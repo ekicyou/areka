@@ -68,9 +68,10 @@ impl LogSink {
     pub fn new() -> Self {
         Self
     }
+}
 
-    /// 内部: 発火を構造化ログへ出力する。
-    fn log(&self, cue: &TalkCue) {
+impl CueSink for LogSink {
+    fn emit(&mut self, cue: TalkCue) {
         tracing::info!(
             target: "ghost-sink",
             event = "emit",
@@ -79,12 +80,6 @@ impl LogSink {
             command_kind = command_kind(&cue.command),
             "talk cue emitted (production default LogSink)"
         );
-    }
-}
-
-impl CueSink for LogSink {
-    fn emit(&mut self, cue: TalkCue) {
-        self.log(&cue);
     }
 }
 
@@ -326,27 +321,6 @@ mod tests {
             "AnchorBegin"
         );
         assert_eq!(command_kind(&CueCommand::AnchorEnd), "AnchorEnd");
-    }
-
-    /// `LogSink` は無蓄積の unit 相当構造体ゆえ、`Clone` した 2 インスタンスを別々に
-    /// 使い回しても状態が共有されない（＝壊れない）ことを確認する。蓄積フィールドが
-    /// 無いため観測可能な差分はないが、大量発火・clone 後の独立動作が panic なく
-    /// 完走することが「無蓄積で無限に稼働できる」性質の直接証跡になる。
-    #[test]
-    fn clone_instances_operate_independently_without_shared_state() {
-        let mut original = LogSink::new();
-        let mut cloned = original.clone();
-
-        let _events = capture(|| {
-            for i in 0..5 {
-                CueSink::emit(&mut original, sample_cue(i as f64, "0", CueCommand::Clear));
-                CueSink::emit(&mut cloned, sample_cue(i as f64, "1", CueCommand::Clear));
-            }
-        });
-
-        // LogSink は unit struct（フィールドなし）ゆえ、この等価性は自明ではあるが、
-        // 「clone してもレイアウト・挙動が分岐しない」ことの回帰檻として残す。
-        assert_eq!(original, cloned);
     }
 
     /// 診断既定の**単一配線**（`LogSink`＋`DiscardSink`）を dola `CuePlayer` の broadcast fan-out

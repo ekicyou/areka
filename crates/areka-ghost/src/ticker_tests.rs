@@ -263,7 +263,7 @@ fn spawn_ticker_stops_on_control_channel_disconnect() {
 }
 
 #[test]
-fn spawn_ticker_sticky_stops_sending_to_disconnected_dispatcher_but_keeps_kanade_alive() {
+fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
     struct TestDispatcherMsg;
     impl From<Tick> for TestDispatcherMsg {
         fn from(_: Tick) -> Self {
@@ -306,7 +306,7 @@ fn spawn_ticker_sticky_stops_sending_to_disconnected_dispatcher_but_keeps_kanade
 
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
-        "ticker join after sticky-disconnect scenario",
+        "ticker join after dispatcher-disconnect scenario",
         Duration::from_secs(5),
         move || {
             handle
@@ -319,13 +319,9 @@ fn spawn_ticker_sticky_stops_sending_to_disconnected_dispatcher_but_keeps_kanade
 // ---- 単発ループレーン: spawn_loop_ticker ----
 
 #[test]
-fn loop_ticker_config_default_is_16ms_and_real_clock() {
+fn loop_ticker_config_default_is_16ms() {
     let config = LoopTickerConfig::default();
     assert_eq!(config.interval, Duration::from_millis(16));
-    // 既定 clock が実クロック（非減少）であることのみ確認する。
-    let first = (config.clock)();
-    let second = (config.clock)();
-    assert!(second.0 >= first.0, "default clock must be non-decreasing");
 }
 
 #[test]
@@ -402,13 +398,6 @@ fn spawn_loop_ticker_catch_up_delivers_exactly_once_across_multiple_missed_bound
         .expect("catch-up must deliver exactly once with the current clock");
     assert_eq!(tick.now, MonotonicMs(100));
 
-    // 2 回目の配送が来ないこと＝跨いだ中間境界を再送しない（catch-up = 1）。
-    // 時計は 100 のまま（次デッドライン 112 未満）なので追加発火は起きない。
-    assert!(
-        tick_rx.recv_timeout(Duration::from_millis(200)).is_err(),
-        "catch-up must collapse multiple missed boundaries into a single deliver"
-    );
-
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
         "loop ticker join after catch-up scenario",
@@ -470,13 +459,4 @@ fn spawn_loop_ticker_stops_on_control_channel_disconnect() {
                 .expect("loop ticker terminates normally on control channel disconnect");
         },
     );
-}
-
-#[test]
-fn real_clock_returns_monotonic_ms_from_get_tick_count64() {
-    // 実クロックの往復確認: 2 回読んで非減少であることのみ検証する（実 OS 時計は
-    // テスト側で制御できないため、値そのものではなく単調性のみを確認する）。
-    let first = real_clock();
-    let second = real_clock();
-    assert!(second.0 >= first.0, "GetTickCount64 must be non-decreasing");
 }

@@ -120,7 +120,7 @@
   - _Depends: 10_
   - _Requirements: 3.1, 3.2, 4.1, 4.3, 5.2, 6.2, 9.1, 9.3, 9.11_
 
-- [ ] 14. (P) 刻み・記録・sylphya の小さい直しをする（T11）
+- [x] 14. (P) 刻み・記録・sylphya の小さい直しをする（T11）
   - #30 の sylphya の barrier が死んだときの記録を `error!` に（続行は変えない）。`sylphya_wiring.rs` は 164〜172 行目だけを触り、`doc/` を名指す行は変えない
   - #53 の欄の改名、#54 の古い注、#58 の落ちないテスト、#59 の写しの本体、#81〜#83 の定数でも緑のテスト・名前のずれ・時間待ちの assert を直す
   - 完了の状態: `a_dead_sylphya_barrier_is_logged_as_error` が緑で、`ticker_tests.rs` に時間待ちの assert が残らない
@@ -191,3 +191,4 @@
 - 11: `dispatcher_choice_tests.rs` は 936→925 行で、見立ての約 790 行に届かない。research #75 の「StartTalk 18 か所・Close＋join 10 か所」は dispatcher のテスト 4 ファイルを合わせた数で、choice の中は 3 か所・2 か所だけ（3 ファイル合わせて −84 行）。`dispatcher_begin_talk_tests.rs` の 3 か所は T14 の表に無く残した。#79 は `audit-parsers-sakura` が未着地なので 18.1 へ回した。
 - 12: #56 は直さない。research の「本番に呼び手が無い」は事実と違い、`crates/areka/src/main.rs:623` が `BasewareRoot::ghost_dir` を本番で呼ぶ。テストの呼び手も約 60 ファイル（範囲の外の表に無い）ある。設計の「消すなら」の条件が成り立たないので、`ghost_dir`・`balloon_dir` は残し、`boot_resolve*_tests.rs` は触らない（進行役の判断・audit 系は推奨案で進めてよいという開発者の方針による）。18.2 のかけ直しでは直さない件として数える。
 - 13: 範囲の外の `crates/shiori-host32-helper/src/shiori_proxy.rs` は今も素の `LoadLibraryW`（作業フォルダと PATH を探す）。設計の範囲に無いので触っていない。完了の棚卸で起票を考える（持ち主は `audit-shiori-host32`）。
+- 14: #53 の欄の改名（`target`→`lane`）は `tools/perf/judge-perf.py` が欄の名で追いつきの系統を分けていたので、範囲を `tools/perf` へ広げた（`lane` を読み、無ければ `target`・生成器と生成した fixture 3 つを更新・記録済みの実ログは触らない）。設計の「範囲の外で触るファイル」に無かった触り。

@@ -151,7 +151,7 @@ pub fn publish_ghost_statics(
 ///
 /// を投函した **後** `barrier()` で反映完了を待ってから返る。これにより prefetch→初回 talk までの
 /// 反映順序が決定論化する（研究 §12-1）。barrier が [`areka_actor::ReplyError`] を返す
-/// （sylphya アクター死亡）場合は **warn＋続行**（永久ブロックしない・panic しない・design Risks）。
+/// （sylphya アクター死亡）場合は **error＋続行**（永久ブロックしない・panic しない・design Risks）。
 pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) -> ResourceSink {
     Box::new(move |id, outcome| {
         let value = match outcome {
@@ -162,7 +162,7 @@ pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) 
         publisher.publish_shiori(asker.clone(), id.to_string(), value);
         // 反映フェンス: 投函済み publish の反映完了を同期観測してから返る（初回 talk 前の順序保証）。
         if let Err(err) = publisher.barrier() {
-            tracing::warn!(
+            tracing::error!(
                 target: LOG_TARGET,
                 id = id,
                 error = %err,
@@ -419,5 +419,32 @@ mod tests {
             .handle
             .join()
             .expect("clean close joins without panic");
+    }
+
+    /// sylphya の役者を畳んだ後に sink を呼ぶと、barrier の失敗が ERROR で 1 件だけ記録され、
+    /// sink は panic せず返る（続行・要件 9.5・design #30）。
+    #[test]
+    fn a_dead_sylphya_barrier_is_logged_as_error() {
+        use crate::test_log_capture::capture;
+
+        let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
+        parts.publisher.close();
+        parts
+            .handle
+            .join()
+            .expect("clean close joins without panic");
+
+        let sink = make_username_resource_sink(parts.publisher, AskerId::new("ghost/dead-barrier"));
+        let events = capture(|| sink("username", ResourceOutcome::Value("さくら".into())));
+
+        let errors: Vec<_> = events
+            .iter()
+            .filter(|e| e.target == LOG_TARGET && e.level == tracing::Level::ERROR)
+            .collect();
+        assert_eq!(
+            errors.len(),
+            1,
+            "barrier の失敗は ERROR で 1 件: {events:?}"
+        );
     }
 }
