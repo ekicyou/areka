@@ -399,3 +399,39 @@ fn inner_multi_level_part_frames_are_used() {
         compose(FIXTURE, &[], 30, &binds).0
     );
 }
+
+/// 合成 1 回の広がりの予算が尽きたら、まだ入っていない子を捨てる。根の面の自分の層は必ず描き、
+/// `error!` は 1 行だけ（指摘 3）。
+#[test]
+fn spent_budget_drops_children_not_yet_entered() {
+    let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,1,1\n\
+                element2,overlay,10,2,2\nelement3,overlay,10,3,3\n}\n\
+                surface10\n{\nelement0,overlay,eye.png,0,0\n}\n";
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas(base, RELS);
+    let map = id_to_path(&atlas, RELS);
+    let mut world = EmoWorld::build_with_images(&parse(text), &BTreeMap::new());
+    world.bind_atlas(&atlas, SetId(0));
+    let run = |limit| {
+        let mut out = Vec::new();
+        let logs = capture_logs(|| {
+            let mut scratch = crate::plan::PlanScratch::with_limit(limit);
+            let (binds, pattern) = (BindSet::default(), PatternState::default());
+            crate::plan::derive_ops(&mut out, &mut scratch, &world, &atlas, 0, &binds, &pattern);
+        });
+        (named_ops(&out, &map), logs)
+    };
+    let (ops, logs) = run(2);
+    assert_eq!(
+        ops,
+        vec![("body.png", 0, 0), ("eye.png", 1, 1), ("eye.png", 2, 2)]
+    );
+    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert!(
+        logs.contains("walk=\"plan\"") && logs.contains("root=0"),
+        "{logs}"
+    );
+    assert!(logs.contains("budget=2"), "{logs}");
+    let (ops, _) = run(0);
+    assert_eq!(ops, vec![("body.png", 0, 0)], "根の面の自分の層は必ず描く");
+}

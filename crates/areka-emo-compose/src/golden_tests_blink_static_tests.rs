@@ -1,6 +1,6 @@
 //! task 11.2（要件 9.1・9.5・11.2）: emo2 まばたき bind の静的不活性テーマ。
 
-use crate::plan::build_plan;
+use crate::plan::{PlanScratch, build_plan};
 
 use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
@@ -73,7 +73,7 @@ fn emo2_blink_binds_are_statically_inactive() {
 
     // [1302] のみ（目/通常・pattern0 あり）。
     let mut ops_base = Vec::new();
-    let mut vis_base = Vec::new();
+    let mut vis_base = PlanScratch::default();
     build_plan(
         &mut ops_base,
         &mut vis_base,
@@ -87,7 +87,7 @@ fn emo2_blink_binds_are_statically_inactive() {
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
     let mut ops_blink = Vec::new();
-    let mut vis_blink = Vec::new();
+    let mut vis_blink = PlanScratch::default();
     build_plan(
         &mut ops_blink,
         &mut vis_blink,
@@ -101,7 +101,7 @@ fn emo2_blink_binds_are_statically_inactive() {
 
     // [1302,1403]（純 `bind` の 1403 だけを足す）。
     let mut ops_pure = Vec::new();
-    let mut vis_pure = Vec::new();
+    let mut vis_pure = PlanScratch::default();
     build_plan(
         &mut ops_pure,
         &mut vis_pure,

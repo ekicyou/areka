@@ -89,7 +89,7 @@ fn animated_base_image_only_surface_is_not_empty() {
     assert_eq!(extent(&world, &atlas, 1), Extent { w: 30, h: 20 });
     let got = build_plan(
         &mut Vec::new(),
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         1,
@@ -179,7 +179,7 @@ fn cells_do_not_change_extent() {
         for pattern in &cells {
             let got = build_plan(
                 &mut Vec::new(),
-                &mut Vec::new(),
+                &mut Default::default(),
                 &world,
                 &atlas,
                 top,

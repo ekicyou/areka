@@ -44,7 +44,7 @@
   - 小さな予算を渡せる内側の口を用意する
   - 終わった姿: 予算の部品のファイルの中のテストで、予算 3 を渡した部品が 3 つ目まで入り、4 つ目で断って `error!` を 1 行だけ出すテストが緑
   - _Requirements: 2.1, 4.4, 4.5, 6.2_
-- [ ] 2.4 命令列の走査を明示のスタックで回し、作業場を 1 つの型にまとめる（指摘 3・指摘 8⑷）
+- [x] 2.4 命令列の走査を明示のスタックで回し、作業場を 1 つの型にまとめる（指摘 3・指摘 8⑷）
   - 面の段を作る処理（element定義の子・コマ・`always` の経過 0・着せ替えの描くコマ）で、再帰していた所に「入る（面・位置）」の積み荷を置き、命令はその場の順で積む。出てくる命令の並びは今の再帰と同じ
   - 祖先の確かめは積み荷を取り出す時点で行い、element定義の子の「面の表に無い」「先祖へ戻る」の `debug!` は今どおり段を作る時点で出す（文言は変えない）
   - 段の中の `insert` の連鎖と、着せ替えの手順の挿入の行き先の数え（`claim_from`）も、作業場の小さなスタックで回す（`claim_from` はこのタスクだけが持つ）
@@ -155,3 +155,4 @@
 - 2.1: `MAX_EXTENT`（plan_extent.rs）の判定は build_plan の EmptyComposition の後。`areka-emo-present` の match に `ExtentTooLarge` の腕はまだ無い（後から着いた側が足す申し合わせ）
 - 2.2: `areka-seriko/src/parts_tests.rs` のテストを `part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock` に改名（期待と説明も）＝audit-seriko へ伝え済み。見えない部品の抽選の時計が残り後で一度に進むのは seriko の今の振る舞い（範囲外）
 - 2.3: `budget.rs` は `Budget::new`／`with_records(limit, Records)`／`enter(walk, root)`。頭の `#![allow(dead_code)]` とその説明は 2.4 で走査に繋いだら消す。`VISIT_BUDGET` は仮の `1 << 20`（3.2 で測る）
+- 2.4: 作業場は `plan::PlanScratch`（`Composer.scratch`）、テストの小さな予算は `PlanScratch::with_limit`。残る確保は `push_static_element_ops` の `order: Vec<usize>`（3.1 で消す）。3.1 の容量の確かめで `steps`・`merged_ids` の容量も見るとよい。親の層 (ii) の `debug!` が子の段より先に出る（並びだけ変わった）。`nesting_film_tests.rs:343` の説明に旧名 `push_film_op`（今は `plan_always::film_op`）が残る＝4.1 で直す

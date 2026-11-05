@@ -274,7 +274,7 @@ fn build_plan_absent_surface_is_surface_not_found() {
     let mut ops = Vec::new();
     let result = build_plan(
         &mut ops,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         9999,
@@ -317,7 +317,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
     let mut ops = Vec::new();
     let result = build_plan(
         &mut ops,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         3000,
@@ -373,7 +373,7 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let mut ops = Vec::new();
     let result = build_plan(
         &mut ops,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         1000,
@@ -419,7 +419,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
     let mut ops = Vec::new();
     let result = build_plan(
         &mut ops,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         7000,
@@ -453,7 +453,7 @@ fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
     let mut ops = Vec::new();
     let result = build_plan(
         &mut ops,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         5000,
@@ -492,7 +492,7 @@ fn build_plan_clears_scratch_and_is_deterministic() {
     let mut ops = vec![junk.clone(), junk.clone(), junk];
     let e1 = build_plan(
         &mut ops,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         5000,
@@ -512,7 +512,7 @@ fn build_plan_clears_scratch_and_is_deterministic() {
     let mut ops2 = Vec::new();
     let e2 = build_plan(
         &mut ops2,
-        &mut Vec::new(),
+        &mut Default::default(),
         &world,
         &atlas,
         5000,
@@ -536,7 +536,7 @@ fn plan_with_errors(
     let logs = crate::log_capture::capture_logs(|| {
         result = Some(build_plan(
             &mut Vec::new(),
-            &mut Vec::new(),
+            &mut Default::default(),
             world,
             atlas,
             top,

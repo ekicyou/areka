@@ -22,7 +22,7 @@ use crate::composed::ComposedSurface;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{BlitOp, derive_ops};
+use crate::plan::{BlitOp, PlanScratch, derive_ops};
 use crate::world::EmoWorld;
 
 // ---- 合成モデルビルダ（task 4 テストと同一パターン・実 fixture パースは統合 task 8 送り）----
@@ -260,17 +260,20 @@ pub(crate) fn ops(
     pattern: &PatternState,
 ) -> Vec<BlitOp> {
     let mut out = Vec::new();
-    let mut visited = Vec::new();
+    let mut scratch = PlanScratch::default();
     derive_ops(
         &mut out,
-        &mut visited,
+        &mut scratch,
         world,
         atlas,
         surface_id,
         binds,
         pattern,
     );
-    assert!(visited.is_empty(), "先祖の積み上げは走査後に空へ戻る");
+    assert!(
+        scratch.visited.is_empty(),
+        "先祖の積み上げは走査後に空へ戻る"
+    );
     out
 }
 

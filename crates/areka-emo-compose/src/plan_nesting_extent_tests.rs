@@ -9,7 +9,7 @@ use std::path::Path;
 use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::parse;
 
-use super::{BlitOp, Extent, build_plan};
+use super::{BlitOp, Extent, PlanScratch, build_plan};
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::log_capture::capture_logs;
@@ -50,12 +50,12 @@ fn plan(
     let mut world = EmoWorld::build_with_images(&parse(text), &Default::default());
     world.bind_atlas(&atlas, SetId(0));
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut scratch = PlanScratch::default();
     let mut result = None;
     let logs = capture_logs(|| {
         result = Some(build_plan(
             &mut ops,
-            &mut visited,
+            &mut scratch,
             &world,
             &atlas,
             top,
@@ -63,7 +63,10 @@ fn plan(
             pattern,
         ));
     });
-    assert!(visited.is_empty(), "先祖の積み上げは走査後に空へ戻る");
+    assert!(
+        scratch.visited.is_empty(),
+        "先祖の積み上げは走査後に空へ戻る"
+    );
     (result.unwrap(), ops, logs)
 }
 

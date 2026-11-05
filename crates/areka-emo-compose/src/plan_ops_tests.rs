@@ -175,16 +175,14 @@ fn appends_without_clearing() {
         method: ComposeMethod::Overlay,
     };
     let mut ops = vec![sentinel.clone()];
-    push_static_element_ops(
+    derive_ops(
         &mut ops,
-        &mut Vec::new(),
+        &mut PlanScratch::default(),
         &world,
         &atlas,
         1,
         &BindSet::default(),
         &PatternState::default(),
-        0,
-        0,
     );
 
     // 先頭 sentinel が残り、末尾へ element 命令が追記される。

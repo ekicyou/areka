@@ -27,7 +27,7 @@ use std::sync::Arc;
 use crate::log_capture::capture_logs;
 use crate::method::{BlendKind, BlendMode, ComposeMethod};
 use crate::normalized::Transform;
-use crate::plan::{BlitOp, build_plan};
+use crate::plan::{BlitOp, PlanScratch, build_plan};
 use crate::plan_test_support::{
     bake_atlas, bind_anim, elem, page_1px, shell_mixed, shell_of, single_entry_table, surface,
     surface_with_anims,
@@ -55,7 +55,7 @@ fn cycle_detection_debug_fires_with_surface_id() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut visited = PlanScratch::default();
     let logs = capture_logs(|| {
         // build_plan は compute_extent（extent 経路）→ derive_ops（ops 経路）の両方を走らせる。
         // ops 経路（flatten_surface）の循環 WARN を狙って結果自体も固定する。
@@ -115,7 +115,7 @@ fn extent_cycle_debug_fires_with_surface_id() {
 
     let binds = BindSet::default(); // extent は有効 bind 非依存ゆえ空 bind でも全 pattern0 を辿る。
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut visited = PlanScratch::default();
     let logs = capture_logs(|| {
         build_plan(
             &mut ops,
@@ -180,7 +180,7 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
 
     let binds = BindSet::from_ids([1400]);
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut visited = PlanScratch::default();
     let logs = capture_logs(|| {
         build_plan(
             &mut ops,

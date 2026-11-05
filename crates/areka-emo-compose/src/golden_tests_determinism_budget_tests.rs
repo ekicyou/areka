@@ -30,7 +30,7 @@ use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
 // 再利用する。
 // ============================================================================
 
-use crate::plan::build_plan;
+use crate::plan::{PlanScratch, build_plan};
 
 /// surface1000＋実 bind パーツ 3 種（1100/1200/1302）が「全て解決し描画命令を生む」有効 bind 集合。
 ///
@@ -171,7 +171,7 @@ fn surface1000_recompose_steady_state_zero_allocation() {
     let ptr0 = out.bytes().as_ptr();
     let len0 = out.bytes().len();
     let ops_cap0 = composer.ops.capacity();
-    let visited_cap0 = composer.visited.capacity();
+    let visited_cap0 = composer.scratch.visited.capacity();
 
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {
@@ -202,7 +202,7 @@ fn surface1000_recompose_steady_state_zero_allocation() {
             "反復 {iter}: ops スクラッチ容量が非成長（clear+push 再利用・要件 10.3）"
         );
         assert_eq!(
-            composer.visited.capacity(),
+            composer.scratch.visited.capacity(),
             visited_cap0,
             "反復 {iter}: visited スクラッチ容量が非成長（祖先スタック再利用・要件 10.3）"
         );
@@ -231,7 +231,7 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut visited = PlanScratch::default();
 
     // 初回: 容量確定。
     let extent0 = build_plan(
@@ -245,7 +245,7 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
     )
     .expect("初回 build_plan は Ok（surface1000 存在＋外形非ゼロ）");
     let ops_cap0 = ops.capacity();
-    let visited_cap0 = visited.capacity();
+    let visited_cap0 = visited.visited.capacity();
     let ops_len0 = ops.len();
 
     for iter in 0..8 {
@@ -270,7 +270,7 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
             "反復 {iter}: ops スクラッチ容量が非成長（再利用・要件 10.3）"
         );
         assert_eq!(
-            visited.capacity(),
+            visited.visited.capacity(),
             visited_cap0,
             "反復 {iter}: visited スクラッチ容量が非成長（再利用・要件 10.3）"
         );
@@ -302,7 +302,7 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     world.bind_atlas(&atlas, SetId(0));
 
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
+    let mut visited = PlanScratch::default();
     let extent = build_plan(
         &mut ops,
         &mut visited,
@@ -347,7 +347,7 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     // 有効 bind を 1 本に絞ると命令も 1 本（層数に厳密比例＝線形係数 1 の追加確証）。
     let one = BindSet::from_ids([surface1000_bind_parts()[0].anim_id]);
     let mut ops1 = Vec::new();
-    let mut visited1 = Vec::new();
+    let mut visited1 = PlanScratch::default();
     build_plan(
         &mut ops1,
         &mut visited1,
@@ -362,7 +362,7 @@ fn surface1000_instruction_count_is_linear_in_layers() {
 
     // 空 bind 集合 → 命令ゼロ（静的 element ゼロゆえ描画層皆無・外形は非ゼロで Ok）。
     let mut ops0 = Vec::new();
-    let mut visited0 = Vec::new();
+    let mut visited0 = PlanScratch::default();
     build_plan(
         &mut ops0,
         &mut visited0,

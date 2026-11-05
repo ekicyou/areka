@@ -529,8 +529,8 @@ fn default_equals_new() {
     let d = Composer::default();
     let n = Composer::new();
     assert_eq!(d.ops.len(), n.ops.len());
-    assert_eq!(d.visited.len(), n.visited.len());
-    assert!(d.ops.is_empty() && d.visited.is_empty());
+    assert_eq!(d.scratch.visited.len(), n.scratch.visited.len());
+    assert!(d.ops.is_empty() && d.scratch.visited.is_empty());
 }
 
 /// 型健全性の据え置き（未使用 import 警告を出さないためのアンカ・実害なし）。

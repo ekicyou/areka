@@ -86,12 +86,12 @@ use areka_emo_atlas::AtlasTable;
 /// - **同期・値返し**（要件 9.3/10.4）: スレッド生成・async・channel を一切持たず、合成結果を
 ///   値（[`compose`]）または呼び手のバッファ（[`compose_into`]）へ直接書いて返す。wintf の
 ///   visual/window/WUC 描画 API には依存しない。
-/// - **結果を保持しない**（要件 9.4）: `Composer` の内部フィールドは走査スクラッチ（`ops`／`visited`）
+/// - **結果を保持しない**（要件 9.4）: `Composer` の内部フィールドは走査スクラッチ（`ops`／`scratch`）
 ///   のみで、[`ComposedSurface`] を一切キャッシュしない。前回の合成結果は次回呼び出しへ持ち越さず、
 ///   surface→結果のキャッシュ・無効化は下流 `emo-present` の責務である。絵は持たないが、下敷き形
 ///   （[`compose_into_reusing`]）が最後に成功させた合成の命令列 1 本（`base_ops`）だけは持つ。
 /// - **buffer 再利用でゼロアロケーション定常状態**（要件 10.3）: [`compose_into`] は呼び手の `out`
-///   と自身のスクラッチ（`ops`／`visited`）を再利用するため、外形が変わらない毎フレーム経路で
+///   と自身のスクラッチ（`ops`／`scratch`）を再利用するため、外形が変わらない毎フレーム経路で
 ///   途中アロケーションを発生させず O(elements) で合成する。
 /// - **アトラス解決は構築時一度きり**（要件 4.3・design 主要決定）: hot path（[`compose_into`]/
 ///   [`compose`]）は [`AtlasTable::resolve`] を一切呼ばず、束縛済み `ElementId` の
@@ -112,8 +112,8 @@ use areka_emo_atlas::AtlasTable;
 pub struct Composer {
     /// plan 段が積む転写命令のスクラッチ（毎回 `build_plan` 入口で clear・再利用）。
     ops: Vec<BlitOp>,
-    /// 入れ子 flatten の循環検出用祖先スタックのスクラッチ（`build_plan` が走査入口で clear・再利用）。
-    visited: Vec<u32>,
+    /// 命令列の走査の作業場（`build_plan` が走査入口で空へ戻して再利用）。
+    scratch: crate::plan::PlanScratch,
     /// 最後に [`compose_into_reusing`] が成功させた合成の命令列（絵は持たない・`compose_into` は触らない）。
     ///
     /// [`compose_into_reusing`]: Composer::compose_into_reusing
@@ -125,7 +125,7 @@ impl Composer {
     pub fn new() -> Self {
         Composer {
             ops: Vec::new(),
-            visited: Vec::new(),
+            scratch: crate::plan::PlanScratch::default(),
             base_ops: Vec::new(),
         }
     }
@@ -133,7 +133,7 @@ impl Composer {
     /// 合成先バッファ再利用形（毎フレーム経路・定常状態アロケーションなし・要件 10.3）。
     ///
     /// `world`／`atlas`／`surface_id`／`active_binds` から plan を導出（[`crate::plan::build_plan`]）し、
-    /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`visited`）
+    /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`scratch`）
     /// を再利用するため、外形が変わらない反復呼び出しで再割り当てを起こさない。
     ///
     /// `build_plan` が `Err`（surface 不在・定義層皆無退化）を返せば、そのまま伝播する（既に `error`
@@ -156,10 +156,10 @@ impl Composer {
         pattern: &PatternState,
     ) -> Result<(), ComposeError> {
         // plan: 命令列＋外形を導出（Err は既に error ログ済み・そのまま伝播・要件 10.5）。
-        // ops／visited は build_plan 入口で clear され再利用される（要件 10.3）。
+        // ops／scratch は build_plan 入口で clear され再利用される（要件 10.3）。
         let extent = crate::plan::build_plan(
             &mut self.ops,
-            &mut self.visited,
+            &mut self.scratch,
             world,
             atlas,
             surface_id,
@@ -193,7 +193,7 @@ impl Composer {
     ) -> Result<Recompose, ComposeError> {
         let extent = crate::plan::build_plan(
             &mut self.ops,
-            &mut self.visited,
+            &mut self.scratch,
             world,
             atlas,
             surface_id,
