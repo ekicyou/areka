@@ -157,7 +157,11 @@ sequenceDiagram
 ```
 
 決めたこと:
-- **見つける所は `BeginDraw` の失敗だけ**。Microsoft の説明では、装置が失われると `BeginDraw` が `DXGI_ERROR_DEVICE_REMOVED` を返し、`EndDraw` は装置の失いを返さない。失敗したら D3D の装置の `GetDeviceRemovedReason()`（`com/d3d11.rs` の包みが在る）を問い、失いと判じたときだけ `GraphicsCore::invalidate()` を呼ぶ。`RenderingDeviceReplaced` は `SetRenderingDevice` を呼んだ後に来る知らせで、見つける役には立たない。`RegisterDeviceRemovedEvent` はスレッドプールから呼ばれ、UI スレッドの外の道が増えるので採らない。
+- **見つける所は 2 つ**（設計の討議 議題 1 で確定）。
+  - **OS の知らせ（プッシュ・ゴーストがじっとしている間も気づく）**: 装置を作るときに `ID3D11Device4::RegisterDeviceRemovedEvent` へイベントを預け、`RegisterWaitForSingleObject` でその待ちをスレッドプールに置く。鳴ったときの係は `tick_wake::mark(GRAPHICS)`（どのスレッドからでも安全な原子の旗）を 1 回呼ぶだけで、WUC にも D3D にも触らない。起こされた UI スレッドは、`GraphicsSetup` の先頭の確かめ（`check_device_removed`）で `GetDeviceRemovedReason()` を問い、失いなら `GraphicsCore::invalidate()` を呼ぶ。確かめは `GRAPHICS` の旗で回った回にだけ問えば足りるが、問うのは安いので、装置が有効な回は毎回問ってよい（設計の細部は実装で決める）。開発者の決め「変わった時点が分かるならプッシュ」に当たる。要る windows の機能（`Win32_Graphics_Direct3D11`・`Win32_System_Threading`）は根の `Cargo.toml` で既に有効で、依存も機能も足さない。
+  - **描画の失敗（今の道の仕上げ）**: Microsoft の説明では、装置が失われると `BeginDraw` が `DXGI_ERROR_DEVICE_REMOVED` を返し、`EndDraw` は装置の失いを返さない。失敗したら D3D の装置の `GetDeviceRemovedReason()`（`com/d3d11.rs` の包みが在る）を問い、失いと判じたときだけ `GraphicsCore::invalidate()` を呼ぶ。
+  - **待ちの後始末**: 待ちとイベントの登録は `GraphicsCore` の作り直しと捨てるときに外す（`UnregisterWaitEx` を「終わるまで待つ」で呼んでから `UnregisterDeviceRemoved`、最後にイベントの handle を閉じる）。終了の道の順は正規のまま保つ（要件 5.4）。登録の失敗は `error!` を残し、描画の失敗で気づく道だけで動き続ける（`ID3D11Device4` が取れない古い OS も同じ）。
+  - `RenderingDeviceReplaced` は `SetRenderingDevice` を呼んだ後に来る知らせで、見つける役には立たない。
 - **無効化は作り直しより先に、同じ単一スレッドのスケジュールで**。`init_graphics_core` を `PreLayout`（複数スレッド）から `GraphicsSetup` へ移し、`invalidate_dependent_components` の直後に並べる。先に作り直されると、無効化の係が「有効」と見て何も倒さなくなるため。無効化は装置が無効な回に毎回走るが、有効な部品だけを倒すので、同じ印を何度も立てない。
 - **作る係は作れる回にだけ回す**。`init_window_graphics`・`visual_resource_management_system`・`deferred_surface_creation_system` を `run_if` で包み、装置か WUC が使えない回は係そのものを回さない。bevy は回さなかった係の `last_run` を進めないので、無効の間についた変化の印は、使えるようになった回にまとめて見える。係の中の早い戻り（`Option<Res<GraphicsCore>>` と `is_valid()`）は、wintf を使う人が係を自分で登録したときの守りとして残す（1 番）。
 - **WUC の資源を作る所を係に切り出す**（`init_wuc_resource`）。今は `init_window_graphics` の中で作り、作った回は早く戻るので、作り直しの回に `Changed<HasGraphicsResources>` を食べて窓が二度と作り直されない（設計の調べで見つけた）。切り出した係は、資源が在って無効なら同じ場所で入れ替え、無ければ命令で入れる。窓の係はその後に `run_if(wuc_ready)` で回る。
@@ -405,6 +409,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6];
 | 3 | 付け替えた子が新しい親の WUC の子に入り、古い親から外れる。子を先に作り、次の回に親へ `Visual` を足すと子がつながる | `crates/wintf/tests/visual/hierarchy_reparent_gap_test.rs`（書き換え） | 古い親に残る・つながらない |
 | 4 | 窓の外で作った部品の木を、後から窓の下へ付けると、根と子孫に見た目の部品が入る。窓の外へ付けたままなら入らない | `crates/wintf/tests/visual/window_join_test.rs`（新・`visual.rs` へつなぐ） | 入らない |
 | 5 | 同じ回に作った親（背景だけ青）と子（未指定）で、子の背景が青。片方だけ決まった親の前景を子が取る | `crates/wintf/tests/graphics/brushes_system_test.rs` | 既定の色・祖父母の色になる |
+| 6 | 知らせ: 預けたイベントを手で鳴らすと（`SetEvent`）、`tick_wake` に `GRAPHICS` が立つ。`GraphicsCore` を捨てると待ちとイベントの登録が外れ、その後に鳴らしても旗は立たない | `graphics/core_tests.rs` | 旗が立たない・捨てた後も鳴る |
 | 6 | 判定: `is_device_lost` の真偽表。`note_draw_failure` に `DXGI_ERROR_DEVICE_REMOVED` を渡すと無効になり、`E_INVALIDARG` なら有効のまま（健全な実の装置） | `graphics/core_tests.rs` | 判定が外れる |
 | 6 | 立ち直り: 隠した実の HWND の窓・その下の四角の部品で `EcsWorld` を回し、全部が有効になってから `GraphicsCore::invalidate()`。3 回以内に回すと、窓・見た目・描画面・命令の列・WUC の合成器が全部作り直され（ポインタが前と違う）、`WindowGraphics::generation()` が 1 | `device_lost_recovery_test.rs` | 古いまま有効・作られない |
 | 6 | 印を食べない: 窓の無い `EcsWorld` に `Visual` と空の `VisualGraphics` を置いて 1 回回し（WUC が無いので作る係は回らない）、WUC の資源を入れてもう 1 回回すと見た目が作られる | `device_lost_recovery_test.rs` | 1 回目に印を食べて作られない |
@@ -430,6 +435,8 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6];
 
 ## 設計で決めたこと（開発者が確かめたい所）
 
+2026-11-05 の設計の討議で、下の 1・2 と「OS の知らせで装置の失いに気づく（プッシュ）」を、開発者が推奨案のまま承認した（開発者「承認」）。3〜8 は技術の都合で決めたもので、討議で異論は出なかった。
+
 1. **下流の立ち直りの手当てをこの spec で行う**（6 番）。設計の調べで、wintf の部品を作り直すだけでは areka の画面は戻らないと分かった（emo-present は古い装置の命令の列を控えに残し、emo-text は古い装置の swap chain を持ち続ける）。討議の「アプリを起動し直すまで戻らない」を直すには下流 3 か所の手当てが要る。在る関数を呼ぶだけで、2 タスクに収まる。emo-present は同じウェーブの `audit-emo-present` と申し合わせてから触る。
 2. **`VsyncTick` トレイトを自由な関数 `flush_window_pos_commands_guarded()` に替える**（13 番）。討議では「トレイトの関数の名前を変える」だったが、数えを消すとトレイトの中身は `self` を使わなくなり、名前だけ変えても 2 度目の audit で指される形が残る。呼び出し元の直しは同じ 1 か所。
 3. **単一スレッドの一覧は「定数」でなく、固定の配列を返す関数にする**（35 番）。bevy の `intern()` が const でないため。中身を固定するテストは討議のとおり。
@@ -448,7 +455,7 @@ pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6];
 3. 後から窓へつないだ部品の係（4 番）と登録
 4. 色の受け継ぎ（5 番・9 番の 1 か所）
 5. 見た目の木の親子（3 番・9 番の 1 か所・10 番の `RemoveAll`）と、新しい見た目への位置と不透明度（6 番の一部）
-6. 描画の装置: 開発用の旗・工場・使わない `use`・失いの判定（7・8・19 番の一部・6 番の一部）
+6. 描画の装置: 開発用の旗・工場・使わない `use`・失いの判定・OS の知らせの待ちと後始末（7・8・19 番の一部・6 番の一部）
 7. `DolaAnimator`（2 番）と `structure.md` の読み方の行
 8. 作り直しの順: 無効化の拡張・`init_graphics_core` の 1 本化と移し・`init_wuc_resource`・作る係の条件・登録（6・18 番・1 番の窓の係）
 9. 窓の部品の整理（16 番）と `examples/graphics_reinit_test.rs`

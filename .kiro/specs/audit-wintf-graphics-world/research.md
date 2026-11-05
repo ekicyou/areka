@@ -426,3 +426,13 @@ wintf の描画の芯である。ECS の World と 13 本のスケジュール�
 - 一般化: 親をたどる 3 か所（9 番）と 4 番の判定は、上限つきの祖先の走査 1 つにまとめた。作る係の「作れない回に印を食べる」は 1 つの規則（`run_if` で回さない）で塞いだ。下流への合図は在る資源の変化の印 1 つにした。
 - 作るか借りるか: 祖先の走査は bevy の `iter_ancestors` が在るが、輪で止まらず `DeferredWorld` から使えないので、小さく自前で持つ。`compile_fail` の型のテストは rustdoc の在る仕組み（前例 `sample-ghost-kit`）を使い、依存を足さない。
 - 削り: 新しい合図の型・新しい世代の番号・監視のスレッドは作らない。トレイト `VsyncTick` は中身が無くなるので関数に替える。切り抜きの控えは新しい部品を作らず `VisualGraphics` に置く。
+
+---
+
+## 10. 設計の討議の決め（2026-11-05）
+
+- 議題は 3 件で、全部推奨案で確定した（開発者「承認」）。正本は `design.md`。
+  1. **装置の失いを、ゴーストがじっとしている間も知る**: OS の知らせ（`ID3D11Device4::RegisterDeviceRemovedEvent` と、スレッドプールの待ち）を使う。待ちの係は `tick_wake::mark(GRAPHICS)` を呼ぶだけで、確かめと無効化は UI スレッドで行う。根拠は、開発者の決め「変わった時点が分かるならプッシュ・分からないならプル」。描画の失敗で気づく道も残す。0.5 秒ごとの心拍の回に問う形（プル）と、限界として書くだけの形は採らなかった。
+  2. **下流の立ち直りもこの spec で直す**: 対象は emo-present の `presenter/refresh.rs`（`audit-emo-present` が了承済み・あちらの新しい `apply_show` の形で書く）、emo-text の `actor_present.rs`、areka の `frame/attach.rs`。
+  3. **`VsyncTick` トレイトを自由な関数 `flush_window_pos_commands_guarded()` に替える**: 要件の討議の「名前を変える」を改めた。
+- 自明な直し 7 件（設計の確かめの議題 1・3、軽い注意 2 つ、emo-present との申し合わせ、`dcomp_integration_test.rs` の重複の訂正、`WINTF_PRODUCERS`）は `7f9b0b2c` に入れた。
