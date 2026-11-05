@@ -90,7 +90,7 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
 ];
 
 /// [`OVER_LIMIT_ALLOWED`] の件数（逐語）。表を増やすときはここも編集する（要件 10.2）。
-const OVER_LIMIT_ALLOWED_COUNT: usize = 8;
+const OVER_LIMIT_ALLOWED_COUNT: usize = 7;
 
 /// 要件 10.3 の自己検査で表から外す 1 件。表の項目でなければならない。
 const CALIBRATION_DROPPED_ENTRY: &str =
