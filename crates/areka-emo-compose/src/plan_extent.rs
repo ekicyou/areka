@@ -1,4 +1,4 @@
-//! キャンバス外形（[`Extent`]）の算出（`plan.rs` から中身を変えずに移した・animated-image-playback）。
+//! キャンバス外形（[`Extent`]）の表の算出（束縛のときに 1 度だけ・`plan.rs` の下の module）。
 
 use std::collections::{HashMap, HashSet};
 
@@ -19,8 +19,8 @@ pub(crate) const MAX_EXTENT: u32 = 16_384;
 
 /// キャンバス外形（[`Extent`]）を**有効 bind 集合に依存せず静的に**算出する（要件 6.5・議題2裁定 (A)）。
 ///
-/// 母集合は **surface の全定義層**＝全 element ＋**全 bind animation の描くコマ**（純 `bind` は全部の
-/// pattern・`bind+random` は番号の最も小さい 1 つ・`binds` に含まれるか否かに関係なく全部）。
+/// 母集合は **surface の全定義層**＝全 element ＋**全 bind・`always` animation の描くコマ**（`always` と
+/// 純 `bind` は全部の pattern・`bind+random` は番号の最も小さい 1 つ・`binds` に含まれるか否かに関係なく全部）。
 /// 各層 element の「累積配置オフセット＋原寸（[`AtlasEntry::original`]）」の和集合を、原点 (0,0)
 /// 固定・負オフセット分は原点でクリップして取る。`extent = (max_x, max_y)`、
 /// 各層で `max_x = max(max_x, max(0, offset_x + original.w))`・同様に `max_y`。**`placement: None`
@@ -29,7 +29,7 @@ pub(crate) const MAX_EXTENT: u32 = 16_384;
 /// これにより **bind のオン/オフでサイズが変わらない**（同一 surface へ異なる `BindSet` を渡しても
 /// [`Extent`] が不変・emo-present のバッファ再利用/窓サイズ安定に必須）。入れ子 surface 参照は
 /// [`flatten_surface`] と同一の pattern の (x,y) オフセット累積＋visited 祖先スタックによる循環検出で
-/// 走査する（ops 経路との違いは「全 bind pattern0 を母集合とする」点のみ）。
+/// 走査する（ops 経路との違いは「有効かどうかに関係なく全部の bind を母集合とし、コマを見ない」点）。
 ///
 /// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
 /// を返す（0×0 退化の Err 分類は [`build_plan`] の責務・本関数は分類しない）。
@@ -111,8 +111,8 @@ fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
 ///
 /// 当 surface の全定義層を走査し `max_x`/`max_y` を更新する。[`flatten_surface`]（ops 経路）と同一の
 /// 入れ子 flatten 構造（オフセット累積＋visited 祖先スタックによる循環検出）を明示のスタックで回すが、
-/// **bind の母集合が異なる**: ops は有効 bind（`binds` ∩ bind animation）のみ、本関数は**全 bind
-/// animation の pattern0**（`binds` 非依存・有効/非有効を問わない）を辿る。これが「外形は有効 bind
+/// **bind の母集合が異なる**: ops は有効 bind（`binds` ∩ bind animation）のみ、本関数は**全 bind・
+/// `always` animation の描くコマ**（`binds` 非依存・有効/非有効を問わない）を辿る。これが「外形は有効 bind
 /// 集合に依存しない静的量」（要件 6.5）の実装核心である。
 ///
 /// 各静的 element については `AtlasBinding` が `Some(ElementId)` のもののみ、`atlas.entry(id).original`
@@ -123,8 +123,8 @@ fn merge(max: &mut Option<(i64, i64)>, r: Option<(i64, i64)>, x: i64, y: i64) {
 /// nesting 要件 2.5）。コマ（[`PatternState`]）は見ないので、部品のアニメーションでも外形は動かない
 /// （要件 2.6）。飛ばす子は外形に数えず、記録は命令の経路だけが出す。
 ///
-/// 子は今までの再帰と同じ順（element → bind の id 昇順の pattern）に積み、逆にして上から取り出す。
-/// 取り出す時点の祖先の列は再帰の入口と同じ（先に取り出した兄弟の段は出る印で外れている）。
+/// 子は element → bind の id 昇順の pattern の順に積み、逆にして上から取り出す（深さ優先）。
+/// 取り出す時点の祖先の列は今の段までの経路そのもの（先に取り出した兄弟の段は出る印で外れている）。
 pub(crate) fn compute_extent_limited(
     on_path: &mut HashSet<u32>,
     world: &EmoWorld,

@@ -127,7 +127,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
 - [ ] 4. できれば: 重なるテスト・古い説明・使われない口
-- [ ] 4.1 2 度確かめるテストをまとめ、古い説明を今のコードに合わせる（指摘 14・15）
+- [x] 4.1 2 度確かめるテストをまとめ、古い説明を今のコードに合わせる（指摘 14・15）
   - 指摘 14 の弱い方を消し、固有の 1〜2 行だけを強い方へ移す
   - 指摘 15 の説明（検体の README の文字コードの行を含む）を今のコードに合わせ、作業の経緯の段落を消す。範囲の展開の頭に、上限を読む側（parsers）に任せている理由を 1 行の説明で書く（指摘 1）。`doc/`・`docs/` のパスを名指す行は足さず変えない
   - 終わった姿: 指摘 14・15 の各箇所が直り、クレートのテストが緑
@@ -172,3 +172,4 @@
 - 3.5: 足し方は `fold.rs` の `add_lines(master, later, Source::{Brace,Append}, records)`。`boxes.rs:213・229` の説明（後勝ち・merge_brace と同じ規則）は 3.6 で直す。`areka` は lib を持たない＝配置のテストは `cargo test -p areka --bins placement`。`interval_written` の読み手は compose から 0＝audit-parsers-sakura へ伝え済み
 - 3.6: audit-parsers-sakura の指摘 76 は main 未着＝先に直し、`boxes.rs` の `distribute`（211〜250 行あたり・`retain` を消して `extend` だけ）を向こうへ伝えた（後から着いた側が rebase）。箱の行だけの同じ element番号の重なり（名前が違うもの）は記録が無い（面の `warn!` は箱の行では出ない・`BoxIssue` に種類を足すのは公開の enum と emo-present の `log_box_issue` に及ぶ＝範囲の外）＝5.1 の棚卸で扱う
 - 3.7: コマの合流の門のテストは純 bind の今の決め（M6・全部のコマを積む）で `pattern0_less_pure_bind_draws_its_patterns`（期待は描く向き）。`plan_ops_tests.rs:652` 付近の節の頭の古い説明（index==0 厳密選択）は 4.1 で直す。走査の表のテストは `mod tests {` の前で切る
+- 4.1: 残りの小さな古い言い方（`composer_tests.rs:32,678` の「全 bind pattern0」・走査の表の説明が lib.rs を見ると書くが表に無い）は 5.1 のかけ直しで拾う

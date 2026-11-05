@@ -5,37 +5,27 @@
 //! 参照はオフセット累積で inline 展開（flatten・明示のスタック）し、祖先の列で循環を検出する。
 //! キャンバス外形を算出し、同一入力に対して決定的な命令列を生成する。
 //!
-//! # 本 module の到達点（task 5.1／5.2／5.3）とシーム
+//! # 層と走査
 //!
-//! - **task 5.1**: 静的 element 層の列挙（[`push_static_element_ops`]・layer 昇順）。
-//! - **task 5.2**: 有効 bind（`BindSet`）pattern0 層の合成対象化＋`animation-sort`→
-//!   animation ID 順の 2 段規則（[`derive_ops`]）。静的層の後（上）へ、descend（既定）なら ID 昇順・
-//!   ascend なら ID 降順で bind pattern0 を積む（design 決定5・画家のアルゴリズム）。全パーツが
-//!   bind な surface でも非空 bind 集合から可視層を生成する。
-//! - **task 5.3**: 入れ子 surface 参照の**多段 flatten＋循環検出**
-//!   （[`flatten_surface`]）。pattern0 の入れ子参照を pattern の (x,y) をオフセット累積して
-//!   inline 展開し、visited 祖先スタックで自己参照・相互参照の循環を検出して非パニックで
-//!   枝を打ち切る（部分結果＋warn・要件 7.1/7.2/7.3）。再帰でなく作業場（[`PlanScratch`]）の明示の
-//!   スタックで回し、合成 1 回の広がりを予算で打ち切る（audit-emo-compose 指摘 3）。
-//! - **task 5.4（本 task）**: **placement None スキップ**（[`derive_ops`] へ `AtlasTable` を注入し
-//!   `AtlasEntry.placement` が None の element は命令化せずスキップ・要件 6.3）＋**静的キャンバス外形
-//!   算出**（[`build_extents`]・[`Extent`]）。外形は**有効 bind 集合に依存せず**、全定義層（全 element
-//!   ＋全 bind animation の pattern0＝有効 bind 非依存）の「配置オフセット＋原寸」の和集合を、原点 (0,0)
-//!   固定・負オフセット分は原点でクリップして算出する（要件 6.5・議題2裁定 (A)）。
+//! - **層 (i)**: 静的 element（[`push_static_element_ops`]・layer 昇順）。element定義の子の面へは同じ順の
+//!   位置で入る。束縛の無い element と `placement` が None の element は命令にしない（要件 6.3）。
+//! - **層 (ii)**: 有効な着せ替え（`BindSet`）・`always`・今のコマを、`animation-sort`→animation ID 順の
+//!   2 段規則（descend（既定）は ID 昇順・ascend は ID 降順）で静的層の後（上）へ積む（[`derive_ops`]・
+//!   design 決定5・画家のアルゴリズム）。コマの無い純 `bind` は読み込みのときに作った手順の全部のコマを
+//!   描き、`bind+random` はコマのあるときだけそのコマを描く。
+//! - **入れ子**: 部品の面へ (x,y) を累積して入る（[`flatten_surface`]）。作業場（[`PlanScratch`]）の
+//!   明示のスタックで回し、祖先の列で循環を見つけて枝を打ち切り（`debug!`・要件 7.1/7.2/7.3）、合成 1 回の
+//!   広がりを予算で打ち切る（指摘 3）。
+//! - **外形**: 束縛のときに 1 度だけ求めた表（[`build_extents`]・[`EmoWorld::extent`]）から引く。有効 bind に
+//!   依存しない静的量（要件 6.5・議題2裁定 (A)）で、合成のたびにはたどらない（指摘 8）。
+//! - **分類**（[`build_plan`]）: 対象 surface 不在→[`ComposeError::SurfaceNotFound`]・外形 0×0→
+//!   [`ComposeError::EmptyComposition`]・外形が上限越え→[`ComposeError::ExtentTooLarge`]・それ以外は
+//!   描ける命令がゼロでも `Ok(Extent)`（要件 6.6/10.5）。非パニック・`error` ログ＋`Err`。
 //!
-//! - **task 5.5（本 task）**: **命令ゼロ時の 3 分類**（[`build_plan`]）。[`derive_ops`]（有効 bind
-//!   依存の命令列）＋束縛のときに求めた外形の表（[`EmoWorld::extent`]・有効 bind 非依存の静的外形）を wrap し、対象 surface 不在→
-//!   [`ComposeError::SurfaceNotFound`]・定義層皆無で外形 0×0→[`ComposeError::EmptyComposition`]・
-//!   surface 存在＋外形非ゼロ（描画可能命令ゼロでも可）→`Ok(Extent)` の 3 状態を厳密に区別する
-//!   （要件 6.6/10.5・議題2裁定）。非パニック・`error` ログ＋`Err`。
-//!
-//! 本 module は stub で偽装せず、生成する命令列はすべて実挙動・決定的・テスト済みである。
-//!
-//! - **task 7（本 task）**: 走査の作業場（[`PlanScratch`]）を引数化する（[`build_plan`]/[`derive_ops`] が
-//!   呼び手＝Composer の作業場を借用・各走査入口で空へ戻す）。外形は束縛のときの表から引き、合成のたびに
-//!   たどらない（指摘 8）。同じ入力の合成を繰り返すとき、命令列と作業場の列（祖先・積み荷・層 (ii) の id）
-//!   の容量が初回から伸びないことを `golden_tests_determinism_budget_tests.rs` が確かめている（要件 10.3）。
-//!   それより先（入力が変わるとき・`HashSet` の中身）は確かめていない。
+//! 作業場は呼び手（Composer）が持ち、走査の入口で空へ戻して使い回す。同じ入力の合成を繰り返すとき、
+//! 命令列と作業場の列（祖先・積み荷・層 (ii) の id）の容量が初回から伸びないことを
+//! `golden_tests_determinism_budget_tests.rs` が確かめている（要件 10.3）。それより先（入力が変わるとき・
+//! `HashSet` の中身）は確かめていない。
 
 use std::collections::HashSet;
 
@@ -63,7 +53,7 @@ pub(crate) use extent::{compute_extent, compute_extent_limited};
 ///
 /// `element` はアトラス参照（束縛時に `Some(ElementId)` へ解決済みのもののみ命令化される）、
 /// `transform` は flatten 済み最終配置（M1 は平行移動のみ）、`method` は M1 では常に
-/// [`ComposeMethod::Overlay`]。`Placement` の実引きは blit 実行時（task 6）に `AtlasTable::entry`
+/// [`ComposeMethod::Overlay`]。`Placement` の実引きは blit 実行時に `AtlasTable::entry`
 /// で O(1) で行うため、本命令は `ElementId` のみを保持する（design Contracts）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlitOp {
@@ -77,11 +67,11 @@ pub struct BlitOp {
 
 /// キャンバス外形（合成先1枚物ビットマップの寸法・原点 (0,0) 固定）。
 ///
-/// 全定義層（全 element ＋全 bind animation の pattern0）の「配置オフセット＋原寸」の和集合
-/// として束縛のときに 1 度だけ求め、面の表（[`EmoWorld::extent`]）に置く。**有効 bind 集合に依存しない静的量**（要件 6.5・議題2
-/// 裁定 (A)）ゆえ、bind のオン/オフでサイズが変わらず、下流 emo-present のバッファ再利用・
-/// キャッシュ・窓サイズ安定に用いる。負オフセット層は原点でクリップされ、外形は常に (0,0) を
-/// 左上とする。`build_plan`（task 5.5）が `Result<Extent, ComposeError>` として wrap して返す。
+/// 全定義層（全 element ＋ `always` と純 `bind` の全部のコマ＋ `bind+random` の番号の最も小さいコマ）の
+/// 「配置オフセット＋原寸」の和集合として束縛のときに 1 度だけ求め、面の表（[`EmoWorld::extent`]）に置く。
+/// **有効 bind 集合に依存しない静的量**（要件 6.5・議題2裁定 (A)）ゆえ、bind のオン/オフでサイズが変わらず、
+/// 下流 emo-present のバッファ再利用・キャッシュ・窓サイズ安定に用いる。負オフセット層は原点でクリップされ、
+/// 外形は常に (0,0) を左上とする。[`build_plan`] が `Result<Extent, ComposeError>` として返す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Extent {
     /// 幅（px・原点 (0,0) からの右端）。
@@ -293,28 +283,27 @@ fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
     }
 }
 
-/// 合成対象 surface の静的 element 層＋有効 bind pattern0 層の転写命令を `out_ops` へ導出する（要件 5.2/5.3/5.4/5.6）。
+/// 合成対象 surface の静的 element 層＋有効な着せ替え・コマの層の転写命令を `out_ops` へ導出する（要件 5.2/5.3/5.4/5.6）。
 ///
 /// design「PlanBuilder（plan.rs）」の層列挙規則に厳密に従う:
 ///
 /// 1. **静的 element 層**（i）: 合成対象 surface 自身の element を layer 昇順・同 layer は登場順で
 ///    先頭へ積む（**下＝基底層**・[`push_static_element_ops`]）。
-/// 2. **有効 bind pattern0 層**（ii）: 合成対象 surface の `SurfaceMaster.animations` のうち、
+/// 2. **着せ替え・コマの層**（ii）: 合成対象 surface の `SurfaceMaster.animations` のうち、
 ///    interval が bind 種（[`Interval::Bind`]/[`Interval::BindRandom`]）**かつ** animation id が
-///    `binds` に含まれる animation を「有効 bind」とし、その pattern0（index 0 の [`Pattern`]）を
-///    **2 段ソート順**で静的層の**後（＝上）**へ積む。ただし pattern0 を静的に積むのは純
-///    [`Interval::Bind`] だけで、[`Interval::BindRandom`] はコマがあるときだけそのコマを描く
-///    （件 26・`animated-surface-log-flood` 要件 9.1）。
+///    `binds` に含まれる animation を「有効 bind」とし、`always` と今のコマとともに
+///    **2 段ソート順**で静的層の**後（＝上）**へ積む。コマの無い純 [`Interval::Bind`] は読み込みのときに
+///    作った手順の全部のコマを描き（seriko-pattern-calls M6）、[`Interval::BindRandom`] はコマがあるとき
+///    だけそのコマを描く（件 26・`animated-surface-log-flood` 要件 9.1）。
 ///    - **段1（animation-sort・要件 5.3/5.6・design 決定5）**: [`EmoWorld::animation_sort`] が
 ///      [`SortOrder::Descend`]（既定）→ animation id **昇順**に描画（大 id が上）。[`SortOrder::Ascend`]
 ///      → id **降順**に描画（小 id が上）。これが画家のアルゴリズムの画素積層写像。
 ///    - **段2**: 上記方向の中で animation id をキーに整列する。
 ///
-/// pattern0 の `surface_id >= 0` は**入れ子 surface 参照**として、参照先 [`SurfaceMaster`] の
-/// **elements のみ**を pattern の (x,y) をオフセット**累積**して inline 展開する
-/// （多段 flatten・design 決定2）。参照先 surface 自身の bind animation は展開しない（design
-/// 「`active_binds` の適用範囲は compose 対象 surface のみ」）。`surface_id < 0` はレイヤクリア/停止
-/// センチネル＝**非描画 skip**（trace ログ・非パニック・要件 5.5 前段）。
+/// pattern の `surface_id >= 0` は**入れ子 surface 参照**として、参照先の面を部品の段として pattern の
+/// (x,y) をオフセット**累積**して inline 展開する（多段 flatten・design 決定2）。部品の段も同じ 2 層を
+/// 積み、コマは部品の欄から読む（surface-element-nesting 要件 5.1・5.10）。`surface_id < 0` はレイヤ
+/// クリア/停止センチネル＝**非描画 skip**（非パニック・要件 5.5 前段）。
 ///
 /// # 循環検出と広がりの予算（要件 7.1/7.2/7.3・指摘 3）
 ///
@@ -352,8 +341,8 @@ pub(crate) fn derive_ops(
 /// 根の面 `root` から段を明示のスタックで回し、積み荷の順に命令を `out_ops` へ積む。
 ///
 /// 積み荷を取り出す時点で、入る面が祖先に在れば循環として捨て（`debug!`）、予算が尽きていれば
-/// 捨てる。その時点の祖先の列は再帰で書いたときの入口と同じ（子の段は取り出す前に全部終わって
-/// 外れている）ので、命令の並びも再帰と同じになる。
+/// 捨てる。先に取り出した兄弟の段は取り出す前に全部終わって祖先から外れているので、祖先の列は
+/// 今の段までの経路そのものになり、命令は深さ優先の順に並ぶ。
 fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_>, root: u32) {
     s.visited.clear();
     s.on_path.clear();
@@ -407,7 +396,7 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 
 /// 層 (ii): 段の有効な着せ替えとコマを、animation-sort の 2 段規則の順に積み荷にする。
 ///
-/// # 合成合流と method ゲート（task 7.2・要件 4.2/4.6/5.3/8.4）
+/// # 合成合流と method ゲート（要件 4.2/4.6/5.3/8.4）
 ///
 /// 層(ii) の対象 id 集合へ、この段のコマ（一番上なら [`PatternState`] の今までの欄、部品の段なら
 /// 部品の欄の `surface_id` の分）を持つ id を合流する。

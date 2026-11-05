@@ -238,9 +238,18 @@ fn shell_without_nesting_gets_no_hit_regions() {
 #[test]
 fn fixture_parents_hit_child_names_at_placed_position() {
     let w = world_of(FIXTURE);
+    // 親 B: 子を (90,50) → Head (90,50)-(110,60)・Eye (95,50)-(105,60)（Head が先・Eye が後）。
+    let names: Vec<&str> = w
+        .hit_regions(1)
+        .unwrap()
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(names, ["Head", "Eye"]);
     assert_eq!(hit(&w, 1, 100, 55).as_deref(), Some("Eye"));
     assert_eq!(hit(&w, 1, 92, 55).as_deref(), Some("Head"));
     assert_eq!(hit(&w, 1, 5, 5), None);
+    assert_eq!(hit(&w, 1, 50, 55), None);
     assert_eq!(hit(&w, 2, 10, 5).as_deref(), Some("Eye"));
     assert_eq!(hit(&w, 2, 2, 5).as_deref(), Some("Head"));
     assert_eq!(

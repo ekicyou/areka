@@ -2,8 +2,8 @@
 //! 無いときに pattern0 を静的に重ねない（再生しているあいだだけ描く）。
 //!
 //! ぱすたの animation1400 は `bind+random` で pattern0 が閉じた目（1410）。seriko が `-1` で欄を
-//! 外した後も pattern0 が静的に積まれ、閉じた目が残っていた。純 `bind`（着せ替え）は今までどおり
-//! bind が入っていれば pattern0 を静的に積む（陽性対照を同じ導出に置く）。
+//! 外した後も pattern0 が静的に積まれ、閉じた目が残っていた。純 `bind`（着せ替え）は bind が入って
+//! いれば全部のコマを静的に積む（seriko-pattern-calls M6・陽性対照を同じ導出に置く）。
 
 use super::*;
 use crate::plan_test_support::*;

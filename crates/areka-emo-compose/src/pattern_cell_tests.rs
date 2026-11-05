@@ -73,7 +73,8 @@ fn frame_and_blank_replace_each_other() {
     assert_eq!(c, d);
 }
 
-/// 入れた順に依らず等しい（全部の欄を使う）。
+/// 入れた順に依らず等しい（全部の欄を使う）。emo-present の `ComposeKey` のキャッシュ等価判定に使うので
+/// 挿入順非依存の `Eq` が要る（要件 5.2/5.4）。
 #[test]
 fn eq_is_insertion_order_stable_over_all_cells() {
     let mut a = PatternState::default();
@@ -161,6 +162,15 @@ fn same_number_in_top_part_and_film_never_mix() {
     // 子の欄は animation 0 だけ（他の番号は載っていない）。
     s.set_film(FilmId(0), 7);
     assert_eq!(s.cell(film(0), 1), Cell::Rest);
+
+    // 一番上を消しても部品は残る（要件 5.10）。
+    s.remove(0);
+    assert_eq!(s.cell(part(0), 0), Cell::Blank);
+    // 同じコマを一番上に置いた状態と部品に置いた状態は等しくない。
+    let (mut top, mut p) = (PatternState::default(), PatternState::default());
+    top.set(0, frame(100, 0, 0));
+    p.set_part(0, 0, frame(100, 0, 0));
+    assert_ne!(top, p);
 }
 
 /// 走査の口は「載っていない」以外の欄を、一番上 → 部品 → 子、各々番号の昇順で返す。

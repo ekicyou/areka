@@ -63,8 +63,8 @@ fn surface1000_is_all_bind_no_static_elements() {
 /// task 8.2 ①（要件 5.4・11.2）: 空 BindSet → 全透明（α==0）だが外形は非ゼロ。
 ///
 /// surface1000 は静的 element ゼロゆえ、空 BindSet では描画可能命令が一切生まれず、合成結果は
-/// 全画素 α==0（全透明）になる。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全 bind
-/// pattern0 原寸の和集合・task 5.4）ゆえ、パーツ画像を挿入した以上は非ゼロになる。これは
+/// 全画素 α==0（全透明）になる。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全部の bind
+/// の描くコマの原寸の和集合）ゆえ、パーツ画像を挿入した以上は非ゼロになる。これは
 /// 「全 bind surface でも外形が安定（bind on/off でサイズ不変）」を実データで固定する。
 #[test]
 fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
@@ -77,7 +77,7 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
     // 外形は非ゼロ（bind 非依存の静的外形＝挿入パーツ原寸の和集合）。
     assert!(
         out.width() > 0 && out.height() > 0,
-        "外形は bind 非依存で非ゼロ（task 5.4）"
+        "外形は bind 非依存で非ゼロ"
     );
     assert_eq!(
         out.stride(),
@@ -85,13 +85,12 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
         "premultiplied BGRA stride 契約"
     );
 
-    // 全画素 α==0（描画命令ゼロ＝全透明）。α バイトを走査して 1 つも α>0 が無いことを固定する。
-    let any_opaque = out.bytes().chunks_exact(4).any(|px| px[3] > 0);
-    assert!(
-        !any_opaque,
+    // 全画素 α==0（描画命令ゼロ＝全透明）。α>0 の画素が 1 つも無いことを固定する。
+    assert_eq!(
+        opaque_pixel_count(&out),
+        0,
         "空 BindSet では全画素が透明（α>0 の画素が存在しない・要件 5.4）"
     );
-    assert_eq!(opaque_pixel_count(&out), 0, "不透明画素は皆無");
 }
 
 /// task 8.2 ②（要件 5.4・11.2）: 非空 BindSet → 非空（α>0 の画素が存在する）。
@@ -175,10 +174,6 @@ fn surface1000_bind_count_overlap_point_sampling() {
     let n_arm = opaque_pixel_count(&out_arm);
     let n_eye = opaque_pixel_count(&out_eye);
     let n_both = opaque_pixel_count(&out_both);
-    assert!(
-        n_both >= n_arm && n_both >= n_eye,
-        "2 bind の不透明画素数は各単独 bind 以上（重なりの和集合・要件 11.2）"
-    );
     // 腕(80×20=1600) と 目(20×90=1800) の和集合は各単独より真に大きい（(0,0) 重なりでも
     // 一方が他方を完全内包しない配置ゆえ）。
     assert!(n_both > n_arm, "腕＋目 は腕単独より真に多い不透明画素");

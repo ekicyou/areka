@@ -1,10 +1,10 @@
 //! element定義の子の合成（要件 1.6・1.7・1.8・2.1〜2.4・2.7・3.1〜3.4・7.1・8.3）。
 //!
 //! 層 (i) は element定義を番号の昇順（同じ番号は書いた順）に見て、画像は命令に、サーフェスの番号は
-//! その場で子へ再帰する（位置は親の位置＋ element定義の X,Y）。先祖へ戻る・面の表に無い・範囲を
+//! 同じ順の位置で子の段へ入る（位置は親の位置＋ element定義の X,Y）。先祖へ戻る・面の表に無い・範囲を
 //! 超える数の element定義だけを飛ばし、`debug!` を 1 行出す。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use areka_emo_atlas::SetId;
@@ -13,7 +13,6 @@ use areka_parsers::shell::parse;
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
-use crate::nesting::NestIssue;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_test_support::{bake_atlas, frame, id_to_path, named_ops, ops, skipped};
 use crate::world::EmoWorld;
@@ -177,34 +176,17 @@ fn child_inside_pattern_target_surface() {
     );
 }
 
-/// 循環でも命令列は有限で、先祖へ戻る element定義だけが抜ける。切った辺はどれも 3.2 の報告に在り、
-/// 警告は出さない（読み込みのときに出ている・合成の中は `debug!`・要件 3.2・3.3）。
+/// 循環でも命令列は有限で、先祖へ戻る element定義だけが抜け、切る辺は 1 本・1 行。警告は出さない
+/// （読み込みのときに出ている・合成の中は `debug!`・要件 3.2・3.3）。切った辺が 3.2 の報告に在ることは
+/// `nesting_visible_tests.rs` の `cut_cycle_edges_from_every_top_are_reported` が確かめる。
 #[test]
 fn cycles_are_finite_and_cut_edges_are_reported() {
     let images = [(2, "surface2.png"), (11, "surface11.png")];
-    let report: BTreeSet<(u32, u32, String)> = {
-        let images: BTreeMap<u32, String> =
-            images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-        EmoWorld::build_with_images(&parse(FIXTURE), &images)
-            .nest_report()
-            .issues
-            .into_iter()
-            .filter_map(|issue| match issue {
-                NestIssue::Cycle {
-                    surface,
-                    element,
-                    target,
-                } => Some((surface, element, target.to_string())),
-                NestIssue::MissingTarget { .. } => None,
-            })
-            .collect()
-    };
     let expected_ops = [
         (60, vec![("part.png", 0, 0)]),
         (61, vec![("part.png", 0, 0), ("part.png", 0, 0)]),
         (62, vec![("part.png", 0, 0), ("part.png", 0, 0)]),
     ];
-    let mut cut_all = BTreeSet::new();
     for (top, expected) in expected_ops {
         let (ops, logs) = compose(FIXTURE, &images, top, &BindSet::default());
         assert_eq!(ops, expected, "一番上 {top}");
@@ -212,14 +194,8 @@ fn cycles_are_finite_and_cut_edges_are_reported() {
             !logs.contains("level=WARN"),
             "element定義の循環は警告しない: {logs}"
         );
-        let cut = skipped(&logs);
-        assert_eq!(cut.len(), 1, "切る辺は 1 本・1 行: {logs}");
-        for edge in cut {
-            assert!(report.contains(&edge), "切った辺 {edge:?} が報告に在る");
-            cut_all.insert(edge);
-        }
+        assert_eq!(skipped(&logs).len(), 1, "切る辺は 1 本・1 行: {logs}");
     }
-    assert_eq!(cut_all, report, "3 つの一番上で報告の辺を全部切る");
 }
 
 /// 無い番号・範囲を超える数の element定義だけが抜け、同じサーフェスの他の element定義は描く（要件 3.1・1.9）。

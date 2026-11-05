@@ -70,8 +70,8 @@ pub(crate) fn surface_with_anims(
 
 /// bind animation 1 本（interval=`Interval::Bind`・pattern0 が入れ子 surface_id を x,y で参照）。
 ///
-/// pattern index は 0 を pattern0（先頭）とし、識別用に index=5 の余分な pattern も加えて
-/// 「pattern0＝最小 index の pattern」を選ぶ実装を突く（疎 index 許容・model 契約）。
+/// pattern index は 0 を pattern0（先頭）とし、index=5 の余分な pattern（面の表に無い 999999）も加える。
+/// 純 `bind` は全部のコマをたどる（seriko-pattern-calls M6）ので pattern5 もたどるが、先が無いので何も積まない。
 pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
     Animation {
         id,
@@ -87,7 +87,7 @@ pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animati
                 x,
                 y,
             },
-            // pattern0 以外は本 task では未使用（pattern0 のみ合成対象・要件 5.2）。
+            // 面の表に無い先（たどっても何も積まない）。
             Pattern {
                 index: 5,
                 method: DrawMethod::new("overlay".to_string()),

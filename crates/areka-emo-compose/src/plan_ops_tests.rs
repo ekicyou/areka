@@ -190,7 +190,7 @@ fn appends_without_clearing() {
     assert_eq!(ops[0], sentinel);
 }
 
-/// surface 不在では何も積まない（後続 task が SurfaceNotFound 分類を担う・本 task は非追記）。
+/// surface 不在では何も積まない（SurfaceNotFound の分類は `build_plan` が担う）。
 #[test]
 fn missing_surface_pushes_nothing() {
     let world = EmoWorld::build(&shell_of(Vec::new()));
@@ -463,10 +463,10 @@ fn nested_pattern0_offset_is_applied_to_element_transform() {
 // ── task 5.3: 入れ子 surface 参照の多段 flatten と循環検出（visited 集合） ─────────────
 
 /// テスト5.3-①（受入基準・要件 7.1/7.2/7.3）: 自己参照 bind はスタックオーバーフローせず、
-/// 部分結果（自 surface の静的 element）が得られ、循環枝は打ち切られる（warn・非パニック）。
+/// 部分結果（自 surface の静的 element）が得られ、循環枝は打ち切られる（debug・非パニック）。
 ///
 /// surface 1000 は静的 element `self.png` を持ち、かつ自身の bind pattern0 が **surface 1000
-/// 自身**を参照する（自己参照 = 循環）。derive_ops は無限再帰せず（テストが完走すれば O.K.）、
+/// 自身**を参照する（自己参照 = 循環）。derive_ops は無限に回らず（テストが完走すれば O.K.）、
 /// 静的層 self.png は積まれ、自己参照枝は visited で打ち切られる。
 #[test]
 fn self_reference_does_not_overflow_and_yields_partial_result() {
@@ -485,7 +485,7 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
     world.bind_atlas(&atlas, SetId(0));
 
     let binds = BindSet::from_ids([1]);
-    // これが無限再帰すると本テストは完走できない（スタックオーバーフローで abort）。
+    // 循環を打ち切らなければ本テストは完走できない。
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
 
     // 静的層 self.png は積まれる（部分結果）。
@@ -501,7 +501,7 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
 /// 打ち切られ部分結果が得られる（非パニック）。
 ///
 /// surface A=1000 の bind→B=1100、B の bind→A=1000。A から derive すると
-/// A 静的 → B 静的（B の bind 経由で A 再入は visited で打ち切り）。無限再帰しない。
+/// A 静的 → B 静的（B の bind 経由で A 再入は visited で打ち切り）。無限に回らない。
 #[test]
 fn mutual_reference_cycle_is_pruned_without_overflow() {
     let base = Path::new("shell/master");
@@ -646,16 +646,14 @@ fn cyclic_derivation_is_deterministic() {
     );
 }
 
-// ── task 11.2: 静的合成の pattern0＝厳密 index==0 選択（実機第2欠陥・要件 9.1/9.2/9.5）──────
+// ── 着せ替えのコマの静的な積み方（要件 9.1/9.2/9.5）──────────────────────────────────────
 //
-// 実機サインオフ#2: むらさきの目が常時閉じている。真因＝`flatten_surface` の pattern 選択が
-// 最小 index フォールバック（min_by_key）だったため、pattern0 を持たない まばたき animation
-// （emo2 1400=`interval,bind+random`・pattern1/2/3、1403=`interval,bind`・pattern2）の閉じ目
-// フレーム（surface 1412/1414）が静的土台へ積まれ、ベースの目（1302）を覆っていた。canon では
-// pattern0（index==0）を持たない bind animation は seriko-loop（M-life）が再生する再生専用
-// フレームで、静的土台には寄与しない。修正＝index==0 厳密選択・不在は良性 skip（DEBUG）。
+// コマの無い有効な純 `bind` は全部のコマを番号の順に重ねる（seriko-pattern-calls 6.8・SSP の測り M6）。
+// `bind+random` はコマのあるときだけそのコマを描き、コマが無いあいだは何も積まない（良性 skip・DEBUG・
+// animated-surface-log-flood 件 26）。実機サインオフ#2（むらさきの目が常時閉じている）は、まばたきの
+// `bind+random`（emo2 1400）の閉じ目フレーム（surface 1412）が静的土台に積まれてベースの目を覆った件。
 
-/// テスト11.2-①（要件 9.1/9.2）: pattern0（index==0）を持たない有効な純 `bind` も、持っているコマを
+/// テスト①（要件 9.1/9.2）: pattern0（index==0）を持たない有効な純 `bind` も、持っているコマを
 /// 静的に積む（純 `bind` は全部のコマを番号の順に重ねる・seriko-pattern-calls 6.8・SSP の測り M6 で
 /// 期待を直した）。pattern0 で絞ると閉じ目（surface 1412）が消える。`bind+random` がコマの無いあいだ
 /// 何も積まないことは次のテストが見る。
@@ -683,7 +681,7 @@ fn pattern0_less_pure_bind_draws_its_patterns() {
     );
 }
 
-/// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
+/// テスト②（要件 9.2）: index==0 と index==1 が共存 → `bind+random` はコマが無いあいだ何も
 /// 静的に積まない（animated-surface-log-flood 件 26 の決めで期待を直した）。純 `bind` は全部のコマを
 /// 番号の順に重ねる（seriko-pattern-calls 6.8・SSP の測り M6 で期待を直した）。
 #[test]

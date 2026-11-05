@@ -75,7 +75,7 @@ fn self_mutual_and_mixed_cycles_are_listed() {
 }
 
 /// 描画メソッドに依らず、すべての pattern定義の辺をたどる。欄 2 が animation の番号になる 7 語の辺と、
-/// 負の番号は辺にしない。pattern定義だけの循環は報告に載らない（今の合成のたびの warn のまま）。
+/// 負の番号は辺にしない。pattern定義だけの循環は報告に載らない（合成のたびの知らせは debug）。
 #[test]
 fn pattern_edges_skip_the_seven_animation_id_words() {
     let words = [

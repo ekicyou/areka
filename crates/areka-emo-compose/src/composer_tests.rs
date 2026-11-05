@@ -1,9 +1,9 @@
-//! `Composer` ファサード結線の in-source テスト（task 7・要件 5.1/5.5/6.6/9.1/9.3/9.4/10.3/10.4/10.5）。
+//! `Composer` ファサード結線の in-source テスト（要件 5.1/5.5/6.6/9.1/9.3/9.4/10.3/10.4/10.5）。
 //!
 //! fold（[`EmoWorld::build`]）→ bind（[`EmoWorld::bind_atlas`]）→ plan（[`crate::plan::build_plan`]）
 //! → execute（[`crate::blit::execute`]）の全結線を、`MemoryDecoder`+`bake` の COM/WIC 非依存経路で
-//! headless に検証する。Composer が合成結果を保持しないこと（要件 9.4）・buffer 再利用でゼロ
-//! アロケーション定常状態になること（要件 10.3）・失敗経路が `Err` で伝播すること（要件 10.5）・
+//! headless に検証する。Composer が合成結果を保持しないこと（要件 9.4）・同じ入力の繰り返しで `out` の
+//! 先頭と命令列の容量が変わらないこと（要件 10.3）・失敗経路が `Err` で伝播すること（要件 10.5）・
 //! compose と compose_into が等価かつ決定的であること（要件 10.1）を固定する。
 
 use super::*;
@@ -448,8 +448,8 @@ fn compose_is_deterministic() {
 /// animation-sort=ascend の多層 + 複数 bind を実データ構造で end-to-end（fold→bind→plan→blit）合成し、
 /// 描画順（ascend ゆえ ID 降順）が画素へ反映されることで結線を証明する。
 ///
-/// hot path が `AtlasTable::resolve` を呼ばず `entry` O(1) のみを使うことは、bind_atlas 後に
-/// `resolve` を一切呼ばずに compose が成功する本テストの経路で示される（束縛は build_bound で完了）。
+/// hot path が `AtlasTable::resolve` を呼ばないことは、下の
+/// [`hot_path_sources_do_not_call_atlas_resolve`] がソースを走査して確かめる。
 #[test]
 fn end_to_end_multilayer_ascend_wiring() {
     let base = Path::new("shell/master");
@@ -506,14 +506,31 @@ fn end_to_end_multilayer_ascend_wiring() {
 fn hot_path_sources_do_not_call_atlas_resolve() {
     // 毎フレームの道のファイルの、中に書いたテストの mod より前に `.resolve(` が無いこと（plan.rs と
     // plan_extent.rs は頭に `#[cfg(test)]` の口を持つので、そこで切ると頭の数十行しか見ない）。
-    for (src, file) in [
-        (include_str!("plan.rs"), "plan.rs"),
-        (include_str!("plan_extent.rs"), "plan_extent.rs"),
-        (include_str!("plan_always.rs"), "plan_always.rs"),
-        (include_str!("blit.rs"), "blit.rs"),
-        (include_str!("blit_rect.rs"), "blit_rect.rs"),
+    // 各ファイルの的の関数（切った領域に在ることを先に確かめ、空の領域で黙って通らないようにする）。
+    for (src, file, target) in [
+        (include_str!("plan.rs"), "plan.rs", "fn build_plan"),
+        (
+            include_str!("plan_extent.rs"),
+            "plan_extent.rs",
+            "fn build_extents",
+        ),
+        (
+            include_str!("plan_always.rs"),
+            "plan_always.rs",
+            "fn film_op",
+        ),
+        (include_str!("blit.rs"), "blit.rs", "fn execute"),
+        (
+            include_str!("blit_rect.rs"),
+            "blit_rect.rs",
+            "fn execute_reusing",
+        ),
     ] {
         let non_test = src.split("mod tests {").next().unwrap_or(src);
+        assert!(
+            non_test.contains(target),
+            "{file}: 検査の的 {target} が在る"
+        );
         assert!(
             !non_test.contains(".resolve("),
             "{file} の hot path（非テスト領域）は atlas.resolve を呼ばない（要件 4.3）"

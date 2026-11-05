@@ -9,9 +9,10 @@ use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{coll, elem, shell_mixed, shell_of, surface_def};
 use crate::sample_test_support::emo2_shell;
-use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
+use crate::world::{AliasMap, SurfaceIndex};
 
-/// 既定リソースを備えた空 World を用意する（`EmoWorld::build` と同じ初期化）。
+/// 畳み込みが必ず読むリソース（`SurfaceIndex`・`AliasMap`）だけを備えた空 World を用意する
+/// （`SurfaceImages` は無ければ画像だけの面が無いものとして読む）。
 fn fresh_world() -> World {
     let mut world = World::new();
     world.insert_resource(SurfaceIndex::default());
@@ -127,39 +128,6 @@ fn range_creates_inclusive_ids() {
     assert!(master_of(&world, 0).is_none());
     assert!(master_of(&world, 4).is_none());
     assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
-}
-
-/// (c) 重複 id は前の定義へ足し、同じ element番号の行は両方を残す（前の行が先・SSP 2.9.29 と同じ・
-/// spec: audit-emo-compose 設計の議題 7 案 A。足し合わせるのは開発者の決め 2026-10-17）。
-#[test]
-fn duplicate_id_same_layer_line_keeps_both() {
-    let first = surface_def(
-        7,
-        vec![AppendTarget::Single(7)],
-        vec![elem(0, "old.png", 0, 0)],
-    );
-    let second = surface_def(
-        7,
-        vec![AppendTarget::Single(7)],
-        vec![elem(0, "new.png", 5, 6)],
-    );
-    let mut world = fresh_world();
-    fold_shell(&mut world, &shell_of(vec![first, second]));
-
-    let m = master_of(&world, 7).expect("id=7 が常駐する");
-    // 同じ layer 0 は両方: old.png (0,0) が先・new.png (5,6) が後。
-    assert_eq!(m.elements.len(), 2);
-    assert_eq!(m.elements[0].path.as_str(), "old.png");
-    assert_eq!(m.elements[1].path.as_str(), "new.png");
-    assert_eq!(m.elements[1].transform.offset(), (5, 6));
-    // 足し合わせても entity は 1 件のみ。
-    assert_eq!(world.resource::<SurfaceIndex>().0.len(), 1);
-    let live: Vec<u32> = world
-        .query::<&SurfaceId>()
-        .iter(&world)
-        .map(|s| s.0)
-        .collect();
-    assert_eq!(live, vec![7]);
 }
 
 /// (d) 単一形 `surface0`: 従来どおり 1 件だけ新設される。

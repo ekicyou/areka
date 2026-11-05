@@ -108,31 +108,6 @@ fn mul_uses_wide_intermediate_without_wrapping() {
     );
 }
 
-/// 要件 1.6: 約分後も u32 域へ収まらない病的比は、大きい側を `u32::MAX` へ張り付ける
-/// 線形縮小で近似縮退する（比の保存ではないが誤差は 1 量子化ステップ以内）。
-#[test]
-fn mul_degrades_proportionally_when_product_exceeds_u32() {
-    // 65_537² = 4_295_098_369（u32::MAX = 4_294_967_295 を 131_074 だけ超える）。
-    // 大きい側 num を u32::MAX へ張り付け、den は 1*u32::MAX/4_295_098_369 = 0 → 最小 1。
-    let big = ScaleRatio::new(65_537, 1).unwrap();
-    let sq = big.mul(big);
-    assert_eq!(
-        (sq.num, sq.den),
-        (4_294_967_295, 1),
-        "誤差 0.0031%（真値 4_295_098_369）"
-    );
-    assert_eq!(sq.scale_len(1), 4_294_967_295);
-
-    // 分母側が超過する対称ケース（den を u32::MAX へ張り付け・num は最小 1）。
-    let tiny = ScaleRatio::new(1, 65_537).unwrap();
-    let sq_inv = tiny.mul(tiny);
-    assert_eq!((sq_inv.num, sq_inv.den), (1, 4_294_967_295));
-
-    // 縮退後も分子・分母は常に非ゼロ（as_f32 が 0 / NaN / inf にならない）。
-    assert!(sq.as_f32() > 0.0 && sq.as_f32().is_finite());
-    assert!(sq_inv.as_f32() > 0.0 && sq_inv.as_f32().is_finite());
-}
-
 /// 要件 1.4（ログ規律・フォールバック発生＝`warn!`）: 近似縮退は縮退前後の値つきで
 /// `warn!` を発する（ログ無し失敗経路の禁止）。縮退しない通常経路は無音（非空虚性）。
 #[test]
@@ -211,40 +186,6 @@ fn dpi_table_scaled_extent_is_deterministic() {
     assert_eq!(k192.scaled_extent(100, 200), (200, 400));
 }
 
-/// 要件 2.5: 端数ちょうど 0.5 は 0 から遠い側（切り上げ）へ丸める。
-#[test]
-fn scale_len_rounds_half_away_from_zero() {
-    let half = ScaleRatio::new(1, 2).unwrap();
-    // 0.5 / 1.5 / 2.5 / 3.5 がすべて切り上がる。
-    assert_eq!(half.scale_len(1), 1);
-    assert_eq!(half.scale_len(3), 2);
-    assert_eq!(half.scale_len(5), 3);
-    assert_eq!(half.scale_len(7), 4);
-    // 端数なしは素通し。
-    assert_eq!(half.scale_len(2), 1);
-    assert_eq!(half.scale_len(4), 2);
-
-    let k54 = ScaleRatio::new(5, 4).unwrap();
-    assert_eq!(k54.scale_len(2), 3); // 2.5
-    assert_eq!(k54.scale_len(6), 8); // 7.5
-    assert_eq!(k54.scale_len(10), 13); // 12.5
-
-    let k32 = ScaleRatio::new(3, 2).unwrap();
-    assert_eq!(k32.scale_len(1), 2); // 1.5
-    assert_eq!(k32.scale_len(3), 5); // 4.5
-    assert_eq!(k32.scale_len(5), 8); // 7.5
-
-    let quarter = ScaleRatio::new(1, 4).unwrap();
-    assert_eq!(quarter.scale_len(2), 1); // 0.5
-    assert_eq!(quarter.scale_len(6), 2); // 1.5
-    assert_eq!(quarter.scale_len(10), 3); // 2.5
-
-    // 0.5 未満は切り捨て側（最小 1px 保証と区別される丸めそのものの挙動）。
-    assert_eq!(ScaleRatio::new(1, 3).unwrap().scale_len(3), 1); // 1.0
-    assert_eq!(ScaleRatio::new(2, 5).unwrap().scale_len(3), 1); // 1.2 → 1
-    assert_eq!(ScaleRatio::new(3, 5).unwrap().scale_len(3), 2); // 1.8 → 2
-}
-
 /// 要件 2.5: 非ゼロ原寸は最小 1px（縮小で表示が消えない）。
 #[test]
 fn scale_len_clamps_nonzero_to_min_one_pixel() {
@@ -303,28 +244,17 @@ fn scale_len_handles_large_extents_without_overflow() {
     let shrink = ScaleRatio::new(1, u32::MAX).unwrap();
     assert_eq!(shrink.scale_len(u32::MAX), 1);
 }
-
 /// 要件 2.5: 丸め規約 round half away from zero を、**丁度 .5 とその両隣**の対で固定する。
 ///
 /// 片側だけの主張では「常に切り上げ」実装も緑になってしまう。`.5` 未満（切り捨て）・
 /// `.5` 丁度（切り上げ）・`.5` 超（切り上げ）の 3 点を隣接入力で対にする。
 ///
-/// # 殺す変異（変異注入の実測に基づく。**排他的キルは持たない**）
+/// # 殺す変異（**排他的キルは持たない**・`dpi_table_scaled_extent_is_deterministic` と共倒れ）
 ///
-/// 丸め変異の一次防衛線は既存 `scale_len_rounds_half_away_from_zero`／
-/// `dpi_table_scaled_extent_is_deterministic` が既に張っており、下の 3 変異はいずれも
-/// それらと共倒れになる。本テストの役割は「.5 未満／.5 丁度／.5 超」を隣接入力の対として
-/// 契約に明文化することであって、新しい変異を単独で捕まえることではない。
-///
-/// - 常に切り上げ（`div_ceil`）: `…499/1000`（0.499）が 1 つ上へずれる。実測 5 失敗＝
-///   本テスト・`as_f32_is_query_view_not_dimension_authority`・
-///   `scale_len_u128_intermediate_beats_u64_overflow`＋既存 2 本
-///   （`scale_len_rounds_half_away_from_zero`／`dpi_table_scaled_extent_is_deterministic`）。
-/// - 常に切り捨て（`len·num/den`）: `…500/1000`（0.5 丁度）が 1 つ下へずれる。実測 3 失敗＝
-///   本テスト＋既存 2 本（上記 2 本）。
+/// - 常に切り上げ（`div_ceil`）: `…499/1000`（0.499）が 1 つ上へずれる（`as_f32_is_query_view_not_dimension_authority`・
+///   `scale_len_u128_intermediate_beats_u64_overflow` も落ちる）。
+/// - 常に切り捨て（`len·num/den`）: `…500/1000`（0.5 丁度）が 1 つ下へずれる。
 /// - round half to **even**: `n` が偶数の `n+0.5` が `n` へ落ちる（下の両ループが検出）。
-///   実測 3 失敗＝本テスト＋既存 2 本（`scale_len_rounds_half_away_from_zero` も
-///   同じ変異で死ぬ）。
 ///
 /// なお本テストの入力はすべて結果 ≥ 1 ゆえ、最小 1px クランプが丸めを覆い隠さない
 /// （min1px と丸めの檻を分離する）。
@@ -353,6 +283,23 @@ fn scale_len_half_tie_pairs_pin_round_half_away_from_zero() {
     assert_eq!(k32.scale_len(4), 6, "6.0 は素通し");
     let k74 = ScaleRatio::new(7, 4).unwrap();
     assert_eq!(k74.scale_len(2), 4, "3.5 丁度 → 4");
+    let (k54, quarter) = (
+        ScaleRatio::new(5, 4).unwrap(),
+        ScaleRatio::new(1, 4).unwrap(),
+    );
+    assert_eq!(
+        (k54.scale_len(6), k54.scale_len(10)),
+        (8, 13),
+        "7.5 → 8・12.5 → 13"
+    );
+    assert_eq!(
+        (quarter.scale_len(6), quarter.scale_len(10)),
+        (2, 3),
+        "1.5 → 2・2.5 → 3"
+    );
+    // 0.5 未満は切り捨て側（1.8 → 2 は切り上げ側）。
+    assert_eq!(ScaleRatio::new(3, 5).unwrap().scale_len(3), 2, "1.8 → 2");
+    assert_eq!(ScaleRatio::new(2, 5).unwrap().scale_len(6), 2, "2.4 → 2");
     assert_eq!(
         k74.scale_len(6),
         11,
@@ -418,20 +365,18 @@ fn mul_is_commutative_and_associative() {
 ///
 /// # 殺す変異（変異注入の実測に基づく。**排他的キルは持たない**）
 ///
-/// 下の 3 変異はいずれも既存 `mul_degrades_proportionally_when_product_exceeds_u32`
-/// （と、ログを見る `mul_degradation_emits_warn_log`）と共倒れになる。本テストの役割は
+/// 下の 3 変異はいずれもログを見る `mul_degradation_emits_warn_log` と共倒れになる。本テストの役割は
 /// 縮退の契約——「大きい側は `u32::MAX` ちょうど・小さい側は最小 1」——を
 /// 複数の base 族で明文化することである。
 ///
 /// - 縮退を「素朴な半減（`div_ceil(2)`）」へ差し替える実装（設計レビューで REJECT
 ///   された案）。`den == 1` の族では真値の **50%** へ落ちるため、下の厳密値と
-///   相対誤差上限の双方が破れる。実測 3 失敗＝本テスト＋既存 2 本。
+///   相対誤差上限の双方が破れる。
 /// - 大きい側の張り付け先を `u32::MAX` 以外（例 `u32::MAX/2`）にする変異
-///   （`max(num, den) == u32::MAX` の主張が死ぬ）。実測 3 失敗＝本テスト＋既存 2 本。
+///   （`max(num, den) == u32::MAX` の主張が死ぬ）。
 /// - 小さい側の `max(1)` を落とす変異。縮小後 `den == 0` となり、`gcd(u32::MAX, 0)` で
 ///   割った正準化の結果が `(1, 0)` へ落ちるため、まず `(sq.num, sq.den) == (u32::MAX, 1)`
 ///   の厳密値主張が発火する（`as_f32` も inf になるが、そこへ到達する前に死ぬ）。
-///   実測 2 失敗＝本テスト＋既存 `mul_degrades_proportionally_when_product_exceeds_u32`。
 #[test]
 fn mul_saturating_degradation_pins_largest_to_u32_max() {
     for base in [65_536u32, 65_537, 100_000, 1_000_000, u32::MAX] {
@@ -444,6 +389,11 @@ fn mul_saturating_degradation_pins_largest_to_u32_max() {
         );
         assert_eq!(sq.num.max(sq.den), u32::MAX, "base={base}");
         assert!(sq.as_f32().is_finite() && sq.as_f32() > 0.0, "base={base}");
+        assert_eq!(
+            sq.scale_len(1),
+            u32::MAX,
+            "base={base}: 縮退した比で長さも張り付く"
+        );
 
         // 逆数側（分母が溢れる対称ケース）。
         let down = ScaleRatio::new(1, base).unwrap();
@@ -487,18 +437,17 @@ fn mul_saturating_degradation_pins_largest_to_u32_max() {
 /// # 殺す変異（変異注入の実測に基づく）
 ///
 /// - `scale_len` を `(len as f32 * self.as_f32()) as u32` へ差し替える（仮数欠落で
-///   大寸が 1px ずれ、極小 k で 0 へ潰れる）。**既存と共倒れ**——実測 5 失敗＝本テスト・
+///   大寸が 1px ずれ、極小 k で 0 へ潰れる）。**既存と共倒れ**——
 ///   `scale_len_half_tie_pairs_pin_round_half_away_from_zero`・
-///   `scale_len_u128_intermediate_beats_u64_overflow`＋既存 2 本
-///   （`scale_len_rounds_half_away_from_zero`／`dpi_table_scaled_extent_is_deterministic`）。
+///   `scale_len_u128_intermediate_beats_u64_overflow`・`dpi_table_scaled_extent_is_deterministic` も落ちる。
 ///   ただし丸めを保った穏当版 `(len as f32 * self.as_f32()).round() as u32` では既存が
 ///   全緑になり、本テストと `scale_len_u128_…` の**新 2 本だけが落ちる**——本テストの
 ///   固有価値はこの「f32 化が丸め規約を保っていても寸法権威にならない」域にある。
 /// - `as_f32` を `num as f32 / den as f32` 以外（例: 先に整数除算）へ変える。
-///   **既存と共倒れ**——実測 3 失敗＝本テスト＋既存 `as_f32_yields_exact_dpi_values`／
-///   `mul_degrades_proportionally_when_product_exceeds_u32`。
-/// - `scale_len` の最小 1px クランプを落とす。**既存と共倒れ**——実測 2 失敗＝本テスト＋
-///   既存 `scale_len_clamps_nonzero_to_min_one_pixel`。
+///   **既存と共倒れ**——`as_f32_yields_exact_dpi_values`／
+///   `mul_saturating_degradation_pins_largest_to_u32_max` も落ちる。
+/// - `scale_len` の最小 1px クランプを落とす。**既存と共倒れ**——
+///   `scale_len_clamps_nonzero_to_min_one_pixel` も落ちる。
 #[test]
 fn as_f32_is_query_view_not_dimension_authority() {
     // 2 冪分母は f32 で厳密（照会値としての厳密性）。

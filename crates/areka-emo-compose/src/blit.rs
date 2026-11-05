@@ -190,9 +190,9 @@ pub(crate) fn overlay_op(
 ///
 /// placement None・頁欠落・頁をはみ出す uv・境界外座標はすべて skip／クリップで吸収し、`panic!` しない。
 ///
-/// # 結線（task 7）
+/// # 結線
 ///
-/// 本関数は task 7 の Composer ファサード（[`crate::Composer::compose_into`]）から
+/// 本関数は Composer ファサード（[`crate::Composer::compose_into`]）から
 /// [`crate::plan::build_plan`] が返す `(Extent, ops)` を受けて結線・消費される。
 pub(crate) fn execute(
     out: &mut ComposedSurface,

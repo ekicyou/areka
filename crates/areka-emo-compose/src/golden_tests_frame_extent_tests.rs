@@ -9,7 +9,7 @@ use super::{
 // task 7.3: 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
 // `compute_extent` 外形前提）。
 //
-// design 決定（design.md「合成合流」）: `compute_extent`（外形）は transient コマを寄与させず、
+// design 決定（design.md「合成合流」）: 外形（束縛のときの表・`EmoWorld::extent`）は transient コマを寄与させず、
 // 「まばたきコマ（1410-1412/2106-2110）はベース外形内に収まる前提」を維持する。コマがベース外形を
 // 越えると越えた分がクリップされる（許容劣化）。**この前提を宣言に留めず emo2 fixture の実測で裏取り
 // する**（design「Testing Strategy / Integration Tests item 3: emo-compose golden」）。
@@ -20,13 +20,13 @@ use super::{
 // ——の**全コマ**について、各コマが参照する surface の **原寸**（`AtlasEntry.original`＝実 PNG の
 // IHDR 寸法）＋コマの (x,y) オフセットが、当該アニメをホストするベース surface（kero=2100／
 // sakura=1000）の `Extent` 内に収まる（`x + frame.w <= base.w` かつ `y + frame.h <= base.h`）ことを
-// production `compute_extent` で検証する。
+// 束縛のときの外形の表（`EmoWorld::extent`）で検証する。
 //
 // ## real fixture 経路（COM/WIC 回避）
 // アニメ構造・(x,y) は**実 surfaces.txt を parse＋fold した実データ**（`EmoWorld` の SurfaceMaster）から
 // 読む。各 surface の原寸は**実 PNG の IHDR を直読**して得る（COM/WIC デコード不要）。実寸の全不透明
 // バッファを `MemoryDecoder` へ挿入して bake するため `AtlasEntry.original` は実 fixture 寸法どおりに
-// なり（全不透明ゆえ placement も full＝original）、`compute_extent` はベース／コマの外形を実寸で算出する。
+// なり（全不透明ゆえ placement も full＝original）、外形の算出はベース／コマの外形を実寸で求める。
 // ＝実アニメ構造・実オフセット・実原寸に基づく real-fixture 検証（既存 golden の合成画素檻が headless
 // 合成画素を扱うのに対し、本檻は headless で**実寸外形**を扱う）。
 // ============================================================================
@@ -194,7 +194,7 @@ fn kero_blink_frames_fit_within_base_extent() {
 /// sakura の採録まばたき（surface1000 内 `animation1400.interval,bind+random,4`）はフレーム
 /// 1412（`eyebase+toji`）／1411（`eyebase+hanme`）／1410（`eyebase+normal`）を overlay する。各フレーム
 /// surface は eye パーツ 2 枚（いずれも実原寸 382×547 の全身キャンバス）の (0,0) 和集合＝382×547。
-/// base surface1000（全パーツ MAYUNA bind の本体・外形は全 bind pattern0 原寸の和集合）は 382×547 を
+/// base surface1000（全パーツ MAYUNA bind の本体・外形は全部の bind の描くコマの原寸の和集合）は 382×547 を
 /// 含むため、各コマはオフセット (0,0) で base 外形内に収まる（越境クリップは発生しない）。
 #[test]
 fn sakura_blink_frames_fit_within_base_extent() {

@@ -132,7 +132,12 @@ animation9.interval,bind
 animation9.pattern1,overlay,201,60,0,0
 }
 ";
-    let world = EmoWorld::build(&parse(text));
+    let mut world = EmoWorld::build(&parse(text));
+    // 足し合わせても面の entity は 1 件のみ（表も entity も 7 だけ）。
+    let mut q = world.world_mut().query::<&crate::world::SurfaceId>();
+    let live: Vec<u32> = q.iter(world.world()).map(|s| s.0).collect();
+    assert_eq!(live, vec![7]);
+    assert_eq!(world.surface_ids().collect::<Vec<_>>(), vec![7]);
     let face = world.surface(7).expect("面 7");
 
     let got: Vec<(u32, &str, (i64, i64))> = face

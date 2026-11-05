@@ -1,17 +1,14 @@
-//! ログ発火経路の決定論的檻（要件 1.4/3.3/4.3/7.3/8.4/10.5 が明示的に義務づける `warn!`/`error!`）。
+//! ログ発火経路の決定論的檻（要件 1.4/3.3/4.3/7.3/8.4/10.5 が義務づける記録の行）。
 //!
-//! 既存テストは観測可能な副作用（None/skip/Err/非パニック）のみを固定していたが、要件は
-//! **ログの発火**そのものを義務づける。本モジュールは [`crate::log_capture::capture_logs`] で
-//! 各失敗経路のログを捕捉し、(a) 決定論的入力で経路を起こし、(b) 捕捉テキストに **level
-//! （WARN/ERROR）＋ target（`areka_emo_compose`）＋ discriminating field**（surface_id/method/
-//! key/path/id）が現れることを assert し、(c) 従来どおり観測可能な副作用も併せて固定する。
+//! [`crate::log_capture::capture_logs`] で各失敗経路のログを捕捉し、(a) 決定論的入力で経路を起こし、
+//! (b) 捕捉テキストに **level（DEBUG/WARN/ERROR）＋ target（`areka_emo_compose`）＋ discriminating
+//! field**（surface_id/method/key/path/id）が現れることを assert し、(c) 観測可能な副作用
+//! （None/skip/Err/非パニック）も併せて固定する。組むたびに出る知らせ（循環・未実装メソッド・
+//! pattern0 の無い着せ替え）は DEBUG、読み込みと防御の知らせは WARN/ERROR。
 //!
-//! # 非空虚性（RED プローブ）
+//! # 非空虚性
 //!
-//! 各ログ assert は level と discriminating field を同時に突くため、当該 `warn!`/`error!` 行を
-//! 削れば必ず失敗する。cycle・unimplemented-method・error! の各ケースについては、production の
-//! ログ行をコメントアウトすると本モジュールの対応 assert が RED になることを確認済み（本番は
-//! `git diff` で無改変を確認）。
+//! 各ログ assert は level と discriminating field を同時に突くため、当該ログ行を削れば必ず失敗する。
 
 use super::*;
 
@@ -33,13 +30,13 @@ use crate::plan_test_support::{
     surface_with_anims,
 };
 
-// ── 7.3: 循環検出 warn（ops 経路・flatten_surface）────────────────────────────────────
+// ── 7.3: 循環検出 debug（ops 経路・flatten_surface）───────────────────────────────────
 
 /// 要件 7.3: 自己参照 surface の合成で循環の知らせが surface_id つきで発火する（＋部分結果は非パニック）。
 /// 組むたびの知らせなので DEBUG（warn は読み込みが 1 度だけ・offline-surface-dump 要件 7.5）。
 ///
 /// surface 1000 が自身の bind pattern0 で 1000 を参照する（自己参照）。build_plan（→derive_ops→
-/// flatten_surface）は循環枝を打ち切り WARN を出す。要件 7.3 はこのログが本体。
+/// flatten_surface）は循環枝を打ち切り DEBUG を出す。要件 7.3 はこのログが本体。
 #[test]
 fn cycle_detection_debug_fires_with_surface_id() {
     let base = Path::new("shell/master");
@@ -58,7 +55,7 @@ fn cycle_detection_debug_fires_with_surface_id() {
     let mut visited = PlanScratch::default();
     let logs = capture_logs(|| {
         // build_plan は外形を表から引き（extent 経路は束縛のときだけ）、derive_ops（ops 経路）を走らせる。
-        // ops 経路（flatten_surface）の循環 WARN を狙って結果自体も固定する。
+        // ops 経路（flatten_surface）の循環 DEBUG を狙って結果自体も固定する。
         let extent = build_plan(
             &mut ops,
             &mut visited,
@@ -74,9 +71,8 @@ fn cycle_detection_debug_fires_with_surface_id() {
         assert_ne!(extent.w, 0, "外形は非ゼロ");
     });
 
-    // ops 経路（flatten_surface）の循環 WARN を **行単位で判別**して突く。extent 経路の循環の知らせ
-    // （「外形算出:」接頭）と取り違えないよう（今は束縛のときにしか出ないが、合成へ戻れば masking
-    // されうる）、ops 経路の WARN は「外形算出」を
+    // ops 経路（flatten_surface）の循環 DEBUG を **行単位で判別**して突く。extent 経路の循環の知らせ
+    // （「外形算出:」接頭・束縛のときに出る）と取り違えないよう、ops 経路の行は「外形算出」を
     // **含まない** 循環行として一意に判別する（この行を消せば必ず落ちる・非空虚性）。
     let ops_cycle_line = logs.lines().find(|l| {
         l.contains("level=DEBUG")
@@ -96,7 +92,7 @@ fn cycle_detection_debug_fires_with_surface_id() {
     );
 }
 
-/// 要件 7.3: 外形算出経路（flatten_extent）の循環の知らせ（DEBUG）も surface_id つきで発火する。
+/// 要件 7.3: 外形算出経路（`compute_extent_limited`）の循環の知らせ（DEBUG）も surface_id つきで発火する。
 ///
 /// 外形は束縛のとき（`bind_atlas` の最後・指摘 8）に表へ求めるので、外形の走査の循環の知らせ（メッセージに
 /// 「外形算出」を含む）はそこで出て、合成（build_plan）では出ない。extent 経路の循環ログを個別に固定する。
@@ -111,7 +107,7 @@ fn extent_cycle_debug_fires_with_surface_id() {
         vec![bind_anim(1, 2000, 0, 0)], // 自己参照。
     );
     let mut world = EmoWorld::build(&shell_of(vec![host]));
-    // extent は有効 bind 非依存ゆえ束縛のときに全 pattern0 を辿る。
+    // extent は有効 bind 非依存ゆえ束縛のときに全部の bind の描くコマを辿る。
     let logs = capture_logs(|| world.bind_atlas(&atlas, SetId(0)));
 
     let binds = BindSet::default();
@@ -130,8 +126,8 @@ fn extent_cycle_debug_fires_with_surface_id() {
         .expect("自己参照でも Ok（外形は非ゼロ）");
     });
 
-    // extent 経路（flatten_extent）特有の循環 WARN を **行単位で判別**する（「外形算出」を含む
-    // 循環行）。ops 経路の循環 WARN とは別の行として一意に突く（この行を消せば必ず落ちる）。
+    // extent 経路特有の循環 DEBUG を **行単位で判別**する（「外形算出」を含む循環行）。ops 経路の
+    // 循環 DEBUG とは別の行として一意に突く（この行を消せば必ず落ちる）。
     let extent_cycle_line = logs.lines().find(|l| {
         l.contains("level=DEBUG")
             && l.contains("target=areka_emo_compose")
@@ -141,7 +137,7 @@ fn extent_cycle_debug_fires_with_surface_id() {
     });
     assert!(
         extent_cycle_line.is_some(),
-        "extent 経路（flatten_extent）の循環 DEBUG（外形算出を含む）が発火する: {logs}",
+        "extent 経路の循環 DEBUG（外形算出を含む）が発火する: {logs}",
     );
     assert!(
         !compose_logs.contains("外形算出"),
@@ -149,15 +145,16 @@ fn extent_cycle_debug_fires_with_surface_id() {
     );
 }
 
-// ── 11.2: pattern0（index==0）なし bind の良性 skip DEBUG（ops 経路・flatten_surface）──────
+// ── pattern0（index==0）なし bind+random の良性 skip DEBUG（ops 経路・flatten_surface）──────
 
-/// 要件 9.1/9.3: pattern0（index==0）を持たない有効 bind は **DEBUG**（surface_id＋animation_id つき）を
+/// 要件 9.1/9.3: コマの無い有効な `bind+random` は **DEBUG**（surface_id＋animation_id つき）を
 /// 出して skip する（非パニック・WARN/ERROR は出さない）。まばたき等 `interval,bind+random` 再生
-/// アニメの静的不活性（実機第2欠陥の是正・task 11.2）。
+/// アニメの静的不活性。
 ///
 /// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当）。build_plan（→derive_ops
-/// →flatten_surface）は index==0 不在ゆえ命令を積まず DEBUG を出す。extent 経路（`plan_extent.rs` の flatten_extent）は
-/// サイズ不変契約のため全 bind pattern（min_by_key）を辿るが DEBUG は出さない＝DEBUG は 1 本だけ。
+/// →flatten_surface）は `bind+random` の手順が空ゆえ命令を積まず DEBUG を出す。extent 経路
+/// （`plan_extent.rs`・束縛のとき）はサイズ不変契約のため番号の最も小さい pattern（min_by_key）を辿るが
+/// DEBUG は出さない＝DEBUG は 1 本だけ。
 #[test]
 fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let base = Path::new("shell/master");
@@ -234,11 +231,11 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     );
 }
 
-// ── 8.4: 未実装メソッド warn（blit.rs execute）────────────────────────────────────────
+// ── 8.4: 未実装メソッド debug（blit.rs execute）───────────────────────────────────────
 
 /// 要件 8.4: 未実装メソッド命令（Replace/Base/Blend）は DEBUG（method＋element つき）を出して skip する。
 ///
-/// blit::execute へ未実装メソッド命令を渡すと、method の Debug 値と element id を載せた WARN が
+/// blit::execute へ未実装メソッド命令を渡すと、method の Debug 値と element id を載せた DEBUG が
 /// 発火し、その命令は合成へ寄与しない（skip）。3 種の未実装メソッドで method フィールドの判別も突く。
 #[test]
 fn unimplemented_method_debug_fires_with_method_and_element() {
@@ -278,7 +275,7 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
             out.bytes().iter().all(|&b| b == 0),
             "{marker}: 未実装は合成へ寄与しない（skip）",
         );
-        // ログ: WARN・target・method（Debug 判別子）・element を同時に突く。
+        // ログ: DEBUG・target・method（Debug 判別子）・element を同時に突く。
         assert!(
             logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
             "{marker}: 未実装は DEBUG（組むたびの知らせ）: {logs}"

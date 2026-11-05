@@ -275,20 +275,15 @@ fn out_of_bounds_placement_is_clipped() {
     );
 }
 
-/// 倒れる 3 条件（下敷きなし・外形の違い・`Overlay` でない命令）はどれも `Full` で、絵はいちからと同じ。
+/// 倒れる条件のうち外形の違い・`Overlay` でない命令はどれも `Full` で、絵はいちからと同じ
+/// （下敷きなしは [`no_underlay_is_full_and_byte_identical`]）。走査の表（`.resolve(` が無い）は
+/// `composer_tests.rs` の `hot_path_sources_do_not_call_atlas_resolve`。
 #[test]
 fn fallbacks_report_full() {
     let a = sample_atlas();
     let prev = [op(0, 0, 0), op(3, 5, 5)];
     let cur = [op(0, 0, 0), op(3, 9, 5)];
     let want = fresh(EXT, &cur, &a);
-
-    let mut out = ComposedSurface::new(0, 0);
-    assert_eq!(
-        execute_reusing(&mut out, EXT, &cur, None, &a),
-        Recompose::Full
-    );
-    assert_eq!(out.bytes(), want.bytes());
 
     let small = fresh(Extent { w: 63, h: 64 }, &prev, &a);
     let mut out = ComposedSurface::new(0, 0);
@@ -390,18 +385,6 @@ fn unchanged_layer_between_movers_240_frames() {
             op(2, 20, 15),
         ]
     });
-}
-
-/// 非テストの領域（`#[cfg(test)]` より前）に名前の引き直し（`.resolve(`）が無い。
-#[test]
-fn hot_path_has_no_name_relookup() {
-    let src = include_str!("blit_rect.rs");
-    let non_test = src.split("#[cfg(test)]").next().unwrap_or(src);
-    assert!(non_test.contains("fn execute_reusing"), "検査の的が在る");
-    assert!(
-        !non_test.contains(".resolve("),
-        "blit_rect.rs の hot path は atlas.resolve を呼ばない（要件 4.3）"
-    );
 }
 
 // ── 合成器の口 `Composer::compose_into_reusing`（タスク 2.2・要件 3.1・3.6） ──

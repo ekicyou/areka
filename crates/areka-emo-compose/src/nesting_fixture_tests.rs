@@ -16,7 +16,6 @@ use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse, p
 
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
-use crate::hit::{RegionPriority, hit_region_in};
 use crate::plan_test_support::png_size;
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 
@@ -249,28 +248,4 @@ fn third_level_image_is_at_the_sum_of_every_offset() {
     let s1 = compose(&loaded, 1);
     assert_eq!(pixel(&s1, 74, 114), color("part.png"));
     assert_eq!(pixel(&s1, 75, 115), color("body.png"));
-}
-
-/// 子 10 の領域が親の列に持ち込まれている（要件 4.1・4.2）。
-#[test]
-fn child_regions_are_imported_into_the_parents() {
-    let loaded = load(FIXTURE);
-    let names = |id: u32| -> Vec<String> {
-        let list = loaded.world.hit_regions(id).expect("面の表に在る番号");
-        list.iter().map(|c| c.name.as_str().to_string()).collect()
-    };
-    let hit = |id: u32, x: i64, y: i64| {
-        let list = loaded.world.hit_regions(id).expect("面の表に在る番号");
-        hit_region_in(list, x, y, RegionPriority::Painter).map(str::to_string)
-    };
-    // 親 A は Head を自分で持つので、持ち込むのは Eye だけ（Eye は親の Head の下に隠れる）。
-    assert_eq!(names(0), ["Eye", "Head", "Body"]);
-    // 親 B: 子を (90,50) → Head (90,50)-(110,60)・Eye (95,50)-(105,60)。
-    assert_eq!(names(1), ["Head", "Eye"]);
-    assert_eq!(hit(1, 100, 55).as_deref(), Some("Eye"));
-    assert_eq!(hit(1, 92, 55).as_deref(), Some("Head"));
-    assert_eq!(hit(1, 50, 55), None);
-    // 親 C: 子を (0,0)。
-    assert_eq!(hit(2, 10, 5).as_deref(), Some("Eye"));
-    assert_eq!(hit(2, 2, 5).as_deref(), Some("Head"));
 }

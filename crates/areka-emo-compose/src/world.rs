@@ -25,7 +25,7 @@ pub struct SurfaceId(pub u32);
 /// element と平行なアトラス束縛結果（`resolve` は構築時一度きり・要件 4.3）。
 ///
 /// `SurfaceMaster.elements` と同じ添字で並ぶ `Option<ElementId>`（`None`＝未解決）。
-/// 型スキーマは本 task で定義し、実際の束縛（`bind_atlas`）は AtlasBinder（task 4）が挿入する。
+/// 束縛は [`EmoWorld::bind_atlas`]（`atlas_bind.rs`）が挿入する。
 #[derive(Debug, Clone, PartialEq, Component)]
 pub struct AtlasBinding(pub Vec<Option<areka_emo_atlas::ElementId>>);
 
@@ -220,9 +220,8 @@ impl EmoWorld {
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
-    /// plain `surface` ヘッダの展開（無い id は新設・既にある id へは行を足す・task 3.2、
-    /// spec: areka-P0-emily-ghost-verification）は [`crate::fold::fold_shell_with`] が担う。
-    /// append/alias の意味論は後続 task が同 fold 経路へ差し込む。
+    /// plain `surface` ヘッダの展開（無い id は新設・既にある id へは行を足す）・append・alias は
+    /// [`crate::fold::fold_shell_with`] が 1 度の畳み込みで担う。
     fn populate_from_shell(&mut self, shell: &Shell, records: Records) {
         crate::fold::fold_shell_with(&mut self.world, shell, records);
     }
@@ -343,12 +342,12 @@ impl EmoWorld {
             .clone()
     }
 
-    /// 将来の seriko system 統合用の脱出口（本 spec では未使用・design 決定3）。
+    /// 中の `World` を読む口（`atlas_bind.rs`・`plan.rs` が面の component を引く・design 決定3）。
     pub fn world(&self) -> &World {
         &self.world
     }
 
-    /// 将来の seriko system 統合用の脱出口（可変・fold/bind が `&mut World` を受ける口）。
+    /// 中の `World` を書く口（`hit_import.rs` が当たり判定の領域を面へ書く）。
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }

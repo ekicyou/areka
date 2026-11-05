@@ -275,12 +275,6 @@ impl ScaleRatio {
     ///   連続区間になり、境界画素の内外一貫が k によらず保存される。
     /// - 決定論・整数のみ（f32 を一切経由しない）。
     ///
-    /// # 公開面の申し送り（W6.5 `scale-exact-rational`）
-    ///
-    /// 本 spec が `scale.rs` へ追加する公開面は本メソッドのみである（`num`／`den` アクセサは
-    /// **新設しない**——W6.5 が計画する `ratio()` 等との名前二重化を避けるため）。W6.5 は設計前に
-    /// 本メソッド着地後の `scale.rs` へ rebase すること。
-    ///
     /// [`scale_len`]: ScaleRatio::scale_len
     /// [`scaled_extent`]: ScaleRatio::scaled_extent
     pub fn unscale_coord(self, v: i64) -> i64 {

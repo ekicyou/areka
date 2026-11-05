@@ -24,7 +24,7 @@ spec `areka-P0-animated-image-playback`（要件 9.4）の試験用のシェル�
 | `shell/yellow.png` | 4×4 | (255,255,0,255) 黄 |
 | `shell/cyan.png` | 4×4 | (0,255,255,255) 水色 |
 
-`shell/descript.txt` は透過の宣言 `seriko.use_self_alpha,1` だけを置く（`areka-P0-self-alpha-declaration` の後、宣言の無いシェルは読めない旨の `warn!` を 1 行出すため）。
+`shell/descript.txt` は `charset,UTF-8` と透過の宣言 `seriko.use_self_alpha,1` だけを置く（透過の宣言の無いシェルは読み込みで `warn!` を 1 行出すため）。
 
 ## シェルのサーフェス（`shell/surfaces.txt`）
 

@@ -4,9 +4,9 @@ use crate::world::EmoWorld;
 use areka_emo_atlas::SetId;
 use std::path::Path;
 
-// ── task 5.4: placement None スキップ＋静的キャンバス外形算出（有効 bind 非依存） ─────────
+// ── placement None スキップ＋静的キャンバス外形算出（有効 bind 非依存） ─────────
 //
-// 外形は `compute_extent` が全定義層（全 element ＋全 bind animation の pattern0＝有効 bind
+// 外形は `compute_extent` が全定義層（全 element ＋全 bind・`always` animation の描くコマ＝有効 bind
 // 非依存）の「配置オフセット＋原寸」の和集合として算出する（要件 6.5・原点 (0,0) 固定・負方向
 // クリップ）。`original` は bake が「登録画像の原寸」をそのまま記録する（trim.rs）ため、各 element
 // の寄与サイズは register 時の (w,h) で制御できる。以下の土台ヘルパはサイズ可変・全透明を扱う。
@@ -15,9 +15,9 @@ use std::path::Path;
 /// [`build_plan`] が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。
 ///
 /// host=1000 は静的 element base(40×30) を持ち、bind id=1→part1(200×10)、id=2→part2(10×150)、
-/// id=3→part3(60×60) を各 pattern0 で参照。外形は全 element＋**全 bind pattern0**の和集合ゆえ
+/// id=3→part3(60×60) を各 pattern0 で参照。外形は全 element＋**全 bind の描くコマ**の和集合ゆえ
 /// max(base.w, part1.w)=200・max(base.h, part2.h)=150＝Extent{200,150}。BindSet を空/部分/全に
-/// 変えても同一でなければ「有効 bind 依存」バグ（6.5 違反）。これが本 task の核心。
+/// 変えても同一でなければ「有効 bind 依存」バグ（6.5 違反）。
 #[test]
 fn extent_is_independent_of_bindset() {
     let base = Path::new("shell/master");
@@ -48,7 +48,7 @@ fn extent_is_independent_of_bindset() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
 
-    // 全 element＋全 bind pattern0 の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
+    // 全 element＋全 bind の描くコマ の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
     let expected = Extent { w: 200, h: 150 };
 
     let extent_with = |binds: BindSet| {
@@ -66,7 +66,7 @@ fn extent_is_independent_of_bindset() {
     assert_eq!(
         extent_with(BindSet::default()),
         expected,
-        "空 BindSet でも全 bind pattern0 を母集合に外形算出"
+        "空 BindSet でも全 bind の描くコマ を母集合に外形算出"
     );
     assert_eq!(
         extent_with(BindSet::from_ids([2])),
@@ -85,7 +85,7 @@ fn extent_is_independent_of_bindset() {
 ///
 /// host=2000 の静的 element は小さい tiny(4×4) のみ。bind id=9 は**一度も activate されない**が、
 /// その pattern0 が huge(500×400) を参照する。もし外形が「有効 bind のみ」を数えるバグなら tiny
-/// の 4×4 になるはずだが、正しくは全 bind pattern0 母集合ゆえ 500×400。空 BindSet でも huge が支配。
+/// の 4×4 になるはずだが、正しくは全 bind の描くコマ 母集合ゆえ 500×400。空 BindSet でも huge が支配。
 #[test]
 fn extent_unions_inactive_bind_contribution() {
     let base = Path::new("shell/master");
@@ -350,7 +350,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
 /// テスト5.5-③（要件 6.6）: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。
 ///
 /// host=1000 は静的 element なし・全パーツ bind。空 BindSet ゆえ有効 bind ゼロ＝命令ゼロだが、
-/// 外形は全 bind pattern0 母集合（有効 bind 非依存）ゆえ非ゼロ。エラーでなく正常空合成。
+/// 外形は全 bind の描くコマ 母集合（有効 bind 非依存）ゆえ非ゼロ。エラーでなく正常空合成。
 #[test]
 fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let base = Path::new("shell/master");
@@ -392,7 +392,7 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
         ops.is_empty(),
         "空 BindSet → bind 命令ゼロ・静的 element も無し → 空 ops"
     );
-    // 外形は全 bind pattern0 の和集合（有効 bind 非依存）: w=max(200,10)=200・h=max(10,150)=150。
+    // 外形は全 bind の描くコマ の和集合（有効 bind 非依存）: w=max(200,10)=200・h=max(10,150)=150。
     assert_eq!(
         extent,
         Extent { w: 200, h: 150 },
@@ -441,39 +441,8 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
     assert!(ops.is_empty());
 }
 
-/// テスト5.5-⑤（sanity・要件 6.6 対比）: 可視 element を持つ通常 surface → `Ok`＋非空 ops。
-#[test]
-fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), Some((64, 64, 64)))]);
-    let visible_id = atlas
-        .resolve(SetId(0), "visible.png")
-        .expect("visible 解決");
-
-    let surf = surface(5000, vec![elem(0, "visible.png", 0, 0)]);
-    let shell = shell_of(vec![surf]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
-
-    let binds = BindSet::default();
-    let mut ops = Vec::new();
-    let result = build_plan(
-        &mut ops,
-        &mut Default::default(),
-        &world,
-        &atlas,
-        5000,
-        &binds,
-        &PatternState::default(),
-    );
-
-    let extent = result.expect("通常 surface は Ok");
-    assert_eq!(ops.len(), 1, "可視 element 1 本 → 命令 1 本");
-    assert_eq!(ops[0].element, visible_id);
-    assert_eq!(extent, Extent { w: 80, h: 60 }, "外形＝element 原寸");
-}
-
-/// テスト5.5-⑥（要件 10.3・10.1）: out_ops はエントリで clear される（スクラッチ再利用）・決定的。
+/// テスト5.5-⑤（要件 6.6・10.3・10.1）: 可視 element を持つ通常 surface → `Ok`＋非空 ops。out_ops は
+/// エントリで clear される（スクラッチ再利用）・決定的。
 #[test]
 fn build_plan_clears_scratch_and_is_deterministic() {
     let base = Path::new("shell/master");
@@ -513,6 +482,7 @@ fn build_plan_clears_scratch_and_is_deterministic() {
         "エントリで clear ＝ この surface の命令のみが残る"
     );
     assert_eq!(ops[0].element, visible_id, "ゴミは残らない");
+    assert_eq!(e1, Extent { w: 80, h: 60 }, "外形＝element 原寸");
 
     // 2 回目（別スクラッチ）→ バイト等価・同一 Extent（決定性）。
     let mut ops2 = Vec::new();

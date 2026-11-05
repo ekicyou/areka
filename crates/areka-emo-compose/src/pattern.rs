@@ -287,25 +287,6 @@ mod tests {
         assert_eq!(ids, vec![2, 5, 9]);
     }
 
-    /// 挿入順が異なっても同一コマ集合なら `Eq`（正準順序の安定性）。
-    ///
-    /// `PatternState` は emo-present の `ComposeKey` に組み込まれキャッシュ等価判定に用いられるため、
-    /// 挿入順非依存の `Eq` が決定論上必須である（要件 5.2/5.4）。
-    #[test]
-    fn eq_is_insertion_order_stable() {
-        let mut a = PatternState::default();
-        a.set(1, frame(10, 0, 0));
-        a.set(2, frame(20, 0, 0));
-        a.set(3, frame(30, 0, 0));
-
-        let mut b = PatternState::default();
-        b.set(3, frame(30, 0, 0));
-        b.set(1, frame(10, 0, 0));
-        b.set(2, frame(20, 0, 0));
-
-        assert_eq!(a, b);
-    }
-
     /// `PatternState` が `Send + 'static` であることをコンパイル時に固定する（スレッド越え所有）。
     #[test]
     fn pattern_state_is_send_static() {

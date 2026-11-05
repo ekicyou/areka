@@ -32,7 +32,7 @@ use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 /// 欠落・不整合はパニックせず `warn` で観測可能化する（要件 1.4）。
 ///
 /// 中身は [`fold_shell_with`] の「出す」の包み。本番の呼び手は [`fold_shell_with`] を使い、
-/// 本関数を呼ぶのはテスト（`fold_tests.rs`・`base_image_tests.rs`）だけになった。
+/// 本関数を呼ぶのはテスト（`fold_tests.rs`・`base_image_tests.rs`）だけ。
 #[cfg_attr(
     not(test),
     expect(dead_code, reason = "テストの呼び手と説明の参照先として残す")
@@ -281,6 +281,8 @@ fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
 /// 「展開結果の適用順は記述順」）。
 ///
 /// emo2 は除外を使用しないため実処理は型シームだが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
+///
+/// 範囲の幅に上限はかけない: 読む側（parsers）がシェル全体の範囲の幅の合計に上限をかけ、越えた記述子を捨てて記録するので、ここへ届く展開は有界。
 pub(crate) fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
     expand_targets_with(targets, Records::Emit)
 }

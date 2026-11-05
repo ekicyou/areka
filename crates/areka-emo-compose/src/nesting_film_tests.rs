@@ -340,7 +340,7 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
 
 // ---- 合成がたどった先との突き合わせ（task 2.7・要件 1.9・3.7） ----
 //
-// 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`push_film_op`）は
+// 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`plan_always::film_op`）は
 // 別々に書いてあるので、片方だけを変えるとずれる。nesting_visible_tests の一致の檻と同じ型で、検体の
 // 全サーフェスを一番上にし、欄の組ごとに「部品 X に目印のコマを足すと命令列が変わる」⇔「X が見える
 // 部品に在る」、「子 F のコマを替えると命令列が変わる」⇔「F が見える子に在る」を確かめる。

@@ -5,12 +5,12 @@ use areka_emo_atlas::{AtlasTable, SetId};
 use areka_parsers::shell::{Animation, DrawMethod, Interval, Pattern};
 use std::path::Path;
 
-// ── task 7.2: PatternState 合流と method ゲート（層(ii) の transient コマ合流・要件 4.2/4.6/5.3/8.4）─
+// ── PatternState 合流と method ゲート（層(ii) の transient コマ合流・要件 4.2/4.6/5.3/8.4）─────
 //
-// flatten_surface（top-level のみ）で「有効 bind pattern0 の集合 ∪ PatternState のコマ集合」を
-// 既存 animation-sort 整列へ合流し、同 id はコマが pattern0 寄与を置換する。コマ・pattern0 双方に
-// method ゲート（is_implemented()＝Overlay のみ駆動）を適用し、非 Overlay は warn!（method 名込み）
-// ＋不描画とする（8.4）。warn 発火は log_capture で檻に入れる。
+// 層 (ii) で「有効な着せ替えの集合 ∪ PatternState のコマ集合」を既存 animation-sort 整列へ合流し、
+// 同 id はコマが着せ替えの静的寄与を置換する。非 Overlay の今のコマは debug!（method 名込み）＋
+// 不描画（8.4）。非 Overlay の pattern は読み込みのときに着せ替えの手順から外れる。記録の行は
+// log_capture で檻に入れる。
 
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternFrame;
@@ -43,12 +43,12 @@ fn bind_anim_method(id: u32, ref_surface_id: i64, method: &str) -> Animation {
     }
 }
 
-/// テスト7.2-①（**受入基準**・要件 8.4）: 非 Overlay method の現在コマは warn!（method 名込み）＋
+/// テスト7.2-①（**受入基準**・要件 8.4）: 非 Overlay method の現在コマは debug!（method 名込み）＋
 /// 不描画。かつコマは同 id の pattern0 静的寄与を置換するゆえ、その pattern0 も現れない（4.2）。
 ///
 /// host=1000 は静的 base ＋ bind id=1 pattern0→part1(overlay)。id=1 の現在コマは surface 1500
 /// （koma）method=Replace（非 Overlay）。コマは非駆動で不描画・pattern0(part1) も置換で不描画ゆえ、
-/// 残るは base のみ。warn は method=Replace を載せる。
+/// 残るは base のみ。debug は method=Replace を載せる。
 #[test]
 fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     let base = Path::new("shell/master");
@@ -79,7 +79,7 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
         vec!["base.png"],
         "非 Overlay コマは不描画・pattern0 も置換で不描画（残るは base）"
     );
-    // warn! が method 名込みで発火する（要件 8.4・完全形保持のまま非駆動）。
+    // debug! が method 名込みで発火する（要件 8.4・完全形保持のまま非駆動）。
     assert!(
         logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
         "非 Overlay コマは DEBUG（組むたびの知らせ）: {logs}"
@@ -95,11 +95,11 @@ fn non_overlay_koma_logs_debug_and_is_not_drawn_replacing_pattern0() {
     );
 }
 
-/// テスト7.2-②（要件 8.4・D-5 是正）: 非 Overlay の **bind pattern0**（静的経路）も warn!（method
-/// 名込み）＋不描画。parser の overlay フィルタ撤去で非 overlay pattern0 が流入し得るため。
+/// テスト7.2-②（要件 8.4）: 非 Overlay の **bind pattern0**（静的経路）も不描画。parser は
+/// 非 overlay の pattern も渡すため。
 ///
 /// host=1000 は静的 base ＋ bind id=1 の pattern0 method="replace"→part1。空 PatternState。
-/// pattern0 は非 Overlay ゆえ不描画（warn method=Replace）で、残るは base のみ。
+/// pattern0 は着せ替えの手順に入らず不描画で、残るは base のみ（合成のたびの知らせは手順が無い旨の debug）。
 #[test]
 fn non_overlay_pattern0_logs_debug_and_is_not_drawn() {
     let base = Path::new("shell/master");
@@ -209,41 +209,12 @@ fn merged_ids_preserve_id_ascending_painter_order() {
     );
 }
 
-/// テスト7.2-⑤（要件 5.4・byte 等価 sanity）: 空 PatternState は合流前と同一 ops を生む
-/// （full golden は task 7.3・ここでは merge 導入で pattern0 経路が退行しないことの即時檻）。
-#[test]
-fn empty_pattern_state_yields_identical_ops_to_pre_merge() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, &["base.png", "part1.png"]);
-    let map = id_to_path(&atlas, &["base.png", "part1.png"]);
-
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 0, 0)],
-    );
-    let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
-    let shell = shell_of(vec![host, part1]);
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
-
-    let binds = BindSet::from_ids([1]);
-    let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
-
-    // 空 PatternState → 静的 base（下）＋ bind pattern0 part1（上）＝合流前と同一。
-    assert_eq!(
-        ops_to_paths(&ops, &map),
-        vec!["base.png", "part1.png"],
-        "空 PatternState は pattern0 経路そのまま（merge 導入で退行しない）"
-    );
-}
-
-/// テスト7.2-⑥（要件 4.6・5.3）: bind pattern0 を持たない id の Overlay コマ単独でも描画される
+/// テスト7.2-⑤（要件 4.6・5.3）: bind pattern0 を持たない id の Overlay コマ単独でも描画される
 /// （合流集合が union ゆえ・コマ専用 id）。まばたき再生（pattern0 なし bind の再生コマ）を突く。
 ///
-/// 注（task 8.3・bindopt D9-3）: 本フィクスチャの host は animation を 1 本も持たないため、
-/// id=1400 は当 surface の **bind 種アニメではない**。ゆえに task 8.3 の合流ゲート（bind 種のコマは
-/// bind 集合に属することを要求）を受けず、期待値は無改変で成立する。bind 種として定義された id を
+/// 注（bindopt D9-3）: 本フィクスチャの host は animation を 1 本も持たないため、id=1400 は当 surface の
+/// **`bind+random` ではない**。ゆえに合流ゲート（`bind+random` のコマは bind 集合に属することを要求）を
+/// 受けない。`bind+random` として定義された id を
 /// bind 非所属のまま与える場合の期待値は [`bind_kind_koma_outside_bindset_is_not_merged`] を見よ。
 #[test]
 fn koma_only_id_without_bind_pattern0_is_drawn() {
@@ -273,16 +244,17 @@ fn koma_only_id_without_bind_pattern0_is_drawn() {
     );
 }
 
-// ── task 8.3: 合流条件の補強＝最後の砦（bindopt D9-3・bindopt 7.1/7.4/7.6）───────────────
+// ── 合流条件の補強＝最後の砦（bindopt D9-3・bindopt 7.1/7.4/7.6）──────────────────────────
 //
 // 実機の表情固着は「bind から外れたパーツの保持コマが掃除されない」ことが根因で、掃除は
 // state.rs（発行前除去）→ looper.rs（進行相の停止）→ plan.rs（合流条件）の 3 段で多重化する。
-// 本段は最後の砦: **bind 種のアニメのコマは現在の bind 集合に属するときだけ**描画対象へ合流する。
-// 上流 2 段が漏れても外れたパーツが表示に残らない不変量をここで成立させる（bindopt 7.1）。
-// bind に属さないアニメ（純 `random` の `interval` 等）は従来どおり無条件で合流する（bindopt 7.4）。
+// 本段は最後の砦: **`bind+random` のコマは現在の bind 集合に属するときだけ**描画対象へ合流する。
+// 上流 2 段が漏れても外れたパーツが表示に残らない不変量をここで成立させる（bindopt 7.1）。純 `bind`
+// のコマは呼ばれて始まったものだけなので無効でも合流し（seriko-pattern-calls 5.6）、bind に属さない
+// アニメ（純 `random` の `interval` 等）も無条件で合流する（bindopt 7.4）。
 // 合成順・z-order の規則は 1 行も変えない（作者意図どおり・design Out of Boundary）。
 
-/// task 8.3 の共通フィクスチャ: host=1000 に 3 本のアニメを置き、対応する参照先 surface を用意する。
+/// 最後の砦の共通フィクスチャ: host=1000 に 3 本のアニメを置き、対応する参照先 surface を用意する。
 ///
 /// - id=1300: **bind 種**（`Interval::Bind`）・pattern0→surface1301（`eyebase.png`）＝目のベース。
 /// - id=1402: **bind 種**（`Interval::BindRandom`）・**pattern0 なし**（index=1 のみ）→surface1413
@@ -318,9 +290,9 @@ fn build_last_stand_world() -> (EmoWorld, AtlasTable, Vec<(ElementId, &'static s
 /// テスト8.3-①（**RED 核**・受入基準・bindopt 7.1・D9-3）: bind 集合から外れた **bind 種**アニメの
 /// 保持コマは、合成計画にその層を作らない（最後の砦）。
 ///
-/// binds={1300} に対し `PatternState` は 1402（bind 種・bind 非所属＝外れたジト目の残留コマ）と
-/// 1500（非 bind の抽選発火コマ）を持つ。是正前は合流条件に bind 所属の要求が無いため 1402 の
-/// `jito.png` が描画され（RED）、是正後は 1402 だけが落ちる。
+/// binds={1300} に対し `PatternState` は 1402（`bind+random`・bind 非所属＝外れたジト目の残留コマ）と
+/// 1500（非 bind の抽選発火コマ）を持つ。合流条件に bind 所属の要求が無ければ 1402 の `jito.png` が
+/// 描画されて落ち、要求があれば 1402 だけが落ちる。
 ///
 /// **陽性対照を同一検証内に併置する**（負の錨の恒真化を防ぐ）: 同じ 1 回の導出で
 /// 1300 の `eyebase.png` と 1500 の `sparkle.png` が**現に描画される**ことを同時に固定するため、
