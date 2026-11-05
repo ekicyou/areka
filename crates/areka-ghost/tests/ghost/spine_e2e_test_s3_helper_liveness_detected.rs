@@ -71,15 +71,15 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
 
-    // ---- boot talk を Steady{None} 到達まで駆動する（S1 と同一技法・sleep 不使用） ----
+    // ---- boot talk を Steady 到達まで駆動する（S1 と同一技法・sleep 不使用） ----
     // dispatcher へ Tick を送るたびに RecordingSink を確認する有界再送ループ（実時間
     // 待機なし・単調増加する now の注入のみ・`yield_now` で他スレッドに実行機会を譲る
     // だけ）。kanade 自身は（dispatcher Tick とは無関係な別チャンネル経由で）
-    // basewareversion NOTIFY の応答往復のみで Steady{talk: None} へ完了する（boot.rs:
-    // 「boot は常に Steady{talk: None} へ完了する」・BootVersion+Notified の遷移は
+    // basewareversion NOTIFY の応答往復のみで Steady へ完了する（DD-IT-12: 挨拶 talk を
+    // 追跡したまま `Steady{talk: Some(greeting)}` へ・BootVersion+Notified の遷移は
     // StartTalk 発行と独立に basewareversion の応答のみで確定する）。
-    // ⚠ ただし cue の発火が boot 系列の完了を**含意しない**——`schedule/boot.rs:241` は
-    // `Action::StartTalk` を `:279` の basewareversion より先に積むので、cue（start-relay
+    // ⚠ ただし cue の発火が boot 系列の完了を**含意しない**——`schedule/boot.rs` の
+    // `to_baseware_version` は `Action::StartTalk` を basewareversion より先に積むので、cue（start-relay
     // →dispatcher の 2 hop ＋ Tick）と 起動の列の最後の記録（basewareversion・6 本目）（shiori アクタースレッド 1 hop）は
     // 別スレッドの競走であり、順序は保証されていない。実測では cue の側が遅いことが
     // ほとんどだが構造的な保証ではないため、件数は下の有界待ちで待ってから数える

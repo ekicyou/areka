@@ -33,7 +33,7 @@
 //! 3 本置く。
 //!
 //! - [`every_over_limit_exception_is_still_over_the_limit`] は、表の全項目に**今も**超過の実体が
-//!   あること。列挙が空振りしていれば 11 件すべてが「実体無し」になって必ず赤になる。
+//!   あること。列挙が空振りしていれば表の全項目が「実体無し」になって必ず赤になる。
 //! - [`the_measurement_is_not_vacuous_and_matches_the_allow_table`] は、実測した超過ファイルの集合が
 //!   表と**完全に一致**すること（要件 10.2 の「着手時の実測と一致」の固定）。
 //! - [`dropping_a_known_exception_turns_the_guard_red`] は、既知の 1 件を表から外すと、実データで
@@ -68,10 +68,6 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
     (
-        "crates/areka-ghost/tests/ghost/inproc_e2e_test.rs",
-        "着手前から超過している統合テスト。分割は本仕様の範囲外（要件 10.4）",
-    ),
-    (
         "crates/areka-seriko/src/actor_bind_loop_tests.rs",
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
@@ -98,7 +94,7 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
 ];
 
 /// [`OVER_LIMIT_ALLOWED`] の件数（逐語）。表を増やすときはここも編集する（要件 10.2）。
-const OVER_LIMIT_ALLOWED_COUNT: usize = 9;
+const OVER_LIMIT_ALLOWED_COUNT: usize = 8;
 
 /// 要件 10.3 の自己検査で表から外す 1 件。表の項目でなければならない。
 const CALIBRATION_DROPPED_ENTRY: &str = "crates/areka-emo-present/src/cache_tests.rs";

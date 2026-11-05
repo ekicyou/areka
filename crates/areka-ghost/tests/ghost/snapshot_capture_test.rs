@@ -153,14 +153,13 @@ fn capture_real_pasta_snapshots() {
     .expect("HOST32_PASTA_DLL を emo2 の ghost/master へ写せませんでした");
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を real_connect へ渡す。
-    let mount = package::resolve(&root, DefaultEncoding::Utf8)
+    let mount = package::resolve(&root, DefaultEncoding::Ansi)
         .expect("採取フィクスチャは実マウント解決を成功裏に通過すべき（boot 内部と同一契約）");
 
     // --- 実 backend へ Recorder を合成した Custom wiring（design.md「Batch/Job Contract」）---
     let handle_slot: Arc<Mutex<Option<RecorderHandle>>> = Arc::new(Mutex::new(None));
     let slot2 = Arc::clone(&handle_slot);
-    // SHIORI 通信の既定は**本番と同じ** `Ansi`（＝Shift_JIS）を渡す。採取フィクスチャの
-    // ファイル層の既定（上の `resolve` の `Utf8`）とは別物で、ここを UTF-8 にすると
+    // SHIORI 通信の既定も**本番と同じ** `Ansi`（＝Shift_JIS）を渡す。ここを UTF-8 にすると
     // 本番と違う最初の要求を採ってしまう（design §Boundary Commitments）。
     let connect = real_connect(helper_exe, mount.shiori, DefaultEncoding::Ansi);
     let wiring = ShioriWiring::Custom(Box::new(move || {
@@ -179,7 +178,7 @@ fn capture_real_pasta_snapshots() {
     let options = GhostBootOptions {
         strict_judges: None,
         ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
+        default_encoding: DefaultEncoding::Ansi,
         shiori: wiring,
         sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
         system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),

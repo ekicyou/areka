@@ -80,8 +80,8 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     // の可能性があり（boot 中の CloseRequest は pending_close 記録のみで即握手しない）、
     // Steady 到達を待たずに送るのは不要な不確実性を招く。boot talk が dispatcher の
     // active slot に載って発火したことを surface cue の到達で確認すれば、kanade は
-    // 既に（boot talk の再生完了を待たず）Steady へ到達済みである
-    // （boot.rs「boot は常に Steady{talk: None} へ完了する」・S3 と同じ論拠）。
+    // 既に（boot talk の再生完了を待たず）Steady へ到達済みである（DD-IT-12: 挨拶 talk を
+    // 追跡したまま `Steady{talk: Some(greeting)}` へ・S3 と同じ論拠）。
     let mut now: u64 = 1;
     super::spin_pumping_ticks(
         "S4: surface cue never fired after repeated Tick — boot talk did not reach \

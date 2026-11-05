@@ -743,7 +743,8 @@ fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
 /// # 交信列の決定論（ticker 無効＋Tick は dispatcher 止まり）
 /// `TickerMode::Disabled` かつ dispatcher は `Tick` を kanade へ中継しない（`TalkDone` のみ中継）ため、
 /// kanade は駆動ループ中に Tick を一切受けず、定常運転由来の追加交信を発行しない。したがって交信列は
-/// boot 系列（`OnInitialize` NOTIFY → `OnFirstBoot` GET(Value) → `basewareversion` NOTIFY）に続き、
+/// boot 系列（`OnInitialize` NOTIFY → `username` GET(204) → `OnFirstBoot` GET(Value) →
+/// `OnTranslate` GET(204) → `basewareversion` NOTIFY）に続き、
 /// shutdown（ForceQuit）が起こす close 系列（`OnClose` NOTIFY → `Unload` Clean）で閉じる——全順序が
 /// 決定論的。`OnFirstBoot` が Value を返すため kanade フォールスルーは `OnBoot` GET を**スキップ**する
 /// （task 6.2 実採取・`schedule/boot.rs`）。記録は shutdown 完了後に読む（`OnClose`/`Unload` は
@@ -849,7 +850,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
             Some("OnFirstBoot".to_string()),
             ExchangeOutcome::Value(expected_onfirstboot_value()),
         ),
-        // 挨拶の台詞は再生の前に OnTranslate へかける。pasta は登録の無いイベントに 204 を返す。
+        // 挨拶の台詞は再生の前に OnTranslate へかける。`shiori4_testdll` は収載の無い ID に 204 を返す。
         (
             ExchangeKind::Get,
             Some("OnTranslate".to_string()),
@@ -897,34 +898,34 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 //
 // I1/I2 が実 InProc DLL 越しの一周（boot→talk→shutdown）を協調ループで駆動するのに対し、
 // I3 は **boot しない**——`inproc_connect(shiori)()` を直接（unit-style）呼び、ロード確立の
-// 3 態様（参照先未指定 / DLL 欠落 / 不正イメージ）がいずれも **panic せず** `Err`（log-first・
-// 要件 3.5）として顕在化することのみを軽量・決定論的に確かめる。アクタースレッド・drive ループ・
-// 共有 fixture・実ビルド済み DLL のいずれも要さない（3 態様とも「失敗」検証ゆえ成功ロードが不要）。
+// 2 態様（DLL 欠落 / 不正イメージ）がいずれも **panic せず** `Err`（log-first・要件 3.5）として
+// 顕在化することのみを軽量・決定論的に確かめる。参照先未指定（`file: None`）は
+// `src/shiori_inproc_adapter_tests.rs` の `inproc_connect_missing_file_fails_immediately` が持つ。
+// アクタースレッド・drive ループ・共有 fixture・実ビルド済み DLL のいずれも要さない
+// （どちらも「失敗」検証ゆえ成功ロードが不要）。
 // ============================================================================
 
 /// I3 用フィクスチャ組み立てヘルパ（`shiori_wiring.rs::build_shiori_mount` を鏡写しにしたもの）。
 ///
 /// 一意な一時ゴースト（`ghost/master/descript.txt`＋`shell/master/` dir）を作り、本番と同じ
 /// 経路（`package::resolve`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
-/// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。`shiori_line` が
-/// `Some(name)` なら descript に `shiori,<name>` 行を書き `file: Some(name)`、`None` なら行を
-/// 書かず `file: None`（resolve は推測しない）。root は [`TempPath`] で返す（破棄で中身ごと
-/// 消える）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
+/// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。descript に
+/// `shiori,<shiori_line>` 行を書く（`file: Some(shiori_line)`）。root は [`TempPath`] で返す
+/// （破棄で中身ごと消える）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
 /// （=`ghost/master`・`inproc_connect` が `dir.join(file)` で組むロード元）へ指定バイト列を
 /// `shiori_line` の名前で書き出す（不正イメージ態様のため）。
-fn build_i3_mount(shiori_line: Option<&str>, dll_bytes: Option<&[u8]>) -> (ShioriMount, TempPath) {
+fn build_i3_mount(shiori_line: &str, dll_bytes: Option<&[u8]>) -> (ShioriMount, TempPath) {
     let root = TempPath::new("areka-ghost-i3-load-failure");
     let master_dir = root.path().join("ghost").join("master");
     std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
     std::fs::create_dir_all(root.path().join("shell").join("master"))
         .expect("fixture shell dir 作成に失敗");
 
-    let mut descript = String::new();
-    if let Some(name) = shiori_line {
-        descript.push_str(&format!("shiori,{name}\n"));
-    }
-    std::fs::write(master_dir.join("descript.txt"), descript)
-        .expect("fixture descript.txt 書き込みに失敗");
+    std::fs::write(
+        master_dir.join("descript.txt"),
+        format!("shiori,{shiori_line}\n"),
+    )
+    .expect("fixture descript.txt 書き込みに失敗");
 
     let mount = package::resolve(root.path(), DefaultEncoding::Ansi)
         .expect("fixture ghost_root の resolve に失敗");
@@ -932,37 +933,11 @@ fn build_i3_mount(shiori_line: Option<&str>, dll_bytes: Option<&[u8]>) -> (Shior
 
     // 不正イメージ態様: resolve 済み shiori.dir（ロード元 dir）へ非 PE バイト列を DLL 名で置く。
     if let Some(bytes) = dll_bytes {
-        let name = shiori_line.expect("dll_bytes を書くには shiori_line（DLL 名）が要る");
-        std::fs::write(shiori.dir.join(name), bytes).expect("非 PE テキストの書き出しに失敗");
+        std::fs::write(shiori.dir.join(shiori_line), bytes)
+            .expect("非 PE テキストの書き出しに失敗");
     }
 
     (shiori, root)
-}
-
-/// I3-① **参照先未指定**（`file: None`）: descript に `shiori,` 行が無ければ `file: None` になり、
-/// `inproc_connect(shiori)()` は DLL ロードを試みず即座に `Err`（推測しない・log-first・要件 3.5）。
-/// 偽陽性（別理由の失敗）を避けるため、エラー文言が DLL ファイル名未解決由来であること
-/// （`inproc_connect` の `file: None` 枝の文言に「ファイル名」を含む）まで確認する。
-#[test]
-fn i3_load_failure_missing_reference_returns_err() {
-    let (shiori, _root) = build_i3_mount(None, None);
-    assert_eq!(
-        shiori.file, None,
-        "fixture は shiori 行なし＝file:None のはず"
-    );
-
-    let connect = inproc_connect(shiori);
-    let result = connect();
-
-    match result {
-        Err(err) => assert!(
-            err.contains("ファイル名"),
-            "参照先未指定はファイル名未解決として顕在化すること（別理由の失敗でない）: {err}"
-        ),
-        Ok(_) => panic!(
-            "参照先未指定（file:None）はロード失敗になるはず（inproc_connect は panic せず Err）"
-        ),
-    }
 }
 
 /// I3-② **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
@@ -970,7 +945,7 @@ fn i3_load_failure_missing_reference_returns_err() {
 /// 要件 3.5）。
 #[test]
 fn i3_load_failure_missing_dll_returns_err() {
-    let (shiori, _root) = build_i3_mount(Some("someMissing.dll"), None);
+    let (shiori, _root) = build_i3_mount("someMissing.dll", None);
     assert_eq!(
         shiori.file,
         Some("someMissing.dll".to_string()),
@@ -999,7 +974,7 @@ fn i3_load_failure_missing_dll_returns_err() {
 /// （panic せず・要件 3.5）。
 #[test]
 fn i3_load_failure_invalid_image_returns_err() {
-    let (shiori, _root) = build_i3_mount(Some("bogus.dll"), Some(b"this is not a valid PE image"));
+    let (shiori, _root) = build_i3_mount("bogus.dll", Some(b"this is not a valid PE image"));
     // 不正イメージ実体がロード元に存在すること（LoadLibraryExW がイメージ検証で拒否する前提）。
     assert!(
         shiori.dir.join("bogus.dll").exists(),

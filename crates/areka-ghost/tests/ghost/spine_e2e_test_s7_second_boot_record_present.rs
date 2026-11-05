@@ -60,7 +60,7 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
     plant_boot_record(&root);
 
     // 2 回目起動の台本: OnFirstBoot は **据えない**（gate が飛ばすため一度も GET されない）。
-    // 発火系列 = OnInitialize → username prefetch → OnBoot → basewareversion（prefetch 段は 3.5 で不変）。
+    // 発火系列 = OnInitialize → username prefetch → OnBoot → OnTranslate（偽の SHIORI の既定の 204）→ basewareversion（prefetch 段は 3.5 で不変）。
     // 万一 gate が退行して OnFirstBoot が GET されると `ScriptedShioriBackend` が「no scripted
     // response」で panic し、挨拶 cue が発火せず下の `spin_pumping_ticks` の有界の待ちが panic する（退行を検出）。
     let (backend, handle) = ScriptedShioriBackend::builder()

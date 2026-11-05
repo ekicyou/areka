@@ -46,7 +46,7 @@ pub(crate) const OBSERVE_TIMEOUT: Duration = Duration::from_secs(60);
 /// 有界待機の再試行間隔。`TickerMode::Real` が背後で実 wall-clock 駆動している
 /// ため、実 pasta の env ゲート追験に限りポーリング用の実 sleep は許容される（design「OnBoot
 /// 一周（sink 発火の非空を有界待機で観測）」の文字どおりの意味）。決定論
-/// spine e2e（S1〜S6・要件 7.4 の sleep 不使用）はこの limitation の対象外——
+/// spine e2e（S1〜S7・要件 7.4 の sleep 不使用）はこの limitation の対象外——
 /// 本テストはそもそも決定論性を要求されない env ゲート追験である。
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 

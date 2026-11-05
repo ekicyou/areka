@@ -134,6 +134,14 @@ fn emo2_shell_master_src() -> PathBuf {
     EMO2.folder().join("shell").join("master")
 }
 
+/// 共有ゴーストの `ghost/master/descript.txt` の中身（組立と鮮度の判定が同じ文を使う）。
+fn ghost_descript() -> String {
+    format!(
+        "charset,UTF-8\nname,Shiori4TestGhost\nshiori,{}\nseriko.defaultsurfacedirectoryname,master\n",
+        shiori4_testdll::DLL_FILE_NAME
+    )
+}
+
 /// 与えられた `root` の直下へテストゴーストの実体（descript／shell／DLL）を配置する
 /// （[`shared_test_ghost`] の唯一の組立手続き・`OnceLock` が直列にする）。
 fn materialize_test_ghost_tree(root: &Path) {
@@ -144,15 +152,8 @@ fn materialize_test_ghost_tree(root: &Path) {
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master)
         .unwrap_or_else(|e| panic!("create ghost/master に失敗: {e}"));
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        format!(
-            "charset,UTF-8\nname,Shiori4TestGhost\nshiori,{}\nseriko.defaultsurfacedirectoryname,master\n",
-            shiori4_testdll::DLL_FILE_NAME
-        )
-        .as_bytes(),
-    )
-    .unwrap_or_else(|e| panic!("write ghost descript.txt に失敗: {e}"));
+    std::fs::write(ghost_master.join("descript.txt"), ghost_descript())
+        .unwrap_or_else(|e| panic!("write ghost descript.txt に失敗: {e}"));
 
     // 3. emo2 実物 shell/master/ を再帰的に実体化（ハードリンク優先・自作最小 shell を作らない・要件 4.1）。
     let shell_src = emo2_shell_master_src();
@@ -272,6 +273,7 @@ fn shared_root() -> &'static Path {
 /// - `shell/master/surfaces.txt` が実在（emo2 実物 shell 流用の証跡・要件 4.1）。
 /// - `ghost/master/<DLL>` が実在（DLL 物理配置の証跡・要件 4.3）。
 /// - `balloon/` が非在（balloon 非同梱の証跡・要件 4.2）。
+/// - `ghost/master/descript.txt` のバイトが [`ghost_descript`] と同じ（書き換えや古い組立を拾わない）。
 /// - キャッシュ DLL が**現行ビルド済み DLL より古くない**（再ビルド陳腐化の検出）。ビルド済み DLL の
 ///   再ビルドは新 inode 生成で mtime を進めるため、旧ハードリンクを掴んだキャッシュはここで陳腐と
 ///   判定され作り直される（後続タスク 5.x の実ロードが常に最新実体を掴む保証）。
@@ -284,8 +286,12 @@ fn shared_ghost_is_fresh(root: &Path) -> bool {
         .join("master")
         .join(shiori4_testdll::DLL_FILE_NAME);
     let balloon = root.join("balloon");
+    let descript = root.join("ghost").join("master").join("descript.txt");
 
     if !surfaces.is_file() || !cached_dll.is_file() || balloon.exists() {
+        return false;
+    }
+    if std::fs::read(&descript).ok().as_deref() != Some(ghost_descript().as_bytes()) {
         return false;
     }
 
@@ -383,6 +389,28 @@ mod tests {
             "emo2 実物の入れ子 PNG まで再帰的に流用されているべき: {}",
             nested_png.display()
         );
+    }
+
+    /// descript.txt の中身が組立の文と違えば、残った共有ゴーストを再利用しない（R2-g6-1）。
+    #[test]
+    fn a_shared_ghost_with_a_changed_descript_is_not_fresh() {
+        let shared = super::shared_test_ghost();
+        let descript = shared
+            .root()
+            .join("ghost")
+            .join("master")
+            .join("descript.txt");
+        assert!(
+            super::shared_ghost_is_fresh(shared.root()),
+            "組んだ直後は健全"
+        );
+
+        std::fs::write(&descript, "charset,UTF-8\nname,Other\n").expect("descript を書けること");
+        let stale = super::shared_ghost_is_fresh(shared.root());
+        std::fs::write(&descript, super::ghost_descript()).expect("descript を戻せること");
+
+        assert!(!stale, "descript が違えば作り直す側へ倒すこと");
+        assert!(super::shared_ghost_is_fresh(shared.root()), "戻せば健全");
     }
 
     /// 錠を持つ間は、2 本目の取り手が記録を消さない（#45・I2 の消去が I1 の記録を消す競りを
