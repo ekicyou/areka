@@ -1,5 +1,5 @@
-use super::test_support::{RecordingSink, run_bounded, test_system_vars};
 use super::*;
+use crate::test_support::{RecordingSink, run_bounded, test_system_vars};
 use areka_sakura::contract::{CueCommand, ScriptOrigin, TalkCue, TalkEndReason};
 use std::sync::mpsc;
 use std::time::Duration;

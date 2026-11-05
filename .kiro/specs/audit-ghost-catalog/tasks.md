@@ -76,7 +76,7 @@
 
 ## `areka-ghost`（`src`）
 
-- [ ] 9. (P) `src` の単体テストの道具を 1 か所にまとめる（T12）
+- [x] 9. (P) `src` の単体テストの道具を 1 か所にまとめる（T12）
   - #36 の有界の実行・システム変数・記録の sink・空の sink・ゴーストの fixture・有界の終了・OnBoot を待つ輪を新しい `test_support.rs` に 1 つずつ置き、写しと「取り込めない」の注を消す。dispatcher に固有の物だけを `dispatcher_test_support.rs` に残す（空になれば消す）
   - #84 の終了を有界の終了の道具へ替える
   - 完了の状態: 同じ形の道具の写しが `areka-ghost/src` に残らず、`runtime_tests.rs` が減って `cargo test -p areka-ghost` が緑

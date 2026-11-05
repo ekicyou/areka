@@ -1,6 +1,6 @@
-use super::test_support::{RecordingSink, run_bounded, test_system_vars};
 use super::*;
 use crate::test_log_capture::{assert_logged, assert_logged_event, capture};
+use crate::test_support::{RecordingSink, run_bounded, test_system_vars};
 use areka_kanade::{AnchorInput, ChoiceInput};
 use areka_sakura::contract::{ScriptOrigin, TalkEndReason};
 use std::sync::mpsc;

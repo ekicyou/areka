@@ -47,6 +47,10 @@ mod translate_wiring;
 #[cfg(test)]
 mod test_log_capture;
 
+// src の単体テストが分け合う道具（写しを持たない）。
+#[cfg(test)]
+mod test_support;
+
 pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
     ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot, boot_with_kanade_stop,

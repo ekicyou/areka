@@ -193,20 +193,7 @@ impl ShioriBackend for TranslateProbeBackend {
 fn boot_sends_on_translate_with_the_expanded_script() {
     let temp = temp_path_kit::TempPath::new("ghost-translate-wiring-boot");
     let root = temp.path();
-    let ghost_master = root.join("ghost").join("master");
-    let shell_master = root.join("shell").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::create_dir_all(&shell_master).expect("create shell/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,TestGhost\nshiori,dummy.dll\n",
-    )
-    .expect("write ghost descript.txt");
-    std::fs::write(
-        shell_master.join("descript.txt"),
-        "charset,UTF-8\nname,TestShell\n",
-    )
-    .expect("write shell descript.txt");
+    crate::test_support::write_ghost(root);
 
     let (seen_tx, seen_rx) = channel();
     let calls = Arc::new(AtomicUsize::new(0));
@@ -229,7 +216,5 @@ fn boot_sends_on_translate_with_the_expanded_script() {
         .expect("OnTranslate never reached the SHIORI during boot");
     assert_eq!(script, r"\0太郎さん\e", "挨拶は展開してから翻訳へ送る");
 
-    runtime
-        .shutdown(areka_kanade::CloseReason::System)
-        .expect("shutdown after boot");
+    crate::test_support::shutdown_bounded(runtime);
 }

@@ -10,13 +10,14 @@ use std::time::{Duration, Instant};
 
 use areka_kanade::{CloseReason, KanadeMsg, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
-use areka_sakura::contract::{CueSink, SystemVarSnapshot, TalkCue};
+use areka_sakura::contract::SystemVarSnapshot;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
 use super::{EmptyShiori, empty_connect};
 use crate::dispatcher::DispatcherMsg;
 use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
+use crate::test_support::{NoopSink, shutdown_bounded};
 
 /// 4 つの答え（要件 7.2・7.5）: 問い合わせ→中身なし・知らせ→成功・終わり→きれいな終了・
 /// 状態→動いている。問い合わせの名前や Reference に依らない。
@@ -95,13 +96,6 @@ impl ShioriBackend for Recording {
     fn status(&mut self) -> HelperStatus {
         self.inner.status()
     }
-}
-
-#[derive(Clone)]
-struct NoopSink;
-
-impl CueSink for NoopSink {
-    fn emit(&mut self, _cue: TalkCue) {}
 }
 
 /// `shiori` の行の無いゴースト（要件 7.4）を差し替え口で起こすと起動は成功し、起動の
@@ -196,13 +190,5 @@ fn ghost_without_shiori_line_boots_and_closes_through_empty_connect() {
         "OnClose 204 must lead to a clean unload: {seen:?}"
     );
 
-    let (done_tx, done_rx) = channel();
-    std::thread::spawn(move || {
-        let _ = done_tx.send(runtime.shutdown(CloseReason::System).is_ok());
-    });
-    assert_eq!(
-        done_rx.recv_timeout(Duration::from_secs(10)),
-        Ok(true),
-        "shutdown should complete within 10s"
-    );
+    shutdown_bounded(runtime);
 }

@@ -505,6 +505,3 @@ mod slot_tests;
 #[cfg(test)]
 #[path = "dispatcher_strict_tests.rs"]
 mod strict_tests;
-#[cfg(test)]
-#[path = "dispatcher_test_support.rs"]
-mod test_support;

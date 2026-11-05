@@ -5,16 +5,14 @@
 //! 無いので、外から見えるのは SHIORI への要求だけ）。
 use super::*;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use areka_kanade::ChangedFrom;
-use areka_sakura::contract::{CueSink, TalkCue};
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{PersistScope, ScopeRoots, save_scope};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
-pub(super) type Requests = Arc<Mutex<Vec<(String, Vec<String>)>>>;
+use crate::test_support::{NoopSink, Requests, shutdown_bounded, wait_for_on_boot, write_ghost};
 
 /// GET を `(id, references)` で記録し、すべて 204（`None`）で返す偽の SHIORI。
 pub(super) struct RecordingShiori(pub(super) Requests);
@@ -51,31 +49,11 @@ impl ShioriBackend for RecordingShiori {
     }
 }
 
-#[derive(Clone)]
-pub(super) struct NoopSink;
-
-impl CueSink for NoopSink {
-    fn emit(&mut self, _cue: TalkCue) {}
-}
-
 /// シェル名（descript の `name`＝`TestShell`）とシェルのフォルダ名（`master`）が別の値に
 /// なるゴーストを作り、起動記録を前もって保存しておく（初回起動の根を外すため）。
 pub(super) fn write_returning_ghost(root: &std::path::Path) {
+    write_ghost(root);
     let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,TestShell\n",
-    )
-    .expect("write shell descript.txt");
-
     let profile = crate::sylphya_wiring::profile_areka_root(&ghost_master);
     std::fs::create_dir_all(&profile).expect("create ghost profile root");
     let roots = ScopeRoots {
@@ -113,30 +91,10 @@ fn boot_and_collect(tag: &str, origin: BootOrigin) -> Vec<(String, Vec<String>)>
 
     let runtime = boot_with_origin(options, None, origin, None, None).expect("boot should succeed");
 
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let seen = loop {
-        let seen = requests.lock().expect("requests mutex poisoned").clone();
-        if seen.iter().any(|(id, _)| id == "OnBoot") {
-            break seen;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "OnBoot never reached SHIORI; requests so far: {seen:?}"
-        );
-        std::thread::sleep(Duration::from_millis(5));
-    };
+    let seen = wait_for_on_boot(&requests);
 
-    // 正規の終了を期限つきで待つ（join の宙吊りでスイート全体を止めない）。一時フォルダは
-    // 終了が済むまで `temp` が生かしておく。
-    let (done_tx, done_rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let result = runtime.shutdown(areka_kanade::CloseReason::System);
-        let _ = done_tx.send(result.map_err(|err| format!("{err:?}")));
-    });
-    let outcome = done_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("shutdown did not complete within 10s (possible hang)");
-    assert_eq!(outcome, Ok(()), "shutdown should succeed");
+    // 一時フォルダは終了が済むまで `temp` が生かしておく。
+    shutdown_bounded(runtime);
     drop(temp);
     seen
 }

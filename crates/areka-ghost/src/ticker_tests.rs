@@ -1,21 +1,7 @@
 use super::*;
-use std::sync::mpsc::{self, sync_channel};
+use crate::test_support::run_bounded;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::thread;
-
-/// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
-/// テストを失敗させる（どのテストもハングしないことを保証する・areka-actor 流儀）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-    let (done_tx, done_rx) = sync_channel::<()>(0);
-    thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
-}
 
 // ---- 純粋層: BoundarySchedule ----
 

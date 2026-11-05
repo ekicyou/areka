@@ -2,20 +2,9 @@ use super::*;
 use std::path::PathBuf;
 use temp_path_kit::TempPath;
 
-/// task 8.3: 退役した `default_system_vars()` の忠実な代役スタンドイン。
-///
-/// `{"username": DEFAULT_USERNAME}` のみを充填した凍結スナップショットを毎回新規構築して
-/// 返す（退役前 provider と同一挙動）。既存テストの意図——既定 username 前提の凍結像刻印——を
-/// [`SystemVarWiring::Custom`] 経由で無改変のまま保つための in-crate 共有ヘルパ。sylphya 読み口
-/// （[`SystemVarWiring::FromSylphya`]）差替後も、これら既存テストは従来どおりの直接注入
-/// セマンティクスを `Custom` で維持する（R7.1・R9.1・design「テスト呼出面の一括更新」）。
-fn test_system_vars() -> SystemVarSource {
-    Box::new(|| {
-        let mut snapshot = SystemVarSnapshot::default();
-        snapshot.insert("username", areka_sakura::sysvar::DEFAULT_USERNAME);
-        snapshot
-    })
-}
+use crate::test_support::{
+    NoopSink, RecordingSink, run_bounded, shutdown_bounded, test_system_vars, write_ghost,
+};
 
 #[test]
 fn mount_variant_constructs_and_displays() {
@@ -48,7 +37,6 @@ fn mount_variant_is_a_std_error() {
 // ---- boot 統合テスト（task 3.1） ----
 
 use areka_kanade::MonotonicMs;
-use areka_sakura::contract::{CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 /// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
@@ -58,27 +46,6 @@ use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 /// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
 fn unique_temp_dir(tag: &str) -> TempPath {
     TempPath::new(&format!("ghost-runtime-{tag}"))
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
-/// `shell/master/descript.txt`）を構築する（`boot` が内部で `resolve` を通す
-/// ための happy-path fixture）。
-fn write_minimal_resolvable_ghost_fixture(root: &std::path::Path) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,TestShell\n",
-    )
-    .expect("write shell descript.txt");
 }
 
 /// テスト専用の最小 `ShioriBackend` fake（`get`/`notify` は無害な既定応答・`unload`
@@ -114,16 +81,6 @@ impl ShioriBackend for FakeShioriBackend {
     }
 }
 
-/// テスト専用の `Clone` 可能な no-op sink（dispatcher の per-talk 注入
-/// （`S: Clone`/`T: Clone`）を満たすためだけの最小実装・`dispatcher.rs` の
-/// `RecordingSink` 流儀に倣うが、本テストは発火内容を検査しないため蓄積しない）。
-#[derive(Clone)]
-struct NoopSink;
-
-impl CueSink for NoopSink {
-    fn emit(&mut self, _cue: TalkCue) {}
-}
-
 /// シナリオ1（happy path）: 解決可能な `ghost_root`・`ShioriWiring::Custom`（fake
 /// backend）・`TickerMode::Disabled` で `boot` すると `Ok(GhostRuntime)` が返り、
 /// `kanade()`／`dispatcher()` の両方の投函端が生きている（＝実際にアクタースレッドが
@@ -138,7 +95,7 @@ impl CueSink for NoopSink {
 fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
     let temp = unique_temp_dir("boot-happy-path-wires-all-components-and-kicks-off-boot-sequence");
     let root = temp.path().to_path_buf();
-    write_minimal_resolvable_ghost_fixture(&root);
+    write_ghost(&root);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -214,22 +171,6 @@ fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
 
 // ---- boot→shutdown 統合テスト（task 3.2） ----
 
-/// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
-/// テストを失敗させる（`dispatcher.rs`／`ticker.rs` テストモジュールと同じ流儀の
-/// ローカルコピー・仮に `shutdown` の join が宙吊りするバグがあってもテスト
-/// スイート全体をハングさせない）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
-}
-
 /// シナリオ3（happy path・task 3.2）: 解決可能な `ghost_root` で `boot` した
 /// `GhostRuntime` に対し `shutdown(CloseReason::System)` を呼ぶと、`ForceQuit` →
 /// kanade join → `DispatcherMsg::Close` → dispatcher join → shiori join → relay
@@ -241,7 +182,7 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
 fn boot_then_shutdown_joins_everything_and_returns_ok() {
     let temp = unique_temp_dir("boot-then-shutdown-joins-everything-and-returns-ok");
     let root = temp.path().to_path_buf();
-    write_minimal_resolvable_ghost_fixture(&root);
+    write_ghost(&root);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -258,17 +199,7 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
 
-    run_bounded(
-        "shutdown after boot",
-        std::time::Duration::from_secs(10),
-        move || {
-            let result = runtime.shutdown(areka_kanade::CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "shutdown should return Ok(()) when every stage joins cleanly, got {result:?}"
-            );
-        },
-    );
+    shutdown_bounded(runtime);
 }
 
 /// シナリオ4（`into_parts` 構造分解・task 3.2）: `boot` した `GhostRuntime` から
@@ -283,7 +214,7 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
     let temp =
         unique_temp_dir("into-parts-exposes-live-senders-and-all-handles-for-manual-teardown");
     let root = temp.path().to_path_buf();
-    write_minimal_resolvable_ghost_fixture(&root);
+    write_ghost(&root);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -402,7 +333,7 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
         "sylphya-publisher-accessor-yields-live-publisher-that-accepts-persist-put",
     );
     let root = temp.path().to_path_buf();
-    write_minimal_resolvable_ghost_fixture(&root);
+    write_ghost(&root);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -462,7 +393,7 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
 
     let temp = unique_temp_dir("shutdown-confirms-persist-flush-via-barrier-before-close");
     let root = temp.path().to_path_buf();
-    write_minimal_resolvable_ghost_fixture(&root);
+    write_ghost(&root);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -505,37 +436,7 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
 
 // ---- InProc 結線の生成〜駆動〜終了 統合テスト（task 2.4） ----
 
-use std::sync::{Arc, Mutex};
-
-/// task 2.4 専用のローカル記録 sink（`dispatcher.rs`／spine e2e の `RecordingSink` と同型・
-/// `Clone` 可能で全 cue を `Arc<Mutex<Vec<TalkCue>>>` へ蓄積する）。tests バイナリ側の
-/// `RecordingSink` は runtime.rs の in-crate 檻からは import できないため、ここでローカルに
-/// 定義し直す（`areka-bin-crate-internal-tests-in-crate` の流儀）。
-#[derive(Clone)]
-struct RecordingSink {
-    records: Arc<Mutex<Vec<TalkCue>>>,
-}
-
-impl RecordingSink {
-    fn new() -> Self {
-        Self {
-            records: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn records(&self) -> Arc<Mutex<Vec<TalkCue>>> {
-        Arc::clone(&self.records)
-    }
-}
-
-impl CueSink for RecordingSink {
-    fn emit(&mut self, cue: TalkCue) {
-        self.records
-            .lock()
-            .expect("records mutex poisoned")
-            .push(cue);
-    }
-}
+use std::sync::Arc;
 
 /// シナリオ5（task 2.4・第 3 の結線 `ShioriWiring::InProc` の生成〜駆動〜終了 一気通貫）:
 /// 実ビルド済み x64 テスト DLL（`shiori4_testdll.dll`）を fixture の `ghost/master/` へ配置し、
@@ -654,17 +555,7 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
     );
 
     // 終了: shutdown が clean に完走し `Ok(())` を返すこと（正規 close・有界待機で宙吊り防止）。
-    run_bounded(
-        "shutdown after InProc boot talk",
-        std::time::Duration::from_secs(10),
-        move || {
-            let result = runtime.shutdown(areka_kanade::CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "shutdown should return Ok(()) after InProc boot talk, got {result:?}"
-            );
-        },
-    );
+    shutdown_bounded(runtime);
 
     // ≥1 cue 捕捉の最終 assert（挨拶が実 InProc DLL 境界を越えて sink に届いた・task 2.4 の
     // 観測可能な完了条件）。

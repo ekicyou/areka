@@ -1,8 +1,8 @@
 //! task 3.1（要件 2.6・design.md「BootCueSink::begin_talk」）: 配送がトークの起動ごとに、
 //! 複製した受け口へそのトークの番号を渡すことの檻。
 
-use super::test_support::{run_bounded, test_system_vars};
 use super::*;
+use crate::test_support::{run_bounded, test_system_vars};
 use areka_sakura::contract::{ScriptOrigin, TalkCue};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;

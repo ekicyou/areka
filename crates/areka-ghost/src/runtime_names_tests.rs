@@ -3,12 +3,11 @@
 //! 検体のゴーストは由来つき起動のテストのもの（`name,TestGhost`・`sakura.name` なし）を使い、
 //! 差し替えの後にマウントの名前と sylphya の静的プロパティが新しい名前で読めることを見る。
 use super::*;
-use std::time::Duration;
-
 use areka_sylphya::FlatResolution;
 use temp_path_kit::TempPath;
 
-use super::origin_tests::{NoopSink, RecordingShiori, Requests, write_returning_ghost};
+use super::origin_tests::{RecordingShiori, write_returning_ghost};
+use crate::test_support::{NoopSink, Requests, shutdown_bounded};
 
 #[test]
 fn set_names_replaces_mount_names_and_republishes_statics() {
@@ -64,15 +63,6 @@ fn set_names_replaces_mount_names_and_republishes_statics() {
         DottedResolution::Value(_)
     ));
 
-    // 正規の終了を期限つきで待つ（join の宙吊りでスイート全体を止めない）。
-    let (done_tx, done_rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let result = runtime.shutdown(areka_kanade::CloseReason::System);
-        let _ = done_tx.send(result.map_err(|err| format!("{err:?}")));
-    });
-    let outcome = done_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("shutdown did not complete within 10s (possible hang)");
-    assert_eq!(outcome, Ok(()), "shutdown should succeed");
+    shutdown_bounded(runtime);
     drop(temp);
 }
