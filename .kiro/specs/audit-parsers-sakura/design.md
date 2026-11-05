@@ -311,7 +311,7 @@ pub enum ShellIssue {
 ```
 - 字句の段の `Token`（`pub(crate)`）は `Brace { header, body, line }`・`TopLevel(fields)`・`Unclosed { heading, line }`・`Reopened { heading, line }` の 4 つにする。`BlockStart`・`Line`・`BlockEnd`・`Raw` と `raw_lines_from` を消す（68）。decode の決して走らない 3 枝（`decode.rs:70-74`・`:79-81`・`:99-103`）は形の上で無くなる。
 - 見出しの決め（33・71 を 1 つの規則で）: `{` だけの行が来たら、前のブレスの区切りから後で、最初の欄が areka の読むブレスの名（`descript`・`surface` で始まる・`.surface.alias` で終わる・`balloon.` で始まる・`.cursor` で終わる）である最も近い行を見出しにする。そういう行が無ければ今どおり `{` の直前の有意な行。見出しと `{` の間の行は ukadoc の「ブレス名、{}、各設定として認識されない行はすべてコメント行」に従いコメントとして捨てる。開いた本体の中で `{` が来たら、同じ選び方で本体の行から見出しを選び、その前の行で前のブレスを閉じて（中身は残す）`Reopened` を出す。
-- 範囲の幅の上限（6）: `parse_target_element` で `Range{start,end}` の `end - start + 1` が上限を越えたら、その記述子だけを飛ばして `RangeTooWide` を積む。見出しのほかの記述子とシェルのほかの部分は読む。記述子が 1 つも残らないブレスは積まない（36 と同じ）。除外の範囲（`!a-b`）は広げないので上限をかけない。`boxes.rs` も同じ `parse_targets` を通るので同じ上限がかかる（記録は画像の側で 1 回だけ）。**上限は幅 8193**（`const RANGE_WIDTH_CAP: u64 = 8193`）＝ukadoc が MATERIA だけの制限として載せる数を借りた（一般の決まりは「割り振りは基本的に自由」で、SSP 向けの実在のシェルは 8193 以上の番号も使う＝番号の値は縛らない）。ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） の番号の数（0〜8192）。上限は幅だけにかけ、番号の値にはかけない（`surface10000` も `surface10000-18192` も読む）。越えた記述子は `error!` で記述子の字を名指して飛ばし（記録は `shell_target.rs`）、シェルは全体として読む。幅は `u64` で数える（`0-4294967295` の幅 2^32 が `u32` に入らないため）。
+- 範囲の幅の上限（6・設計の討議の議題 1 で改め）: **シェル全体の範囲の幅の合計**を数え、`parse_target_element` で `Range{start,end}` の `end - start + 1` を足すと合計が上限を越える記述子は飛ばして `RangeTooWide` を積む（1 つの範囲・1 つの見出しの中の繰り返し・見出しの重ね、のどれでも膨らませられない）。見出しのほかの記述子とシェルのほかの部分は読む。記述子が 1 つも残らないブレスは積まない（36 と同じ）。除外の範囲（`!a-b`）は広げないので上限をかけない。`boxes.rs` も同じ `parse_targets` を通るので同じ上限がかかる（記録は画像の側で 1 回だけ）。**上限は幅 8193**（`const RANGE_WIDTH_CAP: u64 = 8193`）＝ukadoc が MATERIA だけの制限として載せる数を借りた（一般の決まりは「割り振りは基本的に自由」で、SSP 向けの実在のシェルは 8193 以上の番号も使う＝番号の値は縛らない）。ukadoc「なお、MATERIAではsurfaceIDにつかえる数字は0から8192までという制限がある。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#caption_standarddef） の番号の数（0〜8192）。上限は幅だけにかけ、番号の値にはかけない（`surface10000` も `surface10000-18192` も読む）。越えた記述子は `error!` で記述子の字を名指して飛ばし（記録は `shell_target.rs`）、シェルは全体として読む。幅は `u64` で数える（`0-4294967295` の幅 2^32 が `u32` に入らないため）。
 - 読めない数（36）: 要素の層・当たりの番号・アニメの番号・パターンの番号・対象の記述子・別名の項目は、読めなければ 0 にせず飛ばして `UnreadableNumber` を積む。範囲の両端は trim する。座標（`field_i64`）とウェイトは今どおり 0。見出しがちょうど `surface.alias` のブレスは、`sakura.surface.alias` と同じく読まない（今は空の surface 0 を作っている）。
 - ウェイト（5）: 欄を trim し、`-` を含めば最初の `-` で分けて両側を trim、両方が `u32` なら小さい方を待ちにして `WaitRange` を積む。それ以外は今どおり `parse::<u32>().unwrap_or(0)`。
 
@@ -390,7 +390,7 @@ pub fn text_playback_duration(text: &str) -> f64;   // 形も値も変えない�
 | 3 | `decode.rs:454-466`: `Ok(p) if p.is_finite()` だけ受け、ほかは `ArgumentDefaulted` と 1.0 | — | `decode_tests.rs` `newline_non_finite_percent_falls_back_to_default`・`parse_noted_tests.rs:212` に 3 例 | 6 |
 | 4 | `dispatch_block` の `descript` の腕で本体の各行に `decode_sort_key`（トップレベルの道は残す・後の行が勝つ） | 台帳 `assets.toml:6098`・`:7005` | `decode_tests_transcription_gap_tests.rs` `sort_keys_inside_descript_brace_are_transcribed` | 12・24 |
 | 5 | `decode.rs:362`: ウェイトの範囲は小さい方を待ちにして `WaitRange`・モデルは変えない | 記録は `shell_target.rs`【emo-present】 | `decode_tests_animation_tests.rs` `pattern_wait_range_takes_minimum_and_is_reported` | 12・23 |
-| 6 | `parse_target_element` で幅が上限を越えた `Range` の記述子を飛ばして `RangeTooWide`（幅 8193 を越えたとき・番号の値にはかけない） | 記録（`error!`）は `shell_target.rs`【emo-present】・fold は触らない【emo-compose】 | `decode_tests_append_tests.rs` `range_wider_than_cap_is_skipped_and_recorded`（`surface0-4294967295`・`surface.append5,0-4294967295` は飛ぶ）・`range_width_cap_boundary`（`surface0-8192` は読む・`surface0-8193` は飛ぶ・`surface10000` は読む） | 12・23 |
+| 6 | `parse_target_element` でシェル全体の範囲の幅の合計が上限 8193 を越える `Range` の記述子を飛ばして `RangeTooWide`（番号の値にはかけない・設計の討議の議題 1） | 記録（`error!`）は `shell_target.rs`【emo-present】・fold は触らない【emo-compose】 | `decode_tests_append_tests.rs` `range_wider_than_cap_is_skipped_and_recorded`（`surface0-4294967295`・`surface.append5,0-4294967295` は飛ぶ）・`range_width_cap_boundary`（`surface0-8192` は読む・`surface0-8193` は飛ぶ・`surface10000` は読む）・`range_width_cap_is_shell_wide`（`surface0-8192,0-8192` の 2 つ目と、`surface0-8192` の後の `surface8193-8193` は飛ぶ） | 12・23 |
 | 7 | drive の `Some` の腕で `player.tick(last_tick)`＋doc の直し | `dola/src/cue/schedule.rs` の 1 行 | `drive_choice_tests.rs` `resolved_choice_flushes_due_epilogue_before_following_close`（A・B） | 18・24 |
 | 8 | `offset_ms: u64` の `saturating_add`・`ms_to_secs` で 1 回だけ秒へ・`text_playback_duration` の形は不変 | — | `compile_sheet_tests.rs` `start_times_sit_on_the_millisecond_grid`・期待値の直し 2 本 | 14 |
 | 9 | `resolve_bind.rs:58-62`: NotFound 以外の読みの失敗を `warn!`（パスと誤り）・呼び手は変えない | — | `resolve_bind_tests.rs` `unreadable_shell_descript_warns_and_reads_no_binds`（`descript.txt` をフォルダにして読みを失敗させ、WARN 1 件と空の表） | 5 |
@@ -411,7 +411,7 @@ pub fn text_playback_duration(text: &str) -> f64;   // 形も値も変えない�
 | 24 | `lexer.rs:364` の腕を `'"' if cur.is_empty() && !quote_consumed` に | — | `lexer_tests.rs` `mid_argument_quote_is_literal` | 6 |
 | 25 | lexer に `legacy_q_title_end`: `\q…[ID]` の直後の `[…]` が閉じていれば題を 1 つの Text で出す | — | `validation_tests.rs` `legacy_q_title_followed_by_text_folds`・`parse_noted_tests.rs:107` に 1 例 | 7 |
 | 26 | `lexer.rs:243-245` の旧形の印に 1 桁の数・`decode.rs:184` は `starts_with('q')` | — | `validation_tests.rs` `choice_legacy_q_serial_digit_kept_raw`（`\q10[a][b]` は今どおり） | 6 |
-| 27 | `NO_ARG_TAGS`（`* + - 0 1 4 5 6 7 C _! _+ _? _V __c __t _n _q a e h t u v z`）の後の `[` は字のまま | — | `parse_word_boundary_tests.rs` `bracket_after_no_arg_tag_is_text`・前提の変わる 6 本の書き直し（research.md 12 節） | 7 |
+| 27 | `NO_ARG_TAGS`（`* - 0 1 4 5 6 7 C _! _+ _? _V __c __t _n _q a e h t u z`・`+` と `v` は入れない＝設計の討議の議題 2）の後の `[` は字のまま | — | `parse_word_boundary_tests.rs` `bracket_after_no_arg_tag_is_text`・前提の変わる 6 本の書き直し（research.md 12 節） | 7 |
 | 28 | `Move`・`MoveArgs`・`decode_bang` を消し `"!"` を `decode_passthrough_bang` へ・compile の腕を消す | `areka/src/mcp/check_script_judge.rs:89-94` | `validation_tests.rs` `move_bang_is_generic_command` | 8 |
 | 29 | `compile.rs:426` を `Instruction::Raw(raw) =>` の `warn!(event = "raw_ignored", head, bytes)` に | — | `compile_arm_tests.rs` `raw_is_dropped_with_one_warning` | 8 |
 | 30 | `model.rs:23`・`:82`・`:180` の `#[non_exhaustive]` と `:12` の文を消す・`compile.rs:113` と `check_script_judge.rs:62` の `_` を消す・`check_script_judge.rs:129` を全部の腕に | `check_script_judge.rs`（`destination.rs`・`spine_conformance_script.rs`・`readme_cue_tests.rs`・`script_restriction_tests.rs` は変えない） | —（コンパイラが守る） | 8 |
@@ -490,5 +490,16 @@ pub fn text_playback_duration(text: &str) -> f64;   // 形も値も変えない�
 - **段 5 compile**: T14（8）／T15（41・42・92・93）／T16（43・7.11(a)）／T17（44・45・87〜91）
 - **段 6 drive・strict・sysvar**: T18（7 の drive・39・77〜79）／T19（40・80〜85）
 - **段 7 範囲の外（要件 7.10・相手が先に着地していれば main の上で、走っていれば伝言で順を決める）**: T20（38・76）／T21（12・15・16・51・36 で seriko の `resolve.rs` の別名の引きの期待値が変わらないことの確かめ＝要件 7.10）／T22（46・10・50・52）／T23（`shell_target.rs` の乗り換えと `ShellIssue` の記録・`balloon_definitions.rs` の `key_issues`）／T24（7.11(b)・58・7 の dola・4 の台帳・86）
-- **段 8 確かめ**: T25（7.7 の起票と「残る危うさ」の 1 件の起票）／T26（かけ直し・0 件・59・60 の理由）／T27（全体テスト）
+- **段 8 確かめ**: T25（7.7 の起票と「残る危うさ」の 1 件の起票と、旧形の `\q` を選択肢として出す振る舞いの起票＝設計の討議の議題 3）／T26（かけ直し・0 件・59・60 の理由）／T27（全体テスト）
 - 順の決め: T8 は T10 と T17 より先（同じテストのファイルに触る）。T11 は T12 より先。T16 は T8 の後（`read_note_point` が全部の腕になる）。段 7 は形を変えるので、各タスクの中で範囲の外の呼び出し元まで直してワークスペースを緑に戻す。
+
+## 設計の討議で確定した 7 件（2026-11-05 開発者「承認」＝全議題を推奨案で）
+
+1. **指摘 6 の上限はシェル全体の範囲の幅の合計 8193**（1 つの範囲の幅だけでは、同じ範囲を 1 行に並べる・見出しを重ねる、で膨らませられた＝設計の確かめの指摘 1）。手元の SSP のシェル 32 体で、範囲の幅の合計の最大は emo の 2,039（次は 100）＝4 倍の余裕。範囲を使わない番号は 1 つにつき字が要り、入力の大きさに比例するだけなので数えない。越えた記述子は `error!` で名指して飛ばし、シェルのほかの部分は読む。
+2. **指摘 27 の引数を取らないタグの一覧に `+` と `v` を入れない**。完了した spec の決め（`\+[x]` は無視・`\v[1]` の扱い）を保つ。`\+` はゴーストの切り替えという副作用を持ち、SSP で測っていない。
+3. **指摘 26 は、旧形 `\q0[ID][タイトル]` の字が吹き出しに漏れるのを止めるところまで**（旧形は見えない Raw＝完了した spec の要件 5.3）。SSP は旧形を選択肢として出す（research.md 11 節）。ukadoc の「[旧仕様] 選択肢」として出す振る舞いは、T25 で `/kiro-discovery` に起票する。
+4. **指摘 7 の dola の 1 行（`notify_barrier_resolved` で集めを空にする）を入れる**。入れないと、選んだのが次の Tick より先のとき 1 刻み遅れる。
+5. **申し送り 7.11(b) は、charset の宣言をファイル全体から位置を問わず探す**（4,096 バイトの窓も外す）。surfaces.txt の「必ず一行目」へは寛容になる。`areka-nar/src/manifest_tests.rs:302-329` の期待値の変化は `audit-ghost-catalog` に伝える。
+6. **指摘 65 は `decode_passthrough_raw` だけを畳む**。`decode_passthrough_tag`・`decode_passthrough_bare` は `doc/` の 34 行が名指すので残し、見出しの説明を「名指されているので残す」に直す。
+7. **`shell_target.rs` に新しいファイルを足さない**。`ShellIssue` の記録の文言（記述子・見出し・行の番号の欄と、`error!`／`warn!` の重さ）は parsers の `ShellIssue` の側（`impl ShellIssue { pub fn severity(&self) …; pub fn message(&self) … }` の形・記録そのものは出さない）に持たせ、`shell_target.rs` に足すのは呼ぶ数行だけにする。T23 の頭で行数を測り直す。`audit-emo-present` に伝える。
+
