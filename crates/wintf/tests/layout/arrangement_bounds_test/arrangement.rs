@@ -10,19 +10,6 @@ fn test_size_default() {
 }
 
 #[test]
-fn test_size_copy_clone() {
-    let size1 = Size {
-        width: 100.0,
-        height: 50.0,
-    };
-    let size2 = size1; // Copy
-    let size3 = size1.clone(); // Clone
-
-    assert_eq!(size1, size2);
-    assert_eq!(size1, size3);
-}
-
-#[test]
 fn test_arrangement_local_bounds_positive_size() {
     let arrangement = Arrangement {
         offset: Offset { x: 10.0, y: 20.0 },
@@ -94,21 +81,6 @@ fn test_global_arrangement_from_arrangement() {
     };
 
     let global: GlobalArrangement = arrangement.into();
-
-    // デバッグ出力
-    eprintln!(
-        "transform.M11={}, M12={}, M21={}, M22={}, M31={}, M32={}",
-        global.transform.M11,
-        global.transform.M12,
-        global.transform.M21,
-        global.transform.M22,
-        global.transform.M31,
-        global.transform.M32
-    );
-    eprintln!(
-        "bounds.left={}, top={}, right={}, bottom={}",
-        global.bounds.left, global.bounds.top, global.bounds.right, global.bounds.bottom
-    );
 
     // transform検証
     assert_eq!(global.transform.M11, 2.0); // scale x

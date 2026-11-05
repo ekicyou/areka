@@ -135,11 +135,8 @@ fn test_no_change_no_compute() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
-    // LayoutRootを持つエンティティを作成
     let root = world
         .spawn((
-            TaffyStyle::default(),
-            TaffyComputedLayout::default(), // 明示的に挿入
             BoxStyle {
                 size: Some(BoxSize {
                     width: Some(Dimension::Px(800.0)),
@@ -151,25 +148,44 @@ fn test_no_change_no_compute() {
         ))
         .id();
 
-    // システム実行（TaffyStyleは既にあるのでChanged発火なし）
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        build_taffy_styles_system,
-        sync_taffy_tree_system,
-        compute_taffy_layout_system,
-    ));
-
-    // 初回実行でノードが作成される
+    schedule.add_systems(
+        (
+            build_taffy_styles_system,
+            sync_taffy_tree_system,
+            compute_taffy_layout_system,
+            update_arrangements_system,
+        )
+            .chain(),
+    );
     schedule.run(&mut world);
 
-    // TaffyComputedLayoutが存在することを確認
-    assert!(world.entity(root).contains::<TaffyComputedLayout>());
+    // 初回はスタイルの追加で計算が走る
+    assert_eq!(world.get::<Arrangement>(root).unwrap().size.width, 800.0);
+    let ticks_before = world
+        .entity(root)
+        .get_change_ticks::<TaffyComputedLayout>()
+        .unwrap();
 
-    // 2回目の実行（変更なし）
+    // ECS を通さずに taffy の節だけを変える。計算が走れば幅が 1024 になる
+    {
+        let mut taffy_res = world.resource_mut::<TaffyLayoutResource>();
+        let node = taffy_res.get_node(root).unwrap();
+        let mut style = taffy_res.taffy().style(node).unwrap().clone();
+        style.size.width = taffy::style::Dimension::length(1024.0);
+        taffy_res.taffy_mut().set_style(node, style).unwrap();
+    }
+
+    // 2回目の実行（ECS 側の変更なし）は計算せず、書き込みもしない
+    world.increment_change_tick();
     schedule.run(&mut world);
 
-    // エラーなく完了することを確認
-    assert!(world.entity(root).contains::<TaffyComputedLayout>());
+    assert_eq!(world.get::<Arrangement>(root).unwrap().size.width, 800.0);
+    let ticks_after = world
+        .entity(root)
+        .get_change_ticks::<TaffyComputedLayout>()
+        .unwrap();
+    assert_eq!(ticks_before.changed, ticks_after.changed);
 }
 
 #[test]
@@ -237,8 +253,6 @@ fn test_hierarchy_change_triggers_compute() {
 
     let root = world
         .spawn((
-            TaffyStyle::default(),
-            TaffyComputedLayout::default(),
             BoxStyle {
                 size: Some(BoxSize {
                     width: Some(Dimension::Px(800.0)),
@@ -250,37 +264,44 @@ fn test_hierarchy_change_triggers_compute() {
         ))
         .id();
 
-    let child = world
-        .spawn((
-            TaffyStyle::default(),
-            TaffyComputedLayout::default(),
-            BoxStyle::default(),
-        ))
-        .id();
+    let child = world.spawn(BoxStyle::default()).id();
 
     let mut schedule = Schedule::default();
-    schedule.add_systems((
-        build_taffy_styles_system,
-        sync_taffy_tree_system,
-        compute_taffy_layout_system,
-        update_arrangements_system,
-    ));
+    schedule.add_systems(
+        (
+            build_taffy_styles_system,
+            sync_taffy_tree_system,
+            compute_taffy_layout_system,
+            update_arrangements_system,
+        )
+            .chain(),
+    );
     schedule.run(&mut world);
+
+    // 親の無い子は根の計算に入らない
+    assert_eq!(world.get::<Arrangement>(child).unwrap().size.height, 0.0);
 
     // 子を追加
     world.entity_mut(child).insert(ChildOf(root));
-
-    // システム再実行
     schedule.run(&mut world);
 
-    // 子にもTaffyComputedLayoutが設定されていることを確認（Arrangementではなく）
-    assert!(world.entity(child).contains::<TaffyComputedLayout>());
+    // taffy の根の節の子に子の節が並ぶ
+    let taffy_res = world.resource::<TaffyLayoutResource>();
+    let root_node = taffy_res.get_node(root).unwrap();
+    let child_node = taffy_res.get_node(child).unwrap();
+    assert_eq!(
+        taffy_res.taffy().children(root_node).unwrap(),
+        vec![child_node]
+    );
+
+    // 階層の変更で計算し直され、子は根の高さ（既定の stretch）に伸びる
+    assert_eq!(world.get::<Arrangement>(child).unwrap().size.height, 600.0);
 }
 
 // ===== Task 7.6: エンティティ削除のクリーンアップテスト =====
 
 #[test]
-fn test_entity_removal_detected() {
+fn test_entity_removal_cleans_both_mappings() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
@@ -290,55 +311,21 @@ fn test_entity_removal_detected() {
     schedule.add_systems(sync_taffy_tree_system);
     schedule.run(&mut world);
 
-    // TaffyLayoutResourceにノードが登録されていることを確認
-    {
-        let taffy_res = world.resource::<TaffyLayoutResource>();
-        assert!(taffy_res.get_node(entity).is_some());
-    }
+    let node_id = world
+        .resource::<TaffyLayoutResource>()
+        .get_node(entity)
+        .unwrap();
 
-    // エンティティを削除
-    world.despawn(entity);
-
-    // cleanup_removed_entities_systemを実行
-    let mut cleanup_schedule = Schedule::default();
-    cleanup_schedule.add_systems(cleanup_removed_entities_system);
-    cleanup_schedule.run(&mut world);
-
-    // ノードが削除されていることを確認
-    {
-        let taffy_res = world.resource::<TaffyLayoutResource>();
-        assert!(taffy_res.get_node(entity).is_none());
-    }
-}
-
-#[test]
-fn test_taffy_node_removed_with_entity() {
-    let mut world = World::new();
-    world.init_resource::<TaffyLayoutResource>();
-
-    let entity = world.spawn(TaffyStyle::default()).id();
-
-    let mut schedule = Schedule::default();
-    schedule.add_systems(sync_taffy_tree_system);
-    schedule.run(&mut world);
-
-    let node_id = {
-        let taffy_res = world.resource::<TaffyLayoutResource>();
-        taffy_res.get_node(entity).unwrap()
-    };
-
-    // エンティティ削除
     world.despawn(entity);
 
     let mut cleanup_schedule = Schedule::default();
     cleanup_schedule.add_systems(cleanup_removed_entities_system);
     cleanup_schedule.run(&mut world);
 
-    // NodeIdからのマッピングも削除されていることを確認
-    {
-        let taffy_res = world.resource::<TaffyLayoutResource>();
-        assert!(taffy_res.get_entity(node_id).is_none());
-    }
+    // Entity→Node と Node→Entity の両方が消えている
+    let taffy_res = world.resource::<TaffyLayoutResource>();
+    assert!(taffy_res.get_node(entity).is_none());
+    assert!(taffy_res.get_entity(node_id).is_none());
 }
 
 #[test]
@@ -346,25 +333,30 @@ fn test_mapping_cleanup_prevents_memory_leak() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();
 
+    let mut schedule = Schedule::default();
+    schedule.add_systems(sync_taffy_tree_system);
+    let mut cleanup_schedule = Schedule::default();
+    cleanup_schedule.add_systems(cleanup_removed_entities_system);
+
     // 複数のエンティティを作成・削除
+    let mut removed = Vec::new();
     for _ in 0..10 {
         let entity = world.spawn(TaffyStyle::default()).id();
-
-        let mut schedule = Schedule::default();
-        schedule.add_systems(sync_taffy_tree_system);
         schedule.run(&mut world);
+        let node_id = world
+            .resource::<TaffyLayoutResource>()
+            .get_node(entity)
+            .unwrap();
 
         world.despawn(entity);
-
-        let mut cleanup_schedule = Schedule::default();
-        cleanup_schedule.add_systems(cleanup_removed_entities_system);
         cleanup_schedule.run(&mut world);
+        removed.push((entity, node_id));
     }
 
-    // すべてのマッピングがクリーンアップされていることを確認
-    #[cfg(debug_assertions)]
-    {
-        let taffy_res = world.resource::<TaffyLayoutResource>();
-        taffy_res.verify_mapping_consistency();
+    // 10 件それぞれの対応が両向きとも残っていない
+    let taffy_res = world.resource::<TaffyLayoutResource>();
+    for (entity, node_id) in removed {
+        assert!(taffy_res.get_node(entity).is_none(), "{entity:?}");
+        assert!(taffy_res.get_entity(node_id).is_none(), "{entity:?}");
     }
 }
