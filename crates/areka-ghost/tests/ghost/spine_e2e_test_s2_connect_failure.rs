@@ -19,61 +19,6 @@ use areka_ghost::{
 use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind};
 use areka_parsers::charset::DefaultEncoding;
 
-use areka_actor::{ActorError, ActorHandle};
-use temp_path_kit::TempPath;
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-spine-s2-{tag}"))
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
-/// `shell/master/descript.txt`）を構築する。`s1_boot_success::write_ghost_fixture`
-/// と同旨だが、sibling module から private item は参照できないためローカルに
-/// 複製する（本シナリオは connect が即 `Err` を返し実際の起動系列を一切発火しない
-/// ため、shell 側の `name` の値そのものは load-bearing でない）。
-fn write_ghost_fixture(root: &std::path::Path) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,S2TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,S2TestShell\n",
-    )
-    .expect("write shell descript.txt");
-}
-
-/// `ActorHandle::join` を有界時間で観測する（`areka-kanade` 統合テストの
-/// `join_bounded` と同旨のローカルコピー——`ActorHandle::join` 自体は無期限
-/// ブロックし得るため、別スレッドへ逃がし `recv_timeout` で宙吊りを防ぐ）。
-fn join_bounded(
-    what: &str,
-    timeout: std::time::Duration,
-    handle: ActorHandle,
-) -> Result<(), ActorError> {
-    let (res_tx, res_rx) = std::sync::mpsc::sync_channel::<Result<(), ActorError>>(0);
-    std::thread::spawn(move || {
-        let _ = res_tx.send(handle.join());
-    });
-    match res_rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => panic!("'{what}' join did not complete within {timeout:?} (possible hang)"),
-    }
-}
-
-const BOUND: std::time::Duration = super::E2E_BOUND;
-
 /// S2: 接続失敗——connect が即 `Err` を返しても `boot()` 自体は成功する
 /// （connect 失敗は shiori アクタースレッド**内部**で非同期に起こるため、`boot()`
 /// 自身の同期的な返り値には影響しない。`GhostBootError::Mount` のみが `boot` を
@@ -86,9 +31,8 @@ const BOUND: std::time::Duration = super::E2E_BOUND;
 /// 後始末されることを確認する（design「全 join（有界）」の文字どおりの意味）。
 #[test]
 fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
-    let temp = unique_temp_dir("drives-autonomous-kanade-termination-and-full-teardown");
+    let temp = write_ghost_fixture("S2TestGhost", "S2TestShell");
     let root = temp.path().to_path_buf();
-    write_ghost_fixture(&root);
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -135,7 +79,6 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     // ——このテストは kanade へ一度もメッセージを送っていない。
     join_bounded(
         "kanade autonomous termination on connect failure",
-        BOUND,
         kanade_handle,
     )
     .expect(
@@ -172,7 +115,6 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     // kanade が止まるときに送る Close を受けて終わる（real.rs `answer_after_connect_failure`）。
     join_bounded(
         "shiori actor exit after kanade's Close (connect-failure answering loop)",
-        BOUND,
         shiori_handle,
     )
     .expect("shiori actor should finish once kanade has stopped and sent Close");
@@ -181,14 +123,14 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
     // dispatcher は自身の Sender を保持し自然終了しない（「アクター別の停止経路」表）
     // ため、明示的に Close を送出する。
     let _ = dispatcher.send(DispatcherMsg::Close);
-    join_bounded("dispatcher join after Close", BOUND, dispatcher_handle)
+    join_bounded("dispatcher join after Close", dispatcher_handle)
         .expect("dispatcher should terminate after Close");
 
     // start-relay／down-relay は上流（kanade 自身の start_tx／shiori 自身の down_tx）が
     // 既に drop 済み（kanade・shiori 双方のアクタースレッドが既に終了している）ため、
     // メッセージを送らずとも自然終了する。
-    join_bounded("start-relay natural termination", BOUND, start_relay_handle)
+    join_bounded("start-relay natural termination", start_relay_handle)
         .expect("start-relay should terminate naturally once kanade's start_tx is dropped");
-    join_bounded("down-relay natural termination", BOUND, down_relay_handle)
+    join_bounded("down-relay natural termination", down_relay_handle)
         .expect("down-relay should terminate naturally once shiori's down_tx is dropped");
 }

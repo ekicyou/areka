@@ -38,26 +38,13 @@ use areka_ghost::sylphya_wiring::ghost_asker_id;
 use areka_ghost::{
     GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
 };
-use areka_kanade::{MonotonicMs, ShioriBackend};
+use areka_kanade::ShioriBackend;
 use areka_parsers::charset::DefaultEncoding;
 use areka_sylphya::{AskerContext, DottedResolution, FlatResolution};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
 
-use crate::spine_e2e_test::RecordingSink;
-
-/// 壁時計安全弁（兄弟 e2e と整合＝60s）。意味論 deadline は MonotonicMs 仮想時間で注入されるため
-/// この壁時計値はテスト意味論に影響せず、並列負荷の飢餓による偽赤のみを防ぐ。
-const E2E_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-sylphya-{tag}"))
-}
+use crate::spine_e2e_test::{BOUND, RecordingSink, dispatcher_tick, spin_pumping_ticks};
 
 /// `root` 直下に解決可能なゴーストツリーを構築する。ghost/master/descript.txt の
 /// `sakura.name`／`sakura.name2`／`kero.name` を引数の既知値で書く（selfname 系実値解決の入力・
@@ -89,19 +76,6 @@ fn write_named_ghost_fixture(
         b"charset,UTF-8\nname,SylphyaIntegShell\n",
     )
     .expect("write shell descript.txt");
-}
-
-/// 有界待機ヘルパ（`runtime.rs`／`spine_e2e_test.rs` と同旨のローカルコピー・宙吊り検出）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
 }
 
 /// 寛容 mock SHIORI backend（id ごとの GET 応答を map で持ち、未登録 id は `Ok(None)` を返す）。
@@ -177,9 +151,9 @@ fn manual_teardown(parts: GhostParts) {
         sylphya: sylphya_handle,
     } = handles;
 
-    run_bounded(
+    crate::common::run_bounded(
         "manual teardown after reader inspection",
-        E2E_BOUND,
+        BOUND,
         move || {
             let _ = kanade.send(areka_kanade::KanadeMsg::ForceQuit {
                 reason: areka_kanade::CloseReason::System,
@@ -209,7 +183,7 @@ fn manual_teardown(parts: GhostParts) {
 }
 
 /// 初回 talk が発火するまで dispatcher へ Tick を注入し続ける（sleep 不使用・単調増加 `now` の
-/// 注入と `yield_now` のみ・S1 spine 技法）。boot が内部送出した `KanadeMsg::Boot` を起点に
+/// 注入と `yield_now` のみ・親の `spin_pumping_ticks`）。boot が内部送出した `KanadeMsg::Boot` を起点に
 /// prefetch（username GET＋barrier）→ OnBoot GET(Value) → StartTalk → dispatcher active slot →
 /// 全 broadcast、の順で進む。初回 cue が `records` に載れば return（happens-before 確立点:
 /// prefetch は OnBoot より厳密に前段ゆえ、cue 観測は barrier 反映後を含意する）。
@@ -217,23 +191,11 @@ fn drive_until_first_cue(
     dispatcher: &std::sync::mpsc::Sender<DispatcherMsg>,
     records: &std::sync::Arc<std::sync::Mutex<Vec<areka_sakura::contract::TalkCue>>>,
 ) {
-    let mut now: u64 = 1;
-    let deadline = std::time::Instant::now() + E2E_BOUND;
-    while std::time::Instant::now() < deadline {
-        dispatcher
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 1;
-        if !records.lock().expect("records mutex poisoned").is_empty() {
-            return;
-        }
-        std::thread::yield_now();
-    }
-    panic!(
-        "boot talk cue never fired after repeated Tick within bound — the prefetch→talk sequence \
-         did not progress (cannot verify the barrier fence without a fired boot talk)"
+    spin_pumping_ticks(
+        "boot talk cue never fired after repeated Tick — the prefetch→talk sequence did not progress (cannot verify the barrier fence without a fired boot talk)",
+        &mut 1,
+        dispatcher_tick(dispatcher),
+        || !records.lock().expect("records mutex poisoned").is_empty(),
     );
 }
 
@@ -251,7 +213,9 @@ fn drive_until_first_cue(
 /// 鏡像へ反映済みである（sleep／retry 不要）。
 #[test]
 fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
-    let temp = unique_temp_dir("boot-reader-resolves-selfname-family-and-baseware-real-values");
+    let temp = TempPath::new(
+        "ghost-sylphya-boot-reader-resolves-selfname-family-and-baseware-real-values",
+    );
     let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", Some("紫"), Some("エモ"));
 
@@ -332,7 +296,8 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
 /// ことは `Ok(())` に含意される（失敗があれば `GhostShutdownError.failures` に段名つきで現れる）。
 #[test]
 fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
-    let temp = unique_temp_dir("boot-then-shutdown-all-stages-including-sylphya-succeed");
+    let temp =
+        TempPath::new("ghost-sylphya-boot-then-shutdown-all-stages-including-sylphya-succeed");
     let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", None, None);
 
@@ -354,18 +319,7 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
 
-    run_bounded(
-        "shutdown (all stages incl. sylphya)",
-        E2E_BOUND,
-        move || {
-            let result = runtime.shutdown(areka_kanade::CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "shutdown should return Ok(()) when every stage (incl. sylphya Close+join) joins \
-                 cleanly, got {result:?}"
-            );
-        },
-    );
+    crate::common::run_bounded_shutdown("shutdown (all stages incl. sylphya)", BOUND, runtime);
 }
 
 // ============================================================================
@@ -381,7 +335,8 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
 /// snapshot を**一度だけ** assert する（snapshot 自体の retry／sleep は一切なし＝レース非依存）。
 #[test]
 fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
-    let temp = unique_temp_dir("username-value-is-in-boot-talk-snapshot-via-barrier-fence");
+    let temp =
+        TempPath::new("ghost-sylphya-username-value-is-in-boot-talk-snapshot-via-barrier-fence");
     let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", None, None);
 
@@ -438,7 +393,7 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
 /// 静的層由来で依然実在することも併せて固定する（不在記録が他フラット値を巻き添えにしない）。
 #[test]
 fn username_no_content_is_absent_from_boot_talk_snapshot() {
-    let temp = unique_temp_dir("username-no-content-is-absent-from-boot-talk-snapshot");
+    let temp = TempPath::new("ghost-sylphya-username-no-content-is-absent-from-boot-talk-snapshot");
     let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", None, None);
 

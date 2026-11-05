@@ -5,7 +5,8 @@
 // （areka-ghost/src/test_log_capture.rs は lib 内 `#[cfg(test)]` ゆえ統合テストからは不可視・
 // かつスレッド局所）では捕えられない。本モジュールは共有 crate `log-capture-kit` の全スレッド
 // 窓口 [`log_capture_kit::install_global_capture_all`] で全スレッドのイベントを 1 本の共有
-// バッファへ集約する（据え付けは**一度だけ**・取り消せない）。S7 が boot 前後の追加分を照合する。
+// バッファへ集約する（据え付けは**一度だけ**・取り消せない）。S7 が boot 前後の追加分を
+// [`CapturedEvent`] のまま（写さずに）照合する。
 //
 // フィルタ無しの capture-all ゆえ全 callsite の Interest は always に保たれ（`Never` 焼き付き
 // 不能）、他 e2e シナリオの意味論には一切干渉しない——バッファへ push するだけの観測系である。
@@ -15,30 +16,6 @@
 use std::sync::{Arc, Mutex};
 
 use log_capture_kit::{CapturedEvent, install_global_capture_all};
-use tracing::Level;
-
-/// 捕捉した 1 行（照合対象は target／level／message 本文）。
-///
-/// 共有バッファが貯めるのは正準イベント [`CapturedEvent`] で、本型はそこからの**変換**である
-/// （移行前に本モジュールが自前の Layer で組んでいた 3 項目と同じ内容）。
-#[derive(Clone, Debug)]
-pub struct CapturedLine {
-    pub target: String,
-    pub level: Level,
-    pub message: String,
-}
-
-impl From<&CapturedEvent> for CapturedLine {
-    /// `message` は `fmt::Arguments` ゆえ `record_debug` 経路で届き、その `{:?}` は整形済みの
-    /// 本文そのもの（引用符なし）になる。欠落時に空文字になるのも移行前と同じ。
-    fn from(ev: &CapturedEvent) -> Self {
-        Self {
-            target: ev.target.clone(),
-            level: ev.level,
-            message: ev.message().to_string(),
-        }
-    }
-}
 
 /// capture-all 捕捉先をプロセスへ一度だけ据え付け、共有バッファのクローンを返す。
 ///

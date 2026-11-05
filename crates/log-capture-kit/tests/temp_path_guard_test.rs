@@ -135,7 +135,7 @@ enum Why {
 /// 本仕様が触らないと決めたファイルを触らせる圧力になる（`file_length_guard_test.rs:58-60`
 /// が同じ理由で行数を書かないのと同型）。
 const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
-    // ── ⒜ 既にプロセス識別子で一意化している 10 件 ───────────────────────────
+    // ── ⒜ 既にプロセス識別子で一意化している 9 件 ───────────────────────────
     //
     // 設計 C8 が「例外表に載せるか窓口へ寄せるかを実装時に決め、根拠を記録する」と
     // 定めた当の項目。**載せる**を採った。根拠は 3 点。
@@ -154,11 +154,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
         "crates/areka-emo-present/src/balloon_test_support.rs",
         Why::ProcessUnique,
         "プロセス識別子＋単調連番＋Drop の再帰削除を自前で持つ（窓口の移植元と同型）。要件 12.2 の移行対象外",
-    ),
-    (
-        "crates/areka-ghost/tests/ghost/spine_e2e_test_s7_second_boot_record_present.rs",
-        Why::ProcessUnique,
-        "プロセス識別子で一意化済み。要件 12.2 の移行対象外",
     ),
     // `crates/areka-sylphya/src/persist/io.rs` はかつてここに載っていたが、タスク 10.7 が
     // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
@@ -254,13 +249,13 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 15;
+const ALLOWED_COUNT: usize = 14;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。種別ごとに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 13;
+const PROCESS_UNIQUE_COUNT: usize = 12;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 2;
 

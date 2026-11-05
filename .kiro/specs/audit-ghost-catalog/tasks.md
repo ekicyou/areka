@@ -147,7 +147,7 @@
   - 完了の状態: 範囲に `BoxedBackend` の定義が 1 つだけで、I1・I2・snapshot・real_pasta_online が寄せる前と同じ結果で通り、`run_bounded_reports_a_panic_as_a_panic` が緑で、1,000 行の番人が緑
   - _Requirements: 3.1, 5.1, 5.3, 6.1, 6.2, 7.1, 7.2, 7.3, 9.1_
 
-- [ ] 17. spine の結合テストの写しをまとめ、S7 を `TempPath` へ移す（T17）
+- [x] 17. spine の結合テストの写しをまとめ、S7 を `TempPath` へ移す（T17）
   - 着手の前に `main` を取り込み、一時フォルダの番人の例外表の行から件数を数え直す
   - #50〜#52 の fixture・有界の合流・期待の組み立て・待ちの輪を親の `spine_e2e_test.rs` に 1 つずつ置き、子と `sylphya_integration_test` がそれを使う
   - #44 の spine の子の有界の実行と終了の写しを `common.rs` の道具へ使い替える

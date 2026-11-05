@@ -8,7 +8,7 @@
 // `areka.boot.count` を **boot 前に据え**（S1 との唯一の差＝2 回目起動相当）、boot()`apply_boot_record_gate`
 // が `first_boot=false` を解決 → kanade boot 系列が OnFirstBoot を **飛ばし** OnBoot（BootMain）から
 // 起動運行を始めることを、実 ghost スタックを通して固定する。共有 first-boot fixture（i1/i2/s1 が依存）は
-// 一切汚さない（temp-dir ＋ Drop ガード）。
+// 一切汚さない（`TempPath` の一時フォルダの下）。
 //
 // 観測（要件 3.3）:
 //   1. 記録した SHIORI GET 系列に **OnFirstBoot GET が現れない**（OnBoot GET は現れる）。
@@ -16,55 +16,10 @@
 
 use super::*;
 
-use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use areka_kanade::MonotonicMs;
 use areka_parsers::charset::DefaultEncoding;
 
 use tracing::Level;
-
-/// S7 専用の隔離ゴーストルート（Drop ガード付き・共有 first-boot fixture を汚さない）。
-struct TempGhost {
-    root: std::path::PathBuf,
-}
-
-impl TempGhost {
-    fn new(tag: &str) -> Self {
-        let mut root = std::env::temp_dir();
-        root.push(format!(
-            "areka_ghost_spine_e2e_s7_{tag}_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root);
-        Self { root }
-    }
-}
-
-impl Drop for TempGhost {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
-    }
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリーを構築する（S1 の `write_ghost_fixture` と同旨・
-/// sibling module の private item は参照できないためローカル複製）。
-fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,S7TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
-    )
-    .expect("write shell descript.txt");
-}
 
 /// 起動記録（`areka.boot.count`）を ghost スコープの永続鏡像へ **boot 前に**据える（要件 3.3/8.3）。
 ///
@@ -86,19 +41,6 @@ fn plant_boot_record(root: &std::path::Path) {
     .expect("write sylphya.toml boot record");
 }
 
-/// 有界待機ヘルパ（S1 の `run_bounded` と同旨のローカルコピー・宙吊り防止）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
-}
-
 /// S7: 起動記録あり → OnFirstBoot を飛ばして OnBoot から起動し、`boot_gate skip_first_boot` を
 /// ログする（要件 3.3・注入時刻のみ・sleep 不使用・純 x64）。
 #[test]
@@ -112,15 +54,15 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
         .expect("log buffer mutex は毒化しない")
         .len();
 
-    let ghost = TempGhost::new("record_present_skips_onfirstboot");
-    write_ghost_fixture(&ghost.root, SHELL_NAME);
+    let ghost = write_ghost_fixture("S7TestGhost", SHELL_NAME);
+    let root = ghost.path().to_path_buf();
     // 起動記録を据える——これが S1（初回起動）との唯一の差＝2 回目起動相当（要件 3.3）。
-    plant_boot_record(&ghost.root);
+    plant_boot_record(&root);
 
     // 2 回目起動の台本: OnFirstBoot は **据えない**（gate が飛ばすため一度も GET されない）。
     // 発火系列 = OnInitialize → username prefetch → OnBoot → basewareversion（prefetch 段は 3.5 で不変）。
     // 万一 gate が退行して OnFirstBoot が GET されると `ScriptedShioriBackend` が「no scripted
-    // response」で panic し、挨拶 cue が発火せず下の `fired` 表明が有界時間内に赤くなる（退行を検出）。
+    // response」で panic し、挨拶 cue が発火せず下の `spin_pumping_ticks` の有界の待ちが panic する（退行を検出）。
     let (backend, handle) = ScriptedShioriBackend::builder()
         .notify("OnInitialize", Ok(()))
         .get("username", Ok(None))
@@ -136,7 +78,7 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
 
     let options = GhostBootOptions {
         strict_judges: None,
-        ghost_root: ghost.root.clone(),
+        ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(backend) as Box<dyn ShioriBackend>)
@@ -153,42 +95,21 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
     // OnBoot の挨拶が dispatcher の active slot に載って発火するまで、Tick 注入で橋渡し（S1 と同技法・
     // 単調増加する `now` の注入のみ・sleep 不使用・`yield_now` で他スレッドへ実行機会を譲る）。
     let mut now: u64 = 1;
-    let mut fired = false;
-    let deadline = std::time::Instant::now() + super::E2E_BOUND;
-    while std::time::Instant::now() < deadline {
-        runtime
-            .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 1;
-        if !surface_records
-            .lock()
-            .expect("records mutex poisoned")
-            .is_empty()
-        {
-            fired = true;
-            break;
-        }
-        std::thread::yield_now();
-    }
-    assert!(
-        fired,
-        "S7: OnBoot 挨拶 cue が発火しない — 記録あり起動が OnBoot から始まっていない（\
-         gate 退行で OnFirstBoot GET により backend が panic した可能性も含む）"
+    super::spin_pumping_ticks(
+        "S7: OnBoot 挨拶 cue が発火しない — 記録あり起動が OnBoot から始まっていない（gate 退行で OnFirstBoot GET により backend が panic した可能性も含む）",
+        &mut now,
+        dispatcher_tick(runtime.dispatcher()),
+        || {
+            !surface_records
+                .lock()
+                .expect("records mutex poisoned")
+                .is_empty()
+        },
     );
 
     // ---- (1) OnFirstBoot GET 不発・OnBoot GET 発火（要件 3.3）----
     // 死活監視ノイズ（run_shiori_loop が各メッセージ冒頭で status() を確認）を除外して照合する。
-    let calls = handle.calls();
-    let calls_without_status: Vec<RecordedCall> = calls
-        .lock()
-        .expect("calls mutex poisoned")
-        .iter()
-        .filter(|c| !matches!(c, RecordedCall::Status))
-        .cloned()
-        .collect();
+    let calls_without_status = non_status_calls(&handle);
     let is_get =
         |c: &RecordedCall, id: &str| matches!(c, RecordedCall::Get { id: got, .. } if got == id);
     assert!(
@@ -205,40 +126,24 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
     // ---- (2) boot_gate skip_first_boot ログ（要件 3.3・kanade アクタースレッド発火）----
     // OnBoot 到達は skip 分岐の後段ゆえ挨拶発火時点で skip ログは既に積まれているはずだが、
     // スレッド境界の可視化ラグを吸収するため有界スピンで整定を待つ（sleep 不使用・yield のみ）。
-    let deadline = std::time::Instant::now() + super::E2E_BOUND;
-    let mut skip_logged = false;
-    while std::time::Instant::now() < deadline {
-        let hit = log_buffer.lock().expect("log buffer mutex は毒化しない")[base_len..]
-            .iter()
-            .map(super::global_log_probe::CapturedLine::from)
-            .any(|e| {
-                e.target == "kanade"
-                    && e.level == Level::INFO
-                    && e.message.contains("boot_gate skip_first_boot")
-            });
-        if hit {
-            skip_logged = true;
-            break;
-        }
-        std::thread::yield_now();
-    }
-    assert!(
-        skip_logged,
-        "boot_gate skip_first_boot ログ（target=\"kanade\" INFO）が未検出 — 初回ゲートの \
-         skip 分岐が発火していない（要件 3.3）"
+    wait_until(
+        "boot_gate skip_first_boot ログ（target=\"kanade\" INFO）が未検出 — 初回ゲートの skip 分岐が発火していない（要件 3.3）",
+        || {
+            log_buffer.lock().expect("log buffer mutex は毒化しない")[base_len..]
+                .iter()
+                .any(|e| {
+                    e.target == "kanade"
+                        && e.level == Level::INFO
+                        && e.message().contains("boot_gate skip_first_boot")
+                })
+        },
     );
 
     // ---- 後片付け（正規 shutdown・S1 と同じ有界待機）----
-    run_bounded(
+    crate::common::run_bounded_shutdown(
         "shutdown after S7 second-boot talk completion",
-        super::E2E_BOUND,
-        move || {
-            let result = runtime.shutdown(areka_kanade::CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "shutdown should return Ok(()) after S7 second-boot talk completes, got {result:?}"
-            );
-        },
+        super::BOUND,
+        runtime,
     );
-    // `ghost`（TempGhost）はここでスコープを抜け Drop ガードが temp-dir を除去する。
+    // `ghost`（TempPath）はここでスコープを抜け、一時フォルダを中身ごと消す。
 }

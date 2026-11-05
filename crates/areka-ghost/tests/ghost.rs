@@ -4,8 +4,7 @@
 // 置かず、実体は `tests/ghost/` 配下の各 `*_test.rs` に持つ。
 //
 // `spine_e2e_test.rs`（task 4.1 が `ScriptedShioriBackend`/`RecordingSink` を定義し、
-// 後続タスク 4.2〜4.7 が同ファイルへ boot〜close の各シナリオ（S1〜S6）の `#[test]` を
-// 追加していく）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）は
+// boot〜close の各シナリオ（S1〜S7）の `#[test]` は子モジュール `spine_e2e_test_s*.rs` に置く）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）は
 // `spine_e2e_test` の `RecordingSink` を再利用する（`crate::spine_e2e_test::RecordingSink`）。
 // `common`（task 8.3・退役 `default_system_vars` の代役スタンドイン）はテスト支援モジュール。
 // 各 e2e／追験が `crate::common::test_system_vars` を消費し、`SystemVarWiring::Custom` 注入で

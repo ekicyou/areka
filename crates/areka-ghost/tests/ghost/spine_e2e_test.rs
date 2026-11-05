@@ -5,7 +5,7 @@
 //! - [`RecordingSink`] — 演者非依存の単一出力契約 `areka_sakura::contract::CueSink` を実装する、
 //!   `Clone` 可能な記録 sink（broadcast で全 cue を受ける）。
 //!
-//! 後続タスク（4.2〜4.7）はこのファイルへ boot〜close の各シナリオ（S1〜S6）の
+//! 後続タスク（4.2〜4.7・8.6）はこのファイルの子モジュールに boot〜close の各シナリオ（S1〜S7）の
 //! `#[test]` を追加していく。本タスク（4.1）はその土台となる 2 型自体の構築・検証
 //! （台本通りの応答・終了結果・死活遷移を任意に再現できること）のみを担う。
 
@@ -19,7 +19,7 @@ use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 /// host-32 IPC 有界 e2e の壁時計安全弁（ハング検出器）。兄弟 e2e 規約（inproc/real_pasta/
 /// snapshot_capture = 60s）へ整合。意味論 deadline は MonotonicMs 仮想時間で注入されるため
 /// この壁時計値はテスト意味論に影響せず、workspace 並列負荷の飢餓による偽赤のみを防ぐ。
-const E2E_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
+pub(crate) const BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// talk 駆動の効果（cue 発火・TalkDone・その後段の close 握手）を待つ有界スピン。
 /// **待っている間も dispatcher へ Tick を注入し続ける**のが本ヘルパの要点である。
@@ -45,13 +45,13 @@ const E2E_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 ///
 /// `send_tick` は dispatcher 宛の Tick 送出のみを行うこと（kanade 宛の Tick は
 /// `Steady` pump として消費され台本外の `OnSecondChange` NOTIFY を誘発する）。
-fn spin_pumping_ticks(
+pub(crate) fn spin_pumping_ticks(
     what: &str,
     now: &mut u64,
     mut send_tick: impl FnMut(u64),
     mut done: impl FnMut() -> bool,
 ) {
-    let deadline = std::time::Instant::now() + E2E_BOUND;
+    let deadline = std::time::Instant::now() + BOUND;
     while std::time::Instant::now() < deadline {
         if done() {
             return;
@@ -60,7 +60,122 @@ fn spin_pumping_ticks(
         *now += 1;
         std::thread::yield_now();
     }
-    panic!("{what}（有界スピンが {E2E_BOUND:?} を超過）");
+    panic!("{what}（有界スピンが {BOUND:?} を超過）");
+}
+
+// ===================== シナリオの共有の道具（S1〜S7・sylphya の結合テスト） =====================
+
+/// 条件が真になるまで待つだけの有界の輪（Tick は送らない）。[`BOUND`] を越えたら `what` で panic する。
+pub(crate) fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + BOUND;
+    while std::time::Instant::now() < deadline {
+        if cond() {
+            return;
+        }
+        std::thread::yield_now();
+    }
+    panic!("{what}（有界の待ちが {BOUND:?} を超過）");
+}
+
+/// dispatcher へ `Tick{now}` を 1 本送る閉包（[`spin_pumping_ticks`] の `send_tick` に渡す）。
+pub(crate) fn dispatcher_tick(
+    dispatcher: &std::sync::mpsc::Sender<areka_ghost::dispatcher::DispatcherMsg>,
+) -> impl FnMut(u64) + '_ {
+    move |now| {
+        dispatcher
+            .send(areka_ghost::dispatcher::DispatcherMsg::Tick {
+                now: areka_kanade::MonotonicMs(now),
+            })
+            .expect("dispatcher actor should still be alive while driving the talk");
+    }
+}
+
+/// `ActorHandle::join` を [`BOUND`] の上限つきで待つ（宙吊りと panic を分ける `crate::common::run_bounded`）。
+pub(crate) fn join_bounded(
+    what: &str,
+    handle: areka_actor::ActorHandle,
+) -> Result<(), areka_actor::ActorError> {
+    crate::common::run_bounded(what, BOUND, move || handle.join())
+}
+
+/// 一時フォルダ（`TempPath`）の下に解決できる最小のゴースト（`ghost/master` と `shell/master` の
+/// descript.txt）を書いて返す。shell の `name` は `OnBoot` の Ref0（`KanadeConfig::shell_name`）になる。
+pub(crate) fn write_ghost_fixture(ghost_name: &str, shell_name: &str) -> temp_path_kit::TempPath {
+    let temp = temp_path_kit::TempPath::new(&format!("ghost-spine-{ghost_name}"));
+    let ghost_master = temp.path().join("ghost").join("master");
+    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+    std::fs::write(
+        ghost_master.join("descript.txt"),
+        format!(
+            "charset,UTF-8\nname,{ghost_name}\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n"
+        ),
+    )
+    .expect("write ghost descript.txt");
+    let shell_dir = temp.path().join("shell").join("master");
+    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
+    std::fs::write(
+        shell_dir.join("descript.txt"),
+        format!("charset,UTF-8\nname,{shell_name}\n"),
+    )
+    .expect("write shell descript.txt");
+    temp
+}
+
+/// events 表の [`areka_kanade::ShioriCall`] を [`RecordedCall`] へ写す（期待と実装が events 表を共有する）。
+pub(crate) fn expected_from_shiori_call(call: areka_kanade::ShioriCall) -> RecordedCall {
+    match call {
+        areka_kanade::ShioriCall::Get { id, references, .. } => RecordedCall::Get {
+            id: id.to_string(),
+            references,
+        },
+        areka_kanade::ShioriCall::Notify { id, references, .. } => RecordedCall::Notify {
+            id: id.to_string(),
+            references,
+        },
+    }
+}
+
+/// 起動の `OnBoot` が返す挨拶の台詞。
+pub(crate) const GREETING: &str = r"\s[0]hello\e";
+
+/// 初回起動の起動系列（OnInitialize→username の先読み→OnFirstBoot→OnBoot（挨拶）→basewareversion）を
+/// 積んだ台本。username は既定の username の世界を写して 204、OnFirstBoot も 204 で OnBoot へ落ちる。
+pub(crate) fn boot_script() -> ScriptedShioriBackendBuilder {
+    ScriptedShioriBackend::builder()
+        .notify("OnInitialize", Ok(()))
+        .get("username", Ok(None))
+        .get("OnFirstBoot", Ok(None))
+        .get("OnBoot", Ok(Some(GREETING.to_string())))
+        .notify("basewareversion", Ok(()))
+}
+
+/// [`boot_script`] の起動系列が SHIORI へ届く順の期待（Status を除く）。events 表から導く。
+pub(crate) fn expected_boot_prefix(config: &areka_kanade::KanadeConfig) -> Vec<RecordedCall> {
+    use areka_kanade::{events, resources};
+    let inactive = &areka_kanade::ExecutionSnapshot::INACTIVE;
+    vec![
+        expected_from_shiori_call(events::on_initialize(inactive)),
+        expected_from_shiori_call(resources::resource_username(inactive)),
+        // 永続ファイルの無い fixture＝vanish 不在ゆえ Ref0="0"。
+        expected_from_shiori_call(events::on_first_boot(inactive, 0)),
+        expected_from_shiori_call(events::on_boot(config, inactive)),
+        // 挨拶の台詞は再生の前に OnTranslate へかける（偽の SHIORI の既定は 204）。
+        expected_translate(GREETING, &events::on_boot(config, inactive)),
+        expected_from_shiori_call(events::baseware_version(config, inactive)),
+    ]
+}
+
+/// 受けた呼び出しのうち死活の問い合わせ（`Status`）を除いた列。shiori アクターは届くたびに
+/// 冒頭で `status()` を確かめるので、順序の照合ではこれを外す。
+pub(crate) fn non_status_calls(handle: &ScriptedShioriHandle) -> Vec<RecordedCall> {
+    handle
+        .calls()
+        .lock()
+        .expect("calls mutex poisoned")
+        .iter()
+        .filter(|c| !matches!(c, RecordedCall::Status))
+        .cloned()
+        .collect()
 }
 
 // ===================== ScriptedShioriBackend =====================
