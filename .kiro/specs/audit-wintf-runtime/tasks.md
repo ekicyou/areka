@@ -91,7 +91,7 @@
   - 完了の姿: 直したテストが緑で、25・32・33 は較正で赤を見てから戻す。赤なら `#[ignore]` で隠さず新しい指摘として開発者に報告する
   - _Boundary: T1_
   - _Requirements: 4.1, 7.1, 7.2_
-- [ ] 4.2 (P) window・widget のテストを直す（T3）
+- [x] 4.2 (P) window・widget のテストを直す（T3）
   - 43・46・108・116（monitor_hierarchy）: research の案どおり
   - 完了の姿: 直したテストが緑で、確かめを直したものは較正で赤を見てから戻す
   - _Boundary: T3_
