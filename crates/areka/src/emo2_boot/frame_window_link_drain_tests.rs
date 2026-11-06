@@ -18,14 +18,15 @@ use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
 use crate::emo2_boot::move_cue::{MoveCueSink, PositionCue};
+use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
 use crate::placement::follow::{BalloonFollow, MonitorSnapshot, OffsetBase};
 use crate::placement::prepare_ghost_windows_with_work_area;
 use crate::placement::resolver::PointPx;
-use crate::placement::shared_test_support::{WA, balloon_root, emo2_root, with_com_initialized};
 use crate::placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
 use crate::placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
+use crate::placement::test_support::{WA, with_com_initialized};
 
 use super::test_support::{all_shown, pos_of, resnap_world, synth_assets, zero_clock};
 use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};
@@ -129,8 +130,7 @@ fn reset_sticky_and_alignment_reach_their_procedures() {
     sink.emit(carrier("0", "reset", &["sticky-window"]));
     sink.emit(carrier("1", "set", &["alignmenttodesktop", "top"]));
 
-    let ((), events) =
-        crate::placement::test_support::capture_logs(|| run_move_drain_phase(&wiring, &mut world));
+    let ((), events) = log_capture_kit::capture(|| run_move_drain_phase(&wiring, &mut world));
 
     assert!(
         world.resource::<StickyGroupLedger>().groups().is_empty(),
@@ -160,7 +160,7 @@ fn reset_sticky_and_alignment_reach_their_procedures() {
 fn execute_resetballoonpos_returns_the_balloon() {
     with_com_initialized(|| {
         let prepared =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+            prepare_ghost_windows_with_work_area(&emo2_root(), &emo2_balloon_root(), WA, Some(96))
                 .expect("起動の配置の準備は成功する");
         let mut world = World::new();
         world.insert_resource(MonitorSnapshot {

@@ -5,7 +5,7 @@ use super::test_support::{titles, two_scope_placements};
 use super::{GhostWindowMarker, GhostWindows, ScopeWindows, spawn_ghost_windows};
 use crate::follow::{Anchored, BalloonFollow};
 use crate::resolver::{Anchor, PointPx};
-use crate::test_support::ExpectField;
+use log_capture_kit::ExpectField;
 
 // -------------------------------------------------------------------------
 // T-V1: despawn 掃除（areka-P0-dpi-window-vanish 要件 6.1/6.4・D8）
@@ -205,7 +205,7 @@ fn t_v1_despawn_without_registry_resource_is_noop() {
 /// `debug!` 止まりで、warn 以上を出さない（要件 6.2 の前提となる静穏性）。
 #[test]
 fn t_v1_cleanup_logs_are_debug_only_and_name_the_scope() {
-    let (_, events) = crate::test_support::capture_logs(|| {
+    let (_, events) = log_capture_kit::capture(|| {
         let mut world = World::new();
         let placements = two_scope_placements();
         let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -216,14 +216,14 @@ fn t_v1_cleanup_logs_are_debug_only_and_name_the_scope() {
     });
 
     // 除去成立 1 件（最初の片割れ）＋ no-op 1 件（後追いの片割れ）
-    let removed = crate::test_support::expect_one(
+    let removed = log_capture_kit::expect_one(
         &events,
         "placement: ゴースト窓レジストリから scope エントリを除去",
     );
     assert_eq!(removed.level, tracing::Level::DEBUG);
     assert_eq!(removed.expect_field("scope"), "0");
 
-    let noop = crate::test_support::expect_one(
+    let noop = log_capture_kit::expect_one(
         &events,
         "placement: ゴースト窓 despawn だがレジストリに該当 scope なし",
     );

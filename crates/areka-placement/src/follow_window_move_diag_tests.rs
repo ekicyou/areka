@@ -40,7 +40,7 @@ fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
         .id();
     world.despawn(window);
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         resize_window_to(
             &mut world,
             window,
@@ -78,7 +78,7 @@ fn resize_window_to_missing_anchored_on_living_entity_still_warns() {
         ))
         .id();
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         resize_window_to(
             &mut world,
             window,
@@ -113,7 +113,7 @@ fn resize_window_keep_position_on_despawned_entity_is_debug_only_normal_terminat
     world.despawn(window);
 
     let (ok, events) =
-        capture_logs(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
+        capture(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
 
     assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
     assert!(
@@ -132,7 +132,7 @@ fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns()
     let window = world.spawn(fake_handle(0x3000)).id(); // WindowPos なし・entity は実在
 
     let (ok, events) =
-        capture_logs(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
+        capture(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
 
     assert!(!ok);
     let warned = expect_one(&events, "WindowPos 未付与");
@@ -155,7 +155,7 @@ fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns()
 //   (3) 書込が起きない経路（べき等 skip・`WindowHandle` 未付与）ではレコードが出ない
 //   (4) 既定 `RUST_LOG=info` では 1 行も出ない（Req 1.7）
 //
-// 観測境界は tracing イベント本体（`test_support::capture_logs`）——本レコードは
+// 観測境界は tracing イベント本体（`test_support::capture`）——本レコードは
 // `WindowPos` ミラーと違い「書込が起きた事実」そのものの証跡だからである。
 // 座標・寸・DPI は 96 の非倍数／非既定値を使い、取り違えを差で炙り出す。
 // -------------------------------------------------------------------------
@@ -167,10 +167,10 @@ use wintf::ecs::DPI;
 
 use super::super::diag::{DESPAWNED_SKIP_TAG, WINDOW_MOVE_RECORD_TAG};
 use super::super::spawn::{BalloonWindowMarker, CharWindowMarker};
-use super::super::test_support::{LogEvent, capture_logs, ensure_interest_probes, expect_one};
+use log_capture_kit::{CapturedEvent, capture, ensure_interest_probes, expect_one};
 
 /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
-fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
+fn window_move_lines(events: &[CapturedEvent]) -> Vec<String> {
     events
         .iter()
         .map(|e| e.message().to_string())
@@ -179,7 +179,7 @@ fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
 }
 
 /// ちょうど 1 行の窓移動レコードを取り出す（0 件・複数件は落とす）。
-fn only_window_move_line(events: &[LogEvent]) -> String {
+fn only_window_move_line(events: &[CapturedEvent]) -> String {
     let lines = window_move_lines(events);
     assert_eq!(
         lines.len(),
@@ -215,7 +215,7 @@ fn char_window_world(scope: usize, dpi: u16) -> (World, Entity) {
 fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
     let (mut world, e) = char_window_world(1, 192);
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         resize_window_to(
             &mut world,
             e,
@@ -241,7 +241,7 @@ fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
 fn window_move_record_entity_matches_wintf_debug_rendering() {
     let (mut world, e) = char_window_world(0, 120);
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         resize_window_to(
             &mut world,
             e,
@@ -268,7 +268,7 @@ fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
     ] {
         let (mut world, e) = char_window_world(0, 96);
         let (ok, events) =
-            capture_logs(|| resize_window_to(&mut world, e, SizePx { w: 517, h: 823 }, route));
+            capture(|| resize_window_to(&mut world, e, SizePx { w: 517, h: 823 }, route));
         assert!(ok);
         let line = only_window_move_line(&events);
         assert!(
@@ -306,14 +306,14 @@ fn anchor_changed_system_records_the_anchor_change_route() {
     let mut schedule = Schedule::default();
     schedule.add_systems(anchor_changed_system);
     // 初回 run はべき等 skip（＝レコードも出ない＝(3) の裏取りも兼ねる）。
-    let (_, first) = capture_logs(|| schedule.run(&mut world));
+    let (_, first) = capture(|| schedule.run(&mut world));
     assert!(
         window_move_lines(&first).is_empty(),
         "べき等 skip でレコードが出た: {first:?}"
     );
 
     world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Top;
-    let (_, second) = capture_logs(|| schedule.run(&mut world));
+    let (_, second) = capture(|| schedule.run(&mut world));
     let line = only_window_move_line(&second);
     assert!(
         line.contains("route=AnchorChange"),
@@ -337,7 +337,7 @@ fn resize_window_keep_position_records_the_keep_position_route() {
     world.entity_mut(window).insert(DPI::from_dpi(192, 192)); // on_add フックの後に入れる
 
     let (ok, events) =
-        capture_logs(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
+        capture(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
     assert!(ok);
     assert_eq!(
         only_window_move_line(&events),
@@ -378,7 +378,7 @@ fn move_cue_write_is_recorded_as_move_cue_with_a_balloon_follow_companion() {
         .entity_mut(char_window)
         .insert(DPI::from_dpi(120, 120));
 
-    let (ok, events) = capture_logs(|| move_window_to(&mut world, char_window, 999, 777));
+    let (ok, events) = capture(|| move_window_to(&mut world, char_window, 999, 777));
     assert!(ok);
     // 対象窓＝MoveCue／随伴バルーン＝BalloonFollow の 2 行（発行順＝書込順）。
     assert_eq!(
@@ -424,7 +424,7 @@ fn drag_path_records_only_the_balloon_follow_write() {
         .id();
 
     let ev = Phase::Bubble(drag_event_at(char_window, (1300, 500), (1450, 520)));
-    let (_, events) = capture_logs(|| on_char_drag(&mut world, char_window, char_window, &ev));
+    let (_, events) = capture(|| on_char_drag(&mut world, char_window, char_window, &ev));
 
     let lines = window_move_lines(&events);
     assert_eq!(
@@ -449,7 +449,7 @@ fn drag_path_records_only_the_balloon_follow_write() {
 fn no_window_move_record_when_nothing_is_written() {
     // べき等 skip（Req3.1）
     let (mut world, e) = char_window_world(0, 120);
-    let (wrote, events) = capture_logs(|| {
+    let (wrote, events) = capture(|| {
         resize_window_to(
             &mut world,
             e,
@@ -473,7 +473,7 @@ fn no_window_move_record_when_nothing_is_written() {
             CharWindowMarker { scope: 0 },
         ))
         .id();
-    let (wrote, events) = capture_logs(|| {
+    let (wrote, events) = capture(|| {
         resize_window_to(
             &mut world,
             no_handle,

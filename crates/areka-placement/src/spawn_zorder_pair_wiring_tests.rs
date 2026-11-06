@@ -41,7 +41,7 @@ use wintf::ecs::{
 
 use super::wire_zorder_pair;
 use crate::diag::zorder_pair_strategy_line;
-use crate::test_support::capture_logs;
+use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
 // 実窓・World のヘルパ
@@ -166,7 +166,7 @@ fn wire_logs_the_strategy_it_actually_inserted() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
 
-    let (_, events) = capture_logs(|| wire_zorder_pair(&mut world));
+    let (_, events) = capture(|| wire_zorder_pair(&mut world));
 
     assert_eq!(events.len(), 1, "結線が出す記録はちょうど 1 本: {events:?}");
     assert_eq!(

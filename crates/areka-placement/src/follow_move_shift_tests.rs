@@ -12,7 +12,6 @@ use wintf::ecs::WindowPos;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::drain_window_pos_commands;
 
-use super::super::test_support::capture_logs;
 use super::test_support::{
     OFFSCREEN_PULL_TAG, drag_end_event_at, drag_event, fake_handle, guard_events, position_of,
     single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
@@ -22,6 +21,7 @@ use super::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag_end,
 };
 use crate::resolver::{Anchor, PointPx};
+use log_capture_kit::capture;
 
 const W: i32 = 200;
 const H: i32 = 300;
@@ -131,7 +131,7 @@ fn a_huge_shift_pulled_back_by_our_own_clamp_does_not_warn_offscreen_pull() {
         let (mut world, window) = char_world(anchor, 100, BOTTOM_Y);
 
         let (applied, events) =
-            capture_logs(|| apply_char_shift(&mut world, window, (0, 9999), ScaleRatio::ONE));
+            capture(|| apply_char_shift(&mut world, window, (0, 9999), ScaleRatio::ONE));
 
         assert!(applied, "{anchor:?}: 当てる");
         assert!(

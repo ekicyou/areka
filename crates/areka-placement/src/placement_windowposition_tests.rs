@@ -1,9 +1,9 @@
 use super::resolver::{PointPx, SizePx};
-use super::shared_test_support::{
-    TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
-};
-use super::test_support::{ExpectField, LogEvent, capture_logs};
+use super::shared_test_support::TempDir;
 use super::*;
+use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 // ------------------------------------------------------------------
 // windowposition → 初期既定位置（task 4.3・要件 3.2/3.4/3.5/3.6/6.3/7.6）
@@ -19,12 +19,12 @@ use super::*;
 #[test]
 fn prepare_windowposition_logs_scope_raw_side_and_converted_adjust() {
     with_com_initialized(|| {
-        let (result, events) = capture_logs(|| {
+        let (result, events) = capture(|| {
             prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
         });
         result.expect("emo2 fixture の配置準備は成功する");
 
-        let hits: Vec<&LogEvent> = events
+        let hits: Vec<&CapturedEvent> = events
             .iter()
             .filter(|e| {
                 e.message()
@@ -165,8 +165,14 @@ fn prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120() {
 fn prepare_windowposition_adjust_scales_with_balloon_k_not_shell_k() {
     with_com_initialized(|| {
         let root = TempDir::new();
-        let (ghost_root, balloon_dir) =
-            synth_declared_dpi_ghost(&root, "120", "144", Some((266, -129)));
+        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(
+            root.path(),
+            &emo2_root(),
+            &balloon_root(),
+            "120",
+            "144",
+            Some((266, -129)),
+        );
 
         let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(240))
             .expect("windowposition 宣言つき合成ゴーストの準備は成功する");
@@ -210,16 +216,22 @@ fn prepare_windowposition_adjust_scales_with_balloon_k_not_shell_k() {
 fn prepare_windowposition_adjust_is_identical_for_both_balloon_sides() {
     with_com_initialized(|| {
         let root = TempDir::new();
-        let (ghost_root, balloon_dir) =
-            synth_declared_dpi_ghost(&root, "96", "96", Some((266, -129)));
+        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(
+            root.path(),
+            &emo2_root(),
+            &balloon_root(),
+            "96",
+            "96",
+            Some((266, -129)),
+        );
 
-        let (result, events) = capture_logs(|| {
+        let (result, events) = capture(|| {
             prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
         });
         let p = result.expect("windowposition 宣言つき合成ゴーストの準備は成功する");
 
         // (a) 観測点 4: 置き側は Left／Right と異なるのに調整量は同一。
-        let hits: Vec<&LogEvent> = events
+        let hits: Vec<&CapturedEvent> = events
             .iter()
             .filter(|e| {
                 e.message()
@@ -266,7 +278,8 @@ fn prepare_without_windowposition_keeps_resolver_output_bit_identical() {
     with_com_initialized(|| {
         let root = TempDir::new();
         // 作者基準 DPI も 96／96（k₀=1/1）＝調整量以外の変化要因を持たない検体。
-        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "96", "96", None);
+        let (ghost_root, balloon_dir) =
+            synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
 
         let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
             .expect("windowposition 無宣言の合成ゴーストの準備は成功する");

@@ -585,7 +585,7 @@ fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
     });
     let char_window = world.spawn(CharWindowMarker { scope: 0 }).id();
 
-    let (_, events) = crate::test_support::capture_logs(|| {
+    let (_, events) = log_capture_kit::capture(|| {
         log_char_ground(
             &mut world,
             char_window,
@@ -616,7 +616,7 @@ fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
 fn log_chain_emits_exactly_one_record_per_stage() {
     let world = World::new();
 
-    let (_, events) = crate::test_support::capture_logs(|| {
+    let (_, events) = log_capture_kit::capture(|| {
         log_chain(&world, CHAIN_STAGE_REALIGNED, 2, 1, None);
         log_chain(
             &world,
@@ -723,7 +723,7 @@ fn offset_line_uses_a_sentinel_for_an_unpinned_base_and_an_unmarked_scope() {
 fn log_offset_rescale_emits_exactly_one_record_per_call() {
     let world = World::new();
 
-    let (_, events) = crate::test_support::capture_logs(|| {
+    let (_, events) = log_capture_kit::capture(|| {
         log_offset_rescale(
             &world,
             Some(1),

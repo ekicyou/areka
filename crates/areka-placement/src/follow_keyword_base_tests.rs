@@ -3,7 +3,6 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{drag_end_event_at, drag_event, fake_handle, point_of, rect};
 use super::{
     BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
@@ -13,6 +12,7 @@ use crate::config::BalloonXMode;
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{BalloonKeywordBase, spawn_ghost_windows};
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // 実表示寸確定時のキーワード基本位置の再導出（要件 4.2/4.3/4.5/4.7/5.2・
@@ -175,10 +175,10 @@ fn user_drags_balloon_to(world: &mut World, balloon: Entity, to: Point) {
     );
 }
 
-fn assert_no_event(events: &[LogEvent], needle: &str) {
+fn assert_no_event(events: &[CapturedEvent], needle: &str) {
     let hits: Vec<&str> = events
         .iter()
-        .map(LogEvent::message)
+        .map(CapturedEvent::message)
         .filter(|m| m.contains(needle))
         .collect();
     assert!(
@@ -247,7 +247,7 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
         let char_dpi = DPI::from_dpi(144, 144);
         world.entity_mut(char_window).insert(char_dpi);
 
-        let (moved, events) = capture_logs(|| {
+        let (moved, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 char_window,
@@ -391,7 +391,7 @@ fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
 
     // 2 度目: さらに別の寸へ変えても offset は動かない（Side と同じ静的 offset）。
     let third = SizePx { w: 300, h: 500 };
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -438,7 +438,7 @@ fn a_write_that_does_not_change_the_size_preserves_the_material() {
     });
 
     // 同寸で呼ぶ（アンカー変化トリガが現在の表示寸で射影 T を引き直す形）。
-    let (moved, events) = capture_logs(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -512,7 +512,7 @@ fn side_scopes_carry_no_keyword_base_and_resize_leaves_the_offset_bit_identical(
     );
     let before = offset_of(&world, char_window);
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -554,7 +554,7 @@ fn unresolvable_balloon_size_warns_and_leaves_the_offset_untouched() {
             .size = size;
 
         let before = offset_of(&world, char_window);
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 char_window,
@@ -643,7 +643,7 @@ fn a_dragged_relative_position_survives_a_later_char_size_change() {
     );
 
     // その後にキャラ寸が変わる書込（面替え・再吸着・DPI 移動のいずれでも起こる）。
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -717,7 +717,7 @@ fn a_drag_on_a_side_scope_is_a_no_op_for_the_material() {
     );
 
     let char_pos = point_of(&world, char_window);
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         user_drags_balloon_to(
             &mut world,
             balloon_window,
@@ -766,7 +766,7 @@ fn rederive_without_display_dpi_establishes_unpinned_base_and_warns() {
         "檻の前提: キャラ窓が表示 DPI を持たないこと"
     );
 
-    let (moved, events) = capture_logs(|| {
+    let (moved, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,

@@ -44,7 +44,7 @@ use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
 use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::reseed::tests as reseed_tests;
+use crate::placement::reseed::test_support as reseed_tests;
 use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::source::{DescriptSource, GhostTitles};
 use crate::placement::sticky_group_ledger::{

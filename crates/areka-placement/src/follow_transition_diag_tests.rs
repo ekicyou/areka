@@ -38,7 +38,7 @@ use super::{Anchored, MonitorSnapshot, PlacementRoute, resize_window_to};
 use crate::diag::WindowKind;
 use crate::resolver::{Anchor, SizePx};
 use crate::spawn::CharWindowMarker;
-use crate::test_support::{capture_logs, ensure_interest_probes};
+use log_capture_kit::{capture, ensure_interest_probes};
 
 /// 実機の 200% 側のキャラ窓寸（`reobservation-2026-08-15.md` §3.1）。
 const WIDE: SizePx = SizePx { w: 764, h: 1094 };
@@ -92,7 +92,7 @@ fn world_with_stale_snapshot(live_bottom: i32) -> (World, Entity) {
 }
 
 /// 捕捉したイベントから接地点レコードの本文を取り出す（ちょうど 1 件を要求）。
-fn ground_line_of(events: &[crate::test_support::LogEvent]) -> String {
+fn ground_line_of(events: &[log_capture_kit::CapturedEvent]) -> String {
     let hits: Vec<&str> = events
         .iter()
         .map(|e| e.message())
@@ -113,7 +113,7 @@ fn ground_record_shows_the_current_48px_float_when_the_scale_is_lowered() {
     let _residue = drain_window_pos_commands();
     let (mut world, char_window) = world_with_stale_snapshot(LIVE_WA_BOTTOM_AT_100);
 
-    let (written, events) = capture_logs(|| {
+    let (written, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -145,7 +145,7 @@ fn ground_record_reports_zero_difference_when_the_snapshot_matches_the_live_work
     let _residue = drain_window_pos_commands();
     let (mut world, char_window) = world_with_stale_snapshot(BOOT_WA_BOTTOM);
 
-    let (written, events) = capture_logs(|| {
+    let (written, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -184,7 +184,7 @@ fn ground_record_uses_sentinels_when_the_running_monitor_table_is_empty() {
         .id();
 
     let (_, events) =
-        capture_logs(|| resize_window_to(&mut world, char_window, NARROW, PlacementRoute::Resnap));
+        capture(|| resize_window_to(&mut world, char_window, NARROW, PlacementRoute::Resnap));
 
     let line = ground_line_of(&events);
     assert!(
@@ -210,7 +210,7 @@ fn no_ground_record_is_emitted_for_non_bottom_anchors() {
         .id();
 
     let (written, events) =
-        capture_logs(|| resize_window_to(&mut world, free_window, NARROW, PlacementRoute::Resnap));
+        capture(|| resize_window_to(&mut world, free_window, NARROW, PlacementRoute::Resnap));
     assert!(written, "Free アンカーでも寸の書込自体は起きる");
     // 否定を主張する前に捕捉窓が生きていることを示す（空の窓に対して `all(..)` は恒真）。
     assert!(

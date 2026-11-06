@@ -33,10 +33,11 @@ use crate::reseed::BalloonPlacementInputs;
 use crate::resolver::{
     Anchor, PointPx, RectPx, ScopeInput, ScopePlacement, SizePx, resolve_placement,
 };
-use crate::shared_test_support::{WA, balloon_root, emo2_root, with_com_initialized};
+use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::source::{DescriptSource, GhostTitles};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{LogEvent, capture_logs};
+use crate::test_support::{WA, with_com_initialized};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（物理 px）。
 const WORK: (i32, i32, i32, i32) = (0, 0, 1920, 1040);
@@ -211,7 +212,7 @@ fn saved(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String, Strin
     Some((get(Axis::X)?, get(Axis::Y)?))
 }
 
-fn reset_events(events: &[LogEvent], name: &str) -> Vec<LogEvent> {
+fn reset_events(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
@@ -241,7 +242,7 @@ fn shifted_windows_return_to_default_and_are_persisted() {
         .map(|&e| *rig.world.get::<BalloonFollow>(e).unwrap())
         .collect();
 
-    let (moved, events) = capture_logs(|| reset_window_positions(&mut rig.world));
+    let (moved, events) = capture(|| reset_window_positions(&mut rig.world));
     assert!(moved, "並べ直した窓がある");
 
     for scope in 0..2 {
@@ -268,7 +269,7 @@ fn shifted_windows_return_to_default_and_are_persisted() {
             follow_before[scope]
         );
 
-        let logs: Vec<LogEvent> = reset_events(&events, "reset_window_pos")
+        let logs: Vec<CapturedEvent> = reset_events(&events, "reset_window_pos")
             .into_iter()
             .filter(|e| e.field("scope") == Some(scope.to_string().as_str()))
             .collect();
@@ -382,7 +383,7 @@ fn missing_material_only_warns() {
         let mut rig = Rig::new();
         let chars: Vec<Entity> = (0..2).map(|s| rig.gw().char_window(s).unwrap()).collect();
         strip(&mut rig.world);
-        let (moved, events) = capture_logs(|| reset_window_positions(&mut rig.world));
+        let (moved, events) = capture(|| reset_window_positions(&mut rig.world));
         assert!(!moved, "{reason}: 何もしない");
         let skips = reset_events(&events, "reset_window_pos_skipped");
         assert_eq!(skips.len(), 1, "{reason}: warn が 1 行: {events:?}");
@@ -408,7 +409,7 @@ fn scope_without_size_is_left_out_and_rest_is_solved() {
     let balloon0 = rig.gw().balloon_window(0).unwrap();
     rig.world.get_mut::<WindowPos>(balloon0).unwrap().size = None;
 
-    let (moved, events) = capture_logs(|| reset_window_positions(&mut rig.world));
+    let (moved, events) = capture(|| reset_window_positions(&mut rig.world));
     assert!(moved);
     let skips = reset_events(&events, "reset_window_pos_skipped");
     assert_eq!(skips.len(), 1, "{events:?}");

@@ -16,7 +16,7 @@ use crate::placement::reseed::BalloonPlacementInputs;
 use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::source::{DescriptSource, GhostTitles};
 use crate::placement::spawn::spawn_ghost_windows;
-use crate::placement::test_support::capture_logs;
+use log_capture_kit::capture;
 
 fn basis() -> DefaultPlacementBasis {
     DefaultPlacementBasis {
@@ -80,7 +80,7 @@ fn select_resets_with_menu_trigger_and_sends_nothing_to_ghost() {
     let ItemBody::Action(action) = item(&world).body else {
         panic!("葉である");
     };
-    let (_, events) = capture_logs(|| action(&mut world, &MenuContext { scope: 0 }));
+    let (_, events) = capture(|| action(&mut world, &MenuContext { scope: 0 }));
     let triggers: Vec<_> = events
         .iter()
         .filter(|e| e.field_str("event") == Some("balloon_pos_reset_skipped"))

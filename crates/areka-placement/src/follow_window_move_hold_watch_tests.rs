@@ -29,12 +29,12 @@ use super::{
     resize_window_keep_position,
 };
 use crate::resolver::{Anchor, SizePx};
-use crate::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 監視の警告本文（実機ログの grep 語と同一）。
 const INVARIANT_WARNING: &str = "整合待ちの札がある窓へ窓書込が到達した";
 
-fn warnings_containing(events: &[LogEvent], needle: &str) -> usize {
+fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
     events
         .iter()
         .filter(|e| e.level == tracing::Level::WARN)
@@ -141,7 +141,7 @@ fn a_write_without_a_route_is_not_watched() {
 fn the_explicit_script_move_reaches_a_waiting_window_without_tripping_the_watch() {
     let (mut world, window) = held_world(true);
 
-    let (moved, events) = capture_logs(|| move_window_to(&mut world, window, 1301, 356));
+    let (moved, events) = capture(|| move_window_to(&mut world, window, 1301, 356));
     drop_queued_writes();
 
     assert!(moved, "明示操作の書込が成立していない");
@@ -217,7 +217,7 @@ fn a_user_drag_reaches_a_waiting_window_without_tripping_the_watch() {
         .id();
 
     let ev = Phase::Bubble(drag_event_at(window, start, (1450, 350)));
-    let (_, events) = capture_logs(|| on_char_drag(&mut world, window, window, &ev));
+    let (_, events) = capture(|| on_char_drag(&mut world, window, window, &ev));
     drop_queued_writes();
 
     assert_eq!(
@@ -237,7 +237,7 @@ fn a_user_drag_reaches_a_waiting_window_without_tripping_the_watch() {
 fn the_trailing_balloon_follow_is_still_exempt() {
     let (mut world, balloon) = held_world(true);
 
-    let (moved, events) = capture_logs(|| {
+    let (moved, events) = capture(|| {
         move_window_with_route(
             &mut world,
             balloon,

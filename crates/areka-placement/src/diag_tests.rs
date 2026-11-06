@@ -5,7 +5,7 @@ use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 use super::*;
-use crate::test_support::{capture_logs, ensure_interest_probes};
+use log_capture_kit::{capture, ensure_interest_probes};
 
 /// 合成モニタレコード（実 wintf `Monitor` 不要＝純データ）。
 fn rec(handle: isize, is_primary: bool) -> MonitorRecord {
@@ -343,7 +343,7 @@ fn log_zorder_pair_strategy_emits_the_assembled_record_at_debug() {
     let strategy = ZOrderPairStrategy::OwnerLink {
         raise_assist: false,
     };
-    let (_, events) = capture_logs(|| log_zorder_pair_strategy(strategy));
+    let (_, events) = capture(|| log_zorder_pair_strategy(strategy));
     assert_eq!(events.len(), 1, "1 運転 1 レコード: {events:?}");
     assert_eq!(events[0].message(), zorder_pair_strategy_line(strategy));
     assert_eq!(events[0].level, Level::DEBUG);
@@ -355,7 +355,7 @@ fn log_zorder_pair_strategy_emits_the_assembled_record_at_debug() {
 fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
     let char_entity = ent(5);
     let balloon_entity = ent(6);
-    let (_, events) = capture_logs(|| log_zorder_pair_declared(2, char_entity, balloon_entity));
+    let (_, events) = capture(|| log_zorder_pair_declared(2, char_entity, balloon_entity));
     assert_eq!(events.len(), 1, "1 ペア 1 レコード: {events:?}");
     assert_eq!(
         events[0].message(),
@@ -394,7 +394,7 @@ fn window_move_record_line_renders_every_route() {
 #[test]
 fn log_monitor_snapshot_emits_header_and_one_line_per_monitor_at_debug() {
     let monitors = [rec(1, true), rec(2, false)];
-    let (_, events) = capture_logs(|| log_monitor_snapshot(&monitors, "prepare_ghost_windows"));
+    let (_, events) = capture(|| log_monitor_snapshot(&monitors, "prepare_ghost_windows"));
 
     let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
     assert_eq!(
@@ -413,7 +413,7 @@ fn log_monitor_snapshot_emits_header_and_one_line_per_monitor_at_debug() {
 /// モニタ 0 台でも見出し 1 行は出る（count=0 が観測できる・panic しない）。
 #[test]
 fn log_monitor_snapshot_with_no_monitors_still_emits_header() {
-    let (_, events) = capture_logs(|| log_monitor_snapshot(&[], "monitor_snapshot"));
+    let (_, events) = capture(|| log_monitor_snapshot(&[], "monitor_snapshot"));
     let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
     assert_eq!(
         messages,
@@ -434,7 +434,7 @@ fn log_window_move_emits_the_assembled_record_at_debug() {
         size: Some((30, 40)),
         dpi: Some(120),
     };
-    let (_, events) = capture_logs(|| log_window_move(&record));
+    let (_, events) = capture(|| log_window_move(&record));
     assert_eq!(events.len(), 1, "1 移動 1 レコード: {events:?}");
     assert_eq!(events[0].message(), window_move_record_line(&record));
     assert_eq!(events[0].level, Level::DEBUG);

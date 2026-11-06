@@ -21,7 +21,7 @@ use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::{DescriptSource, GhostTitles};
 use crate::placement::spawn::{GhostWindowMarker, GhostWindows, spawn_ghost_windows};
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 const F10: u16 = 0x79;
 const F12: u16 = 0x7B;
@@ -89,7 +89,7 @@ fn world_with_ghost() -> (World, mpsc::Receiver<KanadeMsg>) {
     (world, rx)
 }
 
-fn named<'a>(events: &'a [LogEvent], name: &str) -> Vec<&'a LogEvent> {
+fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
@@ -97,7 +97,7 @@ fn named<'a>(events: &'a [LogEvent], name: &str) -> Vec<&'a LogEvent> {
 }
 
 /// バルーン位置初期化の記録（成功・外し）のきっかけの欄。
-fn balloon_reset_triggers(events: &[LogEvent]) -> Vec<Option<String>> {
+fn balloon_reset_triggers(events: &[CapturedEvent]) -> Vec<Option<String>> {
     events
         .iter()
         .filter(|e| {
@@ -159,7 +159,7 @@ fn other_keys_are_not_consumed() {
     spawn_one_scope(&mut world);
     let e = world.spawn_empty().id();
     let (consumed, events) =
-        capture_logs(|| on_ghost_key_down(&mut world, e, key(F12, true, true, true, false)));
+        capture(|| on_ghost_key_down(&mut world, e, key(F12, true, true, true, false)));
     assert!(!consumed);
     assert!(rx.try_recv().is_err());
     assert!(events.is_empty(), "{events:?}");
@@ -189,7 +189,7 @@ fn ctrl_shift_f10_resets_balloons_with_shortcut_trigger() {
     world.insert_resource(basis());
     spawn_one_scope(&mut world);
     let e = world.spawn_empty().id();
-    let (consumed, events) = capture_logs(|| on_ghost_key_down(&mut world, e, ctrl_shift(F10)));
+    let (consumed, events) = capture(|| on_ghost_key_down(&mut world, e, ctrl_shift(F10)));
     assert!(consumed);
     let triggers = balloon_reset_triggers(&events);
     assert!(!triggers.is_empty(), "初期化を呼んだ: {events:?}");
@@ -211,7 +211,7 @@ fn not_selectable_only_logs_and_consumes() {
         // 窓の組が無い ⇒ どちらも選べない。
         let (mut world, rx) = world_with_ghost();
         let e = world.spawn_empty().id();
-        let (consumed, events) = capture_logs(|| on_ghost_key_down(&mut world, e, ctrl_shift(vk)));
+        let (consumed, events) = capture(|| on_ghost_key_down(&mut world, e, ctrl_shift(vk)));
         assert!(consumed, "{name}");
         let ignored = named(&events, "position_shortcut_ignored");
         assert_eq!(ignored.len(), 1, "{name}: {events:?}");
@@ -229,7 +229,7 @@ fn not_selectable_only_logs_and_consumes() {
     let e = world.spawn_empty().id();
     assert!(on_ghost_key_down(&mut world, e, ctrl_shift(F12)));
     assert!(rx.try_recv().is_ok());
-    let (consumed, events) = capture_logs(|| on_ghost_key_down(&mut world, e, ctrl_shift(F12)));
+    let (consumed, events) = capture(|| on_ghost_key_down(&mut world, e, ctrl_shift(F12)));
     assert!(consumed);
     assert_eq!(named(&events, "position_shortcut_ignored").len(), 1);
     assert!(rx.try_recv().is_err(), "2 度目は送らない");

@@ -46,7 +46,7 @@ use wintf::ecs::window::{ZOrderChainPlan, drain_window_pos_commands};
 use wintf::ecs::{FrameFinalize, KeepDirectlyAbove, WindowHandle};
 
 use super::wire_zorder_pair;
-use crate::test_support::capture_logs;
+use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
 // 実窓・World のヘルパ（`spawn_zorder_pair_wiring_tests.rs` と同一レシピ）
@@ -184,7 +184,7 @@ fn a_run_without_group_declarations_keeps_the_pair_records_in_their_old_vocabula
     wire_zorder_pair(&mut world);
     let _residue = drain_window_pos_commands();
 
-    let (_, events) = capture_logs(|| world.run_schedule(FrameFinalize));
+    let (_, events) = capture(|| world.run_schedule(FrameFinalize));
     let commands = drain_window_pos_commands();
 
     destroy(&[char_hwnd, balloon_hwnd]);

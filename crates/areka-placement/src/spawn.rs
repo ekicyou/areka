@@ -799,9 +799,10 @@ mod clickthrough_tests;
 #[cfg(test)]
 #[path = "spawn_follow_pipeline_tests.rs"]
 mod follow_pipeline_tests;
-#[cfg(test)]
+/// 本体のテストも使う支え（spec: placement-crate-split 設計 TestSupportFeature）。
+#[cfg(any(test, feature = "test-support"))]
 #[path = "spawn_test_support.rs"]
-mod test_support;
+pub mod test_support;
 #[cfg(test)]
 #[path = "spawn_window_band_wiring_tests.rs"]
 mod window_band_wiring_tests;

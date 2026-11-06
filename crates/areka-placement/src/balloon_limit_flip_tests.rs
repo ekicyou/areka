@@ -17,13 +17,13 @@ use wintf::ecs::drag::DragEndEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowHandle, WindowPos};
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::*;
 use crate::balloon_lock::{apply_script_balloon_lock, seed_balloon_lock};
 use crate::follow::{OffsetBase, move_window_to, on_balloon_drag_end};
 use crate::resolver::Anchor;
 use crate::source::GhostTitles;
 use crate::spawn::spawn_ghost_windows;
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 const CLAMP_TAG: &str = "[balloon-limit] Clamp";
 
@@ -171,7 +171,7 @@ fn fitting_balloon_is_left_alone() {
 fn boot_gate_flips_keeps_offset_and_logs_how() {
     let flip = placement(1, left_edge_char(), left_side_offset(), true);
     let push = placement(0, point(-200, 100), left_side_offset(), true);
-    let (out, events) = capture_logs(|| apply_balloon_limit(vec![flip, push], &snapshot()));
+    let (out, events) = capture(|| apply_balloon_limit(vec![flip, push], &snapshot()));
 
     assert_eq!(out[0].balloon_pos, point(1108, 904));
     assert_eq!(
@@ -182,7 +182,7 @@ fn boot_gate_flips_keeps_offset_and_logs_how() {
     assert_eq!(out[0].balloon_offset_base, flip.balloon_offset_base);
     assert_eq!(out[1].balloon_pos, point(0, 100), "押し込み");
 
-    let clamps: Vec<&LogEvent> = events
+    let clamps: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains(CLAMP_TAG))
         .collect();
@@ -197,7 +197,7 @@ fn boot_gate_flips_keeps_offset_and_logs_how() {
 #[test]
 fn boot_gate_does_not_flip_when_limit_is_disabled() {
     let p = placement(1, left_edge_char(), left_side_offset(), false);
-    let (out, events) = capture_logs(|| apply_balloon_limit(vec![p], &snapshot()));
+    let (out, events) = capture(|| apply_balloon_limit(vec![p], &snapshot()));
     assert_eq!(out[0].balloon_pos, point(-872, 904));
     assert!(
         !events.iter().any(|e| e.message().contains(CLAMP_TAG)),
@@ -244,7 +244,7 @@ fn world_with(scope: usize, limit: bool) -> (World, Entity, Entity) {
 fn write_gate_flips_and_returns_to_the_original_side() {
     let (mut world, char_window, balloon) = world_with(0, true);
 
-    let (_, events) = capture_logs(|| move_window_to(&mut world, char_window, 0, 904));
+    let (_, events) = capture(|| move_window_to(&mut world, char_window, 0, 904));
     assert_eq!(point_of(&world, char_window), point(0, 904));
     assert_eq!(point_of(&world, balloon), point(1108, 904));
     let clamp = expect_one(&events, CLAMP_TAG);
@@ -252,14 +252,14 @@ fn write_gate_flips_and_returns_to_the_original_side() {
     assert_eq!(clamp.expect_field("context"), "\"runtime-gate\"");
 
     // 対照: キャラ窓ごと左へはみ出すと押し込み。
-    let (_, events) = capture_logs(|| move_window_to(&mut world, char_window, -200, 904));
+    let (_, events) = capture(|| move_window_to(&mut world, char_window, -200, 904));
     assert_eq!(point_of(&world, balloon), point(0, 904));
     assert_eq!(
         expect_one(&events, CLAMP_TAG).expect_field("how"),
         "\"pushed\""
     );
 
-    let (_, events) = capture_logs(|| move_window_to(&mut world, char_window, 1200, 904));
+    let (_, events) = capture(|| move_window_to(&mut world, char_window, 1200, 904));
     assert_eq!(
         point_of(&world, balloon),
         point(1200 - 872, 904),
@@ -316,7 +316,7 @@ fn release_correction_never_flips() {
         timestamp: Instant::now(),
     };
     let (_, events) =
-        capture_logs(|| on_balloon_drag_end(&mut world, balloon, balloon, &Phase::Bubble(ev)));
+        capture(|| on_balloon_drag_end(&mut world, balloon, balloon, &Phase::Bubble(ev)));
     assert_eq!(point_of(&world, balloon), point(0, 904));
     let clamp = expect_one(&events, CLAMP_TAG);
     assert_eq!(clamp.expect_field("context"), "\"release-gate\"");

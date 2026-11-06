@@ -21,7 +21,7 @@ use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
 use crate::sticky_group_ledger::StickyGroupLedger;
-use crate::test_support::capture_logs;
+use log_capture_kit::capture;
 
 const SAVE_TARGET: &str = "areka::persist::save";
 const H: i32 = 600;
@@ -142,7 +142,7 @@ fn unreadable_rect_skips_that_pair_with_warn_and_keeps_position() {
     let w2 = char_window(&world, 2);
     world.get_mut::<WindowPos>(w2).unwrap().size = None;
     let sent = pos_batch(1);
-    let (out, events) = capture_logs(|| with_adjacency_marks(&world, sent.clone()));
+    let (out, events) = capture(|| with_adjacency_marks(&world, sent.clone()));
     assert_eq!(&out[..sent.len()], &sent[..]);
     assert_eq!(marks(&out), vec![(1, "left".to_string())]);
     let warns: Vec<_> = events
@@ -180,12 +180,12 @@ fn duplicate_mark_keys_are_merged_into_one() {
 #[test]
 fn missing_partner_scope_is_skipped_silently() {
     let single = world_with(&[(0, 1000, 400)]);
-    let (out, events) = capture_logs(|| with_adjacency_marks(&single, pos_batch(0)));
+    let (out, events) = capture(|| with_adjacency_marks(&single, pos_batch(0)));
     assert!(marks(&out).is_empty());
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
 
     let pair = world_with(&[(0, 1000, 400), (1, 600, 400)]);
-    let (out, events) = capture_logs(|| with_adjacency_marks(&pair, pos_batch(1)));
+    let (out, events) = capture(|| with_adjacency_marks(&pair, pos_batch(1)));
     assert_eq!(marks(&out), vec![(1, "left".to_string())]);
     assert!(events.iter().all(|e| e.target != SAVE_TARGET), "{events:?}");
 }
@@ -210,7 +210,7 @@ fn adjacency_entry_and_saved_adjacency_round_trip() {
     );
 
     let entries = vec![(PersistKey::WindowAdjacent { scope: 1 }, "up".to_string())];
-    let (got, events) = capture_logs(|| saved_adjacency(&entries, 1));
+    let (got, events) = capture(|| saved_adjacency(&entries, 1));
     assert_eq!(got, None);
     assert!(
         events

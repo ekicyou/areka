@@ -72,7 +72,7 @@ fn despawn_app_windows_empty_world_is_noop() {
 /// 失敗時に `warn!("{error}")`＋`false`）。本番プロセスでこの行が
 /// `WARN bevy_ecs::world: Could not despawn entity` として見えるのは
 /// `tracing_subscriber` が `log`→`tracing` ブリッジを張るからであって、
-/// テストの捕捉ハーネス（[`capture_logs`]＝素の thread-local dispatcher）には
+/// テストの捕捉ハーネス（[`capture`]＝素の thread-local dispatcher）には
 /// **原理的に 1 件も届かない**。ゆえに「捕捉イベントに warn が無い」は bevy の警告に
 /// 関しては**恒真**であり、それだけを根拠にすると檻が空虚化する。
 ///
@@ -83,7 +83,7 @@ fn despawn_app_windows_empty_world_is_noop() {
 /// （`enqueue`/`Arrangement` 等）に対してのみ意味を持つ。
 #[test]
 fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
-    use crate::placement::test_support::{capture_logs, expect_one};
+    use log_capture_kit::{capture, expect_one};
 
     /// 探針 World: `root → mid → leaf` の連鎖 ＋ 連鎖に無関係な後続標的 `later`。
     /// 戻り値は `(world, root, mid, leaf, later)`。
@@ -143,7 +143,7 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 
     // ── 本体アーム: 同じ探針で、警告を出さず debug 1 行で打ち切り後続も処理し切る ──
     let (mut world, root, mid, leaf, later) = probe();
-    let (count, events) = capture_logs(|| despawn_app_windows(&mut world));
+    let (count, events) = capture(|| despawn_app_windows(&mut world));
 
     assert_eq!(
         count, 4,
@@ -325,13 +325,13 @@ fn write_failure_of_returns_the_failure_only_for_memory_write_failed() {
 /// 対照アーム: 受け口（`AppExit`）の無い World でも最初の出所は残す。
 #[test]
 fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
-    use crate::placement::test_support::capture_logs;
+    use log_capture_kit::capture;
 
     let first = ExitOrigin::KanadeStopped(KanadeStopCause::Fault(connect_failed()));
     let mut world = World::new();
     world.insert_non_send(AppExit::new());
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         quit_app(&mut world, first.clone());
         quit_app(&mut world, ExitOrigin::Escape);
     });
@@ -381,7 +381,7 @@ fn quit_app_keeps_the_first_origin_and_logs_the_second_as_again() {
 /// `app_exit` は出ない、を集めてから 1 回で判定する（面ごとに止めると赤が 1 面しか見えない）。
 #[test]
 fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
-    use crate::placement::test_support::capture_logs;
+    use log_capture_kit::capture;
 
     let mut world = World::new();
     world.insert_non_send(AppExit::new());
@@ -390,7 +390,7 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
     }
     let other = world.spawn_empty().id();
 
-    let (closed, events) = capture_logs(|| close_windows_for_restart(&mut world).closed());
+    let (closed, events) = capture(|| close_windows_for_restart(&mut world).closed());
 
     let windows_left = world
         .query_filtered::<Entity, With<GhostWindowMarker>>()

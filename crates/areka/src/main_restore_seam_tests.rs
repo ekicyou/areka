@@ -2,10 +2,10 @@ use super::*;
 use crate::placement::follow::OffsetBase;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
+use log_capture_kit::{ExpectField, capture, expect_one};
 use placement::balloon_limit::BALLOON_LIMIT_CLAMP_TAG;
 use placement::follow::MonitorSnapshot;
 use placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use placement::test_support::{ExpectField, capture_logs, expect_one};
 use std::path::Path;
 use temp_path_kit::TempPath;
 
@@ -228,9 +228,8 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
         }],
     };
 
-    let ((out, restored, _), events) = capture_logs(|| {
-        restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi)
-    });
+    let ((out, restored, _), events) =
+        capture(|| restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi));
 
     assert_eq!(out.len(), 1);
     assert_eq!(

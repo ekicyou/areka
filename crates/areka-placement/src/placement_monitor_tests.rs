@@ -2,8 +2,8 @@ use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 
 use super::resolver::RectPx;
-use super::shared_test_support::balloon_root;
 use super::*;
+use crate::sample_test_support::balloon_root;
 
 /// テスト用合成 Monitor（実 HMONITOR 不要・wintf monitor.rs テストと同流儀）。
 fn make_monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monitor {
@@ -251,7 +251,7 @@ fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {
         .join("areka_placement_prepare_snapshot_log")
         .join("no_such_ghost");
     let (result, events) =
-        crate::test_support::capture_logs(|| prepare_ghost_windows(&root, &balloon_root()));
+        log_capture_kit::capture(|| prepare_ghost_windows(&root, &balloon_root()));
     assert!(
         result.is_err(),
         "不在 root は Err（列挙点の出力はその手前）"

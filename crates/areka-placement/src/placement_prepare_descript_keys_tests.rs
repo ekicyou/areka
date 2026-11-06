@@ -5,8 +5,10 @@ use std::collections::BTreeSet;
 use std::fs;
 
 use super::resolver::SizePx;
-use super::shared_test_support::{TempDir, WA, synth_declared_dpi_ghost, with_com_initialized};
+use super::shared_test_support::TempDir;
 use super::*;
+use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 
 /// emo2 の面 0（surface0.png）の原寸。
 const SURFACE0: SizePx = SizePx { w: 434, h: 687 };
@@ -17,7 +19,8 @@ const SURFACE0: SizePx = SizePx { w: 434, h: 687 };
 fn prepare_carries_default_surfaces_used_by_measure_and_balloon_dontmove() {
     with_com_initialized(|| {
         let root = TempDir::new();
-        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "96", "96", None);
+        let (ghost_root, balloon_dir) =
+            synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
         fs::write(
             ghost_root.join("ghost/master/descript.txt"),
             "charset,UTF-8\nname,えも\nsakura.name,むらさき\nkero.name,エモ\n\
@@ -43,7 +46,8 @@ fn prepare_carries_default_surfaces_used_by_measure_and_balloon_dontmove() {
 fn prepare_carries_builtin_values_when_descript_is_silent() {
     with_com_initialized(|| {
         let root = TempDir::new();
-        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "96", "96", None);
+        let (ghost_root, balloon_dir) =
+            synth_declared_dpi_ghost(root.path(), &emo2_root(), &balloon_root(), "96", "96", None);
         let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
             .expect("合成ゴーストの準備は成功する");
         assert_eq!(p.default_surfaces, DefaultSurfaces::builtin());

@@ -325,6 +325,10 @@ fn running_scope(
     })
 }
 
+/// 本体のテストも使う補助（spec: placement-crate-split 設計 TestSupportFeature）。
+#[cfg(any(test, feature = "test-support"))]
+#[path = "reseed_test_support.rs"]
+pub mod test_support;
 #[cfg(test)]
 #[path = "reseed_tests.rs"]
-pub(crate) mod tests;
+mod tests;

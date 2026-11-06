@@ -64,8 +64,8 @@ use crate::placement::WORK_AREA_SYNC_CONTEXT;
 use crate::placement::diag::{PlacementRoute, WindowKind};
 use crate::placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
 use crate::placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
-use crate::placement::test_support::{LogEvent, capture_logs};
 use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
+use log_capture_kit::{CapturedEvent, capture};
 
 use super::emo2_frame_system;
 use super::test_support::{
@@ -136,7 +136,7 @@ fn writes_for(
 }
 
 /// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。
-fn warnings_containing(events: &[LogEvent], needle: &str) -> usize {
+fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
     events
         .iter()
         .filter(|e| e.level == tracing::Level::WARN)
@@ -442,7 +442,7 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at(dpi: u16) {
     // 表は永遠に追いつかない。上限に達するまでは 1 件も書かず、警告も出さない。
     for _ in 0..DPI_SYNC_HOLD_MAX_FRAMES - 1 {
         harness.advance_frame();
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             harness.run_placement_phases(&mut source);
         });
         let writes = harness.drain_writes();
@@ -460,7 +460,7 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at(dpi: u16) {
     }
 
     harness.advance_frame();
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_placement_phases(&mut source);
     });
     let writes = harness.drain_writes();
@@ -853,7 +853,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns_at(dpi: u16) {
 
     harness.set_monitor_table(Vec::new());
     harness.advance_frame();
-    let (change, events) = capture_logs(|| harness.run_placement_phases(&mut source));
+    let (change, events) = capture(|| harness.run_placement_phases(&mut source));
 
     assert!(change.is_none(), "dpi={dpi}: 空の表で源を差し替えている");
     assert_eq!(
@@ -885,7 +885,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns_at(dpi: u16) {
         s2_taskbar_hidden_work_area(dpi),
     ));
     harness.advance_frame();
-    let (change, events) = capture_logs(|| harness.run_placement_phases(&mut source));
+    let (change, events) = capture(|| harness.run_placement_phases(&mut source));
     assert!(
         change.is_some(),
         "dpi={dpi}: 台が戻っても差し替えが起きない（0 台の腕から抜けていない）"
@@ -958,7 +958,7 @@ fn a_window_off_all_monitors_is_resolved_by_the_nearest_fallback_not_left_in_pla
     let held_ground = harness.ground_point(0);
     harness.set_monitor_table(Vec::new());
     harness.advance_frame();
-    let (change, _events) = capture_logs(|| harness.run_placement_phases(&mut source));
+    let (change, _events) = capture(|| harness.run_placement_phases(&mut source));
     assert!(change.is_none(), "モニタ 0 台で源を差し替えている");
     assert!(
         harness.drain_writes().is_empty(),

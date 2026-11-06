@@ -3,7 +3,6 @@ use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
 use wintf::ecs::{Point, SizeI, WindowPos, WindowStyle};
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{CLAMP_TAG as GUARD_CLAMP_TAG, fake_handle, point_of, rect};
 use super::{
     BalloonFollowTrigger, MonitorSnapshot, PlacementRoute, enqueue_window_set_pos, follow_balloon,
@@ -12,6 +11,7 @@ use super::{
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{BalloonLimit, GhostWindows, spawn_ghost_windows};
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // runtime 関門の wiring 檻（task 3.3・design「C7: runtime 関門」・
@@ -145,10 +145,10 @@ fn out_of_area_corrected() -> PointPx {
     max_pos(wa(), balloon_size())
 }
 
-fn assert_no_event(events: &[LogEvent], needle: &str) {
+fn assert_no_event(events: &[CapturedEvent], needle: &str) {
     let hits: Vec<&str> = events
         .iter()
-        .map(LogEvent::message)
+        .map(CapturedEvent::message)
         .filter(|m| m.contains(needle))
         .collect();
     assert!(
@@ -189,7 +189,7 @@ fn enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true() {
     let (mut world, _char_window, balloon) = char_overflowing_world(true);
     let proposed = out_of_area();
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,
@@ -237,7 +237,7 @@ fn enqueue_passes_through_when_balloon_limit_is_disabled() {
     let (mut world, _char_window, balloon) = base_world(false);
     let proposed = out_of_area();
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,
@@ -274,7 +274,7 @@ fn enqueue_passes_through_for_windows_without_the_balloon_limit_component() {
     );
     let proposed = out_of_area();
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             char_window,
@@ -307,7 +307,7 @@ fn move_window_to_clamps_the_trailing_balloon_but_never_the_char_window() {
     let char_target = PointPx { x: 1500, y: 700 };
 
     let (ok, events) =
-        capture_logs(|| move_window_to(&mut world, char_window, char_target.x, char_target.y));
+        capture(|| move_window_to(&mut world, char_window, char_target.x, char_target.y));
 
     assert!(ok);
     assert_eq!(
@@ -369,7 +369,7 @@ fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area(
         "探針: 新寸でもはみ出さない（檻が空虚）"
     );
 
-    let (ok, events) = capture_logs(|| resize_window_keep_position(&mut world, balloon, new_size));
+    let (ok, events) = capture(|| resize_window_keep_position(&mut world, balloon, new_size));
 
     assert!(ok);
     assert_eq!(
@@ -406,7 +406,7 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
     let char_target = Point { x: 1500, y: 700 };
     let proposed = out_of_area();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         follow_balloon(
             &mut world,
             char_window,
@@ -479,7 +479,7 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
             }
             _ => {}
         }
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             enqueue_window_set_pos(
                 &mut world,
                 balloon,
@@ -597,7 +597,7 @@ fn unresolvable_reference_warns_and_lets_the_write_through() {
         let (mut world, char_window, balloon) = base_world(true);
         break_it(&mut world, char_window, balloon);
 
-        let (ok, events) = capture_logs(|| {
+        let (ok, events) = capture(|| {
             enqueue_window_set_pos(
                 &mut world,
                 balloon,
@@ -644,7 +644,7 @@ fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
         ..Default::default()
     });
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,
@@ -660,7 +660,7 @@ fn undetermined_balloon_size_warns_but_an_explicit_size_still_clamps() {
     assert_eq!(point_of(&world, balloon), proposed);
 
     // 明示寸があれば現寸を読む必要がない＝同じ World でも補正が成立する。
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,
@@ -687,7 +687,7 @@ fn the_window_move_record_carries_the_corrected_position_and_the_original_route(
     let proposed = out_of_area();
     let corrected = out_of_area_corrected();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,
@@ -725,7 +725,7 @@ fn a_write_that_already_fits_produces_no_correction_and_no_log() {
         "探針: 検査対象の位置が収まっていない"
     );
 
-    let (ok, events) = capture_logs(|| {
+    let (ok, events) = capture(|| {
         enqueue_window_set_pos(
             &mut world,
             balloon,

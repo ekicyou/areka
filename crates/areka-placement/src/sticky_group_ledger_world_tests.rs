@@ -2,7 +2,7 @@
 //! design「StickyGroupLedger」）。
 //!
 //! 窓は偽の部品（`CharWindowMarker`＋`Anchored`＋`DragConfig`）だけで組み、記録は
-//! `log-capture-kit`（`test_support::capture_logs`）で取る。
+//! `log-capture-kit`（`test_support::capture`）で取る。
 
 use std::collections::BTreeSet;
 
@@ -11,8 +11,8 @@ use wintf::ecs::drag::DragConfig;
 use super::super::follow::Anchored;
 use super::super::resolver::Anchor;
 use super::super::spawn::CharWindowMarker;
-use super::super::test_support::{LogEvent, capture_logs};
 use super::*;
+use log_capture_kit::{CapturedEvent, capture};
 
 fn spawn_char(world: &mut World, scope: usize, anchor: Anchor) -> Entity {
     world
@@ -54,14 +54,14 @@ fn groups(world: &World) -> Vec<StickyGroup> {
     world.resource::<StickyGroupLedger>().groups().to_vec()
 }
 
-fn events_of<'a>(events: &'a [LogEvent], event: &str) -> Vec<&'a LogEvent> {
+fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
         .collect()
 }
 
-fn one<'a>(events: &'a [LogEvent], event: &str) -> &'a LogEvent {
+fn one<'a>(events: &'a [CapturedEvent], event: &str) -> &'a CapturedEvent {
     let hits = events_of(events, event);
     assert_eq!(
         hits.len(),
@@ -77,7 +77,7 @@ fn set_sticky_adds_group_logs_and_resyncs_writer() {
     let (mut world, e) = world_with_free_windows();
     seed_sticky_descript(&mut world, None);
 
-    let (ok, events) = capture_logs(|| apply_set_sticky(&mut world, &tokens(&["1", " 0"])));
+    let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(&["1", " 0"])));
     assert!(ok);
     assert_eq!(
         groups(&world),
@@ -114,7 +114,7 @@ fn set_sticky_rejects_without_change_and_logs_reason() {
         (&["2", "x"], "UnparsableToken"),
     ];
     for (raw, reason) in cases {
-        let (ok, events) = capture_logs(|| apply_set_sticky(&mut world, &tokens(raw)));
+        let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(raw)));
         assert!(!ok, "{raw:?}");
         assert_eq!(groups(&world), before, "{raw:?}");
         let rejected = one(&events, "sticky_group_rejected");
@@ -141,7 +141,7 @@ fn set_sticky_accepts_absent_scope_with_warning() {
     let (mut world, e) = world_with_free_windows();
     seed_sticky_descript(&mut world, None);
 
-    let (ok, events) = capture_logs(|| apply_set_sticky(&mut world, &tokens(&["2", "5"])));
+    let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(&["2", "5"])));
     assert!(ok);
     assert_eq!(groups(&world)[0].members, members(&[2, 5]));
     let absent = one(&events, "sticky_member_absent");
@@ -162,7 +162,7 @@ fn reset_sticky_removes_script_groups_only() {
     assert!(apply_set_sticky(&mut world, &tokens(&["2", "3"])));
     assert!(!move_window(&world, e[2]));
 
-    let (ok, events) = capture_logs(|| apply_reset_sticky(&mut world));
+    let (ok, events) = capture(|| apply_reset_sticky(&mut world));
     assert!(ok);
     assert_eq!(
         groups(&world),
@@ -183,7 +183,7 @@ fn reset_sticky_removes_script_groups_only() {
 #[test]
 fn seed_installs_ledger_from_descript_value() {
     let (mut world, e) = world_with_free_windows();
-    let ((), events) = capture_logs(|| seed_sticky_descript(&mut world, Some(" 1 , 0 ")));
+    let ((), events) = capture(|| seed_sticky_descript(&mut world, Some(" 1 , 0 ")));
     assert_eq!(
         groups(&world),
         vec![StickyGroup {
@@ -205,7 +205,7 @@ fn seed_installs_ledger_from_descript_value() {
 fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
     for raw in [None, Some(""), Some("  ")] {
         let (mut world, _) = world_with_free_windows();
-        let ((), events) = capture_logs(|| seed_sticky_descript(&mut world, raw));
+        let ((), events) = capture(|| seed_sticky_descript(&mut world, raw));
         assert!(groups(&world).is_empty(), "{raw:?}");
         assert!(events_of(&events, "sticky_group_rejected").is_empty());
         assert_eq!(
@@ -215,7 +215,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
     }
 
     let (mut world, _) = world_with_free_windows();
-    let ((), events) = capture_logs(|| seed_sticky_descript(&mut world, Some("0")));
+    let ((), events) = capture(|| seed_sticky_descript(&mut world, Some("0")));
     assert!(groups(&world).is_empty());
     let rejected = one(&events, "sticky_group_rejected");
     assert_eq!(rejected.field_str("source"), Some("descript"));
@@ -226,7 +226,7 @@ fn seed_without_value_or_with_bad_value_installs_empty_ledger() {
 #[test]
 fn seed_accepts_absent_scope_with_warning() {
     let (mut world, _) = world_with_free_windows();
-    let ((), events) = capture_logs(|| seed_sticky_descript(&mut world, Some("0,7")));
+    let ((), events) = capture(|| seed_sticky_descript(&mut world, Some("0,7")));
     assert_eq!(groups(&world)[0].members, members(&[0, 7]));
     let absent = one(&events, "sticky_member_absent");
     assert_eq!(absent.field("scope"), Some("7"));
@@ -245,14 +245,14 @@ fn replace_keeps_script_groups_and_rejects_overlap() {
     assert!(apply_reset_sticky(&mut world));
     assert!(apply_set_sticky(&mut world, &tokens(&["2", "3"])));
 
-    let ((), events) = capture_logs(|| replace_sticky_descript(&mut world, Some("1,0")));
+    let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("1,0")));
     assert_eq!(
         one(&events, "sticky_groups").field_str("action"),
         Some("descript_replace")
     );
     assert_eq!(groups(&world).len(), 2);
 
-    let ((), events) = capture_logs(|| replace_sticky_descript(&mut world, Some("1,2")));
+    let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("1,2")));
     assert_eq!(
         groups(&world),
         vec![StickyGroup {
@@ -273,13 +273,13 @@ fn replace_keeps_script_groups_and_rejects_overlap() {
 #[test]
 fn without_ledger_directives_are_dropped_with_warning() {
     let (mut world, _) = world_with_free_windows();
-    let (ok, events) = capture_logs(|| apply_set_sticky(&mut world, &tokens(&["0", "1"])));
+    let (ok, events) = capture(|| apply_set_sticky(&mut world, &tokens(&["0", "1"])));
     assert!(!ok);
     assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
-    let (ok, events) = capture_logs(|| apply_reset_sticky(&mut world));
+    let (ok, events) = capture(|| apply_reset_sticky(&mut world));
     assert!(!ok);
     assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
-    let ((), events) = capture_logs(|| replace_sticky_descript(&mut world, Some("0,1")));
+    let ((), events) = capture(|| replace_sticky_descript(&mut world, Some("0,1")));
     assert_eq!(one(&events, "sticky_skipped").level, tracing::Level::WARN);
     assert!(world.get_resource::<StickyGroupLedger>().is_none());
 }

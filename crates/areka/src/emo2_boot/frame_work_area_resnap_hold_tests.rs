@@ -49,8 +49,8 @@ use crate::placement::dpi_sync::{
     DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncHold, evaluate,
 };
 use crate::placement::follow::move_window_with_route;
-use crate::placement::test_support::{LogEvent, capture_logs};
 use crate::placement::transition_diag::HOLD_SITE_WORK_AREA_RESNAP;
+use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{
     FakeReports, FrameHarness, s2_monitors_with_work_area, s2_taskbar_hidden_work_area,
@@ -84,7 +84,7 @@ fn writes_for(
 }
 
 /// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。
-fn warnings_containing(events: &[LogEvent], needle: &str) -> usize {
+fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
     events
         .iter()
         .filter(|e| e.level == tracing::Level::WARN)
@@ -318,7 +318,7 @@ fn the_fourth_site_records_its_own_deferral_word() {
     // 前半（零件）: 札が 1 つも無いフレームで作業領域が動いても、見送りの行は出ない。
     hide_the_taskbar(&mut harness);
     harness.advance_frame();
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_placement_phases(&mut source);
     });
     let quiet: Vec<String> = events
@@ -346,7 +346,7 @@ fn the_fourth_site_records_its_own_deferral_word() {
     ));
     harness.advance_frame();
     let frame = harness.frame();
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_placement_phases(&mut source);
     });
     let lines: Vec<String> = events
@@ -400,7 +400,7 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
 
     hide_the_taskbar(&mut harness);
     harness.advance_frame();
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_placement_phases(&mut source);
     });
     assert_eq!(

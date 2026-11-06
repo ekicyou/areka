@@ -14,8 +14,8 @@ use super::super::follow::{AnchorSource, Anchored, MonitorSnapshot, OffsetBase, 
 use super::super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use super::super::source::GhostTitles;
 use super::super::spawn::{GhostWindows, spawn_ghost_windows};
-use super::super::test_support::{ExpectField, LogEvent, capture_logs};
 use super::*;
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 作業領域（左 53・上 37・右 1877・下 1043）。
 const WA: RectPx = RectPx {
@@ -94,14 +94,14 @@ fn move_window(world: &World) -> bool {
         .move_window
 }
 
-fn events_of<'a>(events: &'a [LogEvent], event: &str) -> Vec<&'a LogEvent> {
+fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
         .collect()
 }
 
-fn one<'a>(events: &'a [LogEvent], event: &str) -> &'a LogEvent {
+fn one<'a>(events: &'a [CapturedEvent], event: &str) -> &'a CapturedEvent {
     let hits = events_of(events, event);
     assert_eq!(
         hits.len(),
@@ -111,8 +111,8 @@ fn one<'a>(events: &'a [LogEvent], event: &str) -> &'a LogEvent {
     hits[0]
 }
 
-fn apply(world: &mut World, scope: u32, word: AlignmentWord) -> (bool, Vec<LogEvent>) {
-    capture_logs(|| apply_script_alignment(world, scope, &word))
+fn apply(world: &mut World, scope: u32, word: AlignmentWord) -> (bool, Vec<CapturedEvent>) {
+    capture(|| apply_script_alignment(world, scope, &word))
 }
 
 /// バルーンは窓の左上からのずらしを保って付いて動く（1.6）。
@@ -178,12 +178,12 @@ fn parse_missing_or_empty_value_is_missing() {
 /// 3 つ目以降の引数は読まずに `debug!` に残し、方向は最初の値で決まる。
 #[test]
 fn parse_extra_args_are_logged_and_ignored() {
-    let (word, events) = capture_logs(|| parse_alignment_word(&["left", "x", "y"]));
+    let (word, events) = capture(|| parse_alignment_word(&["left", "x", "y"]));
     assert_eq!(word, AlignmentWord::Anchor(Anchor::Left));
     let e = one(&events, "alignment_extra_args");
     assert!(e.expect_field("extra").contains("\"x\""), "{e:?}");
 
-    let (_, events) = capture_logs(|| parse_alignment_word(&["left"]));
+    let (_, events) = capture(|| parse_alignment_word(&["left"]));
     assert!(events_of(&events, "alignment_extra_args").is_empty());
 }
 

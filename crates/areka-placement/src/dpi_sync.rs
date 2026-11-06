@@ -46,7 +46,7 @@ use super::transition_diag::{
 ///
 /// 判定器の許容（`transition_judge_verdict::HOLD_FRAME_ALLOWANCE`）はこの定数を参照する
 /// ——待ちの上限は本番の挙動そのものであり、判定語と同じく定義元は 1 つでなければならない。
-pub(crate) const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
+pub const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
 
 /// 整合待ちの札（ゴースト窓 entity へ付く）。
 ///
@@ -55,12 +55,12 @@ pub(crate) const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DpiSyncHold {
     /// 待ち始めたフレーム番号（有界の起点）。
-    pub(crate) since_frame: u32,
+    pub since_frame: u32,
 }
 
 /// 整合ゲートの判定（設計 C5）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DpiSyncDecision {
+pub enum DpiSyncDecision {
     /// 表と一致した（または表を引けない）ので、そのまま処理する。
     Proceed,
     /// 不一致ゆえ当該窓の窓書込を見送る。
@@ -162,15 +162,15 @@ pub fn current_frame(world: &World) -> u32 {
 
 /// 1 つの窓についてゲートを評価した結果（記録の材料をそのまま持つ）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct DpiSyncOutcome {
+pub struct DpiSyncOutcome {
     /// 判定。
-    pub(crate) decision: DpiSyncDecision,
+    pub decision: DpiSyncDecision,
     /// 窓が持つ拡大率。
-    pub(crate) window_dpi: u32,
+    pub window_dpi: u32,
     /// 帰属モニタの表が持つ拡大率（帰属なし・表なしは `None`）。
-    pub(crate) table_dpi: Option<u32>,
+    pub table_dpi: Option<u32>,
     /// 待ち始めたフレーム番号（これから待ち始めるなら `now`）。
-    pub(crate) since_frame: u32,
+    pub since_frame: u32,
 }
 
 /// 窓の拡大率と帰属モニタの表を突き合わせる（World を**読むだけ**）。
@@ -180,7 +180,7 @@ pub(crate) struct DpiSyncOutcome {
 /// 規則を 1 箇所に置くためである（素直に `position + size / 2` と書くと窓生成前の窓で
 /// 整数桁溢れを起こす）。中心が求まらない窓・`DPI` を持たない窓・表そのものが無い World は
 /// いずれも「表を引けない」＝[`Proceed`](DpiSyncDecision::Proceed) へ倒す。
-pub(crate) fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
+pub fn evaluate(world: &World, window: Entity, now: u32) -> DpiSyncOutcome {
     let window_dpi = world.get::<DPI>(window).map_or(0, |dpi| dpi.dpi_x as u32);
     let table_dpi = world
         .get::<WindowPos>(window)

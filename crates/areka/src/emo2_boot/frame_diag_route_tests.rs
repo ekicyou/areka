@@ -21,7 +21,7 @@ use super::*;
 
 use crate::placement::diag::DESPAWNED_SKIP_TAG;
 
-use crate::placement::test_support::{LogEvent, capture_logs as capture_diag_logs};
+use log_capture_kit::{CapturedEvent, capture as capture_diag_logs};
 
 /// 毎フレーム再スナップ（`resnap_from_sizes`）の書込は `Resnap` として記録される。
 #[test]
@@ -164,7 +164,7 @@ fn despawn_scope_and_restore_stale_registry(world: &mut World, gw: &GhostWindows
 }
 
 /// warn 以上のイベントだけを抜く（`tracing::Level` の Ord は ERROR < WARN < INFO < …）。
-fn warn_or_above(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn warn_or_above(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.level <= tracing::Level::WARN)
@@ -172,7 +172,7 @@ fn warn_or_above(events: &[LogEvent]) -> Vec<&LogEvent> {
 }
 
 /// 破棄済み打ち切りの debug 行（本文に判定語を含むもの）を抜く。
-fn despawn_skip_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn despawn_skip_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains(DESPAWNED_SKIP_TAG))

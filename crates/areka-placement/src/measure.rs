@@ -508,6 +508,11 @@ fn compose_size(
 #[path = "measure_tests.rs"]
 mod tests;
 
+/// 本体のテストが呼ぶ私有の関数への口（`test-support` のときだけ・要件 3.8）。
+#[cfg(feature = "test-support")]
+#[path = "measure_test_support.rs"]
+pub mod test_support;
+
 // 採寸と表示の外形の一致（検体 2 体）と、読み込みの複製が戻っていないことの本文走査。
 // `measure_tests.rs` は 1,000 行の上限に余裕が無いので兄弟として置く
 // （spec: areka-P0-shell-implicit-surface 要件 7.12）。

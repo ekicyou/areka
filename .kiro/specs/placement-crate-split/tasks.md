@@ -44,21 +44,21 @@
   - 完了の状態: 配置の crate の lib と本体の本番の組み立てが緑（テストの組み立ては段 2 で緑に戻す）・段 1 のコミット
   - _Requirements: 2.1, 2.2, 2.5_
 
-- [ ] 3. テストの支えを開ける（段 2）
-- [ ] 3.1 ログの判定の補助を共有の crate へ下ろす
+- [x] 3. テストの支えを開ける（段 2）
+- [x] 3.1 ログの判定の補助を共有の crate へ下ろす
   - `ExpectField`（捕まえたイベントへの実装つき）と `expect_one` を中身を変えずに log-capture-kit へ移し、根から出し直す
   - 本体と配置のテストを、log-capture-kit の `capture`・`CapturedEvent`・`ExpectField`・`expect_one`・`ensure_interest_probes` を直に使う形へ書き換える
   - 配置の旧い包み（`capture_logs`・`LogEvent`）を消す
   - 完了の状態: `fn capture_logs` と `type LogEvent` の grep が 0 件で、log-capture-kit のテストが緑
   - _Requirements: 3.1, 3.6_
-- [ ] 3.2 配置の支えを頼る相手で 3 つに分ける
+- [x] 3.2 配置の支えを頼る相手で 3 つに分ける
   - 外へ開く支え（`WA`・`with_com_initialized`・2 つの描述の定数・`emily_shaped_scopes`・`synth_declared_dpi_ghost`）を `test-support` で立つモジュールへ、見本のゴーストの入口を crate の `sample_test_support` へ、一時フォルダと合成の検体を `shared_test_support` へ置く
   - `synth_declared_dpi_ghost` を、一時フォルダと見本の道を引数で受ける形にし、配置の中の 10 か所の呼び出しも同じ形にする
   - 本体の `emo2_boot` の見本の入口 `emo2_root`・`emo2_balloon_root` を `pub(crate)` に広げ、本体のテストはそれを使う（新しい関数を足さない）
   - 外へ開く支えが `#[cfg(test)]` だけの項目と共有のテスト用の crate に頼らない
   - 完了の状態: 3 つのモジュールが設計の表どおりに在り、同じ働きの関数が 2 つ無い
   - _Requirements: 3.2, 3.3, 3.6_
-- [ ] 3.3 本体のテストが使う項目を `test-support` の印で開ける
+- [x] 3.3 本体のテストが使う項目を `test-support` の印で開ける
   - `spawn` のテストの支えを、テストか機能のときに立つ公開のモジュールにする
   - `reseed` のテストの補助のうち `booted_world`・`new_shell`・`char_positions` と、それらが中で使う補助だけを新しい `reseed` の支えのファイルへ移す（テストだけが使う補助は元に残す）
   - `measure` の私有の 2 つの関数へそのまま渡す公開の入口を、機能のときだけ立つモジュールに置く（本番の可視性は変えない）
@@ -66,12 +66,12 @@
   - コンパイラがほかに出した `#[cfg(test)]` だけの項目も同じ規則で付け替え、開けた項目を実装の記録に足す
   - 完了の状態: 本体のテスト（境をまたぐ 4 本と判定器の一族）が組める
   - _Requirements: 3.3, 3.5, 3.8_
-- [ ] 3.4 配置のテストの実行ファイルに MTA と落ちの報告を入れる
+- [x] 3.4 配置のテストの実行ファイルに MTA と落ちの報告を入れる
   - wintf の落ちの報告の写しを、許可の持ち手の表を持たない形で配置の crate に置き、テストのときだけ宣言する
   - 本体と wintf の 2 つの写しの頭の「写しの相手」の行に 3 つ目を足す（説明だけ）
   - 完了の状態: 配置の lib のテストで、落ちの報告が先に入ることとプロセスの寿命の MTA を確かめる 2 本が緑
   - _Requirements: 3.11, 3.12_
-- [ ] 3.5 機能だけが立つビルドを含めて段 2 を緑にする
+- [x] 3.5 機能だけが立つビルドを含めて段 2 を緑にする
   - ワークスペース全体を全部の対象で組み（本体のテストを組むときの配置＝`test` が立たず機能だけが立つビルドを含む）、配置の crate のテストと本体の bin のテストを回す
   - 赤が出たら赤のテストだけを回し直す
   - 完了の状態: 3 つの走行が緑・段 2 のコミット
@@ -205,3 +205,10 @@
   - 再公開の裏の定義: follow/drag_follow.rs `on_char_drag_end`・`BalloonFollowTrigger`・`follow_balloon`、follow/move_shift.rs の 4 関数、follow/sticky_follow.rs `CharDragSession`・`begin_char_drag`、follow/work_area_clamp.rs `ClampScene`・`place_chain_in_work_area`
   - 公開の項目が名指すためだけに開けた型（要件 2.5 の注つき）: follow/work_area_clamp.rs `ChainPlacement`・`ChainClampOutcome`
 - 段 1 で消した lib.rs の判定器の宣言の説明（17 行）の代わりは無い。`crates/areka-emo-present/src/presenter/transition_record.rs:86` の説明の `placement::transition_judge::summarize` は 7.2（5.7）で直す。
+- 段 2 も緑になるのは 3.5 の時点なので、3.1〜3.5 を 1 回の実装係にまとめた。
+- 3.3・3.8 で開けた項目（`crates/areka-placement/src` の下・7.5 の申し送りに使う）:
+  - `cfg(any(test, feature = "test-support"))`: lib.rs `pub mod test_support`（WA・with_com_initialized・synth_declared_dpi_ghost・EMILY_SHAPED_GHOST_DESCRIPT・EMILY_SHAPED_SHELL_DESCRIPT・emily_shaped_scopes）・spawn.rs `pub mod test_support`（two_scope_placements・titles・ghost_window_entities。`fake_window_handle` は `cfg(test)`）・reseed.rs `pub mod test_support`（booted_world・new_shell・char_positions が pub、補助は pub(crate)）・source.rs `GhostTitles::from_scope_titles`・persist.rs `project_restore`
+  - `cfg(feature = "test-support")` だけ（3.8）: measure.rs `pub mod test_support`（`measure_with_reader`・`measure_baked` への入口）
+- 段 2 で本番の項目を素の `pub` にした（要件 2.1・本体のテストが使う）: dpi_sync.rs DPI_SYNC_HOLD_MAX_FRAMES・DpiSyncDecision・evaluate・DpiSyncOutcome とフィールド（decision・window_dpi・table_dpi・since_frame）・DpiSyncHold.since_frame、balloon_limit.rs BALLOON_LIMIT_CLAMP_TAG、balloon_lock.rs HoldReason・BalloonLockLedger::reason、follow/work_area_clamp.rs WORK_AREA_CLAMP_TAG・follow/drag_follow.rs on_balloon_drag・follow/sticky_follow.rs sync_drag_writer（follow.rs の再公開も組から分けた）
+- 出所は `module_path!()` から決まるので、移した時点で `areka::placement::measure` が `areka_placement::measure` に変わった。本体の measure_bake_count・measure_bake_log の期待値は段 2 で直した（7.1 が持つのは明示の `DIAG_TARGET` ほか）。
+- 3.1 の grep 0 件は配置の crate と `placement_tests` の範囲。本体の `emo2_boot`・`input_events` と areka-emo-text の同名の補助は文字列を返す別物で、触っていない。

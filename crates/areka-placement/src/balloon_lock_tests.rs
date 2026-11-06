@@ -2,15 +2,15 @@
 //! 6.2・7.3・design「BalloonLock」）。
 //!
 //! 窓は偽の部品（`BalloonWindowMarker`＋`DragConfig`）だけで組み、記録は
-//! `log-capture-kit`（`test_support::capture_logs`）で取る。
+//! `log-capture-kit`（`test_support::capture`）で取る。
 
 use std::collections::BTreeSet;
 
 use wintf::ecs::drag::DragConfig;
 
 use super::super::spawn::BalloonWindowMarker;
-use super::super::test_support::{LogEvent, capture_logs};
 use super::*;
+use log_capture_kit::{CapturedEvent, capture};
 
 fn spawn_balloon(world: &mut World, scope: usize) -> Entity {
     world
@@ -37,7 +37,7 @@ fn reason(world: &World, scope: u32) -> Option<HoldReason> {
     world.resource::<BalloonLockLedger>().reason(scope)
 }
 
-fn count(events: &[LogEvent], event: &str) -> usize {
+fn count(events: &[CapturedEvent], event: &str) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
@@ -79,7 +79,7 @@ fn script_lock_applies_only_to_writing_scope() {
     let (mut world, e) = world_with_balloons();
     seed_balloon_lock(&mut world, &BTreeSet::new());
 
-    let ((), events) = capture_logs(|| apply_script_balloon_lock(&mut world, 0, true));
+    let ((), events) = capture(|| apply_script_balloon_lock(&mut world, 0, true));
 
     assert!(!movable(&world, e[0]));
     assert!(movable(&world, e[1]));
@@ -101,7 +101,7 @@ fn script_unlock_releases_only_its_scope() {
     apply_script_balloon_lock(&mut world, 0, true);
     apply_script_balloon_lock(&mut world, 1, true);
 
-    let ((), events) = capture_logs(|| apply_script_balloon_lock(&mut world, 0, false));
+    let ((), events) = capture(|| apply_script_balloon_lock(&mut world, 0, false));
 
     assert!(movable(&world, e[0]));
     assert!(!movable(&world, e[1]));
@@ -116,7 +116,7 @@ fn unlock_cannot_release_descript_tier() {
     seed_balloon_lock(&mut world, &scopes(&[0]));
     apply_script_balloon_lock(&mut world, 0, true);
 
-    let ((), events) = capture_logs(|| apply_script_balloon_lock(&mut world, 0, false));
+    let ((), events) = capture(|| apply_script_balloon_lock(&mut world, 0, false));
 
     assert!(!movable(&world, e[0]));
     assert_eq!(count(&events, "balloon_move_unlocked"), 1);
@@ -148,7 +148,7 @@ fn replace_descript_keeps_script_lock() {
 fn lock_without_ledger_warns_and_seeds_empty() {
     let (mut world, e) = world_with_balloons();
 
-    let ((), events) = capture_logs(|| apply_script_balloon_lock(&mut world, 1, true));
+    let ((), events) = capture(|| apply_script_balloon_lock(&mut world, 1, true));
 
     assert_eq!(count(&events, "balloon_lock_ledger_missing"), 1);
     assert!(movable(&world, e[0]));

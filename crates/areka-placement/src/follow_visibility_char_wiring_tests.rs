@@ -3,7 +3,6 @@ use wintf::ecs::SizeI;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
-use super::super::test_support::{ExpectField, capture_logs, expect_one};
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, OFFSCREEN_PULL_TAG, UNRESOLVED_TAG,
     drag_event_at, dragging_state, fake_handle, gap_center_x, guard_events, left_wa, mixed_layout,
@@ -15,6 +14,7 @@ use super::{
     resize_window_to, work_area_for_window_with_origin,
 };
 use crate::resolver::{Anchor, PointPx, SizePx};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // 遷移ガードの**配線**（task 6.1・S3 是正・Req 3.1/3.2/3.3・D5/D6/D13）
@@ -131,7 +131,7 @@ fn visibility_guard_clamps_x_on_non_drag_placement_routes() {
                 "dpi={dpi}: 旧矩形が非交差では『遷移』でなく留置＝Keep が正解になってしまう"
             );
 
-            let (ok, events) = capture_logs(|| resize_window_to(&mut world, e, new, route));
+            let (ok, events) = capture(|| resize_window_to(&mut world, e, new, route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
             // (2) 位置の不変条件（Req 3.1）: 書かれた矩形はどこかの work area と交差する。
@@ -193,7 +193,7 @@ fn visibility_guard_does_not_fire_on_explicit_or_non_placement_routes() {
                 "dpi={dpi}: 探針が不動点——発火条件が揃っていない"
             );
 
-            let (ok, events) = capture_logs(|| resize_window_to(&mut world, e, new, route));
+            let (ok, events) = capture(|| resize_window_to(&mut world, e, new, route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
             assert_eq!(
@@ -241,7 +241,7 @@ fn drag_path_neither_clamps_nor_warns_when_leaving_every_work_area() {
         // カーソルを帯へ運ぶ: 生ドラッグ x = px(24) ＝ 帯の内側。
         let moved = (cursor.0 - (px(200, dpi) - px(24, dpi)), cursor.1);
         let ev = Phase::Bubble(drag_event_at(window, cursor, moved));
-        let (consumed, events) = capture_logs(|| on_char_drag(&mut world, window, window, &ev));
+        let (consumed, events) = capture(|| on_char_drag(&mut world, window, window, &ev));
         assert!(!consumed);
 
         let pos = point_of(&world, window);
@@ -296,8 +296,7 @@ fn nearest_fallback_warns_on_non_drag_route_even_without_clamping() {
             "dpi={dpi}: 探針が clamp を伴っている＝`NearestFallback` 単独の檻になっていない"
         );
 
-        let (ok, events) =
-            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+        let (ok, events) = capture(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
         assert!(ok);
         assert_eq!(
             point_of(&world, e),
@@ -359,7 +358,7 @@ fn offscreen_char_world(dpi: i32) -> (World, Entity, PointPx, SizePx) {
 fn run_offscreen_reprojection(
     dpi: i32,
     route: PlacementRoute,
-) -> Vec<crate::test_support::LogEvent> {
+) -> Vec<log_capture_kit::CapturedEvent> {
     let layout = mixed_layout(dpi);
     let (mut world, e, pos, size) = offscreen_char_world(dpi);
 
@@ -381,7 +380,7 @@ fn run_offscreen_reprojection(
         "dpi={dpi}: 決めた位置まで帰属しない探針＝既存の観測と区別が付かない"
     );
 
-    let (ok, events) = capture_logs(|| resize_window_to(&mut world, e, size, route));
+    let (ok, events) = capture(|| resize_window_to(&mut world, e, size, route));
     assert!(ok, "dpi={dpi}: 書込が成立していない（前提が崩れている）");
     events
 }
@@ -429,7 +428,7 @@ fn an_onscreen_projection_input_stays_silent() {
         let _ = old_pos;
 
         let (_, events) =
-            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::WorkAreaResnap));
+            capture(|| resize_window_to(&mut world, e, new, PlacementRoute::WorkAreaResnap));
         assert!(
             guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
             "dpi={dpi}: 画面内の入力で引き寄せの警告が出ている: {events:?}"
@@ -503,7 +502,7 @@ fn a_bottom_snapped_resize_whose_input_center_sits_on_the_work_area_bottom_stays
             ))
             .id();
         let (ok, events) =
-            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::DpiReproject));
+            capture(|| resize_window_to(&mut world, e, new, PlacementRoute::DpiReproject));
         assert!(ok, "dpi={dpi}: 書込が成立していない（前提が崩れている）");
         assert!(
             guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
@@ -538,7 +537,7 @@ fn missing_work_area_holds_position_and_warns_on_non_drag_route() {
             };
 
             let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+                capture(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
             assert!(ok, "dpi={dpi} {label}: 寸の反映自体は従来どおり成立する");
             assert_eq!(
                 point_of(&world, e),
@@ -567,7 +566,7 @@ fn missing_work_area_stays_silent_on_guard_exempt_routes() {
     for dpi in DPIS {
         let (mut world, e, _) = gap_bound_char_world(dpi);
         world.remove_resource::<MonitorSnapshot>();
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 e,
@@ -617,8 +616,7 @@ fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
             "dpi={dpi}: 探針が不動点——素の射影が既に可視"
         );
 
-        let (ok, events) =
-            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+        let (ok, events) = capture(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
         assert!(ok);
         assert!(
             visible_in(&layout, point_of(&world, e), new),
@@ -752,7 +750,7 @@ fn undetermined_position_aborts_resize_without_writing() {
             let before = *world.get::<WindowPos>(e).expect("WindowPos があるはず");
 
             let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+                capture(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
 
             assert!(
                 !ok,
@@ -817,8 +815,7 @@ fn negative_real_position_is_not_aborted_and_still_resizes() {
         );
 
         let (mut world, e) = char_world_with_window_pos(dpi, start, Some(old_size_i(dpi)));
-        let (ok, events) =
-            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+        let (ok, events) = capture(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
 
         assert!(
             ok,
@@ -879,7 +876,7 @@ fn single_axis_position_sentinel_also_aborts() {
             let before = *world.get::<WindowPos>(e).expect("WindowPos があるはず");
 
             let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+                capture(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
 
             assert!(!ok, "dpi={dpi} {label}: 片軸センチネルが打ち切られていない");
             assert_eq!(

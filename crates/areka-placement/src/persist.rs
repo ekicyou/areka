@@ -189,7 +189,7 @@ fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
 ///
 /// 本番の呼び手（[`merge_scope`]）は吸着の当て直しだけの位置も要るので [`project_restore_parts`] を
 /// 直に呼ぶ。本関数はその結果だけを返す檻向けの口。
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn project_restore(
     anchor: Anchor,
     pos: PointPx,

@@ -5,7 +5,6 @@ use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources}
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::spawn_ghost_windows;
-use crate::placement::test_support::LogEvent;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_text::state::TextLayerConfig;
@@ -13,6 +12,7 @@ use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use bevy_ecs::system::SystemState;
+use log_capture_kit::CapturedEvent;
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
@@ -887,7 +887,7 @@ impl Drop for FrameHarness {
 }
 
 /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
-pub(super) fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
+pub(super) fn window_move_lines(events: &[CapturedEvent]) -> Vec<String> {
     events
         .iter()
         .map(|e| e.message().to_string())
@@ -896,7 +896,7 @@ pub(super) fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
 }
 
 /// 指定 entity の窓移動レコードから `route=` の語だけを取り出す（出現順）。
-pub(super) fn window_move_routes_of(events: &[LogEvent], entity: Entity) -> Vec<String> {
+pub(super) fn window_move_routes_of(events: &[CapturedEvent], entity: Entity) -> Vec<String> {
     let key = format!("entity={entity:?} ");
     window_move_lines(events)
         .iter()

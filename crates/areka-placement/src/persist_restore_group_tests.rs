@@ -169,15 +169,15 @@ mod clamped_flag_at_finalize {
     };
     use crate::chain_finalize::AdjacencyMark;
     use crate::spawn::GhostWindows;
-    use crate::test_support::capture_logs;
     use areka_sylphya::{PersistKey, PersistScope};
+    use log_capture_kit::capture;
     use wintf::ecs::WindowPos;
 
     const SKIP: &str = "記憶の位置を寄せて表示した起動なので、古い記憶へ隣り合いの印を書き足さない";
     const ADDED: &str = "古い記憶に隣り合いの印だけを書き足した";
 
     /// 印の無い古い記憶のスコープ 1（スコープ 0 の左に隣り合う）を持つ rig。`flag` を据えて保存を呼ぶ。
-    fn run(flag: Option<bool>) -> (bool, Vec<crate::test_support::LogEvent>) {
+    fn run(flag: Option<bool>) -> (bool, Vec<log_capture_kit::CapturedEvent>) {
         let mut rig = Rig::new(true);
         let mut seed = seed_entries();
         seed.extend(char_pos_entries(1, SENTINEL_POS));
@@ -203,7 +203,7 @@ mod clamped_flag_at_finalize {
         if let Some(f) = flag {
             rig.world.insert_resource(RestoredPositionsClamped(f));
         }
-        let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+        let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
         let mut after = rig.load();
         let added = after
             .remove(&PersistKey::WindowAdjacent { scope: 1 })

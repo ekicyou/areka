@@ -24,9 +24,8 @@ use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
 use areka_emo_present::shell_target::load_shell_target;
 
 use super::{build_shell_assets, compose_size};
-use crate::shared_test_support::{
-    konnoyayame_shell_root, r_post_and_komainu_shell_root, with_com_initialized,
-};
+use crate::sample_test_support::{konnoyayame_shell_root, r_post_and_komainu_shell_root};
+use crate::test_support::with_com_initialized;
 
 // ---------------------------------------------------------------------------
 // (1) 採寸経路と表示経路の外形の一致

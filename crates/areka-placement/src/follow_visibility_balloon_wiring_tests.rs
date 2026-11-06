@@ -5,7 +5,6 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::super::diag::DESPAWNED_SKIP_TAG;
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, UNRESOLVED_TAG, balloon_size, char_size,
     drag_end_event_at, drag_event_at, dragging_state, fake_handle, gap_center_x, grounded_y,
@@ -17,6 +16,7 @@ use super::{
     resize_window_to, route_applies_visibility_guard,
 };
 use crate::resolver::{Anchor, PointPx, SizePx};
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // バルーン矩形への遷移ガード配線（task 6.2・S3′ 是正・Req 3.4・D6）
@@ -157,7 +157,7 @@ fn balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers() {
             );
 
             let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, char_window, char_size(dpi), route));
+                capture(|| resize_window_to(&mut world, char_window, char_size(dpi), route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
             // (2) キャラ窓は clamp されていない＝救われたのはバルーンだけである。
@@ -231,7 +231,7 @@ fn balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers(
             );
 
             let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, char_window, char_size(dpi), route));
+                capture(|| resize_window_to(&mut world, char_window, char_size(dpi), route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
             assert_eq!(
@@ -298,7 +298,7 @@ fn balloon_drag_trigger_neither_clamps_nor_warns() {
                 .entity_mut(char_window)
                 .insert(dragging_state((start.x, start.y), cursor));
 
-            let (_, events) = capture_logs(|| match entry {
+            let (_, events) = capture(|| match entry {
                 "on_char_drag" => {
                     let ev = Phase::Bubble(drag_event_at(char_window, cursor, moved));
                     on_char_drag(&mut world, char_window, char_window, &ev)
@@ -350,7 +350,7 @@ fn balloon_parked_off_screen_is_respected_on_placement_trigger() {
             "dpi={dpi}: 前提——提案も非交差（`Keep` 腕を通る条件）"
         );
 
-        let (ok, events) = capture_logs(|| {
+        let (ok, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 char_window,
@@ -424,7 +424,7 @@ fn balloon_undetermined_size_holds_proposed_position_and_warns() {
         let (mut world, char_window, balloon) =
             char_with_balloon_window_pos(dpi, WindowPos::default(), offset);
 
-        let (ok, events) = capture_logs(|| {
+        let (ok, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 char_window,
@@ -487,7 +487,7 @@ fn missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field() 
         };
 
         let (ok, events) =
-            capture_logs(|| resize_window_to(&mut world, char_window, new, PlacementRoute::Resnap));
+            capture(|| resize_window_to(&mut world, char_window, new, PlacementRoute::Resnap));
         assert!(ok, "dpi={dpi}: 寸の反映自体は従来どおり成立する");
 
         let warned = guard_events(&events, UNRESOLVED_TAG);
@@ -548,7 +548,7 @@ fn balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps() {
         let (mut world, char_window, balloon) =
             char_with_balloon_window_pos(dpi, window_pos, offset);
 
-        let (ok, events) = capture_logs(|| {
+        let (ok, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 char_window,
@@ -575,7 +575,7 @@ fn balloon_despawned_skips_guard_without_warning() {
             char_with_far_balloon_world(dpi, visible_balloon_pos(dpi), far_out_offset(dpi));
         world.despawn(balloon);
 
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             resize_window_to(
                 &mut world,
                 char_window,
@@ -623,7 +623,7 @@ fn balloon_despawned_skips_guard_without_warning() {
 }
 
 /// 破棄済み判定語（[`DESPAWNED_SKIP_TAG`]）を含む行を抜く（相ごとの計数用）。
-fn despawn_skip_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn despawn_skip_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains(DESPAWNED_SKIP_TAG))
@@ -641,7 +641,7 @@ fn balloon_without_handle_on_living_entity_still_warns_on_follow_write() {
     // entity は実在させたまま `WindowHandle` だけを剥がす（窓生成前と同じ状態）。
     world.entity_mut(balloon).remove::<WindowHandle>();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         resize_window_to(
             &mut world,
             char_window,
@@ -780,8 +780,7 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
                 "dpi={dpi}: 探針が不動点——ガード無しのバルーン提案 {balloon_bare:?} が既に可視"
             );
 
-            let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, char_window, new, route));
+            let (ok, events) = capture(|| resize_window_to(&mut world, char_window, new, route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
             let char_pos = point_of(&world, char_window);
@@ -905,8 +904,7 @@ fn balloon_follows_the_guarded_char_position_not_the_raw_projection() {
                 "dpi={dpi}: 素の射影に追従したバルーン {follows_raw:?} が可視では変異を区別できない"
             );
 
-            let (ok, events) =
-                capture_logs(|| resize_window_to(&mut world, char_window, new, route));
+            let (ok, events) = capture(|| resize_window_to(&mut world, char_window, new, route));
             assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
 
             assert_eq!(

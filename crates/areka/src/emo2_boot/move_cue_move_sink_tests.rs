@@ -257,7 +257,7 @@ fn alignment_with_non_numeric_actor_is_dropped_with_warn() {
     for selector in ["alignmenttodesktop", "alignmentondesktop"] {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        let (_, events) = crate::placement::test_support::capture_logs(|| {
+        let (_, events) = log_capture_kit::capture(|| {
             sink.emit(carrier_cue("sakura", "set", &[selector, "top"]))
         });
         assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));

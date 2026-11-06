@@ -4,7 +4,6 @@ use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{SizeI, WindowPos};
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{
     drag_end_event_at, drag_event_at, fake_handle, point_of, rect, window_pos_sized,
 };
@@ -12,6 +11,7 @@ use super::{BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_
 use crate::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // -------------------------------------------------------------------------
 // 解放時補正の檻（task 3.4・design「C8: 解放時補正」・Testing Strategy Integration 2・
@@ -170,10 +170,10 @@ fn set_stale_offset(world: &mut World, char_window: Entity) {
     world.entity_mut(char_window).insert(follow);
 }
 
-fn assert_no_event(events: &[LogEvent], needle: &str) {
+fn assert_no_event(events: &[CapturedEvent], needle: &str) {
     let hits: Vec<&str> = events
         .iter()
-        .map(LogEvent::message)
+        .map(CapturedEvent::message)
         .filter(|m| m.contains(needle))
         .collect();
     assert!(
@@ -185,8 +185,8 @@ fn assert_no_event(events: &[LogEvent], needle: &str) {
 /// `needle` を含むイベントが**ちょうど 1 件**在ることを主張し、その添字を返す。
 ///
 /// 添字は捕捉順＝発火順そのものであり、これが「順序固定」を直接測る唯一の手段である
-/// （`capture_logs` は `Vec` へ push するだけで並べ替えない）。
-fn index_of(events: &[LogEvent], needle: &str) -> usize {
+/// （`capture` は `Vec` へ push するだけで並べ替えない）。
+fn index_of(events: &[CapturedEvent], needle: &str) -> usize {
     let hits: Vec<usize> = events
         .iter()
         .enumerate()
@@ -242,7 +242,7 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
     let dragged_to = release_outside();
     wndproc_moved_balloon_to(&mut world, balloon, dragged_to);
 
-    let (consumed, events) = capture_logs(|| {
+    let (consumed, events) = capture(|| {
         on_balloon_drag(
             &mut world,
             balloon,
@@ -326,7 +326,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     let expected_raw = raw_offset(released_at);
     let corrected = release_outside_corrected();
 
-    let (consumed, events) = capture_logs(|| {
+    let (consumed, events) = capture(|| {
         on_balloon_drag_end(
             &mut world,
             balloon,
@@ -453,7 +453,7 @@ fn releasing_inside_the_work_area_writes_nothing() {
     wndproc_moved_balloon_to(&mut world, balloon, released_at);
     set_stale_offset(&mut world, char_window);
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         on_balloon_drag_end(
             &mut world,
             balloon,
@@ -490,7 +490,7 @@ fn releasing_outside_does_not_correct_when_balloon_limit_is_disabled() {
     wndproc_moved_balloon_to(&mut world, balloon, released_at);
     set_stale_offset(&mut world, char_window);
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         on_balloon_drag_end(
             &mut world,
             balloon,
@@ -552,7 +552,7 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
         wndproc_moved_balloon_to(&mut world, balloon, released_at);
         break_it(&mut world, char_window, balloon);
 
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             on_balloon_drag_end(
                 &mut world,
                 balloon,
@@ -654,7 +654,7 @@ fn the_release_correction_is_idempotent_through_the_runtime_gate() {
     );
     wndproc_moved_balloon_to(&mut world, balloon, release_outside());
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         on_balloon_drag_end(
             &mut world,
             balloon,

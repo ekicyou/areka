@@ -6,11 +6,13 @@
 
 use std::fs;
 
-use super::shared_test_support::{
-    EMILY_SHAPED_GHOST_DESCRIPT, EMILY_SHAPED_SHELL_DESCRIPT, TempDir, emily_shaped_scopes,
-    emo2_root, synth_balloon_dir, with_com_initialized,
-};
+use super::shared_test_support::{TempDir, synth_balloon_dir};
 use super::*;
+use crate::sample_test_support::emo2_root;
+use crate::test_support::{
+    EMILY_SHAPED_GHOST_DESCRIPT, EMILY_SHAPED_SHELL_DESCRIPT, emily_shaped_scopes,
+    with_com_initialized,
+};
 
 /// えみりの形の固定入力から、配置の設定は scope 0・1 だけを返す。
 #[test]

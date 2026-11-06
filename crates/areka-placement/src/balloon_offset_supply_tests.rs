@@ -247,8 +247,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::resolver::PointPx;
-use super::shared_test_support::{TempDir, WA, synth_declared_dpi_ghost, with_com_initialized};
-use super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
+use super::shared_test_support::TempDir;
+use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 /// `windowposition` 供給層の観測点（`placement_windowposition_tests.rs` が
 /// 「フィールド名と値の形そのものが契約」と固定している info 行）の本文。
@@ -268,8 +270,14 @@ fn synth_ghost_with_author_offset(
     windowposition: Option<(i32, i32)>,
     offset: (i32, i32),
 ) -> (PathBuf, PathBuf) {
-    let (ghost_root, balloon_dir) =
-        synth_declared_dpi_ghost(root, shell_dpi, balloon_dpi, windowposition);
+    let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(
+        root.path(),
+        &emo2_root(),
+        &balloon_root(),
+        shell_dpi,
+        balloon_dpi,
+        windowposition,
+    );
     let shell_descript = ghost_root.join("shell").join("master").join("descript.txt");
     let mut text = fs::read_to_string(&shell_descript).expect("合成 shell descript を読む");
     text.push_str(&format!(
@@ -447,7 +455,7 @@ fn prepare_records_saturation_with_the_contract_tag() {
         let (ghost_root, balloon_dir) =
             synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (i32::MAX, -40));
 
-        let (merged, events) = capture_logs(|| merged_offset(&ghost_root, &balloon_dir, 240));
+        let (merged, events) = capture(|| merged_offset(&ghost_root, &balloon_dir, 240));
 
         assert_eq!(
             merged,
@@ -484,12 +492,12 @@ fn prepare_logs_the_conversion_before_the_windowposition_supply_point() {
         let (ghost_root, balloon_dir) =
             synth_ghost_with_author_offset(&root, "120", "144", Some((266, -129)), (i32::MAX, -40));
 
-        let (_, events) = capture_logs(|| merged_offset(&ghost_root, &balloon_dir, 240));
+        let (_, events) = capture(|| merged_offset(&ghost_root, &balloon_dir, 240));
 
         let index_of = |needle: &str| -> usize {
             events
                 .iter()
-                .position(|e: &LogEvent| e.message().contains(needle))
+                .position(|e: &CapturedEvent| e.message().contains(needle))
                 .unwrap_or_else(|| panic!("`{needle}` を含むログが無い: {events:?}"))
         };
         let converted = index_of(BALLOON_OFFSET_SATURATED_TAG);

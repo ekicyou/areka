@@ -59,7 +59,7 @@ pub fn wintf_moves_window(anchor: Anchor, grouped: bool) -> bool {
 /// すべてのキャラクターの窓の `DragConfig.move_window` を、今の `Anchored` と帳簿から付け直す。
 ///
 /// 帳簿が無い（窓を作る閉包がまだ据えていない）ときは、どの窓も組なしとして付ける。
-pub(crate) fn sync_drag_writer(world: &mut World) {
+pub fn sync_drag_writer(world: &mut World) {
     let grouped: Vec<u32> = world
         .get_resource::<StickyGroupLedger>()
         .map(|ledger| {

@@ -18,12 +18,12 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use crate::emo2_boot::assets::{build_balloon_assets, build_shell_assets};
+use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::placement::PlacementError;
 use crate::placement::descript_window_keys::DefaultSurfaces;
-use crate::placement::shared_test_support::{balloon_root, emo2_root, with_com_initialized};
-use areka_placement::measure::{
-    MeasureScaling, measure_baked, measure_scope_sizes, measure_with_reader,
-};
+use crate::placement::test_support::with_com_initialized;
+use areka_placement::measure::test_support::{measure_baked, measure_with_reader};
+use areka_placement::measure::{MeasureScaling, measure_scope_sizes};
 
 /// 1 つのファイルについて、5 つの口が呼ばれた回数。
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -265,7 +265,7 @@ fn emo2_bakes_each_still_image_once_per_stage() {
     with_com_initialized(|| {
         let root = emo2_root();
         let shell_dir = root.join("shell").join("master");
-        let balloon_dir = balloon_root();
+        let balloon_dir = emo2_balloon_root();
         let (measure, assets) = measure_then_assets(&root, &shell_dir, &balloon_dir);
 
         let measured_shell = measure.in_dir(&shell_dir);
@@ -335,7 +335,11 @@ fn first_frame_measure_matches_full_frame_measure() {
                 ghost.path().join("shell").join("master"),
                 ghost.path().join("balloon"),
             ),
-            ("emo2", emo2.join("shell").join("master"), balloon_root()),
+            (
+                "emo2",
+                emo2.join("shell").join("master"),
+                emo2_balloon_root(),
+            ),
         ];
         let arm = WicDecoderArm::new().expect("WIC の読み手（COM 初期化済み）");
         let defaults = DefaultSurfaces::builtin();
@@ -358,7 +362,7 @@ const LOAD_TARGETS: [&str; 3] = [
 ];
 
 /// 採寸自身の記録の宛先（`measure.rs`）。
-const MEASURE_TARGET: &str = "areka::placement::measure";
+const MEASURE_TARGET: &str = "areka_placement::measure";
 
 /// `target` の記録を（水準, 文言）の並びにする。
 fn records_of(events: &[CapturedEvent], targets: &[&str]) -> Vec<(tracing::Level, String)> {

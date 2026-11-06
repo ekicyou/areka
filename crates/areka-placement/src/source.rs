@@ -73,12 +73,12 @@ impl GhostTitles {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl GhostTitles {
     /// テスト専用コンストラクタ（`titles` は非公開フィールドのため、spawn（task 5.1）
     /// 等の headless テストが fixture I/O（`load_descript_source`）なしで
-    /// `GhostTitles` を構築する唯一の経路。`#[cfg(test)]` 限定で本番公開面は不変）。
-    pub(crate) fn from_scope_titles<I>(titles: I) -> Self
+    /// `GhostTitles` を構築する唯一の経路。テストか `test-support` のときだけで本番公開面は不変）。
+    pub fn from_scope_titles<I>(titles: I) -> Self
     where
         I: IntoIterator<Item = (usize, String)>,
     {

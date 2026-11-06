@@ -518,7 +518,7 @@ fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> 
 /// （永続化 ghost.dat は M-life の領分）。
 ///
 /// イベントは消費しない（常に `false`＝伝播続行。[`on_char_drag`] と同じ規約）。
-pub(crate) fn on_balloon_drag(
+pub fn on_balloon_drag(
     world: &mut World,
     _sender: Entity,
     entity: Entity,

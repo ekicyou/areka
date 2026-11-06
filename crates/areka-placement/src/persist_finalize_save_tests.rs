@@ -36,7 +36,7 @@ use crate::follow::{Anchored, OffsetBase, on_char_drag_end};
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{ExpectField, LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 記録の target（ドラッグの確定と同じ）。
 const SAVE_TARGET: &str = "areka::persist::save";
@@ -199,11 +199,15 @@ fn expected_saved(scope: usize) -> (String, String) {
     ((pos.x + size.w / 2).to_string(), pos.y.to_string())
 }
 
-fn save_events(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn save_events(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events.iter().filter(|e| e.target == SAVE_TARGET).collect()
 }
 
-pub(super) fn find<'a>(events: &'a [LogEvent], needle: &str, scope: usize) -> Vec<&'a LogEvent> {
+pub(super) fn find<'a>(
+    events: &'a [CapturedEvent],
+    needle: &str,
+    scope: usize,
+) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| {
@@ -314,7 +318,7 @@ fn unreadable_size_skips_that_scope_with_warn_and_writes_the_rest() {
     let unreadable = rig.char_window(1);
     rig.world.get_mut::<WindowPos>(unreadable).unwrap().size = None;
 
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let after = rig.load();
 
     let warns = find(&events, "読めないので飛ばす", 1);
@@ -340,7 +344,7 @@ fn unreadable_size_skips_that_scope_with_warn_and_writes_the_rest() {
 #[test]
 fn without_persist_wiring_logs_one_info_and_does_not_panic() {
     let rig = Rig::new(false);
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let saves = save_events(&events);
     assert_eq!(saves.len(), 1, "送り口が無いときは 1 行だけ: {events:?}");
     assert_eq!(saves[0].level, tracing::Level::INFO);
@@ -349,7 +353,7 @@ fn without_persist_wiring_logs_one_info_and_does_not_panic() {
 
     let mut rig = Rig::new(true);
     rig.world.remove_resource::<GhostWindows>();
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let saves = save_events(&events);
     assert_eq!(
         saves.len(),
@@ -412,7 +416,7 @@ fn written_and_skipped_scopes_are_logged_under_save_target() {
     let mut rig = Rig::new(true);
     rig.mark_remembered(0);
 
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
 
     let skipped = find(&events, "記憶に位置があるので書かない", 0);
     assert_eq!(skipped.len(), 1, "スコープ 0 の書かない行: {events:?}");
@@ -453,7 +457,7 @@ fn scope_moved_before_finalize_is_not_written() {
     rig.world.get_mut::<WindowPos>(moved).unwrap().position = Some(Point { x: 999, y: 400 });
     rig.mark_remembered(0);
 
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let after = rig.load();
 
     assert_eq!(window_pos(&after, 1), window_pos(&before, 1));
@@ -480,7 +484,7 @@ fn scope_moved_only_vertically_before_finalize_is_not_written() {
     let moved = rig.char_window(0);
     rig.world.get_mut::<WindowPos>(moved).unwrap().position = Some(Point { x: 1483, y: 300 });
 
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let after = rig.load();
 
     assert_eq!(window_pos(&after, 0), window_pos(&before, 0));
@@ -545,7 +549,7 @@ fn old_memory_gets_only_the_adjacency_mark_added() {
         .unwrap()
         .x = 1483 - 381;
 
-    let ((), events) = capture_logs(|| persist_unremembered_char_positions(&rig.world));
+    let ((), events) = capture(|| persist_unremembered_char_positions(&rig.world));
     let mut after = rig.load();
 
     assert_eq!(

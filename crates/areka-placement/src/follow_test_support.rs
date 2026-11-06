@@ -7,9 +7,9 @@ use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
-use super::super::test_support::LogEvent;
 use super::{MonitorSnapshot, project_anchor};
 use crate::resolver::RectPx;
+use log_capture_kit::CapturedEvent;
 
 // -------------------------------------------------------------------------
 // テストヘルパ（偽装境界: 実 HWND なしの headless World で決定論検証する。
@@ -305,7 +305,10 @@ pub(super) fn point_of(world: &World, entity: Entity) -> PointPx {
 }
 
 /// `[visibility-guard]` を名乗るイベントだけを抜く。
-pub(super) fn guard_events<'a>(events: &'a [LogEvent], needle: &str) -> Vec<&'a LogEvent> {
+pub(super) fn guard_events<'a>(
+    events: &'a [CapturedEvent],
+    needle: &str,
+) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains(needle))

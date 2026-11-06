@@ -1,7 +1,5 @@
 use crate::follow::OffsetBase;
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
-use wintf::ecs::WindowHandle;
 
 use super::GhostWindowMarker;
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
@@ -14,7 +12,7 @@ use crate::source::GhostTitles;
 // -------------------------------------------------------------------------
 
 /// scope0/scope1 の 2 スコープぶんの解決済み配置（emo2 相当の形）。
-pub(super) fn two_scope_placements() -> Vec<ScopePlacement> {
+pub fn two_scope_placements() -> Vec<ScopePlacement> {
     vec![
         ScopePlacement {
             scope: 0,
@@ -45,21 +43,23 @@ pub(super) fn two_scope_placements() -> Vec<ScopePlacement> {
     ]
 }
 
-pub(super) fn titles() -> GhostTitles {
+pub fn titles() -> GhostTitles {
     GhostTitles::from_scope_titles([(0, "むらさき".to_string()), (1, "エモ".to_string())])
 }
 
 /// 全 GhostWindowMarker 窓 entity を収集する。
-pub(super) fn ghost_window_entities(world: &mut World) -> Vec<Entity> {
+pub fn ghost_window_entities(world: &mut World) -> Vec<Entity> {
     world
         .query_filtered::<Entity, With<GhostWindowMarker>>()
         .iter(world)
         .collect()
 }
 
-/// 偽 HWND を持つ `WindowHandle`（4.2 と同じ fake WindowHandle パターン）。
-pub(super) fn fake_window_handle(raw: isize) -> WindowHandle {
-    WindowHandle {
+/// 偽 HWND を持つ `WindowHandle`（4.2 と同じ fake WindowHandle パターン）。配置のテストだけが使う。
+#[cfg(test)]
+pub(super) fn fake_window_handle(raw: isize) -> wintf::ecs::WindowHandle {
+    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    wintf::ecs::WindowHandle {
         hwnd: HWND(raw as *mut core::ffi::c_void),
         instance: HINSTANCE::default(),
     }

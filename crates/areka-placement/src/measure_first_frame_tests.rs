@@ -15,7 +15,7 @@ use areka_emo_atlas::{
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
 
 use super::first_frame::FirstFrameDecoder;
-use crate::test_support::capture_logs;
+use log_capture_kit::capture;
 
 type Px = [u8; 4];
 
@@ -223,7 +223,7 @@ fn bake_fade_in_warns(way: Way) -> (BakeResult, usize) {
             use_self_alpha: UseSelfAlpha::On,
         },
     }];
-    let (result, events) = capture_logs(|| match way {
+    let (result, events) = capture(|| match way {
         Way::WrappedBake => bake(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default()),
         Way::WrappedQuiet => {
             bake_quiet(&sets, &FirstFrameDecoder::new(&dec), PackConfig::default())

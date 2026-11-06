@@ -17,9 +17,10 @@ use crate::prepare_ghost_windows_with_work_area;
 use crate::reseed::resolve_standard_scopes;
 use crate::reset_pos::DefaultPlacementBasis;
 use crate::resolver::PointPx;
-use crate::shared_test_support::{WA, balloon_root, emo2_root, with_com_initialized};
+use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::test_support::{LogEvent, capture_logs};
+use crate::test_support::{WA, with_com_initialized};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// ドラッグでずらしたバルーンのずらし（標準のずらしと必ず違う値）。
 const DRAGGED: PointPx = PointPx { x: 777, y: -333 };
@@ -81,7 +82,7 @@ fn basis(world: &World) -> DefaultPlacementBasis {
     world.resource::<DefaultPlacementBasis>().clone()
 }
 
-fn face_logs(events: &[LogEvent]) -> Vec<LogEvent> {
+fn face_logs(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("balloon_face_windowposition"))
@@ -101,8 +102,7 @@ fn standard_balloon_moves_to_the_new_face_position() {
         );
         let old_offset = follow(&world, &windows, 0).offset();
 
-        let (moved, events) =
-            capture_logs(|| apply_face_windowposition(&mut world, 0, other_face()));
+        let (moved, events) = capture(|| apply_face_windowposition(&mut world, 0, other_face()));
         assert!(moved, "標準の位置のバルーンは置き直す");
 
         let b = basis(&world);
@@ -159,8 +159,7 @@ fn dragged_balloon_keeps_its_position() {
             follow(&world, &windows, 0),
         );
 
-        let (moved, events) =
-            capture_logs(|| apply_face_windowposition(&mut world, 0, other_face()));
+        let (moved, events) = capture(|| apply_face_windowposition(&mut world, 0, other_face()));
         assert!(!moved, "動かしてあるバルーンは置き直さない");
         assert_eq!(
             (
@@ -203,7 +202,7 @@ fn same_value_does_nothing() {
             })
             .collect();
 
-        let (moved, events) = capture_logs(|| apply_face_windowposition(&mut world, 0, same));
+        let (moved, events) = capture(|| apply_face_windowposition(&mut world, 0, same));
         assert!(!moved);
         assert_eq!(basis(&world), before_basis);
         let after: Vec<_> = windows

@@ -46,8 +46,8 @@ use wintf::ecs::window::transition_diag::{self, TickStart};
 use crate::placement::chain_finalize::ChainFinalized;
 use crate::placement::follow::MonitorSnapshot;
 use crate::placement::resolver::RectPx;
-use crate::placement::test_support::capture_logs as capture_diag_logs;
 use crate::placement::transition_diag as placement_diag;
+use log_capture_kit::capture as capture_diag_logs;
 
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, assert_no_write,
@@ -402,7 +402,7 @@ fn a_log_capture_verification_names_the_single_threaded_executor() {
     let ((), events) = capture_diag_logs(|| schedule.run(&mut harness.world));
     let lines: Vec<&str> = events
         .iter()
-        .map(crate::placement::test_support::LogEvent::message)
+        .map(log_capture_kit::CapturedEvent::message)
         .filter(|m| m.contains("kind=snapshot"))
         .collect();
     assert_eq!(

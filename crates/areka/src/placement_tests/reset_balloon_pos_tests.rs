@@ -22,6 +22,7 @@ use windows::Win32::Foundation::{HINSTANCE, HWND};
 use wintf::ecs::window::drain_window_pos_commands;
 use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
+use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwitchBuildRequest, build_swap};
 use crate::placement::follow::{
     AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase,
@@ -30,13 +31,12 @@ use crate::placement::persist::PersistWiring;
 use crate::placement::prepare_ghost_windows_with_work_area;
 use crate::placement::reset_pos::DefaultPlacementBasis;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement};
-use crate::placement::shared_test_support::{
-    TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
-};
 use crate::placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
 use crate::placement::sticky_group_ledger::StickyGroupLedger;
-use crate::placement::test_support::{LogEvent, capture_logs};
+use crate::placement::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
+use log_capture_kit::{CapturedEvent, capture};
+use temp_path_kit::TempPath;
 
 /// ドラッグでずらしたバルーンのずらし（標準のずらしと必ず違う値）。
 const DRAGGED: PointPx = PointPx { x: 777, y: -333 };
@@ -163,7 +163,7 @@ fn saved_offset(map: &HashMap<PersistKey, String>, scope: u32) -> Option<(String
     Some((get(Axis::X)?, get(Axis::Y)?))
 }
 
-fn events_named(events: &[LogEvent], name: &str) -> Vec<LogEvent> {
+fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
@@ -172,8 +172,15 @@ fn events_named(events: &[LogEvent], name: &str) -> Vec<LogEvent> {
 }
 
 /// キーワードのバルーン（`windowposition.x,center`）で組む合成の検体（`reseed_tests` t_rs05 と同じ）。
-fn keyword_fixture(root: &TempDir) -> (PathBuf, PathBuf) {
-    let (ghost, balloon) = synth_declared_dpi_ghost(root, "96", "96", None);
+fn keyword_fixture(root: &TempPath) -> (PathBuf, PathBuf) {
+    let (ghost, balloon) = synth_declared_dpi_ghost(
+        root.path(),
+        &emo2_root(),
+        &emo2_balloon_root(),
+        "96",
+        "96",
+        None,
+    );
     fs::write(
         balloon.join("descript.txt"),
         "charset,UTF-8\ndpi,96\nwindowposition.x,center\nwindowposition.y,-20\n",
@@ -188,10 +195,10 @@ fn keyword_fixture(root: &TempDir) -> (PathBuf, PathBuf) {
 #[test]
 fn dragged_balloons_return_to_standard_and_are_persisted() {
     with_com_initialized(|| {
-        let kw_root = TempDir::new();
+        let kw_root = TempPath::new("placement-prepare");
         let (kw_ghost, kw_balloon) = keyword_fixture(&kw_root);
         for (ghost, balloon, expect_keyword) in [
-            (emo2_root(), balloon_root(), false),
+            (emo2_root(), emo2_balloon_root(), false),
             (kw_ghost, kw_balloon, true),
         ] {
             let mut rig = Rig::new(&ghost, &balloon, None);
@@ -225,7 +232,7 @@ fn dragged_balloons_return_to_standard_and_are_persisted() {
                 .collect();
 
             let (reset, events) =
-                capture_logs(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Menu));
+                capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Menu));
             assert!(reset, "{}: 戻したバルーンがある", ghost.display());
             assert!(events_named(&events, "balloon_pos_reset_skipped").is_empty());
 
@@ -313,7 +320,7 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
         let built = build_swap(&SwitchBuildRequest::Shell {
             ghost_root: emo2_root(),
             folder: "master".to_string(),
-            balloon_dir: balloon_root(),
+            balloon_dir: emo2_balloon_root(),
         })
         .unwrap_or_else(|_| panic!("同じシェルの資産づくりは成功する"));
         let SwapBuilt::Shell {
@@ -326,7 +333,7 @@ fn boot_basis_and_switch_basis_give_the_same_positions() {
 
         let mut positions = Vec::new();
         for basis in [None, Some(switch_basis)] {
-            let mut rig = Rig::new(&emo2_root(), &balloon_root(), basis);
+            let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), basis);
             rig.drag_balloons();
             assert!(reset_balloon_positions(
                 &mut rig.world,
@@ -363,13 +370,12 @@ fn missing_material_only_warns() {
             }),
         ];
         for (reason, strip) in cases {
-            let mut rig = Rig::new(&emo2_root(), &balloon_root(), None);
+            let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
             rig.drag_balloons();
             let before: Vec<Point> = rig.windows.scopes().map(|s| rig.balloon_pos(s)).collect();
             strip(&mut rig.world);
-            let (reset, events) = capture_logs(|| {
-                reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Shortcut)
-            });
+            let (reset, events) =
+                capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Shortcut));
             assert!(!reset, "{reason}: 何もしない");
             let skips = events_named(&events, "balloon_pos_reset_skipped");
             assert_eq!(skips.len(), 1, "{reason}: warn が 1 行: {events:?}");
@@ -394,14 +400,14 @@ fn missing_material_only_warns() {
 #[test]
 fn unresolved_scope_is_skipped_with_scope_and_the_rest_reset() {
     with_com_initialized(|| {
-        let mut rig = Rig::new(&emo2_root(), &balloon_root(), None);
+        let mut rig = Rig::new(&emo2_root(), &emo2_balloon_root(), None);
         rig.drag_balloons();
         let b0 = rig.windows.balloon_window(0).unwrap();
         rig.world.get_mut::<WindowPos>(b0).unwrap().size = None;
         let stuck = rig.balloon_pos(0);
 
         let (reset, events) =
-            capture_logs(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Script));
+            capture(|| reset_balloon_positions(&mut rig.world, BalloonResetTrigger::Script));
         assert!(reset, "残りのスコープは戻す");
         let skips = events_named(&events, "balloon_pos_reset_skipped");
         assert_eq!(skips.len(), 1, "{events:?}");

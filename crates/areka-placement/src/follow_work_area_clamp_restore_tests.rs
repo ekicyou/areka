@@ -5,7 +5,6 @@
 //! 右に外したモニタ（x=5000 から）で、今のどのモニタとも交わらない。`shown` は窓ごとの判定が
 //! 寄せた結果（見えている窓は `shown == projected`）を手で置く。
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{point, rect};
 use super::{
     GroupShift, MonitorSnapshot, RestoredWindow, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
@@ -13,6 +12,7 @@ use super::{
 };
 use crate::chain_finalize::{AdjacencyMark, ChainRect};
 use crate::resolver::PointPx;
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 fn desk() -> MonitorSnapshot {
     MonitorSnapshot {
@@ -49,7 +49,7 @@ fn placed(windows: &[RestoredWindow], shifts: &[GroupShift]) -> Vec<PointPx> {
         .collect()
 }
 
-fn tagged<'a>(events: &'a [LogEvent], tag: &str) -> Vec<&'a LogEvent> {
+fn tagged<'a>(events: &'a [CapturedEvent], tag: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains(tag))
@@ -83,7 +83,7 @@ fn groups_all_outside_shift_together() {
         ],
     ];
     for windows in cases {
-        let (shifts, events) = capture_logs(|| keep_restored_groups(&windows, &desk()));
+        let (shifts, events) = capture(|| keep_restored_groups(&windows, &desk()));
         let after = placed(&windows, &shifts);
         let delta = |i: usize| {
             (
@@ -119,7 +119,7 @@ fn visible_member_keeps_group_per_window() {
             Some(AdjacencyMark::Right),
         ),
     ];
-    let (shifts, events) = capture_logs(|| keep_restored_groups(&windows, &desk()));
+    let (shifts, events) = capture(|| keep_restored_groups(&windows, &desk()));
     assert_eq!(shifts, vec![]);
     let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
     assert_eq!(keep.level, tracing::Level::DEBUG);
@@ -148,7 +148,7 @@ fn apart_or_non_consecutive_pairs_are_not_grouped() {
             Some(AdjacencyMark::Right),
         ),
     ];
-    let ((a, b), events) = capture_logs(|| {
+    let ((a, b), events) = capture(|| {
         (
             keep_restored_groups(&apart, &desk()),
             keep_restored_groups(&skipped, &desk()),
@@ -173,7 +173,7 @@ fn all_visible_group_is_kept() {
             Some(AdjacencyMark::Right),
         ),
     ];
-    let (shifts, events) = capture_logs(|| keep_restored_groups(&windows, &desk()));
+    let (shifts, events) = capture(|| keep_restored_groups(&windows, &desk()));
     assert_eq!(shifts, vec![]);
     let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
     assert_eq!(keep.expect_field("reason"), "\"remembered-visible\"");
@@ -212,7 +212,7 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
         ),
     ];
     let empty = MonitorSnapshot { work_areas: vec![] };
-    let ((a, b), events) = capture_logs(|| {
+    let ((a, b), events) = capture(|| {
         (
             keep_restored_groups(&windows, &empty),
             keep_restored_groups(&windows, &desk()),

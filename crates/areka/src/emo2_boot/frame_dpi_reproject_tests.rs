@@ -1,8 +1,8 @@
 use crate::placement::follow::MonitorSnapshot;
 use crate::placement::resolver::RectPx;
-use crate::placement::test_support::capture_logs as capture_diag_logs;
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::Entity;
+use log_capture_kit::capture as capture_diag_logs;
 use wintf::ecs::DPI;
 use wintf::ecs::{Point, SizeI, WindowPos};
 

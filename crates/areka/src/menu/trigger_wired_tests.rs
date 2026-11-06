@@ -173,7 +173,7 @@ fn a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic() {
         &mut world,
         MenuWiring::with_to_screen(menu_tx, shifted_to_screen),
     );
-    let windows: Vec<Entity> = crate::placement::shared_test_support::emily_shaped_scopes()
+    let windows: Vec<Entity> = crate::placement::test_support::emily_shaped_scopes()
         .into_iter()
         .map(|scope| {
             world

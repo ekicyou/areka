@@ -4,10 +4,10 @@ use wintf::ecs::DPI;
 
 use super::follow::OffsetBase;
 use super::resolver::{PointPx, SizePx};
-use super::shared_test_support::{
-    TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
-};
+use super::shared_test_support::TempDir;
 use super::*;
+use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 
 /// emo2 fixture の native 採寸値（`measure.rs` テストの同名定数と同一の実測値）。
 /// k₀ 適用後の期待値はこれらの `scaled_extent` 倍として書く。
@@ -530,7 +530,14 @@ fn prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value() {
     with_com_initialized(|| {
         let root = TempDir::new();
         // shell=120（125% 原稿）・balloon=144（150% 原稿）——既定 96 とも互いとも異なる 3 値。
-        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "120", "144", None);
+        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(
+            root.path(),
+            &emo2_root(),
+            &balloon_root(),
+            "120",
+            "144",
+            None,
+        );
 
         let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(240))
             .expect("宣言 DPI 付き合成ゴーストの準備は成功する");
@@ -580,7 +587,14 @@ fn prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value() {
 fn prepare_k0_rounding_matches_integer_authority_not_f32() {
     with_com_initialized(|| {
         let root = TempDir::new();
-        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "168", "96", None);
+        let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(
+            root.path(),
+            &emo2_root(),
+            &balloon_root(),
+            "168",
+            "96",
+            None,
+        );
 
         let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(186))
             .expect("k₀=31/28 の準備は成功する");

@@ -67,12 +67,16 @@ pub mod zorder_group_ledger;
 // 未使用警告が出る（frame.rs の同型 allow と同じ事情・`areka` は lib target を持たない bin crate）。
 #[allow(unused_imports)]
 pub use windowposition::scale_signed;
-/// `#[cfg(test)]` 限定のテスト共有部品（tracing ログ捕捉ハーネス）。本番バイナリには含まれない。
-///
-/// `pub(crate)`: `main.rs` の起動シーム檻（`monitor_snapshot_seam_tests`）も同じ捕捉
-/// ハーネスを使う。areka は bin crate ゆえ crate 内可視で足り、公開面は増えない。
+/// 見本のゴーストの入口（配置のテストだけ・要件 3.2）。
 #[cfg(test)]
-pub(crate) mod test_support;
+mod sample_test_support;
+/// テストの実行ファイルの落ちの報告とプロセスの寿命の MTA（要件 3.11・3.12）。
+#[cfg(test)]
+mod test_crash_report;
+/// 配置の外のテストも使う支え。本体は dev-dependency でだけ `test-support` を付けるので、
+/// 本番のビルドには含まれない（spec: placement-crate-split 要件 3.3・3.5）。
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

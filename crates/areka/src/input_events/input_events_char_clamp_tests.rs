@@ -9,7 +9,7 @@ use std::sync::mpsc;
 use wintf::ecs::Point;
 
 use super::*;
-use crate::placement::shared_test_support::emily_shaped_scopes;
+use crate::placement::test_support::emily_shaped_scopes;
 
 fn no_region(scope: u32, x: i64, y: i64) -> HitRegion {
     HitRegion {

@@ -67,8 +67,9 @@ use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, Gh
 use super::spawn::BalloonLimit;
 
 pub use self::anchor::{AnchorSource, Anchored, project_anchor};
+pub use self::drag_follow::on_balloon_drag;
 pub use self::drag_follow::on_char_drag_end;
-pub(crate) use self::drag_follow::{on_balloon_drag, on_balloon_drag_end, on_char_drag};
+pub(crate) use self::drag_follow::{on_balloon_drag_end, on_char_drag};
 // 追従 Component の定義元は単位空間契約のモジュール（`offset_space`）へ移した
 // （areka-P0-balloon-offset-dpi・design D14／task 3.1）。外部からの参照はすべて
 // このファサードを経由するため、移設の波及はこの 1 行に閉じる。
@@ -110,10 +111,10 @@ pub use self::work_area::MonitorDpiEntry;
 // （task 2.1）と詰め直し（task 2.2）で、`#[path]` で src を取り込む examples には無いので、そちらのビルドでは未使用に見える。
 #[allow(unused_imports)]
 pub(crate) use self::work_area_clamp::{
-    ChainClampOutcome, ChainPlacement, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
-    WORK_AREA_UNRESOLVED_TAG, resolve_chain_in_work_area,
+    ChainClampOutcome, ChainPlacement, WORK_AREA_KEEP_TAG, WORK_AREA_UNRESOLVED_TAG,
+    resolve_chain_in_work_area,
 };
-pub use self::work_area_clamp::{ClampScene, place_chain_in_work_area};
+pub use self::work_area_clamp::{ClampScene, WORK_AREA_CLAMP_TAG, place_chain_in_work_area};
 // 面の拡大の寄せ（task 1.3）。`window_move` の `resize_window_to` が `super::` で辿る私有の再束縛。
 use self::work_area_clamp::clamp_grown_free_default;
 // 記憶から戻した組の寄せ（task 1.4）。呼び手は記憶の戻し（`persist::apply_restored_placements`・task 2.4）。
@@ -159,7 +160,8 @@ pub use self::move_shift::{
 };
 use self::move_shift::{balloon_shift, reset_applied};
 pub(crate) use self::move_shift::{origin_position, rebase_shift};
-pub(crate) use self::sticky_follow::{is_char_dragging, sync_drag_writer};
+pub(crate) use self::sticky_follow::is_char_dragging;
+pub use self::sticky_follow::sync_drag_writer;
 // ドラッグの始めの控え。呼び手は `input_events::drag` だけで、`#[path]` で src を取り込む
 // examples には input_events が無いので、そちらのビルドでは未使用に見える。
 #[allow(unused_imports)]

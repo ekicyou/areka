@@ -6,7 +6,6 @@
 
 use bevy_ecs::prelude::*;
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{dragging_state, fake_handle, point, point_of, rect};
 use super::{
     MonitorSnapshot, PlacementRoute, WORK_AREA_CLAMP_TAG, WORK_AREA_KEEP_TAG,
@@ -17,6 +16,7 @@ use crate::follow::OffsetBase;
 use crate::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::source::GhostTitles;
 use crate::spawn::{GhostWindows, spawn_ghost_windows};
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 use wintf::ecs::window::drain_window_pos_commands;
 
 const SCOPE: usize = 0;
@@ -62,7 +62,7 @@ fn grow(world: &World, window: Entity, route: PlacementRoute, size: SizePx) -> P
     clamp_grown_free_default(world, window, Anchor::Free, route, DEFAULT_POS, size)
 }
 
-fn tagged<'a>(events: &'a [LogEvent], tag: &str) -> Vec<&'a LogEvent> {
+fn tagged<'a>(events: &'a [CapturedEvent], tag: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains(tag))
@@ -79,7 +79,7 @@ fn grown_default_free_window_is_lifted_only_vertically() {
         PlacementRoute::Resnap,
         PlacementRoute::ReportedSizeReconcile,
     ] {
-        let (to, events) = capture_logs(|| grow(&world, window, route, GROWN));
+        let (to, events) = capture(|| grow(&world, window, route, GROWN));
 
         assert_eq!(to, point(1000, 1704 - 1368), "{route:?}");
         assert!(to.y + GROWN.h <= 1704);
@@ -122,14 +122,14 @@ fn explicitly_placed_or_remembered_windows_are_kept() {
     ];
     for (reason, tweak) in cases {
         let (mut world, window) = world_free(Some(desk()));
-        let (before, _) = capture_logs(|| grow(&world, window, PlacementRoute::Resnap, GROWN));
+        let (before, _) = capture(|| grow(&world, window, PlacementRoute::Resnap, GROWN));
         assert_ne!(
             before, DEFAULT_POS,
             "対照: 変える前は寄せられる（{reason}）"
         );
         tweak(&mut world, window);
 
-        let (to, events) = capture_logs(|| grow(&world, window, PlacementRoute::Resnap, GROWN));
+        let (to, events) = capture(|| grow(&world, window, PlacementRoute::Resnap, GROWN));
 
         assert_eq!(to, DEFAULT_POS, "{reason}");
         let keep = expect_one(&events, WORK_AREA_KEEP_TAG);
@@ -144,7 +144,7 @@ fn explicitly_placed_or_remembered_windows_are_kept() {
 fn other_routes_anchors_and_non_char_windows_are_untouched_and_silent() {
     let (mut world, window) = world_free(Some(desk()));
     let stray = world.spawn_empty().id();
-    let (outs, events) = capture_logs(|| {
+    let (outs, events) = capture(|| {
         let mut outs = Vec::new();
         for route in [
             PlacementRoute::DpiReproject,
@@ -194,7 +194,7 @@ fn oversized_window_aligns_left_and_top() {
 #[test]
 fn grown_window_that_still_fits_is_kept() {
     let (world, window) = world_free(Some(desk()));
-    let (to, events) = capture_logs(|| {
+    let (to, events) = capture(|| {
         grow(
             &world,
             window,
@@ -218,7 +218,7 @@ fn missing_snapshot_warns_unresolved_with_contrast() {
     let (empty, w2) = world_free(Some(MonitorSnapshot { work_areas: vec![] }));
     let (with_snap, w3) = world_free(Some(desk()));
 
-    let ((a, b, c), events) = capture_logs(|| {
+    let ((a, b, c), events) = capture(|| {
         (
             grow(&bare, w1, PlacementRoute::Resnap, GROWN),
             grow(&empty, w2, PlacementRoute::Resnap, GROWN),

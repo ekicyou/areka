@@ -19,7 +19,7 @@ use temp_path_kit::TempPath;
 use crate::emo2_boot::assets::{build_balloon_assets, build_shell_assets};
 use crate::placement::PlacementError;
 use crate::placement::descript_window_keys::DefaultSurfaces;
-use areka_placement::measure::measure_with_reader;
+use areka_placement::measure::test_support::measure_with_reader;
 
 /// 黙らせる記録の文言（焼く段 `areka_emo_atlas`・面の表 `areka_emo_compose`）。
 const ZERO_SIZED: &str = "bake: element の元画像が 0 寸です";
@@ -291,7 +291,7 @@ fn unreadable_balloon_face0_stops_measure_with_one_error_each() {
                 "balloon: 面画像の bake に失敗"
             ),
             (
-                "areka::placement::measure",
+                "areka_placement::measure",
                 "measure: scope のバルーン面 0 の採寸に失敗"
             ),
         ],

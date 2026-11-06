@@ -21,7 +21,6 @@ use wintf::ecs::window::drain_window_pos_commands;
 
 use super::super::persist::PersistWiring;
 use super::super::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
-use super::super::test_support::{LogEvent, capture_logs};
 use super::sticky_follow::{
     CharDragSession, begin_char_drag, drag_anchor, drag_wintf_moves, finish_char_drag,
     follow_partners_on_drag,
@@ -29,6 +28,7 @@ use super::sticky_follow::{
 use super::test_support::{fake_handle, position_of, single_monitor_snapshot, window_pos_sized};
 use super::{Anchored, BalloonFollow, CharWindowMarker, OffsetBase, apply_char_shift};
 use crate::resolver::{Anchor, PointPx};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// キャラクターの窓の大きさ（物理 px・96 の倍数を避ける）。
 const W: i32 = 434;
@@ -81,7 +81,7 @@ fn point(x: i32, y: i32) -> PointPx {
     PointPx { x, y }
 }
 
-fn events_of<'a>(events: &'a [LogEvent], event: &str) -> Vec<&'a LogEvent> {
+fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
@@ -128,7 +128,7 @@ fn bottom_partner_takes_only_horizontal_delta() {
     group(&mut world, &["0", "1"]);
 
     begin_char_drag(&mut world, dragged.char);
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         follow_partners_on_drag(&mut world, dragged.char, point(470, 120));
     });
 
@@ -180,7 +180,7 @@ fn finish_writes_partner_persists_logs_and_clears_session() {
 
     begin_char_drag(&mut world, dragged.char);
     follow_partners_on_drag(&mut world, dragged.char, point(520, 210));
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         finish_char_drag(&mut world, dragged.char, point(537, 180));
     });
 
@@ -290,7 +290,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
     let lone = spawn_char(&mut world, 2, Anchor::Free, (100, 100));
     group(&mut world, &["0", "1"]);
 
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         follow_partners_on_drag(&mut world, a.char, point(600, 300));
         finish_char_drag(&mut world, a.char, point(600, 300));
     });
@@ -304,7 +304,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
 
     // 別の窓（組の相手 b）の控えで a を動かしても、b の始めの位置は変わらない。
     begin_char_drag(&mut world, b.char);
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         follow_partners_on_drag(&mut world, a.char, point(600, 300));
     });
     assert_eq!(position_of(&world, b.char), Point { x: 900, y: 150 });
@@ -314,7 +314,7 @@ fn without_session_partner_stays_and_skip_is_logged() {
     assert!(world.get_resource::<CharDragSession>().is_some());
 
     // 組に無い窓は記録しない。
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         follow_partners_on_drag(&mut world, lone.char, point(0, 0));
     });
     assert!(events_of(&events, "sticky_follow_skipped").is_empty());
@@ -329,13 +329,13 @@ fn absent_member_is_logged_at_begin_and_left_out() {
     let partner = spawn_char(&mut world, 1, Anchor::Free, (900, 150));
     group(&mut world, &["0", "1", "2"]);
 
-    let ((), events) = capture_logs(|| begin_char_drag(&mut world, dragged.char));
+    let ((), events) = capture(|| begin_char_drag(&mut world, dragged.char));
     let absent = events_of(&events, "sticky_member_absent");
     assert_eq!(absent.len(), 1, "{events:?}");
     assert_eq!(absent[0].field("scope"), Some("2"));
     assert_eq!(absent[0].field_str("when"), Some("drag"));
 
-    let ((), events) = capture_logs(|| finish_char_drag(&mut world, dragged.char, point(510, 200)));
+    let ((), events) = capture(|| finish_char_drag(&mut world, dragged.char, point(510, 200)));
     assert_eq!(position_of(&world, partner.char), Point { x: 910, y: 150 });
     assert_eq!(
         events_of(&events, "sticky_follow")[0].field("partners"),

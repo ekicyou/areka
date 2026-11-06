@@ -14,12 +14,12 @@ use crate::placement::diag::{ZORDER_PAIR_DECLARED_TAG, zorder_pair_declared_line
 use crate::placement::follow::{AnchorSource, Anchored, BalloonFollow};
 use crate::placement::resolver::Anchor;
 use crate::placement::source::GhostTitles;
-use crate::placement::test_support::capture_logs;
 use areka_placement::spawn::test_support::{ghost_window_entities, titles, two_scope_placements};
 use areka_placement::spawn::{
     BalloonLimit, BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
     spawn_ghost_windows,
 };
+use log_capture_kit::capture;
 
 // -------------------------------------------------------------------------
 // T-I1: spawn 組立（6.1/6.2・1.1/1.2）
@@ -678,9 +678,9 @@ fn spawn_emits_one_declared_record_per_scope_with_scope_and_both_entities() {
     let mut world = World::new();
     let placements = two_scope_placements();
 
-    let (gw, events) = capture_logs(|| spawn_ghost_windows(&mut world, &placements, &titles()));
+    let (gw, events) = capture(|| spawn_ghost_windows(&mut world, &placements, &titles()));
 
-    let declared: Vec<&crate::placement::test_support::LogEvent> = events
+    let declared: Vec<&log_capture_kit::CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains(ZORDER_PAIR_DECLARED_TAG))
         .collect();

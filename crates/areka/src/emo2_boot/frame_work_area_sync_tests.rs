@@ -21,7 +21,7 @@
 
 use crate::placement::WORK_AREA_SYNC_CONTEXT;
 use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
-use crate::placement::test_support::capture_logs;
+use log_capture_kit::capture;
 use wintf::ecs::window::monitor::Monitor;
 
 use super::test_support::{
@@ -254,7 +254,7 @@ fn an_empty_monitor_table_keeps_the_sources_and_warns() {
     harness.set_monitor_table(Vec::new());
     harness.advance_frame();
 
-    let (change, events) = capture_logs(|| harness.run_work_area_sync());
+    let (change, events) = capture(|| harness.run_work_area_sync());
     assert!(change.is_none(), "空の表で源を差し替えている");
     assert_eq!(
         harness.work_area_source(),
@@ -282,7 +282,7 @@ fn a_non_empty_monitor_table_does_not_warn() {
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
     harness.advance_frame();
 
-    let (change, events) = capture_logs(|| harness.run_work_area_sync());
+    let (change, events) = capture(|| harness.run_work_area_sync());
     assert!(change.is_some(), "前提: 差し替えが起きる表を渡している");
     assert!(
         events.iter().all(|e| e.level != tracing::Level::WARN),
@@ -380,7 +380,7 @@ fn the_sync_is_called_before_the_scale_phase_in_the_frame_system() {
 /// 捕捉窓の内側は観測 target が点いた状態である（既定 OFF そのものは
 /// `placement/follow_transition_diag_tests.rs` が directive 単位で所有する）。
 fn transition_lines(harness: &mut FrameHarness) -> Vec<String> {
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_work_area_sync();
     });
     events
@@ -456,7 +456,7 @@ fn a_rebuilt_source_also_logs_the_monitor_configuration_with_its_own_call_site_t
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
     harness.advance_frame();
 
-    let (_, events) = capture_logs(|| harness.run_work_area_sync());
+    let (_, events) = capture(|| harness.run_work_area_sync());
     let headers: Vec<&str> = events
         .iter()
         .map(|e| e.message())

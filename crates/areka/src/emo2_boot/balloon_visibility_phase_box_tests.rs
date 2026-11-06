@@ -30,7 +30,7 @@ use super::*;
 use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::ShellBoxHover;
 use crate::placement::spawn::CharWindowMarker;
-use crate::placement::test_support::capture_logs;
+use log_capture_kit::capture;
 use wintf::ecs::{FrameTime, WindowDragging};
 
 /// サーフェス 0 に箱 a、サーフェス 1 は箱を持たない。
@@ -84,7 +84,7 @@ fn runtime() -> Rc<RefCell<TextLayerRuntime>> {
     )))
 }
 
-fn box_hover_errors(events: &[crate::placement::test_support::LogEvent]) -> usize {
+fn box_hover_errors(events: &[log_capture_kit::CapturedEvent]) -> usize {
     events
         .iter()
         .filter(|e| e.level == Level::ERROR && e.message().contains("箱の上の滞在"))
@@ -131,7 +131,7 @@ fn box_observation_reads_the_shown_boxes_and_the_settled_hover() {
 fn missing_box_hover_record_means_no_hover_and_is_logged_once() {
     let mut logged = false;
 
-    let (results, events) = capture_logs(|| {
+    let (results, events) = capture(|| {
         let empty = observe_scope_boxes(&[], None, 0, &mut logged);
         let first = observe_scope_boxes(&shown_a(), None, 0, &mut logged);
         let second = observe_scope_boxes(&shown_a(), None, 1, &mut logged);
@@ -159,7 +159,7 @@ fn collection_settles_the_box_hover_before_observing() {
     let runtime = runtime();
     let mut state = BalloonVisibilityState::default();
 
-    let (observed, events) = capture_logs(|| {
+    let (observed, events) = capture(|| {
         collect_observations(
             &presenter,
             &runtime,
@@ -284,7 +284,7 @@ fn issue_hide(trigger: VisibilityTrigger, latch: bool) -> (Vec<u32>, Vec<String>
         break_latch: latch,
         ..BalloonVisibilityState::default()
     };
-    let (outcome, events) = capture_logs(|| {
+    let (outcome, events) = capture(|| {
         issue_actions(
             &mut presenter,
             &mut world,

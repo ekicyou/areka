@@ -3,7 +3,6 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use super::super::test_support::{capture_logs, expect_one};
 use super::drag_follow::BALLOON_DRAG_BASE_UNPINNED_TAG;
 use super::test_support::{
     drag_event, drag_event_at, dragging_state, fake_handle, position_of, single_monitor_snapshot,
@@ -12,6 +11,7 @@ use super::test_support::{
 use super::{Anchored, BalloonFollow, move_window_to, on_char_drag};
 use crate::resolver::Anchor;
 use crate::resolver::PointPx;
+use log_capture_kit::{capture, expect_one};
 
 // -------------------------------------------------------------------------
 // on_balloon_drag: バルーン単独ドラッグの相対位置記憶（task 8.3・4.8・DD16）
@@ -337,7 +337,7 @@ fn on_balloon_drag_without_display_dpi_establishes_unpinned_base_and_warns() {
     );
 
     let ev = Phase::Bubble(drag_event(balloon));
-    let (consumed, events) = capture_logs(|| on_balloon_drag(&mut world, balloon, balloon, &ev));
+    let (consumed, events) = capture(|| on_balloon_drag(&mut world, balloon, balloon, &ev));
     assert!(!consumed, "ドラッグ中ハンドラはイベントを消費しない");
 
     // (a) 現在値はドラッグ結果（balloon − char）へ更新される——縮退で見送らない。

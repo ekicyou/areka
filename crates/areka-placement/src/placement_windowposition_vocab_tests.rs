@@ -12,7 +12,7 @@
 //! - **ログ**（警告 2 種と観測点 4 の `limit`／`x_mode` フィールド）
 //!   ＝実機サインオフが grep する契約面（要件 6.2/6.3）
 //!
-//! ログ捕捉ハーネス（`test_support::capture_logs`）は既に較正済みであり、同じ観測点 4 の
+//! ログ捕捉ハーネス（`test_support::capture`）は既に較正済みであり、同じ観測点 4 の
 //! 行を `placement_windowposition_tests.rs` が捕捉して値を検査している。本ファイルの
 //! 各テストも**必ず観測点 4 の行を 1 件捕捉すること**を先に主張してから「警告が無い」側の
 //! 主張を行う（捕捉ゼロで恒真になる空虚な主張を作らない）。
@@ -21,8 +21,8 @@ use areka_emo_compose::ScaleRatio;
 
 use super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::shared_test_support::{TempDir, synth_balloon_dir};
-use super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::*;
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 /// 観測点 4 の本文（実機サインオフの grep 対象・フィールド名ごと契約）。
 const OBSERVATION: &str = "windowposition を初期既定位置の調整量へ";
@@ -45,11 +45,11 @@ fn cfg_scope0() -> PlacementConfig {
 
 /// 合成バルーン定義 1 つに対し `apply_scope_windowpositions` を通し、
 /// 解決後の構成と捕捉ログを返す（k は恒等＝語彙の観測に丸めを混ぜない）。
-fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<LogEvent>) {
+fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<CapturedEvent>) {
     let root = TempDir::new();
     let balloon_dir = synth_balloon_dir(&root, dir_name, extra_lines);
     let mut cfg = cfg_scope0();
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         apply_scope_windowpositions(&mut cfg, &balloon_dir, &[0], ScaleRatio::ONE);
     });
     (cfg, events)
@@ -59,8 +59,8 @@ fn resolve(dir_name: &str, extra_lines: &str) -> (PlacementConfig, Vec<LogEvent>
 ///
 /// 空虚化しないための前提として、呼び手は**同じ `events` から観測点 4 を 1 件取り出した後**に
 /// 呼ぶこと（捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
-fn assert_no_event(events: &[LogEvent], needle: &str) {
-    let hits: Vec<&LogEvent> = events
+fn assert_no_event(events: &[CapturedEvent], needle: &str) {
+    let hits: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains(needle))
         .collect();

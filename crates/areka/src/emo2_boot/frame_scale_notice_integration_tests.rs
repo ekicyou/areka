@@ -133,7 +133,7 @@ fn strings(v: &[&str]) -> Vec<String> {
 }
 
 /// `event` が `name` の記録の数。
-fn count_event(events: &[LogEvent], name: &str) -> usize {
+fn count_event(events: &[CapturedEvent], name: &str) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
@@ -227,7 +227,7 @@ fn shell_replacement_with_another_author_dpi_raises_no_notice() {
 #[test]
 fn notice_before_steady_reaches_the_real_kanade_and_is_dropped_but_the_table_is_written() {
     let mut cage = Cage::new(144);
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         // 捕捉の窓の中で起こすと、kanade のスレッドの記録も同じ窓に入る。
         let (kanade, _handle) = areka_kanade::spawn_kanade(
             KanadeConfig::new("", ""),
@@ -281,7 +281,7 @@ fn notice_without_kanade_warns_once_and_keeps_the_table_written() {
         .insert_non_send(crate::ghost_session::GhostSlot(None));
     cage.boot_and_show_shell();
     cage.set_shell_dpi(192);
-    let ((), events) = capture_logs(|| cage.frame());
+    let ((), events) = capture(|| cage.frame());
     assert_eq!(
         cage.shell_scaling().as_deref(),
         Some("200,200"),

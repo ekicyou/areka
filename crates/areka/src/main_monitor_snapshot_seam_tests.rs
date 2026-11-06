@@ -1,10 +1,10 @@
 use super::*;
+use log_capture_kit::capture;
 use placement::diag::{
     MONITOR_RECORD_TAG, MONITOR_SNAPSHOT_TAG, MonitorRecord, monitor_record_line,
     monitor_snapshot_header_line,
 };
 use placement::follow::MonitorSources;
-use placement::test_support::capture_logs;
 use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 
@@ -67,7 +67,7 @@ fn synthetic_monitors() -> Vec<Monitor> {
 }
 
 /// `[diag.*]` 行だけを抜き出す（同時に走る他の観測ログを混ぜない）。
-fn diag_lines(events: &[placement::test_support::LogEvent]) -> Vec<String> {
+fn diag_lines(events: &[log_capture_kit::CapturedEvent]) -> Vec<String> {
     events
         .iter()
         .map(|e| e.message().to_string())
@@ -81,7 +81,7 @@ fn diag_lines(events: &[placement::test_support::LogEvent]) -> Vec<String> {
 #[test]
 fn boot_snapshot_logs_every_monitor_with_the_canonical_call_site_tag() {
     let monitors = synthetic_monitors();
-    let (_, events) = capture_logs(|| boot_monitor_snapshot(&monitors));
+    let (_, events) = capture(|| boot_monitor_snapshot(&monitors));
 
     let expected: Vec<MonitorRecord> = placement::monitor_records(&monitors);
     let mut want = vec![monitor_snapshot_header_line("monitor_snapshot", 3)];
@@ -114,7 +114,7 @@ fn boot_snapshot_logs_every_monitor_with_the_canonical_call_site_tag() {
 /// 退行はここで赤になる。
 #[test]
 fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
-    let (_, events) = capture_logs(|| boot_monitor_snapshot(&synthetic_monitors()));
+    let (_, events) = capture(|| boot_monitor_snapshot(&synthetic_monitors()));
     let header = diag_lines(&events).remove(0);
     assert!(
         header.contains("context=monitor_snapshot"),
@@ -170,7 +170,7 @@ fn boot_snapshot_builds_both_sources_from_the_same_monitor_list() {
 /// （レコード不在では「出力が無効だった」と区別できない）。
 #[test]
 fn boot_snapshot_with_no_monitors_still_reports_count_zero() {
-    let (sources, events) = capture_logs(|| boot_monitor_snapshot(&[]));
+    let (sources, events) = capture(|| boot_monitor_snapshot(&[]));
     assert!(sources.is_empty());
     assert_eq!(
         diag_lines(&events),

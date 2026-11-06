@@ -19,7 +19,7 @@ use super::spawn::BalloonWindowMarker;
 
 /// 止めた理由（記録に出す）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct HoldReason {
+pub struct HoldReason {
     pub descript: bool,
     pub script: bool,
 }
@@ -33,7 +33,7 @@ pub struct BalloonLockLedger {
 
 impl BalloonLockLedger {
     /// 動かせないなら理由、動かせるなら `None`。
-    pub(crate) fn reason(&self, scope: u32) -> Option<HoldReason> {
+    pub fn reason(&self, scope: u32) -> Option<HoldReason> {
         let reason = HoldReason {
             descript: self.descript.contains(&scope),
             script: self.script.contains(&scope),

@@ -31,9 +31,9 @@ use super::super::follow::{
 use super::super::persist::PersistWiring;
 use super::super::resolver::{Anchor, PointPx, RectPx};
 use super::super::spawn::{BalloonKeywordBase, CharWindowMarker};
-use super::super::test_support::{LogEvent, capture_logs};
 use super::*;
 use crate::config::BalloonXMode;
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
 const SCOPE: usize = 1;
@@ -254,7 +254,7 @@ impl Rig {
     }
 }
 
-fn held_logs(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn held_logs(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("balloon_drag_held"))
@@ -272,7 +272,7 @@ fn held_balloon_drag_changes_nothing_and_logs_once() {
     seed_balloon_lock(&mut rig.world, &scopes(&[SCOPE as u32]));
     let follow = rig.follow();
 
-    let ((), events) = capture_logs(|| rig.full_drag(rig.balloon));
+    let ((), events) = capture(|| rig.full_drag(rig.balloon));
 
     assert_eq!(
         rig.follow(),
@@ -304,7 +304,7 @@ fn unheld_scope_writes_as_today() {
     seed_balloon_lock(&mut rig.world, &scopes(&[0]));
     let follow = rig.follow();
 
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         rig.start(rig.balloon);
         rig.move_balloon(Point { x: 773, y: 409 });
         rig.drag(Point { x: 1500, y: 930 });
@@ -333,7 +333,7 @@ fn cleared_snapshot_falls_back_to_current_setting() {
     let mut rig = Rig::new();
     rig.world.resource::<WindowDragContextResource>().clear();
 
-    let ((), events) = capture_logs(|| rig.call_end());
+    let ((), events) = capture(|| rig.call_end());
     assert_eq!(
         rig.saved_offsets().len(),
         2,
@@ -343,7 +343,7 @@ fn cleared_snapshot_falls_back_to_current_setting() {
 
     rig.world.entity_mut(rig.char_w).insert(KEYWORD_BASE);
     apply_script_balloon_lock(&mut rig.world, SCOPE as u32, true);
-    let ((), events) = capture_logs(|| rig.call_end());
+    let ((), events) = capture(|| rig.call_end());
     assert_eq!(
         rig.keyword_base(),
         Some(KEYWORD_BASE),
@@ -367,7 +367,7 @@ fn other_window_snapshot_falls_back_to_current_setting() {
             constraint: None,
         });
 
-    let ((), events) = capture_logs(|| rig.call_end());
+    let ((), events) = capture(|| rig.call_end());
 
     assert_eq!(rig.saved_offsets().len(), 2, "別の窓の控えで止めた");
     assert_eq!(rig.keyword_base(), None);
@@ -381,7 +381,7 @@ fn mid_drag_lock_takes_effect_from_next_drag() {
     let mut rig = Rig::new();
     seed_balloon_lock(&mut rig.world, &BTreeSet::new());
 
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         rig.start(rig.balloon);
         apply_script_balloon_lock(&mut rig.world, SCOPE as u32, true);
         rig.move_balloon(Point { x: 773, y: 409 });
@@ -394,7 +394,7 @@ fn mid_drag_lock_takes_effect_from_next_drag() {
     assert!(held_logs(&events).is_empty());
 
     let follow = rig.follow();
-    let ((), events) = capture_logs(|| rig.full_drag(rig.balloon));
+    let ((), events) = capture(|| rig.full_drag(rig.balloon));
     assert_eq!(rig.follow(), follow);
     assert_eq!(
         rig.saved_offsets(),

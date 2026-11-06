@@ -36,7 +36,7 @@ use super::{
 
 /// 寄せて動かした（info!）。
 #[allow(dead_code)] // 出す口は task 1.2 の World の口・examples には呼び手が無い
-pub(crate) const WORK_AREA_CLAMP_TAG: &str = "[work-area-clamp] Clamp";
+pub const WORK_AREA_CLAMP_TAG: &str = "[work-area-clamp] Clamp";
 /// 判定したが動かさなかった（debug!）。
 #[allow(dead_code)] // 同上
 pub(crate) const WORK_AREA_KEEP_TAG: &str = "[work-area-clamp] Keep";

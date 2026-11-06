@@ -14,17 +14,17 @@
 //!
 //! # ログ檻の非空虚性
 //!
-//! 捕捉ハーネス（`test_support::capture_logs`）は較正済みだが、「◯◯のログが無い」は
+//! 捕捉ハーネス（`test_support::capture`）は較正済みだが、「◯◯のログが無い」は
 //! 捕捉ゼロでも真になってしまう。本ファイルの「無い」側の主張は**必ず同じ捕捉集合から
 //! [`expect_one`] で 1 件取り出した後**に行う（`expect_one` は 0 件で panic するので、
 //! 捕捉が生きていることがその時点で証明されている）。
 
 use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::super::resolver::{Anchor, ScopeInput, resolve_placement};
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::*;
 use crate::follow::OffsetBase;
 use crate::shared_test_support::MEASURE_DPI;
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 // ---------------------------------------------------------------------------
 // 檻の道具
@@ -93,8 +93,8 @@ fn char_overflowing(mut p: ScopePlacement) -> ScopePlacement {
 ///
 /// 呼び手は**同じ `events` から [`expect_one`] で 1 件取り出した後**に呼ぶこと
 /// （捕捉が生きていることが確認済みの集合に対してのみ「無い」を主張する）。
-fn assert_no_event(events: &[LogEvent], needle: &str) {
-    let hits: Vec<&LogEvent> = events
+fn assert_no_event(events: &[CapturedEvent], needle: &str) {
+    let hits: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains(needle))
         .collect();
@@ -141,7 +141,7 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
         "前提: 左辺から 20px はみ出す"
     );
 
-    let (out, events) = capture_logs(|| apply_balloon_limit(vec![before], &snapshot(&[WA])));
+    let (out, events) = capture(|| apply_balloon_limit(vec![before], &snapshot(&[WA])));
 
     assert_eq!(out.len(), 1, "出力長＝入力長");
     assert_eq!(
@@ -196,8 +196,7 @@ fn boot_gate_logs_only_for_scopes_it_actually_moved() {
     let outside = char_overflowing(placement(1, point(30, 300), point(-50, 10), true));
     assert_eq!(inside.balloon_pos, point(650, 310), "前提: scope 0 は域内");
 
-    let (out, events) =
-        capture_logs(|| apply_balloon_limit(vec![inside, outside], &snapshot(&[WA])));
+    let (out, events) = capture(|| apply_balloon_limit(vec![inside, outside], &snapshot(&[WA])));
 
     assert_eq!(out[0], inside, "域内の scope は入力に完全恒等（補正なし）");
     assert_eq!(
@@ -223,8 +222,7 @@ fn boot_gate_skips_scopes_with_limit_disabled() {
     let disabled = char_overflowing(placement(0, point(30, 300), point(-50, 10), false));
     let enabled = char_overflowing(placement(1, point(30, 300), point(-50, 10), true));
 
-    let (out, events) =
-        capture_logs(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[WA])));
+    let (out, events) = capture(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[WA])));
 
     assert_eq!(
         out[0], disabled,
@@ -255,7 +253,7 @@ fn boot_gate_skips_scopes_with_limit_disabled() {
 fn boot_gate_warns_and_passes_through_when_snapshot_is_empty() {
     let before = placement(0, point(30, 300), point(-50, 10), true);
 
-    let (out, events) = capture_logs(|| apply_balloon_limit(vec![before], &snapshot(&[])));
+    let (out, events) = capture(|| apply_balloon_limit(vec![before], &snapshot(&[])));
 
     assert_eq!(
         out,
@@ -532,7 +530,7 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             );
 
             let (out, events) =
-                capture_logs(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[area])));
+                capture(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[area])));
 
             // limit=0 の腕: 辺・隅・DPI 水準によらず入力へ完全恒等（要件 2.7・5.2）。
             assert_eq!(

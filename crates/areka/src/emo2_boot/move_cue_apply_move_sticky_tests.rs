@@ -25,7 +25,7 @@ use crate::placement::spawn::GhostWindows;
 use crate::placement::sticky_group_ledger::{
     StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
 };
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 帳簿を据え、台本の組 `members` を作る（2.1 の関数）。
 fn group(world: &mut World, members: &[&str]) {
@@ -54,7 +54,7 @@ fn diff(after: Point, before: Point) -> Point {
     }
 }
 
-fn events_of<'a>(events: &'a [LogEvent], event: &str) -> Vec<&'a LogEvent> {
+fn events_of<'a>(events: &'a [CapturedEvent], event: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
@@ -93,7 +93,7 @@ fn partner_follows_by_the_amount_the_target_actually_moved() {
     let offset = world.get::<BalloonFollow>(p.partner).unwrap().offset();
 
     let (applied, events) =
-        capture_logs(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+        capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
     assert!(applied);
 
     let moved = diff(pos_of(&world, p.target), target_before);
@@ -165,8 +165,7 @@ fn ignore_option_moves_only_the_target_and_the_group_moves_on_with_the_new_relat
         "--option=ignore-sticky-window",
     ]);
     assert!(ignore.ignore_sticky_window, "前提: 名前付きの形で読める");
-    let (applied, events) =
-        capture_logs(|| apply_move_directive(&mut world, &ignore, ScaleRatio::ONE));
+    let (applied, events) = capture(|| apply_move_directive(&mut world, &ignore, ScaleRatio::ONE));
     assert!(applied);
     assert_eq!(pos_of(&world, p.partner), partner_before, "相手は動かない");
     let ignored = events_of(&events, "sticky_follow_ignored");
@@ -289,9 +288,8 @@ fn ungrouped_window_moves_alone_as_before() {
         let p = pair(&gw);
         let partner_before = pos_of(&world, p.partner);
 
-        let (applied, events) = capture_logs(|| {
-            apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE)
-        });
+        let (applied, events) =
+            capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
         assert!(applied);
         assert_eq!(pos_of(&world, p.partner), partner_before, "seed={seed}");
         for name in [
@@ -318,7 +316,7 @@ fn absent_member_is_logged_and_left_out() {
     let partner_before = pos_of(&world, p.partner);
 
     let (applied, events) =
-        capture_logs(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
+        capture(|| apply_move_directive(&mut world, &directive(&MOVE_XY), ScaleRatio::ONE));
     assert!(applied);
     assert_ne!(pos_of(&world, p.partner), partner_before);
     let absent = events_of(&events, "sticky_member_absent");
@@ -342,7 +340,7 @@ fn refused_write_or_zero_amount_moves_no_partner() {
 
     // 量が 0: x・y を省いた（今の位置のまま）指令。
     let partner_before = pos_of(&world, p.partner);
-    let (applied, events) = capture_logs(|| {
+    let (applied, events) = capture(|| {
         apply_move_directive(&mut world, &directive(&["", "", "", "0"]), ScaleRatio::ONE)
     });
     assert!(applied);
@@ -351,7 +349,7 @@ fn refused_write_or_zero_amount_moves_no_partner() {
 
     // 書けない: 動かす窓の窓ハンドルを外す。
     world.entity_mut(p.target).remove::<WindowHandle>();
-    let (applied, events) = capture_logs(|| {
+    let (applied, events) = capture(|| {
         apply_move_directive(
             &mut world,
             &directive(&["-100", "-60", "", "0", "base", "base"]),

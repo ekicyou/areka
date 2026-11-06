@@ -40,7 +40,7 @@ use super::resolver::{PointPx, RectPx, ScopePlacement, SizePx};
 /// 実機サインオフの grep 判定語であり、`[balloon-limit] ` 接頭辞 1 語で本機能の記録を
 /// 全部拾えることが 2 段 grep の第 1 段になる（`[zorder-pair] ` の先例と同じ手口）。
 /// 出力点は各関門（task 2.4／3.3／3.4）が持ち、本モジュールは語彙だけを所有する。
-pub(crate) const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
+pub const BALLOON_LIMIT_CLAMP_TAG: &str = "[balloon-limit] Clamp";
 
 /// 作業領域が解決できず limit 補正を評価できなかったことを表す判定語（`warn`）。
 ///

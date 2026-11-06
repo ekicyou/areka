@@ -1,80 +1,128 @@
-//! `#[cfg(test)]` 限定: placement 配下のテストが共有する **ログ捕捉の判定ヘルパ**。
+//! 配置の外のテストも使う支え（`test-support` の機能か、配置自身のテストのときだけ立つ）。
 //!
-//! 本モジュールは `#[cfg(test)]` でのみコンパイルされ、本番バイナリには一切含まれない。
-//! `source.rs`／`measure.rs` の各 `mod tests` が `use super::test_support::*;` で消費する。
-//!
-//! # 捕捉そのものはここに無い
-//!
-//! 捕捉窓・常駐の仕掛け・イベントの正準表現は、ワークスペースで 1 箇所だけ定義される
-//! `log-capture-kit` にある。本モジュールが持つのは ⑴ 正準型への別名 ⑵ 呼出側の判定を
-//! 短く書くための補助（[`expect_one`]・[`ExpectField`]）⑶ 委譲 1 行の [`capture_logs`]
-//! だけである。使い方（存在／不在の主張の書き方・全スレッド捕捉との使い分け）は
-//! `log_capture_kit` の crate doc が利用手順として書いている。
-//!
-//! # なぜ「素朴な `with_default` 捕捉」では非決定的に取りこぼすのか
-//!
-//! 「`tracing::subscriber::with_default` はスレッドローカルだから並行実行でも干渉しない」は
-//! **誤り**である。差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを
-//! 評価するか」を決める **callsite の interest キャッシュはプロセス全体で 1 つ**しかなく、
-//! その発行点をプロセス内で最初に踏んだスレッドの判定が焼き付く（先着が勝つ）。捕捉窓を
-//! 持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、先に踏まれると `never` が
-//! 大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。結果、不在の主張は
-//! 捕捉 0 件のまま静かに緑になり、存在の主張は確率的に赤になる。
-//!
-//! 共有機構はこれを ⑴ プロセス寿命の probe 常駐（interest が `never` へ落ちる経路を恒久的に
-//! 閉じる）⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントによる空振り検出（捕捉が働いて
-//! いなければ panic する）の 3 点で塞ぐ。`tracing-core` の実コードを引いた逐条の機序解説は
-//! `log_capture_kit` の crate doc と同 crate の `src/probe.rs` にある。
+//! 頼るのは配置の型・`windows`・std だけ。`#[cfg(test)]` だけの項目と共有のテスト用の crate
+//! （`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）には頼らない——本体のテストを組むときの
+//! 配置は `test` が立たず機能だけが立つので、頼ると組めなくなる（spec: placement-crate-split 要件 3.3・3.4）。
+//! 見本のゴーストの入口は crate ごとの `sample_test_support`、一時フォルダと合成の検体は
+//! `shared_test_support` にある。ログの判定の補助は `log_capture_kit` を直に使う（要件 3.1）。
 
-use log_capture_kit::CapturedEvent;
+use std::fs;
+use std::path::{Path, PathBuf};
 
-/// 常駐の仕掛けを捕捉窓を開かずに確立する（冪等）。
-///
-/// [`capture_logs`] は内部で呼ぶので、自前で捕捉先を差す側だけが直接呼ぶ。
-pub(crate) use log_capture_kit::ensure_interest_probes;
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
-/// 捕捉した 1 イベント。正準表現 [`log_capture_kit::CapturedEvent`] の型別名。
-///
-/// `level`（`error!`／`warn!`／`debug!` の別＝縮退梯子の契約）と、`message` を含む構造化
-/// フィールドを持つ。本文は [`CapturedEvent::message`]、フィールドの Debug 表現は
-/// [`CapturedEvent::field`]（欠落は `None`）で引く。欠落を失敗として扱いたい判定は
-/// [`ExpectField::expect_field`] を使う。
-pub(crate) type LogEvent = CapturedEvent;
+use crate::resolver::RectPx;
 
-/// 構造化フィールドの Debug 表現を引き、欠落を失敗として扱う（フィールド名も契約のうち）。
-///
-/// 正準型は同名の固有メソッド `field()` を `Option<&str>` で持つ。固有メソッドは拡張
-/// トレイトより先に解決されるため、この補助は**別名**でなければ黙って無視される。
-pub(crate) trait ExpectField {
-    /// 構造化フィールドの Debug 表現。欠落は失敗。
-    fn expect_field(&self, name: &str) -> &str;
-}
-
-impl ExpectField for LogEvent {
-    fn expect_field(&self, name: &str) -> &str {
-        self.field(name)
-            .unwrap_or_else(|| panic!("ログフィールド `{name}` が無い: {:?}", self.fields_map()))
+/// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求・
+/// measure.rs テストと同一パターン）。
+pub fn with_com_initialized<F: FnOnce()>(f: F) {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+    f();
+    unsafe {
+        CoUninitialize();
     }
 }
 
-/// クロージャ実行中に**現在のスレッド**で発火した tracing イベントを戻り値と共に返す。
+/// 決定論テスト用の合成 work area（物理 px・resolver T-R 群と同流儀）。
+pub const WA: RectPx = RectPx {
+    left: 0,
+    top: 0,
+    right: 1920,
+    bottom: 1040,
+};
+
+/// 宣言 DPI 付きの最小合成ゴーストを一時ディレクトリへ組む（テスト補助）。
 ///
-/// 捕捉層は共有機構への委譲で、硬化（probe 常駐・窓内の interest 再計算・番兵）も
-/// 呼出側の判定内容も共有機構側が保証する。
-pub(crate) fn capture_logs<R, F: FnOnce() -> R>(f: F) -> (R, Vec<LogEvent>) {
-    log_capture_kit::capture(f)
+/// `prepare_never_reads_or_writes_ghost_dat` の合成ゴーストと同型（emo2 の実 PNG を
+/// 複写した最小 shell）に、`seriko.dpi`／balloon `dpi` の宣言を足したもの。
+/// 返り値は `(ghost_root, balloon_root)`。`root` の下に組み、絵は `emo2_root`（見本のゴースト）と
+/// `balloon_root`（そのバルーン）から写す（道は呼び手が自分の crate の `sample_test_support` から渡す）。
+///
+/// 注意: 合成 shell の `surfaces.txt` は単一 overlay ゆえ、scope0 は emo2 実測と同じ
+/// 434×687 になるが scope1（surface10 単体）は emo2 実 shell の合成寸（336×400）とは
+/// 異なる——本補助を使う檻は scope0 と balloon を期待値の錨に用いる。
+///
+/// 合成バルーンへ複写するのは本体側 `balloons0.png` の 1 枚のみ（相方側 `balloonk*` を
+/// 置かない）。ゆえに全 scope の連鎖が本体側系列へ収束し、バルーン寸は scope に依らず
+/// 同一になる——本補助を使う檻は同時に要件 3.7（`balloonk*` 不在時の後方互換）の錨でもある。
+///
+/// `balloon_windowposition`（task 4.3）: `Some((x, y))` ならバルーン既定設定へ
+/// `windowposition.x`/`.y` を宣言する（面別上書き `balloons0s.txt` は置かないので、
+/// 確定値はこの基層のみが供給する）。`None` なら**どの層にも `windowposition` が無い**
+/// ＝要件 3.4 の「数値指定なし」検体になる。
+pub fn synth_declared_dpi_ghost(
+    root: &Path,
+    emo2_root: &Path,
+    balloon_root: &Path,
+    shell_dpi: &str,
+    balloon_dpi: &str,
+    balloon_windowposition: Option<(i32, i32)>,
+) -> (PathBuf, PathBuf) {
+    let ghost_master = root.join("ghost").join("master");
+    let shell_master = root.join("shell").join("master");
+    let balloon_dir = root.join("balloon-declared");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+    fs::create_dir_all(&shell_master).expect("create shell/master");
+    fs::create_dir_all(&balloon_dir).expect("create balloon dir");
+    fs::write(
+        ghost_master.join("descript.txt"),
+        "charset,UTF-8\nname,えも\nsakura.name,むらさき\nkero.name,エモ\n",
+    )
+    .expect("ghost descript");
+    fs::write(
+        shell_master.join("descript.txt"),
+        format!(
+            "charset,UTF-8\nseriko.dpi,{shell_dpi}\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n"
+        ),
+    )
+    .expect("shell descript");
+    fs::write(
+        shell_master.join("surfaces.txt"),
+        "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface10\n{\nelement0,overlay,surface10.png,0,0\n}\n",
+    )
+    .expect("surfaces.txt");
+    for png in ["surface0.png", "surface10.png"] {
+        fs::copy(
+            emo2_root.join("shell/master").join(png),
+            shell_master.join(png),
+        )
+        .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
+    }
+    let windowposition = match balloon_windowposition {
+        Some((x, y)) => format!("windowposition.x,{x}\nwindowposition.y,{y}\n"),
+        None => String::new(),
+    };
+    fs::write(
+        balloon_dir.join("descript.txt"),
+        format!("charset,UTF-8\ndpi,{balloon_dpi}\nuse_self_alpha,1\n{windowposition}"),
+    )
+    .expect("balloon descript");
+    fs::copy(
+        balloon_root.join("balloons0.png"),
+        balloon_dir.join("balloons0.png"),
+    )
+    .expect("balloons0.png 複写");
+    (root.to_path_buf(), balloon_dir)
 }
 
-/// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
-pub(crate) fn expect_one<'a>(events: &'a [LogEvent], needle: &str) -> &'a LogEvent {
-    let hits: Vec<&LogEvent> = events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .collect();
-    assert_eq!(
-        hits.len(),
-        1,
-        "`{needle}` を含むログがちょうど 1 件ではない: {events:?}"
-    );
-    hits[0]
+/// えみり（`emily4`）と同じ形のゴーストの `descript.txt`（spec: areka-P0-emily-ghost-verification
+/// 要件 6.7）。`kero.name` に加えて `char2.name` を持つ。名前は架空で、えみりの文面は写さない。
+pub const EMILY_SHAPED_GHOST_DESCRIPT: &str =
+    "charset,UTF-8\nname,かたち\nsakura.name,ひとり\nkero.name,ふたり\nchar2.name,さんにん\n";
+
+/// えみりと同じ形のシェルの `descript.txt`（同上）。`char2.balloon.offsetx`・
+/// `char3.seriko.alignmenttodesktop`・`char4.seriko.alignmenttodesktop` を持つ。
+pub const EMILY_SHAPED_SHELL_DESCRIPT: &str = "charset,UTF-8\nseriko.use_self_alpha,1\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nchar2.balloon.offsetx,0\nchar3.seriko.alignmenttodesktop,free\nchar4.seriko.alignmenttodesktop,free\n";
+
+/// えみりの形の固定入力から配置の設定が返す scope の全部（窓を手で書かずに作るための元）。
+pub fn emily_shaped_scopes() -> Vec<usize> {
+    crate::config::build_placement_config(
+        &areka_parsers::kv::parse_kv(EMILY_SHAPED_GHOST_DESCRIPT),
+        &areka_parsers::kv::parse_kv(EMILY_SHAPED_SHELL_DESCRIPT),
+    )
+    .scopes
+    .into_keys()
+    .collect()
 }

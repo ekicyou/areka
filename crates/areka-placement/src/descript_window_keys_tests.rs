@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;
-use crate::test_support::{ExpectField, capture_logs, expect_one};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
@@ -15,7 +15,7 @@ fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 /// 書かれていなければ組み込みの既定の面（本体側 0・相方側とスコープ 2 以降 10）で、記録も残さない（要件 1.1・1.2・1.4）。
 #[test]
 fn unwritten_scopes_use_builtin_default_surfaces_silently() {
-    let (ds, events) = capture_logs(|| read_default_surfaces(&kv(&[("name", "x")])));
+    let (ds, events) = capture(|| read_default_surfaces(&kv(&[("name", "x")])));
     assert_eq!(ds, DefaultSurfaces::builtin());
     assert_eq!(ds.surface(0), 0);
     assert_eq!(ds.surface(1), 10);
@@ -81,7 +81,7 @@ fn unreadable_values_fall_back_to_builtin_with_one_warning_each() {
             (1, "char1.seriko.defaultsurface"),
             (2, "char2.seriko.defaultsurface"),
         ] {
-            let (ds, events) = capture_logs(|| read_default_surfaces(&kv(&[(key, raw)])));
+            let (ds, events) = capture(|| read_default_surfaces(&kv(&[(key, raw)])));
             assert_eq!(
                 ds.surface(scope),
                 builtin_default_surface(scope),
@@ -147,7 +147,7 @@ fn first_existing_picks_the_first_present_candidate() {
 fn shell_scope_value_beats_ghost_balloon_dontmove() {
     let ghost = kv(&[("balloon.dontmove", "true")]);
     let shell = kv(&[("sakura.balloon.dontmove", "0")]);
-    let (locked, events) = capture_logs(|| read_balloon_dontmove(&ghost, &shell, &[0, 1]));
+    let (locked, events) = capture(|| read_balloon_dontmove(&ghost, &shell, &[0, 1]));
     assert_eq!(
         locked,
         BTreeSet::from([1]),
@@ -194,7 +194,7 @@ fn ghost_only_locks_every_scope() {
 #[test]
 fn nothing_written_locks_nothing() {
     let (locked, events) =
-        capture_logs(|| read_balloon_dontmove(&kv(&[("name", "x")]), &kv(&[]), &[0, 1]));
+        capture(|| read_balloon_dontmove(&kv(&[("name", "x")]), &kv(&[]), &[0, 1]));
     assert!(locked.is_empty());
     assert!(events.is_empty(), "{events:?}");
 }
@@ -204,7 +204,7 @@ fn nothing_written_locks_nothing() {
 fn unreadable_shell_value_falls_through_to_ghost() {
     let ghost = kv(&[("balloon.dontmove", "true")]);
     let shell = kv(&[("char0.balloon.dontmove", "yes")]);
-    let (locked, events) = capture_logs(|| read_balloon_dontmove(&ghost, &shell, &[0]));
+    let (locked, events) = capture(|| read_balloon_dontmove(&ghost, &shell, &[0]));
     assert_eq!(locked, BTreeSet::from([0]));
     assert_eq!(events.len(), 1, "{events:?}");
     let ev = expect_one(&events, "descript_value_unreadable");
@@ -219,7 +219,7 @@ fn unreadable_shell_value_falls_through_to_ghost() {
 fn unreadable_ghost_value_locks_nothing() {
     let ghost = kv(&[("balloon.dontmove", "2")]);
     let shell = kv(&[("kero.balloon.dontmove", "")]);
-    let (locked, events) = capture_logs(|| read_balloon_dontmove(&ghost, &shell, &[1]));
+    let (locked, events) = capture(|| read_balloon_dontmove(&ghost, &shell, &[1]));
     assert!(locked.is_empty());
     assert_eq!(events.len(), 2, "{events:?}");
     let keys: Vec<&str> = events.iter().map(|e| e.expect_field("key")).collect();
@@ -232,7 +232,7 @@ fn unreadable_ghost_value_locks_nothing() {
 #[test]
 fn ghost_syncscale_true_links_every_scope() {
     let ghost = kv(&[("balloon.syncscale", "true")]);
-    let (sync, events) = capture_logs(|| read_balloon_syncscale(&ghost, &kv(&[])));
+    let (sync, events) = capture(|| read_balloon_syncscale(&ghost, &kv(&[])));
     for scope in [0, 1, 2, 7] {
         assert!(sync.is_synced(scope), "scope={scope}");
     }
@@ -255,7 +255,7 @@ fn shell_syncscale_links_only_its_scope() {
         ("char2.balloon.syncscale", 2),
     ] {
         let shell = kv(&[(key, "true")]);
-        let (sync, events) = capture_logs(|| read_balloon_syncscale(&kv(&[]), &shell));
+        let (sync, events) = capture(|| read_balloon_syncscale(&kv(&[]), &shell));
         for other in 0..4u32 {
             assert_eq!(
                 sync.is_synced(other),
@@ -289,7 +289,7 @@ fn shell_syncscale_canonical_prefix_beats_alias() {
 #[test]
 fn shell_syncscale_ignores_leading_zero_scope() {
     let shell = kv(&[("char02.balloon.syncscale", "true")]);
-    let (sync, events) = capture_logs(|| read_balloon_syncscale(&kv(&[]), &shell));
+    let (sync, events) = capture(|| read_balloon_syncscale(&kv(&[]), &shell));
     assert_eq!(sync, BalloonSyncScale::default());
     assert!(events.is_empty(), "{events:?}");
 }
@@ -323,7 +323,7 @@ fn syncscale_values_other_than_true_mean_unspecified() {
         ("True", false),
         ("1", false),
     ] {
-        let (sync, events) = capture_logs(|| {
+        let (sync, events) = capture(|| {
             read_balloon_syncscale(
                 &kv(&[("balloon.syncscale", raw)]),
                 &kv(&[("sakura.balloon.syncscale", raw)]),
@@ -344,7 +344,7 @@ fn syncscale_values_other_than_true_mean_unspecified() {
 #[test]
 fn unwritten_syncscale_is_unspecified_silently() {
     let (sync, events) =
-        capture_logs(|| read_balloon_syncscale(&kv(&[("name", "x")]), &kv(&[("name", "y")])));
+        capture(|| read_balloon_syncscale(&kv(&[("name", "x")]), &kv(&[("name", "y")])));
     assert_eq!(sync, BalloonSyncScale::default());
     assert!(!sync.is_synced(0));
     assert!(events.is_empty(), "{events:?}");

@@ -6,8 +6,8 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::PlacementError;
-use crate::shared_test_support::{balloon_root, emo2_root};
-use crate::test_support::{ExpectField, capture_logs, expect_one};
+use crate::sample_test_support::{balloon_root, emo2_root};
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 /// このテスト専用の一時ディレクトリを返す。共通窓口 `temp-path-kit` 経由で組むので、
 /// 名前にプロセス識別子と連番が入り**プロセス間でも一意**になる。
@@ -335,7 +335,7 @@ fn load_balloon_author_dpi_emo2_fixture_is_default_96() {
 /// 無言で 96 を返す実装（縮退が観測できない）の双方をここで落とす。
 #[test]
 fn parse_author_dpi_absent_logs_debug_with_source() {
-    let (dpi, events) = capture_logs(|| parse_author_dpi(None, SHELL_DPI_KEY));
+    let (dpi, events) = capture(|| parse_author_dpi(None, SHELL_DPI_KEY));
     assert_eq!(dpi, DEFAULT_AUTHOR_DPI);
 
     let ev = expect_one(&events, "宣言なし");
@@ -354,7 +354,7 @@ fn parse_author_dpi_absent_logs_debug_with_source() {
 fn parse_author_dpi_declared_is_silent() {
     for raw in ["96", "120", "144", "168", "192", "110", "65535"] {
         let expected: u16 = raw.parse().expect("テスト入力は u16");
-        let (dpi, events) = capture_logs(|| parse_author_dpi(Some(raw), SHELL_DPI_KEY));
+        let (dpi, events) = capture(|| parse_author_dpi(Some(raw), SHELL_DPI_KEY));
         assert_eq!(dpi, expected, "raw={raw}");
         assert!(events.is_empty(), "正常宣言は無言（raw={raw}）: {events:?}");
     }
@@ -366,7 +366,7 @@ fn parse_author_dpi_declared_is_silent() {
 #[test]
 fn parse_author_dpi_invalid_logs_warn_with_source_and_raw() {
     for raw in ["abc", "", " 120 ", "-96", "65536", "96.0", "0x60"] {
-        let (dpi, events) = capture_logs(|| parse_author_dpi(Some(raw), BALLOON_DPI_KEY));
+        let (dpi, events) = capture(|| parse_author_dpi(Some(raw), BALLOON_DPI_KEY));
         assert_eq!(dpi, DEFAULT_AUTHOR_DPI, "raw={raw:?}");
 
         let ev = expect_one(&events, "数値として解釈できない");
@@ -387,7 +387,7 @@ fn parse_author_dpi_invalid_logs_warn_with_source_and_raw() {
 #[test]
 fn parse_author_dpi_zero_logs_warn_distinct_from_invalid() {
     for raw in ["0", "00"] {
-        let (dpi, events) = capture_logs(|| parse_author_dpi(Some(raw), SHELL_DPI_KEY));
+        let (dpi, events) = capture(|| parse_author_dpi(Some(raw), SHELL_DPI_KEY));
         assert_eq!(dpi, DEFAULT_AUTHOR_DPI, "raw={raw}");
 
         let ev = expect_one(&events, "表示スケールの分母に使えない");
@@ -439,7 +439,7 @@ fn parse_author_dpi_u16_boundary_is_exact() {
 #[test]
 fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
     let (shell_dpi, shell_events) =
-        capture_logs(|| shell_source_with(&[("seriko.dpi", "abc")]).shell_author_dpi());
+        capture(|| shell_source_with(&[("seriko.dpi", "abc")]).shell_author_dpi());
     assert_eq!(shell_dpi, DEFAULT_AUTHOR_DPI);
     assert_eq!(
         expect_one(&shell_events, "数値として解釈できない").expect_field("source"),
@@ -448,7 +448,7 @@ fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
     );
 
     let zero = balloon_root_with("balloon-dpi-zero-log", "charset,UTF-8\ndpi,0\n");
-    let (balloon_dpi, balloon_events) = capture_logs(|| load_balloon_author_dpi(zero.path()));
+    let (balloon_dpi, balloon_events) = capture(|| load_balloon_author_dpi(zero.path()));
     assert_eq!(balloon_dpi, DEFAULT_AUTHOR_DPI);
     assert_eq!(
         expect_one(&balloon_events, "表示スケールの分母に使えない").expect_field("source"),
@@ -468,7 +468,7 @@ fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
 fn load_balloon_author_dpi_missing_file_logs_read_warn_and_absent_debug() {
     let temp = unique_temp_dir("balloon-dpi-missing-file-log");
     let root = temp.child("no_such_balloon");
-    let (dpi, events) = capture_logs(|| load_balloon_author_dpi(&root));
+    let (dpi, events) = capture(|| load_balloon_author_dpi(&root));
     assert_eq!(dpi, DEFAULT_AUTHOR_DPI);
 
     let read_fail = expect_one(&events, "読み取りに失敗");
@@ -494,7 +494,7 @@ fn load_balloon_author_dpi_missing_file_logs_read_warn_and_absent_debug() {
 #[test]
 fn load_balloon_author_dpi_declared_file_is_silent() {
     let declared = balloon_root_with("balloon-dpi-declared-log", "charset,UTF-8\ndpi,192\n");
-    let (dpi, events) = capture_logs(|| load_balloon_author_dpi(declared.path()));
+    let (dpi, events) = capture(|| load_balloon_author_dpi(declared.path()));
     assert_eq!(dpi, 192);
     assert!(events.is_empty(), "正常経路は無言: {events:?}");
     drop(declared);

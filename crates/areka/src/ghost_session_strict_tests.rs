@@ -6,7 +6,7 @@ use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
 use crate::input_events::MouseWiring;
 use crate::menu::MenuWiring;
-use crate::placement::test_support::capture_logs;
+use log_capture_kit::capture;
 
 /// 結線が成立しない入力（ゴーストの根もバルーンの根も実在しない）。`wire_emo2_boot` は資産の
 /// 組立で失敗し World に触れない。fallback の腕へ倒れれば LogSink の起動が試みられ、その起点
@@ -51,7 +51,7 @@ fn decisions() -> (StartupDescriptValues, GhostDecision, BalloonDecision) {
 }
 
 /// fallback の腕（LogSink の起動）を試みた証の本文（起点不在の `warn!`・その他の失敗の `error!`・成立の `info!`）。
-fn fallback_attempts(events: &[crate::placement::test_support::LogEvent]) -> usize {
+fn fallback_attempts(events: &[log_capture_kit::CapturedEvent]) -> usize {
     events
         .iter()
         .filter(|e| {
@@ -71,7 +71,7 @@ fn strict_boot_returns_err_without_falling_back() {
     let (descript, ghost, balloon) = decisions();
 
     let mut strict_world = World::new();
-    let (strict, strict_events) = capture_logs(|| {
+    let (strict, strict_events) = capture(|| {
         boot_ghost_strict(
             &mut strict_world,
             unwirable_inputs(),
@@ -87,7 +87,7 @@ fn strict_boot_returns_err_without_falling_back() {
     );
 
     let mut lenient_world = World::new();
-    let (lenient, lenient_events) = capture_logs(|| {
+    let (lenient, lenient_events) = capture(|| {
         boot_ghost(
             &mut lenient_world,
             unwirable_inputs(),

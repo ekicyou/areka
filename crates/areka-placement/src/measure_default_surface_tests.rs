@@ -9,8 +9,9 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::descript_window_keys::{DefaultSurfaces, read_default_surfaces};
-use crate::shared_test_support::{balloon_root, emo2_root, with_com_initialized};
-use crate::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
+use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::test_support::with_com_initialized;
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 /// emo2 の面 0（surface0.png）の原寸。
 const SURFACE0: (i32, i32) = (434, 687);
@@ -26,10 +27,10 @@ fn ghost_kv(pairs: &[(&str, &str)]) -> DefaultSurfaces {
 }
 
 /// emo2 の本体側・相方側を `defaults` で測り、キャラの大きさの組と記録を返す。
-fn measure_emo2(defaults: &DefaultSurfaces) -> (Vec<(i32, i32)>, Vec<LogEvent>) {
+fn measure_emo2(defaults: &DefaultSurfaces) -> (Vec<(i32, i32)>, Vec<CapturedEvent>) {
     let mut result = None;
     with_com_initialized(|| {
-        let (out, events) = capture_logs(|| {
+        let (out, events) = capture(|| {
             measure_scope_sizes(
                 &emo2_root().join("shell/master"),
                 &balloon_root(),

@@ -6,7 +6,6 @@
 
 use bevy_ecs::prelude::*;
 
-use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{point, rect, window_pos_sized};
 use super::{
     ChainClampOutcome, ChainPlacement, ClampScene, MonitorSnapshot, WORK_AREA_CLAMP_TAG,
@@ -15,6 +14,7 @@ use super::{
 };
 use crate::chain_finalize::{ChainRect, ChainSlot, KeepReason, PairDecision};
 use crate::resolver::PointPx;
+use log_capture_kit::{CapturedEvent, ExpectField, capture, expect_one};
 
 fn slot(scope: usize, r: ChainRect, decision: PairDecision) -> ChainSlot {
     ChainSlot {
@@ -291,7 +291,7 @@ fn world_chain(
     (world, slots, targets)
 }
 
-fn tagged<'a>(events: &'a [LogEvent], tag: &str) -> Vec<&'a LogEvent> {
+fn tagged<'a>(events: &'a [CapturedEvent], tag: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains(tag))
@@ -310,9 +310,8 @@ fn world_entry_places_like_core_and_logs_clamp_and_keep() {
     ];
     let (world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
 
-    let (out, events) = capture_logs(|| {
-        place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack)
-    });
+    let (out, events) =
+        capture(|| place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack));
 
     assert_eq!(out, run(&rects, &decisions, &desk()));
     assert_eq!(out[0].outcome, ChainClampOutcome::Flipped);
@@ -349,7 +348,7 @@ fn world_entry_logs_kept_reason() {
     ];
     let (world, slots, targets) = world_chain(&rects, &decisions, Some(desk()));
 
-    let (out, events) = capture_logs(|| {
+    let (out, events) = capture(|| {
         place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::RememberedJoin)
     });
 
@@ -369,7 +368,7 @@ fn world_without_snapshot_warns_unresolved_with_contrast() {
     let (bare, slots, targets) = world_chain(&rects, &decisions, None);
     let (with_snap, slots2, targets2) = world_chain(&rects, &decisions, Some(desk()));
 
-    let ((out, contrast), events) = capture_logs(|| {
+    let ((out, contrast), events) = capture(|| {
         (
             place_chain_in_work_area(&bare, &slots, &targets, |_| ClampScene::DpiRealign),
             place_chain_in_work_area(&with_snap, &slots2, &targets2, |_| ClampScene::DpiRealign),
@@ -404,9 +403,8 @@ fn unreadable_height_is_unresolved_and_others_continue() {
         .unwrap()
         .size = None;
 
-    let (out, events) = capture_logs(|| {
-        place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack)
-    });
+    let (out, events) =
+        capture(|| place_chain_in_work_area(&world, &slots, &targets, |_| ClampScene::BootRepack));
 
     assert_eq!(out[0].to, point(-1108, 900));
     assert_eq!(out[0].outcome, ChainClampOutcome::Unresolved);

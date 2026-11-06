@@ -30,7 +30,7 @@ use super::{
 };
 use crate::app_exit::{ExitOrigin, FirstExit, fault_of};
 use crate::emo2_boot::frame::run_ghost_quit_phase;
-use crate::placement::shared_test_support::emily_shaped_scopes;
+use crate::placement::test_support::emily_shaped_scopes;
 
 /// 起動の台本。scope 0・1 の台詞の間に scope 2 の面と台詞を挟み、その後ろへ scope 0 の目印の面
 /// （2100）を置く。目印が届けば、再生は scope 2 の区間を越えて最後まで進んでいる。

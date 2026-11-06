@@ -7,8 +7,9 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninit
 
 use crate::PlacementError;
 use crate::descript_window_keys::DefaultSurfaces;
-use crate::shared_test_support::{balloon_root, emo2_root, write_self_alpha_one_descript};
-use crate::test_support::{ExpectField, capture_logs, expect_one};
+use crate::sample_test_support::{balloon_root, emo2_root};
+use crate::shared_test_support::write_self_alpha_one_descript;
+use log_capture_kit::{ExpectField, capture, expect_one};
 
 /// COM 初期化下でクロージャを実行する（`WicDecoderArm` は COM 必須・
 /// emo-atlas `wic_arm.rs` テストと同一パターン）。
@@ -777,7 +778,7 @@ fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
 #[test]
 fn scale_size_px_failure_emits_error_log_with_attribution() {
     // char 起因（scope=3・k=2/1）。
-    let (res, events) = capture_logs(|| {
+    let (res, events) = capture(|| {
         apply_scaling(
             vec![scope_input(3, (i32::MAX, 10), (10, 10))],
             &MeasureScaling {
@@ -800,7 +801,7 @@ fn scale_size_px_failure_emits_error_log_with_attribution() {
     assert_eq!(events.len(), 1, "1 失敗 1 ログ: {events:?}");
 
     // balloon 起因（scope=1・k=3/1）——kind と scope が balloon 軸へ切り替わる。
-    let (res, events) = capture_logs(|| {
+    let (res, events) = capture(|| {
         apply_scaling(
             vec![
                 scope_input(0, (10, 10), (10, 10)),
@@ -828,7 +829,7 @@ fn scale_size_px_failure_emits_error_log_with_attribution() {
 /// k 適用の成功経路は**無言**（`error!` を無条件発火させる変異の陰性対照）。
 #[test]
 fn apply_scaling_success_is_silent() {
-    let (res, events) = capture_logs(|| {
+    let (res, events) = capture(|| {
         apply_scaling(
             vec![
                 scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON0_W, BALLOON0_H)),

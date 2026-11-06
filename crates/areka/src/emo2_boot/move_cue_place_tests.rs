@@ -27,7 +27,7 @@ use crate::placement::persist::PersistWiring;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（下にタスクバー）。
 const PRIMARY: (i32, i32, i32, i32) = (0, 0, 1920, 1040);
@@ -117,7 +117,7 @@ fn place(world: &mut World, e: Entity, x: i32, y: i32) {
     wp.position = Some(wintf::ecs::Point { x, y });
 }
 
-fn events_named(events: &[LogEvent], name: &str) -> Vec<LogEvent> {
+fn events_named(events: &[CapturedEvent], name: &str) -> Vec<CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
@@ -215,7 +215,7 @@ fn every_base_resolves_to_its_frame() {
         let target = gw.char_window(1).unwrap();
         place(&mut world, target, bx, by);
         let (moved, events) =
-            capture_logs(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
         assert!(moved, "{name}: 動く（非スコープの基準でも動く）");
         assert_eq!(pos(&world, target), PointPx { x: ax, y: ay }, "{name}");
         assert_eq!(
@@ -249,7 +249,7 @@ fn substitutions_are_logged_one_by_one() {
     for &(script, want) in cases {
         let (mut world, _gw) = world_with(Anchor::Free);
         let (moved, events) =
-            capture_logs(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
         assert!(moved, "{script:?}");
         let subs = events_named(&events, "move_frame_substituted");
         assert_eq!(subs.len(), want.len(), "{script:?}: {events:?}");
@@ -405,7 +405,7 @@ fn move_keeps_balloon_offset_and_writes_nothing_else() {
 fn move_applied_records_base_and_ref_points() {
     let (mut world, _gw) = world_with(Anchor::Bottom);
     let (_, events) =
-        capture_logs(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
+        capture(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
     let applied = events_named(&events, "move_applied");
     assert_eq!(applied.len(), 1, "{events:?}");
     let ev = &applied[0];
@@ -472,7 +472,7 @@ fn missing_material_skips_with_warn() {
         strip(&mut world);
         let before = world.get::<WindowPos>(target).and_then(|w| w.position);
         let (moved, events) =
-            capture_logs(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
+            capture(|| apply_move_directive(&mut world, &args(script), ScaleRatio::ONE));
         assert!(!moved, "{reason}: 動かさない");
         let skips = events_named(&events, "move_skipped");
         assert_eq!(skips.len(), 1, "{reason}: {events:?}");
@@ -494,7 +494,7 @@ fn missing_anchored_writes_script_position_with_warn() {
     let target = gw.char_window(1).unwrap();
     world.entity_mut(target).remove::<Anchored>();
     let (moved, events) =
-        capture_logs(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
+        capture(|| apply_move_directive(&mut world, &args(EMO2_ADJUST), ScaleRatio::ONE));
     assert!(moved);
     let missing = events_named(&events, "move_anchor_missing");
     assert_eq!(missing.len(), 1, "{events:?}");
