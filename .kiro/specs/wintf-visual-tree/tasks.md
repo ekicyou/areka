@@ -54,7 +54,7 @@
   - _Requirements: 1.2a, 1.2b, 1.2c_
 
 - [ ] 4. 節の世界の行列と見た目の版を埋める
-- [ ] 4.1 根ごとに節の世界の行列と外接矩形を埋める
+- [x] 4.1 根ごとに節の世界の行列と外接矩形を埋める
   - 根からの DIP で、節の局所の変形（`VisualTransform` × `Arrangement.offset` の平行移動・無ければ恒等）を前順に掛け、軸に沿うか・中身の世界の外接矩形・部分木の和を埋める（値が変わるときだけ書く）
   - 明示のスタックで深さ 1,024 を越えたら `error!` を 1 行残して止める（輪でも落ちない）
   - 見えない節は自分も子孫も訪れない。子が描画面の持ち主なら訪れず、親が節なら実体名つきの `error!` を残して切る
@@ -162,3 +162,4 @@
 - 2.3: `Transform2D.rotation` の doc の「CCW」は y 上向きの言い方（画面では時計回り）。8.3 の棚卸で言い直すとよい
 - 3.1: bevy 0.19 の on_visual_add は同じバンドル（require 込み）の部品を見られる＝Risks の代わりの形は使っていない。フックの確かめのテストは `graphics/visual/visual_tests.rs`。3.2 まで `insert_graphics_parts_on_window_join` は後から窓へ付いた節にも 3 部品を入れる
 - 3.2: 規則の係は `graphics/visual/systems.rs` の `sync_surface_owner_parts`（PreRenderSurface の先頭）。持ち主が節に変わると、その下の持ち主の子は WUC の木から外れたまま＝7.1 の根の部品で受ける
+- 4.1: `fill_world_visuals` の口は設計の Contracts と違う（`children_of_root: &[Entity]`・変化の引数なし）。4.2 で変化の引数と版を足し、4.2 か 7.1 で design の Contracts を実際の口に合わせて直す。持ち主の境は `Has<VisualGraphics> || WorldVisual なし`

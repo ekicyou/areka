@@ -1,7 +1,15 @@
+use super::{Visual, VisualDrawContent, VisualTransform};
+use crate::ecs::common::MAX_ANCESTOR_DEPTH;
+use crate::ecs::graphics::components::VisualGraphics;
+use crate::ecs::graphics::systems::format_entity_name;
+use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
 use core::hash::*;
-#[derive(Component, Clone, Copy, Debug)]
+use tracing::error;
+use windows_numerics::Matrix3x2;
+
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct WorldVisual {
     /// local → world の累積アフィン。
     pub world_mat: Matrix3x2,
@@ -61,4 +69,108 @@ impl Default for WorldVisual {
     fn default() -> Self {
         Self::PENDING
     }
+}
+
+/// `fill_world_visuals` が 1 つの `Visual` から読み書きする部品。
+/// `WorldVisual` を持たないもの・`VisualGraphics` を持つものは描画面の持ち主（節でない）。
+pub(crate) type FillData = (
+    &'static Visual,
+    Option<&'static Arrangement>,
+    Option<&'static VisualTransform>,
+    Option<&'static VisualDrawContent>,
+    Option<&'static mut WorldVisual>,
+    Option<&'static Children>,
+    Has<VisualGraphics>,
+    Option<&'static Name>,
+);
+
+/// 根 `root`（描画面の持ち主）の下の節の `WorldVisual` を根からの DIP で埋める。
+///
+/// - 局所の変形は `VisualTransform × 平行移動(Arrangement.offset)`（無ければ恒等）・
+///   `world = local * parent`（行ベクトル）。根は恒等。
+/// - 前順（`Children` の並び順）に訪れ、`visited` に訪れた節と深さ（根の子が 1）を入れる。
+///   平らにする係はこの順をそのまま使う。
+/// - 見えない節は自分も子孫も訪れない（`WorldVisual` は前の値のまま）。
+/// - 子が描画面の持ち主なら訪れない。親が節なら `error!` を残して切る（根の直下は記録しない）。
+/// - 深さが `MAX_ANCESTOR_DEPTH` を越えた節は訪れず `error!` を 1 行残す（親の輪もここで止まる）。
+/// - 値が変わった節だけ書く。戻り値は書いた節が在ったか。
+#[allow(dead_code, reason = "`update_draw_trees`（7.1）が呼ぶまで使い手が無い")]
+pub(crate) fn fill_world_visuals(
+    root: Entity,
+    root_name: Option<&Name>,
+    nodes: &mut Query<FillData>,
+    children_of_root: &[Entity],
+    visited: &mut Vec<(Entity, usize)>,
+) -> bool {
+    visited.clear();
+    let mut worlds: Vec<WorldVisual> = Vec::new();
+    let mut parents: Vec<Option<usize>> = Vec::new();
+    // (実体, 深さ, 親の visited の添字)。逆に積んで pop が並び順になるようにする。
+    let mut stack: Vec<(Entity, usize, Option<usize>)> = children_of_root
+        .iter()
+        .rev()
+        .map(|&c| (c, 1, None))
+        .collect();
+    let mut over_limit = false;
+    while let Some((e, depth, parent)) = stack.pop() {
+        let Ok((visual, arrangement, transform, content, wv, kids, has_surface, name)) =
+            nodes.get(e)
+        else {
+            continue; // 消えた実体・Visual でない実体
+        };
+        if has_surface || wv.is_none() {
+            if parent.is_some() {
+                error!(
+                    entity = %format_entity_name(e, name),
+                    "[fill_world_visuals] 節の下の描画面の持ち主は支えないので、その部分木を切る"
+                );
+            }
+            continue;
+        }
+        if !visual.is_visible {
+            continue;
+        }
+        if depth > MAX_ANCESTOR_DEPTH {
+            if !over_limit {
+                over_limit = true;
+                error!(
+                    root = %format_entity_name(root, root_name),
+                    limit = MAX_ANCESTOR_DEPTH,
+                    "[fill_world_visuals] 木の深さが上限を越えたので、それより深い節を訪れない"
+                );
+            }
+            continue;
+        }
+        let parent_mat = parent.map_or(Matrix3x2::identity(), |p| worlds[p].world_mat);
+        let local = transform.map_or(Matrix3x2::identity(), |t| t.to_affine())
+            * arrangement.map_or(Matrix3x2::identity(), |a| a.offset.into());
+        let mut w = WorldVisual::from_world_mat(local * parent_mat);
+        w.content_world_aabb = content.map_or(Aabb::EMPTY, |c| c.local_aabb.transform(w.world_mat));
+        w.subtree_world_aabb = w.content_world_aabb;
+        let idx = visited.len();
+        visited.push((e, depth));
+        worlds.push(w);
+        parents.push(parent);
+        if let Some(kids) = kids {
+            stack.extend(kids.iter().rev().map(|k| (k, depth + 1, Some(idx))));
+        }
+    }
+    // 前順では子が親より後ろに在るので、逆にたどれば子の和が先に揃う。
+    for i in (0..worlds.len()).rev() {
+        if let Some(p) = parents[i] {
+            worlds[p].subtree_world_aabb = worlds[p]
+                .subtree_world_aabb
+                .union(worlds[i].subtree_world_aabb);
+        }
+    }
+    let mut changed = false;
+    for (&(e, _), w) in visited.iter().zip(&worlds) {
+        if let Ok((.., Some(mut wv), _, _, _)) = nodes.get_mut(e) {
+            if *wv != *w {
+                *wv = *w;
+                changed = true;
+            }
+        }
+    }
+    changed
 }
