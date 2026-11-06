@@ -28,7 +28,7 @@
   - clippy の指摘の機械的な直しのうち、件 1 の外のもの（`clippy-199-lints` の持ち物）。ただし audit が同じ所を指したら、その audit の指摘としては直してよい。
   - 開発者の裁定（ロードマップの「生きている決まり」・記憶の決めごと・完了した spec の要件）を覆す直し。直さずに議題にする。
 - **Adjacent expectations**:
-  - kanade を呼ぶのは `crates/areka`（139 ファイル）と `crates/areka-ghost`（30 ファイル）である。この spec は、この 2 つが使っている kanade の公開の口の形を変えない（足すのはよい）。`crates/areka/` は同じウェーブの `placement-crate-split` が書き換えるので、この spec は触らない。
+  - kanade を呼ぶのは `crates/areka`（139 ファイル）と `crates/areka-ghost`（30 ファイル）である。この spec は、この 2 つが使っている kanade の公開の口の形を変えない（足すのはよい・要件 9.9 の 2 か所だけは呼び手ごと変える）。`crates/areka/` は同じウェーブの `placement-crate-split` が書き換えるので、この spec は触らない（要件 9.9 の直しに要る 3 つのファイルだけは、同 spec と申し合わせて触る＝要件 6.1）。
   - kanade が使う `areka-talk`（`SecurityLevel`・`StartTalk`・`ScriptOrigin`）と `areka-actor`（`reply_channel`・`ReplySender`・`spawn_ui`・`ActorHandle`）の形は、同じウェーブの `audit-sylphya-actor` が変えない。この spec も、この 2 つのクレートの今ある公開の口の形を変えない（足すのはよい）。
   - kanade は dola・wintf に依らない。
 
@@ -104,9 +104,9 @@
 
 #### Acceptance Criteria
 
-1. The 本 spec の直し shall `crates/areka/` の下のファイルに手を入れない（同じウェーブの `placement-crate-split` が書き換えるため）
+1. The 本 spec の直し shall `crates/areka/` の下のファイルに手を入れない（同じウェーブの `placement-crate-split` が書き換えるため）。ただし要件 9.9 の直しに要る `crates/areka/src/input_events/`（`user_break.rs` とその呼び手のテスト）・`crates/areka/src/log_history.rs`・`crates/areka/src/mcp/sakurascript_log_tests.rs` は除く（2026-11-06 `placement-crate-split` と申し合わせ済み＝同 spec はこれらのファイルを動かさず、名前も変えず、書き換えるのは `crate::placement::` を名指す行だけ）。足す行に `crate::placement::` を書くとき、または直しが `placement` を名指すファイルへ及ぶときは、触る前に `placement-crate-split` のセッションへ知らせる
 2. The 本 spec の直し shall `placement-crate-split` が触る `crates/areka/` の外のファイル（`log-capture-kit` のテスト 2 つ・wintf の `ecs/window_proc/` の 2 つ・`tools/perf/fixtures/`・`tools/perf/fixtures-loop/`）に手を入れない
-3. The 本 spec の直し shall `crates/areka` と `crates/areka-ghost` が使っている kanade の公開の口（型・関数・定数）の名前・引数・戻り値・公開の有無を変えない（新しい口を足すのはよい）
+3. The 本 spec の直し shall `crates/areka` と `crates/areka-ghost` が使っている kanade の公開の口（型・関数・定数）の名前・引数・戻り値・公開の有無を変えない。ただし要件 9.9 の 2 か所（`KanadeMsg::UserBreak` に欄を足す・`resource_username` を消す）は除き、呼び手を全部直す（新しい口を足すのはよい）
 4. The 本 spec の直し shall `areka-talk` と `areka-actor` の今ある公開の口の形を変えない（新しい口を足すのはよい）
 5. If 確定した指摘の直しが、要件 6.1〜6.4 のどれかを破らないと成り立たないとき, then the 本 spec shall その直しを行わず、議題にして開発者の裁定を仰ぐ
 6. While 範囲の外のファイルを受け持つ spec のセッションが走っているあいだ, when 直しがそのファイルへ及ぶとき, the 本 spec shall そのセッションと申し合わせてから触る
@@ -134,15 +134,15 @@
 4. The 検証 shall かけ直した audit の結果（新しい指摘が 0 件であること、または要件 8.3 の裁定）を記録に残す
 5. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`） shall 緑で終わる
 
-### Requirement 9: 要件の討議で確定した直す対象と残す指摘（2026-11-06・議題 7 のほかの 8 議題を推奨案で確定）
+### Requirement 9: 要件の討議で確定した直す対象と残す指摘（2026-11-06・8 議題を推奨案で確定・議題 7 は討議のうえ開発者「承認」）
 
 **Objective:** As a 開発者, I want 討議で決めた直す対象と、残すと裁定した指摘と、議題ごとの直し方の決めを 1 か所で引きたい, so that 設計とタスクが決めから外れない
 
-指摘の番号は `research.md` §3 の通し番号（#1〜#96）。議題 7（#6・#62・#92）は討議を続けている（決まったら 9.9 に書く）。
+指摘の番号は `research.md` §3 の通し番号（#1〜#96）。議題 7（#6・#62・#92）は `placement-crate-split` と申し合わせたうえで、推奨案（この spec で直す）を開発者が承認した。
 
 #### Acceptance Criteria
 
-1. The 本 spec shall `research.md` §3 の 96 件のうち、9.9 で扱いを決める #6・#62・#92 を除く 93 件を直す対象とし、3 つの組（Must fix 2・Should fix 51・Nice to have 43 のうち該当分）とも直す。#63 は 9.6 のとおり一部を残す
+1. The 本 spec shall `research.md` §3 の 96 件のうち、96 件を全部直す対象とし、3 つの組（Must fix 2・Should fix 51・Nice to have 43 のうち該当分）とも直す。#63 は 9.6 のとおり一部を残す
 2. When #1 を直すとき, the kanade shall 外から来た台本の CR・LF・NUL を、SEND の入口（`schedule/sstp.rs` の `on_send`）で取り除いてから受け付ける。返事の語 `SstpSendOutcome` には値を足さない。SSP は生の改行を含む台本を断らず、改行が抜けた形で再生した（`research.md` §10）。送る点で全ての ID と Reference を検査する二段目の守りと、それに当たったときの扱いは設計で決める
 3. When #3 を直すとき, the kanade shall 終了の保留中・切替の保留中に来た `RaiseEvent` と property の返しを SHIORI へ送らず、`warn!` を記録して捨てる（マウス・SSTP・台詞の切れ目と同じ決まり）。SSP では測っていない（測るには開発者の SSP のゴーストを閉じる操作が要るため）
 4. When #5 を直すとき, the kanade shall 「台本があるか」の判定を 1 つの関数にまとめて 3 か所から使い、空白だけの台本も台本として扱う（SSP は空白だけの台本を再生して話し中のトークを置き換えた＝`research.md` §10）
@@ -150,5 +150,8 @@
 6. The 本 spec shall #63 のうち、5 状態（`Minimizing`・`Induction`・`Passive`・`TimeCritical`・`Opening`）の語彙を、わざと置いた先送りの印（⑵・`status-execution-states` 要件 6.1・6.2 の「語彙に留める」）として残す（要件 2.5 の記録）。空の `OpeningKinds` から `opening()` が出るバグは直す
 7. The 本 spec の直し shall 完了した spec の細かい決め（テストを対で置く・trace で観測する・証跡の形など）に触れる #4・#8・#14・#25・#28・#50・#51・#52・#53・#67・#68・#74・#79・#87・#88 を直す。決めの趣旨は変えない（例 #79 の 30,000 の値は残し、テストをまとめるだけ）
 8. When #18（要件 7）を直すとき, the 本 spec の直し shall 本番のコードの赤に隠れていた結合テストの 11 件（`manual_contains` 7・`doc_lazy_continuation` 3・`drain_collect` 1）も直し、要件 7.1 の「警告 0 件」を結合テストまで含めて満たす
-9. （議題 7 の討議の結果をここに書く）
+9. The 本 spec の直し shall 要件 6.1・6.3 の例外として、次の 3 件をこの spec で直す（`placement-crate-split` の着地を待たない。同 spec の着地は早くても 1〜2 週先で、触る行は重ならない）
+   - #6: 利用者の中断の知らせ `KanadeMsg::UserBreak` に、押されたバルーンのトークの番号を載せる欄を足し、番号が今のトークと合うときだけ止める（合わなければ表 C）。表示の側から番号を運ぶ道がどこまで及ぶかは設計で測る（`send_break` は今 `scope` しか持たない）。呼び手＝`crates/areka/src/input_events/user_break.rs` と、`UserBreak` を組む・比べるテスト（`user_break_tests.rs`・`shell_box_handler_tests.rs` ほか）
+   - #62: 素通しの `resource_username` を消し、呼び手（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs` と注の `sylphya_integration_test.rs`）を `resource_get("username", ..)` に直す
+   - #92: `crates/areka/src/log_history.rs` の `TARGET_SCRIPT` を `areka_kanade::script_log::TARGET` に替え、2 つの文字列の一致を縛るテスト（`crates/areka/src/mcp/sakurascript_log_tests.rs`）を消す
 10. The 本 spec shall 1 本の spec のまま進め、タスクは指摘の組ごとでなくファイルのまとまりごとに束ねる。If タスクの段で 20 を大きく越えるとき, then the 本 spec shall 残る Nice to have を同じ範囲の 2 本目の spec へ回す
