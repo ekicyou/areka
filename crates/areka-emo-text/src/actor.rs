@@ -198,12 +198,12 @@ struct ActorRender {
     /// 作れなかった印の面の（物理寸, WUC の資源の変わった時刻）（上限越え・その寸での窓の子の作成の
     /// 失敗＝入力で答えが決まる失敗だけ）。同じなら作り直さない（`actor_present.rs` の `present_markers`）。
     markers_failed: Option<((u32, u32), Option<bevy_ecs::change_detection::Tick>)>,
-    /// 前のフレームの配置の覚え（鍵と、行・区切り・帯・キャンバス・指摘 8・`actor_present.rs` の
+    /// 前のフレームの配置の覚え（鍵と、行・区切り・帯・キャンバス・audit-emo-text-state-actor 指摘 8・`actor_present.rs` の
     /// `FrameMemo`）。拡大率と装置の作り直しでは `ActorRender` ごと捨てるので、覚えも一緒に消える。
     frame_memo: Option<present::FrameMemo>,
-    /// 届いた字の区切りの覚え（`actor_present.rs` の `BreakMemo`・指摘 8）。
+    /// 届いた字の区切りの覚え（`actor_present.rs` の `BreakMemo`・audit-emo-text-state-actor 指摘 8）。
     break_memo: present::BreakMemo,
-    /// 配置から装飾までを作り直した回数（テストだけの数・指摘 8）。
+    /// 配置から装飾までを作り直した回数（テストだけの数・audit-emo-text-state-actor 指摘 8）。
     #[cfg(test)]
     frame_rebuilds: u32,
 }
@@ -302,17 +302,17 @@ pub struct TextLayerRuntime {
     /// 箱の場所 → 登録済みの置き場所（`routing`・`layout_input` と対・`actor_box.rs` の `sync_boxes`）。
     box_sites: HashMap<PlaceKey, BoxPlacement>,
     /// 箱の場所 → 登録したときのシェルの画像の大きさ（native 原寸・`box_sites` と対）。箱の面と印の面を
-    /// 「箱とシェルの画像の重なり」で切る（`actor_box.rs` の `image_limit`・指摘 3）。
+    /// 「箱とシェルの画像の重なり」で切る（`actor_box.rs` の `image_limit`・audit-emo-text-state-actor 指摘 3）。
     box_shell_size: HashMap<PlaceKey, (u32, u32)>,
     /// はみ出しを警告済みの（サーフェス番号, 箱の名前）。箱の束を差し替えると空に戻す。
     box_overflow_warned: BTreeSet<(u32, BoxName)>,
     /// 定義の 2 つの警告（折り返しの基準・無視した書き出し位置）を出した箱の名前。箱の登録には
     /// 前の配置の入力が毎回無いので、名前ごとに 1 度だけにする。箱の束を差し替えると空に戻す。
     box_definition_warned: BTreeSet<BoxName>,
-    /// 箱の名前 → 白を混色の相手として解いた値（印は押す前・指摘 7）。箱の束の受け取りが名前ごとに
+    /// 箱の名前 → 白を混色の相手として解いた値（印は押す前・audit-emo-text-state-actor 指摘 7）。箱の束の受け取りが名前ごとに
     /// 1 度だけ解いて入れ、登録は複製して印を押すだけ。解決は拡大率に依らないので、表を替えるまで古びない。
     box_resolved: BTreeMap<BoxName, ResolvedBalloonText>,
-    /// いま描画範囲（validrect）が潰れている場所（幅か高さが 0 以下・件 2）。登録口
+    /// いま描画範囲（validrect）が潰れている場所（幅か高さが 0 以下・areka-P0-balloon-text-bugs 件 2）。登録口
     /// （`actor_attach.rs` の `note_region_collapse`）が状態の変わり目に 1 回だけ記録するための
     /// 記憶で、登録を外しても・箱の束を差し替えても消さない＝隠す・出す・付け直しで記録が
     /// 増えない（要件 2.3〜2.5・2.7）。
@@ -326,11 +326,11 @@ pub struct TextLayerRuntime {
     /// 合図の適用が消去と届いた数を数える）。正本ではない（届いた字の正本は `state`）。
     lookahead: TalkLookahead,
     /// 全文の先読みを入れ直した回数（`install`・`reinstall`・`forget_boxes` を呼ぶ 3 か所で 1 つ進める・
-    /// 配置の覚えの鍵・指摘 8）。`lookahead.rs` を変えずに入れ直しを見分けるための数。
+    /// 配置の覚えの鍵・audit-emo-text-state-actor 指摘 8）。`lookahead.rs` を変えずに入れ直しを見分けるための数。
     lookahead_rev: u64,
     /// このトークが選択待ちに入ったか（文字の線の `ChoiceWaitBegan` で真・`TalkEnded` と次のトークの
     /// 先渡しで偽）。真のときだけ押下の口 [`settle_choices_at`](Self::settle_choices_at) が場所を済ませる。
-    /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（件 1）。
+    /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（areka-P0-balloon-text-bugs 件 1）。
     choice_wait_open: bool,
     /// 場所 → 手動の送りの状態（balloon-scroll-arrows・要件 8.8）。書くのは `actor_scroll.rs`・
     /// 提示（`actor_present.rs`）・本ファイルの消去の腕・箱の登録を外す口だけ。
@@ -408,11 +408,11 @@ impl TextLayerRuntime {
     /// `Clear`／`ClearAll` は描画実行部の全域リセット要求点でもある（planner 初期化＋確定行
     /// TextLayout キャッシュの全破棄——design「Clear で全破棄」・破棄はこの口だけ・次フレームは
     /// `FramePlan::FullClear`＝全域透明・R4.3）。純粋状態（[`TextLayerState::apply_cue`]）を
-    /// 空にするだけでは既描画サーフェスに古いピクセルが残留するため（#6 欠陥）、提示層の
+    /// 空にするだけでは既描画サーフェスに古いピクセルが残留するため（前の会話の画素が残る欠陥）、提示層の
     /// 描画実行部にも同じ消去を伝える必要がある:
     ///
     /// - `Clear`＝**対象スコープのみ**（`cue.actor` の描画実行部だけをクリア・R6.4/R7.4）。
-    /// - `ClearAll`＝**全スコープ**（装着済み全 actor の描画実行部をクリア・#6 の冒頭全消し・
+    /// - `ClearAll`＝**全スコープ**（装着済み全 actor の描画実行部をクリア・前の会話を残さない冒頭全消し・
     ///   R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
     ///   行う（`state.rs::apply_cue` の全 `actor_states` 消去と対）。
     ///
@@ -447,7 +447,7 @@ impl TextLayerRuntime {
                 for render in self.surfaces.values_mut() {
                     render.executor.request_clear();
                 }
-                // 全スコープの原子的無効化（R5.1/5.2/5.4・#6 冒頭全消し）: 保持する**全** actor の
+                // 全スコープの原子的無効化（R5.1/5.2/5.4・前の会話を残さない冒頭全消し）: 保持する**全** actor の
                 // hover／ヒット行スナップショットを一括初期化する（上流は残存スコープを列挙できない——
                 // `state.rs::apply_cue(ClearAll)` の全 actor_states 消去と対）。cue が名指ししない
                 // actor の stale hover／snapshot も同時に消え、片方だけ古い状態が残らない（5.2）。
@@ -537,7 +537,7 @@ impl TextLayerRuntime {
 
     /// hover 状態注入（契約正本・R4.1）。`None`＝ハイライト無し。UI スレッド専用（runtime は `!Send`）。
     ///
-    /// 注入値は actor ごとに保持し、次の提示フレームの装飾（task 8.2）が読む。`ordinal` が現存
+    /// 注入値は actor ごとに保持し、次の提示フレームの装飾が読む。`ordinal` が現存
     /// 選択肢スパンに無い場合も **panic せず**そのまま保持し、描画時に「ハイライト無し」として
     /// 縮退する（stale ordinal——`decorate_canvas` が hover 印を付けない・design.md RuntimeContract）。
     /// 縮退検出時は `debug!` を一件出す（log-first・ループを殺さない）。
@@ -568,7 +568,7 @@ impl TextLayerRuntime {
     /// 行ヒットジオメトリ照会（契約正本・R3.2）。
     ///
     /// **鮮度契約**: 最後に提示（present）したフレームの導出値＝表示と同一 layout からの単一導出
-    /// （R3.3/5.2・population は present_actor＝task 8.2）。未装着・選択肢なし・スナップショット未
+    /// （R3.3/5.2・population は present_actor）。未装着・選択肢なし・スナップショット未
     /// population は空 slice。
     pub fn choice_hit_rows(&self, actor: &ActorKey) -> &[ChoiceHitRow] {
         self.choice_hit_rows_at(&PlaceKey::balloon(actor))
@@ -580,7 +580,7 @@ impl TextLayerRuntime {
         self.choice_snapshot.get(place).map_or(&[], Vec::as_slice)
     }
 
-    /// 「済んでいない選択肢があるか」照会（R1.3・照会のみ＝バリア解決はしない・件 1 で意味を改めた）。
+    /// 「済んでいない選択肢があるか」照会（R1.3・照会のみ＝バリア解決はしない・areka-P0-balloon-text-bugs 件 1 で意味を改めた）。
     ///
     /// **表示層自身**の範囲の記録（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）に
     /// 種類が選択肢で済みの境目より後のもの（[`ActorTextState::has_live_choice`](crate::state::ActorTextState::has_live_choice)）があることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
@@ -669,7 +669,7 @@ impl TextLayerRuntime {
         self.lookahead_rev += 1;
     }
 
-    /// その場所の描き手が配置から装飾までを作り直した回数（テストだけの読み口・指摘 8）。
+    /// その場所の描き手が配置から装飾までを作り直した回数（テストだけの読み口・audit-emo-text-state-actor 指摘 8）。
     /// 描き手が無ければ `None`。
     #[cfg(test)]
     pub(super) fn frame_rebuilds(&self, place: &PlaceKey) -> Option<u32> {
@@ -707,7 +707,7 @@ impl TextLayerRuntime {
 /// [`handle_text_msg_with`]（終了規律の正準写像）へ委譲して cue を純粋状態へ適用する。
 /// 先渡し（`TextMsg::Upcoming`）は実行時の `preview_talk` へ渡し、空回しで区間の全文を求める。
 /// 選択待ちの始まり（`TextMsg::ChoiceWaitBegan`）は押下の口を開き、トークの終わり
-/// （`TextMsg::TalkEnded`）は全部の場所の選択肢を済みにして口を閉じる（先渡しも口を閉じる・件 1）。
+/// （`TextMsg::TalkEnded`）は全部の場所の選択肢を済みにして口を閉じる（先渡しも口を閉じる・areka-P0-balloon-text-bugs 件 1）。
 /// 終了経路はちょうど 2 つ——`TextMsg::Close` 受領＝`Ok(Break)`・全 `UiSender`
 /// （＝全 [`EmoTextSink`] クローン）drop＝drain 正常終了（R1.4・error ログなし）。
 /// 個別 cue の適用失敗（runtime 借用競合など）は `Err` 戻し→基盤が `error!`＋継続する
@@ -742,7 +742,7 @@ pub fn spawn_emo_text(
             },
             |upcoming| match runtime.try_borrow_mut() {
                 Ok(mut rt) => {
-                    // 次のトークの先渡し＝前のトークの選択待ちは終わっている（件 1）。
+                    // 次のトークの先渡し＝前のトークの選択待ちは終わっている（areka-P0-balloon-text-bugs 件 1）。
                     rt.close_choice_wait();
                     rt.preview_talk(&upcoming);
                     Ok(())
@@ -759,7 +759,7 @@ pub fn spawn_emo_text(
                     if mark == TextMsg::ChoiceWaitBegan {
                         rt.note_choice_wait_began();
                     } else {
-                        // トークの終わり: 全部の場所の選択肢を済みにし、押下の口を閉じる（件 1）。
+                        // トークの終わり: 全部の場所の選択肢を済みにし、押下の口を閉じる（areka-P0-balloon-text-bugs 件 1）。
                         rt.settle_all_choices();
                         rt.close_choice_wait();
                     }

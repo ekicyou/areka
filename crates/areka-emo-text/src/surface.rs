@@ -524,7 +524,7 @@ impl TextSurface {
         &self.sources[1 - self.front]
     }
 
-    /// front 面への読み出し口（比較専用オラクル `DrawExecutor`（draw.rs）が読む・task 5）。
+    /// front 面への読み出し口（比較専用オラクル `DrawExecutor`（draw.rs）が読む）。
     /// 旧 `source_tex`（レガシー本番描画の描き先）と実体は同じ front だが、本番経路が
     /// `ViewboxExecutor`（back へ描き `flip` で交換）へ移行したため、front はオラクルが読む
     /// 「テスト限定の読み出し口」へ一本化した（`#[cfg(test)]`・除去は本ユニットの範囲外）。
@@ -612,7 +612,7 @@ mod tests {
 
     use wintf::ecs::{Arrangement, GraphicsCommandList, GraphicsCore, VisualGraphics};
 
-    /// タスク 5 観測完了状態の檻:
+    /// 装着・提示・読み戻しの檻:
     /// 供給面を装着したスロットに対して提示と読み戻しが行え、読み戻したバイト列から
     /// 装着直後は空（透明＝全 0）であることを確認できる（R9.1/R9.3）。
     ///
@@ -679,13 +679,13 @@ mod tests {
         let bytes = surface.read_back().expect("read_back（present 後）失敗");
         assert!(
             bytes.iter().all(|&b| b == 0),
-            "present は提示のみ（source_tex の内容を変えない）"
+            "present は提示のみ（front 面の内容を変えない）"
         );
     }
 
-    /// read_back が実際に供給面（source_tex）を読んでいることの往復檻
-    /// （模造の全 0 バッファ返却では通らない）。上流描画（task 6）不在のため、
-    /// テスト専用に UpdateSubresource で既知パターンを source_tex へ直接書き、
+    /// read_back が実際に供給面の front（`sources[front]`）を読んでいることの往復檻
+    /// （模造の全 0 バッファ返却では通らない）。描画を通さず読み戻しだけを確かめるため、
+    /// テスト専用に UpdateSubresource で既知パターンを `sources[front]` へ直接書き、
     /// present→read_back が全バイト一致で返すことを確認する（chain.rs 往復檻と同轍）。
     #[test]
     fn readback_roundtrips_source_tex_contents() {
@@ -701,7 +701,7 @@ mod tests {
             TextSurface::attach(&mut world, &binding, &compositor, &core, (w, h), (0.0, 0.0))
                 .expect("TextSurface::attach 失敗");
 
-        // 既知の非退化パターン（premultiplied 整合: 成分 ≤ α）を source_tex へ直接書く。
+        // 既知の非退化パターン（premultiplied 整合: 成分 ≤ α）を `sources[front]` へ直接書く。
         let mut pattern = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h {
             for x in 0..w {
@@ -733,7 +733,7 @@ mod tests {
         let bytes = surface.read_back().expect("read_back 失敗");
         assert_eq!(
             bytes, pattern,
-            "read_back は source_tex の内容を全バイト一致で返す"
+            "read_back は front 面の内容を全バイト一致で返す"
         );
     }
 
@@ -793,7 +793,7 @@ mod tests {
         out
     }
 
-    /// タスク 4.1 往復檻（観測可能な完了状態）:
+    /// 面内 blit と flip の往復檻:
     /// front へ既知パターンを直書き→`copy_front_to_back_shifted(blit)`→`flip()`→`read_back()` で、
     /// ずらし量 ゼロ・正・負（(0,0)・(0,+N)・(0,-N)・(+N,0)・(-N,0)）それぞれについて
     /// 元の内容が期待位置に byte 一致で現れ、露出域（非コピー域）が透明（全 0）であることを確認する

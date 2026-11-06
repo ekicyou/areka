@@ -7,7 +7,7 @@ use super::test_support::{
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::{SpanKind, TextLayerConfig};
 
-// ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
+// ══ Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
 
 /// Observable（5.1/5.2/5.4）: `apply_cue(Clear)` は当該 actor の hover を None へリセットし、
 /// ヒット行スナップショットを純粋状態の選択肢消去と**原子的**に無効化する（present を待たず
@@ -160,11 +160,11 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     );
 }
 
-// ══ task 9.4: ライフサイクル無効化の同一フレーム原子性（画素消滅＋契約無効化の同時観測・R5.1/5.2/5.3/7.3/7.4） ══
+// ══ ライフサイクル無効化の同一フレーム原子性（画素消滅＋契約無効化の同時観測・R5.1/5.2/5.3/7.3/7.4） ══
 
 /// Observable（5.1/5.2/7.3/7.4・シナリオA=Clear）: Clear 注入→FullClear フレームの**同一 post-present 観測**で、
 /// 選択肢行バンドのインク消滅・`choice_hit_rows` 空・`choice_active=false` の三者が**同時**に成立する
-/// （8.3 は present 前の契約レベル原子性——9.4 は FullClear 提示後の画素消滅を契約空と同一フレームで束ねる）。
+/// （上の節は present 前の契約レベル原子性——この節は FullClear 提示後の画素消滅を契約空と同一フレームで束ねる）。
 #[test]
 fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
     let (mut world, window, slot) = com_world();
@@ -258,7 +258,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     // ── ClearAll 注入（提示前の無効化は `clear_all_resets_hover_and_hit_rows_for_every_actor` が見る）。
     rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
 
-    // ── FullClear フレーム提示（2 段階クリアの第 1 相・8.3 と同型）——旧集合の画素が消える。
+    // ── FullClear フレーム提示（2 段階クリアの第 1 相・上の節と同型）——旧集合の画素が消える。
     present_frame(&mut rt, &mut world, 12.0).expect("FullClear フレーム提示");
     let cleared_bytes = read_back(&rt, &actor);
     assert_eq!(
@@ -378,7 +378,7 @@ fn clear_drops_anchor_hit_rows_and_hit_active_atomically() {
     assert!(!rt.hit_active(&actor));
 }
 
-// ══ 全消しの後の作りたての場所（指摘 11） ══
+// ══ 全消しの後の作りたての場所（audit-emo-text-state-actor 指摘 11） ══
 
 /// `\p[0]a`〜`\p[999]a` の後に全消しを 2 回すると、場所の数は登録した 2 つのスコープへ戻る
 /// （作りたてと同じで面を持たない場所を外す）。消した回数は外さないので減らない。

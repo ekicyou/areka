@@ -156,7 +156,7 @@ fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
     );
 }
 
-// task 9.1: 描画＋字下げの readback 統合檻（COM・headless・R7.1/7.4・draw==hit の R3.3）
+// 描画＋字下げの readback 統合檻（COM・headless・R7.1/7.4・draw==hit の R3.3）
 #[test]
 fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     const FONT_H: f32 = 12.0;
@@ -245,7 +245,7 @@ fn present_with_no_choices_yields_empty_choice_hit_rows() {
     );
 }
 
-// task 9.2: hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
+// hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
 //
 // Observable: cursor.* 由来の SquareFill（塗り=(105,25,25)・文字=(255,255,255)）を持つバルーンで、
 // hover on/off を注入する対フレームにおいて (a) 塗り色画素と白文字画素が ordinal-0 セグメント矩形へ
@@ -372,9 +372,9 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     );
 }
 
-// task 9.3: 矩形反転縮退の pixel 檻（COM・headless・R4.3/6.1/7.2）。
+// 矩形反転縮退の pixel 檻（COM・headless・R4.3/6.1/7.2）。
 //
-// 9.2（`hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`）を cursor.\* 未指定
+// `hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage` を cursor.\* 未指定
 // バルーン（`geo_model`＝Invert 縮退）で反映する。正典確定「矩形反転縮退: セグメント矩形＝
 // バルーン既定 font.color 塗り・文字色＝各成分 255−c」を画素で固定する: hover 行のセグメント矩形が
 // **既定文字色（読取値・黒(0,0,0)）で全域不透明化**され、その上に**反転文字色（255−c＝白(255,255,255)）**の
@@ -385,14 +385,14 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    // 3 選択肢を別行へ配置（9.2 と同型・hover 行が 1 行に限定されることを測る台）。
+    // 3 選択肢を別行へ配置（hover 画素檻と同型・hover 行が 1 行に限定されることを測る台）。
     rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
     rt.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
     rt.apply_cue(&choice_cue("0", 0.1, "OnNo", "いいえ", &["r1"]));
     rt.apply_cue(&cue("0", 0.2, CueCommand::NewLine { ratio: 1.0 }));
     rt.apply_cue(&choice_cue("0", 0.2, "OnMaybe", "どちらでも", &["r2"]));
     let image = (200u32, 100u32);
-    // cursor.\* 未指定 geo_model → Invert（矩形反転縮退・task 5.3 resolve）。
+    // cursor.\* 未指定 geo_model → Invert（矩形反転縮退・`ResolvedChoiceStyle::resolve`）。
     let resolved = ResolvedBalloonText::resolve(&geo_model(), image);
     assert_eq!(
         resolved.choice_style,
@@ -444,7 +444,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
             px[0] == fb && px[1] == fg && px[2] == fr && px[3] == 255
         })
     };
-    // 反転文字色（255−c＝白）近傍画素数——AA 芯を各チャネル ±55（255→≥200・9.2 白閾値と等価）で数える。
+    // 反転文字色（255−c＝白）近傍画素数——AA 芯を各チャネル ±55（255→≥200・hover 画素檻の白閾値と等価）で数える。
     let text_in = |b: &[u8], rect| {
         count_px(b, width, rect, |px| {
             px[0].abs_diff(tb) <= 55

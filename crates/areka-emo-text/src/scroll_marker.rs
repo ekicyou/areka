@@ -285,7 +285,7 @@ pub struct ResolvedMarkerPlacement {
 impl ResolvedMarkerPlacement {
     /// x・y がそろった座標は広がり（画像の大きさ・箱は箱の大きさ）に解き、無ければ（片方だけも）
     /// 既定の置き場にする（要件 3.4・3.7・4.2・7.1・7.7）。広がりは `i32` に入らないこともあるので
-    /// `i64` で解く（[`MarkerCoord::resolve`] の `i32` は使わない・指摘 3）。
+    /// `i64` で解く（[`MarkerCoord::resolve`] の `i32` は使わない・audit-emo-text-state-actor 指摘 3）。
     pub fn resolve(keys: &ArrowKeys, extent: (u32, u32)) -> Self {
         let extent = (i64::from(extent.0), i64::from(extent.1));
         let at = |kind, point: &MarkerPoint| match point.both() {

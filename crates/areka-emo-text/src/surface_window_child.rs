@@ -44,7 +44,7 @@ fn fill_hit_cells(px: &mut Vec<u8>, size: (u32, u32), cells: &[HitRectPx]) {
     }
 }
 
-/// 窓の子の当たりのマスクの覚え（指摘 9）: 最後に焼いた字の矩形・画素の作業場・今のマスクと予備の
+/// 窓の子の当たりのマスクの覚え（audit-emo-text-state-actor 指摘 9）: 最後に焼いた字の矩形・画素の作業場・今のマスクと予備の
 /// 2 枚。矩形が変わるたびに、予備を単独で持てれば焼き直し、持てなければ新しく作る
 /// （`areka-emo-present` の `presenter/budget.rs` の 2 枚を入れ替える形）。
 #[derive(Default)]

@@ -1,4 +1,4 @@
-//! # choice_fixture_test — choice-render 検証の test-local 最小適合 fixture（task 11.1・R7.6）
+//! # choice_fixture_test — choice-render 検証の test-local 最小適合 fixture（R7.6）
 //!
 //! design.md「Testing Strategy > Integration Tests #5（7.6）」の正典述語を張る:
 //! **実フォント出力の目視確認（既定フォント盲点の回避）＋ test-local 最小 fixture を tests 配下に
@@ -81,7 +81,7 @@ fn font_color_tuple(model: &BalloonModel) -> (u8, u8, u8) {
 /// で取り下げられ、範囲外の宣言は再び書字開始角へ落ちる）、あわせて validrect 外の `origin.x,0`／`origin.y,0`
 /// 宣言を持っていた出荷／テスト資産を**正典推奨形**（指定せず validrect の定義に任せる）へ
 /// 是正した。本 fixture の 2 本もその対象だが、**着地後も開始点を観測する消費者が 1 本も
-/// 無かった**（同 spec タスク 4.1 の意味論棚卸しが着手前に記録した既知の穴）。ここで塞ぐ。
+/// 無かった**（同 spec の意味論棚卸しが記録した既知の穴）。ここで塞ぐ。
 ///
 /// - **是正前**（宣言 `origin(0,0)`）: `0` は validrect `[5, …]` の外なので書字開始角 `(5,5)` へ寄っていた。
 /// - **是正後**（宣言なし）: `None` 腕が書字開始角 `(5,5)` へ縮退する。
@@ -129,7 +129,7 @@ fn choice_fixtures_start_at_writing_corner_regardless_of_image_size() {
 /// （既定 ＭＳ ゴシック盲点の回避＝実フォント目視確認の前提）。
 #[test]
 fn fixtures_parse_to_expected_choice_styles() {
-    // ── cursor.* 指定 → SquareFill（実導出・9.2/9.3 の cursor_model と同値） ──
+    // ── cursor.* 指定 → SquareFill（実導出・`actor_choice_contract_tests.rs` の cursor_model と同値） ──
     let cursor = cursor_model();
     assert_eq!(
         cursor.font().name(),

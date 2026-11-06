@@ -103,7 +103,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         }
     }
 
-    // ── 予約スロットへの結線（R9.1/R9.2/R9.5 経路・task 8 と同じ組み方） ──
+    // ── 予約スロットへの結線（R9.1/R9.2/R9.5 経路・`tests/attach_wiring_test.rs` と同じ組み方） ──
     let (Some(view0), Some(view1)) = (
         demo.presenter.text_slot_view(TargetId(0)),
         demo.presenter.text_slot_view(TargetId(1)),
@@ -283,7 +283,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
 
     // (4) 正確な注入時刻で提示し、readback 述語を検証する。
     if demo.hold {
-        // --hold は目視用: 述語の確かめを飛ばし、提示だけして次のステージへ進む（指摘 18）。
+        // --hold は目視用: 述語の確かめを飛ばし、提示だけして次のステージへ進む（audit-emo-text-state-actor 指摘 18）。
         let mut rt = demo.runtime.borrow_mut();
         if let Err(e) = present_frame(&mut rt, world, t_check) {
             log_present_failure(&mut demo.present_err_logged, &e, "hold の提示フレーム");

@@ -1,7 +1,7 @@
-//! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（件 3・実 GPU）
+//! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（areka-P0-balloon-text-bugs 件 3・実 GPU）
 //!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **3.1**・**3.2**・**3.3**・**3.4**・**3.5**・**3.6**・
-//! **3.8**・**3.11**・**4.3**、design「areka が塗る下線（件 3）」・テストの方針「結合 2・3・5」）。
+//! **3.8**・**3.11**・**4.3**、design「areka が塗る下線（areka-P0-balloon-text-bugs 件 3）」・テストの方針「結合 2・3・5」）。
 //!
 //! 本番の 1 フレームの経路（`present_frame`・実 DirectWrite の行送り・実 GPU）を通して読み戻す。
 //!
@@ -630,7 +630,7 @@ fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame()
 /// 縦書きの列のレシピ（spec `emo-text-dwrite-fidelity` 要件 5.1）で em の箱が列の箱の真ん中に来た後は、
 /// 2 方向とも字の墨が列の箱の真ん中にあり（k=1 の実測で右から左 5..=22・左から右 4..=23、
 /// 箱 0..=27 の中心 13.5 と一致）、線は列の箱の左端より 1〜2 列外＝面の外へ出るので、2 方向とも
-/// 寄せが効く。直す前の左から右は墨が箱の右へ約 5px 寄っていて線が面に収まり、寄せなかった。
+/// 寄せが効く。
 const VERTICAL: (u32, u32) = (118, 120);
 
 /// 縦書きの普通のバルーンの定義（validrect は全域）。

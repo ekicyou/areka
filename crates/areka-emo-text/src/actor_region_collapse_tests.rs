@@ -1,7 +1,7 @@
-//! # actor_region_collapse_tests — 潰れた描画範囲は状態の変わり目に 1 回だけ記録する（件 2）
+//! # actor_region_collapse_tests — 潰れた描画範囲は状態の変わり目に 1 回だけ記録する（areka-P0-balloon-text-bugs 件 2）
 //!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **2.3**〜**2.5**・**2.7**・**4.2**、design
-//! 「潰れた描画範囲（件 2）」）。
+//! 「潰れた描画範囲（areka-P0-balloon-text-bugs 件 2）」）。
 //!
 //! 解決（[`TextRegion::resolve`](crate::region::TextRegion::resolve)）は毎フレーム走るので記録を
 //! 出さない（`region_tests.rs` が固定する）。記録は登録口

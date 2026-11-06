@@ -157,7 +157,7 @@ fn undeliverable_marks_log_one_line_each() {
     );
 }
 
-// ── spawn_emo_text のドレインの結線（4.4 の口へ） ──
+// ── spawn_emo_text のドレインの結線（ランタイムの済みの口へ） ──
 
 /// 実ドレインを起こし、スコープ 0 と 1 に選択肢を 1 つずつ届けたトークの受け口を返す。
 fn drain_with_choices() -> (Rc<RefCell<TextLayerRuntime>>, EmoTextSink, EmoTextSink) {

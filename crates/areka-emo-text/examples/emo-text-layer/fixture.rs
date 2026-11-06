@@ -27,7 +27,7 @@ pub(super) fn shared_balloon_dir() -> PathBuf {
         .to_path_buf()
 }
 
-/// example ローカル fixture 変種（縦書き観測用・task 9.1 成果）。
+/// example ローカル fixture 変種（縦書き観測用）。
 fn vertical_variant_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/fixtures/emo2-vertical")
 }

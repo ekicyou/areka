@@ -1,8 +1,8 @@
 charset,UTF-8
-// emo2-choice fixture（task 11.1・R7.6）: cursor.* 指定バルーン descript
+// emo2-choice fixture（R7.6）: cursor.* 指定バルーン descript
 //
 // choice ハイライトが SquareFill 実導出（塗り=cursor.brush.color・hover 文字=cursor.font.color）へ
-// 解決される最小適合バルーン。値は 9.2/9.3 の in-code `cursor_model()` と同一
+// 解決される最小適合バルーン。値は `actor_choice_contract_tests.rs` の in-code `cursor_model()` と同一
 // （square 塗り(105,25,25)＋白文字(255,255,255)）を「実 parse される descript」として自前用意する。
 //
 // 実フォント指定（既定 ＭＳ ゴシック盲点の回避・記憶 emo-text-byte-equiv-default-font-blindspot）:

@@ -1,10 +1,10 @@
-//! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合（task 11.2・R6.1/6.2/6.3）
+//! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合（R6.1/6.2/6.3）
 //!
 //! design.md「Testing Strategy > E2E/実機 item 1（emo2_boot 統合）」の正典述語を張る:
 //! **実 emo2 fixture ＋ menu.pasta 経路でメニュー cue 列 →選択肢描画〔headless readback〕**。
 //!
-//! task 11.1（`choice_fixture_test.rs`）は tests 配下の **test-local** 最小 fixture で parse→resolve と
-//! 実フォント render を固定した。task 11.2 は **リポジトリに実在する emo2 fixture**
+//! `choice_fixture_test.rs` は tests 配下の **test-local** 最小 fixture で parse→resolve と
+//! 実フォント render を固定する。本ファイルは **リポジトリに実在する emo2 fixture**
 //! （`検体 emo2 の同梱バルーン emo2-kakukaku`）の実 descript／実 menu.pasta を
 //! 用い、cue 配送 →選択肢描画をエンドツーエンドで検証する（実窓は起動しない・headless readback のみ）。
 //!

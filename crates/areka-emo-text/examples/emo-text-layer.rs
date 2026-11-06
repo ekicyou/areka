@@ -64,7 +64,7 @@
 //! 起動時に各バルーン窓の実モニタ DPI と合成スケール k を `info!` でログする。
 //! PASS/FAIL の自動判定は readback 述語（物理 1:1・k=1.0 前提）で決定論だが k≠1 では無効なので、
 //! **バルーン枠とテキストの整合は非 96 DPI 環境で実際に目視確認すること**
-//! （emo-present example の task 5.3 手順と同型・記憶 areka-placement-real-ghost-first）:
+//! （emo-present example の手順と同型・記憶 areka-placement-real-ghost-first）:
 //!
 //! 1. Windows「設定 → システム → ディスプレイ → 拡大縮小」で対象モニタのスケールを
 //!    150%（dpi=144）または 200%（dpi=192）に設定する（あるいは既にそのスケールで
@@ -190,7 +190,7 @@ fn main() -> windows::core::Result<()> {
         .add_systems(FrameFinalize, drive_demo_system);
 
     println!();
-    println!("areka emo-text-layer 観測 example（task 9.2）");
+    println!("areka emo-text-layer 観測 example");
     println!("================================================");
     println!(
         "  モード: {}（--vertical で縦書き fixture 変種へ切替）",
@@ -217,7 +217,7 @@ fn main() -> windows::core::Result<()> {
 
     mgr.run()?;
 
-    // --hold は目視用: 判定も PASS/FAIL の出力もせず、閉じたら 0 で終わる（指摘 18）。
+    // --hold は目視用: 判定も PASS/FAIL の出力もせず、閉じたら 0 で終わる（audit-emo-text-state-actor 指摘 18）。
     if hold {
         return Ok(());
     }

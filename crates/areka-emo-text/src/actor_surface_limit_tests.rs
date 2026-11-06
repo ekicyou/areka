@@ -1,4 +1,4 @@
-//! # 文字の面の切り・大きさの上限・作れない面の覚え（指摘 3・実 GPU）
+//! # 文字の面の切り・大きさの上限・作れない面の覚え（audit-emo-text-state-actor 指摘 3・実 GPU）
 //!
 //! - 画像より大きい validrect の面は、画像の右と下で切った大きさになる（x だけ・y だけ・両方）。
 //! - 物理寸の上限（一辺・面積）を越える面は作らず、`error!` は 10 フレームで 1 回のまま。
@@ -310,7 +310,7 @@ fn swap_core(world: &mut bevy_ecs::prelude::World, core: GraphicsCore) -> Graphi
     old
 }
 
-/// 指摘 3: 印の面を作るフレームに装置が無効でも、その失敗は覚えない＝装置が戻ると同じ寸で作る。
+/// audit-emo-text-state-actor 指摘 3: 印の面を作るフレームに装置が無効でも、その失敗は覚えない＝装置が戻ると同じ寸で作る。
 #[test]
 fn marker_surface_appears_once_the_device_is_valid_again() {
     let (mut world, _, _) = com_world();
@@ -337,7 +337,7 @@ fn marker_surface_appears_once_the_device_is_valid_again() {
     );
 }
 
-/// 指摘 3: 上限を越える印の面は 10 フレームで記録 1 回、WUC の資源が作り直されると試し直す（記録が
+/// audit-emo-text-state-actor 指摘 3: 上限を越える印の面は 10 フレームで記録 1 回、WUC の資源が作り直されると試し直す（記録が
 /// もう 1 回）。文字の面は描画範囲で小さく、印の面だけが重なり（17000×100）で一辺の上限を越える。
 #[test]
 fn over_limit_marker_surface_logs_once_until_wuc_resources_change() {
@@ -375,7 +375,7 @@ validrect.right,-16800",
     );
 }
 
-/// 指摘 3: 箱の大きさが 16000 でも、箱の文字の面と印の面は「箱とシェルの画像の重なり」
+/// audit-emo-text-state-actor 指摘 3: 箱の大きさが 16000 でも、箱の文字の面と印の面は「箱とシェルの画像の重なり」
 /// （`min(箱の幅, シェルの幅 − X)`・高さも同じ）で切る。x だけ・y だけ・両方を大きくし（片方の切りを
 /// 外すと、その軸の case が落ちる）、シェルの画像の大きさが変わると次の提示で切り直す。
 #[test]

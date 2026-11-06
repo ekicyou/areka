@@ -1,8 +1,8 @@
-//! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ（task 8.1／8.2）
+//! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ
 //!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**）。
 //!
-//! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]・task 8.2）が
+//! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]）が
 //! 共有する道具だけをここに置く。中身は 4 つ:
 //!
 //! 1. **描画環境の用意**——headless の GPU World（実 GPU）と予約スロット。
@@ -181,7 +181,7 @@ impl Shot {
 ///
 /// **順序が効く**——装着（`register_actor`）を先に、台本の投入を後にする。装着はバルーン定義から
 /// 導いた 2 層（既定・無効表示）を表示状態へ差し込む唯一の点で、現在の見た目が既に既定から
-/// 動いていると新しい既定へ追随しない（要件 4.1・task 4.2 の「装着時に 2 層を差し込む口」）。
+/// 動いていると新しい既定へ追随しない（要件 4.1・「装着時に 2 層を差し込む口」）。
 /// 装着より前に `\f[bold,1]` を流すと、以後その actor の文字は**バルーン定義の 28 px ではなく
 /// 素の既定 12 px**で描かれる。本番の起動順（装着 → 発話）はこの向きで、
 /// `line_pitch_readback_test.rs` の組み立ても同じである。
@@ -266,7 +266,7 @@ pub(crate) fn differs(a: &Shot, b: &Shot) -> bool {
 /// 「素の側にインクが無く、装飾した側にインクがある」画素を持つ**行**（y）の一覧。
 ///
 /// 下線・打ち消し線はこの一覧に**連続した帯**として現れる（線は字の隙間も跨いで引かれるので、
-/// 字の無い x にもインクが増える）。横書き用——縦書きは列で数える（task 8.2）。
+/// 字の無い x にもインクが増える）。横書き用——縦書きは列で数える（[`vertical`]）。
 pub(crate) fn added_ink_rows(plain: &Shot, styled: &Shot) -> Vec<u32> {
     (0..plain.height)
         .filter(|&y| (0..plain.width).any(|x| styled.is_ink(x, y) && !plain.is_ink(x, y)))

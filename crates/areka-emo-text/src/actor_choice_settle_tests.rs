@@ -1,16 +1,16 @@
 //! 選択肢の「済み」の境目の檻（areka-P0-balloon-text-bugs 件 1・要件 1.10〜1.13）。
 //!
-//! タスク 4.3 の部分は GPU なしで、場所の状態（`ActorTextState`）の境目と層の状態
+//! 前半は GPU なしで、場所の状態（`ActorTextState`）の境目と層の状態
 //! （`TextLayerState`）の口だけを固定する: 境目の範囲・消去（`\c`・台詞の頭）で 0 に戻ること・
 //! 済みにした後に足された選択肢は済んでいないこと・アンカーは済みにならないこと・
 //! 場所が無ければ何もしないこと・空回しの写しが境目も写すこと。
 //!
-//! タスク 4.4 の部分も GPU なしで、ランタイム（`TextLayerRuntime`）の済みの口を固定する: 選択待ちの
+//! 中ほども GPU なしで、ランタイム（`TextLayerRuntime`）の済みの口を固定する: 選択待ちの
 //! 前の押下の口は何もしない・後ならその場所の選択肢の問いが偽でほかの場所は真・全部済みで偽・
 //! アンカーは押せる範囲に残る・強調が外れる・当たり行の写しから選択肢の行がその場で消える。
-//! 提示で写しを作り直すときの外し方は実 GPU の檻（タスク 4.7）が固定する。
+//! 提示で写しを作り直すときの外し方は後半の実 GPU の檻が固定する。
 //!
-//! タスク 4.7 の部分は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行が当たり行から
+//! 後半は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行が当たり行から
 //! 消えること・済みと提示で WARN 0 行・済んだ行の強調が読み戻しに出ないこと・済む前と後で強調なしの
 //! 読み戻しが同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
 
@@ -173,7 +173,7 @@ fn rehearsal_copy_carries_the_boundary() {
     assert_eq!(settled_flags(&copy, "0"), vec![(SpanKind::Choice, true)]);
 }
 
-// ══ タスク 4.4: ランタイムの済みの口（写し・強調・問いを同時に揃える・GPU なし） ══
+// ══ ランタイムの済みの口（写し・強調・問いを同時に揃える・GPU なし） ══
 
 use super::{ChoiceHitRow, TextLayerRuntime};
 use crate::choice::HitRectPx;
@@ -319,7 +319,7 @@ fn closing_the_choice_wait_makes_the_press_a_no_op_again() {
     assert_eq!(row_kinds(&rt, "0").len(), 3);
 }
 
-// ══ タスク 4.7: 済んだ行の振る舞い（実 GPU・普通のバルーンと箱） ══
+// ══ 済んだ行の振る舞い（実 GPU・普通のバルーンと箱） ══
 
 use bevy_ecs::prelude::World;
 use log_capture_kit::capture;

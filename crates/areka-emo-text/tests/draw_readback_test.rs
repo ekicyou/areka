@@ -1,4 +1,4 @@
-//! # draw_readback_test — UI スレッド上の描画・読み戻しの通し構造検証（task 10.2）
+//! # draw_readback_test — UI スレッド上の描画・読み戻しの通し構造検証
 //!
 //! design.md「Testing Strategy > Integration Tests #4（描画実行）」の正典述語を、
 //! **通し経路**（sink emit → UI ドレイン → `present_frame` → `read_back`）で檻化する
@@ -14,7 +14,7 @@
 //!    長）、(b) 提示位置が validrect 原点に一致（`Arrangement`）、(c) 面内のインクが
 //!    書字開始角（validrect-local 原点側）から始まる（領域オフセットの
 //!    二重適用＝面内で (36,46) へずれる変異を殺す）。インクの行矩形はみ出し（縦書きで
-//!    数 px 超え得る——task 6.3 申し送り）は供給面クリップで validrect 内に閉じる。
+//!    数 px 超え得る）は供給面クリップで validrect 内に閉じる。
 //!
 //! in-source の檻（`src/draw_oracle_tests.rs`）が **DrawExecutor 単体**（layout/canvas/render を
 //! テストが直結）で同種の述語を張るのに対し、本テストは結線層〜COM 層の**実配線**
@@ -147,7 +147,7 @@ fn assert_validrect_containment(
 
 // ══ 横書き: 3 述語の通し檻（実 EmoPresenter 公開経路・R7.3/R8.5/R9.1/R9.3） ══════════════
 
-/// 観測可能な完了状態（task 10.2・横書き）: 実 sink→UI ドレイン→present_frame→read_back の
+/// 観測可能な完了状態（横書き）: 実 sink→UI ドレイン→present_frame→read_back の
 /// 通し経路で、(1) 可視グリフ数増加に伴う非透明ピクセルの単調増加、(2) Clear 後の全域
 /// 透明化、(3) 有効領域（validrect）外に非透明ピクセルが無いこと（封じ込め構造＋面内
 /// 開始角）の 3 述語が green である。併せてスクロールの全域再描画（R7.3・残渣なし・
@@ -339,9 +339,9 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
 
 // ══ 縦書き（vertical_rl）変種: 3 述語＋横方向スクロール（R6 系の軸切替を通し経路で） ══════
 
-/// 観測可能な完了状態（task 10.2・縦書き変種）: 縦書き（vertical_rl）でも 3 述語が
+/// 観測可能な完了状態（縦書き変種）: 縦書き（vertical_rl）でも 3 述語が
 /// green である——(1) 単調増加、(2) Clear 後全域透明、(3) validrect 封じ込め（縦書きの
-/// インク行矩形はみ出し——task 6.3 申し送り——も供給面クリップで validrect 内に閉じる）。
+/// インク行矩形はみ出しも供給面クリップで validrect 内に閉じる）。
 /// 列は validrect 右端から左へ流れ、あふれは横方向スクロール（先頭列の消失）になる。
 #[test]
 fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrect() {

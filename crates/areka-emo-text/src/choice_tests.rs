@@ -184,7 +184,7 @@ fn empty_inputs_yield_empty_segments() {
     assert!(annotate_lines(&[], &[]).is_empty());
 }
 
-// ── タスク 5.2: ヒット行導出（derive_hit_rows）と窓物理写像（to_window_physical） ──
+// ── ヒット行導出（derive_hit_rows）と窓物理写像（to_window_physical） ──
 //
 // 座標系: layout 出力（inline_range／行矩形）は絶対 image px（描画開始点＝validrect 原点起点）。
 // CanvasHitRow.rect は canvas-local（validrect-local）——from_layout と同一の原点差引きゆえ
@@ -802,7 +802,7 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
     assert!(shared >= rows[1].rect.top && shared < rows[1].rect.bottom);
 }
 
-/// 帯の丈の式は NaN を渡しても落ちない（指摘 4）。`clamp` は下限が NaN だと panic する。
+/// 帯の丈の式は NaN を渡しても落ちない（audit-emo-text-state-actor 指摘 4）。`clamp` は下限が NaN だと panic する。
 ///
 /// 較正: 式を `clamp` に戻すと、`font_height` が NaN の 2 行（上限も下限も NaN になる・
 /// 下限だけ NaN になる）で panic して赤。`line_box_height`・`line_pitch` の NaN は `clamp` でも

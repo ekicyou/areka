@@ -50,7 +50,7 @@
 //! 中でもキーと値は別々の欄に入るので区切り文字を含む指定（`\f[a=b,c]` と `\f[a,b=c]`）が
 //! 同じ鍵へ潰れることはなく、値も列のまま持つので `\f[bold,"x,y"]`（値 1 個）と
 //! `\f[bold,x,y]`（値 2 個）も別の 1 件に数える（引用符が守るカンマは
-//! `areka-parsers` の `lexer_tests.rs::quoted_arg_protects_comma` が固定している）。台本の先頭で集合を空にするので、
+//! `areka-parsers` の `lexer_tests.rs::quoted_and_unquoted_args_mixed` が固定している）。台本の先頭で集合を空にするので、
 //! 次の台詞では同じ指定がもう 1 度残る。記録なしで失敗を飲み込む経路は持たない——
 //! [`ActorTextState::apply_font_args`] の腕がすべて記録へ落ちることは、`match` の腕を
 //! 字面で数える試験（`state_decoration_reset_tests.rs` §13）が見張る。

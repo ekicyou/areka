@@ -1,18 +1,18 @@
-//! # box_attach_test — 箱の面の窓の子としての装着を GPU の読み戻しで確かめる（task 7.8）
+//! # box_attach_test — 箱の面の窓の子としての装着を GPU の読み戻しで確かめる
 //!
 //! シェル相当の 1 target を実 `EmoPresenter` で表示確立し（窓 DPI 192＝拡大率 2）、その
 //! `text_slot_view` を毎フレームの箱の同期（`sync_boxes`）へ渡して、箱 2 つを持つスコープを
 //! `present_frame` で提示する。確かめること（要件 1.6・3.1〜3.4・3.7・3.9・6.8・9.4）:
 //!
 //! - 窓の `Children` が「差し込み口 → element番号の大きい箱 → 小さい箱 → 絵」に並ぶ
-//!   （element番号の大きい順の数え方はこの GPU の通しでしか踏めない・tasks.md 7.4 の申し送り）
-//! - 箱の面の当たり判定は表示されている字の矩形の集まり（字の無い所は受けない・task 13）
+//!   （element番号の大きい順の数え方はこの GPU の通しでしか踏めない）
+//! - 箱の面の当たり判定は表示されている字の矩形の集まり（字の無い所は受けない・要件 9.4）
 //! - 読み戻しで箱ごとに独立に文字が描かれ、背景は透明（絵を描かない）
 //! - 箱の位置が `(X + 領域の左, Y + 領域の上) × 拡大率`
 //! - 箱の束の差し替えで箱の面の entity が消える
 //!
 //! 流儀は `attach_wiring_test.rs` と同じ（GPU/WUC は headless 実資源・時刻は注入）。
-//! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない・tasks.md 1）。
+//! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
 #[path = "support/mod.rs"]
 mod support;
@@ -207,7 +207,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         "窓の子は 差し込み口 → element番号の大きい箱 → 小さい箱 → 絵"
     );
 
-    // ── 当たり判定は表示されている字の矩形の集まり（要件 9.4・task 13）・装着の構造 ──
+    // ── 当たり判定は表示されている字の矩形の集まり（要件 9.4）・装着の構造 ──
     for (name, child) in [("a", child_a), ("b", child_b)] {
         assert_eq!(
             world.get::<HitTest>(child).copied(),

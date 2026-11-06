@@ -178,7 +178,7 @@ fn later_cues_apply_immediately_without_overwrite_guard() {
     assert_eq!(items_of(&state, "0"), expected.as_slice());
 }
 
-// ── Choice/Cursor 実消費（W4 choice-render・タスク 1.2） ──
+// ── Choice/Cursor 実消費（areka-P0-choice-render タスク 1.2） ──
 
 /// actor の choices を取得する（未生成なら panic ＝テスト失敗として扱う）。
 fn choices_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [ChoiceSpan] {
@@ -302,7 +302,7 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     assert_eq!(counts.warn, 1);
 }
 
-/// 反復 Choice cue（非空 text）は once-guard 警告を一切発火しない（撤去済み）。
+/// 反復 Choice cue（非空 text）は警告を一切発火しない。
 #[test]
 fn repeated_nonempty_choice_cues_do_not_warn() {
     let ((), events) = capture_checked(|| {
@@ -336,7 +336,7 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
                 y: "2lh".into(),
             },
         ));
-        // 反復しても warn 無し（once-guard 撤去）。
+        // 反復しても warn 無し。
         state.apply_cue(&cue(
             "0",
             0.2,
@@ -377,12 +377,12 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
     assert_eq!(state.visible_glyphs(&ActorKey::from("0"), 100.0), 1);
     // Cursor は choices を作らない。
     assert!(choices_of(&state, "0").is_empty());
-    // once-guard 警告は発火しない。
+    // 警告は発火しない。
     assert_eq!(level_count(&events, Level::WARN), 0);
 }
 
 /// Cursor アームがグリフ／reveal 状態を一切変えないことを、対照実行（Cursor cue を
-/// 挟まない）との**バイト等価**で固定する（1.3 checklist「グリフ/reveal 状態を変更しない」）。
+/// 挟まない）との**バイト等価**で固定する（「グリフ/reveal 状態を変更しない」）。
 /// CursorMove は非グリフ item ゆえ、グリフ列（items から Glyph のみ抽出）と reveal 時刻列は
 /// Cursor cue の有無で完全に一致し、可視グリフ数も全時刻で一致する。
 #[test]
@@ -509,12 +509,12 @@ fn non_balloon_commands_do_not_disturb_state() {
     assert_eq!(state, before);
 }
 
-// ── TextLayerConfig 既定値（design.md 正準: 行間 line_gap=2・char_wait は撤去済み） ──
+// ── TextLayerConfig 既定値（design.md 正準: 行間 line_gap=2） ──
 
 #[test]
 fn config_defaults_match_design_canon() {
     let config = TextLayerConfig::default();
-    // char_wait は撤去済み（reveal は配送 duration 由来）——config は line_gap のみ。
+    // reveal は配送 duration 由来——config は line_gap のみ。
     assert_eq!(config.line_gap, 2.0);
 }
 

@@ -1,4 +1,4 @@
-//! 箱の束の受け取りと、箱を隠す印（task 7.3・要件 3.10・6.8）。
+//! 箱の束の受け取りと、箱を隠す印（要件 3.10・6.8）。
 //!
 //! 箱の束はテストの中に持つ surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。箱の面の登録と装着は `actor_box_sync_tests.rs` が見るので、ここの `World` は
@@ -203,7 +203,7 @@ fn font_search_dirs_are_readable_in_the_given_order() {
     assert_eq!(rt.box_font_dirs(), [PathBuf::from("other")].as_slice());
 }
 
-/// 箱 a（100×50）を `(x, y)` に置くシェルの文面（指摘 1・要件 7）。
+/// 箱 a（100×50）を `(x, y)` に置くシェルの文面（audit-emo-text-state-actor 指摘 1・要件 7）。
 fn shell_with_box_at(x: i64, y: i64) -> String {
     format!("balloon.a\n{{\nsize,100,50\n}}\nsurface0\n{{\nelement1,balloon,a,{x},{y}\n}}\n")
 }

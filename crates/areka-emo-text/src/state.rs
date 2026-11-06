@@ -417,7 +417,7 @@ impl ActorTextState {
         self.settled = self.choices.len();
     }
 
-    /// 済みの境目（この序数より前の選択肢は済み・配置の覚えの鍵・指摘 8）。
+    /// 済みの境目（この序数より前の選択肢は済み・配置の覚えの鍵・audit-emo-text-state-actor 指摘 8）。
     pub(crate) fn settled(&self) -> usize {
         self.settled
     }
@@ -442,8 +442,12 @@ pub struct TextLayerState {
     actors: BTreeMap<PlaceKey, ActorTextState>,
     /// scope ごとの内容が消された回数（`Clear`／`ClearAll` の累計・単調増加）。
     /// `ActorTextState` の欄にしないのは、内容の状態の形と等しさを変えないため。
+    /// 場所を外しても消さない（わざと残す）: 読み手（`crates/areka` の `balloon_visibility`）が
+    /// 単調増加を前提に `clear_count` の変化を見るので、消すと 0 へ戻って変化を取り違える。
     clears: BTreeMap<PlaceKey, u64>,
     /// スコープごとの今のサーフェス番号と文字の行き先（操作は [`route`]・要件 4.7）。
+    /// `set_box_index` でも消さない（わざと残す）: スコープの今のサーフェス番号はシェルの切替を
+    /// またいで保つ状態なので、使ったスコープの数だけ残る（1 つにつき小さな構造体 1 つ）。
     routes: BTreeMap<ActorKey, route::ScopeRoute>,
     /// サーフェス番号 → element番号の昇順の箱の名前（空なら行き先は常に普通のバルーン）。
     box_index: BTreeMap<u32, Vec<areka_emo_compose::BoxName>>,
@@ -706,7 +710,7 @@ impl TextLayerState {
         self.clears_at(&PlaceKey::balloon(actor))
     }
 
-    /// その場所（箱の場所も）の内容が消された回数（配置の覚えの鍵・指摘 8）。読むだけで状態を変えない。
+    /// その場所（箱の場所も）の内容が消された回数（配置の覚えの鍵・audit-emo-text-state-actor 指摘 8）。読むだけで状態を変えない。
     pub(crate) fn clears_at(&self, place: &PlaceKey) -> u64 {
         self.clears.get(place).copied().unwrap_or(0)
     }

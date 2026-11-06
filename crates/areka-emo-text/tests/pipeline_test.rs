@@ -1,4 +1,4 @@
-//! # pipeline_test — 受信から可視化決定までの通しパイプライン検証（task 10.1・R2.4/R2.5/R3.5）
+//! # pipeline_test — 受信から可視化決定までの通しパイプライン検証（R2.4/R2.5/R3.5）
 //!
 //! cue 受信（実 `EmoTextSink`→実 `spawn_ui` channel）→状態適用（`TextLayerState`）→
 //! レイアウト決定（`LayoutEngine::layout`）→可視窓決定（`LayoutEngine::visible_window`）
@@ -421,9 +421,9 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
     );
 }
 
-// ══ 縦書き（9.1 fixture 変種）: 縦書き解決→横スクロールの可視窓決定まで通しで固定する ══
+// ══ 縦書き（`emo2-vertical` fixture 変種）: 縦書き解決→横スクロールの可視窓決定まで通しで固定する ══
 
-/// 9.1 縦書き fixture 変種（2 層マージ済み）で writing_mode 解決→領域解決→受信→状態適用→
+/// 縦書き fixture 変種 `emo2-vertical`（2 層マージ済み）で writing_mode 解決→領域解決→受信→状態適用→
 /// レイアウト→可視窓決定を通し、横方向スクロール（vertical_rl＝内容が右へ）の可視グリフ数と
 /// 可視窓を、注入時刻ごとの絶対値で檻化する。
 ///

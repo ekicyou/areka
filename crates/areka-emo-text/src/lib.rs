@@ -12,7 +12,8 @@
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
 //! 1. **純粋層**（[`state`]／[`place`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
-//!    [`viewbox`]／[`look`]／[`color`]／[`scroll_marker`]）——
+//!    [`viewbox`]／[`look`]／[`color`]／[`scroll_marker`]／[`segment`]／[`wrap`]／[`choice`]／
+//!    [`balloon_overrides`]／[`inline_marker`]／`lookahead`／`underline`）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
 //! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
@@ -99,10 +100,10 @@ pub enum TextLayerError {
     },
 }
 
-/// budouy 依存導入の spike（task 1・Req 1.2/8.1）。
+/// budouy 依存導入の spike（Req 1.2/8.1）。
 ///
 /// budouy の**実 API 実形**をコンパイラで確定し、以降の `segment.rs` 本実装
-/// （task 3.2）と Parser キャッシュ機構（task 5）の判断根拠を回帰檻として固定する。
+/// と Parser キャッシュ機構の判断根拠を回帰檻として固定する。
 /// 代表和文の実境界ピン（決定論・無損失）も兼ねる。
 ///
 /// spike で確定した事実:
@@ -121,7 +122,7 @@ mod budouy_spike {
     /// コンパイル時 trait 証明: `Send`（アクター跨ぎ／将来の move の余地）。
     fn assert_send<T: Send>() {}
 
-    /// budouy Parser は Sync + Send（→ `OnceLock` キャッシュ採用の根拠・task 5）。
+    /// budouy Parser は Sync + Send（→ `OnceLock` キャッシュ採用の根拠）。
     #[test]
     fn parser_is_sync_and_send() {
         assert_sync::<budouy::Parser>();
@@ -284,7 +285,7 @@ mod tests {
         ("viewbox.rs", include_str!("viewbox.rs")),
         ("viewbox_diff.rs", include_str!("viewbox_diff.rs")),
         ("wrap.rs", include_str!("wrap.rs")),
-        // areka-P0-text-decoration-canon が新設した純粋モジュール 14 本
+        // 装飾まわりの純粋モジュールとその兄弟テスト（areka-P0-text-decoration-canon ほか）
         // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
         ("color.rs", include_str!("color.rs")),
         ("color_tests.rs", include_str!("color_tests.rs")),
@@ -342,8 +343,8 @@ mod tests {
             "viewbox_test_support.rs",
             include_str!("viewbox_test_support.rs"),
         ),
-        // 純粋層モジュールの兄弟テスト／支援で歴史的に載っていなかったもの（タスク 9.4 で追加）。
-        // いずれも `windows` 参照 0 件を実測してから移した——除外一覧に置いておく理由が無い。
+        // 純粋層モジュールの兄弟テスト／支援で、`windows` を触らないもの。
+        // いずれも `windows` 参照 0 件——除外一覧に置いておく理由が無い。
         (
             "layout_segmented_tests.rs",
             include_str!("layout_segmented_tests.rs"),
@@ -438,7 +439,7 @@ mod tests {
             include_str!("actor_scroll_tests.rs"),
         ),
     ];
-    /// 純粋層の走査面へ**載せない**ファイルの明示（タスク 9.4）。
+    /// 純粋層の走査面へ**載せない**ファイルの明示。
     ///
     /// ここに載るのは COM 層・結線層のモジュールとその兄弟テスト／支援である。
     /// ここへ置くことは「純粋層でない」の宣言ではなく「この検査では走査しない」の明示で、
@@ -538,7 +539,7 @@ mod tests {
             }
         }
     }
-    /// 手保守の静的な列挙が「新設したのに載せない」を塞げない穴を閉じる（タスク 9.4）。
+    /// 手保守の静的な列挙が「新設したのに載せない」を塞げない穴を閉じる。
     ///
     /// [`PURE_SOURCES`] も [`SOURCES_OUTSIDE_THE_PURE_SCAN`] も人が書く一覧なので、
     /// 新しい兄弟ファイルを足しただけでは走査面が広がらず、層規律の字面検査は黙って

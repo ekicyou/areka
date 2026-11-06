@@ -34,11 +34,11 @@ impl TextLayerRuntime {
     /// 箱の束を受け取る（UI スレッドから・装着の相とシェルの切替が呼ぶ）。
     ///
     /// 1. 前の箱の面（シェルの窓の子）を片付け、箱の場所ごとの実行時の表も捨てる。
-    /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製・指摘 7）、
+    /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製・audit-emo-text-state-actor 指摘 7）、
     ///    既定の 2 層（その `font.looks`・拡大率に依らない・design.md「装飾の持ち運び」）と種類を状態へ渡す。
     /// 3. 新しい表を状態へ入れる。状態は箱の場所の文字を捨て、各スコープの今のサーフェス番号を保ち、
     ///    行き先を新しい表での既定へ引き直す（要件 6.8）。種類は 3 の持ち運びの判定が引くので、
-    ///    **2 を 3 より先に**行う（tasks.md Implementation Notes 5.4）。
+    ///    **2 を 3 より先に**行う（`set_box_index` は今ある箱の種類で持ち運びを判定するため）。
     /// 4. `\s` の解決の閉包とフォントを探す場所の順（要件 3.10）を入れ替える。
     pub fn set_box_layout(
         &mut self,
@@ -83,7 +83,7 @@ impl TextLayerRuntime {
             .map(|(id, placements)| (id, placements.iter().map(|p| p.name.clone()).collect()))
             .collect();
         // 置き場所の表は名前のブレスが採られたものだけを載せる（`fold_boxes`）ので、定義は必ず引ける。
-        // 同じ名前が幾つのサーフェスに在っても解くのは 1 度（指摘 7）。
+        // 同じ名前が幾つのサーフェスに在っても解くのは 1 度（audit-emo-text-state-actor 指摘 7）。
         let names: BTreeSet<&BoxName> = index.values().flatten().collect();
         let traits: BTreeMap<BoxName, BoxTraits> = names
             .into_iter()
@@ -201,7 +201,7 @@ impl TextLayerRuntime {
 
     /// 場所の面を切る右と下（場所の左上を原点とする image px）: 普通のバルーンは画像の大きさ、箱は
     /// 箱の大きさとシェルの画像の重なり（`min(箱の幅, シェルの幅 − X)`・高さも同じ・`i64` で求める・
-    /// 指摘 3）。箱がシェルの右か下の外なら 0 以下（描かない）。
+    /// audit-emo-text-state-actor 指摘 3）。箱がシェルの右か下の外なら 0 以下（描かない）。
     pub(super) fn image_limit(&self, place: &PlaceKey, binding: &TextSlotBinding) -> (f32, f32) {
         let (w, h) = (
             i64::from(binding.image_size.0),
@@ -413,7 +413,7 @@ impl TextLayerRuntime {
     /// 書き出し位置・選択肢の飾りの縮退＝spec real-run-log-noise 要件 2.1〜2.4）は名前の欄を
     /// `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
     /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える・要件 3.11）。
-    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（件 2・要件 2.7）。
+    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（areka-P0-balloon-text-bugs 件 2・要件 2.7）。
     fn register_box(&mut self, key: PlaceKey, want: DesiredBox) {
         let Some(def) = self.box_layout.def(&want.site.name) else {
             // `desired_box` が定義の在る名前だけを通すので構造上起こらない。
@@ -423,7 +423,7 @@ impl TextLayerRuntime {
             );
             return;
         };
-        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。表を入れたときの覚えを複製して押す（指摘 7）。
+        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。表を入れたときの覚えを複製して押す（audit-emo-text-state-actor 指摘 7）。
         let Some(memo) = self.box_resolved.get(&want.site.name) else {
             // 覚えは表に載る名前ごとに入るので構造上起こらない。
             warn!(
@@ -440,7 +440,7 @@ impl TextLayerRuntime {
             decoration::warn_cursor_fallback(name, &CursorFallback::of(def.model.cursor()), None);
         }
         let (w, h) = (i64::from(def.size.0), i64::from(def.size.1));
-        // 潰れの記録（件 2）。`def` の借用が切れた後に呼ぶ。
+        // 潰れの記録（areka-P0-balloon-text-bugs 件 2）。`def` の借用が切れた後に呼ぶ。
         self.note_region_collapse(&key, want.site.name.as_str(), &resolved);
         let (sw, sh) = (
             i64::from(want.surface_size.0),

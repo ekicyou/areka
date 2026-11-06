@@ -1,4 +1,4 @@
-//! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す（task 12.2・要件 10.4）
+//! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す（要件 10.4）
 //!
 //! 検体 `tests/fixtures/shell-balloon/surfaces.txt` を、読み手（`parse_boxes`・`parse`）→
 //! 畳み込み（`fold_boxes`）→ 文字の層（`TextLayerRuntime::set_box_layout`）へ通し、台本を

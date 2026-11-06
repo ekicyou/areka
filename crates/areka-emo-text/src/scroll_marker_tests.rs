@@ -246,7 +246,7 @@ fn forget_drops_manual_and_remainder() {
     assert_eq!(s.forget(StopReason::Cleared), ScrollChange::Unchanged);
 }
 
-// ---- 見える範囲・出る条件・置き場（task 3.2・要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7・8.5・8.7） ----
+// ---- 見える範囲・出る条件・置き場（要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7・8.5・8.7） ----
 
 use crate::layout::test_support::{IMAGE, broken_lines, model_rect};
 use crate::layout::{FixedMetrics, WrapPlan};
@@ -546,7 +546,7 @@ fn placement_without_coords_uses_the_ssp_measured_default() {
     );
 }
 
-/// 指摘 3: 広がり（箱の大きさ）が `i32` に入らない `u32::MAX` や `2^31` でも、置き場の計算が落ちず、
+/// audit-emo-text-state-actor 指摘 3: 広がり（箱の大きさ）が `i32` に入らない `u32::MAX` や `2^31` でも、置き場の計算が落ちず、
 /// 既定の置き場（`幅 − 20`・`高さ − 15`）と右端・下端からの座標を広がりのまま解く。x だけ・y だけを
 /// 別々に大きくする（片方の軸を `as i32` に戻すと、その軸の case が落ちる）。
 #[test]

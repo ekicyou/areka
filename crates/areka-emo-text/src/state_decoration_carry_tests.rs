@@ -130,7 +130,7 @@ fn traits() -> BTreeMap<BoxName, BoxTraits> {
         .collect()
 }
 
-/// 箱の種類を箱の表より先に入れ（Implementation Notes 5.4）、スコープ 0・1 に普通のバルーンの 2 層を差す。
+/// 箱の種類を箱の表より先に入れ（`set_box_index` が今ある種類で持ち運びを判定するため）、スコープ 0・1 に普通のバルーンの 2 層を差す。
 fn state() -> TextLayerState {
     let mut state = TextLayerState::default();
     state.set_box_traits(traits());

@@ -334,7 +334,7 @@ fn scale_one_and_a_half_places_and_sizes_the_arrows() {
     assert_eq!(hits, expected, "当たりは描いた所と同じ（面の端で切れる）");
 }
 
-/// 押下の届き方（6.2・6.3 の受け口の前提）: 印の面は窓の直接の子なので、泡立ちの道は「送り手 → 窓」で、
+/// 押下の届き方（押下の受け口の前提）: 印の面は窓の直接の子なので、泡立ちの道は「送り手 → 窓」で、
 /// 押下は窓の `OnPointerPressed`（普通のバルーンはバルーンの窓・箱はシェルの窓）が受ける。wintf は
 /// 子を末尾から当てるので、矢印の下の絵が不透明ならその絵が送り手になり、絵が透けていれば印の面が
 /// 送り手になる。矢印の透けた画素は（絵も透けていれば）何も受けない。
@@ -393,7 +393,7 @@ fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
     assert_eq!(build_bubble_path(&world, picture), vec![picture, window]);
 }
 
-/// 指摘 2: `i32` の上限の近くの矢印でも、描く矩形の右端・下端があふれず、当たりとマスクの矩形
+/// audit-emo-text-state-actor 指摘 2: `i32` の上限の近くの矢印でも、描く矩形の右端・下端があふれず、当たりとマスクの矩形
 /// （`marker_span` の始まりの床〜終わりの天井）と一致する。右端・下端を別々に見る。
 #[test]
 fn draw_rect_near_i32_max_matches_the_hit_and_mask_rect() {

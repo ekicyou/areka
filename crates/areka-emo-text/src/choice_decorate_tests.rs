@@ -1,4 +1,4 @@
-// ── タスク 5.4: canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
+// ── canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
 //
 // design.md「純粋層 / ChoicePure」・要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
 // SquareFill）/4.3（未指定→Invert 反転）/4.5（描画実行の一点写像＝焼込済み純データ）。

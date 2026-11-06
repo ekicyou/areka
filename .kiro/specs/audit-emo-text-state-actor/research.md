@@ -592,3 +592,10 @@
 
 - 指摘にしなかったもの: (a) の `HitMaskCache`（上の「頼まれた点」）・`scroll_marker.rs:229` の `shortcut:`・`tests/kero_menu_capacity_test.rs:260-276`・`tests/shipped_fixture_region_test.rs:42-50`・`tests/physical_extent_arbitration_test.rs` の 81/81・`tests/shell_balloon_fixture_test.rs` の `fake_resolver`・`state_decoration_tests.rs:407,421` の `cursorbrush`（兄弟の 11.4）・`tests/areka_balloon_fixture/definition.rs:127-131` の表の数（重なりを防ぐ意図が説明にある）・`Cargo.toml` の description の spec 名（ほかのクレートと同じ出自の札）。
 - 範囲の外で見えたもの（知らせるだけ）: 兄弟の `draw_oracle_tests.rs:43`・`viewbox_draw_test_support.rs:38` の写し（R1-7）・`state_decoration_reset_tests.rs:483` は範囲の中で `state_decoration.rs:53` と同じ誤った名（R1-16 と一緒に直す）・`doc/COMPAT_ARCHITECTURE.md:250` の古い値（R1-17）。
+
+#### 1 回目の片付け
+
+- 29 件とも直した（組 A `7a476cb1`・組 B `823de1fe`・組 C `9e07a703`・組 D `d93d030f`・組 E は次のコミット）。どの組も別のレビュー係の承認を得た。
+- R1-23・R1-24 は裁定に当たる指摘。開発者は audit 系の spec の議題を推奨案で承認してよいとしている（11-04）ので、次の形で決めた。
+  - R1-23: 振る舞いは変えず、理由を注釈に書いた。完了した `real-run-log-noise` の要件 1.7 が、この種の警告（上書きで飛ばした値）を「装着と入力が変わったときだけ出す」とすでに決めている。入力が同じなら解き直さない門は `actor_attach.rs` の入力の覚えが持つので、警告は解き直し 1 回に 1 件で、3.12 の決まりとも合う。
+  - R1-24: 振る舞いは変えず、わざと残す理由を doc に書いた。`clears` は `crates/areka` の `balloon_visibility` が等しさで比べるので、0 に戻すと取り違える。`routes` はシェルの切替をまたいで保つスコープの状態。

@@ -3,8 +3,7 @@ use areka_sakura::contract::FONT_TAG_CARRIER;
 
 /// FP 丸めに依存しない reveal 間隔（0.25 は 2 の冪＝正確表現）。duration 駆動 reveal では
 /// `interval = duration / N` ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むことで
-/// interval=0.25 の決定論的リビール時刻列を得る（旧 char_wait=0.25 檻と機能等価・
-/// 期待リビール時刻は実装と同一の `D/N` 算術で成立し、旧 0.05 リテラル由来値を使わない）。
+/// interval=0.25 の決定論的リビール時刻列を得る（期待リビール時刻は実装と同一の `D/N` 算術で成立する）。
 pub(super) const REVEAL_INTERVAL: f64 = 0.25;
 
 /// テスト用 cue 生成ヘルパ。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込み

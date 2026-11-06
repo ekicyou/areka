@@ -34,16 +34,16 @@ pub enum TextMsg {
     Upcoming(Vec<TalkCue>),
     /// 終了指示（結線側が talk 経路の畳み込みで送る・`Ok(Break)` 経路）。
     Close,
-    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く・件 1）。
+    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く・areka-P0-balloon-text-bugs 件 1）。
     TalkEnded,
-    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し・件 1）。
+    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し・areka-P0-balloon-text-bugs 件 1）。
     ChoiceWaitBegan,
 }
 
 /// **単一の出力契約** [`dola::cue::CueSink`] の実装——broadcast された全 cue を UI ドレインへ
 /// 非ブロック送出する受信口（担当外 cue も届き、reveal を汚さず duration を honor する）。
 ///
-/// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.text_sink`
+/// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.sinks`
 ///   へ登録・注入可能な形・注入自体は emo2-boot の責務・R10.1/R11.6）。
 /// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側
 ///   （R1.3 前半)。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
@@ -66,7 +66,7 @@ impl Clone for EmoTextSink {
     }
 }
 
-/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る（件 1）。
+/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る（areka-P0-balloon-text-bugs 件 1）。
 ///
 /// 複製はトークの再生が所有し、最後まで・中断・置き換えのどの終わり方でも落ちる。同じ口の FIFO で
 /// そのトークの cue の後に並び、置き換えでは配送が古いトークのスレッドを合流してから新しいトークを
@@ -122,13 +122,13 @@ impl EmoTextSink {
     }
 }
 
-/// **単一の出力契約**（R11.6・task 4.1）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+/// **単一の出力契約**（R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を broadcast し、emo-text は担当（Balloon）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
 /// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・R2.2/R2.3）。配送先スロットの
-/// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ廃した（task 8.1 で暫定並存の
-/// `TextSink` 実装を撤去し `CueSink` 一本へ集約）。
+/// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ廃し、
+/// `CueSink` 一本にしている。
 impl dola::cue::CueSink for EmoTextSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(TextMsg::Cue(cue));
@@ -156,7 +156,7 @@ impl dola::cue::CueSink for EmoTextSink {
         }
     }
 
-    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む（件 1）。
+    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む（areka-P0-balloon-text-bugs 件 1）。
     /// 積めなかったとき（UI ドレイン停止後）は `preview` と同じく `error!` 1 行のみ・panic しない。
     fn choice_wait_began(&mut self) {
         if self.tx.send(TextMsg::ChoiceWaitBegan).is_err() {
@@ -242,7 +242,7 @@ mod tests {
     /// 記録 handler で `spawn_ui` し、`(sink, terminated, records)` を返す。
     ///
     /// - handler は [`handle_text_msg_with`]（終了規律の正準写像）へ委譲し、cue を `records` へ
-    ///   push する（＝「描画を担う側」への配送先スタンドイン。状態機械適用は task 7.2 の領分）。
+    ///   push する（＝「描画を担う側」への配送先スタンドイン。状態機械の適用はここでは見ない）。
     /// - `poison` が指す本文の Text cue は `Err` を返す（個別配送失敗の再現・R1.5）。
     /// - 本テストスレッドが pump スレッドを演じる（`spawn_ui` と pump は同一スレッド必須）。
     fn spawn_recording_drain(
@@ -282,9 +282,9 @@ mod tests {
     /// 単一出力契約（`dola::cue::CueSink`）への登録可能性を型で検証する（トレイトはフルパス束縛で参照）。
     fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
 
-    /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへの登録・`GhostBootOptions.text_sink` への
+    /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへの登録・`GhostBootOptions.sinks` への
     /// 注入が可能な**単一の出力契約**（`dola::cue::CueSink + Clone + Send + 'static`）を満たす
-    /// （R10.1/R11.6・task 4.1 の単一トレイト・注入自体は emo2-boot の責務）。
+    /// （R10.1/R11.6・単一トレイト・注入自体は emo2-boot の責務）。
     #[test]
     fn emo_text_sink_satisfies_cue_sink_contract() {
         assert_cue_sink_contract::<EmoTextSink>();

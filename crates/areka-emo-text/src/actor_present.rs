@@ -64,7 +64,7 @@ pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
 ///   `ActorRender` を破棄した直後のフレームでも再発火する（新 k の物理寸で再生成・R8.2）。
 /// - **装着済み actor のグリフ更新**: viewbox ダーティ矩形スクロール描画→（変化ありのフレームだけ）
 ///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
-/// - **描画範囲の潰れた場所**（件 2）: 装着せず描かず記録もせず、残った描画資源は外して捨てる。
+/// - **描画範囲の潰れた場所**（areka-P0-balloon-text-bugs 件 2）: 装着せず描かず記録もせず、残った描画資源は外して捨てる。
 ///   「提示した場所」に数えない（箱の写しに載せない）。ほかの場所の提示は続ける。
 /// - **デバイス失敗**: 失敗源で `error!` 済み（log-first）。当該 actor の当該フレーム提示を
 ///   skip して他 actor の処理は継続し、最初の失敗を `Err` として返す（次フレーム再試行）。
@@ -80,7 +80,7 @@ pub fn present_frame(
     drop_renders_after_device_change(runtime, world);
     // 状態を持つ actor だけが提示対象（binding 登録済みでも cue が無ければ描くものがない）。
     //
-    // 「状態を持つ」の判定は **中身か既に作った供給面のどちらかがある**こと（task 7.2）。
+    // 「状態を持つ」の判定は **中身か既に作った供給面のどちらかがある**こと。
     // 装着（[`TextLayerRuntime::register_actor`]）が 2 層を差し込む時点でスコープの器は
     // 生まれる——器だけを提示対象に数えると、一度も発話していないスコープにまで供給面を
     // 割り当ててしまう。逆に、既に供給面を持つスコープは中身が空でも外せない（`Clear`／
@@ -227,12 +227,12 @@ fn present_actor(
     };
 
     // 文字の面は画像（箱は箱とシェルの画像の重なり）の右と下で切る（外は窓に映らない）。左と上は
-    // 面の原点なので切らない（近い辺は上限が止める）。切って空なら潰れた場所と同じく描かない（指摘 3・要件 2.1）。
+    // 面の原点なので切らない（近い辺は上限が止める）。切って空なら潰れた場所と同じく描かない（audit-emo-text-state-actor 指摘 3・要件 2.1）。
     let region = &resolved.region;
     let lim = runtime.image_limit(place, &binding);
     let clip = (region.right().min(lim.0), region.bottom().min(lim.1));
 
-    // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない（件 2・要件 2.1・2.2・2.7） ──
+    // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない（areka-P0-balloon-text-bugs 件 2・要件 2.1・2.2・2.7） ──
     // 描いた後に潰れた（再追従が描画資源を残した）なら、ここで差し込み口から外して前の字を残さない
     // （要件 2.9）。当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
     if region.is_collapsed() || clip.0 <= region.left() || clip.1 <= region.top() {
@@ -402,7 +402,7 @@ fn present_actor(
     let visible = actor_state.reveal().visible(talk_time);
     let spans = actor_state.choices();
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。済んだ選択肢を指す強調は
-    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・件 1 の要件 1.10／1.12）。
+    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・areka-P0-balloon-text-bugs 件 1 の要件 1.10／1.12）。
     let hover = runtime
         .choice_hover
         .get(place)
@@ -419,7 +419,7 @@ fn present_actor(
         lookahead_rev: runtime.lookahead_rev,
     };
     let look = actor_state.current_look();
-    // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す（指摘 8）。
+    // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す（audit-emo-text-state-actor 指摘 8）。
     let mut memo = match render.frame_memo.take() {
         Some(memo) if memo.matches(&key, look, &resolved) => memo,
         _ => {
@@ -529,7 +529,7 @@ fn present_actor(
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()
             .filter_map(|row| {
-                // 済んだ選択肢の行は写しに入れない＝押しても当たらない（アンカーの行は残る・件 1 の要件 1.11）。
+                // 済んだ選択肢の行は写しに入れない＝押しても当たらない（アンカーの行は残る・areka-P0-balloon-text-bugs 件 1 の要件 1.11）。
                 spans
                     .iter()
                     .find(|span| span.ordinal == row.ordinal)
@@ -574,7 +574,7 @@ fn present_actor(
 
 /// 提示の最後: 出す矢印・絵・置き場・拡大率が前と違うときだけ印の面を描き直す（当たりの写しも
 /// 一緒に作り直す・要件 3.8）。印の面は初めて矢印を出すときに、面の画像（箱は箱とシェルの画像の
-/// 重なり）全体の物理寸で文字の面の直前に挿す（要件 3.5・指摘 3）。失敗は失敗源で `error!` 済み
+/// 重なり）全体の物理寸で文字の面の直前に挿す（要件 3.5・audit-emo-text-state-actor 指摘 3）。失敗は失敗源で `error!` 済み
 /// （その場所の矢印だけが出ない）。上限越えとその寸での作成の失敗は寸を覚え、同じ寸では試さない。
 fn present_markers(
     runtime: &mut TextLayerRuntime,
@@ -729,7 +729,7 @@ pub(super) fn arrange_lines(
     // 区切りを計算せず、区間の全文にも触れない（R4.2・要件 3.3）。文節（BudouxWordWrap）は
     // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表・字の無い行の丈に
     // 使う「今の見た目」も）で、そうでなければ届いた字で区切る（修正前の動き・warn は持ち主が出す）。
-    // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う（指摘 8）。
+    // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う（audit-emo-text-state-actor 指摘 8）。
     let (content, wrap) = match resolved.wrap {
         WrapMode::CharByChar => (arrived, WrapPlan::CharByChar),
         WrapMode::BudouxWordWrap => match lookahead.basis(place, arrived) {
@@ -741,7 +741,7 @@ pub(super) fn arrange_lines(
         },
     };
     // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
-    // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
+    // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ）。
     // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
     Some(LayoutEngine::layout_styled(
         content.items(),
@@ -757,7 +757,7 @@ pub(super) fn arrange_lines(
     ))
 }
 
-/// 届いた字の区切りの覚え（指摘 8）: 鍵は（消した回数, 項目の数）。項目は消すまで増えるだけで、
+/// 届いた字の区切りの覚え（audit-emo-text-state-actor 指摘 8）: 鍵は（消した回数, 項目の数）。項目は消すまで増えるだけで、
 /// 表を替えると箱の `ActorRender` は捨てられるので、この 2 つが同じなら区切りも同じ。
 #[derive(Default)]
 pub(super) struct BreakMemo {
@@ -802,7 +802,7 @@ struct FrameKey {
     lookahead_rev: u64,
 }
 
-/// 配置の覚え（指摘 8）: 鍵が前のフレームと同じなら、配置・選択肢の範囲・キャンバス・装飾を
+/// 配置の覚え（audit-emo-text-state-actor 指摘 8）: 鍵が前のフレームと同じなら、配置・選択肢の範囲・キャンバス・装飾を
 /// 作り直さず、覚えた答え（行・区切り・帯・キャンバス）で描き手を回す。
 ///
 /// **配置が読む値を足したら鍵にも足す**（足し忘れると古い字を見せる）。

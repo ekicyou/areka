@@ -1,7 +1,7 @@
-//! # actor_region_collapse_present_tests — 潰れた場所は提示で描かず、描いた後に潰れたら前の字を片付ける（件 2・実 GPU）
+//! # actor_region_collapse_present_tests — 潰れた場所は提示で描かず、描いた後に潰れたら前の字を片付ける（areka-P0-balloon-text-bugs 件 2・実 GPU）
 //!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **2.1**・**2.2**・**2.4**・**2.6**〜**2.9**・**4.2**、
-//! design「潰れた描画範囲（件 2）」・テストの方針「結合 7」）。
+//! design「潰れた描画範囲（areka-P0-balloon-text-bugs 件 2）」・テストの方針「結合 7」）。
 //!
 //! 提示（`present_frame`）は、描画範囲の潰れた場所を装着せず描かず（供給面を作らない）、記録も
 //! 出さない。描画資源が残っていれば（描いた後の再追従で潰れた）その提示で `TextSurface::release` で

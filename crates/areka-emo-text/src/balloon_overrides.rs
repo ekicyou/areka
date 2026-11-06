@@ -57,6 +57,8 @@ pub fn overrides(model: &BalloonModel) -> BalloonOverrides {
         ]),
         (None, None, None) => {}
         (r, g, b) => {
+            // 解き直し 1 回に 1 件。入力が前と同じフレームは呼び手が解き直さない
+            // （spec real-run-log-noise 要件 1.7）ので、出るのは装着と入力が変わったときだけ。
             let part = |c: Option<u8>| c.map_or(String::new(), |v| v.to_string());
             warn!(
                 key = "disable.font.color",

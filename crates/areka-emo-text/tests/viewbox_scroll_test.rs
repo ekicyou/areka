@@ -1,4 +1,4 @@
-//! # viewbox_scroll_test — 再描画レス・ダーティ限定描画の決定論カウント檻（task 11・実 pump 通し）
+//! # viewbox_scroll_test — 再描画レス・ダーティ限定描画の決定論カウント檻（実 pump 通し）
 //!
 //! design.md「Testing Strategy → Integration Tests → 2. 再描画レス カウント檻
 //! （tests/viewbox_scroll_test.rs・実 pump 通し）」の正典述語を、**実配線**
@@ -10,7 +10,7 @@
 //! actor 別の [`DrawStats`] を [`TextLayerRuntime::draw_stats`] から読み、フレーム間の**増分**を
 //! 検査する。時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 //!
-//! ## 観測する 2 条件（task 11 の観測可能な完了状態）
+//! ## 観測する 2 条件
 //!
 //! 1. **内容・可視窓とも不変のフレーム → 全統計増分 0**（NoChange gating）: 描画済みの状態で新規
 //!    cue を加えず同一注入時刻 `t` で `present_frame` をもう一度呼ぶと、`draw_text_layout_calls`／
@@ -134,7 +134,7 @@ fn stats(runtime: &Rc<RefCell<TextLayerRuntime>>, actor: &ActorKey) -> DrawStats
 
 // ══ 実 pump 通し: 再描画レス・ダーティ限定描画のカウント檻（R3.1/R3.2/R3.5/R10.3） ══════════
 
-/// 観測可能な完了状態（task 11）: 実 pump（register→present_frame）で actor を駆動し、
+/// 観測可能な完了状態: 実 pump（register→present_frame）で actor を駆動し、
 /// (1) 内容・可視窓とも不変のフレームで全統計増分が 0（NoChange gating）、(2) あふれ→スクロール
 /// フレームで `draw_text_layout_calls` 増分が可視行数より厳密に小さく露出帯交差行の上限
 /// 以下・`line_layout_creations` 増分も可視行数より小さい（確定行を再描画・再生成しない）を檻化する。

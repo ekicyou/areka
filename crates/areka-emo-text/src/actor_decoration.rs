@@ -38,8 +38,8 @@ use crate::viewbox_draw::ViewboxExecutor;
 use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
 
-/// 描画実行部と計測器を組み、全部通ってから `attach` で供給面を付けて 1 actor 分の描画資源にする
-/// （task 7.3）。面を付けるのを最後にするのは、組み立てが失敗したときに窓の子の entity を残さない
+/// 描画実行部と計測器を組み、全部通ってから `attach` で供給面を付けて 1 actor 分の描画資源にする。
+/// 面を付けるのを最後にするのは、組み立てが失敗したときに窓の子の entity を残さない
 /// ため（どれも面を要らない）。
 ///
 /// フォント候補列の解決台帳（[`FontCatalog`]）は**ここで 1 つだけ**作り、計測器と描画器の

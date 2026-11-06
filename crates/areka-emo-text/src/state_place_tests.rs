@@ -94,7 +94,7 @@ fn clear_empties_only_destination_box_and_returns_to_write_start() {
 
 #[test]
 fn clear_on_balloon_destination_behaves_as_before_and_leaves_boxes() {
-    // 箱の無い構成: 本 spec の前と同じ。
+    // 箱の無い構成: 箱の場所は作らない。
     let mut plain = TextLayerState::default();
     write(&mut plain, "0", "ふ");
     plain.apply_cue(&cue("0", 0.0, CueCommand::Clear));

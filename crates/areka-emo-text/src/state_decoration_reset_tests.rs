@@ -1,9 +1,9 @@
 //! 「戻す操作」の公開・装着時の 2 層の差し込み・記録の 1 度化の決定論テスト
-//! （タスク 4.2・要件 10.2／10.3／10.4／10.5／10.7・4.1・6.3・13.1／13.4／13.5）。
+//! （要件 10.2／10.3／10.4／10.5／10.7・4.1・6.3・13.1／13.4／13.5）。
 //!
 //! [`super`]（`state_decoration_tests.rs`）の子モジュールとして接続してあり、台本を組む
 //! 補助（`font`・`text`・`st`・`look_of`）を共有する。1 ファイル 1,000 行の見張りに余裕を
-//! 残すため、タスク 4.1 の試験とはファイルを分けている。
+//! 残すため、`state_decoration_tests.rs` の試験とはファイルを分けている。
 //!
 //! 記録の件数は `log-capture-kit`（ワークスペース唯一の捕捉機構）で数える。記録の道を持つ
 //! 操作について「出ない」を主張する試験には、同じ窓・同じ発行点で「出る側」を 1 件置いた
@@ -474,7 +474,7 @@ fn a_record_key_is_the_pair_not_a_flattened_spelling() {
 /// 鍵の第 3 要素は値の**列**であって、カンマで繋いだ 1 本の綴りではない（R13.4／R13.5）。
 ///
 /// 引用符はトークンの中のカンマを守る（`areka-parsers` の
-/// `lexer_tests.rs::quoted_arg_protects_comma` が `\s["a,b"]` → 引数 `["a,b"]` を固定して
+/// `lexer_tests.rs::quoted_and_unquoted_args_mixed` が `\![raise,"a,b",c]` → 引数 `["raise","a,b","c"]` を固定して
 /// いる）。よって `\f[bold,"x,y"]`（値 1 個・真偽の語でない）と `\f[bold,x,y]`（値 2 個・
 /// 個数違い）は**理由まで違う別々の失敗**なのに、鍵を `values.join(",")` へ平坦化すると
 /// どちらも `"x,y"` になり、2 件目が無記録で飲み込まれる。件数だけでなく 2 つの `reason`
@@ -507,7 +507,7 @@ fn a_record_key_keeps_the_value_list_not_a_joined_spelling() {
 // ------------------------------------- §12 `\f[disable]` も一括の戻し（R10.2／R10.4）
 
 /// `\f[disable]` は無効表示の見た目へ丸ごと合わせ、所有外キーの保持も空にする
-/// （`\f[default]` との対称・タスク 4.2 の裁定）。
+/// （`\f[default]` との対称・要件 10.2／10.4）。
 #[test]
 fn the_disable_tag_is_a_bulk_reset_too() {
     let mut state = TextLayerState::default();
@@ -621,7 +621,7 @@ fn no_failure_path_is_swallowed_without_a_record() {
 /// **`look.rs` 側の字面検査では本番を見張れない**——`look_font_tag_tests.rs::the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items`
 /// が走査する `look.rs::apply_font_tag` の `key == "default"`／`"disable"` の 2 腕は、
 /// `apply_font_args` が先に掴んで戻す操作へ回すため**本番経路から到達しない**
-/// （`apply_font_args` の doc とタスク 4.2 の裁定）。本番の実体は本ファイルの
+/// （`apply_font_args` の doc・要件 10.2／10.4）。本番の実体は本ファイルの
 /// `reset_look_to` であり、そこを項目の列挙へ書き換えても向こうの検査は緑のままになる。
 ///
 /// 値の比較でも見張れない——今日の [`crate::look::TextLook`] の項目集合では、列挙形と

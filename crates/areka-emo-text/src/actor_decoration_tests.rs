@@ -1,4 +1,4 @@
-// task 7.2 の檻: バルーン背景色の受け口（[`TextLayerRuntime::set_balloon_background`]／
+// バルーン背景色の受け口（[`TextLayerRuntime::set_balloon_background`]／
 // `background_of`）と、装着の 1 点（[`TextLayerRuntime::register_actor`]）で 2 層を
 // 純粋状態へ差し込む配線（要件 4.6／3.1）。
 //
@@ -313,7 +313,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     );
 }
 
-/// 指摘 5: 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない
+/// audit-emo-text-state-actor 指摘 5: 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない
 /// （面を付けるのは書体・計測器・描き手が全部通った後）。組み立ては無効にした `GraphicsCore` で
 /// 落とし、閉包は生きた装置で本物の窓の子の面を付ける——先に呼べば子が 1 つ増えて赤になる。
 #[test]

@@ -30,7 +30,7 @@ fn visible_glyphs_progress_one_by_one_with_injected_time() {
 /// 非 2 冪の配送 duration でも進行する（丸め安全マージン付き時刻で観測）。
 /// duration=0.15・N=3 → interval = 0.15/3 ≈ 0.05（f64 除算・厳密ビット等価は主張しない）。
 /// リビール時刻 r ≈ [1.0, 1.05, 1.10] を、±0.01 マージン付き注入時刻で観測する
-/// （旧 0.05 リテラル由来の期待値でなく `D/N` 由来の近似時刻＋マージンで固定・FP flaky 回避）。
+/// （`D/N` 由来の近似時刻＋マージンで固定・FP flaky 回避）。
 #[test]
 fn visible_glyphs_progress_with_duration_derived_interval() {
     let mut state = TextLayerState::default();
@@ -164,8 +164,8 @@ fn visible_glyphs_are_independent_per_actor() {
 // ══ 服従契約の縮退（1.2/7.3）と honor no-op（2.2/7.5）══
 
 /// 縮退（1.2/7.3）: 配送 duration=0（瞬時／後方互換 cue）かつ N≥1 は interval=0 ゆえ
-/// 全グリフが `cue.at` で**同時**可視になる（旧 char_wait 実装は 0.05 刻みで 1 グリフずつ
-/// 出すため、この同時可視は duration 服従後にのみ成立する）。
+/// 全グリフが `cue.at` で**同時**可視になる（決まった刻みで 1 グリフずつ出す実装では
+/// この同時可視は成立しない）。
 #[test]
 fn zero_duration_reveals_all_glyphs_simultaneously_at_cue_at() {
     let mut state = TextLayerState::default();

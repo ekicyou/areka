@@ -1,4 +1,4 @@
-//! # shipped_fixture_region_test — 出荷済み実ゴースト定義の開始点を逐語固定する檻（task 4.2）
+//! # shipped_fixture_region_test — 出荷済み実ゴースト定義の開始点を逐語固定する檻
 //!
 //! 出典 spec: `areka-P0-balloon-vertical-canon`（要件 **3.10**／**10.7**・設計 **DD5**／**C9**）。
 //!
@@ -24,15 +24,9 @@
 //! [`WritingMode`] も併せて固定する。複製 fixture `emo2-kakukaku-wplimit` も同値であることを
 //! 同じ形で固定する（複製が原本から乖離したら赤くなる）。
 //!
-//! ## 2 つの編集を跨いで無改変のまま緑であることが証跡になる
+//! ## 期待値は origin の宣言にもクランプにも依らない
 //!
-//! 本檻は **origin 宣言がまだ在る状態（クランプ経由）で書かれた**。以後、
-//!
-//! - task 4.3 = fixture の `origin.x,0`／`origin.y,0` 宣言の削除
-//! - task 4.4 = `region.rs` の origin クランプ撤去（要件 3.10）
-//!
-//! の**いずれを経ても本ファイルは無改変のまま緑であり続けなければならない**。これが両編集の
-//! 挙動不変を反証可能にする証跡である。成立の理屈は次のとおり——期待値 (36,46)／(24,40) は
+//! 期待値 (36,46)／(24,40) は
 //!
 //! - 「宣言 `origin(0,0)` が validrect 外ゆえ**クランプで書字開始角へ寄った**結果」でもあり、
 //! - 「宣言が無いので**未宣言の縮退で書字開始角へ落ちた**結果」でもある（要件 3.11 が不変を保証）
@@ -40,7 +34,7 @@
 //! という**同じ値**である。したがって本檻は宣言の有無にもクランプの有無にも依存しない。
 //!
 //! **禁則**: 本ファイルで `model.origin().x() == Some(0)` のような**宣言された生値**を assert
-//! してはならない。task 4.3 で宣言が消えた瞬間に赤くなり、上の証跡が成立しなくなる。
+//! してはならない。期待値が宣言の有無に依らないことがこの檻の成立条件である。
 //!
 //! **禁則の対象**: 上の禁則が掛かるのは**原本 `emo2-kakukaku` とその複製 `emo2-kakukaku-wplimit`
 //! を見る検査**（既存 5 本）である。この 2 つは宣言を削除済みで、宣言の有無に依存しないことが
@@ -56,65 +50,7 @@
 //!
 //! ---
 //!
-//! # 付録: task 4.1 意味論の棚卸し記録（2026-08-28 実測）
-//!
-//! 本檻はこの棚卸しの産物である。監査証跡として恒久記録する（正本は
-//! `.kiro/specs/completed/areka-P0-balloon-vertical-canon/tasks.md` 付録 A）。
-//!
-//! ## 対象ファイル一覧
-//!
-//! **validrect 外の `origin` 宣言を持つバルーン定義データファイル＝5 本**（いずれも
-//! `origin.x,0`／`origin.y,0`）:
-//!
-//! | # | ファイル | 是正方針（DD5） |
-//! |---|---|---|
-//! | D1 | `areka-emo-text/examples/fixtures/emo2-vertical/descript.txt` | 宣言削除（開始点 (356,46) 不変） |
-//! | D2 | `areka-emo-text/tests/fixtures/emo2-choice/descript-cursor.txt` | 宣言削除＋直前コメントの是正 |
-//! | D3 | `areka-emo-text/tests/fixtures/emo2-choice/descript-plain.txt` | 宣言削除（D2 と対） |
-//! | D4 | `検体 emo2 の同梱バルーン emo2-kakukaku の descript.txt` | 宣言削除（**本檻の対象**） |
-//! | D5 | `検体 emo2-kakukaku-wplimit の descript.txt` | 宣言削除（**本檻の対象**・D4 の複製） |
-//!
-//! **解決後 validrect の外にある in-code モデル＝3 箇所**（＋`region.rs` の fixture 複製 2 箇所）:
-//!
-//! | # | 場所 | 是正方針（DD5） |
-//! |---|---|---|
-//! | C1 | `areka-emo-text/tests/draw_readback_test.rs` の `validrect_model` | `Origin::new(None, None)` へ |
-//! | C2 | `areka-emo-text/tests/scale_invariance_test.rs` の 3 箇所 | `Origin::new(None, None)` へ |
-//! | C3 | `areka-emo-text/src/actor_scale_refresh_tests.rs` | `Origin::new(None, None)` へ |
-//! | C4／C5 | `areka-emo-text/src/region.rs` の `fixture_model()`／in-code KV | 意図ごとに個別判断 |
-//!
-//! ## 内外判定の結果: **5 本すべてが範囲外**
-//!
-//! 設計 C9 の候補地表は 4 件を挙げていたが、**`emo2-kakukaku-wplimit`（D5）が 5 件目**として
-//! 4.1 の棚卸しで判明した。逆向きの食い違い（既知 4 件のいずれかが実は範囲内だった）は無い。
-//! `C3` は設計のどの行にも現れていなかった。
-//!
-//! ## 方法の限界（同じ穴を二度踏まないために）
-//!
-//! - **語の grep では見つからない類が在る。** 「クランプ」「clamp_origin」「書字開始角」を
-//!   検索しても、当該語を 1 度も書いていない定義ファイル（`emo2-kakukaku/descript.txt` 等）は
-//!   原理的にヒットしない。2026-08-27 の棚卸しが実ゴースト定義を取りこぼしたのはこの理由。
-//!   **語 grep は文言是正の網羅にだけ使い、対象の発見には使わない。**
-//! - **基層だけを見て内外を判定してはならない。** `emo2-kakukaku` 系の基層は validrect が全 0
-//!   （範囲 [0,0]・両端含む判定で origin 0 は「内」）だが、本番は必ず面別上書き層を重ねるため
-//!   実範囲は sakura [36,356]×[46,168]／kero [24,240]×[40,133] で「外」になる。2026-08-27〜28 の
-//!   設計判断がこの取り違えで `wplimit` を「不変」と誤判定した。
-//! - **全緑は十分性の証拠にならない。** `actor_scale_refresh_tests.rs` の範囲外宣言はクランプ
-//!   撤去後も緑のままであり、`emo2-kakukaku` の開始点は当時どのテストも固定していなかった。
-//!
-//! ## やり直しの手順（棚卸しを再実施するとき）
-//!
-//! 1. `origin.x`／`origin.y` の行頭アンカー付き全文検索（`target`／`.git`／`vendors`／`.kiro` を
-//!    除外。**ファイルシステム側**を見ること——インデックス側だけだと未追跡ファイルを落とす）
-//! 2. 網の妥当性を別マーカーで裏取り: `validrect.` を含むファイルを全列挙して
-//!    「バルーン定義らしきファイル」を洗い、1 の結果を包含しているか見る
-//! 3. in-code は `Origin::` の全構築点を列挙し `Some(..)` のものだけ残す
-//! 4. 各宣言について、対応する面別上書き層（`balloons*s.txt`／`balloonk*s.txt`）を後勝ちで
-//!    重ね、採用画像の PNG IHDR から原寸を読み、`region.rs` の `resolve_or`／`resolve_coord` の
-//!    規則どおりに validrect 4 辺を計算する
-//! 5. 解決値が範囲（**両端含む**）に入るかを x・y 独立に判定する
-//! 6. 消費側の追随を `.origin()` と `TextRegion::resolve` の 2 本で洗う
-//!    （前者が生値を見る檻・後者が解決結果を見る檻）
+//! 対象ファイルの棚卸しの記録の正本は `.kiro/specs/completed/areka-P0-balloon-vertical-canon/tasks.md` の付録 A。
 
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -269,7 +205,7 @@ fn shipped_fixture_resolves_to_horizontal_tb() {
 /// scope 0（sakura）の解決結果を逐語固定する——**開始点 (36, 46)**。
 ///
 /// この値は「宣言 `origin(0,0)` がクランプで書字開始角へ寄った結果」でもあり
-/// 「宣言が無く未宣言縮退で書字開始角へ落ちた結果」でもある同じ値なので、task 4.3／4.4 の
+/// 「宣言が無く未宣言縮退で書字開始角へ落ちた結果」でもある同じ値なので、宣言の削除・クランプ撤去の
 /// いずれを経ても不変である（モジュール doc「2 つの編集を跨いで…」参照）。
 #[test]
 fn shipped_sakura_scope_region_is_pinned() {

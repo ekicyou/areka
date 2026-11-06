@@ -15,13 +15,13 @@ use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
-// ══ task 7.1: 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
+// ══ 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
 //
 // `TextSlotView` は emo-present の私有フィールド型で in-crate から構築できない
 // （公開コンストラクタなし・`text_slot_view` は実 GPU 表示確立が前提）。よって本檻は
 // 公開口 `refresh_actor_scale` が `TextSlotBinding::from_view` の直後に委譲する内側シーム
 // `refresh_actor_binding`（binding 直渡し・以降の判断分岐は完全に同一）を駆動する。
-// view 経由の全経路（`from_view` の物理寸読み取りを含む）は GPU 統合テストの領分（task 7.3）。
+// view 経由の全経路（`from_view` の物理寸読み取りを含む）は GPU 統合テスト（`tests/attach_wiring_test.rs`）の領分。
 
 /// 代表 native 原寸（emo2 balloon 相当）と、k を通した物理寸（`scaled_extent` 相当の実値）。
 /// k=1.25: 400×1.25=500 / 224×1.25=280。k=2: 800 / 448。
@@ -277,8 +277,8 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
     // 装着済みの状態で「何もしない」ことを観測する（毎フレーム再結線＝供給面の作り直しと
     // 全再描画を毎フレーム走らせる変異は、ここで is_attached／統計が動くことで死ぬ）。
     //
-    // **キルの排他性（実測・task 7.3 で再測）**: 「判定キー全同値でも ActorRender を破棄する」
-    // 変異は本ケースが殺すが**排他キルではない**——task 7.3 の統合檻
+    // **キルの排他性（実測）**: 「判定キー全同値でも ActorRender を破棄する」
+    // 変異は本ケースが殺すが**排他キルではない**——統合檻
     // `attach_wiring_test::scale_refresh_logs_k_transition_and_reattach_physical_size`
     // （同値 k のフレームで装着 `info!` が再発火しないことを見る）も同時に落ちる＝**共倒れ 2 本**。
     // 「churn ガードそのものを撤去する（全同値でも true を返して再構築する）」変異も
@@ -337,7 +337,7 @@ fn refresh_actor_scale_for_unregistered_actor_is_noop() {
 // 「`debug` まで開けた記録」は捕捉した全水準のうち `TRACE` を除いたものとして数える
 // （`capture_under_filter` の機能 `env-filter` は wintf だけが引く決まり・log-capture-kit の doc）。
 
-/// 件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
+/// spec real-run-log-noise の件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
 const ORIGIN_TO_CORNER: &str = "未指定の origin 成分を書字開始角へ寄せる";
 /// 件 1 と同じ解決の中のもう 1 つの `debug!`（要件 1.5）。
 const DEFAULT_EDGE: &str = "未指定座標成分を既定辺へ縮退する";
@@ -636,7 +636,7 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
     assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
 }
 
-/// 指摘 6: 装置の変化の印は文字の層ごと。同じ World に 2 つの文字の層を置き、装置を作り直すと、
+/// audit-emo-text-state-actor 指摘 6: 装置の変化の印は文字の層ごと。同じ World に 2 つの文字の層を置き、装置を作り直すと、
 /// 先に回った層も後に回った層も描き手を作り直す（印が World に 1 つだと、後の層は先の層が控えた
 /// 印を読んで「変わっていない」とし、古い装置の描き手を使い続ける）。
 #[test]

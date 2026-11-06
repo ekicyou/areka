@@ -126,9 +126,8 @@ fn parse_at_prefix_percent_is_relative_percent() {
     );
 }
 
-/// 語彙全形の網羅: Relative × Lh は他の
-/// `@` 単位テスト（Px/Em/Percent）で唯一欠けていた組合せ——Absolute×{Px,Em,Lh,Percent}
-/// ／Relative×{Px,Em,Lh,Percent} の完全マトリクスを閉じる。
+/// 語彙全形の網羅: Relative × Lh。他の `@` 単位テスト（Px/Em/Percent）と合わせて
+/// Absolute×{Px,Em,Lh,Percent}／Relative×{Px,Em,Lh,Percent} の完全マトリクスになる。
 #[test]
 fn parse_at_prefix_lh_is_relative_lh() {
     assert_eq!(

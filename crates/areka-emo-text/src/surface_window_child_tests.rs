@@ -1,4 +1,4 @@
-//! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（task 7.2・要件 1.6・3.6・3.7・9.4）。
+//! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（要件 1.6・3.6・3.7・9.4）。
 //!
 //! GPU/WUC は headless 実資源（`GraphicsCore::new()`・`surface.rs` の既存テストと同じ方針）。
 
@@ -65,7 +65,7 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "窓の直接の子（差し込み口の下の子ではない・要件 3.6）"
     );
 
-    // --- 当たり判定は字の矩形のマスクで、装着の時は 0 個（何も受けない・要件 9.4・task 13） ---
+    // --- 当たり判定は字の矩形のマスクで、装着の時は 0 個（何も受けない・要件 9.4） ---
     assert_eq!(
         world.get::<HitTest>(child).copied(),
         Some(HitTest::alpha_mask()),

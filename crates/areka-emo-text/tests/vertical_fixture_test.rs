@@ -1,4 +1,4 @@
-//! # vertical_fixture_test — 縦書き観測用 fixture 変種の読み込み検証（task 9.1・R11.4）
+//! # vertical_fixture_test — 縦書き観測用 fixture 変種の読み込み検証（R11.4）
 //!
 //! example ローカル fixture 変種 `examples/fixtures/emo2-vertical/` を実ファイルから
 //! 読み込み、以下を檻化する（design.md「File Structure Plan」・「観測」縦横切替が正典）:
@@ -39,7 +39,7 @@ use areka_parsers::balloon::BalloonModel;
 /// 共有 fixture のバルーン枠画像 balloons0.png の実測原寸（image px・再利用・非改変）。
 const FIXTURE_IMAGE_SIZE: (u32, u32) = (400, 224);
 
-/// fixture 変種（`examples/fixtures/emo2-vertical/`・task 9.2 の example が起動引数で切り替える
+/// fixture 変種（`examples/fixtures/emo2-vertical/`・example `emo-text-layer` が起動引数で切り替える
 /// 参照先）の descript 基層のみ（画像別上書き層なし）の BalloonModel。
 fn base_model() -> BalloonModel {
     variant_base_model(EXT_KEY_FIXTURE)

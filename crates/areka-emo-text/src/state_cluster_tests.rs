@@ -121,7 +121,7 @@ fn choice_cue_range_counts_clusters() {
     );
 }
 
-/// 選択肢とアンカーの始まりは、前の字のクラスタの数（改行は数えない・指摘 23⑷）。
+/// 選択肢とアンカーの始まりは、前の字のクラスタの数（改行は数えない・audit-emo-text-state-actor 指摘 23⑷）。
 /// 「か゚」（2 符号で 1 字）・改行・選択肢「B」の後に開いたアンカーは 2 から始まる。
 #[test]
 fn choice_and_anchor_start_counts_clusters_before_them() {

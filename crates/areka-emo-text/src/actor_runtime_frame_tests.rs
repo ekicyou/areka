@@ -313,7 +313,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     let n3 = read(&rt);
     assert!(n3 > n2, "t=0.11 で 3 グリフ目まで可視: {n2} -> {n3}");
 
-    // 配置の覚え（指摘 8）: 見える字が増えたフレームは作り直し、入力が同じフレームは作り直さない。
+    // 配置の覚え（audit-emo-text-state-actor 指摘 8）: 見える字が増えたフレームは作り直し、入力が同じフレームは作り直さない。
     let place = crate::place::PlaceKey::balloon(&actor);
     let rebuilds = rt.frame_rebuilds(&place).expect("装着済みの描き手");
     assert_eq!(rebuilds, 3, "字が増えた 3 フレームで作り直す");
@@ -342,7 +342,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     assert_eq!(read(&rt), 0, "Clear 後の供給面は全域透明へ戻る");
 }
 
-/// 観測可能な完了状態（task 9・R3.5/R10.3）: 登録済み actor に対して present_frame 後の
+/// 観測可能な完了状態（R3.5/R10.3）: 登録済み actor に対して present_frame 後の
 /// 決定論観測統計を `TextLayerRuntime::draw_stats(actor)`（`surface(actor)` と同型の
 /// additive アクセサ）から外部が読み出せる。未装着 actor は `None`。
 #[test]
@@ -382,7 +382,7 @@ fn draw_stats_readable_after_present_frame() {
     );
 
     // 後続フレームでリビールが進むと現在行を描き直し、累計が増える（累計は減らないので
-    // 「前以上」では次のフレームで何も描かなくても通る・指摘 13）。
+    // 「前以上」では次のフレームで何も描かなくても通る・audit-emo-text-state-actor 指摘 13）。
     present_frame(&mut rt, &mut world, 0.06).expect("フレーム t=0.06");
     let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
     assert!(
@@ -393,7 +393,7 @@ fn draw_stats_readable_after_present_frame() {
     );
 }
 
-/// task 5 配線の存在チェック（R4.2/R9.1・[test-only-decision-branches]）:
+/// 配線の存在チェック（R4.2/R9.1・[test-only-decision-branches]）:
 /// balloon model の `budoux_newline` が `ResolvedBalloonText.wrap` へ他の解決値
 /// （mode/region/font）と同じ一点解決経路で反映される。ON model（`budoux_newline,1`）
 /// → `BudouxWordWrap`・キー無し → `CharByChar`（既定）。`WrapMode::resolve` の受理語彙は
@@ -428,11 +428,11 @@ fn resolve_wires_wrap_mode_from_balloon_model() {
     );
 }
 
-/// 観測可能な完了状態（task 6.1・R6.4/R7.4・#6）: `ClearAll` は純粋状態の全スコープ消去に
+/// 観測可能な完了状態（R6.4/R7.4）: `ClearAll` は純粋状態の全スコープ消去に
 /// 加え、**装着済み全 actor の描画実行部**へ全域クリアを伝え、既描画サーフェスに古い
 /// ピクセルを残さない（`Clear` は cue.actor スコープのみ）。2 actor を装着してインクを載せ、
 /// 一方の actor 名で発行した `ClearAll` が**両**供給面を全域透明へ戻すことを readback で固定する
-/// （提示層でも全 render をクリアしないと #6＝前会話残留が再現する）。
+/// （提示層でも全 render をクリアしないと前の会話の画素が残る）。
 #[test]
 fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
     let (mut world, window0, slot0) = com_world();
@@ -478,7 +478,7 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
     assert_eq!(
         read(&rt, &kero),
         0,
-        "ClearAll は cue が名指ししない actor（1）の供給面も全域透明へ戻す（#6・全 render クリア）"
+        "ClearAll は cue が名指ししない actor（1）の供給面も全域透明へ戻す（全 render クリア）"
     );
     // 両描画実行部が **FullClear**（request_clear 経由）を 1 回ずつ行ったことを固定する。
     // これがないと ClearAll が cue.actor の render しかクリアせず（＝退行）、

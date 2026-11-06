@@ -141,7 +141,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch: f32) -> f32 {
     let upper = line_pitch.max(font_height);
-    // clamp は下限が NaN だと panic する。max/min なら有限の値で同じ答えのまま落ちない（指摘 4）。
+    // clamp は下限が NaN だと panic する。max/min なら有限の値で同じ答えのまま落ちない（audit-emo-text-state-actor 指摘 4）。
     line_box_height.max(font_height).min(upper)
 }
 
@@ -328,7 +328,7 @@ pub struct HitRectPx {
 /// §座標写像式（正本）は入力を「canvas-local（validrect-local）」と明記し
 /// [`to_window_physical`] が `region` 原点を戻す。layout 出力（`inline_range`／行矩形）は
 /// **絶対 image px**（描画開始点＝validrect 原点起点）ゆえ、canvas-local 化には validrect 原点が
-/// 必須。よって本関数は `region` を受け取り原点差引きを行う（追加・新規関数・呼び手は task 8）。
+/// 必須。よって本関数は `region` を受け取り原点差引きを行う（呼び手は結線層の提示）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 ///
@@ -677,7 +677,7 @@ impl ResolvedChoiceStyle {
     /// - `cursor.blendmethod` が ROP 系（`none` 以外）→ `none` 扱い
     ///   （色ベース描画・variant は style 判定どおりで不変・要件 6.5）。
     ///
-    /// 本メソッドは記録を出さない。縮退した元の値は [`CursorFallback::of`] が同じ判定で返し、
+    /// 本メソッドは記録を出さない。縮退した元の値は [`CursorFallback::of`] が取り出し、
     /// 警告は登録の側が置き場ごとに値が決まったときに 1 件出す（spec real-run-log-noise 要件 2.6:
     /// 解き直し 1 回で本メソッドは 2 回呼ばれ、置き場の名前も知らないため）。
     ///
@@ -700,7 +700,7 @@ impl ResolvedChoiceStyle {
         // style 解決（none→NoMarker・それ以外＝underline 系の縮退も既定 square も SquareFill）。
         match cursor.style() {
             Some(s) if s.eq_ignore_ascii_case("none") => ResolvedChoiceStyle::NoMarker,
-            // underline 系は SquareFill へ縮退（元の値は CursorFallback::of が同じ判定で返す）。
+            // underline 系も none 以外の 1 つとして SquareFill へ縮退（元の値は CursorFallback::of が取り出す）。
             // square 明示・style 未指定（既定 square）ともに SquareFill（正典確定 cursor.* マップ）。
             _ => square_fill_from(cursor),
         }
@@ -754,9 +754,9 @@ pub(crate) struct CursorFallback {
 }
 
 impl CursorFallback {
-    /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`ResolvedChoiceStyle::resolve`]
-    /// と同じ [`style_has_underline`] で、ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する
-    /// （`resolve` では ROP 系は分岐に効かないため判定を持たない）。
+    /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`style_has_underline`] の、
+    /// ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する（[`ResolvedChoiceStyle::resolve`] は
+    /// `none` 以外の style を一律に SquareFill へ落とし、ROP 系も分岐に効かないため、どちらの判定も持たない）。
     pub(crate) fn of(cursor: &BalloonCursor) -> CursorFallback {
         CursorFallback {
             blendmethod: rop_blendmethod(cursor).map(str::to_string),

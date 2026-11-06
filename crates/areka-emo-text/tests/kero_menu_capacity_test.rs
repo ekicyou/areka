@@ -1,4 +1,4 @@
-//! # kero_menu_capacity_test — 実物バルーン × メニュー 3 台本の容量テスト（task 5.1）
+//! # kero_menu_capacity_test — 実物バルーン × メニュー 3 台本の容量テスト
 //!
 //! 出典 spec: `areka-P0-emo-text-line-height-canon`（要件 **8.1**／**8.2**／**8.4 (a)(c)**／
 //! **8.7**／**5.1**〜**5.4**／**6.5**／**3.4**／**4.1**／**4.2**・design.md §4.1 正典表・§4.3）。

@@ -1,4 +1,4 @@
-// ── タスク 5.3: ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
+// ── ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
 //
 // design.md「純粋層 / ChoicePure」Service Interface（ResolvedChoiceStyle enum + resolve/paint）・
 // 縮退表（cursor.style underline 系→SquareFill／cursor.blendmethod ROP 系→none 扱い／

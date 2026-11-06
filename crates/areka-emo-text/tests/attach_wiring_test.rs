@@ -1,4 +1,4 @@
-//! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（task 8・R9.1/R9.2/R9.5）
+//! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（R9.1/R9.2/R9.5）
 //!
 //! 2 つの target（sakura/kero 相当）を実 `EmoPresenter` に登録して表示を確立し、
 //! `text_slot_view(target)`（emo-present の読み取り専用 additive 増分・R9.1/R9.2）で得た
@@ -61,7 +61,7 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
     (presenter, window0, window1)
 }
 
-// ── k≠1 の単一 target フィクスチャ（task 7.3・R8.2 の `from_view` 檻用） ─────────────────
+// ── k≠1 の単一 target フィクスチャ（R8.2 の `from_view` 檻用） ─────────────────
 
 /// k>1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
 ///
@@ -132,7 +132,7 @@ fn setup_target_with_dpis(
 type LogEvent = CapturedEvent;
 
 /// 構造化フィールドの Debug 表現を取り出し、**欠落は失敗**とする判定アダプタ
-/// （フィールド名も 7.4 の判定契約のうち）。
+/// （フィールド名も実機サインオフの判定契約のうち）。
 ///
 /// `field` ではなく別名にしてあるのは、[`CapturedEvent`] が同名の固有メソッドを持つためで
 /// ある。拡張トレイトに `field` を生やすと固有メソッドが黙って優先され、欠落時に panic する
@@ -397,7 +397,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
 ///
 /// k=1 では `surface_size() == physical_size()` が**恒等**であり、正しい実装と旧実装が
 /// 数値的に区別できない（＝檻が空虚になる）。既存の `setup_two_targets` は k=1.0 固定ゆえ
-/// この盲点をそのまま踏んでいた（3.2+3.3 の申し送り「lib 自体は無傷」が偽になった経緯）。
+/// この盲点をそのまま踏んでいた。
 ///
 /// 檻の内容は 3 点:
 /// 1. `binding.surface_size == view.physical_size()`（物理原寸を保持する）、
@@ -514,19 +514,19 @@ fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
     );
 }
 
-// ══ task 7.3 ②: k 再追従の**ログ観測契約**（R8.7・task 7.4 実機サインオフの判定源） ══
+// ══ k 再追従の**ログ観測契約**（R8.7・実機サインオフの判定源） ══
 
 /// 再追従が決定論的に**ログで観測できる**ことを固定する（R8.7）。
 ///
-/// task 7.4 の実機サインオフは、これらのフィールドを grep して判定する:
+/// 実機サインオフは、これらのフィールドを grep して判定する:
 /// - 再追従 `info!`: `actor` ／ `k_old` ／ `k_new`（k の遷移そのもの）、
 /// - 2 回目の装着 `info!`: `physical_size`（新 k の供給面寸）。
 ///
-/// **判定は絶対値でなく比で行う**（7.4 本文）——ここでも `physical_size` の比が
-/// `k_new / k_old` に一致することまで固定する。フィールド名の改名・ログ削除は 7.4 の判定基準を
+/// **判定は絶対値でなく比で行う**——ここでも `physical_size` の比が
+/// `k_new / k_old` に一致することまで固定する。フィールド名の改名・ログ削除は実機サインオフの判定基準を
 /// 静かに壊すため、名前と値の双方を実行テストで固定する（`expect_field` は欠落で panic する）。
 ///
-/// 併せて「装着 `info!` は `ActorRender` 不在時のみ」（7.1 で doc を改訂した契約）も
+/// 併せて「装着 `info!` は `ActorRender` 不在時のみ」（`register_actor_binding` の doc の契約）も
 /// 実測する: 同一 actor で装着ログが**2 回**出るのは、間に再追従による破棄が挟まったときだけ。
 #[test]
 fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
@@ -555,7 +555,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     assert_eq!(
         first_attach.expect_field("physical_size"),
         "(140, 80)",
-        "k=1 の供給面寸（7.4 の比較基準）"
+        "k=1 の供給面寸（実機サインオフの比較基準）"
     );
 
     // ── 窓 DPI を 192 へ（実機のモニタ跨ぎ相当）→ presenter の適用 k が 2.0 へ跳ぶ ──

@@ -97,7 +97,7 @@ pub(super) fn warn_coarse_wrap_threshold(
 
 impl TextLayerRuntime {
     /// 描画範囲の潰れを場所の記憶と突き合わせ、状態の変わり目に 1 回だけ記録する
-    /// （件 2・要件 2.3〜2.5・2.7）。呼び手は登録口——普通のバルーンの
+    /// （areka-P0-balloon-text-bugs 件 2・要件 2.3〜2.5・2.7）。呼び手は登録口——普通のバルーンの
     /// [`register_actor`](Self::register_actor)（装着・再追従が合流する）と箱の `register_box`。
     ///
     /// - 潰れに入った（記憶に無く、いま潰れている）: `warn!` 1 回。どのバルーンのどの値かが
@@ -152,7 +152,7 @@ impl TextLayerRuntime {
     /// 範囲外ゆえ無視した `origin` 宣言の警告（本 spec 要件 3.1〜3.5）も同じ理由で本口が書く。
     /// 関数の本体だけは `actor_decoration.rs` に置く（本ファイルの行数の余白のため）。
     ///
-    /// 描画範囲の潰れの状態の変わり目の記録（件 2）も本口が書く（`note_region_collapse`）。
+    /// 描画範囲の潰れの状態の変わり目の記録（areka-P0-balloon-text-bugs 件 2）も本口が書く（`note_region_collapse`）。
     pub fn register_actor(
         &mut self,
         actor: ActorKey,
@@ -181,7 +181,7 @@ impl TextLayerRuntime {
         self.layout_input.insert(place, resolved);
     }
 
-    /// 統合配線の一点口（R9.5・task 8）: `ActorKey → TargetId` 対応の解決結果
+    /// 統合配線の一点口（R9.5）: `ActorKey → TargetId` 対応の解決結果
     /// （`EmoPresenter::text_slot_view(target)` の view——対応関係の所有は結線側・
     /// example/emo2-boot）と 2 層マージ済み balloon model から、binding
     /// （[`TextSlotBinding::from_view`]）と layout 入力（[`ResolvedBalloonText::resolve`]・
@@ -398,7 +398,7 @@ impl TextLayerRuntime {
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
         // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で
-        // 差し込み口から外す（ここで捨てると前の字の絵が差し込み口に残る・件 2 要件 2.9）。
+        // 差し込み口から外す（ここで捨てると前の字の絵が差し込み口に残る・areka-P0-balloon-text-bugs 件 2 要件 2.9）。
         if collapsed {
             info!(
                 actor = %actor,
