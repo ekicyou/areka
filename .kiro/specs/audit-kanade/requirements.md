@@ -133,3 +133,22 @@
 3. If かけ直しを重ねても新しい指摘が 0 件に収束しないとき, then the 検証 shall 打ち切る前に、各回の指摘の数と組の内訳を添えて開発者に知らせ、裁定を仰ぐ
 4. The 検証 shall かけ直した audit の結果（新しい指摘が 0 件であること、または要件 8.3 の裁定）を記録に残す
 5. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`） shall 緑で終わる
+
+### Requirement 9: 要件の討議で確定した直す対象と残す指摘（2026-11-06・議題 7 のほかの 8 議題を推奨案で確定）
+
+**Objective:** As a 開発者, I want 討議で決めた直す対象と、残すと裁定した指摘と、議題ごとの直し方の決めを 1 か所で引きたい, so that 設計とタスクが決めから外れない
+
+指摘の番号は `research.md` §3 の通し番号（#1〜#96）。議題 7（#6・#62・#92）は討議を続けている（決まったら 9.9 に書く）。
+
+#### Acceptance Criteria
+
+1. The 本 spec shall `research.md` §3 の 96 件のうち、9.9 で扱いを決める #6・#62・#92 を除く 93 件を直す対象とし、3 つの組（Must fix 2・Should fix 51・Nice to have 43 のうち該当分）とも直す。#63 は 9.6 のとおり一部を残す
+2. When #1 を直すとき, the kanade shall 外から来た台本の CR・LF・NUL を、SEND の入口（`schedule/sstp.rs` の `on_send`）で取り除いてから受け付ける。返事の語 `SstpSendOutcome` には値を足さない。SSP は生の改行を含む台本を断らず、改行が抜けた形で再生した（`research.md` §10）。送る点で全ての ID と Reference を検査する二段目の守りと、それに当たったときの扱いは設計で決める
+3. When #3 を直すとき, the kanade shall 終了の保留中・切替の保留中に来た `RaiseEvent` と property の返しを SHIORI へ送らず、`warn!` を記録して捨てる（マウス・SSTP・台詞の切れ目と同じ決まり）。SSP では測っていない（測るには開発者の SSP のゴーストを閉じる操作が要るため）
+4. When #5 を直すとき, the kanade shall 「台本があるか」の判定を 1 つの関数にまとめて 3 か所から使い、空白だけの台本も台本として扱う（SSP は空白だけの台本を再生して話し中のトークを置き換えた＝`research.md` §10）
+5. When #7 を直すとき, the kanade shall 選択待ちの時間切れを期限ちょうどに出す（毎秒の刻みまで待たない）。完了 `areka-P0-choice-select-events` の設計「Tick で判定」は、大原則「時刻は正確に扱う」（2026-10-05）に合わせて改める。直しが `crates/areka-ghost` の刻みに及んでよい（持ち主は着地済み・C18 に居ない）。起こし方は設計で決める
+6. The 本 spec shall #63 のうち、5 状態（`Minimizing`・`Induction`・`Passive`・`TimeCritical`・`Opening`）の語彙を、わざと置いた先送りの印（⑵・`status-execution-states` 要件 6.1・6.2 の「語彙に留める」）として残す（要件 2.5 の記録）。空の `OpeningKinds` から `opening()` が出るバグは直す
+7. The 本 spec の直し shall 完了した spec の細かい決め（テストを対で置く・trace で観測する・証跡の形など）に触れる #4・#8・#14・#25・#28・#50・#51・#52・#53・#67・#68・#74・#79・#87・#88 を直す。決めの趣旨は変えない（例 #79 の 30,000 の値は残し、テストをまとめるだけ）
+8. When #18（要件 7）を直すとき, the 本 spec の直し shall 本番のコードの赤に隠れていた結合テストの 11 件（`manual_contains` 7・`doc_lazy_continuation` 3・`drain_collect` 1）も直し、要件 7.1 の「警告 0 件」を結合テストまで含めて満たす
+9. （議題 7 の討議の結果をここに書く）
+10. The 本 spec shall 1 本の spec のまま進め、タスクは指摘の組ごとでなくファイルのまとまりごとに束ねる。If タスクの段で 20 を大きく越えるとき, then the 本 spec shall 残る Nice to have を同じ範囲の 2 本目の spec へ回す
