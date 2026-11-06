@@ -1,5 +1,7 @@
 use super::super::*;
 use super::command::*;
+use crate::ecs::graphics::clip::ClipShape;
+use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
@@ -8,15 +10,17 @@ use windows_numerics::*;
 ///
 /// - `VisualTransform`   : 無ければ identity 扱い。
 /// - `VisualDrawContent` : 無ければ描画コマンドを出さない。
-/// - `VisualClip`        : 無ければ clip push/pop なし。
+/// - `Visual`            : `is_visible` が false なら部分木ごと出さない。`clip` が無ければ push/pop なし。
+/// - `Arrangement`       : 矩形・角丸の切り抜きの大きさ。無ければ大きさ 0。
 /// - `Children`          : 無ければ葉ノード。
 ///
-/// 4 つを 1 本に束ねることで、1 エンティティ = 1 回の `Query::get`
+/// 5 つを 1 本に束ねることで、1 エンティティ = 1 回の `Query::get`
 /// ルックアップで済む（クエリを分けると get が複数回になる）。
 type NodeData = (
     Option<&'static VisualTransform>,
     Option<&'static VisualDrawContent>,
-    Option<&'static VisualClip>,
+    Option<&'static Visual>,
+    Option<&'static Arrangement>,
     Option<&'static Children>,
 );
 
@@ -88,9 +92,18 @@ fn visit(
     }
 
     // despawn 済み / クエリ非該当は静かにスキップ（部分木ごと出力しない）。
-    let Ok((transform, draw, clip, children)) = nodes.get(entity) else {
+    let Ok((transform, draw, visual, arrangement, children)) = nodes.get(entity) else {
         return;
     };
+    // 見えない節は子孫ごと出さない（1.7）。
+    if visual.is_some_and(|v| !v.is_visible) {
+        return;
+    }
+    let clip = visual.and_then(|v| v.clip.as_ref());
+    // shortcut: 矩形も角丸も Arrangement の大きさの矩形として切る（角丸は角を落とさない）、5.2・5.3 で本来の形へ。
+    let clip_rect = arrangement.map_or(Aabb::new(0.0, 0.0, 0.0, 0.0), |a| {
+        Aabb::new(0.0, 0.0, a.size.width, a.size.height)
+    });
 
     // world = local * parent（行ベクトル規約: v' = v * local * parent）。
     let local = transform
@@ -100,7 +113,7 @@ fn visit(
 
     // ① クリップ計画（4 値）。push はここでは積まない。
     // ③ Culled は push を出す *前* に return するので bracket（push/pop 対）は均衡を保つ。
-    let (new_eff, pop) = match plan_clip(clip, unit_rect, entity, world_mat, eff) {
+    let (new_eff, pop) = match plan_clip(clip, &clip_rect, unit_rect, entity, world_mat, eff) {
         ClipKind::Culled => return,
         ClipKind::NoClip => (eff, None),
         ClipKind::Rect { push, new_eff } => {
@@ -144,7 +157,7 @@ fn visit(
 
 /// クリップを計画して 4 値 (`ClipKind`) を返す。push はまだ積まない。
 ///
-/// `VisualClip::Rect` は world が矩形保存なら `PushClipRect`、回転/せん断があれば
+/// 矩形・角丸（`clip_rect` に読み替え済み）は world が矩形保存なら `PushClipRect`、回転/せん断があれば
 /// 単位矩形 + 実効変換に正規化して `PushClipGeometry` へ昇格する（geometry 実体は
 /// `unit_rect` を共有し、差分のポインタ同一性を保つ）。
 ///
@@ -156,7 +169,8 @@ fn visit(
 /// クリップの無いノードは決して `Culled` を返さない（`NoClip`）。これにより
 /// 「自ノードが不可視でも子は見え得る」という部分木カリングの健全性が保たれる。
 fn plan_clip(
-    clip: Option<&VisualClip>,
+    clip: Option<&ClipShape>,
+    clip_rect: &Aabb,
     unit_rect: &ID2D1Geometry,
     entity: Entity,
     world_mat: Matrix3x2,
@@ -167,7 +181,10 @@ fn plan_clip(
     };
 
     match clip {
-        VisualClip::Rect(local) => {
+        ClipShape::Rectangle
+        | ClipShape::RoundedRectangle { .. }
+        | ClipShape::RoundedRectangleIndividual { .. } => {
+            let local = clip_rect;
             if is_rect_preserving(&world_mat) {
                 // 矩形保存 → そのまま world 矩形へ焼き込み。world_aabb は厳密。
                 let world_aabb = transform_aabb(local, &world_mat);
@@ -197,7 +214,7 @@ fn plan_clip(
                 }
             }
         }
-        VisualClip::Geometry(local_geom) => {
+        ClipShape::Geometry(local_geom) => {
             // local geometry は遅延適用（emit 側で SetTransform(world_mat)）。
             // 有効 AABB は geometry のバウンディングボックスで保守的に絞る。
             let world_aabb = geometry_bounds(local_geom, &world_mat);
