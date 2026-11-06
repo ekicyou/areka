@@ -1,7 +1,6 @@
 use super::super::*;
 use super::command::*;
 use crate::numerics::*;
-use bevy_ecs::prelude::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
 

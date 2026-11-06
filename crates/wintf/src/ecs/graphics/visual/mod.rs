@@ -11,6 +11,21 @@ use tracing::{error, warn};
 use super::clip::ClipShape;
 use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 
+mod clip;
+mod draw;
+mod draw_content;
+mod transform;
+mod version;
+mod visual_flags;
+mod world_visual;
+
+pub use clip::*;
+pub use draw_content::*;
+pub use transform::*;
+pub use version::*;
+pub use visual_flags::*;
+pub use world_visual::*;
+
 /// 論理的なVisualコンポーネント
 /// サイズ情報はArrangementから取得する（Single Source of Truth）
 ///

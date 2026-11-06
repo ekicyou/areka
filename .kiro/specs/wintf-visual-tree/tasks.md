@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 土台: Visual の居場所への移設と性質の一本化
-- [ ] 1.1 作りかけの描画の木を Visual の居場所へ移す
+- [x] 1.1 作りかけの描画の木を Visual の居場所へ移す
   - 今の `Visual` の 1 ファイルをフォルダにし、作りかけの描画の木の部品（描く中身・局所の変形・見た目の版・世界の行列・平らにする係と描く列）をその下へ移す（ファイルの割り振りは設計の File Structure Plan のとおり）
   - 別の層としての `ecs::visual` を外す（`ecs/mod.rs` で外すのは `pub mod visual;` の 1 行だけ・`DPI`／`ZOrderPairStrategy` ほかの再公開と `ecs/window/zorder_*` は動かさない）
   - 型の名前と `ecs::graphics::Visual`・`VisualGraphics` の名前は変えない
