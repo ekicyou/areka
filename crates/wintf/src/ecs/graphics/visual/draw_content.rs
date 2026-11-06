@@ -6,7 +6,15 @@ use windows::Win32::Graphics::Direct2D::*;
 use windows::core::Result;
 use windows_core::*;
 
+/// 描画面を持たない節の描く中身（閉じた命令の列・局所の外接矩形〔96 DPI の DIP〕・補間・重ね方）。
+///
+/// 持てば節になり、世界の行列（`WorldVisual`）と見た目の版（`VisualVersion`）を必ず連れてくる。
+///
+/// 重ね方（`composite_mode`）が `SOURCE_OVER` でないとき、D2D の `DrawImage` は絵を今の軸に沿う
+/// 切り抜きまで透明で広げてから合成する（`DESTINATION_IN` などは絵の外の画素にも効く）。
+/// wintf は D2D の値をそのまま通す。
 #[derive(Component, Clone, Debug, PartialEq)]
+#[require(super::WorldVisual, super::VisualVersion)]
 pub struct VisualDrawContent {
     pub local_aabb: Aabb,
     pub command_list: ID2D1CommandList,
@@ -14,6 +22,12 @@ pub struct VisualDrawContent {
     pub composite_mode: D2D1_COMPOSITE_MODE,
 }
 
+// SAFETY 条件: windows-rs の COM スマートポインタは自動では Send/Sync にならない。
+// `ID2D1CommandList` は GraphicsCore の装置から作り、その装置は D2D1_FACTORY_TYPE_MULTI_THREADED の
+// 工場（GraphicsCore::new → create_d2d_factory）の CreateDevice で作られる。同じ工場の系列への COM
+// 呼び出しは D2D が内部で直列化するため、跨スレッド移動・参照共有とも安全。別の装置で作った命令の列を
+// 入れる道は型では閉じられないので、「GraphicsCore の装置で作り、閉じてから入れる」を使い手の約束とする
+// （command_list.rs と同じ根拠）。
 unsafe impl Send for VisualDrawContent {}
 unsafe impl Sync for VisualDrawContent {}
 

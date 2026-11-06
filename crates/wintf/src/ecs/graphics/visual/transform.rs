@@ -2,7 +2,10 @@ use crate::numerics::*;
 use bevy_ecs::prelude::*;
 use core::ops::*;
 
+/// 節の局所の変形。持てば節になり、世界の行列（`WorldVisual`）と見た目の版（`VisualVersion`）を
+/// 必ず連れてくる。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Hash, Default)]
+#[require(super::WorldVisual, super::VisualVersion)]
 #[repr(transparent)]
 pub struct VisualTransform(pub Transform2D);
 

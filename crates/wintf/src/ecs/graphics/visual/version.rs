@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 
 /// appearance ダイジェスト版番号。ノード内で単調 ++。
 ///
-/// 含める:   VisualDrawContent / VisualClip / VisualFlags
+/// 含める:   VisualDrawContent / Visual.clip / Visual.is_visible
 /// 含めない: VisualTransform（to_world を ε 比較 / scroll を blit で扱うため）
 ///           z順（lis が構造 diff で検出）
 ///
