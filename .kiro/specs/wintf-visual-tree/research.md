@@ -149,3 +149,69 @@
 ## 8. 次の段
 
 要件の討議（`/kiro-requirements-discussion`）で 7 節の 13 件を扱い、答えを要件へ写してから `/kiro-design wintf-visual-tree`。設計の段では 5 節の 1・2・7 を先に測る。
+
+## 9. 設計の段の調べ（2026-11-06・`/kiro-spec-design -y`）
+
+発見の型は **Extension（light）**: 既存の描画の道へ木を差し込む拡張で、外部の依存は増えない。読んだもの: 2 節の一覧のほか `ecs/graphics/{components,visual_manager,core}.rs`・`ecs/graphics/systems/{clip_sync,visual_sync,window_pos,init}.rs`・`ecs/world/mod.rs` の登録・`numerics/` 全部・`tests/graphics/common/mod.rs`・`areka-emo-present/src/display_gpu_tests.rs`・`completed/audit-wintf-graphics-world/research.md` 22〜30 番・`completed/audit-wintf-runtime/research.md` 4 節と 14 節・`wintf-visual-damage-redraw/brief.md`・`wintf-d2d-composite-rules/brief.md`。cargo は回していない。使った skill: `kiro-spec-design` の 4 つの rules。
+
+### 5 節の調べの答え
+
+| # | 問い | 答え（出どころ） | 設計への含み |
+|---|---|---|---|
+| 1 | `PushLayer` と重ね方 | `D2D1_LAYER_OPTIONS1_NONE`＝「層の的を積み、透明な黒で塗る」・`INITIALIZE_FROM_BACKGROUND`＝「透明な黒で塗らない」（Microsoft Learn `D2D1_LAYER_OPTIONS1`・逐語）。層を戻すときの合成の仕方は文書に無い。`DrawImage` は「`compositeMode` が `SOURCE_OVER` でなければ、絵は今の軸に沿う切り抜きまで透明で広げられる」（`ID2D1DeviceContext::DrawImage` の Remarks・逐語） | `NONE` で固定（層は透明から始まる・`SOURCE_OVER` でない重ね方は層の中身に効く）。背景から始める旗は透明な描画面で戻すときの合成が定まらないので採らない。変える権限は `wintf-d2d-composite-rules`。6.3 の重ね方の見本は図形の切り抜きの外で取る |
+| 2 | `PushAxisAlignedClip` と DC の変換 | 「`clipRect` は今の world の変換で変換され、その後に軸に沿う外接矩形を計算し、効率のためその外接矩形で切る」（Microsoft Learn・逐語）。`maskTransform` は「層を合成するとき図形に掛ける変換」（`D2D1_LAYER_PARAMETERS1`） | `emit` は命令ごとに `SetTransform` を明示する: `Draw`＝`world * root`・`PushClipRect`＝`root`（矩形は DIP の world）・`PushLayer`＝恒等で `maskTransform = world * root`。回転・せん断の矩形は `build` が図形へ上げる（今のまま） |
+| 3 | WARP の装置 | `d3d11_create_device(None, D3D_DRIVER_TYPE_WARP, HMODULE::default(), BGRA_SUPPORT, None, D3D11_SDK_VERSION, None, None)` → `cast::<IDXGIDevice>` → `D2D1CreateFactory::<ID2D1Factory1>(MULTI_THREADED)` → `CreateDevice` → `CreateDeviceContext`。`windows` の機能 `Win32_Graphics_Direct3D`／`Direct3D11`／`Direct2D` は根の `Cargo.toml` に在る | 足場は `emit_test_support.rs` の 10 数行。デバッグ層の旗は付けない。`CoInitialize` は要らない（`test_crash_report` の `CoIncrementMTAUsage`） |
+| 4 | 96 DPI の計算専用 DC | `GraphicsCore` に無く、本番で `new_calc_aabb` を使う道も無い。足場の DC は `SetDpi(96, 96)` | `new_calc_aabb`／`new_calc_aabb_ex` は消す（5.13）。使い手は `local_aabb` を自分で与える |
+| 5 | bevy 0.19 の `Children` と変化 | `ChildOf` の付け替え・despawn で親の `Children` が更新される＝`Ref<Children>.is_changed()` で親子の変化が読める。`RemovedComponents<T>` は外れた実体だけで根は分からない | 外れた節は `RemovedComponents` が 1 件でも在れば全部の根を組み直す（議題 6 ㋐）。`#[require(WorldVisual, VisualVersion)]` で節は必ず 2 つを持つ |
+| 6 | `Query` の純粋なテスト | `visual_sync_tests.rs` の形（`World::new()`・`Schedule::default().add_systems(..)`・`schedule.run(&mut world)`）。工場だけなら `D2D1CreateFactory` で装置なし | `builder_tests.rs`・`world_visual_tests.rs`・`systems_tests.rs` はこの形 |
+| 7 | WARP の ±1 | 文書では確かめられない。6.3 に「同じ木を 2 度描いて全画素が一致」の較正を足す | 着手の最初の画素のテストで一致を確かめてから見本を書く |
+
+### bevy のフックの前提
+
+`Visual` の `on_add` が同じバンドルで入った `VisualDrawContent`／`VisualTransform`／`OwnSurface`／`GraphicsCommandList` を見られるか。bevy 0.19 はバンドルの全部を書いてからフックを呼ぶ作り（`BundleInserter`）なので見える見込み。着手の最初のタスクで `systems_tests.rs` の 1 本で確かめ、見えなければフックは今どおり無条件に入れ、`sync_surface_owner_parts` が `PreRenderSurface` の先頭（`visual_resource_management_system` の前）で外す。どちらでも規則は `wants_own_surface` の 1 か所。
+
+### 工場と装置の失い
+
+`GraphicsCore::create` は毎回 `create_d2d_factory()` で新しい工場を作る（`core.rs:155`）。工場から作った `ID2D1Geometry`（`ClipShape::Geometry`・`DrawTree.unit_rect`・角丸の path）は作り直しの後に `D2DERR_WRONG_FACTORY` になる。よって `invalidate_dependent_components` が `DrawTree` を空にし、`Geometry` の切り抜きを `warn!` つきで `None` へ戻し、`VisualDrawContent`（装置の命令の列）は `GraphicsCommandList` と同じく外す。
+
+### 外部の使い手の数え直し
+
+`wintf::numerics::` を crates の外（`crates/wintf/src/numerics`・`ecs/visual` を除く）から使う所は 0（`windows_numerics` を直に使う所だけ）。`numerics` の削除は wintf の中で閉じる。
+
+## 10. 設計の決め（7 節の 4〜13）
+
+| # | 決め | 理由 |
+|---|---|---|
+| 4 | ㋐ 専用の部品 `DrawTree`（平らな列と `unit_rect` を持つ）。入れる・外すのは `update_draw_trees` だけ | 要件 1.8 の字面（命令の列を持たず節だけ）に合い、使い手に約束を強いない。`surface.rs` の 3 つの filter と `render.rs` の読む部品に 1 つ足すだけ |
+| 5 | ㋐ `WorldVisual` は根からの DIP。`build` の `root_mat` は消え、`emit` が `root`（拡大＋offset）を掛ける。viewport は根の `Arrangement.size` | DPI が変わっても節の値が変わらない（2.9）・damage-redraw の「変形では版を上げない」と相性がよい |
+| 6 | ㋐ `RemovedComponents<VisualDrawContent｜VisualTransform｜ChildOf｜OwnSurface>` が 1 件でも在れば全部の根を組み直す。despawn・付け替えは親の `Changed<Children>` で拾う | 稀で安い（根は数枚）。前の回の一覧を持つ作りは damage-redraw が持つ |
+| 7 | 層は `D2D1_LAYER_OPTIONS1_NONE`（透明から始まる）で固定。背景から始める旗は採らない。重ね方の見本は図形の切り抜きの外で取る | 9 節の 1。変える権限は `wintf-d2d-composite-rules` |
+| 8 | 切り抜きと層の覆いは `PER_PRIMITIVE`（D2D の既定）。見本は境界から 2 画素以上離す | 境界の画素は ±1 を越えて変わりうる |
+| 9 | ㋐ 足場だけで作る（`emit_test_support.rs`）。`GraphicsCore` の公開面は増やさない | 本番の口に WARP を混ぜない。`wintf-d2d-composite-rules` は同じ足場を `pub(crate)` で使う |
+| 10 | ㋐ `moved(self, dst, rect: Aabb, eps: f32)`＝`rect` の 4 角を両方で変換して差を `eps` で比べる | 名前どおりの単位。使い手 0 なので署名を変えてよい |
+| 11 | ㋐ `VisualDrawContent` の `impl Hash` を外す。`ClipShape` に `Hash` は付けない。`hash_draw` は（実体・版・補間・重ね方・world） | 番地を混ぜる元を残さない |
+| 12 | 閉じた（要件 1.11） | — |
+| 13 | ㋐ 明示のスタック `(entity, depth)`・上限は `MAX_ANCESTOR_DEPTH`（1,024）を共用。`fill_world_visuals` が前順の列を作り、`build` はその列をたどる | あふれないことが構造で言える。走査が 1 回で済む |
+
+追加の決め（設計で見えたもの）:
+
+- **`DrawCommand` は命令の列と図形の複製を持つ**: `PushClipGeometryEntity`／`PushClipGeometryRect` を `PushClipGeometry { world_mat, geometry, world_aabb }` 1 つにまとめ、`DrawItem` に `command_list`・補間・重ね方を持たせる。`emit` は `Query` を要らず、純粋なテストが列だけで答えを比べられる。代わりに `DrawTree` に `Send/Sync` の注記が要る（`ClipShape` と同じ根拠）。
+- **角丸の切り抜きは path geometry 1 本の道**（均一も個別も 4 角の弧）: D2D は個別の半径を正しく描けるので、WUC 側の「最大の半径へ縮める」近似は写さない。
+- **節の位置は `VisualTransform` だけ**。節の `Arrangement` は切り抜きの大きさにだけ使う（2.2・2.4 の字面）。
+- **`VisualVersion` は `Changed<Visual>` でも上がる**（`opacity`・`transform_origin` の変化を含む）: 版が余分に上がるだけで「変形では上げない」の約束は守る。前の値を控える作りは足さない。
+- **`sync_surface_owner_parts` が `insert_graphics_parts_on_window_join` を置き換える**: 規則の答えが変わる 4 つの部品の出入りと `ChildOf` の変化を 1 つの係で見る。
+
+## 11. まとめ方（synthesis）
+
+- **一般化**: 「描画面の有無」を 1 つの規則 `wants_own_surface` に、「切り抜きの形」を `ClipShape → ID2D1Geometry` の 1 つの変換（`clip_geometry`）に、「軸に沿うか」を `Matrix3x2Ext::axis_aligned` の 1 つに寄せた。`PushClipGeometry` 1 種で単位矩形・角丸・使い手の図形を扱う。
+- **作るか採るか**: D2D の `PushAxisAlignedClip`／`PushLayer`／`DrawImage` と bevy の `#[require]`・`RemovedComponents` をそのまま使う。読み戻しは emo-present の形を写す（下流なので借りられない）。依存は足さない。
+- **単純化**: `VisualFlags`・`VisualClip`・`Point2`・`Aabb` の演算子・`new_calc_aabb`・`WorldVisual`／`Transform2D` の `Hash`・`DrawCommand` の Entity 変種を消す。`build` の重複した矩形の働き 5 つを消す。描く係は 1 つ（`render_surface`）のまま。
+
+## 12. 危うさと手当て
+
+- bevy のフックが同じバンドルの部品を見られない → 9 節の手当て（規則は 1 か所のまま）。
+- 角丸の path geometry の弧の向き → WARP の画素（角の内側と外側）で固定。
+- WARP の答えが環境で 1 段ずれる → 較正の 1 本（同じ木を 2 度）と ±1・境界を避ける見本。
+- 毎フレーム全節を訪れる負荷 → 変化の無い回は `WorldVisual` を書かず列も組み直さない。差分は damage-redraw。
+- `RemovedComponents` で全部の根を組み直す → 稀。根は数枚。
+- 装置の失いで使い手の `Geometry` を `None` に戻す → `warn!`（実体名）で知らせ、`Res<GraphicsCore>` の変化を合図に作り直す約束を `Visual` の doc に書く。
