@@ -39,6 +39,13 @@
 //! 先頭で「あ」の送りが em 未満であることを確かめ、縮退していたら赤で止める
 //! （`kero_menu_capacity_test.rs` の同趣旨の門と同じ考え方）。
 
+#[path = "support/mod.rs"]
+mod support;
+
+use support::{
+    is_fill, is_hover_text, make_world_with_gpu, read_back, spawn_reserved_slot, surface_size,
+};
+
 use areka_emo_text::actor::{
     ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
 };
@@ -49,13 +56,9 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
 use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::com::dwrite::dwrite_create_factory;
-use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 
 // ══ 裁定値（design.md §4.1 正典表・裁定 2026-09-05） ═════════════════════════════════════
 
@@ -189,35 +192,6 @@ fn model() -> BalloonModel {
 
 // ══ GPU/COM フィクスチャ（choice_fixture_test.rs と同一方針・headless） ═══════════════
 
-/// `GraphicsCore` ＋ `WucGraphicsResource` を実資源として載せた wintf World（headless・MTA）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-/// emo-present `VisualMount` と同型の予約スロット（(window, slot) を返す）。
-fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-line-pitch-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    (window, slot)
-}
-
 /// DirectWrite factory（計測に要るのは factory だけ・GPU 不要）。
 fn factory() -> IDWriteFactory2 {
     dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite factory を生成できる")
@@ -298,13 +272,6 @@ fn make_runtime(world: &mut World) -> (TextLayerRuntime, ActorKey) {
     (rt, actor)
 }
 
-/// 供給面の読み戻し（premultiplied BGRA 密配列）と面の寸。
-fn read_back(rt: &TextLayerRuntime, actor: &ActorKey) -> (Vec<u8>, u32, u32) {
-    let surface = rt.surface(actor).expect("装着済み actor の供給面");
-    let (w, h) = surface.size();
-    (surface.read_back().expect("read_back"), w, h)
-}
-
 // ══ 画素の読み取り ═════════════════════════════════════════════════════════════════════
 
 /// x 帯 `[x0, x1)`・y 帯 `[y0, y1)` の中で、述語に合う画素を 1 つ以上持つ y の**連続した並び**を
@@ -380,29 +347,6 @@ fn is_ink(px: &[u8]) -> bool {
     px[3] >= INK_ALPHA_MIN
 }
 
-/// ホバー塗り帯の色（`cursor.brush.color` (105,25,25)・premultiplied α=255 ゆえ BGRA=(25,25,105,255)）。
-fn is_band_fill(px: &[u8]) -> bool {
-    px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
-}
-
-/// ホバー行の**文字だけ**を選ぶ述語（塗り帯そのものを文字と数えないための切り分け）。
-///
-/// [`is_ink`]（α ≥ 128）は塗り帯の画素にも当たる——帯は不透明だからである。それで縦範囲を測ると
-/// 「帯の縦範囲」が返り、**字が 1 画素も無くても帯の上端 ＝ 帯の上端**になって上端の判定が
-/// 恒真になる。そこで色で分ける:
-///
-/// - ホバー文字は白（`cursor.font.color` 255,255,255）。premultiplied では B ＝ G ＝ R ＝ α なので、
-///   帯の外（背景が透明）では青チャネル ＝ α。帯の上に載った字は塗りと混ざり
-///   B ＝ 25 ＋ 230 × 被覆率 になる。
-/// - 塗り帯は (105,25,25) ゆえ青チャネルは 25 止まり。帯の縁が半透明になっても premultiplied なので
-///   25 より小さくなるだけである。
-///
-/// ゆえに「青チャネルが 128 以上」は白文字だけを拾う。α の閾値も併せて掛け、帯の外の薄い端は
-/// [`is_ink`] と同じ被覆率（≈ 0.5）で落とす。
-fn is_hover_text(px: &[u8]) -> bool {
-    px[3] >= INK_ALPHA_MIN && px[0] >= INK_ALPHA_MIN
-}
-
 /// `ChoiceHitRow::rect`（バルーン窓物理 px）の行内軸を供給面の座標（validrect-local）へ写す。
 fn row_x_span(row: &ChoiceHitRow, width: u32) -> (u32, u32) {
     let x0 = (row.rect.left - VR_ORIGIN.0).floor().max(0.0) as u32;
@@ -475,7 +419,7 @@ fn canon_pitch_advance_and_ink_height_match_the_ruling() {
     let mut world = make_world_with_gpu();
     let (mut rt, actor) = make_runtime(&mut world);
     present_cues(&mut rt, &mut world, &[text_cue(INK_SAMPLE_CHAR)]);
-    let (bytes, w, h) = read_back(&rt, &actor);
+    let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
     let (top, bottom) = ink_extent(&bytes, w, 0, w, 0, h, is_ink)
         .expect("1 字を描いたのでインクが在る（無ければ描画が退化している）");
@@ -514,7 +458,7 @@ fn two_lines_ink_does_not_overlap_at_the_ruled_pitch() {
         &mut world,
         &[text_cue(LINE_TEXT), newline_cue(), text_cue(LINE_TEXT)],
     );
-    let (bytes, w, h) = read_back(&rt, &actor);
+    let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
     let runs = ink_runs(&bytes, w, 0, w, 0, h, is_ink);
     assert_eq!(
@@ -630,7 +574,7 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
     for (ordinal, (_, label)) in CHOICES.iter().enumerate() {
         rt.inject_choice_hover(&actor, Some(ordinal));
         present_frame(&mut rt, &mut world, 100.0).expect("ホバー提示");
-        let (bytes, w, h) = read_back(&rt, &actor);
+        let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
         let (x0, x1) = row_x_span(&rows[ordinal], w);
         // 窓は行の書き出し（＝帯の上端）を基準に、上下へ SCAN_MARGIN ずつ開ける。
@@ -644,7 +588,7 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
         );
 
         // ── 塗り帯 ──
-        let band = ink_runs(&bytes, w, x0, x1, y0, y1, is_band_fill);
+        let band = ink_runs(&bytes, w, x0, x1, y0, y1, is_fill);
         assert_eq!(
             band.len(),
             1,

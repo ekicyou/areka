@@ -19,6 +19,11 @@
 //! 基本とする（state.rs の檻と同方針）。reveal ペースは配送 duration 由来
 //! （`interval = duration / N`）ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込む。
 
+#[path = "support/mod.rs"]
+mod support;
+
+use support::pump_until_idle;
+
 use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
@@ -34,8 +39,6 @@ use areka_parsers::balloon::{
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ── パイプライン土台（実 channel・実 spawn_ui・専用 pump スレッド） ──────────────────
 
@@ -44,29 +47,9 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 /// 得る（旧 char_wait=0.25 檻と機能等価・期待時刻は同一 `D/N` 算術で成立）。
 const REVEAL_INTERVAL: f64 = 0.25;
 
-/// テスト用 cue 生成ヘルパ（state.rs／sink.rs の檻と同型）。Text cue には配送
-/// duration = `N × REVEAL_INTERVAL` を焼き込み（reveal interval=0.25）、他は瞬時（duration=0）。
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
-        _ => 0.0,
-    };
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration,
-    }
-}
-
-/// 事前 queue 済みメッセージを全て処理し、queue が空になった時点で抜ける bounded pump
-/// （sink.rs の檻と同型——`WM_QUIT` は posted メッセージが尽きた後にのみ配送されるため、
-/// drain タスクは queue 済み cue を全て処理してから復帰する。決定論・ハングしない）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけの
-    // 無害な Win32 呼び出し（呼び出しスレッド＝pump スレッド）。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
+    support::cue(actor, at, command, REVEAL_INTERVAL)
 }
 
 /// 受信から状態適用までを実 channel で通す 1 インスタンス分のパイプライン実行。

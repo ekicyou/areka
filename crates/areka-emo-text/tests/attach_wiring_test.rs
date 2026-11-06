@@ -10,17 +10,18 @@
 //! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・presenter.rs テストと同一方針）。
 //! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 
-use std::cell::RefCell;
-use std::path::Path;
-use std::rc::Rc;
-use std::time::Duration;
+#[path = "support/mod.rs"]
+mod support;
 
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
+use support::{
+    build_target_assets, make_world_with_gpu, opaque_count, pump_until_idle, read_back,
+    show_surface,
 };
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use areka_emo_present::{EmoPresenter, TargetId};
 use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
@@ -29,118 +30,18 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{DPI, GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
+use wintf::ecs::{DPI, GraphicsCommandList, VisualGraphics};
 
-// ── GPU/WUC フィクスチャ（emo-present presenter.rs テストと同一方針） ──────────────────
-
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
+fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+    support::cue(actor, at, command, 0.0)
 }
 
 // ── 合成入力の生成補助（presenter.rs テストと同技法・上流公開 API で本物を組む） ─────────
-
-fn elem(path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer: 0,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
-
-/// surface 1000 = 単一 element（`w×h` 全不透明・座標由来グラデーション）の
-/// `(EmoWorld, AtlasTable)` を返す（バルーン枠画像に相当する合成入力）。
-fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![elem("p.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            img.push((x as u8).wrapping_mul(3).wrapping_add(salt));
-            img.push((y as u8).wrapping_mul(5).wrapping_add(salt));
-            img.push(((x + y) as u8).wrapping_mul(7).wrapping_add(salt));
-            img.push(0xFF);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// `ShowSurface` を適用して表示を確立する（reply Ok を要求）。
-fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: areka_emo_compose::PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    let outcome = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（ShowSurface）を受信できない");
-    assert!(matches!(outcome, Ok(())), "ShowSurface は Ok: {outcome:?}");
-}
 
 /// sakura/kero 相当の 2 target（原寸が異なる 2 バルーン）を表示確立まで組む。
 /// 返り値: (presenter, window0, window1)。原寸は target0=(140,80)・target1=(120,60)。
@@ -268,16 +169,6 @@ fn expect_one<'a>(events: &'a [LogEvent], needle: &str) -> &'a LogEvent {
 
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
-/// テスト用 cue。
-fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
-}
-
 /// テスト用 BalloonModel（幾何は既定: validrect 未指定＝画像全域・font 未指定＝既定）。
 fn geo_model() -> BalloonModel {
     BalloonModel::new(
@@ -289,27 +180,6 @@ fn geo_model() -> BalloonModel {
         None,
         None,
     )
-}
-
-/// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
-/// （actor.rs 結線テストの決定論パターン——WM_QUIT は posted メッセージが尽きた後に配送）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
-}
-
-/// 非透明ピクセル数（BGRA 密配列の α ≠ 0）。
-fn opaque_count(bytes: &[u8]) -> usize {
-    bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
-}
-
-/// 装着済み actor の供給面 readback。
-fn read_back(rt: &TextLayerRuntime, actor: &ActorKey) -> Vec<u8> {
-    rt.surface(actor)
-        .expect("装着済み actor の供給面")
-        .read_back()
-        .expect("read_back")
 }
 
 // ══ 観測可能な完了状態: 2 target 結線シナリオで actor 別バルーンへ独立描画（R9.5） ══

@@ -30,17 +30,18 @@
 //!   インク源が存在しない（Image/Surface シーム住人の inert は draw.rs 6.3 檻が正典・
 //!   本テストはその通し側の帰結「テキスト以外のインク源なし」を assert する）。
 
-use std::cell::RefCell;
-use std::path::Path;
-use std::rc::Rc;
-use std::time::Duration;
+#[path = "support/mod.rs"]
+mod support;
 
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
+use support::{
+    build_target_assets, make_world_with_gpu, opaque_count, pump_until_idle, read_back,
+    show_surface, spawn_reserved_slot,
 };
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use areka_emo_present::{EmoPresenter, TargetId};
 use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
@@ -48,18 +49,9 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{
-    Arrangement, DPI, GraphicsCommandList, GraphicsCore, Visual, VisualGraphics,
-    WucGraphicsResource,
-};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
+use wintf::ecs::{Arrangement, DPI, GraphicsCommandList, VisualGraphics};
 
 // ── 幾何定数（fixture 実測値系の非退化 validrect——負値=反対辺の実解決を通す） ──────────
 
@@ -93,109 +85,6 @@ fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
     )
 }
 
-// ── GPU/WUC フィクスチャ（attach_wiring_test と同一方針・headless） ─────────────────────
-
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-// ── 実 EmoPresenter の合成入力（attach_wiring_test と同技法・上流公開 API で本物を組む） ──
-
-fn elem(path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer: 0,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
-
-/// surface 1000 = 単一 element（`w×h` 全不透明）の `(EmoWorld, AtlasTable)`
-/// （バルーン枠画像に相当する合成入力）。
-fn build_target_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![elem("p.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            img.push((x as u8).wrapping_mul(3));
-            img.push((y as u8).wrapping_mul(5));
-            img.push(((x + y) as u8).wrapping_mul(7));
-            img.push(0xFF);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// `ShowSurface` を適用して表示を確立する（reply Ok を要求）。
-fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: areka_emo_compose::PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    let outcome = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（ShowSurface）を受信できない");
-    assert!(matches!(outcome, Ok(())), "ShowSurface は Ok: {outcome:?}");
-}
-
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
 /// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
@@ -203,33 +92,9 @@ fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetI
 /// （旧 char_wait=0.05 既定と機能等価・進行観測は安全マージン付き時刻 0.11/0.16/… で行う）。
 const REVEAL_INTERVAL: f64 = 0.05;
 
-/// テスト用 cue。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込み
-/// （reveal interval=0.05）、他コマンドは瞬時（duration=0）。
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
-        _ => 0.0,
-    };
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration,
-    }
-}
-
-/// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
-/// （WM_QUIT は posted メッセージが尽きた後に配送——sink.rs/attach_wiring の決定論
-/// パターン。sink 生存中は複数セッション実行できる＝actor.rs 檻ケース 3 の前例）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
-}
-
-/// 非透明ピクセル数（BGRA 密配列の α ≠ 0）。
-fn opaque_count(bytes: &[u8]) -> usize {
-    bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
+    support::cue(actor, at, command, REVEAL_INTERVAL)
 }
 
 /// 非透明ピクセルの外接矩形 (min_x, min_y, max_x, max_y)（インクなしは None）。
@@ -245,14 +110,6 @@ fn ink_bounds(bytes: &[u8], width: u32) -> Option<(u32, u32, u32, u32)> {
         }
     }
     bounds
-}
-
-/// 装着済み actor の供給面 readback。
-fn read_back(rt: &TextLayerRuntime, actor: &ActorKey) -> Vec<u8> {
-    rt.surface(actor)
-        .expect("装着済み actor の供給面")
-        .read_back()
-        .expect("read_back")
 }
 
 /// 供給面と提示位置の validrect 封じ込め構造（述語 3 の (a)(b)——design COM 層「装着」正典:
@@ -308,7 +165,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     // component 不在は `derive_scale` の縮退分岐（error! ＋ k=1.0）を通るため、不在に頼ると
     // 縮退が正常経路になりすまして観測できない。作者基準 DPI 96 と揃えて k=1.0 を成立させる。
     let window = world.spawn(DPI::from_dpi(96, 96)).id();
-    let (emo_world, atlas) = build_target_assets(IMAGE.0, IMAGE.1);
+    let (emo_world, atlas) = build_target_assets(IMAGE.0, IMAGE.1, 0);
     let mut presenter = EmoPresenter::new();
     presenter
         // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
@@ -493,21 +350,6 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
 }
 
 // ══ 縦書き（vertical_rl）変種: 3 述語＋横方向スクロール（R6 系の軸切替を通し経路で） ══════
-
-/// emo-present `VisualMount` と同型の予約スロット（surface.rs/actor.rs テストと同型・
-/// R9.1 公開経路は横書きテストが檻化済みのため、縦書き変種は軽量 rig で通しを張る）。
-fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-layer-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    (window, slot)
-}
 
 /// 観測可能な完了状態（task 10.2・縦書き変種）: 縦書き（vertical_rl）でも 3 述語が
 /// green である——(1) 単調増加、(2) Clear 後全域透明、(3) validrect 封じ込め（縦書きの

@@ -26,6 +26,11 @@
 //! 正しく閉じることは、入口の `the_font_gate_closes_on_a_missing_family` が実在しない名前で
 //! 確かめる。
 
+#[path = "../support/mod.rs"]
+mod shared;
+
+use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
+
 mod vertical;
 
 use areka_emo_text::actor::{
@@ -35,13 +40,8 @@ use areka_emo_text::draw::FontCatalog;
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
-use bevy_ecs::prelude::World;
 use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::com::dwrite::dwrite_create_factory;
-use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 
 // ══ 台本と描画環境の定数 ═══════════════════════════════════════════════════════════════
 
@@ -198,37 +198,8 @@ impl Shot {
 
     /// 面全体の非透明画素数（退化していないことの前提確認用）。
     pub(crate) fn ink_count(&self) -> usize {
-        self.bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
+        opaque_count(&self.bytes)
     }
-}
-
-/// `GraphicsCore` ＋ `WucGraphicsResource` を実資源として載せた wintf World（headless・MTA）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-/// emo-present `VisualMount` と同型の予約スロット。
-fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-decoration-readback-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    (window, slot)
 }
 
 /// 台本 1 本を**本番の 1 フレーム経路**（`present_frame`）へ通し、供給面を読み戻す。
@@ -260,10 +231,9 @@ pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
     }
     present_frame(&mut rt, &mut world, SETTLED).expect("装着＋描画フレーム");
 
-    let surface = rt.surface(&actor).expect("装着済み actor の供給面");
-    let (width, height) = surface.size();
+    let (width, height) = surface_size(&rt, &actor);
     Shot {
-        bytes: surface.read_back().expect("read_back"),
+        bytes: read_back(&rt, &actor),
         width,
         height,
     }

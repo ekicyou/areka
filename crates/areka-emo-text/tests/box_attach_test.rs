@@ -14,31 +14,26 @@
 //! 流儀は `attach_wiring_test.rs` と同じ（GPU/WUC は headless 実資源・時刻は注入）。
 //! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない・tasks.md 1）。
 
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::time::Duration;
+#[path = "support/mod.rs"]
+mod support;
 
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_emo_compose::{BindSet, BoxLayout, EmoWorld, fold_boxes};
-use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
+use support::{build_assets, make_world_with_gpu, opaque_count, read_back_at, show_surface};
+
+use std::collections::BTreeMap;
+
+use areka_emo_compose::{BoxLayout, EmoWorld, fold_boxes};
+use areka_emo_present::{EmoPresenter, TargetId};
 use areka_emo_text::actor::{SurfaceKeyResolver, TextLayerRuntime, present_frame};
 use areka_emo_text::place::{PlaceKey, TextPlace};
 use areka_emo_text::state::{SurfaceKeyOutcome, TextLayerConfig};
-use areka_parsers::shell::{
-    AppendTarget, DefRef, Element, ElementPath, Shell, Surface, parse, parse_boxes,
-};
+use areka_parsers::shell::{parse, parse_boxes};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{
-    AlphaMaskResource, Arrangement, DPI, GraphicsCommandList, GraphicsCore, HitTest,
-    VisualGraphics, WucGraphicsResource,
+    AlphaMaskResource, Arrangement, DPI, GraphicsCommandList, HitTest, VisualGraphics,
 };
 
 /// シェルの面の native 原寸（サーフェス 1000 の絵）。
@@ -71,89 +66,15 @@ element2,balloon,b,100,70
 }
 ";
 
-// ── GPU/WUC フィクスチャ（attach_wiring_test.rs と同じ） ─────────────────────────────
-
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-/// サーフェス 1000 ＝ 全不透明の絵 1 枚の `(EmoWorld, AtlasTable)`（シェルの絵に相当）。
-fn build_shell_assets() -> (EmoWorld, AtlasTable) {
-    let (w, h) = SHELL_NATIVE;
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![Element {
-            layer: 0,
-            path: ElementPath::new("p.png".to_string()),
-            x: 0,
-            y: 0,
-        }],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    dec.insert(
-        base.join("p.png"),
-        w,
-        h,
-        w * 4,
-        vec![0x80; (w * h * 4) as usize],
-        true,
-    );
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake は失敗しない");
-    let shell = Shell {
-        definitions: (0..surfaces.len()).map(DefRef::Surface).collect(),
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-    };
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// シェルの target を拡大率 2 で表示確立まで組む。返り値: (presenter, 窓)。
+/// シェルの target を拡大率 2 で表示確立まで組む（サーフェス 1000 ＝ 画素がすべて 0x80 の絵 1 枚・
+/// シェルの絵に相当）。返り値: (presenter, 窓)。
 fn setup_shell(world: &mut World) -> (EmoPresenter, Entity) {
     let window = world.spawn(DPI::from_dpi(192, 192)).id();
-    let (emo_world, atlas) = build_shell_assets();
+    let (w, h) = SHELL_NATIVE;
+    let (emo_world, atlas) = build_assets(w, h, vec![0x80; (w * h * 4) as usize]);
     let mut presenter = EmoPresenter::new();
     presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: areka_emo_compose::PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    let outcome = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（ShowSurface）を受信できない");
-    assert!(matches!(outcome, Ok(())), "ShowSurface は Ok: {outcome:?}");
+    show_surface(&mut presenter, world, TargetId(0));
     (presenter, window)
 }
 
@@ -208,18 +129,6 @@ fn write_to(rt: &mut TextLayerRuntime, name: &str, text: &str) {
         key: name.to_owned(),
     }));
     rt.apply_cue(&cue(CueCommand::Text(text.into())));
-}
-
-/// 非透明ピクセル数（BGRA 密配列の α ≠ 0）。
-fn opaque_count(bytes: &[u8]) -> usize {
-    bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
-}
-
-fn read_back(rt: &TextLayerRuntime, place: &PlaceKey) -> Vec<u8> {
-    rt.surface_at(place)
-        .expect("提示済みの箱の面")
-        .read_back()
-        .expect("read_back")
 }
 
 /// 箱の面の entity の当たりのマスクで「内」の画素の数と、(左上, 最後の行, 右上) の内外。
@@ -353,7 +262,7 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
     );
 
     // ── 読み戻し（要件 1.6・3.4）: 箱ごとに文字が描かれ、背景は透明 ──
-    let (bytes_a, bytes_b) = (read_back(&rt, &box_a), read_back(&rt, &box_b));
+    let (bytes_a, bytes_b) = (read_back_at(&rt, &box_a), read_back_at(&rt, &box_b));
     for (name, bytes, (w, h)) in [
         ("a", &bytes_a, rt.surface_at(&box_a).expect("a").size()),
         ("b", &bytes_b, rt.surface_at(&box_b).expect("b").size()),
@@ -391,11 +300,11 @@ fn boxes_attach_as_window_children_in_element_order_and_draw_independently() {
         "b の追記は a の字の矩形を変えない"
     );
     assert!(
-        opaque_count(&read_back(&rt, &box_b)) > opaque_count(&bytes_b),
+        opaque_count(&read_back_at(&rt, &box_b)) > opaque_count(&bytes_b),
         "b の追記で b のインクが増える"
     );
     assert_eq!(
-        read_back(&rt, &box_a),
+        read_back_at(&rt, &box_a),
         bytes_a,
         "b の更新は a の面へ波及しない（バイト同一）"
     );

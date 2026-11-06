@@ -36,6 +36,11 @@
 //! 行寸は layout の `font_height`（12）由来で DirectWrite 実測に依存しない（行内軸の送り幅のみ実測
 //! 依存だが、1 行 1 グリフ＋明示改行ゆえ折返しに影響しない）。
 
+#[path = "support/mod.rs"]
+mod support;
+
+use support::{make_world_with_gpu, pump_until_idle, spawn_reserved_slot};
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -49,14 +54,12 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
+
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
+fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+    support::cue(actor, at, command, 0.0)
+}
 
 // ── 幾何定数（決定論・ブロック軸は整数格子） ──────────────────────────────────────────
 
@@ -91,38 +94,6 @@ const _: () = assert!(FILL_LINES as u32 * PITCH + FONT_H > IMAGE.1);
 
 // ── テスト土台（draw_readback_test / actor.rs runtime_tests と同一方針・headless GPU） ──
 
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む
-/// （本番 UI スレッド＝MTA・記憶: areka WUC は MTA スレッドで動く）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-/// emo-present `VisualMount` と同型の予約スロット（surface.rs/actor.rs テストと同型）。
-/// 返り値は (window, slot)。
-fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-layer-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    (window, slot)
-}
-
 /// テスト用 BalloonModel：validrect＝画像全域（top0/bottom120/left0/right100）・origin (0,0)・
 /// font 高さ 12（pitch 15 を明示）・横書き（既定）。1 行 1 グリフゆえ折返し閾値は効かせない。
 fn model() -> BalloonModel {
@@ -137,16 +108,6 @@ fn model() -> BalloonModel {
     )
 }
 
-/// テスト用 cue。
-fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
-}
-
 /// 1 行（先頭行以外は先に改行マーカー）を emit する。全 cue は at=0.0・duration=0（配送 duration=0
 /// ＝全グリフが at=0.0 で即時可視ゆえ FULLY_REVEALED で全可視）。行末尾に改行を付けない＝部分リビール時の空行を作らない
 /// （常に全可視で描くため実際には無関係だが、行構造を「1 行 1 グリフ」に厳密化する）。
@@ -159,14 +120,6 @@ fn emit_line(sink: &mut EmoTextSink, line_index: usize) {
         0.0,
         CueCommand::Text(LINE_GLYPHS[line_index].to_string()),
     ));
-}
-
-/// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
-/// （draw_readback_test / sink.rs の決定論パターン——WM_QUIT は posted メッセージが尽きた後に配送）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ（pump スレッド）。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
 }
 
 /// フレーム提示（runtime を borrow_mut し present_frame を回して即座に解放する——後続の

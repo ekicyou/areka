@@ -19,6 +19,9 @@
 //! native をそのまま透過する形へ是正した（k<1 では順写像が縮小写像＝単射でなく、逆写像が
 //! 原理的に存在しないため）。旧導出の端数檻は透過檻＋k<1 の衝突檻へ置き換えてある。
 
+#[path = "support/mod.rs"]
+mod support;
+
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::{ImagePx, PhysicalPx, ScaleContract};
@@ -86,19 +89,9 @@ fn physical_surface(image: (u32, u32), k: f32) -> (u32, u32) {
 /// （旧 char_wait=0.25 檻と機能等価・pipeline_test.rs と同方針）。
 const REVEAL_INTERVAL: f64 = 0.25;
 
-/// テスト用 cue 生成ヘルパ（pipeline_test.rs と同型）。Text cue には配送
-/// duration = `N × REVEAL_INTERVAL` を焼き込む（reveal interval=0.25）。他は瞬時（duration=0）。
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
-        _ => 0.0,
-    };
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration,
-    }
+    support::cue(actor, at, command, REVEAL_INTERVAL)
 }
 
 /// 1 観測点のレイアウト決定結果（注入時刻ごとの可視グリフ数・行列・可視窓——
