@@ -54,7 +54,7 @@
   - 完了の姿: そのテストが緑で、`clamp` に戻すと落ちる
   - _Boundary: choice_
   - _Requirements: 2.1, 4.5, 4.6, 5.4_
-- [ ] 2.4 文字の面を画像の右と下で切り、面の大きさの上限と作れない面の覚えを置く（指摘 3 の前半）
+- [x] 2.4 文字の面を画像の右と下で切り、面の大きさの上限と作れない面の覚えを置く（指摘 3 の前半）
   - 文字の面の矩形の右と下を画像の右と下で切り、空なら描かない
   - 物理寸の上限（一辺 16,384・面積 2^25）を越える面は作らず、作れなかった場所を物理寸と位置で覚え、`error!` を 1 回にする。入力で答えが決まる失敗（上限越え・その寸での装着の失敗）だけを覚え、資源の無い一時の失敗は覚えず毎フレーム試し直す。装置の作り直しと WUC の資源の作り直しで覚えを消す
   - 面の大きさの掛け算を、あふれない幅の整数で行う（`surface.rs` の行数を増やさない）
@@ -241,3 +241,4 @@
 - 検体・フォント・バルーンの検体の組の部品は `tests/support/fixture.rs`（`support/mod.rs` の `pub mod fixture;`）。本物のフォントの門は `FontCatalog::family_for` の 1 つ。`shell_balloon_fixture_test.rs` の `fake_resolver` は `tests/` の中で唯一の写しで、`src/` の部品は crate の外から呼べないので残す（1.5）。
 - 「戻すと落ちる」を確かめるテストは、`||` の短絡で片方の足し算が通らない置き場所を作らない。x だけ・y だけ・両方の 3 つを回す（2.1 の差し戻し）。
 - 印の面の描く矩形は `marker_surface.rs` の私的な `marker_draw_rect`。当たりとマスクの式は今は別々に書いてある。2.5 で `at` を `i64` にするとき、3 か所を 1 つの私的な関数にまとめれば、テストを実際の道と比べる形にできる（2.2 のレビュー）。
+- 作れない面の覚えは `TextLayerRuntime.surface_failed: HashMap<PlaceKey, FailedSurface>`。鍵は（物理寸, 物理の位置, WUC の資源の変わった時刻, (binding.slot, binding.window)）。WUC の作り直しは時刻で、結線の替わりは結線で自然に外れる。装置の作り直しでは `drop_renders_after_device_change` が消す（3.3 で保つこと）。上限の定数と `over_surface_limit` は `actor_present.rs` の `pub(crate)`（2.5 で使う）。`lib.rs` の母数は 85（2.4）。

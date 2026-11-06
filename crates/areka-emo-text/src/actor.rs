@@ -307,7 +307,18 @@ pub struct TextLayerRuntime {
     box_markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
     /// World の無い所（再追従）で描画資源と一緒に外した印の面。次の [`present_frame`] の頭で窓の子ごと消す。
     retired_markers: Vec<MarkerSurface>,
+    /// 場所 → 作れなかった文字の面の（物理寸, 物理の位置, WUC の資源の変わった時刻, 差し込み口, 窓）。同じなら
+    /// 作り直さない（`actor_present.rs`・入力で答えが決まる失敗だけ・装置の作り直しで消す）。
+    surface_failed: HashMap<PlaceKey, FailedSurface>,
 }
+
+/// 作れなかった文字の面の覚えの中身（[`TextLayerRuntime`] の `surface_failed`）。
+type FailedSurface = (
+    (u32, u32),
+    (f32, f32),
+    Option<bevy_ecs::change_detection::Tick>,
+    (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity),
+);
 
 impl TextLayerRuntime {
     /// 空のランタイムを構築する（COM 資源は初回解決フレームで World 資源から遅延構築）。
@@ -345,6 +356,7 @@ impl TextLayerRuntime {
             balloon_markers: HashMap::new(),
             box_markers: BTreeMap::new(),
             retired_markers: Vec::new(),
+            surface_failed: HashMap::new(),
         }
     }
 
@@ -819,6 +831,10 @@ mod scroll_tests;
 #[cfg(test)]
 #[path = "actor_scroll_present_tests.rs"]
 mod scroll_present_tests;
+
+#[cfg(test)]
+#[path = "actor_surface_limit_tests.rs"]
+mod surface_limit_tests;
 
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]

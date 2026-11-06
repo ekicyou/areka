@@ -93,10 +93,10 @@ fn create_transparent_source_tex(
         CPUAccessFlags: 0,
         MiscFlags: 0,
     };
-    let zeros = vec![0u8; (width * height * 4) as usize];
+    let zeros = vec![0u8; width as usize * height as usize * 4];
     let init = D3D11_SUBRESOURCE_DATA {
         pSysMem: zeros.as_ptr() as *const _,
-        SysMemPitch: width * 4,
+        SysMemPitch: width.saturating_mul(4),
         SysMemSlicePitch: 0,
     };
     let mut tex: Option<ID3D11Texture2D> = None;
@@ -160,7 +160,7 @@ unsafe fn copy_rows(
     width: u32,
     height: u32,
 ) -> Result<Vec<u8>, TextLayerError> {
-    let stride = (width * 4) as usize;
+    let stride = width as usize * 4;
     let row_pitch = mapped.RowPitch as usize;
     if row_pitch < stride {
         return Err(TextLayerError::Device {
@@ -475,7 +475,7 @@ impl TextSurface {
         let dense = unsafe { copy_rows(&mapped, w, h) };
         unsafe { self.context.Unmap(&staging_res, 0) };
         dense.inspect_err(|_| {
-            let (row_pitch, stride) = (mapped.RowPitch as usize, (w * 4) as usize);
+            let (row_pitch, stride) = (mapped.RowPitch as usize, w as usize * 4);
             tracing::error!(row_pitch, stride, "RowPitch < stride（想定外）");
         })
     }
@@ -567,8 +567,8 @@ impl TextSurface {
         let dsty = dy.max(0);
         let left = (-dx).max(0);
         let top = (-dy).max(0);
-        let right = w.min(w - dx);
-        let bottom = h.min(h - dy);
+        let right = w.min(w.saturating_sub(dx));
+        let bottom = h.min(h.saturating_sub(dy));
         // box 退化＝全域スクロールアウト（写る残存域なし）——copy を発行しない（back は呼び手が埋める）。
         if right <= left || bottom <= top {
             return;

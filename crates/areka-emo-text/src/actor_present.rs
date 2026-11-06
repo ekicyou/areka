@@ -33,6 +33,19 @@ use super::{
     is_settled_ordinal,
 };
 
+/// 文字の面の物理寸の一辺の上限（Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大）。
+pub(crate) const MAX_SURFACE_SIDE: u32 = 16_384;
+/// 文字の面の物理寸の面積の上限（8K の画面より大きい・`audit-emo-compose` の `MAX_AREA` と同じ）。
+pub(crate) const MAX_SURFACE_AREA: u64 = 1 << 25;
+/// 上限を越える面を作らなかったときの記録の文。
+pub(crate) const SURFACE_LIMIT_MESSAGE: &str =
+    "文字の面の物理寸が上限を越える——面を作らず、寸と位置が変わるまで作り直さない";
+
+/// 物理寸が文字の面の上限（一辺・面積）を越えるか。
+pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
+    w > MAX_SURFACE_SIDE || h > MAX_SURFACE_SIDE || u64::from(w) * u64::from(h) > MAX_SURFACE_AREA
+}
+
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
 /// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・R3.3）。
 ///
@@ -155,6 +168,8 @@ fn drop_renders_after_device_change(runtime: &mut TextLayerRuntime, world: &mut 
     if seen.is_none() {
         return;
     }
+    // 新しい装置では作れるかもしれない（作れなかった面の覚えを消す）。
+    runtime.surface_failed.clear();
     let places: Vec<PlaceKey> = runtime.surfaces.keys().cloned().collect();
     debug!(
         dropped = places.len(),
@@ -219,10 +234,18 @@ fn present_actor(
         });
     };
 
+    // 文字の面は画像の右と下で切る（外は窓に映らない）。左と上は面の原点なので切らない（近い辺は
+    // 上限が止める）。切って空なら潰れた場所と同じく描かない（指摘 3・要件 2.1）。
+    let region = &resolved.region;
+    let clip = (
+        region.right().min(binding.image_size.0 as f32),
+        region.bottom().min(binding.image_size.1 as f32),
+    );
+
     // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない（件 2・要件 2.1・2.2・2.7） ──
     // 描いた後に潰れた（再追従が描画資源を残した）なら、ここで差し込み口から外して前の字を残さない
     // （要件 2.9）。当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
-    if resolved.region.is_collapsed() {
+    if region.is_collapsed() || clip.0 <= region.left() || clip.1 <= region.top() {
         if let Some(render) = runtime.surfaces.remove(place) {
             if let Some(markers) = render.markers {
                 markers.despawn(world);
@@ -239,17 +262,42 @@ fn present_actor(
 
     // ── 初回解決フレーム: World 資源から描画資源を構築し予約スロットへ装着（初回のみ） ──
     if !runtime.surfaces.contains_key(place) {
-        let region = &resolved.region;
-        // 物理寸＝ceil(validrect 寸 × k)・offset＝validrect 原点 × k（DPI/スケール契約）。
+        // 物理寸＝ceil(切った validrect 寸 × k)・offset＝validrect 原点 × k（DPI/スケール契約）。
         let physical_size = (
-            contract.physical_extent(ImagePx(region.right() - region.left())),
-            contract.physical_extent(ImagePx(region.bottom() - region.top())),
+            contract.physical_extent(ImagePx(clip.0 - region.left())),
+            contract.physical_extent(ImagePx(clip.1 - region.top())),
         );
         // 箱の面は `(箱の X + 領域の左, 箱の Y + 領域の上) × k`（シェルの窓の中の位置）。
         let physical_offset = (
             contract.to_physical(ImagePx(origin.0 + region.left())).0,
             contract.to_physical(ImagePx(origin.1 + region.top())).0,
         );
+        // 入力で答えの決まる失敗（上限越え・その寸での装着の失敗）は、寸・位置・WUC の資源・結線
+        // （差し込み口と窓）が変わるまで試さない（記録は 1 回）。資源が無いだけの失敗は覚えず毎フレーム試し直す。
+        let wuc = world.get_resource_change_ticks::<WucGraphicsResource>();
+        let wired = (binding.slot, binding.window);
+        let attempt = (
+            physical_size,
+            physical_offset,
+            wuc.map(|t| t.changed),
+            wired,
+        );
+        if runtime.surface_failed.get(place) == Some(&attempt) {
+            return Ok(false);
+        }
+        if over_surface_limit(physical_size) {
+            error!(
+                actor = %actor,
+                place = ?place.place,
+                ?physical_size,
+                ?physical_offset,
+                max_side = MAX_SURFACE_SIDE,
+                max_area = MAX_SURFACE_AREA,
+                "{SURFACE_LIMIT_MESSAGE}"
+            );
+            runtime.surface_failed.insert(place.clone(), attempt);
+            return Ok(false);
+        }
         // 箱の面はシェルの窓の直接の子として、差し込み口の直後から element番号の大きい順に挿す。
         let child_index = match &place.place {
             TextPlace::Balloon => None,
@@ -298,6 +346,7 @@ fn present_actor(
         }
         // GraphicsCore は一時取り外し——attach の &mut World と資源借用の衝突を構造回避する。
         let config = runtime.config;
+        let mut attach_failed = false;
         let render = with_graphics_core(
             world,
             |world, core| -> Result<ActorRender, TextLayerError> {
@@ -309,7 +358,7 @@ fn present_actor(
                         core,
                         physical_size,
                         physical_offset,
-                    )?,
+                    ),
                     Some(index) => TextSurface::attach_window_child(
                         world,
                         binding.window,
@@ -318,8 +367,9 @@ fn present_actor(
                         core,
                         physical_size,
                         physical_offset,
-                    )?,
-                };
+                    ),
+                }
+                .inspect_err(|_| attach_failed = true)?;
                 decoration::build_actor_render(
                     core,
                     surface,
@@ -329,7 +379,13 @@ fn present_actor(
                     actor,
                 )
             },
-        )?;
+        )
+        .inspect_err(|_| {
+            if attach_failed {
+                runtime.surface_failed.insert(place.clone(), attempt);
+            }
+        })?;
+        runtime.surface_failed.remove(place);
         runtime.surfaces.insert(place.clone(), render);
         info!(
             actor = %actor,
