@@ -441,6 +441,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
   - **今の段で行う（前提なし）**: `pub fn path(&self) -> &str` を足す（足すだけ）。範囲の中の読み手（`bitmap_source.rs:93`・`bitmap_source/tests.rs:127`・`:135`）を `path()` に替える。
   - **前提つきで行う**: `placement-crate-split` が main に着地し、この枝が main を取り込んだ後にだけ、欄 `path` を非公開にし、`crates/areka/examples/mock-shell.rs:609` を `bitmap.path()` に替える。同じタスクで `crates/areka/examples/clickthrough_two_rects.rs:192` の説明を、7 番の後の条件（`Changed<BitmapSourceResource>` ＋ `With<HitTest>` ＋ `HitTestMode::AlphaMask`・マスクがまだ無いとき）に合わせる。
   - **前提が満たされていないとき**: そのタスクは手を付けずに止まり、開発者へ尋ねる（`crates/areka/` には触らない）。
+  - **この spec の完了**（2026-11-06 設計の討議・議題 1・開発者「承認」）: この spec の完了（`/kiro-complete`）は `placement-crate-split` の着地を待つ。28 番を半分のまま閉じない（要件 3.1・6.3）。
 - 要件 5.11・5.12 との関係: 両要件は「同じウェーブのあいだ」の約束で、上の前提（相手の着地と main の取り込み）が満たされた後の 2 ファイルの書き換えは、この約束に当たらない。
 
 ### 消すものの確かめ（要件 3.3）
@@ -474,6 +475,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 | 7 | 画像を付けて描き、外して別の画像を付け直すと、D2D の画像が作り直される（番地が変わる）。外しただけの部品から `BitmapSourceResource` が消え、`HitTest` は残る。遅れて着いた前の読み込みは入らない | `widget/bitmap_source/tests.rs`（実 GPU） | 古い画像のまま・古いマスクで当たる |
 | 8 | 背景色つきの空のトークの大きさを変えると命令の列が入れ替わる。文のトークから空のトーク（背景色なし）に入れ替えると命令の列が空になる | `widget/text/typewriter/tests.rs`（実 GPU） | 最初の大きさのまま・前の文の絵が残る |
 | 10 | 必ず失敗する記録を `store_command_list` に渡すと空の列が入り、2 回目の係で対象にならない。前から列を持つ部品の列は入れ替わらない | `widget/record_tests.rs`（実 GPU） | 毎回やり直す・絵が消える |
+| 10 | 空の列が入った部品も、立ち直り（命令の列を外す係）の後に描き直される（設計の討議・議題 2） | `widget/record_tests.rs`（実 GPU） | 一度の失敗の後、立ち直っても描かれない |
 | 11 | `load_decoded_bitmap` の答えが `IWICBitmap` へ `cast` できる（変換器はできない） | `widget/bitmap_source/tests.rs`（COM だけ） | 変換器のまま返る |
 | 12 | 打ち終えて止まった表示で、2 回目の `update_typewriters` が変化の印を立てず、`draw_typewriters` が命令の列を入れ替えない | `widget/text/typewriter/tests.rs`（実 GPU） | 毎回入れ替わる |
 | 13 | `Arrangement` と値を入れた `GlobalArrangement` を束で入れると、渡した値が残る | `layout/hit_test/tests_ex/entity_ex.rs`（回り道を戻したテスト） | 既定値に変わる |
@@ -496,7 +498,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 
 ## 設計で決めたこと（開発者が確かめたい所）
 
-技術の都合で決めたもの。答えで作業が変わるのは 1 だけ。28 番の道（相手の着地の後へ回す）は取りまとめ役の答えで、設計の討議で開発者に確かめる。
+2026-11-06 の設計の討議で、下の 1〜6 と 28 番の道（相手の着地の後へ回す・この spec の完了は `placement-crate-split` の着地を待つ）を、どれも推奨案のまま確定した（開発者「承認」）。1 には「空の列が入った部品も、立ち直りの後に描き直される」テストを足した（Testing Strategy の 10 番の 2 行目）。
 
 1. **恒久の失敗の扱い**（10 番）: 命令の列が無い部品にだけ空の列を入れ、前から列を持つ部品は絵を残す。一時の失敗で絵を消さないため。
 2. **11 番のαのマスクは UI スレッドで写す今の形のまま**: 解読は裏の 1 回になるので「2 度の解読」は解ける。マスクを裏で作って命令で戻す道は足さない。
