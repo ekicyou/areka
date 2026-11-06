@@ -623,31 +623,6 @@ fn a_destination_that_is_itself_a_link_fails_the_stage_with_its_path() {
     assert_eq!(tree(&outside), before, "リンクの先は触られていない");
 }
 
-/// 根から宛先へ降りる途中の段（`ghost\<T>\shell`）がリンクでもたどらず、その段のパスを
-/// 添えて組み上げの段で失敗する（宛先の最後の段だけを見ると、リンクの先へ入れ替える）。
-#[test]
-fn a_link_between_the_root_and_the_destination_fails_the_stage_with_its_path() {
-    let work = root_with_ghost("tester");
-    let outside = work.path().join("outside");
-    make_tree(&outside, &[("test-shell/descript.txt", b"outside")]);
-    let before = tree(&outside);
-    let link = work.path().join("ghost").join("tester").join("shell");
-    junction(&link, &outside);
-
-    let request = InstallRequest {
-        roots: &SingleRoot(work.path()),
-        target_ghost: Some("tester"),
-    };
-    let prepared = prepare(shell_archive(), &request);
-    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
-    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
-        .expect_err("途中の段のリンクはたどらない");
-
-    assert_eq!(error.path, link, "途中の段のパスを名指す");
-    assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidInput);
-    assert_eq!(tree(&outside), before, "リンクの先は触られていない");
-}
-
 /// 既存のファイルと書庫のフォルダが同じ名前でぶつかったら、作業フォルダでなく**宛先**の
 /// パスを名指す（作業フォルダは次の走行の片付けで消えるので、利用者が直す場所にならない）。
 #[test]

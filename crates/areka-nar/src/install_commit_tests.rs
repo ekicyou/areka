@@ -911,3 +911,35 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
     );
     drop(handle);
 }
+
+/// 根から宛先へ降りる途中の段（`ghost\<T>\shell`）がリンク（ジャンクション）なら、
+/// たどってその先へ入れる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。利用者が
+/// 置き場を別のドライブの場所へ移した形で、更新もインストールも止めない。
+#[test]
+fn a_link_between_the_root_and_the_destination_is_followed_and_the_install_lands_behind_it() {
+    let work = root_with_ghost("tester");
+    let outside = work.path().join("outside");
+    fs::create_dir_all(&outside).expect("リンクの先を作れる");
+    junction(
+        &work.path().join("ghost").join("tester").join("shell"),
+        &outside,
+    );
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: Some("tester"),
+    };
+    let prepared = prepare(shell_archive(), &request);
+
+    let (_, outcome) = install(work.path(), &prepared);
+    outcome.expect("途中の段のリンクを越えて確定できる");
+
+    let landed = outside.join("test-shell");
+    assert_eq!(
+        fs::read(landed.join("descript.txt")).expect("読める"),
+        b"shell descript"
+    );
+    assert_eq!(
+        fs::read(landed.join("surface0.png")).expect("読める"),
+        b"png"
+    );
+}

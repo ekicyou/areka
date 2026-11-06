@@ -11,8 +11,9 @@
 //! 持っている。`descript.txt` 等と共有する層なので、ここからは変えない。
 //!
 //! 既存層はキーの大小を保つので、引く前に **ASCII 小文字化した写しを作り直し**、
-//! 以降はその写しだけを引く（要件 3.4）。同じキーが大小違いで 2 度あれば、
-//! 既存層の並び（キーのバイト順）で後に来たほうが勝つ。
+//! 以降はその写しだけを引く（要件 3.4）。同じキーが大小違いで 2 度あれば、ファイルの
+//! 後の行が勝つ（descript の `parse_kv_lowercased` と同じ勝者）。空の値は落とさない
+//! （拒否と警告が使うので、空の値を落とす `parse_kv_lowercased` とはここが違う）。
 //!
 //! # 拒否と警告の分かれ目
 //!
@@ -213,9 +214,11 @@ pub(crate) fn parse_manifest(bytes: &[u8]) -> Result<InstallManifest, RefuseReas
 }
 
 /// 既存層の結果をキーだけ ASCII 小文字化して写し直す（要件 3.4）。
+///
+/// `parse_kv` は行の順を返さないので 1 行ずつ渡し、大小違いの同じ鍵は後の行で上書きする。
 fn lowercased_keys(text: &str) -> BTreeMap<String, String> {
-    parse_kv(text)
-        .into_iter()
+    text.lines()
+        .flat_map(parse_kv)
         .map(|(key, value)| (key.to_ascii_lowercase(), value))
         .collect()
 }
@@ -378,7 +381,8 @@ fn numbered(prefix: &str, base: &str) -> bool {
 ///
 /// 無印（`balloon`）→ `balloon0` → `balloon1` … の順に `<接頭辞>.directory` の鍵を引く。
 /// 値が空でも行が在れば見つかったとする。無印は無くても続け、番号は最初に無かった所で
-/// 止める。番号は `format!` で先頭に 0 を付けない 10 進の綴りだけを作るので、
+/// 止める。見つかった数が上限（[`MAX_COMPANIONS`]）に届いたところでも止める。
+/// 番号は `format!` で先頭に 0 を付けない 10 進の綴りだけを作るので、
 /// `balloon01` のような鍵には決して当たらない。
 fn search_balloons(keys: &BTreeMap<String, String>) -> Vec<String> {
     let found = |prefix: &String| keys.contains_key(&format!("{prefix}.directory"));

@@ -239,7 +239,8 @@ pub enum NarError {
         /// `committed` を元に戻せたか。
         rolled_back: bool,
         /// 元へ戻せなかった宛先ごとの生き残り。巻き戻せた・掘る前・新規の宛先を消す手だけが
-        /// 躓いた場合は空。全て失敗の記録の work に挙げた本体の根の作業フォルダ（1 つ）の配下に在る。`Vec` でなく `Box<[_]>` なのは、
+        /// 躓いた場合は空。生き残りはいずれも、失敗の記録の `work` の欄に出る本体の根の
+        /// 作業フォルダ（1 つ）の配下に在る。`Vec` でなく `Box<[_]>` なのは、
         /// `NarError` を包む呼び手の失敗の型を clippy の `result_large_err` の閾値の下に保つため。
         survivors: Box<[SurvivingTree]>,
     },
@@ -270,7 +271,8 @@ pub enum ManifestWarning {
         written: String,
         read: String,
     },
-    /// 探索で読まなかった同梱のバルーンの鍵（打ち切りの後ろの番号・先頭に 0 を付けた綴り）。
+    /// 探索で読まなかった同梱のバルーンの鍵（打ち切りの後ろの番号・上限 `MAX_COMPANIONS` を
+    /// 超えた番号・先頭に 0 を付けた綴り）。
     #[error("同梱のバルーンの探索で読まなかったので読み飛ばした: {key}")]
     CompanionNotSearched { key: String },
 }

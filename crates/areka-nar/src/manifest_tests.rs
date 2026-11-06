@@ -340,19 +340,27 @@ fn looks_up_every_key_ignoring_ascii_case() {
     assert_eq!(manifest.warnings, vec![], "大小違いは知らないキーではない");
 }
 
-/// 大小だけが違う同じキーが 2 度あれば後勝ち（要件 3.4）。
+/// 大小だけが違う同じキーが 2 度あれば、ファイルの後の行が勝つ（要件 3.4）。
 ///
-/// 「後」は既存層の並び（キーのバイト順）で決まる。`Directory` は `directory` より
-/// 前に来るので、小文字のほうが勝つ。
+/// 鍵の表の順（`Directory` が `directory` より前）なら小文字のほうが勝つ並びにして、
+/// 行の順で畳んでいることを見る。
 #[test]
 fn the_later_of_two_keys_differing_only_in_case_wins() {
     let manifest = parsed(&[
         "type,ghost",
         "name,えも",
-        "Directory,first",
-        "directory,second",
+        "directory,first",
+        "Directory,second",
     ]);
     assert_eq!(manifest.directory, "second");
+}
+
+/// 同梱のバルーンの鍵も後の行が勝つ。areka-ghost の `companion_balloon` と同じ勝者になる。
+#[test]
+fn the_later_companion_directory_row_wins_across_case() {
+    let manifest = parsed_ghost(&["balloon.directory,y", "Balloon.Directory,x"]);
+    assert_eq!(manifest.companions.len(), 1);
+    assert_eq!(manifest.companions[0].directory, "x");
 }
 
 /// カンマの無い行は既存層と同じく読み飛ばす。知らないキーにも数えない（要件 3.4）。

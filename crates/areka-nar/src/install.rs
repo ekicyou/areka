@@ -48,12 +48,12 @@ pub(crate) const SURVIVOR_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 
 
 /// 宛先の根を答える口（要件 5.4・5.5）。答えは `<根>`（その下に `ghost\`・`balloon\` を組む）。
 ///
-/// どの根へ入れるかは呼び手が決める。計画を組むとき配置ごとに 1 回だけ尋ね、
+/// どの根へ入れるかは呼び手が決める。本体の配置を組むとき 1 回だけ尋ね、
 /// 答えをその配置に固定する（同じ配置に 2 回は尋ねない）。
 pub trait InstallRoots {
     /// ゴーストの本体の `directory`、またはシェル・サプリメントの宛先ゴーストのフォルダ名に対して。
     fn ghost_root(&self, folder: &str) -> PathBuf;
-    /// バルーンの本体・同梱のバルーンの `directory` に対して。
+    /// バルーンの本体の `directory` に対して（同梱のためには尋ねない）。
     fn balloon_root(&self, folder: &str) -> PathBuf;
 }
 
@@ -298,17 +298,13 @@ pub(crate) fn stage_placement(
 ) -> Result<ExistingState, StageError> {
     at(stage, std::fs::create_dir_all(stage))?;
 
-    // 宛先そのものも、根から宛先へ降りる途中の段（`ghost\<T>\shell` など）もリンクなら
-    // たどらない。たどると、リンクの先を写した木で入れ替える。
-    if let Some(link) = placement
-        .destination
-        .ancestors()
-        .take_while(|segment| *segment != placement.root)
-        .find(|segment| {
-            std::fs::symlink_metadata(segment).is_ok_and(|meta| meta.file_type().is_symlink())
-        })
+    // 宛先そのものがリンクならたどらない。たどると、リンクの先を写した木で入れ替える。
+    // 根から宛先へ降りる途中の段（`ghost\<T>\shell` など）のリンクは利用者が移した置き場なので
+    // たどる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。
+    if std::fs::symlink_metadata(&placement.destination)
+        .is_ok_and(|meta| meta.file_type().is_symlink())
     {
-        return Err(link_refused(link.to_path_buf()));
+        return Err(link_refused(placement.destination.clone()));
     }
     let meta = std::fs::symlink_metadata(&placement.destination);
     let existing = if meta.is_ok_and(|meta| meta.is_dir()) {

@@ -33,6 +33,16 @@ fn numbered_only_yields_balloon0() {
     assert_eq!(got.as_deref(), Some("claudia"));
 }
 
+/// 大小だけが違う同じ鍵が 2 度あれば後の行が勝つ（`areka-nar` のインストーラが置いた先と同じ）。
+#[test]
+fn the_later_row_wins_across_case_like_the_installer() {
+    let got = companion_of(
+        "catalog-companion-case",
+        "charset,UTF-8\nballoon.directory,y\nBalloon.Directory,x\n",
+    );
+    assert_eq!(got.as_deref(), Some("x"));
+}
+
 /// `balloon0` が欠番で `balloon1` だけ → 無し（探索は最初に無い番号で止まる・要件 1.5・7.1）。
 #[test]
 fn balloon1_only_yields_none() {
