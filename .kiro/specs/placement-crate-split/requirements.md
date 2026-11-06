@@ -108,13 +108,15 @@
 #### Acceptance Criteria
 
 1. The 分割作業 shall `crates/log-capture-kit/tests/` の表（`file_length_guard_test.rs` の 1,000 行の例外表・`temp_path_guard_test.rs`・`with_default_guard_test.rs`）にある配置のパスを、移した先のパス（本体のテスト専用のモジュールへ移すものは本体の側のパス）へ書き換え、理由の文の主語が変わるもの（`with_default_guard_test.rs` の「areka は当該フィーチャを有効にしない」ほか）は新しい crate に合わせる。
-2. The 分割作業 shall ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR` を使う `measure_template_tests`・`zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests`・`spawn_zorder_pair_deferred_tests`・`transition_signoff_procedure_tests`・`zorder_property_deferral_tests`）が、移した先のファイルを読むようにする。
-3. If ソースを文字列で読むテストが読む先のファイルを見つけられない場合, then the そのテスト shall 黙って通らず赤になる。ソースの木を歩くテスト（`spawn_zorder_pair_deferred_tests` の走査ほか）は、移した後も移す前と同じ範囲（本体と配置の両方の `src`）を歩き、範囲が黙って狭まらない。
-4. The 分割作業 shall 文書（`doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/` の `briefing-assets.md` と網羅台帳 `ledger/*.toml` の根拠の場所・`.kiro/steering/structure.md`）にある配置のパスを、移した先のパスへ書き換える。
-5. The 分割作業 shall ソースと道具の説明の中にある配置のパス（wintf・`pilot`・`ukadoc-survey`・本体の `emo2_boot`・`tools/perf/judge-followup.py` ほか）を、移した先のパスへ書き換える。
-6. The 分割作業 shall `tools/perf/fixtures/` と `tools/perf/fixtures-loop/` の見本の `run.log` を手で書き換えず、見本を作る `tools/perf/fixtures/generate.py` を直して作り直す。
-7. The 分割作業 shall `audit-placement-core`・`audit-placement-follow` の brief の「受け持つファイル」を、移した先のパスへ書き換える。
-8. When 書き換えを終えたとき, the 分割作業 shall 古いパス `crates/areka/src/placement/`（と `src/placement/`）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書 `roadmap-history.md`・`.kiro/specs/completed/` と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
+2. The 分割作業 shall ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR` を使う `measure_template_tests`・`zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests`・`spawn_zorder_pair_deferred_tests`・`transition_signoff_procedure_tests`・`zorder_property_deferral_tests`）を、次の原則で置き、移した先のファイルを読むようにする: 自分の crate のファイルは自分の crate のテストが読む。別の crate のファイルを読むのは、コードの依存と同じ向き（上の crate が自分の依存する下の crate を読む）に限り、下の crate が上の crate のファイルを読むことはしない。
+3. The 分割作業 shall 要件 5.2 の原則に合わせて次のように置く: `measure_template_tests` は確かめていることで割り、採寸と表示の外形の一致と配置のファイル（`measure.rs`・`measure_first_frame.rs`・配置の examples の `window-placement.rs`）の走査を配置の crate に、本体のファイル（`emo2_boot/assets.rs`・本体のテストの支え・本体の examples）の走査を本体に置く。`spawn_zorder_pair_deferred_tests` は crate ごとに割り（wintf の `zorder_pair_deferred_vocabulary_tests.rs` と同じ形）、配置のファイルの名簿と配置の `src` の木の走査を配置に、`emo2_boot` のファイルの名簿と本体の `src` の木の走査を本体に置く。分岐の対応表 `zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests` は、1 つの分岐を覆うテストが crate をまたいで並ぶ表なので割らずに本体へ移し、「どの分岐も 1 本以上のテストで覆われている」の確かめを保つ。
+4. The 本体の crate `areka` shall 下の crate のファイルを文字で読むとき、相対の道（`../../../wintf/src/…`）を散らさず、crate の名前と crate の中のパスを並べて書く 1 つの読み口（例: `crate_source!("wintf", "src/ecs/window/zorder_chain.rs")`）を通して読む。
+5. If ソースを文字列で読むテストが読む先のファイルを見つけられない場合, then the そのテスト shall 黙って通らず赤になる。crate ごとに割ったソースの木を歩くテストは、合わせて移す前と同じ範囲（本体と配置の両方の `src`）を歩き、範囲が黙って狭まらない。
+6. The 分割作業 shall 文書（`doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/` の `briefing-assets.md` と網羅台帳 `ledger/*.toml` の根拠の場所・`.kiro/steering/structure.md`）にある配置のパスを、移した先のパスへ書き換える。
+7. The 分割作業 shall ソースと道具の説明の中にある配置のパス（wintf・`pilot`・`ukadoc-survey`・本体の `emo2_boot`・`tools/perf/judge-followup.py` ほか）を、移した先のパスへ書き換える。
+8. The 分割作業 shall `tools/perf/fixtures/` と `tools/perf/fixtures-loop/` の見本の `run.log` を手で書き換えず、見本を作る `tools/perf/fixtures/generate.py` を直して作り直す。
+9. The 分割作業 shall `audit-placement-core`・`audit-placement-follow` の brief の「受け持つファイル」を、移した先のパスへ書き換える。
+10. When 書き換えを終えたとき, the 分割作業 shall 古いパス `crates/areka/src/placement/`（と `src/placement/`）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書 `roadmap-history.md`・`.kiro/specs/completed/` と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
 
 ### Requirement 6: ログの出所の名前
 
@@ -173,3 +175,7 @@ brief が「要件の段で決める」とした点。上の要件は推奨案�
 4. **`capture_logs` の汎用の部分を `log-capture-kit` へ下ろすか**（要件 3.4）。推奨は **下ろさない**（`test-support` 機能で開けるだけにする。下ろすのは移すだけを超える）。
 5. **数の取り直し**（議題ではなく申し送り）: brief の「`placement::test_support` を外の 194 ファイルが使う」は、11-06 の測りで約 40 ファイル（`placement::test_support` か `placement::{…test_support…}` を書くファイル・配置の中を除く）。配置を指す本体のファイルは 173（配置自身を除く）。設計の段で数え直す。
 6. **brief の触るファイルの一覧に無かった所**（申し送り・同じウェーブの兄弟の触るファイルと重ならないことは 11-06 に確かめた）: `crates/log-capture-kit/tests/with_default_guard_test.rs`（表に配置のパス 3 つ）・説明の中のパス（wintf の `api_owner_chain_probe_tests.rs`・`ecs/window/window_band_pipeline_real_tests.rs`・`ecs/window/zorder_pair_maintain_always_on_top_tests.rs`・`runtime/tick_bridge.rs`、`crates/pilot/examples/pilot-dropfiles-on-wuc-window/main.rs`、`crates/ukadoc-survey/src/evidence/candidates.rs`、本体の `emo2_boot/hit_region.rs`・`emo2_boot/frame_transition_atomicity_tests.rs`、`tools/perf/judge-followup.py`）。
+
+## 要件の討議で決めたこと
+
+- **議題 3（ファイルを文字として読むテストの置き場）**（2026-11-06 開発者「参照場所があちこちに飛ぶのはソース管理できなくなる。あとで読む人が素直に読めるソースコードの書き方をしないとダメ。それをするのが『整理』」・承認）: 自分の crate のファイルは自分の crate のテストが読み、別の crate を読むのはコードの依存と同じ向き（上が下を読む）に限る。measure_template_tests・`spawn_zorder_pair_deferred_tests` は crate ごとに割り、分岐の対応表 2 本は本体へ移して crate の名前とパスで読む読み口 1 つにまとめる（要件 5.2〜5.5）。初めの推奨「配置に残して `../../areka/…` を読む」は、下の crate が上の crate を読む逆向きの参照になるので退けた。
