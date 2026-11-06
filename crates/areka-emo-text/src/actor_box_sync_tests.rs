@@ -59,7 +59,7 @@ element1,balloon,a,150,0
 pub(super) const SHELL_IMAGE: (u32, u32) = (200, 300);
 
 /// はみ出しの警告の文言（発行点と 1 文字も違わないこと）。
-const OVERFLOW_MESSAGE: &str =
+pub(super) const OVERFLOW_MESSAGE: &str =
     "箱がサーフェスの画像からはみ出している——採ったうえで、はみ出した部分は窓の端で切れる";
 
 /// 登録したときの記録の文言（同じ置き場所で何もしないことを数えるのに使う）。

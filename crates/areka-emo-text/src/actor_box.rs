@@ -233,8 +233,8 @@ impl TextLayerRuntime {
                 rect: HitRectPx {
                     left: at(site.x),
                     top: at(site.y),
-                    right: at(site.x + i64::from(def.size.0)),
-                    bottom: at(site.y + i64::from(def.size.1)),
+                    right: at(site.x.saturating_add(i64::from(def.size.0))),
+                    bottom: at(site.y.saturating_add(i64::from(def.size.1))),
                 },
             });
         }
@@ -424,7 +424,10 @@ impl TextLayerRuntime {
             i64::from(want.surface_size.1),
         );
         let site = &want.site;
-        let overflows = site.x < 0 || site.y < 0 || site.x + w > sw || site.y + h > sh;
+        let overflows = site.x < 0
+            || site.y < 0
+            || site.x.saturating_add(w) > sw
+            || site.y.saturating_add(h) > sh;
         if overflows
             && self
                 .box_overflow_warned

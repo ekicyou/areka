@@ -8,8 +8,12 @@ use std::path::PathBuf;
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
 
-use super::test_support::{box_layout, box_name, cue, emote, fake_resolver, items_at, text};
-use super::{SurfaceKeyResolver, TextLayerRuntime};
+use super::box_sync_tests::OVERFLOW_MESSAGE;
+use super::test_support::{
+    box_layout, box_name, capture_checked, cue, emote, fake_resolver, items_at,
+    spawn_reserved_slot, text,
+};
+use super::{SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
 use crate::state::test_support::font;
@@ -199,4 +203,53 @@ fn font_search_dirs_are_readable_in_the_given_order() {
         vec![PathBuf::from("other")],
     );
     assert_eq!(rt.box_font_dirs(), [PathBuf::from("other")].as_slice());
+}
+
+/// 箱 a（100×50）を `(x, y)` に置くシェルの文面（指摘 1・要件 7）。
+fn shell_with_box_at(x: i64, y: i64) -> String {
+    format!("balloon.a\n{{\nsize,100,50\n}}\nsurface0\n{{\nelement1,balloon,a,{x},{y}\n}}\n")
+}
+
+/// 置き場所に `i64::MAX` を含む箱でも、位置に大きさを足す 4 つの足し算（当たりの矩形の右と下・
+/// はみ出しの判断の x と y）は上限で止まる（要件 7.1・7.2）: はみ出しの警告は 2 度の同期でちょうど
+/// 1 回出て、当たりの矩形は裏返らない。x だけ・y だけが上限の置き場所も並べるので、どの足し算を
+/// ただの足し算に戻しても、試験の作りではあふれて落ちる（要件 7.3・y だけの置き場所は x 側が
+/// 収まるので `||` が y の足し算まで届く）。
+#[test]
+fn box_at_the_integer_max_site_warns_once_and_keeps_its_hit_rect_upright() {
+    for (x, y) in [(i64::MAX, 0), (0, i64::MAX), (i64::MAX, i64::MAX)] {
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        let layout = box_layout(&shell_with_box_at(x, y));
+        let key = place("0", TextPlace::Box(box_name(&layout, 0, "a")));
+        rt.set_box_layout(&mut world, layout, fake_resolver(), vec![]);
+        rt.apply_cue(&emote("0", "0"));
+        rt.apply_cue(&text("0", "あ"));
+        let shell = TextSlotBinding::new(slot, window, 1.0, (200, 300), (200, 300));
+
+        let ((), events) = capture_checked(|| {
+            for _ in 0..2 {
+                rt.sync_box_bindings(&mut world, &[(ActorKey::from("0"), Some((shell, 0)))]);
+            }
+        });
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.message() == OVERFLOW_MESSAGE)
+                .count(),
+            1,
+            "({x}, {y}): 上限で止まった端はサーフェスの画像より大きい＝はみ出す"
+        );
+
+        rt.refresh_shown_boxes(&[key], 10.0);
+        let [shown] = rt.shown_boxes(&ActorKey::from("0")) else {
+            panic!("({x}, {y}): 文字の出ている箱 a が 1 つ載る")
+        };
+        assert!(
+            shown.rect.right >= shown.rect.left && shown.rect.bottom >= shown.rect.top,
+            "({x}, {y}): 当たりの矩形は裏返らない: {:?}",
+            shown.rect
+        );
+    }
 }

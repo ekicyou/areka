@@ -35,7 +35,7 @@
   - _Requirements: 2.1, 2.3, 4.6_
 
 - [ ] 2. 必ず直す（指摘 1〜4）
-- [ ] 2.1 (P) 箱の当たりの矩形とはみ出しの判断の足し算を上限で止める（指摘 1・持ち込みの件）
+- [x] 2.1 (P) 箱の当たりの矩形とはみ出しの判断の足し算を上限で止める（指摘 1・持ち込みの件）
   - 箱の位置に大きさを足す 3 か所（当たりの矩形の右と下・はみ出しの判断）を、上限で止める足し算にする。位置を浮動小数に直す所は直さない
   - 置き場所が整数の上限の箱で、当たりの矩形が裏返らず、はみ出しの警告が 1 回出るテストを置く
   - 完了の姿: そのテストが緑で、直す前の足し算に戻すと試験の作りで落ちる
@@ -239,3 +239,4 @@
 - `tests/` の共有の部品は `tests/support/mod.rs`（先頭に `#![allow(dead_code)]`）。各テストは `#[path = "support/mod.rs"] mod support;`、`decoration_readback/mod.rs` の中からは `#[path = "../support/mod.rs"] mod shared;` で引く（1.4）。
 - `lib.rs` の純粋層の一覧の母数は 1.3 で 84（`choice_test_support.rs` を足した）。選択肢の部品は `crate::choice::test_support`、配置の 3 つ（`IMAGE`・`model_rect`・`broken_lines`）は `crate::layout::test_support`。
 - 検体・フォント・バルーンの検体の組の部品は `tests/support/fixture.rs`（`support/mod.rs` の `pub mod fixture;`）。本物のフォントの門は `FontCatalog::family_for` の 1 つ。`shell_balloon_fixture_test.rs` の `fake_resolver` は `tests/` の中で唯一の写しで、`src/` の部品は crate の外から呼べないので残す（1.5）。
+- 「戻すと落ちる」を確かめるテストは、`||` の短絡で片方の足し算が通らない置き場所を作らない。x だけ・y だけ・両方の 3 つを回す（2.1 の差し戻し）。
