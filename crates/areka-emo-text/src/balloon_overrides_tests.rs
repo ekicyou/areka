@@ -1,8 +1,8 @@
-//! [`super`]（`balloon_overrides`）の決定論テスト——トークン列の形と事前検証の記録。
+//! [`super`]（`balloon_overrides`）の決定論テスト——トークン列の形と、飛ばした値の記録。
 //!
-//! 入力はすべて転記層の公開入口（`areka_parsers::balloon::parse_str`）を通す。土台の 2 層は
-//! 本番（`ResolvedFont::resolve_with_background`）と同じ 5 引数を空の列で受け口へ渡して組む
-//! （[`base_of`]）。記録の件数は `log-capture-kit` で数え、捕捉の窓には `overrides` だけを入れる。
+//! 入力はすべて転記層の公開入口（`areka_parsers::balloon::parse_str`）を通す。記録の件数は
+//! `log-capture-kit` で数え、捕捉の窓には本番の解決（`ResolvedFont::resolve`）1 回だけを入れる
+//! ——記録は「解決 1 回に 1 回」（受け口の判定は `look`・色の成分不足は本モジュールの宛先）。
 //!
 //! | テスト | 内容 | 要件 |
 //! |---|---|---|
@@ -20,48 +20,30 @@
 //! | E3 | 端から端まで: 無効表示の色 3 成分は混色でなく宣言値 | 8.2, 9.10 |
 //! | E4 | 端から端まで: 縁取りは状態だけ立ち他の項目は既定のまま | 9.10 |
 
-use areka_parsers::balloon::{BalloonModel, parse_str};
+use areka_parsers::balloon::parse_str;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::{BalloonOverrides, overrides};
-use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
+use crate::draw::ResolvedFont;
 use crate::look::{LookLayers, apply_font_tag};
 
 /// 本モジュールの記録の宛先。
 const TARGET: &str = "areka_emo_text::balloon_overrides";
+/// 受け口（`look.rs` の `apply_overrides`）が飛ばした値の記録の宛先。
+const LOOK: &str = "areka_emo_text::look";
 
-/// 本番と同じ 5 引数を空の列で受け口へ渡して土台の 2 層を組む。
-///
-/// 書体名の候補・大きさ・色・選択肢文字色は本番の解決関数の結果から取る
-/// （選択肢文字色は受け口が素通しするので解決済みの 2 層から読み戻せる）。背景は `resolve` と同じ既定。
-fn base_of(model: &BalloonModel) -> LookLayers {
-    let resolved = ResolvedFont::resolve(model);
-    let mut candidates = vec![resolved.name.clone()];
-    candidates.extend(resolved.fallback_chain.iter().cloned());
-    LookLayers::from_balloon(
-        candidates,
-        resolved.height,
-        resolved.color,
-        DEFAULT_BALLOON_BACKGROUND,
-        resolved.looks.cursor_text,
-        &[],
-        &[],
-    )
-}
-
-/// 解析 → 土台 → `overrides`。捕捉の窓には `overrides` だけを入れる（解決関数自身の記録を数えない）。
-fn run(descript: &str) -> (BalloonOverrides, Vec<CapturedEvent>, LookLayers) {
+/// 解析 → 列（窓の外）と、本番の解決 1 回（窓の中）。記録は「解決 1 回に 1 回」を数える。
+fn run(descript: &str) -> (BalloonOverrides, Vec<CapturedEvent>) {
     let model = parse_str(descript, None);
-    let base = base_of(&model);
-    let (out, events) = capture(|| overrides(&model, &base));
-    (out, events, base)
+    let (_, events) = capture(|| ResolvedFont::resolve(&model));
+    (overrides(&model), events)
 }
 
-/// 本モジュールが出した `warn` だけ。
+/// 書体設定の記録の `warn` だけ（色の成分不足は本モジュール・受け口の判定は `look`）。
 fn warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
-        .filter(|e| e.level == tracing::Level::WARN && e.target == TARGET)
+        .filter(|e| e.level == tracing::Level::WARN && (e.target == TARGET || e.target == LOOK))
         .collect()
 }
 
@@ -75,14 +57,14 @@ fn lists(src: &[&[&str]]) -> Vec<Vec<String>> {
 /// W1: 基底の飾りは宣言されたキーだけが `[キー, 値]` の列になり、無効表示へは漏れない。
 #[test]
 fn font_overrides_emit_one_token_list_per_declared_decoration_key() {
-    let (out, _, _) = run("font.underline,1\r\nfont.bold,1\r\nfont.strike,0\r\n");
+    let (out, _) = run("font.underline,1\r\nfont.bold,1\r\nfont.strike,0\r\n");
     assert_eq!(
         out.font,
         lists(&[&["bold", "1"], &["strike", "0"], &["underline", "1"]])
     );
     assert!(out.disable.is_empty(), "{:?}", out.disable);
 
-    let (all, _, _) = run(
+    let (all, _) = run(
         "font.bold,1\r\nfont.italic,1\r\nfont.outline,1\r\nfont.strike,1\r\nfont.underline,1\r\n",
     );
     assert_eq!(
@@ -100,7 +82,7 @@ fn font_overrides_emit_one_token_list_per_declared_decoration_key() {
 /// W2: 無効表示の書体名は候補列（カンマ分割・trim・記述順）、大きさ・色・飾りは `\f` と同じ形。
 #[test]
 fn disable_overrides_emit_name_height_color_and_decorations() {
-    let (out, _, _) = run("disable.font.name,A, B\r\ndisable.font.height,20\r\n\
+    let (out, _) = run("disable.font.name,A, B\r\ndisable.font.height,20\r\n\
          disable.font.color.r,1\r\ndisable.font.color.g,2\r\ndisable.font.color.b,3\r\n\
          disable.font.italic,1\r\n");
     assert_eq!(
@@ -118,14 +100,15 @@ fn disable_overrides_emit_name_height_color_and_decorations() {
 /// W3: 色の 3 成分が揃わなければ列に入れず、キー `disable.font.color` で 1 度だけ記録する。
 #[test]
 fn disable_color_with_missing_components_is_dropped_and_warned_once() {
-    let (only_r, events, _) = run("disable.font.color.r,1\r\n");
+    let (only_r, events) = run("disable.font.color.r,1\r\n");
     assert!(only_r.disable.is_empty(), "{:?}", only_r.disable);
     let w = warns(&events);
     assert_eq!(w.len(), 1, "{w:?}");
+    assert_eq!(w[0].target, TARGET);
     assert_eq!(w[0].field_str("key"), Some("disable.font.color"));
     assert_eq!(w[0].field_str("value"), Some("1,,"));
 
-    let (out, events, _) = run("disable.font.color.r,1\r\ndisable.font.color.g,2\r\n");
+    let (out, events) = run("disable.font.color.r,1\r\ndisable.font.color.g,2\r\n");
     assert!(out.disable.is_empty(), "{:?}", out.disable);
     let w = warns(&events);
     assert_eq!(w.len(), 1, "{w:?}");
@@ -137,22 +120,24 @@ fn disable_color_with_missing_components_is_dropped_and_warned_once() {
 /// 記録のキーは descript のキー名（`font.bold`／`disable.font.bold`）で、基底と無効表示を取り違えない。
 #[test]
 fn out_of_vocabulary_values_are_passed_through_and_warned_once() {
-    let (out, events, base) = run("font.bold,yes\r\n");
+    let (out, events) = run("font.bold,yes\r\n");
     assert_eq!(out.font, lists(&[&["bold", "yes"]]));
 
     // 理由の語は受け口自身に言わせる（語を写さない）。
+    let base = LookLayers::default();
     let expected = apply_font_tag(&mut base.default.clone(), &base, &["bold", "yes"])
         .expect_err("受け口は `yes` を飛ばすはず")
         .reason;
 
     let w = warns(&events);
     assert_eq!(w.len(), 1, "{w:?}");
+    assert_eq!(w[0].target, LOOK);
     assert_eq!(w[0].field_str("key"), Some("font.bold"));
     assert_eq!(w[0].field_str("value"), Some("yes"));
     assert_eq!(w[0].field_str("reason"), Some(expected));
 
     // 基底と無効表示に同じ値を書くと記録は 2 件で、キーで書いた行を区別できる。
-    let (_, events, _) = run("font.bold,yes\r\ndisable.font.bold,yes\r\n");
+    let (_, events) = run("font.bold,yes\r\ndisable.font.bold,yes\r\n");
     let keys: Vec<_> = warns(&events).iter().map(|e| e.field_str("key")).collect();
     assert_eq!(keys, [Some("font.bold"), Some("disable.font.bold")]);
 }
@@ -162,7 +147,7 @@ fn out_of_vocabulary_values_are_passed_through_and_warned_once() {
 /// 同じ発行点が生きていることの対照は W4／W9（同じ窓の組み方で 1 件を数える）。
 #[test]
 fn canonical_declarations_produce_no_warnings() {
-    let (out, events, _) = run(
+    let (out, events) = run(
         "font.bold,1\r\nfont.italic,0\r\nfont.strike,1\r\nfont.underline,default\r\n\
          disable.font.name,Meiryo, Yu Gothic UI\r\ndisable.font.height,14\r\n\
          disable.font.color.r,128\r\ndisable.font.color.g,128\r\ndisable.font.color.b,128\r\n\
@@ -176,7 +161,7 @@ fn canonical_declarations_produce_no_warnings() {
 /// W6: 影の 4 キーは基底・無効表示とも列にしない（零の判定）。飾りは同じ入力から列になる（対照）。
 #[test]
 fn shadow_keys_are_never_forwarded() {
-    let (out, _, _) = run(
+    let (out, _) = run(
         "font.bold,1\r\nfont.shadowcolor.r,1\r\nfont.shadowcolor.g,2\r\nfont.shadowcolor.b,3\r\n\
          font.shadowstyle,offset\r\n\
          disable.font.bold,1\r\ndisable.font.shadowcolor.r,1\r\ndisable.font.shadowcolor.g,2\r\n\
@@ -195,7 +180,7 @@ fn shadow_keys_are_never_forwarded() {
 /// W7: 何も書かなければ両列とも空（受け口の呼び出しは従来と同じ）。
 #[test]
 fn no_declarations_yield_two_empty_lists() {
-    let (out, events, _) = run("");
+    let (out, events) = run("");
     assert_eq!(out, BalloonOverrides::default());
     assert_eq!(warns(&events).len(), 0, "{events:?}");
 }
@@ -203,7 +188,7 @@ fn no_declarations_yield_two_empty_lists() {
 /// W8: 縁取り（受け口では語彙のみ）は列に入り、記録しない。
 #[test]
 fn outline_is_forwarded_without_warning() {
-    let (out, events, _) = run("font.outline,1\r\ndisable.font.outline,1\r\n");
+    let (out, events) = run("font.outline,1\r\ndisable.font.outline,1\r\n");
     assert_eq!(out.font, lists(&[&["outline", "1"]]));
     assert_eq!(out.disable, lists(&[&["outline", "1"]]));
     assert_eq!(warns(&events).len(), 0, "{events:?}");
@@ -213,14 +198,15 @@ fn outline_is_forwarded_without_warning() {
 /// `20` は記録 0 件（研究 §14——相対指定は転記層が `u32` で読むため配線へ届かない）。
 #[test]
 fn disable_height_rejected_by_receiver_is_forwarded_and_warned_once() {
-    let (zero, events, _) = run("disable.font.height,0\r\n");
+    let (zero, events) = run("disable.font.height,0\r\n");
     assert_eq!(zero.disable, lists(&[&["height", "0"]]));
     let w = warns(&events);
     assert_eq!(w.len(), 1, "{w:?}");
+    assert_eq!(w[0].target, LOOK);
     assert_eq!(w[0].field_str("key"), Some("disable.font.height"));
     assert_eq!(w[0].field_str("value"), Some("0"));
 
-    let (twenty, events, _) = run("disable.font.height,20\r\n");
+    let (twenty, events) = run("disable.font.height,20\r\n");
     assert_eq!(twenty.disable, lists(&[&["height", "20"]]));
     assert_eq!(warns(&events).len(), 0, "{events:?}");
 }

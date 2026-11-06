@@ -241,10 +241,10 @@ impl ResolvedFont {
     /// [`crate::color::mix_disabled`] が唯一の実装点）。背景を知らない呼び手は
     /// [`resolve`](Self::resolve) を使い、[`DEFAULT_BALLOON_BACKGROUND`]（白）が採られる。
     ///
-    /// バルーン定義の飾り 5 本（`font.bold` ほか）と `disable.font.*` は、空の列で組んだ土台の
-    /// 2 層を基に [`crate::balloon_overrides::overrides`] がトークン列へ写し、
+    /// バルーン定義の飾り 5 本（`font.bold` ほか）と `disable.font.*` は、
+    /// [`crate::balloon_overrides::overrides`] がトークン列へ写し、
     /// [`LookLayers::from_balloon`] の 2 引数へ渡す（読み取りの所有は
-    /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空で、土台と同じ結果になる。
+    /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空になる。
     /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）は渡さない——所有は
     /// `text-align-shadow-canon`。
     pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
@@ -295,16 +295,7 @@ impl ResolvedFont {
         candidates.push(name.clone());
         candidates.extend(fallback_chain.iter().cloned());
 
-        let base = LookLayers::from_balloon(
-            candidates.clone(),
-            height,
-            color,
-            background,
-            cursor_text,
-            &[],
-            &[],
-        );
-        let overrides = crate::balloon_overrides::overrides(model, &base);
+        let overrides = crate::balloon_overrides::overrides(model);
 
         ResolvedFont {
             face: FontFace::regular(&name),
