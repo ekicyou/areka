@@ -224,3 +224,40 @@ fn tree_edits_catch_promotion_and_demotion() {
         "節でない持ち主に入るのは昇格でない（根の部品が無ければどのみち組む）"
     );
 }
+
+/// 装置の失いの立ち直りの後に単位矩形が新しい工場の図形で作り直される（3.4・外のテストからは見えない欄）。
+/// 立ち直りは `init_graphics_core` と同じく装置の資源を同じ場所で入れ替えて与える。
+#[test]
+fn unit_rect_recreated_after_device_loss_recovery() {
+    use crate::ecs::graphics::{GraphicsCore, invalidate_dependent_components};
+    use windows::core::Interface;
+
+    let mut ecs = EcsWorld::new();
+    let world = ecs.world_mut();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let window = world.spawn(Window::default()).id();
+    let owner = world.spawn((Visual::default(), ChildOf(window))).id();
+    let node = world
+        .spawn((
+            Visual::default(),
+            solid_rect_content(rect()),
+            ChildOf(owner),
+        ))
+        .id();
+    world.run_schedule(PreRenderSurface);
+    let unit_rect = |w: &World| w.get::<DrawTree>(owner).unwrap().unit_rect.clone();
+    let before = unit_rect(world).expect("unit_rect built");
+
+    world.resource_mut::<GraphicsCore>().invalidate();
+    let mut invalidate = Schedule::default();
+    invalidate.add_systems(invalidate_dependent_components);
+    invalidate.run(world);
+    assert!(unit_rect(world).is_none(), "the loss drops unit_rect");
+
+    *world.resource_mut::<GraphicsCore>() = GraphicsCore::new().expect("GraphicsCore");
+    world.entity_mut(node).insert(solid_rect_content(rect()));
+    world.run_schedule(PreRenderSurface);
+    let after = unit_rect(world).expect("unit_rect recreated after recovery");
+    // 古い物は控えで生かしてあるので番地は使い回されない
+    assert_ne!(before.as_raw(), after.as_raw());
+}
