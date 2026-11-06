@@ -313,3 +313,57 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
         "下線系は 0 件"
     );
 }
+
+/// 指摘 5: 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない
+/// （面を付けるのは書体・計測器・描き手が全部通った後）。組み立ては無効にした `GraphicsCore` で
+/// 落とし、閉包は生きた装置で本物の窓の子の面を付ける——先に呼べば子が 1 つ増えて赤になる。
+#[test]
+fn failing_build_never_attaches_and_leaves_no_window_child() {
+    use super::decoration::build_actor_render;
+    use super::test_support::{com_world, geo_model, window_children};
+    use crate::surface::TextSurface;
+    use wintf::ecs::{GraphicsCore, WucGraphicsResource};
+
+    let (mut world, window, _slot) = com_world();
+    let compositor = world
+        .resource::<WucGraphicsResource>()
+        .compositor()
+        .cloned()
+        .expect("compositor");
+    let live = world
+        .remove_resource::<GraphicsCore>()
+        .expect("GraphicsCore");
+    let mut dead = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+    dead.invalidate();
+    let before = window_children(&world, window);
+    let resolved = ResolvedBalloonText::resolve(&geo_model(), NATIVE);
+    let mut called = false;
+
+    let result = build_actor_render(
+        &dead,
+        || {
+            called = true;
+            TextSurface::attach_window_child(
+                &mut world,
+                window,
+                0,
+                &compositor,
+                &live,
+                (4, 4),
+                (0.0, 0.0),
+            )
+        },
+        &resolved.font,
+        resolved.mode,
+        &TextLayerConfig::default(),
+        &ActorKey::from("sakura"),
+    );
+
+    assert!(result.is_err(), "無効な装置では組み立てが失敗する");
+    assert_eq!(
+        window_children(&world, window),
+        before,
+        "窓の子の entity を残さない"
+    );
+    assert!(!called, "組み立てが失敗したら面を付ける閉包を呼ばない");
+}

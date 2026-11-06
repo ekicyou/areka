@@ -352,29 +352,31 @@ fn present_actor(
         let render = with_graphics_core(
             world,
             |world, core| -> Result<ActorRender, TextLayerError> {
-                let surface = match child_index {
-                    None => TextSurface::attach(
-                        world,
-                        &binding,
-                        &compositor,
-                        core,
-                        physical_size,
-                        physical_offset,
-                    ),
-                    Some(index) => TextSurface::attach_window_child(
-                        world,
-                        binding.window,
-                        index,
-                        &compositor,
-                        core,
-                        physical_size,
-                        physical_offset,
-                    ),
-                }
-                .inspect_err(|_| attach_failed = true)?;
+                let attach = || {
+                    match child_index {
+                        None => TextSurface::attach(
+                            world,
+                            &binding,
+                            &compositor,
+                            core,
+                            physical_size,
+                            physical_offset,
+                        ),
+                        Some(index) => TextSurface::attach_window_child(
+                            world,
+                            binding.window,
+                            index,
+                            &compositor,
+                            core,
+                            physical_size,
+                            physical_offset,
+                        ),
+                    }
+                    .inspect_err(|_| attach_failed = true)
+                };
                 decoration::build_actor_render(
                     core,
-                    surface,
+                    attach,
                     &resolved.font,
                     resolved.mode,
                     &config,

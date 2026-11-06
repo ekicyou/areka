@@ -38,7 +38,9 @@ use crate::viewbox_draw::ViewboxExecutor;
 use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
 
-/// 装着済みの供給面へ描画実行部と計測器を添えて 1 actor 分の描画資源を組む（task 7.3）。
+/// 描画実行部と計測器を組み、全部通ってから `attach` で供給面を付けて 1 actor 分の描画資源にする
+/// （task 7.3）。面を付けるのを最後にするのは、組み立てが失敗したときに窓の子の entity を残さない
+/// ため（どれも面を要らない）。
 ///
 /// フォント候補列の解決台帳（[`FontCatalog`]）は**ここで 1 つだけ**作り、計測器と描画器の
 /// 双方へ共有で渡す（要件 9.8）。台帳が 2 つあると、同じ候補列が全滅したときの記録が計測側と
@@ -48,7 +50,7 @@ use crate::writing::WritingMode;
 /// 間近にあるため（design.md「それ以上の追加は `actor_decoration.rs` へ」）。
 pub(super) fn build_actor_render(
     core: &GraphicsCore,
-    surface: TextSurface,
+    attach: impl FnOnce() -> Result<TextSurface, TextLayerError>,
     font: &ResolvedFont,
     mode: WritingMode,
     config: &TextLayerConfig,
@@ -65,7 +67,7 @@ pub(super) fn build_actor_render(
     let executor = ViewboxExecutor::new_shared(core, Rc::clone(&fonts))?;
     let metrics = DWriteMetrics::new_shared(factory, font, mode, config, fonts)?;
     Ok(ActorRender {
-        surface,
+        surface: attach()?,
         executor,
         metrics,
         markers: None,
