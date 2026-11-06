@@ -86,9 +86,9 @@
 //! `pasta.dll` を**絶対パスで**与える。相対パスだと `pasta.dll` の LOAD が `0x8007007E` で失敗する）に
 //! 従う。ただし本 probe に**その制約はかからない**——理由は次の 2 点で、混同しないこと:
 //!
-//! 1. **本 probe の fixture ルートは常に絶対解決される**: [`emo2_root`] のアンカーはコンパイル時に
-//!    埋め込まれる `CARGO_MANIFEST_DIR`（＝`crates/areka` の絶対パス）であり、続く `../pilot/...` は
-//!    そのアンカーからの相対要素にすぎない。**プロセスの作業ディレクトリに依存しない**ため、どこから
+//! 1. **本 probe の fixture ルートは常に絶対解決される**: [`emo2_root`] は `sample_ghost_kit` の
+//!    `SampleRoot::acquire("emo2")` が用意した検体の**絶対パス**（`SampleRoot::folder`）を返す。
+//!    **プロセスの作業ディレクトリに依存しない**ため、どこから
 //!    `cargo run` しても同一の emo2 fixture を読む（起動側で絶対パスを与える必要がない）。
 //! 2. **本 probe は `pasta.dll` を一切ロードしない**: SHIORI（`pasta.dll`）も host-32 helper も起動しない
 //!    ため、`0x8007007E`（DLL LOAD 失敗）の経路自体が存在しない。**読むものは少なくない**が、いずれも
@@ -99,7 +99,7 @@
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
 //!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
 //!      [`load_shell_assets`]）
-//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:221` の `measure_balloon_surface0`）と
+//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:433` の `measure_balloon_surface0`）と
 //!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:583` の `apply_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
