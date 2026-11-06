@@ -270,3 +270,7 @@
 - 5.2: 全体テスト（`tools/test-all.ps1`）1 回で全段緑（x64 825 s）・`Cargo.lock` と依存は変わらず・`crates/areka-emo-text/` に新しいファイル無し
 - 13.1: main（#426・#427・#428）を取り込んだ。seriko の `table_parts_tests`・`table_calls_dot_sakura_tests` もこちらの指摘 4・10.1 の debug! に合わせた。`word_warns` の「未知の合成メソッド名」の枝はもう当たらない（完了の棚卸で audit-seriko の持ち分として扱う）。番人の例外表は 6 件
 - 13.2: design.md に「仕事の上限と記録の回数」の節を足した。`Records::Quiet` が効くのは面の表を黙って組む段（写す行・箱・持ち込み）だけで、合成の側・外形の走査・入れ子の報告は従わない
+- 完了時にその場で解決: `Animation::interval_written` の欄を消した（読み手 0・parsers・emo-atlas・emo-present・seriko に及ぶ）
+- 完了時にその場で解決: `doc/COMPAT_ARCHITECTURE.md`・`ledger/assets.toml`・`extent-element-offset/brief.md` の消えたテスト名と、同じ番号の行の規則の古い説明（議題 7 案 A の前の「後勝ち」）を直した
+- 完了時にその場で解決: seriko の `table_calls_dot_sakura_tests.rs` の `word_warns` の当たらなくなった枝（未知の合成メソッド名）を消した
+- 完了時に起票（既存の brief へ）: `seriko-trigger-lottery-gaps` の件 5（`rebuild` の V²）・件 6（`reaches` の深さの 2 乗）、`audit-emo-text-state-actor` に `actor_box.rs` の位置の飽和
