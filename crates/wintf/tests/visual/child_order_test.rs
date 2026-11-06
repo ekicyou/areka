@@ -6,10 +6,10 @@
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
-use windows::core::Result;
+use windows::core::{Interface, Result};
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::{WucVisualFactory, setup_graphics};
+use super::common::{WucVisualFactory, expected_wuc_order, setup_graphics, wuc_children};
 
 /// テスト用マーカーコンポーネント（アーキタイプを変えるために使用）
 #[derive(Component, Default)]
@@ -20,8 +20,8 @@ struct ExtraMarkerA;
 struct ExtraMarkerB;
 
 /// 異なるアーキタイプを持つ兄弟エンティティの一部を未同期状態にした場合、
-/// visual_hierarchy_sync_system 実行後に全子の parent_visual が更新されることを検証。
-/// さらに全子の parent_visual が正しい親 Visual を参照していることを検証。
+/// visual_hierarchy_sync_system 実行後に全子の parent_visual が親の Visual を指し、
+/// WUC の子の並びが Children の順を写していることを検証。
 #[test]
 fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
@@ -88,18 +88,25 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
             "Children should reflect spawn order"
         );
 
-        // 全子の parent_visual が更新されていること（is_some()）
+        // 全子の parent_visual が親の Visual を指すこと
         for (name, entity) in [
             ("child_a", child_a),
             ("child_b", child_b),
             ("child_c", child_c),
         ] {
             let vg = world.get::<VisualGraphics>(entity).unwrap();
-            assert!(
-                vg.parent_visual().is_some(),
+            assert_eq!(
+                vg.parent_visual().map(|v| v.as_raw()),
+                Some(parent_visual.as_raw()),
                 "{name} should have parent_visual cached after sync"
             );
         }
+
+        // WUC の子の並びが Children の順を写すこと
+        assert_eq!(
+            wuc_children(&parent_visual)?,
+            expected_wuc_order(&[&child_a_visual, &child_b_visual, &child_c_visual])
+        );
 
         Ok(())
     })
@@ -153,16 +160,17 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
         schedule.run(&mut world);
 
         // VisualGraphics を持つ子は正しく同期されていること
-        let child_a_vg = world.get::<VisualGraphics>(child_a).unwrap();
-        assert!(
-            child_a_vg.parent_visual().is_some(),
-            "child_a should have parent_visual"
-        );
-
-        let child_c_vg = world.get::<VisualGraphics>(child_c).unwrap();
-        assert!(
-            child_c_vg.parent_visual().is_some(),
-            "child_c should have parent_visual"
+        for (name, entity) in [("child_a", child_a), ("child_c", child_c)] {
+            let vg = world.get::<VisualGraphics>(entity).unwrap();
+            assert_eq!(
+                vg.parent_visual().map(|v| v.as_raw()),
+                Some(parent_visual.as_raw()),
+                "{name} should have parent_visual"
+            );
+        }
+        assert_eq!(
+            wuc_children(&parent_visual)?,
+            expected_wuc_order(&[&child_a_visual, &child_c_visual])
         );
 
         Ok(())
@@ -189,6 +197,7 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
 
         // 交互に異なるアーキタイプの子を spawn
         let mut child_entities = Vec::new();
+        let mut child_visuals = Vec::new();
         for i in 0..5 {
             let child_visual = factory.create_visual()?;
             let entity = if i % 2 == 0 {
@@ -210,6 +219,7 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
                     .id()
             };
             child_entities.push(entity);
+            child_visuals.push(child_visual);
         }
 
         let mut schedule = Schedule::default();
@@ -221,14 +231,17 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
         let children_order: Vec<Entity> = children.iter().collect();
         assert_eq!(children_order, child_entities);
 
-        // 全子の parent_visual が設定されていること
+        // 全子の parent_visual が親の Visual を指すこと
         for (i, entity) in child_entities.iter().enumerate() {
             let vg = world.get::<VisualGraphics>(*entity).unwrap();
-            assert!(
-                vg.parent_visual().is_some(),
+            assert_eq!(
+                vg.parent_visual().map(|v| v.as_raw()),
+                Some(parent_visual.as_raw()),
                 "child_{i} should have parent_visual after sync"
             );
         }
+        let refs: Vec<&_> = child_visuals.iter().collect();
+        assert_eq!(wuc_children(&parent_visual)?, expected_wuc_order(&refs));
 
         Ok(())
     })

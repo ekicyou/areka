@@ -63,10 +63,10 @@ fn test_label_with_existing_visual() {
         ))
         .id();
 
-    // Visualが存在することを確認（上書きされないか確認）
+    // フックが積んだ命令を流してから、既存の Visual が上書きされていないことを確認
+    world.flush();
     let visual = world.get::<Visual>(entity).expect("Visual should exist");
-    // 既存のVisual値が保持されている可能性があるため、存在のみ確認
-    assert!(visual.is_visible);
+    assert_eq!(visual.opacity, 0.5);
 }
 
 /// 複数のウィジェットが同時にVisualを取得できることを確認

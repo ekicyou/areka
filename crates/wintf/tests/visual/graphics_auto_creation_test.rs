@@ -7,7 +7,7 @@
 //! テスト内で明示的に VisualGraphics::default() を挿入する。
 
 use bevy_ecs::prelude::*;
-use windows::core::Result;
+use windows::core::{Interface, Result};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
     SurfaceGraphics, Visual, VisualGraphics, WucGraphicsResource, visual_resource_management_system,
@@ -40,17 +40,18 @@ fn test_visual_triggers_visual_graphics_creation() -> Result<()> {
             .spawn((Visual::default(), VisualGraphics::default()))
             .id();
 
-        // この時点では VisualGraphics はまだない
+        // この時点では VisualGraphics の GPU リソースはまだない
+        assert!(!world.get::<VisualGraphics>(entity).unwrap().is_valid());
+
         // システムを実行すると作成される
         let mut schedule = Schedule::default();
         schedule.add_systems(visual_resource_management_system);
         schedule.run(&mut world);
 
-        // VisualGraphics が作成されていることを確認
-        let vg = world.get::<VisualGraphics>(entity);
+        // VisualGraphics の GPU リソースが作成されていることを確認
         assert!(
-            vg.is_some(),
-            "VisualGraphics should be created for entity with Visual"
+            world.get::<VisualGraphics>(entity).unwrap().is_valid(),
+            "VisualGraphics should get GPU resources for entity with Visual"
         );
 
         Ok(())
@@ -58,7 +59,6 @@ fn test_visual_triggers_visual_graphics_creation() -> Result<()> {
 }
 
 /// Visual追加時に SurfaceGraphics は即時作成されないことを確認（R2 AC#5, R5で遅延作成）
-/// 注意: 現在の実装ではSurfaceも作成されるが、設計では遅延作成が求められている
 #[test]
 fn test_visual_does_not_trigger_immediate_surface_creation() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
@@ -71,11 +71,10 @@ fn test_visual_does_not_trigger_immediate_surface_creation() -> Result<()> {
         schedule.add_systems(visual_resource_management_system);
         schedule.run(&mut world);
 
-        // 現在の実装では SurfaceGraphics も作成される（後で修正が必要）
-        // この部分は Phase 4 で修正される
-        let _surface = world.get::<SurfaceGraphics>(entity);
-        // 現状の実装を確認するためのテスト（修正後は is_none() になる）
-        // assert!(surface.is_none(), "SurfaceGraphics should NOT be created immediately (deferred creation)");
+        assert!(
+            world.get::<SurfaceGraphics>(entity).is_none(),
+            "SurfaceGraphics should NOT be created immediately (deferred creation)"
+        );
 
         Ok(())
     })
@@ -96,20 +95,25 @@ fn test_visual_graphics_not_recreated_if_exists() -> Result<()> {
         schedule.add_systems(visual_resource_management_system);
         schedule.run(&mut world);
 
-        let vg_first = world.get::<VisualGraphics>(entity).expect("should exist");
-        let is_valid_first = vg_first.is_valid();
+        let first = world
+            .get::<VisualGraphics>(entity)
+            .and_then(|vg| vg.visual())
+            .expect("First VisualGraphics should be valid")
+            .as_raw();
 
-        // 2回目の実行（変更なし）
+        // 2回目の実行。変化の印を立て、作り直しを止めるのが有効の判定であることを試す
+        world
+            .get_mut::<VisualGraphics>(entity)
+            .unwrap()
+            .set_changed();
         schedule.run(&mut world);
 
-        let vg_second = world
+        let second = world
             .get::<VisualGraphics>(entity)
-            .expect("should still exist");
-        let is_valid_second = vg_second.is_valid();
-
-        // 両方とも有効であることを確認
-        assert!(is_valid_first, "First VisualGraphics should be valid");
-        assert!(is_valid_second, "Second VisualGraphics should be valid");
+            .and_then(|vg| vg.visual())
+            .expect("Second VisualGraphics should be valid")
+            .as_raw();
+        assert_eq!(first, second, "VisualGraphics should not be recreated");
 
         Ok(())
     })
@@ -136,15 +140,15 @@ fn test_multiple_entities_get_visual_graphics() -> Result<()> {
         schedule.run(&mut world);
 
         assert!(
-            world.get::<VisualGraphics>(entity1).is_some(),
+            world.get::<VisualGraphics>(entity1).unwrap().is_valid(),
             "Entity1 should have VisualGraphics"
         );
         assert!(
-            world.get::<VisualGraphics>(entity2).is_some(),
+            world.get::<VisualGraphics>(entity2).unwrap().is_valid(),
             "Entity2 should have VisualGraphics"
         );
         assert!(
-            world.get::<VisualGraphics>(entity3).is_some(),
+            world.get::<VisualGraphics>(entity3).unwrap().is_valid(),
             "Entity3 should have VisualGraphics"
         );
 

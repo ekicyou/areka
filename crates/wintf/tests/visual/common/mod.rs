@@ -21,6 +21,27 @@ pub fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
     Ok(())
 }
 
+/// WUC: 親の `ContainerVisual::Children()` を下から上の順に回し、子のポインタを並べる。
+pub fn wuc_children(parent: &Visual) -> Result<Vec<*mut core::ffi::c_void>> {
+    let it = parent.cast::<ContainerVisual>()?.Children()?.First()?;
+    let mut out = Vec::new();
+    while it.HasCurrent()? {
+        out.push(it.Current()?.as_raw());
+        it.MoveNext()?;
+    }
+    Ok(out)
+}
+
+/// Children の順に `InsertAtBottom` した後の、WUC の子の並び（下→上）の期待。
+/// 最後の子が最下・最初の子が最上なので、Children の逆順になる。
+pub fn expected_wuc_order(children_in_ecs_order: &[&Visual]) -> Vec<*mut core::ffi::c_void> {
+    children_in_ecs_order
+        .iter()
+        .rev()
+        .map(|v| v.as_raw())
+        .collect()
+}
+
 /// WUC ビジュアルファクトリ。テストごとに新規 `WucGraphicsResource` を保持し、
 /// そこから実 WUC `Visual`（`SpriteVisual` を基底 `Visual` へ cast）を供給する。
 pub struct WucVisualFactory {

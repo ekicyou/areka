@@ -1,83 +1,4 @@
-use bevy_ecs::prelude::*;
-use wintf::ecs::PointF;
 use wintf::ecs::Visual;
-use wintf::ecs::visual_resource_management_system;
-use wintf::ecs::world::FrameCount;
-use wintf::ecs::{GraphicsCore, VisualGraphics};
-
-#[test]
-fn test_visual_component_definition() {
-    let mut world = World::new();
-
-    // Test Default
-    let entity = world.spawn(Visual::default()).id();
-
-    let visual = world.get::<Visual>(entity).unwrap();
-
-    // Check default values
-    assert_eq!(visual.is_visible, true);
-    assert_eq!(visual.opacity, 1.0);
-    assert_eq!(visual.transform_origin.x, 0.0);
-    assert_eq!(visual.transform_origin.y, 0.0);
-}
-
-#[test]
-fn test_visual_component_properties() {
-    let visual = Visual {
-        is_visible: false,
-        opacity: 0.5,
-        transform_origin: PointF { x: 10.0, y: 20.0 },
-        clip: None,
-    };
-
-    assert_eq!(visual.is_visible, false);
-    assert_eq!(visual.opacity, 0.5);
-    assert_eq!(visual.transform_origin.x, 10.0);
-    assert_eq!(visual.transform_origin.y, 20.0);
-}
-
-/// Phase 6: Visualリソース作成テスト
-///
-/// visual_resource_management_systemはVisualGraphicsのみを作成し、
-/// SurfaceGraphicsは作成しない（deferred_surface_creation_systemで遅延作成）。
-///
-/// Phase 2: on_visual_addフックはVisualGraphics自動挿入を停止したため、
-/// テスト内で明示的にVisualGraphicsを挿入する。
-#[test]
-fn test_visual_resource_creation() {
-    let mut world = World::new();
-
-    // Setup GraphicsCore
-    // Note: This requires a valid Windows environment with DComp support.
-    // If running in CI without GPU, this might fail.
-    // But local environment seems to have it.
-    let graphics = GraphicsCore::new().expect("Failed to create GraphicsCore");
-    world.insert_resource(graphics);
-
-    // Setup FrameCount resource (required by visual_resource_management_system)
-    world.insert_resource(FrameCount(1));
-
-    // Setup Schedule
-    let mut schedule = Schedule::default();
-    schedule.add_systems(visual_resource_management_system);
-
-    // Spawn entity with Visual + VisualGraphics
-    // Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
-    let entity = world
-        .spawn((Visual::default(), VisualGraphics::default()))
-        .id();
-
-    // Run schedule
-    schedule.run(&mut world);
-
-    // Phase 6: VisualGraphicsのみが作成される（Surfaceは遅延作成）
-    assert!(
-        world.get::<VisualGraphics>(entity).is_some(),
-        "VisualGraphics should be created by visual_resource_management_system"
-    );
-    // SurfaceGraphicsはdeferred_surface_creation_systemで作成されるため、
-    // ここでは存在しない
-}
 
 // ========================================================================
 // Visual API unit tests (Task 1.2)
@@ -87,7 +8,7 @@ fn test_visual_resource_creation() {
 fn test_visual_default_values() {
     let visual = Visual::default();
     assert_eq!(visual.opacity, 1.0);
-    assert_eq!(visual.is_visible, true);
+    assert!(visual.is_visible);
     assert_eq!(visual.clamped_opacity(), 1.0);
 }
 
@@ -134,28 +55,33 @@ fn test_visual_set_opacity_clamps_above_one() {
 #[test]
 fn test_visual_clamped_opacity_direct_field_out_of_range() {
     // 直接フィールドアクセスで範囲外値を設定した場合でも clamped_opacity() はクランプを保証
-    let mut visual = Visual::default();
-    visual.opacity = -0.5;
-    assert_eq!(visual.clamped_opacity(), 0.0);
+    let low = Visual {
+        opacity: -0.5,
+        ..Default::default()
+    };
+    assert_eq!(low.clamped_opacity(), 0.0);
 
-    visual.opacity = 2.0;
-    assert_eq!(visual.clamped_opacity(), 1.0);
+    let high = Visual {
+        opacity: 2.0,
+        ..Default::default()
+    };
+    assert_eq!(high.clamped_opacity(), 1.0);
 }
 
 #[test]
 fn test_visual_set_visible_true() {
     let mut visual = Visual::default();
     visual.set_visible(false);
-    assert_eq!(visual.is_visible, false);
+    assert!(!visual.is_visible);
     visual.set_visible(true);
-    assert_eq!(visual.is_visible, true);
+    assert!(visual.is_visible);
 }
 
 #[test]
 fn test_visual_set_visible_false() {
     let mut visual = Visual::default();
     visual.set_visible(false);
-    assert_eq!(visual.is_visible, false);
+    assert!(!visual.is_visible);
 }
 
 #[test]

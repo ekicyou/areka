@@ -1,12 +1,13 @@
-//! visual_property_sync_system のギャップテスト (W3b-T)
+//! visual_property_sync_system のテスト (W3b-T)
 //!
-//! IDCompositionVisual3 の SetOffsetX/Y・SetOpacity は write-only COM API で
-//! 読み戻しができないため、各分岐の完走 characterization に留める
-//! （クリップ・不透明度の意味論は ULW 側ピクセルテストで間接固定済み — W3a 所見5 参照）。
+//! WUC の `Visual` は `Opacity()`・`Offset()` を読み戻せるので、同期の後に読んで期待の値と比べる
+//! （読み出しも GPU の持ち主のスレッドの閉包の中で行う）。
 //! 対象: crates/wintf/src/ecs/graphics/systems/visual_sync.rs (visual_property_sync_system)
 
 use bevy_ecs::prelude::*;
 use windows::core::Result;
+use windows_numerics::Vector3;
+use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{Visual, VisualGraphics, Window, visual_property_sync_system};
 
 use super::common::{WucVisualFactory, setup_graphics};
@@ -26,10 +27,18 @@ fn setup() -> Result<(World, WucVisualFactory)> {
     Ok((world, factory))
 }
 
-/// 非 Window エンティティ: offset + opacity の両方を設定する経路が完走する
+/// 配置の位置（論理座標・累積の倍率は既定の 1）
+fn arrangement_at(x: f32, y: f32) -> Arrangement {
+    Arrangement {
+        offset: Offset { x, y },
+        ..Default::default()
+    }
+}
+
+/// 非 Window エンティティ: offset と opacity の両方が WUC の Visual へ写る
 ///
-/// Note: Visual::on_add が Arrangement を自動挿入し、Arrangement::on_add が
-/// GlobalArrangement を連鎖挿入するため、クエリの全要求コンポーネントが揃う。
+/// Note: Arrangement::on_add が GlobalArrangement を連鎖挿入するため、
+/// クエリの全要求コンポーネントが揃う。
 #[test]
 fn syncs_offset_and_opacity_for_non_window_entity() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
@@ -41,11 +50,21 @@ fn syncs_offset_and_opacity_for_non_window_entity() -> Result<()> {
                 opacity: 0.5,
                 ..Default::default()
             },
-            VisualGraphics::new(visual),
+            arrangement_at(10.0, 20.0),
+            VisualGraphics::new(visual.clone()),
         ));
         world.flush();
 
         run_sync(&mut world);
+        assert_eq!(visual.Opacity()?, 0.5);
+        assert_eq!(
+            visual.Offset()?,
+            Vector3 {
+                X: 10.0,
+                Y: 20.0,
+                Z: 0.0
+            }
+        );
         Ok(())
     })
 }
@@ -74,17 +93,24 @@ fn window_entity_skips_offset_branch() -> Result<()> {
 
         world.spawn((
             Window::default(),
-            Visual::default(),
-            VisualGraphics::new(visual),
+            Visual {
+                opacity: 0.5,
+                ..Default::default()
+            },
+            arrangement_at(10.0, 20.0),
+            VisualGraphics::new(visual.clone()),
         ));
         world.flush();
 
         run_sync(&mut world);
+        assert_eq!(visual.Opacity()?, 0.5);
+        // 窓の位置は Win32 が持つので、WUC の Offset は既定の 0 のまま
+        assert_eq!(visual.Offset()?, Vector3::default());
         Ok(())
     })
 }
 
-/// is_visible=false は opacity 0.0 の分岐を通る
+/// is_visible=false は opacity 0.0 を写す
 #[test]
 fn invisible_visual_takes_zero_opacity_branch() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
@@ -97,32 +123,36 @@ fn invisible_visual_takes_zero_opacity_branch() -> Result<()> {
                 opacity: 1.0,
                 ..Default::default()
             },
-            VisualGraphics::new(visual),
+            VisualGraphics::new(visual.clone()),
         ));
         world.flush();
 
         run_sync(&mut world);
+        assert_eq!(visual.Opacity()?, 0.0);
         Ok(())
     })
 }
 
-/// 範囲外 opacity は clamped_opacity() 経由でクランプされる分岐を通る
+/// 範囲外 opacity は clamped_opacity() でクランプされて写る
 #[test]
 fn out_of_range_opacity_is_clamped_before_set() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
         let (mut world, factory) = setup()?;
         let visual = factory.create_visual()?;
+        // 既定の 1.0 と見分けるため、同期の前の値をずらしておく
+        visual.SetOpacity(0.25)?;
 
         world.spawn((
             Visual {
-                opacity: 5.0, // SetOpacity(5.0) は DComp 的に不正だが clamp(1.0) で安全
+                opacity: 5.0,
                 ..Default::default()
             },
-            VisualGraphics::new(visual),
+            VisualGraphics::new(visual.clone()),
         ));
         world.flush();
 
         run_sync(&mut world);
+        assert_eq!(visual.Opacity()?, 1.0);
         Ok(())
     })
 }
