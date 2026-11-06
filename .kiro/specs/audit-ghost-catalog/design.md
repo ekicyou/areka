@@ -305,7 +305,7 @@ pub(crate) fn read_central_directory(bytes: &[u8]) -> Result<Vec<RawEntry>, Refu
 | 要件 | 3.1・3.2・4.1・4.2・9.9 |
 
 **形**
-- `names.rs` に `pub(crate) fn fold(name: &str) -> String`（1 字を 1 字の大文字へ畳む・最終の検証で `to_lowercase` から改めた・要件 9.16）と `pub(crate) fn same_name(a: &str, b: &str) -> bool`（`fold(a) == fold(b)`）を置く。今の `validate_entry_names` の鍵は `fold` を使う（振る舞いは今と同じ）。
+- `names.rs` に `pub(crate) fn fold(name: &str) -> String`（1 字を 1 字の大文字へ畳む・最終の検証で `to_lowercase` から改めた・要件 9.16）と `pub(crate) fn same_name(a: &str, b: &str) -> bool`（`fold(a) == fold(b)`）を置く。今の `validate_entry_names` の鍵は `fold` を使う（語末の Σ だけが前と変わる・要件 9.16）。
 - #64: `plan.rs` の `path_in_folder`・`leading_segments_match`、`install.rs` の `copy_existing` の切り抜きの比べと `kept`、`lib.rs` の `entry_bytes` を `same_name` に替える。`eq_ignore_ascii_case` で書庫の名前どうし・宛先の名前どうしを比べる所はほかに残さない（定数の綴り `install.txt` との比べは残してよい）。
 - #6: `validate_entry_names` の表を `BTreeMap<String, (String, bool)>`（畳んだ全体のパス → 綴りとフォルダか）にし、別に `BTreeMap<String, String>`（畳んだ先祖の前置き → それを生んだエントリの綴り）を持つ。ファイルのエントリの畳んだパスが先祖の表に在る、またはエントリの先祖の前置きがファイルとして表に在るとき `CaseCollision { a, b }`。明示のフォルダのエントリ（`x/`）と `x/y.txt` は衝突ではない。
 - #7: `manifest.rs` の `collect_companions` が、見つけた順に `fold(directory)` を集合に持ち、2 つ目が重なれば `RefuseReason::InvalidDirectoryName { key: "<2 つ目の接頭辞>.directory", value: 綴り }` で書庫ごと断る（語彙は増やさない。`crates/areka/src/install/judge.rs` の割り当ても変わらない）。本体の宛先と同梱の宛先の重なりは今の計画（`overridden`）が扱う。
