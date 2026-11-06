@@ -12,20 +12,19 @@
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::{BalloonModel, Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::change_detection::DetectChangesMut;
 use log_capture_kit::capture;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
+use super::marker::ARROW_LIMIT_MESSAGE;
 use super::present::{
     MARKER_LIMIT_MESSAGE, MAX_SURFACE_AREA, MAX_SURFACE_SIDE, SURFACE_LIMIT_MESSAGE,
 };
 use super::test_support::{
-    REVEAL_INTERVAL, balloon, box_layout, box_name, com_world, cue, emote, fake_resolver,
-    opaque_count, physical, read_back, spawn_reserved_slot, text,
+    REVEAL_INTERVAL, balloon, balloon_model_of, box_layout, box_name, com_world, cue, emote,
+    fake_resolver, level_count, opaque_count, physical, read_back, spawn_reserved_slot, text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
@@ -36,10 +35,8 @@ const IMAGE: (u32, u32) = (200, 100);
 
 /// validrect（上・下・左・右）と字の丈だけを決めたバルーン。
 fn model(validrect: ValidRect, font_height: Option<u32>) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         validrect,
         Font::new(None, font_height, FontColor::new(None, None, None)),
         None,
@@ -115,16 +112,15 @@ fn over_limit_surface_logs_once_in_ten_frames() {
                 .map(|i| present_frame(&mut rt, &mut world, 1.0 + f64::from(i) * 0.1))
                 .collect::<Vec<_>>()
         });
-        let errors: Vec<_> = events
-            .iter()
-            .filter(|e| e.level == tracing::Level::ERROR)
-            .collect();
         assert_eq!(
-            errors.len(),
+            level_count(&events, tracing::Level::ERROR),
             1,
-            "{name}: ERROR は 10 フレームで 1 回: {errors:?}"
+            "{name}: ERROR は 10 フレームで 1 回: {events:?}"
         );
-        assert_eq!(errors[0].message(), SURFACE_LIMIT_MESSAGE, "{name}");
+        assert!(
+            events.iter().any(|e| e.message() == SURFACE_LIMIT_MESSAGE),
+            "{name}: {events:?}"
+        );
         assert!(results.iter().all(Result::is_ok), "{name}: {results:?}");
         assert!(rt.surface(&actor).is_none(), "{name}: 面は作らない");
         let place = balloon("0");
@@ -475,11 +471,15 @@ fn over_limit_arrow_image_logs_once_in_ten_frames() {
             .map(|i| present_frame(&mut rt, &mut world, 1000.0 + f64::from(i) * 0.1))
             .collect::<Vec<_>>()
     });
-    let errors = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::ERROR)
-        .count();
-    assert_eq!(errors, 1, "10 フレームで 1 回: {events:?}");
+    assert_eq!(
+        level_count(&events, tracing::Level::ERROR),
+        1,
+        "10 フレームで 1 回: {events:?}"
+    );
+    assert!(
+        events.iter().any(|e| e.message() == ARROW_LIMIT_MESSAGE),
+        "矢印の絵の上限の記録: {events:?}"
+    );
     assert!(results.iter().all(Result::is_ok), "{results:?}");
     assert!(rt.surfaces[&place].markers.is_some(), "印の面はある");
 }

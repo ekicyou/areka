@@ -249,6 +249,9 @@ fn present_actor(
 
     // ── 初回解決フレーム: World 資源から描画資源を構築し予約スロットへ装着（初回のみ） ──
     if !runtime.surfaces.contains_key(place) {
+        // 描き手が無い＝前の字は映っていない。面を作れずに戻っても当たり行が残らないよう外す
+        // （装着できればこの回は全部を描き直し、写しも作り直す）。
+        runtime.choice_snapshot.remove(place);
         // 物理寸＝ceil(切った validrect 寸 × k)・offset＝validrect 原点 × k（DPI/スケール契約）。
         let physical_size = (
             contract.physical_extent(ImagePx(clip.0 - region.left())),

@@ -424,3 +424,25 @@ fn draw_rect_near_i32_max_matches_the_hit_and_mask_rect() {
         );
     }
 }
+
+/// 一辺が上限を越える絵の矢印は描かないので当たりにも入らない: その矩形の点は当たらず、矩形が重なる
+/// 描けた矢印の画素は、先に並ぶ大きすぎる矢印でなく描けた矢印に当たる。
+#[test]
+fn over_limit_arrow_is_not_hit_even_where_it_overlaps_a_drawn_arrow() {
+    let (mut world, window, _slot) = com_world();
+    let mut markers = attach(&mut world, window, 0, (40, 30), (0.0, 0.0));
+    let big = solid(super::super::present::MAX_SURFACE_SIDE + 1, 4, 255);
+    let small = solid(4, 4, 255);
+    let scale = ScaleContract::new(1.0, None);
+    let shown = [
+        placed(MarkerKind::Up, (0, 0), &big),
+        placed(MarkerKind::Down, (2, 0), &small),
+    ];
+    markers.draw(&mut world, &shown, &scale).expect("描く");
+    assert_eq!(markers.hit((0.5, 1.5)), None, "大きすぎる矢印だけの点");
+    assert_eq!(
+        markers.hit((3.5, 1.5)),
+        Some(MarkerKind::Down),
+        "重なる点は描けた矢印"
+    );
+}

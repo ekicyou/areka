@@ -1,7 +1,7 @@
 use areka_sakura::contract::{ActorKey, CueCommand};
 
 use super::test_support::{
-    choice_cue, com_world, count_px, cue, geo_model, inked, opaque_count, read_back,
+    choice_cue, com_world, count_px, cue, geo_model, inked, opaque_count, read_back, row_px,
     spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
@@ -188,7 +188,10 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
     // 選択肢行バンド（各ヒット行の y レンジ）を捕捉。
     let bands: Vec<(u32, u32)> = base_rows
         .iter()
-        .map(|r| (r.rect.top as u32, r.rect.bottom.ceil() as u32))
+        .map(|r| {
+            let (_, y0, _, y1) = row_px(r);
+            (y0, y1)
+        })
         .collect();
     let base_bytes = read_back(&rt, &actor);
     for (i, &(y0, y1)) in bands.iter().enumerate() {
@@ -223,7 +226,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
 
 /// Observable（5.1/5.2/5.3/7.3/7.4・シナリオB=新 talk）: ClearAll＋新 Choice 集合（別 id）注入→提示の
 /// 同一フレームで、旧選択肢が画素・契約とも消え、**新集合のみ**が保持される（5.3）。ClearAll 直後（提示前）に
-/// 旧集合のヒット行が残らないこと（原子的無効化）も併せて確認する。
+/// 旧集合のヒット行が残らないことは `clear_all_resets_hover_and_hit_rows_for_every_actor` が見る。
 #[test]
 fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     let (mut world, window, slot) = com_world();
@@ -288,7 +291,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     // 画素: 新集合の行バンドにインクがある＝新選択肢が描かれている（7.3/7.4）。
     let new_bytes = read_back(&rt, &actor);
     for (i, r) in new_rows.iter().enumerate() {
-        let (y0, y1) = (r.rect.top as u32, r.rect.bottom.ceil() as u32);
+        let (_, y0, _, y1) = row_px(r);
         assert!(
             count_px(&new_bytes, width, (0, y0, width, y1), inked) > 0,
             "集合2: 新選択肢行 {i} バンドにインクがある（描画==ヒット・7.3/7.4）"

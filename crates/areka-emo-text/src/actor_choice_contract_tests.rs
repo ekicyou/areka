@@ -1,4 +1,4 @@
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER};
+use areka_sakura::contract::{ActorKey, CueCommand};
 
 use super::test_support::{
     choice_cue, com_world, count_px, cue, cursor_model, geo_model, inked, opaque_count, read_back,
@@ -7,6 +7,7 @@ use super::test_support::{
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::choice::ResolvedChoiceStyle;
 use crate::state::TextLayerConfig;
+use crate::state::test_support::font;
 
 /// `choice_active`（1.3）: スパン非空で true・スパン無し／未知 actor で false。
 #[test]
@@ -130,11 +131,7 @@ fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
     // 1 行目＝既定の大きさの選択肢・2 行目＝`\f[height,40]` の選択肢。
     rt.apply_cue(&choice_cue("0", 0.0, "OnSmall", "ちいさい", &[]));
     rt.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }));
-    rt.apply_cue(&cue(
-        "0",
-        0.0,
-        CueCommand::command_carrier(FONT_TAG_CARRIER, vec!["height".to_owned(), "40".to_owned()]),
-    ));
+    rt.apply_cue(&font("0", &["height", "40"]));
     rt.apply_cue(&choice_cue("0", 0.2, "OnBig", "おおきい", &[]));
     let image = (240u32, 200u32);
     rt.register_actor(
@@ -203,7 +200,10 @@ fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     assert!(rows[0].rect.top < rows[1].rect.top && rows[1].rect.top < rows[2].rect.top);
     let width = image.0;
     let bytes = read_back(&rt, &actor);
-    let band = |r: &super::ChoiceHitRow| (r.rect.top as u32, r.rect.bottom.ceil() as u32);
+    let band = |r: &super::ChoiceHitRow| {
+        let (_, y0, _, y1) = row_px(r);
+        (y0, y1)
+    };
     let (r0y0, r0y1) = band(&rows[0]);
     assert!(
         count_px(&bytes, width, (indent_x as u32, r0y0, width, r0y1), inked) > 0,
@@ -581,14 +581,9 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
 /// ＭＳ ゴシック（比 1.0）の檻では寄せが 0 のままで、この経路は 1 度も踏まれない
 /// （既定フォント盲点）。
 fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
-    use areka_parsers::balloon::{
-        BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect,
-        WindowPosition, WordWrapPoint,
-    };
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    use areka_parsers::balloon::{BalloonCursor, CursorColor, Font, FontColor, Origin, ValidRect};
+    super::test_support::balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(
             Some("Yu Gothic UI".to_owned()),

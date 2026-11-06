@@ -6,17 +6,15 @@
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::MarkerImage;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::{BalloonModel, Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::prelude::World;
 
 use super::TextLayerRuntime;
 use super::TextSlotBinding;
 use super::box_sync_tests::fixture;
-use super::test_support::spawn_reserved_slot;
 use super::test_support::text;
+use super::test_support::{balloon_model_of, spawn_reserved_slot};
 use crate::inline_marker::InlineMarkerLook;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
@@ -24,10 +22,8 @@ use crate::state::TextLayerConfig;
 const NATIVE: (u32, u32) = (400, 224);
 
 fn model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,

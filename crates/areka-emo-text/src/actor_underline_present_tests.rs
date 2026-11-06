@@ -1,7 +1,7 @@
 //! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（areka-P0-balloon-text-bugs 件 3・実 GPU）
 //!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **3.1**・**3.2**・**3.3**・**3.4**・**3.5**・**3.6**・
-//! **3.8**・**3.11**・**4.3**、design「areka が塗る下線（areka-P0-balloon-text-bugs 件 3）」・テストの方針「結合 2・3・5」）。
+//! **3.8**・**3.10**・**3.11**・**4.3**、design「areka が塗る下線（areka-P0-balloon-text-bugs 件 3）」・テストの方針「結合 2・3・5」）。
 //!
 //! 本番の 1 フレームの経路（`present_frame`・実 DirectWrite の行送り・実 GPU）を通して読み戻す。
 //!

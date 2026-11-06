@@ -551,10 +551,9 @@ fn line_bands_read_the_block_axis_in_vertical_modes() {
     assert_eq!(bands[0].offset, -7.0, "右から左の寄せは負");
 }
 
-/// 装飾の無い行は従来と 1 画素も変わらない（非退行）——行矩形のブロック軸寸が既定の大きさに
-/// 等しいので、アクターに 1 つの値を配っていた頃と同じ帯になる。
+/// 装飾の無い行はどれも、既定の大きさの行ボックスと行送りで決まる同じ帯になる。
 #[test]
-fn line_bands_match_the_actor_wide_value_when_no_line_is_decorated() {
+fn undecorated_lines_all_get_the_default_size_band() {
     const EM: f32 = 10.0;
     let lines = [
         line((0.0, 0.0, 100.0, EM), &[]),

@@ -169,7 +169,7 @@ fn transparent_arrow_pixels_and_outside_do_not_hit() {
     assert_eq!(rt.marker_at_point(&place, (-1.0, -1.0)), None);
 }
 
-/// 再追従でモデルの矢印の鍵が替わると、置き場が替わり（要件 3.4・8.6）、古い拡大率の印の面は
+/// 再追従でモデルの矢印の鍵が替わると、置き場が替わり（要件 3.4・8.6）、前の印の面は
 /// 次の提示で窓の子から消えて新しい面に替わる（窓の子を残さない）。
 #[test]
 fn model_change_moves_the_arrow_and_drops_the_old_marker_surface() {

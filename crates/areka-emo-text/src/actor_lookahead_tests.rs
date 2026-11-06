@@ -16,16 +16,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::{BalloonModel, Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::{ActorKey, CueCommand};
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::prelude::World;
 use dola::cue::{CuePayload, CuePlayer, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{capture_checked, pump_until_idle};
+use super::test_support::{balloon_model_of, capture_checked, pump_until_idle};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, spawn_emo_text};
 use crate::layout::{FixedMetrics, PositionedLine};
 use crate::place::PlaceKey;
@@ -58,14 +56,12 @@ pub(super) fn balloon_model(
     writing_mode: Option<&str>,
     budoux_newline: Option<&str>,
 ) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(FONT_HEIGHT), FontColor::new(None, None, None)),
-        writing_mode.map(str::to_string),
-        budoux_newline.map(str::to_string),
+        writing_mode,
+        budoux_newline,
     )
 }
 

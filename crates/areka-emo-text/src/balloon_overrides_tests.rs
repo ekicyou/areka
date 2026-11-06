@@ -1,7 +1,8 @@
 //! [`super`]（`balloon_overrides`）の決定論テスト——トークン列の形と、飛ばした値の記録。
 //!
 //! 入力はすべて転記層の公開入口（`areka_parsers::balloon::parse_str`）を通す。記録の件数は
-//! `log-capture-kit` で数え、捕捉の窓には本番の解決（`ResolvedFont::resolve`）1 回だけを入れる
+//! `log-capture-kit` で数え、捕捉の窓には本番の解決（`ResolvedFont::resolve`）1 回と、窓が生きている
+//! ことの対照の `error!` 1 件だけを入れる（`capture_checked`・「記録 0 件」が窓の死で恒真にならない）
 //! ——記録は「解決 1 回に 1 回」（受け口の判定は `look`・色の成分不足は本モジュールの宛先）。
 //!
 //! | テスト | 内容 | 要件 |
@@ -21,9 +22,10 @@
 //! | E4 | 端から端まで: 縁取りは状態だけ立ち他の項目は既定のまま | 9.10 |
 
 use areka_parsers::balloon::parse_str;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::CapturedEvent;
 
 use super::{BalloonOverrides, overrides};
+use crate::actor::test_support::capture_checked;
 use crate::draw::ResolvedFont;
 use crate::look::{LookLayers, apply_font_tag};
 
@@ -32,10 +34,10 @@ const TARGET: &str = "areka_emo_text::balloon_overrides";
 /// 受け口（`look.rs` の `apply_overrides`）が飛ばした値の記録の宛先。
 const LOOK: &str = "areka_emo_text::look";
 
-/// 解析 → 列（窓の外）と、本番の解決 1 回（窓の中）。記録は「解決 1 回に 1 回」を数える。
+/// 解析 → 列（窓の外）と、本番の解決 1 回（対照つきの窓の中）。記録は「解決 1 回に 1 回」を数える。
 fn run(descript: &str) -> (BalloonOverrides, Vec<CapturedEvent>) {
     let model = parse_str(descript, None);
-    let (_, events) = capture(|| ResolvedFont::resolve(&model));
+    let (_, events) = capture_checked(|| ResolvedFont::resolve(&model));
     (overrides(&model), events)
 }
 
@@ -144,7 +146,7 @@ fn out_of_vocabulary_values_are_passed_through_and_warned_once() {
 
 /// W5: 正典どおりの宣言（基底・無効表示の全形）は記録を 1 件も出さない。
 ///
-/// 同じ発行点が生きていることの対照は W4／W9（同じ窓の組み方で 1 件を数える）。
+/// 窓が生きていることは同じ窓の対照の `error!` で確かめる（`run`）。発行点が生きていることは W4／W9。
 #[test]
 fn canonical_declarations_produce_no_warnings() {
     let (out, events) = run(

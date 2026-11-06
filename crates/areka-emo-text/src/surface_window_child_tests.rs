@@ -10,18 +10,13 @@ use bevy_ecs::name::Name;
 use wintf::ecs::{Arrangement, GraphicsCommandList, HitTest, Visual};
 
 use crate::actor::TextSlotBinding;
-use crate::actor::test_support::{make_dispatcher_and_compositor, window_children};
+use crate::actor::test_support::{
+    make_dispatcher_and_compositor, spawn_reserved_slot, window_children,
+};
 
 /// 窓と、その直接の子 2 つ（差し込み口・絵）を組む。返り値は (window, slot, picture)。
 fn spawn_window_with_slot_and_picture(world: &mut World) -> (Entity, Entity, Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-layer-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
+    let (window, slot) = spawn_reserved_slot(world);
     let picture = world
         .spawn((Name::new("picture"), Visual::default(), ChildOf(window)))
         .id();

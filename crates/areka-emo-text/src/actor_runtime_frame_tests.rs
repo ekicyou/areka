@@ -1,16 +1,15 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::{Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
 use bevy_ecs::prelude::World;
 use log_capture_kit::count_levels;
 use wintf::ecs::{GraphicsCommandList, VisualGraphics};
 
 use super::test_support::{
-    com_world, cue, geo_model, opaque_count, pump_until_idle, read_back, spawn_reserved_slot,
+    balloon_model_of, com_world, cue, geo_model, opaque_count, pump_until_idle, read_back,
+    spawn_reserved_slot,
 };
 use super::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
@@ -403,15 +402,13 @@ fn draw_stats_readable_after_present_frame() {
 #[test]
 fn resolve_wires_wrap_mode_from_balloon_model() {
     let image = (120u32, 60u32);
-    // ON: budoux_newline,1 を持つ model（`new` の末尾 positional 引数）。
-    let on_model = BalloonModel::new(
-        WindowPosition::new(None, None),
+    // ON: budoux_newline,1 を持つ model。
+    let on_model = balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
-        Some("1".into()),
+        Some("1"),
     );
     let resolved_on = ResolvedBalloonText::resolve(&on_model, image);
     assert_eq!(

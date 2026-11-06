@@ -15,7 +15,7 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{
     COARSE_WRAP_MESSAGE, FONT_HEIGHT_ZERO, IGNORED_ORIGIN_MESSAGE, ROP_FALLBACK_MESSAGE,
-    box_layout, box_name, capture_checked, cue, emote, fake_resolver, items_at,
+    box_layout, box_name, capture_checked, cue, emote, fake_resolver, items_at, physical,
     spawn_reserved_slot, text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
@@ -108,11 +108,13 @@ pub(super) fn fixture() -> Fixture {
 
 impl Fixture {
     pub(super) fn shell(&self, scale: f32) -> TextSlotBinding {
-        let physical = (
-            (SHELL_IMAGE.0 as f32 * scale).ceil() as u32,
-            (SHELL_IMAGE.1 as f32 * scale).ceil() as u32,
-        );
-        TextSlotBinding::new(self.slot, self.window, scale, physical, SHELL_IMAGE)
+        TextSlotBinding::new(
+            self.slot,
+            self.window,
+            scale,
+            physical(SHELL_IMAGE, scale),
+            SHELL_IMAGE,
+        )
     }
 
     /// 台本の `\s` と絵の差し替えの両方が届いた状態にする（`-1` は非表示）。

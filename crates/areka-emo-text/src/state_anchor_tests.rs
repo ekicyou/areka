@@ -10,6 +10,7 @@ use log_capture_kit::capture;
 use super::route_tests::{boxed, key, select, show, state_with_boxes};
 use super::test_support::{applied, cue, font, spans, text};
 use super::*;
+use crate::actor::test_support::capture_checked;
 use crate::look::{StyleId, TextLook};
 use crate::lookahead::{Basis, TalkLookahead, advance_state};
 
@@ -371,8 +372,12 @@ fn rehearsal_emits_no_records() {
         );
     }
 
-    let (rehearsed, quiet) = capture(|| run(TextLayerState::default().rehearsal_copy()));
-    assert_eq!(quiet.len(), 0, "空回しは記録を出さない {quiet:?}");
+    let (rehearsed, quiet) = capture_checked(|| run(TextLayerState::default().rehearsal_copy()));
+    assert_eq!(
+        quiet.len(),
+        1,
+        "空回しは記録を出さない（対照の 1 件だけ） {quiet:?}"
+    );
     assert_eq!(
         rehearsed.places().collect::<Vec<_>>(),
         production.places().collect::<Vec<_>>(),
@@ -594,20 +599,17 @@ fn rehearsal_and_production_agree_on_style_numbers() {
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
     look.install(&state, None, &talk);
-    let answers = {
-        let mut answers = Vec::new();
-        for c in &talk {
-            let dest = PlaceKey {
-                actor: c.actor.clone(),
-                place: state.destination(&c.actor),
-            };
-            look.note_cue(c, &dest);
-            advance_state(&mut state, None, c);
-            let arrived = state.place_state(&place).expect("場所に状態がある");
-            answers.push(matches!(look.basis(&place, arrived), Basis::Full { .. }));
-        }
-        answers
-    };
+    let mut answers = Vec::new();
+    for c in &talk {
+        let dest = PlaceKey {
+            actor: c.actor.clone(),
+            place: state.destination(&c.actor),
+        };
+        look.note_cue(c, &dest);
+        advance_state(&mut state, None, c);
+        let arrived = state.place_state(&place).expect("場所に状態がある");
+        answers.push(matches!(look.basis(&place, arrived), Basis::Full { .. }));
+    }
     // 食い違いの warn は `Basis::Arrived` の道でしか出ないので、全部 Full なら 0 件。
     assert_eq!(answers, vec![true; talk.len()], "最後まで全文で配置される");
 }

@@ -107,8 +107,6 @@ fn resolve_specified_colors_without_style_defaults_to_square_fill() {
     );
 }
 
-// ── resolve: underline 系と blendmethod は SquareFill のまま（縮退表・6.5・記録は出さない） ──
-
 // ── paint: 描画実行用 (fill, text) 正規形 ──
 
 /// SquareFill.paint → Some((fill, text))（dfc 非依存）。

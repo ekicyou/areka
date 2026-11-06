@@ -71,14 +71,32 @@ pub(crate) fn pump_until_idle() {
 /// テスト用 BalloonModel（幾何のみ・font 未指定＝既定 ＭＳ ゴシック 12px・
 /// validrect 未指定＝画像全域・wordwrap 未指定＝右辺折返し）。
 pub(crate) fn geo_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
         None,
+    )
+}
+
+/// 書き始めの位置・描画範囲・書体・書字方向・`budoux_newline` を決めたバルーン
+/// （`windowposition`・`wordwrappoint` は書かない）。テストのバルーンはここで組む。
+pub(crate) fn balloon_model_of(
+    origin: Origin,
+    validrect: ValidRect,
+    font: Font,
+    writing_mode: Option<&str>,
+    budoux_newline: Option<&str>,
+) -> BalloonModel {
+    BalloonModel::new(
+        WindowPosition::new(None, None),
+        origin,
+        WordWrapPoint::new(None, None),
+        validrect,
+        font,
+        writing_mode.map(str::to_string),
+        budoux_newline.map(str::to_string),
     )
 }
 

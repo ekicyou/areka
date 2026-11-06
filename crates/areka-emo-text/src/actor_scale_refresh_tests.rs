@@ -7,8 +7,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::test_support::{
-    FONT_HEIGHT_ZERO, capture_checked, com_world, cue, geo_model, insert_gpu, opaque_count,
-    read_back, spawn_reserved_slot,
+    FONT_HEIGHT_ZERO, balloon_model_of, capture_checked, choice_cue, com_world, cue, geo_model,
+    insert_gpu, opaque_count, read_back, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -129,10 +129,8 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
     // origin は宣言しない——本檻の関心は「validrect だけが変わったとき region が変わるか」で
     // あり origin は付随物である（かつての `Origin::new(Some(0), Some(0))` は解決後
     // validrect [24,360]×[16,200] の外にあり、範囲外の宣言の扱いに依存していた）。
-    let narrowed = BalloonModel::new(
-        WindowPosition::new(None, None),
+    let narrowed = balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(Some(16), Some(200), Some(24), Some(360)),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
@@ -346,10 +344,8 @@ const NOTHING_CHANGED: &str = "文字層の再追従: 適用 k・面実寸・文
 
 /// `origin`・`wordwrappoint`・`validrect` を書かないバルーン（解き直すたびに件 1 が成分ごとに出る）。
 fn unspecified_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
@@ -429,10 +425,8 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
     rt.register_actor_binding(actor.clone(), binding, &model);
 
     // ⑴ 文字の大きさの変わる定義。
-    let taller = BalloonModel::new(
-        WindowPosition::new(None, None),
+    let taller = balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(30), FontColor::new(None, None, None)),
         None,
@@ -550,10 +544,8 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let binding = TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE);
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
+    let model = balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(0), FontColor::new(None, None, None)),
         None,
@@ -680,7 +672,8 @@ fn device_change_recreates_renders_of_every_text_layer_in_the_world() {
 }
 
 /// 再追従で捨てた描き手は差し込み口からも外す: 新しい拡大率の物理寸が上限を越えて面を作れなくても、
-/// 前の拡大率の字の絵が差し込み口に残らない（k=1 で幅 9,000 の画像を 200% へ＝18,000）。
+/// 前の拡大率の字の絵が差し込み口に残らず、見えなくなった選択肢の当たり行も残らない
+/// （k=1 で幅 9,000 の画像を 200% へ＝18,000）。
 #[test]
 fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
     use wintf::ecs::VisualGraphics;
@@ -688,6 +681,7 @@ fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    rt.apply_cue(&choice_cue("0", 0.0, "c1", "はい", &[]));
     let wide = (9000, 60);
     rt.register_actor_binding(
         actor.clone(),
@@ -701,6 +695,10 @@ fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
     };
     present_frame(&mut rt, &mut world, 10.0).expect("k=1 の提示");
     assert!(slot_visual(&world).is_some(), "k=1 では字の絵が付く");
+    assert!(
+        !rt.choice_hit_rows(&actor).is_empty(),
+        "k=1 では選択肢を押せる"
+    );
     assert!(rt.refresh_actor_binding(
         &actor,
         TextSlotBinding::new(slot, window, 2.0, (18000, 120), wide),
@@ -711,5 +709,9 @@ fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
     assert!(
         slot_visual(&world).is_none(),
         "前の字の絵が差し込み口に残る"
+    );
+    assert!(
+        rt.choice_hit_rows(&actor).is_empty(),
+        "見えない選択肢の当たり行が残る"
     );
 }

@@ -154,7 +154,7 @@ impl MarkerSurface {
                 w = m.image.width,
                 h = m.image.height,
                 max_side = MAX_SURFACE_SIDE,
-                "矢印の絵の寸が上限を越える——描かず、出す矢印が変わるまで描き直さない"
+                "{ARROW_LIMIT_MESSAGE}"
             );
         }
         // 可謬な準備（絵の GPU への転送）は BeginDraw の前に済ませる。
@@ -240,6 +240,10 @@ impl MarkerSurface {
         self.surface.despawn_window_child(world);
     }
 }
+
+/// 上限を越える矢印の絵を描かなかったときの記録の文。
+pub(crate) const ARROW_LIMIT_MESSAGE: &str =
+    "矢印の絵の寸が上限を越える——描かず、出す矢印が変わるまで描き直さない";
 
 /// 矢印の絵を GPU へ移せる寸か（文字の面と同じ上限・越える絵は描かない）。
 fn image_fits(m: &PlacedMarker) -> bool {

@@ -8,15 +8,16 @@
 // 最後の 1 本（描き手の組み立ての失敗）だけは実 GPU（`com_world`）を使う。
 
 use areka_parsers::balloon::{
-    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WordWrapPoint,
+    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect,
 };
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
-use super::test_support::{ROP_FALLBACK_MESSAGE, capture_checked, spawn_reserved_slot};
+use super::test_support::{
+    ROP_FALLBACK_MESSAGE, balloon_model_of, capture_checked, spawn_reserved_slot,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::color::mix_disabled;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -31,10 +32,8 @@ const NATIVE: (u32, u32) = (400, 224);
 /// これで「装着で 2 層が届く」の述語が恒真にならない——届かなければ状態は
 /// [`LookLayers::default`] のまま残り、比較が赤になる。
 fn styled_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(
             Some("Meiryo".to_string()),

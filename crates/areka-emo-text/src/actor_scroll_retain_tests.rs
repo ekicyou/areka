@@ -203,7 +203,8 @@ fn present_actor_scroll_keeps_first_visible_line_ink_coarse_cadence() {
 /// 冒頭に `\n[150]` が立つ台本を拡大率 1.0 で駆動する（症状 F の再現・R17.3）。
 ///
 /// 送りが起きた後の最終フレームで ⑴ 先頭可視行の帯（面の上端 0 から字の丈 × k）にインクが
-/// 在ること ⑵ その下にもインクが在ること＝見えている行が 2 つ以上あること、を主張する。
+/// 在ること（[`drive_lap`] の最後の確かめ）⑵ その下にもインクが在ること＝見えている行が 2 つ以上
+/// あること、を主張する。
 /// 最新行は縮退規則（最新行への飽和）で常に可視ゆえ、⑵ が成り立つのは「最新行より前の行も
 /// 見えている」ときだけである。送り量の原点を最初の行の開始側に置くと最新の 1 行だけが面の上から 1.5 行ぶん下に
 /// 残るため ⑴ が 0 画素で赤になる。全域再描画のオラクルとのバイト等価は [`drive_lap`] が持つ。
@@ -224,13 +225,7 @@ fn assert_leading_gap_lap(k: f32) {
     let last = drive_lap(k, REVEAL_INTERVAL, &cues, t_end);
     let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
-    let head = count_px(&last, w, (0, 0, w, head_band), inked);
     let below = count_px(&last, w, (0, head_band, w, h), inked);
-    assert!(
-        head > 0,
-        "k={k}: 冒頭に空きが在る台本でも、送りの後の先頭可視行の帯 [0,{head_band}) に\
-         インクが在る（症状 F: 冒頭の空きが送られず最新の 1 行だけが残る）"
-    );
     assert!(
         below > 0,
         "k={k}: 先頭可視行より下の帯 [{head_band},{h}) にもインクが在る＝収まる行が\
