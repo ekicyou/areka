@@ -148,7 +148,7 @@
   - 完了の姿: `cargo build -p wintf --all-targets`（example とテストを含む）が警告なしに通り、visual 層と数の部品に未使用の印と使い手 0 の公開の働きが無い（grep で 0 件）
   - _Requirements: 5.12, 5.13, 7.3_
 
-- [ ] 9. 全体の確かめ
+- [x] 9. 全体の確かめ
   - `tools/test-all.ps1` の全体テストを 1 回回し、既存のウィジェットと emo の画素のテストを含めて緑を確かめる
   - 依存が増えていないこと（`Cargo.toml` の差分 0）・公開の名前に areka の語が無いこと・新しいテストが兄弟ファイルに在ることを確かめる
   - 完了の姿: 全体テストが緑で、上の 3 つの確かめが 0 件
@@ -174,3 +174,4 @@
 - 7.1 レビュー: 節が持ち主へ上がった回（OwnSurface/GraphicsCommandList を足した）に元の根の列から外れることを 7.4 の実 GPU のテストに足す
 - 7.1: 組む係は `graphics/visual/systems.rs` の `update_draw_trees`（無効な回も fill は回し版を上げる・build はしない）。昇格・降格は `TreeEdits` で全部の根を組み直す。降格で `DrawTree` も外す。装置の失いの後は 7.3 で `unit_rect = None` にしないと古い工場の図形が再利用される
 - 7.2: 片づけの係は命令の列か DrawTree の片方だけが外れたら描き直しの印を立てる（設計に無い追加・design.md 177 行に足す）。この枝のテストは 7.4 で足す
+- 9: 全体テスト（c34bb80b）緑・563 秒・Cargo.toml/Cargo.lock の差分 0・wintf の追加行に areka の語 0・新しいテスト 13 本はすべて兄弟ファイル（draw_tree は tests/graphics の統合テスト）
