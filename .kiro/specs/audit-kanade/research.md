@@ -259,3 +259,19 @@ ukadoc に定めが無い #1・#5 を、討議の前に SSP の MCP で測った
 - **#5（空白だけの台本）**: 8 秒待つ長い台本を送った直後に、生の改行 1 つだけの台本を送った。直後の `get_status` は空（話していない）で、台本の記録には空の台本が #305 として残った。対照として長い台本だけを送ると `talking,balloon(0=0)` になった。＝SSP は空白だけの台本も 1 本の台本として再生し、話し中のトークを置き換える。
 - **#3（終了・切替の保留中に来た通知の依頼）は測っていない**。測るには SSP のゴーストを閉じる・切り替える操作が要り、開発者の SSP の状態を動かすため。
 - SHIORI への要求の記録（`ssp_shiori_log.txt`）は、今のゴーストには無かった（在るのは 11-01 で止まった別のゴースト `dot_sakura` のものだけ）。よって `OnTranslate` の Reference0 に改行がどう載ったかは見ていない。
+
+## 11. 設計の決め（2026-11-06・`/kiro-spec-design audit-kanade -y`）
+
+- 発見の種類: **light**（今のクレートの直し・新しい依存も外のサービスも無い）。外の調べ（WebSearch）は要らなかった。読んだ手引き: `kiro-spec-design` の `design-principles`・`design-discovery-light`・`design-synthesis`・`design-review-gate`、設計の雛形、完了 `audit-ghost-catalog` の design.md（形を写した）。
+- §9 の調べのうち、コードを読んで決まったもの:
+  - **#16**: `cargo rustc -p areka-kanade --lib -- --force-warn dead_code`（記録 `target\audit-kanade\dead-code-forced.txt`）で、`schedule` への許しの下に隠れていたのは `Phase::ClosePending` の欄 `reason`（`types.rs:136`）の 1 件だけ。テストの組み立て（`--profile test`・`dead-code-forced-test.txt`）では 0 件。欄は本番で読まれず、終了の理由は `state.pending_close` が持つ＝欄ごと消す（本番 3 か所・テスト約 20 か所）。
+  - **`with_default_guard_test.rs`**: `placement-crate-split` が触る `log-capture-kit` のテスト 2 つは `file_length_guard_test.rs` と `temp_path_guard_test.rs`（同 spec の要件）。`with_default_guard_test.rs` は入らない。`failure_test.rs` は分けないので例外表は変わらない。
+  - **#6 の運び道**: 押されたバルーンの台詞のトークの番号を持つのは表示の側の `BalloonVisibilityState.talk_id`（`emo2_boot/balloon_visibility.rs:451`・`BalloonTimeout` と同じ源）だけ。`Emo2Wiring.balloon_visibility`（`emo2_boot/frame/wiring.rs:120`・`pub(in crate::emo2_boot)`）の中にあり、`input_events` から読めない＝読み口を 2 つ（`balloon_visibility.rs`・`frame/wiring.rs`）足す要がある。`frame/wiring.rs` は `crate::placement::zorder_group_ledger` を名指す（36 行目）＝`placement-crate-split` との申し合わせの点。入力の側の旗の線（`NoUserBreakSignal::TalkStarted`）は、入力の段が表示の更新の段より先に回るため、Y の始まりが届いた時点で画面は X のまま＝番号が食い違うので採らない。
+- **#1 の二段目**: 送る点（`round_trip_raw`）で、ID に CR・LF・NUL があれば今の `event_id_not_allowed`（`error!`＋`Failed(Internal)`）で断る。Reference は取り除いて `warn!`（`reference_line_break_removed`）を残して送る（同じ点の欠番の印の置き換えと同じ形・SSP の見え方と同じ）。断る形は、翻訳の要求なら `translate_failed`→`Unloading{Fault}`、毎秒の問い合わせなら横断の腕で `Unloading{Fault}` になり、SHIORI の答え由来の値 1 つでゴーストが降りるので採らない。`ShioriFailure` に値を足す形・`Failed(Shiori)` に化けさせる形も採らない（語彙が増える・記録が嘘を言う）。外の値が ID になる選択・アンカーの応答待ちの失敗は、今の規律で 204 と同じに扱われる。
+- **#7**: 期限が決まる時点は kanade に分かる＝プッシュ。kanade は `Action::ArmChoiceWake(期限)` を出し、殻が `KanadeConfig.choice_wake`（`Sender<MonotonicMs>`）へ送る。`areka-ghost` の結線が中継（`spawn_relay::<MonotonicMs, TickerMsg>`・今の「中継 2 本で輪を解く」と同じ形）で刻み役の `TickerMsg::WakeKanadeAt` に写し、刻み役は待ちの残りに 1 回だけの起こしを足して、期限を過ぎた時の本物の時刻で `KanadeMsg::ChoiceTimeoutDue { now }` を送る。kanade は今の `fire_choice_timeout_if_due` をその時刻で呼ぶ（pump は出さない）。毎秒の刻みでの判定は残す（起こしの線の無い構成・知らせの遅れを拾う）。採らない: 刻みを細かくする（1 秒の周期が崩れ 50 ms の丸めが残る）・余分な `Tick`（選択が先に済むと OnSecondChange が余分に出る）・kanade に時計を持たせる（別の時計を混ぜて観測より先の時刻を作りうる）・dispatcher に計らせる（期限の写しは kanade の領分・50 ms の丸め）・共有の数を刻み役が読む（変わる時点が分かるのにプル）。完了 `areka-P0-choice-select-events` の design.md:566「Tick で判定」は要件 9.5 のとおりこの設計で改めた（保管の写しは直さない）。
+- **#33**: 私的な `run_shiori_loop` に手空きの周期を引数で渡す（本番は `IDLE_INTERVAL`）。テストは周期 5 ms・上限 10 秒。
+- **#6 の形**: `KanadeMsg::UserBreak { scope, talk_id: Option<TalkId> }`。`None` は「表示の側が観測できない」（`balloon_visible: Option<bool>` と同じ決まり）で、kanade は「合わない」に入れて表 C へ。`press_with_visibility`・`on_box_press` の引数は変えない（`user_break_tests.rs` の呼び出しの行を変えないため・要件 9.9）。
+- **#61 と #62 の重なり**: #62 の呼び手が `resource_get` を使うので、#61 で再輸出から消すのは 7 つ（`resource_get` は残す）。
+- **#4**: 欄 `choice_prev_talk` を `prev_talk` に改名（17 ファイル）。名前が中身と食い違ったままだと、かけ直しの audit がまた指す。
+- **束**: ファイルのまとまりで 19 本（要件 9.10）。1,000 行の近いファイルを減らす束（T1〜T4）を先に、範囲の外へ及ぶ #7（T16）・#6（T17）を後ろに置いた。
+- **合成（design-synthesis）**: 一般化＝「頭書きを切る 3 字」は `crate::sstp::LINE_BREAKERS` 1 つにまとめ、入口の検査・送る点の検査・SEND の取り除きの 3 か所が使う。採る・作る＝標準の `str::replace`／`contains` と今の中継の部品で足り、新しい部品は作らない。削る＝#7 の取り消しの知らせは作らない（古い起こしは空振りして `trace!` だけ）。
