@@ -12,7 +12,7 @@
 
 - 要件の討議で直すと決めた 18 件（#1〜#9・#11〜#15・#17・#19・#20・#22。#4 は口を足して説明を直すまで）を、3 つの組とも直す。
 - 直したバグと危ない所の 1 件ごとに、壊れたら落ちるテストを 1 本ずつ持たせる（#1・#2・#3・#4・#5・#22 は新しいテスト。消す・寄せる指摘は今あるテストが同じ結果で通る）。
-- 範囲の外のファイルには 1 つも手を入れない（C18 の約束・要件 6.2）。
+- 範囲の外のファイルは、`crates/log-capture-kit/tests/with_default_guard_test.rs` の例外の表に 1 行足すことのほかは変えない（C18 の約束・要件 6.2・6.7・設計の討議 議題 2）。
 - タスクはファイルのまとまりで 11 本に束ねる（要件 2.6 の 20 以内）。
 - 最後に同じ作法で audit をかけ直し、新しい指摘 0 件・全体テストの緑・既定の枝との差分の確かめを記録する。
 
@@ -35,7 +35,7 @@
 
 ### 範囲の外（持たないもの）
 
-- 範囲の外のファイル全部。`crates/areka/` と、`placement-crate-split` が触るファイル（`crates/log-capture-kit` のテスト 2 つ・wintf の `ecs/window_proc/` の 2 つ・`tools/perf/fixtures/`・`tools/perf/fixtures-loop/`）には手を入れない（要件 6.2）。この設計の直しは、どれも範囲の外のファイルを変えずに済む。
+- 範囲の外のファイル全部。`crates/areka/` と、`placement-crate-split` が触るファイル（`crates/log-capture-kit` のテスト 2 つ・wintf の `ecs/window_proc/` の 2 つ・`tools/perf/fixtures/`・`tools/perf/fixtures-loop/`）には手を入れない（要件 6.2）。範囲の外で変えるのは、#2 の縛るテストのための `crates/log-capture-kit/tests/with_default_guard_test.rs` の例外の 1 行だけ（このファイルは要件 6.2 の 2 つに入らない・持ち主の `audit-test-kits` は走っていない。ただし表に `crates/areka/src/placement/` の 3 行があるので、`placement-crate-split` と申し合わせてから触る＝要件 6.6）。
 - 書けなかったときの知らせの文面と、その後の処置（`crates/areka/src/alert.rs`・`write_failure.rs`）。この spec が決めるのは `PersistFailureCause::Io` に入れる理由の文だけ。
 - `crates/areka` のテストにある、保存の口を包む写し（`SharedFakeIo` ほか 19）。本体の見直しの持ち物（要件 Boundary Context）。
 - `vendors/` の下（要件 6.8）。
@@ -78,7 +78,7 @@
 
 ## ファイルの構成
 
-範囲の外のファイルは 1 つも変えない。新しいファイルは 5 つ（どれもテスト）。消すファイルは 2 つ。
+範囲の外で変えるファイルは 1 つ（例外の表の 1 行）。新しいファイルは 5 つ（どれもテスト）。消すファイルは 2 つ。
 
 ### 新しいファイル
 
@@ -127,6 +127,9 @@ crates/areka-actor/tests/ui_span_test.rs                      # #2 の縛るテ�
 - `tests/toy_ui_pump_test.rs` — #5（2 本足す）・ポンプの道具を `ui_pump_support` へ出す・#9（スパイクを名指す注を直す）。
 - `tests/toy_worker_test.rs` — #11（panic の受け手の付け外しを消す）。
 - `src/spawn.rs` — #11（toy(a) と重なる単体テスト 4 本と、それだけが使う道具 `run_bounded` を消す）。
+
+**範囲の外（1 つだけ）**
+- `crates/log-capture-kit/tests/with_default_guard_test.rs` — #2（`ALLOWED_DIRECT_CALLS` に `("crates/areka-actor/tests/ui_span_test.rs", "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）")` を足し、`ALLOWED_DIRECT_CALLS_COUNT` を 5 → 6）。`placement-crate-split` が同じ表の placement の 3 行を書き換えるなら、その着地の後に main を取り込んでから足す。
 
 **`crates/areka-talk/src/`**
 - `tests.rs` — #7（`StartTalk::new` の既定を見る 3 本を残して消す）。
@@ -192,14 +195,15 @@ fn read_existing(scope: PersistScope, io: &dyn PersistIo, path: &Path) -> Result
 - `Ok(None)`（無い）→ `Ok(FormatDoc::default())`。
 - `Ok(Some(c))` で `c.trim().is_empty()`（空のファイル）→ `Ok(FormatDoc::default())`。守る中身が無いので上書きしてよい（読む側は今どおり warn して不在）。
 - `Ok(Some(c))` → `format::parse_toml_str(&c)`。
-- `Err(e)` → `Err(読めない理由の文)`。今の warn!「`persist read-before-write failed; merging onto empty base (tolerant)`」は消す（その道が無くなる）。
+- `Err(e)` → 共有違反（`raw_os_error() == Some(32)`）と拒み（`Some(5)`）の間だけ、錠と同じく `LOCK_RETRY` ごとに最大 `LOCK_WAIT`（1 秒）読み直す（ウイルス対策などの一時の掴みで起動を止めない・設計の討議 議題 1）。それでも読めなければ、またはほかの失敗なら `Err(読めない理由の文)`。今の warn!「`persist read-before-write failed; merging onto empty base (tolerant)`」は消す（その道が無くなる）。
 - `save_scope` は `Err(reason)` のとき `commit` を呼ばず、`error!(target: "areka_sylphya::persist", event = "persist_existing_unusable", ?scope, path, reason, keys, "persist existing file unusable; not overwriting, reporting Degraded")` を 1 回出し、`PersistOutcome::Degraded(PersistFailure { scope, dir: roots.root_of(scope).cloned(), keys, cause: PersistFailureCause::Io(reason) })` を返す。新しい variant は足さない（`PersistFailureCause` を網羅する `crates/areka` の match を壊さない）。
 - 控える走り（読み取りだけ）でも同じ判定を通す（控えに入った中身は areka が書いた物なので、使えないことは無い）。
 
 **縛るテスト**（`persist/persist_unreadable_tests.rs`・`FakePersistIo` の上・決定論）
 - `a_newer_format_version_is_kept_and_the_save_degrades`: `format-version = 2` の中身を直に `commit` で置き → `save_scope(BootCount)` が `Degraded(Io(理由に "format-version"))`・中身はバイトで同じ・ERROR `persist_existing_unusable` が 1 件。**直しを外すと赤**（`Saved` になり中身が 1 件だけのファイルに替わる）。
 - `a_broken_toml_is_kept_and_the_save_degrades`: `format-version = 1\n[window` → 同じ。
-- `a_read_failure_keeps_the_file_and_the_save_degrades`: 有効なファイルを書いた後 `fail_next_read` → `Degraded`・`fail` の後の読みで元の中身。
+- `a_read_failure_keeps_the_file_and_the_save_degrades`: 有効なファイルを書いた後 `fail_next_read`（共有違反でない失敗）→ `Degraded`・`fail` の後の読みで元の中身。
+- `a_transient_sharing_violation_is_retried`: 1 回目の読みだけ共有違反（os error 32）を返す偽の IO → 読み直して `Saved`・既存の key も残る。取り直しを外すと赤（`Degraded` になる）。
 - `an_empty_file_is_overwritten`: 中身 `""` → `Saved`・保存した値が読める（空のファイルで止まらない）。
 - `a_missing_file_is_still_created`: 無いファイル → `Saved`（今と同じ・退かないこと）。
 
@@ -279,6 +283,7 @@ impl SylphyaPublisher {
 
 - 形: `let span = tracing::info_span!("actor", actor = %name);` を `spawn_local` の前に作り、`spawn_local(async move { loop { … } }.instrument(span))`（`use tracing::Instrument;`）。タスクの頭の `span.enter()`・`_enter`・`actor: String` を消す。区間は poll の間だけ入る（handler の `error!` は今どおり区間の中に出る）。
 - 縛るテスト（`tests/ui_span_test.rs`・テストは 1 本だけのバイナリ）`the_ui_actor_span_is_entered_only_while_polled`:
+  - 素の `set_default` を呼ぶので、`with_default_guard_test.rs` の例外の表に 1 行足す（「範囲の外（1 つだけ）」・設計の討議 議題 2）。
   - 自前の最小の受け手 `EnterDepth`（`tracing::Subscriber` を実装・`enter` で +1・`exit` で −1・`Arc<AtomicIsize>` を持つ。`spawn_log_capture_tests.rs` の `NotAWindow` と同じ型の自作・依存 0）を、ポンプのスレッド（テストのスレッド）の既定に `tracing::subscriber::set_default` で据えてから `spawn_ui` を呼ぶ。
   - handler の中で深さを記録する（1 であること＝区間が付いている較正。区間を消すと赤）。
   - 返信を受けた worker が `done` を立て、ポンプの filter が `done` を見た時点（タスクの poll の外・UI スレッドの上）の深さを記録して止める → 0 であること。**直しを外すと赤**（待ちの間も入ったままで 1）。
@@ -336,6 +341,7 @@ impl SylphyaPublisher {
 | 18 | 直さずに残す（⑵） | 「正典の語彙は全部持ち、縮退の口と追跡で配線を追う」開発者の決まりで置いた追跡の台帳 |
 | 21 | `sylphya-sqlite-kvs` の brief の件 2 へ回した | C18 で止まる（`SylphyaCore::new().apply` を `crates/areka` のテストが使う） |
 | 4（呼び手） | `audit-areka-install-update` の brief へ回した | `crates/areka` は C18 で触れない |
+| 1（知らせの決まった一文） | `audit-areka-app` の brief へ回した（設計の討議 議題 1） | 書けなかった知らせの「直し方: この置き場を書ける状態にしてください」（`crates/areka/src/alert.rs` の `MEMORY_WRITE_FIX`）は、置き場は書けて中身が使えない #1 の場面に合わない。`crates/areka` は C18 で触れない |
 
 かけ直しの audit（T11）で同じ件が出ても数えない（要件 7.2）。
 
@@ -352,7 +358,7 @@ impl SylphyaPublisher {
 | T5 | 書き手のアクターの整理: #14・#15・#20 | `actor.rs`・`actor_actor_criteria_cage.rs`・`actor_failure_sink_tests.rs`・`actor_tests.rs` | T4 |
 | T6 | 大域のフラットの区画: #17 | `mirror.rs`・`reader.rs`・`pull_tests.rs` | T1 |
 | T7 | 名前の読みの誤りの種類: #22 | `key.rs` | T1 |
-| T8 | UI アクター: #9 → #2・#5 | `ui.rs`・`tests/spike_ui_pump.rs`（消す）・`tests/toy_ui_pump_test.rs`・新 `tests/ui_pump_support/mod.rs`・新 `tests/ui_span_test.rs` | — |
+| T8 | UI アクター: #9 → #2・#5 | `ui.rs`・`tests/spike_ui_pump.rs`（消す）・`tests/toy_ui_pump_test.rs`・新 `tests/ui_pump_support/mod.rs`・新 `tests/ui_span_test.rs`・範囲の外の `crates/log-capture-kit/tests/with_default_guard_test.rs`（例外の 1 行） | `placement-crate-split` との申し合わせ |
 | T9 | 役者の土台の写しのテスト: #11 | `tests/toy_worker_test.rs`・`src/spawn.rs` | — |
 | T10 | トークのテスト: #7 | `areka-talk/src/tests.rs` | — |
 | T11 | 仕上げ（下の「仕上げの確かめ」） | 範囲の全部 | T1〜T10 |
@@ -398,8 +404,8 @@ impl SylphyaPublisher {
 | 6.2 | `crates/areka/` ほかに触らない | 「範囲の外」。T11 で差分 0 を確かめる |
 | 6.3 | `io.rs` の一時のパスの入口 | #3 の節（錠のパスは宛先から組む・入口の綴りを足さない・`TempPath` の 3 か所を変えない） |
 | 6.4・6.5 | 約束を破らないと直せない指摘 | 「直さない・回した指摘」の表（回し先は要件の討議で実在を確かめ、brief に書き足し済み） |
-| 6.6 | 走っている相手と申し合わせ | 範囲の外のファイルに触らないので、申し合わせの場面は無い |
-| 6.7 | 要る変更だけ | 範囲の外の変更は 0 |
+| 6.6 | 走っている相手と申し合わせ | `with_default_guard_test.rs` の 1 行だけ。`placement-crate-split` と申し合わせてから触る（T8） |
+| 6.7 | 要る変更だけ | 範囲の外の変更は `with_default_guard_test.rs` の例外の 1 行と件数だけ |
 | 6.8 | `vendors/` | 触らない |
 | 7.1・7.2・7.3 | かけ直し 0 件 | T11（「仕上げの確かめ」） |
 | 7.4 | 全体テスト | T11 |
@@ -408,10 +414,11 @@ impl SylphyaPublisher {
 ## 失敗の扱い
 
 - **#1**: 使えない既存のファイルの保存は `error!`（`event = "persist_existing_unusable"`・欄に scope・path・reason・keys）＋ `Degraded(Io(理由))`。ファイルは触らない。読む側（`load_scope`）は今どおり warn! と不在。
-- **#3**: 錠が取れない保存は `error!`（`event = "persist_lock_failed"`）＋ `Degraded(Io(理由))`。待ちは最大 1 秒。
+- **#3**: 錠が取れない保存は `error!`（`event = "persist_lock_failed"`）＋ `Degraded(Io(理由))`。待ちは最大 1 秒（設計の討議 議題 3 で確定）。
+- **空の記憶ファイル**: 空か空白だけのファイルは守る中身が無いので上書きする（設計の討議 議題 4 で確定）。
 - **#4**: `barrier_within` の期限切れは `error!` ＋ `Err(ReplyError::Timeout)`。死んだアクターは今どおり warn! ＋ `Err(Dropped)`。
 - **#22**: 新しい誤りの種類も今の道（`parse_dotted` の `Err` を受けた呼び手の warn!）を通る。新しい記録は足さない。
-- **利用者から見た結果**（`crates/areka` の今の扱い・この spec は変えない）: `Degraded` は書けなかった知らせになる。起動の前の書き込み（起動中の印＝App スコープ）なら「記憶を書けないので、ゴーストを起こさずに起動を止めました。」、走っている間（窓の位置ほか＝Ghost スコープ）なら「記憶を書けなくなったので、areka を終了しました。」の窓が出て、「理由: …」の行に上の理由の文が載る。つまり、使えない記憶のファイルが在るときは、そのファイルを直すか退けるまで areka は記憶を書かず、起動を止める（または書く場面で終わる）。これは要件の討議で開発者が選んだ「書かずに残し、`Degraded` を返す」の帰結で、記憶を消す代わりに止まる。理由の文は「どのファイルが・なぜ使えないか・中身を消していないこと」を言う。
+- **利用者から見た結果**（`crates/areka` の今の扱い・この spec は変えない）: `Degraded` は書けなかった知らせになる。起動の前の書き込み（起動中の印＝App スコープ）なら「記憶を書けないので、ゴーストを起こさずに起動を止めました。」、走っている間（窓の位置ほか＝Ghost スコープ）なら「記憶を書けなくなったので、areka を終了しました。」の窓が出て、「理由: …」の行に上の理由の文が載る。つまり、使えない記憶のファイルが在るときは、そのファイルを直すか退けるまで areka は記憶を書かず、起動を止める（または書く場面で終わる）。これは要件の討議で開発者が選んだ「書かずに残し、`Degraded` を返す」の帰結で、記憶を消す代わりに止まる。理由の文は「どのファイルが・なぜ使えないか・中身を消していないこと」を言う。完了した `areka-P0-sylphya` の要件 6.7（永続化の失敗でゴーストの起動・実行を止めない）とは字面でぶつかるが、書く側の失敗は後の裁定（完了した `areka-P0-write-failure-notice`・2026-10-16「書けない＝致命」）で上書きされている。止まることは設計の討議の議題 1 で開発者が承認した（2026-11-06）。決まった一文「直し方: この置き場を書ける状態にしてください」が合わない件は `audit-areka-app` へ回した。
 
 ## テストの方針
 
@@ -429,8 +436,8 @@ impl SylphyaPublisher {
 2. 範囲の 3 つのクレートだけへ `/ponytail:ponytail-audit` をかけ直す。上限 20 件は外し、全部のファイルを 1 行目から最後まで読む（要件 7.1）。出た指摘は、直しが生んだ物も含めて直し、0 件になるまで繰り返す。数えないのは「直さない・回した指摘」の表の 5 件だけ（要件 7.2）。かけ直しの回と結果を `research.md` の「かけ直しの結果」に残す（要件 7.3）。
 3. `pwsh -NoProfile -File tools/test-all.ps1` が緑で終わる（要件 7.4）。
 4. 既定の枝との差分で約束を確かめ、結果を `research.md` に残す（要件 7.5）:
-   - `git diff --stat origin/main...HEAD -- crates/areka/ crates/log-capture-kit/tests/ crates/wintf/src/ecs/window_proc/ tools/perf/fixtures/ tools/perf/fixtures-loop/ vendors/ Cargo.lock` が空（要件 6.2・6.8・5.5）。
-   - `git diff --name-only origin/main...HEAD` が範囲の 3 つのクレートと `.kiro/specs/audit-sylphya-actor/` の下だけ（要件 6.7）。
+   - `git diff --stat origin/main...HEAD -- crates/areka/ crates/log-capture-kit/tests/file_length_guard_test.rs crates/log-capture-kit/tests/temp_path_guard_test.rs crates/wintf/src/ecs/window_proc/ tools/perf/fixtures/ tools/perf/fixtures-loop/ vendors/ Cargo.lock` が空（要件 6.2・6.8・5.5）。
+   - `git diff --name-only origin/main...HEAD` が範囲の 3 つのクレートと `.kiro/specs/audit-sylphya-actor/` の下と、`crates/log-capture-kit/tests/with_default_guard_test.rs` だけ。後者の差分は例外の 1 行と件数 5 → 6 だけ（要件 6.7）。
    - `git diff origin/main...HEAD -- crates/areka-sylphya/src/persist/io.rs` に、一時のパスの入口の綴りと `TempPath` の行の増減が無い（要件 6.3）。
    - 公開の形: 消した・変えた公開の物が `MirrorImage::flat_global`・`FormatDoc::is_all_absent`・`SylphyaMsg::PersistPut` の `reply` の 3 つだけで、どれも 3 つのクレートの外で 0 か所であることを grep で示す。足した物が `PersistIo::lock_for_update`・`SylphyaPublisher::barrier_within`・`KeyParseError::TextAfterParen` の 3 つであること（要件 6.1）。
    - `git diff origin/main...HEAD -- crates/areka-sylphya/src/vocab/dotted.rs` に 64 行目・80 行目の行（`doc/COMPAT_ARCHITECTURE.md` を名指す行）の増減が無い（要件 5.7）。
