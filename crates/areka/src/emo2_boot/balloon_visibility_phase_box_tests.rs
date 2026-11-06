@@ -29,7 +29,7 @@ use super::test_support::attach_headless;
 use super::*;
 use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::ShellBoxHover;
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 use log_capture_kit::capture;
 use wintf::ecs::{FrameTime, WindowDragging};
 

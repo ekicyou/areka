@@ -123,13 +123,13 @@ fn default_basis_from_boot_equals_the_one_from_shell_switch() {
     }
     let rpost =
         sample_ghost_kit::SampleRoot::acquire("R_POST_and_KOMAINU").expect("登記済みの検体");
-    let work_area = crate::placement::resolver::RectPx {
+    let work_area = areka_placement::resolver::RectPx {
         left: 0,
         top: 0,
         right: 1920,
         bottom: 1040,
     };
-    let boot = crate::placement::prepare_ghost_windows_with_work_area(
+    let boot = areka_placement::prepare_ghost_windows_with_work_area(
         rpost.folder(),
         &emo2_balloon_root(),
         work_area,
@@ -155,7 +155,7 @@ fn default_basis_from_boot_equals_the_one_from_shell_switch() {
     );
     assert_eq!(
         boot,
-        crate::placement::reset_pos::DefaultPlacementBasis { source, balloon },
+        areka_placement::reset_pos::DefaultPlacementBasis { source, balloon },
         "起動で置く材料とシェルの切り替えで置く材料は同じシェルで等しい"
     );
 }

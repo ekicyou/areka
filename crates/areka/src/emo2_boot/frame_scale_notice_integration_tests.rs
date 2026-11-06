@@ -32,7 +32,7 @@ struct Cage {
     wiring: Option<Emo2Wiring>,
     present_tx: mpsc::Sender<PresentCommand>,
     _lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
-    gw: crate::placement::spawn::GhostWindows,
+    gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。欄は宣言の順に落ちるので、最後に置いて装置の世界より後に返す。
     _gpu: crate::emo2_boot::spine::GpuPermit,
 }

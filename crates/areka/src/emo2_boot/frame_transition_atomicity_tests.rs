@@ -73,17 +73,17 @@ use wintf::ecs::window::transition_diag::{
     WriteRecord, WriteStage, WriteTag, emit_line, write_line,
 };
 
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::chain_realign::ChainRealignPending;
-use crate::placement::diag::WindowKind;
-use crate::placement::dpi_sync::DpiSyncHold;
-use crate::placement::follow::BalloonFollow;
-use crate::placement::resolver::PointPx;
-use crate::placement::transition_diag::{FIELD_DIFF, KIND_GROUND};
 use crate::placement_tests::transition_judge::{
     GROUND_DIFF_MAX, PATH_A_WRITES_MAX, TRANSITION_FRAME_BOUND, WRITES_PER_WINDOW_MAX,
     parse_transition_line,
 };
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::chain_realign::ChainRealignPending;
+use areka_placement::diag::WindowKind;
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::follow::BalloonFollow;
+use areka_placement::resolver::PointPx;
+use areka_placement::transition_diag::{FIELD_DIFF, KIND_GROUND};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{

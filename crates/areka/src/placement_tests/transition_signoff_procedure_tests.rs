@@ -36,12 +36,12 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::TRANSITION_LOG_ENV;
-use crate::placement::transition_diag::{
+use crate::placement_tests::transition_judge_offset::judge_offset_log;
+use areka_placement::transition_diag::{
     CHAIN_FIELDS, CHAIN_STAGE_ALL, FIELD_VERDICT, GROUND_FIELDS, HOLD_FIELDS, KIND_CHAIN,
     KIND_GROUND, KIND_HOLD, KIND_OFFSET, KIND_SNAPSHOT, OFFSET_FIELDS, OFFSET_VERDICT_ALL,
     PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
 };
-use crate::placement_tests::transition_judge_offset::judge_offset_log;
 
 /// 手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
 const PROCEDURE_RELATIVE_PATH: &str =

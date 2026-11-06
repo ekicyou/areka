@@ -378,8 +378,8 @@ use temp_path_kit::TempPath;
 
 use super::transition_judge_offset_tests::{log_of, pass_lines};
 use super::{OffsetReport, judge_offset_log};
-use crate::placement::transition_diag::KIND_OFFSET;
 use crate::placement_tests::transition_judge::TRANSITION_LOG_ENV;
+use areka_placement::transition_diag::KIND_OFFSET;
 use wintf::ecs::window::transition_diag::FIELD_KIND;
 
 /// 実機ログを読み、追随レコードの判定まで通す。

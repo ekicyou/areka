@@ -43,14 +43,14 @@ use crate::emo2_boot::shell_box_assets::ShellBoxAssets;
 use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
 use crate::emo2_boot::switch_assets::{SwapPayload, SwapSlot};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::reseed::test_support as reseed_tests;
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::source::{DescriptSource, GhostTitles};
-use crate::placement::sticky_group_ledger::{
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::reseed::test_support as reseed_tests;
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::source::{DescriptSource, GhostTitles};
+use areka_placement::sticky_group_ledger::{
     StickyGroup, StickyGroupLedger, StickySource, apply_set_sticky, seed_sticky_descript,
 };
-use crate::placement::zorder_group_ledger::GroupSource;
+use areka_placement::zorder_group_ledger::GroupSource;
 use face_tests::new_balloon_definitions;
 
 // ---------------------------------------------------------------- 土台
@@ -735,7 +735,7 @@ fn shell_finish_replaces_only_the_descript_sticky_group() {
 /// `kero.balloon.dontmove,1` の `{1}` へ替わり、スコープ 1 の台本の lock は残る。
 #[test]
 fn shell_finish_replaces_only_the_descript_balloon_lock() {
-    use crate::placement::balloon_lock::{
+    use areka_placement::balloon_lock::{
         BalloonLockLedger, HoldReason, apply_script_balloon_lock, seed_balloon_lock,
     };
 

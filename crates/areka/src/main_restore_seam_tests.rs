@@ -1,11 +1,11 @@
 use super::*;
-use crate::placement::follow::OffsetBase;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
+use areka_placement::balloon_limit::BALLOON_LIMIT_CLAMP_TAG;
+use areka_placement::follow::MonitorSnapshot;
+use areka_placement::follow::OffsetBase;
+use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use log_capture_kit::{ExpectField, capture, expect_one};
-use placement::balloon_limit::BALLOON_LIMIT_CLAMP_TAG;
-use placement::follow::MonitorSnapshot;
-use placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use std::path::Path;
 use temp_path_kit::TempPath;
 
@@ -271,7 +271,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
 /// その語の印、無ければ `None`（印の無い古い記憶）で、窓を作る閉包がこの一覧を窓の一式へ据える。
 #[test]
 fn restore_seam_returns_remembered_adjacency_marks_per_restored_scope() {
-    use placement::chain_finalize::AdjacencyMark;
+    use areka_placement::chain_finalize::AdjacencyMark;
     let temp = unique_temp_dir("adjacency-marks");
     let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);

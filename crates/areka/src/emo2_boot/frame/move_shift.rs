@@ -2,7 +2,7 @@
 //!
 //! 移動の相（[`run_move_drain_phase`](super::run_move_drain_phase)）の直後に毎フレーム走る。
 //! 各スコープのキャラ窓とバルーン窓について、提示が覚えたずれと当てた拡大率を読み、
-//! 窓に当てた記録と食い違うときだけ置き方の口（`placement::follow::apply_char_shift`・
+//! 窓に当てた記録と食い違うときだけ置き方の口（`areka_placement::follow::apply_char_shift`・
 //! `apply_balloon_shift`）で当てる。
 //!
 //! - 拡大率がまだ無い（最初の面を表示していない）窓は何もしない（表示したフレームで当てる）。
@@ -15,9 +15,9 @@ use areka_emo_present::{EmoPresenter, TargetId};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
-use crate::placement::dpi_sync::{self, HoldSite};
-use crate::placement::follow::{apply_balloon_shift, apply_char_shift, shift_is_current};
-use crate::placement::spawn::GhostWindows;
+use areka_placement::dpi_sync::{self, HoldSite};
+use areka_placement::follow::{apply_balloon_shift, apply_char_shift, shift_is_current};
+use areka_placement::spawn::GhostWindows;
 
 use super::super::target_map::{balloon_target, shell_target};
 

@@ -26,8 +26,8 @@ use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, WindowPos};
 
-use crate::placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
-use crate::placement::follow::BalloonFollow;
+use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
+use areka_placement::follow::BalloonFollow;
 use log_capture_kit::capture;
 
 use super::test_support::{

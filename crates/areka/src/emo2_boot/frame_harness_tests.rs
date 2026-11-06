@@ -43,10 +43,10 @@ use wintf::ecs::FrameCount;
 use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::window::transition_diag::{self, TickStart};
 
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::follow::MonitorSnapshot;
-use crate::placement::resolver::RectPx;
-use crate::placement::transition_diag as placement_diag;
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::follow::MonitorSnapshot;
+use areka_placement::resolver::RectPx;
+use areka_placement::transition_diag as placement_diag;
 use log_capture_kit::capture as capture_diag_logs;
 
 use super::test_support::{

@@ -35,7 +35,7 @@
 
 use wintf::ecs::window::{log_group_applied, log_group_rejected};
 
-use crate::placement::zorder_group_ledger::{
+use areka_placement::zorder_group_ledger::{
     GroupSource, RebaseOutcome, ZOrderGroupLedger, ZOrderReject, parse_zorder_tokens,
 };
 
@@ -46,7 +46,7 @@ const SEPARATOR: char = ',';
 
 /// shell 設定由来の基底を台帳へ据える（要件 5.1／5.2／5.3／5.4）。
 ///
-/// `raw` は `seriko.zorder` の値そのもの（`placement::config` の `zorder_raw`）。`None` は
+/// `raw` は `seriko.zorder` の値そのもの（`areka_placement::config` の `zorder_raw`）。`None` は
 /// 「設定が無い」であり、台帳にも記録にも一切触れない。
 ///
 /// 呼ぶのは起動の段でちょうど 1 回である（`wire_emo2_boot` →

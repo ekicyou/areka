@@ -1,4 +1,4 @@
-use crate::placement::resolver::SizePx;
+use areka_placement::resolver::SizePx;
 use wintf::ecs::DPI;
 use wintf::ecs::SizeI;
 
@@ -16,10 +16,10 @@ use super::*;
 // 名乗ってしまい、Req 1.9 の 2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
 // に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない（D13）。
 //
-// 観測境界は `placement::test_support::capture_logs`（`pub(crate)`＝本モジュールから到達可能）
-// による tracing イベント本体で、レコード書式の権威は `placement::diag` の純関数が持つ。
+// 観測境界は `areka_placement::test_support::capture_logs`（`pub(crate)`＝本モジュールから到達可能）
+// による tracing イベント本体で、レコード書式の権威は `areka_placement::diag` の純関数が持つ。
 
-use crate::placement::diag::DESPAWNED_SKIP_TAG;
+use areka_placement::diag::DESPAWNED_SKIP_TAG;
 
 use log_capture_kit::{CapturedEvent, capture as capture_diag_logs};
 

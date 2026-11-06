@@ -33,9 +33,9 @@ fn unwirable_inputs() -> GhostBootInputs {
 fn decisions() -> (StartupDescriptValues, GhostDecision, BalloonDecision) {
     (
         StartupDescriptValues {
-            author_dpi: placement::AuthorDpi::DEFAULT,
+            author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         },
         GhostDecision {
             route: GhostRoute::Switched,

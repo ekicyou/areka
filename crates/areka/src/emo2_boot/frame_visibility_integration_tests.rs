@@ -48,7 +48,7 @@ use super::*;
 fn gpu_frame_world() -> (
     crate::emo2_boot::spine::GpuPermit,
     World,
-    crate::placement::spawn::GhostWindows,
+    areka_placement::spawn::GhostWindows,
 ) {
     // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
     // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。

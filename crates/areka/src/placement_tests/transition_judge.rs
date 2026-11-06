@@ -46,7 +46,7 @@
 //! （task 3.2 の `#[ignore]` テスト）だけであり、本番の実行経路からは 1 度も呼ばれない。
 //! areka は lib ターゲットを持たない bin crate ゆえ `pub` でも dead_code 免除されず、
 //! 本番ビルドへ置くと項目ごとに `#[allow(dead_code)]` を貼る羽目になって**以後の真の
-//! dead code を隠す**。`placement::test_support` と同じ形（`#[cfg(test)]` のモジュール宣言）に
+//! dead code を隠す**。`areka_placement::test_support` と同じ形（`#[cfg(test)]` のモジュール宣言）に
 //! して、許可属性を 1 つも置かずに済ませる。純関数であることは変わらないので、決定論テストと
 //! 実機サインオフが**同一実装**を回すという C7 の要件（I/O を持たない単一実装）は満たす。
 

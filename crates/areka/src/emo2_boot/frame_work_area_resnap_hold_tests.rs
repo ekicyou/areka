@@ -44,12 +44,10 @@ use bevy_ecs::entity::Entity;
 use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, WindowPos};
 
-use crate::placement::diag::{PlacementRoute, WindowKind};
-use crate::placement::dpi_sync::{
-    DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncHold, evaluate,
-};
-use crate::placement::follow::move_window_with_route;
-use crate::placement::transition_diag::HOLD_SITE_WORK_AREA_RESNAP;
+use areka_placement::diag::{PlacementRoute, WindowKind};
+use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncHold, evaluate};
+use areka_placement::follow::move_window_with_route;
+use areka_placement::transition_diag::HOLD_SITE_WORK_AREA_RESNAP;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{

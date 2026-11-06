@@ -77,8 +77,8 @@
   - 完了の状態: 3 つの走行が緑・段 2 のコミット
   - _Requirements: 3.3, 3.4, 3.5, 3.7_
 
-- [ ] 4. 本体の道を書き換え、一時の別名を外す（段 3）
-- [ ] 4.1 本体が配置を指す道を新しい crate の道へ書き換える
+- [x] 4. 本体の道を書き換え、一時の別名を外す（段 3）
+- [x] 4.1 本体が配置を指す道を新しい crate の道へ書き換える
   - 本体の約 170 ファイルの配置を指す道を `areka_placement::` へ、残りの旧い判定器を指す道（2.4 で直した `frame_transition_*` のほか）をテスト専用のフォルダへ機械で置き換える
   - 一時の別名を外し、整形をかける
   - 置き換えの範囲を `git diff --stat` と grep で確かめる（正規表現を書き込んだ所はバイトで確かめる）
@@ -212,3 +212,4 @@
 - 段 2 で本番の項目を素の `pub` にした（要件 2.1・本体のテストが使う）: dpi_sync.rs DPI_SYNC_HOLD_MAX_FRAMES・DpiSyncDecision・evaluate・DpiSyncOutcome とフィールド（decision・window_dpi・table_dpi・since_frame）・DpiSyncHold.since_frame、balloon_limit.rs BALLOON_LIMIT_CLAMP_TAG、balloon_lock.rs HoldReason・BalloonLockLedger::reason、follow/work_area_clamp.rs WORK_AREA_CLAMP_TAG・follow/drag_follow.rs on_balloon_drag・follow/sticky_follow.rs sync_drag_writer（follow.rs の再公開も組から分けた）
 - 出所は `module_path!()` から決まるので、移した時点で `areka::placement::measure` が `areka_placement::measure` に変わった。本体の measure_bake_count・measure_bake_log の期待値は段 2 で直した（7.1 が持つのは明示の `DIAG_TARGET` ほか）。
 - 3.1 の grep 0 件は配置の crate と `placement_tests` の範囲。本体の `emo2_boot`・`input_events` と areka-emo-text の同名の補助は文字列を返す別物で、触っていない。
+- 4.1: 本体の `src` は、コードと説明のどちらでも `crate::placement::`・素の `placement::` が 0 件（説明の 36 か所も `areka_placement::` へ直した）。ファイルのパスの記述（`src/placement/<name>.rs` の形）は 15 ファイルの 60 行に残る。その中には `emo2_boot/assets_tests.rs`・`frame_test_support.rs`・`frame_transition_atomicity_tests.rs`・`main_monitor_snapshot_seam_tests.rs`・`placement_tests/zorder_*_branch_coverage_tests.rs` など 7.2 の一覧に無いファイルもあるので、7.2 で一緒に直し、7.6 の grep で 0 を確かめる。

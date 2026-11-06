@@ -21,11 +21,11 @@ use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 
 use crate::app_exit::close_windows_for_restart;
-use crate::placement::chain_finalize::AdjacencyMark;
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::follow::move_window_to;
-use crate::placement::persist::{adjacency_entry, char_pos_entries, persist_entries};
-use crate::placement::resolver::{PointPx, RectPx};
+use areka_placement::chain_finalize::AdjacencyMark;
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::follow::move_window_to;
+use areka_placement::persist::{adjacency_entry, char_pos_entries, persist_entries};
+use areka_placement::resolver::{PointPx, RectPx};
 
 /// 書き手が送られた分を書き終えるのを待ってから、記憶のファイルの中身をそのまま読む。
 fn memory(store: &PersistStore, ghost: &MinimalGhost) -> String {
@@ -53,10 +53,7 @@ fn assert_positions_saved(store: &PersistStore) {
 fn boot_remembered(
     world: &mut World,
     ghost: &MinimalGhost,
-) -> (
-    GhostWindows,
-    Vec<crate::placement::resolver::ScopePlacement>,
-) {
+) -> (GhostWindows, Vec<areka_placement::resolver::ScopePlacement>) {
     let (placements, restored, _) = crate::restore_merged_placements(
         ghost.root(),
         prep_placements(),

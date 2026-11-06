@@ -18,9 +18,9 @@ use super::*;
 
 use std::time::Instant;
 
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::follow::on_char_drag_end;
 use areka_parsers::charset::DefaultEncoding;
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::follow::on_char_drag_end;
 use wintf::ecs::Point;
 use wintf::ecs::drag::{DragEndEvent, DraggingState};
 use wintf::ecs::pointer::Phase;

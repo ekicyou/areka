@@ -104,13 +104,13 @@ use areka_sakura::ActorKey;
 use wintf::ecs::{DPI, FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
 
 #[allow(unused_imports)]
-use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 #[allow(unused_imports)]
-use crate::placement::follow::{resize_window_keep_position, resize_window_to};
+use areka_placement::follow::{resize_window_keep_position, resize_window_to};
 #[allow(unused_imports)]
-use crate::placement::resolver::SizePx;
+use areka_placement::resolver::SizePx;
 #[allow(unused_imports)]
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
 // 終了相（R15.4）の出口＝終了の統合操作（全窓を閉じてから終了を指示する）。
 use crate::app_exit::{ExitOrigin, quit_app};
 

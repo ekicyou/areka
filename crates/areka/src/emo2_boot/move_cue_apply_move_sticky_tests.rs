@@ -18,11 +18,11 @@ use wintf::ecs::{Point, WindowHandle};
 
 use super::apply_move_tests::{move_world, pos_of};
 use super::*;
-use crate::placement::follow::{Anchored, BalloonFollow};
-use crate::placement::persist::PersistWiring;
-use crate::placement::resolver::Anchor;
-use crate::placement::spawn::GhostWindows;
-use crate::placement::sticky_group_ledger::{
+use areka_placement::follow::{Anchored, BalloonFollow};
+use areka_placement::persist::PersistWiring;
+use areka_placement::resolver::Anchor;
+use areka_placement::spawn::GhostWindows;
+use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
 };
 use log_capture_kit::{CapturedEvent, capture};

@@ -24,17 +24,15 @@ use wintf::ecs::{DPI, Point, WindowHandle, WindowPos};
 
 use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwitchBuildRequest, build_swap};
-use crate::placement::follow::{
-    AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase,
-};
-use crate::placement::persist::PersistWiring;
-use crate::placement::prepare_ghost_windows_with_work_area;
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement};
-use crate::placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
-use crate::placement::sticky_group_ledger::StickyGroupLedger;
-use crate::placement::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
+use areka_placement::follow::{AnchorSource, Anchored, BalloonFollow, MonitorSnapshot, OffsetBase};
+use areka_placement::persist::PersistWiring;
+use areka_placement::prepare_ghost_windows_with_work_area;
 use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement};
+use areka_placement::spawn::{BalloonKeywordBase, GhostWindows, spawn_ghost_windows};
+use areka_placement::sticky_group_ledger::StickyGroupLedger;
+use areka_placement::test_support::{WA, synth_declared_dpi_ghost, with_com_initialized};
 use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 

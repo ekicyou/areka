@@ -54,7 +54,7 @@ pub const TRANSITION_FRAME_BOUND: u32 = 0;
 /// 着地したので参照へ替えた——判定の許容が本番の待ちより短ければ、規約どおりに待った遷移が
 /// 不合格になる（判定語の単一定義元と同じ理屈が値にも及ぶ）。
 /// hold を含まない遷移（`holds == 0`）では 1 フレームも足さない。
-pub const HOLD_FRAME_ALLOWANCE: u32 = crate::placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES;
+pub const HOLD_FRAME_ALLOWANCE: u32 = areka_placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES;
 
 /// 1 つの窓に対する遷移 1 回ぶんの窓書込回数の上限（C7・要件 4.5）。
 pub const WRITES_PER_WINDOW_MAX: u32 = 1;

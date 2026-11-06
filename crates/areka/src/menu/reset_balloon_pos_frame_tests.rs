@@ -12,10 +12,10 @@ use bevy_ecs::world::World;
 use super::{reset_balloon_enabled, reset_balloon_item};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem};
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::source::{DescriptSource, GhostTitles};
-use crate::placement::spawn::spawn_ghost_windows;
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::source::{DescriptSource, GhostTitles};
+use areka_placement::spawn::spawn_ghost_windows;
 use log_capture_kit::capture;
 
 fn basis() -> DefaultPlacementBasis {

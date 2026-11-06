@@ -9,9 +9,9 @@ use std::rc::Rc;
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::spawn::GhostWindows;
 
 /// 「バルーン位置初期化」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の後）。
 pub(crate) fn register(world: &mut World) {

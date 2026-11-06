@@ -28,7 +28,7 @@ use crate::emo2_boot::frame::balloon_runtime_test_support::manual_balloon_runtim
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
 use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signals};
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// 既定の置き場（120×40 の絵: 上 (100, 15)・下 (100, 25)）の矢印の不透明な点。
 const UP: (i32, i32) = (105, 17);

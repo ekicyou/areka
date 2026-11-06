@@ -190,8 +190,8 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 fn ghost_os_close_sends_close_request_with_the_window_scope() {
     use crate::emo2_boot::hit_region::HitRegion;
     use crate::input_events::{MouseWiring, RegionSource};
-    use crate::placement::spawn::CharWindowMarker;
     use areka_kanade::{CloseReason, KanadeMsg};
+    use areka_placement::spawn::CharWindowMarker;
     use std::sync::mpsc;
 
     fn no_hit(scope: u32, _x: i64, _y: i64) -> HitRegion {
@@ -425,10 +425,10 @@ fn close_windows_for_restart_closes_all_windows_without_requesting_exit() {
 /// 前提として閉じる前に資源が在ることを確かめる（無い World では判定が空になる）。
 #[test]
 fn close_windows_for_restart_removes_ghost_windows_resource() {
-    use crate::placement::follow::OffsetBase;
-    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-    use crate::placement::source::GhostTitles;
-    use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+    use areka_placement::follow::OffsetBase;
+    use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use areka_placement::source::GhostTitles;
+    use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
     let placement = ScopePlacement {
         scope: 0,
@@ -476,11 +476,11 @@ fn close_windows_for_restart_removes_ghost_windows_resource() {
 /// ドラッグの控えも外す（次の一式は起動と同じく descript の組から始まる）。
 #[test]
 fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
-    use crate::placement::follow::{CharDragSession, OffsetBase, begin_char_drag};
-    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-    use crate::placement::source::GhostTitles;
-    use crate::placement::spawn::spawn_ghost_windows;
-    use crate::placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
+    use areka_placement::follow::{CharDragSession, OffsetBase, begin_char_drag};
+    use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use areka_placement::source::GhostTitles;
+    use areka_placement::spawn::spawn_ghost_windows;
+    use areka_placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
 
     let placement = ScopePlacement {
         scope: 0,
@@ -531,7 +531,7 @@ fn close_windows_for_restart_removes_sticky_ledger_and_drag_session() {
 /// descript の段も台本の lock も外す（次に起きた窓の組は起動で据え直す）。
 #[test]
 fn close_windows_for_restart_removes_the_balloon_lock_ledger() {
-    use crate::placement::balloon_lock::{
+    use areka_placement::balloon_lock::{
         BalloonLockLedger, apply_script_balloon_lock, seed_balloon_lock,
     };
 

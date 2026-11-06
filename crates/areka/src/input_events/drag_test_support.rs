@@ -29,11 +29,11 @@ use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
 use super::super::{MouseWiring, RegionSource, attach_char_pointer_handlers};
 use crate::emo2_boot::hit_region::HitRegion;
-use crate::placement::follow::{MonitorSnapshot, OffsetBase};
-use crate::placement::persist::PersistWiring;
-use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
+use areka_placement::follow::{MonitorSnapshot, OffsetBase};
+use areka_placement::persist::PersistWiring;
+use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::spawn_ghost_windows;
 
 /// 相方（scope 1）。0 以外にして既定値との取り違えを避ける。
 pub(super) const SCOPE: usize = 1;

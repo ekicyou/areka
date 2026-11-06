@@ -26,9 +26,9 @@
 
 use wintf::ecs::window::SetWindowPosCommand;
 
-use crate::placement::diag::PlacementRoute;
-use crate::placement::follow::{Anchored, BalloonFollow};
-use crate::placement::resolver::{Anchor, RectPx};
+use areka_placement::diag::PlacementRoute;
+use areka_placement::follow::{Anchored, BalloonFollow};
+use areka_placement::resolver::{Anchor, RectPx};
 
 use super::test_support::{
     FakeReports, FrameHarness, pos_of, s2_monitors_with_neighbor_work_area,

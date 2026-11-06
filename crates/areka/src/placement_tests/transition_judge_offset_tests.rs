@@ -12,7 +12,7 @@
 //!
 //! # 観測行は発行側の純関数が組む
 //!
-//! `kind=offset` の行は [`crate::placement::transition_diag::offset_line`] が、`kind=monitor` の
+//! `kind=offset` の行は [`areka_placement::transition_diag::offset_line`] が、`kind=monitor` の
 //! 行は判定器の共有ヘルパが組む。テストが自前で字面を組むと、発行側が欄を変えたときに檻だけが
 //! 古い形のまま緑になる。
 //!
@@ -30,14 +30,14 @@
 //! 2026-08-28 に是正した欠陥（恒等比で現在値を据え置いてしまう）が再発したときに
 //! [`an_identity_ratio_that_does_not_re_derive_is_red`] が赤にする所である。
 
-use crate::placement::resolver::PointPx;
-use crate::placement::transition_diag::{
+use crate::placement_tests::transition_judge::parse_transition_line;
+use crate::placement_tests::transition_judge::test_support::monitor;
+use areka_placement::resolver::PointPx;
+use areka_placement::transition_diag::{
     FIELD_BASE_DPI, FIELD_VERDICT, OFFSET_VERDICT_ALL, OFFSET_VERDICT_ANCHORED,
     OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED,
     OFFSET_VERDICT_UNRESOLVED, OffsetRecord, offset_line,
 };
-use crate::placement_tests::transition_judge::parse_transition_line;
-use crate::placement_tests::transition_judge::test_support::monitor;
 use wintf::ecs::window::transition_diag::{FIELD_SCOPE, Stamp};
 
 use super::{ALIGNMENT_RESIDUAL_MAX_PX, OffsetViolation, judge_offset_log};

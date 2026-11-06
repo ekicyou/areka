@@ -22,8 +22,8 @@ use crate::emo2_boot::move_cue::{MoveDirective, PositionCue, parse_move_directiv
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::target_map::shell_target;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::sticky_group_ledger::StickyGroupLedger;
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
 use super::test_support::{
     FrameHarness, PerTargetSizes, SPAWN_SIZE_1, all_shown, capture_logs, pos_of, size_of,

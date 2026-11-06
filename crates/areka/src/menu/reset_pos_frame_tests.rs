@@ -235,10 +235,10 @@ fn wired_world(windows: bool) -> (World, mpsc::Receiver<KanadeMsg>) {
     crate::menu::wire_menu(&mut world, mpsc::channel().0);
     super::register(&mut world);
     if windows {
-        crate::placement::spawn::spawn_ghost_windows(
+        areka_placement::spawn::spawn_ghost_windows(
             &mut world,
             &[],
-            &crate::placement::source::GhostTitles::from_scope_titles(Vec::<(usize, String)>::new()),
+            &areka_placement::source::GhostTitles::from_scope_titles(Vec::<(usize, String)>::new()),
         );
     }
     (world, rx)

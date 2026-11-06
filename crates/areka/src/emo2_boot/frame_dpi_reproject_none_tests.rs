@@ -1,6 +1,6 @@
-use crate::placement::diag::DESPAWNED_SKIP_TAG;
-use crate::placement::follow::BalloonFollow;
 use areka_emo_compose::ScaleRatio;
+use areka_placement::diag::DESPAWNED_SKIP_TAG;
+use areka_placement::follow::BalloonFollow;
 use bevy_ecs::prelude::Entity;
 use log_capture_kit::{capture as capture_diag_logs, expect_one};
 use wintf::ecs::DPI;

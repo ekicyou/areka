@@ -19,7 +19,7 @@ use crate::emo2_boot::ghost_switch::{
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::emo2_boot::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 use crate::emo2_boot::reload_args::{DescriptNotes, ReloadTarget};
-use crate::placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
+use areka_placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
 
 /// 切替の握手と SHIORI だけの読み直しに応える台本。
 fn script(name: &'static str) -> FakeShiori {

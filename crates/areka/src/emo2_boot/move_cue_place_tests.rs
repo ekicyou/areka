@@ -19,14 +19,14 @@ use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::apply_move_directive;
 use crate::emo2_boot::move_cue::{MoveDirective, parse_move_directive};
-use crate::placement::diag::PlacementRoute;
-use crate::placement::follow::{
+use areka_placement::diag::PlacementRoute;
+use areka_placement::follow::{
     Anchored, BalloonFollow, MonitorSnapshot, OffsetBase, apply_char_shift, resize_window_to,
 };
-use crate::placement::persist::PersistWiring;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::persist::PersistWiring;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use log_capture_kit::{CapturedEvent, capture};
 
 /// 主モニタの作業領域（下にタスクバー）。

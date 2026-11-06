@@ -34,11 +34,11 @@ use crate::emo2_boot::ghost_switch::{
 };
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::ghost_session::{GhostSlot, StartupDescriptValues};
-use crate::placement::AuthorDpi;
-use crate::placement::persist::{char_pos_entries, persist_entries};
-use crate::placement::resolver::PointPx;
 use crate::write_failure::sites_tests::{KINDS, drain_desk};
 use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
+use areka_placement::AuthorDpi;
+use areka_placement::persist::{char_pos_entries, persist_entries};
+use areka_placement::resolver::PointPx;
 
 /// 根の下の木（相対パス → ファイルの中身。フォルダは `None`）。
 fn tree(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
@@ -464,7 +464,7 @@ fn every_write_kind_is_withheld_under_the_guard() {
     let descript = StartupDescriptValues {
         author_dpi: AuthorDpi::DEFAULT,
         zorder_raw: None,
-        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+        default_surfaces: areka_placement::DefaultSurfaces::builtin(),
     };
     let mut boot = Ok(());
     let desk = reached_desk(world, None, |w| {

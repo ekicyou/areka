@@ -81,7 +81,7 @@ fn the_deterministic_constants_hold_the_values_c7_fixes() {
     // 二度書くと task 5.4 が解消した二重定義が檻の側で復活する。固定するのは結線である。
     assert_eq!(
         super::HOLD_FRAME_ALLOWANCE,
-        crate::placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES
+        areka_placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES
     );
 }
 

@@ -15,12 +15,12 @@ use wintf::ecs::window::{KeyDown, OnKeyDown};
 use super::{PositionShortcut, attach_shortcut_receivers, on_ghost_key_down, shortcut_of};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::reset_pos_frame::PendingResetRaise;
-use crate::placement::follow::OffsetBase;
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::{DescriptSource, GhostTitles};
-use crate::placement::spawn::{GhostWindowMarker, GhostWindows, spawn_ghost_windows};
+use areka_placement::follow::OffsetBase;
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::{DescriptSource, GhostTitles};
+use areka_placement::spawn::{GhostWindowMarker, GhostWindows, spawn_ghost_windows};
 use log_capture_kit::{CapturedEvent, capture};
 
 const F10: u16 = 0x79;

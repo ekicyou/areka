@@ -22,7 +22,7 @@ use crate::emo2_boot::hit_region::HitRegion;
 use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
 use crate::emo2_boot::shell_cursor_table::{CursorScene, Shape, SystemCursor};
 use crate::input_events::hover_region::cursor_pick::Spot;
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 const TARGET: &str = "areka::input_events::char_watch::cursor_answer";
 

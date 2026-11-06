@@ -17,8 +17,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use temp_path_kit::TempPath;
 
 use crate::emo2_boot::assets::{build_balloon_assets, build_shell_assets};
-use crate::placement::PlacementError;
-use crate::placement::descript_window_keys::DefaultSurfaces;
+use areka_placement::PlacementError;
+use areka_placement::descript_window_keys::DefaultSurfaces;
 use areka_placement::measure::test_support::measure_with_reader;
 
 /// 黙らせる記録の文言（焼く段 `areka_emo_atlas`・面の表 `areka_emo_compose`）。

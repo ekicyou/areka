@@ -10,10 +10,10 @@ use wintf::ecs::{
     DpiSuggestedRectPolicy, KeepDirectlyAbove, Point, SizeI, Window, WindowPos, WindowStyle,
 };
 
-use crate::placement::diag::{ZORDER_PAIR_DECLARED_TAG, zorder_pair_declared_line};
-use crate::placement::follow::{AnchorSource, Anchored, BalloonFollow};
-use crate::placement::resolver::Anchor;
-use crate::placement::source::GhostTitles;
+use areka_placement::diag::{ZORDER_PAIR_DECLARED_TAG, zorder_pair_declared_line};
+use areka_placement::follow::{AnchorSource, Anchored, BalloonFollow};
+use areka_placement::resolver::Anchor;
+use areka_placement::source::GhostTitles;
 use areka_placement::spawn::test_support::{ghost_window_entities, titles, two_scope_placements};
 use areka_placement::spawn::{
     BalloonLimit, BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,

@@ -21,12 +21,12 @@ use crate::emo2_boot::move_cue::{MoveCueSink, PositionCue};
 use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
-use crate::placement::follow::{BalloonFollow, MonitorSnapshot, OffsetBase};
-use crate::placement::prepare_ghost_windows_with_work_area;
-use crate::placement::resolver::PointPx;
-use crate::placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
-use crate::placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
-use crate::placement::test_support::{WA, with_com_initialized};
+use areka_placement::follow::{BalloonFollow, MonitorSnapshot, OffsetBase};
+use areka_placement::prepare_ghost_windows_with_work_area;
+use areka_placement::resolver::PointPx;
+use areka_placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
+use areka_placement::sticky_group_ledger::{StickyGroupLedger, seed_sticky_descript};
+use areka_placement::test_support::{WA, with_com_initialized};
 
 use super::test_support::{all_shown, pos_of, resnap_world, synth_assets, zero_clock};
 use super::{Emo2Wiring, run_move_drain_phase, run_move_drain_with};

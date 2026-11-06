@@ -23,8 +23,8 @@
 use bevy_ecs::change_detection::DetectChangesMut;
 use wintf::ecs::{Point, WindowPos};
 
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::spawn::GhostWindows;
 
 use super::shell_target;
 use super::test_support::{

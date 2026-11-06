@@ -27,11 +27,11 @@ use wintf::ecs::window::ZOrderChainPlan;
 use crate::emo2_boot::frame::run_zorder_drain_phase;
 use crate::emo2_boot::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
-use crate::placement::follow::OffsetBase;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
-use crate::placement::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrderGroup};
+use areka_placement::follow::OffsetBase;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrderGroup};
 
 // ---------------------------------------------------------------- 道具立て
 

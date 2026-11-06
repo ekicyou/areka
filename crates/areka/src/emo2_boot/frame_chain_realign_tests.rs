@@ -22,10 +22,10 @@ use bevy_ecs::change_detection::DetectChangesMut;
 use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
-use crate::placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
-use crate::placement::chain_realign::ChainRealignPending;
-use crate::placement::dpi_sync::DpiSyncHold;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
+use areka_placement::chain_realign::ChainRealignPending;
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::spawn::GhostWindows;
 
 use super::shell_target;
 use super::test_support::{

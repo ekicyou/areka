@@ -18,7 +18,7 @@ use crate::scope_bind_fixture_test_support::{
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::emo2_boot::target_map::scope_of;
 // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
-use crate::placement::source::{load_balloon_author_dpi, load_descript_source};
+use areka_placement::source::{load_balloon_author_dpi, load_descript_source};
 
 /// 観測可能な完了条件（tasks.md task 2.6）: emo2 fixture を渡した統合テストが
 /// `BootAssets` の各フィールドに期待どおりのデータを含んで green で通る。
@@ -529,7 +529,7 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
     }
 
     /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——適用前の固定名採寸が
-    /// 返していた値と同一（`placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
+    /// 返していた値と同一（`areka_placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
     const SAKURA_FACE0: (u32, u32) = (400, 224);
 
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
@@ -833,7 +833,7 @@ fn screen_binds_split_per_scope_on_shared_scope_fixture() {
         None,
         &[0, 1, 2, 3],
         96,
-        &crate::placement::DefaultSurfaces::builtin(),
+        &areka_placement::DefaultSurfaces::builtin(),
         &decoder,
     ) {
         Ok(shell) => shell,

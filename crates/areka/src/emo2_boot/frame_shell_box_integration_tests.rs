@@ -65,7 +65,7 @@ struct Cage {
     present_tx: mpsc::Sender<PresentCommand>,
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     reports: mpsc::Receiver<areka_kanade::KanadeMsg>,
-    _gw: crate::placement::spawn::GhostWindows,
+    _gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。`world` の装置より後に返すので欄の最後。
     _gpu: crate::emo2_boot::spine::GpuPermit,
 }

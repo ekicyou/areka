@@ -39,11 +39,11 @@
 use wintf::ecs::WindowPos;
 use wintf::ecs::window::SetWindowPosCommand;
 
-use crate::placement::config::BalloonXMode;
-use crate::placement::follow::BalloonFollow;
-use crate::placement::resolver::{PointPx, SizePx, keyword_balloon_pos};
-use crate::placement::spawn::BalloonKeywordBase;
-use crate::placement::transition_diag::OFFSET_VERDICT_KEYWORD_PENDING;
+use areka_placement::config::BalloonXMode;
+use areka_placement::follow::BalloonFollow;
+use areka_placement::resolver::{PointPx, SizePx, keyword_balloon_pos};
+use areka_placement::spawn::BalloonKeywordBase;
+use areka_placement::transition_diag::OFFSET_VERDICT_KEYWORD_PENDING;
 
 use super::test_support::{
     FakeReports, FrameHarness, capture_logs, count_level, s2_monitors_with_work_area,

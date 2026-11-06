@@ -60,11 +60,11 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
-use crate::placement::WORK_AREA_SYNC_CONTEXT;
-use crate::placement::diag::{PlacementRoute, WindowKind};
-use crate::placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
-use crate::placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
 use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
+use areka_placement::WORK_AREA_SYNC_CONTEXT;
+use areka_placement::diag::{PlacementRoute, WindowKind};
+use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
+use areka_placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::emo2_frame_system;

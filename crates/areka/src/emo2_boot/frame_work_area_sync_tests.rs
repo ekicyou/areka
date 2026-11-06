@@ -19,8 +19,8 @@
 //! [`a_changed_monitor_table_rebuilds_both_sources`] が別に固定する。順序だけの違い・
 //! モニタ 0 台・窓書込ゼロの各主張にも、同じ理由でそれぞれ陽性の対がある。
 
-use crate::placement::WORK_AREA_SYNC_CONTEXT;
-use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
+use areka_placement::WORK_AREA_SYNC_CONTEXT;
+use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use log_capture_kit::capture;
 use wintf::ecs::window::monitor::Monitor;
 

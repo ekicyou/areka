@@ -40,7 +40,7 @@ use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signa
 use crate::input_events::{
     MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed,
 };
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 use log_capture_kit::capture;
 
 const SHELL: &str = "\

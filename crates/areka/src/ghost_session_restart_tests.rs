@@ -20,8 +20,8 @@ use crate::emo2_boot::spine::{
 };
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
-use crate::placement::spawn::GhostWindowMarker;
 use crate::readme::ReadmeWiring;
+use areka_placement::spawn::GhostWindowMarker;
 use log_capture_kit::capture;
 
 /// 作業プール（`WintfTaskPool`）の無い素の World では、窓を作る関数は配置の準備に入らず
@@ -244,7 +244,7 @@ fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::Cap
 /// `GhostWindows` と一緒に帳簿を据え、シェルの `seriko.sticky-window` の組を入れる。
 #[test]
 fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
-    use crate::placement::sticky_group_ledger::{StickyGroupLedger, StickySource};
+    use areka_placement::sticky_group_ledger::{StickyGroupLedger, StickySource};
 
     let (world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0,1");
 
@@ -270,8 +270,8 @@ fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
 /// 動かせない（据える前に作った窓へ書き手が届く）。
 #[test]
 fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
-    use crate::placement::balloon_lock::{BalloonLockLedger, HoldReason};
-    use crate::placement::spawn::BalloonWindowMarker;
+    use areka_placement::balloon_lock::{BalloonLockLedger, HoldReason};
+    use areka_placement::spawn::BalloonWindowMarker;
     use wintf::ecs::drag::DragConfig;
 
     let (mut world, events) = boot_windows_with_sticky_line("kero.balloon.dontmove,1");
@@ -302,7 +302,7 @@ fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
 /// 捨てる書き方（ID が 1 つ）なら組を作らずに記録し、起動は続く（要件 3.9・窓は 4 枚・帳簿は空で据わる）。
 #[test]
 fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
-    use crate::placement::sticky_group_ledger::StickyGroupLedger;
+    use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
     let (mut world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0");
 
@@ -329,9 +329,9 @@ fn commit_without_task_pool_logs_error() {
     let mut world = World::new();
     let prepared = PreparedWindows {
         descript: StartupDescriptValues {
-            author_dpi: placement::AuthorDpi::DEFAULT,
+            author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         },
         spawn: Box::new(|_: &mut World| {}),
     };
@@ -389,9 +389,9 @@ fn boot_round(
     kanade_stop: Sender<KanadeNotice>,
 ) -> (GhostSession, ScriptedShioriHandle) {
     let descript = StartupDescriptValues {
-        author_dpi: placement::AuthorDpi::DEFAULT,
+        author_dpi: areka_placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
-        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+        default_surfaces: areka_placement::DefaultSurfaces::builtin(),
     };
     let ghost = GhostDecision {
         route: GhostRoute::Argv,

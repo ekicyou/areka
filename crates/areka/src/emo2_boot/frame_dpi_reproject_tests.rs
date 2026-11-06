@@ -1,6 +1,6 @@
-use crate::placement::follow::MonitorSnapshot;
-use crate::placement::resolver::RectPx;
 use areka_emo_compose::ScaleRatio;
+use areka_placement::follow::MonitorSnapshot;
+use areka_placement::resolver::RectPx;
 use bevy_ecs::prelude::Entity;
 use log_capture_kit::capture as capture_diag_logs;
 use wintf::ecs::DPI;
@@ -34,7 +34,7 @@ use super::*;
 // 緑であり、5.2 が分離を**誤って**実装した場合に赤へ落ちる前方ガードである（実測: 5.2 が当てた
 // 変異 M3＝`Some` 経路を据置きへ流す／M6＝現寸でなく別寸で射影する、でそれぞれ赤化した）。
 
-use crate::placement::follow::{
+use areka_placement::follow::{
     BalloonFollow, WorkAreaResolution, work_area_for_window_with_origin,
 };
 
