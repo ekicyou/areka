@@ -13,7 +13,7 @@
 // （空 sheet 高速経路）。ゆえに close talk 自体の完了確認に Tick 注入は要らない——ただし
 // OnClose GET（kanade↔shiori の同期往復）・StartTalk（start_tx→start-relay→dispatcher_tx
 // の 2 hop）・TalkDone（dispatcher 自身の inbox 経由で kanade へ転送）は依然として実スレッド
-// 境界を跨ぐため、有界のスピン待機（Tick 送出なし・sleep なし・`yield_now` のみ）で
+// 境界を跨ぐため、dispatcher へ Tick を注入しつつ有界スピンで待ち（sleep なし）、
 // `handle.calls()` に `Unload` が現れるのを確認する。
 //
 // `handle.calls()` に `Unload` が現れた時点で、kanade 自身の thread は
@@ -76,12 +76,11 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
 
     // ---- boot talk を Steady 到達まで駆動する（S1/S3 と同一技法・sleep 不使用) ----
-    // 起動直後に CloseRequest を送ると kanade がまだ boot 系列途中（Idle〜BootVersion）
-    // の可能性があり（boot 中の CloseRequest は pending_close 記録のみで即握手しない）、
-    // Steady 到達を待たずに送るのは不要な不確実性を招く。boot talk が dispatcher の
-    // active slot に載って発火したことを surface cue の到達で確認すれば、kanade は
-    // 既に（boot talk の再生完了を待たず）Steady へ到達済みである（DD-IT-12: 挨拶 talk を
-    // 追跡したまま `Steady{talk: Some(greeting)}` へ・S3 と同じ論拠）。
+    // boot talk が dispatcher の active slot に載って発火したことを surface cue の到達で
+    // 確かめる。cue の到達は起動系列の完了を**含意しない**（S1/S3 と同じ: `StartTalk` は
+    // basewareversion より先に積まれ、別スレッドの競走になる）。起動系列の途中で届いた
+    // CloseRequest は pending_close として持ち越され、握手は Steady 到達の後に始まる
+    // （DD-IT-12）ので、cue を待ってから送れば握手の完走を下の有界待ちで確かめられる。
     let mut now: u64 = 1;
     super::spin_pumping_ticks(
         "S4: surface cue never fired after repeated Tick — boot talk did not reach \

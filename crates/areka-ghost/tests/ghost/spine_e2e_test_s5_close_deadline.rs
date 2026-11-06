@@ -100,8 +100,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
 
     // ---- boot talk を Steady 到達まで駆動する（S1/S3/S4 と同一技法・sleep 不使用) ----
     // dispatcher への Tick は kanade 自身の last_now を更新しない（別チャンネル・別
-    // 帳簿）ため、この loop を通しても kanade の last_now は None のまま維持される
-    // （CONCERNS 参照）。
+    // 帳簿）ため、この loop を通しても kanade の last_now は None のまま維持される。
     let mut now: u64 = 1;
     super::spin_pumping_ticks(
         "S5: surface cue never fired after repeated Tick — boot talk did not reach \
@@ -161,7 +160,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用・要件 7.4) ----
     // 1本目: CloseTalkWait 入場後 初めて受ける Tick——deadline を
     // `arm_now + close_talk_deadline_ms` へ確定するだけで比較はしない
-    // （close.rs の deadline=None 分岐・CONCERNS 参照）。
+    // （close.rs の deadline=None 分岐）。
     let arm_now: u64 = 5_000;
     runtime
         .kanade()
@@ -241,7 +240,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // まま）は dispatcher の active slot に残っているはずだが、dispatcher への Close
     // 送出は稼働中 active talk へ `SakuraMsg::Close` を送って即座に中断させてから
     // join する（`close_active_if_any`・dispatcher.rs）ため、恒久的に止まった close
-    // talk があっても shutdown は有界時間内に完走する（CONCERNS 参照）。
+    // talk があっても shutdown は有界時間内に完走する。
     crate::common::run_bounded_shutdown(
         "shutdown after S5 close deadline exceeded",
         super::BOUND,

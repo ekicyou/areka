@@ -17,13 +17,13 @@
 //!    `from_sylphya_provider` が刻印する像そのもの）に `username = "SomeUser"` が**必ず**含まれる
 //!    （sleep／retry なしで決定論成立）。companion で 204（NoContent）→ snapshot 非包含も固定する。
 //!
-//! ## ゴーストの AskerContext の入手（CONCERNS）
+//! ## ゴーストの AskerContext の入手
 //! reader 照会は問い合わせ元 [`AskerContext`] を第一級で要する（R2.6）。本番 boot は
 //! `ghost_asker_id(&mount.shiori.dir)` で構築し、`mount.shiori.dir` は
 //! `areka_parsers::package::shiori_dir` が合成する（正準化しない）。ゆえにテストは同じ導出
 //! ——`ghost_asker_id(&shiori_dir(&root))`——で production と**同一** asker を本番同型に再構築できる（GhostParts は asker を露出しない）。
 //!
-//! ## mock shiori の username=Value 台本化（CONCERNS）
+//! ## mock shiori の username=Value 台本化
 //! username prefetch は kanade boot 系列が resource id `"username"`（`resource_username`・
 //! `ALLOWED_RESOURCE_IDS`）へ GET する。mock backend が `get("username")` へ `Ok(Some("SomeUser"))`
 //! を返すと、boot が kanade へ注入した実 `ResourceSink`（`make_username_resource_sink`）が

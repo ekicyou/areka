@@ -20,7 +20,7 @@
 //! 破棄される・または unload 結果ゆえ）。GET の `Value`／`NoContent` のみ再構成し、その他の
 //! outcome（`Failed`／`NotifyOk`／`Unloaded`）は `None`（採取不能）として除外する。
 //!
-//! # 出力の正準形式（`crates/shiori4-testdll/snapshots/OnBoot.txt`／`OnFirstBoot.txt` と一致）
+//! # 出力の正準形式（`crates/shiori4-testdll/snapshots/OnFirstBoot.txt` と一致）
 //! 200: `SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: <s>\r\n\r\n`
 //! 204: `SHIORI/3.0 204 No Content\r\n\r\n`
 //! **`X-Areka-Snapshot: PROVISIONAL` マーカは付けない**（実採取は非 provisional・凍結コミット時に
@@ -39,8 +39,8 @@ use crate::recorder::{ExchangeKind, ExchangeOutcome, ExchangeRecord};
 /// - `Value(s)` → `SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: {s}\r\n\r\n`
 /// - `NoContent` → `SHIORI/3.0 204 No Content\r\n\r\n`
 ///
-/// CRLF 行末・`Charset: UTF-8`・`Value:` 行・空行終端で `snapshots/OnBoot.txt`／
-/// `OnFirstBoot.txt` の正準形式と一致する（PROVISIONAL マーカは含めない）。
+/// CRLF 行末・`Charset: UTF-8`・`Value:` 行・空行終端で `snapshots/OnFirstBoot.txt`
+/// の正準形式と一致する（PROVISIONAL マーカは含めない）。
 fn reconstruct_envelope(outcome: &ExchangeOutcome) -> Option<String> {
     match outcome {
         ExchangeOutcome::Value(s) => Some(format!(

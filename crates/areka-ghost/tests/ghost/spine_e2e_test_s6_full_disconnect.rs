@@ -50,12 +50,12 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     let temp = write_ghost_fixture("S6TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
 
-    // boot() 内部の同期 kanade 往復（OnInitialize NOTIFY→OnFirstBoot GET→OnBoot GET→
-    // basewareversion NOTIFY）が panic しない最小限の台本のみ用意する——本シナリオの
+    // 起動系列（親の `boot_script()` が台本化する列。kanade スレッドで非同期に走る）が
+    // panic しない最小限の台本のみ用意する——本シナリオの
     // 焦点は解体の「構造」であり、boot talk（`\s[0]hello\e`）の再生完了までは駆動
     // しない（dispatcher の active slot に乗ったまま未進行でも、後続①の
     // `DispatcherMsg::Close` が既存の Close funnel で安全に中断させる・dispatcher.rs
-    // 自身の単体テストで既に確認済みの挙動・CONCERNS 参照）。OnClose／Unload は台本化
+    // 自身の単体テストで既に確認済みの挙動）。OnClose／Unload は台本化
     // しない——本シナリオは kanade へ `CloseRequest`／`ForceQuit` のいずれも送らず、
     // 運行意味論を経ない raw `KanadeMsg::Close` のみで停止させるため、shiori backend
     // の `unload()` が呼ばれることはない。

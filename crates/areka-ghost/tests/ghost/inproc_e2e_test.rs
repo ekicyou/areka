@@ -1,6 +1,7 @@
-//! I1 canonical 一周 e2e（task 5.1・design.md「inproc 決定論 e2e（I1〜I3）」シナリオ I1）。
+//! inproc 決定論 e2e I1〜I3（design.md「inproc 決定論 e2e（I1〜I3）」）。I1＝実 DLL 越しの一周の演出列・
+//! I2＝同じ一周の交信列・I3＝ロード失敗の主要態様。
 //!
-//! spine の S1（`spine_e2e_test.rs` の `s1_boot_success`）を **実 InProc DLL 境界越し**で再演する。
+//! I1 は spine の S1（`spine_e2e_test.rs` の `s1_boot_success`）を **実 InProc DLL 境界越し**で再演する。
 //! S1 は台本 fake backend（`ScriptedShioriBackend`）が `\s[0]hello\e` を返すのに対し、本 I1 は
 //! `ShioriWiring::InProc` で実ビルド済み `shiori4_testdll.dll` をロードし、その OnFirstBoot 応答（凍結
 //! スナップショット由来の実採取起動挨拶・task 6.2）が kanade→start-relay→dispatcher→sakura→
@@ -16,15 +17,9 @@
 //! 正常終了の握手は `shutdown(CloseReason::System)==Ok(())` で観測する（要件 5.3）。観測は演出配送の
 //! **受領レベル**（`RecordingSink`）に留め、実描画（サーフェス合成・画素読戻し）は要求しない（要件 5.5）。
 //!
-//! # 兄弟 spine テストとの共存（tasks.md「[4.2 重大・5.1/5.2必読]」＋ task 5.0）
-//! 本テストは同一 `ghost` テストバイナリ内で spine の協調ループと並走する。自前 assemble をせず
-//! `inproc_fixture::shared_test_ghost()`（OnceLock・assemble 一度・hardlink 優先）を再利用して新規バイト
-//! 書き込み由来の Defender 再スキャン＝spine starvation を避け、駆動ループは反復回数境界でなく **壁時計
-//! deadline 境界**（task 2.4 の runtime.rs InProc 統合テスト方式）で括る。spine のプローブループは task 5.0 で
-//! 同じ壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
-//! だけで偽陽性を生まない（5.0 前は spine が反復回数境界の空 spin で早合点し飢餓したため 2ms sleep で緩和して
-//! いたが、その応急措置は 5.0 完了で撤去した）。残る低頻度残存はこの並列マルチエージェント build セッション
-//! 特有の兄弟コンパイル burst 下でのみ稀に spine settle ループが飢餓するもので、本テスト自体は無関係。
+//! # 兄弟 spine テストとの共存
+//! 同じ `ghost` テストバイナリで spine と並走するため、共有ゴースト（`inproc_fixture::shared_test_ghost()`）を
+//! 使い回して新規書き込みを避け、駆動ループは壁時計 deadline で括る（CPU 競合は到達を遅らせるだけ）。
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -940,7 +935,7 @@ fn build_i3_mount(shiori_line: &str, dll_bytes: Option<&[u8]>) -> (ShioriMount, 
     (shiori, root)
 }
 
-/// I3-② **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
+/// I3-① **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
 /// `inproc_connect` は `LoadLibraryExW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
 /// 要件 3.5）。
 #[test]
@@ -969,7 +964,7 @@ fn i3_load_failure_missing_dll_returns_err() {
     }
 }
 
-/// I3-③ **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
+/// I3-② **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
 /// `LoadLibraryExW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
 /// （panic せず・要件 3.5）。
 #[test]

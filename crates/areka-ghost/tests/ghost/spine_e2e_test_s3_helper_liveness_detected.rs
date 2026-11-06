@@ -199,8 +199,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // 完走したこと（status flapping で shiori actor がループし続けるような壊れ方を
     // していないこと）の 2 点を確認する。sticky-once の不変量そのものは task 1.4 の
     // 単体テスト（death_detected_once_reports_shiori_down_and_only_once）が既に固定
-    // しており、本 e2e の責務は配線がそれを最後まで届けることの証明に置く
-    // （CONCERNS 参照）。
+    // しており、本 e2e の責務は配線がそれを最後まで届けることの証明に置く。
     let all_calls = handle.calls().lock().expect("calls mutex poisoned").clone();
     assert!(
         all_calls.iter().any(|c| matches!(c, RecordedCall::Unload)),
