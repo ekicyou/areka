@@ -163,7 +163,8 @@ fn unknown_tag_is_noted_on_spellings_without_an_arm() {
         // 素通しのタグ（角括弧つき）。
         (r"\i[5]", r"\i[5]"),
         (r"\&[amp]", r"\&[amp]"),
-        (r"\w[2]", r"\w[2]"),
+        // `\w` の後の `[2]` は字（かけ直しの R18）。
+        (r"\w[2]", r"\w"),
         (r"\q*[ID]", r"\q*[ID]"),
         // 旧い 2 連の `\q`（畳んだ全部に 1 つ）。
         (r"\q[ID][題]\e", r"\q[ID][題]"),

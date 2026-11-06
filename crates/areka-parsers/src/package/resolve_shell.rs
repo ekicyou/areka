@@ -83,6 +83,16 @@ fn folder_name(value: &str) -> Option<&OsStr> {
     }
 }
 
+/// 基のフォルダから外へ出うる相対パスか（`..`・根・ドライブ／UNC の頭を含む）。
+fn points_outside(value: &str) -> bool {
+    Path::new(value).components().any(|c| {
+        matches!(
+            c,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    })
+}
+
 /// `seriko.defaultsurfacedirectoryname` の値を確かめて既定のシェル名にする。
 ///
 /// 無いか空なら黙って `master`。空でなく 1 つのフォルダ名でない値は、`shell/` の外を
@@ -143,7 +153,19 @@ pub fn resolve_with_shell(
     let shiori = ShioriMount {
         dir: shiori_dir,
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori_2c_30d5_30a1_30a4_30eb_540d:1
-        file: map.get("shiori").cloned(),
+        // 外を指しても記録だけで使う（ゴーストは元々好きな DLL を持ち込める・R2）。
+        file: map
+            .get("shiori")
+            .inspect(|value| {
+                if points_outside(value) {
+                    tracing::warn!(
+                        value = %value,
+                        ghost_root = %ghost_root.display(),
+                        "shiori の値が ghost/master の外を指す: そのまま使う"
+                    );
+                }
+            })
+            .cloned(),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1
         encoding: map.get("shiori.encoding").cloned(),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1
@@ -176,6 +198,20 @@ pub fn resolve_with_shell(
         shiori,
         shell,
         bindgroups,
-        readme: map.get("readme").cloned(),
+        // 外を指す値は無いのと同じ（OS の関連付けでゴーストの外のファイルを開かせない・R2）。
+        readme: map
+            .get("readme")
+            .filter(|value| {
+                let outside = points_outside(value);
+                if outside {
+                    tracing::warn!(
+                        value = %value,
+                        ghost_root = %ghost_root.display(),
+                        "readme の値がゴーストのフォルダの外を指す: 既定の名を使う"
+                    );
+                }
+                !outside
+            })
+            .cloned(),
     })
 }

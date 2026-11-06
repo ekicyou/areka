@@ -8,7 +8,7 @@
 //! 本ファイルが担うのは **emo2 subset の値正規化**と、それ以外のトークンの素通し:
 //! - 待ち時間 `\wN` / `\_w[ms]` → 単一 `Wait(Duration)`
 //!   （`\wN` = n × 50ms、`\_w[ms]` = 絶対 ms。要件 3）。正典に無い括弧形
-//!   `\w[n]` は待ちにしない（未知タグと同じ `Raw` 素通し・要件 18.1）。
+//!   `\w[n]` は待ちにしない（`\w` は知らない素の綴りの `Raw`、`[n]` は字・要件 18.1 を R18 で改めた）。
 //! - 改行 `\n` / `\n[percent]` / `\n[half]` → `NewLine(NewLineRatio)`
 //!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持。要件 4）。
 //! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離・要件 5.1/5.2）。
@@ -471,7 +471,6 @@ fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
 
 /// subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
 /// 保持（要件 11.2/13.8）。生情報を復元して失わない。
-/// なお `\b2[x]`（数字直後が `[` の非短縮ブラケット word `b2`）もここへ落ちる。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
 /// 呼び手は 1 つだが、網羅台帳と `doc/COMPAT_ARCHITECTURE.md` が名指しているので残す。
 fn decode_passthrough_tag(

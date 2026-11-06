@@ -166,10 +166,9 @@ fn tags_and_sysvars_after_body_bracket_are_separate_units() {
 /// （引数を取らないタグの後の `[` は字のまま＝`bracket_after_no_arg_tag_is_text`）。
 #[test]
 fn bracket_immediately_after_tag_name_is_still_bracket_form() {
-    let cases: [(&str, &str, &[&str]); 10] = [
+    let cases: [(&str, &str, &[&str]); 9] = [
         (r"\n[half]", "n", &["half"]),
         (r"\n[50]", "n", &["50"]),
-        (r"\w[2]", "w", &["2"]),
         (r"\b[2]", "b", &["2"]),
         (r"\p[1]", "p", &["1"]),
         (r"\_a[ID]", "_a", &["ID"]),
@@ -191,7 +190,6 @@ fn bracket_immediately_after_tag_name_is_still_bracket_form() {
 #[test]
 fn unclosed_bracket_immediately_after_tag_name_is_still_absorbed_as_raw() {
     assert_eq!(lex(r"\s[注です"), vec![raw(r"\s[注です")]);
-    assert_eq!(lex(r"\b1["), vec![raw(r"\b1[")]);
 }
 
 /// 指摘 27（SSP で測った `\1`・`\e` と同じ規則）: 引数を取らないタグの後の `[` は角括弧の道に
@@ -200,7 +198,7 @@ fn unclosed_bracket_immediately_after_tag_name_is_still_absorbed_as_raw() {
 fn bracket_after_no_arg_tag_is_text() {
     let no_arg = [
         "*", "-", "0", "1", "4", "5", "6", "7", "C", "_!", "_+", "_?", "_V", "__c", "__t", "_n",
-        "_q", "a", "e", "h", "t", "u", "z",
+        "_q", "a", "e", "h", "t", "u", "w", "z",
     ];
     for word in no_arg {
         let closed = format!("\\{word}[注]です");
@@ -213,11 +211,26 @@ fn bracket_after_no_arg_tag_is_text() {
 }
 
 /// L10（要件 4.10・5.5）: 短縮形の 1 桁規律と、旧仕様の選択肢 `\q*[ID][タイトル]` は不変。
+/// 短縮形の数字の後の `[` は字（閉じていても閉じていなくても・かけ直しの R18 で要件 4.3 の
+/// 「角括弧付きタグを優先」を改めた）。
 #[test]
 fn shorthand_digit_rule_and_legacy_q_star_are_unchanged() {
-    assert_eq!(lex(r"\w2[x]"), vec![tag("w2", &["x"])]);
-    assert_eq!(lex(r"\b2[x]"), vec![tag("b2", &["x"])]);
-    assert_eq!(lex(r"\p2[x]"), vec![tag("p2", &["x"])]);
+    assert_eq!(
+        lex(r"\w2[x]"),
+        vec![shorthand(ShorthandWord::Wait, 2), text("[x]")]
+    );
+    assert_eq!(
+        lex(r"\b2[x]"),
+        vec![shorthand(ShorthandWord::Balloon, 2), text("[x]")]
+    );
+    assert_eq!(
+        lex(r"\p2[x]"),
+        vec![shorthand(ShorthandWord::Scope, 2), text("[x]")]
+    );
+    assert_eq!(
+        lex(r"\b1["),
+        vec![shorthand(ShorthandWord::Balloon, 1), text("[")]
+    );
     assert_eq!(lex(r"\w2"), vec![shorthand(ShorthandWord::Wait, 2)]);
     assert_eq!(
         lex(r"\b12"),

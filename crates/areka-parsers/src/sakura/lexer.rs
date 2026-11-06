@@ -42,7 +42,7 @@ pub(crate) enum Token {
     /// 正準形 `\word[args]`（`word` は確定済みのタグ名で直後が `[`、args は `]` までをカンマ分割）。
     ///
     /// `word` は本文を含まない 1〜3 文字（`\_X`／`\__X` 形を含む）。例外で 2 文字になる
-    /// のは短縮対象語＋1 桁（`w2` 等）と旧仕様の選択肢 `q*`／`q0`〜`q9` の 2 形。
+    /// のは旧仕様の選択肢 `q*`／`q0`〜`q9`。
     Tag { word: String, args: Vec<String> },
     /// 角括弧を伴わないタグの綴り（先頭の `\` を除く）。
     ///
@@ -96,10 +96,11 @@ fn shorthand_word(c: char) -> Option<ShorthandWord> {
 /// この綴りの後の `[` は角括弧の道に入らず字のまま（SSP で `\1[小声で]`・`\e[注]` を
 /// 測った結果＝research.md 11 節）。`+` と `v` は完了した spec の決め（`\+[x]` は Raw・
 /// `\v[1]` は raise でない）を保つため入れない（設計の討議の議題 2）。`c` は
-/// `\c[char,…]`、`w` は `\w[n]` があるので入れない。
+/// `\c[char,…]` があるので入れない。`w` は ukadoc に `\w時間`（1〜9）しか無いので入れる
+/// （`\w[x]` は `\w` と字の `[x]`・かけ直しの R18）。
 const NO_ARG_TAGS: &[&str] = &[
     "*", "-", "0", "1", "4", "5", "6", "7", "C", "_!", "_+", "_?", "_V", "__c", "__t", "_n", "_q",
-    "a", "e", "h", "t", "u", "z",
+    "a", "e", "h", "t", "u", "w", "z",
 ];
 
 /// さくらスクリプト文字列を構文トークン列へ分割する（mod 内非公開）。
@@ -255,8 +256,8 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     };
 
     // ワード（コマンド語）を読む: 最大 3 文字で頭打ちにし（`[`／`\`／`%` でも止まる）、
-    // 長さは `bare_tag_len` の規則で確定してから `[` を判定する。例外は短縮対象語＋1 桁と
-    // 旧仕様の選択肢 `q*[` の 2 形で、読み取り結果をそのまま使う。
+    // 長さは `bare_tag_len` の規則で確定してから `[` を判定する。例外は旧仕様の選択肢
+    // `q*[` で、読み取り結果をそのまま使う。
     // 短縮対象語（`\w`/`\b`/`\p`）は 1 文字読んだ時点で次が数字なら短縮形を優先する。
     let word_start = i + 1;
     let mut j = word_start;
@@ -264,12 +265,12 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     // 先頭 1 文字を確定（少なくとも word は 1 文字ある）。
     j += 1;
 
-    // 短縮形判定（語に依らず共通・要件 1.2）: word が 1 文字（短縮対象語）で、
-    // 続く文字が 1 桁数字、かつその数字の次が `[` でない（`\w[2]`/`\b2[x]` は正準タグ）。
+    // 短縮形判定（語に依らず共通・要件 1.2）: word が 1 文字（短縮対象語）で、続く文字が
+    // 1 桁数字。数字の次の `[` は字のまま（ukadoc に `\w9[…]`・`\b2[…]`・`\p1[…]` の形は
+    // 無い＝指摘 27 と同じ「タグ＋字」・かけ直しの R18）。
     if let Some(word) = shorthand_word(first)
         && let Some(&(_, d)) = chars.get(j)
         && d.is_ascii_digit()
-        && chars.get(j + 1).map(|&(_, c)| c) != Some('[')
     {
         let n = (d as u8) - b'0';
         return (Token::Shorthand { word, n }, j + 1);
@@ -286,20 +287,14 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
 
     let mut word: String = chars[word_start..j].iter().map(|&(_, c)| c).collect();
 
-    // `[` を見る前にタグ名の長さを確定する。例外は短縮対象語＋1 桁（短縮形判定を
-    // 抜けた以上、次は必ず `[`）で、読み取り結果をそのまま使う。
-    let shorthand_digit = shorthand_word(first).is_some()
-        && chars
-            .get(word_start + 1)
-            .is_some_and(|&(_, d)| d.is_ascii_digit());
-    // 例外その二: 旧仕様の選択肢 `\q*[ID][タイトル]`（`*` は通し番号・`*` か 1 桁の数の
-    // 直後が `[` のときだけ。`\q10[…]` のような 2 桁は当たらない）。
+    // `[` を見る前にタグ名の長さを確定する。例外は旧仕様の選択肢 `\q*[ID][タイトル]`
+    // （`*` は通し番号・`*` か 1 桁の数の直後が `[` のときだけ。`\q10[…]` の 2 桁は当たらない）。
     let legacy_q_star = first == 'q'
         && chars
             .get(word_start + 1)
             .is_some_and(|&(_, c)| c == '*' || c.is_ascii_digit())
         && chars.get(word_start + 2).map(|&(_, c)| c) == Some('[');
-    if !(shorthand_digit || legacy_q_star) {
+    if !legacy_q_star {
         let len = bare_tag_len(&word);
         word = word.chars().take(len).collect();
         j = word_start + len;

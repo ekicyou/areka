@@ -338,3 +338,80 @@ fn shiori_dir_uses_native_separators() {
         temp.path().join("ghost").join("master").as_os_str()
     );
 }
+
+/// ghost/master の descript.txt を `body` にし、`shell/master` を持つ一時ツリーで名前なしの解決を
+/// 記録つきで回し、マウントと `warn!` の件を返す。
+fn resolve_descript_capturing(
+    tag: &str,
+    body: &str,
+) -> (
+    TempPath,
+    super::MountModel,
+    Vec<log_capture_kit::CapturedEvent>,
+) {
+    let root = TempPath::new(&format!("parsers-resolve-shell-outside-{tag}"));
+    let master = root.path().join("ghost").join("master");
+    fs::create_dir_all(&master).expect("create ghost/master");
+    fs::write(master.join("descript.txt"), body.as_bytes()).expect("write ghost descript.txt");
+    write_shell(root.path(), "master", "charset,UTF-8\n");
+    let (model, events) =
+        log_capture_kit::capture(|| resolve_with_shell(root.path(), DefaultEncoding::Utf8, None));
+    let warns = events
+        .into_iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .collect();
+    (root, model.expect("resolve ok"), warns)
+}
+
+/// R2: ゴーストのフォルダの外を指す `readme`（`..`・絶対パス・ドライブ）は値が無いのと同じに
+/// 扱い（説明書は既定の `readme.txt` へ落ちる）、値を `warn!` に残す。
+#[test]
+fn readme_pointing_outside_ghost_is_dropped_with_warn() {
+    for (tag, value) in [
+        ("parent", r"..\..\secret.txt"),
+        ("parent-slash", "../x.txt"),
+        ("rooted", r"\Windows\win.ini"),
+        ("drive", r"C:\Windows\win.ini"),
+        ("unc", r"\\server\share\x.txt"),
+    ] {
+        let (_root, model, warns) =
+            resolve_descript_capturing(tag, &format!("charset,UTF-8\nreadme,{value}\n"));
+
+        assert_eq!(model.readme, None, "{value}");
+        assert_eq!(warns.len(), 1, "{value}: {warns:?}");
+        assert_eq!(warns[0].field("value"), Some(value), "{warns:?}");
+    }
+}
+
+/// R2: ゴーストのフォルダの中のサブフォルダを指す `readme` はそのまま使い、記録しない。
+#[test]
+fn readme_inside_ghost_subfolder_is_kept() {
+    let (_root, model, warns) =
+        resolve_descript_capturing("inside", "charset,UTF-8\nreadme,doc/manual.txt\n");
+
+    assert_eq!(model.readme.as_deref(), Some("doc/manual.txt"));
+    assert!(warns.is_empty(), "{warns:?}");
+}
+
+/// R2: ghost/master の外を指す `shiori` は記録だけ——値はそのまま使う（共有の DLL を持つ
+/// ゴーストを起動できなくしない）。
+#[test]
+fn shiori_pointing_outside_is_kept_with_warn() {
+    let value = r"..\shared\x.dll";
+    let (_root, model, warns) =
+        resolve_descript_capturing("shiori", &format!("charset,UTF-8\nshiori,{value}\n"));
+
+    assert_eq!(model.shiori.file.as_deref(), Some(value));
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert_eq!(warns[0].field("value"), Some(value), "{warns:?}");
+}
+
+/// R2: ghost/master の中の `shiori` は記録しない。
+#[test]
+fn shiori_inside_is_not_warned() {
+    let (_root, model, warns) =
+        resolve_descript_capturing("shiori-inside", "charset,UTF-8\nshiori,yaya.dll\n");
+
+    assert_eq!(model.shiori.file.as_deref(), Some("yaya.dll"));
+    assert!(warns.is_empty(), "{warns:?}");
+}

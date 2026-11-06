@@ -40,11 +40,18 @@ fn wait_shorthand_boundary_values() {
 /// n × 50ms https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
 /// と `\_w[時間]`＝絶対 ms
 /// https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
-/// の 2 形だけ）。よって待ちとして解釈せず、他の未知タグと同じく `Raw` の
-/// 素通しにする（要件 18.1/18.2）。正典 2 形が不変であることを同じ檻で対照する。
+/// の 2 形だけ）。よって待ちとして解釈せず、`\w` は知らない素の綴りの `Raw`、`[2]` は字に
+/// する（かけ直しの R18 で `sakura-parse` 要件 18.1 の「全体を `Raw`」を改めた＝字を消さない）。
+/// 正典 2 形が不変であることを同じ檻で対照する。
 #[test]
-fn wait_bracket_form_is_raw_not_wait() {
-    assert_eq!(dec(r"\w[2]"), vec![Instruction::Raw(r"\w[2]".to_string())]);
+fn wait_bracket_form_is_raw_tag_and_text_not_wait() {
+    assert_eq!(
+        dec(r"\w[2]"),
+        vec![
+            Instruction::Raw(r"\w".to_string()),
+            Instruction::Text("[2]".to_string())
+        ]
+    );
     // 対照: 正典の短縮形と絶対ミリ秒形は従来どおり `Wait`。
     assert_eq!(
         dec(r"\w2"),
@@ -620,13 +627,26 @@ fn balloon_surface_inner_readable_via_as_str() {
     }
 }
 
-/// `\b2[x]`（数字の直後が `[`）は短縮形でなく正準タグ `\b2[x]` 扱い＝subset 外 word
-/// `b2` → `Raw`（既存 `\w2[x]` と同型・"b" arm 追加後も不変・R1.6 整合）。
+/// `\b2[x]`・`\w9[x]`・`\p1[x]`（数字の直後が `[`）は短縮形＋字の `[x]`（ukadoc に数字の後の
+/// 角括弧の形は無い・指摘 27 と同じ「タグ＋字」・かけ直しの R18 で `sakura-tag-word-boundary`
+/// 要件 4.3 の「角括弧付きタグを優先」を改めた）。
 #[test]
-fn balloon_bracketed_digit_word_stays_raw() {
+fn bracket_after_shorthand_digit_is_shorthand_and_text() {
+    let text = || Instruction::Text("[x]".to_string());
     assert_eq!(
         dec(r"\b2[x]"),
-        vec![Instruction::Raw(r"\b2[x]".to_string())]
+        vec![
+            Instruction::BalloonSurface(SurfaceArg::new("2".to_string())),
+            text()
+        ]
+    );
+    assert_eq!(
+        dec(r"\w9[x]"),
+        vec![Instruction::Wait(Duration::from_millis(450)), text()]
+    );
+    assert_eq!(
+        dec(r"\p1[x]"),
+        vec![Instruction::SpeakerScope { n: 1 }, text()]
     );
 }
 

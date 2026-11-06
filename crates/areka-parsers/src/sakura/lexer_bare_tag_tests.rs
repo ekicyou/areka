@@ -193,10 +193,10 @@ fn known_one_char_tags_do_not_swallow_following_body_text() {
     assert_eq!(lex(r"\uあ"), vec![bare("u"), text("あ")]);
 }
 
-/// T14（要件 4.3・5.7）: 短縮形の規律は不変——1 桁のみを読み、直後が `[` なら
-/// 角括弧付きタグを優先する。
+/// T14（要件 4.3・5.7）: 短縮形の規律——1 桁のみを読む。`\w` の直後の `[` は字
+/// （かけ直しの R18 で、要件 4.3 の「角括弧付きタグを優先」を改めた）。
 #[test]
-fn shorthand_rules_are_unchanged() {
+fn shorthand_reads_one_digit_and_w_bracket_is_text() {
     assert_eq!(
         lex(r"\w2"),
         vec![Token::Shorthand {
@@ -204,7 +204,7 @@ fn shorthand_rules_are_unchanged() {
             n: 2
         }]
     );
-    assert_eq!(lex(r"\w[2]"), vec![tag("w", &["2"])]);
+    assert_eq!(lex(r"\w[2]"), vec![bare("w"), text("[2]")]);
 }
 
 /// T14（要件 4.4・5.7）: エスケープの扱いは不変——`\\` はリテラル `\`、
