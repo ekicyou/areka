@@ -5,7 +5,6 @@ use crate::ecs::graphics::systems::format_entity_name;
 use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
-use core::hash::*;
 use tracing::{error, warn};
 use windows_numerics::Matrix3x2;
 
@@ -24,15 +23,6 @@ pub struct WorldVisual {
 
     /// 自 + 子孫の world AABB union（サブツリー・カリング／スクロール集計用）。
     pub subtree_world_aabb: Aabb,
-}
-
-impl Hash for WorldVisual {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.world_mat.calc_hash(state);
-        self.axis_aligned.hash(state);
-        self.content_world_aabb.hash(state);
-        self.subtree_world_aabb.hash(state);
-    }
 }
 
 impl WorldVisual {

@@ -1,10 +1,8 @@
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
-use core::hash::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::core::Result;
-use windows_core::*;
 
 /// 描画面を持たない節の描く中身（閉じた命令の列・局所の外接矩形〔96 DPI の DIP〕・補間・重ね方）。
 ///
@@ -30,15 +28,6 @@ pub struct VisualDrawContent {
 // （command_list.rs と同じ根拠）。
 unsafe impl Send for VisualDrawContent {}
 unsafe impl Sync for VisualDrawContent {}
-
-impl Hash for VisualDrawContent {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.local_aabb.hash(state);
-        (self.command_list.as_raw() as usize).hash(state);
-        self.interpolation_mode.0.hash(state);
-        self.composite_mode.0.hash(state);
-    }
-}
 
 impl VisualDrawContent {
     /// 事前に計算済みの `local_aabb` を用いて `VisualDrawContent` を構築する。
