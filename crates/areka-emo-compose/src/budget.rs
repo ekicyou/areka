@@ -5,6 +5,8 @@
 //! （面 1 つに入ってする仕事はその面の行の数に比例するので、走査全体の仕事は予算×定数で抑えられる）。
 //! 積み荷（命令列の段の命令と子へ入る印・当たり判定の持ち込みで親へ渡す領域）もこれとは別に数える。
 
+use areka_parsers::shell::Animation;
+
 use crate::normalized::SurfaceMaster;
 use crate::world::Records;
 
@@ -17,11 +19,19 @@ pub(crate) const VISIT_BUDGET: usize = 1 << 16;
 /// 面 1 つの行の全部の数（element・collision と、animation ごとに interval の 1 行＋pattern の数・飽和）。
 /// 面に入った走査がなめうる行の上限なので、どの走査も入るときにこれで予算から引く（指摘 129・130）。
 pub(crate) fn surface_rows(master: &SurfaceMaster) -> usize {
-    let lines = master
-        .elements
-        .len()
-        .saturating_add(master.collisions.len());
-    master.animations.iter().fold(lines, |n, a| {
+    rows(
+        master
+            .elements
+            .len()
+            .saturating_add(master.collisions.len()),
+        &master.animations,
+    )
+}
+
+/// 行の数え方の唯一の定義（面の [`surface_rows`] と畳み込みの記述子の `fold.rs` の `body_lines` が共有する）:
+/// `lines`（element と collision の数）に、animation ごとに interval の 1 行＋pattern の数を飽和で足す。
+pub(crate) fn rows(lines: usize, animations: &[Animation]) -> usize {
+    animations.iter().fold(lines, |n, a| {
         n.saturating_add(1).saturating_add(a.patterns.len())
     })
 }

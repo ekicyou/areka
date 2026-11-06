@@ -38,7 +38,7 @@ use crate::world::{AliasMap, Records, SurfaceId, SurfaceIndex};
 /// （枝の選び方と面の表への書き込みは変えない・spec: emo-bake-log-overlap 要件 2.3）。
 pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records) {
     let mut added = HashMap::new();
-    let mut copied = 0;
+    let mut copied = Copied::default();
     for def in &shell.definitions {
         match *def {
             DefRef::Surface(index) => match shell.surfaces.get(index) {
@@ -111,27 +111,52 @@ pub(crate) fn fold_shell_with(world: &mut World, shell: &Shell, records: Records
 /// 読む側の上限は番号の数だけを抑えるので、本体の行数との積をここで抑える。仮の値で、測り直しの候補。
 pub(crate) const MAX_COPIED_LINES: usize = 1 << 20;
 
+/// 畳み込み 1 回で写した行の数と、上限を越えたことを記録済みか（[`may_copy`]・面と箱で 1 つずつ）。
+#[derive(Default)]
+pub(crate) struct Copied {
+    lines: usize,
+    reported: bool,
+}
+
 /// 記述子 1 つの本体（`lines` 行）を `ids` の番号ごとに写してよいか（指摘 78）。写す数を `copied` に足し、
-/// 合計が [`MAX_COPIED_LINES`] を越えるなら足さずに `error!`（番号の範囲・行の数・上限）を出して false
-/// （呼び手はその記述子を捨てる）。`table` は記録の欄（面の `"surfaces"` か箱の `"boxes"`）。
+/// 合計が [`MAX_COPIED_LINES`] を越えるなら足さずに false（呼び手はその記述子を捨てる）。記録（番号の範囲・
+/// 行の数・上限）は畳み込み 1 回で初めの 1 度だけ `error!`、以後は `debug!`（7 回目の指摘 23）。`table` は
+/// 記録の欄（面の `"surfaces"` か箱の `"boxes"`）。
 pub(crate) fn may_copy(
-    copied: &mut usize,
+    copied: &mut Copied,
     table: &'static str,
     ids: &[u32],
     lines: usize,
     records: Records,
 ) -> bool {
     let n = ids.len().saturating_mul(lines);
-    if n <= MAX_COPIED_LINES - *copied {
-        *copied += n;
+    if n <= MAX_COPIED_LINES - copied.lines {
+        copied.lines += n;
         return true;
     }
-    if records.emits() {
+    let first = ids.first().copied().unwrap_or_default();
+    let last = ids.last().copied().unwrap_or_default();
+    if !records.emits() {
+        return false;
+    }
+    if !copied.reported {
+        copied.reported = true;
         tracing::error!(
             target: "areka_emo_compose",
             table,
-            first = ids.first().copied().unwrap_or_default(),
-            last = ids.last().copied().unwrap_or_default(),
+            first,
+            last,
+            ids = ids.len(),
+            lines,
+            limit = MAX_COPIED_LINES,
+            "範囲の見出しで写す行の数が畳み込みの上限を越えた: この記述子を捨てる"
+        );
+    } else {
+        tracing::debug!(
+            target: "areka_emo_compose",
+            table,
+            first,
+            last,
             ids = ids.len(),
             lines,
             limit = MAX_COPIED_LINES,
@@ -141,14 +166,10 @@ pub(crate) fn may_copy(
     false
 }
 
-/// 記述子の本体の行の数（element・collision と、animation ごとに interval の 1 行＋pattern の行）。番号ごとに
+/// 記述子の本体の行の数（数え方は面の [`crate::budget::surface_rows`] と同じ [`crate::budget::rows`]）。番号ごとに
 /// 写すのは pattern の列も全部なので、pattern の行も数える。
 fn body_lines(elements: &[Element], collisions: &[Collision], animations: &[Animation]) -> usize {
-    animations
-        .iter()
-        .fold(elements.len().saturating_add(collisions.len()), |n, a| {
-            n.saturating_add(1).saturating_add(a.patterns.len())
-        })
+    crate::budget::rows(elements.len().saturating_add(collisions.len()), animations)
 }
 
 /// 行を足した面ごとの、すでにある番号の集合（[`add_lines`] が重なりと先勝ちを表で引く・指摘 27）と、
@@ -184,7 +205,7 @@ fn fold_plain_surface(
     surface: &Surface,
     records: Records,
     added: &mut HashMap<u32, Numbers>,
-    copied: &mut usize,
+    copied: &mut Copied,
 ) {
     let ids = expand_targets_with(&surface.targets, records);
     let lines = body_lines(&surface.elements, &surface.collisions, &surface.animations);
@@ -315,7 +336,7 @@ fn fold_append(
     append: &SurfaceAppend,
     records: Records,
     added: &mut HashMap<u32, Numbers>,
-    copied: &mut usize,
+    copied: &mut Copied,
 ) {
     let ids = expand_targets_with(&append.targets, records);
     let lines = body_lines(&append.elements, &append.collisions, &append.animations);

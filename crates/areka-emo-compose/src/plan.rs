@@ -454,11 +454,12 @@ fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_
 /// 層(ii) の対象 id 集合へ、この段のコマ（一番上なら [`PatternState`] の今までの欄、部品の段なら
 /// 部品の欄の `surface_id` の分）を持つ id を合流する。
 /// 合流対象 id 集合 =
-/// `{ 有効 bind pattern0 を持つ id } ∪ { この段に現在コマを持つ id のうち bind 種でないもの、
-/// または bind 種でも現在の bind 集合に属するもの }`（bind 所属条件は bindopt D9-3・下記）。整列は既存の
-/// animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。各 id で現在コマが
-/// あれば**コマが pattern0 静的寄与を置換**する（4.2「各コマは直前コマをリセットしてベースへ」）。
-/// コマ・pattern0 いずれも method ゲート（[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
+/// `{ 今の bind 集合に属する着せ替えの id } ∪ { always の id } ∪ { この段に現在コマを持つ id のうち
+/// bind+random でないもの、または bind+random でも現在の bind 集合に属するもの }`（bind 所属条件は bindopt
+/// D9-3・下記）。整列は既存の animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。
+/// 各 id で現在コマがあれば**コマが静的な寄与（着せ替えの手順・always の経過 0）を置換**する（4.2「各コマは
+/// 直前コマをリセットしてベースへ」）。コマ・着せ替えの手順・always の経過 0 のいずれも method ゲート
+/// （[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
 /// 非 Overlay は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。一番上と部品の段は
 /// 読む欄だけが違い、規則は同じ 1 本の経路を通る（surface-element-nesting 要件 5.1・5.10・5.12）。
 ///
@@ -504,7 +505,7 @@ fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
             .into_iter()
             .flatten(),
     );
-    // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。上で入れた id と重なったものは
+    // 現在コマの id を合流（有効な着せ替えでも `always` でもない id も含む）。上で入れた id と重なったものは
     // 整列の後に 1 つへ畳む（上で入れた id は有効な着せ替えか `always` なので、下の門は通る）。
     for (id, _frame) in frames {
         // bindopt D9-3（最後の砦・bindopt 7.1）: `bind+random` のコマは bind 集合に属するときだけ

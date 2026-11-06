@@ -43,14 +43,16 @@ pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
 pub(crate) const IMPORT_BUDGET: usize = 1 << 20;
 
 /// [`attach_hit_regions`] の中身。`limit` は根をまたいで持ち込む領域の数の予算（本番は [`IMPORT_BUDGET`]・
-/// テストは小さな数）。尽きたら `error!` を 1 行出し（`records` が `Quiet` なら出さない）、その面から先には
-/// 持ち込みを付けない。覚えに入れる列の長さの合計も同じ `limit` で抑える（[`HitMemo`]）。
+/// テストは小さな数）。残りに収まらない根の面には持ち込みを付けず、後ろの根は残りで続ける（記録は初めの 1 度だけ
+/// `error!`・以後は `debug!`・`records` が `Quiet` なら出さない）。覚えに入れる列の長さの合計も同じ
+/// `limit` で抑える（[`HitMemo`]）。
 pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, limit: usize) {
     let mut left = limit;
     let mut found = Vec::new();
     let mut memo = HitMemo::new(limit);
     // 広がりの予算の `error!` は呼び出し 1 回に 1 行（2 根目からは黙らせる・他の読み込みの走査と同じ）。
     let mut reported = !records.emits();
+    let mut over_reported = false;
     for id in emo.surface_ids() {
         let Some(master) = emo.surface(id) else {
             continue;
@@ -66,16 +68,31 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
         // 列は［持ち込み］→［直接］なので、長さが違えば持ち込みが在る（根は領域を切り詰めない）。
         let imported = list.len() - master.collisions.len();
         if imported > left {
-            if records.emits() {
+            // 収まらない根だけを飛ばし、後ろの小さな根は残りで持ち込む（7 回目の指摘 6）。記録は初めの 1 度だけ `error!`。
+            if !records.emits() {
+                continue;
+            }
+            if !over_reported {
+                over_reported = true;
                 tracing::error!(
                     target: "areka_emo_compose",
                     surface_id = id,
                     imported,
+                    left,
                     budget = limit,
-                    "持ち込む領域の数がシェル全体の予算を越えた: この面から先へ持ち込みを付けない"
+                    "持ち込む領域の数がシェル全体の予算を越えた: この面には持ち込みを付けない"
+                );
+            } else {
+                tracing::debug!(
+                    target: "areka_emo_compose",
+                    surface_id = id,
+                    imported,
+                    left,
+                    budget = limit,
+                    "持ち込む領域の数がシェル全体の予算を越えた: この面には持ち込みを付けない"
                 );
             }
-            break;
+            continue;
         }
         left -= imported;
         if imported > 0 {

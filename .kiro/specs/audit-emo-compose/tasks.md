@@ -214,7 +214,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 5.3, 6.2_
 
 - [ ] 12. かけ直し 7 回目の指摘の直し（research.md 21 節・開発者 11-06「直して終える」＝33 件を直してレビューを通し、audit はもうかけない）
-- [ ] 12.1 実装の側の直し（明細 4・6・20〜27）
+- [x] 12.1 実装の側の直し（明細 4・6・20〜27）
   - _Requirements: 2.1, 4.4, 4.5, 6.2_
 - [ ] 12.2 テストの直し（明細 1〜3・5・7〜19・28〜33）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
@@ -259,3 +259,4 @@
 - 10.2: 写す行の上限はちょうど 2^20 で残り・2^20+1 で断るの両側を確かめる。部品に `named_ops_of`
 - 11-06 audit-parsers-sakura が完了へ: `Animation::interval_written` の読み手は compose の本番に 0（3.5 で `merge_brace` を消した）＝欄を消す直しは parsers・emo-atlas・seriko に及ぶので範囲の外＝完了の棚卸で `/kiro-discovery` に起票（持ち主は parsers 側）と返事した
 - 11.1: `reaches` は `to` を見てから予算を引き、断られた面は開かないだけ（`continue`）。`build_plan` の 3 種の失敗は `PlanScratch.failed_reported` で合成器 1 つにつき面ごとに初めの 1 度 `error!`・以後 `debug!`。`may_copy` の `error!` に `table`（surfaces／boxes）。`bake_emo2` は `bake_surfaces` へ
+- 12.1: `is_implemented_name` は確保しない `same_canonical` で `OVERLAY_WORDS` と比べる（`is_implemented` を広げたら一緒に直す）。持ち込みの予算に収まらない根は飛ばして後ろの根へ（`continue`・`error!` は初めの 1 度）。`may_copy` は初めの 1 度 `error!`・以後 `debug!`・Quiet は無言。行の数え方は `budget::rows` 1 つ

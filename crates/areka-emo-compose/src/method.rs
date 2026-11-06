@@ -130,11 +130,12 @@ pub enum BlendKind {
 
 /// メソッド名の正規化（前後の空白を落とし・小文字にし・`-` と `_` を除く）。
 ///
-/// [`ComposeMethod::from_name`] と [`crate::world::EmoWorld::dangling_pattern_targets`] が
-/// **同じ規則**で語を比べるための唯一の定義である。`from_name` は未知の語で `debug!` を出すので
-/// 照会の側からは呼べない（要件 3.5）が、正規化だけはここを共有する。
+/// [`ComposeMethod::from_name`]・[`is_known_name`]・[`crate::pattern_word::pattern_word`]（照会の
+/// [`crate::world::EmoWorld::dangling_pattern_targets`] もこれを通る）が**同じ規則**で語を比べるための唯一の
+/// 定義である。`from_name` は未知の語で `debug!` を出すので照会の側からは呼べない（要件 3.5）が、正規化だけは
+/// ここを共有する。合成のたびに引く [`is_implemented_name`] は確保しない [`same_canonical`] で同じ規則を当てる。
 ///
-/// 合成のたびに引かれるので、もう正規化済みの語（ふつうの `overlay` など）は写さずに借りて返す（指摘 29）。
+/// もう正規化済みの語（ふつうの `overlay` など）は写さずに借りて返す（指摘 29）。
 pub(crate) fn canonical_method_name(name: &str) -> Cow<'_, str> {
     let name = name.trim();
     if name
@@ -182,7 +183,7 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
         // overlay 同義群（ukadoc 同義明文）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#add:1
-        "overlay" | "add" | "bind" => ComposeMethod::Overlay,
+        c if OVERLAY_WORDS.contains(&c) => ComposeMethod::Overlay,
         "overlayfast" => ComposeMethod::OverlayFast,
         "interpolate" => ComposeMethod::Interpolate,
         "replace" => ComposeMethod::Replace,
@@ -194,10 +195,24 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
     })
 }
 
+/// `name` を [`canonical_method_name`] と同じ規則で正規化した語が、正規化済みの語 `canon` と同じか（確保しない）。
+fn same_canonical(name: &str, canon: &str) -> bool {
+    name.trim()
+        .bytes()
+        .filter(|&b| b != b'-' && b != b'_')
+        .map(|b| b.to_ascii_lowercase())
+        .eq(canon.bytes())
+}
+
+/// [`ComposeMethod::Overlay`] へ写す語（正規化済み・[`known_method`] と [`is_implemented_name`] が共有する）。
+const OVERLAY_WORDS: [&str; 3] = ["overlay", "add", "bind"];
+
 /// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
 /// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `debug!` を出さない）。
+/// 実装済みは `Overlay` だけ（[`ComposeMethod::is_implemented`]）なので、その語と比べる。合成のたびに引かれる
+/// ので確保しない（大文字や `-`・`_` の入った語でも・7 回目の指摘 4）。
 pub(crate) fn is_implemented_name(name: &str) -> bool {
-    known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
+    OVERLAY_WORDS.iter().any(|w| same_canonical(name, w))
 }
 
 /// 記録を出さずに「この描画メソッドの語が登録簿に在るか」を答える（未知の語なら false）。
@@ -378,6 +393,38 @@ mod tests {
             ComposeMethod::from_name("overlayscreen"),
             ComposeMethod::Blend(BlendMode::fast(BlendKind::Screen))
         );
+    }
+
+    /// 確保しない [`is_implemented_name`] は `from_name(..).is_implemented()` と同じ答え（大文字・区切り・空白・
+    /// 似た綴りの語も）。
+    #[test]
+    fn is_implemented_name_matches_from_name() {
+        for name in [
+            "overlay",
+            "OVERLAY",
+            " Over-Lay ",
+            "o_v-e_rlay",
+            "add",
+            "ADD",
+            "Bind",
+            "b-i-n-d",
+            "overlayfast",
+            "overlay-fast",
+            "overla",
+            "overlayy",
+            "addd",
+            "",
+            "  ",
+            "blend-add",
+            "ＯＶＥＲＬＡＹ",
+            "bïnd",
+        ] {
+            assert_eq!(
+                is_implemented_name(name),
+                ComposeMethod::from_name(name).is_implemented(),
+                "{name:?}"
+            );
+        }
     }
 
     /// 未知メソッドは原文保持の `Unknown` シームへ吸収する。

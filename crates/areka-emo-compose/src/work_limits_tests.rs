@@ -152,6 +152,60 @@ fn box_fold_drops_the_descriptor_over_the_copied_line_limit() {
     assert_eq!(errors(&logs, "写す行"), 0, "{logs}");
 }
 
+/// 7 回目の指摘 23: 上限を越えた記述子がいくつ続いても `error!` は畳み込み 1 回で初めの 1 度だけ（以後は
+/// `debug!`）。面 0 の 1 行の後、1,024 行の `surface1-1024` 類を 3 つ書くと 3 つとも捨て、記録は 1 行。
+#[test]
+fn fold_reports_the_copied_line_limit_once() {
+    let mut text = String::from("charset,UTF-8\nsurface0\n{\ncollision0,0,0,1,1,A\n}\n");
+    for k in 0..3 {
+        text.push_str(&format!(
+            "surface{}-{}\n{{\n",
+            2000 * k + 1,
+            2000 * k + 1024
+        ));
+        for c in 0..1024 {
+            text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+        }
+        text.push_str("}\n");
+    }
+    let mut world = None;
+    let logs = capture_logs(|| world = Some(EmoWorld::build(&parse(&text))));
+    let world = world.expect("組める");
+    assert!(world.surface(0).is_some(), "上限の内の面 0 は残る");
+    assert!([1, 2001, 4001].iter().all(|&i| world.surface(i).is_none()));
+    assert_eq!(errors(&logs, "写す行"), 1, "{logs}");
+    let debugs = logs
+        .lines()
+        .filter(|l| l.contains("level=DEBUG") && l.contains("写す行"))
+        .count();
+    assert_eq!(debugs, 2, "{logs}");
+}
+
+/// 7 回目の指摘 23・24: 箱でも、上限で捨てた `surface*`ブレスがいくつ続いても `error!` は 1 行。捨てた記述子の
+/// 番号も在る番号に数えるので、後の `surface.append5` を「無い番号への追記」と報告しない。
+#[test]
+fn box_fold_counts_dropped_descriptor_numbers_as_existing() {
+    let mut text = String::from(
+        "charset,UTF-8\nballoon.a\n{\nsize,10,10\n}\nsurface0\n{\nelement0,balloon,a,0,0\n}\n",
+    );
+    for _ in 0..2 {
+        text.push_str("surface1-1024\n{\n");
+        for e in 0..1024 {
+            text.push_str(&format!("element{e},balloon,a,0,0\n"));
+        }
+        text.push_str("}\n");
+    }
+    text.push_str("surface.append5\n{\nelement9,balloon,a,0,0\n}\n");
+    let world = EmoWorld::build(&parse("charset,UTF-8\n"));
+    let mut report = None;
+    let logs = capture_logs(|| {
+        report = Some(fold_boxes(&parse_boxes(&text), &BTreeMap::new(), &world).1);
+    });
+    let report = report.expect("畳める");
+    assert!(report.issues.is_empty(), "{:?}", report.issues);
+    assert_eq!(errors(&logs, "写す行"), 1, "{logs}");
+}
+
 /// 指摘 79: 面 0 … 9 がそれぞれ面 10（当たり判定 3 つ）を置く。根をまたぐ持ち込みの予算 10 は面 0〜2 の
 /// 9 本で残り 1 になり、面 3 から先には付けない。`error!` は 1 行で、黙らせる組み方では出ない。
 #[test]
@@ -182,6 +236,41 @@ fn hit_import_counts_the_regions_across_roots_against_one_budget() {
         let expected = usize::from(records.emits());
         assert_eq!(errors(&logs, "持ち込む領域"), expected, "{logs}");
     }
+}
+
+/// 7 回目の指摘 6: 根をまたぐ持ち込みの予算に収まらない根だけを飛ばし、後ろの小さな根は残りで持ち込む。面 0 は
+/// 面 10（当たり判定 3 つ）を、面 1〜3 は面 11（1 つ）を置く。予算 2 では面 0 を飛ばし、面 1・2 に 1 つずつ付けて
+/// 残り 0 になり、面 3 も飛ばす。`error!` は初めの 1 度だけ（面 3 は `debug!`）。
+#[test]
+fn hit_import_skips_only_the_roots_over_the_budget() {
+    let mut text = String::from("charset,UTF-8\nsurface0\n{\nelement0,overlay,10,0,0\n}\n");
+    for i in 1..=3 {
+        text.push_str(&format!("surface{i}\n{{\nelement0,overlay,11,0,0\n}}\n"));
+    }
+    text.push_str(
+        "surface10\n{\ncollision0,0,0,1,1,A\ncollision1,0,0,1,1,B\ncollision2,0,0,1,1,C\n}\n",
+    );
+    text.push_str("surface11\n{\ncollision0,0,0,1,1,D\n}\n");
+    let mut world = EmoWorld::build(&parse(&text));
+    let w = world.world_mut();
+    let attached: Vec<Entity> = w
+        .query_filtered::<Entity, With<HitRegions>>()
+        .iter(w)
+        .collect();
+    for e in attached {
+        w.entity_mut(e).remove::<HitRegions>();
+    }
+    let logs = capture_logs(|| attach_hit_regions_limited(&mut world, Records::Emit, 2));
+    let counts: Vec<usize> = (0..=3)
+        .map(|i| world.hit_regions(i).map_or(0, <[_]>::len))
+        .collect();
+    assert_eq!(
+        counts,
+        [0, 1, 1, 0],
+        "大きな面 0 の後ろの小さな根は持ち込む"
+    );
+    assert_eq!(errors(&logs, "持ち込む領域"), 1, "{logs}");
+    assert!(logs.contains("surface_id=0"), "{logs}");
 }
 
 /// 指摘 82: 面 0 が 2×2 の絵を持つ面 1 を (-2, 0) に置くと外形は幅 0・高さ 2。幅か高さが 0 なら

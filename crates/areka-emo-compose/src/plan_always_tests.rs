@@ -182,6 +182,40 @@ fn top_always_draws_rest_pattern_when_cell_is_empty() {
     );
 }
 
+/// 7 回目の指摘 4: 経過 0 の pattern の描画メソッドが大文字や `-`・`_` の入った語（`Over-Lay`）でも描き、
+/// 同じ合成器で繰り返し合成しても命令列と作業場の容量は伸びない（語の比べは合成のたびに引かれる）。
+#[test]
+fn always_with_uppercase_method_recomposes_without_growing() {
+    use crate::{ComposedSurface, Composer};
+
+    let text = format!(
+        "surface0\n{{\nelement0,overlay,body.png,0,0\nanimation0.interval,always\n\
+         animation0.pattern0,Over-Lay,5,0,3,4\n}}\n{TARGETS}"
+    );
+    let (world, atlas) = build(&text);
+    let pattern = PatternState::default();
+    assert_eq!(
+        compose(&world, &atlas, 0, &pattern).0,
+        vec![op("body.png", 0, 0), op("a.png", 3, 4)]
+    );
+    let (mut composer, mut out) = (Composer::new(), ComposedSurface::new(0, 0));
+    let mut run = || {
+        composer
+            .compose_into(&mut out, &world, &atlas, 0, &BindSet::default(), &pattern)
+            .expect("合成できる");
+        (
+            composer.ops.len(),
+            composer.ops.capacity(),
+            composer.scratch.capacities(),
+        )
+    };
+    let first = run();
+    assert_eq!(first.0, 2, "body と a の 2 命令");
+    for k in 0..8 {
+        assert_eq!(run(), first, "{k} 回目");
+    }
+}
+
 /// 要件 3.1・4.1: 部品（element定義で置いたサーフェス）の手書きの `always` も、部品の欄が空なら経過 0
 /// を描く。部品の欄の「消えている」で消え、一番上の同じ番号の欄は効かない。
 #[test]

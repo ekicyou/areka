@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::balloon::{self, BalloonModel};
 use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine, ShellBoxes};
 
-use crate::fold::{expand_targets_with, may_copy};
+use crate::fold::{Copied, expand_targets_with, may_copy};
 use crate::world::{EmoWorld, Records};
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
@@ -223,16 +223,17 @@ fn distribute<'a>(
     let mut existing: BTreeSet<u32> = images.keys().copied().collect();
     let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
     // 番号ごとに写す行の合計は面の畳み込みと同じ上限（指摘 78）。越えた記述子は記録して捨てる。
-    let mut copied = 0;
+    let mut copied = Copied::default();
     for definition in &boxes.definitions {
         match definition {
             BoxDefinition::Surface(surface) => {
                 let ids = expand_targets_with(&surface.targets, records);
+                // 上限で捨てる記述子の番号も在る番号に数える（後の追記を「無い番号」と報告しない・7 回目の指摘 24）。
+                existing.extend(ids.iter().copied());
                 if !may_copy(&mut copied, "boxes", &ids, surface.elements.len(), records) {
                     continue;
                 }
                 for id in ids {
-                    existing.insert(id);
                     lines.entry(id).or_default().extend(&surface.elements);
                 }
             }
