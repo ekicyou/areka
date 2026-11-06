@@ -17,7 +17,7 @@
 //! # ghost 結線モデルとの違い（kanade 自身の `real_helper_test.rs` との差分）
 //! kanade 自身のテストは DLL の**既存の親 dir**をそのまま `load_dir` として使うが、
 //! ghost の `ShioriMount.dir` は `ghost_root/ghost/master` に**固定**される
-//! （`areka_parsers::package::resolve` の規約・`real_connect` の `load_dir` は
+//! （`areka_parsers::package::resolve_with_shell` の規約・`real_connect` の `load_dir` は
 //! `shiori.dir` から直接取る）。そのため本テストは実 DLL をフィクスチャの
 //! `ghost/master/` へコピーして持ち込む（DLL 側を動かすのではなく、フィクスチャ側を
 //! DLL の所在へ合わせる、の逆）。

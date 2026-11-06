@@ -32,7 +32,7 @@ pub(super) fn on_bind<O: SurfaceOutput>(
         return;
     }
 
-    // 形ごとの当て方は `apply_bind_directive`（パーツ 1 つずつ今の `apply_named_bind`）。ここは記録と発行だけ。
+    // 形ごとの当て方は `apply_bind_directive`（パーツ 1 つずつ `apply_named_bind`）。ここは記録と発行だけ。
     let mut last_changed: Option<DisplayCommand> = None;
     for applied in apply_bind_directive(states, bind_resolver, &cue.actor, &directive) {
         let (category, part, on) = (&applied.category, &applied.part, applied.on);

@@ -1,13 +1,8 @@
-//! decode の単体テスト（タスク 4.1: surface ブロックの枠組みとヘッダの寛容スキップ）。
+//! decode の単体テストの親（`decode(lex(..))` を主題ごとの兄弟ファイルで確かめる）。
 //!
-//! 本タスクが検証するのは decode スケルトンの骨格挙動のみ:
-//! - 空入力・ヘッダのみ（charset/descript）・ヘッダ欠落が失敗せず既定状態で継続する（要件 3.1/3.2/3.3）。
-//! - `surfaceNNN` ブロックから surface ID と（当面空の）構成要素枠を取り出す（要件 4.1）。
-//! - ディスパッチ優先順位により `kero.surface.alias` / `surface.append*` が
-//!   `surfaceNNN` と誤分類されない（設計 System Flows のブロックディスパッチ）。
-//!
-//! element/collision/animation の値化・append/alias の値化はタスク 4.2〜4.6 の領分ゆえ
-//! ここでは検証しない（本タスクは枠組みのみ）。期待値はリテラル直書き（sakura 規律）。
+//! 本ファイルは共通の import と子の宣言だけを持つ。振り分けと寛容スキップは `skeleton_tests`、
+//! element・collision・animation・append・alias の値化はそれぞれの子が確かめる。
+//! 期待値はリテラル直書き（sakura 規律）。
 
 use super::decode::decode;
 use super::lexer::lex;

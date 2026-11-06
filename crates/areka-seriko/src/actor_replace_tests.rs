@@ -6,7 +6,6 @@
 
 use super::test_support::*;
 use super::*;
-use crate::bind::BindOptionDecls;
 use crate::looper::tests::{always_fire, cfg, pattern_of, table_single};
 use crate::output::{DisplayCommand, MockSurfaceOutput, RebaseKind, RebasedShow};
 use crate::table::AnimationTable;
@@ -21,38 +20,9 @@ fn resolver_of(key: &str, id: u32) -> SurfaceResolver {
     SurfaceResolver::new(BTreeMap::from([(key.to_string(), vec![id])]))
 }
 
-/// (腕, 伸び) → 1300 の sakura 解決層（既定のポリシー＝排他置換）。
-fn arm_resolver() -> BindResolver {
-    let sakura = BTreeMap::from([(("腕".to_string(), "伸び".to_string()), 1300)]);
-    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
-}
-
-/// 差し替えの事実（この檻は判定を見ない）。
-fn no_facts() -> crate::SkinFacts {
-    crate::SkinFacts::new(BTreeMap::new(), BTreeMap::new(), BTreeMap::new())
-}
-
 /// `\![bind,腕,伸び,1]` の cue。
 fn arm_on_cue(scope: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::command_carrier(
-            "bind",
-            vec!["腕".to_string(), "伸び".to_string(), "1".to_string()],
-        ),
-        duration: 0.0,
-    }
-}
-
-/// `\b[key]` の cue。
-fn balloon_cue(scope: &str, key: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(scope),
-        command: CueCommand::BalloonSurface { key: key.into() },
-        duration: 0.0,
-    }
+    carrier_cue(scope, "bind", &["腕", "伸び", "1"])
 }
 
 /// 記録の中の `Rebased` の位置をすべて返す。
@@ -91,7 +61,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
     let (mut sink, handle) = spawn_seriko(
         resolver_of("通常", 2100),
         crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
-        arm_resolver(),
+        arm_bind_resolver(),
         cfg(old, always_fire()),
         out,
     );
@@ -99,7 +69,7 @@ fn shell_replace_emits_one_rebased_with_same_surface_and_new_default_binds() {
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // Show 2100
     sink.send_tick(0);
     sink.send_tick(1000); // 古い表で発火（2106）
-    CueSink::emit(&mut sink, arm_on_cue("0")); // 動的な着せ替え {1100,1207,1300}
+    CueSink::emit(&mut sink, arm_on_cue("0")); // 動的な着せ替え {1100,1207,1302}
 
     let new = table_single(2100, 0, Interval::Random { k: 4 }, &[(3000, 0)]);
     assert!(sink.send_replace(
@@ -181,13 +151,21 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
     let (mut sink, handle) = spawn_seriko(
         resolver_of("通常", 2100),
         crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
-        arm_resolver(),
+        arm_bind_resolver(),
         cfg(shell, always_fire()),
         out,
     );
 
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常"));
-    CueSink::emit(&mut sink, balloon_cue("0", "5"));
+    CueSink::emit(
+        &mut sink,
+        cue(
+            0.0,
+            "0",
+            CueCommand::BalloonSurface { key: "5".into() },
+            0.0,
+        ),
+    );
     CueSink::emit(&mut sink, emote_cue(0.0, "1", "-1")); // scope 1 はシェルだけ（非表示）
     sink.send_tick(0);
     sink.send_tick(1000); // シェルのループが発火（2106）
@@ -233,7 +211,7 @@ fn balloon_replace_keeps_shell_side_and_reports_balloon_surfaces() {
     assert!(carries_frame(&after[0], 2110), "シェルのループは続く");
     assert!(
         matches!(&after[0], DisplayCommand::Show { surface_id: 2100, binds, .. }
-            if *binds == BindSet::from_ids([1100, 1207, 1300])),
+            if *binds == BindSet::from_ids([1100, 1207, 1302])),
         "シェルの面と着せ替えは不変: {:?}",
         after[0]
     );
@@ -283,7 +261,7 @@ fn balloon_replace_reports_unseen_scopes_from_new_tables_with_surface_zero() {
     );
 }
 
-/// 殻を経ずに既存の処理へ届いた依頼は `error!` を 1 件残して捨てる（状態・発行は不変）。
+/// 殻を経ずに `handle_message` へじかに届いた依頼は `error!` を 1 件残して捨てる（状態・発行は不変）。
 #[test]
 fn replace_reaching_handle_message_directly_logs_error_and_is_dropped() {
     let resolver = tiny_resolver();
@@ -383,7 +361,7 @@ fn shell_replace_rebased_carries_fallback_surface_for_missing_current_surface() 
     );
 }
 
-/// 書き換えの記録はスコープごとに 1 件・事象名で見分けられる（要件 3.3）。
+/// 書き換えの記録はスコープごとに 1 件・事象名で見分けられる（descript-window-keys 要件 3.3）。
 #[test]
 fn shell_fallback_outcomes_log_one_warn_each() {
     let (logs, ()) = capture_logs_flow(|| {
@@ -409,4 +387,30 @@ fn shell_fallback_outcomes_log_one_warn_each() {
         1,
         "{logs}"
     );
+}
+
+/// 役者を止めた後の差し替えの依頼は受け手が無いので偽を返す（呼び手が `error!` を残す）。
+#[test]
+fn replace_after_actor_stopped_returns_false() {
+    let (sink, handle) = spawn_seriko(
+        resolver_of("通常", 2100),
+        crate::DefaultBinds::uniform(BindSet::from_ids([1100])),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        MockSurfaceOutput::new(),
+    );
+    sink.close().expect("Close を送れること");
+    handle.join().expect("Close で正常終了する");
+
+    assert!(!sink.send_replace(
+        SerikoReplace::Shell {
+            epoch: 1,
+            resolver: resolver_of("通常", 2100),
+            static_binds: crate::DefaultBinds::uniform(BindSet::from_ids([1100])),
+            bind_resolver: BindResolver::empty(),
+            shell_table: AnimationTable::empty(),
+            fallback: crate::ShellSurfaceFallback::default(),
+        },
+        no_facts()
+    ));
 }

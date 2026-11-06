@@ -1,6 +1,7 @@
 //! task 11.2（要件 9.1・9.5・11.2）: emo2 まばたき bind の静的不活性テーマ。
 
 use crate::plan::build_plan;
+use areka_parsers::shell::AppendTarget;
 
 use super::test_support::{on_params, parse_emo2_shell, shell_master_dir, solid_opaque};
 use super::{
@@ -150,7 +151,7 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
     let s1000 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 1000)
+        .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("emo2 surfaces.txt に surface1000 が存在する");
 
     // 1400（bind+random）と 1403（bind）は pattern0（index==0）を持たない再生アニメである。

@@ -40,8 +40,8 @@ fn header_only_is_not_retained() {
     );
 }
 
-/// `surface0` ブロック → surface ID 0 を持つ枠が 1 個。element 本体はタスク 4.2 で充填。
-/// （animation はタスク 4.3 のシームゆえ空・append/alias は本タスクで生成しない。）
+/// `surface0` ブロック → surface ID 0 を持つ枠が 1 個（element は 1 つ・animation は無いので空）。
+/// surface のブレスから append/alias は生じない。
 #[test]
 fn surface_zero_block_extracts_id_zero() {
     let input = "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\n";
@@ -50,7 +50,6 @@ fn surface_zero_block_extracts_id_zero() {
     assert_eq!(
         shell.surfaces[0],
         Surface {
-            id: 0,
             targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
@@ -62,7 +61,7 @@ fn surface_zero_block_extracts_id_zero() {
             animations: vec![],
         }
     );
-    // append/alias は本タスクでは生成しない。
+    // surface のブレスから append/alias は生じない。
     assert!(shell.appends.is_empty());
     assert!(shell.aliases.is_empty());
 }
@@ -73,22 +72,29 @@ fn surface_large_id_is_extracted() {
     let input = "surface1000\n{\ncollision0,93,62,271,130,Head\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 1000);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(1000)]);
 }
 
-/// 非数値 ID（`surface` の後ろに数字がない崩れヘッダ）→ パニックせず既定 0 に倒す（要件 3.3）。
+/// 非数値 ID（`surface` の後ろに数字がない崩れヘッダ）→ 0 にせず記述子を飛ばし、記述子が
+/// 残らないブレスは積まない（パニックしない・指摘 36）。
 #[test]
-fn malformed_surface_id_defaults_to_zero() {
+fn malformed_surface_id_is_skipped_not_zero() {
     let input = "surface\n{\nelement0,overlay,x.png,0,0\n}\n";
-    let shell = decode(lex(input));
-    assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 0);
+    let text = crate::shell::parse_all(input);
+    assert!(text.shell.surfaces.is_empty());
+    assert_eq!(
+        text.issues,
+        vec![crate::shell::ShellIssue::UnreadableNumber {
+            heading: "surface".into(),
+            text: String::new(),
+        }]
+    );
 }
 
 /// ヘッダ欠落（surface 定義がいきなり本体行のみ・崩れ入力）→ 失敗せず継続（要件 3.3）。
 #[test]
 fn missing_header_does_not_fail() {
-    // ブロック開始のない孤立行群。lexer は TopLevel/Raw に落とし、decode は吸収する。
+    // ブロック開始のない孤立行群。lexer は TopLevel に落とし、decode は吸収する。
     let input = "element0,overlay,x.png,0,0\ncollision0,1,2,3,4,Head\n";
     let shell = decode(lex(input));
     assert_eq!(
@@ -115,7 +121,7 @@ fn decode_is_deterministic() {
 }
 
 /// ディスパッチ優先順位: `kero.surface.alias` / `surface.append*` を `surfaceNNN` と誤分類しない。
-/// 本タスクでは alias/append の値化は行わない（4.4/4.5）ので surfaces のみを検査する。
+/// alias/append の値化は兄弟の `alias_tests`・`append_tests` が確かめるので、ここでは surfaces のみを検査する。
 /// 実 surfaceNNN（`surface2100`）だけが surfaces に入り、alias/append ヘッダ由来の
 /// 偽 surface が混入しないことを保証する。
 #[test]
@@ -137,5 +143,5 @@ kero.surface.alias
     let shell = decode(lex(input));
     // surfaces に入るのは実 surface2100 のみ（alias/append を surface と誤読しない）。
     assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 2100);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(2100)]);
 }

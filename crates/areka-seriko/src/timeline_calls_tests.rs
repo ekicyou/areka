@@ -8,18 +8,8 @@ use crate::table::FrameAct;
 use areka_emo_compose::ComposeMethod;
 use std::num::NonZeroU64;
 
-/// 描くコマ。
-fn draw(surface_id: i64, wait_ms: u32) -> LoopFrame {
-    LoopFrame {
-        surface_id,
-        picture: None,
-        method: ComposeMethod::Overlay,
-        act: FrameAct::Draw,
-        wait_ms,
-        x: 0,
-        y: 0,
-    }
-}
+// 描くコマ。
+use crate::test_support::draw_frame as draw;
 
 /// 働きのコマ（番号の欄は読み込みのまま残る）。
 fn act(act: FrameAct, surface_id: i64, wait_ms: u32) -> LoopFrame {
@@ -45,7 +35,7 @@ fn move_with_minus_one_does_not_stop() {
     // 末尾の働きのコマも止まらず残る。
     let frames = vec![draw(10, 0), act(FrameAct::Move, -1, 50)];
     assert_eq!(frame_at(&frames, 50), FrameStatus::FinishedResidual(1));
-    // 描くコマの -1 は今までどおり止まる。
+    // 描くコマの -1 は止まる。
     let frames = vec![draw(10, 0), draw(-1, 50)];
     assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
 }
@@ -94,4 +84,36 @@ fn always_action_frame_with_minus_one_is_a_frame() {
     let period = NonZeroU64::new(100).unwrap();
     assert_eq!(always_at(&frames, period, None, 60), AlwaysView::Frame(1));
     assert_eq!(visible_frame(&frames, 1), Some(0));
+}
+
+/// 描くコマの `-1` のすぐ後に待ち 0 の働きのコマが続いても、`-1` で止まる（今のコマは働きのコマでも、
+/// 欄に置くはずのコマが `-1` だから・ukadoc pattern の項）。
+#[test]
+fn minus_one_followed_by_zero_wait_action_frame_stops() {
+    let frames = vec![draw(100, 0), draw(-1, 50), act(FrameAct::Inert, 0, 0)];
+    assert_eq!(frame_at(&frames, 49), FrameStatus::Active(0));
+    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
+    let frames = vec![
+        draw(100, 0),
+        draw(-1, 50),
+        act(start(3), 0, 0),
+        draw(101, 50),
+    ];
+    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
+    // 描くコマが前に無い働きのコマは止めない（欄を外すだけ）。
+    let frames = vec![act(start(3), 0, 0), draw(101, 50)];
+    assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
+}
+
+/// `-1` のすぐ後に待ち 0 の描くコマがあっても、`-1` に着いた時点で止まる（後ろの描くコマへ進まない・
+/// ukadoc「サーフェス番号に-1でそのアニメーションの停止」・areka-P0-seriko-loop 要件 4.3）。
+#[test]
+fn minus_one_followed_by_a_zero_wait_draw_frame_stops() {
+    let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 0)];
+    assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
+    assert_eq!(frame_at(&frames, 50), FrameStatus::Stopped);
+    assert_eq!(frame_at(&frames, u64::MAX), FrameStatus::Stopped, "恒久");
+    // 刻みが `-1` の短い窓 [50,55) を飛び越えても止まる。
+    let frames = vec![draw(100, 0), draw(-1, 50), draw(101, 5)];
+    assert_eq!(frame_at(&frames, 60), FrameStatus::Stopped);
 }

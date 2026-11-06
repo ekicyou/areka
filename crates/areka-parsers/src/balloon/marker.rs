@@ -43,7 +43,7 @@ impl MarkerPoint {
     }
 }
 
-/// 読めなかった座標の鍵と、その生の値。
+/// 数として読めなかった鍵と、その生の値（矢印の座標の鍵と、バルーンの数の鍵の両方で使う）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyIssue {
     pub key: &'static str,
@@ -57,7 +57,7 @@ pub struct ArrowKeys {
     pub arrow0: MarkerPoint,
     /// 下（縦書きでは左）。
     pub arrow1: MarkerPoint,
-    /// `arrow.filename`（拡張子なし・そのまま）。
+    /// `arrow.filename`（拡張子なし・そのまま・空は `None`）。
     pub filename: Option<String>,
     /// 読めなかった座標の鍵と値（鍵の並び順）。
     pub issues: Vec<KeyIssue>,
@@ -93,7 +93,10 @@ pub(super) fn read_arrow_keys(merged: &BTreeMap<String, String>) -> ArrowKeys {
         arrow0,
         arrow1,
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#arrow.filename_2c_30d5_30a1_30a4_30eb_540d:1
-        filename: merged.get("arrow.filename").cloned(),
+        filename: merged
+            .get("arrow.filename")
+            .filter(|v| !v.is_empty())
+            .cloned(),
         issues,
     }
 }

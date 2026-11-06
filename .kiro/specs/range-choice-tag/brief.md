@@ -127,3 +127,9 @@
 - **見つけた穴・古くなった記述**:
   - 上の棚卸㉔の「kanade と `crates/areka/src/emo2_boot/` は触らない見込み」は古い（`talk_lifecycle.rs` が要る）。roadmap の「直列の列」の注記「kanade と `emo2_boot/` には触らない」も同じく古い。
   - dola の合図の種類（`crates/dola/src/cue/command.rs` の `CueCommand`）には「種類が増えうる」の印が無い。種類を足すと、dola を使う外の人の、全部の種類を並べる分け方が壊れる＝次のリリースへの申し送りに 1 項目足す（`anchor-tag-canon` と同じ扱い）。
+
+## audit-parsers-sakura の申し送り（2026-11-06 同 spec のタスク 8.1 の `/kiro-discovery` で追記）
+
+- **追記の件: 旧形の `\q0[ID][タイトル]` を選択肢として出す**（区分 C・ukadoc の「[旧仕様] 選択肢」）。今の areka は旧形を見えない Raw として捨てる（完了した spec の要件 5.3）。`audit-parsers-sakura` の指摘 26 は、旧形の字が吹き出しに漏れるのを止めるところまでにした（同 spec の design.md「設計の討議で確定した 7 件」の 3）。SSP は同じ台本で旧形を**選択肢**として出し、タイトルだけが見え、選択待ちと時間切れのトークまで動いた（同 spec の research.md 11 節・2026-11-05 に SSP の MCP で測った・台本 `\0\b[2]\![set,choicetimeout,20000]A\q0[OnMeasureYes][はい]B\q1[OnMeasureNo][いいえ]C`）。
+- **なぜこの spec へ**: 触る場所が同じ＝選択肢の読み（`crates/areka-parsers/src/sakura/lexer.rs` の `legacy_q_title_end`・`legacy_q_star` と `decode.rs` の旧形の見分け）と、選択待ちの区切り（`crates/areka-sakura/src/compile.rs` の `\q` の合図を数える条件・`drive.rs` の選択肢の ID の一覧）。旧形を `\q[タイトル,ID]` と同じ合図へ写せば、下流は区別しなくてよい見込み。
+- **規模**: +2〜3 タスク（読みの写し・旧形の通し番号の扱い・テスト）。旧形の通し番号（`\q0`・`\q1`）が並びや ID の扱いに効くかは、要件の段で ukadoc を引き、読めない点は SSP の MCP で測る（打つ前に許し）。

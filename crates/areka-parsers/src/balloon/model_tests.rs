@@ -11,18 +11,12 @@
 
 use std::collections::BTreeMap;
 
+use super::parse_tests::map;
+
 use crate::balloon::{
     BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
     FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint, parse,
 };
-
-/// テスト用: `&[(k, v)]` からフラット KV `BTreeMap` を組む小ヘルパ（parse_tests 流儀）。
-fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-        .collect()
-}
 
 #[test]
 fn window_position_accessors_read_components() {
@@ -237,21 +231,6 @@ fn balloon_model_all_unspecified_is_none_distinct_from_zero() {
     assert_ne!(unspecified.windowposition(), zeros.windowposition());
 }
 
-#[test]
-fn types_derive_copy_and_clone_where_specified() {
-    // 整数のみの型は Copy（accessor が値返しできる根拠）。
-    let wp = WindowPosition::new(Some(1), Some(2));
-    let copied = wp; // Copy
-    assert_eq!(wp, copied);
-    let color = FontColor::new(Some(1), Some(2), Some(3));
-    let color_copied = color; // Copy
-    assert_eq!(color, color_copied);
-    // Font は String を含むため Clone のみ（Copy 不可）。
-    let font = Font::new(Some("A".to_string()), Some(1), color);
-    let font_cloned = font.clone();
-    assert_eq!(font, font_cloned);
-}
-
 // ── budoux_newline 拡張キーの転記（要件 1.1/1.5・writing_mode 写経） ──
 
 /// 基層/画像別上書き層の後勝ちマージで `budoux_newline` が転記される（要件 1.1）。
@@ -261,8 +240,8 @@ fn types_derive_copy_and_clone_where_specified() {
 #[test]
 fn budoux_newline_two_layer_merge_image_wins() {
     // 両層に指定 → 画像別層が descript 基層を上書き（後勝ち・要件 1.1）。
-    let descript = kv_map(&[("budoux_newline", "0")]);
-    let image = kv_map(&[("budoux_newline", "1")]);
+    let descript = map(&[("budoux_newline", "0")]);
+    let image = map(&[("budoux_newline", "1")]);
     let merged = parse(&descript, Some(&image));
     assert_eq!(merged.budoux_newline(), Some("1"));
 
@@ -281,7 +260,7 @@ fn budoux_newline_two_layer_merge_image_wins() {
 /// テキスト層の責務・[areka-parser-transcribes-tree-downstream]）。
 #[test]
 fn budoux_newline_raw_string_no_validation() {
-    let descript = kv_map(&[("budoux_newline", "abc")]);
+    let descript = map(&[("budoux_newline", "abc")]);
     let got = parse(&descript, None);
     // 未知語彙でも解釈せず生文字列のまま転記する。
     assert_eq!(got.budoux_newline(), Some("abc"));
@@ -293,7 +272,7 @@ fn budoux_newline_raw_string_no_validation() {
 /// 影響を受けない（完全一致引きゆえ既存ゴースト無害）。
 #[test]
 fn budoux_newline_absent_is_none_and_other_keys_unaffected() {
-    let descript = kv_map(&[("origin.x", "12"), ("writing_mode", "vertical_rl")]);
+    let descript = map(&[("origin.x", "12"), ("writing_mode", "vertical_rl")]);
     let got = parse(&descript, None);
     assert_eq!(got.budoux_newline(), None);
     // 既存の他キーは budoux_newline 追加の影響を受けない（既存ゴースト挙動不変）。
@@ -356,7 +335,7 @@ fn balloon_cursor_default_is_all_unspecified() {
 /// 2 層マージ（既存 `parse` の `merged` 機構）に cursor.* が相乗りする。
 #[test]
 fn cursor_keys_populate_cursor_model_via_merge() {
-    let descript = kv_map(&[
+    let descript = map(&[
         ("cursor.style", "square"),
         ("cursor.brush.color.r", "105"),
         ("cursor.brush.color.g", "25"),
@@ -387,7 +366,7 @@ fn cursor_keys_populate_cursor_model_via_merge() {
 /// cursor.* 未記載の descript では `cursor` 全フィールドが未指定（`None`／既定）になる（要件 4.3/6.1）。
 #[test]
 fn cursor_absent_yields_all_unspecified() {
-    let descript = kv_map(&[("origin.x", "0"), ("font.height", "28")]);
+    let descript = map(&[("origin.x", "0"), ("font.height", "28")]);
     let got = parse(&descript, None);
     let cursor = got.cursor();
 
@@ -404,8 +383,8 @@ fn cursor_absent_yields_all_unspecified() {
 /// cursor.* の画像別上書きは既存 2 層後勝ちマージに相乗りする（要件 4.2・R3.2）。
 #[test]
 fn cursor_keys_image_layer_overrides_descript() {
-    let descript = kv_map(&[("cursor.style", "square"), ("cursor.brush.color.r", "105")]);
-    let image = kv_map(&[("cursor.brush.color.r", "10")]);
+    let descript = map(&[("cursor.style", "square"), ("cursor.brush.color.r", "105")]);
+    let image = map(&[("cursor.brush.color.r", "10")]);
     let got = parse(&descript, Some(&image));
 
     // 画像別層が同一キーを後勝ち上書き（R3.2）。
@@ -418,7 +397,7 @@ fn cursor_keys_image_layer_overrides_descript() {
 /// 寛容パス素通しのまま（KV 層が語彙を落とさない＝6.2 の語彙シーム）。
 #[test]
 fn cursor_unmodeled_subkeys_do_not_leak_into_modeled_fields() {
-    let descript = kv_map(&[
+    let descript = map(&[
         ("cursor.style", "square"),
         ("cursor.shadowcolor.r", "77"),
         ("cursor.shadowcolor.g", "77"),
@@ -439,7 +418,7 @@ fn cursor_unmodeled_subkeys_do_not_leak_into_modeled_fields() {
 /// （「cursor キーを font へ巻き込まない」既存不変条件の分離側・要件 6.2）。
 #[test]
 fn cursor_font_color_does_not_fold_into_font_color() {
-    let descript = kv_map(&[("font.color.r", "0"), ("cursor.font.color.r", "255")]);
+    let descript = map(&[("font.color.r", "0"), ("cursor.font.color.r", "255")]);
     let got = parse(&descript, None);
 
     // font.color.r は descript の 0（cursor.font.color.r の 255 に汚染されない）。
@@ -457,7 +436,7 @@ fn cursor_font_color_does_not_fold_into_font_color() {
 /// 文字列フィールドの独立欠落を 1 本で檻に入れる）。
 #[test]
 fn cursor_subkeys_populate_independently_per_key() {
-    let descript = kv_map(&[
+    let descript = map(&[
         // brush は g のみ、pen は b のみ、font は 1 成分も指定しない。
         ("cursor.brush.color.g", "40"),
         ("cursor.pen.color.b", "200"),
@@ -492,7 +471,7 @@ fn cursor_subkeys_populate_independently_per_key() {
 #[test]
 fn cursor_style_value_variants_transcribed_verbatim() {
     for style in ["square", "underline", "square+underline", "none", "wobble"] {
-        let descript = kv_map(&[("cursor.style", style)]);
+        let descript = map(&[("cursor.style", style)]);
         let got = parse(&descript, None);
         // 未知語彙・複合語彙でも解釈せず生文字列のまま転記する（不透明転写）。
         assert_eq!(got.cursor().style(), Some(style), "style={style:?}");
@@ -504,7 +483,7 @@ fn cursor_style_value_variants_transcribed_verbatim() {
 #[test]
 fn cursor_blendmethod_value_variants_transcribed_verbatim() {
     for blend in ["none", "notmaskpen", "alpha"] {
-        let descript = kv_map(&[("cursor.blendmethod", blend)]);
+        let descript = map(&[("cursor.blendmethod", blend)]);
         let got = parse(&descript, None);
         assert_eq!(got.cursor().blendmethod(), Some(blend), "blend={blend:?}");
     }

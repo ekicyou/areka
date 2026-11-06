@@ -153,7 +153,6 @@ const IMAGES: &[(&str, u8)] = &[("p.png", 40), ("q.png", 120), ("r.png", 200)];
 fn atlas() -> AtlasTable {
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements: IMAGES
             .iter()

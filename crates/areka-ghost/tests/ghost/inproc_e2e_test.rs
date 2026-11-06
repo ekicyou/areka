@@ -848,7 +848,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を inproc_connect へ渡す
     // （`boot()` の InProc arm が `inproc_connect(mount.shiori.clone())` を呼ぶのと同じ導出）。
-    let mount = package::resolve(ghost_root, DefaultEncoding::Utf8)
+    let mount = package::resolve_with_shell(ghost_root, DefaultEncoding::Utf8, None)
         .expect("共有テストゴーストは実マウント解決を成功裏に通過すべき（boot 内部と同一契約）");
 
     // Recorder ハンドルを spawn 後のアクタースレッドからテストスレッドへ逃がす共有スロット。
@@ -1036,7 +1036,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 /// I3 用フィクスチャ組み立てヘルパ（`shiori_wiring.rs::build_shiori_mount` を鏡写しにしたもの）。
 ///
 /// 一意な一時ゴースト（`ghost/master/descript.txt`＋`shell/master/` dir）を作り、本番と同じ
-/// 経路（`package::resolve`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
+/// 経路（`package::resolve_with_shell`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
 /// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。`shiori_line` が
 /// `Some(name)` なら descript に `shiori,<name>` 行を書き `file: Some(name)`、`None` なら行を
 /// 書かず `file: None`（resolve は推測しない）。掃除のため root パスも返す（呼び出し側が
@@ -1066,7 +1066,7 @@ fn build_i3_mount(shiori_line: Option<&str>, dll_bytes: Option<&[u8]>) -> (Shior
     std::fs::write(master_dir.join("descript.txt"), descript)
         .expect("fixture descript.txt 書き込みに失敗");
 
-    let mount = package::resolve(&root, DefaultEncoding::Ansi)
+    let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
         .expect("fixture ghost_root の resolve に失敗");
     let shiori = mount.shiori;
 

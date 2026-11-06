@@ -11,24 +11,7 @@ use super::model::{
     Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
     Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
-use super::parse;
-
-/// 空入力は空 `Shell`（surfaces/appends/aliases すべて空）を返す（要件 2.2）。
-#[test]
-fn empty_input_yields_empty_shell() {
-    let shell = parse("");
-    assert_eq!(
-        shell,
-        Shell {
-            surfaces: vec![],
-            appends: vec![],
-            aliases: vec![],
-            animation_sort: None,
-            collision_sort: None,
-            definitions: vec![],
-        }
-    );
-}
+use super::{ShellIssue, parse, parse_all};
 
 /// 空白・ヘッダのみの入力も空 `Shell` を返す（寛容スキップ・要件 2.2/9.3）。
 #[test]
@@ -93,7 +76,6 @@ smile,[0,1,2]
 
     let expected = Shell {
         surfaces: vec![Surface {
-            id: 0,
             targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
@@ -165,68 +147,35 @@ this_is_a_garbage_line_without_meaning
 ";
     let shell = parse(input);
     assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].id, 0);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(0)]);
     assert_eq!(shell.surfaces[0].elements.len(), 1);
     assert_eq!(shell.surfaces[0].elements[0].path.as_str(), "body.png");
 }
 
-// --- タスク 1.3: 公開 `parse()` 経由の method 忠実転記マトリクス＋Interval::Other 転記 ---
-//
-// タスク 1.2 の decode 分岐（overlay フィルタ撤去・fallback-Bind 撤去）が公開 facade
-// `parse()` を通しても保たれることを end-to-end で確定させる（要件 2.1/4.6/8.2/8.4）。
-// decode_tests は decode 単体を、本テストは lex→decode 結線後の観測面をピンする。
-
-/// 公開 `parse()` 経由でも method 忠実転記マトリクス（overlay/replace/未知名/欠落）が
-/// 全行保存される（要件 2.1/4.6/8.4）。overlay フィルタが復活すると 4 行が overlay 1 行に
-/// 激減し len==4 が FAIL する（facade 側の行数保存の檻）。
+/// 終わりで閉じていないブレスは中身を今どおり落とし（Shell・箱・描けない行のどれにも入らない）、
+/// `parse_all` が見出しと行の番号を `UnclosedAtEnd` として返す。前のブレスは読む（指摘 34）。
 #[test]
-fn parse_transcribes_full_method_matrix() {
+fn parse_all_reports_unclosed_final_brace() {
     let input = "\
 surface0
 {
-animation0.interval,bind
-animation0.pattern0,overlay,100,0,0,0
-animation0.pattern1,replace,101,0,0,0
-animation0.pattern2,frobnicate,102,0,0,0
-animation0.pattern3
+element0,overlay,a.png,0,0
 }
-";
-    let shell = parse(input);
-    assert_eq!(shell.surfaces.len(), 1);
-    let patterns = &shell.surfaces[0].animations[0].patterns;
-    assert_eq!(patterns.len(), 4);
-    let methods: Vec<&str> = patterns.iter().map(|p| p.method.as_str()).collect();
-    // overlay/replace/未知名は verbatim・欠落は空文字（下流 Unknown 吸収）。
-    assert_eq!(methods, vec!["overlay", "replace", "frobnicate", ""]);
-}
-
-/// 公開 `parse()` 経由でも未認識 interval キーワード（`sometimes`）は `Interval::Bind` へ
-/// 倒れず `Interval::Other("sometimes")` へ忠実転記され、隣接する正当な animation
-/// （`random,4`）は影響を受けず decode される（要件 2.1/8.2）。fallback-Bind が復活すると
-/// interval==Bind となり Other アサートが FAIL する。
-#[test]
-fn parse_transcribes_unrecognized_interval_as_other_with_surviving_neighbor() {
-    let input = "\
-surface0
+surface9
 {
-animation0.interval,sometimes,5
-animation0.pattern0,overlay,10,0,0,0
-animation1.interval,random,4
-animation1.pattern0,overlay,20,0,0,0
-}
+element0,overlay,x.png,0,0
+element1,replace,y.png,0,0
 ";
-    let shell = parse(input);
-    assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].animations.len(), 2);
-    // sometimes は Interval::Other へ忠実転記（Bind へ倒さない）・pattern は残る。
+    let text = parse_all(input);
+    assert_eq!(text.shell.surfaces.len(), 1);
+    assert_eq!(text.boxes.len(), 1);
+    assert!(text.undrawn.is_empty());
     assert_eq!(
-        shell.surfaces[0].animations[0].interval,
-        Interval::Other("sometimes".into())
+        text.issues,
+        vec![ShellIssue::UnclosedAtEnd {
+            heading: "surface9".to_string(),
+            line: 5,
+        }]
     );
-    assert_eq!(shell.surfaces[0].animations[0].patterns.len(), 1);
-    // 隣接する正当な animation は random,4 として decode される。
-    assert_eq!(
-        shell.surfaces[0].animations[1].interval,
-        Interval::Random { k: 4 }
-    );
+    assert_eq!(text.shell, parse(input));
 }

@@ -13,12 +13,10 @@ use areka_actor::reply_channel;
 use tracing::Level;
 
 use super::test_support::{
-    CapturedEvent, build_two_face_assets, capture, make_world_with_gpu, pattern_overlay_at,
-    set_window_dpi, spawn_window_with_dpi,
+    CapturedEvent, INFO_LINE_MESSAGE, build_two_face_assets, capture, hide_ok, make_world_with_gpu,
+    pattern_overlay_at, set_window_dpi, show_with_ok, spawn_window_with_dpi,
 };
 use super::timing::PERF_LINE_MESSAGE;
-
-const SHOW_LINE_MESSAGE: &str = "apply(ShowSurface): 表示・マスクを更新";
 
 /// 小さい外形（4×3）。DPI 96→100 で物理寸が 4×3 のまま変わらないので、拡大率だけの替わりを作れる。
 const W: u32 = 4;
@@ -36,9 +34,7 @@ fn attach(
 ) -> Entity {
     let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas, _, _) = build_two_face_assets(W, H);
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), ownership)
         .expect("所有権の設定は Ok");
@@ -52,36 +48,7 @@ fn show(
     binds: BindSet,
     pattern: PatternState,
 ) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id,
-            binds,
-            pattern,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "ShowSurface（面 {surface_id}）が Ok でない"
-    );
-}
-
-fn hide(presenter: &mut EmoPresenter, world: &mut World) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target: TargetId(0),
-            reply: Some(tx),
-        },
-    );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
+    show_with_ok(presenter, world, TargetId(0), surface_id, binds, pattern);
 }
 
 /// 表示の行を順に `(水準, size_changed)` で返す。どの行も直後が perf の行で、欄の集合はすべて同じ
@@ -90,7 +57,7 @@ fn show_lines(events: &[CapturedEvent]) -> Vec<(Level, String)> {
     let idx: Vec<usize> = events
         .iter()
         .enumerate()
-        .filter(|(_, e)| e.message() == SHOW_LINE_MESSAGE)
+        .filter(|(_, e)| e.message() == INFO_LINE_MESSAGE)
         .map(|(i, _)| i)
         .collect();
     let perfs = events
@@ -213,7 +180,7 @@ fn state_changes_and_reshow_after_hide_are_info_on_the_shell() {
         // 窓の大きさだけが替わる形（同じ面では起きないので前の原寸を書き換えて作る）。
         presenter.targets.get_mut(&TargetId(0)).unwrap().native_size = Some((1, 1));
         show(&mut presenter, &mut world, 3000, b1(), frame(2)); // 大きさ
-        hide(&mut presenter, &mut world);
+        hide_ok(&mut presenter, &mut world, TargetId(0));
         show(&mut presenter, &mut world, 3000, b1(), frame(2)); // 隠した後の出し直し
         show(&mut presenter, &mut world, 3000, b1(), frame(2)); // コマ送り（同じ中身）
     });
@@ -324,7 +291,7 @@ fn balloon_reveal_is_info_and_same_frame_while_hidden_is_debug() {
             BindSet::default(),
             frame(1),
         ); // コマ送り
-        hide(&mut presenter, &mut world);
+        hide_ok(&mut presenter, &mut world, TargetId(0));
         show(
             &mut presenter,
             &mut world,

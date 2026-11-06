@@ -16,8 +16,8 @@ areka-emo-compose = { path = "../areka-emo-compose" }
 areka-actor = { path = "../areka-actor" }
 wintf = { path = "../wintf" }
 bevy_ecs = { workspace = true }
-# display.rs は D2D の DXGI_FORMAT_B8G8R8A8_UNORM（workspace 既定の `Win32_Graphics_Dxgi_Common`
-# で有効）のみを要する。swap chain 本体型（`Win32_Graphics_Dxgi`）は不要（自前供給面は撤去済み）。
+# display.rs（D2D の型と DXGI_FORMAT_B8G8R8A8_UNORM・workspace 既定の features で有効）と command.rs
+# （`windows::core::Error`）が使う。swap chain 本体型（`Win32_Graphics_Dxgi`）は不要（自前供給面は撤去済み）。
 windows = { workspace = true }
 # display.rs の set_transform(&Matrix3x2) が要する。wintf と同一の workspace ピン（0.3.1）を用いる。
 windows-numerics = { workspace = true }
@@ -25,10 +25,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-# テストヘルパ（display_fault_tests.rs 等）が windows:: の型を直接参照するため明示する
-# （dev-deps は workspace 既定の暗黙継承がなく明示が要る）。swap chain 本体型
-# （`Win32_Graphics_Dxgi`）は不要（自前供給面は撤去済み）。
-windows = { workspace = true }
 # ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
 # ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
 # 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。

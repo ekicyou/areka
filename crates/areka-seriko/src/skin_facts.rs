@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::strict::DetectionPoint;
 
-use crate::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
+use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 
 /// 判定に要る事実。本番は表示の層から写した [`SkinFacts`] が答え、テストは手書きの表で答える。
 pub trait SkinLookup {

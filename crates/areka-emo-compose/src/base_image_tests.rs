@@ -23,9 +23,8 @@ fn elem(layer: u32, path: &str, x: i64, y: i64) -> Element {
 }
 
 /// ターゲット記述子とボディ element 群から plain surface 定義を組み立てる。
-fn surface_def(id: u32, targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
+fn surface_def(targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
     Surface {
-        id,
         targets,
         elements,
         collisions: Vec::new(),
@@ -91,7 +90,6 @@ fn masters_of(world: &EmoWorld) -> Vec<SurfaceMaster> {
 #[test]
 fn shared_header_gives_each_id_its_own_image() {
     let shell = shell_of(vec![surface_def(
-        0,
         vec![AppendTarget::Single(0), AppendTarget::Single(1)],
         Vec::new(),
     )]);
@@ -121,12 +119,10 @@ fn shared_header_gives_each_id_its_own_image() {
 fn no_images_leaves_the_folded_table_untouched() {
     let shell = shell_of(vec![
         surface_def(
-            0,
             vec![AppendTarget::Single(0)],
             vec![elem(0, "body.png", 3, 4), elem(1, "face.png", 5, 6)],
         ),
         surface_def(
-            10,
             vec![AppendTarget::Single(10)],
             vec![elem(2, "hat.png", 0, 0)],
         ),
@@ -148,19 +144,16 @@ fn used_and_shadowed_partition_the_images() {
     let shell = shell_of(vec![
         // ウ: 層 0 が在るので画像は使わない。
         surface_def(
-            0,
             vec![AppendTarget::Single(0)],
             vec![elem(0, "body.png", 0, 0)],
         ),
         // イ: 層 0 が空いているので画像が最も奥に入る。
         surface_def(
-            1,
             vec![AppendTarget::Single(1)],
             vec![elem(1, "face.png", 7, 8)],
         ),
         // エ: 画像が無いので触らない。
         surface_def(
-            2,
             vec![AppendTarget::Single(2)],
             vec![elem(3, "hat.png", 0, 0)],
         ),
@@ -362,7 +355,6 @@ fn append_to_unknown_id_still_warns_and_creates_nothing() {
 fn brace_after_append_merges_into_the_image_only_face() {
     let shell = shell_mixed(
         vec![surface_def(
-            7,
             vec![AppendTarget::Single(7)],
             vec![elem(0, "brace0.png", 0, 0)],
         )],
@@ -426,7 +418,6 @@ fn pattern(index: u32, method: &str, surface_id: i64) -> Pattern {
 /// コマ群を持つアニメーション 1 本だけを載せた面の定義（element は 0 本）。
 fn surface_with_patterns(id: u32, patterns: Vec<Pattern>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: Vec::new(),
         collisions: Vec::new(),

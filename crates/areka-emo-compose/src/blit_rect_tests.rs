@@ -418,7 +418,6 @@ fn composer_world() -> (crate::EmoWorld, AtlasTable) {
         y,
     };
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
         elements: vec![el(0, "a.png", 0, 0), el(1, "b.png", 2, 1)],
         collisions: Vec::new(),

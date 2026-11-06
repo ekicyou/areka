@@ -26,7 +26,6 @@ const SIZES: &[(&str, (u32, u32))] = &[
 fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements: SIZES
             .iter()

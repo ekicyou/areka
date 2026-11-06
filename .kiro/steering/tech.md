@@ -72,6 +72,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - `cargo test` を基準に、クレートごとの統合テストとin-sourceテストを併用する
 - wintfは`tests/`配下をドメイン別に分割し、トップレベルのエントリポイントから束ねる
 - examplesは手動検証とグラフィックス挙動確認の補助であり、テストの代替ではない
+- `areka-parsers` の dev-dependency にワークスペースの `log-capture-kit` を持つ（テスト専用・charset などの `warn!` を数える・2026-11-05 `audit-parsers-sakura` の設計で承認された例外。`Cargo.lock` に新しいクレートは増えない）
 
 #### フルテスト（`tools/test-all.ps1`＝完了ゲートの正本・2026-09-24）
 

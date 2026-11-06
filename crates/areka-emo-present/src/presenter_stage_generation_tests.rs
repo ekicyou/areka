@@ -1,15 +1,15 @@
 //! 出番の世代と、合図が追い付くまでの欄の外し（spec: areka-P0-animated-image-playback task 4.3・
 //! 要件 2.3）。
 //!
-//! 面の表・コマ・指令の送り方は 4.2 の `presenter_film_tests.rs` の補助をそのまま使う（面 0 ＝
+//! 面の表・コマ・指令の送り方は 4.2 と同じ `presenter_test_support.rs` の補助を使う（面 0 ＝
 //! 回数つき `fin.png` と終わりなし `end.png` を並べたバルーン）。
 
 use super::*;
 
-use super::film_tests::{
-    T, ack, applies, attach, build_balloon, established, frames, golden, hide, send, shown,
+use super::test_support::{
+    T, ack, applies, attach, build_balloon, capture, established, frames, golden, hide,
+    make_world_with_gpu, send, shown,
 };
-use super::test_support::{capture, make_world_with_gpu};
 
 const DROP_MESSAGE: &str = "apply(StageAck): 捨てた";
 

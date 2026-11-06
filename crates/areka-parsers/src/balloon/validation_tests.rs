@@ -9,8 +9,7 @@
 //!   `validrect`）＋ descript 継承（`font`）（R3.2/R3.3）。
 //! - R5.3: `descript.txt`＋`balloonk0s.txt` → 画像別上書き（`windowposition`/`validrect`）＋
 //!   descript 継承（`wordwrappoint.x`/`font`・画像別に無いキー）（R3.3）。
-//! - R2.7/過剰実装ガード: 非モデル化 distractor キー（`anchor.font.color.*`/`cursor.font.color.*`/
-//!   `number.font.*`/`sstpmessage.font.*`/arrow/onlinemarker/sstpmarker）が結果へ漏れないこと。
+//! - 本番と同じ既定 `Ansi` で復号し、`charset,UTF-8` の宣言が効いていること（非 ASCII の値）。
 //!
 //! fixture は実行時に `std::fs` で**実物ファイル**を読む（クレート跨ぎ `include_str!` 不使用・
 //! `charset`/`sakura` validation_tests の流儀）。charset→balloon の実パイプラインを忠実に辿るため
@@ -28,23 +27,16 @@
 use super::parse::parse_str;
 use crate::charset::{DefaultEncoding, decode};
 
-/// emo2 が同時にインストールするバルーンの fixture ディレクトリ（検体の窓口から得る）。
+/// emo2 が同時にインストールするバルーンの fixture ファイル（検体の窓口から得る）を実物バイトで読み、
+/// charset デコードして文字列化する。
 ///
-/// コンパイル時 `include_str!` ではクレートをビルド時結合してしまうため、実行時に `std::fs`
-/// 読みする（`charset` validation_tests の「クレート跨ぎ include_str! 不使用」流儀に倣う）。
-fn fixture_dir() -> std::path::PathBuf {
-    crate::sample_test_support::emo2_balloon_root()
-}
-
-/// fixture ファイルを実物バイトで読み、charset デコードして文字列化する。
-///
-/// `charset,UTF-8` 宣言（descript.txt L1）どおり `Utf8` 既定でデコードする（画像別 .txt は
-/// ASCII ゆえ同じく素通り）。これは実パイプライン（charset→kv→balloon）の忠実な上流消費。
+/// 本番（`areka-emo-present` の balloon の読み）と同じ既定 `Ansi` でデコードする。descript.txt L1 の
+/// `charset,UTF-8` 宣言が効いて UTF-8 で読まれる（画像別 .txt は ASCII ゆえ同じく素通り）。
 fn load_decoded(file: &str) -> String {
-    let path = fixture_dir().join(file);
+    let path = crate::sample_test_support::emo2_balloon_root().join(file);
     let bytes = std::fs::read(&path)
         .unwrap_or_else(|e| panic!("fixture readable: {}: {e}", path.display()));
-    decode(&bytes, DefaultEncoding::Utf8)
+    decode(&bytes, DefaultEncoding::Ansi)
 }
 
 // ───────────────────────────────────────────────────────────────────
@@ -61,6 +53,13 @@ fn load_decoded(file: &str) -> String {
 #[test]
 fn r5_1_descript_only_pins_geometry_and_font_subset() {
     let descript = load_decoded("descript.txt");
+    // `Ansi` 既定でも宣言どおり UTF-8 で読めている（宣言が消えれば化けて落ちる）。
+    assert_eq!(
+        crate::kv::parse_kv(&descript)
+            .get("craftmanw")
+            .map(String::as_str),
+        Some("えちょ")
+    );
     let model = parse_str(&descript, None);
 
     // origin は descript に行が無い → 両成分 None（正典推奨形＝宣言せず validrect の定義に
@@ -173,36 +172,4 @@ fn r5_3_descript_plus_kero_image_inherits_wordwrappoint() {
     assert_eq!(model.font().color().r(), Some(0));
     assert_eq!(model.font().color().g(), Some(0));
     assert_eq!(model.font().color().b(), Some(0));
-}
-
-// ───────────────────────────────────────────────────────────────────
-// R2.7 / 過剰実装ガード — distractor 非漏洩＋subset 限定（R5.5）
-// ───────────────────────────────────────────────────────────────────
-
-/// 非モデル化 distractor キーが結果へ漏れないことを固定する（R2.7・過剰実装ガード R5.5）。
-///
-/// descript.txt には `font.color.r,0` と同名前綴の distractor（`anchor.font.color.r,180`・
-/// `cursor.font.color.r,255`）や、`font.height,28` と競合し得る `number.font.height,12`・
-/// `sstpmessage.font.height,10` が並ぶ。完全一致引き（`get`）ゆえ `font.color.r()==Some(0)` は
-/// `font.color.r` 由来であり distractor 由来ではないこと、`font.height()==Some(28)` は
-/// `font.name`/`font.height` 由来であり `number.*`/`sstpmessage.*` 由来ではないことを確認する。
-///
-/// なお number/onlinemarker/sstpmarker/sstpmessage は**そもそもモデルに accessor が無い**
-/// ため、subset 逸脱抽象が追加されていないこと自体は型で保証される。arrow は
-/// balloon-scroll-arrows で `arrow_keys()` として読むようになったが、`arrow*` の鍵は完全一致で別に引く
-/// ため、ここで見る幾何＋フォントの値を汚さない。ここでは「同名前綴 distractor が採用値を汚染しない」完全一致引きの生き証人を置く。
-#[test]
-fn r2_7_distractor_keys_do_not_leak_into_subset() {
-    let descript = load_decoded("descript.txt");
-    let model = parse_str(&descript, None);
-
-    // font.color.r は Some(0)（descript L28）であり、anchor(180)/cursor(255) いずれでもない。
-    assert_eq!(model.font().color().r(), Some(0));
-    assert_ne!(model.font().color().r(), Some(180)); // anchor.font.color.r,180（L33）を巻き込まない。
-    assert_ne!(model.font().color().r(), Some(255)); // cursor.font.color.r,255（L49）を巻き込まない。
-
-    // font.height は Some(28)（descript L26）であり、number(12)/sstpmessage(10) いずれでもない。
-    assert_eq!(model.font().height(), Some(28));
-    assert_ne!(model.font().height(), Some(12)); // number.font.height,12（L53）を巻き込まない。
-    assert_ne!(model.font().height(), Some(10)); // sstpmessage.font.height,10（L69）を巻き込まない。
 }

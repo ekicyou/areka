@@ -60,8 +60,7 @@ pub(super) struct PresentTarget {
     /// 累積として主張できる。適用単位の増分は表示成立点で `take_delta` により取り出され、
     /// perf サマリ行の `alloc_*` フィールドへ載る。
     ///
-    /// 後段（task 5.2）は本フィールドへ再利用席（合成先の常設席・マスクの輪番）を足す。
-    /// 席が増えても計数の API 面と所有者は動かない。
+    /// 再利用席（合成先の常設席・マスクの輪番）も本フィールドが持つ。
     pub(super) budget: FrameBudget,
     /// 合成入力（surface id＋bind 集合＋pattern）→ (composed 原寸, mask, display) 対の**容量 3・LRU**
     /// メモ化表（容量は 2026-08-15 の開発者裁定で 1 → 3・要件 7.1）。
@@ -88,8 +87,8 @@ pub(super) struct PresentTarget {
     /// **最後に表示が確立したサーフェス id**（CurrentSurfaceRead・R3.1-3.3）。
     ///
     /// 画面の絵ではなく確立の結果を刻む（全透明合成でも表示成立＝その id が正・α 非依存で collision
-    /// 解決の単一真実源）。`Hide`／`EmptyComposition` 縮退で `None`。書き込みは既存 `visible` 更新点と
-    /// 同一の3箇所のみ（確立＝`Some(surface_id)`／縮退・Hide＝`None`）で、失敗経路は表示成立点より
+    /// 解決の単一真実源）。`Hide`／`EmptyComposition` 縮退で `None`。書き込みは 3 箇所のみ（`show.rs` の
+    /// 縮退と確立〔External を含む〕・`hub.rs` の Hide。確立＝`Some(surface_id)`／縮退・Hide＝`None`）で、失敗経路は表示成立点より
     /// 手前で early return するため前値を保持する（`ComposeKey` からは導出しない＝`invalidate_all` で
     /// キーが消えても表示は残るため画面と乖離する）。
     ///

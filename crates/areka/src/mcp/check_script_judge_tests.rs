@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use areka_parsers::sakura::parse_noted;
+use areka_sakura::strict::{MSG_DEFAULTED, MSG_UNCLOSED, MSG_UNKNOWN_COMMAND};
 use areka_seriko::{SurfaceResolver, SurfaceTarget};
 
 use super::*;
@@ -547,4 +548,12 @@ fn ordinary_script_reports_only_the_raise_nobody_handles() {
         // `\![raise]` は今は誰も拾わない。
         [Kind::UnknownCommand]
     );
+}
+
+/// strict の 16 の点はどれも、同じ綴りの診断の種類へ写る。
+#[test]
+fn every_detection_point_maps_to_kind_of_same_name() {
+    for point in DetectionPoint::ALL {
+        assert_eq!(kind_of(point).as_str(), point.kind(), "{point:?}");
+    }
 }

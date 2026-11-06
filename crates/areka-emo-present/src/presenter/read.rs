@@ -141,7 +141,7 @@ impl EmoPresenter {
 
     /// 下流照会契約（要件 1.2）: いま**実際に表示へ適用中**の k。
     ///
-    /// 単一真実源は [`PresentTarget::applied`] で、その更新点は表示成立点ただ 1 箇所である——ゆえに本照会が
+    /// 単一真実源は `PresentTarget::applied` で、その更新点は表示成立点ただ 1 箇所である——ゆえに本照会が
     /// 返す値は常に「いま画面に載っている絵に実際に掛かった k」であり、「導出したが適用に失敗した k」が
     /// 漏れることはない（要件 4.4 の失敗経路は `applied` を書かずに early return する）。
     ///
@@ -238,9 +238,10 @@ impl EmoPresenter {
     /// 表示面（wintf の `CompositionDrawingSurface`）は書き込み専用であり読み戻さない。返るのは
     /// 合成メモが保持する原寸バイト列そのもので、k=1 では旧経路（撤去済みの自前供給面の読み戻し）
     /// が返していたバイト列と同一バイト・
-    /// k の値に依らず同一である。読み戻しの寿命はメモの寿命に等しい——未装着・未表示・表示中
-    /// エントリの消失（LRU 追い出し・`InvalidateCache` 後）は `error!` ＋
-    /// [`PresentError::TargetNotAttached`]（消費者は表示直後に読む）。
+    /// k の値に依らず同一である。読み戻しの寿命はメモの寿命に等しい——どれも `error!` ＋ `Err` で、
+    /// 未装着は [`PresentError::TargetNotAttached`]・未表示は [`PresentError::NotShown`]・表示中
+    /// エントリの消失（LRU 追い出し・`InvalidateCache` 後）は [`PresentError::EntryEvicted`]
+    /// （消費者は表示直後に読む）。
     pub fn read_back(&self, target: TargetId) -> Result<Vec<u8>, PresentError> {
         let Some(t) = self.targets.get(&target) else {
             tracing::error!(?target, "read_back: 未装着ターゲット");
@@ -251,7 +252,7 @@ impl EmoPresenter {
                 ?target,
                 "read_back: 未だ表示していない（表示成立点を通っていない）"
             );
-            return Err(PresentError::TargetNotAttached(target));
+            return Err(PresentError::NotShown(target));
         };
         // `get` は最近使用順を動かさない（LRU を打ち直すのは `show.rs` の `touch` だけ）。
         match t.cache.get(*surface_id, binds, pattern) {
@@ -262,7 +263,10 @@ impl EmoPresenter {
                     surface_id,
                     "read_back: 表示中エントリがメモに無い（追い出し／InvalidateCache 後）"
                 );
-                Err(PresentError::TargetNotAttached(target))
+                Err(PresentError::EntryEvicted {
+                    target,
+                    surface_id: *surface_id,
+                })
             }
         }
     }

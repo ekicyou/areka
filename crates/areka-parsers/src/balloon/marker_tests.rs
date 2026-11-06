@@ -103,8 +103,6 @@ fn no_keys_leaves_model_unchanged() {
     let text = "font.height,12\r\nvalidrect.left,3\r\n";
     let model = parse_str(text, None);
     assert_eq!(model.arrow_keys(), &ArrowKeys::default());
-    // 鍵の無い定義では、鍵を足す前の作り（with_arrow_keys なし）と等しい。
-    assert_eq!(model.clone().with_arrow_keys(ArrowKeys::default()), model);
     assert_eq!(model.font().height(), Some(12));
 }
 
@@ -139,5 +137,44 @@ fn marker_filename_per_surface_file_overrides_descript() {
     assert_eq!(
         marker("marker.filename,a\r\n", Some("font.height,9\r\n")).as_deref(),
         Some("a")
+    );
+}
+
+#[test]
+fn arrow_filename_empty_is_absent() {
+    // `marker.filename` と同じに、空の値は書いていないのと同じ（隠し場所の鍵を `None` に 1 つにする）。
+    assert_eq!(keys("arrow.filename,\r\n", None).filename, None);
+    assert_eq!(keys("arrow.filename,  \r\n", None).filename, None);
+}
+
+#[test]
+fn numeric_keys_report_unreadable_values() {
+    let model = parse_str(
+        "font.height,28px\r\nvalidrect.left,１０\r\nfont.color.r,300\r\norigin.x,\r\n\
+         disable.font.color.b,x\r\nfont.color.g,5\r\nwindowposition.x,center\r\n",
+        None,
+    );
+    // 鍵が在って読めない値（空を含む）だけを、読む順に 1 件ずつ積む。読めた鍵と無い鍵は積まない。
+    let issue = |key: &'static str, value: &str| KeyIssue {
+        key,
+        value: value.to_owned(),
+    };
+    assert_eq!(
+        model.key_issues(),
+        &[
+            issue("origin.x", ""),
+            issue("validrect.left", "１０"),
+            issue("font.color.r", "300"),
+            issue("font.height", "28px"),
+            issue("disable.font.color.b", "x"),
+        ]
+    );
+    // 読めない値は今どおり `None`（既定へ倒すのは読み込む側）。
+    assert_eq!(model.font().height(), None);
+    assert_eq!(model.font().color().g(), Some(5));
+    // `windowposition.x` は `center` などの語を正しく持つので積まない。
+    assert_eq!(
+        parse_str("windowposition.x,center\r\n", None).key_issues(),
+        &[]
     );
 }

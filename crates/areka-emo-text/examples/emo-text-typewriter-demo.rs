@@ -316,8 +316,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
     let Some((emo_world, atlas)) = demo.assets.take() else {
         setup_abort("アセットが二重消費された（構造不変の破れ）");
     };
-    if let Err(e) = demo.presenter.attach_target(
-        world,
+    demo.presenter.attach_target(
         TargetId(0),
         demo.win,
         emo_world,
@@ -325,9 +324,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
         // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
         96,
-    ) {
-        setup_abort(&format!("attach_target に失敗: {e}"));
-    }
+    );
     let (tx, rx) = reply_channel::<PresentOutcome>();
     demo.presenter.apply(
         world,

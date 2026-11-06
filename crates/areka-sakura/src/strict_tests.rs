@@ -120,26 +120,6 @@ fn sixteen_points_name_kind_message() {
     }
 }
 
-/// 種類は 7 つだけ。予約の種類（`missing_animation`・`unknown_entity`）は出ない（要件 2.6・2.8）。
-#[test]
-fn kinds_are_the_seven_without_reserved() {
-    let mut kinds: Vec<&str> = DetectionPoint::ALL.iter().map(|p| p.kind()).collect();
-    kinds.sort_unstable();
-    kinds.dedup();
-    assert_eq!(
-        kinds,
-        [
-            "ignored",
-            "missing_balloon",
-            "missing_surface",
-            "unknown_command",
-            "unknown_tag",
-            "unpaired_tag",
-            "unreadable_argument",
-        ]
-    );
-}
-
 /// 文面の定数 11 個の文字列そのもの（`check_script` の答えを 1 バイトも変えない）。文面は `:` を含まない。
 #[test]
 fn message_constants_verbatim() {
@@ -244,28 +224,39 @@ fn record_writes_one_event_with_convention_fields() {
     );
 }
 
-/// 差し込み口は外から実装でき、束ねたものは複製できる。
+/// 読みの印の全部から点へ（`compile` と `check_script` が同じ写しを使う）。
 #[test]
-fn hooks_bundle_ghost_and_judges() {
-    struct Judges;
-    impl StrictJudges for Judges {
-        fn command_handled(&self, name: &str, _first: Option<&str>) -> bool {
-            name == "open"
-        }
-        fn font(&self, args: &[String]) -> Option<DetectionPoint> {
-            (args.first().map(String::as_str) == Some("sub")).then_some(DetectionPoint::FontIgnored)
-        }
+fn read_note_point_every_note() {
+    use areka_parsers::sakura::ReadNote;
+    let rows = [
+        (ReadNote::UnknownTag, DetectionPoint::ReadUnknownTag),
+        (ReadNote::Unclosed, DetectionPoint::ReadUnclosed),
+        (ReadNote::ArgumentDefaulted, DetectionPoint::ReadDefaulted),
+    ];
+    for (note, point) in rows {
+        assert_eq!(read_note_point(&note), point, "{note:?}");
     }
-    let hooks = StrictHooks {
-        ghost: "さくら".into(),
-        judges: std::sync::Arc::new(Judges),
-    };
-    let copy = hooks.clone();
-    assert_eq!(&*copy.ghost, "さくら");
-    assert!(copy.judges.command_handled("open", None));
-    assert!(!copy.judges.command_handled("nosuch", None));
-    assert_eq!(
-        copy.judges.font(&["sub".to_string(), "1".to_string()]),
-        Some(DetectionPoint::FontIgnored)
-    );
+}
+
+/// `\!` の点の 6 通り: 誰も拾わなければ値によらず `CommandUnhandled`、拾われて読めない
+/// `choicetimeout` だけが `ChoiceTimeoutUnreadable`、ほかは点なし。
+#[test]
+fn command_point_six_cases() {
+    use crate::compile::ChoiceTimeoutDirective::{Default, Secs, Unreadable};
+    use DetectionPoint::{ChoiceTimeoutUnreadable, CommandUnhandled};
+    let rows = [
+        (false, None, Some(CommandUnhandled)),
+        (false, Some(Unreadable), Some(CommandUnhandled)),
+        (true, None, None),
+        (true, Some(Default), None),
+        (true, Some(Secs(0.5)), None),
+        (true, Some(Unreadable), Some(ChoiceTimeoutUnreadable)),
+    ];
+    for (handled, choice_timeout, point) in rows {
+        assert_eq!(
+            command_point(handled, choice_timeout),
+            point,
+            "{handled} {choice_timeout:?}"
+        );
+    }
 }

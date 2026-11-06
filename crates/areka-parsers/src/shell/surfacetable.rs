@@ -53,7 +53,7 @@ pub fn parse_surfacetable(text: &str) -> SurfaceTable {
             continue;
         }
         if line == "}" {
-            group = None;
+            close_group(group.take(), &mut table.rows);
             continue;
         }
         let Some((head, tail)) = line.split_once(',') else {
@@ -73,6 +73,7 @@ pub fn parse_surfacetable(text: &str) -> SurfaceTable {
             continue;
         }
         if keyword("group") {
+            close_group(group.take(), &mut table.rows);
             group = Some(OpenGroup {
                 name: tail.to_string(),
                 scope: 0,
@@ -82,12 +83,8 @@ pub fn parse_surfacetable(text: &str) -> SurfaceTable {
         }
         if keyword("scope") {
             match (group.as_mut(), number(trim_blank(tail))) {
-                (Some(open), Some(scope)) => {
-                    open.scope = scope;
-                    for row in &mut table.rows[open.first_row..] {
-                        row.scope = scope;
-                    }
-                }
+                // 既に写した行へは group を閉じるときに 1 回だけ当てる（行ごとに書き直さない）。
+                (Some(open), Some(scope)) => open.scope = scope,
                 _ => table.unreadable.push(index + 1),
             }
             continue;
@@ -102,7 +99,17 @@ pub fn parse_surfacetable(text: &str) -> SurfaceTable {
             None => table.unreadable.push(index + 1),
         }
     }
+    close_group(group, &mut table.rows);
     table
+}
+
+/// 閉じる group の scope（後が勝つ）を、その group の行の全部へ当てる。
+fn close_group(group: Option<OpenGroup>, rows: &mut [SurfaceTableRow]) {
+    if let Some(group) = group {
+        for row in &mut rows[group.first_row..] {
+            row.scope = group.scope;
+        }
+    }
 }
 
 /// 前後の ASCII の空白とタブだけを落とす（全角の空白は残す）。

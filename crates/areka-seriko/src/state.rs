@@ -1,8 +1,8 @@
 //! サーフェス状態モジュール（状態層・per-scope の現 surface 状態と静的 bind 集合の所有者）。
 //!
 //! 話者スコープ（`ActorKey`）ごとに独立した現在の表示状態（表示中 surface / 非表示）を
-//! `HashMap` で保持し（`ActorKey` は `Hash+Eq` を持つが `Ord` を持たないため HashMap・design
-//! 状態層）、shell descript 由来の静的 bind 集合を per-scope マップと**同居**して保持する
+//! スコープの昇順に並ぶ `BTreeMap` で保持し（抽選で乱数を引く順をここで決める・design 状態層）、
+//! shell descript 由来の静的 bind 集合を per-scope マップと**同居**して保持する
 //! （要件 4.4）。加えて per-scope の動的着せ替え集合 `dynamic_binds` を保持し、Show 発行の
 //! bind 供給源はこの動的集合を優先し、未束縛 scope は静的既定集合へフォールバックする
 //! （要件 3.1・`mayuna-compose` が予約シームを消費）。
@@ -10,9 +10,9 @@
 //! [`ScopeStates::apply`] は 1 cue = 1 scope の更新をトランザクション境界とし、状態が実際に
 //! 変化したときだけ発行すべき [`DisplayCommand`] を [`ApplyOutcome::Changed`] で返す。状態
 //! 不変なら [`ApplyOutcome::Unchanged`] を返して再発行を抑止する（冪等ガード・要件 3.4・DD8）。
-//! 実際の発行（単一発行点）は後続タスク（アクター層 `emit_display`）の責務。
+//! 実際の発行（単一発行点）はアクター層の `emit_display` が受け持つ。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
@@ -24,7 +24,7 @@ use crate::shell_fallback::{ShellFallbackOutcome, ShellSurfaceFallback, SurfaceK
 
 /// あるスコープの現 surface 状態（要件 3.1/3.3/3.4）。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ScopeState {
+pub(crate) enum ScopeState {
     /// 表示中の surface id（要件 3.1/3.5）。
     Shown(u32),
     /// 非表示（`\s[-1]` 相当・要件 3.3/3.4）。
@@ -70,19 +70,19 @@ pub enum BindApplyOutcome {
 ///
 /// [`ScopeStates`] が保持する 2 つの per-scope 表示 map（シェル `scopes`／バルーン `balloon`）に
 /// 整合する **surface ID 名前空間の区別**であり、能力の仕切りではない（design「面種非依存・裁定 (a)」）。
-/// per-(scope, slot) の [`PatternState`] 表 `pattern_states` のキー成分・[`LoopRuntime`] 側の再生状態
-/// キー（後続タスク）と共有し、両 slot は同一コードパスで評価される。`HashMap` キーに用いるため
+/// per-(scope, slot) の [`PatternState`] 表 `pattern_states` のキー成分・`LoopRuntime` 側の再生状態
+/// キーと共有し、両 slot は同一コードパスで評価される。`HashMap` キーに用いるため
 /// `Copy`＋`Hash`＋`Eq` を導出する。
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Slot {
     /// シェル面（`scopes` map・bind ゲート対象）。
     Shell,
-    /// バルーン面（`balloon` map・M-boot は着せ替え非在）。
+    /// バルーン面（`balloon` map・着せ替えは無い）。
     Balloon,
 }
 
-/// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 6.1・2.3）。運ぶ口
-/// （`SerikoMsg::Stage`）と世代の扱いは task 5.1。
+/// 表示層からの窓の知らせ（spec: areka-P0-animated-image-playback 要件 6.1・2.3）。運ぶ口は
+/// `SerikoMsg::Stage`（`SerikoSink::send_stage` が送る）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StageNote {
     /// `scope` のバルーンの窓の見える・見えないと、表示層が今確立している面の番号。
@@ -105,18 +105,16 @@ struct BalloonWindow {
 
 /// [`ScopeStates::commit_pattern`] の適用結果（pattern 進行状態変化に応じた表示発行の判定・要件 6.1/6.2）。
 ///
-/// [`commit_bind`] を鏡映した冪等ガード（同値なら書き込まず [`PatternApplyOutcome::Unchanged`]）＋
-/// 表示中なら現 surface を新 pattern で再合成させる Show/ShowBalloon を [`PatternApplyOutcome::Changed`]
-/// で返す。非表示／未知 slot は評価自体が走らない（表示中ゲート・2.1）が、防御的に非発行（`Unchanged`）で
-/// 扱う（`apply_bind` の [`BindApplyOutcome::StateOnly`] に相当する第 3 区分は設けない——commit_pattern は
-/// 表示中 slot にのみ到達する契約ゆえ）。
-///
-/// [`commit_bind`]: ScopeStates::commit_bind
+/// `ScopeStates::commit_bind` を鏡映した冪等ガード（同値なら書き込まず
+/// [`PatternApplyOutcome::Unchanged`]）＋面の在る slot（バルーンは窓が閉じていても届く）なら現 surface
+/// を新 pattern で再合成させる Show/ShowBalloon を [`PatternApplyOutcome::Changed`] で返す。面の無い
+/// slot は非発行（`Unchanged`）（`apply_bind` の [`BindApplyOutcome::StateOnly`] に相当する第 3 区分は設けない）。
 #[derive(Clone, Debug, PartialEq)]
 pub enum PatternApplyOutcome {
-    /// 表示中 slot での pattern 変化 → 現 surface を新 pattern で再合成させる Show/ShowBalloon（要件 6.1）。
+    /// 面の在る slot（窓が閉じていても届く）での pattern 変化 → 現 surface を新 pattern で再合成させる
+    /// Show/ShowBalloon（要件 6.1）。
     Changed(DisplayCommand),
-    /// 同値（冪等・要件 6.2）または非表示／未知 slot（防御的非発行）→ 発行なし。
+    /// 同値（冪等・要件 6.2）または面の無い slot → 発行なし。
     Unchanged,
 }
 
@@ -129,12 +127,12 @@ pub enum PatternApplyOutcome {
 /// が `dynamic_binds` 優先・不在時 `static_binds` フォールバックで決める）。動的 bind は
 /// `apply_bind` が書き込み、`dynamic_binds` は空のまま起動する。
 pub struct ScopeStates {
-    /// 話者スコープごとの現 surface 状態（`ActorKey` は `Ord` 非対応ゆえ HashMap・design）。
-    scopes: HashMap<ActorKey, ScopeState>,
+    /// 話者スコープごとの現 surface 状態（スコープの昇順に並ぶ・[`ScopeStates::shown_slots`] の順）。
+    scopes: BTreeMap<ActorKey, ScopeState>,
     /// バルーン面のスコープごとの現 surface 状態（シェル面 `scopes` とは**別 map** で同居・
     /// 要件 4.3/4.6）。同型 [`ScopeState`] だが独立し、`apply_balloon` のみが変更する。
     /// シェル面と相互に不変（`apply()` は触らない・`static_binds` はバルーンでは使わない）。
-    balloon: HashMap<ActorKey, ScopeState>,
+    balloon: BTreeMap<ActorKey, ScopeState>,
     /// 静的 bind 集合（起動時に解決・シェルの差し替え [`ScopeStates::rebase_shell`] でだけ替わる・
     /// 要件 4.2/4.3/4.4）。
     ///
@@ -146,14 +144,14 @@ pub struct ScopeStates {
     /// scope は `static_binds`（既定・初期値）を Show の bind 供給源とする（[`current_binds`]）。
     ///
     /// 起動時は空（書き込むのは `apply_bind`）。空である限り
-    /// [`current_binds`] は全 scope で `static_binds` を返し、Show 発行は従来と byte 同値
-    /// （要件 3.8 非退行）。[`current_binds`]: ScopeStates::current_binds
+    /// [`current_binds`] は全 scope で `static_binds` を返し、Show の着せ替えは
+    /// `static_binds` だけになる（要件 3.8）。[`current_binds`]: ScopeStates::current_binds
     dynamic_binds: HashMap<ActorKey, BindSet>,
     /// per-(scope, slot) の pattern 進行状態（`dynamic_binds` と同居・要件 5.1）。エントリを持つ
     /// (scope, slot) はその [`PatternState`] を、持たない (scope, slot) は空（[`PatternState::default`]）を
     /// Show/ShowBalloon の pattern 供給源とする（[`current_pattern`]）。SERIKO ループ評価
-    /// （後続タスク）が `commit_pattern` 経由で書き込み、surface 切替時に当該 slot が空へリセットされる。
-    /// 空である限り Show/ShowBalloon の pattern は空＝ループ不活性時は従来と観測等価（要件 5.4）。
+    /// が `commit_pattern` 経由で書き込み、surface 切替時に当該 slot が空へリセットされる。
+    /// 空である限り Show/ShowBalloon の pattern は空＝ループ不活性時は pattern を何も足さない（要件 5.4）。
     ///
     /// [`current_pattern`]: ScopeStates::current_pattern
     pattern_states: HashMap<(ActorKey, Slot), PatternState>,
@@ -165,18 +163,18 @@ pub struct ScopeStates {
 impl ScopeStates {
     /// 静的 bind 集合を受けて空のスコープ状態を構築する（要件 4.2）。
     ///
-    /// `static_binds` は task 1.2/2.4 で解決される bindgroup default 由来の `BindSet` を想定し、
+    /// `static_binds` はシェルの bindgroup default 由来の既定の集合で、
     /// 本構造体はそれを保持する（替わるのはシェルの差し替え [`ScopeStates::rebase_shell`] だけ）。
     pub fn new(static_binds: DefaultBinds) -> Self {
         Self {
-            scopes: HashMap::new(),
-            balloon: HashMap::new(),
+            scopes: BTreeMap::new(),
+            balloon: BTreeMap::new(),
             static_binds,
-            // 空で起動。動的 bind の書き込みは後続タスク（apply_bind）の責務。既定 on/off の
+            // 空で起動。動的 bind の書き込みは `apply_bind` が受け持つ。既定 on/off の
             // 「初期値」はここを pre-populate するのではなく current_binds のフォールバックで実現。
             dynamic_binds: HashMap::new(),
             // 空で起動。pattern の書き込みは SERIKO ループ評価（commit_pattern）の責務。未格納の
-            // (scope, slot) は current_pattern が空を返す（従来と観測等価・要件 5.4）。
+            // (scope, slot) は current_pattern が空を返す（要件 5.4）。
             pattern_states: HashMap::new(),
             balloon_windows: HashMap::new(),
         }
@@ -188,14 +186,14 @@ impl ScopeStates {
     /// 戻り値で状態変化の有無を返し、冪等ガード（要件 3.4）を呼び手（発行層）へ委ねる。
     ///
     /// 分岐（design Postconditions）:
-    /// - [`SurfaceTarget::Show(id)`]:
+    /// - [`SurfaceTarget::Show`]`(id)`:
     ///   - 現状が既に `Shown(id)`（同一 id）→ [`ApplyOutcome::Unchanged`]（冪等・再発行しない・
     ///     要件 3.4/DD8）。
     ///   - それ以外（未知 scope・`Hidden`・別 id を表示中）→ 状態を `Shown(id)` に設定（未知 scope
     ///     は新規挿入・design「未知 scope への Show は新規挿入」）し、
     ///     [`ApplyOutcome::Changed`]`(DisplayCommand::Show { scope, surface_id: id, binds })` を返す
-    ///     （scope の現在 bind 集合 [`current_binds`] を同梱・要件 5.1。動的 bind 未適用なら
-    ///     `static_binds`＝従来同値・要件 3.8）。[`current_binds`]: ScopeStates::current_binds
+    ///     （scope の現在 bind 集合 [`current_binds`](Self::current_binds) を同梱・要件 5.1。動的 bind
+    ///     未適用なら `static_binds`・要件 3.8）。
     /// - [`SurfaceTarget::Hide`]:
     ///   - 現状が既に `Hidden` → [`ApplyOutcome::Unchanged`]（非表示保持・要件 3.4）。
     ///   - それ以外（表示中、または未知 scope）→ 状態を `Hidden` に設定し
@@ -222,9 +220,9 @@ impl ScopeStates {
                 ApplyOutcome::Changed(DisplayCommand::Show {
                     scope: scope.clone(),
                     surface_id: id,
-                    // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds＝非退行・R3.8）。
+                    // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds・R3.8）。
                     binds: self.current_binds(scope).clone(),
-                    // pattern 進行状態は cue 由来 Show では空（ループ非活性＝従来と観測等価・R5.4）。
+                    // pattern 進行状態は cue 由来 Show では空（ループ非活性なら pattern を何も足さない・R5.4）。
                     // 直上で格納 pattern をクリア済み＝空 pattern と一貫（実 pattern は commit_pattern 経由）。
                     pattern: PatternState::default(),
                 })
@@ -245,18 +243,18 @@ impl ScopeStates {
         }
     }
 
-    /// 1 つの解決済みバルーン面指令を対象スコープへ適用する（[`apply`] の鏡映・要件 4.3/4.6）。
+    /// 1 つの解決済みバルーン面指令を対象スコープへ適用する（[`apply`](Self::apply) の鏡映・要件 4.3/4.6）。
     ///
     /// シェル面 `scopes` とは独立した `balloon` map のみを触り、`scopes`・`static_binds` には
     /// 一切干渉しない（相互独立・要件 4.6）。1 cue = 1 scope をトランザクション境界とし、状態が
     /// 実際に変化したときだけ発行すべき [`DisplayCommand`] を [`ApplyOutcome::Changed`] で返す。
     ///
     /// 発行する指令は [`DisplayCommand::ShowBalloon`]／[`DisplayCommand::HideBalloon`] で、シェル面
-    /// [`DisplayCommand::Show`] と異なり **bind を同梱しない**（M-boot にバルーン着せ替えは存在
-    /// しない・要件 4.1）。
+    /// [`DisplayCommand::Show`] と異なり **bind を同梱しない**（バルーンに着せ替えは
+    /// 無い・要件 4.1）。
     ///
-    /// 分岐（design「seriko バルーン面契約」Postconditions・[`apply`] の balloon map への鏡映）:
-    /// - [`SurfaceTarget::Show(id)`]:
+    /// 分岐（design「seriko バルーン面契約」Postconditions・[`apply`](Self::apply) の balloon map への鏡映）:
+    /// - [`SurfaceTarget::Show`]`(id)`:
     ///   - 現状が既に `Shown(id)`（同一 id）→ [`ApplyOutcome::Unchanged`]（冪等・再発行しない・
     ///     要件 4.3/DD8）。
     ///   - それ以外（未知 scope・`Hidden`・別 id を表示中）→ 状態を `Shown(id)` に設定し
@@ -317,7 +315,7 @@ impl ScopeStates {
     /// シェルの差し替えの戻り先（spec: descript-window-keys 要件 3.2〜3.5）。
     ///
     /// シェルの面で表示中（`Shown(id)`）のスコープだけを見て、今の面が新しいシェルに無ければ
-    /// [`crate::shell_fallback::decide`] の答えで `Shown(to)` か `Hidden` に書き換える。非表示・未表示の
+    /// `crate::shell_fallback::decide` の答えで `Shown(to)` か `Hidden` に書き換える。非表示・未表示の
     /// スコープは替えない。結果は書き換えたスコープだけをスコープの昇順で返す（記録は呼び手）。
     pub fn fall_back_shell_surfaces(
         &mut self,
@@ -327,7 +325,7 @@ impl ScopeStates {
         if fallback.surface_ids.is_empty() {
             return Vec::new();
         }
-        let mut shown: Vec<(ActorKey, u32)> = self
+        let shown: Vec<(ActorKey, u32)> = self
             .scopes
             .iter()
             .filter_map(|(scope, st)| match st {
@@ -335,7 +333,6 @@ impl ScopeStates {
                 ScopeState::Hidden => None,
             })
             .collect();
-        shown.sort();
         let mut outcomes = Vec::new();
         for (scope, missing) in shown {
             let candidates = fallback
@@ -411,7 +408,7 @@ impl ScopeStates {
     /// `dynamic_binds` にエントリを持つ scope はその動的集合を、持たない scope は静的既定集合
     /// `static_binds`（起動直後 default on/off を初期値とする）を返す純粋な読み取り。Show 発行の
     /// bind 供給源はこのアクセサであり、動的 bind が未適用（`dynamic_binds` が空）の間は全 scope で
-    /// `static_binds` を返す＝従来の発行結果と byte 同値（要件 3.8 非退行）。
+    /// `static_binds` を返す（要件 3.8）。
     pub fn current_binds(&self, scope: &ActorKey) -> &BindSet {
         match self.dynamic_binds.get(scope) {
             Some(binds) => binds,
@@ -435,7 +432,7 @@ impl ScopeStates {
     ///      非表示 scope へ Show を強制すると `\s[-1]` 意味論を破るため・D5。新集合は次の Show 発行時に
     ///      [`current_binds`] 経由で載る）。
     ///
-    /// **非退行（要件 3.8）**: 本メソッドは `dynamic_binds` のみを書き込み、シェル面 `scopes`・
+    /// **表示の状態には触れない（要件 3.8）**: 本メソッドは `dynamic_binds` のみを書き込み、シェル面 `scopes`・
     /// バルーン面 `balloon` の状態機械には一切干渉しない（[`apply`]／[`apply_balloon`] の遷移は不変）。
     ///
     /// [`current_binds`]: ScopeStates::current_binds
@@ -535,7 +532,7 @@ impl ScopeStates {
                 let sid = *sid;
                 // bind 変化の Show 再発行は現在コマ（`current_pattern`）を保ったまま再合成する
                 // （空 default ではない・design「ScopeStates 拡張」）。bind はシェル面に適用される
-                // ため Shell slot の pattern を同梱。ループ不活性（未 commit）なら空＝従来と同値（R5.4）。
+                // ため Shell slot の pattern を同梱。ループ不活性（未 commit）なら空（R5.4）。
                 let pattern = self.current_pattern(scope, Slot::Shell).clone();
                 BindApplyOutcome::Changed(DisplayCommand::Show {
                     scope: scope.clone(),
@@ -583,7 +580,7 @@ impl ScopeStates {
     /// (scope, slot) は空（[`PatternState::default`] 相当）を返す純粋な読み取り。`current_binds` が
     /// 未束縛 scope で `static_binds`（既定）を返すのと同型で、pattern は「既定＝空」（pattern 寄与なし）。
     /// Show/ShowBalloon 発行の pattern 供給源はこのアクセサであり、未格納（ループ不活性）の間は空を
-    /// 返す＝従来の発行結果と観測等価（要件 5.4）。
+    /// 返す（要件 5.4）。
     ///
     /// 不在時は静的な空 [`PatternState`]（プロセス共有・`OnceLock`）への参照を返す（`&self` の寿命へ
     /// 縮約される `&'static`）。
@@ -595,24 +592,23 @@ impl ScopeStates {
     }
 
     /// 対象 (scope, slot) の pattern 進行状態を `new` へコミットし表示発行の要否を判定する
-    /// （[`commit_bind`] の鏡映・要件 6.1/6.2）。
+    /// （`commit_bind` の鏡映・要件 6.1/6.2）。
     ///
     /// 手順（`commit_bind` と同型）:
     /// 1. **冪等ガード（要件 6.2）**: `new` が現在 pattern（[`current_pattern`]・不在は空）と同値なら
     ///    状態を書き込まず [`PatternApplyOutcome::Unchanged`] を返す（発行なし）。
     /// 2. **状態更新**: `pattern_states` へ `new` を書き込む（bind／表示状態機械には干渉しない）。
-    /// 3. **発行判定**: 対象 slot の表示状態（Shell → `scopes`／Balloon → `balloon`）を見て、
-    ///    - `Shown(sid)` → [`PatternApplyOutcome::Changed`]。Shell は現在 bind 集合を同梱した
+    /// 3. **発行判定**: 対象 slot の面（Shell は `scopes`、Balloon は `balloon_face`＝台本で受けた面か
+    ///    知らせの面）を見て、
+    ///    - 面が在る → [`PatternApplyOutcome::Changed`]。Shell は現在 bind 集合を同梱した
     ///      [`DisplayCommand::Show`]、Balloon は binds 非同梱の [`DisplayCommand::ShowBalloon`] を、
     ///      いずれも現 surface id＋新 pattern で構築する（現 surface を新コマで再合成・要件 6.1）。
-    ///    - `Hidden` または未知（`None`）→ [`PatternApplyOutcome::Unchanged`]（防御的非発行）。表示中
-    ///      ゲート（2.1）により commit_pattern は表示中 slot にのみ到達する契約ゆえ、非表示 slot への
-    ///      到達は通常運用では発生しないが、到達しても非表示 surface へ Show を強制しない。
+    ///      バルーンは窓が閉じていても届く。
+    ///    - 面が無い → [`PatternApplyOutcome::Unchanged`]。
     ///
     /// 面種非依存（裁定 (a)）: シェル slot・バルーン slot を同一コードパスで扱い、発行指令の型のみ
     /// slot で分岐する（Shell=Show / Balloon=ShowBalloon）。
     ///
-    /// [`commit_bind`]: ScopeStates::commit_bind
     /// [`current_pattern`]: ScopeStates::current_pattern
     pub fn commit_pattern(
         &mut self,
@@ -649,7 +645,7 @@ impl ScopeStates {
                         binds: self.current_binds(scope).clone(),
                         pattern: new,
                     },
-                    // バルーン面は binds 非同梱（ShowBalloon・M-boot 着せ替え非在）。
+                    // バルーン面は binds 非同梱（ShowBalloon・着せ替えは無い）。
                     Slot::Balloon => DisplayCommand::ShowBalloon {
                         scope: scope.clone(),
                         surface_id: sid,
@@ -664,24 +660,20 @@ impl ScopeStates {
     }
 
     /// 表示中（`Shown`）の全 (scope, slot, surface_id) を列挙する読み取り専用アクセサ
-    /// （[`LoopRuntime`] の抽選・進行の対象 slot 列挙用・要件 2.1）。
+    /// （`LoopRuntime` の抽選の対象の列挙・進行の対象は [`ScopeStates::stage_slots`]・要件 2.1）。
     ///
     /// シェル面 `scopes`・バルーン面 `balloon` の両 map を走査し、`Shown(sid)` のエントリのみを
-    /// `(scope, slot, surface_id)` で返す（`Hidden`／未知は除外）。[`LoopRuntime`] は表示中 slot に
-    /// のみ抽選・進行を走らせる（表示中ゲート）ため、この列挙が評価対象を与える。列挙順は `HashMap`
-    /// 由来で非決定ゆえ、消費側（[`LoopRuntime`]）が固定順（scope 昇順→Shell→Balloon）へ整列する
-    /// （D-7）。状態は一切変更しない純粋な読み取りで、`LoopRuntime` は bind／表示状態機械へ書き込まない。
-    ///
-    /// [`LoopRuntime`]: crate::looper::LoopRuntime
+    /// `(scope, slot, surface_id)` で返す（`Hidden`／未知は除外）。並びは乱数を引く固定順（scope
+    /// 昇順→Shell→Balloon・D-7）で、[`ScopeStates::stage_slots`] と同じ。状態は一切変更しない純粋な
+    /// 読み取りで、`LoopRuntime` は bind／表示状態機械へ書き込まない。
     pub fn shown_slots(&self) -> Vec<(ActorKey, Slot, u32)> {
+        let scopes: BTreeSet<&ActorKey> = self.scopes.keys().chain(self.balloon.keys()).collect();
         let mut out = Vec::new();
-        for (scope, st) in &self.scopes {
-            if let ScopeState::Shown(sid) = st {
+        for scope in scopes {
+            if let Some(ScopeState::Shown(sid)) = self.scopes.get(scope) {
                 out.push((scope.clone(), Slot::Shell, *sid));
             }
-        }
-        for (scope, st) in &self.balloon {
-            if let ScopeState::Shown(sid) = st {
+            if let Some(ScopeState::Shown(sid)) = self.balloon.get(scope) {
                 out.push((scope.clone(), Slot::Balloon, *sid));
             }
         }
@@ -728,10 +720,10 @@ impl ScopeStates {
     /// 要件 6.1）。
     ///
     /// シェルは [`ScopeStates::shown_slots`] と同じ（見えている＝真）。バルーンは面の番号が分かる
-    /// スコープの全部で、見えているかは知らせの窓（知らせが 1 度も無ければ、今までどおり `\b` で
+    /// スコープの全部で、見えているかは知らせの窓（知らせが 1 度も無ければ、`\b` で
     /// 表示中の面を開いた窓とみなす）。並びはスコープの昇順 → シェル → バルーン。
     pub fn stage_slots(&self) -> Vec<(ActorKey, Slot, u32, bool)> {
-        let scopes: std::collections::BTreeSet<&ActorKey> = self
+        let scopes: BTreeSet<&ActorKey> = self
             .scopes
             .keys()
             .chain(self.balloon.keys())

@@ -11,19 +11,17 @@
 //!    双方が可視であることを実 component 値で先に主張する。
 //! 2. 文字層スロットが**実際に描画内容を持つ**状態でも同じ非表示が及び、内容を壊さずに再表示で
 //!    双方が復帰すること。予約スロットへ内容（`VisualGraphics`）を挿す形は emo-text の
-//!    `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs:249-262`）と同一である。
-//! 3. 外部所有の不可視構築を**指令経由**で行ったとき、`Visual` が可視の値で挿入される瞬間が一度も
-//!    無いこと（Requirement 1.2 の「同一フレーム内の往復も禁止」）。装着 API を直接叩く
+//!    `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs`）と同一である。
+//! 3. 外部所有の不可視構築を**指令経由**で行ったとき、1 回目は `Visual` が可視の値で挿入されず、
+//!    2 回目からは `Visual` が書き換えられないこと（Requirement 1.2 の「同一フレーム内の往復も禁止」）。装着 API を直接叩く
 //!    `mount_visibility_tests.rs` の検査は初期可視性を引数で渡すため、初期可視性を
 //!    `presenter/show.rs` が所有権から導出する側の往復は覆えない。
 
 use super::*;
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
-use areka_actor::reply_channel;
-use bevy_ecs::prelude::{Insert, On, Query};
+use bevy_ecs::prelude::{DetectChanges, Insert, On, Query};
 
 use windows::UI::Composition::Visual as WucVisual;
 use windows::core::Interface;
@@ -31,7 +29,8 @@ use windows::core::Interface;
 use wintf::ecs::{HitTest, HitTestMode, Visual, VisualGraphics};
 
 use super::test_support::{
-    build_target_assets, make_world_with_gpu, mount_entities, show_ok, spawn_window_with_dpi,
+    build_target_assets, hide_ok, make_world_with_gpu, mount_entities, show_ok,
+    spawn_window_with_dpi,
 };
 
 // ── 檻の補助 ────────────────────────────────────────────────────────────────────────────
@@ -96,22 +95,6 @@ fn assert_layers(
     );
 }
 
-/// 明示的な非表示指令を指令の入口（[`EmoPresenter::apply`]）へ流し、応答が `Ok(())` であることを見る。
-fn hide_via_command(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "明示的な非表示指令の応答が Ok でない"
-    );
-}
-
 /// 既定の可視性所有（＝従来の指令駆動）の target を 1 つ組み、初回の表示指令まで済ませて返す。
 ///
 /// 所有権を設定しないことが要点である——本ファイルが対象とするのは本仕様が新設した経路ではなく、
@@ -122,20 +105,18 @@ fn command_driven_target_after_first_show(salt: u8) -> (World, EmoPresenter, Tar
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, salt);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     (world, presenter, TargetId(0))
 }
 
 /// 予約スロットへ描画内容（`VisualGraphics`）を装着する（emo-text の
-/// `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs:249-262`）と同じ形）。
+/// `TextSurface::attach`（`crates/areka-emo-text/src/surface.rs`）と同じ形）。
 ///
-/// 本 crate は emo-text へ依存できない（依存方向は emo-compose → emo-present）ため、装着の形だけを
-/// 同型に再現する。文字の**絵**は要らない——ここで問うのは「内容を持つスロットにも非表示が及ぶか」
-/// であって描かれた画素の内容ではない。
+/// 本 crate は emo-text へ依存できない（emo-text が本 crate に依存しており、逆向きは循環になる）
+/// ため、装着の形だけを同型に再現する。文字の**絵**は要らない——ここで問うのは「内容を持つ
+/// スロットにも非表示が及ぶか」であって描かれた画素の内容ではない。
 fn attach_content_to_slot(world: &mut World, slot: Entity) {
     let compositor = world
         .get_resource::<WucGraphicsResource>()
@@ -171,7 +152,7 @@ fn explicit_hide_command_transitions_both_layers_from_visible_to_hidden() {
         "明示的な非表示指令の直前",
     );
 
-    hide_via_command(&mut presenter, &mut world, target);
+    hide_ok(&mut presenter, &mut world, target);
 
     assert_layers(
         &world,
@@ -213,7 +194,7 @@ fn explicit_hide_command_covers_a_text_layer_that_holds_drawn_content() {
         "文字層へ内容を装着した直後",
     );
 
-    hide_via_command(&mut presenter, &mut world, target);
+    hide_ok(&mut presenter, &mut world, target);
 
     assert_layers(
         &world,
@@ -261,9 +242,7 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x43);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), VisibilityOwnership::External)
         .expect("装着済み target への所有権設定は Ok");
@@ -306,4 +285,20 @@ fn external_construction_through_the_command_funnel_never_inserts_a_visible_visu
         Layers::Hidden,
         "外部所有の初回表示指令の直後",
     );
+
+    // 2 回目からは書き換え無し: 同じ呼び出しの中で見える→消えるの往復があれば変更の印が立つ
+    // （同値は書かないので、印は値を書いた証拠になる）。
+    world.clear_trackers();
+    world.increment_change_tick();
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    for (e, what) in [(surface, "枠の面"), (slot, "文字層スロット")] {
+        assert!(
+            !world
+                .entity(e)
+                .get_ref::<Visual>()
+                .expect("Visual")
+                .is_changed(),
+            "2 回目の表示指令で{what} entity の Visual が書き換えられた（Requirement 1.2）"
+        );
+    }
 }

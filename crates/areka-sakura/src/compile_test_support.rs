@@ -1,5 +1,6 @@
 use super::*;
 use crate::sysvar::SystemVarSnapshot;
+use std::borrow::Borrow;
 
 /// task 4.1 で `compile` 署名が `(instructions, vars)` へ変わった。既存檻は sysvar を
 /// 観測しない（値源展開＝SystemVar アームは task 4.2 の領分）ため、空スナップショットを
@@ -36,6 +37,16 @@ pub(super) fn cue_eq(a: &Cue, b: &Cue) -> bool {
         && a.start_time == b.start_time
         && a.payload == b.payload
         && a.duration == b.duration
+}
+
+/// 2 つの合図の列が同じ数で、1 つずつ [`cue_eq`] で等しいことを確かめる（内容と時刻・指摘 89）。
+/// `&[Cue]` も `&[&Cue]`（絞り込んだ列）も受ける。
+pub(super) fn assert_cues_eq<A: Borrow<Cue>, B: Borrow<Cue>>(a: &[A], b: &[B], what: &str) {
+    assert_eq!(a.len(), b.len(), "{what}: cue の数");
+    for (i, (x, y)) in a.iter().zip(b).enumerate() {
+        let (x, y) = (x.borrow(), y.borrow());
+        assert!(cue_eq(x, y), "{what}: cue[{i}] が違う: {x:?} vs {y:?}");
+    }
 }
 
 /// 内容 cue を持つ台本は先頭へ単一 `ClearAll`（`start_time=0.0`・`duration=0.0`）を前置する

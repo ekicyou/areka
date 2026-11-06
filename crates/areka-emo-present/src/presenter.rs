@@ -1,7 +1,7 @@
 //! `EmoPresenter`（presenter.rs）: 提示段の統括ハブ（合成・キャッシュ・表示・マスクの一点結線）。
 //!
-//! 上流が組んだ部品（[`ComposeCache`]・`display::record_display`・[`VisualMount`]・emo-compose の
-//! [`Composer`]）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。合成そのもの
+//! 上流が組んだ部品（`ComposeCache`・`display::record_display`・`VisualMount`・emo-compose の
+//! `Composer`）を target ごとに束ね、指令 [`PresentCommand`] を UI スレッド上で適用する。合成そのもの
 //! は emo-compose、表示の記録（原寸 D2D bitmap → 描画命令）は `display.rs`、面の生成・変換・描画は
 //! wintf のコマンドリスト経路、当たり判定マスクは wintf hit-test が担い、本型は「指令を受けて、
 //! キャッシュ引き当て or 合成＋記録 → 表示記録・配置の書き込み → AlphaMask 同期 → 可視制御」を
@@ -58,7 +58,7 @@ mod timing;
 mod transition_record;
 mod visibility;
 
-// 分割前の `use` 一式はここに残す。テストファイル 8 本は `use super::*;` で本モジュールの束縛から
+// 分割前の `use` 一式はここに残す。テストファイルは `use super::*;` で本モジュールの束縛から
 // 外部クレート型を拾っており、子モジュールへ分配してここから落とすと test ビルドが壊れるためである。
 // 子モジュールも同じ束縛を `use super::{…};` 経由で引くので、非 test ビルドでも全 import が消費され、
 // 未使用インポートの抑止指示は 1 つも要らない。
@@ -69,7 +69,10 @@ use std::marker::PhantomData;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
-use areka_actor::{ReplySender, reply_channel};
+use areka_actor::ReplySender;
+// 本番の漏斗は戻り値で結果を返す。応答の口を作るのはテストだけ（`use super::*;` で拾う）。
+#[cfg(test)]
+use areka_actor::reply_channel;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, Recompose,
@@ -89,7 +92,6 @@ use crate::scale::{ScalePolicy, derive_scale};
 pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
-pub use self::replace::DetachedState;
 pub use self::scale_change::{AppliedScale, ScaleChange};
 use self::target::PresentTarget;
 pub use self::target::VisibilityOwnership;
@@ -98,9 +100,9 @@ pub use self::target::VisibilityOwnership;
 // 発行点の内部事情ゆえ再輸出しない（語だけを公開面へ出す）。
 pub use self::transition_record::{
     KIND_SURFACE, SURFACE_FIELD_H, SURFACE_FIELD_REASON, SURFACE_FIELD_RESIZED,
-    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W, SURFACE_FIELDS, SURFACE_REASON_ALL,
-    SURFACE_REASON_INVISIBLE, SURFACE_REASON_K_UNCHANGED, SURFACE_STAGE_ALL, SURFACE_STAGE_SKIPPED,
-    SURFACE_STAGE_UPLOAD, SURFACE_STAGE_VISUALIZE,
+    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W, SURFACE_FIELDS, SURFACE_REASON_INVISIBLE,
+    SURFACE_REASON_K_UNCHANGED, SURFACE_STAGE_ALL, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_UPLOAD,
+    SURFACE_STAGE_VISUALIZE,
 };
 
 #[cfg(test)]
@@ -159,7 +161,7 @@ mod resize_report_tests;
 mod scale_change_tests;
 #[cfg(test)]
 #[path = "presenter_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "presenter_visibility_tests.rs"]
 mod visibility_tests;

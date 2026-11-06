@@ -9,7 +9,7 @@
 //! 4. 指定の有無と値（読めない値を含む）で、区切りの値以外の cue の内容と時刻が変わらないこと
 //!    （選択肢の無い台本では区切りも出ない・転記はそのまま）。
 
-use super::test_support::{barrier_of, compile, cue_eq};
+use super::test_support::{assert_cues_eq, barrier_of, compile};
 use super::{
     BarrierKind, ChoiceTimeoutDirective, Cue, CueCommand, CuePayload, parse_choice_timeout,
 };
@@ -151,14 +151,6 @@ fn without_directive(cues: &[Cue]) -> Vec<Cue> {
         .collect()
 }
 
-/// cue 列が `cue_eq` で 1 つずつ同一であることを確かめる（内容と時刻）。
-fn assert_cues_eq(a: &[Cue], b: &[Cue], what: &str) {
-    assert_eq!(a.len(), b.len(), "{what}: cue の数");
-    for (i, (x, y)) in a.iter().zip(b).enumerate() {
-        assert!(cue_eq(x, y), "{what}: cue[{i}] が違う: {x:?} vs {y:?}");
-    }
-}
-
 /// 台本の文字列 → 区切りの値の表（9.1・2.4・3.1〜3.3・6.1・6.2・1.5・2.2）。
 #[test]
 fn script_directive_sets_choice_barrier_timeout() {
@@ -294,4 +286,24 @@ fn reader_is_reachable_from_the_crate_root() {
     assert_eq!(root_parse(&args(&["abc"])), Root::Unreadable);
     assert_eq!(root_parse(&args(&[])), Root::Default);
     assert_eq!(root_parse(&args(&["500"])), Root::Secs(0.5));
+}
+
+/// **警告（要件 7.11(a)）**: 読めない時間の欄は compile の中で WARN `choice_timeout_unreadable` を
+/// ちょうど 1 行（元の綴りを `raw` に）残し、読める値では 0 行。
+#[test]
+fn unreadable_choice_timeout_warns_once_readable_none() {
+    let warns = |value: &str| {
+        let script = format!(r"{CHOICES}\![set,choicetimeout,{value}]");
+        let (_, events) = log_capture_kit::capture(|| cues_of(&script));
+        events
+            .into_iter()
+            .filter(|e| {
+                e.level == tracing::Level::WARN
+                    && e.field_str("event") == Some("choice_timeout_unreadable")
+            })
+            .map(|e| e.field("raw").map(str::to_string))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(warns("abc"), [Some("abc".to_string())]);
+    assert!(warns("500").is_empty());
 }

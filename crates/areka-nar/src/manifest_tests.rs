@@ -302,18 +302,15 @@ fn treats_an_empty_charset_line_as_no_declaration() {
     assert_eq!(parsed_ghost(&["charset,"]).charset_declared, None);
 }
 
-/// **既知の盲点**——`charset` 行より前に非 ASCII の行があると、既存層の先読みが
-/// そこで打ち切られて宣言に届かない。本文は ANSI 既定で読まれるのに、
-/// `charset_declared` にはファイルに書かれた値が載る（要件 3.3 の境界）。
+/// `charset` 行より前に非 ASCII の行があっても、宣言は使われる（7.11(b)・
+/// `audit-parsers-sakura` が既存層の先読みを位置を問わない読みに直した）。
 ///
-/// 検体 5 つはいずれも `charset` を 1 行目に置くのでこの形には当たらない。
-/// 直すには既存層（`areka-parsers::charset`）の先読みを変えることになり、
-/// 本 spec の境界の外なので、ここでは「そうなる」ことだけを固定する。
+/// 1 行目の名を UTF-8 で書き、後ろの `charset,UTF-8` が効いて正しく読めることで、
+/// ANSI 既定でなく宣言で読まれたことを確かめる。
 #[test]
-fn a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used() {
-    let (sjis, _, _) = encoding_rs::SHIFT_JIS.encode("狛犬");
+fn a_charset_line_after_a_non_ascii_line_is_used() {
     let mut bytes = b"type,ghost\r\nname,".to_vec();
-    bytes.extend_from_slice(&sjis);
+    bytes.extend_from_slice("狛犬".as_bytes());
     bytes.extend_from_slice(b"\r\ncharset,UTF-8\r\ndirectory,komainu\r\n");
 
     let manifest = parse_manifest(&bytes).expect("受理される");
@@ -324,7 +321,7 @@ fn a_charset_line_after_a_non_ascii_line_is_recorded_but_not_used() {
     );
     assert_eq!(
         manifest.name, "狛犬",
-        "実際に使われたのは ANSI 既定のほう（宣言には届いていない）"
+        "本文は書かれた宣言（UTF-8）で読まれる"
     );
 }
 

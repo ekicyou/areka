@@ -37,7 +37,7 @@ pub(super) fn register_click_through_windows(
 
 /// GPU 資源到達フレームで `attach_target`→`apply(ShowSurface)` を各 target 高々 1 回駆動する起動 system。
 ///
-/// `EmoPresenter::apply`/`attach_target` は `&mut World` と NonSend な presenter を要するため排他 system
+/// `EmoPresenter::apply` は `&mut World` と NonSend な presenter を要するため排他 system
 /// （`&mut World`）とし、`EmoBoot` を World から取り出して駆動する（借用衝突を避けるため remove→駆動→
 /// insert）。GPU 資源（`GraphicsCore`/`WucGraphicsResource`）は wintf が窓生成後に遅延挿入するため、
 /// 揃うまでは保留し次 tick で再試行する。装着後は `attached` で以降を no-op 化する。
@@ -73,8 +73,7 @@ pub(super) fn boot_present_system(world: &mut World) {
             &BindSet::default(),
             &PatternState::default(),
         );
-        match boot.presenter.attach_target(
-            world,
+        boot.presenter.attach_target(
             TargetId(0),
             boot.shell_window,
             emo_world,
@@ -83,47 +82,43 @@ pub(super) fn boot_present_system(world: &mut World) {
             // 供給する。窓 DPI が 96 の環境では k=1.0（従来と同一の表示寸・描画結果）、
             // 非 96 DPI ではその比が k として表示へ掛かる。
             AUTHOR_DPI,
-        ) {
-            Ok(()) => {
-                // 起動時 golden 検証用に surface0（bind 無し）を先に表示する（本編の巡回は surface1000 の
-                // まばたきゆえ、golden の基準となる surface0 はここで一度だけ明示表示する）。
-                boot.presenter.apply(
-                    world,
-                    PresentCommand::ShowSurface {
-                        target: TargetId(0),
-                        surface_id: 0,
-                        binds: BindSet::default(),
-                        pattern: PatternState::default(),
-                        reply: None,
-                    },
-                );
-                // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: read_back（native 原寸）==
-                // 直接合成した golden を full byte equality で検証する（k に依らず同一・不一致は
-                // loud に panic）。
-                assert_startup_golden(
-                    &boot.presenter,
-                    world,
-                    boot.shell_window,
-                    TargetId(0),
-                    shell_golden,
-                    "shell surface0",
-                );
-                // --- 手動デモ: さくらスクリプト相当の表情＋まばたきを指令切替で再現 ---
-                // \s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]
-                //         \![bind,目,通常,1]\![bind,まばたき,通常,1] を seriko 代役でハンドコンパイル。
-                // 共通表情（腕組み=1101・口‥‥=1206・目通常=1302・眉悲しみ=1502・髪飾りリボン=1800／紅なし）を
-                // surface1000 に合成表示し、まばたき（1400）を CYCLE_INTERVAL_SECS 周期で出し入れして目の開閉を
-                // 手動再現する（EyesOpen⇔EyesClosed）。まばたきの時間駆動アニメ本体は seriko エンジン領分（別 spec・未実装）。
-                boot.presenter.apply(world, boot.cycle_state.command()); // 初回＝EyesOpen（surface1000）
-                let now = world
-                    .get_resource::<FrameTime>()
-                    .map(|ft| ft.0)
-                    .unwrap_or(0.0);
-                boot.shell_cycling = true;
-                boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
-            }
-            Err(e) => tracing::error!(error = %e, "emo-present: シェル target の attach に失敗"),
-        }
+        );
+        // 起動時 golden 検証用に surface0（bind 無し）を先に表示する（本編の巡回は surface1000 の
+        // まばたきゆえ、golden の基準となる surface0 はここで一度だけ明示表示する）。
+        boot.presenter.apply(
+            world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 0,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: None,
+            },
+        );
+        // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: read_back（native 原寸）==
+        // 直接合成した golden を full byte equality で検証する（k に依らず同一・不一致は
+        // loud に panic）。
+        assert_startup_golden(
+            &boot.presenter,
+            world,
+            boot.shell_window,
+            TargetId(0),
+            shell_golden,
+            "shell surface0",
+        );
+        // --- 手動デモ: さくらスクリプト相当の表情＋まばたきを指令切替で再現 ---
+        // \s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]
+        //         \![bind,目,通常,1]\![bind,まばたき,通常,1] を seriko 代役でハンドコンパイル。
+        // 共通表情（腕組み=1101・口‥‥=1206・目通常=1302・眉悲しみ=1502・髪飾りリボン=1800／紅なし）を
+        // surface1000 に合成表示し、まばたき（1400）を CYCLE_INTERVAL_SECS 周期で出し入れして目の開閉を
+        // 手動再現する（EyesOpen⇔EyesClosed）。まばたきの時間駆動アニメ本体は seriko エンジン領分（別 spec・未実装）。
+        boot.presenter.apply(world, boot.cycle_state.command()); // 初回＝EyesOpen（surface1000）
+        let now = world
+            .get_resource::<FrameTime>()
+            .map(|ft| ft.0)
+            .unwrap_or(0.0);
+        boot.shell_cycling = true;
+        boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
     }
 
     if let Some((emo_world, atlas)) = boot.balloon_assets.take() {
@@ -136,8 +131,7 @@ pub(super) fn boot_present_system(world: &mut World) {
             &BindSet::default(),
             &PatternState::default(),
         );
-        match boot.presenter.attach_target(
-            world,
+        boot.presenter.attach_target(
             TargetId(1),
             boot.balloon_window,
             emo_world,
@@ -145,30 +139,26 @@ pub(super) fn boot_present_system(world: &mut World) {
             // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が balloon descript の
             // 実値を供給する。シェルと同一の分母を用いる（[`AUTHOR_DPI`]）。
             AUTHOR_DPI,
-        ) {
-            Ok(()) => {
-                boot.presenter.apply(
-                    world,
-                    PresentCommand::ShowSurface {
-                        target: TargetId(1),
-                        surface_id: 0,
-                        binds: BindSet::default(),
-                        pattern: PatternState::default(),
-                        reply: None,
-                    },
-                );
-                // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）。
-                assert_startup_golden(
-                    &boot.presenter,
-                    world,
-                    boot.balloon_window,
-                    TargetId(1),
-                    balloon_golden,
-                    "balloon surface0",
-                );
-            }
-            Err(e) => tracing::error!(error = %e, "emo-present: バルーン target の attach に失敗"),
-        }
+        );
+        boot.presenter.apply(
+            world,
+            PresentCommand::ShowSurface {
+                target: TargetId(1),
+                surface_id: 0,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: None,
+            },
+        );
+        // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）。
+        assert_startup_golden(
+            &boot.presenter,
+            world,
+            boot.balloon_window,
+            TargetId(1),
+            balloon_golden,
+            "balloon surface0",
+        );
     }
 
     // 窓寸 reconcile（emo-dpi-scaling task 5.2・R7.1/R7.2）: 本フレームの全 apply が済んだ**後**に

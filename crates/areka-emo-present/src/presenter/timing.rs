@@ -52,7 +52,7 @@ use crate::command::TargetId;
 /// 読み手は檻だけである（`timing_tests.rs`・task 1.4 の計時ログ較正檻）——製品コードは
 /// リテラルを直接持つため参照しない。契約面を名前で 1 箇所に据えることが本定数の目的であり、
 /// 死蔵ではない。
-#[allow(dead_code)]
+#[cfg(test)]
 pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 
 /// 計時対象の段（Requirement 1.1 の列挙と 1:1）。
@@ -61,9 +61,9 @@ pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 /// 費やされた時間があれば差として現れ、内訳の取りこぼしが判る）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Stage {
-    /// キャッシュ照会（`ComposeCache::get`）。
+    /// キャッシュ照会（`ComposeCache::touch`）。
     CacheLookup,
-    /// 合成（`Composer::compose` / `compose_into`）。
+    /// 合成（`Composer::compose_into` / `compose_into_reusing`）。
     Compose,
     /// 当たり判定マスク生成（`AlphaMask` 生成・引き当て時は実行されない）。
     MaskGen,
@@ -101,7 +101,7 @@ pub(super) struct EmitContext {
     ///
     /// 遷移観測チャネルの全レコード（窓書込・モニタ表更新・サーフェス更新）が同じ番号を持つため、
     /// この 1 フィールドで「段階別計時の行」と「遷移の時系列」が突合できる。供給元は
-    /// `transition_record::frame_of`（World 資源 `FrameCount`）1 箇所である。
+    /// 刻印と同じ `transition_record::stamp_of` の `frame` 1 箇所である。
     pub(super) frame: u32,
 }
 
@@ -316,9 +316,14 @@ fn hash_frame(frame: &PatternFrame, hasher: &mut Fnv1a) {
     // （`Blend(Multiply)` と `Blend(Screen)` が同一値になる系統的衝突＝異なりキー数を
     // 過少に見積もる向き）。`BlendKind` も `#[non_exhaustive]` ゆえ判別子で混ぜ、
     // 直交軸の `fast` を併せて流す。
-    if let ComposeMethod::Blend(mode) = &frame.method {
-        std::mem::discriminant(&mode.kind).hash(hasher);
-        mode.fast.hash(hasher);
+    match &frame.method {
+        ComposeMethod::Blend(mode) => {
+            std::mem::discriminant(&mode.kind).hash(hasher);
+            mode.fast.hash(hasher);
+        }
+        // 未知のメソッドも名前が意味を分ける（同じ理由で判別子だけでは足りない）。
+        ComposeMethod::Unknown(name) => name.hash(hasher),
+        _ => {}
     }
     frame.x.hash(hasher);
     frame.y.hash(hasher);
