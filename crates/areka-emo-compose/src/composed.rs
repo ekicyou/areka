@@ -6,8 +6,7 @@
 
 /// 合成結果（premultiplied BGRA・`Send` 所有・無変換で WUC upload / AlphaMask 生成可能）。
 ///
-/// 内部フィールドは opaque。不変条件として `stride == width * 4`・
-/// `bytes.len() == stride * height`・画素は常に premultiplied BGRA を保つ。
+/// 内部フィールドは opaque。不変条件として `bytes.len() == width * 4 * height`・画素は常に premultiplied BGRA を保つ。
 /// [`new`] は全 0（全透明）バッファを確保して構築し、下流 `blit` が転写で埋める。
 ///
 /// [`new`]: ComposedSurface::new
@@ -15,25 +14,22 @@
 pub struct ComposedSurface {
     width: u32,
     height: u32,
-    /// 常に `width * 4`（BGRA・1 画素 4 バイト）。
-    stride: u32,
-    /// premultiplied BGRA バイト列（`len == stride * height`）。
+    /// premultiplied BGRA バイト列（`len == width * 4 * height`）。
     bytes: Vec<u8>,
 }
 
 impl ComposedSurface {
     /// 指定サイズの全透明（全 0）premultiplied BGRA サーフェスを確保する。
     ///
-    /// `stride = width * 4`・`bytes.len() = stride * height` を満たす 0 埋めバッファを割り当てる。
-    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。
+    /// `bytes.len() = width * 4 * height` を満たす 0 埋めバッファを割り当てる。
+    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下で
+    /// あること（`stride()` を u32 であふれさせない・debug で確かめる）。
     pub fn new(width: u32, height: u32) -> Self {
-        let stride = width * 4;
-        let len = stride as usize * height as usize;
+        debug_assert_within_extent(width, height);
         ComposedSurface {
             width,
             height,
-            stride,
-            bytes: vec![0u8; len],
+            bytes: vec![0u8; byte_len(width, height)],
         }
     }
 
@@ -49,7 +45,8 @@ impl ComposedSurface {
 
     /// 行ストライド（バイト）。常に `width * 4`。
     pub fn stride(&self) -> u32 {
-        self.stride
+        // 幅は合成で上限（一辺 `plan::MAX_EXTENT`）以下に抑えるので u32 で足りる。
+        self.width * 4
     }
 
     /// premultiplied BGRA バイト列の参照（`len == stride * height`）。
@@ -79,7 +76,7 @@ impl ComposedSurface {
         self.bytes.capacity()
     }
 
-    /// バッファを `w×h`（`stride = w*4`）へ再確保し、全画素を 0（全透明）へクリアする。
+    /// バッファを `w×h`（行の幅 `w*4`）へ再確保し、全画素を 0（全透明）へクリアする。
     ///
     /// 既存の `Vec<u8>` 容量を**再利用**する（要件 10.3・毎フレーム経路のゼロアロケーション）:
     /// 必要バイト数が現容量以下なら再割り当てせず `truncate`＋`resize`／不足時のみ伸長する。
@@ -88,17 +85,19 @@ impl ComposedSurface {
     ///
     /// # 公開している理由（消費者）
     ///
-    /// `areka-emo-present` の予算檻（`presenter/budget_tests.rs` の `fill_extent`）が席を
-    /// `w×h` へ合わせるために呼ぶ。本番の合成先（`compose_into` → [`crate::blit`]）が通るのは
-    /// **まさにこのメソッド**である。
+    /// `areka-emo-present` の予算のテストが席を `w×h` へ合わせるために直に呼ぶ。本番の合成先
+    /// （`compose_into` → [`crate::blit`]）が通るのは**まさにこのメソッド**である。
+    ///
+    /// 幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下であること（[`new`] と同じく debug で確かめる）。
+    ///
+    /// [`new`]: ComposedSurface::new
     ///
     /// [`bytes_mut`]: ComposedSurface::bytes_mut
     pub fn resize_and_clear(&mut self, width: u32, height: u32) {
-        let stride = width * 4;
-        let len = stride as usize * height as usize;
+        debug_assert_within_extent(width, height);
+        let len = byte_len(width, height);
         self.width = width;
         self.height = height;
-        self.stride = stride;
         // 容量再利用: 既存要素を 0 で埋め直し、長さを len へ合わせる（>len は捨て・<len は 0 追加）。
         // Vec::resize は容量が足りれば再割り当てしない（10.3）。
         self.bytes.clear();
@@ -112,11 +111,9 @@ impl ComposedSurface {
     ///
     /// [`resize_and_clear`]: ComposedSurface::resize_and_clear
     pub(crate) fn resize_from(&mut self, width: u32, height: u32, src: &[u8]) {
-        let stride = width * 4;
-        debug_assert_eq!(src.len(), stride as usize * height as usize);
+        debug_assert_eq!(src.len(), byte_len(width, height));
         self.width = width;
         self.height = height;
-        self.stride = stride;
         self.bytes.clear();
         self.bytes.extend_from_slice(src);
     }
@@ -127,6 +124,20 @@ impl ComposedSurface {
     pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
         &mut self.bytes
     }
+}
+
+/// 幅と高さが外形の上限（[`crate::plan::MAX_EXTENT`]）以下か。合成は `build_plan` で越える外形を
+/// `ExtentTooLarge` として断るので、越えるのは呼び手の誤り（`stride()` を u32 であふれさせない）。
+fn debug_assert_within_extent(width: u32, height: u32) {
+    debug_assert!(
+        width <= crate::plan::MAX_EXTENT && height <= crate::plan::MAX_EXTENT,
+        "外形の上限を越える大きさ: {width}x{height}"
+    );
+}
+
+/// `width×height` の BGRA の長さ（バイト）。掛け算は `usize` で行い、`u32` であふれさせない。
+fn byte_len(width: u32, height: u32) -> usize {
+    width as usize * 4 * height as usize
 }
 
 #[cfg(test)]
@@ -158,5 +169,13 @@ mod tests {
         let s = ComposedSurface::new(2, 2);
         let bytes = s.into_bytes();
         assert_eq!(bytes.len(), 2 * 4 * 2);
+    }
+
+    /// 指摘 33: 外形の上限を越える幅は入口で止める（`stride()` を u32 であふれさせない）。
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "外形の上限")]
+    fn resize_beyond_max_extent_is_rejected() {
+        ComposedSurface::new(0, 0).resize_and_clear(crate::plan::MAX_EXTENT + 1, 0);
     }
 }

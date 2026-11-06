@@ -56,7 +56,6 @@ fn shell() -> Vec<Surface> {
     base.animations = vec![Animation {
         id: 0,
         interval: Interval::Bind,
-        interval_written: true,
         patterns: vec![Pattern {
             index: 0,
             method: DrawMethod::new("overlay".to_string()),

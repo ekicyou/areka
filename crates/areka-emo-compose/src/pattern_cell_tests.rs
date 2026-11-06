@@ -1,4 +1,4 @@
-//! `PatternState` の欄の 3 つの意味と動く絵の子の欄（task 2.2・要件 1.10, 4.5, 7.4）。
+//! `PatternState` の欄の 3 つの意味と動く絵の子の欄（要件 1.10, 4.5, 7.4）。
 //!
 //! 欄の読み `Cell` は「載っていない（経過 0）」「サーフェスを指すコマ」「絵を指すコマ」「消えている」の
 //! 4 つ。等しさは足した欄も比べる（`ComposeKey` に自動で入る）。ここでは 4 つの読みが区別されること、
@@ -6,15 +6,7 @@
 //! 部品の欄・子の欄が混ざらないことを固定する。
 
 use super::*;
-
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
-}
+use crate::plan_test_support::frame;
 
 const TOP: Option<PartKey> = None;
 fn part(n: u32) -> Option<PartKey> {
@@ -29,8 +21,8 @@ fn film(n: u32) -> Option<PartKey> {
 fn four_readings_are_distinct() {
     let mut s = PatternState::default();
     assert_eq!(s.cell(TOP, 1), Cell::Rest);
-    s.set(1, frame(10));
-    assert_eq!(s.cell(TOP, 1), Cell::Frame(&frame(10)));
+    s.set(1, frame(10, 0, 0));
+    assert_eq!(s.cell(TOP, 1), Cell::Frame(&frame(10, 0, 0)));
     s.set_blank(1);
     assert_eq!(s.cell(TOP, 1), Cell::Blank);
     // 「消えている」はコマではない（今までの読み口には現れない）。
@@ -68,26 +60,27 @@ fn blank_is_not_rest() {
 fn frame_and_blank_replace_each_other() {
     let mut a = PatternState::default();
     a.set_blank(1);
-    a.set(1, frame(10));
+    a.set(1, frame(10, 0, 0));
     let mut b = PatternState::default();
-    b.set(1, frame(10));
+    b.set(1, frame(10, 0, 0));
     assert_eq!(a, b);
 
     let mut c = PatternState::default();
-    c.set_part(1400, 0, frame(10));
+    c.set_part(1400, 0, frame(10, 0, 0));
     c.set_part_blank(1400, 0);
     let mut d = PatternState::default();
     d.set_part_blank(1400, 0);
     assert_eq!(c, d);
 }
 
-/// 入れた順に依らず等しい（全部の欄を使う）。
+/// 入れた順に依らず等しい（全部の欄を使う）。emo-present の `ComposeKey` のキャッシュ等価判定に使うので
+/// 挿入順非依存の `Eq` が要る（要件 5.2/5.4）。
 #[test]
 fn eq_is_insertion_order_stable_over_all_cells() {
     let mut a = PatternState::default();
-    a.set(1, frame(10));
+    a.set(1, frame(10, 0, 0));
     a.set_blank(2);
-    a.set_part(1400, 0, frame(20));
+    a.set_part(1400, 0, frame(20, 0, 0));
     a.set_part_blank(1400, 1);
     a.set_film(FilmId(5), 1);
     a.set_film(FilmId(3), 2);
@@ -97,8 +90,8 @@ fn eq_is_insertion_order_stable_over_all_cells() {
     b.set_part_blank(1400, 1);
     b.set_film(FilmId(5), 1);
     b.set_blank(2);
-    b.set_part(1400, 0, frame(20));
-    b.set(1, frame(10));
+    b.set_part(1400, 0, frame(20, 0, 0));
+    b.set(1, frame(10, 0, 0));
 
     assert_eq!(a, b);
     assert_eq!(a.cells().collect::<Vec<_>>(), b.cells().collect::<Vec<_>>());
@@ -121,7 +114,7 @@ fn emptied_state_equals_default() {
     let mut s = PatternState::default();
     s.set_blank(1);
     s.set_part_blank(1400, 0);
-    s.set_part(1401, 0, frame(1));
+    s.set_part(1401, 0, frame(1, 0, 0));
     s.set_film(FilmId(9), 4);
     s.remove(1);
     s.clear_parts();
@@ -136,15 +129,15 @@ fn emptied_state_equals_default() {
 #[test]
 fn clear_parts_keeps_top_only() {
     let mut s = PatternState::default();
-    s.set(1, frame(10));
+    s.set(1, frame(10, 0, 0));
     s.set_blank(2);
-    s.set_part(1400, 0, frame(20));
+    s.set_part(1400, 0, frame(20, 0, 0));
     s.set_part_blank(1400, 1);
     s.set_film(FilmId(5), 1);
     s.clear_parts();
 
     let mut top = PatternState::default();
-    top.set(1, frame(10));
+    top.set(1, frame(10, 0, 0));
     top.set_blank(2);
     assert_eq!(s, top);
 }
@@ -153,22 +146,31 @@ fn clear_parts_keeps_top_only() {
 #[test]
 fn same_number_in_top_part_and_film_never_mix() {
     let mut s = PatternState::default();
-    s.set(0, frame(100));
+    s.set(0, frame(100, 0, 0));
     s.set_part_blank(0, 0);
     s.set_film(FilmId(0), 7);
 
-    assert_eq!(s.cell(TOP, 0), Cell::Frame(&frame(100)));
+    assert_eq!(s.cell(TOP, 0), Cell::Frame(&frame(100, 0, 0)));
     assert_eq!(s.cell(part(0), 0), Cell::Blank);
     assert_eq!(s.cell(film(0), 0), Cell::Picture(7));
 
     s.remove_film(FilmId(0));
-    assert_eq!(s.cell(TOP, 0), Cell::Frame(&frame(100)));
+    assert_eq!(s.cell(TOP, 0), Cell::Frame(&frame(100, 0, 0)));
     assert_eq!(s.cell(part(0), 0), Cell::Blank);
     assert_eq!(s.cell(film(0), 0), Cell::Rest);
 
     // 子の欄は animation 0 だけ（他の番号は載っていない）。
     s.set_film(FilmId(0), 7);
     assert_eq!(s.cell(film(0), 1), Cell::Rest);
+
+    // 一番上を消しても部品は残る（要件 5.10）。
+    s.remove(0);
+    assert_eq!(s.cell(part(0), 0), Cell::Blank);
+    // 同じコマを一番上に置いた状態と部品に置いた状態は等しくない。
+    let (mut top, mut p) = (PatternState::default(), PatternState::default());
+    top.set(0, frame(100, 0, 0));
+    p.set_part(0, 0, frame(100, 0, 0));
+    assert_ne!(top, p);
 }
 
 /// 走査の口は「載っていない」以外の欄を、一番上 → 部品 → 子、各々番号の昇順で返す。
@@ -177,11 +179,11 @@ fn cells_scans_every_non_rest_cell_in_canonical_order() {
     let mut s = PatternState::default();
     s.set_film(FilmId(2), 9);
     s.set_part_blank(1400, 1);
-    s.set_part(1400, 0, frame(20));
+    s.set_part(1400, 0, frame(20, 0, 0));
     s.set_blank(3);
-    s.set(1, frame(10));
-    let f10 = frame(10);
-    let f20 = frame(20);
+    s.set(1, frame(10, 0, 0));
+    let f10 = frame(10, 0, 0);
+    let f20 = frame(20, 0, 0);
     assert_eq!(
         s.cells().collect::<Vec<_>>(),
         vec![

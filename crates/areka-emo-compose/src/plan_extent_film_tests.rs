@@ -1,24 +1,19 @@
-//! 外形に動く絵の子と `always` を数える（task 2.6・要件 1.2・1.7・6.2・7.1）。
+//! 外形に動く絵の子と `always` を数える（要件 1.2・1.7・6.2・7.1）。
 //!
 //! 動く絵の子は画像の element と同じ 1 行で原寸を数え、`always` は全部の pattern の先を着せ替えの
 //! pattern0 と同じやり方で数える。外形はコマ（[`PatternState`]）に依らない静的な量のまま。
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasTable,
-    DecodedImage, LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    bake_with_limits,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::{AnimationFrame, AtlasTable, LoopCount, MemoryDecoder};
 
 use super::compute_extent;
 use crate::bind::BindSet;
-use crate::method::ComposeMethod;
-use crate::nesting::FilmId;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{Extent, build_plan};
+use crate::pattern::PatternState;
+use crate::plan::Extent;
+use crate::plan_test_support::{
+    bake_films_and_bind, frame, insert_film, insert_stills, plan_of, solid,
+};
 use crate::world::EmoWorld;
 
 const BASE: &str = "shell";
@@ -33,23 +28,10 @@ const STILLS: &[(&str, u32, u32)] = &[
 /// 動く絵（名前, 幅, 高さ）。どちらも 2 コマ・待ち 100 ずつ・終わりなし。
 const FILMS: &[(&str, u32, u32)] = &[("film.apng", 30, 20), ("surface1.png", 30, 20)];
 
-fn solid(w: u32, h: u32, c: u8) -> DecodedImage {
-    DecodedImage {
-        width: w,
-        height: h,
-        stride: w * 4,
-        bgra: [c, c, c, 255].repeat((w * h) as usize),
-        has_alpha: true,
-    }
-}
-
 /// 文面を面の表にして焼き、束縛する。`images` は `surface<数字>.png` として置いた絵。
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     let mut dec = MemoryDecoder::default();
-    for &(rel, w, h) in STILLS {
-        let img = solid(w, h, 9);
-        dec.insert(Path::new(BASE).join(rel), w, h, w * 4, img.bgra, true);
-    }
+    insert_stills(&mut dec, Path::new(BASE), STILLS.iter().copied());
     for &(rel, w, h) in FILMS {
         let frames: Vec<AnimationFrame> = [10, 11]
             .into_iter()
@@ -58,59 +40,15 @@ fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
                 delay_ms: 100,
             })
             .collect();
-        dec.insert_animated(
+        insert_film(
+            &mut dec,
             Path::new(BASE).join(rel),
-            AnimationInfo {
-                width: w,
-                height: h,
-                frame_count: frames.len() as u32,
-            },
-            Ok(frames[0].image.clone()),
-            Ok(AnimatedImage {
-                frames,
-                loop_count: LoopCount::Infinite,
-            }),
+            frames,
+            LoopCount::Infinite,
         );
     }
-    let elements = STILLS
-        .iter()
-        .chain(FILMS)
-        .map(|(rel, _, _)| Element {
-            layer: 0,
-            path: ElementPath::new(rel.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
-        &dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&baked.table, SetId(0));
-    assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
-    (world, baked.table)
-}
-
-fn extent(world: &EmoWorld, atlas: &AtlasTable, id: u32) -> Extent {
-    compute_extent(&mut Vec::new(), world, atlas, id)
+    let rels = STILLS.iter().chain(FILMS).map(|(rel, _, _)| *rel);
+    bake_films_and_bind(&dec, Path::new(BASE), rels, text, images)
 }
 
 /// 要件 1.7・6.2: 動く絵を置いたサーフェスの外形は、同じ寸法の静止画を置いたときと同じ。
@@ -123,8 +61,8 @@ fn film_element_extent_equals_same_sized_still() {
     assert_eq!(world.film_sheets().count(), 1, "動く絵は子へ分解されている");
     let (still_world, still_atlas) = build_with(&text("still.png"), &[]);
 
-    let film = extent(&world, &atlas, 0);
-    assert_eq!(film, extent(&still_world, &still_atlas, 0));
+    let film = compute_extent(&world, &atlas, 0);
+    assert_eq!(film, compute_extent(&still_world, &still_atlas, 0));
     assert_eq!(film, Extent { w: 30, h: 20 });
 }
 
@@ -141,16 +79,8 @@ fn animated_base_image_only_surface_is_not_empty() {
         "surface1.png は子へ分解されている"
     );
 
-    assert_eq!(extent(&world, &atlas, 1), Extent { w: 30, h: 20 });
-    let got = build_plan(
-        &mut Vec::new(),
-        &mut Vec::new(),
-        &world,
-        &atlas,
-        1,
-        &BindSet::default(),
-        &Default::default(),
-    );
+    assert_eq!(compute_extent(&world, &atlas, 1), Extent { w: 30, h: 20 });
+    let got = plan_of(&world, &atlas, 1, &BindSet::default(), &Default::default()).1;
     assert_eq!(got, Ok(Extent { w: 30, h: 20 }));
 }
 
@@ -174,11 +104,12 @@ const ALWAYS: &str = "surface0\n{\nelement0,overlay,body.png,0,0\n\
 fn hand_written_always_extent_is_union_of_all_patterns() {
     let (world, atlas) = build_with(ALWAYS, &[]);
     // wide (2+40)×5・tall 5×(4+50)・body 10×10 の和集合。
-    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
+    assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
 }
 
 /// seriko-pattern-calls 6.8・M6: 純 `bind` は `always` と同じく全部の pattern の先を数える（負の番号と
-/// 8 語の欄 2 は数えない）。`bind+random` は今のまま番号の最も小さい 1 つだけ（pattern1 の big は数えない）。
+/// 8 語の欄 2 は数えない）。`bind+random` は今のまま番号の最も小さい 1 つだけ（pattern0 の tall を (0,10) に
+/// 数え、pattern1 の big は数えない）。
 #[test]
 fn pure_bind_extent_is_union_of_all_patterns() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\n\
@@ -190,60 +121,24 @@ fn pure_bind_extent_is_union_of_all_patterns() {
                 animation0.pattern4,insert,99,0,0,0\n\
                 animation0.pattern5,move,99,0,0,0\n\
                 animation1.interval,bind+random,2\n\
-                animation1.pattern0,overlay,30,0,0,0\n\
+                animation1.pattern0,overlay,31,0,0,10\n\
                 animation1.pattern1,overlay,99,0,0,0\n}\n\
                 surface30\n{\nelement0,overlay,wide.png,0,0\n}\n\
                 surface31\n{\nelement0,overlay,tall.png,0,0\n}\n\
                 surface99\n{\nelement0,overlay,big.png,0,0\n}\n";
     let (world, atlas) = build_with(text, &[]);
-    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
+    assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 60 });
 }
 
-/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ・消えている・動く絵の子のコマ）。
+/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ）。外形は束縛のときの表を引くだけでコマを
+/// 受け取らないので、替えた計画 1 回で足りる（指摘 118）。動く絵の子のコマは、ここの検体では
+/// 替えても命令が外形の内に収まり確かめにならないので外した。
 #[test]
 fn cells_do_not_change_extent() {
-    let text = format!(
-        "{ALWAYS}surface2\n{{\nelement0,overlay,body.png,0,0\nelement1,overlay,film.apng,0,0\n}}\n"
-    );
-    let (world, atlas) = build_with(&text, &[]);
-    let film = world.film_sheets().next().expect("子が在る");
-    let film_id: FilmId = film.id;
-    let other_picture = film.frames[1];
-
-    let mut cells = vec![PatternState::default()];
-    let mut p = PatternState::default();
-    p.set(
-        0,
-        PatternFrame {
-            surface_id: 31,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 4,
-        },
-    );
-    cells.push(p);
-    let mut p = PatternState::default();
-    p.set_blank(0);
-    cells.push(p);
-    let mut p = PatternState::default();
-    p.set_film(film_id, other_picture);
-    cells.push(p);
-
-    for top in [0, 2] {
-        let want = extent(&world, &atlas, top);
-        for pattern in &cells {
-            let got = build_plan(
-                &mut Vec::new(),
-                &mut Vec::new(),
-                &world,
-                &atlas,
-                top,
-                &BindSet::default(),
-                pattern,
-            );
-            assert_eq!(got, Ok(want), "top={top} pattern={pattern:?}");
-        }
-    }
-    assert_eq!(extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
-    assert_eq!(extent(&world, &atlas, 2), Extent { w: 30, h: 20 });
+    let (world, atlas) = build_with(ALWAYS, &[]);
+    let mut pattern = PatternState::default();
+    pattern.set(0, frame(31, 0, 4));
+    let got = plan_of(&world, &atlas, 0, &BindSet::default(), &pattern).1;
+    assert_eq!(got, Ok(compute_extent(&world, &atlas, 0)));
+    assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
 }

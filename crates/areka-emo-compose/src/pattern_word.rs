@@ -26,7 +26,7 @@ pub enum PatternWord {
 /// 描画メソッドの語が 8 語のどれかを答える（綴りの比べ方は合成メソッドと同じ
 /// [`canonical_method_name`]・記録は出さない）。
 pub fn pattern_word(method: &str) -> PatternWord {
-    match canonical_method_name(method).as_str() {
+    match &*canonical_method_name(method) {
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#start_2cID:1
         "start" => PatternWord::Start,
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#stop_2cID:1

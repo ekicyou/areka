@@ -5,8 +5,9 @@ use areka_emo_compose::BindSet;
 use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    INFO_LINE_MESSAGE, build_assets_with_valid_and_empty, build_target_assets, capture, hide_ok,
-    make_world_with_gpu, mask_dims, mount_entities, show_ok, show_with, spawn_window_with_dpi,
+    INFO_LINE_MESSAGE, bake_world, bind_overlay_surface, build_assets_with_valid_and_empty,
+    build_target_assets, capture, elem, gradient, hide_ok, make_world_with_gpu, mask_dims,
+    mount_entities, shell_of, show_ok, show_with, spawn_window_with_dpi, surface,
 };
 
 /// R3.4 観測完了（skip＋表示不変の回帰檻）: 有効 id で表示・マスクを確立後、**解決不能 id** の
@@ -215,6 +216,53 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
             .is_none(),
         "EmptyComposition は cache へ 0×0 を挿入しない"
     );
+}
+
+/// 外形が上限を越える面（`ExtentTooLarge`・合成が error! 済み）も `EmptyComposition` と同じく隠す縮退＋
+/// reply Ok（申し合わせ 11-05・audit-emo-compose 指摘 23）。面 1000 は着せ替えの先 5000 を一辺の上限
+/// 16384 より遠い (20000, 0) に置く（外形は有効な着せ替えに依らないので、着せ替えなしでも越える）。
+#[test]
+fn extent_too_large_degrades_to_hidden_and_replies_ok() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas) = bake_world(
+        shell_of(vec![
+            bind_overlay_surface(20_000, 0),
+            surface(5000, vec![elem("p.png", 0, 0)]),
+        ]),
+        vec![("p.png", 5, 4, gradient(5, 4, 0x22))],
+    );
+    let direct = Composer::new().compose(
+        &emo_world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+    );
+    assert!(
+        matches!(
+            direct,
+            Err(ComposeError::ExtentTooLarge { surface: 1000, .. })
+        ),
+        "前提: 面 1000 は ExtentTooLarge: {direct:?}"
+    );
+
+    let mut presenter = EmoPresenter::new();
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+    show_ok(&mut presenter, &mut world, TargetId(0), 5000);
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
+
+    let outcome = show_with(
+        &mut presenter,
+        &mut world,
+        TargetId(0),
+        1000,
+        BindSet::default(),
+        PatternState::default(),
+    );
+    assert!(matches!(outcome, Ok(())), "隠す縮退＋reply Ok: {outcome:?}");
+    assert!(!world.get::<Visual>(surface_entity).unwrap().is_visible);
+    assert!(!presenter.targets.get(&TargetId(0)).unwrap().visible);
 }
 
 /// R3.3 観測完了（Hide → 再 ShowSurface 復帰）: 有効表示 → `Hide`（不可視＋`HitTest::none()`＋

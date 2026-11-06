@@ -94,7 +94,6 @@ smile,[0,1,2]
             animations: vec![Animation {
                 id: 0,
                 interval: Interval::Bind,
-                interval_written: true,
                 patterns: vec![Pattern {
                     index: 0,
                     // task 1.2: overlay 行の method を忠実転記（field[1]＝"overlay"）。

@@ -1,13 +1,14 @@
-//! 子の領域の持ち込み（要件 4.1〜4.10・7.1・8.3・タスク 5.2）。
+//! 子の領域の持ち込み（要件 4.1〜4.10・7.1・8.3）。
 //!
 //! 持ち込み済みの列を [`EmoWorld::hit_regions`] で引き、`hit_region_in`（画家則＝後ろが手前）で
 //! 当てて確かめる。並びは［子から持ち込む分（element定義の番号の昇順）］→［親に直接書いた領域］。
 
-use areka_parsers::shell::{Collision, CollisionName, parse};
+use areka_parsers::shell::parse;
 
 use super::HitRegions;
 use crate::hit::{RegionPriority, hit_region_in};
-use crate::world::{EmoWorld, SurfaceIndex};
+use crate::plan_test_support::{coll, component_of};
+use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -22,19 +23,7 @@ fn hit(world: &EmoWorld, id: u32, x: i64, y: i64) -> Option<String> {
 
 /// 面の表で `id` に [`HitRegions`] が付いているか。
 fn has_regions(world: &EmoWorld, id: u32) -> bool {
-    let entity = world.world().resource::<SurfaceIndex>().0[&id];
-    world.world().get::<HitRegions>(entity).is_some()
-}
-
-fn coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str) -> Collision {
-    Collision {
-        index,
-        left,
-        top,
-        right,
-        bottom,
-        name: CollisionName::new(name.to_string()),
-    }
+    component_of::<HitRegions>(world.world(), id).is_some()
 }
 
 /// 子の領域が element定義の X,Y だけずれた位置で当たり、元の位置では当たらない（要件 4.1・4.2）。
@@ -219,10 +208,7 @@ fn pattern_targets_import_nothing() {
 /// ままの `SurfaceMaster.collisions`（要件 7.1）。無い番号は `None`。
 #[test]
 fn shell_without_nesting_gets_no_hit_regions() {
-    let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-    let w = world_of(&text);
+    let w = EmoWorld::build(&crate::sample_test_support::emo2_shell());
     let ids: Vec<u32> = w.surface_ids().collect();
     assert!(
         ids.iter()
@@ -248,9 +234,18 @@ fn shell_without_nesting_gets_no_hit_regions() {
 #[test]
 fn fixture_parents_hit_child_names_at_placed_position() {
     let w = world_of(FIXTURE);
+    // 親 B: 子を (90,50) → Head (90,50)-(110,60)・Eye (95,50)-(105,60)（Head が先・Eye が後）。
+    let names: Vec<&str> = w
+        .hit_regions(1)
+        .unwrap()
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(names, ["Head", "Eye"]);
     assert_eq!(hit(&w, 1, 100, 55).as_deref(), Some("Eye"));
     assert_eq!(hit(&w, 1, 92, 55).as_deref(), Some("Head"));
     assert_eq!(hit(&w, 1, 5, 5), None);
+    assert_eq!(hit(&w, 1, 50, 55), None);
     assert_eq!(hit(&w, 2, 10, 5).as_deref(), Some("Eye"));
     assert_eq!(hit(&w, 2, 2, 5).as_deref(), Some("Head"));
     assert_eq!(
@@ -267,4 +262,88 @@ fn fixture_parents_hit_child_names_at_placed_position() {
     // 持ち込みが在るのは子 10 を置く 0・1・2 だけ（10 自身・領域の無い入れ子・pattern定義の先には付かない）。
     let with: Vec<u32> = w.surface_ids().filter(|&id| has_regions(&w, id)).collect();
     assert_eq!(with, vec![0, 1, 2]);
+}
+
+/// 広がりの予算（指摘 3・22・130）: 予算は入る面と面の行と持ち込む領域を数える（collision 1 行の子 1 つで
+/// 入る 1 ＋行 1 ＋渡す 1＝3）。予算 6 の持ち込みは
+/// element定義の子 3 つのうち 2 つ目まで入って 3 つ目を持ち込まず、`error!` を 1 行だけ出す。黙らせる
+/// 組み方の予算は同じく断って記録を出さない。
+#[test]
+fn spent_budget_does_not_import_children_not_yet_entered() {
+    use crate::budget::Budget;
+    use crate::log_capture::capture_logs;
+    use crate::world::Records;
+
+    let w = world_of(
+        "surface0\n{\nelement1,overlay,1,0,0\nelement2,overlay,2,0,0\nelement3,overlay,3,0,0\n}\n\
+         surface1\n{\ncollision0,0,0,5,5,One\n}\n\
+         surface2\n{\ncollision0,0,0,5,5,Two\n}\n\
+         surface3\n{\ncollision0,0,0,5,5,Three\n}\n",
+    );
+    let master = w.surface(0).expect("面 0");
+    let mut list = Vec::new();
+    let logs = capture_logs(|| list = super::regions_of(&w, master, &mut Budget::new(6), None));
+    assert_eq!(
+        list,
+        [coll(0, 0, 0, 5, 5, "One"), coll(0, 0, 0, 5, 5, "Two")]
+    );
+    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert!(
+        logs.lines().any(|l| l.contains("level=ERROR")
+            && l.contains("walk=\"hit_import\"")
+            && l.contains("root=0")),
+        "{logs}"
+    );
+    let logs = capture_logs(|| {
+        list = super::regions_of(
+            &w,
+            master,
+            &mut Budget::with_records(6, Records::Quiet),
+            None,
+        )
+    });
+    assert_eq!(list.len(), 2);
+    assert!(logs.is_empty(), "{logs}");
+    // 予算が足りれば 3 つとも持ち込む（本番の組み方）。
+    assert_eq!(w.hit_regions(0).map(<[_]>::len), Some(3));
+}
+
+/// 指摘 6（2000 根の形の小さな版）: 面 1000 に "Y" が 20 行、面 100+i が "Z" 1 行と面 1000 を置き、面 i が
+/// "Y" 1 行と面 100+i を置く（i は 20 組）。根をまたいで共有する覚えは面 100+i ごとに 21 本の列を持ち、根の
+/// 答えも覚えるので、上限が無ければ合計 480 本になる。覚えの予算 100 では合計が 100 以下で止まり、後の面は
+/// 覚えず、どの根の答えも覚えを使わないときと同じ。
+#[test]
+fn memo_stops_at_its_budget_and_answers_stay_the_same() {
+    use super::{HitMemo, regions_of};
+    use crate::budget::{Budget, VISIT_BUDGET};
+
+    const N: u32 = 20;
+    let mut text = String::from("surface1000\n{\n");
+    for c in 0..20 {
+        text.push_str(&format!("collision{c},0,0,5,5,Y\n"));
+    }
+    text.push_str("}\n");
+    for i in 0..N {
+        text.push_str(&format!(
+            "surface{}\n{{\nelement0,overlay,1000,0,0\ncollision0,0,0,5,5,Z\n}}\n\
+             surface{i}\n{{\nelement0,overlay,{},0,0\ncollision0,0,0,5,5,Y\n}}\n",
+            100 + i,
+            100 + i
+        ));
+    }
+    let w = world_of(&text);
+    let mut memo = HitMemo::new(100);
+    for id in w.surface_ids() {
+        let master = w.surface(id).expect("面");
+        let with_memo = regions_of(&w, master, &mut Budget::new(VISIT_BUDGET), Some(&mut memo));
+        let without = regions_of(&w, master, &mut Budget::new(VISIT_BUDGET), None);
+        assert_eq!(with_memo, without, "根 {id}");
+    }
+    let stored: usize = memo.map.values().map(|(_, list)| list.len()).sum();
+    assert!(stored <= 100, "覚えの合計 {stored} 本は上限以下");
+    assert!(memo.map.contains_key(&100), "初めの面は覚える");
+    assert!(
+        !memo.map.contains_key(&(100 + N - 1)),
+        "上限の後の面は覚えない"
+    );
 }

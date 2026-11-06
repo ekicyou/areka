@@ -1,14 +1,11 @@
-//! task 8.3（要件 11.3・6.2）: トリム等価の pixel テーマ。
+//! トリム等価の pixel テーマ（要件 11.3・6.2）。
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
-use super::{
-    AtlasTable, BindSet, Composer, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId,
-    Shell, SurfaceSet, bake,
-};
-use areka_parsers::shell::AppendTarget;
+use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
+use super::{AtlasTable, BindSet, Composer, MemoryDecoder, Path, PatternState, SetId, Shell};
+use crate::plan_test_support::bound_world;
 
 // ============================================================================
-// task 8.3: トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
+// トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
 //
 // bake は透明マージンを α-bbox トリムで切り落とし、原画像内の bbox 左上を
 // `Placement.trim_offset`・原寸を `AtlasEntry.original` として記録する（`trim.rs`）。
@@ -87,52 +84,36 @@ fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec
         bgra.clone(),
         has_alpha,
     );
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    let table = bake(std::slice::from_ref(&set), &dec, PackConfig::default()).table;
-    (table, bgra)
+    (bake_emo2(shell, base, &dec), bgra)
 }
 
-/// task 8.3（要件 11.3・6.2）: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
+/// 要件 11.3・6.2: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
 ///
-/// surface0 の element0 は配置 (0,0)（実 fixture・既存テストで固定）。透明マージン付き 40×40 を
+/// surface0 の element0 は配置 (0,0)（実 fixture・前提は `golden_tests_surface0_base_tests` が固定する）。透明マージン付き 40×40 を
 /// 挿入すると bake はトリム（trim_offset=(12,15)・original=40×40・uv=10×10）する。合成では
 /// dest = 配置 (0,0) ＋ trim_offset (12,15) = (12,15) へ不透明コアが着弾し、その他は透明のまま。
 /// これは原画像（コアが (12,15) に premultiplied・残り 0）とバイト単位で一致する。
-/// あわせて外形が**原寸 40×40**（トリム後コア 10×10 ではない・task 5.4/要件 6.5）であることを固定する。
+/// あわせて外形が**原寸 40×40**（トリム後コア 10×10 ではない・要件 6.5）であることを固定する。
 #[test]
 fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let shell = parse_emo2_shell();
-
-    // surface0 が element0 単層・配置 (0,0)・bind 無しであることを実データで確認する（前提固定）。
-    let s0 = shell
-        .surfaces
-        .iter()
-        .find(|s| s.targets == [AppendTarget::Single(0)])
-        .expect("emo2 surfaces.txt に surface0 が存在する");
-    assert_eq!(s0.elements.len(), 1, "surface0 は element0 単層");
-    assert_eq!(
-        (s0.elements[0].x, s0.elements[0].y),
-        (0, 0),
-        "element0 は原点配置（配置 (0,0)＋trim_offset で着弾位置が決まる）"
-    );
 
     let base = shell_master_dir();
     let (atlas, original_bytes) = build_atlas_margined_surface0(&shell, &base);
 
     // bake が現に記録したトリム情報を診断的に固定する（trim_offset/original/uv が期待どおり）。
-    // element0 は fold 後の登場順で ElementId(0)（surface0 単層・既存 8.1 harness と同一束縛）。
-    let entry = atlas.entry(areka_emo_atlas::ElementId(0));
+    // element0 の絵は名前から引く（焼きの番号の振り方に依らない）。
+    let id = atlas
+        .resolve(SetId(0), "surface0.png")
+        .expect("surface0.png は焼いてある");
+    let entry = atlas.entry(id);
     assert_eq!(
         entry.original,
         areka_emo_atlas::Size {
             w: ORIG_W,
             h: ORIG_H
         },
-        "original は原寸 40×40（トリム後コアではない・task 5.4 の外形母集合）"
+        "original は原寸 40×40（トリム後コアではない・外形の母集合）"
     );
     let placement = entry
         .placement
@@ -153,8 +134,7 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     );
 
     // fold → bind → compose（surface0・空 BindSet）。
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
     let out = Composer::new()
         .compose(
             &world,
@@ -185,78 +165,5 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
         out.bytes(),
         original_bytes.as_slice(),
         "トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価（要件 6.2/11.3）"
-    );
-
-    // 着弾位置の要点確認: コア左上 (12,15) は不透明・素の配置 (0,0) は透明。
-    let core_tl = (
-        (INNER_Y * out.stride() + INNER_X * 4) as usize,
-        [CORE_B, CORE_G, CORE_R, 255u8],
-    );
-    assert_eq!(
-        &out.bytes()[core_tl.0..core_tl.0 + 4],
-        &core_tl.1,
-        "配置+trim=(12,15) に不透明コアが着弾"
-    );
-    assert_eq!(
-        &out.bytes()[0..4],
-        &[0, 0, 0, 0],
-        "素の配置 (0,0)（trim を足さない位置）は透明のまま（トリムが見た目を変えない）"
-    );
-}
-
-/// 非空虚性ガード（要件 6.2/11.3）: 「trim_offset を足さない」誤配置は合成結果と一致しない。
-///
-/// byte-equality が tautology でないことを示すため、コアを **trim_offset を加算せず**素の配置
-/// (0,0) に置いた「誤った期待バッファ」を手組みし、それが実際の合成結果と**不一致**になることを
-/// 固定する。もし blit が trim_offset を再加算していなければ（要件 6.2 のバグ）、コアは (0,0) に
-/// 着弾しこの誤バッファと一致してしまう——本 assert_ne! はその退行を検出する。
-#[test]
-fn surface0_trim_equivalence_is_non_vacuous() {
-    let shell = parse_emo2_shell();
-    let base = shell_master_dir();
-    let (atlas, _original) = build_atlas_margined_surface0(&shell, &base);
-
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
-    let out = Composer::new()
-        .compose(
-            &world,
-            &atlas,
-            0,
-            &BindSet::default(),
-            &PatternState::default(),
-        )
-        .expect("Ok");
-
-    // 誤った期待: コアを trim_offset を足さず原点 (0,0) に置いた 40×40 バッファ。
-    // 実際の合成は配置+trim=(12,15) にコアを置くので、両者は一致してはならない。
-    let stride = ORIG_W * 4;
-    let mut wrong = vec![0u8; (stride * ORIG_H) as usize];
-    for y in 0..CORE_H {
-        for x in 0..CORE_W {
-            let off = (y * stride + x * 4) as usize;
-            wrong[off] = CORE_B;
-            wrong[off + 1] = CORE_G;
-            wrong[off + 2] = CORE_R;
-            wrong[off + 3] = 255;
-        }
-    }
-
-    assert_ne!(
-        out.bytes(),
-        wrong.as_slice(),
-        "trim_offset を足さない誤配置は合成結果と不一致＝byte-equality は非空虚（blit が現に trim_offset を再加算・要件 6.2）"
-    );
-
-    // 誤バッファでコアが在る (0,0) は、実合成では透明（trim で (12,15) へ移動済み）＝差の直接証拠。
-    assert_eq!(
-        &wrong[0..4],
-        &[CORE_B, CORE_G, CORE_R, 255],
-        "誤バッファは (0,0) にコア"
-    );
-    assert_eq!(
-        &out.bytes()[0..4],
-        &[0, 0, 0, 0],
-        "実合成の (0,0) は透明（差が生じる画素）"
     );
 }

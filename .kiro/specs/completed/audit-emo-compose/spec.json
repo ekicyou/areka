@@ -1,0 +1,26 @@
+{
+  "feature_name": "audit-emo-compose",
+  "created_at": "2026-11-05T09:23:26Z",
+  "updated_at": "2026-11-06T04:48:31Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-06T04:48:31Z"
+    }
+  },
+  "ready_for_implementation": true
+}

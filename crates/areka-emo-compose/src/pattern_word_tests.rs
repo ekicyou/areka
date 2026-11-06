@@ -1,8 +1,6 @@
 //! 8 語の見分けと相手の欄の読みの檻（seriko-pattern-calls 要件 1.2・2.1〜2.3・9.2）。
 
 use super::{PatternWord, UnreadableTarget, call_targets, pattern_word};
-use crate::method::is_move_name;
-use crate::world::targets_animation_id;
 
 const LISTS: [PatternWord; 4] = [
     PatternWord::AlternativeStart,
@@ -43,41 +41,35 @@ fn other_words_are_draw() {
     }
 }
 
-/// 今の 2 つの判定は照会への薄い呼び出しで、答えは 7 語と move に揃う。
-#[test]
-fn legacy_checks_follow_the_query() {
-    for method in [
-        "start",
-        "Stop",
-        "alternative-start",
-        "alternativestop",
-        "parallel_start",
-        "parallelstop",
-        "INSERT",
-    ] {
-        assert!(targets_animation_id(method), "{method}");
-        assert!(!is_move_name(method), "{method}");
-    }
-    assert!(!targets_animation_id(" Move "));
-    assert!(is_move_name(" Move "));
-    assert!(!targets_animation_id("overlay"));
-    assert!(!is_move_name("overlay"));
-}
-
 /// start・stop・insert は番号 1 つを読む（要件 2.1）。
 #[test]
 fn single_words_read_one_number() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
         assert_eq!(call_targets(word, "3"), ok(&[3]), "{word:?}");
         assert_eq!(call_targets(word, " 12 "), ok(&[12]), "{word:?}");
+        assert_eq!(
+            call_targets(word, "4294967295"),
+            ok(&[u32::MAX]),
+            "{word:?}"
+        );
     }
 }
 
-/// 番号 1 つの語で、空・名前・負の数・並びは読めない（要件 2.5）。
+/// 番号 1 つの語で、空・名前・符号つきの数・並び・u32 を越える数は読めない（要件 2.5）。
 #[test]
 fn single_words_reject_unreadable_columns() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
-        for target in ["", "  ", "abc", "1a", "-1", "(0,1)", "1.5"] {
+        for target in [
+            "",
+            "  ",
+            "abc",
+            "1a",
+            "-1",
+            "+1",
+            "(0,1)",
+            "1.5",
+            "4294967296",
+        ] {
             assert_eq!(
                 call_targets(word, target),
                 Err(UnreadableTarget),
@@ -112,12 +104,22 @@ fn list_words_read_every_list_form() {
     }
 }
 
-/// 並びの 4 語で、空・空の並び・空の項・名前・負の数・閉じない括弧は読めない（要件 2.5）。
+/// 並びの 4 語で、空・空の並び・空の項・名前・符号つきの数・閉じない括弧・u32 を越える数は読めない（要件 2.5）。
 #[test]
 fn list_words_reject_unreadable_columns() {
     for word in LISTS {
         for target in [
-            "", "()", "[]", "(0,,1)", "(0,a)", "(0,-1)", "(0,1", "[0,1)", "abc",
+            "",
+            "()",
+            "[]",
+            "(0,,1)",
+            "(0,a)",
+            "(0,-1)",
+            "(+1)",
+            "(0,1",
+            "[0,1)",
+            "abc",
+            "(0,4294967296)",
         ] {
             assert_eq!(
                 call_targets(word, target),

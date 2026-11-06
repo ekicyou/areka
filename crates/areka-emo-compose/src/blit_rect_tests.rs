@@ -1,5 +1,6 @@
 //! `blit_rect.rs` の兄弟のテスト: 矩形の重ね直しが `blit::execute`（いちから）とバイト単位で
-//! 同じこと、矩形の求め方、いちからへ倒れる 3 条件、長い連なり、hot path の静的検査。
+//! 同じこと、矩形の求め方、いちからへ倒れる 3 条件、長い連なり、合成器の口、uv が頁をはみ出す表、
+//! 端の位置の飽和（hot path の静的検査は `composer_tests.rs`）。
 //!
 //! 見本の絵は半透明を含む決定的な模様（premultiplied・`c <= a`）で、SourceOver の丸めまで突く。
 
@@ -15,6 +16,7 @@ use crate::composed::ComposedSurface;
 use crate::method::ComposeMethod;
 use crate::normalized::Transform;
 use crate::plan::{BlitOp, Extent};
+use crate::plan_test_support::{elem, shell_of, surface};
 
 /// 見本の絵 1 枚（大きさ・切り詰めのずれ・模様の種）。`None` は全透明（placement 無し）。
 type Part = Option<(u32, u32, (i32, i32), u32)>;
@@ -86,7 +88,6 @@ fn fresh(extent: Extent, ops: &[BlitOp], atlas: &AtlasTable) -> ComposedSurface 
 /// 前の命令列 `prev`（その絵はいちから）から今 `cur` を下敷き形で重ね、いちからと同じことを確かめて報告を返す。
 fn reuse_once(extent: Extent, prev: &[BlitOp], cur: &[BlitOp], atlas: &AtlasTable) -> Recompose {
     let base = fresh(extent, prev, atlas);
-    let base_before = base.bytes().to_vec();
     let mut out = ComposedSurface::new(0, 0);
     let r = execute_reusing(&mut out, extent, cur, Some((&base, prev)), atlas);
     assert_eq!(out.width(), extent.w);
@@ -95,7 +96,6 @@ fn reuse_once(extent: Extent, prev: &[BlitOp], cur: &[BlitOp], atlas: &AtlasTabl
         out.bytes() == fresh(extent, cur, atlas).bytes(),
         "下敷き形の絵がいちからの合成とバイト単位で同じ（{r:?}）"
     );
-    assert_eq!(base.bytes(), &base_before[..], "下敷きは読むだけ");
     r
 }
 
@@ -275,7 +275,9 @@ fn out_of_bounds_placement_is_clipped() {
     );
 }
 
-/// 倒れる 3 条件（下敷きなし・外形の違い・`Overlay` でない命令）はどれも `Full` で、絵はいちからと同じ。
+/// 倒れる条件のうち外形の違い・`Overlay` でない命令はどれも `Full` で、絵はいちからと同じ
+/// （下敷きなしは [`no_underlay_is_full_and_byte_identical`]）。走査の表（`.resolve(` が無い）は
+/// `composer_tests.rs` の `hot_path_sources_do_not_call_atlas_resolve`。
 #[test]
 fn fallbacks_report_full() {
     let a = sample_atlas();
@@ -283,20 +285,17 @@ fn fallbacks_report_full() {
     let cur = [op(0, 0, 0), op(3, 9, 5)];
     let want = fresh(EXT, &cur, &a);
 
-    let mut out = ComposedSurface::new(0, 0);
-    assert_eq!(
-        execute_reusing(&mut out, EXT, &cur, None, &a),
-        Recompose::Full
-    );
-    assert_eq!(out.bytes(), want.bytes());
-
-    let small = fresh(Extent { w: 63, h: 64 }, &prev, &a);
-    let mut out = ComposedSurface::new(0, 0);
-    assert_eq!(
-        execute_reusing(&mut out, EXT, &cur, Some((&small, &prev)), &a),
-        Recompose::Full
-    );
-    assert_eq!(out.bytes(), want.bytes());
+    // 下敷きの幅だけ・高さだけが違う。
+    for size in [Extent { w: 63, h: 64 }, Extent { w: 64, h: 63 }] {
+        let small = fresh(size, &prev, &a);
+        let mut out = ComposedSurface::new(0, 0);
+        assert_eq!(
+            execute_reusing(&mut out, EXT, &cur, Some((&small, &prev)), &a),
+            Recompose::Full,
+            "下敷き {size:?}"
+        );
+        assert_eq!(out.bytes(), want.bytes());
+    }
 
     let mut odd = prev.clone();
     odd[0].method = ComposeMethod::OverlayFast;
@@ -392,37 +391,16 @@ fn unchanged_layer_between_movers_240_frames() {
     });
 }
 
-/// 非テストの領域（`#[cfg(test)]` より前）に名前の引き直し（`.resolve(`）が無い。
-#[test]
-fn hot_path_has_no_name_relookup() {
-    let src = include_str!("blit_rect.rs");
-    let non_test = src.split("#[cfg(test)]").next().unwrap_or(src);
-    assert!(non_test.contains("fn execute_reusing"), "検査の的が在る");
-    assert!(
-        !non_test.contains(".resolve("),
-        "blit_rect.rs の hot path は atlas.resolve を呼ばない（要件 4.3）"
-    );
-}
-
-// ── 合成器の口 `Composer::compose_into_reusing`（タスク 2.2・要件 3.1・3.6） ──
+// ── 合成器の口 `Composer::compose_into_reusing`（要件 3.1・3.6） ──
 
 /// 面 1 枚（不透明の背景 8×6 と半透明の小物 3×2）を fold・bind 済みの world と atlas。
 fn composer_world() -> (crate::EmoWorld, AtlasTable) {
-    use areka_emo_atlas::{AlphaParams, MemoryDecoder, PackConfig, SurfaceSet, UseSelfAlpha, bake};
-    use areka_parsers::shell::{DefRef, Element, ElementPath, Shell, Surface};
+    use areka_emo_atlas::MemoryDecoder;
 
-    let el = |layer, path: &str, x, y| Element {
-        layer,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    };
-    let surfaces = vec![Surface {
-        targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
-        elements: vec![el(0, "a.png", 0, 0), el(1, "b.png", 2, 1)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
+    let surfaces = vec![surface(
+        0,
+        vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 2, 1)],
+    )];
     let base = std::path::Path::new("shell/master");
     let mut dec = MemoryDecoder::new();
     dec.insert(
@@ -441,26 +419,9 @@ fn composer_world() -> (crate::EmoWorld, AtlasTable) {
         [40, 30, 20, 128].repeat(6),
         true,
     );
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "bake は失敗しない");
-    let shell = Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions: vec![DefRef::Surface(0)],
-    };
-    let mut world = crate::EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    let table = crate::plan_test_support::bake_decoded(&dec, base, ["a.png", "b.png"].into_iter());
+    let world = crate::plan_test_support::bound_world(&shell_of(surfaces), &[], &table);
+    (world, table)
 }
 
 /// 2 回目から矩形を報告し（同じ入力なので幅 0 の矩形＝前の命令列を覚えている）、絵はいちからと同じ。
@@ -532,4 +493,117 @@ fn composer_failure_keeps_previous_ops() {
         "失敗の前の命令列が残っている"
     );
     assert_eq!(again.bytes(), first.bytes());
+}
+
+// ── uv が頁をはみ出す表（指摘 19・要件 4.4・6.2） ──
+
+/// 面 0（背景 a）と面 1（背景 a＋小物 b）を束縛した world と、b の uv が頁の右へ 1 画素はみ出す表。
+fn uv_overflow_world() -> (crate::EmoWorld, AtlasTable) {
+    let key = |p: &str| AtlasKey {
+        set: SetId(0),
+        rel_path: p.into(),
+    };
+    let placed = |page, uv: Rect| AtlasEntry {
+        original: Size { w: uv.w, h: uv.h },
+        placement: Some(Placement {
+            page,
+            uv_rect: uv,
+            trim_offset: Point { x: 0, y: 0 },
+        }),
+    };
+    let atlas = AtlasTable::new(
+        vec![key("a.png"), key("b.png")],
+        vec![
+            placed(
+                0,
+                Rect {
+                    x: 0,
+                    y: 0,
+                    w: 8,
+                    h: 6,
+                },
+            ),
+            // 頁の幅 3 に対して x + w = 4（右へ 1 画素はみ出す）。
+            placed(
+                1,
+                Rect {
+                    x: 1,
+                    y: 0,
+                    w: 3,
+                    h: 2,
+                },
+            ),
+        ],
+        vec![pattern_page(8, 6, 1), pattern_page(3, 2, 2)],
+    );
+    let shell = shell_of(vec![
+        surface(0, vec![elem(0, "a.png", 0, 0)]),
+        surface(1, vec![elem(0, "a.png", 0, 0), elem(1, "b.png", 2, 1)]),
+    ]);
+    let world = crate::plan_test_support::bound_world(&shell, &[], &atlas);
+    (world, atlas)
+}
+
+/// uv が頁の右へ 1 画素はみ出す命令は、いちからの合成でも矩形の重ね直しでもパニックせず、
+/// その命令だけ飛ばして `warn!`（element・頁・uv）を出す（絵は b の無い面 0 と同じ）。
+#[test]
+fn uv_past_page_edge_is_skipped_with_warn_on_both_paths() {
+    let (world, atlas) = uv_overflow_world();
+    let (binds, pat) = (crate::BindSet::default(), crate::PatternState::default());
+    let mut c = crate::Composer::new();
+    let without_b = c.compose(&world, &atlas, 0, &binds, &pat).expect("Ok");
+    let expect_warn = |logs: &str, path: &str| {
+        assert!(
+            logs.lines().any(|l| l.contains("level=WARN")
+                && l.contains("element=1")
+                && l.contains("page=1")
+                && l.contains("uv=Rect { x: 1, y: 0, w: 3, h: 2 }")
+                && l.contains("頁に収まらない")),
+            "{path}: はみ出しの warn: {logs}"
+        );
+    };
+
+    // いちからの合成。
+    let mut full = ComposedSurface::new(0, 0);
+    let logs = crate::log_capture::capture_logs(|| {
+        c.compose_into(&mut full, &world, &atlas, 1, &binds, &pat)
+            .expect("Ok");
+    });
+    expect_warn(&logs, "いちから");
+    assert_eq!(full.bytes(), without_b.bytes(), "いちから: b だけ飛ばす");
+
+    // 矩形の重ね直し（下敷き＝面 0 の絵・命令列の違いは b だけ）。
+    let mut base = ComposedSurface::new(0, 0);
+    c.compose_into_reusing(&mut base, None, &world, &atlas, 0, &binds, &pat)
+        .expect("Ok");
+    let mut out = ComposedSurface::new(0, 0);
+    let mut r = Recompose::Full;
+    let logs = crate::log_capture::capture_logs(|| {
+        r = c
+            .compose_into_reusing(&mut out, Some(&base), &world, &atlas, 1, &binds, &pat)
+            .expect("Ok");
+    });
+    assert!(
+        matches!(r, Recompose::Partial { w: 3, h: 2, .. }),
+        "矩形の道を通る: {r:?}"
+    );
+    expect_warn(&logs, "矩形");
+    assert_eq!(out.bytes(), without_b.bytes(), "矩形: b だけ飛ばす");
+}
+
+/// 指摘 31: i64 の端の位置でも置き場と転写先の足し算は飽和し、panic せず絵の外として切られる。
+#[test]
+fn extreme_position_saturates_without_panic() {
+    let a = sample_atlas();
+    let prev = [op(0, 0, 0), op(3, 0, 0)];
+    let cur = [op(0, 0, 0), op(3, i64::MAX, i64::MAX)];
+    assert_eq!(
+        reuse_once(EXT, &prev, &cur, &a),
+        Recompose::Partial {
+            x: 0,
+            y: 0,
+            w: 12,
+            h: 12
+        }
+    );
 }

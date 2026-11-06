@@ -1,22 +1,22 @@
 //! 着せ替え（interval が `bind` 種の animation）の描く手順を、読み込みのときに 1 度だけ作る
 //! （seriko-pattern-calls 要件 5.5・6.5・6.7・6.8）。
 //!
-//! 純 `bind` は全部の pattern を番号の昇順に、`bind+random` は pattern0 だけをたどる
-//! （2 コマ目以降は seriko が再生するコマで、静的に描くと閉じ目が目を覆う）。描く語で番号が 0 以上の
-//! コマは [`BindStep::Draw`]、純 `bind` の `insert` で相手が同じ面の純 `bind` なら [`BindStep::Insert`]、
-//! それ以外は手順に入れない。記録は出さない（描かない語は `shape_issues`、8 語は seriko が 1 度出す）。
+//! 純 `bind` だけが手順を持ち、全部の pattern を番号の昇順にたどる。`bind+random` は手順を持たない
+//! （コマがあるときだけ描く・animated-surface-log-flood 件 26。手順を作ると入れ子の表が描かない先を
+//! 見える部品に数える）。描く語で番号が 0 以上のコマは [`BindStep::Draw`]、`insert` で相手が同じ面の
+//! 純 `bind` なら [`BindStep::Insert`]、それ以外は手順に入れない。記録は出さない（描かない語は `shape_issues`、8 語は seriko が 1 度出す）。
 //!
 //! 合成はコマの無い有効な着せ替えの寄与としてこの手順を積み、`insert,B` の位置に B の寄与を
 //! B 自身の座標で積む（[`push_bind_contribution`]・要件 5.7・6.1〜6.4・SSP の測り M6）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
-use areka_parsers::shell::{Animation, Interval};
+use areka_parsers::shell::Interval;
 use bevy_ecs::prelude::Resource;
 
 use crate::method::is_implemented_name;
 use crate::pattern_word::{PatternWord, call_targets, pattern_word};
-use crate::plan::{BlitOp, Level, push_contribution};
+use crate::plan::{Level, PlanScratch, push_direct};
 use crate::world::EmoWorld;
 
 /// 着せ替えの手順の 1 段。
@@ -40,17 +40,18 @@ impl BindSteps {
             let Some(master) = world.surface(surface) else {
                 continue;
             };
+            // 同じ面の純 `bind` の番号（`insert` の相手を 1 度で引く）。
+            let pure: HashSet<u32> = master
+                .animations
+                .iter()
+                .filter(|a| matches!(a.interval, Interval::Bind))
+                .map(|a| a.id)
+                .collect();
             for anim in &master.animations {
-                let pure = match anim.interval {
-                    Interval::Bind => true,
-                    Interval::BindRandom { .. } => false,
-                    _ => continue,
-                };
-                let mut patterns: Vec<_> = anim
-                    .patterns
-                    .iter()
-                    .filter(|p| pure || p.index == 0)
-                    .collect();
+                if !matches!(anim.interval, Interval::Bind) {
+                    continue;
+                }
+                let mut patterns: Vec<_> = anim.patterns.iter().collect();
                 patterns.sort_by_key(|p| p.index);
                 let list = patterns
                     .into_iter()
@@ -65,10 +66,10 @@ impl BindSteps {
                                     y: p.y,
                                 })
                             }
-                            PatternWord::Insert if pure => {
+                            PatternWord::Insert => {
                                 let target =
                                     *call_targets(PatternWord::Insert, &p.target).ok()?.first()?;
-                                is_pure_bind(&master.animations, target)
+                                pure.contains(&target)
                                     .then_some(BindStep::Insert { target })
                             }
                             _ => None,
@@ -81,50 +82,60 @@ impl BindSteps {
         BindSteps(steps)
     }
 
-    /// 面 `surface` の animation `animation` の手順（`bind` 種でなければ空）。
+    /// 面 `surface` の animation `animation` の手順（純 `bind` でなければ空）。
     pub(crate) fn get(&self, surface: u32, animation: u32) -> &[BindStep] {
         self.0.get(&(surface, animation)).map_or(&[], |s| s)
     }
 }
 
-/// 1 つの段で、どの着せ替え B をどの着せ替え A が差し込むかを決める（(B, A) の列・B は 1 度だけ）。
+/// 1 つの段で、どの着せ替え B をどの着せ替え A が差し込むかを決め、`s.claims` に B → A で置く（B は 1 度だけ）。
 ///
-/// 描く順（`order`）に有効でコマの無い着せ替えの手順をたどり、`insert,B` の B が有効で、まだ誰にも
+/// 描く順（`s.merged_ids`）に有効でコマの無い着せ替えの手順をたどり、`insert,B` の B が有効で、まだ誰にも
 /// 差し込まれておらず、展開中の祖先でもなければ A のものにする（巡回は打ち切る・2 つの差し込み手は
 /// 描く順で先の方だけ・6.4）。差し込まれた B は本来の位置では積まない（6.1）。差し込む A が無効か
 /// コマを持つ（展開されない）なら B は誰のものにもならず、本来の位置に積む（設計議題 4）。
-pub(crate) fn claim_inserts(level: &Level<'_>, order: &[u32]) -> Vec<(u32, u32)> {
-    let mut claims = Vec::new();
-    let mut expanded = Vec::new();
-    let mut stack = Vec::new();
-    for &id in order {
-        claim_from(level, id, &mut claims, &mut expanded, &mut stack);
+pub(crate) fn claim_inserts(s: &mut PlanScratch, level: &Level<'_>) {
+    s.claims.clear();
+    s.expanded.clear();
+    for k in 0..s.merged_ids.len() {
+        let id = s.merged_ids[k];
+        claim_from(s, level, id);
     }
-    claims
 }
 
-fn claim_from(
-    level: &Level<'_>,
-    a: u32,
-    claims: &mut Vec<(u32, u32)>,
-    expanded: &mut Vec<u32>,
-    stack: &mut Vec<u32>,
-) {
-    if expanded.contains(&a) || !expands(level, a) {
-        return;
-    }
-    expanded.push(a);
-    stack.push(a);
-    for step in level.world.bind_steps(level.surface_id, a) {
-        let BindStep::Insert { target: b } = *step else {
+/// `a` から差し込みの連鎖を、作業場の小さなスタック（`s.chain`＝展開中の祖先と手順の読み位置）でたどる。
+/// 手順の表はスタックの頭の着せ替えが変わったときだけ引き直す（指摘 4）。
+fn claim_from(s: &mut PlanScratch, level: &Level<'_>, root: u32) {
+    open_claim(s, level, root);
+    let (mut head, mut steps) = (None, &[][..]);
+    while let Some(top) = s.chain.last_mut() {
+        let (a, i) = *top;
+        if head != Some(a) {
+            (head, steps) = (Some(a), level.world.bind_steps(level.surface_id, a));
+        }
+        let Some(&step) = steps.get(i) else {
+            s.chain.pop();
             continue;
         };
-        if level.binds.contains(b) && !stack.contains(&b) && !claims.iter().any(|&(c, _)| c == b) {
-            claims.push((b, a));
-            claim_from(level, b, claims, expanded, stack);
+        top.1 += 1;
+        let BindStep::Insert { target: b } = step else {
+            continue;
+        };
+        // 展開中の祖先（`s.chain`）は根 `root` のほかは差し込み済み（`s.claims` に在る）なので、
+        // 祖先の確かめは根と比べて表を引くだけで足りる（列を順に引かない・指摘 26）。
+        if level.binds.contains(b) && b != root && !s.claims.contains_key(&b) {
+            s.claims.insert(b, a);
+            open_claim(s, level, b);
         }
     }
-    stack.pop();
+}
+
+/// 着せ替え `a` の手順をまだたどっておらず、展開するなら、たどり済みにしてスタックへ積む。
+fn open_claim(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
+    if !s.expanded.contains(&a) && expands(level, a) {
+        s.expanded.insert(a);
+        s.chain.push((a, 0));
+    }
 }
 
 /// 着せ替え `id` の手順を展開するか（有効で、手順を置き換える今のコマが無い）。
@@ -132,56 +143,36 @@ fn expands(level: &Level<'_>, id: u32) -> bool {
     level.binds.contains(id) && level.frame(id).is_none()
 }
 
-/// コマの無い有効な着せ替え `a` の手順を積む。`Draw` は段の位置＋コマの座標に、`Insert { B }` は
-/// [`claim_inserts`] が B を `a` のものにしたときだけ、その位置に B の寄与（B の今のコマか B の手順）を
-/// B 自身の座標で積む（6.1・6.3・6.7）。`done` は段の中で積んだ B（同じ B を 2 度積まない）。
-pub(crate) fn push_bind_contribution(
-    out_ops: &mut Vec<BlitOp>,
-    visited: &mut Vec<u32>,
-    level: &Level<'_>,
-    claims: &[(u32, u32)],
-    done: &mut Vec<u32>,
-    a: u32,
-) {
-    let steps = level.world.bind_steps(level.surface_id, a);
-    if steps.is_empty() {
-        // まばたき等の `bind+random` で pattern0 が無い・描くコマが無い: 静的な寄与は無い（再生は seriko の領分）。
-        tracing::debug!(
-            target: "areka_emo_compose",
-            surface_id = level.surface_id,
-            animation_id = a,
-            "有効な着せ替えに描く手順が無い: 静的合成へ寄与なし"
-        );
-        return;
-    }
-    // `bind+random` はコマがあるときだけ描く（再生していないあいだ pattern0 を静的に積まない・
-    // animated-surface-log-flood 件 26 の決めに合わせる）。手順は `insert` の行き先の数えに残す。
-    let bind_random = level
-        .master
-        .animations
-        .iter()
-        .any(|anim| anim.id == a && matches!(anim.interval, Interval::BindRandom { .. }));
-    if bind_random {
-        return;
-    }
-    for step in steps {
-        match *step {
-            BindStep::Draw { surface, x, y } => level.flatten(out_ops, visited, surface, x, y),
+/// コマの無い有効な着せ替え `a` の手順を積み荷にする。`Draw` は段の位置＋コマの座標に入る積み荷、
+/// `Insert { B }` は [`claim_inserts`] が B を A のものにしたときだけ、その位置に B の寄与（B の今のコマか
+/// B の手順）を B 自身の座標で積む（6.1・6.3・6.7）。`s.done` は段の中で積んだ B（同じ B を 2 度積まない）。
+/// `insert` の連鎖は作業場の小さなスタック（`s.chain`）でたどる。`a` の手順は空でないこと（呼び手が
+/// [`push_direct`] で確かめる）。手順の表はスタックの頭の着せ替えが変わったときだけ引き直す（指摘 4）。
+pub(crate) fn push_bind_contribution(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
+    s.chain.push((a, 0));
+    let (mut head, mut steps) = (None, &[][..]);
+    while let Some(top) = s.chain.last_mut() {
+        let (a, i) = *top;
+        if head != Some(a) {
+            (head, steps) = (Some(a), level.world.bind_steps(level.surface_id, a));
+        }
+        let Some(&step) = steps.get(i) else {
+            s.chain.pop();
+            continue;
+        };
+        top.1 += 1;
+        match step {
+            BindStep::Draw { surface, x, y } => s.steps.push(level.enter(surface, x, y)),
             BindStep::Insert { target: b } => {
-                if claims.contains(&(b, a)) && !done.contains(&b) {
-                    done.push(b);
-                    push_contribution(out_ops, visited, level, claims, done, b);
+                if s.claims.get(&b) == Some(&a)
+                    && s.done.insert(b)
+                    && push_direct(&mut s.steps, &s.anims, level, b)
+                {
+                    s.chain.push((b, 0));
                 }
             }
         }
     }
-}
-
-/// 同じ面に、番号 `id` の純 `bind` の animation が在るか。
-fn is_pure_bind(animations: &[Animation], id: u32) -> bool {
-    animations
-        .iter()
-        .any(|a| a.id == id && matches!(a.interval, Interval::Bind))
 }
 
 #[cfg(test)]

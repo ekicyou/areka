@@ -1,117 +1,91 @@
-//! task 11.2（要件 9.1・9.5・11.2）: emo2 まばたき bind の静的不活性テーマ。
+//! 要件 9.1・9.5・11.2: emo2 まばたき bind+random の静的不活性テーマ。
 
-use crate::plan::build_plan;
+use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
+use super::{AtlasTable, BindSet, MemoryDecoder, Path, PatternState, SetId, Shell};
+use crate::plan_test_support::{bound_world, opaque_wxh, plan_of};
 use areka_parsers::shell::AppendTarget;
 
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir, solid_opaque};
-use super::{
-    AtlasTable, BindSet, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId, Shell,
-    SurfaceSet, bake,
-};
-
 // ============================================================================
-// task 11.2: emo2 まばたき bind（1400/1403・pattern0 なし）の静的不活性回帰檻
-// （要件 **9.1**・**9.5**・11.2）。
+// emo2 まばたき bind+random（1400・pattern0 なし）の静的不活性回帰檻（要件 **9.1**・**9.5**・11.2）。
 //
-// 実機サインオフ#2: むらさきの目が常時閉じている。真因＝`flatten_surface` の pattern 選択が
-// 最小 index フォールバック（min_by_key）だったため、pattern0（index==0）を持たない まばたき
-// animation 1400（`interval,bind+random`・pattern1/2/3）と 1403（`interval,bind`・pattern2）の
-// 閉じ目フレーム（surface 1412/1414）が静的土台に積まれ、ベースの目（1302）を覆っていた。実 pasta は
-// まばたきを on-repeat で bind するため BindSet に残る。canon では pattern0 を持たない bind
-// animation は seriko-loop（M-life）が再生する再生専用フレームで、静的土台には寄与しない。
+// 実機サインオフ#2: むらさきの目が常時閉じている。まばたき animation 1400（`interval,bind+random`・
+// pattern1/2/3）の閉じ目フレーム（surface 1412）が静的土台に積まれ、ベースの目（1302）を覆っていた。
+// 実 pasta はまばたきを on-repeat で bind するため BindSet に残る。`bind+random` はコマのあるときだけ
+// 描く（コマは seriko が再生する）ので、静的土台には寄与しない。純 `bind` の 1403（pattern2＝1414 の
+// null）は有効なら全部のコマを重ねる（seriko-pattern-calls 6.8・M6）。
 //
-// 本檻: emo2 surface1000 を [1302]（目/通常・pattern0 あり）と [1302,1400,1403]（＋まばたき）で
-// build_plan し、生成描画命令列（BlitOp）が**同一**であることを固定する。まばたき bind を足しても
-// 静的合成が一切変わらない＝「常時閉じ目」退行を直接ガードする。
+// 本檻: emo2 surface1000 を [1302,1403] と [1302,1400,1403]（＋まばたき）で build_plan し、生成描画
+// 命令列（BlitOp）が**同一**であることを固定する＝「常時閉じ目」退行を直接ガードする。
 //
-// 非空虚性: 閉じ目パーツ（1412=eyebase+toji・1414=null）の画像を atlas へ挿入するため、旧
-// min_by_key 実装なら 1400→surface1412・1403→surface1414 が composed され命令列が伸びて assert が
-// 破れる。修正後（find(index==0)）はこれらが skip され命令列が [1302] と一致する。
+// 非空虚性: 閉じ目パーツ（1412=eyebase+toji・1414=null）の画像を atlas へ挿入するため、番号の最も
+// 小さい pattern を静的に描く実装なら 1400→surface1412 が積まれて命令列が伸び、assert が破れる。
 // ============================================================================
 
 /// まばたき檻用の `AtlasTable` を構築する（COM/WIC 非依存・要件 11.4）。
 ///
 /// [`build_atlas_for_surface1000`] と異なり、目/通常（1302→purple/4/normal.png）に加えて **閉じ目
 /// パーツ**の画像（surface1412 の eyebase/toji・surface1414 の null）も MemoryDecoder へ挿入する。
-/// これにより旧 min_by_key 実装なら 1400/1403 の閉じ目フレームが解決され命令が生じる（＝非空虚）。
+/// これにより番号の最も小さい pattern を静的に描く実装なら閉じ目フレームが解決され命令が生じる（＝非空虚）。
 fn build_atlas_for_blink_cage(shell: &Shell, base: &Path) -> AtlasTable {
     let mut dec = MemoryDecoder::new();
     // 目/通常（1302 = surface1302 → purple/4/normal.png・pattern0 あり）。
-    let (w, h, s, b, a) = solid_opaque(20, 90, 0, 0, 255);
+    let (w, h, s, b, a) = opaque_wxh(20, 90, 0, 0, 255);
     dec.insert(base.join("purple/4/normal.png"), w, h, s, b, a);
     // 閉じ目パーツ（1400→surface1412=eyebase+toji、1403→surface1414=null）を解決可能にする。
-    // これらが解決できることで、旧 min_by_key 実装なら閉じ目が composed され命令列が伸びる（非空虚）。
+    // これらが解決できることで、番号の最も小さい pattern を静的に描く実装なら閉じ目が積まれ命令列が伸びる（非空虚）。
     for rel in [
         "purple/a/eyebase.png",
         "purple/4/toji.png",
         "purple/a/null.png",
     ] {
-        let (w, h, s, b, a) = solid_opaque(20, 90, 128, 128, 128);
+        let (w, h, s, b, a) = opaque_wxh(20, 90, 128, 128, 128);
         dec.insert(base.join(rel), w, h, s, b, a);
     }
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    bake(std::slice::from_ref(&set), &dec, PackConfig::default()).table
+    bake_emo2(shell, base, &dec)
 }
 
-/// task 11.2（要件 9.1・9.5・11.2）: emo2 まばたき bind（1400/1403・pattern0 なし）は静的合成へ
-/// 寄与しない＝BindSet に足しても BlitOp 列が [1302] のときと**同一**。
+/// 要件 9.1・9.5・11.2: emo2 まばたき bind+random（1400・pattern0 なし）は静的合成へ寄与しない＝
+/// BindSet に足しても BlitOp 列が [1302,1403] のときと**同一**。純 `bind` の 1403 は全部のコマを重ねる。
 ///
 /// 「むらさきの目が常時閉じている」実機第2欠陥の直接回帰檻。まばたき（閉じ目）フレームが静的
-/// 土台へ積まれない（pattern0 を持たないゆえ）ことを命令列の同一性で固定する。
+/// 土台へ積まれないことを命令列の同一性で固定する。
 #[test]
 fn emo2_blink_binds_are_statically_inactive() {
     let shell = parse_emo2_shell();
     let base = shell_master_dir();
     let atlas = build_atlas_for_blink_cage(&shell, &base);
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&shell, &[], &atlas);
 
     // [1302] のみ（目/通常・pattern0 あり）。
-    let mut ops_base = Vec::new();
-    let mut vis_base = Vec::new();
-    build_plan(
-        &mut ops_base,
-        &mut vis_base,
+    let (ops_base, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1302]),
         &PatternState::default(),
-    )
-    .expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
+    );
+    result.expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
-    let mut ops_blink = Vec::new();
-    let mut vis_blink = Vec::new();
-    build_plan(
-        &mut ops_blink,
-        &mut vis_blink,
+    let (ops_blink, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1302, 1400, 1403]),
         &PatternState::default(),
-    )
-    .expect("まばたき込みでも Ok");
+    );
+    result.expect("まばたき込みでも Ok");
 
     // [1302,1403]（純 `bind` の 1403 だけを足す）。
-    let mut ops_pure = Vec::new();
-    let mut vis_pure = Vec::new();
-    build_plan(
-        &mut ops_pure,
-        &mut vis_pure,
+    let (ops_pure, result) = plan_of(
         &world,
         &atlas,
         1000,
         &BindSet::from_ids([1302, 1403]),
         &PatternState::default(),
-    )
-    .expect("純 bind 込みでも Ok");
+    );
+    result.expect("純 bind 込みでも Ok");
 
     // `bind+random` のまばたき 1400（pattern0 なし）は静的合成へ寄与しない＝BlitOp 列が完全一致。
     assert_eq!(
@@ -134,12 +108,13 @@ fn emo2_blink_binds_are_statically_inactive() {
     );
 }
 
-/// まばたき檻の非空虚性の実データ確認: 1400/1403 が pattern0（index==0）を持たず、閉じ目パーツ
-/// 画像が atlas に解決される（旧実装なら composed されうる）ことを固定する。
+/// まばたき檻の非空虚性の実データ確認: まばたきの 1400 は `bind+random`・1403 は純 `bind` で、どちらも
+/// pattern0（index==0）を持たず、番号の最も小さい pattern の先（1400 は閉じ目の 1412・1403 は null の 1414）の
+/// 画像が atlas に解決されることを固定する。
 ///
 /// これにより上檻 [`emo2_blink_binds_are_statically_inactive`] の assert_eq が「まばたきが元々
-/// 何も生まないから一致」という空虚一致でないこと（旧 min_by_key なら閉じ目が composed され破れる）
-/// を実データで裏づける。
+/// 何も生まないから一致」という空虚一致でないこと（番号の最も小さい pattern を静的に描く実装なら
+/// 閉じ目が積まれ破れる）を実データで裏づける。
 #[test]
 fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
     use areka_parsers::shell::Interval;
@@ -154,35 +129,33 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
         .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("emo2 surfaces.txt に surface1000 が存在する");
 
-    // 1400（bind+random）と 1403（bind）は pattern0（index==0）を持たない再生アニメである。
-    for (aid, closed_frame_surface) in [(1400u32, 1412i64), (1403, 1414)] {
+    for (aid, interval, first_frame_surface) in [
+        (1400u32, Interval::BindRandom { k: 4 }, 1412i64),
+        (1403, Interval::Bind, 1414),
+    ] {
         let anim = s1000
             .animations
             .iter()
             .find(|a| a.id == aid)
             .unwrap_or_else(|| panic!("surface1000 に animation{aid} が存在する"));
-        assert!(
-            matches!(anim.interval, Interval::Bind | Interval::BindRandom { .. }),
-            "animation{aid} は bind 種 interval（BindSet に載る）",
-        );
+        assert_eq!(anim.interval, interval, "animation{aid} の interval");
         assert!(
             !anim.patterns.iter().any(|p| p.index == 0),
-            "animation{aid} は pattern0（index==0）を持たない（まばたき再生アニメ）",
+            "animation{aid} は pattern0（index==0）を持たない",
         );
-        // 旧 min_by_key が採るであろう最小 index pattern の参照先（閉じ目 surface）が存在する。
         let min_pat = anim
             .patterns
             .iter()
             .min_by_key(|p| p.index)
             .expect("pattern を 1 本以上持つ");
         assert_eq!(
-            min_pat.surface_id, closed_frame_surface,
-            "animation{aid} の最小 index pattern は閉じ目 surface{closed_frame_surface} を参照（旧実装ならこれを合成）",
+            min_pat.surface_id, first_frame_surface,
+            "animation{aid} の最小 index pattern は surface{first_frame_surface} を参照（静的に描けばこれを合成）",
         );
     }
 
-    // 閉じ目パーツ surface（1412=eyebase+toji）の element 画像が atlas に解決される（placement Some）。
-    // ＝旧実装なら実際に composed され得た＝上檻の assert_eq は非空虚。
+    // 閉じ目（1412=eyebase+toji）と null（1414）の element 画像が atlas に解決される（placement Some）。
+    // ＝静的に描く実装なら実際に積まれ得た＝上檻の assert_eq は非空虚。
     for rel in [
         "purple/a/eyebase.png",
         "purple/4/toji.png",
@@ -190,10 +163,21 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
     ] {
         let id = atlas
             .resolve(SetId(0), rel)
-            .unwrap_or_else(|| panic!("閉じ目パーツ {rel} が atlas に解決される"));
+            .unwrap_or_else(|| panic!("{rel} が atlas に解決される"));
         assert!(
             atlas.entry(id).placement.is_some(),
-            "{rel} は不透明コアあり＝placement Some（旧実装なら composed され得た）",
+            "{rel} は不透明コアあり＝placement Some（静的に描けば積まれ得た）",
         );
     }
+    // 閉じ目の面 1412 そのものを合成すると命令が生じる（静的に描けば上檻の命令列が実際に伸びる）。
+    let world = bound_world(&shell, &[], &atlas);
+    let (ops_1412, result) = plan_of(
+        &world,
+        &atlas,
+        1412,
+        &BindSet::default(),
+        &PatternState::default(),
+    );
+    result.expect("閉じ目の面 1412 は合成できる");
+    assert!(!ops_1412.is_empty(), "閉じ目の面 1412 の命令列は空でない");
 }

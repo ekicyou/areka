@@ -1,4 +1,4 @@
-//! 検体を読み手から合成まで通す（要件 8.2・8.3・タスク 8.1）。
+//! 検体を読み手から合成まで通す（要件 8.2・8.3）。
 //!
 //! `tests/fixtures/surface-nesting/` の surfaces.txt を 解析 → 面の表 → 焼く → 合成 の順に通す。
 //! 焼く一覧は本番の入口（`areka-emo-present` の `build_shell_target_with_boxes`）と同じ形
@@ -6,17 +6,14 @@
 //! 画像は `MemoryDecoder` に、検体の PNG の見出し（IHDR）から読んだ原寸の単色を入れる
 //! （ファイルごとに色を変え、合成の画素で「どの絵か」を見分ける）。
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse, parse_boxes};
+use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
+use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
-use crate::hit::{RegionPriority, hit_region_in};
+use crate::plan_test_support::{bake_surfaces, elem, image_map, opaque_wxh, png_size, px, surface};
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -35,19 +32,6 @@ const FILES: &[(&str, u32, u32, [u8; 3])] = &[
 
 fn fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/surface-nesting")
-}
-
-/// PNG の見出しから原寸を読む（署名と IHDR が無ければ赤）。
-fn png_size(path: &Path) -> (u32, u32) {
-    let bytes =
-        std::fs::read(path).unwrap_or_else(|e| panic!("{} が読めない: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") && &bytes[12..16] == b"IHDR",
-        "{} は PNG の見出しを持たない",
-        path.display()
-    );
-    let be = |at: usize| u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap());
-    (be(16), be(20))
 }
 
 fn file(name: &str) -> &'static (&'static str, u32, u32, [u8; 3]) {
@@ -74,7 +58,7 @@ struct Tally {
     bake_errors: usize,
 }
 
-/// 検体に仕込んだ件数（surfaces.txt の冒頭の説明・tasks.md 1.2 の記録）。
+/// 検体に仕込んだ件数（surfaces.txt の冒頭の説明）。
 const PLANTED: Tally = Tally {
     missing_target: 2,
     cycle: 3,
@@ -94,10 +78,7 @@ struct Loaded {
 fn load(text: &str) -> Loaded {
     let shell = parse(text);
     // ファイル名の慣習だけで面になる絵（surface_nesting_fixture_test がフォルダの中身を番する）。
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     let mut world = EmoWorld::build_with_images(&shell, &images);
     let nest = world.nest_report();
     let (_, boxes) = fold_boxes(&parse_boxes(text), &images, &world);
@@ -108,40 +89,23 @@ fn load(text: &str) -> Loaded {
         s.elements
             .retain(|e| element_kind(&e.path) == ElementKind::Image);
     }
-    surfaces.extend(world.base_images().used.iter().map(|(&id, name)| Surface {
-        targets: vec![AppendTarget::Single(id)],
-        elements: vec![Element {
-            layer: 0,
-            path: ElementPath::new(name.clone()),
-            x: 0,
-            y: 0,
-        }],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }));
+    surfaces.extend(
+        world
+            .base_images()
+            .used
+            .iter()
+            .map(|(&id, name)| surface(id, vec![elem(0, name, 0, 0)])),
+    );
 
     let dir = fixture_dir();
     let mut dec = MemoryDecoder::new();
     for &(name, _, _, _) in FILES {
         let (w, h) = png_size(&dir.join(name));
-        let px = color(name);
-        dec.insert(
-            dir.join(name),
-            w,
-            h,
-            w * 4,
-            px.repeat((w * h) as usize),
-            true,
-        );
+        let [b, g, r, _] = color(name);
+        let (w, h, stride, bgra, has_alpha) = opaque_wxh(w, h, b, g, r);
+        dec.insert(dir.join(name), w, h, stride, bgra, has_alpha);
     }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: &dir,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(std::slice::from_ref(&set), &dec, PackConfig::default());
+    let baked = bake_surfaces(&surfaces, &dir, &dec);
     world.bind_atlas(&baked.table, SetId(0));
 
     let count = |f: fn(&NestIssue) -> bool| nest.issues.iter().filter(|i| f(i)).count();
@@ -175,12 +139,6 @@ fn compose(loaded: &Loaded, top: u32) -> ComposedSurface {
             &PatternState::default(),
         )
         .unwrap_or_else(|e| panic!("surface{top} の合成に失敗した: {e:?}"))
-}
-
-fn pixel(s: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    assert!(x < s.width() && y < s.height(), "({x},{y}) は外形の外");
-    let at = (y * s.stride() + x * 4) as usize;
-    s.bytes()[at..at + 4].try_into().unwrap()
 }
 
 /// 検体の PNG は冒頭の説明どおりの原寸を見出しに持つ（以下の画素の座標はこの原寸で数える）。
@@ -228,23 +186,19 @@ fn every_parent_contains_the_shared_child_image() {
     let loaded = load(FIXTURE);
     // 親 A: 子 10 を (20,30)。
     let s0 = compose(&loaded, 0);
-    assert_eq!(pixel(&s0, 25, 35), color("eye.png"));
-    assert_eq!(pixel(&s0, 19, 35), color("body.png"));
+    assert_eq!(px(&s0, 25, 35), color("eye.png"));
+    assert_eq!(px(&s0, 19, 35), color("body.png"));
     // 親 B: 子 10 を (90,50)。親の画像（幅 100）の右へはみ出した所も描かれる。
     let s1 = compose(&loaded, 1);
     assert_eq!((s1.width(), s1.height()), (110, 200));
-    assert_eq!(pixel(&s1, 105, 55), color("eye.png"));
-    assert_eq!(pixel(&s1, 89, 55), color("body.png"));
+    assert_eq!(px(&s1, 105, 55), color("eye.png"));
+    assert_eq!(px(&s1, 89, 55), color("body.png"));
     // 親 C: element0 が子 10（surface2.png は使われない）・ブレスの無い子 11 を (50,50)。
     let s2 = compose(&loaded, 2);
     assert_eq!((s2.width(), s2.height()), (62, 62));
-    assert_eq!(pixel(&s2, 5, 5), color("eye.png"));
-    assert_eq!(pixel(&s2, 55, 55), color("surface11.png"));
-    assert_eq!(
-        pixel(&s2, 30, 30),
-        [0, 0, 0, 0],
-        "surface2.png は描かれない"
-    );
+    assert_eq!(px(&s2, 5, 5), color("eye.png"));
+    assert_eq!(px(&s2, 55, 55), color("surface11.png"));
+    assert_eq!(px(&s2, 30, 30), [0, 0, 0, 0], "surface2.png は描かれない");
 }
 
 /// 3 段目（32）の絵は各段の位置の和に出る（要件 2.3）。part.png（10x10）の右下の角で見る:
@@ -254,34 +208,10 @@ fn third_level_image_is_at_the_sum_of_every_offset() {
     let loaded = load(FIXTURE);
     // 親 A: 30 を (5,5)・31 を (3,4)・32 を (2,1) → 32 は (10,10)〜(20,20)。
     let s0 = compose(&loaded, 0);
-    assert_eq!(pixel(&s0, 19, 19), color("part.png"));
-    assert_eq!(pixel(&s0, 20, 20), color("body.png"));
+    assert_eq!(px(&s0, 19, 19), color("part.png"));
+    assert_eq!(px(&s0, 20, 20), color("body.png"));
     // 親 B: surface.append1 が 30 を (60,100) → 32 は (65,105)〜(75,115)。
     let s1 = compose(&loaded, 1);
-    assert_eq!(pixel(&s1, 74, 114), color("part.png"));
-    assert_eq!(pixel(&s1, 75, 115), color("body.png"));
-}
-
-/// 子 10 の領域が親の列に持ち込まれている（要件 4.1・4.2）。
-#[test]
-fn child_regions_are_imported_into_the_parents() {
-    let loaded = load(FIXTURE);
-    let names = |id: u32| -> Vec<String> {
-        let list = loaded.world.hit_regions(id).expect("面の表に在る番号");
-        list.iter().map(|c| c.name.as_str().to_string()).collect()
-    };
-    let hit = |id: u32, x: i64, y: i64| {
-        let list = loaded.world.hit_regions(id).expect("面の表に在る番号");
-        hit_region_in(list, x, y, RegionPriority::Painter).map(str::to_string)
-    };
-    // 親 A は Head を自分で持つので、持ち込むのは Eye だけ（Eye は親の Head の下に隠れる）。
-    assert_eq!(names(0), ["Eye", "Head", "Body"]);
-    // 親 B: 子を (90,50) → Head (90,50)-(110,60)・Eye (95,50)-(105,60)。
-    assert_eq!(names(1), ["Head", "Eye"]);
-    assert_eq!(hit(1, 100, 55).as_deref(), Some("Eye"));
-    assert_eq!(hit(1, 92, 55).as_deref(), Some("Head"));
-    assert_eq!(hit(1, 50, 55), None);
-    // 親 C: 子を (0,0)。
-    assert_eq!(hit(2, 10, 5).as_deref(), Some("Eye"));
-    assert_eq!(hit(2, 2, 5).as_deref(), Some("Head"));
+    assert_eq!(px(&s1, 74, 114), color("part.png"));
+    assert_eq!(px(&s1, 75, 115), color("body.png"));
 }

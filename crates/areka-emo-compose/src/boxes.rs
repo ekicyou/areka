@@ -11,8 +11,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::balloon::{self, BalloonModel};
 use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine};
 
-use crate::fold::expand_targets;
-use crate::world::EmoWorld;
+use crate::fold::{Copied, expand_targets_with, may_copy};
+use crate::world::{EmoWorld, Records};
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -138,10 +138,12 @@ pub enum BoxIssue {
         name: String,
         image_element: u32,
     },
-    /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。
+    /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。番号ごとに 1 件で、
+    /// `name` はそのブレスの最初の箱の名前。
     AppendTargetMissing { surface: u32, name: String },
     /// element定義で子として置かれたサーフェスが箱を持つ。箱は親の中に置かない
-    /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。
+    /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。辺 (親, 子) ごとに 1 件で、`name` は子の
+    /// 最初の箱の名前（子の箱の数を掛けると、子を置く親の数×箱の数まで増えるため）。
     InChildSurface {
         parent: u32,
         child: u32,
@@ -152,8 +154,9 @@ pub enum BoxIssue {
 /// 転記から箱の定義の表と置き場所の表を作り、読み捨てた事実を報告に載せる（純粋・失敗しない）。
 ///
 /// `images`（面の画像だけで在る番号）は `surface.append*`ブレスの存在の条件に、`world`（画像の
-/// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs にも記録にも触れない
-/// （記録の水準は入口が決める）。
+/// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs に触れず、記録は
+/// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` と知らない記述子の記録だけはここで出す・指摘 78。
+/// どちらも `world` を組んだときの出し分けに従い、黙らせる組み方の面の表なら出さない）。
 pub fn fold_boxes(
     boxes: &[BoxDefinition],
     images: &BTreeMap<u32, String>,
@@ -161,7 +164,7 @@ pub fn fold_boxes(
 ) -> (BoxLayout, BoxReport) {
     let mut issues = Vec::new();
     let defs = fold_braces(boxes, &mut issues);
-    let surfaces = distribute(boxes, images, &mut issues)
+    let surfaces = distribute(boxes, images, world.records(), &mut issues)
         .into_iter()
         .map(|(id, lines)| {
             let placements = place(id, &lines, &defs, world, &mut issues);
@@ -175,14 +178,14 @@ pub fn fold_boxes(
     (layout, BoxReport { issues })
 }
 
-/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに箱 1 つにつき 1 件載せる
+/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに 1 件（子の最初の箱の名前で）載せる
 /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。置き場所の表は変えない（子の箱は親の中に
 /// 置かれず、子を一番上に表示したときは今までどおり置かれる・要件 6.2〜6.4）。
 ///
 /// 辺は面の表の入れ子の表（[`EmoWorld::nest_table`] の `children`＝面の表に在る子だけ）から取る。
 /// 面の表に無い番号は子として描かれず、無い番号の報告（`NestIssue::MissingTarget`）が受け持つので
 /// ここでは見ない。同じ親が同じ子を何度置いても辺は 1 本に数える。並びは親の番号の昇順 →
-/// element定義の番号の昇順 → 箱の並び（子の element番号の昇順）。
+/// element定義の番号の昇順。件数は辺の数で止まる（子の箱の数を掛けない）。
 fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<BoxIssue>) {
     if layout.is_empty() {
         return;
@@ -194,55 +197,59 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
         };
         let mut seen = BTreeSet::new();
         for &child in parts.children.iter().filter(|&&c| seen.insert(c)) {
-            issues.extend(
-                layout
-                    .placements(child)
-                    .iter()
-                    .map(|p| BoxIssue::InChildSurface {
-                        parent,
-                        child,
-                        name: p.name.as_str().to_string(),
-                    }),
-            );
+            if let Some(first) = layout.placements(child).first() {
+                issues.push(BoxIssue::InChildSurface {
+                    parent,
+                    child,
+                    name: first.name.as_str().to_string(),
+                });
+            }
         }
     }
 }
 
 /// 箱の element定義の行を、画像の element と同じ規則でサーフェス番号へ配る（要件 2.1・2.2）。
 ///
-/// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し（同じ element番号は後勝ち）、
-/// `surface.append*`ブレスは「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。
-/// 無い番号への追記は箱の行ごとに報告へ載せる。
+/// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し、`surface.append*`ブレスは
+/// 「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。どちらも同じ element番号の
+/// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose
+/// 設計の議題 7 案 A）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（箱の行の数を掛けない）。
 fn distribute<'a>(
     boxes: &'a [BoxDefinition],
     images: &BTreeMap<u32, String>,
+    records: Records,
     issues: &mut Vec<BoxIssue>,
 ) -> BTreeMap<u32, Vec<&'a BoxElementLine>> {
     let mut existing: BTreeSet<u32> = images.keys().copied().collect();
     let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
+    // 番号ごとに写す行の合計は面の畳み込みと同じ上限（指摘 78）。越えた記述子は記録して捨てる。
+    let mut copied = Copied::default();
     for definition in boxes {
         match definition {
             BoxDefinition::Surface(surface) => {
-                for id in expand_targets(&surface.targets) {
-                    existing.insert(id);
-                    // 同じ番号の前の行へ足す。同じ element番号の行は後の行が勝つ（`fold.rs` の
-                    // `merge_brace` と同じ規則・開発者の決め 2026-10-17「足し合わせる」）。
-                    let kept = lines.entry(id).or_default();
-                    kept.retain(|l| !surface.elements.iter().any(|n| n.element == l.element));
-                    kept.extend(&surface.elements);
+                let ids = expand_targets_with(&surface.targets, records);
+                // 上限で捨てる記述子の番号も在る番号に数える（後の追記を「無い番号」と報告しない・7 回目の指摘 24）。
+                existing.extend(ids.iter().copied());
+                if !may_copy(&mut copied, "boxes", &ids, surface.elements.len(), records) {
+                    continue;
+                }
+                for id in ids {
+                    lines.entry(id).or_default().extend(&surface.elements);
                 }
             }
             BoxDefinition::Append(append) => {
-                for id in expand_targets(&append.targets) {
+                let ids = expand_targets_with(&append.targets, records);
+                if !may_copy(&mut copied, "boxes", &ids, append.elements.len(), records) {
+                    continue;
+                }
+                for id in ids {
                     if existing.contains(&id) {
                         lines.entry(id).or_default().extend(&append.elements);
-                    } else {
-                        issues.extend(append.elements.iter().map(|line| {
-                            BoxIssue::AppendTargetMissing {
-                                surface: id,
-                                name: line.name.clone(),
-                            }
-                        }));
+                    } else if let Some(line) = append.elements.first() {
+                        issues.push(BoxIssue::AppendTargetMissing {
+                            surface: id,
+                            name: line.name.clone(),
+                        });
                     }
                 }
             }

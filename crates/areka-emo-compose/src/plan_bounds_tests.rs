@@ -2,16 +2,15 @@
 //!
 //! 数は SSP の測り（research.md §10.6・`g_anim` の 18×14・`g_size` の 12×14）と同じ形の検体で固める。
 
-use std::path::Path;
-
-use areka_emo_atlas::{AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, bake};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::AtlasTable;
+use areka_parsers::shell::parse;
 
 use super::{ShellBounds, shell_bounds};
 use crate::Composer;
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
+use crate::plan_test_support::{bake_gray, bound_world};
 use crate::world::EmoWorld;
 
 /// 画像の名前と原寸（全面不透明）。
@@ -24,60 +23,23 @@ const SIZES: &[(&str, (u32, u32))] = &[
 
 /// 文面を面の表にし、アトラスを当てて返す。
 fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements: SIZES
-            .iter()
-            .map(|(r, _)| Element {
-                layer: 0,
-                path: ElementPath::new(r.to_string()),
-                x: 0,
-                y: 0,
-            })
-            .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for (rel, (w, h)) in SIZES {
-        dec.insert(
-            base.join(rel),
-            *w,
-            *h,
-            w * 4,
-            vec![64u8; (w * 4 * h) as usize],
-            true,
-        );
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: areka_emo_atlas::AlphaParams {
-            use_self_alpha: areka_emo_atlas::UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    let atlas = result.table;
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
-    (world, atlas)
+    let atlas = bake_gray(SIZES);
+    (bound_world(&parse(text), &[], &atlas), atlas)
 }
 
 /// どの面の合成の絵の大きさも外形の右下を超えない（design ShellCanvasBounds の Invariants）。
 fn assert_every_surface_fits(world: &EmoWorld, atlas: &AtlasTable, b: ShellBounds) {
     let mut composer = Composer::new();
     for id in world.surface_ids() {
-        let Ok(out) = composer.compose(
-            world,
-            atlas,
-            id,
-            &BindSet::default(),
-            &PatternState::default(),
-        ) else {
-            continue;
-        };
+        let out = composer
+            .compose(
+                world,
+                atlas,
+                id,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+            .unwrap_or_else(|e| panic!("surface{id} が合成できない: {e:?}"));
         assert!(
             out.width() as i64 <= b.right as i64 && out.height() as i64 <= b.bottom as i64,
             "surface{id} の絵 {}x{} が外形 {b:?} の右下を超える",
@@ -161,8 +123,9 @@ fn shell_without_overflow_is_base_size() {
 
 /// 入れ子（element定義の子・pattern の先の面がさらに pattern を持つ）は位置を足して数え、負の番号と
 /// 描かないメソッドの pattern は数えず、循環（element定義も pattern も）は黙って打ち切る（記録を出さない）。
-/// pattern の循環は `sometimes` に置く: `walk` はどの interval も辿るが、`compute_extent` は bind・`always`
-/// だけを辿る（bind の循環でも記録を出さないことは `bind_cycle_emits_no_warn`）。
+/// pattern の循環は `sometimes` に置く: `walk` はどの interval も辿るが、外形の表（束縛のときに
+/// `compute_extent` が作る）は bind・`always` だけを辿る（bind の循環でも記録を出さないことは
+/// `bind_cycle_emits_no_warn`）。
 #[test]
 fn nesting_adds_offsets_and_skips_non_drawing() {
     let (world, atlas) = world_of(
@@ -191,10 +154,10 @@ fn nesting_adds_offsets_and_skips_non_drawing() {
     assert!(logs.trim().is_empty(), "外形は記録を出さない: {logs}");
 }
 
-/// bind の pattern0 は描画メソッドを問わず面の絵の大きさに数えられる（`compute_extent`）。`overlayfast` で
+/// 純 `bind` の pattern は描画メソッドを問わず面の絵の大きさ（外形の表）に数えられる。`overlayfast` で
 /// 外へはみ出しても、外形はその絵を収める（Invariants）。
 #[test]
-fn bind_pattern0_non_overlay_still_fits() {
+fn pure_bind_pattern_non_overlay_still_fits() {
     let (world, atlas) = world_of(
         "charset,UTF-8\r\n\
          surface0\r\n{\r\nelement0,overlay,base16.png,0,0\r\n\
@@ -202,6 +165,16 @@ fn bind_pattern0_non_overlay_still_fits() {
          surface10\r\n{\r\nelement0,overlay,red4.png,0,0\r\n}\r\n",
     );
     let b = shell_bounds(&world, &atlas);
+    // 30,0 に置いた 4×4 が右端を 34 にする（数えなければ土台の 16 のまま）。
+    assert_eq!(
+        b,
+        ShellBounds {
+            left: 0,
+            top: 0,
+            right: 34,
+            bottom: 8
+        }
+    );
     assert_every_surface_fits(&world, &atlas, b);
 }
 
@@ -216,11 +189,21 @@ fn always_pattern_non_overlay_still_fits() {
          surface10\r\n{\r\nelement0,overlay,red4.png,0,0\r\n}\r\n",
     );
     let b = shell_bounds(&world, &atlas);
+    // 0,20 に置いた 4×4 が下端を 24 にする（数えなければ土台の 8 のまま）。
+    assert_eq!(
+        b,
+        ShellBounds {
+            left: 0,
+            top: 0,
+            right: 16,
+            bottom: 24
+        }
+    );
     assert_every_surface_fits(&world, &atlas, b);
 }
 
-/// bind の pattern が循環するシェルでも、外形は記録を出さない（`compute_extent` の循環の知らせは
-/// debug・task 3.2）。
+/// 着せ替えの pattern が循環するシェルでも、外形は記録を出さない（`shell_bounds` は面ごとの外形を表から
+/// 引くだけ・表を作るときの循環の知らせは束縛のときの debug）。
 #[test]
 fn bind_cycle_emits_no_warn() {
     let (world, atlas) = world_of(
@@ -232,9 +215,32 @@ fn bind_cycle_emits_no_warn() {
     );
     let mut b = None;
     let logs = capture_logs(|| b = Some(shell_bounds(&world, &atlas)));
-    assert!(
-        !logs.contains("level=WARN"),
-        "外形は warn を出さない: {logs}"
-    );
+    assert!(logs.trim().is_empty(), "外形は記録を出さない: {logs}");
     assert_every_surface_fits(&world, &atlas, b.expect("外形"));
+}
+
+/// 広がりの予算（指摘 3）: 子の面は入る 1 ＋行 1 つで 2 を数える（指摘 130）。予算 4 のシェルの外形は、負の位置に
+/// 置いた element定義の子 3 つのうち 2 つ目まで入って 3 つ目を数えず、`error!` を 1 行だけ出す。予算 6 なら 3 つとも数える。
+#[test]
+fn spent_budget_leaves_children_not_yet_entered_out_of_the_bounds() {
+    let (world, atlas) = world_of(
+        "charset,UTF-8\r\n\
+         surface0\r\n{\r\nelement0,overlay,10,-10,0\r\nelement1,overlay,10,-20,0\r\nelement2,overlay,10,-30,0\r\n}\r\n\
+         surface10\r\n{\r\nelement0,overlay,red4.png,0,0\r\n}\r\n",
+    );
+    let run = |limit| {
+        let mut b = None;
+        let logs = capture_logs(|| b = Some(super::shell_bounds_limited(&world, &atlas, limit)));
+        (b.expect("外形"), logs)
+    };
+    let (b, logs) = run(4);
+    assert_eq!(b.left, -20, "{b:?}");
+    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert!(
+        logs.contains("walk=\"bounds\"") && logs.contains("root=0"),
+        "{logs}"
+    );
+    let (b, logs) = run(6);
+    assert_eq!(b.left, -30, "{b:?}");
+    assert!(!logs.contains("level=ERROR"), "{logs}");
 }

@@ -10,6 +10,7 @@
 
 - 受け持つファイル: `crates/areka-emo-text/` のうち `audit-emo-text-layout-draw` の持ち物でないもの全部（`state*`・`actor*`・`choice*`・`sink*`・`surface*`・`lib.rs`・`balloon_overrides*`・`tests/`・`Cargo.toml`）。
 - 大きさ: 102 ファイル・コード 9,170 行・テスト 29,332 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
+- 持ち込みの件（2026-11-06 `audit-emo-compose` の完了の棚卸から・区分 B・バグ）: `crates/areka-emo-text/src/actor_box.rs:236-237,427` が箱の位置（`i64`）に大きさを飽和させずに足す（`elementN,balloon,名前,9223372036854775807,0` で debug は panic・release は折り返す）。emo-compose の側は同じ形を `saturating_add` で直した（同 spec の research.md 15 節の 31）。この spec の audit の指摘と一緒に直し、壊れたら落ちるテストを 1 本置く。起票の条件: この spec の受け持つファイル。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
 ## Desired Outcome

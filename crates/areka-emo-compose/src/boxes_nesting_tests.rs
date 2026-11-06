@@ -1,20 +1,19 @@
 //! 子として置かれたサーフェスの箱（spec: areka-P0-surface-element-nesting 要件 6.1〜6.4・8.1）。
 //!
 //! 箱の置き場所の表は入れ子で変えない（子の箱は親の中に置かれない）。代わりに面の表の
-//! element定義の辺 (親, 子) ごとに、子の箱 1 つにつき [`BoxIssue::InChildSurface`] を 1 件載せる。
+//! element定義の辺 (親, 子) ごとに、子の最初の箱の名前で [`BoxIssue::InChildSurface`] を 1 件載せる。
 
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse, parse_boxes};
+use areka_emo_atlas::AtlasTable;
+use areka_parsers::shell::parse;
 
-use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement, fold_boxes};
+use super::{BoxIssue, BoxLayout, BoxName, BoxPlacement};
 use crate::Composer;
 use crate::bind::BindSet;
 use crate::pattern::PatternState;
-use crate::world::EmoWorld;
+use crate::plan_test_support::bound_world;
+use crate::plan_test_support::{AtlasSpec, bake_atlas_sized};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -22,8 +21,7 @@ const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.t
 const PLACE_70: &str = "element1,overlay,70,10,10";
 
 fn fold(text: &str) -> (BoxLayout, Vec<BoxIssue>) {
-    let world = EmoWorld::build(&parse(text));
-    let (layout, report) = fold_boxes(&parse_boxes(text), &Default::default(), &world);
+    let (layout, report) = super::tests::fold(text);
     (layout, report.issues)
 }
 
@@ -73,29 +71,62 @@ fn placing_a_box_child_adds_exactly_one_report_and_keeps_the_layout() {
     assert_eq!(issues_after, expected);
 }
 
-/// 箱 1 つにつき 1 件・辺 (親, 子) ごと・並びは親 → element定義 → 箱（要件 6.1）。
+/// 辺 (親, 子) ごとに 1 件・名前は子の最初の箱・並びは親 → element定義（要件 6.1）。
 ///
-/// 子 5 は箱 2 つ（element番号の昇順に b・a）、子 6 は箱 1 つ。親 1 は 6 と 5 を置き、5 を 2 度置く
-/// （同じ辺は 1 本）。親 0 は 5 を置く。3 段目（6 の子 7）は箱を持たないので載らない。
+/// 子 5 は箱 2 つ（element番号の昇順に b・a＝最初は b）、子 6 は箱 1 つ。親 1 は 6 と 5 を置き、5 を 2 度置く
+/// （同じ辺は 1 本）。親 0 は 5 を置く。3 段目（6 の子 7）の箱は辺 (6, 7) で載り、孫を置く (1, 7) は載らない
+/// （辺は直接の親子だけ）。
 /// 面の表に無い番号（9）を指す行は、無い番号の報告の受け持ちなのでここには載らない。
 #[test]
-fn one_report_per_box_per_parent_child_edge_in_order() {
+fn one_report_per_parent_child_edge_in_order() {
     let text = "balloon.a\n{\nsize,10,10\n}\nballoon.b\n{\nsize,10,10\n}\n\
         surface1\n{\nelement0,overlay,6,0,0\nelement1,overlay,5,0,0\nelement2,overlay,5,3,3\nelement3,overlay,9,0,0\n}\n\
         surface0\n{\nelement0,overlay,5,0,0\n}\n\
         surface5\n{\nelement0,overlay,p.png,0,0\nelement2,balloon,a,0,0\nelement1,balloon,b,0,0\n}\n\
         surface6\n{\nelement0,overlay,7,0,0\nelement1,balloon,a,1,1\n}\n\
-        surface7\n{\nelement0,overlay,p.png,0,0\n}\n";
+        surface7\n{\nelement0,overlay,p.png,0,0\nelement1,balloon,a,0,0\n}\n";
     let (_, issues) = fold(text);
     assert_eq!(
         only_in_child(&issues),
         vec![
             in_child(0, 5, "b"),
-            in_child(0, 5, "a"),
             in_child(1, 6, "a"),
             in_child(1, 5, "b"),
-            in_child(1, 5, "a"),
+            in_child(6, 7, "a")
         ]
+    );
+}
+
+/// 子を置く親が多く、子の箱も多くても、件数は辺の数で止まる（親の数×箱の数にしない）。
+#[test]
+fn many_parents_and_many_child_boxes_report_one_per_edge() {
+    const PARENTS: u32 = 30;
+    const BOXES: u32 = 40;
+    let mut text = String::new();
+    for e in 1..=BOXES {
+        text.push_str(&format!("balloon.b{e}\n{{\nsize,10,10\n}}\n"));
+    }
+    text.push_str("surface500\n{\nelement0,overlay,p.png,0,0\n");
+    for e in 1..=BOXES {
+        text.push_str(&format!("element{e},balloon,b{e},0,0\n"));
+    }
+    text.push_str("}\n");
+    for parent in 0..PARENTS {
+        text.push_str(&format!(
+            "surface{parent}\n{{\nelement0,overlay,500,0,0\n}}\n"
+        ));
+    }
+    let (layout, issues) = fold(&text);
+    assert_eq!(
+        layout.placements(500).len(),
+        BOXES as usize,
+        "子の箱は全部置かれる"
+    );
+    assert_eq!(
+        only_in_child(&issues),
+        (0..PARENTS)
+            .map(|p| in_child(p, 500, "b1"))
+            .collect::<Vec<_>>()
     );
 }
 
@@ -112,8 +143,6 @@ fn child_shown_as_top_keeps_its_boxes() {
             y: 0,
         }]
     );
-    let (unplaced, _) = fold(&without(FIXTURE, PLACE_70));
-    assert_eq!(unplaced.placements(70), layout.placements(70));
 }
 
 /// 親に直接書いた箱の置き場所は、子を置いているかどうかで変わらない（要件 6.4）。
@@ -151,41 +180,16 @@ fn parent_boxes_do_not_depend_on_placing_children() {
 const IMAGES: &[(&str, u8)] = &[("p.png", 40), ("q.png", 120), ("r.png", 200)];
 
 fn atlas() -> AtlasTable {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements: IMAGES
-            .iter()
-            .map(|(rel, _)| Element {
-                layer: 0,
-                path: ElementPath::new(rel.to_string()),
-                x: 0,
-                y: 0,
-            })
-            .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for (rel, value) in IMAGES {
-        dec.insert(base.join(rel), 4, 4, 16, vec![*value; 64], true);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake の仕込みは失敗しない");
-    result.table
+    let specs: Vec<AtlasSpec> = IMAGES
+        .iter()
+        .map(|&(rel, v)| (rel, (4, 4), Some((v, v, v))))
+        .collect();
+    bake_atlas_sized(Path::new("shell/master"), &specs)
 }
 
 fn compose(text: &str, top: u32) -> (u32, u32, Vec<u8>) {
     let atlas = atlas();
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&atlas, SetId(0));
+    let world = bound_world(&parse(text), &[], &atlas);
     let out = Composer::new()
         .compose(
             &world,
