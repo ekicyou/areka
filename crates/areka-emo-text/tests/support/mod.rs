@@ -294,7 +294,7 @@ pub fn y_span_where(
 
 /// SquareFill の塗り帯そのもの（`cursor.brush.color` (105,25,25)・premultiplied α=255 ゆえ
 /// BGRA=(25,25,105,255)）。
-pub fn is_fill(px: &[u8]) -> bool {
+fn is_fill(px: &[u8]) -> bool {
     px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
 }
 
@@ -349,7 +349,7 @@ pub fn to_canvas_local(r: &ChoiceHitRow, ox: f32, oy: f32) -> (f32, f32, f32, f3
 pub const SCAN_MARGIN: u32 = 4;
 /// ハイライト矩形の下端から hover 文字のインクがはみ出してよい上限（画素）＝ **0**。
 /// 裁定 2026-09-06（第 2 回・R13.3）——**緩めてはならない**（R12.2）。
-pub const BAND_OVERHANG_MAX: u32 = 0;
+const BAND_OVERHANG_MAX: u32 = 0;
 
 /// 強調の帯の期待値（hover 行の行矩形の上端・帯の丈・行ボックスの中央へ寄せる量）。
 pub struct Band {
@@ -361,7 +361,7 @@ pub struct Band {
 /// hover 行（`row`・canvas-local）の強調の帯を確かめる。走査窓は「hover 行の block 起点−余白
 /// 〜 次の行（`next_row`）の block 起点＋余白」＝帯寸に依存しない独立の窓。
 ///
-/// 確かめること: 帯の丈が `band.height`・帯の位置が `line_top + offset` から・読み戻した塗りの
+/// 確かめること: 帯の丈が `band.height`・塗りの行がひと続き・帯の位置が `line_top + offset` から・読み戻した塗りの
 /// 上端がヒット矩形の上端と一致（描画とヒットの単一導出・R13.2）・窓の中に白文字が在り、
 /// 窓の上下端に接しない・字の上端は帯の内・下端のはみ出しは [`BAND_OVERHANG_MAX`]。
 pub fn assert_hover_band(
@@ -390,6 +390,14 @@ pub fn assert_hover_band(
         band.height,
         fill_span.0,
         fill_span.1
+    );
+    // 丈は塗りの最小と最大の y で測るので、途中に塗りの無い行があっても合ってしまう。
+    let gap = (fill_span.0..=fill_span.1)
+        .find(|&y| y_span_where(hover, w, x0, x1, y, y + 1, is_fill).is_none());
+    assert_eq!(
+        gap, None,
+        "[{tag}] ハイライト帯の塗りがひと続きでない（塗りの無い行がある）: 帯 y{}..{}",
+        fill_span.0, fill_span.1
     );
     // 帯の**絶対位置**（R13.1）: 行矩形の上端から行ボックスの中央へ offset だけ寄る。
     let top = band.line_top + band.offset;

@@ -27,6 +27,8 @@ pub(super) struct Demo {
     pub(super) model: BalloonModel,
     /// 装着＋結線完了フラグ。
     pub(super) attached: bool,
+    /// GPU 資源を待ち始めた時刻（届かないまま上限を過ぎたら準備の失敗）。
+    pub(super) gpu_wait_start: Option<std::time::Instant>,
     /// UI スレッド所有の集約ルート（sink ドレインと present_frame が共有）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// cue 受信口（UI ドレインへ配送）。
@@ -97,6 +99,7 @@ pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
         assets1: Some(assets1),
         model,
         attached: false,
+        gpu_wait_start: None,
         runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

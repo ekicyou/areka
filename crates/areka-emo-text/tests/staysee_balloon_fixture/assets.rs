@@ -2,8 +2,45 @@
 //!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**・設計 **C2** の A 行）。
 
-use super::test_support::{EXPECTED_FILE_NAMES, EXPECTED_FRAME_SIZES, staysee_root};
+use super::test_support::{EXPECTED_FRAME_SIZES, staysee_root};
 use crate::support::fixture::png_native_size;
+
+/// 上流 `ponapalt/StayseeBalloon` `fe1b02f3` の配布物に含まれる全 29 ファイル。
+///
+/// areka が読まないファイル（`thumbnail.pnr`・`online*`・`marker.png`・`sstp.png`・
+/// `balloonc*`・`arrow*`・`install.txt`）も削らず、告知ファイルを足しもしない
+/// （要件 2.2・5.4）。並びは `verification/provenance.md` §3 のハッシュ一覧と同じ昇順。
+const EXPECTED_FILE_NAMES: [&str; 29] = [
+    "LICENSE",
+    "arrow0.png",
+    "arrow1.png",
+    "balloonc0.png",
+    "balloonc1.png",
+    "balloonc2.png",
+    "balloonc3.png",
+    "balloonc4.png",
+    "balloonk0.png",
+    "balloonk1.png",
+    "balloons0.png",
+    "balloons1.png",
+    "balloons2.png",
+    "balloons3.png",
+    "descript.txt",
+    "install.txt",
+    "marker.png",
+    "online0.png",
+    "online1.png",
+    "online2.png",
+    "online3.png",
+    "online4.png",
+    "online5.png",
+    "online6.png",
+    "online7.png",
+    "online8.png",
+    "readme.txt",
+    "sstp.png",
+    "thumbnail.pnr",
+];
 
 /// 保管フォルダ直下のエントリ名が 29 本の固定集合と**過不足なく**一致し、サブフォルダが 0 である。
 ///

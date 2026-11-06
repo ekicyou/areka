@@ -100,13 +100,32 @@ pub(super) fn create_balloon_window(
         .id()
 }
 
+/// GPU 資源の到達を待つ上限（秒）。
+const GPU_WAIT_SECS: f64 = 30.0;
+
 /// GPU 資源が届いたか（装着してよいフレームか）。
-pub(super) fn gpu_ready(world: &World) -> bool {
-    world.get_resource::<GraphicsCore>().is_some()
+///
+/// 届かないまま [`GPU_WAIT_SECS`] を過ぎたら準備の失敗として `setup_abort` で打ち切る（`--hold`
+/// でも同じ・装置を作れないと装着の後の watchdog が走らず、例は何も出さずに止まらない）。
+/// `waiting_since` は待ち始めた時刻で、呼び手が持つ。
+pub(super) fn gpu_ready(world: &World, waiting_since: &mut Option<std::time::Instant>) -> bool {
+    let ready = world.get_resource::<GraphicsCore>().is_some()
         && world
             .get_resource::<WucGraphicsResource>()
             .map(|r| r.is_valid())
-            .unwrap_or(false)
+            .unwrap_or(false);
+    if !ready
+        && waiting_since
+            .get_or_insert_with(std::time::Instant::now)
+            .elapsed()
+            .as_secs_f64()
+            > GPU_WAIT_SECS
+    {
+        setup_abort(&format!(
+            "GPU の資源（GraphicsCore／WUC）が {GPU_WAIT_SECS} 秒たっても揃わない"
+        ));
+    }
+    ready
 }
 
 /// attach_target → ShowSurface（reply で成立を要求）。失敗は文で返し、呼び手が記録する。

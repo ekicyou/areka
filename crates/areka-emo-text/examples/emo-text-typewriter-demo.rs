@@ -118,6 +118,8 @@ struct Demo {
     model: BalloonModel,
     runtime: Rc<RefCell<TextLayerRuntime>>,
     attached: bool,
+    /// GPU 資源を待ち始めた時刻（届かないまま上限を過ぎたら準備の失敗）。
+    gpu_wait_start: Option<std::time::Instant>,
     /// 現サイクルのタイプ開始フレーム時刻。
     cycle_start: f64,
     /// 現サイクルの cue を流し終えたか。
@@ -133,7 +135,7 @@ fn main() -> windows::core::Result<()> {
         )
         .init();
 
-    let mgr = WinApp::new()?;
+    let mgr = WinApp::new().inspect_err(|e| error!(error = %e, "WinApp の作成に失敗"))?;
     let world = mgr.world();
     world
         .borrow_mut()
@@ -155,7 +157,8 @@ fn main() -> windows::core::Result<()> {
     println!("  ★ バルーンを「ダブルクリック」するとデモを終了します。");
     println!();
 
-    mgr.run()?;
+    mgr.run()
+        .inspect_err(|e| error!(error = %e, "メッセージループが失敗で終わった"))?;
     println!("[emo-text-typewriter-demo] 終了しました。おほほ、ごきげんよう！");
     Ok(())
 }
@@ -184,6 +187,7 @@ fn build_and_spawn(world: &mut World) {
             TextLayerConfig::default(),
         ))),
         attached: false,
+        gpu_wait_start: None,
         cycle_start: 0.0,
         fed: false,
         present_err_logged: false,
@@ -235,7 +239,7 @@ fn drive_system(world: &mut World) {
 
 /// GPU 資源到達フレームで attach→ShowSurface→結線を 1 回だけ行う。
 fn try_attach(demo: &mut Demo, world: &mut World) {
-    if !gpu_ready(world) {
+    if !gpu_ready(world, &mut demo.gpu_wait_start) {
         return;
     }
     if let Err(msg) = show_balloon(

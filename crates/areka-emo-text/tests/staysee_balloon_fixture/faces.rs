@@ -7,7 +7,10 @@ use log_capture_kit::CapturedEvent;
 
 use crate::support::fixture::{assert_balloon_loading_records, load_face0_with_records};
 
-use super::test_support::{EXPECTED_FACE_COUNT, staysee_root};
+use super::test_support::staysee_root;
+
+/// どちらの scope でも解決される面の本数（面 0〜3）。
+const EXPECTED_FACE_COUNT: usize = 4;
 
 /// 本体側（scope 0）で解決される面の並び `(面 id, 採用接頭辞, 実ファイル名, 採用段)`。
 ///

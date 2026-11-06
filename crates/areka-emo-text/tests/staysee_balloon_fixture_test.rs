@@ -32,7 +32,7 @@
 //! 実 GPU と実窓は使わず、同一入力に対して常に同一の結果を返す。使う外の仕組みは
 //! 2 つだけで、テーマによって要るものが違う。
 //!
-//! - `assets`・`definition`・`faces`・`scale` はファイル読み込みと純粋層の解決だけ。
+//! - `assets`・`definition`・`faces` はファイル読み込みと純粋層の解決だけ。
 //! - `bake` は画像復号（WIC）を使う。COM を MTA で張る。
 //! - `region`・`wrapping`・`script` は **DirectWrite の factory を使う**
 //!   （文字の送り幅と行送りを実測するため）。既定書体が入っていない環境では
@@ -54,7 +54,6 @@
 //! | `region` | `staysee_balloon_fixture/region.rs` | 文字の領域解決と既定書体の受け入れ口 |
 //! | `wrapping` | `staysee_balloon_fixture/wrapping.rs` | 折返しと描画範囲への内包 |
 //! | `script` | `staysee_balloon_fixture/script.rs` | 選択肢と遅延座標指定の位置 |
-//! | `scale` | `staysee_balloon_fixture/scale.rs` | 表示スケールの扱い |
 //!
 //! ### 置き場がテーマ別**ディレクトリ**である理由
 //!
@@ -94,6 +93,3 @@ mod wrapping;
 
 #[path = "staysee_balloon_fixture/script.rs"]
 mod script;
-
-#[path = "staysee_balloon_fixture/scale.rs"]
-mod scale;

@@ -89,7 +89,7 @@ pub(super) fn drive_demo_system(world: &mut World) {
 /// 装着の失敗は `--hold` でも `setup_abort`（`error!`＋終了コード 1）で打ち切る
 /// （タイプライターの例と同じ・hold の「閉じれば 0」で失敗を隠さない）。
 fn try_attach(demo: &mut Demo, world: &mut World) {
-    if !gpu_ready(world) {
+    if !gpu_ready(world, &mut demo.gpu_wait_start) {
         return;
     }
 

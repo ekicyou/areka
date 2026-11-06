@@ -169,7 +169,7 @@ fn main() -> windows::core::Result<()> {
     let vertical = std::env::args().any(|a| a == "--vertical");
     let hold = std::env::args().any(|a| a == "--hold");
 
-    let mgr = WinApp::new()?;
+    let mgr = WinApp::new().inspect_err(|e| error!(error = %e, "WinApp の作成に失敗"))?;
     let world = mgr.world();
 
     world
@@ -215,7 +215,8 @@ fn main() -> windows::core::Result<()> {
     }
     println!();
 
-    mgr.run()?;
+    mgr.run()
+        .inspect_err(|e| error!(error = %e, "メッセージループが失敗で終わった"))?;
 
     // --hold は目視用: 判定も PASS/FAIL の出力もせず、閉じたら 0 で終わる（audit-emo-text-state-actor 指摘 18）。
     if hold {

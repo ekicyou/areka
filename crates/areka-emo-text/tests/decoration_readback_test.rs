@@ -28,8 +28,8 @@
 //! 「画素が違う」を述べる述語は、比べる 2 枚がそもそも別物なら**何をしても緑**になる。
 //! ゆえに 2 本の対照を置く:
 //!
-//! - [`the_same_script_paints_the_same_pixels_twice`]——同じ台本を 2 度描くと 1 バイトも
-//!   違わない（読み戻しに実行ごとのばらつきが無い）。
+//! - [`the_same_script_paints_the_same_pixels_twice`]——同じ台本を別々の World（別々の装置）で
+//!   2 度描くと 1 バイトも違わない（読み戻しに実行ごと・装置ごとのばらつきが無い）。
 //! - [`tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels`]——同じトークン列を
 //!   装飾を焼かない運搬名で流すと差が消える（差は装飾を焼いたことに由来する）。
 //!
@@ -46,8 +46,8 @@ mod support;
 
 use support::{
     ALT_FONT, FONT_HEIGHT, MISSING_FONT, REAL_FONT, SAMPLE, VISIBLE_KEYS, added_ink_rows,
-    assert_real_font_present, differs, font_is_installed, plain_shot, run, shoot_pair, single_band,
-    text_cue, unbaked_cue,
+    assert_real_font_present, differs, font_is_installed, plain_shot, run, run_fresh, shoot_pair,
+    single_band, text_cue, unbaked_cue,
 };
 
 // ══ 今日の値（実測で固定する定数） ═════════════════════════════════════════════════════
@@ -188,14 +188,16 @@ fn vocabulary_only_keys_leave_the_pixels_untouched() {
 
 // ══ 較正——差の検出が空振りしていないこと（要件 15.7） ═════════════════════════════════
 
-/// 同じ台本を 2 度描くと 1 バイトも違わない（読み戻しに実行ごとのばらつきが無い）。
+/// 同じ台本を別々の World（別々の装置）で 2 度描くと 1 バイトも違わない（読み戻しに実行ごと・
+/// 装置ごとのばらつきが無い）。
 ///
-/// これが崩れると「画素が違う」の述語は装飾と無関係に緑になる。
+/// 素の 1 枚（`plain_shot`）は別のスレッドの World で撮ったものと比べうるので、片方は新しい
+/// World で撮る。これが崩れると「画素が違う」の述語は装飾と無関係に緑になる。
 #[test]
 fn the_same_script_paints_the_same_pixels_twice() {
     assert_real_font_present();
     let a = run(None, &[text_cue(SAMPLE)]);
-    let b = run(None, &[text_cue(SAMPLE)]);
+    let b = run_fresh(None, &[text_cue(SAMPLE)]);
     assert!(a.ink_count() > 0, "素の台本にインクがある（前提）");
     assert!(
         !differs(&a, &b),

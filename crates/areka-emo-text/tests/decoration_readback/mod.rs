@@ -201,6 +201,14 @@ pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
     })
 }
 
+/// [`run`] を新しく作った World（装置も新しい）で撮る。
+///
+/// [`plain_shot`] の 1 枚は別のスレッドの World で撮ったものでありうるので、装置をまたいでも
+/// 同じ画素になることを較正で確かめるために使う。
+pub(crate) fn run_fresh(writing_mode: Option<&str>, script: &[TalkCue]) -> Shot {
+    shoot(&mut make_world_with_gpu(), &model(writing_mode), script)
+}
+
 fn shoot(world: &mut World, model: &BalloonModel, script: &[TalkCue]) -> Shot {
     let (window, slot) = spawn_reserved_slot(world);
 
@@ -225,7 +233,7 @@ fn shoot(world: &mut World, model: &BalloonModel, script: &[TalkCue]) -> Shot {
 }
 
 /// 素の台本の 1 枚。書字方向ごとに実行ファイルで 1 度だけ描き、以後は同じ 1 枚を返す
-/// （同じ台本が同じ画素になることは入口の `the_same_script_paints_the_same_pixels_twice` が固定する）。
+/// （同じ台本が別の World でも同じ画素になることは入口の `the_same_script_paints_the_same_pixels_twice` が固定する）。
 pub(crate) fn plain_shot(writing_mode: Option<&str>) -> &'static Shot {
     static SHOTS: [OnceLock<Shot>; 3] = [const { OnceLock::new() }; 3];
     let slot = match writing_mode {

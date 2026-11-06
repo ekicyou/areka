@@ -28,43 +28,6 @@ pub(crate) fn staysee_root() -> PathBuf {
 
 // ── 保管フォルダの期待値（要件 2.2・5.4）──────────────────────────────────────
 
-/// 上流 `ponapalt/StayseeBalloon` `fe1b02f3` の配布物に含まれる全 29 ファイル。
-///
-/// areka が読まないファイル（`thumbnail.pnr`・`online*`・`marker.png`・`sstp.png`・
-/// `balloonc*`・`arrow*`・`install.txt`）も削らず、告知ファイルを足しもしない
-/// （要件 2.2・5.4）。並びは `verification/provenance.md` §3 のハッシュ一覧と同じ昇順。
-pub(crate) const EXPECTED_FILE_NAMES: [&str; 29] = [
-    "LICENSE",
-    "arrow0.png",
-    "arrow1.png",
-    "balloonc0.png",
-    "balloonc1.png",
-    "balloonc2.png",
-    "balloonc3.png",
-    "balloonc4.png",
-    "balloonk0.png",
-    "balloonk1.png",
-    "balloons0.png",
-    "balloons1.png",
-    "balloons2.png",
-    "balloons3.png",
-    "descript.txt",
-    "install.txt",
-    "marker.png",
-    "online0.png",
-    "online1.png",
-    "online2.png",
-    "online3.png",
-    "online4.png",
-    "online5.png",
-    "online6.png",
-    "online7.png",
-    "online8.png",
-    "readme.txt",
-    "sstp.png",
-    "thumbnail.pnr",
-];
-
 /// areka が枠として焼き込む 6 枚の原寸（IHDR 由来・image px）。
 ///
 /// `balloons*` が本体側（scope 0）・`balloonk*` が相方側（scope 1）の系列で、
@@ -99,11 +62,6 @@ pub(crate) fn expected_frame_size(file_name: &str) -> (u32, u32) {
             )
         })
 }
-
-// ── 面の系列解決（要件 3.4）──────────────────────────────────────────────────
-
-/// どちらの scope でも解決される面の本数（面 0〜3）。
-pub(crate) const EXPECTED_FACE_COUNT: usize = 4;
 
 // ── 定義ファイルの読み口（要件 3.3）──────────────────────────────────────────
 
