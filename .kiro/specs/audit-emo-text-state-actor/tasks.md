@@ -104,7 +104,7 @@
   - 面の写し先の欄と作成を消し、読み戻しの関数はその場で写し先を作る。読み戻しの関数の形は変えない
   - 完了の姿: 読み戻しを使うテストが全部そのまま緑で、`surface.rs` の行数が増えていない
   - _Requirements: 2.1, 5.1, 6.1_
-- [ ] 3.7 箱の当たりのマスクと作業場を使い回す（指摘 9）
+- [x] 3.7 箱の当たりのマスクと作業場を使い回す（指摘 9）
   - 窓の子の側に当たりのマスクの覚え（矩形の列・作業場・今と予備の 2 枚）を置き、面の当たりの矩形の欄と置き換える
   - 矩形が変わったら作業場を埋め直し、予備を取れれば作り直し、取れなければ新しく作る形（`areka-emo-present` の 2 枚を入れ替える形）にする
   - 完了の姿: 当たりのマスクのテストがそのまま緑で、`surface.rs` の行数が増えていない
@@ -248,3 +248,4 @@
 - 片付けは `ActorRender::discard(self, world, slot: Option<Entity>)`、解決と印は `resolve_stamped`（`stamp_inline_marker` は消えた）、登録の後半は `finish_registration`、変化なしの記録は `trace_unchanged`。3.4 で「覚えを複製して印を押すだけ」が要るなら、`resolve_stamped` から押す所を切り出す（design.md:342 の `stamp_inline_marker` は今は無い）。`actor_attach.rs` 390 行あたりの注釈は古いので 5.5 で直す（3.2）。
 - 箱の解決の覚えは `TextLayerRuntime.box_resolved: BTreeMap<BoxName, ResolvedBalloonText>`（印を押す前）。登録は `stamped(&actor, memo.clone())`。design.md:342 の `stamp_inline_marker` は今の `stamped`（5.5 で直す）（3.4）。
 - 全消しの後の片付けは `TextLayerState::forget_pristine_places(keep)`。`TextLayerRuntime::apply_cue` が `ClearAll` のときだけ呼び、空回し（`advance_state` を直に呼ぶ先読み）は通らない。登録したスコープが残るのは見た目の 2 層が入っているから（外れても `place_entry` が同じ既定で作り直す）（3.5）。
+- 当たりのマスクの覚えは `surface_window_child.rs` の `HitMaskCache`。マスクの欄が無い異常の道では矩形を覚えずに戻るので、提示ごとに警告が出続けうる（装着の時に必ず欄を入れるので普通は通らない・6.1 のかけ直しで見る）（3.7）。

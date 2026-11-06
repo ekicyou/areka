@@ -41,10 +41,10 @@ use wintf::ecs::{Arrangement, GraphicsCore, LayoutScale, Offset, Size, VisualGra
 
 use crate::TextLayerError;
 use crate::actor::TextSlotBinding;
-use crate::choice::HitRectPx;
 
 #[path = "surface_window_child.rs"]
 mod window_child;
+use window_child::HitMaskCache;
 
 /// `windows_core::Error` を [`TextLayerError::Device`]（ログ＋`HRESULT`＋文脈）へ写像する
 /// クロージャ（log-first: `error!`＋`Err` 戻り値・panic 禁止）。
@@ -275,8 +275,8 @@ pub struct TextSurface {
     fixed_overlay: FixedOverlaySeam,
     /// 箱の文字の面として窓の直接の子に作った entity（差し込み口へ装着した面は `None`）。
     window_child: Option<Entity>,
-    /// 窓の子の entity の当たりのマスクへ最後に焼いた字の矩形（同じ集まりなら焼き直さない）。
-    hit_cells: Vec<HitRectPx>,
+    /// 窓の子の entity の当たりのマスクの覚え（同じ字の矩形なら焼き直さない・2 枚を使い回す）。
+    hit_mask: HitMaskCache,
 }
 
 /// 物理 px 直接の `Arrangement`（寸＝供給面の物理寸・offset＝窓クライアント原点基準の物理 px）。
@@ -403,7 +403,7 @@ impl TextSurface {
                 size: physical_size,
                 fixed_overlay: FixedOverlaySeam::default(),
                 window_child: None,
-                hit_cells: Vec::new(),
+                hit_mask: HitMaskCache::default(),
             },
             wuc_visual,
         ))

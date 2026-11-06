@@ -177,3 +177,29 @@ fn mask_rounds_cells_outward_and_clips_to_surface() {
         assert!(!inside(x, y), "({x},{y}) は外");
     }
 }
+
+/// マスクの覚え（指摘 9）: 同じ字の矩形なら焼き直さず、変われば前に退いた予備のマスクを焼き直して
+/// 使い回す（2 枚を入れ替える）。当たりの答えは焼き直しのたびに新しい矩形に従う。
+#[test]
+fn hit_mask_cache_skips_same_cells_and_reuses_the_spare() {
+    let (mut world, window, box_entity, _) = shell_with_box();
+    let mut cache = HitMaskCache::default();
+    let a = vec![cell(0.0, 0.0, 20.0, 20.0)];
+    let b = vec![cell(40.0, 0.0, 60.0, 20.0)];
+    let live = |cache: &HitMaskCache| Arc::as_ptr(cache.live.as_ref().expect("焼いたマスク"));
+
+    cache.update(&mut world, box_entity, BOX_SIZE, a.clone());
+    let first = live(&cache);
+    cache.update(&mut world, box_entity, BOX_SIZE, a.clone());
+    assert_eq!(live(&cache), first, "同じ矩形なら焼き直さない");
+
+    cache.update(&mut world, box_entity, BOX_SIZE, b);
+    assert_ne!(live(&cache), first, "予備がまだ無いので新しく作る");
+    assert_eq!(hit(&world, window, 65.0, 25.0), Some(box_entity));
+    assert_eq!(hit(&world, window, 25.0, 25.0), None);
+
+    cache.update(&mut world, box_entity, BOX_SIZE, a);
+    assert_eq!(live(&cache), first, "退いた 1 枚目を焼き直して使い回す");
+    assert_eq!(hit(&world, window, 25.0, 25.0), Some(box_entity));
+    assert_eq!(hit(&world, window, 65.0, 25.0), None);
+}
