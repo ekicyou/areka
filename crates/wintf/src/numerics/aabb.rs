@@ -1,4 +1,5 @@
 use super::calc_hash::*;
+use super::matrix3x2::Matrix3x2Ext;
 use super::point2::*;
 use core::hash::*;
 use core::ops::*;
@@ -130,7 +131,7 @@ impl Aabb {
         }
         let r = self.0;
 
-        if m.M12 == 0.0 && m.M21 == 0.0 {
+        if m.axis_aligned() {
             let a = Point2::new(r.left, r.top) * m;
             let b = Point2::new(r.right, r.bottom) * m;
             return Aabb::new(

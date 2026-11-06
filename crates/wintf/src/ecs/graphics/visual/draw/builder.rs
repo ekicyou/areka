@@ -185,7 +185,7 @@ fn plan_clip(
         | ClipShape::RoundedRectangle { .. }
         | ClipShape::RoundedRectangleIndividual { .. } => {
             let local = clip_rect;
-            if is_rect_preserving(&world_mat) {
+            if world_mat.axis_aligned() {
                 // 矩形保存 → そのまま world 矩形へ焼き込み。world_aabb は厳密。
                 let world_aabb = transform_aabb(local, &world_mat);
                 let new_eff = aabb_intersect(&eff, &world_aabb);
@@ -280,15 +280,6 @@ fn unit_to_rect(r: &Aabb) -> Matrix3x2 {
         M31: r.left(),
         M32: r.top(),
     }
-}
-
-/// 軸整列を保つ変換か（`PushAxisAlignedClip` 可否）。
-/// 回転なし（せん断なし）、または 90/270 度回転を許容。
-fn is_rect_preserving(m: &Matrix3x2) -> bool {
-    const EPS: f32 = 1e-4;
-    let no_skew = m.M12.abs() < EPS && m.M21.abs() < EPS;
-    let quarter = m.M11.abs() < EPS && m.M22.abs() < EPS;
-    no_skew || quarter
 }
 
 /// AABB の 4 隅を変換して外接 AABB を得る（任意アフィン対応）。

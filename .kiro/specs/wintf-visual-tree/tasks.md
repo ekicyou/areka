@@ -21,7 +21,7 @@
   - _Requirements: 6.7_
 
 - [ ] 2. 数の部品の 1 本化
-- [ ] 2.1 「軸に沿うか」の判定を 1 つにまとめ、動きの判定を名前どおりの単位に直す
+- [x] 2.1 「軸に沿うか」の判定を 1 つにまとめ、動きの判定を名前どおりの単位に直す
   - 90 度の倍数の回転を軸に沿うと判じ、浮動小数の残り（許容 1e-4）を許す判定を 1 か所に置く
   - 動きの判定を、与えた矩形の 4 角を 2 つの行列で比べ、その矩形と同じ単位の許容で判じる形へ直す
   - 純粋なテストで 0・90・180・270 度と 1e-5 の残りが「沿う」、45 度とせん断が「沿わない」、平行移動 0.5 と許容 1.0 で「動かない」・2.0 で「動いた」を固定する
@@ -157,3 +157,4 @@
 ## Implementation Notes
 - 1.2: 持ち主の切り抜きの同期は任意の図形を目印の鍵 `GEOMETRY_AS_NONE_KEY=(-1,-1,0,None)` で「切り抜きなし」に読み替える。`graphics/visual/version.rs` の doc に捨てた `VisualClip/VisualFlags` の名が残る（4.2 で書き換える）
 - 1.3: 節の描く中身の道具は `graphics/visual/draw_content_test_support.rs` の `solid_rect_content(rect)`（WIC の的・工場に結びつくので WARP の再生には使えない）
+- 2.1: 軸の判定は `numerics/matrix3x2.rs` の `Matrix3x2Ext::axis_aligned` だけ（`Aabb::transform` の近道もこれを使う・90 度の外接矩形のテストは 2.2 で足す）。builder の `transform_aabb` は 2.2 で数の部品へ寄せる

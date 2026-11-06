@@ -6,7 +6,7 @@ pub struct WorldVisual {
     /// local → world の累積アフィン。
     pub world_mat: Matrix3x2,
 
-    /// world_mat が軸平行か（M12 == 0 && M21 == 0）。
+    /// world_mat が軸に沿うか（`Matrix3x2Ext::axis_aligned`・90 度の倍数も沿う）。
     /// `PushAxisAlignedClip` 可否 / `Aabb::transform` fast path のキャッシュ。
     pub axis_aligned: bool,
 
