@@ -7,24 +7,6 @@ use wintf::ecs::layout::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyS
 // ===== Task 7.2: TaffyComputedLayout→Arrangement変換テスト =====
 
 #[test]
-fn test_computed_layout_to_arrangement_conversion() {
-    let mut world = World::new();
-    world.init_resource::<TaffyLayoutResource>();
-
-    // TaffyComputedLayoutを持つエンティティを作成
-    let computed = TaffyComputedLayout::default();
-    let entity = world.spawn((TaffyStyle::default(), computed)).id();
-
-    // update_arrangements_systemを実行
-    let mut schedule = Schedule::default();
-    schedule.add_systems(update_arrangements_system);
-    schedule.run(&mut world);
-
-    // Arrangementが挿入されていることを確認
-    assert!(world.entity(entity).contains::<Arrangement>());
-}
-
-#[test]
 fn test_computed_layout_position_to_arrangement_offset() {
     let mut world = World::new();
     world.init_resource::<TaffyLayoutResource>();

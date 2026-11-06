@@ -8,8 +8,8 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
+use log_capture_kit::count_levels;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
@@ -18,11 +18,7 @@ use wintf::ecs::{
 };
 
 fn setup() -> (World, Schedule) {
-    // init_wuc_resource は内部で WucGraphicsResource::new（DQTAT_COM_NONE）を呼ぶため
-    // COM を MTA 初期化しておく。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // init_wuc_resource が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let mut world = World::new();
     world.insert_resource(core);
@@ -88,9 +84,12 @@ fn invalid_hwnd_fails_gracefully_without_window_graphics() {
 
         // 1回目: WucGraphicsResource を命令で入れ、同じ回の窓の係が CreateDesktopWindowTarget
         // (null HWND) に失敗 → error ログ + 継続。2回目も同じ（パニックなし）
-        schedule.run(&mut world);
-        schedule.run(&mut world);
+        let ((), counts) = count_levels(|| {
+            schedule.run(&mut world);
+            schedule.run(&mut world);
+        });
 
+        assert!(counts.error >= 1, "無効 HWND の失敗が error を残していない");
         assert!(
             world.get::<WindowGraphics>(entity).is_none(),
             "無効 HWND では WindowGraphics は挿入されない（パニックなし）"

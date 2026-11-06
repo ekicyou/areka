@@ -17,12 +17,10 @@
 //! → `WM_NCDESTROY` させ、ハンドル破棄を Entity ライフサイクルに一致させる。除去後に
 //! レジストリが空になったら shutdown フック（終了起点）を発火する。
 //!
-//! # スケジュール結線は本タスクの領分外
-//! 本システムを tick スケジュールへ登録するのは `WinApp`（runtime→World）が後続タスク
-//! （4.3）で行う。ここでは登録しない（ECS→runtime の上向き依存を schedule に持ち込まない）。
-//! shutdown シグナル本体（ECS 所有の `event_listener::Event`・facade 下向き注入）の結線も
-//! 後続タスク（4.2）の領分で、本タスクは「空遷移で発火する差し替え可能なフック接点」のみ
-//! 用意する（設計 ShutdownPolicy）。
+//! # スケジュール結線
+//! 本システムを tick スケジュールへ登録するのは `WinApp`（runtime→World）で、ここでは
+//! 登録しない（ECS→runtime の上向き依存を schedule に持ち込まない）。空遷移で発火する
+//! フックは `WinApp` が注入し、終了の合図（[`crate::AppExit`]）を撃つ。
 
 use std::collections::HashMap;
 
@@ -35,8 +33,7 @@ use crate::runtime::wndproc_bridge::WndState;
 
 /// 空への遷移時に発火する終了起点フック。
 ///
-/// 実体（ECS 所有の `event_listener::Event` notify）は後続タスク 4.2 で注入される。
-/// 本タスクでは「空遷移ちょうどで呼ばれる差し替え可能な接点」だけを提供する。
+/// 実体は `WinApp` が注入する（終了の合図 [`crate::AppExit`] を撃つクロージャ）。
 type ShutdownHook = Box<dyn Fn()>;
 
 /// 生成済みウィンドウハンドルを Entity キーで保持する NonSend リソース。
@@ -68,8 +65,7 @@ impl<W> WindowRegistry<W> {
 
     /// 空遷移で発火する終了起点フックを差し替える。
     ///
-    /// 後続タスク 4.2 が ECS 所有の `event_listener::Event` を notify するクロージャを
-    /// ここへ注入する。本タスクでは接点のみ。
+    /// `WinApp` が終了の合図 [`crate::AppExit`] を撃つクロージャをここへ注入する。
     pub(crate) fn set_shutdown_hook(&mut self, hook: impl Fn() + 'static) {
         self.shutdown_hook = Some(Box::new(hook));
     }

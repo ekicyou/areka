@@ -25,7 +25,7 @@ pub(crate) fn on_container_pressed(
             // Ctrl+左クリックでイベントを停止
             if state.ctrl_down && state.left_down {
                 info!(
-                    "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, {}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, {}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     wlabel,
@@ -58,7 +58,7 @@ pub(crate) fn on_container_pressed(
             // 右クリック検出
             if state.right_down {
                 info!(
-                    "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, {}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, {}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     wlabel,
@@ -88,7 +88,7 @@ pub(crate) fn on_container_pressed(
 
 /// FlexContainer の OnDragStart ハンドラ
 ///
-/// ドラッグ開始時に初期inset値を記録する。
+/// ドラッグ開始位置をログに出す（開始位置の保持はフレームワークの DraggingState が持つ）。
 pub(crate) fn on_container_drag_start(
     world: &mut World,
     sender: Entity,
@@ -111,9 +111,6 @@ pub(crate) fn on_container_drag_start(
                 "[Drag] DragStart: sender={}, entity={}, pos=({},{})",
                 sender_name, entity_name, event.position.x, event.position.y
             );
-
-            // ウィンドウエンティティを探索してドラッグ開始位置を記録
-            // これはDraggingStateとして保存される（DraggingStateには既にdrag_start_posがある）
 
             false
         }

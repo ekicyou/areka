@@ -29,13 +29,6 @@ fn decode_first_frame(filename: &str) -> (IWICImagingFactory2, IWICBitmapFrameDe
 // ============================================================
 
 #[test]
-fn wic_factory_can_be_created() {
-    with_com_initialized(|| {
-        wic_factory().expect("wic_factory should succeed under COM apartment");
-    });
-}
-
-#[test]
 fn decode_png_frame_and_get_size() {
     with_com_initialized(|| {
         let (_factory, frame) = decode_first_frame("test_8x8_rgba.png");
@@ -107,36 +100,48 @@ fn format_converter_init_to_pbgra32_succeeds() {
 // copy_pixels
 // ============================================================
 
+/// 8x8 の検体を PBGRA32 に変えて全体を写す（stride = 8*4 = 32、計 256 バイト）。
+fn copy_whole_pbgra(factory: &IWICImagingFactory2, frame: &IWICBitmapFrameDecode) -> Vec<u8> {
+    let source: IWICBitmapSource = frame.cast().expect("cast");
+    let converter = factory.create_format_converter().expect("converter");
+    converter
+        .init(
+            &source,
+            &GUID_WICPixelFormat32bppPBGRA,
+            WICBitmapDitherTypeNone,
+            None,
+            0.0,
+            WICBitmapPaletteTypeCustom,
+        )
+        .expect("init");
+    let converted: IWICBitmapSource = converter.cast().expect("cast");
+    let mut buffer = vec![0u8; 256];
+    converted
+        .copy_pixels(None, 32, &mut buffer)
+        .expect("copy_pixels whole image");
+    buffer
+}
+
+/// 入れ物は 0 で始めるので、写さない包みなら 0 のままになる。
 #[test]
 fn copy_pixels_whole_image_fills_buffer() {
     with_com_initialized(|| {
         let (factory, frame) = decode_first_frame("test_8x8_rgba.png");
-        let source: IWICBitmapSource = frame.cast().expect("cast");
-        let converter = factory.create_format_converter().expect("converter");
-        converter
-            .init(
-                &source,
-                &GUID_WICPixelFormat32bppPBGRA,
-                WICBitmapDitherTypeNone,
-                None,
-                0.0,
-                WICBitmapPaletteTypeCustom,
-            )
-            .expect("init");
-        let converted: IWICBitmapSource = converter.cast().expect("cast");
-
-        // 8x8 PBGRA32: stride = 8*4 = 32, total = 256 bytes
-        let mut buffer = vec![0u8; 256];
-        converted
-            .copy_pixels(None, 32, &mut buffer)
-            .expect("copy_pixels whole image");
+        let buffer = copy_whole_pbgra(&factory, &frame);
+        assert!(
+            buffer.iter().any(|&b| b != 0),
+            "copy_pixels should write the image into the buffer"
+        );
     });
 }
 
+/// 部分の写しは、全体の写しの同じ画素と一致する。
 #[test]
-fn copy_pixels_with_subrect_succeeds() {
+fn copy_pixels_with_subrect_matches_whole_copy() {
     with_com_initialized(|| {
         let (factory, frame) = decode_first_frame("test_8x8_rgba.png");
+        let whole = copy_whole_pbgra(&factory, &frame);
+
         let source: IWICBitmapSource = frame.cast().expect("cast");
         let converter = factory.create_format_converter().expect("converter");
         converter
@@ -151,16 +156,30 @@ fn copy_pixels_with_subrect_succeeds() {
             .expect("init");
         let converted: IWICBitmapSource = converter.cast().expect("cast");
 
+        let (x, y, w, h) = (1usize, 1usize, 2usize, 2usize);
         let rect = WICRect {
-            X: 0,
-            Y: 0,
-            Width: 2,
-            Height: 2,
+            X: x as i32,
+            Y: y as i32,
+            Width: w as i32,
+            Height: h as i32,
         };
-        let mut buffer = vec![0u8; 16]; // 2x2 * 4 bytes
+        let mut buffer = vec![0u8; w * h * 4];
         converted
-            .copy_pixels(Some(&rect), 8, &mut buffer)
+            .copy_pixels(Some(&rect), (w * 4) as u32, &mut buffer)
             .expect("copy_pixels subrect");
+
+        let expected: Vec<u8> = (y..y + h)
+            .flat_map(|row| {
+                whole[(row * 8 + x) * 4..(row * 8 + x + w) * 4]
+                    .iter()
+                    .copied()
+            })
+            .collect();
+        assert!(
+            expected.iter().any(|&b| b != 0),
+            "sample area must not be blank"
+        );
+        assert_eq!(buffer, expected);
     });
 }
 
@@ -208,31 +227,55 @@ fn palette_has_alpha_of(filename: &str) -> bool {
 }
 
 #[test]
+#[cfg_attr(
+    not(areka_palette_samples),
+    ignore = "areka-emo-atlas のパレットの見本が無い（ワークスペースの外）"
+)]
 fn palette_idx8_mixed_has_alpha() {
     assert!(palette_has_alpha_of("idx8_mixed.png"));
 }
 
 #[test]
+#[cfg_attr(
+    not(areka_palette_samples),
+    ignore = "areka-emo-atlas のパレットの見本が無い（ワークスペースの外）"
+)]
 fn palette_idx4_mixed_has_alpha() {
     assert!(palette_has_alpha_of("idx4_mixed.png"));
 }
 
 #[test]
+#[cfg_attr(
+    not(areka_palette_samples),
+    ignore = "areka-emo-atlas のパレットの見本が無い（ワークスペースの外）"
+)]
 fn palette_gray8_trns_has_alpha() {
     assert!(palette_has_alpha_of("gray8_trns.png"));
 }
 
 #[test]
+#[cfg_attr(
+    not(areka_palette_samples),
+    ignore = "areka-emo-atlas のパレットの見本が無い（ワークスペースの外）"
+)]
 fn palette_trans_gif_has_alpha() {
     assert!(palette_has_alpha_of("trans.gif"));
 }
 
 #[test]
+#[cfg_attr(
+    not(areka_palette_samples),
+    ignore = "areka-emo-atlas のパレットの見本が無い（ワークスペースの外）"
+)]
 fn palette_idx8_plain_has_no_alpha() {
     assert!(!palette_has_alpha_of("idx8_plain.png"));
 }
 
 #[test]
+#[cfg_attr(
+    not(areka_palette_samples),
+    ignore = "areka-emo-atlas のパレットの見本が無い（ワークスペースの外）"
+)]
 fn palette_idx8_opaque_trns_has_no_alpha() {
     assert!(!palette_has_alpha_of("idx8_opaque_trns.png"));
 }

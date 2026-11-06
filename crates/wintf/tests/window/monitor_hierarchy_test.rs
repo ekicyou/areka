@@ -107,50 +107,12 @@ fn test_monitor_enumeration() {
             monitor.bounds.bottom > monitor.bounds.top,
             "Monitor bounds height should be positive"
         );
-    }
-}
 
-// ===== Task 11.2: LayoutRoot → {Monitor, Window} → Widget階層構築テスト =====
-
-#[test]
-fn test_monitor_hierarchy_construction() {
-    let mut world = World::new();
-    world.insert_resource(TaffyLayoutResource::default());
-
-    // initialize_layout_rootを実行
-    initialize_layout_root(&mut world);
-
-    // LayoutRootを取得
-    let mut layout_root_query = world.query_filtered::<Entity, With<LayoutRoot>>();
-    let layout_root = layout_root_query
-        .iter(&world)
-        .next()
-        .expect("LayoutRoot should exist");
-
-    // Monitorエンティティを取得
-    let monitors: Vec<Entity> = world
-        .query_filtered::<Entity, With<Monitor>>()
-        .iter(&world)
-        .collect();
-
-    // 各MonitorがLayoutRootの子であることを再検証
-    for monitor_entity in monitors.iter() {
-        let child_of = world
-            .get::<ChildOf>(*monitor_entity)
-            .expect("Monitor should have ChildOf");
-        assert_eq!(child_of.parent(), layout_root);
-    }
-
-    // Monitorに必要なレイアウトコンポーネントが存在することを検証
-    for monitor_entity in monitors.iter() {
-        // BoxStyleコンポーネントが存在し、position, size, insetが設定されていることを検証
+        // Monitor に要るレイアウトの部品（絶対配置・大きさ・位置）が揃っていることを検証
         let box_style = world
-            .get::<BoxStyle>(*monitor_entity)
+            .get::<BoxStyle>(entity)
             .expect("Monitor should have BoxStyle component");
-        assert!(
-            box_style.position.is_some(),
-            "Monitor BoxStyle should have position"
-        );
+        assert_eq!(box_style.position, Some(BoxPosition::Absolute));
         assert!(
             box_style.size.is_some(),
             "Monitor BoxStyle should have size"
@@ -160,45 +122,14 @@ fn test_monitor_hierarchy_construction() {
             "Monitor BoxStyle should have inset"
         );
         assert!(
-            world.get::<Arrangement>(*monitor_entity).is_some(),
+            world.get::<Arrangement>(entity).is_some(),
             "Monitor should have Arrangement component"
         );
         assert!(
-            world.get::<GlobalArrangement>(*monitor_entity).is_some(),
+            world.get::<GlobalArrangement>(entity).is_some(),
             "Monitor should have GlobalArrangement component"
         );
     }
-}
-
-// ===== Task 12.1: Monitor.boundsからTaffyStyle変換テスト =====
-
-#[test]
-fn test_monitor_to_taffy_style_conversion() {
-    let mut world = World::new();
-    world.insert_resource(TaffyLayoutResource::default());
-
-    // initialize_layout_rootを実行
-    initialize_layout_root(&mut world);
-
-    // build_taffy_styles_systemを実行してTaffyStyleを生成
-    let mut schedule2 = Schedule::default();
-    schedule2.add_systems(build_taffy_styles_system);
-    schedule2.run(&mut world);
-
-    // 各MonitorのTaffyStyleを検証
-    let mut has_monitors = false;
-    for (_monitor, box_style, _taffy_style) in world
-        .query::<(&Monitor, &BoxStyle, &TaffyStyle)>()
-        .iter(&world)
-    {
-        has_monitors = true;
-
-        // BoxPosition::Absoluteが設定されていることを検証
-        assert_eq!(box_style.position, Some(BoxPosition::Absolute));
-        println!("Monitor has TaffyStyle");
-    }
-
-    assert!(has_monitors, "At least one monitor should have TaffyStyle");
 }
 
 // ===== Task 13.1: Taffyツリー同期とレイアウト計算テスト =====
@@ -257,18 +188,17 @@ fn test_taffy_tree_sync_and_layout_computation() {
     schedule4.add_systems(compute_taffy_layout_system);
     schedule4.run(&mut world);
 
-    // TaffyComputedLayoutが配布されていることを検証
-    let _layout_root_computed = world
-        .get::<TaffyComputedLayout>(layout_root)
-        .expect("LayoutRoot should have TaffyComputedLayout");
-
+    // TaffyComputedLayout が既定値（build_taffy_styles_system が入れる空の値）でなく、
+    // 実際に計算された値で上書きされていることを検証
     for monitor_entity in monitors.iter() {
-        let _monitor_computed = world
+        let monitor_computed = world
             .get::<TaffyComputedLayout>(*monitor_entity)
             .expect("Monitor should have TaffyComputedLayout");
-
-        // レイアウトが計算されていることを検証（内部構造にアクセスできないため存在確認のみ）
-        println!("Monitor {:?} has computed layout", monitor_entity);
+        assert_ne!(
+            *monitor_computed,
+            TaffyComputedLayout::default(),
+            "Monitor layout should be computed, not left at default"
+        );
     }
 }
 
@@ -388,66 +318,6 @@ fn test_backward_compatibility_without_layout_root() {
     assert!(
         taffy_res.get_node(widget).is_some(),
         "Taffy node should be created even without LayoutRoot"
-    );
-}
-
-#[test]
-fn test_existing_tests_still_pass() {
-    // 既存のレイアウトシステムが正常に動作することを検証
-    let mut world = World::new();
-    world.insert_resource(TaffyLayoutResource::default());
-
-    // LayoutRootを作成（新システム）
-    world.insert_resource(App::new());
-    initialize_layout_root(&mut world);
-
-    // 既存のWindow/Widgetエンティティを作成
-    let window = world
-        .spawn((
-            BoxStyle {
-                size: Some(BoxSize {
-                    width: Some(Dimension::Px(800.0)),
-                    height: Some(Dimension::Px(600.0)),
-                }),
-                ..Default::default()
-            },
-            Arrangement::default(),
-            GlobalArrangement::default(),
-        ))
-        .id();
-
-    let widget = world
-        .spawn((
-            BoxStyle {
-                size: Some(BoxSize {
-                    width: Some(Dimension::Px(200.0)),
-                    height: Some(Dimension::Px(100.0)),
-                }),
-                ..Default::default()
-            },
-            ChildOf(window),
-            Arrangement::default(),
-            GlobalArrangement::default(),
-        ))
-        .id();
-
-    // レイアウトシステムを実行
-    let mut schedule2 = Schedule::default();
-    schedule2.add_systems((
-        build_taffy_styles_system,
-        sync_taffy_tree_system,
-        compute_taffy_layout_system,
-    ));
-    schedule2.run(&mut world);
-
-    // Window/Widgetのレイアウトが正しく計算されることを検証
-    assert!(
-        world.get::<TaffyComputedLayout>(window).is_some(),
-        "Window should have computed layout"
-    );
-    assert!(
-        world.get::<TaffyComputedLayout>(widget).is_some(),
-        "Widget should have computed layout"
     );
 }
 

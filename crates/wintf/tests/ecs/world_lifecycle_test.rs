@@ -82,17 +82,6 @@ fn new_ecs_world_registers_all_schedule_labels() {
     assert!(schedules.contains(FrameFinalize), "FrameFinalize 未登録");
 }
 
-/// `UISetup` スケジュールのみ SingleThreaded エグゼキュータに設定される
-/// （Win32 UI スレッド固定要件。他はデフォルトのマルチスレッド）。
-#[test]
-fn uisetup_schedule_uses_single_threaded_executor() {
-    let ecs_world = EcsWorld::new();
-    let schedules = ecs_world.world().get_resource::<Schedules>().unwrap();
-
-    assert!(schedules.get(UISetup).is_some(), "UISetup schedule exists");
-    assert!(schedules.get(Update).is_some(), "Update schedule exists");
-}
-
 /// `EcsWorld::default()` は `new()` と同じ初期状態を生成する
 /// （FrameCount=0・全スケジュール登録）。
 #[test]
@@ -113,9 +102,5 @@ fn default_matches_new_initial_state() {
 #[test]
 fn ecs_world_debug_is_non_exhaustive() {
     let ecs_world = EcsWorld::new();
-    let debug_str = format!("{:?}", ecs_world);
-    assert!(
-        debug_str.contains("EcsWorld"),
-        "Debug 出力に型名を含む: {debug_str}"
-    );
+    assert_eq!(format!("{:?}", ecs_world), "EcsWorld { .. }");
 }

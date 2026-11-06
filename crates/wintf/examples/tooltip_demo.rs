@@ -37,7 +37,7 @@
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::time::{Duration, Instant};
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -564,9 +564,17 @@ fn toggle_one_line(world: &mut World) {
                 area: TooltipArea::Rect(ONE_LINE.rect()),
                 text: Some(ONE_LINE_TEXT.to_string()),
             };
-            let id = tooltip::register(world, window, range).ok();
+            let id = match tooltip::register(world, window, range) {
+                Ok(id) => {
+                    info!(?id, "[tooltip_demo] F8: 「1 行」の範囲を登録し直した");
+                    Some(id)
+                }
+                Err(e) => {
+                    error!(?e, "[tooltip_demo] F8: 「1 行」の範囲を登録し直せなかった");
+                    None
+                }
+            };
             world.resource_mut::<Demo>().one_line = id;
-            info!(?id, "[tooltip_demo] F8: 「1 行」の範囲を登録し直した");
         }
     }
 }
@@ -576,7 +584,11 @@ fn reassert_other(world: &mut World) {
     let Some(other) = world.get_resource::<Demo>().map(|d| d.other_window) else {
         return;
     };
-    world.entity_mut(other).insert(ReassertZOrder::default());
+    // Alt+F4 で閉じた窓の実体は消えている
+    let Ok(mut other) = world.get_entity_mut(other) else {
+        return;
+    };
+    other.insert(ReassertZOrder::default());
     info!("[tooltip_demo] F9: もう 1 枚の窓の重なりを立て直した");
 }
 

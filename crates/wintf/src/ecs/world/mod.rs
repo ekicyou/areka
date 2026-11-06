@@ -28,7 +28,7 @@ use tracing::{error, info};
 ///
 /// WUC（Windows.UI.Composition）はスレッド親和 API であり、かつ DispatcherQueue は
 /// 「メッセージポンプが回るスレッド」に居ないと合成 commit が永遠に flush されない。
-/// try_tick_world は UI スレッド（AsyncTickTask の spawn_local）から呼ばれるため、
+/// try_tick_world は UI スレッド（tick のタスク `run_async_tick` の spawn_local）から呼ばれるため、
 /// WUC オブジェクトに触る schedule を SingleThreaded executor に固定して
 /// 「全 WUC 呼び出し＝UI スレッド」を構造的に保証する。
 ///
@@ -36,8 +36,8 @@ use tracing::{error, info};
 /// （worker スレッド実行）でも動作していたが、WUC 移行でこの前提が崩れた。
 /// worker スレッドで CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT) が走ると
 /// DispatcherQueue がポンプの無い worker に紐づき、エラーを一切出さないまま
-/// 画面へ何も合成されない（dcomp_demo: 窓は visible・SetBrush/SetRoot 全成功・
-/// 内容だけ出ない／ECS 非依存でメインスレッド生成の wuc_spike: 表示される、で切り分け確定）。
+/// 画面へ何も合成されない（ECS 経由の試作: 窓は visible・SetBrush/SetRoot 全成功・
+/// 内容だけ出ない／ECS 非依存でメインスレッド生成の試作: 表示される、で切り分け確定）。
 pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6] {
     [
         UISetup.intern(),

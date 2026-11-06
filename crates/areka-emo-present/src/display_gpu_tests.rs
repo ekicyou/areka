@@ -12,8 +12,7 @@
 //! SOURCE_OVER が src そのもの、の 4 点。DC の既定 DPI だけは実行機に左右されるため、記録にも
 //! 再生にも使う DC を 96 に固定する（宛先矩形は論理 px ゆえ、96 でのみ 1 論理 px = 1 画素になる）。
 //!
-//! 読み戻しの型は wintf `tests/graphics/surface_pixel_equivalence_test.rs` と同じ
-//! （`CPU_READ|CANNOT_DRAW` の staging へ `CopyFromBitmap` → `Map(READ)` → pitch を踏まえて行複写）。
+//! 読み戻しの型: `CPU_READ|CANNOT_DRAW` の staging へ `CopyFromBitmap` → `Map(READ)` → pitch を踏まえて行複写。
 
 use super::*;
 

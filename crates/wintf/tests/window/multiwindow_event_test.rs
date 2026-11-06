@@ -3,12 +3,10 @@
 //! 以下を検証:
 //! - find_owner_window: エンティティの所属ウィンドウ特定
 //! - build_bubble_path: Window 境界での伝播停止
-//! - WM_MOUSELEAVE スコーピング: ウィンドウ別 PointerState クリア
-//! - ドラッグ HWND ガード: 異ウィンドウからの end_dragging スキップ
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use wintf::ecs::pointer::{PointerState, build_bubble_path};
+use wintf::ecs::pointer::build_bubble_path;
 use wintf::ecs::window::{Window, find_owner_window};
 
 // ============================================================================
@@ -184,124 +182,4 @@ fn test_build_bubble_path_no_window() {
     assert_eq!(path.len(), 2, "Window なしの場合は全パス");
     assert_eq!(path[0], child);
     assert_eq!(path[1], root);
-}
-
-// ============================================================================
-// Task 7.2: WM_MOUSELEAVE スコーピングテスト
-// ============================================================================
-
-/// 2つの Window 配下にそれぞれ PointerState を持つエンティティを配置し、
-/// Window A のスコープ付きクリア処理を模擬実行
-#[test]
-fn test_mouseleave_scoped_pointer_clear() {
-    let mut world = World::new();
-
-    // Window A とそのウィジェット
-    let window_a = world
-        .spawn(Window {
-            title: "Window A".to_string(),
-            ..Default::default()
-        })
-        .id();
-    let widget_a = world
-        .spawn((ChildOf(window_a), PointerState::default()))
-        .id();
-
-    // Window B とそのウィジェット
-    let window_b = world
-        .spawn(Window {
-            title: "Window B".to_string(),
-            ..Default::default()
-        })
-        .id();
-    let widget_b = world
-        .spawn((ChildOf(window_b), PointerState::default()))
-        .id();
-
-    // Window A のスコープ付き PointerState クリアを模擬実行
-    // (handlers.rs の WM_MOUSELEAVE と同じロジック)
-    let mut entities_to_clear = Vec::new();
-    {
-        let mut query = world.query::<(Entity, &PointerState)>();
-        for (e, _) in query.iter(&world) {
-            if find_owner_window(&world, e) == Some(window_a) {
-                entities_to_clear.push(e);
-            }
-        }
-    }
-    for entity in entities_to_clear {
-        if let Ok(mut entity_ref) = world.get_entity_mut(entity) {
-            entity_ref.remove::<PointerState>();
-        }
-    }
-
-    // 検証: Window A のウィジェットは PointerState が削除された
-    assert!(
-        world.get::<PointerState>(widget_a).is_none(),
-        "Window A のウィジェットの PointerState は削除された"
-    );
-
-    // 検証: Window B のウィジェットは PointerState が維持された
-    assert!(
-        world.get::<PointerState>(widget_b).is_some(),
-        "Window B のウィジェットの PointerState は維持される"
-    );
-}
-
-// ============================================================================
-// Task 5.2 / 7.4: ドラッグ HWND ガードテスト
-// ============================================================================
-
-/// ドラッグ対象の entity の所属ウィンドウを find_owner_window で引き、異なるウィンドウの
-/// entity では「同じウィンドウか」の判定が不成立になることを純粋 ECS で検証する。
-///
-/// 左ボタンを離したときの今のガードは find_owner_window を使わない。
-/// `mouse_click.rs` のハンドラは `end_dragging_on_release(hwnd, ..)` を呼ぶだけで、
-/// 離した窓の HWND が押しで捕捉を取った窓の HWND（`CaptureGuard::hwnd`）と同じときだけ
-/// ドラッグを休ませる（Preparing/JustStarted/Dragging のどれでも同じ判定）。
-/// 異なるウィンドウからの離しの振る舞いは `wndproc_bridge_drag_release_tests.rs` の
-/// 隠れた実物の窓 2 枚のテストで確かめる。ここでは find_owner_window の答えだけを固定する。
-#[test]
-fn test_drag_hwnd_guard_owner_window_check() {
-    let mut world = World::new();
-
-    // Window A とそのウィジェット（ドラッグ対象）
-    let window_a = world
-        .spawn(Window {
-            title: "Window A".to_string(),
-            ..Default::default()
-        })
-        .id();
-    let drag_target = world.spawn(ChildOf(window_a)).id();
-
-    // Window B（ボタンアップが来るウィンドウ）
-    let window_b = world
-        .spawn(Window {
-            title: "Window B".to_string(),
-            ..Default::default()
-        })
-        .id();
-
-    // Preparing/JustStarted 状態での entity 所有者チェック模擬
-    // ドラッグ対象は Window A に属する
-    let drag_entity_owner = find_owner_window(&world, drag_target);
-    assert_eq!(
-        drag_entity_owner,
-        Some(window_a),
-        "ドラッグ対象は Window A に属する"
-    );
-
-    // Window B からのボタンアップ: ガード不成立
-    let should_end_from_b = drag_entity_owner == Some(window_b);
-    assert!(
-        !should_end_from_b,
-        "Window B からのボタンアップではドラッグ終了しない"
-    );
-
-    // Window A からのボタンアップ: ガード成立
-    let should_end_from_a = drag_entity_owner == Some(window_a);
-    assert!(
-        should_end_from_a,
-        "Window A からのボタンアップではドラッグ終了する"
-    );
 }

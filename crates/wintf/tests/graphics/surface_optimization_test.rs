@@ -21,13 +21,13 @@ fn test_surface_graphics_dirty_component_exists() {
 
 #[test]
 fn test_mark_dirty_surfaces_updates_frame() {
-    let mut app = bevy_app::App::new();
-    app.insert_resource(FrameCount(1)); // フレーム番号1
-    app.add_systems(bevy_app::Update, mark_dirty_surfaces);
+    let mut world = World::new();
+    world.insert_resource(FrameCount(1)); // フレーム番号1
+    let mut schedule = Schedule::default();
+    schedule.add_systems(mark_dirty_surfaces);
 
     // SurfaceGraphics と SurfaceGraphicsDirty を持つエンティティを作成
-    let entity = app
-        .world_mut()
+    let entity = world
         .spawn((
             SurfaceGraphics::default(),
             SurfaceGraphicsDirty::default(),
@@ -35,54 +35,23 @@ fn test_mark_dirty_surfaces_updates_frame() {
         ))
         .id();
 
-    // 最初のupdateでChangeトラッカーを初期化
-    app.update();
+    // 最初の回でChangeトラッカーを初期化
+    schedule.run(&mut world);
 
     // フレーム番号を更新
-    app.world_mut().resource_mut::<FrameCount>().0 = 42;
+    world.resource_mut::<FrameCount>().0 = 42;
 
     // GraphicsCommandListを変更（強制的に変更検出をトリガー）
-    if let Some(mut cmd_list) = app
-        .world_mut()
-        .entity_mut(entity)
-        .get_mut::<GraphicsCommandList>()
-    {
-        cmd_list.set_changed();
-    }
+    world
+        .get_mut::<GraphicsCommandList>(entity)
+        .unwrap()
+        .set_changed();
 
-    app.update();
+    schedule.run(&mut world);
 
     // SurfaceGraphicsDirtyのrequested_frameがフレーム番号で更新されていることを確認
-    let dirty = app
-        .world()
-        .entity(entity)
-        .get::<SurfaceGraphicsDirty>()
-        .unwrap();
+    let dirty = world.get::<SurfaceGraphicsDirty>(entity).unwrap();
     assert_eq!(dirty.requested_frame, 42);
-}
-
-#[test]
-fn test_surface_graphics_dirty_on_surface_added() {
-    // SurfaceGraphicsの追加時にSurfaceGraphicsDirtyも一緒に追加されることをテスト
-    // （実際にはdeferred_surface_creation_systemが担当）
-    let mut app = bevy_app::App::new();
-    app.insert_resource(FrameCount(0));
-
-    // SurfaceGraphicsとSurfaceGraphicsDirtyを一緒にspawn
-    let entity = app
-        .world_mut()
-        .spawn((SurfaceGraphics::default(), SurfaceGraphicsDirty::default()))
-        .id();
-
-    app.update();
-
-    // 両方のコンポーネントが存在することを確認
-    assert!(app.world().entity(entity).contains::<SurfaceGraphics>());
-    assert!(
-        app.world()
-            .entity(entity)
-            .contains::<SurfaceGraphicsDirty>()
-    );
 }
 
 // ========== Task 1.1: SurfaceCreationStats テスト ==========
@@ -125,23 +94,6 @@ fn test_surface_creation_stats_record_resized() {
     let mut stats = SurfaceCreationStats::default();
     stats.record_resized();
     assert_eq!(stats.resize_count, 1);
-}
-
-#[test]
-fn test_surface_creation_stats_as_resource() {
-    // SurfaceCreationStatsがECSリソースとして使えることを確認
-    let mut world = World::new();
-    world.insert_resource(SurfaceCreationStats::default());
-
-    // リソースが取得できることを確認
-    let stats = world.resource::<SurfaceCreationStats>();
-    assert_eq!(stats.created_count, 0);
-
-    // 可変参照で更新
-    world
-        .resource_mut::<SurfaceCreationStats>()
-        .record_created();
-    assert_eq!(world.resource::<SurfaceCreationStats>().created_count, 1);
 }
 
 // ========== Task 1.2: 物理ピクセルサイズ計算ヘルパーテスト ==========

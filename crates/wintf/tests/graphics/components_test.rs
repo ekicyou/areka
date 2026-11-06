@@ -15,15 +15,11 @@ use bevy_ecs::prelude::*;
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::UI::Composition::{ContainerVisual, Visual};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::{Interface, Result};
 use wintf::ecs::{GraphicsCore, SurfaceGraphics, VisualGraphics, WucGraphicsResource};
 
 fn make_wuc() -> WucGraphicsResource {
-    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // COM は GPU の持ち主のスレッドが MTA で初期化済み（graphics/common/mod.rs）
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let d2d = core.d2d_device().expect("d2d device");
     WucGraphicsResource::new(d2d).expect("WucGraphicsResource 作成失敗")
@@ -88,12 +84,10 @@ fn make_surface(
 
 #[test]
 fn visual_graphics_default_is_invalid_and_empty() {
-    crate::common::on_gpu_owner_thread(move || {
-        let vg = VisualGraphics::default();
-        assert!(!vg.is_valid(), "default は GPU リソースなし");
-        assert!(vg.visual().is_none());
-        assert!(vg.parent_visual().is_none());
-    });
+    let vg = VisualGraphics::default();
+    assert!(!vg.is_valid(), "default は GPU リソースなし");
+    assert!(vg.visual().is_none());
+    assert!(vg.parent_visual().is_none());
 }
 
 #[test]
