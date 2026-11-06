@@ -221,21 +221,6 @@ impl MarkerSurface {
         &self.surface
     }
 
-    /// 最後に描いた面の読み戻し（乗算済み BGRA・物理寸・`stride = width × 4`）。
-    pub fn read_back(&self) -> Result<Vec<u8>, TextLayerError> {
-        self.surface.read_back()
-    }
-
-    /// 面の物理寸。
-    pub fn size(&self) -> (u32, u32) {
-        self.surface.size()
-    }
-
-    /// 窓の子の entity。
-    pub fn window_child(&self) -> Option<Entity> {
-        self.surface.window_child()
-    }
-
     /// 片付け: 窓の子の entity を消す（窓の `Children` からも外れる）。
     pub fn despawn(self, world: &mut World) {
         self.surface.despawn_window_child(world);

@@ -504,11 +504,6 @@ impl TextLayerRuntime {
         &self.state
     }
 
-    /// 調整値（行送りの行間 `line_gap`・構築時に正規化済み）。
-    pub fn config(&self) -> &TextLayerConfig {
-        &self.config
-    }
-
     /// actor の供給面が予約スロットへ装着済みか。
     pub fn is_attached(&self, actor: &ActorKey) -> bool {
         self.surfaces.contains_key(&PlaceKey::balloon(actor))

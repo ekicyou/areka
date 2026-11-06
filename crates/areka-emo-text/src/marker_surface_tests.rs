@@ -70,7 +70,7 @@ fn attach(
 }
 
 fn mask_of(world: &World, surface: &MarkerSurface) -> AlphaMask {
-    let entity = surface.window_child().expect("窓の子");
+    let entity = surface.surface().window_child().expect("窓の子");
     world
         .get::<AlphaMaskResource>(entity)
         .and_then(AlphaMaskResource::mask)
@@ -107,7 +107,7 @@ fn balloon_marker_is_inserted_right_before_the_slot_with_an_empty_mask() {
     assert_eq!(index, 0);
 
     let markers = attach(&mut world, window, index, (200, 100), (0.0, 0.0));
-    let child = markers.window_child().expect("窓の子");
+    let child = markers.surface().window_child().expect("窓の子");
     assert_eq!(
         window_children(&world, window),
         vec![child, slot, picture],
@@ -128,7 +128,7 @@ fn balloon_marker_is_inserted_right_before_the_slot_with_an_empty_mask() {
     let mask = mask_of(&world, &markers);
     assert_eq!((mask.width(), mask.height()), (200, 100));
     assert!((0..100).all(|y| (0..200).all(|x| !mask.is_hit(x, y))));
-    assert_eq!(markers.size(), (200, 100));
+    assert_eq!(markers.surface().size(), (200, 100));
 
     markers.despawn(&mut world);
     assert_eq!(window_children(&world, window), vec![slot, picture]);
@@ -176,7 +176,7 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
             .marker_child_index(&window_children(&world, window), k)
             .expect("箱の文字の面の位置");
         let m = attach(&mut world, window, index, (10, 10), (0.0, 0.0));
-        markers.push(m.window_child().expect("窓の子"));
+        markers.push(m.surface().window_child().expect("窓の子"));
         rt.surfaces.get_mut(k).expect("箱の面").markers = Some(m);
     }
     let (b_mark, a_mark) = (markers[0], markers[1]);
@@ -222,7 +222,7 @@ fn drawn_arrow_shows_in_read_back_and_mask_holds_only_shown_opaque_pixels() {
         .draw(&mut world, &[placed(MarkerKind::Up, (2, 5), &up)], &scale)
         .expect("描く");
 
-    let bytes = markers.read_back().expect("読み戻し");
+    let bytes = markers.surface().read_back().expect("読み戻し");
     assert_eq!(alpha_at(&bytes, 40, 3, 6), 200, "矢印の画素が出る");
     assert_eq!(alpha_at(&bytes, 40, 2, 5), 100);
     assert_eq!(alpha_at(&bytes, 40, 1, 5), 0, "矢印の外は透明");
@@ -245,6 +245,7 @@ fn drawn_arrow_shows_in_read_back_and_mask_holds_only_shown_opaque_pixels() {
     markers.draw(&mut world, &[], &scale).expect("空で描く");
     assert!(
         markers
+            .surface()
             .read_back()
             .expect("読み戻し")
             .iter()
@@ -266,7 +267,7 @@ fn image_whose_size_and_bytes_disagree_is_err_and_leaves_the_surface_unchanged()
     let scale = ScaleContract::new(1.0, None);
     let good = [placed(MarkerKind::Up, (2, 5), &solid(4, 3, 255))];
     markers.draw(&mut world, &good, &scale).expect("描く");
-    let before = markers.read_back().expect("読み戻し");
+    let before = markers.surface().read_back().expect("読み戻し");
 
     let short = Arc::new(MarkerImage {
         width: 4,
@@ -279,7 +280,7 @@ fn image_whose_size_and_bytes_disagree_is_err_and_leaves_the_surface_unchanged()
         .expect_err("寸とバイト列が合わない絵は描かない");
 
     assert_eq!(
-        markers.read_back().expect("読み戻し"),
+        markers.surface().read_back().expect("読み戻し"),
         before,
         "画素は前のまま"
     );
@@ -310,7 +311,7 @@ fn scale_one_and_a_half_places_and_sizes_the_arrows() {
         )
         .expect("描く");
 
-    let bytes = markers.read_back().expect("読み戻し");
+    let bytes = markers.surface().read_back().expect("読み戻し");
     for (x, y) in [(15, 9), (20, 14), (17, 12)] {
         assert_eq!(alpha_at(&bytes, 60, x, y), 255, "({x},{y}) は矢印の内");
     }
@@ -392,7 +393,7 @@ fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
     world.flush();
 
     let mut markers = attach(&mut world, window, 0, WINDOW, (0.0, 0.0));
-    let marker = markers.window_child().expect("窓の子");
+    let marker = markers.surface().window_child().expect("窓の子");
     world.entity_mut(marker).insert(arranged(0.0, 0.0, WINDOW));
     assert_eq!(window_children(&world, window), vec![marker, picture]);
     // 左の矢印は透けた絵の上、右の矢印は不透明な絵の上。左の矢印の 1 列目は透明（α 0）。

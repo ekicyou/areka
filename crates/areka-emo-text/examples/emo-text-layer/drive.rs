@@ -630,7 +630,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
 /// へ檻化する（reference: tests/viewbox_scroll_test.rs の実 pump 檻を観測 example へ写像）。
 ///
 /// 決定論の要: `present_frame` へ渡す注入時刻を本関数が固定制御し（実フレーム時刻に依存しない）、
-/// 可視窓は純粋 layout（[`window_probe`]）から導出するため、フレームレートに依らず同一結果になる。
+/// 可視窓は純粋 layout（[`reveal_probe`]）から導出するため、フレームレートに依らず同一結果になる。
 /// cue 列・注入時刻シナリオ自体は一切変えず、観測用の追加提示のみを行う（既存 C1–C7 は不変）。
 fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     let actor = actor0();
@@ -726,8 +726,8 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     let s1 = stats_of(demo, &actor);
     present_at(demo, world, complete[i2].t_mid);
     let s2 = stats_of(demo, &actor);
-    let (fvl1, _) = window_probe(demo, &actor, complete[i1].t_mid);
-    let (fvl2, _) = window_probe(demo, &actor, complete[i2].t_mid);
+    let (_, fvl1, _) = reveal_probe(demo, &actor, complete[i1].t_mid);
+    let (_, fvl2, _) = reveal_probe(demo, &actor, complete[i2].t_mid);
 
     let draw1 = s1.draw_text_layout_calls - s_idle.draw_text_layout_calls;
     let draw2 = s2.draw_text_layout_calls - s1.draw_text_layout_calls;
@@ -863,13 +863,6 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) 
         window.first_visible_line,
         lines.len() - window.first_visible_line,
     )
-}
-
-/// 純粋 layout から `(first_visible_line, visible_line_count)` を導出する
-/// （GPU present 不使用・描画と同一 metrics ゆえ供給面の可視窓と一致・決定論）。
-fn window_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize) {
-    let (_, fvl, vlc) = reveal_probe(demo, actor, t);
-    (fvl, vlc)
 }
 
 /// 指定注入時刻で `present_frame` を回す（失敗は log-first で Verdict へ記録して継続）。

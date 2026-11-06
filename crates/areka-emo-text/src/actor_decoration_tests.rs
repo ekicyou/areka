@@ -207,8 +207,6 @@ fn refreshing_after_the_background_changed_rebuilds_once() {
 /// R4.6: 背景の受け口は actor ごとに独立する（本体側の背景が相方側に効かない）。
 #[test]
 fn the_background_slot_is_per_actor() {
-    let mut world = World::new();
-    let (_, _) = spawn_reserved_slot(&mut world);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.set_balloon_background(ActorKey::from("0"), TINTED);
 

@@ -132,7 +132,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 /// 行ボックス丈 37.24 を丈 30 では覆いきれないため、帯をどこへ置くかで見え方が変わる。帯を
 /// 行矩形のブロック軸**近端**へ揃えていた頃の読み戻しは「上に 7 画素の余白を残したまま下で
 /// 2 画素を切る」であった。**帯を広げるのではなく、字の箱の中央へ寄せる**のが正しい
-/// ——寄せる量は [`highlight_band_offset`] が決める（spec `areka-P0-emo2-conformance-e2e`
+/// ——寄せる量は [`band_offset_on_char_box`] が決める（spec `areka-P0-emo2-conformance-e2e`
 /// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
 /// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
 ///
@@ -189,6 +189,7 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// `t = 0` では `0.0 + x` が `x` とビットまで同じなので、上の表の値は変わらない（要件 5.1）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+#[cfg(test)]
 pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
     band_offset_on_char_box(0.0, line_box_height, band_extent)
 }
@@ -210,7 +211,7 @@ pub struct LineBand {
     pub extent: f32,
     /// 行矩形の左辺（横書きは上辺）から帯の起点までの**符号つき**の量。横書き＝帯を字の箱の
     /// 中央へ置く量 `round(max(0, t) + max(0, 行ボックス − 帯) / 2)`（`t` は
-    /// [`GlyphMetrics::horizontal_char_box_top`]・`t = 0` で [`highlight_band_offset`] の出力・
+    /// [`GlyphMetrics::horizontal_char_box_top`]・`t = 0` で `highlight_band_offset` の出力・
     /// 0 以上）・縦書き＝
     /// `round(metrics.vertical_em_box_left(em, mode))`（em の箱を書体の縦書きの基線に中央で
     /// 重ねた所・右から左は負になり得る＝帯は行矩形の左へ出る）。
@@ -309,7 +310,7 @@ pub struct HitRectPx {
 /// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝行矩形の
 /// 左辺（横書きは上辺）＋符号つきの `band_offset` から `band_extent` 分**
 /// （[`LineBand`] の 2 値。横書きは [`highlight_band_extent`] の descent 込みの帯を
-/// [`LineBand::offset`] が字の箱の中央へ寄せた位置（[`highlight_band_offset`] は字の箱の
+/// [`LineBand::offset`] が字の箱の中央へ寄せた位置（`highlight_band_offset` は字の箱の
 /// 上端 t ＝ 0 のとき）、縦書きは列の em の帯を em の箱へ
 /// 重ねた位置で、右から左の寄せは負。ハイライト描画（`highlight_rect`）と同一の
 /// 2 値を受け取ることで帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px の
@@ -698,7 +699,6 @@ impl ResolvedChoiceStyle {
         match cursor.style() {
             Some(s) if s.eq_ignore_ascii_case("none") => ResolvedChoiceStyle::NoMarker,
             // underline 系は SquareFill へ縮退（元の値は CursorFallback::of が同じ判定で返す）。
-            Some(s) if style_has_underline(s) => square_fill_from(cursor),
             // square 明示・style 未指定（既定 square）ともに SquareFill（正典確定 cursor.* マップ）。
             _ => square_fill_from(cursor),
         }
