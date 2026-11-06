@@ -1,10 +1,9 @@
 //! actor の子: 1 コマの描画の流れ（未解決の見送り・描画範囲の潰れた場所の見送り・初回の装着・配置→装飾→描画→提示）。
 //! 足す予定の spec: text-reveal-fade（`present_actor`）・balloon-markers。
 
-use bevy_ecs::change_detection::{DetectChangesMut, Tick};
+use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::World;
-use bevy_ecs::resource::Resource;
 use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
@@ -144,12 +143,6 @@ pub fn present_frame(
     }
 }
 
-/// 文字の層が最後に見た `GraphicsCore` の変化の印（[`drop_renders_after_device_change`] の控え）。
-///
-/// World ごとに 1 つなので、1 つの World に文字の層は 1 つの前提（本番はゴーストの World ごとに 1 つ）。
-#[derive(Resource)]
-struct SeenGraphicsCore(Tick);
-
 /// `GraphicsCore` の変化の印（作り直しと本当の失いのときだけ立つ）を見たら、全部の描き手と印の面を
 /// 差し込み口・窓の子から外して捨てる（audit-wintf-graphics-world 6 番・要件 3.1）。古い装置の
 /// swap chain・文脈を使い続けない。作り直しは同じ回の作る門が、装置が有効なときだけ行う。
@@ -162,13 +155,12 @@ fn drop_renders_after_device_change(runtime: &mut TextLayerRuntime, world: &mut 
         return;
     };
     let now = world.read_change_tick();
-    let seen = world.get_resource::<SeenGraphicsCore>().map(|s| s.0);
+    let seen = runtime.seen_graphics;
     if seen.is_some_and(|seen| !changed.is_newer_than(seen, now)) {
         return;
     }
     // 時刻を進めて控える: 同じ時刻のうちに後から立った印も、次の回に新しいと分かる。
-    let mark = world.increment_change_tick();
-    world.insert_resource(SeenGraphicsCore(mark));
+    runtime.seen_graphics = Some(world.increment_change_tick());
     if seen.is_none() {
         return;
     }

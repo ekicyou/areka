@@ -646,3 +646,46 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
         .expect("read_back");
     assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
 }
+
+/// 指摘 6: 装置の変化の印は文字の層ごと。同じ World に 2 つの文字の層を置き、装置を作り直すと、
+/// 先に回った層も後に回った層も描き手を作り直す（印が World に 1 つだと、後の層は先の層が控えた
+/// 印を読んで「変わっていない」とし、古い装置の描き手を使い続ける）。
+#[test]
+fn device_change_recreates_renders_of_every_text_layer_in_the_world() {
+    use wintf::ecs::VisualGraphics;
+    let (mut world, window, slot) = com_world();
+    let (window2, slot2) = spawn_reserved_slot(&mut world);
+    let layer = |slot, window| {
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        rt.register_actor_binding(
+            ActorKey::from("0"),
+            TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
+            &geo_model(),
+        );
+        rt
+    };
+    let mut first = layer(slot, window);
+    let mut later = layer(slot2, window2);
+    let visual = |world: &World, slot| {
+        world
+            .get::<VisualGraphics>(slot)
+            .and_then(|v| v.visual().cloned())
+    };
+    present_frame(&mut first, &mut world, 10.0).expect("先の層の初回提示");
+    present_frame(&mut later, &mut world, 10.0).expect("後の層の初回提示");
+    let before = (
+        visual(&world, slot).expect("先の層の見た目"),
+        visual(&world, slot2).expect("後の層の見た目"),
+    );
+
+    insert_gpu(&mut world);
+    present_frame(&mut first, &mut world, 10.0).expect("先の層の作り直しの回");
+    present_frame(&mut later, &mut world, 10.0).expect("後の層の作り直しの回");
+    let after = (
+        visual(&world, slot).expect("先の層の新しい見た目"),
+        visual(&world, slot2).expect("後の層の新しい見た目"),
+    );
+    assert_ne!(after.0, before.0, "先の層が古い装置の描き手を使い続けた");
+    assert_ne!(after.1, before.1, "後の層が古い装置の描き手を使い続けた");
+}

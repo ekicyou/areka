@@ -330,6 +330,9 @@ pub struct TextLayerRuntime {
     /// 場所 → 作れなかった文字の面の（物理寸, 物理の位置, WUC の資源の変わった時刻, 差し込み口, 窓）。同じなら
     /// 作り直さない（`actor_present.rs`・入力で答えが決まる失敗だけ・装置の作り直しで消す）。
     surface_failed: HashMap<PlaceKey, FailedSurface>,
+    /// この文字の層が最後に見た `GraphicsCore` の変化の時刻（`actor_present.rs` の
+    /// `drop_renders_after_device_change` の控え・文字の層ごと）。
+    seen_graphics: Option<bevy_ecs::change_detection::Tick>,
 }
 
 /// 作れなかった文字の面の覚えの中身（[`TextLayerRuntime`] の `surface_failed`）。
@@ -378,6 +381,7 @@ impl TextLayerRuntime {
             box_markers: BTreeMap::new(),
             retired_markers: Vec::new(),
             surface_failed: HashMap::new(),
+            seen_graphics: None,
         }
     }
 

@@ -6,6 +6,7 @@
 //! - スクロールの後も、切った面の画素は切らない面（今までの形）の左上と同じ。
 //! - 箱の文字の面と印の面は「箱の大きさとシェルの画像の重なり」を越えない（シェルの大きさが変われば作り直す）。
 //! - 印の面も、装置が無効なフレームの失敗は覚えず、上限越えの覚えは WUC の資源が作り直されると試し直す。
+//! - 作れない文字の面の覚えは、装置の作り直しでも消える（試し直す）。
 
 use std::sync::Arc;
 
@@ -426,4 +427,30 @@ font.height,40",
             }
         }
     }
+}
+
+/// 2.4・3.3: 作れなかった文字の面の覚えは装置の作り直しで消える＝WUC の資源も入力も同じでも、
+/// 作り直した装置の回に試し直す（上限越えの記録がもう 1 回）。
+#[test]
+fn remembered_surface_failure_is_retried_after_device_recreation() {
+    let (mut world, _, _) = com_world();
+    let cues = [cue("0", 0.0, CueCommand::Text("あ".into()))];
+    let vr = ValidRect::new(None, None, Some(-100_000), None);
+    let mut rt = runtime(&mut world, &cues, &model(vr, None), IMAGE, 1.0);
+    let mut count = |world: &mut bevy_ecs::prelude::World| {
+        let (_, events) = capture(|| {
+            for i in 0..3 {
+                let _ = present_frame(&mut rt, world, 1.0 + f64::from(i) * 0.1);
+            }
+        });
+        events
+            .iter()
+            .filter(|e| e.message() == SURFACE_LIMIT_MESSAGE)
+            .count()
+    };
+    assert_eq!(count(&mut world), 1, "初めの 3 フレームで 1 回");
+    assert_eq!(count(&mut world), 0, "同じ入力では試さない");
+    // 装置だけを作り直す（WUC の資源の変わった時刻は覚えの鍵のまま）。
+    world.resource_mut::<GraphicsCore>().set_changed();
+    assert_eq!(count(&mut world), 1, "装置を作り直すと試し直す");
 }
