@@ -129,7 +129,7 @@
   - _Requirements: 1.8, 1.9, 3.4_
 
 - [ ] 8. example・文書・visual 層の仕上げ
-- [ ] 8.1 (P) 描画の木の example を作る
+- [x] 8.1 (P) 描画の木の example を作る
   - 重ね方・回転・切り抜きを描画の木で描く example を 1 本足す
   - 使うのは設計の「残す・消す」の表で残す口だけ（8.3 の削除と重ならない）
   - 完了の姿: `cargo run -p wintf --example visual_tree_demo` で窓に出る（ビルドが通り、起動して窓を出し有界に終わる）
