@@ -377,7 +377,7 @@ flowchart TD
 - 座標系は**根からの DIP**（DPI を含まない・議題 5 ㋐）。根の `WorldVisual` は恒等。`world = local * parent`（行ベクトル・`Transform2D` の規約）。`WorldVisual` の `Hash` impl は外す（使い手なし）。
 - 前順で `world_mat`・`axis_aligned`（`Matrix3x2Ext::axis_aligned`）・`content_world_aabb`（`local_aabb.transform(world_mat)`・中身が無ければ `EMPTY`）を埋め、訪れた順の列を逆にたどって `subtree_world_aabb = content ∪ 子の subtree` を親へ積む。明示のスタック `(entity, depth)`・`depth > MAX_ANCESTOR_DEPTH` で `error!` 1 行（根の実体名・上限）を残して、それより深い節を訪れない（議題 13 ㋐・輪もここで止まる）。
 - 節の境界: 子が `VisualGraphics` を持てば（＝描画面の持ち主）**その子と子孫を訪れない**。節の下で見つけたとき（親が節）は `error!`（実体名・「節の下の描画面の持ち主は支えない」）を残して切る（1.11）。根の直下の持ち主は今の WUC の木の子なので記録しない（1.2）。
-- 可視: `Visual.is_visible == false` の節は自分も子孫も訪れない（`WorldVisual` は前の値のまま・`build` に渡す「見える節の集合」はこの走査が決める）。走査は見えない部分木を飛ばすので `build` は可視を読み直さない。
+- 可視: `Visual.is_visible == false` の節は自分も子孫も訪れない（`WorldVisual` は前の値のまま・`build` に渡す「見える節の集合」はこの走査が決める）。走査は見えない部分木を飛ばすので `build` は可視を読み直さない。ただし見えない部分木の中も版だけは追う（`Visual`・描く中身が変わった節の `VisualVersion` を上げ、不透明度の `warn!` を出す・`visited` には入れず行列も書かない）。隠れている間の変化を、また見えた回に失わないため（「版が違えば絵が違う」）。
 - 版: `Ref<Visual>.is_changed() || Ref<VisualDrawContent>.is_changed()` の節は `VisualVersion.bump()`（4.3）。`VisualTransform` は読まない（4.4）。`Visual` の変化には `opacity`・`transform_origin` も含まれる（版が余分に上がるだけで約束は破らない・doc に書く）。
 - 不透明度: `Ref<Visual>.is_changed()` かつ `opacity != 1.0` の節は `warn!`（実体名・「節の不透明度の層は `wintf-d2d-composite-rules` の範囲・1.0 で描く」）。変化の回だけ出るので 1 度（3.9）。
 - 書き込みは値が変わるときだけ（`WorldVisual` の `PartialEq` を足して比べる）。
@@ -387,21 +387,25 @@ flowchart TD
 
 ```rust
 /// 根 `root` の木を埋める。戻り値は「この回に木の中で変化があったか」（版が上がった・
-/// 行列が変わった・節の出入り・親子の変化）と、訪れた節の順の列（`build` が同じ順で使う）。
+/// 行列が変わった・節の入り〔`WorldVisual` が付いた〕・親子の変化・根の配置・切り抜きを持つ節の配置）。
+/// 訪れた節の順の列は `visited` に入る（`build` が同じ順で使う）。節の出は `update_draw_trees` が
+/// `RemovedComponents` で拾う。
 pub(crate) fn fill_world_visuals(
     root: Entity,
     root_name: Option<&Name>,
-    nodes: &mut Query<FillData>,            // (Entity, Ref<Visual>, Ref<Arrangement>, Option<&VisualTransform>,
-                                            //  Option<Ref<VisualDrawContent>>, &mut WorldVisual,
-                                            //  &mut VisualVersion, Option<Ref<Children>>, Has<VisualGraphics>)
+    nodes: &mut Query<FillData>,            // (Ref<Visual>, Option<Ref<Arrangement>>, Option<&VisualTransform>,
+                                            //  Option<Ref<VisualDrawContent>>, Option<&mut WorldVisual>,
+                                            //  Option<&mut VisualVersion>, Option<Ref<Children>>,
+                                            //  Has<VisualGraphics>, Option<&Name>)
+                                            //  WorldVisual なし・VisualGraphics ありは持ち主（節でない）
     root_arrangement_changed: bool,         // 根の Ref<Arrangement>.is_changed()（viewport が変わる＝組み直す）
-    children_of_root: Option<&Children>,
-    root_children_changed: bool,
+    children_of_root: &[Entity],            // 根の Children の並び（無ければ空）
+    root_children_changed: bool,            // 根の Ref<Children>.is_changed()
     visited: &mut Vec<(Entity, usize)>,     // 前順の列と深さ（容量を使い回す）
 ) -> bool
 ```
 - Preconditions: `root` は `VisualGraphics` を持つ。節は `WorldVisual`・`VisualVersion` を持つ（`#[require]`）。
-- Postconditions: 訪れた節の `WorldVisual` が今の値。見えない部分木・持ち主の部分木・上限を越えた節は訪れない。
+- Postconditions: 訪れた節の `WorldVisual` が今の値。見えない部分木・持ち主の部分木・上限を越えた節は訪れない。見えない部分木の中で変わった節の版は上がっている。
 - Invariants: `VisualTransform` の変化だけでは版が上がらない。
 
 **Implementation Notes**

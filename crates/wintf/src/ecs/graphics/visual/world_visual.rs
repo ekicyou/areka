@@ -1,4 +1,4 @@
-use super::{Visual, VisualDrawContent, VisualTransform};
+use super::{Visual, VisualDrawContent, VisualTransform, VisualVersion};
 use crate::ecs::common::MAX_ANCESTOR_DEPTH;
 use crate::ecs::graphics::components::VisualGraphics;
 use crate::ecs::graphics::systems::format_entity_name;
@@ -6,7 +6,7 @@ use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
 use core::hash::*;
-use tracing::error;
+use tracing::{error, warn};
 use windows_numerics::Matrix3x2;
 
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -74,12 +74,13 @@ impl Default for WorldVisual {
 /// `fill_world_visuals` が 1 つの `Visual` から読み書きする部品。
 /// `WorldVisual` を持たないもの・`VisualGraphics` を持つものは描画面の持ち主（節でない）。
 pub(crate) type FillData = (
-    &'static Visual,
-    Option<&'static Arrangement>,
+    Ref<'static, Visual>,
+    Option<Ref<'static, Arrangement>>,
     Option<&'static VisualTransform>,
-    Option<&'static VisualDrawContent>,
+    Option<Ref<'static, VisualDrawContent>>,
     Option<&'static mut WorldVisual>,
-    Option<&'static Children>,
+    Option<&'static mut VisualVersion>,
+    Option<Ref<'static, Children>>,
     Has<VisualGraphics>,
     Option<&'static Name>,
 );
@@ -90,44 +91,53 @@ pub(crate) type FillData = (
 ///   `world = local * parent`（行ベクトル）。根は恒等。
 /// - 前順（`Children` の並び順）に訪れ、`visited` に訪れた節と深さ（根の子が 1）を入れる。
 ///   平らにする係はこの順をそのまま使う。
-/// - 見えない節は自分も子孫も訪れない（`WorldVisual` は前の値のまま）。
+/// - 見えない節は自分も子孫も訪れない（`WorldVisual` は前の値のまま）。ただし版を上げる・
+///   不透明度の `warn!`・持ち主と深さの検査だけは見えない部分木の中でも行う。
 /// - 子が描画面の持ち主なら訪れない。親が節なら `error!` を残して切る（根の直下は記録しない）。
 /// - 深さが `MAX_ANCESTOR_DEPTH` を越えた節は訪れず `error!` を 1 行残す（親の輪もここで止まる）。
-/// - 値が変わった節だけ書く。戻り値は書いた節が在ったか。
+/// - `Visual` か描く中身が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
+///   `VisualTransform` は見ない＝変形だけでは上げない。`Visual` の変化には `opacity`・
+///   `transform_origin` も入る（版が余分に上がるだけ）。
+/// - `Visual` が変わった回に `opacity != 1.0` なら `warn!` を 1 行（節の不透明度は 1.0 で描く）。
+/// - 値が変わった節だけ書く。戻り値「変化あり」は、版の上がり・行列などの変化・節の入り
+///   （`WorldVisual` が付いた）・親子の変化（`Children`・`root_children_changed`）・根の配置の変化
+///   （`root_arrangement_changed`）・切り抜きを持つ節の `Arrangement` の変化。後の 2 つは版を上げない。
+///   節の出は `update_draw_trees` が `RemovedComponents` で拾う。
 #[allow(dead_code, reason = "`update_draw_trees`（7.1）が呼ぶまで使い手が無い")]
 pub(crate) fn fill_world_visuals(
     root: Entity,
     root_name: Option<&Name>,
     nodes: &mut Query<FillData>,
+    root_arrangement_changed: bool,
     children_of_root: &[Entity],
+    root_children_changed: bool,
     visited: &mut Vec<(Entity, usize)>,
 ) -> bool {
     visited.clear();
+    let mut changed = root_arrangement_changed || root_children_changed;
+    let mut bumped: Vec<Entity> = Vec::new();
     let mut worlds: Vec<WorldVisual> = Vec::new();
     let mut parents: Vec<Option<usize>> = Vec::new();
-    // (実体, 深さ, 親の visited の添字)。逆に積んで pop が並び順になるようにする。
-    let mut stack: Vec<(Entity, usize, Option<usize>)> = children_of_root
+    // (実体, 深さ, 親の visited の添字, 見えない部分木の中か)。逆に積んで pop が並び順になるようにする。
+    let mut stack: Vec<(Entity, usize, Option<usize>, bool)> = children_of_root
         .iter()
         .rev()
-        .map(|&c| (c, 1, None))
+        .map(|&c| (c, 1, None, false))
         .collect();
     let mut over_limit = false;
-    while let Some((e, depth, parent)) = stack.pop() {
-        let Ok((visual, arrangement, transform, content, wv, kids, has_surface, name)) =
+    while let Some((e, depth, parent, hidden)) = stack.pop() {
+        let Ok((visual, arrangement, transform, content, wv, _, kids, has_surface, name)) =
             nodes.get(e)
         else {
             continue; // 消えた実体・Visual でない実体
         };
         if has_surface || wv.is_none() {
-            if parent.is_some() {
+            if parent.is_some() || hidden {
                 error!(
                     entity = %format_entity_name(e, name),
                     "[fill_world_visuals] 節の下の描画面の持ち主は支えないので、その部分木を切る"
                 );
             }
-            continue;
-        }
-        if !visual.is_visible {
             continue;
         }
         if depth > MAX_ANCESTOR_DEPTH {
@@ -141,6 +151,25 @@ pub(crate) fn fill_world_visuals(
             }
             continue;
         }
+        if visual.is_changed() || content.as_ref().is_some_and(|c| c.is_changed()) {
+            bumped.push(e);
+        }
+        if visual.is_changed() && visual.opacity != 1.0 {
+            warn!(
+                entity = %format_entity_name(e, name),
+                opacity = visual.opacity,
+                "[fill_world_visuals] 節の不透明度の層は wintf-d2d-composite-rules の範囲なので、1.0 で描く"
+            );
+        }
+        if hidden || !visual.is_visible {
+            // 見えない部分木も版だけは追う（隠れている間の変化を、また見えた回に失わない）。
+            if let Some(kids) = kids {
+                stack.extend(kids.iter().rev().map(|k| (k, depth + 1, None, true)));
+            }
+            continue;
+        }
+        changed |= kids.as_ref().is_some_and(|k| k.is_changed())
+            || (visual.clip.is_some() && arrangement.as_ref().is_some_and(|a| a.is_changed()));
         let parent_mat = parent.map_or(Matrix3x2::identity(), |p| worlds[p].world_mat);
         let local = transform.map_or(Matrix3x2::identity(), |t| t.to_affine())
             * arrangement.map_or(Matrix3x2::identity(), |a| a.offset.into());
@@ -152,7 +181,7 @@ pub(crate) fn fill_world_visuals(
         worlds.push(w);
         parents.push(parent);
         if let Some(kids) = kids {
-            stack.extend(kids.iter().rev().map(|k| (k, depth + 1, Some(idx))));
+            stack.extend(kids.iter().rev().map(|k| (k, depth + 1, Some(idx), false)));
         }
     }
     // 前順では子が親より後ろに在るので、逆にたどれば子の和が先に揃う。
@@ -163,13 +192,19 @@ pub(crate) fn fill_world_visuals(
                 .union(worlds[i].subtree_world_aabb);
         }
     }
-    let mut changed = false;
     for (&(e, _), w) in visited.iter().zip(&worlds) {
-        if let Ok((.., Some(mut wv), _, _, _)) = nodes.get_mut(e) {
+        if let Ok((.., Some(mut wv), _, _, _, _)) = nodes.get_mut(e) {
+            changed |= wv.is_added();
             if *wv != *w {
                 *wv = *w;
                 changed = true;
             }
+        }
+    }
+    changed |= !bumped.is_empty();
+    for e in bumped {
+        if let Ok((.., Some(mut version), _, _, _)) = nodes.get_mut(e) {
+            version.bump();
         }
     }
     changed
