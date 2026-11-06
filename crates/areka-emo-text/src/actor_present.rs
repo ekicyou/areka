@@ -20,8 +20,8 @@ use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::scroll_marker::{ScrollChange, marker_visibility, window_for};
-use crate::segment::segment_plan;
-use crate::state::{ChoiceSpan, TextLayerState};
+use crate::segment::{SegmentPlan, segment_plan};
+use crate::state::{ChoiceSpan, TextItem, TextLayerState};
 use crate::surface::TextSurface;
 use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
@@ -431,6 +431,7 @@ fn present_actor(
                 place,
                 &resolved,
                 &render.metrics,
+                &mut render.break_memo,
                 talk_time,
             ) else {
                 // 直前で状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
@@ -711,6 +712,7 @@ fn present_markers(
 /// （持ち主は [`TalkLookahead`]）。全文が無い（先に知らされていない）か、届いた内容が全文の先頭と
 /// 食い違うときは、届いた字の列で区切って配置する修正前の動きで続ける（記録は持ち主が場所・区間
 /// ごとに 1 度だけ出す）。
+#[allow(clippy::too_many_arguments)]
 pub(super) fn arrange_lines(
     state: &TextLayerState,
     lookahead: &mut TalkLookahead,
@@ -718,6 +720,7 @@ pub(super) fn arrange_lines(
     place: &PlaceKey,
     resolved: &ResolvedBalloonText,
     metrics: &dyn GlyphMetrics,
+    breaks: &mut BreakMemo,
     talk_time: f64,
 ) -> Option<Vec<PositionedLine>> {
     let arrived = state.place_state(place)?;
@@ -726,16 +729,15 @@ pub(super) fn arrange_lines(
     // 区切りを計算せず、区間の全文にも触れない（R4.2・要件 3.3）。文節（BudouxWordWrap）は
     // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表・字の無い行の丈に
     // 使う「今の見た目」も）で、そうでなければ届いた字で区切る（修正前の動き・warn は持ち主が出す）。
-    // `plan` は届いた字で区切る腕でだけ束縛し、借用 `&plan` が layout 呼出まで生存するよう遅延初期化する。
-    let plan;
+    // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う（指摘 8）。
     let (content, wrap) = match resolved.wrap {
         WrapMode::CharByChar => (arrived, WrapPlan::CharByChar),
         WrapMode::BudouxWordWrap => match lookahead.basis(place, arrived) {
             Basis::Full { content, plan } => (content, WrapPlan::Segmented(plan)),
-            Basis::Arrived => {
-                plan = segment_plan(arrived.items());
-                (arrived, WrapPlan::Segmented(&plan))
-            }
+            Basis::Arrived => (
+                arrived,
+                WrapPlan::Segmented(breaks.plan(state.clears_at(place), arrived.items())),
+            ),
         },
     };
     // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
@@ -753,6 +755,32 @@ pub(super) fn arrange_lines(
         &place.actor,
         cursor_warn,
     ))
+}
+
+/// 届いた字の区切りの覚え（指摘 8）: 鍵は（消した回数, 項目の数）。項目は消すまで増えるだけで、
+/// 表を替えると箱の `ActorRender` は捨てられるので、この 2 つが同じなら区切りも同じ。
+#[derive(Default)]
+pub(super) struct BreakMemo {
+    last: Option<((u64, usize), SegmentPlan)>,
+    /// 区切りを計算し直した回数（テストだけの数）。
+    #[cfg(test)]
+    pub(super) runs: u32,
+}
+
+impl BreakMemo {
+    /// 鍵が前と同じなら覚えた区切り、違えば区切り直して覚えた区切りを返す。
+    fn plan(&mut self, clears: u64, items: &[TextItem]) -> &SegmentPlan {
+        let key = (clears, items.len());
+        let kept = self.last.take().filter(|(k, _)| *k == key);
+        #[cfg(test)]
+        if kept.is_none() {
+            self.runs += 1;
+        }
+        &self
+            .last
+            .insert(kept.unwrap_or_else(|| (key, segment_plan(items))))
+            .1
+    }
 }
 
 /// 配置の覚えの鍵のうち数で比べる欄（今の見た目と配置の入力は [`FrameMemo`] が値で持って比べる）。

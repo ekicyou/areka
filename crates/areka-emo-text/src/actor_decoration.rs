@@ -73,6 +73,7 @@ pub(super) fn build_actor_render(
         markers: None,
         markers_failed: None,
         frame_memo: None,
+        break_memo: Default::default(),
         #[cfg(test)]
         frame_rebuilds: 0,
     })
