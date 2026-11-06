@@ -928,3 +928,35 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
     assert!(!(shared >= rows[0].rect.top && shared < rows[0].rect.bottom));
     assert!(shared >= rows[1].rect.top && shared < rows[1].rect.bottom);
 }
+
+/// 帯の丈の式は NaN を渡しても落ちない（指摘 4）。`clamp` は下限が NaN だと panic する。
+///
+/// 較正: 式を `clamp` に戻すと、`font_height` が NaN の 2 行（上限も下限も NaN になる・
+/// 下限だけ NaN になる）で panic して赤。`line_box_height`・`line_pitch` の NaN は `clamp` でも
+/// 落ちないが、3 つの入力それぞれを NaN にして確かめる。
+#[test]
+fn band_extent_does_not_panic_on_nan_and_matches_clamp_for_finite() {
+    let n = f32::NAN;
+    for (font, line_box, pitch) in [
+        (n, 37.24, 30.0),
+        (n, 37.24, n),
+        (28.0, n, 30.0),
+        (28.0, 37.24, n),
+        (n, n, n),
+    ] {
+        let _ = highlight_band_extent(font, line_box, pitch);
+    }
+    // 有限の値では前の式 clamp(line_box, font, max(font, pitch)) と同じ答え。
+    for font in [0.0_f32, 10.0, 28.0, 40.0] {
+        for line_box in [0.0_f32, 9.0, 13.3, 26.6, 37.24, 53.2, 100.0] {
+            for pitch in [0.0_f32, 5.0, 12.0, 30.0, 42.0, 1e9] {
+                let before = line_box.clamp(font, pitch.max(font));
+                assert_eq!(
+                    highlight_band_extent(font, line_box, pitch),
+                    before,
+                    "font {font}・line_box {line_box}・pitch {pitch}"
+                );
+            }
+        }
+    }
+}

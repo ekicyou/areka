@@ -133,10 +133,13 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 /// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
 /// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
 ///
+/// 式は `max` と `min` で書く（有限の値では上の `clamp` と同じ答え・NaN を渡しても落ちない）。
+///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch: f32) -> f32 {
     let upper = line_pitch.max(font_height);
-    line_box_height.clamp(font_height, upper)
+    // clamp は下限が NaN だと panic する。max/min なら有限の値で同じ答えのまま落ちない（指摘 4）。
+    line_box_height.max(font_height).min(upper)
 }
 
 /// ハイライト帯／ヒット帯を字の箱の中央へ寄せる量を決める（純粋・**描画とヒットの唯一の源**）。
