@@ -17,7 +17,7 @@
 //!   **全 0＝退化**（基層のみでは描画領域が空）。
 //! - `balloons0s.txt`（画像別上書き層）: `balloons0.png`（実測 400×224）向けに `validrect`
 //!   （top,46／bottom,-56／left,36／right,-44）と `wordwrappoint.x,-49` を与え、2 層マージ後に
-//!   **非退化領域 (36,46)-(356,168)** を成立させる（region.rs の `two_layer_merged_fixture…` と同機構）。
+//!   **非退化領域 (36,46)-(356,168)** を成立させる（`src/region_tests.rs` の `two_layer_merged_fixture…` と同機構）。
 //! - `menu.pasta`（メニュー台本）: `＊メインメニュー選択肢` の本文に
 //!   `\q[おしゃべり頻度,…]\n\q[エモの位置調整,…]\_l[5em,2lh]\q[閉じる,…]` という
 //!   **実さくらスクリプト断片**（`\n` 改行 3 項目＋`\_l` 字下げ）を持つ。
@@ -61,7 +61,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::compile;
 use areka_sakura::contract::{ActorKey, CueCommand, CuePayload, SystemVarSnapshot};
 
-/// balloons0.png の実測原寸（region.rs `FIXTURE_IMAGE_SIZE` と同値・image px）。
+/// balloons0.png の実測原寸（`src/region_tests.rs` の `FIXTURE_IMAGE_SIZE` と同値・image px）。
 const IMAGE_SIZE: (u32, u32) = (400, 224);
 
 /// 実 `descript.txt`（基層）＋`balloons0s.txt`（画像別上書き層）を 2 層マージした BalloonModel。

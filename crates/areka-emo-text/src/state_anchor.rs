@@ -16,8 +16,9 @@
 //!
 //! ## 記録
 //!
-//! 重なり（開いている間の開き）と迷子の閉じは compile が補って警告済みで、ここへは届かない。
-//! 届いたときの扱いは防御で、`debug!` に留める。下見の空回しの写しは記録を 1 件も出さない
+//! 重なり（開いている間の開き）は compile が補って警告済みで、ここへは届かない（届いたときの扱いは
+//! 防御）。迷子の閉じも compile が落とすが、開いている間に `\c` で本文が消えた後の閉じは
+//! 本番でもここへ届く（`\_a[x]あ\c\_a` は開き → 字 → `Clear` → 閉じの順で届く）。どちらも `debug!` に留める。下見の空回しの写しは記録を 1 件も出さない
 //! （本番の適用が出す・二重にしない）。
 
 use super::{ActorTextState, ChoiceSpan, SpanKind, TextLayerState};
@@ -101,7 +102,7 @@ impl TextLayerState {
         if closed {
             tracing::debug!(actor = %actor, "AnchorEnd cue 適用（アンカーの範囲を閉じる）");
         } else {
-            tracing::debug!(actor = %actor, "開いているアンカーが無い——閉じを無視する（到達しない防御）");
+            tracing::debug!(actor = %actor, "開いているアンカーが無い——閉じを無視する");
         }
     }
 

@@ -274,7 +274,7 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     assert_eq!(spans[2].glyph_range, 8..11);
 }
 
-/// R1.5 縮退（spec `areka-P0-choice-render` の design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
+/// `areka-P0-choice-render` R1.5 縮退（同じ spec の design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
 /// グリフ追記なし・reveal 不変。空 Choice は届くたびに warn する（1 回で黙らせない）。
 #[test]
 fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
@@ -450,7 +450,7 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
 
 // ── `areka-P0-choice-render` R5.1/R5.3/R9.5: choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
 
-/// `Clear` は対象 actor の choices を items と同時に初期化する（データ形で 5.1/5.3 を保証）。
+/// `Clear` は対象 actor の choices を items と同時に初期化する（データ形で `areka-P0-choice-render` 5.1/5.3 を保証）。
 #[test]
 fn clear_resets_choices_alongside_items() {
     let mut state = TextLayerState::default();

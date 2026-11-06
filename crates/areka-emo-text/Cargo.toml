@@ -17,7 +17,7 @@ tracing = { workspace = true }
 # cue 契約の正本（TalkCue/ActorKey/CueCommand/CueSink 再輸出——design.md Dependencies・再定義しない）。
 areka-sakura = { path = "../areka-sakura" }
 # cue 再生の単一出力契約トレイト（dola::cue::CueSink）。演者は各自 1 実装を持つ
-# （broadcast＋演者側 relevance の単一権威・R11.3/R11.6）。EmoTextSink が実装する。
+# （broadcast＋演者側 relevance の単一権威・`areka-P0-cue-playback-duration` R11.3/R11.6）。EmoTextSink が実装する。
 dola = { path = "../dola" }
 # 結線層（sink.rs/actor.rs）の UI スレッド配送ブリッジ（spawn_ui/UiSender——design.md
 # Key Dependencies「areka-actor spawn_ui (P0)」。EmoTextSink の配送口そのもの）。
@@ -31,10 +31,10 @@ areka-parsers = { path = "../areka-parsers" }
 wintf = { path = "../wintf" }
 # slot entity への装着（&mut World insert）・TextSlotBinding の Entity（design.md Allowed Dependencies）。
 bevy_ecs = { workspace = true }
-# 分かち書き境界の決定論計算（segment.rs 消費の唯一の場所・design.md Technology Stack・8.1）。
+# 分かち書き境界の決定論計算（segment.rs 消費の唯一の場所・`areka-P0-budoux-newline` の design.md Technology Stack・8.1）。
 # `default-features = false` で CLI 依存（cli → seahorse）を落とし、`std`＋`vendored-models`
-# のみを引く（design.md の `features=["vendored-models"]` を CLI 非取込へ精緻化・`lib.rs` の budouy spike で確認済み）。
-# vendored-models＝既定日本語モデル同梱でネットワーク/ファイル I/O 不要（オフライン CI 整合・8.1）。
+# のみを引く（同じ design.md の `features=["vendored-models"]` を CLI 非取込へ精緻化・`lib.rs` の budouy spike で確認済み）。
+# vendored-models＝既定日本語モデル同梱でネットワーク/ファイル I/O 不要（オフライン CI 整合・同じ spec の 8.1）。
 budouy = { version = "0.2.2", default-features = false, features = ["std", "vendored-models"] }
 # COM 層（surface.rs）は D3D11/DXGI 直呼び（CopyResource/Map/Present・IDXGISwapChain1 等）を要する。
 # workspace 既定へ `Win32_Graphics_Dxgi`（swap chain 本体の型）を上乗せする。

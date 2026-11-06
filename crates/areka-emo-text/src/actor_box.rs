@@ -283,7 +283,7 @@ impl TextLayerRuntime {
     /// 箱の場所が今も描かれたままでよいか: 登録があり、隠す印が無く、文字を持つ。登録は直近の
     /// 同期が絵の番号から導いた置き場所で、絵はフレームの外では替わらないので、登録があること
     /// 自体が「絵と合っている」ことを表す。台本の `\s` の受け取り（行き先だけが替わる）と
-    /// `\b[名前]`（`areka-P0-shell-balloon-frame-align` 要件 4.5）では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
+    /// `\b[名前]`（要件 4.5）では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
     /// 非表示は次の同期が登録を外す（`unregister_box`）ので外れる。
     fn box_still_shown(&self, key: &PlaceKey) -> bool {
         self.box_sites.contains_key(key)
@@ -425,7 +425,7 @@ impl TextLayerRuntime {
             );
             return;
         };
-        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。表を入れたときの覚えを複製して押す（audit-emo-text-state-actor 指摘 7）。
+        // 箱もそのスコープの普通のバルーンの印を使う（`script-small-tags` 要件 5.1）。表を入れたときの覚えを複製して押す（audit-emo-text-state-actor 指摘 7）。
         let Some(memo) = self.box_resolved.get(&want.site.name) else {
             // 覚えは表に載る名前ごとに入るので構造上起こらない。
             warn!(

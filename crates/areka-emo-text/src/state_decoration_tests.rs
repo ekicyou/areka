@@ -222,7 +222,8 @@ fn choice_glyphs_carry_current_decoration() {
 /// `Text` の腕は 0 文字を上位で分岐せず [`super::ActorTextState::push_current_style`] を
 /// 無条件に呼ぶので、ガードが無ければ「既定と異なる見た目をグリフ 0 個で表へ積む」が実際に
 /// 起きる。空の `Text` は上流に実在する（`state_reveal_tests.rs` の空チャンクの試験が流して
-/// いる）。ゆえにこの述語が `push_current_style` の 0 文字ガードを踏む唯一の試験である。
+/// いる）。ゆえにこの述語は `push_current_style` の 0 文字ガードを踏む（空の `Text` を流す試験は
+/// ほかに `state_decoration_reset_tests.rs` の `appending_zero_glyphs_records_nothing` がある）。
 #[test]
 fn empty_text_appends_no_style_number() {
     let mut state = TextLayerState::default();

@@ -102,7 +102,7 @@ pub enum TextLayerError {
     },
 }
 
-/// budouy 依存導入の spike（Req 1.2/8.1）。
+/// budouy 依存導入の spike（`areka-P0-budoux-newline` Req 1.2/8.1）。
 ///
 /// budouy の**実 API 実形**をコンパイラで確定し、以降の `segment.rs` 本実装
 /// と Parser キャッシュ機構の判断根拠を回帰檻として固定する。
@@ -132,7 +132,7 @@ mod budouy_spike {
     }
 
     /// vendored-models の既定日本語 parser が I/O なしでロードでき、
-    /// 代表和文を無損失に 2 つ以上の塊へ分かち書きする（Req 8.1: オフライン）。
+    /// 代表和文を無損失に 2 つ以上の塊へ分かち書きする（`areka-P0-budoux-newline` Req 8.1: オフライン）。
     #[test]
     fn default_japanese_parser_segments_losslessly() {
         // infallible ロード（Result ではない・同梱データのロードのみ）。
@@ -149,7 +149,7 @@ mod budouy_spike {
         let joined: String = first.concat();
         assert_eq!(joined, sentence, "チャンク連結が原文と不一致（損失あり）");
 
-        // 実際に 2 つ以上の塊へ分かれる代表文であることをピン（Req 1.2: 境界がセグメンテーションへ供給される）。
+        // 実際に 2 つ以上の塊へ分かれる代表文であることをピン（`areka-P0-budoux-newline` のタスク 1: 分かち書きの境界が実際に出る）。
         assert!(
             first.len() >= 2,
             "代表和文が単一塊に潰れている（分かち書きが機能していない）: {first:?}"

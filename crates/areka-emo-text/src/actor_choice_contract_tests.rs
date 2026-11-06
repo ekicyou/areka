@@ -1,4 +1,4 @@
-// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
 
@@ -575,7 +575,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
 }
 
-// ── 帯の寄せ（R13）: 実フォントの hover 移動・解除で塗りが消し残らない読み戻し ──
+// ── 帯の寄せ（`areka-P0-emo2-conformance-e2e` R13）: 実フォントの hover 移動・解除で塗りが消し残らない読み戻し ──
 
 /// 実フォント `Yu Gothic UI`・正典 `font.height,28` ＋ `cursor.*` 指定のバルーン定義。
 ///
@@ -604,7 +604,7 @@ fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
     ))
 }
 
-/// Observable（R13.1/13.2/13.5）: 実フォントで帯が行ボックスの中央へ寄った状態で hover を
+/// Observable（`areka-P0-emo2-conformance-e2e` R13.1/13.2/13.5）: 実フォントで帯が行ボックスの中央へ寄った状態で hover を
 /// **移動**させ、さらに**解除**しても、前の行の塗りが 1 画素も残らない。
 ///
 /// ダーティ矩形は em ボックス（`font.height`）＋実測インクはみ出しで組まれるので、帯の遠端側の
@@ -612,8 +612,8 @@ fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
 /// クリップの外へ落ちて塗りが残る（`expand_overhang_for_band`）。寄せを数えないままでは
 /// hover を移した後の面に前の行の帯の下端が残り、この檻が赤くなる。
 ///
-/// 併せて、ヒット矩形の上端が**行矩形の上端 ＋ 寄せ**であること（R13.1）と、寄せが描画とヒットへ
-/// 同一に配られること（R13.2＝読み戻した塗りの上端がヒット矩形の上端に一致）も固定する。
+/// 併せて、ヒット矩形の上端が**行矩形の上端 ＋ 寄せ**であること（`areka-P0-emo2-conformance-e2e` R13.1）と、寄せが描画とヒットへ
+/// 同一に配られること（`areka-P0-emo2-conformance-e2e` R13.2＝読み戻した塗りの上端がヒット矩形の上端に一致）も固定する。
 #[test]
 fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
@@ -694,7 +694,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         0,
         "hover 無しでは塗りが 1 画素も無い"
     );
-    // R13.1: ヒット矩形の上端は行矩形の上端（0 / 行送り 1 つぶん）＋寄せ。
+    // `areka-P0-emo2-conformance-e2e` R13.1: ヒット矩形の上端は行矩形の上端（0 / 行送り 1 つぶん）＋寄せ。
     assert_eq!(
         (rows[0].rect.top, rows[1].rect.top),
         (offset, pitch + offset),
@@ -714,7 +714,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         fill_in_row(&first, &rows[0]) > 0,
         "ordinal 0 の帯が塗られる"
     );
-    // R13.2: 読み戻した塗りの縦位置がヒット矩形の縦位置と一致する（描画とヒットへ同一の寄せ）。
+    // `areka-P0-emo2-conformance-e2e` R13.2: 読み戻した塗りの縦位置がヒット矩形の縦位置と一致する（描画とヒットへ同一の寄せ）。
     let painted = fill_rows(&first).expect("塗りが在る以上、その縦範囲も在る");
     assert_eq!(
         (painted.0, painted.1 + 1),
@@ -736,7 +736,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     let residue = fill_in_row(&moved, &rows[0]);
     assert_eq!(
         residue, 0,
-        "hover を移した後、前の行（ordinal 0・{:?}）に塗りが {residue} 画素消し残った——ダーティ帯の超過分が寄せ {offset} を数えていない（R13.5）",
+        "hover を移した後、前の行（ordinal 0・{:?}）に塗りが {residue} 画素消し残った——ダーティ帯の超過分が寄せ {offset} を数えていない（`areka-P0-emo2-conformance-e2e` R13.5）",
         rows[0].rect
     );
 
@@ -747,7 +747,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     let left_over = fill_total(&off);
     assert_eq!(
         left_over, 0,
-        "hover 解除の後、面全域に塗りが {left_over} 画素消し残った（R13.5）"
+        "hover 解除の後、面全域に塗りが {left_over} 画素消し残った（`areka-P0-emo2-conformance-e2e` R13.5）"
     );
     assert!(opaque_count(&off) > 0, "解除後も素のグリフインクは描かれる");
 }

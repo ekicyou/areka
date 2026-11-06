@@ -443,10 +443,10 @@ fn present_actor(
                 return Ok(true);
             };
             // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・`areka-P0-choice-render` R3.3/5.2） ──
-            // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
+            // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——`areka-P0-choice-render` の design.md の Precondition）。
             // 範囲と帯は choice_ranges が 1 度だけ出す（当たりは描き替えたときだけ同じ値から出す）。
             // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
-            // R3.3/R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
+            // `areka-P0-choice-render` R3.3・`areka-P0-emo2-conformance-e2e` R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
             // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
             // 和文フォントの descent インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
             // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸・要件 7.9）で、
@@ -522,13 +522,13 @@ fn present_actor(
     // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
     // readback は front を読むため観測述語に影響しない・`areka-P0-emo-text-viewbox` R1.1/R3.1）。
     if changed {
-        // ── ヒット行スナップショット更新（present 成功時のみ・表示と同一 lines/segments の単一導出・5.2） ──
+        // ── ヒット行スナップショット更新（present 成功時のみ・表示と同一 lines/segments の単一導出・`areka-P0-choice-render` 5.2） ──
         // committed は既存 visible_window→executor が確定した面反映済みスクロールをそのまま消費する
-        // （新規のスクロール可視判定は追加しない・6.3）。NoChange フレームはこの更新を丸ごと省き
+        // （新規のスクロール可視判定は追加しない・同じ spec の 6.3）。NoChange フレームはこの更新を丸ごと省き
         // 直前スナップショットを不変のまま保つ。
         let committed = render.executor.scroll_state().committed;
         // 帯は装飾（描画）へ渡したのと**同一の行ごとの列**——描画とヒットの
-        // 座標整合（`areka-P0-emo2-conformance-e2e` R3.3/R13.2）。
+        // 座標整合（`areka-P0-choice-render` R3.3・`areka-P0-emo2-conformance-e2e` R13.2）。
         let hit_rows = memo.hit_rows(&resolved.region, resolved.mode);
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
@@ -579,7 +579,7 @@ fn present_actor(
 
 /// 提示の最後: 出す矢印・絵・置き場・拡大率が前と違うときだけ印の面を描き直す（当たりの写しも
 /// 一緒に作り直す・`balloon-scroll-arrows` 要件 3.8）。印の面は初めて矢印を出すときに、面の画像（箱は箱とシェルの画像の
-/// 重なり）全体の物理寸で文字の面の直前に挿す（要件 3.5・audit-emo-text-state-actor 指摘 3）。失敗は失敗源で `error!` 済み
+/// 重なり）全体の物理寸で文字の面の直前に挿す（`balloon-scroll-arrows` 要件 3.5・audit-emo-text-state-actor 指摘 3）。失敗は失敗源で `error!` 済み
 /// （その場所の矢印だけが出ない）。上限越えとその寸での作成の失敗は寸を覚え、同じ寸では試さない。
 fn present_markers(
     runtime: &mut TextLayerRuntime,

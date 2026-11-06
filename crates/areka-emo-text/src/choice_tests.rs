@@ -365,7 +365,7 @@ fn derive_out_of_range_line_index_is_skipped() {
     );
 }
 
-// ── to_window_physical: §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
+// ── to_window_physical: `areka-P0-choice-render` design.md §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
 
 /// canvas-local (10,0,30,10)・原点 (36,46)。横書きは committed をブロック軸（y=top/bottom）へ。
 #[test]

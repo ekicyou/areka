@@ -135,7 +135,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 /// 行矩形のブロック軸**近端**へ揃えていた頃の読み戻しは「上に 7 画素の余白を残したまま下で
 /// 2 画素を切る」であった。**帯を広げるのではなく、字の箱の中央へ寄せる**のが正しい
 /// ——寄せる量は [`band_offset_on_char_box`] が決める（spec `areka-P0-emo2-conformance-e2e`
-/// `areka-P0-emo2-conformance-e2e` R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
+/// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
 /// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
 ///
 /// 式は `max` と `min` で書く（有限の値では上の `clamp` と同じ答え・NaN を渡しても落ちない）。
@@ -234,7 +234,7 @@ pub struct LineBand {
 /// 「装飾込みから導く」と定める側である（行内軸は既にそう実装されている）。
 ///
 /// 塗る帯とクリックを受ける帯は同じ列から出る——片方だけを広げると「見えている帯の外が
-/// クリックできる」という別の破れ方になる（`areka-P0-text-decoration-canon` R3.3 の単一導出）。
+/// クリックできる」という別の破れ方になる（R3.3 の単一導出）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn line_bands<M: GlyphMetrics + ?Sized>(
@@ -367,7 +367,7 @@ pub fn derive_hit_rows(
         // 絶対 image px のヒット矩形を組む（横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。
         // block 近端（横書き＝rect.top・縦書き＝rect.left）は描画（住人 transform の offset＝
         // 行矩形の近端）と同一の起点ゆえ、band_extent と band_offset が同値なら帯は描画と数値一致
-        // する（`areka-P0-emo2-conformance-e2e` R3.3/R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
+        // する（R3.3・`areka-P0-emo2-conformance-e2e` R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
         // 行矩形 block 帯と完全一致＝非退行）。
         let abs = match mode {
             WritingMode::HorizontalTb => LineRect {
@@ -526,7 +526,7 @@ pub fn glyph_cells(
 ///
 /// `bands`（[`line_bands`] の出力・行ごとの [`LineBand`]）から当該行の 2 値を引いて Choice 住人へ
 /// 焼き込み、COM 層のハイライト矩形とダーティ帯がこの 2 値を読む——[`derive_hit_rows`] へ**同じ列**
-/// を渡すことで描画帯とヒット帯の数値一致（`areka-P0-emo2-conformance-e2e` R3.3/R13.2）を呼び手 1 箇所で担保する。
+/// を渡すことで描画帯とヒット帯の数値一致（R3.3・`areka-P0-emo2-conformance-e2e` R13.2）を呼び手 1 箇所で担保する。
 ///
 /// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
 ///

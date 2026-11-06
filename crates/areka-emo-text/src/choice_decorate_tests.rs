@@ -3,7 +3,7 @@
 // ── canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
 //
 // `areka-P0-choice-render` design.md「純粋層 / ChoicePure」・`areka-P0-choice-render` 要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
-// SquareFill）/4.3（未指定→Invert 反転）/4.5（描画実行の一点写像＝焼込済み純データ）。
+// SquareFill）/4.3（未指定→Invert 反転）。描画は焼き込み済みの純データからの一点写像で行う。
 // 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
 
@@ -375,7 +375,7 @@ fn lines_without_segments_stay_glyph_run() {
     );
 }
 
-// ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し（不変条件 3・4.5/6.5） ──
+// ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し（`areka-P0-choice-render` の不変条件 3・4.5/6.5） ──
 
 /// hover=Some(99)（どのセグメントも持たない ordinal）→ 全住人 hovered/highlight None・
 /// ただしセグメント持ち行は Choice 住人化しセグメントは記録する（stale-safe 不変条件・

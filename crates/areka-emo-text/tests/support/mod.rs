@@ -6,8 +6,8 @@
 //! テストの実行ファイルになるので、子のフォルダに置く）。中身:
 //!
 //! 1. **実 GPU の World と予約スロット**——`GraphicsCore`＋`WucGraphicsResource` を載せた
-//!    headless の World（本番の UI スレッドと同じ MTA）と、emo-present `VisualMount` と同型の
-//!    予約スロット。
+//!    headless の World（本番の UI スレッドと同じ MTA）と、emo-present `VisualMount` の
+//!    予約スロットを写した最小の形（本物が持つ `HitTest` は持たせない）。
 //! 2. **presenter の検体**——surface 1000 ＝ 絵 1 枚の `(EmoWorld, AtlasTable)` と `ShowSurface`。
 //! 3. **幾何だけのバルーン定義**——origin・wordwrappoint・validrect・書体の高さ・書字方向だけの
 //!    `BalloonModel`。
@@ -60,7 +60,8 @@ pub fn make_world_with_gpu() -> World {
     world
 }
 
-/// emo-present `VisualMount` と同型の予約スロット。返り値は (window, slot)。
+/// emo-present `VisualMount` の予約スロットを写した最小の形（窓の子で `Visual` だけを持つ。
+/// 本物が持つ `HitTest` は持たせない）。返り値は (window, slot)。
 pub fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
     let window = world.spawn_empty().id();
     let slot = world

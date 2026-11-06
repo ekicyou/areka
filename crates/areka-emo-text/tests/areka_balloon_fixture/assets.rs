@@ -87,7 +87,7 @@ fn png_native_sizes_are_pinned() {
 }
 
 /// 名前 `areka-balloon` が、登記のほかの名前と同梱バルーンの名前のどれとも、大小を無視して
-/// 重ならない（要件 5.2）。自分の行は登記にちょうど 1 つ在る（要件 10.3）。
+/// 重ならない（要件 5.2）。自分の行は登記にちょうど 1 つ在る（要件 10.1）。
 #[test]
 fn name_does_not_collide_case_insensitively() {
     let own_rows = SAMPLES.iter().filter(|s| s.name == BALLOON_NAME).count();

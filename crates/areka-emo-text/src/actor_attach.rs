@@ -61,7 +61,7 @@ impl ResolveInputs {
 /// 解決からは粗さの記録を外し、記録は本関数が担う。文言と 4 つの欄（`balloon`・`axis`・
 /// `wrap_threshold`・`inline_limit`）は移動の前後で 1 文字も変えていない——実機走行の判定は
 /// この語を grep する（`areka-P0-emo2-conformance-e2e` 要件 14.3・同じ spec の手順書 §5.7）。`balloon` の欄は場所の名前（普通のバルーンは
-/// 結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前・shell-balloon
+/// 結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前・
 /// `areka-P0-shell-balloon` 要件 3.11・3.12）で、呼び手が渡す。
 ///
 /// # 件数（`areka-P0-emo2-conformance-e2e` 要件 14.2）
@@ -373,7 +373,7 @@ impl TextLayerRuntime {
         // 省略すると、同 k のまま面実寸や scope 別 `validrect` が変わったときに旧寸の文字層が
         // 残る。k は双方とも ScaleContract 正規化済み（TextSlotBinding::new 経由）の同一表現
         // ゆえ、（derive した `PartialEq` 経由の）厳密一致で「変化なし」を判定してよい
-        // （f32 は出口ビュー——ここでは比較にのみ使い、寸法演算には一切用いない・D4）。
+        // （f32 は出口ビュー——ここでは比較にのみ使い、寸法演算には一切用いない・`areka-P0-emo-dpi-scaling` の D4）。
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。

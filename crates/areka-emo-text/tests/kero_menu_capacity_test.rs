@@ -37,7 +37,7 @@
 //!
 //! ## 行の高さの導出（本ファイルの期待値の根）
 //!
-//! 行の矩形は「上端＝行送り軸の位置・下端＝上端＋`font.height`」（`layout.rs` の `finish_line`）。
+//! 行の矩形は「上端＝行送り軸の位置・下端＝上端＋`font.height`」（`layout_scan.rs` の `finish_line`）。
 //! 先頭行の上端は書字開始点の 40 ゆえ、行の上端は 40 → 70 → 100、下端は 68 → 98 → **128**。
 //! 3 行目の下端 128 は描画範囲の下端 133 の内にあり、あふれ判定は発火しない（先頭可視行 0）。
 //! 旧式（`ceil(28 × 1.25)` ＝ 35）だと 3 行目の上端は 40 ＋ 2 × 35 ＝ 110・下端 138 > 133 で
@@ -274,7 +274,7 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
                 want_tops.to_vec(),
                 "{heading}／{kind:?}: 行の上端（先頭 40・以降 +30・カーソル指定は 40+2×30=100）"
             );
-            // 行の下端＝上端＋font.height（`layout.rs` の `finish_line`）——68 / 98 / 128。
+            // 行の下端＝上端＋font.height（`layout_scan.rs` の `finish_line`）——68 / 98 / 128。
             assert_eq!(
                 line_bottoms(&lines),
                 want_tops

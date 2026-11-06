@@ -48,7 +48,7 @@ pub enum TextMsg {
 /// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.sinks`
 ///   へ登録・注入可能な形・注入自体は emo2-boot の責務・`areka-P0-cue-playback-duration` R10.1/R11.6）。
 /// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側
-///   （`areka-P0-cue-playback-duration` R1.3 前半)。中間アクターは設けない（[`UiSender`] が配送口そのもの——`areka-P0-cue-playback-duration` design.md 結線層）。
+///   （R1.3 前半）。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
 /// - cue は FIFO で UI ドレインへ到達する（unbounded・非ブロック）。
 ///
 /// # Invariants

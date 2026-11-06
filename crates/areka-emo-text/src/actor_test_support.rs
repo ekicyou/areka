@@ -404,16 +404,9 @@ pub(crate) fn instant(actor: &str, command: CueCommand) -> TalkCue {
     }
 }
 
-/// 本文が id と同じ、参照なしの瞬時の選択肢。
+/// 本文が id と同じ、参照なしの瞬時の選択肢（作るのは `state::test_support::choice`）。
 pub(crate) fn choice(actor: &str, id: &str) -> TalkCue {
-    instant(
-        actor,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: id.to_owned(),
-            references: Vec::new(),
-        },
-    )
+    crate::state::test_support::choice(actor, id, id)
 }
 
 pub(crate) fn balloon(actor: &str) -> PlaceKey {

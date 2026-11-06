@@ -1,8 +1,9 @@
 charset,UTF-8
 // emo2-choice fixture（R7.6）: cursor.* 指定バルーン descript
+// 断りの無い要件の番号は spec `areka-P0-choice-render` のもの。
 //
 // choice ハイライトが SquareFill 実導出（塗り=cursor.brush.color・hover 文字=cursor.font.color）へ
-// 解決される最小適合バルーン。値は `actor_choice_contract_tests.rs` の in-code `cursor_model()` と同一
+// 解決される最小適合バルーン。値は `src/actor_test_support.rs` の in-code `cursor_model()` と同一
 // （square 塗り(105,25,25)＋白文字(255,255,255)）を「実 parse される descript」として自前用意する。
 //
 // 実フォント指定（既定 ＭＳ ゴシック盲点の回避）:
@@ -20,7 +21,7 @@ validrect.left,5
 validrect.right,-5
 validrect.bottom,-5
 
-// cursor.* スタイルモデル（SquareFill 実導出・要件 4.2/6.2）。
+// cursor.* スタイルモデル（SquareFill 実導出・要件 4.2/6.1）。
 // style,square＝矩形塗りマーカー・brush.color＝矩形内塗り色・font.color＝hover 白文字。
 cursor.style,square
 cursor.brush.color.r,105

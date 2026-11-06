@@ -36,12 +36,12 @@
 //!   **単位の係数・基点・原点の解釈・軸取り違えの判定は解決層 [`crate::cursor_tag`] の責務**で、
 //!   その解決を軸ごとに呼ぶ配線が `layout` である（`areka-P0-cursor-tag-canon` の層分け）。
 //!   本層は軸の情報すら持たない——`centerx` が Y 軸に書かれた事実の判定も解決層が行う。
-//! - **typewriter リビール（R3／R7 系）**: `Text` 追記時に per-glyph リビール時刻を
+//! - **typewriter リビール（`areka-P0-emo-text-layer` 要件 3・`areka-P0-cue-playback-duration` 要件 7）**: `Text` 追記時に per-glyph リビール時刻を
 //!   `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭は `r_0 = at`）で確定する。
 //!   `interval` は**配送された cue の再生時間**から `interval = duration / glyph_count`
 //!   で導出する（自前の文字送り定数は持たない・服従＝再生時間の真実源に従う・`areka-P0-cue-playback-duration` R7.1/R7.2）。
 //!   可視数は `visible_glyphs(actor, t)`＝注入時刻 `t` で `r_i <= t` のグリフ数。
-//!   実時間 sleep／`Instant` 不使用（注入時刻駆動・`areka-P0-cue-playback-duration` R3.3/R9.1）。
+//!   実時間 sleep／`Instant` 不使用（注入時刻駆動・`areka-P0-emo-text-layer` R3.3・`areka-P0-cue-playback-duration` R9.1）。
 //! - グリフ単位は書記素クラスタ（UAX #29 の拡張書記素クラスタ）。切り方は
 //!   [`areka_sakura::cluster::clusters`] だけを通す（再生時間の文字数と同じ切り方・
 //!   ZWJ 列・国旗・肌色・異体字セレクタ・キーキャップ・結合文字が 1 アイテム・1 段になる）。
@@ -276,7 +276,7 @@ pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
     }
 }
 
-/// per-glyph リビール時刻列（注入時刻駆動 typewriter・`areka-P0-cue-playback-duration` R3.1–3.5／R7.1–7.3）。
+/// per-glyph リビール時刻列（注入時刻駆動 typewriter・`areka-P0-emo-text-layer` R3.1–3.5・`areka-P0-cue-playback-duration` R7.1–7.3）。
 ///
 /// 時刻式（`areka-P0-emo-text-layer` design.md「typewriter リビール」正本・決定論の正準）:
 /// `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭グリフは `r_0 = at(chunk(0))`）。
@@ -683,7 +683,7 @@ impl TextLayerState {
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
             // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
             // variant 追加時にコンパイラが再検討を強制する）。整数の `BalloonSurface` は表示系
-            // （seriko＝`cue_target_of` が Shell 分類）の消費対象＝文字状態機械へは動作させない防御面（`areka-P0-cue-playback-duration` R3.2）。
+            // （seriko＝`cue_target_of` が Shell 分類）の消費対象＝文字状態機械へは動作させない防御面（`areka-P0-balloon-face-cue` R3.2）。
             // `Wait` は action を持たない純粋な待ち（cue_target_of が `None` 分類）＝
             // どの表現者の担当でもなく、本状態機械は状態を変えない。時間は envelope
             // duration が担い、上流が後続 cue の時刻へ焼き込み済みゆえ、ここで新たな

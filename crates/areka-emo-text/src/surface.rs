@@ -235,7 +235,7 @@ impl PendingReadBack {
 }
 
 /// `\_b --option=fixed` 固定層（スクロールに追従しない画像層）の差し込み点の**型シーム**
-/// （R7・実挙動なし）。
+/// （`areka-P0-emo-text-viewbox` R7・実挙動なし）。
 ///
 /// 固定層はスクロール描画面（`sources`）に**描かない**——面内 blit の影響を受けない
 /// **別合成層**として、[`TextSurface::present`] の合成点（front→backbuffer コピーの直後・
@@ -273,7 +273,7 @@ pub struct TextSurface {
     sprite: SpriteVisual,
     /// 現在の供給面サイズ（物理 px＝`ceil(validrect 寸 × k)`・論理 px 不在）。
     size: (u32, u32),
-    /// `\_b --option=fixed` 固定層差し込み点の型シーム（R7・今は実挙動なし）。
+    /// `\_b --option=fixed` 固定層差し込み点の型シーム（`areka-P0-emo-text-viewbox` R7・今は実挙動なし）。
     /// [`present`](Self::present) の合成点を型で予約する（scroll 面 `sources` とは分離した
     /// 別合成層——増設時に blit 構成を再構築せずに済む・`areka-P0-emo-text-viewbox` R7.3）。
     #[allow(dead_code)]
@@ -893,7 +893,7 @@ mod tests {
         );
     }
 
-    /// 「まだ」と失敗の分かれ目（1.5）: GPU がまだ使っているだけの `DXGI_ERROR_WAS_STILL_DRAWING`
+    /// 「まだ」と失敗の分かれ目（`areka-P0-mcp-dump-images-residue` 1.5）: GPU がまだ使っているだけの `DXGI_ERROR_WAS_STILL_DRAWING`
     /// は「まだ」、それ以外（`E_FAIL`）は失敗。
     #[test]
     fn still_drawing_separates_not_yet_from_failure() {
@@ -905,7 +905,7 @@ mod tests {
         )));
     }
 
-    /// 待たない読み戻しの往復（1.3 の層の側）: front へ模様 P を直に書き、`begin_read_back` の後に
+    /// 待たない読み戻しの往復（`areka-P0-mcp-dump-images-residue` 1.3 の層の側）: front へ模様 P を直に書き、`begin_read_back` の後に
     /// front を模様 Q で描き替えても、`try_finish` が読めたときの中身は積んだ時点の P と全バイト一致。
     #[test]
     fn pending_read_back_returns_front_as_of_begin() {

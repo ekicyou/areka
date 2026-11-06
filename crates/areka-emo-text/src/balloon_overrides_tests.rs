@@ -1,5 +1,7 @@
 //! [`super`]（`balloon_overrides`）の決定論テスト——トークン列の形と、飛ばした値の記録。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-font-descript-keys` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 入力はすべて転記層の公開入口（`areka_parsers::balloon::parse_str`）を通す。記録の件数は
 //! `log-capture-kit` で数え、捕捉の窓には本番の解決（`ResolvedFont::resolve`）1 回と、窓が生きている
 //! ことの対照の `error!` 1 件だけを入れる（`capture_checked`・「記録 0 件」が窓の死で恒真にならない）

@@ -132,7 +132,7 @@ fn choice_fixtures_start_at_writing_corner_regardless_of_image_size() {
 /// （既定 ＭＳ ゴシック盲点の回避＝実フォント目視確認の前提）。
 #[test]
 fn fixtures_parse_to_expected_choice_styles() {
-    // ── cursor.* 指定 → SquareFill（実導出・`actor_choice_contract_tests.rs` の cursor_model と同値） ──
+    // ── cursor.* 指定 → SquareFill（実導出・`src/actor_test_support.rs` の cursor_model と同値） ──
     let cursor = cursor_model();
     assert_eq!(
         cursor.font().name(),

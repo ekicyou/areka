@@ -582,10 +582,10 @@ impl TextLayerRuntime {
         self.choice_snapshot.get(place).map_or(&[], Vec::as_slice)
     }
 
-    /// 「済んでいない選択肢があるか」照会（R1.3・照会のみ＝バリア解決はしない・areka-P0-balloon-text-bugs 件 1 で意味を改めた）。
+    /// 「済んでいない選択肢があるか」照会（`areka-P0-choice-render` 要件 1.3・照会のみ＝バリア解決はしない・areka-P0-balloon-text-bugs 件 1 で意味を改めた）。
     ///
     /// **表示層自身**の範囲の記録（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）に
-    /// 種類が選択肢で済みの境目より後のもの（[`ActorTextState::has_live_choice`](crate::state::ActorTextState::has_live_choice)）があることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
+    /// 種類が選択肢で済みの境目より後のもの（[`ActorTextState::has_live_choice`](crate::state::ActorTextState::has_live_choice)）があることを表す（`areka-P0-choice-render` の DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
     /// スコープの**どの場所か**（普通のバルーン・箱）に済んでいない選択肢があれば真（kanade の
     /// 選択待ちの単位がスコープだから）。アンカーの範囲は数えない。バルーンの時間切れの観測は
     /// これを読まない（選択肢つきのトークはトークの終わりの時刻から測る）。未知 actor・選択肢なしは `false`。

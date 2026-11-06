@@ -254,7 +254,7 @@ pub(crate) fn plain_shot(writing_mode: Option<&str>) -> &'static Shot {
 /// 「素の台本」と「装飾を足した台本」の 2 枚を撮る（同じ書字方向・同じ本文）。
 ///
 /// 素の側は [`plain_shot`] の 1 枚を使い回す。装飾ありの側は `\f[トークン…]` を本文の**前**に
-/// 置く（要件 3.3——装飾は以降の文字に効く）。
+/// 置く（要件 3.2——装飾は以降の文字に効く）。
 pub(crate) fn shoot_pair(writing_mode: Option<&str>, tokens: &[&str]) -> (&'static Shot, Shot) {
     let plain = plain_shot(writing_mode);
     let styled = run(writing_mode, &[font_cue(tokens), text_cue(SAMPLE)]);

@@ -156,7 +156,7 @@ fn two_anchors_get_different_ordinals() {
     );
 }
 
-// ---- 到達しない防御（compile が補うので本番の列では起きない）
+// ---- 到達しない防御（重なりの開きは compile が補うので本番の列では起きない）
 
 /// 開いている間の新たな開きは、直前の範囲をそこで閉じてから開く。
 #[test]
@@ -189,6 +189,8 @@ fn reopening_closes_a_range_left_open_in_another_place() {
     assert_eq!(spans(&state, "0"), vec![anchor(0, "a", "あ", 0..1)]);
     assert_eq!(spans(&state, "1"), vec![anchor(0, "b", "い", 0..1)]);
 }
+
+// ---- 迷子の閉じ（開いている間に `\c` で本文が消えた後の閉じは本番でも届く）
 
 /// 開いていないのに届いた閉じは、状態を変えない（場所も作らない）。
 #[test]

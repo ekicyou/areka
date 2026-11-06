@@ -6,12 +6,11 @@ use std::rc::Rc;
 use areka_parsers::balloon::{Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
 use bevy_ecs::prelude::World;
-use log_capture_kit::count_levels;
 use wintf::ecs::{GraphicsCommandList, VisualGraphics};
 
 use super::test_support::{
-    balloon_model_of, com_world, cue, geo_model, opaque_count, pump_until_idle, read_back,
-    spawn_reserved_slot,
+    balloon_model_of, capture_alive, com_world, cue, geo_model, level_count, opaque_count,
+    pump_until_idle, read_back, spawn_reserved_slot,
 };
 use super::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
@@ -19,23 +18,19 @@ use super::{
 use crate::state::TextLayerConfig;
 use crate::wrap::WrapMode;
 
-// ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
+// ── ログ捕捉（窓と対照の記録は `test_support` の `capture_alive` を使う） ──
 
 /// クロージャを共有のログ捕捉窓の中で実行し、（結果, WARN 件数, ERROR 件数）を返す。
 ///
-/// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-/// 窓の内側で対照の `error!` を 1 件出して数えられたことを確かめ、返す ERROR 件数からは除く
+/// 窓が生きていることは [`capture_alive`] の対照の `error!` で確かめ、返す ERROR 件数からは除く
 /// （「error 0 件」の主張が捕捉窓の死で恒真になるのを防ぐ）。
 fn with_log_cage<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
-    let (out, counts) = count_levels(|| {
-        tracing::error!("捕捉窓が生きていることの対照イベント");
-        f()
-    });
-    assert!(
-        counts.error >= 1,
-        "対照の error! が数えられていない（捕捉窓が死んでいる）"
-    );
-    (out, counts.warn, counts.error - 1)
+    let (out, events) = capture_alive(f);
+    (
+        out,
+        level_count(&events, tracing::Level::WARN),
+        level_count(&events, tracing::Level::ERROR) - 1,
+    )
 }
 
 // ══ 実 pump 3 経路（R1.2/R1.3/R1.4/R1.5——観測可能な完了状態の前半） ══

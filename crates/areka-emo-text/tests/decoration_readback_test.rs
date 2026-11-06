@@ -57,8 +57,8 @@ use support::{
 /// `\f[underline,1]` でインクが増える行の帯（供給面 local の y・`Yu Gothic UI` の
 /// `font.height,28`・横書き）。
 ///
-/// 横書きの下線は areka が線の上端をベースラインに置いて塗る（spec `areka-P0-balloon-text-bugs`
-/// `areka-P0-balloon-text-bugs` 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
+/// 横書きの下線は areka が線の上端をベースラインに置いて塗る
+/// （spec `areka-P0-balloon-text-bugs` 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
 /// （字のインクは 29 行まで）で、二値化した線の帯は 30 の 1 行（太さ 1.42）。DirectWrite の既定の
 /// 位置（33・ベースラインから下線の位置の分だけ下）から改めた。値が動いたら赤にして裁定を仰ぐ。
 const UNDERLINE_BAND: (u32, u32) = (30, 30);

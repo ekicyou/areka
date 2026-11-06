@@ -4,8 +4,8 @@
 //!
 //! `surface.rs` の子（`#[path]`）。供給面の生成は親の `TextSurface::create` を共有し、ここは
 //! 「窓の子として挿す・消す」「表示されている字の矩形で当たりのマスクを焼く」（要件 9.4）と、
-//! 差し込み口・窓の子のどちらの面も外す片付け `TextSurface::release`（`areka-P0-balloon-text-bugs`
-//! `areka-P0-balloon-text-bugs` 要件 2.9）を持つ。
+//! 差し込み口・窓の子のどちらの面も外す片付け `TextSurface::release`
+//! （`areka-P0-balloon-text-bugs` 要件 2.9）を持つ。
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;

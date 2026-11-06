@@ -23,8 +23,8 @@
 //!
 //! 上記の拡張キー版に加え、SSP 正典キー `vertical,1` を宣言するだけが異なる第 2 の変種
 //! `examples/fixtures/emo2-vertical-canon/` を読み、**両版が同一の [`WritingMode`] と
-//! 同一の [`TextRegion`]（全成分）を与える**ことを檻にする（areka-P0-balloon-vertical-canon
-//! `areka-P0-balloon-vertical-canon` 要件 10.1／10.2・design.md「C6 縦書きフィクスチャ 2 種」／DD9）。
+//! 同一の [`TextRegion`]（全成分）を与える**ことを檻にする
+//! （`areka-P0-balloon-vertical-canon` 要件 10.1／10.2・design.md「C6 縦書きフィクスチャ 2 種」／DD9）。
 //! あわせて、両版の `descript.txt` の差分が **`writing_mode,vertical_rl` → `vertical,1` の
 //! 1 行だけ**であること・`balloons0s.txt` が同内容であること・**両版とも `origin` を
 //! 宣言しない**こと（正典推奨形・`areka-P0-balloon-vertical-canon` 要件 10.9）を機械で固定する（人の目視に頼らない）。
@@ -239,7 +239,7 @@ fn neither_fixture_declares_origin() {
     }
 }
 
-/// DD9 の「差分は 1 行だけ」を人の目視でなく機械で守る構造檻——2 つの `descript.txt` を
+/// `areka-P0-balloon-vertical-canon` DD9 の「差分は 1 行だけ」を人の目視でなく機械で守る構造檻——2 つの `descript.txt` を
 /// 行単位で比較し、**異なる行がちょうど 1 組**で、それが
 /// `writing_mode,vertical_rl` → `vertical,1` であることを固定する。
 /// `balloons0s.txt` は全行一致（同内容）であることも固定する。
