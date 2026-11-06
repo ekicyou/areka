@@ -130,6 +130,29 @@ pub(crate) fn single_pattern_anim(
     }
 }
 
+/// `surface.append` の定義 1 つ（対象と element/collision/animation）。
+pub(crate) fn append_def(
+    targets: Vec<AppendTarget>,
+    elements: Vec<Element>,
+    collisions: Vec<Collision>,
+    animations: Vec<Animation>,
+) -> SurfaceAppend {
+    SurfaceAppend {
+        targets,
+        elements,
+        collisions,
+        animations,
+    }
+}
+
+/// `surface<数字>.png` として置いた絵の対応（番号 → ファイル名）を組む。
+pub(crate) fn image_map(entries: &[(u32, &str)]) -> BTreeMap<u32, String> {
+    entries
+        .iter()
+        .map(|(id, file)| (*id, (*file).to_string()))
+        .collect()
+}
+
 /// 与えた surface 群を登場順 definitions（plain のみ）で包む `Shell`（animation-sort 未指定＝既定 descend）。
 pub(crate) fn shell_of(surfaces: Vec<Surface>) -> Shell {
     shell_of_with_sort(surfaces, None)
@@ -248,6 +271,41 @@ pub(crate) fn ops(
     out
 }
 
+/// 予算つきで命令列を引く口: 予算 `limit` の作業場 1 つ（合成器 1 つと同じ）で `surface_id` を 2 回合成し
+/// （着せ替えもコマも無し）、最後の命令列と 2 回分の記録を返す（記録が合成器 1 つで 1 行かを見られる）。
+pub(crate) fn ops_limited(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    limit: usize,
+) -> (Vec<BlitOp>, String) {
+    let (binds, pattern) = (BindSet::default(), PatternState::default());
+    let mut scratch = PlanScratch::with_limit(limit);
+    let mut out = Vec::new();
+    let logs = crate::log_capture::capture_logs(|| {
+        for _ in 0..2 {
+            out.clear();
+            derive_ops(
+                &mut out,
+                &mut scratch,
+                world,
+                atlas,
+                surface_id,
+                &binds,
+                &pattern,
+            );
+        }
+    });
+    (out, logs)
+}
+
+/// `needle` を含む `error!` の行の数（記録の読み取り）。
+pub(crate) fn errors(logs: &str, needle: &str) -> usize {
+    logs.lines()
+        .filter(|l| l.contains("level=ERROR") && l.contains(needle))
+        .count()
+}
+
 /// 入れ子の目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。見える部品と合成の
 /// 一致の檻（nesting_visible_tests・nesting_film_tests）が引く。
 pub(crate) const MARKER: u32 = 900;
@@ -258,16 +316,11 @@ pub(crate) const MARK_ANIM: u32 = 9999;
 pub(crate) fn visible_parts_of(
     table: &NestTable,
     top: u32,
-    binds: &[u32],
+    binds: &BindSet,
     pattern: &PatternState,
 ) -> Vec<u32> {
     let mut out = Vec::new();
-    table.visible_parts(
-        top,
-        &BindSet::from_ids(binds.iter().copied()),
-        pattern,
-        &mut out,
-    );
+    table.visible_parts(top, binds, pattern, &mut out);
     out
 }
 
@@ -498,8 +551,7 @@ pub(crate) fn bake_gray(sizes: &[(&str, (u32, u32))]) -> AtlasTable {
 /// `shell` を面の表にし（`images` は `surface<数字>.png` として置いた絵（番号, 名前））、`atlas` を
 /// 束縛した World を返す（束縛済みの World の口）。
 pub(crate) fn bound_world(shell: &Shell, images: &[(u32, &str)], atlas: &AtlasTable) -> EmoWorld {
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(shell, &images);
+    let mut world = EmoWorld::build_with_images(shell, &image_map(images));
     world.bind_atlas(atlas, SetId(0));
     world
 }

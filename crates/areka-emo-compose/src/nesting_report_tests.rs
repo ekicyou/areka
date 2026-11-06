@@ -11,6 +11,7 @@ use areka_parsers::shell::parse;
 
 use super::{NestIssue, NestReport};
 use crate::log_capture::capture_logs;
+use crate::plan_test_support::image_map;
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -131,7 +132,7 @@ fn same_child_by_two_paths_is_not_a_cycle() {
 #[test]
 fn filename_convention_child_is_not_missing() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,11,0,0\n}\n";
-    let images = BTreeMap::from([(11, "surface11.png".to_string())]);
+    let images = image_map(&[(11, "surface11.png")]);
     let with_image = EmoWorld::build_with_images(&parse(text), &images);
     assert_eq!(with_image.nest_report(), NestReport::default());
     assert_eq!(report_of(text), vec![missing(0, 1, "11")]);
@@ -181,8 +182,8 @@ fn fixture_yields_exactly_the_planted_issues() {
 }
 
 /// 広がりの予算（指摘 3）: 呼び出し 1 回の予算が尽きたら着かないと答え、`error!` を 1 行だけ出す。
-/// 取り出す面は「1 ＋出る辺の数」を数える（指摘 130）ので、0 → 1 → 2 → 3 の鎖は 2＋2＋1＝5 で 3 へ着き、
-/// 予算 4 なら着かない。
+/// 取り出す面は「1 ＋出る辺の数」を数える（指摘 130・出発の 0 は数えない）ので、0 → 1 → 2 → 3 の鎖は
+/// 1・2・3 の 2＋2＋1＝5 で 3 へ着き、予算 4 なら着かない。
 #[test]
 fn spent_budget_answers_not_reached() {
     let edges = BTreeMap::from([(0, vec![1]), (1, vec![2]), (2, vec![3])]);

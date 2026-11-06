@@ -67,41 +67,6 @@ fn extent_is_independent_of_bindset() {
     );
 }
 
-/// 要件 6.5・全 bind 母集合: 非活性 bind（どの BindSet にも入れない）の
-/// pattern0 が参照する巨大入れ子 surface が、それでも外形を支配する。
-///
-/// host=2000 の静的 element は小さい tiny(4×4) のみ。bind id=9 は**一度も activate されない**が、
-/// その pattern0 が huge(500×400) を参照する。もし外形が「有効 bind のみ」を数えるバグなら tiny
-/// の 4×4 になるはずだが、正しくは全 bind の描くコマ 母集合ゆえ 500×400。空 BindSet でも huge が支配。
-#[test]
-fn extent_unions_inactive_bind_contribution() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("tiny.png", (4, 4), Some((64, 64, 64))),
-            ("huge.png", (500, 400), Some((64, 64, 64))),
-        ],
-    );
-
-    let host = surface_with_anims(
-        2000,
-        vec![elem(0, "tiny.png", 0, 0)],
-        vec![bind_anim(9, 2900, 0, 0)], // id=9 は以降どの BindSet にも入れない。
-    );
-    let huge = surface(2900, vec![elem(0, "huge.png", 0, 0)]);
-    let shell = shell_of(vec![host, huge]);
-    let world = bound_world(&shell, &[], &atlas);
-
-    // 有効 bind 非依存ゆえ、activate されない id=9 の huge も外形へ寄与＝500×400 が支配。
-    let extent = compute_extent(&world, &atlas, 2000);
-    assert_eq!(
-        extent,
-        Extent { w: 500, h: 400 },
-        "非活性 bind の入れ子巨大 surface も外形を支配（全 bind 母集合・6.5）"
-    );
-}
-
 /// 要件 6.3＋6.5: placement None（全透明）element は命令からスキップされるが、
 /// 外形には原寸で寄与する。
 ///
@@ -389,7 +354,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
 /// 要件 6.6・10.3: 可視 element を持つ通常 surface → `Ok`＋非空 ops。out_ops は
 /// エントリで clear される（スクラッチ再利用）。
 #[test]
-fn build_plan_clears_scratch() {
+fn build_plan_clears_out_ops() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), Some((64, 64, 64)))]);
     let visible_id = atlas

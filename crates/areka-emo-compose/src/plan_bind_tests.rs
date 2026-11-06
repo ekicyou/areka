@@ -30,24 +30,18 @@ fn shell(anims: &str) -> String {
     text
 }
 
-/// 面 0 を合成した命令列（(絵の名前, X, Y)）と記録。
-fn compose(
-    anims: &str,
-    binds: &[u32],
-    pattern: &PatternState,
-) -> (Vec<(&'static str, i64, i64)>, String) {
+/// 面 0 を合成した命令列（(絵の名前, X, Y)）。
+fn compose(anims: &str, binds: &[u32], pattern: &PatternState) -> Vec<(&'static str, i64, i64)> {
     let atlas = bake_atlas(Path::new("shell/master"), RELS);
     let world = bound_world(&parse(&shell(anims)), &[], &atlas);
     let map = id_to_path(&atlas, RELS);
     let binds = BindSet::from_ids(binds.iter().copied());
-    let mut out = Vec::new();
-    let logs =
-        capture_logs(|| out = crate::plan_test_support::ops(&world, &atlas, 0, &binds, pattern));
-    (named_ops(&out, &map), logs)
+    let out = crate::plan_test_support::ops(&world, &atlas, 0, &binds, pattern);
+    named_ops(&out, &map)
 }
 
 fn ops(anims: &str, binds: &[u32]) -> Vec<(&'static str, i64, i64)> {
-    compose(anims, binds, &PatternState::default()).0
+    compose(anims, binds, &PatternState::default())
 }
 
 /// A（1）＝後ろ・`insert,2`・前、B（2）＝1 コマ。
@@ -120,7 +114,7 @@ fn inserted_b_with_a_frame_draws_the_frame_in_place() {
     let mut pattern = PatternState::default();
     pattern.set(2, frame(21, 7, 8));
     assert_eq!(
-        compose(A_INSERTS_B, &[1, 2], &pattern).0,
+        compose(A_INSERTS_B, &[1, 2], &pattern),
         [
             ("body.png", 0, 0),
             ("s10.png", 1, 2),
@@ -212,7 +206,7 @@ fn inactive_pure_bind_frame_is_drawn() {
     let mut pattern = PatternState::default();
     pattern.set(2, frame(20, 3, 4));
     assert_eq!(
-        compose(A_INSERTS_B, &[], &pattern).0,
+        compose(A_INSERTS_B, &[], &pattern),
         [("body.png", 0, 0), ("s20.png", 3, 4)]
     );
 }
@@ -224,12 +218,12 @@ fn active_pure_bind_falls_back_to_steps_after_its_frame_is_gone() {
     pattern.set(1, frame(11, 0, 0));
     // A のコマは手順を展開しないので、B は本来の位置に積む。
     assert_eq!(
-        compose(A_INSERTS_B, &[1, 2], &pattern).0,
+        compose(A_INSERTS_B, &[1, 2], &pattern),
         [("body.png", 0, 0), ("s11.png", 0, 0), ("s20.png", 3, 4)]
     );
     pattern.remove(1);
     assert_eq!(
-        compose(A_INSERTS_B, &[1, 2], &pattern).0,
+        compose(A_INSERTS_B, &[1, 2], &pattern),
         ops(A_INSERTS_B, &[1, 2])
     );
 }

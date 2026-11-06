@@ -2,9 +2,9 @@
 //!
 //! fold（[`EmoWorld::build`]）→ bind（[`EmoWorld::bind_atlas`]）→ plan（[`crate::plan::build_plan`]）
 //! → execute（[`crate::blit::execute`]）の全結線を、`MemoryDecoder`+`bake` の COM/WIC 非依存経路で
-//! headless に検証する。Composer が合成結果を保持しないこと（要件 9.4）・同じ入力の繰り返しで `out` の
-//! 先頭と命令列の容量が変わらず絵が同じであること（要件 10.3・10.1）を固定する（失敗経路の `Err` と記録は
-//! `log_firing_tests`）。
+//! headless に検証する。Composer が合成結果を保持しないこと（要件 9.4）を固定する（同じ入力の繰り返しで
+//! `out` の先頭と命令列・作業場の容量が変わらず絵が同じであること（要件 10.3・10.1）は
+//! `golden_tests_determinism_budget_tests`、失敗経路の `Err` と記録は `log_firing_tests`）。
 
 use super::*;
 use crate::plan_test_support::bound_world;
@@ -36,13 +36,13 @@ fn blue_base_red_part() -> (EmoWorld, AtlasTable) {
 }
 
 /// 静的 element の無い面 1000 に bind 1（面 1100・青 4×4）と bind 2（面 1200・緑 2×2）。面 1300（赤 4×4）は
-/// pattern0 を持たない、コマの参照先。
+/// どの着せ替えの手順にも無い、コマの参照先。
 fn two_binds_and_a_frame() -> (EmoWorld, AtlasTable) {
     let atlas = bake_atlas_sized(
         Path::new("shell/master"),
         &[
-            ("p1.png", (4, 4), Some((200, 0, 0))), // 青＝id=1 pattern0（surface1100）。
-            ("p2.png", (2, 2), Some((0, 200, 0))), // 緑＝id=2 pattern0（surface1200・小さめ）。
+            ("p1.png", (4, 4), Some((200, 0, 0))), // 青＝id=1 の着せ替えの手順（surface1100）。
+            ("p2.png", (2, 2), Some((0, 200, 0))), // 緑＝id=2 の着せ替えの手順（surface1200・小さめ）。
             ("p3.png", (4, 4), Some((0, 0, 200))), // 赤＝id=1 の現在コマ（surface1300）。
         ],
     );
@@ -153,67 +153,7 @@ fn composer_holds_no_result_no_stale_cache() {
     );
 }
 
-// ── テスト3（要件 10.3・10.1）: compose_into は buffer を再利用し、繰り返しで再割り当てしない ──
-
-/// 同一 out・同一 surface で compose_into を 2 回 → バッファ長不変・先頭ポインタ不変（再割り当て
-/// なし）・結果バイト等価（決定性）。Composer 内部 ops スクラッチ容量も安定（定常状態ゼロアロケーション）。
-#[test]
-fn compose_into_reuses_buffer_across_calls() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("p.png", (30, 20), Some((100, 110, 120)))]);
-    let surf = surface(5000, vec![elem(0, "p.png", 0, 0)]);
-    let world = bound_world(&shell_of(vec![surf]), &[], &atlas);
-
-    let binds = BindSet::default();
-    let mut composer = Composer::new();
-    let mut out = ComposedSurface::new(0, 0);
-
-    composer
-        .compose_into(
-            &mut out,
-            &world,
-            &atlas,
-            5000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("1 回目 Ok");
-    let len1 = out.bytes().len();
-    let ptr1 = out.bytes().as_ptr();
-    let bytes1 = out.bytes().to_vec();
-    let ops_cap1 = composer.ops.capacity();
-
-    composer
-        .compose_into(
-            &mut out,
-            &world,
-            &atlas,
-            5000,
-            &binds,
-            &PatternState::default(),
-        )
-        .expect("2 回目 Ok");
-    let len2 = out.bytes().len();
-    let ptr2 = out.bytes().as_ptr();
-    let ops_cap2 = composer.ops.capacity();
-
-    assert_eq!(len1, len2, "同一外形でバッファ長不変（要件 10.3）");
-    assert_eq!(
-        ptr1, ptr2,
-        "容量再利用ゆえ先頭ポインタ不変＝再割り当てなし（要件 10.3）"
-    );
-    assert_eq!(
-        bytes1,
-        out.bytes(),
-        "同一入力→バイト等価（決定性・要件 10.1）"
-    );
-    assert_eq!(
-        ops_cap1, ops_cap2,
-        "Composer 内部 ops スクラッチ容量も安定（定常状態ゼロアロケーション・要件 10.3）"
-    );
-}
-
-// ── テスト3b（recompose-budget 要件 3.3／6.4）: compose_into は使い回した out を必ず塗り直す ──
+// ── テスト3（recompose-budget 要件 3.3／6.4）: compose_into は使い回した out を必ず塗り直す ──
 
 /// 事前に 0 以外で塗った `out` へ `compose_into` した結果が、まっさらな `out` への結果と
 /// **バイト等価**であること（合成先に前コマの残像を残さない）。
@@ -355,7 +295,7 @@ fn compose_error_display_strings_are_exact() {
     );
 }
 
-// ── テスト6（要件 4.3・hot path resolve-free）: multi-layer 実データの end-to-end 結線 ──
+// ── テスト5（要件 4.3・hot path resolve-free）: multi-layer 実データの end-to-end 結線 ──
 
 /// animation-sort=ascend の多層 + 複数 bind を実データ構造で end-to-end（fold→bind→plan→blit）合成し、
 /// 描画順（ascend ゆえ ID 降順）が画素へ反映されることで結線を証明する。
@@ -411,8 +351,9 @@ fn end_to_end_multilayer_ascend_wiring() {
 /// hot path（compose/compose_into 経路）と外形の表を作る道のソースに `atlas.resolve(` が現れないことを
 /// 静的に確認する。
 ///
-/// 毎フレームの道の plan.rs／plan_always.rs／blit.rs／blit_rect.rs／lib.rs（Composer）と、束縛のときに
-/// 外形の表を作る plan_extent.rs（合成からは呼ばない）の非テストコードは `atlas.entry`（O(1)）のみを引き、
+/// 毎フレームの道の plan.rs／plan_always.rs／bind_steps.rs（着せ替えの手順）／blit.rs／blit_rect.rs／
+/// lib.rs（Composer）と、束縛のときに外形の表を作る plan_extent.rs・outline_walk.rs（合成からは呼ばない）の
+/// 非テストコードは `atlas.entry`（O(1)）のみを引き、
 /// `resolve` は bind_atlas（atlas_bind.rs）の名前引きに限られる（要件 4.3・design 主要決定）。
 /// 本テストは各ソースの非テスト領域文字列を検査し、hot path に `resolve` 呼び出しが無いことを固定する。
 #[test]
@@ -431,6 +372,16 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
             include_str!("plan_always.rs"),
             "plan_always.rs",
             "fn film_op",
+        ),
+        (
+            include_str!("bind_steps.rs"),
+            "bind_steps.rs",
+            "fn push_bind_contribution",
+        ),
+        (
+            include_str!("outline_walk.rs"),
+            "outline_walk.rs",
+            "fn walk",
         ),
         (include_str!("blit.rs"), "blit.rs", "fn execute"),
         (
@@ -472,33 +423,33 @@ fn hot_path_sources_do_not_call_atlas_resolve() {
 // 期待バッファを入力ジオメトリから**独立に再構成**できる（golden は tautology でない）。
 //
 // 空 PatternState の合成が既知バイトへ完全一致することで「PatternState の配線が空 pattern の出力を
-// 摂動しない」ことを、非空 PatternState の合成が「コマが同 ID の pattern0 を置換しつつ animation-sort
+// 摂動しない」ことを、非空 PatternState の合成が「コマが同 ID の着せ替えの手順を置換しつつ animation-sort
 // 整列を保つ」ことで transient 合流の中核挙動（要件 5.3）を、それぞれ回帰ガードする。
 // ============================================================================
 
 /// 要件 5.4・design Postconditions: 空 PatternState の合成が、入力ジオメトリから組んだ既知バイトと
 /// **byte 完全一致**する golden。
 ///
-/// bind pattern0 を持つ代表 surface（base 青 4×4 全不透明＋有効 bind pattern0 で赤 2×2 を (1,1) へ
+/// 着せ替えを持つ代表 surface（base 青 4×4 全不透明＋有効 bind の手順で赤 2×2 を (1,1) へ
 /// overlay）を `PatternState::default()` で合成し、合成バイトが入力ジオメトリから独立再構成した
 /// 期待バッファと byte-for-byte 一致することを固定する。空 PatternState は no-op ゆえ、この一致は
 /// 「PatternState の配線が空 pattern の出力を一切摂動しない」ことの回帰檻になる。
 #[test]
 fn empty_pattern_state_compose_is_byte_identical_to_the_rebuilt_golden() {
     let base = Path::new("shell/master");
-    // base(青 4×4 全不透明) を (0,0)、有効 bind pattern0（赤 2×2）を (1,1) へ overlay。全不透明ゆえ
+    // base(青 4×4 全不透明) を (0,0)、有効 bind の手順（赤 2×2）を (1,1) へ overlay。全不透明ゆえ
     // SourceOver は上層優先＝期待バッファを独立再構成できる（tautology でない golden）。
     let atlas = bake_atlas_sized(
         base,
         &[
             ("base.png", (4, 4), Some((200, 0, 0))), // 青。
-            ("part.png", (2, 2), Some((0, 0, 200))), // 赤（bind pattern0）。
+            ("part.png", (2, 2), Some((0, 0, 200))), // 赤（bind の手順）。
         ],
     );
     let host = surface_with_anims(
         1000,
         vec![elem(0, "base.png", 0, 0)],
-        vec![bind_anim(1, 1100, 1, 1)], // pattern0 → surface1100（赤 part）を (1,1) へ。
+        vec![bind_anim(1, 1100, 1, 1)], // 手順 → surface1100（赤 part）を (1,1) へ。
     );
     let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
     let world = bound_world(&shell_of(vec![host, part]), &[], &atlas);
@@ -535,19 +486,19 @@ fn empty_pattern_state_compose_is_byte_identical_to_the_rebuilt_golden() {
     );
 }
 
-/// 要件 5.3・4.2: transient コマが同 ID の pattern0 を置換し、animation-sort の
+/// 要件 5.3・4.2: transient コマが同 ID の着せ替えの手順を置換し、animation-sort の
 /// ID 昇順描画（画家のアルゴリズム）が保たれる golden。
 ///
 /// host(1000) に有効 bind 2 本（id=1→surface1100 青 4×4／id=2→surface1200 緑 2×2）を置き、
 /// `PatternState` で **id=1 の現在コマ = surface1300（赤 4×4）** を与える。合流規則（design 決定）は
-/// 対象 id 集合＝{ 有効 bind pattern0 id } ∪ { コマ id } を既存 animation-sort（Descend 既定＝id 昇順
-/// 描画）で整列し、コマがあれば同 ID の pattern0 静的寄与を置換する（4.2）。
+/// 対象 id 集合＝{ 有効 bind の id } ∪ { コマ id } を既存 animation-sort（Descend 既定＝id 昇順
+/// 描画）で整列し、コマがあれば同 ID の着せ替えの手順の寄与を置換する（4.2）。
 ///
 /// 検証:
 ///   (a) 置換: id=1 の層は 1100(青) でなく 1300(赤)＝青は 1 画素も現れない。
 ///   (b) 整列不変: id 昇順描画で id=2(緑) が id=1(コマ赤) の**上**＝(0,0) は緑・緑外側 (2,2) は赤。
 #[test]
-fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
+fn transient_frame_replaces_same_id_bind_steps_and_preserves_painter_order() {
     let (world, atlas) = two_binds_and_a_frame();
 
     let binds = BindSet::from_ids([1, 2]);
@@ -568,16 +519,16 @@ fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
         "外形は bind の描くコマの母集合どおり 4×4"
     );
 
-    // (a) コマが pattern0 を置換: id=1 の層は 1100(青) でなく 1300(赤)。緑(2×2)の外側 (2,2) は赤。
+    // (a) コマが着せ替えの手順を置換: id=1 の層は 1100(青) でなく 1300(赤)。緑(2×2)の外側 (2,2) は赤。
     assert_eq!(
         px(&out, 2, 2),
         [0, 0, 200, 255],
-        "id=1 の現在コマ(赤 surface1300)が pattern0(青 surface1100)を置換（要件 4.2）"
+        "id=1 の現在コマ(赤 surface1300)が着せ替えの手順(青 surface1100)を置換（要件 4.2）"
     );
-    // 置換された青 pattern0 は合成に 1 画素も現れない（コマが完全に肩代わり）。
+    // 置換された青の手順は合成に 1 画素も現れない（コマが完全に肩代わり）。
     assert!(
         !out.bytes().chunks_exact(4).any(|p| p == [200, 0, 0, 255]),
-        "置換された pattern0(青 surface1100)は合成へ寄与しない（要件 4.2・現在コマ 1 枚）"
+        "置換された着せ替えの手順(青 surface1100)は合成へ寄与しない（要件 4.2・現在コマ 1 枚）"
     );
 
     // (b) animation-sort 整列不変（Descend 既定＝id 昇順描画）: id=2(緑) が id=1(コマ赤) の上。
@@ -588,13 +539,13 @@ fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
     );
 }
 
-/// transient 合流の非空虚性ガード: 空 PatternState では id=1 が青 pattern0(1100) のまま＝上檻の
+/// transient 合流の非空虚性ガード: 空 PatternState では id=1 が青の手順(1100) のまま＝上檻の
 /// 「赤が置換」が pattern 由来であること（元々赤ではない）を対比で固定する。
 #[test]
 fn transient_merge_is_pattern_driven_not_static() {
     let (world, atlas) = two_binds_and_a_frame();
 
-    // 空 PatternState → id=1 は青 pattern0(1100) のまま。緑外側 (2,2) は青（赤ではない）。
+    // 空 PatternState → id=1 は青の手順(1100) のまま。緑外側 (2,2) は青（赤ではない）。
     let out = Composer::new()
         .compose(
             &world,
@@ -607,7 +558,7 @@ fn transient_merge_is_pattern_driven_not_static() {
     assert_eq!(
         px(&out, 2, 2),
         [200, 0, 0, 255],
-        "空 PatternState では id=1 は青 pattern0(1100) のまま（赤置換は pattern 由来＝上檻は非空虚）"
+        "空 PatternState では id=1 は青の手順(1100) のまま（赤置換は pattern 由来＝上檻は非空虚）"
     );
     // 赤(コマ surface1300)は空 pattern では 1 画素も現れない。
     assert!(

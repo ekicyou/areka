@@ -200,7 +200,7 @@
 - [ ] 9. かけ直し 4 回目の指摘の直し（research.md 18 節・開発者 11-06「案 A」＝47 件を直し、最後の audit で必ず直す・直したほうがよいが 0 件なら終わり。そのとき出た「できれば」は同じ回に直し、次の audit はかけない）
 - [x] 9.1 実装の側の直し（覚えの記憶の上限・読み込みの予算の記録のあふれ・箱の記録の組み方と追記の報告・知らない描画メソッドの命令・手順の表引き・見える部品の行の多い面・説明）
   - _Requirements: 2.1, 4.4, 4.5, 6.2_
-- [ ] 9.2 テストの直し（境目・静的な檻・重なり・写し・古い説明・名前）
+- [x] 9.2 テストの直し（境目・静的な檻・重なり・写し・古い説明・名前）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
 ## Implementation Notes
@@ -238,3 +238,4 @@
 - 11-06 audit-emo-present が main へ着地（PR #426・c2106635）＝こちらが後から着く側。main を取り込むときに: `areka-emo-present` の表示の側の match に `ExtentTooLarge` を `EmptyComposition` と同じ「隠す」で足す・`presenter_read_accessor_tests.rs` の `hit_region` の説明 2 行を直す（`composed.rs` の `fill_extent` の名指しは 6.4 で外し済み）。向こうの変更: `EmoPresenter::attach_target` は 5 引数・戻り値なし、`apply_show` は `PresentOutcome` を返す
 - 11-06 audit-seriko が main へ着地（PR #427・82144a96）＝こちらが後から着く側。取り込むときに `parts_tests.rs` の同じテスト（向こうは旧名 `part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field`・こちらは改名済み）を両方の直しに合わせる。1,000 行の例外表の件数は今の main で 7
 - 9.1: `HitMemo` の覚えの長さも根をまたぐ予算から引く。読み込みの走査（外形の表・シェルの外形・`shape_issues`・`NestReport`）の予算の `error!` は呼び出し 1 回に 1 行（`*_limited` の口）。`Records` は面の表のリソース（`EmoWorld::records()`）・箱もそれに従う。無い番号への箱の追記は番号ごとに 1 件（欄は足さない）。行の数が予算に届く子は `NestTable.children` から外れる（その子の箱の `InChildSurface` は出ない・合成も置かない）。明細 3 は誤り（element のメソッドは畳み込みで必ず Overlay）
+- 9.2: テスト 442→437。部品に `ops_limited`・`errors`・`append_def`（4 引数）・`image_map`、`visible_parts_of` は `&BindSet`。範囲の外: `.kiro/specs/completed/areka-P0-recompose-budget/research.md:68` が改名前の `surface1000_recompose_steady_state_zero_allocation`（今は `surface1000_recompose_capacities_do_not_grow`）を名指す（完了済みの記録・触らない）

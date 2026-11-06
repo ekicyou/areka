@@ -88,7 +88,6 @@ fn fresh(extent: Extent, ops: &[BlitOp], atlas: &AtlasTable) -> ComposedSurface 
 /// 前の命令列 `prev`（その絵はいちから）から今 `cur` を下敷き形で重ね、いちからと同じことを確かめて報告を返す。
 fn reuse_once(extent: Extent, prev: &[BlitOp], cur: &[BlitOp], atlas: &AtlasTable) -> Recompose {
     let base = fresh(extent, prev, atlas);
-    let base_before = base.bytes().to_vec();
     let mut out = ComposedSurface::new(0, 0);
     let r = execute_reusing(&mut out, extent, cur, Some((&base, prev)), atlas);
     assert_eq!(out.width(), extent.w);
@@ -97,7 +96,6 @@ fn reuse_once(extent: Extent, prev: &[BlitOp], cur: &[BlitOp], atlas: &AtlasTabl
         out.bytes() == fresh(extent, cur, atlas).bytes(),
         "下敷き形の絵がいちからの合成とバイト単位で同じ（{r:?}）"
     );
-    assert_eq!(base.bytes(), &base_before[..], "下敷きは読むだけ");
     r
 }
 

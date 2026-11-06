@@ -443,15 +443,10 @@ fn as_f32_is_query_view_not_dimension_authority() {
     let len = 2_000_000_001u32;
     assert_eq!(k54.scale_len(len), 2_500_000_001, "整数権威の厳密値");
 
-    // 極小: f32 の切り捨てキャストは表示を消すが、scale_len は最小 1px を守る。
+    // 極小: 1 未満へ縮めても scale_len は最小 1px を守る。
     for (num, den) in [(1u32, 3u32), (2, 3), (1, 1000)] {
         let k = ScaleRatio::new(num, den).unwrap();
         assert_eq!(k.scale_len(1), 1, "{num}/{den}: 最小 1px");
-        assert_eq!(
-            (1.0f32 * k.as_f32()) as u32,
-            0,
-            "{num}/{den}: f32 キャストは 0 へ潰す"
-        );
     }
 }
 

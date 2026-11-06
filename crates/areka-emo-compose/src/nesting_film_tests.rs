@@ -97,7 +97,7 @@ const BASE: &str = "shell";
 
 /// 見える部品と見える子（着せ替えは無し）。
 fn visible(table: &NestTable, top: u32, pattern: &PatternState) -> (Vec<u32>, Vec<FilmId>) {
-    let parts = visible_parts_of(table, top, &[], pattern);
+    let parts = visible_parts_of(table, top, &BindSet::default(), pattern);
     let mut films = vec![FilmId(u32::MAX)]; // 先に空にすることも確かめる。
     table.visible_films(top, &parts, &mut films);
     (parts, films)

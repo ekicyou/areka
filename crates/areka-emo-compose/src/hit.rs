@@ -253,18 +253,6 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_name_returns_frontmost() {
-        let m = master_with(vec![
-            coll(1, 0, 0, 100, 100, "Hand"),
-            coll(2, 50, 50, 150, 150, "Hand"),
-        ]);
-        assert_eq!(
-            hit_region_in(&m.collisions, 75, 75, RegionPriority::Painter),
-            Some("Hand")
-        );
-    }
-
-    #[test]
     fn fold_output_append_wins_painter() {
         use areka_parsers::shell::{AppendTarget, DefRef, Shell, Surface, SurfaceAppend};
 

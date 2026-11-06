@@ -89,7 +89,7 @@ fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec
 
 /// 要件 11.3・6.2: トリムありの合成結果 == トリムなし理論配置（原画像）とバイト等価。
 ///
-/// surface0 の element0 は配置 (0,0)（実 fixture・既存テストで固定）。透明マージン付き 40×40 を
+/// surface0 の element0 は配置 (0,0)（実 fixture・前提は `golden_tests_surface0_base_tests` が固定する）。透明マージン付き 40×40 を
 /// 挿入すると bake はトリム（trim_offset=(12,15)・original=40×40・uv=10×10）する。合成では
 /// dest = 配置 (0,0) ＋ trim_offset (12,15) = (12,15) へ不透明コアが着弾し、その他は透明のまま。
 /// これは原画像（コアが (12,15) に premultiplied・残り 0）とバイト単位で一致する。
@@ -97,19 +97,6 @@ fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec
 #[test]
 fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let shell = parse_emo2_shell();
-
-    // surface0 が element0 単層・配置 (0,0)・bind 無しであることを実データで確認する（前提固定）。
-    let s0 = shell
-        .surfaces
-        .iter()
-        .find(|s| s.id == 0)
-        .expect("emo2 surfaces.txt に surface0 が存在する");
-    assert_eq!(s0.elements.len(), 1, "surface0 は element0 単層");
-    assert_eq!(
-        (s0.elements[0].x, s0.elements[0].y),
-        (0, 0),
-        "element0 は原点配置（配置 (0,0)＋trim_offset で着弾位置が決まる）"
-    );
 
     let base = shell_master_dir();
     let (atlas, original_bytes) = build_atlas_margined_surface0(&shell, &base);

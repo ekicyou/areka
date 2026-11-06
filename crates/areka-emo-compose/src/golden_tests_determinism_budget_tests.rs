@@ -16,6 +16,7 @@ use crate::plan_test_support::bound_world;
 //   1. **再合成予算（10.3）**: 同一 surface1000＋同一 BindSet を 1 つの Composer・1 つの out で反復
 //      compose_into し、out バッファの先頭ポインタ・長さと命令列・作業場の列の容量が初回から変わらない
 //      ことを **容量不変 assert** で固定する（同じ Composer の繰り返しが同じバイトを出すことも併せて）。
+//      外形は束縛のときに作った外形の表から引くので、合成の中で外形をたどらない（指摘 8）。
 //   2. **命令数（10.3）**: surface1000＋有効 bind 集合（3 本・1 本・0 本）で計画を建て、`ops.len()` が
 //      **描画層数（＝解決した有効 bind 数）**に等しいことを assert する（1 つの検体の等値で、線形の証明ではない）。
 //   3. **決定性（10.1）**: 独立した 2 つの合成器の compose がバイト等価（bytes＋width＋height＋stride）で
@@ -83,7 +84,7 @@ fn surface1000_compose_is_byte_deterministic() {
 /// を反復ループ全域で固定する。外形は束縛のときの表から引くので、合成の中で外形をたどらない（指摘 8）。
 /// realloc する実装ならポインタ／容量が動いて破れる。入力が変わるときの確保の有無は確かめていない。
 #[test]
-fn surface1000_recompose_steady_state_zero_allocation() {
+fn surface1000_recompose_capacities_do_not_grow() {
     let shell = parse_emo2_shell();
     let base = shell_master_dir();
     let atlas = build_atlas_for_surface1000(&shell, &base);
@@ -219,7 +220,7 @@ fn surface1000_instruction_count_is_linear_in_layers() {
         "解決した 3 有効 bind（1100/1200/1302）→ 3 命令"
     );
 
-    // 各命令の method は overlay（M1 実装対象）で、命令は実描画層（センチネル skip 済み）。
+    // 各命令の method は overlay（M1 実装対象）。
     for op in &ops {
         assert_eq!(
             op.method,

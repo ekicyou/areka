@@ -1,26 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, Element, Interval, Pattern, Shell, Surface, SurfaceAppend,
-};
+use areka_parsers::shell::{Animation, AppendTarget, DefRef, Interval, Pattern, Shell, Surface};
 
 use crate::base_image::BaseImageReport;
 use crate::fold::fold_shell_with;
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{
-    elem, fresh_world, pattern, shell_mixed, shell_of, snapshot_world, surface_def,
-    surface_with_anims,
+    append_def, elem, fresh_world, image_map, pattern, shell_mixed, shell_of, snapshot_world,
+    surface_def, surface_with_anims,
 };
 use crate::world::{EmoWorld, Records};
-
-/// 番号 → ファイル名の対応を組み立てる。
-fn images(entries: &[(u32, &str)]) -> BTreeMap<u32, String> {
-    entries
-        .iter()
-        .map(|(id, file)| (*id, (*file).to_string()))
-        .collect()
-}
 
 /// 画像を足す前の面の表（畳み込みだけを通した素の結果）を id 昇順で取り出す。
 fn folded_masters(shell: &Shell) -> Vec<SurfaceMaster> {
@@ -51,8 +41,10 @@ fn shared_header_gives_each_id_its_own_image() {
         vec![AppendTarget::Single(0), AppendTarget::Single(1)],
         Vec::new(),
     )]);
-    let world =
-        EmoWorld::build_with_images(&shell, &images(&[(0, "surface0.png"), (1, "surface1.png")]));
+    let world = EmoWorld::build_with_images(
+        &shell,
+        &image_map(&[(0, "surface0.png"), (1, "surface1.png")]),
+    );
 
     for (id, file) in [(0u32, "surface0.png"), (1, "surface1.png")] {
         let master = world.surface(id).expect("展開された面が在る");
@@ -67,7 +59,7 @@ fn shared_header_gives_each_id_its_own_image() {
     let report = world.base_images();
     assert_eq!(
         report.used,
-        images(&[(0, "surface0.png"), (1, "surface1.png")])
+        image_map(&[(0, "surface0.png"), (1, "surface1.png")])
     );
     assert!(report.shadowed.is_empty());
 }
@@ -118,7 +110,7 @@ fn used_and_shadowed_partition_the_images() {
             vec![elem(3, "hat.png", 0, 0)],
         ),
     ]);
-    let given = images(&[
+    let given = image_map(&[
         (0, "surface0.png"),
         (1, "surface1.png"),
         (5, "surface5.png"),
@@ -129,12 +121,12 @@ fn used_and_shadowed_partition_the_images() {
     let report = world.base_images();
     assert_eq!(
         report.shadowed,
-        images(&[(0, "surface0.png")]),
+        image_map(&[(0, "surface0.png")]),
         "ウ: 面 0 は使わない"
     );
     assert_eq!(
         report.used,
-        images(&[(1, "surface1.png"), (5, "surface5.png")]),
+        image_map(&[(1, "surface1.png"), (5, "surface5.png")]),
         "イ: 面 1 と ア: 面 5 は使う",
     );
 
@@ -166,16 +158,6 @@ fn used_and_shadowed_partition_the_images() {
     assert!(face5.animations.is_empty());
 }
 
-/// `surface.append` の対象群（ターゲット記述子と追記 element）。
-fn append_def(targets: Vec<AppendTarget>, elements: Vec<Element>) -> SurfaceAppend {
-    SurfaceAppend {
-        targets,
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }
-}
-
 /// `surface.append` は、波括弧が 1 行も無い「画像だけで存在する面」にも効く（要件 3.7・C6）。
 ///
 /// 追記で層 0 を足した面は画像を使わない（`shadowed`）。層 0 を足さなかった面は今までどおり
@@ -189,16 +171,20 @@ fn append_reaches_image_only_faces() {
             append_def(
                 vec![AppendTarget::Single(7)],
                 vec![elem(0, "add0.png", 0, 0), elem(5, "deco.png", 1, 2)],
+                Vec::new(),
+                Vec::new(),
             ),
             // 面 8: 追記は層 5 だけ（層 0 は空いたままなので画像が入る＝ア）。
             append_def(
                 vec![AppendTarget::Single(8)],
                 vec![elem(5, "deco.png", 1, 2)],
+                Vec::new(),
+                Vec::new(),
             ),
         ],
         vec![DefRef::Append(0), DefRef::Append(1)],
     );
-    let given = images(&[(7, "surface7.png"), (8, "surface8.png")]);
+    let given = image_map(&[(7, "surface7.png"), (8, "surface8.png")]);
 
     let mut built = None;
     let logs = crate::log_capture::capture_logs(|| {
@@ -229,10 +215,10 @@ fn append_reaches_image_only_faces() {
     let report = world.base_images();
     assert_eq!(
         report.shadowed,
-        images(&[(7, "surface7.png")]),
+        image_map(&[(7, "surface7.png")]),
         "追記で足した層 0 も「在る」に数える",
     );
-    assert_eq!(report.used, images(&[(8, "surface8.png")]));
+    assert_eq!(report.used, image_map(&[(8, "surface8.png")]));
 
     // 追記のために作った面は「新設」ではないので、重複の警告も未存在の警告も出ない。
     assert!(
@@ -253,6 +239,8 @@ fn append_to_unknown_id_still_warns_and_creates_nothing() {
         vec![append_def(
             vec![AppendTarget::Single(9)],
             vec![elem(0, "add0.png", 0, 0)],
+            Vec::new(),
+            Vec::new(),
         )],
         vec![DefRef::Append(0)],
     );
@@ -262,7 +250,7 @@ fn append_to_unknown_id_still_warns_and_creates_nothing() {
         // 画像は面 7 の分だけ渡す（面 9 はどちらにも無い）。
         built = Some(EmoWorld::build_with_images(
             &shell,
-            &images(&[(7, "surface7.png")]),
+            &image_map(&[(7, "surface7.png")]),
         ));
     });
     let world = built.expect("構築された面の表");
@@ -291,6 +279,8 @@ fn brace_after_append_merges_into_the_image_only_face() {
         vec![append_def(
             vec![AppendTarget::Single(7)],
             vec![elem(5, "deco.png", 1, 2)],
+            Vec::new(),
+            Vec::new(),
         )],
         vec![DefRef::Append(0), DefRef::Surface(0)],
     );
@@ -299,7 +289,7 @@ fn brace_after_append_merges_into_the_image_only_face() {
     let logs = crate::log_capture::capture_logs(|| {
         built = Some(EmoWorld::build_with_images(
             &shell,
-            &images(&[(7, "surface7.png")]),
+            &image_map(&[(7, "surface7.png")]),
         ));
     });
     let world = built.expect("構築された面の表");
@@ -318,7 +308,7 @@ fn brace_after_append_merges_into_the_image_only_face() {
     );
     assert_eq!(
         world.base_images().shadowed,
-        images(&[(7, "surface7.png")]),
+        image_map(&[(7, "surface7.png")]),
         "ウ: 波括弧の element0 が在るので画像は使わない",
     );
 
@@ -419,7 +409,8 @@ fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
 fn dangling_pattern_targets_counts_image_only_faces_as_existing() {
     let patterns = vec![pattern(0, "overlay", 1031)];
 
-    let with_image = world_with_patterns(patterns.clone(), &images(&[(1031, "surface1031.png")]));
+    let with_image =
+        world_with_patterns(patterns.clone(), &image_map(&[(1031, "surface1031.png")]));
     assert!(
         with_image.dangling_pattern_targets().is_empty(),
         "画像だけの面 1031 は相手として在る",

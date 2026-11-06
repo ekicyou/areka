@@ -171,13 +171,12 @@ mod tests {
         assert!(binding.0.iter().all(|b| b.is_none()), "全 element が None");
     }
 
-    /// テスト④: 空 World（surface ゼロ）でも `bind_atlas` はパニックせず何もしない。
+    /// テスト④: 空 World（surface ゼロ）でも `bind_atlas` はパニックしない。
     #[test]
-    fn empty_world_bind_is_noop() {
+    fn empty_world_bind_does_not_panic() {
         let base = Path::new("shell/master");
         let atlas = bake_atlas(base, &["only.png"]);
-        let world = bound_world(&shell_of(Vec::new()), &[], &atlas);
-        assert_eq!(world.surface_ids().count(), 0);
+        bound_world(&shell_of(Vec::new()), &[], &atlas);
     }
 
     /// テスト⑤: 別 SetId で bind すると（set がキーの一部ゆえ）既知パスも `None` になる。

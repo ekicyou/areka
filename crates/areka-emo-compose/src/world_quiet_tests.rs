@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use super::EmoWorld;
 use crate::log_capture::capture_logs;
+use crate::plan_test_support::image_map;
 
 const SHELL: &str = "\
 surface0
@@ -59,11 +60,12 @@ const ALL_TEXTS: &[&str] = &[
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 面の画像を使わずスキップ",
 ];
 
-/// [`SHELL`] の後に、写す行の数が上限（2^20）を越える記述子（`surface1-1024` に 1,024 行）を足す。
+/// [`SHELL`] の後に、それだけで写す行の数が上限（2^20）を越える記述子（`surface1-1024` に 1,025 行＝
+/// 1,024×1,025）を足す。
 fn shell_text() -> String {
     let mut text = String::from(SHELL);
     text.push_str("surface1-1024\n{\n");
-    for c in 0..1024 {
+    for c in 0..1025 {
         text.push_str(&format!("collision{c},0,0,1,1,R\n"));
     }
     text.push_str("}\n");
@@ -75,10 +77,7 @@ fn count(logs: &str, text: &str) -> usize {
 }
 
 fn images() -> BTreeMap<u32, String> {
-    BTreeMap::from([
-        (0, "surface0.png".to_string()),
-        (7, "surface7.png".to_string()),
-    ])
+    image_map(&[(0, "surface0.png"), (7, "surface7.png")])
 }
 
 /// 面の番号の列・各面の定義・別名・面の画像の表。

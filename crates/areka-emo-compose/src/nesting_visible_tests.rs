@@ -58,9 +58,9 @@ fn shell_without_nesting_or_binds_gives_empty_table() {
     // 一番上のコマ（random）の先は部品に数える（③）が、表は空のまま。
     let mut pattern = PatternState::default();
     pattern.set(0, frame(1, 0, 0));
-    assert_eq!(visible(&table, 0, &[], &pattern), vec![1]);
+    assert_eq!(visible(&table, 0, &BindSet::default(), &pattern), vec![1]);
     assert_eq!(
-        visible(&table, 0, &[], &PatternState::default()),
+        visible(&table, 0, &BindSet::default(), &PatternState::default()),
         Vec::<u32>::new()
     );
 }
@@ -105,32 +105,56 @@ fn fixture_visible_parts_follow_children_binds_and_frames() {
     let empty = PatternState::default();
 
     // ① 子と 3 段の入れ子。着せ替え 100 が無効なら 40 は出ない。
-    assert_eq!(visible(&table, 0, &[], &empty), vec![10, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::default(), &empty),
+        vec![10, 30, 31, 32]
+    );
     // ② 有効な着せ替えの pattern0 の先。
-    assert_eq!(visible(&table, 0, &[100], &empty), vec![10, 30, 31, 32, 40]);
-    assert_eq!(visible(&table, 1, &[], &empty), vec![10, 30, 31, 32]);
-    assert_eq!(visible(&table, 2, &[], &empty), vec![10, 11]);
-    assert_eq!(visible(&table, 71, &[], &empty), vec![70]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([100]), &empty),
+        vec![10, 30, 31, 32, 40]
+    );
+    assert_eq!(
+        visible(&table, 1, &BindSet::default(), &empty),
+        vec![10, 30, 31, 32]
+    );
+    assert_eq!(
+        visible(&table, 2, &BindSet::default(), &empty),
+        vec![10, 11]
+    );
+    assert_eq!(visible(&table, 71, &BindSet::default(), &empty), vec![70]);
     // 部品の無い面。
-    assert_eq!(visible(&table, 32, &[100], &empty), Vec::<u32>::new());
+    assert_eq!(
+        visible(&table, 32, &BindSet::from_ids([100]), &empty),
+        Vec::<u32>::new()
+    );
 
     // ③ 部品のコマの先（10 のまばたき→12・40 の口→41）。部品の欄から引く。
     let mut pattern = PatternState::default();
     pattern.set_part(10, 0, frame(12, 0, 0));
     pattern.set_part(40, 0, frame(41, 0, 0));
     assert_eq!(
-        visible(&table, 0, &[100], &pattern),
+        visible(&table, 0, &BindSet::from_ids([100]), &pattern),
         vec![10, 12, 30, 31, 32, 40, 41]
     );
     // 40 が出ていなければ、40 の部品のコマは数えない。
-    assert_eq!(visible(&table, 0, &[], &pattern), vec![10, 12, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::default(), &pattern),
+        vec![10, 12, 30, 31, 32]
+    );
     // 一番上の欄の同じ番号のコマは部品のコマとして読まない（欄が混ざらない）。
     let mut top_only = PatternState::default();
     top_only.set(0, frame(12, 0, 0));
-    assert_eq!(visible(&table, 1, &[], &top_only), vec![10, 12, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 1, &BindSet::default(), &top_only),
+        vec![10, 12, 30, 31, 32]
+    );
     let mut wrong_field = PatternState::default();
     wrong_field.set_part(1, 0, frame(12, 0, 0));
-    assert_eq!(visible(&table, 1, &[], &wrong_field), vec![10, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 1, &BindSet::default(), &wrong_field),
+        vec![10, 30, 31, 32]
+    );
 }
 
 /// ② 同じ animation の番号にコマが在れば、pattern0 の先でなくコマの先を数える。
@@ -140,7 +164,7 @@ fn frame_replaces_bind_pattern0() {
     let mut pattern = PatternState::default();
     pattern.set(100, frame(41, 0, 0));
     assert_eq!(
-        visible(&table, 0, &[100], &pattern),
+        visible(&table, 0, &BindSet::from_ids([100]), &pattern),
         vec![10, 30, 31, 32, 41]
     );
 
@@ -153,7 +177,10 @@ fn frame_replaces_bind_pattern0() {
             ..frame(41, 0, 0)
         },
     );
-    assert_eq!(visible(&table, 0, &[100], &not_drawn), vec![10, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([100]), &not_drawn),
+        vec![10, 30, 31, 32]
+    );
 }
 
 /// ③ 有効でない `bind+random` のコマは数えない。純 `bind`・着せ替えでないコマは無条件に数える
@@ -200,15 +227,21 @@ element0,overlay,eye.png,0,0
     // 一番上の欄: 無効な純 `bind` 9 のコマも数える（M5）。
     let mut top = PatternState::default();
     top.set(9, frame(7, 0, 0));
-    assert_eq!(visible(&table, 0, &[], &top), vec![5, 7]);
-    assert_eq!(visible(&table, 0, &[9], &top), vec![5, 7]);
+    assert_eq!(visible(&table, 0, &BindSet::default(), &top), vec![5, 7]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([9]), &top),
+        vec![5, 7]
+    );
 
     // 部品の欄: 無効な着せ替え 7 のコマは数えない・random 8 は数える。
     let mut part = PatternState::default();
     part.set_part(5, 7, frame(6, 0, 0));
     part.set_part(5, 8, frame(7, 0, 0));
-    assert_eq!(visible(&table, 0, &[], &part), vec![5, 7]);
-    assert_eq!(visible(&table, 0, &[7], &part), vec![5, 6, 7]);
+    assert_eq!(visible(&table, 0, &BindSet::default(), &part), vec![5, 7]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([7]), &part),
+        vec![5, 6, 7]
+    );
 
     // 描画メソッドが動かないコマは数えない。
     let mut not_drawn = PatternState::default();
@@ -220,7 +253,7 @@ element0,overlay,eye.png,0,0
             ..frame(7, 0, 0)
         },
     );
-    assert_eq!(visible(&table, 0, &[], &not_drawn), vec![5]);
+    assert_eq!(visible(&table, 0, &BindSet::default(), &not_drawn), vec![5]);
 }
 
 /// 着せ替えの先は手順の「描く」コマ（0 以上・描画メソッドが動く・欄 2 が animation の番号の語を除く）だけ。
@@ -263,7 +296,12 @@ element0,overlay,eye.png,0,0
         })
     );
     assert_eq!(
-        visible(&table, 0, &[1, 2, 3, 4, 5, 6], &PatternState::default()),
+        visible(
+            &table,
+            0,
+            &BindSet::from_ids([1, 2, 3, 4, 5, 6]),
+            &PatternState::default()
+        ),
         vec![3]
     );
 }
@@ -311,8 +349,14 @@ element0,overlay,eye.png,0,0
         Some(vec![(1, 3), (1, 4)])
     );
     let empty = PatternState::default();
-    assert_eq!(visible(&table, 0, &[1, 2], &empty), vec![3, 4]);
-    assert_eq!(visible(&table, 0, &[2], &empty), Vec::<u32>::new());
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([1, 2]), &empty),
+        vec![3, 4]
+    );
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([2]), &empty),
+        Vec::<u32>::new()
+    );
 }
 
 /// 先祖へ戻る辺は進まない（自分自身・相互・コマが一番上へ戻る）。有限で終わる。
@@ -320,16 +364,22 @@ element0,overlay,eye.png,0,0
 fn back_edges_to_ancestors_are_not_followed() {
     let table = fixture_world().nest_table();
     let empty = PatternState::default();
-    assert_eq!(visible(&table, 60, &[], &empty), Vec::<u32>::new());
-    assert_eq!(visible(&table, 61, &[], &empty), vec![62]);
-    assert_eq!(visible(&table, 62, &[], &empty), vec![61]);
+    assert_eq!(
+        visible(&table, 60, &BindSet::default(), &empty),
+        Vec::<u32>::new()
+    );
+    assert_eq!(visible(&table, 61, &BindSet::default(), &empty), vec![62]);
+    assert_eq!(visible(&table, 62, &BindSet::default(), &empty), vec![61]);
 
     // 部品のコマが一番上・途中の先祖を指しても、そこへは戻らない。
     let mut pattern = PatternState::default();
     pattern.set_part(32, 0, frame(30, 0, 0));
     pattern.set_part(31, 0, frame(0, 0, 0));
     pattern.set_part(10, 0, frame(12, 0, 0));
-    assert_eq!(visible(&table, 0, &[], &pattern), vec![10, 12, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::default(), &pattern),
+        vec![10, 12, 30, 31, 32]
+    );
 }
 
 /// 渡された列は先に空にしてから入れる（呼び手の列を使い回す）。
@@ -349,7 +399,7 @@ fn out_is_cleared_and_reused() {
 // 片方だけを変えるとずれる。ここでは両者を同じ面の表・同じ着せ替えの集合・同じコマの状態で動かし、
 // 結論が一致することを全ての（一番上, 部品）の組で確かめる。
 
-use crate::plan_test_support::{MARK_ANIM, MARKER};
+use crate::plan_test_support::{MARK_ANIM, MARKER, visible_parts_of};
 
 /// 検体と小さな文面で使う画像の名前（どれも 2×2 の不透明）。
 const RELS: &[&str] = &[
@@ -413,9 +463,7 @@ impl Case {
     }
 
     fn parts(&self, top: u32, binds: &BindSet, pattern: &PatternState) -> Vec<u32> {
-        let mut out = Vec::new();
-        self.table.visible_parts(top, binds, pattern, &mut out);
-        out
+        visible_parts_of(&self.table, top, binds, pattern)
     }
 
     /// 面の表に在る番号（目印は除く・目印を一番上にすると目印のコマが先祖へ戻る）。

@@ -123,12 +123,12 @@ fn assert_frames_fit_base(
             fextent.w > 0 && fextent.h > 0,
             "コマ surface{fid} の原寸外形は非ゼロ（実 PNG 由来）"
         );
-        // 収まり（クリップ非発生）: x + frame.w <= base.w かつ y + frame.h <= base.h。x/y は非負前提
-        // （emo2 の採録コマは (x,y)>=0）だが、負値でも i64 比較で安全側（左上原点クリップは別議論）。
+        // 収まり（クリップ非発生）: x, y >= 0 かつ x + frame.w <= base.w かつ y + frame.h <= base.h
+        // （emo2 の採録コマは (x,y)>=0・負なら左上で切れる）。
         let right = x + fextent.w as i64;
         let bottom = y + fextent.h as i64;
         assert!(
-            right <= base_extent.w as i64 && bottom <= base_extent.h as i64,
+            x >= 0 && y >= 0 && right <= base_extent.w as i64 && bottom <= base_extent.h as i64,
             "コマ surface{fid}（原寸 {}x{} ＋オフセット ({x},{y})）は base surface{base_id} 外形 \
              {}x{} 内に収まる（右端 {right}<=幅{}／下端 {bottom}<=高{}）＝クリップ非発生（要件 5.4）",
             fextent.w,

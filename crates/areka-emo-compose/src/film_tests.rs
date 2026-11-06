@@ -1,7 +1,8 @@
 //! 動く絵を子へ分解する（`film.rs`・spec: areka-P0-animated-image-playback）。
 //!
 //! 絵は `MemoryDecoder` へ登録して本物の `bake_with_limits` で焼く（`plan_test_support::bake_decoded`・上限は
-//! 既定値を渡し、環境変数に依らない）。焼く経路が作れない形（コマの並びが約束と違う）だけは `AtlasTable::with_frames` で組む。
+//! 既定値を渡し、環境変数に依らない）。焼く経路が作れない形（コマの並びが約束と違う）だけは `AtlasTable::with_frames`
+//! で組むか、検査へ並びを手で渡す（`check_rejects_six_ways`）。
 
 use std::num::NonZeroU32;
 use std::path::Path;

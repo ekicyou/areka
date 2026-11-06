@@ -6,9 +6,8 @@
 //! base surface」である。これは要件 5.4 の中核ケース＝静的 element ゼロでも有効 bind 集合が
 //! あれば非空ビットマップになる surface。ここでは:
 //!   ① 空 BindSet → 描画命令ゼロ → 全画素 α==0（全透明）だが、外形は bind 非依存の静的量
-//!      （全部の bind の描くコマの原寸の和集合）ゆえ非ゼロ。
-//!   ② 非空 BindSet → 参照パーツ画像が合成され α>0 の画素が生まれる（非空）。
-//!   ③ bind 数に応じた重なりを要点サンプリング（要件 11.2）: パーツごとに判別可能な色・サイズを
+//!      （全部の bind の描くコマの原寸の和集合）ゆえ非ゼロで、bind を全部入れたときと同じ。
+//!   ② bind 数に応じた重なりを要点サンプリング（要件 11.2）: パーツごとに判別可能な色・サイズを
 //!      与え、特定パーツだけが覆う画素が「その bind が有効なときだけ不透明」になることで、合成が
 //!      固定画像でなく bind 集合を反映していることを証明する。
 //! すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。
@@ -22,7 +21,7 @@ use crate::plan_test_support::px;
 
 /// surface1000 が「静的 element ゼロ・全パーツ bind」の着せ替え base surface であることを実データで確認する。
 ///
-/// 下の 3 本の前提（要件 5.4 の対象 surface である）を fixture で固定する診断テスト。
+/// 下の 2 本の前提（要件 5.4 の対象 surface である）を fixture で固定する診断テスト。
 #[test]
 fn surface1000_is_all_bind_no_static_elements() {
     let shell = parse_emo2_shell();
@@ -71,8 +70,8 @@ fn surface1000_is_all_bind_no_static_elements() {
 ///
 /// surface1000 は静的 element ゼロゆえ、空 BindSet では描画可能命令が一切生まれず、合成結果は
 /// 全画素 α==0（全透明）になる。一方、外形（[`Extent`]）は**有効 bind 非依存の静的量**（全部の bind
-/// の描くコマの原寸の和集合）ゆえ、パーツ画像を挿入した以上は非ゼロになる。これは
-/// 「全 bind surface でも外形が安定（bind on/off でサイズ不変）」を実データで固定する。
+/// の描くコマの原寸の和集合）ゆえ、パーツ画像を挿入した以上は非ゼロで、代表 bind 3 本（1100/1200/1302）を
+/// 入れたときと同じ。これは「全 bind surface でも外形が安定（bind on/off でサイズ不変）」を実データで固定する。
 #[test]
 fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
     let shell = parse_emo2_shell();
@@ -92,6 +91,14 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
         "premultiplied BGRA stride 契約"
     );
 
+    // bind on/off で外形は変わらない（代表 bind 3 本を入れた合成と同じ幅・高さ）。
+    let full = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1200, 1302]));
+    assert_eq!(
+        (out.width(), out.height()),
+        (full.width(), full.height()),
+        "外形は有効 bind に依らない"
+    );
+
     // 全画素 α==0（描画命令ゼロ＝全透明）。α>0 の画素が 1 つも無いことを固定する。
     assert_eq!(
         opaque_pixel_count(&out),
@@ -100,27 +107,7 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
     );
 }
 
-/// ②（要件 5.4・11.2）: 非空 BindSet → 非空（α>0 の画素が存在する）。
-///
-/// 静的 element ゼロの surface1000 でも、有効 bind 集合を与えれば参照パーツ画像が合成され、
-/// 少なくとも 1 画素が α>0 になる（要件 5.4「静的 element ゼロ＋非空 bind 集合 → 可視ビットマップ・
-/// 空白でない」）。空 BindSet（全透明）との対比が bind 経路が現に駆動されている証拠（RED/GREEN）。
-#[test]
-fn surface1000_nonempty_bindset_is_non_blank() {
-    let shell = parse_emo2_shell();
-    let base = shell_master_dir();
-    let atlas = build_atlas_for_surface1000(&shell, &base);
-
-    // 腕 1100 のみ有効。
-    let binds = BindSet::from_ids([1100]);
-    let out = compose_surface1000(&shell, &atlas, &binds);
-
-    // 腕パーツ（80×20 全不透明）が原点 (0,0) に着弾するので、その内側の代表画素が不透明。
-    assert!(px(&out, 0, 0)[3] > 0, "パーツ左上 (0,0) は不透明");
-    assert!(px(&out, 40, 10)[3] > 0, "腕パーツ内部の代表画素は不透明");
-}
-
-/// ③（要件 11.2・5.4）: bind 数に応じた重なりを要点サンプリング。
+/// ②（要件 11.2・5.4）: bind 数に応じた重なりを要点サンプリング。
 ///
 /// 各パーツに **判別可能な色・サイズ**を与え、特定パーツだけが覆う画素を「その bind が有効な
 /// ときだけ不透明・無効なら透明」であることでサンプリング検証する。合成が固定画像でなく

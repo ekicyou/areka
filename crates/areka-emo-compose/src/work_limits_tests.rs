@@ -13,18 +13,9 @@ use crate::composed::ComposedSurface;
 use crate::hit_import::{HitRegions, attach_hit_regions_limited};
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan::{PlanScratch, derive_ops};
-use crate::plan_test_support::bake_atlas;
-use crate::plan_test_support::bound_world;
+use crate::plan_test_support::{bake_atlas, bound_world, errors, ops_limited};
 use crate::world::{EmoWorld, Records};
 use crate::{ComposeError, Composer, fold_boxes};
-
-/// `needle` を含む `error!` の行の数。
-fn errors(logs: &str, needle: &str) -> usize {
-    logs.lines()
-        .filter(|l| l.contains("level=ERROR") && l.contains(needle))
-        .count()
-}
 
 /// 指摘 76: 面 0 が置く面 1 は絵 1 枚と、命令にならない（絵の解決できない）element 1,000 行を持つ。入る 1 と
 /// 積み荷 1 は予算 100 の内でも、なめる行（1,001）が越えるので面 1 は開かず、`error!` は合成器 1 つで 1 行。
@@ -41,16 +32,8 @@ fn plan_counts_the_scanned_rows_of_an_entered_surface() {
     text.push_str("}\n");
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
     let world = bound_world(&parse(&text), &[], &atlas);
-    let (binds, pattern) = (BindSet::default(), PatternState::default());
     let run = |limit: usize| {
-        let mut scratch = PlanScratch::with_limit(limit);
-        let mut ops = Vec::new();
-        let logs = capture_logs(|| {
-            for _ in 0..2 {
-                ops.clear();
-                derive_ops(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern);
-            }
-        });
+        let (ops, logs) = ops_limited(&world, &atlas, 0, limit);
         (ops.len(), errors(&logs, "walk=\"plan\""))
     };
     assert_eq!(run(100), (0, 1), "なめる行で切れ、記録は 1 行");

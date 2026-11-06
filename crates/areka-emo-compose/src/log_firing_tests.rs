@@ -8,7 +8,8 @@
 //!
 //! # 非空虚性
 //!
-//! 各ログ assert は level と discriminating field を同時に突くため、当該ログ行を削れば必ず失敗する。
+//! 各ログ assert は level と target と discriminating field が**同じ 1 行**に揃うことを突く（[`one_line`]）ため、
+//! 当該ログ行を削れば必ず失敗する。
 
 use super::*;
 use crate::plan_test_support::bound_world;
@@ -16,9 +17,7 @@ use crate::plan_test_support::bound_world;
 use areka_emo_atlas::{
     AtlasEntry, AtlasKey, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
 };
-use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, SurfaceAppend,
-};
+use areka_parsers::shell::{AppendTarget, DefRef, Interval, SurfaceAppend};
 use std::path::Path;
 
 use crate::log_capture::capture_logs;
@@ -27,8 +26,13 @@ use crate::normalized::Transform;
 use crate::plan::BlitOp;
 use crate::plan_test_support::{
     bake_atlas, bind_anim, elem, page_1px, plan_of, shell_mixed, shell_of, single_entry_table,
-    surface, surface_with_anims,
+    single_pattern_anim, surface, surface_with_anims,
 };
+
+/// `needles` を全部含む記録の行が在るか（level・target・欄を同じ 1 行で突く）。
+fn one_line(logs: &str, needles: &[&str]) -> bool {
+    logs.lines().any(|l| needles.iter().all(|n| l.contains(n)))
+}
 
 // ── 7.3: 循環検出 debug（ops 経路・flatten_surface）───────────────────────────────────
 
@@ -140,20 +144,7 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
     let atlas = bake_atlas(base, &["closed.png"]);
 
     // index=1 のみが surface 1412 を参照する再生アニメ（まばたき相当）。
-    let blink = Animation {
-        id: 1400,
-        interval: Interval::BindRandom { k: 4 },
-        interval_written: true,
-        patterns: vec![Pattern {
-            index: 1,
-            method: DrawMethod::new("overlay".to_string()),
-            surface_id: 1412,
-            target: "1412".into(),
-            wait: 0,
-            x: 0,
-            y: 0,
-        }],
-    };
+    let blink = single_pattern_anim(1400, Interval::BindRandom { k: 4 }, 1, 1412);
     let host = surface_with_anims(1000, Vec::new(), vec![blink]);
     let part = surface(1412, vec![elem(0, "closed.png", 0, 0)]);
     let world = bound_world(&shell_of(vec![host, part]), &[], &atlas);
@@ -245,22 +236,22 @@ fn unimplemented_method_debug_fires_with_method_and_element() {
             out.bytes().iter().all(|&b| b == 0),
             "{marker}: 未実装は合成へ寄与しない（skip）",
         );
-        // ログ: DEBUG・target・method（Debug 判別子）・element を同時に突く。
+        // ログ: DEBUG・target・method（Debug 判別子）・element を同じ 1 行で突く。
         assert!(
-            logs.contains("level=DEBUG") && !logs.contains("level=WARN"),
-            "{marker}: 未実装は DEBUG（組むたびの知らせ）: {logs}"
+            !logs.contains("level=WARN"),
+            "{marker}: WARN は出さない: {logs}"
         );
         assert!(
-            logs.contains("target=areka_emo_compose"),
-            "{marker}: target: {logs}"
-        );
-        assert!(
-            logs.contains("element=0"),
-            "{marker}: element id を載せる: {logs}"
-        );
-        assert!(
-            logs.contains(&format!("method={marker}")),
-            "{marker}: method の判別子を載せる: {logs}",
+            one_line(
+                &logs,
+                &[
+                    "level=DEBUG",
+                    "target=areka_emo_compose",
+                    "element=0",
+                    &format!("method={marker}"),
+                ]
+            ),
+            "{marker}: 未実装は DEBUG（組むたびの知らせ）で element と method を載せる: {logs}"
         );
     }
 }
@@ -303,10 +294,18 @@ fn missing_page_warn_fires_with_element_and_page() {
         out.bytes().iter().all(|&b| b == 0),
         "頁欠落は skip（非パニック）"
     );
-    assert!(logs.contains("level=WARN"), "頁欠落は WARN: {logs}");
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("element=0"), "element id: {logs}");
-    assert!(logs.contains("page=5"), "欠落頁番号を載せる: {logs}");
+    assert!(
+        one_line(
+            &logs,
+            &[
+                "level=WARN",
+                "target=areka_emo_compose",
+                "element=0",
+                "page=5"
+            ]
+        ),
+        "頁欠落は WARN で element と欠落頁番号を載せる: {logs}"
+    );
 }
 
 // ── 3.3: 未解決 alias warn（world.rs resolve_alias）─────────────────────────────────
@@ -323,10 +322,14 @@ fn unresolved_alias_warn_fires_with_key() {
 
     // 副作用: 未解決は None（非パニック・要件 3.3）。
     assert_eq!(result, None, "未解決 alias は None");
-    // ログ: WARN・target・key を同時に突く。
-    assert!(logs.contains("level=WARN"), "未解決 alias は WARN: {logs}");
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("key=\"nope\""), "未解決 key を載せる: {logs}");
+    // ログ: WARN・target・key を同じ 1 行で突く。
+    assert!(
+        one_line(
+            &logs,
+            &["level=WARN", "target=areka_emo_compose", "key=\"nope\""]
+        ),
+        "未解決 alias は WARN で key を載せる: {logs}"
+    );
 }
 
 // ── 10.5: SurfaceNotFound / EmptyComposition error（plan.rs build_plan / Composer::compose）──
@@ -350,17 +353,19 @@ fn surface_not_found_error_fires_with_surface_id() {
         Some(ComposeError::SurfaceNotFound(9999)),
         "不在 surface は SurfaceNotFound",
     );
-    // ログ: ERROR・target・surface_id を同時に突く。
+    // ログ: ERROR・target・surface_id・分類名を同じ 1 行で突く。
     assert!(
-        logs.contains("level=ERROR"),
-        "不在 surface は ERROR: {logs}"
+        one_line(
+            &logs,
+            &[
+                "level=ERROR",
+                "target=areka_emo_compose",
+                "surface_id=9999",
+                "SurfaceNotFound"
+            ]
+        ),
+        "不在 surface は ERROR で surface_id と分類名を載せる: {logs}"
     );
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(
-        logs.contains("surface_id=9999"),
-        "不在 surface_id を載せる: {logs}"
-    );
-    assert!(logs.contains("SurfaceNotFound"), "分類名が載る: {logs}");
 }
 
 /// 要件 10.5: 定義層皆無で外形 0×0 の退化で ERROR（surface_id つき）が発火し、Err(EmptyComposition)。
@@ -383,14 +388,19 @@ fn empty_composition_error_fires_with_surface_id() {
         Some(ComposeError::EmptyComposition(7000)),
         "定義層皆無 0×0 は EmptyComposition",
     );
-    // ログ: ERROR・target・surface_id を同時に突く。
-    assert!(logs.contains("level=ERROR"), "退化データは ERROR: {logs}");
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
+    // ログ: ERROR・target・surface_id・分類名を同じ 1 行で突く。
     assert!(
-        logs.contains("surface_id=7000"),
-        "退化 surface_id を載せる: {logs}"
+        one_line(
+            &logs,
+            &[
+                "level=ERROR",
+                "target=areka_emo_compose",
+                "surface_id=7000",
+                "EmptyComposition"
+            ]
+        ),
+        "退化データは ERROR で surface_id と分類名を載せる: {logs}"
     );
-    assert!(logs.contains("EmptyComposition"), "分類名が載る: {logs}");
 }
 
 // ── 1.4: fold の重なりの記録（fold.rs fold_plain_surface / fold_append）────────────────────
@@ -428,10 +438,13 @@ fn duplicate_surface_id_merge_logs_debug_not_warn() {
         warns[0].contains("element番号の二重定義") && warns[0].contains("element=0"),
         "{logs}"
     );
-    assert!(logs.contains("level=DEBUG"), "id 重複は DEBUG: {logs}");
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("id=7"), "重複 id を載せる: {logs}");
-    assert!(logs.contains("重複"), "id 重複メッセージ: {logs}");
+    assert!(
+        one_line(
+            &logs,
+            &["level=DEBUG", "target=areka_emo_compose", "id=7", "重複"]
+        ),
+        "id 重複は DEBUG の 1 行で重複 id を載せる: {logs}"
+    );
 }
 
 /// 要件 1.4/2.2: append 対象 id が未存在なら WARN（id つき）が発火し、新設しない（存在条件付き）。
@@ -462,15 +475,12 @@ fn nonexistent_append_target_warn_fires_with_id() {
     });
 
     assert!(
-        logs.contains("level=WARN"),
-        "未存在 append 対象は WARN: {logs}"
+        one_line(
+            &logs,
+            &["level=WARN", "target=areka_emo_compose", "id=999", "未存在"]
+        ),
+        "未存在 append 対象は WARN で id を載せる: {logs}"
     );
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(
-        logs.contains("id=999"),
-        "未存在 append 対象 id を載せる: {logs}"
-    );
-    assert!(logs.contains("未存在"), "未存在メッセージ: {logs}");
 }
 
 // ── 4.3: 未束縛 element debug（atlas_bind.rs bind_atlas）───────────────────────────────
@@ -505,23 +515,21 @@ fn unbound_element_debug_fires_with_path() {
         .expect("bogus element");
     assert_eq!(binding.0[bogus_idx], None, "未束縛 element は None");
 
-    // ログ: DEBUG・target・path を同時に突き、WARN 以上は出ない。
+    // ログ: DEBUG・target・path・surface_id を同じ 1 行で突き、WARN 以上は出ない。
     assert!(
-        logs.contains("level=DEBUG"),
-        "未束縛 element は DEBUG: {logs}"
+        one_line(
+            &logs,
+            &[
+                "level=DEBUG",
+                "target=areka_emo_compose",
+                "path=\"bogus.png\"",
+                "surface_id=1000"
+            ]
+        ),
+        "未束縛 element は DEBUG で path と surface_id を載せる: {logs}"
     );
     assert!(
         !logs.contains("level=WARN") && !logs.contains("level=ERROR"),
         "未束縛 element は WARN 以上を出さない: {logs}"
-    );
-    assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(
-        logs.contains("path=\"bogus.png\""),
-        "未束縛 path を載せる: {logs}"
-    );
-    // surface_id フィールドも載る（判別強化）。
-    assert!(
-        logs.contains("surface_id=1000"),
-        "surface_id も載る: {logs}"
     );
 }

@@ -287,8 +287,8 @@ fn only_binds_in_bindset_are_included() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["part2.png"]);
 }
 
-/// 要件 5.4: 静的 element ゼロ・全パーツ bind の surface でも非空 bind 集合→非空 ops。
-/// 空 bind 集合では bind 命令ゼロ（非パニック・全透明処理は 5.5/6.6）。
+/// 要件 5.4: 静的 element ゼロ・全パーツ bind の surface でも非空 bind 集合→非空 ops（空 bind 集合で命令が
+/// ゼロになることは `plan_extent_tests` の空 BindSet の檻が見る）。
 #[test]
 fn bind_only_surface_produces_layers_from_nonempty_bindset() {
     let (world, atlas) = build_bind_world(
@@ -306,14 +306,6 @@ fn bind_only_surface_produces_layers_from_nonempty_bindset() {
     assert_eq!(
         ops_to_paths(&ops_full, &map),
         vec!["part1.png", "part2.png"]
-    );
-
-    // 空 bind 集合 → bind 命令なし（静的 element も無いので空・非パニック）。
-    let empty = BindSet::default();
-    let ops_empty = ops(&world, &atlas, 1000, &empty, &PatternState::default());
-    assert!(
-        ops_empty.is_empty(),
-        "空 bind 集合では bind 命令ゼロ（非パニック）"
     );
 }
 
@@ -336,13 +328,14 @@ fn static_elements_precede_bind_layers() {
     assert_eq!(ops_to_paths(&ops, &map), vec!["base.png", "part1.png"]);
 }
 
-/// 要件 5.5 前段: pattern0 の surface_id<0 はセンチネル＝命令を積まず skip（非パニック）。
+/// 要件 5.5 前段: pattern0 の surface_id<0 はセンチネル＝命令を積まず skip（非パニック）。-2 を u32 へ
+/// 丸めた番号 4294967294 の面を置いても、その絵は出ない（番号へ読み替えない）。
 #[test]
 fn sentinel_pattern0_is_skipped() {
     let base = Path::new("shell/master");
     // part1 は正常参照、bind id=2 の pattern0 は surface_id=-2（センチネル）。
-    let atlas = bake_atlas(base, &["part1.png"]);
-    let map = id_to_path(&atlas, &["part1.png"]);
+    let atlas = bake_atlas(base, &["part1.png", "wrap.png"]);
+    let map = id_to_path(&atlas, &["part1.png", "wrap.png"]);
 
     let host = surface_with_anims(
         1000,
@@ -353,13 +346,14 @@ fn sentinel_pattern0_is_skipped() {
         ],
     );
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
-    let shell = shell_of(vec![host, part1]);
+    let wrapped = surface(u32::MAX - 1, vec![elem(0, "wrap.png", 0, 0)]);
+    let shell = shell_of(vec![host, part1, wrapped]);
     let world = bound_world(&shell, &[], &atlas);
 
     let binds = BindSet::from_ids([1, 2]);
     let ops = ops(&world, &atlas, 1000, &binds, &PatternState::default());
 
-    // センチネル bind id=2 は積まれず、part1 のみ（非パニック）。
+    // センチネル bind id=2 は積まれず、part1 のみ（非パニック・wrap.png は出ない）。
     assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png"]);
 }
 
@@ -385,14 +379,14 @@ fn nested_pattern0_offset_is_applied_to_element_transform() {
     assert_eq!(ops[0].transform.offset(), (35, -14));
 }
 
-// ── 入れ子 surface 参照の多段 flatten と循環検出（visited 集合） ─────────────
+// ── 入れ子 surface 参照の多段 flatten と循環検出（祖先の経路 on_path） ─────────────
 
 /// 受入基準・要件 7.1/7.2/7.3: 自己参照 bind はスタックオーバーフローせず、
 /// 部分結果（自 surface の静的 element）が得られ、循環枝は打ち切られる（debug・非パニック）。
 ///
 /// surface 1000 は静的 element `self.png` を持ち、かつ自身の bind pattern0 が **surface 1000
 /// 自身**を参照する（自己参照 = 循環）。derive_ops は無限に回らず（テストが完走すれば O.K.）、
-/// 静的層 self.png は積まれ、自己参照枝は visited で打ち切られる。
+/// 静的層 self.png は積まれ、自己参照枝は祖先の経路（on_path）で打ち切られる。
 #[test]
 fn self_reference_does_not_overflow_and_yields_partial_result() {
     let base = Path::new("shell/master");
@@ -414,7 +408,7 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
 
     // 静的層 self.png は積まれる（部分結果）。
     // ops は有界（自己参照枝は打ち切られる）。静的 self.png（1本）＋ bind pattern0 が
-    // surface 1000 を参照→ visited で 1000 は既訪問ゆえ枝打ち切り＝追加 element なし。
+    // surface 1000 を参照→ 1000 は祖先の経路（on_path）に在るゆえ枝打ち切り＝追加 element なし。
     // よって self.png 1本のみ。
     let paths = ops_to_paths(&ops, &[(self_id, "self.png")]);
     assert_eq!(paths, vec!["self.png"], "自己参照枝は打ち切り＝静的層のみ");
@@ -424,7 +418,7 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
 /// 打ち切られ部分結果が得られる（非パニック）。
 ///
 /// surface A=1000 の bind→B=1100、B の bind→A=1000。A から derive すると
-/// A 静的 → B 静的（B の bind 経由で A 再入は visited で打ち切り）。無限に回らない。
+/// A 静的 → B 静的（B の bind 経由で A 再入は祖先の経路（on_path）で打ち切り）。無限に回らない。
 #[test]
 fn mutual_reference_cycle_is_pruned_without_overflow() {
     let base = Path::new("shell/master");
@@ -493,7 +487,7 @@ fn offset_accumulates_across_multilevel_nesting() {
 }
 
 /// 要件 7.1・ancestor-stack 規律: 非循環で同一 surface を2回参照すると、
-/// 双方とも展開される（visited は祖先スタックゆえ枝離脱で pop・偽陽性打ち切りをしない）。
+/// 双方とも展開される（祖先の経路（on_path）は枝を離れると外すので、偽陽性打ち切りをしない）。
 ///
 /// A=1000 の bind id=1 → 共有子 S=1300 at (10,0)、bind id=2 → 中間 B=1100（B の bind→S=1300 at
 /// (0,20)）。S は祖先でない2経路（A 直下・A→B 経由）から参照される。S の element は各経路で

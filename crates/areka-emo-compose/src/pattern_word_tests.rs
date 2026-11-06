@@ -55,11 +55,21 @@ fn single_words_read_one_number() {
     }
 }
 
-/// 番号 1 つの語で、空・名前・負の数・並び・u32 を越える数は読めない（要件 2.5）。
+/// 番号 1 つの語で、空・名前・符号つきの数・並び・u32 を越える数は読めない（要件 2.5）。
 #[test]
 fn single_words_reject_unreadable_columns() {
     for word in [PatternWord::Start, PatternWord::Stop, PatternWord::Insert] {
-        for target in ["", "  ", "abc", "1a", "-1", "(0,1)", "1.5", "4294967296"] {
+        for target in [
+            "",
+            "  ",
+            "abc",
+            "1a",
+            "-1",
+            "+1",
+            "(0,1)",
+            "1.5",
+            "4294967296",
+        ] {
             assert_eq!(
                 call_targets(word, target),
                 Err(UnreadableTarget),
@@ -94,7 +104,7 @@ fn list_words_read_every_list_form() {
     }
 }
 
-/// 並びの 4 語で、空・空の並び・空の項・名前・負の数・閉じない括弧・u32 を越える数は読めない（要件 2.5）。
+/// 並びの 4 語で、空・空の並び・空の項・名前・符号つきの数・閉じない括弧・u32 を越える数は読めない（要件 2.5）。
 #[test]
 fn list_words_reject_unreadable_columns() {
     for word in LISTS {
@@ -105,6 +115,7 @@ fn list_words_reject_unreadable_columns() {
             "(0,,1)",
             "(0,a)",
             "(0,-1)",
+            "(+1)",
             "(0,1",
             "[0,1)",
             "abc",

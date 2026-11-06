@@ -13,9 +13,9 @@ use crate::composed::ComposedSurface;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
 use crate::plan::compute_extent;
-use crate::plan_test_support::{bake_atlas, bound_world};
+use crate::plan_test_support::{bake_atlas, bound_world, ops_limited};
 use crate::world::EmoWorld;
-use crate::{Composer, shell_bounds};
+use crate::{Composer, ShellBounds, shell_bounds};
 
 /// 再帰なら 1 段ごとにスタックを食い、256 KiB では深い鎖であふれる。
 const SMALL_STACK: usize = 256 * 1024;
@@ -82,7 +82,16 @@ fn deep_chain_walks_finish_on_a_small_stack() {
         assert_eq!(ops.len(), 1, "鎖の先の絵 1 枚");
         let extent = compute_extent(&world, &atlas, 0);
         assert_eq!((extent.w, extent.h), (2, 2));
-        shell_bounds(&world, &atlas);
+        assert_eq!(
+            shell_bounds(&world, &atlas),
+            ShellBounds {
+                left: 0,
+                top: 0,
+                right: 2,
+                bottom: 2
+            },
+            "鎖の先の絵が外形に入る"
+        );
         let mut parts = Vec::new();
         world.nest_table().visible_parts(
             0,
@@ -322,12 +331,7 @@ fn diamond_with_leaves(last: u32, leaves: u32) -> (EmoWorld, AtlasTable) {
 #[test]
 fn plan_counts_the_layer_payload_against_the_budget() {
     let (world, atlas) = diamond_with_leaves(6, 50);
-    let mut ops = Vec::new();
-    let logs = capture_logs(|| {
-        let mut scratch = crate::plan::PlanScratch::with_limit(100);
-        let (binds, pattern) = (BindSet::default(), PatternState::default());
-        crate::plan::derive_ops(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern);
-    });
+    let (ops, logs) = ops_limited(&world, &atlas, 0, 100);
     assert_eq!(ops.len(), 24, "葉の絵は予算の残りの分だけ");
     assert_eq!(errors(&logs, "plan", 0), 1, "{}", errors_only(&logs));
 }

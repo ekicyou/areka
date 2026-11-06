@@ -12,18 +12,10 @@ use crate::hit_import::regions_of;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::PatternState;
-use crate::plan::{Extent, PlanScratch, compute_extent_limited, derive_ops};
+use crate::plan::{Extent, compute_extent_limited};
 use crate::plan_bounds::shell_bounds_limited;
-use crate::plan_test_support::bake_atlas;
-use crate::plan_test_support::bound_world;
+use crate::plan_test_support::{bake_atlas, bound_world, errors, ops, ops_limited};
 use crate::world::EmoWorld;
-
-/// `needle` を含む `error!` の行の数。
-fn errors(logs: &str, needle: &str) -> usize {
-    logs.lines()
-        .filter(|l| l.contains("level=ERROR") && l.contains(needle))
-        .count()
-}
 
 /// 面 0 が面 1 を `(x, 0)` に置き、面 1 は絵 1 枚と `extra`（行の並び）を持つシェルを、絵を束縛して組む。
 fn child_with_rows(x: i64, extra: &str) -> (EmoWorld, areka_emo_atlas::AtlasTable) {
@@ -43,29 +35,23 @@ fn rows(n: usize, prefix: &str, suffix: &str) -> String {
 
 /// 指摘 129: 面 1 は絵 1 枚と、描かない pattern 1,000 行の animation 1 つを持つ。旧い単位（入る 1＋element 1＋
 /// animation 1＋積み荷 1＝4）なら予算 100 で開くが、pattern の行も数えると 1＋1＋（1＋1,000）＋積み荷 1＝1,004 なので
-/// 開かず、`error!` は合成器 1 つで 1 行。1,004 なら切れない。
+/// 開かず、`error!` は合成器 1 つで 1 行。1,004 なら切れず、1 つ少ない 1,003 では切れる（interval の 1 行も数える）。
 #[test]
 fn plan_counts_the_pattern_rows_of_an_entered_surface() {
     let patterns = rows(1000, "animation0.pattern", ",overlay,-1,0,0,0");
     let (world, atlas) = child_with_rows(0, &format!("animation0.interval,never\n{patterns}"));
-    let (binds, pattern) = (BindSet::default(), PatternState::default());
     let run = |limit: usize| {
-        let mut scratch = PlanScratch::with_limit(limit);
-        let mut ops = Vec::new();
-        let logs = capture_logs(|| {
-            for _ in 0..2 {
-                ops.clear();
-                derive_ops(&mut ops, &mut scratch, &world, &atlas, 0, &binds, &pattern);
-            }
-        });
+        let (ops, logs) = ops_limited(&world, &atlas, 0, limit);
         (ops.len(), errors(&logs, "walk=\"plan\""))
     };
     assert_eq!(run(100), (0, 1), "pattern の行で切れ、記録は 1 行");
+    assert_eq!(run(1_003), (0, 1), "1 単位足りなければ切れる");
     assert_eq!(run(1_004), (1, 0), "予算の内なら絵を描き、記録は無い");
 }
 
 /// 指摘 130: 面 1 は絵 1 枚と当たり判定 1,000 行を持つ（入る 1＋行 1,001＝1,002）。旧い単位（入る 1 だけ）なら
 /// 予算 100 で入るが、面ごとの外形とシェルの外形はどちらも入らず（面 1 の絵を数えない）、`error!` を 1 行出す。
+/// 1,002 なら入り、1 つ少ない 1,001 では入らない。
 #[test]
 fn extent_and_bounds_count_the_rows_of_an_entered_surface() {
     let (world, atlas) = child_with_rows(-5, &rows(1000, "collision", ",0,0,1,1,R"));
@@ -78,6 +64,7 @@ fn extent_and_bounds_count_the_rows_of_an_entered_surface() {
         (extent, errors(&logs, "walk=\"extent\""))
     };
     assert_eq!(run_extent(100), (Extent { w: 0, h: 0 }, 1));
+    assert_eq!(run_extent(1_001), (Extent { w: 0, h: 0 }, 1));
     assert_ne!(
         run_extent(1_002).0,
         Extent { w: 0, h: 0 },
@@ -90,6 +77,7 @@ fn extent_and_bounds_count_the_rows_of_an_entered_surface() {
         (left, errors(&logs, "walk=\"bounds\""))
     };
     assert_eq!(run_bounds(100), (0, 1));
+    assert_eq!(run_bounds(1_001), (0, 1));
     assert_eq!(run_bounds(1_002), (-5, 0));
 }
 
@@ -106,6 +94,7 @@ fn hit_import_counts_the_rows_of_an_entered_surface() {
         (list.len(), errors(&logs, "walk=\"hit_import\""))
     };
     assert_eq!(run(100), (0, 1));
+    assert_eq!(run(2_001), (999, 1), "1 つ少なければ 1 本落とす");
     assert_eq!(run(2_002), (1000, 0));
 }
 
@@ -131,16 +120,12 @@ fn hit_import_drops_the_far_regions_first() {
 #[test]
 fn undrawn_ops_count_no_pixels() {
     let (world, atlas) = child_with_rows(0, "");
-    let (binds, pattern) = (BindSet::default(), PatternState::default());
-    let mut drawn = Vec::new();
-    derive_ops(
-        &mut drawn,
-        &mut PlanScratch::default(),
+    let drawn = ops(
         &world,
         &atlas,
         1,
-        &binds,
-        &pattern,
+        &BindSet::default(),
+        &PatternState::default(),
     );
     assert_eq!(drawn.len(), 1, "検体: 絵 1 枚の命令");
     let undrawn = crate::BlitOp {
@@ -155,10 +140,11 @@ fn undrawn_ops_count_no_pixels() {
     assert_eq!(ops.len(), 101);
 }
 
-/// 指摘 131: 波括弧が置き換える collision の前の行は畳み込みの最後に 1 度だけ除く。波括弧・追記・波括弧・追記の
-/// 順に同じ番号を足しても、並びは「最後の波括弧より前の同じ番号を除き、後は書いた順」のまま。
+/// 指摘 131: 波括弧が置き換えるのは、最後の波括弧より前の同じ番号の collision。波括弧・追記・波括弧・追記の
+/// 順に同じ番号を足しても、並びは「最後の波括弧より前の同じ番号を除き、後は書いた順」になる（並びだけを見る
+/// 檻で、除く回数は見ない）。
 #[test]
-fn brace_replaces_earlier_collisions_once_at_the_end() {
+fn brace_drops_earlier_same_numbered_collisions_and_keeps_written_order() {
     let text = "charset,UTF-8\n\
         surface0\n{\ncollision0,0,0,1,1,A\ncollision1,0,0,1,1,B\n}\n\
         surface.append0\n{\ncollision0,0,0,1,1,C\n}\n\

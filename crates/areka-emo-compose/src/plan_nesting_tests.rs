@@ -13,7 +13,7 @@ use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_test_support::{
-    bake_atlas, bound_world, frame, id_to_path, named_ops, ops, skipped,
+    bake_atlas, bound_world, frame, id_to_path, named_ops, ops, ops_limited, skipped,
 };
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -383,12 +383,7 @@ fn spent_budget_drops_children_not_yet_entered() {
     let world = bound_world(&parse(text), &[], &atlas);
     let map = id_to_path(&atlas, RELS);
     let run = |limit| {
-        let mut out = Vec::new();
-        let logs = capture_logs(|| {
-            let mut scratch = crate::plan::PlanScratch::with_limit(limit);
-            let (binds, pattern) = (BindSet::default(), PatternState::default());
-            crate::plan::derive_ops(&mut out, &mut scratch, &world, &atlas, 0, &binds, &pattern);
-        });
+        let (out, logs) = ops_limited(&world, &atlas, 0, limit);
         (named_ops(&out, &map), logs)
     };
     let (ops, logs) = run(6);
@@ -396,7 +391,11 @@ fn spent_budget_drops_children_not_yet_entered() {
         ops,
         vec![("body.png", 0, 0), ("eye.png", 1, 1), ("eye.png", 2, 2)]
     );
-    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert_eq!(
+        logs.matches("level=ERROR").count(),
+        1,
+        "合成器 1 つで 1 行: {logs}"
+    );
     assert!(
         logs.contains("walk=\"plan\"") && logs.contains("root=0"),
         "{logs}"

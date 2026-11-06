@@ -1,6 +1,6 @@
 use areka_parsers::shell::{
     AliasKey, Animation, AppendTarget, Collision, DefRef, Element, Interval, Shell, Surface,
-    SurfaceAlias, SurfaceAppend,
+    SurfaceAlias,
 };
 use bevy_ecs::world::World;
 
@@ -8,8 +8,8 @@ use crate::fold::{expand_targets_with, fold_shell_with};
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{
-    FoldSnapshot, coll, component_of, elem, fresh_world, shell_mixed, shell_of, snapshot_world,
-    surface_def,
+    FoldSnapshot, append_def, coll, component_of, elem, fresh_world, shell_mixed, shell_of,
+    snapshot_world, surface_def,
 };
 use crate::sample_test_support::emo2_shell;
 use crate::world::{AliasMap, Records, SurfaceIndex};
@@ -34,21 +34,6 @@ fn anim(id: u32) -> Animation {
         interval: Interval::Bind,
         interval_written: true,
         patterns: Vec::new(),
-    }
-}
-
-/// element/collision/animation を任意に持つ append 定義を組み立てる。
-fn append_def(
-    targets: Vec<AppendTarget>,
-    elements: Vec<Element>,
-    collisions: Vec<Collision>,
-    animations: Vec<Animation>,
-) -> SurfaceAppend {
-    SurfaceAppend {
-        targets,
-        elements,
-        collisions,
-        animations,
     }
 }
 
@@ -655,8 +640,8 @@ fn hand_built_overlap_shell_folds_byte_equal_twice() {
 
 /// (2) 実 emo2 fixture の fold 決定性（要件 1.7/2.3/10.1）。
 ///
-/// 実 `surfaces.txt` を parse → `EmoWorld::build` を2回。公開クエリ越しのスナップショット
-/// （surface 群・alias 群・両 sort 順）がバイト等価であることを固定する。これは実登場順ストリーム
+/// 実 `surfaces.txt` を parse → `EmoWorld::build` を2回。スナップショット（surface 群・alias 群）が
+/// バイト等価であることを固定する。これは実登場順ストリーム
 /// （plain 群 → 多 id range append → 重複キー alias）に対する single-pass fold が決定的である証左。
 #[test]
 fn emo2_fixture_folds_byte_equal_twice() {
@@ -666,17 +651,9 @@ fn emo2_fixture_folds_byte_equal_twice() {
     let a = EmoWorld::build(&shell);
     let b = EmoWorld::build(&shell);
 
-    // 公開クエリ越しのスナップショット（surface_ids は昇順＝決定的）。
-    let snap = |w: &EmoWorld| -> FoldSnapshot {
-        let surfaces: Vec<(u32, SurfaceMaster)> = w
-            .surface_ids()
-            .map(|id| (id, w.surface(id).expect("列挙 id は常駐する").clone()))
-            .collect();
-        (surfaces, w.alias_snapshot())
-    };
     assert_eq!(
-        snap(&a),
-        snap(&b),
+        snapshot_world(a.world()),
+        snapshot_world(b.world()),
         "実 emo2 の2回 fold はバイト等価（要件 10.1）"
     );
 

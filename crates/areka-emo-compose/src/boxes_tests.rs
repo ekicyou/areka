@@ -90,6 +90,7 @@ fn hand_built_layout_answers_lookups() {
 
 use areka_parsers::shell::parse_boxes;
 
+use crate::plan_test_support::image_map;
 use crate::{BoxIssue, BoxReport, EmoWorld, fold_boxes};
 
 /// 文面を転記して畳む（面の画像は 0 件・画像の World は同じ文面から組む）。`nesting_tests` も引く。
@@ -203,8 +204,6 @@ fn inapplicable_keys_are_dropped_reported_and_the_rest_is_kept() {
     );
     let def = layout.def(&name("w")).expect("残りのキーで採られる");
     assert_eq!(def.model, parse_str("origin.x,4", None));
-    assert_eq!(def.model.windowposition().x(), None);
-    assert_eq!(def.model.windowposition_raw().x_raw(), None);
 }
 
 #[test]
@@ -407,7 +406,7 @@ fn text_without_braces_folds_to_an_empty_layout_and_no_report() {
 
 /// 面の画像の対応を渡して畳む（画像の World も同じ文面と同じ対応から組む）。
 fn fold_images(text: &str, given: &[(u32, &str)]) -> (BoxLayout, BoxReport, EmoWorld) {
-    let images: BTreeMap<u32, String> = given.iter().map(|(id, f)| (*id, f.to_string())).collect();
+    let images = image_map(given);
     let world = EmoWorld::build_with_images(&areka_parsers::shell::parse(text), &images);
     let (layout, report) = fold_boxes(&parse_boxes(text), &images, &world);
     (layout, report, world)

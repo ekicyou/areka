@@ -52,92 +52,43 @@ fn copied_alpha_is_kept_on_a_cleared_output() {
 
 // ── blit uv_rect.x/y != 0（源矩形オフセット・記録の檻 log_firing_tests から移した・指摘 103）──
 
-/// 要件 6.1/6.4: エントリの uv_rect.x/y が非ゼロ（頁内サブ矩形オフセット）でも、頁原点でなく
-/// **uv オフセット位置**の源画素が転写される。
-///
-/// 3×1 の頁に [赤, 緑, 青] を横並びに置き、uv_rect=(x:2,y:0,w:1,h:1) で **青のみ**を切り出す
-/// エントリを組む。合成結果 (0,0) が青（頁原点の赤でない）であればサンプル位置が uv.x で
-/// 正しくオフセットされている証左。手計算バイトで厳密一致を突く。
+/// 要件 6.1/6.4: エントリの uv_rect.x・y がどちらも 0 でない（頁の中の切り出し）とき、頁の原点でなく
+/// **uv の位置**の源の画素を転写する。3×3 の頁は画素ごとに色が違う（B＝80×x・G＝80×y）ので、x か y の
+/// どちらかを読み落とせば (2,2) と違う色になる。
 #[test]
 fn blit_reads_source_at_nonzero_uv_offset() {
-    // 3×1 premultiplied BGRA 頁: (0,0)=赤 [0,0,255] / (1,0)=緑 [0,255,0] / (2,0)=青 [255,0,0]。
-    let bytes = vec![
-        0, 0, 255, 255, // (0,0) 赤
-        0, 255, 0, 255, // (1,0) 緑
-        255, 0, 0, 255, // (2,0) 青
-    ];
+    let bytes: Vec<u8> = (0..3u8)
+        .flat_map(|y| (0..3u8).flat_map(move |x| [80 * x, 80 * y, 50, 255]))
+        .collect();
     let page = AtlasPage {
         width: 3,
-        height: 1,
+        height: 3,
         stride: 12,
         bytes: Arc::from(bytes),
     };
-    // uv.x=2（青の列）を 1×1 で切り出す。trim_offset=0 ゆえ着弾は配置 (0,0)。
+    // uv (2,2) を 1×1 で切り出す。trim_offset=0 ゆえ着弾は配置 (0,0)。
     let atlas = single_entry_table(
         page,
         Rect {
             x: 2,
-            y: 0,
-            w: 1,
-            h: 1,
-        },
-        Point { x: 0, y: 0 },
-    );
-    let ops = vec![BlitOp {
-        element: ElementId(0),
-        transform: Transform::translate(0, 0),
-        method: ComposeMethod::Overlay,
-    }];
-
-    let mut out = ComposedSurface::new(0, 0);
-    crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
-
-    // 頁原点(赤)でなく uv.x=2 の青が着弾する（源矩形オフセット読み取りの直接証拠）。
-    assert_eq!(
-        px(&out, 0, 0),
-        [255, 0, 0, 255],
-        "uv.x=2 の青が転写される（頁原点の赤でない）",
-    );
-}
-
-/// uv_rect.y も非ゼロで効くことを縦方向で突く（3 行頁の 3 行目を切り出す）。
-#[test]
-fn blit_reads_source_at_nonzero_uv_y_offset() {
-    // 1×3 premultiplied BGRA 頁（縦並び）: 行0=赤 / 行1=緑 / 行2=青。
-    let bytes = vec![
-        0, 0, 255, 255, // (0,0) 赤
-        0, 255, 0, 255, // (0,1) 緑
-        255, 0, 0, 255, // (0,2) 青
-    ];
-    let page = AtlasPage {
-        width: 1,
-        height: 3,
-        stride: 4,
-        bytes: Arc::from(bytes),
-    };
-    // uv.y=2（青の行）を 1×1 で切り出す。
-    let atlas = single_entry_table(
-        page,
-        Rect {
-            x: 0,
             y: 2,
             w: 1,
             h: 1,
         },
         Point { x: 0, y: 0 },
     );
-    let ops = vec![BlitOp {
+    let ops = [BlitOp {
         element: ElementId(0),
         transform: Transform::translate(0, 0),
         method: ComposeMethod::Overlay,
     }];
 
     let mut out = ComposedSurface::new(0, 0);
-    crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
+    execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
 
     assert_eq!(
         px(&out, 0, 0),
-        [255, 0, 0, 255],
-        "uv.y=2 の青が転写される（頁原点の赤でない）",
+        [160, 160, 50, 255],
+        "uv (2,2) の画素が転写される（頁の原点や x・y の片方だけの位置でない）",
     );
 }
