@@ -272,7 +272,7 @@ pub(crate) fn sum_on_ms_grid(a: f64, b: f64) -> f64;
 - `absolute_fire_time(cue)` = `sum_on_ms_grid(absolute_start_time, cue.start_time)`。
 - `TimedSchedule::tick` の到達: `pop_if(|e| !(sum_on_ms_grid(start_time, e.offset()) > current_time))`（NaN の扱いを今と同じにするため `!(>)`・#80）。
 - `is_completed`: `current_time >= sum_on_ms_grid(start_time, horizon)`。`occupancy_horizon()` も同じ式。
-- 並べ替えは 5 か所とも `total_cmp`（降順は `b.offset().total_cmp(&a.offset())`）。NaN を含む並びは「正の NaN が昇順の末尾」に決まる（#10）。
+- 並べ替えは 5 か所とも `total_cmp`（降順は `b.offset().total_cmp(&a.offset())`）。NaN を含む並びは、NaN が符号で両端に分かれる形に決まる（負の NaN が昇順の先頭・正の NaN が末尾。x86 で計算から生まれる NaN＝`inf - inf`・`0.0 / 0.0` は符号の桁が立った負の NaN）（#10）。
 
 ### storyboard の層
 
@@ -359,7 +359,7 @@ pub fn has_instances(&self) -> bool;
 | # | 段 | 直し方 | 範囲の外 | 縛るテスト |
 |---|---|---|---|---|
 | 9 | 前 | 相対の終わりを私的な関数 1 本にし、`absolute_end_time` と `to_talk_schedule` の両方が呼ぶ（clamp を通す）。`schedule.rs:356-366` の説明を事実に合わせる | — | 新 `end_time_equals_occupancy_horizon_for_non_finite_durations`（長さ [NaN, +inf, −3]）（`tests/cue/sheet_test.rs`） |
-| 10 | 前 | `sheet.rs:41-46`・`schedule.rs:142-146・165-169`・`compile/mod.rs:229-233・290-295` を `total_cmp` に。「panic しない」の注を直す | — | 新 `sort_with_many_nan_follows_total_order`（NaN 24 件を含む `CueSheet::new` と `to_talk_schedule`）（`tests/cue/sheet_test.rs`）・新 compile の並べ替えの 1 本（`tests/compile/boundary_test.rs`） |
+| 10 | 前 | `sheet.rs:41-46`・`schedule.rs:142-146・165-169`・`compile/mod.rs:229-233・290-295` を `total_cmp` に。「panic しない」の注を直す | — | 新 `sort_with_many_nan_follows_total_order`（`f64::NAN` と `f64::INFINITY - f64::INFINITY`（負の NaN）を合わせて 24 件含む `CueSheet::new` と `to_talk_schedule`）（`tests/cue/sheet_test.rs`）・新 compile の並べ替えの 1 本（`tests/compile/boundary_test.rs`） |
 | 11 | 後 | `WaitForInput` の `timeout` 欄・`BarrierKind::Timeout`・`barrier_timeout_offset`・時間切れの枝（`schedule.rs:199-215・236-254`）・`BarrierReached::Timeout` を消す。`WaitForInput` と `resolve_click` の説明に「`talk-fast-forward` の `\x` の受け皿」と書く（要件 11.4） | `areka-sakura/src/drive.rs` は `other =>` で受ける＝変更なし | —（消す直し。残る口は既存の `resolve_click` のテストが縛る） |
 | 12 | 後 | `RoutingCommand`・`EntityKey`・`CuePayload::Routing`・`Entry::Routing`・`routing_buffer`・`next_routing` を消す（要件 11.5）。`schedule.rs` の冒頭の説明「3 種」を直す | なし（grep 0） | — |
 | 13 | 後 | `filtered_ready`・`CuePlayer::ready`・`CuePlayer::remaining` を消し、配送の門の中で `self.schedule.ready()` から直に配る。テストの読み替えは前の段で済ませる | なし | — |
