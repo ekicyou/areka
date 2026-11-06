@@ -19,7 +19,7 @@ use areka_parsers::kv::parse_kv;
 use areka_parsers::package::{GhostNames, resolve_with_shell};
 use tracing::{debug, error, warn};
 
-use super::PlacementError;
+use crate::error::PlacementError;
 
 /// descript 定義ファイル名（ghost/master と shell/<dir> の双方で同名）。
 const DESCRIPT_FILE: &str = "descript.txt";

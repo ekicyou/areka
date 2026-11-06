@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::PlacementError;
+use crate::error::PlacementError;
 use crate::sample_test_support::{balloon_root, emo2_root};
 use log_capture_kit::{ExpectField, capture, expect_one};
 

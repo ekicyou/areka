@@ -21,7 +21,7 @@
 use bevy_ecs::prelude::*;
 use wintf::ecs::DPI;
 
-use super::offset_space::{BalloonFollow, OffsetBase};
+use super::{BalloonFollow, OffsetBase};
 use crate::resolver::PointPx;
 
 fn dpi(v: u16) -> DPI {

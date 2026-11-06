@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
-use crate::PlacementError;
 use crate::descript_window_keys::DefaultSurfaces;
+use crate::error::PlacementError;
 use crate::sample_test_support::{balloon_root, emo2_root};
 use crate::shared_test_support::write_self_alpha_one_descript;
 use log_capture_kit::{ExpectField, capture, expect_one};

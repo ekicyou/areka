@@ -18,7 +18,7 @@
 use areka_emo_compose::ScaleRatio;
 use wintf::ecs::DPI;
 
-use super::offset_space::{OffsetBase, OffsetRescale, rescale_follow_offset};
+use super::{OffsetBase, OffsetRescale, rescale_follow_offset};
 use crate::resolver::PointPx;
 
 /// 表示 DPI（両軸同値）。

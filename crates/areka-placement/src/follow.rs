@@ -74,11 +74,6 @@ pub(crate) use self::drag_follow::{on_balloon_drag_end, on_char_drag};
 // （areka-P0-balloon-offset-dpi・design D14／task 3.1）。外部からの参照はすべて
 // このファサードを経由するため、移設の波及はこの 1 行に閉じる。
 pub use self::offset_space::BalloonFollow;
-/// 単位空間契約の定義元が持つ基準対（areka-P0-balloon-offset-dpi・要件 1.1／3.1）。
-///
-/// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
-/// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
-pub use self::offset_space::OffsetBase;
 /// 遷移時の唯一の変換規則と、その判定結果
 /// （areka-P0-balloon-offset-dpi・要件 3.1／3.3／3.6・task 6.1）。
 ///
@@ -95,6 +90,11 @@ pub(crate) use self::offset_space::{ScaledAxis, scale_author_offset};
 pub use self::work_area::{
     MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
 };
+/// 追従オフセットの基準対（型の定義は `resolver`・依存の向きの規約①・spec: placement-crate-split 要件 7.6。areka-P0-balloon-offset-dpi・要件 1.1／3.1）。
+///
+/// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
+/// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
+pub use super::resolver::OffsetBase;
 // 2 源の型と比較（task 5.1 で新設）。本番の消費者は `emo2_boot::frame::work_area_sync` が
 // 定義元から直接 import するため、この再輸出を**名前で呼ぶ**のはテストと起動シームだけである。
 // examples は `#[path]` で src を取り込むが本番項目しか使わないので、そちらのビルドでは

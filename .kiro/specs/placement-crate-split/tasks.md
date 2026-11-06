@@ -120,15 +120,15 @@
   - 完了の状態: どちらの grep も、名前を付けた例外（`session_end_sync_send_tests.rs`）と配置の `zorder_property_deferral_tests.rs` の `../areka-sylphya` の 1 行を除いて 0 件で、ワークスペース全体を全部の対象で組んで警告 0・段 4 のコミット
   - _Requirements: 5.2, 5.4, 4.3_
 
-- [ ] 6. 依存の向きの規約と行数を整える（段 5）
-- [ ] 6.1 規約の文と実際の参照の食い違い 5 件を解く
+- [x] 6. 依存の向きの規約と行数を整える（段 5）
+- [x] 6.1 規約の文と実際の参照の食い違い 5 件を解く
   - `OffsetBase` の型の定義を `resolver` へ移し、`follow` から出し直す（`follow` の写像を使う impl は元に残す）
   - `PlacementError` を独立のファイルへ移して根から出し直し、`measure`・`source` はそのファイルを引く
   - 根の規約の文を、名指す 6 モジュールの約束であることの明記・`diag` と `config` の実際・「同じ段どうしは引き合ってよい」を含む設計の文に書き直す
   - 6 つのファイルの参照を grep して文の並びと照らした表を実装の記録に残す
   - 完了の状態: 配置の crate のテストが緑で、外の道（`follow::OffsetBase`・`areka_placement::PlacementError`）が変わっていない
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
-- [ ] 6.2 1,000 行の上限を例外表を増やさずに守る
+- [x] 6.2 1,000 行の上限を例外表を増やさずに守る
   - 根・判定器（`transition_judge.rs`）・本体の根の行数を、番人の数え方で測る
   - 判定器が 1,000 行を超えたときだけ、観測行の読みを兄弟のファイルへ出す
   - 完了の状態: 1,000 行の番人が緑で、例外表の項目の数が変わっていない・段 5 のコミット
@@ -218,3 +218,17 @@
 - 5.6: 名前を付けた例外は、ワークスペース全体を歩く見張りの 3 本（`session_end_sync_send_tests.rs`・`emo2_boot/frame_attach_tests.rs`・`readonly_tests.rs`）になった。後の 2 本は `.parent()` で上がるので設計の grep に当たらない。3 本とも `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（完了の棚卸で起票）。
 - 共に使う走査器は `areka_placement::test_support::{measure_template, zorder_pair_deferred}` に 1 つずつ（`rust_sources_under`・`deferred_hits`・`SHELL_PARSE` も、両方の片割れが使うのでここに置いた）。
 - 7.2 へ: `crates/areka/examples/collision-probe.rs` の 76・96・100・103・107・111・115 行（`placement/{spawn,source,measure,mod}.rs:<行>`）と `collision-probe/setup.rs` の 42 行（`window-placement.rs:259-261`）・76 行（`placement/spawn.rs`）の説明のパス。90 行の古い `../pilot/...` の記述（`emo2_root` は今は sample_ghost_kit から来る）は直さず、`audit-areka-app` へ申し送る。
+- 6.1: `impl OffsetBase` は `unpinned` の 1 つだけで follow の写像を使わないので、型と一緒に `resolver` へ移した（`offset_space.rs` に残す impl は無い）。measure・source の子（機能で立つ `measure_test_support.rs` とテストの 3 本）も `crate::error::PlacementError` を引く。
+- 6.1 の参照の表（数える決まり: 本番のコードと機能で立つ子の `use (super|crate)::` だけ。説明の intra-doc リンクは組み立ての依存ではないので数えない）:
+
+  | モジュール | 配置の中で引く先 | 外の crate | 文の並びとの照合 |
+  |---|---|---|---|
+  | config | なし | std・tracing・areka_parsers | 一致（いちばん左） |
+  | resolver | config | tracing・wintf（DPI） | 一致（follow を引く参照は 0） |
+  | measure（`measure_first_frame.rs`・`measure_test_support.rs` を含む） | resolver・error・descript_window_keys | emo-atlas・emo-compose・emo-present・tracing・std | 一致（error と descript_window_keys は名指さない所） |
+  | spawn | config・diag・follow（同じ段）・resolver・chain_finalize・source | bevy_ecs・windows・wintf・tracing | 一致（同じ段の follow） |
+  | follow（子も含む） | diag・resolver・spawn（同じ段）・balloon_limit・balloon_lock・dpi_sync・persist・transition_diag・chain_finalize・sticky_group_ledger・windowposition・根の scale_signed | bevy_ecs・windows・wintf・emo-compose・tracing | 一致（名指さない所への参照は 7.5 で申し送る） |
+  | diag | なし | bevy_ecs（Entity）・wintf（ZOrderPairStrategy）・tracing・std | 一致（最下流） |
+
+  説明のリンクだけの参照: `diag.rs:112` → `super::spawn::wire_zorder_pair`・`follow/offset_space.rs:251` → `crate::measure::MeasureScaling`。
+- 6.2: 番人の数え方で lib.rs 918 行・`placement_tests/transition_judge.rs` 999 行・main.rs 989 行。判定器は 1,000 行を超えないので分けていない。例外表は 5 件のまま。

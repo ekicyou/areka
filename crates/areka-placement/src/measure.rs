@@ -47,9 +47,9 @@ use areka_emo_present::balloon::{
 use areka_emo_present::shell_target::load_shell_target_quiet;
 use tracing::{error, warn};
 
-use super::PlacementError;
 use super::descript_window_keys::{DefaultSurfaces, builtin_default_surface, first_existing};
 use super::resolver::{ScopeInput, SizePx};
+use crate::error::PlacementError;
 
 // 採寸の読み手（動く絵を 1 枚目だけで読む包み）。
 #[path = "measure_first_frame.rs"]

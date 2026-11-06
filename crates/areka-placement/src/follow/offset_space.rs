@@ -62,7 +62,7 @@ use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::{Component, Entity};
 use wintf::ecs::DPI;
 
-use crate::resolver::PointPx;
+use crate::resolver::{OffsetBase, PointPx};
 use crate::scale_signed;
 
 /// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
@@ -150,27 +150,6 @@ impl BalloonFollow {
     /// 元へ戻れば同じ値へ戻る（[`rescale_follow_offset`] の純関数性がここで守られる）。
     pub fn apply_rescaled(&mut self, offset: PointPx) {
         self.offset = offset;
-    }
-}
-
-/// 追従オフセットの基準対——値と、その値が属する表示 DPI。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OffsetBase {
-    /// 基準値（キャラ窓左上相対・物理 px）。
-    pub offset: PointPx,
-    /// 基準値が属する表示 DPI。`None` は**未係留**＝
-    /// 「最初に観測した表示 DPI の空間に属する」と読む（永続値の腕・要件 5.2）。
-    pub dpi: Option<DPI>,
-}
-
-impl OffsetBase {
-    /// **未係留**の基準対を組む（表示 DPI が記録されていない値・要件 5.2）。
-    ///
-    /// 永続値の腕がこの形を採るほか、追従の基準を対象にしない檻が合成の
-    /// `ScopePlacement` を組むときの既定でもある——「どの表示 DPI に属するか分からない」
-    /// を正直に表す 1 ビットであり、最初の観測で値を変えずに係留される。
-    pub fn unpinned(offset: PointPx) -> Self {
-        Self { offset, dpi: None }
     }
 }
 

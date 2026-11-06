@@ -5,8 +5,8 @@ use std::path::Path;
 
 use areka_emo_atlas::ElementDecoder;
 
-use crate::PlacementError;
 use crate::descript_window_keys::DefaultSurfaces;
+use crate::error::PlacementError;
 use crate::resolver::ScopeInput;
 
 /// [`super::measure_with_reader`] へそのまま渡す。

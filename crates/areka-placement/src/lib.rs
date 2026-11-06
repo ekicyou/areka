@@ -5,15 +5,16 @@
 //! 座標単位契約（design 正本 U1〜U5）に従い、配置パイプラインの座標・寸法は
 //! **すべて物理 px 単一通貨**とする（論理 DIP・`BoxStyle` は持ち込まない）。
 //!
-//! 依存方向（design「Architecture Pattern & Boundary Map」の強制規約）:
-//! `resolver`（純粋・std のみ）← `config`（areka-parsers のみ）←
-//! `measure`（emo-atlas/compose）← `spawn`／`follow`（wintf/bevy_ecs）← main.rs シーム。
-//! 左のモジュールは右へ import しない。
-//! [`diag`]（配置観測・areka-P0-dpi-window-vanish design「Allowed Dependencies」）は
-//! この鎖の**さらに左**＝最下流に置く: 純データ＋`tracing` のみに依存し、`World`・wintf の
-//! 型を一切知らない（wintf `Monitor` からの転写は本 mod.rs・`follow` 側の仕事）。
+//! 依存の向き（この約束が名指すのは `resolver`・`config`・`measure`・`spawn`・`follow`・`diag`
+//! の 6 つだけで、ほかのモジュールの参照はこの約束の外）:
+//! `config`（areka-parsers・tracing）← `resolver`（std・tracing・wintf の DPI・`config`）←
+//! `measure`（emo-atlas・emo-compose・emo-present）← `spawn`／`follow`（wintf・bevy_ecs ほか・
+//! 同じ段どうしは引き合ってよい）← 本体のシーム。左のモジュールは右を import しない。
+//! [`diag`] は最下流: 配置のモジュールを 1 つも引かない（ほかの crate からは bevy_ecs の
+//! `Entity`・wintf の `ZOrderPairStrategy`・tracing を引く）。
+//! 失敗の型 [`PlacementError`] は `error.rs`（配置のモジュールを引かない）に置き、根から出し直す。
 //!
-//! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`]（task 1）に加え、
+//! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`] の出し直しに加え、
 //! 配置準備の合成ルート [`prepare_ghost_windows`]（task 6.1・design「main.rs seam」）
 //! を持つ。design File Structure の「mod.rs＝モジュール公開面」に従い、
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
@@ -31,6 +32,8 @@ pub mod config;
 pub mod descript_window_keys;
 pub use self::descript_window_keys::DefaultSurfaces;
 pub mod diag;
+mod error;
+pub use self::error::PlacementError;
 /// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。
 pub mod dpi_sync;
 pub mod face_windowposition;
@@ -79,12 +82,11 @@ mod test_crash_report;
 pub mod test_support;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use areka_emo_compose::ScaleRatio;
 use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces_quiet};
 use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
-use areka_parsers::package::MountError;
 use tracing::{error, info, warn};
 use wintf::ecs::DPI;
 use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
@@ -94,48 +96,6 @@ use self::measure::{MeasureScaling, MeasuredSizes};
 use self::resolver::{RectPx, ScopePlacement};
 use self::source::GhostTitles;
 use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_vocab};
-
-/// 配置準備パイプライン（resolve→descript 読込→採寸→解決）の観測可能な失敗。
-///
-/// design「Error Handling」準拠: 安易な panic 禁止・失敗は `error!`＋`Err`。
-/// すべて main.rs シームを経て呼び手の `main` へ返り、「起動窓を開けない」の告知と
-/// 終了コード 1 になる（log-first）。
-#[derive(Debug, thiserror::Error)]
-pub enum PlacementError {
-    /// ゴーストパッケージのマウント解決（`areka_parsers::package::resolve_with_shell`）失敗。
-    ///
-    /// `MountError` は `std::error::Error` 未実装のため `#[from]`/`#[source]`
-    /// にせず値として保持し `Debug` 表示する。
-    #[error("ゴーストのマウント解決に失敗: {0:?}")]
-    Mount(MountError),
-
-    /// descript.txt の読み取り失敗（I/O エラー）。
-    #[error("descript の読み取りに失敗: {path}")]
-    DescriptRead {
-        /// 読み取れなかった descript.txt のパス。
-        path: PathBuf,
-        /// 元の I/O エラー。
-        source: std::io::Error,
-    },
-
-    /// surface 採寸（emo-atlas/compose による原寸合成）失敗。
-    #[error("scope {scope} の surface 採寸に失敗: {reason}")]
-    Measure {
-        /// 採寸対象のスコープ番号。
-        scope: usize,
-        /// 失敗理由（下流の詳細を文字列化）。
-        reason: String,
-    },
-
-    /// モニタ列挙が 0 台で primary work area の出所がない（2.12 の基準を
-    /// 満たせない）。架空の既定矩形は発明せず呼び手へ返す（`main` が「起動窓を開けない」
-    /// を告知して終える）。task 6.1 で追加（mod.rs＝準備関数の置き場は本タスク境界内）。
-    #[error("モニタ列挙に失敗: {reason}")]
-    Monitor {
-        /// 失敗理由（列挙結果の状況を文字列化）。
-        reason: String,
-    },
-}
 
 /// primary モニタ DPI を取得できないときに採る「96 相当」の DPI
 /// （areka-P0-emo-dpi-scaling design「Error Handling」の

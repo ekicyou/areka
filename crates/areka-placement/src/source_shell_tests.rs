@@ -11,7 +11,7 @@ use std::path::Path;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::PlacementError;
+use crate::error::PlacementError;
 
 /// `shell/master`（`seriko.dpi,96`）と `shell/second`（`seriko.dpi,144`）の 2 つを持つ
 /// ゴーストを一時ディレクトリへ組む。両シェルの `descript.txt` は中身で見分けられる。

@@ -15,9 +15,9 @@
 use areka_emo_compose::ScaleRatio;
 use wintf::ecs::DPI;
 
+use super::OffsetBase;
 use super::offset_space::{
-    OffsetBase, OffsetRescale, ScaledAxis, UnresolvedScale, rescale_follow_offset,
-    scale_author_offset,
+    OffsetRescale, ScaledAxis, UnresolvedScale, rescale_follow_offset, scale_author_offset,
 };
 use crate::resolver::PointPx;
 
