@@ -123,8 +123,12 @@ use sample_ghost_kit::SampleRoot;
 
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::balloon::BalloonModel;
+
+#[path = "support/mod.rs"]
+mod support;
+
+use support::fixture::{emo2_balloon_root, png_native_size, read_balloon_file};
 
 // ── 逐語固定する期待値（本ファイル冒頭の表と 1:1）────────────────────────────
 //
@@ -169,23 +173,13 @@ const KERO_OVERLAY: &str = "balloonk0s.txt";
 // ── fixture の所在（窓口 `sample-ghost-kit` が持つ・検体名で引く）───────────────────────
 //
 // 検体は段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。原本と複製は
-// 別々の検体として登記されているので、保持も 2 つになる（同じ木の複製ではない）。
-
-/// 原本の検体（実ゴースト `emo2`。バルーン定義は同梱バルーンのフォルダに在る）。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
+// 別々の検体として登記されているので、保持も 2 つになる（同じ木の複製ではない）。原本
+// （実ゴースト `emo2` の同梱バルーン）は共有の部品 `support::fixture::emo2_balloon_root` が持つ。
 
 /// 複製の検体（`windowposition-limit` の実機サインオフ用・単体で登記されたバルーン）。
 static WPLIMIT: LazyLock<SampleRoot> = LazyLock::new(|| {
     SampleRoot::acquire("emo2-kakukaku-wplimit").expect("emo2-kakukaku-wplimit は登記済みの検体")
 });
-
-/// 原本の実ゴースト用バルーン定義ディレクトリ（自分でパスを継ぎ足さない）。
-fn shipped_root() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
 
 /// 複製 fixture（`windowposition-limit` の実機サインオフ用）。原本とは別の検体として登記されて
 /// おり、ゴーストツリーの列挙には影響しない（同 fixture の `readme.txt` 正典）。
@@ -195,42 +189,12 @@ fn wplimit_root() -> PathBuf {
 
 // ── 本番と同じ読み込み経路 ───────────────────────────────────────────────
 
-/// バルーン記述ファイルを本番と同じ規約で読む。
-///
-/// 本番経路 `areka_emo_present::balloon::load_scope_balloon_model` は
-/// `decode(&bytes, DefaultEncoding::Ansi)`（**既定 Ansi・ファイル内の `charset` 宣言優先**）で
-/// 読む。`emo2-kakukaku/descript.txt` は `charset,UTF-8` を宣言しており、面別上書き層は
-/// 宣言を持たないが純 ASCII ゆえどちらの既定でも同一である。ここで `DefaultEncoding::Utf8` を
-/// 使わないのは、本番と 1 文字でも違う規約で読むと「檻は緑だが本番は別物」になり得るため。
-///
-/// **読み込み失敗は明示的に panic する**（パス解決の生存証明）。ファイルを読めなかったときに
-/// 「対象 0 件だから緑」になる檻を作ってはならない。
-fn read_layer(dir: &Path, name: &str) -> String {
-    let path = dir.join(name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "出荷済みバルーン定義 {} の読取に失敗した（本檻はこのファイルの実在が前提）: {e}",
-            path.display()
-        )
-    });
-    assert!(
-        !bytes.is_empty(),
-        "出荷済みバルーン定義 {} が空である（空ファイルでは解決結果が檻の主張と無関係になる）",
-        path.display()
-    );
-    decode(&bytes, DefaultEncoding::Ansi)
-}
-
 /// 指定ディレクトリの 2 層（`descript.txt` 基層＋面別上書き層）をマージした `BalloonModel`。
 ///
-/// マージは本番と同じ `areka_parsers::balloon::parse_str(descript, Some(overlay))`
-/// （権威経路の呼び方は `areka/src/emo2_boot/assets_tests.rs` と
-/// `areka-emo-present/src/balloon.rs` の `load_scope_balloon_model` が固定している）。
+/// 読みは本番と同じ ANSI の規則（`support::fixture::read_balloon_file`）、マージは本番と同じ
+/// `areka_parsers::balloon::parse_str(descript, Some(overlay))`。
 fn merged_model(dir: &Path, overlay: &str) -> BalloonModel {
-    parse_str(
-        &read_layer(dir, "descript.txt"),
-        Some(&read_layer(dir, overlay)),
-    )
+    support::fixture::merged_model(dir, Some(overlay))
 }
 
 /// 与えたディレクトリの scope 0／1 を解決した `TextRegion` の対を返す。
@@ -241,24 +205,6 @@ fn resolve_both(dir: &Path) -> (TextRegion, TextRegion) {
         TextRegion::resolve(&sakura, SAKURA_IMAGE_SIZE, WritingMode::resolve(&sakura)),
         TextRegion::resolve(&kero, KERO_IMAGE_SIZE, WritingMode::resolve(&kero)),
     )
-}
-
-/// PNG の IHDR から原寸 `(width, height)` を読む（署名 8B ＋ 長さ 4B ＋ `IHDR` 4B の直後）。
-///
-/// 画像デコーダ（WIC）を持ち込まないのは、本檻を純粋層・非 GPU・非 COM に保つため
-/// （要件 10.6）。IHDR はストリーム先頭に在ることが PNG 仕様で決まっているので固定
-/// オフセットで足りる。
-fn png_native_size(path: &Path) -> (u32, u32) {
-    let bytes = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("バルーン枠画像 {} の読取に失敗した: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
-        "{} が PNG（先頭 IHDR チャンク付き）として読めない",
-        path.display()
-    );
-    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    (w, h)
 }
 
 /// `TextRegion` の全成分を逐語で突合する（どの成分が壊れたかを名指しで出す）。
@@ -285,9 +231,9 @@ fn assert_region(
 /// 「読めないから panic」ではなく静かに別の何かを測る形へ滑り込む余地が残る。
 #[test]
 fn shipped_fixture_files_exist_and_are_non_empty() {
-    for dir in [shipped_root(), wplimit_root()] {
+    for dir in [emo2_balloon_root(), wplimit_root()] {
         for name in ["descript.txt", SAKURA_OVERLAY, KERO_OVERLAY] {
-            let text = read_layer(&dir, name);
+            let text = read_balloon_file(&dir, name);
             assert!(
                 !text.trim().is_empty(),
                 "{} は空でないバルーン定義であること",
@@ -304,7 +250,7 @@ fn shipped_fixture_files_exist_and_are_non_empty() {
 /// ハードコードした画像原寸が出荷 PNG の IHDR と一致する（期待値の二重帳簿を防ぐ）。
 #[test]
 fn native_sizes_match_shipped_png_headers() {
-    for dir in [shipped_root(), wplimit_root()] {
+    for dir in [emo2_balloon_root(), wplimit_root()] {
         assert_eq!(
             png_native_size(&dir.join("balloons0.png")),
             SAKURA_IMAGE_SIZE,
@@ -328,7 +274,7 @@ fn native_sizes_match_shipped_png_headers() {
 /// これが動くと開始点の期待値の意味そのものが変わる。開始点と一緒に固定する。
 #[test]
 fn shipped_fixture_resolves_to_horizontal_tb() {
-    for dir in [shipped_root(), wplimit_root()] {
+    for dir in [emo2_balloon_root(), wplimit_root()] {
         for overlay in [SAKURA_OVERLAY, KERO_OVERLAY] {
             assert_eq!(
                 WritingMode::resolve(&merged_model(&dir, overlay)),
@@ -349,7 +295,7 @@ fn shipped_fixture_resolves_to_horizontal_tb() {
 /// いずれを経ても不変である（モジュール doc「2 つの編集を跨いで…」参照）。
 #[test]
 fn shipped_sakura_scope_region_is_pinned() {
-    let (sakura, _) = resolve_both(&shipped_root());
+    let (sakura, _) = resolve_both(&emo2_balloon_root());
     assert_region(
         &sakura,
         SAKURA_EDGES,
@@ -365,7 +311,7 @@ fn shipped_sakura_scope_region_is_pinned() {
 /// 由来するため、2 層マージの継承が壊れると単独で赤くなる。
 #[test]
 fn shipped_kero_scope_region_is_pinned() {
-    let (_, kero) = resolve_both(&shipped_root());
+    let (_, kero) = resolve_both(&emo2_balloon_root());
     assert_region(
         &kero,
         KERO_EDGES,
@@ -385,7 +331,7 @@ fn shipped_kero_scope_region_is_pinned() {
 /// したらここで赤くなる。
 #[test]
 fn wplimit_copy_resolves_identically_to_shipped_original() {
-    let (orig_sakura, orig_kero) = resolve_both(&shipped_root());
+    let (orig_sakura, orig_kero) = resolve_both(&emo2_balloon_root());
     let (copy_sakura, copy_kero) = resolve_both(&wplimit_root());
 
     // 原本との同値（乖離の検出）。

@@ -8,20 +8,20 @@
 use std::collections::BTreeMap;
 
 use areka_emo_atlas::UseSelfAlpha;
-use areka_emo_present::balloon::{
-    load_balloon_use_self_alpha, load_scope_balloon_model, resolve_balloon_faces,
-};
+use areka_emo_present::balloon::load_balloon_use_self_alpha;
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_parsers::balloon::BalloonModel;
 use areka_parsers::kv::parse_kv;
-use log_capture_kit::{CapturedEvent, LineFormat, capture, format_line};
+use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{
-    EXPECTED_DESCRIPT, EXPECTED_FACE_SETTINGS, EXPECTED_INSTALL, balloon_root,
+use crate::support::fixture::{
+    assert_balloon_loading_records, load_face0_with_records, record_lines,
 };
 
-/// 本番の読み込みの記録の宛先（`resolve_balloon_faces`／`load_scope_balloon_model` の発行元）。
-const BALLOON_LOG_TARGET: &str = "areka_emo_present::balloon";
+use super::test_support::{
+    EXPECTED_DESCRIPT, EXPECTED_FACE_SETTINGS, EXPECTED_INSTALL, balloon_root, expected_region,
+    expected_wrap_threshold, scope_face0_file, scope_image_size,
+};
 
 /// 1 行目に置く文字コードの宣言（要件 5.3）。
 const CHARSET_LINE: &str = "charset,UTF-8";
@@ -29,22 +29,16 @@ const CHARSET_LINE: &str = "charset,UTF-8";
 /// 鍵と値の読み物ではないが、文字コードと 1 行目は同じ規約で書く文のファイル（設計「文のファイル」）。
 const README: &str = "readme.txt";
 
-/// scope ごとの面 0 の期待値（設計「描画範囲の解け方」の表と、`descript.txt` に面別の設定を
-/// 重ねた値）。
+/// scope ごとの面 0 の期待値（`descript.txt` に面別の設定を重ねた宣言値）。面 0 の絵の名前・
+/// 寸法・解いた範囲・折り返し基準は `test_support.rs` の表から引く。
 struct Face0Expectation {
     scope: u32,
-    file: &'static str,
-    image_size: (u32, u32),
     /// モデルが写す宣言値 `origin.x`・`origin.y`。
     origin: (i32, i32),
     /// モデルが写す宣言値 `validrect.left`・`top`・`right`・`bottom`。
     validrect: (i32, i32, i32, i32),
     /// モデルが写す宣言値 `wordwrappoint.x`・`y`。
     wordwrappoint: (i32, i32),
-    /// 解いた範囲（左・上・右・下・image px）。
-    region: (f32, f32, f32, f32),
-    /// 解いた折り返し基準 x（326 − 30）。
-    wrap_threshold: f32,
     /// 面の系列解決で本体側の系列へ縮退する面 `(面 id, 接頭辞)`（`warn!` の欄）。
     /// 相方側は面 2・3 を持たない（要件 2.2）のでちょうど 2 件、本体側は 0 件。
     expected_fallback: &'static [(u32, &'static str)],
@@ -53,24 +47,16 @@ struct Face0Expectation {
 const FACE0: [Face0Expectation; 2] = [
     Face0Expectation {
         scope: 0,
-        file: "balloons0.png",
-        image_size: (326, 169),
         origin: (14, 11),
         validrect: (0, 0, 326, -20),
         wordwrappoint: (-30, 0),
-        region: (0.0, 0.0, 326.0, 149.0),
-        wrap_threshold: 296.0,
         expected_fallback: &[],
     },
     Face0Expectation {
         scope: 1,
-        file: "balloonk0.png",
-        image_size: (326, 96),
         origin: (14, 14),
         validrect: (0, 0, 326, -14),
         wordwrappoint: (-30, 0),
-        region: (0.0, 0.0, 326.0, 82.0),
-        wrap_threshold: 296.0,
         expected_fallback: &[(2, "balloons"), (3, "balloons")],
     },
 ];
@@ -171,80 +157,15 @@ fn key_value_lists_equal_the_expected_tables_including_the_key_set() {
     }
 }
 
-/// 本番の読み込みの経路（面の系列解決→面 0 に `descript.txt` と面別の設定を重ねたモデル）を
-/// 同じ捕捉の窓で走らせる（`staysee_balloon_fixture/faces.rs` の `resolve_faces_with_records` と同じ形）。
+/// 本番の読み込みの経路を同じ捕捉の窓で走らせ、（面 0 のモデル, 面 0 のファイル名, 記録）を返す。
 fn load_with_records(scope: u32) -> (BalloonModel, String, Vec<CapturedEvent>) {
-    let root = balloon_root();
-    let ((model, face0_file), events) = capture(|| {
-        let faces = resolve_balloon_faces(&root, scope)
-            .unwrap_or_else(|e| panic!("scope {scope} の面の系列解決が失敗した: {e}"));
-        let face0 = faces
-            .iter()
-            .find(|f| f.surface_id == 0)
-            .unwrap_or_else(|| panic!("scope {scope}: 面 0 が解決されない"));
-        (
-            load_scope_balloon_model(&root, scope, face0),
-            face0.file_name.clone(),
-        )
-    });
+    let (faces, model, events) = load_face0_with_records(&balloon_root(), scope);
+    let face0_file = faces
+        .iter()
+        .find(|f| f.surface_id == 0)
+        .map(|f| f.file_name.clone())
+        .expect("面 0 の実在は load_face0_with_records が確かめている");
     (model, face0_file, events)
-}
-
-/// 読み込みの窓の記録を突き合わせる（要件 5.8・6.5）。
-///
-/// - 対照: 宛先の情報の記録が、系列解決の完了（欄 `chain`）と 2 層マージの確定
-///   （欄 `validrect_left`）で 1 件ずつ（「0 件」の主張が捕捉の空振りで真にならないため）。
-/// - `ERROR` は 0 件。`WARN` は面の縮退の記録だけで、欄（宛先・scope・面 id・接頭辞）まで
-///   `expected_fallback` と一致する。それ以外の `WARN` は 0 件。
-fn assert_loading_records(scope: u32, events: &[CapturedEvent], expected_fallback: &[(u32, &str)]) {
-    let lines: Vec<String> = events
-        .iter()
-        .map(|e| format_line(e, LineFormat::LevelTargetFields))
-        .collect();
-    let infos: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::INFO && e.target == BALLOON_LOG_TARGET)
-        .collect();
-    for field in ["chain", "validrect_left"] {
-        assert_eq!(
-            infos.iter().filter(|e| e.field(field).is_some()).count(),
-            1,
-            "scope {scope}: 宛先 {BALLOON_LOG_TARGET} の情報の記録で欄 `{field}` を持つものが 1 件でない（捕捉の空振りか発行点の変化）: {lines:?}"
-        );
-    }
-    let errors = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::ERROR)
-        .count();
-    assert_eq!(errors, 0, "scope {scope}: ERROR の記録がある: {lines:?}");
-    let actual: Vec<(String, String, String, String)> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .map(|e| {
-            let field = |name: &str| e.field(name).unwrap_or("<欄なし>").to_string();
-            (
-                e.target.clone(),
-                field("scope"),
-                field("surface_id"),
-                field("prefix"),
-            )
-        })
-        .collect();
-    let expected: Vec<(String, String, String, String)> = expected_fallback
-        .iter()
-        .map(|(surface_id, prefix)| {
-            (
-                BALLOON_LOG_TARGET.to_string(),
-                scope.to_string(),
-                surface_id.to_string(),
-                (*prefix).to_string(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        actual, expected,
-        "scope {scope}: WARN の記録が面の縮退の期待どおりでない（縮退のほかは 0 件のはず）: {lines:?}"
-    );
 }
 
 /// 本番の読み込みで、記録が期待どおり（`ERROR` 0 件・`WARN` は相方側の面 2・3 の縮退 2 件だけ）で、
@@ -254,9 +175,13 @@ fn production_loading_records_no_warning_and_models_the_declared_values() {
     for exp in &FACE0 {
         let scope = exp.scope;
         let (model, face0_file, events) = load_with_records(scope);
-        assert_loading_records(scope, &events, exp.expected_fallback);
+        assert_balloon_loading_records(scope, &events, exp.expected_fallback);
 
-        assert_eq!(face0_file, exp.file, "scope {scope}: 面 0 のファイル名");
+        assert_eq!(
+            face0_file,
+            scope_face0_file(scope),
+            "scope {scope}: 面 0 のファイル名"
+        );
         let o = model.origin();
         assert_eq!(
             (o.x(), o.y()),
@@ -310,8 +235,9 @@ fn use_self_alpha_is_declared_on() {
     );
     let warns: Vec<String> = events
         .iter()
-        .filter(|e| matches!(e.level, tracing::Level::WARN | tracing::Level::ERROR))
-        .map(|e| format_line(e, LineFormat::LevelTargetFields))
+        .zip(record_lines(&events))
+        .filter(|(e, _)| matches!(e.level, tracing::Level::WARN | tracing::Level::ERROR))
+        .map(|(_, line)| line)
         .collect();
     assert!(warns.is_empty(), "WARN 以上の記録がある: {warns:?}");
 }
@@ -323,16 +249,16 @@ fn resolved_region_matches_the_design_table() {
     for exp in &FACE0 {
         let scope = exp.scope;
         let (model, _, _) = load_with_records(scope);
-        let region = ResolvedBalloonText::resolve(&model, exp.image_size).region;
+        let region = ResolvedBalloonText::resolve(&model, scope_image_size(scope)).region;
         assert_eq!(
             (region.left(), region.top(), region.right(), region.bottom()),
-            exp.region,
+            expected_region(scope),
             "scope {scope}: 範囲（左・上・右・下）"
         );
         assert!(!region.is_collapsed(), "scope {scope}: 範囲が潰れている");
         assert_eq!(
             region.wrap_threshold(),
-            exp.wrap_threshold,
+            expected_wrap_threshold(scope),
             "scope {scope}: 折り返し基準"
         );
         assert!(

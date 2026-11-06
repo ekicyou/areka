@@ -46,14 +46,14 @@ use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DEFAULT_FONT_NAME;
 use areka_emo_text::layout::GlyphMetrics;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::balloon::BalloonModel;
 
 use super::test_support::{
     EXPECTED_ADVANCE_FULL, EXPECTED_ADVANCE_HALF, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT,
     EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, SCOPE_FACE0_FILES,
-    expected_bottom, resolve_staysee, scope_image_size, staysee_metrics, staysee_model,
+    expected_bottom, resolve_staysee, scope_image_size, staysee_model,
 };
+use crate::support::fixture::{balloon_metrics, merged_model};
 
 // ── 領域解決の期待値（設計 C2 の E 行）──────────────────────────────────────────
 //
@@ -98,22 +98,7 @@ const DECLARED_INLINE_LIMIT: f32 = 149.0;
 /// 作らない）。
 fn declared_model() -> BalloonModel {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(DECLARED_BALLOON_DIR);
-    let read = |name: &str| {
-        let path = dir.join(name);
-        let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-            panic!(
-                "対照のバルーン定義 {} の読取に失敗した（対照はこのファイルの実在が前提）: {e}",
-                path.display()
-            )
-        });
-        assert!(
-            !bytes.is_empty(),
-            "対照のバルーン定義 {} が空である（空では対照が何も示さない）",
-            path.display()
-        );
-        decode(&bytes, DefaultEncoding::Ansi)
-    };
-    parse_str(&read("descript.txt"), Some(&read(DECLARED_BALLOON_OVERLAY)))
+    merged_model(&dir, Some(DECLARED_BALLOON_OVERLAY))
 }
 
 // ── 領域解決（設計 C2 の E 行・要件 3.3／3.5）────────────────────────────────
@@ -280,7 +265,7 @@ fn undeclared_font_name_resolves_to_the_canon_default() {
 #[test]
 fn default_font_metrics_are_pinned_at_height_twelve() {
     let resolved = resolve_staysee(0);
-    let metrics = staysee_metrics(&resolved);
+    let metrics = balloon_metrics(&resolved);
     let h = resolved.font.height;
     assert_eq!(
         h, EXPECTED_FONT_HEIGHT,

@@ -69,6 +69,10 @@
 //! `decoration_readback/` が同型の先例である。
 
 #[cfg(test)]
+#[path = "support/mod.rs"]
+mod support;
+
+#[cfg(test)]
 #[path = "staysee_balloon_fixture/test_support.rs"]
 mod test_support;
 

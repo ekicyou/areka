@@ -5,7 +5,7 @@
 > どのタスクも、直した後に触ったファイルが 1,000 行を越えないこと、`crates/areka/` に触らず公開の形を変えないこと、`Cargo.toml`／`Cargo.lock` の依存を変えないことを確かめてから終える（要件 5.1・6.1・6.9）。
 > 「申し合わせ」とある所は、`design.md` の「並走の兄弟との申し合わせ」の表の番号（⑴〜⑺）。向こうの持ち物に触る前に `audit-emo-text-layout-draw` のセッションへ持ちかけ、断られたとき・待てないときは、こちらの範囲で成り立つ部分だけを入れ、残りは 1 件ずつ開発者への議題にする（設計の議題 4）。
 
-- [ ] 1. 準備: テストの組み立て部品を 1 つにまとめる（指摘 15・16）
+- [x] 1. 準備: テストの組み立て部品を 1 つにまとめる（指摘 15・16）
 - [x] 1.1 `src/` の実 GPU の World・箱・指令・記録の部品を、アクターのテストの部品ファイルへまとめる
   - 実 GPU の World の組み立て・箱の表の組み立て（問題なしの確かめつき）・箱の部品・画素の数え上げ・窓の子の列・記録の捕まえ方（対照の `error!` つき）・警告の文の定数・指令の部品（`pump_until_idle`・記録の取り出し・表示の間隔を含む）を、アクターのテストの部品ファイルへ寄せ、各テストの写しを消して引く
   - 名前を引くたびに表を組み直す部品は、1 度組んだ表を渡す形にする
@@ -27,7 +27,7 @@
   - 各テストは `#[path]` で部品を引き、写しを消す
   - 完了の姿: 指摘 16 のうち GPU と presenter の写しが `tests/` から消え、`tests/` のテストが同じ数だけ緑
   - _Requirements: 2.1, 2.3, 4.6_
-- [ ] 1.5 `tests/` の検体・フォント・バルーンの検体の組の部品を共有の部品フォルダへまとめる
+- [x] 1.5 `tests/` の検体・フォント・バルーンの検体の組の部品を共有の部品フォルダへまとめる
   - 検体の置き場とバルーンのファイルの読み（本番と同じ ANSI の規則の 1 つ）・`menu.pasta` の本文の取り出し・画像の寸の読み・DirectWrite の工場・本物のフォントの門・復号の読みを共有の部品へ置く
   - 2 つのバルーンの検体の組の α の数え上げ・COM の初期化・記録の確かめ・配置の道も同じ部品へ寄せる
   - 期待値は検体の定数から引き、写しの期待値の表を消す。UTF-8 で読んでいた検体の読みは ANSI の規則に揃える
@@ -238,3 +238,4 @@
 - 向こうから知らされた件: `actor_present.rs:616` の BudouX の区切りの毎フレームのかけ直し → 3.10。`state_decoration.rs:296-297,334-336` の古い説明と `actor_decoration_frame_tests.rs:115` の `layout_with_cursor_warn` を名指す説明 → 5.5。`surface.rs:568,571` の負の数の桁あふれ → 2.4 の上限と一緒に見る。
 - `tests/` の共有の部品は `tests/support/mod.rs`（先頭に `#![allow(dead_code)]`）。各テストは `#[path = "support/mod.rs"] mod support;`、`decoration_readback/mod.rs` の中からは `#[path = "../support/mod.rs"] mod shared;` で引く（1.4）。
 - `lib.rs` の純粋層の一覧の母数は 1.3 で 84（`choice_test_support.rs` を足した）。選択肢の部品は `crate::choice::test_support`、配置の 3 つ（`IMAGE`・`model_rect`・`broken_lines`）は `crate::layout::test_support`。
+- 検体・フォント・バルーンの検体の組の部品は `tests/support/fixture.rs`（`support/mod.rs` の `pub mod fixture;`）。本物のフォントの門は `FontCatalog::family_for` の 1 つ。`shell_balloon_fixture_test.rs` の `fake_resolver` は `tests/` の中で唯一の写しで、`src/` の部品は crate の外から呼べないので残す（1.5）。

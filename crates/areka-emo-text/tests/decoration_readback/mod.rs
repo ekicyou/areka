@@ -31,22 +31,20 @@ mod shared;
 
 use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
 
+/// 実フォントの門は共有の部品（`support/fixture.rs`）が持つ。期待値の前提になる実フォント
+/// `REAL_FONT` は、プロポーショナルで実物 `emo2-kakukaku` と同じ指定。
+pub(crate) use shared::fixture::{REAL_FONT, assert_real_font_present, font_is_installed};
+
 mod vertical;
 
 use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
 };
-use areka_emo_text::draw::FontCatalog;
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
-use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use wintf::com::dwrite::dwrite_create_factory;
 
 // ══ 台本と描画環境の定数 ═══════════════════════════════════════════════════════════════
-
-/// 期待値の前提になる実フォント（プロポーショナル・実物 `emo2-kakukaku` と同じ指定）。
-pub(crate) const REAL_FONT: &str = "Yu Gothic UI";
 
 /// `\f[name,…]` の差し替え先（製品既定フォント——`REAL_FONT` と字形が明らかに違う）。
 pub(crate) const ALT_FONT: &str = "ＭＳ ゴシック";
@@ -116,28 +114,6 @@ pub(crate) fn model_with(font_name: &str, font_height: u32, extra: &str) -> Ball
 pub(crate) fn model(writing_mode: Option<&str>) -> BalloonModel {
     let extra = writing_mode.map_or(String::new(), |m| format!("writing_mode,{m}\n"));
     model_with(REAL_FONT, FONT_HEIGHT, &extra)
-}
-
-// ══ 実フォントの門（本番の判断関数で判定する） ═════════════════════════════════════════
-
-fn factory() -> IDWriteFactory2 {
-    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite factory を生成できる")
-}
-
-/// 当該のフォント名がこの機械にインストールされているか——**本番の判断関数**
-/// `FontCatalog::family_for` で判定する。
-pub(crate) fn font_is_installed(name: &str) -> bool {
-    let catalog = FontCatalog::new(&factory()).expect("FontCatalog::new");
-    catalog.family_for(&[name.to_owned()]).is_some()
-}
-
-/// 実フォントが無ければ赤で止める（代替フォントのまま緑にしない）。
-pub(crate) fn assert_real_font_present() {
-    assert!(
-        font_is_installed(REAL_FONT),
-        "実フォント {REAL_FONT} がこの機械に無い。本ファイルの期待値は当該フォントの実描画を\
-         前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
 }
 
 // ══ cue（`\f` は再生時間 0 の汎用キャリア） ════════════════════════════════════════════

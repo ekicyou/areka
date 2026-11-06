@@ -12,13 +12,10 @@ use std::sync::LazyLock;
 
 use areka_emo_present::balloon::{ResolvedFace, resolve_balloon_faces};
 use areka_emo_text::actor::ResolvedBalloonText;
-use areka_emo_text::draw::DWriteMetrics;
-use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
 use sample_ghost_kit::SampleRoot;
-use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use wintf::com::dwrite::dwrite_create_factory;
+
+use crate::support::fixture::read_balloon_file;
 
 /// 既定バルーンの検体。プロセス寿命で保持する（`SampleRoot` は破棄で複製の木を消すため）。
 static STAYSEE: LazyLock<SampleRoot> = LazyLock::new(|| {
@@ -127,28 +124,11 @@ pub(crate) fn resolve_faces(scope: u32) -> Vec<ResolvedFace> {
 
 // ── 定義ファイルの読み口（要件 3.3）──────────────────────────────────────────
 
-/// 検体のテキストファイルを本番と同じ規約で復号する。
-///
-/// 本番経路 `areka_emo_present::balloon::load_scope_balloon_model` は
-/// `decode(&bytes, DefaultEncoding::Ansi)`（**既定 Ansi・ファイル内の `charset` 宣言優先**）で
-/// 読む。StayseeBalloon は `charset,Shift_JIS` を宣言しているのでその宣言が効く。
-///
-/// **読み込み失敗は明示的に panic する**。読めなかったときに「対象 0 件だから緑」になる形を
-/// 作ってはならない。
+/// 検体のテキストファイルを本番と同じ規約（既定 Ansi・ファイル内の `charset` 宣言優先）で
+/// 復号する。StayseeBalloon は `charset,Shift_JIS` を宣言しているのでその宣言が効く。読みの
+/// 失敗と空は共有の部品 [`read_balloon_file`] が名指しで落とす。
 pub(crate) fn read_decoded(name: &str) -> String {
-    let path = staysee_root().join(name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "既定バルーンの定義 {} の読取に失敗した（本テストはこのファイルの実在が前提）: {e}",
-            path.display()
-        )
-    });
-    assert!(
-        !bytes.is_empty(),
-        "既定バルーンの定義 {} が空である（空ファイルでは読み取り結果が主張と無関係になる）",
-        path.display()
-    );
-    decode(&bytes, DefaultEncoding::Ansi)
+    read_balloon_file(&staysee_root(), name)
 }
 
 /// `descript.txt` 単層（面別上書き層なし）から本番と同じ経路でモデルを組む。
@@ -158,17 +138,6 @@ pub(crate) fn staysee_model() -> BalloonModel {
     parse_str(&read_decoded("descript.txt"), None)
 }
 
-// ── 文字の計測の入口（要件 1.3・3.5）────────────────────────────────────────
-
-/// DirectWrite の factory（文字の寸法を測るのに要るのはこれだけ——実 GPU も実窓も要らない）。
-///
-/// 同 crate の既存の統合テスト（`line_pitch_readback_test.rs`・`kero_menu_capacity_test.rs`）と
-/// 同じ作り方である。生成失敗は明示的に落とす。
-pub(crate) fn dwrite_factory() -> IDWriteFactory2 {
-    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
-        .expect("DirectWrite factory を生成できる（文字の寸法の観測はこれが前提）")
-}
-
 // ── 領域と書体の入口（要件 3.3・3.5・設計 C2 の E 行／F 行）────────────────────
 //
 // 検体の描画範囲・書体・文字の寸法は複数のテーマが引く。ここに集約し、テーマ側で
@@ -176,11 +145,11 @@ pub(crate) fn dwrite_factory() -> IDWriteFactory2 {
 // 値そのものは `research.md` §8.2 の実測・導出であり、宣言からの計算結果である
 // 4 辺は「実測へ合わせて緩める」対象ではない（設計 Error Handling）。
 
-/// 各 scope の面 0 として焼き込まれる枠画像の名前（原寸の引き先）。
+/// 各 scope の面 0 として焼き込まれる枠画像の名前（原寸の引き先・共有の部品の定数）。
 ///
 /// 原寸そのものは [`EXPECTED_FRAME_SIZES`]（実 PNG の IHDR と突合済み）から引くので、
 /// ここで二重に綴らない。
-pub(crate) const SCOPE_FACE0_FILES: [(u32, &str); 2] = [(0, "balloons0.png"), (1, "balloonk0.png")];
+pub(crate) use crate::support::fixture::SCOPE_FACE0_FILES;
 
 /// 描画範囲の左辺（`validrect.left,22` の素通し・image px）。
 pub(crate) const EXPECTED_LEFT: f32 = 22.0;
@@ -226,15 +195,4 @@ pub(crate) fn expected_bottom(scope: u32) -> f32 {
 /// 検体の当該 scope を本番の描画入口と同じ関数で解く。
 pub(crate) fn resolve_staysee(scope: u32) -> ResolvedBalloonText {
     ResolvedBalloonText::resolve(&staysee_model(), scope_image_size(scope))
-}
-
-/// 検体の書体で実測の文字の寸法を組む（GPU 不要——計測に要るのは factory だけ）。
-pub(crate) fn staysee_metrics(resolved: &ResolvedBalloonText) -> DWriteMetrics {
-    DWriteMetrics::new(
-        &dwrite_factory(),
-        &resolved.font,
-        resolved.mode,
-        &TextLayerConfig::default(),
-    )
-    .expect("既定バルーンの書体で文字の寸法を組める")
 }

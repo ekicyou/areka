@@ -3,30 +3,14 @@
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.2**・**2.1**・**2.2**・**2.4**・**2.6**・**2.7**・
 //! **3.1**・**3.2**・**3.4**・**4.1**・**5.2**・**7.1**・**10.3**）。
 
-use std::path::Path;
-
 use areka_emo_atlas::{ElementDecoder, WicDecoderArm};
 use sample_ghost_kit::SAMPLES;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+use crate::support::fixture::{init_com_for_this_thread, png_native_size};
 
 use super::test_support::{
     BALLOON_NAME, EXPECTED_FILE_NAMES, EXPECTED_ONLINE_SIZE, EXPECTED_PNG_SIZES, balloon_root,
 };
-
-/// PNG の IHDR から寸法 `(width, height)` を読む（署名 8B ＋ 長さ 4B ＋ `IHDR` 4B の直後）。
-fn png_native_size(path: &Path) -> (u32, u32) {
-    let bytes = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("バルーンの絵 {} の読取に失敗した: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
-        "{} が PNG（先頭 IHDR チャンク付き）として読めない（{} バイト）",
-        path.display(),
-        bytes.len()
-    );
-    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    (w, h)
-}
 
 /// フォルダ直下が 23 ファイルの表と過不足なく一致し、サブフォルダも空のファイルも無い。
 ///
@@ -106,10 +90,7 @@ fn png_native_sizes_are_pinned() {
 /// `online0.webp` を areka の動く絵の読み手で聞き、77×36 の動く絵である（要件 3.2・4.1）。
 #[test]
 fn online_marker_is_an_animated_webp_of_77x36() {
-    // SAFETY: COM の MTA 初期化。並列のテストで既に張られていても使えるので戻り値は見ない。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    init_com_for_this_thread();
     let decoder = WicDecoderArm::new().expect("WIC の読み手を作れない（COM の初期化が前提）");
     let (name, width, height) = EXPECTED_ONLINE_SIZE;
     let path = balloon_root().join(name);

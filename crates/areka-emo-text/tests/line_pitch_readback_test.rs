@@ -36,12 +36,13 @@
 //!
 //! `Yu Gothic UI` はプロポーショナルで、仮名の送りは em より狭い。当該フォントが無い環境では
 //! DirectWrite が等幅の代替へ落ち、本ファイルの数値の前提が崩れたまま緑になり得る。ゆえに
-//! 先頭で「あ」の送りが em 未満であることを確かめ、縮退していたら赤で止める
-//! （`kero_menu_capacity_test.rs` の同趣旨の門と同じ考え方）。
+//! 先頭で共有の門（`support::fixture::assert_real_font_present`・本番の判断関数で判定）を通し、
+//! 当該フォントが無ければ赤で止める。
 
 #[path = "support/mod.rs"]
 mod support;
 
+use support::fixture::{assert_real_font_present, balloon_metrics};
 use support::{
     is_fill, is_hover_text, make_world_with_gpu, read_back, spawn_reserved_slot, surface_size,
 };
@@ -57,8 +58,6 @@ use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
-use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use wintf::com::dwrite::dwrite_create_factory;
 
 // ══ 裁定値（design.md §4.1 正典表・裁定 2026-09-05） ═════════════════════════════════════
 
@@ -192,30 +191,9 @@ fn model() -> BalloonModel {
 
 // ══ GPU/COM フィクスチャ（choice_fixture_test.rs と同一方針・headless） ═══════════════
 
-/// DirectWrite factory（計測に要るのは factory だけ・GPU 不要）。
-fn factory() -> IDWriteFactory2 {
-    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite factory を生成できる")
-}
-
-/// 実 descript の font 指定で組んだ字の寸法（GPU 不要・各検査の実フォント門に使う）。
+/// 実 descript の font 指定で組んだ字の寸法（GPU 不要）。
 fn canon_metrics() -> DWriteMetrics {
-    let resolved = ResolvedBalloonText::resolve(&model(), IMAGE);
-    DWriteMetrics::new(
-        &factory(),
-        &resolved.font,
-        resolved.mode,
-        &TextLayerConfig::default(),
-    )
-    .expect("実 descript のフォントで DWriteMetrics を生成できる")
-}
-
-/// 実フォントの送り幅が代替フォントへ縮退していないことを確かめる（縮退なら赤で止める）。
-fn assert_real_font_present(metrics: &DWriteMetrics) {
-    let a = metrics.advance("あ", FONT_HEIGHT);
-    assert!(
-        a < FONT_HEIGHT,
-        "実フォント Yu Gothic UI が見つからない（「あ」の送りが {a} ＝ em {FONT_HEIGHT} 以上の等幅値へ縮退している）。本ファイルの期待値は実フォントの実測を前提にしているので、代替フォントのまま緑にしない"
-    );
+    balloon_metrics(&ResolvedBalloonText::resolve(&model(), IMAGE))
 }
 
 // ══ cue（全リビール済みフレームで読むので duration は素直に焼く） ══════════════════════
@@ -393,7 +371,7 @@ fn canon_pitch_advance_and_ink_height_match_the_ruling() {
     );
 
     let metrics = canon_metrics();
-    assert_real_font_present(&metrics);
+    assert_real_font_present();
 
     // (a) 行送り ＝ 裁定値（要件 1.2）。
     assert_eq!(
@@ -450,7 +428,7 @@ fn canon_pitch_advance_and_ink_height_match_the_ruling() {
 /// その場合は本検査が赤になる。
 #[test]
 fn two_lines_ink_does_not_overlap_at_the_ruled_pitch() {
-    assert_real_font_present(&canon_metrics());
+    assert_real_font_present();
     let mut world = make_world_with_gpu();
     let (mut rt, actor) = make_runtime(&mut world);
     present_cues(
@@ -535,7 +513,7 @@ fn two_lines_ink_does_not_overlap_at_the_ruled_pitch() {
 /// 次の行のインクが窓へ入らない）。
 #[test]
 fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
-    assert_real_font_present(&canon_metrics());
+    assert_real_font_present();
     assert_vr_origin_matches_resolved_region();
     let mut world = make_world_with_gpu();
     let (mut rt, actor) = make_runtime(&mut world);

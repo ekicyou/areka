@@ -46,10 +46,7 @@ use support::{
     white_pixels_in_rect,
 };
 
-use std::path::PathBuf;
-use std::sync::LazyLock;
-
-use sample_ghost_kit::SampleRoot;
+use support::fixture::{command_cues, emo2_balloon_root, menu_script, merged_model};
 
 use areka_emo_text::actor::{
     ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
@@ -58,44 +55,9 @@ use areka_emo_text::choice::ResolvedChoiceStyle;
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CueCommand, CuePayload, SystemVarSnapshot, TalkCue};
-
-// ── 実 emo2 fixture の所在（リポジトリ実在ファイル・test-local でない） ─────────────────────
-
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-/// emo2 検体のゴーストフォルダ（メニュー台本は `ghost/master/dic/` 下に在る）。
-fn emo2_fixture_root() -> PathBuf {
-    EMO2.folder().to_path_buf()
-}
-
-/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
-fn emo2_balloon_root() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
-/// 実 fixture ファイル（与えた基準フォルダからの相対パス）を読み、`charset` 宣言に従いデコード
-/// する（parser-foundation の decode 経路）。descript／pasta とも UTF-8 ゆえ既定 UTF-8 で読む。
-fn read_fixture_under(base: PathBuf, rel: &str) -> String {
-    let mut path = base;
-    for seg in rel.split('/') {
-        path = path.join(seg);
-    }
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "実 emo2 fixture {} の読取に失敗した（task 11.2 は実在 fixture を用いる）: {e}",
-            path.display()
-        )
-    });
-    decode(&bytes, DefaultEncoding::Utf8)
-}
+use areka_sakura::contract::{ActorKey, CueCommand, CuePayload, SystemVarSnapshot};
 
 /// balloons0.png の実測原寸（region.rs `FIXTURE_IMAGE_SIZE` と同値・image px）。
 const IMAGE_SIZE: (u32, u32) = (400, 224);
@@ -103,28 +65,12 @@ const IMAGE_SIZE: (u32, u32) = (400, 224);
 /// 実 `descript.txt`（基層）＋`balloons0s.txt`（画像別上書き層）を 2 層マージした BalloonModel。
 /// 実機の balloon-parse と同一機構（`parse_str(descript, Some(image))`）——非退化領域が成立する。
 fn merged_balloon_model() -> BalloonModel {
-    let descript = read_fixture_under(emo2_balloon_root(), "descript.txt");
-    let image_layer = read_fixture_under(emo2_balloon_root(), "balloons0s.txt");
-    parse_str(&descript, Some(&image_layer))
+    merged_model(&emo2_balloon_root(), Some("balloons0s.txt"))
 }
 
-/// 実 `menu.pasta` の `＊メインメニュー選択肢` 本文からさくらスクリプト断片を抽出する。
-///
-/// pasta 本文行は `　　　エモ：＠通常　<さくらスクリプト>` の形——pasta 話者接頭辞は最初の ASCII
-/// `\`（さくらスクリプト開始）より前ゆえ、最初の `\` 以降を取れば純さくらスクリプト断片になる。
-/// メインメニュー本文行は `\q[おしゃべり頻度` と `\q[閉じる` を同時に含む唯一の行で一意に識別できる。
+/// 実 `menu.pasta` の `＊メインメニュー選択肢` 本文（純さくらスクリプト断片）。
 fn extract_main_menu_sakura() -> String {
-    let pasta = read_fixture_under(emo2_fixture_root(), "ghost/master/dic/menu.pasta");
-    let line = pasta
-        .lines()
-        .find(|l| l.contains("\\q[おしゃべり頻度") && l.contains("\\q[閉じる"))
-        .expect(
-            "menu.pasta に メインメニュー選択肢 本文行（\\q[おしゃべり頻度…\\q[閉じる…）が在る",
-        );
-    let start = line
-        .find('\\')
-        .expect("本文行はさくらスクリプト（\\）を含む");
-    line[start..].to_string()
+    menu_script("＊メインメニュー選択肢")
 }
 
 /// 実台本のメインメニュー 3 項目（`\q[disp,target]` の (target=id, disp=label)）。
@@ -258,24 +204,6 @@ fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
 
 // ══ テスト 3: 実 fixture ＋ 実 cue 列を headless 描画し readback で検証する（GPU・headless） ══════
 
-/// コンパイル済み CueSheet の Command cue を配送エンベロープ `TalkCue` へ無変形複写する
-/// （Barrier/Routing は runtime の apply_cue 対象外——選択待ち／配送制御は本 spec スコープ外）。
-fn command_talk_cues(sheet: &areka_sakura::contract::CueSheet) -> Vec<TalkCue> {
-    sheet
-        .cues()
-        .iter()
-        .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
-            _ => None,
-        })
-        .collect()
-}
-
 /// Observable（R6.1/6.2/6.3）: 実 emo2 fixture（実 descript の SquareFill＋実 validrect）へ、
 /// 実 menu.pasta 由来の cue 列（Choice/NewLine/Cursor）を通し経路
 /// （`register_actor`→`apply_cue`→`present_frame`→`inject_choice_hover`→`read_back`）で描くと、
@@ -294,9 +222,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     // ── 実 fixture → 実 style ／ 実 menu.pasta → 実 cue 列 ──
     let model = merged_balloon_model();
     let sakura = extract_main_menu_sakura();
-    let instructions = areka_parsers::sakura::parse(&sakura);
-    let compiled = compile(&instructions, &SystemVarSnapshot::default());
-    let talk_cues = command_talk_cues(&compiled.sheet);
+    let talk_cues = command_cues(&sakura);
 
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor(

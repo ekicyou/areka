@@ -6,7 +6,8 @@
 //! 点 3 つ・コマ k で点 k が α 1、ほかが α 0.25・3 コマ・各 300 ミリ秒・繰り返し無限。
 
 use areka_emo_atlas::{ElementDecoder, LoopCount, WicDecoderArm};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+use crate::support::fixture::init_com_for_this_thread;
 
 use super::test_support::{EXPECTED_ONLINE_SIZE, balloon_root};
 
@@ -32,10 +33,7 @@ const FRAME_DELAY_MS: u32 = 300;
 /// （要件 8.9・3.2・3.3）。
 #[test]
 fn online_marker_frames_light_dots_in_turn() {
-    // SAFETY: COM の MTA 初期化。並列のテストで既に張られていても使えるので戻り値は見ない。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    init_com_for_this_thread();
     let decoder = WicDecoderArm::new().expect("WIC の読み手を作れない（COM の初期化が前提）");
     let (name, width, height) = EXPECTED_ONLINE_SIZE;
     let path = balloon_root().join(name);

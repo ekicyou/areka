@@ -41,88 +41,25 @@
 //! 旧式（`ceil(28 × 1.25)` ＝ 35）だと 3 行目の上端は 40 ＋ 2 × 35 ＝ 110・下端 138 > 133 で
 //! あふれる——それが対照テスト（`legacy_pitch_metrics_reproduces_the_dropped_first_line`）である。
 
-use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+use std::path::Path;
 
-use sample_ghost_kit::SampleRoot;
+#[path = "support/mod.rs"]
+mod support;
+
+use support::fixture::{
+    assert_real_font_present, balloon_metrics, command_cues, emo2_balloon_root, emo2_folder,
+    menu_script, state_of,
+};
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DWriteMetrics;
 use areka_emo_text::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::segment::{SegmentPlan, segment_plan};
-use areka_emo_text::state::{TextItem, TextLayerConfig, TextLayerState};
+use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CuePayload, SystemVarSnapshot, TalkCue};
-use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use wintf::com::dwrite::dwrite_create_factory;
-
-// ══ 実物の所在と読み込み（本番と同じ規約） ══════════════════════════════════════════════
-
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-/// emo2 検体のゴーストフォルダ（pasta 辞書は `ghost/master/dic/` 下に在る）。
-fn emo2_fixture_root() -> PathBuf {
-    EMO2.folder().to_path_buf()
-}
-
-/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
-fn emo2_balloon_root() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
-/// 実 fixture ファイル（与えた基準フォルダからの相対パス）の生バイト列を読む。
-///
-/// 読めなかったときに「対象 0 件だから緑」にならないよう、失敗と空は明示的に panic する。
-fn read_fixture_bytes(base: PathBuf, rel: &str) -> Vec<u8> {
-    let mut path: PathBuf = base;
-    for seg in rel.split('/') {
-        path = path.join(seg);
-    }
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "実 emo2 fixture {} の読取に失敗した（本檻はこのファイルの実在が前提）: {e}",
-            path.display()
-        )
-    });
-    assert!(
-        !bytes.is_empty(),
-        "実 emo2 fixture {} が空である",
-        path.display()
-    );
-    bytes
-}
-
-/// バルーン記述ファイルを本番と同じ規約で読む。
-///
-/// 本番経路 `areka_emo_present::balloon::load_scope_balloon_model` は
-/// `decode(&bytes, DefaultEncoding::Ansi)`（**既定 Ansi・ファイル内の `charset` 宣言優先**）で
-/// 読む。`emo2-kakukaku/descript.txt` は `charset,UTF-8` を宣言しており、面別上書き層は
-/// 宣言を持たないが純 ASCII ゆえどちらの既定でも同一である。
-fn read_balloon_layer(rel: &str) -> String {
-    decode(
-        &read_fixture_bytes(emo2_balloon_root(), rel),
-        DefaultEncoding::Ansi,
-    )
-}
-
-/// pasta 辞書を読む。
-///
-/// 辞書ファイルは `charset` 宣言を持たない（宣言はゴーストの `master/descript.txt` の
-/// `charset,UTF-8` が担う）ので、既定を UTF-8 として読む（`emo2_fixture_e2e_test.rs` と同じ規約）。
-fn read_pasta(rel: &str) -> String {
-    decode(
-        &read_fixture_bytes(emo2_fixture_root(), rel),
-        DefaultEncoding::Utf8,
-    )
-}
+use areka_parsers::balloon::BalloonModel;
+use areka_sakura::contract::{ActorKey, TalkCue};
 
 /// 相方（エモ）側バルーンの面別上書き層（scope 1・`balloonk0.png` 288×203 向け）。
 const KERO_OVERLAY: &str = "balloonk0s.txt";
@@ -146,12 +83,9 @@ const PITCH: f32 = 30.0;
 /// 書字開始点（相方側・image px）。
 const KERO_START: (f32, f32) = (24.0, 40.0);
 
-/// 2 層（`descript.txt` 基層＋面別上書き層）をマージした `BalloonModel`（本番と同じ `parse_str`）。
+/// 2 層（`descript.txt` 基層＋面別上書き層）をマージした `BalloonModel`（本番と同じ規約で読む）。
 fn merged_model(overlay: &str) -> BalloonModel {
-    parse_str(
-        &read_balloon_layer("descript.txt"),
-        Some(&read_balloon_layer(overlay)),
-    )
+    support::fixture::merged_model(&emo2_balloon_root(), Some(overlay))
 }
 
 // ══ 実台本（menu.pasta の 3 本の選択肢台本） ═════════════════════════════════════════════
@@ -167,90 +101,7 @@ const MENU_HEADINGS: [&str; 3] = [
     "＊エモの位置調整選択肢",
 ];
 
-/// 見出しで指した台本の本文（純さくらスクリプト断片）を実 `menu.pasta` から取り出す。
-fn menu_script(heading: &str) -> String {
-    let pasta = read_pasta("ghost/master/dic/menu.pasta");
-    let mut lines = pasta.lines();
-    lines
-        .find(|l| l.trim_end() == heading)
-        .unwrap_or_else(|| panic!("menu.pasta に見出し {heading} が在る"));
-    let body = lines
-        .find(|l| l.contains('\\'))
-        .unwrap_or_else(|| panic!("見出し {heading} の直後にさくらスクリプトを含む本文行が在る"));
-    let start = body
-        .find('\\')
-        .expect("本文行はさくらスクリプト（\\）を含む");
-    body[start..].to_string()
-}
-
-/// 実 sakura パイプライン（`parse` → `compile`）で台本を cue 列へ落とし、
-/// 文字状態機械が消費する Command cue だけを配送エンベロープへ無変形複写する。
-fn command_cues(script: &str) -> Vec<TalkCue> {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = compile(&instructions, &SystemVarSnapshot::default());
-    compiled
-        .sheet
-        .cues()
-        .iter()
-        .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
-            _ => None,
-        })
-        .collect()
-}
-
-/// cue 列を実 `TextLayerState` へ載せ、（状態, 唯一の actor）を返す。
-fn state_of(cues: &[TalkCue]) -> (TextLayerState, ActorKey) {
-    let mut state = TextLayerState::default();
-    for cue in cues {
-        state.apply_cue(cue);
-    }
-    let actors: Vec<ActorKey> = state.actors().map(|(k, _)| k.clone()).collect();
-    assert_eq!(
-        actors.len(),
-        1,
-        "選択肢台本は 1 スコープぶんの cue 列である: {actors:?}"
-    );
-    (state, actors[0].clone())
-}
-
 // ══ metrics（実フォント）と、実フォント不在の検出 ═══════════════════════════════════════
-
-/// DirectWrite factory（GPU 不要——計測に要るのは factory だけ）。
-fn factory() -> IDWriteFactory2 {
-    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite factory を生成できる")
-}
-
-/// 実フォントの送り幅が縮退していないことを先頭で確かめる（design「新規の決定論テスト」注記）。
-///
-/// `Yu Gothic UI` はプロポーショナル——仮名の送りは em（28）より**狭い**。この環境に当該フォントが
-/// 無いと DirectWrite が等幅の代替（全角＝em）へ落ち、本ファイルの数値の前提（送り ≈ 23）が
-/// 崩れたまま緑になり得る。ゆえに縮退を検出したら**赤で止める**。
-fn assert_real_font_present(metrics: &dyn GlyphMetrics) {
-    let a = metrics.advance("あ", FONT_HEIGHT);
-    assert!(
-        a < FONT_HEIGHT,
-        "実フォント Yu Gothic UI が見つからない（「あ」の送りが {a} ＝ em {FONT_HEIGHT} 以上の等幅値へ縮退している）。\
-         本ファイルの期待値はプロポーショナルな実フォントの実測を前提にしているので、\
-         代替フォントのまま緑にしない"
-    );
-}
-
-/// 実物のバルーン記述から解決した metrics（実フォント・正典の行間）。
-fn resolved_metrics(factory: &IDWriteFactory2, resolved: &ResolvedBalloonText) -> DWriteMetrics {
-    DWriteMetrics::new(
-        factory,
-        &resolved.font,
-        resolved.mode,
-        &TextLayerConfig::default(),
-    )
-    .expect("実 descript のフォントで DWriteMetrics を生成できる")
-}
 
 /// 行送りだけを**旧式**（`ceil(font_height × 1.25)`）へ戻すテスト専用の metrics（要件 8.7 の対照）。
 ///
@@ -353,11 +204,10 @@ fn line_bottoms(lines: &[PositionedLine]) -> Vec<f32> {
 /// | 位置調整 | 40 / 100 | 68 / 128 | 2 項目・2 段目（上端 70）は文字が無く**行を作らない** |
 #[test]
 fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     // 前提の実物ジオメトリ（値が変われば以下の期待値の導出ごと崩れるので先に固定する）。
     assert_eq!(resolved.mode, WritingMode::HorizontalTb, "相方側は横書き");
@@ -489,11 +339,10 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
 /// (a) だけが新しい行送りへ追随する（要件 4.1）。
 #[test]
 fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     let script = menu_script(MENU_HEADINGS[0]);
     assert!(
@@ -572,11 +421,10 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
 /// 収まり（240 の内）と「縮退した等幅値ではない」（200 より遠い）の 2 つの境で挟む。
 #[test]
 fn close_and_back_choices_stay_inside_the_drawing_range_without_wrapping() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     // 机上値がなぜ外れたか（要件 6.5 の記録）: 全角＝em を仮定すると 3 文字で 84px ＝ 遠端 248 に
     // なり描画範囲の右端 240 を超える。実フォントの送りは em より狭いので実際には超えない。
@@ -665,11 +513,10 @@ fn first_glyph_of(lines: &[PositionedLine], index: usize) -> usize {
 /// 実際に区別している（両者が同じ値になるような緩い比較ではない）。
 #[test]
 fn sakura_side_wrap_positions_match_a_soft_only_reference() {
-    let factory = factory();
     let model = merged_model(SAKURA_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, SAKURA_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     let soft = resolved.region.wrap_threshold();
     let hard = resolved.region.inline_limit();
@@ -750,11 +597,10 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
 /// 違う。旧式の口は製品コードに残さない（テスト専用の metrics で注入する）。
 #[test]
 fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let real = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&real);
+    let real = balloon_metrics(&resolved);
+    assert_real_font_present();
     let legacy = LegacyPitchMetrics { real: &real };
     assert_eq!(
         legacy.line_pitch(FONT_HEIGHT),
@@ -818,7 +664,7 @@ fn the_shipped_fixture_files_this_cage_points_at_exist() {
         balloon.join("descript.txt"),
         balloon.join(KERO_OVERLAY),
         balloon.join(SAKURA_OVERLAY),
-        emo2_fixture_root().join("ghost/master/dic/menu.pasta"),
+        emo2_folder().join("ghost/master/dic/menu.pasta"),
     ] {
         assert!(
             Path::new(&path).is_file(),

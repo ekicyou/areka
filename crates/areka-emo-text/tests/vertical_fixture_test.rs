@@ -27,49 +27,27 @@
 //! 1 行だけ**であること・`balloons0s.txt` が同内容であること・**両版とも `origin` を
 //! 宣言しない**こと（正典推奨形・要件 10.9）を機械で固定する（人の目視に頼らない）。
 
-use std::path::PathBuf;
+#[path = "support/mod.rs"]
+mod support;
+
+use support::fixture::{example_fixture_dir, read_balloon_file, read_fixture_bytes};
 
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::balloon::BalloonModel;
 
 /// 共有 fixture のバルーン枠画像 balloons0.png の実測原寸（image px・再利用・非改変）。
 const FIXTURE_IMAGE_SIZE: (u32, u32) = (400, 224);
 
-/// fixture 変種の配置（design.md File Structure Plan 正典:
-/// `examples/fixtures/emo2-vertical/`——task 9.2 の example が起動引数で切り替える参照先）。
-fn fixture_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("fixtures")
-        .join("emo2-vertical")
-}
-
-/// fixture 変種ファイルを読み、charset 宣言（`charset,UTF-8`）に従いデコードする
-/// （parser-foundation の decode 経路＝example 9.2 と同じ読み込み規約）。
-fn read_decoded(name: &str) -> String {
-    let path = fixture_dir().join(name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "fixture 変種 {} の読取に失敗した（task 9.1 の観測 fixture が必要）: {e}",
-            path.display()
-        )
-    });
-    decode(&bytes, DefaultEncoding::Utf8)
-}
-
-/// descript 基層のみ（画像別上書き層なし）の BalloonModel。
+/// fixture 変種（`examples/fixtures/emo2-vertical/`・task 9.2 の example が起動引数で切り替える
+/// 参照先）の descript 基層のみ（画像別上書き層なし）の BalloonModel。
 fn base_model() -> BalloonModel {
-    parse_str(&read_decoded("descript.txt"), None)
+    variant_base_model(EXT_KEY_FIXTURE)
 }
 
 /// 2 層マージ済み（descript 基層＋balloons0s.txt 画像別上書き層・後勝ち）の BalloonModel。
 fn merged_model() -> BalloonModel {
-    parse_str(
-        &read_decoded("descript.txt"),
-        Some(&read_decoded("balloons0s.txt")),
-    )
+    variant_merged_model(EXT_KEY_FIXTURE)
 }
 
 // ── R11.4: writing_mode が縦書きへ解決される ──
@@ -167,42 +145,25 @@ const EXT_KEY_FIXTURE: &str = "emo2-vertical";
 /// 正典キー版（`vertical,1`）フィクスチャのディレクトリ名。
 const CANON_KEY_FIXTURE: &str = "emo2-vertical-canon";
 
-/// 名前でフィクスチャ変種のディレクトリを引く（既存 `fixture_dir` の 2 変種一般化）。
-fn variant_dir(variant: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("fixtures")
-        .join(variant)
-}
-
-/// 指定変種のファイルを生バイトで読む——**存在しなければ panic する**
-/// （フィクスチャ不在が「対象 0 件だから緑」へ化けない規律・既存 `read_decoded` と同じ）。
+/// 指定変種のファイルを生バイトで読む——**存在しないか空なら panic する**
+/// （フィクスチャ不在が「対象 0 件だから緑」へ化けない規律）。
 fn read_variant_bytes(variant: &str, name: &str) -> Vec<u8> {
-    let path = variant_dir(variant).join(name);
-    std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "フィクスチャ {} の読取に失敗した（areka-P0-balloon-vertical-canon task 5.1 の同値檻には両変種の実ファイルが要る）: {e}",
-            path.display()
-        )
-    })
+    read_fixture_bytes(&example_fixture_dir(variant), name)
 }
 
-/// 指定変種のファイルを charset 宣言（`charset,UTF-8`）に従いデコードする。
+/// 指定変種のファイルを本番と同じ規約（既定 Ansi・`charset,UTF-8` 宣言優先）で読む。
 fn read_variant_decoded(variant: &str, name: &str) -> String {
-    decode(&read_variant_bytes(variant, name), DefaultEncoding::Utf8)
+    read_balloon_file(&example_fixture_dir(variant), name)
 }
 
 /// 指定変種の descript 基層のみ（画像別上書き層なし）の BalloonModel。
 fn variant_base_model(variant: &str) -> BalloonModel {
-    parse_str(&read_variant_decoded(variant, "descript.txt"), None)
+    support::fixture::merged_model(&example_fixture_dir(variant), None)
 }
 
 /// 指定変種の 2 層マージ済み（descript 基層＋`balloons0s.txt` 後勝ち）の BalloonModel。
 fn variant_merged_model(variant: &str) -> BalloonModel {
-    parse_str(
-        &read_variant_decoded(variant, "descript.txt"),
-        Some(&read_variant_decoded(variant, "balloons0s.txt")),
-    )
+    support::fixture::merged_model(&example_fixture_dir(variant), Some("balloons0s.txt"))
 }
 
 /// 両変種のフィクスチャ 2 ファイルが実在し、空でないこと——同値檻・構造檻が

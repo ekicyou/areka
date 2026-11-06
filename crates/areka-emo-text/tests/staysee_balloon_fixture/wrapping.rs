@@ -49,36 +49,24 @@
 //! 要さず、同一入力に対して常に同一の結果を返す。既定書体が無い環境では
 //! [`super::region`] の寸法の門が先に赤で止まる。
 
-use areka_emo_text::layout::{LayoutEngine, PositionedLine, WrapPlan};
+use areka_emo_text::layout::{LayoutEngine, PositionedLine};
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::state::TextItem;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::parse_str;
 
+use crate::support::fixture::{
+    FULL_WIDTH_BODY, HALF_WIDTH_BODY, MIXED_BODY, assert_rect_inside, glyph_count, glyph_items,
+    lay_out,
+};
+
 use super::test_support::{
     EXPECTED_ADVANCE_FULL, EXPECTED_ADVANCE_HALF, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT,
     EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, expected_bottom,
-    read_decoded, resolve_staysee, scope_image_size, staysee_metrics,
+    read_decoded, resolve_staysee, scope_image_size,
 };
 
 // ── 流し込む 3 本文（設計 C2 の G 行）────────────────────────────────────────
-
-/// 全角のみの本文（60 字）。1 字 12 px。
-const FULL_WIDTH_BODY: &str = "あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ";
-/// 半角のみの本文（120 字）。1 字 6 px。
-const HALF_WIDTH_BODY: &str = "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij\
-                               abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij";
-/// 全角と半角を交互に並べた本文（90 字）。偶数番目が全角。
-const MIXED_BODY: &str = "あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおe";
 
 /// 各本文の字数と、期待する行ごとの文字数（設計 C2 の G 行・Domain Model の導出）。
 const EXPECTED_LINE_LENGTHS: [(&str, &str, &[usize]); 3] = [
@@ -92,27 +80,6 @@ const KERO_EXACT_FIT_LINES: usize = 5;
 
 // ── 本番と同じ折返し経路 ─────────────────────────────────────────────────────
 
-/// 本文を 1 クラスタ 1 グリフの追記列へ写す（`\n` は行区切りとして写す）。
-fn glyph_items(body: &str) -> Vec<TextItem> {
-    areka_sakura::cluster::clusters(body)
-        .map(|ch| {
-            if ch == "\n" {
-                TextItem::LineBreak { ratio: 1.0 }
-            } else {
-                TextItem::glyph(ch)
-            }
-        })
-        .collect()
-}
-
-/// 追記列のうち可視グリフの数（非グリフのアイテムは序数を消費しない）。
-fn glyph_count(items: &[TextItem]) -> usize {
-    items
-        .iter()
-        .filter(|it| matches!(it, TextItem::Glyph { .. }))
-        .count()
-}
-
 /// 当該 scope の描画範囲・既定書体で本文を配置する（全文可視）。
 fn layout_in_scope(scope: u32, items: &[TextItem]) -> (TextRegion, Vec<PositionedLine>) {
     let resolved = resolve_staysee(scope);
@@ -121,16 +88,7 @@ fn layout_in_scope(scope: u32, items: &[TextItem]) -> (TextRegion, Vec<Positione
         "scope {scope}: 文字の高さが {EXPECTED_FONT_HEIGHT} ではなく {}（以下の期待値はこの高さが前提）",
         resolved.font.height
     );
-    let metrics = staysee_metrics(&resolved);
-    let lines = LayoutEngine::layout(
-        items,
-        glyph_count(items),
-        &resolved.region,
-        resolved.mode,
-        resolved.font.height,
-        &metrics,
-        WrapPlan::CharByChar,
-    );
+    let lines = lay_out(&resolved, items);
     (resolved.region, lines)
 }
 
@@ -267,28 +225,16 @@ fn every_glyph_stays_inside_the_drawing_range() {
 
         for (n, line) in lines.iter().enumerate() {
             for (i, glyph) in line.glyphs.iter().enumerate() {
-                let (left, right) = (glyph.inline_pos, glyph.inline_pos + glyph.advance);
                 let where_ = format!("{label}: {} 行目 {} 文字目 `{}`", n + 1, i + 1, glyph.text);
-                assert!(
-                    left >= EXPECTED_LEFT,
-                    "{where_} の左端 {left} が描画範囲の左辺 {EXPECTED_LEFT} より外に出た"
-                );
-                assert!(
-                    right <= EXPECTED_RIGHT,
-                    "{where_} の右端 {right} が描画範囲の右辺 {EXPECTED_RIGHT} を超えた\
-                     （超過 {} px）",
-                    right - EXPECTED_RIGHT
-                );
-                assert!(
-                    line.rect.top >= EXPECTED_TOP,
-                    "{where_} の上端 {} が描画範囲の上辺 {EXPECTED_TOP} より外に出た",
-                    line.rect.top
-                );
-                assert!(
-                    line.rect.bottom <= bottom,
-                    "{where_} の下端 {} が描画範囲の下辺 {bottom} を超えた（超過 {} px）",
-                    line.rect.bottom,
-                    line.rect.bottom - bottom
+                assert_rect_inside(
+                    &where_,
+                    (
+                        glyph.inline_pos,
+                        line.rect.top,
+                        glyph.inline_pos + glyph.advance,
+                        line.rect.bottom,
+                    ),
+                    (EXPECTED_LEFT, EXPECTED_TOP, EXPECTED_RIGHT, bottom),
                 );
             }
         }

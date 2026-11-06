@@ -22,6 +22,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use support::fixture::{read_balloon_file, read_script_file};
 use support::{
     Band, assert_hover_band, dump_png_on_white, fill_pixels_in_rect, make_world_with_gpu,
     opaque_count, read_back, spawn_reserved_slot, surface_size, to_canvas_local,
@@ -38,7 +39,6 @@ use areka_emo_text::region::TextRegion;
 use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 // ── fixture ロード（vertical_fixture_test と同一の読み込み規約：実ファイル＋charset デコード） ──
@@ -51,26 +51,20 @@ fn fixture_dir() -> PathBuf {
         .join("emo2-choice")
 }
 
-/// fixture ファイルを読み、`charset,UTF-8` 宣言に従いデコードする（parser-foundation の decode 経路）。
-fn read_decoded(name: &str) -> String {
-    let path = fixture_dir().join(name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "fixture {} の読取に失敗した（task 11.1 の test-local fixture が必要）: {e}",
-            path.display()
-        )
-    });
-    decode(&bytes, DefaultEncoding::Utf8)
+/// バルーンの定義 1 枚（面別上書き層なし）を本番と同じ規約（既定 Ansi・`charset,UTF-8` 宣言
+/// 優先）で読み、実 balloon パーサで parse した BalloonModel。
+fn model_of(name: &str) -> BalloonModel {
+    parse_str(&read_balloon_file(&fixture_dir(), name), None)
 }
 
 /// cursor.* 指定 fixture を実 balloon パーサで parse した BalloonModel。
 fn cursor_model() -> BalloonModel {
-    parse_str(&read_decoded("descript-cursor.txt"), None)
+    model_of("descript-cursor.txt")
 }
 
 /// cursor.* 未指定 fixture を実 balloon パーサで parse した BalloonModel。
 fn plain_model() -> BalloonModel {
-    parse_str(&read_decoded("descript-plain.txt"), None)
+    model_of("descript-plain.txt")
 }
 
 fn font_color_tuple(model: &BalloonModel) -> (u8, u8, u8) {
@@ -184,7 +178,7 @@ fn fixtures_parse_to_expected_choice_styles() {
     );
 
     // ── menu.txt の項目数（\q[…]）が注入 cue 列（4 項目）と一致する（台本と注入の対応検証） ──
-    let menu = read_decoded("menu.txt");
+    let menu = read_script_file(&fixture_dir(), "menu.txt");
     let q_count = menu.matches("\\q[").count();
     assert_eq!(
         q_count,

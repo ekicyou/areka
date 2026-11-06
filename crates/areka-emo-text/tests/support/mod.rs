@@ -10,9 +10,12 @@
 //! 3. **指令とポンプ**——間隔つきの cue と、積んだメッセージを処理し切って抜ける pump。
 //! 4. **読み戻しと画素の数え上げ**——供給面の読み戻し・不透明の数・矩形の中の数え上げ・
 //!    選択肢の強調の帯の確かめ・白背景へ合成した PNG の書き出し。
+//! 5. **検体・フォント・バルーンの検体の組**——子の [`fixture`]（`support/fixture.rs`）。
 
 // テストの実行ファイルごとに使う部品が違い、使わない部品が dead_code になるため。
 #![allow(dead_code)]
+
+pub mod fixture;
 
 use std::path::Path;
 use std::time::Duration;
@@ -31,7 +34,6 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -41,10 +43,7 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 /// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
 /// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。
 pub fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    fixture::init_com_for_this_thread();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
     let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");

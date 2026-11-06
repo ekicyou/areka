@@ -2,26 +2,8 @@
 //!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**・設計 **C2** の A 行）。
 
-use std::path::Path;
-
 use super::test_support::{EXPECTED_FILE_NAMES, EXPECTED_FRAME_SIZES, staysee_root};
-
-/// PNG の IHDR から原寸 `(width, height)` を読む（署名 8B ＋ 長さ 4B ＋ `IHDR` 4B の直後）。
-///
-/// 画像デコーダ（WIC）を持ち込まないのは本テーマを純粋層・非 COM に保つため。
-/// IHDR がストリーム先頭に在ることは PNG 仕様が定めているので固定オフセットで足りる。
-fn png_native_size(path: &Path) -> (u32, u32) {
-    let bytes = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("バルーン枠画像 {} の読取に失敗した: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
-        "{} が PNG（先頭 IHDR チャンク付き）として読めない",
-        path.display()
-    );
-    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    (w, h)
-}
+use crate::support::fixture::png_native_size;
 
 /// 保管フォルダ直下のエントリ名が 29 本の固定集合と**過不足なく**一致し、サブフォルダが 0 である。
 ///

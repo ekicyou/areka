@@ -46,17 +46,19 @@ use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::choice::{
     ResolvedChoiceStyle, annotate_lines, derive_hit_rows, highlight_band_extent, line_bands,
 };
-use areka_emo_text::layout::{LayoutEngine, PositionedLine, WrapPlan};
-use areka_emo_text::state::{ChoiceSpan, TextItem, TextLayerState};
+use areka_emo_text::layout::PositionedLine;
+use areka_emo_text::state::{ChoiceSpan, TextLayerState};
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::parse_str;
-use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CuePayload, SystemVarSnapshot, TalkCue};
+use areka_sakura::contract::ActorKey;
 
 use super::test_support::{
     EXPECTED_ADVANCE_FULL, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT, EXPECTED_LINE_BOX,
     EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, expected_bottom, read_decoded,
-    resolve_staysee, scope_image_size, staysee_metrics,
+    resolve_staysee, scope_image_size,
+};
+use crate::support::fixture::{
+    self, assert_rect_inside, balloon_metrics, command_cues, glyph_count, lay_out,
 };
 
 // ── 流し込む台本（設計 C2 の H 行）──────────────────────────────────────────
@@ -92,45 +94,10 @@ const EXPECTED_LINES: usize = 3;
 
 // ── 本番と同じ 4 段（`kero_menu_capacity_test.rs` と同じ経路）──────────────────
 
-/// 台本を実 sakura パイプライン（`parse` → `compile`）で cue 列へ落とし、
-/// 文字状態機械が消費する Command cue だけを配送エンベロープへ無変形複写する。
-fn command_cues(script: &str) -> Vec<TalkCue> {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = compile(&instructions, &SystemVarSnapshot::default());
-    let cues: Vec<TalkCue> = compiled
-        .sheet
-        .cues()
-        .iter()
-        .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
-            _ => None,
-        })
-        .collect();
-    assert!(
-        !cues.is_empty(),
-        "台本 `{script}` から Command cue が 1 つも出なかった（cue 0 件では以降の観測が空振りになる）"
-    );
-    cues
-}
-
-/// cue 列を実 [`TextLayerState`] へ載せ、（状態, 唯一の actor）を返す。
+/// 台本を実 sakura パイプラインで cue 列へ落として実 [`TextLayerState`] へ載せ、
+/// （状態, 唯一の actor）を返す。
 fn state_of(script: &str) -> (TextLayerState, ActorKey) {
-    let mut state = TextLayerState::default();
-    for cue in command_cues(script) {
-        state.apply_cue(&cue);
-    }
-    let actors: Vec<ActorKey> = state.actors().map(|(k, _)| k.clone()).collect();
-    assert_eq!(
-        actors.len(),
-        1,
-        "台本 `{script}` は 1 スコープぶんの cue 列のはず（実測の actor: {actors:?}）"
-    );
-    (state, actors[0].clone())
+    fixture::state_of(&command_cues(script))
 }
 
 /// 配置の 1 回ぶん（描画範囲・行列・選択肢スパン）。
@@ -159,24 +126,12 @@ fn place(script: &str) -> Placed {
         .actor_state(&actor)
         .expect("apply_cue 済みの actor 状態が在る");
     let items = actor_state.items();
-    let visible = items
-        .iter()
-        .filter(|it| matches!(it, TextItem::Glyph { .. }))
-        .count();
+    let visible = glyph_count(items);
     assert_eq!(
         visible, EXPECTED_GLYPHS,
         "台本 `{script}` が載せたグリフが {EXPECTED_GLYPHS} 個ではなく {visible} 個"
     );
-    let metrics = staysee_metrics(&resolved);
-    let lines = LayoutEngine::layout(
-        items,
-        visible,
-        &resolved.region,
-        resolved.mode,
-        resolved.font.height,
-        &metrics,
-        WrapPlan::CharByChar,
-    );
+    let lines = lay_out(&resolved, items);
     let choices = actor_state.choices().to_vec();
     Placed {
         resolved,
@@ -350,7 +305,7 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
     );
 
     // ⑵ 帯の実寸——丈 0 の帯や「帯が 1 本も無い」状態で内包が真になるのを防ぐ。
-    let metrics = staysee_metrics(&placed.resolved);
+    let metrics = balloon_metrics(&placed.resolved);
     let bands = line_bands(&placed.lines, placed.resolved.mode, &metrics);
     let want_extent =
         highlight_band_extent(EXPECTED_FONT_HEIGHT, EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH);
@@ -478,26 +433,10 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
 
 /// 矩形 `(左, 上, 右, 下)` が描画範囲の内側に収まることを 4 辺それぞれで言う。
 fn assert_containment(where_: &str, rect: (f32, f32, f32, f32), bottom: f32) {
-    let (left, top, right, low) = rect;
-    assert!(
-        left >= EXPECTED_LEFT,
-        "{where_} の左端 {left} が描画範囲の左辺 {EXPECTED_LEFT} より外に出た（超過 {} px）",
-        EXPECTED_LEFT - left
-    );
-    assert!(
-        right <= EXPECTED_RIGHT,
-        "{where_} の右端 {right} が描画範囲の右辺 {EXPECTED_RIGHT} を超えた（超過 {} px）",
-        right - EXPECTED_RIGHT
-    );
-    assert!(
-        top >= EXPECTED_TOP,
-        "{where_} の上端 {top} が描画範囲の上辺 {EXPECTED_TOP} より外に出た（超過 {} px）",
-        EXPECTED_TOP - top
-    );
-    assert!(
-        low <= bottom,
-        "{where_} の下端 {low} が描画範囲の下辺 {bottom} を超えた（超過 {} px）",
-        low - bottom
+    assert_rect_inside(
+        where_,
+        rect,
+        (EXPECTED_LEFT, EXPECTED_TOP, EXPECTED_RIGHT, bottom),
     );
 }
 

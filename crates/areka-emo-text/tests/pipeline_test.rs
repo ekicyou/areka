@@ -22,11 +22,11 @@
 #[path = "support/mod.rs"]
 mod support;
 
+use support::fixture::{example_fixture_dir, merged_model};
 use support::pump_until_idle;
 
 use std::cell::RefCell;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
@@ -35,9 +35,8 @@ use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use areka_emo_text::state::TextLayerState;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint, parse_str,
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
-use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 
 // ── パイプライン土台（実 channel・実 spawn_ui・専用 pump スレッド） ──────────────────
@@ -445,26 +444,6 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
 
 // ══ 縦書き（9.1 fixture 変種）: 縦書き解決→横スクロールの可視窓決定まで通しで決定論 ══
 
-/// fixture 変種の配置（design.md File Structure Plan 正典・vertical_fixture_test.rs と同一）。
-fn fixture_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("fixtures")
-        .join("emo2-vertical")
-}
-
-/// fixture 変種ファイルを読み、charset 宣言に従いデコードする（9.1 の檻と同一規約）。
-fn read_decoded(name: &str) -> String {
-    let path = fixture_dir().join(name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "fixture 変種 {} の読取に失敗した（task 9.1 の観測 fixture が必要）: {e}",
-            path.display()
-        )
-    });
-    decode(&bytes, DefaultEncoding::Utf8)
-}
-
 /// 9.1 縦書き fixture 変種（2 層マージ済み）で writing_mode 解決→領域解決→受信→状態適用→
 /// レイアウト→可視窓決定を通し、横方向スクロール（vertical_rl＝内容が右へ）の可視窓が
 /// 注入時刻に対して決定論的に決まることを檻化する。
@@ -476,9 +455,9 @@ fn read_decoded(name: &str) -> String {
 /// 列数そのものを導き直している（26 列目も左端 46 ≥ 36 で足りない）。
 #[test]
 fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
-    let merged = parse_str(
-        &read_decoded("descript.txt"),
-        Some(&read_decoded("balloons0s.txt")),
+    let merged = merged_model(
+        &example_fixture_dir("emo2-vertical"),
+        Some("balloons0s.txt"),
     );
     let mode = WritingMode::resolve(&merged);
     assert_eq!(

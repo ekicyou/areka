@@ -36,6 +36,10 @@
 //! | `wrapping` | `areka_balloon_fixture/wrapping.rs` | 折り返しの行数と字数・範囲への内包・拡大率 1.0 と 1.25 |
 
 #[cfg(test)]
+#[path = "support/mod.rs"]
+mod support;
+
+#[cfg(test)]
 #[path = "areka_balloon_fixture/test_support.rs"]
 mod test_support;
 

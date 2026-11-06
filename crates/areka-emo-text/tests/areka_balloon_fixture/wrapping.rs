@@ -57,50 +57,41 @@
 //!
 //! ファイル読み込み・純粋層の解決・DirectWrite の計測だけ。実 GPU・実窓は使わない。
 
-use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces};
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
-use areka_emo_text::draw::DWriteMetrics;
-use areka_emo_text::layout::{LayoutEngine, PositionedLine, WrapPlan};
+use areka_emo_text::layout::{LayoutEngine, PositionedLine};
 use areka_emo_text::region::{ImagePx, ScaleContract, TextRegion};
-use areka_emo_text::state::{TextItem, TextLayerConfig};
 use areka_emo_text::writing::WritingMode;
 use bevy_ecs::prelude::World;
-use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
-use wintf::com::dwrite::dwrite_create_factory;
 
-use super::test_support::balloon_root;
+use crate::support::fixture::{
+    FULL_WIDTH_BODY, HALF_WIDTH_BODY, MIXED_BODY, assert_rect_inside, glyph_items, lay_out,
+    load_face0,
+};
+
+use super::test_support::{
+    balloon_root, expected_region, expected_wrap_threshold, scope_image_size,
+};
 
 // ── 期待値（設計「描画範囲の解け方」の表と書体から手で書いた値）──────────────────
 
 /// 観測する拡大率（設計 `wrapping.rs`: 1.0 と 1.25）。
 const SCALES: [f32; 2] = [1.0, 1.25];
 
-/// scope ごとの面 0 の期待値。
+/// scope ごとの面 0 の書き始め（寸法・範囲・折り返し基準は `test_support.rs` の表から引く）。
 struct ScopeExpectation {
     scope: u32,
-    image_size: (u32, u32),
-    /// 範囲（左・上・右・下・image px）。
-    region: (f32, f32, f32, f32),
     /// 書き始め（origin の宣言どおり）。
     start: (f32, f32),
-    /// 折り返し基準 x（326 − 30）。
-    wrap_threshold: f32,
 }
 
 const SAKURA: ScopeExpectation = ScopeExpectation {
     scope: 0,
-    image_size: (326, 169),
-    region: (0.0, 0.0, 326.0, 149.0),
     start: (14.0, 11.0),
-    wrap_threshold: 296.0,
 };
 
 const KERO: ScopeExpectation = ScopeExpectation {
     scope: 1,
-    image_size: (326, 96),
-    region: (0.0, 0.0, 326.0, 82.0),
     start: (14.0, 14.0),
-    wrap_threshold: 296.0,
 };
 
 /// 文字の高さ（`font.height,12`）。
@@ -111,23 +102,6 @@ const ADVANCE_FULL: f32 = 12.0;
 /// 行ボックスの丈と行送り（12 ＋行間 2）。
 const LINE_BOX: f32 = 12.0;
 const LINE_PITCH: f32 = 14.0;
-
-/// 全角だけの本文（60 字）。
-const FULL_WIDTH_BODY: &str = "あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ\
-                               あいうえおかきくけこ";
-/// 半角だけの本文（120 字）。
-const HALF_WIDTH_BODY: &str = "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij\
-                               abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij";
-/// 全角と半角を交互に並べた本文（90 字・偶数番目が全角）。
-const MIXED_BODY: &str = "あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおeかfきgくhけiこj\
-                          あaいbうcえdおe";
 
 /// 本文・各行の字数・各行の右端（導き方はモジュールの説明）。
 const BODIES: [(&str, &str, &[usize], &[f32]); 3] = [
@@ -156,31 +130,18 @@ const BODIES: [(&str, &str, &[usize], &[f32]); 3] = [
 /// 本番の読み込み（面の系列解決→面 0 に `descript.txt` と面別の設定を重ねたモデル）で
 /// 枠の配置の画像の寸法から範囲と書体を解く。
 fn resolve_scope(exp: &ScopeExpectation, binding: &TextSlotBinding) -> ResolvedBalloonText {
-    let root = balloon_root();
-    let faces = resolve_balloon_faces(&root, exp.scope)
-        .unwrap_or_else(|e| panic!("scope {} の面の系列解決が失敗した: {e}", exp.scope));
-    let face0 = faces
-        .iter()
-        .find(|f| f.surface_id == 0)
-        .unwrap_or_else(|| panic!("scope {}: 面 0 が解決されない", exp.scope));
-    let model = load_scope_balloon_model(&root, exp.scope, face0);
+    let (_, model) = load_face0(&balloon_root(), exp.scope);
     ResolvedBalloonText::resolve(&model, binding.image_size)
 }
 
 /// 面 0 を拡大率 k で置いたときの枠の配置を本番と同じ構築口で組む（`scale.rs` と同じ形）。
 fn binding(world: &mut World, exp: &ScopeExpectation, k: f32) -> TextSlotBinding {
-    let (w, h) = exp.image_size;
+    let image_size = scope_image_size(exp.scope);
+    let (w, h) = image_size;
     let surface = ((w as f32 * k).ceil() as u32, (h as f32 * k).ceil() as u32);
     let slot = world.spawn_empty().id();
     let window = world.spawn_empty().id();
-    TextSlotBinding::new(slot, window, k, surface, exp.image_size)
-}
-
-/// 本文を 1 字 1 グリフの追記列へ写す。
-fn glyph_items(body: &str) -> Vec<TextItem> {
-    areka_sakura::cluster::clusters(body)
-        .map(TextItem::glyph)
-        .collect()
+    TextSlotBinding::new(slot, window, k, surface, image_size)
 }
 
 /// 範囲が表のとおりであることを確かめてから、本文を全文可視で流す。
@@ -195,38 +156,20 @@ fn layout_body(
     let k = binding.scale;
     assert_eq!(
         (region.left(), region.top(), region.right(), region.bottom()),
-        exp.region,
+        expected_region(scope),
         "scope {scope} k={k}: 範囲が設計の表と違う（物理の寸法が解決へ渡っている疑い）"
     );
     assert_eq!(region.start(), exp.start, "scope {scope} k={k}: 書き始め");
     assert_eq!(
         region.wrap_threshold(),
-        exp.wrap_threshold,
+        expected_wrap_threshold(scope),
         "scope {scope} k={k}: 折り返し基準"
     );
     assert_eq!(
         resolved.font.height, FONT_HEIGHT,
         "scope {scope}: 文字の高さ（以下の期待値はこの高さが前提）"
     );
-    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
-        .expect("DirectWrite factory を生成できる（文字の寸法の観測はこれが前提）");
-    let metrics = DWriteMetrics::new(
-        &factory,
-        &resolved.font,
-        resolved.mode,
-        &TextLayerConfig::default(),
-    )
-    .expect("areka-balloon の書体で文字の寸法を組める");
-    let items = glyph_items(body);
-    let lines = LayoutEngine::layout(
-        &items,
-        items.len(),
-        &region,
-        resolved.mode,
-        resolved.font.height,
-        &metrics,
-        WrapPlan::CharByChar,
-    );
+    let lines = lay_out(&resolved, &glyph_items(body));
     (region, lines)
 }
 
@@ -240,19 +183,15 @@ fn assert_contained(label: &str, region: &TextRegion, lines: &[PositionedLine], 
     for (n, line) in lines.iter().enumerate() {
         for (i, g) in line.glyphs.iter().enumerate() {
             let at = format!("{label}: {} 行目 {} 字目 `{}`", n + 1, i + 1, g.text);
-            let (l, r) = (g.inline_pos, g.inline_pos + g.advance);
-            assert!(l >= region.left(), "{at} の左端 {l} が範囲の左辺の外");
-            assert!(r <= region.right(), "{at} の右端 {r} が範囲の右辺の外");
-            assert!(
-                line.rect.top >= region.top(),
-                "{at} の上端 {} が範囲の上辺の外",
-                line.rect.top
-            );
-            assert!(
-                line.rect.bottom <= region.bottom(),
-                "{at} の下端 {} が範囲の下辺 {} の外",
-                line.rect.bottom,
-                region.bottom()
+            assert_rect_inside(
+                &at,
+                (
+                    g.inline_pos,
+                    line.rect.top,
+                    g.inline_pos + g.advance,
+                    line.rect.bottom,
+                ),
+                (region.left(), region.top(), region.right(), region.bottom()),
             );
         }
     }
@@ -329,11 +268,11 @@ fn sakura_wrapping_fills_each_line_up_to_the_threshold() {
             let tail = line.glyphs.last().expect("空の行は無い");
             let end = tail.inline_pos + tail.advance;
             assert!(
-                end + next.advance > SAKURA.wrap_threshold,
+                end + next.advance > expected_wrap_threshold(SAKURA.scope),
                 "{label}: {} 行目は右端 {end} で、次の `{}` を足しても基準 {} を超えない（早すぎる折り返し）",
                 n + 1,
                 next.text,
-                SAKURA.wrap_threshold
+                expected_wrap_threshold(SAKURA.scope)
             );
             checks += 1;
         }
