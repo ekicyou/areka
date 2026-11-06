@@ -172,6 +172,12 @@ impl WorkArea {
     pub(crate) fn residue(&self) -> &[PathBuf] {
         &self.residue
     }
+
+    /// 元の木を持たない失敗の後に作業フォルダを消す（組み上げは書庫から作り直せる）。
+    /// 消せなければ次の走行の片付けが拾うので、失敗は返さない。
+    pub(crate) fn discard(&self) {
+        let _ = remove_tree(&self.dir);
+    }
 }
 
 /// 棚の錠を共有なしで開く。待たずに失敗を返す（2 つの根を逆の順で掘っても止まらない）。
@@ -332,7 +338,7 @@ pub(crate) fn stage_placement(
     // 先にフォルダを全部作る。フォルダのエントリ（要件 4.9 前段）とファイルの親
     // （同後段）が `dirs` で 1 つに揃っているので、ここは区別せずに作れる。
     // 既存のファイルとフォルダの名前のぶつかりが写しの上で確かめられたときだけ、宛先の
-    // 側のパスで名指す（作業フォルダは次の走行の片付けで消え、利用者が直す場所にならない）。
+    // 側のパスで名指す（作業フォルダは失敗の後に消え、利用者が直す場所にならない）。
     // それ以外の失敗は今までどおり作業フォルダのパスを名指す。
     for relative in &placement.dirs {
         let folder = stage.join(relative);
@@ -414,7 +420,7 @@ fn copy_existing(
                 at(&target, std::fs::copy(&source, &target))?;
                 // 複写は読み取り専用の属性も運ぶ。作業フォルダの写しは必ず書ける形にする
                 // ——さもないと、書庫が同名を持っていたときに続く書き出しが作業フォルダの
-                // パスを名指して失敗し、そのパスは次の走行の片付けで消えるので、利用者は
+                // パスを名指して失敗し、そのパスは失敗の後に消えるので、利用者は
                 // 直す場所に辿り着けない。属性は宛先を守るためのもので、入れ替えで丸ごと
                 // 新しい木に替わる以上、写しの側で持ち越す意味も無い。
                 let mut mode = at(&target, std::fs::metadata(&target))?.permissions();
@@ -508,7 +514,7 @@ enum Undo {
     /// 先に消すのは、Windows の `rename` が既に在る宛先を上書きしないため。消えるのは
     /// 書庫から作り直せる新しい木だけで、利用者の元の木は `old` に居る。置けなかった
     /// （`placed` が偽）ときの宛先は自分の木ではない——退避の後に誰かが作った——ので消さない。
-    /// 戻す手が失敗しても `old` はそのまま残る（失敗の経路では作業フォルダを片付けない）ので、
+    /// 戻す手が失敗しても `old` はそのまま残る（戻せなかった失敗では作業フォルダを片付けない）ので、
     /// 取り返しのつかない消え方はしない。
     Restore {
         old: PathBuf,
@@ -550,7 +556,12 @@ pub(crate) fn commit_all(
     let mut undo = Vec::with_capacity(plan.len());
     for (k, (placement, existing)) in plan.iter().zip(states).enumerate() {
         if let Err(failure) = commit_one(area, k, placement, *existing, &mut undo) {
-            return Err(roll_back(undo, installed, failure));
+            let failure = roll_back(undo, installed, failure);
+            // 全て戻せたら `old-<k>` は無い。戻せなかったときは元の木が居るので触らない。
+            if failure.rolled_back {
+                area.discard();
+            }
+            return Err(failure);
         }
         installed.push(InstalledElement {
             kind: placement.kind.clone(),

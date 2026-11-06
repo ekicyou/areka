@@ -22,7 +22,8 @@ impl CueSink for ChannelSink {
 ///
 /// kanade の送出口（`Sender<TalkCommand>`）から start-relay を経て dispatcher inbox へ入る
 /// 唯一の変換点であり、ここで variant が落ちると当該指示が物理的に到達不能になる。3 形すべてが
-/// 情報無損失で対応アームへ写ることを固定する（新 variant 追加時は本檻がコンパイルエラーで気づく）。
+/// 情報無損失で対応アームへ写ることを固定する。本体の `From<TalkCommand>` は受け皿を持たないので、
+/// variant が増えるとコンパイラが本体の直しを迫る。このテストへの追加は手で行う。
 #[test]
 fn talk_command_converts_to_dispatcher_msg_for_every_variant() {
     use areka_sakura::contract::TalkCommand;

@@ -198,10 +198,12 @@ pub fn real_connect(
             // 起動時に決めた初期値（この `real_connect` 呼び出しに 1 つ・要件 5.2）。
             //
             // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS に
-            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **2 本**
+            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **3 本**
             // ある——片道イベントの応答は採用の根拠に用いない（要件 5.3）ためで、並びは
-            // `areka-kanade` の boot 状態機械（`schedule/boot.rs`）の発行点 3 つで決まる:
+            // 上の版の確かめと、`areka-kanade` の boot 状態機械（`schedule/boot.rs`）の
+            // 発行点 3 つで決まる:
             //
+            // 0. この閉包の中の版の確かめ（`GET Version`・上の 6.）。応答は採用に回さない。
             // 1. `boot_start`（Idle+Boot の遷移関数）が発行する `OnInitialize`＝**片道の
             //    NOTIFY**。その応答は `client.rs` の `notify` が破棄するだけで、応答ヘッダを
             //    採用へ回す手続きを呼ばない（同関数の本文にその経路が無いことは通信層の
@@ -210,10 +212,10 @@ pub fn real_connect(
             //    ＝**応答待ちの GET**。これも Shift_JIS で出る。相手が名乗る
             //    `Charset: UTF-8` を採用するのはこの応答。
             // 3. prefetch 応答を写して発行する `OnFirstBoot`＝GET（初回起動の場合。起動記録が
-            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、3 本目から
+            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、4 本目から
             //    UTF-8 になる点は変わらない）。ここから UTF-8 になり、以後は変わらない（要件 2.7）。
             //
-            // 2 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
+            // 3 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
             // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
             // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
             negotiator,

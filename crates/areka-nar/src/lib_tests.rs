@@ -395,7 +395,7 @@ pub(super) fn hold(path: &Path) -> fs::File {
 
 /// 宛先の中のファイルを掴んだまま `open` → `install` すると、確定の段で失敗し、
 /// 巻き戻して宛先は呼ぶ前のまま。記録はちょうど 1 件で、`work` の欄は根の
-/// `.nar-work` の配下に実在するフォルダを指す。
+/// `.nar-work` の配下の作業フォルダを指す（巻き戻せたので、その場で消してある）。
 ///
 /// 記録の欄は 1 つずつ読んで比べる。連結した綴りで比べると、区切りが値の側に
 /// 現れたときに別々の欄の食い違いが同じ綴りへ潰れる。
@@ -452,8 +452,8 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
     assert!(!recorded.is_empty(), "作業フォルダを掘ったのに work が空");
     let recorded = Path::new(recorded);
     assert!(
-        recorded.is_dir(),
-        "work が実在しない: {}",
+        !recorded.exists(),
+        "巻き戻せたのに作業フォルダが残っている: {}",
         recorded.display()
     );
     assert!(
@@ -545,8 +545,8 @@ fn a_failing_nested_companion_rolls_the_ghost_back_within_one_root() {
     assert_eq!(errors.len(), 1, "失敗 1 回につき記録 1 件: {records:?}");
     let recorded = Path::new(errors[0].field("work").expect("work の欄がある"));
     assert!(
-        recorded.is_dir(),
-        "work が実在しない: {}",
+        !recorded.exists(),
+        "巻き戻せたのに作業フォルダが残っている: {}",
         recorded.display()
     );
     assert!(

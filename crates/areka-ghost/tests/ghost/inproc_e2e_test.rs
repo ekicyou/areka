@@ -586,7 +586,8 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
         // `first_boot_epilogue`（`areka.prop.set` / `areka.boot.count` / "1"）を KanadeConfig へ注入する。
         // sakura が CueSheet 末尾（horizon・duration 0）へこのキャリア cue を付加し、挨拶再生を**完走**
         // したときのみ broadcast されて起動記録が書かれる（要件 3.4・design C5-3/C7）。共有 fixture
-        // （shared_test_ghost）は永続ファイルを持たない＝常に初回扱いゆえ、挨拶列は必ずこの 1 件で閉じる。
+        // （shared_test_ghost）は起動記録を書くが、`shared_test_ghost()` が錠を取った後に `profile\areka`
+        // を消すので、毎回初回扱いになり、挨拶の列は必ずこの 1 件で閉じる。
         (
             ActorKey::from("0"),
             CueCommand::command_carrier(

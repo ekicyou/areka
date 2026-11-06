@@ -211,7 +211,8 @@ impl NarArchive {
     /// 計画 → 組み上げ → 確定。記録は出さない（出口は [`NarArchive::install`] 1 つ）。
     ///
     /// 作業フォルダは本体の根に 1 つ掘り（同梱も本体の根に置く）、`work` へ積む
-    /// （呼び手が記録の欄として出す。途中で失敗しても掘った分は載る）。
+    /// （呼び手が記録の欄として出す。途中で失敗しても掘った分は載る）。元の木を持たない失敗
+    /// （組み上げの失敗・巻き戻せた確定の失敗）では、作業フォルダはここで消す。
     /// `rolled_back` が偽のとき、利用者の元の木が残っている場所は失敗の値の
     /// `survivors` が持ち、いずれも `work` に積んだ本体の根の作業フォルダ（1 つ）の配下に在る。
     /// 書庫の `balloon/<dir>/` を本体から除いた同梱の名前は `overridden` へ積む（同じく記録の材料）。
@@ -242,8 +243,12 @@ impl NarArchive {
         // 全部を組み終えてから確定へ進む（どの根にもまだ 1 バイトも書いていない）。
         let mut states = Vec::with_capacity(plan.len());
         for (k, placement) in plan.iter().enumerate() {
-            let state = stage_placement(&area.stage(k), placement, &self.contents)
-                .map_err(|failure| self.io(IoPhase::Stage, failure.path, failure.source))?;
+            let state =
+                stage_placement(&area.stage(k), placement, &self.contents).map_err(|failure| {
+                    // 宛先には触れていないので、作業フォルダに在るのは組み上げの途中だけ。
+                    area.discard();
+                    self.io(IoPhase::Stage, failure.path, failure.source)
+                })?;
             states.push(state);
         }
 
@@ -337,9 +342,23 @@ fn read_archive_bytes(path: &Path) -> Result<Vec<u8>, NarError> {
 
 /// 長さが `limit` を越える書庫は読まずに「大きすぎる」で断り、越えなければ丸ごと読む。
 fn read_archive_bytes_within(path: &Path, limit: u64) -> Result<Vec<u8>, NarError> {
-    let (mut file, len) = open_within(path, limit)?;
+    let (file, len) = open_within(path, limit)?;
+    read_capped(file, len, limit, path)
+}
+
+/// 測った後に書庫が伸びても `limit` を越えては読まず、越えた分が在れば「大きすぎる」で断る。
+fn read_capped(reader: impl Read, len: u64, limit: u64, path: &Path) -> Result<Vec<u8>, NarError> {
     let mut bytes = Vec::with_capacity(len as usize);
-    file.read_to_end(&mut bytes).map_err(read_failed(path))?;
+    reader
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(read_failed(path))?;
+    if bytes.len() as u64 > limit {
+        return Err(NarError::Refused {
+            archive: path.to_path_buf(),
+            reason: archive_too_large(),
+        });
+    }
     Ok(bytes)
 }
 
@@ -375,7 +394,8 @@ fn read_failed(path: &Path) -> impl Fn(std::io::Error) -> NarError + '_ {
 /// `NarError` の表示は確定済みの件数も巻き戻せたかも持たない（設計の逐語）ので、
 /// 要件 6.4 が見えることを求めている 2 つは欄として足す。`work` はこの走行が掘った
 /// 本体の根の作業フォルダ（1 つ）の場所で、巻き戻せたかに関わらず載せる（掘る前の
-/// 失敗と拒否では空）。
+/// 失敗と拒否では空）。元の木を持たない失敗（組み上げの失敗・巻き戻せた確定の失敗）では、
+/// その場所はもう消してある。
 fn log_failure(failure: NarError, work: &[PathBuf]) -> NarError {
     let (archive, committed, rolled_back) = match &failure {
         // 拒否は書く前に止まっているので、確定は 0 件・宛先は呼ぶ前のまま。

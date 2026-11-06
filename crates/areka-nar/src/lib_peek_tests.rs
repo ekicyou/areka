@@ -301,6 +301,32 @@ fn open_refuses_an_archive_longer_than_the_limit_before_reading() {
     assert_eq!(read.len() as u64, len);
 }
 
+/// 長さを測った後に伸びた書庫（測った長さ 0・中身 100 バイト）は、上限 4 に 1 を足した
+/// 5 バイトまでしか読まずに「大きすぎる」で断り、上限ちょうどなら読める。読む量を縛らないと
+/// 読み手に残る量が 95 を割って赤。
+#[test]
+fn a_reader_longer_than_the_limit_is_refused_while_reading() {
+    let path = Path::new("grown.nar");
+    let mut grown = &[0u8; 100][..];
+    let refused = read_capped(&mut grown, 0, 4, path);
+    assert_eq!(grown.len(), 95, "上限 + 1 バイトより先は読まない");
+    assert!(
+        matches!(
+            refused,
+            Err(NarError::Refused {
+                reason: RefuseReason::UnsupportedEntry {
+                    what: Unsupported::TooLarge,
+                    ..
+                },
+                ..
+            })
+        ),
+        "上限を越えて読んだら断る: {refused:?}"
+    );
+    let read = read_capped(&[0u8; 5][..], 0, 5, path).expect("上限ちょうどは読める");
+    assert_eq!(read.len(), 5);
+}
+
 /// `install.txt` を空白で `len` バイトに延ばした書庫を開く。
 fn open_with_install_txt_of(len: usize) -> Result<NarArchive, NarError> {
     let work = WorkDir::new().expect("根を借りられる");

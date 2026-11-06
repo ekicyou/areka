@@ -356,12 +356,13 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
     let prepared = prepare(balloon_archive(&[]), &request);
     let handle = hold(&destination.join("shiori.dll"));
 
-    let (_, outcome) = install(work.path(), &prepared);
+    let (area, outcome) = install(work.path(), &prepared);
     let failure = outcome.expect_err("使用中なので確定できない");
 
     assert_eq!(failure.phase, IoPhase::Commit, "確定の段で失敗した");
     assert_eq!(failure.path, destination, "対象パスが分かる");
     assert!(failure.rolled_back, "宛先は呼ぶ前のまま");
+    assert!(!area.exists(), "巻き戻せたら作業フォルダは残さない");
     assert_eq!(failure.committed, vec![], "確定した配置は 1 つも無い");
     assert_eq!(tree(&destination), before, "宛先は 1 バイトも変わらない");
     drop(handle);
