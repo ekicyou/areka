@@ -1045,3 +1045,101 @@
 | `wuc_spike` | `ecs/world/mod.rs:40`（注記。基点の `ecs/graphics/visual.rs:140` からは消えた） | 7.8 で直す |
 | `dcomp_demo` | `ecs/world/mod.rs:39`（注記。5.1 で example を消した名残） | 7.8 で直す |
 | `create_command_list` | `src/com/d2d/mod.rs:20`・`:33`、呼び手 7 か所（上の 69 の行）。ほかに `crates/areka-emo-present/src/display_fault_tests.rs:185`・`:236` はテストの名（`areka-emo-present` 自身の失敗の道の名で、wintf の口ではない） | 7.3 で包みと 7 か所を直す。`areka-emo-present` のテストの名は wintf の口を指さないが、7.3 の「grep 0 件」の文字どおりには当たる（7.3 で扱いを決める） |
+
+---
+
+## 14. 公開の口の変化と申し送り（タスク 8.1・V1・2026-11-06）
+
+### 公開の口の変化（要件 4.4・確かめ直した表）
+
+design.md「公開の口の変化」の表を、この spec の枝のコミット（`git log --no-merges 88eb0a43..HEAD`。取り込んだ `audit-wintf-graphics-world`（`45b01bb0`）と `doc-tree-tidy`（`8eb8758c`）の分を除く）の差分で確かめ直した。0.x の壊す変更として次の版の知らせにそのまま載せる。`#[deprecated]` は挟んでいない（要件の討議の裁定 3）。6 節の「15 件」はこの表で置き換える。
+
+確かめの式: 消えた口は `git grep -n -w <名前> -- . ':!.kiro/specs' ':!vendors' ':!target'`（`.kiro/steering/` と `doc/` を含むツリー全体）の件数。残る・変わる・増える口は今のコードの在りかと形。
+
+| 番号 | 口 | 変化 | 今のコードの grep（2026-11-06） |
+|---|---|---|---|
+| 1・13・24 | `wintf::com::d2d::{command_sink, command_types}` と、その再公開の型（`com::d2d::DrawCommand` と描画命令の型 28 個）・`RecCommandSink`・`dup_com` | 消える | `command_sink`・`command_types`・`RecCommandSink`・`dup_com` ＝各 0。`DrawCommand` の残りは別物の `ecs::visual::draw::DrawCommand`（描画の木） |
+| 16 | `wintf::com::d2d::D2D1CommandListExt::open` | 消える（`close` は残る） | `com/d2d/` の `fn open(` ＝0。`fn close` は `com/d2d/mod.rs:33` |
+| 69 | `wintf::com::d2d::D2D1FactoryExt`（`create_path_geometry`・`create_rounded_rectangle_geometry`） | 消える | 3 つとも 0 |
+| 69（7.3） | `wintf::com::d2d::D2D1DeviceExt::create_command_list` | 消える（`D2D1DeviceExt` は `create_device_context` だけで残る・`com/d2d/mod.rs:13`） | `create_command_list` ＝0（`areka-emo-present/src/display_fault_tests.rs:185` のテストの名 `create_command_list_failure_…` は語の一致に当たらない・wintf の口ではない） |
+| 69 | `wintf::com::d2d::D2D1DeviceContextExt::{create_bitmap_from_wic_bitmap, draw_text, fill_geometry, draw_image}` | 消える | `create_bitmap_from_wic_bitmap`・`fill_geometry` ＝0。`draw_text` の 3 件は `doc/archive/` の昔の設計のコードだけ、`draw_image` の 2 件は `doc/archive/` と `ecs/widget/bitmap_source/systems.rs:186` の注記（`DrawBitmap` を選んだ理由の語）だけ。`crates/` の中の `fn` と呼び出しは 0 |
+| 69 | `wintf::com::d3d11::D3D11DeviceExt`（`get_device_removed_reason`・`create_texture2d`） | 消える（モジュール `com::d3d11` は残る） | 3 つとも 0（`ecs/graphics/core.rs` の 2 か所は 7.1 で生の `GetDeviceRemovedReason()` へ） |
+| 69・92 | `wintf::com::dwrite::DWriteTextFormatExt`（`set_text_alignment`・`set_paragraph_alignment`） | 消える | 3 つとも 0 |
+| 69 | `wintf::com::dwrite::DWriteTextLayoutExt::{get_cluster_count, hit_test_text_position}` と、戻りの型 `wintf::com::dwrite::HitTestResult` | 消える（**design の表に無かった `HitTestResult` を足した**） | `get_cluster_count`・`hit_test_text_position` ＝0。`com/` の中の `HitTestResult` ＝0（残る 18 件は別物の `ecs::layout::hit_test::HitTestResult` と `doc/archive/`） |
+| 20 | 隠れたマクロ `ambassador_impl_D2D1DeviceContextExt`・`ambassador_impl_WinState` | 消える | 2 つとも 0。`ambassador` も 0 |
+| 4 | `wintf::com::dwrite::DWriteTextLayoutExt::get_cluster_metrics` | 形は同じ（`fn get_cluster_metrics(&self) -> Result<Vec<DWRITE_CLUSTER_METRICS>>`・`com/dwrite.rs:99`）。DirectWrite の失敗で `Ok(空)` でなく `Err` を返す | 判定は内部の `fn sizing_outcome(r: Result<()>) -> Result<bool>`（`com/dwrite.rs:141`・公開でない） |
+| 12 | `wintf::com::wuc::drain_dispatcher_queue` | 消える | 0（内部の `DrainStep`・`drain_step` も 0） |
+| 14 | `wintf::com::animation`（`create_animation_timer`・`create_animation_manager`・`create_animation_transition_library`・`UIAnimationTimerExt`・`UIAnimationManagerExt`・`UIAnimationTransitionLibraryExt`・`UIAnimationStoryboardExt`・`UIAnimationVariableExt`） | 消える | 8 つとも 0。`com/mod.rs` の `pub mod` は `d2d`・`d3d11`・`dwrite`・`dxgi`・`wic`・`wuc` の 6 つ |
+| 15 | `wintf::com::wic::load_bitmap_source` | 形は同じ（`pub fn load_bitmap_source(factory: &IWICImagingFactory2, path: &Path) -> Result<(IWICBitmapSource, bool)>`・`com/wic.rs:30`）。番号つきでない形式の α の有無を WIC に聞く（一覧から漏れていた `16bppBGRA5551`・`64bppRGBAHalf`・`40bppCMYKAlpha` が「有り」になる）。形式の情報が取れないときは WIC のエラーを返す | 判定は内部の `fn pixel_format_has_alpha(factory: &IWICImagingFactory2, format: &GUID) -> Result<bool>`（`com/wic.rs:95`・`SupportsTransparency` は `:98`）。写しの `areka-emo-atlas/src/decode/wic_arm.rs:191`（同じ形・`:197`）も公開でない |
+| 17 | `wintf::{WinState, SimpleWinState}` | 消える | 2 つとも 0 |
+| 18 | `wintf::WinStyle`（組み立ての関数ごと） | 消える（`apply_click_through`・`apply_layered_companion` は残る） | `WinStyle` ＝0。`pub fn apply_click_through` は `win_style.rs:15`、`pub fn apply_layered_companion` は `:54` |
+| 74 | `wintf::WinApp::spawn_ui_local` | 消える（`wintf::executor::spawn_local` を使う・`lib.rs:10` の `pub use wintf_winmsg_executor as executor`） | 0 |
+| 5 | `wintf::ecs::layout::{LengthPercentageAuto, LengthPercentage}::Percent` の taffy への変換 | 100 で割る（文書どおり 0.0〜100.0。`Dimension::Percent` は前から割っていた） | `ecs/layout/dimension.rs:161`・`:207` の `percent(v / 100.0)` |
+| 94 | `wintf::ecs::layout::{FlexContainer, FlexItem}` | 消える | 型の宣言と道（`::FlexContainer`・`use … FlexItem` の形）は 0。語の一致の 15 件は example の文字列と注記（`examples/taffy_flex_demo/`）・テストの注記・`ecs/layout/systems/taffy_systems.rs:18` の「旧: 8 コンポーネント」の注記だけ |
+| 101 | `wintf::ecs::layout::Opacity` | 消える | 型の宣言と道は 0。語の一致の 20 件の内訳: WUC の口 `Visual::Opacity()` の読み戻し 7 件（`ecs/graphics/systems/visual_sync_tests.rs:35`・`:43`、`tests/visual/property_sync_test.rs:3`・`:59`・`:106`・`:131`・`:155`）、見た目の同期の注記 3 件（`ecs/graphics/systems/visual_sync.rs:264`・`:266`・`:310`）、合成の α の注記 5 件（`ecs/layout/hit_test/mod.rs:309`・`:412`、`ecs/layout/hit_test/tests_ex/opacity.rs:7`・`:152`・`:163`）、example の注記と画面の文「Opacity=0.5」2 件（`examples/taffy_flex_demo/setup.rs:521`・`:564`）、ログの文 1 件（`ecs/graphics/visual.rs:170` の「Opacity value is outside valid range」）、昔の設計の列挙の値 `AnimationProperty::Opacity(f32, f32)` 2 件（`doc/archive/WinVisual.md:1055`・`:1074`）。どれも消した型を指さない（消した型を名指していた `ecs/graphics/visual.rs:177` は 7.8 で直した） |
+| 66 | crates.io の keywords | `directcomposition` が外れる | `crates/wintf/Cargo.toml:11` ＝`["windows", "ui", "japanese", "vertical-text"]`。`directcomposition` ＝0 |
+| 6 | `wintf::WindowCreationFailed` | **増える**（`#[derive(Component, Debug)] pub struct WindowCreationFailed;`。窓の生成に失敗した実体の印で、外すと次の刻みでまた作る） | `runtime/window_factory.rs:85`・再公開 `runtime/mod.rs:30`（`lib.rs:12` の `pub use runtime::*` で `wintf::` に出る）・問い合わせの除外 `ecs/window/window_system.rs:39` |
+
+行の内訳（表の 21 行）: 消える 16 行（1・13・24、16、69 の 6 行、20、12、14、17、18、74、94、101）・形は同じで振る舞いが変わる 3 行（4・15・5）・見出し 1 行（66）・増える 1 行（6）。design の表との差は、`HitTestResult` を足したこと、69 の `D2D1FactoryExt`・`D3D11DeviceExt`・`DWriteTextFormatExt` の中のメソッドの名を書き出したこと、`create_command_list` を 7.3 の行として分けたことだけ。ほかの行は design の表のとおりだった。
+
+#### 公開でない口の変化（参考・次の版の知らせには載せない）
+
+crate の外から見えない口（`pub(crate)` と private）。知らせには載せないが、`/kiro-validate-impl` と 8.3 のかけ直しの突き合わせに使う。
+
+| 番号・タスク | 口 | 変化 | 今のコードの grep |
+|---|---|---|---|
+| 72・73（7.8） | `runtime::message_loop::MessageLoopDriver`（`block_on`・73）・`runtime::tick_bridge::AsyncTickTask`（`spawn`・73）・`ShutdownPolicy::notify_shutdown`（72） | 消える（`crate::executor::{block_on, spawn_local}` と `Event::notify(usize::MAX)` を直に呼ぶ） | 3 つとも 0 |
+| 71（2.3） | `runtime::message_loop::MessageLoopDriver::run`・`default_filter` | 消える（呼び手 0。型の残り `block_on` は 7.8 で消えた） | `message_loop.rs` の `pub(crate) fn run(`・`default_filter` ＝0 |
+| 73（7.8） | `runtime::tick_bridge::run_async_tick` | private → `pub(crate) async fn`（`tick_bridge.rs:293`。`runtime/mod.rs` が `spawn_local(run_async_tick(…))` で起こす） | 在る |
+| 2・8（2.1） | `join_vsync`（`tick_bridge.rs:113`）・`compensation`（`:125`）・`vsync_once`（`:131`） | 増える（private） | 在る |
+| 11（2.1） | `relay_vblank`（`pub(crate) async fn`・`tick_bridge.rs:326`） | 増える | 在る |
+| 7（2.3） | `init_ui_com`（`fn init_ui_com() -> Result<()>`・`runtime/mod.rs:120`） | 増える（private） | 在る |
+| 3・6（2.2） | `initial_pos_flags`（`window_factory.rs:89`）・`mark_creation_failed`（`:106`） | 増える（private） | 在る |
+| 4（1.2） | `sizing_outcome`（`com/dwrite.rs:141`） | 増える（private） | 在る |
+| 15（1.4） | `pixel_format_has_alpha`（wintf `com/wic.rs:95`・`areka-emo-atlas/src/decode/wic_arm.rs:191`） | 形が変わる（`(&GUID) -> bool` から `(&IWICImagingFactory2, &GUID) -> Result<bool>` へ・private） | 在る |
+| 84（3.1） | `create_test_window`（`api.rs:304`）・`with_test_window`（`:334`） | 増える（`#[cfg(test)] pub(crate)`） | 在る |
+
+### 申し送り（要件 3.4・3.5・3.6）
+
+この spec の記録に残す。相手の brief はこのタスクでは触っていない（下の「申し送りの写し」）。
+
+| 相手 | 番号・事柄 | 中身 |
+|---|---|---|
+| `wintf-visual-tree` | 21・22・23・88（直さずに残す ⑵・要件の討議の裁定 2） | 21＝「軸に沿うか」の判定が `Matrix3x2Ext::axis_aligned`・`Aabb::transform` の近道（ちょうど 0）と `builder::is_rect_preserving`（1e-4 の許容・90 度の回転も認める）で食い違う。22＝矩形の空・交わり・変形が `Aabb` と `draw/builder.rs` で二重にあり、NaN の矩形と空の矩形の変形で答えが逆になる。23＝`numerics/` にテストが 1 本も無い（`Transform2D::pivot_srt` の `m21` の符号を裏返しても赤にならない）。88＝使い手 0 の働き（`Aabb::{contains, intersect, union, translate}` と演算子の多く・`Point2`・`Matrix3x2Ext::moved`・`Transform2D::{pivot_srt, to_affine}`）。`moved` には単位の誤り（名は `eps_px` だが単位の正方形の角しか比べない）があり、あちらで直す価値がある。働きの使い手の表は 4 節。`numerics/` はこの spec では 86 番の import の 1 行（`b2468d5c` の `numerics/aabb.rs`）のほか変えていない |
+| `audit-wintf-layout-widget` | 5・94・101（**直し済み**・要件の討議の裁定 4） | 5＝`LengthPercentageAuto`・`LengthPercentage` の `Percent` を 100 で割る（`ecs/layout/dimension.rs:161`・`:207`）と、それを固定していたテストの期待の裏返し。94＝`FlexContainer`・`FlexItem` を消した（`ecs/layout/box_style.rs`）。101＝`Opacity` を消した（`ecs/layout/metrics.rs`）。あちらの持ち物の本番をこちらで直したので、あちらのギャップ分析はこの 3 件を数え直さない |
+| `audit-wintf-layout-widget` | `Arrangement` の on_add フック（4.1 の Implementation Notes） | `Arrangement` の on_add フックは、生成の束に入れた `GlobalArrangement` を既定値で上書きする。本番にその使い方は無く欠陥ではないが、束で両方を入れる書き方が黙って効かない。指摘にするかはあちらで決める |
+| `audit-wintf-window` | 3（位置だけを指定した窓） | 生成の側（`runtime/window_factory.rs` の `initial_pos_flags`）だけで直した。片方だけ与えた窓の座標の換算（枠の厚み）は `ecs/window/window_pos/mod.rs` の `to_window_coords_for_creation` の素通しのまま（`ecs/window/window_pos/tests.rs` が固定・設計の討議の裁定 3）。素通しのままでよいかはあちらの受け持ち |
+| `audit-wintf-window` | 6（生成に失敗した窓） | 印 `WindowCreationFailed` を置き、あちらの持ち物の `ecs/window/window_system.rs` の `create_windows` の問い合わせ（`:35-41`）に `Without<WindowCreationFailed>` を足した。一時的な失敗からは自動で立ち直らない（設計の討議の裁定 4）。立ち直らせる側（印を外す側）をどこに置くかはあちらで決める |
+| `audit-wintf-window` | DPI の変わり目で中心を保つ動き（5.2 の Implementation Notes） | `taffy_flex_demo` で Window 1 を副モニターの原点 (-2304,355) へ送ると、DPI 192→144 の伸び縮みで中心を保ち (-2104,530) に着く（大きさの差の半分）。実行時の窓と DPI の規則（`src/ecs/window` の持ち物）で、正しいかはあちらの受け持ち。example は着地点を主張しない |
+| `audit-emo-atlas` | 15（WIC の α の写し） | `areka-emo-atlas/src/decode/wic_arm.rs:191` の `pixel_format_has_alpha` を wintf と同じ `SupportsTransparency` の判定へ替えた（`audit-emo-atlas` は走っていなかったので、設計の討議の裁定 1 でこちらが直した）。テストは `areka-emo-atlas/src/decode/wic_arm_tests.rs`。完了した `emo-atlas-palette-alpha` の要件 2.3・3.3 を「α を持つ形式は有り」の向きにだけ狭く改めた（その文書は触っていない）。あちらのギャップ分析はこの件を数え直さない。wintf を import しない境界の決まりで写しが 2 つ残ることは変えていない |
+| `audit-test-kits` | `crates/log-capture-kit/src/lib.rs:28` の「消費 10 crate」（6 の Implementation Notes） | wintf の `Cargo.toml` の同じ注記はタスク 6 で「消費する crate のうち」に直した。`log-capture-kit` の側の注記は範囲の外なので残した。今 `crates/*/Cargo.toml` で `log-capture-kit` を名指す crate は 18（自身を除く）で、「10」は古い |
+
+#### 描画の木の傷との重なり（要件 3.5）
+
+`wintf-visual-tree` の brief の「直すべき傷」1〜8 との重なり。4 節の確かめを今のコードで読み直した。この spec の直しはどの傷も直していない。
+
+| 傷 | この spec の番号 | 扱い |
+|---|---|---|
+| 傷 3（軸に沿うかの判定が 2 通り） | 21 | 直さずに申し送る（あちらで 1 つにまとめる） |
+| 傷 4（`builder.rs` の矩形の働きが `numerics/aabb.rs` と二重） | 22 | 直さずに申し送る（あちらで `numerics` の側へ寄せる） |
+| 傷 1（COM の番地の hash） | なし | 範囲の外（`ecs/visual/draw_content.rs`・`draw/builder.rs`）。範囲の中の `numerics/calc_hash.rs` は小数だけを ±0 をそろえて hash する正しい作り（指摘なし） |
+| 傷 2・5〜8 | なし | 範囲の外（`ecs/visual/`） |
+
+- 23・88 は傷の番号に当たらないが、あちらの Desired Outcome の「純粋なテスト」と、本番へ上げる部品の整え（`moved` の単位の誤り）として渡す。
+- `audit-wintf-graphics-world` があちらの brief に書いた申し送り（あちらの 22〜29 番＝傷 1〜8・30 番）とは、指す行が重ならない（あちらは `ecs/visual/`、こちらは `numerics/`）。傷 3・4 は両方から同じ傷を指すので、あちらのギャップ分析では 1 件として数える。
+
+#### 申し送りの写し
+
+このタスクは research.md だけを書く。相手の brief（`wintf-visual-tree`・`audit-wintf-layout-widget`・`audit-wintf-window`・`audit-emo-atlas`・`audit-test-kits`）へ節を足すかは、完了のときの棚卸で決める（`audit-wintf-graphics-world` は `wintf-visual-tree` の brief に「…からの申し送り」の節を足した前例がある）。
+
+### 台帳の知らせ（要件 3.6）
+
+- **`wintf-dwmflush-wait-compensation`（`.kiro/specs/wintf-dwmflush-wait-compensation/brief.md`。台帳は `.kiro/steering/roadmap.md` の spec 台帳の行と `- [ ] wintf-dwmflush-wait-compensation` の行）を、この spec の完了のときに台帳から閉じる。**
+- brief の直す中身（`DwmFlush` が待たずに戻る回の空回り・`Err` の回に notify を撃たない穴・`AsyncTickTask` の注記の食い違い）は、この spec の 2・8 番としてタスク 2.1（R1・`18ceaa9d`）が brief の形のまま直した。呼ぶ前後の時間で判定する `compensation`（1ms 未満なら約 16ms までの不足分を眠る）・1 周に必ず 1 回 notify する `vsync_once`・`DwmFlush` の失敗は `debug!` の 1 行・panic した vblank のスレッドは `join_vsync` が `error!`。`AsyncTickTask` の型は 7.8 で消えた（注記の食い違いごと 0 件）。実機の確かめ（消灯・ロック・リモートデスクトップ）はタスク 8.2。
+- brief 自身が「2026-11-05 `audit-wintf-runtime` に吸収・台帳からは `audit-wintf-runtime` の完了のときに閉じる」と書いている（要件の討議の裁定 1）。
+
+### 要件 3.1・3.2・3.7 の締め
+
+- 3.1: 119 件を全部「直す」（115）か「直さずに残す」（4）に確定した（`requirements.md` の「指摘の扱い」）。直すと確定した 115 件のうち公開の口に響くものは上の表のとおり。
+- 3.2: 直さずに残したのは 21・22・23・88 の 4 件だけで、どれも ⑵（描画の木の部品・開発者の裁定 2）。⑴・⑶ で残したものは 0 件。
+- 3.7: 20 タスクを越えたが、開発者の裁定 6（「1 本のまま」）のとおり 1 本で進めた（大タスク 8・小タスク 28）。

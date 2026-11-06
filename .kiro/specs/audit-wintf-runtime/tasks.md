@@ -187,7 +187,7 @@
   - _Requirements: 4.1, 4.3, 5.3, 6.1, 6.2_
 
 - [ ] 8. 記録と検証（V1・V2）
-- [ ] 8.1 公開の口の変化と申し送りを記録する（V1）
+- [x] 8.1 公開の口の変化と申し送りを記録する（V1）
   - 「公開の口の変化」の表を、実際に消した・変えた・増やした口で確かめ直して research.md に残す
   - 申し送り（`wintf-visual-tree` へ 21・22・23・88・`audit-wintf-layout-widget` へ 5・94・101 は直し済み・`audit-wintf-window` へ 3・6・`audit-emo-atlas` へ 15）と、描画の木の傷との重なりを記録する
   - `wintf-dwmflush-wait-compensation` を完了のときに台帳から閉じることを書く
