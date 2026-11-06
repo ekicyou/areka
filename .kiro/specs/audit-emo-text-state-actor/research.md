@@ -451,3 +451,52 @@
 3. 指摘 4 の道筋（大きな `\f[height]` で行の位置が無限大になる前に、配置・DirectWrite の側が止めるか）。直しは道筋に依らないが、テストの入力を決めるときに確かめる。
 4. 指摘 8 の効き目（`tools/perf/` の計測）。
 5. `multi-ghost-runtime` が 2 つ目のゴーストを同じ World に置く形か（6.3 の 2・その spec の brief で確かめる。議題 2 で甲を取れば要らない）。
+
+## 15. 設計の段の調べ（2026-11-06・`/kiro-spec-design -y`）
+
+- **調べの種類**: 軽い調べ（既にある仕組みの直し・新しい依存なし・外の資料の調べは要らない）。下請け 3 人で ⑴ 指摘 17 のスパイクと live-diff の照らし合わせ ⑵ 指摘 8 の「変化なし」の条件と指摘 23 ⑶ 指摘 3・5・9・10・2 の直しの形と `surface.rs` の行の見込みを読み、進行役が指摘 1・6・7・11・19〜22・24・28 の行を開いた。コードは変えていない・テストは走らせていない。
+- **使ったスキルと手引き**: `kiro-spec-design`（同梱の `design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）。形は完了した兄弟 `audit-emo-compose` の design.md に倣った。
+
+### 15.1 14 節の調べの答え
+
+1. **validrect が画像の外へ出るとき（14 節の 1）**: 要件の討議で ukadoc を引いて済み（`requirements.md` の「面の大きさの上限」）。設計の段で分かったこと: 面の原点は `region.left/top` で、`canvas.rs:341`・`choice.rs:336,421,467`・`viewbox_draw_render.rs:375-404`・印の描き方がこれを前提にする。右と下は描く式に触らずに切れる（描き手は `surface.size()` から計画する・`viewbox_draw_render.rs:70`）が、左と上を切るには原点のずれを向こうの持ち物まで通す必要がある。そこで右と下だけを切り、左と上の大きな負の値は面の大きさの上限（一辺 16,384・面積 2^25・兄弟 `audit-emo-compose` の `MAX_EXTENT`・`MAX_AREA` と同じ）で止める形を推す（design.md の設計の議題 1）。
+2. **指摘 17 のスパイク（14 節の 2）**: スパイクの確かめ 7 つを照らした。⑴ 自分の読み戻しの `RowPitch >= stride`（`:299`）＝スパイク自身の写しの確かめ ⑵ 比べる所にインクがある（`:556`）＝`viewbox_draw_live_diff_tests.rs:203` ほか ⑶ A に描いて B へずらす＝B に直に描く（許し 4 画素・`:560`）＝live-diff の `checkpoint` が面の全体を `assert_eq!`（`:216`・許しなし）で、本物の `ViewboxExecutor` を通して比べる（横書き `:377`・縦書き右から `:384`・スパイクに無い縦書き左から `:393`・`viewbox_draw_scroll_retain_tests.rs:322`） ⑷ 全角と半角の複数行＝live-diff は全角の 10・20 px・比例の書体（`:481`）・絵文字（`:540`）・検体（`:617`）。半角の英数字をずらして比べる場面だけは無いが、ずらしの不変は字に依らない ⑸ AA のこぼれ幅（`:525,585-633`）＝印字だけ・値は `viewbox_dirty_tests.rs:428` が固定 ⑹ 計測した行にインク＝スパイク自身の確かめ ⑺ GO／NO-GO の印字。**消しても本番を守る確かめは失われない**。`Cargo.toml` に `[[test]]` は無い。古くなる説明は `viewbox.rs:333` と `viewbox_draw_live_diff_tests.rs:455`（どちらも向こうの持ち物・説明だけ）。
+3. **指摘 4 の道筋（14 節の 3）**: 直し（`max`／`min`）は道筋に依らず、テストは純関数を NaN で呼ぶので、道筋は確かめないまま進める。根（`look.rs:757`）は向こうへ知らせる。
+4. **指摘 8 の効き目（14 節の 4）**: `present_frame` だけを狙う計測の場面は `tools/perf/` に無い。全体の計測（`tools/perf/invoke-perf-run.ps1 -Profile short`）で前後を 1 回だけ測って記録に残す（効かなくても戻さない）。「変化なし」の条件は 15.2。
+5. **`multi-ghost-runtime` の形（14 節の 5）**: 指摘 6 で印を文字の層ごとにするので要らない。
+
+### 15.2 指摘 8 の「変化なし」の条件（下請けの読み）
+
+- 飛ばす所（`actor_present.rs:354-426`）が読む値: 届いた状態の `items`（消すまで増えるだけ・`clear_content` でだけ戻る）・`reveal.visible(t)`・`choices`（`\_a` の開きは項目を増やさない・`state_anchor.rs:39`）・字の見た目の列・`current_look()`（`\f`・`set_look_layers`・`set_box_traits`・`copy_script` で項目を増やさずに変わる）・`settled`（強調の絞りだけに効く）・`layout_input`（登録し直しで描き手を捨てずに替わる・`actor_attach.rs:181`・`actor_box.rs:452`）・全文の先読み（入れ直し・`forget_boxes`・`\c` で区間の番号が進む）・`choice_hover`・計測器（`ActorRender` の寿命の間変わらない）。
+- 版の数（revision）は今どこにも無い。使える単調な値は場所ごとの消した回数（`state.rs:440`）・項目の数・選択肢の数・`settled`。
+- 先読みの入れ直しを呼ぶのは `actor.rs:433,609,626`・`actor_box.rs:79` の 4 か所だけ＝文字の層の側に数を 1 つ置けば `lookahead.rs`（向こうの持ち物）を変えずに済む。
+- 鍵の形は design.md の「配置の覚え」。届いた字の区切りの覚えは `(消した回数, 項目の数)` で足りる（項目は消すまで増えるだけ・表を替えると箱の描き手は捨てられる）。
+- 指摘 23: 4 つとも行を開いて確かめた（`actor_present.rs:215`・`choice.rs:568-594`・`choice.rs:79-95`・`state.rs:587-591`／`state_anchor.rs:33-37`）。直しの形は design.md。
+
+### 15.3 指摘 3・5・9・10・2 の読み
+
+- 箱の場所の `binding.image_size` は箱の大きさで、シェルの画像の大きさは `DesiredBox.surface_size`（`actor_box.rs:286,386`）にしか無く、はみ出しの警告に使った後で捨てられる＝文字の層に覚える欄が要る。
+- 作れない面の記録は源（`surface.rs`・`marker_surface.rs` の `device_err`）と `crates/areka` の `scale_text.rs:302` の 2 か所で出る。覚えで 2 回目から `Ok(false)` を返せば、`crates/areka` を変えずに両方とも 1 回で止まる。
+- 指摘 5: `TextSurface` に `Drop` は無い（`Drop` は `sink.rs` だけ）。`build_actor_render` の失敗しうる 4 つ（`dwrite_factory`・`FontCatalog::new`・`ViewboxExecutor::new_shared`・`DWriteMetrics::new_shared`）はどれも面を要らない＝装着を最後へ回せる。呼び手は 1 か所。
+- 指摘 9: `wintf/src/ecs/widget/bitmap_source/alpha_mask.rs:100` に `pub fn regenerate_from_pbgra32(&mut self, pixels: &[u8], width: u32, height: u32, stride: u32)`。`AlphaMaskResource` には `set`・`set_shared(Arc)`・`mask()` だけ＝`areka-emo-present` の `presenter/budget.rs:320-345` の 2 枚を入れ替える形に倣う。
+- 指摘 10: `read_back` の呼び手はテストと例と `crates/areka` のテスト 2 本（`spine_talk_close_tests.rs:28`・`dump_balloon_gpu_tests.rs:57`）だけ。本番の `dump_balloon.rs:83,90` は `begin_read_back`（その場で写し先を作る）。
+- `surface.rs` の行: 10 で約 −4・3 の掛け算の書き直しは 0・9 は `surface_window_child.rs` 側＝約 991 行で新しいファイルは要らない。
+- 指摘 2: `marker_surface.rs:137-138` の `i32` の足し算を確かめた（絵の幅の `as i32` も負に化けうる）。
+
+### 15.4 進行役が開いた行
+
+- 指摘 1: `actor_box.rs:236-237,427` を確かめた。
+- 指摘 6: 印は `actor_present.rs:130-160` の私的な資源で、使うのは `drop_renders_after_device_change` だけ。
+- 指摘 7: `set_box_layout` は `ResolvedFont::resolve_with_background` で見た目の 2 層だけを解き（`actor_box.rs:102-104`）、`register_box` は登録のたびに `ResolvedBalloonText::resolve_with_background` で全部を解く（`:406-410`）＝警告は表を入れたときに 1 回、登録し直しのたびにもう 1 回。解決は拡大率に依らない。
+- 指摘 11: 提示の走査は「中身があるか面を持つ」場所だけを描く（`actor_present.rs:65-79`）。`ActorTextState` は `PartialEq` を持つ。登録で入る見た目の 2 層（`set_look_layers`・`state_decoration.rs:585-589`）は場所の中身に載るので、場所を外す条件は「作りたてと同じ」にする（見た目を入れたスコープは外れない）。消した回数 `clears` は `crates/areka` の `balloon_visibility.rs` が `clear_count` の変化で見る＝外さない。
+- 指摘 19: 本番の適用（`look.rs:235-246` の `apply_overrides`）は答えを捨て、記録は `balloon_overrides.rs` の試しの通し（`probe_all`）だけが出す。`balloon_overrides::overrides` の呼び手は `draw.rs:304` だけ（`crates/areka` は 0）。試しの土台（`draw.rs:295-302`）はほかに使い道が無い。
+- 指摘 21: 写しは `surface.rs:51,61`・`marker_surface.rs:309`・`draw.rs:817,830`・`viewbox_draw.rs:318,331`。emo-text に記録の文を数えるテストは無い（同じ文を数えるのは `areka-emo-present` の別の文）。
+- 指摘 22・24: `handle_text_msg`・`highlight_band_offset`・`config()`・`balloon_overrides` は `crates/areka` から使われていない（grep し直した）。
+- 指摘 28: 走査の一覧の中に `wintf::com` を取り込むファイルは 0。`wintf::` を取り込むのは `actor_present.rs:9` の `wintf::ecs::{GraphicsCore, WucGraphicsResource}` だけ。`inline_marker_tests.rs`・`underline_tests.rs` は `windows` を取り込まない。
+
+### 15.5 まとめの見方（design-synthesis）
+
+- **広げて 1 つにしたもの**: 「作れない面・上限を越える面は入力が変わるまで作り直さず記録 1 回」を、文字の面と印の面で同じ形（物理寸の覚え）にした。面の大きさの上限の値は兄弟の合成の上限と同じにした。
+- **作るか借りるか**: マスクの使い回しは wintf の既にある口と `areka-emo-present` の形を借りた。新しい依存は無い。
+- **削ったもの**: 指摘 8 の計測の場面は作らない（全体の計測で 1 回）。指摘 21 の記録の文は引数にせず 1 つに揃えた（呼び出しの箇所を変えずに済む）。指摘 11 の「前の全消しから空のまま」の印は持たず、「作りたてと同じ」の比べで済ませた（新しい欄が要らない）。左と上の切りは上限で覆い、描く式に原点のずれを通さない（設計の議題 1）。
+- **新しいファイル**: `src/actor_surface_limit_tests.rs`・`src/actor_frame_memo_tests.rs`・`src/choice_test_support.rs`・`tests/support/mod.rs`。本番のソースは足さない。
