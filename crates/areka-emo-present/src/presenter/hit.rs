@@ -2,7 +2,9 @@
 //! サーフェス px 直接照合と、窓 client 物理 px を実適用 k で縮約する正準判定入口。
 
 use super::{EmoPresenter, RegionPriority, ScaleRatio, TargetId};
-use areka_emo_compose::hit::{hit_region_in, hit_region_scaled_in};
+#[cfg(test)]
+use areka_emo_compose::hit::hit_region_in;
+use areka_emo_compose::hit::hit_region_scaled_in;
 
 /// 窓 client 物理 px の点に対する当たり判定結果（[`EmoPresenter::hit_region_client`] の戻り値）。
 ///
@@ -15,7 +17,7 @@ use areka_emo_compose::hit::{hit_region_in, hit_region_scaled_in};
 /// [`surface_point`]: Self::surface_point
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClientHit<'a> {
-    /// 当たった領域名（無ければ `None`）。k=1.0 では [`EmoPresenter::hit_region`] と完全一致する。
+    /// 当たった領域名（無ければ `None`）。k=1.0 では `EmoPresenter::hit_region`（テスト専用）と完全一致する。
     pub region: Option<&'a str>,
     /// 縮約後のサーフェス px 座標（作者定義空間）。SHIORI へ配信する「ローカル座標」の正準値（要件 1.8）。
     pub surface_point: (i64, i64),
@@ -36,7 +38,9 @@ impl EmoPresenter {
     /// 解決する。`EmoWorld` を presenter 外へ露出しない（`&SurfaceMaster` を外へ出さない）ため純関数
     /// [`areka_emo_compose::hit::hit_region_in`] の呼出は本メソッド内で閉じ、戻り値の寿命は `&self` に従う
     /// （マウス移動ごとの割当を生まない・design §CurrentSurfaceRead Service Interface）。
-    pub fn hit_region(&self, target: TargetId, x: i64, y: i64) -> Option<&str> {
+    /// 本番の呼び手は無いのでテスト専用（native 座標の照合の檻だけが使う）。
+    #[cfg(test)]
+    pub(crate) fn hit_region(&self, target: TargetId, x: i64, y: i64) -> Option<&str> {
         let t = self.targets.get(&target)?;
         // 子から持ち込んだ領域が在ればその列（surface-element-nesting 要件 4.1・4.2）。
         let regions = t.emo_world.hit_regions(t.current_surface_id?)?;
@@ -46,15 +50,15 @@ impl EmoPresenter {
     /// 窓 client 物理 px の点を**実適用 k で縮約**して当たり判定を解決する（DPI 追従の正準判定入口・
     /// 要件 1.1/1.4-1.7/4.5）。
     ///
-    /// [`Self::hit_region`] が native サーフェス px を受けるのに対し、本メソッドは **k 適用後の窓 client
+    /// `Self::hit_region`（テスト専用）が native サーフェス px を受けるのに対し、本メソッドは **k 適用後の窓 client
     /// 物理 px**（`WM_MOUSEMOVE` 等が運ぶ生座標）をそのまま受ける。÷k は本メソッドが吸収するため、
     /// 呼び手が座標を前処理してはならない（前処理すると二重縮約になる）。戻り値の
     /// [`ClientHit::surface_point`] が SHIORI へ配信する「ローカル座標」の正準値である（要件 1.8）。
     ///
     /// # k の真実源（要件 1.4/1.7）
     ///
-    /// k は私有 [`PresentTarget::applied`] の**直読のみ**で得る。f32 の出口ビュー [`Self::applied_scale`]
-    /// を経由せず（丸めを持ち込まない）、[`derive_scale`] を再呼出もしない（モニタ DPI からの再導出は
+    /// k は私有 `PresentTarget::applied` の**直読のみ**で得る。f32 の出口ビュー [`Self::applied_scale`]
+    /// を経由せず（丸めを持ち込まない）、`derive_scale` を再呼出もしない（モニタ DPI からの再導出は
     /// 「表示に実際に掛かった k」と食い違い得る）。判定のたびに読むためスナップショットを保持せず、
     /// 窓 DPI 変化で `applied` が更新されれば以後の判定は自動的に新しい k で行われる——旧 k による
     /// 判定は構造的に残らない（要件 1.7）。
@@ -62,7 +66,7 @@ impl EmoPresenter {
     /// # 縮退（いずれも panic せず定義された結果を返す）
     ///
     /// - **現サーフェス無し**（未表示／`Hide`／空合成縮退／未登録 target）: `region` は `None`
-    ///   （[`Self::hit_region`] の縮退と同一）。`surface_point` は有効 k（`applied` 不在なら
+    ///   （`Self::hit_region` の縮退と同一）。`surface_point` は有効 k（`applied` 不在なら
     ///   [`ScaleRatio::ONE`]）で縮約した値を返す——判定が無くても座標空間の契約は保つ。これは
     ///   **正常な縮退**であり `warn!` を出さない（未表示 scope 上のマウス移動ごとに鳴らさない）。
     /// - **面はあるのに `applied` が不在**（k 取得不能）: `warn!` を 1 行記録したうえで

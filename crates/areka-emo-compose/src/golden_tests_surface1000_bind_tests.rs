@@ -18,6 +18,7 @@ use super::test_support::{
     shell_master_dir, surface1000_bind_parts,
 };
 use crate::plan_test_support::px;
+use areka_parsers::shell::AppendTarget;
 
 /// surface1000 が「静的 element ゼロ・全パーツ bind」の着せ替え base surface であることを実データで確認する。
 ///
@@ -28,7 +29,7 @@ fn surface1000_is_all_bind_no_static_elements() {
     let s1000 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 1000)
+        .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("emo2 surfaces.txt に surface1000 が存在する");
     assert!(
         s1000.elements.is_empty(),

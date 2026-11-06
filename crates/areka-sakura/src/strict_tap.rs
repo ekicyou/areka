@@ -69,7 +69,7 @@ pub(crate) struct StrictTap {
     sinks: Vec<Box<dyn CueSink + Send>>,
     /// 合図の順番 → 台本の位置（文字の数）。配った合図の分は取り出して知らせの口へ渡す。
     cue_places: Vec<Option<Place>>,
-    ghost: Arc<str>,
+    /// ゴースト名は控えの台帳が持つ（知らせの口へはそこから写す）。
     ledger: Rc<RefCell<StrictLedger>>,
     /// 次に配る合図の順番。
     next: usize,
@@ -81,7 +81,6 @@ impl StrictTap {
         sinks: Vec<Box<dyn CueSink + Send>>,
         cue_spans: Vec<Option<Range<usize>>>,
         script: &str,
-        ghost: Arc<str>,
         ledger: Rc<RefCell<StrictLedger>>,
     ) -> Self {
         let mut cursor = CharCursor::new(script);
@@ -92,7 +91,6 @@ impl StrictTap {
         Self {
             sinks,
             cue_places,
-            ghost,
             ledger,
             next: 0,
         }
@@ -105,7 +103,7 @@ impl CueSink for StrictTap {
         match self.cue_places.get_mut(self.next).and_then(Option::take) {
             Some(place) => {
                 // 口は出来上がった位置と名だけを持つ。どのスレッドから知らせても記録 1 件を書くだけ。
-                let ghost = Arc::clone(&self.ghost);
+                let ghost = Arc::clone(&self.ledger.borrow().ghost);
                 let probe = CueProbe::new(move |finding| record(&ghost, finding, &place));
                 for sink in self.sinks.iter_mut() {
                     sink.emit_with(cue.clone(), &probe);

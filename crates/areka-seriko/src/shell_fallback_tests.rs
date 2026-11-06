@@ -4,17 +4,12 @@
 //! スコープだけを書き換えること（非表示・未表示は替えない）を確かめる。
 
 use super::*;
-use crate::ScopeStates;
 use crate::resolve::SurfaceTarget;
-use areka_emo_compose::BindSet;
+use crate::test_support::empty_states;
 
-/// 新しいシェルの面の表（0・5）。descript の既定の面 5・組み込みの既定の面 0 を想定する。
+/// 番号の列を集合にする。
 fn ids(list: &[u32]) -> BTreeSet<u32> {
     list.iter().copied().collect()
-}
-
-fn states() -> ScopeStates {
-    ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()))
 }
 
 #[test]
@@ -42,7 +37,7 @@ fn decide_hides_when_no_candidate_exists() {
 /// 結果は書き換えたスコープだけ（昇順）。
 #[test]
 fn fall_back_rewrites_only_shown_scopes() {
-    let mut st = states();
+    let mut st = empty_states();
     let (s0, s1, s2, s3, s4) = (
         ActorKey::from("0"),
         ActorKey::from("1"),
@@ -110,7 +105,7 @@ fn fall_back_rewrites_only_shown_scopes() {
 /// 候補の表に載っていないスコープで今の面が無ければ、候補なしとして出さない。
 #[test]
 fn fall_back_hides_scope_without_candidate_list() {
-    let mut st = states();
+    let mut st = empty_states();
     let s0 = ActorKey::from("0");
     st.apply(&s0, SurfaceTarget::Show(3));
     let outcomes = st.fall_back_shell_surfaces(&ShellSurfaceFallback {
@@ -130,7 +125,7 @@ fn fall_back_hides_scope_without_candidate_list() {
 /// 面の番号の集合が空の戻り先（材料なし・既定値）は何も替えない。
 #[test]
 fn empty_fallback_rewrites_nothing() {
-    let mut st = states();
+    let mut st = empty_states();
     let s0 = ActorKey::from("0");
     st.apply(&s0, SurfaceTarget::Show(3));
     assert!(

@@ -1,32 +1,11 @@
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
 
-use wintf::ecs::Arrangement;
-
 use super::test_support::{
-    build_target_assets, build_two_face_assets, make_world_with_gpu, mount_entities,
-    set_window_dpi, show_ok, spawn_window_with_dpi,
+    arrangement_of, build_target_assets, build_two_face_assets, make_world_with_gpu,
+    mount_entities, set_window_dpi, show_ok, show_with, spawn_window_with_dpi,
 };
-
-/// surface entity の `Arrangement`（**論理寸＝原寸・係数＝拡大率 k**）を `(寸, 係数)` で読む。
-///
-/// 表示の作り方が「原寸の絵＋変換の係数」になったため、報告値の裏取りはここと照会値
-/// （`target_physical_size`＝丸め権威）で行う。物理寸そのもの（`GlobalArrangement.bounds`）は
-/// wintf の伝播段が導くので、本ファイルのテストは走らせない（丸めの一致は `display_tests.rs`
-/// の T-N3 が表で固定する）。
-fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
-    let arr = world
-        .get::<Arrangement>(surface_entity)
-        .expect("surface entity に Arrangement が無い");
-    (
-        (arr.size.width as u32, arr.size.height as u32),
-        (arr.scale.x, arr.scale.y),
-    )
-}
 
 // ── 表示成立点の状態照合＝窓寸 reconcile 報告（タスク 3.4・議題 #2 裁定）────────────────────
 // design Flow 1 キー決定「表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を
@@ -47,9 +26,7 @@ fn dpi_change_reports_new_physical_size_to_caller() {
     let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x85);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // k=1/1 の初回表示（初回報告は Flow 3 手順 5 の領分ゆえ、ここでは取り出して捨てる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -106,9 +83,7 @@ fn unchanged_physical_size_reports_nothing() {
     let (emo_world, atlas, _g1000, _g3000) = build_two_face_assets(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     let k2 = ScaleRatio::new(2, 1).unwrap();
     let physical = k2.scaled_extent(6, 5);
@@ -157,9 +132,7 @@ fn first_show_reports_physical_size_for_initial_reconcile() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x86);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 表示前は要求なし（attach しただけで窓を動かさない）。
     assert_eq!(
@@ -196,29 +169,23 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
     let k2 = ScaleRatio::new(2, 1).unwrap();
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // (A) 表示記録の前提資源を一時退避 → 合成の後、表示成立の手前で失敗する。
     let gfx = world
         .remove_resource::<GraphicsCore>()
         .expect("前提: make_world_with_gpu が GraphicsCore を載せている");
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
     assert!(
         matches!(
-            rx.recv_timeout(Duration::from_secs(10)),
-            Ok(Err(PresentError::Device { .. }))
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                BindSet::default(),
+                PatternState::default()
+            ),
+            Err(PresentError::Device { .. })
         ),
         "前提: 表示記録に失敗する"
     );
@@ -245,23 +212,17 @@ fn failed_show_reports_no_resize_and_keeps_previous_values() {
     // (C) 窓 DPI を 192→96（k=2/1→1/1・物理寸なら 8×6→4×3 相当）へ変えたうえで**合成に失敗**させる。
     //     表示は成立しないため、k も表示も前値のまま＝報告も無い。
     set_window_dpi(&mut world, window, 96);
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 9999,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
     assert!(
         matches!(
-            rx.recv_timeout(Duration::from_secs(10)),
-            Ok(Err(PresentError::Compose(ComposeError::SurfaceNotFound(
-                9999
-            ))))
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                9999,
+                BindSet::default(),
+                PatternState::default()
+            ),
+            Err(PresentError::Compose(ComposeError::SurfaceNotFound(9999)))
         ),
         "前提: 解決不能 id は Err(SurfaceNotFound)"
     );

@@ -252,3 +252,29 @@ fn the_frame_calls_the_move_drain_after_the_resnap_and_before_the_chain_finalize
         "重なりの指令の取り出しの置き場が変わった（reconcile={reconcile}・zorder={zorder}・resnap={resnap}）"
     );
 }
+
+/// 装置の作り直しで emo-present が控えを捨てて出し直す口（audit-wintf-graphics-world 6 番・要件 3.1）を、
+/// 本番の `emo2_frame_system` が毎フレーム 1 回、装着の相の後・拡大率の相の前に呼ぶ。
+#[test]
+fn the_frame_calls_the_device_change_refresh_once_between_attach_and_dpi() {
+    let code: String = include_str!("frame.rs")
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let call = "wiring.presenter.refresh_after_device_change(world);";
+    assert_eq!(code.matches(call).count(), 1, "呼出がちょうど 1 つではない");
+    let at = |needle: &str| {
+        code.find(needle)
+            .unwrap_or_else(|| panic!("錨が無い: {needle}"))
+    };
+    let (attach, refresh, dpi) = (
+        at("run_attach_phase(&mut wiring, world);"),
+        at(call),
+        at("run_dpi_phase(&mut wiring, world);"),
+    );
+    assert!(
+        attach < refresh && refresh < dpi,
+        "装着の相の後・拡大率の相の前に無い（attach={attach}・refresh={refresh}・dpi={dpi}）"
+    );
+}

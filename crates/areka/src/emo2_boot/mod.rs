@@ -172,7 +172,7 @@ use self::zorder_cue::ZOrderDirective;
 /// と同流儀・working donor 準拠）。
 #[derive(Debug, thiserror::Error)]
 pub enum BootWiringError {
-    /// ゴーストのマウント解決（`areka_parsers::package::resolve`）失敗。
+    /// ゴーストのマウント解決（`areka_parsers::package::resolve_with_shell`）失敗。
     ///
     /// `MountError`（`StartPointMissing`／`ShellDirMissing` 等）は `std::error::Error`
     /// 未実装のため `#[from]` にせず値保持する（呼び手が variant 内容で warn/error 分類）。
@@ -205,9 +205,9 @@ pub enum BootWiringError {
 
     /// バルーン表示対象（`areka_emo_present::build_balloon_target`）の構築失敗。
     ///
-    /// `PresentError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[from]` で畳む。
+    /// `BalloonLoadError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[from]` で畳む。
     #[error("バルーン表示対象の構築に失敗")]
-    Balloon(#[from] areka_emo_present::PresentError),
+    Balloon(#[from] areka_emo_present::BalloonLoadError),
 
     /// バルーン文字層 UI アクター（`areka_emo_text::actor::spawn_emo_text`）の spawn 失敗。
     ///

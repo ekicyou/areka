@@ -410,9 +410,7 @@ fn close_then_show_race_keeps_order_through_the_bridge() {
     let t = balloon_target(0);
     let mut presenter = EmoPresenter::new();
     let window = world.spawn(DPI::from_dpi(96, 96)).id();
-    presenter
-        .attach_target(&mut world, t, window, emo_world, atlas, 96)
-        .expect("attach_target");
+    presenter.attach_target(t, window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(t, VisibilityOwnership::External)
         .expect("set_visibility_ownership");

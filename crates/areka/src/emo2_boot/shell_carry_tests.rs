@@ -16,8 +16,8 @@ use std::path::PathBuf;
 
 use areka_emo_compose::BindSet;
 use areka_seriko::{
-    BindOptionDecls, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig,
-    SurfaceResolver, spawn_seriko,
+    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    spawn_seriko,
 };
 
 use super::*;
@@ -30,19 +30,18 @@ fn shell_with(ids: &'static [u32]) -> impl Fn(u32) -> bool {
 
 /// 本体側の名前表: 服（A=100・B=101）・帽子（C=200）。`multiple` の宣言は `multiple` に挙げたカテゴリ。
 fn names(multiple: &[&str]) -> BindResolver {
-    let sakura = BTreeMap::from([
-        (("服".to_owned(), "A".to_owned()), 100),
-        (("服".to_owned(), "B".to_owned()), 101),
-        (("帽子".to_owned(), "C".to_owned()), 200),
-    ]);
-    BindResolver::new(
-        sakura,
-        BTreeMap::new(),
-        BindOptionDecls {
-            sakura_multiple: multiple.iter().map(|c| (*c).to_owned()).collect(),
-            ..BindOptionDecls::default()
-        },
-    )
+    let mut shell = String::from(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup100.name,服,A\r\n\
+         sakura.bindgroup101.name,服,B\r\n\
+         sakura.bindgroup200.name,帽子,C\r\n",
+    );
+    for (i, category) in multiple.iter().enumerate() {
+        shell.push_str(&format!(
+            "sakura.bindoption{i}.group,{category},multiple\r\n"
+        ));
+    }
+    names_of(&shell)
 }
 
 fn set(ids: &[u32]) -> BindSet {
@@ -211,21 +210,22 @@ fn decide_binds_sheds_a_removed_default_unless_an_exclusive_wear_covers_it() {
     );
 }
 
-/// `char2.*` だけに服 B（101）の名前を持つシェルの着せ替えの名前表（作業フォルダ＝`target\\` の下に
-/// ゴーストを組み、シェルの読みから作る）。服 A（100）の名前は持たない。
+/// `char2.*` だけに服 B（101）の名前を持つシェルの着せ替えの名前表。服 A（100）の名前は持たない。
 fn char2_names() -> BindResolver {
+    names_of("charset,UTF-8\r\nchar2.bindgroup101.name,服,B\r\n")
+}
+
+/// シェルの descript.txt `shell` を持つゴーストを作業フォルダ（`target\\` の下）に組み、本番と同じ
+/// シェルの読み（`resolve_with_shell` → `BindResolver::from_groups`）で着せ替えの名前表を作る。
+fn names_of(shell: &str) -> BindResolver {
     let work = sample_ghost_kit::WorkDir::new().expect("作業フォルダを取れる");
     let master = work.path().join("ghost").join("master");
     std::fs::create_dir_all(&master).expect("ghost/master を作る");
     std::fs::write(master.join("descript.txt"), "charset,UTF-8\r\nname,t\r\n")
         .expect("ゴーストの descript.txt を書く");
-    let shell = work.path().join("shell").join("master");
-    std::fs::create_dir_all(&shell).expect("shell/master を作る");
-    std::fs::write(
-        shell.join("descript.txt"),
-        "charset,UTF-8\r\nchar2.bindgroup101.name,服,B\r\n",
-    )
-    .expect("シェルの descript.txt を書く");
+    let shell_dir = work.path().join("shell").join("master");
+    std::fs::create_dir_all(&shell_dir).expect("shell/master を作る");
+    std::fs::write(shell_dir.join("descript.txt"), shell).expect("シェルの descript.txt を書く");
     let model = areka_parsers::package::resolve_with_shell(
         work.path(),
         areka_parsers::charset::DefaultEncoding::Utf8,

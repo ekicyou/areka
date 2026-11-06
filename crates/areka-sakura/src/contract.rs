@@ -51,17 +51,17 @@ pub struct TalkHandle {
 pub use areka_talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 
 // 出どころの語彙（正本=areka-talk・受け口の areka が直接の依存なしで使う）。
-pub use areka_talk::{ScriptOrigin, SecurityLevel, SenderHead, SenderType, SenderWord, SstpKind};
+pub use areka_talk::{ScriptOrigin, SecurityLevel, SstpKind};
 
 // ── 再輸出（二重定義しない） ──
 //
+// システム変数展開の消費側契約型（R7・正本は `crate::sysvar`）を re-export し、下流は安定パス
+// `areka_sakura::contract::*`（＝lib.rs で glob 再輸出）から参照できる（値源非所有・凍結像消費）。
+pub use crate::sysvar::SystemVarSnapshot;
+
 // relevance 分類器 [`cue_target_of`] は dola（`dola::cue::sink`）が単一権威として所有し、
 // 本層は re-export のみ（下流 `areka_sakura::contract::cue_target_of` パスは不変・網羅檻は
 // dola 側 `crates/dola/tests/cue/sink_test.rs` の `cue_target_of_classifies_every_variant`）。
-pub use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
-// システム変数展開の消費側契約型（R7・正本は `crate::sysvar`）を re-export し、下流は安定パス
-// `areka_sakura::contract::*`（＝lib.rs で glob 再輸出）から参照できる（値源非所有・凍結像消費）。
-pub use crate::sysvar::{DEFAULT_USERNAME, ResolvedVar, SystemVarSnapshot, resolve_system_var};
 pub use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueSink, CueTarget, TalkCue,
     cue_target_of,

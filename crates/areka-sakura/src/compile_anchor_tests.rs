@@ -12,7 +12,7 @@
 //!
 //! 位置（`index`）は読み手が返す命令の列の添字（0 始まり）。
 
-use super::test_support::{assert_clear_all_prefix_and_rest, compile, cue_eq};
+use super::test_support::{assert_clear_all_prefix_and_rest, assert_cues_eq, compile};
 use super::*;
 use areka_parsers::sakura::parse;
 
@@ -129,9 +129,10 @@ fn anchor_cues_take_no_time_and_do_not_shift_the_others() {
     let others: Vec<&Cue> = cues.iter().filter(|cue| !is_anchor(cue)).collect();
     let control = assert_clear_all_prefix_and_rest(without_anchor.sheet.cues());
     assert_eq!(shape(&without_anchor), ["text:あ", "text:い", "text:う"]);
-    assert!(
-        others.len() == control.len() && others.iter().zip(control).all(|(a, b)| cue_eq(a, b)),
-        "アンカーの有無で他の合図の時刻と長さは変わらない"
+    assert_cues_eq(
+        &others,
+        control,
+        "アンカーの有無で他の合図の時刻と長さは変わらない",
     );
 }
 

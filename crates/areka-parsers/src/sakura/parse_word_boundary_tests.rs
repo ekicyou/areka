@@ -121,7 +121,28 @@ fn unclosed_bracket_in_body_does_not_swallow_the_rest() {
 /// P5（要件 3.2）: タグ直後の未閉じの開き括弧は、従来どおり末尾まで `Raw` 1 個になる。
 #[test]
 fn unclosed_bracket_right_after_tag_is_still_raw_to_end() {
-    assert_eq!(parse(r"\e[注です"), vec![raw(r"\e[注です")]);
+    assert_eq!(parse(r"\s[注です"), vec![raw(r"\s[注です")]);
+}
+
+/// 指摘 27（research.md 11 節の SSP の結果）: 引数を取らないタグの後の `[…]` は字のまま。
+/// `\1` は話し手を切り替え、`\e` はトークを終える。`\+[x]`・`\v[1]` は今どおり
+/// （設計の討議の議題 2・`bracketed_plus_stays_raw`・`bracketed_raise_has_no_arm`）。
+#[test]
+fn bracket_after_no_arg_tag_is_text() {
+    assert_eq!(
+        parse(r"\0ア\1[小声で]そうなの？"),
+        vec![
+            speaker(0),
+            text("ア"),
+            speaker(1),
+            text("[小声で]そうなの？")
+        ]
+    );
+    assert_eq!(
+        parse(r"イ\e[注]です"),
+        vec![text("イ"), Instruction::End, text("[注]です")]
+    );
+    assert_eq!(parse(r"\+[x]"), vec![raw(r"\+[x]")]);
 }
 
 /// P6（要件 4.1・4.2）: 直後に角括弧が来る形の意味が不変。

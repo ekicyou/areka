@@ -3,6 +3,7 @@
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, BindSet, MemoryDecoder, Path, PatternState, SetId, Shell};
 use crate::plan_test_support::{bound_world, opaque_wxh, plan_of};
+use areka_parsers::shell::AppendTarget;
 
 // ============================================================================
 // emo2 まばたき bind+random（1400・pattern0 なし）の静的不活性回帰檻（要件 **9.1**・**9.5**・11.2）。
@@ -125,7 +126,7 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
     let s1000 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 1000)
+        .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("emo2 surfaces.txt に surface1000 が存在する");
 
     for (aid, interval, first_frame_surface) in [

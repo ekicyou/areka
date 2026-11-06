@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 use crate::kv::parse_kv;
 
-use super::marker::{read_arrow_keys, read_marker_filename};
+use super::marker::{KeyIssue, read_arrow_keys, read_marker_filename};
 use super::model::{
     BalloonCursor, BalloonModel, CursorColor, DisableFont, Font, FontColor, FontDecorationRaw,
     FontShadowRaw, Origin, ValidRect, WindowPosition, WindowPositionRaw, WordWrapPoint,
@@ -46,19 +46,15 @@ pub fn parse(
     descript: &BTreeMap<String, String>,
     image: Option<&BTreeMap<String, String>>,
 ) -> BalloonModel {
-    // 2 層マージ（D4）: descript 基層を複製し、画像別層を後勝ちで重ね合わせる（R3.2/R3.3/R3.5）。
-    let merged = match image {
+    // 2 層マージ（D4）: 画像別層があるときだけ descript 基層を複製し、後勝ちで重ねる（R3.2/R3.3/R3.5）。
+    match image {
         Some(image_map) => {
             let mut merged = descript.clone();
-            for (key, value) in image_map {
-                merged.insert(key.clone(), value.clone());
-            }
-            merged
+            merged.extend(image_map.iter().map(|(k, v)| (k.clone(), v.clone())));
+            map_merged(&merged)
         }
-        None => descript.clone(),
-    };
-
-    map_merged(&merged)
+        None => map_merged(descript),
+    }
 }
 
 /// 便宜入口: デコード済み文字列 2 層を内部で `kv::parse_kv` して `parse` へ委譲する（R1.1/R1.5）。
@@ -66,75 +62,79 @@ pub fn parse(
 /// KV 化（行分割・後勝ち・trim）は foundation の `kv::parse_kv` が所有するため再実装しない（R1.5）。
 /// 画像別層 `None` は descript 文字列のみを写像する（R3.5）。
 pub fn parse_str(descript: &str, image: Option<&str>) -> BalloonModel {
-    let descript_map = parse_kv(descript);
-    let image_map = image.map(parse_kv);
-    parse(&descript_map, image_map.as_ref())
+    let mut merged = parse_kv(descript);
+    if let Some(image) = image {
+        merged.extend(parse_kv(image));
+    }
+    map_merged(&merged)
 }
 
 /// マージ済み 1 マップから各モデル化キーを完全一致で引き `BalloonModel` を構築する（R2/R4）。
 fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
+    let mut issues = Vec::new();
     let windowposition = WindowPosition::new(
-        get_scalar::<i32>(merged, "windowposition.x"),
-        get_scalar::<i32>(merged, "windowposition.y"),
+        // `center` などの語を正しく持つ鍵なので、数として読めなくても積まない（語の判別は配置層）。
+        merged.get("windowposition.x").and_then(|v| v.parse().ok()),
+        get_scalar::<i32>(merged, &mut issues, "windowposition.y"),
     );
     // windowposition.x/.limit の生文字列転記（windowposition-limit 要件 1.1/4.1）。
     // 上の数値写像とは別枠であり、数値化できないキーワード（center/top/bottom）や limit の 0/1 を
     // 解釈せず・警告せずそのまま持ち上げる。trim は kv 層（`kv::parse_kv`）で済んでいる。
     // 0/1 検証・キーワード判別・語彙外値の警告付き縮退は下流（配置層）の責務。
     let windowposition_raw = WindowPositionRaw::new(
-        merged.get("windowposition.x").map(|v| v.to_owned()),
-        merged.get("windowposition.limit").map(|v| v.to_owned()),
+        get_raw(merged, "windowposition.x"),
+        get_raw(merged, "windowposition.limit"),
     );
     let origin = Origin::new(
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#origin.x_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "origin.x"),
+        get_scalar::<i32>(merged, &mut issues, "origin.x"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#origin.y_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "origin.y"),
+        get_scalar::<i32>(merged, &mut issues, "origin.y"),
     );
     let wordwrappoint = WordWrapPoint::new(
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#wordwrappoint.x_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "wordwrappoint.x"),
+        get_scalar::<i32>(merged, &mut issues, "wordwrappoint.x"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#wordwrappoint.y_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "wordwrappoint.y"),
+        get_scalar::<i32>(merged, &mut issues, "wordwrappoint.y"),
     );
     let validrect = ValidRect::new(
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.top_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "validrect.top"),
+        get_scalar::<i32>(merged, &mut issues, "validrect.top"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.bottom_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "validrect.bottom"),
+        get_scalar::<i32>(merged, &mut issues, "validrect.bottom"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.left_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "validrect.left"),
+        get_scalar::<i32>(merged, &mut issues, "validrect.left"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#validrect.right_2c_5ea7_6a19_20_2a1:1
-        get_scalar::<i32>(merged, "validrect.right"),
+        get_scalar::<i32>(merged, &mut issues, "validrect.right"),
     );
     let color = FontColor::new(
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.color.r_2c_6570_5024:1
-        get_scalar::<u8>(merged, "font.color.r"),
+        get_scalar::<u8>(merged, &mut issues, "font.color.r"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.color.g_2c_6570_5024:1
-        get_scalar::<u8>(merged, "font.color.g"),
+        get_scalar::<u8>(merged, &mut issues, "font.color.g"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.color.b_2c_6570_5024:1
-        get_scalar::<u8>(merged, "font.color.b"),
+        get_scalar::<u8>(merged, &mut issues, "font.color.b"),
     );
     let font = Font::new(
         // font.name は文字列値（数値化しない・R2.5）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.name_2c_30d5_30a9_30f3_30c8_540d:1
-        merged.get("font.name").map(|v| v.to_owned()),
+        get_raw(merged, "font.name"),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#font.height_2c_6570_5024:1
-        get_scalar::<u32>(merged, "font.height"),
+        get_scalar::<u32>(merged, &mut issues, "font.height"),
         color,
     );
     // writing_mode は生文字列の転記のみ（trim は kv 層済み・値の検証・語彙判定・fallback は
     // 下流 emo テキスト層の責務・emo-text-layer 要件 5.6）。
-    let writing_mode = merged.get("writing_mode").map(|v| v.to_owned());
+    let writing_mode = get_raw(merged, "writing_mode");
     // budoux_newline も生文字列の転記のみ（writing_mode と同一規律・値の検証・語彙判定・
     // fallback は下流 emo テキスト層の責務・budoux-newline 要件 1.1）。
-    let budoux_newline = merged.get("budoux_newline").map(|v| v.to_owned());
+    let budoux_newline = get_raw(merged, "budoux_newline");
     // vertical も生文字列の転記のみ。上 2 者と異なりこれは areka 拡張キーではなく SSP 正典キー
     // （SSP 2.8.80 が確立・`0`／`1`）であり、正典側の既定は横書きである。ただし転記層の扱いは
     // 同一で、未宣言（None）と宣言（Some・空文字列を含む）を潰さずそのまま持ち上げる。
     // `0`/`1` の検証・語彙外値の警告付き縮退・`writing_mode` との共存裁定は、いずれも下流の
     // 書字方向の解決層の責務である（balloon-vertical-canon 要件 1.4/1.6/1.7）。
-    let vertical = merged.get("vertical").map(|v| v.to_owned());
+    let vertical = get_raw(merged, "vertical");
 
     // cursor.* スタイルモデル（additive・要件 4.2/6.2）。既存の完全一致引き＋2 層後勝ちマージに
     // 相乗りする。style/blendmethod は生文字列転記（語彙判定は下流）。brush/pen/font の各色成分は
@@ -143,30 +143,30 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     // 語彙を落とさない寛容パス素通しのまま（6.2 の語彙シーム）。
     let cursor = BalloonCursor::new(
         // style は文字列値（数値化しない・要件 4.2/6.5）。
-        merged.get("cursor.style").map(|v| v.to_owned()),
+        get_raw(merged, "cursor.style"),
         CursorColor::new(
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.r_2c_6570_5024:1
-            get_scalar::<u8>(merged, "cursor.brush.color.r"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.brush.color.r"),
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.g_2c_6570_5024:1
-            get_scalar::<u8>(merged, "cursor.brush.color.g"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.brush.color.g"),
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.brush.color.b_2c_6570_5024:1
-            get_scalar::<u8>(merged, "cursor.brush.color.b"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.brush.color.b"),
         ),
         CursorColor::new(
-            get_scalar::<u8>(merged, "cursor.pen.color.r"),
-            get_scalar::<u8>(merged, "cursor.pen.color.g"),
-            get_scalar::<u8>(merged, "cursor.pen.color.b"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.pen.color.r"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.pen.color.g"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.pen.color.b"),
         ),
         CursorColor::new(
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.r_2c_6570_5024:1
-            get_scalar::<u8>(merged, "cursor.font.color.r"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.font.color.r"),
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.g_2c_6570_5024:1
-            get_scalar::<u8>(merged, "cursor.font.color.g"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.font.color.g"),
             // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#cursor.font.color.b_2c_6570_5024:1
-            get_scalar::<u8>(merged, "cursor.font.color.b"),
+            get_scalar::<u8>(merged, &mut issues, "cursor.font.color.b"),
         ),
         // blendmethod は不透明転写（数値化しない・要件 6.5）。
-        merged.get("cursor.blendmethod").map(|v| v.to_owned()),
+        get_raw(merged, "cursor.blendmethod"),
     );
 
     // 書体 5 本・影 4 本（基底）と `disable.font.*` 14 本（無効表示）の転記
@@ -200,11 +200,11 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     let disable_font = DisableFont::new(
         Font::new(
             get_raw(merged, "disable.font.name"),
-            get_scalar::<u32>(merged, "disable.font.height"),
+            get_scalar::<u32>(merged, &mut issues, "disable.font.height"),
             FontColor::new(
-                get_scalar::<u8>(merged, "disable.font.color.r"),
-                get_scalar::<u8>(merged, "disable.font.color.g"),
-                get_scalar::<u8>(merged, "disable.font.color.b"),
+                get_scalar::<u8>(merged, &mut issues, "disable.font.color.r"),
+                get_scalar::<u8>(merged, &mut issues, "disable.font.color.g"),
+                get_scalar::<u8>(merged, &mut issues, "disable.font.color.b"),
             ),
         ),
         FontDecorationRaw::new(
@@ -241,6 +241,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     .with_arrow_keys(read_arrow_keys(merged))
     // 印の絵の名前（script-small-tags 要件 5.2）。矢印と同じに面の後勝ちに乗る。
     .with_marker_filename(read_marker_filename(merged))
+    .with_key_issues(issues)
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を生文字列のまま複製する（数値化しない）。
@@ -252,6 +253,19 @@ fn get_raw(merged: &BTreeMap<String, String>, key: &str) -> Option<String> {
 ///
 /// 完全一致引き（`get`）ゆえ distractor キー（`anchor.font.color.r` 等）を巻き込まない（R2.7）。
 /// キー不在・非数値・範囲外（`parse` が `Err`）はいずれも `None` へ降格し panic しない（R1.4/R3.4）。
-fn get_scalar<T: FromStr>(merged: &BTreeMap<String, String>, key: &str) -> Option<T> {
-    merged.get(key).and_then(|value| value.parse::<T>().ok())
+/// 鍵が在って読めないとき（空の値を含む）は `issues` に 1 件積む（記録は読み込む側）。
+fn get_scalar<T: FromStr>(
+    merged: &BTreeMap<String, String>,
+    issues: &mut Vec<KeyIssue>,
+    key: &'static str,
+) -> Option<T> {
+    let value = merged.get(key)?;
+    let parsed = value.parse::<T>().ok();
+    if parsed.is_none() {
+        issues.push(KeyIssue {
+            key,
+            value: value.clone(),
+        });
+    }
+    parsed
 }

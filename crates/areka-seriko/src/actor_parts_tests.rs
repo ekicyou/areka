@@ -5,14 +5,10 @@
 //! 発行先の記録の並びで確かめる（刻みは注入の絶対時刻・乱数は常に発火）。
 
 use super::test_support::*;
-use super::*;
-use crate::bind::BindOptionDecls;
 use crate::looper::tests::{always_fire, cfg};
-use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use crate::output::DisplayCommand;
+use crate::test_support::{part_frames, table_of};
+use areka_emo_compose::BindSet;
 
 /// 一番上 0・2 は子 100 を置き、自分の animation9（200 → 201 → `-1`）を持つ。1 は何も置かない。
 /// 100 の animation0 は 101（開き目・すぐ）→ 102（閉じ目・500ms 後）→ `-1`（さらに 500ms 後）。
@@ -49,70 +45,24 @@ const NEGATIVE_CHILD: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     animation0.pattern1,overlay,-2,500,0,0\n}\n\
     surface101\n{\n}\n";
 
-/// 同期 `handle_message` に cue と刻みを流す足場。
-struct Rig {
-    resolver: SurfaceResolver,
-    bind_resolver: BindResolver,
-    states: ScopeStates,
-    rt: LoopRuntime,
-    out: MockSurfaceOutput,
-    records: Arc<Mutex<Vec<DisplayCommand>>>,
-}
+/// この檻の足場（本体は兄弟の足場 `ClockRig`）。
+type Rig = ClockRig;
 
 impl Rig {
-    fn new(text: &str, static_binds: BindSet) -> Self {
-        let table =
-            AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)));
+    fn from_text(text: &str, static_binds: BindSet) -> Self {
+        let table = table_of(text);
         assert!(table.has_animated_parts(), "前提: 動く部品の在る表");
-        // (目, 閉) → 5（既定のポリシー＝着衣は排他置換・脱衣は除去）。
-        let sakura = BTreeMap::from([(("目".to_string(), "閉".to_string()), 5)]);
-        let out = MockSurfaceOutput::new();
-        let records = out.records();
-        Self {
-            resolver: SurfaceResolver::new(BTreeMap::new()),
-            bind_resolver: BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default()),
-            states: ScopeStates::new(crate::DefaultBinds::uniform(static_binds)),
-            rt: LoopRuntime::new(cfg(table, always_fire())),
-            out,
-            records,
-        }
+        Self::configured(cfg(table, always_fire()), eye_resolver(), static_binds)
     }
 
-    /// 1 通流し、その 1 通で増えた発行を返す。
-    fn send(&mut self, msg: SerikoMsg) -> Vec<DisplayCommand> {
-        let before = self.records.lock().unwrap().len();
-        let flow = handle_message(
-            &self.resolver,
-            &self.bind_resolver,
-            &mut self.states,
-            &mut self.rt,
-            &mut self.out,
-            msg,
-        );
-        assert_eq!(flow, ControlFlow::Continue(()));
-        self.records.lock().unwrap()[before..].to_vec()
+    /// 時計が `ms` のときに `\0\s[key]`。
+    fn surface(&mut self, ms: u64, key: &str) -> Vec<DisplayCommand> {
+        self.hear(ms, emote_cue(0.0, "0", key))
     }
 
-    fn tick(&mut self, now_ms: u64) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Tick { now_ms })
-    }
-
-    /// `\0\s[key]`。
-    fn surface(&mut self, key: &str) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Cue(emote_cue(0.0, "0", key)))
-    }
-
-    /// `\0\![bind,目,閉,on]`。
-    fn bind_eye(&mut self, on: &str) -> Vec<DisplayCommand> {
-        self.send(SerikoMsg::Cue(TalkCue {
-            at: 0.0,
-            actor: ActorKey::from("0"),
-            command: CueCommand::command_carrier(
-                "bind",
-                vec!["目".to_string(), "閉".to_string(), on.to_string()],
-            ),
-            duration: 0.0,
-        }))
+    /// 時計が `ms` のときに `\0\![bind,目,閉,on]`。
+    fn bind_eye(&mut self, ms: u64, on: &str) -> Vec<DisplayCommand> {
+        self.hear(ms, carrier_cue("0", "bind", &["目", "閉", on]))
     }
 }
 
@@ -121,8 +71,8 @@ impl Rig {
 /// 次の刻みで同じ `Show` は二重に出ない。
 #[test]
 fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
-    let mut rig = Rig::new(BLINK, BindSet::from_ids([]));
-    rig.surface("0");
+    let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
+    rig.surface(0, "0");
     rig.tick(0);
     let (_, _, p) = single_show(rig.tick(1000));
     assert_eq!(top_frames(&p), vec![(9, 200)]);
@@ -131,7 +81,7 @@ fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
     assert_eq!(top_frames(&p), vec![(9, 201)], "前提: 一番上は 2 コマ目");
     assert_eq!(part_frames(&p, 100), vec![(0, 102)], "前提: 子は閉じ目");
 
-    let cmds = rig.surface("2");
+    let cmds = rig.surface(1600, "2");
     let (sid, _, p) = single_show(cmds);
     assert_eq!(sid, 2);
     assert_eq!(
@@ -143,28 +93,29 @@ fn switch_mid_blink_emits_one_show_carrying_the_closed_eye_frame() {
 
     assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
 
-    // 次の境界: 一番上は面 2 で最初のコマ（200）から。子は経過 1000 で `-1` に着いて止まる。
+    // 次の境界: 一番上は面 2 で最初のコマ（200）から。子は経過 1000 で `-1` に着いて再生を終えているので、
+    // 同じ境界の抽選に当たり最初のコマ（101）から。
     let (sid, _, p) = single_show(rig.tick(2000));
     assert_eq!(sid, 2);
     assert_eq!(top_frames(&p), vec![(9, 200)], "一番上は最初から");
-    assert!(part_frames(&p, 100).is_empty());
+    assert_eq!(part_frames(&p, 100), vec![(0, 101)], "子も最初から");
 }
 
 /// 子を置いていない面へ行って戻っても、子は見えなかった間も進んでいた続きから出る（要件 5.7）。
 #[test]
 fn leaving_to_a_face_without_the_child_and_back_resumes_without_rewind() {
-    let mut rig = Rig::new(BLINK, BindSet::from_ids([]));
-    rig.surface("0");
+    let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
+    rig.surface(0, "0");
     rig.tick(0);
     let (_, _, p) = single_show(rig.tick(1000));
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
 
-    let (sid, _, p) = single_show(rig.surface("1"));
+    let (sid, _, p) = single_show(rig.surface(1000, "1"));
     assert_eq!(sid, 1);
     assert!(p.is_empty(), "子を置いていない面に部品のコマは無い");
     assert!(rig.tick(1600).is_empty(), "見えない子のために描き直さない");
 
-    let (sid, _, p) = single_show(rig.surface("0"));
+    let (sid, _, p) = single_show(rig.surface(1600, "0"));
     assert_eq!(sid, 0);
     assert_eq!(
         part_frames(&p, 100),
@@ -178,8 +129,8 @@ fn leaving_to_a_face_without_the_child_and_back_resumes_without_rewind() {
 /// 付け直した瞬間の `Show` は時計の続きのコマを載せる（要件 5.12・5.6）。
 #[test]
 fn bind_change_emits_one_show_without_the_removed_side_frames() {
-    let mut rig = Rig::new(BIND_CHILD, BindSet::from_ids([5]));
-    rig.surface("0");
+    let mut rig = Rig::from_text(BIND_CHILD, BindSet::from_ids([5]));
+    rig.surface(0, "0");
     rig.tick(0);
     let (_, _, p) = single_show(rig.tick(1000));
     assert_eq!(part_frames(&p, 100), vec![(5, 105)]);
@@ -190,32 +141,50 @@ fn bind_change_emits_one_show_without_the_removed_side_frames() {
         "前提: 着せ替えの子が 2 コマ目"
     );
 
-    let (sid, binds, p) = single_show(rig.bind_eye("0"));
+    let (sid, binds, p) = single_show(rig.bind_eye(1600, "0"));
     assert_eq!(sid, 0);
     assert_eq!(binds, BindSet::from_ids([]));
     assert!(p.is_empty(), "外れた側の部品のコマを載せない: {p:?}");
 
     // 刻みを挟まずに付け直す: 時計は次の刻みまで残っているので続きのコマが載る。
-    let (_, binds, p) = single_show(rig.bind_eye("1"));
+    let (_, binds, p) = single_show(rig.bind_eye(1600, "1"));
     assert_eq!(binds, BindSet::from_ids([5]));
     assert_eq!(part_frames(&p, 100), vec![(5, 106)]);
 
     assert!(rig.tick(1700).is_empty(), "同じ Show を二重に出さない");
 }
 
-/// 時計を書き換えない口（出来事の直後の `refresh`）は `-1` 以外の負の番号のコマを書かない（tasks.md 7.3 の申し送り）。
+/// 出来事の直後の作り直し（`refresh`）は `-1` 以外の負の番号のコマを書かない（tasks.md 7.3 の申し送り）。
 /// 見えない間に負のコマへ着いた子の面へ戻ると、部品のコマの無い `Show` が 1 件だけ出る。
 #[test]
 fn switch_back_onto_a_negative_frame_carries_no_part_frame() {
-    let mut rig = Rig::new(NEGATIVE_CHILD, BindSet::from_ids([]));
-    rig.surface("0");
+    let mut rig = Rig::from_text(NEGATIVE_CHILD, BindSet::from_ids([]));
+    rig.surface(0, "0");
     rig.tick(0);
     let (_, _, p) = single_show(rig.tick(1000));
     assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
-    single_show(rig.surface("1"));
+    single_show(rig.surface(1000, "1"));
     assert!(rig.tick(1600).is_empty());
 
-    let (sid, _, p) = single_show(rig.surface("0"));
+    let (sid, _, p) = single_show(rig.surface(1600, "0"));
     assert_eq!(sid, 0);
     assert!(p.is_empty(), "負の番号のコマは載らない: {p:?}");
+}
+
+/// 一番上と子が同じ境界で始まり、同じ次の境界でそろって `-1` に着くと、その境界の抽選で両方とも
+/// 最初のコマから始まる（一番上も部品も、終わった刻みの抽選を 1 回分待たない）。
+#[test]
+fn top_and_child_ending_on_a_boundary_both_restart_on_it() {
+    let mut rig = Rig::from_text(BLINK, BindSet::from_ids([]));
+    rig.surface(0, "0");
+    rig.tick(0);
+    let (_, _, p) = single_show(rig.tick(1000));
+    assert_eq!(top_frames(&p), vec![(9, 200)]);
+    assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
+    let (_, _, p) = single_show(rig.tick(1600));
+    assert_eq!(top_frames(&p), vec![(9, 201)], "前提: 一番上は 2 コマ目");
+    assert_eq!(part_frames(&p, 100), vec![(0, 102)], "前提: 子は 2 コマ目");
+    let (_, _, p) = single_show(rig.tick(2000));
+    assert_eq!(top_frames(&p), vec![(9, 200)], "一番上も最初から");
+    assert_eq!(part_frames(&p, 100), vec![(0, 101)], "子も最初から");
 }

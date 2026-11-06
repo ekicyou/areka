@@ -6,8 +6,9 @@
 //! `replace`・`add`・`bind`・ukadoc に無い語）は本転記。転記だけを行い、展開・検証・記録はしない
 //! （失敗しない）。記録は入口（`load_shell_target`）が出す。
 
-use super::decode::is_image_element_method;
-use super::lexer::{Token, lex};
+use super::decode::{is_box_element_method, is_image_element_method};
+use super::lexer::heading_text;
+use super::parse::parse_all;
 
 /// areka が描けない描画メソッドの element定義 1 行（欄は原文のまま）。
 #[derive(Clone, Debug, PartialEq)]
@@ -22,41 +23,38 @@ pub struct UndrawnElementLine {
 
 /// surfaces.txt の文面から、描けない描画メソッドの element定義の行を登場順に並べる（純粋・失敗しない）。
 ///
-/// 字句解析は画像の読み手と同じ `lexer::lex`。閉じたブレス（`BlockStart`..`BlockEnd`）だけを見る
-/// （閉じずに終わるブレスは字句解析が `Raw` にする）。見出しの先頭の欄が `surface` で始まるブレス
-/// だけが対象で、これは読み手の `surface.append*` と `surface*` の 2 つの枝を合わせた範囲と同じ
-/// （`kero.surface.alias` は `surface` で始まらないので当たらない）。見出しは展開せず 1 行 1 件。
+/// `parse_all` の射影。閉じたブレスだけを見る（閉じずに終わるブレスは字句解析が中身を落とす）。
+/// 見出しの先頭の欄が `surface` で始まるブレスだけが対象で、これは読み手の `surface.append*` と `surface*` の 2 つの枝を合わせた範囲と同じ
+/// （`kero.surface.alias` は `surface` で始まらないので当たらず、`surface.alias` は 2 つの読み手と同じく外す）。見出しは展開せず 1 行 1 件。
 pub fn parse_undrawn_elements(text: &str) -> Vec<UndrawnElementLine> {
-    let mut lines = Vec::new();
-    let mut heading: Option<String> = None;
+    parse_all(text).undrawn
+}
 
-    for token in lex(text) {
-        match token {
-            Token::BlockStart(header) => {
-                let head = header.first().map(String::as_str).unwrap_or("");
-                heading = head.starts_with("surface").then(|| header.join(","));
-            }
-            Token::Line(fields) => {
-                let Some(heading) = heading.as_ref() else {
-                    continue;
-                };
-                let Some(element) = fields.first().and_then(|k| k.strip_prefix("element")) else {
-                    continue;
-                };
-                let method = fields.get(1).map(String::as_str).unwrap_or("");
-                if is_image_element_method(method) || method == "balloon" {
-                    continue;
-                }
-                lines.push(UndrawnElementLine {
-                    heading: heading.clone(),
-                    element: element.to_string(),
-                    method: method.to_string(),
-                });
-            }
-            Token::BlockEnd => heading = None,
-            Token::TopLevel(_) | Token::Raw(_) => {}
-        }
+/// 閉じたブレス 1 つから描けない element定義の行を `out` へ積む（`parse_all` が呼ぶ）。
+pub(crate) fn undrawn_lines(
+    header: &[String],
+    body: &[Vec<String>],
+    out: &mut Vec<UndrawnElementLine>,
+) {
+    if !header
+        .first()
+        .is_some_and(|head| head.starts_with("surface") && head != "surface.alias")
+    {
+        return;
     }
-
-    lines
+    let heading = heading_text(header);
+    for fields in body {
+        let Some(element) = fields.first().and_then(|k| k.strip_prefix("element")) else {
+            continue;
+        };
+        let method = fields.get(1).map(String::as_str).unwrap_or("");
+        if is_image_element_method(method) || is_box_element_method(method) {
+            continue;
+        }
+        out.push(UndrawnElementLine {
+            heading: heading.clone(),
+            element: element.to_string(),
+            method: method.to_string(),
+        });
+    }
 }

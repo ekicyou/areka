@@ -49,9 +49,8 @@ pub(crate) fn surface(id: u32, elements: Vec<Element>) -> Surface {
 }
 
 /// ターゲット記述子とボディ element 群から plain surface 定義を組み立てる。
-pub(crate) fn surface_def(id: u32, targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
+pub(crate) fn surface_def(targets: Vec<AppendTarget>, elements: Vec<Element>) -> Surface {
     Surface {
-        id,
         targets,
         elements,
         collisions: Vec::new(),
@@ -66,7 +65,6 @@ pub(crate) fn surface_with_anims(
     animations: Vec<Animation>,
 ) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements,
         collisions: Vec::new(),

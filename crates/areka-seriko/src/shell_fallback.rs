@@ -36,7 +36,7 @@ pub enum ShellFallbackOutcome {
 
 /// 1 スコープ分の答え。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceKeep {
+pub(crate) enum SurfaceKeep {
     /// 今の面が新しいシェルに在る（替えない）。
     Keep,
     /// 候補のこの面へ替える。

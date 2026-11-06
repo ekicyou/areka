@@ -27,7 +27,7 @@ use std::path::Path;
 
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
-use areka_parsers::package::resolve;
+use areka_parsers::package::{read_ghost_names, shiori_dir};
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, SylphyaPublisher, load_scope};
 use bevy_ecs::entity::Entity;
@@ -289,12 +289,13 @@ fn project_restore_parts(
 
 /// 起動時の永続値先読み（本モジュール**唯一の IO 点**・design C1・A1 シーム）。
 ///
-/// mount 解決（[`areka_parsers::package::resolve`]＝mount 規則の単一権威・二重実装しない）で
-/// ghost mount を得て、Ghost 永続スコープ root（[`profile_areka_root`]`(&model.shiori.dir)`＝
-/// boot 結線と同一構築・単一権威）を導出し、[`load_scope`]`(Ghost, ..)` で永続 entries を読む。
+/// ゴーストの descript を確かめ（[`read_ghost_names`]）、Ghost 永続スコープ root
+/// （[`profile_areka_root`]`(&`[`shiori_dir`]`(ghost_root))`＝boot 結線と同じ SHIORI の置き場の
+/// 綴り・単一権威）を導出し、[`load_scope`]`(Ghost, ..)` で永続 entries を読む。シェルは
+/// 解決しない（既定のシェルが無くても保存した状態を戻す・指摘 46）。
 ///
 /// 全縮退は warn/debug ＋ 空 `Vec`（起動を止めない・panic しない・Req6.1/6.3）:
-/// - mount 解決失敗 → `warn!` ＋ 空（本関数で処理）。
+/// - ゴーストの descript の不在・読めない → `warn!` ＋ 空（本関数で処理）。
 /// - ファイル不在・破損・read 障害 → [`load_scope`] が寛容に空へ縮退する（sylphya 契約）。
 ///
 /// IO は本番実装 [`FsPersistIo`]（sylphya 内で FS に触れる唯一の型）。返り値は決定論的順序
@@ -303,22 +304,19 @@ pub fn load_restored_state(
     ghost_root: &Path,
     default_encoding: DefaultEncoding,
 ) -> Vec<(PersistKey, String)> {
-    // mount 解決は単一権威（source.rs と同一 resolve 呼び口・規則を二重化しない）。
-    let model = match resolve(ghost_root, default_encoding) {
-        Ok(model) => model,
-        Err(err) => {
-            warn!(
-                ghost_root = %ghost_root.display(),
-                error = ?err,
-                "ゴーストのマウント解決に失敗（永続復元をスキップ＝既定位置解決へ縮退）"
-            );
-            return Vec::new();
-        }
-    };
+    // ゴーストの descript が在って読めるときだけ戻す（不在の根を永続の根にしない）。
+    if let Err(err) = read_ghost_names(ghost_root, default_encoding) {
+        warn!(
+            ghost_root = %ghost_root.display(),
+            error = ?err,
+            "ゴーストのマウント解決に失敗（永続復元をスキップ＝既定位置解決へ縮退）"
+        );
+        return Vec::new();
+    }
 
-    // Ghost スコープ root＝profile_areka_root(shiori.dir)（boot 結線と同一構築・R6.5）。
+    // Ghost スコープ root＝profile_areka_root(shiori_dir)（boot 結線と同一構築・R6.5）。
     let roots = ScopeRoots {
-        ghost: Some(profile_areka_root(&model.shiori.dir)),
+        ghost: Some(profile_areka_root(&shiori_dir(ghost_root))),
         ..ScopeRoots::default()
     };
 

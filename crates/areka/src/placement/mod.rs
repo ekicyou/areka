@@ -115,7 +115,7 @@ use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_
 /// 終了コード 1 になる（log-first）。
 #[derive(Debug, thiserror::Error)]
 pub enum PlacementError {
-    /// ゴーストパッケージのマウント解決（`areka_parsers::package::resolve`）失敗。
+    /// ゴーストパッケージのマウント解決（`areka_parsers::package::resolve_with_shell`）失敗。
     ///
     /// `MountError` は `std::error::Error` 未実装のため `#[from]`/`#[source]`
     /// にせず値として保持し `Debug` 表示する。

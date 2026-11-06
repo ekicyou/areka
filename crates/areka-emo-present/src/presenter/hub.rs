@@ -10,7 +10,7 @@ use super::visibility::strip_finite_films;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, HashMap, PatternState,
     PhantomData, PresentCommand, PresentError, PresentOutcome, PresentTarget, ReplySender,
-    ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World, reply_channel,
+    ScalePolicy, ScaleRatio, TargetId, VisibilityOwnership, World,
 };
 
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
@@ -41,10 +41,8 @@ impl EmoPresenter {
     ///
     /// 装着（`VisualMount`）は**初回 `ShowSurface` で原寸が確定してから遅延生成**するため、本メソッドは
     /// skeleton（`mount=None`/`visible=false`）を組んで登録するのみで World には触れない。既存 id への
-    /// 再登録は表示コンテキストごと置換する。
-    ///
-    /// `world` は将来の system 化（`&mut World` を要する装着タイミング）へ向けた API 一貫性のために受ける
-    /// が、遅延生成方針ゆえ本メソッドでは参照しない。
+    /// 再登録は登録の値を差し替えるだけで、前の装着（窓の子の Visual）は窓に残る——差し替えは
+    /// `ReplaceTarget` を使う（外から取り外す公開の口は無い）。
     ///
     /// # `author_dpi`（作者基準 DPI・要件 1.1/1.5）
     ///
@@ -58,13 +56,12 @@ impl EmoPresenter {
     /// [`DEFAULT_AUTHOR_DPI`]: crate::scale::DEFAULT_AUTHOR_DPI
     pub fn attach_target(
         &mut self,
-        _world: &mut World,
         target: TargetId,
         window: Entity,
         emo_world: EmoWorld,
         atlas: AtlasTable,
         author_dpi: u16,
-    ) -> Result<(), PresentError> {
+    ) {
         self.targets.insert(
             target,
             PresentTarget {
@@ -97,7 +94,6 @@ impl EmoPresenter {
                 failure_note: None,
             },
         );
-        Ok(())
     }
 
     /// 指令を適用する（UI スレッド上で呼ぶ）。reply 同梱時は完了/失敗を高々 1 回返信する。
@@ -218,26 +214,7 @@ impl EmoPresenter {
             return;
         }
 
-        // 成否は応答で読む（状態の後追いで推測しない・`show_target` と同じ）。
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        self.apply_show(
-            world,
-            target_id,
-            surface_id,
-            binds,
-            pattern,
-            Some(tx),
-            false,
-        );
-        let outcome = rx.recv().unwrap_or_else(|e| {
-            tracing::error!(
-                ?target_id,
-                surface_id,
-                error = %e,
-                "apply(ShowSurface): 適用結果の応答が失われた"
-            );
-            Err(PresentError::TargetNotAttached(target_id))
-        });
+        let outcome = self.apply_show(world, target_id, surface_id, binds, pattern, false);
         if outcome.is_ok()
             && let Some(t) = self.targets.get_mut(&target_id)
         {

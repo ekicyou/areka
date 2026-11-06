@@ -23,7 +23,10 @@ use crate::state::{ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopTrigger};
 
 /// 本番の刻みと同じ間隔（ms・`areka-ghost` の ticker と同じ）。
-pub const SETTLE_TICK_MS: u64 = 16;
+pub(crate) const SETTLE_TICK_MS: u64 = 16;
+
+/// 進める刻みの数の上限（16ms × 37,500 ＝ 10 分）。作者の書いた長すぎる待ちで書き出しが止まらないように。
+pub(crate) const SETTLE_MAX_TICKS: u64 = 37_500;
 
 /// その面の `runonce` の待ちの合計の最大（無ければ 0・部品の `runonce` は数えない）。
 pub fn settle_time(table: &AnimationTable, surface_id: u32) -> u64 {
@@ -44,6 +47,7 @@ impl SurfaceOutput for Discard {
 }
 
 /// 面を時刻 0 に見せ始め、[`settle_time`] まで画面と同じ道で進めた状態を返す（同じスレッド・決定論）。
+/// [`settle_time`] が `SETTLE_MAX_TICKS` 刻み（10 分）を越える面は `warn!` を 1 行残し、上限の時刻で止める。
 ///
 /// 刻みの位相は合図と同じ時刻 0 から 16ms ごとに固定する（画面は絶対の格子に揃うので合図から最初の
 /// 刻みまでは 0〜16ms のどれか。`runonce` の最後のコマはどちらでも同じ）。
@@ -53,7 +57,16 @@ pub fn settle_surface(
     binds: &BindSet,
     surface_id: u32,
 ) -> PatternState {
-    let until = settle_time(table, surface_id);
+    let wait_ms = settle_time(table, surface_id);
+    let until = wait_ms.min(SETTLE_MAX_TICKS * SETTLE_TICK_MS);
+    if until < wait_ms {
+        tracing::warn!(
+            surface_id,
+            max_ticks = SETTLE_MAX_TICKS,
+            wait_ms,
+            "seriko: settle runonce の待ちの合計が上限を越える——上限の時点で打ち切って書き出す"
+        );
+    }
     let clock = Arc::new(AtomicU64::new(0));
     let read = Arc::clone(&clock);
     let resolver = SurfaceResolver::new(BTreeMap::new());

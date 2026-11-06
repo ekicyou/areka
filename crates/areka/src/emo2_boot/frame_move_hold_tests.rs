@@ -117,16 +117,13 @@ fn a_move_after_attach_before_the_first_surface_is_held() {
     let mut presenter = EmoPresenter::new();
     for scope in [0u32, 1] {
         let window = harness.char_window(scope as usize);
-        presenter
-            .attach_target(
-                &mut harness.world,
-                shell_target(scope),
-                window,
-                EmoWorld::build(&areka_parsers::shell::parse("")),
-                AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-                96,
-            )
-            .expect("headless 装着は成功する");
+        presenter.attach_target(
+            shell_target(scope),
+            window,
+            EmoWorld::build(&areka_parsers::shell::parse("")),
+            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
+            96,
+        );
     }
     let (tx, wiring) = wiring_with(presenter);
     let target = harness.char_window(1);

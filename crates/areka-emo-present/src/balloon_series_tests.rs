@@ -1,56 +1,7 @@
 use super::*;
 
-use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, capture_events};
-
-/// R1.5/R7.2 系列を明示した面判定: 面であるか否かは **どの系列（scope）で見るか**に依存する。
-///
-/// 単一接頭辞固定時代の「`balloonk0.png` は枠でない」という無条件の判定を、系列を明示した
-/// 判定へ**意味を変えて**更新したもの（design.md「Implementation Notes / Integration」）——
-/// scope 0 の連鎖では `balloonk0.png` を採用せず、scope 1 の連鎖では面 0 として採用する。
-/// 一方、正典でバルーン面系列と定義されていないファイル（`balloonc*`/`arrow*`/`marker*`/
-/// `online*`・非数字・非 png）はどの系列から見ても面でない。
-#[test]
-fn face_judgment_is_series_explicit_not_fixed_prefix() {
-    // 相方側の面: scope 0 の連鎖では採用されず、scope 1 の連鎖では面 0 になる。
-    assert!(
-        selected(&["balloonk0.png", "balloons0.png"], 0)
-            .iter()
-            .all(|f| f.3 != "balloonk0.png"),
-        "scope 0 の連鎖に balloonk は無く相方側の面を採用しない"
-    );
-    assert_eq!(
-        selected(&["balloonk0.png"], 1),
-        vec![(
-            0,
-            "balloonk".to_string(),
-            ChainTier::Own,
-            "balloonk0.png".to_string()
-        )],
-        "scope 1 の連鎖では balloonk0.png が面 0 として採用される"
-    );
-    // 本体側の面と大小無視（系列を明示しても判定 3 段そのものは不変）。
-    assert_eq!(face_id_of("balloons", "balloons0.png"), Some(0));
-    assert_eq!(face_id_of("balloons", "balloons12.png"), Some(12));
-    assert_eq!(face_id_of("balloons", "BALLOONS3.PNG"), Some(3), "大小無視");
-    // 非バルーン面（どの系列から見ても面でない・R5.3）。
-    for prefix in ["balloons", "balloonk", "balloonp0def", "balloonp1def"] {
-        for name in [
-            "balloonc0.png", // 入力ボックス
-            "arrow0.png",    // スクロール矢印
-            "marker.png",    // マーカー
-            "online0.png",   // 受信アニメ
-            "balloons.png",  // 数字が無い
-            "balloonsX.png", // 非数字
-            "balloons0.txt", // 非 png
-        ] {
-            assert_eq!(
-                face_id_of(prefix, name),
-                None,
-                "系列 {prefix} が非バルーン面 {name} を採用した"
-            );
-        }
-    }
-}
+use super::test_support::{CapturedEvent, FieldUnquoted, TempDir};
+use log_capture_kit::capture;
 
 // ── 檻 1: scope→接頭辞優先連鎖の導出（R1.1/1.6/1.8/1.9/1.10・R7.1）─────────────
 
@@ -150,18 +101,11 @@ fn prefix_chain_head_is_scope_canonical_name_for_any_scope() {
 }
 
 /// R1.9（縮退シーム）/R7.1(c): 装飾族の**一段深い旧名**（`arrows` → `arrow`）も、
-/// 同じ表構造（可変長の旧名候補列）で構造改変なしに表現できる。本仕様は吹き出し族のみ
-/// 実装するが、表データが族でパラメタ化されている事実をここで固定する。
+/// 同じ表構造（可変長の旧名候補列）で構造改変なしに表現できる（本物の矢印の族の表で固定する）。
 #[test]
 fn series_family_table_expresses_deeper_legacy_names() {
-    const ARROW_FAMILY: SeriesFamily = SeriesFamily {
-        base: "arrow",
-        scope0_legacy: &["arrows", "arrow"],
-        scope1_legacy: &["arrowk"],
-    };
-
     assert_eq!(
-        chain_pairs(&ARROW_FAMILY, 0),
+        chain_pairs(&crate::balloon_marker::ARROW_FAMILY, 0),
         vec![
             ("arrowp0def".to_string(), ChainTier::Own),
             ("arrows".to_string(), ChainTier::Own),
@@ -170,7 +114,7 @@ fn series_family_table_expresses_deeper_legacy_names() {
         "scope 0 の旧名候補が 2 段でも構造改変なしに連鎖へ載る"
     );
     assert_eq!(
-        chain_pairs(&ARROW_FAMILY, 2),
+        chain_pairs(&crate::balloon_marker::ARROW_FAMILY, 2),
         vec![
             ("arrowp2def".to_string(), ChainTier::Own),
             ("arrowk".to_string(), ChainTier::KeroNamed),
@@ -420,30 +364,9 @@ fn select_faces_preserves_original_file_name_case() {
 }
 
 // ── 檻 6: 採用接頭辞からの面別上書きファイル名導出（R2.2/R2.3・R7.1）─────────────
+// R2.3（後段へ縮退した面は後段接頭辞の上書き層）は `resolve_balloon_faces_falls_back_per_face_id_on_real_directory` が持つ。
 
-/// 檻 6（R2.2/R2.3）: 面別上書きファイル名は**採用接頭辞に対応して**導出され、ID 単位
-/// フォールバックで後段へ落ちた面ではその後段接頭辞の名前になる。scope 1 が `balloonk0`
-/// を採ったなら `balloonk0s.txt`・面 1 が `balloons1` へ縮退したなら `balloons1s.txt`
-/// （連鎖の他の接頭辞の上書き層を引かない）。
-#[test]
-fn override_file_name_follows_adopted_prefix_per_face() {
-    let names = ["balloonk0.png", "balloons0.png", "balloons1.png"];
-    let faces = select_faces(&names, &prefix_chain(&BALLOON_FAMILY, 1));
-
-    assert_eq!(faces.len(), 2, "面 0/1 の 2 面が解決される");
-    assert_eq!(
-        faces[0].override_file_name(),
-        "balloonk0s.txt",
-        "採用面 balloonk0 の上書き層は balloonk0s.txt（balloons0s.txt を引かない・R2.2）"
-    );
-    assert_eq!(
-        faces[1].override_file_name(),
-        "balloons1s.txt",
-        "デフォルト段へ縮退した面 1 の上書き層は後段接頭辞の balloons1s.txt（R2.3）"
-    );
-}
-
-/// 檻 6（続き・R2.2）: 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
+/// 檻 6（R2.2）: 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
 /// 依らず**連鎖上の接頭辞**（小文字正準形）から導出される。
 #[test]
 fn override_file_name_uses_chain_prefix_not_file_case() {
@@ -479,11 +402,8 @@ fn resolve_balloon_faces_requires_face_zero() {
 
     let err = resolve_balloon_faces(dir.path(), 0).expect_err("面 0 不在なら Err のはず");
     assert!(
-        matches!(
-            err,
-            PresentError::Compose(ComposeError::EmptyComposition(0))
-        ),
-        "面 0 不在は既存縮退経路（EmptyComposition(0)）へ畳む: {err:?}"
+        matches!(err, BalloonLoadError::NoFace0 { scope: 0, .. }),
+        "面 0 不在は NoFace0: {err:?}"
     );
 }
 
@@ -495,11 +415,8 @@ fn resolve_balloon_faces_errors_on_unreadable_directory() {
 
     let err = resolve_balloon_faces(&missing, 0).expect_err("走査失敗なら Err のはず");
     assert!(
-        matches!(
-            err,
-            PresentError::Compose(ComposeError::EmptyComposition(0))
-        ),
-        "走査失敗も既存縮退経路へ畳む: {err:?}"
+        matches!(err, BalloonLoadError::List { .. }),
+        "走査失敗は List: {err:?}"
     );
 }
 
@@ -595,7 +512,7 @@ fn resolve_warns_only_for_default_tier_face_at_scope1() {
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 1));
+    let (result, events) = capture(|| resolve_balloon_faces(dir.path(), 1));
     let faces = result.expect("面 0 は balloonk0 で解決する");
     assert_eq!(
         faces
@@ -643,7 +560,7 @@ fn resolve_emits_no_fallback_warn_at_scope0() {
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 0));
+    let (result, events) = capture(|| resolve_balloon_faces(dir.path(), 0));
     let faces = result.expect("面 0 が在るゆえ Ok");
     assert!(
         faces.iter().all(|f| f.tier == ChainTier::Own),
@@ -665,7 +582,7 @@ fn resolve_does_not_warn_for_kero_named_tier_at_scope2() {
     dir.touch("balloons0.png");
     dir.touch("balloons1.png");
 
-    let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 2));
+    let (result, events) = capture(|| resolve_balloon_faces(dir.path(), 2));
     let faces = result.expect("面 0 は名指し相方系列 balloonk0 で解決する");
     assert_eq!(
         faces

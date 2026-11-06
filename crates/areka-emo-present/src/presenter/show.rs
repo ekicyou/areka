@@ -7,15 +7,17 @@ use crate::display::record_display;
 
 use super::scale_change::{AppliedScale, ScaleChange};
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
-use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
+use super::transition_record::{SurfaceRecord, SurfaceStage, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
-    PresentError, PresentOutcome, Recompose, ReplySender, TargetId, VisibilityOwnership,
-    VisualMount, World, derive_scale,
+    PresentError, PresentOutcome, Recompose, TargetId, VisibilityOwnership, VisualMount, World,
+    derive_scale,
 };
 
 impl EmoPresenter {
     /// `ShowSurface` の適用（キャッシュ引き当て or 合成＋表示記録 → 表示記録・配置の書き込み → マスク同期 → 可視化）。
+    ///
+    /// 結果は戻り値で返す。応答の口へ送るのは指令の入口（`apply`）だけで、ここは送らない。
     ///
     /// 手順（design §System Flows・Flow 1・裁定 D）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。
     /// (0) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
@@ -50,7 +52,6 @@ impl EmoPresenter {
     /// `reveal` は「呼び手がこの適用の後に窓を見えるようにする」こと。見えていなかった外から所有される
     /// 窓を出し直す [`EmoPresenter::show_target`] だけが真を渡し、表示の行の水準の判定（コマ送りだけの
     /// 適用か）に使う（`animated-surface-log-flood` 要件 1.5）。
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_show(
         &mut self,
         world: &mut World,
@@ -58,9 +59,8 @@ impl EmoPresenter {
         surface_id: u32,
         binds: BindSet,
         pattern: PatternState,
-        reply: Option<ReplySender<PresentOutcome>>,
         reveal: bool,
-    ) {
+    ) -> PresentOutcome {
         // (−1) 段階計時の起点（Requirement 1.1・design D5）。**無条件**に開始する——ログ設定を
         // 一切参照しないため、計時ログの有効・無効で表示経路が分岐しない（Requirement 1.5）ことが
         // 檻ではなく構造で成立する。`emit` は `self` を消費するため、以降の early return は
@@ -73,8 +73,7 @@ impl EmoPresenter {
                 surface_id,
                 "apply(ShowSurface): 未装着ターゲット"
             );
-            Self::reply(reply, Err(PresentError::TargetNotAttached(target_id)));
-            return;
+            return Err(PresentError::TargetNotAttached(target_id));
         };
 
         // (0) k 導出（show 適用ごと・design Flow 1）。窓 DPI は wintf の `DPI` component から読む
@@ -198,14 +197,10 @@ impl EmoPresenter {
                                 );
                             }
                             target.failure_note = Some(NO_GFX);
-                            Self::reply(
-                                reply,
-                                Err(PresentError::Device {
-                                    hresult: 0,
-                                    context: "GraphicsCore resource",
-                                }),
-                            );
-                            return;
+                            return Err(PresentError::Device {
+                                hresult: NO_GFX.1,
+                                context: NO_GFX.0,
+                            });
                         };
                         // 席は読むだけだが、貸し出し口は 1 つしかない（`native_scratch`）。伸長は
                         // 起きないため確保の計数も動かない。
@@ -215,13 +210,12 @@ impl EmoPresenter {
                             .native_scratch(|scratch| record_display(dc, scratch, repeat))
                         {
                             Ok(list) => list,
-                            // record_display は内部で記録済み（display.rs device_err・同じ原因の続きは debug!）。
+                            // record_display は内部で記録済み（command.rs の device_err・同じ原因の続きは debug!）。
                             Err(e) => {
                                 if let PresentError::Device { hresult, context } = &e {
                                     target.failure_note = Some((*context, *hresult));
                                 }
-                                Self::reply(reply, Err(e));
-                                return;
+                                return Err(e);
                             }
                         }
                     };
@@ -236,7 +230,8 @@ impl EmoPresenter {
                     // 追い出しエントリの表示バッファ容量を受け取り、束ねられていたマスクは輪番の
                     // 空きスロットとして下の `regenerate_mask` へ回す（設計 D2⑵/D3）。回収が
                     // 成立しなければ空バッファから始まり、以後の伸長がそのまま計数される。
-                    let (mut display, retired_mask) = target.budget.display_buffer(recycled);
+                    let (mut display, retired_mask) =
+                        super::budget::FrameBudget::display_buffer(recycled);
                     // 合成先席と表示バッファを**交代**させる（複写も確保も起きない・設計 D2⑴）。
                     // **k の値に依らず常にこの経路**（要件 1.3・7.3）——表示へ載せるのは原寸そのもの
                     // であり、k 適用の段は存在しない。交代後は回収した容量が合成先席に入り、次の適用は
@@ -271,23 +266,35 @@ impl EmoPresenter {
                     // 消えている。席の交代（O(1) の入れ替え）もこの区間に入る。
                     timing.mark(Stage::MaskGen);
                 }
-                Err(ComposeError::EmptyComposition(id)) => {
+                Err(
+                    e @ (ComposeError::EmptyComposition(_) | ComposeError::ExtentTooLarge { .. }),
+                ) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
-                    tracing::warn!(
-                        ?target_id,
-                        surface_id = id,
-                        was_visible = target.visible,
-                        "apply(ShowSurface): 全透明退化（EmptyComposition）→ Hide 縮退（reply Ok）"
-                    );
+                    // 外形の上限越え（合成が error! 済み・絵は確保されない）も同じく隠す（audit-emo-compose との申し合わせ 11-05）。
+                    if matches!(e, ComposeError::EmptyComposition(_)) {
+                        tracing::warn!(
+                            ?target_id,
+                            surface_id,
+                            was_visible = target.visible,
+                            "apply(ShowSurface): 全透明退化（EmptyComposition）→ Hide 縮退（reply Ok）"
+                        );
+                    } else {
+                        tracing::warn!(
+                            ?target_id,
+                            surface_id,
+                            was_visible = target.visible,
+                            error = %e,
+                            "apply(ShowSurface): 外形が上限越え（ExtentTooLarge）→ Hide 縮退（reply Ok）"
+                        );
+                    }
                     if let Some(mount) = target.mount.as_ref() {
                         mount.set_visible(world, false);
                     }
                     target.visible = false;
-                    // EmptyComposition 縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
+                    // この縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
                     target.current_surface_id = None;
                     target.failure_note = None;
-                    Self::reply(reply, Ok(()));
-                    return;
+                    return Ok(());
                 }
                 Err(e) => {
                     // 解決不能 id（SurfaceNotFound 等）: error! ＋ 表示不変 ＋ reply Err（R3.4）。
@@ -298,8 +305,7 @@ impl EmoPresenter {
                         "apply(ShowSurface): 合成失敗 → 表示は適用前のまま（reply Err）"
                     );
                     target.failure_note = None;
-                    Self::reply(reply, Err(PresentError::Compose(e)));
-                    return;
+                    return Err(PresentError::Compose(e));
                 }
             }
         }
@@ -482,7 +488,7 @@ impl EmoPresenter {
                     // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
                     k_ratio = ?scale,
                     k = scale.as_f32(),
-                    author_dpi = target.policy.author_dpi,
+                    author_dpi = target.policy.author_dpi(),
                     // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
                     window_dpi = ?window_dpi,
                     native_w = native.0,
@@ -532,12 +538,12 @@ impl EmoPresenter {
                 surface_id,
                 cache_hit,
                 key_hash,
-                // 遷移観測と**同じ資源**から読む（Requirement 2.8・D12）。供給元が 2 つになると
+                // 遷移観測の刻印そのものから読む（Requirement 2.8・D12）。供給元が 2 つになると
                 // 「perf 行と surface 行が同一フレームで突合できる」が静かに壊れる。
-                frame: frame_of(world),
+                frame: stamp_of(world).frame,
             },
             allocs,
         );
-        Self::reply(reply, Ok(()));
+        Ok(())
     }
 }

@@ -264,7 +264,8 @@ fn inproc_connect_missing_file_fails_immediately() {
     // shiori 行なし＝file: None（resolve が推測しない）。
     std::fs::write(master_dir.join("descript.txt"), "").expect("空 descript 書き込み");
 
-    let mount = package::resolve(&root, DefaultEncoding::Ansi).expect("fixture の resolve");
+    let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
+        .expect("fixture の resolve");
     let _ = std::fs::remove_dir_all(&root);
     assert_eq!(
         mount.shiori.file, None,

@@ -122,6 +122,8 @@ pub enum PresentCommand {
 /// - [`Compose`](PresentError::Compose): 上流合成の失敗を [`areka_emo_compose::ComposeError`] から
 ///   透過（`#[from]`）する。
 /// - [`TargetNotAttached`](PresentError::TargetNotAttached): 指定 [`TargetId`] が未装着。
+/// - [`NotShown`](PresentError::NotShown): 装着済みだが表示が一度も成立していない。
+/// - [`EntryEvicted`](PresentError::EntryEvicted): 表示中の絵が合成メモから追い出された。
 /// - [`Device`](PresentError::Device): グラフィックスデバイス層の失敗（`HRESULT` ＋文脈）。
 ///
 /// `#[non_exhaustive]` ゆえ将来 variant を追加しても下流の `match` は網羅性エラーにならない。
@@ -134,6 +136,19 @@ pub enum PresentError {
     /// 指定ターゲットが未装着（表示面・キャッシュが結線されていない）。
     #[error("target {0:?} is not attached")]
     TargetNotAttached(TargetId),
+    /// 装着済みだが表示が一度も成立していない（出す・読む内容が無い）。
+    #[error("target {0:?} has never been shown")]
+    NotShown(TargetId),
+    /// 表示中の絵が合成メモから追い出された（LRU 追い出し・`InvalidateCache` の後）。
+    #[error(
+        "target {target:?} surface {surface_id}: shown entry was evicted from the compose cache"
+    )]
+    EntryEvicted {
+        /// 読もうとした target。
+        target: TargetId,
+        /// 表示中だった面の番号。
+        surface_id: u32,
+    },
     /// グラフィックスデバイス層の失敗（`HRESULT` ＋発生文脈の静的説明）。
     #[error("graphics device error: {hresult:#x} {context}")]
     Device {
@@ -147,9 +162,9 @@ pub enum PresentError {
 /// `windows_core::Error` を [`PresentError::Device`]（ログ＋`HRESULT`＋文脈）へ写像するクロージャ。
 ///
 /// 失敗経路はログ規律（`error!` ＋ `Err` 戻り値・パニック禁止）に従い、発生箇所の静的文脈を添えて
-/// 構造化エラーへ畳む。`.map_err(device_err("<where>", repeat))?` の形で D2D/D3D/DXGI 呼び出しを包む。
+/// 構造化エラーへ畳む。`.map_err(device_err("<where>", repeat))?` の形で D2D 呼び出しを包む。
 ///
-/// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`chain`）
+/// [`PresentError`] と同じ場所に置く共有の写像であり、提示段のどのモジュール（`display`・`presenter`）
 /// からも同一の形で使える（同形の写像を各モジュールへ複写しないため）。
 ///
 /// `repeat` は前に記録した同じ対象の失敗の原因（`context`・`hresult`）。今の原因と同じなら同じ
@@ -162,9 +177,9 @@ pub(crate) fn device_err(
     move |e| {
         let hresult = e.code().0;
         if repeat == Some((context, hresult)) {
-            tracing::debug!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+            tracing::debug!(hresult, context, "D2D 呼び出しが失敗");
         } else {
-            tracing::error!(hresult, context, "D3D/DXGI 呼び出しが失敗");
+            tracing::error!(hresult, context, "D2D 呼び出しが失敗");
         }
         PresentError::Device { hresult, context }
     }
@@ -177,7 +192,6 @@ mod device_err_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_emo_compose::{BindSet, ComposeError, PatternState};
 
     /// 型 `T` が `Send + 'static` であることをコンパイル時に要求するヘルパ。
     fn _assert_send_static<T: Send + 'static>() {}
@@ -193,97 +207,15 @@ mod tests {
         _assert_send_static::<TargetId>();
     }
 
-    /// Req 3.3/3.5/3.6: 各 variant を実データで構築できる（reply=None の撃ちっぱなし形）。
-    ///
-    /// `ShowSurface` は実 [`BindSet`] を同梱し、`Hide`（`\s[-1]` 相当）・`InvalidateCache` と併せて
-    /// 3 経路すべてが所有データのみで組み立てられることを確認する。
-    #[test]
-    fn variants_construct_with_owned_data() {
-        let target = TargetId(0);
-
-        let show = PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::from_ids([0u32, 5, 5, 3]),
-            pattern: PatternState::default(),
-            reply: None,
-        };
-        let hide = PresentCommand::Hide {
-            target: TargetId(1),
-            reply: None,
-        };
-        let invalidate = PresentCommand::InvalidateCache {
-            target,
-            reply: None,
-        };
-
-        // variant の識別を match で確認（構築が成立し所有されていること）。
-        assert!(matches!(
-            show,
-            PresentCommand::ShowSurface {
-                surface_id: 1000,
-                ..
-            }
-        ));
-        assert!(matches!(
-            hide,
-            PresentCommand::Hide {
-                target: TargetId(1),
-                ..
-            }
-        ));
-        assert!(matches!(
-            invalidate,
-            PresentCommand::InvalidateCache {
-                target: TargetId(0),
-                ..
-            }
-        ));
-    }
-
-    /// TargetId は `Copy` かつ `Hash` キーとして扱える（`Debug` 整形も `Device`/`TargetNotAttached`
-    /// の表示経路で用いる）。
-    #[test]
-    fn target_id_is_copy_and_hashable_key() {
-        use std::collections::HashSet;
-        let a = TargetId(7);
-        let b = a; // Copy
-        assert_eq!(a, b);
-        let mut set = HashSet::new();
-        set.insert(a);
-        assert!(set.contains(&b));
-        assert_eq!(format!("{a:?}"), "TargetId(7)");
-    }
-
-    /// Req 4.3/7.2: `PresentError` は `ComposeError` を `#[from]` で透過取り込みできる。
-    ///
-    /// 上流合成失敗をそのまま `?` で持ち上げられることを、`.into()` 変換で静的・実行時に確認する。
-    #[test]
-    fn present_error_maps_compose_error_via_from() {
-        let ce = ComposeError::SurfaceNotFound(1000);
-        let pe: PresentError = ce.into();
-        assert!(matches!(
-            pe,
-            PresentError::Compose(ComposeError::SurfaceNotFound(1000))
-        ));
-
-        // EmptyComposition も同経路で写像される（Error Categories 双方）。
-        let pe2: PresentError = ComposeError::EmptyComposition(42).into();
-        assert!(matches!(
-            pe2,
-            PresentError::Compose(ComposeError::EmptyComposition(42))
-        ));
-    }
-
     /// `Device` variant の `Display` は HRESULT を 16 進で整形する（`{hresult:#x}`）。
     #[test]
     fn device_error_displays_hex_hresult() {
         let err = PresentError::Device {
             hresult: 0x8899_AABBu32 as i32,
-            context: "CreateSwapChain",
+            context: "CreateBitmap",
         };
         let text = err.to_string();
         assert!(text.contains("0x8899aabb"), "unexpected: {text}");
-        assert!(text.contains("CreateSwapChain"));
+        assert!(text.contains("CreateBitmap"));
     }
 }

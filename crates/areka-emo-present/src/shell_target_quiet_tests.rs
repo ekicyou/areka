@@ -11,12 +11,15 @@
 
 use super::*;
 
-use std::path::PathBuf;
-
 use areka_emo_atlas::{ElementId, MemoryDecoder};
 use temp_path_kit::TempPath;
 
-use super::test_support::{CapturedEvent, capture_events, write_descript};
+use super::test_support::{
+    BOXES_FIXTURE_IMAGES, CapturedEvent, NESTING_FIXTURE_IMAGES, boxes_fixture_dir, decoder_with,
+    nesting_fixture_dir, write_descript, write_records_fixture,
+};
+use crate::balloon::test_support::count_message;
+use log_capture_kit::capture;
 
 /// 読み込みの記録の宛先（シェルの権威と、透過の宣言の記録）。
 const LOAD_TARGETS: [&str; 2] = [
@@ -30,15 +33,6 @@ fn load_records(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .iter()
         .filter(|e| LOAD_TARGETS.contains(&e.target.as_str()))
         .collect()
-}
-
-/// 不透明 1×1 PBGRA の絵を `names` の名前で入れた復号器。
-fn decoder_with(dir: &Path, names: &[&str]) -> MemoryDecoder {
-    let mut dec = MemoryDecoder::new();
-    for name in names {
-        dec.insert(dir.join(name), 1, 1, 4, vec![10u8, 20, 30, 255], true);
-    }
-    dec
 }
 
 /// 戻り値の比べられる写し（索引表は `HashMap` を持ち `Debug` の順が定まらないので鍵の並びで写す）。
@@ -64,20 +58,20 @@ fn fingerprint(target: &ShellTarget) -> String {
     )
 }
 
-/// 両入口で読み、戻り値が等しいこと・出す入口に `needle` の記録が在ること・出さない入口の
-/// 読み込みの記録が 0 行であることを確かめる。
-fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needle: &str) {
-    let (emit, emit_events) =
-        capture_events(|| load_shell_target(dir, dec).expect("出す入口で読める"));
+/// 両入口で 1 回ずつ読み、戻り値が等しいこと・出す入口に `needles` のどの文言の記録も在ること・
+/// 出さない入口の読み込みの記録が 0 行であることを確かめる。
+fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needles: &[&str]) {
+    let (emit, emit_events) = capture(|| load_shell_target(dir, dec).expect("出す入口で読める"));
     let (quiet, quiet_events) =
-        capture_events(|| load_shell_target_quiet(dir, dec).expect("出さない入口で読める"));
+        capture(|| load_shell_target_quiet(dir, dec).expect("出さない入口で読める"));
 
-    assert!(
-        load_records(&emit_events)
-            .iter()
-            .any(|e| e.message().contains(needle)),
-        "出す入口に `{needle}` の記録が無い（検体が事象を起こしていない）: {emit_events:?}"
-    );
+    let emitted = load_records(&emit_events);
+    for needle in needles {
+        assert!(
+            emitted.iter().any(|e| e.message().contains(needle)),
+            "出す入口に `{needle}` の記録が無い（検体が事象を起こしていない）: {emit_events:?}"
+        );
+    }
     let quiet_records = load_records(&quiet_events);
     assert!(
         quiet_records.is_empty(),
@@ -94,72 +88,25 @@ fn assert_quiet_matches_emit(dir: &Path, dec: &MemoryDecoder, needle: &str) {
 #[test]
 fn records_fixture_is_silent_and_equal() {
     let dir = TempPath::new("shell-quiet-records");
-    std::fs::write(
-        dir.child("surfaces.txt"),
-        concat!(
-            "charset,UTF-8\n",
-            "surface0\n{\nelement0,overlay,base0.png,0,0\n}\n",
-            "surface1\n{\nelement1,overlay,parts1.png,0,0\n",
-            "animation0.interval,random,4\n",
-            "animation0.pattern0,overlay,777,0,0,0\n}\n",
-        ),
-    )
-    .expect("記述ファイル作成");
-    write_descript(dir.path());
-    for name in [
-        "surface0.png",
-        "surface0000.png",
-        "surface1.png",
-        "surface99999999999.png",
-        "base0.png",
-        "parts1.png",
-    ] {
-        std::fs::File::create(dir.child(name)).expect("プレースホルダ作成");
-    }
-    // `parts1.png` を入れないので、その 1 枚が焼く段で落ちる（`error!` も黙らせる側）。
-    let dec = decoder_with(dir.path(), &["base0.png", "surface1.png"]);
+    let dec = write_records_fixture(dir.path());
 
-    assert_quiet_matches_emit(dir.path(), &dec, "同じ番号");
-    assert_quiet_matches_emit(dir.path(), &dec, "コマの相手");
-    assert_quiet_matches_emit(dir.path(), &dec, "脱落");
+    assert_quiet_matches_emit(dir.path(), &dec, &["同じ番号", "コマの相手", "脱落"]);
 }
 
-/// 入れ子の検体（無い番号・循環・descript.txt が無い）。
+/// 入れ子の検体（無い番号・循環）。
 #[test]
 fn nesting_fixture_is_silent_and_equal() {
-    let dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("areka-emo-compose")
-        .join("tests")
-        .join("fixtures")
-        .join("surface-nesting");
-    let dec = decoder_with(
-        &dir,
-        &[
-            "body.png",
-            "eye.png",
-            "eye_closed.png",
-            "mouth.png",
-            "mouth_open.png",
-            "part.png",
-            "surface11.png",
-            "surface2.png",
-        ],
-    );
-    assert_quiet_matches_emit(&dir, &dec, "element定義が指したサーフェスが無い");
+    let dir = nesting_fixture_dir();
+    let dec = decoder_with(&dir, &NESTING_FIXTURE_IMAGES);
+    assert_quiet_matches_emit(&dir, &dec, &["element定義が指したサーフェスが無い"]);
 }
 
 /// 箱の検体（箱の数の `info!`）と、誤りのある箱（各件の `warn!`）。
 #[test]
 fn box_fixtures_are_silent_and_equal() {
-    let dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("areka-emo-text")
-        .join("tests")
-        .join("fixtures")
-        .join("shell-balloon");
-    let dec = decoder_with(&dir, &["body0.png", "body1.png", "body2.png", "body3.png"]);
-    assert_quiet_matches_emit(&dir, &dec, "箱を読んだ");
+    let dir = boxes_fixture_dir();
+    let dec = decoder_with(&dir, &BOXES_FIXTURE_IMAGES);
+    assert_quiet_matches_emit(&dir, &dec, &["箱を読んだ"]);
 
     let bad = TempPath::new("shell-quiet-bad-box");
     std::fs::write(
@@ -173,7 +120,7 @@ fn box_fixtures_are_silent_and_equal() {
     .expect("記述ファイル作成");
     write_descript(bad.path());
     let dec = decoder_with(bad.path(), &["base.png"]);
-    assert_quiet_matches_emit(bad.path(), &dec, "size の無い");
+    assert_quiet_matches_emit(bad.path(), &dec, &["size の無い"]);
 }
 
 /// `.pna` が添えてある絵（数つきの `warn!`）と、透過の宣言の `info!`（宛先 `self_alpha`）。
@@ -188,8 +135,7 @@ fn pna_fixture_is_silent_and_equal() {
     write_descript(dir.path());
     let mut dec = decoder_with(dir.path(), &["base.png"]);
     dec.insert_pna(dir.child("base.png"));
-    assert_quiet_matches_emit(dir.path(), &dec, ".pna");
-    assert_quiet_matches_emit(dir.path(), &dec, "透過");
+    assert_quiet_matches_emit(dir.path(), &dec, &[".pna", "透過"]);
 }
 
 /// `surfaces.txt` が無く画像だけで組むシェル、と descript.txt が読めないシェル。
@@ -198,15 +144,14 @@ fn image_only_and_no_descript_are_silent_and_equal() {
     let dir = TempPath::new("shell-quiet-image-only");
     std::fs::File::create(dir.child("surface0.png")).expect("プレースホルダ作成");
     let dec = decoder_with(dir.path(), &["surface0.png"]);
-    assert_quiet_matches_emit(dir.path(), &dec, "画像だけで");
-    assert_quiet_matches_emit(dir.path(), &dec, "descript.txt が読めない");
+    assert_quiet_matches_emit(dir.path(), &dec, &["画像だけで", "descript.txt が読めない"]);
 }
 
 /// 出さない入口で読み、`Err` が返ることと、読み込みの記録が `needle` を含む `error!` 1 行だけで
 /// あることを確かめる（要件 3.6）。
 fn assert_quiet_failure(dir: &Path, needle: &str) -> ShellLoadError {
     let dec = MemoryDecoder::new();
-    let (result, events) = capture_events(|| load_shell_target_quiet(dir, &dec));
+    let (result, events) = capture(|| load_shell_target_quiet(dir, &dec));
     let records = load_records(&events);
     assert_eq!(records.len(), 1, "失敗の記録だけが 1 行: {records:?}");
     assert_eq!(records[0].level, tracing::Level::ERROR, "{records:?}");
@@ -217,7 +162,8 @@ fn assert_quiet_failure(dir: &Path, needle: &str) -> ShellLoadError {
 /// フォルダの一覧に失敗しても、出さない入口は `error!` を 1 行出して `List` を返す。
 #[test]
 fn quiet_list_failure_still_records_the_error() {
-    let dir = PathBuf::from(r"C:\areka-test\shell-quiet-no-dir");
+    let root = TempPath::new("shell-quiet-no-dir");
+    let dir = root.child("missing");
     let error = assert_quiet_failure(&dir, "一覧に失敗");
     assert!(matches!(error, ShellLoadError::List { .. }), "{error:?}");
 }
@@ -245,14 +191,6 @@ const ZERO_SIZED: &str = "bake: element の元画像が 0 寸です";
 /// 畳み込み（`areka_emo_compose`）の追記の相手の無い面の記録の文言。
 const APPEND_NO_TARGET: &str = "surface.append 対象 id が未存在";
 
-/// `needle` を文言に含む記録の行の数（宛先まるごとでなく文言ごとに数える）。
-fn count_message(events: &[CapturedEvent], needle: &str) -> usize {
-    events
-        .iter()
-        .filter(|e| e.message().contains(needle))
-        .count()
-}
-
 /// spec: emo-bake-log-overlap 要件 1.1・2.1・3.3: 出す読み込みは焼く段と畳み込みの記録を 1 行ずつ
 /// 出し、出さない読み込みはその文言が 0 行・戻り値は等しい。
 #[test]
@@ -272,9 +210,9 @@ fn quiet_load_silences_bake_and_fold_records() {
     dec.insert(dir.child("zero.png"), 0, 0, 0, Vec::new(), true);
 
     let (emit, emit_events) =
-        capture_events(|| load_shell_target(dir.path(), &dec).expect("出す入口で読める"));
+        capture(|| load_shell_target(dir.path(), &dec).expect("出す入口で読める"));
     let (quiet, quiet_events) =
-        capture_events(|| load_shell_target_quiet(dir.path(), &dec).expect("出さない入口で読める"));
+        capture(|| load_shell_target_quiet(dir.path(), &dec).expect("出さない入口で読める"));
 
     assert_eq!(
         count_message(&emit_events, ZERO_SIZED),
@@ -301,4 +239,45 @@ fn quiet_load_silences_bake_and_fold_records() {
         fingerprint(&emit),
         "戻り値が両入口で違う"
     );
+}
+
+/// 読み込みの記録のうち、重さが `level` で文言が `needle` を含む行の数。
+fn count_level(events: &[CapturedEvent], level: tracing::Level, needle: &str) -> usize {
+    load_records(events)
+        .iter()
+        .filter(|e| e.level == level && e.message().contains(needle))
+        .count()
+}
+
+/// spec: audit-parsers-sakura 指摘 6・34: 範囲の上限を越える記述子は `error!` 1 行、終わりで
+/// 閉じていないブレスは `warn!` 1 行を出す入口だけが出す。
+#[test]
+fn shell_issues_are_recorded_by_severity() {
+    let dir = TempPath::new("shell-quiet-shell-issues");
+    std::fs::write(
+        dir.child("surfaces.txt"),
+        concat!(
+            "charset,UTF-8\n",
+            "surface0\n{\nelement0,overlay,base.png,0,0\n}\n",
+            "surface1-9000\n{\nelement0,overlay,base.png,0,0\n}\n",
+            "surface2\n{\nelement0,overlay,base.png,0,0\n",
+        ),
+    )
+    .expect("記述ファイル作成");
+    write_descript(dir.path());
+    let dec = decoder_with(dir.path(), &["base.png"]);
+
+    let (_, events) = capture(|| load_shell_target(dir.path(), &dec).expect("読める"));
+
+    assert_eq!(
+        count_level(&events, tracing::Level::ERROR, "上限"),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(
+        count_level(&events, tracing::Level::WARN, "閉じていない"),
+        1,
+        "{events:?}"
+    );
+    assert_quiet_matches_emit(dir.path(), &dec, &["上限"]);
 }

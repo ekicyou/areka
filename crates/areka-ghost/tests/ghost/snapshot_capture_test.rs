@@ -350,7 +350,7 @@ fn capture_real_pasta_snapshots() {
     write_real_pasta_ghost_fixture(&root, &dll_path);
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を real_connect へ渡す。
-    let mount = package::resolve(&root, DefaultEncoding::Utf8)
+    let mount = package::resolve_with_shell(&root, DefaultEncoding::Utf8, None)
         .expect("採取フィクスチャは実マウント解決を成功裏に通過すべき（boot 内部と同一契約）");
 
     // --- 実 backend へ Recorder を合成した Custom wiring（design.md「Batch/Job Contract」）---

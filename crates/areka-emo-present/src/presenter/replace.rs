@@ -15,7 +15,7 @@ use super::{
 /// 合成の入力（`EmoWorld`・アトラス・キャッシュ）と拡大政策は引き継がない——新しいシェル・
 /// バルーンの資産と作者 DPI から作り直すものだからである。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DetachedState {
+pub(super) struct DetachedState {
     /// 装着先の窓（差し替えの前後で同じ窓を使う）。
     pub window: Entity,
     /// 可視性の持ち主（バルーン窓は `External` のまま引き継ぐ）。
@@ -37,7 +37,7 @@ impl EmoPresenter {
     ///
     /// 未登録なら `error!` を残して `Err(TargetNotAttached)` を返し、表は変えない。一度も表示して
     /// いない target（装着の子が無い）も外せる。
-    pub fn detach_target(
+    pub(super) fn detach_target(
         &mut self,
         world: &mut World,
         target: TargetId,
@@ -92,18 +92,7 @@ impl EmoPresenter {
                 return;
             }
         };
-        if let Err(e) = self.attach_target(
-            world,
-            target_id,
-            carried.window,
-            emo_world,
-            atlas,
-            author_dpi,
-        ) {
-            tracing::error!(?target_id, error = %e, "apply(ReplaceTarget): 登録し直せなかった");
-            Self::reply(reply, Err(e));
-            return;
-        }
+        self.attach_target(target_id, carried.window, emo_world, atlas, author_dpi);
         let target = self.targets.get_mut(&target_id).expect("直上で登録済み");
         target.ownership = carried.ownership;
         // 前回の物理寸を引き継ぐので、⑷ の表示は物理寸が変わったときだけ窓寸の要求を積む。
@@ -120,14 +109,13 @@ impl EmoPresenter {
             "apply(ReplaceTarget): 古い装着を片付けて登録し直した"
         );
         if let Some((surface_id, binds)) = show {
-            // 返信は置き換え自身が返す。表示の失敗は `apply_show` の中で `error!` 済み。
-            self.apply_show(
+            // 返信は置き換え自身が返す。表示の失敗は `apply_show` の中で `error!` 済みなので結果は捨てる。
+            let _ = self.apply_show(
                 world,
                 target_id,
                 surface_id,
                 binds,
                 PatternState::default(),
-                None,
                 false,
             );
         }

@@ -1,8 +1,8 @@
 //! I/O 層: surface／バルーンの原寸採寸（task 4.1・DD5）。
 //!
-//! emo2-boot と同じ公開 API 経路（シェル読み込みの権威
-//! `areka_emo_present::shell_target::load_shell_target` → `ShellTarget::build_world` →
-//! `Composer::compose`）で、各スコープの初期 surface と
+//! emo2-boot と同じ中身の公開 API 経路（シェル読み込みの権威。emo2-boot は `load_shell_target`・
+//! 採寸は記録を出さない `areka_emo_present::shell_target::load_shell_target_quiet` →
+//! `ShellTarget::take_world` → `Composer::compose`）で、各スコープの初期 surface と
 //! **そのスコープが解決した**バルーン面 0 を **bind なし合成**し、原寸
 //! （物理 px [`SizePx`]）を得る。
 //!
@@ -395,13 +395,13 @@ fn build_shell_assets(
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
 ) -> Result<(EmoWorld, AtlasTable), PlacementError> {
-    let target =
+    let mut target =
         load_shell_target_quiet(shell_dir, decoder).map_err(|reason| PlacementError::Measure {
             scope: 0,
             reason: reason.to_string(),
         })?;
     let atlas = target.atlas().clone();
-    Ok((target.build_world(), atlas))
+    Ok((target.take_world(), atlas))
 }
 
 /// **当該 scope** が解決したバルーン系列の面 0 を採寸する（要件 3.1・design D2）。

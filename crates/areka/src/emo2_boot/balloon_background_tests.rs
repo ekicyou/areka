@@ -48,7 +48,6 @@ const WHITE: (u8, u8, u8) = (255, 255, 255);
 /// 1 element だけの surface（バルーン面の合成 surfaces.txt と同型）。
 fn surface(id: u32, rel: &str) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: vec![Element {
             layer: 0,

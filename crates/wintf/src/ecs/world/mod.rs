@@ -1,7 +1,7 @@
 //! ECSワールド管理
 //!
 //! - schedule_labels: フレームカウンタとスケジュールラベル定義
-//! - vsync: VSYNC優先レンダリングと再入防止ガード
+//! - vsync: tick+flush の再入防止ガードと錠つきの窓の書き込みの流し
 
 mod vsync;
 
@@ -21,8 +21,33 @@ use bevy_ecs::system::*;
 use std::cell::RefCell;
 use std::rc::Weak;
 use std::time::Instant;
-use tracing::{error, info, trace};
-use windows::Win32::Foundation::HWND;
+use tracing::{error, info};
+
+/// 単一スレッドで回すスケジュール（WUC に触る係と窓を作る係はここに置く）。
+/// `intern()` が const でないため、定数の代わりに固定の配列を返す関数にする。
+///
+/// WUC（Windows.UI.Composition）はスレッド親和 API であり、かつ DispatcherQueue は
+/// 「メッセージポンプが回るスレッド」に居ないと合成 commit が永遠に flush されない。
+/// try_tick_world は UI スレッド（AsyncTickTask の spawn_local）から呼ばれるため、
+/// WUC オブジェクトに触る schedule を SingleThreaded executor に固定して
+/// 「全 WUC 呼び出し＝UI スレッド」を構造的に保証する。
+///
+/// 背景（2026-07-02 実測）: DComp は free-threaded で MultiThreaded executor
+/// （worker スレッド実行）でも動作していたが、WUC 移行でこの前提が崩れた。
+/// worker スレッドで CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT) が走ると
+/// DispatcherQueue がポンプの無い worker に紐づき、エラーを一切出さないまま
+/// 画面へ何も合成されない（dcomp_demo: 窓は visible・SetBrush/SetRoot 全成功・
+/// 内容だけ出ない／ECS 非依存でメインスレッド生成の wuc_spike: 表示される、で切り分け確定）。
+pub(crate) fn single_threaded_schedules() -> [InternedScheduleLabel; 6] {
+    [
+        UISetup.intern(),
+        GraphicsSetup.intern(),
+        PreRenderSurface.intern(),
+        RenderSurface.intern(),
+        Composition.intern(),
+        CommitComposition.intern(),
+    ]
+}
 
 /// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース（task 4.3）。
 ///
@@ -43,11 +68,6 @@ pub struct EcsWorldSelfRef(pub Weak<RefCell<EcsWorld>>);
 /// 初期化ロジックや拡張機能をここに集約
 pub struct EcsWorld {
     world: World,
-    has_systems: bool,
-    message_window: Option<HWND>,
-    // デバッグ用: フレームレート計測
-    frame_count: u64,
-    last_log_time: Option<Instant>,
     /// フレーム駆動の相別観測（既定 OFF・`RUST_LOG` に `wintf::tick=debug` で点く）。
     tick_diag: tick_diag::TickDiag,
     /// tick の門が有効か（既定 **無効**＝門を入れる前と同じ挙動）。
@@ -130,53 +150,24 @@ impl EcsWorld {
             schedules.insert(Schedule::new(PreLayout));
             schedules.insert(Schedule::new(Layout));
             schedules.insert(Schedule::new(PostLayout));
-
-            // UISetupだけメインスレッド固定
-            {
-                let mut sc = Schedule::new(UISetup);
-                sc.set_executor(SingleThreadedExecutor::new());
-                schedules.insert(sc);
-            }
-
-            // WUC（Windows.UI.Composition）はスレッド親和 API であり、かつ DispatcherQueue は
-            // 「メッセージポンプが回るスレッド」に居ないと合成 commit が永遠に flush されない。
-            // try_tick_world は UI スレッド（AsyncTickTask の spawn_local）から呼ばれるため、
-            // WUC オブジェクトに触る schedule を SingleThreaded executor に固定して
-            // 「全 WUC 呼び出し＝UI スレッド」を構造的に保証する。
-            //
-            // 背景（2026-07-02 実測）: DComp は free-threaded で MultiThreaded executor
-            // （worker スレッド実行）でも動作していたが、WUC 移行でこの前提が崩れた。
-            // worker スレッドで CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT) が走ると
-            // DispatcherQueue がポンプの無い worker に紐づき、エラーを一切出さないまま
-            // 画面へ何も合成されない（dcomp_demo: 窓は visible・SetBrush/SetRoot 全成功・
-            // 内容だけ出ない／ECS 非依存でメインスレッド生成の wuc_spike: 表示される、で切り分け確定）。
-            {
-                let mut sc = Schedule::new(GraphicsSetup);
-                sc.set_executor(SingleThreadedExecutor::new());
-                schedules.insert(sc);
-            }
+            schedules.insert(Schedule::new(UISetup));
+            schedules.insert(Schedule::new(GraphicsSetup));
             schedules.insert(Schedule::new(Draw));
-            {
-                let mut sc = Schedule::new(PreRenderSurface);
-                sc.set_executor(SingleThreadedExecutor::new());
-                schedules.insert(sc);
-            }
-            {
-                let mut sc = Schedule::new(RenderSurface);
-                sc.set_executor(SingleThreadedExecutor::new());
-                schedules.insert(sc);
-            }
-            {
-                let mut sc = Schedule::new(Composition);
-                sc.set_executor(SingleThreadedExecutor::new());
-                schedules.insert(sc);
-            }
-            {
-                let mut sc = Schedule::new(CommitComposition);
-                sc.set_executor(SingleThreadedExecutor::new());
-                schedules.insert(sc);
-            }
+            schedules.insert(Schedule::new(PreRenderSurface));
+            schedules.insert(Schedule::new(RenderSurface));
+            schedules.insert(Schedule::new(Composition));
+            schedules.insert(Schedule::new(CommitComposition));
             schedules.insert(Schedule::new(FrameFinalize));
+
+            // WUC に触る係と窓を作る係は UI スレッドで回す（理由は single_threaded_schedules）。
+            for label in single_threaded_schedules() {
+                match schedules.get_mut(label) {
+                    Some(sc) => {
+                        sc.set_executor(SingleThreadedExecutor::new());
+                    }
+                    None => error!(?label, "単一スレッドにするスケジュールが登録されていない"),
+                }
+            }
         }
 
         // デフォルトシステムの登録
@@ -241,20 +232,12 @@ impl EcsWorld {
                     // Monitorレイアウト更新（detect_display_change_systemの後）
                     crate::ecs::layout::update_monitor_layout_system
                         .after(crate::ecs::layout::detect_display_change_system),
-                    // 依存コンポーネント無効化
-                    crate::ecs::graphics::invalidate_dependent_components
-                        .after(crate::ecs::layout::update_monitor_layout_system),
                     // Typewriter更新（アニメーション進行）
                     crate::ecs::widget::text::update_typewriters
-                        .after(crate::ecs::graphics::invalidate_dependent_components),
+                        .after(crate::ecs::layout::update_monitor_layout_system),
                 )
                     .chain(),
             );
-
-            // PreLayoutスケジュール: GraphicsCore初期化
-            // Phase 2: DCompシステム（visual_resource_management_system, visual_hierarchy_sync_system）を除去
-            // init_graphics_coreのみ残存（単独登録、chain不要）
-            schedules.add_systems(PreLayout, crate::ecs::graphics::init_graphics_core);
 
             // Layoutスケジュールにtaffyレイアウトシステムを登録
             schedules.add_systems(
@@ -291,11 +274,24 @@ impl EcsWorld {
             );
 
             // GraphicsSetupスケジュール: WUC（Windows.UI.Composition）合成スタック初期化
-            // init_window_graphics: Window に WindowGraphics を作成（単独登録、chain不要）
-            schedules.add_systems(GraphicsSetup, crate::ecs::graphics::init_window_graphics);
+            // 失いの確かめ → 無効化 → 装置 → WUC の資源 → 窓の順（無効化を作り直しより先に置かないと、
+            // 作り直された装置を見て何も倒さなくなる）。作る係は作れる回だけ回し、変化の印を食べない。
+            {
+                use crate::ecs::graphics::*;
+                schedules.add_systems(
+                    GraphicsSetup,
+                    (
+                        check_device_removed,
+                        invalidate_dependent_components,
+                        init_graphics_core,
+                        init_wuc_resource.run_if(graphics_core_ready),
+                        init_window_graphics.run_if(wuc_ready),
+                    )
+                        .chain(),
+                );
+            }
 
-            // Drawスケジュール: ウィジェット描画システム
-            // Phase 2: DCompシステム（deferred_surface_creation_system, cleanup_surface_on_commandlist_removed）を除去
+            // Drawスケジュール: ウィジェット描画システム（D2D の命令の列を作るだけで WUC に触らない）
             // chainはgenerate_alpha_mask_systemまで維持
             schedules.add_systems(
                 Draw,
@@ -325,14 +321,21 @@ impl EcsWorld {
                     .chain(),
             );
 
-            // PreRenderSurface: DComp パイプライン用 Visual/Surface リソース管理
+            // PreRenderSurface: WUC の見た目（Visual）と描画面（Surface）の部品の管理
             schedules.add_systems(
                 PreRenderSurface,
                 (
-                    crate::ecs::graphics::visual_manager::visual_resource_management_system,
-                    crate::ecs::graphics::deferred_surface_creation_system.after(
+                    // 後から窓へつないだ部品に見た目の部品を入れる（4 番）。同じ回に作られるよう先頭。
+                    crate::ecs::graphics::insert_graphics_parts_on_window_join.before(
                         crate::ecs::graphics::visual_manager::visual_resource_management_system,
                     ),
+                    crate::ecs::graphics::visual_manager::visual_resource_management_system
+                        .run_if(crate::ecs::graphics::wuc_ready),
+                    crate::ecs::graphics::deferred_surface_creation_system
+                        .run_if(crate::ecs::graphics::wuc_ready)
+                        .after(
+                            crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                        ),
                     crate::ecs::graphics::mark_dirty_surfaces
                         .after(crate::ecs::graphics::deferred_surface_creation_system),
                     crate::ecs::graphics::cleanup_surface_on_commandlist_removed
@@ -342,7 +345,7 @@ impl EcsWorld {
                 ),
             );
 
-            // RenderSurface: DComp パイプライン用 Surface 描画
+            // RenderSurface: WUC の描画面へ命令の列を描く
             schedules.add_systems(RenderSurface, crate::ecs::graphics::render_surface);
 
             // Compositionスケジュール: WUC Visual階層同期（合成 commit は WUC 側で暗黙反映）
@@ -400,36 +403,12 @@ impl EcsWorld {
 
         Self {
             world,
-            has_systems: true, // デフォルトシステムがあるのでtrue
-            message_window: None,
-            frame_count: 0,
-            last_log_time: None,
             tick_diag: tick_diag::TickDiag::default(),
             tick_gate_enabled: false,
             frames_since_boot: 0,
             frames_since_run: 0,
             last_run_was_heartbeat: false,
         }
-    }
-
-    /// メッセージウィンドウのHWNDを設定（格納のみ）。
-    ///
-    /// NOTE: 旧経路では App リソースへも伝播していたが、`App::set_message_window`/
-    /// `WM_LAST_WINDOW_DESTROYED` PostMessage 経路の撤去（task 4.5）に伴い、本メソッドは
-    /// EcsWorld 側の HWND 格納のみを担う。
-    pub fn set_message_window(&mut self, hwnd: HWND) {
-        self.message_window = Some(hwnd);
-    }
-
-    /// メッセージウィンドウのHWNDを取得
-    pub fn message_window(&self) -> Option<HWND> {
-        self.message_window
-    }
-
-    /// Schedulesリソースへのアクセスを提供
-    pub fn schedules_mut(&mut self) -> Mut<'_, Schedules> {
-        self.has_systems = true;
-        self.world.resource_mut::<Schedules>()
     }
 
     /// 指定したスケジュールにシステムを追加
@@ -443,7 +422,6 @@ impl EcsWorld {
         schedule: impl ScheduleLabel,
         systems: impl IntoScheduleConfigs<ScheduleSystem, M>,
     ) {
-        self.has_systems = true;
         self.world
             .resource_mut::<Schedules>()
             .add_systems(schedule, systems);
@@ -484,33 +462,6 @@ impl EcsWorld {
             .get_resource::<crate::ecs::widget::bitmap_source::WintfTaskPool>()
         {
             task_pool.spawn(f);
-        }
-    }
-
-    /// フレームレート計測とログ出力（デバッグ用）
-    /// 10秒ごとにフレームレートをログ出力
-    fn measure_and_log_framerate(&mut self) {
-        self.frame_count += 1;
-
-        let now = Instant::now();
-        if let Some(last_log) = self.last_log_time {
-            let elapsed = now.duration_since(last_log);
-            if elapsed.as_secs() >= 10 {
-                let fps = self.frame_count as f64 / elapsed.as_secs_f64();
-                let avg_frame_time = elapsed.as_secs_f64() * 1000.0 / self.frame_count as f64;
-                trace!(
-                    fps,
-                    frame_count = self.frame_count,
-                    elapsed_secs = format_args!("{:.2}", elapsed.as_secs_f64()),
-                    avg_frame_time_ms = format_args!("{:.2}", avg_frame_time),
-                    "Frame rate measurement"
-                );
-                self.frame_count = 0;
-                self.last_log_time = Some(now);
-            }
-        } else {
-            // 初回
-            self.last_log_time = Some(now);
         }
     }
 
@@ -604,21 +555,12 @@ impl EcsWorld {
         }
     }
 
-    /// システムを1回実行
-    /// システムが実行された場合はtrueを返す
+    /// 13 本のスケジュールを 1 回回す（いつも回すので `true` を返す）
     pub fn try_tick_world(&mut self) -> bool {
-        // デバッグ: フレームレート計測（不要になったらコメントアウト）
-        self.measure_and_log_framerate();
-
         // 相別観測の前置ガード（要件 3.8）。tick 1 回につきここで 1 度だけ評価し、
         // 以後はこの bool を配る。偽のときこの観測のために時刻を取らず、行も組まない
         // （兄弟テストが「ガードは最初の時刻取得より前」を本文の並びで固定する）。
         let diag_on = tick_diag::is_enabled();
-
-        // システムが登録されていない場合はスキップ
-        if !self.has_systems {
-            return false;
-        }
 
         // FrameCount をインクリメント、FrameTime を更新
         //
@@ -627,10 +569,9 @@ impl EcsWorld {
         // panic、release はラップする。FrameCount.0 の消費は (1) 多数の tracing ログの
         // `frame=` フィールドと (2) graphics/systems/surface.rs::mark_dirty_surfaces での
         // `dirty.requested_frame = frame_count.0 as u64`（Changed<SurfaceGraphicsDirty>
-        // 検出をトリガーするための「変化ノンス」用途で、値自体は本番では読まれない。本番読み取りは
-        // 皆無で grep 上 graphics/tests.rs のみ）のみ。後者はラップ MAX→0 でも「前回値と異なる」
-        // 性質を満たすため Changed 検出は継続し、いずれの消費も算術上の大小比較・配列添字には
-        // 用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
+        // 検出をトリガーするための「変化ノンス」用途で、値自体は読まれない）のみ。
+        // 後者はラップ MAX→0 でも「前回値と異なる」性質を満たすため Changed 検出は継続し、
+        // いずれの消費も算術上の大小比較・配列添字には用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
         // debug panic 化を避ける堅牢化（saturating/wrapping_add）は debug 挙動を変えるため
         // P66 として記録。
         //
@@ -727,183 +668,11 @@ impl EcsWorld {
 
         true
     }
-
-    /// VSYNCカウンターの変化を検知し、必要に応じてworld tickを実行
-    ///
-    /// この関数は`run()`のWM_VSYNC処理と`WndProc`のWM_WINDOWPOSCHANGED処理の
-    /// 両方から呼び出され、重複実行を防ぐ。
-    ///
-    /// # Returns
-    /// - `true`: tickが実行された
-    /// - `false`: tickがスキップされた（カウンター変化なし）
-    ///
-    /// # 拡張ポイント
-    /// 他のモーダルループ関連メッセージ（WM_ENTERSIZEMOVEなど）で同様の問題が
-    /// 発見された場合、該当メッセージ処理でこの関数を呼び出すだけで対応可能。
-    pub fn try_tick_on_vsync(&mut self) -> bool {
-        use self::vsync::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
-        use std::sync::atomic::Ordering;
-
-        // Ordering::Relaxed の妥当性（W7b-V 点検）:
-        // - VSYNC_TICK_COUNT は単一生産者（VSync スレッドの fetch_add）・単一消費者
-        //   （メインスレッドの本 load のみ）のモノトニックカウンタで、tick 要否は
-        //   「値が前回と異なるか」だけに依存する。カウンタ越しに共有データを渡さない
-        //   （実 tick 処理は同一スレッドの Rc<RefCell> で逐次化され、VSync スレッドとの
-        //   同期は別途 PostMessageW のメッセージキューが担う）ため、acquire/release は不要。
-        // - LAST_VSYNC_TICK はメインスレッドのみが load/store する（他スレッドからの
-        //   アクセスは存在しない）ため、より強い順序付けは観測挙動に影響しない。
-        // u64 カウンタの周回はおよそ 9.7×10^9 年規模（~60Hz）で実機到達不能。
-        let current_tick = VSYNC_TICK_COUNT.load(Ordering::Relaxed);
-        let last_tick = LAST_VSYNC_TICK.load(Ordering::Relaxed);
-
-        // カウンターが変化していなければスキップ
-        if current_tick == last_tick {
-            return false;
-        }
-
-        // 前回処理値を更新（try_tick_world()呼び出し前に更新することで、
-        // 再入時の重複tickを防止）
-        LAST_VSYNC_TICK.store(current_tick, Ordering::Relaxed);
-
-        // world tickを実行
-        self.try_tick_world()
-    }
 }
 
 impl Default for EcsWorld {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tick_order_tests {
-    //! 統合テスト（task 5.2・要件 4.2/4.5）: tick の 13 本スケジュール **実行順序不変**。
-    //!
-    //! `try_tick_world` は 13 本のスケジュールを固定順で回す（`Input … FrameFinalize`）。
-    //! 起床ブリッジ（`AsyncTickTask`/`VsyncEventBridge`）の置換にあたり、この構成・順序を
-    //! **変更しない**ことが要件 4.5 の中核不変条件。本テストは各スケジュールへ実行順を記録する
-    //! プローブシステムを 1 本ずつ差し込み、空 World で `try_tick_world` を 1 周回して、
-    //! **実際の実行順序**が固定 13 本列と完全一致することを直接実証する（headless・GPU 不要：
-    //! 空 World では window/graphics システムは生成対象ゼロで no-op）。
-    //!
-    //! VSync 起床→tick→再待機の async ループ 1 周（`spawn_local` executor + 実 Event 必須）は
-    //! headless に再現不能のため E2E 5.3 へ委譲する。本テストはその 1 周の **核**（13 本 tick の
-    //! 構成・順序）を固定する（`tick_one_frame` の再入安全・借用スキップは
-    //! `runtime/tick_bridge.rs` のユニットテストが担保）。
-
-    use super::*;
-
-    /// 各スケジュールのプローブが実行順にラベル名を push する記録リソース。
-    #[derive(Resource, Default)]
-    struct TickOrderLog(Vec<&'static str>);
-
-    /// 固定 13 本スケジュールの期待実行順（設計 Testing Strategy / schedule_labels.rs の不変条件）。
-    const EXPECTED_ORDER: [&str; 13] = [
-        "Input",
-        "Update",
-        "PreLayout",
-        "Layout",
-        "PostLayout",
-        "UISetup",
-        "GraphicsSetup",
-        "Draw",
-        "PreRenderSurface",
-        "RenderSurface",
-        "Composition",
-        "CommitComposition",
-        "FrameFinalize",
-    ];
-
-    /// (要件 4.5) 13 本スケジュールが実行順不変であることを、実 tick の実行順記録で検証する。
-    #[test]
-    fn try_tick_world_runs_thirteen_schedules_in_fixed_order() {
-        let mut ecs = EcsWorld::new();
-
-        // 記録リソースを挿入し、各スケジュールへ「自分のラベル名を push する」プローブを
-        // 1 本ずつ登録する。既存システムと同居しても push 順は schedule 境界で確定する
-        // （`try_tick_world` が schedule 単位で逐次 `try_run_schedule` するため）。
-        ecs.world_mut().insert_resource(TickOrderLog::default());
-
-        macro_rules! probe {
-            ($label:expr, $name:literal) => {
-                ecs.add_systems($label, |mut log: ResMut<TickOrderLog>| {
-                    log.0.push($name);
-                });
-            };
-        }
-        probe!(Input, "Input");
-        probe!(Update, "Update");
-        probe!(PreLayout, "PreLayout");
-        probe!(Layout, "Layout");
-        probe!(PostLayout, "PostLayout");
-        probe!(UISetup, "UISetup");
-        probe!(GraphicsSetup, "GraphicsSetup");
-        probe!(Draw, "Draw");
-        probe!(PreRenderSurface, "PreRenderSurface");
-        probe!(RenderSurface, "RenderSurface");
-        probe!(Composition, "Composition");
-        probe!(CommitComposition, "CommitComposition");
-        probe!(FrameFinalize, "FrameFinalize");
-
-        // 空 World を 1 周 tick（window/graphics は生成対象ゼロで no-op・headless 安全）。
-        let ticked = ecs.try_tick_world();
-        assert!(
-            ticked,
-            "システム登録済みの World は try_tick_world が true を返すべき"
-        );
-
-        let order = ecs.world().resource::<TickOrderLog>().0.clone();
-        assert_eq!(
-            order.len(),
-            13,
-            "tick は厳密に 13 本のスケジュールを実行すべき（構成不変・要件 4.5）"
-        );
-        assert_eq!(
-            order, EXPECTED_ORDER,
-            "13 本スケジュールの実行順序は固定列と完全一致すべき（順序不変・要件 4.5）"
-        );
-    }
-
-    /// (要件 4.2) 起床ごとの 1 tick が冪等に 13 本を回す（2 周目も同一順序で安定）。
-    #[test]
-    fn repeated_ticks_keep_thirteen_schedule_order_stable() {
-        let mut ecs = EcsWorld::new();
-        ecs.world_mut().insert_resource(TickOrderLog::default());
-        // 単一プローブで全スケジュールを記録（macro 再掲を避け Input のみ別関数で代表確認は
-        // 上テスト済み。ここは「2 周で順序がブレない」ことに焦点を当て全 13 本に再登録）。
-        macro_rules! probe {
-            ($label:expr, $name:literal) => {
-                ecs.add_systems($label, |mut log: ResMut<TickOrderLog>| {
-                    log.0.push($name);
-                });
-            };
-        }
-        probe!(Input, "Input");
-        probe!(Update, "Update");
-        probe!(PreLayout, "PreLayout");
-        probe!(Layout, "Layout");
-        probe!(PostLayout, "PostLayout");
-        probe!(UISetup, "UISetup");
-        probe!(GraphicsSetup, "GraphicsSetup");
-        probe!(Draw, "Draw");
-        probe!(PreRenderSurface, "PreRenderSurface");
-        probe!(RenderSurface, "RenderSurface");
-        probe!(Composition, "Composition");
-        probe!(CommitComposition, "CommitComposition");
-        probe!(FrameFinalize, "FrameFinalize");
-
-        ecs.try_tick_world();
-        ecs.try_tick_world();
-
-        let order = ecs.world().resource::<TickOrderLog>().0.clone();
-        assert_eq!(order.len(), 26, "2 周で 13×2 本が実行されるべき");
-        assert_eq!(&order[..13], EXPECTED_ORDER, "1 周目の順序が固定列と一致");
-        assert_eq!(
-            &order[13..],
-            EXPECTED_ORDER,
-            "2 周目も同一順序で安定（順序不変）"
-        );
     }
 }
 
@@ -936,6 +705,10 @@ pub(crate) static TICK_WAKE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::
 #[cfg(test)]
 #[path = "world_tick_gate_tests.rs"]
 mod tick_gate_wiring_tests;
+
+#[cfg(test)]
+#[path = "world_schedule_tests.rs"]
+mod schedule_tests;
 
 impl std::fmt::Debug for EcsWorld {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

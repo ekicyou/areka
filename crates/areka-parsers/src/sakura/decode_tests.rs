@@ -4,16 +4,16 @@
 //! - 待ち時間（`\wN` = n×50ms、`\_w[ms]` = 絶対 ms）の境界値。
 //! - 改行比率（素の `\n` = 1.0、`\n[percent]` = percent/100、`\n[half]` = 0.5、負値）。
 //! - 選択肢 `\q[disp,target,refs...]` の disp/target 分離 ＋ references 順序保持。
-//! - `\![move,...]` の Move 化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
-//!
-//! `move` 以外の `\!`・subset 外タグ・`\q` 旧 2 連形・`\![*]`（タスク 4.2）はここでは検証しない。
+//! - `\![move,...]` の汎用コマンド化、`\p[n]`/`\s[...]`/`\_l[x,y]`/`\e`/`\c`/`\-`、`%keyword`、テキスト。
+//! - `move` 以外の `\!`・subset 外タグ・`\q` 旧 2 連形・`\![*]` の素通し（タスク 4.2 の節）、
+//!   バルーン面 `\b`（タスク 1.2 の節）、非有限の `\n[…]`。
 //!
 //! decode は lexer を消費するため、入力は実スクリプト文字列を `lex` した結果を渡す
 //! （構文区切りと意味デコードの結線が正しいことも同時に固定する）。
 
 use super::decode::decode;
 use super::lexer::lex;
-use super::model::{Choice, Instruction, MARKER_COMMAND, MoveArgs, NewLineRatio, SurfaceArg};
+use super::model::{Choice, Instruction, MARKER_COMMAND, NewLineRatio, SurfaceArg};
 use std::time::Duration;
 
 /// 文字列をレックスしてデコードするヘルパ（テスト題材は実スクリプト断片）。
@@ -40,11 +40,18 @@ fn wait_shorthand_boundary_values() {
 /// n × 50ms https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cw_6642_9593:1
 /// と `\_w[時間]`＝絶対 ms
 /// https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_w_5b_6642_9593_5d:1
-/// の 2 形だけ）。よって待ちとして解釈せず、他の未知タグと同じく `Raw` の
-/// 素通しにする（要件 18.1/18.2）。正典 2 形が不変であることを同じ檻で対照する。
+/// の 2 形だけ）。よって待ちとして解釈せず、`\w` は知らない素の綴りの `Raw`、`[2]` は字に
+/// する（かけ直しの R18 で `sakura-parse` 要件 18.1 の「全体を `Raw`」を改めた＝字を消さない）。
+/// 正典 2 形が不変であることを同じ檻で対照する。
 #[test]
-fn wait_bracket_form_is_raw_not_wait() {
-    assert_eq!(dec(r"\w[2]"), vec![Instruction::Raw(r"\w[2]".to_string())]);
+fn wait_bracket_form_is_raw_tag_and_text_not_wait() {
+    assert_eq!(
+        dec(r"\w[2]"),
+        vec![
+            Instruction::Raw(r"\w".to_string()),
+            Instruction::Text("[2]".to_string())
+        ]
+    );
     // 対照: 正典の短縮形と絶対ミリ秒形は従来どおり `Wait`。
     assert_eq!(
         dec(r"\w2"),
@@ -260,16 +267,17 @@ fn control_tags_end_clear_quit() {
     assert_eq!(dec(r"\-"), vec![Instruction::Quit]);
 }
 
-// ── キャラ移動（要件 7.1 — move のみ・タスク 4.1）─────────────
+// ── キャラ移動（要件 7.1 — 汎用の道・指摘 28）─────────────
 
-/// `\![move,dx,dy]` → Move（move を除いた生引数列を保持・要件 7.1）。
+/// `\![move,dx,dy]` → 名前 `move` の GenericCommand（move を除いた生引数列を保持・要件 7.1）。
 #[test]
 fn move_command_decoded_with_args() {
     assert_eq!(
         dec(r"\![move,10,20]"),
-        vec![Instruction::Move(MoveArgs {
-            args: vec!["10".to_string(), "20".to_string()],
-        })],
+        vec![Instruction::GenericCommand {
+            name: "move".to_string(),
+            raw_args: vec!["10".to_string(), "20".to_string()],
+        }],
     );
 }
 
@@ -410,33 +418,6 @@ fn legacy_double_bracket_q_star_to_raw() {
     assert_eq!(
         dec(r"\q*[ID][タイトル]"),
         vec![Instruction::Raw(r"\q*[ID][タイトル]".to_string())],
-    );
-}
-
-/// 旧 2 連形は前後の正常命令を破壊しない（隣接命令保持・要件 5.3/10.3）。
-#[test]
-fn legacy_q_preserves_neighbors() {
-    assert_eq!(
-        dec(r"\e\q[ID][タイトル]\c"),
-        vec![
-            Instruction::End,
-            Instruction::Raw(r"\q[ID][タイトル]".to_string()),
-            Instruction::Clear,
-        ],
-    );
-}
-
-/// 現行単一ブラケット `\q[はい,OnYes]` は引き続き Choice へ decode（4.1 の維持・要件 5.1）。
-/// 旧形と現行形の弁別が正しいことを固定。
-#[test]
-fn modern_single_bracket_q_still_choice() {
-    assert_eq!(
-        dec(r"\q[はい,OnYes]"),
-        vec![Instruction::Choice(Choice {
-            disp: "はい".to_string(),
-            target: "OnYes".to_string(),
-            references: vec![],
-        })],
     );
 }
 
@@ -646,13 +627,26 @@ fn balloon_surface_inner_readable_via_as_str() {
     }
 }
 
-/// `\b2[x]`（数字の直後が `[`）は短縮形でなく正準タグ `\b2[x]` 扱い＝subset 外 word
-/// `b2` → `Raw`（既存 `\w2[x]` と同型・"b" arm 追加後も不変・R1.6 整合）。
+/// `\b2[x]`・`\w9[x]`・`\p1[x]`（数字の直後が `[`）は短縮形＋字の `[x]`（ukadoc に数字の後の
+/// 角括弧の形は無い・指摘 27 と同じ「タグ＋字」・かけ直しの R18 で `sakura-tag-word-boundary`
+/// 要件 4.3 の「角括弧付きタグを優先」を改めた）。
 #[test]
-fn balloon_bracketed_digit_word_stays_raw() {
+fn bracket_after_shorthand_digit_is_shorthand_and_text() {
+    let text = || Instruction::Text("[x]".to_string());
     assert_eq!(
         dec(r"\b2[x]"),
-        vec![Instruction::Raw(r"\b2[x]".to_string())]
+        vec![
+            Instruction::BalloonSurface(SurfaceArg::new("2".to_string())),
+            text()
+        ]
+    );
+    assert_eq!(
+        dec(r"\w9[x]"),
+        vec![Instruction::Wait(Duration::from_millis(450)), text()]
+    );
+    assert_eq!(
+        dec(r"\p1[x]"),
+        vec![Instruction::SpeakerScope { n: 1 }, text()]
     );
 }
 
@@ -690,4 +684,17 @@ fn existing_tags_unchanged_with_balloon_interleaved() {
             Instruction::End,
         ],
     );
+}
+
+/// 指摘 3（要件 7.1）: 非有限の割合（`NaN`・`inf`・桁あふれで inf になる `1e40`）は
+/// 既定 1.0 へ倒す（レイアウトに非有限の位置を渡さない）。
+#[test]
+fn newline_non_finite_percent_falls_back_to_default() {
+    for s in [r"\n[NaN]", r"\n[inf]", r"\n[1e40]"] {
+        assert_eq!(
+            dec(s),
+            vec![Instruction::NewLine(NewLineRatio::new(1.0))],
+            "script: {s:?}"
+        );
+    }
 }

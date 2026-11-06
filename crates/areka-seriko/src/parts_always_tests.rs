@@ -4,25 +4,16 @@
 //! 表は `surfaces.txt` の本文から解析 → 畳み込み → [`AnimationTable::from_world`] の実経路で組む。
 //! 時刻は `advance`／`refresh` の時刻、乱数は呼ばれた回数を数える注入列で、どちらも決定論。
 
-use areka_emo_compose::{Cell, EmoWorld, PartKey, PatternState};
-use areka_sakura::ActorKey;
-use log_capture_kit::{LineFormat, capture_lines};
+use areka_emo_compose::{BindSet, PatternState};
 
-use super::{PartAnim, PartClocks};
+use super::PartClocks;
+use super::tests::{cell_of, count};
 use crate::looper::tests::counting_rng;
-use crate::state::Slot;
 use crate::table::AnimationTable;
+use crate::test_support::{capture_logs, part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
 
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
-}
-
-/// 一番上 `top` のシェルの面で刻みを 1 回回し、部品の欄を作り直した絵を返す。
+/// 一番上 `top` のシェルの面で刻みを 1 回回し、部品の欄を作り直した絵を返す（着せ替えも一番上の欄も空）。
 fn tick(
     clocks: &mut PartClocks,
     table: &AnimationTable,
@@ -31,39 +22,28 @@ fn tick(
     crossed: bool,
     rng: &mut LoopRng,
 ) -> PatternState {
-    let mut p = PatternState::default();
-    clocks.advance(
-        &scope(),
-        Slot::Shell,
-        top,
-        &areka_emo_compose::BindSet::default(),
+    let empty = PatternState::default();
+    super::tests::tick(
+        clocks,
         table,
+        top,
+        &BindSet::default(),
         now_ms,
         crossed,
-        true,
-        None,
         rng,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
-    p
+        &empty,
+    )
 }
 
-/// 部品 `part` の animation 0 の欄の読み（サーフェスを指すコマは番号）。
-fn cell_of(p: &PatternState, part: u32) -> Option<Option<u32>> {
-    match p.cell(Some(PartKey::Surface(part)), 0) {
-        Cell::Rest => None,
-        Cell::Frame(f) => Some(Some(f.surface_id)),
-        Cell::Blank => Some(None),
-        Cell::Picture(_) => unreachable!("作者のサーフェスの部品は絵を指さない"),
-    }
-}
-
-fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
+/// 一番上 `top` のシェルの面で出来事の直後の `refresh` を時刻 `at_ms` で回し、部品の欄を作り直した絵を返す。
+fn refresh(
+    clocks: &mut PartClocks,
+    table: &AnimationTable,
+    top: u32,
+    at_ms: Option<u64>,
+) -> PatternState {
+    let empty = PatternState::default();
+    super::tests::refresh_at(clocks, table, top, &BindSet::default(), at_ms, &empty)
 }
 
 /// 一番上 0 と 1 が子 100 を置き、2 は何も置かない。100 の `always` は 101（待ち 0＝経過 0）→
@@ -149,20 +129,7 @@ fn refresh_creates_always_clock_at_event_time() {
     let table = table_of(ALWAYS);
     let (mut rng, probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
-    let b = areka_emo_compose::BindSet::default();
-
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        0,
-        &b,
-        &table,
-        None,
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = refresh(&mut clocks, &table, 0, None);
     assert!(p.is_empty());
     assert_eq!(
         clocks.clock(&scope(), 100, 0),
@@ -170,33 +137,11 @@ fn refresh_creates_always_clock_at_event_time() {
         "時刻が分からなければ作らない"
     );
 
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        0,
-        &b,
-        &table,
-        Some(1000),
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = refresh(&mut clocks, &table, 0, Some(1000));
     assert!(p.is_empty(), "経過 0 のコマは欄に載らない");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
 
-    let mut p = PatternState::default();
-    clocks.refresh(
-        &scope(),
-        Slot::Shell,
-        1,
-        &b,
-        &table,
-        Some(1200),
-        true,
-        &mut crate::seeded_rng(0),
-        &mut p,
-    );
+    let p = refresh(&mut clocks, &table, 1, Some(1200));
     assert_eq!(cell_of(&p, 100), Some(Some(102)), "在る時計は続き");
     assert_eq!(clocks.clock(&scope(), 100, 0), playing(1000));
     tick(&mut clocks, &table, 0, 1250, true, &mut rng);
@@ -257,15 +202,16 @@ fn always_clock_birth_is_debug_logged_once() {
     let table = table_of(ALWAYS);
     let (mut rng, _probe) = counting_rng(&[]);
     let mut clocks = PartClocks::default();
-    let (_, lines) = capture_lines(LineFormat::LevelTargetFields, || {
+    let lines = capture_logs(|| {
         for at in [1000u64, 1100, 1200] {
             tick(&mut clocks, &table, 0, at, false, &mut rng);
         }
     });
-    let born: Vec<&String> = lines
-        .iter()
-        .filter(|l| l.contains("level=DEBUG") && l.contains("seriko: part always の時計が生まれた"))
-        .collect();
-    assert_eq!(born.len(), 1, "{lines:#?}");
-    assert!(born[0].contains("part=100"), "{born:?}");
+    let born = ["level=DEBUG", "seriko: part always の時計が生まれた"];
+    assert_eq!(count(&lines, &born), 1, "{lines:#?}");
+    assert_eq!(
+        count(&lines, &[born[0], born[1], "part=100"]),
+        1,
+        "{lines:#?}"
+    );
 }

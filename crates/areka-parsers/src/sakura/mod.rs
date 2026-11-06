@@ -12,9 +12,6 @@
 
 mod model;
 
-#[cfg(test)]
-mod model_tests;
-
 mod char_code;
 
 #[cfg(test)]
@@ -52,7 +49,7 @@ mod validation_tests;
 
 pub use lexer::substitute_system_vars;
 pub use model::{
-    Anchor, CharCodeDrop, Choice, Instruction, JUMP_TAG_CARRIER, MARKER_COMMAND, MoveArgs,
-    NewLineRatio, RAISE_TAG_CARRIER, Read, ReadNote, SurfaceArg,
+    Anchor, CharCodeDrop, Choice, Instruction, JUMP_TAG_CARRIER, MARKER_COMMAND, NewLineRatio,
+    RAISE_TAG_CARRIER, Read, ReadNote, SurfaceArg,
 };
 pub use parse::{parse, parse_noted};

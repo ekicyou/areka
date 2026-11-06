@@ -1,134 +1,16 @@
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
-use wintf::ecs::{Arrangement, GraphicsCommandList};
+use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 
 use super::test_support::{
-    CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
-    force_current_surface, make_world_with_gpu, mount_entities, set_window_dpi, show_ok,
-    spawn_window_with_dpi,
+    CapturedEvent, INFO_LINE_MESSAGE, applies, arrangement_of, attach_hit_target,
+    build_target_assets, build_two_face_assets, capture, force_current_surface, hide_ok,
+    make_world_with_gpu, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
+    tamper_face_1000_slot,
 };
 
-/// surface entity の配置＝`(論理寸, 変換の係数)`。
-///
-/// 論理寸は**原寸**（k を焼き込まない）で、k は `scale` の係数としてだけ現れる
-/// （`mount.rs` の `logical_arrangement`）。両方を 1 つの値で読むのは、片方だけを見ると
-/// 「寸へ k を焼き込み係数を 1.0 に据え置く」旧形と区別できないためである。
-fn arrangement_of(world: &World, surface_entity: Entity) -> Option<((u32, u32), f32)> {
-    world.get::<Arrangement>(surface_entity).map(|a| {
-        ((a.size.width as u32, a.size.height as u32), {
-            assert_eq!(a.scale.x, a.scale.y, "x/y で異なる係数は本経路に無い");
-            a.scale.x
-        })
-    })
-}
-
-// ── 表示成立点の行（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
-// 実機サインオフ（R6.3）は有界 auto-exit で起動して `RUST_LOG` を grep し、**このログのフィールド名と
-// 値**から「2 水準が異なる k・異なる物理寸で描かれた」ことを決定論的に判定する。ゆえに level が
-// `info` であることと D10 各フィールドが正しい値で在ることは観測状態と同格の契約であり、檻に入れる。
-//
-// 捕捉窓（`capture`／`CapturedEvent`）は presenter 系テストの共有引き口
-// `presenter_test_support.rs` が再輸出する。実体は硬化機構の唯一の定義元 `log-capture-kit` で、
-// 本 crate は捕捉先を自前で差さない。`with_default` がスレッドローカルなのは既定 dispatcher
-// だけで、「そのログを評価するか」を決める callsite の interest キャッシュは**プロセス全体で
-// 1 つ**しかない。先に踏んだスレッドの判定が焼き付くため、捕捉窓を持たないスレッドが先着すると
-// `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても**取りこぼす**——問題は他テスト
-// のイベントの混入ではなく自分の観測の欠落である。共有機構は probe 常駐・窓内 interest 再計算・
-// 番兵による空振り検出の 3 点でこれを塞ぐ（詳細は `presenter_test_support.rs` の説明）。
-
-/// 要件 6.1/6.3 観測完了（設計 D10 の観測ログ）: 表示成立点で **`info` レベル**のログが出て、
-/// k 導出値（`k`・`k_ratio`）・`author_dpi`・`window_dpi`・native 寸・scaled 寸が揃う。
-///
-/// k=2/1・native 4×3・物理 8×6 という**互いに弁別可能**な値で組むため、native と scaled の取り違え・
-/// k の取り違えはすべて RED になる。表示成立点の行を INFO 以外へ落とす改変も level assert が捕まえる
-/// （R6.3 の `RUST_LOG` grep は既定の観測条件で info を読むため、level 自体が契約である）。
-#[test]
-fn display_success_emits_d10_observation_log_at_info() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x88);
-
-    let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
-
-    let ((), events) = capture(|| {
-        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    });
-
-    let ev = events
-        .iter()
-        .find(|e| {
-            e.field("message")
-                .is_some_and(|m| m.contains("表示・マスクを更新"))
-        })
-        .unwrap_or_else(|| panic!("表示成立点のログが出ていない: {events:?}"));
-
-    assert_eq!(
-        ev.level,
-        tracing::Level::INFO,
-        "表示成立点の観測ログが info レベルでない（R6.3 の RUST_LOG grep が既定条件で読めない）"
-    );
-
-    let field = |name: &str| -> String {
-        ev.field(name)
-            .unwrap_or_else(|| panic!("D10 フィールド `{name}` が無い: {:?}", ev.fields))
-            .to_string()
-    };
-
-    // k 導出値: f32 の照会表現と、既約有理表現（num/den）の双方。
-    assert_eq!(field("k"), "2.0", "k（f32）が実適用値でない");
-    let k_ratio = field("k_ratio");
-    assert!(
-        k_ratio.contains("num: 2") && k_ratio.contains("den: 1"),
-        "k_ratio に既約 num/den が出ていない: {k_ratio}"
-    );
-
-    // 導出の両入力（分母＝作者基準 DPI・分子側＝窓 DPI）。
-    assert_eq!(field("author_dpi"), "96");
-    assert_eq!(
-        field("window_dpi"),
-        "Some((192, 192))",
-        "窓 DPI が出ていない（不在＝要件 1.4 縮退も None として観測できる必要がある）"
-    );
-
-    // 適用寸: native（k 適用前）と scaled（k 適用後・実際に窓へ載る物理寸）が弁別可能に揃う。
-    assert_eq!(field("native_w"), "4");
-    assert_eq!(field("native_h"), "3");
-    assert_eq!(
-        field("scaled_w"),
-        "8",
-        "scaled 寸が native のまま（k が届いていない）"
-    );
-    assert_eq!(
-        field("scaled_h"),
-        "6",
-        "scaled 寸が native のまま（k が届いていない）"
-    );
-
-    // 状態照合の結果（初回表示ゆえ差分あり＝窓寸 reconcile 要求を積んだ）。
-    assert_eq!(field("size_changed"), "true");
-    assert_eq!(field("surface_id"), "1000");
-    assert_eq!(field("target_id"), "TargetId(0)");
-}
-
 // ── applied_scale／refresh_scale（タスク 3.5・design Flow 2）───────────────────────────────
-
-/// 捕捉イベント列に「表示成立点のログ」が在るか（＝`apply_show` が表示を成立させたか）。
-///
-/// `refresh_scale` が「何もしなかった」ことの証明に使う——戻り値 `None` だけでは
-/// 「再表示したが同寸だった」と区別できないため、表示成立そのものの有無を観測する。
-fn has_display_success_log(events: &[CapturedEvent]) -> bool {
-    events.iter().any(|e| {
-        e.field("message")
-            .is_some_and(|m| m.contains("表示・マスクを更新"))
-    })
-}
 
 /// 要件 1.2 観測完了（照会契約 `applied_scale`）: 未登録 target と表示成立前は `None`、k≠1 の表示
 /// 成立後は**実適用 k** を返す。
@@ -148,9 +30,7 @@ fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
         "未登録 target は None"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     assert_eq!(
         presenter.applied_scale(TargetId(0)),
         None,
@@ -197,9 +77,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     assert_eq!(scaled_size, (12, 10), "前提: 原寸と物理寸が弁別可能");
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // k=1/1 の表示確立（初回表示が積む k₀ 補正要求は取り出して捨てる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -207,12 +85,12 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
         native_golden,
-        "前提: 表示に渡すメモは原寸の合成バイト"
+        "前提: 表示に渡すメモは原寸の合成バイト（R2.4/R3.2/R8.2 の golden 一致）"
     );
     let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
     assert_eq!(
         arrangement_of(&world, surface_entity),
-        Some((native_size, 1.0)),
+        (native_size, (1.0, 1.0)),
         "前提: 確立時の配置は原寸・係数 1.0"
     );
     // 表示記録は k を含まない＝k 変化で作り直されないことを後段で突き合わせる。
@@ -245,10 +123,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     // (c) 引き当てが成立している（要件 5.3・k はキーに参加しない）。
     let ev = events
         .iter()
-        .find(|e| {
-            e.field("message")
-                .is_some_and(|m| m.contains("表示・マスクを更新"))
-        })
+        .find(|e| e.message() == INFO_LINE_MESSAGE)
         .unwrap_or_else(|| panic!("再表示の成立点ログが出ていない: {events:?}"));
     assert_eq!(
         ev.field("cache_hit"),
@@ -258,7 +133,7 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
     // (d) 配置は原寸のまま係数だけが動く（拡大は wintf の変換行列が掛ける）。
     assert_eq!(
         arrangement_of(&world, surface_entity),
-        Some((native_size, 2.0)),
+        (native_size, (2.0, 2.0)),
         "配置が新 k を映していない（原寸のままか、寸へ k を焼き込んでいる）"
     );
     assert_eq!(
@@ -305,16 +180,13 @@ fn refresh_scale_after_dpi_change_reapplies_new_k() {
 fn refresh_scale_without_dpi_change_does_nothing() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas, golden_1000, _g3000) = build_two_face_assets(6, 5);
-    let (probe_world, probe_atlas, _, _) = build_two_face_assets(6, 5);
+    let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(6, 5);
     let k2 = ScaleRatio::new(2, 1).unwrap();
     // 窓 192／author 96 ゆえ k=2/1。メモは原寸で持つので golden は k に依らず同一である。
     let scaled_size = k2.scaled_extent(6, 5);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
@@ -334,48 +206,13 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         "前提: 確立した表示記録は空でない（改竄値と弁別できる）"
     );
 
-    // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の原寸合成）で上書きする。
-    let tampered = {
-        let mut composer = Composer::new();
-        composer
-            .compose(
-                &probe_world,
-                &probe_atlas,
-                3000,
-                &BindSet::default(),
-                &PatternState::default(),
-            )
-            .expect("面 3000 の合成は Ok")
-    };
-    let tampered_bytes = tampered.bytes().to_vec();
-    // 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった（署名追随）。改竄した絵と
-    // **同一 bytes 由来**のマスクを渡し、スロットの原子対をプローブ側でも崩さない。
-    let tampered_mask =
-        std::sync::Arc::new(wintf::ecs::widget::bitmap_source::AlphaMask::from_pbgra32(
-            tampered.bytes(),
-            tampered.width(),
-            tampered.height(),
-            tampered.stride(),
-        ));
-    assert_ne!(
-        tampered_bytes, golden_1000,
-        "プローブ前提: 別の絵であること"
+    // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の原寸合成）・空の表示記録で上書きする。
+    tamper_face_1000_slot(
+        &mut presenter,
+        TargetId(0),
+        (6, 5),
+        GraphicsCommandList::empty(),
     );
-    // 原寸は面そのものが持つ（エントリに別フィールドは無い・要件 5.1）ゆえ、キーも原寸も変えず
-    // **絵だけ**を差し替えるプローブは面・マスク・表示記録の三つ組を渡すだけで成立する。
-    presenter
-        .targets
-        .get_mut(&TargetId(0))
-        .unwrap()
-        .cache
-        .insert(
-            1000,
-            BindSet::default(),
-            PatternState::default(),
-            tampered,
-            tampered_mask,
-            GraphicsCommandList::empty(),
-        );
 
     // DPI は据え置き（k 不変）。
     let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
@@ -390,12 +227,12 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     // 改竄そのものは効いている（プローブの空振りで (1) が緑になっていない）。
     assert_eq!(
         presenter.read_back(TargetId(0)).expect("read_back 失敗"),
-        tampered_bytes,
+        golden_3000,
         "プローブがメモへ届いていない（(1) の不変が恒真になる）"
     );
     // (2) 表示成立点のログが 1 件も出ていない。
     assert!(
-        !has_display_success_log(&events),
+        applies(&events).0 == 0,
         "k 不変なのに表示成立点のログが出ている（再表示が走った）: {events:?}"
     );
     // (3) 未消費の要求を握り潰していない（drain フェーズが拾えること）。
@@ -427,9 +264,7 @@ fn refresh_scale_without_last_show_input_does_nothing() {
         "未登録 target は None（panic しない）"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 一度も show していない状態で DPI を変える。
     set_window_dpi(&mut world, window, 192);
 
@@ -437,7 +272,7 @@ fn refresh_scale_without_last_show_input_does_nothing() {
 
     assert_eq!(got, None, "再表示入力が無いのに新物理寸を返している");
     assert!(
-        !has_display_success_log(&events),
+        applies(&events).0 == 0,
         "再表示入力が無いのに表示が成立している: {events:?}"
     );
     assert_eq!(
@@ -469,25 +304,12 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x93);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     let _ = presenter.take_pending_resize(TargetId(0));
 
     // `\s[-1]` 相当で非表示にする（キャッシュ・装着・last_show は保持される）。
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::Hide {
-            target: TargetId(0),
-            reply: Some(tx),
-        },
-    );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Ok(()))
-    ));
+    hide_ok(&mut presenter, &mut world, TargetId(0));
     assert_eq!(
         presenter.current_surface_id(TargetId(0)),
         None,
@@ -508,7 +330,7 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
 
     assert_eq!(got, None, "非表示 target が新物理寸を報告している");
     assert!(
-        !has_display_success_log(&events),
+        applies(&events).0 == 0,
         "非表示 target が DPI 変化だけで再表示された（蘇生）: {events:?}"
     );
     let t = presenter.targets.get(&TargetId(0)).unwrap();
@@ -549,9 +371,7 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
     let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x95);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 192)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 192);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.applied_scale(TargetId(0)),
@@ -574,7 +394,7 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
         "DPI 不在を 96 で捏造している（k=1/2 と誤導出して再表示が走った）"
     );
     assert!(
-        !has_display_success_log(&events),
+        applies(&events).0 == 0,
         "DPI 不在の縮退で再表示が走っている: {events:?}"
     );
     assert_eq!(
@@ -607,9 +427,7 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x94);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         presenter.take_pending_resize(TargetId(0)),
@@ -700,21 +518,21 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
         "再表示失敗が error! でない（要件 4.4 のログ規律）"
     );
     assert!(
-        !has_display_success_log(&events),
+        applies(&events).0 == 0,
         "失敗したのに表示成立点のログが出ている: {events:?}"
     );
 }
 
 /// 捕捉イベント列のうち **R1.6 の防御 warn** の件数（level と固有文言の双方で選別する）。
 fn applied_absent_warn_count(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| {
-            e.level == tracing::Level::WARN
-                && e.field("message")
-                    .is_some_and(|m| m.contains("適用スケール未確定"))
-        })
-        .count()
+    events.iter().filter(|e| is_applied_absent_warn(e)).count()
+}
+
+/// R1.6 の防御 warn か。
+fn is_applied_absent_warn(e: &CapturedEvent) -> bool {
+    e.level == tracing::Level::WARN
+        && e.field("message")
+            .is_some_and(|m| m.contains("適用スケール未確定"))
 }
 
 /// 要件 1.6 観測完了（DD-5 の防御分岐・**述語そのものの檻**）: 「表示中サーフェスがあるのに
@@ -814,12 +632,7 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
     for (want_x, want_y) in [("180", "96"), ("360", "192")] {
         let warn = events
             .iter()
-            .find(|e| {
-                e.level == tracing::Level::WARN
-                    && e.field("message")
-                        .is_some_and(|m| m.contains("適用スケール未確定"))
-                    && e.field("client_x") == Some(want_x)
-            })
+            .find(|e| is_applied_absent_warn(e) && e.field("client_x") == Some(want_x))
             .unwrap_or_else(|| {
                 panic!("client_x={want_x} の防御 warn が捕捉されていない: {events:?}")
             });
@@ -837,8 +650,9 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         );
     }
 
-    // (d) 正常縮退は同一 callsite で **1 件も増やさない**（陰性）。捕捉が生きていることは
-    //     直前の陽性 1 件が証明済みゆえ、この陰性主張は恒真になり得ない。
+    // (d) 正常縮退は同一 callsite で **1 件も増やさない**（陰性）。4 呼出は 1 つの窓で捕捉して
+    //     いるので、(c) の「ちょうど 2 件」が防御呼出 2 回分と一致することがそのまま陰性の証拠に
+    //     なる（述語を applied.is_none() 単独へ潰すと 3 件以上で (c) が鳴る）。
     assert_eq!(
         unshown.region, None,
         "未表示 scope は正常縮退（region なし）"
@@ -847,10 +661,43 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         unregistered.region, None,
         "未登録 target は正常縮退（region なし）"
     );
+}
+
+/// 装置の作り直し（audit-wintf-graphics-world 6 番・要件 3.1）: `GraphicsCore` を入れ替えた後の
+/// `refresh_after_device_change` は控えを捨てて出し直し、面の命令の列が新しい物になる。印が
+/// 立たない回は何もしない（列はそのまま）。
+#[test]
+fn device_recreation_rerecords_display_list() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5a);
+    let mut presenter = EmoPresenter::new();
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _slot) = mount_entities(&presenter, TargetId(0));
+    let list_of = |world: &World| {
+        world
+            .get::<GraphicsCommandList>(surface_entity)
+            .cloned()
+            .expect("表示確立後は surface entity に表示記録がある")
+    };
+    let before = list_of(&world);
+
+    // 初回は印を控えるだけ・2 回目は印が立っていないので何もしない。
+    presenter.refresh_after_device_change(&mut world);
+    presenter.refresh_after_device_change(&mut world);
     assert_eq!(
-        applied_absent_warn_count(&events),
-        2,
-        "未表示 scope・未登録 target で warn を足してはならない（述語を applied.is_none() 単独へ\
-         潰すとマウス移動ごとのログ洪水になる。防御呼出 2 回分の 2 件から増えない）: {events:?}"
+        list_of(&world),
+        before,
+        "装置が変わっていないのに出し直した"
     );
+
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore::new 失敗"));
+    presenter.refresh_after_device_change(&mut world);
+    assert_ne!(
+        list_of(&world),
+        before,
+        "装置を作り直した後も古い装置の命令の列のまま（控えを捨てて出し直していない）"
+    );
+    assert_eq!(presenter.target_visible(TargetId(0)), Some(true));
 }

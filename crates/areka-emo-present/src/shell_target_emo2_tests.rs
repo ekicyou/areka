@@ -15,7 +15,7 @@
 //! # 索引表を権威経由にする理由
 //!
 //! B に別の索引表（`surfaces.txt` の `element` だけから焼いたもの）を渡してはならない。外形を
-//! 算出する `flatten_extent`（`crates/areka-emo-compose/src/plan.rs`）は**索引表で引けない層を
+//! 算出する `flatten_extent`（`crates/areka-emo-compose/src/plan_extent.rs`）は**索引表で引けない層を
 //! 記録なしで飛ばす**ので、誤って足された `surface10.png` の層が B の索引表では引けず、
 //! A と B の両方から同じように消えて、壊れていても緑のままになる。両方に同じ（権威が焼いた）
 //! 索引表を渡せば、誤って足された層は A にだけ現れて外形と画素に出る。

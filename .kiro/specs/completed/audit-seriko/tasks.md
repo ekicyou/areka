@@ -1,0 +1,264 @@
+# 実装計画: audit-seriko
+
+> 直しの正本は design.md の「指摘ごとの直し」の表（要件 8.1 の 18 件）。「指摘 N」はその表の番号。
+> 並走の印 `(P)` は付けない。設計の「System Flows」のとおり直列で進める（同じテストファイル・`bind.rs`・`looper.rs`・`state.rs`・`settle.rs` に複数のタスクが触り、後のタスクは指摘 6 でまとめた道具を使うため）。
+> 消す・形を変える口は、どのタスクでも消す前にツリー全体を `rg -n '\b名前\b'` で探し、件数と探した日の `HEAD` をタスクの記録に残す（design.md「消す前の確かめ」）。
+> 「赤になることを確かめる」は、確かめる行を一時的に外して赤・戻して緑を 1 回ずつ見て記録に残すこと（design.md Testing Strategy）。
+> design.md の行番号は設計の時点のもの。前のタスクで行がずれるので、直す相手はテストや関数の名で探し直す。
+
+- [x] 1. テストの道具を受け口へまとめる（指摘 6）
+- [x] 1.1 層をまたぐテストの道具の受け口を作り、`src/` の写しを寄せる
+  - 最初に、着手の `HEAD` でクレートのテストの数と、後のタスクで移す・消すテストの名の一覧を記録に残す（1〜5 のタスクの「同じ数・同じ期待値」の比べる元）
+  - `lib_test_support.rs` を新しく置き、`lib.rs` からテストのときだけ繋ぐ。表を読んで組む道具・既定のスコープ・記録の捕まえ（行の列とつないだ文字列）・表と記録の組・警告の抜き出し・`check_calls` の 6 種・部品の再生中・1 コマの状態を置く
+  - research.md 3 節の 6 に挙げた `src/` の写し（`table.rs` の中の写し、`looper_test_support.rs`・`state_test_support.rs` を含む）を消して受け口を使う。道具の名が本番の項目と同じなら明示の `use` で受ける
+  - 写しの中身が違うものは振る舞いを変えて寄せず、違いを引数で表すか、寄せずに止めて報告する
+  - 完了: クレートのテストが記録した数・同じ期待値で緑。`src/` に写しの道具が残っていないことを `rg` で示した記録がある
+  - _Boundary: areka-seriko の src のテストと受け口_
+  - _Requirements: 2.3, 6.1, 8.1_
+- [x] 1.2 役者の時計つきの組みと吹き出しの合図の写しを `actor_test_support.rs` へ寄せる
+  - 4 本の Rig を、統括器の設定・名前の表・静的な着せ替えを構築の引数に受ける 1 つの組みにまとめ、3 本の吹き出しの合図を 1 つの道具にする
+  - 時計を持たない `actor_stage_tests.rs` の Rig は、時計に揃えて期待値が変わるなら寄せずに止めて報告する
+  - 完了: 役者のテストが記録した期待値で緑。Rig と合図の定義が受け口の 1 か所だけにある
+  - _Boundary: actor_test_support.rs と actor_*_tests.rs_
+  - _Requirements: 2.3, 8.1_
+- [x] 1.3 統合テストの共有の道具を `tests/common/mod.rs` にまとめる
+  - 合図の組み・emo2 の面の文字列と名前の解決・話の知らせ・何もしない文字の受け手を、写しの 2 組（`cue_sequence`＝`regression`、`balloon_face_e2e`＝`bind_e2e`）から 1 か所へ移し、各テストが `mod common;` で使う
+  - 使わない道具が出るテストのために受け口の先頭で未使用の警告を許す
+  - 完了: 4 本の統合テストが同じ期待値で緑。写しの定義が `tests/` の各ファイルから消えている
+  - _Boundary: areka-seriko の tests/_
+  - _Requirements: 2.3, 8.1_
+- [x] 1.4 範囲の外の「出所」の説明 3 行を直す（統合・指摘 6 の結果）
+  - 触る前に持ち主 `audit-test-kits` が走っていないかを `.kiro/specs/` と作業場の枝で確かめて記録する。走っていれば要件 7.3 に従って申し合わせてから触る
+  - `log-capture-kit` の「出所は `table.rs` の `capture_logs`」の文 3 行（`event.rs`・`event_tests.rs`）の出所の書き方だけを、1.1 で移した先に合わせて直す。ほかの行は触らない
+  - 完了: 3 行が移した先を指し、`git diff` の `log-capture-kit` の変更がその 3 行だけ
+  - _Boundary: log-capture-kit（範囲の外・決めた行だけ）_
+  - _Requirements: 7.3, 7.4, 7.6_
+
+- [x] 2. 名前の表を本番と同じ道で組む（指摘 3）
+- [x] 2.1 クレートの中のテストの名前の表を descript の文字列から組む形へ移す
+  - 名前の表が要るテスト（`bind_tests`・`bind_named_tests`・`actor_bind_loop_tests`・`actor_clock_tests`・`actor_parts_tests`・`actor_replace_tests`・`tests/bind_e2e`）を、descript の文字列 → 着せ替えの読み → 本番の表の組み方で組む形にする。統合テスト用の着せ替えの読みは 1.3 の受け口に置く
+  - 期待値が変わるテストが出たら、テスト用の口が本番と違っていた証拠として本番の答えへ直し、その件を記録に残す
+  - 完了: 移したテストが全部緑で、クレートの中にテスト用の口の呼び出しが残っていない
+  - _Boundary: areka-seriko の名前の表を使うテスト_
+  - _Requirements: 2.3, 4.1, 7.2, 8.1_
+- [x] 2.2 テスト用の口と宣言の型を消し、範囲の外の呼び出し元を直す（統合）
+  - 触る前に、`shell_carry_tests.rs` の持ち主 `audit-emo2-boot-spine` が走っていないか、同じ `bind.rs` に触る `audit-parsers-sakura` が着地したか走っているかを確かめて記録する。着地していれば main を取り込んでから消す
+  - `shell_carry_tests.rs` の名前の表を descript の文字列で組む形にし、今ある `char2_names` の中身を 1 つの道具にして両方から呼ぶ（作業フォルダはワークツリーの `target\` の下の `WorkDir` のまま）
+  - `BindResolver::new` と `BindOptionDecls` を消し、再輸出と `lib.rs` の doc の列、`bind.rs` の「`new` で組んだ表は…」の説明を消す。消す前のツリー全体の確かめを記録する
+  - 完了: `cargo build --workspace --all-targets` が通り、`rg` で 2 つの名がツリーに 0 件。`shell_carry_tests` が緑
+  - _Boundary: bind.rs・lib.rs と areka の shell_carry_tests.rs（範囲の外・呼び出し元だけ）_
+  - _Requirements: 2.3, 4.4, 7.1, 7.2, 7.3, 7.4, 7.6, 8.1_
+
+- [x] 3. 1,000 行を越える役者のテストを分ける（指摘 2・統合）
+  - 刻みの道のテストの組を新しい兄弟のファイルへ移し、`actor.rs` に接続の宣言を足す。写しの道具は消し、一番上のテストの同じ中身の道具を、1.1 の後に置かれた 1 か所の定義から使う（要るものだけ `pub(crate)` に上げる）。写しでない 1 回鳴らす道具はそのまま移す
+  - 着せ替え付きの状態は、着せ替えが空の道具ではなく `shown_shell_with_binds(sid, BindSet::from_ids([1100, 1207]))` で組む（移すテストは `Show` の欄を `..` で読み飛ばすので、取り違えても緑のまま通ってしまう）
+  - 移した後も 1,000 行を越えるなら、刻みの道の前の最後の組も移す
+  - 1,000 行の見張りの例外表から元のファイルの行を消し、件数を main を取り込んだ後の表の行の数に合わせる（9 → 8 を決め打ちしない）。触る前に持ち主 `audit-test-kits` が走っていないかを確かめて記録する
+  - 完了: 2 つのファイルとも 1,000 行未満で、移したテストが 1.1 で記録した名のまま同じ期待値で緑。`file_length_guard_test` が行を消した表で緑
+  - _Boundary: actor_bind_loop_tests.rs・actor_tick_tests.rs（新）・actor.rs と log-capture-kit の例外表（範囲の外・1 行と件数だけ）_
+  - _Depends: 2.1_
+  - _Requirements: 6.1, 7.4, 7.6, 8.1_
+
+- [x] 4. 本番のコードの直し
+- [x] 4.1 一番上と部品で写した引き金の扱いを 1 か所にまとめる（指摘 4・16）
+  - 窓の開け閉めを写す処理・鳴らした記録・「3 語の引き金か」の判定を `trigger.rs` の 1 つずつの口にまとめ、一番上と部品の両方から呼ぶ。記録の行は段・欄の並び・文言を今と 1 字も変えない
+  - 構える時刻の引数を符号なしの整数にして変換を消し、呼び手 6 か所を直す。消す口（`is_trigger_word`・`is_trigger`）と形を変える `Armed::arm` の確かめを記録する
+  - 完了: 引き金のテスト（一番上・部品・話・引き金そのもの）が記録の文字ごと同じで緑
+  - _Boundary: trigger.rs・looper_trigger.rs・parts_trigger.rs・looper.rs・parts.rs_
+  - _Requirements: 2.3, 7.1, 7.2, 8.1_
+- [x] 4.2 「印を戻さない」決まりと `always` の判定を `run_calls` の 1 か所へ移す（指摘 5）
+  - 2 つの貸し口は渡された値を置くだけにし、止めた相手が `always` かは `run_calls` が表から引いて渡す。貸し口の不要になった欄を消す。形を変える `CallPlays::stop` の確かめを記録する
+  - 新しいテスト: 当て終えた印が 500 の再生を 300 で回しても印は 500 のまま、続けて 600 で回しても 400 の `move` が 2 度当たらない
+  - 完了: 新しいテストが緑で、`max` を外すと赤になることを確かめた記録がある。既存の呼び出しのテストが緑
+  - _Boundary: calls.rs・looper_calls.rs・parts_calls.rs・calls_tests.rs_
+  - _Requirements: 4.1, 4.2, 7.1, 7.2, 8.1_
+- [x] 4.3 文字の時刻の問い合わせで開発のビルドだけ止まる道を消す（指摘 9）
+  - `debug_assert!` を消し、列に無い序数では刻みの時刻を返して `warn!` を残す今の道をどのビルドでも通す
+  - 新しいテスト: 列に無い序数で呼ぶと刻みの時刻を返し、序数と時刻の欄を持つ `warn!` が 1 行出る
+  - 完了: 新しいテストが緑で、`debug_assert!` を戻すと `panic` で赤になることを確かめた記録がある
+  - _Boundary: looper_trigger.rs・looper_trigger_tests.rs_
+  - _Requirements: 4.1, 4.2, 6.2, 8.1_
+- [x] 4.4 スコープの状態を順のある表にし、並べ替えを消す（指摘 11）
+  - スコープとバルーンの状態を順のある表にし、出ている面の列を「スコープの昇順 → シェル → バルーン」で組む。一番上の並べ替えと順位の関数 `slot_rank`、状態の中の並べ替えを消し、誤った説明 3 か所を直す。`slot_rank` を消す前の確かめを記録する
+  - 新しいテスト（`state_stage_tests.rs`）: スコープ 0 と 1 の両方にシェルとバルーンを出し、列が「0 シェル → 0 バルーン → 1 シェル → 1 バルーン」になる
+  - 完了: 乱数を焼き込んだ抽選の順のテストが期待値を変えずに緑。新しいテストが緑で、スコープを回し終えてからバルーンを回す形に一時的に変えると赤になることを確かめた記録がある
+  - _Boundary: state.rs・looper.rs・state_stage_tests.rs_
+  - _Requirements: 4.1, 4.2, 7.1, 8.1_
+- [x] 4.5 公開の口を 7 つ狭め、届かない枝を消す（指摘 15・17）
+  - 7 つの口を再輸出から外して `pub(crate)` にし、`lib.rs` の doc の列から外す。消す前のツリー全体の確かめを記録する
+  - 部品のスコープの名前の入れ方を、無いときだけ写して入れる 1 つの分岐にし、届かない枝を消す（毎刻みの写しを避ける理由の説明は保つ）
+  - 完了: `cargo build --workspace --all-targets` が通り、部品のテストが緑
+  - _Boundary: lib.rs・bind.rs・settle.rs・timeline.rs・state.rs・parts.rs_
+  - _Requirements: 2.3, 7.1, 7.2, 8.1_
+- [x] 4.6 書き出しの面の待ちに 10 分の上限を置く（指摘 19）
+  - 進める刻みの数に上限（16ms × 37,500）を置き、越えたら面の番号・上限・作者の書いた待ちの合計を欄に持つ `warn!` を 1 行残して、上限の時刻まで進めた面を返す。上限の内は今と同じ 16ms ごとの道
+  - 新しいテスト: 待ちが上限ちょうどの面は `warn!` 0 行で今と同じ面。上限の 1ms 後にコマが替わる面は `warn!` 1 行で替わる前のコマ
+  - 完了: 2 本のテストが緑で、上限を外すと 2 本目が赤になることを確かめた記録がある
+  - _Boundary: settle.rs・settle_tests.rs_
+  - _Requirements: 4.1, 4.2, 6.2, 8.1, 8.4, 8.5_
+
+- [x] 5. テストと説明の直し
+- [x] 5.1 見るべきものを見ていないテストを直す（指摘 1・7）
+  - `non_monotonic_tick_is_ignored` を、コマが替わる間に時刻が戻る形に差し替え、戻る刻みで指令 0 件・最後に見た時刻が 2150 であることを確かめる
+  - `prefix_alike_name_is_not_bind` に記録の 1 行、`table.rs` の中の表のテストに採った本数 3、`ticks_add_no_warn` に `Show` が 1 つ以上、`word_warns` の 2 つ目の枝の較正を足す（相手は名で探す）
+  - 完了: 各テストが緑で、確かめる相手（番人・`debug!`・余分な animation・刻みの道・欄の形）を外すと赤になることを 1 つずつ確かめた記録がある
+  - _Boundary: looper_tests.rs・actor_bind_noevent_tests.rs・table.rs・table_calls_check_tests.rs・table_calls_dot_sakura_tests.rs_
+  - _Requirements: 4.1, 4.2, 8.1_
+- [x] 5.2 試されていない分岐にテストを足す（指摘 8）
+  - 本番は変えず 6 本足す: 間隔 0 の警告と、動く絵の子の待ち 0 の警告（どちらも `table.rs` の中のテスト）、名前の引きの未宣言と重なり（`bind_tests.rs`）、スコープ 2 の名前の着せ替えの排他と `mustselect`（`bind_named_tests.rs`）、`always` の前の周の終わりのコマを 1 度だけ当てる（`calls_tests.rs`）、役者を止めた後の差し替えが偽（`actor_replace_tests.rs`）
+  - `table.rs` は足した後も 1,000 行未満であることを確かめる（越えるなら兄弟のテストファイルへ置く）
+  - 完了: 6 本が緑で、試す分岐を外すと赤になることを 1 本ずつ確かめた記録がある
+  - _Boundary: table.rs・bind_tests.rs・bind_named_tests.rs・calls_tests.rs・actor_replace_tests.rs_
+  - _Requirements: 4.1, 4.2, 6.1, 6.3, 8.1_
+- [x] 5.3 使われない見本の根を消し、古い説明を直す（指摘 10・12）
+  - `R_POST_AND_KOMAINU`・`r_post_and_komainu_shell_root`・その自己テストを、消す前のツリー全体の確かめを記録してから消す
+  - 古い説明（`actor.rs` の 2 か所・`resolve.rs`・`state_surface_tests.rs`・`looper_parts_emo2_tests.rs` の手書きの数と一覧）を、行番号でなく中身で探して直すか消す（emo2 のテストは理由の 2 行だけ残す）
+  - 完了: クレートのテストが緑で、`rg` で消した名がツリーに 0 件
+  - _Boundary: sample_test_support.rs・sample_test_support_tests.rs と説明を直す 4 ファイル_
+  - _Requirements: 7.1, 8.1_
+- [x] 5.4 自分と比べるだけのテストと重なったテストを消す（指摘 13・14）
+  - 自分と比べるだけのテスト（`resolve.rs`・`output.rs`・`timeline_repeat_tests.rs`・`settle_tests.rs`・`timeline.rs`）と重なったテスト（`bind_tests.rs`・`state_surface_tests.rs`）を、design.md の行番号でなくテストの名と中身で探し直して消す。残るテストが同じことを見ていることを記録する
+  - 完了: クレートのテストが緑で、1.1 で記録した数から消した分だけ減ったことを記録に残している
+  - _Boundary: 左の 7 ファイルのテストだけ_
+  - _Requirements: 2.3, 8.1_
+
+- [x] 6. 最後の確かめ
+- [x] 6.1 同じ作法で audit をかけ直し、新しい指摘を 0 件にする
+  - main を取り込み、`audit-parsers-sakura` などと行がぶつかれば揃え、例外表の件数を取り込んだ後の行の数に合わせ直す。並走の spec が消した口を使い始めていないか探し直す
+  - `crates/areka-seriko/` だけに、全件を出す・全部読む作法で `/ponytail:ponytail-audit` をかけ直し、新しい指摘を要件 2・3 に従って直し、0 件になるまでかけ直す
+  - 要件 8 の 18 件が全部直ったことを表で照らし、検証の記録に「新しい指摘 0 件」と、残すと裁定された 18・20 の番号・種類・裁定・理由を残す
+  - 完了: 検証の記録に 0 件と 18・20 の記録がある
+  - _Boundary: areka-seriko の全体（確かめ）_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 5.1, 5.2, 5.3, 7.3, 7.5, 8.2, 8.3, 8.6_
+- [x] 6.2 全体テストを回して緑を確かめる
+  - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す。赤が出たら赤のテストだけに絞って直し、回し直す
+  - `Cargo.lock` が変わっていないこと、`doc/`・`docs/` を名指す行を足していないこと、1,000 行を越えるファイルが無いことを確かめる。GPU に触る直しが無いことも記録する
+  - 完了: 全体テストが緑で、`git diff main -- Cargo.lock` が空
+  - _Boundary: ワークスペース全体（確かめ）_
+  - _Requirements: 4.3, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
+
+## Implementation Notes
+- 1.1（着手 HEAD `b64c6f68`）: クレートのテストは 550 件（lib 523・balloon_face_e2e 5・bind_e2e 9・cue_sequence 1・loop_integration 9・regression 3）。直した後も同じ 550 件・同じ名。寄せた先は `crate::test_support`（`src/lib_test_support.rs`）の `table_of`・`scope`・`capture_logs`（行の列）・`capture_text`（つないだ文字列。文字列を返していた `capture_logs` の新しい名）・`table_and_logs`・`warns`・`KINDS`・`part_playing`・`overlay_frame`・`one_frame_pattern`・`draw_frame`。中身の違う写しは名で分けた（`actor_trigger_fixture_tests` の `table_and_all_logs`＝畳み込みの記録も捕まえる・`table_interval_words_tests` の `table_and_text`）。`rg` で `src/` に写しが残らないことを確かめた（名が当たる本番の `bind.rs` の `fn scope`・トレイトの `fn playing` は別物）。
+- 1.1 で記録した、後で移す・消すテストの名: タスク 3（移すだけ）＝`tick_with_no_shown_slot_is_complete_no_op`・`tick_boundary_cross_emits_show_carrying_pattern`・`send_tick_after_actor_stopped_logs_debug_no_panic`・`emote_surface_change_resets_loop_playback`。5.3（消す）＝`r_post_and_komainu_shell_root_holds_surfaces_txt`。5.4 指摘 13（消す）＝`resolve_is_deterministic_same_input_same_output`・`balloon_resolve_is_deterministic`・`same_input_same_answer`・`settling_twice_gives_the_same_state`、（中の確かめだけ消す）＝`balloon_display_commands_construct_and_match`・`frame_at_sakura_real_sequence_finishes_residual_permanently`。5.4 指摘 14（消す）＝`empty_resolver_resolves_all_none`・`accumulate_on_off_round_trip`・`accumulate_off_absent_is_noop`・`show_command_carries_static_binds`・`show_carries_static_default_when_no_dynamic_bind_applied`。消し終えた見込みは 540 件。
+- clippy: toolchain が固定されておらず、今の clippy（0.1.99）では着手の時点から areka-seriko に 4 件の警告がある（`actor.rs:91` large_enum_variant・`looper.rs:433`・`looper_talk_tests.rs:597`・`looper_trigger_tests.rs:504` の collapsible_if）。依存の dola にも出る。各タスクは `cargo clippy -p areka-seriko --all-targets --no-deps` で警告が増えないことを見る。この 4 件は完了の棚卸で扱う。
+- 1.2: Rig 4 本は `ClockRig::configured(config, names, static_binds)`（`with_config` はこれを呼ぶ）にまとめ、parts・stage・talk は `type Rig = ClockRig;` と檻ごとの impl。`send(ms, msg)` に時刻の引数が増えた。時計を持たない stage と parts の Rig も時計に揃えて寄せたが期待値は不変（parts の 4 本は最初の `\s` で時計が刻み 0 でなく合図の時刻 0 で生まれる。開始は同じ 0 で、時計の無い道は looper の `refresh(.., None, ..)` のテストが見張る）。`balloon_cue` は `cue(.., CueCommand::BalloonSurface{..}, ..)` へ。範囲の外の同名の `looper_talk_tests.rs` の `fn cue`・`parts_trigger_tests.rs` の `struct Rig` は写しでないので残した。`BindResolver::new` の呼び出しが `actor_test_support.rs` に入った（2.1 で消す相手）。
+- 1.3: `tests/common/mod.rs`（先頭に `#![allow(dead_code)]`）へ `emote_cue`・`emo2_surfaces_txt`・`emo2_resolver`・`TalkNotice`＋From 2 つ・`NullTextSink` を移した。写しが 1 本しか無い `emo2_binds`・`RecordingTextSink`・`test_bind_resolver`・`run_scenario` は元の場所のまま。
+- 1.4: 持ち主 `audit-test-kits` は走っていない（2026-11-05 の origin/main に spec.json が無く、作業場も枝も無い）。`event.rs:145`・`event_tests.rs:15`・`:102` の出所を `lib_test_support.rs` へ向けた（3 行だけ）。範囲の外の申し送り: `event_tests.rs:15` の括弧書き `（Capture::on_event）` は着手前から古い書き方（持ち主 `audit-test-kits` の受け持ち・完了の棚卸で渡す）。
+- 2.1: 名前の表は descript の文字列 → `groups_of`（`bind_tests.rs`・統合テスト用の写しは `tests/common/mod.rs`）→ `BindResolver::from_groups` で組む。期待値の変わったテストは 0 件（手組みの表と本番の表は移したどのテストでも同じ答え）。`ClockRig::configured` の 2 つ目の引数は `BindResolver` そのもの、`eye_names()` は `eye_resolver()` へ。`groups_of` は呼ぶたびに `target\` の下に作業フォルダを作るので lib のテストは約 0.6 s → 1.4 s（ファイルを書かない読みの `read_bindgroup_defaults` は parsers の `pub(super)` で境界の外）。残る `BindResolver::new`／`BindOptionDecls` は定義・再輸出・doc と範囲の外の `shell_carry_tests.rs` だけ。
+- 2.2（着手 HEAD `f0b3c80d`）: 消す前のツリー全体の `rg -n 'BindResolver::new'` は 2 件（`bind.rs` の doc・`shell_carry_tests.rs`）、`rg -n 'BindOptionDecls'` は 8 件（`bind.rs` 3・`lib.rs` 2・`shell_carry_tests.rs` 3）。消した後は両方 0 件。`cargo build --workspace --all-targets` は警告 0。持ち主の確かめ: `audit-emo2-boot-spine` は brief.md だけ（走っていない）。`audit-parsers-sakura` は走っている（main に未着地・その枝は areka-seriko に未着手）。`bind.rs` の `from_groups`・`ScopeNames::read` を触る予定なので、こちらは消すところだけにし、伝言で知らせた（ぶつかったら後から着いた側が合わせる）。`shell_carry_tests.rs` は `names_of(shell)`（`WorkDir` → `resolve_with_shell` → `from_groups`）を `names`・`char2_names` の両方から呼ぶ。`BindResolver` の構造体の doc の「app 層が素データで組む・parsers に依存せず」も、事実と合わなくなったので消した。
+- 並走からの知らせ（2026-11-05・`audit-emo-compose`、枝 `claude/kiro-start-audit-emo-compose-cb01ad` の `a7bad45c`）: `parts_tests.rs` のテスト 1 本の名が `part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field` から `part_hidden_by_the_parent_frame_change_is_not_left_in_the_field_and_keeps_its_random_clock` に変わり、期待も変わる（見える部品がコマの無い bind+random の先を数えなくなったため）。6.1 で main を取り込んだ後は、名の一覧をこの 1 本の分だけ読み替えて比べる。同じ知らせの気づき（直していない）: 見えない間の部品の抽選の時計が古いまま残り、見え直したときに経過した分を一度に進める。6.1 の audit のかけ直しで見る。
+- 3（着手 HEAD `5865671e`）: 持ち主 `audit-test-kits` は走っていない（2026-11-05 の fetch 後も spec.json・作業場・枝が無い）。刻みの道の 4 本を移しても元は 1,001 行だったので、その前の組（`bind_noncanonical_addressee_severity_split` と専用の `noncanonical_custom_cue`）も `actor_tick_tests.rs` へ移した。行数は `actor_bind_loop_tests.rs` 1,366 → 906・`actor_tick_tests.rs` 380。写しの道具 7 つは `crate::looper::tests` の定義へ（`looper_tests.rs` の `pat`・`surface_with`・`shell_table`・`shown_shell_with_binds` を `pub(crate)` に上げた）。例外表は HEAD と origin/main で同じ 9 行だったので、1 行消して件数を 8 にした。名の一覧は 5 本のモジュールの道だけが `actor::tick_tests::` に変わった。申し送り: 移したテストは着せ替えの組を見ていない（`[1100]` に変えても緑）。移す前からの性質なので、6.1 の audit で見る。
+- 4.1（着手 HEAD `58cb8736`）: 消す前の rg は `is_trigger_word` 3 件（すべて `looper.rs`）・`is_trigger` 5 件（`parts.rs` 2・`parts_trigger.rs` 3）・`Armed::arm` 7 件（呼び手 6＝`looper_trigger.rs` 1・`parts_trigger.rs` 1・`trigger_tests.rs` 4、doc 1）。消した後は `is_trigger_word`・`is_trigger`・`Armed::is_visible` が 0 件。記録の行は段・文言・欄の並び（`scope slot [part] animation_id started_at_ms`）が前と同じであることを、元のマクロの写しと捕まえて突き合わせて確かめた（`part` が None なら欄は出ない）。変わったのは target だけで、`areka_seriko::looper::top_trigger`／`areka_seriko::parts::part_trigger` が `areka_seriko::trigger` にまとまった（design の約束は段・欄・文言で、target を拾う所はリポジトリに無い。`RUST_LOG` を `areka_seriko::looper` で絞って引き金の行を見る人には見え方が変わる）。
+- 4.2（着手 HEAD `6c912a27`）: 形を変える前の `CallPlays::stop` に関わる所は 5 か所（定義・`run_calls` の呼び出し・`looper_calls.rs`・`parts_calls.rs`・`calls_tests.rs` の偽の表）。`CallPlays` は 11 件で、すべて areka-seriko の中にある。直した後は全部 `stop(animation, always)` になった。新しいテスト `acts_through_mark_never_moves_back` を足して 551 件。`max` を `now_ms` に替えると新しいテストが赤になった（前半「印は 300 へ戻らない」、前半を外すと後半「400 の move が 2 度当たらない」も単独で赤）。`always` の判定に `&& false` を足すと、役者・一番上・部品の呼び出しのテスト 3 本が赤になった。
+- 4.3（着手 HEAD `f1f966a6`）: `glyph_wall_ms` の `debug_assert!` を消した。新しいテスト `glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn` を足して 552 件になった。`debug_assert!` を戻すと、このテストは `looper_trigger.rs:155` の panic で赤になる。`warn!` の文言と欄（`glyph`・`now_ms`）は変えていない。
+- 4.4（着手 HEAD `8a7d79c9`）: 消す前の `rg -n 'slot_rank'` は 2 件（どちらも `looper.rs` で、定義と使う所）、消した後は 0 件。`scopes`・`balloon` を `BTreeMap` にした。古い並べ替えは「スコープ → シェル／バルーン」だけを鍵にした安定な並べ替えで、スコープごとに 1 件なので、新しい組み方とどの場合も同じ順になる。新しいテストを足して 553 件。シェルを全部回してからバルーンを回す形に変えると、新しいテストだけが赤になる。`looper.rs` は 976 行。
+- 4.5（着手 HEAD `a1e49f73`）: 消す前のツリー全体の rg は、全体／areka-seriko の中の順に accumulate 18／18・SETTLE_TICK_MS 6／6・lap_of 14／14・always_at 63／61・AlwaysView 24／24・LotteryBoundary 16／16・ScopeState 74／71。外れの分は、always_at が `doc/ukadoc-coverage/ledger/assets.toml`・`doc/COMPAT_ARCHITECTURE.md` の文中の名前、ScopeState が `crates/areka/src/placement/spawn_cleanup_tests.rs` の同じ名の別の型で、使い手ではない。7 つを `pub(crate)` にし（`bind.rs` は `accumulate` の可視性だけ）、`cargo build --workspace --all-targets` は通った。`PartClocks::advance` は get_mut が None のときだけ写して入れる match 1 つにした。
+- 4.6（着手 HEAD `9dae36f6`）: `SETTLE_MAX_TICKS = 37_500` を置き、終わりの時刻を `wait_ms.min(上限)` にした（上限の内は丸めない）。越えたら `warn!`（欄は `surface_id`・`max_ticks`・`wait_ms`）を 1 行出す。テストを 2 本足して 555 件。上限ちょうどの面は warn 0 行で 101、上限を 1ms 越える面は warn 1 行で 100。`until = wait_ms` に戻すと warn が 0 行で赤、`min` だけ外すと `Some(101)` で赤になった。
+- 5.1（着手 HEAD `d29e7b41`）: 5 本を直して 555 件のまま。赤の確かめは次のとおり。① `non_monotonic_tick_is_ignored` のコマは 3 枚（`(2106,0),(2110,100),(2120,1000)`）にした。design の指摘 1 の行は「コマ 2 枚」だが、2 枚だと 2150 で再生が終わって消え、番人が無くても 2050 で何も出ないので、指令 0 件の確かめが何も見ていないことになる。番人を外すと 2050 で 2106 へ巻き戻る `Show` が出て赤。② `debug!` を消すと赤。③ surface50 に Random を 1 本足すと 4≠3 で赤。④ 刻みの範囲を空にすると赤。⑤ は新しいテストを足さず、もとからある較正のテスト `word_warn_filter_catches_an_unreadable_target` に入れた。`method.rs` の `%name` を `?name` にすると赤。摂動で触った範囲の外のファイル（`areka-emo-compose/src/method.rs` など）は HEAD のバイトに戻した。
+- 5.2（着手 HEAD `3f3febb3`）: テストを 6 本足して 561 件。本番のコードは HEAD のバイトのまま。⑴⑵ は読み手から届かない分岐なので、design のとおり型で組んだ。⑶ の重なりは、同じキーの 2 行目が前の行を上書きするため、`bindgroup08` と `bindgroup8` の綴りの違いで作った。⑷ には、本体側の同じ名前（`sakura` の 1303）を引かないことの確かめも足した。どれも、試す分岐を外すと赤になることを確かめた。申し送り（6.1 の audit で見る）: `calls.rs` の `(lo / period).saturating_sub(1)` の `-1` は外しても緑のまま。累積の待ちは周期以下なので、前の周のコマは窓に入りえない。上のコメント「1 つ前の周の終わりのコマも窓に入りうる」も事実と合わない。
+- 5.3（着手 HEAD `a5cdb4a5`）: 消す前のツリー全体の rg で見ると、`R_POST_AND_KOMAINU`・`r_post_and_komainu_shell_root` の seriko の外の件数は、`crates/areka/src/placement/placement_shared_test_support.rs` ほかと `crates/areka-emo-present/src/shell_target_test_support.rs` が自分で持つ同じ名前の別物だけで、seriko の口の使い手は 0 件。消した後は areka-seriko の中で 0 件、テストは 560 件。検体 `R_POST_and_KOMAINU` は他のクレートが使うので残した。申し送り（6.1 で見る）: design の 12 行目に挙がっていない古い説明が残っている（`actor.rs` の「後続の時間駆動ループ」「本タスク・後続 4.1」「cue 適用駆動（本タスク）」「M-boot」と、`resolve.rs` の「M-boot … 名前解決は将来 additive」）。
+- 5.4（着手 HEAD `06f23fa4`）: 消したのは、1.1 で記録した名と同じ 9 本と、中の確かめ 3 行（`output.rs` の `x == x.clone()` 2 行、`timeline.rs` の 172 を 2 度確かめていた行）。テストは 560 → 551 件（1.1 の見込みの 540 は、後で足した分を数えていなかった）。同じことを見ている残りのテストは次のとおり。
+  - `empty_resolver_resolves_all_none` → `empty_resolver_is_default_policy_and_never_reaches_apply`
+  - `accumulate_off_absent_is_noop` → `accumulate_idempotent_off_off`
+  - `accumulate_on_off_round_trip` → `accumulate_basic_on_then_off`・`accumulate_on_preserves_existing`・`accumulate_off_removes_only_target`
+  - state_surface の 2 本 → `scope_isolation_does_not_touch_other_scope`
+- 6.1 かけ直し 1 回目（2026-11-06・HEAD `b4f39286`＝origin/main `8eb8758c` を取り込んだ後。取り込んだのは doc-tree-tidy の 1 コミットで、seriko と例外表は変わっていない）: 新しい指摘は 26 件（必ず直す 1・直したほうがよい 11・できれば 14）。詳しくは `reaudit-1.md`。種類 (1)〜(3) に触れるのは R1（(3)・直すと ukadoc の「-1 で終了」に寄る）と R12（(1)・surface-element-nesting 5.7 の裁定の延長）。audit 系の議題は推奨案で承認してよい、という開発者の決め（11-04）に従い、どちらも推奨どおり「直す」とした。直す組は A＝R1・R12（振る舞い）、B＝説明の直し（R2・R4〜R7・R9・R10・R23〜R25）、C＝テストの確かめ（R3・R8・R17・R18）、D＝テストの整理（R11・R15・R16・R19〜R22・R26）、E＝R13（clippy）・R14（pub use）。範囲の外の申し送り: `log-capture-kit/src/event_tests.rs:15`・`:18` の古い名は持ち主の `audit-test-kits` へ渡す。
+- 6.1 組 A（R1・R12）: R1 は `frame_at` が `visible_frame` の指す描くコマで止まりを決めるように直した（ukadoc「サーフェス番号に-1でそのアニメーションの停止」）。負の番号の warn も、止めた描くコマの番号で出す。R12 は部品の抽選の「再生中」を「時計があり、かつその時刻のコマが Nothing か Frame」にし、一番上の `is_playing` も同じ見方にそろえた（審査の指摘。「時刻は正確に扱う」に合う）。そのため、境目ちょうどに終わった再生はその刻みで抽選される。期待を直したテストは 4 本: `playing_anim_is_not_relotteried`（入力の待ちを 1500 にして、本当に再生中の形にした）・`emo2_part_lottery_after_stalled_ticks...`・`part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field`（並走の audit-emo-compose が同じテストを直している。着地した側が合わせる）・`switch_mid_blink...`。テストを 6 本足して 557 件。どの直しも、外すと赤になることを確かめた。`reaudit-1.md` の R12 の「一番上は直さなくてよい」は誤りだったので直した。
+- 6.1 組 B（R2・R4〜R7・R9・R10・R23〜R25）: 偽の説明と作業の頃の語（task 番号・本タスク・M-boot）を、areka-seriko の src・tests・Cargo.toml から外した。残すのは `actor.rs:745` のログの文字列だけ。R2 は `let first = lo / period;` にした（答えに出ない余白で、コメントは偽だった）。R24 でテストの名を 1 本変えた: `only_random_and_bindrandom_are_recorded_others_debug_logged` → `random_and_bindrandom_draw_bind_is_call_only_others_debug_logged`。記録の文言・逆斜線の数・`doc/` を名指す行は変わっていない。`cargo doc -p areka-seriko --no-deps` の警告は着手の前からの 21 件（2 回目のかけ直しで見る）。
+- 6.1 組 C（R3・R8・R17・R18）: 4 本のテストに、名前どおりのことを確かめる assert を足した。R3＝刻みの Show が {1100,1207} を載せる。R8＝`-1` を外した本文で比べ、`Some((101,0,0))` を確かめる。R17＝`.all()` を、ちょうどの列の比較にした。R18＝隠れたスコープでも状態が {1100,1207,1302} に直る。どれも、壊すと赤になることを確かめた。テストは 557 件で、名前も変わっていない。
+- 6.1 組 D（R11・R15・R16・R19〜R22・R26）: テストのコードだけを直した。テストは 557 → 550 件。消した 7 本は `policy_both_options_declared_prefers_multiple`・`balloon_display_commands_construct_and_match`・`mock_records_balloon_display_commands_in_send_order`・`mock_starts_empty`・`tick_interval_is_the_production_16ms`・`frame_at_sparse_derived_dense_vec`・`frame_status_is_send`。同じことは残るテストが見ている（16ms を固定するテストは無くなった。R15 の判断どおり）。統合テストの組みは `tests/common` の `run_core`・`run_actor`・`run_cues`・`emo2_binds` に、写しの道具は `carrier_cue`・`fresh_states`・`switch_at`・`tick_at` ほかにまとめた。動きは、元の写しのどれとも同じ。`parts_tests.rs` の道具の写しも寄せたので、並走の audit-emo-compose が直した同じファイルとまた重なる（着地した側が合わせる）。
+- 6.1 組 E（R13・R14）: `cargo clippy -p areka-seriko --all-targets --no-deps -- -D warnings` が通るようになった。collapsible_if の 3 件は let の連鎖にまとめた。`SerikoReplace` には、R13 の推すとおり `#[expect(clippy::large_enum_variant, reason=…)]` を付けた。R14 の 4 つ（FrameStatus・frame_at・should_fire・SurfaceKeep）は外に使い手が無い（同じ名の別の関数とコメントだけ）ので、再輸出から外し、`SurfaceKeep` を `pub(crate)` にした。`cargo build --workspace --all-targets` は通り、`cargo doc` の警告は 21 → 20 件。
+- 6.1 かけ直し 2 回目（HEAD `6394c98f`・main に新しいコミットは無い）: 新しい指摘は 24 件（必ず直す 2・直したほうがよい 10・できれば 12）。詳しくは `reaudit-2.md`。3 種類に触れるのは次の 3 件で、audit 系は推奨案で承認してよいという決め（11-04）に従い、どれも推奨どおりに直す。
+  - S1（(1)）: R12 の直しが生んだバグで、終わる刻みの古い再生の働きのコマが消える。`has_due_acts` で当て残しがあれば再生中と見なす。
+  - S2（(3)）: R1 の直しが足りない。i 以下で最初の負の描くコマで止める。ukadoc の「-1 で終わる」に寄る。
+  - S3: `always` の追いつきが 2 乗で増える。周を 1 つずつ待ち行列へ入れる形にする（時刻は変わらず、種類に当たらない）。
+  - 直す組は A2＝S1・S2・S4・S24、A3＝S3・S5（calls.rs）、B2＝説明（S6〜S13・S19〜S22）、C2＝S14（再輸出）・S15〜S18・S23（テスト）。
+- 6.1 組 A2（S1・S2・S4・S24）: S1 は `calls.rs` の `has_due_acts` で直した。当て残しの働きのコマがあるあいだは再生中と見なす（一番上と部品）。再生が境目の刻みで終わり、働きのコマがまだ残っているときだけ、抽選は次の境目まで待つ。S2 は `timeline.rs` の `stop_frame`（i 以下で最初の負の描くコマ）で `frame_at` の止まりと warn の番号を決めるようにし、`always` は通らない。S4 は表を (2110,1500) にした。テストは 553 件。申し送り（組 A3 で扱う）: 一番上の `is_playing` は抽選しない引き金の再生でも `has_due_acts` を回している（match の後ろへ移す）。`looper_trigger.rs` の `playing_at` にも S1 と同じ型の穴がある見込み（#287 から）。
+- 6.1 組 A3（S3・S5・申し送り 2 件）: S3 は待ち行列を、再生ごとに次の 1 件だけ入れる形（`next_due`・`push_next`）に替えた。時刻も順も前と同じで、無作為の表 20 万通りで前の作りと突き合わせた。表を引く回数は 503,505 → 9,008。S5 は `then` の枝のテストを足した。申し送り 1 で、`is_playing` を match の後ろへ移した。
+  - 申し送り 2 は 3 回差し戻され、根の原因を調べて直した。原因は、一番上の引き金が時刻の順の外で「始めるか」を決めていたこと。直しは `Armed::poll` を `next_start` と `commit` に分け、`fire_top_triggers` を次の形にした。
+    - 開始の時刻の候補を (T, 番号) で並べる。
+    - T までの働きのコマを当ててから、再生中かを測る。
+    - 呼び出しがちょうど T に始めた再生は入れ替えない。
+  - テストは 561 件。
+  - 残り（組 B2 へ）: `looper_calls.rs` の先頭の doc（呼ぶ順）・同じ時刻 T の中の順の決め・`fire_top_triggers` の doc の返り値。
+  - 残り（組 A4 で扱う）: 部品（`parts.rs`／`parts_trigger.rs`）に同じ根の穴がある。部品は 1 段目で呼び出しを now まで当て、2 段目は 1 段目の前の時計で判定する。そのため、遅れた刻みで止めが落ちる、周を飛ばす、順がずれる、の 3 つが起きる。
+  - 前からある穴（読みだけ）: 合図の経路では periodic・talk を判定しない。抽選と `always` の再生は now に始まって呼び出しより先に置かれる。
+- 並走からの知らせ（2026-11-06・audit-ghost-catalog）: `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` が 1,000 行を割り、1,000 行の例外表からその 1 行を消す。着地の順で、件数を表の行から数え直して合わせる。
+- 6.1 組 B2（S6〜S13・S19〜S22 と、A3 の審査から来た doc 3 件）: 偽の説明と符牒（re-audit R/S・討議 #N・5.3・檻 10・design の行番号）を、今のコードに合う文に直した。`cargo doc -p areka-seriko --no-deps` の警告は 20 → 0 件。記録の行の文字列は変えていない。assert の文言は 3 つだけ変え、「討議 #N」を外した。逆斜線が減ったのは、S21 で消した手順の `\e` の 2 つだけ。申し送り（組 A4 へ）: `parts.rs` の `refresh` の doc が「回数つきの時計を全部捨てる」とだけ書いているが、3 語の時計も捨てる。
+- 6.1 組 C2（S14〜S18・S23）
+  - S14: 外に使い手の無い再輸出 4 つ（BindDirective・parse_bind_directive・BalloonResolve・resolve_balloon_key）を `pub(crate)` にした。外で名が出るのは文中の名とコメントだけ。
+  - S15: 写しの道具を寄せた（`part_frames`・`film_picture`・`empty_states` ほか）。
+  - S16: 消したテストは `bind::tests::policy_mustselect_only_declared_category_per_namespace`。
+  - S17: 名を変えたテストは 2 本。
+    - `is_continuous_is_true_only_when_always_or_animated_parts_exist` → `random_only_is_not_continuous_always_is`
+    - `emo2_table_is_continuous_equals_current_gate` → `emo2_table_is_continuous_through_animated_parts`
+  - S18: 2 本を `parts::always_tests::` から `parts::tests::` へ移した。
+  - S23: `tests/cue_sequence.rs` を `regression.rs` のケース 4 に畳んだ。
+  - テストは 561 → 560 件。
+- 6.1 組 A4（部品の同じ根の穴）: 部品の引き金も一番上と同じ形にした。開始の時刻の順に並べ、T までの呼び出しを当て、当てた後の時計で再生中かを測る。呼び出しがちょうど T に始めた再生は入れ替えない。直した中身は次のとおり。
+  - 構えてあった部品は 1 段目で判定し、新しく見えた部品は 2 段目の `judge_part` で判定する。
+  - `was_playing` を消した。
+  - `Armed::poll` は使い手が無くなったので消した。`trigger_tests.rs` には同じ意味の道具を置いた。
+  - テストを 4 本足して 564 件。前からある期待値は変えていない。
+  - 残り（前からある狭い穴・読みだけ）: 新しく見えた部品の talk で T < now のとき、判定が 1 段目の呼び出しの後になる。働きのコマを持つ部品が同じ刻みで新しく見え、その刻みに区切りの文字が来たときだけ起きる。
+- 6.1 かけ直し 3 回目（HEAD `7055bfe6`）: 新しい指摘は 15 件（必ず直す 4・直したほうがよい 6・できれば 5）。件数は 26 → 24 → 15 と減っている。詳しくは `reaudit-3.md`。3 種類に当たるものは無い（T3 だけは `shortcut:` で残す道もあるが、推奨は直すこと）。直す組は次のとおり。
+  - A5＝T1・T4・T7（trigger.rs ほか）
+  - A6＝T2・T3（刻みと合図の順・looper.rs は 993 行なので兄弟へ分ける）
+  - B3＝T5・T6・T8〜T12（テストの確かめと説明）
+  - C3＝T13〜T15（テストの整理）
+- 6.1 組 A5（T1・T4・T7）: T1 は `Armed::commit` が runonce に印を付けてから再生中かを見るようにした。見送った回は後から鳴らさない。完了 spec `areka-P0-seriko-trigger-intervals` の要件 2.1・5.3 と ukadoc の「サーフェスに切り替わった瞬間に1回のみ再生。」に合う。同じ spec の design.md:513 の「`playing_at(since)` が真なら入れずに None（構えた直後は再生中でありえない）」は、前提が崩れていて古い。完了した spec の文書なので直していない。T4 は talk の開始を `wall_ms(glyph).max(since)` にした。T7 は一番上のテストに「鳴らした」の記録が 2 件であることの確かめを足した。部品の側は、もとからあるテストが守っている。期待を変えたテストは `runonce_polled_while_playing_keeps_its_one_shot` → `runonce_polled_while_playing_is_skipped_for_good`（Some(100)→None）の 1 本だけ。talk のテスト 1 本は、偽の時計の矛盾を直すために入力だけ変えた。テストは 567 件。
+- 6.1 組 A6（T2・T3）
+  - 一番上の刻み（`on_tick`）を 3 つの輪に分けた。
+    - 1 つ目の輪は、引き金と now までの呼び出し。
+    - 2 つ目の輪は抽選で、乱数の順はそのまま。
+    - 3 つ目の輪は、`always` と now に始まった再生の頭のコマ、進行、部品。
+  - 部品の刻みも同じ順に並べ替えた。
+  - 合図の作り直し（refresh）でも 3 語を全部判定し、`advance_talk` で数えを進める。
+  - 今より前の呼び出しは、今に始まった再生に当たらない。`has_due_acts` はいつも偽になったので消した。
+  - refresh は `looper_refresh.rs`・`parts_refresh.rs` へ移した。`looper.rs` は 993 → 896 行。
+  - 期待を変えたテストは 2 本。
+    - `last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery`: 終わった再生が同じ刻みで抽選に戻るので、抽選の数が 2 になった。
+    - `refresh_arms_at_the_event_time_and_fires_only_runonce` → `refresh_arms_at_the_event_time_and_judges_up_to_it`（T3 そのもの）。
+  - 選びの乱数（pick_rng）を引く順が、同じ刻みで面をまたぐときだけ変わる。この順に頼る決めやテストは無い。
+  - テストは 575 件。
+- 6.1 組 B3＋C3（T5・T6・T8〜T15）: 本番の変更はコメントと doc だけ。
+  - T5・T6: 確かめを足した。外すと赤になる。
+  - T8: 時計を単調にした。
+  - T9・T10・T12: 名前・文言・doc を、確かめている中身に合わせた。
+  - T11: 符牒と「今まで」の類を消した。
+  - T13: 消したテストは 3 本（`cue_sink_emit_forwards_cue_to_inbox`・`emit_after_receiver_gone_logs_no_panic`・`bind_noncanonical_addressee_severity_split`）。後半は `noncanonical_custom_for_another_name_is_debug_only` として移した。
+  - T14・T15: 道具を `lib_test_support` へ寄せ、空の状態の手書きを `empty_states()`／`fresh_states()` に替えた。
+  - テストは 575 → 573 件。
+- 6.1 かけ直し 4 回目（HEAD `f80f6437`）: 新しい指摘は 20 件（必ず直す 0・直したほうがよい 13・できれば 7）。詳しくは `reaudit-4.md`。件数は 26 → 24 → 15 → 20 で、必ず直すは 1 → 2 → 4 → 0。本番の振る舞いの指摘は U1 の 1 件だけで、ほかはテストの確かめ・説明・写し。3 種類に当たるものは無い。直す組は次のとおり。
+  - D4＝U1・U7・U8・U14（本番のコードと doc）
+  - E4＝U2〜U6・U9〜U13・U15〜U20（テストと説明）
+- 6.1 組 D4（U1・U7・U8・U14）
+  - U1: refresh で鳴り直した一番上の再生の頭が Pending か Stopped のとき、古い残りのコマを外すようにした。新しいテストを 1 本足して 574 件。Stopped の頭の記録と後片付けは、次の刻みの `put_top_play` が出す。refresh が FinishedResidual で前からそうしているのと同じ分け方で、抽選と引き金の判定には響かない。
+  - U7: `arm_part` の通らない枝を消した。
+  - U8・U14: doc を今の作りに合わせた。
+- 6.1 組 E4（U2〜U6・U9〜U13・U15〜U20）: テストの確かめを足した。U2・U3・U4・U9・U10・U11・U19 は、どれも壊すと赤になることを確かめた。
+  - テストの時計を単調にした（U5・U6）。
+  - U12: 重なった `bind_name_gate_other_name_is_benign_debug_no_emit` を消した。同じ道は `prefix_alike_name_is_not_bind` が見ている。
+  - U13・U20: `film_world`・`film_clock`・`note_balloon` ほかへ寄せた。
+  - spec の番号・出どころを直した（U15・U16）。古い見出しと文言も直した（U18・U19）。
+  - U17 は進行役の判断で本番の残りにも広げ、「既存」「従来」「旧」など前の版と比べる語を、本番とテストのコメントから外した。「旧パーツ」のように 1 回の当てはめの前の状態を指す語は残した。本番の変更はコメントと doc だけ。
+  - 名を変えたテストは 4 本。
+    - `wait_at_the_cap_settles_as_before` → `wait_at_the_cap_keeps_the_last_frame`
+    - `empty_always_keeps_the_existing_empty_warn` → `empty_always_falls_to_the_empty_warn`
+    - `empty_frames_keep_the_existing_empty_warn` → `empty_frames_fall_to_the_empty_warn`
+    - `talk_elsewhere_in_the_table_arms_without_top_judgement` → `talk_elsewhere_in_the_table_arms_and_plays_nothing`
+  - テストは 574 → 573 件。
+- 6.1 かけ直し 5 回目（HEAD `bd312b93`）: 新しい指摘は 17 件（必ず直す 0・直したほうがよい 7・できれば 10）。本番の振る舞いに関わるものは 0 件で、テスト 7 件・説明 10 件。詳しくは `reaudit-5.md`。3 種類に当たるものは無い。全部を組 F5 で直す。
+- 6.1 組 F5（V1〜V17）: 5 回目の 17 件を直した（`d7450270`）。開発者の裁定（2026-11-06「5 回目で区切る」）に従い、かけ直しはここで打ち切った。照合の表・残す 18・20 の記録・打ち切りの記録は `verification.md`。テストは 573 件。
+- 6.2（commit `64dec042`）: `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回し、全部の段が緑だった（x64 のワークスペースのテストは 1032 s、i686・fmt・エンコーディング・リリースノート・ロードマップの段も緑）。`git diff origin/main -- Cargo.lock` は空。`doc/`・`docs/` を名指す行は足していない。1,000 行を越えるファイルは areka-seriko に無い（残りは例外表の 8 行の分だけ）。GPU に触る直しは無い。
+- 検証（kiro-validate-impl）の 1 回目は NO-GO だった。並走の audit-emo-present（main `c2106635`）も例外表の別の行を消していたので、取り込むと表は 7 行なのに件数は 8 のままになる。main を取り込み、件数を表の行から数え直して 7 にした。設計のずれ（ファイルの増減・振る舞いの変わる所・打ち切り）は、design.md の末尾に「実装後の追記」として書き足した。
+- 検証の 2 回目は GO（commit `fa40666c`・main `c2106635` を取り込んだ後）。`tools/test-all.ps1` は全部の段が緑で、x64 のワークスペースのテストは 622 s。網羅は要件 42/42（5.2・5.3 は 2026-11-06 の裁定で満たす）。範囲の外の変更は、決めた 4 ファイルの決めた行だけ。新しい依存も新しい公開の口も無い。
+- 完了の棚卸へ渡すもの:
+  - `log-capture-kit/src/event_tests.rs:15`・`:18` の古い名（持ち主は audit-test-kits）。
+  - 完了した `areka-P0-seriko-trigger-intervals` の design.md:513・:620・:669 が古い（runonce の前提と、引き金の記録の target）。
+  - `parts_tests.rs` の重なり（audit-emo-compose）。
+  - 例外表の件数は、着地の順に表の行から数え直す（audit-ghost-catalog）。
+  - 読みだけで残した 3 つの狭い穴。
+  - 引き金の target の変更と、pick_rng を引く順の変更は、v0.2.0 の seriko の spec への注記に入れる。
+- 完了時にその場で解決: `crates/log-capture-kit/src/event_tests.rs:15`・`:18` の出所の書き方にあった `Capture::on_event`（今はどこにも無い）を、今在る `capture_logs` に直した（コメント 2 行・本 spec の範囲の外。持ち主の `audit-test-kits` は brief だけで走っていない）。
+- 完了の棚卸で直さないと判断したもの: 完了した `areka-P0-seriko-trigger-intervals` の design.md:513・:620・:669 は、当時の設計の記録なので書き換えない（今の形は本 spec の design.md の「実装後の追記」と tasks.md の A5・4.1 の項にある）。並走の重なり（`parts_tests.rs` は audit-emo-compose と、例外表の件数は audit-ghost-catalog と）は、後から着地する側が合わせる約束で、今は何もしない。読みだけで残していた 3 つの狭い穴は、6.1 の T2・T3・T4 で直してある。

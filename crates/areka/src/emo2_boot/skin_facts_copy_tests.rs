@@ -43,9 +43,7 @@ fn presenter() -> EmoPresenter {
             (balloon_target(scope), NOW_BALLOON),
         ] {
             let window = ecs.spawn_empty().id();
-            presenter
-                .attach_target(&mut ecs, target, window, world_of(text), atlas(), 96)
-                .expect("登録できる");
+            presenter.attach_target(target, window, world_of(text), atlas(), 96);
         }
     }
     presenter

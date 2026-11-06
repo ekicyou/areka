@@ -9,7 +9,7 @@
 //! エスケープ・クォート・未閉じの寛容吸収・引数分割）も同じファイルで固定する
 //! （要件 4.1〜4.6／5.7）。すべて決定論（`#[test]`・時計／GPU／実機に依存しない・要件 5.8）。
 
-use super::{Token, lex};
+use super::{ShorthandWord, Token, lex};
 
 // ───────────────────────────────────────────────────────────────────
 // 期待値の組み立て補助（本ファイル内のみで使う）。
@@ -193,12 +193,18 @@ fn known_one_char_tags_do_not_swallow_following_body_text() {
     assert_eq!(lex(r"\uあ"), vec![bare("u"), text("あ")]);
 }
 
-/// T14（要件 4.3・5.7）: 短縮形の規律は不変——1 桁のみを読み、直後が `[` なら
-/// 角括弧付きタグを優先する。
+/// T14（要件 4.3・5.7）: 短縮形の規律——1 桁のみを読む。`\w` の直後の `[` は字
+/// （かけ直しの R18 で、要件 4.3 の「角括弧付きタグを優先」を改めた）。
 #[test]
-fn shorthand_rules_are_unchanged() {
-    assert_eq!(lex(r"\w2"), vec![Token::Shorthand { word: 'w', n: 2 }]);
-    assert_eq!(lex(r"\w[2]"), vec![tag("w", &["2"])]);
+fn shorthand_reads_one_digit_and_w_bracket_is_text() {
+    assert_eq!(
+        lex(r"\w2"),
+        vec![Token::Shorthand {
+            word: ShorthandWord::Wait,
+            n: 2
+        }]
+    );
+    assert_eq!(lex(r"\w[2]"), vec![bare("w"), text("[2]")]);
 }
 
 /// T14（要件 4.4・5.7）: エスケープの扱いは不変——`\\` はリテラル `\`、
@@ -233,8 +239,10 @@ fn bracket_arg_splitting_is_unchanged() {
     assert_eq!(lex(r"\s[]"), vec![tag("s", &[])]);
 }
 
-/// T15（要件 4.1）: 入力末尾の裸 `\` は綴り `"\\"` の `Bare` として載る（挙動不変）。
+/// T15（要件 4.1・指摘 64）: 入力末尾の裸 `\` は空の綴りの `Bare` として載る
+/// （ほかの `Bare` と同じく先頭の `\` を綴りに含めない）。
 #[test]
-fn trailing_lone_backslash_is_bare_spelling() {
-    assert_eq!(lex(r"\"), vec![bare(r"\")]);
+fn trailing_lone_backslash_is_empty_bare() {
+    assert_eq!(lex(r"\"), vec![bare("")]);
+    assert_eq!(lex(r"あ\"), vec![text("あ"), bare("")]);
 }

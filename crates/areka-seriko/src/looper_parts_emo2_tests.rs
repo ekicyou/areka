@@ -13,70 +13,13 @@
 //! 持つ。2110／2210 が絵に出るのは発火の 40ms 後〜120ms 後だけで、次の抽選の境界とは、発火の
 //! 刻みが境界から 880ms 以上遅れたときしか重ならない（design.md「emo2 についての事実」）。
 //! 本テストの刻みの間隔は 33〜67ms なので、その端（要件 7.5）には触れない。
-//!
-//! # 着手前の確認（tasks.md 1.1）: 既存テストの刻みの飛び
-//!
-//! 刻みを回す既存テストで、隣り合う刻みの差が 880ms 以上の所は次のとおり（HEAD `eb1a7e77` で
-//! ワークスペース全体の `send_tick`／`SerikoMsg::Tick`／`on_tick`／`inject_seriko_tick` を拾った）。
-//! 実物の emo2 の表で seriko の刻みを回す既存テストは、**seriko クレートの中には 0 本**。
-//! クレートの外では `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs` の 5 本が、実物の emo2 の
-//! シェルの表（`SpineHarness::boot_live`）に常に発火する乱数を注入して刻みを回す。
-//! seriko クレートの `tests/regression.rs`・`tests/cue_sequence.rs`・`tests/bind_e2e.rs`・
-//! `tests/balloon_face_e2e.rs` は emo2 の alias 表を使うが、ループは `SerikoLoopConfig::disabled()`
-//! （空の表）で、seriko の刻みを 1 つも送らない。seriko クレートの中で刻みを回すテストはどれも
-//! 手組みの表（emo2 の形を模した合成）を使う。本番の `emo2_boot/mod.rs` の刻みは実時刻でテストではなく、
-//! `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` の刻みは dispatcher 宛で seriko には届かない。
-//!
-//! - `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs`（**実物の emo2 の表**・常に発火）:
-//!   `spine_blink_smoke_send_tick_drives_loop_pattern_command`（40ms 刻み・飛びなし）・
-//!   `spine_e2e_kero_blink_one_cycle_golden`（0→1000。その後 1040・1120）・
-//!   `spine_e2e_sakura_blink_after_bind_one_cycle_golden`（0→1000。その後 1150・1172）・
-//!   `spine_e2e_sakura_blink_default_off_emits_nothing`（0→1000→2000→…→5000・各 1000）・
-//!   `spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing`（0→1000。その後 1040・1120）
-//! - `tests/loop_integration.rs`: `kero_negative_tail_restores_base_full_path`（0→1000）・
-//!   `sakura_residual_tail_keeps_frame_full_path`（0→1000）・
-//!   `playing_anim_not_relotteried_across_boundary_full_path`（0→1000・1000→2000）・
-//!   `bindrandom_off_consumes_no_rng_full_path`（0→1000・1000→2000）・
-//!   `bindrandom_on_fires_full_path`（0→1000）・`unchanged_tick_emits_nothing_full_path`（0→1000）・
-//!   `surface_switch_clears_playback_and_frame_full_path`（0→1000・1000→2000）・
-//!   `residual_immediately_cleared_on_refire_full_path`（0→1000・1100→2000）・
-//!   `other_negative_surface_warns_once_and_spares_others_full_path`（0→1000・1040→2000）
-//! - `src/looper_tests.rs`: 0→1000 が 21 本、ほかに `playing_anim_is_not_relotteried`（1000→2000）・
-//!   `kero_negative_tail_restores_base_and_is_relotteriable`（1120→2000）・
-//!   `residual_is_immediately_cleared_on_refire`（1100→2000）・
-//!   `absent_scope_balloon_table_is_inert`（1000→2000）・`on_surface_changed_removes_playback`（1000→2000）・
-//!   `disabled_config_is_inert`（1000→5000）・
-//!   `playing_bind_anim_removed_from_binds_stops_and_does_not_revive`（1100→2000）
-//! - `src/looper_replace_tests.rs`: 2 本とも 0→1000
-//! - `src/actor_replace_tests.rs`: 2 本とも 0→1000
-//! - `src/actor_bind_loop_tests.rs`（`SerikoMsg::Tick` の直投函）:
-//!   `tick_with_no_shown_slot_is_complete_no_op`（0→1000・1000→5000・表示中のサーフェスが無いので
-//!   抽選も発火も無い）・`tick_boundary_cross_emits_show_carrying_pattern`（0→1000）・
-//!   `emote_surface_change_resets_loop_playback`（0→1000）。どれも手組みの表で、コマが指す
-//!   サーフェス（2106・500 など）は自分のアニメーションを持たず、飛びの前に発火も無い
-//!   （`send_tick_after_actor_stopped_logs_debug_no_panic` は停止後の 1 刻みだけ）
-//! - `src/actor_dispatch_tests.rs`: 刻みなし（`tests/bind_e2e.rs`・`tests/balloon_face_e2e.rs` の
-//!   `SakuraMsg::Tick` は台本の時計で、seriko の刻みではない）
-//!
-//! **端（要件 7.5）に当たるものは 0 件**。理由は次の 2 つ:
-//!
-//! 1. seriko クレートの中の手組みの表はどれも、pattern定義が指すサーフェス（2106・2110・500・3000 など）に
-//!    自分のアニメーションを持たせていない。部品として抽選されるものが表に 1 つも無い。
-//!    （実物の emo2 の表では 2110／2210 がアニメーションを持つので、`spine_seriko_loop_tests.rs` の 5 本には
-//!    この理由は使えない。あの 5 本は下の 2 だけで端を外れる。）
-//! 2. 飛びの直後の刻み（境界を跨ぐ刻み）で 2110／2210 が絵に出ているものが無い。0→1000 は最初の
-//!    刻みが境界を遅延初期化するだけで、その前に発火は無い。それ以外の飛びの直前は、どれも
-//!    コマ無し・停止（`-1`・`-2`）・末尾の残留（701・1410 など）・再生中の 2106 で、2110 は出ていない。
-//!    `spine_seriko_loop_tests.rs` で 2110 が出るのは 1040（40ms 刻みの回では 1040・1080 など）だけで、
-//!    その刻みは境界を跨がない。`spine_e2e_sakura_blink_default_off_emits_nothing` は着せ替えが OFF で
-//!    発火そのものが無い。
 
 use super::tests::{cfg, pattern_of};
 use super::*;
 use crate::bind::build_static_bindset;
 use crate::resolve::SurfaceTarget;
 use crate::state::ApplyOutcome;
-use areka_emo_compose::{ComposeMethod, EmoWorld, PatternState};
+use areka_emo_compose::{ComposeMethod, PatternState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -95,7 +38,7 @@ pub(crate) fn emo2_shell_table() -> AnimationTable {
         .join("surfaces.txt");
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(&content)))
+    crate::test_support::table_of(&content)
 }
 
 /// `seeded_rng` を包み、呼ばれた回数を数える乱数。
@@ -303,7 +246,7 @@ fn scripted_rng(values: &'static [u32]) -> (LoopRng, Arc<AtomicUsize>) {
 fn run_kero(ticks: &[u64], rng: (LoopRng, Arc<AtomicUsize>)) -> (Vec<String>, usize) {
     let (rng, calls) = rng;
     let mut rt = LoopRuntime::new(cfg(emo2_shell_table(), rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(build_static_bindset(&[])));
+    let mut states = crate::test_support::empty_states();
     states.apply(&ActorKey::from("1"), SurfaceTarget::Show(10));
     let mut lines = Vec::new();
     for &now in ticks {
@@ -351,7 +294,7 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
     // 比べる相手: 同じ境界を跨ぐが、跨ぐ刻み（2080）ではまばたきが終わっていて 2110 が見えない。
     const CONTROL: &[u64] = &[0, 1960, 2080, 3000, 3040];
 
-    let (control, control_calls) = run_kero(CONTROL, scripted_rng(&[0, 0]));
+    let (control, control_calls) = run_kero(CONTROL, scripted_rng(&[0, 1, 0]));
     assert_eq!(
         control,
         [
@@ -362,7 +305,11 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
         ],
         "部品が境界で見えないなら部品のコマは載らない"
     );
-    assert_eq!(control_calls, 2, "一番上の抽選 2 回（1960・3000）だけ");
+    // 2080 はまばたきが `-1` に着いた刻みなので、一番上が抽選される（外れ・部品の抽選ではない）。
+    assert_eq!(
+        control_calls, 3,
+        "一番上の抽選 3 回（1960・2080・3000）だけ"
+    );
 
     // 当たり: 2000 の部品の抽選が 0 を引く。
     let (hit, hit_calls) = run_kero(EDGE, scripted_rng(&[0, 0, 0]));
@@ -380,7 +327,8 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
         ],
         "当たれば 2106 が 2000〜2080 の 80ms だけ重なる"
     );
-    assert_eq!(hit_calls, control_calls + 1, "部品の抽選の 1 回だけ多い");
+    // 端の 2080 は境界を跨がないので一番上の抽選は無い。一番上の 2 回（1960・3000）に部品の 1 回（2000）。
+    assert_eq!(hit_calls, 3, "一番上の 2 回に部品の抽選の 1 回だけ多い");
 
     // 外れ: 2000 の部品の抽選が 1 を引く。乱数の 1 回の上乗せは同じで、絵は前と同じ。
     let (miss, miss_calls) = run_kero(EDGE, scripted_rng(&[0, 1, 0]));
@@ -396,8 +344,7 @@ fn emo2_part_lottery_after_stalled_ticks_is_one_extra_draw_and_at_most_80ms() {
         "外れなら部品のコマは載らない"
     );
     assert_eq!(
-        miss_calls,
-        control_calls + 1,
-        "外れでも部品の抽選の 1 回だけ多い"
+        miss_calls, 3,
+        "外れでも一番上の 2 回に部品の抽選の 1 回だけ多い"
     );
 }

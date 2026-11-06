@@ -4,7 +4,7 @@
 //! 転記だけを行い、検証も記録もしない（失敗しない）。厳しく読むのは下流（areka の
 //! `emo2_boot` の cursorブレスの表）。
 
-use super::lexer::{Token, lex};
+use super::parse::parse_all;
 
 /// cursorブレス 1 つの転記。
 #[derive(Clone, Debug, PartialEq)]
@@ -17,33 +17,18 @@ pub struct CursorBrace {
 
 /// 見出しの先頭の欄が `.cursor` で終わる閉じたブレスだけを転記する（純粋・失敗しない）。
 ///
-/// 字句解析は画像の読み手と同じ `lexer::lex`。閉じたブレス（`BlockStart`..`BlockEnd`）だけを
-/// 見る（閉じていないブレスは字句解析が `Raw` に吸収する）。
+/// `parse_all` の射影。閉じたブレスだけを見る（閉じていないブレスは字句解析が中身を落とす）。
 pub fn parse_cursor_braces(text: &str) -> Vec<CursorBrace> {
-    let mut braces = Vec::new();
-    let mut open: Option<(Vec<String>, Vec<Vec<String>>)> = None;
+    parse_all(text).cursor_braces
+}
 
-    for token in lex(text) {
-        match token {
-            Token::BlockStart(header) => open = Some((header, Vec::new())),
-            Token::Line(fields) => {
-                if let Some((_, body)) = open.as_mut() {
-                    body.push(fields);
-                }
-            }
-            Token::BlockEnd => {
-                if let Some((header, lines)) = open.take()
-                    && header.first().is_some_and(|head| head.ends_with(".cursor"))
-                {
-                    braces.push(CursorBrace {
-                        heading: header.join(","),
-                        lines,
-                    });
-                }
-            }
-            Token::TopLevel(_) | Token::Raw(_) => {}
-        }
-    }
-
-    braces
+/// 閉じたブレス 1 つが cursorブレスなら転記する（`parse_all` が呼ぶ）。
+pub(crate) fn cursor_brace(header: &[String], body: &[Vec<String>]) -> Option<CursorBrace> {
+    header
+        .first()
+        .is_some_and(|head| head.ends_with(".cursor"))
+        .then(|| CursorBrace {
+            heading: header.join(","),
+            lines: body.to_vec(),
+        })
 }

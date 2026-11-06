@@ -85,6 +85,30 @@ fn load_restored_state_absent_file_is_empty() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// 起動時先読み: 既定のシェル（shell/master）が無くても、ゴーストの永続値は読める
+/// （永続の置き場は SHIORI の置き場だけで決まり、シェルの解決に縛られない・指摘 46）。
+#[test]
+fn load_restored_state_survives_missing_default_shell() {
+    let temp = unique_temp_dir("load-no-shell");
+    let root = temp.path().to_path_buf();
+    plant_minimal_ghost(&root);
+    std::fs::remove_dir_all(root.join("shell")).expect("remove shell");
+    let profile = profile_areka_root(&root.join("ghost").join("master"));
+    std::fs::create_dir_all(&profile).expect("create profile/areka");
+    std::fs::write(
+        profile.join("sylphya.toml"),
+        "format-version = 1\n[boot]\ncount = \"7\"\n".as_bytes(),
+    )
+    .expect("plant sylphya.toml");
+
+    let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+
+    assert!(
+        entries.contains(&(PersistKey::BootCount, "7".to_string())),
+        "シェルが無くても BootCount が読める: {entries:?}"
+    );
+}
+
 /// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし・6.1/6.3）。
 #[test]
 fn load_restored_state_mount_resolve_failure_is_empty() {

@@ -39,14 +39,12 @@ fn anim(id: u32) -> Animation {
 
 /// surface 定義（element/collision/animation を任意に持つ）を組み立てる。
 fn surface_full(
-    id: u32,
     targets: Vec<AppendTarget>,
     elements: Vec<Element>,
     collisions: Vec<Collision>,
     animations: Vec<Animation>,
 ) -> Surface {
     Surface {
-        id,
         targets,
         elements,
         collisions,
@@ -58,11 +56,7 @@ fn surface_full(
 #[test]
 fn enumeration_creates_all_ids_with_shared_body() {
     let body = vec![elem(0, "arm.png", 10, 20)];
-    let surf = surface_def(
-        0,
-        vec![AppendTarget::Single(0), AppendTarget::Single(5)],
-        body,
-    );
+    let surf = surface_def(vec![AppendTarget::Single(0), AppendTarget::Single(5)], body);
     let mut world = fresh_world();
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
@@ -86,7 +80,6 @@ fn enumeration_creates_all_ids_with_shared_body() {
 #[test]
 fn range_creates_inclusive_ids() {
     let surf = surface_def(
-        1,
         vec![AppendTarget::Range { start: 1, end: 3 }],
         vec![elem(0, "r.png", 0, 0)],
     );
@@ -107,11 +100,7 @@ fn range_creates_inclusive_ids() {
 /// (c) 単一形 `surface0`: 従来どおり 1 件だけ新設される。
 #[test]
 fn single_form_creates_one_surface() {
-    let surf = surface_def(
-        0,
-        vec![AppendTarget::Single(0)],
-        vec![elem(0, "s0.png", 1, 2)],
-    );
+    let surf = surface_def(vec![AppendTarget::Single(0)], vec![elem(0, "s0.png", 1, 2)]);
     let mut world = fresh_world();
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
@@ -125,7 +114,6 @@ fn single_form_creates_one_surface() {
 #[test]
 fn enumeration_expands_in_description_order() {
     let surf = surface_def(
-        2,
         vec![AppendTarget::Single(2), AppendTarget::Single(1)],
         vec![elem(0, "d.png", 0, 0)],
     );
@@ -150,17 +138,14 @@ fn enumeration_expands_in_description_order() {
 fn append_reaches_existing_ids_only_not_creating_absent() {
     // 事前 plain surface: id=10, id=2100, id=2101（2102-2110 と 2200-2210 は未存在）。
     let s10 = surface_def(
-        10,
         vec![AppendTarget::Single(10)],
         vec![elem(0, "base10.png", 0, 0)],
     );
     let s2100 = surface_def(
-        2100,
         vec![AppendTarget::Single(2100)],
         vec![elem(0, "b2100.png", 0, 0)],
     );
     let s2101 = surface_def(
-        2101,
         vec![AppendTarget::Single(2101)],
         vec![elem(0, "b2101.png", 0, 0)],
     );
@@ -226,7 +211,6 @@ fn append_reaches_existing_ids_only_not_creating_absent() {
 fn append_merges_element_and_collision_layer_sorted() {
     // 事前 surface: layer=2 の element ＋ collision 1 本。
     let base = surface_full(
-        5,
         vec![AppendTarget::Single(5)],
         vec![elem(2, "hi.png", 0, 0)],
         vec![coll(0, 0, 0, 10, 10, "Head")],
@@ -269,16 +253,8 @@ fn append_merges_element_and_collision_layer_sorted() {
 #[test]
 fn append_only_sees_earlier_defined_surfaces() {
     // 登場順: Surface(a)→id=1, Append(x)→{1,2}, Surface(b)→id=2。
-    let sa = surface_def(
-        1,
-        vec![AppendTarget::Single(1)],
-        vec![elem(0, "a.png", 0, 0)],
-    );
-    let sb = surface_def(
-        2,
-        vec![AppendTarget::Single(2)],
-        vec![elem(0, "b.png", 0, 0)],
-    );
+    let sa = surface_def(vec![AppendTarget::Single(1)], vec![elem(0, "a.png", 0, 0)]);
+    let sb = surface_def(vec![AppendTarget::Single(2)], vec![elem(0, "b.png", 0, 0)]);
     let ap = append_def(
         vec![AppendTarget::Single(1), AppendTarget::Single(2)],
         vec![elem(1, "x.png", 9, 9)],
@@ -371,7 +347,6 @@ fn expand_targets_exclude_applies_regardless_of_position() {
 fn fold_plain_surface_honors_exclusion() {
     // `surface1-4 !3` 相当（1,2,4 を新設・3 を除外）。
     let surf = surface_def(
-        1,
         vec![
             AppendTarget::Range { start: 1, end: 4 },
             AppendTarget::Exclude(3),
@@ -469,16 +444,8 @@ fn absent_alias_key_returns_none_non_panic() {
 /// (4) single-pass 登場順収集: surface と alias が交互に並んでも両 alias が収集される（要件 1.7）。
 #[test]
 fn aliases_collected_when_interleaved_with_surfaces() {
-    let s0 = surface_def(
-        0,
-        vec![AppendTarget::Single(0)],
-        vec![elem(0, "s0.png", 0, 0)],
-    );
-    let s1 = surface_def(
-        1,
-        vec![AppendTarget::Single(1)],
-        vec![elem(0, "s1.png", 0, 0)],
-    );
+    let s0 = surface_def(vec![AppendTarget::Single(0)], vec![elem(0, "s0.png", 0, 0)]);
+    let s1 = surface_def(vec![AppendTarget::Single(1)], vec![elem(0, "s1.png", 0, 0)]);
     let a0 = alias_def("alpha", vec![100, 101]);
     let a1 = alias_def("beta", vec![200]);
     let mut world = fresh_world();
@@ -546,19 +513,16 @@ fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
 fn hand_built_overlap_shell_folds_byte_equal_twice() {
     // plain: 10, 2100, 2101（append の対象になり得る既存 id）。
     let s10 = surface_def(
-        10,
         vec![AppendTarget::Single(10)],
         vec![elem(0, "b10.png", 0, 0)],
     );
     let s2100 = surface_full(
-        2100,
         vec![AppendTarget::Single(2100)],
         vec![elem(0, "b2100.png", 0, 0)],
         vec![coll(0, 0, 0, 10, 10, "Head")],
         vec![anim(1)],
     );
     let s2101 = surface_def(
-        2101,
         vec![AppendTarget::Single(2101)],
         vec![elem(0, "b2101.png", 0, 0)],
     );
@@ -676,7 +640,6 @@ fn emo2_fixture_folds_byte_equal_twice() {
 fn interleaved_redefinition_is_appearance_order_deterministic() {
     // 登場順: Surface(id=5, old) → Append(id=5, +mid) → Surface(id=5, new・前へ足す)。
     let s_old = surface_def(
-        5,
         vec![AppendTarget::Single(5)],
         vec![elem(0, "old.png", 0, 0)],
     );
@@ -687,7 +650,6 @@ fn interleaved_redefinition_is_appearance_order_deterministic() {
         Vec::new(),
     );
     let s_new = surface_def(
-        5,
         vec![AppendTarget::Single(5)],
         vec![elem(0, "new.png", 9, 9)],
     );

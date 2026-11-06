@@ -6,7 +6,7 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
-use tracing::warn;
+use tracing::{error, warn};
 
 use super::clip::ClipShape;
 use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
@@ -35,28 +35,76 @@ pub struct Visual {
 /// - エンティティ自身が `Window` の場合は即座に `true`
 /// - `ChildOf` を辿って祖先に `Window` があれば `true`
 /// - 見つからない場合（orphan Visual）は `false`
+/// - 祖先の走査は上限つき（`ancestors`）。上限を越えたら「見つからない」として `false`
 pub fn owner_window_exists(world: &DeferredWorld, entity: Entity) -> bool {
-    // 自身が Window の場合
-    if world.get::<crate::ecs::window::Window>(entity).is_some() {
-        return true;
-    }
+    use crate::ecs::window::Window;
+    // 親の輪（A→B→A）があっても上限で止まる（on_visual_add から同期的に呼ばれる）。
+    has_window_ancestor(
+        entity,
+        |e| world.get::<Window>(e).is_some(),
+        |e| world.get::<ChildOf>(e).map(|c| c.parent()),
+    )
+}
 
-    // ChildOf チェーンを辿る
-    // NOTE(W3b-V): bevy の Relationship 管理は自己参照 ChildOf（A→A）を警告付きで
-    // 除去するが、間接巡回（A→B→A）は構築可能であり、その場合このループは終了しない
-    // （on_visual_add フックから同期的に呼ばれるため影響大）。通常の API 使用では
-    // 巡回は生成されないため前提の明文化に留める（巡回ガードの追加は P48 に記録）。
-    let mut current = entity;
-    loop {
-        let parent = world.get::<ChildOf>(current).map(|c| c.parent());
-        match parent {
-            Some(p) => {
-                if world.get::<crate::ecs::window::Window>(p).is_some() {
-                    return true;
-                }
-                current = p;
+/// 窓に属するかの規則（自分が窓か、上限つきの祖先に窓が在るか）。フックと
+/// [`insert_graphics_parts_on_window_join`] が共用する。
+fn has_window_ancestor(
+    entity: Entity,
+    is_window: impl Fn(Entity) -> bool,
+    parent_of: impl FnMut(Entity) -> Option<Entity>,
+) -> bool {
+    is_window(entity) || crate::ecs::common::ancestors(entity, parent_of).any(is_window)
+}
+
+/// 窓に属する部品へ入れる見た目の部品 3 つ。既に在るものは入れない。
+fn insert_graphics_parts(entity_cmds: &mut EntityCommands) {
+    entity_cmds.insert_if_new((
+        VisualGraphics::default(),
+        SurfaceGraphics::default(),
+        SurfaceGraphicsDirty::default(),
+    ));
+}
+
+/// 窓の外で作った部品の木を後から窓の下へ付けたとき、根と子孫のうち見た目の部品を
+/// まだ持たない `Visual` に、フックと同じ 3 つを入れる（4 番）。
+/// `PreRenderSurface` の先頭で回し、入れた `VisualGraphics` は同じ回に作られる。
+pub fn insert_graphics_parts_on_window_join(
+    mut commands: Commands,
+    changed: Query<Entity, Changed<ChildOf>>,
+    parents: Query<&ChildOf>,
+    windows: Query<(), With<crate::ecs::window::Window>>,
+    children: Query<&Children>,
+    pending: Query<(), (With<Visual>, Without<VisualGraphics>)>,
+) {
+    // ふだんは窓に属する Visual が全部持っているので、待つものが無ければ何もしない。
+    if pending.is_empty() {
+        return;
+    }
+    for entity in &changed {
+        let joined = has_window_ancestor(
+            entity,
+            |e| windows.contains(e),
+            |e| parents.get(e).ok().map(|c| c.parent()),
+        );
+        if !joined {
+            continue;
+        }
+        // 子孫の走査も祖先と同じ上限で止める。
+        let mut stack = vec![(entity, 0usize)];
+        while let Some((e, depth)) = stack.pop() {
+            if pending.contains(e) {
+                insert_graphics_parts(&mut commands.entity(e));
             }
-            None => return false,
+            let Ok(kids) = children.get(e) else { continue };
+            if depth >= crate::ecs::common::MAX_ANCESTOR_DEPTH {
+                error!(
+                    root = ?entity,
+                    limit = crate::ecs::common::MAX_ANCESTOR_DEPTH,
+                    "[insert_graphics_parts_on_window_join] 子孫の走査が上限を越えたので止める"
+                );
+                continue;
+            }
+            stack.extend(kids.iter().map(|k| (k, depth + 1)));
         }
     }
 }
@@ -79,12 +127,6 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     // owner Window 存在判定: 祖先に Window があるかを確認
     let has_owner_window = owner_window_exists(&world, entity);
 
-    // owner Window が存在する場合のみ graphics コンポーネントを挿入対象にする
-    let needs_visual_graphics = has_owner_window && world.get::<VisualGraphics>(entity).is_none();
-    let needs_surface_graphics = has_owner_window && world.get::<SurfaceGraphics>(entity).is_none();
-    let needs_surface_dirty =
-        has_owner_window && world.get::<SurfaceGraphicsDirty>(entity).is_none();
-
     // コマンドを発行（チェック完了後に一度だけ commands を借用する）
     let mut cmds = world.commands();
     let mut entity_cmds = cmds.entity(entity);
@@ -95,14 +137,9 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         entity_cmds.insert(crate::ecs::layout::Arrangement::default());
     }
 
-    if needs_visual_graphics {
-        entity_cmds.insert(VisualGraphics::default());
-    }
-    if needs_surface_graphics {
-        entity_cmds.insert(SurfaceGraphics::default());
-    }
-    if needs_surface_dirty {
-        entity_cmds.insert(SurfaceGraphicsDirty::default());
+    // owner Window が存在する場合のみ graphics コンポーネントを挿入する
+    if has_owner_window {
+        insert_graphics_parts(&mut entity_cmds);
     }
 
     // BrushInheritマーカーを挿入（継承解決システムで処理される）

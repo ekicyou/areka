@@ -92,7 +92,6 @@ fn build_shell_assets() -> (EmoWorld, AtlasTable) {
     let (w, h) = SHELL_NATIVE;
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: vec![Element {
             layer: 0,
@@ -139,9 +138,7 @@ fn setup_shell(world: &mut World) -> (EmoPresenter, Entity) {
     let window = world.spawn(DPI::from_dpi(192, 192)).id();
     let (emo_world, atlas) = build_shell_assets();
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
         world,

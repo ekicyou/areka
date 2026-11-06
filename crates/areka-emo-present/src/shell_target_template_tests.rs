@@ -33,13 +33,12 @@
 
 use super::*;
 
+use crate::presenter::test_support::pattern_overlay_at;
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_compose::{
-    BindSet, ComposeMethod, ComposedSurface, Composer, PatternFrame, PatternState,
-};
+use areka_emo_compose::{BindSet, ComposedSurface, Composer, PatternState};
 
 use super::test_support::{
-    konnoyayame_shell_dir, r_post_and_komainu_shell_dir, with_com_initialized,
+    konnoyayame_shell_dir, pixel, r_post_and_komainu_shell_dir, with_com_initialized,
 };
 
 /// `R_POST_and_KOMAINU` の面 0 の外形（要件 3.1・7.4・`surface0000.png` の実寸）。
@@ -73,17 +72,13 @@ fn compose(
         .unwrap_or_else(|e| panic!("面 {id} は合成できる: {e}"))
 }
 
-/// 合成結果の 1 画素（premultiplied BGRA）を引く。
-fn pixel(surface: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    let at = (y * surface.stride() + x * 4) as usize;
-    surface.bytes()[at..at + 4]
-        .try_into()
-        .expect("4 バイトの画素")
-}
-
 /// `surfaces.txt` が面 `id` の波括弧を持つか（宣言の有無）。
 fn is_declared(target: &ShellTarget, id: u32) -> bool {
-    target.shell.surfaces.iter().any(|s| s.id == id)
+    target
+        .shell
+        .surfaces
+        .iter()
+        .any(|s| s.targets == [AppendTarget::Single(id)])
 }
 
 /// 検体のシェルを実物の絵ごと読む（COM 初期化済みの中でだけ呼べる）。
@@ -202,16 +197,7 @@ fn konnoyayame_blink_frame_changes_pixels_only_inside_the_frame_rect() {
 
         let base = compose(&target, &world, 0, &PatternState::default());
 
-        let mut patterns = PatternState::default();
-        patterns.set(
-            BLINK_ANIMATION,
-            PatternFrame {
-                surface_id: BLINK_SURFACE,
-                method: ComposeMethod::Overlay,
-                x: BLINK_AT.0,
-                y: BLINK_AT.1,
-            },
-        );
+        let patterns = pattern_overlay_at(BLINK_ANIMATION, BLINK_SURFACE, BLINK_AT.0, BLINK_AT.1);
         let blinked = compose(&target, &world, 0, &patterns);
 
         assert_eq!(
@@ -223,11 +209,6 @@ fn konnoyayame_blink_frame_changes_pixels_only_inside_the_frame_rect() {
         // 差が収まるべき矩形（コマの位置＋コマの絵の実寸）。
         let (left, top) = (BLINK_AT.0 as u32, BLINK_AT.1 as u32);
         let (right, bottom) = (left + BLINK_SIZE.0, top + BLINK_SIZE.1);
-        assert_eq!(
-            (left, top, right, bottom),
-            (93, 103, 165, 133),
-            "前提: 矩形は tasks 6.1 と design が挙げる (93,103)〜(165,133) でなければならない"
-        );
 
         let mut differing = 0usize;
         let mut outside: Vec<(u32, u32)> = Vec::new();

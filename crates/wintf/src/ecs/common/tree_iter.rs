@@ -15,8 +15,8 @@
 //! use wintf::ecs::common::DepthFirstReversePostOrder;
 //!
 //! // ヒットテストでの使用例
-//! let traversal = DepthFirstReversePostOrder::new(root);
-//! for entity in traversal.iter(world) {
+//! let mut traversal = DepthFirstReversePostOrder::new(root);
+//! while let Some(entity) = traversal.next(world) {
 //!     if hit_test_entity(world, entity, point) {
 //!         return Some(entity);
 //!     }

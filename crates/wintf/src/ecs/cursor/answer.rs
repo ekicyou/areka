@@ -115,6 +115,11 @@ pub fn last_shown(hwnd: HWND) -> Option<HCURSOR> {
     LAST_SHOWN.with(|m| m.borrow().get(&(hwnd.0 as isize)).copied())
 }
 
+/// 窓 1 つ分の控えを消す（窓を外すときに呼ぶ・同じ値の HWND が後で使い回されても前の形を出さない）。
+pub fn forget_last_shown(hwnd: HWND) {
+    LAST_SHOWN.with(|m| m.borrow_mut().remove(&(hwnd.0 as isize)));
+}
+
 /// 最後に出した形の控えを全部消す（シェル・ゴーストの入れ替えで前のカーソルを捨てる前に呼ぶ）。
 pub fn clear_last_shown() {
     LAST_SHOWN.with(|m| m.borrow_mut().clear());

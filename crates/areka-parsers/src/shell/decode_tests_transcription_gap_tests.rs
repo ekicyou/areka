@@ -15,8 +15,8 @@ use super::{AppendTarget, DefRef, Element, ElementPath, SortOrder, decode, lex};
 // 期待値はリテラル直書き（sakura 規律）。
 
 /// (b) 多 id ヘッダ（列挙 `surface0,5` ＋範囲 `surface1-3`）の忠実転記（要件 12.5(b)）。
-/// 列挙は各 id を Single 記述子として保持し、代表 id は先頭ターゲット値。
-/// 範囲は展開せず Range 記述子で保持し、代表 id は範囲始点（旧 `unwrap_or(0)` 破損の修正を固定）。
+/// 列挙は各 id を Single 記述子として保持し、範囲は展開せず Range 記述子で保持する
+/// （旧 `unwrap_or(0)` 破損の修正を固定）。
 #[test]
 fn multi_id_surface_header_enumeration_and_range_are_transcribed() {
     let input = "\
@@ -32,15 +32,13 @@ element0,overlay,b.png,0,0
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 2);
 
-    // 列挙 `surface0,5` → targets == [Single(0), Single(5)]・代表 id == 0。
-    assert_eq!(shell.surfaces[0].id, 0);
+    // 列挙 `surface0,5` → targets == [Single(0), Single(5)]。
     assert_eq!(
         shell.surfaces[0].targets,
         vec![AppendTarget::Single(0), AppendTarget::Single(5)]
     );
 
-    // 範囲 `surface1-3` → targets == [Range{1,3}]・代表 id == 1（範囲始点・unwrap_or(0) 破損でない）。
-    assert_eq!(shell.surfaces[1].id, 1);
+    // 範囲 `surface1-3` → targets == [Range{1,3}]（unwrap_or(0) 破損でない）。
     assert_eq!(
         shell.surfaces[1].targets,
         vec![AppendTarget::Range { start: 1, end: 3 }]
@@ -145,4 +143,29 @@ kero.surface.alias
         shell.definitions,
         vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Alias(0),]
     );
+}
+
+/// descriptブレスの中の並びの鍵を読む（指摘 4・ukadoc の descriptブレス記述例
+/// 「descript { version,1 / collision-sort,ascend / animation-sort,ascend }」）。
+/// 後の行が勝ち、トップレベルの行の道も残る。
+#[test]
+fn sort_keys_inside_descript_brace_are_transcribed() {
+    let input = "\
+descript
+{
+version,1
+collision-sort,ascend
+animation-sort,descend
+animation-sort,ascend
+}
+";
+    let shell = decode(lex(input));
+    assert_eq!(shell.animation_sort, Some(SortOrder::Ascend));
+    assert_eq!(shell.collision_sort, Some(SortOrder::Ascend));
+
+    // ブレスの後のトップレベルの行が勝つ（登場順で後の行が勝つ）。
+    let shell = decode(lex(
+        "descript\n{\ncollision-sort,ascend\n}\ncollision-sort,descend\n",
+    ));
+    assert_eq!(shell.collision_sort, Some(SortOrder::Descend));
 }

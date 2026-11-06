@@ -10,7 +10,7 @@
 //! `lexer_tests.rs` が既に固定しているため、ここでは重複させない。
 //! すべて決定論（`#[test]`・時計／GPU／実機に依存しない・要件 5.10）。
 
-use super::{Token, lex};
+use super::{ShorthandWord, Token, lex};
 
 // ───────────────────────────────────────────────────────────────────
 // 期待値の組み立て補助（本ファイル内のみで使う）。
@@ -39,7 +39,7 @@ fn tag(word: &str, args: &[&str]) -> Token {
     }
 }
 
-fn shorthand(word: char, n: u8) -> Token {
+fn shorthand(word: ShorthandWord, n: u8) -> Token {
     Token::Shorthand { word, n }
 }
 
@@ -162,13 +162,13 @@ fn tags_and_sysvars_after_body_bracket_are_separate_units() {
 // L8〜L11: 変わってはならない形（要件 3.2・4.4・4.9・4.10・5.5・5.6）。
 // ───────────────────────────────────────────────────────────────────
 
-/// L8（要件 4.10・5.5）: タグの直後に `[` が来る形は従来どおり角括弧形として読まれる。
+/// L8（要件 4.10・5.5）: 引数を取りうるタグの直後に `[` が来る形は角括弧形として読まれる
+/// （引数を取らないタグの後の `[` は字のまま＝`bracket_after_no_arg_tag_is_text`）。
 #[test]
 fn bracket_immediately_after_tag_name_is_still_bracket_form() {
-    let cases: [(&str, &str, &[&str]); 10] = [
+    let cases: [(&str, &str, &[&str]); 9] = [
         (r"\n[half]", "n", &["half"]),
         (r"\n[50]", "n", &["50"]),
-        (r"\w[2]", "w", &["2"]),
         (r"\b[2]", "b", &["2"]),
         (r"\p[1]", "p", &["1"]),
         (r"\_a[ID]", "_a", &["ID"]),
@@ -180,24 +180,62 @@ fn bracket_immediately_after_tag_name_is_still_bracket_form() {
     for (input, word, args) in cases {
         assert_eq!(lex(input), vec![tag(word, args)], "input: {input}");
     }
-    assert_eq!(lex(r"\e[注]です"), vec![tag("e", &["注"]), text("です")]);
+    assert_eq!(
+        lex(r"\c[char,1]です"),
+        vec![tag("c", &["char", "1"]), text("です")]
+    );
 }
 
 /// L9（要件 3.2・5.5）: タグの直後の未閉じ `[` は従来どおり残り全部を `Raw` として吸収する。
 #[test]
 fn unclosed_bracket_immediately_after_tag_name_is_still_absorbed_as_raw() {
-    assert_eq!(lex(r"\e[注です"), vec![raw(r"\e[注です")]);
-    assert_eq!(lex(r"\b1["), vec![raw(r"\b1[")]);
+    assert_eq!(lex(r"\s[注です"), vec![raw(r"\s[注です")]);
+}
+
+/// 指摘 27（SSP で測った `\1`・`\e` と同じ規則）: 引数を取らないタグの後の `[` は角括弧の道に
+/// 入らず、閉じていても閉じていなくても字のまま。`+` と `v` は一覧の外（設計の討議の議題 2）。
+#[test]
+fn bracket_after_no_arg_tag_is_text() {
+    let no_arg = [
+        "*", "-", "0", "1", "4", "5", "6", "7", "C", "_!", "_+", "_?", "_V", "__c", "__t", "_n",
+        "_q", "a", "e", "h", "t", "u", "w", "z",
+    ];
+    for word in no_arg {
+        let closed = format!("\\{word}[注]です");
+        assert_eq!(lex(&closed), vec![bare(word), text("[注]です")], "{closed}");
+        let open = format!("\\{word}[注です");
+        assert_eq!(lex(&open), vec![bare(word), text("[注です")], "{open}");
+    }
+    assert_eq!(lex(r"\+[x]"), vec![tag("+", &["x"])]);
+    assert_eq!(lex(r"\v[1]"), vec![tag("v", &["1"])]);
 }
 
 /// L10（要件 4.10・5.5）: 短縮形の 1 桁規律と、旧仕様の選択肢 `\q*[ID][タイトル]` は不変。
+/// 短縮形の数字の後の `[` は字（閉じていても閉じていなくても・かけ直しの R18 で要件 4.3 の
+/// 「角括弧付きタグを優先」を改めた）。
 #[test]
 fn shorthand_digit_rule_and_legacy_q_star_are_unchanged() {
-    assert_eq!(lex(r"\w2[x]"), vec![tag("w2", &["x"])]);
-    assert_eq!(lex(r"\b2[x]"), vec![tag("b2", &["x"])]);
-    assert_eq!(lex(r"\p2[x]"), vec![tag("p2", &["x"])]);
-    assert_eq!(lex(r"\w2"), vec![shorthand('w', 2)]);
-    assert_eq!(lex(r"\b12"), vec![shorthand('b', 1), text("2")]);
+    assert_eq!(
+        lex(r"\w2[x]"),
+        vec![shorthand(ShorthandWord::Wait, 2), text("[x]")]
+    );
+    assert_eq!(
+        lex(r"\b2[x]"),
+        vec![shorthand(ShorthandWord::Balloon, 2), text("[x]")]
+    );
+    assert_eq!(
+        lex(r"\p2[x]"),
+        vec![shorthand(ShorthandWord::Scope, 2), text("[x]")]
+    );
+    assert_eq!(
+        lex(r"\b1["),
+        vec![shorthand(ShorthandWord::Balloon, 1), text("[")]
+    );
+    assert_eq!(lex(r"\w2"), vec![shorthand(ShorthandWord::Wait, 2)]);
+    assert_eq!(
+        lex(r"\b12"),
+        vec![shorthand(ShorthandWord::Balloon, 1), text("2")]
+    );
 
     assert_eq!(
         lex(r"\q*[ID][タイトル]"),
@@ -226,7 +264,7 @@ fn forms_unaffected_by_word_boundary_rule() {
     );
     assert_eq!(
         lex(r"\w9テキスト[注]です"),
-        vec![shorthand('w', 9), text("テキスト[注]です")]
+        vec![shorthand(ShorthandWord::Wait, 9), text("テキスト[注]です")]
     );
     assert_eq!(
         lex(r"\eテキスト［注］です"),

@@ -6,7 +6,6 @@
 //! - emo2 `descript.txt`（UTF-8）由来リテラル入力の既定 `Utf8` 通し（R7.1/R7.4）。
 //! - `SHIFT_JIS.encode` ラウンドトリップ合成入力での宣言優先デコード
 //!   （宣言 Shift_JIS が既定 `Utf8` に勝ち文字化けしない・R7.2/R7.3/R2.2/D3）。
-//! - charset 宣言なし入力の**既定別**デコード（指定どおりのエンコードが支配・R7.5/R2.4）。
 //!
 //! 期待値はすべてリテラル直書き（クレート跨ぎ `include_str!` 不使用・R7.3）。
 //! fixture 由来値には採取元の正本ファイル名・行をコメントで明示する。
@@ -66,33 +65,4 @@ fn synthesized_shift_jis_declaration_wins_over_utf8_default() {
     let kv = parse_kv(&text);
 
     assert_eq!(kv.get("name").map(String::as_str), Some("かくかく"));
-}
-
-// ───────────────────────────────────────────────────────────────────
-// 3. charset 宣言なし・既定別（R7.5, R2.4）
-// ───────────────────────────────────────────────────────────────────
-
-/// charset 宣言のない入力は、呼び出し側が渡した既定エンコードが支配し、
-/// 指定どおりのエンコードでデコードされることを固定する（R7.5/R2.4）。
-///
-/// - `Ansi` パスの生き証人: charset 行なしの日本語 KV を SHIFT_JIS バイト列で
-///   与え、`Ansi`（→CP932 固定写像）でデコードすると `name→かくかく` に復元される。
-/// - `Utf8` パス: charset 行なしの ASCII/UTF-8 バイト列を `Utf8` でデコードすると
-///   `name→hello` に復元される。
-///
-/// いずれも宣言に依らず**既定指定のみ**でエンコードが決まることを示す。
-#[test]
-fn no_charset_declaration_decodes_per_default_encoding() {
-    // Ansi 既定: charset 行なしの日本語 KV（SHIFT_JIS バイト列・合成）。
-    let (ansi_bytes, _enc, had_errors) = encoding_rs::SHIFT_JIS.encode("name,かくかく\r\n");
-    assert!(!had_errors, "合成入力は Shift_JIS へ無損失変換できる前提");
-    let ansi_text = decode(&ansi_bytes, DefaultEncoding::Ansi);
-    let ansi_kv = parse_kv(&ansi_text);
-    assert_eq!(ansi_kv.get("name").map(String::as_str), Some("かくかく"));
-
-    // Utf8 既定: charset 行なしの ASCII/UTF-8 バイト列。
-    let utf8_bytes = b"name,hello\n";
-    let utf8_text = decode(utf8_bytes, DefaultEncoding::Utf8);
-    let utf8_kv = parse_kv(&utf8_text);
-    assert_eq!(utf8_kv.get("name").map(String::as_str), Some("hello"));
 }

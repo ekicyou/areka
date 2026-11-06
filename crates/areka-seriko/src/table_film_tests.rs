@@ -7,59 +7,38 @@
 
 use std::num::{NonZeroU32, NonZeroU64};
 
-use areka_emo_compose::{
-    ElementKind, EmoWorld, FilmId, FilmSheet, FilmSkip, FilmSkipReason, PartKey, SurfaceMaster,
-};
+use areka_emo_compose::{EmoWorld, FilmId, FilmSheet, FilmSkip, FilmSkipReason, PartKey};
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
+use crate::test_support::{film_sheet, film_world, warns};
 
-const FIXTURE: &str =
-    include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
+use crate::test_support::ANIMATED_PLAYBACK_SHELL as FIXTURE;
 
 /// 検体の動く絵の親の絵の番号（アトラスの番号の代わり）。
 const RGB_APNG: u32 = 3;
 const ALPHA_WEBP: u32 = 5;
 const RGB_WEBP: u32 = 8;
 
-fn sheet(id: u32, path: &str, delays_ms: &[u32], laps: Option<u32>) -> FilmSheet {
-    FilmSheet {
-        id: FilmId(id),
-        path: path.to_string(),
-        frames: (0..delays_ms.len() as u32).map(|i| id + i).collect(),
-        delays_ms: delays_ms.to_vec(),
-        laps: laps.and_then(NonZeroU32::new),
-        original: (2, 2),
-        rest: 0,
-    }
-}
-
 /// 検体の README の値で組んだ子の定義（番号の昇順）。
 fn fixture_sheets() -> Vec<FilmSheet> {
     vec![
-        sheet(RGB_APNG, "rgb.apng", &[100, 100], None),
-        sheet(ALPHA_WEBP, "alpha.webp", &[100, 0, 70], Some(3)),
-        sheet(RGB_WEBP, "rgb.webp", &[100, 100], None),
+        film_sheet(FilmId(RGB_APNG), "rgb.apng", &[100, 100], None),
+        film_sheet(FilmId(ALPHA_WEBP), "alpha.webp", &[100, 0, 70], Some(3)),
+        film_sheet(FilmId(RGB_WEBP), "rgb.webp", &[100, 100], None),
     ]
 }
 
 /// 検体の面の表を組み、動く絵の element を分解と同じに子を置く element へ替える。
 fn fixture_world() -> EmoWorld {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(FIXTURE));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            let film = match e.path.as_str() {
-                "rgb.apng" => RGB_APNG,
-                "alpha.webp" => ALPHA_WEBP,
-                "rgb.webp" => RGB_WEBP,
-                _ => continue,
-            };
-            e.kind = ElementKind::Film(FilmId(film));
-        }
-    }
-    world
+    film_world(
+        FIXTURE,
+        &[
+            ("rgb.apng", FilmId(RGB_APNG)),
+            ("alpha.webp", FilmId(ALPHA_WEBP)),
+            ("rgb.webp", FilmId(RGB_WEBP)),
+        ],
+    )
 }
 
 fn build(
@@ -70,10 +49,6 @@ fn build(
     capture_lines(LineFormat::LevelTargetFields, || {
         AnimationTable::from_world_and_films(world, sheets.iter(), skips)
     })
-}
-
-fn warns(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
 /// 子 1 つにつき `always` を 1 本（animation の番号 0）。周期はコマの待ち時間の合計、回数はファイルの
@@ -125,11 +100,15 @@ fn film_rows_carry_period_laps_and_picture_frames() {
 #[test]
 fn film_rows_do_not_collide_with_surface_numbers() {
     let world = fixture_world();
-    let sheets = vec![sheet(0, "rgb.apng", &[100, 100], None)];
+    let sheets = vec![film_sheet(FilmId(0), "rgb.apng", &[100, 100], None)];
     let (table, _) = build(&world, &sheets, &[]);
     let surface0 = table.part_animations(PartKey::Surface(0));
     let film0 = table.part_animations(PartKey::Film(FilmId(0)));
-    assert_eq!(surface0, table.animations(0), "作者のサーフェスは今の列");
+    assert_eq!(
+        surface0,
+        table.animations(0),
+        "作者のサーフェスの列は一番上の面の列と同じ"
+    );
     assert_eq!(surface0[0].frames[0].picture, None);
     assert_eq!(film0[0].frames[0].picture, Some(0));
     assert!(table.part_animations(PartKey::Film(FilmId(99))).is_empty());
@@ -160,17 +139,13 @@ fn fixture_table_carries_film_rows_and_counts_film_parts() {
 /// 子だけ（手書きの `always` も `random` も無い）でも門は真。
 #[test]
 fn film_only_table_is_continuous() {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(
+    let world = film_world(
         "surface0\n{\nelement0,overlay,rgb.apng,0,0\n}\n",
-    ));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        master.elements[0].kind = ElementKind::Film(FilmId(RGB_APNG));
-    }
+        &[("rgb.apng", FilmId(RGB_APNG))],
+    );
     let (table, logs) = build(
         &world,
-        &[sheet(RGB_APNG, "rgb.apng", &[100, 100], None)],
+        &[film_sheet(FilmId(RGB_APNG), "rgb.apng", &[100, 100], None)],
         &[],
     );
     assert!(table.is_empty(), "作者のサーフェスの行は無い");
@@ -209,8 +184,7 @@ fn film_skips_warn_once_per_cause() {
     );
 }
 
-/// `from_world` は面の表の `film_sheets()`・`film_skips()` を渡すだけ: アトラスを束縛していない
-/// 面の表では子の行も記録も無い。
+/// アトラスの無い世界では、`from_world` の表に子の行が無く、ほかの行は子の定義を渡さない表と同じ。
 #[test]
 fn from_world_without_atlas_has_no_film_rows() {
     let world = fixture_world();

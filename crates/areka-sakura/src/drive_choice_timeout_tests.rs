@@ -1,7 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::contract::{ScriptOrigin, TalkId};
-use crate::duration::text_playback_duration;
+use crate::contract::TalkId;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -11,25 +10,14 @@ use std::time::Duration;
 // `Tick(0.0)` の次に `Tick(50.0)` で駆動し、**区切りと指定の時間を一度に越える**。再生層の時刻表が
 // 指定の値で区切りを飛ばすなら、選択待ちの知らせは届かず台本が終わってしまう（この檻が落ちる）。
 
-/// 台本の区切りの時刻（hello の D ＋ `\_w[100]`＝0.35）。本番と同一算術で導く。
-fn barrier_horizon() -> f64 {
-    text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
-}
-
 /// 1 つの指定で台本を流し、時計を一度に進めて、選択待ちの知らせと終わらないことを確かめる。
 fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, talk_id: TalkId) {
     let script = format!(r"\s[10]hello\_w[100]\q[選択A,targetA]{directive}\e");
     let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
     let handle = spawn_talk(
-        StartTalk {
-            epilogue: Vec::new(),
-            script,
-            talk_id,
-            origin: ScriptOrigin::GHOST,
-            strict: false,
-        },
+        StartTalk::new(talk_id, script),
         done_tx,
-        two_sinks(NoopSink, NoopSink),
+        one_sink(NoopSink),
         SystemVarSnapshot::default(),
         None,
     );
@@ -47,7 +35,7 @@ fn assert_one_step_enters_choice_wait(directive: &str, expected: Option<f64>, ta
         TalkNotice::ChoiceWaiting(ChoiceWaiting {
             talk_id,
             choice_ids: vec!["targetA".to_string()],
-            display_end_elapsed_secs: barrier_horizon(),
+            display_end_elapsed_secs: menu_horizon(),
             timeout_directive_secs: expected,
         }),
         "{directive:?}: 表示の終わりは区切りの時刻（tick 時刻 50.0 ではない）・指令は指定どおり"

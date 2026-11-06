@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_parsers::balloon::{self, BalloonModel};
-use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine, ShellBoxes};
+use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine};
 
 use crate::fold::{Copied, expand_targets_with, may_copy};
 use crate::world::{EmoWorld, Records};
@@ -158,7 +158,7 @@ pub enum BoxIssue {
 /// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` と知らない記述子の記録だけはここで出す・指摘 78。
 /// どちらも `world` を組んだときの出し分けに従い、黙らせる組み方の面の表なら出さない）。
 pub fn fold_boxes(
-    boxes: &ShellBoxes,
+    boxes: &[BoxDefinition],
     images: &BTreeMap<u32, String>,
     world: &EmoWorld,
 ) -> (BoxLayout, BoxReport) {
@@ -215,7 +215,7 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
 /// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose
 /// 設計の議題 7 案 A）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（箱の行の数を掛けない）。
 fn distribute<'a>(
-    boxes: &'a ShellBoxes,
+    boxes: &'a [BoxDefinition],
     images: &BTreeMap<u32, String>,
     records: Records,
     issues: &mut Vec<BoxIssue>,
@@ -224,7 +224,7 @@ fn distribute<'a>(
     let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
     // 番号ごとに写す行の合計は面の畳み込みと同じ上限（指摘 78）。越えた記述子は記録して捨てる。
     let mut copied = Copied::default();
-    for definition in &boxes.definitions {
+    for definition in boxes {
         match definition {
             BoxDefinition::Surface(surface) => {
                 let ids = expand_targets_with(&surface.targets, records);
@@ -349,10 +349,10 @@ fn place(
 /// `balloon.*`ブレスを登場順に定義の表へ畳む（同じ名前は後のもので丸ごと置き換え・要件 1.8）。
 ///
 /// 置き換えたブレスが採られなければ、その名前の定義は無くなる（前の定義へは戻さない）。
-fn fold_braces(boxes: &ShellBoxes, issues: &mut Vec<BoxIssue>) -> BTreeMap<BoxName, BoxDef> {
+fn fold_braces(boxes: &[BoxDefinition], issues: &mut Vec<BoxIssue>) -> BTreeMap<BoxName, BoxDef> {
     let mut defs = BTreeMap::new();
     let mut seen = BTreeSet::new();
-    for definition in &boxes.definitions {
+    for definition in boxes {
         let BoxDefinition::Brace(BoxBrace { name, lines }) = definition else {
             continue;
         };
