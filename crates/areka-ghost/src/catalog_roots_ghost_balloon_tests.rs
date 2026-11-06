@@ -159,7 +159,7 @@ fn each_ghost_sees_only_its_own_inner_and_deleted_ghost_drops_out() {
     let for1 = balloons_for(&roots, &g1);
     let for2 = balloons_for(&roots, &g2);
 
-    assert_eq!(dirs(&for1.listed), [in1.clone()]);
+    assert_eq!(dirs(&for1.listed), [in1]);
     assert_eq!(dirs(&for2.listed), [in2, r_shared.clone()]);
     assert!(for2.hidden.is_empty());
 

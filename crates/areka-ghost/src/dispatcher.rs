@@ -378,6 +378,7 @@ impl DispatcherState {
             self.active = None;
         } else {
             tracing::info!(
+                event = "talk_done_stale",
                 talk_id = done.talk_id.0,
                 "stale TalkDone discarded (slot already replaced or empty)"
             );

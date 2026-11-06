@@ -2,7 +2,7 @@
 //!
 //! 上流からのメッセージを型変換しつつ下流へ中継する最小機構。上流が全て
 //! 手放されたら明示停止を持たず自然に終了する（start-relay／down-relay の
-//! 2 箇所で使用・design.md「ghost::relay」）。task 2.1 で実装する。
+//! 2 箇所で使用・design.md「ghost::relay」）。
 
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -28,7 +28,7 @@ where
                 Ok(msg) => {
                     let converted: B = B::from(msg);
                     if tx.send(converted).is_err() {
-                        tracing::warn!(relay = %relay_name, "downstream disconnected; relay stopping");
+                        tracing::warn!(event = "relay_downstream_gone", relay = %relay_name, "downstream disconnected; relay stopping");
                         return;
                     }
                 }

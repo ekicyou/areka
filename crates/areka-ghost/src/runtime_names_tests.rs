@@ -1,7 +1,8 @@
 //! 動作中のゴーストの名前の差し替え（[`GhostRuntime::set_names`]）のテスト（mcp-reload 要件 7.3）。
 //!
 //! 検体のゴーストは由来つき起動のテストのもの（`name,TestGhost`・`sakura.name` なし）を使い、
-//! 差し替えの後にマウントの名前と sylphya の静的プロパティが新しい名前で読めることを見る。
+//! 差し替えの後にマウントの名前と sylphya の静的プロパティが新しい名前で読めることと、
+//! 新しい名前に無い静的な名前が鏡像から消えること（要件 9.15 ⑵）を見る。
 use super::*;
 use areka_sylphya::FlatResolution;
 use temp_path_kit::TempPath;

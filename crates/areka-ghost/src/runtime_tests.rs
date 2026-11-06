@@ -38,15 +38,6 @@ fn mount_variant_is_a_std_error() {
 
 use areka_kanade::MonotonicMs;
 
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-runtime-{tag}"))
-}
-
 /// シナリオ2（mount 失敗の短絡）: `ghost_root` に `ghost/master/descript.txt` が
 /// 存在しない場合、`boot` は `Err(GhostBootError::Mount(_))` を返す。`shiori`
 /// フィールドの connect closure は「呼ばれたら panic する」ものを故意に仕込み、
@@ -55,8 +46,8 @@ fn unique_temp_dir(tag: &str) -> TempPath {
 /// も spawn されない（短絡する）ことの直接証跡になる（要件 2.5）。
 #[test]
 fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
-    let temp = unique_temp_dir(
-        "boot-returns-mount-error-and-short-circuits-before-touching-shiori-wiring",
+    let temp = TempPath::new(
+        "ghost-runtime-boot-returns-mount-error-and-short-circuits-before-touching-shiori-wiring",
     );
     // 空のフォルダ＝ghost/master/descript.txt が無い。
     let options = GhostBootOptions {
@@ -89,7 +80,7 @@ fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
 /// 起動〜終了の一連の流れ」の直接証跡になる）。
 #[test]
 fn boot_then_shutdown_joins_everything_and_returns_ok() {
-    let temp = unique_temp_dir("boot-then-shutdown-joins-everything-and-returns-ok");
+    let temp = TempPath::new("ghost-runtime-boot-then-shutdown-joins-everything-and-returns-ok");
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
@@ -108,8 +99,9 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
 /// S6 全断線シナリオ等の分解結線に必要な全てを過不足なく提供している直接証跡。
 #[test]
 fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
-    let temp =
-        unique_temp_dir("into-parts-exposes-live-senders-and-all-handles-for-manual-teardown");
+    let temp = TempPath::new(
+        "ghost-runtime-into-parts-exposes-live-senders-and-all-handles-for-manual-teardown",
+    );
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
@@ -214,8 +206,8 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
 /// 持たないため、直後の反映フェンスで生存を証拠づける）。
 #[test]
 fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
-    let temp = unique_temp_dir(
-        "sylphya-publisher-accessor-yields-live-publisher-that-accepts-persist-put",
+    let temp = TempPath::new(
+        "ghost-runtime-sylphya-publisher-accessor-yields-live-publisher-that-accepts-persist-put",
     );
     let root = temp.path().to_path_buf();
     write_ghost(&root);
@@ -266,7 +258,8 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
 fn shutdown_confirms_persist_flush_via_barrier_before_close() {
     use crate::test_log_capture::{assert_logged, capture};
 
-    let temp = unique_temp_dir("shutdown-confirms-persist-flush-via-barrier-before-close");
+    let temp =
+        TempPath::new("ghost-runtime-shutdown-confirms-persist-flush-via-barrier-before-close");
     let root = temp.path().to_path_buf();
     write_ghost(&root);
 
@@ -559,8 +552,9 @@ use areka_sylphya::{Axis, load_scope};
 /// `barrier`/`join` の宙吊りに備え `run_bounded` で有界化する。
 #[test]
 fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
-    let temp =
-        unique_temp_dir("exit-flush-reflects-barrierless-clone-puts-after-shutdown-sequence");
+    let temp = TempPath::new(
+        "ghost-runtime-exit-flush-reflects-barrierless-clone-puts-after-shutdown-sequence",
+    );
     let root = temp.path().to_path_buf();
 
     let roots = ScopeRoots {

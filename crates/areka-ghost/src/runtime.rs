@@ -1,10 +1,8 @@
 //! ghost 結線層の起動・終了統括（`GhostRuntime`／`boot`／`shutdown`）。
 //!
-//! task 3.1 で `boot` 手順と `GhostRuntime`（`kanade()`／`dispatcher()` の
-//! 投函端アクセサのみ）を実装した。task 3.2 は同じ `GhostRuntime` へ
-//! `shutdown`／`into_parts`（`GhostParts`・`GhostHandles`・`GhostShutdownError`
-//! を含む終了統括一式）を追加実装した（design.md「終了（shutdown）シーケンス」
-//! 「アクター別の停止経路（正本）」）。
+//! 起動は `boot`／`boot_with_kanade_stop`／`boot_with_origin`、動作中の差し替えは
+//! `set_shell_dir`（シェルのフォルダ）と `set_names`（名前）、終了は `shutdown`／
+//! `shutdown_within`／`into_parts`（design.md「終了（shutdown）シーケンス」）。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -374,19 +372,19 @@ impl GhostRuntime {
         }
 
         // 5・6. ticker（`TickerMode::Real` 時のみ起動されている・両方 no-op で完全スキップ）。
-        if let Some(ticker_tx) = ticker_tx {
-            if ticker_tx.send(TickerMsg::Close).is_err() {
-                tracing::debug!(
-                    target: "ghost-shutdown",
-                    "ticker already stopped before Close send; treating as idempotent"
-                );
-            }
+        if let Some(ticker_tx) = ticker_tx
+            && ticker_tx.send(TickerMsg::Close).is_err()
+        {
+            tracing::debug!(
+                target: "ghost-shutdown",
+                "ticker already stopped before Close send; treating as idempotent"
+            );
         }
-        if let Some(ticker_handle) = ticker_handle {
-            if let Err(err) = ticker_handle.join() {
-                tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
-                failures.push(("ticker", err));
-            }
+        if let Some(ticker_handle) = ticker_handle
+            && let Err(err) = ticker_handle.join()
+        {
+            tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
+            failures.push(("ticker", err));
         }
 
         // 7. shiori join（送出なし。kanade 終了系列が ShioriMsg::Close を既に送出済み・
@@ -640,15 +638,15 @@ pub fn boot_with_origin(
     // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。ここで先に作る
     // （`FsPersistIo::commit` も commit 時に `create_dir_all` する二重の安全網）。失敗しても boot は
     // 止めない（warn＋継続・log-first・6.3——FsPersistIo が commit 時に再試行する）。
-    if let Some(ghost_root) = scope_roots.ghost.as_ref() {
-        if let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root) {
-            tracing::warn!(
-                target: "ghost-boot",
-                path = %ghost_root.display(),
-                error = %err,
-                "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
-            );
-        }
+    if let Some(ghost_root) = scope_roots.ghost.as_ref()
+        && let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)
+    {
+        tracing::warn!(
+            target: "ghost-boot",
+            path = %ghost_root.display(),
+            error = %err,
+            "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
+        );
     }
 
     let areka_sylphya::SylphyaParts {

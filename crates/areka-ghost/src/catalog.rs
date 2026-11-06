@@ -339,7 +339,17 @@ pub fn homeurl(descript_dir: &Path) -> Option<String> {
 
 /// `<descript_dir>/descript.txt` の `name`。読み方は `homeurl` と同じ。
 pub fn descript_name(descript_dir: &Path) -> Option<String> {
-    read_descript(&descript_dir.join(DESCRIPT_FILE))?.remove("name")
+    let path = descript_dir.join(DESCRIPT_FILE);
+    unreadable_is_none(&path, descript_name_in(descript_dir, DefaultEncoding::Ansi)).flatten()
+}
+
+/// `<descript_dir>/descript.txt` を `encoding` で読んだ `name`（鍵の大小を無視・空は無し）。
+/// 読めない（無いも含む）→ `Err`。記録は呼び手が出す（一覧は [`descript_name`]、シェル名は `config`）。
+pub(crate) fn descript_name_in(
+    descript_dir: &Path,
+    encoding: DefaultEncoding,
+) -> std::io::Result<Option<String>> {
+    Ok(read_descript_in(&descript_dir.join(DESCRIPT_FILE), encoding)?.remove("name"))
 }
 
 /// `<dir>/ghost/master/descript.txt` が実在するか（argv のゴーストの検査＝要件 4.8）。
@@ -408,8 +418,24 @@ fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
 /// descript を読み、鍵を ASCII 小文字化した表を返す。無ければ黙って None（その項目ではない）、
 /// 読めなければ `warn!`＋None（要件 2.7）。
 fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
-    match std::fs::read(path) {
-        Ok(bytes) => Some(parse_kv_lowercased(&decode(&bytes, DefaultEncoding::Ansi))),
+    unreadable_is_none(path, read_descript_in(path, DefaultEncoding::Ansi))
+}
+
+/// descript を `encoding` で読み、鍵を ASCII 小文字化した表（記録は出さない）。
+fn read_descript_in(
+    path: &Path,
+    encoding: DefaultEncoding,
+) -> std::io::Result<BTreeMap<String, String>> {
+    Ok(parse_kv_lowercased(&decode(
+        &std::fs::read(path)?,
+        encoding,
+    )))
+}
+
+/// descript の読みの結果を一覧の扱いへ: 無い → 黙って None、読めない → `warn!`＋None（要件 2.7）。
+fn unreadable_is_none<T>(path: &Path, read: std::io::Result<T>) -> Option<T> {
+    match read {
+        Ok(value) => Some(value),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => {
             tracing::warn!(

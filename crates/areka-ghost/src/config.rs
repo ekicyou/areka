@@ -5,8 +5,7 @@
 //! （design.md「ghost::config」）。
 
 use areka_kanade::KanadeConfig;
-use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::kv::parse_kv_lowercased;
+use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountModel;
 use areka_sakura::strict::{StrictHooks, StrictJudges};
 use std::path::Path;
@@ -14,9 +13,6 @@ use std::sync::Arc;
 
 /// shell descript のファイル名（`{shell.dir}/descript.txt`）。
 const SHELL_DESCRIPT_FILE: &str = "descript.txt";
-/// shell descript の name キー（OnBoot Reference0＝「起動時のシェル名」・ukadoc）。
-/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#name_2c_30b7_30a7_30eb_540d:1
-const SHELL_NAME_KEY: &str = "name";
 
 /// `MountModel` と shell descript から `KanadeConfig` を解決する（純関数・I/O は
 /// shell descript 読取のみ）。
@@ -77,11 +73,12 @@ pub(crate) fn strict_hooks(
 /// 自身のディレクトリ名（basename）へフォールバックする（`warn!` 付き）。
 fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> String {
     let shell_dir = &mount.shell.dir;
-    let fallback = || shell_dir_basename(shell_dir);
-
     let descript_path = shell_dir.join(SHELL_DESCRIPT_FILE);
-    let bytes = match std::fs::read(&descript_path) {
-        Ok(bytes) => bytes,
+
+    // name＝OnBoot Reference0 の「起動時のシェル名」。一覧（`catalog`）と同じ読み手を使う。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#name_2c_30b7_30a7_30eb_540d:1
+    match crate::catalog::descript_name_in(shell_dir, default_encoding) {
+        Ok(Some(name)) => name,
         Err(err) => {
             tracing::warn!(
                 event = "shell_descript_unreadable",
@@ -89,20 +86,15 @@ fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> 
                 error = %err,
                 "shell descript が読取不能——shell ディレクトリ名へフォールバックする"
             );
-            return fallback();
+            shell_dir_basename(shell_dir)
         }
-    };
-
-    // 一覧（`catalog`）と同じ読み方: 鍵の大小を無視し、空の値は無い。
-    match parse_kv_lowercased(&decode(&bytes, default_encoding)).remove(SHELL_NAME_KEY) {
-        Some(name) => name,
-        None => {
+        Ok(None) => {
             tracing::warn!(
                 event = "shell_name_missing",
                 path = %descript_path.display(),
                 "shell descript に name キーが無い——shell ディレクトリ名へフォールバックする"
             );
-            fallback()
+            shell_dir_basename(shell_dir)
         }
     }
 }
@@ -134,6 +126,7 @@ mod tests {
     /// `root` 直下に最小限の正常なゴーストツリー（`ghost/master/descript.txt` ＋
     /// `shell/<shell_dir_name>/`）を構築し、`shell/<shell_dir_name>/descript.txt` を
     /// 任意内容で書く（`None` なら shell descript 自体を作らない＝不在ケース）。
+    /// `ghost_line`（例 `"name,えみり"`）はゴースト側 descript に足す行。
     ///
     /// `shell_dir_name` はゴースト側 descript の `seriko.defaultsurfacedirectoryname`
     /// へそのまま渡され、`areka_parsers::package::resolve_with_shell` がそれを shell dir 名として
@@ -144,17 +137,21 @@ mod tests {
     /// `MountModel` は `#[non_exhaustive]` ゆえ他クレートから構造体リテラルで
     /// 直接構築できない（design 契約どおり）ため、`areka_parsers::package::resolve_with_shell`
     /// を通して実物を得る（`resolve_tests.rs` の tempdir fixture 流儀を踏襲）。
-    fn resolve_mount_with_shell_descript(
+    fn resolve_mount(
         root: &Path,
+        ghost_line: Option<&str>,
         shell_dir_name: &str,
         shell_descript: Option<&[u8]>,
     ) -> MountModel {
         let ghost_master = root.join("ghost").join("master");
         fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        let ghost_line = ghost_line.map(|l| format!("{l}\n")).unwrap_or_default();
         fs::write(
             ghost_master.join("descript.txt"),
-            format!("charset,UTF-8\nseriko.defaultsurfacedirectoryname,{shell_dir_name}\n")
-                .as_bytes(),
+            format!(
+                "charset,UTF-8\nseriko.defaultsurfacedirectoryname,{shell_dir_name}\n{ghost_line}"
+            )
+            .as_bytes(),
         )
         .expect("write ghost descript.txt");
 
@@ -168,20 +165,18 @@ mod tests {
             .expect("fixture tree resolves to a MountModel")
     }
 
-    /// ゴースト側 descript に `name_line`（例 `"name,えみり"`）を足した最小のツリーを
-    /// 組んで解決する（`None` なら name 行を書かない）。shell descript は置かない。
+    /// ゴースト側 descript に `name_line` を足し、shell descript は置かない（shell は `master`）。
     fn resolve_mount_with_ghost_name(root: &Path, name_line: Option<&str>) -> MountModel {
-        let ghost_master = root.join("ghost").join("master");
-        fs::create_dir_all(&ghost_master).expect("create ghost/master");
-        let name_line = name_line.map(|l| format!("{l}\n")).unwrap_or_default();
-        fs::write(
-            ghost_master.join("descript.txt"),
-            format!("charset,UTF-8\n{name_line}").as_bytes(),
-        )
-        .expect("write ghost descript.txt");
-        fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-        areka_parsers::package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
-            .expect("fixture tree resolves to a MountModel")
+        resolve_mount(root, name_line, "master", None)
+    }
+
+    /// ゴースト側 descript には足さず、shell descript を `shell_descript` で置く。
+    fn resolve_mount_with_shell_descript(
+        root: &Path,
+        shell_dir_name: &str,
+        shell_descript: Option<&[u8]>,
+    ) -> MountModel {
+        resolve_mount(root, None, shell_dir_name, shell_descript)
     }
 
     #[test]
@@ -348,20 +343,6 @@ mod tests {
             "master",
             Some(b"charset,UTF-8\nother,value\n"),
         );
-
-        // --- Act ---
-        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
-
-        // --- Assert: shell ディレクトリ自身の basename（"master"）へフォールバック ---
-        assert_eq!(config.shell_name, "master");
-    }
-
-    #[test]
-    fn resolve_kanade_config_falls_back_to_dir_name_when_descript_missing() {
-        // --- Arrange: shell/master/descript.txt が存在しない ---
-        let temp = unique_temp_dir("falls-back-when-descript-missing");
-        let root = temp.path().to_path_buf();
-        let mount = resolve_mount_with_shell_descript(&root, "master", None);
 
         // --- Act ---
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);

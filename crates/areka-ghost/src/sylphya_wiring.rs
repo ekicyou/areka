@@ -379,6 +379,22 @@ mod tests {
         );
     }
 
+    /// [`FLAT_STATIC_NAMES`] は [`derive_flat_statics`] が積みうる名の全部と一致する
+    /// （名を足して一覧に足し忘れると、読み直しで古い値が残る・要件 9.15 ⑵）。
+    #[test]
+    fn flat_static_names_match_what_derive_can_publish() {
+        let all = names(Some("むらさき"), Some("紫"), Some("エモ"));
+        let keys: Vec<_> = derive_flat_statics(&all)
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+        assert_eq!(keys, FLAT_STATIC_NAMES);
+        assert_eq!(
+            absent_flat_statics(&names(None, None, None)),
+            FLAT_STATIC_NAMES
+        );
+    }
+
     // --- provider 差替の固定ログ（design Monitoring・R9.3 サインオフ証跡・Task 10.1） ---
 
     /// `from_sylphya_provider` が生成するスナップショットのたびに、design Monitoring の固定ログ

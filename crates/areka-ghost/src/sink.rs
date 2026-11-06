@@ -194,7 +194,7 @@ mod tests {
 
     /// `CueSink::emit` が構造化ログを 1 件発火し、`at`／`actor`／`command_kind` が
     /// 期待どおり載ることを検証する（診断既定実装が「発火のたびに構造化ログが
-    /// 出力される」ことの直接証跡・単一の出力契約 [`dola::cue::CueSink`]）。
+    /// 出力される」ことの直接証跡・単一の出力契約 [`areka_sakura::contract::CueSink`]（＝`dola::cue::CueSink`））。
     #[test]
     fn emit_logs_structured_event_with_at_actor_and_command_kind() {
         let mut sink = LogSink::new();
