@@ -113,6 +113,7 @@
   - _Requirements: 3.1, 4.1, 4.2_
 - [ ] 8.3 素の `set_default` の例外の表に 8.2 のテストの 1 行を足す（範囲の外の唯一の変更）
   - `placement-crate-split` の着地の知らせを受けてから `main` を取り込み、その後で `crates/log-capture-kit/tests/with_default_guard_test.rs` の例外の表に design.md の 1 行を足し、件数を 5 → 6 にする。こちらが先に着地することになったら、足す前に向こうへ一言知らせる
+  - 2026-11-06 に着地の知らせを受けた（PR#433・squash `ff31386f`・`origin/main` に在ることを確かめた）。main の表は placement の 3 行が `crates/areka-placement/…` に替わり、件数は 5 のまま。残っている待ちは 8.2 だけ。8.2 を済ませたら、この時点の `main` を取り込んで 1 行を足す
   - そのファイルの差分が 1 行と件数だけで、`with_default_guard_test` が緑
   - _Depends: 8.2_
   - _Requirements: 6.6, 6.7_
