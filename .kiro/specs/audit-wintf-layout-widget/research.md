@@ -475,3 +475,82 @@ wintf の「置き場所」と「部品」である。`layout/` は、taffy（fl
 - 直したほうがよいの多くは、描く骨組みの 5 重の写しと、捨てた失敗と、毎回のやり直し・毎回の描き直し・UI スレッドでの 2 度の解読で、骨組みを 1 つにすると一度に片づく。
 - 範囲の外へ及ぶのは `crates/wintf/tests/`・`crates/wintf/examples/` だけで、`ecs/mod.rs`・`ecs/world/mod.rs`・`ecs/visual/`・`ecs/graphics/`・`crates/areka/` には触らずに直せる。`Cargo.lock` に触るのは serde の機能を外す場合だけ（D-7）。
 - タスクは 19〜24 で 20 を越えうる。組で 2 本に分ける案 B を推す。
+
+---
+
+## 8. 設計の段の調べ（2026-11-06・`/kiro-spec-design -y`）
+
+### 8.1 調べの種類と使った手引き
+
+- 種類: 軽い調べ（在るコードの直し・依存の追加なし）。`kiro-spec-design` の手引き（`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、ponytail の作法（いちばん小さな完全な変更・消せるものは消す）に従った。
+- 調べた所: 範囲のファイル（直す所の周り）、bevy_ecs 0.19.1・windows 0.62.2・taffy 0.13.0 の手元の写し（`C:\rust\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\` の下）、Microsoft の DirectWrite の説明。
+- 5 節の調べものは 16 番を除いて全部この節で答えた（16 番は `hit-id-pass` へ申し送り済み）。
+
+### 8.2 2 番: 消えたことを計算の係が読んでも、掃除の係は読めるか
+
+- `RemovedComponents<T>` は係ごとに読み位置を持つ（`bevy_ecs-0.19.1/src/lifecycle.rs:511-514` の `reader: Local<'s, RemovedComponentReader<T>>`）。`read()`（`:578`）は自分の読み位置だけを進め、`is_empty()`（`:603`）は読み位置を進めない。
+- 消えた記録の入れ物を古い順に捨てるのは `World::clear_trackers`（`world/mod.rs:1735-1736`）だけで、wintf はどこでも呼ばない（`crates/wintf/src/runtime/mod.rs:255-257` に同じ確かめがある）。だから、計算の係・掃除の係・木をつなぐ係がそれぞれ同じ消えた記録を 1 度ずつ読める。
+- 設計への含み: 計算の係は、読んだかどうかを `is_empty()` で見るだけだと読み位置が進まず、次の回もまた「消えた」と見て計算し直す。2 つの読み口を毎回両方とも読み切る（`read().count()` を両方取ってから比べる。`||` で片方を飛ばさない）。
+- 設計の調べで見つけた穴: `BoxStyle` を外して `TaffyStyle` を外した部品は、`ChildOf` が残るので木をつなぐ係の「`ChildOf` が消えた」の道に乗らない。掃除の係は計算の後に並ぶので、その回の計算は消える前の節を含んだまま走り、次の回は何も起きない。そこで木をつなぐ係（計算より前）が `RemovedComponents<TaffyStyle>` も読み、その節を taffy の親から外す。係の並び（`ecs/world/mod.rs:243-256`）は変えない。
+
+### 8.3 19 番: DirectWrite の向きの設定の順
+
+- Microsoft の `IDWriteTextFormat::SetReadingDirection` の説明（https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwritetextformat-setreadingdirection）は、読む向きと行の向きが「must always be set 90 degrees orthogonal to each other」で、外れると `Draw` や `GetMetrics` のような配置を使う所で `DWRITE_E_FLOWDIRECTIONCONFLICTS` になると書く。設定する関数そのものは順で断らない。
+- 設計への含み: 今の順（読む向き → 行の向き）のままでよい。確かめは、4 つの向きで設定を読み返し、その書式で作った配置の `GetMetrics` が通ることで行う（DirectWrite の工場だけで書ける・GPU は要らない）。
+
+### 8.4 11 番: 解読を 1 回にする
+
+- windows 0.62.2 の `IWICImagingFactory::CreateBitmapFromSource(source, option) -> IWICBitmap`（`Windows/Win32/Graphics/Imaging/mod.rs:3559`）と `WICBitmapCacheOnLoad`（`:6159`・値 2）。`WICBitmapCacheOnLoad` は作るときにメモリへ写しを作る。今の `load_bitmap_source` が返す「形式の変換器」は読むときに初めて解読するので、`CreateBitmapFromSource(変換器, WICBitmapCacheOnLoad)` を裏の作業で 1 回呼べば、解読は裏の 1 回だけになり、UI スレッドの `copy_pixels`（αのマスク）と `CreateBitmapFromWicBitmap`（描画）はメモリの写しを読むだけになる。
+- 要る windows の機能 `Win32_Graphics_Imaging` は根の `Cargo.toml` で有効（`Win32_Graphics_Imaging_D2D` が在る）。依存は足さない。
+- windows 0.62.2 の Imaging には `unsafe impl Send` が 1 つも無い（grep 0 件）。`BitmapSourceResource` の手書きの `Send`／`Sync` は要るので残す（22 番は `BitmapSourceGraphics` と `TypewriterLayoutCache` だけ）。
+- 確かめのテスト: 裏の作業が渡す画像が `IWICBitmap` へ `cast` できること。変換器は `IWICBitmap` を持たないので、直しを戻すと落ちる。
+
+### 8.5 3・5 番: bevy 0.19 のフックと「無ければ何もしない」命令
+
+- 部品を入れるたびに `on_insert` が呼ばれる（入れ替えでも呼ばれる）。外すときは `Discard` → `Remove` の順（`lifecycle.rs:24-30`）。
+- `EntityCommands::try_remove`（`system/commands/mod.rs:1827`）・`try_insert`（`:1626`）は相手が消えていたら何もしない。`Commands::get_entity`（`:490`）は今いるかを確かめて `Result` を返す。
+- 設計への含み: 3 番は `TypewriterTalk` に `on_insert` を足し、控えを `try_remove` で外す。外すときのフックは `Label` の `on_label_remove`（`label.rs:76-82`）と同じく命令の列を空にする。5 番は `get_entity` で確かめ（消えていたら `debug!`）、`try_insert` で入れる（同じ回のうちに消えた場合の守り）。
+
+### 8.6 6 番: 文字の数え方
+
+- DirectWrite のクラスタの長さ（`DWRITE_CLUSTER_METRICS.length`）と範囲（`DWRITE_TEXT_RANGE`）はどちらも UTF-16 の単位。時間表は「トークンの UTF-16 の終わりに届くまでクラスタを進める」形にすれば、サロゲートの対（1 クラスタ 2 単位）・異体字セレクタや結合文字（2 文字で 1 クラスタ）・改行（1 クラスタ）が同じ規則で数わる。トークンの境目をまたぐクラスタは前のトークンが受け持つ。
+- 隠す範囲は、見せるクラスタの長さの和から、全部のクラスタの長さの和まで。どちらもクラスタの長さだけで出せるので、DirectWrite の配置を持たない純な関数にでき、テストは CPU だけで書ける。
+
+### 8.7 20 番: モニタのテストが本文の字面を数えている件
+
+- `monitor_systems_transition_tests.rs:577-602` が `include_str!("monitor_systems.rs")` で見る字面は 4 つ: `transition_diag::stamp_from_world(&frame, &tick_start)` が在る・`transition_diag::stamp()` が 0 回・`transition_diag::is_enabled()` が 2 回・`pub fn detect_display_change_system(` が在る。`BoxStyle` を組む関数を 1 つにまとめても、この 4 つの数は変わらない。
+- 同じファイルの `:32` が見張る `ecs/world/mod.rs` の字面には、この spec は触らない（要件 5.9）。
+
+### 8.8 消すもの・形が変わるものの確かめ（要件 3.3・3.4）
+
+- `ecs/mod.rs` が名指しで再公開する範囲の名前（`BitmapSource`・`BitmapSourceGraphics`・`BitmapSourceResource`・`BoxedCommand`・`CommandSender`・`WicCore`・`WintfTaskPool`・`draw_bitmap_sources`・`Typewriter` 一式・`TypewriterTimeline`）は、どれも消さない。`TextLayoutMetrics` は `pub use layout::*` の glob で出ているだけなので、消しても `ecs/mod.rs` を書き換えずに済む。
+- `ecs/world/mod.rs` が名指す範囲の係（`build_taffy_styles_system` ほか 27 個）は、名前を全部残す。係の引数が変わっても、bevy が埋めるので登録の行は変わらない。
+- `layout::PhysicalPoint` を名指す所は `crates/wintf/examples/taffy_flex_demo/main.rs:88`（`region.rs:15` はそれを使う）と範囲の中のテストだけ。areka は `pointer` の方を使う（`crates/areka/src/emo2_boot/frame/dpi.rs:11` など）。
+- taffy の逆引き（`get_entity`・`verify_mapping_consistency`）を読むのは `crates/wintf/tests/layout/taffy_advanced_test/mapping_management.rs`・`tree_sync.rs`・`crates/wintf/tests/layout/taffy_child_order_test.rs` の 3 ファイル。
+- 値の型を部品として使う所（`Query`・`With`・`spawn`・`insert` の中）は木の全体で 0 件（2026-11-06 に grep）。
+- **設計の調べで見つけた食い違い（28 番）**: `crates/areka/examples/mock-shell.rs:609` が `assert_eq!(bitmap.path, SHELL_IMAGE_PATH);` で `BitmapSource.path` を読む。ギャップ分析は「欄を書く所が 0」を確かめたが、読む所を見落としていた。欄を非公開にすると、このウェーブでは触れない `crates/areka/` の例が通らなくなる（要件 5.11・5.12）。要件 5.12 の決まりどおり、要件 4.5 の議題に回す（答えは 8.11）。
+- 設計の調べで見つけたもう 1 つ（直さない・説明だけ）: `crates/areka/examples/clickthrough_two_rects.rs:192` の説明が「`Added<BitmapSourceResource>` ＋ `With<HitTest>` ＋ `HitTestMode::AlphaMask` の時だけ」と書く。7 番でαのマスクの係を `Changed<BitmapSourceResource>` にすると、説明が少し古くなる（動きは変わらない・付けた時に作るのは同じ）。このウェーブのあいだは `crates/areka/` に触れないので、28 番の前提つきのタスクで一緒に直す（8.11）。
+
+### 8.9 まとめ（synthesis）
+
+- **まとめられるもの（一般化）**: 命令の列を記録する骨組みを 1 つの関数にし、記録の結果を部品へ入れる所も 1 つにする（21 番）。これで 9 番（捨てた失敗）・10 番（恒久の失敗の毎回のやり直し）・30 番（名前の文字列は失敗のときだけ）・31 番（いつも真の比べ）の描く 5 か所の分が一度に片づく。当たり判定は `hit_test_entity_ex` を 1 本の正本にし（14 番）、前景色の式は `Brushes` の 1 つの関数にする（32 番）。向きの設定（19 番）とモニタの `BoxStyle`（20 番）も 1 つずつにする。
+- **作るか使うか**: 新しく作る仕組みは無い。bevy の `on_insert`・`try_remove`・`try_insert`・`get_entity`、WIC の `WICBitmapCacheOnLoad`、テストの PNG を書く `image`（wintf の開発用の依存に既に在る）を使う。
+- **削ったもの（簡素化）**:
+  - 11 番のαのマスクは、UI スレッドでメモリの写しから `copy_pixels` する今の形のまま残す（裏へ移す命令の道を足さない）。解読は裏の 1 回だけになり、ギャップ分析の「2 度の解読」は解ける。
+  - 36 番は印を持たせず `debug!` に下げる（当たり判定は `&World` しか持たず、印を書けない）。
+  - 15 番は番号の型を広げず、255 色を越えたら `error!` を残して失敗を返す（`from_image` の戻りの型は今のまま）。
+
+### 8.10 変えてはならない所（2026-11-06・取りまとめ役からの申し送りを確かめた）
+
+- `crates/wintf/src/ecs/layout/systems/monitor_systems.rs:564` の記録の文「`[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`」は、`crates/areka/src/placement/transition_judge_reobservation_tests.rs:74` が実機ログの写し（逐語の fixture）として使い、`monitor_systems_tests.rs:350` も確かめに使う。20 番（`BoxStyle` の組み立てをまとめる）と 30 番（ログを削る）は、この行の文を変えない。完了した spec の手順書（`.kiro/specs/completed/areka-P0-dpi-window-vanish/diagnosis-procedure.md`）も実機の grep の語に使っている。
+- `crates/wintf/src/ecs/graphics/visual.rs:19`・`:135` の `Visual` の付けたときのフックは `Arrangement::default()` だけを入れ、`GlobalArrangement` と `ArrangementTreeChanged` は `Arrangement` のフックの連鎖に任せている。13 番の `insert_if_new` は「無ければ入れる」なので、この連鎖は今のまま効く（変わるのは、束で渡した値を上書きしなくなる所だけ）。
+
+### 8.11 28 番の道（2026-11-06・取りまとめ役の答え・設計の討議で開発者に確かめる）
+
+- 取る道: 要件 4.5 の「相手の着地の後へ回す」（設計の段の報告で ⒜ として推した案）。
+- 理由: 欄を非公開にすると `crates/areka/examples/mock-shell.rs:609` が組み立たなくなり、このウェーブのあいだは `crates/areka/` に触れない（要件 5.11・5.12）。開発者は `wintf-visual-tree` と `placement-crate-split` をこの spec より先に実装する見込みなので、この spec の実装は自然に `placement-crate-split` の着地の後になる。
+- 扱い:
+  - 前提なし（今の段）: `BitmapSource::path()` を足し、範囲の中の読み手を替える。
+  - 前提つき（`placement-crate-split` が main に着地し、この枝が main を取り込んだ後だけ）: 欄 `path` を非公開にし、`mock-shell.rs:609` を `bitmap.path()` に替える。同じタスクで `crates/areka/examples/clickthrough_two_rects.rs:192` の説明を 7 番の後の条件に合わせる（8.8）。
+  - 前提が満たされていないとき: そのタスクは手を付けずに止まり、開発者へ尋ねる。
+- あわせて記録する決まり（取りまとめ役の申し送り）: `monitor_systems_transition_tests.rs:32` は `include_str!` で `ecs/world/mod.rs` の字面を見張る。同じウェーブの `wintf-visual-tree` が先にその行を変えたなら、この spec は main を取り込み、テストがその字面に合ったままであることを確かめるだけにする（`ecs/world/mod.rs` には触らない）。
