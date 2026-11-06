@@ -1,4 +1,4 @@
-//! `build` の純粋なテスト（工場だけ・装置なし・要件 1.1, 1.3, 1.5, 2.4, 2.5, 2.7, 2.8, 4.5, 4.6, 5.5〜5.7, 6.7）。
+//! `build` の純粋なテスト（工場だけ・装置なし・要件 1.1, 1.3, 1.5, 2.4〜2.8, 4.5, 4.6, 5.1, 5.2, 5.5〜5.7, 6.7）。
 //! `fill_world_visuals` で埋めた後の値から列を組む（本番と同じ順）。
 
 use super::super::draw_content_test_support::solid_rect_content;
@@ -6,6 +6,7 @@ use super::super::*;
 use super::builder::*;
 use crate::ecs::graphics::ClipShape;
 use crate::ecs::layout::Arrangement;
+use crate::ecs::test_support::capture_under_filter;
 use crate::numerics::*;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::system::SystemState;
@@ -30,9 +31,12 @@ fn rect4() -> D2D_RECT_F {
     }
 }
 
+fn factory() -> ID2D1Factory {
+    unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, None) }.unwrap()
+}
+
 fn unit_rect() -> ID2D1Geometry {
-    let factory: ID2D1Factory1 =
-        unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, None) }.unwrap();
+    let factory = factory();
     let r = D2D_RECT_F {
         left: 0.0,
         top: 0.0,
@@ -115,7 +119,17 @@ fn build_only(
     let mut state: SystemState<Query<NodeData>> = SystemState::new(world);
     let nodes = state.get(world).unwrap();
     let mut out = vec![DrawCommand::PopClipRect]; // 先頭で消されること
-    build(&mut out, unit, viewport, &nodes, visited);
+    let root = Entity::PLACEHOLDER;
+    build(
+        &mut out,
+        &factory(),
+        unit,
+        viewport,
+        &nodes,
+        root,
+        None,
+        visited,
+    );
     out
 }
 
@@ -388,4 +402,167 @@ fn hash_is_the_same_for_same_version_and_transform_regardless_of_com_address() {
     let mut neg = item.world_mat;
     neg.M12 = -0.0;
     assert_eq!(hash(v, neg), h1);
+}
+
+fn with_clip(clip: ClipShape) -> Visual {
+    Visual {
+        clip: Some(clip),
+        ..Default::default()
+    }
+}
+
+/// 切り抜きの節（位置 (2, 3)・大きさ 10×10）と中身の子を置き、最初の push の図形を返す。
+fn geometry_clip_of(clip: ClipShape) -> (ClipGeometry, Vec<DrawCommand>) {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let a = group(&mut world, root, with_clip(clip), at(2.0, 3.0, 10.0, 10.0));
+    leaf(&mut world, a, 0.0, 0.0);
+    let out = flatten(&mut world, root, INFINITE);
+    let DrawCommand::PushClipGeometry(g) = &out[0] else {
+        panic!("図形の push でない: {:?}", shape(&out));
+    };
+    assert_eq!(g.world_mat, Matrix3x2::translation(2.0, 3.0));
+    assert_eq!(g.world_aabb, Aabb::new(2.0, 3.0, 12.0, 13.0));
+    assert!(matches!(out[1], DrawCommand::Draw(_)));
+    assert!(matches!(out[2], DrawCommand::PopClipGeometry));
+    assert_eq!(out.len(), 3);
+    (g.clone(), out)
+}
+
+/// 局所の点が図形の内側か。
+fn inside(g: &ID2D1Geometry, x: f32, y: f32) -> bool {
+    let p = windows_numerics::Vector2 { X: x, Y: y };
+    unsafe { g.FillContainsPoint(p, None, D2D1_DEFAULT_FLATTENING_TOLERANCE) }
+        .unwrap()
+        .as_bool()
+}
+
+#[test]
+fn uniform_rounded_clip_is_a_path_geometry_of_the_arrangement_size() {
+    let (g, _) = geometry_clip_of(ClipShape::rounded_rectangle(3.0));
+    for (x, y) in [(0.3, 0.3), (9.7, 0.3), (9.7, 9.7), (0.3, 9.7)] {
+        assert!(!inside(&g.geometry, x, y), "角の外 ({x}, {y})");
+    }
+    for (x, y) in [(5.0, 5.0), (1.5, 1.5), (5.0, 0.1), (0.1, 5.0)] {
+        assert!(inside(&g.geometry, x, y), "内側 ({x}, {y})");
+    }
+}
+
+#[test]
+fn individual_rounded_clip_rounds_each_corner_by_its_own_radius() {
+    // 右上だけ丸い。
+    let (g, _) = geometry_clip_of(ClipShape::rounded_rectangle_individual(0.0, 4.0, 0.0, 0.0));
+    assert!(!inside(&g.geometry, 9.7, 0.3), "右上の角の外");
+    for (x, y) in [(0.3, 0.3), (9.7, 9.7), (0.3, 9.7)] {
+        assert!(inside(&g.geometry, x, y), "丸くない角の内側 ({x}, {y})");
+    }
+}
+
+/// 持ち主の WUC 側と同じ見た目か: 同じ大きさ・半径の D2D 角丸矩形と内外が一致する（2.4）。
+/// 半径が辺の半分を超えると X と Y で別々に頭を打ち、角は楕円になる。
+#[test]
+fn rounded_clip_matches_d2d_rounded_rectangle_including_over_large_radius() {
+    let f = factory();
+    for (w, h, r) in [
+        (100.0, 40.0, 30.0),
+        (100.0, 40.0, 5.0),
+        (40.0, 100.0, 200.0),
+    ] {
+        let ours = super::clip_geometry::rounded_rect(&f, w, h, r, r, r, r).unwrap();
+        let d2d: ID2D1Geometry = unsafe {
+            f.CreateRoundedRectangleGeometry(&D2D1_ROUNDED_RECT {
+                rect: D2D_RECT_F {
+                    left: 0.0,
+                    top: 0.0,
+                    right: w,
+                    bottom: h,
+                },
+                radiusX: r,
+                radiusY: r,
+            })
+        }
+        .unwrap()
+        .cast()
+        .unwrap();
+        let pts = [
+            (21.0, 0.5),
+            (0.5, 21.0),
+            (w - 21.0, h - 0.5),
+            (w - 0.5, 21.0),
+            (0.5, 0.5),
+            (3.0, 3.0),
+            (w * 0.5, h * 0.5),
+            (w * 0.5, 0.5),
+            (0.5, h * 0.5),
+        ];
+        for (x, y) in pts {
+            assert_eq!(
+                inside(&ours, x, y),
+                inside(&d2d, x, y),
+                "{w}x{h} r={r} の ({x}, {y})"
+            );
+        }
+    }
+    let ours = super::clip_geometry::rounded_rect(&f, 100.0, 40.0, 30.0, 30.0, 30.0, 30.0).unwrap();
+    assert!(!inside(&ours, 21.0, 0.5), "楕円の角の外");
+}
+
+#[test]
+fn ellipse_geometry_clip_is_used_as_is() {
+    let ellipse: ID2D1Geometry = unsafe {
+        factory().CreateEllipseGeometry(&D2D1_ELLIPSE {
+            point: windows_numerics::Vector2 { X: 5.0, Y: 5.0 },
+            radiusX: 5.0,
+            radiusY: 5.0,
+        })
+    }
+    .unwrap()
+    .cast()
+    .unwrap();
+    let (g, _) = geometry_clip_of(ClipShape::Geometry(ellipse.clone()));
+    assert_eq!(g.geometry, ellipse);
+}
+
+const CLIP_FAIL_TEXT: &str = "切り抜きの図形を作れないか外接矩形を取れない";
+
+#[test]
+fn geometry_bounds_failure_logs_and_skips_the_subtree() {
+    // 開いたまま閉じていない path geometry は GetBounds が D2DERR_WRONG_STATE（0x88990001）を返す。
+    let path = unsafe { factory().CreatePathGeometry() }.unwrap();
+    let _sink = unsafe { path.Open() }.unwrap();
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let clip = with_clip(ClipShape::Geometry(path.cast().unwrap()));
+    let a = group(&mut world, root, clip, at(0.0, 0.0, 10.0, 10.0));
+    world.entity_mut(a).insert(Name::new("broken-clip"));
+    leaf(&mut world, a, 0.0, 0.0);
+    let c = leaf(&mut world, root, 20.0, 0.0);
+    let visited = fill(&mut world, root);
+    let unit = unit_rect();
+    let mut out = Vec::new();
+    let log = capture_under_filter("error", || {
+        out = build_only(&mut world, &unit, INFINITE, &visited)
+    });
+    assert_eq!(shape(&out), vec![draw(c, 20.0, 0.0, 24.0, 4.0)]);
+    assert_eq!(log.matches(CLIP_FAIL_TEXT).count(), 1, "{log}");
+    assert!(log.contains("broken-clip"), "実体名が要る: {log}");
+    assert!(log.contains("0x88990001"), "HRESULT が要る: {log}");
+}
+
+#[test]
+fn node_gone_between_fill_and_build_is_logged_and_skipped() {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let a = leaf(&mut world, root, 0.0, 0.0);
+    leaf(&mut world, a, 1.0, 0.0);
+    let c = leaf(&mut world, root, 10.0, 0.0);
+    let visited = fill(&mut world, root);
+    world.entity_mut(a).remove::<Arrangement>();
+    let unit = unit_rect();
+    let mut out = Vec::new();
+    let log = capture_under_filter("error", || {
+        out = build_only(&mut world, &unit, INFINITE, &visited)
+    });
+    assert_eq!(shape(&out), vec![draw(c, 10.0, 0.0, 14.0, 4.0)]);
+    assert_eq!(log.matches("[build]").count(), 1, "{log}");
 }
