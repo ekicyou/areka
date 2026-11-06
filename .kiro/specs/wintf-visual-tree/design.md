@@ -250,7 +250,7 @@ flowchart TD
 | 1.10 | 木なしは今と同じ画素 | `render_surface`（`Option<&DrawTree>` が `None` なら今の道） | — | — |
 | 1.11 | 節の下の持ち主は `error!` で切る | `fill_world_visuals` | — | — |
 | 2.1 | 重ね方・補間（既定 SOURCE_OVER・LINEAR） | `VisualDrawContent`・`emit` | `DrawItem` | emit の規則 |
-| 2.2 | 根の変形×局所の変形・DIP | `fill_world_visuals`（DIP の world）・`emit`（`root` を掛ける） | `WorldVisual` | emit の規則 |
+| 2.2 | 根の変形×局所の変形（`VisualTransform × 平行移動(Arrangement.offset)`）・DIP | `fill_world_visuals`（DIP の world）・`emit`（`root` を掛ける） | `WorldVisual` | emit の規則 |
 | 2.3 | 回転・拡大・反転 | `Transform2D::to_affine`・`emit` | — | — |
 | 2.4 | 矩形・角丸の切り抜き（大きさは `Arrangement`） | `build`・`clip_geometry` | `ClipShape` | — |
 | 2.5 | 回転した矩形は図形へ | `build`（`axis_aligned` でなければ `PushClipGeometry`） | — | emit の規則 |
@@ -328,7 +328,7 @@ flowchart TD
 **Responsibilities & Constraints**
 - `Visual` は今のまま（`is_visible`・`opacity`・`transform_origin`・`clip`）。doc に「可視・切り抜き・不透明度は `Visual` の 1 つの性質。描画面の持ち主では WUC（`visual_property_sync_system`・`clip_sync_system`）が、節では D2D（`fill_world_visuals`・`build`・`emit`）が実現する。`ClipShape::Geometry` は節だけが効かせ、持ち主では `warn!` 1 度で切り抜かない。節の `opacity` は `warn!` 1 度で 1.0」と書く（3.3）。
 - `OwnSurface`: 印の部品（`#[derive(Component, Default)] pub struct OwnSurface;`）。在れば新しい描き方の部品の有無に依らず描画面の持ち主。
-- 規則は 1 か所: `pub(crate) fn wants_own_surface(has_command_list: bool, has_own_surface: bool, has_tree_parts: bool) -> bool { has_command_list || has_own_surface || !has_tree_parts }`。`has_tree_parts` は `VisualDrawContent` か `VisualTransform` を持つこと。`on_visual_add` はこの規則で 3 部品を入れるか決める（bevy はバンドルを全部書いてからフックを呼ぶので、同じバンドルで入った部品が見える。着手の最初のタスクで `systems_tests.rs` の 1 本で確かめる）。`sync_surface_owner_parts` が後からの変化を直す。
+- 規則は 1 か所: `pub(crate) fn wants_own_surface(has_command_list: bool, has_own_surface: bool, is_node: bool) -> bool { has_command_list || has_own_surface || !is_node }`。`is_node` は **`Has<WorldVisual>`**（設計議題 2・検証の重大 2・開発者 2026-11-06「承認」）: `WorldVisual` は `VisualDrawContent`／`VisualTransform` の `#[require]` で必ず入り、装置の失い（`invalidate_dependent_components` は `VisualDrawContent` を外す）でも外れないので、失いの回に節が持ち主へ化ける往復が起きない。新しい描き方の部品を一度でも持った Visual は節のまま（要件 1.2b）。節を持ち主へ戻すには `OwnSurface` を付ける（`Visual` の doc に書く）。`sync_surface_owner_parts` が見る `Added`／`RemovedComponents` も `WorldVisual`・`OwnSurface`・`GraphicsCommandList` の 3 つになる。`on_visual_add` はこの規則で 3 部品を入れるか決める（bevy はバンドルを全部書いてからフックを呼ぶので、同じバンドルで入った部品が見える。着手の最初のタスクで `systems_tests.rs` の 1 本で確かめる）。`sync_surface_owner_parts` が後からの変化を直す。
 
 **Contracts**: State [x]
 
@@ -481,7 +481,7 @@ pub(crate) fn build(
 )
 ```
 - 走査は `visited` の順をそのままたどる（深さ優先の前順・`Children` の並び順・1.1）。深さが戻ったところで、積んでおいた pop の命令（`PopClipRect`／`PopClipGeometry`）を出す。再帰しない（5.3・5.4 は `fill_world_visuals` と同じ上限）。
-- 節の位置は `VisualTransform` だけで決まる（2.2）。節の `Arrangement` は切り抜きの大きさ（`size`）にだけ使い、`offset`・`scale` は描画に使わない（持ち主の位置は今までどおり WUC の木）。
+- 節の局所の変形は `VisualTransform × 平行移動(Arrangement.offset)`（設計議題 1・開発者 2026-11-06「承認」）: 位置の正本は持ち主も節も layout（`Arrangement.offset`・DIP）で、`VisualTransform` はその上の追加の変形（WinUI Composition の `Offset` と `TransformMatrix` の重ね方と同じ）。節に layout を使わなければ `offset` は 0 なので答えは変わらない。`Arrangement.scale` は描画に使わない（DPI の倍率は `emit` の `root`）。`Arrangement.size` は切り抜きの大きさ（2.4）。この積は `fill_world_visuals` が行う（`build` は `WorldVisual` を読むだけ）。
 - 切り抜きの計画（`plan_clip`）: `Visual.clip` が `None` → `NoClip`。`Rectangle` かつ `world_mat.axis_aligned()` → `PushClipRect(local_rect.transform(world_mat))`。`Rectangle` で回転・せん断 → `PushClipGeometry { geometry: unit_rect, world_mat: unit_to_rect(local_rect) * world_mat }`。`RoundedRectangle*` → `clip_geometry::rounded_rect(factory, size, 4 つの半径)` で path geometry（4 角の弧・均一も個別も同じ 1 本の道・大きさは `Arrangement.size`・2.4）。`Geometry(g)` → `PushClipGeometry { geometry: g.clone(), world_mat }`。どの分岐でも `new_eff = eff ∩ clip_world_aabb`・空なら `Culled`（push も pop も出さない）。
 - 図形の外接矩形は `ID2D1Geometry::GetBounds(Some(&world_mat))` を `Result` で受け、`Err` は `error!`（実体名・HRESULT）を残して `Culled`（5.2・0 の矩形に化かさない）。path geometry の作成の失敗も同じ（5.1）。
 - 描く 1 件: 中身が在り `content_world_aabb` が `new_eff` と交わるときだけ `Draw` を出す（2.8 の間引き・1.3）。`hash_draw(entity, version, interpolation, composite, world_mat)`（`CalcHash` で小数を正規化・番地を使わない・4.5）。
@@ -517,7 +517,7 @@ pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCom
 | Intent | 窓の下の `Visual` に、規則 `wants_own_surface` の答えどおり 3 部品を入れる・外す |
 | Requirements | 1.2a, 1.2b, 1.2c |
 
-- 見る変化: `Or<(Changed<ChildOf>, Added<VisualDrawContent>, Added<VisualTransform>, Added<OwnSurface>, Added<GraphicsCommandList>)>` の実体と、`RemovedComponents<VisualDrawContent | VisualTransform | OwnSurface | GraphicsCommandList>` の実体。`Changed<ChildOf>` の実体は子孫も見る（今の `insert_graphics_parts_on_window_join` の明示のスタック・上限つき）。
+- 見る変化: `Or<(Changed<ChildOf>, Added<WorldVisual>, Added<OwnSurface>, Added<GraphicsCommandList>)>` の実体と、`RemovedComponents<OwnSurface | GraphicsCommandList>` の実体（`WorldVisual` は外れない＝設計議題 2）。`Changed<ChildOf>` の実体は子孫も見る（今の `insert_graphics_parts_on_window_join` の明示のスタック・上限つき）。
 - 判定: 窓に属し（`has_window_ancestor`）、規則が真で 3 部品が無ければ `insert_if_new`、規則が偽で `VisualGraphics` を持てば 3 部品を `remove`。
 - 置き場は `PreRenderSurface` の先頭（`visual_resource_management_system` の前・今と同じ）。
 - Validation: `systems_tests.rs`: 後から `VisualDrawContent` を入れた持ち主が節になる・`OwnSurface` を入れた節が持ち主になる・`GraphicsCommandList` を入れた節が持ち主になる・窓へ後から付けた木（今の `window_join_test` の筋）。
@@ -631,7 +631,7 @@ graph TB
 - `numerics/aabb_tests.rs`: `is_empty`（NaN・退化・`EMPTY`）・`intersect`（離れた矩形は空・NaN は空）・`union`（`EMPTY` は単位元）・`transform`（軸に沿う近道と 4 角の一般・空と NaN は `EMPTY`・反転でも左上右下が揃う）（5.6, 5.7, 6.6）。
 - `numerics/matrix3x2_tests.rs`: `axis_aligned`（0 度・90 度・180 度・270 度・1e-5 の残り＝沿う・45 度・せん断＝沿わない）・`moved`（平行移動 0.5 と `eps` 1.0 で偽・2.0 で真・矩形が遠いほど回転の差が大きく出る）（5.5, 5.11, 6.6）。
 - `numerics/transform2d_tests.rs`: `pivot_srt`（anchor を中心に 90 度で (1,0) が (0,1) へ・`m21` の符号を裏返すと赤）・`to_affine`（`pivot_srt · mat · T(offset)` の順）・負の拡大（反転）（2.3, 6.6）。
-- `graphics/visual/visual_tests.rs`: `wants_own_surface` の真理値表 8 通り（1.2a〜2c）。
+- `graphics/visual/visual_tests.rs`: `wants_own_surface(has_command_list, has_own_surface, is_node)` の真理値表 8 通り（1.2a〜2c）。`systems_tests.rs` に「装置の失いの形で `VisualDrawContent` を外しても節のまま（3 部品が入らない）」の 1 本（検証の重大 2）。
 - `graphics/visual/world_visual_tests.rs`・`draw/builder_tests.rs`・`systems_tests.rs`: Components の各 Validation のとおり（1.1〜1.7, 1.11, 2.7, 2.8, 4.1〜4.6, 5.2〜5.4, 6.7）。
 
 ### Integration Tests（実 GPU・画面に出さない・既存の `tests/graphics/` の形）

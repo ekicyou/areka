@@ -50,7 +50,7 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 1. While 描画面の持ち主が子孫に節を持つ, when その描画面が描かれる, the wintf shall 根の自分の命令の列（在れば）を先に描き、続けて節を深さ優先の前順（親が先・兄弟は `Children` の並び順）で同じ描画面に描く。
 2. The wintf shall 描画面の持ち主を、その描画面の木の根と見なし、根より下で自分の描画面を持つ Visual とその子孫を、根の木の節と見なさない。
 2a. While Visual が新しい描き方の部品のいずれかを持ち、`GraphicsCommandList` を持たず、描画面を持つ目印（名前は設計で決める・例 `OwnSurface`）を持たない, the wintf shall その Visual を節とし、自分の WUC の Visual と描画面を作らない（新しい描き方の既定は「描画面なし」）。
-2b. While Visual が `GraphicsCommandList` を持つ, or 新しい描き方の部品を 1 つも持たない, the wintf shall 今どおりその Visual に WUC の Visual（と、命令の列があれば描画面）を持たせる（今の描き方の既定は変えない）。
+2b. While Visual が `GraphicsCommandList` を持つ, or 新しい描き方の部品を一度も持ったことがない, the wintf shall 今どおりその Visual に WUC の Visual（と、命令の列があれば描画面）を持たせる（今の描き方の既定は変えない。一度節になった Visual は装置の失いで中身が外れても節のまま・持ち主へ戻すには目印を付ける＝設計議題 2・2026-11-06）。
 2c. While Visual が描画面を持つ目印を持つ, the wintf shall 新しい描き方の部品の有無に依らず、その Visual に WUC の Visual と描画面を持たせ、その下の木の根とする（手動の昇格の口）。
 3. When 節が描く中身（`VisualDrawContent`）を持たない, the wintf shall その節自身は描かず、子孫の節は描く。
 4. When 節が局所の変形（`VisualTransform`）を持たない, the wintf shall 恒等の変形として扱う。
@@ -69,7 +69,7 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 #### Acceptance Criteria
 
 1. When 節を描く, the wintf shall その節の描く中身が持つ重ね方（composite mode）と補間の指定で描く。指定しない描き手の既定は `SOURCE_OVER` と線形補間とする。
-2. When 節を描く, the wintf shall 根から節までの局所の変形を順に掛け合わせた世界の変形で描く。根の変形は今の描画面の変形（DPI の倍率と描画面の中の描き始めの位置）とし、節の局所の座標は 96 DPI の DIP で与える。
+2. When 節を描く, the wintf shall 根から節までの局所の変形（節ごとに `VisualTransform` × 配置の位置 `Arrangement.offset` の平行移動・設計議題 1）を順に掛け合わせた世界の変形で描く。根の変形は今の描画面の変形（DPI の倍率と描画面の中の描き始めの位置）とし、節の局所の座標は 96 DPI の DIP で与える。
 3. When 節の局所の変形が回転・拡大・負の拡大（反転）を含む, the wintf shall その変形を描く中身にそのまま効かせる（回転した絵・拡大した絵・裏返した絵が得られる）。
 4. When 節の `Visual.clip` が矩形か角丸（`ClipShape::Rectangle`・`RoundedRectangle*`・大きさは描画面の持ち主と同じく配置から）, the wintf shall その節と子孫の描画を、節の局所の座標でのその形の内側に限る。
 5. When 矩形か角丸の切り抜きを持つ節の世界の変形が回転・せん断を含む, the wintf shall 切り抜きを世界の座標で回転した形として効かせる（軸に沿う矩形に広げない）。

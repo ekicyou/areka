@@ -197,7 +197,8 @@
 
 - **`DrawCommand` は命令の列と図形の複製を持つ**: `PushClipGeometryEntity`／`PushClipGeometryRect` を `PushClipGeometry { world_mat, geometry, world_aabb }` 1 つにまとめ、`DrawItem` に `command_list`・補間・重ね方を持たせる。`emit` は `Query` を要らず、純粋なテストが列だけで答えを比べられる。代わりに `DrawTree` に `Send/Sync` の注記が要る（`ClipShape` と同じ根拠）。
 - **角丸の切り抜きは path geometry 1 本の道**（均一も個別も 4 角の弧）: D2D は個別の半径を正しく描けるので、WUC 側の「最大の半径へ縮める」近似は写さない。
-- **節の位置は `VisualTransform` だけ**。節の `Arrangement` は切り抜きの大きさにだけ使う（2.2・2.4 の字面）。
+- ~~節の位置は `VisualTransform` だけ~~ → **設計の討議（2026-11-06・承認）で改めた**: 節の局所の変形は `VisualTransform × 平行移動(Arrangement.offset)`（位置の正本は layout・WinUI の `Offset`×`TransformMatrix` と同じ）。`Arrangement.size` は切り抜きの大きさ。
+- **設計の討議で確定（検証の重大 2）**: 持ち主の規則の入力は `Has<WorldVisual>`（節であることは失いで消えない）。要件 1.2b を「一度も持ったことがない」に直した。代案（`VisualDrawContent.command_list` を `Option` に）は公開の欄の形を変えるので採らなかった。
 - **`VisualVersion` は `Changed<Visual>` でも上がる**（`opacity`・`transform_origin` の変化を含む）: 版が余分に上がるだけで「変形では上げない」の約束は守る。前の値を控える作りは足さない。
 - **`sync_surface_owner_parts` が `insert_graphics_parts_on_window_join` を置き換える**: 規則の答えが変わる 4 つの部品の出入りと `ChildOf` の変化を 1 つの係で見る。
 
