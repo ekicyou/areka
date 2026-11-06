@@ -15,25 +15,24 @@ use crate::pattern::{Cell, PatternState};
 use crate::plan::BlitOp;
 use crate::world::EmoWorld;
 
-/// 動く絵の子 `film` の今のコマを 1 枚の命令にして積む。欄が「載っていない」なら経過 0 のコマ、
+/// 動く絵の子 `film` の今のコマを 1 枚の命令にする。欄が「載っていない」なら経過 0 のコマ、
 /// 絵の番号が子のコマに無ければ経過 0 のコマ（`debug!`）、「消えている」なら何も。全透明のコマは
 /// 命令にしない。子の定義が無ければ（起きないはず）描かずに `error!`。
-pub(crate) fn push_film_op(
-    out_ops: &mut Vec<BlitOp>,
+pub(crate) fn film_op(
     world: &EmoWorld,
     atlas: &AtlasTable,
     film: FilmId,
     pattern: &PatternState,
     method: &ComposeMethod,
     transform: Transform,
-) {
+) -> Option<BlitOp> {
     let Some(sheet) = world.film_sheet(film) else {
         tracing::error!(
             target: "areka_emo_compose",
             film = film.0,
             "動く絵の子の定義が無い: 描かない"
         );
-        return;
+        return None;
     };
     let rest = sheet.frames[sheet.rest];
     let picture = match pattern.cell(Some(PartKey::Film(film)), 0) {
@@ -47,19 +46,17 @@ pub(crate) fn push_film_op(
             );
             rest
         }
-        Cell::Blank => return,
+        Cell::Blank => return None,
         Cell::Rest | Cell::Frame(_) => rest,
     };
     let element = ElementId(picture);
-    if atlas.entry(element).placement.is_none() {
-        // 全透明のコマ（通常系）。
-        return;
-    }
-    out_ops.push(BlitOp {
+    // 全透明のコマ（通常系）は命令にしない。
+    atlas.entry(element).placement.as_ref()?;
+    Some(BlitOp {
         element,
         transform,
         method: method.clone(),
-    });
+    })
 }
 
 /// `always` の animation `anim` の欄が `cell` のとき、経過 0 として描く pattern。「載っていない」で、

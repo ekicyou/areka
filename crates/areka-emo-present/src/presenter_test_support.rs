@@ -381,7 +381,7 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
 /// 有効 surface 1000（`w×h` 全不透明 element）＋ 定義層皆無で外形 0×0 に退化する surface 7000
 /// （element/animation ゼロ）を**同一 target**へ載せる `(EmoWorld, AtlasTable)` を返す。
 ///
-/// surface 7000 は composer_tests.rs の `no_layers_degenerate_propagates_empty_composition`
+/// surface 7000 は plan_extent_tests.rs の `build_plan_no_layers_degenerate_is_empty_composition`
 /// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::compose` が
 /// `Err(ComposeError::EmptyComposition(7000))` を返す。単なる全透明 element は非ゼロ外形の
 /// `Ok`（`all_transparent_surface_is_ok_transparent_nonzero_extent`）で EmptyComposition では
@@ -497,7 +497,6 @@ pub(super) fn bind_overlay_surface(x: i64, y: i64) -> Surface {
         animations: vec![Animation {
             id: 2000,
             interval: Interval::Bind,
-            interval_written: true,
             patterns: vec![Pattern {
                 index: 0,
                 method: DrawMethod::new("overlay".to_string()),

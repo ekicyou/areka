@@ -4,8 +4,8 @@
 //! 実装状態（実装済み＝`overlay`・型シームのみ＝それ以外）を保持する。emo2 実測で使用される
 //! `overlay`（および同義の `add`/`bind`）のみ実挙動を持ち、`overlay-fast`・`interpolate`・
 //! `replace`・`asis`・`reduce`・`blend-*` 群などは未実装シームとして口だけを保つ。未実装メソッド
-//! 参照時はパニックせず `warn` 以上のログで観測可能に扱う（実際のスキップ／ログは下流
-//! `blit` 実行器の責務であり、本モジュールは登録簿＝型シームのみを提供する）。
+//! 参照時はパニックせずログで観測可能に扱う（未知の語は `from_name` が `debug!`・未実装メソッドの命令は
+//! 下流の `blit` 実行器が `debug!` を出して飛ばす。本モジュールは登録簿＝型シームのみを提供する）。
 //!
 //! # 表現の選択（BlendMode）
 //!
@@ -17,7 +17,9 @@
 //! 列挙し、`fast` は直交フラグとして構造体に持たせることで、写像表（design
 //! 「合成メソッド写像表」）の全ブレンドモードを最小の列挙で忠実に表現する。
 
-use tracing::warn;
+use std::borrow::Cow;
+
+use tracing::debug;
 
 /// ukadoc 由来の合成（描画）メソッド全量列挙。
 ///
@@ -128,11 +130,22 @@ pub enum BlendKind {
 
 /// メソッド名の正規化（前後の空白を落とし・小文字にし・`-` と `_` を除く）。
 ///
-/// [`ComposeMethod::from_name`] と [`crate::world::EmoWorld::dangling_pattern_targets`] が
-/// **同じ規則**で語を比べるための唯一の定義である。`from_name` は未知の語で `warn!` を出すので
-/// 照会の側からは呼べない（要件 3.5）が、正規化だけはここを共有する。
-pub(crate) fn canonical_method_name(name: &str) -> String {
-    name.trim().to_ascii_lowercase().replace(['-', '_'], "")
+/// [`ComposeMethod::from_name`]・[`is_known_name`]・[`crate::pattern_word::pattern_word`]（照会の
+/// [`crate::world::EmoWorld::dangling_pattern_targets`] もこれを通る）が**同じ規則**で語を比べるための唯一の
+/// 定義である。`from_name` は未知の語で `debug!` を出すので照会の側からは呼べない（要件 3.5）が、正規化だけは
+/// ここを共有する。合成のたびに引く [`is_implemented_name`] は確保しない [`same_canonical`] で同じ規則を当てる。
+///
+/// もう正規化済みの語（ふつうの `overlay` など）は写さずに借りて返す（指摘 29）。
+pub(crate) fn canonical_method_name(name: &str) -> Cow<'_, str> {
+    let name = name.trim();
+    if name
+        .bytes()
+        .any(|b| b.is_ascii_uppercase() || b == b'-' || b == b'_')
+    {
+        Cow::Owned(name.to_ascii_lowercase().replace(['-', '_'], ""))
+    } else {
+        Cow::Borrowed(name)
+    }
 }
 
 impl ComposeMethod {
@@ -156,7 +169,9 @@ impl ComposeMethod {
         // 正規化は [`canonical_method_name`] 1 か所に置く（同じ規則を引く
         // `EmoWorld::dangling_pattern_targets` と静かにずれないため）。
         known_method(&canonical_method_name(name)).unwrap_or_else(|| {
-            warn!(method = %name, "未知の合成メソッド名: Unknown シームへ吸収");
+            // 利用者向けの warn は読み込みの形の誤り（`ShapeIssue::UndrawnPattern`・未知の語は先が無くても数える）が
+            // 1 件 1 行で出す。
+            debug!(target: "areka_emo_compose", method = %name, "未知の合成メソッド名: Unknown シームへ吸収");
             ComposeMethod::Unknown(name.into())
         })
     }
@@ -168,7 +183,7 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
         // overlay 同義群（ukadoc 同義明文）。
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#overlay:1
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell_surfaces.html#add:1
-        "overlay" | "add" | "bind" => ComposeMethod::Overlay,
+        c if OVERLAY_WORDS.contains(&c) => ComposeMethod::Overlay,
         "overlayfast" => ComposeMethod::OverlayFast,
         "interpolate" => ComposeMethod::Interpolate,
         "replace" => ComposeMethod::Replace,
@@ -180,16 +195,29 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
     })
 }
 
-/// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
-/// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `warn!` を出さない）。
-pub(crate) fn is_implemented_name(name: &str) -> bool {
-    known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
+/// `name` を [`canonical_method_name`] と同じ規則で正規化した語が、正規化済みの語 `canon` と同じか（確保しない）。
+fn same_canonical(name: &str, canon: &str) -> bool {
+    name.trim()
+        .bytes()
+        .filter(|&b| b != b'-' && b != b'_')
+        .map(|b| b.to_ascii_lowercase())
+        .eq(canon.bytes())
 }
 
-/// `move`（サーフェスの番号を無視して、土台の層の表示位置をずらす・描かない）か。
-/// 語の見分けは [`crate::pattern_word::pattern_word`] 1 か所に置く。
-pub(crate) fn is_move_name(name: &str) -> bool {
-    crate::pattern_word::pattern_word(name) == crate::pattern_word::PatternWord::Move
+/// [`ComposeMethod::Overlay`] へ写す語（正規化済み・[`known_method`] と [`is_implemented_name`] が共有する）。
+const OVERLAY_WORDS: [&str; 3] = ["overlay", "add", "bind"];
+
+/// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
+/// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `debug!` を出さない）。
+/// 実装済みは `Overlay` だけ（[`ComposeMethod::is_implemented`]）なので、その語と比べる。合成のたびに引かれる
+/// ので確保しない（大文字や `-`・`_` の入った語でも・7 回目の指摘 4）。
+pub(crate) fn is_implemented_name(name: &str) -> bool {
+    OVERLAY_WORDS.iter().any(|w| same_canonical(name, w))
+}
+
+/// 記録を出さずに「この描画メソッドの語が登録簿に在るか」を答える（未知の語なら false）。
+pub(crate) fn is_known_name(name: &str) -> bool {
+    known_method(&canonical_method_name(name)).is_some()
 }
 
 /// 正規化済み（小文字・区切り除去）メソッド名を [`BlendMode`] へ写像する。
@@ -259,23 +287,8 @@ mod tests {
                 ComposeMethod::Unknown(_) => "unknown",
             }
         }
-        // 代表値で全 variant を踏む。
-        let all = [
-            ComposeMethod::Overlay,
-            ComposeMethod::OverlayFast,
-            ComposeMethod::Interpolate,
-            ComposeMethod::Replace,
-            ComposeMethod::Asis,
-            ComposeMethod::Base,
-            ComposeMethod::Reduce,
-            ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)),
-            ComposeMethod::Auto,
-            ComposeMethod::Unknown("future".into()),
-        ];
-        assert_eq!(all.len(), 10);
-        for m in &all {
-            assert!(!name(m).is_empty());
-        }
+        // 呼ばれなくても型検査で網羅が確かめられる。
+        let _ = name;
     }
 
     /// 網羅 match ガード（Req 8.1）: `BlendKind` の全 19 種を名指しする。
@@ -304,31 +317,7 @@ mod tests {
                 BlendKind::Luminosity => "luminosity",
             }
         }
-        let all = [
-            BlendKind::Add,
-            BlendKind::Multiply,
-            BlendKind::Screen,
-            BlendKind::Overlay,
-            BlendKind::Darken,
-            BlendKind::Lighten,
-            BlendKind::DarkerColor,
-            BlendKind::LighterColor,
-            BlendKind::ColorBurn,
-            BlendKind::ColorDodge,
-            BlendKind::HardLight,
-            BlendKind::HardMix,
-            BlendKind::Difference,
-            BlendKind::Exclusion,
-            BlendKind::Divide,
-            BlendKind::Hue,
-            BlendKind::Saturation,
-            BlendKind::Color,
-            BlendKind::Luminosity,
-        ];
-        assert_eq!(all.len(), 19);
-        for k in all {
-            assert!(!name(k).is_empty());
-        }
+        let _ = name;
     }
 
     /// Req 8.2/8.3: `Overlay` のみ実装済み・他はすべて型シーム（未実装）。
@@ -404,6 +393,38 @@ mod tests {
             ComposeMethod::from_name("overlayscreen"),
             ComposeMethod::Blend(BlendMode::fast(BlendKind::Screen))
         );
+    }
+
+    /// 確保しない [`is_implemented_name`] は `from_name(..).is_implemented()` と同じ答え（大文字・区切り・空白・
+    /// 似た綴りの語も）。
+    #[test]
+    fn is_implemented_name_matches_from_name() {
+        for name in [
+            "overlay",
+            "OVERLAY",
+            " Over-Lay ",
+            "o_v-e_rlay",
+            "add",
+            "ADD",
+            "Bind",
+            "b-i-n-d",
+            "overlayfast",
+            "overlay-fast",
+            "overla",
+            "overlayy",
+            "addd",
+            "",
+            "  ",
+            "blend-add",
+            "ＯＶＥＲＬＡＹ",
+            "bïnd",
+        ] {
+            assert_eq!(
+                is_implemented_name(name),
+                ComposeMethod::from_name(name).is_implemented(),
+                "{name:?}"
+            );
+        }
     }
 
     /// 未知メソッドは原文保持の `Unknown` シームへ吸収する。

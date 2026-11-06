@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::{AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, bake};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::AtlasTable;
+use areka_parsers::shell::parse;
 
 use super::{ShapeIssue, shape_issues};
 use crate::Composer;
@@ -12,6 +12,7 @@ use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
+use crate::plan_test_support::{bake_atlas_sized, bound_world, frame};
 use crate::world::EmoWorld;
 
 /// 循環（面 10 の bind が自分を指す）・描かないメソッド（面 0 の `replace` が面 20 を指す）を 1 つずつ
@@ -51,6 +52,33 @@ fn collects_cycle_and_undrawn_pattern_once_each() {
     assert!(logs.trim().is_empty(), "集める関数は記録を出さない: {logs}");
 }
 
+/// 1 つの pattern が循環と描かないメソッドの両方に当たる（面 10 の `replace` が自分を指す）と、`Cycle`
+/// が先（指摘 124）。
+#[test]
+fn cycle_comes_before_undrawn_for_the_same_pattern() {
+    let world = EmoWorld::build(&parse(
+        "charset,UTF-8\r\nsurface10\r\n{\r\nelement0,overlay,part.png,0,0\r\n\
+         animation0.interval,bind\r\nanimation0.pattern0,replace,10,0,0,0\r\n}\r\n",
+    ));
+    assert_eq!(
+        shape_issues(&world),
+        vec![
+            ShapeIssue::Cycle {
+                surface: 10,
+                animation: 0,
+                pattern: 0,
+                target: 10,
+            },
+            ShapeIssue::UndrawnPattern {
+                surface: 10,
+                animation: 0,
+                pattern: 0,
+                method: "replace".to_string(),
+            },
+        ]
+    );
+}
+
 /// 誤りの無いシェルは空。
 #[test]
 fn clean_shell_has_no_issues() {
@@ -64,42 +92,16 @@ fn clean_shell_has_no_issues() {
 
 /// 文面を面の表にし、アトラスを当てて返す。
 fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let rels = ["base.png", "part.png"];
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements: rels
-            .iter()
-            .map(|r| Element {
-                layer: 0,
-                path: ElementPath::new(r.to_string()),
-                x: 0,
-                y: 0,
-            })
-            .collect(),
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for rel in rels {
-        dec.insert(base.join(rel), 2, 2, 8, vec![255u8; 16], true);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: areka_emo_atlas::AlphaParams {
-            use_self_alpha: areka_emo_atlas::UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
-    let mut world = EmoWorld::build(&parse(text));
-    world.bind_atlas(&result.table, SetId(0));
-    (world, result.table)
+    let white = Some((255, 255, 255));
+    let atlas = bake_atlas_sized(
+        Path::new("shell/master"),
+        &[("base.png", (2, 2), white), ("part.png", (2, 2), white)],
+    );
+    (bound_world(&parse(text), &[], &atlas), atlas)
 }
 
 /// 同じ面を何度組んでも、形の誤り（入れ子の循環・描かないメソッドの pattern0 とコマ）の知らせは
-/// warn にならず debug に留まり、絵は毎回同じ（打ち切り・飛ばしの振る舞いは変わらない）。
+/// warn にならず debug に留まり、絵は 3 回とも同じ（決定性）。
 #[test]
 fn composing_repeatedly_adds_no_warn() {
     let (world, atlas) = world_of(TEXT);
@@ -108,10 +110,8 @@ fn composing_repeatedly_adds_no_warn() {
     pattern.set(
         2,
         PatternFrame {
-            surface_id: 20,
             method: ComposeMethod::Replace,
-            x: 0,
-            y: 0,
+            ..frame(20, 0, 0)
         },
     );
     let mut composer = Composer::new();
@@ -130,12 +130,6 @@ fn composing_repeatedly_adds_no_warn() {
         !logs.contains("level=WARN"),
         "合成は warn を出さない: {logs}"
     );
-    // 描かない語の pattern0 は読み込みのときに着せ替えの手順から外れ、合成のたびには知らせない
-    // （seriko-pattern-calls 5.5 で「非 Overlay method の bind pattern0」を外した）。
-    assert!(
-        !logs.contains("非 Overlay method の bind pattern0"),
-        "合成のたびに語を引き直さない: {logs}"
-    );
     for kind in ["循環", "非 Overlay method の現在コマ"] {
         assert!(
             logs.lines()
@@ -143,8 +137,8 @@ fn composing_repeatedly_adds_no_warn() {
             "{kind} は debug に残る: {logs}"
         );
     }
-    assert_eq!(shots[0..2], shots[2..4], "絵は毎回同じ");
-    assert_eq!(shots[0..2], shots[4..6], "絵は毎回同じ");
+    assert_eq!(shots[0..2], shots[2..4], "3 回とも同じ絵（決定性）");
+    assert_eq!(shots[0..2], shots[4..6], "3 回とも同じ絵（決定性）");
 }
 
 /// 面 0 が面 1 を置き（element定義と pattern定義）、面 1 の `move` が面 0 を指しても循環でない。
@@ -206,4 +200,26 @@ fn composing_unknown_sort_repeatedly_adds_no_warn() {
     );
     assert_eq!(shots[0], shots[1], "絵は毎回同じ");
     assert_eq!(shots[0], shots[2], "絵は毎回同じ");
+}
+
+/// 先の無い（負の番号の）pattern は、未知の語なら描かない pattern に数え、知っている語なら数えない。
+#[test]
+fn unknown_word_without_a_target_is_undrawn_but_known_word_is_not() {
+    let issues = |method: &str| {
+        let text = format!(
+            "surface0\n{{\nelement0,overlay,base.png,0,0\n\
+             animation0.interval,sometimes\nanimation0.pattern0,{method},-1,0,0,0\n}}\n"
+        );
+        shape_issues(&EmoWorld::build(&parse(&text)))
+    };
+    assert_eq!(
+        issues("foo"),
+        vec![ShapeIssue::UndrawnPattern {
+            surface: 0,
+            animation: 0,
+            pattern: 0,
+            method: "foo".to_string(),
+        }]
+    );
+    assert_eq!(issues("replace"), vec![]);
 }

@@ -2,11 +2,13 @@
 //!
 //! premultiplied SourceOver（`dst_c' = src_c + div255(dst_c × (255 − src_a))`・
 //! `div255(v) = (v + 127) / 255`）を u8/u32 整数で実装し、浮動小数を経路に持ち込まない。
+//! 式と「1 命令を矩形で切って重ねる」処理は [`overlay_op`] の 1 か所だけにあり、いちからの合成
+//! （[`execute`]）と矩形の重ね直し（[`crate::blit_rect`]）の両方がそれを呼ぶ。
 //! 転写先座標は「配置座標＋`trim_offset`」で算出しトリムが見た目を変えないことを保証する。
 //! `placement` が None（全透明）のエントリは転写をスキップする。合成先バッファを再利用し
 //! アトラス転写を O(elements) で行い、途中アロケーションを発生させない。
 
-use areka_emo_atlas::AtlasTable;
+use areka_emo_atlas::{AtlasPage, AtlasTable, Rect};
 
 use crate::composed::ComposedSurface;
 use crate::plan::{BlitOp, Extent};
@@ -32,6 +34,171 @@ fn source_over_channel(src_c: u8, dst_c: u8, inv_src_a: u32) -> u8 {
     out.min(255) as u8
 }
 
+/// 半開の矩形 `[x0, x1) × [y0, y1)`（i64・空は `x0 >= x1 || y0 >= y1`）。
+#[derive(Clone, Copy)]
+pub(crate) struct Area {
+    pub x0: i64,
+    pub y0: i64,
+    pub x1: i64,
+    pub y1: i64,
+}
+
+impl Area {
+    pub(crate) const EMPTY: Area = Area {
+        x0: 0,
+        y0: 0,
+        x1: 0,
+        y1: 0,
+    };
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.x0 >= self.x1 || self.y0 >= self.y1
+    }
+
+    pub(crate) fn intersect(self, o: Area) -> Area {
+        Area {
+            x0: self.x0.max(o.x0),
+            y0: self.y0.max(o.y0),
+            x1: self.x1.min(o.x1),
+            y1: self.y1.min(o.y1),
+        }
+    }
+
+    pub(crate) fn union(self, o: Area) -> Area {
+        if self.is_empty() {
+            return o;
+        }
+        if o.is_empty() {
+            return self;
+        }
+        Area {
+            x0: self.x0.min(o.x0),
+            y0: self.y0.min(o.y0),
+            x1: self.x1.max(o.x1),
+            y1: self.y1.max(o.y1),
+        }
+    }
+}
+
+/// 命令の置き場（左上が配置＋`trim_offset`・大きさが `uv_rect`・座標は i64）。
+/// `placement` が無い命令は空。
+pub(crate) fn op_area(op: &BlitOp, atlas: &AtlasTable) -> Area {
+    let Some(p) = atlas.entry(op.element).placement.as_ref() else {
+        return Area::EMPTY;
+    };
+    let (ox, oy) = op.transform.offset();
+    // 位置は i64 の端まで取りうるので飽和で足す（外形・シェルの外形と同じ）。
+    let x0 = ox.saturating_add(p.trim_offset.x as i64);
+    let y0 = oy.saturating_add(p.trim_offset.y as i64);
+    Area {
+        x0,
+        y0,
+        x1: x0.saturating_add(p.uv_rect.w as i64),
+        y1: y0.saturating_add(p.uv_rect.h as i64),
+    }
+}
+
+/// 合成 1 回で重ねてよい画素の数の、外形の面積に対する倍率（指摘 77・`MAX_AREA` の外形で 2^31 画素）。
+/// 仮の値（重ね塗り 64 枚分）で、測り直しの候補。
+pub(crate) const PIXEL_FACTOR: u64 = 64;
+
+/// 命令列 `ops` を、外形 `extent` の中で重ねる画素の合計が面積×[`PIXEL_FACTOR`] に収まる頭の部分だけに
+/// 切り詰める（いちからの合成も矩形の重ね直しも、この命令列より多くは重ねない）。描かない描画メソッドの命令は
+/// 重ねないので 0 画素に数える（指摘 134）。捨てた命令の数を返す。
+pub(crate) fn cap_pixels(ops: &mut Vec<BlitOp>, extent: Extent, atlas: &AtlasTable) -> usize {
+    let canvas = Area {
+        x0: 0,
+        y0: 0,
+        x1: extent.w as i64,
+        y1: extent.h as i64,
+    };
+    let limit = u64::from(extent.w) * u64::from(extent.h) * PIXEL_FACTOR;
+    let mut spent = 0u64;
+    let kept = ops
+        .iter()
+        .take_while(|op| {
+            let a = op_area(op, atlas).intersect(canvas);
+            if op.method.is_implemented() && !a.is_empty() {
+                spent += (a.x1 - a.x0) as u64 * (a.y1 - a.y0) as u64;
+            }
+            spent <= limit
+        })
+        .count();
+    let dropped = ops.len() - kept;
+    ops.truncate(kept);
+    dropped
+}
+
+/// `uv` が頁 `page` に収まり、頁の行の幅とバイト列の長さも足りるか（掛け算と足し算は `u64`）。
+/// 表（`AtlasTable::new`）は uv と頁を照らさないので、転写の手前で信じずに確かめる。
+fn uv_fits(uv: &Rect, page: &AtlasPage) -> bool {
+    let (w, h, stride) = (page.width as u64, page.height as u64, page.stride as u64);
+    uv.x as u64 + uv.w as u64 <= w
+        && uv.y as u64 + uv.h as u64 <= h
+        && w * 4 <= stride
+        && stride * h <= page.bytes.len() as u64
+}
+
+/// 命令 `op` を `clip`（合成先の中の矩形）で切って `dst`（行の幅 `stride`）へ SourceOver で重ねる。
+///
+/// 置き場が無い（全透明）なら何もしない。頁が無い・uv が頁に収まらないなら `warn!` を出して
+/// その命令だけ飛ばす（非パニック・破損アトラス防御）。`clip` は合成先の中にあること（呼び手の責任）。
+pub(crate) fn overlay_op(
+    dst: &mut [u8],
+    stride: usize,
+    clip: Area,
+    op: &BlitOp,
+    atlas: &AtlasTable,
+) {
+    let Some(placement) = atlas.entry(op.element).placement.as_ref() else {
+        return;
+    };
+    let Some(page) = atlas.page(placement.page) else {
+        tracing::warn!(
+            target: "areka_emo_compose",
+            element = op.element.0,
+            page = placement.page,
+            "転写元アトラス頁が存在しない: 命令を skip"
+        );
+        return;
+    };
+    let uv = &placement.uv_rect;
+    if !uv_fits(uv, page) {
+        tracing::warn!(
+            target: "areka_emo_compose",
+            element = op.element.0,
+            page = placement.page,
+            uv = ?uv,
+            "転写元の uv が頁に収まらない: 命令を skip"
+        );
+        return;
+    }
+    let placed = op_area(op, atlas);
+    let area = placed.intersect(clip);
+    if area.is_empty() {
+        return;
+    }
+    // 転写先座標 − 置き場の左上 ＝ 転写元の uv 内座標。
+    let src_x = (uv.x as i64 + area.x0 - placed.x0) as usize * 4;
+    let src_y = (uv.y as i64 + area.y0 - placed.y0) as usize;
+    let n = (area.x1 - area.x0) as usize * 4;
+    let src_stride = page.stride as usize;
+    for (i, dy) in (area.y0..area.y1).enumerate() {
+        let s = (src_y + i) * src_stride + src_x;
+        let d = dy as usize * stride + area.x0 as usize * 4;
+        // premultiplied BGRA: [B, G, R, A] へ決定6の式を各 ch＋α に同式適用。
+        let (src_px, _) = page.bytes[s..s + n].as_chunks::<4>();
+        let (dst_px, _) = dst[d..d + n].as_chunks_mut::<4>();
+        for (s, d) in src_px.iter().zip(dst_px) {
+            let inv_src_a = 255u32 - s[3] as u32;
+            d[0] = source_over_channel(s[0], d[0], inv_src_a);
+            d[1] = source_over_channel(s[1], d[1], inv_src_a);
+            d[2] = source_over_channel(s[2], d[2], inv_src_a);
+            d[3] = source_over_channel(s[3], d[3], inv_src_a);
+        }
+    }
+}
+
 /// 命令列をアトラス頁から合成先バッファ `out` へ premultiplied SourceOver 整数演算で転写する。
 ///
 /// design「BlitExecutor（blit.rs）」の契約に厳密に従う:
@@ -39,15 +206,8 @@ fn source_over_channel(src_c: u8, dst_c: u8, inv_src_a: u32) -> u8 {
 /// 1. `out` を `extent`（`w×h`・`stride = w*4`）へ [`ComposedSurface::resize_and_clear`] で
 ///    再確保し、全画素 0（全透明）へクリアする。既存 `Vec<u8>` 容量を再利用し、必要バイト数が
 ///    現容量以下なら再割り当てしない（要件 10.3・毎フレーム経路のゼロアロケーション）。
-/// 2. `ops` を順に処理する。各 [`BlitOp`] について:
-///    - `atlas.entry(op.element).placement` を引く。`None`（全透明・plan で除外済みだが防御的に）
-///      ならスキップ（非パニック）。
-///    - 転写元＝`atlas.page(placement.page)` の `placement.uv_rect`。頁が無ければ `warn`＋skip。
-///    - 転写先左上＝`op.transform.offset() + placement.trim_offset`（要件 6.2・トリムが見た目を
-///      変えない）。座標演算は **i64** で行う。
-///    - 転写元画素 `(sx, sy)`（`0..uv_rect.w × 0..uv_rect.h`）ごとに転写先 `(dx, dy)` を i64 で
-///      算出し、`[0, extent.w) × [0, extent.h)` へクリップ（負座標・はみ出しは skip・要件 6.2）。
-///    - premultiplied SourceOver 整数式（決定6・[`source_over_channel`]）で BGRA 4 バイトを合成する。
+/// 2. `ops` を順に、合成先の全体を矩形として [`overlay_op`] で重ねる。置き場を先に合成先で
+///    切るので、画面の外の画素は回らない（負座標・はみ出しのクリップ・要件 6.2）。
 ///
 /// 各命令は合成前に [`crate::method::ComposeMethod::is_implemented`] で dispatch する。M1 の実装対象は
 /// [`crate::method::ComposeMethod::Overlay`]（＝SourceOver）のみゆえ、`is_implemented() == false` の
@@ -60,11 +220,11 @@ fn source_over_channel(src_c: u8, dst_c: u8, inv_src_a: u32) -> u8 {
 ///
 /// # 非パニック（要件 1.4）
 ///
-/// placement None・頁欠落・境界外座標はすべて skip／クリップで吸収し、`panic!` しない。
+/// placement None・頁欠落・頁をはみ出す uv・境界外座標はすべて skip／クリップで吸収し、`panic!` しない。
 ///
-/// # 結線（task 7）
+/// # 結線
 ///
-/// 本関数は task 7 の Composer ファサード（[`crate::Composer::compose_into`]）から
+/// 本関数は Composer ファサード（[`crate::Composer::compose_into`]）から
 /// [`crate::plan::build_plan`] が返す `(Extent, ops)` を受けて結線・消費される。
 pub(crate) fn execute(
     out: &mut ComposedSurface,
@@ -75,9 +235,13 @@ pub(crate) fn execute(
     // (1) 合成先を extent へ再確保＋全透明クリア（容量再利用・要件 10.3）。
     out.resize_and_clear(extent.w, extent.h);
 
-    let out_w = extent.w as i64;
-    let out_h = extent.h as i64;
-    let out_stride = out.stride() as usize;
+    let canvas = Area {
+        x0: 0,
+        y0: 0,
+        x1: extent.w as i64,
+        y1: extent.h as i64,
+    };
+    let stride = out.stride() as usize;
     let dst = out.bytes_mut();
 
     // (2) 命令を順に転写（画家のアルゴリズム・下層から上層）。
@@ -95,70 +259,7 @@ pub(crate) fn execute(
             );
             continue;
         }
-
-        let entry = atlas.entry(op.element);
-        // placement None（全透明・plan で除外済み）は防御的に skip（要件 6.3・非パニック）。
-        let Some(placement) = entry.placement.as_ref() else {
-            continue;
-        };
-        // 転写元頁。欠落は warn＋skip（非パニック・破損アトラス防御）。
-        let Some(page) = atlas.page(placement.page) else {
-            tracing::warn!(
-                target: "areka_emo_compose",
-                element = op.element.0,
-                page = placement.page,
-                "転写元アトラス頁が存在しない: 命令を skip"
-            );
-            continue;
-        };
-
-        let src_stride = page.stride as usize;
-        let src_bytes: &[u8] = &page.bytes;
-        let uv = &placement.uv_rect;
-
-        // 転写先左上＝配置オフセット＋trim_offset（i64・要件 6.2）。
-        let (off_x, off_y) = op.transform.offset();
-        let dest_left = off_x + placement.trim_offset.x as i64;
-        let dest_top = off_y + placement.trim_offset.y as i64;
-
-        // 転写元矩形 (uv.x, uv.y, uv.w, uv.h) を1画素ずつ転写先へ SourceOver 合成する。
-        for sy in 0..uv.h as i64 {
-            let dy = dest_top + sy;
-            // 行単位で縦クリップ（範囲外行は行ごと skip）。
-            if dy < 0 || dy >= out_h {
-                continue;
-            }
-            let src_row = (uv.y as i64 + sy) as usize * src_stride;
-            let dst_row = dy as usize * out_stride;
-
-            for sx in 0..uv.w as i64 {
-                let dx = dest_left + sx;
-                // 横クリップ（負座標・はみ出しは画素ごと skip・要件 6.2）。
-                if dx < 0 || dx >= out_w {
-                    continue;
-                }
-                let si = src_row + (uv.x as i64 + sx) as usize * 4;
-                let di = dst_row + dx as usize * 4;
-
-                // premultiplied BGRA: [B, G, R, A]。
-                let src_b = src_bytes[si];
-                let src_g = src_bytes[si + 1];
-                let src_r = src_bytes[si + 2];
-                let src_a = src_bytes[si + 3];
-                let inv_src_a = 255u32 - src_a as u32;
-
-                let dst_b = dst[di];
-                let dst_g = dst[di + 1];
-                let dst_r = dst[di + 2];
-                let dst_a = dst[di + 3];
-
-                // 決定6の premultiplied SourceOver を BGRA 各 ch＋α へ同式適用。
-                dst[di] = source_over_channel(src_b, dst_b, inv_src_a);
-                dst[di + 1] = source_over_channel(src_g, dst_g, inv_src_a);
-                dst[di + 2] = source_over_channel(src_r, dst_r, inv_src_a);
-                dst[di + 3] = source_over_channel(src_a, dst_a, inv_src_a);
-            }
-        }
+        overlay_op(dst, stride, canvas, op, atlas);
     }
 }
 
@@ -167,39 +268,11 @@ mod tests {
     use super::*;
     use crate::method::{BlendKind, BlendMode, ComposeMethod};
     use crate::normalized::Transform;
+    use crate::plan_test_support::{page_1px, px, single_entry_table, two_entry_table};
     use areka_emo_atlas::{
         AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
     };
     use std::sync::Arc;
-
-    /// premultiplied BGRA 1 画素頁を組む（stride = width*4・tightly packed）。
-    fn page_1px(b: u8, g: u8, r: u8, a: u8) -> AtlasPage {
-        AtlasPage {
-            width: 1,
-            height: 1,
-            stride: 4,
-            bytes: Arc::from(vec![b, g, r, a]),
-        }
-    }
-
-    /// 単一エントリ（`ElementId(0)`）＋単一頁の AtlasTable を組む。
-    ///
-    /// エントリ original は uv.w×uv.h に合わせる（外形算出は本 task では不使用）。
-    fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> AtlasTable {
-        let keys = vec![AtlasKey {
-            set: SetId(0),
-            rel_path: "e.png".into(),
-        }];
-        let entries = vec![AtlasEntry {
-            original: Size { w: uv.w, h: uv.h },
-            placement: Some(Placement {
-                page: 0,
-                uv_rect: uv,
-                trim_offset: trim,
-            }),
-        }];
-        AtlasTable::new(keys, entries, vec![page])
-    }
 
     /// `ElementId(0)` を (x,y) へ overlay 転写する命令 1 本。
     fn op_at(x: i64, y: i64) -> BlitOp {
@@ -208,13 +281,6 @@ mod tests {
             transform: Transform::translate(x, y),
             method: ComposeMethod::Overlay,
         }
-    }
-
-    /// 合成先 out の (x,y) 画素 [B,G,R,A] を読む（stride=w*4 前提）。
-    fn px(out: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-        let i = (y * out.stride() + x * 4) as usize;
-        let b = out.bytes();
-        [b[i], b[i + 1], b[i + 2], b[i + 3]]
     }
 
     /// div255 の丸めが四捨五入であること（決定6）。
@@ -242,58 +308,15 @@ mod tests {
     fn known_pixel_pair_source_over_byte_exact() {
         // dst 背景を先に置くため、下層＝不透明 dst / 上層＝部分透明 src の 2 命令で組む。
         // 下層 dst 用エントリ（ElementId(0)）・上層 src 用エントリ（ElementId(1)）を持つ table。
-        let keys = vec![
-            AtlasKey {
-                set: SetId(0),
-                rel_path: "dst.png".into(),
-            },
-            AtlasKey {
-                set: SetId(0),
-                rel_path: "src.png".into(),
-            },
-        ];
-        let entries = vec![
-            AtlasEntry {
-                original: Size { w: 1, h: 1 },
-                placement: Some(Placement {
-                    page: 0,
-                    uv_rect: Rect {
-                        x: 0,
-                        y: 0,
-                        w: 1,
-                        h: 1,
-                    },
-                    trim_offset: Point { x: 0, y: 0 },
-                }),
-            },
-            AtlasEntry {
-                original: Size { w: 1, h: 1 },
-                placement: Some(Placement {
-                    page: 1,
-                    uv_rect: Rect {
-                        x: 0,
-                        y: 0,
-                        w: 1,
-                        h: 1,
-                    },
-                    trim_offset: Point { x: 0, y: 0 },
-                }),
-            },
-        ];
         let dst_page = page_1px(200, 100, 50, 255);
         let src_page = page_1px(20, 40, 60, 128);
-        let atlas = AtlasTable::new(keys, entries, vec![dst_page, src_page]);
+        let atlas = two_entry_table(dst_page, src_page);
 
         let ops = vec![
-            BlitOp {
-                element: ElementId(0),
-                transform: Transform::translate(0, 0),
-                method: ComposeMethod::Overlay,
-            },
+            op_at(0, 0),
             BlitOp {
                 element: ElementId(1),
-                transform: Transform::translate(0, 0),
-                method: ComposeMethod::Overlay,
+                ..op_at(0, 0)
             },
         ];
 
@@ -311,58 +334,15 @@ mod tests {
     #[test]
     fn opaque_src_replaces_dst() {
         // 下層に別色不透明 dst、上層に不透明 src を重ねる。
-        let keys = vec![
-            AtlasKey {
-                set: SetId(0),
-                rel_path: "dst.png".into(),
-            },
-            AtlasKey {
-                set: SetId(0),
-                rel_path: "src.png".into(),
-            },
-        ];
-        let entries = vec![
-            AtlasEntry {
-                original: Size { w: 1, h: 1 },
-                placement: Some(Placement {
-                    page: 0,
-                    uv_rect: Rect {
-                        x: 0,
-                        y: 0,
-                        w: 1,
-                        h: 1,
-                    },
-                    trim_offset: Point { x: 0, y: 0 },
-                }),
-            },
-            AtlasEntry {
-                original: Size { w: 1, h: 1 },
-                placement: Some(Placement {
-                    page: 1,
-                    uv_rect: Rect {
-                        x: 0,
-                        y: 0,
-                        w: 1,
-                        h: 1,
-                    },
-                    trim_offset: Point { x: 0, y: 0 },
-                }),
-            },
-        ];
         let dst_page = page_1px(11, 22, 33, 255);
         let src_page = page_1px(200, 150, 100, 255);
-        let atlas = AtlasTable::new(keys, entries, vec![dst_page, src_page]);
+        let atlas = two_entry_table(dst_page, src_page);
 
         let ops = vec![
-            BlitOp {
-                element: ElementId(0),
-                transform: Transform::translate(0, 0),
-                method: ComposeMethod::Overlay,
-            },
+            op_at(0, 0),
             BlitOp {
                 element: ElementId(1),
-                transform: Transform::translate(0, 0),
-                method: ComposeMethod::Overlay,
+                ..op_at(0, 0)
             },
         ];
         let mut out = ComposedSurface::new(0, 0);
@@ -377,58 +357,15 @@ mod tests {
     /// テスト③（要件 6.4）: 完全透明 src（α=0・premultiplied ゆえ色も 0）は dst を残す。
     #[test]
     fn transparent_src_leaves_dst() {
-        let keys = vec![
-            AtlasKey {
-                set: SetId(0),
-                rel_path: "dst.png".into(),
-            },
-            AtlasKey {
-                set: SetId(0),
-                rel_path: "src.png".into(),
-            },
-        ];
-        let entries = vec![
-            AtlasEntry {
-                original: Size { w: 1, h: 1 },
-                placement: Some(Placement {
-                    page: 0,
-                    uv_rect: Rect {
-                        x: 0,
-                        y: 0,
-                        w: 1,
-                        h: 1,
-                    },
-                    trim_offset: Point { x: 0, y: 0 },
-                }),
-            },
-            AtlasEntry {
-                original: Size { w: 1, h: 1 },
-                placement: Some(Placement {
-                    page: 1,
-                    uv_rect: Rect {
-                        x: 0,
-                        y: 0,
-                        w: 1,
-                        h: 1,
-                    },
-                    trim_offset: Point { x: 0, y: 0 },
-                }),
-            },
-        ];
         let dst_page = page_1px(70, 80, 90, 255);
         let src_page = page_1px(0, 0, 0, 0); // premultiplied 全透明。
-        let atlas = AtlasTable::new(keys, entries, vec![dst_page, src_page]);
+        let atlas = two_entry_table(dst_page, src_page);
 
         let ops = vec![
-            BlitOp {
-                element: ElementId(0),
-                transform: Transform::translate(0, 0),
-                method: ComposeMethod::Overlay,
-            },
+            op_at(0, 0),
             BlitOp {
                 element: ElementId(1),
-                transform: Transform::translate(0, 0),
-                method: ComposeMethod::Overlay,
+                ..op_at(0, 0)
             },
         ];
         let mut out = ComposedSurface::new(0, 0);
@@ -717,31 +654,6 @@ mod tests {
         assert!(
             out.bytes().iter().all(|&b| b == 0),
             "全命令が非実装 → 何も合成されずクリア済み全透明（非パニック・8.4）"
-        );
-    }
-
-    /// テスト（回帰・要件 6.4）: 純 overlay 命令列は 6.1 と同一挙動（ガード追加で挙動不変）。
-    #[test]
-    fn pure_overlay_ops_still_composite() {
-        let page = page_1px(11, 22, 33, 255);
-        let atlas = single_entry_table(
-            page,
-            Rect {
-                x: 0,
-                y: 0,
-                w: 1,
-                h: 1,
-            },
-            Point { x: 0, y: 0 },
-        );
-        let ops = vec![op_at(0, 0)];
-
-        let mut out = ComposedSurface::new(0, 0);
-        execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
-        assert_eq!(
-            px(&out, 0, 0),
-            [11, 22, 33, 255],
-            "overlay 命令は従来どおり合成される"
         );
     }
 

@@ -25,7 +25,8 @@ impl EmoPresenter {
     /// 合成入力（surface id＋bind 集合＋pattern）が完全一致するヒットなら再合成しない（R4.2）し、
     /// k だけが変わった適用もヒットする（要件 5.3）。(1) ミスなら合成し（native 原寸）、
     /// `SurfaceNotFound` は error! ＋表示不変＋`Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋
-    /// `Ok`（設計ディスカッション #1）、`Ok` なら原寸バイトから表示記録（閉じた `GraphicsCommandList`）を
+    /// `Ok`（設計ディスカッション #1・外形の上限越えの `ExtentTooLarge` も同じ扱い）、
+    /// `Ok` なら原寸バイトから表示記録（閉じた `GraphicsCommandList`）を
     /// 起こし、マスクを原寸バイトから 1 回だけ生成して `cache.insert` へ面・マスク・記録の三つ組で渡す。
     /// (2) `mount` 未生成ならエントリの表示記録込みで遅延生成し、(3) 表示記録 → 配置（原寸・k）→
     /// マスク → 可視化の順に同一呼び出し内で書く（R2.4）。拡大は wintf の描画経路
@@ -266,19 +267,32 @@ impl EmoPresenter {
                     // 消えている。席の交代（O(1) の入れ替え）もこの区間に入る。
                     timing.mark(Stage::MaskGen);
                 }
-                Err(ComposeError::EmptyComposition(id)) => {
+                Err(
+                    e @ (ComposeError::EmptyComposition(_) | ComposeError::ExtentTooLarge { .. }),
+                ) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
-                    tracing::warn!(
-                        ?target_id,
-                        surface_id = id,
-                        was_visible = target.visible,
-                        "apply(ShowSurface): 全透明退化（EmptyComposition）→ Hide 縮退（reply Ok）"
-                    );
+                    // 外形の上限越え（合成が error! 済み・絵は確保されない）も同じく隠す（audit-emo-compose との申し合わせ 11-05）。
+                    if matches!(e, ComposeError::EmptyComposition(_)) {
+                        tracing::warn!(
+                            ?target_id,
+                            surface_id,
+                            was_visible = target.visible,
+                            "apply(ShowSurface): 全透明退化（EmptyComposition）→ Hide 縮退（reply Ok）"
+                        );
+                    } else {
+                        tracing::warn!(
+                            ?target_id,
+                            surface_id,
+                            was_visible = target.visible,
+                            error = %e,
+                            "apply(ShowSurface): 外形が上限越え（ExtentTooLarge）→ Hide 縮退（reply Ok）"
+                        );
+                    }
                     if let Some(mount) = target.mount.as_ref() {
                         mount.set_visible(world, false);
                     }
                     target.visible = false;
-                    // EmptyComposition 縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
+                    // この縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
                     target.current_surface_id = None;
                     target.failure_note = None;
                     return Ok(());

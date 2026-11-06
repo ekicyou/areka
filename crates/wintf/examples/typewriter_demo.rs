@@ -5,12 +5,13 @@
 //! タイプライター効果のデモンストレーション:
 //! - 文字を一文字ずつ表示
 //! - ウェイト制御
-//! - pause/resume/skip 操作
-//! - FireEvent による完了イベント
+//! - pause/resume/skip 操作（skip は縦書きだけ）
+//! - FireEvent による完了イベント（横書きが最後まで進むと受け手に届き、ログに出る）
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::time::Duration;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
@@ -24,7 +25,7 @@ use wintf::ecs::widget::text::{
     TextDirection, Typewriter, TypewriterEvent, TypewriterEventKind, TypewriterLayoutCache,
     TypewriterTalk, TypewriterToken,
 };
-use wintf::ecs::{FrameTime, Point, Window, WindowPos};
+use wintf::ecs::{FrameTime, Point, Update, Window, WindowPos};
 use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -66,7 +67,8 @@ fn main() -> Result<()> {
     println!("  3. 一文字ずつ表示（タイプライター効果）");
     println!("  4. 3秒後: pause()");
     println!("  5. 5秒後: resume()");
-    println!("  6. 6秒後: skip()（全文即時表示）");
+    println!("  6. 6秒後: 縦書きだけ skip()（全文即時表示）");
+    println!("     横書きは最後まで進み、約9秒で完了イベントがログに出る");
     println!("  7. 10秒後: ウィンドウ終了");
 
     // メッセージループを開始
@@ -179,7 +181,7 @@ fn create_typewriter_demo_window(world: &mut World) {
         ))
         .id();
 
-    // 横書き用の内側ボックス（薄い青）
+    // 横書き用の内側ボックス（黒。1px の余白が枠に見える）
     let horizontal_box = world
         .spawn((
             Name::new("HorizontalBox"),
@@ -209,8 +211,7 @@ fn create_typewriter_demo_window(world: &mut World) {
 
     // 横書き Typewriter エンティティ
     // NOTE: Typewriterは描画コンテンツサイズを自己申告しないため、
-    // 親のサイズに合わせて固定サイズで指定する必要がある
-    // NOTE: 空のTypewriterTalkを初期設定することで、会話開始前も背景が描画される
+    // flex_grow で親の残りを埋める
     world.spawn((
         Name::new("HorizontalTypewriter"),
         HorizontalTypewriter,
@@ -249,7 +250,7 @@ fn create_typewriter_demo_window(world: &mut World) {
         ChildOf(horizontal_box),
     ));
 
-    // 縦書き用の内側ボックス（薄い緑）
+    // 縦書き用の内側ボックス（黒。1px の余白が枠に見える）
     let vertical_box = world
         .spawn((
             Name::new("VerticalBox"),
@@ -281,7 +282,7 @@ fn create_typewriter_demo_window(world: &mut World) {
 
     // 縦書き Typewriter エンティティ
     // NOTE: Typewriterは描画コンテンツサイズを自己申告しないため、
-    // 親のサイズに合わせて固定サイズで指定する必要がある
+    // 幅は 85px に決め、高さは flex_grow で親の残りを埋める
     // NOTE: 空のTypewriterTalkを初期設定することで、会話開始前も背景が描画される
     world.spawn((
         Name::new("VerticalTypewriter"),
@@ -332,6 +333,9 @@ fn create_typewriter_demo_window(world: &mut World) {
         CompletionReceiver,
         TypewriterEvent::None,
     ));
+    world
+        .resource_mut::<Schedules>()
+        .add_systems(Update, log_typewriter_events);
 
     println!("[Test] Typewriter demo window created:");
     println!("  Window (root)");
@@ -430,13 +434,24 @@ fn resume_typewriter(world: &mut World) {
     }
 }
 
-/// Typewriter をスキップ
+/// 縦書き Typewriter をスキップ（skip は残りの FireEvent を出さないので、横書きは最後まで進めて完了イベントを見せる）
 fn skip_typewriter(world: &mut World) {
     // LayoutCache から total_cluster_count を取得して skip に渡す
-    let mut query = world.query::<(&mut TypewriterTalk, &TypewriterLayoutCache)>();
+    let mut query = world
+        .query_filtered::<(&mut TypewriterTalk, &TypewriterLayoutCache), With<VerticalTypewriter>>(
+        );
     for (mut talk, layout_cache) in query.iter_mut(world) {
         let total = layout_cache.timeline().total_cluster_count;
         talk.skip(total);
-        println!("[Test] Typewriter skipped to end (progress: 100%)");
+        println!("[Test] VerticalTypewriter skipped to end (progress: 100%)");
+    }
+}
+
+/// 受け手に届いた TypewriterEvent をログに出す
+fn log_typewriter_events(query: Query<(&Name, &TypewriterEvent), Changed<TypewriterEvent>>) {
+    for (name, event) in &query {
+        if *event != TypewriterEvent::None {
+            info!(receiver = %name, event = ?event, "[Typewriter] Event received");
+        }
     }
 }

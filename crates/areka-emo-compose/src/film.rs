@@ -55,7 +55,8 @@ pub struct FilmSkip {
 pub enum FilmSkipReason {
     /// 待ち時間の合計が 0。
     ZeroTotalDelay,
-    /// コマの並びが約束と違う（0 番が親でない・コマと待ち時間の数が違う・原寸が揃わない）。
+    /// コマの並びが約束と違う（0 番が親でない・コマが 2 枚未満・コマと待ち時間の数が違う・コマの番号が
+    /// 表の外・原寸が揃わない）。
     BrokenFrames,
 }
 
@@ -147,8 +148,8 @@ fn sheet_of(
     })
 }
 
-/// 動く絵 1 つの検査: ①0 番が親自身 ②コマ（2 枚以上）と待ち時間の数が同じ ③全部のコマの原寸が
-/// 親と同じ（①〜③は `BrokenFrames`）④待ち時間の合計が 1 以上（`ZeroTotalDelay`）。
+/// 動く絵 1 つの検査: ①0 番が親自身 ②コマが 2 枚以上で待ち時間と数が同じ ③全部のコマの番号が表の内で
+/// 原寸が親と同じ（①〜③は `BrokenFrames`）④待ち時間の合計が 1 以上（`ZeroTotalDelay`）。
 pub(crate) fn check(
     parent: ElementId,
     anim: &Animation,

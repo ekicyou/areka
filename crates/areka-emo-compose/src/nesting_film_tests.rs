@@ -3,29 +3,24 @@
 //! `NestReport::from_world` の振り分けは `_` の腕で「無い番号」に落ちるので、`ElementKind::Film`
 //! の扱いを書き漏らしてもコンパイラは教えない。ここを檻にする。
 //!
-//! 後半は見える部品と見える子（task 2.4・要件 1.9・3.7）: `SurfaceParts` の `films`・`always_rest`、
+//! 後半は見える部品と見える子（要件 1.9・3.7）: `SurfaceParts` の `films`・`always_rest`、
 //! `walk` の経過 0 の辺（欄が「載っていない」ときだけ・「消えている」では進まない）、`visible_films`。
 
-use std::collections::BTreeMap;
-use std::num::NonZeroU32;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasTable,
-    DecodedImage, LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    bake_with_limits,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Interval, Surface, parse};
+use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
+use areka_parsers::shell::{ElementPath, Interval, parse};
 
 use super::{
-    ElementKind, FilmId, NestTable, PartKey, SurfaceParts, element_kind, is_always_interval,
-    rest_index,
+    ElementKind, FilmId, NestTable, SurfaceParts, element_kind, is_always_interval, rest_index,
 };
 use crate::bind::BindSet;
-use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{BlitOp, derive_ops};
+use crate::pattern::PatternState;
+use crate::plan_test_support::{
+    MARK_ANIM, MARKER, bake_films_and_bind, frame, image_map, insert_film_2x2, opaque_wxh, ops,
+    visible_parts_of,
+};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 fn other(s: &str) -> Interval {
@@ -70,12 +65,6 @@ fn element_kind_never_reads_as_film() {
     }
 }
 
-/// 鍵の 2 つの種類は、同じ数でも等しくならない（番号が当たらない・要件 1.12）。
-#[test]
-fn part_key_kinds_never_collide() {
-    assert_ne!(PartKey::Surface(3), PartKey::Film(FilmId(3)));
-}
-
 /// `ElementKind::Film` の element は「無い番号」にも「循環」にも数えない（子は先を持たない）。
 ///
 /// 子を置く element を作るのは分解の仕事なので、ここでは読み込んだ面の表の element を直に替える。
@@ -96,42 +85,22 @@ fn nest_report_counts_film_as_neither_missing_nor_cycle() {
     assert_eq!(world.nest_report().issues, vec![]);
 }
 
-// ---- 見える部品と見える子（task 2.4） ----
+// ---- 見える部品と見える子 ----
 
 const FIXTURE: &str = include_str!("../tests/fixtures/animated-playback/shell/surfaces.txt");
 const BASE: &str = "shell";
 
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
-}
-
 /// 見える部品と見える子（着せ替えは無し）。
 fn visible(table: &NestTable, top: u32, pattern: &PatternState) -> (Vec<u32>, Vec<FilmId>) {
-    let mut parts = Vec::new();
-    table.visible_parts(top, &BindSet::default(), pattern, &mut parts);
+    let parts = visible_parts_of(table, top, &BindSet::default(), pattern);
     let mut films = vec![FilmId(u32::MAX)]; // 先に空にすることも確かめる。
     table.visible_films(top, &parts, &mut films);
     (parts, films)
 }
 
-/// 全面が 1 色・不透明の 2×2。
-fn solid(c: u8) -> DecodedImage {
-    DecodedImage {
-        width: 2,
-        height: 2,
-        stride: 8,
-        bgra: [c, c, c, 255].repeat(4),
-        has_alpha: true,
-    }
-}
-
 /// 検体のシェルを、検体の README のコマ・待ち時間・繰り返しの動く絵（中身は 2×2 の単色）で焼いて
-/// 束縛する（本物の分解を通す）。`surface2.png` は element0 が在るので土台にしない（本番と同じ）。
+/// 束縛する（本物の分解を通す）。面の画像は `surface1.png` だけを渡す（`surface2.png` は渡さないので、element0 が
+/// 在る面の画像を土台にしない分岐はここでは通らない）。
 fn fixture_world() -> (EmoWorld, AtlasTable) {
     fixture_world_with("")
 }
@@ -147,7 +116,8 @@ fn fixture_world_with(extra: &str) -> (EmoWorld, AtlasTable) {
         "marker.png",
     ];
     for rel in stills {
-        dec.insert(Path::new(BASE).join(rel), 2, 2, 8, solid(9).bgra, true);
+        let (w, h, stride, bgra, has_alpha) = opaque_wxh(2, 2, 9, 9, 9);
+        dec.insert(Path::new(BASE).join(rel), w, h, stride, bgra, has_alpha);
     }
     let films: [(&str, &[u32], Option<u32>); 4] = [
         ("rgb.apng", &[100, 100], None),
@@ -156,63 +126,16 @@ fn fixture_world_with(extra: &str) -> (EmoWorld, AtlasTable) {
         ("surface1.png", &[333, 0, 70, 1], Some(2)),
     ];
     for (rel, delays, laps) in films {
-        let frames = delays
-            .iter()
-            .enumerate()
-            .map(|(i, &delay_ms)| AnimationFrame {
-                image: solid(10 + i as u8),
-                delay_ms,
-            })
-            .collect();
-        let loop_count = laps.map_or(LoopCount::Infinite, |n| {
-            LoopCount::Finite(NonZeroU32::new(n).unwrap())
-        });
-        dec.insert_animated(
-            Path::new(BASE).join(rel),
-            AnimationInfo {
-                width: 2,
-                height: 2,
-                frame_count: delays.len() as u32,
-            },
-            Ok(solid(10)),
-            Ok(AnimatedImage { frames, loop_count }),
-        );
+        insert_film_2x2(&mut dec, Path::new(BASE).join(rel), delays, laps);
     }
     let rels = stills.into_iter().chain(films.iter().map(|f| f.0));
-    let elements = rels
-        .map(|rel| Element {
-            layer: 0,
-            path: ElementPath::new(rel.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
+    bake_films_and_bind(
         &dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    let images = BTreeMap::from([(1, "surface1.png".to_string())]);
-    let text = format!("{FIXTURE}{extra}");
-    let mut world = EmoWorld::build_with_images(&parse(&text), &images);
-    world.bind_atlas(&baked.table, SetId(0));
-    assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
-    (world, baked.table)
+        Path::new(BASE),
+        rels,
+        &format!("{FIXTURE}{extra}"),
+        &[(1, "surface1.png")],
+    )
 }
 
 fn film_of(atlas: &AtlasTable, rel: &str) -> FilmId {
@@ -262,7 +185,7 @@ fn fixture_films_behind_pattern_targets_are_visible() {
 
     // 10 の always のコマが 20 を指す → 経過 0 の先 31 は消え、20 と 20 の子が見える。
     let mut pattern = PatternState::default();
-    pattern.set(0, frame(20));
+    pattern.set(0, frame(20, 0, 0));
     assert_eq!(
         visible(&table, 10, &pattern),
         (vec![20], films_of(&atlas, &["rgb.webp"]))
@@ -270,7 +193,7 @@ fn fixture_films_behind_pattern_targets_are_visible() {
 
     // 0 の always のコマが 3 を指す → 3 の子（0 と同じ rgb.apng）は重ねて数えない。
     let mut pattern = PatternState::default();
-    pattern.set(0, frame(3));
+    pattern.set(0, frame(3, 0, 0));
     assert_eq!(
         visible(&table, 0, &pattern),
         (
@@ -281,7 +204,7 @@ fn fixture_films_behind_pattern_targets_are_visible() {
 
     // 部品 20 の always の部品の欄のコマが 1 を指す → 1 の土台の子が見える。
     let mut pattern = PatternState::default();
-    pattern.set_part(20, 0, frame(1));
+    pattern.set_part(20, 0, frame(1, 0, 0));
     assert_eq!(
         visible(&table, 0, &pattern),
         (
@@ -359,8 +282,8 @@ fn always_rest_edge_follows_only_rest_cells() {
     assert_eq!(parts(&p), vec![5, 8], "部品 5 が消えている");
 
     let mut p = PatternState::default();
-    p.set(0, frame(9));
-    p.set_part(5, 0, frame(6));
+    p.set(0, frame(9, 0, 0));
+    p.set_part(5, 0, frame(6, 0, 0));
     assert_eq!(parts(&p), vec![5, 6, 9], "コマが経過 0 を置き換える");
 
     // 部品の欄の「消えている」は一番上の同じ番号の欄に効かない（逆も）。
@@ -377,10 +300,7 @@ fn always_rest_edge_follows_only_rest_cells() {
 #[test]
 fn tables_without_films_or_always_keep_new_columns_empty() {
     let fixture = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     let world = EmoWorld::build_with_images(&parse(fixture), &images);
     let table = world.nest_table();
     assert!(!table.is_empty());
@@ -392,50 +312,31 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
     }
 }
 
-// ---- 合成がたどった先との突き合わせ（task 2.7・要件 1.9・3.7） ----
+// ---- 合成がたどった先との突き合わせ（要件 1.9・3.7） ----
 //
-// 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`push_film_op`）は
+// 見える部品・見える子（`walk`・`visible_films`）と合成の平坦化（`flatten_surface`・`plan_always::film_op`）は
 // 別々に書いてあるので、片方だけを変えるとずれる。nesting_visible_tests の一致の檻と同じ型で、検体の
 // 全サーフェスを一番上にし、欄の組ごとに「部品 X に目印のコマを足すと命令列が変わる」⇔「X が見える
 // 部品に在る」、「子 F のコマを替えると命令列が変わる」⇔「F が見える子に在る」を確かめる。
-
-/// 目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。
-const MARKER: u32 = 900;
-/// 目印のコマを置く animation の番号（検体に無い番号）。
-const MARK_ANIM: u32 = 9999;
-
-fn ops(world: &EmoWorld, atlas: &AtlasTable, top: u32, pattern: &PatternState) -> Vec<BlitOp> {
-    let (mut ops, mut visited) = (Vec::new(), Vec::new());
-    derive_ops(
-        &mut ops,
-        &mut visited,
-        world,
-        atlas,
-        top,
-        &BindSet::default(),
-        pattern,
-    );
-    ops
-}
 
 /// 欄の組: 空・経過 0 と違うコマ・子を置くサーフェスを指すコマ・消えている・部品の経過 0 と
 /// 部品の消えている・子のコマ（一番上は今までの欄、20 と 10 は部品の欄）。
 fn walk_patterns(world: &EmoWorld) -> Vec<(&'static str, PatternState)> {
     let mut rows = vec![("空", PatternState::default())];
     let mut p = PatternState::default();
-    p.set(0, frame(30));
-    p.set_part(20, 0, frame(31));
+    p.set(0, frame(30, 0, 0));
+    p.set_part(20, 0, frame(31, 0, 0));
     rows.push(("経過 0 と違うコマ", p));
     let mut p = PatternState::default();
-    p.set(0, frame(3));
-    p.set_part(20, 0, frame(1));
+    p.set(0, frame(3, 0, 0));
+    p.set_part(20, 0, frame(1, 0, 0));
     rows.push(("子を置くサーフェスを指すコマ", p));
     let mut p = PatternState::default();
     p.set_blank(0);
     p.set_part_blank(20, 0);
     rows.push(("消えている", p));
     let mut p = PatternState::default();
-    p.set(0, frame(10));
+    p.set(0, frame(10, 0, 0));
     rows.push(("部品の経過 0", p.clone()));
     p.set_part_blank(10, 0);
     rows.push(("部品の消えている", p));
@@ -466,15 +367,15 @@ element0,overlay,marker.png,0,0
     let (mut seen, mut unseen) = ([0; 2], [0; 2]);
     for (name, pattern) in walk_patterns(&world) {
         for &top in &ids {
-            let base = ops(&world, &atlas, top, &pattern);
+            let base = ops(&world, &atlas, top, &BindSet::default(), &pattern);
             let (parts, visible_films) = visible(&table, top, &pattern);
             let at = format!(
                 "欄 {name}・一番上 {top}・見える部品 {parts:?}・見える子 {visible_films:?}"
             );
             for &x in &ids {
                 let mut marked = pattern.clone();
-                marked.set_part(x, MARK_ANIM, frame(MARKER));
-                let walked = ops(&world, &atlas, top, &marked) != base;
+                marked.set_part(x, MARK_ANIM, frame(MARKER, 0, 0));
+                let walked = ops(&world, &atlas, top, &BindSet::default(), &marked) != base;
                 let listed = parts.binary_search(&x).is_ok();
                 assert_eq!(walked, listed, "{at}・部品 {x}");
                 if listed { seen[0] += 1 } else { unseen[0] += 1 }
@@ -483,7 +384,7 @@ element0,overlay,marker.png,0,0
                 let walked = world.film_sheet(f).unwrap().frames.iter().any(|&p| {
                     let mut marked = pattern.clone();
                     marked.set_film(f, p);
-                    ops(&world, &atlas, top, &marked) != base
+                    ops(&world, &atlas, top, &BindSet::default(), &marked) != base
                 });
                 let listed = visible_films.binary_search(&f).is_ok();
                 assert_eq!(walked, listed, "{at}・子 {f:?}");

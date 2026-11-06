@@ -5,11 +5,9 @@
 //! 浮動小数（f32/f64）を一切持ち込まない。f32 が現れるのは照会契約の出口ビュー
 //! [`ScaleRatio::as_f32`] のみである。
 //!
-//! **唯一の例外（裁定済み）**: 唯一の既知の例外は emo-text
-//! `ScaleContract::physical_extent`（文字供給面の確保寸）であり、2026-08-14 の裁定
-//! （spec `areka-P0-scale-exact-rational`）に基づく。誤差は +1 側のみで不可視。
-//! **この例外を他の用途へ拡大してはならない**——例外は供給面寸のこの 1 点に限られ、
-//! 新たな f32 寸法演算を許す一般則ではない。
+//! **例外（裁定済み）**: `as_f32` の消費者は 2 つだけ（emo-text の文字供給面の確保寸と、emo-present
+//! の表示の拡大係数）で、中身と裁定は [`ScaleRatio::as_f32`] の説明が正本。
+//! **この例外を他の用途へ拡大してはならない**——新たな f32 寸法演算を許す一般則ではない。
 //!
 //! - **既約正準化**（要件 1.1）: 構築時に gcd で約分し、`Eq`/`Hash` を正準形で厳密化する
 //!   （下流 `emo-present` の合成キャッシュキーの一意性を担保する）。
@@ -157,7 +155,7 @@ impl ScaleRatio {
 
     /// 照会契約の出口ビュー（`num as f32 / den as f32`・要件 1.2/1.6）。
     ///
-    /// 下流（`collision-dpi-hittest` の ÷k・`emo-text-layer` の行寸）が参照する
+    /// 下流（`emo-text-layer` の行寸）が参照する
     /// 合成スケール照会値の表現。**寸法・画素演算にこの値を使ってはならない**——
     /// 寸法の k 倍は必ず [`scale_len`]／[`scaled_extent`] を通す（丸め規約の単一権威）。
     ///
@@ -275,12 +273,6 @@ impl ScaleRatio {
     ///   連続区間になり、境界画素の内外一貫が k によらず保存される。
     /// - 決定論・整数のみ（f32 を一切経由しない）。
     ///
-    /// # 公開面の申し送り（W6.5 `scale-exact-rational`）
-    ///
-    /// 本 spec が `scale.rs` へ追加する公開面は本メソッドのみである（`num`／`den` アクセサは
-    /// **新設しない**——W6.5 が計画する `ratio()` 等との名前二重化を避けるため）。W6.5 は設計前に
-    /// 本メソッド着地後の `scale.rs` へ rebase すること。
-    ///
     /// [`scale_len`]: ScaleRatio::scale_len
     /// [`scaled_extent`]: ScaleRatio::scaled_extent
     pub fn unscale_coord(self, v: i64) -> i64 {
@@ -292,10 +284,6 @@ impl ScaleRatio {
         s.clamp(i64::MIN as i128, i64::MAX as i128) as i64
     }
 }
-
-#[cfg(test)]
-#[path = "scale_test_support.rs"]
-mod test_support;
 
 #[cfg(test)]
 #[path = "scale_ratio_tests.rs"]

@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 use windows_numerics::Matrix3x2;
 
-use super::{D2DRect, LayoutScale, Offset, Size, transform_rect_axis_aligned};
+use super::{D2DRect, LayoutScale, Offset, Size};
 use crate::ecs::types::Rect;
 
 /// ローカルレイアウト配置（親からの相対位置とサイズ）
@@ -182,13 +182,14 @@ impl From<Arrangement> for Matrix3x2 {
     }
 }
 
-/// ArrangementからGlobalArrangementへの変換
+/// ArrangementからGlobalArrangementへの変換（親の無い根）
+///
+/// 恒等の親の下の子と同じ決まり（`GlobalArrangement::default() * arrangement`）で求める。
+/// ずらしは親の倍率（＝1）で伸ばし、自分の倍率では伸ばさない——親をまだ持たない窓の
+/// bounds がずらしの倍率倍に跳ばないため。
 impl From<Arrangement> for GlobalArrangement {
     fn from(arrangement: Arrangement) -> Self {
-        let transform: Matrix3x2 = arrangement.into();
-        let local_bounds = arrangement.local_bounds();
-        let bounds = transform_rect_axis_aligned(&local_bounds, &transform);
-        Self { transform, bounds }
+        GlobalArrangement::default() * arrangement
     }
 }
 

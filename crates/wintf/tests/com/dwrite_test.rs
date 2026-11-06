@@ -41,22 +41,7 @@ fn make_layout(text: PCWSTR) -> IDWriteTextLayout {
 #[test]
 fn dwrite_factory_and_text_format_can_be_created_headless() {
     let factory = make_factory();
-    let format = make_format(&factory);
-    format
-        .set_text_alignment(DWRITE_TEXT_ALIGNMENT_CENTER)
-        .expect("set_text_alignment");
-    format
-        .set_paragraph_alignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)
-        .expect("set_paragraph_alignment");
-}
-
-/// 範囲外の列挙値はラッパーが E_INVALIDARG をそのまま伝播する。
-#[test]
-fn set_text_alignment_propagates_invalid_arg_error() {
-    let factory = make_factory();
-    let format = make_format(&factory);
-    let result = format.set_text_alignment(DWRITE_TEXT_ALIGNMENT(9999));
-    assert!(result.is_err(), "invalid alignment should fail");
+    let _format = make_format(&factory);
 }
 
 // ============================================================
@@ -68,7 +53,6 @@ fn set_text_alignment_propagates_invalid_arg_error() {
 #[test]
 fn create_text_layout_with_null_text_yields_empty_layout() {
     let layout = make_layout(PCWSTR::null());
-    assert_eq!(layout.get_cluster_count().expect("count"), 0);
     assert!(layout.get_cluster_metrics().expect("metrics").is_empty());
 }
 
@@ -76,15 +60,13 @@ fn create_text_layout_with_null_text_yields_empty_layout() {
 #[test]
 fn create_text_layout_with_empty_literal_yields_empty_layout() {
     let layout = make_layout(w!(""));
-    assert_eq!(layout.get_cluster_count().expect("count"), 0);
+    assert!(layout.get_cluster_metrics().expect("metrics").is_empty());
 }
 
 /// ASCII 5 文字 → 5 クラスタ（各クラスタ長 1）。
 #[test]
 fn ascii_text_produces_one_cluster_per_char() {
     let layout = make_layout(w!("Hello"));
-    assert_eq!(layout.get_cluster_count().expect("count"), 5);
-
     let metrics = layout.get_cluster_metrics().expect("metrics");
     assert_eq!(metrics.len(), 5);
     for m in &metrics {
@@ -97,7 +79,7 @@ fn ascii_text_produces_one_cluster_per_char() {
 #[test]
 fn japanese_text_produces_one_cluster_per_character() {
     let layout = make_layout(w!("日本語"));
-    assert_eq!(layout.get_cluster_count().expect("count"), 3);
+    assert_eq!(layout.get_cluster_metrics().expect("metrics").len(), 3);
 }
 
 /// サロゲートペア（U+20BB7 𠮷）は UTF-16 2 単位で 1 クラスタ。
@@ -110,57 +92,6 @@ fn surrogate_pair_is_single_cluster_of_two_utf16_units() {
     assert_eq!(
         metrics[0].length, 2,
         "surrogate pair occupies 2 UTF-16 units"
-    );
-}
-
-// ============================================================
-// get_cluster_count / get_cluster_metrics の整合
-// ============================================================
-
-#[test]
-fn cluster_metrics_len_matches_cluster_count() {
-    let layout = make_layout(w!("abc あいう"));
-    let count = layout.get_cluster_count().expect("count");
-    let metrics = layout.get_cluster_metrics().expect("metrics");
-    assert_eq!(metrics.len(), count as usize);
-}
-
-// ============================================================
-// hit_test_text_position
-// ============================================================
-
-#[test]
-fn hit_test_text_position_returns_leading_and_trailing_points() {
-    let layout = make_layout(w!("AB"));
-
-    let leading = layout
-        .hit_test_text_position(0, false)
-        .expect("leading hit test");
-    let trailing = layout
-        .hit_test_text_position(0, true)
-        .expect("trailing hit test");
-
-    assert!(leading.point_x >= 0.0);
-    assert!(leading.point_y >= 0.0);
-    assert_eq!(leading.metrics.textPosition, 0);
-    assert!(leading.metrics.length >= 1);
-    // 同一文字の trailing は leading より右（LTR テキスト）
-    assert!(
-        trailing.point_x > leading.point_x,
-        "trailing ({}) should be right of leading ({})",
-        trailing.point_x,
-        leading.point_x
-    );
-}
-
-/// 範囲外テキスト位置はエラーにならず末尾へクランプされる（DirectWrite 仕様の特性化）。
-#[test]
-fn hit_test_text_position_clamps_out_of_range_position() {
-    let layout = make_layout(w!("AB"));
-    let result = layout.hit_test_text_position(999, false);
-    assert!(
-        result.is_ok(),
-        "out-of-range position should clamp, not fail"
     );
 }
 

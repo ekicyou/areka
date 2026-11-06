@@ -174,7 +174,6 @@ impl Visual {
     }
 
     /// クランプ済み opacity 値を返す (0.0〜1.0)。
-    /// `Opacity::clamped()` の移行先。
     pub fn clamped_opacity(&self) -> f32 {
         self.opacity.clamp(0.0, 1.0)
     }

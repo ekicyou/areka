@@ -1,7 +1,7 @@
 //! 記録を出さない組み方の入口の檻（spec: emo-bake-log-overlap 要件 2.1・2.3・3.2・3.4）。
 //!
-//! 追記の相手の面が無い・既に在るアニメーションの番号を追記で書き直す・同じ番号の面を 2 度書く、
-//! を持つシェルを [`EmoWorld::build_with_images`] と [`EmoWorld::build_with_images_quiet`] で組む。
+//! 追記の相手の面が無い・既に在るアニメーションの番号を追記で書き直す・同じ番号の面を 2 度書く・
+//! 範囲の見出しで写す行の数が畳み込みの上限を越える、を持つシェルを [`EmoWorld::build_with_images`] と [`EmoWorld::build_with_images_quiet`] で組む。
 //! 出す入口はその記録を 1 行ずつ出し（対照）、出さない入口は畳み込みと面の画像の記録の文言が
 //! 0 行で、面の表は出す入口と等しい。行は宛先まるごとでなく文言ごとに数える。
 
@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use super::EmoWorld;
 use crate::log_capture::capture_logs;
+use crate::plan_test_support::image_map;
 
 const SHELL: &str = "\
 surface0
@@ -36,13 +37,15 @@ kero.surface.alias
 }
 ";
 
-/// この檻のシェルで出る 3 件の文言（`fold.rs`）。
+/// この檻のシェルで出る 4 件の文言（`fold.rs`）。
 const DUPLICATE: &str = "surface id 重複";
-const REDEFINE: &str = "append が既存 animation id を再定義";
+const REDEFINE: &str = "animation番号の二重定義";
 const MISSING: &str = "surface.append 対象 id が未存在";
+const COPY_LIMIT: &str = "範囲の見出しで写す行の数が畳み込みの上限を越えた";
 
-/// 面の表を組む段の記録の文言の全部（`fold.rs` の 10 本・`base_image.rs` の 1 本）。
+/// 面の表を組む段の記録の文言の全部（`fold.rs` の 12 本・`base_image.rs` の 1 本）。
 const ALL_TEXTS: &[&str] = &[
+    COPY_LIMIT,
     "DefRef::Surface が surfaces 範囲外を指す",
     "DefRef::Append が appends 範囲外を指す",
     "DefRef::Alias が aliases 範囲外を指す",
@@ -51,20 +54,30 @@ const ALL_TEXTS: &[&str] = &[
     MISSING,
     "SurfaceIndex は指すが SurfaceMaster component が欠落: スキップ",
     REDEFINE,
+    "element番号の二重定義",
     "未知の AppendTarget 記述子",
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 作り直す",
     "SurfaceIndex は指すが SurfaceMaster component が欠落: 面の画像を使わずスキップ",
 ];
+
+/// [`SHELL`] の後に、それだけで写す行の数が上限（2^20）を越える記述子（`surface1-1024` に 1,025 行＝
+/// 1,024×1,025）を足す。
+fn shell_text() -> String {
+    let mut text = String::from(SHELL);
+    text.push_str("surface1-1024\n{\n");
+    for c in 0..1025 {
+        text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+    }
+    text.push_str("}\n");
+    text
+}
 
 fn count(logs: &str, text: &str) -> usize {
     logs.lines().filter(|l| l.contains(text)).count()
 }
 
 fn images() -> BTreeMap<u32, String> {
-    BTreeMap::from([
-        (0, "surface0.png".to_string()),
-        (7, "surface7.png".to_string()),
-    ])
+    image_map(&[(0, "surface0.png"), (7, "surface7.png")])
 }
 
 /// 面の番号の列・各面の定義・別名・面の画像の表。
@@ -76,7 +89,7 @@ fn table(w: &EmoWorld) -> impl PartialEq + std::fmt::Debug {
 
 #[test]
 fn quiet_build_emits_no_fold_records_and_same_table() {
-    let shell = areka_parsers::shell::parse(SHELL);
+    let shell = areka_parsers::shell::parse(&shell_text());
     let images = images();
 
     let mut emit = None;
@@ -85,8 +98,8 @@ fn quiet_build_emits_no_fold_records_and_same_table() {
     let quiet_logs =
         capture_logs(|| quiet = Some(EmoWorld::build_with_images_quiet(&shell, &images)));
 
-    // 対照: 出す入口は 3 件を 1 行ずつ出す。
-    for text in [DUPLICATE, REDEFINE, MISSING] {
+    // 対照: 出す入口は 4 件を 1 行ずつ出す。
+    for text in [DUPLICATE, REDEFINE, MISSING, COPY_LIMIT] {
         assert_eq!(count(&emit_logs, text), 1, "出す入口の {text}: {emit_logs}");
     }
     // 出さない入口は、面の表を組む段の記録の文言がどれも 0 行。
@@ -97,11 +110,19 @@ fn quiet_build_emits_no_fold_records_and_same_table() {
             "出さない入口の {text}: {quiet_logs}"
         );
     }
+    // 一覧に無い文言も含め、出さない入口はこのクレートの WARN／ERROR を 1 行も出さない。
+    assert!(
+        !quiet_logs
+            .lines()
+            .any(|l| l.contains("target=areka_emo_compose")
+                && (l.contains("level=WARN") || l.contains("level=ERROR"))),
+        "{quiet_logs}"
+    );
 
     let (emit, quiet) = (emit.unwrap(), quiet.unwrap());
     assert_eq!(table(&emit), table(&quiet), "面の表は両入口で等しい");
     // 検体が空振りしていないこと（面 0・面 7 が在り、面 5 は新設されない・別名が在る）。
     assert!(emit.surface(0).is_some() && emit.surface(7).is_some());
-    assert!(emit.surface(5).is_none());
+    assert!(emit.surface(5).is_none() && emit.surface(1).is_none());
     assert!(emit.resolve_alias("せいかん").is_some());
 }

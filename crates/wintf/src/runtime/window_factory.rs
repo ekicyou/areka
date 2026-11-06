@@ -12,7 +12,8 @@
 //! よって生成後に現行 `WindowStyle`/`WindowPos`/`title` を反映する初期化ステップ
 //! （`SetWindowLongPtrW(GWL_STYLE)`／`SetWindowPos`／`SetWindowTextW`）を行う。座標は
 //! 旧 `create_windows` と同一の `WindowPos::to_window_coords_for_creation` で算出し、
-//! 初期表示ドリフトを避ける（設計 Risks）。
+//! 位置と大きさのうち与えられた側だけを [`initial_pos_flags`] の旗で反映する（位置だけ・
+//! 大きさだけの窓も、出た後の刻みで跳ばない）。
 //!
 //! # ex_style 算出（要件 4.1/4.2/4.3）
 //! 合成モード非依存の branchless 単一経路で算出する
@@ -34,15 +35,16 @@ use std::cell::RefCell;
 use std::rc::Weak;
 
 use crate::executor::util::{Window as LibWindow, WindowType, get_instance_handle};
+use bevy_ecs::prelude::Component;
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, error};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CW_USEDEFAULT, GWL_STYLE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, SetParent, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    WS_EX_LAYERED,
+    CW_USEDEFAULT, GWL_STYLE, SET_WINDOW_POS_FLAGS, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetParent, SetWindowLongPtrW, SetWindowPos,
+    SetWindowTextW, ShowWindow, WS_EX_LAYERED,
 };
 use windows::core::HSTRING;
 
@@ -77,26 +79,57 @@ fn creation_ex_style(style: &WindowStyle, stay_on_top: bool) -> WINDOW_EX_STYLE 
     if stay_on_top { ex | WS_EX_TOPMOST } else { ex }
 }
 
-/// 宣言的ウィンドウ生成をライブラリ経由へ橋渡しする移行ファクトリ。
+/// 窓の生成に失敗した実体の印。`create_windows` の問い合わせから外す。
+/// 立ち直らせたい側がこの印を外すと、次の刻みでまた作る。
+#[derive(Component, Debug)]
+pub struct WindowCreationFailed;
+
+/// 生成直後の `SetWindowPos` の旗。位置も大きさも既定（`CW_USEDEFAULT`）なら `None`（呼ばない）。
+/// 位置が既定なら `SWP_NOMOVE`、大きさが既定なら `SWP_NOSIZE` を足す。
+fn initial_pos_flags(x: i32, width: i32) -> Option<SET_WINDOW_POS_FLAGS> {
+    let no_move = x == CW_USEDEFAULT;
+    let no_size = width == CW_USEDEFAULT;
+    if no_move && no_size {
+        return None;
+    }
+    let mut flags = SWP_NOZORDER | SWP_NOACTIVATE;
+    if no_move {
+        flags |= SWP_NOMOVE;
+    }
+    if no_size {
+        flags |= SWP_NOSIZE;
+    }
+    Some(flags)
+}
+
+/// 生成に失敗した実体に印を入れ、`error!` を 1 行残す（印で毎刻みの作り直しを止める）。
+fn mark_creation_failed(world: &mut World, entity: Entity, e: impl std::fmt::Debug) {
+    error!(entity = ?entity, error = ?e, "ライブラリウィンドウ生成に失敗");
+    world.entity_mut(entity).insert(WindowCreationFailed);
+}
+
+/// 宣言的ウィンドウ生成をライブラリ経由へ橋渡しするファクトリ。
 ///
-/// 後続タスク 4.3 の書き換え後 `create_windows`（`&mut World` 排他システム）から
-/// 呼び出される想定で、エントリポイント [`EcsWindowFactory::create_window`] を
-/// `&mut World` シグネチャで提供する。`create_windows`（task 4.3 結線済み）が呼ぶ。
+/// エントリポイント [`EcsWindowFactory::create_window`] を `&mut World` シグネチャで
+/// 提供し、`create_windows`（`&mut World` 排他システム）が呼ぶ。
 pub(crate) struct EcsWindowFactory;
 
 impl EcsWindowFactory {
     /// `entity` の宣言的ウィンドウデータからライブラリウィンドウを生成し登録する。
     ///
-    /// 手順（借用は最小限・`new_checked_ex` 越しに World 借用を保持しない＝再入安全）:
+    /// 手順（World を `&mut` で借りたまま `new_ex` で作る）:
     /// 1. `entity` の `Window`/`WindowStyle`/`WindowPos`/`title` を
     ///    `World` から読み取り（immutable・即解放）。`Window` 不在なら no-op。
     /// 2. `ex_style` を [`creation_ex_style`] で算出（[`StayOnTop`] の印があれば `WS_EX_TOPMOST` 付き）。
     /// 3. `WndState{ world: Weak<RefCell<EcsWorld>>, entity }` と [`make_wndproc`] で
-    ///    `LibWindow::new_checked_ex(WindowType::TopLevel, ex_style, state, wndproc)` を生成。
-    ///    ※ ライブラリは生成時に WM_CREATE 等を同期送出しうるが、本関数は World 借用を
-    ///    跨いで保持しないため、クロージャの `try_borrow` 安全スキップと衝突しない。
+    ///    `LibWindow::new_ex(WindowType::TopLevel, ex_style, state, wndproc)` を生成。
+    ///    失敗したら [`WindowCreationFailed`] の印を入れ `error!` を 1 行残して戻る。
+    ///    ※ ライブラリは生成時に WM_CREATE 等を同期送出しうる。刻みが共有 World を借りて
+    ///    いる最中なので、wndproc のクロージャの `try_borrow` が失敗して飛ばす（生成時の
+    ///    メッセージは ECS の更新が要らない）。
     /// 4. 生成後初期化: `SetWindowLongPtrW(GWL_STYLE)`／`SetWindowPos`（座標は
-    ///    `to_window_coords_for_creation`・CW_USEDEFAULT 時はスキップ）／`SetWindowTextW`。
+    ///    `to_window_coords_for_creation`・旗は [`initial_pos_flags`]）／`SetWindowTextW`。
+    ///    親の付け替え・位置合わせ・題の設定の失敗は `error!` を残して先へ進む。
     /// 5. `Window<WndState>` を [`WindowRegistry`]（NonSend）へ entity キーで格納。
     /// 6. `WindowHandle{ hwnd, instance }`／`HasGraphicsResources` を entity へ insert
     ///    （グラフィクス経路）。
@@ -147,7 +180,7 @@ impl EcsWindowFactory {
         let lib_window = match LibWindow::new_ex(WindowType::TopLevel, ex_style, state, wndproc) {
             Ok(w) => w,
             Err(e) => {
-                error!(entity = ?entity, error = ?e, "ライブラリウィンドウ生成に失敗");
+                mark_creation_failed(world, entity, e);
                 return;
             }
         };
@@ -166,11 +199,10 @@ impl EcsWindowFactory {
         // 意味するため、WS_CHILD を持たない窓では厳密一致しない（ライブラリが生成時 hWndParent
         // を露出しないための近似）。子ウィンドウ用途（WS_CHILD）では一致する。
         if let Some(parent_hwnd) = parent {
-            // SAFETY: Win32 境界。有効 hwnd を有効 parent_hwnd の子へ再設定するのみ。
-            // 失敗（無効 parent 等）は Err を返すが致命的ではないため無視（旧経路も生成失敗時
-            // は当該 Entity をスキップする方針）。
-            unsafe {
-                let _ = SetParent(hwnd, Some(parent_hwnd));
+            // SAFETY: Win32 境界。有効 hwnd を parent_hwnd の子へ再設定するのみ。
+            // 失敗（無効 parent 等）は記録して先へ進む（窓は最上位のまま残る）。
+            if let Err(e) = unsafe { SetParent(hwnd, Some(parent_hwnd)) } {
+                error!(entity = ?entity, parent = ?parent_hwnd, error = ?e, "親の付け替えに失敗");
             }
         }
 
@@ -190,13 +222,13 @@ impl EcsWindowFactory {
         {
             registry.insert(entity, lib_window);
         } else {
-            // レジストリ未挿入は結線不備（4.3 が NonSend リソースを用意する）。
-            // building block 段階では未到達想定だが、握り潰すと Window が即 drop=
-            // DestroyWindow されるため、忘れ込みを検知できるよう明示ログを残す。
+            // レジストリ未挿入は結線不備（`WinApp` が NonSend リソースを用意する）。
+            // 握り潰すと Window が即 drop=DestroyWindow されるためその場で作って入れるが、
+            // 終了の仕掛けの無い登録簿なので error! で残す。
             let mut registry = WindowRegistry::<LibWindow<WndState>>::new();
             registry.insert(entity, lib_window);
             world.insert_non_send(registry);
-            debug!(entity = ?entity, "WindowRegistry を遅延生成して格納");
+            error!(entity = ?entity, "WindowRegistry が無いのでその場で作って格納（終了の仕掛けなし）");
         }
 
         // --- 6. WindowHandle / HasGraphicsResources を反映（グラフィクス経路） ---
@@ -213,8 +245,9 @@ impl EcsWindowFactory {
     ///
     /// 旧 `create_windows` が `CreateWindowExW` 引数で渡していた style/pos/title を、
     /// ライブラリ生成（`WINDOW_STYLE(0)`・`CW_USEDEFAULT`・名前なし）後に適用する。
-    /// 座標算出は旧経路と同一の `WindowPos::to_window_coords_for_creation`。CW_USEDEFAULT
-    /// を含む場合はライブラリ生成時点で OS 既定が適用済みのため `SetWindowPos` を省く。
+    /// 座標算出は旧経路と同一の `WindowPos::to_window_coords_for_creation`。既定
+    /// （`CW_USEDEFAULT`）の側はライブラリ生成時点の OS 既定のまま残す（[`initial_pos_flags`]）。
+    /// Win32 の失敗は `error!` を残して先へ進む。
     fn apply_initial_state(
         hwnd: HWND,
         style: &WindowStyle,
@@ -237,8 +270,8 @@ impl EcsWindowFactory {
         // WS_POPUP・現行 areka/全 example）では非クライアント領域が無いため実質無害。
         // SAFETY: Win32 境界。位置・サイズ・z オーダーは変えず（NOMOVE/NOSIZE/NOZORDER）、
         // フレーム再計算（FRAMECHANGED）のみを要求する。
-        unsafe {
-            let _ = SetWindowPos(
+        if let Err(e) = unsafe {
+            SetWindowPos(
                 hwnd,
                 None,
                 0,
@@ -246,34 +279,28 @@ impl EcsWindowFactory {
                 0,
                 0,
                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-            );
+            )
+        } {
+            error!(hwnd = ?hwnd, error = ?e, "枠の再計算の SetWindowPos に失敗");
         }
 
-        // 座標・サイズ（旧経路と同一算出）。CW_USEDEFAULT を含む場合は OS 既定維持で省略。
+        // 座標・サイズ（旧経路と同一算出）。与えられた側だけを反映する。
         let system_dpi = unsafe { GetDpiForSystem() };
         let (x, y, width, height) =
             pos.to_window_coords_for_creation(style.style, ex_style, system_dpi);
-        if x != CW_USEDEFAULT && width != CW_USEDEFAULT {
+        if let Some(flags) = initial_pos_flags(x, width) {
             // SAFETY: Win32 境界。有効 hwnd に対する位置・サイズ反映。NOZORDER/NOACTIVATE
             // で z オーダー・アクティブ化を変えない（生成直後の初期反映）。
-            unsafe {
-                let _ = SetWindowPos(
-                    hwnd,
-                    None,
-                    x,
-                    y,
-                    width,
-                    height,
-                    SWP_NOZORDER | SWP_NOACTIVATE,
-                );
+            if let Err(e) = unsafe { SetWindowPos(hwnd, None, x, y, width, height, flags) } {
+                error!(hwnd = ?hwnd, error = ?e, "生成直後の位置合わせに失敗");
             }
         }
 
         // タイトル。
         let title_h = HSTRING::from(title);
         // SAFETY: Win32 境界。有効 hwnd にウィンドウテキストを設定するのみ。
-        unsafe {
-            let _ = SetWindowTextW(hwnd, &title_h);
+        if let Err(e) = unsafe { SetWindowTextW(hwnd, &title_h) } {
+            error!(hwnd = ?hwnd, error = ?e, "題の設定に失敗");
         }
     }
 }
@@ -283,14 +310,17 @@ impl EcsWindowFactory {
 mod window_factory_stay_on_top_tests;
 
 #[cfg(test)]
+#[path = "window_factory_creation_tests.rs"]
+mod window_factory_creation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::rc::Rc;
 
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongPtrW, GetWindowTextW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
-        WS_POPUP, WS_VISIBLE,
+        GetWindowLongPtrW, GetWindowTextW, SW_HIDE, WS_EX_NOREDIRECTIONBITMAP, WS_POPUP,
     };
 
     /// (1) ex_style 算出: 一本化後の唯一経路は NOREDIRECTIONBITMAP を立て LAYERED を除去する。
@@ -330,10 +360,9 @@ mod tests {
     }
 
     /// (2) 実ウィンドウ生成: ファクトリ経由でウィンドウが生成され、レジストリ保持・
-    ///     スタイル/タイトル反映が確認できる（headless・DComp で不可視のまま検証）。
+    ///     スタイル/タイトル反映が確認できる。
     ///
-    /// DComp（WS_EX_NOREDIRECTIONBITMAP）は GDI 不可視ゆえ画面に出ないが、HWND は実在し
-    /// GWL_STYLE / ウィンドウテキストは反映される。表示の E2E は 4.3 結線後（task 5.3）。
+    /// `create_window` は `ShowWindow(SW_SHOW)` で窓を出すので、作った直後に隠してから確かめる。
     #[test]
     fn factory_creates_registers_and_applies_state() {
         // ECS World（共有）と bevy World を用意。bevy World は registry の NonSend 棚を持つ。
@@ -362,22 +391,26 @@ mod tests {
 
         EcsWindowFactory::create_window(&mut bevy_world, entity, weak);
 
-        // レジストリに格納され、有効な HWND を持つ。
-        let registry = bevy_world
-            .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
-            .expect("registry が存在するべき");
-        // WindowHandle が反映されている。
+        // WindowHandle が反映されている。作った直後に隠す。
         let handle = bevy_world
             .get::<WindowHandle>(entity)
             .copied()
             .expect("WindowHandle が insert されるべき");
+        let _ = unsafe { ShowWindow(handle.hwnd, SW_HIDE) };
         assert!(!handle.hwnd.is_invalid(), "生成 HWND は有効であるべき");
+        // レジストリに格納されている。
+        assert!(
+            !bevy_world
+                .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
+                .expect("registry が存在するべき")
+                .is_empty(),
+            "生成した窓が registry に格納されるべき"
+        );
         // HasGraphicsResources も反映。
         assert!(
             bevy_world.get::<HasGraphicsResources>(entity).is_some(),
             "HasGraphicsResources が insert されるべき"
         );
-        let _ = registry; // 借用解放のため明示。
 
         let hwnd = handle.hwnd;
 
@@ -400,9 +433,6 @@ mod tests {
         // クリーンアップ: registry を drop すると Window<WndState>::drop → DestroyWindow。
         drop(bevy_world);
         drop(shared);
-
-        // 未使用警告抑止（WS_OVERLAPPEDWINDOW/WS_VISIBLE は将来の拡張用 import）。
-        let _ = (WS_OVERLAPPEDWINDOW, WS_VISIBLE);
     }
 
     /// 統合テスト（task 5.2・要件 2.1/6.1/2.5）: **宣言的ウィンドウ生成フロー end-to-end**。
@@ -415,13 +445,13 @@ mod tests {
     /// 検証点:
     /// - (a) **ウィンドウクラス未登録エラーが出ない**: 新経路はライブラリ共有クラスを使い
     ///   `process_singleton`（旧 2 クラス登録）を一切経由しない。`create_windows` が
-    ///   `EcsWorldSelfRef` 在で factory 経路へ分岐し、`new_checked_ex` がクラス未登録で
+    ///   `EcsWorldSelfRef` 在で factory 経路へ分岐し、`new_ex` がクラス未登録で
     ///   失敗しないこと（HWND が有効＝登録/生成成功）で担保する（要件 2.5）。
     /// - (b) `WindowRegistry` がその Entity の `Window<WndState>`（有効 HWND）を保持する。
     /// - (c) Entity に `WindowHandle` が付与される。
     ///
-    /// headless 制約: DComp（`WS_EX_NOREDIRECTIONBITMAP`）で不可視のまま実 HWND を生成し
-    /// メッセージループは回さない。`ShowWindow` を含む実表示と full `new→world→run` は E2E 5.3。
+    /// メッセージループは回さない。`create_window` は窓を `SW_SHOW` で出すので、作った直後に
+    /// 隠してから確かめる。
     #[test]
     fn create_windows_new_path_spawns_registers_and_handles_without_class_error() {
         use crate::ecs::window::window_system::create_windows;
@@ -469,6 +499,7 @@ mod tests {
             .get::<WindowHandle>(entity)
             .copied()
             .expect("create_windows 後に WindowHandle が付与されるべき（生成成功）");
+        let _ = unsafe { ShowWindow(handle.hwnd, SW_HIDE) };
         assert!(
             !handle.hwnd.is_invalid(),
             "生成 HWND は有効であるべき（クラス未登録エラーなく生成成立・要件 2.5）"
@@ -487,19 +518,16 @@ mod tests {
             !registry.is_empty(),
             "生成済みウィンドウが WindowRegistry に保持されるべき（spawn→生成→保持）"
         );
-        let _ = registry;
 
         // 冪等性: 同じ Entity は WindowHandle 付与済みゆえ再 create_windows で二重生成しない
-        // （クエリ `Without<WindowHandle>` で除外される）。registry 件数は 1 のまま。
+        // （クエリ `Without<WindowHandle>` で除外される）。registry は Entity を鍵に上書き
+        // するので件数では見えない——HWND が替わらないことで見る。
         create_windows(&mut bevy_world);
-        let registry = bevy_world
-            .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
-            .expect("WindowRegistry が存在するべき");
-        assert!(
-            !registry.is_empty(),
-            "再 create_windows でも registry は維持される（二重生成・取りこぼしなし）"
+        assert_eq!(
+            bevy_world.get::<WindowHandle>(entity).map(|h| h.hwnd),
+            Some(handle.hwnd),
+            "再 create_windows で同じ Entity に窓を作り直さない（二重生成なし）"
         );
-        let _ = registry;
 
         // クリーンアップ: registry drop → Window<WndState>::drop → DestroyWindow。
         drop(bevy_world);

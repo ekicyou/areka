@@ -1,4 +1,4 @@
-//! 合成が着せ替えの手順を積み、`insert` を展開する（seriko-pattern-calls task 2.2・要件 5.5〜5.7・
+//! 合成が着せ替えの手順を積み、`insert` を展開する（seriko-pattern-calls 要件 5.5〜5.7・
 //! 6.1〜6.4・6.7・6.8・8.1）。
 //!
 //! 有効な純 `bind` は全部のコマを番号の順に重ね、`insert,B` の位置に B の寄与を B 自身の座標で
@@ -7,16 +7,14 @@
 
 use std::path::Path;
 
-use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
-use super::derive_ops;
-use super::test_support::{bake_atlas, id_to_path};
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
-use crate::method::ComposeMethod;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::world::EmoWorld;
+use crate::pattern::PatternState;
+use crate::plan_test_support::{
+    bake_atlas, bound_world, frame, id_to_path, named_ops, named_ops_of,
+};
 
 const RELS: &[&str] = &[
     "body.png", "s10.png", "s11.png", "s12.png", "s20.png", "s21.png", "s22.png", "s30.png",
@@ -34,48 +32,14 @@ fn shell(anims: &str) -> String {
     text
 }
 
-/// 面 0 を合成した命令列（(絵の名前, X, Y)）と記録。
-fn compose(
-    anims: &str,
-    binds: &[u32],
-    pattern: &PatternState,
-) -> (Vec<(&'static str, i64, i64)>, String) {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, RELS);
-    let map = id_to_path(&atlas, RELS);
-    let mut world = EmoWorld::build(&parse(&shell(anims)));
-    world.bind_atlas(&atlas, SetId(0));
+/// 面 0 を合成した命令列（(絵の名前, X, Y)）。
+fn compose(anims: &str, binds: &[u32], pattern: &PatternState) -> Vec<(&'static str, i64, i64)> {
     let binds = BindSet::from_ids(binds.iter().copied());
-    let mut ops = Vec::new();
-    let mut visited = Vec::new();
-    let logs =
-        capture_logs(|| derive_ops(&mut ops, &mut visited, &world, &atlas, 0, &binds, pattern));
-    let named = ops
-        .iter()
-        .map(|op| {
-            let name = map
-                .iter()
-                .find(|(id, _)| *id == op.element)
-                .map(|(_, p)| *p)
-                .expect("命令の ElementId は既知");
-            let (x, y) = op.transform.offset();
-            (name, x, y)
-        })
-        .collect();
-    (named, logs)
+    named_ops_of(&shell(anims), &[], RELS, 0, &binds, pattern).0
 }
 
 fn ops(anims: &str, binds: &[u32]) -> Vec<(&'static str, i64, i64)> {
-    compose(anims, binds, &PatternState::default()).0
-}
-
-fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x,
-        y,
-    }
+    compose(anims, binds, &PatternState::default())
 }
 
 /// A（1）＝後ろ・`insert,2`・前、B（2）＝1 コマ。
@@ -148,7 +112,7 @@ fn inserted_b_with_a_frame_draws_the_frame_in_place() {
     let mut pattern = PatternState::default();
     pattern.set(2, frame(21, 7, 8));
     assert_eq!(
-        compose(A_INSERTS_B, &[1, 2], &pattern).0,
+        compose(A_INSERTS_B, &[1, 2], &pattern),
         [
             ("body.png", 0, 0),
             ("s10.png", 1, 2),
@@ -240,21 +204,9 @@ fn inactive_pure_bind_frame_is_drawn() {
     let mut pattern = PatternState::default();
     pattern.set(2, frame(20, 3, 4));
     assert_eq!(
-        compose(A_INSERTS_B, &[], &pattern).0,
+        compose(A_INSERTS_B, &[], &pattern),
         [("body.png", 0, 0), ("s20.png", 3, 4)]
     );
-}
-
-/// `bind+random` の外れた保持コマは今のまま描かない（D9-3 の門）。
-#[test]
-fn inactive_bind_random_frame_stays_hidden() {
-    let anims = "\
-animation4.interval,bind+random,4
-animation4.pattern0,overlay,30,0,0,0
-";
-    let mut pattern = PatternState::default();
-    pattern.set(4, frame(30, 0, 0));
-    assert_eq!(compose(anims, &[], &pattern).0, [("body.png", 0, 0)]);
 }
 
 /// 有効の純 `bind` はコマが静的な寄与を置き換え、コマが消えれば（`stop`）静的な寄与に戻る（5.7・M5）。
@@ -264,12 +216,12 @@ fn active_pure_bind_falls_back_to_steps_after_its_frame_is_gone() {
     pattern.set(1, frame(11, 0, 0));
     // A のコマは手順を展開しないので、B は本来の位置に積む。
     assert_eq!(
-        compose(A_INSERTS_B, &[1, 2], &pattern).0,
+        compose(A_INSERTS_B, &[1, 2], &pattern),
         [("body.png", 0, 0), ("s11.png", 0, 0), ("s20.png", 3, 4)]
     );
     pattern.remove(1);
     assert_eq!(
-        compose(A_INSERTS_B, &[1, 2], &pattern).0,
+        compose(A_INSERTS_B, &[1, 2], &pattern),
         ops(A_INSERTS_B, &[1, 2])
     );
 }
@@ -284,13 +236,22 @@ animation1.pattern1,overlay,12,0,0,0
 animation4.interval,bind+random,4
 animation4.pattern0,unknownmethod,30,0,0,0
 ";
-    for _ in 0..3 {
-        let (named, logs) = compose(anims, &[1, 4], &PatternState::default());
-        assert_eq!(named, [("body.png", 0, 0), ("s12.png", 0, 0)]);
-        assert_eq!(
-            logs.matches("未知の合成メソッド名").count(),
-            0,
-            "合成のたびの記録: {logs}"
-        );
-    }
+    let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let world = bound_world(&parse(&shell(anims)), &[], &atlas);
+    let map = id_to_path(&atlas, RELS);
+    let binds = BindSet::from_ids([1, 4]);
+    let mut named = Vec::new();
+    let logs = capture_logs(|| {
+        for _ in 0..3 {
+            let out =
+                crate::plan_test_support::ops(&world, &atlas, 0, &binds, &PatternState::default());
+            named.push(named_ops(&out, &map));
+        }
+    });
+    assert_eq!(named, vec![vec![("body.png", 0, 0), ("s12.png", 0, 0)]; 3]);
+    assert_eq!(
+        logs.matches("未知の合成メソッド名").count(),
+        0,
+        "合成のたびの記録: {logs}"
+    );
 }

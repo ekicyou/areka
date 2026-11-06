@@ -2,61 +2,58 @@
 //!
 //! element レイヤ順・有効 bind 集合の `animation-sort`→animation ID 順の2段合成規則を確定し、
 //! 各命令へ `AtlasTable` 解決結果（`ElementId`・`Placement`）と変換行列を含める。入れ子 surface
-//! 参照はオフセット累積で再帰的に inline 展開（flatten）し、visited 集合で循環を検出する。
+//! 参照はオフセット累積で inline 展開（flatten・明示のスタック）し、祖先の列で循環を検出する。
 //! キャンバス外形を算出し、同一入力に対して決定的な命令列を生成する。
 //!
-//! # 本 module の到達点（task 5.1／5.2／5.3）とシーム
+//! # 層と走査
 //!
-//! - **task 5.1**: 静的 element 層の列挙（[`push_static_element_ops`]・layer 昇順）。
-//! - **task 5.2**: 有効 bind（`BindSet`）pattern0 層の合成対象化＋`animation-sort`→
-//!   animation ID 順の 2 段規則（[`derive_ops`]）。静的層の後（上）へ、descend（既定）なら ID 昇順・
-//!   ascend なら ID 降順で bind pattern0 を積む（design 決定5・画家のアルゴリズム）。全パーツが
-//!   bind な surface でも非空 bind 集合から可視層を生成する。
-//! - **task 5.3**: 入れ子 surface 参照の**多段再帰 flatten＋循環検出**
-//!   （[`flatten_surface`]）。pattern0 の入れ子参照を pattern の (x,y) をオフセット累積して
-//!   再帰的に inline 展開し、visited 祖先スタックで自己参照・相互参照の循環を検出して非パニックで
-//!   枝を打ち切る（部分結果＋warn・要件 7.1/7.2/7.3）。
-//! - **task 5.4（本 task）**: **placement None スキップ**（[`derive_ops`] へ `AtlasTable` を注入し
-//!   `AtlasEntry.placement` が None の element は命令化せずスキップ・要件 6.3）＋**静的キャンバス外形
-//!   算出**（[`compute_extent`]・[`Extent`]）。外形は**有効 bind 集合に依存せず**、全定義層（全 element
-//!   ＋全 bind animation の pattern0＝有効 bind 非依存）の「配置オフセット＋原寸」の和集合を、原点 (0,0)
-//!   固定・負オフセット分は原点でクリップして算出する（要件 6.5・議題2裁定 (A)）。
+//! - **層 (i)**: 静的 element（[`push_static_element_ops`]・layer 昇順）。element定義の子の面へは同じ順の
+//!   位置で入る。束縛の無い element と `placement` が None の element は命令にしない（要件 6.3）。
+//! - **層 (ii)**: 有効な着せ替え（`BindSet`）・`always`・今のコマを、`animation-sort`→animation ID 順の
+//!   2 段規則（descend（既定）は ID 昇順・ascend は ID 降順）で静的層の後（上）へ積む（[`derive_ops`]・
+//!   design 決定5・画家のアルゴリズム）。コマの無い純 `bind` は読み込みのときに作った手順の全部のコマを
+//!   描き、`bind+random` はコマのあるときだけそのコマを描く。
+//! - **入れ子**: 部品の面へ (x,y) を累積して入る（[`flatten_surface`]）。作業場（[`PlanScratch`]）の
+//!   明示のスタックで回し、祖先の列で循環を見つけて枝を打ち切り（`debug!`・要件 7.1/7.2/7.3）、合成 1 回の
+//!   広がりを予算で打ち切る（指摘 3）。
+//! - **外形**: 束縛のときに 1 度だけ求めた表（[`build_extents`]・[`EmoWorld::extent`]）から引く。有効 bind に
+//!   依存しない静的量（要件 6.5・議題2裁定 (A)）で、合成のたびにはたどらない（指摘 8）。
+//! - **分類**（[`build_plan`]）: 対象 surface 不在→[`ComposeError::SurfaceNotFound`]・外形の幅か高さが 0→
+//!   [`ComposeError::EmptyComposition`]・外形が上限（一辺か面積）越え→[`ComposeError::ExtentTooLarge`]・それ以外は
+//!   描ける命令がゼロでも `Ok(Extent)`（要件 6.6/10.5）。非パニック・`error` ログ＋`Err`。
 //!
-//! - **task 5.5（本 task）**: **命令ゼロ時の 3 分類**（[`build_plan`]）。[`derive_ops`]（有効 bind
-//!   依存の命令列）＋[`compute_extent`]（有効 bind 非依存の静的外形）を wrap し、対象 surface 不在→
-//!   [`ComposeError::SurfaceNotFound`]・定義層皆無で外形 0×0→[`ComposeError::EmptyComposition`]・
-//!   surface 存在＋外形非ゼロ（描画可能命令ゼロでも可）→`Ok(Extent)` の 3 状態を厳密に区別する
-//!   （要件 6.6/10.5・議題2裁定）。非パニック・`error` ログ＋`Err`。
-//!
-//! 本 module は stub で偽装せず、生成する命令列はすべて実挙動・決定的・テスト済みである。
-//!
-//! - **task 7（本 task）**: design 署名どおり `visited` 祖先スタックのスクラッチを引数化する
-//!   （[`build_plan`]/[`derive_ops`]/[`compute_extent`] が呼び手＝Composer の `Vec<u32>` を借用・
-//!   各走査入口で `clear`）。これにより毎フレーム経路（`compose_into`）で visited の再割り当てが
-//!   起きず、O(elements) の定常状態アロケーションなしを満たす（要件 10.3）。
+//! 作業場は呼び手（Composer）が持ち、走査の入口で空へ戻して使い回す。同じ入力の合成を繰り返すとき、
+//! 命令列と作業場の列（祖先・積み荷・層 (ii) の id）の容量が初回から伸びないことを
+//! `golden_tests_determinism_budget_tests.rs` が確かめている（要件 10.3）。それより先（入力が変わるとき・
+//! `HashSet` の中身）は確かめていない。
+
+use std::collections::{HashMap, HashSet};
 
 use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
 use bevy_ecs::entity::Entity;
 
 use crate::bind::BindSet;
+use crate::budget::{Budget, VISIT_BUDGET, surface_rows};
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
 use crate::nesting::{ElementKind, PartKey, is_always_interval};
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan_always::{always_rest_target, push_film_op};
-use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
+use crate::plan_always::{always_rest_target, film_op};
+use crate::world::{AtlasBinding, EmoWorld, Records, SurfaceIndex};
 
 #[path = "plan_extent.rs"]
 mod extent;
-pub(crate) use extent::compute_extent;
+pub(crate) use extent::{MAX_AREA, MAX_EXTENT, build_extents};
+#[cfg(test)]
+pub(crate) use extent::{build_extents_limited, compute_extent, compute_extent_limited};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
 ///
 /// `element` はアトラス参照（束縛時に `Some(ElementId)` へ解決済みのもののみ命令化される）、
 /// `transform` は flatten 済み最終配置（M1 は平行移動のみ）、`method` は M1 では常に
-/// [`ComposeMethod::Overlay`]。`Placement` の実引きは blit 実行時（task 6）に `AtlasTable::entry`
+/// [`ComposeMethod::Overlay`]。`Placement` の実引きは blit 実行時に `AtlasTable::entry`
 /// で O(1) で行うため、本命令は `ElementId` のみを保持する（design Contracts）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlitOp {
@@ -70,11 +67,11 @@ pub struct BlitOp {
 
 /// キャンバス外形（合成先1枚物ビットマップの寸法・原点 (0,0) 固定）。
 ///
-/// 全定義層（全 element ＋全 bind animation の pattern0）の「配置オフセット＋原寸」の和集合
-/// として [`compute_extent`] が算出する。**有効 bind 集合に依存しない静的量**（要件 6.5・議題2
-/// 裁定 (A)）ゆえ、bind のオン/オフでサイズが変わらず、下流 emo-present のバッファ再利用・
-/// キャッシュ・窓サイズ安定に用いる。負オフセット層は原点でクリップされ、外形は常に (0,0) を
-/// 左上とする。`build_plan`（task 5.5）が `Result<Extent, ComposeError>` として wrap して返す。
+/// 全定義層（全 element ＋ `always` と純 `bind` の全部のコマ＋ `bind+random` の番号の最も小さいコマ）の
+/// 「配置オフセット＋原寸」の和集合として束縛のときに 1 度だけ求め、面の表（[`EmoWorld::extent`]）に置く。
+/// **有効 bind 集合に依存しない静的量**（要件 6.5・議題2裁定 (A)）ゆえ、bind のオン/オフでサイズが変わらず、
+/// 下流 emo-present のバッファ再利用・キャッシュ・窓サイズ安定に用いる。負オフセット層は原点でクリップされ、
+/// 外形は常に (0,0) を左上とする。[`build_plan`] が `Result<Extent, ComposeError>` として返す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Extent {
     /// 幅（px・原点 (0,0) からの右端）。
@@ -83,105 +80,201 @@ pub struct Extent {
     pub h: u32,
 }
 
-/// 静的 element 層の転写命令を `out_ops` へ layer 昇順（同 layer は登場順）で積む（要件 4.1/4.5）。
+/// 命令列の走査の作業場（指摘 3・8⑷）。合成器が 1 つ持ち、走査のたびに中身を空へ戻して使い回す
+/// （同じ入力の繰り返しで容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる・要件 10.3）。
 ///
-/// 指定 surface の [`SurfaceMaster`] と平行な [`AtlasBinding`] を World から読み、element を
-/// **layer 昇順・同 layer は登場順**（安定ソート）で列挙する。束縛が `Some(ElementId)` の
-/// element のみ [`BlitOp`] を積み、`None`（未解決・bind 時に debug・脱落は読み込みの error 済み）の element はスキップ
-/// する（要件 4.3）。さらに束縛済み element でも [`AtlasTable::entry`] の `placement` が None
-/// （全透明＝空エントリ）なら命令化せずスキップする（要件 6.3・通常系ゆえ warn しない）。
-/// element の [`Transform`]（転記 x,y の行列表現・要件 4.2）と [`ComposeMethod`] をそのまま
-/// 命令へ伝播する。
+/// 段（1 つの面を 1 つの位置に置く単位）の積み荷は `steps` の 1 本の列に足し、段が尽きたら切り詰める。
+/// 層 (ii) の id・挿入の数えの列が 1 本ずつで足りるのは、1 つの段の積み荷を全部作り終えてから子の段へ
+/// 入るため（段を作る途中で別の段を作らない）。
+#[derive(Debug)]
+pub(crate) struct PlanScratch {
+    /// 祖先の列（今たどっている面の経路・段を出るときに外す順）。
+    pub(crate) visited: Vec<u32>,
+    /// 経路にある面の集合（循環の確かめを O(1) にする・`visited` と同じ面を持つ）。
+    pub(crate) on_path: HashSet<u32>,
+    /// 段の積み荷を足していく 1 本の列。
+    pub(crate) steps: Vec<Step>,
+    /// 段ごとの印（積み荷の始まりと読み位置）。
+    frames: Vec<FrameMark>,
+    /// 層 (ii) の描く順の id。
+    pub(crate) merged_ids: Vec<u32>,
+    /// 段の面の animation の番号 → `SurfaceMaster.animations` の添字（段の頭で作る・指摘 28）。
+    pub(crate) anims: HashMap<u32, usize>,
+    /// 段の中の差し込みの決め（B → A＝B を A が差し込む）。
+    pub(crate) claims: HashMap<u32, u32>,
+    /// 段の中で差し込み済みの B。
+    pub(crate) done: HashSet<u32>,
+    /// 差し込みの数えで手順をたどり済みの着せ替え。
+    pub(crate) expanded: HashSet<u32>,
+    /// 段の中の着せ替えの手順をたどる小さなスタック（(着せ替え, 手順の読み位置)）。差し込みの数えと
+    /// 寄与の積みが順に使う（どちらも終わると空に戻る）。
+    pub(crate) chain: Vec<(u32, usize)>,
+    /// 合成 1 回の広がりの予算（本番は [`VISIT_BUDGET`]）。
+    limit: usize,
+    /// 予算が尽きたことを記録済みの根の面（指摘 24）。同じ根の合成はコマ替えのたびに同じ所で切れるので、
+    /// 合成器 1 つにつき根ごとに 1 度だけ記録する。
+    reported: HashSet<u32>,
+    /// 重ねる画素の上限を越えたことを記録済みの根の面（指摘 77・`reported` と同じ形）。
+    pixels_reported: HashSet<u32>,
+    /// 合成の失敗（`SurfaceNotFound`・`EmptyComposition`・`ExtentTooLarge`）を記録済みの面（`reported` と
+    /// 同じ形）。表示の側は失敗をコマ替えのたびに呼び直すので、`error!` は合成器 1 つにつき面ごとに 1 度。
+    failed_reported: HashSet<u32>,
+}
+
+impl Default for PlanScratch {
+    fn default() -> Self {
+        Self {
+            visited: Vec::new(),
+            on_path: HashSet::new(),
+            steps: Vec::new(),
+            frames: Vec::new(),
+            merged_ids: Vec::new(),
+            anims: HashMap::new(),
+            claims: HashMap::new(),
+            done: HashSet::new(),
+            expanded: HashSet::new(),
+            chain: Vec::new(),
+            limit: VISIT_BUDGET,
+            reported: HashSet::new(),
+            pixels_reported: HashSet::new(),
+            failed_reported: HashSet::new(),
+        }
+    }
+}
+
+impl PlanScratch {
+    /// 小さな予算を渡す内側の口（テスト用）。
+    #[cfg(test)]
+    pub(crate) fn with_limit(limit: usize) -> Self {
+        Self {
+            limit,
+            ..Self::default()
+        }
+    }
+
+    /// 作業場の全部の列と集合の容量（テスト用・繰り返しの合成で増えないことを見る）。
+    #[cfg(test)]
+    pub(crate) fn capacities(&self) -> [(&'static str, usize); 13] {
+        [
+            ("visited", self.visited.capacity()),
+            ("on_path", self.on_path.capacity()),
+            ("steps", self.steps.capacity()),
+            ("frames", self.frames.capacity()),
+            ("merged_ids", self.merged_ids.capacity()),
+            ("anims", self.anims.capacity()),
+            ("claims", self.claims.capacity()),
+            ("done", self.done.capacity()),
+            ("expanded", self.expanded.capacity()),
+            ("chain", self.chain.capacity()),
+            ("reported", self.reported.capacity()),
+            ("pixels_reported", self.pixels_reported.capacity()),
+            ("failed_reported", self.failed_reported.capacity()),
+        ]
+    }
+
+    /// 面の段を開く: 祖先に積み、段の積み荷（層 (i) → 層 (ii)）を作る。
+    fn open(&mut self, level: &Level<'_>) {
+        self.visited.push(level.surface_id);
+        self.on_path.insert(level.surface_id);
+        let start = self.steps.len();
+        self.frames.push(FrameMark { start, read: start });
+        push_static_element_ops(self, level);
+        push_bind_layer(self, level);
+    }
+}
+
+/// 段の積み荷。
+#[derive(Debug, Clone)]
+pub(crate) enum Step {
+    /// 命令をそのまま積む。
+    Op(BlitOp),
+    /// 部品の段（`is_top_level=false`）へ、面 `surface` を位置 (x, y) に置いて入る。
+    Enter { surface: u32, x: i64, y: i64 },
+}
+
+/// 段の印: 積み荷の始まりと、次に読む位置。
+#[derive(Debug)]
+struct FrameMark {
+    start: usize,
+    read: usize,
+}
+
+/// 走査 1 回の入力（どの段でも同じ）。
+#[derive(Clone, Copy)]
+struct Walk<'a> {
+    world: &'a EmoWorld,
+    atlas: &'a AtlasTable,
+    binds: &'a BindSet,
+    pattern: &'a PatternState,
+    /// 走査の頭で 1 度だけ読んだ animation-sort。
+    sort: &'a SortOrder,
+}
+
+impl<'a> Walk<'a> {
+    /// 面 `surface_id` を (x, y) に置く段。面か束縛が無ければ `None`（何も積まない）。
+    fn level(self, surface_id: u32, x: i64, y: i64, is_top_level: bool) -> Option<Level<'a>> {
+        let (master, binding) = surface_and_binding(self.world, surface_id)?;
+        Some(Level {
+            world: self.world,
+            atlas: self.atlas,
+            master,
+            binding,
+            surface_id,
+            binds: self.binds,
+            pattern: self.pattern,
+            sort: self.sort,
+            offset_x: x,
+            offset_y: y,
+            is_top_level,
+        })
+    }
+}
+
+/// 層 (i): 段の面の静的 element を、layer 昇順（同 layer は登場順）で積み荷にする（要件 4.1/4.5）。
 ///
-/// `out_ops` は呼び手のスクラッチ Vec を再利用する意図（要件 10.3・完全な再利用形は
-/// task 7 で実現）ゆえ、本関数は **追記のみ**（clear しない）を行う。element 数ぶんの命令を
-/// 末尾へ push する。surface が存在しない場合・`AtlasBinding` 未挿入の場合は何も積まない
-/// （後続 task が `SurfaceNotFound`/未束縛の分類を担う）。
-///
-/// # 決定性（要件 4.5/10.1）
-///
-/// 同一の World／surface に対して、本関数は毎回同一の命令列を append する。layer 昇順の
-/// **安定ソート**により同 layer element の登場順が保たれ、束縛（index 平行）も決定的ゆえ、
-/// 生成される `Vec<BlitOp>` はバイト等価になる。
-///
-/// # シーム（後続 task）
-///
-/// bind 層（5.2）・入れ子 flatten（5.3）・placement None スキップと外形（5.4）・zero-op 分類
-/// （5.5）は本関数を **拡張**して埋める。本関数は静的 element 経路のみを担い、偽の結果を
-/// 返さない。
-///
-/// 消費は task 5.2 の [`derive_ops`] が本関数を wrap して行う（合成対象 surface 自身の静的層＝
-/// (offset_x, offset_y)=(0,0)・bind pattern0 の入れ子参照＝pattern の (x,y) をオフセット）。
+/// 束縛が `Some(ElementId)` の画像だけを命令にし、`None`（画像の解決に失敗・bind 時に debug 済み）と
+/// `placement` が None（全透明・要件 6.3）は飛ばす。位置は段の位置＋ element の X,Y。
 ///
 /// # element定義の子（surface-element-nesting 要件 2.1〜2.3・3.1〜3.4）
 ///
-/// 欄がサーフェスの番号（[`ElementKind::Surface`]）の element定義は、同じ順の位置でその場で子へ
-/// 再帰する（位置は親の位置＋ element定義の X,Y・[`flatten_surface`] を `is_top_level=false` で）。
-/// 子が先祖（`visited`）に在る・面の表に無い・範囲を超える数のときは、その element定義だけを
-/// 飛ばして `debug!` を 1 行出す（警告は読み込みのときに出ている）。画像だけのサーフェスでは
-/// 命令列は前と同じ。
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn push_static_element_ops(
-    out_ops: &mut Vec<BlitOp>,
-    visited: &mut Vec<u32>,
-    world: &EmoWorld,
-    atlas: &AtlasTable,
-    surface_id: u32,
-    binds: &BindSet,
-    pattern: &PatternState,
-    offset_x: i64,
-    offset_y: i64,
-) {
-    let Some((master, binding)) = surface_and_binding(world, surface_id) else {
-        // surface 不在・または binding 未挿入。本 task では静的 element を積まない（後続 task が
-        // SurfaceNotFound/未束縛の分類を担当する）。
-        return;
-    };
-
-    // layer 昇順・同 layer は登場順（安定ソート）。fold 段で既に整列済み（不変条件）だが、
-    // plan は自 module で決定性を保証するため添字と layer を安定ソートし直す。
-    let mut order: Vec<usize> = (0..master.elements.len()).collect();
-    order.sort_by_key(|&i| master.elements[i].layer);
-
-    for i in order {
-        let element = &master.elements[i];
+/// 欄がサーフェスの番号（[`ElementKind::Surface`]）の element定義は、同じ順の位置に子の段へ入る
+/// 積み荷を置く（位置は段の位置＋ element定義の X,Y）。子が先祖（`visited`）に在る・面の表に無い・
+/// 範囲を超える数のときは、その element定義だけを飛ばして `debug!` を 1 行出す（警告は読み込みの
+/// ときに出ている）。動く絵の子は今のコマ 1 枚の命令を置く。
+fn push_static_element_ops(s: &mut PlanScratch, level: &Level<'_>) {
+    let (master, surface_id) = (level.master, level.surface_id);
+    // layer 昇順・同 layer は登場順。畳み込み（`fold.rs`）が element番号の昇順に安定ソート済み
+    // （不変条件）なので、並べ直さずに記述の順で読む。
+    debug_assert!(master.elements.is_sorted_by_key(|e| e.layer));
+    for (i, element) in master.elements.iter().enumerate() {
         let (ex, ey) = element.transform.offset();
-        // element定義の子: その場で再帰する（位置は親の位置＋ X,Y）。飛ばすのはこの element定義だけ。
+        let (x, y) = (
+            level.offset_x.saturating_add(ex),
+            level.offset_y.saturating_add(ey),
+        );
         let skip_reason = match element.kind {
             ElementKind::Image => None,
             ElementKind::SurfaceOutOfRange => Some("番号として扱える範囲を超える数"),
             // 動く絵の子: 同じ順の位置で今のコマ 1 枚を、置いた element の描画メソッドで描く。
             ElementKind::Film(film) => {
-                push_film_op(
-                    out_ops,
-                    world,
-                    atlas,
-                    film,
-                    pattern,
-                    &element.method,
-                    Transform::translate(offset_x + ex, offset_y + ey),
-                );
+                let transform = Transform::translate(x, y);
+                let (world, atlas, pattern) = (level.world, level.atlas, level.pattern);
+                let op = film_op(world, atlas, film, pattern, &element.method, transform);
+                s.steps.extend(op.map(Step::Op));
                 continue;
             }
-            ElementKind::Surface(child) if world.surface(child).is_none() => {
+            ElementKind::Surface(child) if level.world.surface(child).is_none() => {
                 Some("面の表に無い番号")
             }
-            ElementKind::Surface(child) if visited.contains(&child) => {
+            ElementKind::Surface(child) if s.on_path.contains(&child) => {
                 Some("先祖へ戻る参照（循環）")
             }
             ElementKind::Surface(child) => {
-                flatten_surface(
-                    out_ops,
-                    visited,
-                    world,
-                    atlas,
-                    child,
-                    binds,
-                    pattern,
-                    offset_x + ex,
-                    offset_y + ey,
-                    false,
-                );
+                s.steps.push(Step::Enter {
+                    surface: child,
+                    x,
+                    y,
+                });
                 continue;
             }
         };
@@ -197,7 +290,7 @@ pub(crate) fn push_static_element_ops(
             continue;
         }
         // 束縛が Some の画像のみ命令化する。None（画像の解決に失敗・bind 時に debug・脱落は読み込みの error 済み）はスキップ。
-        let Some(element_id) = binding.0.get(i).copied().flatten() else {
+        let Some(element_id) = level.binding.0.get(i).copied().flatten() else {
             tracing::trace!(
                 target: "areka_emo_compose",
                 surface_id,
@@ -208,8 +301,8 @@ pub(crate) fn push_static_element_ops(
             continue;
         };
         // placement None（全透明＝空エントリ）の element は命令化せずスキップ（要件 6.3）。原寸は
-        // 既知ゆえ外形（compute_extent）へは寄与するが、転写命令には現れない（通常系・warn しない）。
-        if atlas.entry(element_id).placement.is_none() {
+        // 既知ゆえ外形（外形の表）へは寄与するが、転写命令には現れない（通常系・warn しない）。
+        if level.atlas.entry(element_id).placement.is_none() {
             tracing::trace!(
                 target: "areka_emo_compose",
                 surface_id,
@@ -219,260 +312,259 @@ pub(crate) fn push_static_element_ops(
             );
             continue;
         }
-        // 入れ子参照の (x,y) オフセットを element 配置へ足し込む（1 段 inline 展開・要件 5.2 の
-        // pattern0 入れ子参照。M1 は平行移動のみゆえ加算で足りる）。offset=(0,0) の合成対象自身の
-        // 静的層では element の transform そのままになる。
-        out_ops.push(BlitOp {
+        s.steps.push(Step::Op(BlitOp {
             element: element_id,
-            transform: Transform::translate(ex + offset_x, ey + offset_y),
+            transform: Transform::translate(x, y),
             method: element.method.clone(),
-        });
+        }));
     }
 }
 
-/// 合成対象 surface の静的 element 層＋有効 bind pattern0 層の転写命令を `out_ops` へ導出する（要件 5.2/5.3/5.4/5.6）。
+/// 合成対象 surface の静的 element 層＋有効な着せ替え・コマの層の転写命令を `out_ops` へ導出する（要件 5.2/5.3/5.4/5.6）。
 ///
 /// design「PlanBuilder（plan.rs）」の層列挙規則に厳密に従う:
 ///
 /// 1. **静的 element 層**（i）: 合成対象 surface 自身の element を layer 昇順・同 layer は登場順で
-///    [`push_static_element_ops`]（offset=(0,0)）により先頭へ積む（**下＝基底層**）。
-/// 2. **有効 bind pattern0 層**（ii）: 合成対象 surface の `SurfaceMaster.animations` のうち、
+///    先頭へ積む（**下＝基底層**・[`push_static_element_ops`]）。
+/// 2. **着せ替え・コマの層**（ii）: 合成対象 surface の `SurfaceMaster.animations` のうち、
 ///    interval が bind 種（[`Interval::Bind`]/[`Interval::BindRandom`]）**かつ** animation id が
-///    `binds` に含まれる animation を「有効 bind」とし、その pattern0（index 0 の [`Pattern`]）を
-///    **2 段ソート順**で静的層の**後（＝上）**へ積む。ただし pattern0 を静的に積むのは純
-///    [`Interval::Bind`] だけで、[`Interval::BindRandom`] はコマがあるときだけそのコマを描く
-///    （件 26・`animated-surface-log-flood` 要件 9.1）。
+///    `binds` に含まれる animation を「有効 bind」とし、`always` と今のコマとともに
+///    **2 段ソート順**で静的層の**後（＝上）**へ積む。コマの無い純 [`Interval::Bind`] は読み込みのときに
+///    作った手順の全部のコマを描き（seriko-pattern-calls M6）、[`Interval::BindRandom`] はコマがあるとき
+///    だけそのコマを描く（件 26・`animated-surface-log-flood` 要件 9.1）。
 ///    - **段1（animation-sort・要件 5.3/5.6・design 決定5）**: [`EmoWorld::animation_sort`] が
 ///      [`SortOrder::Descend`]（既定）→ animation id **昇順**に描画（大 id が上）。[`SortOrder::Ascend`]
 ///      → id **降順**に描画（小 id が上）。これが画家のアルゴリズムの画素積層写像。
 ///    - **段2**: 上記方向の中で animation id をキーに整列する。
 ///
-/// pattern0 の `surface_id >= 0` は**入れ子 surface 参照**として、参照先 [`SurfaceMaster`] の
-/// **elements のみ**を pattern の (x,y) をオフセット**累積**して再帰的に inline 展開する
-/// （多段 flatten・design 決定2）。参照先 surface 自身の bind animation は展開しない（design
-/// 「`active_binds` の適用範囲は compose 対象 surface のみ」）。`surface_id < 0` はレイヤクリア/停止
-/// センチネル＝**非描画 skip**（trace ログ・非パニック・要件 5.5 前段）。
+/// pattern の `surface_id >= 0` は**入れ子 surface 参照**として、参照先の面を部品の段として pattern の
+/// (x,y) をオフセット**累積**して inline 展開する（多段 flatten・design 決定2）。部品の段も同じ 2 層を
+/// 積み、コマは部品の欄から読む（surface-element-nesting 要件 5.1・5.10）。`surface_id < 0` はレイヤ
+/// クリア/停止センチネル＝**非描画 skip**（非パニック・要件 5.5 前段）。
 ///
-/// # 循環検出（要件 7.1/7.2/7.3・design 決定2）
+/// # 循環検出と広がりの予算（要件 7.1/7.2/7.3・指摘 3）
 ///
-/// 入れ子参照の再帰は visited 祖先スタック（`Vec<u32>`）で保護する。既に**現在の祖先経路**に
-/// 存在する surface を再訪すると（自己参照・相互参照の循環）、`debug!` の上その枝のみを打ち切って
-/// 部分結果を残す（パニックしない・スタック深度に依存しない構造的停止保証）。visited は枝離脱時
-/// に pop する祖先スタック規律ゆえ、非循環の重複参照（DAG の共有子）は各経路で正しく展開される。
+/// 入れ子は明示のスタック（[`PlanScratch`]）で回す（[`flatten_surface`]）。既に**現在の祖先経路**に
+/// 存在する surface へ入ろうとすると（自己参照・相互参照の循環）、`debug!` の上その枝のみを打ち切って
+/// 部分結果を残す。祖先は段を出るときに外すので、非循環の重複参照（DAG の共有子）は各経路で正しく
+/// 展開される。合成 1 回に予算 1 つを渡し、入る面と、子の段の面の行の全部（[`surface_rows`]）と、子の段の
+/// 積み荷を数えて、尽きたらまだ積んでいない積み荷とまだ入っていない枝を捨てる（根の面の自分の層は予算に
+/// 切られず必ず描く・ただし重ねる画素の上限（[`build_plan`]・指摘 77）は根の層も切る・`error!` は合成器 1 つにつき
+/// 根ごとに 1 度だけ・指摘 21・24・76・129）。
 ///
 /// # 決定性（要件 4.5/10.1）
 ///
-/// 静的層は [`push_static_element_ops`] の安定順、bind 層は (animation id → 昇/降順) の全順序で
-/// 整列し、入れ子 flatten も同一走査順で決定的ゆえ、同一入力（World／surface_id／binds）に対し
-/// 毎回同一命令列を append する（循環入力でも有界かつバイト等価）。
-///
-/// # placement None スキップ（task 5.4・要件 6.3）
-///
-/// `atlas` を [`push_static_element_ops`] へ渡し、束縛済みでも `AtlasEntry.placement` が None
-/// （全透明）の element は命令化せずスキップする。**有効 bind pattern0 の入れ子参照先も本経路の
-/// element として展開される**ため、そこにある placement None element も同様にスキップされる。
-///
-/// # シーム（後続 task が本関数を拡張して埋める）
-///
-/// - **描画可能命令ゼロの Err 分類（`SurfaceNotFound`/`EmptyComposition`）** → task 5.5。本関数は
-///   分類を返さず、不在 surface に対しては何も積まない（非パニック）。公開ファサード `build_plan`
-///   （`Result<Extent, ComposeError>`・visited をスクラッチ引数へ）は 5.5 が本関数＋[`compute_extent`]
-///   を wrap して導入する。
-///
-/// 消費は task 5.5 の [`build_plan`] が本関数を wrap して行う（本 module 内の呼び出し鎖
-/// `push_static_element_ops`/`flatten_surface`/`surface_and_binding`/`is_bind_interval` は
-/// [`build_plan`] → [`derive_ops`]/[`compute_extent`] の一点から辿られる）。
+/// 静的層は安定順、bind 層は (animation id → 昇/降順) の全順序で整列し、入れ子も同一走査順で
+/// 決定的ゆえ、同一入力（World／surface_id／binds）に対し毎回同一命令列を append する（循環入力でも
+/// 有界かつバイト等価）。`out_ops` は clear しない（追記のみ・clear は [`build_plan`]）。
 pub(crate) fn derive_ops(
     out_ops: &mut Vec<BlitOp>,
-    visited: &mut Vec<u32>,
+    scratch: &mut PlanScratch,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
     binds: &BindSet,
     pattern: &PatternState,
 ) {
-    // visited 祖先スタック（design: Composer スクラッチの Vec<u32>）は呼び手（[`build_plan`]／
-    // Composer ファサード）から借用して再利用する（要件 10.3・定常状態アロケーションなし）。
-    // 走査開始前に空へ戻し、祖先スタック規律（push-on-enter／pop-on-exit）で走査後も空に戻す。
-    visited.clear();
-    // top-level 合成対象は PatternState の今までの欄のコマを層(ii) へ合流させる。入れ子再帰
-    // （部品の段）は is_top_level=false で部品の欄を読む。
-    flatten_surface(
-        out_ops, visited, world, atlas, surface_id, binds, pattern, 0, 0, true,
-    );
+    let walk = Walk {
+        world,
+        atlas,
+        binds,
+        pattern,
+        sort: world.animation_sort(),
+    };
+    flatten_surface(out_ops, scratch, walk, surface_id);
 }
 
-/// 合成対象 surface（top-level）／入れ子参照先 surface（再帰）を平坦化して `out_ops` へ積む。
+/// 根の面 `root` から段を明示のスタックで回し、積み荷の順に命令を `out_ops` へ積む。
 ///
-/// - 層（i）: 当 surface の静的 element を (offset_x, offset_y) 累積で積む（[`push_static_element_ops`]）。
-/// - 層（ii）: 有効 bind（interval が bind 種 ∧ id ∈ `binds`）の pattern0 を animation-sort→ID 順の
-///   2 段規則で積む。pattern0 が入れ子 surface を参照（`surface_id >= 0`）するなら、pattern の (x,y)
-///   を累積オフセットへ足して**再帰**する。
+/// 積み荷を取り出す時点で、入る面が祖先に在れば循環として捨て（`debug!`）、予算が尽きていれば
+/// 捨てる。先に取り出した兄弟の段は取り出す前に全部終わって祖先から外れているので、祖先の列は
+/// 今の段までの経路そのものになり、命令は深さ優先の順に並ぶ。
+fn flatten_surface(out_ops: &mut Vec<BlitOp>, s: &mut PlanScratch, walk: Walk<'_>, root: u32) {
+    s.visited.clear();
+    s.on_path.clear();
+    s.steps.clear();
+    s.frames.clear();
+    let records = if s.reported.contains(&root) {
+        Records::Quiet
+    } else {
+        Records::Emit
+    };
+    let mut budget = Budget::with_records(s.limit, records);
+    // 根の面は予算に数えない（自分の層は必ず描く。ただし重ねる画素の上限は `build_plan` が根の層も含めて切る）。一番上は今までの欄のコマを層 (ii) へ合流させる。
+    if let Some(level) = walk.level(root, 0, 0, true) {
+        s.open(&level);
+    }
+    while let Some(frame) = s.frames.last_mut() {
+        let (surface, x, y) = match s.steps.get(frame.read) {
+            // 段が尽きた: 積み荷を切り詰め、祖先から外す。
+            None => {
+                s.steps.truncate(frame.start);
+                s.frames.pop();
+                let popped = s.visited.pop();
+                debug_assert!(popped.is_some(), "visited は祖先スタック（LIFO）");
+                if let Some(surface) = popped {
+                    s.on_path.remove(&surface);
+                }
+                continue;
+            }
+            Some(Step::Op(op)) => {
+                out_ops.push(op.clone());
+                frame.read += 1;
+                continue;
+            }
+            Some(&Step::Enter { surface, x, y }) => (surface, x, y),
+        };
+        frame.read += 1;
+        // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（非パニック）。定義だけで決まる
+        // 誤りなので、組むたびの知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
+        if s.on_path.contains(&surface) {
+            tracing::debug!(
+                target: "areka_emo_compose",
+                surface_id = surface,
+                "入れ子参照の循環を検出・枝を打ち切り"
+            );
+            continue;
+        }
+        // 部品の段（element定義の子・pattern定義の先）は部品の欄を読む。段を開くとなめる面の行の全部も
+        // 入る 1 と一緒に先に予算から引き、足りなければ開かない（積み荷を作らない行も仕事・指摘 76・129）。
+        let level = walk.level(surface, x, y, false);
+        let rows = level.as_ref().map_or(0, |l| surface_rows(l.master));
+        if !budget.enter(rows, "plan", root) {
+            continue;
+        }
+        if let Some(level) = level {
+            let start = s.steps.len();
+            s.open(&level);
+            // 段の積み荷（命令と子へ入る印）も予算から引き、足りない分は積まない（指摘 21）。
+            let kept = budget.take_up_to(s.steps.len() - start, "plan", root);
+            s.steps.truncate(start + kept);
+        }
+    }
+    if records.emits() && budget.reported() {
+        s.reported.insert(root);
+    }
+}
+
+/// 層 (ii): 段の有効な着せ替えとコマを、animation-sort の 2 段規則の順に積み荷にする。
 ///
-/// **`binds` の適用範囲は top-level のみ**ではなく全再帰段で同一 `binds` を参照するが、参照先の
-/// bind animation は「その surface の `animations` に定義され `binds` に含まれる」もののみが有効で、
-/// emo2 の bind パーツ surface（1100 系）は element のみで bind を持たないため差は生じない（design
-/// 記録）。将来 BindSet のスコープ設計を入れ子ごとに分ける必要が生じた場合はシーム再検討。
+/// # 合成合流と method ゲート（要件 4.2/4.6/5.3/8.4）
 ///
-/// visited は祖先スタック: 入口で `surface_id` を push、出口で pop。既訪問（＝現在の祖先経路に
-/// 存在）なら循環ゆえ `debug!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
-///
-/// # 合成合流と method ゲート（task 7.2・要件 4.2/4.6/5.3/8.4）
-///
-/// 層(ii) の対象 id 集合へ、この段のコマ（`is_top_level`＝derive_ops 直下の合成対象 surface なら
-/// [`PatternState`] の今までの欄、部品の段なら部品の欄の `surface_id` の分）を持つ id を合流する。
+/// 層(ii) の対象 id 集合へ、この段のコマ（一番上なら [`PatternState`] の今までの欄、部品の段なら
+/// 部品の欄の `surface_id` の分）を持つ id を合流する。
 /// 合流対象 id 集合 =
-/// `{ 有効 bind pattern0 を持つ id } ∪ { この段に現在コマを持つ id のうち bind 種でないもの、
-/// または bind 種でも現在の bind 集合に属するもの }`（bind 所属条件は bindopt D9-3・下記）。整列は既存の
-/// animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。各 id で現在コマが
-/// あれば**コマが pattern0 静的寄与を置換**する（4.2「各コマは直前コマをリセットしてベースへ」）。
-/// コマ・pattern0 いずれも method ゲート（[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
+/// `{ 今の bind 集合に属する着せ替えの id } ∪ { always の id } ∪ { この段に現在コマを持つ id のうち
+/// bind+random でないもの、または bind+random でも現在の bind 集合に属するもの }`（bind 所属条件は bindopt
+/// D9-3・下記）。整列は既存の animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。
+/// 各 id で現在コマがあれば**コマが静的な寄与（着せ替えの手順・always の経過 0）を置換**する（4.2「各コマは
+/// 直前コマをリセットしてベースへ」）。コマ・着せ替えの手順・always の経過 0 のいずれも method ゲート
+/// （[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
 /// 非 Overlay は `debug!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。一番上と部品の段は
 /// 読む欄だけが違い、規則は同じ 1 本の経路を通る（surface-element-nesting 要件 5.1・5.10・5.12）。
 ///
 /// # bind 非所属コマの合流拒否（bindopt D9-3・最後の砦・bindopt 7.1/7.4）
 ///
-/// 上記の合流で、**当 surface の bind 種アニメ**（[`is_bind_animation`]）に属する id のコマは
-/// `binds.contains(id)` のときだけ合流する。`-1` 終端を持たないアニメは末尾到達後に最終コマを
-/// 保持する仕様ゆえ、着せ替え ID が bind 集合から外れても保持コマが残り得る。その掃除は状態側
-/// （発行前除去）と再生側（進行相の停止）が担うが、いずれかが漏れても**外れたパーツが表示に
-/// 残らない**不変量を合成計画側でも保証する（実機の表情固着の直接の機構）。**bind に属さない
-/// アニメ（純 `random` の `interval` 等）のコマは無条件で従来どおり合流する**（bindopt 7.4）。
-/// 合成順・重ね順（animation-sort 2 段規則）は本ゲートで一切変わらない。
+/// 上記の合流で、**当 surface の `bind+random`** に属する id のコマは `binds.contains(id)` のときだけ
+/// 合流する。`-1` 終端を持たないアニメは末尾到達後に最終コマを保持する仕様ゆえ、着せ替え ID が bind
+/// 集合から外れても保持コマが残り得る。上流の掃除が漏れても**外れたパーツが表示に残らない**
+/// 不変量を合成計画側でも保証する。**bind に属さないアニメ（純 `random` の `interval` 等）のコマは
+/// 無条件で従来どおり合流する**（bindopt 7.4）。合成順・重ね順は本ゲートで一切変わらない。
 ///
-/// 引数は out_ops/visited のスクラッチ2本＋world/atlas の入力2本＋surface_id＋binds＋pattern＋累積
-/// offset(x,y)＋is_top_level。全て再帰の各段で必要ゆえ削れない（スクラッチ構造体化は将来の整理余地）。
-#[allow(clippy::too_many_arguments)]
-fn flatten_surface(
-    out_ops: &mut Vec<BlitOp>,
-    visited: &mut Vec<u32>,
-    world: &EmoWorld,
-    atlas: &AtlasTable,
-    surface_id: u32,
-    binds: &BindSet,
-    // task 7.2: 現在コマ集合の層(ii) 合流＋コマ/pattern0 双方への method ゲートで実消費する。
-    // 一番上は今までの欄、部品の段は部品の欄を読む。
-    pattern: &PatternState,
-    offset_x: i64,
-    offset_y: i64,
-    is_top_level: bool,
-) {
-    // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（非パニック）。定義だけで決まる
-    // 誤りなので、組むたびの知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
-    if visited.contains(&surface_id) {
-        tracing::debug!(
-            target: "areka_emo_compose",
-            surface_id,
-            "入れ子参照の循環を検出・枝を打ち切り"
-        );
-        return;
+/// `binds` は全段で同じものを参照するが、参照先の bind animation は「その surface の `animations` に
+/// 定義され `binds` に含まれる」もののみが有効（emo2 の bind パーツ surface は bind を持たない）。
+fn push_bind_layer(s: &mut PlanScratch, level: &Level<'_>) {
+    let (master, surface_id) = (level.master, level.surface_id);
+    // 番号 → 添字の表（同じ番号の animation は畳み込みで 1 つ・先勝ち＝最初の 1 つを指す）。
+    s.anims.clear();
+    for (i, a) in master.animations.iter().enumerate() {
+        s.anims.entry(a.id).or_insert(i);
     }
-    visited.push(surface_id);
-
-    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む（placement None はスキップ・
-    // element定義の子はその場で再帰）。
-    push_static_element_ops(
-        out_ops, visited, world, atlas, surface_id, binds, pattern, offset_x, offset_y,
-    );
-
-    // 当 surface 不在なら bind 層もない（後続 task が SurfaceNotFound 分類を担う）。存在する場合のみ
-    // bind 層を積む。いずれにせよ枝離脱で visited を pop する。
-    if let Some((master, _binding)) = surface_and_binding(world, surface_id) {
-        // 層（ii）: 合流対象 id 集合 = { 有効 bind（interval が bind 種 ∧ id ∈ binds）の pattern0 を
-        //   持つ id } ∪ { この段のコマを持つ id }。この段のコマは、一番上なら今までの欄、部品の段
-        //   （element定義の子・pattern定義の先）なら部品の欄のこの番号の分（surface-element-nesting
-        //   要件 5.1・5.10・5.13）。以下の規則は両者で同じ 1 本の経路を通る。
-        let frames = (pattern.iter().filter(|_| is_top_level))
-            .chain(pattern.part(surface_id).filter(|_| !is_top_level));
-        // `always` は欄が無くても経過 0 を描くので、いつも重ねる対象に入れる（順は同じ規則）。
-        let mut merged_ids: Vec<u32> = master
+    // `always` は欄が無くても経過 0 を描くので、いつも重ねる対象に入れる（順は同じ規則）。
+    s.merged_ids.clear();
+    s.merged_ids.extend(
+        master
             .animations
             .iter()
             .filter(|a| {
-                (is_bind_interval(&a.interval) && binds.contains(a.id))
+                (is_bind_interval(&a.interval) && level.binds.contains(a.id))
                     || is_always_interval(&a.interval)
             })
-            .map(|a| a.id)
-            .collect();
-        // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
-        // 二重列挙しない（整列後も 1 回だけ処理される）。
-        for (id, _frame) in frames {
-            if merged_ids.contains(&id) {
-                continue;
-            }
-            // bindopt D9-3（最後の砦・bindopt 7.1）: **`bind+random`** のアニメのコマは、現在の
-            // bind 集合に属するときだけ合流する。bind から外れた ID の保持コマ（`-1` 終端を持たない
-            // アニメが末尾到達後に保つ最終コマ）が、上流の掃除（状態側の発行前除去・再生側の
-            // 進行相停止）を漏れても表示へ届かない不変量をここで成立させる。純 `bind` のコマは
-            // 呼ばれて始まったものだけなので、無効でも合流する（seriko-pattern-calls 5.6・M5）。
-            // **bind に属さないアニメ（純 `random` の `interval` 等・当 surface に定義の無い id）は
-            // 無条件で従来どおり合流する**（bindopt 7.4）。合成順・重ね順の規則は不変（合流の可否のみ）。
-            if is_bind_random_animation(master, id) && !binds.contains(id) {
-                tracing::debug!(
-                    target: "areka_emo_compose",
-                    surface_id,
-                    animation_id = id,
-                    "bind 集合に属さない bind 種アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
-                );
-                continue;
-            }
-            merged_ids.push(id);
+            .map(|a| a.id),
+    );
+    let pattern = level.pattern;
+    // 段の種類で読む欄だけを回す（使わない欄を全部なめない・指摘 30）。
+    let frames = (level
+        .is_top_level
+        .then(|| pattern.iter())
+        .into_iter()
+        .flatten())
+    .chain(
+        (!level.is_top_level)
+            .then(|| pattern.part(surface_id))
+            .into_iter()
+            .flatten(),
+    );
+    // 現在コマの id を合流（有効な着せ替えでも `always` でもない id も含む）。上で入れた id と重なったものは
+    // 整列の後に 1 つへ畳む（上で入れた id は有効な着せ替えか `always` なので、下の門は通る）。
+    for (id, _frame) in frames {
+        // bindopt D9-3（最後の砦・bindopt 7.1）: `bind+random` のコマは bind 集合に属するときだけ
+        // 合流する。純 `bind` のコマは呼ばれて始まったものだけなので、無効でも合流する
+        // （seriko-pattern-calls 5.6・M5）。bind に属さないアニメは無条件で合流する（bindopt 7.4）。
+        if is_bind_random_animation(master, &s.anims, id) && !level.binds.contains(id) {
+            tracing::debug!(
+                target: "areka_emo_compose",
+                surface_id,
+                animation_id = id,
+                "bind 集合に属さない bind+random アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
+            );
+            continue;
         }
-
-        // 段1/段2: animation-sort の2段規則を**変更せず**合流後 id 集合へ適用する（design 決定5・
-        //   画家のアルゴリズム写像・R5.3）。Descend（既定）→ id 昇順に描画（大 id が上）。
-        //   Ascend → id 降順に描画（小 id が上）。
-        match world.animation_sort() {
-            SortOrder::Descend => merged_ids.sort_unstable(),
-            SortOrder::Ascend => merged_ids.sort_unstable_by(|a, b| b.cmp(a)),
-            // 知らない値（`Other`・`#[non_exhaustive]` の先）は既定 Descend（id 昇順描画）へ倒す。
-            // 1 シェル 1 度の warn は読み込み側が `shape_issues` で出す。
-            other => {
-                tracing::debug!(
-                    target: "areka_emo_compose",
-                    surface_id,
-                    sort = ?other,
-                    "未知の animation-sort: 既定 Descend（id 昇順描画）として扱う"
-                );
-                merged_ids.sort_unstable();
-            }
-        }
-
-        // 描画順に各 id の寄与（コマ優先・無ければ `always` の経過 0 か着せ替えの手順）を静的層の
-        // 後（＝上）へ積む。`insert` で差し込まれる着せ替えは本来の位置では積まない（6.1）。
-        let level = Level {
-            world,
-            atlas,
-            master,
-            surface_id,
-            binds,
-            pattern,
-            offset_x,
-            offset_y,
-            is_top_level,
-        };
-        let claims = crate::bind_steps::claim_inserts(&level, &merged_ids);
-        let mut done = Vec::new();
-        for &id in &merged_ids {
-            if !claims.iter().any(|&(b, _)| b == id) {
-                push_contribution(out_ops, visited, &level, &claims, &mut done, id);
-            }
-        }
+        s.merged_ids.push(id);
     }
 
-    // 枝離脱: 祖先スタックから pop（非循環の重複参照は別経路で再展開可能に保つ・要件 7.1）。
-    let popped = visited.pop();
-    debug_assert_eq!(popped, Some(surface_id), "visited は祖先スタック（LIFO）");
+    // 段1/段2: animation-sort の2段規則を**変更せず**合流後 id 集合へ適用する（design 決定5・
+    //   画家のアルゴリズム写像・R5.3）。Descend（既定）→ id 昇順に描画（大 id が上）。
+    //   Ascend → id 降順に描画（小 id が上）。
+    match level.sort {
+        SortOrder::Descend => s.merged_ids.sort_unstable(),
+        SortOrder::Ascend => s.merged_ids.sort_unstable_by(|a, b| b.cmp(a)),
+        // 知らない値（`Other`・`#[non_exhaustive]` の先）は既定 Descend（id 昇順描画）へ倒す。
+        // 1 シェル 1 度の warn は読み込み側が `shape_issues` で出す。
+        other => {
+            tracing::debug!(
+                target: "areka_emo_compose",
+                surface_id,
+                sort = ?other,
+                "未知の animation-sort: 既定 Descend（id 昇順描画）として扱う"
+            );
+            s.merged_ids.sort_unstable();
+        }
+    }
+    s.merged_ids.dedup();
+
+    // 描画順に各 id の寄与（コマ優先・無ければ `always` の経過 0 か着せ替えの手順）を静的層の
+    // 後（＝上）へ積む。`insert` で差し込まれる着せ替えは本来の位置では積まない（6.1）。
+    crate::bind_steps::claim_inserts(s, level);
+    s.done.clear();
+    for k in 0..s.merged_ids.len() {
+        let id = s.merged_ids[k];
+        if !s.claims.contains_key(&id) && push_direct(&mut s.steps, &s.anims, level, id) {
+            crate::bind_steps::push_bind_contribution(s, level, id);
+        }
+    }
 }
 
-/// [`flatten_surface`] の 1 つの段の入力（層 (ii) の寄与を積む口が共有する）。
+/// 段の入力（層 (i)・層 (ii) の積み荷を作る口が共有する）。
 pub(crate) struct Level<'a> {
     pub(crate) world: &'a EmoWorld,
     pub(crate) atlas: &'a AtlasTable,
     pub(crate) master: &'a SurfaceMaster,
+    pub(crate) binding: &'a AtlasBinding,
     pub(crate) surface_id: u32,
     pub(crate) binds: &'a BindSet,
     pub(crate) pattern: &'a PatternState,
+    pub(crate) sort: &'a SortOrder,
     pub(crate) offset_x: i64,
     pub(crate) offset_y: i64,
     pub(crate) is_top_level: bool,
@@ -488,46 +580,32 @@ impl Level<'_> {
         }
     }
 
-    /// 面 `surface` をこの段の位置＋ (x, y) に再帰で平坦化する。
-    pub(crate) fn flatten(
-        &self,
-        out_ops: &mut Vec<BlitOp>,
-        visited: &mut Vec<u32>,
-        surface: u32,
-        x: i64,
-        y: i64,
-    ) {
-        flatten_surface(
-            out_ops,
-            visited,
-            self.world,
-            self.atlas,
+    /// 面 `surface` をこの段の位置＋ (x, y) に置く部品の段へ入る積み荷。
+    pub(crate) fn enter(&self, surface: u32, x: i64, y: i64) -> Step {
+        Step::Enter {
             surface,
-            self.binds,
-            self.pattern,
-            self.offset_x + x,
-            self.offset_y + y,
-            false,
-        );
+            x: self.offset_x.saturating_add(x),
+            y: self.offset_y.saturating_add(y),
+        }
     }
 }
 
-/// 層 (ii) の animation `id` の寄与を積む: 今のコマがあればそのコマ（静的な寄与を置き換える・4.2）、
-/// 無ければ `always` の経過 0、それも無ければ有効な着せ替えの手順（`insert` を展開する）。
-/// `claims`・`done` は [`crate::bind_steps::push_bind_contribution`] へ渡す段の差し込みの決め。
-pub(crate) fn push_contribution(
-    out_ops: &mut Vec<BlitOp>,
-    visited: &mut Vec<u32>,
+/// 層 (ii) の animation `id` の寄与のうち、手順の展開の要らないもの（今のコマ・`always` の経過 0）を
+/// 積む。今のコマは静的な寄与を置き換える（4.2）。コマの無い有効な着せ替えで描く手順があるなら、
+/// 積まずに `true` を返す（呼び手が [`crate::bind_steps::push_bind_contribution`] で手順をたどる）。
+///
+/// `anims` は段の面の animation の番号 → 添字の表（[`PlanScratch`] の `anims`）。
+pub(crate) fn push_direct(
+    steps: &mut Vec<Step>,
+    anims: &HashMap<u32, usize>,
     level: &Level<'_>,
-    claims: &[(u32, u32)],
-    done: &mut Vec<u32>,
     id: u32,
-) {
+) -> bool {
     let surface_id = level.surface_id;
     if let Some(frame) = level.frame(id) {
         if frame.method.is_implemented() {
-            // Overlay: frame.surface_id へ (x,y) 累積で再帰 flatten（循環は再帰入口の visited 判定）。
-            level.flatten(out_ops, visited, frame.surface_id, frame.x, frame.y);
+            // Overlay: frame.surface_id へ (x,y) 累積で入る（循環は取り出すときの visited 判定）。
+            steps.push(level.enter(frame.surface_id, frame.x, frame.y));
         } else {
             // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画（要件 8.4）。組むたびの
             // 知らせは debug（warn は読み込みが `shape_issues` で 1 度だけ出す）。
@@ -539,64 +617,84 @@ pub(crate) fn push_contribution(
                 "非 Overlay method の現在コマ: 不描画 skip（完全形保持・非駆動・要件 8.4）"
             );
         }
-        return;
+        return false;
     }
-    // 同 id の animation は fold 段で単一化済み（後勝ち）ゆえ find で足りる。
-    let Some(anim) = level.master.animations.iter().find(|a| a.id == id) else {
-        return;
+    // 同 id の animation は fold 段で単一化済み（先勝ち）ゆえ表の 1 つで足りる。
+    let Some(anim) = anims.get(&id).map(|&i| &level.master.animations[i]) else {
+        return false;
     };
     // `always`: 欄が「載っていない」なら経過 0 の pattern を今のコマと同じやり方で描き、
     // 「消えている」なら描かない（要件 3.1・4.1・4.5・4.6）。
     if is_always_interval(&anim.interval) {
         let key = (!level.is_top_level).then_some(PartKey::Surface(surface_id));
         if let Some(p) = always_rest_target(anim, level.pattern.cell(key, id), surface_id) {
-            level.flatten(out_ops, visited, p.surface_id as u32, p.x, p.y);
+            steps.push(level.enter(p.surface_id as u32, p.x, p.y));
         }
-        return;
+        return false;
     }
     // コマ無しの有効な着せ替え: 読み込みのときに作った手順を積む（合成のたびに語を引き直さない・5.5）。
-    crate::bind_steps::push_bind_contribution(out_ops, visited, level, claims, done, id);
+    if level.world.bind_steps(surface_id, id).is_empty() {
+        // `bind+random`（コマが無いあいだは描かない・件 26）か、描くコマが無い: 静的な寄与は無い（再生は seriko の領分）。
+        tracing::debug!(
+            target: "areka_emo_compose",
+            surface_id,
+            animation_id = id,
+            "有効な着せ替えに描く手順が無い: 静的合成へ寄与なし"
+        );
+        return false;
+    }
+    true
 }
 
-/// plan 段の公開ファサード: 命令列を導出し、命令ゼロ時の 3 分類を確定して外形を返す（要件 1.4/6.6/10.5）。
+/// 合成の失敗の記録: 面で初めてなら `error!`、2 度目からは `debug!`（[`PlanScratch`] の `failed_reported`）。
+macro_rules! log_failure {
+    ($first:expr, $($arg:tt)+) => {
+        if $first {
+            tracing::error!($($arg)+);
+        } else {
+            tracing::debug!($($arg)+);
+        }
+    };
+}
+
+/// plan 段の公開ファサード: 命令列を導出し、失敗の分類を確定して外形を返す（要件 1.4/6.6/10.5）。
 ///
-/// [`derive_ops`]（有効 bind 依存の命令列）と [`compute_extent`]（有効 bind 非依存の静的外形）を
-/// wrap し、design「Error Handling」表・議題2裁定の**3 状態**を厳密に区別する:
+/// [`derive_ops`]（有効 bind 依存の命令列）と外形の表（[`EmoWorld::extent`]・有効 bind 非依存の静的外形）を
+/// wrap し、design「Error Handling」表・議題2裁定の 3 状態と外形の上限越えを厳密に区別する:
 ///
 /// 1. **対象 surface 不在**（[`EmoWorld::surface`] が `None`）→ `error` ログ＋
 ///    [`ComposeError::SurfaceNotFound`]（要件 10.5）。命令/外形の算出**前**に返す。
 /// 2. **surface 存在 & 外形非ゼロ**（描画可能命令ゼロでも可）→ `Ok(extent)`。全 element 全透明・
 ///    空の有効 bind 集合などで `out_ops` が空でも、これは**正常系**であり `Err` にしない
 ///    （要件 6.6・議題2裁定）。非ゼロの静的外形と（空かもしれない）命令列を返す。
-/// 3. **定義層が皆無で外形 0×0**（surface は存在するが `compute_extent` が `Extent{0,0}`）→
+/// 3. **外形の幅か高さが 0**（surface は存在するが表の外形が `Extent{0,0}`＝定義層皆無か束縛の前、または片方の辺だけ 0）→
 ///    `error` ログ＋[`ComposeError::EmptyComposition`]（要件 10.5・議題2裁定: これが唯一の真の
 ///    失敗となる退化ケース）。
+/// 4. **外形が一辺の上限 [`MAX_EXTENT`] か面積の上限 [`MAX_AREA`] を越える** → `error` ログ＋
+///    [`ComposeError::ExtentTooLarge`]。命令を積まず、絵も確保させない。
+///
+/// 1・3・4 の `error` ログは合成器（`scratch`）1 つにつき面ごとに初めの 1 度だけで、2 度目からは `debug`。
 ///
 /// `out_ops` は呼び手のスクラッチ Vec を再利用する意図（要件 10.3）ゆえ、**エントリで `clear`**
-/// してから命令を積む（前回内容のゴミが混ざらない）。不在/退化の `Err` 時も `out_ops` は空である
-/// （不在は算出前 return・退化は derive 済みでも 0×0 定義層皆無ゆえ命令は元々ゼロ）。
+/// してから命令を積む（前回内容のゴミが混ざらない）。どの `Err` 時も `out_ops` は空である
+/// （どの失敗も命令を積む前に返す）。
 ///
 /// # 決定性（要件 10.1）
 ///
-/// [`derive_ops`]/[`compute_extent`] がともに決定的ゆえ、同一入力（World／atlas／surface_id／
+/// [`derive_ops`] と外形の表がともに決定的ゆえ、同一入力（World／atlas／surface_id／
 /// binds）に対し毎回同一の `(out_ops, Extent)` または同一 `Err` を返す。
 ///
 /// # 非パニック（要件 1.4）
 ///
 /// 全経路で `panic!` せず、失敗は `error` ログ＋`Err` で表現する（[`crate::error`] 規律）。
 ///
-/// # visited スクラッチ（要件 10.3・buffer 再利用形）
+/// # 作業場（要件 10.3・buffer 再利用形）
 ///
-/// `visited` は呼び手（Composer ファサード）が保持する祖先スタックのスクラッチ Vec を借用する。
-/// 外形走査（[`compute_extent`]）と命令走査（[`derive_ops`]）は逐次に走るため、両者が同一
-/// スクラッチを共有し**各走査の入口で `clear`**（走査後も祖先スタック規律で空へ戻る）する。これに
-/// より定常状態（毎フレーム経路）で visited の再割り当てが起きない（要件 10.3・O(elements)）。
-///
-/// 本関数は plan module の呼び出し鎖の頂点（`build_plan` → `derive_ops`/`compute_extent` → …）で、
-/// task 7 の Composer ファサード（`compose_into`/`compose`）から結線して消費される。
+/// `scratch` は呼び手（Composer ファサード）が保持する走査の作業場（[`PlanScratch`]）を借用する。
+/// 命令走査（[`derive_ops`]）は作業場の全部を入口で空へ戻して使う。外形は表から引くだけで走査しない。
 pub(crate) fn build_plan(
     out_ops: &mut Vec<BlitOp>,
-    visited: &mut Vec<u32>,
+    scratch: &mut PlanScratch,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
@@ -608,7 +706,9 @@ pub(crate) fn build_plan(
 
     // 分類1: 対象 surface 不在 → SurfaceNotFound（算出前に返す・要件 10.5）。
     if world.surface(surface_id).is_none() {
-        tracing::error!(
+        let first = scratch.failed_reported.insert(surface_id);
+        log_failure!(
+            first,
             target: "areka_emo_compose",
             surface_id,
             "合成対象 surface が存在しない: SurfaceNotFound"
@@ -616,25 +716,64 @@ pub(crate) fn build_plan(
         return Err(ComposeError::SurfaceNotFound(surface_id));
     }
 
-    // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。visited は
-    // compute_extent 入口で clear される（要件 10.3・共有スクラッチ）。
-    let extent = compute_extent(visited, world, atlas, surface_id);
+    // 静的外形（有効 bind 非依存）は束縛のときに求めた表から引く（指摘 8）。幅か高さが 0 なら定義層皆無か
+    // 束縛の前か、描ける画素の無い退化データ。
+    let extent = world.extent(surface_id);
 
-    // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
-    // 命令列は元々ゼロ（外形へ寄与する層＝命令の母集合が皆無）ゆえ out_ops は空のまま返す。
-    if extent.w == 0 && extent.h == 0 {
-        tracing::error!(
+    // 分類3: 外形の幅か高さが 0（定義層皆無か、どの層も原点の左か上にしか無い）の退化データのみ真の失敗
+    // （議題2裁定・要件 10.5・指摘 82）。描ける画素が無いので out_ops は空のまま返す。
+    if extent.w == 0 || extent.h == 0 {
+        let first = scratch.failed_reported.insert(surface_id);
+        log_failure!(
+            first,
             target: "areka_emo_compose",
             surface_id,
-            "定義層が皆無で外形 0×0 の退化データ: EmptyComposition"
+            w = extent.w,
+            h = extent.h,
+            "外形の幅か高さが 0 の退化データ: EmptyComposition"
         );
         return Err(ComposeError::EmptyComposition(surface_id));
     }
 
-    // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。visited は derive_ops
-    // 入口で clear され、外形走査と共有される（要件 10.3）。pattern は derive_ops へ透過する
-    // （現在コマ上乗せの実消費は task 7.2・外形 compute_extent は pattern 非依存の静的量）。
-    derive_ops(out_ops, visited, world, atlas, surface_id, binds, pattern);
+    // 外形が GPU の面の最大寸か面積の上限を越える → 命令を積まず、絵も確保させずに失敗を返す（壊れた
+    // シェルで巨大な確保を試みて落ちない）。
+    if extent.w > MAX_EXTENT
+        || extent.h > MAX_EXTENT
+        || u64::from(extent.w) * u64::from(extent.h) > MAX_AREA
+    {
+        let first = scratch.failed_reported.insert(surface_id);
+        log_failure!(
+            first,
+            target: "areka_emo_compose",
+            surface_id,
+            w = extent.w,
+            h = extent.h,
+            max = MAX_EXTENT,
+            max_area = MAX_AREA,
+            "外形が GPU の面の最大寸か面積の上限を越える: ExtentTooLarge"
+        );
+        return Err(ComposeError::ExtentTooLarge {
+            surface: surface_id,
+            w: extent.w,
+            h: extent.h,
+        });
+    }
+
+    // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。作業場は derive_ops
+    // 入口で空へ戻る（要件 10.3）。外形は pattern 非依存の静的量。
+    derive_ops(out_ops, scratch, world, atlas, surface_id, binds, pattern);
+    // 重ねる画素の数も抑える（命令の数は予算の内でも、大きな絵を何枚も重ねられる・指摘 77）。記録は合成器
+    // 1 つにつき根ごとに 1 度（予算と同じ形）。
+    let dropped = crate::blit::cap_pixels(out_ops, extent, atlas);
+    if dropped > 0 && scratch.pixels_reported.insert(surface_id) {
+        tracing::error!(
+            target: "areka_emo_compose",
+            surface_id,
+            dropped,
+            factor = crate::blit::PIXEL_FACTOR,
+            "重ねる画素の数が外形の面積の上限を越えた: 残りの命令を捨てる"
+        );
+    }
 
     // 分類2: surface 存在＋外形非ゼロ → 正常系。out_ops が空でも（全透明・空 bind 集合）Err に
     // しない（要件 6.6・議題2裁定: 静的外形どおりの空命令列＝全透明返却）。
@@ -652,19 +791,22 @@ pub(crate) fn is_bind_interval(interval: &Interval) -> bool {
 /// 指定 animation id が当 surface の **`bind+random`** アニメか（bindopt D9-3・bindopt 7.1/7.4・
 /// seriko-pattern-calls 5.6 で純 `bind` を外した）。
 ///
-/// [`flatten_surface`] の層(ii) 合流条件が「`bind+random` のコマは bind 集合に属することを要求する」
-/// ための判定。当 surface の `animations` から id を引き、interval が `bind+random` のものが 1 本でも
-/// あれば真。**当 surface に定義の無い id・純 `bind`・bind 種でない id（純 `random` の `interval` 等）は
+/// [`push_bind_layer`] の層(ii) 合流条件が「`bind+random` のコマは bind 集合に属することを要求する」
+/// ための判定。当 surface の `animations` から id を番号 → 添字の表 `anims` で引き、interval が
+/// `bind+random` なら真。**当 surface に定義の無い id・純 `bind`・bind 種でない id（純 `random` の `interval` 等）は
 /// 偽**で、追加ゲートを受けず無条件に合流する（bindopt 7.4）。
 ///
 /// 判定は `emo-compose` が既に持つ [`Interval`]（転記層由来）だけで閉じており、bind 種の語彙を
 /// 求めて seriko へ依存を逆流させない（design Allowed Dependencies「parsers → areka → seriko →
-/// emo-compose・逆流禁止」）。同 id の animation は fold 段で単一化済みゆえ `any` で足りる。
-fn is_bind_random_animation(master: &SurfaceMaster, animation_id: u32) -> bool {
-    master
-        .animations
-        .iter()
-        .any(|a| a.id == animation_id && matches!(a.interval, Interval::BindRandom { .. }))
+/// emo-compose・逆流禁止」）。同 id の animation は fold 段で単一化済みゆえ表の 1 つで足りる。
+fn is_bind_random_animation(
+    master: &SurfaceMaster,
+    anims: &HashMap<u32, usize>,
+    animation_id: u32,
+) -> bool {
+    anims
+        .get(&animation_id)
+        .is_some_and(|&i| matches!(master.animations[i].interval, Interval::BindRandom { .. }))
 }
 
 /// 指定 surface id の [`SurfaceMaster`] と [`AtlasBinding`] を同時に読む（本 module 内補助）。
@@ -673,7 +815,7 @@ fn is_bind_random_animation(master: &SurfaceMaster, animation_id: u32) -> bool {
 /// 併せて借用する。いずれか（surface 不在・binding 未挿入）が欠けると `None`。既存の公開
 /// `world()` アクセサ経由で読むため、公開 API を広げない。
 ///
-/// [`push_static_element_ops`]／[`derive_ops`] 経由で使う本 module 内補助。
+/// 命令列（[`push_static_element_ops`]／[`derive_ops`]）と外形（`plan_extent`）・シェルの外形（`plan_bounds`）が使う補助。
 pub(crate) fn surface_and_binding(
     world: &EmoWorld,
     surface_id: u32,
@@ -686,20 +828,16 @@ pub(crate) fn surface_and_binding(
 }
 
 #[cfg(test)]
-#[path = "plan_test_support.rs"]
-mod test_support;
-
-#[cfg(test)]
 #[path = "plan_ops_tests.rs"]
 mod ops_tests;
 
 #[cfg(test)]
-#[path = "plan_nesting_tests.rs"]
-mod nesting_tests;
+#[path = "plan_frame_merge_tests.rs"]
+mod frame_merge_tests;
 
 #[cfg(test)]
-#[path = "plan_bind_random_tests.rs"]
-mod bind_random_tests;
+#[path = "plan_nesting_tests.rs"]
+mod nesting_tests;
 
 #[cfg(test)]
 #[path = "plan_bind_tests.rs"]

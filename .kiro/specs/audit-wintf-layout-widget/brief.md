@@ -72,3 +72,14 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## `audit-wintf-runtime` からの申し送り（2026-11-06）
+
+`audit-wintf-runtime` は、この spec の持ち物の本番を一部直した（要件の討議の裁定 4・かけ直しでのコントローラの裁定）。全文はあちらの `.kiro/specs/completed/audit-wintf-runtime/research.md` の 14 節「申し送り」と 15 節「申し送り（範囲を広げて直した分の知らせ）」。直し済みの件は、ギャップ分析で数え直さない。
+
+- **5（直し済み）**: `LengthPercentageAuto`・`LengthPercentage` の `Percent` を 100 で割る（`ecs/layout/dimension.rs:161`・`:207`）と、それを固定していたテストの期待の裏返し。
+- **94（直し済み）**: `FlexContainer`・`FlexItem` を消した（`ecs/layout/box_style.rs`）。
+- **101（直し済み）**: `Opacity` を消した（`ecs/layout/metrics.rs`）。
+- **146（直し済み）**: 親の無い根の bounds の伸ばし方。`src/ecs/layout/arrangement.rs` の `From<Arrangement> for GlobalArrangement` を `GlobalArrangement::default() * arrangement` にした。
+- **144 とその根（直し済み）**: taffy のノードを消すときの失敗の捨て方。`src/ecs/layout/taffy.rs` の `remove_node`（木から先に消し、消せたときだけ対応を消す）と `src/ecs/layout/systems/taffy_systems.rs` の `cleanup_removed_entities_system`（失敗を `error!` で残す）を直した。
+- **`Arrangement` の on_add フック（判断はこちら）**: on_add フックが、生成の束に入れた `GlobalArrangement` を既定値で上書きする。本番にその使い方は無く今は欠陥ではないが、束で両方を入れる書き方が黙って効かない。指摘にするかはこちらで決める。

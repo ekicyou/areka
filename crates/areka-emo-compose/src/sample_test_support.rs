@@ -18,6 +18,15 @@ pub(crate) fn emo2_root() -> PathBuf {
     EMO2.folder().to_path_buf()
 }
 
+/// emo2 検体の `shell/master/surfaces.txt` を読んで解析する（`read_to_string`＋`areka_parsers::shell::parse`。
+/// COM／WIC／atlas bake は経由しない純粋な parse ゆえ headless で走る）。
+pub(crate) fn emo2_shell() -> areka_parsers::shell::Shell {
+    let path = emo2_root().join("shell/master/surfaces.txt");
+    let content = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
+    areka_parsers::shell::parse(&content)
+}
+
 /// YAYA の標準テンプレート `konnoyayame` 検体（spec: areka-P0-shell-implicit-surface 要件 7.11）。
 static KONNOYAYAME: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("konnoyayame").expect("konnoyayame は登記済みの検体"));

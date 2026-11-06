@@ -62,7 +62,7 @@ C の候補ごとに、次の 4 つを調べる。
 2. **areka での使い方**: その依存を使っているクレートとファイルの数と場所（`Grep` で `use <名前>::` や `<名前>::`）。破壊的変更が、その使い方に当たるかどうか。
 3. **据え置きの理由と決まり**: `.kiro/steering/tech.md` の依存の一覧と、`Cargo.toml` のコメントに、今の版に留めている理由や、上げるときの手順が書いてあれば、それを示す。areka で特に当たるもの:
    - `windows`・`windows-core`・`windows-numerics` は同じ版の系列で揃える。片方だけ上げない。
-   - `bevy_*`（`bevy_app`・`bevy_ecs`・`bevy_tasks`・`bevy_utils`）は 4 つ揃えて上げる。
+   - `bevy_*`（`bevy_ecs`・`bevy_tasks`・`bevy_utils`）は 3 つ揃えて上げる。
    - `rmcp` は 3 つのクレート（`areka-mcp`・`areka-mcp-bridge`・`real-run-kit`）で同じ `=` に揃える。上げるときの検証と書き直す文書は `tech.md` の `rmcp` の項に書いてある。
    - `unicode-segmentation` を上げると Unicode の版が変わり、絵文字の切り方が動きうる。
 4. **新しい版の `rust-version`**: 手元の `rustc --version` より新しいものを要求していないか。

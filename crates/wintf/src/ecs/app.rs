@@ -48,7 +48,7 @@ impl App {
     /// 最後のウィンドウが閉じられた場合はtrueを返す
     ///
     /// NOTE: 新 `WinApp` 経路のアプリ終了は `WindowRegistry` の空遷移
-    /// （`reconcile_window_registry` → `ShutdownPolicy::notify_shutdown`）が駆動する。
+    /// （`reconcile_window_registry` → `AppExit::request_exit`）が駆動する。
     /// 旧 `WM_LAST_WINDOW_DESTROYED` を message_window へ PostMessage する経路は撤去した
     /// （task 4.5）。本メソッドは window_count の追跡と「最後のウィンドウか」の判定のみを担う。
     pub fn on_window_destroyed(&mut self, entity: Entity) -> bool {

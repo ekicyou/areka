@@ -32,6 +32,7 @@ pub mod method;
 pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 mod bind_steps;
+mod budget;
 pub mod composed;
 pub mod film;
 pub use film::{FilmSheet, FilmSheets, FilmSkip, FilmSkipReason};
@@ -58,6 +59,7 @@ pub use boxes::{
     BoxDef, BoxIssue, BoxLayout, BoxName, BoxPlacement, BoxReport, FontFollow, fold_boxes,
 };
 pub mod fold;
+mod outline_walk;
 pub mod plan;
 mod plan_always;
 mod plan_bounds;
@@ -69,7 +71,7 @@ pub mod blit;
 mod blit_rect;
 pub use blit_rect::Recompose;
 pub mod hit;
-pub use hit::{RegionPriority, ScaledHit, hit_region, hit_region_scaled};
+pub use hit::{RegionPriority, ScaledHit};
 mod hit_import;
 pub use hit_import::HitRegions;
 pub mod scale;
@@ -85,13 +87,15 @@ use areka_emo_atlas::AtlasTable;
 /// - **同期・値返し**（要件 9.3/10.4）: スレッド生成・async・channel を一切持たず、合成結果を
 ///   値（[`compose`]）または呼び手のバッファ（[`compose_into`]）へ直接書いて返す。wintf の
 ///   visual/window/WUC 描画 API には依存しない。
-/// - **結果を保持しない**（要件 9.4）: `Composer` の内部フィールドは走査スクラッチ（`ops`／`visited`）
-///   のみで、[`ComposedSurface`] を一切キャッシュしない。前回の合成結果は次回呼び出しへ持ち越さず、
-///   surface→結果のキャッシュ・無効化は下流 `emo-present` の責務である。絵は持たないが、下敷き形
-///   （[`compose_into_reusing`]）が最後に成功させた合成の命令列 1 本（`base_ops`）だけは持つ。
-/// - **buffer 再利用でゼロアロケーション定常状態**（要件 10.3）: [`compose_into`] は呼び手の `out`
-///   と自身のスクラッチ（`ops`／`visited`）を再利用するため、外形が変わらない毎フレーム経路で
-///   途中アロケーションを発生させず O(elements) で合成する。
+/// - **結果を保持しない**（要件 9.4）: `Composer` の内部フィールドは走査スクラッチ（`ops`／`scratch`・
+///   `scratch` は記録済みの印＝面ごとに 1 度だけ記録するための面の番号の集合も持つ）と、下敷き形
+///   （[`compose_into_reusing`]）が最後に成功させた合成の命令列 1 本（`base_ops`）で、[`ComposedSurface`]
+///   （絵）を一切キャッシュしない。前回の合成結果は次回呼び出しへ持ち越さず、surface→結果のキャッシュ・
+///   無効化は下流 `emo-present` の責務である。
+/// - **buffer 再利用**（要件 10.3）: [`compose_into`] は呼び手の `out` と自身のスクラッチ（`ops`／
+///   `scratch`）を再利用し、外形は束縛のときの表から引く（合成のたびにたどらない）。同じ入力を繰り返す
+///   合成で `out` の先頭と命令列・作業場の列の容量が初回から変わらないことはテストで確かめている
+///   （`golden_tests_determinism_budget_tests.rs`）。入力が変わるときの確保の有無は確かめていない。
 /// - **アトラス解決は構築時一度きり**（要件 4.3・design 主要決定）: hot path（[`compose_into`]/
 ///   [`compose`]）は [`AtlasTable::resolve`] を一切呼ばず、束縛済み `ElementId` の
 ///   [`AtlasTable::entry`] O(1) 引きのみを行う（束縛は事前の [`EmoWorld::bind_atlas`] で完了済み）。
@@ -103,16 +107,17 @@ use areka_emo_atlas::AtlasTable;
 ///
 /// # 失敗経路（要件 10.5）
 ///
-/// 合成対象 surface 不在 → [`ComposeError::SurfaceNotFound`]、定義層皆無で外形 0×0 の退化 →
-/// [`ComposeError::EmptyComposition`]。いずれも `error` ログ＋`Err`（[`crate::plan::build_plan`]
+/// 合成対象 surface 不在 → [`ComposeError::SurfaceNotFound`]、外形の幅か高さが 0 の退化 →
+/// [`ComposeError::EmptyComposition`]、外形が一辺か面積の上限を越える → [`ComposeError::ExtentTooLarge`]。
+/// いずれも `error` ログ＋`Err`（[`crate::plan::build_plan`]
 /// が分類・ログ済み）で、パニックしない（要件 1.4）。描画可能命令ゼロでも定義層があれば正常系
 /// （外形どおりの全透明 [`ComposedSurface`] を `Ok` で返す・要件 6.6）。
 #[derive(Debug, Default)]
 pub struct Composer {
     /// plan 段が積む転写命令のスクラッチ（毎回 `build_plan` 入口で clear・再利用）。
     ops: Vec<BlitOp>,
-    /// 入れ子 flatten の循環検出用祖先スタックのスクラッチ（`build_plan` が走査入口で clear・再利用）。
-    visited: Vec<u32>,
+    /// 命令列の走査の作業場（`build_plan` が走査入口で空へ戻して再利用）。
+    scratch: crate::plan::PlanScratch,
     /// 最後に [`compose_into_reusing`] が成功させた合成の命令列（絵は持たない・`compose_into` は触らない）。
     ///
     /// [`compose_into_reusing`]: Composer::compose_into_reusing
@@ -122,21 +127,17 @@ pub struct Composer {
 impl Composer {
     /// 空スクラッチの `Composer` を構築する（合成結果は保持しない・要件 9.4）。
     pub fn new() -> Self {
-        Composer {
-            ops: Vec::new(),
-            visited: Vec::new(),
-            base_ops: Vec::new(),
-        }
+        Self::default()
     }
 
-    /// 合成先バッファ再利用形（毎フレーム経路・定常状態アロケーションなし・要件 10.3）。
+    /// 合成先バッファ再利用形（毎フレーム経路・要件 10.3）。
     ///
     /// `world`／`atlas`／`surface_id`／`active_binds` から plan を導出（[`crate::plan::build_plan`]）し、
-    /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`visited`）
-    /// を再利用するため、外形が変わらない反復呼び出しで再割り当てを起こさない。
+    /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`scratch`）
+    /// を再利用する（同じ入力の反復で容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる）。
     ///
-    /// `build_plan` が `Err`（surface 不在・定義層皆無退化）を返せば、そのまま伝播する（既に `error`
-    /// ログ済み・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
+    /// `build_plan` が `Err`（surface 不在・外形の幅か高さが 0 の退化・外形の上限越え）を返せば、そのまま伝播する（記録済み＝
+    /// 合成器 1 つにつき面ごとに初めは `error`・後は `debug`・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
     /// してから転写し、`Ok(())` を返す。描画可能命令ゼロ（全透明・空 bind 集合）でも正常系として
     /// 外形どおりの全透明バッファを書く（要件 6.6）。
     ///
@@ -154,11 +155,11 @@ impl Composer {
         active_binds: &BindSet,
         pattern: &PatternState,
     ) -> Result<(), ComposeError> {
-        // plan: 命令列＋外形を導出（Err は既に error ログ済み・そのまま伝播・要件 10.5）。
-        // ops／visited は build_plan 入口で clear され再利用される（要件 10.3）。
+        // plan: 命令列＋外形を導出（Err は記録済み＝面ごとに初めは error・後は debug・そのまま伝播・要件 10.5）。
+        // ops／scratch は build_plan 入口で clear され再利用される（要件 10.3）。
         let extent = crate::plan::build_plan(
             &mut self.ops,
-            &mut self.visited,
+            &mut self.scratch,
             world,
             atlas,
             surface_id,
@@ -192,7 +193,7 @@ impl Composer {
     ) -> Result<Recompose, ComposeError> {
         let extent = crate::plan::build_plan(
             &mut self.ops,
-            &mut self.visited,
+            &mut self.scratch,
             world,
             atlas,
             surface_id,
@@ -241,6 +242,10 @@ mod log_capture;
 #[cfg(test)]
 mod sample_test_support;
 
+// 命令列ほかのテストが引く部品（面の組み立て・コマ・頁・焼き・記録の読み取り・命令列を引く口）。
+#[cfg(test)]
+pub(crate) mod plan_test_support;
+
 #[cfg(test)]
 mod golden_tests;
 
@@ -249,6 +254,22 @@ mod composer_tests;
 
 #[cfg(test)]
 mod log_firing_tests;
+
+// 深い鎖・菱形・insert の連鎖を、入れ子をたどる走査へ同じ検体で通す（指摘 3）。
+#[cfg(test)]
+mod walk_limits_tests;
+
+// 線形の探索で 2 乗に伸びていた所を、大きな検体で通す（指摘 25〜30）。
+#[cfg(test)]
+mod linear_lookup_tests;
+
+// 予算が数えなかった仕事の量（なめる行・重ねる画素・範囲の写し・根をまたぐ持ち込み・指摘 76〜79）。
+#[cfg(test)]
+mod work_limits_tests;
+
+// 予算を面の行の全部で数える（どの走査も入るときに引く）・重なりの記録・持ち込みの切り方（指摘 129〜137）。
+#[cfg(test)]
+mod row_budget_tests;
 
 #[cfg(test)]
 mod contract_tests {

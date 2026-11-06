@@ -1,23 +1,19 @@
 //! element定義の子の合成（要件 1.6・1.7・1.8・2.1〜2.4・2.7・3.1〜3.4・7.1・8.3）。
 //!
 //! 層 (i) は element定義を番号の昇順（同じ番号は書いた順）に見て、画像は命令に、サーフェスの番号は
-//! その場で子へ再帰する（位置は親の位置＋ element定義の X,Y）。先祖へ戻る・面の表に無い・範囲を
+//! 同じ順の位置で子の段へ入る（位置は親の位置＋ element定義の X,Y）。先祖へ戻る・面の表に無い・範囲を
 //! 超える数の element定義だけを飛ばし、`debug!` を 1 行出す。
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use areka_emo_atlas::SetId;
 use areka_parsers::shell::parse;
 
-use super::derive_ops;
-use super::test_support::{bake_atlas, id_to_path};
 use crate::bind::BindSet;
-use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
-use crate::nesting::NestIssue;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::world::EmoWorld;
+use crate::plan_test_support::{
+    bake_atlas, bound_world, frame, id_to_path, named_ops, named_ops_of, ops_limited, skipped,
+};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
@@ -54,57 +50,11 @@ fn compose_with(
     binds: &BindSet,
     pattern: &PatternState,
 ) -> (Vec<(&'static str, i64, i64)>, String) {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas(base, RELS);
-    let map = id_to_path(&atlas, RELS);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&atlas, SetId(0));
-    let mut ops = Vec::new();
-    let mut visited = Vec::new();
-    let logs =
-        capture_logs(|| derive_ops(&mut ops, &mut visited, &world, &atlas, top, binds, pattern));
-    assert!(visited.is_empty(), "先祖の積み上げは走査後に空へ戻る");
-    let named = ops
-        .iter()
-        .map(|op| {
-            let name = map
-                .iter()
-                .find(|(id, _)| *id == op.element)
-                .map(|(_, p)| *p)
-                .expect("命令の ElementId は既知");
-            let (x, y) = op.transform.offset();
-            (name, x, y)
-        })
-        .collect();
-    (named, logs)
+    named_ops_of(text, images, RELS, top, binds, pattern)
 }
 
 fn ops_of(text: &str, top: u32) -> Vec<(&'static str, i64, i64)> {
     compose(text, &[], top, &BindSet::default()).0
-}
-
-/// 飛ばした element定義の `debug!` の行から (親, element, 指した欄) を取り出す。
-fn skipped(logs: &str) -> Vec<(u32, u32, String)> {
-    logs.lines()
-        .filter(|l| l.contains("level=DEBUG") && l.contains("子のサーフェスを置かない"))
-        .map(|l| {
-            let field = |name: &str| -> String {
-                let start = l.find(&format!(" {name}=")).expect(name) + name.len() + 2;
-                l[start..]
-                    .split(' ')
-                    .next()
-                    .unwrap()
-                    .trim_matches('"')
-                    .to_string()
-            };
-            (
-                field("surface_id").parse().unwrap(),
-                field("element").parse().unwrap(),
-                field("child"),
-            )
-        })
-        .collect()
 }
 
 /// 子の画像の左上が、親の element定義の X,Y と子の中の X,Y の和に来る（要件 2.1）。
@@ -216,34 +166,17 @@ fn child_inside_pattern_target_surface() {
     );
 }
 
-/// 循環でも命令列は有限で、先祖へ戻る element定義だけが抜ける。切った辺はどれも 3.2 の報告に在り、
-/// 警告は出さない（読み込みのときに出ている・合成の中は `debug!`・要件 3.2・3.3）。
+/// 循環でも命令列は有限で、先祖へ戻る element定義だけが抜け、切る辺は 1 本・1 行。警告は出さない
+/// （読み込みのときに出ている・合成の中は `debug!`・要件 3.2・3.3）。切った辺が 3.2 の報告に在ることは
+/// `nesting_visible_tests.rs` の `cut_cycle_edges_from_every_top_are_reported` が確かめる。
 #[test]
 fn cycles_are_finite_and_cut_edges_are_reported() {
     let images = [(2, "surface2.png"), (11, "surface11.png")];
-    let report: BTreeSet<(u32, u32, String)> = {
-        let images: BTreeMap<u32, String> =
-            images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-        EmoWorld::build_with_images(&parse(FIXTURE), &images)
-            .nest_report()
-            .issues
-            .into_iter()
-            .filter_map(|issue| match issue {
-                NestIssue::Cycle {
-                    surface,
-                    element,
-                    target,
-                } => Some((surface, element, target.to_string())),
-                NestIssue::MissingTarget { .. } => None,
-            })
-            .collect()
-    };
     let expected_ops = [
         (60, vec![("part.png", 0, 0)]),
         (61, vec![("part.png", 0, 0), ("part.png", 0, 0)]),
         (62, vec![("part.png", 0, 0), ("part.png", 0, 0)]),
     ];
-    let mut cut_all = BTreeSet::new();
     for (top, expected) in expected_ops {
         let (ops, logs) = compose(FIXTURE, &images, top, &BindSet::default());
         assert_eq!(ops, expected, "一番上 {top}");
@@ -251,14 +184,8 @@ fn cycles_are_finite_and_cut_edges_are_reported() {
             !logs.contains("level=WARN"),
             "element定義の循環は警告しない: {logs}"
         );
-        let cut = skipped(&logs);
-        assert_eq!(cut.len(), 1, "切る辺は 1 本・1 行: {logs}");
-        for edge in cut {
-            assert!(report.contains(&edge), "切った辺 {edge:?} が報告に在る");
-            cut_all.insert(edge);
-        }
+        assert_eq!(skipped(&logs).len(), 1, "切る辺は 1 本・1 行: {logs}");
     }
-    assert_eq!(cut_all, report, "3 つの一番上で報告の辺を全部切る");
 }
 
 /// 無い番号・範囲を超える数の element定義だけが抜け、同じサーフェスの他の element定義は描く（要件 3.1・1.9）。
@@ -279,17 +206,7 @@ fn only_the_missing_element_is_dropped() {
     assert!(!logs.contains("level=WARN"), "合成の中は debug!: {logs}");
 }
 
-// ── 部品の段のコマの合流（task 4.2・要件 5.1・5.2・5.10・5.12・5.13） ──
-
-/// `surface_id` を (x,y) に置く Overlay のコマ。
-fn frame(surface_id: u32, x: i64, y: i64) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x,
-        y,
-    }
-}
+// ── 部品の段のコマの合流（要件 5.1・5.2・5.10・5.12・5.13） ──
 
 /// 子 10 を (20,30) に置く親 0。子と親は同じ番号の animation0 を持つ。
 const PART_TEXT: &str = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,20,30\n\
@@ -446,5 +363,62 @@ fn inner_multi_level_part_frames_are_used() {
     assert_eq!(
         compose_with(FIXTURE, &[], 30, &binds, &elsewhere).0,
         compose(FIXTURE, &[], 30, &binds).0
+    );
+}
+
+/// 合成 1 回の広がりの予算が尽きたら、まだ入っていない子を捨てる。予算は入る面と、子の段でなめる行
+/// （element 1 行）と、子の段の積み荷（ここでは絵 1 枚）を数える（子 1 つで 3）。根の面の自分の層は必ず描き、`error!` は 1 行だけ（指摘 3・21）。
+#[test]
+fn spent_budget_drops_children_not_yet_entered() {
+    let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,10,1,1\n\
+                element2,overlay,10,2,2\nelement3,overlay,10,3,3\n}\n\
+                surface10\n{\nelement0,overlay,eye.png,0,0\n}\n";
+    let atlas = bake_atlas(Path::new("shell/master"), RELS);
+    let world = bound_world(&parse(text), &[], &atlas);
+    let map = id_to_path(&atlas, RELS);
+    let run = |limit| {
+        let (out, logs) = ops_limited(&world, &atlas, 0, limit);
+        (named_ops(&out, &map), logs)
+    };
+    let (ops, logs) = run(6);
+    assert_eq!(
+        ops,
+        vec![("body.png", 0, 0), ("eye.png", 1, 1), ("eye.png", 2, 2)]
+    );
+    assert_eq!(
+        logs.matches("level=ERROR").count(),
+        1,
+        "合成器 1 つで 1 行: {logs}"
+    );
+    assert!(
+        logs.contains("walk=\"plan\"") && logs.contains("root=0"),
+        "{logs}"
+    );
+    assert!(logs.contains("budget=6"), "{logs}");
+    let (ops, _) = run(0);
+    assert_eq!(ops, vec![("body.png", 0, 0)], "根の面の自分の層は必ず描く");
+}
+
+/// 指摘 31: 子の段の位置が i64::MAX でも、子の中の X=1 の足し算は飽和して panic しない
+/// （element の位置と、子の着せ替えの段へ入る位置の両方）。
+#[test]
+fn child_position_at_i64_max_saturates() {
+    let (ops, _) = compose(
+        "surface0\n{\nelement0,overlay,body.png,0,0\n\
+         element1,overlay,10,9223372036854775807,0\n}\n\
+         surface10\n{\nelement0,overlay,eye.png,1,0\n\
+         animation100.interval,bind\nanimation100.pattern0,overlay,11,0,1,0\n}\n\
+         surface11\n{\nelement0,overlay,part.png,0,0\n}\n",
+        &[],
+        0,
+        &BindSet::from_ids([100]),
+    );
+    assert_eq!(
+        ops,
+        vec![
+            ("body.png", 0, 0),
+            ("eye.png", i64::MAX, 0),
+            ("part.png", i64::MAX, 0)
+        ]
     );
 }

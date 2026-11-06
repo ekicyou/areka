@@ -68,11 +68,18 @@ fn test_bidirectional_mapping_consistency() {
     assert_eq!(taffy_res.get_node(entities[4]), Some(node_ids[4]));
 }
 
+/// 作って消した後も、両向きの対応の数と中身が揃っている（デバッグビルドのみ）
 #[cfg(debug_assertions)]
 #[test]
 fn test_mapping_consistency_verification() {
-    let taffy_res = TaffyLayoutResource::default();
+    let mut world = World::new();
+    let mut taffy_res = TaffyLayoutResource::default();
 
-    // verify_mapping_consistency()がpanicしないことを確認（デバッグビルドのみ）
+    let kept = world.spawn_empty().id();
+    let removed = world.spawn_empty().id();
+    taffy_res.create_node(kept).unwrap();
+    taffy_res.create_node(removed).unwrap();
+    taffy_res.remove_node(removed).unwrap();
+
     taffy_res.verify_mapping_consistency();
 }

@@ -2,7 +2,7 @@
 //!
 //! 無い番号: element定義が指した番号が面の表に無い、または範囲を超える数。
 //! 循環: element定義の辺 (親, element, 子) について、子から element定義の辺とすべての pattern定義の辺
-//! （欄 2 が animation の番号になる 7 語は除く）をたどって親へ戻れるなら 1 件。
+//! （欄 2 が animation の番号になる 7 語と、サーフェスの番号を無視する `move` は除く）をたどって親へ戻れるなら 1 件。
 //! 並びは親の番号 → element定義の番号の昇順（同じ番号は書いた順）。
 
 use std::collections::BTreeMap;
@@ -11,6 +11,7 @@ use areka_parsers::shell::parse;
 
 use super::{NestIssue, NestReport};
 use crate::log_capture::capture_logs;
+use crate::plan_test_support::image_map;
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -74,10 +75,10 @@ fn self_mutual_and_mixed_cycles_are_listed() {
     );
 }
 
-/// 描画メソッドに依らず、すべての pattern定義の辺をたどる。欄 2 が animation の番号になる 7 語の辺と、
-/// 負の番号は辺にしない。pattern定義だけの循環は報告に載らない（今の合成のたびの warn のまま）。
+/// 描画メソッドに依らず、すべての pattern定義の辺をたどる。欄 2 が animation の番号になる 7 語と `move` の辺と、
+/// 負の番号は辺にしない。pattern定義だけの循環は報告に載らない（合成のたびの知らせは debug）。
 #[test]
-fn pattern_edges_skip_the_seven_animation_id_words() {
+fn pattern_edges_skip_the_seven_animation_id_words_and_move() {
     let words = [
         "start",
         "stop",
@@ -86,6 +87,7 @@ fn pattern_edges_skip_the_seven_animation_id_words() {
         "parallelstart",
         "parallelstop",
         "insert",
+        "move",
     ];
     for word in words {
         let text = format!(
@@ -93,13 +95,9 @@ fn pattern_edges_skip_the_seven_animation_id_words() {
              surface1\n{{\nanimation0.interval,random,2\nanimation0.pattern0,{word},0,50,0,0\n\
              animation0.pattern1,overlay,-1,50,0,0\n}}\n"
         );
-        assert_eq!(
-            report_of(&text),
-            vec![],
-            "{word} の欄 2 は animation の番号"
-        );
+        assert_eq!(report_of(&text), vec![], "{word} の欄 2 は辺にならない");
     }
-    // 7 語以外は動かない描画メソッド（reduce）でも辺になる。
+    // 7 語と move の他は動かない描画メソッド（reduce）でも辺になる。
     let issues = report_of(
         "surface0\n{\nelement0,overlay,1,0,0\n}\n\
          surface1\n{\nanimation0.interval,random,2\nanimation0.pattern0,reduce,0,50,0,0\n}\n",
@@ -131,7 +129,7 @@ fn same_child_by_two_paths_is_not_a_cycle() {
 #[test]
 fn filename_convention_child_is_not_missing() {
     let text = "surface0\n{\nelement0,overlay,body.png,0,0\nelement1,overlay,11,0,0\n}\n";
-    let images = BTreeMap::from([(11, "surface11.png".to_string())]);
+    let images = image_map(&[(11, "surface11.png")]);
     let with_image = EmoWorld::build_with_images(&parse(text), &images);
     assert_eq!(with_image.nest_report(), NestReport::default());
     assert_eq!(report_of(text), vec![missing(0, 1, "11")]);
@@ -160,10 +158,7 @@ fn order_is_parent_then_element_then_source_order() {
 /// 報告を作る間は記録を 1 行も出さない（要件 8.1 の記録は入口の役目）。
 #[test]
 fn fixture_yields_exactly_the_planted_issues() {
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     let world = EmoWorld::build_with_images(&parse(FIXTURE), &images);
     let mut report = NestReport::default();
     let logs = capture_logs(|| report = world.nest_report());
@@ -178,4 +173,63 @@ fn fixture_yields_exactly_the_planted_issues() {
         ]
     );
     assert!(logs.is_empty(), "報告は記録を出さない: {logs}");
+}
+
+/// 広がりの予算（指摘 3）: 呼び出し 1 回の予算が尽きたら着かないと答え、`error!` を 1 行だけ出す。
+/// 取り出す面は「1 ＋出る辺の数」を数える（指摘 130・出発の 0 と着いた 3 は数えない）ので、0 → 1 → 2 → 3 の
+/// 鎖は 1・2 の 2＋2＝4 で 3 へ着き、予算 3 なら着かない。
+#[test]
+fn spent_budget_answers_not_reached() {
+    let edges = BTreeMap::from([(0, vec![1]), (1, vec![2]), (2, vec![3])]);
+    let mut reached = None;
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 4, &mut false)));
+    assert_eq!(reached, Some(true));
+    assert!(logs.is_empty(), "{logs}");
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 3, &mut false)));
+    assert_eq!(reached, Some(false));
+    assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
+    assert!(
+        logs.lines().any(|l| l.contains("level=ERROR")
+            && l.contains("walk=\"reaches\"")
+            && l.contains("root=0")),
+        "{logs}"
+    );
+}
+
+/// どの予算にも収まらない面（出る辺が予算より多い）を経ても、循環を取りこぼさない（6 回目の指摘 1）。
+/// 1 → 3 → 1 で面 1 は辺 9 本、予算 4: 1 は着いた先か出発なので開かずに済む。
+#[test]
+fn oversized_surface_on_the_cycle_is_still_reported() {
+    let mut text = String::from("surface1\n{\nelement0,overlay,3,0,0\n");
+    for i in 1..9 {
+        text.push_str(&format!("element{i},overlay,99,0,0\n"));
+    }
+    text.push_str("}\nsurface3\n{\nelement0,overlay,1,0,0\n}\n");
+    let world = EmoWorld::build(&parse(&text));
+    let mut report = NestReport::default();
+    let logs = capture_logs(|| report = NestReport::from_world_limited(&world, 4));
+    let cycles: Vec<_> = report
+        .issues
+        .into_iter()
+        .filter(|i| matches!(i, NestIssue::Cycle { .. }))
+        .collect();
+    assert_eq!(cycles, vec![cycle(1, 0, 3), cycle(3, 0, 1)]);
+    assert!(!logs.contains("level=ERROR"), "{logs}");
+}
+
+/// どの予算にも収まらない面は開かないだけで、探しは続く（6 回目の指摘 1 の continue）。0 から 1 と 2 を積み、
+/// 先に取り出す 1（辺 11 本＝12 > 予算 4）は断られて ERROR 1 行、その後 2 を開いて 3 へ着く。
+#[test]
+fn refused_surface_is_skipped_and_the_walk_goes_on() {
+    let edges = BTreeMap::from([(0, vec![2, 1]), (1, (100..=110).collect()), (2, vec![3])]);
+    let (mut reached, mut reported) = (None, false);
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 4, &mut reported)));
+    assert_eq!(reached, Some(true));
+    assert!(reported);
+    let errors: Vec<_> = logs.lines().filter(|l| l.contains("level=ERROR")).collect();
+    assert_eq!(errors.len(), 1, "{logs}");
+    assert!(
+        errors[0].contains("walk=\"reaches\"") && errors[0].contains("root=0"),
+        "{logs}"
+    );
 }

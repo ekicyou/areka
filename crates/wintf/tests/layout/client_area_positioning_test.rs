@@ -10,10 +10,9 @@ use wintf::ecs::{Point, SizeI};
 /// 標準ウィンドウスタイルでto_window_coordsの動作を検証
 #[test]
 fn test_to_window_coords_overlapped_window() {
-    // 実際のウィンドウを作成してテストする
-    // ウィンドウ作成
+    // 見えない実際のウィンドウで試す（読む API は非表示でも動き、前面を奪わない）
     // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED（ULW 方式に対応）
-    let hwnd = create_test_window(WS_OVERLAPPEDWINDOW | WS_VISIBLE, WS_EX_LAYERED);
+    let hwnd = create_test_window(WS_OVERLAPPEDWINDOW, WS_EX_LAYERED);
     assert!(!hwnd.is_invalid(), "テストウィンドウの作成に失敗");
 
     // WindowPosを作成 - クライアント領域 (100, 100, 800, 600)
@@ -44,23 +43,27 @@ fn test_to_window_coords_overlapped_window() {
     // - y座標はクライアント領域より上にオフセット（タイトルバー分）
     // - width/heightはボーダー分だけ大きくなる
 
-    // 座標がクライアント領域以下になっていることを確認（左・上にオフセット）
-    assert!(x <= 100, "x座標がクライアント領域以下であること: got {}", x);
+    // 座標がクライアント領域より左・上にあることを確認
     assert!(
-        y <= 100,
-        "y座標がクライアント領域以下であること (タイトルバー分): got {}",
+        x < 100,
+        "x座標がクライアント領域より左であること: got {}",
+        x
+    );
+    assert!(
+        y < 100,
+        "y座標がクライアント領域より上であること (タイトルバー分): got {}",
         y
     );
 
     // サイズがクライアント領域より大きいことを確認
     assert!(
-        width >= 800,
-        "幅がクライアント領域以上であること: got {}",
+        width > 800,
+        "幅がクライアント領域より大きいこと: got {}",
         width
     );
     assert!(
-        height >= 600,
-        "高さがクライアント領域以上であること: got {}",
+        height > 600,
+        "高さがクライアント領域より大きいこと: got {}",
         height
     );
 }
@@ -70,7 +73,7 @@ fn test_to_window_coords_overlapped_window() {
 #[test]
 fn test_to_window_coords_popup_window() {
     // WS_POPUPウィンドウを作成（タイトルバー・ボーダーなし）
-    let hwnd = create_test_window(WS_POPUP | WS_VISIBLE, WINDOW_EX_STYLE(0));
+    let hwnd = create_test_window(WS_POPUP, WINDOW_EX_STYLE(0));
     assert!(!hwnd.is_invalid(), "テストウィンドウの作成に失敗");
 
     // WindowPosを作成 - クライアント領域 (100, 100, 800, 600)

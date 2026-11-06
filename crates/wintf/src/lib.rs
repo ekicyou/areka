@@ -5,11 +5,9 @@ pub mod numerics;
 mod runtime;
 #[cfg(test)]
 mod test_crash_report;
-mod win_state;
 mod win_style;
 
 pub use wintf_winmsg_executor as executor;
 
 pub use runtime::*;
-pub use win_state::*;
 pub use win_style::*;

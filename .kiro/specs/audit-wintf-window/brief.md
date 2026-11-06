@@ -72,3 +72,11 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## `audit-wintf-runtime` からの申し送り（2026-11-06）
+
+`audit-wintf-runtime` は、この spec の持ち物に触る直しを 2 件入れ、確かめの途中で 1 つ気付いた。全文はあちらの `.kiro/specs/completed/audit-wintf-runtime/research.md` の 14 節「申し送り」。
+
+- **3（位置だけを指定した窓）**: 生成の側（`runtime/window_factory.rs` の `initial_pos_flags`）だけで直した。片方だけ与えた窓の座標の換算（枠の厚み）は `ecs/window/window_pos/mod.rs` の `to_window_coords_for_creation` の素通しのまま（`ecs/window/window_pos/tests.rs` が固定・あちらの設計の討議の裁定 3）。素通しのままでよいかはこちらで決める。
+- **6（生成に失敗した窓）**: 印 `WindowCreationFailed` を置き、`ecs/window/window_system.rs` の `create_windows` の問い合わせ（`:35-41`）に `Without<WindowCreationFailed>` を足した。一時的な失敗からは自動で立ち直らない（あちらの設計の討議の裁定 4）。立ち直らせる側（印を外す側）をどこに置くかはこちらで決める。
+- **DPI の変わり目で中心を保つ動き**: `taffy_flex_demo` で Window 1 を副モニターの原点 (-2304,355) へ送ると、DPI 192→144 の伸び縮みで中心を保ち (-2104,530) に着く（大きさの差の半分）。実行時の窓と DPI の規則（`src/ecs/window`）の動きで、正しいかはこちらで確かめる。example は着地点を主張しない。

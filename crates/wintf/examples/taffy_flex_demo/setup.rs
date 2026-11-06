@@ -41,7 +41,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     let flex_container = world
         .spawn((
             Name::new("FlexDemo-Container"),
-            FlexDemoContainer,
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 0.9,
@@ -83,7 +82,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     let red_box = world
         .spawn((
             Name::new("RedBox"),
-            RedBox,
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 1.0,
@@ -137,7 +135,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     let green_box = world
         .spawn((
             Name::new("GreenBox"),
-            GreenBox,
             Visual {
                 opacity: 0.5,
                 ..Default::default()
@@ -171,7 +168,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     // GreenBoxの子エンティティ（黄色矩形、半透明）
     world.spawn((
         Name::new("GreenBoxChild"),
-        GreenBoxChild,
         Visual {
             opacity: 0.5,
             ..Default::default()
@@ -198,7 +194,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     // Flexアイテム3（青、growで伸縮、より大きなgrow値）- 左クリックでサイズ変更
     world.spawn((
         Name::new("BlueBox"),
-        BlueBox,
         Visual {
             opacity: 0.5,
             ..Default::default()
@@ -231,7 +226,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     let region_container = world
         .spawn((
             Name::new("RegionTest-Container"),
-            RegionTestContainer,
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 0.85,
@@ -272,7 +266,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
 
     world.spawn((
         Name::new("RegionRectBox"),
-        RegionRectBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.8,
@@ -295,7 +288,7 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     ));
 
     // --- 2. 多角形リージョン (Polygon) ---
-    // 4分割を三角形ポリゴンで表現（各象限を2三角形で充填）
+    // 4分割を四角形のポリゴンで表現（各象限を 1 つの四角形で）
     let polygon_region_map = HitRegionMap::builder()
         .polygon(
             "top-left",
@@ -318,7 +311,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
 
     world.spawn((
         Name::new("RegionPolygonBox"),
-        RegionPolygonBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.6,
@@ -340,7 +332,7 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
         ChildOf(region_container),
     ));
 
-    // --- 3. 混在＋重複リージョン (Mixed + Overlap) ---
+    // --- 3. 混在リージョン (Mixed) ---
     // rect(top-left, bottom-right) + polygon(top-right, bottom-left) の混在
     let mixed_region_map = HitRegionMap::builder()
         .rect("top-left", 0.0, 0.0, 70.0, 75.0)
@@ -358,7 +350,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
 
     world.spawn((
         Name::new("RegionMixedBox"),
-        RegionMixedBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.6,
@@ -398,7 +389,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
 
     world.spawn((
         Name::new("RegionColorMapBox"),
-        RegionColorMapBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.8,
@@ -424,7 +414,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     // HitRegionMap なし → Bounds フォールバック（region: None）
     world.spawn((
         Name::new("RegionFallbackBox"),
-        RegionFallbackBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.7,
@@ -452,7 +441,6 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     let click_through_container = world
         .spawn((
             Name::new("ClickThrough-Container"),
-            ClickThroughTestContainer,
             Visual {
                 opacity: 0.3,
                 ..Default::default()
@@ -486,10 +474,9 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
         .id();
 
     // --- クリックスルー領域 (HitTest::none) ---
-    // 黄色半透明矩形、マウスイベントが貫通する
+    // 赤の半透明矩形、マウスイベントが貫通する
     world.spawn((
         Name::new("ClickThroughBox"),
-        ClickThroughBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 1.0,
@@ -509,10 +496,9 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     ));
 
     // --- 通常領域 (HitTest::bounds) ---
-    // シアン半透明矩形、マウスイベントを受け取る
+    // 青の半透明矩形、マウスイベントを受け取る
     world.spawn((
         Name::new("NormalHitBox"),
-        NormalHitBox,
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.0,
@@ -573,8 +559,8 @@ pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Po
     println!("  │  ├─ RegionColorMapBox (カラーマップ: 4色→4リージョン)");
     println!("  │  └─ RegionFallbackBox (フォールバック: region=None)");
     println!("  └─ ClickThrough-Container (Row, SpaceEvenly) - クリックスルーテスト");
-    println!("     ├─ ClickThroughBox (黄色, HitTest::none) - クリック貫通");
-    println!("     ├─ NormalHitBox (シアン, HitTest::bounds) - 通常クリック");
+    println!("     ├─ ClickThroughBox (赤, HitTest::none) - クリック貫通");
+    println!("     ├─ NormalHitBox (青, HitTest::bounds) - 通常クリック");
     println!("     └─ AlphaBoundaryBox (紫, Opacity=0.5) - α境界値テスト");
 
     window_entity

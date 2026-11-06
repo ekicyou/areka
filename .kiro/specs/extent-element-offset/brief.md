@@ -91,7 +91,7 @@
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述:
   - 着せ替えの最初の pattern の取り方が、外形（番号が最小のもの）と命令（番号が 0 のもの）で違う件は同じ関数の中なので、本 spec で一緒に揃えるのが安い（議題に足す）。
-  - `crates/areka-emo-compose/src/log_firing_tests.rs` の `pattern0_less_bind_skip_fires_debug_and_no_warn_error` の説明に、移す前の `plan.rs` の行番号（`:529`）が残っている。
+  - `crates/areka-emo-compose/src/log_firing_tests.rs` の `pattern0_less_bind_skip_fires_debug_and_no_warn_error` の説明に、移す前の `plan.rs` の行番号（`:529`）が残っている。→ 2026-11-06 `audit-emo-compose` が閉じた（テストは `frameless_bind_random_skip_fires_debug_and_no_warn_error` へ改名・説明の行番号も消えた）。
   - Current State・Scope の「`plan.rs` の `flatten_extent`」は `plan_extent.rs` と読む。
   - 外形が変わると採寸の結果も変わる。`placement-measure-bake-once` より先に着地させると、あちらの「採寸の結果が同じ」の固定が書きやすい。
 

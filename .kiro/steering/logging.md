@@ -115,7 +115,7 @@ $env:RUST_LOG="debug"; cargo run -p wintf --example clip_demo
 $env:RUST_LOG="wintf=trace"; cargo run -p wintf --example taffy_flex_demo
 
 # 特定モジュールのみ
-$env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run -p wintf --example multi_window_test
+$env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run -p wintf --example tooltip_demo
 ```
 
 ## ライブラリ vs アプリケーション

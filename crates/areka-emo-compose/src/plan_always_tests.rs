@@ -1,26 +1,24 @@
-//! 合成で、動く絵の子と `always` の経過 0 を描く（task 2.5・要件 1.4・3.1・4.1・4.5・4.6・7.1）。
+//! 合成で、動く絵の子と `always` の経過 0 を描く（要件 1.4・3.1・4.1・4.5・4.6・7.1）。
 //!
 //! 欄が「載っていない」なら経過 0 の絵、「消えている」なら何も、コマならそのコマ。動く絵の子は
 //! 下に何も敷かず、コマの絵 1 枚だけを置いた element の描画メソッドで命令にする。
 
-use std::collections::BTreeMap;
-use std::num::NonZeroU32;
 use std::path::Path;
 
 use areka_emo_atlas::{
-    AlphaParams, AnimatedImage, AnimationFrame, AnimationInfo, AnimationLimits, AtlasTable,
-    DecodedImage, ElementId, LoopCount, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    bake_with_limits,
+    AnimationFrame, AtlasTable, DecodedImage, ElementId, LoopCount, MemoryDecoder, SetId,
 };
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
 
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::nesting::{ElementKind, FilmId};
 use crate::normalized::SurfaceMaster;
-use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{BlitOp, derive_ops};
+use crate::pattern::PatternState;
+use crate::plan::BlitOp;
+use crate::plan_test_support::{
+    bake_films_and_bind, errors, frame, insert_film, insert_film_2x2, insert_stills, solid,
+};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -53,95 +51,42 @@ fn image(bgra: Vec<u8>) -> DecodedImage {
     }
 }
 
-fn solid(c: u8) -> DecodedImage {
-    image([c, c, c, 255].repeat(4))
-}
-
 /// 動く絵のコマ: 0 は全面不透明・1 は左上の 1 画素だけ不透明・2 は全透明。待ちは 0・100・100 なので
 /// 経過 0 はコマ 1（1 枚目の待ちが 0 なら次のコマ）。
 fn film_frames() -> Vec<AnimationFrame> {
     let mut one = vec![0u8; 16];
     one[..4].copy_from_slice(&[20, 20, 20, 255]);
-    [solid(10), image(one), image(vec![0; 16])]
+    [solid(2, 2, 10), image(one), image(vec![0; 16])]
         .into_iter()
         .zip([0, 100, 100])
         .map(|(image, delay_ms)| AnimationFrame { image, delay_ms })
         .collect()
 }
 
-fn insert_film(dec: &mut MemoryDecoder, rel: &str, frames: Vec<AnimationFrame>, laps: Option<u32>) {
-    let loop_count = laps.map_or(LoopCount::Infinite, |n| {
-        LoopCount::Finite(NonZeroU32::new(n).unwrap())
-    });
-    dec.insert_animated(
-        Path::new(BASE).join(rel),
-        AnimationInfo {
-            width: 2,
-            height: 2,
-            frame_count: frames.len() as u32,
-        },
-        Ok(frames[0].image.clone()),
-        Ok(AnimatedImage { frames, loop_count }),
-    );
-}
-
 /// 文面を面の表にし、静止画と動く絵（どれも 2×2）で焼いて束縛する。`images` は
 /// `surface<数字>.png` として置いた絵（番号, 名前）。
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     let mut dec = MemoryDecoder::default();
-    for rel in STILLS {
-        dec.insert(Path::new(BASE).join(rel), 2, 2, 8, solid(9).bgra, true);
-    }
-    insert_film(&mut dec, FILM, film_frames(), None);
+    insert_stills(
+        &mut dec,
+        Path::new(BASE),
+        STILLS.iter().map(|&rel| (rel, 2, 2)),
+    );
+    insert_film(
+        &mut dec,
+        Path::new(BASE).join(FILM),
+        film_frames(),
+        LoopCount::Infinite,
+    );
     for (rel, delays, laps) in FIXTURE_FILMS {
-        let frames = delays
-            .iter()
-            .enumerate()
-            .map(|(i, &delay_ms)| AnimationFrame {
-                image: solid(10 + i as u8),
-                delay_ms,
-            })
-            .collect();
-        insert_film(&mut dec, rel, frames, laps);
+        insert_film_2x2(&mut dec, Path::new(BASE).join(rel), delays, laps);
     }
     let rels = STILLS
         .iter()
         .copied()
         .chain([FILM])
         .chain(FIXTURE_FILMS.iter().map(|f| f.0));
-    let elements = rels
-        .map(|rel| Element {
-            layer: 0,
-            path: ElementPath::new(rel.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: Path::new(BASE),
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake_with_limits(
-        &[set],
-        &dec,
-        PackConfig::default(),
-        AnimationLimits::default(),
-    );
-    assert!(baked.errors.is_empty(), "{:?}", baked.errors);
-    let images: BTreeMap<u32, String> = images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-    let mut world = EmoWorld::build_with_images(&parse(text), &images);
-    world.bind_atlas(&baked.table, SetId(0));
-    assert!(world.film_skips().is_empty(), "{:?}", world.film_skips());
-    (world, baked.table)
+    bake_films_and_bind(&dec, Path::new(BASE), rels, text, images)
 }
 
 fn build(text: &str) -> (EmoWorld, AtlasTable) {
@@ -177,17 +122,8 @@ fn compose(
     pattern: &PatternState,
 ) -> (Vec<(String, i64, i64)>, Vec<BlitOp>, String) {
     let mut ops = Vec::new();
-    let mut visited = Vec::new();
     let logs = capture_logs(|| {
-        derive_ops(
-            &mut ops,
-            &mut visited,
-            world,
-            atlas,
-            top,
-            &BindSet::default(),
-            pattern,
-        )
+        ops = crate::plan_test_support::ops(world, atlas, top, &BindSet::default(), pattern)
     });
     let named = ops
         .iter()
@@ -206,15 +142,6 @@ fn ops_of(text: &str, top: u32, pattern: &PatternState) -> Vec<(String, i64, i64
 
 fn op(name: &str, x: i64, y: i64) -> (String, i64, i64) {
     (name.to_string(), x, y)
-}
-
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
 }
 
 /// a.png の 5・b.png の 6（手書きの `always` のコマが指す先）。
@@ -242,12 +169,46 @@ fn top_always_draws_rest_pattern_when_cell_is_empty() {
     assert_eq!(ops(&blank), vec![op("body.png", 0, 0)], "消えている");
 
     let mut cell = PatternState::default();
-    cell.set(0, frame(6));
+    cell.set(0, frame(6, 0, 0));
     assert_eq!(
         ops(&cell),
         vec![op("body.png", 0, 0), op("b.png", 0, 0)],
         "コマが経過 0 を置き換える"
     );
+}
+
+/// 7 回目の指摘 4: 経過 0 の pattern の描画メソッドが大文字や `-`・`_` の入った語（`Over-Lay`）でも描き、
+/// 同じ合成器で繰り返し合成しても命令列と作業場の容量は伸びない（語の比べは合成のたびに引かれる）。
+#[test]
+fn always_with_uppercase_method_recomposes_without_growing() {
+    use crate::{ComposedSurface, Composer};
+
+    let text = format!(
+        "surface0\n{{\nelement0,overlay,body.png,0,0\nanimation0.interval,always\n\
+         animation0.pattern0,Over-Lay,5,0,3,4\n}}\n{TARGETS}"
+    );
+    let (world, atlas) = build(&text);
+    let pattern = PatternState::default();
+    assert_eq!(
+        compose(&world, &atlas, 0, &pattern).0,
+        vec![op("body.png", 0, 0), op("a.png", 3, 4)]
+    );
+    let (mut composer, mut out) = (Composer::new(), ComposedSurface::new(0, 0));
+    let mut run = || {
+        composer
+            .compose_into(&mut out, &world, &atlas, 0, &BindSet::default(), &pattern)
+            .expect("合成できる");
+        (
+            composer.ops.len(),
+            composer.ops.capacity(),
+            composer.scratch.capacities(),
+        )
+    };
+    let first = run();
+    assert_eq!(first.0, 2, "body と a の 2 命令");
+    for k in 0..8 {
+        assert_eq!(run(), first, "{k} 回目");
+    }
 }
 
 /// 要件 3.1・4.1: 部品（element定義で置いたサーフェス）の手書きの `always` も、部品の欄が空なら経過 0
@@ -380,11 +341,7 @@ fn film_without_sheet_is_not_drawn_and_logs_error() {
         .kind = ElementKind::Film(FilmId(123_456));
     let (named, _, logs) = compose(&world, &atlas, 0, &PatternState::default());
     assert_eq!(named, vec![op("part.png", 0, 0)]);
-    assert_eq!(
-        logs.lines().filter(|l| l.contains("level=ERROR")).count(),
-        1,
-        "{logs}"
-    );
+    assert_eq!(errors(&logs, "動く絵の子の定義が無い"), 1, "{logs}");
 }
 
 /// 要件 7.1: `always` でない animation（組み合わせ・大文字・ほかの語）は欄が空でも何も足さない。

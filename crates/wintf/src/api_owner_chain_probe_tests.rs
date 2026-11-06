@@ -12,11 +12,12 @@
 //!
 //! # 窓の作り
 //!
-//! 本番のゴースト窓と同じ `WS_POPUP` ＋ `WS_EX_TOOLWINDOW`（`placement/spawn.rs:572-576`）
-//! で作り、`ShowWindow(SW_SHOWNOACTIVATE)` で**実際に表示状態**にする——「既に表示中の窓の
+//! 本番のゴースト窓（`crates/areka/src/placement/spawn.rs` の `window_style`＝`WS_POPUP`＋
+//! `WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_ACCEPTFILES`）のうち、`WS_POPUP`＋`WS_EX_TOOLWINDOW`
+//! だけで作り、`ShowWindow(SW_SHOWNOACTIVATE)` で**実際に表示状態**にする——「既に表示中の窓の
 //! 張り替え」が問いだからである。寸法は 0x0 なので画面には 1 ピクセルも出ないが、
 //! `WS_VISIBLE` は立ち、OS から見れば可視のトップレベル窓である。
-//! `WS_EX_TOOLWINDOW` は本番と同じであり、この一点によって owner の付け外しが
+//! 本番から `WS_EX_TOOLWINDOW` を持ってきてあり、この一点によって owner の付け外しが
 //! **タスクバーへの出方を変えようがない**（道具窓は元からタスクバーに出ない）。
 //!
 //! # 測り方
@@ -54,7 +55,7 @@
 //! 両テストは [`head_owns_nothing`] で「先頭が何も所有していない」ことを自己検査するので、
 //! **受け皿を外すと必ず赤になる**。
 //!
-//! 他の実測（1・1b・2・3・4・5・6・8）は所有側を動かす形か絶対帯指定を測っており、記録済みの
+//! 他の実測（1・1b・2・4・5・6）は所有側を動かす形か絶対帯指定を測っており、記録済みの
 //! 逐語値は受け皿の有無に依らない。よってそちらは値を保つためにあえて触っていない。
 //!
 //! # 主張しないこと
@@ -67,43 +68,31 @@
 use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow,
-    GetWindow, HWND_BOTTOM, HWND_TOP, IsIconic, IsWindow, IsWindowVisible, SW_HIDE, SW_MINIMIZE,
-    SW_RESTORE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-    ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
+    DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, HWND_BOTTOM,
+    HWND_TOP, IsIconic, IsWindow, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOWNOACTIVATE,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, w};
 
-use super::{clear_window_owner, set_window_owner};
+use super::{clear_window_owner, is_window_visible as is_visible, set_window_owner};
 
 // ---------------------------------------------------------------------------
-// 実窓（0x0・可視・トップレベル・本番と同じ拡張スタイル）
+// 実窓（0x0・可視・トップレベル・本番の拡張スタイルのうち道具窓だけ）
 // ---------------------------------------------------------------------------
 
 pub(super) fn create_probe_window(title: PCWSTR) -> HWND {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を生成し、活性化を奪わずに
-    // 表示状態へ移す。
+    let hwnd = crate::api::create_test_window(
+        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
+        WINDOW_STYLE(WS_POPUP.0),
+        None,
+        title,
+    );
+    // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を、活性化を奪わずに表示状態へ移す。
     unsafe {
-        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-        let hwnd = CreateWindowExW(
-            WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
-            w!("Static"),
-            title,
-            WINDOW_STYLE(WS_POPUP.0),
-            10,
-            10,
-            0,
-            0,
-            None,
-            None,
-            Some(hinstance.into()),
-            None,
-        )
-        .expect("CreateWindowExW should create a probe window");
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        hwnd
     }
+    hwnd
 }
 
 thread_local! {
@@ -122,7 +111,7 @@ thread_local! {
 /// テスト 1 本につき 0x0 の窓が 1 枚残り、終われば消える。壊すと所有が次の窓へ移りかねない。
 ///
 /// **受け皿を敷くのは §13 で測り直した実測 7・9 と、§13 の掃き出しだけである。** 他の実測
-/// （1・1b・2・3・4・5・6）は所有側を動かす形か絶対帯指定を測っており、記録済みの逐語値は
+/// （1・1b・2・4・5・6）は所有側を動かす形か絶対帯指定を測っており、記録済みの逐語値は
 /// 受け皿の有無に依らないので、値を保つためにあえて触らない。
 pub(super) fn ensure_ime_anchor() {
     IME_ANCHOR_MADE.with(|made| {
@@ -188,11 +177,6 @@ pub(super) fn destroy_all(windows: &[HWND]) {
             let _ = DestroyWindow(*hwnd);
         }
     }
-}
-
-fn is_visible(hwnd: HWND) -> bool {
-    // SAFETY: Win32 境界。読み取りのみ。
-    unsafe { IsWindowVisible(hwnd) }.as_bool()
 }
 
 fn is_alive(hwnd: HWND) -> bool {
@@ -299,18 +283,8 @@ pub(super) fn place_after(hwnd: HWND, after: HWND) {
     }
 }
 
-fn place_at(hwnd: HWND, insert_after: HWND) {
-    place_after(hwnd, insert_after);
-}
-
 /// 本設計が採る後押し——**鎖の根を錨（1 つ手前の窓）の直後へ差し直す**（`research.md` §13.3）。
-///
-/// > ⚠ **2026-08-30 訂正**: ここは当初「鎖の**先頭**を 2 番目の直後へ差し直す」だった。
-/// > §13.2 でその形は**撤回**されている——Windows が鎖を並べ直すのは**所有する窓が動いた
-/// > とき**だけであり、鎖の先頭は誰も所有していないので、先頭を動かしても鎖は並ばない
-/// > （24 通りの始点すべてで 0/24）。当時それが効いて見えたのは、受け皿が無く
-/// > **不可視の IME 窓が鎖の先頭に所有されていた**からである。撤回済みの形は
-/// > [`retired_head_nudge`]（実測 9 が「収まらないこと」を主張するために保存）。
+/// 撤回済みの初版の形は [`retired_head_nudge`]。
 ///
 /// 参照するのはどちらも自分の窓である。`GW_HWNDPREV`（＝「いま自分の 1 つ手前にいる窓」）を
 /// 挿入位置に使う形は**その窓が他プロセスのものでありうる**——読み取りと書き込みの間に
@@ -381,15 +355,15 @@ fn owner_chain_probe_relink_on_visible_windows() {
     let after_link = z_shape(&set);
 
     // 後押し① 根を最背面へ落とす（1 回だけ）。
-    place_at(set[3], HWND_BOTTOM);
+    place_after(set[3], HWND_BOTTOM);
     let after_nudge_root_bottom = z_shape(&set);
 
     // 後押し② 先頭を最前面へ持ち上げる（1 回だけ）。
-    place_at(set[0], HWND_TOP);
+    place_after(set[0], HWND_TOP);
     let after_nudge_head_top = z_shape(&set);
 
     // 攪乱——利用者の活性化に相当する形で最背面の窓を最前面へ持ち上げる。
-    place_at(set[3], HWND_TOP);
+    place_after(set[3], HWND_TOP);
     let after_disturb = z_shape(&set);
 
     eprintln!("[probe-1] before(reversed)        = {before:?}");
@@ -448,7 +422,7 @@ fn owner_chain_probe_rechain_to_a_different_order() {
         .collect();
 
     link_chain(&set); // 手前から 0,1,2,3
-    place_at(set[3], HWND_BOTTOM);
+    place_after(set[3], HWND_BOTTOM);
     let first = z_shape(&set);
 
     // 逆順の鎖へ張り替える（先に全部外してから張り直す＝途中で星形も輪も作らない）。
@@ -457,7 +431,7 @@ fn owner_chain_probe_rechain_to_a_different_order() {
     let reversed: Vec<HWND> = set.iter().rev().copied().collect();
     link_chain(&reversed); // 手前から 3,2,1,0
     let after_relink_no_nudge = z_shape(&set);
-    place_at(set[0], HWND_BOTTOM); // 新しい根（添字 0）を最背面へ
+    place_after(set[0], HWND_BOTTOM); // 新しい根（添字 0）を最背面へ
     let after_relink_nudge = z_shape(&set);
 
     eprintln!("[probe-1b] first_chain            = {first:?}");
@@ -595,7 +569,7 @@ fn owner_chain_probe_destroy_cascade_and_neutralization() {
     let d_owner_after = owner_of(d).map(|o| o == f);
     destroy_all(&[d, f]);
 
-    // ⑶ 先に鎖から外してから破棄する（ペア切離の雛形＝`zorder_pair_maintain.rs:286`）。
+    // ⑶ 先に鎖から外してから破棄する（ペア切離の雛形＝`zorder_pair_maintain.rs` の `detach_owner_links_for_lost_peers`）。
     let g = create_probe_window(w!("owner-chain-probe/dest-g"));
     let h = create_probe_window(w!("owner-chain-probe/dest-h"));
     let i = create_probe_window(w!("owner-chain-probe/dest-i"));
@@ -762,7 +736,7 @@ fn owner_chain_probe_minimal_nudge_variants() {
         .collect();
     arrange_z(&s1, &[3, 2, 1, 0]);
     link_chain(&s1);
-    place_at(s1[3], HWND_BOTTOM);
+    place_after(s1[3], HWND_BOTTOM);
     let root_bottom = z_shape(&s1);
 
     // ⑵ 鎖の先頭を最前面へ。
@@ -771,7 +745,7 @@ fn owner_chain_probe_minimal_nudge_variants() {
         .collect();
     arrange_z(&s2, &[3, 2, 1, 0]);
     link_chain(&s2);
-    place_at(s2[0], HWND_TOP);
+    place_after(s2[0], HWND_TOP);
     let head_top = z_shape(&s2);
 
     // ⑶ 中間の窓だけを動かす。
@@ -780,7 +754,7 @@ fn owner_chain_probe_minimal_nudge_variants() {
         .collect();
     arrange_z(&s3, &[3, 2, 1, 0]);
     link_chain(&s3);
-    place_at(s3[2], HWND_TOP);
+    place_after(s3[2], HWND_TOP);
     let mid_top = z_shape(&s3);
 
     // ⑷ 後押しをまったく出さない（対照）。
@@ -893,9 +867,9 @@ fn owner_chain_probe_nudge_effect_on_outsiders() {
 }
 
 // ===========================================================================
-// 実測 9: **自分の窓だけ**を参照する後押し（実測 8 の弱点を潰す）
+// 実測 9: **自分の窓だけ**を参照する後押し
 //
-// 実測 8 の「その場への差し直し」は挿入位置に `GW_HWNDPREV`＝**他プロセスの窓**を渡しうる。
+// 「その場への差し直し」は挿入位置に `GW_HWNDPREV`＝**他プロセスの窓**を渡しうる。
 // その窓が読み取りと書き込みの間に消えると `SetWindowPos` が黙って失敗し、鎖が収まらない
 // （full-suite の並走走行で実際に再現した）。よって自分の窓だけを参照する形を採る。
 //

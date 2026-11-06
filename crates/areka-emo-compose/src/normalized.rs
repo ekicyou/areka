@@ -1,8 +1,8 @@
 //! 正規化 Surface 定義の公開形: `SurfaceMaster` / `NormalizedElement` / `Transform`。
 //!
 //! 下流（seriko・collision-geometry）が再パース・再展開なしに消費できる正規化定義を提供する。
-//! element（レイヤ・画像パス・座標）に加え collisions・animations・`animation-sort`／
-//! `collision-sort` の順序キーを保持する。element 配置は変換行列（`Transform`）で表現し、
+//! element（レイヤ・画像パス・座標）に加え collisions・animations を保持する（`animation-sort` は
+//! シェル全体の値として [`crate::EmoWorld::animation_sort`] が持つ）。element 配置は変換行列（`Transform`）で表現し、
 //! X,Y のみの平行移動を単位行列の特例として扱う（回転・拡縮は行列表現に予約）。
 
 use crate::method::ComposeMethod;
@@ -76,11 +76,12 @@ pub struct SurfaceMaster {
     pub elements: Vec<NormalizedElement>,
     /// 当たり判定領域（転記のまま）。
     ///
-    /// 順序不変条件: **登場順**。`surface.append` 由来は末尾へ連結される（`fold.rs:121-122`）。
-    /// 画家則（後定義が手前）はこの順序に意味論を載せる（HitCore [`hit_region`] が逆順走査で
+    /// 順序不変条件: **登場順**。追記と 2 つ目の波括弧の行は末尾へ足す（波括弧だけは同じ collision番号の
+    /// 前の行を除いてから・畳み込みの `add_lines`）。
+    /// 画家則（後定義が手前）はこの順序に意味論を載せる（HitCore [`hit_region_in`] が逆順走査で
     /// 最前面を決める・collision-geometry 要件 2.1）ため、この順序は挙動上の意味を持つ。
     ///
-    /// [`hit_region`]: crate::hit::hit_region
+    /// [`hit_region_in`]: crate::hit::hit_region_in
     pub collisions: Vec<areka_parsers::shell::Collision>,
     /// SERIKO animation 群（interval/pattern を転記のまま保持）。
     pub animations: Vec<areka_parsers::shell::Animation>,
@@ -108,7 +109,6 @@ pub struct NormalizedElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_parsers::shell::ElementPath;
 
     /// `translate` は平行移動成分を保持し、M1 では純平行移動と判定される。
     #[test]
@@ -125,29 +125,5 @@ mod tests {
         assert_eq!(t.offset(), (0, 0));
         assert!(t.is_translation());
         assert_eq!(t, Transform::default());
-    }
-
-    /// `SurfaceMaster` / `NormalizedElement` を構築しフィールドを読み取れる。
-    #[test]
-    fn surface_master_construct_and_read() {
-        let elem = NormalizedElement {
-            layer: 0,
-            path: ElementPath::new("surface0.png".to_string()),
-            transform: Transform::translate(10, 20),
-            method: ComposeMethod::Overlay,
-            kind: ElementKind::Image,
-        };
-        let master = SurfaceMaster {
-            id: 1000,
-            elements: vec![elem],
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        };
-        assert_eq!(master.id, 1000);
-        assert_eq!(master.elements.len(), 1);
-        assert_eq!(master.elements[0].layer, 0);
-        assert_eq!(master.elements[0].path.as_str(), "surface0.png");
-        assert_eq!(master.elements[0].transform.offset(), (10, 20));
-        assert_eq!(master.elements[0].method, ComposeMethod::Overlay);
     }
 }

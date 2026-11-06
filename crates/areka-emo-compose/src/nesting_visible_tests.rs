@@ -1,62 +1,41 @@
 //! 参照の表と「今の絵に出ている部品」（要件 5.11・5.13・8.3）。
 //!
-//! 規則（`flatten_surface` と同じ辺）: 一番上から ① element定義の子 ② 有効な着せ替えの pattern0 の先
-//! （同じ animation の番号にコマが在ればコマが置き換える）③ そのサーフェスのコマ（一番上は今までの欄・
-//! 部品は部品の欄）のうち描画メソッドが動くもので、着せ替えの種類なら有効なものの先、をたどる。
+//! 規則（`flatten_surface` と同じ辺）: 一番上から ① element定義の子 ② 有効な純 `bind` の手順の描くコマの先
+//! （同じ animation の番号にコマが在ればコマが置き換える・`bind+random` は手順を持たない）②' `always` の経過 0 のコマの先
+//! （欄が載っていないときだけ・詳しくは `NestTable::visible_parts` の説明）③ そのサーフェスのコマ（一番上は今までの欄・
+//! 部品は部品の欄）のうち描画メソッドが動くもので、`bind+random` なら有効なものの先、をたどる。
 //! 先祖へ戻る辺は進まない。
 //!
-//! 後半は合成との一致の檻（task 4.4・要件 3.2・5.12）: 「部品 X のコマを足すと命令列が変わる」⇔
-//! 「X が部品の列に在る」・外れた着せ替えのコマは両方を変えない・合成が切る循環の辺は報告に在る。
+//! 後半は合成との一致の檻（要件 3.2・5.12）: 「部品 X のコマを足すと命令列が変わる」⇔
+//! 「X が部品の列に在る」・外れた `bind+random` のコマは両方を変えない・合成が切る循環の辺は報告に在る。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface, parse};
+use areka_emo_atlas::AtlasTable;
+use areka_parsers::shell::parse;
 
 use super::{NestIssue, NestTable, SurfaceParts};
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
-use crate::plan::{BlitOp, derive_ops};
+use crate::plan::BlitOp;
+use crate::plan_test_support::{
+    MARK_ANIM, MARKER, bake_atlas, frame, image_map, ops, skipped, visible_parts_of as visible,
+};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
 /// 検体の面の表（ファイル名の慣習だけで建つ 2・11 を含む）。
 fn fixture_world() -> EmoWorld {
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     EmoWorld::build_with_images(&parse(FIXTURE), &images)
 }
 
 fn table_of(text: &str) -> NestTable {
     EmoWorld::build(&parse(text)).nest_table()
-}
-
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
-}
-
-fn visible(table: &NestTable, top: u32, binds: &[u32], pattern: &PatternState) -> Vec<u32> {
-    let mut out = Vec::new();
-    table.visible_parts(
-        top,
-        &BindSet::from_ids(binds.iter().copied()),
-        pattern,
-        &mut out,
-    );
-    out
 }
 
 fn listed(world: &EmoWorld, table: &NestTable) -> BTreeSet<u32> {
@@ -74,13 +53,12 @@ fn shell_without_nesting_or_binds_gives_empty_table() {
          surface1\n{\nelement0,overlay,eye.png,0,0\n}\n",
     );
     assert!(table.is_empty());
-    assert_eq!(table, NestTable::default());
     // 一番上のコマ（random）の先は部品に数える（③）が、表は空のまま。
     let mut pattern = PatternState::default();
-    pattern.set(0, frame(1));
-    assert_eq!(visible(&table, 0, &[], &pattern), vec![1]);
+    pattern.set(0, frame(1, 0, 0));
+    assert_eq!(visible(&table, 0, &BindSet::default(), &pattern), vec![1]);
     assert_eq!(
-        visible(&table, 0, &[], &PatternState::default()),
+        visible(&table, 0, &BindSet::default(), &PatternState::default()),
         Vec::<u32>::new()
     );
 }
@@ -125,32 +103,56 @@ fn fixture_visible_parts_follow_children_binds_and_frames() {
     let empty = PatternState::default();
 
     // ① 子と 3 段の入れ子。着せ替え 100 が無効なら 40 は出ない。
-    assert_eq!(visible(&table, 0, &[], &empty), vec![10, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::default(), &empty),
+        vec![10, 30, 31, 32]
+    );
     // ② 有効な着せ替えの pattern0 の先。
-    assert_eq!(visible(&table, 0, &[100], &empty), vec![10, 30, 31, 32, 40]);
-    assert_eq!(visible(&table, 1, &[], &empty), vec![10, 30, 31, 32]);
-    assert_eq!(visible(&table, 2, &[], &empty), vec![10, 11]);
-    assert_eq!(visible(&table, 71, &[], &empty), vec![70]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([100]), &empty),
+        vec![10, 30, 31, 32, 40]
+    );
+    assert_eq!(
+        visible(&table, 1, &BindSet::default(), &empty),
+        vec![10, 30, 31, 32]
+    );
+    assert_eq!(
+        visible(&table, 2, &BindSet::default(), &empty),
+        vec![10, 11]
+    );
+    assert_eq!(visible(&table, 71, &BindSet::default(), &empty), vec![70]);
     // 部品の無い面。
-    assert_eq!(visible(&table, 32, &[100], &empty), Vec::<u32>::new());
+    assert_eq!(
+        visible(&table, 32, &BindSet::from_ids([100]), &empty),
+        Vec::<u32>::new()
+    );
 
     // ③ 部品のコマの先（10 のまばたき→12・40 の口→41）。部品の欄から引く。
     let mut pattern = PatternState::default();
-    pattern.set_part(10, 0, frame(12));
-    pattern.set_part(40, 0, frame(41));
+    pattern.set_part(10, 0, frame(12, 0, 0));
+    pattern.set_part(40, 0, frame(41, 0, 0));
     assert_eq!(
-        visible(&table, 0, &[100], &pattern),
+        visible(&table, 0, &BindSet::from_ids([100]), &pattern),
         vec![10, 12, 30, 31, 32, 40, 41]
     );
     // 40 が出ていなければ、40 の部品のコマは数えない。
-    assert_eq!(visible(&table, 0, &[], &pattern), vec![10, 12, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::default(), &pattern),
+        vec![10, 12, 30, 31, 32]
+    );
     // 一番上の欄の同じ番号のコマは部品のコマとして読まない（欄が混ざらない）。
     let mut top_only = PatternState::default();
-    top_only.set(0, frame(12));
-    assert_eq!(visible(&table, 1, &[], &top_only), vec![10, 12, 30, 31, 32]);
+    top_only.set(0, frame(12, 0, 0));
+    assert_eq!(
+        visible(&table, 1, &BindSet::default(), &top_only),
+        vec![10, 12, 30, 31, 32]
+    );
     let mut wrong_field = PatternState::default();
-    wrong_field.set_part(1, 0, frame(12));
-    assert_eq!(visible(&table, 1, &[], &wrong_field), vec![10, 30, 31, 32]);
+    wrong_field.set_part(1, 0, frame(12, 0, 0));
+    assert_eq!(
+        visible(&table, 1, &BindSet::default(), &wrong_field),
+        vec![10, 30, 31, 32]
+    );
 }
 
 /// ② 同じ animation の番号にコマが在れば、pattern0 の先でなくコマの先を数える。
@@ -158,9 +160,9 @@ fn fixture_visible_parts_follow_children_binds_and_frames() {
 fn frame_replaces_bind_pattern0() {
     let table = fixture_world().nest_table();
     let mut pattern = PatternState::default();
-    pattern.set(100, frame(41));
+    pattern.set(100, frame(41, 0, 0));
     assert_eq!(
-        visible(&table, 0, &[100], &pattern),
+        visible(&table, 0, &BindSet::from_ids([100]), &pattern),
         vec![10, 30, 31, 32, 41]
     );
 
@@ -170,10 +172,13 @@ fn frame_replaces_bind_pattern0() {
         100,
         PatternFrame {
             method: ComposeMethod::Reduce,
-            ..frame(41)
+            ..frame(41, 0, 0)
         },
     );
-    assert_eq!(visible(&table, 0, &[100], &not_drawn), vec![10, 30, 31, 32]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([100]), &not_drawn),
+        vec![10, 30, 31, 32]
+    );
 }
 
 /// ③ 有効でない `bind+random` のコマは数えない。純 `bind`・着せ替えでないコマは無条件に数える
@@ -219,16 +224,22 @@ element0,overlay,eye.png,0,0
 
     // 一番上の欄: 無効な純 `bind` 9 のコマも数える（M5）。
     let mut top = PatternState::default();
-    top.set(9, frame(7));
-    assert_eq!(visible(&table, 0, &[], &top), vec![5, 7]);
-    assert_eq!(visible(&table, 0, &[9], &top), vec![5, 7]);
+    top.set(9, frame(7, 0, 0));
+    assert_eq!(visible(&table, 0, &BindSet::default(), &top), vec![5, 7]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([9]), &top),
+        vec![5, 7]
+    );
 
     // 部品の欄: 無効な着せ替え 7 のコマは数えない・random 8 は数える。
     let mut part = PatternState::default();
-    part.set_part(5, 7, frame(6));
-    part.set_part(5, 8, frame(7));
-    assert_eq!(visible(&table, 0, &[], &part), vec![5, 7]);
-    assert_eq!(visible(&table, 0, &[7], &part), vec![5, 6, 7]);
+    part.set_part(5, 7, frame(6, 0, 0));
+    part.set_part(5, 8, frame(7, 0, 0));
+    assert_eq!(visible(&table, 0, &BindSet::default(), &part), vec![5, 7]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([7]), &part),
+        vec![5, 6, 7]
+    );
 
     // 描画メソッドが動かないコマは数えない。
     let mut not_drawn = PatternState::default();
@@ -237,10 +248,10 @@ element0,overlay,eye.png,0,0
         8,
         PatternFrame {
             method: ComposeMethod::Replace,
-            ..frame(7)
+            ..frame(7, 0, 0)
         },
     );
-    assert_eq!(visible(&table, 0, &[], &not_drawn), vec![5]);
+    assert_eq!(visible(&table, 0, &BindSet::default(), &not_drawn), vec![5]);
 }
 
 /// 着せ替えの先は手順の「描く」コマ（0 以上・描画メソッドが動く・欄 2 が animation の番号の語を除く）だけ。
@@ -283,13 +294,18 @@ element0,overlay,eye.png,0,0
         })
     );
     assert_eq!(
-        visible(&table, 0, &[1, 2, 3, 4, 5, 6], &PatternState::default()),
+        visible(
+            &table,
+            0,
+            &BindSet::from_ids([1, 2, 3, 4, 5, 6]),
+            &PatternState::default()
+        ),
         vec![3]
     );
 }
 
 /// seriko-pattern-calls 6.8・M6: 入れ子の辺は着せ替えの手順の「描く」コマから作る。純 `bind` は全部の
-/// コマ（呼び出しの語は除く）、`bind+random` は pattern0 だけ。
+/// コマ（呼び出しの語は除く）。`bind+random` は手順を持たないので、有効でもコマが無ければ数えない（件 26）。
 #[test]
 fn bind_targets_come_from_bind_steps_draws() {
     let text = "\
@@ -328,11 +344,17 @@ element0,overlay,eye.png,0,0
     let table = table_of(text);
     assert_eq!(
         table.parts(0).map(|p| p.bind_targets.clone()),
-        Some(vec![(1, 3), (1, 4), (2, 6)])
+        Some(vec![(1, 3), (1, 4)])
     );
     let empty = PatternState::default();
-    assert_eq!(visible(&table, 0, &[1, 2], &empty), vec![3, 4, 6]);
-    assert_eq!(visible(&table, 0, &[2], &empty), vec![6]);
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([1, 2]), &empty),
+        vec![3, 4]
+    );
+    assert_eq!(
+        visible(&table, 0, &BindSet::from_ids([2]), &empty),
+        Vec::<u32>::new()
+    );
 }
 
 /// 先祖へ戻る辺は進まない（自分自身・相互・コマが一番上へ戻る）。有限で終わる。
@@ -340,16 +362,22 @@ element0,overlay,eye.png,0,0
 fn back_edges_to_ancestors_are_not_followed() {
     let table = fixture_world().nest_table();
     let empty = PatternState::default();
-    assert_eq!(visible(&table, 60, &[], &empty), Vec::<u32>::new());
-    assert_eq!(visible(&table, 61, &[], &empty), vec![62]);
-    assert_eq!(visible(&table, 62, &[], &empty), vec![61]);
+    assert_eq!(
+        visible(&table, 60, &BindSet::default(), &empty),
+        Vec::<u32>::new()
+    );
+    assert_eq!(visible(&table, 61, &BindSet::default(), &empty), vec![62]);
+    assert_eq!(visible(&table, 62, &BindSet::default(), &empty), vec![61]);
 
     // 部品のコマが一番上・途中の先祖を指しても、そこへは戻らない。
     let mut pattern = PatternState::default();
-    pattern.set_part(32, 0, frame(30));
-    pattern.set_part(31, 0, frame(0));
-    pattern.set_part(10, 0, frame(12));
-    assert_eq!(visible(&table, 0, &[], &pattern), vec![10, 12, 30, 31, 32]);
+    pattern.set_part(32, 0, frame(30, 0, 0));
+    pattern.set_part(31, 0, frame(0, 0, 0));
+    pattern.set_part(10, 0, frame(12, 0, 0));
+    assert_eq!(
+        visible(&table, 0, &BindSet::default(), &pattern),
+        vec![10, 12, 30, 31, 32]
+    );
 }
 
 /// 渡された列は先に空にしてから入れる（呼び手の列を使い回す）。
@@ -363,18 +391,13 @@ fn out_is_cleared_and_reused() {
     assert!(out.is_empty());
 }
 
-// ── 合成との一致の檻（task 4.4・要件 3.2・5.11・5.12・5.13・8.3） ──
+// ── 合成との一致の檻（要件 3.2・5.11・5.12・5.13・8.3） ──
 //
-// 規則（`visible_parts`）と合成の再帰（`derive_ops` → `flatten_surface`）は別々に書いてあるので、
+// 規則（`visible_parts`）と合成の平坦化（`derive_ops` → `flatten_surface`）は別々に書いてあるので、
 // 片方だけを変えるとずれる。ここでは両者を同じ面の表・同じ着せ替えの集合・同じコマの状態で動かし、
 // 結論が一致することを全ての（一番上, 部品）の組で確かめる。
 
-/// 目印のサーフェス（どこからも指されない・目印の画像を 1 枚だけ持つ）。
-const MARKER: u32 = 900;
-/// 目印のコマを置く animation の番号（どの文面にも無い番号）。
-const MARK_ANIM: u32 = 9999;
-
-/// 検体と小さな文面で使う画像の名前（どれも 1×1 の不透明）。
+/// 検体と小さな文面で使う画像の名前（どれも 2×2 の不透明）。
 const RELS: &[&str] = &[
     "a.png",
     "b.png",
@@ -413,11 +436,8 @@ impl Case {
         from_defs: usize,
     ) -> Case {
         let text = format!("{text}\nsurface{MARKER}\n{{\nelement0,overlay,marker.png,0,0\n}}\n");
-        let images: BTreeMap<u32, String> =
-            images.iter().map(|(i, p)| (*i, p.to_string())).collect();
-        let mut world = EmoWorld::build_with_images(&parse(&text), &images);
         let atlas = bake_atlas(Path::new("shell/master"), RELS);
-        world.bind_atlas(&atlas, SetId(0));
+        let world = crate::plan_test_support::bound_world(&parse(&text), images, &atlas);
         let table = world.nest_table();
         let binds = binds
             .iter()
@@ -435,23 +455,11 @@ impl Case {
     }
 
     fn ops(&self, top: u32, binds: &BindSet, pattern: &PatternState) -> Vec<BlitOp> {
-        let (mut ops, mut visited) = (Vec::new(), Vec::new());
-        derive_ops(
-            &mut ops,
-            &mut visited,
-            &self.world,
-            &self.atlas,
-            top,
-            binds,
-            pattern,
-        );
-        ops
+        ops(&self.world, &self.atlas, top, binds, pattern)
     }
 
     fn parts(&self, top: u32, binds: &BindSet, pattern: &PatternState) -> Vec<u32> {
-        let mut out = Vec::new();
-        self.table.visible_parts(top, binds, pattern, &mut out);
-        out
+        visible(&self.table, top, binds, pattern)
     }
 
     /// 面の表に在る番号（目印は除く・目印を一番上にすると目印のコマが先祖へ戻る）。
@@ -480,43 +488,10 @@ impl Case {
     }
 }
 
-/// 指定の rel_path 群を焼いた単一セットのアトラス（COM/WIC 非依存）。
-fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
-    let elements: Vec<Element> = rels
-        .iter()
-        .map(|r| Element {
-            layer: 0,
-            path: ElementPath::new(r.to_string()),
-            x: 0,
-            y: 0,
-        })
-        .collect();
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(0)],
-        elements,
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-    let mut dec = MemoryDecoder::new();
-    for r in rels {
-        dec.insert(base.join(r), 1, 1, 4, vec![1, 2, 3, 255], true);
-    }
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let result = bake(&[set], &dec, PackConfig::default());
-    assert!(result.errors.is_empty(), "焼くのは失敗しない");
-    result.table
-}
-
 fn not_drawn(surface_id: u32) -> PatternFrame {
     PatternFrame {
         method: ComposeMethod::Reduce,
-        ..frame(surface_id)
+        ..frame(surface_id, 0, 0)
     }
 }
 
@@ -524,19 +499,19 @@ fn not_drawn(surface_id: u32) -> PatternFrame {
 fn fixture_case() -> Case {
     // 先頭 2 つは pattern定義どおりのコマだけ（10 のまばたき→12・40 の口→41）。
     let mut parts = PatternState::default();
-    parts.set_part(10, 0, frame(12));
-    parts.set_part(40, 0, frame(41));
+    parts.set_part(10, 0, frame(12, 0, 0));
+    parts.set_part(40, 0, frame(41, 0, 0));
     // 一番上のコマが着せ替え 100 の pattern0 を置き換える。
     let mut replaced = parts.clone();
-    replaced.set(100, frame(41));
+    replaced.set(100, frame(41, 0, 0));
     // 一番上の欄の着せ替えでないコマ。
     let mut top_plain = PatternState::default();
-    top_plain.set(0, frame(12));
+    top_plain.set(0, frame(12, 0, 0));
     // 多段の内側・pattern定義の先のさらに先の部品のコマ（先祖へ戻るものを含む）。
     let mut deep = parts.clone();
-    deep.set_part(32, 0, frame(12));
-    deep.set_part(31, 0, frame(0));
-    deep.set_part(41, 0, frame(30));
+    deep.set_part(32, 0, frame(12, 0, 0));
+    deep.set_part(31, 0, frame(0, 0, 0));
+    deep.set_part(41, 0, frame(30, 0, 0));
     // 描画メソッドが動かないコマ。
     let mut reduce = PatternState::default();
     reduce.set(100, not_drawn(41));
@@ -559,6 +534,7 @@ fn fixture_case() -> Case {
 }
 
 /// 子の中の着せ替え・bind+random・random・pattern定義の先の中の子が混ざる文面（循環なし）。
+/// 5 の `bind+random` 7 は pattern0（先 8）を持つ: 有効でコマが無いとき、合成は描かず部品にも数えない。
 fn layered_case() -> Case {
     let text = "\
 surface0
@@ -575,6 +551,7 @@ surface5
 element0,overlay,part.png,0,0
 element1,overlay,7,1,1
 animation7.interval,bind+random,2
+animation7.pattern0,overlay,8,0,0,0
 animation7.pattern1,overlay,6,50,0,0
 animation8.interval,random,2
 animation8.pattern1,overlay,8,50,0,0
@@ -602,14 +579,14 @@ element1,overlay,8,3,3
 }
 ";
     let mut top_random = PatternState::default();
-    top_random.set(3, frame(8));
+    top_random.set(3, frame(8, 0, 0));
     let mut parts = PatternState::default();
-    parts.set_part(5, 8, frame(8));
-    parts.set_part(5, 7, frame(6));
-    parts.set_part(7, 1, frame(9));
+    parts.set_part(5, 8, frame(8, 0, 0));
+    parts.set_part(5, 7, frame(6, 0, 0));
+    parts.set_part(7, 1, frame(9, 0, 0));
     let mut replaced = parts.clone();
-    replaced.set(9, frame(8));
-    replaced.set_part(6, 4, frame(8));
+    replaced.set(9, frame(8, 0, 0));
+    replaced.set_part(6, 4, frame(8, 0, 0));
     let mut reduce = PatternState::default();
     reduce.set_part(5, 7, not_drawn(6));
     reduce.set_part(7, 1, not_drawn(9));
@@ -667,9 +644,9 @@ animation5.pattern0,overlay,20,0,0,0
 }
 ";
     let mut top = PatternState::default();
-    top.set(2, frame(6));
+    top.set(2, frame(6, 0, 0));
     let mut part = PatternState::default();
-    part.set_part(7, 2, frame(6));
+    part.set_part(7, 2, frame(6, 0, 0));
     Case::new(
         "混ざった循環",
         text,
@@ -701,7 +678,7 @@ fn adding_a_part_frame_changes_ops_iff_part_is_visible() {
                     let visible = case.parts(top, binds, pattern);
                     for &x in &ids {
                         let mut marked = pattern.clone();
-                        marked.set_part(x, MARK_ANIM, frame(MARKER));
+                        marked.set_part(x, MARK_ANIM, frame(MARKER, 0, 0));
                         let changed = case.ops(top, binds, &marked) != base;
                         let listed = visible.binary_search(&x).is_ok();
                         assert_eq!(
@@ -746,7 +723,7 @@ fn equivalence_cage_reaches_pattern_targets_and_inner_part_frames() {
 /// 着せ替えの集合から外れた `bind+random` のコマ（一番上の欄・部品の欄）を足しても、命令列も
 /// 部品の列も変わらない（要件 5.12・純 `bind` は M5 で外した）。
 #[test]
-fn inactive_bind_frames_change_neither_ops_nor_parts() {
+fn inactive_bind_random_frames_change_neither_ops_nor_parts() {
     let mut rows = 0;
     for case in cases() {
         let ids = case.ids();
@@ -765,9 +742,9 @@ fn inactive_bind_frames_change_neither_ops_nor_parts() {
                             .filter(|&&b| !binds.contains(b))
                         {
                             let mut added = pattern.clone();
-                            added.set_part(s, b, frame(MARKER));
+                            added.set_part(s, b, frame(MARKER, 0, 0));
                             if s == top {
-                                added.set(b, frame(MARKER));
+                                added.set(b, frame(MARKER, 0, 0));
                             }
                             let at = format!(
                                 "{}: 一番上 {top}・面 {s}・着せ替えの種類 {b}・着せ替え {binds:?}・コマの状態 {k}",
@@ -787,27 +764,19 @@ fn inactive_bind_frames_change_neither_ops_nor_parts() {
 
 /// 合成が先祖へ戻るとして切った element定義の辺（`debug!` の行から）を (親, element, 子) で返す。
 fn cut_element_edges(logs: &str) -> Vec<(u32, u32, u32)> {
-    logs.lines()
-        .filter(|l| l.contains("level=DEBUG") && l.contains("子のサーフェスを置かない"))
+    let cut: String = logs
+        .lines()
         .filter(|l| l.contains("先祖へ戻る参照"))
-        .map(|l| {
-            let field = |name: &str| -> u32 {
-                let start = l.find(&format!(" {name}=")).expect(name) + name.len() + 2;
-                l[start..]
-                    .split(' ')
-                    .next()
-                    .unwrap()
-                    .trim_matches('"')
-                    .parse()
-                    .unwrap()
-            };
-            (field("surface_id"), field("element"), field("child"))
-        })
+        .map(|l| format!("{l}\n"))
+        .collect();
+    skipped(&cut)
+        .into_iter()
+        .map(|(parent, element, child)| (parent, element, child.parse().expect("子の番号")))
         .collect()
 }
 
 /// 合成が実際に切る循環の element定義の辺は、どの一番上から見ても 3.2 の報告に在る（要件 3.2・8.3）。
-/// pattern定義の辺で切る循環（`warn!`）は報告の対象でない。検体と文面では、全ての一番上で切った辺を
+/// pattern定義の辺で切る循環（`debug!`）は報告の対象でない。検体と文面では、全ての一番上で切った辺を
 /// 合わせると報告の循環にちょうどなる。
 #[test]
 fn cut_cycle_edges_from_every_top_are_reported() {
@@ -833,4 +802,56 @@ fn cut_cycle_edges_from_every_top_are_reported() {
         }
         assert_eq!(cut_all, report, "{}: 切った辺の和＝報告の循環", case.name);
     }
+}
+
+/// 行の数が予算に届く面は、合成・外形・持ち込みと同じく部品に数えない（面 1 は予算−1 行で数え、
+/// 面 2 は予算ちょうどの行で数えない）。
+#[test]
+fn surface_with_rows_at_the_budget_is_not_a_visible_part() {
+    let budget = crate::budget::VISIT_BUDGET;
+    let mut text = String::from("surface0\n{\nelement0,overlay,1,0,0\nelement1,overlay,2,0,0\n}\n");
+    for (id, rows) in [(1, budget - 1), (2, budget)] {
+        text.push_str(&format!("surface{id}\n{{\n"));
+        for c in 0..rows {
+            text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+        }
+        text.push_str("}\n");
+    }
+    let world = EmoWorld::build(&parse(&text));
+    let mut out = Vec::new();
+    world
+        .nest_table()
+        .visible_parts(0, &BindSet::default(), &PatternState::default(), &mut out);
+    assert_eq!(out, [1]);
+}
+
+/// 予算に収まらない子が先に並び、小さな兄弟が後ろに並んでも、兄弟は合成で描かれ部品に数えられる
+/// （収まらない子は残りの予算を使わずにその子だけ外す・合成と見える部品が一致する）。同じ子を指す
+/// `always` の経過 0 と有効な純 `bind` の先も部品に数えない。
+#[test]
+fn sibling_after_a_child_over_the_budget_is_drawn_and_visible() {
+    let budget = crate::budget::VISIT_BUDGET;
+    let mut text = String::from(
+        "surface0\n{\nelement0,overlay,2,0,0\nelement1,overlay,1,0,0\n\
+         animation0.interval,always\nanimation0.pattern0,overlay,2,0,0,0\n\
+         animation1.interval,bind\nanimation1.pattern0,overlay,2,0,0,0\n}\n\
+         surface1\n{\nelement0,overlay,p.png,0,0\n}\nsurface2\n{\n",
+    );
+    for c in 0..budget {
+        text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+    }
+    text.push_str("}\n");
+    let atlas = bake_atlas(Path::new("shell/master"), &["p.png"]);
+    let world = crate::plan_test_support::bound_world(&parse(&text), &[], &atlas);
+    let (binds, pattern) = (BindSet::from_ids([1]), PatternState::default());
+    assert_eq!(
+        ops(&world, &atlas, 0, &binds, &pattern).len(),
+        1,
+        "兄弟 1 の絵を描く"
+    );
+    let mut out = Vec::new();
+    world
+        .nest_table()
+        .visible_parts(0, &binds, &pattern, &mut out);
+    assert_eq!(out, [1]);
 }

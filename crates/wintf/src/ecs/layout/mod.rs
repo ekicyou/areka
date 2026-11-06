@@ -108,7 +108,6 @@ use bevy_ecs::prelude::*;
 /// commands.spawn((
 ///     LayoutRoot,
 ///     BoxSize { width: Some(Dimension::Px(800.0)), height: Some(Dimension::Px(600.0)) },
-///     FlexContainer::default(),
 /// ));
 /// ```
 ///

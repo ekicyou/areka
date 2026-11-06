@@ -1,7 +1,7 @@
 //! `EmoWorld`: emo 専用 per-ghost `bevy_ecs` World（wintf 本体 World とは分離）。
 //!
-//! 正規化 Surface 定義の常駐点。`SurfaceIndex`／`AliasMap`／`ShellSettings`／`SurfaceImages`／
-//! `BaseImageReport` をリソースとして、`SurfaceId`／`SurfaceMaster`／`AtlasBinding` を
+//! 正規化 Surface 定義の常駐点。面の表と付随の表（`SurfaceIndex` など・一覧は [`EmoWorld::build`] と
+//! [`EmoWorld::bind_atlas`] が挿すもの）をリソースとして、`SurfaceId`／`SurfaceMaster`／`AtlasBinding` を
 //! コンポーネントとして保持する。スケール前提で
 //! 定義・構造のみを保持し、合成済みビットマップ（大容量）は World に永続保持しない。本 spec では
 //! Schedule/System を持たず、fold/compose が `&mut World`／`&World` を取る受動データストアとして使う。
@@ -14,6 +14,7 @@ use bevy_ecs::world::World;
 
 use crate::base_image::{BaseImageReport, SurfaceImages};
 use crate::normalized::SurfaceMaster;
+use crate::pattern_word::{PatternWord, pattern_word};
 
 /// surface 番号（entity のドメインキー・疎 id の明示・要件 1.1）。
 ///
@@ -25,7 +26,7 @@ pub struct SurfaceId(pub u32);
 /// element と平行なアトラス束縛結果（`resolve` は構築時一度きり・要件 4.3）。
 ///
 /// `SurfaceMaster.elements` と同じ添字で並ぶ `Option<ElementId>`（`None`＝未解決）。
-/// 型スキーマは本 task で定義し、実際の束縛（`bind_atlas`）は AtlasBinder（task 4）が挿入する。
+/// 束縛は [`EmoWorld::bind_atlas`]（`atlas_bind.rs`）が挿入する。
 #[derive(Debug, Clone, PartialEq, Component)]
 pub struct AtlasBinding(pub Vec<Option<areka_emo_atlas::ElementId>>);
 
@@ -54,6 +55,11 @@ pub struct ShellSettings {
     pub collision_sort: Option<SortOrder>,
 }
 
+/// 面の番号 → 外形（[`crate::plan::Extent`]）の表（指摘 8）。[`EmoWorld::bind_atlas`] の最後に 1 度だけ
+/// 作り、以後は読むだけ（束縛の後で外形は変わらないので、合成のたびにたどり直さない）。
+#[derive(Debug, Default, Resource)]
+pub(crate) struct SurfaceExtents(pub(crate) BTreeMap<u32, crate::plan::Extent>);
+
 /// emo 専用 per-ghost `bevy_ecs` World（wintf 本体 World とは分離・要件 1.8/10.4）。
 ///
 /// surface 1件＝entity 1件で正規化 Surface 定義を常駐させ、公開クエリを提供する受動データ
@@ -67,8 +73,9 @@ pub struct EmoWorld {
     world: World,
 }
 
-/// 面の表を組む段の記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// 面の表を組む段の記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。面の表のリソースにも置き、
+/// 後から面の表を読む畳み込み（箱の [`crate::fold_boxes`]）が同じ組み方を引く（黙らせる組み方の面の表なら箱の記録も出さない）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Resource)]
 pub(crate) enum Records {
     Emit,
     Quiet,
@@ -120,17 +127,26 @@ impl EmoWorld {
             collision_sort: shell.collision_sort.clone(),
         });
         world.insert_resource(SurfaceImages(images.clone()));
+        world.insert_resource(records);
 
         let mut emo = EmoWorld { world };
         emo.populate_from_shell(shell, records);
         let report = crate::base_image::apply_base_images(&mut emo.world, images, records);
         emo.world.insert_resource(report);
         // 子の当たり判定の領域を親へ持ち込む（持ち込みが在るサーフェスにだけ付く・要件 4.1〜4.10）。
-        crate::hit_import::attach_hit_regions(&mut emo);
+        crate::hit_import::attach_hit_regions(&mut emo, records);
         // 着せ替えの描く手順は面の表が出来上がった後に 1 度だけ作る（seriko-pattern-calls 6.8）。
         let steps = crate::bind_steps::BindSteps::build(&emo);
         emo.world.insert_resource(steps);
         emo
+    }
+
+    /// 面の表を組んだときの記録の出し分け（[`EmoWorld::build_with_images_quiet`] なら `Quiet`）。
+    pub(crate) fn records(&self) -> Records {
+        self.world
+            .get_resource::<Records>()
+            .copied()
+            .unwrap_or(Records::Emit)
     }
 
     /// 面 `surface` の着せ替え animation `animation` の描く手順（`bind` 種でなければ空）。
@@ -167,8 +183,9 @@ impl EmoWorld {
     /// 相手の面が存在しないコマの「(コマを持つ面, 相手の番号)」の集合（要件 3.5）。
     ///
     /// 母集合は全部の面の全部の `animation` の全部の `pattern` のうち、`surface_id` が 0 以上で、
-    /// かつ描画メソッドが `start`・`stop`・`alternativestart`・`alternativestop`・`parallelstart`・
-    /// `parallelstop`・`insert` の 7 語（欄 2 がアニメーションの番号になる）のどれでもない。停止を表す
+    /// かつ描画メソッドが 8 語（欄 2 がアニメーションの番号になる `start`・`stop`・`alternativestart`・
+    /// `alternativestop`・`parallelstart`・`parallelstop`・`insert` の 7 語と、サーフェスの番号を無視する
+    /// `move`）のどれでもない（見分けは [`pattern_word`] の 1 本・外形と入れ子の辺と同じ）。停止を表す
     /// 負の番号（`-1`・`-2`）は相手に数えない。画像だけで存在する面は、構築のときに面の表へ
     /// 載っているので「在る」に数える（[`EmoWorld::build_with_images`]）。
     ///
@@ -184,7 +201,7 @@ impl EmoWorld {
             };
             for animation in &master.animations {
                 for pattern in &animation.patterns {
-                    if targets_animation_id(pattern.method.as_str()) {
+                    if pattern_word(pattern.method.as_str()) != PatternWord::Draw {
                         continue;
                     }
                     let Ok(target) = u32::try_from(pattern.surface_id) else {
@@ -215,9 +232,8 @@ impl EmoWorld {
     /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
-    /// plain `surface` ヘッダの展開（無い id は新設・既にある id へは行を足す・task 3.2、
-    /// spec: areka-P0-emily-ghost-verification）は [`crate::fold::fold_shell_with`] が担う。
-    /// append/alias の意味論は後続 task が同 fold 経路へ差し込む。
+    /// plain `surface` ヘッダの展開（無い id は新設・既にある id へは行を足す）・append・alias は
+    /// [`crate::fold::fold_shell_with`] が 1 度の畳み込みで担う。
     fn populate_from_shell(&mut self, shell: &Shell, records: Records) {
         crate::fold::fold_shell_with(&mut self.world, shell, records);
     }
@@ -226,12 +242,14 @@ impl EmoWorld {
     ///
     /// `build` 後・compose 前に一度呼ぶ（design Preconditions）。全 surface entity の
     /// `SurfaceMaster.elements` を `AtlasTable::resolve` で `ElementId` へ解決し、平行な
-    /// [`AtlasBinding`] を各 entity へ挿入する。未解決 element はパニックせず `warn`＋`None`。
+    /// [`AtlasBinding`] を各 entity へ挿入する。未解決 element はパニックせず `debug!`＋`None`（脱落は読み込みの入口が error で 1 度出している）。
     /// 束縛後の compose 経路に `resolve` は現れない（毎フレーム O(1) の `entry` 引き）。
     ///
     /// 束縛の次に動く絵を子へ分解する（[`crate::film`]・要件 1.1〜1.4）。**同じ面の表に呼ぶのは
     /// 1 度だけ**（2 度目は画像でなくなった element を束縛し直さず、子の定義が古いアトラスのまま
     /// 残る）。
+    ///
+    /// 最後に全部の面の外形を求めて表（[`SurfaceExtents`]）に置く（指摘 8・合成とシェルの外形はそこから引く）。
     pub fn bind_atlas(&mut self, atlas: &areka_emo_atlas::AtlasTable, set: areka_emo_atlas::SetId) {
         debug_assert!(
             self.world
@@ -243,6 +261,17 @@ impl EmoWorld {
         );
         crate::atlas_bind::bind_atlas(&mut self.world, atlas, set);
         crate::film::decompose(&mut self.world, atlas);
+        let extents = crate::plan::build_extents(self, atlas);
+        self.world.insert_resource(extents);
+    }
+
+    /// 面 `id` の外形（束縛のときに求めた表から引く）。表に無い（[`EmoWorld::bind_atlas`] の前・面が無い）
+    /// なら 0×0。
+    pub(crate) fn extent(&self, id: u32) -> crate::plan::Extent {
+        self.world
+            .get_resource::<SurfaceExtents>()
+            .and_then(|t| t.0.get(&id).copied())
+            .unwrap_or(crate::plan::Extent { w: 0, h: 0 })
     }
 
     /// 動く絵の子の定義（無ければ `None`）。`ElementKind::Film(id)` の element が在れば必ず `Some`。
@@ -308,13 +337,15 @@ impl EmoWorld {
         }
     }
 
-    /// 実効 animation ソート順（未指定は ukadoc 既定 `Descend`・要件 1.6/5.6）。
-    pub fn animation_sort(&self) -> SortOrder {
+    /// 実効 animation ソート順（未指定は ukadoc 既定 `Descend`・要件 1.6/5.6）。合成のたびに読むので
+    /// 写さずに借りる（知らない値でも確保しない・指摘 135）。
+    pub fn animation_sort(&self) -> &SortOrder {
+        static DESCEND: SortOrder = SortOrder::Descend;
         self.world
             .resource::<ShellSettings>()
             .animation_sort
-            .clone()
-            .unwrap_or(SortOrder::Descend)
+            .as_ref()
+            .unwrap_or(&DESCEND)
     }
 
     /// 実効 collision ソート順（未指定は `None`＝記述順・要件 1.6/5.6）。
@@ -325,35 +356,15 @@ impl EmoWorld {
             .clone()
     }
 
-    /// 将来の seriko system 統合用の脱出口（本 spec では未使用・design 決定3）。
+    /// 中の `World` を読む口（`atlas_bind.rs`・`plan.rs` が面の component を引く・design 決定3）。
     pub fn world(&self) -> &World {
         &self.world
     }
 
-    /// 将来の seriko system 統合用の脱出口（可変・fold/bind が `&mut World` を受ける口）。
+    /// 中の `World` を書く口（`hit_import.rs` が当たり判定の領域を面へ書く）。
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
-}
-
-/// コマの欄 2 が面の番号ではなくアニメーションの番号になる描画メソッドか（要件 3.5）。
-///
-/// ukadoc `descript_shell_surfaces` が「サーフェスID…は無視される」と書く `start`・`stop`・
-/// `alternativestart`・`alternativestop`・`parallelstart`・`parallelstop` の 6 語と、着せ替え
-/// グループを挿す `insert` の計 7 語。転記層（`decode_animations`）はメソッドに関係なく欄 2 を
-/// `surface_id` へ入れるので、除かないと正しく書かれたシェルが相手の無いコマとして数えられる。
-///
-/// 綴りの比べ方は [`ComposeMethod::from_name`] と同じ（前後の空白を落とし・小文字にし・`-` と
-/// `_` を除く）。`from_name` は未知の語で `warn!` を出すので、この判定からは呼ばない
-/// （[`EmoWorld::dangling_pattern_targets`] は記録を出さない）。
-///
-/// [`ComposeMethod::from_name`]: crate::method::ComposeMethod::from_name
-pub(crate) fn targets_animation_id(method: &str) -> bool {
-    // 語の見分けは `pattern_word` 1 か所に置く（記録を出さない・綴りの比べ方は
-    // `ComposeMethod::from_name` と同じ）。上流の emo-atlas `manifest.rs` の `bind_only_paths` が
-    // 8 語と正規化を写して持つ（emo-atlas は emo-compose を参照できない）。ここを変えたらそちらも直す。
-    use crate::pattern_word::{PatternWord, pattern_word};
-    !matches!(pattern_word(method), PatternWord::Draw | PatternWord::Move)
 }
 
 // 記録を出さない組み方の入口の檻（spec: emo-bake-log-overlap 要件 2.1・2.3・3.2・3.4）。
@@ -390,7 +401,7 @@ mod tests {
     #[test]
     fn default_sort_orders() {
         let world = EmoWorld::build(&empty_shell());
-        assert_eq!(world.animation_sort(), SortOrder::Descend);
+        assert_eq!(world.animation_sort(), &SortOrder::Descend);
         assert_eq!(world.collision_sort(), None);
     }
 
@@ -401,7 +412,7 @@ mod tests {
         shell.animation_sort = Some(SortOrder::Ascend);
         shell.collision_sort = Some(SortOrder::Descend);
         let world = EmoWorld::build(&shell);
-        assert_eq!(world.animation_sort(), SortOrder::Ascend);
+        assert_eq!(world.animation_sort(), &SortOrder::Ascend);
         assert_eq!(world.collision_sort(), Some(SortOrder::Descend));
     }
 
@@ -412,23 +423,12 @@ mod tests {
         assert_eq!(world.resolve_alias("nope"), None);
     }
 
-    /// emo2 fixture（実上流シェル）の `surfaces.txt` を UTF-8 で読み parse して `Shell` を得る。
-    ///
-    /// `fold.rs` の `emo2_shell()` と同一の読込経路（`read_to_string`＋`areka_parsers::shell::parse`）。
-    /// COM／WIC／atlas bake は経由しない純粋な parse ゆえ headless で走る。
-    fn emo2_shell() -> Shell {
-        let path = crate::sample_test_support::emo2_root().join("shell/master/surfaces.txt");
-        let content = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
-        areka_parsers::shell::parse(&content)
-    }
-
     /// `alias_snapshot()` が返す所有 `BTreeMap` は、同一 `EmoWorld` の全キーに対し
     /// 借用ベース `resolve_alias(key)` と完全一致する（スナップショットが `AliasMap` から
     /// 静かにドリフトしないための檻・要件 2.2/2.3/7.3）。
     #[test]
     fn alias_snapshot_matches_resolve_alias() {
-        let world = EmoWorld::build(&emo2_shell());
+        let world = EmoWorld::build(&crate::sample_test_support::emo2_shell());
         let snap = world.alias_snapshot();
 
         // 非自明性: emo2 は alias を含む（空マップの vacuous pass を防ぐ）。

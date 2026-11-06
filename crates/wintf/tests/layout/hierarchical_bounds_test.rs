@@ -1,6 +1,5 @@
 // Task 7.1: 階層的バウンディングボックス計算の統合テスト
 
-use windows_numerics::Matrix3x2;
 use wintf::ecs::{Arrangement, GlobalArrangement, LayoutScale, Offset, Size};
 
 /// 3階層のWidgetツリーでの階層的bounds計算をテスト
@@ -19,15 +18,6 @@ fn test_hierarchical_bounds_calculation() {
     };
     let parent_global: GlobalArrangement = parent_arr.into();
 
-    // 親のbounds検証
-    // local_bounds = (0,0,100,50) ← 原点基準
-    // transform = scale(2,2) + translate(20,40) (scaleされたoffset: 10*2=20, 20*2=40)
-    // bounds = (0,0,100,50) * scale(2,2) + translate(20,40) = (20,40,220,140)
-    assert_eq!(parent_global.bounds.left, 20.0);
-    assert_eq!(parent_global.bounds.top, 40.0);
-    assert_eq!(parent_global.bounds.right, 220.0);
-    assert_eq!(parent_global.bounds.bottom, 140.0);
-
     // 子ウィジェット（レベル1）
     // Position: (5, 10), Scale: (1.0, 1.0), Size: (30, 20)
     let child_arr = Arrangement {
@@ -41,16 +31,18 @@ fn test_hierarchical_bounds_calculation() {
     let child_global = parent_global * child_arr;
 
     // 子のbounds検証（親の変換適用後）
-    // 新ロジック: 子のoffsetに親のスケールを適用
-    // parent.bounds.left = 20 (10*2)
+    // 子のoffsetに親のスケールを適用。親の無い根のずらしは自分の倍率で伸ばさない
+    // parent.bounds.left = 10・top = 20（offset のまま）
     // child.offset = (5, 10), parent.scale = (2, 2)
     // scaled_child_offset = (5*2, 10*2) = (10, 20)
-    // child.bounds.left = 20 + 10 = 30
-    // child.bounds.right = 30 + 30*2 = 90 (size 30 * parent_scale 2)
-    assert_eq!(child_global.bounds.left, 30.0);
-    assert_eq!(child_global.bounds.top, 60.0);
-    assert_eq!(child_global.bounds.right, 90.0);
-    assert_eq!(child_global.bounds.bottom, 100.0);
+    // child.bounds.left = 10 + 10 = 20・top = 20 + 20 = 40
+    // child.bounds.right = 20 + 30*2 = 80 (size 30 * parent_scale 2)・bottom = 40 + 20*2 = 80
+    assert_eq!(parent_global.bounds.left, 10.0);
+    assert_eq!(parent_global.bounds.top, 20.0);
+    assert_eq!(child_global.bounds.left, 20.0);
+    assert_eq!(child_global.bounds.top, 40.0);
+    assert_eq!(child_global.bounds.right, 80.0);
+    assert_eq!(child_global.bounds.bottom, 80.0);
 
     // 孫ウィジェット（レベル2）
     // Position: (2, 3), Scale: (1.5, 1.5), Size: (10, 8)
@@ -66,81 +58,17 @@ fn test_hierarchical_bounds_calculation() {
 
     // 孫のbounds検証（親と子の累積変換適用後）
     // 新ロジック: 孫のoffsetに親（child）のスケールを適用
-    // child.bounds.left = 30
+    // child.bounds.left = 20・top = 40
     // child.transform.M11 = 2 (累積スケール)
     // grandchild.offset = (2, 3)
     // scaled_offset = (2*2, 3*2) = (4, 6)
-    // grandchild.bounds.left = 30 + 4 = 34
+    // grandchild.bounds.left = 20 + 4 = 24・top = 40 + 6 = 46
     // result.M11 = 2 * 1.5 = 3
-    // grandchild.bounds.right = 34 + 10*3 = 64
-    assert_eq!(grandchild_global.bounds.left, 34.0);
-    assert_eq!(grandchild_global.bounds.top, 66.0);
-    assert_eq!(grandchild_global.bounds.right, 64.0);
-    assert_eq!(grandchild_global.bounds.bottom, 90.0);
-}
-
-/// From<Arrangement>実装が正しくboundsを設定することを確認
-#[test]
-fn test_global_arrangement_from_arrangement() {
-    let arrangement = Arrangement {
-        offset: Offset { x: 0.0, y: 0.0 },
-        scale: LayoutScale { x: 1.0, y: 1.0 },
-        size: Size {
-            width: 50.0,
-            height: 50.0,
-        },
-    };
-
-    let global: GlobalArrangement = arrangement.into();
-
-    // transform: identity
-    assert_eq!(global.transform, Matrix3x2::identity());
-
-    // bounds: left=0, top=0, right=50, bottom=50
-    assert_eq!(global.bounds.left, 0.0);
-    assert_eq!(global.bounds.top, 0.0);
-    assert_eq!(global.bounds.right, 50.0);
-    assert_eq!(global.bounds.bottom, 50.0);
-}
-
-/// Mul<Arrangement>実装が正しくboundsを計算することを確認
-#[test]
-fn test_global_arrangement_mul_arrangement() {
-    let parent = Arrangement {
-        offset: Offset { x: 10.0, y: 15.0 },
-        scale: LayoutScale { x: 1.0, y: 1.0 },
-        size: Size {
-            width: 20.0,
-            height: 25.0,
-        },
-    };
-    let parent_global: GlobalArrangement = parent.into();
-
-    let child = Arrangement {
-        offset: Offset { x: 5.0, y: 10.0 },
-        scale: LayoutScale { x: 1.0, y: 1.0 },
-        size: Size {
-            width: 10.0,
-            height: 10.0,
-        },
-    };
-
-    let child_global = parent_global * child;
-
-    // transform: parent_transform * child_transform
-    // parent: offset(10, 15), scale(1, 1)
-    // child: offset(5, 10), scale(1, 1)
-    // result: offset(10+5, 15+10) = (15, 25), scale(1, 1)
-    assert_eq!(child_global.transform.M31, 15.0);
-    assert_eq!(child_global.transform.M32, 25.0);
-
-    // bounds: child.local_bounds() transformed by result_transform
-    // child.local_bounds(): (0, 0, 10, 10) - 原点基準
-    // transformed: (15, 25, 25, 35)
-    assert_eq!(child_global.bounds.left, 15.0);
-    assert_eq!(child_global.bounds.top, 25.0);
-    assert_eq!(child_global.bounds.right, 25.0);
-    assert_eq!(child_global.bounds.bottom, 35.0);
+    // grandchild.bounds.right = 24 + 10*3 = 54・bottom = 46 + 8*3 = 70
+    assert_eq!(grandchild_global.bounds.left, 24.0);
+    assert_eq!(grandchild_global.bounds.top, 46.0);
+    assert_eq!(grandchild_global.bounds.right, 54.0);
+    assert_eq!(grandchild_global.bounds.bottom, 70.0);
 }
 
 /// スケール変換のみのテスト

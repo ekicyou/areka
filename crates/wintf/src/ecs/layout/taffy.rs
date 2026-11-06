@@ -77,10 +77,13 @@ impl TaffyLayoutResource {
     }
 
     /// エンティティに対応するレイアウトノードを削除する
+    ///
+    /// 木から先に消し、消せたときだけ対応を消す（失敗しても対応の無い節を残さない）。
     pub fn remove_node(&mut self, entity: Entity) -> Result<(), TaffyError> {
-        if let Some(node_id) = self.entity_to_node.remove(&entity) {
-            self.node_to_entity.remove(&node_id);
+        if let Some(&node_id) = self.entity_to_node.get(&entity) {
             self.tree.remove(node_id)?;
+            self.entity_to_node.remove(&entity);
+            self.node_to_entity.remove(&node_id);
         }
         Ok(())
     }

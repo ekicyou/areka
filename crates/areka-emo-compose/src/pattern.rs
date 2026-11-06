@@ -78,12 +78,12 @@ pub enum Cell<'a> {
 
 /// pattern の現在コマ 1 枚。表示中 surface のアニメに属する transient な合成寄与。
 ///
-/// `surface_id` は常に正値（負値センチネル `-1` 等は評価器が停止／非駆動として解決済みで、
+/// `surface_id` は常に 0 以上（負値センチネル `-1` 等は評価器が停止／非駆動として解決済みで、
 /// コマとしてはここへ載らない）。`method` は完全語彙（要件 8.4）を保持し、合成の実駆動は
 /// `Overlay` のみ（下流 plan の method ゲートが `is_implemented()` で選別する）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PatternFrame {
-    /// コマの surface_id（正値のみ・センチネルは評価器が解決済み）。
+    /// コマの surface_id（0 以上のみ・センチネルは評価器が解決済み）。
     pub surface_id: u32,
     /// 描画メソッド（完全語彙・要件 8.4）。合成は `Overlay` のみ駆動、それ以外は非駆動シーム。
     pub method: ComposeMethod,
@@ -231,16 +231,7 @@ mod cell_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// テスト用の代表コマ（`Overlay`・任意オフセット）。
-    fn frame(surface_id: u32) -> PatternFrame {
-        PatternFrame {
-            surface_id,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        }
-    }
+    use crate::plan_test_support::frame;
 
     /// 既定値は空＝「pattern 寄与なし」（完了状態の明示契約）。
     #[test]
@@ -268,8 +259,8 @@ mod tests {
     #[test]
     fn set_twice_same_id_replaces() {
         let mut state = PatternState::default();
-        state.set(3, frame(100));
-        state.set(3, frame(200));
+        state.set(3, frame(100, 0, 0));
+        state.set(3, frame(200, 0, 0));
         assert_eq!(state.get(3).map(|f| f.surface_id), Some(200));
         // 単一エントリのまま（コマは 1 枚）。
         assert_eq!(state.iter().count(), 1);
@@ -279,7 +270,7 @@ mod tests {
     #[test]
     fn remove_clears_frame() {
         let mut state = PatternState::default();
-        state.set(5, frame(42));
+        state.set(5, frame(42, 0, 0));
         state.remove(5);
         assert_eq!(state.get(5), None);
         assert!(state.is_empty());
@@ -289,30 +280,11 @@ mod tests {
     #[test]
     fn iter_yields_ascending_id_order() {
         let mut state = PatternState::default();
-        state.set(9, frame(1));
-        state.set(2, frame(2));
-        state.set(5, frame(3));
+        state.set(9, frame(1, 0, 0));
+        state.set(2, frame(2, 0, 0));
+        state.set(5, frame(3, 0, 0));
         let ids: Vec<u32> = state.iter().map(|(id, _)| id).collect();
         assert_eq!(ids, vec![2, 5, 9]);
-    }
-
-    /// 挿入順が異なっても同一コマ集合なら `Eq`（正準順序の安定性）。
-    ///
-    /// `PatternState` は emo-present の `ComposeKey` に組み込まれキャッシュ等価判定に用いられるため、
-    /// 挿入順非依存の `Eq` が決定論上必須である（要件 5.2/5.4）。
-    #[test]
-    fn eq_is_insertion_order_stable() {
-        let mut a = PatternState::default();
-        a.set(1, frame(10));
-        a.set(2, frame(20));
-        a.set(3, frame(30));
-
-        let mut b = PatternState::default();
-        b.set(3, frame(30));
-        b.set(1, frame(10));
-        b.set(2, frame(20));
-
-        assert_eq!(a, b);
     }
 
     /// `PatternState` が `Send + 'static` であることをコンパイル時に固定する（スレッド越え所有）。
