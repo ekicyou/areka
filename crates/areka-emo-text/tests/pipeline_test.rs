@@ -31,7 +31,7 @@ use std::rc::Rc;
 
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::TextRegion;
-use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg};
+use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use areka_emo_text::state::TextLayerState;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{
@@ -54,7 +54,7 @@ fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
 /// 受信から状態適用までを実 channel で通す 1 インスタンス分のパイプライン実行。
 ///
 /// 専用スレッド（＝このインスタンスの UI/pump スレッド）上で:
-/// 1. `spawn_ui` の drain（handler は [`handle_text_msg`] へ委譲し `TextLayerState::apply_cue`
+/// 1. `spawn_ui` の drain（handler は [`handle_text_msg_with`] へ委譲し `TextLayerState::apply_cue`
 ///    で状態適用）を起動し、
 /// 2. ワーカースレッドから [`EmoTextSink::emit`] で cue 列を FIFO 送出（受信端は
 ///    ワーカー側・R1.3 の形）し、
@@ -69,10 +69,15 @@ fn run_channel_pipeline(cues: Vec<TalkCue>) -> TextLayerState {
         let (tx, _detached_drain) = areka_actor::spawn_ui(
             "emo-text-pipeline-test",
             move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
-                handle_text_msg(msg, |cue| {
-                    shared.borrow_mut().apply_cue(&cue);
-                    Ok(())
-                })
+                handle_text_msg_with(
+                    msg,
+                    |cue, _| {
+                        shared.borrow_mut().apply_cue(&cue);
+                        Ok(())
+                    },
+                    |_| Ok(()),
+                    |_| Ok(()),
+                )
             },
         )
         .expect("spawn_ui on the pipeline pump thread must succeed");

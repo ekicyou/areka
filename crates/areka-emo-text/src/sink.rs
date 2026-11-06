@@ -20,7 +20,7 @@ use dola::cue::CueProbe;
 /// UI ドレインへの搬送 envelope（`Send + 'static`・design.md 結線層 正本）。
 ///
 /// [`EmoTextSink`] が worker スレッドから積み、UI ドレイン（`spawn_ui` の drain タスク）が
-/// [`handle_text_msg`] で写像する。cue と終了指示を同一 FIFO 口で運ぶことで、
+/// [`handle_text_msg_with`] で写像する。cue と終了指示を同一 FIFO 口で運ぶことで、
 /// 「Close より前に積まれた cue は必ず先に処理される」順序保証を channel に委ねる。
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextMsg {
@@ -169,32 +169,18 @@ impl dola::cue::CueSink for EmoTextSink {
 
 /// 終了規律の正準写像（design.md 結線層——drain handler の器）。
 ///
-/// UI ドレインの handler は本関数へ委譲し、cue の処理（状態機械適用等）だけを `on_cue` で
-/// 差し込む（[`TextMsg::ProbedCue`] も口を捨てて `on_cue` へ渡す）。終了経路はちょうど 2 つ（R1.4 相当）:
+/// cue の処理（状態機械適用等）を `on_cue`、先渡し（[`TextMsg::Upcoming`]）を `on_upcoming`、
+/// トークの印（[`TextMsg::TalkEnded`]・[`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）を
+/// `on_talk_mark` で差し込む。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
+/// 終了経路はちょうど 2 つ（R1.4 相当）:
 ///
-/// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（`on_cue` は呼ばれない・
+/// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（受け取りはどれも呼ばれない・
 ///   基盤 `spawn_ui` が error ログなしで drain を終了する）。
 /// - 全 [`UiSender`]（＝全 [`EmoTextSink`] クローン）drop → drain の `recv` が閉じて正常終了
 ///   （本関数の外・基盤の規約）。
 ///
-/// 個別 cue の処理失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
+/// 受け取りの失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
 /// **失敗は終了経路ではない**・ループを殺さない）。
-///
-/// 先渡し（[`TextMsg::Upcoming`]）・トークの終わり（[`TextMsg::TalkEnded`]）・選択待ちの始まり
-/// （[`TextMsg::ChoiceWaitBegan`]）は読み飛ばす（字は `Cue` で届くので失われない）。
-/// これらを使う取り出しは [`handle_text_msg_with`] を用いる。
-pub fn handle_text_msg<E>(
-    msg: TextMsg,
-    on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
-) -> Result<ControlFlow<()>, E> {
-    handle_text_msg_with(msg, |cue, _| on_cue(cue), |_| Ok(()), |_| Ok(()))
-}
-
-/// [`handle_text_msg`] に先渡しの受け取り `on_upcoming` と、トークの印（[`TextMsg::TalkEnded`]・
-/// [`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）の受け取り `on_talk_mark` を差し込める形
-/// （終了規律は同じ）。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
-///
-/// 先渡し・印の受け取りの失敗も `Err` として返し、基盤が `error!`＋継続する。
 pub fn handle_text_msg_with<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue, Option<CueProbe>) -> Result<(), E>,
@@ -223,7 +209,7 @@ mod tests {
     use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
     use log_capture_kit::count_levels;
 
-    use super::{EmoTextSink, TextMsg, handle_text_msg, handle_text_msg_with};
+    use super::{EmoTextSink, TextMsg, handle_text_msg_with};
     use crate::actor::test_support::{cue, pump_until_idle, spawn_message_drain};
 
     // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
@@ -262,7 +248,7 @@ mod tests {
 
     /// 記録 handler で `spawn_ui` し、`(sink, terminated, records)` を返す。
     ///
-    /// - handler は [`handle_text_msg`]（終了規律の正準写像）へ委譲し、cue を `records` へ
+    /// - handler は [`handle_text_msg_with`]（終了規律の正準写像）へ委譲し、cue を `records` へ
     ///   push する（＝「描画を担う側」への配送先スタンドイン。状態機械適用は task 7.2 の領分）。
     /// - `poison` が指す本文の Text cue は `Err` を返す（個別配送失敗の再現・R1.5）。
     /// - 本テストスレッドが pump スレッドを演じる（`spawn_ui` と pump は同一スレッド必須）。
@@ -278,15 +264,20 @@ mod tests {
             move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
                 // センチネルを handler クロージャへ捕捉（drain future の drop で flag が立つ）。
                 let _hold = &sentinel;
-                handle_text_msg(msg, |cue| {
-                    if let (Some(p), CueCommand::Text(text)) = (poison, &cue.command) {
-                        if text == p {
-                            return Err(format!("poison cue rejected: {text}"));
+                handle_text_msg_with(
+                    msg,
+                    |cue, _| {
+                        if let (Some(p), CueCommand::Text(text)) = (poison, &cue.command) {
+                            if text == p {
+                                return Err(format!("poison cue rejected: {text}"));
+                            }
                         }
-                    }
-                    recs.lock().expect("records lock").push(cue);
-                    Ok(())
-                })
+                        recs.lock().expect("records lock").push(cue);
+                        Ok(())
+                    },
+                    |_| Ok(()),
+                    |_| Ok(()),
+                )
             },
         )
         .expect("spawn_ui on the test (pump) thread must succeed");
@@ -306,15 +297,18 @@ mod tests {
         assert_cue_sink_contract::<EmoTextSink>();
     }
 
-    // ── 終了規律の正準写像（handle_text_msg・純粋部） ──
+    // ── 終了規律の正準写像（handle_text_msg_with・純粋部） ──
 
     /// `TextMsg::Close` → `Ok(Break)`（終了指示＝クリーン終了経路・R1.4 相当の写像）。
     /// on_cue は呼ばれない。
     #[test]
     fn handle_text_msg_maps_close_to_break() {
-        let result = handle_text_msg::<String>(TextMsg::Close, |_| {
-            panic!("on_cue must not be called for Close")
-        });
+        let result = handle_text_msg_with::<String>(
+            TextMsg::Close,
+            |_, _| panic!("on_cue must not be called for Close"),
+            |_| panic!("on_upcoming must not be called for Close"),
+            |_| panic!("on_talk_mark must not be called for Close"),
+        );
         assert_eq!(result, Ok(ControlFlow::Break(())));
     }
 
@@ -323,10 +317,15 @@ mod tests {
     fn handle_text_msg_delivers_cue_and_continues() {
         let delivered = std::cell::RefCell::new(None);
         let sent = cue("0", 1.5, CueCommand::Text("アヒル".into()));
-        let result = handle_text_msg::<String>(TextMsg::Cue(sent.clone()), |c| {
-            *delivered.borrow_mut() = Some(c);
-            Ok(())
-        });
+        let result = handle_text_msg_with::<String>(
+            TextMsg::Cue(sent.clone()),
+            |c, _| {
+                *delivered.borrow_mut() = Some(c);
+                Ok(())
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        );
         assert_eq!(result, Ok(ControlFlow::Continue(())));
         assert_eq!(
             delivered.into_inner(),
@@ -339,9 +338,11 @@ mod tests {
     /// Break にはしない＝失敗は終了経路ではない）。
     #[test]
     fn handle_text_msg_propagates_cue_failure_as_err() {
-        let result = handle_text_msg(
+        let result = handle_text_msg_with(
             TextMsg::Cue(cue("0", 0.0, CueCommand::Clear)),
-            |_| -> Result<(), String> { Err("delivery failed".into()) },
+            |_, _| -> Result<(), String> { Err("delivery failed".into()) },
+            |_| Ok(()),
+            |_| Ok(()),
         );
         assert_eq!(result, Err("delivery failed".to_string()));
     }
@@ -476,17 +477,7 @@ mod tests {
 
     // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・要件 2.1） ──
 
-    /// 今の形 `handle_text_msg` は先渡しを読み飛ばす（`Ok(Continue)`・on_cue は呼ばれない）。
-    #[test]
-    fn handle_text_msg_skips_upcoming() {
-        let result = handle_text_msg::<String>(
-            TextMsg::Upcoming(vec![cue("0", 0.0, CueCommand::Clear)]),
-            |_| panic!("on_cue must not be called for Upcoming"),
-        );
-        assert_eq!(result, Ok(ControlFlow::Continue(())));
-    }
-
-    /// 新しい形 `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
+    /// `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
     #[test]
     fn handle_text_msg_with_routes_upcoming_and_propagates_failure() {
         let list = vec![cue("0", 0.0, CueCommand::Text("アヒル".into()))];

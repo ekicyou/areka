@@ -16,7 +16,7 @@ use std::rc::Rc;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
 use log_capture_kit::count_levels;
 
-use super::{EmoTextSink, TextMsg, handle_text_msg, handle_text_msg_with};
+use super::{EmoTextSink, TextMsg, handle_text_msg_with};
 use crate::actor::test_support::{balloon, choice, instant, pump_until_idle, spawn_message_drain};
 use crate::actor::{TextLayerRuntime, spawn_emo_text};
 use crate::state::TextLayerConfig;
@@ -94,13 +94,22 @@ fn choice_wait_began_arrives_in_the_same_order_as_cues() {
     drop(original);
 }
 
-/// 2 つの受け口の形（`handle_text_msg`）は終わりと始まりを読み飛ばす（`on_cue` は呼ばれない）。
+/// 終わりと始まりは 4 つ目の受け口へそのまま渡り、`on_cue` は呼ばれない。
 #[test]
-fn two_receiver_shape_skips_talk_end_and_choice_wait_began() {
+fn talk_marks_route_to_fourth_receiver_only() {
     for msg in [TextMsg::TalkEnded, TextMsg::ChoiceWaitBegan] {
-        let result =
-            handle_text_msg::<String>(msg, |_| panic!("on_cue must not be called for marks"));
+        let got = std::cell::RefCell::new(None);
+        let result = handle_text_msg_with::<String>(
+            msg.clone(),
+            |_, _| panic!("on_cue must not be called for marks"),
+            |_| panic!("on_upcoming must not be called for marks"),
+            |m| {
+                *got.borrow_mut() = Some(m);
+                Ok(())
+            },
+        );
         assert_eq!(result, Ok(ControlFlow::Continue(())));
+        assert_eq!(got.into_inner(), Some(msg), "印は無変形で渡る");
     }
 }
 
