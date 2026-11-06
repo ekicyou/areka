@@ -106,7 +106,16 @@ fn fill(world: &mut World, root: Entity) -> Vec<(Entity, usize)> {
     let mut state: SystemState<Query<FillData>> = SystemState::new(world);
     let mut nodes = state.get_mut(world).unwrap();
     let mut visited = Vec::new();
-    fill_world_visuals(root, None, &mut nodes, false, &top, false, &mut visited);
+    fill_world_visuals(
+        root,
+        None,
+        &mut nodes,
+        false,
+        &top,
+        false,
+        &mut visited,
+        &mut Default::default(),
+    );
     visited
 }
 

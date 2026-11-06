@@ -188,6 +188,7 @@ pub(crate) fn tree_commands(
         &top,
         false,
         &mut visited,
+        &mut Default::default(),
     );
 
     let viewport = viewport.unwrap_or_else(|| {

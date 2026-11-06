@@ -5,6 +5,7 @@ use crate::ecs::graphics::systems::format_entity_name;
 use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
+use std::collections::HashSet;
 use tracing::{error, warn};
 use windows_numerics::Matrix3x2;
 
@@ -75,6 +76,36 @@ pub(crate) type FillData = (
     Option<&'static Name>,
 );
 
+/// 木の作りの誤り（`fill_world_visuals` が `error!` を残すもの）の種類。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum TreeIssue {
+    /// 節の下の描画面の持ち主（鍵はその持ち主）。
+    OwnerUnderNode,
+    /// 深さの上限越え・親の輪（鍵は根）。
+    TooDeep,
+}
+
+/// 毎回の検査で同じ誤りの `error!` を毎フレーム出さないための覚え。続く間は 1 回だけ記録し、
+/// 消えた回の後にまた現れたらもう 1 回記録する。回の終わりに [`Self::end_round`] を呼ぶ。
+/// 係の `Local` に置くので公開（中身は crate の外から触れない）。
+#[derive(Default)]
+pub struct ReportedIssues {
+    prev: HashSet<(Entity, TreeIssue)>,
+    seen: HashSet<(Entity, TreeIssue)>,
+}
+
+impl ReportedIssues {
+    /// この回に見た誤りを覚え、前の回に無かった初めてのものなら `true`（記録する）。
+    fn first_seen(&mut self, e: Entity, issue: TreeIssue) -> bool {
+        self.seen.insert((e, issue)) && !self.prev.contains(&(e, issue))
+    }
+
+    /// 回の終わり。この回に見なかった誤りは消えたものとして忘れる。
+    pub(crate) fn end_round(&mut self) {
+        self.prev = std::mem::take(&mut self.seen);
+    }
+}
+
 /// 根 `root`（描画面の持ち主）の下の節の `WorldVisual` を根からの DIP で埋める。
 ///
 /// - 局所の変形は `VisualTransform × 平行移動(Arrangement.offset)`（無ければ恒等）・
@@ -85,6 +116,7 @@ pub(crate) type FillData = (
 ///   不透明度の `warn!`・持ち主と深さの検査だけは見えない部分木の中でも行う。
 /// - 子が描画面の持ち主なら訪れない。親が節なら `error!` を残して切る（根の直下は記録しない）。
 /// - 深さが `MAX_ANCESTOR_DEPTH` を越えた節は訪れず `error!` を 1 行残す（親の輪もここで止まる）。
+/// - この 2 つの `error!` は `reported` で、誤りが続く間は 1 回だけにする（切る・止めるは毎回行う）。
 /// - `Visual` か描く中身が変わった節（見えなくなった節も）は `VisualVersion` を 1 つ上げる。
 ///   `VisualTransform` は見ない＝変形だけでは上げない。`Visual` の変化には `opacity`・
 ///   `transform_origin` も入る（版が余分に上がるだけ）。
@@ -101,6 +133,7 @@ pub(crate) fn fill_world_visuals(
     children_of_root: &[Entity],
     root_children_changed: bool,
     visited: &mut Vec<(Entity, usize)>,
+    reported: &mut ReportedIssues,
 ) -> bool {
     visited.clear();
     let mut changed = root_arrangement_changed || root_children_changed;
@@ -113,7 +146,6 @@ pub(crate) fn fill_world_visuals(
         .rev()
         .map(|&c| (c, 1, None, false))
         .collect();
-    let mut over_limit = false;
     while let Some((e, depth, parent, hidden)) = stack.pop() {
         let Ok((visual, arrangement, transform, content, wv, _, kids, has_surface, name)) =
             nodes.get(e)
@@ -121,7 +153,7 @@ pub(crate) fn fill_world_visuals(
             continue; // 消えた実体・Visual でない実体
         };
         if has_surface || wv.is_none() {
-            if parent.is_some() || hidden {
+            if (parent.is_some() || hidden) && reported.first_seen(e, TreeIssue::OwnerUnderNode) {
                 error!(
                     entity = %format_entity_name(e, name),
                     "[fill_world_visuals] 節の下の描画面の持ち主は支えないので、その部分木を切る"
@@ -130,8 +162,7 @@ pub(crate) fn fill_world_visuals(
             continue;
         }
         if depth > MAX_ANCESTOR_DEPTH {
-            if !over_limit {
-                over_limit = true;
+            if reported.first_seen(root, TreeIssue::TooDeep) {
                 error!(
                     root = %format_entity_name(root, root_name),
                     limit = MAX_ANCESTOR_DEPTH,

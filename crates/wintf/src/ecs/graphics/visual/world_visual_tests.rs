@@ -47,12 +47,16 @@ fn scaled(x: f32, y: f32) -> VisualTransform {
     })
 }
 
-/// 回をまたいで変化の検出を持つ係の代わり（`SystemState` が前の回の時刻を覚える）。
-struct Filler(SystemState<Query<'static, 'static, FillData>>);
+/// 回をまたいで変化の検出を持つ係の代わり（`SystemState` が前の回の時刻を、
+/// `ReportedIssues` が前の回の誤りを覚える）。
+struct Filler(
+    SystemState<Query<'static, 'static, FillData>>,
+    ReportedIssues,
+);
 
 impl Filler {
     fn new(world: &mut World) -> Self {
-        Self(SystemState::new(world))
+        Self(SystemState::new(world), ReportedIssues::default())
     }
 
     /// 根の子を `children_of_root` として 1 回埋める。
@@ -74,7 +78,9 @@ impl Filler {
             children_of_root,
             root_children_changed,
             &mut visited,
+            &mut self.1,
         );
+        self.1.end_round();
         (changed, visited)
     }
 
@@ -311,6 +317,81 @@ fn owner_under_node_is_cut_with_error_but_not_under_root() {
     assert_eq!(log.matches(OWNER_TEXT).count(), 1, "{log}");
     assert!(log.contains("deep-owner"), "実体名が要る: {log}");
     assert!(!log.contains("root-owner"), "{log}");
+}
+
+#[test]
+fn owner_under_node_errors_once_while_it_persists() {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let node = world
+        .spawn((Visual::default(), WorldVisual::default(), ChildOf(root)))
+        .id();
+    let owner = world
+        .spawn((
+            Visual::default(),
+            WorldVisual::default(),
+            VisualGraphics::default(),
+            ChildOf(node),
+        ))
+        .id();
+    let mut filler = Filler::new(&mut world);
+    let log = capture_under_filter("error", || {
+        filler.run(&mut world, root);
+        filler.run(&mut world, root);
+    });
+    assert_eq!(log.matches(OWNER_TEXT).count(), 1, "続く間は 1 回: {log}");
+    world.entity_mut(owner).remove::<VisualGraphics>();
+    let log = capture_under_filter("error", || {
+        filler.run(&mut world, root);
+    });
+    assert!(!log.contains(OWNER_TEXT), "{log}");
+    world.entity_mut(owner).insert(VisualGraphics::default());
+    let log = capture_under_filter("error", || {
+        filler.run(&mut world, root);
+    });
+    assert_eq!(
+        log.matches(OWNER_TEXT).count(),
+        1,
+        "戻ったらまた記録: {log}"
+    );
+}
+
+#[test]
+fn depth_over_limit_errors_once_while_it_persists() {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let mut chain = vec![root];
+    for _ in 0..MAX_ANCESTOR_DEPTH + 5 {
+        let e = world
+            .spawn((
+                Visual::default(),
+                WorldVisual::default(),
+                ChildOf(*chain.last().unwrap()),
+            ))
+            .id();
+        chain.push(e);
+    }
+    let mut filler = Filler::new(&mut world);
+    let log = capture_under_filter("error", || {
+        filler.run(&mut world, root);
+        filler.run(&mut world, root);
+    });
+    assert_eq!(log.matches(DEPTH_TEXT).count(), 1, "続く間は 1 回: {log}");
+    let cut = chain[3];
+    world.entity_mut(cut).remove::<ChildOf>();
+    let log = capture_under_filter("error", || {
+        filler.run(&mut world, root);
+    });
+    assert!(!log.contains(DEPTH_TEXT), "{log}");
+    world.entity_mut(cut).insert(ChildOf(chain[2]));
+    let log = capture_under_filter("error", || {
+        filler.run(&mut world, root);
+    });
+    assert_eq!(
+        log.matches(DEPTH_TEXT).count(),
+        1,
+        "戻ったらまた記録: {log}"
+    );
 }
 
 /// 中身を持つ節を 1 つ根の下に置き、1 回埋めて落ち着かせる。
