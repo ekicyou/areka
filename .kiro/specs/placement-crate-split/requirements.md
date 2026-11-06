@@ -58,9 +58,9 @@
 4. When 移動を終えたとき, the 本体の crate `areka` shall 配置を `areka-placement` への path 依存として使い、`crates/areka/src/placement/` を持たない。
 5. The 分割作業 shall ワークスペースの根の `Cargo.toml` を変えない。
 6. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのはワークスペースの中の path 依存だけ）。
-7. The `areka-placement` クレート shall 本番で使う外の crate と `windows` の機能を、今の配置が本番で使う範囲（wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows〔`Win32_Foundation`・`Win32_UI_WindowsAndMessaging`〕・thiserror）に収め、テストとテストの支え（要件 3 の `test-support` 機能）だけで使う機能（`Win32_System_Com`・`Win32_System_LibraryLoader` ほか）は、それらを組むときにだけ付ける。
+7. The `areka-placement` クレート shall 本番の依存を、今の配置が本番で使う外の crate（wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows・thiserror）に収め、どれもワークスペースのほかの crate と同じく `workspace = true` で受ける（`windows` の機能はワークスペースの表のものをそのまま受け、本番のソースが使う機能は `Win32_Foundation`・`Win32_UI_WindowsAndMessaging` の範囲に収める）。
 8. The `areka-placement` クレート shall 本体の crate `areka` に依存しない。
-9. The `areka-placement` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。
+9. The `areka-placement` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。例外表の項目は増やさず（パスの書き換えだけ）、書き換えや整形で上限を超えるファイルは分けて収める。
 
 ### Requirement 2: 公開面の付け替え
 
@@ -85,7 +85,7 @@
 3. The 分割作業 shall テストの支えの写しを作らず、1 つの支えを 1 か所だけに置く。
 4. Where `capture_logs` の汎用の部分を `log-capture-kit` へ下ろす場合, the 分割作業 shall 下ろした部分を `areka-placement` の側に残さず、どちらか 1 か所だけに置く。
 5. The 分割作業 shall 配置のテストのうち本体のほかの部分を使う 3 本（`reset_balloon_pos_tests.rs`→`emo2_boot::switch_assets`・`spawn_assembly_tests.rs`→`input_events::attach_char_pointer_handlers`・`transition_judge_tests.rs`→`emo2_boot::target_map`）を本体に残す。
-6. The 分割作業 shall `#[cfg(test)]` だけの判定器 `transition_judge.rs`・`transition_judge_offset.rs`・`transition_judge_verdict.rs`（とそのテスト）を、配置のフォルダから本体のテスト専用のモジュールへ移し、本番のビルドに含めない。
+6. The 分割作業 shall `#[cfg(test)]` だけの判定器 `transition_judge.rs`・`transition_judge_offset.rs`・`transition_judge_verdict.rs`（とそのテストの一族＝`transition_judge*.rs`・`transition_signoff_tests.rs`・`transition_signoff_procedure_tests.rs`）を、配置のフォルダから本体のテスト専用のモジュールへ移し、本番のビルドに含めない。
 7. The 分割作業 shall 本体の `emo2_boot` のテストのうち `transition_judge*` を使う 2 本（`frame_transition_atomicity_tests.rs`・`frame_transition_branch_tests.rs`）が、移した先の判定器を使って前と同じ合否を示すようにする。
 8. The `areka-placement` クレートのテストの実行ファイル shall 本体と wintf のテストの実行ファイルと同じく、テストを走らせる前にプロセスの寿命の MTA を立てる。
 9. When `areka-placement` のテストの実行ファイルがテストの途中で落ちたとき, the そのテストの実行ファイル shall 本体と wintf のテストの実行ファイルと同じ形の落ちの報告を標準エラーへ出す（3.8 と 3.9 は、本体の `emo2_boot/crash_report_test_support.rs`・wintf の `test_crash_report.rs` に並ぶ 3 つ目の写しで満たす）。
@@ -107,9 +107,9 @@
 
 #### Acceptance Criteria
 
-1. The 分割作業 shall `crates/log-capture-kit/tests/` の表（`file_length_guard_test.rs` の 1,000 行の例外表・`temp_path_guard_test.rs`・`with_default_guard_test.rs`）にある配置のパスを、移した先のパスへ書き換える。
+1. The 分割作業 shall `crates/log-capture-kit/tests/` の表（`file_length_guard_test.rs` の 1,000 行の例外表・`temp_path_guard_test.rs`・`with_default_guard_test.rs`）にある配置のパスを、移した先のパス（本体のテスト専用のモジュールへ移すものは本体の側のパス）へ書き換え、理由の文の主語が変わるもの（`with_default_guard_test.rs` の「areka は当該フィーチャを有効にしない」ほか）は新しい crate に合わせる。
 2. The 分割作業 shall ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR` を使う `measure_template_tests`・`zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests`・`spawn_zorder_pair_deferred_tests`・`transition_signoff_procedure_tests`・`zorder_property_deferral_tests`）が、移した先のファイルを読むようにする。
-3. If ソースを文字列で読むテストが読む先のファイルを見つけられない場合, then the そのテスト shall 黙って通らず赤になる。
+3. If ソースを文字列で読むテストが読む先のファイルを見つけられない場合, then the そのテスト shall 黙って通らず赤になる。ソースの木を歩くテスト（`spawn_zorder_pair_deferred_tests` の走査ほか）は、移した後も移す前と同じ範囲（本体と配置の両方の `src`）を歩き、範囲が黙って狭まらない。
 4. The 分割作業 shall 文書（`doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/` の `briefing-assets.md` と網羅台帳 `ledger/*.toml` の根拠の場所・`.kiro/steering/structure.md`）にある配置のパスを、移した先のパスへ書き換える。
 5. The 分割作業 shall ソースと道具の説明の中にある配置のパス（wintf・`pilot`・`ukadoc-survey`・本体の `emo2_boot`・`tools/perf/judge-followup.py` ほか）を、移した先のパスへ書き換える。
 6. The 分割作業 shall `tools/perf/fixtures/` と `tools/perf/fixtures-loop/` の見本の `run.log` を手で書き換えず、見本を作る `tools/perf/fixtures/generate.py` を直して作り直す。
@@ -126,7 +126,7 @@
 2. The 分割作業 shall モジュールのパスを写した直書きの出所 `"areka::placement::diag"`（`diag.rs`）を、新しい出所の名前（`areka_placement::diag`）に合わせる。
 3. When `RUST_LOG` に `areka_placement=debug` を与えたとき, the areka shall 配置の診断のログ（`diag` を含む）を出す。
 4. The 分割作業 shall 語彙として付けた直書きの出所（`"areka::persist::*"` ほか、モジュールのパスに頼らないもの）を変えない。
-5. The 分割作業 shall ログの出所を名前で読む所（`diag_tests.rs`・`follow_window_move_diag_tests.rs`・`crates/areka/tests/window_link_real_run.rs` の `RUST_LOG`・wintf の `ecs/window_proc/window_pos_tests.rs` の `RUST_LOG`・wintf の `ecs/window_proc/lifecycle.rs` の説明・`tools/perf/judge-perf.py` の説明ほか）を、新しい出所の名前へ書き換える。
+5. The 分割作業 shall ログの出所を名前で読む所（`diag_tests.rs`・`follow_window_move_diag_tests.rs`・`measure_bake_count_tests.rs` と `measure_bake_log_tests.rs` の `"areka::placement::measure"`・`crates/areka/tests/window_link_real_run.rs` の `RUST_LOG`・wintf の `ecs/window_proc/window_pos_tests.rs` の `RUST_LOG`・wintf の `ecs/window_proc/lifecycle.rs` の説明・`tools/perf/judge-perf.py` の説明ほか）を、新しい出所の名前へ書き換える。
 6. When 書き換えを終えたとき, the 分割作業 shall 古い出所の名前 `areka::placement` を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
 7. The 分割作業 shall 性能の判定の道具（`tools/perf/judge-perf.py`・`judge-followup.py` ほか）がログの出所の名前に頼って行を読んでいるかを確かめ、結果を記録する。
 8. If 性能の判定の道具がログの出所の名前に頼って行を読んでいる場合, then the 分割作業 shall その読み方を新しい名前へ直し、道具の自分の確かめ（SelfTest）を回して緑を示す。
