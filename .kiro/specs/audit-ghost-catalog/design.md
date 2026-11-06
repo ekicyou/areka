@@ -72,6 +72,9 @@
 | `crates/areka/src/boot_resolve_tests.rs`・`boot_resolve_option_tests.rs`・`boot_resolve_balloon_tests.rs`・`boot_resolve_mark_text_tests.rs` | #56 | `audit-areka-app` | `ghost_dir(..)`／`balloon_dir(..)` を `ghost_store().join(..)`／`balloon_store().join(..)` へ |
 | `crates/areka/src/install/judge_tests.rs` | #71 | `audit-areka-install-update` | `charset_declared` を名指す 1 か所を消す |
 | `crates/areka/src/readonly_run_tests.rs` | #72 | `audit-areka-app` | `establish_readonly_from` の 3 つ目の引数を消す |
+| `tools/perf/judge-perf.py`・`judge_perf_catchup.py`・`fixtures/generate.py` と `fixtures/` の C1・C2・T2 の `run.log`（実装で追加） | #53 | （道具） | 刻みの記録の欄の名 `target`→`lane` に合わせ、`lane` を読み、無ければ `target` へ戻って読む。fixture は生成器で作り直す |
+| `crates/areka/src/readme/opener.rs`・`opener_submit_tests.rs`（かけ直しで追加） | 1 回目 R1-g3-1 | `audit-areka-app`（並走なし） | 自前の `listed_name` の写しを消して `areka_ghost::config::listed_name` を呼ぶ |
+| `crates/areka-sylphya/src/actor.rs`・`actor_tests.rs`・`actor_actor_criteria_cage.rs`（かけ直しで追加） | 議題 ⑵（要件 9.15） | `audit-sylphya-actor` | `SylphyaMsg::RemoveFlat`・`Effect::RemoveFlatPerAsker`・`SylphyaPublisher::remove_flat` を足し、決定論と epoch の檻に 1 本ずつ足す |
 | `crates/areka`・`crates/areka-mcp-bridge` のテストのうち、空・相対の `AREKA_PROFILE_DIR` を `app_profile_dir` に渡して結果を見るもの | #18 | `audit-areka-app`・`audit-mcp-update-crates` | 実装で grep して、在れば期待を新しい決まりへ（無ければ触らない） |
 
 `audit-parsers-sakura` との申し合わせ（要件 9.10・9.14）は「申し合わせと順」の節に書く。
