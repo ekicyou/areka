@@ -21,9 +21,9 @@ use crate::ecs::clickthrough::{
     ClickThroughController, ClickThroughHandle, ClickThroughRegistry, ClickThroughRegistryHandle,
 };
 use crate::ecs::world::{EcsWorld, EcsWorldSelfRef, FrameFinalize};
-use crate::runtime::message_loop::{MessageLoopDriver, ShutdownPolicy};
+use crate::runtime::message_loop::ShutdownPolicy;
 
-use crate::runtime::tick_bridge::{AsyncTickTask, VsyncEventBridge};
+use crate::runtime::tick_bridge::{VsyncEventBridge, run_async_tick};
 use crate::runtime::window_registry::{WindowRegistry, reconcile_window_registry};
 use crate::runtime::wndproc_bridge::WndState;
 pub use message_loop::AppExit;
@@ -39,8 +39,8 @@ type ProdWindowRegistry = WindowRegistry<crate::executor::util::Window<WndState>
 #[path = "dpi_once_tests.rs"]
 mod dpi_once_tests;
 
-/// メッセージループ層。ライブラリ（`wintf-winmsg-executor`）の `block_on` /
-/// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
+/// メッセージループ層。終了の受け口 `AppExit` と、ライブラリ（`wintf-winmsg-executor`）の
+/// `block_on` へ渡す shutdown future（`ShutdownPolicy`）を提供する。
 mod message_loop;
 
 /// VSync 起床ブリッジ層。専用スレッドの `DwmFlush` vblank 検出を共有
@@ -302,7 +302,7 @@ impl WinApp {
     /// 再収束／R5.2）。ここで wake_event を **VSync event とは別 `Arc`** に保ち、VSync 起床は
     /// [`Self::run`] の relay タスクが「vblank を待って `wake_event.notify`」する形で中継する
     /// （下記 relay 参照）。こうすることで既存 tick cadence を一切変えない（カーソル移動 notify が
-    /// `AsyncTickTask` を余計に起こして ECS tick を増やすことがない＝入力と描画 cadence を非結合）。
+    /// tick のタスクを余計に起こして ECS tick を増やすことがない＝入力と描画 cadence を非結合）。
     ///
     /// # post-tick の構造保証
     /// UI 全体が単一スレッドで、判定コア（`evaluate_targets`）は `&World` を **同期借用**する
@@ -346,9 +346,9 @@ impl WinApp {
     /// 1. 新経路を結線（[`wire_new_path`](Self::wire_new_path)・self-ref 注入 + reconcile 登録）。
     /// 2. `VsyncEventBridge` をローカルに生成（`run` の間 `WinApp` 相当で所有・Drop で
     ///    VSync スレッド stop→join）。
-    /// 3. `AsyncTickTask::spawn` で vblank 駆動の tick ループを UI スレッドへ投入（JoinHandle は
-    ///    `run` の間ローカル保持・World は `Weak`）。
-    /// 4. `MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()))`
+    /// 3. `spawn_local(run_async_tick(..))` で vblank 駆動の tick ループを UI スレッドへ投入
+    ///    （JoinHandle は `run` の間ローカル保持・World は `Weak`）。
+    /// 4. `block_on(ShutdownPolicy::shutdown_future(self.exit.clone()))`
     ///    で、終了の指示（利用側の [`AppExit::request_exit`]、または registry 空遷移 hook）まで
     ///    OS メッセージループを駆動する。ループ開始前に出た指示でもただちに戻る。future 完了でループが **先行 quit せず** 正常復帰する
     ///    （"received unexpected quit message" panic を構造的に回避）。戻った直後に「ループは
@@ -357,7 +357,7 @@ impl WinApp {
     /// 4.5. 窓の登録表を World から取り出して破棄し、残っていた窓を壊す（残っていたときだけ
     ///    `info!` を 1 行残す）。
     /// 5. 復帰時、ローカルの `VsyncEventBridge` が drop（VSync stop→join）し、tick の
-    ///    `JoinHandle` も drop される。tail race 補填として終了時に防御的 notify を撃つ。
+    ///    `JoinHandle` も drop される。
     ///
     /// # 契約: 指示で戻るとき
     /// 終了の指示で戻るときは、登録表に残っていた窓を壊してから戻る。戻った後の `run()` は
@@ -377,11 +377,11 @@ impl WinApp {
         // 3. vblank 駆動の tick ループを UI スレッドへ投入（周期は画面の更新周期・World は Weak）。
         //    `running` は block_on から戻った直後（4.1）に下ろす旗。
         let running = Rc::new(std::cell::Cell::new(true));
-        let _tick = AsyncTickTask::spawn(
+        let _tick = crate::executor::spawn_local(run_async_tick(
             bridge.event().clone(),
             Rc::downgrade(&self.world),
             Rc::clone(&running),
-        );
+        ));
 
         // 3.5. クリック透過機構を起動（ワーカ＋判定ループ）＋登録面を World へ据える（task 3.2）。
         //      `_click_through` を run の間ローカル保持し、run 復帰（shutdown）で drop
@@ -398,7 +398,7 @@ impl WinApp {
         ));
 
         // 4. shutdown future が完了するまでメッセージループを駆動（先行 quit せず復帰）。
-        MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()));
+        crate::executor::block_on(ShutdownPolicy::shutdown_future(self.exit.clone()));
 
         // 4.1. 以後の起床ではフレームを回さない。戻った後に利用側のモーダルなダイアログ等が
         //      残っていた起床のメッセージを配っても、次の 4.5 で登録表を抜いた World を回さない
@@ -421,9 +421,6 @@ impl WinApp {
                 drop(registry);
             }
         }
-
-        // 5. tail race 補填の防御的 notify（冪等・arm 済みリスナのみ起床）。
-        ShutdownPolicy::notify_shutdown(self.exit.signal());
 
         // bridge / _tick はここで drop（VSync stop→join・tick JoinHandle 破棄）。
         Ok(())
