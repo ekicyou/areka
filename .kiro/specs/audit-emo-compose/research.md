@@ -598,3 +598,4 @@
 - 7 回目の 33 件は 12.1（実装の側・`3bbb167b`）と 12.2（テスト・`aa2bde60`）で全部直した。
 - 読む側の上限: `audit-parsers-sakura` の `RANGE_WIDTH_CAP = 8193`（`crates/areka-parsers/src/shell/model.rs`）と境目のテスト `range_width_cap_boundary`（`decode_tests_append_tests.rs`）が `main` に着いた（PR #428・`0f2f3ecd`）。指摘 1 は閉じた。
 - 機能の検証（`/kiro-validate-impl`・1 回目）は NO-GO: main を取り込んでいない（23 ファイルがぶつかる）・申し合わせの `ExtentTooLarge` を隠す腕が無い・この節の収束の一文が事実と違う・design.md にかけ直しで足した上限と記録の形が無い。直しはタスク 13。
+- 機能の検証（2 回目・main 取り込みの後 `e33fcd68`）は GO: 全体テスト 1 回で全段緑・1 回目の NO-GO の 4 点は閉じた・`Cargo.lock` と依存は不変。完了の棚卸に回すもの: `Animation::interval_written` の欄（parsers の持ち分）・seriko の `rebuild`／`unwrite` の 2 乗・emo-text の箱の位置の飽和・parsers の `animation_slot` の 2 乗・古いテスト名の名指し（`doc/COMPAT_ARCHITECTURE.md`・`ledger/assets.toml`・`extent-element-offset/brief.md`）・`NestReport` の深い鎖（`reaches` を強連結成分で 1 度に）・seriko の `word_warns` の当たらなくなった枝。
