@@ -23,10 +23,18 @@ use crate::wrap::WrapMode;
 /// クロージャを共有のログ捕捉窓の中で実行し、（結果, WARN 件数, ERROR 件数）を返す。
 ///
 /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-/// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
+/// 窓の内側で対照の `error!` を 1 件出して数えられたことを確かめ、返す ERROR 件数からは除く
+/// （「error 0 件」の主張が捕捉窓の死で恒真になるのを防ぐ）。
 fn with_log_cage<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
-    let (out, counts) = count_levels(f);
-    (out, counts.warn, counts.error)
+    let (out, counts) = count_levels(|| {
+        tracing::error!("捕捉窓が生きていることの対照イベント");
+        f()
+    });
+    assert!(
+        counts.error >= 1,
+        "対照の error! が数えられていない（捕捉窓が死んでいる）"
+    );
+    (out, counts.warn, counts.error - 1)
 }
 
 // ══ 実 pump 3 経路（R1.2/R1.3/R1.4/R1.5——観測可能な完了状態の前半） ══

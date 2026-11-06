@@ -170,7 +170,7 @@ fn load_with_records(scope: u32) -> (BalloonModel, String, Vec<CapturedEvent>) {
 /// 本番の読み込みで、記録が期待どおり（`ERROR` 0 件・`WARN` は相方側の面 2・3 の縮退 2 件だけ）で、
 /// モデルの値が表のとおり（要件 5.8・5.4〜5.6・6.5）。
 #[test]
-fn production_loading_records_no_warning_and_models_the_declared_values() {
+fn production_loading_records_only_the_expected_fallbacks_and_models_the_declared_values() {
     for exp in &FACE0 {
         let scope = exp.scope;
         let (model, face0_file, events) = load_with_records(scope);

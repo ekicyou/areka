@@ -208,10 +208,20 @@ fn clear_drops_hover_of_the_destination_place_only() {
     let mut rt = runtime_with_boxes();
     rt.set_surface_resolver(fake_resolver());
     let actor = ActorKey::from("0");
+    let box_a = PlaceKey {
+        actor: actor.clone(),
+        place: boxed("a"),
+    };
     rt.inject_choice_hover(&actor, Some(0));
+    rt.inject_choice_hover_at(&box_a, Some(0));
 
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
+    assert_eq!(
+        rt.choice_hover.get(&box_a),
+        None,
+        "行き先の箱の強調は消える"
+    );
     assert_eq!(
         rt.choice_hover.get(&PlaceKey::balloon(&actor)),
         Some(&Some(0)),

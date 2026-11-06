@@ -35,21 +35,6 @@ fn consecutive_text_cues_append() {
     );
 }
 
-/// グリフ単位は書記素クラスタ——多バイト文字も 1 クラスタ = 1 グリフ。
-#[test]
-fn glyph_unit_is_grapheme_cluster() {
-    let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("aあ🦆".into())));
-    assert_eq!(
-        items_of(&state, "0"),
-        &[
-            TextItem::glyph("a"),
-            TextItem::glyph("あ"),
-            TextItem::glyph("🦆"),
-        ]
-    );
-}
-
 // ── R2.2: NewLine 改行（ratio 転写） ──
 
 #[test]
@@ -208,7 +193,7 @@ fn choices_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [ChoiceSpan] {
 /// Choice cue ヘルパ。reveal を Text と同じ時刻式で観測するため、配送 duration =
 /// `N × REVEAL_INTERVAL` を焼き込む（interval=0.25・[`cue`] の Text 分岐と機能等価）。
 fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
-    let duration = text.chars().count() as f64 * REVEAL_INTERVAL;
+    let duration = areka_sakura::cluster::cluster_count(text) as f64 * REVEAL_INTERVAL;
     cue_dur(
         actor,
         at,

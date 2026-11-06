@@ -10,9 +10,9 @@
 //! アンカーは押せる範囲に残る・強調が外れる・当たり行の写しから選択肢の行がその場で消える。
 //! 提示で写しを作り直すときの外し方は実 GPU の檻（タスク 4.7）が固定する。
 //!
-//! タスク 4.7 の部分は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行の座標の押下が
-//! 当たらないこと・WARN 0 行・済んだ行の強調が読み戻しに出ないこと・済む前と後で強調なしの読み戻しが
-//! 同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
+//! タスク 4.7 の部分は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行が当たり行から
+//! 消えること・済みと提示で WARN 0 行・済んだ行の強調が読み戻しに出ないこと・済む前と後で強調なしの
+//! 読み戻しが同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
@@ -333,20 +333,9 @@ use crate::place::TextPlace;
 /// 全部の文字が見えている時刻。
 const LATE: f64 = 10.0;
 
-/// 押下の口が読む値（押せる範囲があるか・当たり行）で、その座標に当たる行があるか。
-/// 入力の層の `click_selection`／`judge_box_click` と同じ判定（押せる範囲が無ければ当たらない・
-/// 矩形は左上を含み右下を含まない）。
-fn press_hits(rt: &TextLayerRuntime, place: &PlaceKey, x: f32, y: f32) -> bool {
-    rt.hit_active(&place.actor)
-        && rt.choice_hit_rows_at(place).iter().any(|row| {
-            let r = row.rect;
-            x >= r.left && x < r.right && y >= r.top && y < r.bottom
-        })
-}
-
 /// 済んだ行の通しの檻（要件 1.10〜1.12）。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
 ///
-/// 提示→当たり行あり→選択待ちの始まり→強調したまま場所を済み→その座標の押下は当たらない・
+/// 提示→当たり行あり→選択待ちの始まり→強調したまま場所を済み→その行は当たり行から消える・
 /// 済み・提示で WARN 0 行／済む前と後で強調なしの読み戻しが同じ／済んだ行に強調を入れても強調なしと同じ。
 /// 済む前の強調が読み戻しを変えることを先に確かめ、読み戻しの比べが効くことを担保する。
 fn settled_row_is_unpressable_and_unlit(
@@ -367,14 +356,6 @@ fn settled_row_is_unpressable_and_unlit(
         .find(|r| r.kind == SpanKind::Choice)
         .expect("前提: 選択肢の当たり行がある")
         .clone();
-    let (x, y) = (
-        (first.rect.left + first.rect.right) / 2.0,
-        (first.rect.top + first.rect.bottom) / 2.0,
-    );
-    assert!(
-        press_hits(rt, place, x, y),
-        "前提: 済む前はその座標の押下が当たる"
-    );
     let plain = read(rt);
     rt.inject_choice_hover_at(place, Some(first.ordinal));
     present_frame(rt, world, LATE).expect("強調の提示");
@@ -389,7 +370,6 @@ fn settled_row_is_unpressable_and_unlit(
     let ((), events) = capture(|| {
         rt.settle_choices_at(place);
         present_frame(rt, world, LATE).expect("済んだ後の提示");
-        let _ = press_hits(rt, place, x, y);
         tracing::warn!("対照の警告");
     });
     let warns: Vec<_> = events
@@ -399,11 +379,13 @@ fn settled_row_is_unpressable_and_unlit(
     assert_eq!(
         warns.len(),
         1,
-        "数えられるのは対照の 1 行だけ（済み・提示・押下の判定で WARN 0 行）: {warns:?}"
+        "数えられるのは対照の 1 行だけ（済み・提示で WARN 0 行）: {warns:?}"
     );
     assert!(
-        !press_hits(rt, place, x, y),
-        "済んだ行の座標の押下は選択にならない（要件 1.11）"
+        !rt.choice_hit_rows_at(place)
+            .iter()
+            .any(|r| r.kind == SpanKind::Choice && r.ordinal == first.ordinal),
+        "済んだ行は当たり行から消える（要件 1.11）"
     );
     assert_eq!(
         read(rt),

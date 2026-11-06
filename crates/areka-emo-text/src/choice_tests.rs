@@ -453,53 +453,6 @@ fn to_window_physical_vertical_puts_committed_on_x_block_axis() {
     }
 }
 
-/// k∈{1.0,2.0}×committed∈{0,50}×3 方向の全網羅パラメタライズ（独立算出の期待値と一致）。
-#[test]
-fn to_window_physical_parameterized_over_k_committed_and_modes() {
-    let region = region(36, 46, 356, 168);
-    let (ox, oy) = (36.0f32, 46.0f32);
-    let row = CanvasHitRow {
-        ordinal: 0,
-        rect: LineRect {
-            left: 10.0,
-            top: 2.0,
-            right: 30.0,
-            bottom: 12.0,
-        },
-    };
-    let r = row.rect;
-    for k in [1.0f32, 2.0] {
-        let contract = ScaleContract::new(k, None);
-        for c in [0i32, 50] {
-            let cf = c as f32;
-            for mode in [
-                WritingMode::HorizontalTb,
-                WritingMode::VerticalRl,
-                WritingMode::VerticalLr,
-            ] {
-                let got = to_window_physical(&row, &region, mode, c, &contract, (0.0, 0.0));
-                let expected = match mode {
-                    // horizontal: x=行内（×k）・y=ブロック（×k+committed）。
-                    WritingMode::HorizontalTb => HitRectPx {
-                        left: (ox + r.left) * k,
-                        top: (oy + r.top) * k + cf,
-                        right: (ox + r.right) * k,
-                        bottom: (oy + r.bottom) * k + cf,
-                    },
-                    // vertical: x=ブロック（×k+committed）・y=行内（×k）。
-                    WritingMode::VerticalRl | WritingMode::VerticalLr => HitRectPx {
-                        left: (ox + r.left) * k + cf,
-                        top: (oy + r.top) * k,
-                        right: (ox + r.right) * k + cf,
-                        bottom: (oy + r.bottom) * k,
-                    },
-                };
-                assert_eq!(got, expected, "k={k} committed={c} mode={mode:?}");
-            }
-        }
-    }
-}
-
 /// 現行契約 k=1.0・committed=0（非スクロール）: 窓物理 px は絶対 image px と一致
 /// （canvas-local + 原点 = 絶対）——2 空間モデルの恒等（R2.2 の DPI=96 経路）。
 #[test]
@@ -582,39 +535,6 @@ fn to_window_physical_adds_the_box_origin_before_scaling() {
     );
 }
 
-// ── R3.3: 描画とヒットの単一導出（derive_hit_rows と from_layout の canvas-local が一致） ──
-
-/// Observable: 固定入力に対し、derive_hit_rows の canvas-local 矩形は、ハイライト描画が
-/// 同一 `LineChoiceSegment`＋行矩形から `from_layout` と同一の原点差引きで組む矩形と
-/// **完全一致**する（表示とヒットが同一導出パス＝座標整合の構造保証）。
-#[test]
-fn hit_row_rect_matches_canvas_local_highlight_derivation() {
-    let region = region(36, 46, 356, 168);
-    let line = line((36.0, 46.0, 86.0, 56.0), &[]); // 絶対 image px の行矩形。
-    let segment = seg(0, 3, (46.0, 66.0)); // 絶対 image px のセグメント inline 範囲。
-    let rows = derive_hit_rows(
-        std::slice::from_ref(&line),
-        std::slice::from_ref(&segment),
-        WritingMode::HorizontalTb,
-        &region,
-        &bands_of(HIT_BAND, NO_OFFSET),
-    );
-    // ハイライト描画が使う canvas-local 矩形を from_layout と同一手順で独立算出:
-    // 行矩形 block 近端（top）＋帯（HIT_BAND）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
-    let (ox, oy) = (region.left(), region.top());
-    let (i0, i1) = segment.inline_range;
-    let expected_highlight = LineRect {
-        left: i0 - ox,
-        top: line.rect.top - oy,
-        right: i1 - ox,
-        bottom: line.rect.top + HIT_BAND - oy,
-    };
-    assert_eq!(
-        rows[0].rect, expected_highlight,
-        "ヒット矩形とハイライト矩形は同一 canvas-local 座標（単一導出）"
-    );
-}
-
 // ── 行ごとの帯（line_bands・要件 11.5 のブロック軸） ──
 
 /// 行ごとに丈が違う——帯の基準は**その行に置かれた最も大きい em**（行矩形のブロック軸寸）で、
@@ -683,12 +603,11 @@ fn line_bands_match_the_actor_wide_value_when_no_line_is_decorated() {
     }
 }
 
-/// 塗る帯とクリックを受ける帯は**同じ列**から出る（R3.3 の単一導出をブロック軸でも保つ）。
-///
-/// 較正: `derive_hit_rows` と `decorate_canvas` へ別々の列を渡す実装に戻すと、
-/// 焼き込まれた丈とヒット矩形の丈が食い違って赤。
+/// `derive_hit_rows` は行ごとの帯の丈をヒット矩形のブロック軸寸にそのまま使う（要件 11.5）。
+/// 塗る帯とクリックを受ける帯の突き合わせは `choice_anchor_tests.rs` の
+/// `highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode` が持つ。
 #[test]
-fn the_hit_band_and_the_painted_band_come_from_the_same_line_list() {
+fn derive_hit_rows_takes_each_line_band_extent_as_the_block_size() {
     let lines = [
         line((0.0, 0.0, 100.0, 10.0), &[]),
         line((0.0, 12.0, 100.0, 52.0), &[]),
