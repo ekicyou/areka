@@ -263,3 +263,67 @@
 ---
 
 （次の手: 要件の討議で 6 章の議題 1〜8 の答えを決め、要件 3.1〜3.5・5.6・7.1〜7.3・1.7 を必要なら書き換えてから `/kiro-design placement-crate-split` へ。）
+
+---
+
+## 7. 設計の段（2026-11-06・`/kiro-spec-design -y`）
+
+- **調べ方の種類**: 軽い調べ（既存の仕組みの延長）。外の新しいライブラリは使わないので Web の調べはしない。Grep・Read と短い数え上げで、設計が頼る事実だけを確かめた。
+- **使ったスキルと手引き**: `kiro-spec-design`（`rules/design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`）と、`.kiro/settings/templates/specs/design.md`。要件の討議の議題 3 の原則（自分の crate のファイルは自分の crate のテストが読み、別の crate は依存の向きに 1 つの読み口で読む）を、置き場の決め全部に当てた。
+
+### 7.1 設計が頼る事実（新しく確かめたこと）
+
+- **`reseed::tests` の 3 つは見本のゴーストに頼らない**: `booted_world`・`new_shell`・`char_positions` が中で使うのは、配置の型・`MonitorSnapshot`・`GhostTitles::from_scope_titles`・`spawn_ghost_windows`・偽の HWND だけ。ファイルの頭で `shared_test_support`（見本）と `test_support`（ログ）を引いているのは同じファイルのテストのため。よって 3 つとその補助だけを別のファイルへ出せば `test-support` で開ける（6 章の「研究の 6 章で設計の段へ回したもの」の 3 つ目の答え）。
+- **本体には `balloon_root` と同じ働きの関数が既にある**: `emo2_boot/sample_test_support.rs` の `emo2_balloon_root`（emo2 の `emo2-kakukaku` のフォルダ）。`emo2_root` とどちらも `pub(super)` で、`emo2_boot` の外から使うには `pub(crate)` に広げる。
+- **配置の外で配置の `shared_test_support` を使う本体のファイルは 4 つだけ**（`frame_window_link_drain_tests`・`spine_third_scope_talk_tests`・`input_events_char_clamp_tests`・`menu/trigger_wired_tests`）。研究の 2.3 の「12・50 ファイル」は配置の中を含んだ数だった。
+- **`synth_declared_dpi_ghost` を本体に残すテストが使う**: `reset_balloon_pos_tests` の `keyword_fixture`。中で `TempDir`（temp-path-kit）と `emo2_root`・`balloon_root`（sample-ghost-kit）を使うので、そのままでは `test-support` で開けない。道を引数で受ければ std の `fs` だけで書ける。呼び出しは 11 か所（配置 10・本体へ移す 1）。
+- **本体の `main.rs` は 986 行**。`mod placement;` を外して `placement_tests` と読み口の宣言を置いても 989 行以下に収まる。
+- **`crate::placement::`（18 文字）→ `areka_placement::`（17 文字）は 1 文字短い**。本体の書き換えで行が伸びる所は無い。伸びるのは本体へ移すファイルの `super::` → `areka_placement::` だけで、上限の近くは `transition_judge.rs`（999 行）1 つ。
+- **受け持ちの重なり**: `audit-emo2-boot-spine` の受け持ちは「`emo2_boot/` のうち frame・switch の持ち物でないもの全部」、`audit-areka-input-menu` は `input_events*`。配置から本体へ移すファイルを `emo2_boot/`・`input_events/` に置くと、2 本の audit の持ち物が重なる。`audit-areka-app` の「ほかの 7 本の持ち物でないもの全部」は、placement の 2 本が名指せば外れる。よって本体の中の新しいフォルダ `placement_tests/` に集めた。
+- **本体のほかの 5 ファイル 6 か所も下の crate を読んでいる**: `input_events/file_drop_wiring_tests.rs:446`（wintf の src）・`log_history_convention_tests.rs:318・324`（areka-ghost・areka-update）・`tick_gate_config_producers_tests.rs:245`（wintf）・`boot_shell_tests.rs:349`・`emo2_boot/film_playback_e2e_tests.rs:53`（emo-compose の見本）。文書（`doc/`）と `target/` を読む所は crate ではない。
+- **配置の中で `shell::parse` を本文で呼ぶ実物は `measure_tests.rs` だけ**（996・997 行の本文の呼び出しと 947 行の説明文）。配置の側の走査器の較正はこのファイルから採れる。
+- **落ちの報告の写しは 5 本のテストを持つ**（wintf の `test_crash_report.rs`）。3 つ目の写しで多重集合が 5 つ増える。
+- **性能の道具の自分の確かめ**: `judge-perf.py --selftest`（`fixtures/`）のほかに、`fixtures-loop/` を読むのは `perf-rank.py`・`perf-compare.py`（`perf_compare_selftest.py`）・`perf-ledger.py`（`perf_ledger_selftest.py`）・`judge-followup.py`（`judge_followup_selftest.py`）。
+- **`[lints]` もクレートの頭の `#![deny]` も無い**（`main.rs` の頭は `windows_subsystem` だけ）。lib にしても写す属性は無い。
+- **`code_only` の走査器は本体と配置の 10 ファイルに同じ形で並ぶ**（既存の形）。まとめるのはこの仕様の外。
+
+### 7.2 置き場の候補の比べ（判定器の一族と境をまたぐテスト）
+
+| 案 | 中身 | 良い所 | 困る所 |
+|---|---|---|---|
+| A `crates/areka/src/placement_tests/`（選んだ） | 判定器の一族 15 と境をまたぐテスト 8（うち片割れ 2）を 1 つのフォルダに | 配置から来た本体のテストが 1 か所で見つかる・audit の受け持ちが重ならない・中の `#[path]` は変わらない | `runtime-crate-split`・`input-crate-split` が置き場を決め直す（どちらにしても要る） |
+| B `crates/areka/src/emo2_boot/transition_judge/` | 判定器を `emo2_boot` の下に | `runtime-crate-split` で `emo2_boot` と一緒に動く | `audit-emo2-boot-spine` と受け持ちが重なる・境をまたぐテストの置き場が割れる |
+| C `crates/areka/src/transition_judge/`（研究の 6 章の 7 の例） | 判定器だけを根の下に | 名前が短い | 境をまたぐテストの置き場が別になる |
+
+### 7.3 まとめの段（synthesis）
+
+- **まとめられる所**: 「外へ開く支え」は、どれも `test_support` という名のモジュール（根・`spawn`・`reseed`・`measure`）か、`test-support` の印を付けた項目（`from_scope_titles`・`project_restore`）に置く。読む人は `test_support` を探せば外へ開くものが全部見つかる。「別の crate を読む」も本体では読み口 1 つ（`crate_source!`・`crate_path`）にまとめた。
+- **作るか使うか**: 条件つきで可視性を変える外の crate（`visibility` ほか）は使わない（外の依存を足さない・1.6）。`measure` の私有の 2 関数は、`test-support` のときだけ立つ `pub fn` の入口で開ける。読み口は std の `include_str!`・`concat!`・`env!` だけで書ける。
+- **減らした所**:
+  - 古い形の `capture_logs` の包みは消す（3.1）。`synth_declared_dpi_ghost` の古い形の包みも作らない（D10）。
+  - 本体の `sample_test_support` に同じ働きの関数を足さない（D6）。
+  - 規約の確かめの新しいテストは足さない（grep の表を実装の記録に残す）。`log-capture-kit` へ移す 2 つの補助にも新しいテストは足さない（中身を変えないため）。
+  - 配置の crate の中で別の crate を読むのは 1 か所（sylphya の src）だけなので、配置の側に読み口は作らない。
+  - 一時の別名は段 1 だけで、最終形に残さない。
+
+### 7.4 設計の決め（design.md の D1〜D11 の要旨）
+
+- D1 判定器の一族と境をまたぐテストは `crates/areka/src/placement_tests/`（7.2 の案 A）。
+- D2 移し方は研究の案 C。段 1 だけ `main.rs` に一時の別名を置き、公開面をコンパイラに数えさせる。
+- D3 `reseed::tests` の 3 つとその補助だけを `reseed_test_support.rs` へ出して `test-support` で開ける。
+- D4 1,000 行は例外表を増やさない。根は `PlacementError` を出して約 910 行。`transition_judge.rs` は超えたときだけ観測行の読みを `transition_judge_parse.rs` へ出す。
+- D5 配置の crate の開発用の依存に `sample-ghost-kit`・`tracing-subscriber`（examples のため）。
+- D6 `balloon_root` は足さず、本体の既存の `emo2_balloon_root` を使う。
+- D7 読み口は本体の crate 全体に当てる（5.4 の字面どおり・ほかの 6 か所も寄せる）。
+- D8 配置の支えを頼る相手で 3 つに分ける（`test_support`・`sample_test_support`・`shared_test_support`）。
+- D9 `measure` の私有の 2 関数は `measure::test_support` の入口で開ける。
+- D10 `synth_declared_dpi_ghost` は道を引数で受ける形で `test_support` へ。
+- D11 1.7 の `workspace = true` は外の crate だけ・ワークスペースの中の crate は path（慣習どおり）。
+
+### 7.5 危うさと手当て
+
+- 機能だけが立つビルド（本体のテストを組むときの配置）で、`test-support` の項目が `#[cfg(test)]` の項目に頼ると組めない → 段 2 で `cargo check --workspace --all-targets` を必ず通す。`test-support` の項目は全部 `pub` か、`pub` から使われる `pub(crate)` だけにする（死んだコードの警告を出さない）。
+- `transition_judge.rs` 999 行・`main.rs` 986 行 → D4。
+- 新しいテストの実行ファイル → 3 つ目の落ちの報告の写しと `load-flake.ps1 -Binary areka-placement-lib`。
+- 割ったテストの語の表が wintf・配置・本体の 3 つに並ぶ → 表の上の注で「3 つ全部へ」。
+- 範囲の外で気づいたこと: `areka-emo-present/src/scale_tests.rs`・`areka-emo-text/tests/attach_wiring_test.rs` が `expect_one`（と `ExpectField`）を自前で持つ。完了の棚卸で扱う（この仕様では直さない）。
