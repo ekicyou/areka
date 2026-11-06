@@ -12,7 +12,9 @@ use areka_parsers::shell::parse;
 use crate::bind::BindSet;
 use crate::log_capture::capture_logs;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{bake_atlas, bound_world, frame, id_to_path, named_ops};
+use crate::plan_test_support::{
+    bake_atlas, bound_world, frame, id_to_path, named_ops, named_ops_of,
+};
 
 const RELS: &[&str] = &[
     "body.png", "s10.png", "s11.png", "s12.png", "s20.png", "s21.png", "s22.png", "s30.png",
@@ -32,12 +34,8 @@ fn shell(anims: &str) -> String {
 
 /// 面 0 を合成した命令列（(絵の名前, X, Y)）。
 fn compose(anims: &str, binds: &[u32], pattern: &PatternState) -> Vec<(&'static str, i64, i64)> {
-    let atlas = bake_atlas(Path::new("shell/master"), RELS);
-    let world = bound_world(&parse(&shell(anims)), &[], &atlas);
-    let map = id_to_path(&atlas, RELS);
     let binds = BindSet::from_ids(binds.iter().copied());
-    let out = crate::plan_test_support::ops(&world, &atlas, 0, &binds, pattern);
-    named_ops(&out, &map)
+    named_ops_of(&shell(anims), &[], RELS, 0, &binds, pattern).0
 }
 
 fn ops(anims: &str, binds: &[u32]) -> Vec<(&'static str, i64, i64)> {

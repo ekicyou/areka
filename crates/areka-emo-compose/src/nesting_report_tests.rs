@@ -161,10 +161,7 @@ fn order_is_parent_then_element_then_source_order() {
 /// 報告を作る間は記録を 1 行も出さない（要件 8.1 の記録は入口の役目）。
 #[test]
 fn fixture_yields_exactly_the_planted_issues() {
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     let world = EmoWorld::build_with_images(&parse(FIXTURE), &images);
     let mut report = NestReport::default();
     let logs = capture_logs(|| report = world.nest_report());

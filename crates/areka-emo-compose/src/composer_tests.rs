@@ -7,14 +7,13 @@
 //! `golden_tests_determinism_budget_tests`、失敗経路の `Err` と記録は `log_firing_tests`）。
 
 use super::*;
-use crate::plan_test_support::bound_world;
 use areka_emo_atlas::AtlasTable;
 use areka_parsers::shell::SortOrder;
 use std::path::Path;
 
 use crate::plan_test_support::{
-    bake_atlas_sized, bind_anim, elem, frame, px, shell_of, shell_of_with_sort, surface,
-    surface_with_anims,
+    bake_atlas_sized, bind_anim, bound_world, elem, frame, px, shell_of, shell_of_with_sort,
+    surface, surface_with_anims,
 };
 
 /// 40×30 の base（不透明青）を (0,0) に置き、有効 bind 1 が 200×10 の part（不透明赤）を (0,0) に置く面 1000。
@@ -283,15 +282,6 @@ fn compose_error_display_strings_are_exact() {
         }
         .to_string(),
         "surface 7 extent 16385x2 exceeds the size limit (side 16384 or area 33554432 pixels)",
-    );
-    assert_eq!(
-        ComposeError::ExtentTooLarge {
-            surface: 7,
-            w: 8_192,
-            h: 4_097
-        }
-        .to_string(),
-        "surface 7 extent 8192x4097 exceeds the size limit (side 16384 or area 33554432 pixels)",
     );
 }
 

@@ -6,7 +6,6 @@
 //! 画像は `MemoryDecoder` に、検体の PNG の見出し（IHDR）から読んだ原寸の単色を入れる
 //! （ファイルごとに色を変え、合成の画素で「どの絵か」を見分ける）。
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
@@ -14,7 +13,7 @@ use areka_parsers::shell::{parse, parse_boxes};
 
 use super::{ElementKind, NestIssue, element_kind};
 use crate::boxes::{BoxIssue, fold_boxes};
-use crate::plan_test_support::{bake_surfaces, elem, opaque_wxh, png_size, px, surface};
+use crate::plan_test_support::{bake_surfaces, elem, image_map, opaque_wxh, png_size, px, surface};
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -59,7 +58,7 @@ struct Tally {
     bake_errors: usize,
 }
 
-/// 検体に仕込んだ件数（surfaces.txt の冒頭の説明・tasks.md 1.2 の記録）。
+/// 検体に仕込んだ件数（surfaces.txt の冒頭の説明）。
 const PLANTED: Tally = Tally {
     missing_target: 2,
     cycle: 3,
@@ -79,10 +78,7 @@ struct Loaded {
 fn load(text: &str) -> Loaded {
     let shell = parse(text);
     // ファイル名の慣習だけで面になる絵（surface_nesting_fixture_test がフォルダの中身を番する）。
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     let mut world = EmoWorld::build_with_images(&shell, &images);
     let nest = world.nest_report();
     let (_, boxes) = fold_boxes(&parse_boxes(text), &images, &world);

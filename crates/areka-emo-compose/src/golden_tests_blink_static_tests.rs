@@ -2,8 +2,7 @@
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, BindSet, MemoryDecoder, Path, PatternState, SetId, Shell};
-use crate::plan_test_support::bound_world;
-use crate::plan_test_support::{opaque_wxh, plan_of};
+use crate::plan_test_support::{bound_world, opaque_wxh, plan_of};
 
 // ============================================================================
 // emo2 まばたき bind+random（1400・pattern0 なし）の静的不活性回帰檻（要件 **9.1**・**9.5**・11.2）。
@@ -169,4 +168,15 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
             "{rel} は不透明コアあり＝placement Some（静的に描けば積まれ得た）",
         );
     }
+    // 閉じ目の面 1412 そのものを合成すると命令が生じる（静的に描けば上檻の命令列が実際に伸びる）。
+    let world = bound_world(&shell, &[], &atlas);
+    let (ops_1412, result) = plan_of(
+        &world,
+        &atlas,
+        1412,
+        &BindSet::default(),
+        &PatternState::default(),
+    );
+    result.expect("閉じ目の面 1412 は合成できる");
+    assert!(!ops_1412.is_empty(), "閉じ目の面 1412 の命令列は空でない");
 }

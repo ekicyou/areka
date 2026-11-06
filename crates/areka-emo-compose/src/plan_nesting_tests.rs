@@ -9,11 +9,10 @@ use std::path::Path;
 use areka_parsers::shell::parse;
 
 use crate::bind::BindSet;
-use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan_test_support::{
-    bake_atlas, bound_world, frame, id_to_path, named_ops, ops, ops_limited, skipped,
+    bake_atlas, bound_world, frame, id_to_path, named_ops, named_ops_of, ops_limited, skipped,
 };
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
@@ -51,12 +50,7 @@ fn compose_with(
     binds: &BindSet,
     pattern: &PatternState,
 ) -> (Vec<(&'static str, i64, i64)>, String) {
-    let atlas = bake_atlas(Path::new("shell/master"), RELS);
-    let world = bound_world(&parse(text), images, &atlas);
-    let map = id_to_path(&atlas, RELS);
-    let mut out = Vec::new();
-    let logs = capture_logs(|| out = ops(&world, &atlas, top, binds, pattern));
-    (named_ops(&out, &map), logs)
+    named_ops_of(text, images, RELS, top, binds, pattern)
 }
 
 fn ops_of(text: &str, top: u32) -> Vec<(&'static str, i64, i64)> {

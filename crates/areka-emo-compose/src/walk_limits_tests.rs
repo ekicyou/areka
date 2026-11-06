@@ -410,7 +410,7 @@ fn extent_over_the_area_limit_is_too_large() {
 
 /// 読み込みの走査（外形の表・シェルの外形・無い番号と循環の報告・形の誤り）は根ごと・組ごとに
 /// 予算を新しくするが、予算が尽きた `error!` は呼び出し 1 回につき 1 行だけ。面 0 … 9 の鎖（element定義と
-/// pattern定義の両方で次の面を指す）で予算 4 なら、面 0〜6 の根と組がどれも尽きる。
+/// pattern定義の両方で次の面を指す）で予算 4 なら、尽きる根と組がいくつもある。
 #[test]
 fn load_walks_report_the_spent_budget_once_per_call() {
     let mut text = String::from("charset,UTF-8\n");

@@ -5,7 +5,7 @@ use super::test_support::{
     shell_master_dir, surface1000_bind_parts,
 };
 use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
-use crate::plan_test_support::bound_world;
+use crate::plan_test_support::{bound_world, plan_of};
 
 // ============================================================================
 // 決定性（要件 **10.1**）と再合成予算（要件 **10.3**）の fixture 検証テスト。
@@ -23,10 +23,8 @@ use crate::plan_test_support::bound_world;
 //      あることを固定する。surface1000（複数 bind の入れ子 flatten を含む最も内容の濃い経路）を主対象とする。
 //
 // すべて MemoryDecoder+bake の CPU-only 経路（COM/WIC/表示なし・要件 11.4）。surface1000 の bind パーツ
-// 土台（surface1000_bind_parts / build_atlas_for_surface1000 / on_params 等）を使う。
+// 土台（surface1000_bind_parts / build_atlas_for_surface1000）を使う。
 // ============================================================================
-
-use crate::plan_test_support::plan_of;
 
 /// surface1000＋実 bind パーツ 3 種（1100/1200/1302）が「全て解決し描画命令を生む」有効 bind 集合。
 ///
@@ -113,14 +111,17 @@ fn surface1000_recompose_capacities_do_not_grow() {
     let ops_len0 = composer.ops.len();
     let ops_cap0 = composer.ops.capacity();
     let caps0 = composer.scratch.capacities();
+    let mut used = 0;
     for (name, cap) in caps0 {
         if matches!(
             name,
             "visited" | "on_path" | "steps" | "frames" | "merged_ids" | "anims"
         ) {
             assert!(cap > 0, "作業場の {name} を使っている（空虚でない）");
+            used += 1;
         }
     }
+    assert_eq!(used, 6, "確かめる作業場の列の名前が 6 つとも在る");
 
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {

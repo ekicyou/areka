@@ -16,7 +16,9 @@ use crate::nesting::{ElementKind, FilmId};
 use crate::normalized::SurfaceMaster;
 use crate::pattern::PatternState;
 use crate::plan::BlitOp;
-use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, insert_film_2x2, solid};
+use crate::plan_test_support::{
+    bake_films_and_bind, errors, frame, insert_film, insert_film_2x2, solid,
+};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 const BASE: &str = "shell";
@@ -310,11 +312,7 @@ fn film_without_sheet_is_not_drawn_and_logs_error() {
         .kind = ElementKind::Film(FilmId(123_456));
     let (named, _, logs) = compose(&world, &atlas, 0, &PatternState::default());
     assert_eq!(named, vec![op("part.png", 0, 0)]);
-    assert_eq!(
-        logs.lines().filter(|l| l.contains("level=ERROR")).count(),
-        1,
-        "{logs}"
-    );
+    assert_eq!(errors(&logs, "動く絵の子の定義が無い"), 1, "{logs}");
 }
 
 /// 要件 7.1: `always` でない animation（組み合わせ・大文字・ほかの語）は欄が空でも何も足さない。

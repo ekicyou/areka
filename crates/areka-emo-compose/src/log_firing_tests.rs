@@ -12,12 +12,11 @@
 //! 当該ログ行を削れば必ず失敗する。
 
 use super::*;
-use crate::plan_test_support::bound_world;
 
 use areka_emo_atlas::{
     AtlasEntry, AtlasKey, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
 };
-use areka_parsers::shell::{AppendTarget, DefRef, Interval, SurfaceAppend};
+use areka_parsers::shell::{AppendTarget, DefRef, Interval};
 use std::path::Path;
 
 use crate::log_capture::capture_logs;
@@ -25,8 +24,8 @@ use crate::method::{BlendKind, BlendMode, ComposeMethod};
 use crate::normalized::Transform;
 use crate::plan::BlitOp;
 use crate::plan_test_support::{
-    bake_atlas, bind_anim, elem, page_1px, plan_of, shell_mixed, shell_of, single_entry_table,
-    single_pattern_anim, surface, surface_with_anims,
+    append_def, bake_atlas, bind_anim, bound_world, elem, page_1px, plan_of, shell_mixed, shell_of,
+    single_entry_table, single_pattern_anim, surface, surface_with_anims,
 };
 
 /// `needles` を全部含む記録の行が在るか（level・target・欄を同じ 1 行で突く）。
@@ -452,12 +451,12 @@ fn duplicate_surface_id_merge_logs_debug_not_warn() {
 fn nonexistent_append_target_warn_fires_with_id() {
     // 事前 surface は id=10 のみ。append は 10（存在）と 999（未存在）を狙う。
     let s10 = surface(10, vec![elem(0, "base.png", 0, 0)]);
-    let ap = SurfaceAppend {
-        targets: vec![AppendTarget::Single(10), AppendTarget::Single(999)],
-        elements: vec![elem(1, "added.png", 3, 4)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    };
+    let ap = append_def(
+        vec![AppendTarget::Single(10), AppendTarget::Single(999)],
+        vec![elem(1, "added.png", 3, 4)],
+        Vec::new(),
+        Vec::new(),
+    );
 
     let logs = capture_logs(|| {
         let world = EmoWorld::build(&shell_mixed(

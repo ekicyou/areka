@@ -12,61 +12,6 @@ use std::path::Path;
 // の寄与サイズは register 時の (w,h) で制御できる。サイズ可変・全透明の焼きは `plan_test_support` の
 // [`bake_atlas_sized`] を引く。
 
-/// **受入基準**・要件 6.5: 空の BindSet でも [`build_plan`] が返す [`Extent`] は全 bind の描くコマを
-/// 数える（有効 bind 集合に依存しない静的量）。外形は束縛のときの表を引くだけで BindSet を受け取らない
-/// ので、空の BindSet の 1 回で足りる（指摘 118）。
-///
-/// host=1000 は静的 element base(40×30) を持ち、bind id=1→part1(200×10)、id=2→part2(10×150)、
-/// id=3→part3(60×60) を各 pattern0 で参照。外形は全 element＋**全 bind の描くコマ**の和集合ゆえ
-/// max(base.w, part1.w)=200・max(base.h, part2.h)=150＝Extent{200,150}。空の BindSet で 40×30 なら
-/// 「有効 bind 依存」バグ（6.5 違反）。
-#[test]
-fn extent_is_independent_of_bindset() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (40, 30), Some((64, 64, 64))),
-            ("part1.png", (200, 10), Some((64, 64, 64))),
-            ("part2.png", (10, 150), Some((64, 64, 64))),
-            ("part3.png", (60, 60), Some((64, 64, 64))),
-        ],
-    );
-
-    // host=1000: 静的 base ＋ bind id=1/2/3 が part1/part2/part3 を (0,0) 参照。
-    let host = surface_with_anims(
-        1000,
-        vec![elem(0, "base.png", 0, 0)],
-        vec![
-            bind_anim(1, 1100, 0, 0),
-            bind_anim(2, 1200, 0, 0),
-            bind_anim(3, 1300, 0, 0),
-        ],
-    );
-    let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
-    let part2 = surface(1200, vec![elem(0, "part2.png", 0, 0)]);
-    let part3 = surface(1300, vec![elem(0, "part3.png", 0, 0)]);
-    let shell = shell_of(vec![host, part1, part2, part3]);
-    let world = bound_world(&shell, &[], &atlas);
-
-    // 全 element＋全 bind の描くコマ の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
-    let expected = Extent { w: 200, h: 150 };
-
-    let extent = plan_of(
-        &world,
-        &atlas,
-        1000,
-        &BindSet::default(),
-        &PatternState::default(),
-    )
-    .1;
-    assert_eq!(
-        extent,
-        Ok(expected),
-        "空 BindSet でも全 bind の描くコマ を母集合に外形算出"
-    );
-}
-
 /// 要件 6.3＋6.5: placement None（全透明）element は命令からスキップされるが、
 /// 外形には原寸で寄与する。
 ///
@@ -277,10 +222,11 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
     );
 }
 
-/// 要件 6.6: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。
+/// **受入基準**・要件 6.5・6.6: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。
 ///
 /// host=1000 は静的 element なし・全パーツ bind。空 BindSet ゆえ有効 bind ゼロ＝命令ゼロだが、
-/// 外形は全 bind の描くコマ 母集合（有効 bind 非依存）ゆえ非ゼロ。エラーでなく正常空合成。
+/// 外形は全 bind の描くコマ 母集合（有効 bind 非依存）ゆえ非ゼロ。エラーでなく正常空合成。外形は束縛の
+/// ときの表を引くだけで BindSet を受け取らないので、空の BindSet の 1 回で足りる（指摘 118）。
 #[test]
 fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let base = Path::new("shell/master");

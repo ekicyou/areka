@@ -2,7 +2,7 @@
 
 use super::test_support::{bake_emo2, parse_emo2_shell, shell_master_dir};
 use super::{AtlasTable, EmoWorld, MemoryDecoder, Path, Shell};
-use crate::plan_test_support::bound_world;
+use crate::plan_test_support::{bound_world, opaque_wxh, png_size};
 
 // ============================================================================
 // 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
@@ -32,7 +32,6 @@ use crate::plan_test_support::bound_world;
 // ============================================================================
 
 use crate::plan::{Extent, compute_extent};
-use crate::plan_test_support::png_size;
 
 /// 実 shell の全 element を**実 PNG 原寸の全不透明バッファ**で `MemoryDecoder` へ挿入し bake する。
 ///
@@ -50,9 +49,9 @@ fn build_atlas_real_sizes(shell: &Shell, base: &Path) -> AtlasTable {
                 continue; // 同一 PNG を複数 surface が参照する（eyebase 等）: 一度だけ挿入。
             }
             let (w, h) = png_size(&abs);
-            let stride = w * 4;
-            let bgra = vec![255u8; (stride * h) as usize]; // 全不透明→ original=(w,h)・placement full。
-            dec.insert(abs, w, h, stride, bgra, true);
+            // 全不透明→ original=(w,h)・placement full。
+            let (w, h, stride, bgra, premul) = opaque_wxh(w, h, 255, 255, 255);
+            dec.insert(abs, w, h, stride, bgra, premul);
         }
     }
     bake_emo2(shell, base, &dec)

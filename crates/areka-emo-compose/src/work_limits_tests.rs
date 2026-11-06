@@ -90,14 +90,15 @@ fn fold_drops_the_descriptor_over_the_copied_line_limit() {
     assert!(logs.contains("lines=1024"), "{logs}");
 }
 
-/// 指摘 78: animation の中の pattern の行も写す行に数える。面 0 の 1 行の後、`surface1-1024` に animation 1 つ・
-/// pattern 1,024 行を書くと 1,024×1,025 で越えるので、その記述子を捨てて `error!` は 1 行。
+/// 指摘 78: animation の中の pattern の行も、animation ごとの interval の 1 行も写す行に数える。面 0 の 1 行の後、
+/// `surface1-1024` に animation 1 つ・pattern 1,023 行を書くと 1,024×(1＋1,023)＝2^20 で合計 2^20＋1 になり
+/// 越えるので、その記述子を捨てて `error!` は 1 行（interval の 1 行を数え落とすと収まってしまう）。
 #[test]
 fn fold_counts_the_pattern_rows_as_copied_lines() {
     let mut text = String::from(
         "charset,UTF-8\nsurface0\n{\ncollision0,0,0,1,1,A\n}\nsurface1-1024\n{\nanimation0.interval,never\n",
     );
-    for p in 0..1024 {
+    for p in 0..1023 {
         text.push_str(&format!("animation0.pattern{p},overlay,0,0,0,0\n"));
     }
     text.push_str("}\n");
@@ -107,6 +108,22 @@ fn fold_counts_the_pattern_rows_as_copied_lines() {
     assert!(world.surface(0).is_some(), "上限の内の面 0 は残る");
     assert!(world.surface(1).is_none() && world.surface(1024).is_none());
     assert_eq!(errors(&logs, "写す行"), 1, "{logs}");
+}
+
+/// 指摘 78: 写す行の合計がちょうど 2^20（`surface1-1024` に 1,024 行）なら上限の内で、記述子は残り
+/// `error!` は出ない。
+#[test]
+fn fold_keeps_the_descriptor_at_exactly_the_copied_line_limit() {
+    let mut text = String::from("charset,UTF-8\nsurface1-1024\n{\n");
+    for c in 0..1024 {
+        text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+    }
+    text.push_str("}\n");
+    let mut world = None;
+    let logs = capture_logs(|| world = Some(EmoWorld::build(&parse(&text))));
+    let world = world.expect("組める");
+    assert!(world.surface(1).is_some() && world.surface(1024).is_some());
+    assert_eq!(errors(&logs, "写す行"), 0, "{logs}");
 }
 
 /// 指摘 78: 箱の行も同じ上限で、越えた記述子を捨てて `error!` は 1 行。

@@ -10,8 +10,8 @@ use crate::plan_test_support::frame;
 /// 部品の欄を一度も使わない状態は空。
 #[test]
 fn empty_parts_are_empty() {
+    // 既定値が空であることは pattern.rs の `default_is_empty`。
     let a = PatternState::default();
-    assert!(a.is_empty());
     assert_eq!(a.part(1400).count(), 0);
     assert_eq!(a.part_get(1400, 0), None);
 }

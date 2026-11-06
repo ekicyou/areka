@@ -8,7 +8,7 @@
 //! 後半は合成との一致の檻（要件 3.2・5.12）: 「部品 X のコマを足すと命令列が変わる」⇔
 //! 「X が部品の列に在る」・外れた `bind+random` のコマは両方を変えない・合成が切る循環の辺は報告に在る。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use areka_emo_atlas::AtlasTable;
@@ -20,25 +20,22 @@ use crate::log_capture::capture_logs;
 use crate::method::ComposeMethod;
 use crate::pattern::{PatternFrame, PatternState};
 use crate::plan::BlitOp;
-use crate::plan_test_support::{bake_atlas, frame, ops, skipped};
+use crate::plan_test_support::{
+    MARK_ANIM, MARKER, bake_atlas, frame, image_map, ops, skipped, visible_parts_of as visible,
+};
 use crate::world::EmoWorld;
 
 const FIXTURE: &str = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
 
 /// 検体の面の表（ファイル名の慣習だけで建つ 2・11 を含む）。
 fn fixture_world() -> EmoWorld {
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     EmoWorld::build_with_images(&parse(FIXTURE), &images)
 }
 
 fn table_of(text: &str) -> NestTable {
     EmoWorld::build(&parse(text)).nest_table()
 }
-
-use crate::plan_test_support::visible_parts_of as visible;
 
 fn listed(world: &EmoWorld, table: &NestTable) -> BTreeSet<u32> {
     world
@@ -399,8 +396,6 @@ fn out_is_cleared_and_reused() {
 // 片方だけを変えるとずれる。ここでは両者を同じ面の表・同じ着せ替えの集合・同じコマの状態で動かし、
 // 結論が一致することを全ての（一番上, 部品）の組で確かめる。
 
-use crate::plan_test_support::{MARK_ANIM, MARKER, visible_parts_of};
-
 /// 検体と小さな文面で使う画像の名前（どれも 2×2 の不透明）。
 const RELS: &[&str] = &[
     "a.png",
@@ -463,7 +458,7 @@ impl Case {
     }
 
     fn parts(&self, top: u32, binds: &BindSet, pattern: &PatternState) -> Vec<u32> {
-        visible_parts_of(&self.table, top, binds, pattern)
+        visible(&self.table, top, binds, pattern)
     }
 
     /// 面の表に在る番号（目印は除く・目印を一番上にすると目印のコマが先祖へ戻る）。

@@ -29,26 +29,20 @@ fn distinctive_opaque(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
     (w, h, stride, bgra, true)
 }
 
-/// emo2 surface0 の element0 パス（`surface0.png`・shell/master 相対）を、`base_dir.join(rel)` の
-/// 実パスで `MemoryDecoder` へ挿入する。挿入画像スペック（w,h,premultiplied BGRA）も返す。
-fn register_surface0_image(dec: &mut MemoryDecoder, base: &Path) -> (u32, u32, Vec<u8>) {
+/// emo2 surface0 の element0 を含む `AtlasTable` を COM/WIC 非依存に構築する（要件 11.4）。挿入した
+/// 画像スペック（w,h,premultiplied BGRA）も返す。
+///
+/// surfaces.txt 全体を `SurfaceSet` として bake するが、`MemoryDecoder` には surface0 の
+/// element0 パス（`surface0.png`・shell/master 相対を `base_dir.join(rel)` の実パスで）のみ既知画像を
+/// 登録する。他 element は `NotFound` として `bake` の errors に記録されるだけで、surface0 の合成には
+/// 影響しない（surface0 は element0 単層のみ）。
+fn build_atlas_for_surface0(shell: &Shell, base: &Path) -> (AtlasTable, u32, u32, Vec<u8>) {
+    let mut dec = MemoryDecoder::new();
     // element0 の相対パスは surfaces.txt の `element0,overlay,surface0.png,0,0` に対応。
     let rel = "surface0.png";
     // emo2 の実 surface0.png 寸法に縛られない任意の決定的サイズ（合成は挿入画像で駆動される）。
     let (w, h, stride, bgra, has_alpha) = distinctive_opaque(37, 29);
     dec.insert(base.join(rel), w, h, stride, bgra.clone(), has_alpha);
-    (w, h, bgra)
-}
-
-/// emo2 surface0 の element0 を含む `AtlasTable` を COM/WIC 非依存に構築する（要件 11.4）。
-///
-/// surfaces.txt 全体を `SurfaceSet` として bake するが、`MemoryDecoder` には surface0 の
-/// element0 パスのみ既知画像を登録する。他 element は `NotFound` として `bake` の errors に
-/// 記録されるだけで、surface0 の合成には影響しない（surface0 は element0 単層のみ）。
-fn build_atlas_for_surface0(shell: &Shell, base: &Path) -> (AtlasTable, u32, u32, Vec<u8>) {
-    let mut dec = MemoryDecoder::new();
-    let (w, h, bgra) = register_surface0_image(&mut dec, base);
-
     (bake_emo2(shell, base, &dec), w, h, bgra)
 }
 

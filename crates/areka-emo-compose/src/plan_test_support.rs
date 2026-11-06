@@ -245,6 +245,24 @@ pub(crate) fn named_ops<'a>(
         .collect()
 }
 
+/// `rels`（2×2 の不透明）を焼き、文面 `text`（ファイル名の慣習だけで面になる絵 `images`）の面の表を束縛して
+/// `top` を合成した命令列を (画像の名前, X, Y) の列で返す。合成の間の記録も返す。
+pub(crate) fn named_ops_of(
+    text: &str,
+    images: &[(u32, &str)],
+    rels: &[&'static str],
+    top: u32,
+    binds: &BindSet,
+    pattern: &PatternState,
+) -> (Vec<(&'static str, i64, i64)>, String) {
+    let atlas = bake_atlas(Path::new("shell/master"), rels);
+    let world = bound_world(&parse(text), images, &atlas);
+    let map = id_to_path(&atlas, rels);
+    let mut out = Vec::new();
+    let logs = crate::log_capture::capture_logs(|| out = ops(&world, &atlas, top, binds, pattern));
+    (named_ops(&out, &map), logs)
+}
+
 /// 命令列を引く口: `surface_id` を合成した命令列を新しい `Vec` で返す。
 pub(crate) fn ops(
     world: &EmoWorld,

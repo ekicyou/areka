@@ -6,7 +6,6 @@
 //! 後半は見える部品と見える子（要件 1.9・3.7）: `SurfaceParts` の `films`・`always_rest`、
 //! `walk` の経過 0 の辺（欄が「載っていない」ときだけ・「消えている」では進まない）、`visible_films`。
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
@@ -19,7 +18,10 @@ use super::{
 use crate::bind::BindSet;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::PatternState;
-use crate::plan_test_support::{bake_films_and_bind, frame, insert_film_2x2, ops, solid};
+use crate::plan_test_support::{
+    MARK_ANIM, MARKER, bake_films_and_bind, frame, image_map, insert_film_2x2, ops, solid,
+    visible_parts_of,
+};
 use crate::world::{EmoWorld, SurfaceIndex};
 
 fn other(s: &str) -> Interval {
@@ -310,10 +312,7 @@ fn always_rest_edge_follows_only_rest_cells() {
 #[test]
 fn tables_without_films_or_always_keep_new_columns_empty() {
     let fixture = include_str!("../tests/fixtures/surface-nesting/surfaces.txt");
-    let images = BTreeMap::from([
-        (2, "surface2.png".to_string()),
-        (11, "surface11.png".to_string()),
-    ]);
+    let images = image_map(&[(2, "surface2.png"), (11, "surface11.png")]);
     let world = EmoWorld::build_with_images(&parse(fixture), &images);
     let table = world.nest_table();
     assert!(!table.is_empty());
@@ -331,8 +330,6 @@ fn tables_without_films_or_always_keep_new_columns_empty() {
 // 別々に書いてあるので、片方だけを変えるとずれる。nesting_visible_tests の一致の檻と同じ型で、検体の
 // 全サーフェスを一番上にし、欄の組ごとに「部品 X に目印のコマを足すと命令列が変わる」⇔「X が見える
 // 部品に在る」、「子 F のコマを替えると命令列が変わる」⇔「F が見える子に在る」を確かめる。
-
-use crate::plan_test_support::{MARK_ANIM, MARKER, visible_parts_of};
 
 /// 欄の組: 空・経過 0 と違うコマ・子を置くサーフェスを指すコマ・消えている・部品の経過 0 と
 /// 部品の消えている・子のコマ（一番上は今までの欄、20 と 10 は部品の欄）。

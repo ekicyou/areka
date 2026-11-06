@@ -165,6 +165,16 @@ fn pure_bind_pattern_non_overlay_still_fits() {
          surface10\r\n{\r\nelement0,overlay,red4.png,0,0\r\n}\r\n",
     );
     let b = shell_bounds(&world, &atlas);
+    // 30,0 に置いた 4×4 が右端を 34 にする（数えなければ土台の 16 のまま）。
+    assert_eq!(
+        b,
+        ShellBounds {
+            left: 0,
+            top: 0,
+            right: 34,
+            bottom: 8
+        }
+    );
     assert_every_surface_fits(&world, &atlas, b);
 }
 
@@ -179,6 +189,16 @@ fn always_pattern_non_overlay_still_fits() {
          surface10\r\n{\r\nelement0,overlay,red4.png,0,0\r\n}\r\n",
     );
     let b = shell_bounds(&world, &atlas);
+    // 0,20 に置いた 4×4 が下端を 24 にする（数えなければ土台の 8 のまま）。
+    assert_eq!(
+        b,
+        ShellBounds {
+            left: 0,
+            top: 0,
+            right: 16,
+            bottom: 24
+        }
+    );
     assert_every_surface_fits(&world, &atlas, b);
 }
 

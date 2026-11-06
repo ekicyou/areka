@@ -101,7 +101,7 @@ fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
 }
 
 /// 同じ面を何度組んでも、形の誤り（入れ子の循環・描かないメソッドの pattern0 とコマ）の知らせは
-/// warn にならず debug に留まり、絵は毎回同じ（打ち切り・飛ばしの振る舞いは変わらない）。
+/// warn にならず debug に留まり、絵は 3 回とも同じ（決定性）。
 #[test]
 fn composing_repeatedly_adds_no_warn() {
     let (world, atlas) = world_of(TEXT);
@@ -137,8 +137,8 @@ fn composing_repeatedly_adds_no_warn() {
             "{kind} は debug に残る: {logs}"
         );
     }
-    assert_eq!(shots[0..2], shots[2..4], "絵は毎回同じ");
-    assert_eq!(shots[0..2], shots[4..6], "絵は毎回同じ");
+    assert_eq!(shots[0..2], shots[2..4], "3 回とも同じ絵（決定性）");
+    assert_eq!(shots[0..2], shots[4..6], "3 回とも同じ絵（決定性）");
 }
 
 /// 面 0 が面 1 を置き（element定義と pattern定義）、面 1 の `move` が面 0 を指しても循環でない。
