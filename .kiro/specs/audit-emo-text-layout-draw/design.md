@@ -590,3 +590,10 @@ cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,     // None＝
 
 - **決め**（同上）: 前後の時間は測らず、大きな入力で結果が直す前と同じことを確かめる決定論の檻を置く（Testing Strategy の「振る舞いが変わらないことの確かめ」）。
 - **理由**: どちらも手間の次数が下がる直しで、効くことはコードの形から決まる。要件に性能の目標の数は無い。負荷の机を使う測りは、開発の道具の負荷を抑える決め（記憶「トークン負荷を極力抑える」）に見合わない。
+
+### 5. 並走の兄弟との申し合わせの結果（2026-11-06・tasks.md の後）
+
+- 指摘 7 は `audit-emo-text-state-actor` のタスク 2.4 が `actor_present.rs` の中で右と下を画像の寸で切る。`TextRegion::surface_extent` は足さない（使い手が無くなるため）。近い辺は申し送りのまま。
+- 装置の失敗の記録の写し（指摘 26 の `device_err`／`none_err`）は、あちらが `crate::surface` の側へ寄せる。こちらは触らない。
+- `state_decoration_tests.rs:424,438` の 1 語はこちらのタスク 11.4 で替える（了承済み）。
+- あちらが `tests/viewbox_blit_spike.rs` を消すので、それを名指す説明 2 か所はこちらのタスク 13.2 で直す。
