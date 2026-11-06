@@ -340,15 +340,15 @@ mod tests {
         let root = temp.path().to_path_buf();
         let mount = resolve_mount_with_shell_descript(
             &root,
-            "master",
+            "keyless",
             Some(b"charset,UTF-8\nother,value\n"),
         );
 
         // --- Act ---
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
-        // --- Assert: shell ディレクトリ自身の basename（"master"）へフォールバック ---
-        assert_eq!(config.shell_name, "master");
+        // --- Assert: shell ディレクトリ自身の basename（"keyless"）へフォールバック ---
+        assert_eq!(config.shell_name, "keyless");
     }
 
     /// フォールバック値が「たまたま `master` と一致する」偽陽性を防ぐための決め手テスト:

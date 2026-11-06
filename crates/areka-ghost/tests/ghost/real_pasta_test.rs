@@ -13,6 +13,8 @@
 //! 設定済みだが DLL 不在なら明示 fail（silent skip を認めない）。helper exe は
 //! `HOST32_HELPER_EXE` 優先→ワークスペース
 //! `target/i686-pc-windows-msvc/{debug,release}/shiori-host32-helper.exe` 探索。
+//! `PASTA_DEBUG=0` で回す（9276 を取り合う）。同じ実行ファイルの実 pasta のテストは
+//! [`real_pasta_turn`] で順に走る。
 //!
 //! # フィクスチャ（`tests/real_pasta_online.rs` と同じ形）
 //! pasta は辞書（`dic/`）・`scripts/`・`pasta.toml` を `ghost/master` から読むので、DLL 単体の
@@ -35,7 +37,7 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::contract::TalkCue;
 use sample_ghost_kit::SampleRoot;
 
-use crate::common::{resolve_helper_exe, run_bounded_shutdown};
+use crate::common::{real_pasta_turn, resolve_helper_exe, run_bounded_shutdown};
 use crate::spine_e2e_test::RecordingSink;
 
 /// OnBoot 一周が sink へ何らかの発火を記録するまでの有界待機上限（実プロセス・実
@@ -80,6 +82,7 @@ pub(crate) fn wait_for_a_cue(
 /// 実 32bit helper＋実 pasta 越しに ghost 結線層の `boot`〜`shutdown` 一周を追験する。
 #[test]
 fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
+    let _turn = real_pasta_turn();
     // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ silent skip（既存 host32 E2E／
     //     kanade 自身の real_helper_test.rs と同じ語法）---
     // 空・空白だけの値は未設定と同じに skip する（snapshot_capture_test と同じ扱い）。

@@ -6,9 +6,11 @@
 //!   既存 e2e テストの既定 username 前提を [`areka_ghost::SystemVarWiring::Custom`] の直接注入で保つ。
 //! - [`resolve_helper_exe`]: 実 pasta のテストが使う i686 helper の探し。
 //! - [`run_bounded`]／[`run_bounded_shutdown`]: 宙吊りを括る有界の実行と正規の終了。
+//! - [`real_pasta_turn`]: 実 pasta を起こすテストの順番（127.0.0.1:9276 の取り合いを避ける）。
 
 use std::path::PathBuf;
 use std::sync::mpsc::{RecvTimeoutError, sync_channel};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use areka_ghost::{GhostRuntime, SystemVarSource};
@@ -93,6 +95,14 @@ pub fn run_bounded_shutdown(what: &str, timeout: Duration, runtime: GhostRuntime
         result.is_ok(),
         "'{what}': shutdown は Ok(()) を返すはず: {result:?}"
     );
+}
+
+/// 実 pasta を起こすテストの順番。`PASTA_DEBUG` が立っていると emo2 は 127.0.0.1:9276 を握るので、
+/// 同じ実行ファイルの中で並べて走らせると取り合う。テストの本体の間ずっと持つ。前のテストの
+/// panic で毒になっていても取り直す（順番だけの錠で、守る値は無い）。
+pub fn real_pasta_turn() -> MutexGuard<'static, ()> {
+    static TURN: Mutex<()> = Mutex::new(());
+    TURN.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

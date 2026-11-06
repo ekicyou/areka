@@ -469,6 +469,62 @@ fn a_destination_in_use_fails_install_and_the_record_points_at_the_work_folder()
     drop(handle);
 }
 
+/// 宛先の中のファイルを共有 0 で掴むと、組み上げの段の複写（既存の宛先を作業フォルダへ
+/// 写す）が os error 32 で落ちる。宛先は呼ぶ前のまま、記録の `work` の作業フォルダは
+/// その場で消してある（組み上げの途中を残さない）。
+#[test]
+fn a_stage_failure_removes_the_work_folder_named_in_the_record() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let root = work.path();
+    let destination = root.join("ghost").join("tester");
+    fs::create_dir_all(&destination).expect("宛先を掘れる");
+    fs::write(destination.join("shiori.dll"), b"loaded").expect("置ける");
+    let before = tree(&destination);
+    let path = put(root, "ghost.nar", &ghost_with_balloon());
+    let archive = NarArchive::open(&path).expect("開ける");
+    let handle = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(destination.join("shiori.dll"))
+        .expect("掴める");
+
+    let (result, records) = capture(|| {
+        archive.install(&InstallRequest {
+            roots: &SingleRoot(root),
+            target_ghost: None,
+        })
+    });
+    let error = result.expect_err("写せないので組み上げられない");
+
+    let NarError::Io {
+        phase, rolled_back, ..
+    } = &error
+    else {
+        panic!("I/O の失敗のはず: {error:?}");
+    };
+    assert_eq!(*phase, IoPhase::Stage, "組み上げの段で失敗した");
+    assert!(*rolled_back, "宛先には触れていない");
+    drop(handle);
+    assert_eq!(tree(&destination), before, "宛先は 1 バイトも変わらない");
+
+    let errors: Vec<_> = records
+        .iter()
+        .filter(|event| event.level == tracing::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 1, "失敗 1 回につき記録 1 件: {records:?}");
+    let recorded = Path::new(errors[0].field("work").expect("work の欄がある"));
+    assert!(
+        recorded.starts_with(root.join(".nar-work")),
+        "work が根の .nar-work の配下にない: {}",
+        recorded.display()
+    );
+    assert!(
+        !recorded.exists(),
+        "組み上げの途中の作業フォルダが残っている: {}",
+        recorded.display()
+    );
+}
+
 // ---- 入れ子の同梱の確定の失敗（本仕様 要件 7.7・10.3） ----
 
 /// ゴーストの書庫の同梱はゴーストの中へ入れ子に置かれ、その確定が失敗すると本体も元へ戻る。

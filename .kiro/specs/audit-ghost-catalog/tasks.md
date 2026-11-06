@@ -204,3 +204,4 @@
 - 14: #53 の欄の改名（`target`→`lane`）は `tools/perf/judge-perf.py` が欄の名で追いつきの系統を分けていたので、範囲を `tools/perf` へ広げた（`lane` を読み、無ければ `target`・生成器と生成した fixture 3 つを更新・記録済みの実ログは触らない）。設計の「範囲の外で触るファイル」に無かった触り。
 - 15: `inproc_e2e_test.rs` は 1,160→1,148 行（まだ 1,000 行の番人の例外表に要る）。一時フォルダの番人の表は 15 行（一意化 13・読むだけ 2）。
 - 16: `inproc_e2e_test.rs` は 1,148→1,013 行で、まだ 1,000 行を越えるので 1,000 行の番人の表は触っていない（並走 spec への知らせも不要）。環境変数で開く実物の pasta の 3 本は、排他テストの机で `HOST32_PASTA_DLL`＝sample-ghost-kit の emo2 の `pasta.dll`、`AREKA_SNAPSHOT_OUT`＝`target\` の下、`--test-threads=1` で回し、緑（ghost 2 本 8.9 秒・real_pasta_online 1 本 86 秒）。
+- 18.2（かけ直し 6 回目）: 範囲の外の申し送り。i686 helper は親の環境変数をそのまま受け継ぐ（`crates/shiori-host32-host/src/process_host.rs`）ので、`PASTA_DEBUG` が立っていると実物の pasta のテストが 127.0.0.1:9276 を取り合う。テストは錠で 1 本ずつにしたが、根本の直し（helper を起こすところで `PASTA_DEBUG=0` を渡す・`real-run-kit` と同じ手当て）は shiori-host32-host の持ち物として完了の棚卸で起票する。

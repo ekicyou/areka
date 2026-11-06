@@ -6,6 +6,7 @@
 //! これらが単体テストで green）。実 pasta 越しの実採取は `HOST32_PASTA_DLL`＋
 //! `AREKA_SNAPSHOT_OUT` の**両方**が設定された場合のみ動作し、いずれか欠落（または空文字）時は
 //! 静かにスキップする（既存 env-gate 流儀・`real_pasta_test.rs` を踏襲）。
+//! `PASTA_DEBUG=0` で回す（9276 を取り合う）。実採取は `real_pasta_turn` で順に走る。
 //!
 //! # 採取フロー（design.md 「Batch / Job Contract」）
 //! 検体 `emo2` の使い捨ての複製に実 pasta DLL を持ち込み（`real_pasta_test.rs` と同じ形）→
@@ -99,7 +100,7 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 use sample_ghost_kit::SampleRoot;
 
-use crate::common::{resolve_helper_exe, run_bounded_shutdown};
+use crate::common::{real_pasta_turn, resolve_helper_exe, run_bounded_shutdown};
 use crate::real_pasta_test::{OBSERVE_TIMEOUT, SHUTDOWN_BOUND, wait_for_a_cue};
 use crate::recorder::{BoxedBackend, Recorder, RecorderHandle};
 use crate::spine_e2e_test::RecordingSink;
@@ -113,6 +114,7 @@ use crate::spine_e2e_test::RecordingSink;
 /// `AREKA_SNAPSHOT_OUT/<ID>.txt` へ書き出す（上書き・冪等）。
 #[test]
 fn capture_real_pasta_snapshots() {
+    let _turn = real_pasta_turn();
     // --- env-gate: 両方揃い、かつ非空のときだけ動作（いずれか欠落・空は silent skip・PASS）---
     let (Ok(pasta_dll), Ok(out_dir)) = (
         std::env::var("HOST32_PASTA_DLL"),

@@ -10,6 +10,7 @@
 //! # env ゲート（`tests/ghost/real_pasta_test.rs` と同じ語法）
 //! `HOST32_PASTA_DLL`（pasta DLL のフルパス）が未設定なら silent skip。設定済みだが DLL 不在なら
 //! 明示 fail。helper exe は `HOST32_HELPER_EXE` 優先→`target/i686-pc-windows-msvc/{debug,release}`。
+//! `PASTA_DEBUG=0` で回す（9276 を取り合う）。
 //!
 //! # フィクスチャ
 //! pasta は辞書（`dic/`）・`scripts/`・`pasta.toml` を `ghost/master` から読むので、DLL 単体の
@@ -52,7 +53,7 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 use sample_ghost_kit::SampleRoot;
 
-use crate::common::{resolve_helper_exe, run_bounded_shutdown};
+use crate::common::{real_pasta_turn, resolve_helper_exe, run_bounded_shutdown};
 use crate::recorder::{
     BoxedBackend, ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle,
 };
@@ -113,6 +114,8 @@ fn wait_records(
 
 #[test]
 fn emo2_does_not_start_chatting_while_online() {
+    // この実行ファイルで実 pasta を起こすのはこのテストだけだが、`ghost` の束ねと同じ形で順番を取る。
+    let _turn = real_pasta_turn();
     // 空・空白だけの値は未設定と同じに skip する（snapshot_capture_test と同じ扱い）。
     let Some(pasta_dll) = std::env::var("HOST32_PASTA_DLL")
         .ok()
