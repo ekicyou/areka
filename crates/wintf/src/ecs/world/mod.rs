@@ -331,6 +331,12 @@ impl EcsWorld {
                     ),
                     crate::ecs::graphics::visual_manager::visual_resource_management_system
                         .run_if(crate::ecs::graphics::wuc_ready),
+                    // 根ごとに節の木を埋めて組み、根の部品を入れる・外す（描画面の作成が同じ回に拾う）。
+                    crate::ecs::graphics::update_draw_trees
+                        .after(
+                            crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                        )
+                        .before(crate::ecs::graphics::deferred_surface_creation_system),
                     crate::ecs::graphics::deferred_surface_creation_system
                         .run_if(crate::ecs::graphics::wuc_ready)
                         .after(

@@ -1,4 +1,4 @@
-mod builder;
+pub(super) mod builder;
 #[cfg(test)]
 mod builder_tests;
 mod clip_geometry;

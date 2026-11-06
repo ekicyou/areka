@@ -85,6 +85,29 @@ fn node_given_command_list_becomes_owner_and_back() {
     assert!(has_none(world, node), "命令の列を外せば節へ戻る");
 }
 
+/// 根の部品（`DrawTree`）は根にだけ在る: 節へ降りた持ち主からは 3 部品と一緒に外れる。
+#[test]
+fn demoted_owner_loses_draw_tree() {
+    let mut ecs = EcsWorld::new();
+    let (_, node) = owner_and_node(&mut ecs);
+    let world = ecs.world_mut();
+    world.entity_mut(node).insert(OwnSurface);
+    world.run_schedule(PreRenderSurface);
+    assert!(has_parts(world, node));
+    world.entity_mut(node).insert(DrawTree {
+        commands: vec![],
+        unit_rect: None,
+    });
+
+    world.entity_mut(node).remove::<OwnSurface>();
+    world.run_schedule(PreRenderSurface);
+    assert!(has_none(world, node));
+    assert!(
+        world.get::<DrawTree>(node).is_none(),
+        "降りた持ち主に古い木を残さない"
+    );
+}
+
 /// 装置の失い（`invalidate_dependent_components`）は `VisualDrawContent` を外し、
 /// `WorldVisual` は残す。節のまま（3 部品が入らない）。
 #[test]
@@ -128,4 +151,76 @@ fn tree_joined_to_window_later_follows_rule() {
     assert!(has_parts(world, owner_child));
     assert!(has_none(world, node_child), "節は窓へ付いても節");
     assert!(has_parts(world, promoted), "目印つきは持ち主");
+}
+
+/// 組み直す条件（`needs_rebuild`）の真理値表 16 通り: どれか 1 つでも真なら組み直す。
+#[test]
+fn needs_rebuild_truth_table() {
+    for bits in 0u8..16 {
+        let (changed, removed_any, core_changed, has_tree) =
+            (bits & 1 != 0, bits & 2 != 0, bits & 4 != 0, bits & 8 != 0);
+        let expected = changed || removed_any || core_changed || !has_tree;
+        assert_eq!(
+            needs_rebuild(changed, removed_any, core_changed, has_tree),
+            expected,
+            "changed={changed} removed_any={removed_any} core_changed={core_changed} has_tree={has_tree}"
+        );
+    }
+}
+
+/// 装置が無い（無効な）回も節の版は上がり（変化を捨てない）、根の部品は入らない（組まない）。
+#[test]
+fn invalid_device_round_bumps_version_without_tree() {
+    let mut ecs = EcsWorld::new();
+    let world = ecs.world_mut();
+    let window = world.spawn(Window::default()).id();
+    let owner = world.spawn((Visual::default(), ChildOf(window))).id();
+    let node = world
+        .spawn((
+            Visual::default(),
+            solid_rect_content(rect()),
+            ChildOf(owner),
+        ))
+        .id();
+    world.run_schedule(PreRenderSurface);
+    assert!(has_parts(world, owner));
+    let before = world.get::<VisualVersion>(node).unwrap().0;
+
+    world.get_mut::<Visual>(node).unwrap().is_visible = false;
+    world.run_schedule(PreRenderSurface);
+    assert!(
+        world.get::<VisualVersion>(node).unwrap().0 > before,
+        "無効な回も版は上がる"
+    );
+    assert!(
+        world.get::<DrawTree>(owner).is_none(),
+        "装置が無ければ組まない"
+    );
+}
+
+/// どの根か分からない出入り（`TreeEdits::any`）: 節の昇格（`VisualGraphics` が入る）と降格
+/// （`VisualGraphics` が外れる・`GraphicsCommandList` の外れでも起きる）を 1 回だけ拾う。
+#[test]
+fn tree_edits_catch_promotion_and_demotion() {
+    let mut world = World::new();
+    let any = world.register_system(|mut edits: TreeEdits| edits.any());
+    let node = world
+        .spawn((Visual::default(), WorldVisual::default()))
+        .id();
+    assert!(!world.run_system(any).unwrap(), "何も無ければ出入りなし");
+
+    world.entity_mut(node).insert(VisualGraphics::default());
+    assert!(world.run_system(any).unwrap(), "節の昇格を拾う");
+    assert!(!world.run_system(any).unwrap(), "同じ昇格は 1 回だけ");
+
+    world.entity_mut(node).remove::<VisualGraphics>();
+    assert!(world.run_system(any).unwrap(), "降格を拾う");
+    assert!(!world.run_system(any).unwrap(), "同じ降格は 1 回だけ");
+
+    let owner = world.spawn(Visual::default()).id();
+    world.entity_mut(owner).insert(VisualGraphics::default());
+    assert!(
+        !world.run_system(any).unwrap(),
+        "節でない持ち主に入るのは昇格でない（根の部品が無ければどのみち組む）"
+    );
 }

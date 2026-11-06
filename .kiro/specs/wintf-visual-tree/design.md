@@ -205,7 +205,7 @@ sequenceDiagram
     R->>R: emit（木の列を再生）・EndDraw
 ```
 
-- 門: `update_draw_trees` は `GraphicsCore` が有効な回だけ木を組む（図形は工場から作る）。無効な回は何もしない（立ち直りの後、`Res<GraphicsCore>` の変化で全部組み直す）。
+- 門: `update_draw_trees` は `GraphicsCore` が有効な回だけ木を組む（図形は工場から作る）。無効な回も `fill_world_visuals` だけは回す（装置は要らない・その回の `Ref` の変化を捨てると版が上がらず「版が違えば絵が違う」が崩れるため）が、組まず根の部品も入れない（立ち直りの後、`Res<GraphicsCore>` の変化で全部組み直す）。
 - 同じフレームの約束（1.9）: 節の変化が `PreRenderSurface` より前（`Update`・`Draw`）なら同じ回に描く。`RenderSurface` より後の変化は次の回（今の `GraphicsCommandList` と同じ）。
 
 ### 持ち主の規則の判定
@@ -333,7 +333,7 @@ flowchart TD
 **Contracts**: State [x]
 
 - State model: 窓の下の `Visual` は `wants_own_surface` が真のとき、かつそのときだけ `VisualGraphics`・`SurfaceGraphics`・`SurfaceGraphicsDirty` を持つ。
-- Persistence & consistency: 規則の答えが変わる回（部品の出入り・`ChildOf` の変化）に `sync_surface_owner_parts` が揃える。外すときは 3 部品を `remove`（`VisualGraphics` の on_remove フックが WUC の親から外す・`SurfaceGraphics` は捨てられる）。
+- Persistence & consistency: 規則の答えが変わる回（部品の出入り・`ChildOf` の変化）に `sync_surface_owner_parts` が揃える。外すときは 3 部品を `remove`（根の部品 `DrawTree` も一緒に外す・`DrawTree` は根にだけ在る・`VisualGraphics` の on_remove フックが WUC の親から外す・`SurfaceGraphics` は捨てられる）。
 
 **Implementation Notes**
 - Integration: `insert_graphics_parts_on_window_join` の名前は `sync_surface_owner_parts` へ変わる（`world/mod.rs`・`tests/visual/window_join_test.rs` が追随）。
@@ -533,8 +533,8 @@ pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCom
 | Intent | 根ごとに `fill_world_visuals` → 変化があれば `build` → `DrawTree` を書く・入れる・外す |
 | Requirements | 1.8, 1.9, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1 |
 
-- 読むもの: `Res<GraphicsCore>`（無効なら戻る・`is_changed()` なら全部組み直す）・根の `Query<(Entity, Ref<Arrangement>, Option<&Children>, Option<&mut DrawTree>, Option<&Name>), With<VisualGraphics>>`・節の **`ParamSet<(Query<FillData>, Query<NodeData>)>`**（`FillData` は `&mut WorldVisual`／`&mut VisualVersion`、`NodeData` は `&WorldVisual`／`&VisualVersion` を持つので、同じ係に並べると bevy が B0001 で落とす。`visual_hierarchy_sync_system`（`visual_sync.rs:70`）と同じ `ParamSet` の形で `set.p0()` で埋め、`set.p1()` で組む・検証の重大 1）・`RemovedComponents<VisualDrawContent | VisualTransform | ChildOf | OwnSurface>`・`Commands`。
-- 手順（根ごと）: ① 根の直下に節（`VisualGraphics` を持たない `Children`）が無ければ `DrawTree` が在るとき `remove`・次へ。② `fill_world_visuals` を呼び「変化あり」を得る（根の `Arrangement` の変化＝viewport・切り抜きを持つ節の `Arrangement` の変化を含む・検証の重大 3）。③ 組み直す条件は純粋な関数 `fn needs_rebuild(changed: bool, removed_any: bool, core_changed: bool, has_tree: bool) -> bool`＝変化あり、または `RemovedComponents` が 1 件でも在る（議題 6 ㋐・全部の根）、または `Res<GraphicsCore>` が変わった、または `DrawTree` が無い（真理値表を `systems_tests.rs` で固定）。④ `unit_rect` が無ければ工場から `CreateRectangleGeometry((0,0,1,1))`（失敗は `error!`＋この根を飛ばす）。⑤ `build` → 在る `DrawTree` は `commands` を入れ替えて `Changed`、無ければ `commands.entity(root).insert(DrawTree { commands, unit_rect })`（同じ schedule の次の係から見える＝`deferred_surface_creation_system`・`mark_dirty_surfaces` が同じ回に拾う・1.8・1.9）。
+- 読むもの: `Res<GraphicsCore>`（無効なら埋めるだけで組まない・`is_changed()` なら全部組み直す）・根の `Query<(Entity, Ref<Arrangement>, Option<&Children>, Option<&mut DrawTree>, Option<&Name>), With<VisualGraphics>>`・節の **`ParamSet<(Query<FillData>, Query<NodeData>)>`**（`FillData` は `&mut WorldVisual`／`&mut VisualVersion`、`NodeData` は `&WorldVisual`／`&VisualVersion` を持つので、同じ係に並べると bevy が B0001 で落とす。`visual_hierarchy_sync_system`（`visual_sync.rs:70`）と同じ `ParamSet` の形で `set.p0()` で埋め、`set.p1()` で組む・検証の重大 1）・`RemovedComponents<VisualDrawContent | VisualTransform | ChildOf | OwnSurface | VisualGraphics>`（`VisualGraphics` の外れ＝降格・`GraphicsCommandList` の外れでも起きる）・節に `VisualGraphics` が入った（昇格）`Query<(), (Added<VisualGraphics>, With<WorldVisual>)>`（この 6 つは `SystemParam` の `TreeEdits` にまとめ、`any()` で読み切る）・`Commands`。
+- 手順（根ごと）: ① 根の直下に節（`VisualGraphics` を持たない `Children`）が無ければ `DrawTree` が在るとき `remove`・次へ。② `fill_world_visuals` を呼び「変化あり」を得る（根の `Arrangement` の変化＝viewport・切り抜きを持つ節の `Arrangement` の変化を含む・検証の重大 3）。③ 組み直す条件は純粋な関数 `fn needs_rebuild(changed: bool, removed_any: bool, core_changed: bool, has_tree: bool) -> bool`＝変化あり、または `RemovedComponents` が 1 件でも在るか節に `VisualGraphics` が入った（昇格）（議題 6 ㋐・全部の根）、または `Res<GraphicsCore>` が変わった、または `DrawTree` が無い（真理値表を `systems_tests.rs` で固定）。④ `unit_rect` が無ければ工場から `CreateRectangleGeometry((0,0,1,1))`（失敗は `error!`＋この根を飛ばす）。⑤ `build` → 在る `DrawTree` は `commands` を入れ替えて `Changed`、無ければ `commands.entity(root).insert(DrawTree { commands, unit_rect })`（同じ schedule の次の係から見える＝`deferred_surface_creation_system`・`mark_dirty_surfaces` が同じ回に拾う・1.8・1.9）。
 - 置き場: `PreRenderSurface`・`visual_resource_management_system` の後・`deferred_surface_creation_system` の前。
 - Validation: `update_draw_trees` は工場を `Res<GraphicsCore>` から取る（工場だけの別の資源は作らない・公開面を増やさない）ので、純粋なテストでは回せない。判断の分岐は `fill_world_visuals`・`build`・`needs_rebuild` の純粋なテストが持ち、`update_draw_trees` 自体の檻は「`DrawTree` の出入り」の 1 本だけを `tests/graphics/` の実 GPU の統合テストで持つ（`GraphicsCore::new()` を使う今の `surface_systems_test.rs` の形）。
 

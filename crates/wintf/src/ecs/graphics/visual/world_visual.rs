@@ -93,7 +93,6 @@ pub(crate) type FillData = (
 ///   （`WorldVisual` が付いた）・親子の変化（`Children`・`root_children_changed`）・根の配置の変化
 ///   （`root_arrangement_changed`）・切り抜きを持つ節の `Arrangement` の変化。後の 2 つは版を上げない。
 ///   節の出は `update_draw_trees` が `RemovedComponents` で拾う。
-#[allow(dead_code, reason = "`update_draw_trees`（7.1）が呼ぶまで使い手が無い")]
 pub(crate) fn fill_world_visuals(
     root: Entity,
     root_name: Option<&Name>,

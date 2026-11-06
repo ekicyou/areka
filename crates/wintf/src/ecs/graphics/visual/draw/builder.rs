@@ -47,7 +47,6 @@ enum ClipKind {
 /// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす（5.1, 5.2）。
 ///
 /// 間引きは性能のため（D2D の切り抜きが既に正しく切る）。間引いた列は viewport に依る。
-#[allow(dead_code, reason = "`update_draw_trees`（7.1）が呼ぶまで使い手が無い")]
 pub(crate) fn build(
     out: &mut Vec<DrawCommand>,
     factory: &ID2D1Factory,
