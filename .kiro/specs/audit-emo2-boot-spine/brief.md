@@ -72,3 +72,9 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 追記（2026-11-06 `audit-sylphya-actor` の要件の討議で回された件）
+
+`audit-sylphya-actor` の audit の指摘のうち、ウェーブ C18 の約束（`areka-actor` の公開の形を変えない・`crates/areka/` に触らない）のために、その spec では直せない 1 件をこの spec へ回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の要件の討議 議題 3）。
+
+- **件（audit #16）**: `areka_actor::spawn_ui` はいつも `Ok` を返すのに、戻り値は `Result<_, UiSpawnError>` で、`UiSpawnError::NotUiThread` は返されない（`crates/areka-actor/src/ui.rs`）。戻り値を `(UiSender, JoinHandle)` にしてエラー型を消し、呼び手（`emo2_boot/mod.rs` の `SpawnUi`・`crates/areka-emo-text/src/actor.rs`）を全部直す。`areka-emo-text` を受け持つ見直しの spec が走っていれば申し合わせる。
