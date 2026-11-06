@@ -130,13 +130,7 @@ impl MarkerSurface {
         unsafe { self.dc.BeginDraw() };
         self.dc.clear(None);
         for (m, bitmap) in &bitmaps {
-            let px = |v: i32| scale.to_physical(ImagePx(v as f32)).0;
-            let dest = D2D_RECT_F {
-                left: px(m.at.0),
-                top: px(m.at.1),
-                right: px(m.at.0 + m.image.width as i32),
-                bottom: px(m.at.1 + m.image.height as i32),
-            };
+            let dest = marker_draw_rect(m, scale);
             self.dc.draw_bitmap(
                 bitmap,
                 Some(&dest),
@@ -221,6 +215,18 @@ impl MarkerSurface {
     /// 片付け: 窓の子の entity を消す（窓の `Children` からも外れる）。
     pub fn despawn(self, world: &mut World) {
         self.surface.despawn_window_child(world);
+    }
+}
+
+/// 矢印を描く矩形（物理 px）。右端・下端は当たりとマスクと同じく `i64` で足す（`i32` の足し算は
+/// 上限の近くであふれる）。
+fn marker_draw_rect(m: &PlacedMarker, scale: &ScaleContract) -> D2D_RECT_F {
+    let px = |v: i64| scale.to_physical(ImagePx(v as f32)).0;
+    D2D_RECT_F {
+        left: px(i64::from(m.at.0)),
+        top: px(i64::from(m.at.1)),
+        right: px(i64::from(m.at.0) + i64::from(m.image.width)),
+        bottom: px(i64::from(m.at.1) + i64::from(m.image.height)),
     }
 }
 
