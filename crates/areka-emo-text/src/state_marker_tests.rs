@@ -8,12 +8,10 @@ use areka_sakura::contract::TalkCue;
 use super::test_support::{applied, cue, items_of, spans, text};
 use super::*;
 use crate::inline_marker::MARKER_GLYPH;
+use crate::layout::test_support::{IMAGE, model_rect};
 use crate::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 
 fn marker(actor: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::command_carrier("*", vec![]))
@@ -97,21 +95,16 @@ fn anchor_range_covers_the_marker_but_the_title_does_not() {
 }
 
 fn region(validrect: (i32, i32, i32, i32), mode: WritingMode) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(
+    let model = model_rect(
+        (Some(0), Some(0)),
+        (
             Some(validrect.0),
             Some(validrect.1),
             Some(validrect.2),
             Some(validrect.3),
         ),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
     );
-    TextRegion::resolve(&model, (400, 224), mode)
+    TextRegion::resolve(&model, IMAGE, mode)
 }
 
 fn layout(state: &TextLayerState, region: &TextRegion, mode: WritingMode) -> Vec<PositionedLine> {

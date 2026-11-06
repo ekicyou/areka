@@ -359,6 +359,10 @@ mod tests {
             include_str!("choice_glyph_cells_tests.rs"),
         ),
         (
+            "choice_test_support.rs",
+            include_str!("choice_test_support.rs"),
+        ),
+        (
             "state_cue_apply_tests.rs",
             include_str!("state_cue_apply_tests.rs"),
         ),
@@ -499,7 +503,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 83, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 84, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

@@ -551,7 +551,7 @@ mod hard_limit_tests;
 mod segmented_tests;
 #[cfg(test)]
 #[path = "layout_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "layout_visible_window_tests.rs"]
 mod visible_window_tests;

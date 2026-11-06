@@ -253,14 +253,10 @@ fn forget_drops_manual_and_remainder() {
 
 // ---- 見える範囲・出る条件・置き場（task 3.2・要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7・8.5・8.7） ----
 
+use crate::layout::test_support::{IMAGE, broken_lines, model_rect};
 use crate::layout::{FixedMetrics, WrapPlan};
 use crate::state::TextItem;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, MarkerCoord, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// layout の檻と同じ画像原寸。
-const IMAGE: (u32, u32) = (400, 224);
+use areka_parsers::balloon::MarkerCoord;
 
 /// 書字方向ごとの描画範囲（validrect: top,bottom,left,right）。どれも 3 行ちょうどが収まる。
 fn region_of(mode: WritingMode) -> TextRegion {
@@ -269,37 +265,14 @@ fn region_of(mode: WritingMode) -> TextRegion {
         WritingMode::VerticalRl => (Some(0), Some(224), Some(360), Some(400)),
         WritingMode::VerticalLr => (Some(0), Some(224), Some(0), Some(34)),
     };
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(rect.0, rect.1, rect.2, rect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
+    let model = model_rect((None, None), rect);
     TextRegion::resolve(&model, IMAGE, mode)
-}
-
-/// n 行（各行 全角 1 字・明示改行で区切る）の item 列。`leading_break` で冒頭に保留改行を置く。
-fn items_of(n: usize, leading_break: bool) -> Vec<TextItem> {
-    let mut items = Vec::new();
-    if leading_break {
-        items.push(TextItem::LineBreak { ratio: 1.0 });
-    }
-    for i in 0..n {
-        if i > 0 {
-            items.push(TextItem::LineBreak { ratio: 1.0 });
-        }
-        items.push(TextItem::glyph("あ"));
-    }
-    items
 }
 
 /// n 行を `font_height` で並べる。
 fn laid(n: usize, mode: WritingMode, region: &TextRegion, font_height: f32) -> Vec<PositionedLine> {
     LayoutEngine::layout(
-        &items_of(n, false),
+        &broken_lines(n),
         n,
         region,
         mode,
@@ -427,7 +400,7 @@ fn manual_line_zero_puts_oldest_line_at_region_start_even_after_leading_break() 
     let mode = WritingMode::HorizontalTb;
     let region = region_of(mode);
     let lines = LayoutEngine::layout(
-        &items_of(5, true),
+        &[vec![TextItem::LineBreak { ratio: 1.0 }], broken_lines(5)].concat(),
         5,
         &region,
         mode,

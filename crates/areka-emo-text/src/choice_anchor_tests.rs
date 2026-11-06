@@ -10,13 +10,11 @@
 //! （行ボックス 13.3 を行送り 12 で頭打ちにして中央へ寄せる）なので、ブロック軸は
 //! 1 行目 1..13・2 行目 13..25・3 行目 25..37。
 
+use super::test_support::region_in;
 use super::*;
 use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
 use crate::state::test_support::applied;
 use crate::state::{SpanKind, TextLayerState};
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 const ACTOR: &str = "0";
@@ -101,16 +99,7 @@ fn arranged(
 ) -> (Vec<PositionedLine>, TextRegion) {
     let actor = ActorKey::from(ACTOR);
     let place = state.actor_state(&actor).expect("場所の状態");
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(0), Some(200), Some(0), Some(40)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    let region = TextRegion::resolve(&model, (400, 224), mode);
+    let region = region_in(mode, 0, 0, 40, 200);
     let lines = LayoutEngine::layout(
         place.items(),
         state.visible_glyphs(&actor, t),

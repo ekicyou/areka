@@ -792,6 +792,10 @@ fn color_tuple(c: CursorColor) -> (u8, u8, u8) {
 mod tests;
 
 #[cfg(test)]
+#[path = "choice_test_support.rs"]
+pub(crate) mod test_support;
+
+#[cfg(test)]
 #[path = "choice_style_resolve_tests.rs"]
 mod style_resolve_tests;
 

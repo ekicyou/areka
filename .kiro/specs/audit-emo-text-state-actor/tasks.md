@@ -16,7 +16,7 @@
   - 状態のテストの部品（書体・文字・適用・区間・位置）を状態のテストの部品ファイルへ寄せ、`state_*` のテストの写しを消して引く
   - 完了の姿: 指摘 15 に挙がった状態の部品の写しが消え、`state_*` のテストが同じ数だけ緑
   - _Requirements: 2.1, 2.3, 4.6_
-- [ ] 1.3 選択肢のテストの部品を新しい部品ファイルへ置き、配置のテストの部品を共有にする
+- [x] 1.3 選択肢のテストの部品を新しい部品ファイルへ置き、配置のテストの部品を共有にする
   - 選択肢のテストの部品（範囲・区間・選択肢の区間・行の組み立て・「は い ⏎ い い え」の検体）を新しい選択肢のテストの部品ファイルへ置き、選択肢のテストの写しを消す
   - 新しいファイルを `lib.rs` の純粋層の一覧に載せ、一覧の母数（今 83）を 1 つ増やす
   - 申し合わせ ⑵: 配置のテストの部品の画像・矩形・壊れた行の 3 つを crate の中で共有にし、矢印と印の状態のテストの写しを消す
@@ -237,3 +237,4 @@
 - 申し合わせの答え（11-06・audit-emo-text-layout-draw）: ⑵⑶⑷⑸ はこちらで直してよい（⑵ は向こうの 1.2 も同じ `layout_test_support.rs` を触る・後から着く方が取り込む）。⑴⑹ は了解（⑹ は向こうの 14.2 で直す）。⑺ はこちらの 2.4 で `actor_present.rs` の中で右と下を切る（向こうの `surface_extent()` は使わず、向こうの 13.2 は取りやめ・近い辺は向こうの申し送り）。向こうの 11.4 が `state_decoration_tests.rs:424,438` の `"cursorbrush"` を `"cursorbrushcolor"` に替える（了承済み）。
 - 向こうから知らされた件: `actor_present.rs:616` の BudouX の区切りの毎フレームのかけ直し → 3.10。`state_decoration.rs:296-297,334-336` の古い説明と `actor_decoration_frame_tests.rs:115` の `layout_with_cursor_warn` を名指す説明 → 5.5。`surface.rs:568,571` の負の数の桁あふれ → 2.4 の上限と一緒に見る。
 - `tests/` の共有の部品は `tests/support/mod.rs`（先頭に `#![allow(dead_code)]`）。各テストは `#[path = "support/mod.rs"] mod support;`、`decoration_readback/mod.rs` の中からは `#[path = "../support/mod.rs"] mod shared;` で引く（1.4）。
+- `lib.rs` の純粋層の一覧の母数は 1.3 で 84（`choice_test_support.rs` を足した）。選択肢の部品は `crate::choice::test_support`、配置の 3 つ（`IMAGE`・`model_rect`・`broken_lines`）は `crate::layout::test_support`。

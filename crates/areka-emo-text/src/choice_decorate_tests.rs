@@ -5,28 +5,12 @@
 // 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
 
+use super::test_support::{region, region_in, seg, yes_no};
 use super::*;
 
 use crate::canvas::{GlyphRunContent, RegionTransform, Resident, TextEffects};
 use crate::layout::PositionedGlyph;
 use crate::look::StyleId;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// validrect 原点を持つ `TextRegion`（left()/top() のみ inline 原点差引きに使用）。
-fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
-}
 
 /// 変換 offset `offset` の GlyphRun 住人（グリフ内容は装飾非関与ゆえ最小の 1 グリフ）。
 fn glyph_resident(offset: (f32, f32)) -> Resident {
@@ -50,15 +34,6 @@ fn canvas(residents: Vec<Resident>) -> ContentCanvas {
     ContentCanvas {
         residents,
         size: (400.0, 224.0),
-    }
-}
-
-/// `(line_index, ordinal, 絶対 inline_range)` の [`LineChoiceSegment`]。
-fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegment {
-    LineChoiceSegment {
-        line_index,
-        ordinal,
-        inline_range: range,
     }
 }
 
@@ -491,20 +466,6 @@ fn hover_stale_ordinal_yields_no_highlight() {
 // 配置（`LayoutEngine`・`FixedMetrics`＝行ボックス 1.33em）→ `line_bands` → `decorate_canvas`／
 // `derive_hit_rows` の本番と同じ道で、焼いた帯と当たりの帯をブロック軸（x）で突き合わせる。
 
-/// 書字方向 `mode` で解いた `TextRegion`（validrect 10,20〜390,220）。
-fn vregion(mode: WritingMode) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(20), Some(220), Some(10), Some(390)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), mode)
-}
-
 /// 縦書きの配置・行ごとの帯・選択肢の注釈の組。
 type Columns = (
     TextRegion,
@@ -516,24 +477,8 @@ type Columns = (
 /// 「はい」「いいえ」を 1 列ずつ並べた選択肢 2 つ（em 28）の配置と、その帯・注釈。
 fn two_choice_columns(mode: WritingMode) -> Columns {
     use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
-    use crate::state::{SpanKind, TextItem};
-    let items = vec![
-        TextItem::glyph("は"),
-        TextItem::glyph("い"),
-        TextItem::LineBreak { ratio: 1.0 },
-        TextItem::glyph("い"),
-        TextItem::glyph("い"),
-        TextItem::glyph("え"),
-    ];
-    let span = |ordinal, glyph_range| ChoiceSpan {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: String::new(),
-        label: String::new(),
-        references: vec![],
-        glyph_range,
-    };
-    let region = vregion(mode);
+    let (items, spans) = yes_no();
+    let region = region_in(mode, 10, 20, 390, 220);
     let lines = LayoutEngine::layout(
         &items,
         5,
@@ -544,7 +489,7 @@ fn two_choice_columns(mode: WritingMode) -> Columns {
         WrapPlan::CharByChar,
     );
     let bands = line_bands(&lines, mode, &FixedMetrics);
-    let segments = annotate_lines(&lines, &[span(0, 0..2), span(1, 2..5)]);
+    let segments = annotate_lines(&lines, &spans);
     (region, lines, bands, segments)
 }
 
@@ -687,7 +632,7 @@ fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
         (WritingMode::VerticalRl, -6.0, 2.0),
         (WritingMode::VerticalLr, -6.0, 2.0),
     ] {
-        let region = vregion(mode);
+        let region = region_in(mode, 10, 20, 390, 220);
         let lines = LayoutEngine::layout_styled(
             &items,
             ids.len(),

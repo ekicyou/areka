@@ -5,53 +5,10 @@
 //! 選択肢の当たり行・強調の帯がはみ出す分も受ける（要件 8.3・R3.3 の単一導出）。面の左上を原点と
 //! する物理 px（`(絶対 − 領域の原点) × k`、ブロック軸に面反映済みのスクロール `committed` を足す）。
 
+use super::test_support::{line, region, region_in, yes_no};
 use super::*;
-use crate::layout::{FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, WrapPlan};
-use crate::look::StyleId;
-use crate::state::{ChoiceSpan, SpanKind, TextItem};
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// validrect 原点 (left, top) を持つ横書きの `TextRegion`。
-fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
-    region_in(WritingMode::HorizontalTb, left, top, right, bottom)
-}
-
-/// 書字方向 `mode` で解いた `TextRegion`。
-fn region_in(mode: WritingMode, left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), mode)
-}
-
-/// 行矩形（絶対 image px）と、(行内軸の位置, 送りの幅) の字の列を持つ行。
-fn line(rect: (f32, f32, f32, f32), glyphs: &[(f32, f32)]) -> PositionedLine {
-    PositionedLine {
-        rect: LineRect {
-            left: rect.0,
-            top: rect.1,
-            right: rect.2,
-            bottom: rect.3,
-        },
-        glyphs: glyphs
-            .iter()
-            .map(|&(inline_pos, advance)| PositionedGlyph {
-                text: "あ".into(),
-                inline_pos,
-                advance,
-                style: StyleId::DEFAULT,
-            })
-            .collect(),
-    }
-}
+use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+use crate::state::TextItem;
 
 fn cell(left: f32, top: f32, right: f32, bottom: f32) -> HitRectPx {
     HitRectPx {
@@ -252,23 +209,7 @@ fn block_axis_is_union_of_line_rect_and_band() {
 /// 縦書きの両方を、表示と同じ配置・同じ帯の列から確かめる。
 #[test]
 fn every_choice_hit_row_lies_inside_the_glyph_cells() {
-    let items = vec![
-        TextItem::glyph("は"),
-        TextItem::glyph("い"),
-        TextItem::LineBreak { ratio: 1.0 },
-        TextItem::glyph("い"),
-        TextItem::glyph("い"),
-        TextItem::glyph("え"),
-    ];
-    let span = |ordinal, glyph_range| ChoiceSpan {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: String::new(),
-        label: String::new(),
-        references: vec![],
-        glyph_range,
-    };
-    let spans = [span(0, 0..2), span(1, 2..5)];
+    let (items, spans) = yes_no();
     let (k, committed) = (2.0f32, 6);
     let contract = ScaleContract::new(k, None);
     for mode in [
