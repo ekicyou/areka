@@ -68,7 +68,7 @@
   - 完了の姿: 変形だけで版が上がらない・中身の変化で 1 つ上がる・根の大きさの変化で「変化あり」かつ版は上がらない・不透明度の `warn!` が 1 度の純粋なテストが緑
   - _Requirements: 3.9, 4.2, 4.3, 4.4_
 
-- [ ] 5. 平らにする係と描く係
+- [x] 5. 平らにする係と描く係
 - [x] 5.1 描く列の形と木の根の部品を整える
   - 図形の切り抜きの push を 1 つにまとめ（図形＋局所→世界の変換）、欄を後の spec が読める公開にし、未使用の印を外す
   - 根の部品（平らな列と回転した矩形の切り抜きに使う単位矩形の図形）を作り、複数スレッドの根拠を注記する
@@ -86,7 +86,7 @@
   - 図形の外接矩形の取得と path geometry の作成の失敗は実体名と HRESULT つきの `error!` を残し、その節と子孫を飛ばす（0 の矩形に化かさない）
   - 完了の姿: 角丸と楕円が図形の push になり、失敗を起こした回に `error!` が出てその節が列に無い純粋なテストが緑
   - _Requirements: 2.4, 2.6, 5.1, 5.2_
-- [ ] 5.4 列を DC へ再生する係と WARP の決定論のテストの足場を作る
+- [x] 5.4 列を DC へ再生する係と WARP の決定論のテストの足場を作る
   - 描く係は設計の変換の規則の表のとおり命令ごとに DC の変換を切り替え、層は透明から始まる形・図形の変換は層の変換で渡す。戻るときは DC の変換を根に戻す
   - WARP の装置と工場を 1 度だけ作り、テストごとに的のビットマップへ木を描いて CPU へ読み戻す足場と、1 チャネル ±1 の比べを `#[cfg(test)]` の兄弟ファイルに置く（環境変数の門なし）
   - 見本はコードの中の単色の小さな絵で持ち、比べる点は境界から 2 画素以上離す
@@ -168,3 +168,4 @@
 - 5.1: 根の部品は `graphics/visual/draw_tree.rs` の `DrawTree { pub commands, pub(crate) unit_rect }`（7.1/7.3 と window_pos.rs から書くので pub(crate)）。`DrawItem.hash` はまだ古い COM 番地入り＝5.2 で直す
 - 5.2: `build(out, unit_rect, viewport, nodes, visited)` に factory・root_name はまだ無い（5.3 で足す）。fill と build の間に消えた実体は記録なしで飛ばす＝5.3 か 7.1 で `error!("[build] ...")` を 1 行足す
 - 5.3: 角丸は `draw/clip_geometry.rs` の `rounded_rect`（角ごとに X は w/2・Y は h/2 で頭打ち＝D2D/WUC と同じ）。持ち主の側の個別の角丸は WUC に無いので最大半径の均一で近似し warn（範囲外・既知）
+- 5.4: WARP の足場は `draw/emit_test_support.rs`（`warp()` OnceLock・`solid(rect,bgra)` は WARP の DC で記録・`render_tree_to_pixels`・`pixel_near`）。viewport は根の `Arrangement.size` 固定＝6.1 の「間引きの有無で同じ」には viewport を外から渡す口を足す
