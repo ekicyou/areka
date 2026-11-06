@@ -100,3 +100,10 @@
 - 優先度の区分: A（開発者 10-15「ヒットテストIDが欲しい」）。
 - 要件定義のモデル: Fable（議題 1「GPU の ID の描き先か、CPU の色分け画像か」は骨組みを決める分かれ目で、決める前例が無い。wintf に窓ごとの 2 枚目の描き先という新しい口を作る）。
 - 分割の案: 無し。
+
+## `audit-wintf-layout-widget` からの申し送り（2026-11-06）
+
+`audit-wintf-layout-widget` の要件の討議で、wintf の色分け画像の読み込み（`crates/wintf/src/ecs/layout/hit_region/mod.rs` の `ColorMapData::from_image`）の指摘のうち 1 件を、直さずにこの spec へ渡すと決めた（開発者「承認」・あちらの `requirements.md`「指摘の扱い」16 番）。256 色を越えると番号が回る件・パスの文字化け・読み込みのテストが無い件は、あちらで直す。
+
+- **16 番: 透明な画素が「黒」の領域として当たる**。読み込みは画像を乗算済みの `32bppPBGRA` へ変換してから、α を見ずに RGB だけで色を引く。乗算済みでは透明な画素の RGB が (0,0,0) になるので、黒 (0,0,0) を領域に対応させると透明な背景が全部その領域として当たる。半透明の画素も色が α 倍にずれ、対応から外れる。
+- 直し方の案は、乗算しない `32bppBGRA` へ変換し、α = 0 の画素を対応外にすること（2〜3 行）。ただし、SSP の `collisionex` の `region` で透明な画素が指定色に当たるかは ukadoc に書いていない（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/#collisionex-star は「指定した画像ファイルの指定色の領域を当たり判定として扱う」とだけ書く）。この読み込みを `region` に使い回すなら、決める前に SSP の MCP で測る（測る前に開発者の許可を取る）。
