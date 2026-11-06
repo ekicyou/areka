@@ -113,7 +113,7 @@ graph TB
 | B | 位置を有限に保つ小さな型を `layout_scan.rs` に置き、4 か所を通す | 採らない |
 | C | A で先に入れ、下見の片づけで B の型を小さく入れる | 採らない |
 
-- 位置が有限でなくなりうるのは、保留の改行の適用（`apply_pending_newline`）と `\_l` の解決の 2 か所だけ。折り返しの送り（行送り 1 つ分）と字の送り（字 1 つ分）は、有限の位置へ足しても有限のまま（f32 の最大へ丸まる）なので守りは要らない。2 か所に 1 行ずつの確かめで足りるので、型は要らない。
+- 位置が有限でなくなりうるのは、保留の改行の適用（`apply_pending_newline`）・`\_l` の解決・折り返しの送り（`layout_scan_glyph.rs:159`）・字の送り（同 `:169`）の 4 か所。後ろの 2 つは、指摘 20 で `\f[height,N]` に上限を置かないと決めたため、行送りや字幅が 1e38 にもなりうる（`\f[height,1e38]` の字が 4 行に折れると位置が無限大＝設計の検証の問題 1）。送りの 3 か所（改行・折り返し・字）は「足した結果が有限なら足し、有限でなければ位置を保って `false`」の私有の関数 1 つ（`try_advance`）を通し、`\_l` は解決の側で 1 行確かめる。型は要らない。
 - 指摘 26 の下見（`layout_scan.rs:230-245`）を、保留の改行と保留のカーソルの適用の関数を写しの局所変数へ呼ぶ形に直すと、改行の守りは 1 か所（`apply_pending_newline`）だけになる。案 B が狙った「2 か所が同じ規則で動く」はこれで得られる。
 - 案 B は `layout_scan*.rs` の行の数えの檻（`finish_line(` の数 4 など）を触り、差分が広がる。
 
@@ -149,7 +149,7 @@ crates/areka-emo-text/src/（範囲の外・申し合わせの後に触る）
 
 ソース（範囲の中）:
 - `layout_scan.rs` — `apply_pending_newline` が送った結果の有限を確かめ、送れなかったら位置を保って `true` を返す（1）。保留の改行の和（`:204`）はそのまま（和の非有限も適用の確かめで拾う）。`Scan` が送れなかった改行を guard へ渡して `warn!` する（1）。下見（`:230-245`）を 2 つの適用の関数を写しへ呼ぶ形に（26）。走査が「今の字の番号に対応するアイテムの位置」を持つ（9）。古い説明（29）。
-- `layout_scan_glyph.rs` — 塊の頭の送りの枝に `&& !self.current.is_empty()`（5）。`segment_advance_sum` へ `&items[今の位置..]` を渡す（9）。説明（5・29）。
+- `layout_scan_glyph.rs` — 折り返しの送り（`:159`）と字の送り（`:169`）を `try_advance` に通し、送れなければ `NonFinite` で 1 回 `warn!`（1・20 の前提）。塊の頭の送りの枝に `&& !self.current.is_empty()`（5）。`segment_advance_sum` へ `&items[今の位置..]` を渡す（9）。説明（5・29）。
 - `layout_line_ops.rs` — `segment_advance_sum` の説明を「渡された列の先頭から数える」に（9）。
 - `layout.rs` — `layout_with_cursor_warn` を消す（30）。説明 `:36-39`（19）・`:80-86`・`:344-345`（5・29）。
 - `layout_styled.rs` — 消した関数へのリンクを直す（30）。
@@ -324,9 +324,13 @@ pub fn resolve_cursor_axis(coord: CursorCoord, axis: CursorAxis, basis: &CursorB
     -> Result<Option<f32>, CursorDegrade>; // 形は同じ。Absolute と Relative の結果が有限でなければ Err(NonFinite)
 
 // layout_scan.rs（私有）
-/// 送れなかった（結果が有限でない）とき位置を保ち true を返す。行内は今どおり行頭へ戻す。
+/// `pos + delta` が有限なら足して true。有限でなければ pos を保って false（改行・折り返し・字の送りが共有）。
+fn try_advance(pos: &mut f32, delta: f32) -> bool;
+/// 送れなかった（結果が有限でない）とき位置を保ち true を返す。行内は今どおり行頭へ戻す。中で try_advance を使う。
 fn apply_pending_newline(pending: &mut Option<f32>, inline_pos: &mut f32, block_pos: &mut f32,
     inline_start: f32, block_dir: f32, pitch: f32) -> bool;
+// layout_scan_glyph.rs: 折り返しの送り（:159）と字の送り（:169）も try_advance を通し、
+// false なら should_warn(actor, NonFinite) で 1 回だけ warn!（改行と同じ種類・同じ guard）。
 ```
 
 - 事前条件: 行送り `pitch` は正の有限（字の高さ＋2）。
@@ -397,7 +401,7 @@ impl ScrollPlanner {
 
 ### 線（指摘 6・14・15）
 
-- 指摘 6: 下線の区間は解決した見た目の `look.underline` だけで選ぶ（`StyleId::DEFAULT` の区間も対象・`!= default.underline` を外す・`viewbox_draw_decoration.rs:129-138`）。打ち消し線は `look.strike` が真なら焼く（`:212`）。既定の見た目だけの行でも、既定の見た目が下線か打ち消し線を持つときは、線を焼く道（`line_layout_with_strokes`）を通す（`viewbox_draw_render.rs:503-508` の早い抜けの条件に足す）。`viewbox_draw_decoration_tests.rs:641-669` の「既定と同じ下線の区間は選ばない」は向きを逆に直す。
+- 指摘 6: 下線は areka が自分で塗るので、区間の選び方を直すだけ＝解決した見た目の `look.underline` だけで選ぶ（`StyleId::DEFAULT` の区間も対象・`!= default.underline` を外す・`viewbox_draw_decoration.rs:129-138`）。打ち消し線は DirectWrite に焼く。`apply_font_ranges` は既定の区間を `continue` で飛ばす（`:174-176`）ので、**既定の見た目が打ち消し線つきなら、ループの前に行の全体へ `SetStrikethrough(true)` を 1 回焼き**、ループの中は今の `look.strike != default.strike` の比べのまま（`\f[strike,0]` で外した区間には `false` を焼く）。範囲の呼び出しの数の檻（`note_range_call`）は、この全体の 1 回も 1 と数える＝既定に打ち消し線の無い行では今どおり 0 件、既定に打ち消し線のある行では既定だけの行で 1 件（檻の期待をこの 2 つに分けて書く）。既定の見た目だけの行でも、既定の見た目が下線か打ち消し線を持つときは、線を焼く道（`line_layout_with_strokes`）を通す（`viewbox_draw_render.rs:503-508` の早い抜けの条件に足す）。`viewbox_draw_decoration_tests.rs:641-669` の「既定と同じ下線の区間は選ばない」は向きを逆に直す。
 - 指摘 14: `underline.rs` の `pull` の頭で、線が丸ごと面の外（`lo > limit || hi < 0`）ならそのまま返す。
 - 指摘 15: 上の計画者の節。
 
@@ -429,7 +433,7 @@ probe_formats: RefCell<HashMap<FontKey, Option<IDWriteTextFormat>>>, // None＝�
 cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,     // None＝測れなかった（error! は 1 回）
 ```
 
-- 指摘 10: `intern` は `index.get(look)` で引き、無ければ `looks` に足して `index` に入れる。`starts_with`・`resolve` の形は変わらない。説明 `:287-288` を直す。
+- 指摘 10: `TextLook` の欄の型 `Script`（`look.rs:53`）にも `Hash`・`Eq` を derive する。`intern` は `index.get(look)` で引き、無ければ `looks` に足して `index` に入れる。`starts_with`・`resolve` の形は変わらない。説明 `:287-288` を直す。
 - 指摘 11（項目 (b) の決め）: 上限の数は置かない。表の寿命を「1 つの台詞のあいだ」に揃える。元からある頭打ちは「今の台詞が使う見た目の数」で、これは `StyleTable`（台詞ごとに空になる）と行の書式の記憶（`LineLayoutStore`・`\c` で空になる）がすでに従っている寿命と同じ。台本の頭には必ず `ClearAll` が付き、`\c` は `Clear` で、どちらも `ViewboxExecutor::request_clear` を通る。そこで `request_clear` が `self.fonts.forget_talk()` と `self.brushes.clear()` を呼ぶ。計測器は同じ台帳を `Rc` で持つので、`advance`・`advance_styled` の頭で `talk_epoch()` が `seen_epoch` と違えば、`probe_formats` を空にし、`cache` から既定の鍵以外を消し、既定の鍵の中の `None`（測れなかった字）を消してから `seen_epoch` を揃える。既定の鍵の成功した字幅は残す（字の種類の数＝Unicode の数が元からある頭打ち・台詞ごとに測り直すと台詞の頭のフレームが重くなる）。`warned`（器の一生に 1 回の記録・`draw_catalog.rs:126-133` の決め）は残す。
 - 指摘 12: `probe_format_for` は失敗も `None` で覚え、`error!` は作れなかったときの 1 回だけ。`measure` は `probe_advance` の失敗を `None` で覚え、縮退の値（`degraded_advance`）を返す。覚えた失敗は次の台詞の切れ目まで試し直さない（記録は台詞ごとに高々 1 回）。`cached_probe_count`（テスト観測）は成功の数だけ数える。
 - 指摘 31（鍵の分）: `advance_styled` は `look.font_key()` の `Vec<String>` を作らずに既定の鍵と欄で比べ（`TextLook` の欄と `default_key` の欄を直接比べる小さな関数）、既定でないときだけ鍵を作る。既定の色のブラシは `ViewboxExecutor` の別の欄で覚える（`BrushCache` を通すと要件 14.2 の「区間の呼び出し 0 件」の檻が鳴るため）。
@@ -467,7 +471,7 @@ cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,     // None＝
 
 | 場面 | 記録 | その後 |
 |---|---|---|
-| 改行の送りが有限でない（1） | `warn!`（キャラクターと種類で 1 回・guard が無ければ毎回） | 行送りの位置を保ち、行内を行頭へ。続けて配置する |
+| 改行・折り返し・字の送りが有限でない（1） | `warn!`（キャラクターと種類で 1 回・guard が無ければ毎回） | 行送りの位置を保ち、行内を行頭へ。続けて配置する |
 | `\_l` の解決が有限でない（2） | `warn!`（今の縮退の道・1 回） | その軸を動かさない |
 | ずらし量・描き直しの範囲のあふれ（3・4） | なし（失敗ではなく飽和で正しい値になる） | 全域の描き直しと同じ結果 |
 | 書式が作れない・字が測れない（12） | `error!`（鍵ごと・字ごとに台詞あたり 1 回） | 縮退の字幅で続ける |
@@ -486,6 +490,7 @@ cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,     // None＝
 |---|---|---|
 | 1 | `\n[3e38]`×10＋字・`\n[-3e38]`×20＋字で、どの行の位置も有限・`warn!` が 1 件。ふつうの割合（1.0・0.5・1.5）は今と同じ位置 | `layout_wrap_tests.rs`（264） |
 | 1 | 同じ台本から見える窓まで通して、`block_offset` が有限 | `layout_visible_window_tests.rs`（634） |
+| 1 | `\f[height,1e38]` で 4 行以上折れる台本で、どの行の位置もグリフの位置も有限（折り返しの送りと字の送り）・`warn!` が 1 件 | `layout_wrap_tests.rs` |
 | 2 | `resolve_cursor_axis` が `3e38em` で `Err(NonFinite)`・有限の結果は今と同じ | `cursor_tag_tests.rs`（426） |
 | 2 | `\_l[3e38em,]あ`・`\_l[3e38em,]\_l[@-3e38em,]あ`・`\_l[,3e38lh]あ` で行の位置に非有限が無い・`warn!` が 1 件 | `layout_cursor_wiring_tests.rs`（451） |
 | 3 | 飽和した確定位置からのずらしが ±面の寸に収まる | `viewbox_axis_tests.rs`（853） |
