@@ -183,17 +183,12 @@ fn drop_renders_after_device_change(runtime: &mut TextLayerRuntime, world: &mut 
         let Some(render) = runtime.surfaces.remove(&place) else {
             continue;
         };
-        if let Some(markers) = render.markers {
-            markers.despawn(world);
-        }
-        match runtime.routing.get(&place) {
-            Some(binding) => render.surface.release(world, binding.slot),
+        let slot = runtime.routing.get(&place).map(|binding| binding.slot);
+        if slot.is_none() {
             // 結線の無い場所は差し込み口が分からない: 窓の子（箱の面）だけは外して残さない。
-            None => {
-                debug!(actor = %place.actor, "装置の変化: 結線の無い場所の描き手を捨てた");
-                render.surface.despawn_window_child(world);
-            }
+            debug!(actor = %place.actor, "装置の変化: 結線の無い場所の描き手を捨てた");
         }
+        render.discard(world, slot);
     }
 }
 
@@ -249,10 +244,7 @@ fn present_actor(
     // （要件 2.9）。当たり行の写しも外す。記録は登録口が状態の変わり目に 1 回だけ出す。
     if region.is_collapsed() || clip.0 <= region.left() || clip.1 <= region.top() {
         if let Some(render) = runtime.surfaces.remove(place) {
-            if let Some(markers) = render.markers {
-                markers.despawn(world);
-            }
-            render.surface.release(world, binding.slot);
+            render.discard(world, Some(binding.slot));
         }
         runtime.choice_snapshot.remove(place);
         return Ok(false);

@@ -79,7 +79,7 @@
   - 失敗する組み立てを渡すと装着の閉包が呼ばれず、窓の子の数が増えないテストを置く
   - 完了の姿: そのテストが緑で、装着を先に呼ぶ形に戻すと子の数の確かめが落ちる
   - _Requirements: 2.1, 4.5, 4.6, 6.4_
-- [ ] 3.2 描き手の片付けと登録の後半の写しを 1 つにまとめる（指摘 20）
+- [x] 3.2 描き手の片付けと登録の後半の写しを 1 つにまとめる（指摘 20）
   - 片付け（印の面を消してから面を外す・窓の子なら窓の子ごと）を描き手の 1 つの関数にし、5 か所の写しをそれに替える
   - 登録の後半（背景・解決・印・前の飾りの縮退・登録・入力の覚え）を 1 つの私的な関数にし、2 か所の写しを替える
   - 完了の姿: 写しが消え、emo-text のテストが前と同じ数だけ緑
@@ -245,3 +245,4 @@
 - 印の面の覚え `ActorRender.markers_failed` は design の Data Models の `Option<(u32, u32)>` と違い、（物理寸, WUC の資源の変わった時刻）を持つ。design.md 293・295 行の「文字の面と同じく WUC の作り直しで消す」を満たすため。覚えるのは上限越えと、`MarkerSurface::attach_noting` が旗を立てる窓の子の作成の失敗だけ（2.5 の差し戻し）。
 - `ResolvedMarkerPlacement::resolve` は design の「呼び手で `i64::from` を渡す」と違い、`(u32, u32)` を受けて中で i64 に広げる。広がりは負にならず、呼び手で `as i32` に戻す道もふさがる（2.5）。
 - 箱の切る大きさは `actor_box.rs` の私的な `image_limit`（箱の大きさとシェルの画像の重なり）。シェルの大きさは `TextLayerRuntime.box_shell_size`。印の矩形の式は `marker_surface.rs` の `marker_span` 1 つ（2.5）。
+- 片付けは `ActorRender::discard(self, world, slot: Option<Entity>)`、解決と印は `resolve_stamped`（`stamp_inline_marker` は消えた）、登録の後半は `finish_registration`、変化なしの記録は `trace_unchanged`。3.4 で「覚えを複製して印を押すだけ」が要るなら、`resolve_stamped` から押す所を切り出す（design.md:342 の `stamp_inline_marker` は今は無い）。`actor_attach.rs` 390 行あたりの注釈は古いので 5.5 で直す（3.2）。

@@ -260,9 +260,18 @@ impl TextLayerRuntime {
             })
     }
 
-    /// 解いた直後の値へ、その actor の印の見た目を押す（装着・再追従・箱の解決の 3 か所）。
-    pub(super) fn stamp_inline_marker(&self, actor: &ActorKey, resolved: &mut ResolvedBalloonText) {
+    /// 背景付きで解き、解いた直後の値へその actor の印の見た目を押す（装着・再追従・箱の解決の 3 か所）。
+    pub(super) fn resolve_stamped(
+        &self,
+        actor: &ActorKey,
+        model: &BalloonModel,
+        image_size: (u32, u32),
+        background: (u8, u8, u8),
+    ) -> ResolvedBalloonText {
+        let mut resolved =
+            ResolvedBalloonText::resolve_with_background(model, image_size, background);
         resolved.font.inline_marker = self.inline_marker_of(actor);
+        resolved
     }
 
     /// 普通のバルーンの名前（バルーンのフォルダ名）を actor ごとに覚える（結線が入れる・要件 3.12）。

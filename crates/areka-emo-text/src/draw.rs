@@ -214,7 +214,7 @@ pub struct ResolvedFont {
     /// 未解決の Regular の顔で、[`FontCatalog::pick`] が解決した顔へ差し替える。
     pub face: FontFace,
     /// 行の中の印（`\![*]`・`%*`）の見た目（要件 5.1）。解決は既定の丸を入れ、runtime が
-    /// アクターごとに覚えた印の絵を解いた直後に押す（`actor_decoration.rs` の `stamp_inline_marker`）。
+    /// アクターごとに覚えた印の絵を解いた直後に押す（`actor_decoration.rs` の `resolve_stamped`）。
     pub inline_marker: InlineMarkerLook,
 }
 

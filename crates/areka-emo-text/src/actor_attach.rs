@@ -206,12 +206,13 @@ impl TextLayerRuntime {
 
     /// **単一構築経路の内側**（binding 直渡し・装着側）: view からの読み取りは呼び手側の
     /// [`TextSlotBinding::from_view`] 一点で完結し、以降の導出——`binding.image_size` を入力と
-    /// する [`ResolvedBalloonText::resolve`] と [`register_actor`](Self::register_actor) への
-    /// 登録——は装着でも再追従でも完全に同一である（第 2 の構築流儀を作らない・R4.3/R8.1）。
+    /// する解決（`resolve_stamped`）と登録の後半（`finish_registration`・中で
+    /// [`register_actor`](Self::register_actor) へ登録する）——は装着でも再追従でも完全に同一である
+    /// （第 2 の構築流儀を作らない・R4.3/R8.1）。
     ///
     /// 再追従側（[`refresh_actor_binding`](Self::refresh_actor_binding)）は判定キーに解決済み
-    /// 領域を含む都合で `resolve` を**判定前に自分で 1 回だけ**呼び、その値のまま
-    /// `register_actor` へ合流する（二重 resolve の回避——導出そのものは本メソッドと同一）。
+    /// 領域を含む都合で `resolve_stamped` を**判定前に自分で 1 回だけ**呼び、その値のまま
+    /// `finish_registration` へ合流する（二重 resolve の回避——導出そのものは本メソッドと同一）。
     pub(super) fn register_actor_binding(
         &mut self,
         actor: ActorKey,
@@ -219,15 +220,25 @@ impl TextLayerRuntime {
         model: &BalloonModel,
     ) {
         let background = self.background_of(&actor);
-        let mut resolved =
-            ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
-        self.stamp_inline_marker(&actor, &mut resolved);
-        let place = PlaceKey::balloon(&actor);
+        let resolved = self.resolve_stamped(&actor, model, binding.image_size, background);
+        self.finish_registration(&actor, binding, model, background, resolved);
+    }
+
+    /// 登録の後半（装着と再追従の作り直しで同じ）: 前の飾りの縮退を取り → 登録し → 入力を覚える。
+    fn finish_registration(
+        &mut self,
+        actor: &ActorKey,
+        binding: TextSlotBinding,
+        model: &BalloonModel,
+        background: (u8, u8, u8),
+        resolved: ResolvedBalloonText,
+    ) {
+        let place = PlaceKey::balloon(actor);
         // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
         let previous = self.cursor_fallback_at(&place);
         self.register_actor(actor.clone(), binding, resolved);
         self.remember_inputs(
-            &actor,
+            actor,
             place,
             model,
             binding.image_size,
@@ -353,12 +364,7 @@ impl TextLayerRuntime {
                 .get(&place)
                 .is_some_and(|it| it.font.inline_marker == self.inline_marker_of(actor))
         {
-            trace!(
-                actor = %actor,
-                k = k_new,
-                "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
-            );
-            return false;
+            return trace_unchanged(actor, k_new);
         }
         // 判定キー＝binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸で
         // model から解き直した文字描画領域の**連言**（D3・R4.4）。k の同値のみを根拠に再追従を
@@ -369,9 +375,7 @@ impl TextLayerRuntime {
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。
-        let mut resolved =
-            ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
-        self.stamp_inline_marker(actor, &mut resolved);
+        let resolved = self.resolve_stamped(actor, model, binding.image_size, background);
         if current == binding && self.layout_input.get(&place) == Some(&resolved) {
             // 中の段: 解いた値が今と同じ——記憶だけを新しい入力へ替える（不変条件は保たれる）。
             let previous = self.cursor_fallback_at(&place);
@@ -383,29 +387,14 @@ impl TextLayerRuntime {
                 background,
                 previous,
             );
-            trace!(
-                actor = %actor,
-                k = k_new,
-                "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
-            );
-            return false;
+            return trace_unchanged(actor, k_new);
         }
 
         // 装着と同一の導出（`ResolvedBalloonText::resolve` → `register_actor`）で binding／
         // layout 入力を再構築する（単一構築経路・R4.3）。純粋状態（TextLayerState）には
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
         let collapsed = resolved.region.is_collapsed();
-        // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
-        let previous = self.cursor_fallback_at(&place);
-        self.register_actor(actor.clone(), binding, resolved);
-        self.remember_inputs(
-            actor,
-            place.clone(),
-            model,
-            binding.image_size,
-            background,
-            previous,
-        );
+        self.finish_registration(actor, binding, model, background, resolved);
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
         // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で
@@ -435,4 +424,14 @@ impl TextLayerRuntime {
         );
         true
     }
+}
+
+/// 再追従の上の段と中の段の記録（作り直さない・常に `false` を返す）。
+fn trace_unchanged(actor: &ActorKey, k: f32) -> bool {
+    trace!(
+        actor = %actor,
+        k,
+        "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
+    );
+    false
 }

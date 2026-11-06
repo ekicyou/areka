@@ -200,6 +200,20 @@ struct ActorRender {
     markers_failed: Option<((u32, u32), Option<bevy_ecs::change_detection::Tick>)>,
 }
 
+impl ActorRender {
+    /// 印の面を消してから面を外す。差し込み口が分かれば外し（窓の子なら窓の子ごと消す）、
+    /// 分からなければ窓の子だけを消す。
+    fn discard(self, world: &mut bevy_ecs::world::World, slot: Option<Entity>) {
+        if let Some(markers) = self.markers {
+            markers.despawn(world);
+        }
+        match slot {
+            Some(slot) => self.surface.release(world, slot),
+            None => self.surface.despawn_window_child(world),
+        }
+    }
+}
+
 /// `\s` の鍵を今のシェルで解決する閉包（結線が渡す・文字の層は seriko の型を名指ししない）。
 ///
 /// 中身は結線の純関数（`resolve_for_text`）で、今のシェルの面の表に無い番号は

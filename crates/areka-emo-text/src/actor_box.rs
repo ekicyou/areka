@@ -21,9 +21,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use tracing::{debug, warn};
 
-use super::{
-    ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration,
-};
+use super::{SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration};
 use crate::choice::{CursorFallback, HitRectPx};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
@@ -56,10 +54,7 @@ impl TextLayerRuntime {
             .collect();
         for key in &stale {
             if let Some(render) = self.surfaces.remove(key) {
-                if let Some(markers) = render.markers {
-                    markers.despawn(world);
-                }
-                render.surface.despawn_window_child(world);
+                render.discard(world, None);
             }
         }
         self.routing.retain(|k, _| !is_box(k));
@@ -422,13 +417,9 @@ impl TextLayerRuntime {
             );
             return;
         };
-        let mut resolved = ResolvedBalloonText::resolve_with_background(
-            &def.model,
-            def.size,
-            DEFAULT_BALLOON_BACKGROUND,
-        );
         // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。
-        self.stamp_inline_marker(&key.actor, &mut resolved);
+        let resolved =
+            self.resolve_stamped(&key.actor, &def.model, def.size, DEFAULT_BALLOON_BACKGROUND);
         if self.box_definition_warned.insert(want.site.name.clone()) {
             let name = want.site.name.as_str();
             attach::warn_coarse_wrap_threshold(name, &resolved, None);
@@ -491,10 +482,7 @@ impl TextLayerRuntime {
             boxes.retain(|b| b.name != *name);
         }
         if let Some(render) = self.surfaces.remove(key) {
-            if let Some(markers) = render.markers {
-                markers.despawn(world);
-            }
-            render.surface.despawn_window_child(world);
+            render.discard(world, None);
         }
         debug!(actor = %key.actor, place = ?key.place, "箱の置き場所の登録を外した（文字は保つ）");
     }
