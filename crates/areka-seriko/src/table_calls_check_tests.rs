@@ -5,14 +5,15 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_compose::BindSet;
 use log_capture_kit::{LineFormat, capture_lines};
 
 use super::FrameAct;
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
+use crate::output::DisplayCommand;
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
-use crate::table::AnimationTable;
+use crate::test_support::{KINDS, count, table_and_logs, warns};
 
 /// 6 種の誤りを 1 件ずつ持つ面 10。
 const SIX_KINDS: &str = "surface10\n{\n\
@@ -29,27 +30,6 @@ const SIX_KINDS: &str = "surface10\n{\n\
     animation2.pattern0,overlay,102,0,0,0\n\
     animation2.pattern1,insert,2\n}\n";
 
-/// 6 種の記録の目印（要件の番号）。
-const KINDS: [&str; 6] = [
-    "要件 2.5",
-    "要件 5.1",
-    "要件 5.3",
-    "要件 6.6",
-    "要件 6.5",
-    "要件 6.4",
-];
-
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
-
-fn count(logs: &[String], needle: &str) -> usize {
-    logs.iter().filter(|l| l.contains(needle)).count()
-}
-
 /// 6 種がそれぞれ 1 度だけ、面・animation・pattern・語・原文の欄つきで出る。
 #[test]
 fn each_kind_is_warned_once_with_its_place() {
@@ -57,7 +37,7 @@ fn each_kind_is_warned_once_with_its_place() {
     for kind in KINDS {
         assert_eq!(count(&logs, kind), 1, "{kind}: {logs:#?}");
     }
-    let warns: Vec<&String> = logs.iter().filter(|l| l.contains("WARN")).collect();
+    let warns = warns(&logs);
     assert_eq!(warns.len(), 6, "ほかの WARN は無い: {warns:#?}");
     let unreadable = warns.iter().find(|l| l.contains("要件 2.5")).unwrap();
     for field in [
@@ -105,15 +85,15 @@ fn sound_calls_log_nothing() {
         animation3.interval,bind\n\
         animation3.pattern0,overlay,103,0,0,0\n}\n";
     let (_, logs) = table_and_logs(text);
-    assert!(logs.iter().all(|l| !l.contains("WARN")), "{logs:#?}");
+    assert!(warns(&logs).is_empty(), "{logs:#?}");
 }
 
 /// 表を作るたびに 1 度で、表を使って刻みを回しても増えない。
 #[test]
 fn ticks_add_no_warn() {
     let (table, logs) = table_and_logs(SIX_KINDS);
-    assert_eq!(count(&logs, "WARN"), 6);
-    let (_, ticking) = capture_lines(LineFormat::LevelTargetFields, || {
+    assert_eq!(warns(&logs).len(), 6);
+    let (shows, ticking) = capture_lines(LineFormat::LevelTargetFields, || {
         let mut rt = LoopRuntime::new(SerikoLoopConfig {
             shell_table: table,
             balloon_tables: BTreeMap::new(),
@@ -125,10 +105,13 @@ fn ticks_add_no_warn() {
         states.apply(&scope, SurfaceTarget::Show(10));
         rt.on_surface_changed(&scope, Slot::Shell);
         rt.refresh(&scope, Slot::Shell, Some(0), &mut states);
-        for now in (0..10_000).step_by(100) {
-            rt.on_tick(now, &mut states);
-        }
+        (0..10_000)
+            .step_by(100)
+            .flat_map(|now| rt.on_tick(now, &mut states))
+            .filter(|c| matches!(c, DisplayCommand::Show { .. }))
+            .count()
     });
+    assert!(shows >= 1, "刻みの道を通って Show が出る");
     for kind in KINDS {
         assert_eq!(count(&ticking, kind), 0, "{kind}: {ticking:#?}");
     }

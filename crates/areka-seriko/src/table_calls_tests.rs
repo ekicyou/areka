@@ -3,19 +3,11 @@
 //!
 //! 入力は `surfaces.txt` の本文そのもの（解析を経る実経路）で組む。
 
-use areka_emo_compose::{ComposeMethod, EmoWorld};
-use log_capture_kit::{LineFormat, capture_lines};
+use areka_emo_compose::ComposeMethod;
 
 use super::FrameAct;
-use crate::table::{AnimationTable, LoopTrigger};
-
-/// 本文から表を組み、同じ走行の `tracing` 出力を 1 イベント 1 行で添えて返す。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
+use crate::table::LoopTrigger;
+use crate::test_support::table_and_logs;
 
 /// 8 語を 1 本の animation に並べた面 10（相手の animation 3・4 も同じ面に置く）。
 const EIGHT_WORDS: &str = "surface10\n{\n\
@@ -27,9 +19,9 @@ const EIGHT_WORDS: &str = "surface10\n{\n\
     animation0.pattern4,stop,3\n\
     animation0.pattern5,parallelstop,(3)\n\
     animation0.pattern6,AlternativeStop,(3,4)\n\
-    animation0.pattern7,insert,3\n\
+    animation0.pattern7,insert,3,70,5,6\n\
     animation0.pattern8,move,-1,40,0,10\n\
-    animation0.pattern9,start,abc\n\
+    animation0.pattern9,start,abc,70,5,6\n\
     animation3.interval,never\n\
     animation3.pattern0,overlay,103,10,0,0\n\
     animation4.interval,never\n\
@@ -76,12 +68,12 @@ fn each_word_gets_its_act_and_wait() {
     assert_eq!(
         (draw.surface_id, draw.method.clone(), draw.x, draw.y),
         (100, ComposeMethod::Overlay, 1, 2),
-        "描くコマは今と同じ"
+        "描くコマは面・合成メソッド・位置を持つ"
     );
 }
 
 /// 働きのコマは描く面を持たない（絵の番号は無し・合成メソッドは記録なしの未知）。8 語以外の
-/// 未知の語は今と同じに「未知の合成メソッド名」を記録する。
+/// 未知の語は「未知の合成メソッド名」を記録する。
 #[test]
 fn act_frames_draw_nothing_and_log_nothing() {
     let text = format!(
@@ -107,7 +99,7 @@ fn act_frames_draw_nothing_and_log_nothing() {
     );
 }
 
-/// `never` と純 `bind` は「呼ばれるだけ」として表に載り、未知の interval は今のまま載らない。
+/// `never` と純 `bind` は「呼ばれるだけ」として表に載り、未知の interval は載らない。
 #[test]
 fn never_and_pure_bind_are_call_only_unknown_stays_out() {
     let text = "surface10\n{\n\
@@ -129,7 +121,7 @@ fn never_and_pure_bind_are_call_only_unknown_stays_out() {
     );
     assert!(
         logs.iter().any(|l| l.contains("vocab=\"yen-e\"")),
-        "未知の interval の記録は今のまま: {logs:?}"
+        "未知の interval は語を添えて記録する: {logs:?}"
     );
     assert!(
         !table.is_continuous(),
@@ -140,7 +132,7 @@ fn never_and_pure_bind_are_call_only_unknown_stays_out() {
 /// 働きのコマの欄 2 は面の番号として数えず、呼ばれるだけの animation しか無い面は動く部品に数えない。
 #[test]
 fn act_frames_and_call_only_parts_are_not_moving_parts() {
-    // 面 10 の `move` の欄 2 は 20、面 20 には抽選の animation がある（今までは動く部品に数えた）。
+    // 面 10 の `move` の欄 2 は 20、面 20 には抽選の animation がある。
     let moved = "surface10\n{\nanimation0.interval,random,2\n\
         animation0.pattern0,move,20,10,0,5\n}\n\
         surface20\n{\nanimation0.interval,random,2\n\

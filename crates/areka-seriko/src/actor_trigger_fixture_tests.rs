@@ -12,6 +12,7 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
+use crate::test_support::{count, part_frames, table_of};
 use areka_emo_compose::{BindSet, EmoWorld};
 use dola::cue::CueSink;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -29,18 +30,13 @@ const CHEEK: u32 = 2;
 const PART: u32 = 9102;
 
 /// 本文を本番と同じ順（読み手 → 畳み込み → 表）で表にし、その走行の記録を 1 件 1 行で添える。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(text)))
-    })
+/// 共有の `table_and_logs` と違い、読み手と畳み込みの記録も含む。
+fn table_and_all_logs(text: &str) -> (AnimationTable, Vec<String>) {
+    capture_lines(LineFormat::LevelTargetFields, || table_of(text))
 }
 
 fn config() -> SerikoLoopConfig {
-    cfg(table_and_logs(FIXTURE).0, always_fire())
-}
-
-fn count(lines: &[String], needle: &str) -> usize {
-    lines.iter().filter(|l| l.contains(needle)).count()
+    cfg(table_and_all_logs(FIXTURE).0, always_fire())
 }
 
 /// 表を組むときの記録の件数を、検体を手で数えた数と比べる。
@@ -48,12 +44,12 @@ fn count(lines: &[String], needle: &str) -> usize {
 /// - 採録の `debug!` は 5 件＝9100 の 3 本（`talk,3`・`runonce`・`periodic,2`）＋ 9102 の 2 本
 ///   （`talk,2`・`runonce`）。
 /// - `warn!` は検体の全体でちょうど 3 件＝9103 の無効な数値 2 件（`talk,abc`・`periodic,0`）＋ 9104 の
-///   空のコマ列 1 件。9103 の `Talk,3`（大文字混じり）は今までどおり `debug!` だけ。
+///   空のコマ列 1 件。9103 の `Talk,3`（大文字混じり）は `debug!` だけ。
 ///
 /// 採らなかった animation は表に無い（要件 1.5・7.1・7.2）。
 #[test]
 fn fixture_table_logs_five_adoptions_and_exactly_three_warnings() {
-    let (table, logs) = table_and_logs(FIXTURE);
+    let (table, logs) = table_and_all_logs(FIXTURE);
 
     assert_eq!(count(&logs, "引き金の語を採録"), 5, "{logs:#?}");
     assert_eq!(count(&logs, "level=WARN"), 3, "{logs:#?}");
@@ -172,9 +168,10 @@ fn part_fires_runonce_and_talk_when_the_outer_surface_shows_it() {
     assert!(top_frames(&p).is_empty());
 }
 
-/// 9103（無効な数値・大文字混じり）と 9104（空のコマ列）: 採らなかった animation はどれもコマを
-/// 持つか `runonce` なので、採っていれば切り替え・文字・2 秒のどこかで指令が出る。出るのは切り替えの
-/// 空の `Show` 1 件だけ。
+/// 9103（無効な数値・大文字混じり）と 9104（空のコマ列）: 出るのは切り替えの空の `Show` 1 件だけ。
+/// 9103 は採っていれば切り替え・文字・2 秒のどこかで指令が出る。9104（コマの無い `runonce`）は採っても
+/// 何も出ないので、採らないことは表のテスト（`fixture_table_logs_five_adoptions_and_exactly_three_warnings`）
+/// が見ている。
 #[test]
 fn surfaces_whose_words_were_refused_stay_still() {
     for (key, surface) in [("9103", 9103), ("9104", 9104)] {
@@ -250,7 +247,7 @@ fn fixture_appended_to_emo2_keeps_the_counts_and_finds_every_picture() {
     let emo2 = std::fs::read_to_string(shell.join("surfaces.txt")).expect("emo2 の surfaces.txt");
     let ours = [9100, 9101, PART, 9103, 9104];
 
-    let (_, alone) = table_and_logs(&emo2);
+    let (_, alone) = table_and_all_logs(&emo2);
     assert_eq!(count(&alone, "level=WARN"), 0, "{alone:#?}");
     assert_eq!(count(&alone, "引き金の語を採録"), 0, "{alone:#?}");
     let emo2_world = EmoWorld::build(&areka_parsers::shell::parse(&emo2));
@@ -259,7 +256,7 @@ fn fixture_appended_to_emo2_keeps_the_counts_and_finds_every_picture() {
     }
 
     let joined = format!("{emo2}\r\n{FIXTURE}");
-    let (_, logs) = table_and_logs(&joined);
+    let (_, logs) = table_and_all_logs(&joined);
     assert_eq!(count(&logs, "level=WARN"), 3, "{logs:#?}");
     assert_eq!(count(&logs, "引き金の語を採録"), 5, "{logs:#?}");
 

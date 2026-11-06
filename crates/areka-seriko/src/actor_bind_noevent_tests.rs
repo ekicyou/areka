@@ -3,12 +3,14 @@
 //!
 //! 同じ初めの状態から 2 つの名前で同じ引数を当て、着せ替えの集合・出た表示の指令・記録（`name` の
 //! 欄を除く）が等しいことを見る。出力の先は表示の指令の受け口だけ（SHIORI への道は無い・3.6）。
+//! 名前が `bind`・`bind-noevent` のどちらでもない運び物（他人宛）を debug で読み飛ばし何も出さない檻と、
+//! 宛名が自分で中身の壊れた運び物の warn の檻（areka-P0-mayuna-compose D8④）もここに置く。
 
 use super::test_support::*;
 use super::*;
 use crate::bind::tests::groups_of;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use areka_sakura::ActorKey;
 
 /// カテゴリ「ボール」は定義の順におじさん・男の子・ギャル・妹（排他・既定なし）。「目」は `mustselect`。
 const SHELL: &str = "charset,UTF-8\r\n\
@@ -42,17 +44,7 @@ fn run(scope: &str, before: &[&[&str]], name: &str, tokens: &[&str]) -> Outcome 
     let mut loop_runtime = inert_runtime();
     let mut out = MockSurfaceOutput::new();
     let records = out.records();
-    let carrier = |name: &str, tokens: &[&str]| {
-        SerikoMsg::Cue(TalkCue {
-            at: 0.0,
-            actor: key.clone(),
-            command: CueCommand::command_carrier(
-                name,
-                tokens.iter().map(|t| t.to_string()).collect(),
-            ),
-            duration: 0.0,
-        })
-    };
+    let carrier = |name: &str, tokens: &[&str]| SerikoMsg::Cue(carrier_cue(scope, name, tokens));
     for b in before {
         let msg = carrier(BIND_COMMAND, b);
         let _ = handle_message(
@@ -223,7 +215,7 @@ fn bind_noevent_outputs_only_one_display_command() {
     }
 }
 
-/// 数でないスコープは 2 つの名前とも同じ warn（D7）。
+/// 数でないスコープは 2 つの名前とも同じ warn（areka-P0-mayuna-compose D7）。
 #[test]
 fn bind_noevent_unmapped_scope_warns_like_bind() {
     let [bind, noevent] = NAMES.map(|name| run("x", &[], name, &["ボール", "妹", "1"]));
@@ -246,11 +238,20 @@ fn prefix_alike_name_is_not_bind() {
     let outcome = run("0", &[], "bind-noeventx", &["ボール", "妹", "1"]);
     assert_eq!(outcome.binds, vec![20]);
     assert!(outcome.shown.is_empty());
+    assert!(!outcome.logs.is_empty(), "担当外の名前も記録に残る");
     assert!(
         outcome.logs.iter().all(|l| l.contains("level=DEBUG")),
         "{:?}",
         outcome.logs
     );
+    let skipped = outcome
+        .logs
+        .iter()
+        .filter(|l| {
+            l.contains("担当外コマンド名のキャリア cue を読み飛ばす") && l.contains("bind-noeventx")
+        })
+        .count();
+    assert_eq!(skipped, 1, "{:?}", outcome.logs);
 }
 
 /// 宛名 `bind-noevent` の壊れた運び物は `bind` と同じ warn（自分宛の壊れ物・D8④）。
@@ -260,25 +261,58 @@ fn noncanonical_bind_noevent_warns_like_bind() {
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
         let mut loop_runtime = inert_runtime();
-        let (logs, _) = capture_logs_flow(|| {
+        let records = out.records();
+        let (logs, flow) = capture_logs_flow(|| {
             handle_message(
                 &tiny_resolver(),
                 &BindResolver::empty(),
                 &mut states,
                 &mut loop_runtime,
                 &mut out,
-                SerikoMsg::Cue(TalkCue {
-                    at: 0.0,
-                    actor: ActorKey::from("0"),
-                    command: CueCommand::Custom {
-                        command: name.to_owned(),
-                        params: dola::DynamicValue::Null,
-                    },
-                    duration: 0.0,
-                }),
+                SerikoMsg::Cue(noncanonical_custom_cue("0", name)),
             )
         });
+        assert_eq!(flow, ControlFlow::Continue(()), "{name}");
         assert_eq!(logs.matches("level=WARN").count(), 1, "{name}: {logs}");
         assert!(logs.contains(&format!("name=\"{name}\"")), "{name}: {logs}");
+        assert!(records.lock().unwrap().is_empty(), "{name}: 発行しない");
     }
+}
+
+/// 宛名が他人（"noexist"）の壊れた運び物は warn! を出さず debug! で素通しし、発行しない（D8④）。
+#[test]
+fn noncanonical_custom_for_another_name_is_debug_only() {
+    let bind_resolver = arm_bind_resolver();
+    let mut states = fresh_states();
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+    let records = out.records();
+
+    let flow = capture_logs_flow(|| {
+        handle_message(
+            &tiny_resolver(),
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(noncanonical_custom_cue("0", "noexist")),
+        )
+    });
+
+    assert_eq!(flow.1, ControlFlow::Continue(()));
+    assert_eq!(
+        flow.0.matches("level=WARN").count(),
+        0,
+        "他人宛/未知名の非正準 params は warn! を出さない（報告責任は宛名の担当者・D8④）: {}",
+        flow.0
+    );
+    assert!(
+        flow.0.contains("level=DEBUG"),
+        "他人宛/未知名は良性 debug! として観測できる（D8④）: {}",
+        flow.0
+    );
+    assert!(
+        records.lock().expect("records mutex poisoned").is_empty(),
+        "非正準 params では発行しない"
+    );
 }

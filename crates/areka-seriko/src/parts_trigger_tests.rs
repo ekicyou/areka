@@ -13,11 +13,12 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::{PartKey, PatternState};
 
-use super::tests::{calls, capture_logs, count, no_binds, overlay, part_frames, scope, table_of};
+use super::tests::{calls, count, no_binds, overlay, refresh_at};
 use super::{PartAnim, PartClocks};
 use crate::looper::tests::{RngProbe, counting_rng};
 use crate::state::Slot;
 use crate::table::AnimationTable;
+use crate::test_support::{capture_logs, part_frames, part_playing as playing, scope, table_of};
 use crate::timeline::LoopRng;
 use crate::trigger::TalkWindow;
 
@@ -111,19 +112,15 @@ impl Rig {
 
     /// 面の切り替えの直後の評価（出来事の時刻 `at_ms`・窓は開いている）。
     fn refresh(&mut self, top: u32, at_ms: Option<u64>) -> PatternState {
-        let mut pattern = PatternState::default();
-        self.clocks.refresh(
-            &scope(),
-            Slot::Shell,
+        let empty = PatternState::default();
+        refresh_at(
+            &mut self.clocks,
+            &self.table,
             top,
             &no_binds(),
-            &self.table,
             at_ms,
-            true,
-            &mut crate::seeded_rng(0),
-            &mut pattern,
-        );
-        pattern
+            &empty,
+        )
     }
 
     fn clock(&self, part: u32, animation_id: u32) -> Option<PartAnim> {
@@ -141,13 +138,6 @@ impl Rig {
             })
             .collect()
     }
-}
-
-fn playing(at: u64) -> Option<PartAnim> {
-    Some(PartAnim::Playing {
-        started_at_ms: at,
-        acts_through: None,
-    })
 }
 
 /// 一番上 0 が子 100 を置き、一番上 1 は何も置かない。100 の `runonce`（animation 0）は頭のコマで
@@ -360,6 +350,56 @@ fn part_revealed_later_counts_its_period_from_the_tick_it_appeared() {
     );
 }
 
+/// 一番上 0 は子を置かない。100 の `runonce`（animation 0）は 101 を 100ms 出して `start,2`、500 で `-1`。
+/// 抽選の animation 1 は 1000ms 後に `start,0`。animation 2 は呼ばれるだけ（111 → 5000ms で 112）。
+const PLAYING_AT_REVEAL: &str = "surface0\n{\n}\n\
+    surface100\n{\nanimation0.interval,runonce\n\
+    animation0.pattern0,overlay,101,100,0,0\n\
+    animation0.pattern1,start,2\n\
+    animation0.pattern2,overlay,-1,400,0,0\n\
+    animation1.interval,random,2\n\
+    animation1.pattern0,overlay,102,0,0,0\n\
+    animation1.pattern1,overlay,103,1000,0,0\n\
+    animation1.pattern2,start,0\n\
+    animation2.interval,never\n\
+    animation2.pattern0,overlay,111,0,0,0\n\
+    animation2.pattern1,overlay,112,5000,0,0\n}\n";
+
+/// 見え直した刻みに、隠れていた間に進んでいた抽選の `start,0`（2000）を当てると、`runonce` は見え始め
+/// （2050）にもう再生中なので、その回を見送って印を付ける。再生が終わって時計が外れた後に、過ぎた
+/// 見え始めの時刻で鳴り直して `start,2` を 2 度当てることは無い（一番上と同じ・
+/// areka-P0-seriko-trigger-intervals 要件 2.1・5.3・5.9）。
+#[test]
+fn part_runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
+    let mut rig = Rig::new(PLAYING_AT_REVEAL, &[0]);
+    let none = PatternState::default();
+    let mut shows_100 = PatternState::default();
+    shows_100.set(7, overlay(100));
+
+    rig.tick_with(0, 1000, true, &shows_100); // 1 が抽選で鳴り、0 は見えた 1000 に鳴る。
+    rig.tick_with(0, 1600, true, &shows_100);
+    rig.tick_with(0, 1700, true, &none);
+    assert!(rig.armed().is_empty(), "前提: 隠れて引き金の状態を捨てた");
+    let lines = capture_logs(|| {
+        for now in [2050, 2200, 2600, 2700] {
+            rig.tick_with(0, now, true, &shows_100); // start,0 は 2000・0 の start,2 は 2100。
+        }
+    });
+    assert!(
+        matches!(
+            rig.clock(100, 2),
+            Some(PartAnim::Playing {
+                started_at_ms: 2100,
+                ..
+            })
+        ),
+        "start,2 は 1 度だけ: {:?}",
+        rig.clock(100, 2)
+    );
+    assert_eq!(rig.clock(100, 0), None, "鳴り直さない");
+    assert_eq!(count(&lines, &["runonce を鳴らした"]), 0, "{lines:#?}");
+}
+
 /// 子 100 の `periodic,1` が 2 本: animation 0 は長さが周期ちょうど（101 → 1000ms で `-1`）、
 /// animation 1 は周期より長い（111 → 1500ms で `-1`）。
 const LAPS: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
@@ -569,11 +609,11 @@ const EVENT: &str = "surface0\n{\nelement0,overlay,100,0,0\n}\n\
     animation1.pattern1,overlay,-1,100,0,0\n}\n";
 
 /// 外側の面の切り替えで最初から見えた部品は、出来事の時刻（刻みの境目に丸めない）が起点: その評価が
-/// `runonce` を鳴らして頭のコマを載せ、次の刻みは出来事の時刻からの経過で進む。出来事の直後の評価は
-/// `runonce` だけを鳴らし（`periodic` は刻みが鳴らす）、構えた後の評価（着せ替えの変化）は鳴らさない。
-/// 時刻が分からない評価は構えない（要件 5.9・6.1・6.2・2.4）。
+/// `runonce` を鳴らして頭のコマを載せ、次の刻みは出来事の時刻からの経過で進む。構えた後の評価
+/// （着せ替えの変化）は `runonce` を鳴らさず、出来事の時刻までに来た `periodic` の境目は刻みと同じく
+/// 境目の時刻で鳴らす。時刻が分からない評価は構えない（要件 3.1・5.9・6.1・6.2・2.4）。
 #[test]
-fn refresh_arms_at_the_event_time_and_fires_only_runonce() {
+fn refresh_arms_at_the_event_time_and_judges_up_to_it() {
     let mut rig = Rig::new(EVENT, &[]);
 
     assert!(rig.refresh(0, None).is_empty());
@@ -604,8 +644,8 @@ fn refresh_arms_at_the_event_time_and_fires_only_runonce() {
     rig.refresh(0, Some(2300));
     assert_eq!(
         rig.clock(100, 1),
-        None,
-        "出来事の直後の評価は periodic を鳴らさない"
+        playing(2234),
+        "出来事の直後の評価も境目 2234 の periodic を鳴らす"
     );
     rig.tick(0, 2310);
     assert_eq!(
@@ -746,6 +786,20 @@ fn hidden_part_talk_stays_silent_and_joins_the_slot_count_when_it_appears() {
         "再び見えなくなったら 9 文字目の区切りでも始まらない"
     );
     assert!(rig.armed().is_empty());
+}
+
+/// 区切りの文字（3 文字目・1100）が、部品の見えた刻み（1160）の窓の中で、見え始めより前に現れたら、
+/// 開始は見え始めの時刻（部品は 1100 にはまだ見えていない・時刻は正確に扱う・要件 4.1・5.6・5.9）。
+#[test]
+fn part_talk_crossed_in_the_revealing_tick_starts_at_the_reveal() {
+    let mut rig = Rig::new(LATE_MOUTH, &[]);
+    let mut shows_100 = PatternState::default();
+    shows_100.set(7, overlay(100));
+
+    rig.talk_tick(0, 1010, &PatternState::default());
+    let p = rig.talk_tick(0, 1160, &shows_100);
+    assert_eq!(rig.clock(100, 0), playing(1160), "1100 からではない");
+    assert_eq!(part_frames(&p, 100), vec![(0, 101)]);
 }
 
 /// 子 100 の `talk,3` が 2 本: animation 0 は長さが区切りの間隔（3 文字＝150ms）ちょうど（101 →

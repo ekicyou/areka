@@ -74,26 +74,26 @@ impl SurfaceResolver {
 }
 
 /// バルーン面 key 解決結果（seriko バルーン専用・シェルの [`SurfaceTarget`] とは別型ゆえ
-/// 既存シェル経路に非干渉・要件 4.6）。名前形と破損数値をログ水準のために類別する。
+/// シェルの経路に干渉しない・要件 4.6）。名前形と破損数値をログ水準のために類別する。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BalloonResolve {
+pub(crate) enum BalloonResolve {
     /// `0..=u32::MAX` の数値 id（→ 後段 [`SurfaceTarget::Show`] で `apply_balloon`・要件 4.1/4.4）。
     Show(u32),
     /// 非表示センチネル `-1`（→ 後段 [`SurfaceTarget::Hide`] で `apply_balloon`・要件 4.2）。
     Hide,
-    /// 非数値（名前形 `\b[バルーン１]`）＝M-boot 未対応の正当構文。
-    /// alias 表は引かず（数値解決のみ・要件 4.4）、呼び手（actor）が warn!＋skip する（要件 4.5）。
+    /// 非数値（名前形 `\b[バルーン１]`）＝文字の層（emo-text）が箱の名前で読む正当構文。
+    /// alias 表は引かず（数値解決のみ・要件 4.4）、呼び手（actor）は `debug!`＋skip する。
     NameForm,
     /// 数値だが不正（`-2`・負の非 `-1`・`u32` 超過）＝破損入力。
     /// 呼び手（actor）が error!＋skip する（シェル経路と同水準・要件 4.5）。
     Invalid,
 }
 
-/// バルーン面 key の数値解決（M-boot: alias／名前解決なし・要件 4.4/4.5）。
+/// バルーン面 key の数値解決（alias／名前解決なし・要件 4.4/4.5）。
 ///
-/// 純関数（`self` 不要・alias 表を一切引かない・決定論）。既存 [`SurfaceResolver::resolve`] は
+/// 純関数（`self` 不要・alias 表を一切引かない・決定論）。[`SurfaceResolver::resolve`] は
 /// 非数値を alias 表で引くが、本関数は**引かず** [`BalloonResolve::NameForm`] で止める
-/// （M-boot は数値のみ・名前解決は将来 additive）。
+/// （名前の形は文字の層が読む。seriko は数だけを読む）。
 ///
 /// 分岐（design「seriko バルーン面契約」Service Interface・要件 4.4/4.5）:
 /// 1. `key` を `i64` として parse
@@ -101,7 +101,7 @@ pub enum BalloonResolve {
 ///    - 成功かつ非負で `u32` に収まる → [`BalloonResolve::Show`]（要件 4.1）
 ///    - 成功だが負の非 `-1`（`-2` 等）・`u32` 範囲外（`4294967296` 等）→ [`BalloonResolve::Invalid`]（破損入力・要件 4.5）
 /// 2. parse 失敗（非数値・名前形）→ [`BalloonResolve::NameForm`]（要件 4.5・alias 非適用）
-pub fn resolve_balloon_key(key: &str) -> BalloonResolve {
+pub(crate) fn resolve_balloon_key(key: &str) -> BalloonResolve {
     // 数値枝: `-1` は i64 で受けて判定し、それ以外の非負を u32 へ写す
     //（SurfaceResolver::resolve の数値枝と同型の判定・ただし帰結の型が異なる）。
     if let Ok(value) = key.parse::<i64>() {
@@ -115,7 +115,7 @@ pub fn resolve_balloon_key(key: &str) -> BalloonResolve {
         };
     }
 
-    // 非数値枝: alias 表は引かない（数値のみ・M-boot）。名前解決は将来 additive。
+    // 非数値枝: alias 表は引かない。名前の形は文字の層が読む。seriko は数だけを読む。
     BalloonResolve::NameForm
 }
 
@@ -203,16 +203,9 @@ mod tests {
         assert_eq!(r.resolve("空"), SurfaceTarget::Unresolved);
     }
 
-    #[test]
-    fn resolve_is_deterministic_same_input_same_output() {
-        let r = hand_built();
-        assert_eq!(r.resolve("静観"), r.resolve("静観"));
-        assert_eq!(r.resolve("通常"), r.resolve("通常"));
-    }
-
     /// emo2 fixture（実上流データ）の alias スナップショットで全パターンを追験（要件 7.3）。
     ///
-    /// emo-compose の `EmoWorld::alias_snapshot()`（task 1.3 で追加）由来の所有 `BTreeMap` を
+    /// emo-compose の `EmoWorld::alias_snapshot()` 由来の所有 `BTreeMap` を
     /// そのまま `SurfaceResolver::new` へ渡し、単一候補・複数候補・未知キーを確認する。
     #[test]
     fn resolves_with_real_emo2_snapshot() {
@@ -271,7 +264,7 @@ mod tests {
     #[test]
     fn balloon_name_form_is_name_form() {
         // 名前形（非数値 `\b[バルーン１]`）は alias 表を引かず NameForm で止める
-        //（M-boot は数値のみ・名前解決は将来 additive・4.5）。
+        //（名前の形は文字の層が読む。seriko は数だけを読む・4.5）。
         assert_eq!(resolve_balloon_key("バルーン１"), BalloonResolve::NameForm);
     }
 
@@ -301,15 +294,5 @@ mod tests {
         // 純関数・alias 非適用の担保: SurfaceResolver では alias で引ける名前
         //（"通常"）も、resolve_balloon_key では表を引かず NameForm で止まる。
         assert_eq!(resolve_balloon_key("通常"), BalloonResolve::NameForm);
-    }
-
-    #[test]
-    fn balloon_resolve_is_deterministic() {
-        // 同一入力に対し常に同一出力（純関数・決定論）。
-        assert_eq!(resolve_balloon_key("2"), resolve_balloon_key("2"));
-        assert_eq!(
-            resolve_balloon_key("バルーン１"),
-            resolve_balloon_key("バルーン１")
-        );
     }
 }

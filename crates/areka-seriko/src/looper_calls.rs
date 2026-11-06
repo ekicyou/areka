@@ -1,8 +1,11 @@
 //! 一番上の面の働きのコマの配線（spec: seriko-pattern-calls 要件 1.3・3.1・3.4・3.5・3.8・3.9・4.1・
 //! 4.5・7.7）。
 //!
-//! 面の段の再生の表と作りかけの欄を一緒に [`CallPlays`] として貸し、[`run_calls`] で当てる。呼ぶのは
-//! 抽選・`always`・引き金の始まりの後、コマを置く前（同じ時刻の 2 度目の開始の止めはこの順が前提）。
+//! 面の段の再生の表と作りかけの欄を一緒に [`CallPlays`] として貸し、[`run_calls`] で当てる。呼ぶ所は
+//! 2 つ: 引き金の判定（`fire_top_triggers`）が開始の時刻ごとにその時刻まで当て（順はその doc の
+//! 「同じ時刻 T の中の順」）、刻みと合図は引き金の後と、抽選・`always` の始まりの後（今の時刻に始まる
+//! 再生の頭のコマ）の 2 回、コマを置く前に今の時刻まで当てる（今の時刻に始まる再生に、それより前の
+//! 呼び出しを当てない。同じ時刻の 2 度目の開始の止めはこの順が前提）。
 //! 欄に置くのは描くコマだけ（働きのコマは絵を重ねず、前の絵を残す）。
 
 use std::collections::{HashMap, HashSet};
@@ -90,7 +93,6 @@ struct TopPlays<'a> {
     pattern: &'a mut PatternState,
     stopped: &'a mut StoppedAlways,
     key: &'a (ActorKey, Slot),
-    anims: &'a [LoopAnimation],
     started: Vec<u32>,
 }
 
@@ -104,8 +106,7 @@ impl CallPlays for TopPlays<'_> {
 
     fn set_acts_through(&mut self, animation: u32, through_ms: u64) {
         if let Some(p) = self.plays.get_mut(&animation) {
-            // 合図の時刻が前の刻みより前でも印を戻さない（同じコマを 2 度当てない）。
-            p.acts_through = Some(p.acts_through.map_or(through_ms, |t| t.max(through_ms)));
+            p.acts_through = Some(through_ms);
         }
     }
 
@@ -129,13 +130,9 @@ impl CallPlays for TopPlays<'_> {
         );
     }
 
-    fn stop(&mut self, animation: u32) {
+    fn stop(&mut self, animation: u32, always: bool) {
         self.plays.remove(&animation);
         self.pattern.remove(animation);
-        let always = self
-            .anims
-            .iter()
-            .any(|a| a.id == animation && matches!(a.trigger, LoopTrigger::Always { .. }));
         if always {
             self.stopped
                 .insert((self.key.0.clone(), self.key.1, animation));
@@ -173,7 +170,6 @@ pub(super) fn run_top_calls(
         pattern,
         stopped,
         key,
-        anims,
         started: Vec::new(),
     };
     let outcome = run_calls(

@@ -1,16 +1,21 @@
+//! ループ統括器（`LoopRuntime`）の抽選・進行・発行の決定論テスト。
+//!
+//! 番号の出どころ: 無印の要件と D-7 は areka-P0-seriko-loop（バルーンの表の要件 5.6 は
+//! areka-P0-kero-balloon）、「bindopt」と D9-2 は areka-P0-bindoption-exclusivity。
+
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::capture_text;
 use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_parsers::shell::{
     Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
 };
-use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::{Arc, Mutex};
 
 // ── テスト用の表構築（from_world 経由＝実構築パスを通す） ──────────────────
 
 /// コマ 1 本（overlay 固定・x/y=0）。
-fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
+pub(crate) fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
     Pattern {
         index,
         method: DrawMethod::new("overlay".to_string()),
@@ -23,7 +28,7 @@ fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
 }
 
 /// animation 1 本を持つ surface 1 件。
-fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
+pub(crate) fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
     Surface {
         id,
         targets: vec![AppendTarget::Single(id)],
@@ -47,7 +52,7 @@ fn world_of(surfaces: Vec<Surface>) -> EmoWorld {
 }
 
 /// surfaces から shell 表を build する。
-fn shell_table(surfaces: Vec<Surface>) -> AnimationTable {
+pub(crate) fn shell_table(surfaces: Vec<Surface>) -> AnimationTable {
     AnimationTable::from_world(&world_of(surfaces))
 }
 
@@ -83,7 +88,7 @@ pub(crate) struct RngProbe {
 }
 
 /// 指定した値列を順に返し、呼ばれた回数を計数する rng を作る（尽きたら 1 を返す＝非発火）。
-/// 返す `Arc` から消費回数・残量を照合できる（bind OFF での**非消費**の檻・要件 3.1）。
+/// 返す `Arc` から消費回数を照合できる（bind OFF での**非消費**の檻・要件 3.1）。
 pub(crate) fn counting_rng(values: &[u32]) -> (LoopRng, Arc<Mutex<RngProbe>>) {
     let probe = Arc::new(Mutex::new(RngProbe {
         calls: 0,
@@ -107,7 +112,7 @@ fn shown_shell(sid: u32) -> (ScopeStates, ActorKey) {
     shown_shell_with_binds(sid, BindSet::from_ids([]))
 }
 
-fn shown_shell_with_binds(sid: u32, binds: BindSet) -> (ScopeStates, ActorKey) {
+pub(crate) fn shown_shell_with_binds(sid: u32, binds: BindSet) -> (ScopeStates, ActorKey) {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(binds));
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(sid));
@@ -122,6 +127,21 @@ pub(crate) fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig
         rng,
         pick_rng: crate::seeded_rng(0),
     }
+}
+
+/// スコープ `"0"` の `slot` の面の (部品, animation の番号) の時計（部品のテストが見る）。
+pub(crate) fn part_clock(
+    rt: &LoopRuntime,
+    slot: Slot,
+    part: u32,
+    id: u32,
+) -> Option<crate::parts::PartAnim> {
+    rt.parts.clock_at(
+        &ActorKey::from("0"),
+        slot,
+        areka_emo_compose::PartKey::Surface(part),
+        id,
+    )
 }
 
 // ── 抽選ゲート: 表示中×非再生中×bind ゲート ───────────────────────────────
@@ -209,7 +229,7 @@ fn hidden_slot_consumes_no_rng() {
     let (rng, probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     // Show せず（未知 scope）＝表示中 slot が 1 つも無い。
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
 
     rt.on_tick(0, &mut states);
     let cmds = rt.on_tick(1000, &mut states);
@@ -224,8 +244,8 @@ fn hidden_slot_consumes_no_rng() {
 /// 再生中アニメは再抽選対象外＝次の境界跨ぎで乱数を消費しない（要件 2.3）。
 #[test]
 fn playing_anim_is_not_relotteried() {
-    // 長い残留アニメ（末尾非負・150ms 継続）。
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);
+    // 次の境界を越えて続く残留アニメ（末尾非負・1500ms 継続）。
+    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 1500)]);
     let (rng, probe) = counting_rng(&[0]); // 最初の跨ぎで 1 回だけ発火
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, _scope) = shown_shell(10);
@@ -320,7 +340,7 @@ fn sakura_residual_keeps_frame_and_is_relotteriable() {
     );
 }
 
-/// 残留→再発火の**即時クリア**（討議 #2）: 先頭 wait>0 の合成テーブルで、末尾非負の残留状態から
+/// 残留→再発火の**即時クリア**: 先頭 wait>0 の合成テーブルで、末尾非負の残留状態から
 /// 再発火した tick に残留コマが即消えベース復帰し、先頭コマ deadline で改めて表示される。
 #[test]
 fn residual_is_immediately_cleared_on_refire() {
@@ -344,7 +364,7 @@ fn residual_is_immediately_cleared_on_refire() {
     assert_eq!(c2.len(), 1, "再発火 tick で残留クリアの再発行");
     assert!(
         pattern_of(&c2[0]).is_empty(),
-        "再発火の瞬間に残留コマが即時クリア＝ベース露出（討議 #2）"
+        "再発火の瞬間に残留コマが即時クリア＝ベース露出"
     );
 
     // 先頭コマ deadline（started_at 2000＋50＝2050）で先頭コマ 700 が表示される。
@@ -429,7 +449,7 @@ fn lottery_consumes_in_scope_ascending_order() {
     // [1, 0]: 先頭消費（scope "0"）は非発火、2 番目（scope "1"）は発火。
     let (rng, probe) = counting_rng(&[1, 0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply(&s0, SurfaceTarget::Show(10));
@@ -465,7 +485,7 @@ fn lottery_consumes_shell_before_balloon() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     states.apply(&scope, SurfaceTarget::Show(10)); // Shell shown surface 10
     states.apply_balloon(&scope, SurfaceTarget::Show(20)); // Balloon shown surface 20
 
@@ -479,7 +499,7 @@ fn lottery_consumes_shell_before_balloon() {
     );
 }
 
-// ── scope キー表引き（バルーン表・檻 10・要件 5.6） ──────────────────────
+// ── scope キー表引き（バルーン表・要件 5.6） ──────────────────────
 
 /// バルーン表は scope ごとに独立に引かれる（要件 5.6）。同一 surface id・同一 animation id でも、
 /// scope 0 は自 scope の表のコマ、scope 1 は自 scope の表のコマで駆動される
@@ -495,7 +515,7 @@ fn balloon_tables_are_looked_up_per_scope() {
         rng: always_fire(),
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
     states.apply_balloon(&s0, SurfaceTarget::Show(20));
@@ -545,7 +565,7 @@ fn absent_scope_balloon_table_is_inert() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([])));
+    let mut states = crate::test_support::empty_states();
     let s1 = ActorKey::from("1");
     states.apply_balloon(&s1, SurfaceTarget::Show(20));
 
@@ -570,7 +590,7 @@ fn absent_scope_balloon_table_is_inert() {
 /// 除去後は再抽選対象へ戻る（rng が再消費される）。
 #[test]
 fn on_surface_changed_removes_playback() {
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 150)]);
+    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 1500)]);
     let (rng, probe) = counting_rng(&[0, 0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, scope) = shown_shell(10);
@@ -588,23 +608,36 @@ fn on_surface_changed_removes_playback() {
     );
 }
 
-/// 非単調 tick（now < 前回）は無視され、状態を変えず空を返す（rng も消費しない・防御・要件 1.2）。
+/// 非単調 tick（now < 前回）は無視され、状態を変えず空を返す（防御・要件 1.2）。
+/// コマが替わった後に時刻が戻っても、前のコマへ巻き戻る指令を出さず、番人の時刻も戻さない。
 #[test]
 fn non_monotonic_tick_is_ignored() {
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
-    let (rng, probe) = counting_rng(&[0]);
+    // 2000 で発火し、コマ 2 枚目（2110）は 2100 から。2150 と 2050 の間にコマの替わり目がある。
+    // 3 枚目は 2150 で再生がまだ終わっていないために置く（2 枚だと 2150 で再生が消え、2050 で
+    // 何も出せず番人を外しても緑のまま）。
+    let table = table_single(
+        10,
+        0,
+        Interval::Random { k: 4 },
+        &[(2106, 0), (2110, 100), (2120, 1000)],
+    );
+    let (rng, _probe) = counting_rng(&[0]);
     let mut rt = LoopRuntime::new(cfg(table, rng));
     let (mut states, _scope) = shown_shell(10);
 
     rt.on_tick(1000, &mut states); // 初回（遅延初期化・境界 next=2000）
-    // 過去へ戻る tick は無視。
-    let cmds = rt.on_tick(500, &mut states);
-    assert!(cmds.is_empty(), "非単調 tick は無発行");
-    // 抽選も走らない＝rng 非消費（初回 1000 は境界跨ぎしない＝next は 2000）。
+    assert!(!rt.on_tick(2000, &mut states).is_empty(), "2000 で発火する");
+    assert!(
+        !rt.on_tick(2150, &mut states).is_empty(),
+        "2150 でコマ 2 枚目へ替わる"
+    );
+    // 過去へ戻る tick は無視（前のコマ 2106 へ巻き戻る Show を出さない）。
+    let cmds = rt.on_tick(2050, &mut states);
+    assert!(cmds.is_empty(), "非単調 tick は無発行: {cmds:?}");
     assert_eq!(
-        probe.lock().unwrap().calls,
-        0,
-        "非単調 tick は rng を消費しない"
+        rt.last_seen,
+        Some(2150),
+        "非単調 tick は番人の時刻を戻さない"
     );
 }
 
@@ -625,7 +658,7 @@ fn on_tick_never_writes_binds() {
     );
 }
 
-/// `SerikoLoopConfig::disabled()` は空表＋ダミー乱数でループ完全不活性（非退行・常に無発行）。
+/// `SerikoLoopConfig::disabled()` は空表＋ダミー乱数でループ完全不活性（常に無発行）。
 #[test]
 fn disabled_config_is_inert() {
     let mut rt = LoopRuntime::new(SerikoLoopConfig::disabled());
@@ -703,15 +736,21 @@ fn playing_bind_anim_removed_from_binds_stops_and_does_not_revive() {
         c2.is_empty(),
         "復活しない＝pattern 不変ゆえ無発行（要件 6.2）"
     );
+    assert!(
+        rt.playback
+            .get(&(scope.clone(), Slot::Shell))
+            .is_none_or(|pb| !pb.contains_key(&7)),
+        "bind から外れた ID の再生も捨てる（bindopt 7.3）"
+    );
 
-    // playback も除去されている＝Idle へ戻っている反証: bind を戻すと次の境界で再抽選対象になる
-    // （再生中のままなら再抽選されず rng は消費されない・要件 2.3）。
+    // bind を戻すと次の境界で再び抽選の対象になる（2000 では経過 1000 で末尾を過ぎるので、
+    // 再生が残っていても引く。再生を捨てたことは上の確かめが見る）。
     states.apply_bind(&scope, 7, true);
     rt.on_tick(2000, &mut states); // 境界跨ぎ
     assert_eq!(
         probe.lock().unwrap().calls,
         2,
-        "停止相当で playback も除去＝再抽選対象へ戻る（bindopt 7.3）"
+        "bind を戻すと再抽選の対象へ戻る（bindopt 7.3）"
     );
 }
 
@@ -798,7 +837,7 @@ fn progress_phase_bind_drop_emits_info_marker() {
     rt.on_tick(1000, &mut states); // 発火・再生中
     states.apply_bind(&scope, 7, false);
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         rt.on_tick(1100, &mut states);
     });
 
@@ -815,7 +854,7 @@ fn progress_phase_bind_drop_emits_info_marker() {
 
 /// bind 種でも bind 集合に属したまま再生が続く間は停止しない（誤検出の不在・bindopt 7.3 の裏側）。
 ///
-/// **不在主張には同一捕捉内の陽性対照を併置する**（`actor_dispatch_tests` の既存流儀）。捕捉区間に
+/// **不在主張には同一捕捉内の陽性対照を併置する**（`actor_dispatch_tests` と同じ形）。捕捉区間に
 /// 抽選境界を跨ぐ tick を含め、健全系では `loop 抽選発火` の痕跡が**必ず出る**ことを同時に主張する
 /// ——捕捉が空でも通ってしまう恒真の檻にしないため。あわせて状態側（保持コマの残存）でも反証し、
 /// ログ経路が壊れても判別能力が残るようにする。進行相のガード条件を反転させる変異
@@ -834,7 +873,7 @@ fn progress_phase_emits_no_drop_marker_while_bind_holds() {
 
     rt.on_tick(0, &mut states);
     // 捕捉区間に境界跨ぎ（＝発火）を含める。bind は終始 ON のまま。
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         rt.on_tick(1000, &mut states); // 抽選発火 → 進行相（bind 所属のまま）
         rt.on_tick(1100, &mut states); // 再生継続（Active・末尾未到達）
     });
@@ -861,19 +900,6 @@ fn progress_phase_emits_no_drop_marker_while_bind_holds() {
 }
 
 // ── 補助 ────────────────────────────────────────────────────────────────
-
-/// テスト専用 tracing 捕捉ハーネス（state/actor/table の同名ヘルパと同一＝硬化機構の唯一の
-/// 定義元 `log-capture-kit` へ委譲）。1 イベント 1 行へ level／target／各フィールド
-/// （`name=value`）を整形し、改行連結で返す。
-///
-/// 「`with_default` はスレッドローカルゆえ並行テスト安全」は誤りである（callsite の interest
-/// キャッシュはプロセス全体で 1 つ・先着スレッドの判定が焼き付く）。共有機構が probe 常駐・
-/// 窓内の interest 再計算・番兵による空振り検出で塞ぐ。機序は `log_capture_kit` の crate doc
-/// と同 crate の `src/probe.rs` を参照。
-fn capture_logs<F: FnOnce()>(f: F) -> String {
-    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
-    lines.join("\n")
-}
 
 pub(crate) fn pattern_of(cmd: &DisplayCommand) -> &PatternState {
     match cmd {

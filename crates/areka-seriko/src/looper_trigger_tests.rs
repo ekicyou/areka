@@ -1,21 +1,21 @@
 //! 一番上の面の `runonce`・`periodic` の檻（spec: areka-P0-seriko-trigger-intervals 要件 2・3・5.1〜5.3・
 //! 5.5・5.7・5.8・6.1・6.2・7.5・8.1・8.2・9.2・9.3・9.6・tasks.md 4.1）。
 //!
-//! 面の切り替えはアクターと同じ順（`apply` → `on_surface_changed` → `refresh`）で踏む。刻みは
-//! `on_tick(now_ms)`、出来事の時刻は `refresh` の `at_ms`、乱数は注入列で、どれも決定論。時刻は
-//! 観測の後にだけ進める。
+//! 面の切り替えはアクターと同じ順（`apply` → `on_surface_shown` → `on_surface_changed` →
+//! `refresh`）で踏む。刻みは `on_tick(now_ms)`、出来事の時刻は `refresh` の `at_ms`、乱数は注入列で、
+//! どれも決定論。時刻は観測の後にだけ進める。
 
 use std::collections::BTreeMap;
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{
-    capture_logs, cell, count, scope, shell_runtime, started, switch, table_of,
-};
+use super::test_support::{cell, note_balloon, shell_runtime, started, switch};
 use super::tests::{always_fire, cfg, counting_rng, pattern_of};
 use super::*;
 use crate::resolve::SurfaceTarget;
-use crate::state::{BindApplyOutcome, StageNote};
+use crate::state::BindApplyOutcome;
+use crate::test_support::count;
+use crate::test_support::{capture_logs, empty_states, scope, table_of};
 
 /// 面 0 の一番上: `runonce`（animation 0＝301 → 100ms で 302 → 100ms で `-1`・全部で 200ms）と
 /// `periodic,1`（animation 1＝401 → 100ms で 402 → 300ms で `-1`・全部で 400ms）。面 1 は何も持たない。
@@ -38,7 +38,7 @@ const TRIGGERS: &str = "surface0\n{\n\
 fn runonce_plays_once_from_the_event_time_on_first_show() {
     let (rng, probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(table_of(TRIGGERS), rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     assert!(rt.on_tick(1000, &mut states).is_empty());
 
     let cmd = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1030).expect("Show");
@@ -67,17 +67,24 @@ fn runonce_plays_once_from_the_event_time_on_first_show() {
     assert_eq!(cell(&states, Slot::Shell, 0), None, "`-1` で消す");
     assert_eq!(started(&rt, Slot::Shell, 0), None, "`-1` で終える");
 
-    let mut now = 1250;
-    while now <= 4000 {
-        rt.on_tick(now, &mut states);
-        assert_eq!(
-            started(&rt, Slot::Shell, 0),
-            None,
-            "{now}: 2 回目は鳴らない"
-        );
-        assert_eq!(cell(&states, Slot::Shell, 0), None, "{now}");
-        now += 50;
-    }
+    let logs = capture_logs(|| {
+        let mut now = 1250;
+        while now <= 4000 {
+            rt.on_tick(now, &mut states);
+            assert_eq!(
+                started(&rt, Slot::Shell, 0),
+                None,
+                "{now}: 2 回目は鳴らない"
+            );
+            assert_eq!(cell(&states, Slot::Shell, 0), None, "{now}");
+            now += 50;
+        }
+    });
+    assert_eq!(
+        count(&logs, "trigger runonce を鳴らした"),
+        0,
+        "2 回目は鳴らない（鳴らしてすぐ捨てる再生も無い）"
+    );
     assert_eq!(probe.lock().unwrap().calls, 0, "3 語は乱数を引かない");
 }
 
@@ -443,7 +450,7 @@ const NO_TRIGGER_WORDS: &str = "surface0\n{\n\
 #[test]
 fn tables_without_trigger_words_keep_no_trigger_state() {
     let mut rt = LoopRuntime::new(cfg(table_of(NO_TRIGGER_WORDS), always_fire()));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
 
     let logs = capture_logs(|| {
         rt.on_tick(0, &mut states);
@@ -490,7 +497,7 @@ fn trigger_words_beside_random_do_not_interfere() {
     let run = |text: &str| {
         let (rng, probe) = counting_rng(&draws);
         let mut rt = LoopRuntime::new(cfg(table_of(text), rng));
-        let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+        let mut states = empty_states();
         rt.on_tick(0, &mut states);
         switch(&mut rt, &mut states, SurfaceTarget::Show(0), 0);
         let runonce = started(&rt, Slot::Shell, 0);
@@ -502,10 +509,10 @@ fn trigger_words_beside_random_do_not_interfere() {
             if random.last().map(|(_, c)| *c) != Some(seen) {
                 random.push((now, seen));
             }
-            if let Some(at) = started(&rt, Slot::Shell, 2) {
-                if periodic.last() != Some(&at) {
-                    periodic.push(at);
-                }
+            if let Some(at) = started(&rt, Slot::Shell, 2)
+                && periodic.last() != Some(&at)
+            {
+                periodic.push(at);
             }
             now += 50;
         }
@@ -538,9 +545,9 @@ const TALK_ELSEWHERE: &str = "surface0\n{\n}\n\
     surface501\n{\n}\n";
 
 /// 表に `talk` が在れば、一番上に 3 語の無い面でも構える（文字の数えの置き場）。その面では再生も
-/// 刻みごとの一番上の判定も生まれない。
+/// 表示の指令も生まれない。
 #[test]
-fn talk_elsewhere_in_the_table_arms_without_top_judgement() {
+fn talk_elsewhere_in_the_table_arms_and_plays_nothing() {
     let (mut rt, mut states) = shell_runtime(TALK_ELSEWHERE);
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
@@ -567,15 +574,8 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
         rng,
         pick_rng: crate::seeded_rng(0),
     });
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
-    let note = |states: &mut ScopeStates, open: bool| {
-        states.note_stage(&StageNote::Balloon {
-            scope: scope(),
-            open,
-            face: 0,
-            generation: 0,
-        });
-    };
+    let mut states = empty_states();
+    let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
 
     note(&mut states, true);
     rt.on_tick(1000, &mut states);
@@ -619,6 +619,52 @@ fn balloon_window_reopen_keeps_runonce_silent_and_restarts_periodic() {
         "開いた時刻 3200 が新しい起点"
     );
     assert_eq!(started(&rt, Slot::Balloon, 0), None);
+}
+
+/// 見え始めの時刻にもう再生中だった `runonce` は、その回を見送って印を付ける。再生が終わって表から
+/// 外れた後に、過ぎた見え始めの時刻で鳴り直して働きのコマ（`start,2`）を 2 度当てることは無い
+/// （窓が閉じている間に抽選の `start,0` が 0 を 1000 に始め、窓は 1050 に開く・
+/// areka-P0-seriko-trigger-intervals 要件 2.1・2.2・5.3）。
+#[test]
+fn runonce_playing_when_it_becomes_visible_is_skipped_for_good() {
+    const PLAYING: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,overlay,301,100,0,0\n\
+        animation0.pattern1,start,2\n\
+        animation0.pattern2,overlay,-1,400,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,401,0,0,0\n\
+        animation1.pattern1,start,0\n\
+        animation2.interval,never\n\
+        animation2.pattern0,overlay,111,0,0,0\n\
+        animation2.pattern1,overlay,112,5000,0,0\n}\n";
+    let (rng, _probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(SerikoLoopConfig {
+        shell_table: AnimationTable::empty(),
+        balloon_tables: BTreeMap::from([(scope(), table_of(PLAYING))]),
+        rng,
+        pick_rng: crate::seeded_rng(0),
+    });
+    let mut states = empty_states();
+    states.apply_balloon(&scope(), SurfaceTarget::Show(0));
+    let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
+    note(&mut states, false);
+    let logs = capture_logs(|| {
+        rt.on_tick(0, &mut states);
+        rt.on_tick(1000, &mut states); // 抽選の 1 が鳴り、start,0 が 0 を 1000 に始める。
+        assert_eq!(started(&rt, Slot::Balloon, 0), Some(1000), "前提");
+        note(&mut states, true);
+        for now in [1050, 1200, 1600, 1700] {
+            rt.on_tick(now, &mut states); // 0 の start,2 は 1100・0 は 1500 に終わる。
+        }
+    });
+    assert_eq!(
+        started(&rt, Slot::Balloon, 2),
+        Some(1100),
+        "start,2 は 1 度だけ"
+    );
+    assert_eq!(started(&rt, Slot::Balloon, 0), None, "鳴り直さない");
+    assert_eq!(count(&logs, "trigger runonce を鳴らした"), 0, "{logs:?}");
 }
 
 /// 記録: 面に入ったら `debug!` を 1 件、`runonce`・`periodic` の開始は `info!`。始めない経路（境目の前・
@@ -669,4 +715,110 @@ fn entering_and_starts_are_logged_and_discards_are_silent() {
         "始めない経路は記録しない: {logs:?}"
     );
     assert_eq!(count(&logs, "level=WARN"), 0, "{logs:?}");
+}
+
+/// 窓が列に無い序数を尋ねても（決まりの破れ）、どのビルドでも止まらず刻みの時刻で代え、序数と時刻の
+/// 欄を持つ `warn!` を 1 行残す（audit-seriko 指摘 9・要件 4.1・6.2）。
+#[test]
+fn glyph_missing_from_feed_falls_back_to_tick_time_with_one_warn() {
+    let mut epoch = TalkEpoch::default();
+    epoch.observe(0.0, 1000);
+    let mut feed = TalkFeed::default();
+    feed.push_chunk(0.0, 0.1, 1);
+    let mut at = None;
+    let logs = capture_logs(|| at = Some(glyph_wall_ms(&epoch, Some(&feed), 5, 1234)));
+
+    assert_eq!(at, Some(1234));
+    let warned = crate::test_support::warns(&logs);
+    assert_eq!(warned.len(), 1, "{logs:?}");
+    assert!(
+        warned[0].contains("seriko: trigger talk の区切りの文字が文字の列に無い")
+            && warned[0].contains("glyph=5")
+            && warned[0].contains("now_ms=1234"),
+        "{logs:?}"
+    );
+}
+
+/// 合図の更新（着せ替えなど・2010）も、その時刻までの `periodic` を判定してから呼び出しを当てる:
+/// 境目 2000 に始まった 1 は、別の再生の 2005 の `stop,1` で止まる（areka-P0-seriko-trigger-intervals
+/// 要件 3.1・6.1・seriko-pattern-calls 要件 3.1・4.1）。
+#[test]
+fn refresh_judges_periodic_before_applying_calls_up_to_the_event_time() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,overlay,301,1005,0,0\n\
+        animation0.pattern1,stop,1\n\
+        animation1.interval,periodic,1\n\
+        animation1.pattern0,overlay,401,0,0,0\n\
+        animation1.pattern1,overlay,402,500,0,0\n}\n\
+        surface301\n{\n}\nsurface401\n{\n}\nsurface402\n{\n}\n";
+    let (mut rt, mut states) = shell_runtime(TEXT);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 1000).expect("Show");
+    rt.on_tick(1500, &mut states);
+    let logs = capture_logs(|| {
+        rt.refresh(&scope(), Slot::Shell, Some(2010), &mut states);
+        rt.on_tick(2100, &mut states);
+    });
+    assert_eq!(
+        started(&rt, Slot::Shell, 1),
+        None,
+        "2000 に始まり 2005 に止まる"
+    );
+    assert_eq!(count(&logs, "trigger periodic を鳴らした"), 1, "{logs:?}");
+}
+
+/// 合図の更新（2010）で境目 2000 に鳴り直した `periodic` が先頭の待ちの前（経過 10）なら、前の周が
+/// 残した最後のコマを刻みと同じく外す（古い絵を 1 刻み残さない・areka-P0-seriko-loop 要件 4.2・
+/// areka-P0-seriko-trigger-intervals 要件 6.2）。
+#[test]
+fn refresh_clears_the_leftover_frame_when_the_refired_head_is_pending() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,301,50,0,0\n\
+        animation0.pattern1,overlay,302,50,0,0\n}\n\
+        surface301\n{\n}\nsurface302\n{\n}\n";
+    let (mut rt, mut states) = shell_runtime(TEXT);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 0).expect("Show");
+    rt.on_tick(1150, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 0), Some(302), "前の周の残り");
+    assert_eq!(started(&rt, Slot::Shell, 0), None);
+
+    rt.refresh(&scope(), Slot::Shell, Some(2010), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(2000),
+        "境目 2000 で鳴り直す"
+    );
+    assert_eq!(
+        cell(&states, Slot::Shell, 0),
+        None,
+        "先頭の待ちの前は欄が空"
+    );
+}
+
+/// 合図の更新（200）で、呼び出しが始め直した頭がもう止まっている（60 に `start,1` で始め直され、経過
+/// 140 で `-1` を過ぎた）なら、前の再生が残したコマを刻みと同じく外す（`start` は欄に触らない・
+/// areka-P0-seriko-loop 要件 4.3・seriko-pattern-calls 要件 3.5・3.9）。
+#[test]
+fn refresh_clears_the_leftover_frame_when_the_called_head_is_stopped() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,start,1\n\
+        animation0.pattern1,overlay,100,50,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,111,0,0,0\n\
+        animation1.pattern1,overlay,-1,100,0,0\n}\n\
+        surface100\n{\n}\nsurface111\n{\n}\n";
+    let (mut rt, mut states) = shell_runtime(TEXT);
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 10).expect("Show");
+    rt.on_tick(30, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 1), Some(111), "前の再生の残り");
+
+    rt.refresh(&scope(), Slot::Shell, Some(200), &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(60), "60 に始め直す");
+    assert_eq!(cell(&states, Slot::Shell, 1), None, "止まった頭は欄が空");
 }

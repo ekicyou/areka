@@ -19,7 +19,7 @@ use crate::table::{LoopAnimation, LoopFrame};
 /// 再生表のコマの働き。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FrameAct {
-    /// 描くコマ（今までのコマ）。
+    /// 描くコマ（8 語でないコマ）。
     Draw,
     /// start・parallelstart（`pick_one` は偽）／alternativestart（`pick_one` は真）。
     Start {
@@ -41,7 +41,7 @@ pub enum FrameAct {
     Inert,
 }
 
-/// pattern定義 1 行を再生表のコマにする。8 語以外は今と同じ（合成メソッドの解決と未知の語の記録）。
+/// pattern定義 1 行を再生表のコマにする。8 語以外は合成メソッドを解決し、未知の語を記録する。
 /// 呼び出しの 6 語・`insert`・読めない相手の待ちは 0、`move` は待ちと X・Y をそのまま持ち、欄 2 を
 /// 読まない。
 pub(crate) fn loop_frame(p: &Pattern) -> LoopFrame {
