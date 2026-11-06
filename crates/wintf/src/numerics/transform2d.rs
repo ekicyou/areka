@@ -1,5 +1,3 @@
-use super::calc_hash::*;
-use core::hash::*;
 use windows_numerics::*;
 
 /// ローカル変換（WinUI Composition の `Visual` 準拠）。
@@ -24,7 +22,7 @@ pub struct Transform2D {
     /// anchor 基準のスケール（pivot_srt の一部＝**最内**）。
     pub scale: Vector2,
 
-    /// anchor 基準の回転 [rad]（CCW、pivot_srt の一部）。
+    /// anchor 基準の回転 [rad]（正で画面上の時計回り＝y 下向き、pivot_srt の一部）。
     pub rotation: f32,
 
     /// 汎用行列。pivot_srt と offset の**間**に適用。
@@ -33,24 +31,6 @@ pub struct Transform2D {
 
     /// 親空間での平行移動（合成順では**最外**＝ mat より後に適用）。
     pub offset: Vector2,
-}
-
-impl CalcHash for Transform2D {
-    #[inline]
-    fn calc_hash<H: Hasher>(&self, state: &mut H) {
-        self.anchor.calc_hash(state);
-        self.scale.calc_hash(state);
-        self.rotation.calc_hash(state);
-        self.mat.calc_hash(state);
-        self.offset.calc_hash(state);
-    }
-}
-
-impl Hash for Transform2D {
-    #[inline]
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.calc_hash(state);
-    }
 }
 
 impl Transform2D {

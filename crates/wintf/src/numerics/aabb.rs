@@ -1,8 +1,6 @@
 use super::calc_hash::*;
-use super::matrix3x2::Matrix3x2Ext;
-use super::point2::*;
+use super::matrix3x2::{Matrix3x2Ext, transform_point};
 use core::hash::*;
-use core::ops::*;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows_numerics::*;
 
@@ -83,11 +81,6 @@ impl Aabb {
         !(self.0.right > self.0.left && self.0.bottom > self.0.top)
     }
 
-    #[inline]
-    pub fn contains(&self, p: Vector2) -> bool {
-        p.X >= self.0.left && p.X < self.0.right && p.Y >= self.0.top && p.Y < self.0.bottom
-    }
-
     /// 空（NaN・退化を含む）は `EMPTY` へそろえる。
     #[inline]
     fn or_empty(self) -> Aabb {
@@ -127,16 +120,6 @@ impl Aabb {
     }
 
     #[inline]
-    pub fn translate(self, v: Vector2) -> Aabb {
-        Aabb::new(
-            self.0.left + v.X,
-            self.0.top + v.Y,
-            self.0.right + v.X,
-            self.0.bottom + v.Y,
-        )
-    }
-
-    #[inline]
     pub fn transform(self, m: Matrix3x2) -> Aabb {
         if self.is_empty() {
             return Aabb::EMPTY;
@@ -144,31 +127,25 @@ impl Aabb {
         let r = self.0;
 
         if m.axis_aligned() {
-            let a = Point2::new(r.left, r.top) * m;
-            let b = Point2::new(r.right, r.bottom) * m;
-            return Aabb::new(
-                a.x().min(b.x()),
-                a.y().min(b.y()),
-                a.x().max(b.x()),
-                a.y().max(b.y()),
-            )
-            .or_empty();
+            let (ax, ay) = transform_point(r.left, r.top, &m);
+            let (bx, by) = transform_point(r.right, r.bottom, &m);
+            return Aabb::new(ax.min(bx), ay.min(by), ax.max(bx), ay.max(by)).or_empty();
         }
 
-        // --- 一般（回転/シアー）：4隅を Point2 で変換して bbox ---
+        // --- 一般（回転/シアー）：4隅を変換して bbox ---
         let ps = [
-            Point2::new(r.left, r.top) * m,
-            Point2::new(r.right, r.top) * m,
-            Point2::new(r.right, r.bottom) * m,
-            Point2::new(r.left, r.bottom) * m,
+            transform_point(r.left, r.top, &m),
+            transform_point(r.right, r.top, &m),
+            transform_point(r.right, r.bottom, &m),
+            transform_point(r.left, r.bottom, &m),
         ];
         let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
         let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-        for p in ps {
-            min_x = min_x.min(p.x());
-            max_x = max_x.max(p.x());
-            min_y = min_y.min(p.y());
-            max_y = max_y.max(p.y());
+        for (x, y) in ps {
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
         }
         Aabb::new(min_x, min_y, max_x, max_y).or_empty()
     }
@@ -177,76 +154,6 @@ impl Aabb {
 impl From<D2D_RECT_F> for Aabb {
     fn from(r: D2D_RECT_F) -> Self {
         Aabb(r)
-    }
-}
-
-impl BitOr for Aabb {
-    type Output = Aabb;
-    #[inline]
-    fn bitor(self, o: Aabb) -> Aabb {
-        self.union(o)
-    }
-}
-impl BitOrAssign for Aabb {
-    #[inline]
-    fn bitor_assign(&mut self, o: Aabb) {
-        *self = *self | o;
-    }
-}
-
-impl BitAnd for Aabb {
-    type Output = Aabb;
-    #[inline]
-    fn bitand(self, o: Aabb) -> Aabb {
-        self.intersect(o)
-    }
-}
-impl BitAndAssign for Aabb {
-    #[inline]
-    fn bitand_assign(&mut self, o: Aabb) {
-        *self = *self & o;
-    }
-}
-
-impl Add<Vector2> for Aabb {
-    type Output = Aabb;
-    #[inline]
-    fn add(self, v: Vector2) -> Aabb {
-        self.translate(v)
-    }
-}
-impl AddAssign<Vector2> for Aabb {
-    #[inline]
-    fn add_assign(&mut self, v: Vector2) {
-        *self = *self + v;
-    }
-}
-
-impl Sub<Vector2> for Aabb {
-    type Output = Aabb;
-    #[inline]
-    fn sub(self, v: Vector2) -> Aabb {
-        self.translate(Vector2 { X: -v.X, Y: -v.Y })
-    }
-}
-impl SubAssign<Vector2> for Aabb {
-    #[inline]
-    fn sub_assign(&mut self, v: Vector2) {
-        *self = *self - v;
-    }
-}
-
-impl Mul<Matrix3x2> for Aabb {
-    type Output = Aabb;
-    #[inline]
-    fn mul(self, m: Matrix3x2) -> Aabb {
-        self.transform(m)
-    }
-}
-impl MulAssign<Matrix3x2> for Aabb {
-    #[inline]
-    fn mul_assign(&mut self, m: Matrix3x2) {
-        *self = *self * m;
     }
 }
 

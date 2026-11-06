@@ -36,7 +36,7 @@ impl Matrix3x2Ext for Matrix3x2 {
     }
 }
 
-fn transform_point(x: f32, y: f32, m: &Matrix3x2) -> (f32, f32) {
+pub(super) fn transform_point(x: f32, y: f32, m: &Matrix3x2) -> (f32, f32) {
     (x * m.M11 + y * m.M21 + m.M31, x * m.M12 + y * m.M22 + m.M32)
 }
 

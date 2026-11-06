@@ -96,7 +96,7 @@ pub(crate) fn solid(rect: D2D_RECT_F, bgra: [u8; 4]) -> VisualDrawContent {
         dc.EndDraw(None, None).unwrap();
         dc.SetTarget(None);
         list.Close().unwrap();
-        VisualDrawContent::new_calc_aabb(list, &dc).unwrap()
+        VisualDrawContent::new(rect.into(), list)
     }
 }
 

@@ -11,7 +11,7 @@ use windows::Win32::System::Com::*;
 use windows::core::Interface;
 
 /// 単色の矩形 `rect` を 1 つ描いて閉じた命令の列を持つ描く中身を作る。
-/// `local_aabb` は 96 DPI の DC で命令の列から求める。
+/// `local_aabb` は塗った `rect` そのもの。
 pub(crate) fn solid_rect_content(rect: D2D_RECT_F) -> VisualDrawContent {
     // テストはスレッドごとに走るので呼ぶたびに初期化する（同じスレッドの 2 度目は S_FALSE）。
     // 既に MTA でも WIC はどちらでも動く。解かないのは返す COM の物がこの後も生きるため。
@@ -65,5 +65,5 @@ pub(crate) fn solid_rect_content(rect: D2D_RECT_F) -> VisualDrawContent {
         dc.SetTarget(None);
         list.Close().unwrap();
     }
-    VisualDrawContent::new_calc_aabb(list, &dc).unwrap()
+    VisualDrawContent::new(rect.into(), list)
 }
