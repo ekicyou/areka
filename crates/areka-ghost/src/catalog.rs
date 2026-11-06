@@ -5,8 +5,9 @@
 //! （`install.txt` の同梱の最初の 1 個＝無印 → `balloon0` の `*.directory`）・ゴーストの descript の
 //! 標準のバルーンの指定（`default.balloon.path`・`balloon`）と「そのフォルダはゴーストか」の判定も持つ。
 //!
-//! - descript は `charset::decode`（既定 `Ansi`）＋`kv::parse_kv` で読み、鍵は ASCII
-//!   小文字化して引く。`menu`／`type` の**値**は trim＋ASCII 小文字化して比べる（R5）。
+//! - descript は `charset::decode`（既定 `Ansi`）＋`kv::parse_kv_lowercased` で読み、鍵は ASCII
+//!   小文字化して引く（空の値は無い・大小の違う同じ鍵は後の行が勝つ）。`menu`／`type` の
+//!   **値**は trim＋ASCII 小文字化して比べる（R5）。
 //!   素性の値は無加工。
 //! - 1 体のゴーストの解決（`package::resolve_with_shell`）とは別の読み手で、それを呼ばない（要件 2.10）。
 //! - 記憶・解決順・既定の定数は知らない（`areka-sylphya`・`areka-nar` に依存しない）。
@@ -20,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::kv::parse_kv;
+use areka_parsers::kv::{parse_kv, parse_kv_lowercased};
 
 /// descript のファイル名（ゴーストは `ghost/master/` の下・シェルとバルーンは最上位）。
 const DESCRIPT_FILE: &str = "descript.txt";
@@ -269,13 +270,16 @@ pub fn companion_balloon(ghost_dir: &Path) -> Option<String> {
             return None;
         }
     };
-    let kv = parse_kv(&decode(&bytes, DefaultEncoding::Ansi));
-    // 行の有無は空の値を落とさずに見る（`fold_keys` は空の値の鍵を落とすので使えない）。
-    let lines: BTreeSet<String> = kv.keys().map(|key| key.to_ascii_lowercase()).collect();
+    let text = decode(&bytes, DefaultEncoding::Ansi);
+    // 行の有無は空の値を落とさずに見る（`parse_kv_lowercased` は空の値の鍵を落とすので使えない）。
+    let lines: BTreeSet<String> = parse_kv(&text)
+        .keys()
+        .map(|key| key.to_ascii_lowercase())
+        .collect();
     let first = ["balloon.directory", "balloon0.directory"]
         .into_iter()
         .find(|key| lines.contains(*key))?;
-    fold_keys(kv).remove(first)
+    parse_kv_lowercased(&text).remove(first)
 }
 
 /// ゴーストの descript.txt に書かれた標準のバルーンの指定。書かれていない鍵・空の値は `None`。
@@ -405,7 +409,7 @@ fn subdirs(store: &Path) -> Vec<(String, PathBuf)> {
 /// 読めなければ `warn!`＋None（要件 2.7）。
 fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
     match std::fs::read(path) {
-        Ok(bytes) => Some(lowercased(&bytes, DefaultEncoding::Ansi)),
+        Ok(bytes) => Some(parse_kv_lowercased(&decode(&bytes, DefaultEncoding::Ansi))),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => {
             tracing::warn!(
@@ -417,21 +421,6 @@ fn read_descript(path: &Path) -> Option<BTreeMap<String, String>> {
             None
         }
     }
-}
-
-/// 既存の charset 復号（要件 2.8・宣言が無いときは `encoding`）＋`parse_kv` の上で鍵を ASCII
-/// 小文字化する（R5）。一覧とシェル名（`config`）の読みはこの 1 つ。
-pub(crate) fn lowercased(bytes: &[u8], encoding: DefaultEncoding) -> BTreeMap<String, String> {
-    fold_keys(parse_kv(&decode(bytes, encoding)))
-}
-
-/// 鍵を ASCII 小文字化し、空の値（`name,`・`type,` 等）は鍵ごと落とす＝どの鍵でも「無し」と
-/// 同じに扱う（仕様は空の値を定めない・task 2.2 の裁定）。
-fn fold_keys(kv: BTreeMap<String, String>) -> BTreeMap<String, String> {
-    kv.into_iter()
-        .filter(|(_, v)| !v.is_empty())
-        .map(|(k, v)| (k.to_ascii_lowercase(), v))
-        .collect()
 }
 
 /// 比べるための値（trim＋ASCII 小文字化・R5）。

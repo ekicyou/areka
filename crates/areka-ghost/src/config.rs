@@ -5,7 +5,8 @@
 //! （design.md「ghost::config」）。
 
 use areka_kanade::KanadeConfig;
-use areka_parsers::charset::DefaultEncoding;
+use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::kv::parse_kv_lowercased;
 use areka_parsers::package::MountModel;
 use areka_sakura::strict::{StrictHooks, StrictJudges};
 use std::path::Path;
@@ -93,7 +94,7 @@ fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> 
     };
 
     // 一覧（`catalog`）と同じ読み方: 鍵の大小を無視し、空の値は無い。
-    match crate::catalog::lowercased(&bytes, default_encoding).remove(SHELL_NAME_KEY) {
+    match parse_kv_lowercased(&decode(&bytes, default_encoding)).remove(SHELL_NAME_KEY) {
         Some(name) => name,
         None => {
             tracing::warn!(
@@ -293,6 +294,22 @@ mod tests {
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
         assert_eq!(config.shell_name, "Foo");
+    }
+
+    /// 同じ鍵が大小の違う綴りで 2 回出たら、後の行が勝つ（parsers の表・#22）。
+    #[test]
+    fn a_later_shell_name_row_wins_whatever_the_spelling() {
+        let temp = unique_temp_dir("shell-name-later-row");
+        let root = temp.path().to_path_buf();
+        let mount = resolve_mount_with_shell_descript(
+            &root,
+            "master",
+            Some(b"charset,UTF-8\nname,Early\nName,Later\n"),
+        );
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.shell_name, "Later");
     }
 
     /// 空の `name,` は一覧と同じく「無い」なので、フォルダ名へ倒す（#22・要件 9.10）。

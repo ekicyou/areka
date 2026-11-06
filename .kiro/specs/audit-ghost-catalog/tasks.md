@@ -159,8 +159,8 @@
 ## 仕上げ
 
 - [ ] 18. 相手待ちの直しを入れ、audit をかけ直し、全体テストを通す（T18）
-- [ ] 18.1 `audit-parsers-sakura` の着地を取り込み、待っていた 2 件を仕上げる
-  - _Blocked: 2026-11-06 時点で `audit-parsers-sakura` が `main` に未着地（先方は実装中・タスク 16 本済み 19 本残り）。着地を待つ_
+- [x] 18.1 `audit-parsers-sakura` の着地を取り込み、待っていた 2 件を仕上げる
+  - _済み: `main`（PR #428 `0f2f3ecd`）を `e59a0e27` で取り込み、#22 は `parse_kv_lowercased` へ乗り換え、#79 の写しは消した（`areka-sakura` の `unreadable_choice_timeout_warns_once_readable_none` が縛る）_
   - `main` を取り込み、parsers の小文字の表と `areka-sakura` の警告のテストが入っているかを確かめる。入っていなければ、ここで止めて開発者へ報告する（自前の写しを残したまま完了しない）
   - #22 の自前の小文字の表を消して、一覧とシェル名の読みの両方を parsers の表へ乗り換える。#79 が 11 で済んでいなければ、ここで自分の側の写しを消す
   - 先方の `resolve` の撤去と行がぶつかっていれば、取り込みの中で合わせる
