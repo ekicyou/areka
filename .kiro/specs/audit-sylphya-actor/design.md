@@ -37,7 +37,7 @@
 
 - 範囲の外のファイル全部。`crates/areka/` と、`placement-crate-split` が触るファイル（`crates/log-capture-kit` のテスト 2 つ・wintf の `ecs/window_proc/` の 2 つ・`tools/perf/fixtures/`・`tools/perf/fixtures-loop/`）には手を入れない（要件 6.2）。この設計の直しは、どれも範囲の外のファイルを変えずに済む。
 - 書けなかったときの知らせの文面と、その後の処置（`crates/areka/src/alert.rs`・`write_failure.rs`）。この spec が決めるのは `PersistFailureCause::Io` に入れる理由の文だけ。
-- `crates/areka` のテストにある、保存の口を包む写し（`SharedFakeIo` ほか 20）。本体の見直しの持ち物（要件 Boundary Context）。
+- `crates/areka` のテストにある、保存の口を包む写し（`SharedFakeIo` ほか 19）。本体の見直しの持ち物（要件 Boundary Context）。
 - `vendors/` の下（要件 6.8）。
 - `crates/areka-sylphya/src/vocab/dotted.rs` の `doc/COMPAT_ARCHITECTURE.md` を名指す 2 行（64 行目・80 行目）。#6 の直しは同じファイルの `mod tests` の中だけを触る（要件 5.7）。
 
@@ -49,7 +49,7 @@
 ### 見直しが要る変化（Revalidation Triggers）
 
 - `save_scope` が `Degraded` を返す場面が 2 つ増える（使えない既存のファイル・錠が取れない）。呼び手（`crates/areka/src/boot_resolve.rs`・`roots/edit.rs`・書き手のアクターの失敗の受け口）は署名も扱いも変わらない。`crates/areka` は `Degraded` を書けなかった知らせとして扱う（起動の前なら起動を止め、走っている間なら areka を終える）。下の「失敗の扱い」に、利用者から見た結果を書く。
-- `PersistIo` に既定つきの口 `lock_for_update` が増える（必須の口は足さない）。範囲の外の実装（`crates/areka` のテストの写し 20＝`placement/*`・`boot_resolve_tests.rs`・`emo2_boot/*`・`input_events/drag_test_support.rs`・`main_persist_wiring_seam_tests.rs` ほか）は書き直さずにコンパイルが通る（既定は錠を持たない）。
+- `PersistIo` に既定つきの口 `lock_for_update` が増える（必須の口は足さない）。範囲の外の実装（`crates/areka` のテストの写し 19＝`placement/*`・`boot_resolve_tests.rs`・`emo2_boot/*`・`input_events/drag_test_support.rs`・`main_persist_wiring_seam_tests.rs` ほか）は書き直さずにコンパイルが通る（既定は錠を持たない）。
 - C18 で並走する `placement-crate-split`（`crates/areka/src/placement/` を新しいクレートへ動かし、`temp_path_guard_test.rs` を書き直す）が使う名前と署名＝`PersistIo`（`read`・`commit`・`withholds`）・`FakePersistIo`・`PersistKey`・`Axis`・`PersistScope`・`ScopeRoots`・`spawn_sylphya`・`load_scope`・`SylphyaPublisher`（既存の口）は、名前も署名も変えない。この spec の足し算は既定つきの口と新しい名前だけ。
 - `SylphyaPublisher::barrier_within` が増える。後で `crates/areka/src/install/desk.rs` がこれへ乗り換える（`audit-areka-install-update` の件）。
 - 記憶のフォルダ（`profile\areka`）に、保存の間だけ `sylphya.toml.lock` が在る（閉じると消える）。
@@ -233,7 +233,7 @@ pub trait PersistIo: Send {
 **`mod.rs` の形**
 - `static SAVE_GATE: Mutex<()> = Mutex::new(());`（毒は `into_inner` で越える＝`withhold.rs` の `lock()` と同じ。中で落ちても壊れた中身は残らない）。
 - `save_scope` は root の確かめの後、`let _gate = save_gate();` → `match io.lock_for_update(&path)`: `Err(e)` なら `error!(target, event = "persist_lock_failed", ?scope, path, error = %e, keys, "persist update lock not acquired; reporting Degraded")` と `Degraded(PersistFailure { cause: Io(e.to_string()), dir, keys, scope })`。`Ok(_lock)` なら持ったまま `read_existing` → 重ね → `commit` → 関数の終わりで両方とも放す。
-- 待ちの上限: プロセスの中の錠を持つ者は、ファイルの錠を最大 `LOCK_WAIT` 待ってから 1 回書くだけなので、プロセスの中の待ちも有界（UI スレッドの直の `save_scope`＝`boot_resolve.rs`・`roots/edit.rs` も同じ）。
+- 待ちの上限: ファイルの錠の待ちは最大 `LOCK_WAIT`（1 秒）。プロセスの中の錠の待ちは、先の書き手の錠の待ち（最大 1 秒）に、その書き手の書き込み（`sync_all` を含み、上限は OS 次第）が足される。上限を付けるのはファイルの錠の待ちだけで、書き込みそのものの長さは今と変わらない（UI スレッドの直の `save_scope`＝`boot_resolve.rs`・`roots/edit.rs` も同じ）。
 
 **前提と後の状態**
 - `SAVE_GATE` はプロセスに 1 つなので、同じテストのバイナリの中では、門に止める偽の IO を持つテスト（#3・#4）が止めている間、ほかのテストの保存も待つ。門はどのテストでも必ずテストの中で開く（テストが落ちても門の送り手が捨てられて開く）。範囲の外に門に止める偽の IO は無い（設計の時点の grep）。
