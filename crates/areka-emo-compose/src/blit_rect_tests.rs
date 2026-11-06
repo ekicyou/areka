@@ -419,10 +419,9 @@ fn composer_world() -> (crate::EmoWorld, AtlasTable) {
         [40, 30, 20, 128].repeat(6),
         true,
     );
-    let baked = crate::plan_test_support::bake_surfaces(&surfaces, base, &dec);
-    assert!(baked.errors.is_empty(), "bake は失敗しない");
-    let world = crate::plan_test_support::bound_world(&shell_of(surfaces), &[], &baked.table);
-    (world, baked.table)
+    let table = crate::plan_test_support::bake_decoded(&dec, base, ["a.png", "b.png"].into_iter());
+    let world = crate::plan_test_support::bound_world(&shell_of(surfaces), &[], &table);
+    (world, table)
 }
 
 /// 2 回目から矩形を報告し（同じ入力なので幅 0 の矩形＝前の命令列を覚えている）、絵はいちからと同じ。
@@ -555,11 +554,11 @@ fn uv_past_page_edge_is_skipped_with_warn_on_both_paths() {
     let without_b = c.compose(&world, &atlas, 0, &binds, &pat).expect("Ok");
     let expect_warn = |logs: &str, path: &str| {
         assert!(
-            logs.contains("level=WARN")
-                && logs.contains("element=1")
-                && logs.contains("page=1")
-                && logs.contains("uv=Rect { x: 1, y: 0, w: 3, h: 2 }")
-                && logs.contains("頁に収まらない"),
+            logs.lines().any(|l| l.contains("level=WARN")
+                && l.contains("element=1")
+                && l.contains("page=1")
+                && l.contains("uv=Rect { x: 1, y: 0, w: 3, h: 2 }")
+                && l.contains("頁に収まらない")),
             "{path}: はみ出しの warn: {logs}"
         );
     };

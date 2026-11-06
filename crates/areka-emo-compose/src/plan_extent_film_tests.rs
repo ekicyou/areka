@@ -11,7 +11,9 @@ use super::compute_extent;
 use crate::bind::BindSet;
 use crate::pattern::PatternState;
 use crate::plan::Extent;
-use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, plan_of, solid};
+use crate::plan_test_support::{
+    bake_films_and_bind, frame, insert_film, insert_stills, plan_of, solid,
+};
 use crate::world::EmoWorld;
 
 const BASE: &str = "shell";
@@ -29,10 +31,7 @@ const FILMS: &[(&str, u32, u32)] = &[("film.apng", 30, 20), ("surface1.png", 30,
 /// 文面を面の表にして焼き、束縛する。`images` は `surface<数字>.png` として置いた絵。
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     let mut dec = MemoryDecoder::default();
-    for &(rel, w, h) in STILLS {
-        let img = solid(w, h, 9);
-        dec.insert(Path::new(BASE).join(rel), w, h, w * 4, img.bgra, true);
-    }
+    insert_stills(&mut dec, Path::new(BASE), STILLS.iter().copied());
     for &(rel, w, h) in FILMS {
         let frames: Vec<AnimationFrame> = [10, 11]
             .into_iter()

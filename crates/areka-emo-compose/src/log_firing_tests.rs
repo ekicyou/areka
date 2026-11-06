@@ -164,14 +164,16 @@ fn frameless_bind_random_skip_fires_debug_and_no_warn_error() {
 
     // DEBUG skip ログを level＋target＋discriminating field（surface_id/animation_id）で突く
     // （この DEBUG 行を消せば必ず落ちる＝非空虚）。
-    let skip_line = logs.lines().find(|l| {
-        l.contains("level=DEBUG")
-            && l.contains("target=areka_emo_compose")
-            && l.contains("surface_id=1000")
-            && l.contains("animation_id=1400")
-    });
     assert!(
-        skip_line.is_some(),
+        one_line(
+            &logs,
+            &[
+                "level=DEBUG",
+                "target=areka_emo_compose",
+                "surface_id=1000",
+                "animation_id=1400"
+            ]
+        ),
         "コマの無い bind+random の skip の DEBUG（surface_id＋animation_id つき）が発火する: {logs}",
     );
     // DEBUG は厳密に 1 本（命令列の経路の skip のみ・外形は表から引くだけ）。
@@ -331,79 +333,11 @@ fn unresolved_alias_warn_fires_with_key() {
     );
 }
 
-// ── 10.5: SurfaceNotFound / EmptyComposition error（plan.rs build_plan / Composer::compose）──
-
-/// 要件 10.5: 不在 surface の合成で ERROR（surface_id つき）が発火し、Err(SurfaceNotFound)。
-#[test]
-fn surface_not_found_error_fires_with_surface_id() {
-    let world = EmoWorld::build(&shell_of(Vec::new())); // surface 皆無。
-    let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
-
-    let binds = BindSet::default();
-    let mut composer = Composer::new();
-    let mut result = Ok(ComposedSurface::new(0, 0));
-    let logs = capture_logs(|| {
-        result = composer.compose(&world, &atlas, 9999, &binds, &PatternState::default());
-    });
-
-    // 副作用: Err(SurfaceNotFound)（要件 10.5）。
-    assert_eq!(
-        result.err(),
-        Some(ComposeError::SurfaceNotFound(9999)),
-        "不在 surface は SurfaceNotFound",
-    );
-    // ログ: ERROR・target・surface_id・分類名を同じ 1 行で突く。
-    assert!(
-        one_line(
-            &logs,
-            &[
-                "level=ERROR",
-                "target=areka_emo_compose",
-                "surface_id=9999",
-                "SurfaceNotFound"
-            ]
-        ),
-        "不在 surface は ERROR で surface_id と分類名を載せる: {logs}"
-    );
-}
-
-/// 要件 10.5: 定義層皆無で外形 0×0 の退化で ERROR（surface_id つき）が発火し、Err(EmptyComposition)。
-#[test]
-fn empty_composition_error_fires_with_surface_id() {
-    // element ゼロ・animation ゼロの surface（存在するが定義層皆無）。
-    let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
-    let world = bound_world(&shell_of(vec![surface(7000, Vec::new())]), &[], &atlas);
-
-    let binds = BindSet::default();
-    let mut composer = Composer::new();
-    let mut result = Ok(ComposedSurface::new(0, 0));
-    let logs = capture_logs(|| {
-        result = composer.compose(&world, &atlas, 7000, &binds, &PatternState::default());
-    });
-
-    // 副作用: Err(EmptyComposition)（要件 10.5・議題2裁定）。
-    assert_eq!(
-        result.err(),
-        Some(ComposeError::EmptyComposition(7000)),
-        "定義層皆無 0×0 は EmptyComposition",
-    );
-    // ログ: ERROR・target・surface_id・分類名を同じ 1 行で突く。
-    assert!(
-        one_line(
-            &logs,
-            &[
-                "level=ERROR",
-                "target=areka_emo_compose",
-                "surface_id=7000",
-                "EmptyComposition"
-            ]
-        ),
-        "退化データは ERROR で surface_id と分類名を載せる: {logs}"
-    );
-}
+// ── 10.5: SurfaceNotFound / EmptyComposition / ExtentTooLarge error（Composer::compose）──
 
 /// 合成の失敗の `error!`（6 回目の指摘 2）: 表示の側は失敗をコマ替えのたびに呼び直すので、同じ合成器では
 /// 面ごとに初めの 1 度だけ ERROR・2 度目からは DEBUG（予算の `reported`・画素の `pixels_reported` と同じ形）。
+/// 新しい合成器は同じ面でも初めの 1 度に ERROR を出す（要件 10.5: ERROR は level・target・surface_id・分類名を同じ 1 行に載せる）。
 #[test]
 fn compose_failure_errors_once_per_surface_per_composer() {
     let text = "charset,UTF-8\nsurface0\n{\nelement0,overlay,1,16383,0\n}\n\
@@ -412,10 +346,22 @@ fn compose_failure_errors_once_per_surface_per_composer() {
     let world = bound_world(&areka_parsers::shell::parse(text), &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
     let mut composer = Composer::new();
-    for (id, name) in [
-        (9999, "SurfaceNotFound"),
-        (7000, "EmptyComposition"),
-        (0, "ExtentTooLarge"),
+    for (id, name, err) in [
+        (9999, "SurfaceNotFound", ComposeError::SurfaceNotFound(9999)),
+        (
+            7000,
+            "EmptyComposition",
+            ComposeError::EmptyComposition(7000),
+        ),
+        (
+            0,
+            "ExtentTooLarge",
+            ComposeError::ExtentTooLarge {
+                surface: 0,
+                w: 16385,
+                h: 2,
+            },
+        ),
     ] {
         let mut errs = Vec::new();
         let logs = capture_logs(|| {
@@ -423,18 +369,32 @@ fn compose_failure_errors_once_per_surface_per_composer() {
                 errs.push(composer.compose(&world, &atlas, id, &binds, &pattern).err());
             }
         });
+        assert_eq!(errs.len(), 3);
         assert!(
-            errs.iter().all(|e| format!("{e:?}").contains(name)),
+            errs.iter().all(|e| e.as_ref() == Some(&err)),
             "{name}: {errs:?}"
         );
-        let id = format!("surface_id={id}");
-        let count = |level: &str| {
+        let surface_id = format!("surface_id={id}");
+        let count = |logs: &str, level: &str| {
+            let needles = [level, "target=areka_emo_compose", &surface_id, name];
             logs.lines()
-                .filter(|l| l.contains(level) && l.contains(&id) && l.contains(name))
+                .filter(|l| needles.iter().all(|n| l.contains(n)))
                 .count()
         };
-        assert_eq!(count("level=ERROR"), 1, "{name}: {logs}");
-        assert_eq!(count("level=DEBUG"), 2, "{name}: {logs}");
+        assert_eq!(count(&logs, "level=ERROR"), 1, "{name}: {logs}");
+        assert_eq!(count(&logs, "level=DEBUG"), 2, "{name}: {logs}");
+        let mut fresh = None;
+        let logs = capture_logs(|| {
+            fresh = Composer::new()
+                .compose(&world, &atlas, id, &binds, &pattern)
+                .err();
+        });
+        assert_eq!(fresh, Some(err), "{name}");
+        assert_eq!(
+            count(&logs, "level=ERROR"),
+            1,
+            "新しい合成器 {name}: {logs}"
+        );
     }
 }
 

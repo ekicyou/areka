@@ -99,7 +99,8 @@ fn visible(table: &NestTable, top: u32, pattern: &PatternState) -> (Vec<u32>, Ve
 }
 
 /// 検体のシェルを、検体の README のコマ・待ち時間・繰り返しの動く絵（中身は 2×2 の単色）で焼いて
-/// 束縛する（本物の分解を通す）。`surface2.png` は element0 が在るので土台にしない（本番と同じ）。
+/// 束縛する（本物の分解を通す）。面の画像は `surface1.png` だけを渡す（`surface2.png` は渡さないので、element0 が
+/// 在る面の画像を土台にしない分岐はここでは通らない）。
 fn fixture_world() -> (EmoWorld, AtlasTable) {
     fixture_world_with("")
 }

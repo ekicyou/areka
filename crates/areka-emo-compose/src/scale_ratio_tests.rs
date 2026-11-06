@@ -438,6 +438,11 @@ fn as_f32_is_query_view_not_dimension_authority() {
     let k54 = ScaleRatio::new(5, 4).unwrap();
     let len = 2_000_000_001u32;
     assert_eq!(k54.scale_len(len), 2_500_000_001, "整数権威の厳密値");
+    assert_ne!(
+        (len as f32 * k54.as_f32()).round() as u32,
+        k54.scale_len(len),
+        "丸めを保った f32 経路は 1px ずれる"
+    );
 }
 
 /// 要件 2.5: `scale_len` の中間は **u128**——u64 では溢れる入力でも厳密値を返す。

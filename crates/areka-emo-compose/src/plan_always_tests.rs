@@ -17,7 +17,7 @@ use crate::normalized::SurfaceMaster;
 use crate::pattern::PatternState;
 use crate::plan::BlitOp;
 use crate::plan_test_support::{
-    bake_films_and_bind, errors, frame, insert_film, insert_film_2x2, solid,
+    bake_films_and_bind, errors, frame, insert_film, insert_film_2x2, insert_stills, solid,
 };
 use crate::world::{EmoWorld, SurfaceIndex};
 
@@ -67,16 +67,11 @@ fn film_frames() -> Vec<AnimationFrame> {
 /// `surface<数字>.png` として置いた絵（番号, 名前）。
 fn build_with(text: &str, images: &[(u32, &str)]) -> (EmoWorld, AtlasTable) {
     let mut dec = MemoryDecoder::default();
-    for rel in STILLS {
-        dec.insert(
-            Path::new(BASE).join(rel),
-            2,
-            2,
-            8,
-            solid(2, 2, 9).bgra,
-            true,
-        );
-    }
+    insert_stills(
+        &mut dec,
+        Path::new(BASE),
+        STILLS.iter().map(|&rel| (rel, 2, 2)),
+    );
     insert_film(
         &mut dec,
         Path::new(BASE).join(FILM),

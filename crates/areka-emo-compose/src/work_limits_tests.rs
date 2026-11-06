@@ -41,15 +41,19 @@ fn plan_counts_the_scanned_rows_of_an_entered_surface() {
     assert_eq!(run(1_003), (1, 0), "予算の内なら絵を描き、記録は無い");
 }
 
-/// 指摘 77: 外形 2×2（面積 4）の面 0 に 2×2 の絵を 100 枚重ねる（400 画素）。重ねてよいのは面積×64＝256 画素
-/// なので、命令は頭の 64 枚で止まり、`error!` は合成器 1 つで 1 行（いちからと矩形の重ね直しの両方）。
+/// 指摘 77: 外形 2×2（面積 4）の面 0 と面 1 に 2×2 の絵を 100 枚ずつ重ねる（400 画素）。重ねてよいのは面積×64＝256
+/// 画素なので、命令は頭の 64 枚で止まり、`error!` は合成器 1 つにつき根ごとに 1 行（面 0 はいちからと矩形の重ね直しの
+/// 両方で 1 行・面 1 も合成して 2 行・7 回目の指摘 8）。
 #[test]
 fn compose_stops_at_the_pixel_limit_once_per_composer() {
-    let mut text = String::from("charset,UTF-8\nsurface0\n{\n");
-    for e in 0..100 {
-        text.push_str(&format!("element{e},overlay,s.png,0,0\n"));
+    let mut text = String::from("charset,UTF-8\n");
+    for id in 0..2 {
+        text.push_str(&format!("surface{id}\n{{\n"));
+        for e in 0..100 {
+            text.push_str(&format!("element{e},overlay,s.png,0,0\n"));
+        }
+        text.push_str("}\n");
     }
-    text.push_str("}\n");
     let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
     let world = bound_world(&parse(&text), &[], &atlas);
     let (binds, pattern) = (BindSet::default(), PatternState::default());
@@ -67,8 +71,12 @@ fn compose_stops_at_the_pixel_limit_once_per_composer() {
             .compose_into_reusing(&mut out, Some(&base), &world, &atlas, 0, &binds, &pattern)
             .expect("合成できる");
         assert_eq!(composer.base_ops.len(), 64, "重ね直し: 頭の 64 枚");
+        composer
+            .compose_into(&mut out, &world, &atlas, 1, &binds, &pattern)
+            .expect("合成できる");
+        assert_eq!(composer.ops.len(), 64, "面 1: 頭の 64 枚");
     });
-    assert_eq!(errors(&logs, "重ねる画素"), 1, "{logs}");
+    assert_eq!(errors(&logs, "重ねる画素"), 2, "{logs}");
 }
 
 /// 指摘 78: 範囲の見出しで写す行の合計は畳み込み 1 回で 2^20 まで。面 0 の 1 行の後、`surface1-1024` に

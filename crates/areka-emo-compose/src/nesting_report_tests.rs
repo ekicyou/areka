@@ -189,7 +189,9 @@ fn spent_budget_answers_not_reached() {
     assert_eq!(reached, Some(false));
     assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
     assert!(
-        logs.contains("walk=\"reaches\"") && logs.contains("root=0"),
+        logs.lines().any(|l| l.contains("level=ERROR")
+            && l.contains("walk=\"reaches\"")
+            && l.contains("root=0")),
         "{logs}"
     );
 }
@@ -227,7 +229,7 @@ fn refused_surface_is_skipped_and_the_walk_goes_on() {
     let errors: Vec<_> = logs.lines().filter(|l| l.contains("level=ERROR")).collect();
     assert_eq!(errors.len(), 1, "{logs}");
     assert!(
-        errors[0].contains("walk=") && errors[0].contains("reaches"),
+        errors[0].contains("walk=\"reaches\"") && errors[0].contains("root=0"),
         "{logs}"
     );
 }

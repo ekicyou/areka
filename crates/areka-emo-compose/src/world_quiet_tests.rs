@@ -110,6 +110,14 @@ fn quiet_build_emits_no_fold_records_and_same_table() {
             "出さない入口の {text}: {quiet_logs}"
         );
     }
+    // 一覧に無い文言も含め、出さない入口はこのクレートの WARN／ERROR を 1 行も出さない。
+    assert!(
+        !quiet_logs
+            .lines()
+            .any(|l| l.contains("target=areka_emo_compose")
+                && (l.contains("level=WARN") || l.contains("level=ERROR"))),
+        "{quiet_logs}"
+    );
 
     let (emit, quiet) = (emit.unwrap(), quiet.unwrap());
     assert_eq!(table(&emit), table(&quiet), "面の表は両入口で等しい");

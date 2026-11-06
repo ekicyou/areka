@@ -289,7 +289,9 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
     );
     assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
     assert!(
-        logs.contains("walk=\"hit_import\"") && logs.contains("root=0"),
+        logs.lines().any(|l| l.contains("level=ERROR")
+            && l.contains("walk=\"hit_import\"")
+            && l.contains("root=0")),
         "{logs}"
     );
     let logs = capture_logs(|| {
@@ -339,6 +341,9 @@ fn memo_stops_at_its_budget_and_answers_stay_the_same() {
     }
     let stored: usize = memo.map.values().map(|(_, list)| list.len()).sum();
     assert!(stored <= 100, "覚えの合計 {stored} 本は上限以下");
-    assert!(memo.contains_key(&100), "初めの面は覚える");
-    assert!(!memo.contains_key(&(100 + N - 1)), "上限の後の面は覚えない");
+    assert!(memo.map.contains_key(&100), "初めの面は覚える");
+    assert!(
+        !memo.map.contains_key(&(100 + N - 1)),
+        "上限の後の面は覚えない"
+    );
 }

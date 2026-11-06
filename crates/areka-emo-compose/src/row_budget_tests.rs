@@ -115,8 +115,9 @@ fn hit_import_drops_the_far_regions_first() {
     assert_eq!(errors(&logs, "walk=\"hit_import\""), 1, "{logs}");
 }
 
-/// 指摘 134: 描かない描画メソッドの命令は重ねないので、重ねる画素の上限に数えない。外形 2×2（上限 256 画素）に
-/// 描かない 2×2 の命令 100 枚（数えれば 400 画素）と描く命令 1 枚を並べても、1 枚も捨てない。
+/// 指摘 134: 描かない描画メソッドの命令は重ねないので、重ねる画素の上限に数えない。外形の外に置いた描く命令も、
+/// 外形の中で重ねる画素が無いので数えない（7 回目の指摘 7）。外形 2×2（上限 256 画素）に描かない 2×2 の命令
+/// 100 枚と (100,100) に置いた描く命令 100 枚（どちらも数えれば 400 画素）と描く命令 1 枚を並べても、1 枚も捨てない。
 #[test]
 fn undrawn_ops_count_no_pixels() {
     let (world, atlas) = child_with_rows(0, "");
@@ -132,12 +133,17 @@ fn undrawn_ops_count_no_pixels() {
         method: ComposeMethod::Replace,
         ..drawn[0].clone()
     };
+    let outside = crate::BlitOp {
+        transform: crate::normalized::Transform::translate(100, 100),
+        ..drawn[0].clone()
+    };
     let mut ops = vec![undrawn; 100];
+    ops.extend(vec![outside; 100]);
     ops.push(drawn[0].clone());
     let extent = world.extent(1);
     assert_eq!((extent.w, extent.h), (2, 2), "検体の外形");
     assert_eq!(crate::blit::cap_pixels(&mut ops, extent, &atlas), 0);
-    assert_eq!(ops.len(), 101);
+    assert_eq!(ops.len(), 201);
 }
 
 /// 指摘 131: 波括弧が置き換えるのは、最後の波括弧より前の同じ番号の collision。波括弧・追記・波括弧・追記の

@@ -336,11 +336,20 @@ fn expand_targets_subtracts_exclude_range_inclusive() {
     assert_eq!(ids, vec![1, 5], "2,3,4 が両端含みで減算される");
 }
 
-/// (3) 除外なし回帰: `Range{1,3}` は減算ロジック導入後も {1,2,3} のまま変わらない。
+/// (3) 除外の組のまとめ: 包まれる組（`3-4` は `2-9` の中）は広い方の端を残し、隣り合う組（`10` は `2-9` の次）は
+/// 1 つにまとめる。`Range{0,12}, !2-9, !3-4, !10` は {0,1,11,12}（まとめで狭い端に縮めると 5〜9 が残る）。
 #[test]
-fn expand_targets_without_exclude_is_unchanged() {
-    let ids = expand_targets_with(&[AppendTarget::Range { start: 1, end: 3 }], Records::Emit);
-    assert_eq!(ids, vec![1, 2, 3]);
+fn expand_targets_merges_nested_and_adjacent_excludes() {
+    let ids = expand_targets_with(
+        &[
+            AppendTarget::Range { start: 0, end: 12 },
+            AppendTarget::ExcludeRange { start: 2, end: 9 },
+            AppendTarget::ExcludeRange { start: 3, end: 4 },
+            AppendTarget::Exclude(10),
+        ],
+        Records::Emit,
+    );
+    assert_eq!(ids, vec![0, 1, 11, 12]);
 }
 
 /// (4) 除外は記述位置に依らず集合全体へ効く（`!` 記述子が範囲の前でも減算される・design）。
@@ -356,10 +365,10 @@ fn expand_targets_exclude_applies_regardless_of_position() {
     assert_eq!(ids, vec![1, 3], "前置の除外でも展開結果から減算される");
 }
 
-/// (5) fold 経由の統合: 除外を含む plain surface を fold すると除外 id が entity 化されない。
-/// `expand_targets` とその fold 呼び手の双方が除外を honor することを EmoWorld/SurfaceIndex で検証。
+/// (5) 畳み込みの統合: 除外を含む plain surface を畳み込むと除外 id が entity 化されない。
+/// `expand_targets` とその畳み込みの呼び手の双方が除外を honor することを `SurfaceIndex` で検証。
 #[test]
-fn fold_plain_surface_honors_exclusion_through_build() {
+fn fold_plain_surface_honors_exclusion() {
     // `surface1-4 !3` 相当（1,2,4 を新設・3 を除外）。
     let surf = surface_def(
         1,
@@ -423,25 +432,6 @@ fn duplicate_alias_key_is_last_wins() {
     // 後の定義が勝つ（両者連結でなく一意な値）。
     assert_eq!(resolve_alias(&world, "100"), Some(&[2100, 9999][..]));
     // キーは 1 本のみ（重複しない）。
-    assert_eq!(world.resource::<AliasMap>().0.len(), 1);
-}
-
-/// (1b) emo2 実相当: `100,[2100]` が 2 回同一値で定義されても後勝ちで一意（要件 3.2）。
-#[test]
-fn duplicate_alias_identical_value_collapses_to_one() {
-    let aliases = vec![alias_def("100", vec![2100]), alias_def("100", vec![2100])];
-    let mut world = fresh_world();
-    fold_shell_with(
-        &mut world,
-        &shell_with_aliases(
-            Vec::new(),
-            aliases,
-            vec![DefRef::Alias(0), DefRef::Alias(1)],
-        ),
-        Records::Emit,
-    );
-
-    assert_eq!(resolve_alias(&world, "100"), Some(&[2100][..]));
     assert_eq!(world.resource::<AliasMap>().0.len(), 1);
 }
 

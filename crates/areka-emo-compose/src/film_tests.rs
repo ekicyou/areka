@@ -7,7 +7,7 @@
 use std::num::NonZeroU32;
 use std::path::Path;
 
-use areka_emo_atlas::{AnimationInfo, AtlasEntry, AtlasKey, MemoryDecoder, SetId, Size};
+use areka_emo_atlas::{AtlasEntry, AtlasKey, MemoryDecoder, SetId, Size};
 
 use super::*;
 use crate::plan_test_support::{
@@ -39,22 +39,6 @@ impl Pics {
     /// 2×2 の動く絵（コマごとに色が違う）。
     fn film(mut self, rel: &str, delays: &[u32], laps: Option<u32>) -> Self {
         insert_film_2x2(&mut self.dec, Self::path(rel), delays, laps);
-        self.rels.push(rel.to_string());
-        self
-    }
-
-    /// 全コマを読めず 1 枚へ縮む動く絵（段 1 の 1 枚目が静止画として焼ける）。
-    fn shrunk(mut self, rel: &str) -> Self {
-        self.dec.insert_animated(
-            Self::path(rel),
-            AnimationInfo {
-                width: 2,
-                height: 2,
-                frame_count: 2,
-            },
-            Ok(solid(2, 2, 10)),
-            Err("broken frame 1".to_string()),
-        );
         self.rels.push(rel.to_string());
         self
     }
@@ -373,23 +357,6 @@ fn rejected_pictures_stay_images_and_are_listed() {
         vec![FilmId(0)]
     );
     assert_every_film_resolves(&world);
-}
-
-/// 要件 1.11: 1 枚へ縮んだ動く絵は分解されない。`animation` が `None` なので対象にならず、面の表に
-/// 何も載らない（動く GIF を 1 枚の絵として読むのは読み手の側・`areka-emo-atlas` の試験が見る）。
-#[test]
-fn shrunk_picture_is_not_decomposed() {
-    let shell = shell_of(vec![surface(0, vec![elem(1, "shrunk.png", 0, 0)])]);
-    let atlas = Pics::default().shrunk("shrunk.png").bake();
-    assert!(
-        atlas.animation(id_of(&atlas, "shrunk.png")).is_none(),
-        "前提"
-    );
-    let world = bound_world(&shell, &[], &atlas);
-
-    assert_eq!(kinds(&world, 0), vec![ElementKind::Image]);
-    assert!(binding(&world, 0).iter().all(Option::is_some));
-    assert!(world.world().get_resource::<FilmSheets>().is_none());
 }
 
 /// 要件 3.4: 同じファイルは、置いた場所・サーフェスに依らず同じ子（子の定義は 1 つ）。

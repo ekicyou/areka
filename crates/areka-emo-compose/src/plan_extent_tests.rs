@@ -79,14 +79,7 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
 /// 50×40 を下回らない（負方向はみ出しは転写時クリップ・議題2裁定 (A)）。
 #[test]
 fn negative_offset_is_clipped_and_origin_stays_fixed() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (50, 40), Some((64, 64, 64))),
-            ("small.png", (10, 10), Some((64, 64, 64))),
-        ],
-    );
+    let atlas = bake_gray(&[("base.png", (50, 40)), ("small.png", (10, 10))]);
 
     let host = surface_with_anims(
         4000,
@@ -110,8 +103,7 @@ fn negative_offset_is_clipped_and_origin_stays_fixed() {
 /// 外形は原寸ちょうど。
 #[test]
 fn extent_equals_base_original_when_no_larger_layers() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("only.png", (123, 45), Some((64, 64, 64)))]);
+    let atlas = bake_gray(&[("only.png", (123, 45))]);
 
     let surf = surface(5000, vec![elem(0, "only.png", 0, 0)]);
     let shell = shell_of(vec![surf]);
@@ -128,14 +120,7 @@ fn extent_equals_base_original_when_no_larger_layers() {
 /// 着せ替えの pattern の位置 (5,7) に置いた部品の原寸まで外形が広がる。
 #[test]
 fn extent_reaches_the_bind_part_at_its_offset() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (40, 30), Some((64, 64, 64))),
-            ("part.png", (200, 150), Some((64, 64, 64))),
-        ],
-    );
+    let atlas = bake_gray(&[("base.png", (40, 30)), ("part.png", (200, 150))]);
     let host = surface_with_anims(
         6000,
         vec![elem(0, "base.png", 0, 0)],
@@ -229,14 +214,7 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
 /// ときの表を引くだけで BindSet を受け取らないので、空の BindSet の 1 回で足りる（指摘 118）。
 #[test]
 fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("part1.png", (200, 10), Some((64, 64, 64))),
-            ("part2.png", (10, 150), Some((64, 64, 64))),
-        ],
-    );
+    let atlas = bake_gray(&[("part1.png", (200, 10)), ("part2.png", (10, 150))]);
 
     // 静的 element なし・bind id=1/2 が part1/part2 を参照。
     let host = surface_with_anims(
@@ -301,8 +279,7 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
 /// エントリで clear される（スクラッチ再利用）。
 #[test]
 fn build_plan_clears_out_ops() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), Some((64, 64, 64)))]);
+    let atlas = bake_gray(&[("visible.png", (80, 60))]);
     let visible_id = atlas
         .resolve(SetId(0), "visible.png")
         .expect("visible 解決");
@@ -369,14 +346,7 @@ fn plan_with_errors(
 /// 合成は確保の前に `ExtentTooLarge` を返し、出力先の絵の容量は 0 のまま・`error!` は 1 行。
 #[test]
 fn far_bind_pattern_fails_without_allocating() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("base.png", (4, 4), Some((64, 64, 64))),
-            ("part.png", (4, 4), Some((64, 64, 64))),
-        ],
-    );
+    let atlas = bake_gray(&[("base.png", (4, 4)), ("part.png", (4, 4))]);
     let host = surface_with_anims(
         1000,
         vec![elem(0, "base.png", 0, 0)],
@@ -417,13 +387,7 @@ fn child_beyond_u32_does_not_wrap_to_small_extent() {
         "surface0\n{{\nelement0,overlay,base.png,0,0\nelement1,overlay,10,{far},0\n}}\n\
          surface10\n{{\nelement0,overlay,part.png,0,0\n}}\n"
     );
-    let atlas = bake_atlas_sized(
-        Path::new("shell/master"),
-        &[
-            ("base.png", (4, 4), Some((64, 64, 64))),
-            ("part.png", (4, 4), Some((64, 64, 64))),
-        ],
-    );
+    let atlas = bake_gray(&[("base.png", (4, 4)), ("part.png", (4, 4))]);
     let world = bound_world(&areka_parsers::shell::parse(&text), &[], &atlas);
 
     let (planned, errors) = plan_with_errors(&world, &atlas, 0);
@@ -445,10 +409,7 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
     let text = "surface0\n{\nelement0,overlay,10,0,0\nelement1,overlay,10,10,0\n\
                 element2,overlay,10,20,0\n}\n\
                 surface10\n{\nelement0,overlay,eye.png,0,0\n}\n";
-    let atlas = bake_atlas_sized(
-        Path::new("shell/master"),
-        &[("eye.png", (4, 4), Some((64, 64, 64)))],
-    );
+    let atlas = bake_gray(&[("eye.png", (4, 4))]);
     let world = bound_world(&areka_parsers::shell::parse(text), &[], &atlas);
     let run = |limit| {
         let mut extent = None;
@@ -480,14 +441,7 @@ fn spent_budget_leaves_children_not_yet_entered_out_of_the_extent() {
 /// 切り詰めた番号（1）の面を数えない（ほかの走査と同じ `u32::try_from`）。
 #[test]
 fn extent_does_not_truncate_pattern_surface_beyond_u32() {
-    let base = Path::new("shell/master");
-    let atlas = bake_atlas_sized(
-        base,
-        &[
-            ("tiny.png", (4, 4), Some((64, 64, 64))),
-            ("huge.png", (500, 400), Some((64, 64, 64))),
-        ],
-    );
+    let atlas = bake_gray(&[("tiny.png", (4, 4)), ("huge.png", (500, 400))]);
     let host = surface_with_anims(
         2000,
         vec![elem(0, "tiny.png", 0, 0)],

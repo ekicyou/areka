@@ -151,7 +151,7 @@ fn appends_without_clearing() {
 #[test]
 fn missing_surface_pushes_nothing() {
     let world = EmoWorld::build(&shell_of(Vec::new()));
-    // surface 不在ゆえ atlas は引かれない（空 atlas で足りる）。
+    // surface 不在ゆえ atlas は引かれない（中身は何でもよい）。
     let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
     let ops = ops(
         &world,

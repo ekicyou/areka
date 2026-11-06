@@ -594,6 +594,17 @@ pub(crate) fn insert_film(
     );
 }
 
+/// 静止画（相対パス, 幅, 高さ）を `base` の下に単色 9 の不透明で `MemoryDecoder` へ登録する。
+pub(crate) fn insert_stills<'a>(
+    dec: &mut MemoryDecoder,
+    base: &Path,
+    stills: impl IntoIterator<Item = (&'a str, u32, u32)>,
+) {
+    for (rel, w, h) in stills {
+        dec.insert(base.join(rel), w, h, w * 4, solid(w, h, 9).bgra, true);
+    }
+}
+
 /// 2×2 の動く絵を登録する（コマ i は色 10＋i・待ちは `delays`・`laps` 周で止まり `None` は終わりなし）。
 pub(crate) fn insert_film_2x2(
     dec: &mut MemoryDecoder,

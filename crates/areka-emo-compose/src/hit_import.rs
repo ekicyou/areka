@@ -114,7 +114,7 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
 /// 覚えた列は根をまたいで持ち続けるので、覚えに入れる列の長さの合計を根をまたぐ 1 つの予算 `left` から引き、
 /// 足りなくなったら以後は何も覚えない（覚えが無いときと同じく入り直すだけ＝答えと記録は変わらない・指摘 6）。
 pub(crate) struct HitMemo {
-    map: HashMap<u32, (usize, Vec<Collision>)>,
+    pub(crate) map: HashMap<u32, (usize, Vec<Collision>)>,
     left: usize,
 }
 
@@ -135,12 +135,6 @@ impl HitMemo {
         }
         self.left -= list.len();
         self.map.insert(id, (spent, list.to_vec()));
-    }
-
-    /// 面 `id` を覚えているか（テストの確かめ口）。
-    #[cfg(test)]
-    pub(crate) fn contains_key(&self, id: &u32) -> bool {
-        self.map.contains_key(id)
     }
 }
 
