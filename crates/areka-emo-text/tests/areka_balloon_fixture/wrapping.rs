@@ -67,13 +67,13 @@ use crate::support::fixture::{
     load_face0,
 };
 
-use super::test_support::{
-    balloon_root, expected_region, expected_wrap_threshold, scope_image_size,
-};
+use super::test_support::{balloon_root, expected_wrap_threshold, scope_image_size};
 
 // ── 期待値（設計「描画範囲の解け方」の表と書体から手で書いた値）──────────────────
 
 /// scope ごとの面 0 の書き始め（寸法・範囲・折り返し基準は `test_support.rs` の表から引く）。
+/// 範囲・書き始め・折り返し基準が表のとおりに解けることは `definition.rs` の
+/// `resolved_region_matches_the_design_table` が同じ読み込みで確かめる。
 struct ScopeExpectation {
     scope: u32,
     /// 書き始め（origin の宣言どおり）。
@@ -130,22 +130,11 @@ fn resolve_scope(exp: &ScopeExpectation) -> ResolvedBalloonText {
     ResolvedBalloonText::resolve(&model, scope_image_size(exp.scope))
 }
 
-/// 範囲が表のとおりであることを確かめてから、本文を全文可視で流す。
+/// 文字の高さを確かめてから、本文を全文可視で流す。
 fn layout_body(exp: &ScopeExpectation, body: &str) -> (TextRegion, Vec<PositionedLine>) {
     let resolved = resolve_scope(exp);
     let region = resolved.region;
     let scope = exp.scope;
-    assert_eq!(
-        (region.left(), region.top(), region.right(), region.bottom()),
-        expected_region(scope),
-        "scope {scope}: 範囲が設計の表と違う"
-    );
-    assert_eq!(region.start(), exp.start, "scope {scope}: 書き始め");
-    assert_eq!(
-        region.wrap_threshold(),
-        expected_wrap_threshold(scope),
-        "scope {scope}: 折り返し基準"
-    );
     assert_eq!(
         resolved.font.height, FONT_HEIGHT,
         "scope {scope}: 文字の高さ（以下の期待値はこの高さが前提）"

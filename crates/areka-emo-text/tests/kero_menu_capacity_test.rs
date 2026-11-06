@@ -41,14 +41,12 @@
 //! 旧式（`ceil(28 × 1.25)` ＝ 35）だと 3 行目の上端は 40 ＋ 2 × 35 ＝ 110・下端 138 > 133 で
 //! あふれる——それが対照テスト（`legacy_pitch_metrics_reproduces_the_dropped_first_line`）である。
 
-use std::path::Path;
-
 #[path = "support/mod.rs"]
 mod support;
 
 use support::fixture::{
-    assert_real_font_present, balloon_metrics, command_cues, emo2_balloon_root, emo2_folder,
-    menu_script, state_of,
+    assert_real_font_present, balloon_metrics, command_cues, emo2_balloon_root, menu_script,
+    state_of,
 };
 
 use areka_emo_text::actor::ResolvedBalloonText;
@@ -74,8 +72,6 @@ const SAKURA_IMAGE_SIZE: (u32, u32) = (400, 224);
 const KERO_BOTTOM: f32 = 133.0;
 /// 相方側の文字描画範囲の右端（image px）＝行内軸の絶対上限（hard）。
 const KERO_RIGHT: f32 = 240.0;
-/// 相方側の折返し基準（image px）＝基層の `wordwrappoint.x,-34` 由来。描画範囲の右端の**外**。
-const KERO_SOFT: f32 = 254.0;
 /// 実物の `font.height`（image px）。
 const FONT_HEIGHT: f32 = 28.0;
 /// 正典の行送りピッチ（`font.height + 行間 2`・design §4.1）。
@@ -210,25 +206,12 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
     assert_real_font_present();
 
     // 前提の実物ジオメトリ（値が変われば以下の期待値の導出ごと崩れるので先に固定する）。
+    // 描画範囲 (24,40)-(240,133)・開始点・折返し基準 254 は `shipped_fixture_region_test.rs` の
+    // `shipped_kero_scope_region_is_pinned` が同じ検体で固定する。
     assert_eq!(resolved.mode, WritingMode::HorizontalTb, "相方側は横書き");
     assert_eq!(
         resolved.font.height, FONT_HEIGHT,
         "実 descript の font.height"
-    );
-    assert_eq!(
-        (
-            resolved.region.left(),
-            resolved.region.top(),
-            resolved.region.right(),
-            resolved.region.bottom()
-        ),
-        (KERO_START.0, KERO_START.1, KERO_RIGHT, KERO_BOTTOM),
-        "相方側の文字描画範囲 (24,40)-(240,133)"
-    );
-    assert_eq!(
-        resolved.region.wrap_threshold(),
-        KERO_SOFT,
-        "折返し基準は基層の wordwrappoint.x,-34 由来の 254（描画範囲の右端の外）"
     );
     assert_eq!(
         resolved.region.inline_limit(),
@@ -506,12 +489,13 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
     let metrics = balloon_metrics(&resolved);
     assert_real_font_present();
 
+    // 折返し基準 351 は `shipped_fixture_region_test.rs` の `shipped_sakura_scope_region_is_pinned` が
+    // 同じ検体で固定する。ここは絶対上限がその外の右端 356 であることだけを言う。
     let soft = resolved.region.wrap_threshold();
     let hard = resolved.region.inline_limit();
     assert_eq!(
-        (soft, hard),
-        (351.0, 356.0),
-        "本体側は折返し基準 351 を描画範囲の右端 356 の内に自ら上書きしている"
+        hard, 356.0,
+        "本体側は折返し基準 {soft} を描画範囲の右端 356 の内に自ら上書きしている"
     );
 
     // 折返し基準を確実に何度も超える長さの 1 行（40 文字・改行もカーソル指定も無い）。
@@ -634,32 +618,4 @@ fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
         0,
         "正典の行送り（30）ではスクロールしない"
     );
-}
-
-// ══ 実物の所在の生存確認 ═══════════════════════════════════════════════════════════════
-
-/// 本ファイルが指す実物の 3 ファイルが実在することを単独で確かめる。
-/// パスが腐って「読めないから対象 0 件で緑」になる形を作らないための錨。
-#[test]
-fn the_shipped_fixture_files_this_cage_points_at_exist() {
-    let balloon = emo2_balloon_root();
-    for path in [
-        balloon.join("descript.txt"),
-        balloon.join(KERO_OVERLAY),
-        balloon.join(SAKURA_OVERLAY),
-        emo2_folder().join("ghost/master/dic/menu.pasta"),
-    ] {
-        assert!(
-            Path::new(&path).is_file(),
-            "実物 {} が見つからない",
-            path.display()
-        );
-    }
-    for heading in MENU_HEADINGS {
-        let script = menu_script(heading);
-        assert!(
-            script.contains("\\q["),
-            "{heading} の本文は \\q の選択肢を含む: {script}"
-        );
-    }
 }

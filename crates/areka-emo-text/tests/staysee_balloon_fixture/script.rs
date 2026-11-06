@@ -50,6 +50,7 @@ use areka_emo_text::layout::PositionedLine;
 use areka_emo_text::state::{ChoiceSpan, TextLayerState};
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::parse_str;
+use areka_parsers::kv::parse_kv;
 use areka_sakura::contract::ActorKey;
 
 use super::test_support::{
@@ -283,13 +284,8 @@ fn the_script_records_both_choices_with_their_ids_and_labels() {
 fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
     let placed = place(SCRIPT);
     let region = &placed.resolved.region;
+    // 測る範囲そのものは `region.rs` の `staysee_text_region_is_pinned_for_both_scopes` が固定する。
     let bottom = expected_bottom(0);
-    assert_eq!(
-        (region.left(), region.top(), region.right(), region.bottom()),
-        (EXPECTED_LEFT, EXPECTED_TOP, EXPECTED_RIGHT, bottom),
-        "内包を測る描画範囲が期待値と違う（実測 {:?}）",
-        (region.left(), region.top(), region.right(), region.bottom())
-    );
     assert_eq!(
         placed.lines.len(),
         EXPECTED_LINES,
@@ -312,10 +308,6 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
     assert_eq!(
         want_extent, EXPECTED_LINE_BOX,
         "既定書体の帯の丈は行ボックスの丈 {EXPECTED_LINE_BOX} と同じはずだが {want_extent}"
-    );
-    assert!(
-        want_extent > 0.0,
-        "帯の丈が {want_extent} ＝ 0 以下では内包を測っても何も示さない"
     );
     assert_eq!(
         bands.len(),
@@ -390,8 +382,8 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
         );
     }
 
-    // ⑷ 4 辺の内包——グリフ矩形と帯の両方を、1 画素も超えないことで言う。
-    let mut checked = 0usize;
+    // ⑷ 4 辺の内包——グリフ矩形と帯の両方を、1 画素も超えないことで言う（矩形の数は ⑶ の
+    // 帯の本数と各行の文字が先に固定している）。
     for (n, row) in rows.iter().enumerate() {
         let label = EXPECTED_CHOICES[n].1;
         let line = &placed.lines[n + 1];
@@ -407,7 +399,6 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
                 ),
                 bottom,
             );
-            checked += 1;
         }
         assert_containment(
             &format!("選択肢「{label}」の強調帯"),
@@ -419,16 +410,7 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
             ),
             bottom,
         );
-        checked += 1;
     }
-    let want_checks: usize = EXPECTED_CHOICES.iter().map(|(_, _, len)| len + 1).sum();
-    assert_eq!(
-        checked,
-        want_checks,
-        "内包を測った矩形が {want_checks} 個（選択肢の文字 {} 個＋帯 {} 本）ではなく {checked} 個",
-        want_checks - EXPECTED_CHOICES.len(),
-        EXPECTED_CHOICES.len()
-    );
 }
 
 /// 矩形 `(左, 上, 右, 下)` が描画範囲の内側に収まることを 4 辺それぞれで言う。
@@ -513,13 +495,13 @@ fn resolve_variant(text: &str) -> ResolvedChoiceStyle {
 }
 
 /// 定義の文字列から `<接頭辞>.r/g/b` の 3 成分を読む（宣言そのものを期待値の源にする）。
+/// 行の読みは本番のバルーンの読み込みと同じ `parse_kv` に任せる。
 fn declared_color(text: &str, prefix: &str) -> (u8, u8, u8) {
+    let map = parse_kv(text);
     let read = |component: char| -> u8 {
-        let key = format!("{prefix}.{component},");
-        text.lines()
-            .find_map(|line| line.trim().strip_prefix(&key))
+        let key = format!("{prefix}.{component}");
+        map.get(&key)
             .unwrap_or_else(|| panic!("検体の `descript.txt` に `{key}` の行が無い"))
-            .trim()
             .parse()
             .unwrap_or_else(|e| panic!("`{key}` の値が 0〜255 の数ではない: {e}"))
     };

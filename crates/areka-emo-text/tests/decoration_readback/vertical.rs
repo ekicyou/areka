@@ -38,8 +38,8 @@
 
 use super::{
     ALT_FONT, FONT_HEIGHT, IMAGE, REAL_FONT, SAMPLE, Shot, VISIBLE_KEYS, added_ink_cols,
-    assert_real_font_present, differs, font_cue, font_is_installed, ink_col_range, model_with, run,
-    run_with, shoot_pair, single_band, text_cue, unbaked_cue,
+    assert_real_font_present, differs, font_is_installed, ink_col_range, model_with, plain_shot,
+    run, run_with, shoot_pair, single_band, text_cue, unbaked_cue,
 };
 
 // ══ 縦書きの 2 方向 ════════════════════════════════════════════════════════════════════
@@ -95,8 +95,8 @@ fn side_of(band: (u32, u32), column: (u32, u32)) -> Side {
 /// 素の列と装飾した列を撮り、インクの増えた列の帯・素の字の列・側を返す。
 fn measure(mode: &str, tokens: &[&str], what: &str) -> ((u32, u32), (u32, u32), Side) {
     let (plain, styled) = shoot_pair(Some(mode), tokens);
-    let band = single_band(&added_ink_cols(&plain, &styled), what);
-    let column = ink_col_range(&plain);
+    let band = single_band(&added_ink_cols(plain, &styled), what);
+    let column = ink_col_range(plain);
     (band, column, side_of(band, column))
 }
 
@@ -172,7 +172,7 @@ fn each_visible_key_changes_the_pixels_in_both_vertical_modes() {
         for (key, tokens) in VISIBLE_KEYS {
             let (plain, styled) = shoot_pair(Some(mode), tokens);
             assert!(
-                differs(&plain, &styled),
+                differs(plain, &styled),
                 "{mode}: `\\f[{}]` を有効にしても画素が 1 バイトも変わらない（本文 {SAMPLE}）",
                 tokens.join(","),
             );
@@ -257,24 +257,19 @@ fn strike_lands_on_the_same_side_of_the_column_in_both_vertical_modes() {
 ///
 /// 同じトークン列を**装飾ではない運搬名**で流すと `state.rs` の自己選別が読み飛ばして装飾を
 /// 1 つも焼かない。cue の本数・並び・再生時間は装飾ありの台本と同一なので、上の「違う」が
-/// **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す。
+/// **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す（装飾の運搬名で
+/// 流せば違うことは [`each_visible_key_changes_the_pixels_in_both_vertical_modes`] が同じ入力で確かめる）。
 #[test]
 fn tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels_in_both_vertical_modes() {
     assert_real_font_present();
     for mode in VERTICAL_MODES {
-        let plain = run(Some(mode), &[text_cue(SAMPLE)]);
+        let plain = plain_shot(Some(mode));
         for (key, tokens) in VISIBLE_KEYS {
             let unbaked = run(Some(mode), &[unbaked_cue(tokens), text_cue(SAMPLE)]);
             assert!(
-                !differs(&plain, &unbaked),
+                !differs(plain, &unbaked),
                 "{mode}: `{key}` のトークン列を装飾ではない運搬名で流したのに画素が変わった——\
                  装飾を焼かない経路が装飾を焼いている",
-            );
-            // 同じトークン列を装飾の運搬名で流せば違う（対照が空振りでないこと）。
-            let baked = run(Some(mode), &[font_cue(tokens), text_cue(SAMPLE)]);
-            assert!(
-                differs(&plain, &baked),
-                "{mode}: `{key}` を装飾の運搬名で流しても画素が変わらない（対照の意味が消える）",
             );
         }
     }

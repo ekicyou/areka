@@ -46,7 +46,7 @@ mod support;
 
 use support::{
     ALT_FONT, FONT_HEIGHT, MISSING_FONT, REAL_FONT, SAMPLE, VISIBLE_KEYS, added_ink_rows,
-    assert_real_font_present, differs, font_cue, font_is_installed, run, shoot_pair, single_band,
+    assert_real_font_present, differs, font_is_installed, plain_shot, run, shoot_pair, single_band,
     text_cue, unbaked_cue,
 };
 
@@ -122,7 +122,7 @@ fn each_visible_key_changes_the_pixels_in_horizontal_tb() {
     for (key, tokens) in VISIBLE_KEYS {
         let (plain, styled) = shoot_pair(None, tokens);
         assert!(
-            differs(&plain, &styled),
+            differs(plain, &styled),
             "`\\f[{}]` を有効にしても画素が 1 バイトも変わらない（横書き・本文 {SAMPLE}）",
             tokens.join(","),
         );
@@ -143,7 +143,7 @@ fn each_visible_key_changes_the_pixels_in_horizontal_tb() {
 fn underline_adds_one_band_of_ink_below_the_glyphs() {
     assert_real_font_present();
     let (plain, styled) = shoot_pair(None, &["underline", "1"]);
-    let rows = added_ink_rows(&plain, &styled);
+    let rows = added_ink_rows(plain, &styled);
     let band = single_band(&rows, "underline");
     assert_eq!(
         band, UNDERLINE_BAND,
@@ -158,7 +158,7 @@ fn underline_adds_one_band_of_ink_below_the_glyphs() {
 fn strike_adds_one_band_of_ink_through_the_glyphs() {
     assert_real_font_present();
     let (plain, styled) = shoot_pair(None, &["strike", "1"]);
-    let rows = added_ink_rows(&plain, &styled);
+    let rows = added_ink_rows(plain, &styled);
     let band = single_band(&rows, "strike");
     assert_eq!(
         band, STRIKE_BAND,
@@ -177,7 +177,7 @@ fn vocabulary_only_keys_leave_the_pixels_untouched() {
     // 対照（陽性側）——同じ窓で bold は画素を変える。
     let (plain, bold) = shoot_pair(None, &["bold", "1"]);
     assert!(
-        differs(&plain, &bold),
+        differs(plain, &bold),
         "対照が働いていない: 同じ窓で `\\f[bold,1]` すら画素を変えていない。\
          以下の「画素が同じ」は恒真なので意味を持たない"
     );
@@ -185,7 +185,7 @@ fn vocabulary_only_keys_leave_the_pixels_untouched() {
     for (key, tokens) in VOCABULARY_ONLY_KEYS {
         let (_, styled) = shoot_pair(None, tokens);
         assert!(
-            !differs(&plain, &styled),
+            !differs(plain, &styled),
             "`\\f[{}]` は語彙として受理するだけで表示は変えない（要件 5.9／6.1）のに画素が変わった",
             tokens.join(","),
         );
@@ -218,23 +218,18 @@ fn the_same_script_paints_the_same_pixels_twice() {
 /// 同じトークン列を**装飾ではない運搬名**で流すと、`state.rs` の自己選別が読み飛ばして装飾を
 /// 1 つも焼かない（番号列は全部 0・装飾の表は空＝`render_styled` は既定の呼出列に落ちる）。
 /// cue の本数・並び・再生時間は装飾ありの台本と同一なので、[`each_visible_key_changes_the_pixels_in_horizontal_tb`]
-/// の「違う」が **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す。
+/// の「違う」が **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す
+/// （同じトークン列を装飾の運搬名で流せば違うことは、そちらが同じ入力で確かめる）。
 #[test]
 fn tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels() {
     assert_real_font_present();
-    let plain = run(None, &[text_cue(SAMPLE)]);
+    let plain = plain_shot(None);
     for (key, tokens) in VISIBLE_KEYS {
         let unbaked = run(None, &[unbaked_cue(tokens), text_cue(SAMPLE)]);
         assert!(
-            !differs(&plain, &unbaked),
+            !differs(plain, &unbaked),
             "`{key}` のトークン列を装飾ではない運搬名で流したのに画素が変わった——\
              装飾を焼かない経路が装飾を焼いている",
-        );
-        // 同じトークン列を装飾の運搬名で流せば違う（対照が空振りでないこと）。
-        let baked = run(None, &[font_cue(tokens), text_cue(SAMPLE)]);
-        assert!(
-            differs(&plain, &baked),
-            "`{key}` を装飾の運搬名で流しても画素が変わらない（対照の意味が消える）",
         );
     }
 }

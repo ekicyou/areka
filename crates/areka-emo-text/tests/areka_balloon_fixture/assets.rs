@@ -3,14 +3,11 @@
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.2**・**2.1**・**2.2**・**2.4**・**2.6**・**2.7**・
 //! **3.1**・**3.2**・**3.4**・**4.1**・**5.2**・**7.1**・**10.3**）。
 
-use areka_emo_atlas::{ElementDecoder, WicDecoderArm};
 use sample_ghost_kit::SAMPLES;
 
-use crate::support::fixture::{init_com_for_this_thread, png_native_size};
+use crate::support::fixture::png_native_size;
 
-use super::test_support::{
-    BALLOON_NAME, EXPECTED_FILE_NAMES, EXPECTED_ONLINE_SIZE, EXPECTED_PNG_SIZES, balloon_root,
-};
+use super::test_support::{BALLOON_NAME, EXPECTED_FILE_NAMES, EXPECTED_PNG_SIZES, balloon_root};
 
 /// フォルダ直下が 23 ファイルの表と過不足なく一致し、サブフォルダも空のファイルも無い。
 ///
@@ -85,35 +82,6 @@ fn png_native_sizes_are_pinned() {
             path.display()
         );
     }
-}
-
-/// `online0.webp` を areka の動く絵の読み手で聞き、77×36 の動く絵である（要件 3.2・4.1）。
-#[test]
-fn online_marker_is_an_animated_webp_of_77x36() {
-    init_com_for_this_thread();
-    let decoder = WicDecoderArm::new().expect("WIC の読み手を作れない（COM の初期化が前提）");
-    let (name, width, height) = EXPECTED_ONLINE_SIZE;
-    let path = balloon_root().join(name);
-    let bytes = std::fs::read(&path)
-        .unwrap_or_else(|e| panic!("オンラインの印 {} を読めない: {e}", path.display()));
-    assert!(
-        bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
-        "{}: WebP の見出し（RIFF・WEBP）が無い（{} バイト）",
-        path.display(),
-        bytes.len()
-    );
-    let info = decoder.probe_animation(&path).unwrap_or_else(|| {
-        panic!(
-            "{}: areka の読み手が動く絵として読めない（コマが 2 枚以上の WebP が前提）",
-            path.display()
-        )
-    });
-    assert_eq!(
-        (info.width, info.height),
-        (width, height),
-        "{}: 寸法が期待 {width}×{height} と違う",
-        path.display()
-    );
 }
 
 /// 名前 `areka-balloon` が、登記のほかの名前と同梱バルーンの名前のどれとも、大小を無視して

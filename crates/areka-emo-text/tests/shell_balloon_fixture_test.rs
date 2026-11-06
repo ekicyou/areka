@@ -18,6 +18,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use areka_emo_compose::{BoxLayout, EmoWorld, FontFollow, fold_boxes};
 use areka_emo_text::actor::{SurfaceKeyResolver, TextLayerRuntime};
@@ -51,7 +52,8 @@ fn fixture_text() -> String {
     decode(&bytes, DefaultEncoding::Utf8)
 }
 
-fn layout() -> BoxLayout {
+/// 検体を読み手と畳み込みへ通した表（実行ファイルで 1 度だけ作る）。
+static LAYOUT: LazyLock<BoxLayout> = LazyLock::new(|| {
     let text = fixture_text();
     let world = EmoWorld::build(&parse(&text));
     let (layout, report) = fold_boxes(&parse_boxes(&text), &BTreeMap::new(), &world);
@@ -61,7 +63,7 @@ fn layout() -> BoxLayout {
         "検体は正しく書いたシェル（報告 0 件）"
     );
     layout
-}
+});
 
 fn names(layout: &BoxLayout, surface: u32) -> Vec<&str> {
     layout
@@ -83,7 +85,12 @@ fn fake_resolver() -> SurfaceKeyResolver {
 /// 検体の箱の束を受け取った文字の層。
 fn runtime() -> TextLayerRuntime {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut World::new(), layout(), fake_resolver(), Vec::new());
+    rt.set_box_layout(
+        &mut World::new(),
+        LAYOUT.clone(),
+        fake_resolver(),
+        Vec::new(),
+    );
     rt
 }
 
@@ -141,7 +148,7 @@ fn place(actor: &str, at: &str) -> PlaceKey {
     let place = match at {
         "" => TextPlace::Balloon,
         name => TextPlace::Box(
-            layout()
+            LAYOUT
                 .surfaces()
                 .flat_map(|(_, ps)| ps.iter().map(|p| p.name.clone()).collect::<Vec<_>>())
                 .find(|n| n.as_str() == name)
@@ -193,11 +200,11 @@ fn look(rt: &TextLayerRuntime, actor: &str, at: &str) -> ((u8, u8, u8), f32) {
 
 #[test]
 fn fixture_folds_three_box_kinds_and_their_placements() {
-    let layout = layout();
-    assert_eq!(names(&layout, 0), ["tate", "yoko"], "element番号の昇順");
-    assert_eq!(names(&layout, 1), ["tate"]);
-    assert_eq!(names(&layout, 2), Vec::<&str>::new(), "箱の無いサーフェス");
-    assert_eq!(names(&layout, 3), ["fuda"], "surface.append3 で足した箱");
+    let layout = &*LAYOUT;
+    assert_eq!(names(layout, 0), ["tate", "yoko"], "element番号の昇順");
+    assert_eq!(names(layout, 1), ["tate"]);
+    assert_eq!(names(layout, 2), Vec::<&str>::new(), "箱の無いサーフェス");
+    assert_eq!(names(layout, 3), ["fuda"], "surface.append3 で足した箱");
     let pos = |id: u32| {
         let p = &layout.placements(id)[0];
         (p.x, p.y)
@@ -254,7 +261,6 @@ fn script_routes_text_to_default_and_named_boxes_across_surfaces() {
     // サーフェスにも置き場所がある＝再び出る（6.3・6.5）。続きは同じ箱へ書く。
     play(&mut rt, &[s("0", "0")]);
     assert_eq!(dest(&rt, "0"), place("0", "tate").place);
-    assert_eq!(names(&layout(), 0), ["tate", "yoko"]);
     play(&mut rt, &[b("0", "yoko"), t("0", "か")]);
     assert_eq!(text_at(&rt, "0", "yoko"), "うえか");
 

@@ -128,7 +128,7 @@ use areka_parsers::balloon::BalloonModel;
 #[path = "support/mod.rs"]
 mod support;
 
-use support::fixture::{emo2_balloon_root, png_native_size, read_balloon_file};
+use support::fixture::{emo2_balloon_root, png_native_size};
 
 // ── 逐語固定する期待値（本ファイル冒頭の表と 1:1）────────────────────────────
 //
@@ -224,28 +224,6 @@ fn assert_region(
 }
 
 // ── 檻 1: パス解決とファイル実在の生存証明 ────────────────────────────────
-
-/// 本檻が読む出荷ファイルが 2 ディレクトリとも実在し、非空であることを先に固定する。
-///
-/// これが無いと、パス解決が壊れた（あるいは fixture が移動した）ときに他の檻が
-/// 「読めないから panic」ではなく静かに別の何かを測る形へ滑り込む余地が残る。
-#[test]
-fn shipped_fixture_files_exist_and_are_non_empty() {
-    for dir in [emo2_balloon_root(), wplimit_root()] {
-        for name in ["descript.txt", SAKURA_OVERLAY, KERO_OVERLAY] {
-            let text = read_balloon_file(&dir, name);
-            assert!(
-                !text.trim().is_empty(),
-                "{} は空でないバルーン定義であること",
-                dir.join(name).display()
-            );
-        }
-        for name in ["balloons0.png", "balloonk0.png"] {
-            let path = dir.join(name);
-            assert!(path.is_file(), "{} が実在すること", path.display());
-        }
-    }
-}
 
 /// ハードコードした画像原寸が出荷 PNG の IHDR と一致する（期待値の二重帳簿を防ぐ）。
 #[test]

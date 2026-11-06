@@ -161,15 +161,15 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
 /// 比集合導出・整数オラクル・本番経路ヘルパの 3 点を、既知値の逐語再現で較正する。
 ///
 /// 判定に使う道具が壊れていても緑は出るため、後続の判定より先に道具の側を固定する
-/// （[[subagent-tooling-can-be-wrong-calibrate-it]]）。ここで確かめるのは次の 4 点である。
+/// （[[subagent-tooling-can-be-wrong-calibrate-it]]）。ここで確かめるのは次の 3 点である。
 ///
 /// 1. 到達比がちょうど [`REACHABLE_RATIO_COUNT`] 個（＝23）であること。
 /// 2. 誤差が実在する 2 比（6/5・12/5）が集合に含まれること——この 2 比を取りこぼすと、
 ///    「誤りは 2 比のみ」という裁定根拠が空振りの緑になる。
 /// 3. 返る比がすべて既約かつ重複なしであること（オラクルと本番経路が同じ比を見る前提）。
-/// 4. 既知値の逐語再現: 比 6/5・寸 25 で**本番経路が 31**・**整数オラクルが 30** を返すこと
-///    （2026-07-30 の実測表に載る代表例そのもの）。差 +1 がここで現れなければ、
-///    どちらかのヘルパが本番と別の経路を辿っている。
+///
+/// 本番経路のヘルパと整数オラクルの既知値の逐語再現（比 6/5・寸 25 で 31 と 30、比 12/5 で
+/// 61 と 60）は [`error_counts_fixed_for_six_fifths_and_twelve_fifths`] の代表例が受け持つ。
 #[test]
 fn helpers_are_calibrated_against_known_values() {
     let ratios = reachable_ratios();
@@ -203,30 +203,6 @@ fn helpers_are_calibrated_against_known_values() {
             "到達比 {num}/{den} が重複している（実測集合 {ratios:?}）"
         );
     }
-
-    // 既知値の逐語再現（比 6/5・寸 25）。本番経路は +1 側へ振れ、整数オラクルは真値を返す。
-    let (num, den, v) = (6u32, 5u32, 25u32);
-    // 2026-07-30 実測表の代表例（`region.rs` の裁定登記に載る値）。
-    let expected_via_f32 = 31u32;
-    let expected_truth = 30u32;
-    let via_f32 = supply_extent_via_f32_path(v, num, den);
-    let truth = true_ceil(v, num, den);
-    assert_eq!(
-        via_f32, expected_via_f32,
-        "本番経路（ScaleRatio::as_f32 → ScaleContract::physical_extent）の既知値が再現しない: \
-         num={num} den={den} v={v} 実測={via_f32} 期待={expected_via_f32}"
-    );
-    assert_eq!(
-        truth, expected_truth,
-        "整数オラクル ceil(v·num/den) の既知値が再現しない: \
-         num={num} den={den} v={v} 実測={truth} 期待={expected_truth}"
-    );
-    assert_eq!(
-        via_f32 - truth,
-        1,
-        "既知の +1 誤差が現れない（どちらかのヘルパが本番と別経路を辿っている疑い）: \
-         num={num} den={den} v={v} 本番経路={via_f32} 真値={truth}"
-    );
 }
 
 // ── 上下界（全到達比 × 全寸の総当たり・design.md C3 テスト①） ────────────────
@@ -266,15 +242,8 @@ fn helpers_are_calibrated_against_known_values() {
 /// OS の DPI 状態にも描画資源にも触れない純粋な算術として走る。
 #[test]
 fn supply_extent_bounds_hold_for_all_reachable_ratios() {
+    // 到達比の個数（総当たりの前提）は `helpers_are_calibrated_against_known_values` が固定する。
     let ratios = reachable_ratios();
-    assert_eq!(
-        ratios.len(),
-        REACHABLE_RATIO_COUNT,
-        "到達比の個数が期待と異なるため総当たりの前提が崩れている: \
-         実測 {} 個 / 期待 {REACHABLE_RATIO_COUNT} 個・実測集合 {ratios:?}",
-        ratios.len()
-    );
-
     for &(num, den) in &ratios {
         for v in 1..=MAX_EXTENT {
             let actual = supply_extent_via_f32_path(v, num, den);

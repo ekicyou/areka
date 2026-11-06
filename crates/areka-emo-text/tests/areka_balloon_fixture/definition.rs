@@ -112,7 +112,8 @@ fn every_text_file_is_bomless_utf8_starting_with_the_charset_line() {
 
 /// 鍵と値の並びが期待値の表と鍵の集合ごと一致する（要件 3.5・5.1・5.4〜5.7・5.9・6.3）。
 ///
-/// 集合が一致するので、表に無い `windowpos.*`・`onlinemarker.filename`／`interval` は書庫にも無い。
+/// 集合が一致するので、表に無い `windowpos.*`・`onlinemarker.filename`／`interval`・`validrect.right,0`
+/// は書庫にも無い。
 /// 同じ鍵の重複は `parse_kv` が後勝ちで潰すので、鍵を持つ行の数でも突き合わせる。
 #[test]
 fn key_value_lists_equal_the_expected_tables_including_the_key_set() {
@@ -138,20 +139,6 @@ fn key_value_lists_equal_the_expected_tables_including_the_key_set() {
             expected.len(),
             "{name}: 鍵を持つ行が {kv_lines} 行（期待 {}・同じ鍵の重複か余計な行）",
             expected.len()
-        );
-        assert!(
-            !actual.keys().any(|k| k.starts_with("windowpos.")),
-            "{name}: `windowpos.*` を写している（要件 5.7）"
-        );
-        assert!(
-            !actual.contains_key("onlinemarker.filename")
-                && !actual.contains_key("onlinemarker.interval"),
-            "{name}: `onlinemarker.filename`／`interval` を書いている（要件 3.5）"
-        );
-        assert_ne!(
-            actual.get("validrect.right").map(String::as_str),
-            Some("0"),
-            "{name}: `validrect.right,0` を写している（要件 6.3）"
         );
     }
 }

@@ -51,7 +51,7 @@ use areka_parsers::balloon::BalloonModel;
 use super::test_support::{
     EXPECTED_ADVANCE_FULL, EXPECTED_ADVANCE_HALF, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT,
     EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, SCOPE_FACE0_FILES,
-    expected_bottom, resolve_staysee, scope_image_size, staysee_model,
+    expected_bottom, resolve_staysee, scope_image_size,
 };
 use crate::support::fixture::{balloon_metrics, merged_model};
 
@@ -170,26 +170,13 @@ fn staysee_text_region_is_pinned_for_both_scopes() {
 
 /// `wordwrappoint` を宣言していないので、折返し基準が描画範囲の遠辺へ縮退する。
 ///
-/// 宣言が無いこと（読み口が `None` を返すこと）と、縮退した先が遠辺の実値 309 であることの
-/// 両方を固定する。**両者が等しいことだけ**を見ると、片方がもう片方から導かれている実装では
-/// 常に真になってしまうので、遠辺そのものの値も併せて押さえる。読み口が既定以外も返せることは
+/// 宣言が無いこと（読み口が `None` を返すこと）は `definition.rs` の
+/// `undeclared_keys_stay_unspecified_and_resolve_to_horizontal` が固定し、ここは縮退した先が遠辺の実値 309 で
+/// あることを固定する。**両者が等しいことだけ**を見ると、片方がもう片方から導かれている実装では
+/// 常に真になってしまうので、遠辺そのものの値を両方に押さえる。読み口が既定以外も返せることは
 /// [`declared_balloon_returns_a_different_font_and_a_split_wrap_threshold`] が示す。
 #[test]
 fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
-    let model = staysee_model();
-    assert_eq!(
-        model.wordwrappoint().x(),
-        None,
-        "検体は `wordwrappoint.x` を宣言していないはず（実測 {:?}）",
-        model.wordwrappoint().x()
-    );
-    assert_eq!(
-        model.wordwrappoint().y(),
-        None,
-        "検体は `wordwrappoint.y` を宣言していないはず（実測 {:?}）",
-        model.wordwrappoint().y()
-    );
-
     for (scope, _) in SCOPE_FACE0_FILES {
         let region = resolve_staysee(scope).region;
         assert_eq!(
@@ -206,13 +193,6 @@ fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
             EXPECTED_RIGHT,
             region.wrap_threshold()
         );
-        assert_eq!(
-            region.wrap_threshold(),
-            region.inline_limit(),
-            "scope {scope}: 折返し基準 {} と遠辺 {} が分かれている（縮退していない）",
-            region.wrap_threshold(),
-            region.inline_limit()
-        );
     }
 }
 
@@ -225,14 +205,6 @@ fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
 /// 黙って追従して恒真になる。
 #[test]
 fn undeclared_font_name_resolves_to_the_canon_default() {
-    let model = staysee_model();
-    assert_eq!(
-        model.font().name(),
-        None,
-        "検体は `font.name` を宣言していないはず（実測 {:?}）",
-        model.font().name()
-    );
-
     for (scope, _) in SCOPE_FACE0_FILES {
         let font = resolve_staysee(scope).font;
         assert_eq!(

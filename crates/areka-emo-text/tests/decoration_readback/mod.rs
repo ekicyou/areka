@@ -29,6 +29,8 @@
 #[path = "../support/mod.rs"]
 mod shared;
 
+use std::sync::OnceLock;
+
 use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
 
 /// 実フォントの門は共有の部品（`support/fixture.rs`）が持つ。期待値の前提になる実フォント
@@ -215,18 +217,35 @@ pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
     }
 }
 
+/// 素の台本の 1 枚。書字方向ごとに実行ファイルで 1 度だけ描き、以後は同じ 1 枚を返す
+/// （同じ台本が同じ画素になることは入口の `the_same_script_paints_the_same_pixels_twice` が固定する）。
+pub(crate) fn plain_shot(writing_mode: Option<&str>) -> &'static Shot {
+    static SHOTS: [OnceLock<Shot>; 3] = [const { OnceLock::new() }; 3];
+    let slot = match writing_mode {
+        None => 0,
+        Some("vertical_rl") => 1,
+        Some("vertical_lr") => 2,
+        Some(other) => unreachable!("書字方向は横書きと縦書きの 2 方向だけ: {other}"),
+    };
+    SHOTS[slot].get_or_init(|| {
+        let shot = run(writing_mode, &[text_cue(SAMPLE)]);
+        assert!(shot.ink_count() > 0, "素の台本にもインクがある（前提）");
+        shot
+    })
+}
+
 /// 「素の台本」と「装飾を足した台本」の 2 枚を撮る（同じ書字方向・同じ本文）。
 ///
-/// 装飾ありの側は `\f[トークン…]` を本文の**前**に置く（要件 3.3——装飾は以降の文字に効く）。
-pub(crate) fn shoot_pair(writing_mode: Option<&str>, tokens: &[&str]) -> (Shot, Shot) {
-    let plain = run(writing_mode, &[text_cue(SAMPLE)]);
+/// 素の側は [`plain_shot`] の 1 枚を使い回す。装飾ありの側は `\f[トークン…]` を本文の**前**に
+/// 置く（要件 3.3——装飾は以降の文字に効く）。
+pub(crate) fn shoot_pair(writing_mode: Option<&str>, tokens: &[&str]) -> (&'static Shot, Shot) {
+    let plain = plain_shot(writing_mode);
     let styled = run(writing_mode, &[font_cue(tokens), text_cue(SAMPLE)]);
     assert_eq!(
         (plain.width, plain.height),
         (styled.width, styled.height),
         "面の寸法は台本によらず同じ（前提）"
     );
-    assert!(plain.ink_count() > 0, "素の台本にもインクがある（前提）");
     (plain, styled)
 }
 

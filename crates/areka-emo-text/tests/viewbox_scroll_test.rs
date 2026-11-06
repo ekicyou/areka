@@ -177,10 +177,6 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
         visible_line_count, FILL_LINES as u64,
         "充填フレームは可視 {FILL_LINES} 行を全域ダーティで描く（可視行数 V の基準）: {fill:?}"
     );
-    assert!(
-        visible_line_count >= 5,
-        "十分な可視行数（5 行以上）で全域再描画との差を際立たせる: {visible_line_count}"
-    );
     assert_eq!(
         fill.blits, 0,
         "初回全域ダーティは blit=(0,0)＝全面 CopyResource で blits を増やさない: {fill:?}"
@@ -282,10 +278,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
     );
     let draw_delta2 = after_scroll2.draw_text_layout_calls - before_scroll2.draw_text_layout_calls;
     let create_delta2 = after_scroll2.line_layout_creations - before_scroll2.line_layout_creations;
-    assert!(
-        draw_delta2 < visible_line_count,
-        "2 度目のスクロールも再描画レス: DrawTextLayout 増分 {draw_delta2} < 可視行数 {visible_line_count}"
-    );
+    // 露出帯の上限 3 は可視 8 行より小さいので、これで再描画レスも言える。
     assert!(
         draw_delta2 <= EXPOSURE_BAND_DRAW_BOUND,
         "2 度目のスクロールも露出帯交差行に限定: {draw_delta2} ≤ {EXPOSURE_BAND_DRAW_BOUND}"

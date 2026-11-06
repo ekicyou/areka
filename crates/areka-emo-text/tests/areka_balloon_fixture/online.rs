@@ -29,14 +29,22 @@ const UNLIT_ALPHA: u8 = 64;
 const FRAME_COUNT: u32 = 3;
 const FRAME_DELAY_MS: u32 = 300;
 
-/// `online0.webp` が 77×36・3 コマ・各 300 ミリ秒・無限・α ありで、コマ k で点 k だけが灯る
-/// （要件 8.9・3.2・3.3）。
+/// `online0.webp` が WebP の 77×36・3 コマ・各 300 ミリ秒・無限・α ありで、コマ k で点 k だけが灯る
+/// （要件 8.9・3.2・3.3・4.1）。
 #[test]
 fn online_marker_frames_light_dots_in_turn() {
     init_com_for_this_thread();
     let decoder = WicDecoderArm::new().expect("WIC の読み手を作れない（COM の初期化が前提）");
     let (name, width, height) = EXPECTED_ONLINE_SIZE;
     let path = balloon_root().join(name);
+    let bytes = std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("オンラインの印 {} を読めない: {e}", path.display()));
+    assert!(
+        bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "{}: WebP の見出し（RIFF・WEBP）が無い（{} バイト）",
+        path.display(),
+        bytes.len()
+    );
 
     let info = decoder
         .probe_animation(&path)

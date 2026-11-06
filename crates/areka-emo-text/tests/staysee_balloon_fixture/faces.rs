@@ -92,12 +92,12 @@ fn assert_face_series(
     );
 }
 
-/// areka が面として読まない 23 本の資産が解決の列挙に 1 本も載らない（要件 3.8）。
+/// areka が面として読まない 23 本の資産の内訳を、要件 3.8 が名指しする 6 種で固定する
+/// （保管フォルダ側から資産が消えたら除外集合が黙って縮む形にしない）。
 ///
-/// 「載らない」は列挙が空でも真になるので、**先に列挙の母数を固定**してから主張する。
-/// 除外側の 23 本も、要件 3.8 が名指しする 6 種の内訳で数を固定してから使う（保管フォルダ側
-/// から資産が消えたら除外集合が黙って縮む形にしない）。
-fn assert_non_face_assets_are_absent(scope: u32, faces: &[ResolvedFace]) {
+/// それらが解決の列挙に 1 本も載らないことは、[`assert_face_series`] が列挙を枠の名前だけの
+/// 並びと逐語で突き合わせることで決まる（要件 3.8）。
+fn assert_non_face_asset_groups() {
     let frames: Vec<&str> = EXPECTED_FRAME_SIZES.iter().map(|(n, _, _)| *n).collect();
     let non_face: Vec<&str> = EXPECTED_FILE_NAMES
         .iter()
@@ -113,23 +113,6 @@ fn assert_non_face_assets_are_absent(scope: u32, faces: &[ResolvedFace]) {
             non_face.len()
         );
     }
-
-    let listed: Vec<&str> = faces.iter().map(|f| f.file_name.as_str()).collect();
-    assert_eq!(
-        listed.len(),
-        EXPECTED_FACE_COUNT,
-        "scope {scope}: 列挙の母数が期待 {EXPECTED_FACE_COUNT} 本に対し実測 {} 本（母数が 0 だと「載らない」の主張は何も確かめない）: {listed:?}",
-        listed.len()
-    );
-    let leaked: Vec<&&str> = non_face.iter().filter(|n| listed.contains(n)).collect();
-    assert!(
-        leaked.is_empty(),
-        "scope {scope}: areka が面として読まない資産が {} 件 {:?} 解決の列挙に載った（列挙 {} 本: {:?}）",
-        leaked.len(),
-        leaked,
-        listed.len(),
-        listed
-    );
 }
 
 /// 本体側と相方側で面の系列が解決され、その間の記録が期待どおりである（要件 3.4・3.8）。
@@ -141,11 +124,11 @@ fn assert_non_face_assets_are_absent(scope: u32, faces: &[ResolvedFace]) {
 fn face_series_and_records_are_pinned_for_both_scopes() {
     let (faces0, events0) = resolve_faces_with_records(0);
     assert_face_series(0, &faces0, &EXPECTED_SCOPE0_FACES);
-    assert_non_face_assets_are_absent(0, &faces0);
     assert_balloon_loading_records(0, &events0, &[]);
 
     let (faces1, events1) = resolve_faces_with_records(1);
     assert_face_series(1, &faces1, &EXPECTED_SCOPE1_FACES);
-    assert_non_face_assets_are_absent(1, &faces1);
     assert_balloon_loading_records(1, &events1, &EXPECTED_SCOPE1_FALLBACK);
+
+    assert_non_face_asset_groups();
 }

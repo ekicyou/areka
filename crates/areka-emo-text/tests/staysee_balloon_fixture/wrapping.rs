@@ -157,12 +157,6 @@ fn each_body_wraps_into_the_pinned_line_lengths() {
             actual, expected,
             "{label}: 各行の文字数が 期待 {expected:?} ではなく 実測 {actual:?}"
         );
-        assert_eq!(
-            actual.iter().sum::<usize>(),
-            total,
-            "{label}: 配置されたグリフの総数が {total} ではなく {}（途中で落ちている）",
-            actual.iter().sum::<usize>()
-        );
 
         for (n, line) in lines.iter().enumerate() {
             assert_eq!(
@@ -198,7 +192,8 @@ fn each_body_wraps_into_the_pinned_line_lengths() {
 fn every_glyph_stays_inside_the_drawing_range() {
     for (label, body, expected) in EXPECTED_LINE_LENGTHS {
         let items = glyph_items(body);
-        let (region, lines) = layout_in_scope(0, &items);
+        // 測る範囲そのものは `region.rs` の `staysee_text_region_is_pinned_for_both_scopes` が固定する。
+        let (_, lines) = layout_in_scope(0, &items);
         let bottom = expected_bottom(0);
 
         assert_eq!(
@@ -215,12 +210,6 @@ fn every_glyph_stays_inside_the_drawing_range() {
             "{label}: 配置されたグリフが {} 個しか無い（流したのは {} 個）",
             placed,
             glyph_count(&items)
-        );
-        assert_eq!(
-            (region.left(), region.top(), region.right(), region.bottom()),
-            (EXPECTED_LEFT, EXPECTED_TOP, EXPECTED_RIGHT, bottom),
-            "{label}: 内包を測る描画範囲が期待値と違う（実測 {:?}）",
-            (region.left(), region.top(), region.right(), region.bottom())
         );
 
         for (n, line) in lines.iter().enumerate() {

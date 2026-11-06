@@ -87,54 +87,34 @@ fn variant_vertical_wrap_threshold_is_nondegenerate() {
     );
 
     // 折返し閾値: balloons0s.txt の wordwrappoint.y,-60（負値=下辺基準）→ 224-60=164。
-    assert_eq!(region.wrap_threshold(), 164.0);
-
-    // 非退化の述語: 非ゼロ・書字開始角（top）より先・有効領域内（bottom 以下）
+    // 164 は非ゼロで、書字開始側の top 46 より先・有効領域の bottom 168 以下にある
     // ＝行内軸（+y）で意味のある折返しが起きる値。
-    assert!(region.wrap_threshold() != 0.0, "閾値が非ゼロである");
-    assert!(
-        region.wrap_threshold() > region.top(),
-        "閾値が書字開始側（top）より先にあり、行内に文字を置く余地がある"
-    );
-    assert!(
-        region.wrap_threshold() <= region.bottom(),
-        "閾値が有効領域内（bottom 以下）にある"
-    );
+    assert_eq!(region.wrap_threshold(), 164.0);
 
     // vertical_rl の書字開始角は validrect 右上（軸読み替え正準表）——変種でも成立。
     assert_eq!(region.start(), (356.0, 46.0));
-}
-
-/// 基層だけでも折返し閾値は退化しない（`wordwrappoint.y,150`＝非ゼロ）——上書き層の
-/// 欠落・不読でも縦書き観測が全損しない fixture 設計であることの檻。
-#[test]
-fn base_layer_alone_has_nondegenerate_vertical_threshold() {
-    let base = base_model();
-    assert_eq!(
-        base.wordwrappoint().y(),
-        Some(150),
-        "descript 基層が有意な（非ゼロ）wordwrappoint.y を持つ"
-    );
 }
 
 // ── R11.4: 画像別上書き層（後勝ち）の実観測 ──
 
 /// 画像別上書き層 `balloons0s.txt` が descript 基層の値を後勝ちで上書きする——
 /// 2 層マージの実観測（基層 150 → 上書き -60・値が異なることでマージ経路を証明）。
+///
+/// 基層だけでも折返し閾値は退化しない（`wordwrappoint.y,150`＝非ゼロ）——上書き層の
+/// 欠落・不読でも縦書き観測が全損しない fixture 設計であることも基層の値で固定する。
 #[test]
 fn image_override_layer_wins_for_wrap_threshold() {
     let base = base_model();
     let merged = merged_model();
-    assert_eq!(base.wordwrappoint().y(), Some(150), "基層の値");
+    assert_eq!(
+        base.wordwrappoint().y(),
+        Some(150),
+        "descript 基層が有意な（非ゼロ）wordwrappoint.y を持つ"
+    );
     assert_eq!(
         merged.wordwrappoint().y(),
         Some(-60),
         "画像別上書き層の値が後勝ちで有効になる"
-    );
-    assert_ne!(
-        base.wordwrappoint().y(),
-        merged.wordwrappoint().y(),
-        "基層と上書き層の値が異なることで 2 層マージが実観測できる"
     );
 }
 
@@ -233,17 +213,10 @@ fn canon_and_extension_fixtures_agree_on_text_region() {
         WritingMode::resolve(&ext_merged),
     );
 
-    assert_eq!(canon.left(), ext.left(), "left が一致する");
-    assert_eq!(canon.top(), ext.top(), "top が一致する");
-    assert_eq!(canon.right(), ext.right(), "right が一致する");
-    assert_eq!(canon.bottom(), ext.bottom(), "bottom が一致する");
-    assert_eq!(canon.start(), ext.start(), "書字開始角が一致する");
     assert_eq!(
-        canon.wrap_threshold(),
-        ext.wrap_threshold(),
-        "折返し閾値が一致する"
+        canon, ext,
+        "TextRegion 全体（4 辺・書字開始角・折返し閾値）が一致する"
     );
-    assert_eq!(canon, ext, "TextRegion 全体が一致する");
 }
 
 /// 要件 10.1／10.2: 正典キー版の解決後 `TextRegion` を design.md「Data Models →
