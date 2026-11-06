@@ -95,7 +95,7 @@
   - 書体の高さ 0 の箱を、隠して登録し直す・拡大率を変える・サーフェスを切り替えるの 3 つの後で、警告が表を入れたときの 1 回のままのテストを置く
   - 完了の姿: そのテストが緑で、登録ごとに解決する形に戻すと警告の数の確かめが落ちる
   - _Requirements: 2.1, 4.5, 4.6_
-- [ ] 3.5 全消しの後に作りたてと同じで面を持たない場所を外す（指摘 11）
+- [x] 3.5 全消しの後に作りたてと同じで面を持たない場所を外す（指摘 11）
   - 状態に、作りたてと同じで面を持たない場所を外す crate の中の関数を足し、全消しを進めた後だけ呼ぶ。消した回数の表は外さない
   - `\p[0]a`〜`\p[999]a` の後に全消し 2 回で、場所の数が登録したスコープの数へ戻り、消した回数が減らないテストを置く
   - 完了の姿: そのテストが緑で、呼び出しを外すと場所の数の確かめが落ちる
@@ -247,3 +247,4 @@
 - 箱の切る大きさは `actor_box.rs` の私的な `image_limit`（箱の大きさとシェルの画像の重なり）。シェルの大きさは `TextLayerRuntime.box_shell_size`。印の矩形の式は `marker_surface.rs` の `marker_span` 1 つ（2.5）。
 - 片付けは `ActorRender::discard(self, world, slot: Option<Entity>)`、解決と印は `resolve_stamped`（`stamp_inline_marker` は消えた）、登録の後半は `finish_registration`、変化なしの記録は `trace_unchanged`。3.4 で「覚えを複製して印を押すだけ」が要るなら、`resolve_stamped` から押す所を切り出す（design.md:342 の `stamp_inline_marker` は今は無い）。`actor_attach.rs` 390 行あたりの注釈は古いので 5.5 で直す（3.2）。
 - 箱の解決の覚えは `TextLayerRuntime.box_resolved: BTreeMap<BoxName, ResolvedBalloonText>`（印を押す前）。登録は `stamped(&actor, memo.clone())`。design.md:342 の `stamp_inline_marker` は今の `stamped`（5.5 で直す）（3.4）。
+- 全消しの後の片付けは `TextLayerState::forget_pristine_places(keep)`。`TextLayerRuntime::apply_cue` が `ClearAll` のときだけ呼び、空回し（`advance_state` を直に呼ぶ先読み）は通らない。登録したスコープが残るのは見た目の 2 層が入っているから（外れても `place_entry` が同じ既定で作り直す）（3.5）。

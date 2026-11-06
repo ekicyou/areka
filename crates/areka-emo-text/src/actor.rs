@@ -460,6 +460,13 @@ impl TextLayerRuntime {
             | CueCommand::Wait => {}
         }
         let box_missing = advance_state(&mut self.state, self.surface_resolver.as_deref(), cue);
+        // 全消しの後だけ、作りたてと同じで面を持たない場所を外す（面を持つ場所は次のフレームで
+        // 画面を消すので残す・空回しの写しでは呼ばない）。
+        if matches!(cue.command, CueCommand::ClearAll) {
+            let surfaces = &self.surfaces;
+            self.state
+                .forget_pristine_places(|place| surfaces.contains_key(place));
+        }
         // `\c`・台詞の頭で文字が無くなった箱を、提示を待たずに写しから外す。`\s` の受け取りは
         // 行き先だけを替え、箱の置き場所は絵の番号に従う（次の箱の同期が決める）ので外さない。
         self.prune_shown_boxes();

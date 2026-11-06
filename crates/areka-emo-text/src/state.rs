@@ -474,6 +474,15 @@ impl TextLayerState {
         }
     }
 
+    /// 全消しの後に呼ぶ。中身が作りたてと同じで、`keep` が偽の普通のバルーンの場所を外す。
+    /// 消した回数（`clears`）は外さない（`crates/areka` が `clear_count` の変化を見るため）。
+    pub(crate) fn forget_pristine_places(&mut self, keep: impl Fn(&PlaceKey) -> bool) {
+        let pristine = ActorTextState::default();
+        self.actors.retain(|key, state| {
+            key.place != TextPlace::Balloon || *state != pristine || keep(key)
+        });
+    }
+
     /// 全部の場所の選択肢を済みにする。
     pub(crate) fn settle_all_choices(&mut self) {
         for state in self.actors.values_mut() {

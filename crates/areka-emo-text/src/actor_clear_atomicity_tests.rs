@@ -451,3 +451,45 @@ fn clear_drops_anchor_hit_rows_and_hit_active_atomically() {
     assert!(rt.choice_hit_rows(&actor).is_empty());
     assert!(!rt.hit_active(&actor));
 }
+
+// ══ 全消しの後の作りたての場所（指摘 11） ══
+
+/// `\p[0]a`〜`\p[999]a` の後に全消しを 2 回すると、場所の数は登録した 2 つのスコープへ戻る
+/// （作りたてと同じで面を持たない場所を外す）。消した回数は外さないので減らない。
+#[test]
+fn clear_all_forgets_pristine_places_but_keeps_clear_counts() {
+    let mut world = bevy_ecs::prelude::World::new();
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    let image = (120u32, 60u32);
+    for actor in ["0", "1"] {
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        rt.register_actor(
+            ActorKey::from(actor),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+    }
+    for n in 0..1000 {
+        rt.apply_cue(&cue(&n.to_string(), 0.0, CueCommand::Text("a".into())));
+    }
+    assert_eq!(rt.state().places().count(), 1000);
+
+    rt.apply_cue(&cue("0", 1.0, CueCommand::ClearAll));
+    let after_first: Vec<u64> = ["0", "1", "5", "999"]
+        .iter()
+        .map(|a| rt.state().clear_count(&ActorKey::from(*a)))
+        .collect();
+    rt.apply_cue(&cue("0", 2.0, CueCommand::ClearAll));
+
+    assert_eq!(
+        rt.state().places().count(),
+        2,
+        "全消しの後は登録したスコープの場所だけが残る"
+    );
+    let after_second: Vec<u64> = ["0", "1", "5", "999"]
+        .iter()
+        .map(|a| rt.state().clear_count(&ActorKey::from(*a)))
+        .collect();
+    assert_eq!(after_first, vec![1, 1, 1, 1]);
+    assert_eq!(after_second, vec![2, 2, 1, 1], "消した回数は減らない");
+}
