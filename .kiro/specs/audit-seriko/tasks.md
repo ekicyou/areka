@@ -260,3 +260,5 @@
   - 例外表の件数は、着地の順に表の行から数え直す（audit-ghost-catalog）。
   - 読みだけで残した 3 つの狭い穴。
   - 引き金の target の変更と、pick_rng を引く順の変更は、v0.2.0 の seriko の spec への注記に入れる。
+- 完了時にその場で解決: `crates/log-capture-kit/src/event_tests.rs:15`・`:18` の出所の書き方にあった `Capture::on_event`（今はどこにも無い）を、今在る `capture_logs` に直した（コメント 2 行・本 spec の範囲の外。持ち主の `audit-test-kits` は brief だけで走っていない）。
+- 完了の棚卸で直さないと判断したもの: 完了した `areka-P0-seriko-trigger-intervals` の design.md:513・:620・:669 は、当時の設計の記録なので書き換えない（今の形は本 spec の design.md の「実装後の追記」と tasks.md の A5・4.1 の項にある）。並走の重なり（`parts_tests.rs` は audit-emo-compose と、例外表の件数は audit-ghost-catalog と）は、後から着地する側が合わせる約束で、今は何もしない。読みだけで残していた 3 つの狭い穴は、6.1 の T2・T3・T4 で直してある。

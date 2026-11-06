@@ -12,10 +12,10 @@
 //!    見本が古びても差分検査は毎回走るので、両者が同時に嘘をつくことはない。
 //!
 //! 逐語写しの出所（`format!`／`write!` の並びは 1 文字も変えていない）:
-//! - 宛先を含む形: `crates/areka-seriko/src/lib_test_support.rs` の `capture_logs`（`Capture::on_event`）と
+//! - 宛先を含む形: `crates/areka-seriko/src/lib_test_support.rs` の `capture_logs` と
 //!   `crates/areka-emo-atlas/src/log_capture.rs`・`crates/areka-emo-compose/src/log_capture.rs`
 //!   の同型。
-//! - 宛先を含まない形: `crates/areka/src/input_events/choice_drain.rs` の `Capture::on_event` と
+//! - 宛先を含まない形: `crates/areka/src/input_events/choice_drain.rs` の `capture_logs` と
 //!   `crates/areka/src/input_events/balloon_test_support.rs`・`crates/areka/src/shiori_demo.rs`・
 //!   `crates/wintf/src/ecs/window_proc/dpi_helpers_tests.rs` の同型。
 
