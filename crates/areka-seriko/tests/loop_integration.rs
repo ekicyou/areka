@@ -149,7 +149,6 @@ fn anim(id: u32, interval: Interval, frames: &[(i64, u32)]) -> Animation {
     Animation {
         id,
         interval,
-        interval_written: true,
         patterns,
     }
 }

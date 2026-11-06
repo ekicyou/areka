@@ -32,7 +32,6 @@ fn anim(id: u32) -> Animation {
     Animation {
         id,
         interval: Interval::Bind,
-        interval_written: true,
         patterns: Vec::new(),
     }
 }

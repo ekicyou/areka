@@ -577,7 +577,6 @@ fn coexisting_patterns_bind_random_draws_none_pure_bind_draws_all() {
     let anim = |interval| Animation {
         id: 1,
         interval,
-        interval_written: true,
         patterns: vec![pattern(0, "overlay", 1100), pattern(1, "overlay", 1200)],
     };
     let paths = |interval| {

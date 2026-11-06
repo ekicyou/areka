@@ -93,7 +93,6 @@ pub(crate) fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animati
     Animation {
         id,
         interval: Interval::Bind,
-        interval_written: true,
         patterns: vec![
             Pattern {
                 x,
@@ -123,7 +122,6 @@ pub(crate) fn single_pattern_anim(
     Animation {
         id,
         interval,
-        interval_written: true,
         patterns: vec![pattern(index, "overlay", ref_surface_id)],
     }
 }
