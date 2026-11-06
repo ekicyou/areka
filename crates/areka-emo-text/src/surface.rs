@@ -260,8 +260,6 @@ pub struct TextSurface {
     sources: [ID3D11Texture2D; 2],
     /// `sources` の front インデックス（初期 0・`flip` で 0↔1 交換）。present/read_back は front を読む。
     front: usize,
-    /// readback 用 staging（CPU_READ・`size` と同寸・1 枚のまま——常に front を copy する）。
-    staging: ID3D11Texture2D,
     /// immediate context（転送 API の発行先・front 面と同一デバイス）。
     context: ID3D11DeviceContext,
     /// slot へ装着した SpriteVisual（brush 保持者・外形追随（将来の resize 点）の操作口）。
@@ -340,7 +338,7 @@ impl TextSurface {
         Ok(surface)
     }
 
-    /// 供給面（swapchain・描画面ダブルバッファ・staging）と、それを brush に持つ `SpriteVisual` を作る。
+    /// 供給面（swapchain・描画面ダブルバッファ）と、それを brush に持つ `SpriteVisual` を作る。
     /// 挿す先（差し込み口か窓の子か）だけが違う 2 つの入口の共通部分。
     fn create(
         compositor: &Compositor,
@@ -372,7 +370,6 @@ impl TextSurface {
             create_transparent_source_tex(&d3d, w, h)?,
             create_transparent_source_tex(&d3d, w, h)?,
         ];
-        let staging = create_staging(&d3d, w, h)?;
         let context =
             unsafe { d3d.GetImmediateContext() }.map_err(device_err("GetImmediateContext"))?;
 
@@ -401,7 +398,6 @@ impl TextSurface {
                 swapchain,
                 sources,
                 front: 0,
-                staging,
                 context,
                 sprite,
                 size: physical_size,
@@ -457,8 +453,9 @@ impl TextSurface {
         let src_res: ID3D11Resource = self.sources[self.front]
             .cast()
             .map_err(device_err("front->Resource cast"))?;
-        let staging_res: ID3D11Resource = self
-            .staging
+        // 写し先は面ごとに持たず読むたびに作る（読み戻しは検証の口だけ）。
+        let d3d = unsafe { self.context.GetDevice() }.map_err(device_err("GetDevice"))?;
+        let staging_res: ID3D11Resource = create_staging(&d3d, w, h)?
             .cast()
             .map_err(device_err("staging->Resource cast"))?;
 
