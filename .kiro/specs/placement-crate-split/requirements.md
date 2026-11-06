@@ -27,7 +27,7 @@
   - 新しい crate `crates/areka-placement/` の新設と、配置の本番とテストの移動（履歴を残す移動）。
   - 配置の公開面の付け替え（外から使われる項目だけを `pub` にする）と、本体の参照の書き換え。
   - テストの支えの開け方（`test-support` 機能）、テストと examples の置き場の移し替え。
-  - ログを捕まえる支えの汎用の部分（`ExpectField`・`expect_one`）を `crates/log-capture-kit/src` へ下ろすこと（議題 1）。`crates/areka/src/emo2_boot/sample_test_support.rs` に `balloon_root` を足すこと。
+  - ログを捕まえる支えの汎用の部分（`ExpectField`・`expect_one`）を `crates/log-capture-kit/src` へ下ろすこと（議題 1）。`crates/areka/src/emo2_boot/sample_test_support.rs` の `emo2_root`・`emo2_balloon_root` を `pub(crate)` に広げること（新しい関数は足さない・3.2）。
   - 配置を名指すパスの書き換え: 1,000 行の番人の例外表ほか `log-capture-kit` の表、ソースを文字列で読むテスト、配置の中の自分を指すパス、文書（`doc/`・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所・`.kiro/steering/structure.md`）、`tools/perf` の見本、ソースの説明の中のパス。
   - ログの出所の名前の付け替えと、名前で読んでいる所の書き換え。
   - `audit-placement-core`・`audit-placement-follow` の brief の「受け持つファイル」の新しいパスへの書き換え。

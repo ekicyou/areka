@@ -251,10 +251,11 @@ flowchart TB
 | 3 | 本体の `crate::placement::`・`placement::` を `areka_placement::` へ書き換え、一時の別名を外す・`cargo fmt --all` | `cargo check --workspace --all-targets`・本体の `src` で `crate::placement::` が 0 件 |
 | 4 | 2 本の片割れ・分岐の対応表を読み口へ・読み口 `crate_source_test_support.rs` と D7 の 6 か所・examples の 2 本 | `cargo check --workspace --all-targets` 警告 0・触ったテストだけ回す |
 | 5 | `OffsetBase` を `resolver` へ・`PlacementError` を `error.rs` へ・規約の文・1,000 行の確かめ（D4） | `cargo check --workspace --all-targets`・`file_length_guard_test` |
-| 6 | 番人の表・出所の名前・文書・道具・説明・`load-flake.ps1`・2 本の brief と申し送り・`structure.md`・roadmap の追記・`tools/perf` の見本と自分の確かめ | `cargo test -p log-capture-kit`・性能の道具の自分の確かめ・grep 0 件（5.10・6.6） |
+| 6 | 番人の表・出所の名前・文書・道具・説明・`load-flake.ps1`・2 本の brief と申し送り・`structure.md`・`tools/perf` の見本と自分の確かめ | `cargo test -p log-capture-kit`・性能の道具の自分の確かめ・grep 0 件（5.10・6.6） |
 | 7 | 完了の多重集合・警告・`tools/test-all.ps1`・実機 1 本・`cargo about generate` | 8.2〜8.8 のすべて |
 
-- 段 1 の後はテストの組み立てが赤のままでよい（段 2 で緑に戻す）。どの段もコミットを分け、PR は 1 本。
+- 段 1 の後はテストの組み立てが赤のままでよい（段 2 で緑に戻す）。
+- 段 1 の `git mv` で、文字で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR`）の読み先と、番人の表（1,000 行・一時の入口・`with_default`）の配置のパスが切れる。段 2 の緑を保つため、段 1 で読み先を移した先の場所へ相対の道のままつなぎ直し（段 4 で片割れと読み口の最終形へ置き換える）、番人の表は段 1 で最終のパスへ書き換える（段 6 では行わない）。どの段もコミットを分け、PR は 1 本。
 - 一時の別名は段 1 のコミットにだけあり、段 3 で消える。最終形に残らない。
 
 ## 要件の対応表
