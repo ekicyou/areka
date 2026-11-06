@@ -3,15 +3,8 @@ use sample_ghost_kit::SampleRoot;
 use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
-// 定数・fixture パス解決
+// fixture パス解決（文字の層の例とタイプライターの例が `#[path]` で共に引く）
 // ---------------------------------------------------------------------------
-
-/// \0（sakura）バルーン窓の初期位置（物理 px・スクリーン座標）。
-pub(super) const SAKURA_POS: (i32, i32) = (320, 160);
-/// \1（kero）バルーン窓の縦間隔（sakura 窓の直下に置く・物理 px）。
-pub(super) const KERO_GAP_Y: i32 = 32;
-/// シナリオ全体の watchdog（talk 起点相対秒・超過は FAIL）。
-pub(super) const WATCHDOG_SECS: f64 = 30.0;
 
 /// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
 static EMO2: LazyLock<SampleRoot> =

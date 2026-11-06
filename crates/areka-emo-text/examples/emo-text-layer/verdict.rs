@@ -22,9 +22,15 @@ impl Verdict {
             self.checks += 1;
             info!(check = label, "readback 検証 OK");
         } else {
-            error!(check = label, "readback 検証 FAIL");
-            self.failures.push(label.to_string());
+            self.fail(label);
         }
+    }
+
+    /// 失敗を log-first で記録する（例の失敗はすべてここを通す・`error!` を出してから積む）。
+    pub(super) fn fail(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        error!(failure = %msg, "emo-text-layer: 検証 FAIL");
+        self.failures.push(msg);
     }
 }
 

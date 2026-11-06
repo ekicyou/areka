@@ -1,11 +1,10 @@
 use super::{
-    ActorKey, BindSet, CueSink, DWriteMetrics, Demo, DrawStats, Duration, EXPOSURE_BAND_DRAW_BOUND,
-    FrameTime, GATE_KERO, GATE_SAKURA, GetAsyncKeyState, GetCursorPos, GlyphMetrics, GraphicsCore,
-    LayoutEngine, POINT, PresentCommand, PresentOutcome, Rc, ResolvedBalloonText, T_CHECK,
-    TargetId, TextLayerConfig, TextSlotBinding, VK_LBUTTON, Verdict, WATCHDOG_SECS, WindowHandle,
-    WindowPos, World, WrapPlan, WritingMode, WucGraphicsResource, actor0, actor1, band_ink,
-    block_extent, error, info, inline_extent_first_band, opaque_count, present_frame,
-    reply_channel, spawn_emo_text, stage_cues, warn,
+    ActorKey, CueSink, DWriteMetrics, Demo, DrawStats, EXPOSURE_BAND_DRAW_BOUND, FrameTime,
+    GATE_KERO, GATE_SAKURA, GetAsyncKeyState, GetCursorPos, GlyphMetrics, GraphicsCore,
+    LayoutEngine, POINT, Rc, ResolvedBalloonText, T_CHECK, TargetId, TextLayerConfig,
+    TextSlotBinding, VK_LBUTTON, Verdict, WATCHDOG_SECS, WindowHandle, WindowPos, World, WrapPlan,
+    WritingMode, actor0, actor1, band_ink, block_extent, gpu_ready, info, inline_extent_first_band,
+    opaque_count, present_frame, show_balloon, spawn_emo_text, stage_cues, warn,
 };
 
 // ---------------------------------------------------------------------------
@@ -86,12 +85,7 @@ pub(super) fn drive_demo_system(world: &mut World) {
 /// GPU 資源到達フレームで attach→ShowSurface→結線（text_slot_view→spawn_emo_text→routing 登録）
 /// を 1 回だけ駆動する（emo-present example の boot_present_system と同型）。
 fn try_attach(demo: &mut Demo, world: &mut World) {
-    let ready = world.get_resource::<GraphicsCore>().is_some()
-        && world
-            .get_resource::<WucGraphicsResource>()
-            .map(|r| r.is_valid())
-            .unwrap_or(false);
-    if !ready {
+    if !gpu_ready(world) {
         return;
     }
 
@@ -100,41 +94,9 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         (TargetId(0), demo.win0, demo.assets0.take()),
         (TargetId(1), demo.win1, demo.assets1.take()),
     ] {
-        let Some((emo_world, atlas)) = assets else {
-            fail_attach(
-                demo,
-                world,
-                format!("{target:?} のアセットが二重消費された（構造不変の破れ）"),
-            );
+        if let Err(msg) = show_balloon(&mut demo.presenter, world, target, window, assets) {
+            fail_attach(demo, world, msg);
             return;
-        };
-        demo.presenter.attach_target(
-            target, window, emo_world, atlas,
-            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
-            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
-            96,
-        );
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        demo.presenter.apply(
-            world,
-            PresentCommand::ShowSurface {
-                target,
-                surface_id: 0,
-                binds: BindSet::default(),
-                pattern: areka_emo_compose::PatternState::default(),
-                reply: Some(tx),
-            },
-        );
-        match rx.recv_timeout(Duration::from_secs(10)) {
-            Ok(Ok(())) => {}
-            other => {
-                fail_attach(
-                    demo,
-                    world,
-                    format!("{target:?} の ShowSurface が成立しない: {other:?}"),
-                );
-                return;
-            }
         }
     }
 
@@ -245,8 +207,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
 
 /// 装着フェーズの失敗集約（log-first・FAIL 記録→シナリオ打切り）。
 fn fail_attach(demo: &mut Demo, world: &mut World, msg: String) {
-    error!("{msg}");
-    world.resource_mut::<Verdict>().failures.push(msg);
+    world.resource_mut::<Verdict>().fail(msg);
     finish(demo, world);
 }
 
@@ -281,8 +242,7 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
             "watchdog 超過（stage={} t={t:.1}s）——シナリオが進行しない",
             demo.stage
         );
-        error!("{msg}");
-        world.resource_mut::<Verdict>().failures.push(msg);
+        world.resource_mut::<Verdict>().fail(msg);
         finish(demo, world);
         return;
     }
@@ -379,7 +339,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
     {
         let mut rt = demo.runtime.borrow_mut();
         if let Err(e) = present_frame(&mut rt, world, t_check) {
-            world.resource_mut::<Verdict>().failures.push(format!(
+            world.resource_mut::<Verdict>().fail(format!(
                 "stage {stage}: present_frame({t_check}) が失敗: {e}"
             ));
             return;
@@ -414,9 +374,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C1: typewriter 進行の途中観測（R11.2）——インクが出始めている。
         0 => {
             let Some(bytes) = read(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C1: \\0 供給面の readback 不能".into());
+                verdict.fail("C1: \\0 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -426,9 +384,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C2: typewriter 単調増加（R11.2）＋折返し構造（横=1 行のまま／縦=縦書き閾値で折返し・R11.4）。
         1 => {
             let Some(bytes) = read(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C2: \\0 供給面の readback 不能".into());
+                verdict.fail("C2: \\0 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -459,9 +415,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C3: 改行（NewLine）で行送り軸方向へインク範囲が拡大する（R11.1/改行）。
         2 => {
             let Some(bytes) = read(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C3: \\0 供給面の readback 不能".into());
+                verdict.fail("C3: \\0 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -484,16 +438,12 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C4: あふれ直前の基準採取＋複数 actor 振り分け（R11.8）。
         3 => {
             let Some(bytes0) = read(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C4: \\0 供給面の readback 不能".into());
+                verdict.fail("C4: \\0 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
             let Some(bytes1) = read(&actor1()) else {
-                verdict
-                    .failures
-                    .push("C4: \\1 供給面の readback 不能（振り分け不成立）".into());
+                verdict.fail("C4: \\1 供給面の readback 不能（振り分け不成立）");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -521,16 +471,12 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C5: あふれ→スクロール（R11.3）＋ \0 更新が \1 へ波及しない独立性（R11.8）。
         4 => {
             let Some(bytes0) = read(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C5: \\0 供給面の readback 不能".into());
+                verdict.fail("C5: \\0 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
             let Some((lines, window)) = layout_of(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C5: \\0 の layout 再導出に失敗".into());
+                verdict.fail("C5: \\0 の layout 再導出に失敗");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -568,17 +514,13 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
                     bytes1 == demo.obs.kero_bytes_c4,
                     "C5: \\0 のスクロール更新が \\1 の供給面へ波及しない（バイト同一）",
                 ),
-                None => verdict
-                    .failures
-                    .push("C5: \\1 供給面の readback 不能".into()),
+                None => verdict.fail("C5: \\1 供給面の readback 不能"),
             }
         }
         // C6: \0 の Clear で全透明へ（R11.5）・\1 は残存（独立性）。
         5 => {
             let Some(bytes0) = read(&actor0()) else {
-                verdict
-                    .failures
-                    .push("C6: \\0 供給面の readback 不能".into());
+                verdict.fail("C6: \\0 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -591,17 +533,13 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
                     opaque_count(&bytes1) > 0,
                     "C6: \\0 の Clear は \\1 のテキストを消さない（独立性）",
                 ),
-                None => verdict
-                    .failures
-                    .push("C6: \\1 供給面の readback 不能".into()),
+                None => verdict.fail("C6: \\1 供給面の readback 不能"),
             }
         }
         // C7: \1 の Clear で全透明へ（R11.5・両バルーンの全消去完了）。
         6 => {
             let Some(bytes1) = read(&actor1()) else {
-                verdict
-                    .failures
-                    .push("C7: \\1 供給面の readback 不能".into());
+                verdict.fail("C7: \\1 供給面の readback 不能");
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -660,9 +598,8 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     // （P → P+1 → P+2）を観測して「スクロールフレームの描画統計が可視窓の深さに依らず一定」
     // ＝確定行がスクロール量に比例して蓄積再描画されないことを檻化する（再描画レスの核）。
     if complete.len() < 3 {
-        world.resource_mut::<Verdict>().failures.push(
-            "C8: あふれ短行リビール区間で 1 行スクロールの完成プラトーが 3 つ未満（観測不能）"
-                .into(),
+        world.resource_mut::<Verdict>().fail(
+            "C8: あふれ短行リビール区間で 1 行スクロールの完成プラトーが 3 つ未満（観測不能）",
         );
         return;
     }
@@ -680,7 +617,7 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     // 最深の 3 連が条件を満たさなければ、それより浅い 3 連はなおさら満たさない（先頭可視行は
     // 完成プラトー列で単調増加）＝短行の本数（`OVERFLOW_LINES`）が足りない。
     if complete[i0].fvl < long_lines {
-        world.resource_mut::<Verdict>().failures.push(format!(
+        world.resource_mut::<Verdict>().fail(format!(
             "C8: 送り出される行がどちらも短行になる 2 段が採れない（最深の始点 先頭可視行 {} < 長い行の本数 {long_lines}・短行の本数が不足）",
             complete[i0].fvl
         ));
@@ -872,8 +809,7 @@ fn present_at(demo: &mut Demo, world: &mut World, t: f64) {
         drop(rt);
         world
             .resource_mut::<Verdict>()
-            .failures
-            .push(format!("C8: present_frame({t}) が失敗: {e}"));
+            .fail(format!("C8: present_frame({t}) が失敗: {e}"));
     }
 }
 

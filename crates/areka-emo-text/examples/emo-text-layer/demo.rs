@@ -1,7 +1,13 @@
 use super::{
     ActorKey, AtlasTable, BalloonModel, DWriteMetrics, EmoPresenter, EmoTextSink, EmoWorld, Entity,
-    Observations, Rc, RefCell, ResolvedBalloonText, TextLayerRuntime,
+    Observations, Rc, RefCell, ResolvedBalloonText, TextLayerConfig, TextLayerRuntime, World,
+    balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, info,
 };
+
+/// \0（sakura）バルーン窓の初期位置（物理 px・スクリーン座標）。
+const SAKURA_POS: (i32, i32) = (320, 160);
+/// \1（kero）バルーン窓の縦間隔（sakura 窓の直下に置く・物理 px）。
+const KERO_GAP_Y: i32 = 32;
 
 // ---------------------------------------------------------------------------
 // Demo（NonSend・EmoPresenter/TextLayerRuntime を内包する集約ルート）
@@ -56,4 +62,56 @@ pub(super) fn actor0() -> ActorKey {
 }
 pub(super) fn actor1() -> ActorKey {
     ActorKey::from("1")
+}
+
+/// アセット構築・窓生成・`Demo` 挿入を一括で行う（UI スレッド・emo-present example と同型）。
+///
+/// `--vertical` は balloon descript の parse 入力だけを変種へ差し替える。
+/// 枠アセットは \0/\1 target の 2 つを共有 fixture から作る。
+pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
+    let decoder = decoder();
+    let model = balloon_model(vertical);
+    let assets0 = balloon_assets(&decoder);
+    let assets1 = balloon_assets(&decoder);
+    let (w, h) = balloon_size(&assets0);
+
+    let win0 = create_balloon_window(world, "sakura", SAKURA_POS.0, SAKURA_POS.1, w, h);
+    let win1 = create_balloon_window(
+        world,
+        "kero",
+        SAKURA_POS.0,
+        SAKURA_POS.1 + h as i32 + KERO_GAP_Y,
+        w,
+        h,
+    );
+
+    world.insert_non_send(Demo {
+        presenter: EmoPresenter::new(),
+        win0,
+        win1,
+        assets0: Some(assets0),
+        assets1: Some(assets1),
+        model,
+        attached: false,
+        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        sink: None,
+        _drain: None,
+        resolved: None,
+        metrics: None,
+        dims: (0, 0),
+        talk_start: 0.0,
+        stage: 0,
+        fed: false,
+        obs: Observations::default(),
+        finished: false,
+        hold,
+        prev_lbutton: false,
+        last_click_time: -10.0,
+    });
+    info!(
+        w,
+        h, vertical, hold, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）"
+    );
 }

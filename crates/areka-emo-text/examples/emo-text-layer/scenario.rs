@@ -15,6 +15,9 @@ use super::{ActorKey, CueCommand, TalkCue, TextLayerRuntime, text_playback_durat
 // - 縦書き（vertical 変種）の列容量: 列 i の左端 = 356 − 28 − 30i ≥ 36 →
 //   i = 0..9 の **10 列**（= `floor((320 − 28) / 30) + 1`）。旧 35px では 9 列。
 
+/// シナリオ全体の watchdog（talk 起点相対秒・超過は FAIL）。
+pub(super) const WATCHDOG_SECS: f64 = 30.0;
+
 /// \0 の 1 行目（6 グリフ・typewriter 進行の観測対象）。
 const LINE1: &str = "おっはよー！";
 /// \0 の 2 行目（10 グリフ・改行観測。横書き 1 行に収まり、縦書きでは複数列へ折返す）。

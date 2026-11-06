@@ -139,13 +139,16 @@ mod verdict;
 
 // 子モジュールの項目もここで束ね直す（子同士は `use super::{…};` でこの束縛を引く）。
 // 新しい公開モジュールパスは生えない——子はすべて私有 `mod` である。
-use self::demo::{Demo, actor0, actor1};
+use self::demo::{Demo, actor0, actor1, build_and_spawn};
 use self::drive::drive_demo_system;
-use self::fixture::{
-    KERO_GAP_Y, SAKURA_POS, WATCHDOG_SECS, load_balloon_model, shared_balloon_dir,
+use self::fixture::{load_balloon_model, shared_balloon_dir};
+use self::scenario::{
+    EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG_SECS, stage_cues,
 };
-use self::scenario::{EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, stage_cues};
-use self::setup::build_and_spawn;
+use self::setup::{
+    balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,
+    show_balloon,
+};
 use self::verdict::{
     Observations, Verdict, band_ink, block_extent, inline_extent_first_band, opaque_count,
 };
@@ -223,6 +226,7 @@ fn main() -> windows::core::Result<()> {
         }
         Some(v) => {
             if !v.done {
+                error!(checks = v.checks, "emo-text-layer: シナリオ完了前に終了");
                 println!(
                     "[emo-text-layer] FAIL (シナリオ完了前に終了・{} checks 通過)",
                     v.checks
@@ -240,6 +244,7 @@ fn main() -> windows::core::Result<()> {
             std::process::exit(1);
         }
         None => {
+            error!("emo-text-layer: 判定リソース不在");
             println!("[emo-text-layer] FAIL (判定リソース不在)");
             std::process::exit(1);
         }

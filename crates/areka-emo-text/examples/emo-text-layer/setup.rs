@@ -1,101 +1,81 @@
 use super::{
-    BindSet, Composer, Demo, EmoPresenter, Entity, HitTest, KERO_GAP_Y, Name, Observations, Point,
-    Rc, RefCell, SAKURA_POS, SizeI, TextLayerConfig, TextLayerRuntime, WS_EX_LAYERED,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE, WicDecoderArm, Window, WindowPos,
-    WindowStyle, World, build_balloon_target, error, info, load_balloon_model, shared_balloon_dir,
+    AtlasTable, BalloonModel, BindSet, Composer, Duration, EmoPresenter, EmoWorld, Entity,
+    GraphicsCore, HitTest, Name, Point, PresentCommand, PresentOutcome, SizeI, TargetId,
+    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE, WicDecoderArm, Window,
+    WindowPos, WindowStyle, World, WucGraphicsResource, build_balloon_target, error,
+    load_balloon_model, reply_channel, shared_balloon_dir,
 };
 
 // ---------------------------------------------------------------------------
-// セットアップ（UI スレッド・COM 初期化済み）
+// セットアップの部品（UI スレッド・COM 初期化済み）
+//
+// 文字の層の例とタイプライターの例が `#[path]` で共に引く。子は上の `use super::{…};` で
+// 親の束縛を引くので、どちらの親もここで使う名前を `use` しておく。
 // ---------------------------------------------------------------------------
 
 /// 失敗時は log-first で真因を出し、観測不能として loud に終了する（誤 PASS を作らない）。
-fn setup_abort(msg: &str) -> ! {
+pub(super) fn setup_abort(msg: &str) -> ! {
     error!("{msg}");
-    println!("[emo-text-layer] FAIL (セットアップ失敗: {msg})");
+    println!(
+        "[{}] FAIL (セットアップ失敗: {msg})",
+        env!("CARGO_BIN_NAME")
+    );
     std::process::exit(1);
 }
 
-/// アセット構築・窓生成・`Demo` 挿入を一括で行う（UI スレッド・emo-present example と同型）。
-pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
+/// WIC のデコーダを作る（失敗は打ち切り）。
+pub(super) fn decoder() -> WicDecoderArm {
     let Ok(decoder) = WicDecoderArm::new() else {
         setup_abort("WicDecoderArm 生成に失敗（COM 未初期化？）");
     };
+    decoder
+}
 
-    // balloon descript（2 層マージ）: --vertical は parse 入力だけを変種へ差し替える。
+/// balloon descript（2 層マージ）を読む（失敗は打ち切り）。
+pub(super) fn balloon_model(vertical: bool) -> BalloonModel {
     let Some(model) = load_balloon_model(vertical) else {
-        setup_abort("balloon descript の読取/解釈に失敗");
+        setup_abort("balloon descript の読取/解釈に失敗（共有 fixture の配置を確認）");
     };
+    model
+}
 
-    // バルーン枠アセット×2（\0/\1 target）: 共有 fixture をシェルと同一経路で構築。
-    let balloon_dir = shared_balloon_dir();
-    let (Ok(assets0), Ok(assets1)) = (
-        build_balloon_target(&balloon_dir, &decoder, 0),
-        build_balloon_target(&balloon_dir, &decoder, 0),
-    ) else {
+/// 共有 fixture のバルーン枠アセットをシェルと同一経路で構築する（失敗は打ち切り）。
+pub(super) fn balloon_assets(decoder: &WicDecoderArm) -> (EmoWorld, AtlasTable) {
+    let Ok(assets) = build_balloon_target(&shared_balloon_dir(), decoder, 0) else {
         setup_abort("バルーン枠アセットの構築に失敗（共有 fixture の配置を確認）");
     };
+    assets
+}
 
-    // 窓寸 ≔ balloon surface0 の合成原寸（物理 px・DPI 表示契約＝等倍）。
+/// 窓寸 ≔ balloon surface0 の合成原寸（物理 px・DPI 表示契約＝等倍・失敗は打ち切り）。
+pub(super) fn balloon_size(assets: &(EmoWorld, AtlasTable)) -> (u32, u32) {
     let (w, h) = match Composer::new().compose(
-        &assets0.0,
-        &assets0.1,
+        &assets.0,
+        &assets.1,
         0,
         &BindSet::default(),
         &areka_emo_compose::PatternState::default(),
     ) {
         Ok(cs) => (cs.width(), cs.height()),
-        Err(e) => {
-            setup_abort(&format!("balloon surface0 の採寸合成に失敗: {e}"));
-        }
+        Err(e) => setup_abort(&format!("balloon surface0 の採寸合成に失敗: {e}")),
     };
     if w == 0 || h == 0 {
         setup_abort("balloon surface0 の合成外形が 0 寸");
     }
-
-    let win0 = create_balloon_window(world, "sakura", SAKURA_POS.0, SAKURA_POS.1, w, h);
-    let win1 = create_balloon_window(
-        world,
-        "kero",
-        SAKURA_POS.0,
-        SAKURA_POS.1 + h as i32 + KERO_GAP_Y,
-        w,
-        h,
-    );
-
-    world.insert_non_send(Demo {
-        presenter: EmoPresenter::new(),
-        win0,
-        win1,
-        assets0: Some(assets0),
-        assets1: Some(assets1),
-        model,
-        attached: false,
-        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
-            TextLayerConfig::default(),
-        ))),
-        sink: None,
-        _drain: None,
-        resolved: None,
-        metrics: None,
-        dims: (0, 0),
-        talk_start: 0.0,
-        stage: 0,
-        fed: false,
-        obs: Observations::default(),
-        finished: false,
-        hold,
-        prev_lbutton: false,
-        last_click_time: -10.0,
-    });
-    info!(
-        w,
-        h, vertical, hold, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）"
-    );
+    (w, h)
 }
 
 /// バルーン窓 Entity を構築する（emo-present example の balloon 窓と同型・物理 px 採寸）。
-fn create_balloon_window(world: &mut World, label: &str, x: i32, y: i32, w: u32, h: u32) -> Entity {
+///
+/// 窓自体はヒット対象外（透過）。バルーン本体（emo-present の surface entity・子）が当たりを受ける。
+pub(super) fn create_balloon_window(
+    world: &mut World,
+    label: &str,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Entity {
     world
         .spawn((
             Name::new(format!("EmoText-Balloon-{label}")),
@@ -118,4 +98,49 @@ fn create_balloon_window(world: &mut World, label: &str, x: i32, y: i32, w: u32,
             HitTest::none(),
         ))
         .id()
+}
+
+/// GPU 資源が届いたか（装着してよいフレームか）。
+pub(super) fn gpu_ready(world: &World) -> bool {
+    world.get_resource::<GraphicsCore>().is_some()
+        && world
+            .get_resource::<WucGraphicsResource>()
+            .map(|r| r.is_valid())
+            .unwrap_or(false)
+}
+
+/// attach_target → ShowSurface（reply で成立を要求）。失敗は文で返し、呼び手が記録する。
+pub(super) fn show_balloon(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    window: Entity,
+    assets: Option<(EmoWorld, AtlasTable)>,
+) -> Result<(), String> {
+    let Some((emo_world, atlas)) = assets else {
+        return Err(format!(
+            "{target:?} のアセットが二重消費された（構造不変の破れ）"
+        ));
+    };
+    presenter.attach_target(
+        target, window, emo_world, atlas,
+        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
+        96,
+    );
+    let (tx, rx) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        world,
+        PresentCommand::ShowSurface {
+            target,
+            surface_id: 0,
+            binds: BindSet::default(),
+            pattern: areka_emo_compose::PatternState::default(),
+            reply: Some(tx),
+        },
+    );
+    match rx.recv_timeout(Duration::from_secs(10)) {
+        Ok(Ok(())) => Ok(()),
+        other => Err(format!("{target:?} の ShowSurface が成立しない: {other:?}")),
+    }
 }
