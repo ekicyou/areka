@@ -312,6 +312,18 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     let n3 = read(&rt);
     assert!(n3 > n2, "t=0.11 で 3 グリフ目まで可視: {n2} -> {n3}");
 
+    // 配置の覚え（指摘 8）: 見える字が増えたフレームは作り直し、入力が同じフレームは作り直さない。
+    let place = crate::place::PlaceKey::balloon(&actor);
+    let rebuilds = rt.frame_rebuilds(&place).expect("装着済みの描き手");
+    assert_eq!(rebuilds, 3, "字が増えた 3 フレームで作り直す");
+    present_frame(&mut rt, &mut world, 0.12).expect("入力が同じフレーム");
+    assert_eq!(
+        rt.frame_rebuilds(&place),
+        Some(rebuilds),
+        "同じ入力は作り直さない"
+    );
+    assert_eq!(read(&rt), n3, "覚えた答えで描いても画素は同じ");
+
     // 装着済み actor の更新は Present のみで完結——World の構造は変わらない（R9.3）。
     assert_eq!(
         world.entities().len(),

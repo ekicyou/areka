@@ -417,6 +417,11 @@ impl ActorTextState {
         self.settled = self.choices.len();
     }
 
+    /// 済みの境目（この序数より前の選択肢は済み・配置の覚えの鍵・指摘 8）。
+    pub(crate) fn settled(&self) -> usize {
+        self.settled
+    }
+
     /// その範囲が済んだ選択肢か（種類が選択肢で、序数が境目より前）。
     pub fn is_settled_choice(&self, span: &ChoiceSpan) -> bool {
         span.kind == SpanKind::Choice && span.ordinal < self.settled
@@ -701,10 +706,12 @@ impl TextLayerState {
     /// scope の内容が消された回数（`Clear` と `ClearAll` の累計・普通のバルーンの場所）。
     /// 一度も消されていない・状態の無い scope は 0。読むだけで状態を変えない。
     pub fn clear_count(&self, actor: &ActorKey) -> u64 {
-        self.clears
-            .get(&PlaceKey::balloon(actor))
-            .copied()
-            .unwrap_or(0)
+        self.clears_at(&PlaceKey::balloon(actor))
+    }
+
+    /// その場所（箱の場所も）の内容が消された回数（配置の覚えの鍵・指摘 8）。読むだけで状態を変えない。
+    pub(crate) fn clears_at(&self, place: &PlaceKey) -> u64 {
+        self.clears.get(place).copied().unwrap_or(0)
     }
 
     /// actor の普通のバルーンの場所のテキスト状態（未生成の actor は `None`）。

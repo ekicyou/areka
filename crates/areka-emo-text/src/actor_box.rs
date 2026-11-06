@@ -76,6 +76,7 @@ impl TextLayerRuntime {
         self.shown_boxes.clear();
         // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・要件 2.7）。
         self.lookahead.forget_boxes();
+        self.lookahead_rev += 1;
 
         let index: BTreeMap<u32, Vec<BoxName>> = layout
             .surfaces()

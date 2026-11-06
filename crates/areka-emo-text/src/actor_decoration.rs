@@ -72,6 +72,9 @@ pub(super) fn build_actor_render(
         metrics,
         markers: None,
         markers_failed: None,
+        frame_memo: None,
+        #[cfg(test)]
+        frame_rebuilds: 0,
     })
 }
 

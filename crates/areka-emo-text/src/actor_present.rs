@@ -15,6 +15,7 @@ use crate::choice::{
 };
 use crate::cursor_tag::CursorWarnGuard;
 use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use crate::look::TextLook;
 use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
@@ -394,30 +395,102 @@ fn present_actor(
             context: "ActorRender missing after attach",
         });
     };
-    // 「見える数 → 区切り → 配置」は [`arrange_lines`] の 1 回の呼び出し（検査も同じ関数を呼ぶ）。
-    let Some(lines) = arrange_lines(
-        &runtime.state,
-        &mut runtime.lookahead,
-        &mut runtime.cursor_warn,
-        place,
-        &resolved,
-        &render.metrics,
-        talk_time,
-    ) else {
+    let Some(actor_state) = runtime.state.place_state(place) else {
         // present_frame は state 由来の場所だけを渡す——防御的に空フレーム扱い。
         return Ok(true);
     };
-    let Some(actor_state) = runtime.state.place_state(place) else {
-        // 直前の arrange_lines が状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
-        return Ok(true);
+    let visible = actor_state.reveal().visible(talk_time);
+    let spans = actor_state.choices();
+    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。済んだ選択肢を指す強調は
+    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・件 1 の要件 1.10／1.12）。
+    let hover = runtime
+        .choice_hover
+        .get(place)
+        .copied()
+        .flatten()
+        .filter(|&ordinal| !is_settled_ordinal(actor_state, ordinal));
+    let key = FrameKey {
+        visible,
+        items: actor_state.items().len(),
+        choices: spans.len(),
+        settled: actor_state.settled(),
+        clears: runtime.state.clears_at(place),
+        hover,
+        lookahead_rev: runtime.lookahead_rev,
+    };
+    let look = actor_state.current_look();
+    // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す（指摘 8）。
+    let mut memo = match render.frame_memo.take() {
+        Some(memo) if memo.matches(&key, look, &resolved) => memo,
+        _ => {
+            // 「見える数 → 区切り → 配置」は [`arrange_lines`] の 1 回の呼び出し（検査も同じ関数を呼ぶ）。
+            let Some(lines) = arrange_lines(
+                &runtime.state,
+                &mut runtime.lookahead,
+                &mut runtime.cursor_warn,
+                place,
+                &resolved,
+                &render.metrics,
+                talk_time,
+            ) else {
+                // 直前で状態を引けている——構造上起こらない（防御的に空フレーム扱い）。
+                return Ok(true);
+            };
+            // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
+            // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
+            // 範囲と帯は choice_ranges が 1 度だけ出す（当たりは描き替えたときだけ同じ値から出す）。
+            // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
+            // R3.3/R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
+            // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
+            // 和文フォントの descent インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
+            // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸・要件 7.9）で、
+            // アクターに 1 つの既定の大きさではない——既定固定だと `[height,40]` の選択肢が表示 42 画素でも
+            // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
+            // 既定の大きさに等しいので、従来と 1 画素も変わらない。
+            let ranges = choice_ranges(
+                &lines,
+                spans,
+                resolved.mode,
+                &resolved.region,
+                &render.metrics,
+            );
+            // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
+            let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
+            let canvas = decorate_canvas(
+                canvas,
+                &ranges.segments,
+                hover,
+                resolved.choice_style,
+                resolved.font.color,
+                &resolved.region,
+                resolved.mode,
+                &ranges.bands,
+            );
+            let ChoiceRanges {
+                segments, bands, ..
+            } = ranges;
+            #[cfg(test)]
+            {
+                render.frame_rebuilds += 1;
+            }
+            FrameMemo {
+                key,
+                look: look.clone(),
+                input: resolved.clone(),
+                lines,
+                segments,
+                bands,
+                canvas,
+            }
+        }
     };
     // 見える字の数の観測を見える範囲の決めより**先に**呼ぶ（字が増えたフレームを自動の位置で
     // 描く・後に呼ぶと 1 フレーム遅れる・要件 8.1）。手動の位置が在ればその行から見せる（要件 8.5）。
     let scroll_state = runtime.scrolls.entry(place.clone()).or_default();
-    if let Some(reason) = scroll_state.observe_visible(actor_state.reveal().visible(talk_time)) {
+    if let Some(reason) = scroll_state.observe_visible(visible) {
         scroll::record(place, ScrollChange::Stopped(reason), "提示");
     }
-    let (window, reached) = window_for(&lines, &resolved.region, resolved.mode, scroll_state);
+    let (window, reached) = window_for(&memo.lines, &resolved.region, resolved.mode, scroll_state);
     if let Some(reason) = reached {
         scroll::record(place, ScrollChange::Stopped(reason), "提示");
     }
@@ -429,48 +502,9 @@ fn present_actor(
         resolved.markers,
     );
 
-    // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
-    // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
-    let spans = actor_state.choices();
-    // 範囲と帯は choice_ranges が 1 度だけ出す（当たりは描き替えたときだけ同じ値から ranges.hit_rows()）。
-    // ハイライト帯／ヒット帯のブロック軸寸と寄せ量を**行ごとに 1 度だけ**決め（**単一の源**・
-    // R3.3/R13.1/R13.2）、装飾（描画帯）とヒット導出（照会帯）の両方へ同じ列を配る。丈は実 font
-    // metrics の行ボックス丈（descent 込み）を行送りピッチで頭打ちにした値——em ボックス丈で切ると
-    // 和文フォントの descent インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
-    // 基準の em は**その行に置かれた文字のうち最も大きい em**（行矩形のブロック軸寸・要件 7.9）で、
-    // アクターに 1 つの既定の大きさではない——既定固定だと `[height,40]` の選択肢が表示 42 画素でも
-    // 帯 14 画素になり、文字の上下がクリックできない（要件 11.5）。装飾の無い行では行矩形のブロック軸寸が
-    // 既定の大きさに等しいので、従来と 1 画素も変わらない。
-    let ranges = choice_ranges(
-        &lines,
-        spans,
-        resolved.mode,
-        &resolved.region,
-        &render.metrics,
-    );
-    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。済んだ選択肢を指す強調は
-    // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・件 1 の要件 1.10／1.12）。
-    let hover = runtime
-        .choice_hover
-        .get(place)
-        .copied()
-        .flatten()
-        .filter(|&ordinal| !is_settled_ordinal(actor_state, ordinal));
-    // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
-    let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
-    let canvas = decorate_canvas(
-        canvas,
-        &ranges.segments,
-        hover,
-        resolved.choice_style,
-        resolved.font.color,
-        &resolved.region,
-        resolved.mode,
-        &ranges.bands,
-    );
     // 装飾入りの描画の入口（要件 14.2・既定だけの行は従来と同一の呼出列）。
     let changed = render.executor.render_styled(
-        &canvas,
+        &memo.canvas,
         &window,
         &resolved.font,
         resolved.mode,
@@ -489,7 +523,7 @@ fn present_actor(
         let committed = render.executor.scroll_state().committed;
         // 帯は装飾（描画）へ渡したのと**同一の行ごとの列**——描画とヒットの
         // 座標整合（R3.3/R13.2）。
-        let hit_rows = ranges.hit_rows();
+        let hit_rows = memo.hit_rows(&resolved.region, resolved.mode);
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()
@@ -521,8 +555,8 @@ fn present_actor(
         // 同じ配置の結果（見えている字だけ）と面反映済みのスクロールから作る。
         if matches!(place.place, TextPlace::Box(_)) {
             let cells = glyph_cells(
-                &lines,
-                &ranges.bands,
+                &memo.lines,
+                &memo.bands,
                 resolved.mode,
                 &resolved.region,
                 committed,
@@ -532,6 +566,7 @@ fn present_actor(
         }
         render.surface.present()?;
     }
+    render.frame_memo = Some(memo);
     *marker_err = present_markers(runtime, world, place, &binding, origin, &shown).err();
     Ok(true)
 }
@@ -718,6 +753,71 @@ pub(super) fn arrange_lines(
         &place.actor,
         cursor_warn,
     ))
+}
+
+/// 配置の覚えの鍵のうち数で比べる欄（今の見た目と配置の入力は [`FrameMemo`] が値で持って比べる）。
+#[derive(Clone, Copy, PartialEq)]
+struct FrameKey {
+    /// 見える字の数（時刻で増える）。
+    visible: usize,
+    /// 項目の数（消すまで増えるだけ）。
+    items: usize,
+    /// 選択肢の数（`\_a` の開きは項目を増やさない）。
+    choices: usize,
+    /// 押した選択肢の境目。
+    settled: usize,
+    /// その場所の消した回数（同じフレームで消して同じ数を書き直すと項目の数が同じになる）。
+    clears: u64,
+    /// 済んだ選択肢で絞った後の強調。
+    hover: Option<usize>,
+    /// 全文の先読みを入れ直した回数。
+    lookahead_rev: u64,
+}
+
+/// 配置の覚え（指摘 8）: 鍵が前のフレームと同じなら、配置・選択肢の範囲・キャンバス・装飾を
+/// 作り直さず、覚えた答え（行・区切り・帯・キャンバス）で描き手を回す。
+///
+/// **配置が読む値を足したら鍵にも足す**（足し忘れると古い字を見せる）。
+///
+/// 鍵が足りる理由: 配置から装飾までが読むのは、届いた項目・見える字の数・選択肢・押した選択肢・
+/// 強調・今の見た目・配置の入力・全文の先読みと、`ActorRender` の寿命の間変わらない字幅だけ。
+/// 項目と選択肢は消すまで増えるだけなので数で比べ、消して同じ数を書き直したときは消した回数が
+/// 進む。`\f` などで項目を増やさずに変わる今の見た目と、登録し直しで描き手を捨てずに替わる配置の
+/// 入力は値で比べる。全文の先読みは入れ直す 3 か所で `lookahead_rev` が進む。場所ごとの区間の番号は
+/// 鍵にしない——描き手を持つ場所は全消しのとき必ず消した回数が進み、箱の回数・区間・描き手は
+/// `set_box_layout` の中で一緒に捨てられるので、`clears_at` と `lookahead_rev` で足りる。
+/// スクロール・原点・`\_l` の手動の位置は飛ばす所より後で読むので鍵に入れない。
+pub(super) struct FrameMemo {
+    key: FrameKey,
+    look: TextLook,
+    /// 配置の入力の複製（外れたときだけ複製し直す）。
+    input: ResolvedBalloonText,
+    lines: Vec<PositionedLine>,
+    segments: Vec<LineChoiceSegment>,
+    bands: Vec<LineBand>,
+    canvas: ContentCanvas,
+}
+
+impl FrameMemo {
+    fn matches(&self, key: &FrameKey, look: &TextLook, input: &ResolvedBalloonText) -> bool {
+        self.key == *key && self.look == *look && self.input == *input
+    }
+
+    /// 覚えた行・区切り・帯からクリックを受ける範囲を出す（[`ChoiceRanges::hit_rows`] を通す・
+    /// 区切りと帯は貸して返す）。
+    fn hit_rows(&mut self, region: &TextRegion, mode: WritingMode) -> Vec<CanvasHitRow> {
+        let ranges = ChoiceRanges {
+            lines: &self.lines,
+            region,
+            mode,
+            segments: std::mem::take(&mut self.segments),
+            bands: std::mem::take(&mut self.bands),
+        };
+        let rows = ranges.hit_rows();
+        self.segments = ranges.segments;
+        self.bands = ranges.bands;
+        rows
+    }
 }
 
 /// 1 つの場所の行の列から出した選択肢の範囲と帯。クリックを受ける範囲は同じ値から

@@ -198,6 +198,12 @@ struct ActorRender {
     /// 作れなかった印の面の（物理寸, WUC の資源の変わった時刻）（上限越え・その寸での窓の子の作成の
     /// 失敗＝入力で答えが決まる失敗だけ）。同じなら作り直さない（`actor_present.rs` の `present_markers`）。
     markers_failed: Option<((u32, u32), Option<bevy_ecs::change_detection::Tick>)>,
+    /// 前のフレームの配置の覚え（鍵と、行・区切り・帯・キャンバス・指摘 8・`actor_present.rs` の
+    /// `FrameMemo`）。拡大率と装置の作り直しでは `ActorRender` ごと捨てるので、覚えも一緒に消える。
+    frame_memo: Option<present::FrameMemo>,
+    /// 配置から装飾までを作り直した回数（テストだけの数・指摘 8）。
+    #[cfg(test)]
+    frame_rebuilds: u32,
 }
 
 impl ActorRender {
@@ -316,6 +322,9 @@ pub struct TextLayerRuntime {
     /// 先渡しの空回しで求めた区間の全文の持ち主（[`preview_talk`](Self::preview_talk) が入れ、
     /// 合図の適用が消去と届いた数を数える）。正本ではない（届いた字の正本は `state`）。
     lookahead: TalkLookahead,
+    /// 全文の先読みを入れ直した回数（`install`・`reinstall`・`forget_boxes` を呼ぶ 3 か所で 1 つ進める・
+    /// 配置の覚えの鍵・指摘 8）。`lookahead.rs` を変えずに入れ直しを見分けるための数。
+    lookahead_rev: u64,
     /// このトークが選択待ちに入ったか（文字の線の `ChoiceWaitBegan` で真・`TalkEnded` と次のトークの
     /// 先渡しで偽）。真のときだけ押下の口 [`settle_choices_at`](Self::settle_choices_at) が場所を済ませる。
     /// トークは 1 体のゴーストで同時に 1 本なので、場所ごとでなくランタイムに 1 つ（件 1）。
@@ -379,6 +388,7 @@ impl TextLayerRuntime {
             collapsed_regions: BTreeSet::new(),
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),
+            lookahead_rev: 0,
             choice_wait_open: false,
             scrolls: HashMap::new(),
             balloon_markers: HashMap::new(),
@@ -480,6 +490,7 @@ impl TextLayerRuntime {
         let sections =
             self.lookahead
                 .install(&self.state, self.surface_resolver.as_deref(), upcoming);
+        self.lookahead_rev += 1;
         debug!(
             cues = upcoming.len(),
             sections, "先渡しを受け取った——空回しで区間の全文を求めた"
@@ -656,6 +667,14 @@ impl TextLayerRuntime {
     fn rehearse_again(&mut self) {
         self.lookahead
             .reinstall(&self.state, self.surface_resolver.as_deref());
+        self.lookahead_rev += 1;
+    }
+
+    /// その場所の描き手が配置から装飾までを作り直した回数（テストだけの読み口・指摘 8）。
+    /// 描き手が無ければ `None`。
+    #[cfg(test)]
+    pub(super) fn frame_rebuilds(&self, place: &PlaceKey) -> Option<u32> {
+        self.surfaces.get(place).map(|render| render.frame_rebuilds)
     }
 
     /// 検査用の読み口: その場所の配置の入力を引いて [`present::arrange_lines`] を呼ぶだけ

@@ -109,7 +109,7 @@
   - 矩形が変わったら作業場を埋め直し、予備を取れれば作り直し、取れなければ新しく作る形（`areka-emo-present` の 2 枚を入れ替える形）にする
   - 完了の姿: 当たりのマスクのテストがそのまま緑で、`surface.rs` の行数が増えていない
   - _Requirements: 2.1, 6.1_
-- [ ] 3.8 前のフレームと同じ入力なら配置から装飾までを飛ばす（指摘 8 の鍵と覚え）
+- [x] 3.8 前のフレームと同じ入力なら配置から装飾までを飛ばす（指摘 8 の鍵と覚え）
   - 直しに入る前に、静かな机で短い全体の計測（`tools/perf/invoke-perf-run.ps1 -Profile short`）を 1 回回し、前の値を記録に残す
   - 状態に消した回数の引き口を足し、文字の層に全文の先読みの入れ直しの数を足して、入れ直す 3 か所で進める
   - 描き手に配置の覚え（鍵＝見える字の数・項目の数・選択肢・押した選択肢・消した回数・強調・今の見た目・先読みの数・配置の入力、答え＝行・区切り・帯・キャンバス）を持たせ、鍵が同じなら覚えたキャンバスで描き手を回す。覚えの説明に「配置が読む値を足したら鍵にも足す」と、鍵が足りる理由を書く
@@ -249,3 +249,5 @@
 - 箱の解決の覚えは `TextLayerRuntime.box_resolved: BTreeMap<BoxName, ResolvedBalloonText>`（印を押す前）。登録は `stamped(&actor, memo.clone())`。design.md:342 の `stamp_inline_marker` は今の `stamped`（5.5 で直す）（3.4）。
 - 全消しの後の片付けは `TextLayerState::forget_pristine_places(keep)`。`TextLayerRuntime::apply_cue` が `ClearAll` のときだけ呼び、空回し（`advance_state` を直に呼ぶ先読み）は通らない。登録したスコープが残るのは見た目の 2 層が入っているから（外れても `place_entry` が同じ既定で作り直す）（3.5）。
 - 当たりのマスクの覚えは `surface_window_child.rs` の `HitMaskCache`。マスクの欄が無い異常の道では矩形を覚えずに戻るので、提示ごとに警告が出続けうる（装着の時に必ず欄を入れるので普通は通らない・6.1 のかけ直しで見る）（3.7）。
+- 配置の覚えは `ActorRender.frame_memo`（`actor_present.rs` の `FrameKey`／`FrameMemo`）。先読みの入れ直しの数は `TextLayerRuntime.lookahead_rev`（install・reinstall・forget_boxes で進む）。作り直しの数はテストだけの `frame_rebuilds`。前の計測は research.md 17 節（3.8）。
+- 範囲の外（完了の棚卸で起票を考える）: 直しの前の short 計測（release・HEAD `f9a8bf04`）で judge-perf が不合格。定常のアイドル CPU の平均 10.69%（上限 3.0%）、catch-up 31 件（すべて loop_ticker の系統）。この spec の直しより前からの状態（3.8）。
