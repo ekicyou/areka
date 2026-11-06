@@ -110,17 +110,13 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     let mut world = World::new();
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     let window = world.spawn_empty().id();
-    wiring
-        .presenter
-        .attach_target(
-            &mut world,
-            balloon_target(0),
-            window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    wiring.presenter.attach_target(
+        balloon_target(0),
+        window,
+        EmoWorld::build(&areka_parsers::shell::parse("")),
+        AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
+        96,
+    );
 
     // ── 実台本 → compile → `CuePlayer` → 実 `BalloonLifecycleSink` → mpsc ──
     let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");

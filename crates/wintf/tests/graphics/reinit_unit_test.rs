@@ -124,15 +124,15 @@ fn test_surface_new_and_invalidate() {
             "surface() should return Some after creation"
         );
 
-        // 無効化
-        surface.invalidate();
+        // 無効化（片づけの口）
+        surface.clear();
         assert!(
             !surface.is_valid(),
-            "Surface should be invalid after invalidate()"
+            "Surface should be invalid after clear()"
         );
         assert!(
             surface.surface().is_none(),
-            "surface() should return None after invalidate()"
+            "surface() should return None after clear()"
         );
     });
 }

@@ -5,21 +5,11 @@
 use std::num::NonZeroU64;
 
 use areka_emo_compose::{EmoWorld, PartKey};
-use log_capture_kit::{LineFormat, capture_lines};
 
 use super::{AnimationTable, LoopTrigger};
+use crate::test_support::{table_and_logs, warns};
 
-/// 動く絵と手書きの `always` を置いた検体のシェル（中身は同じフォルダの README）。
-const FIXTURE: &str =
-    include_str!("../../areka-emo-compose/tests/fixtures/animated-playback/shell/surfaces.txt");
-
-/// 本文から表を組み、同じ走行の `tracing` 出力を 1 イベント 1 行で添えて返す。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
+use crate::test_support::ANIMATED_PLAYBACK_SHELL as FIXTURE;
 
 /// 間隔の語 1 つだけを差し替えた面 0（待ち 0・50・30）。
 fn surface0_with(interval: &str) -> String {
@@ -33,10 +23,6 @@ fn surface0_with(interval: &str) -> String {
 
 fn period(ms: u64) -> NonZeroU64 {
     NonZeroU64::new(ms).expect("正")
-}
-
-fn warns(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
 /// `always` の単独（小文字の完全一致）だけを、回数なし・周期＝待ちの合計で採る。コマは pattern の
@@ -67,7 +53,7 @@ fn exact_always_is_adopted_with_period_and_no_laps() {
     assert_eq!(table.part_animations(PartKey::Surface(0)), anims);
 }
 
-/// 組み合わせ・大文字・ほかの語は今までどおり採らず、元の綴りつきの `debug!` を残す（要件 4.8・4.9）。
+/// 組み合わせ・大文字・ほかの語は採らず、元の綴りつきの `debug!` を残す（要件 4.8・4.9）。
 /// `never` は呼ばれるだけとして採る（spec: seriko-pattern-calls 要件 11.1・`table_calls_tests.rs`）。
 #[test]
 fn combinations_and_other_words_keep_the_debug_arm() {
@@ -104,9 +90,9 @@ fn zero_total_always_is_not_adopted_and_warns_once() {
     assert!(w[0].contains("待ち時間の合計が 0"), "理由が載る: {}", w[0]);
 }
 
-/// コマが空の `always` は今までの空の検査（`warn!`）に落ち、合計 0 の `warn!` は重ねない。
+/// コマが空の `always` は空の検査（`warn!`）に落ち、合計 0 の `warn!` は重ねない。
 #[test]
-fn empty_always_keeps_the_existing_empty_warn() {
+fn empty_always_falls_to_the_empty_warn() {
     let (table, logs) = table_and_logs("surface7\n{\nanimation2.interval,always\n}\n");
     assert!(table.is_empty());
     let w = warns(&logs);
@@ -116,7 +102,7 @@ fn empty_always_keeps_the_existing_empty_warn() {
 
 /// 門 `is_continuous()`: 一番上の `random` だけの表は偽、`always` を 1 本採れば真。
 #[test]
-fn is_continuous_is_true_only_when_always_or_animated_parts_exist() {
+fn random_only_is_not_continuous_always_is() {
     let (random_only, _) = table_and_logs(&surface0_with("random,2"));
     assert!(!random_only.has_animated_parts());
     assert!(!random_only.is_continuous());
@@ -159,10 +145,10 @@ fn fixture_table_carries_hand_written_always() {
     assert!(w[0].contains("surface_id=10") && w[0].contains("animation_id=0"));
 }
 
-/// 実物の emo2 の表: `always` を持たず、門 `is_continuous()` は今の門
-/// （`has_animated_parts` ＝ 2110／2210 が自分のアニメーションを持つので真）と同じ値。
+/// 実物の emo2 の表: `always` を持たず、門 `is_continuous()` は `has_animated_parts`
+/// （2110／2210 が自分のアニメーションを持つので真）と同じ値。
 #[test]
-fn emo2_table_is_continuous_equals_current_gate() {
+fn emo2_table_is_continuous_through_animated_parts() {
     let path = crate::sample_test_support::emo2_root()
         .join("shell")
         .join("master")
@@ -171,7 +157,10 @@ fn emo2_table_is_continuous_equals_current_gate() {
     let world = EmoWorld::build(&areka_parsers::shell::parse(&content));
     let table = AnimationTable::from_world(&world);
 
-    assert!(table.has_animated_parts(), "本 spec の前と同じ（真）");
+    assert!(
+        table.has_animated_parts(),
+        "2110／2210 が自分のアニメーションを持つ"
+    );
     assert_eq!(table.is_continuous(), table.has_animated_parts());
     for id in world.surface_ids() {
         assert!(

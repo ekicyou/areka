@@ -1,21 +1,15 @@
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
-use areka_parsers::shell::{Animation, AppendTarget, DrawMethod, Interval, Pattern, Surface};
 
+use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{Arrangement, GraphicsCommandList};
 
 use super::test_support::{
-    build_target_assets, elem, make_world_with_gpu, native_golden, native_golden_with,
-    pattern_overlay_at, set_window_dpi, shell_of, show_ok, spawn_window_with_dpi, surface,
+    arrangement_of, bake_world, bind_overlay_surface, build_target_assets, elem, gradient,
+    gradient_with_alpha, make_world_with_gpu, mask_bit_counts, mask_dims, mount_entities,
+    native_golden, native_golden_with, pattern_overlay_at, set_window_dpi, shell_of, show_ok,
+    show_with_ok, solid, spawn_window_with_dpi, surface,
 };
 
 // ── task 6.3: 端数 k（5/4）の表示の作り方・αマスクの由来・縮小方向の自動追従 ───────────────
@@ -30,37 +24,6 @@ use super::test_support::{
 // 絵・マスク・表示記録は据え置かれる」の形になる。k≠1 の画素そのものは GPU 補間の出力ゆえ
 // 決定論 golden に取らない（要件 6.6・見た目は実機 2 水準サインオフが担う）。
 
-/// target の surface entity（表示器＝visual/αマスク/bounds の宿主）を取り出す。
-fn surface_entity_of(presenter: &EmoPresenter, target: TargetId) -> Entity {
-    presenter
-        .targets
-        .get(&target)
-        .and_then(|t| t.mount.as_ref())
-        .expect("表示成立後は mount が生成済み")
-        .surface_entity()
-}
-
-/// surface entity に供給済みの αマスク寸（未供給なら `None`）。
-fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
-}
-
-/// surface entity の `Arrangement` を `(寸, 係数)` で読む（**論理寸＝原寸・係数＝拡大率 k**）。
-///
-/// 物理寸そのもの（`GlobalArrangement.bounds`）は wintf の伝播段（`PostLayout`）が導くので、
-/// 本ファイルのテストは走らせない。丸めの一致は `display_tests.rs` の T-N3 が表で固定する。
-fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f32)) {
-    let arr = world
-        .get::<Arrangement>(surface_entity)
-        .expect("surface entity に Arrangement が無い");
-    (
-        (arr.size.width as u32, arr.size.height as u32),
-        (arr.scale.x, arr.scale.y),
-    )
-}
-
 /// surface 1000 ＝ **α が画素ごとに変わる** `w×h` element の `(EmoWorld, AtlasTable)`。
 ///
 /// α は市松に `0xFF`（マスク hit）と `0x20`（閾値 128 未満＝非 hit）を置く。**α=0 を含まない**ため
@@ -70,40 +33,17 @@ fn arrangement_of(world: &World, surface_entity: Entity) -> ((u32, u32), (f32, f
 /// 全不透明の `build_target_assets` では αマスクが**全ビット 1 の一様マスク**になり、
 /// 「マスク内容が表示に渡した原寸バイト由来か」の検査が空虚になる（寸法しか弁別できない）。
 fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![surface(1000, vec![elem("p.png", 0, 0)])];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let a: u8 = if (x + y) % 2 == 0 { 0xFF } else { 0x20 };
-            let pm = |c: u8| ((c as u16 * a as u16) / 255) as u8;
-            img.push(pm((x as u8).wrapping_mul(3).wrapping_add(salt)));
-            img.push(pm((y as u8).wrapping_mul(5).wrapping_add(salt)));
-            img.push(pm(((x + y) as u8).wrapping_mul(7).wrapping_add(salt)));
-            img.push(a);
+    let checker = |x: u32, y: u32| {
+        if (x + y).is_multiple_of(2) {
+            0xFF
+        } else {
+            0x20
         }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
     };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![surface(1000, vec![elem("p.png", 0, 0)])]),
+        vec![("p.png", w, h, gradient_with_alpha(w, h, salt, checker))],
+    )
 }
 
 /// タスク 6.3 の名指し受け入れ基準・要件 2.1/2.5/3.1/3.2 観測完了（**端数を伴う k=5/4 の表示の
@@ -123,32 +63,24 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 120);
 
-    let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x71);
-    // 同一入力を独立に再現して原寸 golden を作る（presenter の内部値の追認ではない）。
-    let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x71);
+    // golden は presenter へ渡す前に同じ入力から合成したもの（presenter の内部値の追認ではない）。
+    let (emo_world, atlas, golden) = build_target_assets(6, 5, 0x71);
+    let native_size = (6, 5);
     let k54 = ScaleRatio::new(5, 4).unwrap();
-    let (golden, native_size) = native_golden(&probe_world, &probe_atlas, 1000);
-    assert_eq!(native_size, (6, 5), "fixture の native 原寸");
     let physical = k54.scaled_extent(6, 5);
     assert_eq!(
         physical,
         (8, 6),
         "6×5/4=7.5→8・5×5/4=6.25→6（両軸とも端数・切り捨て実装なら 7×6 になる）"
     );
-    assert_ne!(
-        physical, native_size,
-        "前提: k≠1 ゆえ原寸と物理寸は弁別可能"
-    );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // (a) 配置＝原寸の寸 × 端数を伴う係数（拡大は wintf の変換行列が掛ける）。
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     assert_eq!(
         arrangement_of(&world, surface_entity),
         (native_size, (1.25, 1.25)),
@@ -172,11 +104,6 @@ fn show_surface_keeps_native_display_and_mask_and_scales_layout_at_k_five_quarte
         mask_dims(&world, surface_entity),
         Some(native_size),
         "αマスク寸が原寸でない（k 倍バイト由来のマスクを載せている）"
-    );
-    assert_ne!(
-        mask_dims(&world, surface_entity),
-        Some(physical),
-        "前提: k≠1 ゆえ原寸と物理寸は弁別可能（マスクが物理寸なら旧 canon）"
     );
 
     // (d)(e) 照会契約・窓寸 reconcile 要求は丸め権威の物理寸。
@@ -238,26 +165,14 @@ fn alpha_mask_bits_come_from_native_bytes() {
         native_size.0 * 4,
     );
     // 非空虚性の前提: hit と非 hit が両方在る（全ビット 1 のマスクでは内容比較が空虚になる）。
-    let mut hits = 0usize;
-    let mut misses = 0usize;
-    for y in 0..native_size.1 {
-        for x in 0..native_size.0 {
-            if expected.is_hit(x, y) {
-                hits += 1;
-            } else {
-                misses += 1;
-            }
-        }
-    }
+    let (hits, misses) = mask_bit_counts(&expected);
     assert!(
         hits > 0 && misses > 0,
         "fixture 前提が崩れた: 期待マスクが一様（hit={hits} miss={misses}）＝内容比較が空虚"
     );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // 前提: 表示に渡ったバイトが原寸 golden そのもの（マスクの由来と同一の bytes）。
@@ -267,22 +182,17 @@ fn alpha_mask_bits_come_from_native_bytes() {
         "読み戻しが原寸の合成バイトと一致しない"
     );
 
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     let mask_res = world
         .get::<AlphaMaskResource>(surface_entity)
         .expect("surface entity に AlphaMaskResource が無い");
     let mask = mask_res.mask().expect("表示成立後は αマスクが供給済み");
 
-    // (a) 寸法は native 原寸。物理寸（10×8）と弁別できる。
+    // (a) 寸法は native 原寸（物理寸は 10×8）。
     assert_eq!(
         (mask.width(), mask.height()),
         native_size,
         "αマスク寸が原寸でない"
-    );
-    assert_ne!(
-        (mask.width(), mask.height()),
-        physical,
-        "αマスクが k 適用後の物理寸で作られている（旧 canon）"
     );
 
     // (b) 全ビット一致（別解像度のバイト由来・引き伸ばし／縮めをここで弾く）。
@@ -316,9 +226,9 @@ fn alpha_mask_bits_come_from_native_bytes() {
 ///
 /// # 既存 `refresh_scale_after_dpi_change_reapplies_new_k` との差
 ///
-/// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** のみで、観測は戻り値・照会値・読み戻しに閉じている。
-/// 本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**、(3) `refresh_scale` 経由でも
-/// **配置の係数が追従し、かつマスクと表示記録が作り直されないこと**——を足す。
+/// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** で、配置の係数の追従と表示記録の据え置きもそこで
+/// 見ている。本テストは (1) **縮小方向**、(2) **端数を伴う遷移先 k**、(3) **αマスクの寸が原寸の
+/// まま**であること——を足す。
 ///
 /// 係数の更新を落とす変異（`set_layout` を再表示経路で呼ばない）は本テストが落とす——初回表示では
 /// `VisualMount::attach` が配置を組むため、`set_layout` が load-bearing なのは再表示経路だけである。
@@ -326,12 +236,10 @@ fn alpha_mask_bits_come_from_native_bytes() {
 fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 192);
-    let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x73);
-    let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x73);
+    let (emo_world, atlas, golden) = build_target_assets(6, 5, 0x73);
+    let native_size = (6, 5);
     let k2 = ScaleRatio::new(2, 1).unwrap();
     let k54 = ScaleRatio::new(5, 4).unwrap();
-    let (golden, native_size) = native_golden(&probe_world, &probe_atlas, 1000);
-    assert_eq!(native_size, (6, 5));
     let grown = k2.scaled_extent(6, 5);
     let shrunk = k54.scaled_extent(6, 5);
     assert_eq!(grown, (12, 10), "前提: k=2/1 の物理寸");
@@ -340,18 +248,12 @@ fn refresh_scale_to_smaller_k_changes_only_the_scale_factor() {
         (8, 6),
         "前提: k=5/4 の物理寸（両軸とも端数・遷移先が遷移元より小さい）"
     );
-    assert!(
-        shrunk.0 < grown.0 && shrunk.1 < grown.1,
-        "前提: 縮小方向の遷移"
-    );
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     assert_eq!(
         arrangement_of(&world, surface_entity),
         (native_size, (2.0, 2.0)),
@@ -448,87 +350,22 @@ const LAYERED_PART_SIZE: (u32, u32) = (6, 4);
 /// 両 part とも base 内（`(2,3)+(6,4)=(8,7)`・`(5,5)+(6,4)=(11,9)` ≤ `(16,12)`）
 /// ゆえ合成外形は base の `w×h` のまま——外形変化ではなく**中身の相対配置**だけを観測できる。
 fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
     let (pw, ph) = LAYERED_PART_SIZE;
-    let base_surface = Surface {
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![elem("p.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: vec![Animation {
-            id: 2000,
-            interval: Interval::Bind,
-            interval_written: true,
-            patterns: vec![Pattern {
-                index: 0,
-                method: DrawMethod::new("overlay".to_string()),
-                surface_id: 5000,
-                target: "5000".into(),
-                wait: 0,
-                x: LAYERED_BIND_AT.0,
-                y: LAYERED_BIND_AT.1,
-            }],
-        }],
-    };
-    let surfaces = vec![
-        base_surface,
-        surface(5000, vec![elem("q.png", 0, 0)]),
-        surface(6000, vec![elem("r.png", 0, 0)]),
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.extend_from_slice(&[b, g, r, 0xFF]);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
+    let base_surface = bind_overlay_surface(LAYERED_BIND_AT.0, LAYERED_BIND_AT.1);
     // 2 part は単色不透明で互いに異色（重なり順と相対配置を画素で弁別できる）。α=255 ゆえ
     // premultiplied 不変条件は自明に成立する。
-    let solid = |bgr: [u8; 3]| {
-        let mut v = Vec::with_capacity((pw * ph * 4) as usize);
-        for _ in 0..(pw * ph) {
-            v.extend_from_slice(&[bgr[0], bgr[1], bgr[2], 0xFF]);
-        }
-        v
-    };
-    dec.insert(
-        base.join("q.png"),
-        pw,
-        ph,
-        pw * 4,
-        solid([0x11, 0x99, 0x22]),
-        true,
-    );
-    dec.insert(
-        base.join("r.png"),
-        pw,
-        ph,
-        pw * 4,
-        solid([0xEE, 0x33, 0xCC]),
-        true,
-    );
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
+    bake_world(
+        shell_of(vec![
+            base_surface,
+            surface(5000, vec![elem("q.png", 0, 0)]),
+            surface(6000, vec![elem("r.png", 0, 0)]),
+        ]),
+        vec![
+            ("p.png", w, h, gradient(w, h, salt)),
+            ("q.png", pw, ph, solid(pw, ph, [0x11, 0x99, 0x22])),
+            ("r.png", pw, ph, solid(pw, ph, [0xEE, 0x33, 0xCC])),
+        ],
+    )
 }
 
 /// 要件 2.3 観測完了（**多層コンテンツの単一 k**・k=3/2）: ベース surface ＋ mayuna 着せ替え相当の
@@ -557,7 +394,7 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
 #[test]
 fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     let mut world = make_world_with_gpu();
-    // 窓 DPI 144 / author_dpi 96 → k=3/2（150%・実機水準・両軸とも端数を伴う倍率）。
+    // 窓 DPI 144 / author_dpi 96 → k=3/2（150%・実機水準）。
     let window = spawn_window_with_dpi(&mut world, 144);
     let k32 = ScaleRatio::new(3, 2).unwrap();
 
@@ -576,10 +413,6 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     );
     let physical = k32.scaled_extent(16, 12);
     assert_eq!(physical, (24, 18), "丸め権威が返す k=3/2 の物理寸");
-    assert_ne!(
-        physical, native_size,
-        "前提: k≠1 ゆえ原寸と物理寸は弁別可能"
-    );
 
     // 前提（層の非空虚性）: 3 層の golden は「層なし」「bind のみ」「pattern のみ」と全て区別できる。
     // ここが縮退すると、presenter が層を握り潰しても (b) がすり抜けてしまう。
@@ -619,38 +452,25 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     }
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with_ok(
+        &mut presenter,
         &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: binds.clone(),
-            pattern: pattern.clone(),
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "3 層 ShowSurface（k=3/2）が Ok でない"
+        TargetId(0),
+        1000,
+        binds.clone(),
+        pattern.clone(),
     );
 
     // (a) 配置＝原寸の寸 × **1 対の**係数。x と y に別々の倍率が入る余地が無いことを明示する。
-    let surface_entity = surface_entity_of(&presenter, TargetId(0));
+    let surface_entity = mount_entities(&presenter, TargetId(0)).0;
     let (arr_size, arr_scale) = arrangement_of(&world, surface_entity);
     assert_eq!(arr_size, native_size, "配置の寸は 3 層合成の原寸");
     assert_eq!(
         arr_scale,
         (1.5, 1.5),
         "配置の係数が k（3/2）の 1 対になっていない"
-    );
-    assert_eq!(
-        arr_scale.0, arr_scale.1,
-        "単一の拡大率＝x と y が同一の係数（層ごと・軸ごとに別の倍率が入っていない）"
     );
     assert_eq!(
         presenter.target_physical_size(TargetId(0)),

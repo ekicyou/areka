@@ -109,12 +109,25 @@ pub fn draw_bitmap_sources(
             Option<&GraphicsCommandList>,
             Option<&Name>,
         ),
-        Or<(Changed<BitmapSourceResource>, Changed<Arrangement>)>,
+        // 命令の列が無い（立ち直りで外された）ときも描き直す
+        Or<(
+            Changed<BitmapSourceResource>,
+            Changed<Arrangement>,
+            Without<GraphicsCommandList>,
+        )>,
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
     let Some(graphics_core) = graphics_core else {
         warn!("GraphicsCore not available, skipping draw_bitmap_sources");
+        return;
+    };
+    if query.is_empty() {
+        return;
+    }
+    // グローバル共有DeviceContextを取得（無ければ部品ごとでなく 1 回だけ記録）
+    let Some(dc) = graphics_core.device_context() else {
+        warn!("DeviceContext not available, skipping draw_bitmap_sources");
         return;
     };
 
@@ -129,14 +142,6 @@ pub fn draw_bitmap_sources(
 
         // D2D Bitmap生成（未生成または無効化されている場合）
         if !graphics.is_valid() {
-            let dc = match graphics_core.device_context() {
-                Some(dc) => dc,
-                None => {
-                    warn!(entity = %entity_name, "DeviceContext not available");
-                    continue;
-                }
-            };
-
             match create_d2d_bitmap(dc, resource.source()) {
                 Ok(bitmap) => {
                     graphics.set_bitmap(bitmap);
@@ -153,11 +158,6 @@ pub fn draw_bitmap_sources(
         }
 
         // GraphicsCommandList生成
-        let dc = match graphics_core.device_context() {
-            Some(dc) => dc,
-            None => continue,
-        };
-
         let command_list = match unsafe { dc.CreateCommandList() } {
             Ok(cl) => cl,
             Err(e) => {

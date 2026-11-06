@@ -1,4 +1,7 @@
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "`wintf-visual-tree` が本番へ上げるまで使い手が無い"
+)]
 
 use crate::numerics::*;
 use bevy_ecs::prelude::*;

@@ -11,8 +11,6 @@ mod graphics_auto_creation_test;
 mod hierarchy_reparent_gap_test;
 #[path = "visual/hierarchy_sync_test.rs"]
 mod hierarchy_sync_test;
-#[path = "visual/insert_visual_test.rs"]
-mod insert_visual_test;
 #[path = "visual/parent_visual_test.rs"]
 mod parent_visual_test;
 #[path = "visual/property_sync_test.rs"]
@@ -23,3 +21,5 @@ mod remove_visual_api_test;
 mod resource_management_gap_test;
 #[path = "visual/widget_visual_auto_insert_test.rs"]
 mod widget_visual_auto_insert_test;
+#[path = "visual/window_join_test.rs"]
+mod window_join_test;

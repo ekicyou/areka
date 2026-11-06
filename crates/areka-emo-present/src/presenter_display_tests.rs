@@ -1,189 +1,13 @@
 use super::*;
 
-use std::path::Path;
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
 use areka_emo_compose::BindSet;
 
 use wintf::ecs::{GraphicsCommandList, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    build_target_assets, elem, make_world_with_gpu, shell_of, show_ok, spawn_window_with_dpi,
-    surface,
+    INFO_LINE_MESSAGE, build_assets_with_valid_and_empty, build_target_assets, capture, hide_ok,
+    make_world_with_gpu, mask_dims, mount_entities, show_ok, show_with, spawn_window_with_dpi,
 };
-
-/// R2.4/R3.2/R8.2 観測完了（golden 一致）: `attach_target` → `apply(ShowSurface 有効 id)` で reply が
-/// `Ok(())`、かつ `read_back` が同一入力の直接合成 golden と**全バイト一致**する。
-///
-/// `read_back` は合成メモの原寸バイトを返すため、`ComposedSurface.bytes()` とのバイト一致は
-/// GPU を経由しない配線検査として決定論的に成立する（供給の成功経路は T-G1 が引き継ぐ）。
-#[test]
-fn golden_match_read_back_equals_direct_compose() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-
-    let (emo_world, atlas, golden) = build_target_assets(3, 2, 0x11);
-    assert!(
-        golden.iter().any(|&b| b != 0),
-        "golden は非退化（全 0 でない）"
-    );
-
-    let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
-
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-
-    let outcome = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（ShowSurface）を受信できない");
-    assert!(
-        matches!(outcome, Ok(())),
-        "有効 id の ShowSurface は Ok を返す: {outcome:?}"
-    );
-
-    let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
-    assert_eq!(
-        rb, golden,
-        "readback が直接合成 golden とバイト一致しない（合成メモの原寸バイト列が壊れている）"
-    );
-}
-
-/// R3.4 観測完了（表示不変）: 有効 id で表示を確立後、**解決不能 id** の `ShowSurface` は reply が
-/// `Err(Compose(SurfaceNotFound))` で、`read_back` バイトは**適用前と不変**（表示を乱さない）。
-#[test]
-fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
-    let mut world = make_world_with_gpu();
-    let window = spawn_window_with_dpi(&mut world, 96);
-
-    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5A);
-
-    let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
-
-    // まず有効 id で表示を確立（表示記録の生成＋表示バイト確定）。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
-    let before = presenter
-        .read_back(TargetId(0))
-        .expect("read_back（前）失敗");
-
-    // 解決不能 id: error! ＋ 表示不変 ＋ reply Err（R3.4）。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 9999,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
-    );
-    let outcome = rx1
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（無効 id）を受信できない");
-    assert!(
-        matches!(
-            outcome,
-            Err(PresentError::Compose(ComposeError::SurfaceNotFound(9999)))
-        ),
-        "無効 id は Err(Compose(SurfaceNotFound(9999))) を返す: {outcome:?}"
-    );
-
-    let after = presenter
-        .read_back(TargetId(0))
-        .expect("read_back（後）失敗");
-    assert_eq!(
-        before, after,
-        "無効 id の適用で表示中バイトが変化した（表示不変の不変条件を破っている）"
-    );
-}
-
-/// 有効 surface 1000（`w×h` 全不透明 element）＋ 定義層皆無で外形 0×0 に退化する surface 7000
-/// （element/animation ゼロ）を**同一 target**へ載せる `(EmoWorld, AtlasTable)` を返す。
-///
-/// surface 7000 は composer_tests.rs の `no_layers_degenerate_propagates_empty_composition`
-/// と同型の構成（bind 済み world に存在するが合成外形 0×0）で、`Composer::compose` が
-/// `Err(ComposeError::EmptyComposition(7000))` を返す。単なる全透明 element は非ゼロ外形の
-/// `Ok`（`all_transparent_surface_is_ok_transparent_nonzero_extent`）で EmptyComposition では
-/// ないため、退化は「定義層皆無 → 0×0」の経路で作る。
-pub(super) fn build_assets_with_valid_and_empty(
-    w: u32,
-    h: u32,
-    salt: u8,
-) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    // surface 1000: 全不透明 element 1 本。surface 7000: element/animation ゼロ（定義層皆無）。
-    let surfaces = vec![
-        surface(1000, vec![elem("p.png", 0, 0)]),
-        surface(7000, Vec::new()),
-    ];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            let a: u8 = 0xFF;
-            let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-            let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-            let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-            img.push(b);
-            img.push(g);
-            img.push(r);
-            img.push(a);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
 
 /// R3.4 観測完了（skip＋表示不変の回帰檻）: 有効 id で表示・マスクを確立後、**解決不能 id** の
 /// `ShowSurface` は reply が `Err(Compose(SurfaceNotFound))`、かつ (a) `read_back` バイトと
@@ -191,8 +15,7 @@ pub(super) fn build_assets_with_valid_and_empty(
 /// (b) surface entity の `HitTest`（`AlphaMask`）、(c) `AlphaMaskResource`（設定済みマスク）の
 /// いずれも**適用前と不変**（表示＋マスクを一切乱さない）。
 ///
-/// 4.1 の `invalid_surface_id_replies_err_and_leaves_display_unchanged` はバイト不変のみを見るが、
-/// 本テストは「skip＝表示器（visual/mask/hit-test）を触らない」を独立・自己完結に固定する。
+/// 「skip＝表示器（visual/mask/hit-test）を触らない」を独立・自己完結に固定する。
 #[test]
 fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let mut world = make_world_with_gpu();
@@ -201,34 +24,13 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x37);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 有効 id で表示・マスク・hit-test を確立。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // 表示器の適用前状態を捕捉（bytes ＋ HitTest ＋ mask 寸法/有無）。
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("有効表示後は mount が生成済み")
-        .surface_entity();
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
 
     let bytes_before = presenter
         .read_back(TargetId(0))
@@ -253,9 +55,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         HitTestMode::AlphaMask,
         "有効表示後は αマスク判定"
     );
-    let mask_dims_before = world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())));
+    let mask_dims_before = mask_dims(&world, surface_entity);
     assert!(
         mask_dims_before.is_some(),
         "有効表示後は AlphaMask が供給済み"
@@ -266,20 +66,14 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     );
 
     // 解決不能 id: error! ＋ skip（表示器不触）＋ reply Err（R3.4）。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    let outcome = show_with(
+        &mut presenter,
         &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 4242,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
+        TargetId(0),
+        4242,
+        BindSet::default(),
+        PatternState::default(),
     );
-    let outcome = rx1
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（無効 id）を受信できない");
     assert!(
         matches!(
             outcome,
@@ -309,9 +103,7 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         "無効 id の skip で HitTest が変化した（マスク/当たり判定を乱している）"
     );
     // (c) AlphaMaskResource 不変（供給済みマスクが消えていない）。
-    let mask_dims_after = world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())));
+    let mask_dims_after = mask_dims(&world, surface_entity);
     assert_eq!(
         mask_dims_before, mask_dims_after,
         "無効 id の skip で AlphaMaskResource が変化した（マスクを乱している）"
@@ -354,32 +146,11 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     }
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 有効 1000 で mount と表示記録を確立し可視化。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("有効表示後は mount が生成済み")
-        .surface_entity();
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
         "有効表示後は可視"
@@ -388,22 +159,17 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         .read_back(TargetId(0))
         .expect("read_back（前）失敗")
         .len();
+    let display_before = world.get::<GraphicsCommandList>(surface_entity).cloned();
 
     // EmptyComposition 退化: warn! ＋ Hide 縮退 ＋ reply Ok（skip でも Err でもない）。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    let outcome = show_with(
+        &mut presenter,
         &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 7000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
+        TargetId(0),
+        7000,
+        BindSet::default(),
+        PatternState::default(),
     );
-    let outcome = rx1
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（EmptyComposition）を受信できない");
     assert!(
         matches!(outcome, Ok(())),
         "EmptyComposition は Hide 縮退＋reply Ok（Err ではない）: {outcome:?}"
@@ -433,6 +199,11 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
         bytes_len_before, bytes_len_after,
         "EmptyComposition で 0×0 のメモへ差し替わった（既存メモ保持の不変条件違反）"
     );
+    assert_eq!(
+        world.get::<GraphicsCommandList>(surface_entity).cloned(),
+        display_before,
+        "EmptyComposition で表示記録が差し替わった（既存の表示記録保持の不変条件違反）"
+    );
     // 7000 は非合成ゆえキャッシュへ載らない（0×0 を挿入しない）。
     assert!(
         presenter
@@ -457,32 +228,11 @@ fn hide_then_reshow_recovers_display_from_cache() {
     let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x4D);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 初回表示（可視・αマスク判定確立）。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "初回 ShowSurface が Ok でない"
-    );
-    let surface_entity = presenter
-        .targets
-        .get(&TargetId(0))
-        .and_then(|t| t.mount.as_ref())
-        .expect("初回表示後は mount が生成済み")
-        .surface_entity();
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
     let bytes_shown = presenter
         .read_back(TargetId(0))
         .expect("read_back（初回）失敗");
@@ -493,18 +243,7 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
 
     // Hide: 不可視 ＋ HitTest::none() ＋ 装着・表示記録・メモ保持。
-    let (txh, rxh) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::Hide {
-            target: TargetId(0),
-            reply: Some(txh),
-        },
-    );
-    assert!(
-        matches!(rxh.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
+    hide_ok(&mut presenter, &mut world, TargetId(0));
     assert!(
         !world.get::<Visual>(surface_entity).unwrap().is_visible,
         "Hide 後は Visual 不可視"
@@ -537,20 +276,16 @@ fn hide_then_reshow_recovers_display_from_cache() {
     }
 
     // 再 ShowSurface（同一有効 id）: キャッシュヒットで再合成せず表示復帰。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
-    );
-    assert!(
-        matches!(rx1.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "再 ShowSurface が Ok でない"
+    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
+    let hits: Vec<_> = events
+        .iter()
+        .filter(|e| e.message() == INFO_LINE_MESSAGE)
+        .map(|e| e.field("cache_hit"))
+        .collect();
+    assert_eq!(
+        hits,
+        vec![Some("true")],
+        "再表示は表示の行 1 行・控えに当たる（Hide の後に合成し直していない）"
     );
 
     // 表示復帰: 可視 ＋ αマスク判定へ戻る。
@@ -596,9 +331,7 @@ fn text_slot_view_is_none_before_display_established() {
         "未登録 target の text_slot_view は None"
     );
 
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 登録済みでも初回 ShowSurface 前（mount 未生成）は空（design: mount は遅延生成・R9.2）。
     assert!(
         presenter.text_slot_view(TargetId(0)).is_none(),
@@ -609,7 +342,7 @@ fn text_slot_view_is_none_before_display_established() {
 /// R9.1/9.2 観測完了（表示確立後の正値）: 有効 `ShowSurface` で表示確立後、`text_slot_view` が
 /// `Some` を返し、(a) `slot()` ＝ mount の予約スロット（`Name("emo-text-layer-slot")` を持つ）、
 /// (b) `window()` ＝ 装着先窓 Entity、(c) `surface_size()` ＝ バルーン/シェル surface の物理 px 原寸、
-/// (d) `scale()` ＝ 現行の物理 1:1 表示契約の恒常値 1.0、をすべて満たす。
+/// (d) `scale()` ＝ この入力（窓 DPI 96・author_dpi 96）での 1.0、をすべて満たす。
 #[test]
 fn text_slot_view_returns_slot_window_size_scale_after_display() {
     let mut world = make_world_with_gpu();
@@ -618,25 +351,9 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x77);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     let view = presenter
         .text_slot_view(TargetId(0))
@@ -698,9 +415,9 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
 ///
 /// # 「引き当てで済む」の観測形
 ///
-/// `apply_show` が `cache_hit` を決めるのは `cache.get(surface_id, &binds, &pattern, k)` ちょうど
-/// その呼び出しであり、k は窓 DPI と政策から導出される（本檻では窓 DPI 不変ゆえ `applied` と同一）。
-/// よって同じ引数での `get` が `Some` であることは「次の同一入力の適用が引き当てで済む」ことと同値である。
+/// `apply_show` が `cache_hit` を決めるのは `target.cache.touch(surface_id, &binds, &pattern)` で
+/// ある（鍵に k は入らない）。`touch` と `get` は同じ `position` で引くので、同じ引数での `get` が
+/// `Some` であることは「次の同一入力の適用が引き当てで済む」ことと同値である。
 #[test]
 fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits() {
     let mut world = make_world_with_gpu();
@@ -709,26 +426,10 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
     let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x6C);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 有効 id でスロットを埋める（表示成立＝表示バッファとマスクの原子対が入る）。
-    let (tx0, rx0) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx0),
-        },
-    );
-    assert!(
-        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提の有効 ShowSurface が Ok でない"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
     // 適用前のスロットの中身を控える（バイトとマスク寸＝原子対の両側）。
     let (bytes_before, mask_dims_before) = {
@@ -753,23 +454,17 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         .expect("read_back（前）失敗");
 
     // 合成失敗（解決不能 id）: error! ＋ 表示不変 ＋ reply Err（R3.4）。
-    let (tx1, rx1) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 9999,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx1),
-        },
-    );
     assert!(
         matches!(
-            rx1.recv_timeout(Duration::from_secs(10)),
-            Ok(Err(PresentError::Compose(ComposeError::SurfaceNotFound(
-                9999
-            ))))
+            show_with(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                9999,
+                BindSet::default(),
+                PatternState::default()
+            ),
+            Err(PresentError::Compose(ComposeError::SurfaceNotFound(9999)))
         ),
         "前提: 解決不能 id は Err(Compose(SurfaceNotFound(9999)))"
     );
@@ -782,7 +477,9 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
         .cache
         .get(1000, &BindSet::default(), &PatternState::default());
     let entry = entry.expect(
-        "合成失敗でキャッシュスロットが空になった＝`take_recycled` が合成の成否判定より手前に         置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は         引き当てに失敗して毎回再合成へ落ちる",
+        "合成失敗でキャッシュスロットが空になった＝`take_recycled` が合成の成否判定より手前に\
+         置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は\
+         引き当てに失敗して毎回再合成へ落ちる",
     );
     // 中身も適用前のまま（対の片側だけ差し替わっていない）。
     assert_eq!(
@@ -797,21 +494,7 @@ fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits()
     );
 
     // 直後の同一入力の適用は成立し、表示も適用前と全バイト一致する。
-    let (tx2, rx2) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx2),
-        },
-    );
-    assert!(
-        matches!(rx2.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "合成失敗の直後でも同一入力の適用は成立する"
-    );
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(
         display_before,
         presenter
@@ -838,9 +521,7 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x2A);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
 
     // 1 回目＝外れ（記録が作られる）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
@@ -872,5 +553,40 @@ fn a_cache_miss_records_a_display_list_into_the_entry() {
     assert_eq!(
         entry.display, recorded,
         "ヒットの回に表示記録が作り直されている（記録経路が外れ経路の外に居る）"
+    );
+}
+
+/// 面の entity から当たりのマスクの資源が外れていると、同じ面の再表示は黙らず `warn!` を 1 件だけ
+/// 残す（当たり判定が矩形か前の状態のまま＝記録の無い失敗の道にしない・`audit-emo-present` 指摘 18）。
+#[test]
+fn reshow_without_alpha_mask_resource_leaves_one_warn() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x18);
+    let mut presenter = EmoPresenter::new();
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
+
+    show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+    let (surface_entity, _) = mount_entities(&presenter, TargetId(0));
+    assert!(
+        world
+            .entity_mut(surface_entity)
+            .take::<AlphaMaskResource>()
+            .is_some(),
+        "前提: 1 回目の表示の後は面の entity にマスクの資源が在る"
+    );
+
+    let ((), events) = capture(|| show_ok(&mut presenter, &mut world, TargetId(0), 1000));
+    let warns = events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN
+                && e.message()
+                    .contains("surface entity に AlphaMaskResource が無い")
+        })
+        .count();
+    assert_eq!(
+        warns, 1,
+        "マスクの資源が無い再表示の warn! の件数: {events:?}"
     );
 }

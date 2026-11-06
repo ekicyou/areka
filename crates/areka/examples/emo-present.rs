@@ -109,7 +109,7 @@
 //! # UI スレッド適用（R7.2・design「M-boot は example が直接 apply を呼ぶ」）
 //!
 //! `EmoPresenter` は COM/GPU 資源を内包する `!Send`（NonSend）で、`attach_target`/`apply` は
-//! UI スレッド（NonSend 到達可能スレッド）から `&mut World` で呼ぶ。窓生成・アセット構築・presenter
+//! UI スレッド（NonSend 到達可能スレッド）から呼ぶ（`&mut World` を要するのは `apply` だけ）。窓生成・アセット構築・presenter
 //! 生成は起動時コマンド（`CommandSender` 経由・UI スレッドで適用）で一度に行い、GPU 資源
 //! （`GraphicsCore`/`WucGraphicsResource`）が揃ったフレームで `boot_present_system`（排他 system・
 //! `&mut World`）が `attach_target`→`apply(ShowSurface)` を **各 target 高々 1 回**駆動する。将来の

@@ -5,8 +5,8 @@
 //! [`ComposedSurface::bytes`]（原寸・premultiplied BGRA）と**バイト単位で一致**することを固定する。
 //!
 //! この 1 本で成功経路の 5 点——`CreateBitmap` の寸・pitch・premultiplied・宛先矩形・`Close`——が
-//! まとめて檻に入る。撤去済みの自前供給面の往復テスト（`chain.rs` の
-//! `upload_read_back_roundtrip_and_resize`）の正当な後継である。
+//! まとめて檻に入る。撤去した自前供給面の往復テストの
+//! 正当な後継である。
 //!
 //! バイト一致が成り立つ条件は k=1・整数矩形・LINEAR が texel 中心で恒等・透明地への
 //! SOURCE_OVER が src そのもの、の 4 点。DC の既定 DPI だけは実行機に左右されるため、記録にも
@@ -17,13 +17,8 @@
 
 use super::*;
 
-use std::path::Path;
-
-use areka_emo_atlas::{
-    AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
-use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+use crate::presenter::test_support::{bake_world, elem, shell_of, surface};
+use areka_emo_compose::{BindSet, Composer, PatternState};
 
 use windows::Win32::Graphics::Direct2D::Common::{D2D1_COLOR_F, D2D1_COMPOSITE_MODE_SOURCE_OVER};
 use windows::Win32::Graphics::Direct2D::{
@@ -37,7 +32,7 @@ use wintf::ecs::GraphicsCore;
 ///
 /// `GraphicsCore` を戻り値に含めるのは DC の寿命がそれに縛られるため。GPU が無ければ
 /// `expect` で赤くなる（黙って緑にする skip は置かない）。
-fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
+pub(super) fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
     // 各テストは専用スレッドで走る。MTA を初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -58,19 +53,6 @@ fn gpu_dc() -> (GraphicsCore, ID2D1DeviceContext) {
 /// `ComposedSurface::bytes_mut` は emo-compose の `pub(crate)` ゆえ画素を直接焼けない。
 /// 各成分は straight 色に α を掛けて作るので premultiplied 不変（成分 ≤ α）を自明に満たす。
 fn composed_with_alpha_edges(w: u32, h: u32) -> ComposedSurface {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![Element {
-            layer: 0,
-            path: ElementPath::new("p.png".to_string()),
-            x: 0,
-            y: 0,
-        }],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-
     let stride = w * 4;
     let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
     for y in 0..h {
@@ -88,39 +70,15 @@ fn composed_with_alpha_edges(w: u32, h: u32) -> ComposedSurface {
             img.push(a);
         }
     }
-    let mut dec = MemoryDecoder::new();
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない: {:?}",
-        baked.errors
+    let (world, atlas) = bake_world(
+        shell_of(vec![surface(1000, vec![elem("p.png", 0, 0)])]),
+        vec![("p.png", w, h, img)],
     );
-
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    let shell = Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    };
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
 
     Composer::new()
         .compose(
             &world,
-            &baked.table,
+            &atlas,
             1000,
             &BindSet::default(),
             &PatternState::default(),
@@ -261,24 +219,5 @@ fn identity_offscreen_roundtrip_equals_composed_native_bytes() {
         bad.map(|i| ((i / 4) as u32 % w, (i / 4) as u32 / w)),
         bad.map(|i| &expected[i..i + 4]),
         bad.map(|i| &read_back[i..i + 4])
-    );
-}
-
-/// 成功側の最低線: `record_display` は中身を持つ（空でない）コマンドリストを返す。
-#[test]
-fn record_display_returns_a_non_empty_command_list() {
-    let (_core, dc) = gpu_dc();
-    let surface = composed_with_alpha_edges(4, 3);
-
-    let list = record_display(&dc, &surface, None).expect("record_display は Ok");
-
-    assert!(
-        list.command_list().is_some(),
-        "返ったリストが空（command_list() が None）"
-    );
-    assert_ne!(
-        list,
-        GraphicsCommandList::empty(),
-        "返ったリストが GraphicsCommandList::empty() と等しい"
     );
 }

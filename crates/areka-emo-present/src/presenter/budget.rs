@@ -140,14 +140,14 @@ enum AllocSite {
 }
 
 impl AllocSite {
-    /// 全発生点（走査の正本。檻はこれを回して「2 つある」ことごと固定する）。
+    /// 全発生点（走査の正本。檻はこれを回して発生点ごとの計数を確かめる）。
     ///
     /// 読み手は本モジュールのテスト（`budget_tests.rs`）のみである。**製品コードにも presenter 側の
     /// 檻にも走査の消費者は無い**——本列挙は本モジュール私有ゆえ外へ持ち出せず、presenter 経由の檻
     /// （`presenter_budget_steady_state_tests.rs`）は [`BudgetCounters`] の名前つき 2 フィールドを
-    /// 直接読む。列挙を増減させると perf サマリ行のフィールド集合が変わるため、「2 つある」ことを
-    /// 固定する走査は本モジュール内に置く。
-    #[allow(dead_code)]
+    /// 直接読む。発生点を回す走査は本モジュール内に置く（増減は perf サマリ行のフィールド集合の
+    /// 照合が捕まえる）。
+    #[cfg(test)]
     const ALL: [AllocSite; 2] = [AllocSite::ComposeDst, AllocSite::Mask];
 }
 
@@ -169,7 +169,7 @@ impl BudgetDelta {
     ///
     /// 現時点の読み手はテストのみ（[`AllocSite::ALL`] を回す檻）。製品コードの
     /// perf サマリ行は名前つきフィールドを直接使う。
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn count(&self, site: AllocSite) -> u32 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
@@ -203,7 +203,7 @@ impl BudgetCounters {
     /// 発生点で引く（全発生点の走査用）。
     ///
     /// 読み手は本モジュールのテストのみ（presenter 経由の檻は名前つきフィールドを直接読む）。
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn count(&self, site: AllocSite) -> u64 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
@@ -287,8 +287,8 @@ mod seat {
     /// # 確保の観測は実体の容量そのもの（高水位を持たない）
     ///
     /// `AlphaMask::regenerate_from_pbgra32` は `clear`＋`resize(詰め長, 0)` である。詰め長が
-    /// そのバッファの容量を超えれば、これは**紛れもない新規確保**である（例: 40×20 → 60×30 の
-    /// k=2/1 で詰め長 400→900 バイト）。[`AlphaMask::packed_capacity`] を再生成の前後で読み
+    /// そのバッファの容量を超えれば、これは**紛れもない新規確保**である（例: 40×20 → 60×30 で
+    /// 詰め長 100→240 バイト・行はバイト境界まで詰める）。[`AlphaMask::packed_capacity`] を再生成の前後で読み
     /// 比べれば、それが厳密に決まる。器側で到達済み詰めバイト長を覚える形は採らない——回る実体が
     /// 4 本ある以上、器が持つ 1 個の値は**どの実体のものでもない**（本モジュール冒頭 §なぜ
     /// 「到達済み寸法（高水位）を器が覚える」形をやめたのか）。
@@ -361,8 +361,8 @@ mod seat {
 /// - Invariants: 適用ごとの増分の総和は累積に一致する。是正後の定常状態では
 ///   [`take_delta`](FrameBudget::take_delta) の全フィールドが 0（Requirement 3.1）であり、
 ///   寸法変化時は席ごとに一度だけ増えてまた 0 へ戻る（Requirement 3.2）。「一度だけ」は
-///   **確保対象ごとに一度**の意であり、2 本のバッファが交代する席（合成先席・マスクの輪番）
-///   では代金が 2 適用に分かれて 1 件ずつ現れる。
+///   **確保対象ごとに一度**の意であり、複数のバッファが回る席（合成先席・マスクの輪番・最大 4 本）
+///   では代金が回る本数ぶんの適用に分かれて 1 件ずつ現れる。
 #[derive(Debug, Default)]
 pub(super) struct FrameBudget {
     /// 取り出し待ちの適用単位の増分。
@@ -371,7 +371,7 @@ pub(super) struct FrameBudget {
     total: BudgetCounters,
     /// 合成先の常設席（A1・`compose_into` の出力先）。
     native: seat::SurfaceSeat,
-    /// マスクの輪番（A4/A7・2 スロット＋各バッファの到達済み詰めバイト長）。
+    /// マスクの輪番（A4/A7・下流が手放した空き 1 枚）。
     mask: seat::MaskRotation,
 }
 
@@ -450,7 +450,7 @@ impl FrameBudget {
     /// （[`swap_native_scratch`] 経由の [`native_scratch`]）側が実体の容量差として拾う。ここで
     /// 先回りして数えると 1 適用で二重に数えることになる。
     ///
-    /// 本メソッドが状態を持たない（`&mut self` を使わない）のは、確保の観測が**実体の容量**から
+    /// 本メソッドが状態を持たない（`self` を取らない関連関数である）のは、確保の観測が**実体の容量**から
     /// 読めるようになったためである。以前は「新しい実体で回り直す」ことを器のフィールドへ
     /// 記録していたが、回るバッファが 4 本になった今それは取り違えの元でしかない。
     ///
@@ -459,7 +459,6 @@ impl FrameBudget {
     /// [`native_scratch`]: FrameBudget::native_scratch
     /// [`swap_native_scratch`]: FrameBudget::swap_native_scratch
     pub(super) fn display_buffer(
-        &mut self,
         recycled: Option<CacheEntry>,
     ) -> (ComposedSurface, Option<Arc<AlphaMask>>) {
         match recycled {
@@ -531,7 +530,7 @@ impl FrameBudget {
     ///
     /// 読み手はテストのみ（`budget_tests.rs` が席の単体で、
     /// `presenter_budget_steady_state_tests.rs` が実 `apply_show` を通した定常状態で読む）。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(super) fn cumulative(&self) -> &BudgetCounters {
         &self.total
     }

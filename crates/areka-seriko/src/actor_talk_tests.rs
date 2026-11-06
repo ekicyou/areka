@@ -13,7 +13,8 @@ use super::test_support::*;
 use super::*;
 use crate::looper::tests::{always_fire, cfg};
 use crate::output::{DisplayCommand, MockSurfaceOutput};
-use areka_emo_compose::{BindSet, EmoWorld};
+use crate::test_support::table_of;
+use areka_emo_compose::BindSet;
 use areka_sakura::CueCommand;
 use dola::cue::CueSink;
 use std::collections::BTreeMap;
@@ -42,8 +43,7 @@ const MOUTH: u32 = 0;
 const ONCE: u32 = 1;
 
 fn config() -> SerikoLoopConfig {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(FACES));
-    cfg(AnimationTable::from_world(&world), always_fire())
+    cfg(table_of(FACES), always_fire())
 }
 
 /// この檻の表で組んだ足場（本体は兄弟の足場 `ClockRig`）。
@@ -204,7 +204,7 @@ fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
     );
 
     // 時計 2000 が新しい台詞の 0 秒。9 文字は 2000・2050・…・2400。
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         assert!(rig.hear(2000, clear_all()).is_empty());
         assert!(
             rig.hear(2000, text(0.0, "0", "あいうえおかきくけ"))
@@ -218,7 +218,7 @@ fn hidden_scope_stays_still_and_runonce_fires_again_on_return() {
     assert_eq!(
         ours.len(),
         2,
-        "cue 1 件につき今までの読み飛ばしの 1 行だけ: {ours:?}"
+        "cue 1 件につき読み飛ばしの 1 行だけ: {ours:?}"
     );
     assert!(
         ours.iter()

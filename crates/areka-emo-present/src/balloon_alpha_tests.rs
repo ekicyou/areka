@@ -6,8 +6,9 @@
 
 use super::*;
 
-use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, capture_events};
+use super::test_support::{CapturedEvent, FieldUnquoted, TempDir};
 use areka_emo_atlas::MemoryDecoder;
+use log_capture_kit::capture;
 
 /// `.pna` の記録（`balloon:` で始まり `ignored_pna` の欄を持つ `warn!`）だけを拾う。
 fn pna_warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
@@ -56,7 +57,7 @@ fn pna_files_are_counted_once_in_one_warn() {
     dir.touch("balloons0.pna");
     dir.touch("ARROW0.PNA");
 
-    let (got, events) = capture_events(|| load_balloon_use_self_alpha(dir.path()));
+    let (got, events) = capture(|| load_balloon_use_self_alpha(dir.path()));
     assert_eq!(got, UseSelfAlpha::On);
     let warns = pna_warns(&events);
     assert_eq!(warns.len(), 1, ".pna の warn! は 1 行: {events:?}");
@@ -75,7 +76,7 @@ fn no_pna_no_warn() {
     dir.write("descript.txt", "charset,UTF-8\nuse_self_alpha,1\n");
     dir.touch("balloons0.png");
 
-    let (_, events) = capture_events(|| load_balloon_use_self_alpha(dir.path()));
+    let (_, events) = capture(|| load_balloon_use_self_alpha(dir.path()));
     assert!(pna_warns(&events).is_empty(), "{events:?}");
 }
 

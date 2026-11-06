@@ -1,0 +1,26 @@
+{
+  "feature_name": "audit-emo-present",
+  "created_at": "2026-11-05T09:23:24Z",
+  "updated_at": "2026-11-05T22:55:34Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-05T22:55:34Z"
+    }
+  },
+  "ready_for_implementation": true
+}

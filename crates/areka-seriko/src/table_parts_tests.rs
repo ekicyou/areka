@@ -11,6 +11,7 @@ use areka_emo_compose::EmoWorld;
 
 use super::AnimationTable;
 use crate::sample_test_support::emo2_root;
+use crate::test_support::table_of;
 
 /// 入れ子の検体（compose の検体フォルダの本文をそのまま読む・design.md「解決したこと」）。
 const FIXTURE: &str =
@@ -20,10 +21,6 @@ fn world_of(text: &str) -> EmoWorld {
     EmoWorld::build(&areka_parsers::shell::parse(text))
 }
 
-fn table_of(text: &str) -> AnimationTable {
-    AnimationTable::from_world(&world_of(text))
-}
-
 /// 空の表と、入れ子も動く部品も無い本文では偽（要件 7.2・7.3）。
 #[test]
 fn table_without_nesting_or_animated_parts_is_false() {
@@ -31,7 +28,7 @@ fn table_without_nesting_or_animated_parts_is_false() {
     assert!(!empty.has_animated_parts());
     assert!(empty.nest_table().is_empty());
 
-    // 一番上 0 のまばたきのコマが 100 を指すが、100 は自分の animation を持たない（今までのシェルの形）。
+    // 一番上 0 のまばたきのコマが 100 を指すが、100 は自分の animation を持たない。
     let plain = table_of(
         "surface0\n{\nanimation0.interval,random,4\n\
          animation0.pattern0,overlay,100,40,0,0\n\
@@ -55,11 +52,13 @@ fn each_part_path_decides_has_animated_parts() {
         )
     };
     let child = "surface0\n{\nelement0,overlay,200,0,0\n}\n";
-    let bind = "surface0\n{\nanimation5.interval,bind\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
+    // `bind+random,0` は `k == 0` で表に採らないが、入れ子の表は pattern0 の先を着せ替えの先として持つ
+    // ので、この経路だけが立つ（素の `bind` は呼ばれるだけの animation として表に載り、コマの経路も立つ）。
+    let bind = "surface0\n{\nanimation5.interval,bind+random,0\nanimation5.pattern0,overlay,200,0,0,0\n}\n";
     let frame = "surface0\n{\nanimation1.interval,random,2\n\
                  animation1.pattern0,overlay,200,40,0,0\n}\n";
     // 合計 0 の `always`（採らない）の経過 0 の pattern（pattern1）だけが 200 を指す（spec:
-    // areka-P0-animated-image-playback task 3.2・合成が経過 0 として描く先）。
+    // areka-P0-animated-image-playback・合成が経過 0 として描く先）。
     let always_rest = "surface0
 {
 animation1.interval,always

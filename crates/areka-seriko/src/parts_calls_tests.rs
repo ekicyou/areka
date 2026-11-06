@@ -4,14 +4,13 @@
 //! 一番上 0 が element定義で部品 100 を置き、1 は何も置かない。刻みは `on_tick(now_ms)`、乱数は
 //! 注入列で、どちらも決定論。
 
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_sakura::ActorKey;
-
 use crate::looper::LoopRuntime;
-use crate::looper::tests::{cfg, counting_rng};
+use crate::looper::tests::{cfg, counting_rng, part_clock};
+use crate::parts::PartAnim;
 use crate::resolve::SurfaceTarget;
 use crate::state::{ScopeStates, Slot};
 use crate::table::AnimationTable;
+use crate::test_support::{capture_logs, empty_states, part_frames, scope, table_of};
 use crate::timeline::LoopRng;
 
 /// 部品の中の絵の面（中身は空）。
@@ -23,29 +22,21 @@ fn shell(anims: &str) -> AnimationTable {
     let text = format!(
         "surface0\n{{\nelement0,overlay,100,0,0\n}}\nsurface100\n{{\n{anims}}}\n{SURFACES}"
     );
-    AnimationTable::from_world(&EmoWorld::build(&areka_parsers::shell::parse(&text)))
-}
-
-fn scope() -> ActorKey {
-    ActorKey::from("0")
+    table_of(&text)
 }
 
 /// シェルの面 0 を出した状態のランタイム（選びの乱数は `pick` を返し続ける）。
 fn shown(anims: &str, lottery: LoopRng, pick: u32) -> (LoopRuntime, ScopeStates) {
     let mut config = cfg(shell(anims), lottery);
     config.pick_rng = Box::new(move |_bound| pick);
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
+    let mut states = empty_states();
     states.apply(&scope(), SurfaceTarget::Show(0));
     (LoopRuntime::new(config), states)
 }
 
 /// 部品 100 の animation `id` の欄の絵（載っていなければ `None`）。
 fn part_cell(states: &ScopeStates, id: u32) -> Option<u32> {
-    states
-        .current_pattern(&scope(), Slot::Shell)
-        .part(100)
-        .find(|&(a, _)| a == id)
-        .map(|(_, f)| f.surface_id)
+    part_cell_of(states.current_pattern(&scope(), Slot::Shell), id)
 }
 
 /// 面を `sid` へ切り替える（アクターと同じ順・出来事の時刻は `at_ms`）。
@@ -122,10 +113,10 @@ fn stop_inside_a_part_looks_the_same_as_minus_one() {
 }
 
 fn part_cell_of(pattern: &areka_emo_compose::PatternState, id: u32) -> Option<u32> {
-    pattern
-        .part(100)
+    part_frames(pattern, 100)
+        .into_iter()
         .find(|&(a, _)| a == id)
-        .map(|(_, f)| f.surface_id)
+        .map(|(_, f)| f)
 }
 
 /// 部品の中で止めた `always` も、面を出すまで始め直さない。面を出したら印が消え、次の刻みの時刻で
@@ -231,4 +222,236 @@ fn move_inside_a_part_becomes_the_character_shift() {
             y: 9
         }]
     );
+}
+
+/// 部品の再生が末尾に着く刻みに抽選が当たっても、その刻みまでの働きのコマを先に当てる
+/// （seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn last_action_frame_in_a_part_on_the_ending_tick_is_not_lost_to_the_lottery() {
+    const ENDING: &str = "animation0.interval,random,2\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,102,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n";
+    let (lottery, _probe) = counting_rng(&[0, 0]);
+    let (mut rt, mut states) = shown(ENDING, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
+    rt.on_tick(2000, &mut states);
+    assert_eq!(
+        part_cell(&states, 1),
+        Some(110),
+        "2000 に animation1 が始まる"
+    );
+}
+
+/// 部品の `periodic` の次の回の時刻と、前の回の終わりの働きのコマが重なっても、前の回のコマを先に
+/// 当ててから同じ時刻に始め直す（回を飛ばさない・一番上と同じ順・seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn last_action_frame_in_a_part_on_the_periodic_restart_tick_is_not_lost() {
+    const PERIODIC: &str = "animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,102,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(PERIODIC, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states); // periodic は 1000 に鳴る。start,1 は 2000。
+    assert_eq!(part_cell(&states, 0), Some(101));
+    assert_eq!(part_cell(&states, 1), None);
+    rt.on_tick(2000, &mut states);
+    assert_eq!(part_cell(&states, 1), Some(110), "前の回の start,1");
+    assert_eq!(part_cell(&states, 0), Some(101), "回を飛ばさず頭から");
+}
+
+/// 遅れた刻みでも、部品の引き金の開始と働きのコマは時刻の順に当たる: 2000 に始まる 1 は 2470 の
+/// `stop,1` で止まり、0 は 3000 に始まる（一番上と同じ・areka-P0-seriko-trigger-intervals 要件 3.1・
+/// seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn part_trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
+    const LATE: &str = "animation0.interval,periodic,3\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,5000,0,0\n\
+        animation1.interval,periodic,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,101,2470,0,0\n\
+        animation2.pattern1,stop,1\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(LATE, lottery, 0);
+    rt.on_tick(0, &mut states); // 部品 100 が見え、2 が 0 に鳴る。
+    rt.on_tick(3100, &mut states); // 1 は 2000・stop,1 は 2470・0 は 3000。
+    assert_eq!(part_cell(&states, 1), None, "2470 に止まる");
+    assert_eq!(part_cell(&states, 0), Some(120), "0 は 3000 に始まる");
+    assert_eq!(
+        part_clock(&rt, Slot::Shell, 100, 0),
+        Some(PartAnim::Playing {
+            started_at_ms: 3000,
+            acts_through: Some(3100)
+        }),
+        "3000 に始め、3100 まで当てた"
+    );
+}
+
+/// 部品の引き金の「再生中か」も、開始の時刻までの働きのコマを当てた後で測る（1970 に止められた 0 は
+/// 2000 に再生中でないので鳴る・areka-P0-seriko-trigger-intervals 要件 3.1・3.3）。
+#[test]
+fn part_periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
+    const STOPPED: &str = "animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,1500,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,101,1970,0,0\n\
+        animation2.pattern1,stop,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(STOPPED, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1100, &mut states); // 0 は 1000 に鳴る（2500 まで続く見込み）。
+    assert_eq!(part_cell(&states, 0), Some(120));
+    rt.on_tick(2100, &mut states); // stop,0 は 1970・次の周は 2000。
+    assert_eq!(part_cell(&states, 0), Some(120), "2000 に頭から");
+    assert_eq!(
+        part_clock(&rt, Slot::Shell, 100, 0),
+        Some(PartAnim::Playing {
+            started_at_ms: 2000,
+            acts_through: Some(2100)
+        }),
+        "2000 に始め、2100 まで当てた"
+    );
+}
+
+/// 遅れた刻みで鳴った部品の再生の働きのコマも、ほかの再生の後の時刻のコマより先に当たる: 1000 に
+/// 鳴った 0 の `start,1`（1100）の後に 2 の `stop,1`（1300）が当たり、1 は止まっている
+/// （seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn part_trigger_play_acts_before_later_calls_of_other_plays() {
+    const ORDER: &str = "animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,100,0,0\n\
+        animation0.pattern1,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,101,1300,0,0\n\
+        animation2.pattern1,stop,1\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(ORDER, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1500, &mut states); // 0 は 1000・start,1 は 1100・stop,1 は 1300。
+    assert_eq!(part_cell(&states, 1), None, "1300 に止まる");
+    assert_eq!(part_cell(&states, 0), Some(120), "0 は 1000 から続く");
+}
+
+/// 呼び出しが部品の `runonce` を、ちょうど構えた時刻に始めたら、鳴らした扱いで入れ替えない。終わった
+/// 後に見え始めの時刻でもう 1 回鳴ることも無い（一番上と同じ・seriko-pattern-calls 要件 5.2・
+/// areka-P0-seriko-trigger-intervals 要件 2.1）。
+#[test]
+fn part_runonce_started_by_a_call_at_its_start_time_fires_once() {
+    const AT_ARM: &str = "animation0.interval,runonce\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,-1,300,0,0\n\
+        animation2.interval,always\n\
+        animation2.pattern0,start,0\n\
+        animation2.pattern1,overlay,120,5000,0,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(AT_ARM, lottery, 0);
+    let lines = capture_logs(|| {
+        for t in [0, 500, 1000] {
+            rt.on_tick(t, &mut states);
+        }
+    });
+    let fired = ["runonce を鳴らした", "part=100", "animation_id=0"];
+    assert_eq!(super::tests::count(&lines, &fired), 1, "{lines:#?}");
+    let ended = ["seriko: part 停止", "part=100", "animation_id=0"];
+    assert_eq!(
+        super::tests::count(&lines, &ended),
+        1,
+        "再生は 1 回だけ: {lines:#?}"
+    );
+    assert_eq!(part_cell(&states, 0), None, "300 に終わったまま");
+}
+
+/// 部品の抽選も、境目の刻みより前の時刻に `start,1` が始めた 1 を再生中と見て乱数を引かない
+/// （部品の `runonce` 0 が 0 に鳴り、`start,1` は 980・刻みは 1050・seriko-pattern-calls 要件 3.1・3.8）。
+#[test]
+fn part_lottery_sees_a_play_started_by_an_earlier_call() {
+    const ANIMS: &str = "animation0.interval,runonce\n\
+        animation0.pattern0,overlay,101,980,0,0\n\
+        animation0.pattern1,start,1\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n";
+    let (lottery, probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shown(ANIMS, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1050, &mut states);
+    assert_eq!(part_cell(&states, 1), Some(110));
+    assert_eq!(probe.lock().unwrap().calls, 0, "1 は 980 から再生中");
+}
+
+/// 面を出し直して始め直した部品の `always` にも、合図の時刻より前の呼び出しは当たらない（抽選の 1 が
+/// 1000 に始まり、`stop,0` は 1050 と 1150。1170 の出し直しで始め直した 0 は 1300 に 2 枚目・
+/// seriko-pattern-calls 要件 3.1・3.8・4.5）。
+#[test]
+fn earlier_stop_does_not_hit_a_part_always_restarted_by_reshow() {
+    const ANIMS: &str = "animation0.interval,always\n\
+        animation0.pattern0,overlay,101,0,0,0\n\
+        animation0.pattern1,overlay,102,100,0,0\n\
+        animation0.pattern2,overlay,111,5000,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,50,0,0\n\
+        animation1.pattern1,stop,0\n\
+        animation1.pattern2,overlay,111,100,0,0\n\
+        animation1.pattern3,stop,0\n\
+        animation1.pattern4,overlay,120,5000,0,0\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shown(ANIMS, lottery, 0);
+    for t in [0, 1000, 1100] {
+        rt.on_tick(t, &mut states);
+    }
+    assert_eq!(part_cell(&states, 0), None, "前提: 1050 に止まる");
+    assert!(rt.on_surface_shown(&scope(), Slot::Shell));
+    rt.refresh(&scope(), Slot::Shell, Some(1170), &mut states);
+    rt.on_tick(1300, &mut states);
+    assert_eq!(
+        part_cell(&states, 0),
+        Some(102),
+        "1150 の stop,0 は当たらない"
+    );
+}
+
+/// 部品の合図の更新（1010）も、その時刻までの `periodic` を判定してから呼び出しを当てる: 境目 1000 に
+/// 始まった 1 は、`runonce` 0 の 1005 の `stop,1` で止まる（areka-P0-seriko-trigger-intervals 要件 3.1・
+/// 5.4・6.1）。
+#[test]
+fn part_refresh_judges_periodic_before_applying_calls() {
+    const ANIMS: &str = "animation0.interval,runonce\n\
+        animation0.pattern0,overlay,101,1005,0,0\n\
+        animation0.pattern1,stop,1\n\
+        animation1.interval,periodic,1\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (mut rt, mut states) = shown(ANIMS, lottery, 0);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(500, &mut states);
+    let logs = capture_logs(|| {
+        rt.refresh(&scope(), Slot::Shell, Some(1010), &mut states);
+    });
+    let fired: Vec<_> = logs
+        .iter()
+        .filter(|l| l.contains("part trigger periodic を鳴らした"))
+        .collect();
+    assert_eq!(fired.len(), 1, "{logs:?}");
+    assert!(
+        fired[0].contains("animation_id=1") && fired[0].contains("started_at_ms=1000"),
+        "境目 1000 に始まった（始まらなかったのではない）: {fired:?}"
+    );
+    rt.on_tick(1100, &mut states);
+    assert_eq!(part_cell(&states, 1), None, "1000 に始まり 1005 に止まる");
 }

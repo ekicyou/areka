@@ -3,54 +3,34 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush, Visual};
-use windows::Win32::Graphics::Direct2D::*;
 
-/// GPUリソースを使用するエンティティを宣言するマーカーコンポーネント
+/// GPU 資源を使う窓の印（在ることだけに意味がある）
 ///
-/// このコンポーネントは以下の役割を持つ：
-/// 1. GPUリソースを使用するエンティティを宣言（存在自体がマーカー）
-/// 2. `Changed<HasGraphicsResources>` でGPUリソース再初期化をトリガー
-///
-/// デバイスロスト時は `set_changed()` を呼び出すことで、
-/// 各GPUリソースコンポーネント（VisualGraphics, WindowGraphics等）の
-/// 再初期化システムをトリガーする。
-///
-/// # メモリ戦略
-/// - **Table戦略**: 多数のエンティティに付与されるGPUリソース宣言マーカー
-/// - デバイスロスト時にset_changed()で一括再初期化をトリガー
+/// 変化の印は見ない。作り直しの合図は `Res<GraphicsCore>` の変化の印。
 #[derive(Component, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HasGraphicsResources;
-
-#[derive(Debug)]
-struct WindowGraphicsInner {
-    pub target: DesktopWindowTarget,
-    pub device_context: ID2D1DeviceContext,
-}
 
 /// ウィンドウごとのグラフィックスリソース
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct WindowGraphics {
-    inner: Option<WindowGraphicsInner>,
+    inner: Option<DesktopWindowTarget>,
     generation: u32,
 }
 
-// SAFETY 条件: 保持する COM/WinRT ポインタの跨スレッド移動（Send）・参照共有（Sync）は
+// SAFETY 条件: 保持する WinRT ポインタの跨スレッド移動（Send）・参照共有（Sync）は
 // 「同一オブジェクトへの呼び出しが同時に実行されない」ことを前提とする。
-// device_context（D2D）は MULTI_THREADED ファクトリ系列のため内部同期されるが、
-// target（WUC DesktopWindowTarget）は UI スレッドアフィニティを持ち、ECS スケジュール構成
-// （&mut 排他または同一コンポーネントへ並行アクセスしないシステム配置）が安全性条件を担う。
+// target（WUC DesktopWindowTarget）は UI スレッドアフィニティを持ち、内部同期は無い。
+// 安全性は ECS スケジュール構成（&mut 排他または同一コンポーネントへ並行アクセスしないシステム配置）が担う。
 unsafe impl Send for WindowGraphics {}
 unsafe impl Sync for WindowGraphics {}
 
 impl WindowGraphics {
-    pub fn new(target: DesktopWindowTarget, device_context: ID2D1DeviceContext) -> Self {
+    /// `generation` は作り直しの回数。初回は 0、作り直しでは前の番号 + 1 を渡す。
+    pub fn new(target: DesktopWindowTarget, generation: u32) -> Self {
         Self {
-            inner: Some(WindowGraphicsInner {
-                target,
-                device_context,
-            }),
-            generation: 0,
+            inner: Some(target),
+            generation,
         }
     }
 
@@ -66,16 +46,8 @@ impl WindowGraphics {
         self.generation
     }
 
-    pub fn increment_generation(&mut self) {
-        self.generation = self.generation.wrapping_add(1);
-    }
-
     pub fn get_target(&self) -> Option<&DesktopWindowTarget> {
-        self.inner.as_ref().map(|i| &i.target)
-    }
-
-    pub fn get_dc(&self) -> Option<&ID2D1DeviceContext> {
-        self.inner.as_ref().map(|i| &i.device_context)
+        self.inner.as_ref()
     }
 }
 
@@ -87,21 +59,29 @@ pub struct VisualGraphics {
     /// 親Visual参照（子削除用にキャッシュ）
     /// 階層同期時に子挿入と同時に設定される
     parent_visual: Option<Visual>,
+    /// 最後に当てた切り抜きの鍵（物理の幅・高さ・拡大率・形）。同じなら作り直さない。
+    /// 見た目を作り直すと空に戻り、新しい見た目へ当て直す（11 番・6 番）
+    clip_key: Option<ClipKey>,
 }
+
+/// 切り抜きの鍵: (物理の幅, 物理の高さ, 拡大率, 形)。解除は形 `None`
+pub(crate) type ClipKey = (f32, f32, f32, Option<crate::ecs::graphics::clip::ClipShape>);
 
 // on_remove フック: 親Visualから自分を削除
 fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {
-    // 親Visualから自分を削除
-    // エラーは無視（親が先に削除されている場合など）
     // DComp の `parent.remove_visual(visual)` は WUC では `parent.Children()?.Remove(visual)` に対応。
     // 基底 Visual は Children を持たないため ContainerVisual へ cast してから Children を得る。
-    if let Some(vg) = world.get::<VisualGraphics>(hook.entity) {
-        if let (Some(parent), Some(visual)) = (&vg.parent_visual, &vg.inner) {
-            use windows::core::Interface;
-            let _ = parent
-                .cast::<windows::UI::Composition::ContainerVisual>()
-                .and_then(|cv| cv.Children())
-                .and_then(|c| c.Remove(visual)); // エラー無視
+    if let Some(vg) = world.get::<VisualGraphics>(hook.entity)
+        && let (Some(parent), Some(visual)) = (&vg.parent_visual, &vg.inner)
+    {
+        use windows::core::Interface;
+        // フックには Err を返す先が無いので記録だけ。親が先に消えた場合があるので debug!（10 番）
+        if let Err(e) = parent
+            .cast::<windows::UI::Composition::ContainerVisual>()
+            .and_then(|cv| cv.Children())
+            .and_then(|c| c.Remove(visual))
+        {
+            tracing::debug!(entity = ?hook.entity, error = ?e, "[on_visual_graphics_remove] Remove from parent failed");
         }
     }
 }
@@ -127,6 +107,7 @@ impl Default for VisualGraphics {
         Self {
             inner: None,
             parent_visual: None,
+            clip_key: None,
         }
     }
 }
@@ -136,6 +117,7 @@ impl VisualGraphics {
         Self {
             inner: Some(visual),
             parent_visual: None,
+            clip_key: None,
         }
     }
 
@@ -144,12 +126,14 @@ impl VisualGraphics {
         Self {
             inner: Some(visual),
             parent_visual,
+            clip_key: None,
         }
     }
 
     pub fn invalidate(&mut self) {
         self.inner = None;
         self.parent_visual = None;
+        self.clip_key = None;
     }
 
     pub fn is_valid(&self) -> bool {
@@ -169,6 +153,14 @@ impl VisualGraphics {
     /// 親Visualを設定/更新する
     pub fn set_parent_visual(&mut self, parent: Option<Visual>) {
         self.parent_visual = parent;
+    }
+
+    pub(crate) fn clip_key(&self) -> Option<&ClipKey> {
+        self.clip_key.as_ref()
+    }
+
+    pub(crate) fn set_clip_key(&mut self, key: ClipKey) {
+        self.clip_key = Some(key);
     }
 }
 
@@ -204,12 +196,6 @@ impl SurfaceGraphics {
         }
     }
 
-    pub fn invalidate(&mut self) {
-        self.inner = None;
-        self.brush = None;
-        self.size = (0, 0);
-    }
-
     pub fn is_valid(&self) -> bool {
         self.inner.is_some()
     }
@@ -228,7 +214,7 @@ impl SurfaceGraphics {
     ///
     /// commands.insert()の代わりにこのメソッドを使用することで、
     /// 同一フレーム内で変更が即座に反映される。
-    /// サイズが異なる場合のみ更新し、Changedフラグを適切に管理。
+    /// 呼ぶたびに無条件で入れ替える（同じ大きさなら呼ばないのは呼ぶ側の判断）。
     pub fn set_surface(
         &mut self,
         surface: CompositionDrawingSurface,
@@ -240,7 +226,7 @@ impl SurfaceGraphics {
         self.size = size;
     }
 
-    /// Surface と brush をクリア（invalidateと同じだが意図を明確に）
+    /// Surface と brush をクリア（装置の失いでの無効化もこの口を使う）
     ///
     /// commands.remove()の代わりにこのメソッドを使用することで、
     /// コンポーネント自体は残したまま内容だけをクリアする。
@@ -265,6 +251,8 @@ impl SurfaceGraphics {
 pub struct SurfaceGraphicsDirty {
     /// 最後に描画をリクエストしたフレーム番号
     pub requested_frame: u64,
+    /// 最後に描き直しを求めたときの拡大率 (scale_x, scale_y)。位置だけの変化で描き直さないための控え
+    pub drawn_scale: (f32, f32),
 }
 
 // ========== Surface Creation Statistics ==========
@@ -286,7 +274,7 @@ pub struct SurfaceGraphicsDirty {
 pub struct SurfaceCreationStats {
     /// 作成されたSurfaceの累計数
     pub created_count: u64,
-    /// スキップされたSurface作成の累計数（CommandList不在等）
+    /// スキップされたSurface作成の累計数（GlobalArrangement の大きさが 0 以下）
     pub skipped_count: u64,
     /// 削除されたSurfaceの累計数
     pub deleted_count: u64,

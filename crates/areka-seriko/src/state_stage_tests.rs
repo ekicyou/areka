@@ -6,6 +6,7 @@
 
 use super::test_support::*;
 use super::*;
+use crate::test_support::one_frame_pattern as pat;
 
 fn note(scope: &ActorKey, open: bool, face: u32) -> StageNote {
     StageNote::Balloon {
@@ -14,20 +15,6 @@ fn note(scope: &ActorKey, open: bool, face: u32) -> StageNote {
         face,
         generation: 0,
     }
-}
-
-fn pat(id: u32, sid: u32) -> PatternState {
-    let mut p = PatternState::default();
-    p.set(
-        id,
-        areka_emo_compose::PatternFrame {
-            surface_id: sid,
-            method: areka_emo_compose::ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
-    p
 }
 
 fn balloon_slots(states: &ScopeStates) -> Vec<(ActorKey, u32, bool)> {
@@ -42,7 +29,7 @@ fn balloon_slots(states: &ScopeStates) -> Vec<(ActorKey, u32, bool)> {
 /// `\b` を受けていないスコープは知らせの面を使う（進行の対象にも、`ShowBalloon` の面にも）。
 #[test]
 fn scope_without_balloon_cue_uses_the_noted_face() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     assert!(
         balloon_slots(&states).is_empty(),
@@ -69,7 +56,7 @@ fn scope_without_balloon_cue_uses_the_noted_face() {
 /// 知らせに従う。
 #[test]
 fn balloon_cue_wins_over_the_noted_face() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.note_stage(&note(&scope, true, 3));
     states.apply_balloon(&scope, SurfaceTarget::Show(5));
@@ -95,7 +82,7 @@ fn balloon_cue_wins_over_the_noted_face() {
 /// `\b[-1]` を受けたら面なし（知らせが在っても進行の対象にならず、指令も出さない）。
 #[test]
 fn balloon_hide_cue_leaves_no_face() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.note_stage(&note(&scope, true, 3));
     states.apply_balloon(&scope, SurfaceTarget::Hide);
@@ -106,11 +93,11 @@ fn balloon_hide_cue_leaves_no_face() {
     );
 }
 
-/// 知らせの無い流れ（`emo2`・今のテスト）では、`\b` で表示中の面を開いた窓として扱い、シェルは
+/// 知らせを送らない流れ（知らせを使わないテストなど）では、`\b` で表示中の面を開いた窓として扱い、シェルは
 /// `shown_slots` と同じ（見えている＝真）。並びはスコープの昇順 → シェル → バルーン。
 #[test]
 fn without_notes_stage_slots_match_shown_slots() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let (s0, s1) = (ActorKey::from("0"), ActorKey::from("1"));
     states.apply(&s1, SurfaceTarget::Show(10));
     states.apply_balloon(&s1, SurfaceTarget::Show(0));
@@ -125,6 +112,28 @@ fn without_notes_stage_slots_match_shown_slots() {
             (s0, Slot::Balloon, 2, true),
             (s1.clone(), Slot::Shell, 10, true),
             (s1, Slot::Balloon, 0, true),
+        ]
+    );
+}
+
+/// 出ている面の列（`shown_slots`）もスコープの昇順 → シェル → バルーン（抽選で乱数を引く順・
+/// audit-seriko 指摘 11）。スコープを回し終えてからバルーンを回す形では 0 バルーンが 1 シェルの後へずれる。
+#[test]
+fn shown_slots_go_scope_ascending_then_shell_then_balloon() {
+    let mut states = fresh_states();
+    let (s0, s1) = (ActorKey::from("0"), ActorKey::from("1"));
+    states.apply(&s1, SurfaceTarget::Show(10));
+    states.apply_balloon(&s1, SurfaceTarget::Show(0));
+    states.apply(&s0, SurfaceTarget::Show(0));
+    states.apply_balloon(&s0, SurfaceTarget::Show(2));
+
+    assert_eq!(
+        states.shown_slots(),
+        vec![
+            (s0.clone(), Slot::Shell, 0),
+            (s0, Slot::Balloon, 2),
+            (s1.clone(), Slot::Shell, 10),
+            (s1, Slot::Balloon, 0),
         ]
     );
 }

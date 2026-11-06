@@ -158,11 +158,8 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
     presenter
         // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
         // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
-        .attach_target(world, TargetId(0), window0, emo_world0, atlas0, 96)
-        .expect("attach_target(0) 失敗");
-    presenter
-        .attach_target(world, TargetId(1), window1, emo_world1, atlas1, 96)
-        .expect("attach_target(1) 失敗");
+        .attach_target(TargetId(0), window0, emo_world0, atlas0, 96);
+    presenter.attach_target(TargetId(1), window1, emo_world1, atlas1, 96);
     show_surface(&mut presenter, world, TargetId(0));
     show_surface(&mut presenter, world, TargetId(1));
     (presenter, window0, window1)
@@ -215,9 +212,7 @@ fn setup_target_with_dpis(
     let window = world.spawn(DPI::from_dpi(window_dpi, window_dpi)).id();
     let (emo_world, atlas) = build_target_assets(native.0, native.1, 0x33);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, author_dpi)
-        .expect("attach_target(0) 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, author_dpi);
     show_surface(&mut presenter, world, TargetId(0));
     (presenter, window)
 }

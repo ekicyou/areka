@@ -1,7 +1,7 @@
 //! スコープのバルーンの面ごとの定義の束（balloon-scroll-arrows 要件 1.3・1.5・1.7・
 //! 設計「emo-present / ScopeBalloonDefinitions」）。
 //!
-//! 読み込みの時に 1 度だけ、採用した面ごとに既存の [`load_scope_balloon_model`] を呼んで
+//! 読み込みの時に 1 度だけ、採用した面ごとに既存の [`crate::balloon::load_scope_balloon_model`] の核を呼んで
 //! 面の設定ファイルを重ねたモデルを作り、その面の矢印の絵と束ねる（2 層の重ね方の権威は増やさない）。
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -11,11 +11,12 @@ use std::sync::Arc;
 use areka_emo_atlas::{AlphaParams, ElementDecoder};
 use areka_parsers::balloon::BalloonModel;
 
-use crate::balloon::{ResolvedFace, load_scope_balloon_model};
+use crate::balloon::{DESCRIPT_TXT, ResolvedFace, read_descript_layer, scope_balloon_model_with};
 use crate::balloon_marker::{
-    ARROW_FAMILY, MARKER_FAMILY, MarkerImage, MarkerPair, resolve_marker_pair,
-    resolve_single_marker,
+    ARROW_FAMILY, MARKER_FAMILY, MarkerImage, MarkerPair, list_dirs, resolve_marker_pair_listed,
+    resolve_single_marker_listed,
 };
+use crate::load_records::LoadRecords;
 
 /// 面 1 つの定義（面の設定ファイルを重ねたモデル＋その面の矢印の絵）。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,20 +91,24 @@ pub fn load_scope_balloon_definitions(
     let mut defs: BTreeMap<u32, FaceDefinition> = BTreeMap::new();
     let mut markers_by_name: HashMap<Option<String>, Option<Arc<MarkerImage>>> = HashMap::new();
     let mut inline_markers: BTreeMap<u32, Option<Arc<MarkerImage>>> = BTreeMap::new();
+    // descript の本文とフォルダの一覧は読み込み 1 回につき 1 回だけ取る（指摘 40）。
+    let descript =
+        read_descript_layer(&balloon_dir.join(DESCRIPT_TXT), LoadRecords::Emit).unwrap_or_default();
+    let listed = list_dirs(&[balloon_dir]);
     for face in faces {
         // 自分の設定ファイルを持たない面は面 0 の定義のまま（要件 1.6・for_face が面 0 へ落とす）。
         if face.surface_id != 0 && !balloon_dir.join(face.override_file_name()).exists() {
             continue;
         }
-        let model = load_scope_balloon_model(balloon_dir, scope, face);
+        let model = scope_balloon_model_with(balloon_dir, scope, face, &descript);
         let keys = model.arrow_keys();
         issues.extend(keys.issues.iter().map(|i| (i.key, i.value.clone())));
         issues.extend(model.key_issues().iter().map(|i| (i.key, i.value.clone())));
         let arrows = arrows_by_name
             .entry(keys.filename.clone())
             .or_insert_with(|| {
-                resolve_marker_pair(
-                    &[balloon_dir],
+                resolve_marker_pair_listed(
+                    &listed,
                     &ARROW_FAMILY,
                     scope,
                     keys.filename.as_deref(),
@@ -116,8 +121,8 @@ pub fn load_scope_balloon_definitions(
         let marker = markers_by_name
             .entry(marker_name.clone())
             .or_insert_with(|| {
-                let found = resolve_single_marker(
-                    &[balloon_dir],
+                let found = resolve_single_marker_listed(
+                    &listed,
                     &MARKER_FAMILY,
                     scope,
                     marker_name.as_deref(),

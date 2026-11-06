@@ -22,7 +22,7 @@
 //!
 //! イの 6×12 は幅が `element1` から・高さが画像から来ている——どちらか一方しか数えていなければ
 //! この値にならない。外形は層ごとの**原寸**の軸ごとの最大で決まり、層の位置は寄与しない
-//! （`compute_extent`・`crates/areka-emo-compose/src/plan.rs`）ので、位置は画素の重なりを
+//! （`compute_extent`・`crates/areka-emo-compose/src/plan_extent.rs`）ので、位置は画素の重なりを
 //! 見るためだけに与えてある。
 //!
 //! ウの画像を**わざと大きく別の絵**にしてあるのが較正である——`apply_base_images` の
@@ -31,13 +31,14 @@
 
 use super::*;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_emo_atlas::MemoryDecoder;
 use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, PatternState};
 use areka_parsers::shell::parse;
 
-use super::test_support::{CapturedEvent, capture_events};
+use super::test_support::{CapturedEvent, insert_solid, layer0_path, pixel};
+use log_capture_kit::capture;
 
 /// 面 1（ア）の画像の実寸。
 const SOLO: (u32, u32) = (7, 5);
@@ -86,7 +87,7 @@ fn surfaces_txt() -> String {
     )
 }
 
-/// フォルダ直下に在ることにするファイル名の一覧（面の画像 4 枚＋画像でない 3 件）。
+/// フォルダ直下に在ることにするファイル名の一覧（面の画像 4 枚＋部品の画像 2 枚＋surfaces.txt）。
 const FILE_NAMES: [&str; 7] = [
     "surface0.png",
     "surface1.png",
@@ -100,18 +101,6 @@ const FILE_NAMES: [&str; 7] = [
 /// 実在しないシェルのフォルダ（核は fs を触らないので、復号器の鍵を組むためだけに使う）。
 fn shell_dir() -> PathBuf {
     PathBuf::from(r"C:\areka-test\shell-target-base-image")
-}
-
-/// 全画素が同じ色の不透明な絵を復号器へ登録する。
-fn insert_solid(dec: &mut MemoryDecoder, dir: &Path, name: &str, size: (u32, u32), color: [u8; 4]) {
-    let (w, h) = size;
-    let bgra: Vec<u8> = color
-        .iter()
-        .copied()
-        .cycle()
-        .take((w * h * 4) as usize)
-        .collect();
-    dec.insert(dir.join(name), w, h, w * 4, bgra, true);
 }
 
 /// 表ア〜エの入力を焼いた [`ShellTarget`] を作る（絵 6 枚はすべて実寸つきで登録済み）。
@@ -153,24 +142,6 @@ fn compose(
         &BindSet::default(),
         &PatternState::default(),
     )
-}
-
-/// 合成結果の 1 画素（premultiplied BGRA）を引く。
-fn pixel(surface: &ComposedSurface, x: u32, y: u32) -> [u8; 4] {
-    let at = (y * surface.stride() + x * 4) as usize;
-    surface.bytes()[at..at + 4]
-        .try_into()
-        .expect("4 バイトの画素")
-}
-
-/// 面の表の層 0 の画像パスを引く（層 0 が無ければ `None`）。
-fn layer0_path(world: &EmoWorld, id: u32) -> Option<String> {
-    world
-        .surface(id)?
-        .elements
-        .iter()
-        .find(|e| e.layer == 0)
-        .map(|e| e.path.as_str().to_string())
 }
 
 /// 表ア（要件 2.2・3.9）: 宣言の無い番号は画像 1 枚で存在し、外形は**画像の実寸**になる。
@@ -215,13 +186,6 @@ fn case_b_empty_layer_zero_merges_the_image_underneath() {
 
     let composed = compose(&target, &world, 0).expect("面 0 は合成できる");
     let expected = (BASE0.0.max(PARTS.0), BASE0.1.max(PARTS.1));
-    assert_eq!(
-        expected,
-        (6, 12),
-        "前提: 期待する外形はどちらか一方の実寸と一致しない"
-    );
-    assert_ne!(expected, BASE0, "前提: 画像だけを数えた外形とは違う");
-    assert_ne!(expected, PARTS, "前提: `element1` だけを数えた外形とは違う");
     assert_eq!(
         (composed.width(), composed.height()),
         expected,
@@ -301,8 +265,9 @@ fn case_d_surface_without_image_stays_empty() {
 
 /// 土台の絵の決定の全体像（要件 2.1 の表の 4 通りが 1 枚のシェルで同時に成り立つ）。
 ///
-/// `used` と `shadowed` が重ならず、和が「認めた画像」の全体に等しいことも併せて見る
-/// （[`BaseImageReport`] の不変条件・`crates/areka-emo-compose/src/base_image.rs`）。
+/// `used` と `shadowed` をそれぞれ値の一致で確かめるので、両者が重ならず和が「認めた画像」の
+/// 全体に等しいこと（[`BaseImageReport`] の不変条件・`crates/areka-emo-compose/src/base_image.rs`）も
+/// この 2 つの一致に含まれる。
 #[test]
 fn every_image_is_either_used_or_shadowed_exactly_once() {
     let world = build_table_target().build_world();
@@ -319,28 +284,6 @@ fn every_image_is_either_used_or_shadowed_exactly_once() {
         shadowed,
         vec![2],
         "使わなかったのは `element0` を持つ面 2 だけ"
-    );
-
-    // 重なり 0 件と、和が「認めた画像」の全体であること（引き算で導かずそのまま判定する）。
-    assert!(
-        used.iter().all(|id| !shadowed.contains(id)),
-        "同じ番号が使った側と使わなかった側の両方に居る: used={used:?} shadowed={shadowed:?}"
-    );
-    let mut both: Vec<u32> = used.iter().chain(shadowed.iter()).copied().collect();
-    both.sort_unstable();
-    assert_eq!(
-        both,
-        select_surface_images(&FILE_NAMES)
-            .images
-            .keys()
-            .copied()
-            .collect::<Vec<_>>(),
-        "認めた画像のうち、使いも隠れもしなかったものが在る"
-    );
-
-    assert!(
-        world.surface(7).is_none(),
-        "宣言も画像も無い面 7 が作られている"
     );
 }
 
@@ -379,7 +322,7 @@ fn append_reaches_a_surface_that_exists_only_as_an_image() {
 /// 要件 3.8: 宣言も画像も無い番号への `surface.append` は、既存の `warn!` を出して面を作らない。
 #[test]
 fn append_to_an_unknown_surface_warns_and_creates_nothing() {
-    let (target, events) = capture_events(build_table_target);
+    let (target, events) = capture(build_table_target);
     let world = target.build_world();
 
     assert!(

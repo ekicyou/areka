@@ -55,8 +55,7 @@ fn attach_show_and_resize(world: &mut World) {
         return;
     };
 
-    if let Err(e) = boot.presenter.attach_target(
-        world,
+    boot.presenter.attach_target(
         target,
         boot.char_window,
         emo_world,
@@ -66,12 +65,7 @@ fn attach_show_and_resize(world: &mut World) {
         // component へ初期化するため初回表示で確定する）——k=96/96=1.0 になるのは実行機が 100%
         // 表示のときだけであり、125%/200% で実行すれば k は 5/4・2/1 になる（DPI 追従駆動は不要）。
         96,
-    ) {
-        tracing::error!(error = %e, "collision-probe: scope0 char target の attach に失敗 — 中止");
-        boot.phase = ProbePhase::Done;
-        world.insert_non_send(boot);
-        return;
-    }
+    );
 
     // donor 必須逸脱 #1/#2: surface1000 を有効 bind 実値付きで表示する。
     boot.presenter.apply(

@@ -29,17 +29,18 @@
 
 use super::*;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use areka_actor::reply_channel;
 use areka_emo_compose::{BindSet, PatternState};
+
+use bevy_ecs::entity::Entity;
 
 use super::super::EmoPresenter;
 use super::super::test_support::{
-    CapturedEvent, build_target_assets, capture, make_world_with_gpu, set_window_dpi,
-    spawn_window_with_dpi,
+    CapturedEvent, build_target_assets, capture, hide_ok, make_world_with_gpu, set_window_dpi,
+    show_with, spawn_window_with_dpi,
 };
-use crate::command::{PresentCommand, PresentOutcome};
+use crate::command::PresentOutcome;
 
 // ── 語彙の読み口 ───────────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,9 @@ fn field_value<'a>(line: &'a str, name: &str) -> &'a str {
 // ── 語彙の逐語固定（Requirement 2.7）────────────────────────────────────────────────────
 
 /// `stage=upload` の行は寸と `resized` を持ち、`reason` は番兵で埋まる。
+///
+/// 下の 3 本の逐語は `target_id` が `Debug` 表現（`TargetId(3)`）でなく内側の u32 で出ることも
+/// 固定する（判定側は `target_id` から scope を算術で写像し、括弧は 1 トークンに切れない）。
 #[test]
 fn the_upload_line_carries_the_size_and_the_resize_verdict() {
     let line = surface_line(&SurfaceRecord {
@@ -127,33 +131,10 @@ fn the_skipped_line_carries_the_reason_and_keeps_the_size_fields_as_sentinels() 
     );
 }
 
-/// `target_id` は `Debug` 表現（`TargetId(3)`）ではなく**内側の u32** で出る。
-///
-/// 判定側は `target_id` から scope を規則「shell = 2·scope ／ balloon = 2·scope+1」で写像する
-/// ため、値が算術で読めなければ判定が組み立たない。加えて `TargetId(3)` の字面は
-/// `judge-perf.py` と同じ辞書化規則で 1 トークンに切れない形（括弧）を持ち込む。
-#[test]
-fn the_target_id_is_written_as_a_bare_number() {
-    let line = surface_line(&SurfaceRecord {
-        stamp: fixed_stamp(1, 1),
-        stage: SurfaceStage::Upload,
-        target_id: TargetId(7),
-        size: Some((1, 1)),
-        resized: Some(false),
-        reason: None,
-    });
-
-    assert_eq!(field_value(&line, SURFACE_FIELD_TARGET_ID), "7");
-    assert!(
-        !line.contains("TargetId"),
-        "`TargetId` の Debug 表現が行へ漏れている: {line}"
-    );
-}
-
 /// 3 段階のどの行も**同じフィールド名を同じ順序で 1 度ずつ**持つ。
 ///
 /// 辞書化は後勝ちなので、1 行に同じ名前が 2 度出ると先の値が黙って消える
-/// （`tools/perf/judge-perf.py:562,588-596`）。段階でフィールドを落とさないことと併せて、
+/// （`tools/perf/judge-perf.py` の `parse_fields`）。段階でフィールドを落とさないことと併せて、
 /// 「記録が出ていない」と「その段階にはその値が無い」の区別を字面の上で保つ。
 #[test]
 fn every_surface_line_repeats_no_field_name_and_drops_none() {
@@ -356,8 +337,8 @@ fn the_previous_size_is_read_before_the_overwrite_and_the_error_branch_is_unmove
     let record_at = at(".native_scratch(|scratch| record_display(dc, scratch, repeat))");
     // 失敗の原因を覚える 3 行（`failure_note`・要件 4.3）をはさんで早期復帰する。
     assert_eq!(
-        lines[record_at + 1..record_at + 9].join(" "),
-        "{ Ok(list) => list, Err(e) => { if let PresentError::Device { hresult, context } = &e { target.failure_note = Some((*context, *hresult)); } Self::reply(reply, Err(e)); return;",
+        lines[record_at + 1..record_at + 8].join(" "),
+        "{ Ok(list) => list, Err(e) => { if let PresentError::Device { hresult, context } = &e { target.failure_note = Some((*context, *hresult)); } return Err(e);",
         "記録の失敗分岐の字面が動いている（早期復帰でなくなると前状態維持が崩れる）"
     );
     assert!(
@@ -481,45 +462,24 @@ fn gpu_world_with_frame() -> World {
     world
 }
 
-/// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作る（`author_dpi` は 96 固定）。
-fn attach(presenter: &mut EmoPresenter, world: &mut World, target: TargetId, window_dpi: u16) {
-    let window = spawn_window_with_dpi(world, window_dpi);
+/// DPI 96 の窓 ＋ 装着済み target を 1 組作り、窓を返す（`author_dpi` も 96。別の DPI は後から `set_window_dpi`）。
+fn attach(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) -> Entity {
+    let window = spawn_window_with_dpi(world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter
-        .attach_target(world, target, window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(target, window, emo_world, atlas, 96);
+    window
 }
 
 /// `ShowSurface` を 1 回適用する。
 fn show(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) -> PresentOutcome {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with(
+        presenter,
         world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("ShowSurface の reply を受信できない")
-}
-
-/// `Hide` を 1 回適用する。
-fn hide(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    rx.recv_timeout(Duration::from_secs(10))
-        .expect("Hide の reply を受信できない")
-        .expect("Hide は成功する");
+        target,
+        1000,
+        BindSet::default(),
+        PatternState::default(),
+    )
 }
 
 /// 捕捉列から `kind=surface` の行だけを発火順に取り出す。
@@ -550,7 +510,7 @@ fn perf_line(events: &[CapturedEvent]) -> CapturedEvent {
 fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    attach(&mut presenter, &mut world, TargetId(3), 96);
+    attach(&mut presenter, &mut world, TargetId(3));
 
     let ((), events) = capture(|| {
         assert!(
@@ -609,7 +569,7 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
 fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    attach(&mut presenter, &mut world, TargetId(0), 96);
+    attach(&mut presenter, &mut world, TargetId(0));
     assert!(
         show(&mut presenter, &mut world, TargetId(0)).is_ok(),
         "前提: 初回表示は成立する（ここまでは捕捉の外）"
@@ -639,11 +599,7 @@ fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
 fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter
-        .attach_target(&mut world, TargetId(1), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    let window = attach(&mut presenter, &mut world, TargetId(1));
     assert!(
         show(&mut presenter, &mut world, TargetId(1)).is_ok(),
         "前提: k=1/1 の初回表示は成立する"
@@ -681,11 +637,7 @@ fn a_scale_change_changes_the_recorded_size_without_being_a_resize() {
 fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     let mut world = gpu_world_with_frame();
     let mut presenter = EmoPresenter::new();
-    let window = spawn_window_with_dpi(&mut world, 96);
-    let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC3);
-    presenter
-        .attach_target(&mut world, TargetId(2), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    let window = attach(&mut presenter, &mut world, TargetId(2));
     assert!(
         show(&mut presenter, &mut world, TargetId(2)).is_ok(),
         "前提: 初回表示は成立する"
@@ -708,7 +660,7 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     assert_eq!(field_value(&lines[0], SURFACE_FIELD_TARGET_ID), "2");
 
     // ⑵ 不可視（k は変えたうえで隠す＝先のゲートを抜けて不可視ゲートへ届かせる）。
-    hide(&mut presenter, &mut world, TargetId(2));
+    hide_ok(&mut presenter, &mut world, TargetId(2));
     set_window_dpi(&mut world, window, 192);
     let (invisible, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(2)));
     assert_eq!(invisible, None, "前提: 不可視では再表示しない");
@@ -720,18 +672,17 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     );
 }
 
-/// 刻印資源を持たない World（`EcsWorld::new` 以外で組まれた World）でもフィールドは落ちない。
+/// 刻印資源を持たない World（`EcsWorld::new` 以外で組まれた World）では刻印を捏造せず 0 を返し、
+/// 両資源が在れば `FrameCount` の番号を載せる（perf の行の `frame` もここから読む）。
 #[test]
-fn a_world_without_the_stamp_resources_still_produces_a_complete_line() {
+fn stamp_of_is_zero_without_the_resources_and_the_frame_count_with_them() {
     let world = World::new();
     let stamp = stamp_of(&world);
     assert_eq!(stamp.frame, 0, "資源不在で値を捏造しない（0 を返す）");
     assert_eq!(stamp.t_us, 0);
-    assert_eq!(frame_of(&world), 0);
 
     let mut with_frame = World::new();
     with_frame.insert_resource(FrameCount(11));
     with_frame.insert_resource(TickStart(Instant::now()));
-    assert_eq!(frame_of(&with_frame), 11);
     assert_eq!(stamp_of(&with_frame).frame, 11);
 }

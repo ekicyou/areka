@@ -67,20 +67,16 @@ fn spawn_tick_last_result_flow() {
 
     // tick to midpoint
     animator.tick(0.5);
-    let result = animator.last_result();
-    assert!(
-        !result.changes.is_empty(),
-        "Should have opacity change at t=0.5"
-    );
+    let len = animator.last_result().changes.len();
+    assert!(len > 0, "Should have opacity change at t=0.5");
 
     // last_result is idempotent
-    let result2 = animator.last_result();
-    assert_eq!(result.changes.len(), result2.changes.len());
+    assert_eq!(len, animator.last_result().changes.len());
 }
 
 #[test]
 fn default_animator_has_empty_result() {
-    let animator = DolaAnimator::new();
+    let mut animator = DolaAnimator::new();
     let result = animator.last_result();
     assert!(result.changes.is_empty());
     assert!(result.triggered.is_empty());
@@ -122,13 +118,13 @@ fn tick_dola_animators_system_updates_all_entities() {
     }
 
     // Both should have changes
-    let a1_ref = world.get::<DolaAnimator>(e1).unwrap();
+    let mut a1_ref = world.get_mut::<DolaAnimator>(e1).unwrap();
     assert!(
         !a1_ref.last_result().changes.is_empty(),
         "Entity 1 should have changes"
     );
 
-    let a2_ref = world.get::<DolaAnimator>(e2).unwrap();
+    let mut a2_ref = world.get_mut::<DolaAnimator>(e2).unwrap();
     assert!(
         !a2_ref.last_result().changes.is_empty(),
         "Entity 2 should have changes"
@@ -142,9 +138,9 @@ fn tick_dola_animators_system_updates_all_entities() {
 #[test]
 fn runtime_accessor_returns_inner_runtime() {
     let rt = make_runtime_with_animation();
-    let animator = DolaAnimator::with_runtime(rt);
+    let mut animator = DolaAnimator::with_runtime(rt);
 
-    // runtime() は読み取り可能
+    // runtime() は可変の借りから読める
     let _runtime = animator.runtime();
     // Debug trait
     let debug = format!("{:?}", animator);

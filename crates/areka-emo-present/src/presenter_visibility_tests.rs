@@ -12,43 +12,17 @@
 
 use super::*;
 
-use std::time::Duration;
-
-use areka_actor::reply_channel;
-
-use wintf::ecs::{Arrangement, HitTest, HitTestMode, Visual};
+use wintf::ecs::{HitTest, HitTestMode, Visual};
 
 use super::test_support::{
-    attach_hit_target, build_target_assets, build_two_face_assets, make_world_with_gpu,
-    mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
+    arrangement_of, attach_hit_target, build_target_assets, build_two_face_assets, hide_ok,
+    make_world_with_gpu, mask_dims, mount_entities, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
 // ── テスト補助（装着実体の実値を読む）──────────────────────────────────────────────────
 // presenter の私有状態（`visible`）だけを見ると「照会は false を返すが entity は可視」という
 // 食い違いを見逃す。可視性の主張は必ず **entity の実 component 値**でも裏を取る
 // （`mount_entities` は `presenter_test_support.rs` の共有補助）。
-
-/// 枠の面 entity の `Arrangement` 寸（＝**論理寸＝原寸**。k は寸へ焼かず `scale` の係数になる）。
-fn arrangement_size(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<Arrangement>(surface_entity)
-        .map(|a| (a.size.width as u32, a.size.height as u32))
-}
-
-/// 枠の面 entity の `Arrangement.scale`（＝実適用 k の係数・wintf の `SetTransform` が掛ける）。
-fn arrangement_scale(world: &World, surface_entity: Entity) -> Option<f32> {
-    world.get::<Arrangement>(surface_entity).map(|a| {
-        assert_eq!(a.scale.x, a.scale.y, "x/y で異なる係数は本経路に無い");
-        a.scale.x
-    })
-}
-
-/// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
-fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
-    world
-        .get::<AlphaMaskResource>(surface_entity)
-        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
-}
 
 /// 枠の面・文字層スロットの双方が不可視かつポインタ透過であること（Requirement 1.2/1.4/1.8）。
 fn assert_entities_hidden(world: &World, presenter: &EmoPresenter, target: TargetId, ctx: &str) {
@@ -114,22 +88,6 @@ fn assert_entities_visible(world: &World, presenter: &EmoPresenter, target: Targ
     );
 }
 
-/// `Hide` を適用し、reply が `Ok(())` であることを確認する。
-fn hide_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::Hide {
-            target,
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "Hide が Ok でない"
-    );
-}
-
 /// 外部所有の target を 1 つ組み、初回 `ShowSurface` まで済ませた状態を返す。
 fn external_target_after_first_show(
     dpi: u16,
@@ -140,9 +98,7 @@ fn external_target_after_first_show(
     let (emo_world, atlas, golden) = build_target_assets(3, 2, salt);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), VisibilityOwnership::External)
         .expect("装着済み target への所有権設定は Ok");
@@ -162,7 +118,7 @@ fn external_target_after_first_show(
 /// 揃っている）ことを**同時に**主張する。片方だけでは「出ないが文字も流せない」縮退を見逃す。
 ///
 /// メモのバイト（readback）まで golden 一致を見るのは、可視化手順を落とした結果として
-/// アップロードやマスク同期まで一緒に落ちていないこと（design「それ以外の全手順は所有権に依らず共通」）
+/// 合成とメモへの取り込みまで一緒に落ちていないこと（design「それ以外の全手順は所有権に依らず共通」）
 /// を実行で確かめるためである。
 #[test]
 fn external_show_establishes_display_without_making_it_visible() {
@@ -217,9 +173,7 @@ fn command_driven_target_is_still_visualized_by_show_surface() {
     let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x22);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     // 所有権を設定しない＝既定（CommandDriven）。
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
 
@@ -287,13 +241,13 @@ fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
         "不可視確立でもメモは原寸の合成バイトで満たされる"
     );
     assert_eq!(
-        arrangement_size(&world, surface),
-        Some(native_size),
+        arrangement_of(&world, surface).0,
+        native_size,
         "配置の論理寸が原寸でない（寸へ k を焼き込んでいる）"
     );
     assert_eq!(
-        arrangement_scale(&world, surface),
-        Some(2.0),
+        arrangement_of(&world, surface).1,
+        (2.0, 2.0),
         "配置の係数に k が届いていない（等倍のまま確立した）"
     );
     assert_eq!(
@@ -317,9 +271,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
     let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(4, 3);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     presenter
         .set_visibility_ownership(TargetId(0), VisibilityOwnership::External)
         .expect("所有権設定は Ok");
@@ -386,7 +338,7 @@ fn external_reshow_updates_result_without_becoming_visible() {
 /// なった。マスクの不変は「αマスクの更新を落とした」ことと区別できなければ意味が無いため、
 /// 係数と照会値が実際に動いていることを同じテストの中で対にして主張する。
 #[test]
-fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
+fn external_reshow_while_invisible_updates_scale_and_physical_size_but_keeps_mask_native() {
     let (mut world, window, mut presenter, target, golden) =
         external_target_after_first_show(96, 0x2A);
     let (surface, _slot) = mount_entities(&presenter, target);
@@ -394,13 +346,13 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
 
     // 遷移の起点: 確立時は k=1/1。配置は原寸・係数 1.0 で、マスクも原寸。
     assert_eq!(
-        arrangement_size(&world, surface),
-        Some(native_size),
+        arrangement_of(&world, surface).0,
+        native_size,
         "前提: 確立時の配置の論理寸は原寸"
     );
     assert_eq!(
-        arrangement_scale(&world, surface),
-        Some(1.0),
+        arrangement_of(&world, surface).1,
+        (1.0, 1.0),
         "前提: 確立時の係数は等倍"
     );
     assert_eq!(
@@ -436,8 +388,8 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
     );
     // 本題: 可視化以外の手順が可視性でゲートされていないこと。
     assert_eq!(
-        arrangement_scale(&world, surface),
-        Some(2.0),
+        arrangement_of(&world, surface).1,
+        (2.0, 2.0),
         "配置の係数が可視性でゲートされている（不可視期間中の変化を取りこぼす・Requirement 6.6 の土台）"
     );
     assert_eq!(
@@ -452,8 +404,8 @@ fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
         "k 変化でメモの原寸バイトが書き換わった（k を含む面を作っている）"
     );
     assert_eq!(
-        arrangement_size(&world, surface),
-        Some(native_size),
+        arrangement_of(&world, surface).0,
+        native_size,
         "配置の論理寸へ k を焼き込んでいる（拡大は変換行列の仕事）"
     );
     assert_eq!(
@@ -599,7 +551,7 @@ fn show_target_without_dpi_change_only_adds_visibility() {
 }
 
 /// Requirement 6.6 の成立経路を固定する: 不可視の間の表示倍率変化は**DPI 追従の相では拾われず**
-/// （`refresh_scale` の可視ゲート・`crates/areka-emo-present/src/presenter/refresh.rs:74-80`）、
+/// （`refresh_scale` の可視ゲート・`presenter/refresh.rs` の `if !visible` の枝）、
 /// 可視化の入口が同じ経路を再通過することで埋め合わされる。
 ///
 /// この 2 段の役割分担を明示的に固定しておかないと、可視ゲートを外す是正（不可視の target まで
@@ -684,9 +636,7 @@ fn hide_is_immediate_regardless_of_ownership() {
     let window2 = spawn_window_with_dpi(&mut world2, 96);
     let (emo_world, atlas, _g) = build_target_assets(3, 2, 0x26);
     let mut presenter2 = EmoPresenter::new();
-    presenter2
-        .attach_target(&mut world2, TargetId(1), window2, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter2.attach_target(TargetId(1), window2, emo_world, atlas, 96);
     show_ok(&mut presenter2, &mut world2, TargetId(1), 1000);
     assert_eq!(presenter2.target_visible(TargetId(1)), Some(true));
     assert_entities_visible(&world2, &presenter2, TargetId(1), "既定所有権の Hide 直前");
@@ -728,7 +678,8 @@ fn external_target_can_be_shown_again_after_hide() {
 }
 
 // ── 失敗経路（log-first・沈黙する失敗を作らない）────────────────────────────────────────
-// いずれも `attach_target` が World にも GPU にも触れない性質を使い、素の `World` で決定論固定する。
+// `show_target` の檻は、`attach_target` が World にも GPU にも触れない性質を使い、素の `World` で
+// 決定論固定する。
 
 /// 未装着 target への所有権設定は `Err`（`error!` 済み・沈黙しない）。
 #[test]
@@ -765,8 +716,8 @@ fn show_target_before_any_established_display_is_err() {
 
     let result = presenter.show_target(&mut world, TargetId(0));
     assert!(
-        matches!(result, Err(PresentError::TargetNotAttached(TargetId(0)))),
-        "未確立 target の可視化が Err でない: {result:?}"
+        matches!(result, Err(PresentError::NotShown(TargetId(0)))),
+        "未確立 target の可視化が NotShown でない: {result:?}"
     );
     assert_eq!(
         presenter.target_visible(TargetId(0)),
@@ -783,9 +734,7 @@ fn setting_ownership_does_not_change_current_visibility() {
     let (emo_world, atlas, _g) = build_target_assets(3, 2, 0x28);
 
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     assert_eq!(presenter.target_visible(TargetId(0)), Some(true));
 
@@ -798,28 +747,4 @@ fn setting_ownership_does_not_change_current_visibility() {
         "所有権の設定が可視状態を消している（設定は宣言であって指令ではない）"
     );
     assert_entities_visible(&world, &presenter, TargetId(0), "所有権設定の直後");
-}
-
-/// 未装着 target の可視状態照会は `None`（「不可視」と区別する）。
-#[test]
-fn target_visible_is_none_for_unattached_target() {
-    let presenter = EmoPresenter::new();
-    assert_eq!(
-        presenter.target_visible(TargetId(9)),
-        None,
-        "未装着 target の照会は None（不可視 Some(false) と混同しない）"
-    );
-}
-
-/// 装着直後（未表示）は `Some(false)`（skeleton の初期可視性）。
-#[test]
-fn target_visible_is_false_right_after_attach() {
-    let mut world = World::new();
-    let mut presenter = EmoPresenter::new();
-    attach_hit_target(&mut presenter, &mut world, TargetId(0));
-    assert_eq!(
-        presenter.target_visible(TargetId(0)),
-        Some(false),
-        "装着直後は不可視（skeleton 登録のみ）"
-    );
 }

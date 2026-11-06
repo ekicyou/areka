@@ -5,18 +5,8 @@
 
 use std::num::{NonZeroU32, NonZeroU64};
 
-use areka_emo_compose::EmoWorld;
-use log_capture_kit::{LineFormat, capture_lines};
-
 use super::{AnimationTable, LoopTrigger};
-
-/// 本文から表を組み、同じ走行の `tracing` 出力を 1 イベント 1 行で添えて返す。
-fn table_and_logs(text: &str) -> (AnimationTable, Vec<String>) {
-    let world = EmoWorld::build(&areka_parsers::shell::parse(text));
-    capture_lines(LineFormat::LevelTargetFields, || {
-        AnimationTable::from_world(&world)
-    })
-}
+use crate::test_support::{table_and_logs, warns};
 
 /// 間隔の語 1 つだけを差し替えた面 0 の animation 3（コマ 2 本）。
 fn surface0_with(interval: &str) -> String {
@@ -25,10 +15,6 @@ fn surface0_with(interval: &str) -> String {
          animation3.pattern0,overlay,10,0,0,0\n\
          animation3.pattern1,overlay,-1,50,0,0\n}}\n"
     )
-}
-
-fn warns(logs: &[String]) -> Vec<&String> {
-    logs.iter().filter(|l| l.contains("level=WARN")).collect()
 }
 
 /// 採録の記録（表を組むときの `debug!`）。
@@ -114,9 +100,9 @@ fn invalid_number_is_not_adopted_and_warns_once() {
     }
 }
 
-/// コマ列が空の 3 語は今までの空の検査（`warn!`）で採らず、採録の記録も残さない。
+/// コマ列が空の 3 語は空の検査（`warn!`）で採らず、採録の記録も残さない。
 #[test]
-fn empty_frames_keep_the_existing_empty_warn() {
+fn empty_frames_fall_to_the_empty_warn() {
     for interval in ["runonce", "periodic,3", "talk,2"] {
         let text = format!("surface7\n{{\nanimation2.interval,{interval}\n}}\n");
         let (table, logs) = table_and_logs(&text);
@@ -136,7 +122,7 @@ fn empty_frames_keep_the_existing_empty_warn() {
     }
 }
 
-/// `+` の組み合わせ・大文字混じり・範囲外の語は今までどおり採らず、元の綴りつきの `debug!` だけを
+/// `+` の組み合わせ・大文字混じり・範囲外の語は採らず、元の綴りつきの `debug!` だけを
 /// 残す（`warn!` は出さない。先頭の語が `talk`／`periodic` そのものでなければ無効の数値の扱いにしない）。
 #[test]
 fn combinations_and_out_of_scope_words_keep_the_debug_arm() {
@@ -174,5 +160,5 @@ fn tables_without_the_three_words_have_false_marks() {
 
     let (always, _) = table_and_logs(&surface0_with("always"));
     assert!(!always.has_triggers && !always.has_talk());
-    assert!(always.is_continuous(), "always の門は今までどおり");
+    assert!(always.is_continuous(), "always の表は連続");
 }

@@ -15,8 +15,8 @@ use windows_numerics::Matrix3x2;
 use wintf::ecs::pointer::build_bubble_path;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{
-    AlphaMaskResource, GlobalArrangement, GraphicsCore, HitTest, Point, PointF, Rect, SizeI,
-    WindowPos, WucGraphicsResource, hit_test_in_window,
+    AlphaMaskResource, GlobalArrangement, HitTest, Point, PointF, Rect, SizeI, WindowPos,
+    WucGraphicsResource, hit_test_in_window,
 };
 
 use super::super::box_sync_tests::{emote, layout, resolver, select, text};
@@ -54,7 +54,8 @@ fn children_of(world: &World, window: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
-/// World の資源（GraphicsCore・Compositor）で印の面を挿す（`present_frame` と同じ取り出し方）。
+/// World の資源（GraphicsCore・Compositor）で印の面を挿す（`present_frame` と同じ取り出し方・
+/// 装置の変化の印を立てない）。
 fn attach(
     world: &mut World,
     window: Entity,
@@ -67,8 +68,8 @@ fn attach(
         .compositor()
         .cloned()
         .expect("Compositor");
-    world.resource_scope(|world, core: bevy_ecs::world::Mut<GraphicsCore>| {
-        MarkerSurface::attach(world, window, index, &compositor, &core, size, offset)
+    crate::actor::present::with_graphics_core(world, |world, core| {
+        MarkerSurface::attach(world, window, index, &compositor, core, size, offset)
             .expect("MarkerSurface::attach")
     })
 }
