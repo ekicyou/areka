@@ -25,7 +25,8 @@ impl EmoPresenter {
     /// 合成入力（surface id＋bind 集合＋pattern）が完全一致するヒットなら再合成しない（R4.2）し、
     /// k だけが変わった適用もヒットする（要件 5.3）。(1) ミスなら合成し（native 原寸）、
     /// `SurfaceNotFound` は error! ＋表示不変＋`Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋
-    /// `Ok`（設計ディスカッション #1）、`Ok` なら原寸バイトから表示記録（閉じた `GraphicsCommandList`）を
+    /// `Ok`（設計ディスカッション #1・外形の上限越えの `ExtentTooLarge` も同じ扱い）、
+    /// `Ok` なら原寸バイトから表示記録（閉じた `GraphicsCommandList`）を
     /// 起こし、マスクを原寸バイトから 1 回だけ生成して `cache.insert` へ面・マスク・記録の三つ組で渡す。
     /// (2) `mount` 未生成ならエントリの表示記録込みで遅延生成し、(3) 表示記録 → 配置（原寸・k）→
     /// マスク → 可視化の順に同一呼び出し内で書く（R2.4）。拡大は wintf の描画経路

@@ -126,8 +126,16 @@ crates/areka-emo-compose/src/
 ├── budget.rs                    # 新: 広がりの予算（Budget）。6 か所の走査が共有する（指摘 3）
 ├── plan_frame_merge_tests.rs    # 新: plan_ops_tests.rs の 857 行目から後（コマの合流の門）を移す（指摘 13）
 ├── walk_limits_tests.rs         # 新: 3 の深い鎖・菱形・insert の連鎖のテスト。5 つの走査へ同じ検体を通すので 1 つにまとめる（lib.rs で宣言）
+├── outline_walk.rs              # 新（かけ直し・7.1）: 外形とシェルの外形の 2 つの走査が共有するたどり方を 1 本に（指摘 84）
+├── linear_lookup_tests.rs       # 新（かけ直し・6.2）: 線形の探索を表引きにした所の、大きな検体での回帰（指摘 25〜30）
+├── work_limits_tests.rs         # 新（かけ直し・7.1）: 予算が数えない仕事（なめる行・重ねる画素・写す行・持ち込み）の上限（指摘 76〜79・82）
+├── row_budget_tests.rs          # 新（かけ直し・8.1）: 予算を面の行の全部で数える（指摘 129〜137）
 └── （ほかは既存ファイルの変更だけ）
+crates/areka-emo-compose/examples/
+└── compose_timing.rs            # 新（3.2）: 予算の値と外形の表の効き目を測る道具（決定論のテストではない・回すのは負荷テストの机）
 ```
+
+消したファイル（かけ直し）: `src/hit_in_tests.rs`（6.5・hit.rs のテストと同じ入力で同じことを確かめるだけ＝指摘 54）・`src/plan_bind_random_tests.rs`（7.3・2 本とも他のテストと重なる＝指摘 120）。
 
 ### Modified Files
 
@@ -156,7 +164,7 @@ crates/areka-emo-compose/src/
 - `src/plan_test_support.rs` — クレートの直下から引ける部品にし、写しの元にする（12）。`frame`・`coll`・`page_1px`・`single_entry_table`・`solid`・`px`・`png_size`・大きさ指定の焼き・動く絵の焼き・記録の読み取り・命令の名前引き・`ops()` をここへ集める（12）。
 - `src/plan_ops_tests.rs` — 前半（1〜855 行）を残し、`derive_ops` の塊を `ops()` に（12）、後半を `plan_frame_merge_tests.rs` へ（13）。
 - `src/scale_test_support.rs` — 消す（定数 1 つを `scale_ratio_tests.rs` の頭へ・16）。
-- 写しを持つテスト（`composer_tests.rs`・`log_firing_tests.rs`・`atlas_bind.rs` のテスト・`film_tests.rs`・`fold_tests.rs`・`base_image_tests.rs`・`nesting_kind_tests.rs`・`nesting_visible_tests.rs`・`pattern_cell_tests.rs`・`plan_always_tests.rs`・`nesting_film_tests.rs`・`pattern.rs` のテスト・`plan_bind_tests.rs`・`plan_nesting_tests.rs`・`plan_nesting_extent_tests.rs`・`pattern_parts_tests.rs`・`hit_in_tests.rs`・`hit_import_tests.rs`・`blit.rs` のテスト・`plan_extent_film_tests.rs`・`golden_tests_frame_extent_tests.rs`・`nesting_fixture_tests.rs`・`plan_extent_tests.rs`・`plan_bounds_tests.rs`・`plan_bind_random_tests.rs`）— 写しを消して `plan_test_support` から引く（12）。
+- 写しを持つテスト（`composer_tests.rs`・`log_firing_tests.rs`・`atlas_bind.rs` のテスト・`film_tests.rs`・`fold_tests.rs`・`base_image_tests.rs`・`nesting_kind_tests.rs`・`nesting_visible_tests.rs`・`pattern_cell_tests.rs`・`plan_always_tests.rs`・`nesting_film_tests.rs`・`pattern.rs` のテスト・`plan_bind_tests.rs`・`plan_nesting_tests.rs`・`plan_nesting_extent_tests.rs`・`pattern_parts_tests.rs`・`hit_in_tests.rs`・`hit_import_tests.rs`・`blit.rs` のテスト・`plan_extent_film_tests.rs`・`golden_tests_frame_extent_tests.rs`・`nesting_fixture_tests.rs`・`plan_extent_tests.rs`・`plan_bounds_tests.rs`・`plan_bind_random_tests.rs`）— 写しを消して `plan_test_support` から引く（12）。このうち `hit_in_tests.rs`・`plan_bind_random_tests.rs` は後のかけ直しでファイルごと消した（上の「消したファイル」）。
 - 失敗しえないテスト・名前と違うテスト・2 度確かめるテスト・古い説明（10・11・14・15）は `research.md` 3 節の行のまま直す。
 - `tests/fixtures/animated-playback/README.md` — 27 行目の説明（`charset,UTF-8`）を事実に（15）。
 - 1,000 行の番人の見通し（要件 6.1・着手のときの行数）: テストを足す先のうち上限に近いのは `fold_tests.rs`（976）・`composer_tests.rs`（897）・`nesting_visible_tests.rs`（837）・`boxes_tests.rs`（792）・`blit.rs`（782）。3 のテストは `walk_limits_tests.rs`、19 のテストは `blit_rect_tests.rs`（536）に置き、この 5 つには指摘 4・11 の数行の直しだけを入れる（指摘 9 の規則のテストは `fold_tests.rs` に足さず、兄弟のファイルへ）。指摘 16 の `fold_shell` の書き換え（23 か所）は行を増やさない。各タスクは直した後の行数を確かめ、越えるなら兄弟のファイルへ分ける。
@@ -328,9 +336,9 @@ flowchart TD
 | 要件 | 2.1, 4.4, 6.2 |
 
 **決め**
-- 上限 `MAX_EXTENT: u32 = 16_384`（`plan_extent.rs`・`pub(crate) const`）。根拠は Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大（`D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION`）。areka の GPU の機器は `wintf/src/ecs/graphics/core.rs` の `create_device_3d` が機能水準を指定せず（既定の並び＝11_0 から）ハードウェアで作る。合成の絵は `areka-emo-present` の `display.rs` が `ID2D1DeviceContext::CreateBitmap` で原寸のまま GPU へ上げるので、この寸を越える絵は表示できない。このクレートは `windows` に依存しないので、値は定数として写し、根拠を 1 行の説明に書く。ツリーの中に同じ値の定数は無かった（grep 済み）。
+- 上限は一辺 `MAX_EXTENT: u32 = 16_384` と面積 `MAX_AREA: u64 = 1 << 25`（どちらも `plan_extent.rs`・`pub(crate) const`）。面積の上限はかけ直し（指摘 23）で足した: 合成のたびに幅×高さ×4 バイトを 0 で埋めて転写するので、一辺の上限の内でも 1 GiB 近い絵を作らない（2^25 画素＝128 MiB・8K の画面より大きい）。一辺の根拠は Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大（`D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION`）。areka の GPU の機器は `wintf/src/ecs/graphics/core.rs` の `create_device_3d` が機能水準を指定せず（既定の並び＝11_0 から）ハードウェアで作る。合成の絵は `areka-emo-present` の `display.rs` が `ID2D1DeviceContext::CreateBitmap` で原寸のまま GPU へ上げるので、この寸を越える絵は表示できない。このクレートは `windows` に依存しないので、値は定数として写し、根拠を 1 行の説明に書く。ツリーの中に同じ値の定数は無かった（grep 済み）。
 - `compute_extent` は `i64` の最大を `u32::try_from(..).unwrap_or(u32::MAX)` で飽和させる（`as u32` の切り詰めをやめる）。位置の足し算は `saturating_add`。
-- `build_plan` は外形を引いた直後（`EmptyComposition` の判定の隣）で、幅か高さが `MAX_EXTENT` を越えたら `error!`（面の番号・幅・高さ・上限）を出して `Err(ComposeError::ExtentTooLarge { surface, w, h })` を返す。命令は積まず、絵の確保もしない（`blit::execute` まで行かない）。
+- `build_plan` は外形を引いた直後（`EmptyComposition` の判定の隣）で、幅か高さが `MAX_EXTENT` を越えるか、幅×高さが `MAX_AREA` を越えたら `error!`（面の番号・幅・高さ・一辺と面積の上限）を出して `Err(ComposeError::ExtentTooLarge { surface, w, h })` を返す。命令は積まず、絵の確保もしない（`blit::execute` まで行かない）。幅か高さが 0 は `EmptyComposition`（かけ直し・指摘 82）。
 - `ComposedSurface` は `stride` 欄を消す。`stride()` は `self.width * 4`（幅は合成で `MAX_EXTENT` 以下に抑えるので `u32` で足りる）。`new`・`resize_and_clear`・`resize_from` の長さは `width as usize * 4 * height as usize`。
 
 ```rust
@@ -338,13 +346,13 @@ flowchart TD
 pub enum ComposeError {
     SurfaceNotFound(u32),
     EmptyComposition(u32),
-    /// 外形が GPU の面の最大寸（一辺 16,384）を越える。
-    #[error("surface {surface} extent {w}x{h} exceeds the maximum")]
+    /// 外形が上限（一辺 `MAX_EXTENT` か面積 `MAX_AREA`）を越える。文の上限の値は定数から作る。
+    #[error("surface {surface} extent {w}x{h} exceeds the size limit (side {side} or area {area} pixels)", ..)]
     ExtentTooLarge { surface: u32, w: u32, h: u32 },
 }
 ```
 
-**波及**: `ComposeError` は `#[non_exhaustive]`。範囲の外で名指しで比べるのは `EmptyComposition` だけ（`areka-emo-present` の `balloon.rs` ほか・`crates/areka` の `assets.rs`・`offline_dump_tests.rs`）＝壊れない。`ExtentTooLarge` を受けた表示の側の扱い（隠すか・前の絵のままか）は `audit-emo-present` と申し合わせる（このクレートからはコードを変えない）。`stride()` の形は変えない。
+**波及**: `ComposeError` は `#[non_exhaustive]`。範囲の外で名指しで比べるのは `EmptyComposition` だけ（`areka-emo-present` の `balloon.rs` ほか・`crates/areka` の `assets.rs`・`offline_dump_tests.rs`）＝壊れない。`ExtentTooLarge` を受けた表示の側の扱い（隠すか・前の絵のままか）は `audit-emo-present` と申し合わせる（このクレートからはコードを変えない）。申し合わせ（11-05）は「`EmptyComposition` と同じく隠す・腕は後から着いた側が足す」で、こちらが後から着いたので 13.1 で `areka-emo-present` の `presenter/show.rs`（`apply_show` の match）に腕を足した（`warn!`＋隠す縮退＋`Ok`）。`stride()` の形は変えない。
 
 #### 明示のスタックの走査と予算（指摘 3）
 
@@ -357,7 +365,7 @@ pub enum ComposeError {
 
 ```rust
 /// 1 回の走査の範囲でたどってよい面の数（値は設計の議題 1）。
-pub(crate) const VISIT_BUDGET: usize = /* 実装の段で決める */;
+pub(crate) const VISIT_BUDGET: usize = 1 << 16; // 3.2 で測って決めた（research.md 14 節）
 
 pub(crate) struct Budget {
     left: usize,
@@ -366,9 +374,9 @@ pub(crate) struct Budget {
 
 impl Budget {
     pub(crate) fn new(limit: usize) -> Self;
-    /// 面に 1 つ入る前に呼ぶ。残りがあれば減らして true。尽きていれば、範囲で初めての
-    /// ときだけ `error!`（`walk`＝走査の名前・`root`＝根の面）を出して false。
-    pub(crate) fn enter(&mut self, walk: &'static str, root: u32) -> bool;
+    /// 面に入る前に呼ぶ。「入る 1 ＋`rows`」を引けたら true。足りなければ false（範囲で初めての
+    /// ときだけ `error!`・`walk`＝走査の名前・`root`＝根の面）。
+    pub(crate) fn enter(&mut self, rows: usize, walk: &'static str, root: u32) -> bool;
 }
 ```
 
@@ -406,6 +414,25 @@ enum Step {
 
 **`ponytail:` 注釈**: `nesting.rs:401` の注釈は残す（要件の討議の決め）。壊れたシェルでの重さは、この予算で覆う（`reaches` は呼び出し 1 回につき 1 つの予算の範囲に入る）。`hit_import.rs:53` の注釈（根ごとに子をたどり直す）が先送りした重さは、深い鎖で実際に終わらなかったので、きれいに終わった面の覚え（System Flows の「広がりの予算」）で解き、注釈は事実に合わせて外した。
 
+#### 仕事の上限と記録の回数（かけ直し・タスク 6〜12）
+
+かけ直しの audit（research.md 15〜22 節）で決まった形。
+
+- 予算の単位（8.1）: どの走査も面に入るとき「入る 1 ＋その面の行の全部（`budget::surface_rows`＝element＋collision＋Σ(1＋pattern)）」を `Budget::enter(rows, ..)` で引く。`reaches` は「1 ＋出る辺の数」。行の数が予算に届く子は部品として入れない（根なら描く）。足りなければ残りを使い切って断る。ただし入る分が予算そのものより多い面は、残りを使わずにその面だけ断る（後ろの兄弟は入れる・10.1）。
+- 外形とシェルの外形のたどり方は `outline_walk.rs` の 1 本（面ごとの寄与は trait `Outline` で呼び手が渡す・指摘 84）。
+- 予算が数えない仕事にも上限を置く（7.1。どれも仮の値で、測り直しの候補）:
+
+| 定数（置き場） | 値 | 抑えるもの | 越えたら |
+|---|---|---|---|
+| `PIXEL_FACTOR`（`blit.rs`） | 64 | 合成 1 回で重ねる画素の合計を「外形の面積×64」まで（`MAX_AREA` の外形で 2^31 画素） | `build_plan` が命令列の頭だけ残し、残りの命令を捨てる（`cap_pixels`・根の層も切る） |
+| `MAX_COPIED_LINES`（`fold.rs`） | `1 << 20` | 畳み込み 1 回で範囲の見出しの番号ごとに写す本体の行の合計（面と箱で 1 つずつ・pattern の行も数える） | その記述子を捨てる（`may_copy`）。ちょうど 2^20 は残る |
+| `IMPORT_BUDGET`（`hit_import.rs`） | `1 << 20` | シェル全体で面に持ち込んで持ち続ける領域の数（覚え `HitMemo` の長さも） | 収まらない根には持ち込みを付けず、後ろの根は残りで続ける |
+
+- 記録の回数（失敗と上限の記録は 1 度だけ・あふれさせない）:
+  - 合成の側: 合成器 1 つにつき面（根）ごとに初めの 1 度だけ `error!`。印は `PlanScratch` の `reported`（予算切れ）・`pixels_reported`（重ねる画素）・`failed_reported`（`SurfaceNotFound`・`EmptyComposition`・`ExtentTooLarge` の 3 種）。2 度目からは、3 種の失敗は `debug!`、ほかは無言。合成を全部黙らせないのは、外形の表は積み荷を数えず命令列の方が先に切れることがあり、記録の無い失敗が残るため（要件 6.2）。アプリの `PresentTarget` は合成器を使い回すので、毎フレームあふれない。
+  - 読み込みの側: 呼び出し 1 回につき 1 度だけ `error!`。印は外形の表とシェルの外形が `outline_walk` の `reported`、持ち込みが `hit_import` の `reported`（予算切れ）と `over_reported`（`IMPORT_BUDGET`）、写す行が `Copied.reported`、`reaches` が呼び手（`NestReport`・`shape_issues`）の持つ `reported`。2 度目からは `debug!` か無言。
+  - `Records::Quiet` が効くのは、面の表を黙って組む段（`EmoWorld::build_with_images_quiet`）の中だけ: 写す行（`may_copy`）・箱の畳み込み（`EmoWorld::records()` に従う）・持ち込み（予算切れと `IMPORT_BUDGET`）。合成の側（`plan.rs` は `world.records()` を見ない）・外形の表とシェルの外形（`outline_walk`）・`NestReport`・`shape_issues` の記録は Quiet に従わない。
+
 #### 着せ替えの手順（指摘 4）
 
 | 欄 | 中身 |
@@ -428,7 +455,7 @@ enum Step {
 #### 当たり判定の 2 関数の削除（指摘 6）
 
 - `hit.rs` の `hit_region`・`hit_region_scaled` と `lib.rs` の再公開を消す。本番の呼び手は 0（`areka-emo-present` の `presenter/hit.rs` は `hit_region_in`・`hit_region_scaled_in` を使う。`EmoPresenter::hit_region` は別のメソッド）。
-- `hit.rs` のテストは `&m.collisions` を `_in` へ渡す形に直す。`hit_in_tests.rs` は答えを固定した 1 本（130〜154 行）だけ残す。`normalized.rs:83` の説明のリンクを `hit_region_in` へ。
+- `hit.rs` のテストは `&m.collisions` を `_in` へ渡す形に直す。`hit_in_tests.rs` は答えを固定した 1 本（130〜154 行）だけ残す予定だったが、かけ直し（6.5・指摘 54）で hit.rs のテストと重なるのでファイルごと消した。`normalized.rs:83` の説明のリンクを `hit_region_in` へ。
 - `areka-emo-present/src/presenter_read_accessor_tests.rs:373,383` の説明の文は古い名前のまま残る（壊れない・`audit-emo-present` へ伝える）。
 
 ### 転写
@@ -511,15 +538,18 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 
 | 場面 | 記録 | 返し方 |
 |---|---|---|
-| 外形が `MAX_EXTENT` を越える | `error!`（面・幅・高さ・上限）。合成のたびに出す（`SurfaceNotFound`・`EmptyComposition` と同じ） | `Err(ExtentTooLarge)`。絵は確保しない |
-| 広がりの予算が尽きた | `error!` を範囲で 1 行（走査の名前・根の面・予算） | 部分の結果（`Ok`）。シェルは全体として読む |
+| 外形が `MAX_EXTENT` か `MAX_AREA` を越える | `error!`（面・幅・高さ・一辺と面積の上限）。合成器 1 つにつき面ごとに初めの 1 度、2 度目からは `debug!`（`SurfaceNotFound`・`EmptyComposition` と同じ） | `Err(ExtentTooLarge)`。絵は確保しない |
+| 広がりの予算が尽きた | `error!` を 1 行（走査の名前・根の面・予算）。合成は合成器 1 つにつき根ごとに 1 度、読み込みは呼び出し 1 回に 1 度。以後は無言 | 部分の結果（`Ok`）。シェルは全体として読む |
+| 重ねる画素が `PIXEL_FACTOR` を越える | `error!`（面・捨てた数・倍率）を合成器 1 つにつき根ごとに 1 度 | 命令列の頭だけ重ねる |
+| 写す行が `MAX_COPIED_LINES` を越える | `error!`（欄・番号の範囲・行の数・上限）を畳み込み 1 回に 1 度、以後 `debug!` | その記述子を捨てる |
+| 持ち込む領域が `IMPORT_BUDGET` を越える | `error!`（面・数・残り・予算）を呼び出し 1 回に 1 度、以後 `debug!` | その根には持ち込みを付けない |
 | uv が頁に収まらない | `warn!`（element・頁・uv）を命令ごと（頁の欠けと同じ扱い） | その命令だけ飛ばす |
 | 範囲の追記の中の無い番号 | 今のまま 1 つずつ `warn!`（最悪 8193 件・範囲の幅の合計の上限は読む側） | 何もしない（今と同じ） |
 | 循環 | 今のまま（`debug!`） | 今のまま |
 
 - どの失敗もパニックしない（今の非パニックの約束を、深さ・広がり・uv にまで広げる）。
 - 位置の足し算は、走査の累積も転写の置き場（`op_area`・`overlay_op`）も `saturating_add` で行う（`i64` の端の位置でも試験の作りで panic しない）。
-- 予算切れを `error!` にするのは、壊れたシェルでしか起きない誤り（定義だけで決まる）で、絵が欠けることを開発者と作者が気付けるようにするため。合成のたびの範囲でも 1 回の合成で 1 行に抑える。
+- 予算切れを `error!` にするのは、壊れたシェルでしか起きない誤り（定義だけで決まる）で、絵が欠けることを開発者と作者が気付けるようにするため。合成では合成器 1 つにつき根ごとに 1 行に抑える（毎フレームあふれさせない）。表のうち面の表を組む段の記録（写す行・持ち込み・持ち込みの予算切れ）は `Records::Quiet` なら出さない。合成の側・外形の走査・入れ子の報告の記録は Quiet に従わない。
 
 ## Testing Strategy
 
@@ -538,7 +568,7 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 
 ### 振る舞いが変わらないことの確かめ
 
-- 命令列の並び: `plan_ops_tests.rs`・`plan_frame_merge_tests.rs`・`plan_nesting_tests.rs`・`plan_bind_tests.rs`・`plan_bind_random_tests.rs`・golden の全部が、明示のスタックにした後もそのまま緑（期待を変えるのは指摘 4・10・11 の決めた所だけ）。
+- 命令列の並び: `plan_ops_tests.rs`・`plan_frame_merge_tests.rs`・`plan_nesting_tests.rs`・`plan_bind_tests.rs`・golden の全部が、明示のスタックにした後もそのまま緑（期待を変えるのは指摘 4・10・11 の決めた所だけ）。
 - 画素: `blit_rect_tests.rs` の「いちからの合成と矩形の重ね直しが同じ画素」を残す（7 の直しで式が 1 つになっても守る）。
 - 外形: `golden_tests_frame_extent_tests.rs` が、表から引く形にした後も同じ値。
 - 追記: `fold_tests.rs:259-330`（範囲の中の無い番号を新設しない）がそのまま緑。指摘 9 で規則を変えたときは、変えた規則の期待を足す。
@@ -560,7 +590,7 @@ pub(crate) fn overlay_op(dst: &mut [u8], stride: usize, clip: Area, op: &BlitOp,
 | 相手 | 何を | いつ |
 |---|---|---|
 | `audit-seriko`（`crates/areka-seriko/`） | 指摘 4 で `src/parts_tests.rs` の `bind+random` を持つテスト（245・400〜460・576・777 行付近）の期待が変わる。直すのはどちらか・どちらが先に着くか | 指摘 4 のタスクの前 |
-| `audit-emo-present`（`crates/areka-emo-present/`） | 指摘 2 の `ExtentTooLarge` を表示の側でどう扱うか（`EmptyComposition` と同じ隠す縮退か）。指摘 6 で古くなる説明 2 行（`presenter_read_accessor_tests.rs:373,383`） | 指摘 2 のタスクの前 |
+| `audit-emo-present`（`crates/areka-emo-present/`） | 指摘 2 の `ExtentTooLarge` を表示の側でどう扱うか（`EmptyComposition` と同じ隠す縮退か）。指摘 6 で古くなる説明 2 行（`presenter_read_accessor_tests.rs:373,383`） | 指摘 2 のタスクの前。済み: 11-05 に「隠す・腕は後から着いた側」と決め、13.1 で `presenter/show.rs` に腕を足した |
 | `audit-parsers-sakura`（`crates/areka-parsers/`・`crates/areka-sakura/`） | 1⑶ の範囲の上限は読む側（申し合わせ済み）。そちらの指摘 76 が `boxes.rs:226,236` に触る＝後から着いた側が rebase。指摘 12 でテストの部品の置き場が `plan_test_support` に動く | 指摘 1 のタスクの前に状況を確かめる |
 | `audit-emo-atlas`（`crates/areka-emo-atlas/`） | 指摘 19 は転写の手前で守る。表を作る側の確かめと重ねるか | 指摘 19 のタスクの前（そちらが走っていれば） |
 | SSP の測り（開発者） | 指摘 9 の 3 つ・予算と外形の上限の参考に巨大な外形と深い菱形を SSP がどう扱うか。試しのシェルを入れること・reload は 1 回ずつ許可を取る。測る前にウェーブの兄弟へ知らせる | 指摘 9 の測りのタスク |

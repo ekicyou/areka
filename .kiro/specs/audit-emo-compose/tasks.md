@@ -219,10 +219,10 @@
 - [x] 12.2 テストの直し（明細 1〜3・5・7〜19・28〜33）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
-- [ ] 13. 機能の検証 1 回目の NO-GO の直し（research.md 22 節）
+- [x] 13. 機能の検証 1 回目の NO-GO の直し（research.md 22 節）
 - [x] 13.1 main を取り込み、ぶつかりを解き、申し合わせの `ExtentTooLarge` を表示の側で隠す腕とテストを足す
   - _Requirements: 5.2_
-- [ ] 13.2 design.md にかけ直しで足した上限と記録の形を書き足し、emo-present の説明を直す
+- [x] 13.2 design.md にかけ直しで足した上限と記録の形を書き足し、emo-present の説明を直す
   - _Requirements: 6.2_
 
 ## Implementation Notes
@@ -269,3 +269,4 @@
 - 12.2: テスト 449→445。形の誤りと入れ子の報告の循環は 1 つの輪では両方 1 件にできない＝検体 `ring_of` を 2 形に（輪の長さ `RING_LAST`=1000）。部品に `insert_stills`。`HitMemo` のテスト専用の口 `contains_key` を消し `map` を `pub(crate)` に
 - 5.2: 全体テスト（`tools/test-all.ps1`）1 回で全段緑（x64 825 s）・`Cargo.lock` と依存は変わらず・`crates/areka-emo-text/` に新しいファイル無し
 - 13.1: main（#426・#427・#428）を取り込んだ。seriko の `table_parts_tests`・`table_calls_dot_sakura_tests` もこちらの指摘 4・10.1 の debug! に合わせた。`word_warns` の「未知の合成メソッド名」の枝はもう当たらない（完了の棚卸で audit-seriko の持ち分として扱う）。番人の例外表は 6 件
+- 13.2: design.md に「仕事の上限と記録の回数」の節を足した。`Records::Quiet` が効くのは面の表を黙って組む段（写す行・箱・持ち込み）だけで、合成の側・外形の走査・入れ子の報告は従わない

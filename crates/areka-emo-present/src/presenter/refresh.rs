@@ -59,8 +59,9 @@ impl EmoPresenter {
     /// （`apply_show` が表示成立点より手前で early return するため前値は構造的に保たれる）。`apply_show`
     /// 自身も失敗を error! するが、それは「合成／デバイスが失敗した」ことしか語らない——どの k からどの k
     /// への再導出が落ちたのか・前表示を維持したのかは本メソッドでしか分からないため、専用のログを出す
-    /// （無言の失敗経路を作らない）。全透明退化（`EmptyComposition` → Hide 縮退）は設計上許容された正常
-    /// 退化ゆえ `apply_show` の `warn!` に委ね、ここでは `debug!` に留める（同一事象を二重に鳴らさない）。
+    /// （無言の失敗経路を作らない）。全透明退化（`EmptyComposition` → Hide 縮退・外形の上限越えの
+    /// `ExtentTooLarge` も同じ）は設計上許容された正常退化ゆえ `apply_show` の `warn!` に委ね、ここでは
+    /// `debug!` に留める（同一事象を二重に鳴らさない）。
     ///
     /// 進行中の talk 再生・SERIKO ループは presenter の**外**に状態を持つため、再表示はキャッシュミス 1 回の
     /// コストで済み挙動を失わない（要件 4.3）。本メソッドは target 状態を一切リセットしない。
@@ -140,7 +141,7 @@ impl EmoPresenter {
             return None;
         }
         if self.targets.get(&target_id)?.current_surface_id.is_none() {
-            // 全透明退化（`EmptyComposition` → Hide 縮退）。`apply_show` が warn! 済みゆえ重ねない。
+            // 全透明退化（`EmptyComposition` → Hide 縮退・`ExtentTooLarge` も同じ）。`apply_show` が warn! 済みゆえ重ねない。
             tracing::debug!(
                 ?target_id,
                 "refresh_scale: 再表示が全透明退化（Hide 縮退・warn は apply_show 側）"
