@@ -598,11 +598,8 @@ impl TextLayerState {
                 };
                 let state = self.place_entry(&dest);
                 // 序数空間は items のグリフ（`Glyph` のみ）＝`visible_glyphs`／reveal と同一。
-                let start = state
-                    .items
-                    .iter()
-                    .filter(|it| matches!(it, TextItem::Glyph { .. }))
-                    .count();
+                // 字を足す所はいつも同じ数で `extend_chunk` を呼ぶので、時刻の列の長さ＝字の数。
+                let start = state.reveal.times().len();
                 if glyph_count == 0 {
                     // R1.5 縮退: 空範囲スパンのみ記録（グリフ追記・リビール拡張なし・行を生まない）。
                     // 空回しの写しでは記録しない（本番の適用が記録する・要件 2.8）。

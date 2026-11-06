@@ -20,7 +20,7 @@
 //! 届いたときの扱いは防御で、`debug!` に留める。下見の空回しの写しは記録を 1 件も出さない
 //! （本番の適用が出す・二重にしない）。
 
-use super::{ActorTextState, ChoiceSpan, SpanKind, TextItem, TextLayerState};
+use super::{ActorTextState, ChoiceSpan, SpanKind, TextLayerState};
 use crate::place::PlaceKey;
 use areka_sakura::contract::ActorKey;
 
@@ -30,11 +30,8 @@ impl ActorTextState {
     /// 印は 1 つなので、既に開いていた範囲はここで伸びなくなる（＝そこで閉じる）。
     pub(super) fn anchor_begin(&mut self, id: &str, references: &[String]) {
         // 序数空間は items のグリフ（`Glyph` のみ）＝選択肢の範囲・リビールと同じ。
-        let now = self
-            .items
-            .iter()
-            .filter(|it| matches!(it, TextItem::Glyph { .. }))
-            .count();
+        // 字を足す所はいつも同じ数で `extend_chunk` を呼ぶので、時刻の列の長さ＝字の数。
+        let now = self.reveal.times().len();
         let ordinal = self.choices.len();
         self.choices.push(ChoiceSpan {
             kind: SpanKind::Anchor,

@@ -121,3 +121,32 @@ fn choice_cue_range_counts_clusters() {
         ]
     );
 }
+
+/// 選択肢とアンカーの始まりは、前の字のクラスタの数（改行は数えない・指摘 23⑷）。
+/// 「か゚」（2 符号で 1 字）・改行・選択肢「B」の後に開いたアンカーは 2 から始まる。
+#[test]
+fn choice_and_anchor_start_counts_clusters_before_them() {
+    let mut state = TextLayerState::default();
+    for command in [
+        CueCommand::Text(KA_HANDAKUTEN.into()),
+        CueCommand::NewLine { ratio: 1.0 },
+        CueCommand::Choice {
+            id: "OnB".into(),
+            text: "B".into(),
+            references: vec![],
+        },
+        CueCommand::AnchorBegin {
+            id: "x".into(),
+            references: vec![],
+        },
+    ] {
+        state.apply_cue(&cue_dur("0", 0.0, 0.0, command));
+    }
+
+    let spans = state
+        .actor_state(&ActorKey::from("0"))
+        .expect("actor state should exist")
+        .choices();
+    assert_eq!(spans[0].glyph_range, 1..2);
+    assert_eq!(spans[1].glyph_range, 2..2);
+}

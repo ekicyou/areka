@@ -77,6 +77,9 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
         // 配置済みグリフを行を跨いで 0 起点で数えた累積和（= items 全体のグリフ序数と一致）。
         let mut line_start = 0usize;
         for (line_index, line) in lines.iter().enumerate() {
+            if line_start >= span_end {
+                break;
+            }
             let line_end = line_start + line.glyphs.len();
             // 純整数の交差 [span_start, span_end) ∩ [line_start, line_end)。
             let lo = span_start.max(line_start);
@@ -567,10 +570,9 @@ pub fn decorate_canvas(
     }
     let mut canvas = canvas;
     for (index, resident) in canvas.residents.iter_mut().enumerate() {
-        // GlyphRun 以外（Image/Surface/既 Choice）は素通し。run はローカル系のまま複製する。
-        let run = match &resident.content {
-            ResidentContent::GlyphRun(run) => run.clone(),
-            _ => continue,
+        // GlyphRun 以外（Image/Surface/既 Choice）は素通し。run の複製はセグメントを持つ行だけ（下）。
+        let ResidentContent::GlyphRun(run) = &resident.content else {
+            continue;
         };
         // 行内軸の resident 原点（絶対 image px）＝ validrect 原点 + 住人 inline offset ＝ 行矩形 inline。
         // from_layout がグリフから差し引く原点と同一——絶対 inline_range をこれで resident-local 化する。
@@ -616,6 +618,8 @@ pub fn decorate_canvas(
         } else {
             None
         };
+        // run はローカル系のまま複製する。
+        let run = run.clone();
         resident.content = ResidentContent::Choice(ChoiceLineContent {
             run,
             segments: row_segments,

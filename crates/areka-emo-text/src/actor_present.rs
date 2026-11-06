@@ -219,7 +219,7 @@ fn present_actor(
     // ── 解決確認: binding＋layout 入力が揃うまでは蓄積のみ（描画スキップ） ──
     let (Some(binding), Some(resolved)) = (
         runtime.routing.get(place).copied(),
-        runtime.layout_input.get(place).cloned(),
+        runtime.layout_input.get(place),
     ) else {
         return Err(TextLayerError::SlotNotAttached {
             actor: actor.to_string(),
