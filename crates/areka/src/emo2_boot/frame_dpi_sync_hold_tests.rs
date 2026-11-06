@@ -26,9 +26,9 @@ use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, WindowPos};
 
-use crate::placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
-use crate::placement::follow::BalloonFollow;
-use crate::placement::test_support::capture_logs;
+use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
+use areka_placement::follow::BalloonFollow;
+use log_capture_kit::capture;
 
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, s2_monitors,
@@ -450,9 +450,9 @@ fn a_companion_follow_still_reaches_a_waiting_balloon() {
 /// 与えられた駆動を回し、遷移観測の行だけを拾う。
 ///
 /// 捕捉窓の内側は観測 target が点いた状態である（既定 OFF そのものは
-/// `placement/follow_transition_diag_tests.rs` が directive 単位で所有する）。
+/// `crates/areka-placement/src/follow_transition_diag_tests.rs` が directive 単位で所有する）。
 fn transition_lines(drive: impl FnOnce()) -> Vec<String> {
-    let (_, events) = capture_logs(drive);
+    let (_, events) = capture(drive);
     events
         .iter()
         .map(|e| e.message().to_string())

@@ -154,7 +154,7 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
     // doc の「起草の 16 ファイルとの突合」を参照）。
     (
-        "crates/areka/src/placement/measure_tests.rs",
+        "crates/areka-placement/src/measure_tests.rs",
         Why::ProcessUnique,
         "プロセス識別子＋単調連番＋Drop の再帰削除を持つ**同 crate 内の自前実装**。タスク 10.2 は \
          placement_shared_test_support.rs を窓口の薄い包みへ寄せた際に「crate 内に 2 系統を残さない」と \
@@ -230,7 +230,7 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     ),
     // ── ⒝ 読み出しのみの 2 件（要件 12.2・設計 C8 が名指しで対象外と定めた）───────
     (
-        "crates/areka/src/placement/placement_monitor_tests.rs",
+        "crates/areka-placement/src/placement_monitor_tests.rs",
         Why::ReadOnly,
         "不在パスを組み立てて「読めないこと」を確かめるだけで、書込も削除も行わない。実体を作らない \
          ので固定名でもプロセス間で奪い合いが起きない（要件 12.2 が名指しで対象外と定めた 2 件の 1 つ）",

@@ -20,9 +20,9 @@ use crate::emo2_boot::spine::{
 };
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
-use crate::placement::spawn::GhostWindowMarker;
-use crate::placement::test_support::capture_logs;
 use crate::readme::ReadmeWiring;
+use areka_placement::spawn::GhostWindowMarker;
+use log_capture_kit::capture;
 
 /// 作業プール（`WintfTaskPool`）の無い素の World では、窓を作る関数は配置の準備に入らず
 /// `TaskPoolMissing` で失敗し、`task_pool_missing` を error で残す（design Testing Strategy
@@ -40,7 +40,7 @@ fn open_ghost_windows_without_task_pool_fails_before_preparing() {
         balloon_root: std::path::PathBuf::from("ghost_session_restart_tests/無い/balloon"),
     };
 
-    let ((opened, reopened), events) = capture_logs(|| {
+    let ((opened, reopened), events) = capture(|| {
         let opened = open_ghost_windows(&mut world, &cfg);
         let closed = app_exit::close_windows_for_restart(&mut world);
         let reopened = reopen_ghost_windows(&mut world, &cfg, closed);
@@ -231,7 +231,7 @@ fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::Cap
     world
         .resource_mut::<Schedules>()
         .add_systems(Input, drain_counting);
-    let (spawned, events) = capture_logs(|| {
+    let (spawned, events) = capture(|| {
         let prepared = prepare_ghost_windows(&mut world, &cfg).expect("emo2 の窓の準備は通る");
         commit_ghost_windows(&mut world, prepared);
         run_input_until(&mut world, |w| ghost_window_count(w) > 0)
@@ -244,7 +244,7 @@ fn boot_windows_with_sticky_line(line: &str) -> (World, Vec<log_capture_kit::Cap
 /// `GhostWindows` と一緒に帳簿を据え、シェルの `seriko.sticky-window` の組を入れる。
 #[test]
 fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
-    use crate::placement::sticky_group_ledger::{StickyGroupLedger, StickySource};
+    use areka_placement::sticky_group_ledger::{StickyGroupLedger, StickySource};
 
     let (world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0,1");
 
@@ -270,8 +270,8 @@ fn boot_seeds_the_sticky_ledger_with_the_descript_group() {
 /// 動かせない（据える前に作った窓へ書き手が届く）。
 #[test]
 fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
-    use crate::placement::balloon_lock::{BalloonLockLedger, HoldReason};
-    use crate::placement::spawn::BalloonWindowMarker;
+    use areka_placement::balloon_lock::{BalloonLockLedger, HoldReason};
+    use areka_placement::spawn::BalloonWindowMarker;
     use wintf::ecs::drag::DragConfig;
 
     let (mut world, events) = boot_windows_with_sticky_line("kero.balloon.dontmove,1");
@@ -302,7 +302,7 @@ fn boot_seeds_the_balloon_lock_ledger_with_the_descript_tier() {
 /// 捨てる書き方（ID が 1 つ）なら組を作らずに記録し、起動は続く（要件 3.9・窓は 4 枚・帳簿は空で据わる）。
 #[test]
 fn boot_with_a_rejected_sticky_value_logs_and_keeps_booting() {
-    use crate::placement::sticky_group_ledger::StickyGroupLedger;
+    use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
     let (mut world, events) = boot_windows_with_sticky_line("seriko.sticky-window,0");
 
@@ -329,13 +329,13 @@ fn commit_without_task_pool_logs_error() {
     let mut world = World::new();
     let prepared = PreparedWindows {
         descript: StartupDescriptValues {
-            author_dpi: placement::AuthorDpi::DEFAULT,
+            author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         },
         spawn: Box::new(|_: &mut World| {}),
     };
-    let ((), events) = capture_logs(|| commit_ghost_windows(&mut world, prepared));
+    let ((), events) = capture(|| commit_ghost_windows(&mut world, prepared));
     let missing_errors = events
         .iter()
         .filter(|e| {
@@ -389,9 +389,9 @@ fn boot_round(
     kanade_stop: Sender<KanadeNotice>,
 ) -> (GhostSession, ScriptedShioriHandle) {
     let descript = StartupDescriptValues {
-        author_dpi: placement::AuthorDpi::DEFAULT,
+        author_dpi: areka_placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
-        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+        default_surfaces: areka_placement::DefaultSurfaces::builtin(),
     };
     let ghost = GhostDecision {
         route: GhostRoute::Argv,
@@ -489,7 +489,7 @@ fn boots_twice_in_one_process_without_double_registration() {
     // ── 2 周目（新しい台本・新しい複製） ──
     let sample2 = acquire_emo2();
     let ((session2, shiori2), round2_events) =
-        capture_logs(|| boot_round(&mut world, &sample2, kanade_stop_tx.clone()));
+        capture(|| boot_round(&mut world, &sample2, kanade_stop_tx.clone()));
     let round2_replaced = round2_events
         .iter()
         .filter(|e| e.field_str("event") == Some("menu_registration_replaced"))

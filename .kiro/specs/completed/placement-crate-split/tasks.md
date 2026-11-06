@@ -1,0 +1,257 @@
+# 実装の計画: placement-crate-split
+
+- 段（設計の「流れ」の段 0〜7）ごとにコミットを分ける。push・PR はしない（完了の段の仕事）。
+- 重い走行は、赤が出たテストだけに絞って回し直す。全体テストと実機は排他テストの机で順を取る。
+- `.kiro/steering/roadmap.md` はこの枝では書かない（C18 の行は棚卸のセッションへ伝え済み・新旧のパスの対応表は完了の段で書く）。
+- 設計の段の表からの寄せ: 文字で読むテストの読み先のつなぎ直しと番人の表の書き換えは段 1（2.3）で行う。段 2 の緑を保つため（設計の「流れ」の注のとおり）。
+
+- [x] 1. 着手の基準を取る（段 0）
+- [x] 1.1 移す前のテストの名前の一覧を残す
+  - 枝の先頭（コードに手を入れる前）で、ワークスペース全体のテストの名前の一覧を取り、ワークツリーの `target/` の下（`target/placement-crate-split/tests-before.txt`）に残す
+  - `: test$` の行の数を記録に書く
+  - 完了の状態: 一覧のファイルが在り、行の数が記録にある
+  - _Requirements: 8.2_
+
+- [x] 2. 新しい crate へ移し、公開面を開ける（段 1）
+- [x] 2.1 配置の crate の骨組みを作る
+  - 新しい lib の crate の `Cargo.toml` を、ほかの crate の慣習（`publish = false` と理由を同じ行・`.workspace = true` の項目）で書く
+  - 本番の依存は設計の 11 個（ワークスペースの中は path・外は `workspace = true`）、開発用の依存は log-capture-kit・sample-ghost-kit・temp-path-kit・tracing-subscriber、機能は `test-support` 1 つ（説明の 1 行つき）
+  - 本番の依存表に共有のテスト用の crate を書かない。本体に依存しない。根の `Cargo.toml` は変えない
+  - 本体の `Cargo.toml` に、本番の path 依存と、`test-support` を付けた開発用の依存を足す
+  - 完了の状態: 両方の `Cargo.toml` が設計の「口の種類」の形どおりで、根の `Cargo.toml` に差分が無い
+  - _Requirements: 1.1, 1.5, 1.6, 1.7, 1.8, 3.4, 3.5_
+- [x] 2.2 配置のファイルを履歴を残して移す
+  - 旧 `placement/mod.rs` を新しい crate の根へ、本体へ残す 21 ファイル（判定器の一族 15・境をまたぐテスト 4・分岐の対応表 2）を本体のテスト専用のフォルダへ、ほかの全部を新しい crate へ `git mv` する
+  - 新しい crate の中の自分を指す道を crate の根を指す道へ書き換える（出所の名前は crate の名前から自動で付く）
+  - 完了の状態: 本体に旧 `src/placement/` が無く、`git status` が移動（rename）として示す
+  - _Requirements: 1.2, 1.3, 1.4, 2.3, 3.7, 3.9, 6.1_
+- [x] 2.3 移動で切れた読み先と番人の表をつなぎ直す
+  - 文字で読むテスト（`measure_template_tests`・分岐の対応表 2 本・`spawn_zorder_pair_deferred_tests`・`zorder_property_deferral_tests`・`transition_signoff_procedure_tests`）の `include_str!`・`#[path]`・`CARGO_MANIFEST_DIR` の読み先を、移した先の場所へ相対の道のまま一時につなぎ直す（最終形は段 4 の 5.x で置き換える）
+  - 番人の表（1,000 行の例外表の 3 項目・一時の入口の表の 2 項目・`with_default` の表の 3 項目）を移した先の最終のパスへ書き換え、理由の文の主語を新しい crate に合わせる（項目の数は変えない）
+  - 完了の状態: 移動で実在しなくなった読み先と表の項目が 0 件で、log-capture-kit のテストが緑
+  - _Requirements: 5.1, 5.5_
+- [x] 2.4 本体のテスト専用のフォルダを組み込む
+  - フォルダの頭に置いた理由と子の宣言だけを書き、本体の根がテストのときだけ宣言する
+  - 移した 21 ファイルの中の親を指す道を、配置の crate の公開の道へ書き換える（本体の部品を指す道はそのまま）
+  - 本体の根に一時の別名（配置の crate を旧い名前で指す）を置き、本体の根の旧い宣言を外す
+  - `emo2_boot` の `frame_transition_*` の 2 本が、移した先の判定器を指すようにする
+  - 完了の状態: 本体の根から配置の宣言が消え、テスト専用のフォルダの宣言が `#[cfg(test)]` の下にある
+  - _Requirements: 3.7, 3.9, 3.10_
+- [x] 2.5 コンパイラに数えさせて公開面を開ける
+  - 本体の本番の組み立てのエラー（E0603・E0616・E0624・E0364・`private_interfaces`）を 1 件ずつ見て、外から使われる項目だけを `pub` にする
+  - 外から使われない項目は `pub(crate)` のまま残す。公開の項目が名指すために開けた型には、項目の上に要件 2.5 の 1 行の注を書く
+  - 開けた項目の一覧を実装の記録に残す（後で 7.5 の申し送りに使う）
+  - 完了の状態: 配置の crate の lib と本体の本番の組み立てが緑（テストの組み立ては段 2 で緑に戻す）・段 1 のコミット
+  - _Requirements: 2.1, 2.2, 2.5_
+
+- [x] 3. テストの支えを開ける（段 2）
+- [x] 3.1 ログの判定の補助を共有の crate へ下ろす
+  - `ExpectField`（捕まえたイベントへの実装つき）と `expect_one` を中身を変えずに log-capture-kit へ移し、根から出し直す
+  - 本体と配置のテストを、log-capture-kit の `capture`・`CapturedEvent`・`ExpectField`・`expect_one`・`ensure_interest_probes` を直に使う形へ書き換える
+  - 配置の旧い包み（`capture_logs`・`LogEvent`）を消す
+  - 完了の状態: `fn capture_logs` と `type LogEvent` の grep が 0 件で、log-capture-kit のテストが緑
+  - _Requirements: 3.1, 3.6_
+- [x] 3.2 配置の支えを頼る相手で 3 つに分ける
+  - 外へ開く支え（`WA`・`with_com_initialized`・2 つの描述の定数・`emily_shaped_scopes`・`synth_declared_dpi_ghost`）を `test-support` で立つモジュールへ、見本のゴーストの入口を crate の `sample_test_support` へ、一時フォルダと合成の検体を `shared_test_support` へ置く
+  - `synth_declared_dpi_ghost` を、一時フォルダと見本の道を引数で受ける形にし、配置の中の 10 か所の呼び出しも同じ形にする
+  - 本体の `emo2_boot` の見本の入口 `emo2_root`・`emo2_balloon_root` を `pub(crate)` に広げ、本体のテストはそれを使う（新しい関数を足さない）
+  - 外へ開く支えが `#[cfg(test)]` だけの項目と共有のテスト用の crate に頼らない
+  - 完了の状態: 3 つのモジュールが設計の表どおりに在り、同じ働きの関数が 2 つ無い
+  - _Requirements: 3.2, 3.3, 3.6_
+- [x] 3.3 本体のテストが使う項目を `test-support` の印で開ける
+  - `spawn` のテストの支えを、テストか機能のときに立つ公開のモジュールにする
+  - `reseed` のテストの補助のうち `booted_world`・`new_shell`・`char_positions` と、それらが中で使う補助だけを新しい `reseed` の支えのファイルへ移す（テストだけが使う補助は元に残す）
+  - `measure` の私有の 2 つの関数へそのまま渡す公開の入口を、機能のときだけ立つモジュールに置く（本番の可視性は変えない）
+  - `GhostTitles::from_scope_titles`・`persist::project_restore` の印を、テストか機能のときに立つ形にする
+  - コンパイラがほかに出した `#[cfg(test)]` だけの項目も同じ規則で付け替え、開けた項目を実装の記録に足す
+  - 完了の状態: 本体のテスト（境をまたぐ 4 本と判定器の一族）が組める
+  - _Requirements: 3.3, 3.5, 3.8_
+- [x] 3.4 配置のテストの実行ファイルに MTA と落ちの報告を入れる
+  - wintf の落ちの報告の写しを、許可の持ち手の表を持たない形で配置の crate に置き、テストのときだけ宣言する
+  - 本体と wintf の 2 つの写しの頭の「写しの相手」の行に 3 つ目を足す（説明だけ）
+  - 完了の状態: 配置の lib のテストで、落ちの報告が先に入ることとプロセスの寿命の MTA を確かめる 2 本が緑
+  - _Requirements: 3.11, 3.12_
+- [x] 3.5 機能だけが立つビルドを含めて段 2 を緑にする
+  - ワークスペース全体を全部の対象で組み（本体のテストを組むときの配置＝`test` が立たず機能だけが立つビルドを含む）、配置の crate のテストと本体の bin のテストを回す
+  - 赤が出たら赤のテストだけを回し直す
+  - 完了の状態: 3 つの走行が緑・段 2 のコミット
+  - _Requirements: 3.3, 3.4, 3.5, 3.7_
+
+- [x] 4. 本体の道を書き換え、一時の別名を外す（段 3）
+- [x] 4.1 本体が配置を指す道を新しい crate の道へ書き換える
+  - 本体の約 170 ファイルの配置を指す道を `areka_placement::` へ、残りの旧い判定器を指す道（2.4 で直した `frame_transition_*` のほか）をテスト専用のフォルダへ機械で置き換える
+  - 一時の別名を外し、整形をかける
+  - 置き換えの範囲を `git diff --stat` と grep で確かめる（正規表現を書き込んだ所はバイトで確かめる）
+  - 完了の状態: ワークスペース全体が全部の対象で組め、本体の `src` で `crate::placement::` が 0 件・段 3 のコミット
+  - _Requirements: 2.4_
+
+- [x] 5. 文字で読むテストと examples を置き直す（段 4）
+- [x] 5.1 examples を crate の公開面で使う形にする
+  - `window-placement.rs` を配置の crate の examples へ `git mv` し、`#[path]` の取り込みをやめて公開面で使う（足りない公開面は外として開ける）
+  - `collision-probe.rs` は本体に残し、配置の `#[path]` を外して依存として使う（`emo2_boot` の `#[path]` はそのまま）。説明の古い `../pilot/...` の記述は確かめて、直すかは申し送りに書く
+  - 2.3 で一時につないだ `measure_template_tests` の examples の読み先を、移した先に合わせる
+  - 完了の状態: 両方の examples が警告なしに組める
+  - _Requirements: 4.1, 4.2, 4.3_
+- [x] 5.2 本体の読み口を作り、下の crate を読む所を寄せる
+  - 本体のテストのときだけ立つ読み口（コンパイルの時に読むマクロと、在ることを確かめて道を返す関数）を作り、読んでよい crate の範囲を説明に書く
+  - 本体のほかの 5 ファイル 6 か所の、下の crate を読む所を読み口へ寄せる
+  - 完了の状態: 触ったテストが緑
+  - _Requirements: 5.4, 5.5_
+- [x] 5.3 `measure_template_tests` を確かめていることで 2 つに割る
+  - 採寸と表示の外形の一致と配置のファイル（配置の examples を含む）の走査を配置の crate に、本体のファイルの走査を本体のテスト専用のフォルダに置く
+  - 共に使う走査器（註釈と文字列を除く `code_only`・見落としの形が無いことの主張とその前提の定数）を、配置の外へ開く支えの組ごとのモジュールに 1 つだけ置き、両方の片割れがそれを使う
+  - どちらの片割れも、自分の crate の実物で走査器の較正（当たりと外れ）を通す。2.3 の一時のつなぎ（配置から本体を読む道）は残さない
+  - 完了の状態: 2 つの片割れが緑で、合わせて移す前と同じファイルを覆う
+  - _Requirements: 5.2, 5.3, 5.5, 3.6_
+- [x] 5.4 `spawn_zorder_pair_deferred_tests` を crate ごとに割る
+  - 配置のファイルの名簿と配置の `src` の木の走査を配置に、`emo2_boot` のファイルの名簿・帯のファイル・本体の `src` の木の走査を本体に置く
+  - 共に使う語の表（2 つ）と行の註釈を落とす `code_only` を、配置の外へ開く支えの別の組ごとのモジュールに 1 つだけ置く（5.3 の `code_only` とは中身が違うのでまとめない。同じ支えのファイルを触るので 5.3 の後）
+  - wintf の兄弟の表の上の注「両方のファイルへ足す」の相手を新しい置き場に直す
+  - 完了の状態: 2 つの片割れが自分の crate の正例で較正を通して緑で、合わせて移す前と同じ木を歩く
+  - _Requirements: 5.2, 5.3, 5.5, 3.6_
+- [x] 5.5 分岐の対応表と残りの文字で読むテストの読み先を最終形にする
+  - 分岐の対応表 2 本を割らずに、配置と wintf の行は読み口で、本体の行は相対の道で読む形にする
+  - 判定器の一族の手順のテストの読み先を、本体の中の相対の道として確かめる
+  - 配置に残る `zorder_property_deferral_tests` の下の crate を読む 1 行に、読み口を作らない理由を 1 行書く
+  - 完了の状態: 対応表の「どの分岐も 1 本以上のテストで覆われている」が緑で、読み先が無ければコンパイルか panic で止まる
+  - _Requirements: 5.2, 5.3, 5.4, 5.5_
+- [x] 5.6 段 4 の読み方の規則を確かめる
+  - 読み口の外で、下の crate へ上がる相対の道と `CARGO_MANIFEST_DIR` から crate の外へ上がる所を grep し、配置の crate から本体を読む所も grep する
+  - 完了の状態: どちらの grep も、名前を付けた例外（`session_end_sync_send_tests.rs`）と配置の `zorder_property_deferral_tests.rs` の `../areka-sylphya` の 1 行を除いて 0 件で、ワークスペース全体を全部の対象で組んで警告 0・段 4 のコミット
+  - _Requirements: 5.2, 5.4, 4.3_
+
+- [x] 6. 依存の向きの規約と行数を整える（段 5）
+- [x] 6.1 規約の文と実際の参照の食い違い 5 件を解く
+  - `OffsetBase` の型の定義を `resolver` へ移し、`follow` から出し直す（`follow` の写像を使う impl は元に残す）
+  - `PlacementError` を独立のファイルへ移して根から出し直し、`measure`・`source` はそのファイルを引く
+  - 根の規約の文を、名指す 6 モジュールの約束であることの明記・`diag` と `config` の実際・「同じ段どうしは引き合ってよい」を含む設計の文に書き直す
+  - 6 つのファイルの参照を grep して文の並びと照らした表を実装の記録に残す
+  - 完了の状態: 配置の crate のテストが緑で、外の道（`follow::OffsetBase`・`areka_placement::PlacementError`）が変わっていない
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
+- [x] 6.2 1,000 行の上限を例外表を増やさずに守る
+  - 根・判定器（`transition_judge.rs`）・本体の根の行数を、番人の数え方で測る
+  - 判定器が 1,000 行を超えたときだけ、観測行の読みを兄弟のファイルへ出す
+  - 完了の状態: 1,000 行の番人が緑で、例外表の項目の数が変わっていない・段 5 のコミット
+  - _Requirements: 1.9_
+
+- [x] 7. 名指す所を書き換える（段 6）
+- [x] 7.1 (P) ログの出所の名前をソースで書き換える
+  - 触るファイルはこれだけ: 配置の `diag.rs`（`DIAG_TARGET` と説明の 3 か所）・`diag_tests.rs`・`follow_window_move_diag_tests.rs`・`window-placement.rs` の説明、本体の `measure_bake_count_tests.rs`・`measure_bake_log_tests.rs`・`tests/window_link_real_run.rs`、wintf の `window_pos_tests.rs`・`lifecycle.rs`（`tools/` は 7.3 が持つ）
+  - 直書きの出所・出所を名前で読むテスト・`RUST_LOG`・説明を新しい名前へ直す
+  - 語彙として付けた出所（`"areka::persist::*"` ほか）は変えない
+  - 完了の状態: 出所で選ぶテスト（`diag_tests`・`follow_window_move_diag_tests`・`measure_bake_*`）が新しい名前で緑
+  - _Boundary: PathRewrite（上に挙げた出所の名前のファイル）_
+  - _Requirements: 6.2, 6.4, 6.5_
+- [x] 7.2 (P) 説明と文書の中のパスを書き換える
+  - 触るファイルはこれだけ: wintf の `api_owner_chain_probe_tests.rs`・`window_band_pipeline_real_tests.rs`・`zorder_pair_maintain_always_on_top_tests.rs`・`runtime/tick_bridge.rs`、pilot の `pilot-dropfiles-on-wuc-window/main.rs`、ukadoc-survey の `evidence/candidates.rs`、本体の `emo2_boot/hit_region.rs`・`frame_transition_atomicity_tests.rs`、`doc/` の 4 つ、`.kiro/steering/structure.md`（7.1 の持つファイルと `tools/` は触らない）
+  - ソースの説明のパスと、文書（`doc/COMPAT_ARCHITECTURE.md`・網羅台帳の根拠の場所・`briefing-assets.md`）を対応の表どおりに直す
+  - `structure.md` の crate の一覧に新しい crate を足し、本体の旧い行を外し、テスト専用のフォルダと例のパス・log-capture-kit を使う crate の数を直す
+  - 行番号つきの所は移した後の行を確かめて書く
+  - 完了の状態: 文書とソースの説明に旧いパスが残らない（`tools/perf` は 7.3）
+  - _Boundary: PathRewrite（説明と文書）_
+  - _Requirements: 5.6, 5.7_
+- [x] 7.3 (P) 性能の道具の見本と説明を直し、自分の確かめを回す
+  - 見本の作り手の旧い出所の名前を直して見本を作り直し、作り手の無い見本は 1 語だけを `target/` の下の使い捨てのスクリプトで置き換え、ほかの部分が変わっていないことを単語の差分で示す
+  - 判定の道具の説明の旧いパスと出所の名前を直し、道具が出所の名前に頼って行を読まないことを記録する（頼っていれば直す）
+  - 完了の状態: 判定の道具の自分の確かめと、見本を読む自分の確かめ（grep で挙がる全部）が緑
+  - _Boundary: PathRewrite（tools/perf の全部）_
+  - _Requirements: 5.7, 5.8, 6.5, 6.7, 6.8_
+- [x] 7.4 (P) 揺れるテストの道具で配置のテストの実行ファイルを選べるようにする
+  - `-Binary` の選べる値に配置の lib を足し、選びを配置の crate の lib のテストへ渡す形にし、説明と注にも足す
+  - 完了の状態: 新しい値で選んだときに配置の crate の lib のテストを指すことを、短い走行か選びの行で示す
+  - _Boundary: TestBinaryGuard（tools/load-flake.ps1）_
+  - _Requirements: 3.13_
+- [x] 7.5 (P) 2 本の audit の brief の受け持ちと申し送りを書く
+  - `audit-placement-core`・`audit-placement-follow` の受け持つファイルを、設計の線引きで移した先のパスへ直す
+  - 両方に申し送りの節を足し、直さなかった不具合・理由の文が古くなった `#[allow]` の一覧・2.5 と 3.8 で開けた項目・（core だけ）規約が名指さない参照と輪・examples の古い説明を書く
+  - 完了の状態: どのファイルもちょうど 1 本の audit の持ち物になり、申し送りの節が両方にある
+  - _Boundary: PathRewrite（2 本の brief）_
+  - _Requirements: 5.9, 7.7, 8.1, 2.5, 3.8_
+- [x] 7.6 旧いパスと旧い出所の名前が残っていないことを確かめる
+  - 決めた範囲で旧いパスと旧い出所の名前（本体のテスト専用のフォルダの出所は当たりにしない形）を grep する
+  - 完了の状態: 両方の grep が 0 件・段 6 のコミット
+  - _Depends: 7.1, 7.2, 7.3, 7.4, 7.5_
+  - _Requirements: 5.10, 6.6_
+
+- [x] 8. 移しただけであることを示す（段 7）
+- [x] 8.1 前後の比べと静的な確かめをそろえる
+  - 完了の時のテストの名前の一覧を取り、着手の一覧と多重集合で比べ、差が設計の表の 13 名（各 +1）だけであることを示す（doc コメントのコードが新しく回ったら `text` の囲みにして 0 に戻す）
+  - ワークスペース全体を全部の対象で組んで警告 0、配置の crate の本番の依存の木に本体が出ないこと、`Cargo.lock` の差が新しい crate と本体の依存だけであること、本番のソースの `windows` の名前空間が 2 つだけであることを示す
+  - 第三者の表を `cargo about generate` で作り直す
+  - 完了の状態: 証跡が実装の記録にそろい、説明できない差が無い
+  - _Requirements: 1.6, 1.7, 1.8, 8.1, 8.2, 8.3, 8.4, 8.8_
+- [x] 8.2 全体テストを回す
+  - 排他テストの机を取って `tools/test-all.ps1` を 1 回回す（約 50 分・裏で走らせる）
+  - 触っていない crate だけが赤のときは止めて報告し、赤の crate だけをもう 1 回回す
+  - 完了の状態: 全体テストが緑
+  - _Requirements: 8.5_
+- [x] 8.3 実機テストを新しい出所の名前で 1 本回す
+  - 画面の操作の順を排他テストの机で取り、`window_link_real_run.rs` を `areka_placement=debug` を含む `RUST_LOG` で 1 回走らせる
+  - 拾ったログに配置の診断の行（新しい出所の名前）があることを示す。ほかの実機テストは回さない
+  - 完了の状態: 実機テストが緑で、診断の行の抜き書きが記録にある・段 7 のコミット
+  - _Requirements: 6.3, 8.6, 8.7_
+
+## Implementation Notes
+
+- 1.1: 着手の一覧は `8c518c5b` で `cargo test --workspace --no-fail-fast -- --list` から取った。`: test$` の行は 14058（`target/placement-crate-split/tests-before.txt`）。
+- 段 1 は途中の形ではワークスペースが読めない（src の無い crate）ので、2.1〜2.5 を 1 回の実装係にまとめた。
+- 2.5 で開けた項目（すべて `crates/areka-placement/src` の下・理由は本体の bin が外から使う。7.5 の申し送りに使う）:
+  - lib.rs のモジュール: balloon_limit・balloon_lock・balloon_syncscale・descript_window_keys・dpi_sync・face_windowposition・reseed・reset_balloon_pos・reset_pos・script_alignment・sticky_group_ledger・zorder_chain_compose・zorder_group_ledger（E0603）
+  - lib.rs: `pub use windowposition::scale_signed` と定義 `windowposition.rs::scale_signed`（E0364）・`load_scope_windowpositions`・`primary_monitor`
+  - source.rs `read_kv_lenient`・balloon_limit.rs `apply_balloon_limit`・balloon_lock.rs `BalloonLockLedger`・`seed_balloon_lock`・`replace_balloon_lock_descript`・`apply_script_balloon_lock`・balloon_syncscale.rs `register`
+  - dpi_sync.rs `DpiSyncHold`・`HoldSite`・`current_frame`・`apply_dpi_phase_gate`・`defers_window_write`・face_windowposition.rs `apply_face_windowposition`
+  - reseed.rs `BalloonPlacementInputs`・`apply_shell_descript`・`reanchor_char_windows`・reset_pos.rs のフィールド `DefaultPlacementBasis.source`・`.balloon`（E0451）
+  - follow.rs の再公開: `OffsetRescale`／`rescale_follow_offset` の組・`on_char_drag_end`（組から分けた）・`ClampScene`／`place_chain_in_work_area`（組から分けた）・move_shift の組 `apply_balloon_shift`・`apply_char_shift`・`rebase_shift_axes`・`shift_is_current`
+  - 再公開の裏の定義: follow/drag_follow.rs `on_char_drag_end`・`BalloonFollowTrigger`・`follow_balloon`、follow/move_shift.rs の 4 関数、follow/sticky_follow.rs `CharDragSession`・`begin_char_drag`、follow/work_area_clamp.rs `ClampScene`・`place_chain_in_work_area`
+  - 公開の項目が名指すためだけに開けた型（要件 2.5 の注つき）: follow/work_area_clamp.rs `ChainPlacement`・`ChainClampOutcome`
+- 段 1 で消した lib.rs の判定器の宣言の説明（17 行）の代わりは無い。`crates/areka-emo-present/src/presenter/transition_record.rs:86` の説明の `placement::transition_judge::summarize` は 7.2（5.7）で直す。
+- 段 2 も緑になるのは 3.5 の時点なので、3.1〜3.5 を 1 回の実装係にまとめた。
+- 3.3・3.8 で開けた項目（`crates/areka-placement/src` の下・7.5 の申し送りに使う）:
+  - `cfg(any(test, feature = "test-support"))`: lib.rs `pub mod test_support`（WA・with_com_initialized・synth_declared_dpi_ghost・EMILY_SHAPED_GHOST_DESCRIPT・EMILY_SHAPED_SHELL_DESCRIPT・emily_shaped_scopes）・spawn.rs `pub mod test_support`（two_scope_placements・titles・ghost_window_entities。`fake_window_handle` は `cfg(test)`）・reseed.rs `pub mod test_support`（booted_world・new_shell・char_positions が pub、補助は pub(crate)）・source.rs `GhostTitles::from_scope_titles`・persist.rs `project_restore`
+  - `cfg(feature = "test-support")` だけ（3.8）: measure.rs `pub mod test_support`（`measure_with_reader`・`measure_baked` への入口）
+- 段 2 で本番の項目を素の `pub` にした（要件 2.1・本体のテストが使う）: dpi_sync.rs DPI_SYNC_HOLD_MAX_FRAMES・DpiSyncDecision・evaluate・DpiSyncOutcome とフィールド（decision・window_dpi・table_dpi・since_frame）・DpiSyncHold.since_frame、balloon_limit.rs BALLOON_LIMIT_CLAMP_TAG、balloon_lock.rs HoldReason・BalloonLockLedger::reason、follow/work_area_clamp.rs WORK_AREA_CLAMP_TAG・follow/drag_follow.rs on_balloon_drag・follow/sticky_follow.rs sync_drag_writer（follow.rs の再公開も組から分けた）
+- 出所は `module_path!()` から決まるので、移した時点で `areka::placement::measure` が `areka_placement::measure` に変わった。本体の measure_bake_count・measure_bake_log の期待値は段 2 で直した（7.1 が持つのは明示の `DIAG_TARGET` ほか）。
+- 3.1 の grep 0 件は配置の crate と `placement_tests` の範囲。本体の `emo2_boot`・`input_events` と areka-emo-text の同名の補助は文字列を返す別物で、触っていない。
+- 4.1: 本体の `src` は、コードと説明のどちらでも `crate::placement::`・素の `placement::` が 0 件（説明の 36 か所も `areka_placement::` へ直した）。ファイルのパスの記述（`src/placement/<name>.rs` の形）は 15 ファイルの 60 行に残る。その中には `emo2_boot/assets_tests.rs`・`frame_test_support.rs`・`frame_transition_atomicity_tests.rs`・`main_monitor_snapshot_seam_tests.rs`・`placement_tests/zorder_*_branch_coverage_tests.rs` など 7.2 の一覧に無いファイルもあるので、7.2 で一緒に直し、7.6 の grep で 0 を確かめる。
+- 段 4（5.1〜5.6）は 1 回の実装係にまとめた（1 つのコミットの段・トークンを抑えるため）。レビューの 1 回目は文書の食い違いで差し戻し、design.md だけを直して 2 回目で承認。
+- 5.1: 移した `window-placement.rs` が `async_io::Timer` を使うので、配置の開発用の依存に `async-io`（本体・wintf と同じ `version = "2.6", default-features = false`・`Cargo.lock` に crate は増えない）を足し、design.md の「使ってよい依存」・D5・PlacementCrate に書き足した。要件 1.6 の字面（「足してよいのはワークスペースの中の path 依存だけ」）は、もとから D5 が認める tracing-subscriber も締め出すので、完了の棚卸で 1.6 の文を「新しい crate を `Cargo.lock` に入れない」の読みに合わせるかを決める。5.1 で新しく開けた公開の項目は無い。
+- 5.6: 名前を付けた例外は、ワークスペース全体を歩く見張りの 3 本（`session_end_sync_send_tests.rs`・`emo2_boot/frame_attach_tests.rs`・`readonly_tests.rs`）になった。後の 2 本は `.parent()` で上がるので設計の grep に当たらない。3 本とも `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（完了の棚卸で起票）。
+- 共に使う走査器は `areka_placement::test_support::{measure_template, zorder_pair_deferred}` に 1 つずつ（`rust_sources_under`・`deferred_hits`・`SHELL_PARSE` も、両方の片割れが使うのでここに置いた）。
+- 7.2 へ: `crates/areka/examples/collision-probe.rs` の 76・96・100・103・107・111・115 行（`placement/{spawn,source,measure,mod}.rs:<行>`）と `collision-probe/setup.rs` の 42 行（`window-placement.rs:259-261`）・76 行（`placement/spawn.rs`）の説明のパス。90 行の古い `../pilot/...` の記述（`emo2_root` は今は sample_ghost_kit から来る）は直さず、`audit-areka-app` へ申し送る。
+- 6.1: `impl OffsetBase` は `unpinned` の 1 つだけで follow の写像を使わないので、型と一緒に `resolver` へ移した（`offset_space.rs` に残す impl は無い）。measure・source の子（機能で立つ `measure_test_support.rs` とテストの 3 本）も `crate::error::PlacementError` を引く。
+- 6.1 の参照の表（数える決まり: 本番のコードと機能で立つ子の `use (super|crate)::` だけ。説明の intra-doc リンクは組み立ての依存ではないので数えない）:
+
+  | モジュール | 配置の中で引く先 | 外の crate | 文の並びとの照合 |
+  |---|---|---|---|
+  | config | なし | std・tracing・areka_parsers | 一致（いちばん左） |
+  | resolver | config | tracing・wintf（DPI） | 一致（follow を引く参照は 0） |
+  | measure（`measure_first_frame.rs`・`measure_test_support.rs` を含む） | resolver・error・descript_window_keys | emo-atlas・emo-compose・emo-present・tracing・std | 一致（error と descript_window_keys は名指さない所） |
+  | spawn | config・diag・follow（同じ段）・resolver・chain_finalize・source | bevy_ecs・windows・wintf・tracing | 一致（同じ段の follow） |
+  | follow（子も含む） | diag・resolver・spawn（同じ段）・balloon_limit・balloon_lock・dpi_sync・persist・transition_diag・chain_finalize・sticky_group_ledger・windowposition・根の scale_signed | bevy_ecs・windows・wintf・emo-compose・tracing | 一致（名指さない所への参照は 7.5 で申し送る） |
+  | diag | なし | bevy_ecs（Entity）・wintf（ZOrderPairStrategy）・tracing・std | 一致（最下流） |
+
+  説明のリンクだけの参照: `diag.rs:112` → `super::spawn::wire_zorder_pair`・`follow/offset_space.rs:251` → `crate::measure::MeasureScaling`。
+- 6.2: 番人の数え方で lib.rs 918 行・`placement_tests/transition_judge.rs` 999 行・main.rs 989 行。判定器は 1,000 行を超えないので分けていない。例外表は 5 件のまま。
+- 段 6 は 2 人の実装係を並べた（7.1・7.2 と 7.3〜7.5。触るファイルは重ならない）。レビューは段 6 全体で 1 回。
+- 7.2 は 4.1・5.6 の注で回された本体の説明のパス（emo2_boot の各テスト・collision-probe ほか）と、同じ形の古い記述がある wintf の `zorder_chain_apply*.rs`・`zorder_pair_maintain.rs`、ukadoc-survey の `extract_tests.rs` も直した。行番号は移す前の `fbfd7923` と今のファイルを突き合わせて付け直した。doc の行番号には、この spec より前から実物とずれているものがある（例 `collision-probe.rs:105` の `measure.rs:221` は今 433 行）。完了の棚卸で audit 側へ申し送る。
+- 7.2: `structure.md` の log-capture-kit を使う crate の数は 18 → 20（areka-placement と、元から漏れていた areka-parsers）。log-capture-kit の節に新しい `expect.rs` はまだ書いていない（完了の棚卸で足す）。
+- 7.3: 性能の道具は出所の名前で行を拾っていない（`judge-perf.py:1052` は `"primary_dpi=" in line`）。6.8 は発動しない。見本の差は 42 語の置き換えだけ。
+- 7.4: `-Binary areka-placement-lib` → `cargo test -p areka-placement --lib --`。負荷は回さず、選びの文を値ごとに評価して確かめた。
+- 7.5: 受け持ちは core 114・follow 56（計 170・glob で分けるので重ならない）。古くなった `#[allow]` は範囲の 46 個のうち 36 個（core 3・follow 33）。要件 8.1 の「約 51」は見込みの数。
+- 7.6: `crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` で `src/placement/`・`areka::placement`（`placement_tests` を除く）・`areka/examples/window-placement` が 0 件。分岐の対応表の `"placement/…_tests.rs"` は見出しの札でパスではない。
+- 8.1: 完了の一覧（`78d19323`・`target/placement-crate-split/tests-after.txt`）は `: test$` が 14071（着手 14058 から +13）。最後の `::` から後ろの多重集合の差は 13 名で各 +1・減りは 0。設計の表の 11 名に、新しい読み口 `crate_source_test_support.rs` の自分の確かめ 2 本（`the_reader_reads_a_lower_crate`・`a_missing_path_stops_with_a_panic`）が加わる。この 2 本は移したテストではないので、設計の表（「部品と口」Verification）に行を足した（タスクの文の「11 名」は 13 名と読む）。新しい文書のテストは 0。
+- 8.1: `cargo check --workspace --all-targets` 警告 0。`cargo tree -p areka-placement -e normal` に本体（`areka v`）は出ない。`Cargo.lock` の差（`8c518c5b` から）は新しい crate の項と本体の依存の 1 行だけ。配置の本番のソースの `windows` の名前空間は `Win32::Foundation`・`Win32::UI::WindowsAndMessaging` の 2 つだけ。`cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` の差は MIT の数 254→255 と `areka-placement 0.1.0` の 1 行だけ。
+- 8.2: 排他テストの机を取って `pwsh -NoProfile -File tools/test-all.ps1` を 1 回（`b08abb60`・始めた時の未コミット 0）。13 段すべて OK（x64 のワークスペース 518 秒・i686 41 秒）・`all steps green`。
+- 8.3: 排他テストの机を取って `AREKA_WINDOW_LINK_REAL_RUN=1 cargo test -p areka --test window_link_real_run` を 1 回（RUST_LOG に `areka_placement=debug`）。1 passed・JUDGE 13 件すべて PASS。`target/wl-signoff/run1.log` に `areka_placement::diag` の行が 95・`run2.log` に 17、旧い `areka::placement` の行は 0。抜き書き:
+  - `2026-11-06T10:47:51.244783Z DEBUG actor{actor=emo-text}: areka_placement::diag: [diag.window_move] route=BalloonFollow entity=31v0 kind=balloon scope=1 x=1120 y=330 w=- h=- dpi=192`
+  - `2026-11-06T10:47:37.597073Z  INFO actor{actor=emo-text}: areka_placement::sticky_group_ledger: sticky: 窓の組の一覧 event="sticky_groups" action="descript_seed" groups=[StickyGroup { members: {0, 1}, source: Descript }]`
+  - `2026-11-06T10:47:52.579509Z  INFO actor{actor=emo-text}: areka_placement::follow::sticky_follow: sticky: 組の相手をドラッグに連れ動かした event="sticky_follow" trigger="drag" scope=0 partners=[1] dx=240 dy=-120`
+- 完了時の棚卸（2026-11-06）: その場で解決 6 件・起票 0 件（既にある brief へ足したもの 1 件）。
+  - 完了時にその場で解決: 要件 1.6 の字面を「ワークスペースの中の path 依存と `Cargo.lock` に既にある crate だけ・新しい crate を入れない」に直した（`34fcf3fc`）。
+  - 完了時にその場で解決: タスク 8.1 の「11 名」を「13 名」に直した（このコミット）。
+  - 完了時にその場で解決: `crate_source_test_support.rs` の頭の説明の例外を 3 本に、`collision-probe.rs` の 89〜91 行の古い `../pilot/...` の記述と 105 行の `measure.rs:221` を今のコードに直した（`3fb9cae8`）。
+  - 完了時にその場で解決: `doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/briefing-assets.md` の行番号を今のコードに合わせた（41 件と、内容が古くなっていた briefing-assets.md の 221・227・228・229・262 行の書き直し・`70044cb2`）。この spec の前から古かった所も含む。ledger の `*.toml` には行番号つきの参照が無かった。
+  - 完了時にその場で解決: `structure.md` の log-capture-kit の Modules に `expect.rs` を足した（`bfd0b93d`）。
+  - 完了時にその場で解決（直さないと決めたもの）: `log-capture-kit/tests/with_default_guard_test.rs` の `KNOWN_DEV_DEPENDENTS` は較正用の陽性の部分集合で全数の表ではないので、areka-placement を足さない。
+  - 既にある brief へ足した: ワークスペース全体を歩く見張り 3 本を `log-capture-kit/tests/` へ移すこと＝`audit-areka-app` の brief の「件 1」（設計で `audit-areka-app` へ申し送ると決めてあった。手順 3 の「進行中の他 spec の担当範囲と重なる」に当たる＝受け持ちが `audit-areka-app` と `audit-emo2-boot-*`）。
+

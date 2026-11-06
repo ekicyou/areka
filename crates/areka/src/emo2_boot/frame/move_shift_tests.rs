@@ -16,8 +16,8 @@ use super::super::test_support::{
     resnap_world,
 };
 use super::{MoveShiftSource, run_move_shift_with};
-use crate::placement::dpi_sync::DpiSyncHold;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::spawn::GhostWindows;
 
 /// 対象ごとのずれと拡大率を持つ偽の提示。
 #[derive(Default)]

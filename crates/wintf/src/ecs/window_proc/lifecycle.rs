@@ -31,7 +31,7 @@ type HandlerResult = Option<LRESULT>;
 /// component が欠落（真の異常・`warn!`）**——はタスク 3.2 が areka の消費側 4 入口へ、
 /// タスク 7.3 が areka の despawn 呼出点 2 箇所へ敷いたものと**同一**である。終了時ログの
 /// 読み手は主体を問わず 1 語で引けなければならないので、**文字列は areka
-/// （`areka::placement::diag::DESPAWNED_SKIP_TAG`）と同一に保つ**こと。
+/// （`areka_placement::diag::DESPAWNED_SKIP_TAG`）と同一に保つ**こと。
 ///
 /// 定数そのものを共有しないのは design の依存方向規約（**wintf → areka の import は禁止**・
 /// File Structure Plan 直下）による。areka 側の定数を参照してはならない。

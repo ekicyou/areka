@@ -19,9 +19,9 @@
 //! [`a_changed_monitor_table_rebuilds_both_sources`] が別に固定する。順序だけの違い・
 //! モニタ 0 台・窓書込ゼロの各主張にも、同じ理由でそれぞれ陽性の対がある。
 
-use crate::placement::WORK_AREA_SYNC_CONTEXT;
-use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
-use crate::placement::test_support::capture_logs;
+use areka_placement::WORK_AREA_SYNC_CONTEXT;
+use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
+use log_capture_kit::capture;
 use wintf::ecs::window::monitor::Monitor;
 
 use super::test_support::{
@@ -254,7 +254,7 @@ fn an_empty_monitor_table_keeps_the_sources_and_warns() {
     harness.set_monitor_table(Vec::new());
     harness.advance_frame();
 
-    let (change, events) = capture_logs(|| harness.run_work_area_sync());
+    let (change, events) = capture(|| harness.run_work_area_sync());
     assert!(change.is_none(), "空の表で源を差し替えている");
     assert_eq!(
         harness.work_area_source(),
@@ -282,7 +282,7 @@ fn a_non_empty_monitor_table_does_not_warn() {
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
     harness.advance_frame();
 
-    let (change, events) = capture_logs(|| harness.run_work_area_sync());
+    let (change, events) = capture(|| harness.run_work_area_sync());
     assert!(change.is_some(), "前提: 差し替えが起きる表を渡している");
     assert!(
         events.iter().all(|e| e.level != tracing::Level::WARN),
@@ -378,9 +378,9 @@ fn the_sync_is_called_before_the_scale_phase_in_the_frame_system() {
 /// 同期を 1 回回し、遷移観測の行だけを拾う。
 ///
 /// 捕捉窓の内側は観測 target が点いた状態である（既定 OFF そのものは
-/// `placement/follow_transition_diag_tests.rs` が directive 単位で所有する）。
+/// `crates/areka-placement/src/follow_transition_diag_tests.rs` が directive 単位で所有する）。
 fn transition_lines(harness: &mut FrameHarness) -> Vec<String> {
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_work_area_sync();
     });
     events
@@ -456,7 +456,7 @@ fn a_rebuilt_source_also_logs_the_monitor_configuration_with_its_own_call_site_t
     harness.set_monitor_table_for_dpi(LOWERED_DPI);
     harness.advance_frame();
 
-    let (_, events) = capture_logs(|| harness.run_work_area_sync());
+    let (_, events) = capture(|| harness.run_work_area_sync());
     let headers: Vec<&str> = events
         .iter()
         .map(|e| e.message())
@@ -478,7 +478,7 @@ fn a_rebuilt_source_also_logs_the_monitor_configuration_with_its_own_call_site_t
 ///
 /// 観測が消えている運転で確保が走らないことは、発行が `debug!` である以上、濾過テストでは
 /// 検出できない（組んでから捨てても緑になる）。担い手は本文の形そのものなので、ここで名指しする
-/// ——`placement/follow_transition_diag_tests.rs` の接地点レコードと同じ流儀である。
+/// ——`crates/areka-placement/src/follow_transition_diag_tests.rs` の接地点レコードと同じ流儀である。
 #[test]
 fn the_snapshot_record_is_built_behind_the_front_guard() {
     let code = include_str!("frame/work_area_sync.rs");

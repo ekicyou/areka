@@ -83,7 +83,7 @@ pub const SURFACE_REASON_INVISIBLE: &str = "invisible";
 /// フレームで全窓が出し続ける空振りであり、判定側の遷移区間は次の起点まで伸びるので、除外に使うと
 /// 毎遷移で全窓が除外側へ入って窓ごとの判定量が静かに消える（task 4.2 の実機採取で判明。裁定は
 /// 仕様 `areka-P0-dpi-transition-atomicity` の requirements.md 4.6 直下の注記〔2026-08-20〕。
-/// 除外の選り分けの実装は `areka` の `placement::transition_judge::summarize`）。
+/// 除外の選り分けの実装は `areka` の `placement_tests::transition_judge::summarize`）。
 ///
 /// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。読み手は語彙の檻（テスト）だけ
 /// （判定側は [`SURFACE_REASON_INVISIBLE`] を直に名指す）。

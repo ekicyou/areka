@@ -15,8 +15,8 @@ use areka_emo_compose::ScaleRatio;
 use areka_emo_present::EmoPresenter;
 use tracing::{debug, info};
 
-use crate::placement::spawn::GhostWindows;
-use crate::placement::sticky_group_ledger::{
+use areka_placement::spawn::GhostWindows;
+use areka_placement::sticky_group_ledger::{
     StickyGroup, StickyGroupLedger, StickySource, parse_sticky_tokens,
 };
 

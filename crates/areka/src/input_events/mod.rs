@@ -34,7 +34,7 @@ use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, 
 use crate::app_exit::{ExitOrigin, quit_app};
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::hit_region::{HitRegion, resolve_hit_region};
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 use throttle::{MouseMoveThrottle, plan_mouse_move};
 
 /// UI スレッド所有のマウス入力配信資源（NonSend・DD-IE-9）。
@@ -374,7 +374,7 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 ///
 /// # 依存方向（regression 修正）
 ///
-/// この結線は本来 `placement::spawn` が担うのが素直だが、placement 本体は
+/// この結線は本来 `areka_placement::spawn` が担うのが素直だが、placement 本体は
 /// `crate::` パスを持てない（example が `#[path]` で私有 include するため・
 /// `window-placement.rs`／`collision-probe.rs`）。設計の依存方向も
 /// `input_events → placement` ゆえ、ハンドラ装着は placement に依存できる
@@ -389,7 +389,7 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 /// # ドラッグの受け手（areka-P0-mouse-drag-events）
 ///
 /// 同じ `insert` で `OnDragStart`（[`drag::on_char_drag_start`]）と `OnDragEnd`
-/// （[`drag::on_char_drag_end_and_notify`]）も入れる。この `OnDragEnd` は `placement::spawn` が
+/// （[`drag::on_char_drag_end_and_notify`]）も入れる。この `OnDragEnd` は `areka_placement::spawn` が
 /// 先に付けた `OnDragEnd(on_char_drag_end)` を**置き換える**（同じ型の部品は 1 つの窓に 1 つ）。
 /// 包みが同じ `on_char_drag_end` を先に呼ぶので位置の保存は続く。順を入れ替えない
 /// （`spawn_ghost_windows` の直後に呼ぶ。逆にすると spawn が包みを上書きし、知らせが止まる）。

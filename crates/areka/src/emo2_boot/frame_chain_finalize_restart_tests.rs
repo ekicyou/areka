@@ -17,11 +17,11 @@ use super::test_support::{
 use super::*;
 
 use crate::app_exit::{WindowsEpoch, close_windows_for_restart};
-use crate::placement::chain_finalize::{
+use areka_placement::chain_finalize::{
     CHAIN_FINALIZE_STALL_FRAMES, ChainFinalizeStall, ChainFinalized,
 };
-use crate::placement::chain_realign::ChainRealignPending;
-use crate::placement::follow::MonitorSnapshot;
+use areka_placement::chain_realign::ChainRealignPending;
+use areka_placement::follow::MonitorSnapshot;
 use wintf::ecs::window::ZOrderChainPlan;
 
 /// 確定が連鎖を解き直したときの記録の本文（`finalize_chain_once_with` の info）。

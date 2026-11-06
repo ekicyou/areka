@@ -41,10 +41,12 @@ mod reference_brain;
 /// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
-/// 窓配置機構（areka-P0-window-placement）。ゴースト定義からキャラ窓・バルーン窓の
-/// 初期配置を解決し窓 entity を組み立てる配置パイプライン。`ghost_session::open_ghost_windows`
-/// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
-mod placement;
+#[cfg(test)]
+mod crate_source_test_support;
+/// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く
+/// （spec: placement-crate-split 要件 3.7・3.9）。
+#[cfg(test)]
+mod placement_tests;
 
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
@@ -763,37 +765,38 @@ fn settle_session_mark(
 /// 先読みした永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。
 /// `ghost_session::open_ghost_windows` は実モニタの列挙と作業プール（`WintfTaskPool`）を要して
 /// テスト困難ゆえ、純粋シーム（load→apply）を本ヘルパへ抽出し単体で
-/// 檻に入れる（IO は [`placement::persist::load_restored_state`] の 1 点のみ・merge は純関数）。
+/// 檻に入れる（IO は [`areka_placement::persist::load_restored_state`] の 1 点のみ・merge は純関数）。
 ///
 /// `default_encoding` は boot 結線・`source.rs` と同一の [`areka_parsers::charset::DefaultEncoding`]
 /// を渡すこと（mount 解決の一貫性のため）。呼び出し側は `DefaultEncoding::Ansi` を渡す。
 fn restore_merged_placements(
     ghost_root: &std::path::Path,
-    placements: Vec<placement::resolver::ScopePlacement>,
-    snapshot: &placement::follow::MonitorSnapshot,
+    placements: Vec<areka_placement::resolver::ScopePlacement>,
+    snapshot: &areka_placement::follow::MonitorSnapshot,
     default_encoding: areka_parsers::charset::DefaultEncoding,
 ) -> (
-    Vec<placement::resolver::ScopePlacement>,
-    std::collections::BTreeMap<usize, Option<placement::chain_finalize::AdjacencyMark>>,
+    Vec<areka_placement::resolver::ScopePlacement>,
+    std::collections::BTreeMap<usize, Option<areka_placement::chain_finalize::AdjacencyMark>>,
     bool,
 ) {
     // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
-    let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
+    let entries = areka_placement::persist::load_restored_state(ghost_root, default_encoding);
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）と、記憶の位置を
     // 寄せて表示したかの判定（窓を作る閉包が `RestoredPositionsClamped` へ据える・window-work-area-clamp 4.6）。
-    let (merged, clamped) = placement::persist::restore_and_judge(placements, &entries, snapshot);
+    let (merged, clamped) =
+        areka_placement::persist::restore_and_judge(placements, &entries, snapshot);
     // 起動時関門（areka-P0-windowposition-limit design C6・要件 2.2/4.7/4.9/5.5/6.1）:
     // 経路①（spawn 初期値）と経路②（復元 merge）はどちらもこの合流点の出力を消費するため、
     // ここ 1 点で両方が被覆される。merge **後**に置くのは保存値優先の合流規則（4.7）を
     // 一切変えないためであり、補正は `balloon_pos`（表示位置）だけに作用する
     // ——`balloon_offset`（論理相対位置）は生値のまま（DD6・補正を焼き付けない）。
-    let merged = placement::balloon_limit::apply_balloon_limit(merged, snapshot);
+    let merged = areka_placement::balloon_limit::apply_balloon_limit(merged, snapshot);
     // 記憶に位置（x・y の両方）があるスコープ集合。既定配置ではなく、起動の並べ直しは覚えた印で、
     // 拡大率の変化の後は変わる直前の隣り合いで決める（dpi-realign-remembered-chain 6.3・1）。値の違いでなく
     // 記憶の有無で決める＝記憶の値がたまたま既定と同じでも記憶として扱う
     // （char-position-save-on-exit 2.6・判定は merge と同じ読み取り `has_saved_char_pos`）。
     // 値は覚えた隣り合いの印（無ければ None）で、窓を作る閉包が窓の一式へ据える。
-    let restored = placement::persist::restored_scope_marks(&entries, &merged);
+    let restored = areka_placement::persist::restored_scope_marks(&entries, &merged);
     (merged, restored, clamped)
 }
 
@@ -803,7 +806,7 @@ fn restore_merged_placements(
 /// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink`×2）の**両方**が、生きた
 /// ghost runtime が存在するときにこのヘルパで `runtime.sylphya_publisher().clone()` を World の
 /// NonSend リソースとして挿入する（`MouseWiring`／`Emo2Wiring` の NonSend 先例に倣う）。以降、
-/// follow.rs の DragEnd 観測点が [`placement::persist::persist_entries`] 経由でこの publisher の
+/// follow.rs の DragEnd 観測点が [`areka_placement::persist::persist_entries`] 経由でこの publisher の
 /// clone 送信端から保存 entries を write-through 投函できる（World レベルの配線導管）。
 ///
 /// 生きた runtime が無い経路（wired の `None` ghost・fallback の `Err`）
@@ -811,7 +814,7 @@ fn restore_merged_placements(
 /// no-op へ縮退・6.2）。挿入は純粋な World 変異ゆえ headless 単体テスト可能（`insert_non_send`
 /// を薄く包み `#[cfg(test)]` の檻に入れる）。
 fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
-    world.insert_non_send(placement::persist::PersistWiring { publisher });
+    world.insert_non_send(areka_placement::persist::PersistWiring { publisher });
 }
 
 /// boot が `Ok` を返した直後の結線（wired／fallback の両アームが呼ぶ 1 か所）。
@@ -885,13 +888,13 @@ pub(crate) fn record_last_used(
 /// 起動時モニタスナップショットの構築＋出力シーム（areka-P0-dpi-window-vanish task 1.2・
 /// 要件 1.1・design D12「areka 構築点を正典」）。
 ///
-/// [`placement::follow::MonitorSnapshot`] は **placement の全判断が読む権威**（work area
+/// [`areka_placement::follow::MonitorSnapshot`] は **placement の全判断が読む権威**（work area
 /// 解決・アンカー射影・可視性判定がすべてこの Resource を引く）である。したがって
 /// 要件 1.1 の正典出力点はこの構築点——ここで観測した値だけが「以後の判断が実際に見た値」
 /// であり、他所で列挙し直した値ではない（D12）。
 ///
-/// 出力は共有ヘルパ [`placement::diag::log_monitor_snapshot`] 1 本で、呼出点タグ
-/// [`placement::MONITOR_SNAPSHOT_CONTEXT`] を名乗る。`prepare_ghost_windows` の列挙点も
+/// 出力は共有ヘルパ [`areka_placement::diag::log_monitor_snapshot`] 1 本で、呼出点タグ
+/// [`areka_placement::MONITOR_SNAPSHOT_CONTEXT`] を名乗る。`prepare_ghost_windows` の列挙点も
 /// 同じヘルパを別タグで呼ぶため、語彙は共有したままログ上で出所を弁別でき、
 /// 両者の食い違いは grep 突合で検出できる（D12: 専用の突合機構は新設しない）。
 ///
@@ -902,16 +905,16 @@ pub(crate) fn record_last_used(
 /// # 2 源を同じ構築関数で作る（atom task 5.1・要件 5.1）
 ///
 /// 返すのは作業領域源と**モニタ別拡大率表**の組である。実行時の同期段
-/// （`emo2_boot::frame::work_area_sync`）も同じ [`placement::follow::MonitorSources::from_monitors`]
+/// （`emo2_boot::frame::work_area_sync`）も同じ [`areka_placement::follow::MonitorSources::from_monitors`]
 /// を通る——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 fn boot_monitor_snapshot(
     monitors: &[wintf::ecs::window::monitor::Monitor],
-) -> placement::follow::MonitorSources {
-    placement::diag::log_monitor_snapshot(
-        &placement::monitor_records(monitors),
-        placement::MONITOR_SNAPSHOT_CONTEXT,
+) -> areka_placement::follow::MonitorSources {
+    areka_placement::diag::log_monitor_snapshot(
+        &areka_placement::monitor_records(monitors),
+        areka_placement::MONITOR_SNAPSHOT_CONTEXT,
     );
-    placement::follow::MonitorSources::from_monitors(monitors)
+    areka_placement::follow::MonitorSources::from_monitors(monitors)
 }
 
 // ---------------------------------------------------------------------------

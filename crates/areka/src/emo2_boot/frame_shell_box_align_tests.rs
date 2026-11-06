@@ -483,7 +483,7 @@ fn box_only_after_hiding_the_window_reports_without_a_warning() {
         boxed(BOX_SURFACE_ID, AT_FACE0),
         "箱にだけ文字"
     );
-    let warned: Vec<&LogEvent> = events
+    let warned: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.level <= tracing::Level::WARN)
         .filter(|e| {

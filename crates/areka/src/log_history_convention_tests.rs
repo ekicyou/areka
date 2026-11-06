@@ -314,29 +314,33 @@ fn the_convention_doc_table_equals_the_rules_and_the_two_convention_targets() {
 // 名指ししたモジュールの実在（要件 2.12）
 // ---------------------------------------------------------------------------
 
-/// ゴーストの実行時のファイル（`::` を含まない target の字面を探す先・`CARGO_MANIFEST_DIR` からの相対）。
-const GHOST_RUNTIME: &str = "../areka-ghost/src/runtime.rs";
-
-/// target の先頭のクレート名から（クレートのフォルダ・根のファイル）を引く。知らないクレートは None。
-fn crate_of(name: &str) -> Option<(&'static str, &'static str)> {
+/// target の先頭のクレート名から（クレートの `src`・根のファイル）を引く。知らないクレートは None。
+/// 本体は相対で、下の crate は読み口で引く（spec: placement-crate-split 要件 5.4）。
+fn crate_of(name: &str) -> Option<(std::path::PathBuf, &'static str)> {
     match name {
-        "areka" => Some(("../areka", "main.rs")),
-        "areka_update" => Some(("../areka-update", "lib.rs")),
+        "areka" => Some((
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            "main.rs",
+        )),
+        "areka_update" => Some((
+            crate::crate_source_test_support::crate_path("areka-update", "src"),
+            "lib.rs",
+        )),
         _ => None,
     }
 }
 
 /// target の在りかを判定し、無ければ理由を返す。導けない target も理由付きで返す（黙って通さない）。
 fn locate(target: &str) -> Result<(), String> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut segments = target.split("::");
     let head = segments.next().unwrap_or_default();
-    let Some((dir, root_file)) = crate_of(head) else {
+    let Some((src, root_file)) = crate_of(head) else {
         if target.contains("::") {
             return Err(format!("{target}: クレート `{head}` のフォルダを導けない"));
         }
         // `::` を含まない明示の target はゴーストの実行時のファイルに字面がある。
-        let path = root.join(GHOST_RUNTIME);
+        // ゴーストの実行時のファイル（`::` を含まない target の字面を探す先）。
+        let path = crate::crate_source_test_support::crate_path("areka-ghost", "src/runtime.rs");
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("{target}: {} を読めない: {e}", path.display()))?;
         let literal = format!("target: \"{target}\"");
@@ -349,7 +353,6 @@ fn locate(target: &str) -> Result<(), String> {
             ))
         };
     };
-    let src = root.join(dir).join("src");
     let rest: Vec<&str> = segments.collect();
     let candidates = if rest.is_empty() {
         vec![src.join(root_file)]

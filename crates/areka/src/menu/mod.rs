@@ -42,8 +42,8 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerReleased, dispatch_pointer_events};
 
 use crate::input_events::MouseWiring;
-use crate::placement::spawn::CharWindowMarker;
 use crate::readme;
+use areka_placement::spawn::CharWindowMarker;
 use trigger::PendingQuery;
 
 /// メニューの枠。宣言順がそのまま並び順（①〜⑫・要件 2.1）で、判別値を登記の添字に使う。

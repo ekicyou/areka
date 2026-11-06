@@ -158,11 +158,11 @@ mod scope_rect {
         ScopeRectReadSeam, ScreenRect, WindowKey,
     };
     use crate::ghost_session::{RuntimeRebuild, rebuild_runtime_in_place};
-    use crate::placement::follow::OffsetBase;
-    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-    use crate::placement::source::GhostTitles;
-    use crate::placement::spawn::spawn_ghost_windows;
     use crate::shiori_host::ShioriHostSink;
+    use areka_placement::follow::OffsetBase;
+    use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use areka_placement::source::GhostTitles;
+    use areka_placement::spawn::spawn_ghost_windows;
 
     /// 窓の印ごとに違う矩形（左＝印の値）を返す偽の OS で、答えの数からどの窓を引いたか分かる。
     fn rect_of(raw: isize) -> ScreenRect {

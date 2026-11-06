@@ -63,9 +63,9 @@ use wintf::ecs::window::{
 };
 
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
-use crate::placement::spawn::GhostWindows;
-use crate::placement::zorder_chain_compose::{compose_chain, element_text};
-use crate::placement::zorder_group_ledger::{
+use areka_placement::spawn::GhostWindows;
+use areka_placement::zorder_chain_compose::{compose_chain, element_text};
+use areka_placement::zorder_group_ledger::{
     GroupElement, GroupWindowKind, Normalization, ZOrderGroup, ZOrderGroupLedger, ZOrderReject,
     parse_zorder_tokens,
 };
@@ -357,7 +357,7 @@ fn reset_applied_detail(ledger: &ZOrderGroupLedger) -> String {
     let base = ledger
         .groups()
         .iter()
-        .find(|group| group.source == crate::placement::zorder_group_ledger::GroupSource::Descript);
+        .find(|group| group.source == areka_placement::zorder_group_ledger::GroupSource::Descript);
     format!(
         "action=reset groups={count} base={base}",
         count = ledger.groups().len(),

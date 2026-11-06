@@ -33,7 +33,7 @@ use super::window_state::StayOnTopState;
 use super::zorder_descript::{apply_descript_base, apply_descript_rebase};
 use super::{BootAssets, DpiChangedQuery, PositionCue, TalkClock};
 use crate::ghost_session::ghost_session_scope_scale::SharedScopeScaleTable;
-use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
+use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
 // Emo2Wiring＋attach フェーズ（tasks.md task 4.1・design「UI 毎フレーム結線 / frame」）

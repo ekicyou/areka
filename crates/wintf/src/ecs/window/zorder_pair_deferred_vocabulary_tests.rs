@@ -99,9 +99,10 @@ const PRODUCTION_FILES: [&str; 8] = [
 /// 先送り語彙（小文字で保持し、走査も小文字化して行う）と、それが何の入口かの説明。
 ///
 /// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
-/// ままである。兄弟の areka 側テスト（`spawn_zorder_pair_deferred_tests.rs`）と同じ 2 つの表
-/// （この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、どちらの表へ
-/// 足すときも両方のファイルへ足すこと。
+/// ままである。兄弟の areka 側の表（`crates/areka-placement/src/test_support.rs` の
+/// `zorder_pair_deferred`・配置と本体の `spawn_zorder_pair_deferred_tests.rs` が共に使う）と同じ
+/// 2 つの表（この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、どちらの表へ
+/// 足すときも両方のファイル（このファイルと配置の `test_support.rs`）へ足すこと。
 const DEFERRED_NEEDLES: [(&str, &str); 6] = [
     (
         "minimize",

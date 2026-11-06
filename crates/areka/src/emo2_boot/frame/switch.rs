@@ -45,16 +45,16 @@ use crate::emo2_boot::shell_cursor_assets::ShellCursorAssets;
 use crate::emo2_boot::skin_facts_copy;
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapPayload};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::balloon_lock::replace_balloon_lock_descript;
-use crate::placement::config::build_placement_config;
-use crate::placement::descript_window_keys::read_balloon_dontmove;
-use crate::placement::reseed::{
+use areka_placement::balloon_lock::replace_balloon_lock_descript;
+use areka_placement::config::build_placement_config;
+use areka_placement::descript_window_keys::read_balloon_dontmove;
+use areka_placement::reseed::{
     BalloonPlacementInputs, apply_shell_descript, reanchor_char_windows,
 };
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::source::DescriptSource;
-use crate::placement::spawn::GhostWindows;
-use crate::placement::sticky_group_ledger::replace_sticky_descript;
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::source::DescriptSource;
+use areka_placement::spawn::GhostWindows;
+use areka_placement::sticky_group_ledger::replace_sticky_descript;
 
 /// 差し替えの世代（プロセスで単調に進む＝ゴーストをまたいでも置き場の荷物と合図を取り違えない）。
 static NEXT_EPOCH: AtomicU64 = AtomicU64::new(1);
