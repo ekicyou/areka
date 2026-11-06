@@ -139,14 +139,14 @@
   - 終わった姿: 消した名前がツリーに無く、ツリー全体がビルドでき、クレートのテストが緑
   - _Requirements: 2.1, 2.3, 5.1, 5.3_
 
-- [ ] 5. 確かめ
+- [x] 5. 確かめ
 - [x] 5.1 読む側の上限の着地を確かめ、audit をかけ直して新しい指摘を 0 件にする（指摘 1・要件 4.1・4.2）
   - `audit-parsers-sakura` の「シェル全体の範囲の幅の合計 8193」の上限と、その壊れたら落ちるテストが `main` に着いていることを確かめる（着いていなければ開発者へ伝える）
   - 同じ範囲（`crates/areka-emo-compose/` の全ファイル）に、件数の上限なし・全部読む作法で `/ponytail:ponytail-audit` をかけ直す。指摘 5・20 は数から外す
   - 新しい指摘を番号と組を付けて `research.md` に残し、直して、0 件になるまでかけ直す。直すタスクが残りの見込みを越えるなら議題にする
   - 終わった姿: 最後のかけ直しの新しい指摘が 0 件と `research.md` に書かれ、確定した指摘の一覧（要件の討議の表）に結果が書き加えられている
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 3.4, 4.1, 4.2, 7.1_
-- [ ] 5.2 全体テストを 1 回回して緑を確かめる（要件 4.3）
+- [x] 5.2 全体テストを 1 回回して緑を確かめる（要件 4.3）
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す。触っていないクレートだけが赤なら、そのクレートだけを 1 回回し直す
   - `Cargo.lock` が変わっていないこと・新しい依存が無いこと・`crates/areka-emo-text/` に新しいファイルが無いこと・終了の道と GPU のテストに触っていないことを差分で確かめる
   - 終わった姿: 全体テストが緑（整形・ライセンス込み）で、上の確かめがどれも差分 0
@@ -209,7 +209,7 @@
 - [x] 10.2 テストの直し（境目・必ず通る確かめ・写し・古い説明）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
-- [ ] 11. かけ直し 6 回目の指摘の直し（research.md 20 節）
+- [x] 11. かけ直し 6 回目の指摘の直し（research.md 20 節）
 - [x] 11.1 25 件をまとめて直す（reaches の断り方・build_plan の失敗の記録を 1 度に・境目と名前のテスト・説明）
   - _Requirements: 2.1, 4.4, 4.5, 5.3, 6.2_
 
@@ -261,3 +261,4 @@
 - 11.1: `reaches` は `to` を見てから予算を引き、断られた面は開かないだけ（`continue`）。`build_plan` の 3 種の失敗は `PlanScratch.failed_reported` で合成器 1 つにつき面ごとに初めの 1 度 `error!`・以後 `debug!`。`may_copy` の `error!` に `table`（surfaces／boxes）。`bake_emo2` は `bake_surfaces` へ
 - 12.1: `is_implemented_name` は確保しない `same_canonical` で `OVERLAY_WORDS` と比べる（`is_implemented` を広げたら一緒に直す）。持ち込みの予算に収まらない根は飛ばして後ろの根へ（`continue`・`error!` は初めの 1 度）。`may_copy` は初めの 1 度 `error!`・以後 `debug!`・Quiet は無言。行の数え方は `budget::rows` 1 つ
 - 12.2: テスト 449→445。形の誤りと入れ子の報告の循環は 1 つの輪では両方 1 件にできない＝検体 `ring_of` を 2 形に（輪の長さ `RING_LAST`=1000）。部品に `insert_stills`。`HitMemo` のテスト専用の口 `contains_key` を消し `map` を `pub(crate)` に
+- 5.2: 全体テスト（`tools/test-all.ps1`）1 回で全段緑（x64 825 s）・`Cargo.lock` と依存は変わらず・`crates/areka-emo-text/` に新しいファイル無し
