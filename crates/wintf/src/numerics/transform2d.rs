@@ -118,3 +118,7 @@ impl From<&Transform2D> for Matrix3x2 {
         t.to_affine()
     }
 }
+
+#[cfg(test)]
+#[path = "transform2d_tests.rs"]
+mod transform2d_tests;
