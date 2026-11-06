@@ -10,7 +10,7 @@
 
 この spec は、kanade（ゴーストの起動・ふだん・終了の段取りを決める役者）のクレート `crates/areka-kanade/` を ponytail の audit で見直し、出た指摘を全部直すためのものである。要件は「受け持つ範囲の指摘を、3 つの組とも全部直す」という形だけを決める。指摘の中身はここには書かない。指摘はギャップ分析で audit をかけて洗い出し、要件の討議で直す対象として確定する（2026-10-19 開発者「原則、ギャップ分析でauditを実施して、設計以降で修正」）。
 
-あわせて、`audit-ghost-catalog` の完了の棚卸で申し送られた件 1（`cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` が、本番のコードで `collapsible_if` を 1 件、テストで `type_complexity` を 5 件出して赤になる）を、この spec で直す（要件 7）。
+あわせて、`audit-ghost-catalog` の完了の棚卸で申し送られた件 1（`cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` が、本番のコードで `collapsible_if` を 1 件、テストで `type_complexity` を 5 件出して赤になる。2026-11-06 のギャップ分析で回した実測では、テストの 5 件は `type_complexity` 4 件と本番と同じ `collapsible_if` の重なり 1 件）を、この spec で直す（要件 7）。
 
 この spec はウェーブ C18 で、ほかの 7 本（`wintf-visual-tree`・`placement-crate-split`・`audit-wintf-layout-widget`・`audit-dola`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-sylphya-actor`）と並んで走る。並走の約束（ロードマップの「ウェーブ編成」の C18 の行）を守る（要件 6）。待つ spec は無い（前に待っていた `mcp-reload` は 2026-10-22 に着地済み）。
 
@@ -119,7 +119,7 @@
 
 #### Acceptance Criteria
 
-1. When 直しを全部終えたとき, the `cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` shall 警告 0 件で通る（申し送りの `collapsible_if` 1 件と `type_complexity` 5 件〔`src/actor_online_tests.rs` 21 行目の `spawn_with` の戻りの組ほか〕を含む）
+1. When 直しを全部終えたとき, the `cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` shall 警告 0 件で通る（申し送りの `collapsible_if` 1 件〔`src/shiori/real.rs:331`〕と `type_complexity` 4 件〔`src/actor_online_tests.rs` 21 行目の `spawn_with` の戻りの組ほか・申し送りの「5 件」の残り 1 件は `collapsible_if` の重なり〕を含む）
 2. The 本 spec の clippy の直し shall 本番のコードとテストの振る舞いを変えない（直す前と同じテストを同じ結果で通す）
 
 ### Requirement 8: 仕上げの確かめ
