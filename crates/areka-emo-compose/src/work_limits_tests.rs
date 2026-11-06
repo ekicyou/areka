@@ -126,7 +126,8 @@ fn fold_keeps_the_descriptor_at_exactly_the_copied_line_limit() {
     assert_eq!(errors(&logs, "写す行"), 0, "{logs}");
 }
 
-/// 指摘 78: 箱の行も同じ上限で、越えた記述子を捨てて `error!` は 1 行。
+/// 指摘 78: 箱の行も同じ上限で、越えた記述子を捨てて `error!` は 1 行。記録は面の表を組んだときの出し分けに
+/// 従い、黙らせる組み方の面の表なら 0 行。
 #[test]
 fn box_fold_drops_the_descriptor_over_the_copied_line_limit() {
     let mut text = String::from(
@@ -146,6 +147,9 @@ fn box_fold_drops_the_descriptor_over_the_copied_line_limit() {
     assert_eq!(layout.placements(0).len(), 1, "上限の内の面 0 は残る");
     assert!(layout.placements(1).is_empty() && layout.placements(1024).is_empty());
     assert_eq!(errors(&logs, "写す行"), 1, "{logs}");
+    let quiet = EmoWorld::build_with_images_quiet(&parse("charset,UTF-8\n"), &BTreeMap::new());
+    let logs = capture_logs(|| drop(fold_boxes(&parse_boxes(&text), &BTreeMap::new(), &quiet)));
+    assert_eq!(errors(&logs, "写す行"), 0, "{logs}");
 }
 
 /// 指摘 79: 面 0 … 9 がそれぞれ面 10（当たり判定 3 つ）を置く。根をまたぐ持ち込みの予算 10 は面 0〜2 の

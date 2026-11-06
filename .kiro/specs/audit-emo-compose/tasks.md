@@ -210,7 +210,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
 - [ ] 11. かけ直し 6 回目の指摘の直し（research.md 20 節）
-- [ ] 11.1 25 件をまとめて直す（reaches の断り方・build_plan の失敗の記録を 1 度に・境目と名前のテスト・説明）
+- [x] 11.1 25 件をまとめて直す（reaches の断り方・build_plan の失敗の記録を 1 度に・境目と名前のテスト・説明）
   - _Requirements: 2.1, 4.4, 4.5, 5.3, 6.2_
 
 ## Implementation Notes
@@ -251,3 +251,5 @@
 - 9.2: テスト 442→437。部品に `ops_limited`・`errors`・`append_def`（4 引数）・`image_map`、`visible_parts_of` は `&BindSet`。範囲の外: `.kiro/specs/completed/areka-P0-recompose-budget/research.md:68` が改名前の `surface1000_recompose_steady_state_zero_allocation`（今は `surface1000_recompose_capacities_do_not_grow`）を名指す（完了済みの記録・触らない）
 - 10.1: `InChildSurface` は辺 (親, 子) ごとに 1 件（完了 spec areka-P0-surface-element-nesting の「箱 1 つにつき 1 件」を design 議題 7 の下で改めた）。`Budget::enter` は n > limit なら残りを使わず断る。持ち込みの予算の記録も根をまたいで 1 度。`NestTable.enterable` を見える部品の全部の門に。`from_name` は debug!（先の無い未知の語は `UndrawnPattern` が拾う＝emo-present が warn!）。`ExtentTooLarge` の文の上限は定数から作る（面積は 33554432 と出る）
 - 10.2: 写す行の上限はちょうど 2^20 で残り・2^20+1 で断るの両側を確かめる。部品に `named_ops_of`
+- 11-06 audit-parsers-sakura が完了へ: `Animation::interval_written` の読み手は compose の本番に 0（3.5 で `merge_brace` を消した）＝欄を消す直しは parsers・emo-atlas・seriko に及ぶので範囲の外＝完了の棚卸で `/kiro-discovery` に起票（持ち主は parsers 側）と返事した
+- 11.1: `reaches` は `to` を見てから予算を引き、断られた面は開かないだけ（`continue`）。`build_plan` の 3 種の失敗は `PlanScratch.failed_reported` で合成器 1 つにつき面ごとに初めの 1 度 `error!`・以後 `debug!`。`may_copy` の `error!` に `table`（surfaces／boxes）。`bake_emo2` は `bake_surfaces` へ

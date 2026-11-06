@@ -59,7 +59,7 @@ pub fn is_always_interval(interval: &Interval) -> bool {
 }
 
 /// 経過 0 のコマ＝待ち時間の累積が 0 の最後の番号（先頭から待つなら `None`）。
-/// 合成と seriko が同じ関数を使う。
+/// 呼ぶのは動く絵の表（`film.rs`）だけ。seriko は同じ規則を自前で持つ（テストで突き合わせる）。
 pub fn rest_index(waits_ms: impl Iterator<Item = u32>) -> Option<usize> {
     waits_ms.take_while(|&w| w == 0).count().checked_sub(1)
 }
@@ -462,8 +462,8 @@ pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
 
 /// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。`limit` は呼び出し 1 回の
 /// 広がりの予算（本番は [`VISIT_BUDGET`]）。取り出した面を `from` の他は「1 ＋その面から出る辺の数」ずつ
-/// 数え（なめる辺も仕事・指摘 130 と同じ型）、尽きたら着かないと答える（残りの辺は循環として報告しない・
-/// 合成の祖先の確かめが循環を止める）。尽きた `error!` は `reported` が偽のときだけ出し、出したら真にする
+/// 数え（なめる辺も仕事・指摘 130 と同じ型）、断られた面は開かない（尽きたら残りの辺は循環として報告しない・
+/// 合成の祖先の確かめが循環を止める）。着いたかは取り出したときに数える前に見る（`to` は開かない）。尽きた `error!` は `reported` が偽のときだけ出し、出したら真にする
 /// （呼び手は表 1 つのあいだ同じ印を渡す＝組の数だけ出さない・指摘 2）。
 // ponytail: 呼び手は（子, 親）の組ごとに 1 度呼び、1 回は予算いっぱいまでなめる（組の数 × 予算）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
 pub(crate) fn reaches(
@@ -484,13 +484,15 @@ pub(crate) fn reaches(
     let mut seen = BTreeSet::from([from]);
     let mut stack = vec![from];
     while let Some(s) = stack.pop() {
-        let out = edges.get(&s).map_or(&[][..], Vec::as_slice);
-        if s != from && !budget.enter(out.len(), "reaches", from) {
-            *reported = true;
-            return false;
-        }
+        // 着いたかは入る前に見る（`to` は開かないので、どの予算にも収まらない面でも循環を取りこぼさない）。
         if s == to {
             return true;
+        }
+        let out = edges.get(&s).map_or(&[][..], Vec::as_slice);
+        if s != from && !budget.enter(out.len(), "reaches", from) {
+            // その面を開かないだけ（積んだ残りは開かずに `to` かだけ見る）。
+            *reported = true;
+            continue;
         }
         for &next in out {
             if seen.insert(next) {

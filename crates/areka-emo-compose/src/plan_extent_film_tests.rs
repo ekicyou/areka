@@ -9,7 +9,6 @@ use areka_emo_atlas::{AnimationFrame, AtlasTable, LoopCount, MemoryDecoder};
 
 use super::compute_extent;
 use crate::bind::BindSet;
-use crate::nesting::FilmId;
 use crate::pattern::PatternState;
 use crate::plan::Extent;
 use crate::plan_test_support::{bake_films_and_bind, frame, insert_film, plan_of, solid};
@@ -132,27 +131,15 @@ fn pure_bind_extent_is_union_of_all_patterns() {
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 60 });
 }
 
-/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ・動く絵の子のコマ）。外形は束縛のときの表を
-/// 引くだけでコマを受け取らないので、両方を替えた計画 1 回で足りる（指摘 118）。
+/// 要件 1.7: コマの欄を替えても外形は同じ（`always` のコマ）。外形は束縛のときの表を引くだけでコマを
+/// 受け取らないので、替えた計画 1 回で足りる（指摘 118）。動く絵の子のコマは、ここの検体では
+/// 替えても命令が外形の内に収まり確かめにならないので外した。
 #[test]
 fn cells_do_not_change_extent() {
-    let text = format!(
-        "{ALWAYS}surface2\n{{\nelement0,overlay,body.png,0,0\nelement1,overlay,film.apng,0,0\n}}\n"
-    );
-    let (world, atlas) = build_with(&text, &[]);
-    let film = world.film_sheets().next().expect("子が在る");
-    let film_id: FilmId = film.id;
-    let other_picture = film.frames[1];
-
+    let (world, atlas) = build_with(ALWAYS, &[]);
     let mut pattern = PatternState::default();
     pattern.set(0, frame(31, 0, 4));
-    pattern.set_film(film_id, other_picture);
-
-    for top in [0, 2] {
-        let want = compute_extent(&world, &atlas, top);
-        let got = plan_of(&world, &atlas, top, &BindSet::default(), &pattern).1;
-        assert_eq!(got, Ok(want), "top={top}");
-    }
+    let got = plan_of(&world, &atlas, 0, &BindSet::default(), &pattern).1;
+    assert_eq!(got, Ok(compute_extent(&world, &atlas, 0)));
     assert_eq!(compute_extent(&world, &atlas, 0), Extent { w: 42, h: 54 });
-    assert_eq!(compute_extent(&world, &atlas, 2), Extent { w: 30, h: 20 });
 }

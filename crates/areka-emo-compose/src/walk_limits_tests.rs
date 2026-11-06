@@ -1,7 +1,7 @@
 //! 入れ子をたどる走査が、深い鎖で落ちず、菱形の広がりで固まらないこと（指摘 3・要件 4.4・4.5）。
 //!
-//! 合成・外形・シェルの外形・当たり判定の持ち込み・見える部品／到達の確かめへ同じ検体を通す。どれも
-//! 予算の値に依らない: 深い鎖は予算の記録を見ず、菱形（2^30 の道）は必ず切れる。
+//! 合成・外形・シェルの外形・当たり判定の持ち込み・見える部品／到達の確かめへ同じ検体を通す。深い鎖は
+//! 予算の内に収まる長さ（頭で確かめる）で予算の記録を見ず、菱形（2^30 の道）は予算の値に依らず必ず切れる。
 
 use std::path::Path;
 
@@ -75,6 +75,8 @@ const NEST_REPORT_LAST: u32 = 1_000;
 #[test]
 fn deep_chain_walks_finish_on_a_small_stack() {
     const LAST: u32 = 10_000;
+    // 1 面は入る 1 ＋行 1〜2 なので、鎖が予算の内に収まる（予算を縮めたらここで落ちる）。
+    assert!(crate::budget::VISIT_BUDGET >= 3 * LAST as usize);
     on_small_stack(|| {
         // 当たり判定の持ち込みは組み立て（build）の中で全部の面を根に回る。
         let (world, atlas) = world_of(LAST, 1);
@@ -118,14 +120,9 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
     let mut world = None;
     let build = capture_logs(|| world = Some(world_of(LAST, 2)));
     let (world, atlas) = world.expect("組める");
-    assert_once_per_scope(&build, "hit_import");
-    assert_eq!(
-        errors_only(&build).matches("walk=\"hit_import\"").count(),
-        1,
-        "持ち込みの予算の記録は根をまたいで 1 行"
-    );
+    assert_once_per_call(&build, "hit_import");
     // 外形は束縛のとき（`bind_atlas`）に根ごとに 1 度だけたどる（指摘 8）。
-    assert_once_per_scope(&build, "extent");
+    assert_once_per_call(&build, "extent");
 
     let mut composer = Composer::new();
     let mut first = Vec::new();
@@ -155,7 +152,7 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
     let logs = capture_logs(|| {
         shell_bounds(&world, &atlas);
     });
-    assert_once_per_scope(&logs, "bounds");
+    assert_once_per_call(&logs, "bounds");
     assert_eq!(
         errors(&logs, "extent", 0),
         0,
@@ -167,16 +164,13 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
     assert!(!logs.contains("level=ERROR"), "{logs}");
 }
 
-/// `walk` の `error!` が根ごとに高々 1 行、根の面 0 では必ず 1 行。
-fn assert_once_per_scope(logs: &str, walk: &str) {
+/// `walk` の `error!` が呼び出し 1 回で（根をまたいで）ちょうど 1 行、それが根の面 0 の行。
+fn assert_once_per_call(logs: &str, walk: &str) {
+    let all = errors_only(logs)
+        .matches(&format!("walk=\"{walk}\""))
+        .count();
+    assert_eq!(all, 1, "{walk}: {}", errors_only(logs));
     assert_eq!(errors(logs, walk, 0), 1, "{walk}: {}", errors_only(logs));
-    for root in 1..=30 {
-        assert!(
-            errors(logs, walk, root) <= 1,
-            "{walk} {root}: {}",
-            errors_only(logs)
-        );
-    }
 }
 
 fn errors(logs: &str, walk: &str, root: u32) -> usize {

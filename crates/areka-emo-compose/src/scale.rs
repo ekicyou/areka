@@ -155,7 +155,7 @@ impl ScaleRatio {
 
     /// 照会契約の出口ビュー（`num as f32 / den as f32`・要件 1.2/1.6）。
     ///
-    /// 下流（`collision-dpi-hittest` の ÷k・`emo-text-layer` の行寸）が参照する
+    /// 下流（`emo-text-layer` の行寸）が参照する
     /// 合成スケール照会値の表現。**寸法・画素演算にこの値を使ってはならない**——
     /// 寸法の k 倍は必ず [`scale_len`]／[`scaled_extent`] を通す（丸め規約の単一権威）。
     ///

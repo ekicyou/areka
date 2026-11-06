@@ -157,8 +157,8 @@ fn as_f32_yields_exact_dpi_values() {
 /// 要件 1.1/1.3/2.2/2.5: DPI 対照表 × 代表原寸が決定論的に一致する。
 ///
 /// 96（k=1/1・等倍）／120（5/4）／144（3/2）／168（7/4）／192（2/1）の 5 水準で、
-/// 代表原寸の k 倍寸が期待表と厳密一致すること・96 と 192 が同一寸にならないこと
-/// （k=1.0 固定の途中状態を残さない・要件 2.2）を固定する。
+/// 代表原寸の k 倍寸が期待表と厳密一致することを固定する（96 と 192 の行が違う＝k=1.0 固定の
+/// 途中状態を残さない・要件 2.2）。
 #[test]
 fn dpi_table_scaled_extent_is_deterministic() {
     const NATIVE: [u32; 10] = [1, 2, 3, 48, 100, 127, 200, 255, 300, 401];
@@ -183,12 +183,6 @@ fn dpi_table_scaled_extent_is_deterministic() {
             );
         }
     }
-
-    // 要件 2.2: 96 水準と 192 水準は同一物理寸にならない（k=1.0 固定の途中状態の排除）。
-    let k96 = ScaleRatio::new(96, AUTHOR_DPI).unwrap();
-    let k192 = ScaleRatio::new(192, AUTHOR_DPI).unwrap();
-    assert_ne!(k96.scaled_extent(100, 200), k192.scaled_extent(100, 200));
-    assert_eq!(k192.scaled_extent(100, 200), (200, 400));
 }
 
 /// 要件 2.5: 非ゼロ原寸は最小 1px（縮小で表示が消えない）。
@@ -315,7 +309,7 @@ fn scale_len_half_tie_pairs_pin_round_half_away_from_zero() {
 
 /// 要件 1.6: 乗算合成は真値（未約分の積）と厳密一致する（可換律・結合律もこれから従う）。
 ///
-/// # 殺す変異（変異注入の実測に基づく。**排他的キルは持たない**）
+/// # 殺す変異（縮退後の gcd 削除だけは本テストが排他的に殺す）
 ///
 /// - `mul` の gcd 約分を**完全に**（積直後と縮退後の 2 箇所とも）落とす変異は、
 ///   `assert_eq!(a.mul(b), ScaleRatio::new(an·bn, ad·bd).unwrap())` の同値主張が殺す。
@@ -323,10 +317,9 @@ fn scale_len_half_tie_pairs_pin_round_half_away_from_zero() {
 ///   `{num:10, den:4}` vs `{num:5, den:2}` で食い違う（`Eq` はフィールド比較ゆえ、
 ///   両辺が正準形であるときに限り「同じ有理数」を意味する）。実測 3 失敗＝本テスト＋既存
 ///   `mul_composes_and_reduces`／`mul_uses_wide_intermediate_without_wrapping`。
-/// - **片側だけの gcd 削除は等価変異**（実測: 積直後のみ削除・縮退後のみ削除、どちらも全緑）。
-///   縮退が起きない限り、どちらか一方が残っていれば結果は既約になるためである。片側削除を
-///   殺すには「縮退経路で shrink が共通因子を作り直す」witness が要るが、本ファイルの
-///   どのテストもそこへ到達していない。
+/// - **積直後だけの gcd 削除は等価変異**（縮退が起きない限り、縮退後の gcd が既約にする）。
+///   **縮退後だけの gcd 削除**は、shrink が共通因子を作り直す witness（`u32::MAX/7 × 2/1`: 積
+///   8589934590/7 が縮退で 4294967295/3 になり、約分して 1431655765/1）が殺す。
 /// - 積の分子・分母を取り違える変異も同じ同値主張が殺す（既存 `mul_composes_and_reduces`
 ///   と共倒れ）。
 #[test]
@@ -343,6 +336,14 @@ fn mul_equals_the_unreduced_product() {
             );
         }
     }
+    assert_eq!(
+        ScaleRatio::new(u32::MAX, 7)
+            .unwrap()
+            .mul(ScaleRatio::new(2, 1).unwrap())
+            .parts(),
+        (1_431_655_765, 1),
+        "縮退で作り直した共通因子 3 も約分する"
+    );
 }
 
 /// 要件 1.6: u32 域を超える積は「大きい側を `u32::MAX` へ張り付ける」飽和縮退になる。
@@ -360,7 +361,7 @@ fn mul_equals_the_unreduced_product() {
 ///   （`(sq.num, sq.den) == (u32::MAX, 1)` の厳密値主張が死ぬ）。
 /// - 小さい側の `max(1)` を落とす変異。縮小後 `den == 0` となり、`gcd(u32::MAX, 0)` で
 ///   割った正準化の結果が `(1, 0)` へ落ちるため、まず `(sq.num, sq.den) == (u32::MAX, 1)`
-///   の厳密値主張が発火する（`as_f32` も inf になるが、そこへ到達する前に死ぬ）。
+///   の厳密値主張が発火する。
 #[test]
 fn mul_saturating_degradation_pins_largest_to_u32_max() {
     for base in [65_536u32, 65_537, 100_000, 1_000_000, u32::MAX] {
@@ -371,7 +372,6 @@ fn mul_saturating_degradation_pins_largest_to_u32_max() {
             (u32::MAX, 1),
             "base={base}: 大きい側は u32::MAX へ張り付き、小さい側は最小 1"
         );
-        assert!(sq.as_f32().is_finite() && sq.as_f32() > 0.0, "base={base}");
         assert_eq!(
             sq.scale_len(1),
             u32::MAX,
@@ -416,10 +416,7 @@ fn mul_saturating_degradation_pins_largest_to_u32_max() {
 ///   全緑になり、本テストと `scale_len_u128_…` の**新 2 本だけが落ちる**——本テストの
 ///   固有価値はこの「f32 化が丸め規約を保っていても寸法権威にならない」域にある。
 /// - `as_f32` を `num as f32 / den as f32` 以外（例: 先に整数除算）へ変える。
-///   **既存と共倒れ**——`as_f32_yields_exact_dpi_values`／
-///   `mul_saturating_degradation_pins_largest_to_u32_max` も落ちる。
-/// - `scale_len` の最小 1px クランプを落とす。**既存と共倒れ**——
-///   `scale_len_clamps_nonzero_to_min_one_pixel` も落ちる。
+///   **既存と共倒れ**——`as_f32_yields_exact_dpi_values` も落ちる。
 #[test]
 fn as_f32_is_query_view_not_dimension_authority() {
     // 2 冪分母は f32 で厳密（照会値としての厳密性）。
@@ -439,15 +436,8 @@ fn as_f32_is_query_view_not_dimension_authority() {
     }
     // 大寸: f32 の 24bit 仮数では原寸そのものが丸められ、結果が 1px ずれる。
     let k54 = ScaleRatio::new(5, 4).unwrap();
-    assert_eq!(k54.as_f32(), 1.25);
     let len = 2_000_000_001u32;
     assert_eq!(k54.scale_len(len), 2_500_000_001, "整数権威の厳密値");
-
-    // 極小: 1 未満へ縮めても scale_len は最小 1px を守る。
-    for (num, den) in [(1u32, 3u32), (2, 3), (1, 1000)] {
-        let k = ScaleRatio::new(num, den).unwrap();
-        assert_eq!(k.scale_len(1), 1, "{num}/{den}: 最小 1px");
-    }
 }
 
 /// 要件 2.5: `scale_len` の中間は **u128**——u64 では溢れる入力でも厳密値を返す。

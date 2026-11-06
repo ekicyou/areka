@@ -402,6 +402,42 @@ fn empty_composition_error_fires_with_surface_id() {
     );
 }
 
+/// 合成の失敗の `error!`（6 回目の指摘 2）: 表示の側は失敗をコマ替えのたびに呼び直すので、同じ合成器では
+/// 面ごとに初めの 1 度だけ ERROR・2 度目からは DEBUG（予算の `reported`・画素の `pixels_reported` と同じ形）。
+#[test]
+fn compose_failure_errors_once_per_surface_per_composer() {
+    let text = "charset,UTF-8\nsurface0\n{\nelement0,overlay,1,16383,0\n}\n\
+                surface1\n{\nelement0,overlay,s.png,0,0\n}\nsurface7000\n{\n}\n";
+    let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
+    let world = bound_world(&areka_parsers::shell::parse(text), &[], &atlas);
+    let (binds, pattern) = (BindSet::default(), PatternState::default());
+    let mut composer = Composer::new();
+    for (id, name) in [
+        (9999, "SurfaceNotFound"),
+        (7000, "EmptyComposition"),
+        (0, "ExtentTooLarge"),
+    ] {
+        let mut errs = Vec::new();
+        let logs = capture_logs(|| {
+            for _ in 0..3 {
+                errs.push(composer.compose(&world, &atlas, id, &binds, &pattern).err());
+            }
+        });
+        assert!(
+            errs.iter().all(|e| format!("{e:?}").contains(name)),
+            "{name}: {errs:?}"
+        );
+        let id = format!("surface_id={id}");
+        let count = |level: &str| {
+            logs.lines()
+                .filter(|l| l.contains(level) && l.contains(&id) && l.contains(name))
+                .count()
+        };
+        assert_eq!(count("level=ERROR"), 1, "{name}: {logs}");
+        assert_eq!(count("level=DEBUG"), 2, "{name}: {logs}");
+    }
+}
+
 // ── 1.4: fold の重なりの記録（fold.rs fold_plain_surface / fold_append）────────────────────
 
 /// 要件 2.1（areka-P0-emily-ghost-verification が上書き）: surface id 重複は前の定義へ足す

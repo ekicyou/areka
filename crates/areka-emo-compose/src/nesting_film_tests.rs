@@ -12,14 +12,13 @@ use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
 use areka_parsers::shell::{ElementPath, Interval, parse};
 
 use super::{
-    ElementKind, FilmId, NestTable, PartKey, SurfaceParts, element_kind, is_always_interval,
-    rest_index,
+    ElementKind, FilmId, NestTable, SurfaceParts, element_kind, is_always_interval, rest_index,
 };
 use crate::bind::BindSet;
 use crate::normalized::SurfaceMaster;
 use crate::pattern::PatternState;
 use crate::plan_test_support::{
-    MARK_ANIM, MARKER, bake_films_and_bind, frame, image_map, insert_film_2x2, ops, solid,
+    MARK_ANIM, MARKER, bake_films_and_bind, frame, image_map, insert_film_2x2, opaque_wxh, ops,
     visible_parts_of,
 };
 use crate::world::{EmoWorld, SurfaceIndex};
@@ -64,12 +63,6 @@ fn element_kind_never_reads_as_film() {
         let kind = element_kind(&ElementPath::new(s.to_string()));
         assert!(!matches!(kind, ElementKind::Film(_)), "{s:?} → {kind:?}");
     }
-}
-
-/// 鍵の 2 つの種類は、同じ数でも等しくならない（番号が当たらない・要件 1.12）。
-#[test]
-fn part_key_kinds_never_collide() {
-    assert_ne!(PartKey::Surface(3), PartKey::Film(FilmId(3)));
 }
 
 /// `ElementKind::Film` の element は「無い番号」にも「循環」にも数えない（子は先を持たない）。
@@ -122,14 +115,8 @@ fn fixture_world_with(extra: &str) -> (EmoWorld, AtlasTable) {
         "marker.png",
     ];
     for rel in stills {
-        dec.insert(
-            Path::new(BASE).join(rel),
-            2,
-            2,
-            8,
-            solid(2, 2, 9).bgra,
-            true,
-        );
+        let (w, h, stride, bgra, has_alpha) = opaque_wxh(2, 2, 9, 9, 9);
+        dec.insert(Path::new(BASE).join(rel), w, h, stride, bgra, has_alpha);
     }
     let films: [(&str, &[u32], Option<u32>); 4] = [
         ("rgb.apng", &[100, 100], None),

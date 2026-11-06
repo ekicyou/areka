@@ -220,14 +220,10 @@ fn append_reaches_image_only_faces() {
     );
     assert_eq!(report.used, image_map(&[(8, "surface8.png")]));
 
-    // 追記のために作った面は「新設」ではないので、重複の警告も未存在の警告も出ない。
+    // 追記のために作った面は「新設」ではないので、重複の警告も未存在の警告も、追記の二重定義の警告も出ない。
     assert!(
-        !logs.contains("重複"),
-        "画像だけの面への追記で偽の重複警告を出さない: {logs}",
-    );
-    assert!(
-        !logs.contains("未存在"),
-        "画像だけの面は「在る」ので未存在の警告を出さない: {logs}",
+        !logs.contains("level=WARN"),
+        "画像だけの面への追記は WARN を出さない: {logs}",
     );
 }
 

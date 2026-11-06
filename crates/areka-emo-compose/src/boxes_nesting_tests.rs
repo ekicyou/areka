@@ -74,7 +74,8 @@ fn placing_a_box_child_adds_exactly_one_report_and_keeps_the_layout() {
 /// 辺 (親, 子) ごとに 1 件・名前は子の最初の箱・並びは親 → element定義（要件 6.1）。
 ///
 /// 子 5 は箱 2 つ（element番号の昇順に b・a＝最初は b）、子 6 は箱 1 つ。親 1 は 6 と 5 を置き、5 を 2 度置く
-/// （同じ辺は 1 本）。親 0 は 5 を置く。3 段目（6 の子 7）は箱を持たないので載らない。
+/// （同じ辺は 1 本）。親 0 は 5 を置く。3 段目（6 の子 7）の箱は辺 (6, 7) で載り、孫を置く (1, 7) は載らない
+/// （辺は直接の親子だけ）。
 /// 面の表に無い番号（9）を指す行は、無い番号の報告の受け持ちなのでここには載らない。
 #[test]
 fn one_report_per_parent_child_edge_in_order() {
@@ -83,14 +84,15 @@ fn one_report_per_parent_child_edge_in_order() {
         surface0\n{\nelement0,overlay,5,0,0\n}\n\
         surface5\n{\nelement0,overlay,p.png,0,0\nelement2,balloon,a,0,0\nelement1,balloon,b,0,0\n}\n\
         surface6\n{\nelement0,overlay,7,0,0\nelement1,balloon,a,1,1\n}\n\
-        surface7\n{\nelement0,overlay,p.png,0,0\n}\n";
+        surface7\n{\nelement0,overlay,p.png,0,0\nelement1,balloon,a,0,0\n}\n";
     let (_, issues) = fold(text);
     assert_eq!(
         only_in_child(&issues),
         vec![
             in_child(0, 5, "b"),
             in_child(1, 6, "a"),
-            in_child(1, 5, "b")
+            in_child(1, 5, "b"),
+            in_child(6, 7, "a")
         ]
     );
 }

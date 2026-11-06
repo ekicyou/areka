@@ -96,11 +96,9 @@ fn compose_returns_ok_composed_surface_for_valid_input() {
     );
 }
 
-// ── テスト2（要件 9.4）: Composer は合成結果を保持しない（構造的＋挙動的） ──
+// ── テスト2（要件 9.4）: Composer は合成結果を保持しない（挙動的） ──
 
-/// Composer の内部フィールドが走査の作業場と命令列（いちからの `ops` と重ね直しの前の `base_ops`）だけで
-/// ComposedSurface を持たないことを、異なる surface を連続 compose して各々が自 surface を反映する
-/// （stale キャッシュがない）ことで示す。
+/// 異なる surface を連続 compose して、各々が自 surface を反映する（古い結果を返さない）。
 ///
 /// surface A(青 10×10)・B(緑 20×20) を交互に compose し、B の結果が A でなく B を反映する。
 #[test]

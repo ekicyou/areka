@@ -12,9 +12,7 @@
 
 use std::path::{Path, PathBuf};
 
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-};
+use areka_emo_atlas::{AtlasTable, MemoryDecoder, SetId};
 use areka_parsers::shell::Shell;
 
 use crate::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState};

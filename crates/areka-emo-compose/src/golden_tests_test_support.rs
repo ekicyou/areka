@@ -1,13 +1,13 @@
 //! `golden_tests` の複数テーマから参照される共有 fixture ヘルパ（テスト関数を持たない）。
 //!
-//! emo2 fixture のパス解決・surfaces.txt パース・`AlphaParams`・
+//! emo2 fixture のパス解決・surfaces.txt パース・
 //! surface1000 の bind パーツ土台（`BindPart` / `surface1000_bind_parts` /
 //! `build_atlas_for_surface1000` / `compose_surface1000`）・不透明画素の計数を集約する。
 //! 単一テーマからしか参照されないヘルパは各テーマファイル側へ残してある。
 
 use super::{
-    AlphaParams, AtlasTable, BindSet, ComposedSurface, Composer, MemoryDecoder, PackConfig, Path,
-    PathBuf, PatternState, Shell, SurfaceSet, UseSelfAlpha, bake,
+    AtlasTable, BindSet, ComposedSurface, Composer, MemoryDecoder, Path, PathBuf, PatternState,
+    Shell,
 };
 
 /// emo2 検体の実資産のパスを組む（在処は窓口 `sample-ghost-kit` が持つ）。
@@ -18,13 +18,6 @@ fn emo2(rel: &str) -> PathBuf {
 /// emo2 の shell/master 基準 dir（surfaces.txt の element 相対パス起点）。
 pub(super) fn shell_master_dir() -> PathBuf {
     emo2("shell/master")
-}
-
-/// AlphaParams { use_self_alpha: On }（emo2 の descript は seriko.use_self_alpha,1）。
-pub(super) fn on_params() -> AlphaParams {
-    AlphaParams {
-        use_self_alpha: UseSelfAlpha::On,
-    }
 }
 
 /// emo2 の surfaces.txt をパースして `Shell` を得る（`emo2_golden.rs` の loader 経路と同一）。
@@ -116,12 +109,7 @@ pub(super) fn build_atlas_for_surface1000(shell: &Shell, base: &Path) -> AtlasTa
 /// `shell` の全部の面を `dec` の絵で焼いて表を返す（`use_self_alpha` は On・焼けない絵は errors に
 /// 残るだけ）。
 pub(super) fn bake_emo2(shell: &Shell, base: &Path, dec: &MemoryDecoder) -> AtlasTable {
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: base,
-        alpha_params: on_params(),
-    };
-    bake(std::slice::from_ref(&set), dec, PackConfig::default()).table
+    crate::plan_test_support::bake_surfaces(&shell.surfaces, base, dec).table
 }
 
 /// surface1000 を有効 bind 集合で合成した結果を得る（world 構築＋bind_atlas＋compose）。

@@ -113,8 +113,14 @@ pub(crate) const MAX_COPIED_LINES: usize = 1 << 20;
 
 /// 記述子 1 つの本体（`lines` 行）を `ids` の番号ごとに写してよいか（指摘 78）。写す数を `copied` に足し、
 /// 合計が [`MAX_COPIED_LINES`] を越えるなら足さずに `error!`（番号の範囲・行の数・上限）を出して false
-/// （呼び手はその記述子を捨てる）。
-pub(crate) fn may_copy(copied: &mut usize, ids: &[u32], lines: usize, records: Records) -> bool {
+/// （呼び手はその記述子を捨てる）。`table` は記録の欄（面の `"surfaces"` か箱の `"boxes"`）。
+pub(crate) fn may_copy(
+    copied: &mut usize,
+    table: &'static str,
+    ids: &[u32],
+    lines: usize,
+    records: Records,
+) -> bool {
     let n = ids.len().saturating_mul(lines);
     if n <= MAX_COPIED_LINES - *copied {
         *copied += n;
@@ -123,6 +129,7 @@ pub(crate) fn may_copy(copied: &mut usize, ids: &[u32], lines: usize, records: R
     if records.emits() {
         tracing::error!(
             target: "areka_emo_compose",
+            table,
             first = ids.first().copied().unwrap_or_default(),
             last = ids.last().copied().unwrap_or_default(),
             ids = ids.len(),
@@ -181,7 +188,7 @@ fn fold_plain_surface(
 ) {
     let ids = expand_targets_with(&surface.targets, records);
     let lines = body_lines(&surface.elements, &surface.collisions, &surface.animations);
-    if !may_copy(copied, &ids, lines, records) {
+    if !may_copy(copied, "surfaces", &ids, lines, records) {
         return;
     }
     for id in ids {
@@ -312,7 +319,7 @@ fn fold_append(
 ) {
     let ids = expand_targets_with(&append.targets, records);
     let lines = body_lines(&append.elements, &append.collisions, &append.animations);
-    if !may_copy(copied, &ids, lines, records) {
+    if !may_copy(copied, "surfaces", &ids, lines, records) {
         return;
     }
     // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。

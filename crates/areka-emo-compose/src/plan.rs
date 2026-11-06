@@ -116,6 +116,9 @@ pub(crate) struct PlanScratch {
     reported: HashSet<u32>,
     /// 重ねる画素の上限を越えたことを記録済みの根の面（指摘 77・`reported` と同じ形）。
     pixels_reported: HashSet<u32>,
+    /// 合成の失敗（`SurfaceNotFound`・`EmptyComposition`・`ExtentTooLarge`）を記録済みの面（`reported` と
+    /// 同じ形）。表示の側は失敗をコマ替えのたびに呼び直すので、`error!` は合成器 1 つにつき面ごとに 1 度。
+    failed_reported: HashSet<u32>,
 }
 
 impl Default for PlanScratch {
@@ -134,6 +137,7 @@ impl Default for PlanScratch {
             limit: VISIT_BUDGET,
             reported: HashSet::new(),
             pixels_reported: HashSet::new(),
+            failed_reported: HashSet::new(),
         }
     }
 }
@@ -150,7 +154,7 @@ impl PlanScratch {
 
     /// 作業場の全部の列と集合の容量（テスト用・繰り返しの合成で増えないことを見る）。
     #[cfg(test)]
-    pub(crate) fn capacities(&self) -> [(&'static str, usize); 12] {
+    pub(crate) fn capacities(&self) -> [(&'static str, usize); 13] {
         [
             ("visited", self.visited.capacity()),
             ("on_path", self.on_path.capacity()),
@@ -164,6 +168,7 @@ impl PlanScratch {
             ("chain", self.chain.capacity()),
             ("reported", self.reported.capacity()),
             ("pixels_reported", self.pixels_reported.capacity()),
+            ("failed_reported", self.failed_reported.capacity()),
         ]
     }
 
@@ -640,6 +645,17 @@ pub(crate) fn push_direct(
     true
 }
 
+/// 合成の失敗の記録: 面で初めてなら `error!`、2 度目からは `debug!`（[`PlanScratch`] の `failed_reported`）。
+macro_rules! log_failure {
+    ($first:expr, $($arg:tt)+) => {
+        if $first {
+            tracing::error!($($arg)+);
+        } else {
+            tracing::debug!($($arg)+);
+        }
+    };
+}
+
 /// plan 段の公開ファサード: 命令列を導出し、失敗の分類を確定して外形を返す（要件 1.4/6.6/10.5）。
 ///
 /// [`derive_ops`]（有効 bind 依存の命令列）と外形の表（[`EmoWorld::extent`]・有効 bind 非依存の静的外形）を
@@ -655,6 +671,8 @@ pub(crate) fn push_direct(
 ///    失敗となる退化ケース）。
 /// 4. **外形が一辺の上限 [`MAX_EXTENT`] か面積の上限 [`MAX_AREA`] を越える** → `error` ログ＋
 ///    [`ComposeError::ExtentTooLarge`]。命令を積まず、絵も確保させない。
+///
+/// 1・3・4 の `error` ログは合成器（`scratch`）1 つにつき面ごとに初めの 1 度だけで、2 度目からは `debug`。
 ///
 /// `out_ops` は呼び手のスクラッチ Vec を再利用する意図（要件 10.3）ゆえ、**エントリで `clear`**
 /// してから命令を積む（前回内容のゴミが混ざらない）。どの `Err` 時も `out_ops` は空である
@@ -687,7 +705,9 @@ pub(crate) fn build_plan(
 
     // 分類1: 対象 surface 不在 → SurfaceNotFound（算出前に返す・要件 10.5）。
     if world.surface(surface_id).is_none() {
-        tracing::error!(
+        let first = scratch.failed_reported.insert(surface_id);
+        log_failure!(
+            first,
             target: "areka_emo_compose",
             surface_id,
             "合成対象 surface が存在しない: SurfaceNotFound"
@@ -702,7 +722,9 @@ pub(crate) fn build_plan(
     // 分類3: 外形の幅か高さが 0（定義層皆無か、どの層も原点の左か上にしか無い）の退化データのみ真の失敗
     // （議題2裁定・要件 10.5・指摘 82）。描ける画素が無いので out_ops は空のまま返す。
     if extent.w == 0 || extent.h == 0 {
-        tracing::error!(
+        let first = scratch.failed_reported.insert(surface_id);
+        log_failure!(
+            first,
             target: "areka_emo_compose",
             surface_id,
             w = extent.w,
@@ -718,7 +740,9 @@ pub(crate) fn build_plan(
         || extent.h > MAX_EXTENT
         || u64::from(extent.w) * u64::from(extent.h) > MAX_AREA
     {
-        tracing::error!(
+        let first = scratch.failed_reported.insert(surface_id);
+        log_failure!(
+            first,
             target: "areka_emo_compose",
             surface_id,
             w = extent.w,
@@ -790,7 +814,7 @@ fn is_bind_random_animation(
 /// 併せて借用する。いずれか（surface 不在・binding 未挿入）が欠けると `None`。既存の公開
 /// `world()` アクセサ経由で読むため、公開 API を広げない。
 ///
-/// [`push_static_element_ops`]／[`derive_ops`] 経由で使う本 module 内補助。
+/// 命令列（[`push_static_element_ops`]／[`derive_ops`]）と外形（`plan_extent`）・シェルの外形（`plan_bounds`）が使う補助。
 pub(crate) fn surface_and_binding(
     world: &EmoWorld,
     surface_id: u32,

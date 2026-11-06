@@ -135,8 +135,8 @@ impl Composer {
     /// 命令列を `out` へ転写（[`crate::blit::execute`]）する。`out` と自身のスクラッチ（`ops`／`scratch`）
     /// を再利用する（同じ入力の反復で容量が伸びないことは `golden_tests_determinism_budget_tests.rs` が確かめる）。
     ///
-    /// `build_plan` が `Err`（surface 不在・定義層皆無退化・外形の上限越え）を返せば、そのまま伝播する（既に `error`
-    /// ログ済み・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
+    /// `build_plan` が `Err`（surface 不在・外形の幅か高さが 0 の退化・外形の上限越え）を返せば、そのまま伝播する（記録済み＝
+    /// 合成器 1 つにつき面ごとに初めは `error`・後は `debug`・要件 10.5）。`Ok(extent)` なら `execute` が `out` を `extent` へ `resize_and_clear`
     /// してから転写し、`Ok(())` を返す。描画可能命令ゼロ（全透明・空 bind 集合）でも正常系として
     /// 外形どおりの全透明バッファを書く（要件 6.6）。
     ///
@@ -154,7 +154,7 @@ impl Composer {
         active_binds: &BindSet,
         pattern: &PatternState,
     ) -> Result<(), ComposeError> {
-        // plan: 命令列＋外形を導出（Err は既に error ログ済み・そのまま伝播・要件 10.5）。
+        // plan: 命令列＋外形を導出（Err は記録済み＝面ごとに初めは error・後は debug・そのまま伝播・要件 10.5）。
         // ops／scratch は build_plan 入口で clear され再利用される（要件 10.3）。
         let extent = crate::plan::build_plan(
             &mut self.ops,

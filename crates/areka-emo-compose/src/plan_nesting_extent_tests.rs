@@ -75,7 +75,7 @@ fn multi_level_children_add_every_offset() {
 }
 
 /// 検体: 親 B（surface1）は子 10 を (90,50) に置き（右へはみ出す）、surface.append1 で 3 段の
-/// 入れ子 30 を (60,100) に置く。子 10 のまばたき（random）は外形に入らない（要件 2.5・2.6）。
+/// 入れ子 30 を (60,100) に置く（要件 2.5・2.6）。
 #[test]
 fn fixture_parent_b_extent_includes_overflowing_child() {
     // body 100×200 ∪ eye (90,50)+20×10 ∪ part (60,100)〜(65,105)+10×10。

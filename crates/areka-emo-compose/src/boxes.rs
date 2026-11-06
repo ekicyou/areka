@@ -228,7 +228,7 @@ fn distribute<'a>(
         match definition {
             BoxDefinition::Surface(surface) => {
                 let ids = expand_targets_with(&surface.targets, records);
-                if !may_copy(&mut copied, &ids, surface.elements.len(), records) {
+                if !may_copy(&mut copied, "boxes", &ids, surface.elements.len(), records) {
                     continue;
                 }
                 for id in ids {
@@ -238,7 +238,7 @@ fn distribute<'a>(
             }
             BoxDefinition::Append(append) => {
                 let ids = expand_targets_with(&append.targets, records);
-                if !may_copy(&mut copied, &ids, append.elements.len(), records) {
+                if !may_copy(&mut copied, "boxes", &ids, append.elements.len(), records) {
                     continue;
                 }
                 for id in ids {

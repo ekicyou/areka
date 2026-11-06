@@ -192,7 +192,7 @@ fn extent_comes_from_the_table_made_by_bind_atlas() {
     assert_eq!(extent, compute_extent(&world, &atlas, 1000));
 }
 
-/// 命令数 O(elements)（要件 10.3）: surface1000＋全有効 bind → 命令数 == 描画層数（線形）。
+/// 命令数（要件 10.3）: surface1000＋全有効 bind → 命令数 == 描画層数。
 ///
 /// surface1000 は静的 element ゼロ・全パーツ bind の本体 surface。有効 bind 集合を
 /// [`surface1000_full_bindset`]（解決する 3 パーツ 1100/1200/1302）にすると、build_plan は各有効
@@ -203,7 +203,7 @@ fn extent_comes_from_the_table_made_by_bind_atlas() {
 /// 生む実装ならこの等値が破れる。各 bind パーツ surface（1100/1200/1302）は element 1 本の単純
 /// surface で、入れ子 flatten は 1 段。ゆえに命令数 = Σ(有効 bind の可視層数) = 有効 bind 数。
 #[test]
-fn surface1000_instruction_count_is_linear_in_layers() {
+fn surface1000_instruction_count_equals_bound_layers() {
     let shell = parse_emo2_shell();
     let base = shell_master_dir();
     let atlas = build_atlas_for_surface1000(&shell, &base);
