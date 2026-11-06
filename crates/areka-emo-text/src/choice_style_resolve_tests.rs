@@ -69,6 +69,16 @@ fn resolve_style_none_is_no_marker() {
     );
 }
 
+/// `cursor.style,NONE`（大文字）も大小を問わず NoMarker（黒い四角の印に変わらない）。
+#[test]
+fn resolve_style_upper_none_is_no_marker() {
+    let c = cursor(Some("NONE"), (None, None, None), (None, None, None), None);
+    assert_eq!(
+        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+        ResolvedChoiceStyle::NoMarker
+    );
+}
+
 // ── resolve: fixture square → SquareFill{(105,25,25),(255,255,255)} ──
 
 /// fixture 実導出形（square＋brush(105,25,25)＋font(255,255,255)）→ SquareFill。

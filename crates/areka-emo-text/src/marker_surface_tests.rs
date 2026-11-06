@@ -258,6 +258,39 @@ fn drawn_arrow_shows_in_read_back_and_mask_holds_only_shown_opaque_pixels() {
     assert!((0..30).all(|y| (0..40).all(|x| !mask.is_hit(x, y))));
 }
 
+/// 寸とバイト列が合わない絵（4×4 に 4 バイト）は `Err`・面の画素も当たりも描いた記録も前のまま。
+#[test]
+fn image_whose_size_and_bytes_disagree_is_err_and_leaves_the_surface_unchanged() {
+    let (mut world, window, _slot) = com_world();
+    let mut markers = attach(&mut world, window, 0, (40, 30), (0.0, 0.0));
+    let scale = ScaleContract::new(1.0, None);
+    let good = [placed(MarkerKind::Up, (2, 5), &solid(4, 3, 255))];
+    markers.draw(&mut world, &good, &scale).expect("描く");
+    let before = markers.read_back().expect("読み戻し");
+
+    let short = Arc::new(MarkerImage {
+        width: 4,
+        height: 4,
+        bgra: vec![255; 4],
+    });
+    let bad = [placed(MarkerKind::Down, (20, 20), &short)];
+    markers
+        .draw(&mut world, &bad, &scale)
+        .expect_err("寸とバイト列が合わない絵は描かない");
+
+    assert_eq!(
+        markers.read_back().expect("読み戻し"),
+        before,
+        "画素は前のまま"
+    );
+    assert!(markers.is_drawn(&good, 1.0), "描いた記録は前のまま");
+    let mask = mask_of(&world, &markers);
+    assert!(
+        mask.is_hit(3, 6) && !mask.is_hit(21, 21),
+        "当たりは前のまま"
+    );
+}
+
 /// 拡大率 1.5: 左上 (10, 6)・4×4 の矢印は物理 px の [15, 21) × [9, 15) に描かれ、当たりも同じ所。
 /// 2 つの矢印は両方とも出る（面の外へはみ出す分は面の端で切れる）。
 #[test]
