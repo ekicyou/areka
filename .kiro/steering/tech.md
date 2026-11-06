@@ -20,7 +20,6 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 ## Key Libraries
 
 - **bevy_ecs** (0.19): ECSアーキテクチャの実装基盤。**2026-08-19 に 0.18→0.19 へ更新（spec 外直接コミット `bf2d7950`）**——`ExecutorKind` API が撤去され実行器が改稿された（檻の追随は `dpi-transition-atomicity` マージ時に実施済み・**更新前の性能実測は傾向も持ち越せない**＝roadmap 追記(80)）
-- **bevy_app** (0.19): ECSスケジュールとアプリライフサイクル統合（wintf は開発用の依存だけ＝`tests/graphics/surface_optimization_test.rs` が使う）
 - **thiserror** (2): エラー型定義（全クレート共通）
 - **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API

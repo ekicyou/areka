@@ -103,11 +103,11 @@ fn sync_simple_applies_scale_to_root_global() {
     assert_eq!(g.transform.M22, 3.0);
     assert_eq!(g.transform.M31, 20.0); // 10 * 2
     assert_eq!(g.transform.M32, 60.0); // 20 * 3
-    // bounds = local_bounds(0,0,100,50) を scale(2,3)+translate(20,60) で変換
-    assert_eq!(g.bounds.left, 20.0);
-    assert_eq!(g.bounds.top, 60.0);
-    assert_eq!(g.bounds.right, 220.0); // 100*2 + 20
-    assert_eq!(g.bounds.bottom, 210.0); // 50*3 + 60
+    // bounds は恒等の親の下の子と同じ決まり: ずらしは自分の倍率で伸ばさず、大きさは伸ばす
+    assert_eq!(g.bounds.left, 10.0);
+    assert_eq!(g.bounds.top, 20.0);
+    assert_eq!(g.bounds.right, 210.0); // 10 + 100*2
+    assert_eq!(g.bounds.bottom, 170.0); // 20 + 50*3
 }
 
 /// `sync_simple_transforms` はルート（Children なし）のみを対象とし、
@@ -318,20 +318,21 @@ fn propagate_three_level_chain_accumulates() {
     let mut s = propagation_schedule();
     s.run(&mut world);
 
-    // child: parent.bounds.left=20、scaled_offset=(5*2,10*2)=(10,20)、result_scale=2
+    // child: parent.bounds=(10,20)（根のずらしは自分の倍率で伸ばさない）、
+    // scaled_offset=(5*2,10*2)=(10,20)、result_scale=2
     let cg = global(&world, child);
-    assert_eq!(cg.bounds.left, 30.0);
-    assert_eq!(cg.bounds.top, 60.0);
-    assert_eq!(cg.bounds.right, 90.0); // 30 + 30*2
-    assert_eq!(cg.bounds.bottom, 100.0); // 60 + 20*2
+    assert_eq!(cg.bounds.left, 20.0);
+    assert_eq!(cg.bounds.top, 40.0);
+    assert_eq!(cg.bounds.right, 80.0); // 20 + 30*2
+    assert_eq!(cg.bounds.bottom, 80.0); // 40 + 20*2
 
-    // grandchild: parent(child).bounds.left=30、child の累積 scale=2、
+    // grandchild: parent(child).bounds.left=20、child の累積 scale=2、
     // scaled_offset=(2*2,3*2)=(4,6)、result_scale=2*1.5=3
     let gg = global(&world, grandchild);
-    assert_eq!(gg.bounds.left, 34.0);
-    assert_eq!(gg.bounds.top, 66.0);
-    assert_eq!(gg.bounds.right, 64.0); // 34 + 10*3
-    assert_eq!(gg.bounds.bottom, 90.0); // 66 + 8*3
+    assert_eq!(gg.bounds.left, 24.0);
+    assert_eq!(gg.bounds.top, 46.0);
+    assert_eq!(gg.bounds.right, 54.0); // 24 + 10*3
+    assert_eq!(gg.bounds.bottom, 70.0); // 46 + 8*3
 }
 
 /// 幅広ツリー: ルートの複数の子がそれぞれ独立に正しい global を得る

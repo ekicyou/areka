@@ -9,7 +9,8 @@ use bevy_ecs::prelude::*;
 use windows::core::{Interface, Result};
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::{WucVisualFactory, expected_wuc_order, setup_graphics, wuc_children};
+use super::common::{WucVisualFactory, expected_wuc_order, wuc_children};
+use wintf::ecs::GraphicsCore;
 
 /// テスト用マーカーコンポーネント（アーキタイプを変えるために使用）
 #[derive(Component, Default)]
@@ -25,7 +26,7 @@ struct ExtraMarkerB;
 #[test]
 fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();
@@ -117,7 +118,7 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
 #[test]
 fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();
@@ -181,7 +182,7 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
 #[test]
 fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();

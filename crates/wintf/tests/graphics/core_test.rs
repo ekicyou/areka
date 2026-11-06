@@ -1,23 +1,9 @@
 //! GraphicsCore初期化のテスト
 //!
 //! このテストは以下を検証します:
-//! - GraphicsCore::new()が正常に完了すること
 //! - 複数回の初期化が可能であること
 
 use wintf::ecs::GraphicsCore;
-
-#[test]
-fn test_graphics_core_creation() {
-    // GraphicsCoreの作成
-    let result = GraphicsCore::new();
-
-    // 初期化が成功することを確認
-    assert!(
-        result.is_ok(),
-        "GraphicsCore::new()は成功するべき: {:?}",
-        result.err()
-    );
-}
 
 #[test]
 fn test_graphics_core_multiple_creation() {

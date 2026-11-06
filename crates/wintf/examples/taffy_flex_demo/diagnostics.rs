@@ -39,26 +39,7 @@ pub(crate) fn dump_all_windows_dpi(world: &mut World) {
 
         // BoxStyle (論理 px)
         if let Some(bs) = world.get::<BoxStyle>(window_entity) {
-            let (w, h) = match &bs.size {
-                Some(size) => {
-                    let w = size
-                        .width
-                        .map(|d| match d {
-                            Dimension::Px(v) => v,
-                            _ => 0.0,
-                        })
-                        .unwrap_or(0.0);
-                    let h = size
-                        .height
-                        .map(|d| match d {
-                            Dimension::Px(v) => v,
-                            _ => 0.0,
-                        })
-                        .unwrap_or(0.0);
-                    (w, h)
-                }
-                None => (0.0, 0.0),
-            };
+            let (w, h) = px_size(bs);
             info!(
                 window = %window_name,
                 logical_width = format_args!("{:.1}", w),
@@ -136,26 +117,7 @@ pub(crate) fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize)
 
         // BoxStyle (論理 px)
         let bs_str = if let Some(bs) = world.get::<BoxStyle>(child) {
-            let (w, h) = match &bs.size {
-                Some(size) => {
-                    let w = size
-                        .width
-                        .map(|d| match d {
-                            Dimension::Px(v) => v,
-                            _ => 0.0,
-                        })
-                        .unwrap_or(0.0);
-                    let h = size
-                        .height
-                        .map(|d| match d {
-                            Dimension::Px(v) => v,
-                            _ => 0.0,
-                        })
-                        .unwrap_or(0.0);
-                    (w, h)
-                }
-                None => (0.0, 0.0),
-            };
+            let (w, h) = px_size(bs);
             format!("box_style=({:.1}x{:.1})", w, h)
         } else {
             "no BoxStyle".to_string()
@@ -196,4 +158,15 @@ pub(crate) fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize)
             dump_children_dpi(world, child, depth + 1);
         }
     }
+}
+
+/// `BoxStyle.size` の px の幅と高さ（px でない・無い次元は 0）。
+fn px_size(bs: &BoxStyle) -> (f32, f32) {
+    let px = |d: Option<Dimension>| match d {
+        Some(Dimension::Px(v)) => v,
+        _ => 0.0,
+    };
+    bs.size
+        .as_ref()
+        .map_or((0.0, 0.0), |size| (px(size.width), px(size.height)))
 }

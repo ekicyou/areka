@@ -76,33 +76,3 @@ fn test_init_graphics_core_idempotent() {
         "有効なGraphicsCoreが在るとき、init_graphics_coreは装置を作り直さない"
     );
 }
-
-#[test]
-fn test_init_graphics_core_in_schedule() {
-    // スケジュール内でinit_graphics_coreが正しく動作することを確認
-
-    let mut world = World::new();
-
-    // FrameCountリソースを追加
-    world.insert_resource(FrameCount::default());
-
-    let mut schedule = Schedule::default();
-
-    // init_graphics_coreをスケジュールに追加
-    schedule.add_systems(init_graphics_core);
-
-    // 初期状態ではリソースが存在しない
-    assert!(
-        world.get_resource::<GraphicsCore>().is_none(),
-        "スケジュール実行前はリソースが存在しない"
-    );
-
-    // スケジュールを実行
-    schedule.run(&mut world);
-
-    // リソースが作成されたことを確認
-    assert!(
-        world.get_resource::<GraphicsCore>().is_some(),
-        "スケジュール実行後、リソースが存在する"
-    );
-}

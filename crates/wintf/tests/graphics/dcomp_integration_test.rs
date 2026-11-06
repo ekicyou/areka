@@ -1,38 +1,18 @@
 //! WUC パイプライン統合テスト (Task 12)
 //!
-//! WUC 移行: 旧 DComp パイプライン統合テスト。ライブパイプラインが WUC へ切り替わったため
-//! WucGraphicsResource を用いる。`invalidate_dependent_components` は WucGraphicsResource を
-//! ResMut で消費する（window_pos.rs）。
+//! 窓の下の Visual に描画の部品が自動で入るフックだけを試す（素の World・装置なし）。
+//! `invalidate_dependent_components` の連動は `window_pos_systems_test.rs` が確かめる。
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use wintf::ecs::world::FrameCount;
-use wintf::ecs::{
-    GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty, Visual, VisualGraphics, Window,
-    WucGraphicsResource,
-};
-
-/// テスト用ワールドをセットアップ
-fn setup_world() -> World {
-    // WucGraphicsResource::new が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
-    let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource作成失敗");
-
-    let mut world = World::new();
-    world.insert_resource(graphics);
-    world.insert_resource(wuc_resource);
-    world.insert_resource(FrameCount(1));
-    world.insert_resource(wintf::ecs::SurfaceCreationStats::default());
-    world
-}
+use wintf::ecs::{SurfaceGraphics, SurfaceGraphicsDirty, Visual, VisualGraphics, Window};
 
 // ========================================================================
 // 12.1: コンポーネント自動挿入テスト（ECS のフックだけを試すので素の World・装置なし）
 // ========================================================================
 
 #[test]
-fn test_dcomp_window_visual_gets_dcomp_components() {
+fn window_visual_gets_graphics_parts() {
     let mut world = World::new();
 
     // Window を生成
@@ -49,20 +29,20 @@ fn test_dcomp_window_visual_gets_dcomp_components() {
     // 窓の下の Visual は VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty が挿入される
     assert!(
         world.get::<VisualGraphics>(visual_entity).is_some(),
-        "DComp Visual should have VisualGraphics"
+        "Window Visual should have VisualGraphics"
     );
     assert!(
         world.get::<SurfaceGraphics>(visual_entity).is_some(),
-        "DComp Visual should have SurfaceGraphics"
+        "Window Visual should have SurfaceGraphics"
     );
     assert!(
         world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
-        "DComp Visual should have SurfaceGraphicsDirty"
+        "Window Visual should have SurfaceGraphicsDirty"
     );
 }
 
 #[test]
-fn test_orphan_visual_does_not_get_dcomp_components() {
+fn orphan_visual_gets_no_graphics_parts() {
     let mut world = World::new();
 
     // orphan Visual（Window 祖先なし）
@@ -71,43 +51,9 @@ fn test_orphan_visual_does_not_get_dcomp_components() {
     // Commands をフラッシュ
     world.flush();
 
-    // orphan Visual は DComp コンポーネントが挿入されない
+    // orphan Visual は描画の部品が挿入されない
     assert!(
         world.get::<VisualGraphics>(visual_entity).is_none(),
         "Orphan Visual should NOT have VisualGraphics"
     );
-}
-
-// ========================================================================
-// 12.2: invalidate_dependent_components 連動テスト
-// ========================================================================
-
-#[test]
-fn test_invalidate_dependent_components_invalidates_wuc_resource() {
-    crate::common::on_gpu_owner_thread(move || {
-        let mut world = setup_world();
-
-        // WucGraphicsResource が valid であることを確認
-        {
-            let wgr = world.resource::<WucGraphicsResource>();
-            assert!(wgr.is_valid(), "WucGraphicsResource should start valid");
-        }
-
-        // GraphicsCore を無効化
-        world.resource_mut::<GraphicsCore>().invalidate();
-
-        // invalidate_dependent_components を実行
-        let mut schedule = Schedule::default();
-        // WUC を捨てる係は GPU の持ち主のスレッドを外れないよう単一スレッドで回す
-        schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
-        schedule.add_systems(wintf::ecs::invalidate_dependent_components);
-        schedule.run(&mut world);
-
-        // WucGraphicsResource が無効化されていることを確認
-        let wgr = world.resource::<WucGraphicsResource>();
-        assert!(
-            !wgr.is_valid(),
-            "WucGraphicsResource should be invalidated after GraphicsCore invalidation"
-        );
-    });
 }

@@ -359,4 +359,6 @@ fn test_mapping_cleanup_prevents_memory_leak() {
         assert!(taffy_res.get_node(entity).is_none(), "{entity:?}");
         assert!(taffy_res.get_entity(node_id).is_none(), "{entity:?}");
     }
+    // 対応だけでなく taffy の木の節も残っていない
+    assert_eq!(taffy_res.taffy().total_node_count(), 0);
 }

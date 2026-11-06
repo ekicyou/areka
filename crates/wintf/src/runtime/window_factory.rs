@@ -520,14 +520,13 @@ mod tests {
         );
 
         // 冪等性: 同じ Entity は WindowHandle 付与済みゆえ再 create_windows で二重生成しない
-        // （クエリ `Without<WindowHandle>` で除外される）。registry 件数は 1 のまま。
+        // （クエリ `Without<WindowHandle>` で除外される）。registry は Entity を鍵に上書き
+        // するので件数では見えない——HWND が替わらないことで見る。
         create_windows(&mut bevy_world);
-        let registry = bevy_world
-            .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
-            .expect("WindowRegistry が存在するべき");
-        assert!(
-            !registry.is_empty(),
-            "再 create_windows でも registry は維持される（二重生成・取りこぼしなし）"
+        assert_eq!(
+            bevy_world.get::<WindowHandle>(entity).map(|h| h.hwnd),
+            Some(handle.hwnd),
+            "再 create_windows で同じ Entity に窓を作り直さない（二重生成なし）"
         );
 
         // クリーンアップ: registry drop → Window<WndState>::drop → DestroyWindow。

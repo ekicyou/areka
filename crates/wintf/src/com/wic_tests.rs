@@ -69,3 +69,24 @@ fn pixel_format_has_alpha_asks_wic() {
     drop(factory);
     unsafe { CoUninitialize() };
 }
+
+/// 125 番: 対のないサロゲートを含む名のファイルも開ける（名を UTF-8 へ化かさず UTF-16 のまま渡す）。
+/// 置き場はワークツリーの `target` の下。
+#[test]
+fn load_bitmap_source_opens_name_with_lone_surrogate() {
+    use std::os::windows::ffi::OsStringExt;
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().unwrap() };
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/wic_lone_surrogate_test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let name: Vec<u16> = [0xD800].into_iter().chain("a.png".encode_utf16()).collect();
+    let path = dir.join(std::ffi::OsString::from_wide(&name));
+    let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/assets/test_8x8_rgba.png");
+    std::fs::copy(asset, &path).unwrap();
+
+    let factory = wic_factory().unwrap();
+    let loaded = load_bitmap_source(&factory, &path);
+    let _ = std::fs::remove_file(&path);
+    assert!(loaded.is_ok(), "{:?}", loaded.err());
+    drop((loaded, factory));
+    unsafe { CoUninitialize() };
+}

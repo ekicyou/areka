@@ -552,6 +552,19 @@ mod tests {
         fast_forward_warmup(&world);
 
         let before = world.borrow().world().resource::<FrameCount>().0;
+        // 省略の回にも掃き出しが走ることを、積んだ 1 本がキューから消えることで見る
+        // （HWND は空なので書込は失敗し `warn!` が出るだけ・キューはスレッドごと）。
+        crate::ecs::window::SetWindowPosCommand::enqueue(
+            crate::ecs::window::SetWindowPosCommand::new(
+                windows::Win32::Foundation::HWND::default(),
+                0,
+                0,
+                1,
+                1,
+                windows::Win32::UI::WindowsAndMessaging::SWP_NOZORDER,
+                None,
+            ),
+        );
         let processed = tick_one_frame_with(&world, |world| {
             world.decide_tick_with(WakeSnapshot {
                 bits: 0,
@@ -568,11 +581,9 @@ mod tests {
             before,
             "省略の回は 13 本を回さないのでフレーム番号は進まない"
         );
-        // 窓書込の掃き出しはガードが外れる**前**に呼ばれる。ガードが戻っていることは
-        // 「省略の回でも関数が flush まで通り抜けた」ことの証跡である（D-3）。
         assert!(
-            !crate::ecs::world::is_tick_flush_in_progress(),
-            "省略の回も flush まで進んでから再入ガードが外れているべき"
+            crate::ecs::window::drain_window_pos_commands().is_empty(),
+            "省略の回も窓書込の掃き出しが走り、積んだ指令が残らないべき（D-3）"
         );
     }
 

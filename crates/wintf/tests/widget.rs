@@ -5,5 +5,5 @@ mod bitmap_source_integration_test;
 mod common;
 #[path = "widget/entity_name_format_test.rs"]
 mod entity_name_format_test;
-#[path = "widget/vertical_text_layout_test.rs"]
-mod vertical_text_layout_test;
+#[path = "widget/label_defaults_test.rs"]
+mod label_defaults_test;

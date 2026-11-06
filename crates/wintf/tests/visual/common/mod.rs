@@ -7,11 +7,6 @@ use windows::UI::Composition::{ContainerVisual, Visual};
 use windows::core::{Interface, Result};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-/// テスト用の GraphicsCore を作成するヘルパー関数
-pub fn setup_graphics() -> Result<GraphicsCore> {
-    GraphicsCore::new()
-}
-
 /// WUC: ContainerVisual.Children().InsertAtBottom で子をつなぐ。
 pub fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
     parent

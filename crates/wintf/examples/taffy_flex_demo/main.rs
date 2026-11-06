@@ -150,11 +150,12 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// プライマリ以外のモニター中央付近の物理ピクセル座標を返す。
+/// プライマリ以外のモニターの中で、左上から幅と高さの `frac` だけ内側の物理ピクセル座標を返す。
 ///
-/// マルチモニター環境で DPI が異なるスクリーンへのウィンドウ配置テスト用。
-/// 非プライマリモニターが存在しない場合は None を返す。
-fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT> {
+/// マルチモニター環境で DPI が異なるスクリーンへのウィンドウ配置テスト用（2 枚の窓が重ならない
+/// よう、Window 2 と Window 1 の移動先で `frac` を変える）。非プライマリモニターが存在しない
+/// 場合は None を返す。
+fn find_non_primary_monitor_point(frac: f32) -> Option<windows::Win32::Foundation::POINT> {
     use std::cell::Cell;
     use windows::Win32::Foundation::{LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Gdi::{
@@ -164,7 +165,7 @@ fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT
 
     // スレッドローカルで結果を収集（EnumDisplayMonitors コールバックから返す手段として）
     thread_local! {
-        static RESULT: Cell<Option<POINT>> = const { Cell::new(None) };
+        static RESULT: Cell<Option<RECT>> = const { Cell::new(None) };
     }
 
     RESULT.with(|r| r.set(None));
@@ -182,15 +183,7 @@ fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT
         if unsafe { GetMonitorInfoW(hmonitor, &mut info) }.as_bool() {
             let is_primary = (info.dwFlags & 1) != 0; // MONITORINFOF_PRIMARY = 1
             if !is_primary {
-                // モニター中央付近（左上から10%内側）を初期位置とする
-                let rect = info.rcMonitor;
-                let w = rect.right - rect.left;
-                let h = rect.bottom - rect.top;
-                let pt = POINT {
-                    x: rect.left + w / 10,
-                    y: rect.top + h / 10,
-                };
-                RESULT.with(|r| r.set(Some(pt)));
+                RESULT.with(|r| r.set(Some(info.rcMonitor)));
                 return BOOL(0); // 最初の非プライマリを見つけたら列挙停止
             }
         }
@@ -201,7 +194,10 @@ fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT
         let _ = EnumDisplayMonitors(None, None, Some(monitor_enum_proc), LPARAM(0));
     }
 
-    RESULT.with(|r| r.get())
+    RESULT.with(|r| r.get()).map(|rect| POINT {
+        x: rect.left + ((rect.right - rect.left) as f32 * frac) as i32,
+        y: rect.top + ((rect.bottom - rect.top) as f32 * frac) as i32,
+    })
 }
 
 /// 非同期デモ実行
@@ -219,7 +215,7 @@ async fn run_demo(tx: CommandSender) {
         setup::create_flexbox_window(
             world,
             "wintf - Taffy Flexbox Demo (Window 2)",
-            find_non_primary_monitor_origin()
+            find_non_primary_monitor_point(0.1)
                 .map(Point::from)
                 .unwrap_or(Point { x: 1200, y: 100 }),
         );
@@ -261,7 +257,7 @@ fn change_layout_parameters(world: &mut World) {
     // NOTE: BoxStyle.size および子要素のレイアウトパラメーターは一切変更しない。
     // ウィンドウの論理サイズと内部レイアウトを保持したままモニター間移動することで、
     // DPIスケーリング動作を正しく検証できる。
-    let Some(target) = find_non_primary_monitor_origin().map(Point::from) else {
+    let Some(target) = find_non_primary_monitor_point(0.5).map(Point::from) else {
         info!("[Test] No non-primary monitor; Window 1 stays where it is");
         return;
     };

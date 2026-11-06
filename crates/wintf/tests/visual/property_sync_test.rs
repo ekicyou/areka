@@ -10,7 +10,8 @@ use windows_numerics::Vector3;
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{Visual, VisualGraphics, Window, visual_property_sync_system};
 
-use super::common::{WucVisualFactory, setup_graphics};
+use super::common::WucVisualFactory;
+use wintf::ecs::GraphicsCore;
 
 fn run_sync(world: &mut World) {
     let mut schedule = Schedule::default();
@@ -20,7 +21,7 @@ fn run_sync(world: &mut World) {
 
 /// 実 Visual を持つテストワールドをセットアップして (world, factory) を返す
 fn setup() -> Result<(World, WucVisualFactory)> {
-    let graphics = setup_graphics()?;
+    let graphics = GraphicsCore::new()?;
     let factory = WucVisualFactory::new(&graphics)?;
     let mut world = World::new();
     world.insert_resource(graphics);

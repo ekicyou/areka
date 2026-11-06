@@ -196,24 +196,11 @@ mod tests {
         // 実測所見（要件 10.2）: WUC の BeginDraw は Some(部分矩形) を渡すと
         // E_INVALIDARG (0x80070057) を返す（本開発機で確認）。本番 render_surface も
         // None のみを渡す（begin_draw(None)）ため、None を主経路の必須 assert とする。
-        let (dc, offset) = surface_interop
+        // 確かめるのは BeginDraw／EndDraw が通ることだけ。atlas offset は WUC の配置しだいで
+        // 値を主張できないので、観測としてテスト出力へ残すに留める。
+        let (_dc, offset) = surface_interop
             .begin_draw(None)
             .expect("begin_draw(None) 失敗");
-
-        // DC が有効な ID2D1DeviceContext3 として取得できることを確認（cast 済み）。
-        // 実挙動検証: DC 上で軽い D2D 呼び出し（Transform 読取）が成功することを確かめる。
-        let mut transform = windows_numerics::Matrix3x2::default();
-        unsafe { dc.GetTransform(&mut transform) };
-
-        // atlas offset: WUC 実装依存だが >= 0 で取得できること（out-param が満たされたこと）を確認。
-        // 非ゼロ性は atlas 配置に依存するため厳密 assert しない（設計指示どおり観測に留める）。
-        assert!(
-            offset.x >= 0 && offset.y >= 0,
-            "updateoffset が負値: ({}, {})",
-            offset.x,
-            offset.y
-        );
-        // atlas offset の実測値をテスト出力へ残す（非ゼロケースの観測）。
         eprintln!(
             "[begin_draw_roundtrip] atlas updateoffset = ({}, {})",
             offset.x, offset.y

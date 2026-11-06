@@ -31,16 +31,18 @@ fn test_hierarchical_bounds_calculation() {
     let child_global = parent_global * child_arr;
 
     // 子のbounds検証（親の変換適用後）
-    // 新ロジック: 子のoffsetに親のスケールを適用
-    // parent.bounds.left = 20 (10*2)
+    // 子のoffsetに親のスケールを適用。親の無い根のずらしは自分の倍率で伸ばさない
+    // parent.bounds.left = 10・top = 20（offset のまま）
     // child.offset = (5, 10), parent.scale = (2, 2)
     // scaled_child_offset = (5*2, 10*2) = (10, 20)
-    // child.bounds.left = 20 + 10 = 30
-    // child.bounds.right = 30 + 30*2 = 90 (size 30 * parent_scale 2)
-    assert_eq!(child_global.bounds.left, 30.0);
-    assert_eq!(child_global.bounds.top, 60.0);
-    assert_eq!(child_global.bounds.right, 90.0);
-    assert_eq!(child_global.bounds.bottom, 100.0);
+    // child.bounds.left = 10 + 10 = 20・top = 20 + 20 = 40
+    // child.bounds.right = 20 + 30*2 = 80 (size 30 * parent_scale 2)・bottom = 40 + 20*2 = 80
+    assert_eq!(parent_global.bounds.left, 10.0);
+    assert_eq!(parent_global.bounds.top, 20.0);
+    assert_eq!(child_global.bounds.left, 20.0);
+    assert_eq!(child_global.bounds.top, 40.0);
+    assert_eq!(child_global.bounds.right, 80.0);
+    assert_eq!(child_global.bounds.bottom, 80.0);
 
     // 孫ウィジェット（レベル2）
     // Position: (2, 3), Scale: (1.5, 1.5), Size: (10, 8)
@@ -56,17 +58,17 @@ fn test_hierarchical_bounds_calculation() {
 
     // 孫のbounds検証（親と子の累積変換適用後）
     // 新ロジック: 孫のoffsetに親（child）のスケールを適用
-    // child.bounds.left = 30
+    // child.bounds.left = 20・top = 40
     // child.transform.M11 = 2 (累積スケール)
     // grandchild.offset = (2, 3)
     // scaled_offset = (2*2, 3*2) = (4, 6)
-    // grandchild.bounds.left = 30 + 4 = 34
+    // grandchild.bounds.left = 20 + 4 = 24・top = 40 + 6 = 46
     // result.M11 = 2 * 1.5 = 3
-    // grandchild.bounds.right = 34 + 10*3 = 64
-    assert_eq!(grandchild_global.bounds.left, 34.0);
-    assert_eq!(grandchild_global.bounds.top, 66.0);
-    assert_eq!(grandchild_global.bounds.right, 64.0);
-    assert_eq!(grandchild_global.bounds.bottom, 90.0);
+    // grandchild.bounds.right = 24 + 10*3 = 54・bottom = 46 + 8*3 = 70
+    assert_eq!(grandchild_global.bounds.left, 24.0);
+    assert_eq!(grandchild_global.bounds.top, 46.0);
+    assert_eq!(grandchild_global.bounds.right, 54.0);
+    assert_eq!(grandchild_global.bounds.bottom, 70.0);
 }
 
 /// スケール変換のみのテスト

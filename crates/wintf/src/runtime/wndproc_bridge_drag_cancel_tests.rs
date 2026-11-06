@@ -20,7 +20,7 @@ use super::wndproc_bridge_drag_test_support::{
 use crate::ecs::drag::{DragEndEvent, DraggingState, WindowDragging, snapshot_drag_state};
 use crate::ecs::pointer::PhysicalPoint;
 use crate::ecs::window::{KeepDirectlyAbove, SinkObservationPending};
-use crate::ecs::world::{FrameCount, UISetup, tick_wake};
+use crate::ecs::world::{UISetup, tick_wake};
 
 // ============================================================================
 // テスト 1: 閾値を越えた後の取り消し 4 種で、終了の知らせが取り消しの印つきで 1 件
@@ -396,12 +396,12 @@ fn t08_non_drag_messages_while_borrowed_change_nothing() {
 }
 
 // ============================================================================
-// テスト 13: 再入の扱いは None を返し、非活性化でも沈降の観測の目印が付かない。
-// 借用は握られたまま。画面更新の回数は増えない（要件 1.2・1.3）
+// テスト 13: 再入の扱いは None を返し、非活性化でも沈降の観測の目印が付かない
+// （要件 1.2・1.3。借用はテスト自身が握るので、借用と画面更新の回数は主張しない）
 // ============================================================================
 
 #[test]
-fn t13_reentrant_handling_returns_none_keeps_the_borrow_and_skips_side_work() {
+fn t13_reentrant_handling_returns_none_and_skips_side_work() {
     let release = Cancel {
         what: "左ボタンを離す（WM_LBUTTONUP）",
         msg: WM_LBUTTONUP,
@@ -417,26 +417,14 @@ fn t13_reentrant_handling_returns_none_keeps_the_borrow_and_skips_side_work() {
             .spawn(KeepDirectlyAbove { peer: rig.target })
             .id();
         rig.start_drag();
-        let frames = rig.world.borrow().world().resource::<FrameCount>().0;
 
         {
             let _held = rig.world.borrow_mut();
             let ret = rig.send(kind.msg, kind.wparam, client_lparam(MOVED));
             assert!(ret.is_none(), "{}: 再入の扱いは None を返す", kind.what);
-            assert!(
-                rig.world.try_borrow().is_err(),
-                "{}: 扱いの後も借用は握られたまま（横取りしない）",
-                kind.what
-            );
         }
 
         let w = rig.world.borrow();
-        assert_eq!(
-            w.world().resource::<FrameCount>().0,
-            frames,
-            "{}: 画面更新の回数は増えない",
-            kind.what
-        );
         assert!(
             !w.world()
                 .entity(balloon)

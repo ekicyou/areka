@@ -58,10 +58,12 @@ fn command_list_close_succeeds_once_then_fails() {
 
 // ============================================================
 // D2D1DeviceContextExt — 描画ラッパー一式を CommandList へ記録して閉じる統合テスト
+// 確かめるのは D2D がエラーを返さないこと（EndDraw・close）だけ。包みは 1 行の素通しで、
+// 何が記録されたかは見ない。
 // ============================================================
 
 #[test]
-fn device_context_wrappers_record_into_command_list() {
+fn device_context_wrappers_record_into_command_list_without_d2d_error() {
     with_com_initialized(|| {
         let core = make_core();
         let device = core.d2d_device().expect("device");

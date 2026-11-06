@@ -31,9 +31,8 @@ pub fn load_bitmap_source(
     factory: &IWICImagingFactory2,
     path: &Path,
 ) -> Result<(IWICBitmapSource, bool)> {
-    // パスを HSTRING に変換
-    let path_str = path.to_string_lossy();
-    let path_hstring = HSTRING::from(path_str.as_ref());
+    // UTF-16 のまま渡す（`to_string_lossy` は対のないサロゲートを U+FFFD に化かし別の名を開く）
+    let path_hstring = HSTRING::from(path);
 
     // デコーダー作成
     let decoder = factory.create_decoder_from_filename(

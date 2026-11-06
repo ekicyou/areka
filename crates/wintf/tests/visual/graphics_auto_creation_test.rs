@@ -10,14 +10,13 @@ use bevy_ecs::prelude::*;
 use windows::core::{Interface, Result};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    SurfaceGraphics, Visual, VisualGraphics, WucGraphicsResource, visual_resource_management_system,
+    GraphicsCore, SurfaceGraphics, Visual, VisualGraphics, WucGraphicsResource,
+    visual_resource_management_system,
 };
-
-use super::common::setup_graphics;
 
 /// テスト用のワールドをセットアップするヘルパー関数（GPU の持ち主のスレッドの中で呼ぶ）
 fn setup_world_with_graphics() -> Result<World> {
-    let graphics = setup_graphics()?;
+    let graphics = GraphicsCore::new()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let wuc_resource = WucGraphicsResource::new(d2d)?;
     let mut world = World::new();
@@ -158,36 +157,27 @@ fn test_multiple_entities_get_visual_graphics() -> Result<()> {
 
 /// GraphicsCore が無効（invalidate済み）の場合は VisualGraphics のGPUリソースが作成されないことを確認
 /// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
+/// （合成器は有効なまま入れて、合成器が無いことでなく GraphicsCore の無効で止まることを見る）
 #[test]
 fn test_no_visual_graphics_with_invalid_graphics_core() -> Result<()> {
-    let mut graphics = setup_graphics()?;
-    // GraphicsCore を無効化
-    graphics.invalidate();
+    crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
+        let mut world = setup_world_with_graphics()?;
+        world.resource_mut::<GraphicsCore>().invalidate();
 
-    let mut world = World::new();
-    world.insert_resource(graphics);
-    world.insert_resource(FrameCount(1));
+        let entity = world
+            .spawn((Visual::default(), VisualGraphics::default()))
+            .id();
 
-    let entity = world
-        .spawn((Visual::default(), VisualGraphics::default()))
-        .id();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(visual_resource_management_system);
+        schedule.run(&mut world);
 
-    let mut schedule = Schedule::default();
-    schedule.add_systems(visual_resource_management_system);
-    schedule.run(&mut world);
+        // ただし、GPUリソースは作成されない（GraphicsCoreが無効なため）
+        assert!(
+            !world.get::<VisualGraphics>(entity).unwrap().is_valid(),
+            "VisualGraphics should not have GPU resources with invalid GraphicsCore"
+        );
 
-    // VisualGraphics コンポーネント自体は明示的に追加済み
-    let vg = world.get::<VisualGraphics>(entity);
-    assert!(
-        vg.is_some(),
-        "VisualGraphics component should exist (explicitly added)"
-    );
-
-    // ただし、GPUリソースは作成されない（GraphicsCoreが無効なため）
-    assert!(
-        !vg.unwrap().is_valid(),
-        "VisualGraphics should not have GPU resources with invalid GraphicsCore"
-    );
-
-    Ok(())
+        Ok(())
+    })
 }

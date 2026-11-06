@@ -3,7 +3,7 @@
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 
 use super::super::metrics::{LayoutScale, Offset, Size};
 use super::super::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyStyle};
@@ -298,6 +298,8 @@ pub fn cleanup_removed_entities_system(
     mut removed: RemovedComponents<TaffyStyle>,
 ) {
     for entity in removed.read() {
-        let _ = taffy_res.remove_node(entity);
+        if let Err(e) = taffy_res.remove_node(entity) {
+            error!(?entity, error = ?e, "[cleanup_removed_entities] Taffy node removal failed");
+        }
     }
 }

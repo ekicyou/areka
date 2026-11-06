@@ -1,6 +1,6 @@
 //! GraphicsCore アクセサのギャップテスト (W3b-T)
 //!
-//! 既存テスト（core_test / core_ecs_test / reinit_unit_test）は生成・invalidate・
+//! 既存テスト（core_test / core_ecs_test）は生成・invalidate・
 //! is_valid を検証済みだが、全アクセサの Some/None 遷移は未固定だったため追加する。
 //! 対象: crates/wintf/src/ecs/graphics/core.rs
 //!

@@ -21,8 +21,6 @@ mod dcomp_integration_test;
 mod device_lost_recovery_test;
 #[path = "graphics/init_window_graphics_test.rs"]
 mod init_window_graphics_test;
-#[path = "graphics/reinit_unit_test.rs"]
-mod reinit_unit_test;
 #[path = "graphics/surface_optimization_test.rs"]
 mod surface_optimization_test;
 #[path = "graphics/surface_systems_test.rs"]

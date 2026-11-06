@@ -406,3 +406,41 @@ fn test_feedback_loop_converges_dpi_192() {
         "DPI 192: Frame2 でどの部品にも書かないこと (converged in one frame)"
     );
 }
+
+/// DPI 192 で親（LayoutRoot）をまだ持たない窓も、位置を倍率倍に跳ばさず 1 フレームで収束する。
+/// 親の無い根の bounds は `From<Arrangement>` で決まり、ずらしは自分の倍率で伸ばさない（146 番）
+#[test]
+fn test_feedback_loop_converges_dpi_192_without_parent() {
+    let mut world = new_world();
+    let entity = spawn_window(
+        &mut world,
+        Some(Point { x: 0, y: 0 }),
+        192,
+        Offset { x: 0.0, y: 0.0 },
+    );
+    let mut schedule = post_layout_schedule();
+    schedule.run(&mut world);
+
+    world.get_mut::<WindowPos>(entity).unwrap().position = Some(Point { x: 200, y: 400 });
+    schedule.run(&mut world);
+
+    let ga = *world.get::<GlobalArrangement>(entity).unwrap();
+    assert_eq!(
+        (ga.bounds.left, ga.bounds.top),
+        (200.0, 400.0),
+        "親の無い窓の bounds はずらしのまま（倍率倍にしない）"
+    );
+    assert_eq!(
+        world.get::<WindowPos>(entity).unwrap().position,
+        Some(Point { x: 200, y: 400 }),
+        "親の無い窓の位置を倍率倍で書き戻さない"
+    );
+
+    let before = ticks(&world, entity);
+    schedule.run(&mut world);
+    assert_eq!(
+        before,
+        ticks(&world, entity),
+        "親の無い窓も Frame2 でどの部品にも書かないこと"
+    );
+}

@@ -2,8 +2,8 @@
 //!
 //! 実 WUC デバイスを用いて clip_sync_system を Schedule 経由で実行する。
 //! 切り抜きの中身（図形）は読み戻さず、各分岐（3 バリアント適用・クリップ解除）で
-//! `error` のログが 0 件であることと、当たっている切り抜きの物の同一性（`Visual::Clip()`）
-//! だけを確かめる。本番は COM の失敗を `error!` して続けるので、ログの数で失敗を見る。
+//! `error` のログが 0 件であることと、切り抜きが当たっているか・外れたか・同じ物か
+//! （`Visual::Clip()`）を確かめる。本番は COM の失敗を `error!` して続けるので、ログの数で失敗を見る。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
@@ -33,6 +33,16 @@ fn setup_world() -> World {
 fn run_without_error(schedule: &mut Schedule, world: &mut World) {
     let ((), counts) = count_levels(|| schedule.run(world));
     assert_eq!(counts.error, 0, "clip_sync_system が error を残した");
+}
+
+/// 実 WUC ビジュアルに切り抜きが当たっているか
+fn has_clip(world: &World, entity: Entity) -> bool {
+    world
+        .get::<VisualGraphics>(entity)
+        .and_then(|vg| vg.visual().cloned())
+        .expect("見た目が無い")
+        .Clip()
+        .is_ok()
 }
 
 fn clip_schedule() -> Schedule {
@@ -71,7 +81,7 @@ fn clip_sync_applies_all_clip_shape_variants() {
         let mut world = setup_world();
         let mut schedule = clip_schedule();
 
-        spawn_clip_entity(
+        let rect = spawn_clip_entity(
             &mut world,
             Visual {
                 clip: Some(ClipShape::Rectangle),
@@ -80,7 +90,7 @@ fn clip_sync_applies_all_clip_shape_variants() {
             100.0,
             50.0,
         );
-        spawn_clip_entity(
+        let rounded = spawn_clip_entity(
             &mut world,
             Visual {
                 clip: Some(ClipShape::RoundedRectangle { radius: 8.0 }),
@@ -89,7 +99,7 @@ fn clip_sync_applies_all_clip_shape_variants() {
             100.0,
             50.0,
         );
-        spawn_clip_entity(
+        let individual = spawn_clip_entity(
             &mut world,
             Visual {
                 clip: Some(ClipShape::RoundedRectangleIndividual {
@@ -106,6 +116,9 @@ fn clip_sync_applies_all_clip_shape_variants() {
 
         // 3 バリアントすべてが角丸の図形の切り抜き → SetClip まで失敗なく通る
         run_without_error(&mut schedule, &mut world);
+        for entity in [rect, rounded, individual] {
+            assert!(has_clip(&world, entity), "切り抜きが当たっていない");
+        }
     });
 }
 
@@ -127,10 +140,15 @@ fn clip_sync_clears_clip_when_clip_is_none() {
 
         // 1回目: クリップ適用
         run_without_error(&mut schedule, &mut world);
+        assert!(has_clip(&world, entity), "切り抜きが当たっていない");
 
         // clip = None に変更 → クリップ解除（SetClip(None)）経路
         world.get_mut::<Visual>(entity).unwrap().clip = None;
         run_without_error(&mut schedule, &mut world);
+        assert!(
+            !has_clip(&world, entity),
+            "clip = None で切り抜きが外れない"
+        );
     });
 }
 
@@ -140,18 +158,25 @@ fn clip_sync_clears_clip_when_size_is_zero() {
         let mut world = setup_world();
         let mut schedule = clip_schedule();
 
-        // clip はあるがサイズ (0, 0) → クリップ解除経路に分岐する
-        spawn_clip_entity(
+        // いったん切り抜きを当ててから、clip はあるがサイズ (0, 0) → クリップ解除経路に分岐する
+        let entity = spawn_clip_entity(
             &mut world,
             Visual {
                 clip: Some(ClipShape::Rectangle),
                 ..Default::default()
             },
-            0.0,
-            0.0,
+            100.0,
+            50.0,
         );
-
         run_without_error(&mut schedule, &mut world);
+        assert!(has_clip(&world, entity), "切り抜きが当たっていない");
+
+        world.get_mut::<Arrangement>(entity).unwrap().size = Size {
+            width: 0.0,
+            height: 0.0,
+        };
+        run_without_error(&mut schedule, &mut world);
+        assert!(!has_clip(&world, entity), "大きさ 0 で切り抜きが外れない");
     });
 }
 

@@ -31,13 +31,6 @@ bitflags = "2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dola = { version = "0.1.0", path = "crates/dola" }
 
-[workspace.dependencies.bevy_app]
-version = "0.19"
-features = [
-    "bevy_reflect",
-    "std",
-]
-
 [workspace.dependencies.bevy_ecs]
 version = "0.19"
 features = [

@@ -56,7 +56,8 @@ impl WicDecoderArm {
     /// `has_alpha` は **変換前**フレームの `GetPixelFormat`（Critical Issue 1）由来と、
     /// 番号つきの形式ならパレット由来の α 有無から取る。
     fn decode_inner(&self, path: &Path) -> windows::core::Result<DecodedImage> {
-        let path_hstring = HSTRING::from(path.to_string_lossy().as_ref());
+        // UTF-16 のまま渡す（`to_string_lossy` は対のないサロゲートを U+FFFD に化かし別の名を開く）
+        let path_hstring = HSTRING::from(path);
 
         // デコーダー作成
         let decoder = unsafe {

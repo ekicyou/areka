@@ -128,8 +128,9 @@ pub fn window_pos_sync_system(
 /// したがって `Arrangement.offset` は物理ピクセル単位であり、
 /// `WindowPos.position`（物理px）をそのまま offset に設定する（DPI除算不要）。
 ///
-/// ルートエンティティ（親なし）の場合は `bounds.left = offset × DPI_scale` となるが、
-/// 実アプリでは Window は常に LayoutRoot の子である。
+/// 親をまだ持たない窓（根）でも `bounds.left = offset` で同じになる（ずらしは自分の倍率で
+/// 伸ばさない。倍率を掛けたずらしを持つのは `transform` だけ）。実アプリでは Window は
+/// LayoutRoot の子になる。
 pub fn sync_window_arrangement_from_window_pos(
     mut query: Query<
         (Entity, &WindowPos, &mut Arrangement, Option<&Name>),

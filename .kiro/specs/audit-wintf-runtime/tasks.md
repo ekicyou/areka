@@ -199,7 +199,7 @@
   - 完了の姿: 3 場面とも vblank と UI のスレッドの CPU が張り付かず、補いの trace が出ていることを記録に残す
   - _Depends: 2.1_
   - _Requirements: 3.6, 7.1_
-- [ ] 8.3 全体テストとかけ直しで 0 件を確かめる（V2）
+- [x] 8.3 全体テストとかけ直しで 0 件を確かめる（V2）
   - 範囲のファイルを数え直し（消したファイルと新しいテストのファイルを入れる）、要件 2 と同じ作法（全件・全部読む・上限なし）で `/ponytail:ponytail-audit` をかけ直す
   - 新しい指摘（`d2d_create_device` の呼び手 0 を含む）は要件 3〜7 と同じ扱いで直し、残す 4 件（21・22・23・88）を除いて 0 件になるまでかけ直す
   - 全体テスト `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回して緑にする（赤が範囲の外の crate だけなら、その crate だけ 1 回回し直す）
@@ -219,3 +219,4 @@
 - 6: `nonmax` は `bevy_ecs` 0.19.1 が推移で引くので `Cargo.lock` に残る。完了の姿の「`Cargo.lock` から消える」は「直接の依存が 0」で満たしたと読む（審査で承認）。同じ「消費 10 crate」の注記が `crates/log-capture-kit/src/lib.rs:28` に残る（範囲の外）。
 - 7.1: main の取り込みで、消した `D3D11DeviceExt::get_device_removed_reason` を `ecs/graphics/core.rs` の 2 か所が使っていた（字面のぶつかりは無し）。生の `GetDeviceRemovedReason()` に直した。`create_command_list` の呼び手は 7 か所（`tests/com/d2d_ext_test.rs:50・73・153` も 7.3 で直す）。`Opacity` の grep 0 件は字面どおりには無理（WUC の口の名に当たる）。7.8 は消した型を名指す `ecs/graphics/visual.rs:177` を 0 にする読みでよいか、7.8 の審査で確かめる。
 - 7.5: wintf の指令のキュー（`window_pos` など）は `thread_local` なので、指令を取り出して確かめるテストは `SingleThreadedExecutor` で回す（`Schedule::default()` は作業スレッドで回り、指令がそちらに残る）。`BoxStyle` の無い窓はレイアウトの大きさが 0 で、描画面が作られない（`graphics_reinit_test` で実機の赤から見つけた）。
+- 8.3: かけ直しで 35 件（120〜154）を見つけて全部直し、2 回目は 0 件。持ち主の spec に根がある 146（親の無い窓の bounds の伸ばし方）・144 の根（taffy のノードを消すときに失敗を捨てる）・emo-atlas の `to_string_lossy` と `with_arm` は、並走が無いのでここで直した（申し送りは research.md 15 節）。SendInput の `INPUT` は x64 で 40 バイト（32 で宣言すると全部断られ、戻り値を見ないと気付かない）。

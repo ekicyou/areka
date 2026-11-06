@@ -13,7 +13,8 @@ use windows::UI::Composition::{ContainerVisual, Visual as WucVisual};
 use windows::core::{IUnknown, Interface, Result};
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::{WucVisualFactory, add_child, setup_graphics};
+use super::common::{WucVisualFactory, add_child};
+use wintf::ecs::GraphicsCore;
 
 fn child_count(parent: &WucVisual) -> Result<i32> {
     parent.cast::<ContainerVisual>()?.Children()?.Count()
@@ -49,7 +50,7 @@ fn run_sync(world: &mut World) {
 #[test]
 fn reparent_moves_child_to_new_parent() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();
@@ -95,7 +96,7 @@ fn reparent_moves_child_to_new_parent() -> Result<()> {
 #[test]
 fn old_parent_resync_keeps_moved_child_in_new_parent() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();
@@ -154,7 +155,7 @@ fn old_parent_resync_keeps_moved_child_in_new_parent() -> Result<()> {
 #[test]
 fn child_joins_when_parent_gets_visual_later() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();
@@ -204,7 +205,7 @@ fn hierarchy_sync_terminates_on_parent_cycle() {
     let (tx, rx) = mpsc::channel::<std::result::Result<(), String>>();
     std::thread::spawn(move || {
         let run = crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-            let graphics = setup_graphics()?;
+            let graphics = GraphicsCore::new()?;
             let factory = WucVisualFactory::new(&graphics)?;
             let mut world = World::new();
             world.insert_resource(graphics);
@@ -224,7 +225,10 @@ fn hierarchy_sync_terminates_on_parent_cycle() {
         Ok(Ok(())) => {}
         Ok(Err(e)) => panic!("準備に失敗: {e}"),
         Err(mpsc::RecvTimeoutError::Timeout) => {
-            panic!("輪の親で木の同期の係が 30 秒で返らない")
+            // panic では GPU の持ち主のスレッドが回り続け、後の GPU テストが待ち続けて実行が
+            // 終わらない。実行ファイルごと落として赤を見せる。
+            eprintln!("輪の親で木の同期の係が 30 秒で返らない");
+            std::process::exit(1);
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => panic!("係のスレッドが落ちた"),
     }

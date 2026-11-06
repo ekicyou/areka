@@ -21,13 +21,13 @@ fn test_surface_graphics_dirty_component_exists() {
 
 #[test]
 fn test_mark_dirty_surfaces_updates_frame() {
-    let mut app = bevy_app::App::new();
-    app.insert_resource(FrameCount(1)); // フレーム番号1
-    app.add_systems(bevy_app::Update, mark_dirty_surfaces);
+    let mut world = World::new();
+    world.insert_resource(FrameCount(1)); // フレーム番号1
+    let mut schedule = Schedule::default();
+    schedule.add_systems(mark_dirty_surfaces);
 
     // SurfaceGraphics と SurfaceGraphicsDirty を持つエンティティを作成
-    let entity = app
-        .world_mut()
+    let entity = world
         .spawn((
             SurfaceGraphics::default(),
             SurfaceGraphicsDirty::default(),
@@ -35,29 +35,22 @@ fn test_mark_dirty_surfaces_updates_frame() {
         ))
         .id();
 
-    // 最初のupdateでChangeトラッカーを初期化
-    app.update();
+    // 最初の回でChangeトラッカーを初期化
+    schedule.run(&mut world);
 
     // フレーム番号を更新
-    app.world_mut().resource_mut::<FrameCount>().0 = 42;
+    world.resource_mut::<FrameCount>().0 = 42;
 
     // GraphicsCommandListを変更（強制的に変更検出をトリガー）
-    if let Some(mut cmd_list) = app
-        .world_mut()
-        .entity_mut(entity)
-        .get_mut::<GraphicsCommandList>()
-    {
-        cmd_list.set_changed();
-    }
+    world
+        .get_mut::<GraphicsCommandList>(entity)
+        .unwrap()
+        .set_changed();
 
-    app.update();
+    schedule.run(&mut world);
 
     // SurfaceGraphicsDirtyのrequested_frameがフレーム番号で更新されていることを確認
-    let dirty = app
-        .world()
-        .entity(entity)
-        .get::<SurfaceGraphicsDirty>()
-        .unwrap();
+    let dirty = world.get::<SurfaceGraphicsDirty>(entity).unwrap();
     assert_eq!(dirty.requested_frame, 42);
 }
 

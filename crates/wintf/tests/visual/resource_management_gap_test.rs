@@ -9,7 +9,7 @@ use windows::core::Result;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{Visual, VisualGraphics, WucGraphicsResource, visual_resource_management_system};
 
-use super::common::setup_graphics;
+use wintf::ecs::GraphicsCore;
 
 fn run_system(world: &mut World) {
     let mut schedule = Schedule::default();
@@ -20,7 +20,7 @@ fn run_system(world: &mut World) {
 /// WucGraphicsResource リソース不在 → 早期リターンし VisualGraphics は無効のまま
 #[test]
 fn early_return_when_wuc_resource_missing() -> Result<()> {
-    let graphics = setup_graphics()?;
+    let graphics = GraphicsCore::new()?;
     let mut world = World::new();
     world.insert_resource(graphics);
     world.insert_resource(FrameCount(0));
@@ -44,7 +44,7 @@ fn early_return_when_wuc_resource_missing() -> Result<()> {
 /// WucGraphicsResource が空（new_empty）→ compositor() None で早期リターン
 #[test]
 fn early_return_when_wuc_resource_empty() -> Result<()> {
-    let graphics = setup_graphics()?;
+    let graphics = GraphicsCore::new()?;
     let mut world = World::new();
     world.insert_resource(graphics);
     world.insert_resource(FrameCount(0));

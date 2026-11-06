@@ -199,6 +199,10 @@ fn test_full_layout_pipeline_with_ecs_world() {
             "Containerの幅が期待値と異なります: expected ~600.0, got {}",
             container_size.width
         );
-        // 高さは親の Flex レイアウトが決める（明示の指定は反映されない）ので確かめない
+        assert!(
+            (container_size.height - 450.0).abs() < 1.0,
+            "Containerの高さが期待値と異なります: expected ~450.0, got {}",
+            container_size.height
+        );
     }
 }

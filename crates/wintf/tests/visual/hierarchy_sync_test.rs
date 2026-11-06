@@ -7,13 +7,14 @@ use bevy_ecs::prelude::*;
 use windows::core::{Interface, Result};
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::{WucVisualFactory, setup_graphics, wuc_children};
+use super::common::{WucVisualFactory, wuc_children};
+use wintf::ecs::GraphicsCore;
 
 /// ChildOf追加時にVisual階層が同期されることを確認
 #[test]
 fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();
@@ -62,7 +63,7 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
 #[test]
 fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
     crate::gpu::on_gpu_owner_thread(|| -> Result<()> {
-        let graphics = setup_graphics()?;
+        let graphics = GraphicsCore::new()?;
         let factory = WucVisualFactory::new(&graphics)?;
 
         let mut world = World::new();

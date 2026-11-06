@@ -185,3 +185,21 @@ fn pixel_format_has_alpha_asks_wic() {
         assert!(pixel_format_has_alpha(&arm.factory, &GUID::zeroed()).is_err());
     });
 }
+
+/// 125 番（audit-wintf-runtime）: 対のないサロゲートを含む名のファイルも開ける
+/// （wintf の `load_bitmap_source` と同じく名を UTF-16 のまま渡す）。置き場はワークツリーの `target` の下。
+#[test]
+fn decode_opens_name_with_lone_surrogate() {
+    use std::os::windows::ffi::OsStringExt;
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/emo_atlas_lone_surrogate_test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let name: Vec<u16> = [0xD800].into_iter().chain("a.png".encode_utf16()).collect();
+    let path = dir.join(std::ffi::OsString::from_wide(&name));
+    std::fs::copy(sample("single.apng"), &path).unwrap();
+    with_arm(|arm| {
+        let decoded = arm.decode(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(decoded.is_ok(), "{:?}", decoded.err());
+    });
+}

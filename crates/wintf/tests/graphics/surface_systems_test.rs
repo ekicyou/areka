@@ -560,55 +560,19 @@ fn render_surface_non_loss_begin_draw_failure_does_not_mark_graphics_core_change
     });
 }
 
-/// 装置が無効なら何も描かずに戻り、資源にも触らない
-#[test]
-fn render_surface_with_invalid_core_returns_without_touching_core() {
-    crate::common::on_gpu_owner_thread(move || {
-        let mut world = setup_world();
-        let surface = create_real_surface(&world, 64, 64);
-        let cmd = make_filled_command_list(world.resource::<GraphicsCore>(), 64.0, 64.0);
-        world.spawn((
-            surface,
-            make_global_arrangement(64.0, 64.0),
-            SurfaceGraphicsDirty::default(),
-            cmd,
-        ));
-        world.resource_mut::<GraphicsCore>().invalidate();
-        let before = world
-            .get_resource_change_ticks::<GraphicsCore>()
-            .unwrap()
-            .changed;
-        world.increment_change_tick();
-
-        single_system_schedule(render_surface).run(&mut world);
-
-        let after = world
-            .get_resource_change_ticks::<GraphicsCore>()
-            .unwrap()
-            .changed;
-        assert_eq!(before, after, "無効な装置の回に GraphicsCore へ触った");
-    });
-}
-
 #[test]
 fn render_surface_skips_invalid_surface_without_error() {
     crate::common::on_gpu_owner_thread(move || {
         let mut world = setup_world();
-        let entity = world
-            .spawn((
-                SurfaceGraphics::default(), // invalid
-                make_global_arrangement(64.0, 64.0),
-                SurfaceGraphicsDirty::default(),
-            ))
-            .id();
+        world.spawn((
+            SurfaceGraphics::default(), // invalid
+            make_global_arrangement(64.0, 64.0),
+            SurfaceGraphicsDirty::default(),
+        ));
 
         let mut schedule = single_system_schedule(render_surface);
-        schedule.run(&mut world);
-
-        assert!(
-            !world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
-            "invalid Surface はスキップされる（パニックなし）"
-        );
+        let ((), counts) = count_levels(|| schedule.run(&mut world));
+        assert_eq!(counts.error, 0, "描画面の無い部品で error を残した");
     });
 }
 

@@ -183,15 +183,7 @@ fn window_pos_sync_propagates_size_change_during_drag() {
             },
             DPI::default(),
             Arrangement::default(),
-            GlobalArrangement {
-                bounds: wintf::ecs::layout::D2DRect {
-                    left: 100.0,
-                    top: 200.0,
-                    right: 500.0,
-                    bottom: 500.0,
-                },
-                ..Default::default()
-            },
+            GlobalArrangement::default(),
             WindowDragging, // ドラッグ中
         ))
         .id();
@@ -199,17 +191,8 @@ fn window_pos_sync_propagates_size_change_during_drag() {
     let mut schedule = Schedule::default();
     schedule.add_systems(window_pos_sync_system);
 
-    // 1回目: Added → Changed で初回処理（サイズ同じなので変化なし）
+    // 1回目: Arrangement の on_add が GlobalArrangement を既定（大きさ 0）にするので何もしない
     schedule.run(&mut world);
-    let wp = world.get::<WindowPos>(entity).unwrap();
-    assert_eq!(
-        wp.size,
-        Some(SizeI {
-            width: 400,
-            height: 300
-        })
-    );
-    assert_eq!(wp.position, Some(Point { x: 100, y: 200 }));
 
     // DPI 125% に変更 → レイアウト再計算でサイズが小さくなる (250x187)
     world.get_mut::<GlobalArrangement>(entity).unwrap().bounds = wintf::ecs::layout::D2DRect {

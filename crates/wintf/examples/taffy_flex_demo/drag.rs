@@ -25,7 +25,7 @@ pub(crate) fn on_container_pressed(
             // Ctrl+左クリックでイベントを停止
             if state.ctrl_down && state.left_down {
                 info!(
-                    "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, {}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, {}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     wlabel,
@@ -58,7 +58,7 @@ pub(crate) fn on_container_pressed(
             // 右クリック検出
             if state.right_down {
                 info!(
-                    "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, {}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, {}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     wlabel,

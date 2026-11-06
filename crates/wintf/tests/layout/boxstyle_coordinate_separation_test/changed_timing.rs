@@ -5,7 +5,7 @@ use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension, sync_window_arrangement_f
 use wintf::ecs::window::{DPI, Window, WindowPos};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{Arrangement, GlobalArrangement};
-use wintf::ecs::{Point, SizeI};
+use wintf::ecs::{Offset, Point, SizeI};
 
 /// 位置のみ変更時に Changed<BoxStyle> が発火しないことを検証
 ///
@@ -69,6 +69,11 @@ fn test_changed_boxstyle_not_fired_on_position_only_change() {
     world.get_mut::<WindowPos>(entity).unwrap().position = Some(Point { x: 500, y: 300 });
     schedule.run(&mut world);
 
+    // 位置の変更そのものは Arrangement へ届いている（係が素通りしていない）
+    assert_eq!(
+        world.get::<Arrangement>(entity).unwrap().offset,
+        Offset { x: 500.0, y: 300.0 }
+    );
     let after_pos_change = world.resource::<ChangedBoxStyleCount>().0;
     assert_eq!(
         initial_count, after_pos_change,

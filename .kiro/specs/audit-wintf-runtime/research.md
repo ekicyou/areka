@@ -1143,3 +1143,125 @@ crate の外から見えない口（`pub(crate)` と private）。知らせに�
 - 3.1: 119 件を全部「直す」（115）か「直さずに残す」（4）に確定した（`requirements.md` の「指摘の扱い」）。直すと確定した 115 件のうち公開の口に響くものは上の表のとおり。
 - 3.2: 直さずに残したのは 21・22・23・88 の 4 件だけで、どれも ⑵（描画の木の部品・開発者の裁定 2）。⑴・⑶ で残したものは 0 件。
 - 3.7: 20 タスクを越えたが、開発者の裁定 6（「1 本のまま」）のとおり 1 本で進めた（大タスク 8・小タスク 28）。
+
+---
+
+## 15. かけ直し（タスク 8.3・V2・2026-11-06）
+
+- 物差し: 2 節〜3 節と同じ `ponytail-audit`（5.3.2）。「最大 20 件」を外して全件、「読まなかった所」を残さず全部読む（要件 2.2・2.3・8.1）。
+- やり方: 範囲のファイルを 6 つの束に分け（`src/runtime/` 14・`src/com/`＋`numerics/`＋`api*`＋根のファイル 26・`tests/` の入口と com・drag・ecs・widget・window・assets 31・`tests/graphics/`＋`tests/visual/` 26・`tests/layout/` 24・`examples/` 12）、束ごとに読み手を立てて全行を読ませた。読み手には 7 節の「指摘にしなかった判断」と残す 4 件を渡した。返った指摘は根拠の行を読み直し、確かめを直したものは較正で赤を見た。
+- 基点: `HEAD` `4ba313e7`（8.1 の後）。
+
+### 範囲の数え直し（要件 1.3）
+
+範囲は 1 節と同じ（`git ls-files crates/wintf` のうち `crates/wintf/src/ecs/` の下を除いたもの）。
+
+| 時点 | 数 |
+|---|---:|
+| 測った基点 `88eb0a43` | 160 |
+| 取り込みの後（13 節） | 140 |
+| かけ直しの時（`4ba313e7`） | **133** |
+
+- 基点との差: 消えた 33・増えた 6。増えた 6 は `src/com/dwrite_cluster_tests.rs`・`src/runtime/{tick_bridge_vsync_tests, ui_com_init_tests, window_factory_creation_tests}.rs`（この spec が足した）と `tests/graphics/device_lost_recovery_test.rs`・`tests/visual/window_join_test.rs`（13 節の取り込みで増えた 2 本）。どれもかけ直しで読んだ。
+- **読んだ数: 133 / 133**（範囲の数と一致）。画像 6 枚（`tests/assets/`）は種類と大きさを確かめ、どれも参照があることを grep で確かめた。`tests/**/*.rs` 76 本はどれも入口の `#[path]`／`mod` から届く。
+- このタスクの直しの後の範囲は **132**（`tests/graphics/reinit_unit_test.rs` を消した。改名の 2 本 `tests/widget/label_defaults_test.rs`・`examples/postmessage_click_demo.rs` は数を変えない）。
+
+### 件数（1 回目のかけ直し・要件 2.5・8.3）
+
+| 組 | 件数 |
+|---|---:|
+| 必ず直す（Must fix） | **0** |
+| 直したほうがよい（Should fix） | **14** |
+| できれば（Nice to have） | **21** |
+| 計 | **35** |
+
+- 残す 4 件（**21・22・23・88**・要件の討議の裁定 2・`wintf-visual-tree` へ申し送り）は数に入れていない。読み手は `numerics/` にこの 4 件のほかの指摘を返さなかった。
+- 番号は 3 節の続き（120〜154）。
+- 指摘にしなかったもの（決めごと）: `build.rs` が見本のフォルダに `rerun-if-changed` を付けない件（タスク 1.5 の Implementation Notes・審査で承認した判断）・`tests/graphics/wuc_restart_regression_test.rs` の A・B の 2 本（完了した spec の回帰の檻の「独立した 2 本の `#[test]`」の形・要件 4.5）。
+
+### 指摘と直し
+
+「較正」は design.md「直したテストの較正」の作法（本番に 1 度壊し方を入れて赤を見て、バイトごと戻した）。
+
+| 番号 | 組 | 場所 | 中身 | 直し | 較正（壊し方 → 赤のテスト） |
+|---|---|---|---|---|---|
+| 120 | Should | `src/runtime/window_factory.rs` のテスト | 二度目の `create_windows` で作り直さないことを `!registry.is_empty()` で見る。registry は Entity を鍵に上書きするので、作り直しても緑 | 同じ Entity の `WindowHandle.hwnd` が替わらないことを見る | `window_system.rs` の `Without<WindowHandle>` を外す → `create_windows_new_path_spawns_registers_and_handles_without_class_error` |
+| 121 | Nice | `src/runtime/tick_bridge.rs` のテスト | 省略の回の掃き出しを、RAII の再入ガードが戻ったことで見る（掃き出しを消しても緑） | 窓書込を 1 本積み、省略の回の後にキューが空であることを見る | `tick_one_frame_with` の `flush_window_pos_commands()` を消す → `tick_one_frame_skips_the_world_tick_when_the_gate_finds_no_reason` |
+| 122 | Nice | `src/runtime/wndproc_bridge_drag_cancel_tests.rs` の t13 | テスト自身が借用を握るので「借用は握られたまま」「画面更新の回数は増えない」は恒真 | 恒真の 2 つの確かめを消し、名を `t13_reentrant_handling_returns_none_and_skips_side_work` に（目印の確かめと対照は残る）。古い名を名指していた `doc/COMPAT_ARCHITECTURE.md:360` の判定の欄も新しい名へ直した（`git grep t13_reentrant_handling_returns_none_keeps` ＝0） | 確かめを消しただけ |
+| 123 | Should | `src/com/d2d/mod.rs` | 公開の `d2d_create_device` は呼び手 0。`D2D1CreateDevice` は隠れたファクトリを作るので、`GraphicsCore` と混ぜると別のファクトリの装置になる | 消した（`Dxgi` の import も）。ツリー全体の grep 0 件 | 消して解いた（設計の討議の裁定 6） |
+| 124 | Nice | `src/com/wuc.rs` の `begin_draw_roundtrip` | `offset >= 0` は既定値 (0,0) でも通り、`GetTransform` は何も見ない | 恒真の確かめと `GetTransform` を消し、BeginDraw／EndDraw が通ることだけを見ると書いた | 確かめを消しただけ |
+| 125 | Nice | `src/com/wic.rs` の `load_bitmap_source` と写しの `areka-emo-atlas/src/decode/wic_arm.rs` の `decode_inner` | 名を `to_string_lossy` で UTF-8 にしてから渡すので、対のないサロゲートを含む名が U+FFFD に化け、在るファイルが開けない | 両方を `HSTRING::from(path)`（UTF-16 のまま）に（1.4 と同じく 2 つを同じ形に保つ・写しは範囲を広げて直した＝コントローラの裁定）。テスト `load_bitmap_source_opens_name_with_lone_surrogate`（`src/com/wic_tests.rs`）・`decode_opens_name_with_lone_surrogate`（`areka-emo-atlas/src/decode/wic_arm_tests.rs`）。置き場はどちらも `target/` の下 | どちらも `to_string_lossy` に戻す → それぞれのテスト |
+| 126 | Should | `tests/com/d2d_ext_test.rs` | 名が「記録する」と言うが、確かめは EndDraw と close の成否だけ（包みが何も描かなくても緑） | 名を `device_context_wrappers_record_into_command_list_without_d2d_error` にし、確かめるのは D2D がエラーを返さないことだけと書いた（包みは 1 行の素通し） | 主張を狭めただけ（本番は変えない） |
+| 127 | Nice | `tests/drag/window_dragging_filter_test.rs` | 1 回目の確かめは `Arrangement` の on_add が境界を 0 にするので生成の値を繰り返すだけ | 生成の境界と 1 回目の確かめを消した（後の 250x187 の確かめは残る） | 確かめを消しただけ |
+| 128 | Nice | `tests/ecs/world_lifecycle_test.rs`・`dola_animator_test.rs` | `EcsWorld` の Debug は型名を含むかだけ。`runtime()` の本は型の確かめと固定の文字列だけ | `EcsWorld` は `"EcsWorld { .. }"` と等しいことを見る。`runtime_accessor_returns_inner_runtime` は消した | Debug を `.field(..).finish()` に → `ecs_world_debug_is_non_exhaustive` |
+| 129 | Nice | `tests/widget/vertical_text_layout_test.rs` | 名が縦書きを言うが、中身は `Label` の既定値だけ | `tests/widget/label_defaults_test.rs` へ改名（`tests/widget.rs` の宣言も） | 改名だけ |
+| 130 | Nice | `tests/com/common/mod.rs` の `with_com_initialized` と同じ形の `areka-emo-atlas/src/decode/wic_arm_test_support.rs` の `with_arm` | `CoInitializeEx` の失敗を捨て、入っていない apartment にも `CoUninitialize` を呼ぶ | 両方とも、入れたときだけ `CoUninitialize`。`RPC_E_CHANGED_MODE` のほかの失敗は落とす（`with_arm` は範囲を広げて直した＝コントローラの裁定） | テストの補助だけ（本番なし・ふだんの実行では赤にする道が無いので較正しない） |
+| 131 | Should | `tests/visual/hierarchy_reparent_gap_test.rs` の輪の親の本 | 30 秒で panic しても GPU の持ち主のスレッドは回り続け、後の GPU テストが待ち続けて実行が終わらない | 時間切れは `eprintln!` して `std::process::exit(1)` | 時間切れの道だけ（輪で止まる壊し方は実行を止めるので入れない） |
+| 132 | Should | `tests/graphics/clip_sync_system_test.rs` の 3 本 | `error` の数だけを見るので、`SetClip(&clip)` や `SetClip(None)` を消しても緑。大きさ 0 の本は先に切り抜きを当てていない | `Visual::Clip()` で当たっている・外れたを見る。大きさ 0 の本は 100x50 で当ててから 0 にする | `SetClip(None)` を消す → `clip_sync_clears_clip_when_clip_is_none`・`clip_sync_clears_clip_when_size_is_zero`。`SetClip(&clip)` を消す → `clip_sync_applies_all_clip_shape_variants` ほか 3 本 |
+| 133 | Should | `tests/visual/graphics_auto_creation_test.rs` の無効な装置の本 | WUC の資源を入れていないので、装置の確かめを消しても合成器が無いことで止まり緑 | GPU の持ち主のスレッドで有効な WUC の資源を入れてから装置を無効にする | `visual_resource_management_system` の `is_valid` の守りを消す → `test_no_visual_graphics_with_invalid_graphics_core` |
+| 134 | Should | `tests/graphics/surface_systems_test.rs` の無効な装置の本 | 早く戻る守りを消しても変化の印は立たず緑 | 消した（`render_surface_with_invalid_core_returns_without_touching_core`） | 消して解いた |
+| 135 | Should | 同じファイルの `render_surface_skips_invalid_surface_without_error` | 描画面が無効のままであることは常に真で、名の「エラーなし」を数えていない | `count_levels` で `error == 0` を見る | 描画面の無い道に `error!` を足す → `render_surface_skips_invalid_surface_without_error` |
+| 136 | Should | `tests/graphics/init_window_graphics_test.rs` の無効な HWND の本 | 失敗が `error!` を残すかを見ない（黙って捨てても緑） | `count_levels` で `error >= 1` を見る | `init_window_graphics` の失敗の `error!` を `debug!` に → `invalid_hwnd_fails_gracefully_without_window_graphics` |
+| 137 | Nice | `tests/graphics/surface_optimization_test.rs` | 開発用の依存 `bevy_app` を使うのはこの 1 本だけ | 素の `Schedule` で回す形にし、`bevy_app` を `crates/wintf/Cargo.toml`・根の `[workspace.dependencies]`・`Cargo.lock`・`.kiro/steering/tech.md`・`.claude/skills/update/SKILL.md:65`（揃えて上げる `bevy_*` の一覧）から外した（依存 -1） | 書き換えただけ（確かめは同じ） |
+| 138 | Nice | `tests/graphics/reinit_unit_test.rs` | 3 本とも `core_accessor_test.rs`・`components_test.rs` の部分集合。注記が無い型 `DCompGraphicsResource` を名指す | ファイルを消した（`tests/graphics.rs` の宣言・`core_accessor_test.rs` の注記も） | 消して解いた |
+| 139 | Nice | `tests/graphics/dcomp_integration_test.rs` | WUC の資源の無効化の本は `window_pos_systems_test.rs` の写しで、名と文が「DComp」のまま | 写しの本と `setup_world` を消し、2 本を `window_visual_gets_graphics_parts`・`orphan_visual_gets_no_graphics_parts` に | 消して解いた |
+| 140 | Nice | `tests/graphics/core_test.rs`・`core_ecs_test.rs` | `test_graphics_core_creation`・`test_init_graphics_core_in_schedule` はほかの本と同じ確かめ | 2 本を消した | 消して解いた |
+| 141 | Nice | `tests/visual/component_test.rs` | 不透明度の 5 本・可視の 2 本が重なる | `set_opacity` を表の 1 本にまとめ、`set_visible_false` を消した | 書き換えただけ |
+| 142 | Nice | `tests/visual/window_join_test.rs` | 要らない `GraphicsCore`（実の D3D 装置）を作り、注記がそれを要ると書く | 2 本から `GraphicsCore` を外し注記を直した（緑のまま＝要らなかった） | 外しただけ |
+| 143 | Nice | `tests/visual/common/mod.rs` の `setup_graphics` | `GraphicsCore::new()` を素通しするだけの包み（20 か所） | 包みを消し、呼び手を `GraphicsCore::new()` に | 消して解いた |
+| 144 | Should | `tests/layout/taffy_advanced_test/tree_sync.rs` の漏れの本、本番の根 `src/ecs/layout/taffy.rs` の `remove_node`・`src/ecs/layout/systems/taffy_systems.rs` の `cleanup_removed_entities_system` | 対応の表しか見ず、taffy の木の節が残っても緑。本番は対応を先に消してから `tree.remove` し（失敗すると対応の無い節が残る）、掃除の係は `let _ =` で失敗を捨てる（記録の無い失敗の道） | テストは `taffy().total_node_count() == 0` を見る。範囲を広げて本番も直した（コントローラの裁定）: `remove_node` は木から先に消し、消せたときだけ対応を消す。掃除の係は失敗を `error!` で残す（`monitor_systems.rs:L408` と同じ形） | `remove_node` の `tree.remove` を消す → `test_mapping_cleanup_prevents_memory_leak`。失敗の道（順と `error!`）は taffy 0.13 の `TaffyTree::remove` が常に `Ok` を返す（在らぬ鍵は添字で panic）ので本物の失敗を起こせず、テストも較正も作れない（到達しない守り） |
+| 145 | Should | `tests/layout/taffy_layout_integration_test/unit_integration.rs` | 古い TODO を理由に高さを確かめない | 高さ 450 を見る（緑＝明示の高さは反映されていた・隠れた欠陥は無かった） | 足した確かめが今の本番で緑であることを見た |
+| 146 | Should | `tests/layout/hierarchical_bounds_test.rs:L33-L43`、`tests/layout/arrangement_bounds_test/arrangement.rs:L93-L101`、本番の根 `src/ecs/layout/arrangement.rs` の `From<Arrangement> for GlobalArrangement` | 親の無い根（`From<Arrangement>`）は自分の倍率でずらしを伸ばし、子（`Mul`）は親の倍率で伸ばす。2 つの決まりを両方テストが固定している。DPI 192 で親の無い窓のずらし 200 は境界 400 になる | 範囲を広げて本番を直した（コントローラの裁定・`audit-wintf-layout-widget` は走っていない）。`From` を `GlobalArrangement::default() * arrangement` にした（行列は同じ・境界だけが変わる。使わなくなった `transform_rect_axis_aligned` の import を外した・関数は公開の口なので残す）。固定していた期待（`test_hierarchical_bounds_calculation`・`test_global_arrangement_from_arrangement`・`tests/ecs/tree_propagation_test.rs` の `sync_simple_applies_scale_to_root_global`・`propagate_three_level_chain_accumulates`）を直し、`test_feedback_loop_converges_dpi_192_without_parent`（`feedback_loop_convergence_test.rs`）を足した。古い決まり（親の無い根は `bounds.left = offset × DPI_scale`）を書いていた `src/ecs/layout/systems/window_pos_systems.rs` の `sync_window_arrangement_from_window_pos` の注記も直した（`git grep "offset × DPI"` ＝0）。呼び手は下の「146 の呼び手」 | 前の `From`（行列で local_bounds を写す）に戻す → `test_global_arrangement_from_arrangement`・`test_hierarchical_bounds_calculation`・`test_feedback_loop_converges_dpi_192_without_parent` |
+| 147 | Nice | `tests/layout/boxstyle_coordinate_separation_test/window_sync.rs` | 生成の大きさが taffy の結果と同じ 800x600 なので、大きさを書かなくても緑 | 生成の大きさを 0x0 に | `update_arrangements_system` が窓の大きさを書かないようにする → `test_update_arrangements_skips_window_offset` ほか 1 本 |
+| 148 | Nice | 同じ組の `changed_timing.rs` | 位置の変更が処理されたかを見ない（係が素通りしても緑） | 2 回目の後に `Arrangement.offset == (500,300)` を見る | 係の `arrangement.offset = new_offset` を消す → `test_changed_boxstyle_not_fired_on_position_only_change` |
+| 149 | Should | `examples/tooltip_demo.rs` の F9 | Alt+F4 で閉じた窓の実体に `entity_mut` で触り panic | `get_entity_mut` で無ければ戻る | example（コンパイル・設計の討議の裁定 6） |
+| 150 | Should | `examples/graphics_reinit_test.rs`・`examples/postmessage_click_test.rs` | 「テスト」と名乗るが、失敗しても終了コード 0 | `graphics_reinit_test` は確かめが通らなければ終了コード 1。`postmessage_click_test` は合否を出さない目で見るデモなので `postmessage_click_demo` へ改名 | example |
+| 151 | Nice | `examples/taffy_flex_demo/main.rs` | 2 秒で Window 1 を Window 2 と同じ点へ送り 2 枚が重なる。注記が「中央付近」と書くが左上から 10% | 点を求める関数に割合を渡す形にし、Window 2 は 10%、Window 1 の移動先は 50% | example |
+| 152 | Nice | `examples/taffy_flex_demo/drag.rs`・`handlers.rs` の 8 か所 | クライアント座標を `screen=` と記録する | `client=` に | example |
+| 153 | Nice | `examples/taffy_flex_demo/diagnostics.rs` | `BoxStyle.size` を px にする 20 行が 2 か所に写してある | `px_size` 1 つにまとめた | example |
+| 154 | Nice | `examples/tooltip_demo.rs` の F8 | 登録し直しの失敗を `.ok()` で捨てる | `error!` を残して `None`。「登録し直した」の `info!` は成功のときだけ出す | example |
+
+### 公開の口の変化（14 節の表への追記・要件 4.4）
+
+| 番号 | 口 | 変化 | 今のコードの grep |
+|---|---|---|---|
+| 123 | `wintf::com::d2d::d2d_create_device` | 消える | 0 |
+
+- 125 は形が同じ（`load_bitmap_source(factory, path)`）。対のないサロゲートを含む名のファイルが開けるようになる。
+
+### 146 の呼び手（直す前に確かめた）
+
+- `From<Arrangement> for GlobalArrangement` を呼ぶのは、ツリー全体（`.kiro/specs/`・`vendors/` を除く）で `src/ecs/common/tree_system.rs` の汎用の伝播（`sync_simple_transforms`・`mark_dirty_trees`・`propagate_parent_transforms` の `(*transform).into()`・L39・L46・L100、`Arrangement`／`GlobalArrangement` で使うのは `src/ecs/layout/systems/arrangement_systems.rs`）と、`arrangement.rs:L73` の文書の例と、テストだけ。ほかの crate からの利用は 0。
+- 本番で親を持たずに `Arrangement` を持つ実体は 2 種: `LayoutRoot`（倍率 1・ずらし 0 なので答えは変わらない）と、`ensure_window_parent_system` が根へつなぐ前の窓。窓の `Arrangement.offset` は `sync_window_arrangement_from_window_pos` が物理の位置をそのまま入れる（「Window は LayoutRoot (scale=1.0) の子なので offset = position（DPI除算不要）」）ので、正しい境界はずらしのまま。前の決まり（DPI 192 で 200 → 400）は `window_pos_sync_system` が位置を倍にして書き戻す誤りで、前の伸ばしに頼って正しく置かれている呼び手は無かった。DPI 96 では前と同じ答え。
+- 変わるのは `bounds` だけ（`transform` は前と同じ `translation * scale`）。倍率が 1 でない根を置くテストは 4 本で、どれも前の決まりを固定していた（上の 146 の行で直した）。
+
+### 狭めた 2 件（コントローラが承認）
+
+- 126: 包みは 1 行の素通しで、描いた中身を画素や沈みの口で見るのは包みの確かめとして釣り合わない。名と注記を「D2D がエラーを返さないこと」に狭めた。
+- 131: 輪の親で止まる壊し方を入れると実行が終わらなくなるので、時間切れの道は較正しない。
+
+### 2 回目のかけ直し（直したファイル）
+
+直したファイル（wintf の `src/` 10＝範囲の 7 と範囲を広げた `ecs/layout/arrangement.rs`・`ecs/layout/taffy.rs`・`ecs/layout/systems/taffy_systems.rs`・`tests/` 31・`examples/` 7、`areka-emo-atlas` の 3、依存と文書 5＝`Cargo.toml` 2・`Cargo.lock`・`.kiro/steering/tech.md`・`.claude/skills/update/SKILL.md`）の差分を読み直した。新しい指摘は 0 件（必ず直す 0・直したほうがよい 0・できれば 0）。
+
+### 残っている指摘（21・22・23・88 を除く）
+
+**0 件**（必ず直す 0・直したほうがよい 0・できれば 0）。1 回目の 35 件は全部直した（146・144 の根・125 の写しは範囲を広げて直した）。残すのは要件の討議で裁定した **21・22・23・88** の 4 件だけ。
+
+### 申し送り（範囲を広げて直した分の知らせ）
+
+| 相手 | 番号 | 中身 |
+|---|---|---|
+| `audit-wintf-layout-widget` | 146・144 | `src/ecs/layout/arrangement.rs` の `From<Arrangement> for GlobalArrangement`、`src/ecs/layout/taffy.rs` の `remove_node`、`src/ecs/layout/systems/taffy_systems.rs` の `cleanup_removed_entities_system` をこの spec で直した。あちらのギャップ分析はこの 3 か所を数え直さない |
+| `audit-emo-atlas` | 125 | `src/decode/wic_arm.rs` の名の渡し方をこの spec で直した（テストは `wic_arm_tests.rs`）。同じ crate の `wic_arm_test_support.rs` の `with_arm`（130 番と同じ形）もこの spec で直した。あちらはこの 2 か所を数え直さない |
+
+### 排他テストの机での走行（2026-11-06）
+
+| 段 | 結果 |
+|---|---|
+| 全体テスト `pwsh -NoProfile -File tools/test-all.ps1`（基点 `4ba313e7`＋このタスクの未コミットの変更） | **緑**。13 段とも OK（x64 workspace tests 468 秒・i686 tests・fmt・encoding ほか）・「all steps green」 |
+| `graphics_reinit_test` | 緑。4 秒で `[TEST SUCCESS] 2 窓とも正常に再初期化されました！`（2 窓とも generation=1）、13 秒で閉じ終了コード 0 |
+| `taffy_flex_demo` | 緑。副モニターあり。2 秒で `[Test] Window 1 moved to non-primary monitor (-1280, 995) via WindowPos`（50% の点・Window 2 は 10% の点）、DPI の写しは 1 秒（Window 1 が 192・Window 2 が 144）と 3 秒（両方 144）、64 秒で閉じ終了コード 0。クリックは送っていないので `client=` の行は出ていない |
+| `postmessage_click_demo` | 緑。`Color toggled: RED -> YELLOW`（2 秒）・`YELLOW -> RED`（4 秒）・`10s: Closing window`、終了コード 0 |
+| `tooltip_demo`（`TOOLTIP_DEMO_EXIT_MS=20000`） | **緑**（2 回目）。1 回目は送った鍵が 1 つも届かなかった。真の原因は手順の台本の `INPUT` の大きさの誤り（x64 で 40 バイトのところを 32 バイトと宣言し、SendInput が全部断って 0 を返した）で、台本は戻り値を見ずに「送った」と書き、前面の窓の pid の確かめも関数の出力が戻り値に混ざって常に真だった。台本を直し（大きさ 40・戻り値が入れた数と等しいかを見る・pid の確かめは真偽だけを返す）、窓を立てない空回しで確かめてから 2 回目を回した。2 回目: 鍵ごとに前面の窓の pid がデモ（26836）であることを確かめて送った。Alt+F4 で `(other)` が閉じ（窓の一覧から消えた）、その後の F9 で panic せず（149・F9 の行は出ない＝実体が無いので戻った）、F8 を 2 度で `F8: 「1 行」の範囲を取り消した removed=true`・`F8: 「1 行」の範囲を登録し直した id=Some(..)`（154 の道は成功の側を通った。失敗の `error!` の側は透過の窓を閉じないと通らない）、20 秒で `TOOLTIP_DEMO_EXIT_MS=20000 に達したので終わる`・終了コード 0 |
+

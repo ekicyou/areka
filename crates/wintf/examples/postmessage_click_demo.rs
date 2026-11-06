@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! # PostMessage Click Debug Test
+//! # PostMessage Click Debug Demo（目で見るデモ・合否は出さない）
 //!
 //! PostMessageW で WM_LBUTTONDOWN / WM_LBUTTONUP をプログラム的に投入し、
 //! クリック後の描画パイプライン（Brushes → draw_rectangles → GPU 合成（WUC）present）
@@ -15,7 +15,7 @@
 //!
 //! ## 使い方
 //! ```
-//! RUST_LOG=debug cargo run --example postmessage_click_test
+//! RUST_LOG=debug cargo run --example postmessage_click_demo
 //! ```
 
 use bevy_ecs::name::Name;

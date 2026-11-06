@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy_ecs::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
 use windows::core::Result;
@@ -12,6 +13,9 @@ use wintf::ecs::{
     GraphicsCore, Point, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle, WindowPos,
 };
 use wintf::*;
+
+/// 4 秒の確かめが通ったら立つ（立たずに終わったら終了コード 1）。
+static PASSED: AtomicBool = AtomicBool::new(false);
 
 /// GraphicsCore再初期化システムの統合テスト
 ///
@@ -159,6 +163,7 @@ fn main() -> Result<()> {
                 all_success = false;
             }
             if all_success && graphics_valid {
+                PASSED.store(true, Ordering::SeqCst);
                 println!(
                     "\n  🎉🎉🎉 [TEST SUCCESS] {} 窓とも正常に再初期化されました！",
                     count
@@ -227,5 +232,9 @@ fn main() -> Result<()> {
 
     mgr.run()?;
 
+    if !PASSED.load(Ordering::SeqCst) {
+        eprintln!("[TEST FAIL] 作り直しの確かめが通らなかった");
+        std::process::exit(1);
+    }
     Ok(())
 }

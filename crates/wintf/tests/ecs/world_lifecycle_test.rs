@@ -102,9 +102,5 @@ fn default_matches_new_initial_state() {
 #[test]
 fn ecs_world_debug_is_non_exhaustive() {
     let ecs_world = EcsWorld::new();
-    let debug_str = format!("{:?}", ecs_world);
-    assert!(
-        debug_str.contains("EcsWorld"),
-        "Debug 出力に型名を含む: {debug_str}"
-    );
+    assert_eq!(format!("{:?}", ecs_world), "EcsWorld { .. }");
 }

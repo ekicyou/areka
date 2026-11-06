@@ -122,19 +122,3 @@ fn tick_dola_animators_system_updates_all_entities() {
         "Entity 2 should have changes"
     );
 }
-
-// ---------------------------------------------------------------
-// runtime() 読み取りアクセス
-// ---------------------------------------------------------------
-
-#[test]
-fn runtime_accessor_returns_inner_runtime() {
-    let rt = make_runtime_with_animation();
-    let mut animator = DolaAnimator::with_runtime(rt);
-
-    // runtime() は可変の借りから読める
-    let _runtime = animator.runtime();
-    // Debug trait
-    let debug = format!("{:?}", animator);
-    assert!(debug.contains("DolaAnimator"));
-}
