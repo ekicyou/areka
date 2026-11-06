@@ -288,3 +288,47 @@
 - **#39**: wintf の心拍が delay の間をどれだけ埋めるか（測っていない・推定）。
 - **#10 の panic**: std の文書の約束から言っていて、実際に再現はしていない（NaN を 20 件以上含む並べ替えのテストで再現の形を作る）。
 - 指摘 #1〜#7・#20・#21・#40・#47 の「壊しても緑」「誤った結果」は、コードを読んで辿った結果で、赤のテストを回しての確認はしていない（直しのテストで、直しを外すと赤になる形を作る）。
+
+## 11. 設計の段の調べ（2026-11-06・`/kiro-spec-design audit-dola -y`）
+
+- **発見の型**: 今ある仕組みの直し（Extension）＝軽い発見（つなぎ目を中心に）。外の調べ（Web）は要らない＝依存を足さず、標準ライブラリ（`f64::total_cmp`・`Vec::pop_if`〔Rust 1.86〕・`std::sync::OnceLock`・`f64::round`）と、すでに依存にある `thiserror`（ワークスペースの依存・`Cargo.lock` は変わらない）だけを使う。
+- **使った決まり**: kiro-spec-design の rules（design-principles・design-discovery-light・design-synthesis・design-review-gate）・ponytail の「いちばん小さな完全な変更」（消せるものは消す・呼び手とテストまで直し切る）・steering（`product.md`・`tech.md`・`structure.md`・`roadmap.md` の C18 の行と約束 ⑴〜⑺）。
+- **読み方**: 範囲の外のテストの当たりは、読むだけのサブエージェント 1 本に任せた（結論だけを受け取った）。ほかはこちらでファイルを開いて確かめた。
+
+### 11.1 §10 の調べの答え
+
+1. **#8 のアンカーは格子に載るか**: 載る。本番のアンカーは必ず **0.0**。`crates/areka-ghost/src/dispatcher.rs:392-399` は、トークの最初の `now` を起点にして `(now - base) / 1000.0` を送る＝最初の Tick は 0.0 で、`drive.rs:318` がそれを刻む。後の Tick は `n / 1000.0`（格子の値）。0.0＋x は x そのもの＝本番ではアンカーとの和は今も外れない。本番で外れるのは相対の和（合図の始まり＋長さ）だけ。§3 #8 の「約 11.6%」は任意のアンカーで測った数で、本番の形ではない。要件 7.7 はテストと後の `dola-interrupt-ticks`（アンカーが 0 でなくなる）のための決めとして、同じ関数を通す形で守る。
+2. **範囲の外で結果が変わるテストの数**: dola の cue を回す範囲の外のテスト（`areka-emo-text`・`areka-sakura`・`areka-seriko`・`areka-ghost`・本体 `areka` の `emo2_boot`・wintf）を全部当たった。**時刻で進めるテストで結果が変わるものは 0 本**。変わるのは `crates/areka-sakura/src/compile_sheet_tests.rs` の **2 本だけ**で、どちらも期待の値を f64 の和で作っているため。
+   - `trailing_explicit_wait_remains_in_sheet_and_extends_extent`（333 行目付近）: `absolute_end_time() == d + w`（d=0.15・w=0.8＝f64 では 0.9500000000000001）。
+   - `append_epilogue_appends_carrier_at_tail_horizon_without_extending`（459 行目）: `append_epilogue` は `absolute_end_time()`（直した後は 0.95）に置くが、テストの補助 `relative_horizon`（381-386 行目）が f64 の和を返す。
+   - 直し: 期待を格子の値（`ms_to_secs(150 + 800)` の形）か `absolute_end_time()` から作る。このファイルは要件 6.3 の触れない所に入らず、C18 のほかの 7 本の触るファイルにも入らない＝**前の段で直す**。
+   - 当たらない理由（要点）: emo-text の先読みのテスト（アンカー 100.0・150.0・刻みは `anchor + t`）の合図の時刻は、どれも 50 ms の倍数（文字 50 ms・待ち 150／300／450 ms）で最大約 3.0 秒。アンカー 100.0・150.0 と 50 ms の倍数（20 秒まで）で、f64 の和と格子の和が違う組は 0（python で全部数えた）。drive の各テストのアンカーは 0.0（一部 7.0・10.0・20.0）で、刻みは字面か `absolute_end_time()` から作る。自前の和（0.25+0.8 など）は 1 つずつ確かめて格子の和と同じ値。本体の `emo2_boot` のテストは期待を `absolute_fire_time()`／`absolute_end_time()` から作る＝一緒に動く。wintf の `dola_animator_test.rs` は storyboard の層だけで cue を使わない。
+3. **ずれの向き**: 格子の和と f64 の和は、どちら向きにも 1 ulp ずれる（始まり 0〜5 秒の 1 ms 刻み × 長さ 9 種で、f64 の和が小さい組 5,916・大きい組 4,959）。f64 の和が格子より小さい組では、「f64 の和の時刻ちょうどで刻んで届く・終わる」を見るテストが「まだ」に変わる＝dola の中のテストで期待を f64 の和で作っているもの（§3 #8 の T1 の 3 本ほか）は、期待を格子の値か `absolute_end_time()`／`occupancy_horizon()` から作る形へ改める（要件 4.5）。
+4. **#2・#3 と `loop_integration_test.rs` の期待**: このファイルの台本は 1 変数・delay 0・loop_offset 無し（`loop_doc`・`short_duration_loop_doc`）＝最後のセグメントの終わりと周回の終わりが同じ時刻で、周回の処理（`update_internal` の Step 2）が評価（Step 3）より先に走る＝#2・#3・#4 の直しで期待は変わらない。変わるのは loop_offset のテスト（#44 で書き直す）と `timeline_manager/tests.rs` の 2 本（`expired_entry_auto_removal`・`evaluate_multi_segment_progression`）。
+5. **#39 の心拍**: 測らない。wintf の起床の旗は大域の静的な値（`crates/wintf/src/ecs/world/tick_wake.rs:260`）で、並んで走るテストからは立つ・立たないを確かめられない。走っているインスタンスがある間は毎フレーム起こすのが正しい形なので、心拍がどれだけ埋めるかは直しの要否に関わらない。檻は dola の側（delay の間、変化が 0 件でも `has_instances()` が真）に置き、旗の行は 1 行の結線にする。
+6. **#10 の panic**: 再現の形は作らない（std の約束は「panic してよい」で、必ず panic するわけではない）。檻は「NaN を 20 件以上含む並べ替えが `total_cmp` の順（正の NaN が末尾）になる」を見るテスト。今の `partial_cmp(..).unwrap_or(Equal)` では NaN の置き場が入力の順で変わるので、このテストは直しの前に赤になる。
+7. **#5**: 要件 11.7 で決着（変数を持つ遷移は同じ変数の配列上の直前のエントリへ・変数を持たないエントリは配列の 1 つ前へ）。
+
+### 11.2 合成（design-synthesis）
+
+- **一般化**: 件 1 の 7 か所の和（#8・#9・要件 7.7）は「2 つの秒を足す」という 1 つの問題＝関数 `sum_on_ms_grid` 1 本。#9 の「2 つの口が別の規則で終わりを出す」は、相対の終わりを出す私的な関数 1 本を 2 つの口が呼ぶ形で消える。#29・#30・#31・#32・#58 は「読み込みで通った文書は start で落ちない」という 1 つの約束にまとまる＝読み込みのときに全ストーリーボードを compile にかけ、start は検査を省く crate の中の入口を使う。
+- **作るか借りるか**: 依存を足さない（C18 の約束 ⑹・要件 5.6）。上の std の関数と、すでにある `thiserror` を使う。格子の判定も std の `round` だけで足りる。
+- **単純化**: 新しい本番のファイルは作らない。消すファイル＝`src/runtime/document_store.rs`（#57）・`tests/cue/tick_last_result_test.rs`（#22）・後の段の `src/playback.rs`（#26）と `tests/compile/serde_test.rs`（#73）。足すファイルは `src/runtime/facade_tests.rs`（DolaRuntime の中の欄を見るテストの置き場・#35・#43・#57 の移し先）の 1 つだけ。
+
+### 11.3 設計で決めたこと（要件 11 のほか）
+
+- `sum_on_ms_grid` は前の段では `pub(crate)`（`src/cue/schedule.rs`）。後の段（要件 7.9）で `pub` にして `dola::cue` から再公開する（後で使うための口を先に開けない）。
+- **#28**: 等しさとハッシュを同じ鍵（±0 を 1 つ・NaN を 1 つ）で作る。§3 の「`PartialEq` は変えない」案では、NaN の鍵は表で見つからない（HashMap は等しさで引く）ので intern の表が増え続ける欠陥が残る＝`PartialEq` を手書きにして Float の腕だけ鍵で比べる。範囲の外で `DynamicValue` を使う 13 ファイル（多くは本体 `emo2_boot` の合図のテスト）が NaN どうしの不等に頼っていないことを、実装のときにツリー全体で確かめる（要件 3.2）。
+- **#29**: 失敗の種類 `DolaError::InvalidNumber { location, field, value }` を 1 つ足す（足すだけ＝C18 で取れる）。エントリの形の誤り（#31 の `trigger_start_offset`・#32 の V7）は既存の `InvalidEntry` を使う。
+- **#39**: `has_instances()` は一時停止中のインスタンスも数える（一時停止のあいだに finish の期限が来る場合も刻みが要る＝正しい側に倒す）。
+- **テストの読み替えは前の段で**: #52（`update` → `tick`＋`last_result`・6 つの `#![allow(deprecated)]` も外す）・#13（`CuePlayer::ready()` を読むテスト → 記録する受け手）・#19（同値のテストを消す）は、テストだけの直しなので前の段で済ませる。後の段は公開の口を消すだけにして、相手の着地を待った後の差分を小さくする。
+- **#51 の `Compiled*` の serde の分**（`tests/compile/serde_test.rs`・`tests/trigger/serde_test.rs:57-85`）は、#73 が後の段でまとめて消すので、前の段では触らない（同じ所を 2 回直さない）。
+- **件 2** は前の段では何もしない（要件 8.1）。後の段で `stop`・`skip_barrier` を消す。
+- **要件 7.4 と #9 の読み合わせ**: 7.4 の「今と同じ値」は「格子へ丸めない」の意味と読む。非有限・負の長さの合図は #9 で clamp を通るので、`absolute_end_time` だけは今と違う値（`occupancy_horizon` と同じ値）になる。本番の台本は `areka-sakura/src/compile.rs:43` の事後条件でこの形を作らない。
+- **件 1 の檻のアンカー**: 「ちょうど届いたら完了」（7.3・7.7）の檻はアンカー 1.0・刻み `1950.0 / 1000.0` で組む。直す前の和 `1.0 + 0.9500000000000001` は 1.95 を越える＝直しを外すと赤になる（アンカー 1〜19,999 ms のうち 1,573 通りがこの形・python で数えた）。
+- **件 3 の `doc_lazy_continuation`**（`facade.rs:323`＝#52 の `update` の説明）: 前の段で説明の字下げを直して clippy を緑にし、後の段で `update` ごと消す（要件 9.1 は前の段の終わりでも満たす）。
+
+### 11.4 設計の見直しの門（design-review-gate）
+
+- 1 回目: 要件の番号の機械の当たりで 1.2・1.3・1.4・1.6・9.2・10.2 が範囲の書き方（「1.1〜1.7」）のため字面で見つからなかった＝対応表を 1 つずつの番号に直した。判断の見直しで、要件 7.4 と #9 の読み合わせ（上の 11.3）と、件 1 の 7.3 の檻が直す前に赤になるアンカーの選び方を足した。
+- 2 回目: 番号 71 件すべてが設計に載る・境目の 4 節が空でない・ファイルの計画に道がある・部品はどれもファイルの道を持つ＝通った。要件の穴や食い違いで止める所は無い。
