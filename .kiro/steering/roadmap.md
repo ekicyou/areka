@@ -1387,7 +1387,7 @@ Opus
 - [x] audit-wintf-graphics-world -- wintf の描画・World・見た目の木・共通の型を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
 - [x] audit-wintf-runtime -- wintf の ECS の外（刻みの土台・COM・窓の型・API・数の型）を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
 - [ ] audit-emo-text-layout-draw -- 文字の層のレイアウトと描画を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
-- [ ] audit-emo-text-state-actor -- 文字の層の状態・アクター・選択肢・窓を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
+- [ ] audit-emo-text-state-actor -- 文字の層の状態・アクター・選択肢・窓を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし。持ち込みの件（2026-11-06 `audit-emo-compose` の完了の棚卸から）: `actor_box.rs` の箱の位置の足し算が飽和しない（同 brief の Current State）
 - [ ] audit-dola -- dola（絶対時刻の台本の再生）を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
 - [x] audit-seriko -- SERIKO（シェルのアニメーション）を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
 - [ ] audit-emo-compose -- 面の合成を見直し、audit の指摘を全部直す（優先・区分 A・v0.1.0 の後の隙間）。Dependencies: なし
@@ -1863,7 +1863,8 @@ pasta（SHIORI のエンジン・`C:\home\maz\git\pasta`）の `novel-areka-cont
 #### Existing Spec Updates
 
 - [ ] wintf-visual-damage-redraw -- 件 1: ぱすたの面 1002 で何もしていないあいだの release 版の CPU（中央値 15.4%・WorkingSet 176 MB）が SSP 2.9.26（5.6%・94 MB）の約 3 倍。適用の外の約 12 ポイントの内訳（wintf の描き直し・present・DComp・刻み）を測ってから縮め、SSP の水準を目標にする。Dependencies: wintf-visual-tree, wintf-d2d-composite-rules
-- [ ] seriko-trigger-lottery-gaps -- 件 4: emo-compose の `nesting.rs` の `bind_targets`／`visible_parts` が、有効でコマの無い `bind+random` の pattern0 の先（ぱすたの 1410）を見える部品に数え、`plan.rs` の `flatten_surface`（`7b3c2d956` で描かなくした）と食い違う。seriko の `rebuild`・`moving_visible` が使う。一致の檻に pattern0 を持つ `bind+random` の文面を足して固定する（区分 B）。Dependencies: なし
+- [ ] seriko-trigger-lottery-gaps -- 件 4: emo-compose の `nesting.rs` の `bind_targets`／`visible_parts` が、有効でコマの無い `bind+random` の pattern0 の先（ぱすたの 1410）を見える部品に数え、`plan.rs` の `flatten_surface`（`7b3c2d956` で描かなくした）と食い違う。seriko の `rebuild`・`moving_visible` が使う。一致の檻に pattern0 を持つ `bind+random` の文面を足して固定する（区分 B）。Dependencies: なし（✅ 2026-11-06 `audit-emo-compose` のタスク 2.2〔指摘 4〕で解消）
+- [ ] seriko-trigger-lottery-gaps -- 件 5・件 6（2026-11-06 `audit-emo-compose` の完了の棚卸から・区分 B・負荷）: seriko の `parts.rs` の `rebuild` が見える部品を不動点まで引き直す V² の写し（`unwrite` も欄を全部写す）と、emo-compose の `NestReport::from_world`・`shape_issues` が element定義ごとに `reaches` を引く深さの 2 乗。同 brief の「件 5・件 6」の節
 - [ ] clippy-199-lints -- 件 1: emo-compose のテストの `chunks_exact` 5 か所（列挙済み・今も残る）と、emo-present のテスト 5 本の 7 件（`chunks_exact` 4・`type_complexity` 2・`assertions_on_constants` 1・列挙の外）。emo-present の本番のコードは `--no-deps` で 0 件。Dependencies: なし
 
 ### v0.1.0 の版の門の実機の申し送り（2026-11-01 `/kiro-discovery` で起票）

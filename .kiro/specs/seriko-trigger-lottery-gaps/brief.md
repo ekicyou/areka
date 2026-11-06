@@ -9,7 +9,9 @@ SERIKO の引き金と抽選に、決まりの食い違いが 3 件残ってい�
 - **件 1（旧 `seriko-trigger-teardown-gaps`・区分 B）**: interval の 3 語（`talk`・`runonce`・`periodic`）の引き金の後始末（構え直し・隠す・捨てる）が、一番上の面と部品で食い違う。
 - **件 2（旧 `seriko-lottery-ended-play-skip`・区分 B）**: 抽選の animation が、境界より前に終わった再生の片付けが残っていると、その境界のくじを 1 回飛ばし、乱数も引かない。
 - **件 3（旧 `seriko-rebuild-hidden-lottery`・区分 C）**: 部品の組み直し（`rebuild`）の 1 回目が、外側の今のコマでは見えない部品にも回り、抽選のくじを引く。
-- **件 4（2026-10-31 `animated-surface-log-flood` から・区分 B）**: 見える部品の数え方（emo-compose の `nesting.rs` の `visible_parts`）が、有効でコマの無い `bind+random` の pattern0 の先を見える部品に数え、描く側（`plan.rs` の `flatten_surface`）と食い違う。
+- **件 4（2026-10-31 `animated-surface-log-flood` から・区分 B・✅ 2026-11-06 `audit-emo-compose` のタスク 2.2〔指摘 4〕で解消＝コマの無い `bind+random` の先を着せ替えの手順にも見える部品にも数えない・seriko の `parts_tests.rs` の期待も同じ spec で直した）**: 見える部品の数え方（emo-compose の `nesting.rs` の `visible_parts`）が、有効でコマの無い `bind+random` の pattern0 の先を見える部品に数え、描く側（`plan.rs` の `flatten_surface`）と食い違う。
+- **件 5（2026-11-06 `audit-emo-compose` の完了の棚卸から・区分 B・負荷）**: `parts.rs` の `rebuild` が `nest.visible_parts` を不動点まで何度も引き直すので、見える部品の数 V に対して V² の写しになる。`unwrite` も欄を全部写す。
+- **件 6（2026-11-06 `audit-emo-compose` の完了の棚卸から・区分 B・負荷）**: emo-compose の `NestReport::from_world`・`plan_issues::shape_issues` が element定義ごとに `reaches`（`nesting.rs`）を引き、深い鎖で深さの 2 乗になる（今は 1000 段の検体で確かめている）。
 
 どれもコードの読みと決定論のテストから出た件で、実機で絵の誤りを見たものは無い。
 
@@ -347,3 +349,12 @@ SERIKO の引き金と抽選に、決まりの食い違いが 3 件残ってい�
 ## 2026-10-31 棚卸㉛の追記（完了 `seriko-pattern-calls` の残り物）
 
 - **件 5（区分 C・テストの穴）**: 引き金の相（`periodic`・`talk` ほか）の後に、pattern定義の呼び出しをもう一度当てる道は、一番上の面だけ `periodic_start_applies_its_head_call_in_the_same_tick` で固定されていて、部品の側にはテストが無い（完了 `seriko-pattern-calls` の `tasks.md` の 8.2 の記録）。件 1 が部品の引き金の後始末（`parts.rs`）を触るので、そのときに部品の側の同じテストを足す。規模は 1 タスク。
+
+## 件 5・件 6（2026-11-06 `audit-emo-compose` の完了の棚卸から）: 入れ子の走査の手間
+
+> 出どころ: `audit-emo-compose` の audit のかけ直し（`.kiro/specs/completed/audit-emo-compose/research.md` 21・22 節・tasks.md 7.3 の Note）。どちらも範囲の外か新しい仕組みが要るので、その spec の中では直さずにここへ足した。触る場所（見える部品と入れ子の走査）が件 3・件 4 と同じ。
+
+- **件 5**: `crates/areka-seriko/src/parts.rs` の `rebuild`（382 行目あたり）は、評価で部品が増えるたびに `NestTable::visible_parts` を最初から引き直す（不動点まで回す）。見える部品が V 個なら写しは V² の程度。`unwrite`（441 行目あたり）は 1 つの部品を消すのに欄を全部写す。直し方の候補: 見える部品を増分で数える（足した部品の子だけをたどる）・`unwrite` はその部品の欄だけを外す。
+- **件 6**: `crates/areka-emo-compose/src/nesting.rs` の `reaches` を、`NestReport::from_world` と `plan_issues::shape_issues` が element定義ごとに呼ぶ。深さ d の鎖では d² の手間（予算 `VISIT_BUDGET` で打ち切るので止まりはする）。直し方の候補: 強連結成分（Tarjan など）で循環を 1 度に求め、各辺の答えを表から引く。直し方が 1 通りでないので、要件の段で決める。
+- 起票の条件（kiro-complete 冒頭ステップ 手順 3）: 件 5 は新しい仕組み（増分で数える）と進行前のこの spec の範囲（`parts.rs`）との重なり。件 6 は新しい仕組み（強連結成分）で直し方が 1 通りでない。
+- 決定論のテスト: 件 5 は件 3 と同じ抽選のテストの答えを変えないこと（回数・時計）を確かめる。件 6 は `walk_limits_tests.rs` の深い鎖の検体（`ring_of`・`RING_LAST`）の答えを変えずに、鎖を長くしても通ることを確かめる。
