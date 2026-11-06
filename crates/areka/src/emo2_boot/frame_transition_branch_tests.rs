@@ -11,7 +11,7 @@
 //! | 作業領域源の実行時同期 | `frame_work_area_sync_tests.rs`（task 5.1） |
 //! | 作業領域変化を契機とする再スナップ | `frame_work_area_resnap_tests.rs`（task 5.2・主に拡大率 96・合流を見る 1 件だけ 192） |
 //! | 再導出結果なしの窓（`None` 経路） | `frame_dpi_reproject_none_tests.rs`（`dpi-window-vanish` S2・単一フレーム） |
-//! | 判定器の `reason=invisible`／`k-unchanged` の選り分け | `placement/transition_judge_tests.rs`（純関数） |
+//! | 判定器の `reason=invisible`／`k-unchanged` の選り分け | `crates/areka/src/placement_tests/transition_judge_tests.rs`（純関数） |
 //!
 //! 本ファイルが持つのは、そこに**無い**側——同じ分岐を**要件 7.2 が名指しする 2 水準
 //! （120 と 192）の両方**で、かつ複数モニタの作業領域を注入した状態で走らせることと、

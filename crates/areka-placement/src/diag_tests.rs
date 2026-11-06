@@ -29,7 +29,7 @@ fn ent(raw: u32) -> Entity {
 /// 専用 target のリテラル固定（Req 1.7・手順書の `RUST_LOG` 記述と 1:1）。
 #[test]
 fn diag_target_literal_is_fixed() {
-    assert_eq!(DIAG_TARGET, "areka::placement::diag");
+    assert_eq!(DIAG_TARGET, "areka_placement::diag");
 }
 
 /// レコード種別タグのリテラル固定（grep 判定語の錨）。
@@ -506,17 +506,17 @@ fn diag_records_are_silent_under_default_info_filter() {
 #[test]
 fn diag_records_are_silent_when_target_opened_only_to_info() {
     assert_eq!(
-        emit_all_under_filter("info,areka::placement::diag=info"),
+        emit_all_under_filter("info,areka_placement::diag=info"),
         "",
         "debug! ではない水準の観測点が混ざっている（Req 1.7・水準割当表）"
     );
 }
 
-/// 手順書の directive（`areka::placement::diag=debug`）で点灯する
+/// 手順書の directive（`areka_placement::diag=debug`）で点灯する
 /// ＝target のリテラルが手順書と 1:1 で結ばれていることの機械的証明（Req 1.5/1.7）。
 #[test]
 fn diag_records_light_up_under_the_procedure_directive() {
-    let out = emit_all_under_filter("info,areka::placement::diag=debug");
+    let out = emit_all_under_filter("info,areka_placement::diag=debug");
     assert!(
         out.contains(MONITOR_SNAPSHOT_TAG)
             && out.contains(MONITOR_RECORD_TAG)

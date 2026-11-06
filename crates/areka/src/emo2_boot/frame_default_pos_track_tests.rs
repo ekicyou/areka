@@ -118,7 +118,7 @@ fn char_x(harness: &FrameHarness, scope: usize) -> i32 {
 
 /// 当該スコープのキャラ窓を右へずらす（利用者のドラッグが landing した後の状態）。
 ///
-/// ドラッグ経路そのもの（`on_char_drag`）は `placement/follow_drag_tests.rs` が所有するので、
+/// ドラッグ経路そのもの（`on_char_drag`）は `crates/areka-placement/src/follow_drag_tests.rs` が所有するので、
 /// ここでは**結果の位置**だけを置く。既定位置は動かさない——ドラッグは route を持たない書込で
 /// あり、D9 の追跡対象から構造的に外れているからである。
 fn drag_char_window_right(harness: &mut FrameHarness, scope: usize, dx: i32) {

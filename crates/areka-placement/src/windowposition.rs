@@ -16,7 +16,7 @@
 //! が所有し、補正は `balloon_pos`（表示位置）だけに作用して調整量へは焼き付かない
 //! （windowposition-limit DD6）。
 //!
-//! 依存規約（placement/mod.rs）: `config`（`PlacementConfig`）と
+//! 依存規約（lib.rs）: `config`（`PlacementConfig`）と
 //! `areka-emo-compose`（`ScaleRatio` 丸め権威）のみを消費し、wintf/bevy_ecs を import しない。
 //!
 //! `windowposition.x` の符号規約は実機（SSP 参照実装）で確定済みであり、バルーンの

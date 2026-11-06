@@ -424,7 +424,7 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
 ///
 /// 経路語は当初 `move_window_to`（＝`MoveCue`）だったが、task 7.5 で「明示操作は見送らない
 /// ことが正しい＝鳴らすのは偽の警報」と裁定したため差し替えた（分類の全体は
-/// `placement/follow_window_move_hold_watch_tests.rs`）。
+/// `crates/areka-placement/src/follow_window_move_hold_watch_tests.rs`）。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
 fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {

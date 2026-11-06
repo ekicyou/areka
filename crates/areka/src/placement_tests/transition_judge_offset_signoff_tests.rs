@@ -105,7 +105,7 @@
 //! 根の絶対パスは §2.4 と同じく `nar-sample-path` の `folder=` の行から得る。
 //!
 //! *理由*: 保存値が効いたスコープでは、キーワード再導出の素材が落ちる
-//! （`crates/areka/src/placement/persist.rs:388` 付近の規約。保存値優先の順位が静かに
+//! （`crates/areka-placement/src/persist.rs:388` 付近の規約。保存値優先の順位が静かに
 //! 反転しないための**正しい規約**であって欠陥ではない）。その結果、**保存値が残っている
 //! 環境では門の行（`verdict=keyword-pending`）が 1 行も出ず**、判定 ⑷ の母数が空になる
 //! （**偽の赤**＝「揃えを 1 度も測れていない」）。実測では、2 本目の採取でキーワード指定
@@ -114,9 +114,9 @@
 //!
 //! *保存値はどこから来るのか——本手順の外の操作である*: `[balloon-offset.*]` を書く経路は
 //! リポジトリ全体で **1 本だけ**である。**バルーンを単独で掴んで動かし、離したとき**
-//! （`placement/follow/drag_follow.rs` の `on_balloon_drag_end`——ここからの
+//! （`crates/areka-placement/src/follow/drag_follow.rs` の `on_balloon_drag_end`——ここからの
 //! `balloon_offset_entries` 呼出が、この関数の**唯一の**呼出点である。結線は
-//! `placement/spawn.rs` のバルーン窓の `OnDragEnd`）。**キャラ窓のドラッグ＝§3 手 4 の
+//! `crates/areka-placement/src/spawn.rs` のバルーン窓の `OnDragEnd`）。**キャラ窓のドラッグ＝§3 手 4 の
 //! モニタ間の往復では 1 バイトも書かれない。** しかも §3 手 4 自身が「往復のあいだ、
 //! バルーンをドラッグしない」と命じているので、**手順どおりに回した採取そのものは保存値を
 //! 作らない**。作るのは手順の外の操作である——試行錯誤の途中でバルーンを摘まんだ、別の
@@ -131,7 +131,7 @@
 //! 掃除が効いたことを自分の目で確かめたいときは、点灯へ `areka::persist::restore=info` を
 //! 足す（例: `$env:RUST_LOG = "wintf::transition=debug,areka::persist::restore=info"`）。
 //! `merge_scope restore` の行がスコープごとに出て、`saved_off_x`／`saved_off_y` が
-//! `None` なら保存値は残っていない（`crates/areka/src/placement/persist.rs` の
+//! `None` なら保存値は残っていない（`crates/areka-placement/src/persist.rs` の
 //! `merge_scope` が刷る）。判定そのものはこの行を読まないので、足しても合否は変わらない。
 //!
 //! 同じファイルの `[window.*]` の節は**消さなくてよい**（起動位置は保ってよい。判定に効く

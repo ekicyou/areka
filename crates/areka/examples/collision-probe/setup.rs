@@ -39,7 +39,7 @@ fn build_and_spawn(world: &mut World) {
         }
     };
 
-    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`window-placement.rs:259-261` 前例）。
+    // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`crates/areka-placement/examples/window-placement.rs:245-247` 前例）。
     world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
@@ -73,7 +73,7 @@ fn build_and_spawn(world: &mut World) {
     //
     // **本 probe に `OnPointerPressed` は付かない**（2026-08-05 実機で確認・冒頭 doc「使い方」参照）。
     // かつて終了を担っていた stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は
-    // `areka-P0-input-events` task 2.7 で退役し（`placement/spawn.rs` の当該コメント）、正典の脱出口
+    // `areka-P0-input-events` task 2.7 で退役し（`crates/areka-placement/src/spawn.rs` の当該コメント）、正典の脱出口
     // （Ctrl+左ダブルクリック・DD-IE-7）は `input_events::attach_char_pointer_handlers` へ移った。
     // 同関数は `pub(crate)` かつ内部が `crate::` パスを使うため example から `#[path]` include できず、
     // 本 probe の終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみである。

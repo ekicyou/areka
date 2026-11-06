@@ -3,7 +3,7 @@
 //! `areka_parsers::package::resolve_with_shell` → ghost/shell descript.txt 読込
 //! （`charset::decode` 既定 Ansi → `kv::parse_kv`）→ (ghost_kv, shell_kv, shell_dir, titles)。
 //!
-//! 依存規約（placement/mod.rs・design「placement::source」）: areka-parsers＋std
+//! 依存規約（lib.rs・design「placement::source」）: areka-parsers＋std
 //! （＋tracing）のみを import する。wintf/bevy_ecs/emo 系・兄弟モジュール
 //! （config/resolver/…）へは依存しない。
 //!

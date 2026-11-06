@@ -3,7 +3,7 @@
 //! 4 層カスケード・両表記寛容（`defaultx`/`defaultleft` 等）・scope 検出・
 //! zorder/sticky/dpi 転記シーム。入力は BTreeMap×2（純粋・panic しない）。
 //!
-//! 依存規約（placement/mod.rs）: areka-parsers の出力形（`kv::parse_kv` の
+//! 依存規約（lib.rs）: areka-parsers の出力形（`kv::parse_kv` の
 //! `BTreeMap<String, String>`）のみを消費し、wintf/bevy_ecs を import しない。
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -264,7 +264,7 @@ fn resolve_scope(
     let balloon_offset = offset_x.zip(offset_y);
 
     // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。本関数は KV の
-    // 純粋転記に徹し、正典既定をそのまま置く（実供給は `placement/mod.rs` の
+    // 純粋転記に徹し、正典既定をそのまま置く（実供給は `lib.rs` の
     // `apply_scope_windowpositions` が持つ取得経路）。
     //
     // 既定値の**単一権威は [`ScopeConfig::default`]** ゆえ literal を再掲せず既定から読む。

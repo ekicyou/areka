@@ -780,7 +780,7 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 /// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
 /// `assets.rs` の読取が実際に `decode` を通っているかどうかには触れない。配線を
 /// `read_to_string` へ戻してもパーサ層の検査は緑のまま通り抜ける。配置採寸側の同種の檻は
-/// `placement/measure_tests.rs` にあるが、そちらは 1,000 行の上限に余裕が無く起動側を
+/// `crates/areka-placement/src/measure_tests.rs` にあるが、そちらは 1,000 行の上限に余裕が無く起動側を
 /// 同居させられないため、読取点それぞれの兄弟へ 1 本ずつ置く形にしている。
 ///
 /// 本検査が主張するのは「読取が失敗しないこと」までで、復号後の文字列そのものは見ない

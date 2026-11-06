@@ -48,7 +48,7 @@
 //! **直接**呼び、`SetWindowPosCommand` のキューを 1 度も通らない。`origin=dpi-suggested`
 //! が現れるのは同 `:468` が組む観測行（`write_line`）**だけ**であり、指令のタグ
 //! （`SetWindowPosCommand.tag`）にこの語を載せる経路は本番に 1 つも無い
-//! （タグを付ける 3 箇所＝`crates/areka/src/placement/follow/window_move.rs:632` の
+//! （タグを付ける 3 箇所＝`crates/areka-placement/src/follow/window_move.rs:730` の
 //! `PlacementRoute` 12 語／`crates/wintf/src/ecs/graphics/systems/window_pos.rs:102` の
 //! `origin=window-pos`／`crates/wintf/src/ecs/window/zorder_pair_maintain.rs:212` の
 //! `origin=zorder-pair`）。

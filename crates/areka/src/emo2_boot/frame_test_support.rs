@@ -176,7 +176,7 @@ fn fake_handle(raw: usize) -> WindowHandle {
 /// 補正が混ざると恒等式が成立しなくなって主題が読めなくなる（設計 DD6: 恒等式は
 /// 「resolver／追従計算の出力時点の事後条件」であって表示位置の恒久不変量ではない）。
 /// ゆえに limit を無効にして関門を素通しさせる。limit の挙動そのものは
-/// `placement/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
+/// `crates/areka-placement/src/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
 /// （`resize_window_keep_position`）もそこで補正が掛かることを固定している。
 fn resnap_placements() -> Vec<ScopePlacement> {
     vec![

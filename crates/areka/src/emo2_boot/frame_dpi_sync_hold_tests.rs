@@ -450,7 +450,7 @@ fn a_companion_follow_still_reaches_a_waiting_balloon() {
 /// 与えられた駆動を回し、遷移観測の行だけを拾う。
 ///
 /// 捕捉窓の内側は観測 target が点いた状態である（既定 OFF そのものは
-/// `placement/follow_transition_diag_tests.rs` が directive 単位で所有する）。
+/// `crates/areka-placement/src/follow_transition_diag_tests.rs` が directive 単位で所有する）。
 fn transition_lines(drive: impl FnOnce()) -> Vec<String> {
     let (_, events) = capture(drive);
     events

@@ -12,7 +12,7 @@
 //! # 恒久計装であって一時計装ではない（要件 1.7）
 //!
 //! 観測点は診断完了後も本体コードに残す。既定では**無音**であり、診断手順書が指定する
-//! `RUST_LOG=…,areka::placement::diag=debug` でのみ点灯する。この「既定 OFF」は
+//! `RUST_LOG=…,areka_placement::diag=debug` でのみ点灯する。この「既定 OFF」は
 //! **専用 target ＋ `debug!` 水準**の 2 段で担保され、in-source 檻
 //! （`diag_records_are_silent_under_default_info_filter` 他）が実際の [`EnvFilter`] 濾過で
 //! 機械的に固定する。
@@ -64,9 +64,9 @@ use wintf::ecs::ZOrderPairStrategy;
 /// 恒久観測の専用ログ target（design D1: 既定 OFF・診断手順が `RUST_LOG` で点灯）。
 ///
 /// 本モジュールの出力は**すべて**この target を通る。診断手順書の
-/// `RUST_LOG=info,…,areka::placement::diag=debug` と 1:1 で対応し、
+/// `RUST_LOG=info,…,areka_placement::diag=debug` と 1:1 で対応し、
 /// リテラルは in-source 檻が固定する（勝手に変えると手順書が無効化する）。
-pub const DIAG_TARGET: &str = "areka::placement::diag";
+pub const DIAG_TARGET: &str = "areka_placement::diag";
 
 /// モニタスナップショットの見出し行タグ（grep 判定語・台数がここに出る）。
 pub const MONITOR_SNAPSHOT_TAG: &str = "[diag.monitor_snapshot]";
@@ -133,7 +133,7 @@ pub const ZORDER_PAIR_STRATEGY_TAG: &str = "[zorder-pair] strategy-selected";
 /// # target について（本定数だけの例外）
 ///
 /// 本モジュールの**出力**はすべて [`DIAG_TARGET`] を通るが、本定数を用いる `debug!` は
-/// 各消費点の既定 target（`areka::placement::follow`／`areka::emo2_boot::frame`）へ出る——
+/// 各消費点の既定 target（`areka_placement::follow`／`areka::emo2_boot::frame`）へ出る——
 /// 終了時ログの静穏性（要件 6.2）は診断手順の点灯有無に依らず成立すべきものだからである。
 /// 本モジュールが持つのは語彙であって出力点ではない。
 pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";

@@ -9,7 +9,7 @@ use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 
 /// 実機の消失事象と同域の合成構成（混在 DPI 96/120/192・非対称 work area・
-/// 負座標・3200 超座標）。実 HMONITOR 不要（placement/mod.rs テストと同流儀）。
+/// 負座標・3200 超座標）。実 HMONITOR 不要（crates/areka-placement/src/lib.rs テストと同流儀）。
 fn synthetic_monitors() -> Vec<Monitor> {
     vec![
         Monitor {

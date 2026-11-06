@@ -73,7 +73,7 @@
 //! **ダブルクリックでは終了しない**（2026-08-05 実機で確認）。本 probe が装着するポインタ
 //! ハンドラは [`on_probe_pointer_moved`]（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
 //! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
-//! `areka-P0-input-events` task 2.7 で**退役**し（`placement/spawn.rs` の当該コメント参照）、
+//! `areka-P0-input-events` task 2.7 で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
 //! 正典の脱出口（**Ctrl+左ダブルクリック**・DD-IE-7）は `input_events::attach_char_pointer_handlers`
 //! （`pub(crate)`・内部が `crate::` パスを使うため example から `#[path]` include できない）が
 //! 担うようになったためである。素のダブルクリックは本来 `KanadeMsg::Mouse(DoubleClick)` の送出契機で
@@ -93,26 +93,26 @@
 //! 2. **本 probe は `pasta.dll` を一切ロードしない**: SHIORI（`pasta.dll`）も host-32 helper も起動しない
 //!    ため、`0x8007007E`（DLL LOAD 失敗）の経路自体が存在しない。**読むものは少なくない**が、いずれも
 //!    データファイルの読取であって DLL のロードではない——実際の読取先は次のとおり:
-//!    - **ghost の `descript.txt`**（`placement/source.rs:142-143`・寛容読取）・**shell の
-//!      `descript.txt`**（`source.rs:146-156`・読取失敗は致命）・**バルーンの `descript.txt`**
-//!      （`source.rs:197-201`・作者基準 DPI の取得）——起点が `descript.txt` であることは
+//!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:152-154`・寛容読取）・**shell の
+//!      `descript.txt`**（`source.rs:156-167`・読取失敗は致命）・**バルーンの `descript.txt`**
+//!      （`source.rs:207-211`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
-//!    - **shell の `surfaces.txt` と面画像**（採寸側 `placement/measure.rs:328-345` ＋ probe 自身の
+//!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
 //!      [`load_shell_assets`]）
 //!    - **バルーンパッケージの面定義・面画像**（`measure.rs:221` の `measure_balloon_surface0`）と
-//!      **`windowposition` 定義**（`placement/mod.rs:341` の `apply_scope_windowpositions`）
+//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:583` の `apply_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
-//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages`＝`placement/mod.rs:307-348` が読取の全体像）。
+//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages`＝`crates/areka-placement/src/lib.rs:373-455` が読取の全体像）。
 //!
 //! # 作者基準 DPI の出所（k 論証への影響・実測済み）
 //!
-//! 採寸経路（`prepare_stages`・`placement/mod.rs:319-322`）は **descript から読んだ実 author_dpi**
+//! 採寸経路（`prepare_stages`・`crates/areka-placement/src/lib.rs:400-407`）は **descript から読んだ実 author_dpi**
 //! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
 //! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
 //! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、
-//! これは in-repo テスト `placement/source.rs:534-538`
+//! これは in-repo テスト `crates/areka-placement/src/source_tests.rs:264-268`
 //! （`shell_author_dpi_emo2_fixture_is_default_96`）と実行ログ（`primary_dpi=192 shell_author_dpi=96
 //! balloon_author_dpi=96` ／ `apply(ShowSurface): ... author_dpi=96 window_dpi=Some((192,192))`）の
 //! 双方で確認できる。**`seriko.dpi` を宣言する別ゴーストへ差し替えると窓寸（採寸 k₀）と表示 k が

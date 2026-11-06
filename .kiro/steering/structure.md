@@ -247,7 +247,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 
 > **モジュール分割パターン**: 600行リファクタ（`oversized-file-refactor`）以降、肥大化したファイルは `{module}/mod.rs` + サブモジュールのディレクトリ形式へ分割する方針。dola `runtime/` がその代表例。**なお「600行」は当時の spec 名であって現行の閾値ではない——今の目安は上の Unit Tests に記した 1 ファイル 1,000 行以下であり、本番ファイル・テストファイルの双方に適用する。**
 >
-> **ファサード形式も可**（`areka-P0-file-slimming` で追加）: 元ファイル `foo.rs` をファサードとして残し、本番項目を `foo/` 配下のサブモジュールへ純移動して `pub use` で再輸出する形でもよい。**呼び出し側を 1 箇所も変えずに済み、公開 API が完全に不変**なので、外部参照の多いファイルにはこちらが向く。代表例は `crates/areka/src/placement/follow.rs`（**2,032 → 122 行**）と `crates/areka/src/emo2_boot/frame.rs`（**1,532 → 201 行**。どちらも分割時点の行数で、その後の spec で増えている）——いずれもファサード分割そのものによる減少である。`follow.rs` はこれとは別に、先行するテスト分離（同 spec のテーマ分割）で 8,472 → 2,032 行まで減っている。**2 つの機構の効果を足し合わせて 1 つの数字として語らないこと。**
+> **ファサード形式も可**（`areka-P0-file-slimming` で追加）: 元ファイル `foo.rs` をファサードとして残し、本番項目を `foo/` 配下のサブモジュールへ純移動して `pub use` で再輸出する形でもよい。**呼び出し側を 1 箇所も変えずに済み、公開 API が完全に不変**なので、外部参照の多いファイルにはこちらが向く。代表例は `crates/areka-placement/src/follow.rs`（**2,032 → 122 行**）と `crates/areka/src/emo2_boot/frame.rs`（**1,532 → 201 行**。どちらも分割時点の行数で、その後の spec で増えている）——いずれもファサード分割そのものによる減少である。`follow.rs` はこれとは別に、先行するテスト分離（同 spec のテーマ分割）で 8,472 → 2,032 行まで減っている。**2 つの機構の効果を足し合わせて 1 つの数字として語らないこと。**
 >
 > ファサード分割で踏む固有の注意点:
 > - **サブモジュールは私有 `mod` で宣言する**。`pub mod` にすると `foo::bar::X` という新しい公開パスが生えて公開面が変わる。
@@ -255,7 +255,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 > - **テストモジュールが参照していた私有項目はファサードで再束縛する**。可視性キーワード無しの素の `use` で足りる（`pub` へ格上げしないこと）。子孫モジュールからは従来どおり見える。
 > - **ファサードの `pub use` 再輸出は `unused_imports` を出しうる**。消費者が `#[cfg(test)]` のテストモジュールや examples しか無い項目は、非 test ビルド単位で未使用と判定されるため。**lib ターゲットの有無で決まるのではない**——決めるのは「その再輸出に非 test ビルドの消費者が居るか」だけである。区別すべき 2 種類がある:
 >   - **内向き**（子モジュール同士が親の束縛を引く）——**子が `use super::{…}` でファサード経由に統一すれば 0 件に抑えられる**。この形は lib ターゲットを持たないサンプルバイナリでも 3 度成功している。
->   - **外向き**（テスト・examples など、クレート外あるいは非 test ビルドに現れない消費者のための再輸出）——**内向きの形では消えない。** `#[allow(unused_imports)]` で抑えてよいが、**死んだ再輸出を握り潰していないことを `cargo rustc -p <crate> --bin <bin> -- --force-warn unused_imports`（lib があれば `--lib --profile test` も）で確認し、属性のコメントには実際に未使用な名前だけを書く**こと。実例は `crates/areka/src/placement/follow.rs` の `#[allow(unused_imports)]` 付きの再輸出で、子はすべて `use super::{…}` を使っているにもかかわらず残っている。
+>   - **外向き**（テスト・examples など、クレート外あるいは非 test ビルドに現れない消費者のための再輸出）——**内向きの形では消えない。** `#[allow(unused_imports)]` で抑えてよいが、**死んだ再輸出を握り潰していないことを `cargo rustc -p <crate> --bin <bin> -- --force-warn unused_imports`（lib があれば `--lib --profile test` も）で確認し、属性のコメントには実際に未使用な名前だけを書く**こと。実例は `crates/areka-placement/src/follow.rs` の `#[allow(unused_imports)]` 付きの再輸出で、子はすべて `use super::{…}` を使っているにもかかわらず残っている。
 > - **`super::`／相対の intra-doc リンクは指す先が変わる**。doc コメントは項目本文の内側にあるため、直すと「本文がバイト単位で不変」という純移動の証明が崩れる。`cargo doc` はゲートではないので**一律未修正が正解**。
 > - **純移動であることは機械的に証明できる**——移設前ファイルを `git show <base>:<path>` で取り出し、属性と先行コメント塊つきの最上位項目へ括弧の釣り合いで分解して、移設後の連結と 1 対 1 突合する。許容してよい差分は「クレート内可視性キーワードの付与」と「意味の変わらない整形の折り返し」だけである。
 
@@ -268,7 +268,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules（役割のパターン）**:
 - `emo2_boot/` - **統合の背骨**（エンジン群の実 sink 差し替え・窓装着・毎フレーム駆動 `frame.rs`・起動〜終了の `spine.rs`）。名前は M-boot の経緯で、今は emo2 専用ではない（検体 3 体が同じ経路を通る）
   - **cue の受け口は `*_cue.rs` の同型**（`zorder_cue`／`move_cue`／`readme_cue` ほか `switch_cue`・`install_cue`・`update_cue`・`reload_cue`・`change_cue`・`user_break_cue`）: 台本の cue は全員へ配られるので、受け口は ⑴ **自己選別**（自分の担当のコマンド名だけ受理・他は良性の読み飛ばし）と ⑵ **送り出し**（UI 側へ要求を運ぶだけ）に限る。担当の重複・取りこぼしは `consumer_ledger.rs`（消費者台帳）が見張る。新しい `\!` コマンドの消費者を足すときはこの型に倣う
-- `placement/` - 窓の生成・既定位置・ドラッグ・バルーン追従・DPI 追従（`follow.rs` はファサード形式の代表例）
+- `placement_tests/` - テスト専用（`main.rs` が `#[cfg(test)]` の下で宣言）。配置（下の「Placement Crate」）と本体のほかの部分をまたぐテストと、遷移の観測ログの判定器（`transition_judge*`）の置き場（`placement-crate-split` 2026-11-06）。配置の crate は本体に依存できないので、本体の部品も使うテストはここに置く
 - `input_events/` - ポインタ入力 → SHIORI マウスイベント／メニューの引き金
 - `menu/` - 右クリックメニュー（`areka-P0-popup-menu-minimal` 2026-09-19）。**枠 7 種に供給関数を登記する口**（`MenuRegistry`）を持ち、列挙・切替・インストール・更新の各 spec は**メニュー本体を触らず自分の枠へ登記して**項目を足している（登記者は `*_frame.rs`）。`plan`（構造の計算・純粋）／`captions`（項目名の SHIORI リソース照会）／`trigger`（引き金と段取り）／`win32`（`TrackPopupMenuEx`＝OS ネイティブ・自前窓なし・**`unsafe` はこのファイルに閉じる**）
 - `readme.rs` ＋ `readme/` - 説明書を既定アプリで開く葉 module（メニューにも入力配線にも依存しない）。`readme/` は開く系の要求の置き場（`areka-P0-open-external-tags` 2026-10-06＝`\j`・`\![open,…]`）で、開く先の決め方 `destination.rs`・開く処理の 1 か所 `opener.rs`（`submit`・説明書もここを通る）・OS の口 `os_port.rs`
@@ -281,7 +281,16 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `mcp/` - MCP のツールの結線（`areka-P0-mcp-tool-entrances` 2026-10-03）。`fn main()` が受け口を `install`／`close` し、`Input` 段の汲む系（`drain`）が要求を毎フレーム取り出して `ghost_name` を解決（`resolve.rs`）してからツールごとのファイルの `handle` へ振り分ける。UI スレッドで待たない＝別スレッドに問うツールは `later` に預けて毎フレーム覗く。重い仕事を抱えるツールは、UI スレッドでは写しまでにして別のスレッドから `ReplyTo` で直接答える（`dump_surface`／`dump_balloon` の PNG の符号化・`areka-P0-mcp-dump-images` 2026-10-05）。台本の検査 `check_script`（areka 独自のツール・`areka-P0-mcp-author-tools` 2026-10-08）は `check_script.rs`（処理）と `check_script_judge.rs`（読み取りの列と事実から診断を決める純粋な判断）。`sakurascript`／`raise_event`（`areka-P0-mcp-kanade-tools` 2026-10-19）と `reload`（台本の `\![reload,…]` と同じ入口 `request_reload`・`areka-P0-mcp-reload` 2026-10-22）も同じ形でツールごとのファイルに置く。3 段目の spec は自分のツールのファイルだけを書き換える（独自のツールを足す spec は `doc/ssp-mcp/areka-tools.md` の「⑹ あとからツールを 1 本足す手順」のファイルも触る）
 - `log_history.rs` - `get_log` の履歴の層（`areka-P0-mcp-log-history` 2026-10-05）。`main.rs` の `log_history::init()` の 1 行で tracing に差し込み、info 以上の出来事を `RUST_LOG` と独立に 5 種別へ積む。出す側との取り決めの正本は `doc/ssp-mcp/log-convention.md`
 **ソースの外**: `icon/`＝アプリ用（組 1）と通知領域用（組 2）のアイコン（`areka-P0-app-icon` 2026-10-16）。寸法ごとの PNG 16 枚と、そこから組んだ `app.ico`・`tray.ico`・`icons.res`（どれもコミット済み・作り直しは `tools/app-icon.ps1`）。資源の番号の表と絵の出どころ・権利は `icon/README.md`。`build.rs` は `icons.res` をリンカへ渡すだけで、組み立ての依存は無い
-**Dependencies**: wintf, dola, shiori-abi, ワークスペースの areka 系（`areka-actor`・`areka-parsers`・`areka-sylphya`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・emo 4 段・`areka-nar`・`areka-update`・`areka-mcp`・`areka-user-data`）, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, miniz_oxide, windows, windows-core
+**Dependencies**: wintf, dola, shiori-abi, ワークスペースの areka 系（`areka-actor`・`areka-parsers`・`areka-sylphya`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・emo 4 段・`areka-nar`・`areka-update`・`areka-mcp`・`areka-user-data`・`areka-placement`）, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, miniz_oxide, windows, windows-core
+
+### Placement Crate（areka-placement）
+**Location**: `/crates/areka-placement/`
+**Purpose**: 窓の生成・既定位置・ドラッグ・バルーン追従・DPI 追従（本体の `placement/` から分けた・`placement-crate-split` 2026-11-06）。ゴースト定義（shell dir＋ghost／shell descript の KV）からキャラ窓・バルーン窓の配置を解決し、窓 entity を組み立てる。座標・寸法はすべて物理 px。`publish = false`
+**Modules（役割のパターン）**: 依存の向きは `config` ← `resolver` ← `measure` ← `spawn`／`follow`（同じ段どうしは引き合ってよい）← 本体のシーム。`diag` は最下流（配置のモジュールを引かない・出所は `areka_placement::diag`）。失敗の型 `PlacementError` は `error.rs` に置き根から出し直す。正本は `lib.rs` の頭の説明。`follow.rs` はファサード形式の代表例（上の「モジュール分割パターン」）
+**Features**: `test-support`（本体のテストだけが使う支えを開ける・本体は `[dev-dependencies]` でだけ付ける）
+**Examples**: `examples/window-placement.rs`（crate の公開面だけで実ゴーストの窓を立てる）
+**Dependencies**: wintf, areka-parsers, emo 3 段（`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`）, areka-sylphya, areka-ghost, bevy_ecs, thiserror, tracing, windows。**本体（`areka`）には依存しない**
+**Consumers**: `areka`（本番と、`test-support` つきの `[dev-dependencies]`）
 
 ### Parser Crate
 **Location**: `/crates/areka-parsers/`
@@ -412,7 +421,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Modules**: `probe.rs`（常駐の仕掛けの確立）／`capture.rs`（捕捉窓。窓の内側で対照イベントを発行し、その捕捉を要求して落ちる＝**不在主張が捕捉 0 件のまま静かに緑にならない**。窓は `WindowSubscriber` で包み、開いている間だけ印 `CaptureWindowMarker` に答える＝閉じた後の記録は窓へ入らない。`areka-actor` の `spawn_actor` がこの印を見て窓を子のスレッドへ引き継ぐので、窓には背景のアクターの記録も入る・`actor-thread-log-capture` 2026-10-31）／`event.rs`（正準イベント型と既存の文字列形の再現）／`filter.rs`（`env-filter` feature・濾過指示つき捕捉。有効にしてよいのは `wintf` のみ）／`global.rs`（全スレッド横断の一回限り捕捉。既定 API と混同させないため別窓口とし、両立条件を明記）
 **Tests（`tests/`）**: **ワークスペース全体の見張りの置き場である**（設計判断・ログ捕捉に限らない）。共有機構の迂回検知（`with_default_guard_test.rs`）・**1 ファイル 1,000 行の番人**（`file_length_guard_test.rs`。目安の正本は本文書 Test Naming Conventions の「1 ファイル 1,000 行以下の目安」の項）・**テスト用一時パスの窓口の迂回検知**（`temp_path_guard_test.rs`）・**検体ゴースト／バルーンの窓口の迂回検知**（`sample_path_guard_test.rs`。旧置き場・展開形の検体フォルダ・展開先の名前空間・同梱バルーンのパス組みの 4 形を、走査語を `sample-ghost-kit` の登記表 `SAMPLES` から組み立てて見張る。`sample-ghost-kit` が本番依存に現れないことも同じ見張りが判定する）の 4 本が、走査部品 `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有する。**見張りを別 crate へ分けると走査器が複製される**ため、crate 名がログ捕捉だけを名乗る点との食い違いを承知でこの配置を採っている。較正 `capture_calibration_test.rs` は**わざと硬化なしの直接呼出を使う**ので迂回検知の例外表に載る（外すと較正が空振りする）。各見張りは例外表の件数を別の定数に逐語で持ち、**項目の追加は複数箇所の明示的な編集としてのみ許す**（暗黙に増えない）。
 **Dependencies**: `tracing`（必須）＋ `tracing-subscriber`（`env-filter` feature 時のみの任意依存・既定 off）。**ワークスペース内 crate への依存は 0**（leaf・依存方向の規律＝`wintf` から引いても上位 crate を持ち込まない）・`publish = false`
-**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 18 crate（`areka`・`wintf`・`areka-actor`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-nar`・`areka-update`・`areka-mcp`・`areka-mcp-bridge`・`areka-user-data`・`shiori-host32-host`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
+**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 20 crate（`areka`・`areka-placement`・`wintf`・`areka-actor`・`areka-ghost`・`areka-kanade`・`areka-parsers`・`areka-sakura`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-nar`・`areka-update`・`areka-mcp`・`areka-mcp-bridge`・`areka-user-data`・`shiori-host32-host`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
 
 ### Temp Path Kit Crate（temp-path-kit）
 **Location**: `/crates/temp-path-kit/`

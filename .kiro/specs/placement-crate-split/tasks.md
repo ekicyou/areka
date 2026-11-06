@@ -134,15 +134,15 @@
   - 完了の状態: 1,000 行の番人が緑で、例外表の項目の数が変わっていない・段 5 のコミット
   - _Requirements: 1.9_
 
-- [ ] 7. 名指す所を書き換える（段 6）
-- [ ] 7.1 (P) ログの出所の名前をソースで書き換える
+- [x] 7. 名指す所を書き換える（段 6）
+- [x] 7.1 (P) ログの出所の名前をソースで書き換える
   - 触るファイルはこれだけ: 配置の `diag.rs`（`DIAG_TARGET` と説明の 3 か所）・`diag_tests.rs`・`follow_window_move_diag_tests.rs`・`window-placement.rs` の説明、本体の `measure_bake_count_tests.rs`・`measure_bake_log_tests.rs`・`tests/window_link_real_run.rs`、wintf の `window_pos_tests.rs`・`lifecycle.rs`（`tools/` は 7.3 が持つ）
   - 直書きの出所・出所を名前で読むテスト・`RUST_LOG`・説明を新しい名前へ直す
   - 語彙として付けた出所（`"areka::persist::*"` ほか）は変えない
   - 完了の状態: 出所で選ぶテスト（`diag_tests`・`follow_window_move_diag_tests`・`measure_bake_*`）が新しい名前で緑
   - _Boundary: PathRewrite（上に挙げた出所の名前のファイル）_
   - _Requirements: 6.2, 6.4, 6.5_
-- [ ] 7.2 (P) 説明と文書の中のパスを書き換える
+- [x] 7.2 (P) 説明と文書の中のパスを書き換える
   - 触るファイルはこれだけ: wintf の `api_owner_chain_probe_tests.rs`・`window_band_pipeline_real_tests.rs`・`zorder_pair_maintain_always_on_top_tests.rs`・`runtime/tick_bridge.rs`、pilot の `pilot-dropfiles-on-wuc-window/main.rs`、ukadoc-survey の `evidence/candidates.rs`、本体の `emo2_boot/hit_region.rs`・`frame_transition_atomicity_tests.rs`、`doc/` の 4 つ、`.kiro/steering/structure.md`（7.1 の持つファイルと `tools/` は触らない）
   - ソースの説明のパスと、文書（`doc/COMPAT_ARCHITECTURE.md`・網羅台帳の根拠の場所・`briefing-assets.md`）を対応の表どおりに直す
   - `structure.md` の crate の一覧に新しい crate を足し、本体の旧い行を外し、テスト専用のフォルダと例のパス・log-capture-kit を使う crate の数を直す
@@ -150,24 +150,24 @@
   - 完了の状態: 文書とソースの説明に旧いパスが残らない（`tools/perf` は 7.3）
   - _Boundary: PathRewrite（説明と文書）_
   - _Requirements: 5.6, 5.7_
-- [ ] 7.3 (P) 性能の道具の見本と説明を直し、自分の確かめを回す
+- [x] 7.3 (P) 性能の道具の見本と説明を直し、自分の確かめを回す
   - 見本の作り手の旧い出所の名前を直して見本を作り直し、作り手の無い見本は 1 語だけを `target/` の下の使い捨てのスクリプトで置き換え、ほかの部分が変わっていないことを単語の差分で示す
   - 判定の道具の説明の旧いパスと出所の名前を直し、道具が出所の名前に頼って行を読まないことを記録する（頼っていれば直す）
   - 完了の状態: 判定の道具の自分の確かめと、見本を読む自分の確かめ（grep で挙がる全部）が緑
   - _Boundary: PathRewrite（tools/perf の全部）_
   - _Requirements: 5.7, 5.8, 6.5, 6.7, 6.8_
-- [ ] 7.4 (P) 揺れるテストの道具で配置のテストの実行ファイルを選べるようにする
+- [x] 7.4 (P) 揺れるテストの道具で配置のテストの実行ファイルを選べるようにする
   - `-Binary` の選べる値に配置の lib を足し、選びを配置の crate の lib のテストへ渡す形にし、説明と注にも足す
   - 完了の状態: 新しい値で選んだときに配置の crate の lib のテストを指すことを、短い走行か選びの行で示す
   - _Boundary: TestBinaryGuard（tools/load-flake.ps1）_
   - _Requirements: 3.13_
-- [ ] 7.5 (P) 2 本の audit の brief の受け持ちと申し送りを書く
+- [x] 7.5 (P) 2 本の audit の brief の受け持ちと申し送りを書く
   - `audit-placement-core`・`audit-placement-follow` の受け持つファイルを、設計の線引きで移した先のパスへ直す
   - 両方に申し送りの節を足し、直さなかった不具合・理由の文が古くなった `#[allow]` の一覧・2.5 と 3.8 で開けた項目・（core だけ）規約が名指さない参照と輪・examples の古い説明を書く
   - 完了の状態: どのファイルもちょうど 1 本の audit の持ち物になり、申し送りの節が両方にある
   - _Boundary: PathRewrite（2 本の brief）_
   - _Requirements: 5.9, 7.7, 8.1, 2.5, 3.8_
-- [ ] 7.6 旧いパスと旧い出所の名前が残っていないことを確かめる
+- [x] 7.6 旧いパスと旧い出所の名前が残っていないことを確かめる
   - 決めた範囲で旧いパスと旧い出所の名前（本体のテスト専用のフォルダの出所は当たりにしない形）を grep する
   - 完了の状態: 両方の grep が 0 件・段 6 のコミット
   - _Depends: 7.1, 7.2, 7.3, 7.4, 7.5_
@@ -232,3 +232,10 @@
 
   説明のリンクだけの参照: `diag.rs:112` → `super::spawn::wire_zorder_pair`・`follow/offset_space.rs:251` → `crate::measure::MeasureScaling`。
 - 6.2: 番人の数え方で lib.rs 918 行・`placement_tests/transition_judge.rs` 999 行・main.rs 989 行。判定器は 1,000 行を超えないので分けていない。例外表は 5 件のまま。
+- 段 6 は 2 人の実装係を並べた（7.1・7.2 と 7.3〜7.5。触るファイルは重ならない）。レビューは段 6 全体で 1 回。
+- 7.2 は 4.1・5.6 の注で回された本体の説明のパス（emo2_boot の各テスト・collision-probe ほか）と、同じ形の古い記述がある wintf の `zorder_chain_apply*.rs`・`zorder_pair_maintain.rs`、ukadoc-survey の `extract_tests.rs` も直した。行番号は移す前の `fbfd7923` と今のファイルを突き合わせて付け直した。doc の行番号には、この spec より前から実物とずれているものがある（例 `collision-probe.rs:105` の `measure.rs:221` は今 433 行）。完了の棚卸で audit 側へ申し送る。
+- 7.2: `structure.md` の log-capture-kit を使う crate の数は 18 → 20（areka-placement と、元から漏れていた areka-parsers）。log-capture-kit の節に新しい `expect.rs` はまだ書いていない（完了の棚卸で足す）。
+- 7.3: 性能の道具は出所の名前で行を拾っていない（`judge-perf.py:1052` は `"primary_dpi=" in line`）。6.8 は発動しない。見本の差は 42 語の置き換えだけ。
+- 7.4: `-Binary areka-placement-lib` → `cargo test -p areka-placement --lib --`。負荷は回さず、選びの文を値ごとに評価して確かめた。
+- 7.5: 受け持ちは core 114・follow 56（計 170・glob で分けるので重ならない）。古くなった `#[allow]` は範囲の 46 個のうち 36 個（core 3・follow 33）。要件 8.1 の「約 51」は見込みの数。
+- 7.6: `crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` で `src/placement/`・`areka::placement`（`placement_tests` を除く）・`areka/examples/window-placement` が 0 件。分岐の対応表の `"placement/…_tests.rs"` は見出しの札でパスではない。

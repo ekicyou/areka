@@ -148,7 +148,7 @@ fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns()
 // ＋「PlacementRoute 配管＋guard_visibility > Integration」・D11）
 //
 // 単一ライター `enqueue_window_set_pos` の**書込成功時**に 1 レコードを専用 target
-// （`areka::placement::diag`）へ出す。檻の要点:
+// （`areka_placement::diag`）へ出す。檻の要点:
 //   (1) 経路名が呼出点と 1:1（route を取り違えたら赤）
 //   (2) route・entity・種別・scope・位置・寸・DPI の**全フィールド**が揃う
 //       （entity は wintf 側ログとの結合キーゆえ必ず入る＝Req 1.9 の 2 段 grep 条件）
@@ -540,11 +540,11 @@ fn window_move_records_are_silent_under_default_info_filter() {
     );
 }
 
-/// (4) 手順書の directive（`areka::placement::diag=debug`）で点灯する
+/// (4) 手順書の directive（`areka_placement::diag=debug`）で点灯する
 /// ＝単一ライター経由でも target が手順書と 1:1 で結ばれている（Req 1.5/1.7）。
 #[test]
 fn window_move_records_light_up_under_the_procedure_directive() {
-    let out = window_move_output_under_filter("info,areka::placement::diag=debug");
+    let out = window_move_output_under_filter("info,areka_placement::diag=debug");
     assert!(
         out.contains(WINDOW_MOVE_RECORD_TAG) && out.contains("route=DpiReproject"),
         "手順書の RUST_LOG で単一ライターのレコードが点灯しない: {out}"

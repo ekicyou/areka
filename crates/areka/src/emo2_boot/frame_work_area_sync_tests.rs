@@ -378,7 +378,7 @@ fn the_sync_is_called_before_the_scale_phase_in_the_frame_system() {
 /// 同期を 1 回回し、遷移観測の行だけを拾う。
 ///
 /// 捕捉窓の内側は観測 target が点いた状態である（既定 OFF そのものは
-/// `placement/follow_transition_diag_tests.rs` が directive 単位で所有する）。
+/// `crates/areka-placement/src/follow_transition_diag_tests.rs` が directive 単位で所有する）。
 fn transition_lines(harness: &mut FrameHarness) -> Vec<String> {
     let (_, events) = capture(|| {
         harness.run_work_area_sync();
@@ -478,7 +478,7 @@ fn a_rebuilt_source_also_logs_the_monitor_configuration_with_its_own_call_site_t
 ///
 /// 観測が消えている運転で確保が走らないことは、発行が `debug!` である以上、濾過テストでは
 /// 検出できない（組んでから捨てても緑になる）。担い手は本文の形そのものなので、ここで名指しする
-/// ——`placement/follow_transition_diag_tests.rs` の接地点レコードと同じ流儀である。
+/// ——`crates/areka-placement/src/follow_transition_diag_tests.rs` の接地点レコードと同じ流儀である。
 #[test]
 fn the_snapshot_record_is_built_behind_the_front_guard() {
     let code = include_str!("frame/work_area_sync.rs");
