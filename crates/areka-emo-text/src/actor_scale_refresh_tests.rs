@@ -685,3 +685,38 @@ fn device_change_recreates_renders_of_every_text_layer_in_the_world() {
     assert_ne!(after.0, before.0, "先の層が古い装置の描き手を使い続けた");
     assert_ne!(after.1, before.1, "後の層が古い装置の描き手を使い続けた");
 }
+
+/// 再追従で捨てた描き手は差し込み口からも外す: 新しい拡大率の物理寸が上限を越えて面を作れなくても、
+/// 前の拡大率の字の絵が差し込み口に残らない（k=1 で幅 9,000 の画像を 200% へ＝18,000）。
+#[test]
+fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
+    use wintf::ecs::VisualGraphics;
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    let wide = (9000, 60);
+    rt.register_actor_binding(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, wide, wide),
+        &geo_model(),
+    );
+    let slot_visual = |world: &World| {
+        world
+            .get::<VisualGraphics>(slot)
+            .and_then(|v| v.visual().cloned())
+    };
+    present_frame(&mut rt, &mut world, 10.0).expect("k=1 の提示");
+    assert!(slot_visual(&world).is_some(), "k=1 では字の絵が付く");
+    assert!(rt.refresh_actor_binding(
+        &actor,
+        TextSlotBinding::new(slot, window, 2.0, (18000, 120), wide),
+        &geo_model(),
+    ));
+    present_frame(&mut rt, &mut world, 10.0).expect("上限越えは Err にしない");
+    assert!(!rt.is_attached(&actor), "上限を越える面は作らない");
+    assert!(
+        slot_visual(&world).is_none(),
+        "前の字の絵が差し込み口に残る"
+    );
+}

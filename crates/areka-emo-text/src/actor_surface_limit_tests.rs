@@ -6,7 +6,8 @@
 //! - スクロールの後も、切った面の画素は切らない面（今までの形）の左上と同じ。
 //! - 箱の文字の面と印の面は「箱の大きさとシェルの画像の重なり」を越えない（シェルの大きさが変われば作り直す）。
 //! - 印の面も、装置が無効なフレームの失敗は覚えず、上限越えの覚えは WUC の資源が作り直されると試し直す。
-//! - 作れない文字の面の覚えは、装置の作り直しでも消える（試し直す）。
+//! - 作れない文字の面の覚えは、WUC の資源の作り直しと装置の作り直しで試し直す。
+//! - 一辺が上限を越える矢印の絵は描かず、`error!` は 10 フレームで 1 回のまま。
 
 use std::sync::Arc;
 
@@ -429,10 +430,10 @@ font.height,40",
     }
 }
 
-/// 2.4・3.3: 作れなかった文字の面の覚えは装置の作り直しで消える＝WUC の資源も入力も同じでも、
-/// 作り直した装置の回に試し直す（上限越えの記録がもう 1 回）。
+/// 2.4・3.3: 作れなかった文字の面の覚えは、WUC の資源の作り直し（鍵の時刻が変わる）と装置の作り直し
+/// （覚えを消す）で、入力が同じでも試し直す（上限越えの記録がそれぞれもう 1 回）。
 #[test]
-fn remembered_surface_failure_is_retried_after_device_recreation() {
+fn remembered_surface_failure_is_retried_after_wuc_or_device_recreation() {
     let (mut world, _, _) = com_world();
     let cues = [cue("0", 0.0, CueCommand::Text("あ".into()))];
     let vr = ValidRect::new(None, None, Some(-100_000), None);
@@ -450,7 +451,42 @@ fn remembered_surface_failure_is_retried_after_device_recreation() {
     };
     assert_eq!(count(&mut world), 1, "初めの 3 フレームで 1 回");
     assert_eq!(count(&mut world), 0, "同じ入力では試さない");
+    // WUC の資源だけを作り直す（覚えの鍵の WUC の時刻が変わる）。
+    world.resource_mut::<WucGraphicsResource>().set_changed();
+    assert_eq!(count(&mut world), 1, "WUC の資源を作り直すと試し直す");
+    assert_eq!(count(&mut world), 0, "作り直した後も同じ入力では試さない");
     // 装置だけを作り直す（WUC の資源の変わった時刻は覚えの鍵のまま）。
     world.resource_mut::<GraphicsCore>().set_changed();
     assert_eq!(count(&mut world), 1, "装置を作り直すと試し直す");
+}
+
+/// 一辺が上限（16,384）を越える矢印の絵は GPU へ移せない（入力で決まる失敗）: 10 フレームで `error!` は
+/// 1 回・提示は `Err` にしない（毎フレーム描き直して記録し続けない）。
+#[test]
+fn over_limit_arrow_image_logs_once_in_ten_frames() {
+    let (mut world, _, _) = com_world();
+    let (mut rt, place) = box_runtime(&mut world, "size,200,100", 40);
+    let big = Arc::new(MarkerImage {
+        width: MAX_SURFACE_SIDE + 1,
+        height: 4,
+        bgra: vec![255; (MAX_SURFACE_SIDE as usize + 1) * 16],
+    });
+    let pair = MarkerPair {
+        up: Some(Arc::clone(&big)),
+        down: Some(big),
+    };
+    rt.set_balloon_markers(ActorKey::from("0"), pair);
+    sync(&mut rt, &mut world, SHELL);
+    let (results, events) = capture(|| {
+        (0..10)
+            .map(|i| present_frame(&mut rt, &mut world, 1000.0 + f64::from(i) * 0.1))
+            .collect::<Vec<_>>()
+    });
+    let errors = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::ERROR)
+        .count();
+    assert_eq!(errors, 1, "10 フレームで 1 回: {events:?}");
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    assert!(rt.surfaces[&place].markers.is_some(), "印の面はある");
 }

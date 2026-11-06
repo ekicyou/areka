@@ -377,7 +377,8 @@ fn default_balloon_model() -> BalloonModel {
 }
 
 /// 今の提示の面が、同じ見える範囲を全域で描き直した面と行ごとに同じこと。描き直しは再追従と同じく
-/// 描画資源だけを捨てて次の提示で作り直す（手動の位置は場所の状態なので残る）。
+/// 描き手を捨て（差し込み口と印の面の窓の子は次の提示の頭で外す）、次の提示で作り直す（手動の位置は
+/// 場所の状態なので残る）。
 fn assert_matches_full_redraw(
     rt: &mut TextLayerRuntime,
     world: &mut World,
@@ -390,7 +391,8 @@ fn assert_matches_full_redraw(
         .expect("面")
         .read_back()
         .expect("read_back");
-    rt.surfaces.remove(place);
+    let render = rt.surfaces.remove(place).expect("描き手");
+    rt.retired_renders.push((render, rt.routing[place].slot));
     present_frame(rt, world, DONE).expect("描き直しの提示");
     let full = rt
         .surface(&place.actor)

@@ -410,9 +410,9 @@ impl TextLayerRuntime {
             );
             return true;
         }
-        // 印の面は窓の子なので、World を持つ次の提示の頭で消す（描画資源と一緒に捨てると残る）。
-        if let Some(markers) = self.surfaces.remove(&place).and_then(|r| r.markers) {
-            self.retired_markers.push(markers);
+        // 差し込み口の絵と窓の子は World を持つ次の提示の頭で外す（ここで落とすだけだと前の字が残る）。
+        if let Some(render) = self.surfaces.remove(&place) {
+            self.retired_renders.push((render, current.slot));
         }
         info!(
             actor = %actor,

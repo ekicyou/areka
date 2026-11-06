@@ -73,9 +73,9 @@ pub fn present_frame(
     world: &mut World,
     talk_time: f64,
 ) -> Result<(), TextLayerError> {
-    // 再追従が描画資源と一緒に外した印の面を窓の子ごと消す（World はここで初めて持つ）。
-    for markers in std::mem::take(&mut runtime.retired_markers) {
-        markers.despawn(world);
+    // 再追従が捨てた描き手を差し込み口から外す（World はここで初めて持つ）。
+    for (render, slot) in std::mem::take(&mut runtime.retired_renders) {
+        render.discard(world, Some(slot));
     }
     drop_renders_after_device_change(runtime, world);
     // 状態を持つ actor だけが提示対象（binding 登録済みでも cue が無ければ描くものがない）。

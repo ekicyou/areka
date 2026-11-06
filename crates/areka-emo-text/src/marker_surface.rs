@@ -36,6 +36,7 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, GraphicsCore};
 
+use super::present::{MAX_SURFACE_SIDE, over_surface_limit};
 use crate::TextLayerError;
 use crate::draw::create_d2d_target_bitmap;
 use crate::region::ScaleContract;
@@ -137,6 +138,8 @@ impl MarkerSurface {
 
     /// 全面を透明にして `shown` の矢印を `(at × k, 大きさ × k)` へ描き、提示し、当たりのマスクを
     /// 出ている矢印の α ≥ 0.5 の画素へ差し替える。失敗は `error!` を残して `Err`（面と当たりは前のまま）。
+    /// 寸が上限を越える絵（GPU へ移せない・入力で決まる失敗）は `error!` を残して描かず当たりにも入れず、
+    /// 描けたことにする（同じ `shown` では描き直さない＝記録は 1 回）。
     pub fn draw(
         &mut self,
         world: &mut World,
@@ -144,8 +147,18 @@ impl MarkerSurface {
         scale: &ScaleContract,
     ) -> Result<(), TextLayerError> {
         let k = scale.scale;
+        let fits: Vec<PlacedMarker> = shown.iter().filter(|m| image_fits(m)).cloned().collect();
+        for m in shown.iter().filter(|m| !image_fits(m)) {
+            tracing::error!(
+                kind = ?m.kind,
+                w = m.image.width,
+                h = m.image.height,
+                max_side = MAX_SURFACE_SIDE,
+                "矢印の絵の寸が上限を越える——描かず、出す矢印が変わるまで描き直さない"
+            );
+        }
         // 可謬な準備（絵の GPU への転送）は BeginDraw の前に済ませる。
-        let bitmaps = shown
+        let bitmaps = fits
             .iter()
             .map(|m| marker_bitmap(&self.dc, &m.image).map(|b| (m, b)))
             .collect::<Result<Vec<_>, _>>()?;
@@ -170,7 +183,7 @@ impl MarkerSurface {
         self.surface.flip();
         self.surface.present()?;
 
-        let mask = marker_hit_mask(self.surface.size(), k, shown);
+        let mask = marker_hit_mask(self.surface.size(), k, &fits);
         let entity = self.surface.window_child();
         match entity.and_then(|e| world.get_mut::<AlphaMaskResource>(e)) {
             Some(mut res) => res.set(mask.clone()),
@@ -203,9 +216,10 @@ impl MarkerSurface {
             return None;
         }
         let k = self.scale;
-        // 当たった画素を描いた矢印（マスクと同じ矩形の取り方）。重なりは先の矢印を採る。
+        // 当たった画素を描いた矢印（マスクと同じ矩形の取り方・描かなかった絵は除く）。重なりは先の矢印を採る。
         self.drawn
             .iter()
+            .filter(|m| image_fits(m))
             .find(|m| {
                 let inside = |p: u32, at: i64, len: u32| {
                     let (lo, hi) = marker_span(at, len, k);
@@ -225,6 +239,11 @@ impl MarkerSurface {
     pub fn despawn(self, world: &mut World) {
         self.surface.despawn_window_child(world);
     }
+}
+
+/// 矢印の絵を GPU へ移せる寸か（文字の面と同じ上限・越える絵は描かない）。
+fn image_fits(m: &PlacedMarker) -> bool {
+    !over_surface_limit((m.image.width, m.image.height))
 }
 
 /// 矢印 1 つの 1 軸の物理 px の範囲（始まり, 終わり）＝`(at × k, (at + 寸) × k)`。描く矩形はそのまま、

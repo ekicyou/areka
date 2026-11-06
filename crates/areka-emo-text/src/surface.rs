@@ -565,8 +565,8 @@ impl TextSurface {
         // dst 原点＝ずらし先の正側・src box＝残存域（ずらしの逆側と面寸で挟んだ矩形）。
         let dstx = dx.max(0);
         let dsty = dy.max(0);
-        let left = (-dx).max(0);
-        let top = (-dy).max(0);
+        let left = dx.saturating_neg().max(0);
+        let top = dy.saturating_neg().max(0);
         let right = w.min(w.saturating_sub(dx));
         let bottom = h.min(h.saturating_sub(dy));
         // box 退化＝全域スクロールアウト（写る残存域なし）——copy を発行しない（back は呼び手が埋める）。
@@ -818,8 +818,8 @@ mod tests {
         let mut out = vec![0u8; (w * h * 4) as usize];
         for yy in 0..h {
             for xx in 0..w {
-                let sx = xx - dx;
-                let sy = yy - dy;
+                let sx = xx.saturating_sub(dx);
+                let sy = yy.saturating_sub(dy);
                 if sx >= 0 && sx < w && sy >= 0 && sy < h {
                     let di = ((yy * w + xx) * 4) as usize;
                     let si = ((sy * w + sx) * 4) as usize;
@@ -844,8 +844,9 @@ mod tests {
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
 
         let (w, h) = (8u32, 6u32);
-        // ずらし量: ゼロ・各軸の正負（面外へ全スクロールしない小さな N＝露出帯が必ず生じる）。
-        for &(dx, dy) in &[(0i32, 0i32), (0, 3), (0, -3), (3, 0), (-3, 0)] {
+        // ずらし量: ゼロ・各軸の正負の小さな N（露出帯が必ず生じる）と i32::MIN（桁があふれず全域が露出）。
+        let m = i32::MIN;
+        for &(dx, dy) in &[(0, 0), (0, 3), (0, -3), (3, 0), (-3, 0), (m, 0), (0, m)] {
             let mut world = World::new();
             let (window, slot) = spawn_reserved_slot(&mut world);
             let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));

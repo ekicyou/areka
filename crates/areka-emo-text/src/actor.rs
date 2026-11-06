@@ -340,8 +340,9 @@ pub struct TextLayerRuntime {
     /// スコープ → 箱の名前 → 箱の矢印の絵（`set_box_markers`・名前の順はスコープごと・要件 2.1・7.3）。
     /// 足りない番号はスコープの普通のバルーンの絵で埋める。
     box_markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
-    /// World の無い所（再追従）で描画資源と一緒に外した印の面。次の [`present_frame`] の頭で窓の子ごと消す。
-    retired_markers: Vec<MarkerSurface>,
+    /// World の無い所（再追従）で捨てた描き手と、それを付けていた差し込み口。次の [`present_frame`] の頭で
+    /// 差し込み口から外し、印の面と窓の子を消す（[`ActorRender::discard`]）。
+    retired_renders: Vec<(ActorRender, Entity)>,
     /// 場所 → 作れなかった文字の面の（物理寸, 物理の位置, WUC の資源の変わった時刻, 差し込み口, 窓）。同じなら
     /// 作り直さない（`actor_present.rs`・入力で答えが決まる失敗だけ・装置の作り直しで消す）。
     surface_failed: HashMap<PlaceKey, FailedSurface>,
@@ -396,7 +397,7 @@ impl TextLayerRuntime {
             scrolls: HashMap::new(),
             balloon_markers: HashMap::new(),
             box_markers: BTreeMap::new(),
-            retired_markers: Vec::new(),
+            retired_renders: Vec::new(),
             surface_failed: HashMap::new(),
             seen_graphics: None,
         }
