@@ -179,6 +179,15 @@ pub(super) fn warn_cursor_fallback(
             style, "cursor.style underline 系は M1 未対応: SquareFill へ縮退"
         );
     }
+    if let Some(style) = now.unknown_style.as_deref()
+        && previous.is_none_or(|p| p.unknown_style.as_deref() != Some(style))
+    {
+        warn!(
+            balloon,
+            style,
+            "cursor.style が正典の値（square・underline・square+underline・none）のどれでもない: 既定の square で描く"
+        );
+    }
 }
 
 impl ResolvedBalloonText {

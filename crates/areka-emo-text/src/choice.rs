@@ -124,7 +124,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 ///   ゆえにピッチで頭打ちにする。実測 Yu Gothic UI 28px（行送り 30 ＝ 28 + 行間 2）では
 ///   `clamp(37.24, 28, max(28, 30)) = 30`——次行の帯へ食い込まない。
 ///   `line_pitch < font_height` の病的設定では下限が勝つ（帯 ＝ `font_height`）。
-/// - 行送り比 `\n[ratio]` で ratio < 1 を指定した行間縮小時は帯が隣接行へ届き得る（M1 既知の
+/// - 行送り比 `\n[ratio]` で ratio < 1 を指定した行間縮小時は帯が隣接行へ届き得る（既知の
 ///   縮退——正典 fixture は ratio ≥ 1）。
 ///
 /// ## 帯の丈だけでは足りない（位置も要る）
@@ -633,7 +633,7 @@ pub fn decorate_canvas(
     canvas
 }
 
-/// ハイライトスタイル差替シーム（cursor.\* 解決＋矩形反転縮退＋将来非正典スタイルの開放口）。
+/// ハイライトスタイル差替シーム（cursor.\* 解決＋矩形反転＋将来非正典スタイルの開放口）。
 ///
 /// balloon の `cursor.*` スタイルモデル（[`BalloonCursor`]）を hover ハイライトの描画正規形へ
 /// 解決する純粋 enum（design.md「純粋層 / ChoicePure」・要件 4.2/4.3/6.1/6.5）。解決は
@@ -654,7 +654,7 @@ pub enum ResolvedChoiceStyle {
         /// hover 文字色（`cursor.font.color`）。
         text: (u8, u8, u8),
     },
-    /// cursor.\* 未指定バルーンの矩形反転縮退（要件 4.3/6.1・M1 実導出＝縮退ではない）。
+    /// cursor.\* 未指定バルーンの矩形反転（要件 4.3/6.1・正典の導出で縮退ではない）。
     ///
     /// [`paint`](ResolvedChoiceStyle::paint) が塗り＝バルーン既定 `font.color`・文字＝各成分 `255−c` を返す
     /// （既定黒文字なら黒矩形＋白文字＝古典反転と同観）。
@@ -668,12 +668,14 @@ impl ResolvedChoiceStyle {
     ///
     /// 判定（design.md 縮退表＋正典確定）:
     /// - `cursor` 不在、または cursor.\* 全キー未指定 → [`Invert`](ResolvedChoiceStyle::Invert)
-    ///   （未指定バルーン判定・M1 実導出・縮退ではない＝warn なし・要件 4.3/6.1）。
+    ///   （未指定バルーン判定・縮退ではない＝warn なし・要件 4.3/6.1）。
     /// - `cursor.style,none` → [`NoMarker`](ResolvedChoiceStyle::NoMarker)（正典・マーカー無し）。
     /// - `cursor.style` underline 系（`underline`／`square+underline`）→
     ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill) へ縮退（在る色を採る・要件 6.5）。
     /// - `cursor.style` square または style 未指定（既定 square）で他キー在り →
     ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill)（`fill=brush.color`・`text=font.color`・要件 4.2）。
+    /// - `cursor.style` が正典の 4 つのどれでもない値 → 既定 square と同じく
+    ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill)（ukadoc は知らない値の扱いを書かない）。
     /// - `cursor.blendmethod` が ROP 系（`none` 以外）→ `none` 扱い
     ///   （色ベース描画・variant は style 判定どおりで不変・要件 6.5）。
     ///
@@ -751,11 +753,14 @@ pub(crate) struct CursorFallback {
     pub(crate) blendmethod: Option<String>,
     /// 下線系の cursor.style の値（SquareFill で描く）。
     pub(crate) underline_style: Option<String>,
+    /// 正典の 4 つ（square・underline・square+underline・none）のどれでもない cursor.style の値
+    /// （ukadoc は知らない値の扱いを書かないので、既定の square＝SquareFill で描く）。
+    pub(crate) unknown_style: Option<String>,
 }
 
 impl CursorFallback {
     /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`style_has_underline`] の、
-    /// ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する（[`ResolvedChoiceStyle::resolve`] は
+    /// 知らない style は [`is_canon_style`] の、ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する（[`ResolvedChoiceStyle::resolve`] は
     /// `none` 以外の style を一律に SquareFill へ落とし、ROP 系も分岐に効かないため、どちらの判定も持たない）。
     pub(crate) fn of(cursor: &BalloonCursor) -> CursorFallback {
         CursorFallback {
@@ -763,6 +768,10 @@ impl CursorFallback {
             underline_style: cursor
                 .style()
                 .filter(|s| style_has_underline(s))
+                .map(str::to_string),
+            unknown_style: cursor
+                .style()
+                .filter(|s| !is_canon_style(s))
                 .map(str::to_string),
         }
     }
@@ -773,6 +782,13 @@ fn rop_blendmethod(cursor: &BalloonCursor) -> Option<&str> {
     cursor
         .blendmethod()
         .filter(|bm| !bm.eq_ignore_ascii_case("none"))
+}
+
+/// `cursor.style` が正典の値（`square`・`none`・underline 系）かを判定する（大小無視）。
+fn is_canon_style(style: &str) -> bool {
+    style.eq_ignore_ascii_case("square")
+        || style.eq_ignore_ascii_case("none")
+        || style_has_underline(style)
 }
 
 /// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視）。

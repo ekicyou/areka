@@ -254,7 +254,7 @@ fn warns<'a>(events: &'a [CapturedEvent], message: &str) -> Vec<&'a CapturedEven
         .collect()
 }
 
-/// T4（要件 2.1〜2.4・5.1）: ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
+/// `real-run-log-noise` 要件 2.1〜2.4・5.1: ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
 /// 1 件ずつ（`balloon` の欄が入れた名前）。値の同じ再追従 3 回で 0 件、拡大率の変わる再追従でも
 /// 0 件、`blendmethod` だけ `xor` に替えた再追従で ROP 系だけ 1 件。
 ///
@@ -309,6 +309,34 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
         warns(&changed, UNDERLINE_FALLBACK).len(),
         0,
         "下線系は 0 件"
+    );
+}
+
+/// 知らない `cursor.style` の警告の文言。
+const UNKNOWN_STYLE: &str = "cursor.style が正典の値（square・underline・square+underline・none）のどれでもない: 既定の square で描く";
+
+/// 知らない `cursor.style`（`squre`）のバルーンは装着で 1 件（`style` の欄が元の値）、値の同じ
+/// 再追従で 0 件。
+#[test]
+fn unknown_cursor_style_warns_once_naming_the_value() {
+    let mut world = World::new();
+    let (bind, actor) = binding(&mut world);
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.set_balloon_label(&actor, "飾りの検体".to_string());
+    let model = cursor_model("squre", "none");
+
+    let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), bind, &model));
+    let unknown = warns(&attached, UNKNOWN_STYLE);
+    assert_eq!(unknown.len(), 1, "装着で知らない style の warn が 1 件");
+    assert_eq!(unknown[0].field_str("balloon"), Some("飾りの検体"));
+    assert_eq!(unknown[0].field_str("style"), Some("squre"));
+
+    let (answer, same) = capture_checked(|| rt.refresh_actor_binding(&actor, bind, &model));
+    assert!(!answer);
+    assert_eq!(
+        warns(&same, UNKNOWN_STYLE).len(),
+        0,
+        "値の同じ再追従で 0 件"
     );
 }
 

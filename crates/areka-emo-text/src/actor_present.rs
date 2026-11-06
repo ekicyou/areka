@@ -404,7 +404,7 @@ fn present_actor(
     };
     let visible = actor_state.reveal().visible(talk_time);
     let spans = actor_state.choices();
-    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。済んだ選択肢を指す強調は
+    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し）。済んだ選択肢を指す強調は
     // 装飾へ渡さない（注釈は全部の範囲のまま＝字・色・印は変わらない・areka-P0-balloon-text-bugs 件 1 の要件 1.10／1.12）。
     let hover = runtime
         .choice_hover
@@ -743,7 +743,7 @@ pub(super) fn arrange_lines(
             ),
         },
     };
-    // `\_l` の座標解決の縮退（`CursorDegrade`・5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
+    // `\_l` の座標解決の縮退（`CursorDegrade`・`areka-P0-cursor-tag-canon` 要件 5.1〜5.3）の warn-once を production で有効化する持続 guard を渡す
     // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ）。
     // 装飾入りの配置の入口（要件 14.1／14.2・番号列が既定だけなら従来と同一の出力）。
     Some(LayoutEngine::layout_styled(

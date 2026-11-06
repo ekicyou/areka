@@ -17,7 +17,7 @@
 //! 5. 箱を隠す・出すで 0 回。箱の束を差し替えても記憶は残り、正の定義で戻れば情報 1 回。
 //!
 //! 片付けの口 `TextSurface::release`（要件 **2.9**）は後の節 `release`（ECS・実 GPU）が固定する。
-//! 提示（1.4）の檻（実 GPU）は兄弟の `actor_region_collapse_present_tests.rs` に置く。
+//! 提示（`actor_present.rs`）の檻（実 GPU）は兄弟の `actor_region_collapse_present_tests.rs` に置く。
 //!
 //! ## 0 件の主張が恒真にならないようにする
 //!
@@ -411,7 +411,7 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
 
 // ── 面の片付け（要件 2.9・ECS・実 GPU） ──
 //
-// 描いた後に潰れたら、提示（1.4）が `TextSurface::release` で前の字の面を外す。ここは片付けの口
+// 描いた後に潰れたら、提示（`actor_present.rs`）が `TextSurface::release` で前の字の面を外す。ここは片付けの口
 // そのものを固定する: 差し込み口の面は差し込み口から文字の層の部品を外し、差し込み口の entity と
 // 窓の `Children` の並びは残す（付け直しで wintf の `visual_sync` が `Children` の順に入れ直す）。
 // 窓の子の面は窓の子ごと消す。差し込み口が居なければ警告して何もしない。

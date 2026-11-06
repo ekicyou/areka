@@ -105,8 +105,8 @@ fn clear_drops_only_the_destination_box() {
 }
 
 /// `\b[名前]` で行き先だけが替わっても、前の箱の文字は出たまま（要件 4.5）なので外さない。
-/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない・本 spec 要件 1.6・2.1）。
-/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す（要件 6.2・6.6・本 spec 要件 1.1〜1.3）。
+/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない・`areka-P0-shell-balloon-frame-align` 要件 1.6・2.1）。
+/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す（要件 6.2・6.6・`areka-P0-shell-balloon-frame-align` 要件 1.1〜1.3）。
 #[test]
 fn only_the_picture_number_drops_boxes_from_the_snapshot() {
     let mut f = two_boxes_shown();
@@ -155,8 +155,8 @@ fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
 }
 
 /// 普通のバルーンの窓に今出ている文字の数: 表示している絵が箱を持つ面なら 0、そうでなければ普通の
-/// バルーンの場所の見えている文字の数（要件 5.1・5.2・6.9・本 spec 要件 1.8）。台本の `\s` の
-/// 受け取りには従わない。箱の表が空なら絵の番号に依らない（本 spec 要件 4.5）。
+/// バルーンの場所の見えている文字の数（要件 5.1・5.2・6.9・`areka-P0-shell-balloon-frame-align` 要件 1.8）。台本の `\s` の
+/// 受け取りには従わない。箱の表が空なら絵の番号に依らない（`areka-P0-shell-balloon-frame-align` 要件 4.5）。
 #[test]
 fn balloon_shown_glyphs_follows_the_shown_picture_number() {
     let mut f = fixture();
@@ -193,8 +193,8 @@ fn balloon_shown_glyphs_follows_the_shown_picture_number() {
         "\\s[4] を受け取っても絵が 0 のままなら窓に出さない"
     );
 
-    // 箱の表が空のシェル（箱の束がまだ無いランタイム）は、絵の番号に依らず本 spec の前と同じ値
-    // （要件 5.4・本 spec 要件 4.5）。
+    // 箱の表が空のシェル（箱の束がまだ無いランタイム）は、絵の番号に依らず普通のバルーンの場所の
+    // 見えている文字の数（要件 5.4・`areka-P0-shell-balloon-frame-align` 要件 4.5）。
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&text("0", "あい"));
     rt.apply_cue(&emote("0", "0"));

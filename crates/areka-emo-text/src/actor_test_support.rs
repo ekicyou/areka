@@ -107,13 +107,13 @@ pub(crate) fn cursor_model() -> BalloonModel {
     geo_model().with_cursor(BalloonCursor::new(
         Some("square".to_string()),
         CursorColor::new(Some(105), Some(25), Some(25)), // brush.color＝矩形塗り色
-        CursorColor::new(None, None, None),              // pen.color（M1 非参照）
+        CursorColor::new(None, None, None),              // pen.color（今は読まない）
         CursorColor::new(Some(255), Some(255), Some(255)), // font.color＝hover 白文字
         None,                                            // blendmethod（既定 none）
     ))
 }
 
-/// テスト用 WUC dispatcher と Compositor（emo-present chain.rs / mount.rs テストと同一方針）。
+/// テスト用 WUC dispatcher と Compositor（emo-present の mount.rs のテストと同一方針）。
 ///
 /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、ASTA を第一候補・失敗時
 /// NONE を保険とする（未初期化スレッドでは ASTA が通る）。controller は Compositor より
@@ -402,7 +402,7 @@ pub(crate) fn balloon(actor: &str) -> PlaceKey {
     PlaceKey::balloon(&ActorKey::from(actor))
 }
 
-/// 4 つの受け口の形で届いた便りを全部記録するドレイン（本テストスレッド＝pump スレッド）。
+/// 3 つの受け口の形で届いた便りを全部記録するドレイン（本テストスレッド＝pump スレッド）。
 pub(crate) fn spawn_message_drain(name: &str) -> (EmoTextSink, Arc<Mutex<Vec<TextMsg>>>) {
     let records = Arc::new(Mutex::new(Vec::new()));
     let (on_cue, on_upcoming, on_mark) = (

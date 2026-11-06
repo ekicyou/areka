@@ -634,3 +634,10 @@
 
 - 指摘にしなかったもの: `tests/attach_wiring_test.rs:605-610`（同じテストの前の窓で発行点が生きていると分かる・`capture_checked` は `tests/` から使えない）・`choice_style_resolve_tests.rs:179-184`（`resolve` に記録の道が無く番兵つき）・`state_cue_apply_tests.rs:193` の `choice_cue`（刻みが違う）・`lib.rs` の禁じる字を `use wintf::{com as c}` で逃げる理屈の上の形（今のファイルに無く、普通の書き方でない）・`tests/decoration_readback/mod.rs` の撮影で World に面が積もること（スレッドの終わりで消える）。
 - 範囲の外で見えたもの（知らせるだけ）: 兄弟の `viewbox_draw_render.rs:607-616` の `marker_bitmap_for` は成功しか覚えず、一辺 16,384 を越える行内の印の絵で、その行を描き直すたびに `error!` が出る（R1-1 と同じ型・`audit-emo-text-layout-draw` へ）。兄弟の `inline_marker_tests`・`lookahead_tests` にも `\f` の cue の手組みがある。
+
+#### 2 回目の片付け
+
+- 19 件とも直した（R2-A1 `88ca8e5d`・R2-B `941192b2`・R2-C は次のコミット）。どの組も別のレビュー係の承認を得た。
+- R2-12・R2-14 は裁定に当たる指摘。開発者は audit 系の spec の議題を推奨案で承認してよいとしている（11-04）ので、次の形で決めた。
+  - R2-12: 正典にない `cursor.style` は、今までどおり既定の square で描く。そのうえで、置き場ごとに値が新しく決まったときだけ、値の名前つきの `warn!` を 1 件出す（`CursorFallback::unknown_style`・`is_canon_style`）。ukadoc の値は square・underline・square+underline・none の 4 つで、既定は square。知らない値の扱いは書かれていない。
+  - R2-14: `M1` は spec の項目ではなく、roadmap のマイルストーン（09-11 完成宣言）。辿れないので、受け持ちのファイルでは「今は」に書き換えるか語を外した。記録の文の字面（`real-run-log-noise` の 2.1・2.2 が文言を決めている）と検体のコメントは残した。兄弟の持ち物の `canvas.rs` にも同じ札が残る。

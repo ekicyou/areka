@@ -70,19 +70,19 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
 /// 丸めそのもの（k<1 の衝突）の檻は [`SUB_UNITY_NATIVE`] 側が所有する。
 const SCALED_NATIVE: (u32, u32) = (140, 80);
 
-/// k<1 檻の native 原寸（2026-07-30）。
+/// k<1 檻の native 原寸。
 ///
 /// # なぜこの値か——k<1 では順写像が**単射でない**
 ///
 /// 丸め権威 `scale_len` は k=4/5 で `142 → round(113.6) = 114` と `143 → round(114.4) = 114`
 /// を返す。**異なる 2 つの原寸が同一の物理寸へ潰れる**のだから、物理寸から原寸を復元する
-/// 逆写像は原理的に存在し得ない——旧導出はどちらか一方で必ず間違える。同様に 77 と 78 は
+/// 逆写像は原理的に存在し得ない——逆写像の導出はどちらか一方で必ず間違える。同様に 77 と 78 は
 /// ともに 62 へ潰れる。
 ///
 /// k>1 でこれが起きないのは、順写像が拡大写像で異なる原寸が異なる物理寸へ分離されるからである
 /// （縮小写像である k<1 のみ鳩ノ巣で衝突する）。ゆえに「k≥1 で緑」は k<1 の証拠にならない。
 ///
-/// 実測（2026-07-30）: 旧導出を復活させるとこの (142, 77) は (143, 78) を返して落ちる。
+/// 逆写像の導出に戻すと、この (142, 77) は (143, 78) を返して落ちる。
 const SUB_UNITY_NATIVE: (u32, u32) = (142, 77);
 
 /// 窓 DPI を指定して balloon 相当の単一 target（native 原寸 [`SCALED_NATIVE`]）を表示確立まで組む。
@@ -390,7 +390,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
 /// [`TextSlotBinding::from_view`] の入力 `TextSlotView` は emo-present の**私有フィールド型**で
 /// 公開コンストラクタを持たず、唯一の構築点が `EmoPresenter::text_slot_view`（実 GPU 表示確立が
 /// 前提）である。ゆえに `surface_size()`（native）を渡す**旧実装へ戻す変異**は
-/// `cargo test -p areka-emo-text` の全 in-crate ターゲットで誰にも殺されない（レビュアー実測）。
+/// `cargo test -p areka-emo-text` の全 in-crate ターゲットで誰にも殺されない。
 /// 本ケースは実 presenter から得た本物の view でその向きを固定する。
 ///
 /// # なぜ k=2（窓 DPI 192／author 96）でなければならないのか
@@ -404,7 +404,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
 /// 2. `binding.image_size == view.surface_size()`（image px 原寸＝作者画像空間は **k 不変**）、
 /// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（R8.2 の可観測な帰結）。
 ///    旧実装では image 空間が 1/k へ縮み、供給面が k に依らずほぼ一定になる——「k を変えても
-///    文字が拡大されない」静かな欠陥（6.5 一次実走で実機検出された症状）そのもの。
+///    文字が拡大されない」静かな欠陥（`areka-P0-emo-dpi-scaling` の実機走行で見つかった症状）そのもの。
 #[test]
 fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     let mut world = make_world_with_gpu();
@@ -454,7 +454,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     );
 }
 
-/// **k<1 の 1px 往復欠陥の回帰檻**（2026-07-30 新設・実 presenter 経路）。
+/// **k<1 の 1px 往復欠陥の回帰檻**（実 presenter 経路）。
 ///
 /// # 何を守っているか
 ///
@@ -465,13 +465,13 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
 ///
 /// 本ケースは作者 DPI 120／窓 DPI 96（k=4/5）で native [`SUB_UNITY_NATIVE`]=(142,77) を通し、
 /// `binding.image_size` が **(142,77) のまま**であることを実 presenter 経由で固定する。
-/// 逆写像を復活させると (143,78) になり落ちる（＝旧実装への排他キル・2026-07-30 実測）。
+/// 逆写像を復活させると (143,78) になり落ちる（＝逆写像の実装への排他キル）。
 ///
 /// # なぜ k>1 の兄弟檻では足りなかったか
 ///
 /// `from_view_reads_physical_size_so_image_space_stays_k_invariant` は k=2 で「どちらの寸を
 /// 読むか」の**向き**を固定するが、k≥1 では逆写像も厳密に復元するため**丸めの破れは起きない**。
-/// k<1 は本 spec のどの檻も実機サインオフ（125%/200%＝k>1）も通っておらず、休眠していたのは
+/// k<1 は `areka-P0-emo-dpi-scaling` のどの檻も実機サインオフ（125%/200%＝k>1）も通っておらず、休眠していたのは
 /// 同梱 emo2 fixture が DPI を宣言しない（＝96）という**データ上の偶然**にすぎなかった。
 ///
 /// # 本番到達性
@@ -594,7 +594,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     assert_eq!(
         second_attach.expect_field("physical_size"),
         "(280, 160)",
-        "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（7.4 は絶対値でなくこの比で判定する）"
+        "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（絶対値でなくこの比で判定する）"
     );
 
     // ── 装着 info! は「ActorRender 不在時のみ」——判定キー全同値の走査では 3 回目が出ない ──

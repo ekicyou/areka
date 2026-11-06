@@ -285,7 +285,8 @@ mod tests {
         ("viewbox.rs", include_str!("viewbox.rs")),
         ("viewbox_diff.rs", include_str!("viewbox_diff.rs")),
         ("wrap.rs", include_str!("wrap.rs")),
-        // 装飾まわりの純粋モジュールとその兄弟テスト（areka-P0-text-decoration-canon ほか）
+        // 装飾・先渡し・行の組み立て・描画の計画の純粋モジュールとその兄弟テスト／支援
+        // （areka-P0-text-decoration-canon ほか）
         // （`draw_metrics.rs`／`draw_line_store.rs` は COM 層なので載せない）。
         ("color.rs", include_str!("color.rs")),
         ("color_tests.rs", include_str!("color_tests.rs")),

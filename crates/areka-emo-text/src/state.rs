@@ -19,7 +19,7 @@
 //!   （追記正本の忠実記録＝後出し優先）に留まり、その改行を実際に**行送りとして
 //!   可視化するか否か**（保留・累算・実体化・蒸発）は下流 layout の**遅延解釈**に委ねる。
 //!   すなわち「追記は即時・行送りの可視化は layout が遅延解釈」（R4.3）。
-//! - `Choice` は配送列に第一級で現れ（R8.6 仕様変更）、本層で実消費する（W4 choice-render）:
+//! - `Choice` は配送列に第一級で現れ（`areka-P0-sakura-dialogue-tags` R8.6）、本層で実消費する（`areka-P0-choice-render`）:
 //!   `text` のグリフを items へ Text cue と同一の追記＋リビール時刻式で載せつつ、`ChoiceSpan`
 //!   （配送順序数 `ordinal`・`\q` ID／表示 label／references の不透明転写・グリフ序数範囲）を
 //!   `choices` へ記録する（R1.1/R1.2）。空 `text` は `warn!`（actor 付き）＋空範囲スパン記録・
@@ -442,8 +442,9 @@ pub struct TextLayerState {
     actors: BTreeMap<PlaceKey, ActorTextState>,
     /// scope ごとの内容が消された回数（`Clear`／`ClearAll` の累計・単調増加）。
     /// `ActorTextState` の欄にしないのは、内容の状態の形と等しさを変えないため。
-    /// 場所を外しても消さない（わざと残す）: 読み手（`crates/areka` の `balloon_visibility`）が
-    /// 単調増加を前提に `clear_count` の変化を見るので、消すと 0 へ戻って変化を取り違える。
+    /// 普通のバルーンの場所の回数は場所を外しても消さない（わざと残す）: 読み手（`crates/areka` の
+    /// `balloon_visibility`）が単調増加を前提に `clear_count` の変化を見るので、消すと 0 へ戻って
+    /// 変化を取り違える。箱の場所の回数は `set_box_index` が箱の場所と一緒に捨てる。
     clears: BTreeMap<PlaceKey, u64>,
     /// スコープごとの今のサーフェス番号と文字の行き先（操作は [`route`]・要件 4.7）。
     /// `set_box_index` でも消さない（わざと残す）: スコープの今のサーフェス番号はシェルの切替を

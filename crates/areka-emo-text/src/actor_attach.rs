@@ -149,7 +149,7 @@ impl TextLayerRuntime {
     /// 「読み込み（装着）1 回につき 1 件」という意味を持つ層がここだからである
     /// （本ファイルの `warn_coarse_wrap_threshold` の doc に経緯）。
     ///
-    /// 範囲外ゆえ無視した `origin` 宣言の警告（本 spec 要件 3.1〜3.5）も同じ理由で本口が書く。
+    /// 範囲外ゆえ無視した `origin` 宣言の警告（`areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.5）も同じ理由で本口が書く。
     /// 関数の本体だけは `actor_decoration.rs` に置く（本ファイルの行数の余白のため）。
     ///
     /// 描画範囲の潰れの状態の変わり目の記録（areka-P0-balloon-text-bugs 件 2）も本口が書く（`note_region_collapse`）。

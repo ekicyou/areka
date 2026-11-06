@@ -273,7 +273,7 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
 }
 
 /// R1.5 縮退（design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
-/// グリフ追記なし・reveal 不変。once-guard は無いので繰り返し空 Choice は毎回 warn する。
+/// グリフ追記なし・reveal 不変。空 Choice は届くたびに warn する（1 回で黙らせない）。
 #[test]
 fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
     let (state, counts) = count_levels(|| {
@@ -315,14 +315,14 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
     assert_eq!(
         level_count(&events, Level::WARN),
         0,
-        "once-guard は撤去済み——非空 Choice は警告しない"
+        "非空 Choice は警告しない"
     );
 }
 
 // ── R2.1: Cursor 実消費——CursorMove 追記・グリフ/リビール不変 ──
 
 /// Cursor cue は各軸を parse_cursor_coord で語彙化した `CursorMove` を items へ追記し、
-/// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。once-guard 警告も無い。
+/// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。警告も出さない。
 #[test]
 fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
     let (state, events) = capture_checked(|| {

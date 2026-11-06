@@ -147,7 +147,7 @@ fn fixtures_parse_to_expected_choice_styles() {
         "cursor.* 指定 fixture は SquareFill（塗り(105,25,25)＋白文字(255,255,255)）へ解決される"
     );
 
-    // ── cursor.* 未指定 → Invert（矩形反転縮退・M1 実導出） ──
+    // ── cursor.* 未指定 → Invert（矩形反転） ──
     let plain = plain_model();
     assert_eq!(
         plain.font().name(),
@@ -158,7 +158,7 @@ fn fixtures_parse_to_expected_choice_styles() {
     assert_eq!(
         plain_style,
         ResolvedChoiceStyle::Invert,
-        "cursor.* 未指定 fixture は Invert（矩形反転縮退）へ解決される"
+        "cursor.* 未指定 fixture は Invert（矩形反転）へ解決される"
     );
 
     // ── ResolvedBalloonText 経由でも同一スタイルを運ぶ（通し経路が読む choice_style） ──

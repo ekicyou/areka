@@ -52,7 +52,7 @@ fn merged_model() -> BalloonModel {
 
 // ── R11.4: writing_mode が縦書きへ解決される ──
 
-/// 縦書き宣言は descript 基層が持つ（design.md L160 正典: `writing_mode,vertical_rl`）——
+/// 縦書き宣言は descript 基層が持つ（`areka-P0-emo-text-layer` の design.md の正典: `writing_mode,vertical_rl`）——
 /// 基層のみでも 2 層マージ後でも `VerticalRl` へ解決される。
 #[test]
 fn variant_writing_mode_resolves_to_vertical_rl() {

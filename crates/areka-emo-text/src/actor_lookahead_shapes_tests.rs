@@ -372,7 +372,7 @@ const BOXED_BOOT_TALK: &str =
 
 /// 検査 11: 再生機の登録（先渡しが届く）→ 汲み出し → 空回しの出発点を変える口（装着の登録・箱の束・
 /// 解決の閉包）→ `tick` の順で、`\f` を含む検査 1 の形の台本を流す。どの順でも各段階で判定の関数が
-/// 通り、出終わった行の列が検査 1 と同じで、warn が 0 件（要件 1.1・2.2・設計の討議 1）。
+/// 通り、出終わった行の列が検査 1 と同じで、warn が 0 件（`areka-P0-budoux-reveal-reflow` 要件 1.1・2.2・同じ spec の設計の討議 1）。
 #[test]
 fn a_preview_before_attaching_still_lays_out_on_the_full_text() {
     let mut failures = Vec::new();

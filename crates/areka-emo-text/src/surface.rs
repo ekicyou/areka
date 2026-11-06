@@ -239,7 +239,7 @@ impl PendingReadBack {
 /// **別合成層**として、[`TextSurface::present`] の合成点（front→backbuffer コピーの直後・
 /// `Present` の直前）に将来重ねる（R7.1/7.3）。`read_back` は `sources`（front）を読むため、
 /// 本予約は pixel golden に影響しない（R7.4）。`#[non_exhaustive]`＋フィールドなし＝crate 外
-/// から意味を持たせられない構造保証で、M1 は型と合成点 doc のみ・実挙動（画像読込・固定層の
+/// から意味を持たせられない構造保証で、今は型と合成点 doc のみ・実挙動（画像読込・固定層の
 /// 実描画）は後続の `\_b` 対応増分の領分（R7.2）。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -271,7 +271,7 @@ pub struct TextSurface {
     sprite: SpriteVisual,
     /// 現在の供給面サイズ（物理 px＝`ceil(validrect 寸 × k)`・論理 px 不在）。
     size: (u32, u32),
-    /// `\_b --option=fixed` 固定層差し込み点の型シーム（R7・M1 は実挙動なし）。
+    /// `\_b --option=fixed` 固定層差し込み点の型シーム（R7・今は実挙動なし）。
     /// [`present`](Self::present) の合成点を型で予約する（scroll 面 `sources` とは分離した
     /// 別合成層——増設時に blit 構成を再構築せずに済む・R7.3）。
     #[allow(dead_code)]
@@ -434,7 +434,7 @@ impl TextSurface {
 
             // ── 固定層（`\_b --option=fixed`）の合成点（[`FixedOverlaySeam`]・R7.1/7.3） ──
             // scroll 面（`sources`）の複製直後・`Present` の直前が、スクロール blit の影響を
-            // 受けない別合成層＝固定層を backbuffer へ重ねる位置。M1 は予約のみ（実描画なし）。
+            // 受けない別合成層＝固定層を backbuffer へ重ねる位置。今は予約のみ（実描画なし）。
             // read_back は front（`sources`）を読むため、この合成点は pixel golden の外（R7.4）。
             let _fixed_overlay_seam = self.fixed_overlay;
         }
@@ -524,10 +524,8 @@ impl TextSurface {
         &self.sources[1 - self.front]
     }
 
-    /// front 面への読み出し口（比較専用オラクル `DrawExecutor`（draw.rs）が読む）。
-    /// 旧 `source_tex`（レガシー本番描画の描き先）と実体は同じ front だが、本番経路が
-    /// `ViewboxExecutor`（back へ描き `flip` で交換）へ移行したため、front はオラクルが読む
-    /// 「テスト限定の読み出し口」へ一本化した（`#[cfg(test)]`・除去は本ユニットの範囲外）。
+    /// front 面への読み出し口（比較専用オラクル `DrawExecutor`（draw.rs）とテストが読む・`#[cfg(test)]`）。
+    /// 本番経路は `ViewboxExecutor` が back へ描き `flip` で交換するので、front を直に読むのはテストだけ。
     #[cfg(test)]
     pub(crate) fn front_tex(&self) -> &ID3D11Texture2D {
         &self.sources[self.front]
@@ -686,9 +684,9 @@ mod tests {
     /// read_back が実際に供給面の front（`sources[front]`）を読んでいることの往復檻
     /// （模造の全 0 バッファ返却では通らない）。描画を通さず読み戻しだけを確かめるため、
     /// テスト専用に UpdateSubresource で既知パターンを `sources[front]` へ直接書き、
-    /// present→read_back が全バイト一致で返すことを確認する（chain.rs 往復檻と同轍）。
+    /// present→read_back が全バイト一致で返すことを確認する。
     #[test]
-    fn readback_roundtrips_source_tex_contents() {
+    fn readback_roundtrips_front_contents() {
         let (_dq, compositor) = make_dispatcher_and_compositor();
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
 
@@ -795,7 +793,8 @@ mod tests {
 
     /// 面内 blit と flip の往復檻:
     /// front へ既知パターンを直書き→`copy_front_to_back_shifted(blit)`→`flip()`→`read_back()` で、
-    /// ずらし量 ゼロ・正・負（(0,0)・(0,+N)・(0,-N)・(+N,0)・(-N,0)）それぞれについて
+    /// ずらし量 ゼロ・正・負（(0,0)・(0,+N)・(0,-N)・(+N,0)・(-N,0)）と桁があふれる `i32::MIN`
+    /// （(MIN,0)・(0,MIN)＝全域が露出域）それぞれについて
     /// 元の内容が期待位置に byte 一致で現れ、露出域（非コピー域）が透明（全 0）であることを確認する
     /// （R1.2/R1.3——面内 whole-pixel blit ＋ ダブルバッファ flip の決定論）。
     ///
@@ -845,7 +844,7 @@ mod tests {
         }
     }
 
-    /// 固定層差し込み点は型シームのみ＝データを一切持たない（zero-sized・M1 で描画へ
+    /// 固定層差し込み点は型シームのみ＝データを一切持たない（zero-sized・描画へ
     /// 影響し得ない構造保証・R7.2）。他 crate 内シーム（`TextEffects`・予約）と
     /// 同じ zero-sized 規律。
     #[test]
@@ -883,7 +882,7 @@ mod tests {
             );
         }
 
-        // present は固定層合成点（front→backbuffer コピー直後）を通るが、M1 は実描画なし。
+        // present は固定層合成点（front→backbuffer コピー直後）を通るが、今は実描画なし。
         surface.present().expect("present 失敗");
         let bytes = surface.read_back().expect("read_back 失敗");
         assert_eq!(

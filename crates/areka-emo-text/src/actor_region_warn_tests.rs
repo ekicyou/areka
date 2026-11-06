@@ -8,7 +8,7 @@
 //! [`TextRegion::resolve`](crate::region::TextRegion::resolve) の中にあった。しかし
 //! 再追従シーム（[`TextLayerRuntime::refresh_actor_binding`]）は churn ガードの判定キーを
 //! 得るために解決を**毎フレーム**通すため、実機の一周走行では生ログ 30,837 行のうち
-//! **27,908 行**が同じ警告になった（走行 A・2026-09-06 の実測）。件数が意味を持たなくなり、
+//! **27,908 行**が同じ警告になった（`areka-P0-emo2-conformance-e2e` の実機走行の実測）。件数が意味を持たなくなり、
 //! 生ログが読めなくなる。
 //!
 //! 「読み込み（装着）1 回につき 1 件」という意味を持つのは、解決する側ではなく **actor の
@@ -32,7 +32,7 @@
 //! 件数を見るテストは捕捉窓の内側で対照の `error!` を 1 件発行し、その 1 件が数えられて
 //! いることを件数の主張と同時に確かめる（`region_inline_limit_tests.rs` と同じ流儀）。
 //!
-//! ## `origin` の警告も同じ登録口が書く（本 spec 要件 3.1〜3.4／5.6）
+//! ## `origin` の警告も同じ登録口が書く（`areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.4／5.6）
 //!
 //! 範囲外ゆえ無視した `origin` 宣言の警告も、同じ理由で同じ登録口が書く——件数の規律も
 //! 同じである（装着で成分 1 つにつき 1 件・値の変わらない再追従で 0 件）。同じ捕捉窓に
@@ -154,7 +154,7 @@ fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, 
     assert_eq!(warn.field_str("axis"), Some(axis), "行内軸の欄");
     assert_eq!(number_field(warn, "wrap_threshold"), wrap_threshold);
     assert_eq!(number_field(warn, "inline_limit"), inline_limit);
-    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（要件 3.12）。
+    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（shell-balloon 要件 3.12）。
     assert_eq!(
         warn.field_str("balloon"),
         Some("スコープ1のバルーン"),
@@ -252,7 +252,7 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
 // ── 要件 14.2／14.4: 再追従は「値が変わったときだけ」 ──
 
 /// 値の変わらない再追従を 3 回繰り返しても追加の警告は 0 件——毎フレーム走る経路で
-/// 警告が積み上がらないことの本体（走行 A の 27,908 行はここで消える）。
+/// 警告が積み上がらないことの本体（上の 27,908 行はここで消える）。
 #[test]
 fn repeated_refresh_with_unchanged_values_adds_no_warning() {
     let mut world = World::new();
@@ -355,7 +355,7 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
     assert_coarse_warning(&warns[0], "x", WIDER_WRAP_X, WIDER_RIGHT);
 }
 
-// ── 本 spec 要件 3.1〜3.4／5.6: 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
+// ── `areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.4／5.6: 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
 //
 // 上の 6 本は `origin` を宣言しない入力なので、下の追加分とは別の警告を見ている。
 // 同じ捕捉窓に 2 種類の警告が混ざりうるため、下の群は**文言で選り分けてから**数える
@@ -445,7 +445,7 @@ fn assert_ignored_origin_warning(
         corner,
         "実際に用いた書き始めの角の欄"
     );
-    // 呼出側は名前を入れていない（要件 3.12）。
+    // 呼出側は名前を入れていない（shell-balloon 要件 3.12）。
     assert_eq!(
         warn.field_str("balloon"),
         Some(balloon),

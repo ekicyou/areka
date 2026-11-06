@@ -419,7 +419,7 @@ font.height,40",
     }
 }
 
-/// 2.4・3.3: 作れなかった文字の面の覚えは、WUC の資源の作り直し（鍵の時刻が変わる）と装置の作り直し
+/// 作れなかった文字の面の覚えは、WUC の資源の作り直し（鍵の時刻が変わる）と装置の作り直し
 /// （覚えを消す）で、入力が同じでも試し直す（上限越えの記録がそれぞれもう 1 回）。
 #[test]
 fn remembered_surface_failure_is_retried_after_wuc_or_device_recreation() {
@@ -449,7 +449,7 @@ fn remembered_surface_failure_is_retried_after_wuc_or_device_recreation() {
     assert_eq!(count(&mut world), 1, "装置を作り直すと試し直す");
 }
 
-/// 一辺が上限（16,384）を越える矢印の絵は GPU へ移せない（入力で決まる失敗）: 10 フレームで `error!` は
+/// 一辺が文字の面と同じ上限（16,384）を越える矢印の絵は描かない（入力で決まる失敗）: 10 フレームで `error!` は
 /// 1 回・提示は `Err` にしない（毎フレーム描き直して記録し続けない）。
 #[test]
 fn over_limit_arrow_image_logs_once_in_ten_frames() {

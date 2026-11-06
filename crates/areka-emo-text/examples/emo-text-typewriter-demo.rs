@@ -92,7 +92,7 @@ fn actor() -> ActorKey {
 }
 /// デモ用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
 /// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT 秒の typewriter 進行になる
-/// （全 cue at=0.0 なので reveal は連続的に累積・旧 char_wait 定数と機能等価）。
+/// （全 cue at=0.0 なので reveal は連続的に累積）。
 fn cue(at: f64, command: CueCommand) -> TalkCue {
     let duration = match &command {
         CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * CHAR_WAIT,

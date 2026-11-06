@@ -537,7 +537,7 @@ fn vertical_adjacent_same_size_column_bands_do_not_overlap() {
 
 /// P3（要件 1.6）: `\f[height,40]` の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの
 /// 量（正＝重なる幅・負＝間の幅、image px）を数で固定する。字のインクは隣と重ならないので列送りは
-/// 直さない（research.md 13.3 節）——帯だけが重なり得るのを、横書きの大きい行と同じ扱いで受け入れる。
+/// 直さない——帯だけが重なり得るのを、横書きの大きい行と同じ扱いで受け入れる。
 #[test]
 fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
     use crate::cursor_tag::CursorWarnGuard;
@@ -675,7 +675,7 @@ fn vertical_em_box_left_default_centres_the_em_box_in_the_column_box() {
 /// と同じ）で、`line_bands` の縦書きの寄せがその値の丸め（−7.4 → −7・＋0.6 → 1）になる——行の箱の
 /// 比からは出ない（`FixedMetrics` の真ん中なら em 28 で −5／5）。横書きの出力は `FixedMetrics` と同じ。
 ///
-/// 較正: `line_bands` の縦書きの枝を 2.1 の割合の定数の式へ戻すと −4／5 で赤。
+/// 較正: `line_bands` の縦書きの枝を行の箱の比の式へ戻すと −4／5 で赤。
 #[test]
 fn vertical_line_bands_read_the_em_box_from_metrics() {
     use crate::layout::{FixedMetrics, GlyphMetrics};

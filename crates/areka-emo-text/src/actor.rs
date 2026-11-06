@@ -161,7 +161,7 @@ impl ResolvedBalloonText {
 /// 下流（choice-interact）は [`ChoiceHitRow::rect`] を本型で受ける——照会契約の座標系正本。
 pub use crate::choice::HitRectPx;
 
-/// 行ヒットジオメトリ契約（本 spec 正本・choice-interact が消費・design.md RuntimeContract）。
+/// 行ヒットジオメトリ契約（正本は本型・choice-interact が消費・`areka-P0-choice-render` の design.md RuntimeContract）。
 ///
 /// 提示フレーム同期スナップショットの 1 行分——1 選択肢セグメントの窓物理 px 矩形に、
 /// 下流 `ChoiceSelection` 構成材料（`ordinal`/`id`/`label`/`references`）を同梱し、契約の
@@ -268,7 +268,7 @@ pub struct TextLayerRuntime {
     /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
     /// の照会源）。present_actor（`actor_present.rs`）が提示に成功するたびに入れ直す。
     choice_snapshot: HashMap<PlaceKey, Vec<ChoiceHitRow>>,
-    /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
+    /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・`areka-P0-cursor-tag-canon` 要件 5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
     /// [`LayoutEngine::layout_styled`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,

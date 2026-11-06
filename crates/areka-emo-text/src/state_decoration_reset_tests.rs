@@ -155,7 +155,7 @@ fn attaching_layers_moves_an_untouched_look_to_the_new_default() {
     assert_eq!(actor.current_look().color, (255, 0, 0));
 }
 
-/// **装着より先に `\f` が届いても、バルーン定義の既定はその台詞に届く**（開発者裁定 2026-09-13）。
+/// **装着より先に `\f` が届いても、バルーン定義の既定はその台詞に届く**（`areka-P0-text-decoration-canon` の開発者裁定）。
 ///
 /// cue のドレインは非同期で、`text_slot_view` が `None` の間は装着が次フレームへ委ねられる
 /// （`crates/areka/src/emo2_boot/frame/attach.rs::connect_balloon_text` の `None` の腕）。

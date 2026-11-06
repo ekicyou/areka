@@ -25,7 +25,7 @@ fn cursor(
     )
 }
 
-// ── resolve: 未指定 → Invert（M1 実導出・縮退ではない） ──
+// ── resolve: 未指定 → Invert（縮退ではない） ──
 
 /// cursor 不在（`None`）→ Invert（未指定バルーン判定・4.3/6.1）。
 #[test]
@@ -191,6 +191,7 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
         CursorFallback {
             blendmethod: Some("mergepennot".to_string()),
             underline_style: None,
+            unknown_style: None,
         }
     );
     assert_eq!(
@@ -198,6 +199,7 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
         CursorFallback {
             blendmethod: None,
             underline_style: Some("underline".to_string()),
+            unknown_style: None,
         }
     );
     assert_eq!(
@@ -205,6 +207,7 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
         CursorFallback {
             blendmethod: None,
             underline_style: Some("square+underline".to_string()),
+            unknown_style: None,
         }
     );
 }
@@ -218,8 +221,27 @@ fn cursor_fallback_is_empty_for_none_unspecified_and_square() {
         styled(Some("square"), None),
         styled(None, None),
         styled(Some("none"), None),
+        styled(Some("SQUARE"), None),
         BalloonCursor::default(),
     ] {
         assert_eq!(CursorFallback::of(&c), CursorFallback::default(), "{c:?}");
     }
+}
+
+/// 正典の 4 つのどれでもない `style`（綴り誤りの `squre`）は元の値を返す（描く形は既定の square）。
+#[test]
+fn cursor_fallback_returns_unknown_style() {
+    let c = styled(Some("squre"), None);
+    assert_eq!(
+        CursorFallback::of(&c),
+        CursorFallback {
+            blendmethod: None,
+            underline_style: None,
+            unknown_style: Some("squre".to_string()),
+        }
+    );
+    assert!(matches!(
+        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+        ResolvedChoiceStyle::SquareFill { .. }
+    ));
 }

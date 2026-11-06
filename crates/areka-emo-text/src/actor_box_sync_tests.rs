@@ -265,7 +265,7 @@ fn scale_change_rebuilds_the_registration_and_keeps_text() {
 }
 
 /// 同じ名前の箱が新しい絵にあれば、その位置で登録し直す（要件 6.1）。置き場所を動かすのは
-/// 渡された絵の番号で、台本の `\s` の cue は要らない（本 spec 要件 1.1）。
+/// 渡された絵の番号で、台本の `\s` の cue は要らない（`areka-P0-shell-balloon-frame-align` 要件 1.1）。
 #[test]
 fn same_name_on_the_next_surface_moves_the_registration() {
     let mut f = fixture();
@@ -281,7 +281,7 @@ fn same_name_on_the_next_surface_moves_the_registration() {
 }
 
 /// 台本の `\s` の cue だけでは登録は動かない。絵の番号が同じなら、受け取った番号が箱の無い面・
-/// 別の置き場所の面・非表示のどれでも、登録はそのまま（本 spec 要件 1.1・1.6）。
+/// 別の置き場所の面・非表示のどれでも、登録はそのまま（`areka-P0-shell-balloon-frame-align` 要件 1.1・1.6）。
 #[test]
 fn surface_cue_alone_does_not_move_the_registration() {
     let mut f = fixture();
@@ -306,7 +306,7 @@ fn surface_cue_alone_does_not_move_the_registration() {
     }
 }
 
-/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る（本 spec 要件 1.1・1.2・1.4）。
+/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る（`areka-P0-shell-balloon-frame-align` 要件 1.1・1.2・1.4）。
 /// 文字の進み具合は保たれる。
 #[test]
 fn picture_number_alone_moves_unregisters_and_restores() {
@@ -339,7 +339,7 @@ fn picture_number_alone_moves_unregisters_and_restores() {
     assert_eq!(f.items(0, "b"), vec![TextItem::glyph("い")]);
 }
 
-/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る（本 spec 要件 1.3）。
+/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る（`areka-P0-shell-balloon-frame-align` 要件 1.3）。
 #[test]
 fn no_picture_number_unregisters_and_keeps_text() {
     let mut f = fixture();
@@ -633,7 +633,7 @@ element1,balloon,r,0,0
 }
 ";
 
-/// T5（要件 2.1〜2.4・5.1）: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
+/// `real-run-log-noise` 要件 2.1〜2.4・5.1: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
 /// 外して付け直しても 0 件、箱の束を差し替えた後の登録で 1 件。
 #[test]
 fn box_cursor_fallback_warns_once_per_box_name() {

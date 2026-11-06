@@ -46,7 +46,7 @@ fn model(
 
 /// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）
 /// ゆえ Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を得る
-/// （旧 char_wait=0.25 檻と機能等価・pipeline_test.rs と同方針）。
+/// （pipeline_test.rs と同方針）。
 const REVEAL_INTERVAL: f64 = 0.25;
 
 /// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。

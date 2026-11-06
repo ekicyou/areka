@@ -40,7 +40,7 @@ use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 
 /// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）
 /// ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を
-/// 得る（旧 char_wait=0.25 檻と機能等価・期待時刻は同一 `D/N` 算術で成立）。
+/// 得る（期待時刻は同一 `D/N` 算術で成立）。
 const REVEAL_INTERVAL: f64 = 0.25;
 
 /// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
@@ -298,8 +298,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     // 改行マーカーは遅延（deferred newline・newline-defer）: 後続の可視グリフが reveal された
     // 時点でのみ実体化する。可視 prefix 末尾より後ろの保留改行は空行を開かず蒸発する
     // （R1.1/1.2/4.1/4.2）。ゆえ「末尾に保留改行だけが積まれた」時刻ではあふれが発火せず、
-    // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる
-    // （旧・即時意味論の幽霊空行スクロールが消え、あふれ発火が実体化時刻へ後退する）。
+    // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる。
     let expected: &[(f64, usize, usize, usize, f32)] = &[
         (0.0, 1, 1, 0, 0.0),     // r_0=0.0: "あ" のみ・1 行
         (0.25, 2, 1, 0, 0.0),    // "あい"・末尾改行は保留（空行を開かない）
@@ -430,8 +429,8 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
 /// 幾何（vertical_fixture_test.rs の実測値）: validrect (36,46)-(356,168)・書字開始角
 /// (356,46)・font 10 → 列送り 12（10 + 行間 2）。明示改行で 27 列（列 i の左端 = 346−12i）を
 /// 作ると、27 列目（i=26）の左端 346−312 = 34 < validrect.left 36 であふれ発火→1 列スキップ・
-/// オフセット +12。旧来の 25 列では 25 列目の左端 346−288 = 58 が 36 を上回りあふれないため、
-/// 列数そのものを導き直している（26 列目も左端 46 ≥ 36 で足りない）。
+/// オフセット +12。25 列では 25 列目の左端 346−288 = 58 が 36 を上回りあふれず、26 列でも
+/// 左端 46 ≥ 36 で足りないので 27 列にする。
 #[test]
 fn vertical_fixture_pipeline_scrolls_horizontally() {
     let merged = merged_model(

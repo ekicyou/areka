@@ -26,7 +26,7 @@
 //!   `register_actor_view`）で予約スロットへ到達する。
 //! - R9.3: グリフ更新フレームは供給面の Present のみで完結する（World の entity 数
 //!   不変・`GraphicsCommandList` 不挿入＝バルーン surface 本体の再合成を強要しない）。
-//! - R8.5: M1 の実挙動はテキスト描画のみ＝グリフ未リビール時（可視 0）と Clear 後に
+//! - R8.5: 今の実挙動はテキスト描画のみ＝グリフ未リビール時（可視 0）と Clear 後に
 //!   インク源が存在しない（Image/Surface シーム住人の inert は `src/canvas.rs` の檻が正典・
 //!   本テストはその通し側の帰結「テキスト以外のインク源なし」を assert する）。
 
@@ -85,7 +85,7 @@ fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
 
 /// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
 /// Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.05 の per-glyph 進行を得る
-/// （旧 char_wait=0.05 既定と機能等価・進行観測は安全マージン付き時刻 0.11/0.16/… で行う）。
+/// （進行観測は安全マージン付き時刻 0.11/0.16/… で行う）。
 const REVEAL_INTERVAL: f64 = 0.05;
 
 /// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
@@ -253,8 +253,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
 
     // ── セッション 2: 行 1〜2 を追加（3 行＝validrect 高 48 に収まる上限） ──
     //    行 i の下端 = 14i + 12（pitch 14 ＝ 字の丈 12 ＋ 行間 2）→ 12／26／40／54。
-    //    3 行目 40 ≤ 48 は収まり 4 行目 54 > 48 であふれる。旧 pitch 15（12／27／42／57）でも
-    //    3 行が上限で、**結論は偶然一致する**——等差が変わっても 3 行目と 4 行目が 48 を跨ぐため。
+    //    3 行目 40 ≤ 48 は収まり 4 行目 54 > 48 であふれる。
     sink.emit(cue("0", 1.0, CueCommand::NewLine { ratio: 1.0 }));
     sink.emit(cue("0", 1.0, CueCommand::Text("■".into())));
     sink.emit(cue("0", 1.0, CueCommand::NewLine { ratio: 1.0 }));
@@ -361,7 +360,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
 
     // ── セッション 1: 列 0＝■■（at=0.0）＋列 1〜7＝■ 各 1（at=0.5）
     //    → 列 i の左端は 120 − 12 − 14i（右上起点・pitch 14）。列 7 は左端 10 ≥ 0 で収まり、
-    //    列 8 は左端 −4 < 0 であふれる＝8 列があふれ前の上限（旧 pitch 15 でも同じく 8 列） ──
+    //    列 8 は左端 −4 < 0 であふれる＝8 列があふれ前の上限 ──
     let (mut sink, _handle) =
         spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
     sink.emit(cue("0", 0.0, CueCommand::Text("■■".into())));

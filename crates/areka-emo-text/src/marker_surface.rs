@@ -138,7 +138,7 @@ impl MarkerSurface {
 
     /// 全面を透明にして `shown` の矢印を `(at × k, 大きさ × k)` へ描き、提示し、当たりのマスクを
     /// 出ている矢印の α ≥ 0.5 の画素へ差し替える。失敗は `error!` を残して `Err`（面と当たりは前のまま）。
-    /// 寸が上限を越える絵（GPU へ移せない・入力で決まる失敗）は `error!` を残して描かず当たりにも入れず、
+    /// 文字の面と同じ上限（一辺・面積）を越える絵（入力で決まる失敗）は `error!` を残して描かず当たりにも入れず、
     /// 描けたことにする（同じ `shown` では描き直さない＝記録は 1 回）。
     pub fn draw(
         &mut self,
@@ -245,7 +245,7 @@ impl MarkerSurface {
 pub(crate) const ARROW_LIMIT_MESSAGE: &str =
     "矢印の絵の寸が上限を越える——描かず、出す矢印が変わるまで描き直さない";
 
-/// 矢印の絵を GPU へ移せる寸か（文字の面と同じ上限・越える絵は描かない）。
+/// 矢印の絵の寸が文字の面と同じ上限（一辺・面積）に収まるか（越える絵は描かない）。
 fn image_fits(m: &PlacedMarker) -> bool {
     !over_surface_limit((m.image.width, m.image.height))
 }

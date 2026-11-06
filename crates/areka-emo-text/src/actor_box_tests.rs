@@ -123,7 +123,7 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
 }
 
 /// 箱の名前ごとの既定の見た目は、その箱の `balloon.*`ブレスから解決した 2 層（白を混色の相手）で、
-/// 箱の種類は表より先に入る（Implementation Notes 5.4）。前の表に無かった箱に閉じる箱 x が
+/// 箱の種類は表より先に入る。前の表に無かった箱に閉じる箱 x が
 /// 新しい既定になるとき、前の箱 a の `\f` の指定は x へ写らない。
 #[test]
 fn box_traits_come_from_the_brace_and_arrive_before_the_index() {
