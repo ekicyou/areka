@@ -72,3 +72,11 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## `audit-wintf-runtime` からの申し送り（2026-11-06）
+
+`audit-wintf-runtime` は、この spec が走っていなかったので、wintf の写しの直しを `areka-emo-atlas` にも入れた（設計の討議の裁定 1・かけ直しでのコントローラの裁定）。全文はあちらの `.kiro/specs/completed/audit-wintf-runtime/research.md` の 14 節「申し送り」と 15 節「申し送り（範囲を広げて直した分の知らせ）」。3 件とも直し済みで、ギャップ分析で数え直さない。
+
+- **15（WIC の α の写し）**: `src/decode/wic_arm.rs` の `pixel_format_has_alpha` を wintf と同じ `SupportsTransparency` の判定へ替えた（テストは `src/decode/wic_arm_tests.rs`）。完了した `emo-atlas-palette-alpha` の要件 2.3・3.3 を「α を持つ形式は有り」の向きにだけ狭く改めた（その文書は触っていない）。wintf を import しない境界の決まりで写しが 2 つ残ることは変えていない。
+- **125（名の渡し方）**: `src/decode/wic_arm.rs` の `decode_inner` が名を `to_string_lossy` で UTF-8 にしてから渡していたのを、`HSTRING::from(path)`（UTF-16 のまま）にした（テストは `wic_arm_tests.rs` の `decode_opens_name_with_lone_surrogate`）。
+- **130（`with_arm`）**: `src/decode/wic_arm_test_support.rs` の `with_arm` が `CoInitializeEx` の失敗を捨てていたのを、入れたときだけ `CoUninitialize` を呼び、`RPC_E_CHANGED_MODE` のほかの失敗は落とす形にした。

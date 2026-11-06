@@ -1134,7 +1134,7 @@ crate の外から見えない口（`pub(crate)` と private）。知らせに�
 
 ### 台帳の知らせ（要件 3.6）
 
-- **`wintf-dwmflush-wait-compensation`（`.kiro/specs/wintf-dwmflush-wait-compensation/brief.md`。台帳は `.kiro/steering/roadmap.md` の spec 台帳の行と `- [ ] wintf-dwmflush-wait-compensation` の行）を、この spec の完了のときに台帳から閉じる。**
+- **`wintf-dwmflush-wait-compensation`（`.kiro/specs/wintf-dwmflush-wait-compensation/brief.md`。完了のときに `absorbed-wintf-dwmflush-wait-compensation-brief.md` としてこの spec のフォルダへ移した。台帳は `.kiro/steering/roadmap.md` の spec 台帳の行と `- [ ] wintf-dwmflush-wait-compensation` の行）を、この spec の完了のときに台帳から閉じる。**
 - brief の直す中身（`DwmFlush` が待たずに戻る回の空回り・`Err` の回に notify を撃たない穴・`AsyncTickTask` の注記の食い違い）は、この spec の 2・8 番としてタスク 2.1（R1・`18ceaa9d`）が brief の形のまま直した。呼ぶ前後の時間で判定する `compensation`（1ms 未満なら約 16ms までの不足分を眠る）・1 周に必ず 1 回 notify する `vsync_once`・`DwmFlush` の失敗は `debug!` の 1 行・panic した vblank のスレッドは `join_vsync` が `error!`。`AsyncTickTask` の型は 7.8 で消えた（注記の食い違いごと 0 件）。実機の確かめ（消灯・ロック・リモートデスクトップ）はタスク 8.2。
 - brief 自身が「2026-11-05 `audit-wintf-runtime` に吸収・台帳からは `audit-wintf-runtime` の完了のときに閉じる」と書いている（要件の討議の裁定 1）。
 

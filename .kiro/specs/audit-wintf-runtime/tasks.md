@@ -221,3 +221,4 @@
 - 7.5: wintf の指令のキュー（`window_pos` など）は `thread_local` なので、指令を取り出して確かめるテストは `SingleThreadedExecutor` で回す（`Schedule::default()` は作業スレッドで回り、指令がそちらに残る）。`BoxStyle` の無い窓はレイアウトの大きさが 0 で、描画面が作られない（`graphics_reinit_test` で実機の赤から見つけた）。
 - 8.3: かけ直しで 35 件（120〜154）を見つけて全部直し、2 回目は 0 件。持ち主の spec に根がある 146（親の無い窓の bounds の伸ばし方）・144 の根（taffy のノードを消すときに失敗を捨てる）・emo-atlas の `to_string_lossy` と `with_arm` は、並走が無いのでここで直した（申し送りは research.md 15 節）。SendInput の `INPUT` は x64 で 40 バイト（32 で宣言すると全部断られ、戻り値を見ないと気付かない）。
 - 8.2: 実機の 3 場面は開発者が操作できないので回していない。2.1 の決定論のテスト（`tick_bridge_vsync_tests.rs`）を静的な証跡として閉じた（開発者の承認・2026-11-06・research.md 16 節）。
+- 完了時にその場で解決: log-capture-kit/src/lib.rs:28 の消費する crate の数を 19 に直した（`crates/*/Cargo.toml` で `log-capture-kit` を名指す crate を自身を除いて数えた。research.md 14 節の「18」は main の取り込み前の数）。
