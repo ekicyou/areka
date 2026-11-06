@@ -38,7 +38,7 @@ use wintf::ecs::{AlphaMaskResource, GraphicsCore};
 
 use crate::TextLayerError;
 use crate::draw::create_d2d_target_bitmap;
-use crate::region::{ImagePx, ScaleContract};
+use crate::region::ScaleContract;
 use crate::scroll_marker::MarkerKind;
 use crate::surface::TextSurface;
 
@@ -46,7 +46,7 @@ use crate::surface::TextSurface;
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacedMarker {
     pub kind: MarkerKind,
-    pub at: (i32, i32),
+    pub at: (i64, i64),
     pub image: Arc<MarkerImage>,
 }
 
@@ -77,6 +77,29 @@ impl MarkerSurface {
         physical_size: (u32, u32),
         physical_offset: (f32, f32),
     ) -> Result<MarkerSurface, TextLayerError> {
+        let place = (window, child_index);
+        Self::attach_noting(
+            world,
+            place,
+            compositor,
+            core,
+            physical_size,
+            physical_offset,
+            &mut false,
+        )
+    }
+
+    /// [`Self::attach`] の内側。その寸で窓の子の面を作れなかった（入力で答えが決まる失敗）ときだけ
+    /// `surface_failed` を立てる。装置の文脈の作成の失敗（一時の失敗）では立てない。
+    pub(crate) fn attach_noting(
+        world: &mut World,
+        (window, child_index): (Entity, usize),
+        compositor: &Compositor,
+        core: &GraphicsCore,
+        physical_size: (u32, u32),
+        physical_offset: (f32, f32),
+        surface_failed: &mut bool,
+    ) -> Result<MarkerSurface, TextLayerError> {
         let Some(d2d) = core.d2d_device() else {
             tracing::error!("印の面: GraphicsCore::d2d_device が無い（矢印を描けない）");
             return Err(TextLayerError::Device {
@@ -95,7 +118,8 @@ impl MarkerSurface {
             core,
             physical_size,
             physical_offset,
-        )?;
+        )
+        .inspect_err(|_| *surface_failed = true)?;
         if let Some(entity) = surface.window_child() {
             world
                 .entity_mut(entity)
@@ -183,9 +207,9 @@ impl MarkerSurface {
         self.drawn
             .iter()
             .find(|m| {
-                let inside = |p: u32, at: i32, len: u32| {
-                    (at as f32 * k).floor() <= p as f32
-                        && (p as f32) < ((at as i64 + len as i64) as f32 * k).ceil()
+                let inside = |p: u32, at: i64, len: u32| {
+                    let (lo, hi) = marker_span(at, len, k);
+                    lo.floor() <= p as f32 && (p as f32) < hi.ceil()
                 };
                 inside(px, m.at.0, m.image.width) && inside(py, m.at.1, m.image.height)
             })
@@ -218,15 +242,23 @@ impl MarkerSurface {
     }
 }
 
-/// 矢印を描く矩形（物理 px）。右端・下端は当たりとマスクと同じく `i64` で足す（`i32` の足し算は
-/// 上限の近くであふれる）。
+/// 矢印 1 つの 1 軸の物理 px の範囲（始まり, 終わり）＝`(at × k, (at + 寸) × k)`。描く矩形はそのまま、
+/// 当たりとマスクは始まりを床・終わりを天井で画素へ取る（3 つが同じ式を通る）。`at` は `i32` の範囲
+/// か広がり（`u32`）からの値なので、`i64` の足し算はあふれない。
+fn marker_span(at: i64, len: u32, k: f32) -> (f32, f32) {
+    (at as f32 * k, (at + i64::from(len)) as f32 * k)
+}
+
+/// 矢印を描く矩形（物理 px）。
 fn marker_draw_rect(m: &PlacedMarker, scale: &ScaleContract) -> D2D_RECT_F {
-    let px = |v: i64| scale.to_physical(ImagePx(v as f32)).0;
+    let k = scale.scale;
+    let (left, right) = marker_span(m.at.0, m.image.width, k);
+    let (top, bottom) = marker_span(m.at.1, m.image.height, k);
     D2D_RECT_F {
-        left: px(i64::from(m.at.0)),
-        top: px(i64::from(m.at.1)),
-        right: px(i64::from(m.at.0) + i64::from(m.image.width)),
-        bottom: px(i64::from(m.at.1) + i64::from(m.image.height)),
+        left,
+        top,
+        right,
+        bottom,
     }
 }
 
@@ -237,20 +269,17 @@ pub(crate) fn marker_hit_mask(size: (u32, u32), k: f32, shown: &[PlacedMarker]) 
     let mut px = vec![0u8; w as usize * h as usize * 4];
     for m in shown {
         let (iw, ih) = (m.image.width as i64, m.image.height as i64);
-        let span = |at: i32, len: i64, limit: u32| {
-            let lo = (at as f32 * k).floor().clamp(0.0, limit as f32) as u32;
-            let hi = ((at as i64 + len) as f32 * k)
-                .ceil()
-                .clamp(0.0, limit as f32) as u32;
-            lo..hi
+        let span = |at: i64, len: u32, limit: u32| {
+            let (lo, hi) = marker_span(at, len, k);
+            lo.floor().clamp(0.0, limit as f32) as u32..hi.ceil().clamp(0.0, limit as f32) as u32
         };
-        for y in span(m.at.1, ih, h) {
-            let iy = ((y as f32 + 0.5) / k).floor() as i64 - m.at.1 as i64;
+        for y in span(m.at.1, m.image.height, h) {
+            let iy = ((y as f32 + 0.5) / k).floor() as i64 - m.at.1;
             if !(0..ih).contains(&iy) {
                 continue;
             }
-            for x in span(m.at.0, iw, w) {
-                let ix = ((x as f32 + 0.5) / k).floor() as i64 - m.at.0 as i64;
+            for x in span(m.at.0, m.image.width, w) {
+                let ix = ((x as f32 + 0.5) / k).floor() as i64 - m.at.0;
                 if !(0..iw).contains(&ix) {
                     continue;
                 }

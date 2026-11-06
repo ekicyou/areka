@@ -69,6 +69,7 @@ pub(super) fn build_actor_render(
         executor,
         metrics,
         markers: None,
+        markers_failed: None,
     })
 }
 
@@ -202,10 +203,7 @@ impl ResolvedBalloonText {
             font,
             wrap: WrapMode::resolve(model),
             choice_style,
-            markers: ResolvedMarkerPlacement::resolve(
-                model.arrow_keys(),
-                (image_size.0 as i32, image_size.1 as i32),
-            ),
+            markers: ResolvedMarkerPlacement::resolve(model.arrow_keys(), image_size),
         }
     }
 }

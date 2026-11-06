@@ -550,3 +550,36 @@ fn placement_without_coords_uses_the_ssp_measured_default() {
         (80, 35)
     );
 }
+
+/// 指摘 3: 広がり（箱の大きさ）が `i32` に入らない `u32::MAX` や `2^31` でも、置き場の計算が落ちず、
+/// 既定の置き場（`幅 − 20`・`高さ − 15`）と右端・下端からの座標を広がりのまま解く。x だけ・y だけを
+/// 別々に大きくする（片方の軸を `as i32` に戻すと、その軸の case が落ちる）。
+#[test]
+fn placement_with_an_extent_beyond_i32_resolves_without_overflow() {
+    use MarkerCoord::FromEnd;
+    let from_end = keys(
+        pt(Some(FromEnd(-12)), Some(FromEnd(-8))),
+        pt(Some(FromEnd(-12)), Some(FromEnd(-8))),
+    );
+    for big in [u32::MAX, 1 << 31] {
+        for (axis, extent) in [("x", (big, 50)), ("y", (50, big))] {
+            let (w, h) = (i64::from(extent.0), i64::from(extent.1));
+            assert_eq!(
+                ResolvedMarkerPlacement::resolve(&ArrowKeys::default(), extent),
+                ResolvedMarkerPlacement {
+                    up: (w - 20, 15),
+                    down: (w - 20, h - 15),
+                },
+                "{axis}・{big}: 既定の置き場"
+            );
+            assert_eq!(
+                ResolvedMarkerPlacement::resolve(&from_end, extent),
+                ResolvedMarkerPlacement {
+                    up: (w - 12, h - 8),
+                    down: (w - 12, h - 8),
+                },
+                "{axis}・{big}: 右端・下端からの座標"
+            );
+        }
+    }
+}

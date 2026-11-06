@@ -68,6 +68,7 @@ impl TextLayerRuntime {
         self.choice_hover.retain(|k, _| !is_box(k));
         self.choice_snapshot.retain(|k, _| !is_box(k));
         self.box_sites.clear();
+        self.box_shell_size.clear();
         let boxes: Vec<PlaceKey> = self.scrolls.keys().filter(|k| is_box(k)).cloned().collect();
         for key in &boxes {
             self.drop_box_scroll(key);
@@ -195,6 +196,23 @@ impl TextLayerRuntime {
         self.box_sites
             .get(place)
             .map_or((0.0, 0.0), |site| (site.x as f32, site.y as f32))
+    }
+
+    /// 場所の面を切る右と下（場所の左上を原点とする image px）: 普通のバルーンは画像の大きさ、箱は
+    /// 箱の大きさとシェルの画像の重なり（`min(箱の幅, シェルの幅 − X)`・高さも同じ・`i64` で求める・
+    /// 指摘 3）。箱がシェルの右か下の外なら 0 以下（描かない）。
+    pub(super) fn image_limit(&self, place: &PlaceKey, binding: &TextSlotBinding) -> (f32, f32) {
+        let (w, h) = (
+            i64::from(binding.image_size.0),
+            i64::from(binding.image_size.1),
+        );
+        match (self.box_sites.get(place), self.box_shell_size.get(place)) {
+            (Some(site), Some(&(sw, sh))) => (
+                w.min(i64::from(sw).saturating_sub(site.x)) as f32,
+                h.min(i64::from(sh).saturating_sub(site.y)) as f32,
+            ),
+            _ => (w as f32, h as f32),
+        }
     }
 
     /// 提示のたびに写しを作り直す（`present_frame` の最後）。`presented` はこのフレームで提示に
@@ -335,6 +353,7 @@ impl TextLayerRuntime {
                     || desired.get(*key).is_none_or(|want| {
                         self.routing.get(*key) != Some(&want.binding)
                             || self.box_sites.get(*key) != Some(&want.site)
+                            || self.box_shell_size.get(*key) != Some(&want.surface_size)
                     })
             })
             .cloned()
@@ -453,6 +472,7 @@ impl TextLayerRuntime {
         );
         self.routing.insert(key.clone(), want.binding);
         self.layout_input.insert(key.clone(), resolved);
+        self.box_shell_size.insert(key.clone(), want.surface_size);
         self.box_sites.insert(key, want.site);
     }
 
@@ -461,6 +481,7 @@ impl TextLayerRuntime {
         self.routing.remove(key);
         self.layout_input.remove(key);
         self.box_sites.remove(key);
+        self.box_shell_size.remove(key);
         self.drop_box_scroll(key);
         // 見えない箱の当たり行を残さない（次の提示で再び導く）。
         self.choice_snapshot.remove(key);

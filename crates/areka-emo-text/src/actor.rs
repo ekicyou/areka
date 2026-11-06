@@ -195,6 +195,9 @@ struct ActorRender {
     metrics: DWriteMetrics,
     /// 印の面（スクロールの矢印・窓の子として文字の面の直前）。矢印を出すまでは `None`。
     markers: Option<MarkerSurface>,
+    /// 作れなかった印の面の（物理寸, WUC の資源の変わった時刻）（上限越え・その寸での窓の子の作成の
+    /// 失敗＝入力で答えが決まる失敗だけ）。同じなら作り直さない（`actor_present.rs` の `present_markers`）。
+    markers_failed: Option<((u32, u32), Option<bevy_ecs::change_detection::Tick>)>,
 }
 
 /// `\s` の鍵を今のシェルで解決する閉包（結線が渡す・文字の層は seriko の型を名指ししない）。
@@ -275,6 +278,9 @@ pub struct TextLayerRuntime {
     box_layout: BoxLayout,
     /// 箱の場所 → 登録済みの置き場所（`routing`・`layout_input` と対・`actor_box.rs` の `sync_boxes`）。
     box_sites: HashMap<PlaceKey, BoxPlacement>,
+    /// 箱の場所 → 登録したときのシェルの画像の大きさ（native 原寸・`box_sites` と対）。箱の面と印の面を
+    /// 「箱とシェルの画像の重なり」で切る（`actor_box.rs` の `image_limit`・指摘 3）。
+    box_shell_size: HashMap<PlaceKey, (u32, u32)>,
     /// はみ出しを警告済みの（サーフェス番号, 箱の名前）。箱の束を差し替えると空に戻す。
     box_overflow_warned: BTreeSet<(u32, BoxName)>,
     /// 定義の 2 つの警告（折り返しの基準・無視した書き出し位置）を出した箱の名前。箱の登録には
@@ -346,6 +352,7 @@ impl TextLayerRuntime {
             hidden_boxes: BTreeSet::new(),
             box_layout: BoxLayout::default(),
             box_sites: HashMap::new(),
+            box_shell_size: HashMap::new(),
             box_overflow_warned: BTreeSet::new(),
             box_definition_warned: BTreeSet::new(),
             collapsed_regions: BTreeSet::new(),

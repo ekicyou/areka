@@ -41,6 +41,10 @@ pub(crate) const MAX_SURFACE_AREA: u64 = 1 << 25;
 pub(crate) const SURFACE_LIMIT_MESSAGE: &str =
     "文字の面の物理寸が上限を越える——面を作らず、寸と位置が変わるまで作り直さない";
 
+/// 上限を越える印の面を作らなかったときの記録の文。
+pub(crate) const MARKER_LIMIT_MESSAGE: &str =
+    "印の面の物理寸が上限を越える——面を作らず、寸が変わるまで作り直さない";
+
 /// 物理寸が文字の面の上限（一辺・面積）を越えるか。
 pub(crate) fn over_surface_limit((w, h): (u32, u32)) -> bool {
     w > MAX_SURFACE_SIDE || h > MAX_SURFACE_SIDE || u64::from(w) * u64::from(h) > MAX_SURFACE_AREA
@@ -234,13 +238,11 @@ fn present_actor(
         });
     };
 
-    // 文字の面は画像の右と下で切る（外は窓に映らない）。左と上は面の原点なので切らない（近い辺は
-    // 上限が止める）。切って空なら潰れた場所と同じく描かない（指摘 3・要件 2.1）。
+    // 文字の面は画像（箱は箱とシェルの画像の重なり）の右と下で切る（外は窓に映らない）。左と上は
+    // 面の原点なので切らない（近い辺は上限が止める）。切って空なら潰れた場所と同じく描かない（指摘 3・要件 2.1）。
     let region = &resolved.region;
-    let clip = (
-        region.right().min(binding.image_size.0 as f32),
-        region.bottom().min(binding.image_size.1 as f32),
-    );
+    let lim = runtime.image_limit(place, &binding);
+    let clip = (region.right().min(lim.0), region.bottom().min(lim.1));
 
     // ── 描画範囲の潰れた場所: 装着せず描かず記録もしない（件 2・要件 2.1・2.2・2.7） ──
     // 描いた後に潰れた（再追従が描画資源を残した）なら、ここで差し込み口から外して前の字を残さない
@@ -549,8 +551,9 @@ fn present_actor(
 }
 
 /// 提示の最後: 出す矢印・絵・置き場・拡大率が前と違うときだけ印の面を描き直す（当たりの写しも
-/// 一緒に作り直す・要件 3.8）。印の面は初めて矢印を出すときに、面の画像（箱は箱）全体の物理寸で
-/// 文字の面の直前に挿す（要件 3.5）。失敗は失敗源で `error!` 済み（その場所の矢印だけが出ない）。
+/// 一緒に作り直す・要件 3.8）。印の面は初めて矢印を出すときに、面の画像（箱は箱とシェルの画像の
+/// 重なり）全体の物理寸で文字の面の直前に挿す（要件 3.5・指摘 3）。失敗は失敗源で `error!` 済み
+/// （その場所の矢印だけが出ない）。上限越えとその寸での作成の失敗は寸を覚え、同じ寸では試さない。
 fn present_markers(
     runtime: &mut TextLayerRuntime,
     world: &mut World,
@@ -570,6 +573,33 @@ fn present_markers(
         _ => {}
     }
     if render.markers.is_none() {
+        let lim = runtime.image_limit(place, binding);
+        let physical_size = (
+            contract.physical_extent(ImagePx(lim.0)),
+            contract.physical_extent(ImagePx(lim.1)),
+        );
+        // 空の面（箱がシェルの外）は作らない。作れなかった寸は寸か WUC の資源が変わるまで試さない。
+        let wuc = world
+            .get_resource_change_ticks::<WucGraphicsResource>()
+            .map(|t| t.changed);
+        let attempt = (physical_size, wuc);
+        if physical_size.0 == 0 || physical_size.1 == 0 || render.markers_failed == Some(attempt) {
+            return Ok(());
+        }
+        if over_surface_limit(physical_size) {
+            error!(
+                actor = %place.actor,
+                place = ?place.place,
+                ?physical_size,
+                max_side = MAX_SURFACE_SIDE,
+                max_area = MAX_SURFACE_AREA,
+                "{MARKER_LIMIT_MESSAGE}"
+            );
+            if let Some(render) = runtime.surfaces.get_mut(place) {
+                render.markers_failed = Some(attempt);
+            }
+            return Ok(());
+        }
         let children: Vec<bevy_ecs::entity::Entity> = world
             .get::<Children>(binding.window)
             .map(|c| c.iter().copied().collect())
@@ -591,24 +621,37 @@ fn present_markers(
                 context: "WucGraphicsResource::compositor",
             });
         };
-        let physical_size = (
-            contract.physical_extent(ImagePx(binding.image_size.0 as f32)),
-            contract.physical_extent(ImagePx(binding.image_size.1 as f32)),
-        );
+        // 装置が無いか無効なのは一時の失敗: 覚えず、次の回に試し直す（文字の面と同じ）。
+        if !world
+            .get_resource::<GraphicsCore>()
+            .is_some_and(GraphicsCore::is_valid)
+        {
+            error!(actor = %place.actor, "印の面: GraphicsCore 不在か無効（矢印を出せない）");
+            return Err(TextLayerError::Device {
+                hresult: 0,
+                context: "GraphicsCore resource",
+            });
+        }
         let physical_offset = (
             contract.to_physical(ImagePx(origin.0)).0,
             contract.to_physical(ImagePx(origin.1)).0,
         );
+        let mut surface_failed = false;
         let markers = with_graphics_core(world, |world, core| {
-            MarkerSurface::attach(
+            MarkerSurface::attach_noting(
                 world,
-                binding.window,
-                index,
+                (binding.window, index),
                 &compositor,
                 core,
                 physical_size,
                 physical_offset,
+                &mut surface_failed,
             )
+        })
+        .inspect_err(|_| {
+            if let (true, Some(render)) = (surface_failed, runtime.surfaces.get_mut(place)) {
+                render.markers_failed = Some(attempt);
+            }
         })?;
         debug!(actor = %place.actor, place = ?place.place, ?physical_size, "印の面を文字の面の直前に挿した");
         if let Some(render) = runtime.surfaces.get_mut(place) {

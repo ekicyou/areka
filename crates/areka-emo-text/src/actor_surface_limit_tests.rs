@@ -4,19 +4,29 @@
 //! - 物理寸の上限（一辺・面積）を越える面は作らず、`error!` は 10 フレームで 1 回のまま。
 //! - 資源の無いフレームの失敗は覚えない＝資源が入ると同じ入力で字が出る。
 //! - スクロールの後も、切った面の画素は切らない面（今までの形）の左上と同じ。
+//! - 箱の文字の面と印の面は「箱の大きさとシェルの画像の重なり」を越えない（シェルの大きさが変われば作り直す）。
+//! - 印の面も、装置が無効なフレームの失敗は覚えず、上限越えの覚えは WUC の資源が作り直されると試し直す。
 
+use std::sync::Arc;
+
+use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use bevy_ecs::change_detection::DetectChangesMut;
 use log_capture_kit::capture;
-use wintf::ecs::GraphicsCore;
+use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-use super::present::{MAX_SURFACE_AREA, MAX_SURFACE_SIDE, SURFACE_LIMIT_MESSAGE};
+use super::present::{
+    MARKER_LIMIT_MESSAGE, MAX_SURFACE_AREA, MAX_SURFACE_SIDE, SURFACE_LIMIT_MESSAGE,
+};
 use super::test_support::{
-    REVEAL_INTERVAL, balloon, com_world, cue, opaque_count, read_back, spawn_reserved_slot,
+    REVEAL_INTERVAL, balloon, box_layout, box_name, com_world, cue, emote, fake_resolver,
+    opaque_count, read_back, spawn_reserved_slot, text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
+use crate::place::{PlaceKey, TextPlace};
 use crate::state::TextLayerConfig;
 
 /// バルーンの画像の大きさ（image px）。
@@ -229,4 +239,191 @@ fn text_appears_after_reregistering_on_a_new_slot_with_the_same_size() {
         opaque_count(&read_back(&rt, &actor)) > 0,
         "同じ寸でも字が出る"
     );
+}
+
+/// シェルの画像（image px）と、箱を置く位置。
+const SHELL: (u32, u32) = (300, 200);
+const SITE: (u32, u32) = (50, 40);
+
+/// 定義 `def`（ブレスの中身）の箱 `big` を絵 0 の `SITE` に置き、矢印の絵と `lines` 行の字を積んだ runtime。
+fn box_runtime(
+    world: &mut bevy_ecs::prelude::World,
+    def: &str,
+    lines: usize,
+) -> (TextLayerRuntime, PlaceKey) {
+    let actor = ActorKey::from("0");
+    let layout = box_layout(&format!(
+        "balloon.big
+{{
+{def}
+}}
+surface0
+{{
+element1,balloon,big,{},{}
+}}
+",
+        SITE.0, SITE.1
+    ));
+    let place = PlaceKey {
+        actor: actor.clone(),
+        place: TextPlace::Box(box_name(&layout, 0, "big")),
+    };
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.set_box_layout(world, layout, fake_resolver(), vec![]);
+    let dot = Arc::new(MarkerImage {
+        width: 4,
+        height: 4,
+        bgra: vec![255; 64],
+    });
+    let pair = MarkerPair {
+        up: Some(Arc::clone(&dot)),
+        down: Some(dot),
+    };
+    rt.set_balloon_markers(actor, pair);
+    rt.apply_cue(&emote("0", "0"));
+    for i in 0..lines {
+        rt.apply_cue(&text("0", "あ"));
+        rt.apply_cue(&cue("0", i as f64, CueCommand::NewLine { ratio: 1.0 }));
+    }
+    (rt, place)
+}
+
+/// シェル `shell`・拡大率 1 で箱を同期する。
+fn sync(rt: &mut TextLayerRuntime, world: &mut bevy_ecs::prelude::World, shell: (u32, u32)) {
+    let (window, slot) = {
+        let b = rt.routing.values().next().copied();
+        b.map(|b| (b.window, b.slot))
+            .unwrap_or_else(|| spawn_reserved_slot(world))
+    };
+    let binding = TextSlotBinding::new(slot, window, 1.0, shell, shell);
+    rt.sync_box_bindings(world, &[(ActorKey::from("0"), Some((binding, 0)))]);
+}
+
+/// 装置の変化の印を立てずに `GraphicsCore` を差し替える（`with_graphics_core` と同じ戻し方）。
+fn swap_core(world: &mut bevy_ecs::prelude::World, core: GraphicsCore) -> GraphicsCore {
+    let before = world
+        .get_resource_change_ticks::<GraphicsCore>()
+        .expect("GraphicsCore")
+        .changed;
+    let old = world
+        .remove_resource::<GraphicsCore>()
+        .expect("GraphicsCore");
+    world.insert_resource(core);
+    world
+        .resource_mut::<GraphicsCore>()
+        .set_last_changed(before);
+    old
+}
+
+/// 指摘 3: 印の面を作るフレームに装置が無効でも、その失敗は覚えない＝装置が戻ると同じ寸で作る。
+#[test]
+fn marker_surface_appears_once_the_device_is_valid_again() {
+    let (mut world, _, _) = com_world();
+    let (mut rt, place) = box_runtime(&mut world, "size,200,100", 40);
+    sync(&mut rt, &mut world, SHELL);
+    // まだあふれない時刻で文字の面だけを作る。
+    present_frame(&mut rt, &mut world, 0.0).expect("あふれる前の提示");
+    assert!(rt.surfaces[&place].markers.is_none(), "まだ矢印は出ない");
+    let mut dead = GraphicsCore::new().expect("GraphicsCore");
+    dead.invalidate();
+    let live = swap_core(&mut world, dead);
+    let _ = present_frame(&mut rt, &mut world, 1000.5);
+    assert!(
+        rt.surfaces[&place].markers.is_none(),
+        "無効な装置では作れない"
+    );
+    swap_core(&mut world, live);
+    present_frame(&mut rt, &mut world, 1001.0).expect("装置が戻った提示");
+    let markers = rt.surfaces[&place].markers.as_ref();
+    assert_eq!(
+        markers.map(|m| m.surface().size()),
+        Some((200, 100)),
+        "同じ寸で印の面ができる"
+    );
+}
+
+/// 指摘 3: 上限を越える印の面は 10 フレームで記録 1 回、WUC の資源が作り直されると試し直す（記録が
+/// もう 1 回）。文字の面は描画範囲で小さく、印の面だけが重なり（17000×100）で一辺の上限を越える。
+#[test]
+fn over_limit_marker_surface_logs_once_until_wuc_resources_change() {
+    let (mut world, _, _) = com_world();
+    let (mut rt, place) = box_runtime(
+        &mut world,
+        "size,17000,100
+validrect.right,-16800",
+        40,
+    );
+    sync(&mut rt, &mut world, (20000, 200));
+    let count = |rt: &mut TextLayerRuntime, world: &mut bevy_ecs::prelude::World, t: f64| {
+        let (_, events) = capture(|| {
+            for i in 0..10 {
+                let _ = present_frame(rt, world, t + f64::from(i) * 0.1);
+            }
+        });
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR && e.message() == MARKER_LIMIT_MESSAGE)
+            .count()
+    };
+    assert_eq!(count(&mut rt, &mut world, 1000.0), 1, "10 フレームで 1 回");
+    assert!(rt.surfaces[&place].markers.is_none(), "印の面は作らない");
+    assert_eq!(
+        count(&mut rt, &mut world, 1002.0),
+        0,
+        "同じ入力では試さない"
+    );
+    world.resource_mut::<WucGraphicsResource>().set_changed();
+    assert_eq!(
+        count(&mut rt, &mut world, 1004.0),
+        1,
+        "WUC の資源が変わると試し直す"
+    );
+}
+
+/// 指摘 3: 箱の大きさが 16000 でも、箱の文字の面と印の面は「箱とシェルの画像の重なり」
+/// （`min(箱の幅, シェルの幅 − X)`・高さも同じ）で切る。x だけ・y だけ・両方を大きくし（片方の切りを
+/// 外すと、その軸の case が落ちる）、シェルの画像の大きさが変わると次の提示で切り直す。
+#[test]
+fn large_box_surfaces_do_not_exceed_the_overlap_with_the_shell_image() {
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let cases = [
+        ("x", (16000, 100)),
+        ("y", (100, 16000)),
+        ("xy", (16000, 16000)),
+    ];
+    for k in [1.0, 1.5] {
+        for (axis, size) in cases {
+            // 箱の丈（100・16000）より多い行＝押し出された行ができて上の矢印が出る。
+            let (mut rt, place) = box_runtime(
+                &mut world,
+                &format!(
+                    "size,{},{}
+font.height,40",
+                    size.0, size.1
+                ),
+                500,
+            );
+            for (shell, t) in [(SHELL, 1000.0), ((400, 260), 1001.0)] {
+                let binding = TextSlotBinding::new(slot, window, k, physical(shell, k), shell);
+                rt.sync_box_bindings(&mut world, &[(actor.clone(), Some((binding, 0)))]);
+                // 矢印はあふれた次の提示で出る。
+                present_frame(&mut rt, &mut world, t).expect("提示");
+                present_frame(&mut rt, &mut world, t + 0.5).expect("次の提示");
+                let overlap = (size.0.min(shell.0 - SITE.0), size.1.min(shell.1 - SITE.1));
+                let render = &rt.surfaces[&place];
+                assert_eq!(
+                    render.surface.size(),
+                    physical(overlap, k),
+                    "{axis}・k={k}・シェル {shell:?}: 文字の面は重なりで切る"
+                );
+                let markers = render.markers.as_ref().expect("矢印が出て印の面がある");
+                assert_eq!(
+                    markers.surface().size(),
+                    physical(overlap, k),
+                    "{axis}・k={k}・シェル {shell:?}: 印の面も重なりで切る"
+                );
+            }
+        }
+    }
 }
