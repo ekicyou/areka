@@ -288,7 +288,7 @@ sequenceDiagram
 
 | # | 直し方 | 範囲の外 | 縛るテスト | 束 |
 |---|---|---|---|---|
-| 1 | 一段目は `on_send` で 3 字を取り除く・二段目は送る点で ID を断り Reference を取り除く（上の節） | — | `send_strips_line_breaks_before_playing_and_translating`・`actor_header_guard_tests.rs` の 3 本 | T6 |
+| 1 | 一段目は `on_send` で 3 字を取り除く・二段目は送る点で ID を断り Reference を取り除く（上の節） | — | `send_strips_line_breaks_before_playing_and_translating`・`actor_header_guard_tests.rs` の 4 本 | T6 |
 | 2 | `talk_gap::begin` に「切替の保留あり → 送らず `Left{GhostChange}`」の枝を足す（`decide` の決めと揃える） | — | `talk_gap_tests.rs` `marked_request_with_pending_change_sends_nothing_and_leaves_for_ghost_change`（枝を外すと `OnShellChanging` が送られて赤） | T5 |
 
 ### Should fix（本番のコード）
@@ -298,7 +298,7 @@ sequenceDiagram
 | 3 | `on_raise_event`・`on_property_event` の「定常でなければ捨てる」に「終了か切替の保留あり」を足す。記録は今の `raise_event_not_steady`・`property_event_not_steady` の `warn!` に `reason`（`not_steady`／`close_pending`／`change_pending`）を足す（要件 9.3） | `crates/areka/src/update/worker.rs` はコードは変わらない（保留中に `NotSteady` を受ける） | `change_property_tests.rs` `raise_and_property_events_are_dropped_while_close_or_change_is_pending`（4 通り＝2 つの入口 × 2 つの保留・行いが空・WARN 1 件ずつ） | T5 |
 | 4 | 欄 `choice_prev_talk` を `prev_talk` に改名し、どの置き換え（選択・マウスの答え・SSTP の台本・時間切れの答え）でも古い番号を入れる。消すのは今の「次の差し替え」の点のまま。`types.rs:224-226` の doc を今の決めに（要件 9.7） | — | `schedule_log_firing_tests.rs` `late_done_of_a_talk_replaced_by_a_mouse_answer_or_a_send_is_info_not_error`（A 再生中にマウスの答えで B に置き換え → A の完了は info・`unknown_talk_done` の ERROR は 0 件。SSTP の台本でも同じ） | T2 |
 | 5 | `schedule/mod.rs` に `pub(crate) fn has_script(s: &str) -> bool`（空でなければ真＝空白だけも台本）を置き、`actor_sstp.rs` の `first_reply_of`・`schedule/sstp.rs:126` の NOTIFY の腕・`steady.rs` の定常の Value の腕の 3 か所から呼ぶ（要件 9.4） | — | `actor_raise_reply_tests.rs:155-187` のずれを固定したテストを `whitespace_only_answer_is_a_script_on_every_path` に改める（返事は「台本あり」・今のトークは置き換わる。trim に戻すと赤）・`sstp_notify_tests.rs` に空白だけの答えで再生が始まる 1 件 | T5 |
-| 6 | 中断の知らせにトークの番号（上の節） | `crates/areka/src/input_events/` の 3 ファイル＋申し合わせの 2 ファイル | `a_break_for_another_talk_stops_nothing_and_goes_to_table_c`・`a_break_without_a_talk_id_stops_nothing`・`send_break_carries_the_talk_id_it_was_given` | T17 |
+| 6 | 中断の知らせにトークの番号（上の節） | `crates/areka/src/input_events/` の 3 ファイル＋申し合わせの 2 ファイル | `a_break_for_another_talk_stops_nothing_and_goes_to_table_c`・`a_break_without_a_talk_id_stops_the_current_talk`・`send_break_carries_the_talk_id_it_was_given` | T17 |
 | 7 | 期限の知らせ（上の節・要件 9.5） | `crates/areka-ghost/src/ticker.rs`・`ticker_tests.rs`・`runtime.rs` | `steady_choice_wake_tests.rs` の 3 本・`choice_test_wake_tests.rs`・`ticker_tests.rs` の 2 本 | T16 |
 | 8 | `choice_timeout_ledger_stale` を `warn!` に上げ、その場で `clear_choice_ledger(state, "choice_timeout_ledger_stale")`。doc の「trace で観測」を改める（要件 9.7） | — | `schedule_log_firing_tests.rs` `a_stale_choice_ledger_is_warned_once_and_cleared`（帳簿の相手と今のトークを食い違わせた状態を直に組み、刻み 2 回で WARN は 1 件・帳簿は空） | T2 |
 | 9 | `outcome_of` を `schedule/resources.rs` へ移して `actor_resources.rs` と `boot.rs` の `on_prefetch_reply` から呼ぶ。boot は固有の `warn!` と記録だけ残す。想定外の答えの理由の綴りは 1 つに | — | —（照会と先読みの今のテストが同じ結果） | T7 |
