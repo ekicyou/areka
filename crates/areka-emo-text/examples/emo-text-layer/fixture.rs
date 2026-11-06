@@ -2,6 +2,15 @@ use super::{BalloonModel, DefaultEncoding, PathBuf, decode, error, parse_str};
 use sample_ghost_kit::SampleRoot;
 use std::sync::LazyLock;
 
+/// 挨拶の 3 行（fixture スクリプト boot.pasta「起動朝」由来・文字の層の例とタイプライターの例が共に引く）。
+///
+/// 1 行目（6 グリフ・typewriter 進行の観測対象）。
+pub(super) const LINE1: &str = "おっはよー！";
+/// 2 行目（10 グリフ・改行観測。横書き 1 行に収まり、縦書きでは複数列へ折返す）。
+pub(super) const LINE2: &str = "めっちゃええ朝やん！";
+/// 3 行目（8 グリフ・横書き行容量 4 行のうちの 3 行目——旧行送りでは最終行だった）。
+pub(super) const LINE3: &str = "今日もいくでー！";
+
 // ---------------------------------------------------------------------------
 // fixture パス解決（文字の層の例とタイプライターの例が `#[path]` で共に引く）
 // ---------------------------------------------------------------------------
@@ -23,11 +32,14 @@ fn vertical_variant_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/fixtures/emo2-vertical")
 }
 
-/// balloon descript ファイルを読み、charset 宣言に従いデコードする
-/// （parser-foundation の decode 経路——tests/vertical_fixture_test.rs と同じ読み込み規約）。
+/// balloon descript ファイルを本番と同じ規約で読む（既定 Ansi・ファイル内の `charset` 宣言優先）。
+///
+/// 本番 `areka_emo_present::balloon::load_scope_balloon_model` と `tests/support/fixture.rs` の
+/// `read_balloon_file` と同じ `decode(&bytes, DefaultEncoding::Ansi)`。1 文字でも違う規約で読むと
+/// `charset` の行の無い層で例だけが本番と違う model を観測する。
 fn read_decoded(path: &std::path::Path) -> Option<String> {
     match std::fs::read(path) {
-        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Utf8)),
+        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Ansi)),
         Err(e) => {
             error!(path = %path.display(), error = %e, "balloon descript の読取に失敗");
             None

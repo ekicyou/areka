@@ -125,7 +125,7 @@ pub(super) fn show_balloon(
     presenter.attach_target(
         target, window, emo_world, atlas,
         // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
-        // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
+        // 供給する（k は窓のモニタ DPI ÷ 96・100% で 1.0、200% で 2.0）。
         96,
     );
     let (tx, rx) = reply_channel::<PresentOutcome>();

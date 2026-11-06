@@ -58,16 +58,11 @@ mod fixture;
 #[path = "emo-text-layer/setup.rs"]
 mod setup;
 
-use self::fixture::{load_balloon_model, shared_balloon_dir};
+use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
 use self::setup::{
     balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,
     setup_abort, show_balloon,
 };
-
-// ── 挨拶テキスト（さっきの画像と同じ・boot.pasta 起動朝 由来） ──
-const LINE1: &str = "おっはよー！";
-const LINE2: &str = "めっちゃええ朝やん！";
-const LINE3: &str = "今日もいくでー！";
 
 /// `--emoji` のときの台詞（色つきの絵文字と、人が 1 文字と見る単位＝クラスタの目視用）。
 /// 家族（ZWJ）・国旗・肌色・異体字セレクタ・キーキャップ・結合文字（か゚）と、既定フォントが持つ ♥。
@@ -127,6 +122,8 @@ struct Demo {
     cycle_start: f64,
     /// 現サイクルの cue を流し終えたか。
     fed: bool,
+    /// 提示フレームの失敗を `error!` で残し終えたか（最初の 1 回だけ `error!`）。
+    present_err_logged: bool,
 }
 
 fn main() -> windows::core::Result<()> {
@@ -189,6 +186,7 @@ fn build_and_spawn(world: &mut World) {
         attached: false,
         cycle_start: 0.0,
         fed: false,
+        present_err_logged: false,
     });
     info!(w, h, "emo-text-typewriter-demo: 窓生成とアセット構築を完了");
 }
@@ -257,7 +255,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         .borrow_mut()
         .register_actor_view(actor(), &view, &demo.model);
 
-    // 実モニタ DPI をログ（物理 1:1・k=1.0 恒常）。
+    // 実モニタ DPI と合成スケール k をログ（k は窓のモニタ DPI ÷ 96・200% で 2.0）。
     if let Some(handle) = world.get::<WindowHandle>(demo.win) {
         info!(
             dpi = handle.get_dpi(),
@@ -297,8 +295,14 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
     // 毎フレーム、フレーム経過時間 t を注入して提示（typewriter が実時間で animate）。
     {
         let mut rt = demo.runtime.borrow_mut();
+        // 最初の 1 回は `error!`（例の失敗は `error!` を残す）・以後は毎フレーム繰り返しうるので `warn!`。
         if let Err(e) = present_frame(&mut rt, world, t) {
-            warn!(error = %e, "提示フレームで失敗（次フレーム再試行）");
+            if demo.present_err_logged {
+                warn!(error = %e, "提示フレームで失敗（次フレーム再試行）");
+            } else {
+                error!(error = %e, "提示フレームで失敗（次フレーム再試行・以後は warn）");
+                demo.present_err_logged = true;
+            }
         }
     }
 

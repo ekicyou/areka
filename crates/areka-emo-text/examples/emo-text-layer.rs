@@ -24,7 +24,9 @@
 //! 完了すると窓を閉じて `PASS`／`FAIL` を出力して終了する。
 //! `--hold` を付けると自動クローズせず talk をループ再生し、balloon 窓上での左ダブルクリックで終了する
 //! （実機での目視確認用・`--vertical` と併用可）。`--hold` ではチェックポイントの確かめも
-//! `PASS`／`FAIL` の出力も行わず、終了コードは判定に使わない（閉じれば 0）。
+//! `PASS`／`FAIL` の出力も行わず、終了コードは判定に使わない（閉じれば 0）。ただし準備と装着の
+//! 失敗は hold でも `FAIL (セットアップ失敗: …)` を出して終了コード 1 で終わり、watchdog の超過は
+//! 窓を閉じずに `error!` を 1 回だけ残す。
 //!
 //! # fixture（R11.4/R11.7）
 //!
@@ -75,8 +77,8 @@
 //!      （自動の判定は飛ばすので PASS/FAIL は出ない）。
 //! 4. 使用した DPI 値と (a)(b)(c) の結果を記録する。dpi=96 のみの確認は不十分である。
 //!
-//! **DoD 申し送り**: 実行時 k≠1 経路は上流（emo-present/placement）が k≠1 を供給し
-//! 次第、本 example を再実行して検証する（design「観測」DPI 観測の Revalidation Trigger）。
+//! 上流（emo-present/placement）は既に実モニタ DPI から k を供給している（200% で k=2.0）。
+//! k≠1 の経路は上の手順の目視で確かめる（design「観測」DPI 観測の Revalidation Trigger）。
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -141,13 +143,13 @@ mod verdict;
 // 新しい公開モジュールパスは生えない——子はすべて私有 `mod` である。
 use self::demo::{Demo, actor0, actor1, build_and_spawn};
 use self::drive::drive_demo_system;
-use self::fixture::{load_balloon_model, shared_balloon_dir};
+use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
 use self::scenario::{
     EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG_SECS, stage_cues,
 };
 use self::setup::{
     balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,
-    show_balloon,
+    setup_abort, show_balloon,
 };
 use self::verdict::{
     Observations, Verdict, band_ink, block_extent, inline_extent_first_band, opaque_count,
@@ -198,12 +200,15 @@ fn main() -> windows::core::Result<()> {
             "横書き horizontal_tb（既定）"
         }
     );
-    println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4.5 秒）");
     if hold {
+        println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（ループ再生）");
         println!(
             "  モード: --hold（目視確認）— talk をループ再生し、balloon 上でダブルクリックすると終了"
         );
     } else {
+        println!(
+            "  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4.5 秒）"
+        );
         println!(
             "  判定: readback 述語で自動判定し、最後に PASS/FAIL を 1 行出力（exit code 連動）"
         );

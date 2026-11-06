@@ -1,4 +1,6 @@
-use super::{ActorKey, CueCommand, TalkCue, TextLayerRuntime, text_playback_duration};
+use super::{
+    ActorKey, CueCommand, LINE1, LINE2, LINE3, TalkCue, TextLayerRuntime, text_playback_duration,
+};
 
 // ---------------------------------------------------------------------------
 // シナリオ定義（boot.pasta 起動朝 挨拶由来のハードコード cue 列・注入時刻付き）
@@ -18,12 +20,6 @@ use super::{ActorKey, CueCommand, TalkCue, TextLayerRuntime, text_playback_durat
 /// シナリオ全体の watchdog（talk 起点相対秒・超過は FAIL）。
 pub(super) const WATCHDOG_SECS: f64 = 30.0;
 
-/// \0 の 1 行目（6 グリフ・typewriter 進行の観測対象）。
-const LINE1: &str = "おっはよー！";
-/// \0 の 2 行目（10 グリフ・改行観測。横書き 1 行に収まり、縦書きでは複数列へ折返す）。
-const LINE2: &str = "めっちゃええ朝やん！";
-/// \0 の 3 行目（8 グリフ・横書き行容量 4 行のうちの 3 行目——旧行送りでは最終行だった）。
-const LINE3: &str = "今日もいくでー！";
 /// \1（kero）の台詞（7 グリフ・複数 actor 振り分けの観測対象）。
 const KERO_LINE: &str = "朝から元気だね";
 /// あふれ→スクロール誘発用の短行（2 グリフ×`OVERFLOW_LINES` 行・先頭行より行内範囲が確実に短い）。
@@ -82,7 +78,7 @@ pub(super) const T_CHECK: [f64; 7] = [0.12, 0.35, 1.1, 1.8, 3.4, 3.6, 3.8];
 /// **数値の出所＝この example の実走**（2026-09-06・k=1.0 に固定して横書き・縦書きとも実測）:
 /// 横書き `draw1=5 draw2=5`・縦書き `draw1=3 draw2=3`（連続する 2 段のスクロールで同値）。
 /// 上限は両モードの最大値を採る。実行手順は本 example のヘッダ doc
-/// 「k=1.0 に固定して自動判定を走らせる」を参照（高 DPI 機ではプロセスを DPI 非対応に
+/// 「自動判定を走らせるときの前提（k=1.0 への固定）」を参照（高 DPI 機ではプロセスを DPI 非対応に
 /// しないと k=2.0 になり、この example の前提が崩れる）。
 ///
 /// **履歴**（現行の数え方とは無関係・当時の記録として残す）: 矩形ごとに描画対象行を全部

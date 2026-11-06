@@ -54,6 +54,10 @@ pub(super) struct Demo {
     pub(super) prev_lbutton: bool,
     /// ダブルクリック検出用: 直近クリック（rising edge）のフレーム時刻（連続 2 クリックの間隔判定）。
     pub(super) last_click_time: f64,
+    /// 提示フレームの失敗を `error!` で残し終えたか（最初の 1 回だけ `error!`・以後は `warn!`）。
+    pub(super) present_err_logged: bool,
+    /// `--hold` の watchdog 超過を `error!` で残し終えたか（hold は窓を閉じないので 1 回だけ）。
+    pub(super) watchdog_logged: bool,
 }
 
 /// sakura/kero の ActorKey（結線側が所有する actor→target 対応の鍵・R9.5）。
@@ -109,6 +113,8 @@ pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
         hold,
         prev_lbutton: false,
         last_click_time: -10.0,
+        present_err_logged: false,
+        watchdog_logged: false,
     });
     info!(
         w,
