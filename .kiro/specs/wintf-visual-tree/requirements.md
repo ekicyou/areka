@@ -52,8 +52,9 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 6. When 節が可視の旗（`VisualFlags`）を持たない, the wintf shall 可視として扱う。
 7. While 節の可視の旗が「見えない」, the wintf shall その節と子孫の節を描かない。
 8. While 描画面の持ち主が命令の列を持たず節だけを持つ, the wintf shall その描画面を作り、木を描く（木だけでも画面に出る）。
-9. When 節の描く中身・変形・切り抜き・可視の旗が変わる, or 節が足される・外れる・親が変わる, the wintf shall 同じフレームの描画でその描画面を描き直す（1 フレーム遅らせない）。
+9. When そのフレームの描画の前に、節の描く中身・変形・切り抜き・可視の旗が変わる, or 節が足される・外れる・親が変わる, the wintf shall 同じフレームの描画でその描画面を描き直す（次のフレームへ遅らせない）。
 10. While 描画面の持ち主が子孫に節を持たない, the wintf shall 今と同じく命令の列 1 本を `SOURCE_OVER` で描き、答えの画素を変えない。
+11. If 節の子孫に自分の描画面を持つ実体（今の `Visual` 部品を持つもの）がある, then the wintf shall その旨を実体名つきで `error!` に記録し、その実体と子孫を根の木の節と見なさない（黙って切らない）。
 
 ### Requirement 2: 節ごとの重ね方・補間・変形・切り抜き
 

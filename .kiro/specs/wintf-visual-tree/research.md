@@ -1,4 +1,4 @@
-# ギャップ分析（`/kiro-validate-gap wintf-visual-tree`・2026-11-06・main `8a572caf` 相当）
+# ギャップ分析（`/kiro-validate-gap wintf-visual-tree`・2026-11-06・枝 `8a572caf`＝main `73c5b25d` の上）
 
 要件（`requirements.md`・確定）と今のコードの差を読み、設計の段へ渡す。読んだもの: `brief.md`・`requirements.md`・steering（`product.md`・`tech.md`・`structure.md`）・申し送りの正本（`completed/audit-wintf-graphics-world/research.md` の 22〜30 番と 8・9 番・`completed/audit-wintf-runtime/research.md` の 14 節と 21・22・23・88 番）・`crates/wintf/src/ecs/visual/`（11 ファイル）・`numerics/`（6 ファイル）・`ecs/graphics/systems/{render,surface,visual_sync,init}.rs`・`ecs/graphics/{visual,core,command_list,mod}.rs`・`ecs/common/ancestors.rs`・`ecs/world/mod.rs`・`ecs/mod.rs`・`com/d2d/mod.rs`・`com/d3d11.rs`・`tools/test-all.ps1`・`tests/graphics/common/mod.rs`・`areka-emo-present/src/display_gpu_tests.rs`（読み戻しの先例）・`wintf-d2d-composite-rules/brief.md`・`wintf-visual-damage-redraw/brief.md`。cargo は回していない。
 
@@ -16,7 +16,7 @@
 | 要件 | 今ある資産 | 差（Missing／Unknown／Constraint） |
 |---|---|---|
 | 1.1〜1.7 画家の順・既定値・可視 | `draw/builder.rs` の `build`／`visit`（前順 DFS・`Children` の順・無い部品は恒等／無し）。`VisualFlags` は読まない（傷 2） | Missing: 描く係（`DrawCommand` の列を DC へ再生）。Missing: `VisualFlags` の読み（1.6・1.7） |
-| 1.2 描画面の持ち主＝根・下の `Visual` は節でない | `Visual` の on_add が窓の下なら `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` を入れる（`graphics/visual.rs:606-640`）。後から窓へ付けた木にも入れる（`insert_graphics_parts_on_window_join`）＝窓の下の `Visual` は全部が描画面の持ち主 | Constraint: 節（`Visual` 無し）の**下**に `Visual` を置くと、今の 2 つの係が壊れる。① `propagate_global_arrangements` の `NodeQuery` は鎖の全部に `Arrangement` を要るので、節で伝播が止まる（`layout/systems/arrangement_systems.rs:52`・`common/tree_system.rs:312`）。② `visual_hierarchy_sync_system` は「親が `VisualGraphics` を持たない＝根」と見る（`visual_sync.rs:90`）ので、その `Visual` は WUC の木の根になる。要件 1.2 の「節と見なさない」は、この 2 つの壊れを**記録して切る**か黙って切るかを設計で決める（議題 12） |
+| 1.2 描画面の持ち主＝根・下の `Visual` は節でない | `Visual` の on_add が窓の下なら `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` を入れる（`graphics/visual.rs:606-640`）。後から窓へ付けた木にも入れる（`insert_graphics_parts_on_window_join`）＝窓の下の `Visual` は全部が描画面の持ち主 | Constraint: 節（`Visual` 無し）の**下**に `Visual` を置くと、今の 2 つの係が壊れる。① `propagate_global_arrangements` の `NodeQuery` は鎖の全部に `Arrangement` を要るので、節で伝播が止まる（`layout/systems/arrangement_systems.rs:52`・`common/tree_system.rs:312`）。② `visual_hierarchy_sync_system` は「親が `VisualGraphics` を持たない＝根」と見る（`visual_sync.rs:90`）ので、その `Visual` は WUC の木の根になる。要件 1.11（討議で追加）＝**記録して切る**（黙って切らない）。壊れの直しは範囲外・文書に書く |
 | 1.8 木だけの根でも描画面を作る | `deferred_surface_creation_system` の `SurfaceCreationFilter` は `With<GraphicsCommandList>`（`surface.rs:192-199`）。`cleanup_surface_on_commandlist_removed` は命令の列が外れると描画面を空にする（`surface.rs:442-489`） | Missing: 木だけの根を作る係と片づける係に見せる印（議題 4） |
 | 1.9 同じフレームで描き直す | `mark_dirty_surfaces` は `Changed<GraphicsCommandList>`・`Changed<SurfaceGraphics>`・`GlobalArrangement` の拡大の変化だけ（`surface.rs:174-229`）。描く係は `Changed<SurfaceGraphicsDirty>` | Missing: 節の変化（部品の変化・足す・外す・親の変更・despawn）を根の印へ写す係。外れた節は `RemovedComponents` で分かるが、どの根の下だったかは分からない（議題 6）。Constraint: bevy の変化の印は「係が前に走ってから」なので、節の変化が `Update`／`Draw` の中なら同じ回、`RenderSurface` より後なら次の回になる |
 | 1.10・3.1 木を持たない描画面は今と同じ | `render.rs:117-136` | 木の分岐を「木があるときだけ」にすれば答えの画素は変わらない。固定は要件 6.3 の「木を持たない描画面との一致」と既存の `tests/graphics/`・emo の画素のテスト |
@@ -128,9 +128,9 @@
 - 深さは明示のスタック＋上限 1,024（`MAX_ANCESTOR_DEPTH` を共用）。
 - 画素のテストは `src/` の兄弟ファイル（落ちの報告・MTA 付き）、見本はコードの中の値、境界から離れた画素、±1。
 
-## 7. 要件の討議へ送る議題（答えで作業が変わるもの）
+## 7. 議題の振り分け（2026-11-06 要件の討議で分類）
 
-要件の末尾の 3 件（1〜3）に、ギャップ分析で見えた 9 件（4〜12）を足す。推奨は「推」。
+要件の末尾の 3 件（1〜3）は**開発者へ**（答えで公開の形・テストの作りが変わる）。ギャップ分析で見えた 4〜13 は **設計の段（`/kiro-design`）で決める設計判断**＝要件は変えない（12 だけは要件 1.11 に写して閉じた）。推奨は「推」。設計の段への約束: 4 の根の印は使い手が置くものではなく係が自動で入れる（要件 1.1・1.8「節を置くだけで」の字面を守る）。
 
 1. **「描画面の中の節」の見分け方**（要件 1.2・brief 議題 1）: 推＝専用の印を置かず「持ち主の子孫で `Visual` を持たず、描画の木の部品のいずれかを持つ実体」。コードの裏づけ: 窓の下の `Visual` は全部が描画面を持つ（`graphics/visual.rs`）。ただし N4（節の下の `Visual` が今の 2 つの係を壊す）は議題 12 へ。
 2. **名前の衝突の解き方**（要件 5.9・brief 議題 2）: 推＝描画の木の側を改名。候補 `ecs::draw_tree`（brief）／`ecs::surface_tree`（「描画面の下の木」が名前で分かる）。型の名前は変えない。`structure.md:55` と `tests/visual/`（`Visual` 部品のテスト・そのまま）の説明も直す。
@@ -143,7 +143,7 @@
 9. **WARP の装置の作り方**（要件 6.1）: ㋐ 推＝テストの足場だけで作る（`d3d11_create_device` ＋ `D2D1CreateFactory` の 10 数行・`GraphicsCore` の公開面を増やさない）。㋑ `GraphicsCore::new_with_driver(D3D_DRIVER_TYPE)` を公開（`wintf-d2d-composite-rules` も使うが、本番の口に WARP が混ざる）。
 10. **`Matrix3x2Ext::moved` の直し方**（要件 5.11）: ㋐ 推＝比べる矩形（`Aabb`・DIP か px）を引数で受け、その 4 角の変換後の差を `eps_px` で比べる（名前どおり）。㋑ 平行移動（M31・M32）は px でそのまま、線形の部分は別の許容で比べる。使い手 0 なので署名を変えてよい。
 11. **`VisualDrawContent`／`VisualClip` の `impl Hash`**（要件 4.5）: ㋐ 推＝外す（使い手は `hash_draw` だけ・番地を混ぜる元を残さない）。㋑ 版を混ぜる形に書き直す（部品が版を持たないので不自然）。
-12. **節の下の `Visual`**（要件 1.2・N4）: ㋐ 推＝埋める係が見つけたら `error!` を 1 行（実体名）残し、その実体と子孫を節と見ない（既存の係の壊れは直さず文書に書く）。㋑ 黙って切る（記録の無い失敗の道になる）。
+12. **節の下の `Visual`**（要件 1.2・N4）: ㋐ 推＝埋める係が見つけたら `error!` を 1 行（実体名）残し、その実体と子孫を節と見ない（既存の係の壊れは直さず文書に書く）。㋑ 黙って切る（記録の無い失敗の道になる）。→ **閉じた**: 要件 1.11 に ㋐ を書いた（記録の無い失敗の道は作らない・`logging.md`）。
 13. **再帰か明示のスタックか**（要件 5.3・5.4）: ㋐ 推＝明示のスタック（`insert_graphics_parts_on_window_join` と同じ形・あふれないことが構造で言える）。㋑ 再帰に深さの引数（差分が小さい・1,024 段の再帰はスレッドの既定の 2 MB で足りる見込み）。
 
 ## 8. 次の段
