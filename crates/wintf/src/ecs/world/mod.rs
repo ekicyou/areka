@@ -325,8 +325,8 @@ impl EcsWorld {
             schedules.add_systems(
                 PreRenderSurface,
                 (
-                    // 後から窓へつないだ部品に見た目の部品を入れる（4 番）。同じ回に作られるよう先頭。
-                    crate::ecs::graphics::insert_graphics_parts_on_window_join.before(
+                    // 窓の下の Visual に持ち主か節かの規則どおり描画面の部品を入れる・外す。同じ回に作られるよう先頭。
+                    crate::ecs::graphics::sync_surface_owner_parts.before(
                         crate::ecs::graphics::visual_manager::visual_resource_management_system,
                     ),
                     crate::ecs::graphics::visual_manager::visual_resource_management_system

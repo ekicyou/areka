@@ -6,13 +6,14 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
-use tracing::{error, warn};
+use tracing::warn;
 
 use super::clip::ClipShape;
 use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 
 mod draw;
 mod draw_content;
+mod systems;
 mod transform;
 mod version;
 mod world_visual;
@@ -22,9 +23,12 @@ pub(crate) mod draw_content_test_support;
 #[cfg(test)]
 mod draw_content_tests;
 #[cfg(test)]
+mod systems_tests;
+#[cfg(test)]
 mod visual_tests;
 
 pub use draw_content::*;
+pub use systems::*;
 pub use transform::*;
 pub use version::*;
 pub use world_visual::*;
@@ -96,7 +100,7 @@ pub fn owner_window_exists(world: &DeferredWorld, entity: Entity) -> bool {
 }
 
 /// 窓に属するかの規則（自分が窓か、上限つきの祖先に窓が在るか）。フックと
-/// [`insert_graphics_parts_on_window_join`] が共用する。
+/// [`sync_surface_owner_parts`] が共用する。
 fn has_window_ancestor(
     entity: Entity,
     is_window: impl Fn(Entity) -> bool,
@@ -112,50 +116,6 @@ fn insert_graphics_parts(entity_cmds: &mut EntityCommands) {
         SurfaceGraphics::default(),
         SurfaceGraphicsDirty::default(),
     ));
-}
-
-/// 窓の外で作った部品の木を後から窓の下へ付けたとき、根と子孫のうち見た目の部品を
-/// まだ持たない `Visual` に、フックと同じ 3 つを入れる（4 番）。
-/// `PreRenderSurface` の先頭で回し、入れた `VisualGraphics` は同じ回に作られる。
-pub fn insert_graphics_parts_on_window_join(
-    mut commands: Commands,
-    changed: Query<Entity, Changed<ChildOf>>,
-    parents: Query<&ChildOf>,
-    windows: Query<(), With<crate::ecs::window::Window>>,
-    children: Query<&Children>,
-    pending: Query<(), (With<Visual>, Without<VisualGraphics>)>,
-) {
-    // ふだんは窓に属する Visual が全部持っているので、待つものが無ければ何もしない。
-    if pending.is_empty() {
-        return;
-    }
-    for entity in &changed {
-        let joined = has_window_ancestor(
-            entity,
-            |e| windows.contains(e),
-            |e| parents.get(e).ok().map(|c| c.parent()),
-        );
-        if !joined {
-            continue;
-        }
-        // 子孫の走査も祖先と同じ上限で止める。
-        let mut stack = vec![(entity, 0usize)];
-        while let Some((e, depth)) = stack.pop() {
-            if pending.contains(e) {
-                insert_graphics_parts(&mut commands.entity(e));
-            }
-            let Ok(kids) = children.get(e) else { continue };
-            if depth >= crate::ecs::common::MAX_ANCESTOR_DEPTH {
-                error!(
-                    root = ?entity,
-                    limit = crate::ecs::common::MAX_ANCESTOR_DEPTH,
-                    "[insert_graphics_parts_on_window_join] 子孫の走査が上限を越えたので止める"
-                );
-                continue;
-            }
-            stack.extend(kids.iter().map(|k| (k, depth + 1)));
-        }
-    }
 }
 
 /// Visualコンポーネントが追加されたときに呼ばれるフック
