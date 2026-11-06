@@ -556,10 +556,6 @@ fn line_bands_scale_with_each_line_own_em() {
     // FixedMetrics: 行ボックス丈 = em × 1.33・ピッチ = em + 2 で頭打ち。
     assert_eq!(bands[0].extent, 12.0, "em 10 → clamp(13.3, 10, 12) = 12");
     assert_eq!(bands[1].extent, 42.0, "em 40 → clamp(53.2, 40, 42) = 42");
-    assert!(
-        bands[1].extent > bands[0].extent * 3.0,
-        "大きい字の行の帯が既定の行のまま（要件 11.5 のブロック軸が効いていない）"
-    );
 }
 
 /// 縦書きでは行矩形の**行内幅ではなく列幅**（x 軸）が基準になる。帯の厚みは列の em、
@@ -659,8 +655,6 @@ fn band_extent_takes_line_box_height_between_em_and_pitch() {
 #[test]
 fn band_extent_is_capped_by_line_pitch() {
     assert_eq!(highlight_band_extent(28.0, 37.242, 30.0), 30.0);
-    // 隣接行の帯は接するだけで重ならない（行送り 30 ＋ 帯 30）。
-    assert!(highlight_band_extent(28.0, 37.242, 30.0) <= 30.0);
 }
 
 /// 下限は em ボックス丈——行ボックス丈がそれより小さくても行矩形より痩せない（非退行）。
@@ -695,10 +689,6 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
     assert_eq!(
         rows[0].rect.bottom, 30.0,
         "帯の終端は近端＋band_extent（em ボックス下端 28 ではない＝descent を覆う）"
-    );
-    assert!(
-        rows[0].rect.bottom > line.rect.bottom - region.top(),
-        "em ボックス丈（28）より下へ伸びる"
     );
 }
 
@@ -782,11 +772,6 @@ fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
         (4.0, 34.0),
         "帯は近端（0）から寄せ {offset} 下がって始まり、丈 {band} 分（寄せ 0 なら 0..30 で赤）"
     );
-    assert_eq!(
-        rows[0].rect.bottom - rows[0].rect.top,
-        band,
-        "寄せても帯の丈は変わらない（帯を広げない）"
-    );
 }
 
 /// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から符号つきの
@@ -838,10 +823,6 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
     );
     assert_eq!((rows[0].rect.top, rows[0].rect.bottom), (4.0, 34.0));
     assert_eq!((rows[1].rect.top, rows[1].rect.bottom), (34.0, 64.0));
-    assert_eq!(
-        rows[0].rect.bottom, rows[1].rect.top,
-        "共有する辺は 1 本（接する）——寄せは行ごとに同じなので隙間も重なりも生まれない"
-    );
     // 半開区間の帰結: 共有辺 y=34 は下の行にだけ当たる（上の行は y < 34）。
     let shared = rows[0].rect.bottom;
     assert!(!(shared >= rows[0].rect.top && shared < rows[0].rect.bottom));

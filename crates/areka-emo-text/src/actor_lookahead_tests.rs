@@ -403,10 +403,7 @@ fn dropping_the_preview_is_judged_as_moved_glyphs() {
     );
 
     // この台本は場所 1 つ・区間 1 つ（消去が無い）なので、warn はちょうど 1 件。
-    let warns: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .collect();
+    let warns = warns(&events);
     assert_eq!(
         warns.len(),
         1,
@@ -668,10 +665,7 @@ fn walk_with_windows(
         };
         stages.push(Stage {
             time: t,
-            rows: lines
-                .iter()
-                .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
-                .collect(),
+            rows: rig.rows(&place, t),
         });
         windows.push(window);
     }
@@ -737,8 +731,7 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
 
     // 対照（先渡しなし）: 台本が「届いた字だけで区切ると、あふれの後の段階で字が動く」形を保っている。
     assert!(
-        !reveal_violations(&old).is_empty()
-            && !after_scroll_violations(&old, &old_windows).is_empty(),
+        !after_scroll_violations(&old, &old_windows).is_empty(),
         "対照: 先渡しなしであふれの後の段階の違反が無い（台本が前提の形を失った）:\n{:#?}",
         trace(&old, &old_windows)
     );

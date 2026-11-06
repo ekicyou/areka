@@ -112,81 +112,33 @@ fn resolve_specified_colors_without_style_defaults_to_square_fill() {
     );
 }
 
-// ── resolve: underline 系 → SquareFill 縮退（縮退表・6.5・記録は出さない） ──
+// ── resolve: underline 系と blendmethod は SquareFill のまま（縮退表・6.5・記録は出さない） ──
 
-/// `cursor.style,underline` → SquareFill へ縮退（在る色を採る・警告は登録の側が出す）。
+/// underline 系の style（`underline`・`square+underline`）は SquareFill へ縮退し、blendmethod は
+/// ROP 系（`notmaskpen`）でも `none` でも variant を変えない（色ベース・警告は登録の側が出す）。
 #[test]
-fn resolve_underline_degrades_to_square_fill() {
-    let c = cursor(
-        Some("underline"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        None,
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-/// `cursor.style,square+underline`（underline 系）→ SquareFill へ縮退。
-#[test]
-fn resolve_square_plus_underline_degrades_to_square_fill() {
-    let c = cursor(
-        Some("square+underline"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        None,
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-// ── resolve: blendmethod ROP 系 → none 扱い（variant は変えない・6.5・記録は出さない） ──
-
-/// `cursor.blendmethod,notmaskpen`（ROP 系）→ none 扱い（色ベース）へ縮退し variant は
-/// style（square）どおり SquareFill のまま（blend は無視・警告は登録の側が出す）。
-#[test]
-fn resolve_rop_blendmethod_is_treated_as_none_and_keeps_square_fill() {
-    let c = cursor(
-        Some("square"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        Some("notmaskpen"),
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-/// `cursor.blendmethod,none`（大小無視）は縮退ではなく variant はスタイルどおり。
-#[test]
-fn resolve_blendmethod_none_keeps_square_fill_without_degrade() {
-    let c = cursor(
-        Some("square"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        Some("none"),
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
+fn underline_styles_and_any_blendmethod_resolve_to_square_fill() {
+    for (style, blend) in [
+        ("underline", None),
+        ("square+underline", None),
+        ("square", Some("notmaskpen")),
+        ("square", Some("none")),
+    ] {
+        let c = cursor(
+            Some(style),
+            (Some(105), Some(25), Some(25)),
+            (Some(255), Some(255), Some(255)),
+            blend,
+        );
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            },
+            "style={style} blend={blend:?}"
+        );
+    }
 }
 
 // ── paint: 描画実行用 (fill, text) 正規形 ──

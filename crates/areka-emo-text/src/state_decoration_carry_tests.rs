@@ -335,6 +335,19 @@ fn owner_moves_a_a_b_through_closed_box_and_return_keeps_its_spec() {
     assert_eq!(now(&mut state, "0"), default_of(&bx("x")));
     show(&mut state, "0", 2);
     assert_eq!(now(&mut state, "0").color, RED);
+
+    // 箱の行き先での戻す操作（`reset_decoration`）も x だけを戻し、スコープの赤は残る。
+    show(&mut state, "0", 0);
+    state.apply_cue(&select("0", "x"));
+    blue(&mut state, "0");
+    state.reset_decoration(Some(&key("0")));
+    assert_eq!(
+        now(&mut state, "0"),
+        default_of(&bx("x")),
+        "戻す操作は行き先を戻す"
+    );
+    show(&mut state, "0", 2);
+    assert_eq!(now(&mut state, "0").color, RED);
 }
 
 #[test]

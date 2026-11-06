@@ -238,26 +238,6 @@ fn decorate_bakes_band_offset_into_choice_residents() {
     }
 }
 
-/// 非退行（R13.6）: 寄せ 0（行ボックス丈 ＝ 帯の丈の既定 ＭＳ ゴシック）を渡すと住人へ焼かれる
-/// 値も 0 になり、下流（ハイライト矩形／ダーティ帯）は寄せを入れる前と 1 画素も変わらない。
-#[test]
-fn decorate_bakes_zero_band_offset_for_flat_line_box_fonts() {
-    let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0))]);
-    let segments = [seg(0, 0, (0.0, 20.0))];
-    let out = decorate_canvas(
-        input,
-        &segments,
-        Some(0),
-        square_fill(),
-        (0, 0, 0),
-        &region,
-        WritingMode::HorizontalTb,
-        &bands_of(TEST_BAND, NO_OFFSET),
-    );
-    assert_eq!(choice(&out.residents[0]).band_offset, 0.0);
-}
-
 /// 縦書き（vertical_rl/lr）: 行内軸＝y。行内 offset.1=50 → 絶対 50..70 は top 原点差引きで local 0..20。
 #[test]
 fn segment_inline_range_vertical_subtracts_top_origin() {

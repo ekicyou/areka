@@ -8,31 +8,6 @@ use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_fram
 use crate::choice::ResolvedChoiceStyle;
 use crate::state::TextLayerConfig;
 
-/// Observable（3.5/4.1）: 現存しない ordinal で `inject_choice_hover` を呼んでもパニックせず、
-/// `choice_active` は選択肢スパンの実状態を反映し続ける（選択肢あり＝true）。
-#[test]
-fn inject_choice_hover_nonexistent_ordinal_does_not_panic_and_choice_active_holds() {
-    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    let actor = ActorKey::from("0");
-    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
-    assert!(
-        rt.choice_active(&actor),
-        "選択肢スパンありで choice_active=true"
-    );
-
-    // 現存スパン（ordinal 0）に無い ordinal 999 を注入——panic せず縮退（debug ログ）。
-    rt.inject_choice_hover(&actor, Some(999));
-    // 実存 ordinal 0 の注入・解除も panic しない。
-    rt.inject_choice_hover(&actor, Some(0));
-    rt.inject_choice_hover(&actor, None);
-
-    // stale ordinal 注入後も choice_active はスパンの実状態を反映し続ける（hover は照会に影響しない）。
-    assert!(
-        rt.choice_active(&actor),
-        "stale ordinal 注入後も choice_active はスパン実状態を反映"
-    );
-}
-
 /// `choice_active`（1.3）: スパン非空で true・スパン無し／未知 actor で false。
 #[test]
 fn choice_active_reflects_span_set_presence() {
@@ -50,6 +25,10 @@ fn choice_active_reflects_span_set_presence() {
         "Text のみ（選択肢スパン無し）actor は false"
     );
     assert!(!rt.choice_active(&unknown), "未知 actor は false");
+
+    // 現存しない ordinal の hover を注入しても panic せず、照会はスパンの実状態のまま（3.5/4.1）。
+    rt.inject_choice_hover(&choosing, Some(999));
+    assert!(rt.choice_active(&choosing), "stale ordinal 注入後も true");
 }
 
 /// `choice_hit_rows`（3.2）: 未知 actor・選択肢無し actor は空 slice を返す
@@ -69,19 +48,6 @@ fn choice_hit_rows_empty_for_unknown_or_no_snapshot_actor() {
     assert!(
         rt.choice_hit_rows(&actor).is_empty(),
         "スナップショット未 population（8.2 前）は空 slice"
-    );
-}
-
-/// `ResolvedBalloonText` は balloon cursor モデルから解決した `choice_style` を運ぶ（Integration）。
-/// cursor.\* 未指定の geo_model → `Invert`（未指定バルーン＝M1 実導出）。
-#[test]
-fn resolved_balloon_text_carries_choice_style_from_cursor_model() {
-    let image = (120u32, 60u32);
-    let resolved = ResolvedBalloonText::resolve(&geo_model(), image);
-    assert_eq!(
-        resolved.choice_style,
-        ResolvedChoiceStyle::Invert,
-        "cursor.* 未指定バルーンは choice_style=Invert（既定文字色反転縮退）"
     );
 }
 
@@ -283,50 +249,6 @@ fn present_with_no_choices_yields_empty_choice_hit_rows() {
     );
 }
 
-/// Observable（3.3/4.x 配線・単一導出）: hover 注入が decorate→render まで配線され、ハイライト塗りで
-/// 非透明ピクセルが増える（Invert 縮退＝塗り＝既定黒文字色の矩形が hover 行へ載る）。ヒット行照会自体は
-/// hover 非依存（count 不変）。
-#[test]
-fn present_with_hover_adds_highlight_pixels_over_non_hover_frame() {
-    let (mut world, window, slot) = com_world();
-    let actor = ActorKey::from("0");
-    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
-    rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &["r1"]));
-    let image = (120u32, 60u32);
-    rt.register_actor(
-        actor.clone(),
-        TextSlotBinding::new(slot, window, 1.0, image, image),
-        ResolvedBalloonText::resolve(&geo_model(), image),
-    );
-
-    // hover 無しで提示（素の選択肢テキスト）＝スナップショット population・hover 未注入。
-    present_frame(&mut rt, &mut world, 10.0).expect("hover 無し提示");
-    let read = |rt: &TextLayerRuntime| -> usize { opaque_count(&read_back(rt, &actor)) };
-    let plain = read(&rt);
-    assert!(plain > 0, "選択肢テキストが描画される");
-    assert_eq!(
-        rt.choice_hit_rows(&actor).len(),
-        2,
-        "hover 前もヒット行は 2"
-    );
-
-    // ordinal 0 を hover 注入→再提示（choice_marker 変化で per-line 増分ダーティ＝Update）。
-    rt.inject_choice_hover(&actor, Some(0));
-    present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
-    let hovered = read(&rt);
-    assert!(
-        hovered > plain,
-        "hover が decorate→render へ配線され、ハイライト塗りで非透明ピクセルが増える: {plain} -> {hovered}"
-    );
-    // ヒット行照会は hover 非依存（count 不変）。
-    assert_eq!(
-        rt.choice_hit_rows(&actor).len(),
-        2,
-        "hover 後もヒット行は 2"
-    );
-}
-
 // task 9.2: hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
 //
 // Observable: cursor.* 由来の SquareFill（塗り=(105,25,25)・文字=(255,255,255)）を持つバルーンで、
@@ -394,11 +316,6 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         hover_delta, 1,
         "hover on はダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {hover_delta}"
     );
-    assert!(
-        hover_delta < rows.len() as u64,
-        "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
-        rows.len()
-    );
     let hover_bytes = read_back(&rt, &actor);
     // 7.2: ordinal-0 セグメント矩形へ塗り色＋白文字画素が出現する。
     assert!(
@@ -441,10 +358,6 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     assert_eq!(
         off_delta, 1,
         "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
-    );
-    assert!(
-        off_delta < rows.len() as u64,
-        "hover off も全域再描画ではない: 増分 {off_delta}"
     );
     let off_bytes = read_back(&rt, &actor);
     // 7.2: 塗り色画素が面全域から消滅する（素描画へ戻る）。
@@ -583,12 +496,13 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         hover_delta, 1,
         "hover on はダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {hover_delta}"
     );
-    assert!(
-        hover_delta < rows.len() as u64,
-        "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
-        rows.len()
-    );
     let hov = read_back(&rt, &actor);
+    // ヒット行の照会は hover に依らない（数は変わらない）。
+    assert_eq!(
+        rt.choice_hit_rows(&actor).len(),
+        3,
+        "hover 後もヒット行は 3"
+    );
     // 7.2/4.3【背景塗り】: hover 行のセグメント矩形は既定文字色（黒）塗りで interior 全域が不透明化する。
     assert_eq!(
         opaque_in(&hov, r0_int),

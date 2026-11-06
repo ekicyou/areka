@@ -223,31 +223,23 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
     rt.apply_cue(&cue("0", 11.0, CueCommand::Clear));
     present_frame(&mut rt, &mut world, 12.0).expect("FullClear フレーム提示");
 
-    // 同一 post-present 観測①: 選択肢行バンドのインクが消滅（FullClear＝全域透明）。
+    // 同一 post-present 観測①: 供給面は全域透明（選択肢行の帯のインクも消える・FullClear＝描画 0 件の全域リセット・7.3/7.4）。
     let cleared_bytes = rt
         .surface(&actor)
         .expect("供給面")
         .read_back()
         .expect("read_back");
-    for (i, &(y0, y1)) in bands.iter().enumerate() {
-        assert_eq!(
-            count_px(&cleared_bytes, width, (0, y0, width, y1), inked),
-            0,
-            "FullClear 後: 選択肢行 {i} バンドのインクが消滅する（7.3/7.4）"
-        );
-    }
-    // 同一観測②: 供給面は全域透明（FullClear＝描画 0 件の全域リセット）。
     assert_eq!(
         opaque_count(&cleared_bytes),
         0,
         "FullClear 後の供給面は全域透明"
     );
-    // 同一観測③: 契約ヒット行が空。
+    // 同一観測②: 契約ヒット行が空。
     assert!(
         rt.choice_hit_rows(&actor).is_empty(),
         "FullClear 後の同一フレームで choice_hit_rows が空（5.2）"
     );
-    // 同一観測④: choice_active=false。
+    // 同一観測③: choice_active=false。
     assert!(
         !rt.choice_active(&actor),
         "FullClear 後の同一フレームで choice_active=false（5.1）"
@@ -292,12 +284,6 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         .expect("read_back");
     assert!(opaque_count(&old_bytes) > 0, "集合1 は画素が描かれる");
 
-    // 旧集合の行バンド（後段で旧画素の消滅を確認するため捕捉）。
-    let old_bands: Vec<(u32, u32)> = old_rows
-        .iter()
-        .map(|r| (r.rect.top as u32, r.rect.bottom.ceil() as u32))
-        .collect();
-
     // ── ClearAll 注入——present を待たず旧集合のヒット行が残らない（原子的無効化・5.2）。
     rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
     assert!(
@@ -321,13 +307,6 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         0,
         "FullClear で旧集合（集合1）の画素は全域消滅する（stale 残留なし）"
     );
-    for (i, &(y0, y1)) in old_bands.iter().enumerate() {
-        assert_eq!(
-            count_px(&cleared_bytes, width, (0, y0, width, y1), inked),
-            0,
-            "旧選択肢行 {i} バンドの画素が消滅する（7.3/7.4）"
-        );
-    }
 
     // ── 集合2（新・別 id）: OnA/OnB を注入し提示。この同一フレームで新集合のみが保持される。
     rt.apply_cue(&choice_cue("0", 13.0, "OnA", "あか", &["a"]));
@@ -341,10 +320,6 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         (new_rows[0].id.as_str(), new_rows[1].id.as_str()),
         ("OnA", "OnB"),
         "集合2 の新 id のみ（旧 OnYes/OnNo は消える・5.3）"
-    );
-    assert!(
-        !new_rows.iter().any(|r| r.id == "OnYes" || r.id == "OnNo"),
-        "旧集合の id はヒット行に残らない（5.3）"
     );
     assert!(
         rt.choice_active(&actor),

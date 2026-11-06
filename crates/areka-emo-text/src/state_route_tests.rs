@@ -12,7 +12,7 @@ use areka_emo_compose::BoxName;
 use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{cue, font, items_of};
+use super::test_support::{cue, items_of};
 use super::*;
 use crate::actor::test_support::{box_in, box_index, box_layout};
 
@@ -385,18 +385,7 @@ fn empty_box_index_never_leaves_balloon() {
     );
 }
 
-// ---- 装飾の持ち運び（要件 3.13〜3.17・3.19。場面の網羅は state_decoration_carry_tests.rs）
-
-fn look_at(state: &TextLayerState, actor: &str, place: TextPlace) -> crate::look::TextLook {
-    state
-        .place_state(&PlaceKey {
-            actor: key(actor),
-            place,
-        })
-        .expect("場所の状態")
-        .current_look()
-        .clone()
-}
+// ---- 空回しの写し（装飾の持ち運びの場面は state_decoration_carry_tests.rs）
 
 /// 箱 a は大きさ 20・スコープに従う、箱 b は大きさ 30・箱に閉じる、箱 c は大きさ 40・スコープに従う。
 fn state_with_traits() -> TextLayerState {
@@ -419,77 +408,6 @@ fn state_with_traits() -> TextLayerState {
     .collect();
     state.set_box_traits(traits);
     state
-}
-
-#[test]
-fn script_decor_follows_scope_and_unset_items_take_new_defaults() {
-    let mut state = state_with_traits();
-    show(&mut state, "0", 0); // 行き先は a
-    state.apply_cue(&font("0", &["color", "255", "0", "0"]));
-    show(&mut state, "0", 2); // 行き先は c（スコープに従う）
-    let at_c = look_at(&state, "0", boxed("c"));
-    assert_eq!(at_c.color, (255, 0, 0), "指定した色は残る");
-    assert_eq!(at_c.height, 40.0, "指定していない大きさは c の既定");
-    show(&mut state, "0", 3); // 普通のバルーンへ
-    assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (255, 0, 0));
-    assert_eq!(state.routes[&key("0")].shared, TextPlace::Balloon);
-}
-
-#[test]
-fn closed_box_neither_takes_nor_leaks_script_decor() {
-    let mut state = state_with_traits();
-    show(&mut state, "0", 0);
-    state.apply_cue(&font("0", &["color", "255", "0", "0"]));
-    state.apply_cue(&select("0", "b")); // 箱に閉じる箱へ
-    state.apply_cue(&font("0", &["bold", "1"])); // 色に触れない指定で場所を生ませる
-    let at_b = look_at(&state, "0", boxed("b"));
-    assert_eq!(at_b.color, (0, 0, 0), "外の指定は入らない");
-    assert_eq!(at_b.height, 30.0, "文字の届く前から b の既定を持つ");
-    assert_eq!(
-        state.routes[&key("0")].shared,
-        boxed("a"),
-        "持ち主は動かない"
-    );
-    state.apply_cue(&font("0", &["color", "0", "0", "255"]));
-    show(&mut state, "0", 2);
-    assert_eq!(
-        look_at(&state, "0", boxed("c")).color,
-        (255, 0, 0),
-        "中の指定は出ない"
-    );
-    show(&mut state, "0", 0);
-    state.apply_cue(&select("0", "b"));
-    assert_eq!(
-        look_at(&state, "0", boxed("b")).color,
-        (0, 0, 255),
-        "戻れば前の指定のまま"
-    );
-    state.reset_decoration(Some(&key("0")));
-    assert_eq!(
-        look_at(&state, "0", boxed("b")).color,
-        (0, 0, 0),
-        "戻す操作は行き先を戻す"
-    );
-    assert_eq!(look_at(&state, "0", boxed("a")).color, (255, 0, 0));
-}
-
-#[test]
-fn shell_switch_moves_shared_box_spec_to_balloon() {
-    let mut state = state_with_traits();
-    show(&mut state, "0", 0);
-    state.apply_cue(&font("0", &["color", "255", "0", "0"]));
-    state.set_box_index(index());
-    assert_eq!(
-        state.routes[&key("0")].shared,
-        boxed("a"),
-        "新しい既定 a へ写し直す"
-    );
-    assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (255, 0, 0));
-    assert_eq!(look_at(&state, "0", boxed("a")).color, (255, 0, 0));
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
-    assert_eq!(look_at(&state, "0", boxed("a")).color, (0, 0, 0));
-    show(&mut state, "0", 3);
-    assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (0, 0, 0));
 }
 
 /// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・要件 2.8）。

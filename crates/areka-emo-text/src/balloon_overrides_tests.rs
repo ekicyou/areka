@@ -169,12 +169,6 @@ fn shadow_keys_are_never_forwarded() {
     );
     assert_eq!(out.font, lists(&[&["bold", "1"]]));
     assert_eq!(out.disable, lists(&[&["bold", "1"]]));
-    for list in out.font.iter().chain(&out.disable) {
-        assert!(
-            !list[0].starts_with("shadowcolor") && !list[0].starts_with("shadowstyle"),
-            "影の列が渡っている: {list:?}"
-        );
-    }
 }
 
 /// W7: 何も書かなければ両列とも空（受け口の呼び出しは従来と同じ）。

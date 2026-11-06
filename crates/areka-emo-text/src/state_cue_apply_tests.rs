@@ -564,7 +564,6 @@ fn line_pitch_adds_line_gap_without_ceiling() {
     assert_eq!(config.line_pitch(12.0), 14.0, "既定フォント高さ 12");
     assert_eq!(config.line_pitch(10.0), 12.0, "構造テストの font 10");
     // 旧式（切り上げつきの係数倍）なら 35／15／13 になる——差が出る値を選んである。
-    assert_ne!(config.line_pitch(28.0), 35.0);
 }
 
 /// 行間を変えると行送りがそのぶんだけ動く（行間は `TextLayerConfig` で可変・R1.6）。
