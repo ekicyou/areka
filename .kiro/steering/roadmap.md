@@ -1908,6 +1908,6 @@ pasta（SHIORI のエンジン・`C:\home\maz\git\pasta`）の `novel-areka-cont
 - [ ] audit-dola -- 件 1: トークの終わり（dola の `absolute_end_time` と占有の終わりの f64 の和）が ms の格子から 1 ulp 外れ、`TalkDone` が 1 刻み遅れうる。件 2: `CuePlayer::stop`（`dola/src/cue/runtime.rs:361`）を呼ぶ本番のコードが 0（区分 B 相当）。Dependencies: なし
 - [ ] range-choice-tag -- 追記の件: 旧形の `\q0[ID][タイトル]` を SSP と同じく選択肢として出す（今は見えない Raw・SSP は選択肢として出すと MCP で測った・区分 C・+2〜3 タスク）。Dependencies: なし
 - [ ] seriko-legacy-pattern-format -- 追記の件: パターンのウェイト `最小-最大` から再生のたびにランダムに選ぶ（今は最小値＋`warn!`・再生の側 `areka-seriko` にも触れる・区分 C・+2〜3 タスク）。Dependencies: なし
-- [ ] coverage-roadmap-refresh -- 追記の件: 台帳 `assets.toml` の bindgroup の既定の欄（kero ほか）が「黙って壊れる」と書くが本番は `DefaultBinds::from_groups` で当てている・消えた `default_bind_ids` の名指し 54 か所と `briefing-assets.md` の消えた `package::resolve` の記述を直す（区分 B 相当・文書だけ・+1〜2 タスク）。Dependencies: なし
+- [ ] coverage-roadmap-refresh -- 追記の件: 台帳 `assets.toml` の bindgroup の既定の欄（kero ほか）が「黙って壊れる」と書くが本番は `DefaultBinds::from_groups` で当てている・消えた `default_bind_ids` の名指し 54 か所と、台帳 `assets.toml` の 50 行と `briefing-assets.md` の消えた `package::resolve` の記述を直す（区分 B 相当・文書だけ・+1〜2 タスク）。Dependencies: なし
 - [ ] audit-emo-text-layout-draw -- 追記の件: `
 [3e38]` のような大きな有限の割合で改行を重ねると配置の位置が inf／NaN になる。配置の側（`areka-emo-text/src/layout_scan.rs`）で非有限の送りを守り `warn!`（audit-parsers-sakura の R17・区分 B 相当）。Dependencies: なし

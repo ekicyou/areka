@@ -472,7 +472,7 @@ fn speaker_scope_n(arg: Option<&String>, notes: &mut Vec<ReadNote>) -> u32 {
 /// subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
 /// 保持（要件 11.2/13.8）。生情報を復元して失わない。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
-/// 呼び手は 1 つだが、網羅台帳と `doc/COMPAT_ARCHITECTURE.md` が名指しているので残す。
+/// 呼び手は 1 つだが、網羅台帳と互換の設計書が名指しているので残す。
 fn decode_passthrough_tag(
     word: String,
     args: Vec<String>,
@@ -501,7 +501,7 @@ fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
 /// 正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
 /// `SpeakerScope` へ写像されるため、ここへは到達しない（R1.5/R4.4）。
 /// 腕の無い綴りなので「知らないタグ」の印を付ける。
-/// 呼び手は 1 つだが、網羅台帳と `doc/COMPAT_ARCHITECTURE.md` が名指しているので残す。
+/// 呼び手は 1 つだが、網羅台帳と互換の設計書が名指しているので残す。
 fn decode_passthrough_bare(word: &str, notes: &mut Vec<ReadNote>) -> Instruction {
     notes.push(ReadNote::UnknownTag);
     Instruction::Raw(format!("\\{word}"))
