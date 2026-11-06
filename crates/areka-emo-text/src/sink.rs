@@ -1,11 +1,13 @@
 //! # sink — cue 受信口（結線層）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! **単一の出力契約** [`dola::cue::CueSink`] を実装する `EmoTextSink` と搬送 envelope
 //! `TextMsg` を担う。`emit` は cue 再生ランタイム（`CuePlayer`）／sakura drive の worker
 //! スレッド上で呼ばれ、cue を UI ドレインへ非ブロック送出する（`UiSender` が配送口そのもの）。
 //!
 //! 演者非依存の `CueSink` 1 本へ集約する（旧 `SurfaceSink`/`TextSink` の 2 分割は
-//! broadcast＋演者側 relevance ゆえ不要・R11.6）。ghost live-path も `CueSink` 注入で結線する。
+//! broadcast＋演者側 relevance ゆえ不要・`areka-P0-cue-playback-duration` R11.6）。ghost live-path も `CueSink` 注入で結線する。
 //!
 //! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` 1 行・panic しない
 //! （`emit` は infallible 契約・log-first）。複製が落ちるときのトークの終わりの合図（`Drop`）だけは
@@ -44,9 +46,9 @@ pub enum TextMsg {
 /// 非ブロック送出する受信口（担当外 cue も届き、reveal を汚さず duration を honor する）。
 ///
 /// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.sinks`
-///   へ登録・注入可能な形・注入自体は emo2-boot の責務・R10.1/R11.6）。
+///   へ登録・注入可能な形・注入自体は emo2-boot の責務・`areka-P0-cue-playback-duration` R10.1/R11.6）。
 /// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側
-///   （R1.3 前半)。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
+///   （`areka-P0-cue-playback-duration` R1.3 前半)。中間アクターは設けない（[`UiSender`] が配送口そのもの——`areka-P0-cue-playback-duration` design.md 結線層）。
 /// - cue は FIFO で UI ドレインへ到達する（unbounded・非ブロック）。
 ///
 /// # Invariants
@@ -122,11 +124,11 @@ impl EmoTextSink {
     }
 }
 
-/// **単一の出力契約**（R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+/// **単一の出力契約**（`areka-P0-cue-playback-duration` R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を broadcast し、emo-text は担当（Balloon）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
-/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・R2.2/R2.3）。配送先スロットの
+/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・`areka-P0-cue-playback-duration` R2.2/R2.3）。配送先スロットの
 /// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ廃し、
 /// `CueSink` 一本にしている。
 impl dola::cue::CueSink for EmoTextSink {
@@ -135,7 +137,7 @@ impl dola::cue::CueSink for EmoTextSink {
     }
 
     /// 名前の形の `\b[名前]`（鍵が整数として読めない＝`resolve_balloon_key` の名前の形）だけ口付きで積む。
-    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる（要件 4.2）。ほかは `emit` と同じ。
+    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる（`mcp-strict-errors` 要件 4.2）。ほかは `emit` と同じ。
     fn emit_with(&mut self, cue: TalkCue, probe: &CueProbe) {
         match &cue.command {
             CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
@@ -145,7 +147,7 @@ impl dola::cue::CueSink for EmoTextSink {
         }
     }
 
-    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（要件 2.1）。
+    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（`areka-P0-budoux-reveal-reflow` 要件 2.1）。
     /// 積めなかったとき（UI ドレイン停止後）は `emit`・`close` と同じく `error!` 1 行のみ・panic しない。
     fn preview(&mut self, upcoming: &[TalkCue]) {
         if self.tx.send(TextMsg::Upcoming(upcoming.to_vec())).is_err() {
@@ -284,7 +286,7 @@ mod tests {
 
     /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへの登録・`GhostBootOptions.sinks` への
     /// 注入が可能な**単一の出力契約**（`dola::cue::CueSink + Clone + Send + 'static`）を満たす
-    /// （R10.1/R11.6・単一トレイト・注入自体は emo2-boot の責務）。
+    /// （`areka-P0-cue-playback-duration` R10.1/R11.6・単一トレイト・注入自体は emo2-boot の責務）。
     #[test]
     fn emo_text_sink_satisfies_cue_sink_contract() {
         assert_cue_sink_contract::<EmoTextSink>();
@@ -461,7 +463,7 @@ mod tests {
         );
     }
 
-    // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・要件 2.1） ──
+    // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・`areka-P0-budoux-reveal-reflow` 要件 2.1） ──
 
     /// `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
     #[test]

@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+
 // 装飾入りの配置（`LayoutEngine::layout_styled`）と装飾入りの描画
 // （`ViewboxExecutor::render_styled`）が**毎フレームの本番経路**（`present_frame`）へ
 // 実際に繋がっていること（要件 14.1／14.2／14.3）と、候補列の解決台帳が計測器と描画器で

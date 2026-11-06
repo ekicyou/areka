@@ -1,5 +1,7 @@
 //! # pipeline_test — 受信から可視化決定までの通しパイプライン検証（R2.4/R2.5/R3.5）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! cue 受信（実 `EmoTextSink`→実 `spawn_ui` channel）→状態適用（`TextLayerState`）→
 //! レイアウト決定（`LayoutEngine::layout`）→可視窓決定（`LayoutEngine::visible_window`）
 //! の通しシナリオを、**実描画なし**（DirectWrite/D2D/COM/GPU 不使用・metrics は
@@ -297,7 +299,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     // 期待表: (注入時刻, 可視グリフ数, 行数, 先頭可視行, ブロック軸オフセット)。
     // 改行マーカーは遅延（deferred newline・newline-defer）: 後続の可視グリフが reveal された
     // 時点でのみ実体化する。可視 prefix 末尾より後ろの保留改行は空行を開かず蒸発する
-    // （R1.1/1.2/4.1/4.2）。ゆえ「末尾に保留改行だけが積まれた」時刻ではあふれが発火せず、
+    // （`areka-P0-newline-defer` R1.1/1.2/4.1/4.2）。ゆえ「末尾に保留改行だけが積まれた」時刻ではあふれが発火せず、
     // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる。
     let expected: &[(f64, usize, usize, usize, f32)] = &[
         (0.0, 1, 1, 0, 0.0),     // r_0=0.0: "あ" のみ・1 行

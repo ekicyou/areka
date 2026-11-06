@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `script-small-tags` のもの（別の spec のものはその場で名を書く）。
+
 // script-small-tags task 6.3 の檻: アクターごとの印の見た目（[`TextLayerRuntime::set_inline_marker`]）を
 // 解いた直後に押す 3 か所（装着・再追従・箱の解決）の判断分岐（要件 5.1）。
 //
@@ -6,7 +8,6 @@
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::MarkerImage;
-use areka_parsers::balloon::{BalloonModel, Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::prelude::World;
 
@@ -14,22 +15,12 @@ use super::TextLayerRuntime;
 use super::TextSlotBinding;
 use super::box_sync_tests::fixture;
 use super::test_support::text;
-use super::test_support::{balloon_model_of, spawn_reserved_slot};
+use super::test_support::{geo_model, spawn_reserved_slot};
 use crate::inline_marker::InlineMarkerLook;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
 const NATIVE: (u32, u32) = (400, 224);
-
-fn model() -> BalloonModel {
-    balloon_model_of(
-        Origin::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
-}
 
 fn image() -> Arc<MarkerImage> {
     Arc::new(MarkerImage {
@@ -67,7 +58,7 @@ fn look_at(rt: &TextLayerRuntime, key: &PlaceKey) -> InlineMarkerLook {
 #[test]
 fn an_actor_without_an_image_gets_the_default_dot() {
     let (mut rt, bind, actor) = attached();
-    rt.register_actor_binding(actor.clone(), bind, &model());
+    rt.register_actor_binding(actor.clone(), bind, &geo_model());
     assert_eq!(
         look_at(&rt, &PlaceKey::balloon(&actor)),
         InlineMarkerLook::Dot
@@ -80,7 +71,7 @@ fn attaching_stamps_the_remembered_image() {
     let (mut rt, bind, actor) = attached();
     let img = image();
     rt.set_inline_marker(actor.clone(), Some(Arc::clone(&img)));
-    rt.register_actor_binding(actor.clone(), bind, &model());
+    rt.register_actor_binding(actor.clone(), bind, &geo_model());
     assert_eq!(
         look_at(&rt, &PlaceKey::balloon(&actor)),
         InlineMarkerLook::Image(img)
@@ -93,7 +84,7 @@ fn attaching_stamps_the_remembered_image() {
 #[test]
 fn changing_the_image_rebuilds_once_on_the_next_refresh() {
     let (mut rt, bind, actor) = attached();
-    rt.register_actor_binding(actor.clone(), bind, &model());
+    rt.register_actor_binding(actor.clone(), bind, &geo_model());
     let place = PlaceKey::balloon(&actor);
 
     let img = image();
@@ -105,14 +96,14 @@ fn changing_the_image_rebuilds_once_on_the_next_refresh() {
     );
 
     let rebuilds = (0..3)
-        .filter(|_| rt.refresh_actor_binding(&actor, bind, &model()))
+        .filter(|_| rt.refresh_actor_binding(&actor, bind, &geo_model()))
         .count();
     assert_eq!(rebuilds, 1, "絵の変化は 1 度だけ組み直しを起こす");
     assert_eq!(look_at(&rt, &place), InlineMarkerLook::Image(img));
 
     rt.set_inline_marker(actor.clone(), None);
     assert!(
-        rt.refresh_actor_binding(&actor, bind, &model()),
+        rt.refresh_actor_binding(&actor, bind, &geo_model()),
         "絵を外すと次の再追従で丸へ組み直す"
     );
     assert_eq!(look_at(&rt, &place), InlineMarkerLook::Dot);

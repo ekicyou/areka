@@ -1,5 +1,7 @@
 //! # choice — 選択肢固有の純粋導出の集約モジュール（純粋層）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `Choice` cue が state 層へ載せた選択肢スパン（[`ChoiceSpan`]・items のグリフ序数範囲）を、
 //! layout 層が配置した行列（[`PositionedLine`]）へ写し、行×選択肢の注釈
 //! （[`LineChoiceSegment`]）を導出する純関数群を単独所有する。描画（装飾）とヒット照会は
@@ -133,7 +135,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 /// 行矩形のブロック軸**近端**へ揃えていた頃の読み戻しは「上に 7 画素の余白を残したまま下で
 /// 2 画素を切る」であった。**帯を広げるのではなく、字の箱の中央へ寄せる**のが正しい
 /// ——寄せる量は [`band_offset_on_char_box`] が決める（spec `areka-P0-emo2-conformance-e2e`
-/// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
+/// `areka-P0-emo2-conformance-e2e` R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
 /// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
 ///
 /// 式は `max` と `min` で書く（有限の値では上の `clamp` と同じ答え・NaN を渡しても落ちない）。
@@ -148,7 +150,7 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// ハイライト帯／ヒット帯を字の箱の中央へ寄せる量を決める（純粋・**描画とヒットの唯一の源**）。
 /// 本関数は字の箱の上端 t ＝ 0 の場合で、本番の横書きの帯は t を足した同じ式から出る。
 ///
-/// ## なぜ寄せるのか（開発者裁定 2026-09-06 第 2 回・R13.1）
+/// ## なぜ寄せるのか（開発者裁定 2026-09-06 第 2 回・`areka-P0-emo2-conformance-e2e` R13.1）
 ///
 /// [`highlight_band_extent`] の帯は行送りピッチで頭打ちになるので、行ボックス丈より短くなり得る
 /// （実測 Yu Gothic UI `font.height,28`: 行ボックス 37.24・帯 30）。DirectWrite は行ボックスの
@@ -172,9 +174,9 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 ///
 /// 行ボックス丈が em ボックス丈に等しいフォント（既定 ＭＳ ゴシック）では帯 ＝ 行ボックスゆえ
 /// offset は 0 になり、寄せる前と 1 画素も変わらない（既定フォントの byte 等価 golden が
-/// 1 バイトも動かないことが offset 0 の証拠・R13.6）。
+/// 1 バイトも動かないことが offset 0 の証拠・`areka-P0-emo2-conformance-e2e` R13.6）。
 ///
-/// ## 隣接行と重ならない（R13.4）
+/// ## 隣接行と重ならない（`areka-P0-emo2-conformance-e2e` R13.4）
 ///
 /// 28 では `offset + 帯 = 34` が行送り 30 を超えるが、次の行の帯も `30 + 4 = 34` から始まるので
 /// **接するだけで重ならない**。ヒット判定は半開区間（`crates/areka/src/input_events/balloon.rs`
@@ -186,7 +188,7 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// 行矩形の上端から `t`（[`GlyphMetrics::horizontal_char_box_top`]）だけ下に在る。帯の寄せは
 /// 本番では `round(max(0, t) + max(0, 行ボックス − 帯) / 2)`（丸め 1 回）＝帯を**字の箱の中央**へ
 /// 置く量で、本関数はそのうち字の箱の上端が行矩形の上端に在る（`t = 0`）ときの値を返す。
-/// `t = 0` では `0.0 + x` が `x` とビットまで同じなので、上の表の値は変わらない（要件 5.1）。
+/// `t = 0` では `0.0 + x` が `x` とビットまで同じなので、上の表の値は変わらない（`emo-text-line-gap` 要件 5.1）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 #[cfg(test)]
@@ -220,19 +222,19 @@ pub struct LineBand {
 
 /// 行ごとの帯を 1 度だけ決める（純粋・[`decorate_canvas`] と [`derive_hit_rows`] へ同じ列を配る）。
 ///
-/// ## なぜ行ごとなのか（要件 11.5）
+/// ## なぜ行ごとなのか（`areka-P0-text-decoration-canon` 要件 11.5）
 ///
 /// 帯の丈をバルーン定義の既定の大きさから**アクターに 1 つ**決めていた頃は、`\f[height,40]` を
 /// 含む選択肢が表示 42 画素でも帯は 14 画素で、**文字の上下がクリックできなかった**。行の丈は
-/// 既に「その行に置かれた文字のうち最も大きい em」になっている（要件 7.9・行矩形のブロック軸寸）
+/// 既に「その行に置かれた文字のうち最も大きい em」になっている（`areka-P0-text-decoration-canon` 要件 7.9・行矩形のブロック軸寸）
 /// ので、そこから行ごとに引き直す。
 ///
-/// 要件 3.5「装飾は hover の判定と当たり判定を変えない」は hover の**表示規則**（文字色の
-/// 差し替えと帯の塗りが装飾より優先されること）を述べたもので、帯の**寸法**は要件 11.5 が
+/// `areka-P0-text-decoration-canon` 要件 3.5「装飾は hover の判定と当たり判定を変えない」は hover の**表示規則**（文字色の
+/// 差し替えと帯の塗りが装飾より優先されること）を述べたもので、帯の**寸法**は`areka-P0-text-decoration-canon` 要件 11.5 が
 /// 「装飾込みから導く」と定める側である（行内軸は既にそう実装されている）。
 ///
 /// 塗る帯とクリックを受ける帯は同じ列から出る——片方だけを広げると「見えている帯の外が
-/// クリックできる」という別の破れ方になる（R3.3 の単一導出）。
+/// クリックできる」という別の破れ方になる（`areka-P0-text-decoration-canon` R3.3 の単一導出）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn line_bands<M: GlyphMetrics + ?Sized>(
@@ -365,7 +367,7 @@ pub fn derive_hit_rows(
         // 絶対 image px のヒット矩形を組む（横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。
         // block 近端（横書き＝rect.top・縦書き＝rect.left）は描画（住人 transform の offset＝
         // 行矩形の近端）と同一の起点ゆえ、band_extent と band_offset が同値なら帯は描画と数値一致
-        // する（R3.3/R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
+        // する（`areka-P0-emo2-conformance-e2e` R3.3/R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
         // 行矩形 block 帯と完全一致＝非退行）。
         let abs = match mode {
             WritingMode::HorizontalTb => LineRect {
@@ -448,7 +450,7 @@ pub fn to_window_physical(
 }
 
 /// 表示されている字 1 字ずつの矩形（送りの幅 × 行の高さ。字の形の画素ではない）を、文字の面の
-/// 左上を原点とする物理 px で返す（要件 9.4・箱の文字の面の当たり判定の材料）。
+/// 左上を原点とする物理 px で返す（`areka-P0-shell-balloon` 要件 9.4・箱の文字の面の当たり判定の材料）。
 ///
 /// `lines` は配置の結果（見えている字だけが載る＝表示の進み具合を反映済み）。式は
 /// [`to_window_physical`] から面の装着位置（`(場所の左上 + 領域の原点) × k`）を引いたもの:
@@ -459,7 +461,7 @@ pub fn to_window_physical(
 /// `min(行矩形の近い辺, 近い辺 + offset)`（縦書きの右から左は offset が負で左へ広がる）、遠い辺は
 /// `max(行矩形の遠い辺, 近い辺 + 帯の offset + extent)`。
 /// `bands` は [`decorate_canvas`]・[`derive_hit_rows`] へ渡すのと同じ [`line_bands`] の列で、帯が
-/// em を越えるフォントでも選択肢の当たり行・強調の帯の全部が字の矩形に入る（要件 8.3・R3.3 の
+/// em を越えるフォントでも選択肢の当たり行・強調の帯の全部が字の矩形に入る（`areka-P0-shell-balloon` 要件 8.3・R3.3 の
 /// 単一導出）。帯の無い行は行矩形だけ。送りの幅が 0 の字は矩形を持たない。同一入力→同一出力（純粋）。
 pub fn glyph_cells(
     lines: &[PositionedLine],
@@ -524,7 +526,7 @@ pub fn glyph_cells(
 ///
 /// `bands`（[`line_bands`] の出力・行ごとの [`LineBand`]）から当該行の 2 値を引いて Choice 住人へ
 /// 焼き込み、COM 層のハイライト矩形とダーティ帯がこの 2 値を読む——[`derive_hit_rows`] へ**同じ列**
-/// を渡すことで描画帯とヒット帯の数値一致（R3.3/R13.2）を呼び手 1 箇所で担保する。
+/// を渡すことで描画帯とヒット帯の数値一致（`areka-P0-emo2-conformance-e2e` R3.3/R13.2）を呼び手 1 箇所で担保する。
 ///
 /// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
 ///

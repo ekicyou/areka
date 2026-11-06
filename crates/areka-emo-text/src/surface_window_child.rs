@@ -1,9 +1,11 @@
 //! # surface_window_child — 文字の面の片付けと、箱の文字の面（シェルの窓の直接の子）の装着・当たりのマスク
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `surface.rs` の子（`#[path]`）。供給面の生成は親の `TextSurface::create` を共有し、ここは
 //! 「窓の子として挿す・消す」「表示されている字の矩形で当たりのマスクを焼く」（要件 9.4）と、
 //! 差し込み口・窓の子のどちらの面も外す片付け `TextSurface::release`（`areka-P0-balloon-text-bugs`
-//! 要件 2.9）を持つ。
+//! `areka-P0-balloon-text-bugs` 要件 2.9）を持つ。
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
@@ -188,7 +190,7 @@ impl TextSurface {
         }
     }
 
-    /// 面の片付け（要件 2.9・描いた後に描画範囲が潰れたとき）: 差し込み口へ装着した面は、差し込み口
+    /// 面の片付け（`areka-P0-balloon-text-bugs` 要件 2.9・描いた後に描画範囲が潰れたとき）: 差し込み口へ装着した面は、差し込み口
     /// `slot` から文字の層の部品（`VisualGraphics`・`Arrangement`）を外す。`VisualGraphics` の外しで
     /// wintf が親の Visual から文字の絵を外し、差し込み口の entity と窓の `Children` の並びは残るので、
     /// 付け直しの装着で wintf の `visual_sync` が `Children` の順（差し込み口が枠の面より手前）に入れ直す。

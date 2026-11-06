@@ -23,8 +23,9 @@ use super::present::{
     MARKER_LIMIT_MESSAGE, MAX_SURFACE_AREA, MAX_SURFACE_SIDE, SURFACE_LIMIT_MESSAGE,
 };
 use super::test_support::{
-    REVEAL_INTERVAL, balloon, balloon_model_of, box_layout, box_name, com_world, cue, emote,
-    fake_resolver, level_count, opaque_count, physical, read_back, spawn_reserved_slot, text,
+    REVEAL_INTERVAL, balloon, balloon_model_of, box_layout, box_name, capture_alive, com_world,
+    cue, emote, fake_resolver, level_count, opaque_count, physical, read_back, spawn_reserved_slot,
+    text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
@@ -346,7 +347,7 @@ validrect.right,-16800",
     );
     sync(&mut rt, &mut world, (20000, 200));
     let count = |rt: &mut TextLayerRuntime, world: &mut bevy_ecs::prelude::World, t: f64| {
-        let (_, events) = capture(|| {
+        let (_, events) = capture_alive(|| {
             for i in 0..10 {
                 let _ = present_frame(rt, world, t + f64::from(i) * 0.1);
             }
@@ -428,7 +429,7 @@ fn remembered_surface_failure_is_retried_after_wuc_or_device_recreation() {
     let vr = ValidRect::new(None, None, Some(-100_000), None);
     let mut rt = runtime(&mut world, &cues, &model(vr, None), IMAGE, 1.0);
     let mut count = |world: &mut bevy_ecs::prelude::World| {
-        let (_, events) = capture(|| {
+        let (_, events) = capture_alive(|| {
             for i in 0..3 {
                 let _ = present_frame(&mut rt, world, 1.0 + f64::from(i) * 0.1);
             }

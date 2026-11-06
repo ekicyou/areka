@@ -75,6 +75,36 @@ pub(crate) fn text(actor: &str, s: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::Text(s.into()))
 }
 
+/// アンカーを開く合図（時刻 0・再生時間 0）。
+pub(crate) fn open(actor: &str, id: &str, references: &[&str]) -> TalkCue {
+    cue(
+        actor,
+        0.0,
+        CueCommand::AnchorBegin {
+            id: id.to_owned(),
+            references: references.iter().map(|r| (*r).to_owned()).collect(),
+        },
+    )
+}
+
+/// アンカーを閉じる合図（時刻 0・再生時間 0）。
+pub(crate) fn close(actor: &str) -> TalkCue {
+    cue(actor, 0.0, CueCommand::AnchorEnd)
+}
+
+/// 選択肢の合図（時刻 0・再生時間 0・参照なし）。
+pub(crate) fn choice(actor: &str, id: &str, s: &str) -> TalkCue {
+    cue(
+        actor,
+        0.0,
+        CueCommand::Choice {
+            id: id.to_owned(),
+            text: s.to_owned(),
+            references: Vec::new(),
+        },
+    )
+}
+
 /// 文字の cue を今の行き先へ書く。
 pub(crate) fn write(state: &mut TextLayerState, actor: &str, s: &str) {
     state.apply_cue(&text(actor, s));

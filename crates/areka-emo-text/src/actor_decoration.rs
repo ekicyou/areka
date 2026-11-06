@@ -1,5 +1,7 @@
 //! バルーン背景色の受け口（`actor.rs` の子・要件 4.6）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 無効表示の見た目の色は「背景 + 文字色 × 2 を 3 で割る」混色で導く
 //! （[`crate::color::mix_disabled`] が唯一の実装点）。その `背景` を結線層が
 //! ランタイムへ預ける口が本モジュールである。
@@ -97,14 +99,14 @@ pub(super) fn glyph_styles_of<'a>(
 }
 
 /// 範囲外ゆえ無視した `origin` 宣言を、装着 1 回につき成分 1 つ 1 件の `warn!` で知らせる
-/// （要件 3.1〜3.5）。
+/// （`areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.5）。
 ///
 /// 書く**時点**は登録口（[`TextLayerRuntime::register_actor`]）のままである——「読み込み
 /// （装着）1 回につき 1 件」という意味を持つ層がそこだからで、先例の折返しの警告と同じ決着
 /// である。関数の**置き場所**だけを子モジュールにするのは、`actor.rs` が 1 ファイル 1,000 行の
 /// 見張りの間近にあるため（`build_actor_render` を引き受けたのと同じ理由・同じ形）。
 ///
-/// # 件数（要件 3.2）
+/// # 件数（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）
 ///
 /// `previous` は当該 actor の**前回の**解決済み領域（未登録＝装着なら `None`）。領域の値が
 /// 新しく決まったとき——初回、または前回と異なる領域——だけ書く。値の同じ再追従は 0 件で
@@ -149,9 +151,10 @@ pub(super) fn warn_ignored_origin(
 /// 知らせる（spec real-run-log-noise 要件 2.1〜2.4・知らない style は spec audit-emo-text-state-actor の
 /// 2 回目のかけ直し R2-12）。
 ///
-/// 以前は純粋な解決（[`ResolvedChoiceStyle::resolve`]）の中にあり、解き直しのたびに出ていた。
-/// 文言は移動の前後で 1 文字も変えず、名前の欄 `balloon` だけを足した（ほかの作者向けの警告と
-/// 同じ取り方）。
+/// 飾りの縮退の 2 つの警告は、以前は純粋な解決（[`ResolvedChoiceStyle::resolve`]）の中にあり、
+/// 解き直しのたびに出ていた。その 2 つは文言を移動の前後で 1 文字も変えず、名前の欄 `balloon`
+/// だけを足した（ほかの作者向けの警告と同じ取り方）。知らない `cursor.style` の警告は移したもの
+/// ではなく、R2-12 でここへ直に足した。
 ///
 /// # 件数
 ///
@@ -212,7 +215,7 @@ impl ResolvedBalloonText {
         let mode = WritingMode::resolve(model);
         let font = ResolvedFont::resolve_with_background(model, background);
         // hover ハイライトスタイルはバルーン cursor.* モデル＋解決済み既定文字色から一度だけ解決する
-        // （下流 present_actor の装飾は本値を読むだけ・choice.rs へは依存しない・design.md Integration）。
+        // （下流 present_actor の装飾は本値を読むだけ・choice.rs へは依存しない・`areka-P0-choice-render` design.md Integration）。
         let choice_style = ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color);
         ResolvedBalloonText {
             mode,
@@ -240,7 +243,7 @@ impl TextLayerRuntime {
         self.balloon_background.insert(actor, background);
     }
 
-    /// 行の中の印の絵を actor ごとに覚える（`None` は既定の丸へ戻す・要件 5.1）。
+    /// 行の中の印の絵を actor ごとに覚える（`None` は既定の丸へ戻す・`script-small-tags` 要件 5.1）。
     ///
     /// 値を覚えるだけで、今の場所の値（`layout_input`）には押し直さない
     /// （[`set_balloon_background`](Self::set_balloon_background) と同じ形）。次の再追従が、解いて
@@ -299,7 +302,7 @@ impl TextLayerRuntime {
         resolved
     }
 
-    /// 普通のバルーンの名前（バルーンのフォルダ名）を actor ごとに覚える（結線が入れる・要件 3.12）。
+    /// 普通のバルーンの名前（バルーンのフォルダ名）を actor ごとに覚える（結線が入れる・`areka-P0-shell-balloon` 要件 3.12）。
     /// 折り返しの基準と無視した書き出し位置の 2 つの警告の名前の欄に出る。後から入れても
     /// 既に出した警告は書き直さない（次に値が新しく決まった登録から効く）。
     pub fn set_balloon_label(&mut self, actor: &ActorKey, label: String) {

@@ -1,5 +1,7 @@
 //! # 行送りの後も収まる行は全部見える（症状 F・再生の相の追試・R17.1〜17.4）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+//!
 //! [`crate::viewbox_draw`] の兄弟檻（`viewbox_draw_scroll_retain_tests.rs`）が純粋レイアウト
 //! （`FixedMetrics`）で組んだ入力を扱うのに対し、本檻は**本番の提示経路**
 //! （[`present_frame`] → `present_actor` → 実フォントの `DWriteMetrics` → `ViewboxExecutor`）を

@@ -1,5 +1,7 @@
 //! `PlaceScroll` の送りの規則の檻（spec `balloon-scroll-arrows` の design.md「純粋な判断（`scroll_marker_tests.rs`）」）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 自動の先頭行 `auto_first` は本来 `window_for` が毎フレーム覚え直す。ここでは私有の欄を
 //! 直接置いて、送りの規則だけを固定する。
 

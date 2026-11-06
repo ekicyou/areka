@@ -1,7 +1,9 @@
 //! # staysee_balloon_fixture_test — 既定バルーン `StayseeBalloon` を検体に値を固定する
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**3.1**／**3.3**／**3.4**／
-//! **3.8**／**3.11**／**5.4**／**7.1**・設計 **C2**）。検体の取り方は同 spec 要件 3.2・設計 C2 を
+//! **3.8**／**3.11**／**5.4**／**7.1**・設計 **C2**）。検体の取り方は `areka-P0-default-balloon-bundle` 要件 3.2・設計 C2 を
 //! 上書きした `areka-P0-default-balloon-nar-fold` 要件 **4.1**〜**4.3** による。
 //!
 //! ## このテストが塞ぐ穴

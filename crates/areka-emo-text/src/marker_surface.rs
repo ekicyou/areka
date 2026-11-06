@@ -1,5 +1,7 @@
 //! # marker_surface — 印の面（スクロールの矢印）の装着・描画・当たりのマスク・読み戻し・片付け
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `actor.rs` の子（`#[path]`・balloon-scroll-arrows の MarkerSurface）。場所ごとに 1 枚、窓の直接の子
 //! として文字の面の**直前**（wintf の `Children` は先頭ほど手前＝文字より手前・バルーンの絵より手前）に挿す。
 //! 供給面は文字の面（[`TextSurface::attach_window_child`]）と同じ作りを共有し、矢印の絵を拡大率どおりの

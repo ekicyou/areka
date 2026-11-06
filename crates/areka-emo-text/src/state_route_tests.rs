@@ -1,6 +1,8 @@
 //! 文字の行き先の決まり方（spec `areka-P0-shell-balloon` の design.md「文字の行き先の決まり方」の表の 11 行・要件 4.1〜4.4・
 //! 4.7〜4.10・5.4・6.1・6.2・6.4・6.6・6.9・10.1）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで取り出す（検体は読まない）。
 //! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs`・`state_anchor_tests.rs`・
@@ -408,7 +410,7 @@ fn state_with_traits() -> TextLayerState {
     state
 }
 
-/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・要件 2.8）。
+/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
 /// 無言であることの判定は `lookahead_tests.rs` の検査 5 が受け持つ。
 #[test]
 fn rehearsal_copy_marks_only_the_copy() {

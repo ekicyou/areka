@@ -1,5 +1,7 @@
 //! actor の子: 手動の送りの公開の口（balloon-scroll-arrows・design.md「ActorScroll」）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 場所（[`PlaceKey`]）ごとの手動の位置（[`PlaceScroll`]）の表を、矢印の押下・ホイール・消去・
 //! 箱の登録を外す・隠した・面の切り替えから動かす。描き直しはしない（次のフレームの
 //! `present_actor` が [`crate::scroll_marker::window_for`] の見える範囲で今の送りの描き直しを出す）。

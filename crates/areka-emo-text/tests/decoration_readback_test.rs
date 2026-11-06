@@ -1,5 +1,7 @@
 //! # decoration_readback_test — 文字装飾の横書き読み戻し
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**／
 //! **5.1**／**5.9**／**6.1**・design.md「Testing Strategy > 読み戻しテスト」）。
 //!
@@ -56,7 +58,7 @@ use support::{
 /// `font.height,28`・横書き）。
 ///
 /// 横書きの下線は areka が線の上端をベースラインに置いて塗る（spec `areka-P0-balloon-text-bugs`
-/// 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
+/// `areka-P0-balloon-text-bugs` 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
 /// （字のインクは 29 行まで）で、二値化した線の帯は 30 の 1 行（太さ 1.42）。DirectWrite の既定の
 /// 位置（33・ベースラインから下線の位置の分だけ下）から改めた。値が動いたら赤にして裁定を仰ぐ。
 const UNDERLINE_BAND: (u32, u32) = (30, 30);
@@ -127,7 +129,7 @@ fn each_visible_key_changes_the_pixels_in_horizontal_tb() {
 
 /// `\f[underline,1]` は字より下に連続した 1 本の帯を足す。
 ///
-/// 位置はベースラインの直下（要件 3.10）。[`UNDERLINE_BAND`] は今日の実測値で、
+/// 位置はベースラインの直下（`areka-P0-balloon-text-bugs` 要件 3.10）。[`UNDERLINE_BAND`] は今日の実測値で、
 /// 動いたら赤にして裁定を仰ぐ。
 #[test]
 fn underline_adds_one_band_of_ink_below_the_glyphs() {
@@ -138,7 +140,7 @@ fn underline_adds_one_band_of_ink_below_the_glyphs() {
     assert_eq!(
         band, UNDERLINE_BAND,
         "下線のインクの帯が今日の値から動いた（`Yu Gothic UI` font.height={FONT_HEIGHT}・横書き）。\
-         線の上端はベースライン（要件 3.10）なので、値が動いたら塗り方か描画基盤側の変化を疑い、\
+         線の上端はベースライン（`areka-P0-balloon-text-bugs` 要件 3.10）なので、値が動いたら塗り方か描画基盤側の変化を疑い、\
          定数を書き換える前に裁定を仰ぐこと"
     );
 }

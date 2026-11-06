@@ -1,5 +1,7 @@
 //! # physical_extent_arbitration_test — 供給面寸 f32 経路の裁定を固定する決定論檻
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-scale-exact-rational` のもの（別の spec のものはその場で名を書く）。
+//!
 //! **裁定日**: 2026-08-14（開発者裁定）。
 //! **出典 spec**: `areka-P0-scale-exact-rational`（完了後は `.kiro/specs/completed/` 配下。
 //! パスではなく spec 名で辿ること）。
@@ -159,7 +161,7 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
 /// （返る比が既約かつ重複なしであることは [`reachable_ratios`] の組み立てそのもの）。
 ///
 /// 1. 到達比がちょうど [`REACHABLE_RATIO_COUNT`] 個（＝23）であること。
-/// 2. 誤差が実在する 2 比（6/5・12/5）が集合に含まれること——この 2 比を取りこぼすと、
+/// 2. 誤差が実在する 2 比（[`ERROR_RATIOS`]＝6/5・12/5）が集合に含まれること——この 2 比を取りこぼすと、
 ///    「誤りは 2 比のみ」という裁定根拠が空振りの緑になる。
 ///
 /// 本番経路のヘルパと整数オラクルの既知値の逐語再現（比 6/5・寸 25 で 31 と 30、比 12/5 で
@@ -176,7 +178,7 @@ fn ratio_set_helper_is_calibrated_against_known_values() {
         ratios.len()
     );
 
-    for known in [(6u32, 5u32), (12u32, 5u32)] {
+    for known in ERROR_RATIOS {
         assert!(
             ratios.contains(&known),
             "誤差が実在する比 {}/{} が到達比集合に含まれていない（実測集合 {ratios:?}）",

@@ -1,5 +1,7 @@
 //! 保管フォルダの名前集合と枠画像の原寸を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**・設計 **C2** の A 行）。
 
 use super::test_support::{EXPECTED_FRAME_SIZES, staysee_root};

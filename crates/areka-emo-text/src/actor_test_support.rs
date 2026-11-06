@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
+
 // UI スレッド常駐ランタイム（TextLayerRuntime／spawn_emo_text／present_frame）のテスト
 // （`actor_*_tests.rs`・`sink` のテスト）が共有する部品（`crate::actor::test_support`）。
 // cue の組み立て・予約スロットの World・読み戻し・箱の束・受信口の drain・記録の捕捉を置く。
@@ -126,19 +128,35 @@ pub(crate) fn make_dispatcher_and_compositor() -> (DispatcherQueueController, Co
     (dq, compositor)
 }
 
-/// emo-present `VisualMount` と同型の予約スロット。
+/// emo-present `VisualMount` の予約スロットを写した最小の形（窓の子で `Visual` だけを持つ。
+/// 本物が持つ `HitTest` は持たせない）。
 /// 返り値は (window, slot)。
 pub(crate) fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
     let window = world.spawn_empty().id();
-    let slot = world
+    let slot = add_child_slot(world, window, "emo-text-layer-slot");
+    (window, slot)
+}
+
+/// 窓に `Visual` だけを持つ子（名前 `name`）をもう 1 つ足す（2 つ目の差し込み口やシェルの面の代わり）。
+pub(crate) fn add_child_slot(world: &mut World, window: Entity, name: &str) -> Entity {
+    let id = world
         .spawn((
-            Name::new("emo-text-layer-slot"),
+            Name::new(name.to_owned()),
             Visual::default(),
             ChildOf(window),
         ))
         .id();
     world.flush();
-    (window, slot)
+    id
+}
+
+/// 登録された箱の場所の鍵のうち最初の 1 つ（箱が 1 つだけのテストで引く）。
+pub(crate) fn first_box_key(rt: &TextLayerRuntime) -> PlaceKey {
+    rt.box_sites
+        .keys()
+        .find(|k| k.place != TextPlace::Balloon)
+        .cloned()
+        .expect("箱が登録されている")
 }
 
 // ── 当たり判定の World（窓・絵） ──
@@ -443,10 +461,7 @@ pub(crate) fn spawn_message_drain(name: &str) -> (EmoTextSink, Arc<Mutex<Vec<Tex
 /// 出し、ERROR がちょうど 1 件であることをここで確かめる（「WARN が 0 件」の主張が捕捉窓の死で
 /// 恒真になるのを防ぐ・`f` が ERROR を出していないことも同時に確かめる）。
 pub(crate) fn capture_checked<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>) {
-    let (value, events) = capture(|| {
-        tracing::error!("捕捉窓が生きていることの対照イベント");
-        f()
-    });
+    let (value, events) = capture_alive(f);
     assert_eq!(
         events
             .iter()
@@ -454,6 +469,27 @@ pub(crate) fn capture_checked<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent
             .count(),
         1,
         "対照の 1 件のほかに ERROR が出たか、対照が数えられていない: {events:?}"
+    );
+    (value, events)
+}
+
+/// 対照の `error!` の文。
+const CONTROL_MESSAGE: &str = "捕捉窓が生きていることの対照イベント";
+
+/// 捕捉窓の中で `f` を走らせ、窓の内側で出した対照の `error!` が 1 件数えられることだけを確かめる
+/// （`f` が ERROR を出す窓で特定の記録の 0 件を言うときに使う・数える側は記録の文で絞る）。
+pub(crate) fn capture_alive<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>) {
+    let (value, events) = capture(|| {
+        tracing::error!("{CONTROL_MESSAGE}");
+        f()
+    });
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.message() == CONTROL_MESSAGE)
+            .count(),
+        1,
+        "対照の記録が数えられていない（捕捉窓が死んでいる）: {events:?}"
     );
     (value, events)
 }
@@ -474,7 +510,7 @@ pub(crate) fn number_field(event: &CapturedEvent, name: &str) -> f32 {
 
 // ── 警告の文（発行点と 1 文字も違わないこと） ──
 
-/// 折返し基準の警告（手順書 §5.7 の grep 語・変えると実機走行の判定が静かに壊れる・要件 14.3）。
+/// 折返し基準の警告（`areka-P0-emo2-conformance-e2e` の手順書 §5.7 の grep 語・変えると実機走行の判定が静かに壊れる・同じ spec の要件 14.3）。
 pub(crate) const COARSE_WRAP_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
 
 /// 無視した `origin` 宣言の警告（`actor_decoration.rs` の発行点）。

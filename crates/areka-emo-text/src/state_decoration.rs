@@ -1,5 +1,7 @@
 //! スコープごとの装飾状態と、追記される文字への番号付け（純粋層・`state.rs` の子モジュール）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `\f[...]` は台本のうえでは再生時間 0 の**汎用キャリア**（[`FONT_TAG_CARRIER`]）で運ばれ、
 //! 本モジュールがその名前で自己選別して消費する（要件 2.4）。効果はスコープ（`\0`・`\1`・
 //! `\p[n]`）ごとに独立で（要件 3.1）、**それ以降に追記される文字**にだけ効く（要件 3.2）。
@@ -24,7 +26,7 @@
 //!
 //! 「戻す操作」の実体は 1 か所（[`ActorTextState::reset_look`]）で、`\f[default]` と
 //! 台本の先頭はそこを通る（要件 10.3）。後続仕様のクリック待ち（`\x`）も同じ実体を
-//! 通す前提で口を開けてあるが、`\x` の実装は本仕様の射程外で**本番の呼び出し元はまだ
+//! 通す前提で口を開けてあるが、`\x` の実装は `areka-P0-text-decoration-canon` の射程外で**本番の呼び出し元はまだ
 //! 無い**（引受先＝`talk-fast-forward`）。
 //! 外から呼ぶ入口は [`TextLayerState::reset_decoration`] 1 本で、スコープ指定と
 //! 全スコープ（要件 10.5）の両方を受ける。`\f[disable]` は戻し先の層が違うだけの
@@ -110,7 +112,7 @@ pub struct Decoration {
     /// 禁じている列挙）。再生は [`crate::look::apply_font_tag`] 1 か所を通るので、
     /// 項目が増えても再生の側は変わらない。
     applied: Vec<Vec<String>>,
-    /// 本仕様が意味を与えないキーの最新の引数列（要件 2.5・キー→引数列）。
+    /// `areka-P0-text-decoration-canon` が意味を与えないキーの最新の引数列（要件 2.5・キー→引数列）。
     unowned: BTreeMap<String, Vec<String>>,
     /// 記録済みの（種別, キー, 値の列）（同じ指定の警告を 1 台詞に 1 度へ抑えるための集合・要件 13.4）。
     ///
@@ -159,7 +161,7 @@ impl Decoration {
     }
 
     /// 台本の指定の 4 欄を `from` から写し、自分の場所の既定（`layers`）の上で当て直す
-    /// （要件 3.13・3.17）。場所の既定は動かさない。
+    /// （`areka-P0-shell-balloon` 要件 3.13・3.17）。場所の既定は動かさない。
     fn take_script(&mut self, from: &Decoration) {
         self.base = from.base;
         self.applied = from.applied.clone();
@@ -217,14 +219,14 @@ impl ActorTextState {
 
     /// このスコープの 2 層（既定・無効表示・選択肢文字色）。
     ///
-    /// **本仕様の本番経路にこの読み口の呼び手は無い**（差し込みは
+    /// **本番の経路にこの読み口の呼び手は無い**（差し込みは
     /// [`TextLayerState::set_look_layers`]、戻し先と載せ直しの参照は `self.decor.layers` の
     /// 直読み）。それでも `pub` で残すのは、design.md「`state_decoration.rs`」の Contracts 表が
     /// 本関数を後続仕様の読み口として載せているためである（`disable.font.*` の配線を着地させた
     /// `areka-P0-balloon-font-descript-keys` は 2 層の実値を `ResolvedFont::resolve` の結果で
     /// 突き合わせたので、この読み口は使っていない）。
-    /// 今日の呼び手は決定論テスト（`actor_decoration_tests.rs`／`state_decoration_tests.rs`／
-    /// `state_decoration_reset_tests.rs`）だけである。
+    /// 今日の呼び手はテストだけである（`src/` の `actor_*`・`state_*` の決定論テストと、
+    /// `tests/shell_balloon_fixture_test.rs`）。
     pub fn look_layers(&self) -> &LookLayers {
         &self.decor.layers
     }
@@ -262,7 +264,7 @@ impl ActorTextState {
     ///
     /// `actor` は R6.3 の記録（上下付きが有効なまま文字が追記された）に使う——ここが
     /// 「文字が追記された」ことを知る唯一の地点だからである。`quiet` が真（空回しの写し）なら
-    /// その `warn!` を出さない（記録済みの集合は同じく更新する・要件 2.8）。
+    /// その `warn!` を出さない（記録済みの集合は同じく更新する・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
     ///
     /// アンカー（`\_a`）の範囲が開いている間は、いま効いている見た目の**写し**に下線を立てて
     /// 登録する（アンカーの既定の見た目）。作者の装飾の状態そのものは変えないので、
@@ -330,7 +332,7 @@ impl ActorTextState {
     /// [`crate::look::apply_font_tag`] の担当で、本関数は「戻す操作へ回すか」「所有外キーを
     /// 保持するか」「何を記録するか」だけを決める。記録なしで失敗を飲み込む経路は無い
     /// （`Err` と記録すべき [`Note`] は必ず `warn!`・所有外キーは `debug!`）。
-    /// `quiet` が真（空回しの写し）なら `warn!` だけを出さない（記録済みの集合と `debug!` は同じ・要件 2.8）。
+    /// `quiet` が真（空回しの写し）なら `warn!` だけを出さない（記録済みの集合と `debug!` は同じ・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
     pub(super) fn apply_font_args(&mut self, actor: &ActorKey, tokens: &[&str], quiet: bool) {
         // 一括の戻し（`\f[default]`）は「戻す操作」1 か所を通す（要件 10.3）——
         // 見た目だけを置き換える apply_font_tag の腕では所有外キーの保持が残ってしまう。
@@ -369,7 +371,7 @@ impl ActorTextState {
                 // 要件 2.5: 値を捨てずに保持し、表示は変えず debug の記録を残す。
                 // キーが空なら apply_font_tag は Err を返すので、ここでは必ずキーがある。
                 let key = tokens[0].to_owned();
-                tracing::debug!(actor = %actor, key = %key, "本仕様の所有外の \\f のキー——引数列を保持し表示は変えない（要件 2.5）");
+                tracing::debug!(actor = %actor, key = %key, "`areka-P0-text-decoration-canon` の所有外の \\f のキー——引数列を保持し表示は変えない（要件 2.5）");
                 self.decor.unowned.insert(
                     key,
                     tokens[1..]
@@ -479,7 +481,7 @@ pub struct BoxTraits {
 }
 
 impl TextLayerState {
-    /// 箱の名前ごとの既定の見た目（拡大率に依らない 2 層）と種類を受け取る（要件 3.4・3.14・3.17）。
+    /// 箱の名前ごとの既定の見た目（拡大率に依らない 2 層）と種類を受け取る（`areka-P0-shell-balloon` 要件 3.4・3.14・3.17）。
     ///
     /// 箱の場所の状態は作られるときにこの 2 層を受け取る（[`TextLayerState::place_entry`]）ので、
     /// 文字が届く前に既定が決まっている。すでにある箱の場所は、装着と同じく新しい 2 層の上へ
@@ -525,7 +527,7 @@ impl TextLayerState {
         }
     }
 
-    /// 行き先が `new` へ替わる瞬間の装飾の持ち運び（要件 3.13〜3.17・design.md「装飾の持ち運び」）。
+    /// 行き先が `new` へ替わる瞬間の装飾の持ち運び（`areka-P0-shell-balloon` 要件 3.13〜3.17・design.md「装飾の持ち運び」）。
     ///
     /// `new` がスコープに従う場所なら、スコープの指定を持つ場所（`shared`）の台本の指定を
     /// `new` へ写して `new` を持ち主にする。箱に閉じる箱なら何も写さず持ち主も変えない
@@ -564,7 +566,7 @@ impl TextLayerState {
         if !source.has_script() && !self.actors.contains_key(&to_key) {
             return;
         }
-        tracing::debug!(actor = %actor, ?from, ?to, "スコープの \\f の指定を新しい行き先へ写す（要件 3.13）");
+        tracing::debug!(actor = %actor, ?from, ?to, "スコープの \\f の指定を新しい行き先へ写す（`areka-P0-shell-balloon` 要件 3.13）");
         self.place_entry(&to_key).decor.take_script(&source);
     }
 

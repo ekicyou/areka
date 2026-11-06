@@ -1,5 +1,7 @@
 //! # viewbox_scroll_test — 再描画レス・ダーティ限定描画の決定論カウント檻（実 pump 通し）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-viewbox` のもの（別の spec のものはその場で名を書く）。
+//!
 //! design.md「Testing Strategy → Integration Tests → 2. 再描画レス カウント檻
 //! （tests/viewbox_scroll_test.rs・実 pump 通し）」の正典述語を、**実配線**
 //! （`register_actor` → `present_frame`（装着＋viewbox ダーティ矩形スクロール描画）→

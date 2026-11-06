@@ -1,5 +1,7 @@
 //! # vertical_fixture_test — 縦書き観測用 fixture 変種の読み込み検証（R11.4）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! example ローカル fixture 変種 `examples/fixtures/emo2-vertical/` を実ファイルから
 //! 読み込み、以下を檻化する（design.md「File Structure Plan」・「観測」縦横切替が正典）:
 //!
@@ -22,10 +24,10 @@
 //! 上記の拡張キー版に加え、SSP 正典キー `vertical,1` を宣言するだけが異なる第 2 の変種
 //! `examples/fixtures/emo2-vertical-canon/` を読み、**両版が同一の [`WritingMode`] と
 //! 同一の [`TextRegion`]（全成分）を与える**ことを檻にする（areka-P0-balloon-vertical-canon
-//! 要件 10.1／10.2・design.md「C6 縦書きフィクスチャ 2 種」／DD9）。
+//! `areka-P0-balloon-vertical-canon` 要件 10.1／10.2・design.md「C6 縦書きフィクスチャ 2 種」／DD9）。
 //! あわせて、両版の `descript.txt` の差分が **`writing_mode,vertical_rl` → `vertical,1` の
 //! 1 行だけ**であること・`balloons0s.txt` が同内容であること・**両版とも `origin` を
-//! 宣言しない**こと（正典推奨形・要件 10.9）を機械で固定する（人の目視に頼らない）。
+//! 宣言しない**こと（正典推奨形・`areka-P0-balloon-vertical-canon` 要件 10.9）を機械で固定する（人の目視に頼らない）。
 
 #[path = "support/mod.rs"]
 mod support;
@@ -146,7 +148,7 @@ fn variant_merged_model(variant: &str) -> BalloonModel {
     support::fixture::merged_model(&example_fixture_dir(variant), Some("balloons0s.txt"))
 }
 
-/// 要件 10.1: 正典キー `vertical,1` を宣言するフィクスチャが縦書きへ解決される——
+/// `areka-P0-balloon-vertical-canon` 要件 10.1: 正典キー `vertical,1` を宣言するフィクスチャが縦書きへ解決される——
 /// descript 基層のみでも、`balloons0s.txt` を重ねた 2 層マージ後でも `VerticalRl`。
 #[test]
 fn canon_key_fixture_resolves_to_vertical_rl() {
@@ -167,7 +169,7 @@ fn canon_key_fixture_resolves_to_vertical_rl() {
     );
 }
 
-/// 要件 10.2: 両版の `TextRegion` が**全成分で逐語一致**する（同一の表示結果の実観測）。
+/// `areka-P0-balloon-vertical-canon` 要件 10.2: 両版の `TextRegion` が**全成分で逐語一致**する（同一の表示結果の実観測）。
 #[test]
 fn canon_and_extension_fixtures_agree_on_text_region() {
     let canon_merged = variant_merged_model(CANON_KEY_FIXTURE);
@@ -189,7 +191,7 @@ fn canon_and_extension_fixtures_agree_on_text_region() {
     );
 }
 
-/// 要件 10.1／10.2: 正典キー版の解決後 `TextRegion` を design.md「Data Models →
+/// `areka-P0-balloon-vertical-canon` 要件 10.1／10.2: 正典キー版の解決後 `TextRegion` を `areka-P0-balloon-vertical-canon` design.md「Data Models →
 /// `emo2-vertical-canon` フィクスチャのデータ形」の表どおりに逐語固定する
 /// （left 36／top 46／right 356／bottom 168／start (356,46)／wrap 224-60=164）。
 #[test]
@@ -214,7 +216,7 @@ fn canon_fixture_text_region_matches_design_data_model() {
     );
 }
 
-/// 要件 10.9: 両版とも `origin` を宣言しない（正典推奨形＝「通常は指定せず validrect の
+/// `areka-P0-balloon-vertical-canon` 要件 10.9: 両版とも `origin` を宣言しない（正典推奨形＝「通常は指定せず validrect の
 /// 定義に任せる」）——基層・2 層マージ後のいずれでも `origin.x`／`origin.y` が未宣言。
 #[test]
 fn neither_fixture_declares_origin() {

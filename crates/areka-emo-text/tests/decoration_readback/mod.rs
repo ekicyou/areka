@@ -1,5 +1,7 @@
 //! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**）。
 //!
 //! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]）が

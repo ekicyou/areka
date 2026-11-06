@@ -1,5 +1,7 @@
 //! # actor_region_collapse_tests — 潰れた描画範囲は状態の変わり目に 1 回だけ記録する（areka-P0-balloon-text-bugs 件 2）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **2.3**〜**2.5**・**2.7**・**4.2**、design
 //! 「潰れた描画範囲（areka-P0-balloon-text-bugs 件 2）」）。
 //!
@@ -31,7 +33,8 @@ use bevy_ecs::prelude::World;
 use log_capture_kit::CapturedEvent;
 
 use super::test_support::{
-    box_layout, capture_checked, emote, fake_resolver, number_field, spawn_reserved_slot, text,
+    box_layout, capture_checked, emote, fake_resolver, first_box_key, number_field,
+    spawn_reserved_slot, text,
 };
 use super::{TextLayerRuntime, TextSlotBinding};
 use crate::place::{PlaceKey, TextPlace};
@@ -289,12 +292,7 @@ impl Shell {
     }
 
     fn box_key(&self) -> PlaceKey {
-        self.rt
-            .box_sites
-            .keys()
-            .find(|k| k.place != TextPlace::Balloon)
-            .cloned()
-            .expect("箱 c が登録されている")
+        first_box_key(&self.rt)
     }
 }
 
@@ -417,7 +415,6 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
 // 窓の子の面は窓の子ごと消す。差し込み口が居なければ警告して何もしない。
 
 mod release {
-    use bevy_ecs::hierarchy::ChildOf;
     use bevy_ecs::name::Name;
     use bevy_ecs::prelude::World;
     use log_capture_kit::capture;
@@ -425,7 +422,7 @@ mod release {
     use wintf::ecs::{Arrangement, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource};
 
     use super::super::TextSlotBinding;
-    use super::super::test_support::{com_world, window_children};
+    use super::super::test_support::{add_child_slot, com_world, window_children};
     use super::IMAGE;
     use crate::surface::TextSurface;
 
@@ -438,10 +435,7 @@ mod release {
         bevy_ecs::entity::Entity,
     ) {
         let (mut world, window, slot) = com_world();
-        let frame = world
-            .spawn((Name::new("emo-surface"), Visual::default(), ChildOf(window)))
-            .id();
-        world.flush();
+        let frame = add_child_slot(&mut world, window, "emo-surface");
         (world, window, slot, frame)
     }
 

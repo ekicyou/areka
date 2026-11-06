@@ -1,5 +1,7 @@
 //! 箱の束の受け取りと、箱を隠す印（要件 3.10・6.8）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 箱の束はテストの中に持つ surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。箱の面の登録と装着は `actor_box_sync_tests.rs` が見るので、ここの `World` は
 //! 空か差し込み口だけでよい。COM は使わない。

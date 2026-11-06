@@ -1,5 +1,7 @@
 //! # actor_region_collapse_present_tests — 潰れた場所は提示で描かず、描いた後に潰れたら前の字を片付ける（areka-P0-balloon-text-bugs 件 2・実 GPU）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **2.1**・**2.2**・**2.4**・**2.6**〜**2.9**・**4.2**、
 //! design「潰れた描画範囲（areka-P0-balloon-text-bugs 件 2）」・テストの方針「結合 7」）。
 //!
@@ -12,22 +14,18 @@
 //! 登録口の記録（潰れの警告・戻りの情報）は捕捉窓の外で済ませ、窓の中は提示のフレームだけにする。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
-use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
 use log_capture_kit::CapturedEvent;
-use wintf::ecs::{Arrangement, Visual, VisualGraphics};
+use wintf::ecs::{Arrangement, VisualGraphics};
 
 use super::region_collapse_tests::{
     COLLAPSED_BALLOON, HEALTHY_BALLOON, IMAGE, SHELL_COLLAPSED, SHELL_HEALTHY, SHELL_IMAGE, model,
 };
 use super::test_support::{
-    box_layout, capture_checked, choice_cue, com_world, cue, emote, fake_resolver, geo_model,
-    opaque_count, read_back, text, window_children,
+    add_child_slot, box_layout, capture_checked, choice_cue, com_world, cue, emote, fake_resolver,
+    first_box_key, geo_model, opaque_count, read_back, text, window_children,
 };
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
-use crate::place::{PlaceKey, TextPlace};
 use crate::state::TextLayerConfig;
 
 /// 装着の記録の文（要件 2.8・1 文字も変えない）。
@@ -36,19 +34,6 @@ const ATTACHED: &str =
 
 /// 数十フレーム（0.1 秒刻み）。
 const FRAMES: usize = 40;
-
-/// 窓に差し込み口の子をもう 1 つ足す。
-fn add_slot(world: &mut World, window: Entity, name: &str) -> Entity {
-    let id = world
-        .spawn((
-            Name::new(name.to_owned()),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    id
-}
 
 /// 捕捉窓の中で `f` を走らせ、全部の記録を返す。対照の `error!` 1 件だけが ERROR で、WARN が 0 件で
 /// あることを確かめる（要件 2.2）。
@@ -77,7 +62,7 @@ fn frames(rt: &mut TextLayerRuntime, world: &mut World) {
 #[test]
 fn a_collapsed_balloon_is_never_attached_and_the_neighbour_is_drawn() {
     let (mut world, window, slot0) = com_world();
-    let slot1 = add_slot(&mut world, window, "emo-text-layer-slot-1");
+    let slot1 = add_child_slot(&mut world, window, "emo-text-layer-slot-1");
     let (small, other) = (ActorKey::from("1"), ActorKey::from("0"));
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&cue("1", 0.0, CueCommand::Text("あいう".into())));
@@ -115,7 +100,7 @@ fn a_collapsed_balloon_is_never_attached_and_the_neighbour_is_drawn() {
 #[test]
 fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
     let (mut world, window, slot) = com_world();
-    let frame = add_slot(&mut world, window, "emo-surface");
+    let frame = add_child_slot(&mut world, window, "emo-surface");
     let actor = ActorKey::from("1");
     let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -166,7 +151,7 @@ fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
 #[test]
 fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
     let (mut world, window, slot) = com_world();
-    let slot1 = add_slot(&mut world, window, "emo-text-layer-slot-1");
+    let slot1 = add_child_slot(&mut world, window, "emo-text-layer-slot-1");
     let (scope0, scope1) = (ActorKey::from("0"), ActorKey::from("1"));
     let shell = TextSlotBinding::new(slot, window, 1.0, SHELL_IMAGE, SHELL_IMAGE);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -182,17 +167,10 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
         TextSlotBinding::new(slot1, window, 1.0, (120, 60), (120, 60)),
         &geo_model(),
     );
-    let box_key = |rt: &TextLayerRuntime| -> PlaceKey {
-        rt.box_sites
-            .keys()
-            .find(|k| k.place != TextPlace::Balloon)
-            .cloned()
-            .expect("箱 c が登録されている")
-    };
 
     speak(&mut rt, &mut world, SHELL_HEALTHY);
     present_frame(&mut rt, &mut world, 1.0).expect("描く");
-    let drawn = box_key(&rt);
+    let drawn = first_box_key(&rt);
     let child = rt
         .surface_at(&drawn)
         .and_then(|s| s.window_child())
@@ -201,7 +179,7 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
 
     speak(&mut rt, &mut world, SHELL_COLLAPSED);
     quiet(|| frames(&mut rt, &mut world));
-    let collapsed = box_key(&rt);
+    let collapsed = first_box_key(&rt);
     assert!(rt.surface_at(&collapsed).is_none(), "潰れた箱に面を作った");
     assert!(
         world.get_entity(child).is_err(),
@@ -224,6 +202,6 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
         1,
         "戻った次のフレームで装着（要件 2.8）"
     );
-    assert!(rt.surface_at(&box_key(&rt)).is_some());
+    assert!(rt.surface_at(&first_box_key(&rt)).is_some());
     assert_eq!(rt.shown_boxes(&scope0).len(), 1);
 }

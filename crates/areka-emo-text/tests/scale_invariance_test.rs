@@ -1,5 +1,7 @@
 //! # scale_invariance_test — DPI/スケールの写像と画像座標空間のレイアウトの絶対値（R4.6/R10.4/R11.9）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 合成スケール k による**写像**（物理寸＝`ceil(寸 × k)`・オフセット＝`原点 × k`）と、
 //! 画像座標空間で解いた**レイアウト決定**（折返し・行送り・スクロール発火）の絶対値を、
 //! 実描画なし（DirectWrite/D2D/COM/GPU 不使用・[`FixedMetrics`] 注入）の headless テストで固定する

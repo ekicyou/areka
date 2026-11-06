@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
+
 // ── ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
 //
 // design.md「純粋層 / ChoicePure」Service Interface（ResolvedChoiceStyle enum + resolve/paint）・
@@ -159,7 +161,7 @@ fn styled(style: Option<&str>, blend: Option<&str>) -> BalloonCursor {
 }
 
 /// ROP 系・下線系のバルーンで resolve の返り値は今のまま（SquareFill）・記録は 0 件
-/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・要件 2.5・2.7）。blendmethod は
+/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・`real-run-log-noise` 要件 2.5・2.7）。blendmethod は
 /// ROP 系でも `none` でも variant を変えない（色ベース・警告は登録の側が出す）。
 #[test]
 fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
@@ -210,6 +212,23 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
             unknown_style: None,
         }
     );
+}
+
+/// 下線系の `style` は大小を問わない（ukadoc の値と大小だけ違う `UNDERLINE`・`Square+Underline` も
+/// 下線系として返し、正典に無い値の側へは落とさない）。
+#[test]
+fn cursor_fallback_matches_underline_style_ignoring_case() {
+    for style in ["UNDERLINE", "Square+Underline"] {
+        assert_eq!(
+            CursorFallback::of(&styled(Some(style), None)),
+            CursorFallback {
+                blendmethod: None,
+                underline_style: Some(style.to_string()),
+                unknown_style: None,
+            },
+            "{style}"
+        );
+    }
 }
 
 /// `blendmethod` が `none`（大小無視）・未指定、`style` が `square`・未指定・`none` では縮退の値は無し。

@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+
 use super::{
     ActorKey, CueSink, DWriteMetrics, Demo, DrawStats, EXPOSURE_BAND_DRAW_BOUND, FrameTime,
     GATE_KERO, GATE_SAKURA, GetAsyncKeyState, GetCursorPos, GlyphMetrics, GraphicsCore,
@@ -584,7 +586,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
     drop(rt);
     *world.resource_mut::<Verdict>() = verdict;
 
-    // ── R10.3: あふれ→スクロール区間の DrawStats 檻（stage 4=C5 のみ・単一 pass/fail へ追加） ──
+    // ── `areka-P0-emo-text-viewbox` R10.3: あふれ→スクロール区間の DrawStats 檻（stage 4=C5 のみ・単一 pass/fail へ追加） ──
     // 既存の readback 述語（C5）で「あふれ→スクロールが発火した」ことを確認した直後に、
     // 描画統計（DrawStats）のフレーム間増分で「可視窓のみ移動フレームは確定行を再描画しない
     // （露出帯限定）」「内容・可視窓とも不変フレームは全増分 0」を決定論に檻化する。
@@ -593,7 +595,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
     }
 }
 
-/// R10.3: あふれ→スクロール区間の再描画レス（可視窓のみ移動＝ダーティ限定描画）と
+/// `areka-P0-emo-text-viewbox` R10.3: あふれ→スクロール区間の再描画レス（可視窓のみ移動＝ダーティ限定描画）と
 /// 内容・可視窓とも不変フレームの全増分 0 を、`draw_stats` のフレーム間増分で単一 pass/fail
 /// へ檻化する（reference: tests/viewbox_scroll_test.rs の実 pump 檻を観測 example へ写像）。
 ///
@@ -663,7 +665,7 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     }
     let s_base = stats_of(demo, &actor);
 
-    // ── 条件 1（NoChange gating・R10.3/R3.5）: 同一注入時刻の再提示で全統計増分 0 ──
+    // ── 条件 1（NoChange gating・`areka-P0-emo-text-viewbox` R10.3/R3.5）: 同一注入時刻の再提示で全統計増分 0 ──
     // 全域再描画方式ならここでも描き直すため増分が出る＝これが再描画レスの一次判別。
     present_at(demo, world, complete[i0].t_mid);
     let s_idle = stats_of(demo, &actor);
@@ -714,7 +716,7 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
         create2,
         blit1,
         blit2,
-        "C8: スクロールフレームの DrawStats 増分（R10.3 観測・可視窓のみ移動・2 段）"
+        "C8: スクロールフレームの DrawStats 増分（`areka-P0-emo-text-viewbox` R10.3 観測・可視窓のみ移動・2 段）"
     );
 
     let mut v = std::mem::take(&mut *world.resource_mut::<Verdict>());

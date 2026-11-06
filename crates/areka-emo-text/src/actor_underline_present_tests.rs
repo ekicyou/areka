@@ -1,5 +1,7 @@
 //! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（areka-P0-balloon-text-bugs 件 3・実 GPU）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **3.1**・**3.2**・**3.3**・**3.4**・**3.5**・**3.6**・
 //! **3.8**・**3.10**・**3.11**・**4.3**、design「areka が塗る下線（areka-P0-balloon-text-bugs 件 3）」・テストの方針「結合 2・3・5」）。
 //!
@@ -33,9 +35,8 @@ use wintf::com::dwrite::dwrite_create_factory;
 
 use super::test_support::box_layout;
 use super::test_support::{com_world, cue, physical, spawn_reserved_slot};
-use super::test_support::{emote, fake_resolver};
+use super::test_support::{emote, fake_resolver, first_box_key};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
-use crate::place::TextPlace;
 use crate::state::TextLayerConfig;
 
 /// 実機の書体。
@@ -315,12 +316,7 @@ fn shoot_box_in(
     let shell = TextSlotBinding::new(slot, window, k, physical(REAL, k), REAL);
     rt.sync_box_bindings(world, &[(ActorKey::from("0"), Some((shell, surface)))]);
     present(&mut rt, world);
-    let key = rt
-        .box_sites
-        .keys()
-        .find(|key| key.place != TextPlace::Balloon)
-        .cloned()
-        .expect("箱が登録されている");
+    let key = first_box_key(&rt);
     let surface = rt.surface_at(&key).expect("箱の面");
     let (w, h) = surface.size();
     Shot {

@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+
 // バルーン背景色の受け口（[`TextLayerRuntime::set_balloon_background`]／
 // `background_of`）と、装着の 1 点（[`TextLayerRuntime::register_actor`]）で 2 層を
 // 純粋状態へ差し込む配線（要件 4.6／3.1）。

@@ -1,5 +1,7 @@
 //! # 本番と同じ経路を歩く検査（文節の折り返しで、表示済みの字が動かない・要件 1・2.5・5）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-budoux-reveal-reflow` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 台本の文字列 → `areka_parsers::sakura::parse` → `areka_sakura::compile` → 刻印
 //! （`with_absolute_start_time`）→ `CuePlayer::from_sheet` → `register_sink`（本物の
 //! [`EmoTextSink`](crate::sink::EmoTextSink)）→ `tick(時刻)` → UI の待ち行列 →

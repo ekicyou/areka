@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+
 use areka_sakura::contract::{ActorKey, CueCommand};
 
 use super::test_support::{
@@ -114,7 +116,7 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
     );
 }
 
-/// **装飾で大きくした選択肢は当たり帯も大きくなる**（要件 11.5 のブロック軸・本番の 1 フレーム経路）。
+/// **装飾で大きくした選択肢は当たり帯も大きくなる**（`areka-P0-text-decoration-canon` 要件 11.5 のブロック軸・本番の 1 フレーム経路）。
 ///
 /// 帯の丈をバルーン定義の既定の大きさから**アクターに 1 つ**決めていた頃は、`\f[height,40]` の
 /// 選択肢が表示 42 画素でも帯 14 画素で、文字の上下がクリックできなかった。純粋層の
@@ -153,11 +155,11 @@ fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
     );
 }
 
-// 描画＋字下げの readback 統合檻（COM・headless・R7.1/7.4・draw==hit の R3.3）
+// 描画＋字下げの readback 統合檻（COM・headless・`areka-P0-choice-render` R7.1/7.4・draw==hit の `areka-P0-choice-render` R3.3）
 #[test]
 fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     const FONT_H: f32 = 12.0;
-    // 行送りは正典の式をそのまま呼ぶ（文字の大きさ + 行間・design §4.1 正典表）。
+    // 行送りは正典の式をそのまま呼ぶ（文字の大きさ + 行間・`areka-P0-emo-text-line-height-canon` design §4.1 正典表）。
     // 式をここに書き写さないので、行間の既定値が変わっても本テストは自動で追随する。
     let pitch: f32 = TextLayerConfig::default().line_pitch(FONT_H); // 12 + 2 = 14.0
     let indent_x: f32 = 5.0 * FONT_H; // 5em = 60.0
@@ -245,7 +247,7 @@ fn present_with_no_choices_yields_empty_choice_hit_rows() {
     );
 }
 
-// hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
+// hover 画素檻＋ダーティ限定檻（COM・headless・`areka-P0-choice-render` R4.4/7.2/7.4）
 //
 // Observable: cursor.* 由来の SquareFill（塗り=(105,25,25)・文字=(255,255,255)）を持つバルーンで、
 // hover on/off を注入する対フレームにおいて (a) 塗り色画素と白文字画素が ordinal-0 セグメント矩形へ
@@ -372,7 +374,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     );
 }
 
-// 矩形反転縮退の pixel 檻（COM・headless・R4.3/6.1/7.2）。
+// 矩形反転縮退の pixel 檻（COM・headless・`areka-P0-choice-render` R4.3/6.1/7.2）。
 //
 // `hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage` を cursor.\* 未指定
 // バルーン（`geo_model`＝Invert 縮退）で反映する。正典確定「矩形反転縮退: セグメント矩形＝

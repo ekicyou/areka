@@ -1,5 +1,7 @@
 //! # shipped_fixture_region_test — 出荷済み実ゴースト定義の開始点を逐語固定する檻
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-vertical-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-balloon-vertical-canon`（要件 **3.10**／**10.7**・設計 **DD5**／**C9**）。
 //!
 //! ## この檻が塞ぐ穴

@@ -1,6 +1,6 @@
 //! # draw_readback_test — UI スレッド上の描画・読み戻しの通し構造検証
 //!
-//! 出典 spec: `areka-P0-emo-text-layer`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//! 出典 spec: `areka-P0-emo-text-layer`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
 //! design.md「Testing Strategy > Integration Tests #4（描画実行）」の正典述語を、
 //! **通し経路**（sink emit → UI ドレイン → `present_frame` → `read_back`）で檻化する
@@ -66,7 +66,7 @@ const FONT_H: u32 = 12;
 const PITCH: u32 = 14;
 
 /// 非退化 validrect 付きのテスト用 BalloonModel。**origin は宣言しない**＝描画開始点は
-/// 書字開始角へ縮退する（region.rs の fixture 檻と同じ経路・要件 3.11）。
+/// 書字開始角へ縮退する（region.rs の fixture 檻と同じ経路・`areka-P0-balloon-vertical-canon` 要件 3.11）。
 /// wordwrap 未指定＝折返し閾値は行末辺（横=right 156／縦=bottom 94）。
 ///
 /// かつては `Origin::new(Some(0), Some(0))` を宣言していたが、これは解決後 validrect
@@ -166,7 +166,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     let (emo_world, atlas) = build_target_assets(IMAGE.0, IMAGE.1, 0);
     let mut presenter = EmoPresenter::new();
     presenter
-        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）。本番は boot が descript の実値を
         // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
         .attach_target(TargetId(0), window, emo_world, atlas, 96);
     show_surface(&mut presenter, &mut world, TargetId(0));

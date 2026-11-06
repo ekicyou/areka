@@ -1,5 +1,7 @@
 //! # actor — UI ドレインとフレーム提示ステップ（結線層）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `spawn_emo_text`（`spawn_ui` 結線・UI ドレイン起動）・`TextLayerRuntime`
 //! （UI スレッド所有の集約ルート）・`TextSlotBinding`・`present_frame`
 //! （毎フレームの注入時刻駆動：リビール進行→レイアウト→描画→装着）を担う。
@@ -100,14 +102,14 @@ impl TextSlotBinding {
 
     /// emo-present の読み取り専用増分 `TextSlotView` からの一点変換（結線の正準口・R9.1/R9.2）。
     ///
-    /// # 2 つの寸を**両方**読む（R8.2）
+    /// # 2 つの寸を**両方**読む（`areka-P0-emo-dpi-scaling` R8.2）
     ///
     /// [`TextSlotView`] は **native 原寸**（`surface_size()`＝k 適用**前**）と**物理寸**
     /// （`physical_size()`＝丸め権威 `scaled_extent` を通した表示寸）を隣り合わせで公開する。
     /// 本メソッドは前者を `image_size` へ、後者を `surface_size` へ写す:
     ///
     /// - `image_size` ← `surface_size()`（native）: 作者画像空間の原寸は**k 不変**でなければ
-    ///   ならない（R8.2 の供給面 `ceil(validrect 寸 × k)` が k に比例する前提）。
+    ///   ならない（`areka-P0-emo-dpi-scaling` R8.2 の供給面 `ceil(validrect 寸 × k)` が k に比例する前提）。
     /// - `surface_size` ← `physical_size()`（k 適用後）: 診断・churn 判定用の表示寸。
     ///
     /// 取り違えるとどちらの向きでも静かに壊れる——`image_size` に物理寸を入れれば画像空間が
@@ -141,10 +143,10 @@ pub struct ResolvedBalloonText {
     /// 折返しモードの解釈結果（`budoux_newline` 語彙解決・ON 時のみ分かち書き境界を計算）。
     pub wrap: WrapMode,
     /// hover ハイライトスタイルの解決正規形（balloon `cursor.*` モデル＋既定文字色から一点解決）。
-    /// 装飾（`decorate_canvas`）が hover 行へ焼く塗り/文字色の源（design.md RuntimeContract・R4.2/4.3）。
+    /// 装飾（`decorate_canvas`）が hover 行へ焼く塗り/文字色の源（`areka-P0-choice-render` design.md RuntimeContract・`areka-P0-choice-render` R4.2/4.3）。
     pub choice_style: ResolvedChoiceStyle,
     /// スクロールの矢印の置き場（`arrow0`／`arrow1` の左上・image px）。モデルの矢印の鍵を
-    /// 広がり（普通のバルーン＝面の画像・箱＝箱の大きさ）で解いた値（要件 3.4・3.7・7.1・7.7）。
+    /// 広がり（普通のバルーン＝面の画像・箱＝箱の大きさ）で解いた値（`balloon-scroll-arrows` 要件 3.4・3.7・7.1・7.7）。
     pub markers: ResolvedMarkerPlacement,
 }
 
@@ -157,7 +159,7 @@ impl ResolvedBalloonText {
     }
 }
 
-/// choice.rs（純粋層）所有のバルーン窓物理 px 矩形を結線層から再輸出する（design.md RuntimeContract）。
+/// choice.rs（純粋層）所有のバルーン窓物理 px 矩形を結線層から再輸出する（`areka-P0-choice-render` design.md RuntimeContract）。
 /// 下流（choice-interact）は [`ChoiceHitRow::rect`] を本型で受ける——照会契約の座標系正本。
 pub use crate::choice::HitRectPx;
 
@@ -165,7 +167,7 @@ pub use crate::choice::HitRectPx;
 ///
 /// 提示フレーム同期スナップショットの 1 行分——1 選択肢セグメントの窓物理 px 矩形に、
 /// 下流 `ChoiceSelection` 構成材料（`ordinal`/`id`/`label`/`references`）を同梱し、契約の
-/// 再照会を不要にする（design.md「下流契約」）。スナップショットは present_actor
+/// 再照会を不要にする（`areka-P0-choice-render` design.md「下流契約」）。スナップショットは present_actor
 /// （`actor_present.rs`）が提示に成功するたびに入れ直す。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChoiceHitRow {
@@ -225,7 +227,7 @@ impl ActorRender {
 /// `\s` の鍵を今のシェルで解決する閉包（結線が渡す・文字の層は seriko の型を名指ししない）。
 ///
 /// 中身は結線の純関数（`resolve_for_text`）で、今のシェルの面の表に無い番号は
-/// [`SurfaceKeyOutcome::Unresolved`] を返す（design.md「箱の束の結線」）。
+/// [`SurfaceKeyOutcome::Unresolved`] を返す（`areka-P0-shell-balloon` design.md「箱の束の結線」）。
 pub type SurfaceKeyResolver = Box<dyn Fn(&str) -> SurfaceKeyOutcome>;
 
 /// UI スレッド所有の集約ルート（NonSend・design.md「TextLayerRuntime」正本）。
@@ -253,7 +255,7 @@ pub struct TextLayerRuntime {
     resolve_inputs: HashMap<PlaceKey, attach::ResolveInputs>,
     /// actor 別の描画資源（遅延生成——`ActorRender` 不在の解決フレームで World 資源から構築・装着。
     /// k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）は本 map の当該エントリだけを破棄し、
-    /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・R8.2/R8.3）。
+    /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・`areka-P0-emo-dpi-scaling` R8.2/R8.3）。
     surfaces: HashMap<PlaceKey, ActorRender>,
     /// 調整値（行送りの行間 `line_gap`）。reveal ペースは配送 duration 由来ゆえ char_wait は
     /// 持たない（本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
@@ -273,25 +275,25 @@ pub struct TextLayerRuntime {
     /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
     cursor_warn: CursorWarnGuard,
     /// actor → バルーンの背景色（面 0 の原点画素・sRGB 非 premultiplied）。無効表示の見た目の
-    /// 色を導くためだけに使う（要件 4.6）。結線側が装着の**前**に
+    /// 色を導くためだけに使う（`areka-P0-text-decoration-canon` 要件 4.6）。結線側が装着の**前**に
     /// [`set_balloon_background`](Self::set_balloon_background) で入れる——未設定は
     /// [`DEFAULT_BALLOON_BACKGROUND`]（白）。読み口は
     /// [`background_of`](Self::background_of)（`actor_decoration.rs`）。
     balloon_background: HashMap<ActorKey, (u8, u8, u8)>,
     /// actor → 行の中の印の絵（結線が [`set_inline_marker`](Self::set_inline_marker) で入れる・
-    /// 無ければ既定の丸・要件 5.1）。装着・再追従・箱の解決の直後に押す。
+    /// 無ければ既定の丸・`script-small-tags` 要件 5.1）。装着・再追従・箱の解決の直後に押す。
     inline_marker: HashMap<ActorKey, Arc<MarkerImage>>,
     /// 印の絵が変わった actor（`set_inline_marker` が入れ、次の箱の同期がその actor の箱を
-    /// 登録し直して空にする・箱は登録の時にしか印を押さないため・要件 5.1）。
+    /// 登録し直して空にする・箱は登録の時にしか印を押さないため・`script-small-tags` 要件 5.1）。
     inline_marker_changed: BTreeSet<ActorKey>,
     /// actor → 普通のバルーンの名前（結線が入れるバルーンのフォルダ名）。折り返しの基準と無視した
-    /// 書き出し位置の 2 つの警告の名前の欄に出す（未設定は `スコープ{番号}のバルーン`・要件 3.12）。
+    /// 書き出し位置の 2 つの警告の名前の欄に出す（未設定は `スコープ{番号}のバルーン`・`areka-P0-shell-balloon` 要件 3.12）。
     /// 入れる口は [`set_balloon_label`](Self::set_balloon_label)（`actor_decoration.rs`）。
     balloon_label: HashMap<ActorKey, String>,
     /// `\s` の鍵の解決の閉包（始めは無し）。無いあいだは `Emote` を読まない＝行き先は常に
-    /// 普通のバルーン（要件 5.4）。本番の差し込みは箱の束の受け取り（`actor_box.rs`）が行う。
+    /// 普通のバルーン（`areka-P0-shell-balloon` 要件 5.4）。本番の差し込みは箱の束の受け取り（`actor_box.rs`）が行う。
     surface_resolver: Option<SurfaceKeyResolver>,
-    /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。
+    /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・`areka-P0-shell-balloon` 要件 3.10）。
     /// 箱の束の受け取りが入れ、読み込む側（`balloon-font-file`）が読む。本番の呼び手はまだ無い継ぎ目で、
     /// 名指す spec（`balloon-font-file`）が閉じたら消す（呼び手が付いていればこの一文を消す）。
     box_font_dirs: Vec<PathBuf>,
@@ -315,7 +317,7 @@ pub struct TextLayerRuntime {
     /// いま描画範囲（validrect）が潰れている場所（幅か高さが 0 以下・areka-P0-balloon-text-bugs 件 2）。登録口
     /// （`actor_attach.rs` の `note_region_collapse`）が状態の変わり目に 1 回だけ記録するための
     /// 記憶で、登録を外しても・箱の束を差し替えても消さない＝隠す・出す・付け直しで記録が
-    /// 増えない（要件 2.3〜2.5・2.7）。
+    /// 増えない（`areka-P0-balloon-text-bugs` 要件 2.3〜2.5・2.7）。
     collapsed_regions: BTreeSet<PlaceKey>,
     /// スコープ → 最後に提示したフレームで文字が 1 字以上見えていた箱の四角（手前から・
     /// `actor_box.rs` の `shown_boxes`）。提示のたびに作り直し、出なくなった箱（`\c`・台詞の頭・
@@ -337,7 +339,7 @@ pub struct TextLayerRuntime {
     scrolls: HashMap<PlaceKey, PlaceScroll>,
     /// スコープ → 普通のバルーンの矢印の絵（`set_balloon_markers`・`actor_scroll.rs`）。
     balloon_markers: HashMap<ActorKey, MarkerPair>,
-    /// スコープ → 箱の名前 → 箱の矢印の絵（`set_box_markers`・名前の順はスコープごと・要件 2.1・7.3）。
+    /// スコープ → 箱の名前 → 箱の矢印の絵（`set_box_markers`・名前の順はスコープごと・`balloon-scroll-arrows` 要件 2.1・7.3）。
     /// 足りない番号はスコープの普通のバルーンの絵で埋める。
     box_markers: BTreeMap<ActorKey, BTreeMap<BoxName, MarkerPair>>,
     /// World の無い所（再追従）で捨てた描き手と、それを付けていた差し込み口。次の [`present_frame`] の頭で
@@ -363,7 +365,7 @@ impl TextLayerRuntime {
     /// 空のランタイムを構築する（COM 資源は初回解決フレームで World 資源から遅延構築）。
     ///
     /// 調整値はここで 1 度だけ正規化する（[`TextLayerConfig::normalized`]）——非有限・負の
-    /// 行間の縮退警告は構築時の 1 件だけで、以降は正規化済みの値を配る（R1.6）。
+    /// 行間の縮退警告は構築時の 1 件だけで、以降は正規化済みの値を配る（`areka-P0-emo-text-line-height-canon` R1.6）。
     pub fn new(config: TextLayerConfig) -> TextLayerRuntime {
         TextLayerRuntime {
             state: TextLayerState::default(),
@@ -407,19 +409,19 @@ impl TextLayerRuntime {
     ///
     /// `Clear`／`ClearAll` は描画実行部の全域リセット要求点でもある（planner 初期化＋確定行
     /// TextLayout キャッシュの全破棄——design「Clear で全破棄」・破棄はこの口だけ・次フレームは
-    /// `FramePlan::FullClear`＝全域透明・R4.3）。純粋状態（[`TextLayerState::apply_cue`]）を
+    /// `FramePlan::FullClear`＝全域透明・`areka-P0-emo-text-viewbox` R4.3）。純粋状態（[`TextLayerState::apply_cue`]）を
     /// 空にするだけでは既描画サーフェスに古いピクセルが残留するため（前の会話の画素が残る欠陥）、提示層の
     /// 描画実行部にも同じ消去を伝える必要がある:
     ///
-    /// - `Clear`＝**対象スコープのみ**（`cue.actor` の描画実行部だけをクリア・R6.4/R7.4）。
+    /// - `Clear`＝**対象スコープのみ**（`cue.actor` の描画実行部だけをクリア・`areka-P0-cue-playback-duration` R6.4/R7.4）。
     /// - `ClearAll`＝**全スコープ**（装着済み全 actor の描画実行部をクリア・前の会話を残さない冒頭全消し・
-    ///   R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
+    ///   `areka-P0-cue-playback-duration` R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
     ///   行う（`state.rs::apply_cue` の全 `actor_states` 消去と対）。
     ///
     /// 戻り値は名前の形の `\b[名前]` の箱が無かったか（[`TextLayerState::apply_cue`] の答え）。
     pub fn apply_cue(&mut self, cue: &TalkCue) -> bool {
         // 状態を進める前の行き先（`\c` が消すのは今の行き先の場所だけ＝純粋状態の `apply_cue` と
-        // 同じ宛先）。先渡しの区間の番号は空回しと同じく、この行き先で消去を数える（要件 4.1）。
+        // 同じ宛先）。先渡しの区間の番号は空回しと同じく、この行き先で消去を数える（`areka-P0-budoux-reveal-reflow` 要件 4.1）。
         let place = PlaceKey {
             actor: cue.actor.clone(),
             place: self.state.destination(&cue.actor),
@@ -432,7 +434,7 @@ impl TextLayerRuntime {
                 if let Some(render) = self.surfaces.get_mut(&place) {
                     render.executor.request_clear();
                 }
-                // 選択肢ライフサイクルの原子的無効化（R5.1/5.2/5.4）: 当該 actor の hover を None へ
+                // 選択肢ライフサイクルの原子的無効化（`areka-P0-choice-render` R5.1/5.2/5.4）: 当該 actor の hover を None へ
                 // リセットし、ヒット行スナップショットを純粋状態の選択肢消去と**同時**に無効化する
                 // （表示と hit の片方だけが古い状態に残らない——present を待たず `choice_hit_rows` が空・
                 // `choice_active` が false へ揃う）。スパン初期化は下段 `state.apply_cue(Clear)` が
@@ -447,20 +449,20 @@ impl TextLayerRuntime {
                 for render in self.surfaces.values_mut() {
                     render.executor.request_clear();
                 }
-                // 全スコープの原子的無効化（R5.1/5.2/5.4・前の会話を残さない冒頭全消し）: 保持する**全** actor の
+                // 全スコープの原子的無効化（`areka-P0-choice-render` R5.1/5.2/5.4・前の会話を残さない冒頭全消し）: 保持する**全** actor の
                 // hover／ヒット行スナップショットを一括初期化する（上流は残存スコープを列挙できない——
                 // `state.rs::apply_cue(ClearAll)` の全 actor_states 消去と対）。cue が名指ししない
                 // actor の stale hover／snapshot も同時に消え、片方だけ古い状態が残らない（5.2）。
                 self.choice_hover.clear();
                 self.choice_snapshot.clear();
-                // 箱を隠す印は次の台詞の頭まで（design.md「箱を数に入れた表示の判断」）。
+                // 箱を隠す印は次の台詞の頭まで（`areka-P0-shell-balloon` design.md「箱を数に入れた表示の判断」）。
                 self.hidden_boxes.clear();
                 self.forget_all_manual(StopReason::Cleared);
             }
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
             // warn-once 良性スキップ・記録は純粋層 `state.apply_cue` が担う（本口は clear 要否のみ）。
-            // `\s` の行き先への受け渡しは下段の `advance_state` が担う（空回しと同じ規則・要件 2.2）。
+            // `\s` の行き先への受け渡しは下段の `advance_state` が担う（空回しと同じ規則・`areka-P0-budoux-reveal-reflow` 要件 2.2）。
             CueCommand::Emote { .. }
             | CueCommand::Text(_)
             | CueCommand::Choice { .. }
@@ -488,8 +490,8 @@ impl TextLayerRuntime {
     }
 
     /// 先渡し（再生の前に渡された、これから届く合図の全部）を受け取る: 今の状態の写しで空回しし、
-    /// 区間の全文を入れ替える（要件 2.1）。受け取ったことを `debug!` 1 行（合図の数・求めた区間の数）で
-    /// 残す——実機の確かめは、最初の字の適用より前にこの行があることを読む（design.md「Monitoring」）。
+    /// 区間の全文を入れ替える（`areka-P0-budoux-reveal-reflow` 要件 2.1）。受け取ったことを `debug!` 1 行（合図の数・求めた区間の数）で
+    /// 残す——実機の確かめは、最初の字の適用より前にこの行があることを読む（`areka-P0-budoux-reveal-reflow` design.md「Monitoring」）。
     fn preview_talk(&mut self, upcoming: &[TalkCue]) {
         let sections =
             self.lookahead
@@ -523,29 +525,29 @@ impl TextLayerRuntime {
 
     /// 装着済み actor の決定論観測統計（[`ViewboxExecutor::stats`]・未装着は `None`）。
     ///
-    /// [`surface`](Self::surface) と同型の additive アクセサ（R9.2 非抵触——emo2-boot 消費経路の
+    /// [`surface`](Self::surface) と同型の additive アクセサ（`areka-P0-emo-text-viewbox` R9.2 非抵触——emo2-boot 消費経路の
     /// 再定義ではない）。example／統合テストがこの口から actor 別の [`DrawStats`]
     /// （blit・`DrawTextLayout` 実行回数・行 TextLayout 生成回数・FullClear 回数）を読み、
     /// 「可視窓のみ移動フレームで確定 content の再描画が起きない」等を決定論的に観測する
-    /// （R3.5/R10.3・目視非依存）。`ViewboxExecutor::stats()` は runtime 内部の `ActorRender` に
-    /// 抱えられており、この読み口がないと example から R10.3 checkpoint が成立しない。
+    /// （`areka-P0-emo-text-viewbox` R3.5/R10.3・目視非依存）。`ViewboxExecutor::stats()` は runtime 内部の `ActorRender` に
+    /// 抱えられており、この読み口がないと example から `areka-P0-emo-text-viewbox` R10.3 checkpoint が成立しない。
     pub fn draw_stats(&self, actor: &ActorKey) -> Option<DrawStats> {
         self.surfaces
             .get(&PlaceKey::balloon(actor))
             .map(|render| render.executor.stats())
     }
 
-    /// hover 状態注入（契約正本・R4.1）。`None`＝ハイライト無し。UI スレッド専用（runtime は `!Send`）。
+    /// hover 状態注入（契約正本・`areka-P0-choice-render` R4.1）。`None`＝ハイライト無し。UI スレッド専用（runtime は `!Send`）。
     ///
     /// 注入値は actor ごとに保持し、次の提示フレームの装飾が読む。`ordinal` が現存
     /// 選択肢スパンに無い場合も **panic せず**そのまま保持し、描画時に「ハイライト無し」として
-    /// 縮退する（stale ordinal——`decorate_canvas` が hover 印を付けない・design.md RuntimeContract）。
+    /// 縮退する（stale ordinal——`decorate_canvas` が hover 印を付けない・`areka-P0-choice-render` design.md RuntimeContract）。
     /// 縮退検出時は `debug!` を一件出す（log-first・ループを殺さない）。
     pub fn inject_choice_hover(&mut self, actor: &ActorKey, hover: Option<usize>) {
         self.inject_choice_hover_at(&PlaceKey::balloon(actor), hover);
     }
 
-    /// 場所を指す hover 状態注入（箱の選択肢の強調・要件 8.2）。意味は
+    /// 場所を指す hover 状態注入（箱の選択肢の強調・`areka-P0-shell-balloon` 要件 8.2）。意味は
     /// [`inject_choice_hover`](Self::inject_choice_hover) と同じで、宛先が場所の鍵になる。
     pub fn inject_choice_hover_at(&mut self, place: &PlaceKey, hover: Option<usize>) {
         // 現存スパンに無い ordinal は縮退（ハイライト無し）——検出を debug ログに残す（panic しない）。
@@ -565,16 +567,16 @@ impl TextLayerRuntime {
         self.choice_hover.insert(place.clone(), hover);
     }
 
-    /// 行ヒットジオメトリ照会（契約正本・R3.2）。
+    /// 行ヒットジオメトリ照会（契約正本・`areka-P0-choice-render` R3.2）。
     ///
     /// **鮮度契約**: 最後に提示（present）したフレームの導出値＝表示と同一 layout からの単一導出
-    /// （R3.3/5.2・population は present_actor）。未装着・選択肢なし・スナップショット未
+    /// （`areka-P0-choice-render` R3.3/5.2・population は present_actor）。未装着・選択肢なし・スナップショット未
     /// population は空 slice。
     pub fn choice_hit_rows(&self, actor: &ActorKey) -> &[ChoiceHitRow] {
         self.choice_hit_rows_at(&PlaceKey::balloon(actor))
     }
 
-    /// 場所を指す行ヒットジオメトリ照会（要件 8.2）。箱の場所の矩形は**シェルの窓**の物理 px
+    /// 場所を指す行ヒットジオメトリ照会（`areka-P0-shell-balloon` 要件 8.2）。箱の場所の矩形は**シェルの窓**の物理 px
     /// （箱の位置を足し済み）。鮮度契約は [`choice_hit_rows`](Self::choice_hit_rows) と同じ。
     pub fn choice_hit_rows_at(&self, place: &PlaceKey) -> &[ChoiceHitRow] {
         self.choice_snapshot.get(place).map_or(&[], Vec::as_slice)
@@ -594,7 +596,7 @@ impl TextLayerRuntime {
     }
 
     /// 押下の口: 選択待ちに入った後なら、場所の選択肢を済みにし、当たり行の写しと強調から
-    /// 済んだ選択肢をその場で外す（提示を待たない・`Clear` と同じ原子性・要件 1.10〜1.13）。
+    /// 済んだ選択肢をその場で外す（提示を待たない・`Clear` と同じ原子性・`areka-P0-balloon-text-bugs` 要件 1.10〜1.13）。
     /// 選択待ちに入る前は何もしない（kanade が捨てる押下なので、押し直せるまま残す）。
     pub fn settle_choices_at(&mut self, place: &PlaceKey) {
         if !self.choice_wait_open {
@@ -660,7 +662,7 @@ impl TextLayerRuntime {
         self.rehearse_again();
     }
 
-    /// 空回しをやり直す（要件 2.2・2.7）: 空回しの出発点（状態か `\s` の解決の閉包）を合図と
+    /// 空回しをやり直す（`areka-P0-budoux-reveal-reflow` 要件 2.2・2.7）: 空回しの出発点（状態か `\s` の解決の閉包）を合図と
     /// 無関係に変えた口の直後に呼ぶ。今の状態と解決の閉包で `reinstall` を呼ぶだけで、先渡しを
     /// 受け取っていなければ何も起きない。
     fn rehearse_again(&mut self) {
@@ -895,7 +897,7 @@ mod surface_limit_tests;
 #[path = "actor_frame_memo_tests.rs"]
 mod frame_memo_tests;
 
-/// バルーン背景色の受け口（要件 4.6）。
+/// バルーン背景色の受け口（`areka-P0-text-decoration-canon` 要件 4.6）。
 #[path = "actor_decoration.rs"]
 mod decoration;
 

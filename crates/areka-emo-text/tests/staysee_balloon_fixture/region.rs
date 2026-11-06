@@ -1,5 +1,7 @@
 //! 文字の領域解決と、既定書体の受け入れ口を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **1.3**／**3.3**／**3.5**・設計 **C2** の
 //! E 行と F 行・**DD4**）。
 //!

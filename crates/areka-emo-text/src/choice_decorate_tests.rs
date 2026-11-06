@@ -1,6 +1,8 @@
+// 断りの無い要件の番号と design.md の参照は spec `vertical-choice-hover-band` のもの（別の spec のものはその場で名を書く）。
+
 // ── canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
 //
-// design.md「純粋層 / ChoicePure」・要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
+// `areka-P0-choice-render` design.md「純粋層 / ChoicePure」・`areka-P0-choice-render` 要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
 // SquareFill）/4.3（未指定→Invert 反転）/4.5（描画実行の一点写像＝焼込済み純データ）。
 // 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
@@ -61,7 +63,7 @@ fn square_fill() -> ResolvedChoiceStyle {
 
 // ── 恒等（非退行）: セグメント空 → canvas 無変更 ──
 
-/// セグメント空 → 入力 canvas をまったく同一で返す（恒等・要件 1.4）。
+/// セグメント空 → 入力 canvas をまったく同一で返す（恒等・`areka-P0-choice-render` 要件 1.4）。
 #[test]
 fn empty_segments_returns_canvas_unchanged() {
     let region = region(0, 0, 400, 224);
@@ -175,7 +177,7 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
     );
 }
 
-/// Observable（R3.3 の帯単一化・R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_extent`
+/// Observable（`areka-P0-choice-render` R3.3 の帯単一化・`areka-P0-emo2-conformance-e2e` R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_extent`
 /// （em ボックス丈 10.0 ではなく 12.0）と `band_offset` を Choice 住人へそのまま焼き込む——COM 層の
 /// ハイライト矩形の起点とダーティ帯はこの値だけを読み、`derive_hit_rows` へ渡す値と同一にする
 /// ことで帯の丈と**位置**まで数値一致する。
@@ -377,7 +379,7 @@ fn lines_without_segments_stay_glyph_run() {
 
 /// hover=Some(99)（どのセグメントも持たない ordinal）→ 全住人 hovered/highlight None・
 /// ただしセグメント持ち行は Choice 住人化しセグメントは記録する（stale-safe 不変条件・
-/// Data Models §不変条件 3・要件 4.5/6.5）。
+/// Data Models §不変条件 3・`areka-P0-choice-render` 要件 4.5/6.5）。
 #[test]
 fn hover_stale_ordinal_yields_no_highlight() {
     let region = region(0, 0, 400, 224);

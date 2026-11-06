@@ -1,7 +1,9 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+
 use super::test_support::{cue, cue_dur, items_of, reveal_times_of};
 use super::*;
 
-// ── R3.1/R3.2/R3.3/R7.1: r_i 式（先頭 r_0 = at・以降 prev + interval）・注入時刻駆動 ──
+// ── `areka-P0-cue-playback-duration` R3.1/R3.2/R3.3/R7.1: r_i 式（先頭 r_0 = at・以降 prev + interval）・注入時刻駆動 ──
 
 /// reveal interval は配送 duration 由来（`interval = duration / N`）。Text("アヒル") へ
 /// `cue` ヘルパが焼き込む duration = 3 × 0.25 = 0.75 ゆえ interval = 0.75/3 = 0.25。
@@ -61,7 +63,7 @@ fn glyphs_never_visible_before_chunk_start() {
     assert_eq!(state.visible_glyphs(&actor, 10.25), 4);
 }
 
-/// R3.4 後段: 直前 chunk が未リビールでも、リビールカーソルは配送 duration が定める
+/// `areka-P0-cue-playback-duration` R3.4 後段: 直前 chunk が未リビールでも、リビールカーソルは配送 duration が定める
 /// ペース（interval）でバッファ末尾を追う（at が過去でも max が prev+interval を選ぶ）。
 #[test]
 fn reveal_cursor_chases_tail_when_next_chunk_start_is_earlier() {

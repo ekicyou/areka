@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+
 use super::{BalloonModel, DefaultEncoding, PathBuf, decode, error, parse_str};
 use sample_ghost_kit::SampleRoot;
 use std::sync::LazyLock;

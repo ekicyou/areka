@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-cursor-tag-canon` のもの（別の spec のものはその場で名を書く）。
+
 use super::*;
 
 // ══ `\_l` 座標語彙のパース（parse_cursor_coord・語彙全形の網羅） ══

@@ -1,5 +1,7 @@
 //! 箱の文字の面の当たり判定＝表示されている字の矩形の集まり の檻（要件 9.4）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! GPU を使わない: 面の entity が装着の時に持つ当たり判定（[`box_hit_components`]）と、提示が
 //! 字の矩形を入れ替える口（[`set_child_hit_cells`]）を、窓・絵・箱の 3 entity を手で組んだ World に
 //! 当て、wintf の当たり判定の入口 `hit_test_in_window`（クリック透過の切り替えと窓のメッセージの

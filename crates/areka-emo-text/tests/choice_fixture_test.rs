@@ -1,6 +1,6 @@
 //! # choice_fixture_test — choice-render 検証の test-local 最小適合 fixture（R7.6）
 //!
-//! 出典 spec: `areka-P0-choice-render`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//! 出典 spec: `areka-P0-choice-render`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
 //! design.md「Testing Strategy > Integration Tests #5（7.6）」の正典述語を張る:
 //! **実フォント出力の目視確認（既定フォント盲点の回避）＋ test-local 最小 fixture を tests 配下に
@@ -106,14 +106,14 @@ fn choice_fixtures_start_at_writing_corner_regardless_of_image_size() {
             assert_eq!(
                 (model.origin().x(), model.origin().y()),
                 (None, None),
-                "{label}: fixture は origin を宣言しない（正典推奨形・要件 10.9）"
+                "{label}: fixture は origin を宣言しない（正典推奨形・`areka-P0-balloon-vertical-canon` 要件 10.9）"
             );
 
             let region = TextRegion::resolve(&model, image_size, WritingMode::HorizontalTb);
             assert_eq!(
                 region.start(),
                 (5.0, 5.0),
-                "{label} / {image_size:?}: 書字開始角＝validrect 左上 (5,5)（要件 3.11）"
+                "{label} / {image_size:?}: 書字開始角＝validrect 左上 (5,5)（`areka-P0-balloon-vertical-canon` 要件 3.11）"
             );
             assert_eq!(
                 (region.left(), region.top()),
@@ -307,11 +307,11 @@ fn real_font_menu_hover_render_dumps_png() {
     // Yu Gothic UI は行ボックス 1.3301em）。白バルーン＋白 hover 文字では「下が消えた」ように見える。
     // 走査 y 窓は「hover 行の block 起点−余白 4 〜 次行の block 起点＋余白 4」＝帯寸に依存しない
     // 独立の窓。窓を帯とぴったり同じにすると、帯からはみ出したインクが窓の外へ落ちて**測れない
-    // まま緑になる**（同 spec 要件 7.3）。これは上端にも同じく効く——窓の上端を帯の上端と揃えると
+    // まま緑になる**。これは上端にも同じく効く——窓の上端を帯の上端と揃えると
     // 「字の上端は帯の上端以上」が窓の取り方だけで必ず成り立ち、字が上へずれても緑のままになる。
     // ゆえに窓は帯の上下へ 4 画素ずつ開ける。上の行の字は黒（premultiplied の青チャネルは 0）ゆえ
     // 白文字の述語に当たらず、塗り色 (25,25,105,255) でもないので窓へ入っても数えられない。
-    // 次行のインクはその行の block 起点から 5〜6 画素下で始まるので、4 画素の余白なら窓へ入らない。
+    // 次行の字も hover していないので黒く、窓の下端へ入っても同じ理由で数えられない。
     // 座標は validrect 原点を差し引いた canvas-local。
     //
     // **裁定 2026-09-06（第 2 回・spec `areka-P0-emo2-conformance-e2e` 要件 13）**:
@@ -328,10 +328,10 @@ fn real_font_menu_hover_render_dumps_png() {
     // 同じインク y28..44 ＝ 上の余白 4・はみ出し **0** になる（丈は変えていない）。
     //
     // 帯を広げる案は採らない——帯を行送りより広げると隣接する行の帯と重なり、どの選択肢を
-    // 指しているかの一意性が壊れる（`emo-text-line-height-canon` design §「帯の防御式を保つ」）。
-    // **はみ出しが出た場合は許容幅を上げず、画素数を添えて改めて開発者の裁定を仰ぐ（R12.2）。**
+    // 指しているかの一意性が壊れる（`areka-P0-emo-text-line-height-canon` design §「帯の防御式を保つ」）。
+    // **はみ出しが出た場合は許容幅を上げず、画素数を添えて改めて開発者の裁定を仰ぐ（`areka-P0-emo2-conformance-e2e` R12.2）。**
     /// 帯を行ボックスの中央へ寄せる量（画素・この fixture の `font.height,20`）。
-    /// `round(max(0, 26.6 − 22) / 2) = round(2.3) = 2`（要件 13.1）。
+    /// `round(max(0, 26.6 − 22) / 2) = round(2.3) = 2`（`areka-P0-emo2-conformance-e2e` 要件 13.1）。
     const BAND_OFFSET_20: u32 = 2;
 
     assert_hover_band(

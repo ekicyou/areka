@@ -1,5 +1,7 @@
 //! # kero_menu_capacity_test — 実物バルーン × メニュー 3 台本の容量テスト
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-line-height-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-emo-text-line-height-canon`（要件 **8.1**／**8.2**／**8.4 (a)(c)**／
 //! **8.7**／**5.1**〜**5.4**／**6.5**／**3.4**／**4.1**／**4.2**・design.md §4.1 正典表・§4.3）。
 //!
@@ -318,7 +320,7 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
 /// (b) 行内軸は `font.height` の 5 倍（24 ＋ 5 × 28 ＝ 164）に着地することを、
 /// 同じ台本の実経路で確かめる。
 ///
-/// (b) は本仕様の前後で変わらない値である（`em` の係数は `font.height` のまま・要件 4.2）。
+/// (b) は `areka-P0-emo-text-line-height-canon` の前後で変わらない値である（`em` の係数は `font.height` のまま・要件 4.2）。
 /// (a) だけが新しい行送りへ追随する（要件 4.1）。
 #[test]
 fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
@@ -473,7 +475,7 @@ fn first_glyph_of(lines: &[PositionedLine], index: usize) -> usize {
 
 /// 本体（さくら）側バルーン `balloons0s.txt` は折返し基準（351）を描画範囲の右端（356）の
 /// **内**に自ら上書きしている。この場合、行内軸の絶対上限（hard）の判定は一度も発火せず、
-/// 折返しの位置は「折返し基準だけを見る参照」と一致しなければならない（本仕様の前後で
+/// 折返しの位置は「折返し基準だけを見る参照」と一致しなければならない（`areka-P0-emo-text-line-height-canon` の前後で
 /// 折返しの位置を変えない・要件 6.4）。
 ///
 /// 参照は本ファイルの中に置いた素朴な実装（送りを足し込み、基準を超えたら折る）である。

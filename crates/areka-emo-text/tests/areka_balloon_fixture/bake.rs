@@ -1,5 +1,7 @@
 //! 面 0 の焼き込みと、半透明の保持を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.3**・**2.4**・**5.9**・設計「Testing Strategy」の
 //! 「中身のテスト」の `bake.rs`）。
 //!

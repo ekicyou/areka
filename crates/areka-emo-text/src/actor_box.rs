@@ -1,5 +1,7 @@
 //! 箱の束の受け取りと、箱を隠す印（`actor.rs` の子・design.md「箱の登録と同期」）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 箱の束（置き場所の表・`\s` の解決の閉包・フォントを探す場所の順）は結線がシェルを読むたびに
 //! （装着の相とシェルの切替）渡す。受け取ると前の箱の面を片付け、箱の場所の文字を捨て、
 //! 新しい表を純粋状態へ入れる（要件 6.8）。普通のバルーンの場所には触れない。
@@ -74,7 +76,7 @@ impl TextLayerRuntime {
         self.box_definition_warned.clear();
         self.box_resolved.clear();
         self.shown_boxes.clear();
-        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・要件 2.7）。
+        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・`areka-P0-budoux-reveal-reflow` 要件 2.7）。
         self.lookahead.forget_boxes();
         self.lookahead_rev += 1;
 
@@ -122,13 +124,13 @@ impl TextLayerRuntime {
         self.state.set_box_traits(traits);
         self.state.set_box_index(index);
         self.surface_resolver = Some(resolve);
-        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（要件 2.7）。
+        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（`areka-P0-budoux-reveal-reflow` 要件 2.7）。
         self.rehearse_again();
         self.box_font_dirs = font_dirs;
         self.box_layout = layout;
     }
 
-    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える（要件 3.2・3.5）。
+    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える（`descript-window-keys` 要件 3.2・3.5）。
     /// [`Self::set_box_layout`] の直後に呼ぶ。替えたスコープがあったときだけ区間の全文を求め直す。
     pub fn fall_back_box_surfaces(&mut self, fallback: &SurfaceFallback) {
         if self.state.fall_back_surfaces(fallback) {
@@ -281,7 +283,7 @@ impl TextLayerRuntime {
     /// 箱の場所が今も描かれたままでよいか: 登録があり、隠す印が無く、文字を持つ。登録は直近の
     /// 同期が絵の番号から導いた置き場所で、絵はフレームの外では替わらないので、登録があること
     /// 自体が「絵と合っている」ことを表す。台本の `\s` の受け取り（行き先だけが替わる）と
-    /// `\b[名前]`（要件 4.5）では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
+    /// `\b[名前]`（`areka-P0-shell-balloon-frame-align` 要件 4.5）では外さない。`\c`・台詞の頭は文字が無くなるので外れ、絵の切替・
     /// 非表示は次の同期が登録を外す（`unregister_box`）ので外れる。
     fn box_still_shown(&self, key: &PlaceKey) -> bool {
         self.box_sites.contains_key(key)
@@ -349,7 +351,7 @@ impl TextLayerRuntime {
             .box_sites
             .keys()
             .filter(|key| {
-                // 印の絵が変わった actor の箱も登録し直して押し直す（要件 5.1）。
+                // 印の絵が変わった actor の箱も登録し直して押し直す（`script-small-tags` 要件 5.1）。
                 self.inline_marker_changed.contains(&key.actor)
                     || desired.get(*key).is_none_or(|want| {
                         self.routing.get(*key) != Some(&want.binding)

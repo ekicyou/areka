@@ -1,6 +1,8 @@
 //! 装飾の持ち運び（spec `areka-P0-shell-balloon` の design.md「装飾の持ち運び」・Testing Strategy の
 //! `state_decoration_carry_tests.rs` の場面・要件 3.13〜3.17・3.19・5.4・10.5）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 箱の構成はテストの中の surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。`font.follow` も同じ畳み込みから引く:
 //! - 箱 a: `font.follow` を書かない（＝スコープに従う）・大きさ 20・既定の色 (20,0,0)

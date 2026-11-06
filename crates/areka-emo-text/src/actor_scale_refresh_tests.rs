@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-dpi-scaling` のもの（別の spec のものはその場で名を書く）。
+
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -27,13 +29,13 @@ use crate::state::TextLayerConfig;
 /// k=1.25: 400×1.25=500 / 224×1.25=280。k=2: 800 / 448。
 const NATIVE: (u32, u32) = (400, 224);
 
-/// R4.5/R8.5（churn ガード）: **判定キーが全同値**（binding 全体＝k・物理寸・image 原寸・
+/// `areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5（churn ガード）: **判定キーが全同値**（binding 全体＝k・物理寸・image 原寸・
 /// slot・window ＋ 再解決した文字描画領域）の再追従要求は **false** を返し、routing／
 /// layout 入力を 1 バイトも動かさない（毎フレーム再結線の禁止）。
 ///
 /// 「k が同値」は no-op の**十分条件ではない**——寸／領域が変われば再構築する
 /// （`refresh_actor_binding_with_same_k_but_different_image_size_rebuilds` /
-/// `refresh_actor_binding_with_same_binding_but_changed_region_rebuilds`・R4.4）。
+/// `refresh_actor_binding_with_same_binding_but_changed_region_rebuilds`・`areka-P0-kero-balloon` R4.4）。
 #[test]
 fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
     let mut world = World::new();
@@ -56,7 +58,7 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
 
     assert!(
         !changed,
-        "判定キーが全同値の再追従要求は no-op で false（R4.5/R8.5）"
+        "判定キーが全同値の再追従要求は no-op で false（`areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5）"
     );
     assert_eq!(
         rt.routing[&PlaceKey::balloon(&actor)],
@@ -70,7 +72,7 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
     );
 }
 
-/// R4.4: **k が同値でも面実寸（`image_size`）が変われば再構築する**。
+/// `areka-P0-kero-balloon` R4.4: **k が同値でも面実寸（`image_size`）が変われば再構築する**。
 /// 「k 同値なら常に no-op」という旧判定では、同 k のまま別寸のバルーン面へ切替えた
 /// （`\b` 等）ときに旧寸の文字層が残る——判定キーを binding 全体へ広げてこれを閉塞する。
 #[test]
@@ -94,7 +96,10 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
         &geo_model(),
     );
 
-    assert!(changed, "k 同値でも面実寸が違えば再構築する（R4.4）");
+    assert!(
+        changed,
+        "k 同値でも面実寸が違えば再構築する（`areka-P0-kero-balloon` R4.4）"
+    );
     let after = rt.routing[&PlaceKey::balloon(&actor)];
     assert_eq!(after.scale, 1.25, "k は同値のまま");
     assert_eq!(
@@ -113,7 +118,7 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
     );
 }
 
-/// R4.4: **binding が全同値でも、再解決した文字描画領域が変われば再構築する**
+/// `areka-P0-kero-balloon` R4.4: **binding が全同値でも、再解決した文字描画領域が変われば再構築する**
 /// （scope 別 `validrect` の差し替え等——判定キーの後半 `ResolvedBalloonText` 側）。
 #[test]
 fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
@@ -140,7 +145,7 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
 
     assert!(
         changed,
-        "binding 同値でも文字描画領域が違えば再構築する（R4.4）"
+        "binding 同値でも文字描画領域が違えば再構築する（`areka-P0-kero-balloon` R4.4）"
     );
     assert_eq!(
         rt.routing[&PlaceKey::balloon(&actor)],
@@ -337,9 +342,10 @@ fn refresh_actor_scale_for_unregistered_actor_is_noop() {
 
 /// spec real-run-log-noise の件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
 const ORIGIN_TO_CORNER: &str = "未指定の origin 成分を書字開始角へ寄せる";
-/// 件 1 と同じ解決の中のもう 1 つの `debug!`（要件 1.5）。
+/// 件 1 と同じ解決の中のもう 1 つの `debug!`（`real-run-log-noise` 要件 1.5）。
 const DEFAULT_EDGE: &str = "未指定座標成分を既定辺へ縮退する";
-/// 件 2（`actor_attach.rs`・何も変わらなかった再追従）。
+/// 件 2（`actor_attach.rs`・何も変わらなかった再追従）。文の中の R4.5 は `areka-P0-kero-balloon` の
+/// もの（本番の記録の文の写しなので文は書き換えない）。
 const NOTHING_CHANGED: &str = "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）";
 
 /// `origin`・`wordwrappoint`・`validrect` を書かないバルーン（解き直すたびに件 1 が成分ごとに出る）。
@@ -361,7 +367,7 @@ fn count_at_debug(events: &[CapturedEvent], message: &str) -> usize {
         .count()
 }
 
-/// T1（要件 1.1・1.2・1.5・5.1）: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
+/// T1（`real-run-log-noise` 要件 1.1・1.2・1.5・5.1）: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
 /// 既定辺へ縮退を 1 件も出さない。件 2 は `trace` で、1 回の再追従にちょうど 1 件出る。
 #[test]
 fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line() {
@@ -408,7 +414,7 @@ fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line(
     assert_eq!(traced[0].level, Level::TRACE, "件 2 の水準は TRACE");
 }
 
-/// T3（要件 1.6・5.6）: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
+/// T3（`real-run-log-noise` 要件 1.6・5.6）: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
 ///
 /// ⑴ 文字の設定が変わる定義への付け替えは `true` ⑵ 文字の設定に効かないキー（`windowposition`）
 /// だけを替えた定義は解き直したうえで `false`、その後の同じ定義の再追従 3 回は解き直さない
@@ -490,7 +496,7 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
     );
 }
 
-/// T2（要件 1.4・1.5）: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
+/// T2（`real-run-log-noise` 要件 1.4・1.5）: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
 /// （x・y の計 2 件）・返り値 `true`。その後の同じ再追従 3 回では 0 件（変わり目ごとに 1 件）。
 #[test]
 fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
@@ -535,7 +541,7 @@ fn count_warn(events: &[CapturedEvent], message: &str) -> usize {
         .count()
 }
 
-/// T7（要件 1.7・5.1 の代表）: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
+/// T7（`real-run-log-noise` 要件 1.7・5.1 の代表）: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
 /// 再追従 3 回で 0 件、拡大率の変わる再追従（＝解き直し）で 1 件。
 #[test]
 fn font_height_zero_warns_once_per_resolve_not_per_refresh() {

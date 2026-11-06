@@ -1,5 +1,7 @@
 //! 文のファイルの中身・本番の読み込みの記録・描画範囲の解け方を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.4**・**3.5**・**5.1**・**5.3**〜**5.9**・
 //! **6.2**・**6.3**・**6.5**・設計「描画範囲の解け方」「Testing Strategy」の `definition.rs`）。
 //!

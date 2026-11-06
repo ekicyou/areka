@@ -1,5 +1,7 @@
 //! テーマ間で共有する小ヘルパと、保管フォルダの期待値。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**。根の取り方は
 //! `areka-P0-default-balloon-nar-fold` 要件 **4.1**〜**4.3**）。
 //!

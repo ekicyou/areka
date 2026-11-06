@@ -1,5 +1,7 @@
 //! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（要件 1.6・3.6・3.7・9.4）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! GPU/WUC は headless 実資源（`GraphicsCore::new()`・`surface.rs` の既存テストと同じ方針）。
 
 use super::*;

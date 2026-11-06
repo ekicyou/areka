@@ -1,5 +1,7 @@
 //! # areka_balloon_fixture_test — 自作のバルーン `areka-balloon` の中身を固定する
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.1**〜**12.5**・設計「Testing Strategy」の
 //! 「中身のテスト」）。
 //!

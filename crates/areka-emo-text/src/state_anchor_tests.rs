@@ -1,45 +1,20 @@
 //! アンカーの範囲の記録（`\_a` の開き → 伸長 → 閉じ → 消去）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-anchor-tag-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 合図（`AnchorBegin`／`AnchorEnd`）だけから範囲を組み、範囲の位置（グリフ序数）・範囲の文字
 //! （Reference0 になる）・通し番号・開いている印の寿命・既定の下線を固定する。箱の構成と組み立ての支援は
 //! `state_route_tests.rs` のものを使う（0: a・b（既定は a） 3: 箱なし）。
 
-use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::FONT_TAG_CARRIER;
 use log_capture_kit::capture;
 
 use super::route_tests::{boxed, key, select, show, state_with_boxes};
-use super::test_support::{applied, cue, font, spans, text};
+use super::test_support::{applied, choice, close, cue, font, open, spans, text};
 use super::*;
 use crate::actor::test_support::capture_checked;
 use crate::look::{StyleId, TextLook};
 use crate::lookahead::{Basis, TalkLookahead, advance_state};
-
-fn open(actor: &str, id: &str, references: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::AnchorBegin {
-            id: id.to_owned(),
-            references: references.iter().map(|r| (*r).to_owned()).collect(),
-        },
-    )
-}
-
-fn close(actor: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::AnchorEnd)
-}
-
-fn choice(actor: &str, id: &str, s: &str) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: s.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
 
 /// 箱の場所の範囲の列（場所が無ければ空）。
 fn box_spans(state: &TextLayerState, actor: &str, name: &str) -> Vec<ChoiceSpan> {

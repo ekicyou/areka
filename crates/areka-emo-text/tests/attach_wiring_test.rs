@@ -1,6 +1,6 @@
 //! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（R9.1/R9.2/R9.5）
 //!
-//! 出典 spec: `areka-P0-emo-text-layer`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//! 出典 spec: `areka-P0-emo-text-layer`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
 //! 2 つの target（sakura/kero 相当）を実 `EmoPresenter` に登録して表示を確立し、
 //! `text_slot_view(target)`（emo-present の読み取り専用 additive 増分・R9.1/R9.2）で得た
@@ -54,7 +54,7 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
 
     let mut presenter = EmoPresenter::new();
     presenter
-        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）。本番は boot が descript の実値を
         // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
         .attach_target(TargetId(0), window0, emo_world0, atlas0, 96);
     presenter.attach_target(TargetId(1), window1, emo_world1, atlas1, 96);
@@ -63,7 +63,7 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
     (presenter, window0, window1)
 }
 
-// ── k≠1 の単一 target フィクスチャ（R8.2 の `from_view` 檻用） ─────────────────
+// ── k≠1 の単一 target フィクスチャ（`areka-P0-emo-dpi-scaling` R8.2 の `from_view` 檻用） ─────────────────
 
 /// k>1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
 ///
@@ -89,7 +89,7 @@ const SUB_UNITY_NATIVE: (u32, u32) = (142, 77);
 
 /// 窓 DPI を指定して balloon 相当の単一 target（native 原寸 [`SCALED_NATIVE`]）を表示確立まで組む。
 ///
-/// 作者基準 DPI は正典既定の 96（ukadoc・D1）ゆえ **k = window_dpi / 96**（192 → k=2）。
+/// 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）ゆえ **k = window_dpi / 96**（192 → k=2）。
 /// `setup_two_targets` は k=1.0 に固定されており、k=1 では `surface_size()` と `physical_size()`
 /// が恒等で**取り違えが数値的に観測できない**——本フィクスチャはその盲点を潰すためにある。
 fn setup_scaled_target(world: &mut World, window_dpi: u16) -> (EmoPresenter, Entity) {
@@ -115,7 +115,7 @@ fn setup_target_with_dpis(
     (presenter, window)
 }
 
-// ── ログ捕捉（R8.7 の観測・共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
+// ── ログ捕捉（`areka-P0-emo-dpi-scaling` R8.7 の観測・共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
 //
 // 捕捉窓・常駐の仕掛け・空振り検出はすべて `log_capture_kit::capture` が持つ。統合テスト
 // （`tests/`）は消費 crate の外側から `use` する別 crate だが、引き方は in-crate テストと
@@ -383,7 +383,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     );
 }
 
-// ══ `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・R8.2） ══
+// ══ `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・`areka-P0-emo-dpi-scaling` R8.2） ══
 
 /// **production 契約の檻**（`from_view` が物理寸を読むことを確かめる正本）。
 ///
@@ -404,7 +404,7 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
 /// 檻の内容は 3 点:
 /// 1. `binding.surface_size == view.physical_size()`（物理原寸を保持する）、
 /// 2. `binding.image_size == view.surface_size()`（image px 原寸＝作者画像空間は **k 不変**）、
-/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（R8.2 の可観測な帰結）。
+/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（`areka-P0-emo-dpi-scaling` R8.2 の可観測な帰結）。
 ///    旧実装では image 空間が 1/k へ縮み、供給面が k に依らずほぼ一定になる——「k を変えても
 ///    文字が拡大されない」静かな欠陥（`areka-P0-emo-dpi-scaling` の実機走行で見つかった症状）そのもの。
 #[test]
@@ -438,7 +438,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
         "image px 原寸は view の native をそのまま透過する（作者画像空間＝k 不変）"
     );
 
-    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（R8.2 の可観測な帰結） ──
+    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（`areka-P0-emo-dpi-scaling` R8.2 の可観測な帰結） ──
     let model = geo_model();
     let sakura = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -516,9 +516,9 @@ fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
     );
 }
 
-// ══ k 再追従の**ログ観測契約**（R8.7・実機サインオフの判定源） ══
+// ══ k 再追従の**ログ観測契約**（`areka-P0-emo-dpi-scaling` R8.7・実機サインオフの判定源） ══
 
-/// 再追従が決定論的に**ログで観測できる**ことを固定する（R8.7）。
+/// 再追従が決定論的に**ログで観測できる**ことを固定する（`areka-P0-emo-dpi-scaling` R8.7）。
 ///
 /// 実機サインオフは、これらのフィールドを grep して判定する:
 /// - 再追従 `info!`: `actor` ／ `k_old` ／ `k_new`（k の遷移そのもの）、
@@ -568,14 +568,14 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     let view2 = presenter.text_slot_view(TargetId(0)).expect("view（k=2）");
     assert_eq!(view2.scale(), 2.0, "前提: 再表示で適用 k が 2.0 へ跳ぶ");
 
-    // ── 再追従ログ: actor ／ k_old ／ k_new（R8.7 の本体） ──
+    // ── 再追従ログ: actor ／ k_old ／ k_new（`areka-P0-emo-dpi-scaling` R8.7 の本体） ──
     let (refreshed, refresh_events) = capture(|| rt.refresh_actor_scale(&sakura, &view2, &model));
     assert!(refreshed, "k 変化の再追従は true");
     let refresh_log = expect_one(&refresh_events, "文字層の再追従");
     assert_eq!(
         refresh_log.level,
         tracing::Level::INFO,
-        "再追従は info!（実機 grep の水準・R8.7）"
+        "再追従は info!（実機 grep の水準・`areka-P0-emo-dpi-scaling` R8.7）"
     );
     assert_eq!(refresh_log.expect_field("actor"), "0", "actor フィールド");
     assert_eq!(
@@ -602,7 +602,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     // ── 装着 info! は「ActorRender 不在時のみ」——判定キー全同値の走査では 3 回目が出ない ──
     assert!(
         !rt.refresh_actor_scale(&sakura, &view2, &model),
-        "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・R4.5/R8.5）"
+        "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・`areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5）"
     );
     let (_, idle_events) =
         capture(|| present_frame(&mut rt, &mut world, 1.0).expect("同値 k 後の提示"));

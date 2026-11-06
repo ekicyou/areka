@@ -1,5 +1,7 @@
 //! 印の合図（`\![*]`・`%*` の汎用の `\!` の合図・名前 `*`）を目印の字として積む檻。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `script-small-tags` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 台本の読み手（`areka-parsers` の `sakura/decode.rs`）を通さず、読み手が出すのと同じ合図の列を
 //! 直接組む（`CueCommand::command_carrier("*", [])`）。
 

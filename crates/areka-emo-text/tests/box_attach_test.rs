@@ -1,6 +1,6 @@
 //! # box_attach_test — 箱の面の窓の子としての装着を GPU の読み戻しで確かめる
 //!
-//! 出典 spec: `areka-P0-shell-balloon`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//! 出典 spec: `areka-P0-shell-balloon`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
 //! シェル相当の 1 target を実 `EmoPresenter` で表示確立し（窓 DPI 192＝拡大率 2）、その
 //! `text_slot_view` を毎フレームの箱の同期（`sync_boxes`）へ渡して、箱 2 つを持つスコープを

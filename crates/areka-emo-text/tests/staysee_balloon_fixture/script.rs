@@ -1,5 +1,7 @@
 //! 選択肢と遅延座標指定の位置を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **3.6**・設計 **C2** の H 行・
 //! Data Models「Domain Model」）。
 //!

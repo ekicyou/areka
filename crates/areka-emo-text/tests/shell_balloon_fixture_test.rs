@@ -1,5 +1,7 @@
 //! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す（要件 10.4）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 検体 `tests/fixtures/shell-balloon/surfaces.txt` を、読み手（`parse_boxes`・`parse`）→
 //! 畳み込み（`fold_boxes`）→ 文字の層（`TextLayerRuntime::set_box_layout`）へ通し、台本を
 //! 指令の列として当てて、場所ごとの文字・行き先・3 種類の箱の見た目を確かめる。GPU は使わない

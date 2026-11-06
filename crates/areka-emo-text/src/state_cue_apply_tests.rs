@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-line-height-canon` のもの（別の spec のものはその場で名を書く）。
+
 use log_capture_kit::count_levels;
 use tracing::Level;
 
@@ -5,7 +7,7 @@ use super::test_support::{REVEAL_INTERVAL, cue, cue_dur, items_of, reveal_times_
 use super::*;
 use crate::actor::test_support::{capture_checked, level_count};
 
-// ── R2.1: Text 追記 ──
+// ── `areka-P0-emo-text-layer` R2.1: Text 追記 ──
 
 #[test]
 fn text_cue_appends_glyphs_in_order() {
@@ -37,7 +39,7 @@ fn consecutive_text_cues_append() {
     );
 }
 
-// ── R2.2: NewLine 改行（ratio 転写） ──
+// ── `areka-P0-emo-text-layer` R2.2: NewLine 改行（ratio 転写） ──
 
 #[test]
 fn newline_cue_appends_line_break_marker_with_ratio() {
@@ -57,7 +59,7 @@ fn newline_cue_appends_line_break_marker_with_ratio() {
     );
 }
 
-// ── R2.3: Clear 全消去（未リビール分含む・schedule ごと初期化） ──
+// ── `areka-P0-emo-text-layer` R2.3: Clear 全消去（未リビール分含む・schedule ごと初期化） ──
 
 #[test]
 fn clear_resets_actor_state_to_initial() {
@@ -128,7 +130,7 @@ fn wait_cue_leaves_text_state_untouched() {
     assert_eq!(&before, after, "Wait は状態を変えない（action なし）");
 }
 
-// ── R1.6: actor 別振り分け・独立状態・lazily 生成 ──
+// ── `areka-P0-emo-text-layer` R1.6: actor 別振り分け・独立状態・lazily 生成 ──
 
 #[test]
 fn cues_route_to_independent_actor_states() {
@@ -164,7 +166,7 @@ fn actors_iterate_in_deterministic_key_order() {
     assert_eq!(keys, vec![&ActorKey::from("0"), &ActorKey::from("1")]);
 }
 
-// ── R10.5: 上書きガードなし・後出し優先の忠実適用 ──
+// ── `areka-P0-emo-text-layer` R10.5: 上書きガードなし・後出し優先の忠実適用 ──
 
 #[test]
 fn later_cues_apply_immediately_without_overwrite_guard() {
@@ -204,7 +206,7 @@ fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> Talk
     )
 }
 
-// ── R1.1/R1.2: Choice 実消費——グリフ追記＋非空 ChoiceSpan 記録 ──
+// ── `areka-P0-choice-render` R1.1/R1.2: Choice 実消費——グリフ追記＋非空 ChoiceSpan 記録 ──
 
 /// 非空 `text` の Choice cue はグリフを items へ追記し（Text と同一）、非空
 /// `glyph_range` を持つ `ChoiceSpan` を記録する（ordinal=0・id/label/references 忠実転写）。
@@ -234,7 +236,7 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25]);
 }
 
-/// 配送順スパン記録（R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
+/// 配送順スパン記録（`areka-P0-choice-render` R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
 /// `ChoiceSpan` は**配送順**に並び（label が配送順に一致）・`ordinal` は **0,1,2 と厳密に
 /// 単調増加**し（spec `areka-P0-choice-render` の design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
 /// 序数空間はグリフのみ（挟んだ改行等の非グリフ item を数えない）。
@@ -298,7 +300,7 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
             glyph_range: 1..1,
         }]
     );
-    // 空 text は warn する（R1.5）。
+    // 空 text は warn する（`areka-P0-choice-render` R1.5）。
     assert_eq!(counts.warn, 1);
 }
 
@@ -319,7 +321,7 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
     );
 }
 
-// ── R2.1: Cursor 実消費——CursorMove 追記・グリフ/リビール不変 ──
+// ── `areka-P0-choice-render` R2.1: Cursor 実消費——CursorMove 追記・グリフ/リビール不変 ──
 
 /// Cursor cue は各軸を parse_cursor_coord で語彙化した `CursorMove` を items へ追記し、
 /// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。警告も出さない。
@@ -446,7 +448,7 @@ fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
     }
 }
 
-// ── R5.1/R5.3/R9.5: choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
+// ── `areka-P0-choice-render` R5.1/R5.3/R9.5: choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
 
 /// `Clear` は対象 actor の choices を items と同時に初期化する（データ形で 5.1/5.3 を保証）。
 #[test]
@@ -467,7 +469,7 @@ fn clear_resets_choices_alongside_items() {
     );
 }
 
-/// `ClearAll` は全 actor スコープの choices を items と同時に初期化する（R5.3）。
+/// `ClearAll` は全 actor スコープの choices を items と同時に初期化する（`areka-P0-choice-render` R5.3）。
 #[test]
 fn clear_all_resets_choices_of_every_actor_scope() {
     let mut state = TextLayerState::default();
@@ -499,7 +501,7 @@ fn non_balloon_commands_do_not_disturb_state() {
         },
     ));
     state.apply_cue(&cue("0", 0.2, CueCommand::EntityRef(42)));
-    // BalloonSurface（バルーン面切替）は表示系の消費対象＝文字状態機械へは配送しない（R3.2）。
+    // BalloonSurface（バルーン面切替）は表示系の消費対象＝文字状態機械へは配送しない（`areka-P0-balloon-face-cue` R3.2）。
     // 適用しても文字状態（items／reveal／visible_glyphs）は完全に不変。
     state.apply_cue(&cue(
         "0",

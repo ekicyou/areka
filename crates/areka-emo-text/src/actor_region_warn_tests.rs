@@ -1,5 +1,7 @@
 //! # actor_region_warn_tests — 折返し警告は「装着ごとに 1 件」（結線層・兄弟テスト）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-emo2-conformance-e2e`（要件 **14.1**〜**14.4**・design **D14**）。
 //!
 //! ## なぜ登録口が持つのか
@@ -158,7 +160,7 @@ fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, 
     assert_eq!(
         warn.field_str("balloon"),
         Some("スコープ1のバルーン"),
-        "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）"
+        "名前を入れていないバルーンの名前の欄はスコープから導く（`areka-P0-shell-balloon` 要件 3.12）"
     );
 }
 
@@ -422,7 +424,7 @@ fn assert_ignored_origin_warning(
     assert_eq!(
         warn.message(),
         IGNORED_ORIGIN_MESSAGE,
-        "文言は上流と 1 文字も違ってはならない（要件 3.3）"
+        "文言は上流と 1 文字も違ってはならない（`areka-P0-balloon-origin-outside-validrect` 要件 3.3）"
     );
     assert_eq!(warn.field_str("key"), Some(key), "無視した成分の名前の欄");
     assert_eq!(
@@ -449,7 +451,7 @@ fn assert_ignored_origin_warning(
     assert_eq!(
         warn.field_str("balloon"),
         Some(balloon),
-        "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）: {warn:?}"
+        "名前を入れていないバルーンの名前の欄はスコープから導く（`areka-P0-shell-balloon` 要件 3.12）: {warn:?}"
     );
 }
 
@@ -472,7 +474,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     assert_eq!(
         ignored.len(),
         2,
-        "両成分が範囲の外なら装着で 2 件（要件 3.1／3.2）: {warns:?}"
+        "両成分が範囲の外なら装着で 2 件（`areka-P0-balloon-origin-outside-validrect` 要件 3.1／3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
@@ -494,7 +496,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     );
 }
 
-/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない（要件 3.4）。
+/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない（`areka-P0-balloon-origin-outside-validrect` 要件 3.4）。
 #[test]
 fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
     let mut world = World::new();
@@ -513,7 +515,7 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
     assert_eq!(
         ignored.len(),
         1,
-        "範囲の外の成分は 1 つだけなので 1 件（要件 3.1／3.2）: {warns:?}"
+        "範囲の外の成分は 1 つだけなので 1 件（`areka-P0-balloon-origin-outside-validrect` 要件 3.1／3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
@@ -527,7 +529,7 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
 }
 
 /// 範囲の内に宣言したバルーンの装着は WARN を 1 件も出さない——ここだけは文言で選り分けず
-/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である・要件 3.4／5.6）。
+/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である・`areka-P0-balloon-origin-outside-validrect` 要件 3.4／5.6）。
 #[test]
 fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
     let mut world = World::new();
@@ -545,12 +547,12 @@ fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
     assert_eq!(
         warns.len(),
         0,
-        "範囲の内の宣言は警告を生まない（総数で 0 件・要件 3.4）: {warns:?}"
+        "範囲の内の宣言は警告を生まない（総数で 0 件・`areka-P0-balloon-origin-outside-validrect` 要件 3.4）: {warns:?}"
     );
 }
 
 /// 値の変わらない再追従を 3 回繰り返しても、無視した `origin` の警告は 1 件も増えない
-/// （毎フレーム走る経路で警告が積み上がらない・要件 3.2）。
+/// （毎フレーム走る経路で警告が積み上がらない・`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
 #[test]
 fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
     let mut world = World::new();
@@ -583,12 +585,12 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
     assert_eq!(
         ignored_origin_warns(&warns).len(),
         0,
-        "値の変わらない再追従では警告を追加しない（要件 3.2）: {warns:?}"
+        "値の変わらない再追従では警告を追加しない（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
 }
 
 /// binding だけが変わって領域が同値の再追従は、**再構築は起きる**のに警告は 0 件
-/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す・要件 3.2）。
+/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す・`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
 #[test]
 fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() {
     let mut world = World::new();
@@ -623,7 +625,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
     assert_eq!(
         ignored_origin_warns(&warns).len(),
         0,
-        "領域の値が同じなら、登録口に達しても警告は出ない（要件 3.2）: {warns:?}"
+        "領域の値が同じなら、登録口に達しても警告は出ない（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
 }
 
@@ -652,7 +654,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     assert_eq!(
         ignored.len(),
         2,
-        "領域の値が変われば成分 1 つにつき 1 件を出し直す（要件 3.2）: {warns:?}"
+        "領域の値が変われば成分 1 つにつき 1 件を出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
@@ -674,7 +676,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     );
 }
 
-/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す（要件 3.2）。
+/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
 ///
 /// 直前の 1 本は面の原寸を変えて値を動かすので、遠辺・折返し基準・原寸も一緒に動く。
 /// それらのどれか 1 つでも判定に効いていれば通ってしまうので、「無視した値が変われば
@@ -742,7 +744,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     assert_eq!(
         ignored.len(),
         1,
-        "無視した値が変われば、その成分について 1 件を出し直す（要件 3.2）: {warns:?}"
+        "無視した値が変われば、その成分について 1 件を出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
@@ -755,7 +757,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     );
 }
 
-/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない（要件 3.3）。
+/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない（`areka-P0-balloon-origin-outside-validrect` 要件 3.3）。
 /// 粗い相方側バルーンに範囲外の `origin` を足すと、折返しの 1 件と `origin` の 2 件で総数 3 件。
 #[test]
 fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {

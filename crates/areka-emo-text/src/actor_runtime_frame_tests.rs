@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -341,7 +343,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     assert_eq!(read(&rt), 0, "Clear 後の供給面は全域透明へ戻る");
 }
 
-/// 観測可能な完了状態（R3.5/R10.3）: 登録済み actor に対して present_frame 後の
+/// 観測可能な完了状態（`areka-P0-emo-text-viewbox` R3.5/R10.3）: 登録済み actor に対して present_frame 後の
 /// 決定論観測統計を `TextLayerRuntime::draw_stats(actor)`（`surface(actor)` と同型の
 /// additive アクセサ）から外部が読み出せる。未装着 actor は `None`。
 #[test]
@@ -392,7 +394,7 @@ fn draw_stats_readable_after_present_frame() {
     );
 }
 
-/// 配線の存在チェック（R4.2/R9.1・[test-only-decision-branches]）:
+/// 配線の存在チェック（`areka-P0-budoux-newline` R4.2/R9.1・[test-only-decision-branches]）:
 /// balloon model の `budoux_newline` が `ResolvedBalloonText.wrap` へ他の解決値
 /// （mode/region/font）と同じ一点解決経路で反映される。ON model（`budoux_newline,1`）
 /// → `BudouxWordWrap`・キー無し → `CharByChar`（既定）。`WrapMode::resolve` の受理語彙は
@@ -425,7 +427,7 @@ fn resolve_wires_wrap_mode_from_balloon_model() {
     );
 }
 
-/// 観測可能な完了状態（R6.4/R7.4）: `ClearAll` は純粋状態の全スコープ消去に
+/// 観測可能な完了状態（`areka-P0-cue-playback-duration` R6.4/R7.4）: `ClearAll` は純粋状態の全スコープ消去に
 /// 加え、**装着済み全 actor の描画実行部**へ全域クリアを伝え、既描画サーフェスに古い
 /// ピクセルを残さない（`Clear` は cue.actor スコープのみ）。2 actor を装着してインクを載せ、
 /// 一方の actor 名で発行した `ClearAll` が**両**供給面を全域透明へ戻すことを readback で固定する

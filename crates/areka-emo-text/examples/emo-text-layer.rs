@@ -1,5 +1,7 @@
 //! # emo-text-layer — 注入時刻駆動の観測用専用 example（R11.1–11.5/11.7–11.9）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! emo2 fixture のバルーン枠（`balloons0.png`）2 窓（\0=sakura／\1=kero）を実表示し、
 //! fixture スクリプト（`ghost/master/dic/boot.pasta` の起動朝挨拶）由来のハードコード
 //! cue 列を **注入時刻駆動**（`talk_time`＝フレーム時刻−talk 開始・実時間 sleep 不使用）

@@ -1,5 +1,7 @@
 //! # support/mod.rs — `tests/` の実 GPU・presenter・読み戻しの共有の部品
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 各テストは `#[path = "support/mod.rs"] mod support;` で引く（`tests/` の直下に置くと
 //! テストの実行ファイルになるので、子のフォルダに置く）。中身:
 //!
@@ -46,7 +48,7 @@ use wintf_winmsg_executor::{FilterResult, MessageLoop};
 // ══ 実 GPU の World と予約スロット ═══════════════════════════════════════════════════════
 
 /// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。
+/// 本番 UI スレッドは MTA（areka の WUC は MTA のスレッドで動く）。
 pub fn make_world_with_gpu() -> World {
     fixture::init_com_for_this_thread();
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
@@ -431,7 +433,7 @@ pub fn assert_hover_band(
     assert!(
         ink_span.1 < y1 - 1,
         "[{tag}] hover 文字のインク下端 y{} が走査窓の下端 y{y1} に接している——窓が下端を切っている\
-         疑いがあり、はみ出しの測定が信用できない（窓を深くすること・R7.3）",
+         疑いがあり、はみ出しの測定が信用できない（窓を深くすること）",
         ink_span.1
     );
     // 上端側の対の門。これが在って初めて、下の「字の上端が帯の内」が窓の取り方ではなく描画結果を
@@ -439,7 +441,7 @@ pub fn assert_hover_band(
     assert!(
         ink_span.0 > y0,
         "[{tag}] hover 文字のインク上端 y{} が走査窓の上端 y{y0} に接している——窓が上端を切っている\
-         疑いがあり、上端の判定が信用できない（窓を上へ開けること・R7.3）",
+         疑いがあり、上端の判定が信用できない（窓を上へ開けること）",
         ink_span.0
     );
     let overhang = ink_span.1.saturating_sub(fill_span.1);
@@ -456,14 +458,14 @@ pub fn assert_hover_band(
     assert!(
         ink_span.0 >= fill_span.0,
         "[{tag}] hover 行の文字のインク上端 y{} はハイライト矩形の上端 y{} の内側にある\
-         （上へのはみ出し＝**文字の上が切れる**・R3.3/4.2）",
+         （上へのはみ出し＝**文字の上が切れる**・`areka-P0-choice-render` R3.3/4.2）",
         ink_span.0,
         fill_span.0
     );
     assert!(
         overhang == BAND_OVERHANG_MAX,
         "[{tag}] hover 行の文字のインク下端 y{} がハイライト矩形の下端 y{} から {overhang} 画素はみ出した\
-         ＝**文字の下が切れる**（R3.3/4.2）。`areka-P0-emo2-conformance-e2e` の裁定（第 2 回・R13.3）が許すのは \
+         ＝**文字の下が切れる**（`areka-P0-choice-render` R3.3/4.2）。`areka-P0-emo2-conformance-e2e` の裁定（第 2 回・R13.3）が許すのは \
          {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接行の帯と重なり、\
          どの選択肢を指しているかの一意性が壊れる）。**許容幅を緩めてもならない**（R12.2）。\
          この数値を添えて開発者の裁定を仰ぐこと",

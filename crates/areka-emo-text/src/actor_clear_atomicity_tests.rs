@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
+
 use areka_sakura::contract::{ActorKey, CueCommand};
 
 use super::test_support::{
