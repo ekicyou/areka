@@ -114,16 +114,16 @@ def show_line(at: datetime, target: str = "TargetId(0)", surface: str = "1000") 
 def catchup_line(at: datetime, target: str) -> str:
     """進行境界スキップ（catch-up）の info!（判定式⑵の入力・§9 の系統別の素材）。
 
-    実物の逐語（`loop_ticker`・45 秒の実走ログで確認）:
+    実物の逐語（`loop_ticker`・45 秒の実走ログで確認・欄が `target` だった頃の綴り）:
         2026-08-22T19:18:27.526356Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker:         loop ticker catch-up: skipped multiple boundaries, firing once target="loop_ticker"
 
-    `dispatcher` / `kanade` は `ticker.rs:203-206,223-226` の同じ形で、違うのは
+    `dispatcher` / `kanade` は `ticker.rs` の同じ形で、違うのは
     (a) 文言が短いほう（"ticker catch-up: …"）(b) スパンが `actor{actor=ticker}`
-    （`ticker.rs:179` の `spawn_actor("ticker")`）(c) `target` の値、の 3 点だけである。
+    （`spawn_actor("ticker")`）(c) `lane` の値、の 3 点だけである。
 
-    【重要】`target` は tracing の **フィールド**（`target = "…"`）であって、
-    メタデータの target 指示子（`target: "…"`）ではない。ゆえに行末に
-    `target="dispatcher"` の形で出る（値は引用符付き）。3 系統を分けるのはこの値であり、
+    【重要】今の ticker.rs は欄を `lane = "…"` と綴るので、行末に `lane="dispatcher"` の形で
+    出る（値は引用符付き）。古い記録の `target="…"` は judge-perf.py が読み替える。
+    3 系統を分けるのはこの値であり、
     文言では dispatcher と kanade を区別できない（どちらも同じ短いほうの文言である）。
     """
     if target == "loop_ticker":
@@ -134,7 +134,7 @@ def catchup_line(at: datetime, target: str) -> str:
         message = "ticker catch-up: skipped multiple boundaries, firing once"
     return (
         f"{ts(at)}  INFO actor{{actor={span}}}: areka_ghost::ticker: "
-        f'{message} target="{target}"'
+        f'{message} lane="{target}"'
     )
 
 
@@ -373,7 +373,7 @@ class Fixture:
         return self
 
     def catchups(self, events: tuple[tuple[float, str], ...]) -> "Fixture":
-        """catch-up を `(発生秒, 系統)` の並びで置く（系統は target フィールドの値）。"""
+        """catch-up を `(発生秒, 系統)` の並びで置く（系統は lane フィールドの値）。"""
         for at_sec, target in events:
             at = T0 + timedelta(seconds=at_sec)
             self._add(at, catchup_line(at, target))
@@ -609,8 +609,8 @@ P14_OTHER_SCOPE_SPAN_MS = P14_OTHER_SCOPE_LEAD_MS + P14_SLOW_INTERVAL_MS + 10.0
 # 消えても、終了コードは 1 つも動かない。ゆえにこの 3 件は `contains` でレポート本文を
 # 直接固定する（case.txt の contains 行）。
 #
-# 【3 系統を分けるのは target フィールドだけである】dispatcher と kanade は文言が
-# 同一（"ticker catch-up: …"）で、違うのは `target="…"` の値だけである。文言で数える
+# 【3 系統を分けるのは lane フィールドだけである】dispatcher と kanade は文言が
+# 同一（"ticker catch-up: …"）で、違うのは `lane="…"` の値だけである。文言で数える
 # 実装はこの 2 系統を 1 つに潰すので、C1／C2 はどちらも 3 系統を 1 件ずつ含む。
 
 #: catch-up を置く時刻（秒）。C1 は起動過渡（定常状態より前）＝判定式⑵ は合格側。

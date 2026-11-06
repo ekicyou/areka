@@ -3,7 +3,7 @@
 //!
 //! 主張の置き方は 3 つ。
 //!
-//! ⑴ 作業フォルダの中身は [`tree`] で**丸ごと**突き合わせる。写し取るのは相対パスと
+//! ⑴ 作業フォルダの中身は `tree`（公開面のテストと共有）で**丸ごと**突き合わせる。写し取るのは相対パスと
 //!    **バイト列そのもの**で、長さや個数では代えない。同じ長さの書き換え（改行の変換は
 //!    まさにこれ）が見えなくなる道を残さないため（要件 5.9）。空フォルダも末尾 `/` の
 //!    鍵として拾うので、要件 4.9 の「空フォルダを作る」が消えても赤になる。
@@ -16,10 +16,11 @@
 //! 登記表の検体とわざと違う綴りにする（検体パスの綴りを見張る常設検査に当たらないため）。
 
 use super::*;
-use crate::container::{inflate_entry, read_central_directory};
-use crate::manifest::{InstallManifest, locate_install_txt, parse_manifest};
-use crate::names::validate_entry_names;
+use crate::container::inflate_entry;
+use crate::manifest::InstallManifest;
+use crate::plan::tests::{read_archive, root_with_ghost, shell_archive};
 use crate::plan::{Placement, build_plan};
+use crate::tests::{hold, tree};
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::collections::BTreeMap;
 use std::fs;
@@ -47,13 +48,7 @@ struct Prepared {
 
 fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
     let bytes = builder.bytes();
-    let raw = read_central_directory(&bytes).expect("書庫そのものは無傷");
-    let names = validate_entry_names(&raw).expect("名前は安全");
-    let index = locate_install_txt(&names)
-        .expect("最上位に install.txt がある")
-        .index;
-    let text = inflate_entry(&bytes, &raw[index]).expect("install.txt を伸長できる");
-    let manifest = parse_manifest(&text).expect("マニフェストは受理される");
+    let (raw, names, manifest) = read_archive(&bytes);
     let contents = raw
         .iter()
         .map(|entry| inflate_entry(&bytes, entry).expect("エントリを伸長できる"))
@@ -64,31 +59,6 @@ fn prepare(builder: NarBuilder, request: &InstallRequest<'_>) -> Prepared {
         manifest,
         plan,
         contents,
-    }
-}
-
-/// 木の全内容。ファイルは相対パス → バイト列、フォルダは末尾 `/` の相対パス → 空。
-///
-/// フォルダが無ければ空の写像を返す（「宛先がまだ無い」と「宛先が空」を同じ形で扱える）。
-fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
-    let mut out = BTreeMap::new();
-    if root.is_dir() {
-        walk(root, "", &mut out);
-    }
-    out
-}
-
-fn walk(dir: &Path, prefix: &str, out: &mut BTreeMap<String, Vec<u8>>) {
-    for child in fs::read_dir(dir).expect("木を辿れる") {
-        let child = child.expect("要素を読める");
-        let name = child.file_name().to_string_lossy().into_owned();
-        let relative = format!("{prefix}{name}");
-        if child.file_type().expect("種別を読める").is_dir() {
-            out.insert(format!("{relative}/"), Vec::new());
-            walk(&child.path(), &format!("{relative}/"), out);
-        } else {
-            out.insert(relative, fs::read(child.path()).expect("中身を読める"));
-        }
     }
 }
 
@@ -138,13 +108,6 @@ fn stage_all(root: &Path, prepared: &Prepared) -> (WorkArea, Vec<ExistingState>)
         );
     }
     (area, states)
-}
-
-/// 宛先ゴースト `name` が実在する空の根を 1 つ借りる（要件 7.10）。
-fn root_with_ghost(name: &str) -> WorkDir {
-    let work = WorkDir::new().expect("作業フォルダを取れる");
-    fs::create_dir_all(work.path().join("ghost").join(name)).expect("宛先ゴーストを作れる");
-    work
 }
 
 // ---- 固定入力 ----
@@ -306,7 +269,7 @@ fn takes_in_the_whole_existing_tree_and_overwrites_only_same_named_files_when_re
 
 // ---- 全消去＋マスク残し（`refresh,1`） ----
 
-/// `refresh,1` では除外マスクに挙がったファイル名だけが残る（全階層・ASCII 大小無視）
+/// `refresh,1` では除外マスクに挙がったファイル名だけが残る（全階層・大小を無視（`same_name`））
 /// （要件 6.2）。
 ///
 /// 3 つの形を同時に見る。⑴ 何段も深いところの同名は残る。⑵ 綴りが大小だけ違う名前も
@@ -348,6 +311,35 @@ fn refresh_one_keeps_only_the_undelete_mask_names_at_every_level() {
             ("profile/deep/nest/state.dat", b"kept deep"),
         ]),
         "マスクの名前だけが同じ位置に残り、他は消える"
+    );
+}
+
+/// 除外マスクの名前は全角の大小も無視して当たる（#64）。
+#[test]
+fn refresh_keep_matches_non_ascii_names_case_insensitively() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(
+        &destination,
+        &[("ＫＥＥＰ.dat", b"kept"), ("gone.txt", b"gone")],
+    );
+    let extra = ["refresh,1", "refreshundeletemask,ｋｅｅｐ.dat"];
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&extra), &request);
+    let (area, _states) = stage_all(work.path(), &prepared);
+
+    assert_eq!(
+        tree(&area.stage(0)),
+        expect_tree(&[
+            ("ＫＥＥＰ.dat", b"kept"),
+            ("balloon/", b""),
+            ("balloon/s0.png", b"s0"),
+            ("descript.txt", b"new descript"),
+            ("install.txt", &balloon_manifest(&extra)),
+        ])
     );
 }
 
@@ -541,7 +533,7 @@ fn written_content_stays_byte_identical_without_any_conversion() {
 /// 既存の宛先に読み取り専用のファイルが在っても、書庫の同名がそれを置き換える。
 ///
 /// 複写は読み取り専用の属性も運ぶので、写した先がそのままだと続く書き出しが
-/// **作業フォルダ**のパスを名指して失敗する。そのパスは次の走行の片付けで消えるので、
+/// **作業フォルダ**のパスを名指して失敗する。そのパスは失敗の後に消えるので、
 /// 利用者は「どこを直せばよいか」に辿り着けない。写した直後に属性を落として根から断つ
 /// ——属性は宛先を守るためのもので、入れ替えで木ごと替わる以上、写しの側で持ち越す
 /// 意味も無い。
@@ -575,6 +567,121 @@ fn a_read_only_existing_file_does_not_block_the_archive_from_replacing_it() {
     );
     // 借りた根の後片付けが読み取り専用で躓かないよう、仕掛けを戻しておく。
     set_read_only(&protected, false);
+}
+
+/// 既に在る宛先の中のリンク（ジャンクション）はたどらず、そのパスを添えて組み上げの段で
+/// 失敗する（#8・要件 9.6）。写しの決まりは `areka-user-data` の写しとそろえる。
+/// リンクの先は 1 バイトも触られない。
+#[test]
+fn a_link_inside_an_existing_destination_fails_the_stage_with_its_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(&destination, &[("descript.txt", b"old descript")]);
+    let outside = work.path().join("outside");
+    make_tree(&outside, &[("secret.txt", b"outside")]);
+    let before = tree(&outside);
+    let link = destination.join("link");
+    junction(&link, &outside);
+
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("リンクはたどらない");
+
+    assert_eq!(error.path, link, "リンクのパスを名指す");
+    assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(tree(&outside), before, "リンクの先は触られていない");
+}
+
+/// 宛先そのものがリンク（ジャンクション）でもたどらず、宛先のパスを添えて組み上げの段で
+/// 失敗する（#8 と同じ決まり）。たどると、リンクの先を写した木で入れ替え、リンクを消す。
+#[test]
+fn a_destination_that_is_itself_a_link_fails_the_stage_with_its_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let outside = work.path().join("outside");
+    make_tree(&outside, &[("secret.txt", b"outside")]);
+    let before = tree(&outside);
+    let destination = work.path().join("balloon").join("test-balloon");
+    fs::create_dir_all(work.path().join("balloon")).expect("格納先を作れる");
+    junction(&destination, &outside);
+
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("宛先のリンクはたどらない");
+
+    assert_eq!(error.path, destination, "宛先のパスを名指す");
+    assert_eq!(error.source.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(tree(&outside), before, "リンクの先は触られていない");
+}
+
+/// 既存のファイルと書庫のフォルダが同じ名前でぶつかったら、作業フォルダでなく**宛先**の
+/// パスを名指す（作業フォルダは失敗の後に消えるので、利用者が直す場所にならない）。
+#[test]
+fn a_file_folder_clash_names_the_destination_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    // 書庫は `balloon/` をフォルダとして持つ。既存では同じ名前がファイル。
+    make_tree(&destination, &[("balloon", b"a file")]);
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("ファイルの場所にフォルダは作れない");
+
+    assert_eq!(
+        error.path,
+        destination.join("balloon"),
+        "宛先の側のパスを名指す"
+    );
+}
+
+/// 既存のフォルダと書庫のファイルが同じ名前でぶつかったときも、宛先のパスを名指す。
+#[test]
+fn a_folder_file_clash_names_the_destination_path() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    // 書庫は `descript.txt` をファイルとして持つ。既存では同じ名前がフォルダ。
+    make_tree(&destination, &[("descript.txt/inner.txt", b"inner")]);
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let error = stage_placement(&area.stage(0), &prepared.plan[0], &prepared.contents)
+        .expect_err("フォルダの場所にファイルは書けない");
+
+    assert_eq!(
+        error.path,
+        destination.join("descript.txt"),
+        "宛先の側のパスを名指す"
+    );
+}
+
+/// `link` に `target` を指すジャンクションを作る（`cmd /c mklink /J`・管理者は要らない）。
+fn junction(link: &Path, target: &Path) {
+    let out = std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .expect("cmd を起こせる");
+    assert!(
+        out.status.success() && link.exists(),
+        "ジャンクションを作れない"
+    );
 }
 
 /// 読み取り専用の属性を付け外しする。
@@ -629,12 +736,9 @@ fn stale_work_folders_are_swept_before_staging_starts() {
     let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
 
     assert!(!stale.exists(), "残骸は残らない");
-    assert_eq!(
-        tree(&work.path().join(".nar-work"))
-            .keys()
-            .filter(|key| key.starts_with("999999-0"))
-            .count(),
-        0,
+    // 棚を丸ごと `tree` で読むと、持っている錠（共有なし）を開けずに落ちる。
+    assert!(
+        !work.path().join(".nar-work").join("999999-0").exists(),
         "残骸の枝は 1 つも残らない"
     );
     assert!(area.path().is_dir(), "自分の作業フォルダは在る");
@@ -772,6 +876,50 @@ fn the_own_address_skips_a_candidate_that_is_being_kept() {
         shelf.join(format!("{pid}-1")),
         "保持中の番地を避ける"
     );
+}
+
+/// 同じ根へ同時に入れる 2 本目は棚の錠で断り、1 本目の作業フォルダを消さない。
+#[test]
+fn a_second_work_area_on_the_same_root_fails_and_leaves_the_first_intact() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let first = WorkArea::create(work.path()).expect("1 本目は作れる");
+
+    let failure = WorkArea::create(work.path()).expect_err("錠を持たれているので断る");
+
+    assert_eq!(failure.path, work.path().join(".nar-work").join(".lock"));
+    assert!(first.path().is_dir(), "1 本目の作業フォルダは在る");
+}
+
+/// 作業場を捨てると錠が閉じ、`.lock` は消え、同じ根でもう 1 本作れる。
+#[test]
+fn the_shelf_lock_is_released_when_the_work_area_is_dropped() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let lock = work.path().join(".nar-work").join(".lock");
+    let first = WorkArea::create(work.path()).expect("1 本目は作れる");
+    assert!(lock.is_file(), "持っている間は錠のファイルが在る");
+
+    drop(first);
+
+    assert!(!lock.exists(), "捨てた後に錠のファイルは残らない");
+    let second = WorkArea::create(work.path()).expect("捨てた後はもう 1 本作れる");
+    assert_eq!(
+        second.residue(),
+        &[] as &[std::path::PathBuf],
+        "錠は残り物に数えない"
+    );
+}
+
+/// 棚に紛れたファイルも片付け、残り物には載せない。
+#[test]
+fn a_stray_file_on_the_shelf_is_swept() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let stray = work.path().join(".nar-work").join("junk.txt");
+    make_tree(&work.path().join(".nar-work"), &[("junk.txt", b"junk")]);
+
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+
+    assert!(!stray.exists(), "紛れたファイルは消えている");
+    assert_eq!(area.residue(), &[] as &[std::path::PathBuf], "残り物は無い");
 }
 
 /// 棚の場所がフォルダでなければ、黙って続けずに失敗を返す。

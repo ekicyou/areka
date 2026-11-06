@@ -59,6 +59,14 @@ pub enum SylphyaMsg {
         /// 点付き語彙 `(正準 key, 値)`（大域点付き区画へ）。
         dotted: Vec<(String, String)>,
     },
+    /// ①静的構成層のフラット名を `asker` の per-asker 区画から消す（読み直しで定義が消えた
+    /// 名前＝起動時に `PublishStatic` が積まなかったのと同じ状態へ戻す）。名前は呼び手が選ぶ。
+    RemoveFlat {
+        /// 問い合わせ元（フラットの per-asker 区画）。
+        asker: AskerId,
+        /// 消すフラット名（% 抜き）。
+        names: Vec<String>,
+    },
     /// ④SHIORI 照会層の publish（`value=None` は 204/失敗＝不在の観測記録）。
     PublishShiori {
         /// 問い合わせ元（フラットの per-asker 着地先）。
@@ -188,6 +196,13 @@ pub enum Effect {
         /// 値。
         value: String,
     },
+    /// フラット per-asker 区画から消す（`RemoveFlat`）。
+    RemoveFlatPerAsker {
+        /// 対象 asker。
+        asker: AskerId,
+        /// フラット名（% 抜き）。
+        name: String,
+    },
     /// 大域点付き区画へ書く（`PublishStatic.dotted`＝`baseware.*`・永続投影の `areka.*`）。
     SetDottedGlobal {
         /// 正準 key 文字列。
@@ -284,6 +299,13 @@ impl SylphyaCore {
                 }
                 effects
             }
+            SylphyaMsg::RemoveFlat { asker, names } => names
+                .iter()
+                .map(|name| Effect::RemoveFlatPerAsker {
+                    asker: asker.clone(),
+                    name: name.clone(),
+                })
+                .collect(),
             SylphyaMsg::PublishShiori { asker, name, value } => match value {
                 Some(v) => vec![Effect::SetFlatPerAsker {
                     asker: asker.clone(),
@@ -483,6 +505,11 @@ impl SylphyaPublisher {
         });
     }
 
+    /// ①静的構成層のフラット名を `asker` の区画から消す（無い名前は何もしない）。
+    pub fn remove_flat(&self, asker: AskerId, names: Vec<String>) {
+        self.send(SylphyaMsg::RemoveFlat { asker, names });
+    }
+
     /// ④SHIORI 照会層を publish する（`value=None` は 204/失敗＝不在の観測記録）。
     pub fn publish_shiori(&self, asker: AskerId, name: String, value: Option<String>) {
         self.send(SylphyaMsg::PublishShiori { asker, name, value });
@@ -648,6 +675,12 @@ fn run_actor(
                         .or_default()
                         .insert(name, value);
                     mutated = true;
+                }
+                Effect::RemoveFlatPerAsker { asker, name } => {
+                    // 実際に消えたときだけ後継像を出す（epoch は実変化に対応する）。
+                    if let Some(flat) = next.flat_per_asker.get_mut(&asker) {
+                        mutated |= flat.remove(&name).is_some();
+                    }
                 }
                 Effect::SetDottedGlobal { key, value } => {
                     next.dotted_global.insert(key, value);

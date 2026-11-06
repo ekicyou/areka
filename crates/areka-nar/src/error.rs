@@ -77,6 +77,9 @@ refuse_reasons! {
     CaseCollision { a: String, b: String },
 
     /// 最上位に `install.txt` が無い（包みフォルダ 1 段を含む＝要件 3.2）。
+    ///
+    /// `top_level` は名前順の先頭最大 8 件。越えたときだけ末尾に名前ではない要約の
+    /// 1 要素 `…（全 N 件）` が付く。
     #[error("最上位に install.txt が無い（最上位 {top_level:?}）")]
     MissingInstallTxt { top_level: Vec<String> },
 
@@ -126,7 +129,7 @@ pub enum Unsupported {
     /// 複数ディスクに分かれている。
     #[error("複数ディスクに分かれている")]
     MultiDisk,
-    /// 宣言サイズの総和が受け入れ上限を超える。
+    /// 宣言サイズの総和・書庫の長さ・`install.txt` の長さ（`MAX_INSTALL_TXT_LEN`）のいずれかが受け入れ上限を超える。
     #[error("大きすぎる")]
     TooLarge,
 }
@@ -207,7 +210,7 @@ pub struct InstalledElement {
 pub struct SurvivingTree {
     /// 元へ戻せなかった宛先（利用者から見えるインストール済みフォルダ）。
     pub destination: PathBuf,
-    /// その宛先の確定前の中身がそのまま残っているフォルダ（どれかの作業フォルダの直下 old-<k>）。
+    /// その宛先の確定前の中身がそのまま残っているフォルダ（本体の根の作業フォルダ（1 つ）の直下 old-<k>）。
     pub path: PathBuf,
 }
 
@@ -236,7 +239,8 @@ pub enum NarError {
         /// `committed` を元に戻せたか。
         rolled_back: bool,
         /// 元へ戻せなかった宛先ごとの生き残り。巻き戻せた・掘る前・新規の宛先を消す手だけが
-        /// 躓いた場合は空。全て失敗の記録の work に挙げたどれかの作業フォルダの配下に在る。`Vec` でなく `Box<[_]>` なのは、
+        /// 躓いた場合は空。生き残りはいずれも、失敗の記録の `work` の欄に出る本体の根の
+        /// 作業フォルダ（1 つ）の配下に在る。`Vec` でなく `Box<[_]>` なのは、
         /// `NarError` を包む呼び手の失敗の型を clippy の `result_large_err` の閾値の下に保つため。
         survivors: Box<[SurvivingTree]>,
     },
@@ -267,7 +271,8 @@ pub enum ManifestWarning {
         written: String,
         read: String,
     },
-    /// 探索で読まなかった同梱のバルーンの鍵（打ち切りの後ろの番号・先頭に 0 を付けた綴り）。
+    /// 探索で読まなかった同梱のバルーンの鍵（打ち切りの後ろの番号・上限 `MAX_COMPANIONS` を
+    /// 超えた番号・先頭に 0 を付けた綴り）。
     #[error("同梱のバルーンの探索で読まなかったので読み飛ばした: {key}")]
     CompanionNotSearched { key: String },
 }

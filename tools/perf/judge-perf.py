@@ -35,7 +35,7 @@
 ----------------------------------------------------------
 従来の件数に加えて、次を出す:
 
-  * **系統別**（`dispatcher`／`kanade`／`loop_ticker`）。分けるのは行末の `target=` フィールドで
+  * **系統別**（`dispatcher`／`kanade`／`loop_ticker`）。分けるのは行末の `lane=` フィールド（古い記録は `target=`）で
     あって文言ではない——dispatcher と kanade は同じ文言を出すので、文言で数えると
     2 系統が 1 つに潰れる（`ticker.rs:203-206, 223-226, 305-308`）
   * **各発生の周辺状況**: 時刻・定常状態かどうか・直前の表示成立点との差（秒）・
@@ -525,18 +525,19 @@ J_SERIKO_STOP_MESSAGES = (
     "seriko: loop bind から外れた ID の再生を停止",  # looper.rs:308
 )
 
-#: catch-up の発行元 3 系統（`ticker.rs:203-206, 223-226, 305-308` の `target = "…"`）。
+#: catch-up の発行元 3 系統（`ticker.rs` の `lane = "…"`・古い記録は `target = "…"`）。
 #: 【dispatcher と kanade は文言で分けられない】どちらも同じ短いほうの文言を出すので、
-#: 分けられるのは target の値だけである（要件 2.9 が「系統別に数える」と言う以上、
+#: 分けられるのは lane の値だけである（要件 2.9 が「系統別に数える」と言う以上、
 #: 文言で数える実装はこの 2 系統を 1 つに潰す＝要求を満たさない）。
 J_CATCHUP_TARGETS = ("dispatcher", "kanade", "loop_ticker")
 
-#: 【target はフィールドである】`tracing::info!(target = "dispatcher", "…")` の `target =`
-#: （等号）は普通のフィールドであって、メタデータの target 指示子（`target:` コロン）では
-#: ない。ゆえに行末に `target="dispatcher"` の形で出る。実測の逐語（45 秒の実走ログ）:
+#: 【lane はフィールドである】`tracing::info!(lane = "dispatcher", "…")` は行末に
+#: `lane="dispatcher"` の形で出る。audit-ghost-catalog（#53）より前の ticker.rs は同じ欄を
+#: `target = "…"` と綴っていた（メタデータの `target:` ではない）ので、記録済みの走行ログは
+#: `target="…"` を持つ。lane を先に読み、無ければ target を読む。実測の逐語（45 秒の実走ログ・旧綴り）:
 #:   …Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker: loop ticker catch-up: #:   skipped multiple boundaries, firing once target="loop_ticker"
 #: 値は引用符付きなので `unquote_field` で落としてからこの語彙と突き合わせる。
-J_CATCHUP_TARGET_FIELD = "target"
+J_CATCHUP_TARGET_FIELDS = ("lane", "target")
 
 #: 【任意種】以下の 3 種は「有れば読む」行である。**必要ログ種ではない**——
 #: 1 本も無い走行でも判定は成立しなければならない（`J_REQUIRED_LOG_KINDS` は不変）。
@@ -894,14 +895,14 @@ def _catchup_kind(line: str) -> str | None:
 
 
 def _catchup_target(line: str) -> str:
-    """catch-up 行の発行元（`target=` フィールドの値）。
+    """catch-up 行の発行元（`lane=` フィールド・古い記録は `target=` の値）。
 
     3 系統を分けられるのはこの値だけである（dispatcher と kanade は文言が同一）。
     値は引用符付きで出るので落とす。フィールドが無い行は、語彙に無い値として
     そのまま名指しする——黙って既知の 3 系統のどれかへ寄せない（要件 2.11）。
     """
     fields = parse_fields(line)
-    raw = fields.get(J_CATCHUP_TARGET_FIELD)
+    raw = next((fields[k] for k in J_CATCHUP_TARGET_FIELDS if k in fields), None)
     if raw is None:
         return "(target 欄なし)"
     return unquote_field(raw)
@@ -1009,7 +1010,7 @@ def scan_log(path: Path) -> LogScan:
 
         kind = _catchup_kind(line)
         if kind is not None:
-            # 0.4.0: 系統は target フィールドで分ける（文言では dispatcher と kanade を
+            # 0.4.0: 系統は lane フィールド（古い記録は target）で分ける（文言では dispatcher と kanade を
             # 区別できない）。値は引用符付きで出るので落としてから積む。
             scan.catchup.append((at, kind, _catchup_target(line)))
             continue
@@ -1865,7 +1866,7 @@ def render_calibration(report: Report) -> None:
         ),
         ("J_DPI_BOOT_FIELDS", list(J_DPI_BOOT_FIELDS), "run.log の起動時ログから"),
         ("J_DPI_SHOW_FIELDS", list(J_DPI_SHOW_FIELDS), "表示成立点の行 から"),
-        ("J_CATCHUP_TARGETS", list(J_CATCHUP_TARGETS), "catch-up の系統・target フィールドの値"),
+        ("J_CATCHUP_TARGETS", list(J_CATCHUP_TARGETS), "catch-up の系統・lane（古い記録は target）フィールドの値"),
         (
             "J_TICK_LINE_MESSAGE",
             J_TICK_LINE_MESSAGE,

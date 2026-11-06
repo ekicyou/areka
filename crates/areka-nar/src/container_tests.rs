@@ -517,73 +517,29 @@ fn declared_size_beyond_the_cap_is_refused_without_a_huge_fixture() {
 fn declared_size_at_the_cap_still_parses() {
     let nar = NarBuilder::new()
         .file("a", b"x")
-        .declared_size(MAX_TOTAL_DECLARED_SIZE - 1)
+        .declared_size(MAX_TOTAL_DECLARED_SIZE)
         .done()
         .bytes();
 
     let entries = read_central_directory(&nar).expect("上限までは中央ディレクトリを読める");
-    assert_eq!(entries[0].uncompressed_size, MAX_TOTAL_DECLARED_SIZE - 1);
+    assert_eq!(entries[0].uncompressed_size, MAX_TOTAL_DECLARED_SIZE);
 }
 
 // ---- 「1 バイトも書かない」（要件 2.6・5.9） ----
 
-/// `container` の本体に決して現れてはならない綴り。
-///
-/// 書き込みの呼び出しを 1 つずつ数え上げる形は採らない。`use std::fs::*;` の後の
-/// 素の `write(p, d)`・`File::options().write(true).create(true).open(p)`・
-/// `hard_link`・`soft_link`・`symlink_file`・`Command::new(..).status()` のように、
-/// 数え上げの網は必ず外側から回り込まれる。代わりに**本モジュールが正直に約束できる
-/// 上位の性質**——ファイルシステムにも別プロセスにも触らない——を 3 語で見張る。
-/// 読み取りの `fs::read` すら持たないので、`fs::` は丸ごと禁じてよい。
-const FORBIDDEN_SPELLINGS: &[&str] = &["fs::", "Path", "process::"];
-
-/// `source` に現れる禁じ手の綴りを拾う。
-fn forbidden_spellings_in(source: &str) -> Vec<&'static str> {
-    FORBIDDEN_SPELLINGS
-        .iter()
-        .copied()
-        .filter(|needle| source.contains(needle))
-        .collect()
-}
-
 /// `container` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
 ///
-/// 「観測しなかった」ではなく「触る手段を持たない」を主張する。読み手の署名は
-/// `&[u8]` と `&RawEntry` しか受け取らず宛先のパスを知らないので、書くとすれば
-/// `fs::`・`Path`／`PathBuf`・`process::` のいずれかが本体に要る。兄弟テスト
-/// （このファイル）は `WorkDir` へ実際に書くので、走査の対象は本体だけに絞る。
+/// 書き込みの呼び出しを 1 つずつ数え上げる形は採らない。`use std::fs::*;` の後の素の
+/// `write(p, d)` や `Command::new(..).status()` のように、数え上げの網は必ず外側から
+/// 回り込まれる。代わりに「触る手段を持たない」を見張る——読み手の署名は `&[u8]` と
+/// `&RawEntry` しか受け取らず宛先のパスを知らないので、書くとすれば入出力の綴りが本体に
+/// 要る。兄弟テスト（このファイル）は `WorkDir` へ実際に書くので、走査の対象は本体だけ。
 #[test]
 fn container_source_contains_no_filesystem_mutation() {
-    let found = forbidden_spellings_in(include_str!("container.rs"));
-    assert!(
-        found.is_empty(),
-        "container が禁じ手の綴りを持っている: {found:?}"
-    );
-}
-
-/// 上の走査の較正。走査語が空でないこと、各語を足した写しが必ず赤になること、
-/// 無関係な行では赤にならないことを、この 1 本で確かめる。
-///
-/// **最初の主張が要る**——走査語が空だと、上のテストは `found.is_empty()` で緑、
-/// 下の繰り返しは 0 周で緑になり、二本とも恒真のまま「見張っている」ように見える。
-#[test]
-fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
-    assert_eq!(
-        FORBIDDEN_SPELLINGS.len(),
-        3,
-        "走査語が空なら二本とも恒真で緑になる"
-    );
-    for needle in FORBIDDEN_SPELLINGS {
-        let synthetic = format!("fn f() {{ let _ = {needle}; }}");
-        assert_eq!(
-            forbidden_spellings_in(&synthetic),
-            vec![*needle],
-            "綴り {needle} を走査が拾えていない"
-        );
-    }
-    assert!(
-        forbidden_spellings_in("fn f() { let _ = u32::from_le_bytes(x); }").is_empty(),
-        "バイト列を読むだけの行は拾わない（走査が何にでも当たるのでは意味が無い）"
+    crate::tests::assert_source_has_no_io(
+        include_str!("container.rs"),
+        crate::tests::IO_SPELLINGS,
+        "fn f() { let _ = u32::from_le_bytes(x); }",
     );
 }
 

@@ -12,15 +12,6 @@
 //! - [`spawn_ticker`] — 上記を単一スレッドのアクターへ配線する薄い殻。`stop_rx`
 //!   （＝ `spawn_actor` の inbox＝[`TickerMsg`] 受信端）を `recv_timeout` で待ち、
 //!   タイムアウトのたびに実クロックを読み境界判定を適用する。
-//!
-//! # `DispatcherMsg` への forward dependency（設計メモ）
-//!
-//! task 2.5 が定義する `DispatcherMsg` はまだ存在しない。本実装は [`spawn_relay`]
-//! （`crate::relay`）が採る「`B: From<A>` 汎用境界」の流儀にならい、`spawn_ticker`
-//! を dispatcher 側メッセージ型 `D` について汎用化した（`D: From<Tick> + Send +
-//! 'static`）。task 2.5 は `DispatcherMsg` に `impl From<Tick> for DispatcherMsg`
-//! を用意し `spawn_ticker::<DispatcherMsg>(...)` で結線すればよく、本ファイルの
-//! シグネチャ変更は不要になる見込み（既知の将来変更を先回りして避ける選択）。
 
 use std::sync::mpsc::{RecvTimeoutError, Sender};
 use std::time::Duration;
@@ -35,9 +26,6 @@ pub enum TickerMsg {
 }
 
 /// ticker が dispatcher へ渡す 1 回分の Tick 内容。
-///
-/// `DispatcherMsg` が定義され次第 `impl From<Tick> for DispatcherMsg` を実装し、
-/// `spawn_ticker::<DispatcherMsg>(...)` の型引数として使う想定（上記モジュール doc 参照）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Tick {
     pub now: MonotonicMs,
@@ -160,8 +148,7 @@ fn next_grid_multiple_strictly_after(interval_ms: u64, now_ms: u64) -> u64 {
 /// Tick を配る。`TickerMsg::Close` 受領または制御チャンネル切断（`stop_rx`
 /// disconnected）で停止する。
 ///
-/// `dispatcher` の要素型 `D` は [`Tick`] から `From` 変換できればよい（`DispatcherMsg`
-/// 未確定を吸収する forward-compat な汎用境界・モジュール doc 参照）。
+/// `dispatcher` の要素型 `D` は [`Tick`] から `From` 変換できればよい。
 pub fn spawn_ticker<D>(
     config: TickerConfig,
     kanade: Sender<KanadeMsg>,
@@ -201,7 +188,7 @@ where
                     if dispatcher_poll.fired {
                         if dispatcher_poll.catch_up {
                             tracing::info!(
-                                target = "dispatcher",
+                                lane = "dispatcher",
                                 "ticker catch-up: skipped multiple boundaries, firing once"
                             );
                         }
@@ -210,7 +197,7 @@ where
                             if dispatcher.send(tick).is_err() {
                                 dispatcher_disconnected = true;
                                 tracing::info!(
-                                    target = "dispatcher",
+                                    lane = "dispatcher",
                                     "ticker: dispatcher disconnected; stopping ticks to this target"
                                 );
                             }
@@ -221,18 +208,16 @@ where
                     if kanade_poll.fired {
                         if kanade_poll.catch_up {
                             tracing::info!(
-                                target = "kanade",
+                                lane = "kanade",
                                 "ticker catch-up: skipped multiple boundaries, firing once"
                             );
                         }
-                        if !kanade_disconnected {
-                            if kanade.send(KanadeMsg::Tick { now }).is_err() {
-                                kanade_disconnected = true;
-                                tracing::info!(
-                                    target = "kanade",
-                                    "ticker: kanade disconnected; stopping ticks to this target"
-                                );
-                            }
+                        if !kanade_disconnected && kanade.send(KanadeMsg::Tick { now }).is_err() {
+                            kanade_disconnected = true;
+                            tracing::info!(
+                                lane = "kanade",
+                                "ticker: kanade disconnected; stopping ticks to this target"
+                            );
                         }
                     }
                 }
@@ -303,7 +288,7 @@ pub fn spawn_loop_ticker(
                     if poll.fired {
                         if poll.catch_up {
                             tracing::info!(
-                                target = "loop_ticker",
+                                lane = "loop_ticker",
                                 "loop ticker catch-up: skipped multiple boundaries, firing once"
                             );
                         }

@@ -9,9 +9,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_kanade::{CloseReason, ShioriBusy, ShioriCut, ShioriUnblock, WaitBudget};
-use areka_sakura::contract::{CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use temp_path_kit::TempPath;
+
+use crate::test_support::{fake_options, run_bounded, shutdown_bounded, write_ghost};
 
 /// 解く手と固まる往復が共有する置き場（解かれたか・解く手の回数）。
 #[derive(Default)]
@@ -78,30 +79,6 @@ impl ShioriBackend for HoldingShiori {
     }
 }
 
-#[derive(Clone)]
-struct NoopSink;
-
-impl CueSink for NoopSink {
-    fn emit(&mut self, _cue: TalkCue) {}
-}
-
-fn write_fixture(root: &std::path::Path) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        b"charset,UTF-8\nname,TestShell\n",
-    )
-    .expect("write shell descript.txt");
-}
-
 struct Booted {
     runtime: GhostRuntime,
     gate: Arc<Gate>,
@@ -112,15 +89,12 @@ struct Booted {
 /// 偽の SHIORI で起動し、解く手が据わるまで待ってから返す（見張りが解く手を必ず見つける）。
 fn boot_holding(tag: &str, hold_on_close: bool) -> Booted {
     let temp = TempPath::new(&format!("ghost-runtime-within-{tag}"));
-    write_fixture(temp.path());
+    write_ghost(temp.path());
     let gate = Arc::new(Gate::default());
     let (ready_tx, ready_rx) = mpsc::channel();
     let (holding_tx, holding_rx) = mpsc::channel();
     let backend_gate = Arc::clone(&gate);
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: temp.path().to_path_buf(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(HoldingShiori {
                 gate: backend_gate,
@@ -129,10 +103,7 @@ fn boot_holding(tag: &str, hold_on_close: bool) -> Booted {
                 holding: holding_tx,
             }) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(temp.path().to_path_buf())
     };
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
     ready_rx
@@ -153,22 +124,12 @@ fn budget(limit: Duration) -> WaitBudget {
     }
 }
 
-/// 別スレッドで走らせ、期限内に戻らなければ失敗にする（固まったままテスト全体を止めない）。
-fn bounded<T: Send + 'static>(what: &str, f: impl FnOnce() -> T + Send + 'static) -> T {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(f());
-    });
-    rx.recv_timeout(Duration::from_secs(20))
-        .unwrap_or_else(|_| panic!("'{what}' did not return within 20s (hang)"))
-}
-
 /// 上限の中で降り切れば今日どおり `Ok` で、打ち切りは無く、解く手も呼ばれない（要件 1.6・2.6）。
 #[test]
 fn shutdown_within_returns_no_cut_when_teardown_finishes_inside_the_limit() {
     let Booted { runtime, gate, .. } = boot_holding("inside-limit", false);
 
-    let (result, cut) = bounded("shutdown_within", move || {
+    let (result, cut) = run_bounded("shutdown_within", Duration::from_secs(20), move || {
         runtime.shutdown_within(CloseReason::System, budget(Duration::from_secs(60)))
     });
 
@@ -200,7 +161,7 @@ fn shutdown_within_cuts_a_held_on_close_and_finishes_the_teardown() {
         }
     });
 
-    let (result, cut) = bounded("shutdown_within", move || {
+    let (result, cut) = run_bounded("shutdown_within", Duration::from_secs(20), move || {
         runtime.shutdown_within(CloseReason::System, budget(Duration::from_secs(60)))
     });
 
@@ -227,11 +188,7 @@ fn plain_shutdown_never_arms_the_watchdog() {
     let probe = runtime.shiori_probe().clone();
     probe.cut_now();
 
-    let result = bounded("shutdown", move || runtime.shutdown(CloseReason::System));
-    assert!(
-        result.is_ok(),
-        "shutdown should succeed as today, got {result:?}"
-    );
+    shutdown_bounded(runtime);
     assert_eq!(
         gate.unblock_calls.load(Ordering::SeqCst),
         0,

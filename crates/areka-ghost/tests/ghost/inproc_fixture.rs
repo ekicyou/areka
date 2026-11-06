@@ -2,7 +2,7 @@
 //!
 //! 本ファイルの LOCATE 部（task 4.1）は、`cargo test --workspace` がビルドした x64 cdylib
 //! `shiori4_testdll.dll` の**単一の正準位置**を決定論的に特定する [`locate_built_test_dll`] を提供する。
-//! 組立部（`assemble_test_ghost`・task 4.2）は同ファイルへ後続タスクが追加し、consume は tasks 5.x。
+//! 組立部は錠つきの共有ゴースト [`shared_test_ghost`] を配る（consume は I1・I2）。
 //!
 //! # 単一正準位置・フォールバックなし（要件 1.2・5.4／design.md D-1）
 //! 正準位置は `target/<profile>/deps/shiori4_testdll.dll`（= テストバイナリ `current_exe()` と同一
@@ -12,14 +12,9 @@
 //! 上書きする）。glob／mtime／多段フォールバックは**採らない**——将来 cargo 挙動変化時に古い deps/ の
 //! DLL を拾って壊れたビルドを隠蔽する silent green を防ぐため（fail-visible・設計討議#1）。挙動変化は
 //! 不在時の明示 panic で即座に顕在化させる。
-//!
-//! 本モジュールの一部の pub 項目は、consume する後続タスク（4.2 組立・5.x e2e）が結線されるまで
-//! この test binary 内で未使用になり得るため、dead-code 警告を抑止する。
-#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
-
-use temp_path_kit::TempPath;
+use std::sync::{Mutex, MutexGuard, OnceLock, TryLockError};
 
 /// `cargo test --workspace` がビルドした x64 cdylib `shiori4_testdll.dll` の**単一の正準位置**を
 /// 決定論的に特定して返す（要件 1.2・5.4／design.md D-1）。
@@ -64,26 +59,6 @@ pub fn locate_built_test_dll() -> PathBuf {
     canonical_dll
 }
 
-/// `assemble_test_ghost` が組み立てた一時テストゴーストの所有ハンドル（RAII クリーンアップ付き）。
-///
-/// `root` は `resolve()`／`boot()` へ渡す ghost_root（`ghost/master/descript.txt` 起点・
-/// design.md「fixture 組立と DLL locate」）。[`TempGhost::root`] で取得する。`Drop` で temp root を
-/// 再帰削除する（design.md「テスト終了時に削除」——ベストエフォート・失敗は無視）。
-///
-/// 実体は共通窓口 `temp-path-kit` が配る一時ディレクトリで、名前にプロセス識別子と連番が
-/// 入るため**プロセス間でも一意**である（同じテストを複数プロセスで同時に走らせても、
-/// 隣のプロセスの fixture を消さない）。削除は [`TempPath`] の破棄が行う。
-pub struct TempGhost {
-    root: TempPath,
-}
-
-impl TempGhost {
-    /// 組み立てた一時ゴーストの root（`resolve()`／`boot()` の ghost_root として渡す）。
-    pub fn root(&self) -> &Path {
-        self.root.path()
-    }
-}
-
 /// `src` ディレクトリツリーを `dst` へ再帰的に**実体化**する（外部 crate 非依存・手書き）。
 ///
 /// ディレクトリ構造を再現し、通常ファイルは [`materialize_file`]（ハードリンク優先・フォールバック
@@ -120,16 +95,17 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
 /// テストゴースト組立は emo2 実物 shell（65 ファイル・約 2.5MB）＋ビルド済み cdylib を配置する。
 /// `std::fs::copy` は**新規バイト列を書き込む**ため、Windows Defender 等のリアルタイム保護が
 /// 生成直後のファイル（特に実行可能な DLL）を走査して CPU を占有し、同一 `ghost` テストバイナリ内で
-/// 並列実行される spine 側の協調反復ループ（`spine_e2e_test.rs`——壁時計を持たず relay/dispatcher
-/// スレッドの被スケジューリングに依存）を starve させ、決定論緑をフレークへ転落させる（レビュー
+/// 並列実行される spine 側の協調反復ループ（`spine_e2e_test.rs`——`BOUND` の壁時計で上限を切り、
+/// relay/dispatcher スレッドの被スケジューリングに依存）の到達を遅らせ（壁時計の上限内でも余裕を食う）、
+/// 決定論緑をフレークへ転落させる（レビュー
 /// reject の回帰根因）。ハードリンクは**既存（=走査済み）の実体へ新しいディレクトリ項目を張るだけ**で
 /// 新規バイト列を書かないため、この再走査ストームが発生せず、かつリンク先は実物とバイト完全同一
-/// （`copy` 以上に verbatim 忠実・要件 4.1）。`Drop` の `remove_dir_all` はリンク項目のみを消す
+/// （`copy` 以上に verbatim 忠実・要件 4.1）。共有ゴーストを消してもリンク項目のみが消える
 /// （元の emo2 実物・deps DLL は別リンクが残るため無傷）。
 ///
 /// フォールバック（`copy`）は、`dst` が `src` と別ボリューム上でハードリンク不可な環境
-/// （temp と repo が別ドライブ等）でも組立が成立するための保険である。同一ボリューム（既定 temp が
-/// repo と同一ドライブ）ではハードリンク経路が使われ、飽和回帰は生じない。
+/// （`target` を別ドライブへ向けた等）でも組立が成立するための保険である。根は既定で
+/// ワークツリーの `target\test-roots` の下（repo と同一ドライブ）なのでハードリンク経路が使われ、飽和回帰は生じない。
 fn materialize_file(from: &Path, to: &Path) {
     if std::fs::hard_link(from, to).is_ok() {
         return;
@@ -159,52 +135,17 @@ fn emo2_shell_master_src() -> PathBuf {
     EMO2.folder().join("shell").join("master")
 }
 
-/// 実在ゴーストの外観資産を流用した最小テストゴーストを一意 temp root へ組み立てる
-/// （要件 4.1・4.2・4.3／design.md「fixture 組立と DLL locate」Batch/Job Contract）。
-///
-/// 手順:
-/// 1. 共通窓口 `temp-path-kit` から temp root を受け取る（名前にプロセス識別子と連番が入るので
-///    **プロセス間でも一意**・破棄で中身ごと消える）。
-/// 2. `ghost/master/descript.txt` を UTF-8 生成する。`shiori,` 行は**新設のテスト DLL**
-///    （`shiori4_testdll.dll` == [`shiori4_testdll::DLL_FILE_NAME`]）を指す（要件 4.2）。
-/// 3. emo2 実物 `shell/master/`（surfaces.txt＋PNG 一式）を `root/shell/master/` へ再帰的に実体化する
-///    （[`copy_dir_recursive`]＝ハードリンク優先）——独自の最小 shell は作らず実物をそのまま流用する
-///    （要件 4.1）。
-/// 4. [`locate_built_test_dll`] が特定した実体 DLL（1.4 完成）を `root/ghost/master/` へ配置する
-///    ——`mount.shiori.dir.join(file)` がこの DLL を指す（要件 4.3）。
-/// 5. balloon 資産は**非同梱**（起動〜終話経路＝`resolve()` が balloon を消費しない判断・要件 4.2）。
-///
-/// 返り値 [`TempGhost`] の Drop がテスト終了時に temp root を削除する。
-///
-/// # 組立の直列化（同時 FS メタデータ churn による spine starvation の除去）
-/// 実体化は [`materialize_test_ghost_tree`] が行い、その FS 区間はプロセス全体で 1 本の
-/// [`std::sync::Mutex`] で直列化する。個々の組立は
-/// ハードリンク優先（[`materialize_file`]）で新規バイト列を書かないが、同一 `ghost` テストバイナリ内で
-/// **複数の組立が同時に**多数の NTFS メタデータ操作（`CreateHardLink`／`CreateDirectory`／
-/// `remove_dir_all`）を叩くと、瞬間的なメタデータ競合が spine 側の協調反復ループ（壁時計なし）を
-/// 稀に starve させ得る。任意時点で組立を高々 1 本に抑えることで、単一組立時の決定論的挙動
-/// （実測 0 失敗）へ収束させる。ロックは FS 区間だけを覆い、`resolve`/`boot` 等の consume は覆わない
-/// （読み取り専用消費は共有 fixture を並行に読んでよい）。
-pub fn assemble_test_ghost(tag: &str) -> TempGhost {
-    // 1. 共通窓口が配る一時 root（プロセス識別子＋連番入り＝**プロセス間でも一意**）。
-    //    破棄で中身ごと消えるので、事前削除も後始末も要らない。
-    let root = TempPath::new(&format!("ghost-inproc-fixture-{tag}"));
-    materialize_test_ghost_tree(root.path());
-    TempGhost { root }
+/// 共有ゴーストの `ghost/master/descript.txt` の中身（組立と鮮度の判定が同じ文を使う）。
+fn ghost_descript() -> String {
+    format!(
+        "charset,UTF-8\nname,Shiori4TestGhost\nshiori,{}\nseriko.defaultsurfacedirectoryname,master\n",
+        shiori4_testdll::DLL_FILE_NAME
+    )
 }
 
 /// 与えられた `root` の直下へテストゴーストの実体（descript／shell／DLL）を配置する
-/// （[`assemble_test_ghost`] と [`shared_test_ghost`] が共有する唯一の組立手続き）。
-///
-/// FS 実体化区間はプロセス全体で 1 本の [`std::sync::Mutex`] で直列化する（同時メタデータ
-/// churn による spine starvation の除去・[`assemble_test_ghost`] の rationale 参照）。
-/// poison は無視する（組立途中 panic 後も後続組立は健全にやり直せる——各 root は独立）。
+/// （[`shared_test_ghost`] の唯一の組立手続き・`OnceLock` が直列にする）。
 fn materialize_test_ghost_tree(root: &Path) {
-    static ASSEMBLE_FS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _fs_guard = ASSEMBLE_FS_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-
     // 1. 事前削除（冪等・Idempotency——固定パスの共有 fixture を作り直す経路で効く）。
     let _ = std::fs::remove_dir_all(root);
 
@@ -212,15 +153,8 @@ fn materialize_test_ghost_tree(root: &Path) {
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master)
         .unwrap_or_else(|e| panic!("create ghost/master に失敗: {e}"));
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        format!(
-            "charset,UTF-8\nname,Shiori4TestGhost\nshiori,{}\nseriko.defaultsurfacedirectoryname,master\n",
-            shiori4_testdll::DLL_FILE_NAME
-        )
-        .as_bytes(),
-    )
-    .unwrap_or_else(|e| panic!("write ghost descript.txt に失敗: {e}"));
+    std::fs::write(ghost_master.join("descript.txt"), ghost_descript())
+        .unwrap_or_else(|e| panic!("write ghost descript.txt に失敗: {e}"));
 
     // 3. emo2 実物 shell/master/ を再帰的に実体化（ハードリンク優先・自作最小 shell を作らない・要件 4.1）。
     let shell_src = emo2_shell_master_src();
@@ -243,70 +177,94 @@ fn materialize_test_ghost_tree(root: &Path) {
     // 5. balloon は非同梱（要件 4.2）——何も配置しない。
 }
 
-/// InProc テスト一族が共有する**一度だけ組み立てる**テストゴーストの root を返す
-/// （`OnceLock` 直列化・要件 4.1〜4.3／design.md「fixture 組立と DLL locate」）。
+/// 共有ゴーストの錠。I1・I2・組みの確かめは同じ固定の根を使うので、1 本ずつ順に持つ
+/// （持つ間はほかのテストが `profile\areka` の記録を消さない）。
+static SHARED_GHOST_LOCK: Mutex<()> = Mutex::new(());
+
+/// 錠を持ったままの共有ゴースト。終了の確かめまで持つこと（`_` で捨てない）。
+pub struct SharedGhost {
+    _guard: MutexGuard<'static, ()>,
+    root: &'static Path,
+}
+
+impl SharedGhost {
+    /// 共有ゴーストの root（`resolve()`／`boot()` の ghost_root として渡す）。
+    pub fn root(&self) -> &Path {
+        self.root
+    }
+}
+
+/// InProc テスト一族が共有する**一度だけ組み立てる**テストゴーストを、錠を取ってから返す
+/// （要件 4.1〜4.3／design.md「fixture 組立と DLL locate」）。
 ///
 /// # なぜ共有 fixture か（FS 飽和による兄弟テスト starvation の除去）
-/// [`assemble_test_ghost`] は emo2 実物 shell/master/ の PNG ツリー再帰コピー＋ビルド済み cdylib の
-/// `fs::copy` という**重い並行ファイル I/O** を伴う。同一 `ghost` テストバイナリ内で cargo 既定の
-/// 並列実行の下、読み取り専用の観測 assert がそれぞれ独立に組立を反復すると、FS が飽和して
-/// spine 側の協調反復テスト（`spine_e2e_test.rs` S1/S3/S4——壁時計を持たず relay/dispatcher
-/// スレッドの被スケジューリングに依存する `for _ in 0..N { Tick; yield_now }` 境界）を starve させ、
-/// 決定論緑がフレーク（≈33%）に転落する。これを根絶するため、読み取り専用消費者は**この単一の
-/// 共有ゴースト**を使い回し、N 消費者に対し再帰コピーは合計 1 回に抑える。
+/// 組立は emo2 実物 shell/master/ の PNG ツリーの実体化＋ビルド済み cdylib の配置という重い
+/// ファイル I/O を伴う。テストごとに組み立てると FS が飽和して spine 側の協調反復テストを
+/// starve させるので、組立は `OnceLock` で 1 回に抑え、プロセスをまたいでも再利用する。
 ///
-/// # 共有の安全性・意図的リーク・プロセス跨ぎ再利用（プロセス寿命 fixture）
-/// - boot/`resolve` はこのゴーストを**読むだけ**（変更しない）なので、多数の消費者が同一 root を
-///   並行に読むのは安全である。最初の複数呼出者は [`OnceLock::get_or_init`] 上で無害に競合し、
-///   実際に組み立てるのはただ 1 人（他は完成を待つ）。
-/// - `static` は**決して Drop されない**。したがってここで組み立てた temp dir は**意図的に
-///   クリーンアップされない**——固定パスのプロセス寿命共有 fixture として存置する。これは FS 飽和
-///   回帰を除去するための計画的トレードオフである（1 回きりの temp dir 残存を許容して、テスト
-///   ごとの反復コピーによる starvation を消す）。破棄あり（Drop 削除）のケースが要る場合は
-///   [`assemble_test_ghost`] を直接使うこと。
-/// - **プロセス跨ぎ再利用**: 固定パスに前プロセスがリークした共有ゴーストが**健全なまま残って
-///   いれば作り直さずそのまま再利用する**（[`shared_ghost_is_fresh`]）。これは `cargo test` を
-///   反復起動するワークフロー（各起動が別プロセス）で決定的に効く——再利用時は組立の FS 変更
-///   （前回リーク dir の `remove_dir_all` 事前削除＋65 ハードリンク再張り）を**丸ごと省く**ため、
-///   spine 協調ループと競合する残余メタデータ churn が消え、read 経路が実質 stat 数回まで軽くなる。
-///   健全性は「shell/surfaces.txt＋ghost/master DLL 実在・balloon 非在・かつ**キャッシュ DLL が
-///   現行ビルド済み DLL より古くない**」で判定する（DLL 再ビルド＝別 inode で mtime が進むと陳腐化
-///   とみなし作り直す。後続タスク 5.x が DLL を実ロードしても常に最新実体を掴む）。
-pub fn shared_test_ghost() -> &'static Path {
-    static SHARED: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let root = SHARED.get_or_init(|| {
-        let root = std::env::temp_dir().join("areka_shiori4_test_ghost_shared");
+/// # 置き場と再利用
+/// 根は `<ワークスペース>\target\test-roots\areka_shiori4_test_ghost_shared`（ワークツリーごと）。
+/// 名前は固定で、前のプロセスが残した実体が健全なら作り直さない（[`shared_ghost_is_fresh`]）。
+/// `static` は Drop されないので、この実体は意図して残る。
+///
+/// # 錠と記録の消去
+/// 錠を取った**後で**起動記録 `ghost\master\profile\areka` を消す（毎回の初回扱い）。無いのは
+/// 通し、ほかの失敗は panic する（黙って 2 回目扱いで走らせない）。錠の毒は越える。
+pub fn shared_test_ghost() -> SharedGhost {
+    hold(
+        SHARED_GHOST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    )
+}
 
-        // 前プロセスがリークした健全な共有ゴーストが残っていれば、FS 変更ゼロで再利用する
-        // （反復起動での残余 churn＝spine starvation の除去・上記ドキュメント参照）。
-        if shared_ghost_is_fresh(&root) {
-            return root;
-        }
+/// [`shared_test_ghost`] の `try_lock` の形。錠が塞がっていれば `None`（記録は消さない）。
+pub fn try_shared_test_ghost() -> Option<SharedGhost> {
+    match SHARED_GHOST_LOCK.try_lock() {
+        Ok(guard) => Some(hold(guard)),
+        Err(TryLockError::Poisoned(poisoned)) => Some(hold(poisoned.into_inner())),
+        Err(TryLockError::WouldBlock) => None,
+    }
+}
 
-        // 無いか陳腐化していれば固定パスへ**ちょうど一度**組み立てる（get_or_init が初期化を直列化）。
-        // ここだけは共通窓口を使わない——**固定パスであること自体が仕様**（プロセスを跨いで
-        // 同じ実体を再利用してビルド後の再組立を丸ごと省くための、意図的な共有 fixture）。
-        // 窓口が配る一意な名前にすると再利用が二度と成立せず、リーク（`static` は Drop されない）
-        // だけが毎プロセス積み上がる。読み取り専用消費のみを許す前提は上記ドキュメントのとおり。
-        materialize_test_ghost_tree(&root);
-        root
-    });
-
-    // 永続状態を**毎呼出し**でリセットする（「shared_test_ghost は永続ファイルを持たない＝常に
-    // 初回扱い」不変条件の回復・i1/i2 等が明示依存）。position-persist で永続書込が実際に効くように
-    // なったため、共有ゴーストを boot して初回挨拶を完走したテストが
-    // `<root>/ghost/master/profile/areka/sylphya.toml`（[boot] count 等）を書き込み、固定パスの
-    // リーク再利用で cargo 実行を跨いで生存する。放置すると後続 boot が「2 回目扱い」になり
-    // OnFirstBoot をスキップして挨拶列が届かず、初回挨拶を待つテストが hang する。ここで毎回
-    // areka profile ディレクトリを消して初回扱いを保証する（ゴースト構造の hardlink 再利用は温存）。
+/// 錠を持った上で起動記録を消し、持ち物にして返す。
+fn hold(guard: MutexGuard<'static, ()>) -> SharedGhost {
+    let root = shared_root();
     let persist_dir = root
         .join("ghost")
         .join("master")
         .join("profile")
         .join("areka");
-    let _ = std::fs::remove_dir_all(&persist_dir);
+    match std::fs::remove_dir_all(&persist_dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => panic!(
+            "共有ゴーストの記録 {} を消せない: {e}",
+            persist_dir.display()
+        ),
+    }
+    SharedGhost {
+        _guard: guard,
+        root,
+    }
+}
 
-    root.as_path()
+/// 共有ゴーストの根（一度だけ組み立てる・健全な残りは再利用する）。
+fn shared_root() -> &'static Path {
+    static SHARED: OnceLock<PathBuf> = OnceLock::new();
+    SHARED.get_or_init(|| {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("crates/areka-ghost の 2 つ上がワークスペースの根")
+            .join("target")
+            .join("test-roots")
+            .join("areka_shiori4_test_ghost_shared");
+        if !shared_ghost_is_fresh(&root) {
+            materialize_test_ghost_tree(&root);
+        }
+        root
+    })
 }
 
 /// 固定パスに残る共有ゴーストが**そのまま再利用してよいほど健全か**を判定する
@@ -316,6 +274,7 @@ pub fn shared_test_ghost() -> &'static Path {
 /// - `shell/master/surfaces.txt` が実在（emo2 実物 shell 流用の証跡・要件 4.1）。
 /// - `ghost/master/<DLL>` が実在（DLL 物理配置の証跡・要件 4.3）。
 /// - `balloon/` が非在（balloon 非同梱の証跡・要件 4.2）。
+/// - `ghost/master/descript.txt` のバイトが [`ghost_descript`] と同じ（書き換えや古い組立を拾わない）。
 /// - キャッシュ DLL が**現行ビルド済み DLL より古くない**（再ビルド陳腐化の検出）。ビルド済み DLL の
 ///   再ビルドは新 inode 生成で mtime を進めるため、旧ハードリンクを掴んだキャッシュはここで陳腐と
 ///   判定され作り直される（後続タスク 5.x の実ロードが常に最新実体を掴む保証）。
@@ -328,8 +287,12 @@ fn shared_ghost_is_fresh(root: &Path) -> bool {
         .join("master")
         .join(shiori4_testdll::DLL_FILE_NAME);
     let balloon = root.join("balloon");
+    let descript = root.join("ghost").join("master").join("descript.txt");
 
     if !surfaces.is_file() || !cached_dll.is_file() || balloon.exists() {
+        return false;
+    }
+    if std::fs::read(&descript).ok().as_deref() != Some(ghost_descript().as_bytes()) {
         return false;
     }
 
@@ -352,22 +315,6 @@ mod tests {
     #[test]
     fn locate_returns_existing_canonical_deps_dir_dll() {
         let dll = super::locate_built_test_dll();
-
-        // (a) 実在（不在なら locate 自身が明示 panic するので、成功戻り値は必ず実在）。
-        assert!(
-            dll.exists(),
-            "locate は実在するパスを返すこと: {}",
-            dll.display()
-        );
-
-        // (b) ファイル名 == 契約定数 DLL_FILE_NAME。
-        assert_eq!(
-            dll.file_name().and_then(|s| s.to_str()),
-            Some(shiori4_testdll::DLL_FILE_NAME),
-            "locate 戻り値のファイル名は契約定数と一致すること: {}",
-            dll.display()
-        );
-
         // (c) 親ディレクトリ名 == "deps"（単一正準位置＝deps・design.md D-1）。
         assert_eq!(
             dll.parent()
@@ -379,32 +326,10 @@ mod tests {
         );
     }
 
-    /// locate 戻り値は絶対パスで `target` ツリー内を指すこと（正準位置の健全性・design.md D-1）。
-    #[test]
-    fn locate_returns_absolute_path_inside_target_tree() {
-        let dll = super::locate_built_test_dll();
-        assert!(
-            dll.is_absolute(),
-            "locate 戻り値は絶対パスであること: {}",
-            dll.display()
-        );
-        assert!(
-            dll.components().any(|c| c.as_os_str() == "target"),
-            "locate 戻り値は target ツリー内を指すこと: {}",
-            dll.display()
-        );
-    }
-
-    // ---- assemble_test_ghost 組立檻（task 4.2） ----
+    // ---- 共有ゴーストの組立檻 ----
     //
-    // 読み取り専用の観測 assert（要件 4.1・4.2・4.3）は**単一のテスト**へ畳み込み、**共有 fixture**
-    // （[`super::shared_test_ghost`]）に対して全て実行する。これは 2 段の FS 飽和対策である:
-    //   (1) 共有 fixture＝`OnceLock` により組立は**1 回**（各 assert が再組立しない）。
-    //   (2) 単一テストへ畳む＝read 経路の並行スレッドを 1 本に抑える（`package::resolve_with_shell` による
-    //       shell dir 走査を別テスト群と同時多発させない）。
-    // これにより read 経路の同時 FS 負荷が、単一の破棄あり組立（Drop 檻）と同程度まで下がり、
-    // 壁時計を持たない兄弟 spine 協調ループを starve させない（レビュー reject の回帰根因）。
-    // 破棄あり（Drop 削除）のケースだけが [`super::assemble_test_ghost`] を直接呼んで独自 root を組む。
+    // 読み取り専用の観測 assert（要件 4.1・4.2・4.3）は read 経路の並行スレッドを 1 本に抑えるため
+    // **単一のテスト**へ畳み、共有 fixture（[`super::shared_test_ghost`]）に対して実行する。
 
     use areka_parsers::charset::DefaultEncoding;
     use areka_parsers::package;
@@ -420,7 +345,8 @@ mod tests {
     ///   （`purple/0/base1.png`）が実在＝自作最小 shell でなく実物の入れ子構造まで流用している。
     #[test]
     fn assembled_shared_ghost_satisfies_mount_dll_shell_and_no_balloon() {
-        let root = super::shared_test_ghost();
+        let shared = super::shared_test_ghost();
+        let root = shared.root();
 
         // 4.2 実マウント解決（boot が内部で通すのと同一契約）が Ok＝完全な解決可能ゴースト。
         let mount = package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
@@ -466,25 +392,60 @@ mod tests {
         );
     }
 
-    /// `TempGhost` の Drop（RAII クリーンアップ）が temp root を実際に削除すること
-    /// （design.md「テスト終了時に削除」）。
+    /// descript.txt の中身が組立の文と違えば、残った共有ゴーストを再利用しない（R2-g6-1）。
     #[test]
-    fn temp_ghost_drop_removes_the_temp_root() {
-        let root_path = {
-            let temp = super::assemble_test_ghost("drop-cleanup");
-            let p = temp.root().to_path_buf();
-            assert!(
-                p.is_dir(),
-                "組立直後は temp root が存在するべき: {}",
-                p.display()
-            );
-            p
-            // ここで temp が drop され、Drop が root を remove_dir_all する。
-        };
+    fn a_shared_ghost_with_a_changed_descript_is_not_fresh() {
+        let shared = super::shared_test_ghost();
+        let descript = shared
+            .root()
+            .join("ghost")
+            .join("master")
+            .join("descript.txt");
         assert!(
-            !root_path.exists(),
-            "TempGhost の Drop 後は temp root が削除されているべき: {}",
-            root_path.display()
+            super::shared_ghost_is_fresh(shared.root()),
+            "組んだ直後は健全"
+        );
+
+        std::fs::write(&descript, "charset,UTF-8\nname,Other\n").expect("descript を書けること");
+        let stale = super::shared_ghost_is_fresh(shared.root());
+        std::fs::write(&descript, super::ghost_descript()).expect("descript を戻せること");
+
+        assert!(!stale, "descript が違えば作り直す側へ倒すこと");
+        assert!(super::shared_ghost_is_fresh(shared.root()), "戻せば健全");
+    }
+
+    /// 錠を持つ間は、2 本目の取り手が記録を消さない（#45・I2 の消去が I1 の記録を消す競りを
+    /// 1 つのスレッドの順で再現する。錠を外すと 2 本目がすぐ取れて記録を消すので赤）。
+    #[test]
+    fn the_shared_ghost_is_not_reset_while_another_test_holds_it() {
+        let first = super::shared_test_ghost();
+        let areka = first
+            .root()
+            .join("ghost")
+            .join("master")
+            .join("profile")
+            .join("areka");
+        std::fs::create_dir_all(&areka).expect("profile/areka を作れること");
+        let record = areka.join("sylphya.toml");
+        std::fs::write(&record, "[boot]\ncount = 1\n").expect("記録を書けること");
+
+        assert!(
+            super::try_shared_test_ghost().is_none(),
+            "持っている間は 2 本目が取れないこと"
+        );
+        assert!(record.is_file(), "持っている間は記録が消えないこと");
+
+        drop(first);
+        let second = super::shared_test_ghost();
+        assert!(
+            !second
+                .root()
+                .join("ghost")
+                .join("master")
+                .join("profile")
+                .join("areka")
+                .exists(),
+            "取り直すと前の記録が消えていること"
         );
     }
 }

@@ -72,3 +72,7 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
+
+- **件 1: 空・相対の `AREKA_PROFILE_DIR` で置き場が作業フォルダからの相対になる**。`crates/areka-mcp-bridge/src/config.rs`（105 行目あたり）は環境変数の値をそのまま置き場に使う。`audit-ghost-catalog` は `crates/areka-user-data/src/lib.rs` の `usable_profile_env` で「空か相対なら `error!` を記録して使わない」に直した（同 spec の要件 4・#18）。同じ決まりへそろえる（`areka-user-data` の関数を呼ぶのが小さい）。起票の訳: 持ち主のこの spec の受け持ちの範囲と重なる。

@@ -72,3 +72,7 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
+
+- **件 1: 今の clippy で `-D warnings` が赤**。`cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` が lib で `collapsible_if` を 1 件、lib test で `type_complexity` を 5 件（`crates/areka-kanade/src/actor_online_tests.rs` 21 行目ほか）出す。振る舞いを変えずに直す。起票の訳: 持ち主のこの spec の受け持ちの範囲と重なる。

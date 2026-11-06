@@ -4,35 +4,10 @@
 
 use super::*;
 use crate::app_profile_dir;
-use std::ffi::OsString;
+use crate::test_support::{env_signals, fixture, logged, profile};
+use log_capture_kit::capture;
 use std::fs;
-use std::path::PathBuf;
 use temp_path_kit::TempPath;
-
-/// 実行ファイルのフォルダ（隣に記憶 `profile\areka\sylphya.toml` 在り）と、まだ無い書ける根。
-fn fixture(label: &str) -> (TempPath, PathBuf, PathBuf) {
-    let tmp = TempPath::under_target(label);
-    let exe = tmp.child("exe");
-    let beside = exe.join("profile").join("areka");
-    fs::create_dir_all(beside.join("mcp-bridge")).unwrap();
-    fs::write(beside.join("sylphya.toml"), "old = 1").unwrap();
-    let root = tmp.child("user");
-    (tmp, exe, root)
-}
-
-/// 書ける根を環境変数で指した入力（ほかの入力は空）。
-fn env_signals(root: &Path) -> Signals {
-    Signals {
-        user_root_env: Some(OsString::from(root)),
-        local_app_data: None,
-        winget_marker: None,
-        writability: Writability::Writable,
-    }
-}
-
-fn profile(dir: &Path) -> PathBuf {
-    dir.join("profile").join("areka")
-}
 
 fn beside_unchanged(exe: &Path) {
     assert_eq!(
@@ -91,6 +66,28 @@ fn profile_env_skips_migration() {
 }
 
 #[test]
+fn establish_still_migrates_when_the_profile_env_is_empty() {
+    let (_tmp, exe, root) = fixture("ud-est-profile-env-empty");
+    let empty = OsStr::new("");
+
+    let (layout, events) = capture(|| establish_from(&env_signals(&root), Some(&exe), Some(empty)));
+
+    assert_eq!(
+        fs::read_to_string(profile(&root).join("sylphya.toml")).unwrap(),
+        "old = 1",
+        "空の値でも隣の記憶を写す"
+    );
+    assert_eq!(
+        app_profile_dir(Some(empty), &layout, Some(&exe)),
+        Some(profile(&root))
+    );
+    let errors = logged(&events, "profile_dir_env_unusable");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].level, tracing::Level::ERROR);
+    beside_unchanged(&exe);
+}
+
+#[test]
 fn migration_failure_keeps_user_root_profile() {
     let (_tmp, exe, root) = fixture("ud-est-copy-fail");
     // 隣の記憶を共有なしで掴み、読めなくする。
@@ -100,8 +97,12 @@ fn migration_failure_keeps_user_root_profile() {
         .open(profile(&exe).join("sylphya.toml"))
         .unwrap();
 
-    let layout = establish_from(&env_signals(&root), Some(&exe), None);
+    let (layout, events) = capture(|| establish_from(&env_signals(&root), Some(&exe), None));
     drop(held);
+
+    let errors = logged(&events, "app_memory_migrate_failed");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].level, tracing::Level::ERROR);
 
     assert_eq!(layout.user_root.as_ref().map(|r| &r.dir), Some(&root));
     assert_eq!(layout.reason, Reason::EnvVar);
@@ -121,7 +122,12 @@ fn uncreatable_user_root_falls_back_beside() {
     fs::write(&file, "x").unwrap();
     let root = file.join("user");
 
-    let layout = establish_from(&env_signals(&root), Some(&exe), None);
+    let (layout, events) = capture(|| establish_from(&env_signals(&root), Some(&exe), None));
+
+    let errors = logged(&events, "user_root_unavailable");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].level, tracing::Level::ERROR);
+    assert_eq!(errors[0].field_str("reason"), Some("create_failed"));
 
     assert_eq!(layout.user_root, None);
     assert_eq!(layout.reason, Reason::EnvVar);

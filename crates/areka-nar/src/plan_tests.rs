@@ -12,35 +12,52 @@
 //! 往復させて組む。`components` や `is_dir` の取り違えが緑のまま残らない。
 
 use super::*;
-use crate::container::{inflate_entry, read_central_directory};
+use crate::container::{RawEntry, inflate_entry, read_central_directory};
 use crate::install::{InstallRoots, SingleRoot};
 use crate::manifest::{locate_install_txt, parse_manifest};
 use crate::names::validate_entry_names;
 use sample_ghost_kit::{NarBuilder, WorkDir, install_txt};
 use std::path::{Component, Path};
 
-// ---- 助手 ----
+// ---- 助手（`install` の兄弟テストも借りる） ----
 
-/// 書庫を読取 → 名前の検証 → マニフェストの解釈まで通してから計画を組む。
-fn planned(builder: NarBuilder, request: &InstallRequest<'_>) -> Result<Planned, RefuseReason> {
-    let bytes = builder.bytes();
-    let raw = read_central_directory(&bytes).expect("書庫そのものは無傷");
+/// 書庫を読取 → 名前の検証 → マニフェストの解釈まで通す。どの段も無傷であることを主張する。
+pub(crate) fn read_archive(bytes: &[u8]) -> (Vec<RawEntry>, Vec<EntryName>, InstallManifest) {
+    let raw = read_central_directory(bytes).expect("書庫そのものは無傷");
     let names = validate_entry_names(&raw).expect("名前は安全");
     let index = locate_install_txt(&names)
         .expect("最上位に install.txt がある")
         .index;
-    let text = inflate_entry(&bytes, &raw[index]).expect("install.txt を伸長できる");
+    let text = inflate_entry(bytes, &raw[index]).expect("install.txt を伸長できる");
     let manifest = parse_manifest(&text).expect("マニフェストは受理される");
-    build_plan(&manifest, &names, request)
+    (raw, names, manifest)
 }
 
-/// 受理された計画を、置く配置と飛ばした同梱の 2 つの列のまま取り出す。拒否されたら主張ごと落とす。
-fn plan_and_skipped_of(
-    builder: NarBuilder,
-    request: &InstallRequest<'_>,
-) -> (Vec<Placement>, Vec<SkippedCompanion>) {
-    let (plan, skipped, _overridden) = accepted(builder, request);
-    (plan, skipped)
+/// 宛先ゴースト `name` が実在する空の根を 1 つ借りる。
+///
+/// OS の一時フォルダは使わない（要件 7.10）。`WorkDir` が破棄で木ごと片付ける。
+pub(crate) fn root_with_ghost(name: &str) -> WorkDir {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    std::fs::create_dir_all(work.path().join("ghost").join(name)).expect("宛先ゴーストを作れる");
+    work
+}
+
+/// ゴースト本体 `test-ghost` の `install.txt` に、同梱の行を足したもの。
+fn ghost_install_txt(companion_lines: &[&str]) -> Vec<u8> {
+    let mut lines = vec![
+        "charset,UTF-8",
+        "type,ghost",
+        "name,emo",
+        "directory,test-ghost",
+    ];
+    lines.extend_from_slice(companion_lines);
+    install_txt(&lines)
+}
+
+/// 書庫を読んでから計画を組む。
+fn planned(builder: NarBuilder, request: &InstallRequest<'_>) -> Result<Planned, RefuseReason> {
+    let (_raw, names, manifest) = read_archive(&builder.bytes());
+    build_plan(&manifest, &names, request)
 }
 
 /// 受理された計画を 3 つの列のまま取り出す。拒否されたら主張ごと落とす。
@@ -49,11 +66,6 @@ fn accepted(builder: NarBuilder, request: &InstallRequest<'_>) -> Planned {
         Ok(planned) => planned,
         Err(reason) => panic!("受理されるはずの書庫が拒否された: {reason}"),
     }
-}
-
-/// 受理された計画の置く配置だけを取り出す。拒否されたら主張ごと落とす。
-fn plan_of(builder: NarBuilder, request: &InstallRequest<'_>) -> Vec<Placement> {
-    plan_and_skipped_of(builder, request).0
 }
 
 /// 拒否だけを取り出す。受理されたら主張ごと落とす。
@@ -65,15 +77,6 @@ fn refusal_of(builder: NarBuilder, request: &InstallRequest<'_>) -> RefuseReason
         ),
         Err(reason) => reason,
     }
-}
-
-/// 宛先ゴースト `name` が実在する空の根を 1 つ借りる。
-///
-/// OS の一時フォルダは使わない（要件 7.10）。`WorkDir` が破棄で木ごと片付ける。
-fn root_with_ghost(name: &str) -> WorkDir {
-    let work = WorkDir::new().expect("作業フォルダを取れる");
-    std::fs::create_dir_all(work.path().join("ghost").join(name)).expect("宛先ゴーストを作れる");
-    work
 }
 
 /// ファイルの相対パスだけを並べる（エントリ番号を見ないときの比較用）。
@@ -147,7 +150,7 @@ fn balloon_archive() -> NarBuilder {
 }
 
 /// 単独のシェル。
-fn shell_archive() -> NarBuilder {
+pub(crate) fn shell_archive() -> NarBuilder {
     NarBuilder::new()
         .file(
             "install.txt",
@@ -227,7 +230,7 @@ fn a_ghost_goes_under_the_root_ghost_folder_without_the_companion_source() {
         roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
-    let plan = plan_of(ghost_archive(), &request);
+    let (plan, _, _) = accepted(ghost_archive(), &request);
 
     assert_eq!(plan.len(), 2, "ゴースト本体と同梱バルーンの 2 配置になる");
     let ghost = &plan[0];
@@ -263,7 +266,7 @@ fn a_balloon_goes_under_the_root_balloon_folder() {
         roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
-    let plan = plan_of(balloon_archive(), &request);
+    let (plan, _, _) = accepted(balloon_archive(), &request);
 
     assert_eq!(plan.len(), 1);
     let balloon = &plan[0];
@@ -290,7 +293,7 @@ fn a_shell_goes_under_the_target_ghosts_shell_folder() {
         roots: &SingleRoot(root.path()),
         target_ghost: Some("test-ghost"),
     };
-    let plan = plan_of(shell_archive(), &request);
+    let (plan, _, _) = accepted(shell_archive(), &request);
 
     assert_eq!(plan.len(), 1);
     let shell = &plan[0];
@@ -321,7 +324,7 @@ fn a_supplement_overlays_the_target_ghost_without_the_top_level_install_txt() {
         roots: &SingleRoot(root.path()),
         target_ghost: Some("test-ghost"),
     };
-    let plan = plan_of(supplement_archive(), &request);
+    let (plan, _, _) = accepted(supplement_archive(), &request);
 
     assert_eq!(plan.len(), 1);
     let supplement = &plan[0];
@@ -352,7 +355,7 @@ fn a_companion_balloon_goes_to_the_balloon_folder_with_its_prefix_stripped() {
         roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
-    let plan = plan_of(ghost_archive(), &request);
+    let (plan, _, _) = accepted(ghost_archive(), &request);
 
     let companion = &plan[1];
     assert_eq!(companion.kind, ElementKind::Balloon);
@@ -400,7 +403,7 @@ fn the_companion_leaves_no_copy_on_the_ghost_side() {
         roots: &SingleRoot(root.path()),
         target_ghost: None,
     };
-    let plan = plan_of(ghost_archive(), &request);
+    let (plan, _, _) = accepted(ghost_archive(), &request);
 
     let ghost = &plan[0];
     for relative in relative_files(ghost) {
@@ -449,7 +452,7 @@ fn the_companion_source_name_may_differ_from_its_destination() {
         .done()
         .file("packed-name/descript.txt", b"d")
         .done();
-    let plan = plan_of(archive, &request);
+    let (plan, _, _) = accepted(archive, &request);
 
     assert_eq!(relative_files(&plan[0]), vec!["install.txt"]);
     assert_eq!(
@@ -490,7 +493,7 @@ fn the_companion_source_matches_the_archive_spelling_ignoring_case() {
         .done()
         .file("test-balloon/descript.txt", b"d")
         .done();
-    let plan = plan_of(archive, &request);
+    let (plan, _, _) = accepted(archive, &request);
 
     assert_eq!(
         relative_files(&plan[0]),
@@ -530,7 +533,7 @@ fn the_companion_carries_its_own_refresh_policy() {
         .done()
         .file("test-balloon/descript.txt", b"d")
         .done();
-    let plan = plan_of(archive, &request);
+    let (plan, _, _) = accepted(archive, &request);
 
     assert_eq!(
         plan[0].existing,
@@ -570,7 +573,7 @@ fn skips_a_companion_whose_source_folder_is_empty() {
         .done()
         .dir("test-balloon");
 
-    let (plan, skipped) = plan_and_skipped_of(archive, &request);
+    let (plan, skipped, _) = accepted(archive, &request);
     assert_eq!(plan.len(), 1, "置く配置は本体だけ");
     assert_eq!(plan[0].kind, ElementKind::Ghost);
     assert_eq!(relative_files(&plan[0]), vec!["install.txt"]);
@@ -614,7 +617,7 @@ fn skips_a_companion_whose_source_folder_is_absent() {
         .file("test-balloon/descript.txt", b"d")
         .done();
 
-    let (plan, skipped) = plan_and_skipped_of(archive, &request);
+    let (plan, skipped, _) = accepted(archive, &request);
     assert_eq!(plan.len(), 1, "置く配置は本体だけ");
     assert_eq!(plan[0].kind, ElementKind::Ghost);
     assert_eq!(
@@ -701,7 +704,7 @@ fn folder_entries_become_folders_and_missing_parents_are_derived() {
         target_ghost: None,
     };
 
-    let empty = plan_of(empty_folder_archive(), &request);
+    let (empty, _, _) = accepted(empty_folder_archive(), &request);
     assert_eq!(relative_files(&empty[0]), vec!["install.txt"]);
     assert_eq!(
         empty[0].dirs,
@@ -709,7 +712,7 @@ fn folder_entries_become_folders_and_missing_parents_are_derived() {
         "中身の無いフォルダのエントリも空フォルダとして残す"
     );
 
-    let derived = plan_of(no_folder_entry_archive(), &request);
+    let (derived, _, _) = accepted(no_folder_entry_archive(), &request);
     assert_eq!(
         relative_files(&derived[0]),
         vec!["install.txt", "a/b/c.txt"]
@@ -777,12 +780,15 @@ fn every_accepted_plan(root: &WorkDir) -> Vec<(&'static str, Vec<Placement>)> {
         target_ghost: Some("test-ghost"),
     };
     vec![
-        ("ghost", plan_of(ghost_archive(), &free)),
-        ("balloon", plan_of(balloon_archive(), &free)),
-        ("shell", plan_of(shell_archive(), &targeted)),
-        ("supplement", plan_of(supplement_archive(), &targeted)),
-        ("empty-folder", plan_of(empty_folder_archive(), &free)),
-        ("no-folder-entry", plan_of(no_folder_entry_archive(), &free)),
+        ("ghost", accepted(ghost_archive(), &free).0),
+        ("balloon", accepted(balloon_archive(), &free).0),
+        ("shell", accepted(shell_archive(), &targeted).0),
+        ("supplement", accepted(supplement_archive(), &targeted).0),
+        ("empty-folder", accepted(empty_folder_archive(), &free).0),
+        (
+            "no-folder-entry",
+            accepted(no_folder_entry_archive(), &free).0,
+        ),
     ]
 }
 
@@ -873,105 +879,11 @@ fn a_sibling_with_a_longer_name_is_not_inside() {
     assert!(!is_inside(&root, &root.join("..")));
 }
 
-// ---- 書き込みをしない（要件 4.1・設計「読む → 入れる」） ----
-
-/// 根の下の木を「相対パスと長さ」の名前順の一覧に写す。フォルダは末尾 `/` で表す。
-fn snapshot(root: &Path) -> Vec<(String, u64)> {
-    let mut found = Vec::new();
-    collect_snapshot(root, "", &mut found);
-    found.sort();
-    found
-}
-
-fn collect_snapshot(dir: &Path, prefix: &str, found: &mut Vec<(String, u64)>) {
-    for child in std::fs::read_dir(dir).expect("根を読める") {
-        let child = child.expect("要素を読める");
-        let name = child.file_name().to_string_lossy().into_owned();
-        let path = format!("{prefix}{name}");
-        let meta = child.metadata().expect("属性を読める");
-        if meta.is_dir() {
-            found.push((format!("{path}/"), 0));
-            collect_snapshot(&child.path(), &format!("{path}/"), found);
-        } else {
-            found.push((path, meta.len()));
-        }
-    }
-}
-
-/// `build_plan` は根を 1 バイトも書き換えない（読むのは宛先ゴーストの実在だけ）。
-#[test]
-fn build_plan_writes_nothing_under_the_root() {
-    let root = root_with_ghost("test-ghost");
-    std::fs::write(
-        root.path()
-            .join("ghost")
-            .join("test-ghost")
-            .join("install.txt"),
-        b"x",
-    )
-    .expect("宛先ゴーストに 1 件置ける");
-    let before = snapshot(root.path());
-    assert!(!before.is_empty(), "根が空なら突合は恒真で緑になる");
-
-    let free = InstallRequest {
-        roots: &SingleRoot(root.path()),
-        target_ghost: None,
-    };
-    let targeted = InstallRequest {
-        roots: &SingleRoot(root.path()),
-        target_ghost: Some("test-ghost"),
-    };
-    let missing = InstallRequest {
-        roots: &SingleRoot(root.path()),
-        target_ghost: Some("not-installed"),
-    };
-    let mut walked = 0;
-    for (archive, request) in [
-        (ghost_archive(), &free),
-        (balloon_archive(), &free),
-        (shell_archive(), &targeted),
-        (supplement_archive(), &targeted),
-        (empty_folder_archive(), &free),
-        (no_folder_entry_archive(), &free),
-        (shell_archive(), &missing),
-        (supplement_archive(), &free),
-    ] {
-        let _ = planned(archive, request);
-        walked += 1;
-    }
-    assert_eq!(walked, 8, "固定入力を 1 本も通していなければ突合は恒真");
-    assert_eq!(
-        before,
-        snapshot(root.path()),
-        "build_plan が根の中身を変えた"
-    );
-}
-
-/// 上の突合の較正。書き込みを 3 通り持ち込めば必ず差が出る。
-#[test]
-fn the_snapshot_notices_every_shape_of_write() {
-    let root = root_with_ghost("test-ghost");
-    let ghost = root.path().join("ghost").join("test-ghost");
-
-    let before = snapshot(root.path());
-    std::fs::write(ghost.join("x.txt"), b"1").expect("ファイルを作れる");
-    let after_create = snapshot(root.path());
-    assert_ne!(before, after_create, "ファイルの追加を見落とす");
-
-    std::fs::write(ghost.join("x.txt"), b"22").expect("ファイルを書き替えられる");
-    let after_write = snapshot(root.path());
-    assert_ne!(after_create, after_write, "中身の変化を見落とす");
-
-    std::fs::create_dir(root.path().join("balloon")).expect("フォルダを作れる");
-    assert_ne!(
-        after_write,
-        snapshot(root.path()),
-        "空フォルダの追加を見落とす"
-    );
-}
-
 #[path = "plan_source_path_tests.rs"]
 mod source_path;
 
 #[path = "plan_roots_tests.rs"]
 mod roots;
+
+#[path = "plan_no_write_tests.rs"]
+mod no_write;

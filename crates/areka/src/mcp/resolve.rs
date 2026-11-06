@@ -77,16 +77,9 @@ pub(crate) fn resolve<'a>(
 }
 
 /// 一覧に出す値（`name`、無ければルートフォルダのフルパス・末尾の区切りなし・要件 4.2）。
+/// script の記録の名と同じ作り（`areka_ghost::config::listed_name`）。
 pub(crate) fn listed_value(ghost: &ActiveGhost) -> String {
-    match &ghost.name {
-        Some(name) => name.clone(),
-        None => ghost
-            .root
-            .display()
-            .to_string()
-            .trim_end_matches(['\\', '/'])
-            .to_string(),
-    }
+    areka_ghost::config::listed_name(ghost.name.as_deref(), &ghost.root)
 }
 
 /// フルパスの照合（大文字小文字・区切り・末尾の区切りの差を同じとみなす・要件 3.3）。

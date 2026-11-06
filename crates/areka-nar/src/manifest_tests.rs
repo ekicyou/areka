@@ -157,7 +157,6 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(emo2.kind, InstallKind::Ghost);
     assert_eq!(emo2.name, EMO2_GHOST_NAME);
     assert_eq!(emo2.directory, "emo2");
-    assert_eq!(emo2.charset_declared.as_deref(), Some("UTF-8"));
     assert_eq!(emo2.accept, None);
     assert_eq!(emo2.existing, ExistingPolicy::Overlay);
     assert_eq!(
@@ -176,7 +175,6 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(r_post.kind, InstallKind::Ghost);
     assert_eq!(r_post.name, R_POST_NAME);
     assert_eq!(r_post.directory, "R_POST_and_KOMAINU");
-    assert_eq!(r_post.charset_declared.as_deref(), Some("Shift_JIS"));
     assert_eq!(r_post.companions, vec![]);
     assert_eq!(r_post.warnings, vec![]);
 
@@ -190,7 +188,6 @@ fn every_real_sample_install_txt_is_accepted_verbatim_without_a_single_warning()
     assert_eq!(pasta.kind, InstallKind::Ghost);
     assert_eq!(pasta.name, "hello-pasta");
     assert_eq!(pasta.directory, "hello-pasta");
-    assert_eq!(pasta.charset_declared, None);
     assert_eq!(pasta.accept, None, "空の accept は「指定なし」");
     assert_eq!(pasta.warnings, vec![]);
 }
@@ -251,6 +248,21 @@ fn refuses_an_empty_archive_with_an_empty_top_level_list() {
     assert_eq!(missing_top_level(NarBuilder::new()), Vec::<String>::new());
 }
 
+/// 最上位の名前が多いときは先頭の 8 件と総数だけを並べる（ちょうど 8 件なら総数は付けない）。
+#[test]
+fn lists_only_the_first_eight_top_level_names_and_the_total() {
+    let with = |count: usize| {
+        (0..count).fold(NarBuilder::new(), |builder, n| {
+            builder.file(format!("f{n:02}.txt"), b"x").done()
+        })
+    };
+    let eight: Vec<String> = (0..8).map(|n| format!("f{n:02}.txt")).collect();
+    assert_eq!(missing_top_level(with(8)), eight);
+    let mut nine = eight.clone();
+    nine.push("…（全 9 件）".to_owned());
+    assert_eq!(missing_top_level(with(9)), nine);
+}
+
 /// `install.txt` という名前の**フォルダ**は読む対象ではない（要件 3.1）。
 #[test]
 fn does_not_take_a_top_level_folder_named_install_txt() {
@@ -268,7 +280,6 @@ fn does_not_take_a_top_level_folder_named_install_txt() {
 fn reads_the_uppercase_charset_key_like_the_emo2_sample() {
     let manifest = parse_manifest(EMO2_GHOST).expect("受理される");
     assert_eq!(manifest.name, EMO2_GHOST_NAME, "UTF-8 として読めている");
-    assert_eq!(manifest.charset_declared.as_deref(), Some("UTF-8"));
 }
 
 /// 値の前の空白は無視する。検体 R_POST_and_KOMAINU の綴り（要件 3.3）。
@@ -276,11 +287,6 @@ fn reads_the_uppercase_charset_key_like_the_emo2_sample() {
 fn reads_the_charset_value_with_a_leading_space_like_the_r_post_sample() {
     let manifest = parse_manifest(R_POST).expect("受理される");
     assert_eq!(manifest.name, R_POST_NAME, "Shift_JIS として読めている");
-    assert_eq!(
-        manifest.charset_declared.as_deref(),
-        Some("Shift_JIS"),
-        "値の前後の空白は落とす"
-    );
 }
 
 /// `charset` 行が無ければ既存層の ANSI 既定（＝CP932）で読む（要件 3.3）。
@@ -293,13 +299,6 @@ fn falls_back_to_the_ansi_default_when_no_charset_line_is_present() {
 
     let manifest = parse_manifest(&bytes).expect("受理される");
     assert_eq!(manifest.name, "狛犬", "宣言が無ければ Shift_JIS で読む");
-    assert_eq!(manifest.charset_declared, None);
-}
-
-/// 空の `charset` 行は「宣言なし」として返す（要件 3.3）。
-#[test]
-fn treats_an_empty_charset_line_as_no_declaration() {
-    assert_eq!(parsed_ghost(&["charset,"]).charset_declared, None);
 }
 
 /// `charset` 行より前に非 ASCII の行があっても、宣言は使われる（7.11(b)・
@@ -314,11 +313,6 @@ fn a_charset_line_after_a_non_ascii_line_is_used() {
     bytes.extend_from_slice(b"\r\ncharset,UTF-8\r\ndirectory,komainu\r\n");
 
     let manifest = parse_manifest(&bytes).expect("受理される");
-    assert_eq!(
-        manifest.charset_declared.as_deref(),
-        Some("UTF-8"),
-        "書かれている宣言はそのまま記録する"
-    );
     assert_eq!(
         manifest.name, "狛犬",
         "本文は書かれた宣言（UTF-8）で読まれる"
@@ -346,19 +340,27 @@ fn looks_up_every_key_ignoring_ascii_case() {
     assert_eq!(manifest.warnings, vec![], "大小違いは知らないキーではない");
 }
 
-/// 大小だけが違う同じキーが 2 度あれば後勝ち（要件 3.4）。
+/// 大小だけが違う同じキーが 2 度あれば、ファイルの後の行が勝つ（要件 3.4）。
 ///
-/// 「後」は既存層の並び（キーのバイト順）で決まる。`Directory` は `directory` より
-/// 前に来るので、小文字のほうが勝つ。
+/// 鍵の表の順（`Directory` が `directory` より前）なら小文字のほうが勝つ並びにして、
+/// 行の順で畳んでいることを見る。
 #[test]
 fn the_later_of_two_keys_differing_only_in_case_wins() {
     let manifest = parsed(&[
         "type,ghost",
         "name,えも",
-        "Directory,first",
-        "directory,second",
+        "directory,first",
+        "Directory,second",
     ]);
     assert_eq!(manifest.directory, "second");
+}
+
+/// 同梱のバルーンの鍵も後の行が勝つ。areka-ghost の `companion_balloon` と同じ勝者になる。
+#[test]
+fn the_later_companion_directory_row_wins_across_case() {
+    let manifest = parsed_ghost(&["balloon.directory,y", "Balloon.Directory,x"]);
+    assert_eq!(manifest.companions.len(), 1);
+    assert_eq!(manifest.companions[0].directory, "x");
 }
 
 /// カンマの無い行は既存層と同じく読み飛ばす。知らないキーにも数えない（要件 3.4）。
@@ -564,51 +566,16 @@ fn accepts_an_ordinary_one_level_directory_name() {
 
 // ---- 本体が書き込みの手段を持たない（要件 4.1） ----
 
-/// `manifest` の本体に決して現れてはならない綴り。
-///
-/// `names` の見張りと同じ 3 語。入口は `&[EntryName]` と `&[u8]` しか受け取らず
-/// 宛先を知らないので、書くとすれば `fs::`・道としての `path::`・`process::` の
-/// いずれかが本体に要る。
-const FORBIDDEN_SPELLINGS: &[&str] = &["fs::", "path::", "process::"];
-
-/// `source` に現れる禁じ手の綴りを拾う。
-fn forbidden_spellings_in(source: &str) -> Vec<&'static str> {
-    FORBIDDEN_SPELLINGS
-        .iter()
-        .copied()
-        .filter(|needle| source.contains(needle))
-        .collect()
-}
-
 /// `manifest` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
+///
+/// 入口は `&[EntryName]` と `&[u8]` しか受け取らず宛先を知らないので、書くとすれば
+/// 入出力の綴りが本体に要る。拒否語彙の変種名では赤にならないことも較正する。
 #[test]
 fn manifest_source_contains_no_filesystem_mutation() {
-    let found = forbidden_spellings_in(include_str!("manifest.rs"));
-    assert!(
-        found.is_empty(),
-        "manifest が禁じ手の綴りを持っている: {found:?}"
-    );
-}
-
-/// 上の走査の較正。走査語が空だと上のテストは恒真で緑になる。
-#[test]
-fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
-    assert_eq!(
-        FORBIDDEN_SPELLINGS.len(),
-        3,
-        "走査語が空なら上のテストは恒真で緑になる"
-    );
-    for needle in FORBIDDEN_SPELLINGS {
-        let synthetic = format!("fn f() {{ let _ = {needle}; }}");
-        assert_eq!(
-            forbidden_spellings_in(&synthetic),
-            vec![*needle],
-            "綴り {needle} を走査が拾えていない"
-        );
-    }
-    assert!(
-        forbidden_spellings_in("RefuseReason::InvalidDirectoryName { key, value }").is_empty(),
-        "拒否語彙の変種名で赤になるなら、走査は本体を書けなくするだけで何も守らない"
+    crate::tests::assert_source_has_no_io(
+        include_str!("manifest.rs"),
+        crate::tests::IO_SPELLINGS,
+        "RefuseReason::InvalidDirectoryName { key, value }",
     );
 }
 

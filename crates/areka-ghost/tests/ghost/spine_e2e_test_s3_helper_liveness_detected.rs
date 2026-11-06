@@ -16,59 +16,8 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
     GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
 };
-use areka_kanade::{KanadeMsg, MonotonicMs};
+use areka_kanade::{KanadeConfig, KanadeMsg, MonotonicMs};
 use areka_parsers::charset::DefaultEncoding;
-
-use areka_actor::{ActorError, ActorHandle};
-use temp_path_kit::TempPath;
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-spine-s3-{tag}"))
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
-/// `shell/master/descript.txt`）を構築する。S1 の `write_ghost_fixture` と同旨だが、
-/// sibling module から private item は参照できないためローカルに複製する。
-fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,S3TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
-    )
-    .expect("write shell descript.txt");
-}
-
-/// `ActorHandle::join` を有界時間で観測する（S2 の `join_bounded` と同旨のローカルコピー）。
-fn join_bounded(
-    what: &str,
-    timeout: std::time::Duration,
-    handle: ActorHandle,
-) -> Result<(), ActorError> {
-    let (res_tx, res_rx) = std::sync::mpsc::sync_channel::<Result<(), ActorError>>(0);
-    std::thread::spawn(move || {
-        let _ = res_tx.send(handle.join());
-    });
-    match res_rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => panic!("'{what}' join did not complete within {timeout:?} (possible hang)"),
-    }
-}
-
-const BOUND: std::time::Duration = super::E2E_BOUND;
 
 /// S3: helper 死活検出——scripted `status()` をシナリオ途中で `Exited(Abnormal)` へ差し
 /// 替え、`runtime.kanade()` へ Tick を 1 回注入するだけで（Steady pump が発行する
@@ -80,9 +29,8 @@ const BOUND: std::time::Duration = super::E2E_BOUND;
 fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination() {
     const SHELL_NAME: &str = "S3LivenessShell";
 
-    let temp = unique_temp_dir("mid-scenario-drives-autonomous-fault-termination");
+    let temp = write_ghost_fixture("S3TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
-    write_ghost_fixture(&root, SHELL_NAME);
 
     // boot 系列一式（S1 と同旨）＋ OnSecondChange（Steady pump の 1 発）＋ unload
     // （Fault 系列が発行する ShioriUnload の応答・best-effort ゆえ Abnormal でも Stopped へ
@@ -98,15 +46,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // shiori actor へ到達し、到達時 status() 確認が Exited を検出する（Req2.2/DD-IT-12）——
     // ゆえに GET/NOTIFY 双方を台本化し、レースが選んだ側だけが消費される（他方は未消費で
     // 無害）。
-    let (backend, handle) = ScriptedShioriBackend::builder()
-        .notify("OnInitialize", Ok(()))
-        // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
-        // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
-        // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
-        .get("username", Ok(None))
-        .get("OnFirstBoot", Ok(None))
-        .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
-        .notify("basewareversion", Ok(()))
+    let (backend, handle) = boot_script()
         .get("OnSecondChange", Ok(None))
         .notify("OnSecondChange", Ok(()))
         .unload(Ok(ExitKind::Abnormal(1)))
@@ -131,82 +71,51 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
 
-    // ---- boot talk を Steady{None} 到達まで駆動する（S1 と同一技法・sleep 不使用） ----
+    // ---- boot talk を Steady 到達まで駆動する（S1 と同一技法・sleep 不使用） ----
     // dispatcher へ Tick を送るたびに RecordingSink を確認する有界再送ループ（実時間
     // 待機なし・単調増加する now の注入のみ・`yield_now` で他スレッドに実行機会を譲る
     // だけ）。kanade 自身は（dispatcher Tick とは無関係な別チャンネル経由で）
-    // basewareversion NOTIFY の応答往復のみで Steady{talk: None} へ完了する（boot.rs:
-    // 「boot は常に Steady{talk: None} へ完了する」・BootVersion+Notified の遷移は
+    // basewareversion NOTIFY の応答往復のみで Steady へ完了する（DD-IT-12: 挨拶 talk を
+    // 追跡したまま `Steady{talk: Some(greeting)}` へ・BootVersion+Notified の遷移は
     // StartTalk 発行と独立に basewareversion の応答のみで確定する）。
-    // ⚠ ただし cue の発火が boot 系列の完了を**含意しない**——`schedule/boot.rs:241` は
-    // `Action::StartTalk` を `:279` の basewareversion より先に積むので、cue（start-relay
-    // →dispatcher の 2 hop ＋ Tick）と 5 本目の記録（shiori アクタースレッド 1 hop）は
+    // ⚠ ただし cue の発火が boot 系列の完了を**含意しない**——`schedule/boot.rs` の
+    // `to_baseware_version` は `Action::StartTalk` を basewareversion より先に積むので、cue（start-relay
+    // →dispatcher の 2 hop ＋ Tick）と 起動の列の最後の記録（basewareversion・6 本目）（shiori アクタースレッド 1 hop）は
     // 別スレッドの競走であり、順序は保証されていない。実測では cue の側が遅いことが
     // ほとんどだが構造的な保証ではないため、件数は下の有界待ちで待ってから数える
-    // （areka-P0-emo2-conformance-e2e R9.2・詳細は :175 以降）。
+    // （areka-P0-emo2-conformance-e2e R9.2・詳細は下の有界待ちの注記）。
     let mut now: u64 = 1;
-    let mut fired = false;
-    let deadline = std::time::Instant::now() + super::E2E_BOUND;
-    while std::time::Instant::now() < deadline {
-        runtime
-            .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 1;
-        if !surface_records
-            .lock()
-            .expect("records mutex poisoned")
-            .is_empty()
-        {
-            fired = true;
-            break;
-        }
-        std::thread::yield_now();
-    }
-    assert!(
-        fired,
-        "S3: surface cue never fired after repeated Tick — boot talk did not reach \
-         dispatcher's active slot within bound"
+    super::spin_pumping_ticks(
+        "S3: surface cue never fired after repeated Tick — boot talk did not reach dispatcher's active slot",
+        &mut now,
+        dispatcher_tick(runtime.dispatcher()),
+        || {
+            !surface_records
+                .lock()
+                .expect("records mutex poisoned")
+                .is_empty()
+        },
     );
 
-    // boot 系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）の
-    // 6 呼出が完了済みであること（＝kanade が Steady{None} へ既に到達済みであること）を
-    // 裏付ける間接証跡（S1 と同旨・死活監視の Status ノイズは除外して数える・task 8.2 の
-    // username prefetch GET が OnInitialize と OnFirstBoot の間に 1 件加わり 4→5、挨拶の台詞の
-    // OnTranslate が OnBoot の後に 1 件加わり 5→6 になる）。
+    // 起動系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）が
+    // 届き終えたこと（＝kanade が Steady へ既に到達済みであること）を裏付ける間接証跡（S1 と同旨・
+    // 死活監視の Status は除いて数える）。件数は親の `expected_boot_prefix` の長さから取る。
     //
-    // **数える前に 6 呼出の到達そのものを有界に待つ**（task 4.1・要件 9.2）。直前のループが
-    // 抜ける条件は「surface cue が 1 件でも載ったこと」だけであり、これは boot 系列の完了を
-    // 含意しない——`to_baseware_version`（`areka-kanade/src/schedule/boot.rs:229-282`）は
-    // `Action::StartTalk` を `basewareversion` の ShioriRequest より**先に**積むため、
-    // StartTalk が start-relay→dispatcher の 2 hop を渡って cue を発火させるのと、
-    // basewareversion NOTIFY が shiori アクタースレッドで記録されるのとは、別スレッドの
-    // 競走になる。待たずに数えると 5 本目がまだ届かず `left: 4` で落ちる瞬間があり、これが
-    // 負荷時にだけ現れる間欠的な赤の正体である。手本は同じ boot 系列の確認を「条件が満たされる
-    // まで待つ」形で書いている `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`
-    // （`wait_until`）——判定そのもの（Status を除いてちょうど 5 件）は一切変えず、
-    // 数える前に待ちを置くだけである。上限は本ファイル既存の有界待ちと同じ `E2E_BOUND`。
-    let calls_handle = handle.calls();
-    let non_status_len = || {
-        calls_handle
-            .lock()
-            .expect("calls mutex poisoned")
-            .iter()
-            .filter(|c| !matches!(c, RecordedCall::Status))
-            .count()
-    };
-    let mut boot_prefix_len = non_status_len();
-    let boot_deadline = std::time::Instant::now() + super::E2E_BOUND;
-    while boot_prefix_len < 6 && std::time::Instant::now() < boot_deadline {
-        std::thread::yield_now();
-        boot_prefix_len = non_status_len();
-    }
+    // **数える前に起動系列の到達そのものを有界に待つ**（task 4.1・要件 9.2）。直前の待ちが抜ける
+    // 条件は「surface cue が 1 件でも載ったこと」だけで、起動系列の完了を含意しない——
+    // `to_baseware_version`（`areka-kanade/src/schedule/boot.rs`）は `Action::StartTalk` を
+    // `basewareversion` の ShioriRequest より**先に**積むので、cue と最後の記録は別スレッドの
+    // 競走になる。判定（Status を除いてちょうど期待の長さ）は変えず、数える前に待つだけである。
+    let boot_prefix_len =
+        expected_boot_prefix(&KanadeConfig::new(SHELL_NAME, env!("CARGO_PKG_VERSION"))).len();
+    wait_until(
+        "S3: 起動系列が揃わなかった——kanade はまだ Steady に到達していないはず",
+        || non_status_calls(&handle).len() >= boot_prefix_len,
+    );
     assert_eq!(
-        boot_prefix_len, 6,
-        "S3: boot 系列 6 呼出（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion）が \
-         完了していない——kanade はまだ Steady に到達していないはず"
+        non_status_calls(&handle).len(),
+        boot_prefix_len,
+        "S3: 起動系列（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion）の ほかに呼び出しが来ている"
     );
 
     // ---- helper がシナリオ途中で異常終了する様子を、backend の外側（テスト自身の
@@ -214,7 +123,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     handle.set_status(HelperStatus::Exited(ExitKind::Abnormal(1)));
 
     // ---- kanade へ Tick を 1 回だけ注入する（Steady pump の唯一の駆動源）。----
-    // Steady{talk: None} + Tick → OnSecondChange GET が shiori actor へ届く
+    // Tick → OnSecondChange（挨拶の後なら GET・再生中なら NOTIFY・上の DD-IT-12 の注記）が shiori actor へ届く
     // （steady.rs on_tick）。run_shiori_loop はメッセージ到達の冒頭で必ず
     // backend.status() を確認するため（親モジュール rustdoc 参照）、この 1 通の
     // Tick 到達だけで死活検出（Exited 初回観測→ShioriDown 送出）と OnSecondChange
@@ -249,7 +158,6 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
 
     join_bounded(
         "kanade autonomous fault termination after mid-scenario status transition",
-        BOUND,
         kanade_handle,
     )
     .expect(
@@ -265,7 +173,6 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // actor も有界時間内に終了するはず。
     join_bounded(
         "shiori actor termination after kanade's fault sequence closes it",
-        BOUND,
         shiori_handle,
     )
     .expect("shiori actor should terminate once kanade's fault sequence sends ShioriMsg::Close");
@@ -274,15 +181,15 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // dispatcher は自身の Sender を保持し自然終了しない（「アクター別の停止経路」表）
     // ため、明示的に Close を送出する（S2 と同旨）。
     let _ = dispatcher.send(DispatcherMsg::Close);
-    join_bounded("dispatcher join after Close", BOUND, dispatcher_handle)
+    join_bounded("dispatcher join after Close", dispatcher_handle)
         .expect("dispatcher should terminate after Close");
 
     // start-relay／down-relay は上流（kanade 自身の start_tx／shiori 自身の down_tx）が
     // 既に drop 済み（kanade・shiori 双方のアクタースレッドが既に終了している）ため、
     // メッセージを送らずとも自然終了する。
-    join_bounded("start-relay natural termination", BOUND, start_relay_handle)
+    join_bounded("start-relay natural termination", start_relay_handle)
         .expect("start-relay should terminate naturally once kanade's start_tx is dropped");
-    join_bounded("down-relay natural termination", BOUND, down_relay_handle)
+    join_bounded("down-relay natural termination", down_relay_handle)
         .expect("down-relay should terminate naturally once shiori's down_tx is dropped");
 
     // ---- sticky-once の間接証跡 ----
@@ -292,9 +199,8 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // 完走したこと（status flapping で shiori actor がループし続けるような壊れ方を
     // していないこと）の 2 点を確認する。sticky-once の不変量そのものは task 1.4 の
     // 単体テスト（death_detected_once_reports_shiori_down_and_only_once）が既に固定
-    // しており、本 e2e の責務は配線がそれを最後まで届けることの証明に置く
-    // （CONCERNS 参照）。
-    let all_calls = calls_handle.lock().expect("calls mutex poisoned").clone();
+    // しており、本 e2e の責務は配線がそれを最後まで届けることの証明に置く。
+    let all_calls = handle.calls().lock().expect("calls mutex poisoned").clone();
     assert!(
         all_calls.iter().any(|c| matches!(c, RecordedCall::Unload)),
         "S3: Fault 系列は best-effort Unload を発行するはず: {all_calls:?}"

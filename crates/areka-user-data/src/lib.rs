@@ -196,16 +196,34 @@ fn absolute(value: &OsStr) -> Result<PathBuf, Option<PathBuf>> {
     }
 }
 
+/// [`PROFILE_DIR_ENV`] の値のうち使えるもの（絶対パス）。[`USER_ROOT_ENV`] と同じ決まり。記録しない。
+pub(crate) fn profile_env_dir(profile_env: Option<&OsStr>) -> Option<PathBuf> {
+    absolute(profile_env?).ok()
+}
+
+/// 入口で 1 回だけ呼ぶ [`profile_env_dir`]: 空・相対の値は `error!` を出して捨てる（次の決めへ進む）。
+pub(crate) fn usable_profile_env(profile_env: Option<&OsStr>) -> Option<PathBuf> {
+    let dir = profile_env_dir(profile_env);
+    if let (Some(value), None) = (profile_env, &dir) {
+        tracing::error!(
+            event = "profile_dir_env_unusable",
+            value = %Path::new(value).display(),
+            "AREKA_PROFILE_DIR is empty or relative; ignored"
+        );
+    }
+    dir
+}
+
 /// areka の記憶の置き場（要件 5.1〜5.3・6.1）。純粋。
 ///
-/// `profile_env` → `<書ける根>\profile\areka` → `<exe_dir>\profile\areka` → `None`（`exe_dir` も無い）。
+/// `profile_env`（絶対パスのときだけ・空と相対は捨てる。記録は入口の [`usable_profile_env`]）→ `<書ける根>\profile\areka` → `<exe_dir>\profile\areka` → `None`（`exe_dir` も無い）。
 pub fn app_profile_dir(
     profile_env: Option<&OsStr>,
     layout: &Layout,
     exe_dir: Option<&Path>,
 ) -> Option<PathBuf> {
-    if let Some(env) = profile_env {
-        return Some(PathBuf::from(env));
+    if let Some(dir) = profile_env_dir(profile_env) {
+        return Some(dir);
     }
     let base = match &layout.user_root {
         Some(root) => root.dir.as_path(),
@@ -217,3 +235,6 @@ pub fn app_profile_dir(
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod test_support;

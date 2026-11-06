@@ -228,9 +228,9 @@ def render(
     """§9 の追補を印字する。`emit` は 1 行を受け取る関数（`Report.line`）。"""
     emit("")
     emit(f"-- 系統別・各発生の突合（要件 2.9・0.4.0 で追加） " + "-" * 30)
-    emit("  系統は行末の target フィールド（tracing のフィールドであってメタデータの")
-    emit("  target 指示子ではない）で分ける。dispatcher と kanade は文言が同一なので、")
-    emit("  文言では分けられない（ticker.rs:203-206, 223-226, 305-308）。")
+    emit("  系統は行末の lane フィールド（古い記録は target・tracing のフィールドであって")
+    emit("  メタデータの target 指示子ではない）で分ける。dispatcher と kanade は文言が")
+    emit("  同一なので、文言では分けられない（ticker.rs）。")
     for target in targets:
         total = analysis.total_by_target.get(target, 0)
         steady = analysis.steady_by_target.get(target, 0)

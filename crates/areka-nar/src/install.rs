@@ -13,7 +13,7 @@
 //!
 //! 完成形は「既存の宛先の木」＋「書庫の木」の重ね合わせで、下敷きの取り方だけが
 //! [`ExistingPolicy`] で変わる。`Overlay` は丸ごと、`Replace { keep }` は除外マスクに
-//! 挙がったファイル名だけ（全階層・ASCII 大小無視）。
+//! 挙がったファイル名だけ（全階層・大小を無視（`same_name`））。
 //!
 //! サプリメントに `refresh,1` が書かれていても全消去にならないのは、
 //! [`crate::manifest`] が `supplement` の `refresh` を読み飛ばして必ず `Overlay` を
@@ -23,6 +23,7 @@
 
 use crate::error::{ExistingState, InstalledElement, IoPhase, ManifestWarning, SurvivingTree};
 use crate::manifest::{ExistingPolicy, InstallManifest};
+use crate::names::same_name;
 use crate::plan::Placement;
 use std::ffi::OsStr;
 use std::io;
@@ -33,6 +34,12 @@ use std::time::{Duration, Instant, SystemTime};
 /// 根の直下に掘る作業フォルダの棚。入れ替えが `rename` で済むよう根と同じボリュームに置く。
 const WORK: &str = ".nar-work";
 
+/// 棚の直下の錠。同じ根へ同時に入れる 2 本目を断る（片付けが 1 本目の作業フォルダを消すため）。
+const SHELF_LOCK: &str = ".lock";
+
+/// `FILE_FLAG_DELETE_ON_CLOSE`。`areka-nar` は `windows` に依存しないので値で書く。
+const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+
 /// 同一プロセス内で単調増加する連番。プロセス間の一意性はプロセス識別子が担う。
 static NEXT_SERIAL: AtomicU32 = AtomicU32::new(0);
 
@@ -41,12 +48,12 @@ pub(crate) const SURVIVOR_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 
 
 /// 宛先の根を答える口（要件 5.4・5.5）。答えは `<根>`（その下に `ghost\`・`balloon\` を組む）。
 ///
-/// どの根へ入れるかは呼び手が決める。計画を組むとき配置ごとに 1 回だけ尋ね、
+/// どの根へ入れるかは呼び手が決める。本体の配置を組むとき 1 回だけ尋ね、
 /// 答えをその配置に固定する（同じ配置に 2 回は尋ねない）。
 pub trait InstallRoots {
     /// ゴーストの本体の `directory`、またはシェル・サプリメントの宛先ゴーストのフォルダ名に対して。
     fn ghost_root(&self, folder: &str) -> PathBuf;
-    /// バルーンの本体・同梱のバルーンの `directory` に対して。
+    /// バルーンの本体の `directory` に対して（同梱のためには尋ねない）。
     fn balloon_root(&self, folder: &str) -> PathBuf;
 }
 
@@ -91,18 +98,18 @@ fn at<T>(path: &Path, result: io::Result<T>) -> Result<T, StageError> {
     })
 }
 
-/// 1 回の展開が宛先の根 1 つに使う作業フォルダ `<根>/.nar-work/<プロセス識別子>-<連番>/`。
+/// 1 回の展開が宛先の根に使う作業フォルダ `<根>/.nar-work/<プロセス識別子>-<連番>/`。
 ///
-/// 根をまたぐ `.nar` は根ごとに 1 つ持つ（同じ根は綴りの完全一致で 1 つにまとめる）。
-/// どの入れ替えも同じ根の中の `rename` で済む。
+/// 計画の配置は全て本体の根に置く（同梱も本体の根＝`plan::companion_placement`）ので、
+/// 1 回の展開に 1 つで足りる。どの入れ替えも同じ根の中の `rename` で済む。
 #[derive(Debug)]
 pub(crate) struct WorkArea {
-    /// 掘った根（配置の `root` と綴りで突き合わせる）。
-    root: PathBuf,
     dir: PathBuf,
     /// 棚に残っていて消せなかった物と、生き残りを持つため期限まで消さずに残した物。
     /// [`InstallOutcome::leftovers`] に合流する。
     residue: Vec<PathBuf>,
+    /// 棚の錠。共有なしで開いて持ち、捨てると閉じて `.lock` も消える。
+    _lock: std::fs::File,
 }
 
 impl WorkArea {
@@ -110,7 +117,8 @@ impl WorkArea {
     ///
     /// # Errors
     ///
-    /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、この走行の番地を
+    /// 根が実在しないとき（根を勝手に作らない＝設計の事前条件）、棚を作れないとき、
+    /// 棚の錠を開けないとき（同じ根へ別の展開が入っている）、この走行の番地を
     /// 空にできないとき、作業フォルダを作れないとき [`StageError`]。
     pub(crate) fn create(root: &Path) -> Result<WorkArea, StageError> {
         WorkArea::create_at(root, SystemTime::now())
@@ -130,19 +138,16 @@ impl WorkArea {
             });
         }
         let shelf = root.join(WORK);
+        at(&shelf, std::fs::create_dir_all(&shelf))?;
+        let lock = open_shelf_lock(&shelf.join(SHELF_LOCK))?;
         let dir = next_address(&shelf, now, || NEXT_SERIAL.fetch_add(1, Ordering::Relaxed));
         let residue = prepare_shelf(&shelf, &dir, now)?;
         at(&dir, std::fs::create_dir_all(&dir))?;
         Ok(WorkArea {
-            root: root.to_path_buf(),
             dir,
             residue,
+            _lock: lock,
         })
-    }
-
-    /// 掘った根。
-    pub(crate) fn root(&self) -> &Path {
-        &self.root
     }
 
     /// 作業フォルダそのもの。退避先 `old-<k>` もこの下に作る。
@@ -167,14 +172,27 @@ impl WorkArea {
     pub(crate) fn residue(&self) -> &[PathBuf] {
         &self.residue
     }
+
+    /// 元の木を持たない失敗の後に作業フォルダを消す（組み上げは書庫から作り直せる）。
+    /// 消せなければ次の走行の片付けが拾うので、失敗は返さない。
+    pub(crate) fn discard(&self) {
+        let _ = remove_tree(&self.dir);
+    }
 }
 
-/// 配置の根に掘った作業フォルダ。呼び手は計画の全部の根に 1 つずつ掘ってから渡す。
-pub(crate) fn area_for<'a>(areas: &'a [WorkArea], root: &Path) -> &'a WorkArea {
-    areas
-        .iter()
-        .find(|area| area.root == root)
-        .expect("配置の根ごとに作業フォルダを掘ってから組み上げ・確定へ進む")
+/// 棚の錠を共有なしで開く。待たずに失敗を返す（2 つの根を逆の順で掘っても止まらない）。
+fn open_shelf_lock(path: &Path) -> Result<std::fs::File, StageError> {
+    use std::os::windows::fs::OpenOptionsExt;
+    at(
+        path,
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .share_mode(0)
+            .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+            .open(path),
+    )
 }
 
 /// この走行の番地 `<プロセス識別子>-<連番>` を、保持中の項目を避けて取る。
@@ -245,6 +263,9 @@ fn prepare_shelf(shelf: &Path, dir: &Path, now: SystemTime) -> Result<Vec<PathBu
             residue.push(shelf.to_path_buf());
             continue;
         };
+        if entry.file_name().eq_ignore_ascii_case(SHELF_LOCK) {
+            continue;
+        }
         let path = entry.path();
         if is_retained(&path, now) {
             residue.push(path);
@@ -283,7 +304,17 @@ pub(crate) fn stage_placement(
 ) -> Result<ExistingState, StageError> {
     at(stage, std::fs::create_dir_all(stage))?;
 
-    let existing = if placement.destination.is_dir() {
+    // 宛先そのものがリンクならたどらない。たどると、リンクの先を写した木で入れ替える。
+    // 根から宛先へ降りる途中の段（`ghost\<T>\shell` など）のリンクは利用者が移した置き場なので
+    // たどる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。同じボリュームの中の置き場ならたどる。
+    // 別のボリュームを指すリンクの先へは `rename` で入れ替えられず、確定の段で失敗する（何も変わらない）。
+    if std::fs::symlink_metadata(&placement.destination)
+        .is_ok_and(|meta| meta.file_type().is_symlink())
+    {
+        return Err(link_refused(placement.destination.clone()));
+    }
+    let meta = std::fs::symlink_metadata(&placement.destination);
+    let existing = if meta.is_ok_and(|meta| meta.is_dir()) {
         // 入れ子の同梱の場所は同梱自身が組み上げるので、本体の下敷きには写さない。
         let carve: Vec<PathBuf> = placement
             .carve_out
@@ -306,9 +337,20 @@ pub(crate) fn stage_placement(
 
     // 先にフォルダを全部作る。フォルダのエントリ（要件 4.9 前段）とファイルの親
     // （同後段）が `dirs` で 1 つに揃っているので、ここは区別せずに作れる。
+    // 既存のファイルとフォルダの名前のぶつかりが写しの上で確かめられたときだけ、宛先の
+    // 側のパスで名指す（作業フォルダは失敗の後に消え、利用者が直す場所にならない）。
+    // それ以外の失敗は今までどおり作業フォルダのパスを名指す。
     for relative in &placement.dirs {
         let folder = stage.join(relative);
-        at(&folder, std::fs::create_dir_all(&folder))?;
+        if let Err(source) = std::fs::create_dir_all(&folder) {
+            let clash = folder.exists() && !folder.is_dir();
+            let path = if clash {
+                placement.destination.join(relative)
+            } else {
+                folder
+            };
+            return Err(StageError { path, source });
+        }
     }
     for (index, relative) in &placement.files {
         // 計画のエントリ番号は読取層が数えた列の添字。範囲を出る経路は今日は無いが、
@@ -319,7 +361,14 @@ pub(crate) fn stage_placement(
             contents.len()
         );
         let file = stage.join(relative);
-        at(&file, std::fs::write(&file, &contents[*index]))?;
+        if let Err(source) = std::fs::write(&file, &contents[*index]) {
+            let path = if file.is_dir() {
+                placement.destination.join(relative)
+            } else {
+                file
+            };
+            return Err(StageError { path, source });
+        }
     }
     Ok(existing)
 }
@@ -331,61 +380,80 @@ pub(crate) fn stage_placement(
 /// 1 つも含まないフォルダは作らない——「全消去してから mask の名前だけ戻す」と同じ形。
 ///
 /// `carve` に挙がったフォルダ（絶対パス）の下は、空フォルダも含めて写さない。突き合わせは
-/// 残す名前と同じく ASCII の大小を無視する。
+/// 残す名前と同じく大小を無視する（[`same_name`]）。
+///
+/// 木の中のリンク（ジャンクションを含む）はたどらず、そのパスを添えて失敗する。
 fn copy_existing(
     from: &Path,
     to: &Path,
     keep: Option<&[String]>,
     carve: &[PathBuf],
 ) -> Result<(), StageError> {
-    for child in at(from, std::fs::read_dir(from))? {
-        let child = at(from, child)?;
-        let source = child.path();
-        let target = to.join(child.file_name());
-        if at(&source, child.file_type())?.is_dir() {
-            let spelled = source.to_string_lossy();
-            if carve
-                .iter()
-                .any(|folder| folder.to_string_lossy().eq_ignore_ascii_case(&spelled))
-            {
-                continue;
+    // 深い木でもスタックを使い切らないよう、再帰でなく明示の積み荷で歩く（`areka-user-data` の写しと同じ）。
+    let mut pending = vec![(from.to_path_buf(), to.to_path_buf())];
+    while let Some((from, to)) = pending.pop() {
+        for child in at(&from, std::fs::read_dir(&from))? {
+            let child = at(&from, child)?;
+            let source = child.path();
+            let target = to.join(child.file_name());
+            let kind = at(&source, child.file_type())?;
+            // Windows の std はジャンクションも `is_symlink` に数える。リンクはたどらない
+            // （`areka-user-data` の写しと同じ決まり・#8）。
+            if kind.is_symlink() {
+                return Err(link_refused(source));
             }
-            if keep.is_none() {
-                at(&target, std::fs::create_dir_all(&target))?;
+            if kind.is_dir() {
+                let spelled = source.to_string_lossy();
+                if carve
+                    .iter()
+                    .any(|folder| same_name(&folder.to_string_lossy(), &spelled))
+                {
+                    continue;
+                }
+                if keep.is_none() {
+                    at(&target, std::fs::create_dir_all(&target))?;
+                }
+                pending.push((source, target));
+            } else if kept(keep, &child.file_name()) {
+                // 残す物が出てきて初めて親を作る（`keep` の側で空フォルダが生えない）。
+                at(&to, std::fs::create_dir_all(&to))?;
+                at(&target, std::fs::copy(&source, &target))?;
+                // 複写は読み取り専用の属性も運ぶ。作業フォルダの写しは必ず書ける形にする
+                // ——さもないと、書庫が同名を持っていたときに続く書き出しが作業フォルダの
+                // パスを名指して失敗し、そのパスは失敗の後に消えるので、利用者は
+                // 直す場所に辿り着けない。属性は宛先を守るためのもので、入れ替えで丸ごと
+                // 新しい木に替わる以上、写しの側で持ち越す意味も無い。
+                let mut mode = at(&target, std::fs::metadata(&target))?.permissions();
+                // Unix なら誰でも書ける形になる綴りだが、本プロジェクトは Windows 専用で、
+                // ここが落とすのは読み取り専用の属性 1 つだけ（設計「Windows 固有」）。
+                #[allow(clippy::permissions_set_readonly_false)]
+                mode.set_readonly(false);
+                at(&target, std::fs::set_permissions(&target, mode))?;
             }
-            copy_existing(&source, &target, keep, carve)?;
-        } else if kept(keep, &child.file_name()) {
-            // 残す物が出てきて初めて親を作る（`keep` の側で空フォルダが生えない）。
-            at(to, std::fs::create_dir_all(to))?;
-            at(&target, std::fs::copy(&source, &target))?;
-            // 複写は読み取り専用の属性も運ぶ。作業フォルダの写しは必ず書ける形にする
-            // ——さもないと、書庫が同名を持っていたときに続く書き出しが作業フォルダの
-            // パスを名指して失敗し、そのパスは次の走行の片付けで消えるので、利用者は
-            // 直す場所に辿り着けない。属性は宛先を守るためのもので、入れ替えで丸ごと
-            // 新しい木に替わる以上、写しの側で持ち越す意味も無い。
-            let mut mode = at(&target, std::fs::metadata(&target))?.permissions();
-            // Unix なら誰でも書ける形になる綴りだが、本プロジェクトは Windows 専用で、
-            // ここが落とすのは読み取り専用の属性 1 つだけ（設計「Windows 固有」）。
-            #[allow(clippy::permissions_set_readonly_false)]
-            mode.set_readonly(false);
-            at(&target, std::fs::set_permissions(&target, mode))?;
         }
     }
     Ok(())
 }
 
+/// リンク（ジャンクションを含む）をたどらずに断る失敗（#8）。
+fn link_refused(path: PathBuf) -> StageError {
+    StageError {
+        path,
+        source: io::Error::new(io::ErrorKind::InvalidInput, "リンクはたどらない"),
+    }
+}
+
 /// このファイル名を下敷きに残すか。
 ///
 /// 除外マスクは**ファイル名**の一覧で、階層を問わず同名に当たる（要件 6.2・正典
-/// `descript_install#refreshundeletemask`）。突き合わせは ASCII の大小を無視する
-/// （Windows では同じファイルを指す綴り）。
+/// `descript_install#refreshundeletemask`）。突き合わせは大小を無視する（[`same_name`]・
+/// Windows では同じファイルを指す綴り）。
 fn kept(keep: Option<&[String]>, name: &OsStr) -> bool {
     match keep {
         None => true,
         Some(keep) => {
             let name = name.to_string_lossy();
-            keep.iter()
-                .any(|allowed| allowed.eq_ignore_ascii_case(&name))
+            keep.iter().any(|allowed| same_name(allowed, &name))
         }
     }
 }
@@ -441,20 +509,25 @@ pub(crate) struct CommitError {
 enum Undo {
     /// 新規に置いた木を消す。
     Remove(PathBuf),
-    /// 退避した木を宛先へ戻す（新しく置いた木が在れば先に消す）。
+    /// 退避した木を宛先へ戻す（新しい木を置いていれば、`placed` が真で先に消す）。
     ///
     /// 先に消すのは、Windows の `rename` が既に在る宛先を上書きしないため。消えるのは
-    /// 書庫から作り直せる新しい木だけで、利用者の元の木は `old` に居る。戻す手が失敗
-    /// しても `old` はそのまま残る（失敗の経路では作業フォルダを片付けない）ので、
+    /// 書庫から作り直せる新しい木だけで、利用者の元の木は `old` に居る。置けなかった
+    /// （`placed` が偽）ときの宛先は自分の木ではない——退避の後に誰かが作った——ので消さない。
+    /// 戻す手が失敗しても `old` はそのまま残る（戻せなかった失敗では作業フォルダを片付けない）ので、
     /// 取り返しのつかない消え方はしない。
-    Restore { old: PathBuf, dest: PathBuf },
+    Restore {
+        old: PathBuf,
+        dest: PathBuf,
+        placed: bool,
+    },
 }
 
 /// 組み上げ済みの全配置を宛先と入れ替えて確定する（要件 5.10・5.11・6.4・6.6）。
 ///
 /// 配置の番号順に確定し、途中で失敗したら確定済みを逆順に元へ戻す。利用者から見えるのは
-/// 「全部入った」か「何も変わっていない」のどちらかだけになる（要件 5.11）。`areas` は
-/// 配置の根ごとの作業フォルダで、戻しの列は根をまたいでも 1 本（本仕様 要件 5.9）。
+/// 「全部入った」か「何も変わっていない」のどちらかだけになる（要件 5.11）。`area` は
+/// 本体の根に掘った作業フォルダで、戻しの列は 1 本（本仕様 要件 5.9）。
 ///
 /// 退避した木を消すのは**全配置が確定した後**の後片付け 1 回にまとめてある。配置ごとに
 /// 消すと、後の配置が失敗したときに前の配置を戻す元が既に無い——要件 5.11 を満たせない
@@ -463,11 +536,12 @@ enum Undo {
 /// # Errors
 ///
 /// どれかの配置の入れ替えに失敗したとき [`CommitError`]。`rolled_back` が真なら宛先は
-/// 全て呼ぶ前の内容で、偽なら `committed` に挙げた配置が確定したまま残っている。
+/// 全て呼ぶ前の内容。偽なら `committed` は確定した配置の一覧で、その宛先は巻き戻しの
+/// 途中で消えて無いことがある——元の木の在りかは `survivors` を見る。
 ///
 /// `skipped` は計画の段が飛ばした同梱で、判断せずに結果へ写すだけ。
 pub(crate) fn commit_all(
-    areas: &[WorkArea],
+    area: &WorkArea,
     manifest: &InstallManifest,
     plan: &[Placement],
     skipped: Vec<SkippedCompanion>,
@@ -481,9 +555,13 @@ pub(crate) fn commit_all(
     let mut installed = Vec::with_capacity(plan.len());
     let mut undo = Vec::with_capacity(plan.len());
     for (k, (placement, existing)) in plan.iter().zip(states).enumerate() {
-        let area = area_for(areas, &placement.root);
         if let Err(failure) = commit_one(area, k, placement, *existing, &mut undo) {
-            return Err(roll_back(undo, installed, failure));
+            let failure = roll_back(undo, installed, failure);
+            // 全て戻せたら `old-<k>` は無い。戻せなかったときは元の木が居るので触らない。
+            if failure.rolled_back {
+                area.discard();
+            }
+            return Err(failure);
         }
         installed.push(InstalledElement {
             kind: placement.kind.clone(),
@@ -496,12 +574,9 @@ pub(crate) fn commit_all(
 
     // 空のまま残すと、開発用の根では原本に写って全複製に伝播する（設計）。失敗しても
     // 確定は取り消さないが、黙って忘れはしない。
-    let mut leftovers = Vec::new();
-    for area in areas {
-        leftovers.extend_from_slice(area.residue());
-        if remove_tree(area.path()).is_err() {
-            leftovers.push(area.path().to_path_buf());
-        }
+    let mut leftovers = area.residue().to_vec();
+    if remove_tree(area.path()).is_err() {
+        leftovers.push(area.path().to_path_buf());
     }
     Ok(InstallOutcome {
         name: manifest.name.clone(),
@@ -549,11 +624,13 @@ fn commit_one(
     // （要件 6.6）。解放は試みない（短い掴みを待つだけ）。宛先は 1 バイトも動いていない。
     let old = area.retired(k);
     at(dest, rename_patiently(dest, &old))?;
+    let placed = rename_patiently(&area.stage(k), dest);
     undo.push(Undo::Restore {
         old,
         dest: dest.clone(),
+        placed: placed.is_ok(),
     });
-    at(dest, rename_patiently(&area.stage(k), dest))
+    at(dest, placed)
 }
 
 /// 確定済みを逆順に元へ戻し、呼び手へ返す失敗を組む。
@@ -611,10 +688,11 @@ fn unwind(undo: Vec<Undo>) -> Unwound {
                 let result = remove_tree(&dest);
                 (dest, result)
             }
-            Undo::Restore { old, dest } => {
-                // 新しく置いた木が在れば先に退ける。2 手目の `rename` が失敗した直後は
-                // 宛先が空いているので、その場合は何もせずに戻しへ進む。
-                let result = remove_tree(&dest).and_then(|()| rename_patiently(&old, &dest));
+            Undo::Restore { old, dest, placed } => {
+                // 新しく置いた木だけを先に退ける。置けなかったなら宛先は消さずに戻しへ進む
+                // （空いていれば戻り、誰かの木が居れば戻せずに生き残りとして残る）。
+                let removed = if placed { remove_tree(&dest) } else { Ok(()) };
+                let result = removed.and_then(|()| rename_patiently(&old, &dest));
                 if result.is_err() && old.is_dir() {
                     survivors.push(SurvivingTree {
                         destination: dest.clone(),
@@ -637,7 +715,14 @@ thread_local! {
     // 短い掴みの檻が、拒まれたのを見てから掴みを放すのに使う（要件 5.1〜5.4）。
     pub(crate) static ON_RENAME_REFUSED: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
         const { std::cell::RefCell::new(None) };
+    // テストだけの待ちの長さ（既定は本番と同じ）。掴みっぱなしの檻が 0 にして眠らずに
+    // 同じ失敗を見る（#63）。
+    pub(crate) static RENAME_PATIENCE: std::cell::Cell<Duration> =
+        const { std::cell::Cell::new(RENAME_PATIENCE_LIMIT) };
 }
+
+/// [`rename_patiently`] が短い掴みを待ち切る上限。
+const RENAME_PATIENCE_LIMIT: Duration = Duration::from_secs(2);
 
 /// フォルダを `rename` する。外のプロセスの**短い**掴みだけは待ち切る。
 ///
@@ -649,8 +734,11 @@ thread_local! {
 /// 最後の失敗をそのまま返す——解放は試みない（要件 6.6）。他の失敗は待たずに返す。
 fn rename_patiently(from: &Path, to: &Path) -> io::Result<()> {
     const STEP: Duration = Duration::from_millis(50);
-    const PATIENCE: Duration = Duration::from_secs(2);
-    let deadline = Instant::now() + PATIENCE;
+    #[cfg(not(test))]
+    let patience = RENAME_PATIENCE_LIMIT;
+    #[cfg(test)]
+    let patience = RENAME_PATIENCE.get();
+    let deadline = Instant::now() + patience;
     loop {
         match std::fs::rename(from, to) {
             Err(err) if matches!(err.raw_os_error(), Some(5 | 32)) && Instant::now() < deadline => {

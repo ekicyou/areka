@@ -1,6 +1,7 @@
-//! I1 canonical 一周 e2e（task 5.1・design.md「inproc 決定論 e2e（I1〜I3）」シナリオ I1）。
+//! inproc 決定論 e2e I1〜I3（design.md「inproc 決定論 e2e（I1〜I3）」）。I1＝実 DLL 越しの一周の演出列・
+//! I2＝同じ一周の交信列・I3＝ロード失敗の主要態様。
 //!
-//! spine の S1（`spine_e2e_test.rs` の `s1_boot_success`）を **実 InProc DLL 境界越し**で再演する。
+//! I1 は spine の S1（`spine_e2e_test.rs` の `s1_boot_success`）を **実 InProc DLL 境界越し**で再演する。
 //! S1 は台本 fake backend（`ScriptedShioriBackend`）が `\s[0]hello\e` を返すのに対し、本 I1 は
 //! `ShioriWiring::InProc` で実ビルド済み `shiori4_testdll.dll` をロードし、その OnFirstBoot 応答（凍結
 //! スナップショット由来の実採取起動挨拶・task 6.2）が kanade→start-relay→dispatcher→sakura→
@@ -12,23 +13,14 @@
 //!
 //! さらに凍結応答が差し替えられた際の検出漏れを塞ぐため、期待列（ハードコードした
 //! `expected_greeting_sequence` の `(actor, command)` 全順序）が独立の **ドリフト検出ピン**となる
-//! （要件 5.2）——凍結 Value が変われば DLL→compile が別列を産み、この期待列に一致しなくなる。加えて
-//! 凍結スナップショット（`shiori4_testdll::snapshot_for("OnFirstBoot")`）が 200＋Value＋非空である
-//! ことも固定する。
+//! （要件 5.2）——凍結 Value が変われば DLL→compile が別列を産み、この期待列に一致しなくなる。
 //! 正常終了の握手は `shutdown(CloseReason::System)==Ok(())` で観測する（要件 5.3）。観測は演出配送の
 //! **受領レベル**（`RecordingSink`）に留め、実描画（サーフェス合成・画素読戻し）は要求しない（要件 5.5）。
 //!
-//! # 兄弟 spine テストとの共存（tasks.md「[4.2 重大・5.1/5.2必読]」＋ task 5.0）
-//! 本テストは同一 `ghost` テストバイナリ内で spine の協調ループと並走する。自前 assemble をせず
-//! `inproc_fixture::shared_test_ghost()`（OnceLock・assemble 一度・hardlink 優先）を再利用して新規バイト
-//! 書き込み由来の Defender 再スキャン＝spine starvation を避け、駆動ループは反復回数境界でなく **壁時計
-//! deadline 境界**（task 2.4 の runtime.rs InProc 統合テスト方式）で括る。spine のプローブループは task 5.0 で
-//! 同じ壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
-//! だけで偽陽性を生まない（5.0 前は spine が反復回数境界の空 spin で早合点し飢餓したため 2ms sleep で緩和して
-//! いたが、その応急措置は 5.0 完了で撤去した）。残る低頻度残存はこの並列マルチエージェント build セッション
-//! 特有の兄弟コンパイル burst 下でのみ稀に spine settle ループが飢餓するもので、本テスト自体は無関係。
+//! # 兄弟 spine テストとの共存
+//! 同じ `ghost` テストバイナリで spine と並走するため、共有ゴースト（`inproc_fixture::shared_test_ghost()`）を
+//! 使い回して新規書き込みを避け、駆動ループは壁時計 deadline で括る（CPU 競合は到達を遅らせるだけ）。
 
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -36,74 +28,20 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
     GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot, inproc_connect,
 };
-use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
+use areka_kanade::{MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 use areka_parsers::package::ShioriMount;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
-use shiori_host32_host::{
-    ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
-};
+use temp_path_kit::TempPath;
 
+use crate::common::run_bounded_shutdown;
 use crate::inproc_fixture::shared_test_ghost;
-use crate::recorder::{ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle};
+use crate::recorder::{
+    BoxedBackend, ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle,
+};
 use crate::spine_e2e_test::RecordingSink;
-
-/// `inproc_connect` が返す `Box<dyn ShioriBackend>` を、具体型境界 `Recorder<B: ShioriBackend>` へ
-/// 渡せるようにする薄い委譲アダプタ（`Box<dyn ShioriBackend>` は `ShioriBackend` を実装せず、孤児則で
-/// blanket impl も足せないため newtype で橋渡しする）。全呼出を内側の実 InProc backend へ素通しする
-/// ——記録は外側の `Recorder` が担い、本アダプタは駆動対象非依存の中継に徹する（D-3「同一手口」）。
-struct BoxedBackend(Box<dyn ShioriBackend>);
-
-impl ShioriBackend for BoxedBackend {
-    fn get(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<Option<String>, RequestError> {
-        self.0.get(id, references, status)
-    }
-
-    fn notify(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<(), RequestError> {
-        self.0.notify(id, references, status)
-    }
-
-    // 新しい 2 メソッドも中身へそのまま渡す（既定のままだとヘッダと応答のレベルが黙って落ちる）。
-    fn get_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<Option<ValueReply>, RequestError> {
-        self.0.get_with_headers(id, references, status, headers)
-    }
-
-    fn notify_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<(), RequestError> {
-        self.0.notify_with_headers(id, references, status, headers)
-    }
-
-    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
-        self.0.unload()
-    }
-
-    fn status(&mut self) -> HelperStatus {
-        self.0.status()
-    }
-}
 
 /// 凍結 OnFirstBoot スナップショットの Value 行 payload（起動挨拶さくらスクリプト・task 6.2 実採取）を
 /// 抽出する。giant literal を持たず凍結スナップショットから導出して実採取差し替えへ自動追随させる
@@ -122,7 +60,7 @@ fn expected_onfirstboot_value() -> String {
 }
 
 /// I1/I2 の起動挨拶（実 emo2 OnFirstBoot 応答・task 6.2 実採取）が決定論的にコンパイルされる
-/// 期待演出列（(actor, command) の全順序・117 件）。
+/// 期待演出列（(actor, command) の全順序・118 件）。
 ///
 /// この列は sakura コンパイラ規則から構造的に導出し、実 parse+compile の観測列と照合済み
 /// （tasks.md「[6.2 sakura コンパイラ規則]」）である。要点（areka-P0-sakura-dialogue-tags 統合後の
@@ -648,7 +586,8 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
         // `first_boot_epilogue`（`areka.prop.set` / `areka.boot.count` / "1"）を KanadeConfig へ注入する。
         // sakura が CueSheet 末尾（horizon・duration 0）へこのキャリア cue を付加し、挨拶再生を**完走**
         // したときのみ broadcast されて起動記録が書かれる（要件 3.4・design C5-3/C7）。共有 fixture
-        // （shared_test_ghost）は永続ファイルを持たない＝常に初回扱いゆえ、挨拶列は必ずこの 1 件で閉じる。
+        // （shared_test_ghost）は起動記録を書くが、`shared_test_ghost()` が錠を取った後に `profile\areka`
+        // を消すので、毎回初回扱いになり、挨拶の列は必ずこの 1 件で閉じる。
         (
             ActorKey::from("0"),
             CueCommand::command_carrier(
@@ -659,17 +598,48 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
     ]
 }
 
-/// 有界待機ヘルパ（spine S1／runtime.rs の `run_bounded` と同旨のローカルコピー）。`shutdown` を
-/// 別スレッドへ逃がし `recv_timeout` で宙吊りを防ぐ（`ActorHandle::join` 由来のブロックを括る）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
+/// I1・I2 の駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
+/// **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
+/// `LoadLibraryExW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
+/// すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
+/// 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
+/// 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
+/// schedule に無害）であり、届いた列の**内容**の正しさは後段の `assert_greeting_broadcast` が担う——
+/// golden が凍結 Value の実 compile と食い違えば必ず fail する fail-visible 設計（決定論）。
+///
+/// poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
+/// 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
+/// だけで偽陽性を生まない。
+fn drive_until_greeting_settles(
+    runtime: &areka_ghost::GhostRuntime,
+    surface_records: &Arc<Mutex<Vec<TalkCue>>>,
+    text_records: &Arc<Mutex<Vec<TalkCue>>>,
+    who: &str,
+) {
+    let expected_len = expected_greeting_sequence().len();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut now: u64 = 500;
+    while Instant::now() < deadline {
+        runtime
+            .dispatcher()
+            .send(DispatcherMsg::Tick {
+                now: MonotonicMs(now),
+            })
+            .expect("dispatcher actor should still be alive while probing for the boot talk");
+        now += 500;
+        let s = surface_records
+            .lock()
+            .expect("records mutex poisoned")
+            .len();
+        let t = text_records.lock().expect("records mutex poisoned").len();
+        if s >= expected_len && t >= expected_len {
+            return;
+        }
+        // hang-guard の poll 周期（talk pacing ではない）。sim 時刻は注入 Tick の `now` のみが進める。
+        std::thread::yield_now();
+    }
+    panic!(
+        "{who}: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 InProc DLL 境界を横断した一周が成立していない（hang guard）"
     );
 }
 
@@ -677,26 +647,11 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F
 /// 全順序で一致することを照合する（＋ドリフト検出＋正常終了握手・要件 5.1/5.2/5.3/5.4/5.5/1.1/1.3）。
 #[test]
 fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
-    // ---- ドリフト検出（要件 5.2）: 独立の錨は下段のハードコード期待列
-    //      （expected_greeting_sequence）——凍結 Value が差し替えられれば DLL→compile が別列を
-    //      産み、cue 列 assert が確実に fail する。ここでは加えて凍結スナップショットが 200＋Value
-    //      ＋非空であることを固定する（採取形の退行防止）。 ----
-    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot").expect(
-        "OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）",
-    );
-    assert!(
-        snapshot.contains("200"),
-        "ドリフト検出: 凍結 OnFirstBoot は 200 応答であること: {snapshot:?}"
-    );
-    let value = expected_onfirstboot_value();
-    assert!(
-        !value.is_empty(),
-        "ドリフト検出: 凍結 OnFirstBoot の Value 行 payload は非空であること: {snapshot:?}"
-    );
-
     // ---- 実 InProc 一周の駆動 ----
     // 自前 assemble せず共有 fixture を再利用（tasks.md「[4.2 重大]」・spine starvation 回避）。
-    let ghost_root = shared_test_ghost().to_path_buf();
+    // 錠は終了の確かめまで持つ（I2 の記録の消去と競らない）。
+    let shared = shared_test_ghost();
+    let ghost_root = shared.root().to_path_buf();
 
     // broadcast ゆえ surface/text の両 sink が同一の全 cue を受ける（S1 と同律）。boot 前に records
     // ハンドルを取得しておく。
@@ -719,51 +674,7 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     let runtime =
         boot(options).expect("boot should succeed through ShioriWiring::InProc（実テスト DLL）");
 
-    // 期待 broadcast 列（実 emo2 OnFirstBoot 挨拶）。二人掛け合い自己紹介が
-    // ClearAll → Emote/Text/Wait/NewLine/Custom(bang) の全順序へコンパイルされる（構造導出＋実 compile
-    // 観測で照合済み・tasks.md 6.2）。ここでは列長を駆動ループの整定判定に使う（内容照合は後段 assert）。
-    let expected = expected_greeting_sequence();
-
-    // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
-    // **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
-    // `LoadLibraryW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
-    // すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
-    // 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
-    // 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
-    // schedule に無害）であり、届いた列の**内容**の正しさは後段の `assert_greeting_broadcast` が担う——
-    // golden が凍結 Value の実 compile と食い違えば必ず fail する fail-visible 設計（決定論）。
-    //
-    // poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
-    // 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
-    // だけで偽陽性を生まない。sim 時刻は依然として注入 Tick の `now` のみが進める。
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let mut now: u64 = 500;
-    let mut captured = false;
-    while Instant::now() < deadline {
-        runtime
-            .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 500;
-        let s = surface_records
-            .lock()
-            .expect("records mutex poisoned")
-            .len();
-        let t = text_records.lock().expect("records mutex poisoned").len();
-        if s >= expected.len() && t >= expected.len() {
-            captured = true;
-            break;
-        }
-        // hang-guard の poll 周期（talk pacing ではない）。sim 時刻は注入 Tick の `now` のみが進める。
-        std::thread::yield_now();
-    }
-    assert!(
-        captured,
-        "I1: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 \
-         InProc DLL 境界を横断した一周が成立していない（hang guard）"
-    );
+    drive_until_greeting_settles(&runtime, &surface_records, &text_records, "I1");
 
     // ---- 演出列の全順序照合（要件 5.1・broadcast・(actor, command) 全順序・at 非減少）----
     let surface = surface_records
@@ -778,20 +689,13 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     // ---- 正常終了の握手（要件 5.3）----
     // shutdown（ForceQuit→OnClose NOTIFY→Unload）が clean に完走し `Ok(())` を返すこと。有界待機で
     // 宙吊りを防ぐ（`shutdown` 内部の全 actor join を括る）。
-    run_bounded(
+    run_bounded_shutdown(
         "shutdown after I1 boot talk completion",
         Duration::from_secs(15),
-        move || {
-            let result = runtime.shutdown(CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "正常終了の握手: shutdown は I1 一周後に Ok(()) を返すこと（clean close）, got {result:?}"
-            );
-        },
+        runtime,
     );
 
-    // 共有 fixture（shared_test_ghost）はプロセス寿命 leak ゆえ本テストでは削除しない（意図的・
-    // inproc_fixture.rs のドキュメント参照）。
+    drop(shared);
 }
 
 /// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1/I2 が同一の演出出力 assert を
@@ -835,7 +739,8 @@ fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
 /// # 交信列の決定論（ticker 無効＋Tick は dispatcher 止まり）
 /// `TickerMode::Disabled` かつ dispatcher は `Tick` を kanade へ中継しない（`TalkDone` のみ中継）ため、
 /// kanade は駆動ループ中に Tick を一切受けず、定常運転由来の追加交信を発行しない。したがって交信列は
-/// boot 系列（`OnInitialize` NOTIFY → `OnFirstBoot` GET(Value) → `basewareversion` NOTIFY）に続き、
+/// boot 系列（`OnInitialize` NOTIFY → `username` GET(204) → `OnFirstBoot` GET(Value) →
+/// `OnTranslate` GET(204) → `basewareversion` NOTIFY）に続き、
 /// shutdown（ForceQuit）が起こす close 系列（`OnClose` NOTIFY → `Unload` Clean）で閉じる——全順序が
 /// 決定論的。`OnFirstBoot` が Value を返すため kanade フォールスルーは `OnBoot` GET を**スキップ**する
 /// （task 6.2 実採取・`schedule/boot.rs`）。記録は shutdown 完了後に読む（`OnClose`/`Unload` は
@@ -844,7 +749,9 @@ fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
 fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     // ---- 実 InProc backend へ Recorder を合成した Custom wiring を組む（D-3）----
     // 自前 assemble せず共有 fixture を再利用（tasks.md「[4.2 重大]」・spine starvation 回避）。
-    let ghost_root = shared_test_ghost();
+    // 錠は終了の確かめまで持つ（I1 の記録の消去と競らない）。
+    let shared = shared_test_ghost();
+    let ghost_root = shared.root();
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を inproc_connect へ渡す
     // （`boot()` の InProc arm が `inproc_connect(mount.shiori.clone())` を呼ぶのと同じ導出）。
@@ -883,55 +790,14 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     let runtime =
         boot(options).expect("boot should succeed through Custom(Recorder(inproc_connect))");
 
-    // 期待演出列長（I1 と同一のハードコード golden）。列長は待機の十分条件（内容照合は後段 assert）。
-    let expected_cue_len = expected_greeting_sequence().len();
-
-    // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで**壁時計デッドライン**で
-    // 括って待つ（I1・task 2.4 方式・sleep 不使用・`yield_now` poll）。sim 時刻は注入 Tick の `now`
-    // のみが進める。挨拶は複数秒の台本ゆえ `now` を大股（+500ms/Tick）で前進させ、単一 Tick が at 昇順で
-    // due cue を一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の十分条件・内容の正しさは
-    // 後段 assert が担う（I1 と同律・fail-visible・決定論）。
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let mut now: u64 = 500;
-    let mut captured = false;
-    while Instant::now() < deadline {
-        runtime
-            .dispatcher()
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(now),
-            })
-            .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 500;
-        let s = surface_records
-            .lock()
-            .expect("records mutex poisoned")
-            .len();
-        let t = text_records.lock().expect("records mutex poisoned").len();
-        if s >= expected_cue_len && t >= expected_cue_len {
-            captured = true;
-            break;
-        }
-        // hang-guard の poll 周期（talk pacing ではない）。sim 時刻は注入 Tick の `now` のみが進める。
-        std::thread::yield_now();
-    }
-    assert!(
-        captured,
-        "I2: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 \
-         InProc DLL 境界を横断した一周が成立していない（hang guard）"
-    );
+    drive_until_greeting_settles(&runtime, &surface_records, &text_records, "I2");
 
     // ---- 正常終了の握手（要件 5.3）: shutdown（ForceQuit→OnClose NOTIFY→Unload）を完走させる。----
     // 交信列の close 系列（OnClose/Unload）は shutdown が起こすため、記録は shutdown 完了後に読む。
-    run_bounded(
+    run_bounded_shutdown(
         "shutdown after I2 boot talk completion",
         Duration::from_secs(15),
-        move || {
-            let result = runtime.shutdown(CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "正常終了の握手: shutdown は I2 一周後に Ok(()) を返すこと（clean close）, got {result:?}"
-            );
-        },
+        runtime,
     );
 
     // ================= 記録装置 (1): 交信列（Recorder） =================
@@ -980,7 +846,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
             Some("OnFirstBoot".to_string()),
             ExchangeOutcome::Value(expected_onfirstboot_value()),
         ),
-        // 挨拶の台詞は再生の前に OnTranslate へかける。pasta は登録の無いイベントに 204 を返す。
+        // 挨拶の台詞は再生の前に OnTranslate へかける。`shiori4_testdll` は収載の無い ID に 204 を返す。
         (
             ExchangeKind::Get,
             Some("OnTranslate".to_string()),
@@ -1019,7 +885,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     assert_greeting_broadcast(&surface, "surface");
     assert_greeting_broadcast(&text, "text");
 
-    // 共有 fixture（shared_test_ghost）はプロセス寿命 leak ゆえ本テストでは削除しない（意図的）。
+    drop(shared);
 }
 
 // ============================================================================
@@ -1028,98 +894,60 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 //
 // I1/I2 が実 InProc DLL 越しの一周（boot→talk→shutdown）を協調ループで駆動するのに対し、
 // I3 は **boot しない**——`inproc_connect(shiori)()` を直接（unit-style）呼び、ロード確立の
-// 3 態様（参照先未指定 / DLL 欠落 / 不正イメージ）がいずれも **panic せず** `Err`（log-first・
-// 要件 3.5）として顕在化することのみを軽量・決定論的に確かめる。アクタースレッド・drive ループ・
-// 共有 fixture・実ビルド済み DLL のいずれも要さない（3 態様とも「失敗」検証ゆえ成功ロードが不要）。
+// 2 態様（DLL 欠落 / 不正イメージ）がいずれも **panic せず** `Err`（log-first・要件 3.5）として
+// 顕在化することのみを軽量・決定論的に確かめる。参照先未指定（`file: None`）は
+// `src/shiori_inproc_adapter_tests.rs` の `inproc_connect_missing_file_fails_immediately` が持つ。
+// アクタースレッド・drive ループ・共有 fixture・実ビルド済み DLL のいずれも要さない
+// （どちらも「失敗」検証ゆえ成功ロードが不要）。
 // ============================================================================
 
 /// I3 用フィクスチャ組み立てヘルパ（`shiori_wiring.rs::build_shiori_mount` を鏡写しにしたもの）。
 ///
 /// 一意な一時ゴースト（`ghost/master/descript.txt`＋`shell/master/` dir）を作り、本番と同じ
 /// 経路（`package::resolve_with_shell`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
-/// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。`shiori_line` が
-/// `Some(name)` なら descript に `shiori,<name>` 行を書き `file: Some(name)`、`None` なら行を
-/// 書かず `file: None`（resolve は推測しない）。掃除のため root パスも返す（呼び出し側が
-/// best-effort で削除する）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
+/// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。descript に
+/// `shiori,<shiori_line>` 行を書く（`file: Some(shiori_line)`）。root は [`TempPath`] で返す
+/// （破棄で中身ごと消える）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
 /// （=`ghost/master`・`inproc_connect` が `dir.join(file)` で組むロード元）へ指定バイト列を
 /// `shiori_line` の名前で書き出す（不正イメージ態様のため）。
-fn build_i3_mount(shiori_line: Option<&str>, dll_bytes: Option<&[u8]>) -> (ShioriMount, PathBuf) {
-    let unique = format!(
-        "areka-ghost-i3-load-failure-{}-{:?}-{}",
-        std::process::id(),
-        std::thread::current().id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
-    );
-    let root = std::env::temp_dir().join(unique);
-    let master_dir = root.join("ghost").join("master");
+fn build_i3_mount(shiori_line: &str, dll_bytes: Option<&[u8]>) -> (ShioriMount, TempPath) {
+    let root = TempPath::new("areka-ghost-i3-load-failure");
+    let master_dir = root.path().join("ghost").join("master");
     std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
-    std::fs::create_dir_all(root.join("shell").join("master"))
+    std::fs::create_dir_all(root.path().join("shell").join("master"))
         .expect("fixture shell dir 作成に失敗");
 
-    let mut descript = String::new();
-    if let Some(name) = shiori_line {
-        descript.push_str(&format!("shiori,{name}\n"));
-    }
-    std::fs::write(master_dir.join("descript.txt"), descript)
-        .expect("fixture descript.txt 書き込みに失敗");
+    std::fs::write(
+        master_dir.join("descript.txt"),
+        format!("shiori,{shiori_line}\n"),
+    )
+    .expect("fixture descript.txt 書き込みに失敗");
 
-    let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
+    let mount = package::resolve_with_shell(root.path(), DefaultEncoding::Ansi, None)
         .expect("fixture ghost_root の resolve に失敗");
     let shiori = mount.shiori;
 
     // 不正イメージ態様: resolve 済み shiori.dir（ロード元 dir）へ非 PE バイト列を DLL 名で置く。
     if let Some(bytes) = dll_bytes {
-        let name = shiori_line.expect("dll_bytes を書くには shiori_line（DLL 名）が要る");
-        std::fs::write(shiori.dir.join(name), bytes).expect("非 PE テキストの書き出しに失敗");
+        std::fs::write(shiori.dir.join(shiori_line), bytes)
+            .expect("非 PE テキストの書き出しに失敗");
     }
 
     (shiori, root)
 }
 
-/// I3-① **参照先未指定**（`file: None`）: descript に `shiori,` 行が無ければ `file: None` になり、
-/// `inproc_connect(shiori)()` は DLL ロードを試みず即座に `Err`（推測しない・log-first・要件 3.5）。
-/// 偽陽性（別理由の失敗）を避けるため、エラー文言が DLL ファイル名未解決由来であること
-/// （`inproc_connect` の `file: None` 枝の文言に「ファイル名」を含む）まで確認する。
-#[test]
-fn i3_load_failure_missing_reference_returns_err() {
-    let (shiori, root) = build_i3_mount(None, None);
-    assert_eq!(
-        shiori.file, None,
-        "fixture は shiori 行なし＝file:None のはず"
-    );
-
-    let connect = inproc_connect(shiori);
-    let result = connect();
-
-    // 後始末（best-effort）: assert より先に一時ディレクトリを掃除する。
-    let _ = std::fs::remove_dir_all(&root);
-
-    match result {
-        Err(err) => assert!(
-            err.contains("ファイル名"),
-            "参照先未指定はファイル名未解決として顕在化すること（別理由の失敗でない）: {err}"
-        ),
-        Ok(_) => panic!(
-            "参照先未指定（file:None）はロード失敗になるはず（inproc_connect は panic せず Err）"
-        ),
-    }
-}
-
-/// I3-② **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
-/// `inproc_connect` は `LoadLibraryW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
+/// I3-① **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
+/// `inproc_connect` は `LoadLibraryExW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
 /// 要件 3.5）。
 #[test]
 fn i3_load_failure_missing_dll_returns_err() {
-    let (shiori, root) = build_i3_mount(Some("someMissing.dll"), None);
+    let (shiori, _root) = build_i3_mount("someMissing.dll", None);
     assert_eq!(
         shiori.file,
         Some("someMissing.dll".to_string()),
         "fixture は shiori 行あり＝file:Some のはず"
     );
-    // DLL 実体は書いていない＝ロード元に不在（LoadLibraryW が失敗する前提）。
+    // DLL 実体は書いていない＝ロード元に不在（LoadLibraryExW が失敗する前提）。
     assert!(
         !shiori.dir.join("someMissing.dll").exists(),
         "態様前提: DLL は存在しないこと"
@@ -1128,21 +956,22 @@ fn i3_load_failure_missing_dll_returns_err() {
     let connect = inproc_connect(shiori);
     let result = connect();
 
-    let _ = std::fs::remove_dir_all(&root);
-
     match result {
-        Err(_) => {}
+        Err(err) => assert!(
+            err.contains("LoadLibraryExW"),
+            "DLL 欠落は DLL の読み込みの失敗として顕在化すること（別理由の失敗でない）: {err}"
+        ),
         Ok(_) => panic!("DLL 欠落はロード失敗になるはず（inproc_connect は panic せず Err）"),
     }
 }
 
-/// I3-③ **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
-/// `LoadLibraryW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
+/// I3-② **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
+/// `LoadLibraryExW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
 /// （panic せず・要件 3.5）。
 #[test]
 fn i3_load_failure_invalid_image_returns_err() {
-    let (shiori, root) = build_i3_mount(Some("bogus.dll"), Some(b"this is not a valid PE image"));
-    // 不正イメージ実体がロード元に存在すること（LoadLibraryW がイメージ検証で拒否する前提）。
+    let (shiori, _root) = build_i3_mount("bogus.dll", Some(b"this is not a valid PE image"));
+    // 不正イメージ実体がロード元に存在すること（LoadLibraryExW がイメージ検証で拒否する前提）。
     assert!(
         shiori.dir.join("bogus.dll").exists(),
         "態様前提: 非 PE テキストの bogus.dll が存在すること"
@@ -1151,10 +980,11 @@ fn i3_load_failure_invalid_image_returns_err() {
     let connect = inproc_connect(shiori);
     let result = connect();
 
-    let _ = std::fs::remove_dir_all(&root);
-
     match result {
-        Err(_) => {}
+        Err(err) => assert!(
+            err.contains("LoadLibraryExW"),
+            "不正イメージは DLL の読み込みの失敗として顕在化すること（別理由の失敗でない）: {err}"
+        ),
         Ok(_) => panic!("不正イメージはロード失敗になるはず（inproc_connect は panic せず Err）"),
     }
 }

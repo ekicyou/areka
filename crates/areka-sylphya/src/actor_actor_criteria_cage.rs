@@ -86,6 +86,15 @@ fn epoch_increments_monotonically_through_actor_publishes() {
         "absent-record (204) must not publish (no state change → epoch unchanged)"
     );
 
+    // 非変異③: RemoveFlat で無い名前を消す → 実変化なし → epoch 据え置き。
+    publisher.remove_flat(a("ghost/a"), vec!["selfname2".into()]);
+    publisher.barrier().expect("barrier while alive");
+    assert_eq!(
+        shared.load().epoch,
+        e2,
+        "removing an absent flat name must not publish (epoch unchanged)"
+    );
+
     // 変異③: 再度の変異で単調増加が続く（据え置き後も +1 する）。
     publisher.publish_static(a("ghost/b"), vec![("selfname".into(), "y".into())], vec![]);
     publisher.barrier().expect("barrier while alive");
@@ -93,6 +102,27 @@ fn epoch_increments_monotonically_through_actor_publishes() {
         shared.load().epoch,
         e2 + 1,
         "mutation after no-ops must resume +1"
+    );
+
+    // 変異④: RemoveFlat で在る名前を消す → +1・名指しでない名前（SET の host 区画）は残る。
+    publisher.remove_flat(a("ghost/b"), vec!["selfname".into()]);
+    publisher.barrier().expect("barrier while alive");
+    let image = shared.load();
+    assert_eq!(
+        image.epoch,
+        e2 + 2,
+        "removing a present flat name must advance epoch by 1"
+    );
+    assert!(
+        image
+            .flat_per_asker
+            .get(&a("ghost/b"))
+            .is_none_or(|flat| !flat.contains_key("selfname")),
+        "removed flat name must be gone"
+    );
+    assert!(
+        image.dotted_per_asker.contains_key(&a("ghost/a")),
+        "removal must not touch other areas"
     );
 
     // 正典終了で確実に畳む（join で panic 不在も確認）。

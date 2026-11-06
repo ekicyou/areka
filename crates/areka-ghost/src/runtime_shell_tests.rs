@@ -5,11 +5,11 @@
 //! `shell/B/`（`name,ShellB`）を足して名前ありで起動する。
 use super::*;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use temp_path_kit::TempPath;
 
-use super::origin_tests::{NoopSink, RecordingShiori, Requests, refs_of, write_returning_ghost};
+use super::origin_tests::{RecordingShiori, refs_of, write_returning_ghost};
+use crate::test_support::{Requests, fake_options, shutdown_bounded, wait_for_on_boot};
 
 /// 名前ありで起動すると、マウントのシェルは `shell/B`、`OnBoot` の Ref0 は B の名前になり、
 /// 書き換えの口の後はマウントのシェルが新しいフォルダを指す。
@@ -29,34 +29,17 @@ fn named_shell_boot_mounts_it_and_set_shell_dir_rewrites_it() {
     let requests: Requests = Arc::new(Mutex::new(Vec::new()));
     let backend_requests = Arc::clone(&requests);
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.clone(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(RecordingShiori(backend_requests)) as Box<dyn ShioriBackend>)
         })),
-        sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-        system_vars: SystemVarWiring::Custom(Box::new(SystemVarSnapshot::default)),
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root.clone())
     };
 
     let mut runtime = boot_with_origin(options, None, BootOrigin::Plain, Some("B"), None)
         .expect("boot should succeed");
     assert_eq!(runtime.mount().shell.dir, shell_b);
 
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let seen = loop {
-        let seen = requests.lock().expect("requests mutex poisoned").clone();
-        if seen.iter().any(|(id, _)| id == "OnBoot") {
-            break seen;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "OnBoot never reached SHIORI; requests so far: {seen:?}"
-        );
-        std::thread::sleep(Duration::from_millis(5));
-    };
+    let seen = wait_for_on_boot(&requests);
     assert_eq!(
         refs_of(&seen, "OnBoot"),
         vec![&vec!["ShellB".to_string()]],
@@ -70,15 +53,6 @@ fn named_shell_boot_mounts_it_and_set_shell_dir_rewrites_it() {
     assert_eq!(runtime.mount().shell.dir, shell_master);
     assert_eq!(runtime.mount().bindgroups[&0].default_on, vec![3]);
 
-    // 正規の終了を期限つきで待つ（join の宙吊りでスイート全体を止めない）。
-    let (done_tx, done_rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let result = runtime.shutdown(areka_kanade::CloseReason::System);
-        let _ = done_tx.send(result.map_err(|err| format!("{err:?}")));
-    });
-    let outcome = done_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("shutdown did not complete within 10s (possible hang)");
-    assert_eq!(outcome, Ok(()), "shutdown should succeed");
+    shutdown_bounded(runtime);
     drop(temp);
 }

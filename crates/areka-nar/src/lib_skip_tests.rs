@@ -100,7 +100,7 @@ impl Run {
 /// 書庫を根とは別の置き場に置き、記録を捕まえながら `open` → `install` を通す。
 fn run(nar: &NarBuilder, shelf: &WorkDir, root: &Path, target_ghost: Option<&str>) -> Run {
     let archive = shelf.path().join("skip-test.nar");
-    fs::write(&archive, nar.bytes()).expect("固定入力を置ける");
+    nar.write_to(&archive).expect("固定入力を置ける");
     let (outcome, records) = capture(|| {
         NarArchive::open(&archive)?.install(&InstallRequest {
             roots: &SingleRoot(root),

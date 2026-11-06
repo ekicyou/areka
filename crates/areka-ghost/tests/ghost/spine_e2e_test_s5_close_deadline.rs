@@ -39,83 +39,28 @@
 
 use super::*;
 
-use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
+use areka_ghost::{
+    GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot_with_kanade_stop,
+};
+use areka_kanade::{
+    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
+    MonotonicMs, events,
+};
 use areka_parsers::charset::DefaultEncoding;
-use temp_path_kit::TempPath;
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-spine-s5-{tag}"))
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリーを構築する（S1/S3/S4 の
-/// `write_ghost_fixture` と同旨だが、sibling module から private item は参照できない
-/// ためローカルに複製する）。
-fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,S5TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
-    )
-    .expect("write shell descript.txt");
-}
-
-/// events 表由来の [`ShioriCall`] をこのファイル固有の [`RecordedCall`] へ変換する
-/// （S1/S4 の `expected_from_shiori_call` と同旨のローカル複製・Req 7.1）。
-fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
-    match call {
-        ShioriCall::Get { id, references, .. } => RecordedCall::Get {
-            id: id.to_string(),
-            references,
-        },
-        ShioriCall::Notify { id, references, .. } => RecordedCall::Notify {
-            id: id.to_string(),
-            references,
-        },
-    }
-}
-
-/// 有界待機ヘルパ（S1〜S4 と同旨のローカルコピー）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
-}
 
 /// S5: close deadline 超過——close talk を意図的に完了させず（`\_w[49999950]`＝約13.9時間
 /// 相当の待ちで恒久的に止める）、`runtime.kanade()` へ `Tick` を 2 回注入するだけで
 /// （1本目で deadline を確定・2本目で超過を跨ぐ）、`Unloading{DeadlineExceeded}`→
-/// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走する
-/// ことを、`runtime.shutdown()` の全スレッド join 成功をもって確認する（design「S5
-/// close deadline」・要件 7.4/7.5/7.6）。
+/// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走し、停止の通知の
+/// 原因が `DeadlineExceeded` であること（呼び出しの列は通常の Quit と同じなので、締切の道を
+/// 通ったかは原因でしか分からない）と、`runtime.shutdown()` の全スレッド join 成功を確認する
+/// （design「S5 close deadline」・要件 7.4/7.5/7.6）。
 #[test]
 fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     const SHELL_NAME: &str = "S5DeadlineShell";
 
-    let temp = unique_temp_dir("exceeded-forces-termination-via-tick-injection");
+    let temp = write_ghost_fixture("S5TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
-    write_ghost_fixture(&root, SHELL_NAME);
 
     let config = KanadeConfig::new(SHELL_NAME, env!("CARGO_PKG_VERSION"));
 
@@ -123,15 +68,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // unload（DeadlineExceeded 系列が発行する ShioriUnload の応答・Ok(Clean)）を台本化する。
     // OnSecondChange は台本化しない——本シナリオは kanade へ boot 完了後、CloseRequest と
     // deadline 用 Tick 2 本しか送らないため steady pump は起こらない。
-    let (backend, handle) = ScriptedShioriBackend::builder()
-        .notify("OnInitialize", Ok(()))
-        // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
-        // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
-        // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
-        .get("username", Ok(None))
-        .get("OnFirstBoot", Ok(None))
-        .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
-        .notify("basewareversion", Ok(()))
+    let (backend, handle) = boot_script()
         .get(
             "OnClose",
             Ok(Some(r"\_w[49999950]this-never-completes\-".to_string())),
@@ -156,26 +93,20 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         ticker: TickerMode::Disabled,
     };
 
-    let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+    // 停止の通知の投函端つきで起こす（締切の道を通ったことは停止の原因で見る）。
+    let (stop_tx, stop_rx) = std::sync::mpsc::channel::<KanadeNotice>();
+    let runtime = boot_with_kanade_stop(options, Some(stop_tx))
+        .expect("boot should succeed for a resolvable ghost_root");
 
     // ---- boot talk を Steady 到達まで駆動する（S1/S3/S4 と同一技法・sleep 不使用) ----
     // dispatcher への Tick は kanade 自身の last_now を更新しない（別チャンネル・別
-    // 帳簿）ため、この loop を通しても kanade の last_now は None のまま維持される
-    // （CONCERNS 参照）。
+    // 帳簿）ため、この loop を通しても kanade の last_now は None のまま維持される。
     let mut now: u64 = 1;
-    let dispatcher = runtime.dispatcher();
-    let tick = |n: u64| {
-        dispatcher
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(n),
-            })
-            .expect("dispatcher actor should still be alive while driving the boot talk");
-    };
     super::spin_pumping_ticks(
         "S5: surface cue never fired after repeated Tick — boot talk did not reach \
          dispatcher's active slot",
         &mut now,
-        tick,
+        dispatcher_tick(runtime.dispatcher()),
         || {
             !surface_records
                 .lock()
@@ -215,7 +146,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         "S5: OnClose GET was never issued after CloseRequest — the greeting-tracking close \
          deferral (DD-IT-12) never resolved into a close handshake",
         &mut now,
-        tick,
+        dispatcher_tick(runtime.dispatcher()),
         || {
             handle
                 .calls()
@@ -229,7 +160,7 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用・要件 7.4) ----
     // 1本目: CloseTalkWait 入場後 初めて受ける Tick——deadline を
     // `arm_now + close_talk_deadline_ms` へ確定するだけで比較はしない
-    // （close.rs の deadline=None 分岐・CONCERNS 参照）。
+    // （close.rs の deadline=None 分岐）。
     let arm_now: u64 = 5_000;
     runtime
         .kanade()
@@ -250,55 +181,38 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
 
     // ---- deadline 超過による強制終了系列の完走を有界スピン待機で確認する ----
     // （Tick 送出は上で完了済み・以降は追加 Tick も sleep も伴わない）。
-    let mut deadline_settled = false;
-    let deadline = std::time::Instant::now() + super::E2E_BOUND;
-    while std::time::Instant::now() < deadline {
-        let has_unload = handle
-            .calls()
-            .lock()
-            .expect("calls mutex poisoned")
-            .iter()
-            .any(|c| matches!(c, RecordedCall::Unload));
-        if has_unload {
-            deadline_settled = true;
-            break;
+    wait_until(
+        "S5: Unload was never observed after the deadline-crossing Tick — forced termination (CloseTalkWait deadline exceeded → Unload) did not complete within bound",
+        || {
+            handle
+                .calls()
+                .lock()
+                .expect("calls mutex poisoned")
+                .iter()
+                .any(|c| matches!(c, RecordedCall::Unload))
+        },
+    );
+
+    // ---- 停止の原因が締切の超過であること（通常の Quit の道へ退行すると原因が変わる）----
+    // 起動を終えた `Steady` の通知が先に届くので、停止の通知まで読み飛ばす。
+    let stopped: KanadeStopped = loop {
+        let notice = stop_rx
+            .recv_timeout(super::BOUND)
+            .expect("kanade should post a stop notice after the deadline-exceeded Unload");
+        if let KanadeNotice::Stopped(stopped) = notice {
+            break stopped;
         }
-        std::thread::yield_now();
-    }
-    assert!(
-        deadline_settled,
-        "S5: Unload was never observed after the deadline-crossing Tick — forced \
-         termination (CloseTalkWait deadline exceeded → Unload) did not complete within bound"
+    };
+    assert_eq!(
+        stopped.cause,
+        KanadeStopCause::DeadlineExceeded,
+        "S5: the stop cause must be DeadlineExceeded, got {stopped:?}"
     );
 
     // ---- (a) 起動系列＋close 開始＋強制終了系列が正典順序で発火 ----
     // 死活監視ノイズ（RecordedCall::Status）を除外して比較する（S1/S3/S4 と同旨）。
-    let expected_sequence = vec![
-        expected_from_shiori_call(events::on_initialize(
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-        // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1・DD-9 の唯一の期待値導出経路）。
-        expected_from_shiori_call(areka_kanade::resources::resource_username(
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-        expected_from_shiori_call(events::on_first_boot(
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-            // fixture ghost に永続ファイル無し＝vanish 不在ゆえ Ref0="0"（従来値同値）。
-            0,
-        )),
-        expected_from_shiori_call(events::on_boot(
-            &config,
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-        // 台詞は再生の前に OnTranslate へかける（偽の SHIORI の既定は 204）。
-        super::expected_translate(
-            r"\s[0]hello\e",
-            &events::on_boot(&config, &areka_kanade::ExecutionSnapshot::INACTIVE),
-        ),
-        expected_from_shiori_call(events::baseware_version(
-            &config,
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
+    let mut expected_sequence = expected_boot_prefix(&config);
+    expected_sequence.extend([
         expected_from_shiori_call(events::on_close(
             CloseReason::User { scope: 0 },
             &areka_kanade::ExecutionSnapshot::INACTIVE,
@@ -311,15 +225,8 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
             ),
         ),
         RecordedCall::Unload,
-    ];
-    let calls_without_status: Vec<RecordedCall> = handle
-        .calls()
-        .lock()
-        .expect("calls mutex poisoned")
-        .iter()
-        .filter(|c| !matches!(c, RecordedCall::Status))
-        .cloned()
-        .collect();
+    ]);
+    let calls_without_status = non_status_calls(&handle);
     assert_eq!(
         calls_without_status, expected_sequence,
         "起動系列＋close 開始＋強制終了系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→\
@@ -328,22 +235,15 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
 
     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
     // deadline 超過による強制終了が既に Unload まで完走済み（上の有界待機で確認済み）
-    // であるため、ここでの `ForceQuit` 送出は kanade が既に自発停止済みであることの
-    // 冪等パスを実地で運動させる（S4 と同旨）。close talk（`\_w[49999950]` で止まった
+    // である。ここでの `ForceQuit` が届く道と、送出が失敗する冪等の道のどちらを通るかは
+    // 時機次第で、どちらでも全 join が有界時間で完走することを確かめる（S4 と同旨）。close talk（`\_w[49999950]` で止まった
     // まま）は dispatcher の active slot に残っているはずだが、dispatcher への Close
     // 送出は稼働中 active talk へ `SakuraMsg::Close` を送って即座に中断させてから
     // join する（`close_active_if_any`・dispatcher.rs）ため、恒久的に止まった close
-    // talk があっても shutdown は有界時間内に完走する（CONCERNS 参照）。
-    run_bounded(
+    // talk があっても shutdown は有界時間内に完走する。
+    crate::common::run_bounded_shutdown(
         "shutdown after S5 close deadline exceeded",
-        super::E2E_BOUND,
-        move || {
-            let result = runtime.shutdown(CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "shutdown should return Ok(()) after the deadline-exceeded forced \
-                 termination completes, got {result:?}"
-            );
-        },
+        super::BOUND,
+        runtime,
     );
 }

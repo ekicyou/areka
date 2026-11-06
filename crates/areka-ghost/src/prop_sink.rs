@@ -130,7 +130,7 @@ impl CueSink for PropSetCueSink {
 mod tests {
     use super::*;
     use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-    use areka_sylphya::persist::{FakePersistIo, PersistIo};
+    use areka_sylphya::persist::FakePersistIo;
     use areka_sylphya::{
         PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
@@ -148,24 +148,9 @@ mod tests {
         }
     }
 
-    /// 同一 [`FakePersistIo`] を `Arc` 共有する委譲 IO（テスト専用・actor.rs 先例の再実装）。
-    ///
-    /// `FakePersistIo` は内部 `Mutex` で Clone 不可ゆえ、write-through が実 IO シームを通ったことは
-    /// 「アクターへ渡した IO と同じ store」を別ハンドルの [`load_scope`] で観測して確認する。
-    #[derive(Clone)]
-    struct SharedFakeIo(Arc<FakePersistIo>);
-    impl PersistIo for SharedFakeIo {
-        fn read(&self, path: &std::path::Path) -> std::io::Result<Option<String>> {
-            self.0.read(path)
-        }
-        fn commit(&self, path: &std::path::Path, content: &str) -> std::io::Result<()> {
-            self.0.commit(path, content)
-        }
-    }
-
     /// ghost root 付きの共有 FakeIo sylphya を起動する（write-through を別ハンドルで観測するため）。
-    fn spawn_with_shared_io() -> (areka_sylphya::SylphyaParts, ScopeRoots, SharedFakeIo) {
-        let shared = SharedFakeIo(Arc::new(FakePersistIo::new()));
+    fn spawn_with_shared_io() -> (areka_sylphya::SylphyaParts, ScopeRoots, Arc<FakePersistIo>) {
+        let shared = Arc::new(FakePersistIo::new());
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
             ..ScopeRoots::default()

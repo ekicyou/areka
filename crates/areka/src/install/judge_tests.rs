@@ -25,7 +25,6 @@ fn manifest(
         existing: ExistingPolicy::Overlay,
         companions: Vec::new(),
         warnings: Vec::new(),
-        charset_declared: None,
     }
 }
 

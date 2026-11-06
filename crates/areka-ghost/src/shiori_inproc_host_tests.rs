@@ -4,7 +4,7 @@
 //! （interface.rs `host_sink_all_methods_dispatch` と同律）。
 //! - SetProperty → GetProperty 往復（格納値の move-out）。
 //! - 欠落 key の GetProperty → `SHIORI_E_PROPERTY_NOT_FOUND`（out_value 未書込）。
-//! - Raise → `Ok(())`（M1 InProc に消費者なし・warn 記録のみ）。
+//! - Raise → `Ok(())`＋WARN の記録（M1 InProc に消費者なし・記録は捕まえて見る）。
 //! - Complete（任意トークン）→ `SHIORI_E_UNKNOWN_TOKEN`（deferred 非対応＝pending 枠なし・要件 7.4）。
 
 use super::*;
@@ -48,13 +48,21 @@ fn get_missing_property_returns_property_not_found() {
     );
 }
 
-/// Raise は消費者不在でも `Ok(())` を返すこと（warn 可視化・握りつぶさない・要件 7.4）。
+/// Raise は消費者不在でも `Ok(())` を返し、受領を WARN で記録すること（握りつぶさない・要件 7.4）。
 #[test]
 fn raise_returns_ok_without_consumer() {
     let host: IShioriHost = InProcHost::new().into();
 
     let script = HSTRING::from("\\h\\s[0]hello");
-    unsafe { host.Raise(&script) }.expect("Raise は受領して Ok を返すこと（消費者なし）");
+    let events = crate::test_log_capture::capture(|| {
+        unsafe { host.Raise(&script) }.expect("Raise は受領して Ok を返すこと（消費者なし）");
+    });
+    assert!(
+        events
+            .iter()
+            .any(|e| e.target == LOG_TARGET && e.level == tracing::Level::WARN),
+        "Raise の受領は {LOG_TARGET} の WARN で見えること: {events:?}"
+    );
 }
 
 /// Complete は任意トークンで `SHIORI_E_UNKNOWN_TOKEN`（deferred 非対応・pending 枠なし・要件 7.4）。

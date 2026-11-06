@@ -378,6 +378,7 @@ impl DispatcherState {
             self.active = None;
         } else {
             tracing::info!(
+                event = "talk_done_stale",
                 talk_id = done.talk_id.0,
                 "stale TalkDone discarded (slot already replaced or empty)"
             );
@@ -505,6 +506,3 @@ mod slot_tests;
 #[cfg(test)]
 #[path = "dispatcher_strict_tests.rs"]
 mod strict_tests;
-#[cfg(test)]
-#[path = "dispatcher_test_support.rs"]
-mod test_support;

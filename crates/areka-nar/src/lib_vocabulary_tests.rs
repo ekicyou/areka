@@ -20,7 +20,6 @@ use super::*;
 use log_capture_kit::{CapturedEvent, capture};
 use sample_ghost_kit::{Corrupt, Damage, NarBuilder, WorkDir, install_txt};
 use std::collections::BTreeSet;
-use std::fs;
 
 // ---- 固定入力 ----
 
@@ -31,9 +30,8 @@ pub(super) struct Case {
     /// なぜこの入力がその語になるのか。赤くなったときに読む。
     pub note: &'static str,
     pub nar: NarBuilder,
-    /// `None`＝`open` が拒否する。`Some(t)`＝`open` は通り `install` が拒否する
-    /// （`t` は呼び出し側が渡す宛先ゴーストの名前）。
-    pub install: Option<Option<&'static str>>,
+    /// `false`＝`open` が拒否する。`true`＝`open` は通り `install` が拒否する。
+    pub refused_by_install: bool,
 }
 
 /// 受理されるゴーストの `install.txt`。
@@ -55,7 +53,7 @@ pub(super) fn cases() -> Vec<Case> {
             kind: "CorruptArchive",
             note: "終端記録（EOCD）を書かない書庫は構造として読めない",
             nar: with_manifest().damage(Damage::NoEocd),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "IntegrityMismatch",
@@ -64,7 +62,7 @@ pub(super) fn cases() -> Vec<Case> {
                 .file("ghost/master/dic.txt", b"line\r\n")
                 .corrupt(Corrupt::Crc)
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "UnsupportedEntry",
@@ -73,7 +71,7 @@ pub(super) fn cases() -> Vec<Case> {
                 .file("ghost/master/secret.txt", b"locked")
                 .encrypted_flag()
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "NameUndecodable",
@@ -82,7 +80,7 @@ pub(super) fn cases() -> Vec<Case> {
                 .file(b"\x81\x20.txt".to_vec(), b"x")
                 .utf8_flag(false)
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "PathTooLong",
@@ -90,7 +88,7 @@ pub(super) fn cases() -> Vec<Case> {
             nar: with_manifest()
                 .file(format!("g/{}", "a".repeat(199)), b"x")
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "SymlinkEntry",
@@ -99,13 +97,13 @@ pub(super) fn cases() -> Vec<Case> {
                 .file("ghost/master/link.txt", b"x")
                 .symlink()
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "UnsafePath",
             note: "親へ遡る要素を含む名前（根の外が宛先になり得る）",
             nar: with_manifest().file("../外.txt", b"x").done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "CaseCollision",
@@ -115,7 +113,7 @@ pub(super) fn cases() -> Vec<Case> {
                 .done()
                 .file("ghost/master/a.txt", b"y")
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "MissingInstallTxt",
@@ -125,7 +123,7 @@ pub(super) fn cases() -> Vec<Case> {
                 .done()
                 .file("wrap/ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "UnsupportedType",
@@ -136,7 +134,7 @@ pub(super) fn cases() -> Vec<Case> {
                     &install_txt(&["type,plugin", "name,テスト", "directory,tester"]),
                 )
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "MissingRequiredKey",
@@ -147,7 +145,7 @@ pub(super) fn cases() -> Vec<Case> {
                     &install_txt(&["type,ghost", "directory,tester"]),
                 )
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "InvalidDirectoryName",
@@ -158,7 +156,7 @@ pub(super) fn cases() -> Vec<Case> {
                     &install_txt(&["type,ghost", "name,テスト", "directory,../外"]),
                 )
                 .done(),
-            install: None,
+            refused_by_install: false,
         },
         Case {
             kind: "TargetGhostMissing",
@@ -171,7 +169,7 @@ pub(super) fn cases() -> Vec<Case> {
                 .done()
                 .file("shell/master/surface0.png", b"png")
                 .done(),
-            install: Some(None),
+            refused_by_install: true,
         },
     ]
 }
@@ -205,15 +203,15 @@ fn every_refusal_kind_has_a_fixture_and_is_recorded_once() {
 
     for case in cases() {
         let path = root.join(format!("{}.nar", case.kind));
-        fs::write(&path, case.nar.bytes()).expect("固定入力を置ける");
+        case.nar.write_to(&path).expect("固定入力を置ける");
 
-        let (result, records) = capture(|| match case.install {
-            None => NarArchive::open(&path).map(|_| ()),
-            Some(target_ghost) => NarArchive::open(&path)
+        let (result, records) = capture(|| match case.refused_by_install {
+            false => NarArchive::open(&path).map(|_| ()),
+            true => NarArchive::open(&path)
                 .expect("install で拒否される入力は open を通る")
                 .install(&InstallRequest {
                     roots: &SingleRoot(root),
-                    target_ghost,
+                    target_ghost: None,
                 })
                 .map(|_| ()),
         });
@@ -287,7 +285,9 @@ fn a_successful_install_writes_no_error_record() {
     let work = WorkDir::new().expect("根を借りられる");
     let root = work.path();
     let path = root.join("good.nar");
-    fs::write(&path, super::ghost_with_balloon().bytes()).expect("固定入力を置ける");
+    super::ghost_with_balloon()
+        .write_to(&path)
+        .expect("固定入力を置ける");
 
     let (outcome, records) = capture(|| {
         NarArchive::open(&path)
@@ -331,7 +331,7 @@ fn skipped_manifest_keys_are_warned_one_by_one() {
         .done()
         .file("ghost/master/descript.txt", b"charset,Shift_JIS\r\n")
         .done();
-    fs::write(&path, nar.bytes()).expect("固定入力を置ける");
+    nar.write_to(&path).expect("固定入力を置ける");
 
     let (outcome, records) = capture(|| {
         NarArchive::open(&path)

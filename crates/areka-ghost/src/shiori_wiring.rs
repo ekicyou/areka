@@ -198,10 +198,12 @@ pub fn real_connect(
             // 起動時に決めた初期値（この `real_connect` 呼び出しに 1 つ・要件 5.2）。
             //
             // 宣言を持たない UTF-8 のゴースト（emo2 の pasta）では初期値が既定の Shift_JIS に
-            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **2 本**
+            // なる。そこから採用が起きるまでに `Charset: Shift_JIS` を名乗る要求は **3 本**
             // ある——片道イベントの応答は採用の根拠に用いない（要件 5.3）ためで、並びは
-            // `areka-kanade` の boot 状態機械（`schedule/boot.rs`）の発行点 3 つで決まる:
+            // 上の版の確かめと、`areka-kanade` の boot 状態機械（`schedule/boot.rs`）の
+            // 発行点 3 つで決まる:
             //
+            // 0. この閉包の中の版の確かめ（`GET Version`・上の 6.）。応答は採用に回さない。
             // 1. `boot_start`（Idle+Boot の遷移関数）が発行する `OnInitialize`＝**片道の
             //    NOTIFY**。その応答は `client.rs` の `notify` が破棄するだけで、応答ヘッダを
             //    採用へ回す手続きを呼ばない（同関数の本文にその経路が無いことは通信層の
@@ -210,10 +212,10 @@ pub fn real_connect(
             //    ＝**応答待ちの GET**。これも Shift_JIS で出る。相手が名乗る
             //    `Charset: UTF-8` を採用するのはこの応答。
             // 3. prefetch 応答を写して発行する `OnFirstBoot`＝GET（初回起動の場合。起動記録が
-            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、3 本目から
+            //    あれば同じ腕が `OnFirstBoot` を飛ばして `OnBoot` を発行するが、4 本目から
             //    UTF-8 になる点は変わらない）。ここから UTF-8 になり、以後は変わらない（要件 2.7）。
             //
-            // 2 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
+            // 3 本とも本文は ASCII のみ（References を持たず `Sender`／`Status` の値も ASCII の
             // 語彙）なので、適用前と違うのは `Charset` ヘッダの値だけ。採用の規則は実行層では
             // なく交渉状態の持ち物であり、ここは決めた値を渡すだけ。
             negotiator,
@@ -271,8 +273,9 @@ fn ghost_label(master_dir: &Path) -> String {
 /// （要件 6.4・`shiori4-api` の決定 6 の helper の道の前倒し）。
 ///
 /// 華和梨などはこれにファイル名をそのままつなげて辞書を開くので、区切りの混在や末尾の
-/// 区切りなし（`…\ghost/master`）では読めない。
-fn helper_load_dir(dir: &Path) -> std::io::Result<PathBuf> {
+/// 区切りなし（`…\ghost/master`）では読めない。同じプロセス内の道（`inproc_connect`）も
+/// これで整える。
+pub(crate) fn helper_load_dir(dir: &Path) -> std::io::Result<PathBuf> {
     // 部品を集め直すと区切りが `\` にそろい、末尾の区切りも落ちる。
     let mut shaped: PathBuf = std::path::absolute(dir)?.components().collect();
     // 空を足すと末尾に区切りが 1 つだけ付く（既にあれば足さない）。
@@ -326,39 +329,15 @@ pub fn empty_connect() -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String
 #[cfg(test)]
 mod tests {
     use areka_parsers::charset::DefaultEncoding;
-    use areka_parsers::package;
     use temp_path_kit::TempPath;
 
     use super::*;
 
-    /// `ShioriMount` は `#[non_exhaustive]`（`areka-parsers` 外からの struct リテラル構築は
-    /// 不可）ゆえ、本番と同じ経路（`package::resolve_with_shell`）で実フィクスチャから取得する。
-    ///
     /// `ghost/master/descript.txt` に `shiori,<name>` 行が有れば `file: Some(name)`、
     /// 無ければ `file: None` になる（`resolve` の実装どおり・推測しない）。
-    ///
-    /// フィクスチャの置き場は共通窓口 `temp-path-kit` から受け取る。名前にプロセス識別子と
-    /// 連番が入るので**プロセス間でも一意**であり、破棄で中身ごと消える（従来の手組みの名前は
-    /// スレッド識別子までしか含まず、しかも後始末が無いため一時ディレクトリが残り続けていた）。
-    /// 返り値の [`TempPath`] を呼び出し側がテストの間だけ生かしておくこと。
     fn build_shiori_mount(shiori_line: Option<&str>) -> (TempPath, ShioriMount) {
-        let temp = TempPath::new("ghost-shiori-wiring");
-        let root = temp.path().to_path_buf();
-        let master_dir = root.join("ghost").join("master");
-        std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
-        std::fs::create_dir_all(root.join("shell").join("master"))
-            .expect("fixture shell dir 作成に失敗");
-
-        let mut descript = String::new();
-        if let Some(name) = shiori_line {
-            descript.push_str(&format!("shiori,{name}\n"));
-        }
-        std::fs::write(master_dir.join("descript.txt"), descript)
-            .expect("fixture descript.txt 書き込みに失敗");
-
-        let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
-            .expect("fixture ghost_root の resolve に失敗");
-        (temp, mount.shiori)
+        let descript = shiori_line.map_or(String::new(), |name| format!("shiori,{name}\n"));
+        crate::test_support::shiori_mount("ghost-shiori-wiring", &descript)
     }
 
     /// `shiori.file` が `None`（DLL ファイル名未解決）なら、ウィンドウ生成やプロセス起動を
@@ -409,7 +388,10 @@ mod tests {
         let result = connect();
 
         match result {
-            Err(_) => {}
+            Err(e) => assert!(
+                e.contains("i686 helper の spawn に失敗"),
+                "spawn の段で落ちるはず: {e}"
+            ),
             Ok(_) => panic!("存在しない helper_exe への spawn は失敗するはず"),
         }
     }

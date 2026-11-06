@@ -50,6 +50,7 @@ const LOG_TARGET: &str = "ghost-boot";
 /// （`"selfname"`／`"selfname2"`／`"keroname"`）。返す `Vec` は決定論的な安定順
 /// （selfname → selfname2 → keroname）で、これらは task 8.2 で ghost が `PublishStatic` する。
 pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
+    // 名前を足したら FLAT_STATIC_NAMES にも足す（読み直しで消す範囲）。
     let mut out: Vec<(String, String)> = Vec::new();
 
     // %selfname＝sakura.name（R4.3）。未定義→積まない（素通し縮退）。
@@ -74,6 +75,21 @@ pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
     }
 
     out
+}
+
+/// [`derive_flat_statics`] が積みうるフラットな静的名の全部。
+pub const FLAT_STATIC_NAMES: [&str; 3] = ["selfname", "selfname2", "keroname"];
+
+/// `names` で起動したなら積まれない静的名（[`FLAT_STATIC_NAMES`] のうち
+/// [`derive_flat_statics`] に無いもの）。読み直しはこれを鏡像から消し、起動時と同じ状態にする
+/// （ukadoc は名前が無いときの値を定めない・要件 9.15 ⑵）。
+pub fn absent_flat_statics(names: &GhostNames) -> Vec<String> {
+    let flat = derive_flat_statics(names);
+    FLAT_STATIC_NAMES
+        .iter()
+        .filter(|name| !flat.iter().any(|(f, _)| f == *name))
+        .map(|name| name.to_string())
+        .collect()
 }
 
 // ============================================================================
@@ -101,8 +117,8 @@ pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
 /// boot 系列の sylphya アクターを起動する（本番 IO＝[`FsPersistIo`]・運行 sink 未配線＝M1）。
 ///
 /// `roots` は層別 profile root（ghost/shell/app/balloon）。起動時に全スコープを寛容ロードして
-/// 初期鏡像へ投影する（不在スコープは空扱い・emo2 fixture の read-only でも汚染しない——M1 本番
-/// 経路に永続書込呼出は無い・design Implementation Notes）。返る [`SylphyaParts`] の reader は
+/// 初期鏡像へ投影する（不在スコープは空扱い）。書き込みは呼び手の `persist_put` と、`boot` の
+/// profile の根の作成（`runtime.rs` の step 2b）が行う。返る [`SylphyaParts`] の reader は
 /// 結線直後から無待機で読める。
 ///
 /// `failures` は保存の失敗の受け口（要件 1.3）。`Some` なら保存が失敗するたびに中身を 1 件送る。
@@ -151,7 +167,7 @@ pub fn publish_ghost_statics(
 ///
 /// を投函した **後** `barrier()` で反映完了を待ってから返る。これにより prefetch→初回 talk までの
 /// 反映順序が決定論化する（研究 §12-1）。barrier が [`areka_actor::ReplyError`] を返す
-/// （sylphya アクター死亡）場合は **warn＋続行**（永久ブロックしない・panic しない・design Risks）。
+/// （sylphya アクター死亡）場合は **error＋続行**（永久ブロックしない・panic しない・design Risks）。
 pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) -> ResourceSink {
     Box::new(move |id, outcome| {
         let value = match outcome {
@@ -162,7 +178,7 @@ pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) 
         publisher.publish_shiori(asker.clone(), id.to_string(), value);
         // 反映フェンス: 投函済み publish の反映完了を同期観測してから返る（初回 talk 前の順序保証）。
         if let Err(err) = publisher.barrier() {
-            tracing::warn!(
+            tracing::error!(
                 target: LOG_TARGET,
                 id = id,
                 error = %err,
@@ -363,6 +379,22 @@ mod tests {
         );
     }
 
+    /// [`FLAT_STATIC_NAMES`] は [`derive_flat_statics`] が積みうる名の全部と一致する
+    /// （名を足して一覧に足し忘れると、読み直しで古い値が残る・要件 9.15 ⑵）。
+    #[test]
+    fn flat_static_names_match_what_derive_can_publish() {
+        let all = names(Some("むらさき"), Some("紫"), Some("エモ"));
+        let keys: Vec<_> = derive_flat_statics(&all)
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+        assert_eq!(keys, FLAT_STATIC_NAMES);
+        assert_eq!(
+            absent_flat_statics(&names(None, None, None)),
+            FLAT_STATIC_NAMES
+        );
+    }
+
     // --- provider 差替の固定ログ（design Monitoring・R9.3 サインオフ証跡・Task 10.1） ---
 
     /// `from_sylphya_provider` が生成するスナップショットのたびに、design Monitoring の固定ログ
@@ -419,5 +451,32 @@ mod tests {
             .handle
             .join()
             .expect("clean close joins without panic");
+    }
+
+    /// sylphya の役者を畳んだ後に sink を呼ぶと、barrier の失敗が ERROR で 1 件だけ記録され、
+    /// sink は panic せず返る（続行・要件 9.5・design #30）。
+    #[test]
+    fn a_dead_sylphya_barrier_is_logged_as_error() {
+        use crate::test_log_capture::capture;
+
+        let parts = spawn_ghost_sylphya(ScopeRoots::default(), None);
+        parts.publisher.close();
+        parts
+            .handle
+            .join()
+            .expect("clean close joins without panic");
+
+        let sink = make_username_resource_sink(parts.publisher, AskerId::new("ghost/dead-barrier"));
+        let events = capture(|| sink("username", ResourceOutcome::Value("さくら".into())));
+
+        let errors: Vec<_> = events
+            .iter()
+            .filter(|e| e.target == LOG_TARGET && e.level == tracing::Level::ERROR)
+            .collect();
+        assert_eq!(
+            errors.len(),
+            1,
+            "barrier の失敗は ERROR で 1 件: {events:?}"
+        );
     }
 }

@@ -4,7 +4,8 @@
 //! 助手と固定入力は [`super`]（`install_tests.rs`）から借りる。分けたのは
 //! 1 ファイル 1,000 行の上限に収めるためで、固定入力は 1 つも削っていない。
 //!
-//! 失敗の場合は 4 つあり、どれも**本物の失敗を起こして**踏む。
+//! ⑴〜⑷は**本物の失敗**で踏む。他のプロセスの割り込みが要る競合と巻き戻しの躓きは、
+//! 判断を持つ関数を直接踏む。
 //!
 //! ⑴ 宛先の中のファイルを、読みだけを共有して開いたまま確定する（起動中の
 //!    `shiori.dll` の再現＝要件 6.6）。Windows は配下に掴まれたファイルが在るフォルダの
@@ -16,37 +17,16 @@
 //!    失敗して残り物になる。
 //!
 //! どの失敗でも、宛先が**呼ぶ前と 1 バイトも変わっていない**ことを木ごと突き合わせる
-//! （[`tree`] は相対パスとバイト列そのもので写す）。「まだ在る」では何も証明できない。
+//! （`tree` は相対パスとバイト列そのもので写す）。「まだ在る」では何も証明できない。
 
 use super::*;
 use crate::error::{ElementKind, SurvivingTree};
-use std::os::windows::fs::OpenOptionsExt;
 
 /// 入れ子の同梱の確定の兄弟テスト。1,000 行の上限に収めるために分けた。
 #[path = "install_nested_tests.rs"]
 mod nested;
 
 // ---- 助手 ----
-
-/// 読むことだけを共有して開いたまま持つ（起動中のゴーストの `shiori.dll` と同じ状態）。
-///
-/// 掴んだ handle を返す。落とすまで、そのファイルも**親フォルダ**も
-/// `rename`／`remove_dir_all` できない（どちらも os error 5）。
-///
-/// 設計の試験方針も `share_mode(1)`（`FILE_SHARE_READ`）と書いている。共有をゼロに
-/// すると**組み上げ**の段の複写（既存の宛先を作業フォルダへ写す）が os error 32 で
-/// 先に失敗し、確定の段まで到達しないためである。
-/// 実際に読み込まれている DLL は読みを共有する（だから複写は通り、消せない）ので、
-/// 共有を読みだけに絞るほうが再現として正しく、要件 6.6 の「確定ができない」に届く。
-const SHARE_READ: u32 = 1;
-
-fn hold(path: &Path) -> fs::File {
-    fs::OpenOptions::new()
-        .read(true)
-        .share_mode(SHARE_READ)
-        .open(path)
-        .unwrap_or_else(|err| panic!("{} を掴めるはず: {err}", path.display()))
-}
 
 /// 全配置を組み上げる（宛先は読むだけ）。
 fn stage_into(area: &WorkArea, prepared: &Prepared) -> Vec<ExistingState> {
@@ -80,7 +60,7 @@ fn install(root: &Path, prepared: &Prepared) -> (PathBuf, Result<InstallOutcome,
     let states = stage_into(&area, prepared);
     let work = area.path().to_path_buf();
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -360,6 +340,8 @@ fn all_three_existing_states_are_judged_before_the_swap() {
 /// その場で失敗するので、宛先は 1 バイトも動かない。
 #[test]
 fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let destination = work.path().join("balloon").join("test-balloon");
     make_tree(
@@ -374,12 +356,13 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
     let prepared = prepare(balloon_archive(&[]), &request);
     let handle = hold(&destination.join("shiori.dll"));
 
-    let (_, outcome) = install(work.path(), &prepared);
+    let (area, outcome) = install(work.path(), &prepared);
     let failure = outcome.expect_err("使用中なので確定できない");
 
     assert_eq!(failure.phase, IoPhase::Commit, "確定の段で失敗した");
     assert_eq!(failure.path, destination, "対象パスが分かる");
     assert!(failure.rolled_back, "宛先は呼ぶ前のまま");
+    assert!(!area.exists(), "巻き戻せたら作業フォルダは残さない");
     assert_eq!(failure.committed, vec![], "確定した配置は 1 つも無い");
     assert_eq!(tree(&destination), before, "宛先は 1 バイトも変わらない");
     drop(handle);
@@ -391,7 +374,7 @@ fn a_destination_in_use_fails_the_commit_and_leaves_it_byte_identical() {
 /// 再現（spec: `areka-P0-ghost-session-test-load-flake` の負荷の再現 4.6）。⑴と同じ
 /// 掴み方で 1 手目の退避を確かに拒ませ、拒みを観測した継ぎ目（`ON_RENAME_REFUSED`）
 /// の中で放す。眠りも放す側のスレッドも無いので、負荷で放すのが遅れて上限を越すことが
-/// ない。ずっと掴んだままの⑴は今までどおり失敗する（待つ分だけ約 2 秒遅くなる）。
+/// ない。ずっと掴んだままの⑴は今までどおり失敗する（⑴は待ちの長さを 0 にして眠らない）。
 #[test]
 fn a_destination_held_briefly_by_another_process_still_commits() {
     let work = WorkDir::new().expect("作業フォルダを取れる");
@@ -423,7 +406,7 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
     });
 
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -457,6 +440,8 @@ fn a_destination_held_briefly_by_another_process_still_commits() {
 /// 失敗する。宛先が空のまま残る経路が無いことを、呼ぶ前のバイト列で確かめる。
 #[test]
 fn a_failing_second_rename_puts_the_retired_tree_back() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let destination = work.path().join("balloon").join("test-balloon");
     make_tree(&destination, &[("descript.txt", b"old descript")]);
@@ -472,7 +457,7 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
     // 組み上げた木を掴む＝2 手目の `rename` だけが失敗する。
     let handle = hold(&area.stage(0).join("descript.txt"));
     let failure = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -497,6 +482,8 @@ fn a_failing_second_rename_puts_the_retired_tree_back() {
 /// 挙げ、`rolled_back` がそれを戻せたかを言う。
 #[test]
 fn a_failure_on_the_second_placement_rolls_the_first_one_back() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
     let balloon = work.path().join("balloon").join("test-balloon");
@@ -550,6 +537,8 @@ fn a_failure_on_the_second_placement_rolls_the_first_one_back() {
 /// で、書きかけの木が根に残らないことがここで決まる。
 #[test]
 fn a_placement_that_was_new_is_removed_again_when_a_later_one_fails() {
+    // 掴みっぱなしなので待っても放されない。眠らずに同じ失敗を見る（#63）。
+    crate::install::RENAME_PATIENCE.set(std::time::Duration::ZERO);
     let work = WorkDir::new().expect("作業フォルダを取れる");
     let ghost = work.path().join("ghost").join("test-ghost");
     let balloon = work.path().join("balloon").join("test-balloon");
@@ -638,6 +627,62 @@ fn a_new_placement_whose_destination_appeared_meanwhile_does_not_schedule_it_for
     );
 }
 
+/// 退避の後、新しい木を置く前に宛先が生え直したら、巻き戻しはその木を消さない。
+///
+/// 2 手目の「作業フォルダ → 宛先」を掴みで 1 度拒ませ、拒みを観測した継ぎ目の中で掴みを
+/// 放して宛先に他人の木を作る。試し直しは中身の在る宛先を上書きできずに失敗する。
+/// 置いていない宛先を「新しく置いた木」として消すと、他人の木が消える。戻せないので
+/// 元の木は退避先に生き残りとして残る。
+#[test]
+fn a_destination_recreated_before_the_new_tree_is_placed_is_not_removed_by_the_rollback() {
+    let work = WorkDir::new().expect("作業フォルダを取れる");
+    let destination = work.path().join("balloon").join("test-balloon");
+    make_tree(&destination, &[("descript.txt", b"old descript")]);
+    let original = tree(&destination);
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: None,
+    };
+    let prepared = prepare(balloon_archive(&[]), &request);
+    let area = WorkArea::create(work.path()).expect("作業フォルダを作れる");
+    let states = stage_into(&area, &prepared);
+    // 組み上げた木を掴む＝2 手目だけが拒まれ、継ぎ目が呼ばれる。
+    let mut handle = Some(hold(&area.stage(0).join("descript.txt")));
+    let someone = destination.clone();
+    crate::install::ON_RENAME_REFUSED.with(|seam| {
+        *seam.borrow_mut() = Some(Box::new(move || {
+            drop(handle.take());
+            make_tree(&someone, &[("someone-elses.txt", b"not ours")]);
+        }));
+    });
+    let failure = commit_all(
+        &area,
+        &prepared.manifest,
+        &prepared.plan,
+        Vec::new(),
+        &states,
+    );
+    crate::install::ON_RENAME_REFUSED.with(|seam| *seam.borrow_mut() = None);
+    let failure = failure.expect_err("生え直した宛先は上書きできない");
+
+    assert!(!failure.rolled_back, "他人の木が居るので戻せない");
+    assert_eq!(
+        tree(&destination),
+        expect_tree(&[("someone-elses.txt", b"not ours")]),
+        "他人の木は 1 バイトも変わらない"
+    );
+    let retired = area.path().join("old-0");
+    assert_eq!(
+        failure.survivors,
+        vec![SurvivingTree {
+            destination: destination.clone(),
+            path: retired.clone(),
+        }],
+        "元の木の在りかを返す"
+    );
+    assert_eq!(tree(&retired), original, "元の木は退避先にそのまま残る");
+}
+
 // ---- ⑷ 残り物 ----
 
 /// 後片付けが失敗しても確定は取り消さず、片付かなかった場所を残り物として返す。
@@ -662,7 +707,7 @@ fn leftovers_name_the_work_folder_when_the_cleanup_cannot_finish() {
     fs::write(&stuck, b"stuck").expect("仕掛けを置ける");
     let handle = hold(&stuck);
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -732,10 +777,12 @@ fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
             Undo::Restore {
                 old: missing_old.clone(),
                 dest: first_stuck.clone(),
+                placed: true,
             },
             Undo::Restore {
                 old: missing_old,
                 dest: last_stuck.clone(),
+                placed: true,
             },
         ],
         committed.clone(),
@@ -751,9 +798,10 @@ fn a_rollback_that_cannot_finish_reports_the_first_stuck_destination() {
         "逆順に解くので、最後に積んだ宛先が最初に躓く"
     );
     assert!(!failure.rolled_back, "元には戻っていない");
-    assert_eq!(
-        failure.committed, committed,
-        "確定したまま残っている配置が分かる"
+    assert_eq!(failure.committed, committed, "確定した配置が分かる");
+    assert!(
+        !first_stuck.exists(),
+        "退避先の無い戻しの手は新しい木を先に消すので、確定した宛先は残っていない"
     );
     assert!(
         !removable.exists(),
@@ -794,6 +842,7 @@ fn a_rollback_that_cannot_restore_reports_where_the_original_tree_survives() {
         vec![Undo::Restore {
             old: old.clone(),
             dest: destination.clone(),
+            placed: true,
         }],
         vec![],
         StageError {
@@ -840,7 +889,7 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
     );
     let states = stage_into(&area, &prepared);
     let outcome = commit_all(
-        std::slice::from_ref(&area),
+        &area,
         &prepared.manifest,
         &prepared.plan,
         Vec::new(),
@@ -862,4 +911,37 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
         "インストールそのものは通っている"
     );
     drop(handle);
+}
+
+/// 根から宛先へ降りる途中の段（`ghost\<T>\shell`）がリンク（ジャンクション）なら、
+/// たどってその先へ入れる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。利用者が
+/// 置き場を移した形で、更新もインストールも止めない。同じボリュームの中の置き場ならたどる。
+/// 別のボリュームを指すリンクの先へは `rename` で入れ替えられず、確定の段で失敗する（何も変わらない）。
+#[test]
+fn a_link_between_the_root_and_the_destination_is_followed_and_the_install_lands_behind_it() {
+    let work = root_with_ghost("tester");
+    let outside = work.path().join("outside");
+    fs::create_dir_all(&outside).expect("リンクの先を作れる");
+    junction(
+        &work.path().join("ghost").join("tester").join("shell"),
+        &outside,
+    );
+    let request = InstallRequest {
+        roots: &SingleRoot(work.path()),
+        target_ghost: Some("tester"),
+    };
+    let prepared = prepare(shell_archive(), &request);
+
+    let (_, outcome) = install(work.path(), &prepared);
+    outcome.expect("途中の段のリンクを越えて確定できる");
+
+    let landed = outside.join("test-shell");
+    assert_eq!(
+        fs::read(landed.join("descript.txt")).expect("読める"),
+        b"shell descript"
+    );
+    assert_eq!(
+        fs::read(landed.join("surface0.png")).expect("読める"),
+        b"png"
+    );
 }

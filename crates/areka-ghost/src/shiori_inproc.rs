@@ -7,8 +7,9 @@
 //! [`IShioriFactory`](shiori_abi::interface::IShioriFactory) を [`Interface::from_raw`] で興す。
 //!
 //! ## 確立シーケンス（design.md §InProcLibrary Responsibilities）
-//! 1. `LoadLibraryW(dll_path)`（絶対パス想定・UTF-16 NUL 終端）。失敗（DLL 欠落・不正イメージ）→
-//!    `error!` 済み `Err(String)`（要件 3.5・log-first）。
+//! 1. `LoadLibraryExW(dll_path, .., LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)`
+//!    （絶対パス必須・依存は DLL のフォルダとシステムの既定から探し、作業フォルダと PATH は見ない）。
+//!    失敗（DLL 欠落・不正イメージ・相対パス）→ `error!` 済み `Err(String)`（要件 3.5・log-first）。
 //! 2. `GetProcAddress("shiori_factory")`。未解決（シンボル欠落）→ `error!` 済み `Err(String)`。
 //!    **この時点で HMODULE は既にロード済みゆえ、失敗経路でも確実に解放する**——本関数は手順 1
 //!    成功直後に [`InProcLibrary`] を構築し、以後の失敗は `?`/`return` でスコープを抜けることで
@@ -33,16 +34,7 @@
 //! ## 失敗経路のログ規律（要件 3.5・memory areka-log-first-no-silent-failure）
 //! すべての失敗経路は `Err` を返す前に `error!`（`target: "ghost-shiori-inproc"`）でログする。
 //! silent に成功を偽装しない。panic は用いない（総和的に `Err(String)` を返す）。
-//!
-//! ## consume 点
-//! 本モジュールは task 2.1 で新設され、`InProcBackend`／`inproc_connect`（DLL ロード→factory→
-//! `IShiori`→backend 写像）からの consume は **task 2.3** が行う。それまで production 経路では
-//! 未使用ゆえ [`allow(dead_code)`] で dead_code 警告を抑止する（template `shiori_proxy.rs` と同律・
-//! 結線時に消費される）。in-crate 檻は `load` を実消費する。
 
-// task 2.3 が `InProcBackend`／`inproc_connect` から本モジュールを consume するまで production 経路
-// では未使用。それによる dead_code 警告を抑止する（結線時に消費される）。
-#![allow(dead_code)]
 // `#[implement(IShioriHost)]`（InProcHost）が生成する実装トレイト面は COM 規約の PascalCase
 // メソッド名（`Raise`/`Complete`/`GetProperty`/`SetProperty`）を要求する。ABI（interface.rs）と
 // 同律で、本モジュール全体で non_snake_case を許可する。
@@ -60,14 +52,18 @@ use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN, SHI
 use shiori_abi::interface::{IShiori, IShioriFactory, IShioriHost, IShioriHost_Impl};
 use shiori_host32_host::{
     Charset, CharsetPolicy, ExitKind, HelperStatus, Method, RequestError, RequestHeaders,
-    ShioriError, ShutdownError, ValueReply, build_request, parse_response, request_of,
+    ShioriError, ShutdownError, ValueReply, build_request, map_get_reply, parse_response,
+    request_of,
 };
 use tracing::{error, warn};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
 use windows::Win32::System::Diagnostics::Debug::{
     SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX, SetThreadErrorMode, THREAD_ERROR_MODE,
 };
-use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+use windows::Win32::System::LibraryLoader::{
+    GetProcAddress, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+    LoadLibraryExW,
+};
 // `Result` は glob 導入しない——本モジュールの `load` は `std::result::Result<_, String>` を返すため、
 // COM の `Result<()>` は別名（`ComResult`）で受け、std `Result` を shadow しない。
 use windows::core::{HRESULT, HSTRING, Interface, Result as ComResult, implement, s};
@@ -81,7 +77,11 @@ const LOG_TARGET: &str = "ghost-shiori-inproc";
 /// 整合で正準表記は `system`）。`out` へ refcount 1 の `IShioriFactory` を move-out し `HRESULT` を返す。
 type ShioriFactoryFn = unsafe extern "system" fn(*mut *mut c_void) -> HRESULT;
 
-/// `LoadLibraryW` を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに呼ぶ。
+/// DLL を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに読む。
+///
+/// `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` で、依存の DLL は読む DLL の
+/// フォルダとシステムの既定から探し、作業フォルダと PATH は見ない（DLL の植え込みを塞ぐ）。
+/// このフラグは絶対パスを要り、相対パスは OS が断る。
 ///
 /// 既定では、壊れた DLL を読むと OS が利用者の画面に窓を出し、OK が押されるまでこのスレッドを止める。
 /// 失敗は `Err` として返り、呼出側が `error!` で記録するので、窓は要らない。呼ぶ間だけこのスレッドの
@@ -99,7 +99,13 @@ fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
     }
     .is_ok();
     // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16。失敗は Err で返る。
-    let result = unsafe { LoadLibraryW(wide) };
+    let result = unsafe {
+        LoadLibraryExW(
+            wide,
+            None,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+        )
+    };
     if set {
         // SAFETY: 直前に読み出した元のモードを戻すだけ。
         let _ = unsafe { SetThreadErrorMode(old, None) };
@@ -137,7 +143,7 @@ impl InProcLibrary {
     /// `dll_path` は絶対パス想定（呼び出し側が `load_dir.join(shiori_name)` で組む・design.md §InProc 結線）。
     /// 呼び出しは shiori アクタースレッド上（D-6）。`CoInitializeEx` は呼ばない。
     pub(crate) fn load(dll_path: &Path) -> Result<(Self, IShioriFactory), String> {
-        // --- 手順 1: LoadLibraryW（絶対パス・UTF-16 NUL 終端）---
+        // --- 手順 1: LoadLibraryExW（絶対パス・UTF-16 NUL 終端）---
         // HSTRING は NUL 終端 UTF-16 を保持する。失敗（DLL 欠落・不正イメージ）→ error! 済み Err。
         let wide = HSTRING::from(dll_path.as_os_str());
         // OS の窓は出さない（`load_library_quiet`）。失敗時は Err を返す（下で map）。
@@ -149,10 +155,10 @@ impl InProcLibrary {
                     target: LOG_TARGET,
                     path = %dll_path.display(),
                     error = %e,
-                    "InProc DLL のロードに失敗（DLL 欠落・不正イメージ等）"
+                    "InProc DLL のロードに失敗（DLL 欠落・不正イメージ・相対パス等）"
                 );
                 return Err(format!(
-                    "LoadLibraryW failed for {}: {e}",
+                    "LoadLibraryExW failed for {}: {e}",
                     dll_path.display()
                 ));
             }
@@ -331,8 +337,8 @@ const SENDER: &str = "areka";
 /// へ機械的に写す**純関数**（design.md「`IShiori::Get` 応答の写像表」・要件 3.2）。
 ///
 /// `response_bytes` は `out_response` HSTRING の UTF-8 表現で、`hr == S_OK` のときのみ意味を持つ。
-/// host-32 の `Shiori3Client::map_get_result` と同一規律で写す（status 分類を再実装せず同じ判断へ
-/// 機械写像・要件 3.2）:
+/// ここが見るのは HRESULT と解析だけで、status の分け方は host-32 の [`map_get_reply`] を呼ぶ
+/// （写しを持たない・要件 3.2）:
 ///
 /// | 観測 | 写像 |
 /// |---|---|
@@ -368,7 +374,7 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<ValueRep
         );
         return Err(RequestError::Shiori(ShioriError::Parse));
     }
-    // S_OK（即時応答）: 応答バイト列を SHIORI/3.0 として解析し、map_get_result と同一規律で写す。
+    // S_OK（即時応答）: 応答バイト列を SHIORI/3.0 として解析し、map_get_reply で写す。
     // SHIORI/4 in-proc は UTF-8 固定で交渉を行わない（要件 5.4——`CharsetPolicy::Force`
     // ゆえ応答の `Charset` ヘッダは復号にも採用にも用いない）。
     let parsed = match parse_response(response_bytes, CharsetPolicy::Force(Charset::UTF_8)) {
@@ -381,25 +387,8 @@ fn map_get_outcome(hr: HRESULT, response_bytes: &[u8]) -> Result<Option<ValueRep
             return Err(RequestError::Shiori(ShioriError::Parse));
         }
     };
-    // ① エラー条件を先に判定（400/500/ErrorLevel は SHIORI エラー・map_get_result 同律・要件 3.2）。
-    //    error_level を先に見るのは 200 でも ErrorLevel 付きはエラー扱いにするため。
-    if parsed.status == 400 || parsed.status == 500 || parsed.error_level.is_some() {
-        return Err(RequestError::Shiori(ShioriError::Status {
-            status: parsed.status,
-            error_level: parsed.error_level,
-            error_description: parsed.error_description,
-        }));
-    }
-    // ② 204 は成功・スクリプト無し。
-    if parsed.status == 204 {
-        return Ok(None);
-    }
-    // ③ 200・その他の許容 status は Value をそのまま返す（欠落は None）。応答のレベルは生のまま添える。
-    let security_level = parsed.security_level;
-    Ok(parsed.value.map(|value| ValueReply {
-        value,
-        security_level,
-    }))
+    // 状態の分け方（400/500/ErrorLevel・204・その他）は 32bit の道と同じ 1 つの関数で読む（要件 3.2）。
+    map_get_reply(parsed)
 }
 
 /// GET/NOTIFY 共通の request 組み立て（`build_request` → HSTRING）。
@@ -559,7 +548,8 @@ impl ShioriBackend for InProcBackend {
 /// `real_connect`（別プロセス Helper 版）の **InProc 版**であり、実行は shiori アクタースレッド上で
 /// 一度だけ（`spawn_shiori_actor` 既存契約）。手順:
 /// 1. `shiori.file` が `None`（DLL 名未解決）→ **即 `Err`**（推測しない・real_connect と同律・要件 3.5）。
-/// 2. [`InProcLibrary::load`]`(dir.join(file))` で x64 DLL をロードし `IShioriFactory` を解決。
+/// 2. `dir` を helper の道と同じ形（絶対・`\`・末尾 1 つ）に整え、[`InProcLibrary::load`]`(dir.join(file))`
+///    で x64 DLL をロードし `IShioriFactory` を解決。
 /// 3. [`InProcHost::new`] を `IShioriHost` 化。
 /// 4. `factory.CreateInstance(load_dir, shiori_name, host)` で load 完了済み `IShiori` を得る。`factory`
 ///    は直後にスコープを落として Release する（いかなる `FreeLibrary` よりも先・design.md）。
@@ -583,7 +573,19 @@ pub fn inproc_connect(
                 shiori.dir.display()
             ));
         };
-        let load_dir = shiori.dir;
+        // helper の道と同じ形（絶対・`\`・末尾 1 つ）に整える。DLL は絶対パスでしか読まない（#28）。
+        let load_dir = crate::shiori_wiring::helper_load_dir(&shiori.dir).map_err(|e| {
+            error!(
+                target: LOG_TARGET,
+                dir = %shiori.dir.display(),
+                error = %e,
+                "SHIORI のフォルダを絶対パスに整えられない（InProc 接続できない）"
+            );
+            format!(
+                "SHIORI のフォルダを絶対パスに整えられません（dir={}）: {e}",
+                shiori.dir.display()
+            )
+        })?;
         let dll_path = load_dir.join(&shiori_name);
 
         // 2. x64 DLL をロードし factory を解決（失敗は error! 済み Err(String)・要件 3.5）。
@@ -645,7 +647,7 @@ pub fn inproc_connect(
 
 #[cfg(test)]
 #[path = "shiori_inproc_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 #[cfg(test)]
 #[path = "shiori_inproc_host_tests.rs"]

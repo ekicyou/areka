@@ -4,11 +4,11 @@
 //! スレッドはテストのビルドでは OS を呼ばずに断る口を持つので、その記録に行き先が積まれるかを
 //! 時間の上限つきで待って判定する（記録はプロセス共有なので件数や位置では判定しない）。
 
-use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use areka_ghost::BasewareRoot;
+use areka_ghost::config::listed_name;
 use areka_parsers::sakura::JUMP_TAG_CARRIER;
 use bevy_ecs::world::World;
 use log_capture_kit::{CapturedEvent, capture};
@@ -16,7 +16,7 @@ use temp_path_kit::TempPath;
 
 use super::super::destination::{Destination, classify};
 use super::super::opener_test_support::{build_ghost_root, refused_files};
-use super::{OpenJob, Opener, listed_name, submit};
+use super::{OpenJob, Opener, submit};
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
@@ -79,16 +79,6 @@ fn assert_one_drop(events: &[CapturedEvent], reason: &str) -> CapturedEvent {
     assert!(ev.field("destination").is_some());
     assert!(ev.field("tag").is_some());
     ev
-}
-
-/// 置き場から名を決める（`get_active_ghost_list` と同じ: descript の `name`、空・無しなら
-/// フォルダの絶対パス・末尾の区切りなし）。
-#[test]
-fn listed_name_prefers_descript_name_else_trimmed_folder() {
-    let dir = Path::new(r"C:\a\ghost\g\");
-    assert_eq!(listed_name(Some("G"), dir), "G");
-    assert_eq!(listed_name(Some(""), dir), r"C:\a\ghost\g");
-    assert_eq!(listed_name(None, dir), r"C:\a\ghost\g");
 }
 
 #[test]

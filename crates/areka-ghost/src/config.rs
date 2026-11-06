@@ -5,23 +5,20 @@
 //! （design.md「ghost::config」）。
 
 use areka_kanade::KanadeConfig;
-use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::kv::parse_kv;
+use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountModel;
 use areka_sakura::strict::{StrictHooks, StrictJudges};
+use std::path::Path;
 use std::sync::Arc;
 
 /// shell descript のファイル名（`{shell.dir}/descript.txt`）。
 const SHELL_DESCRIPT_FILE: &str = "descript.txt";
-/// shell descript の name キー（OnBoot Reference0＝「起動時のシェル名」・ukadoc）。
-/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#name_2c_30b7_30a7_30eb_540d:1
-const SHELL_NAME_KEY: &str = "name";
 
 /// `MountModel` と shell descript から `KanadeConfig` を解決する（純関数・I/O は
 /// shell descript 読取のみ）。
 ///
-/// shell 名は `MountModel.shell.dir` 直下の `descript.txt` を読み、`decode` →
-/// `parse_kv` の上で `name` キーの値を採る。読取不能・`name` 欠落時は `warn!` の
+/// shell 名は `MountModel.shell.dir` 直下の `descript.txt` を一覧と同じ表（鍵の大小を
+/// 無視・空の値は無し）で読み、`name` の値を採る。読取不能・`name` 欠落時は `warn!` の
 /// 上で shell ディレクトリ名（通常 `"master"`）へフォールバックする——shell
 /// descript は補助情報であり、boot を落とさない（design.md「ghost::config」）。
 ///
@@ -39,21 +36,25 @@ pub fn resolve_kanade_config(
     }
 }
 
-/// script 種別のログに出すゴーストの名前。descript の `name` が空でなければそれ、
-/// 無い・空なら根（`ghost/master` の 2 つ上）の絶対パスから末尾の区切りを除いた字
-/// （MCP の `resolve::listed_value` と同じ作り・要件 4.1）。
-fn listed_ghost_name(mount: &MountModel) -> String {
-    if let Some(name) = mount.names.name.as_deref().filter(|n| !n.is_empty()) {
+/// 一覧に出すゴーストの名（script の記録・MCP の `ghost_name` の両方がこれを使う）。`name` が
+/// 空でなければそれ、無い・空なら根の絶対パスから末尾の区切りを除いた字。
+pub fn listed_name(name: Option<&str>, ghost_root: &Path) -> String {
+    if let Some(name) = name.filter(|n| !n.is_empty()) {
         return name.to_string();
     }
-    let master = &mount.shiori.dir;
-    let root = master.ancestors().nth(2).unwrap_or(master);
-    std::path::absolute(root)
-        .unwrap_or_else(|_| root.to_path_buf())
+    std::path::absolute(ghost_root)
+        .unwrap_or_else(|_| ghost_root.to_path_buf())
         .display()
         .to_string()
         .trim_end_matches(['\\', '/'])
         .to_string()
+}
+
+/// script 種別のログに出すゴーストの名前（根は `ghost/master` の 2 つ上・要件 4.1）。
+fn listed_ghost_name(mount: &MountModel) -> String {
+    let master = &mount.shiori.dir;
+    let root = master.ancestors().nth(2).unwrap_or(master);
+    listed_name(mount.names.name.as_deref(), root)
 }
 
 /// strict の記録の束ね（spec mcp-strict-errors 要件 2.2）。名は `script` の記録と同じ
@@ -72,31 +73,28 @@ pub(crate) fn strict_hooks(
 /// 自身のディレクトリ名（basename）へフォールバックする（`warn!` 付き）。
 fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> String {
     let shell_dir = &mount.shell.dir;
-    let fallback = || shell_dir_basename(shell_dir);
-
     let descript_path = shell_dir.join(SHELL_DESCRIPT_FILE);
-    let bytes = match std::fs::read(&descript_path) {
-        Ok(bytes) => bytes,
+
+    // name＝OnBoot Reference0 の「起動時のシェル名」。一覧（`catalog`）と同じ読み手を使う。
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#name_2c_30b7_30a7_30eb_540d:1
+    match crate::catalog::descript_name_in(shell_dir, default_encoding) {
+        Ok(Some(name)) => name,
         Err(err) => {
             tracing::warn!(
+                event = "shell_descript_unreadable",
                 path = %descript_path.display(),
                 error = %err,
                 "shell descript が読取不能——shell ディレクトリ名へフォールバックする"
             );
-            return fallback();
+            shell_dir_basename(shell_dir)
         }
-    };
-
-    let text = decode(&bytes, default_encoding);
-    let map = parse_kv(&text);
-    match map.get(SHELL_NAME_KEY) {
-        Some(name) => name.clone(),
-        None => {
+        Ok(None) => {
             tracing::warn!(
+                event = "shell_name_missing",
                 path = %descript_path.display(),
-                "shell descript に name キーが無い——shell ディレクトリ名へフォールバックする"
+                "shell descript の name が無いか空——shell ディレクトリ名へフォールバックする"
             );
-            fallback()
+            shell_dir_basename(shell_dir)
         }
     }
 }
@@ -113,7 +111,7 @@ fn shell_dir_basename(shell_dir: &std::path::Path) -> String {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::Path;
     use temp_path_kit::TempPath;
 
     /// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
@@ -128,6 +126,7 @@ mod tests {
     /// `root` 直下に最小限の正常なゴーストツリー（`ghost/master/descript.txt` ＋
     /// `shell/<shell_dir_name>/`）を構築し、`shell/<shell_dir_name>/descript.txt` を
     /// 任意内容で書く（`None` なら shell descript 自体を作らない＝不在ケース）。
+    /// `ghost_line`（例 `"name,えみり"`）はゴースト側 descript に足す行。
     ///
     /// `shell_dir_name` はゴースト側 descript の `seriko.defaultsurfacedirectoryname`
     /// へそのまま渡され、`areka_parsers::package::resolve_with_shell` がそれを shell dir 名として
@@ -138,19 +137,21 @@ mod tests {
     /// `MountModel` は `#[non_exhaustive]` ゆえ他クレートから構造体リテラルで
     /// 直接構築できない（design 契約どおり）ため、`areka_parsers::package::resolve_with_shell`
     /// を通して実物を得る（`resolve_tests.rs` の tempdir fixture 流儀を踏襲）。
-    fn resolve_mount_with_shell_descript(
-        root: &PathBuf,
+    fn resolve_mount(
+        root: &Path,
+        ghost_line: Option<&str>,
         shell_dir_name: &str,
         shell_descript: Option<&[u8]>,
     ) -> MountModel {
-        let _ = fs::remove_dir_all(root);
-
         let ghost_master = root.join("ghost").join("master");
         fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        let ghost_line = ghost_line.map(|l| format!("{l}\n")).unwrap_or_default();
         fs::write(
             ghost_master.join("descript.txt"),
-            format!("charset,UTF-8\nseriko.defaultsurfacedirectoryname,{shell_dir_name}\n")
-                .as_bytes(),
+            format!(
+                "charset,UTF-8\nseriko.defaultsurfacedirectoryname,{shell_dir_name}\n{ghost_line}"
+            )
+            .as_bytes(),
         )
         .expect("write ghost descript.txt");
 
@@ -164,31 +165,18 @@ mod tests {
             .expect("fixture tree resolves to a MountModel")
     }
 
-    /// ゴースト側 descript に `name_line`（例 `"name,えみり"`）を足した最小のツリーを
-    /// 組んで解決する（`None` なら name 行を書かない）。shell descript は置かない。
-    fn resolve_mount_with_ghost_name(root: &PathBuf, name_line: Option<&str>) -> MountModel {
-        let _ = fs::remove_dir_all(root);
-        let ghost_master = root.join("ghost").join("master");
-        fs::create_dir_all(&ghost_master).expect("create ghost/master");
-        let name_line = name_line.map(|l| format!("{l}\n")).unwrap_or_default();
-        fs::write(
-            ghost_master.join("descript.txt"),
-            format!("charset,UTF-8\n{name_line}").as_bytes(),
-        )
-        .expect("write ghost descript.txt");
-        fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-        areka_parsers::package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
-            .expect("fixture tree resolves to a MountModel")
+    /// ゴースト側 descript に `name_line` を足し、shell descript は置かない（shell は `master`）。
+    fn resolve_mount_with_ghost_name(root: &Path, name_line: Option<&str>) -> MountModel {
+        resolve_mount(root, name_line, "master", None)
     }
 
-    /// 根の絶対パス（末尾の区切りなし）＝ MCP の `listed_value` と同じ作りの期待値。
-    fn expected_root_value(root: &PathBuf) -> String {
-        std::path::absolute(root)
-            .expect("absolute root")
-            .display()
-            .to_string()
-            .trim_end_matches(['\\', '/'])
-            .to_string()
+    /// ゴースト側 descript には足さず、shell descript を `shell_descript` で置く。
+    fn resolve_mount_with_shell_descript(
+        root: &Path,
+        shell_dir_name: &str,
+        shell_descript: Option<&[u8]>,
+    ) -> MountModel {
+        resolve_mount(root, None, shell_dir_name, shell_descript)
     }
 
     #[test]
@@ -210,7 +198,7 @@ mod tests {
 
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
-        assert_eq!(config.ghost_name, expected_root_value(&root));
+        assert_eq!(config.ghost_name, listed_name(None, &root));
         assert!(std::path::Path::new(&config.ghost_name).is_absolute());
         assert!(!config.ghost_name.ends_with(['\\', '/']));
     }
@@ -242,7 +230,7 @@ mod tests {
             assert_eq!(&*hooks.ghost, listed);
             let want = match name_line {
                 Some(_) => "えみり".to_string(),
-                None => expected_root_value(&root),
+                None => listed_name(None, &root),
             };
             assert_eq!(&*hooks.ghost, want);
         }
@@ -265,7 +253,7 @@ mod tests {
 
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
-        assert_eq!(config.ghost_name, expected_root_value(&root));
+        assert_eq!(config.ghost_name, listed_name(None, &root));
         assert!(!config.ghost_name.ends_with(['\\', '/']));
     }
 
@@ -290,6 +278,61 @@ mod tests {
         assert_eq!(config.close_talk_deadline_ms, 30_000);
     }
 
+    /// シェルの descript の鍵は一覧と同じく大小を無視して読む（#22・要件 9.10）。
+    #[test]
+    fn shell_name_key_is_read_case_insensitively() {
+        let temp = unique_temp_dir("shell-name-key-case");
+        let root = temp.path().to_path_buf();
+        let mount =
+            resolve_mount_with_shell_descript(&root, "master", Some(b"charset,UTF-8\nName,Foo\n"));
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.shell_name, "Foo");
+    }
+
+    /// 同じ鍵が大小の違う綴りで 2 回出たら、後の行が勝つ（parsers の表・#22）。
+    #[test]
+    fn a_later_shell_name_row_wins_whatever_the_spelling() {
+        let temp = unique_temp_dir("shell-name-later-row");
+        let root = temp.path().to_path_buf();
+        let mount = resolve_mount_with_shell_descript(
+            &root,
+            "master",
+            Some(b"charset,UTF-8\nname,Early\nName,Later\n"),
+        );
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.shell_name, "Later");
+    }
+
+    /// 空の `name,` は一覧と同じく「無い」なので、フォルダ名へ倒す（#22・要件 9.10）。
+    #[test]
+    fn an_empty_shell_name_falls_back_to_the_folder_name() {
+        let temp = unique_temp_dir("shell-name-empty");
+        let root = temp.path().to_path_buf();
+        let mount =
+            resolve_mount_with_shell_descript(&root, "custom", Some(b"charset,UTF-8\nname,\n"));
+
+        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
+
+        assert_eq!(config.shell_name, "custom");
+    }
+
+    /// 名が空でなければそれ、無い・空なら根の絶対パスから末尾の区切りを除いた字（#25）。
+    #[test]
+    fn listed_name_falls_back_to_the_absolute_root_without_a_trailing_separator() {
+        assert_eq!(listed_name(Some("Emily"), Path::new(r"C:\x\")), "Emily");
+        assert_eq!(listed_name(None, Path::new(r"C:\a\b\")), r"C:\a\b");
+        assert_eq!(listed_name(Some(""), Path::new(r"C:\a\b/")), r"C:\a\b");
+        let cwd = std::env::current_dir().expect("cwd");
+        assert_eq!(
+            listed_name(None, Path::new(r"rel\dir\")),
+            cwd.join(r"rel\dir").display().to_string()
+        );
+    }
+
     #[test]
     fn resolve_kanade_config_falls_back_to_dir_name_when_name_key_missing() {
         // --- Arrange: descript.txt は読めるが name キーが無い ---
@@ -297,29 +340,15 @@ mod tests {
         let root = temp.path().to_path_buf();
         let mount = resolve_mount_with_shell_descript(
             &root,
-            "master",
+            "keyless",
             Some(b"charset,UTF-8\nother,value\n"),
         );
 
         // --- Act ---
         let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
 
-        // --- Assert: shell ディレクトリ自身の basename（"master"）へフォールバック ---
-        assert_eq!(config.shell_name, "master");
-    }
-
-    #[test]
-    fn resolve_kanade_config_falls_back_to_dir_name_when_descript_missing() {
-        // --- Arrange: shell/master/descript.txt が存在しない ---
-        let temp = unique_temp_dir("falls-back-when-descript-missing");
-        let root = temp.path().to_path_buf();
-        let mount = resolve_mount_with_shell_descript(&root, "master", None);
-
-        // --- Act ---
-        let config = resolve_kanade_config(&mount, DefaultEncoding::Utf8);
-
-        // --- Assert: shell ディレクトリ自身の basename（"master"）へフォールバック ---
-        assert_eq!(config.shell_name, "master");
+        // --- Assert: shell ディレクトリ自身の basename（"keyless"）へフォールバック ---
+        assert_eq!(config.shell_name, "keyless");
     }
 
     /// フォールバック値が「たまたま `master` と一致する」偽陽性を防ぐための決め手テスト:

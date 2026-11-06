@@ -10,12 +10,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_kanade::{MonotonicMs, ShioriBackend};
-use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::contract::{CueCommand, CuePayload, CueSink, SystemVarSnapshot, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 use crate::dispatcher::DispatcherMsg;
-use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
+use crate::runtime::{GhostBootOptions, ShioriWiring, SystemVarWiring, boot};
+use crate::test_support::{fake_options, shutdown_bounded, write_ghost};
 
 /// 利用者名を「太郎」と答え、挨拶に `greeting` を返し、`OnTranslate` の Reference を `seen` へ
 /// 送って `translated`（`None`＝204）で答える偽の SHIORI（他の照会は 204）。
@@ -100,27 +100,11 @@ fn boot_and_play(
 ) -> (Vec<String>, String) {
     let temp = temp_path_kit::TempPath::new(&format!("ghost-translate-e2e-{tag}"));
     let root = temp.path();
-    let ghost_master = root.join("ghost").join("master");
-    let shell_master = root.join("shell").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::create_dir_all(&shell_master).expect("create shell/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        "charset,UTF-8\nname,TestGhost\nshiori,dummy.dll\n",
-    )
-    .expect("write ghost descript.txt");
-    std::fs::write(
-        shell_master.join("descript.txt"),
-        "charset,UTF-8\nname,TestShell\n",
-    )
-    .expect("write shell descript.txt");
+    write_ghost(root);
 
     let (seen_tx, seen_rx) = channel();
     let text = Arc::new(Mutex::new(String::new()));
     let options = GhostBootOptions {
-        strict_judges: None,
-        ghost_root: root.to_path_buf(),
-        default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Custom(Box::new(move || {
             Ok(Box::new(UsernameShiori {
                 greeting,
@@ -130,8 +114,7 @@ fn boot_and_play(
         })),
         sinks: vec![Box::new(TextRecorder(Arc::clone(&text)))],
         system_vars: SystemVarWiring::FromSylphya,
-        app_profile_dir: None,
-        ticker: TickerMode::Disabled,
+        ..fake_options(root.to_path_buf())
     };
 
     let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
@@ -156,16 +139,7 @@ fn boot_and_play(
         std::thread::yield_now();
     }
 
-    let (done_tx, done_rx) = channel();
-    std::thread::spawn(move || {
-        let result = runtime.shutdown(areka_kanade::CloseReason::System);
-        let _ = done_tx.send(result.is_ok());
-    });
-    assert_eq!(
-        done_rx.recv_timeout(Duration::from_secs(10)),
-        Ok(true),
-        "shutdown should complete within 10s"
-    );
+    shutdown_bounded(runtime);
     drop(temp);
     let played = text.lock().expect("text mutex poisoned").clone();
     (references, played)

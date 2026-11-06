@@ -16,7 +16,8 @@
 //! ため、共有 crate へ一本化して撤去した。
 //!
 //! 本 crate 内で独自にフィールドを抜き出したいテスト（[`crate::sink`] の構造化ログ檻）は
-//! [`capture_events`] から正準イベントを受け取る。捕捉窓は crate 内でもここ 1 箇所に集める。
+//! [`capture_events`] から正準イベントを受け取り、[`label_of`] で値を読む。捕捉窓は crate 内でも
+//! ここ 1 箇所に集める。
 //!
 //! # 機序（「スレッドローカルゆえ安全」は誤り）
 //! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
@@ -52,7 +53,7 @@ pub(crate) struct CapturedEvent {
     pub event: Option<String>,
 }
 
-/// 語彙フィールド（`event`）の値を、移行前の visitor と同じ規則で取り出す。
+/// 構造化フィールド `name`（語彙の `event` など）の値を、移行前の visitor と同じ規則で取り出す。
 ///
 /// 移行前は `record_str`（文字列リテラルで渡す規約の正路）を無条件に採り、`record_debug` は
 /// 生値がまだ無いときだけ採っていた。すなわち**生値が 1 つでもあれば最後の生値、無ければ
@@ -61,7 +62,7 @@ pub(crate) struct CapturedEvent {
 /// **[`log_capture_kit::CapturedEvent::field_str`] だけで書いてはならない**——`?expr`／`%expr`
 /// で渡されたフィールドは `record_str` を通らないため `None` になり、その経路の値が黙って
 /// 落ちて語彙の判定が空振りになる（`log_capture_kit` の crate doc「注意」節）。
-fn label_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
+pub(crate) fn label_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
     let mut last_str: Option<&str> = None;
     let mut first_debug: Option<&str> = None;
     for (field_name, value) in &ev.fields {
@@ -101,7 +102,7 @@ impl CapturedEvent {
 ///
 /// 本 crate で捕捉窓を開くのはここ 1 箇所だけである。[`CapturedEvent`] が持たないフィールドを
 /// 見たいテスト（[`crate::sink`] の `at`／`actor`／`command_kind` 檻）はこちらを使い、
-/// [`log_capture_kit::CapturedEvent`] から必要な値を自分で取り出す。
+/// [`label_of`] で必要な値を取り出す。
 pub(crate) fn capture_events<F: FnOnce()>(f: F) -> Vec<CanonicalEvent> {
     let ((), events) = log_capture_kit::capture(f);
     events

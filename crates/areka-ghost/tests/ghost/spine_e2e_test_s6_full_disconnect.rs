@@ -33,58 +33,6 @@ use areka_ghost::{
 use areka_kanade::KanadeMsg;
 use areka_parsers::charset::DefaultEncoding;
 
-use areka_actor::{ActorError, ActorHandle};
-use temp_path_kit::TempPath;
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-spine-s6-{tag}"))
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリーを構築する（S1/S3/S4/S5 の
-/// `write_ghost_fixture` と同旨だが、sibling module から private item は参照できない
-/// ためローカルに複製する）。
-fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,S6TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
-    )
-    .expect("write shell descript.txt");
-}
-
-/// `ActorHandle::join` を有界時間で観測する（S2〜S3 の `join_bounded` と同旨の
-/// ローカルコピー）。
-fn join_bounded(
-    what: &str,
-    timeout: std::time::Duration,
-    handle: ActorHandle,
-) -> Result<(), ActorError> {
-    let (res_tx, res_rx) = std::sync::mpsc::sync_channel::<Result<(), ActorError>>(0);
-    std::thread::spawn(move || {
-        let _ = res_tx.send(handle.join());
-    });
-    match res_rx.recv_timeout(timeout) {
-        Ok(result) => result,
-        Err(_) => panic!("'{what}' join did not complete within {timeout:?} (possible hang)"),
-    }
-}
-
-const BOUND: std::time::Duration = super::E2E_BOUND;
-
 /// S6: 全断線（段階的解体）——`into_parts` で分解し、①dispatcher へ `Close`→join
 /// （Close-only アクターの正規停止・「アクター別の停止経路」表の dispatcher 行）②
 /// kanade へ raw `Close`→join（運行意味論——OnClose NOTIFY／Unload 等——を一切経ない
@@ -99,29 +47,19 @@ const BOUND: std::time::Duration = super::E2E_BOUND;
 fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() {
     const SHELL_NAME: &str = "S6DisconnectShell";
 
-    let temp = unique_temp_dir("staged-teardown-terminates-all-five-actors-within-bound");
+    let temp = write_ghost_fixture("S6TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
-    write_ghost_fixture(&root, SHELL_NAME);
 
-    // boot() 内部の同期 kanade 往復（OnInitialize NOTIFY→OnFirstBoot GET→OnBoot GET→
-    // basewareversion NOTIFY）が panic しない最小限の台本のみ用意する——本シナリオの
+    // 起動系列（親の `boot_script()` が台本化する列。kanade スレッドで非同期に走る）が
+    // panic しない最小限の台本のみ用意する——本シナリオの
     // 焦点は解体の「構造」であり、boot talk（`\s[0]hello\e`）の再生完了までは駆動
     // しない（dispatcher の active slot に乗ったまま未進行でも、後続①の
     // `DispatcherMsg::Close` が既存の Close funnel で安全に中断させる・dispatcher.rs
-    // 自身の単体テストで既に確認済みの挙動・CONCERNS 参照）。OnClose／Unload は台本化
+    // 自身の単体テストで既に確認済みの挙動）。OnClose／Unload は台本化
     // しない——本シナリオは kanade へ `CloseRequest`／`ForceQuit` のいずれも送らず、
     // 運行意味論を経ない raw `KanadeMsg::Close` のみで停止させるため、shiori backend
     // の `unload()` が呼ばれることはない。
-    let (backend, _handle) = ScriptedShioriBackend::builder()
-        .notify("OnInitialize", Ok(()))
-        // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
-        // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
-        // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
-        .get("username", Ok(None))
-        .get("OnFirstBoot", Ok(None))
-        .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
-        .notify("basewareversion", Ok(()))
-        .build();
+    let (backend, _handle) = boot_script().build();
 
     let options = GhostBootOptions {
         strict_judges: None,
@@ -165,7 +103,7 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     dispatcher
         .send(DispatcherMsg::Close)
         .expect("dispatcher actor should still be alive to receive Close");
-    join_bounded("① dispatcher join after Close", BOUND, dispatcher_handle)
+    join_bounded("① dispatcher join after Close", dispatcher_handle)
         .expect("dispatcher should terminate after its only stop path (Close)");
 
     // ---- ②: KanadeMsg::Close → kanade join ----
@@ -178,7 +116,7 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     kanade
         .send(KanadeMsg::Close)
         .expect("kanade actor should still be alive to receive raw Close");
-    join_bounded("② kanade join after raw Close", BOUND, kanade_handle).expect(
+    join_bounded("② kanade join after raw Close", kanade_handle).expect(
         "kanade should terminate on its bare Close stop path without running any \
          shutdown semantics (no OnClose NOTIFY, no Unload)",
     );
@@ -190,7 +128,6 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     // Sender 側が尽きた時点で Err を返し、受信ループが正常終了する。
     join_bounded(
         "③ shiori actor natural termination via shiori_tx drop cascading from ②",
-        BOUND,
         shiori_handle,
     )
     .expect(
@@ -204,7 +141,6 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     // drop されている）。
     join_bounded(
         "③ down-relay natural termination via down_tx drop cascading from shiori's exit",
-        BOUND,
         down_relay_handle,
     )
     .expect(
@@ -217,7 +153,6 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
     // の後に join しても機能的な前後関係はない——宣言順序の都合でここに置く）。
     join_bounded(
         "③ start-relay natural termination via start_tx drop cascading from ②",
-        BOUND,
         start_relay_handle,
     )
     .expect(

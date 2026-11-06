@@ -165,7 +165,7 @@ fn readonly_run_leaves_the_tree_as_it_was() {
             winget_marker: None,
             writability: Writability::Writable,
         };
-        let layout = establish_readonly_from(&signals, Some(&root), None);
+        let layout = establish_readonly_from(&signals, Some(&root));
         check(layout.user_root.is_none(), "まだ無い書ける根を使う形にした");
         // 初回の起動の形（隣の形・書ける根はまだ無い）: 記憶の置き場は exe の隣の `profile\areka` で、
         // 書ける根の下ではない（要件 4.3）。

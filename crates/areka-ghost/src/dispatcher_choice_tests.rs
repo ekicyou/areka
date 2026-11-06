@@ -1,8 +1,8 @@
-use super::test_support::{RecordingSink, run_bounded, test_system_vars};
 use super::*;
 use crate::test_log_capture::{assert_logged, assert_logged_event, capture};
+use crate::test_support::{RecordingSink, run_bounded, test_system_vars};
 use areka_kanade::{AnchorInput, ChoiceInput};
-use areka_sakura::contract::{ScriptOrigin, TalkEndReason};
+use areka_sakura::contract::TalkEndReason;
 use std::sync::mpsc;
 use std::time::Duration;
 use tracing::Level;
@@ -107,6 +107,20 @@ fn release(state: &mut DispatcherState) {
     }
 }
 
+/// 後始末: dispatcher へ `Close` を送り、有界の時間で join する（dispatcher のテストで共有）。
+pub(super) fn close_and_join(tx: &mpsc::Sender<DispatcherMsg>, handle: ActorHandle) {
+    tx.send(DispatcherMsg::Close).expect("send Close");
+    run_bounded(
+        "dispatcher join after Close",
+        Duration::from_secs(5),
+        move || {
+            handle
+                .join()
+                .expect("dispatcher terminates normally after Close");
+        },
+    );
+}
+
 /// 実 talk の選択待ち台本（sakura drive.rs の MENU_SCRIPT と同一）。
 ///
 /// compile 後（アンカー 0）: `hello`@0（D=0.25）／Wait@0.25（`\_w[100]`=0.1）／Choice@0.35（id=targetA）
@@ -123,13 +137,21 @@ fn resolve_choice_relays_id_to_matching_talk_without_touching_slot_or_base() {
     let talk_id = TalkId(901);
     occupy(&mut fx.state, talk_id, probe);
 
-    // base_now を Tick で刻印しておく（中継が起点を動かさないことを見るため）。
+    // base_now を Tick で刻印し（中継が起点を動かさないことを見るため）、ミリ秒→秒の換算も見る。
     fx.feed(DispatcherMsg::Tick {
         now: MonotonicMs(7_000),
     });
-    assert!(
-        matches!(obs_rx.recv_timeout(Duration::from_secs(5)), Ok(SakuraMsg::Tick(t)) if t == 0.0),
-        "初回 Tick は elapsed 0.0 として中継される（base_now 刻印）"
+    fx.feed(DispatcherMsg::Tick {
+        now: MonotonicMs(7_500),
+    });
+    let relayed = || match obs_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(SakuraMsg::Tick(t)) => t,
+        _ => panic!("talk へ SakuraMsg::Tick が中継されるべき"),
+    };
+    assert_eq!(
+        (relayed(), relayed()),
+        (0.0, 0.5),
+        "初回 Tick は elapsed 0.0（base_now 刻印）・500ms 後は 0.5 秒として中継される"
     );
 
     fx.feed(DispatcherMsg::ResolveChoice {
@@ -624,14 +646,8 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
     );
 
     let talk_id = TalkId(931);
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id,
-        script: MENU_SCRIPT.to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
-    .expect("send Start(menu)");
+    tx.send(DispatcherMsg::Start(StartTalk::new(talk_id, MENU_SCRIPT)))
+        .expect("send Start(menu)");
     // base_now=1_000 刻印 → elapsed 0.5 で Choice@0.35・Barrier@0.35 到達（WaitingForChoice）。
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(1_000),
@@ -688,16 +704,7 @@ fn menu_talk_choice_waiting_reaches_kanade_and_resolve_resumes_it_to_completion(
         _ => unreachable!("解決後に届くのは TalkDone"),
     }
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
 
 /// **e2e（実 talk・R7.5/DD-11）**: 選択待ち中の `CancelChoice` は Close funnel を通って talk を
@@ -719,14 +726,8 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
     );
 
     let talk_id = TalkId(932);
-    tx.send(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id,
-        script: MENU_SCRIPT.to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }))
-    .expect("send Start(menu)");
+    tx.send(DispatcherMsg::Start(StartTalk::new(talk_id, MENU_SCRIPT)))
+        .expect("send Start(menu)");
     tx.send(DispatcherMsg::Tick {
         now: MonotonicMs(2_000),
     })
@@ -763,16 +764,7 @@ fn menu_talk_cancel_choice_ends_talk_and_interrupted_talkdone_reaches_kanade() {
         _ => unreachable!("解除後に届くのは TalkDone"),
     }
 
-    tx.send(DispatcherMsg::Close).expect("send Close");
-    run_bounded(
-        "dispatcher join after Close",
-        Duration::from_secs(5),
-        move || {
-            handle
-                .join()
-                .expect("dispatcher terminates normally after Close");
-        },
-    );
+    close_and_join(&tx, handle);
 }
 
 // ── areka-P0-balloon-text-bugs task 4.6: 押下の選択の取り次ぎ（design「押下の選択の取り次ぎ」・案 (b)） ──
@@ -823,13 +815,10 @@ fn pressed_selection_queued_after_choice_waiting_reaches_kanade_in_inbox_order()
     fx.feed(DispatcherMsg::Tick {
         now: MonotonicMs(1_200),
     });
-    fx.feed(DispatcherMsg::Start(StartTalk {
-        epilogue: Vec::new(),
-        talk_id: TalkId(942),
-        script: MENU_SCRIPT.to_string(),
-        origin: ScriptOrigin::GHOST,
-        strict: false,
-    }));
+    fx.feed(DispatcherMsg::Start(StartTalk::new(
+        TalkId(942),
+        MENU_SCRIPT,
+    )));
     fx.feed(DispatcherMsg::Choice(dirty_choice_input()));
     fx.feed(DispatcherMsg::Anchor(dirty_anchor_input()));
 

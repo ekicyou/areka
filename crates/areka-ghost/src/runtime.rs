@@ -1,10 +1,8 @@
 //! ghost 結線層の起動・終了統括（`GhostRuntime`／`boot`／`shutdown`）。
 //!
-//! task 3.1 で `boot` 手順と `GhostRuntime`（`kanade()`／`dispatcher()` の
-//! 投函端アクセサのみ）を実装した。task 3.2 は同じ `GhostRuntime` へ
-//! `shutdown`／`into_parts`（`GhostParts`・`GhostHandles`・`GhostShutdownError`
-//! を含む終了統括一式）を追加実装した（design.md「終了（shutdown）シーケンス」
-//! 「アクター別の停止経路（正本）」）。
+//! 起動は `boot`／`boot_with_kanade_stop`／`boot_with_origin`、動作中の差し替えは
+//! `set_shell_dir`（シェルのフォルダ）と `set_names`（名前）、終了は `shutdown`／
+//! `shutdown_within`／`into_parts`（design.md「終了（shutdown）シーケンス」）。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -275,6 +273,7 @@ impl GhostRuntime {
 
     /// 動作中のゴーストの名前（`mount().names`）を替え、静的プロパティ（`selfname` ほか・
     /// `baseware.*`）を新しい名前で出し直す（mcp-reload 要件 7.3・descript の読み直し）。
+    /// 新しい名前が定義しない静的な名前は先に鏡像から消す（新しい descript で起動したのと同じ状態）。
     pub fn set_names(&mut self, names: GhostNames) {
         tracing::info!(
             target: "ghost-runtime",
@@ -283,9 +282,15 @@ impl GhostRuntime {
             "ghost names replaced"
         );
         self.mount.names = names;
+        let asker = crate::sylphya_wiring::ghost_asker_id(&self.mount.shiori.dir);
+        // 新しい名前に無い静的名は消す（起動時に積まないのと同じ＝素通し縮退・要件 9.15 ⑵）。
+        self.sylphya_publisher.remove_flat(
+            asker.clone(),
+            crate::sylphya_wiring::absent_flat_statics(&self.mount.names),
+        );
         crate::sylphya_wiring::publish_ghost_statics(
             &self.sylphya_publisher,
-            crate::sylphya_wiring::ghost_asker_id(&self.mount.shiori.dir),
+            asker,
             &self.mount.names,
             env!("CARGO_PKG_VERSION"),
         );
@@ -367,19 +372,19 @@ impl GhostRuntime {
         }
 
         // 5・6. ticker（`TickerMode::Real` 時のみ起動されている・両方 no-op で完全スキップ）。
-        if let Some(ticker_tx) = ticker_tx {
-            if ticker_tx.send(TickerMsg::Close).is_err() {
-                tracing::debug!(
-                    target: "ghost-shutdown",
-                    "ticker already stopped before Close send; treating as idempotent"
-                );
-            }
+        if let Some(ticker_tx) = ticker_tx
+            && ticker_tx.send(TickerMsg::Close).is_err()
+        {
+            tracing::debug!(
+                target: "ghost-shutdown",
+                "ticker already stopped before Close send; treating as idempotent"
+            );
         }
-        if let Some(ticker_handle) = ticker_handle {
-            if let Err(err) = ticker_handle.join() {
-                tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
-                failures.push(("ticker", err));
-            }
+        if let Some(ticker_handle) = ticker_handle
+            && let Err(err) = ticker_handle.join()
+        {
+            tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
+            failures.push(("ticker", err));
         }
 
         // 7. shiori join（送出なし。kanade 終了系列が ShioriMsg::Close を既に送出済み・
@@ -560,7 +565,7 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
 /// 引数は [`boot`] と同一で、末尾に `kanade_stop` が 1 つ増えるだけの派生である（[`boot`] は
 /// `None` を渡す薄い包み＝**既存の構築点は 1 つも変わらない**）。設計は当初これを
 /// `GhostBootOptions` の新フィールドとして書いていたが、[`GhostBootOptions`] は struct
-/// リテラルで組まれる型であり（本 crate と `areka` の合計 25 箇所）、フィールドを増やすと
+/// リテラルで組まれる型であり（本 crate と `areka` の多くの箇所）、フィールドを増やすと
 /// 全構築点の書き換えを強いる——設計自身が置いた「既存の構築点は不変」という条件と両立しない。
 /// そこで [`areka_kanade::spawn_kanade_with_stop_sink`] と**同じ形の派生関数**を採る。
 ///
@@ -633,15 +638,15 @@ pub fn boot_with_origin(
     // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。ここで先に作る
     // （`FsPersistIo::commit` も commit 時に `create_dir_all` する二重の安全網）。失敗しても boot は
     // 止めない（warn＋継続・log-first・6.3——FsPersistIo が commit 時に再試行する）。
-    if let Some(ghost_root) = scope_roots.ghost.as_ref() {
-        if let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root) {
-            tracing::warn!(
-                target: "ghost-boot",
-                path = %ghost_root.display(),
-                error = %err,
-                "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
-            );
-        }
+    if let Some(ghost_root) = scope_roots.ghost.as_ref()
+        && let Err(err) = areka_sylphya::persist::FsPersistIo::ensure_root_dir(ghost_root)
+    {
+        tracing::warn!(
+            target: "ghost-boot",
+            path = %ghost_root.display(),
+            error = %err,
+            "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
+        );
     }
 
     let areka_sylphya::SylphyaParts {

@@ -2,7 +2,7 @@
 //!
 //! 上流からのメッセージを型変換しつつ下流へ中継する最小機構。上流が全て
 //! 手放されたら明示停止を持たず自然に終了する（start-relay／down-relay の
-//! 2 箇所で使用・design.md「ghost::relay」）。task 2.1 で実装する。
+//! 2 箇所で使用・design.md「ghost::relay」）。
 
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -28,7 +28,7 @@ where
                 Ok(msg) => {
                     let converted: B = B::from(msg);
                     if tx.send(converted).is_err() {
-                        tracing::warn!(relay = %relay_name, "downstream disconnected; relay stopping");
+                        tracing::warn!(event = "relay_downstream_gone", relay = %relay_name, "downstream disconnected; relay stopping");
                         return;
                     }
                 }
@@ -42,23 +42,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc::{self, sync_channel};
-    use std::thread;
+    use crate::test_support::run_bounded;
+    use std::sync::mpsc;
     use std::time::Duration;
-
-    /// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
-    /// テストを失敗させる（どのテストもハングしないことを保証する・areka-actor 流儀）。
-    fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-        let (done_tx, done_rx) = sync_channel::<()>(0);
-        thread::spawn(move || {
-            f();
-            let _ = done_tx.send(());
-        });
-        assert!(
-            done_rx.recv_timeout(timeout).is_ok(),
-            "'{what}' did not complete within {timeout:?} (possible hang)"
-        );
-    }
 
     #[derive(Debug, PartialEq, Eq)]
     struct A(u32);
@@ -102,9 +88,15 @@ mod tests {
 
         // 後始末: 上流を手放して自然終了させる。
         drop(a_tx);
-        handle
-            .join()
-            .expect("relay terminates normally after upstream drop");
+        run_bounded(
+            "relay join after upstream drop",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("relay terminates normally after upstream drop");
+            },
+        );
     }
 
     // ケース2: 上流全 Sender drop → 自然終了（join が Ok(()) を有界時間内に返す）。

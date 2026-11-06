@@ -44,6 +44,19 @@ pub trait PersistIo: Send {
     }
 }
 
+/// 同じ IO を複数の持ち手で分ける包み（3 つの口をすべて中身へ渡す）。
+impl<T: PersistIo + Sync + ?Sized> PersistIo for std::sync::Arc<T> {
+    fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+        (**self).read(path)
+    }
+    fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        (**self).commit(path, content)
+    }
+    fn withholds(&self, path: &Path) -> bool {
+        (**self).withholds(path)
+    }
+}
+
 /// 本番 IO 実装（`std::fs` による temp 書込→`rename` の原子的確定）。
 ///
 /// areka-sylphya でファイルシステムに触れる唯一の型（R8.3）。暦時計・OS 環境は読まない。
@@ -330,4 +343,32 @@ mod tests {
     }
 
     // fake は外部環境（暦時計・OS 名・実 FS）を一切必要としない（R8.3・R9.2 の純 x64 檻）。
+
+    /// `Arc` で包んでも 3 つの口（read・commit・withholds）はすべて中身へ渡る。
+    #[test]
+    fn an_arc_forwards_all_three_methods() {
+        struct Withholding(FakePersistIo);
+        impl PersistIo for Withholding {
+            fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+                self.0.read(path)
+            }
+            fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+                self.0.commit(path, content)
+            }
+            fn withholds(&self, _path: &Path) -> bool {
+                true
+            }
+        }
+        let inner = std::sync::Arc::new(Withholding(FakePersistIo::new()));
+        let io: Box<dyn PersistIo> = Box::new(inner.clone());
+        let path = PathBuf::from("/scope/sylphya.toml");
+
+        io.commit(&path, "A").unwrap();
+        assert_eq!(inner.read(&path).unwrap().as_deref(), Some("A"));
+        assert_eq!(io.read(&path).unwrap().as_deref(), Some("A"));
+        assert!(
+            io.withholds(&path),
+            "withholds も中身へ渡る（既定の false にならない）"
+        );
+    }
 }

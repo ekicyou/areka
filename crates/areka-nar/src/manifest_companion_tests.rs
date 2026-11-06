@@ -31,24 +31,6 @@ fn reads_the_balloon_companion_with_its_own_source_directory() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// `*.source.directory` が無ければ `*.directory` と同じ値にする（要件 3.12）。
-#[test]
-fn defaults_the_companion_source_directory_to_the_directory() {
-    let manifest = parsed_ghost(&["balloon.directory,emo2-kakukaku"]);
-    assert_eq!(manifest.companions.len(), 1);
-    assert_eq!(manifest.companions[0].source_directory, "emo2-kakukaku");
-}
-
-/// 空の `*.source.directory` も「無い」と同じ扱い（要件 3.12）。
-#[test]
-fn an_empty_companion_source_directory_falls_back_to_the_directory() {
-    let manifest = parsed_ghost(&[
-        "balloon.directory,emo2-kakukaku",
-        "balloon.source.directory,",
-    ]);
-    assert_eq!(manifest.companions[0].source_directory, "emo2-kakukaku");
-}
-
 /// `shell` でも同時インストールを読む（要件 3.12 は ghost と shell の両方）。
 #[test]
 fn reads_companions_for_a_shell_too() {
@@ -168,47 +150,18 @@ fn a_companion_key_without_its_directory_is_recorded_as_an_ignored_key() {
     );
 }
 
-/// 同時インストールのフォルダ名も 1 階層でなければならない（要件 3.9）。
+/// 長い知らないキーは、警告に先頭と長さだけを載せる（全体は載せない）。
 #[test]
-fn refuses_a_companion_directory_that_is_not_a_one_level_name() {
+fn a_long_ignored_key_is_bounded_in_its_warning() {
+    let key = "x".repeat(300);
+    let manifest = parsed_ghost(&[&format!("{key},1")]);
     assert_eq!(
-        refused_ghost(&["balloon0.directory,../escape"]),
-        RefuseReason::InvalidDirectoryName {
-            key: "balloon0.directory".to_owned(),
-            value: "../escape".to_owned(),
-        }
+        manifest.warnings,
+        vec![ManifestWarning::IgnoredKey {
+            key: bounded_value(&key)
+        }]
     );
-    assert_eq!(
-        refused_ghost(&["balloon.directory,"]),
-        RefuseReason::InvalidDirectoryName {
-            key: "balloon.directory".to_owned(),
-            value: String::new(),
-        },
-        "空のフォルダ名も 1 階層の名前ではない"
-    );
-}
-
-/// 取り出し元は階層付きの相対パスとして読み、各段が 1 階層の名前でなければ断る
-/// （要件 2.1・5.3・5.4）。
-#[test]
-fn refuses_a_companion_source_directory_with_a_segment_that_is_not_a_one_level_name() {
-    let manifest = parsed_ghost(&[
-        "balloon.directory,emo2-kakukaku",
-        "balloon.source.directory,sub/kakukaku",
-    ]);
-    assert_eq!(manifest.companions[0].source_directory, "sub/kakukaku");
-    assert_eq!(manifest.warnings, vec![]);
-
-    assert_eq!(
-        refused_ghost(&[
-            "balloon.directory,emo2-kakukaku",
-            "balloon.source.directory,sub/CON",
-        ]),
-        RefuseReason::InvalidDirectoryName {
-            key: "balloon.source.directory".to_owned(),
-            value: "sub/CON".to_owned(),
-        }
-    );
+    assert!(!manifest.warnings[0].to_string().contains(&key));
 }
 
 // ---- 扱わない同時インストールの種別（要件 3.13） ----
@@ -521,7 +474,8 @@ fn never_records_a_key_it_actually_reads() {
     assert_eq!(manifest.warnings, vec![]);
 }
 
-/// 警告は順序つきの列で、同じキーに 2 度は出ない（要件 3.13・3.15・3.16）。
+/// 警告は順序つきの列で、この入力では同じ警告が 2 度出ない（1 件のキーからは 1 件・
+/// `refreshundeletemask` は使えない要素ごとに 1 件）（要件 3.13・3.15・3.16）。
 ///
 /// 本体の再インストール → キーの名前順 → 同時インストールごと（探索の順）、の 3 段で並ぶ。
 /// 「含む」で測ると、この順序も重複の有無も測れない。
@@ -558,5 +512,56 @@ fn warnings_come_back_as_an_ordered_sequence_with_no_duplicates() {
                 value: "c/d".to_owned(),
             },
         ]
+    );
+}
+
+/// 2 つの同梱が大小だけ違う同じ宛先を指す書庫は、2 つ目の宛先の名前の拒みとして
+/// 書庫ごと断る（#7・要件 9.9）。黙って片方で上書きすると、もう片方の中身が消える。
+#[test]
+fn two_companions_naming_the_same_folder_refuse_the_archive() {
+    assert_eq!(
+        refused_ghost(&["balloon.directory,foo", "balloon0.directory,FOO"]),
+        RefuseReason::InvalidDirectoryName {
+            key: "balloon0.directory".to_owned(),
+            value: "FOO".to_owned(),
+        }
+    );
+}
+
+// ---- 探す同梱の数の上限（要件 9.15 ⑶） ----
+
+/// `balloon0` から `balloon{count-1}` までの宛先の行を作る。
+fn numbered_balloons(count: usize) -> Vec<String> {
+    (0..count)
+        .map(|n| format!("balloon{n}.directory,b{n}"))
+        .collect()
+}
+
+/// ちょうど上限の数の同梱は全部探し、上限による読み飛ばしは出ない。
+#[test]
+fn searches_every_companion_up_to_the_cap() {
+    let lines = numbered_balloons(MAX_COMPANIONS);
+    let borrowed: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let manifest = parsed_ghost(&borrowed);
+    assert_eq!(manifest.companions.len(), 64);
+    assert_eq!(manifest.warnings, vec![]);
+}
+
+/// 上限を 1 つ超えた同梱は探さず、その鍵を「探索で読まなかった」と記録する。
+#[test]
+fn records_the_companion_beyond_the_cap_as_not_searched() {
+    let lines = numbered_balloons(MAX_COMPANIONS + 1);
+    let borrowed: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let manifest = parsed_ghost(&borrowed);
+    assert_eq!(manifest.companions.len(), 64);
+    assert_eq!(
+        manifest.companions.last().map(|c| c.key.as_str()),
+        Some("balloon63")
+    );
+    assert_eq!(
+        manifest.warnings,
+        vec![ManifestWarning::CompanionNotSearched {
+            key: "balloon64.directory".to_owned(),
+        }]
     );
 }

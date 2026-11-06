@@ -579,6 +579,71 @@ fn the_case_fold_is_unicode_not_ascii_only() {
     );
 }
 
+/// 畳みは 1 字ずつ大文字へ（NTFS の大文字表の形）。語末の `Σ` を `ς` にする小文字化だと
+/// `aΣ` と `aσ` が別物に見えるが、NTFS では同じ名前なので衝突にする（`aς` と `aσ` も同じ）。
+#[test]
+fn the_case_fold_maps_every_sigma_to_one_name() {
+    for (first, second) in [("aΣ", "aσ"), ("aς", "aσ")] {
+        let reason = refusal(
+            NarBuilder::new()
+                .file(first, b"x")
+                .done()
+                .file(second, b"y")
+                .done(),
+        );
+
+        assert_eq!(
+            reason,
+            RefuseReason::CaseCollision {
+                a: first.to_owned(),
+                b: second.to_owned(),
+            }
+        );
+    }
+}
+
+/// ファイルと、別のエントリが暗に作るフォルダは同じ宛先を取り合うので衝突する。
+/// 順を逆にしても、大小だけ違っても同じ（#6）。
+#[test]
+fn a_file_collides_with_a_folder_another_entry_implies() {
+    let cases = [
+        (["x", "x/y.txt"], ("x", "x/y.txt")),
+        (["x/y.txt", "x"], ("x/y.txt", "x")),
+        (["X", "x/y.txt"], ("X", "x/y.txt")),
+        (["a/x/y.txt", "A/X"], ("a/x/y.txt", "A/X")),
+    ];
+    for (paths, (a, b)) in cases {
+        let mut builder = NarBuilder::new();
+        for path in paths {
+            builder = builder.file(path, b"x").done();
+        }
+        assert_eq!(
+            refusal(builder),
+            RefuseReason::CaseCollision {
+                a: a.to_owned(),
+                b: b.to_owned(),
+            },
+            "{paths:?}"
+        );
+    }
+}
+
+/// 明示のフォルダのエントリとその子は、どちらの順でも衝突しない（#6）。
+#[test]
+fn an_explicit_folder_entry_and_its_children_do_not_collide() {
+    let names = accepted(
+        NarBuilder::new()
+            .dir("x")
+            .file("x/y.txt", b"x")
+            .done()
+            .file("z/w.txt", b"x")
+            .done()
+            .dir("Z"),
+    );
+
+    assert_eq!(names.len(), 4);
+}
+
 /// 違う場所にある同じ名前は衝突しない（畳み込むのは完全なパス）。
 #[test]
 fn the_same_leaf_in_different_folders_does_not_collide() {
@@ -615,6 +680,31 @@ fn only_the_listed_reserved_words_are_refused() {
 
     let refused_names = ["ghost/PRN", "ghost/aux.txt", "ghost/Com9.dat", "ghost/LPT1"];
     for name in refused_names {
+        let reason = refusal_of(name.as_bytes().to_vec());
+        assert!(
+            matches!(
+                reason,
+                RefuseReason::UnsafePath {
+                    why: UnsafeWhy::InvalidWindowsName(_),
+                    ..
+                }
+            ),
+            "予約名なのに通った: {name}（{reason:?}）"
+        );
+    }
+}
+
+/// 上付き数字の `COM¹`〜`LPT³` も Windows の予約名（#3）。
+#[test]
+fn superscript_com_and_lpt_names_are_reserved() {
+    for name in [
+        "ghost/COM\u{b9}.txt",
+        "ghost/com\u{b2}",
+        "ghost/COM\u{b3}.dat",
+        "ghost/LPT\u{b9}",
+        "ghost/lpt\u{b2}.txt",
+        "ghost/LPT\u{b3}",
+    ] {
         let reason = refusal_of(name.as_bytes().to_vec());
         assert!(
             matches!(
@@ -683,60 +773,17 @@ fn the_index_follows_the_central_directory_order() {
 
 // ---- 「1 バイトも書かない」（要件 4.1） ----
 
-/// `names` の本体に決して現れてはならない綴り。
-///
-/// `container` の見張りと同じ形だが、走査語が 1 つ違う。`container` は `Path` を
-/// 禁じていて、こちらは拒否語彙に `UnsafePath` が出てくるのでその語では測れない。
-/// 代わりに `path` の**道の綴り**を見る。`&Path` を書くには `use` でも直書きでも
-/// `path::` が要るので、道具立てとしては同じ強さになる。
-const FORBIDDEN_SPELLINGS: &[&str] = &["fs::", "path::", "process::"];
-
-/// `source` に現れる禁じ手の綴りを拾う。
-fn forbidden_spellings_in(source: &str) -> Vec<&'static str> {
-    FORBIDDEN_SPELLINGS
-        .iter()
-        .copied()
-        .filter(|needle| source.contains(needle))
-        .collect()
-}
-
 /// `names` の本体が、ファイルシステムにも別プロセスにも触る綴りを 1 つも持たない。
 ///
 /// 「観測しなかった」ではなく「触る手段を持たない」を主張する。入口は `&[RawEntry]`
-/// しか受け取らず宛先を知らないので、書くとすれば `fs::`・道としての `path::`・
-/// `process::` のいずれかが本体に要る。
+/// しか受け取らず宛先を知らないので、書くとすれば入出力の綴りが本体に要る。拒否語彙の
+/// `UnsafePath` では赤にならないことも較正する。
 #[test]
 fn names_source_contains_no_filesystem_mutation() {
-    let found = forbidden_spellings_in(include_str!("names.rs"));
-    assert!(
-        found.is_empty(),
-        "names が禁じ手の綴りを持っている: {found:?}"
-    );
-}
-
-/// 上の走査の較正。走査語が空でないこと、各語を足した写しが必ず赤になること、
-/// 拒否語彙の `UnsafePath` では赤にならないことを、この 1 本で確かめる。
-///
-/// **最初の主張が要る**——走査語が空だと、上のテストは `found.is_empty()` で緑、
-/// 下の繰り返しは 0 周で緑になり、二本とも恒真のまま「見張っている」ように見える。
-#[test]
-fn the_mutation_scan_catches_every_spelling_it_claims_to_watch() {
-    assert_eq!(
-        FORBIDDEN_SPELLINGS.len(),
-        3,
-        "走査語が空なら二本とも恒真で緑になる"
-    );
-    for needle in FORBIDDEN_SPELLINGS {
-        let synthetic = format!("fn f() {{ let _ = {needle}; }}");
-        assert_eq!(
-            forbidden_spellings_in(&synthetic),
-            vec![*needle],
-            "綴り {needle} を走査が拾えていない"
-        );
-    }
-    assert!(
-        forbidden_spellings_in("RefuseReason::UnsafePath { index, name, why }").is_empty(),
-        "拒否語彙の変種名で赤になるなら、走査は本体を書けなくするだけで何も守らない"
+    crate::tests::assert_source_has_no_io(
+        include_str!("names.rs"),
+        crate::tests::IO_SPELLINGS,
+        "RefuseReason::UnsafePath { index, name, why }",
     );
 }
 

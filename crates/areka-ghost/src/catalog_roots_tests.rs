@@ -11,6 +11,7 @@ use super::{
     BasewareRoots, Hidden, InstallRoot, StoreKind, find_balloon, find_ghost, fold_key,
     install_root, list_balloons, list_ghosts, same_folder_name, same_root, survey,
 };
+use crate::catalog::test_support::{put_balloon, put_ghost_in, two_roots};
 use crate::catalog::{BasewareRoot, GhostEntry, scan_balloons, scan_ghosts};
 
 /// ASCII・全角英字・ギリシアは大文字小文字を区別しない（要件 2.8）。
@@ -77,46 +78,14 @@ fn missing_roots_drop_out_of_present_and_come_back() {
 fn single_root_and_entries_carry_their_root() {
     let tmp = TempPath::under_target("catalog-roots-entry");
     let dir = tmp.path().to_path_buf();
-    std::fs::create_dir_all(dir.join(r"ghost\g\ghost\master")).unwrap();
-    std::fs::write(dir.join(r"ghost\g\ghost\master\descript.txt"), "name,G\r\n").unwrap();
-    std::fs::create_dir_all(dir.join(r"balloon\b")).unwrap();
-    std::fs::write(dir.join(r"balloon\b\descript.txt"), "name,B\r\n").unwrap();
+    put_ghost_in(&dir.join("ghost"), "g", "name,G\r\n");
+    put_balloon(&dir, "b", "B");
 
     let roots = BasewareRoots::single(dir.clone());
     assert_eq!(roots.roots(), [BasewareRoot::new(dir.clone())]);
     let root = &roots.roots()[0];
     assert_eq!(scan_ghosts(root)[0].root, dir);
     assert_eq!(scan_balloons(root)[0].root, dir);
-}
-
-/// `<根>/ghost/<folder>/ghost/master/descript.txt` を置く（一覧に出せるゴースト）。
-fn put_ghost(root: &Path, folder: &str) -> PathBuf {
-    let dir = root.join("ghost").join(folder);
-    std::fs::create_dir_all(dir.join(r"ghost\master")).unwrap();
-    std::fs::write(dir.join(r"ghost\master\descript.txt"), "name,G\r\n").unwrap();
-    dir
-}
-
-/// `<根>/balloon/<folder>/descript.txt` を置く（一覧に出せるバルーン）。
-fn put_balloon(root: &Path, folder: &str) -> PathBuf {
-    let dir = root.join("balloon").join(folder);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("descript.txt"), "name,B\r\n").unwrap();
-    dir
-}
-
-/// 見つかる 2 つの根 `a`（上）・`b`（下）の並び。
-fn two_roots(label: &str) -> (TempPath, PathBuf, PathBuf, BasewareRoots) {
-    let tmp = TempPath::under_target(label);
-    let a = tmp.child("a");
-    let b = tmp.child("b");
-    std::fs::create_dir_all(&a).unwrap();
-    std::fs::create_dir_all(&b).unwrap();
-    let roots = BasewareRoots::new(vec![
-        BasewareRoot::new(a.clone()),
-        BasewareRoot::new(b.clone()),
-    ]);
-    (tmp, a, b, roots)
 }
 
 fn ghost_dirs(entries: &[GhostEntry]) -> Vec<PathBuf> {
@@ -128,14 +97,14 @@ fn ghost_dirs(entries: &[GhostEntry]) -> Vec<PathBuf> {
 #[test]
 fn union_hides_lower_same_name_per_kind_and_sorts_by_folder() {
     let (_tmp, a, b, roots) = two_roots("catalog-roots-union");
-    let ga = put_ghost(&a, "g");
-    let gb = put_ghost(&b, "g");
-    let only_b = put_ghost(&b, "a_only_b");
-    let ba = put_balloon(&a, "bal");
-    let bb = put_balloon(&b, "bal");
+    let ga = put_ghost_in(&a.join("ghost"), "g", "name,G");
+    let gb = put_ghost_in(&b.join("ghost"), "g", "name,G");
+    let only_b = put_ghost_in(&b.join("ghost"), "a_only_b", "name,G");
+    let ba = put_balloon(&a, "bal", "B");
+    let bb = put_balloon(&b, "bal", "B");
     // フォルダ名 x: a にゴースト・b にバルーン → 互いを隠さない。
-    let xg = put_ghost(&a, "x");
-    let xb = put_balloon(&b, "x");
+    let xg = put_ghost_in(&a.join("ghost"), "x", "name,G");
+    let xb = put_balloon(&b, "x", "B");
 
     let s = survey(&roots);
     assert_eq!(ghost_dirs(&s.ghosts), [only_b, ga.clone(), xg.clone()]);
@@ -175,8 +144,8 @@ fn unlistable_upper_folder_does_not_hide_lower() {
     let (_tmp, a, b, roots) = two_roots("catalog-roots-unlistable");
     std::fs::create_dir_all(a.join(r"ghost\x")).unwrap();
     std::fs::create_dir_all(a.join(r"balloon\x")).unwrap();
-    let gx = put_ghost(&b, "x");
-    let bx = put_balloon(&b, "x");
+    let gx = put_ghost_in(&b.join("ghost"), "x", "name,G");
+    let bx = put_balloon(&b, "x", "B");
 
     assert!(survey(&roots).hidden.is_empty());
     assert_eq!(find_ghost(&roots, "x").unwrap().dir, gx);
@@ -188,8 +157,8 @@ fn unlistable_upper_folder_does_not_hide_lower() {
 #[test]
 fn case_only_difference_hides_and_finds() {
     let (_tmp, a, b, roots) = two_roots("catalog-roots-case");
-    let upper = put_ghost(&a, "Emo2");
-    let lower = put_ghost(&b, "emo2");
+    let upper = put_ghost_in(&a.join("ghost"), "Emo2", "name,G");
+    let lower = put_ghost_in(&b.join("ghost"), "emo2", "name,G");
 
     let s = survey(&roots);
     assert_eq!(ghost_dirs(&s.ghosts), std::slice::from_ref(&upper));
@@ -212,7 +181,7 @@ fn missing_root_reads_as_zero_items() {
     let tmp = TempPath::under_target("catalog-roots-missing");
     let gone = tmp.child("gone");
     let b = tmp.child("b");
-    let g = put_ghost(&b, "g");
+    let g = put_ghost_in(&b.join("ghost"), "g", "name,G");
     let roots = BasewareRoots::new(vec![BasewareRoot::new(gone), BasewareRoot::new(b)]);
 
     let s = survey(&roots);
@@ -229,8 +198,8 @@ fn install_root_branches() {
     let a = tmp.child("a");
     let b = tmp.child("b");
     std::fs::create_dir_all(&a).unwrap();
-    put_ghost(&b, "g");
-    put_balloon(&b, "bal");
+    put_ghost_in(&b.join("ghost"), "g", "name,G");
+    put_balloon(&b, "bal", "B");
     let roots = BasewareRoots::new(vec![
         BasewareRoot::new(a.clone()),
         BasewareRoot::new(b.clone()),

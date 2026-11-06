@@ -11,8 +11,9 @@
 //! 持っている。`descript.txt` 等と共有する層なので、ここからは変えない。
 //!
 //! 既存層はキーの大小を保つので、引く前に **ASCII 小文字化した写しを作り直し**、
-//! 以降はその写しだけを引く（要件 3.4）。同じキーが大小違いで 2 度あれば、
-//! 既存層の並び（キーのバイト順）で後に来たほうが勝つ。
+//! 以降はその写しだけを引く（要件 3.4）。同じキーが大小違いで 2 度あれば、ファイルの
+//! 後の行が勝つ（descript の `parse_kv_lowercased` と同じ勝者）。空の値は落とさない
+//! （拒否と警告が使うので、空の値を落とす `parse_kv_lowercased` とはここが違う）。
 //!
 //! # 拒否と警告の分かれ目
 //!
@@ -27,14 +28,14 @@
 //! 同じ `install.txt` からは必ず同じ列が出る。⑴ 本体の再インストール →
 //! ⑵ キーの名前順の読み飛ばし（探索で読まなかった同時インストールの鍵もここ）→
 //! ⑶ 同時インストールごとの記録（探索の順・1 体の中は取り除き → マスク）、
-//! の 3 段。1 件のキーからは最大 1 件の警告しか出さない。
+//! の 3 段。1 件のキーからは最大 1 件の警告（`refreshundeletemask` だけは、使えない要素ごとに 1 件）。
 //!
 //! 本モジュールは宛先を受け取らず、ファイルシステムを変える呼び出しを 1 つも
 //! 持たない（兄弟テストが字面で見張る）。
 
 use crate::error::{ManifestWarning, RefuseReason};
 use crate::names::{
-    EntryName, MAX_ENTRY_PATH_UTF16, bounded_value, is_valid_one_level_name, utf16_len,
+    EntryName, MAX_ENTRY_PATH_UTF16, bounded_value, fold, is_valid_one_level_name, utf16_len,
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
@@ -45,6 +46,9 @@ pub(crate) const INSTALL_TXT: &str = "install.txt";
 
 /// 同時インストールとして読む接頭辞。この後ろは数字列だけを許す。
 const BALLOON_PREFIX: &str = "balloon";
+
+/// 探す同梱のバルーンの上限。鍵を何万も並べた install.txt で取り出しの比べが膨らまないように。
+pub(crate) const MAX_COMPANIONS: usize = 64;
 
 /// 正典にはあるが areka が扱わない同時インストールの接頭辞（要件 3.13）。
 ///
@@ -132,8 +136,6 @@ pub struct InstallManifest {
     /// `kind` が `Ghost`／`Shell` のときだけ非空。探索の順（無印 → 0 → 1…）に並ぶ。
     pub companions: Vec<Companion>,
     pub warnings: Vec<ManifestWarning>,
-    /// ファイルに書かれていた `charset` の値（実際に使われた文字コードではない）。
-    pub charset_declared: Option<String>,
 }
 
 /// 最上位の `install.txt` を 1 つ選ぶ（要件 3.1・3.2）。
@@ -157,7 +159,11 @@ pub(crate) fn locate_install_txt(entries: &[EntryName]) -> Result<&EntryName, Re
         })
 }
 
+/// 拒否の理由に並べる最上位の名前の数。越えた分は総数の 1 要素にまとめる（理由を 1 行に保つ）。
+const MAX_LISTED_TOP_LEVEL: usize = 8;
+
 /// 最上位に見えている名前を名前順に並べる。フォルダは `名前/` の形。
+/// [`MAX_LISTED_TOP_LEVEL`] を越えるときは先頭のその数と、末尾に `…（全 N 件）` を置く。
 ///
 /// フォルダのエントリを 1 つも持たない書庫（実在の配布物 `hello-pasta.nar` が
 /// その形）でも包みフォルダの名前が出るよう、深いエントリからは**先頭の要素**を
@@ -172,7 +178,12 @@ fn top_level_names(entries: &[EntryName]) -> Vec<String> {
             names.insert(format!("{}/", entry.components[0]));
         }
     }
-    names.into_iter().collect()
+    let total = names.len();
+    let mut listed: Vec<String> = names.into_iter().take(MAX_LISTED_TOP_LEVEL).collect();
+    if total > MAX_LISTED_TOP_LEVEL {
+        listed.push(format!("…（全 {total} 件）"));
+    }
+    listed
 }
 
 /// `install.txt` の中身を解釈する（要件 3.3〜3.16）。
@@ -199,14 +210,15 @@ pub(crate) fn parse_manifest(bytes: &[u8]) -> Result<InstallManifest, RefuseReas
         existing,
         companions,
         warnings,
-        charset_declared: non_empty(&keys, "charset"),
     })
 }
 
 /// 既存層の結果をキーだけ ASCII 小文字化して写し直す（要件 3.4）。
+///
+/// `parse_kv` は行の順を返さないので 1 行ずつ渡し、大小違いの同じ鍵は後の行で上書きする。
 fn lowercased_keys(text: &str) -> BTreeMap<String, String> {
-    parse_kv(text)
-        .into_iter()
+    text.lines()
+        .flat_map(parse_kv)
         .map(|(key, value)| (key.to_ascii_lowercase(), value))
         .collect()
 }
@@ -369,7 +381,8 @@ fn numbered(prefix: &str, base: &str) -> bool {
 ///
 /// 無印（`balloon`）→ `balloon0` → `balloon1` … の順に `<接頭辞>.directory` の鍵を引く。
 /// 値が空でも行が在れば見つかったとする。無印は無くても続け、番号は最初に無かった所で
-/// 止める。番号は `format!` で先頭に 0 を付けない 10 進の綴りだけを作るので、
+/// 止める。見つかった数が上限（[`MAX_COMPANIONS`]）に届いたところでも止める。
+/// 番号は `format!` で先頭に 0 を付けない 10 進の綴りだけを作るので、
 /// `balloon01` のような鍵には決して当たらない。
 fn search_balloons(keys: &BTreeMap<String, String>) -> Vec<String> {
     let found = |prefix: &String| keys.contains_key(&format!("{prefix}.directory"));
@@ -377,7 +390,12 @@ fn search_balloons(keys: &BTreeMap<String, String>) -> Vec<String> {
     let numbered = (0_usize..)
         .map(|n| format!("{BALLOON_PREFIX}{n}"))
         .take_while(found);
-    plain.into_iter().chain(numbered).collect()
+    // 上限の後ろの接頭辞は探さない。その鍵は呼び手が CompanionNotSearched として記録する。
+    plain
+        .into_iter()
+        .chain(numbered)
+        .take(MAX_COMPANIONS)
+        .collect()
 }
 
 /// 同時インストールのバルーンを組み、読み飛ばした指定を記録する（要件 1.1〜1.10・6.3〜6.5）。
@@ -397,36 +415,57 @@ fn collect_companions(
         Vec::new()
     };
 
+    // 鍵は読むときに小文字へ揃えてあるので、接頭辞はそのまま引ける（鍵ごとに列を舐めない）。
+    let searched: BTreeSet<&str> = found.iter().map(String::as_str).collect();
     // 読み飛ばしの記録。キーの名前順に 1 件のキーへ 1 件だけ出す。
     for key in keys.keys() {
         match classify(key) {
             KeyRole::Known => {}
-            KeyRole::Unknown => warnings.push(ManifestWarning::IgnoredKey { key: key.clone() }),
+            KeyRole::Unknown => warnings.push(ManifestWarning::IgnoredKey {
+                key: bounded_value(key),
+            }),
             KeyRole::Companion { prefix, supported } => {
                 if !handles_companions {
                     // 種別の判定が先に効く。扱わない種別でも、ここでは
                     // 「ゴースト以外に書かれている」として 1 件だけ記録する。
-                    warnings.push(ManifestWarning::CompanionOnNonGhost { key: key.clone() });
+                    warnings.push(ManifestWarning::CompanionOnNonGhost {
+                        key: bounded_value(key),
+                    });
                 } else if !supported {
-                    warnings.push(ManifestWarning::UnsupportedCompanionKind { key: key.clone() });
-                } else if found.iter().any(|searched| searched == prefix) {
+                    warnings.push(ManifestWarning::UnsupportedCompanionKind {
+                        key: bounded_value(key),
+                    });
+                } else if searched.contains(prefix) {
                     // 探索で見つかった接頭辞の鍵は ⑶ で読む。
                 } else if keys.contains_key(&format!("{prefix}.directory")) {
-                    // 宛先は書かれているが、打ち切りの後ろか先頭に 0 を付けた綴り。
-                    warnings.push(ManifestWarning::CompanionNotSearched { key: key.clone() });
+                    // 宛先は書かれているが、打ち切りや上限の後ろか、先頭に 0 を付けた綴り。
+                    warnings.push(ManifestWarning::CompanionNotSearched {
+                        key: bounded_value(key),
+                    });
                 } else {
                     // 宛先の無い断片（`balloon.source.directory` だけ、など）は、
                     // どこへ入れるのか決まらない。
-                    warnings.push(ManifestWarning::IgnoredKey { key: key.clone() });
+                    warnings.push(ManifestWarning::IgnoredKey {
+                        key: bounded_value(key),
+                    });
                 }
             }
         }
     }
 
     let mut companions = Vec::with_capacity(found.len());
+    let mut destinations = BTreeSet::new();
     for prefix in found {
-        let directory = keys[&format!("{prefix}.directory")].clone();
-        check_one_level(&format!("{prefix}.directory"), &directory)?;
+        let key = format!("{prefix}.directory");
+        let directory = keys[&key].clone();
+        check_one_level(&key, &directory)?;
+        // 大小だけ違う同じ宛先の 2 つ目は、片方の中身を黙って潰すので書庫ごと断る（#7）。
+        if !destinations.insert(fold(&directory)) {
+            return Err(RefuseReason::InvalidDirectoryName {
+                key,
+                value: bounded_value(&directory),
+            });
+        }
         let source_key = format!("{prefix}.source.directory");
         // `*.source.directory` が無い（または空）なら宛先と同じ名前を取り出し元にする。
         let written = non_empty(keys, &source_key);

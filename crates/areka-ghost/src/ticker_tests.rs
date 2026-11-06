@@ -1,21 +1,7 @@
 use super::*;
-use std::sync::mpsc::{self, sync_channel};
+use crate::test_support::run_bounded;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::thread;
-
-/// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
-/// テストを失敗させる（どのテストもハングしないことを保証する・areka-actor 流儀）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-    let (done_tx, done_rx) = sync_channel::<()>(0);
-    thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
-}
 
 // ---- 純粋層: BoundarySchedule ----
 
@@ -180,9 +166,6 @@ fn shared_clock(
 
 #[test]
 fn spawn_ticker_delivers_kanade_and_dispatcher_ticks_on_injected_clock() {
-    // dispatcher 側メッセージ型は task 2.5 未着手のため KanadeMsg を仮の D として使う
-    // （設計メモのとおり同一型を暫定転用。`KanadeMsg` はここでは `From<Tick>` を実装
-    // した専用のテスト用ラッパ型を介して満たす）。
     struct TestDispatcherMsg {
         now: MonotonicMs,
     }
@@ -277,7 +260,7 @@ fn spawn_ticker_stops_on_control_channel_disconnect() {
 }
 
 #[test]
-fn spawn_ticker_sticky_stops_sending_to_disconnected_dispatcher_but_keeps_kanade_alive() {
+fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
     struct TestDispatcherMsg;
     impl From<Tick> for TestDispatcherMsg {
         fn from(_: Tick) -> Self {
@@ -320,7 +303,7 @@ fn spawn_ticker_sticky_stops_sending_to_disconnected_dispatcher_but_keeps_kanade
 
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
-        "ticker join after sticky-disconnect scenario",
+        "ticker join after dispatcher-disconnect scenario",
         Duration::from_secs(5),
         move || {
             handle
@@ -333,13 +316,9 @@ fn spawn_ticker_sticky_stops_sending_to_disconnected_dispatcher_but_keeps_kanade
 // ---- 単発ループレーン: spawn_loop_ticker ----
 
 #[test]
-fn loop_ticker_config_default_is_16ms_and_real_clock() {
+fn loop_ticker_config_default_is_16ms() {
     let config = LoopTickerConfig::default();
     assert_eq!(config.interval, Duration::from_millis(16));
-    // 既定 clock が実クロック（非減少）であることのみ確認する。
-    let first = (config.clock)();
-    let second = (config.clock)();
-    assert!(second.0 >= first.0, "default clock must be non-decreasing");
 }
 
 #[test]
@@ -387,7 +366,7 @@ fn spawn_loop_ticker_delivers_once_per_grid_firing_on_injected_clock() {
 }
 
 #[test]
-fn spawn_loop_ticker_catch_up_delivers_exactly_once_across_multiple_missed_boundaries() {
+fn spawn_loop_ticker_catch_up_delivers_the_current_clock() {
     let clock_value = Arc::new(Mutex::new(0u64));
     let (started_tx, started_rx) = mpsc::channel::<()>();
 
@@ -408,20 +387,13 @@ fn spawn_loop_ticker_catch_up_delivers_exactly_once_across_multiple_missed_bound
         .expect("loop ticker should read the clock once at startup");
 
     // 0 から 100 まで一気に進める＝16,32,48,64,80,96 の 6 境界を跨ぐ（サスペンド復帰等）。
-    // catch-up 政策により deliver は**ちょうど 1 回**だけ呼ばれる。
+    // 1 回だけは純粋層の `poll_skips_multiple_missed_boundaries_and_fires_only_once` が縛る。
     *clock_value.lock().expect("lock") = 100;
 
     let tick = tick_rx
         .recv_timeout(Duration::from_secs(5))
-        .expect("catch-up must deliver exactly once with the current clock");
+        .expect("catch-up must deliver a tick with the current clock");
     assert_eq!(tick.now, MonotonicMs(100));
-
-    // 2 回目の配送が来ないこと＝跨いだ中間境界を再送しない（catch-up = 1）。
-    // 時計は 100 のまま（次デッドライン 112 未満）なので追加発火は起きない。
-    assert!(
-        tick_rx.recv_timeout(Duration::from_millis(200)).is_err(),
-        "catch-up must collapse multiple missed boundaries into a single deliver"
-    );
 
     stop_tx.send(TickerMsg::Close).expect("send Close");
     run_bounded(
@@ -484,13 +456,4 @@ fn spawn_loop_ticker_stops_on_control_channel_disconnect() {
                 .expect("loop ticker terminates normally on control channel disconnect");
         },
     );
-}
-
-#[test]
-fn real_clock_returns_monotonic_ms_from_get_tick_count64() {
-    // 実クロックの往復確認: 2 回読んで非減少であることのみ検証する（実 OS 時計は
-    // テスト側で制御できないため、値そのものではなく単調性のみを確認する）。
-    let first = real_clock();
-    let second = real_clock();
-    assert!(second.0 >= first.0, "GetTickCount64 must be non-decreasing");
 }

@@ -2,90 +2,24 @@
 //
 // design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S1:
 // 「Boot→OnBoot GET が Value→StartTalk→sakura 再生→RecordingSink の発火列（at 昇順・
-// 内容一致）→TalkDone{Ended} が kanade へ転送される」を、起動から実 ghost スタック
-// （kanade→start-relay→dispatcher→sakura の実アクター一式）を通して駆動し、時刻注入
-// （Tick）のみで確認する（sleep 不使用・要件 7.2/7.4/7.6・純 x64）。
+// 内容一致）」を、起動から実 ghost スタック（kanade→start-relay→dispatcher→sakura の
+// 実アクター一式）を通して駆動し、時刻注入（Tick）のみで確認する（sleep 不使用・要件
+// 7.2/7.4/7.6・純 x64）。TalkDone{Ended} の kanade への転送はここでは見ない（末尾の注記）。
 
 use super::*;
 
-use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use areka_kanade::{KanadeConfig, MonotonicMs, ShioriCall, events};
+use areka_kanade::KanadeConfig;
 use areka_parsers::charset::DefaultEncoding;
-use temp_path_kit::TempPath;
-
-/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
-/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
-/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
-///
-/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
-fn unique_temp_dir(tag: &str) -> TempPath {
-    TempPath::new(&format!("ghost-spine-s1-{tag}"))
-}
-
-/// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
-/// `shell/master/descript.txt`）を構築する。shell descript の `name` は `shell_name`
-/// （`OnBoot` Ref0・`KanadeConfig::shell_name` の値源と一致させるための既知値・task
-/// 4.2 参照材料 4/5）。
-fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
-    let ghost_master = root.join("ghost").join("master");
-    std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
-    std::fs::write(
-        ghost_master.join("descript.txt"),
-        b"charset,UTF-8\nname,S1TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
-    )
-    .expect("write ghost descript.txt");
-
-    let shell_dir = root.join("shell").join("master");
-    std::fs::create_dir_all(&shell_dir).expect("create shell/master");
-    std::fs::write(
-        shell_dir.join("descript.txt"),
-        format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
-    )
-    .expect("write shell descript.txt");
-}
-
-/// events 表由来の [`ShioriCall`] を、このファイル固有の [`RecordedCall`]（task 4.1 の
-/// [`ScriptedShioriBackend`] 記録型）へ変換する（fixture・assert・実装が単一の正本＝
-/// events 表を共有する・Req 7.1）。kanade 自身の統合テストが使う `expected_call`/
-/// `CallMethod` は kanade クレート専用の private 型であり本ファイルからは参照できない
-/// ため、ここで同旨の変換を用意する（task 4.2 参照材料 6 の指示どおり）。
-fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
-    match call {
-        ShioriCall::Get { id, references, .. } => RecordedCall::Get {
-            id: id.to_string(),
-            references,
-        },
-        ShioriCall::Notify { id, references, .. } => RecordedCall::Notify {
-            id: id.to_string(),
-            references,
-        },
-    }
-}
-
-/// 有界待機ヘルパ（`runtime.rs`/`dispatcher.rs` テストモジュールと同旨のローカルコピー）。
-fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
-    std::thread::spawn(move || {
-        f();
-        let _ = done_tx.send(());
-    });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
-}
 
 /// S1: boot 成功——boot→OnBoot(Value)→StartTalk→sakura 再生→RecordingSink の発火列
-/// （at 昇順・内容一致）→TalkDone を、Tick 注入のみで決定論的に確認する
-/// （要件 7.2/7.4/7.6）。
+/// （at 昇順・内容一致）を、Tick 注入のみで決定論的に確認する（要件 7.2/7.4/7.6）。
 #[test]
 fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     const SHELL_NAME: &str = "S1BootShell";
 
-    let temp = unique_temp_dir("plays-greeting-and-records-expected-cue-sequence");
+    let temp = write_ghost_fixture("S1TestGhost", SHELL_NAME);
     let root = temp.path().to_path_buf();
-    write_ghost_fixture(&root, SHELL_NAME);
 
     // events 表と同一パラメタで期待値導出用 config を構築する（`resolve_kanade_config` が
     // 実際に組み立てる値と shell_name/baseware_version が一致する・task 4.2 参照材料 4）。
@@ -93,15 +27,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
 
     // boot 系列一式のみを台本化する（OnSecondChange は kanade へ Tick を一切送らないため
     // 不要・OnClose/Unload は本テスト末尾の shutdown() が消費する）。
-    let (backend, handle) = ScriptedShioriBackend::builder()
-        .notify("OnInitialize", Ok(()))
-        // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
-        // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
-        // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
-        .get("username", Ok(None))
-        .get("OnFirstBoot", Ok(None))
-        .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
-        .notify("basewareversion", Ok(()))
+    let (backend, handle) = boot_script()
         .notify("OnClose", Ok(()))
         .unload(Ok(ExitKind::Clean))
         .build();
@@ -128,8 +54,8 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
 
     // boot() は内部で KanadeMsg::Boot を既に送出済み——boot 系列は kanade アクタースレッド
     // 上で同期往復（oneshot round trip）のみで完走するため、この時点で OnInitialize〜
-    // basewareversion の 5 呼出はスケジューリング次第で既に発火し終えて**いることもある**
-    // （⚠ 発火し終えている保証は無い。cue の発火はこの 5 呼出の完了を含意しない——理由と
+    // basewareversion の起動系列はスケジューリング次第で既に発火し終えて**いることもある**
+    // （⚠ 発火し終えている保証は無い。cue の発火は起動系列の完了を含意しない——理由と
     // 対処は下の有界待ちの注記を読むこと。task 5.6・要件 9.2）。しかし
     // StartTalk は start_tx→start-relay→dispatcher_tx の 2 hop（別スレッド）を経るため、
     // dispatcher の active slot に talk が実際に載るタイミングはスレッドスケジューリング
@@ -137,19 +63,11 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     // たびに RecordingSink を確認する再送ループ（実時間待機なし・単調増加する `now` の
     // 注入のみ・`yield_now` で他スレッドに実行機会を譲るだけ）でこの橋渡しをする。
     let mut now: u64 = 1;
-    let dispatcher = runtime.dispatcher();
-    let tick = |n: u64| {
-        dispatcher
-            .send(DispatcherMsg::Tick {
-                now: MonotonicMs(n),
-            })
-            .expect("dispatcher actor should still be alive while driving the boot talk");
-    };
     super::spin_pumping_ticks(
         "S1: surface cue never fired after repeated Tick — boot talk did not reach \
          dispatcher's active slot",
         &mut now,
-        tick,
+        dispatcher_tick(runtime.dispatcher()),
         || {
             !surface_records
                 .lock()
@@ -163,85 +81,20 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     // backend.status() を確認する（死活監視・親モジュール rustdoc 参照）ため、
     // calls() には Get/Notify の間に RecordedCall::Status が挟まる。起動系列の
     // 順序判定はこの死活監視ノイズと無関係なので除外して比較する。
-    let expected_boot_prefix = vec![
-        expected_from_shiori_call(events::on_initialize(
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-        // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1・DD-9 の唯一の期待値導出経路）。
-        expected_from_shiori_call(areka_kanade::resources::resource_username(
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-        expected_from_shiori_call(events::on_first_boot(
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-            // fixture ghost に永続ファイル無し＝vanish 不在ゆえ Ref0="0"（従来値同値）。
-            0,
-        )),
-        expected_from_shiori_call(events::on_boot(
-            &config,
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-        // 挨拶の台詞は再生の前に OnTranslate へかける（偽の SHIORI の既定は 204）。
-        super::expected_translate(
-            r"\s[0]hello\e",
-            &events::on_boot(&config, &areka_kanade::ExecutionSnapshot::INACTIVE),
-        ),
-        expected_from_shiori_call(events::baseware_version(
-            &config,
-            &areka_kanade::ExecutionSnapshot::INACTIVE,
-        )),
-    ];
+    let expected_boot_prefix = expected_boot_prefix(&config);
 
-    // **数える前に 5 呼出の到達そのものを有界に待つ**（task 5.6・要件 9.2〔2026-09-04 の
-    // 開発者裁定で S1 まで対象を広げた改訂版〕・R12.1 の事前登記済み例外も同裁定で S1 を含む）。
-    // 上の `spin_pumping_ticks`（:147-158）が抜ける条件は「surface cue が 1 件でも載ったこと」
-    // だけであり、これは boot 系列 5 呼出の完了を**含意しない**——`to_baseware_version`
-    // （`crates/areka-kanade/src/schedule/boot.rs:229-282`）は `Action::StartTalk` を同 `:241`
-    // で積み、`basewareversion` の `Action::ShioriRequest` を同 `:277-279` で**その後に**積む。
-    // ゆえに StartTalk が start-relay→dispatcher の 2 hop を渡って cue を発火させるのと、
-    // basewareversion NOTIFY が shiori アクタースレッド（1 hop）で記録されるのとは、別スレッド
-    // の競走であり順序は保証されていない。待たずに数えると 5 本目がまだ届かず `left: 4` の
-    // Vec 不一致で落ちる瞬間があり、これが負荷時にだけ現れる間欠的な赤の正体である
-    // （`verification/isolation-decision.md` §2 の系統 ⑸）。
-    //
-    // 形は S3 に当てた直し（task 4.1・`3e7414fc`）と同一である——手本は
-    // `crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs:189-203`
-    // の有界待ちで、そのさらに手本は「条件が満たされるまで待つ」形で同じ 5 呼出を確認する
-    // `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`（`wait_until`）。
-    // 判定そのもの（Status を除いた列が `expected_boot_prefix` と**等値**）は 1 文字も変えず、
-    // 数える前に待ちを置くだけなので被覆を 1 つも失わない——待ちの脱出条件は「5 件以上」だが
-    // 直後の等値照合が上限も保つため、6 件来れば依然として赤になる。上限は本ファイルの他の
-    // 有界待ちと同じ `E2E_BOUND`（`spine_e2e_test.rs:22`＝60 秒の壁時計安全弁）を再利用する。
-    let calls = handle.calls();
-    let non_status_len = || {
-        calls
-            .lock()
-            .expect("calls mutex poisoned")
-            .iter()
-            .filter(|c| !matches!(c, RecordedCall::Status))
-            .count()
-    };
-    let mut boot_prefix_len = non_status_len();
-    let boot_deadline = std::time::Instant::now() + super::E2E_BOUND;
-    while boot_prefix_len < expected_boot_prefix.len() && std::time::Instant::now() < boot_deadline
-    {
-        std::thread::yield_now();
-        boot_prefix_len = non_status_len();
-    }
-    assert!(
-        boot_prefix_len >= expected_boot_prefix.len(),
-        "S1: boot 系列 {} 呼出（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion）が \
-         {:?} 以内に揃わなかった——Status を除く観測件数は {} 件",
-        expected_boot_prefix.len(),
-        super::E2E_BOUND,
-        boot_prefix_len
+    // **数える前に起動系列の到達そのものを有界に待つ**（task 5.6・要件 9.2〔2026-09-04 の
+    // 開発者裁定で S1 まで対象を広げた改訂版〕）。上の `spin_pumping_ticks` が抜ける条件は
+    // 「surface cue が 1 件でも載ったこと」だけで、起動系列の完了を**含意しない**——
+    // `to_baseware_version`（`crates/areka-kanade/src/schedule/boot.rs`）は `Action::StartTalk` を
+    // `basewareversion` の `Action::ShioriRequest` より**先に**積むので、cue（start-relay→dispatcher の
+    // 2 hop）と最後の記録（shiori アクタースレッドの 1 hop）は別スレッドの競走になる。待ちの脱出条件は
+    // 「期待の長さ以上」だが、直後の等値照合が上限も保つので 1 件多く来れば赤になる。
+    wait_until(
+        "S1: boot 系列（OnInitialize/username/OnFirstBoot/OnBoot/OnTranslate/basewareversion）が揃わなかった",
+        || non_status_calls(&handle).len() >= expected_boot_prefix.len(),
     );
-    let calls_without_status: Vec<RecordedCall> = calls
-        .lock()
-        .expect("calls mutex poisoned")
-        .iter()
-        .filter(|c| !matches!(c, RecordedCall::Status))
-        .cloned()
-        .collect();
+    let calls_without_status = non_status_calls(&handle);
     assert_eq!(
         calls_without_status, expected_boot_prefix,
         "起動系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→OnTranslate→basewareversion）が正典順序で発火していない"
@@ -284,7 +137,7 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     super::spin_pumping_ticks(
         "S1: broadcast cue 列が期待長へ整定しなかった（初回起動 epilogue まで含む全 4 件）",
         &mut now,
-        tick,
+        dispatcher_tick(runtime.dispatcher()),
         || {
             surface_records
                 .lock()
@@ -321,24 +174,13 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     assert_broadcast(&surface, "surface");
     assert_broadcast(&text, "text");
 
-    // ---- 後片付け兼 (c) の間接証跡 ----
-    // TalkDone{Ended} が dispatcher→kanade へ転送済みであること（dispatcher の slot が
-    // 解放され kanade が Steady{None} へ戻っていること）は、kanade inbox を直接覗く
-    // 経路が公開面に無いため、後続の shutdown（ForceQuit→OnClose NOTIFY→Unload の順）
-    // が台本どおり完走し Ok(()) を返すことをもって間接的に確認する——もし TalkDone が
-    // 届かず kanade が Steady{Some} に取り残されていても ForceQuit は横断遷移で全 Phase
-    // から Unloading{Forced} へ直行するため shutdown 自体は成立してしまうが、これは
-    // 「正規終了握手」シナリオ（task 4.5）の担当範囲であり、本タスクの主眼は (a)(b) の
-    // 発火列検証に置く（CONCERNS 参照）。
-    run_bounded(
+    // ---- 後片付け ----
+    // TalkDone{Ended} の dispatcher→kanade の転送は公開面から覗けない。ForceQuit は全 Phase から
+    // Unloading{Forced} へ直行するので、この shutdown の成功も転送の証跡にはならない
+    // （正規の終了の握手は S4 の担当）。
+    crate::common::run_bounded_shutdown(
         "shutdown after S1 boot talk completion",
-        super::E2E_BOUND,
-        move || {
-            let result = runtime.shutdown(areka_kanade::CloseReason::System);
-            assert!(
-                result.is_ok(),
-                "shutdown should return Ok(()) after S1 boot talk completes, got {result:?}"
-            );
-        },
+        super::BOUND,
+        runtime,
     );
 }

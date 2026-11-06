@@ -1,6 +1,6 @@
 //! 書庫の中を読む口（[`NarArchive::entry_bytes`]）の兄弟テスト。
 //!
-//! 判定するのは、在る・大文字小文字違い・フォルダ・無い・同梱バルーンのフォルダの
+//! 判定するのは、在る・大文字小文字違い（全角を含む）・フォルダ・無い・同梱バルーンのフォルダの
 //! 中のファイルの 5 通りと、読み直し・書き込み・記録が 0 であること。
 
 use super::*;
@@ -31,12 +31,14 @@ fn ghost() -> NarBuilder {
         .done()
         .file("kaku/terms.md", b"# balloon terms\r\n")
         .done()
+        .file("ＡＢＣ.txt", b"full width\r\n")
+        .done()
 }
 
 /// 書庫を一時の根に置いて開く。根を返すのは、開いた後に原本を潰すテストのため。
 fn open(work: &WorkDir) -> (NarArchive, PathBuf) {
     let path = work.path().join("ghost.nar");
-    fs::write(&path, ghost().bytes()).expect("固定入力を置ける");
+    ghost().write_to(&path).expect("固定入力を置ける");
     (NarArchive::open(&path).expect("無傷の書庫は開ける"), path)
 }
 
@@ -63,6 +65,17 @@ fn the_path_ignores_ascii_case() {
     assert_eq!(
         archive.entry_bytes("Ghost/Master/Descript.txt"),
         Some(&b"charset,Shift_JIS\r\n"[..])
+    );
+}
+
+/// 大小の無視は ASCII に限らない（全角の英字も同じ名前として引ける）。
+#[test]
+fn the_path_ignores_non_ascii_case() {
+    let work = WorkDir::new().expect("根を借りられる");
+    let (archive, _) = open(&work);
+    assert_eq!(
+        archive.entry_bytes("ａｂｃ.TXT"),
+        Some(&b"full width\r\n"[..])
     );
 }
 

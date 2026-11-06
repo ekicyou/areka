@@ -1,7 +1,7 @@
-//! `plan` の兄弟テストの続き——宛先の根を配置ごとに 1 回だけ尋ね、答えをその配置に
-//! 固定すること（要件 5.4・5.5）。
+//! `plan` の兄弟テストの続き——宛先の根は本体の配置を組むとき 1 回だけ尋ね、同梱は本体の根に
+//! 置く（バルーンの根は尋ねない）こと（要件 5.4・5.5）。
 //!
-//! 助手は [`super`]（`plan_tests.rs`）から借りる。根は配置ごとに別の `WorkDir` を答える
+//! 助手は [`super`]（`plan_tests.rs`）から借りる。根はフォルダ名ごとに決めた `WorkDir` を答える
 //! 口を使い、尋ねられた順と回数を記録して突き合わせる。
 
 use super::*;
@@ -68,7 +68,7 @@ fn companions_go_inside_the_ghost_under_the_body_root_without_asking_balloon_roo
         target_ghost: None,
     };
 
-    let plan = plan_of(two_companions_archive(), &request);
+    let (plan, _, _) = accepted(two_companions_archive(), &request);
 
     let ghost = ghost_root.path().join("ghost").join("test-ghost");
     let placed: Vec<(&str, &Path, PathBuf, bool)> = plan
@@ -140,7 +140,7 @@ fn a_shell_companion_goes_inside_the_target_ghost() {
         .file("bal1/descript.txt", b"balloon")
         .done();
 
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         archive,
         &InstallRequest {
             roots: &roots,
@@ -167,7 +167,7 @@ fn a_balloon_only_archive_still_asks_the_balloon_root() {
         balloon: HashMap::from([("test-balloon", free.path())]),
         asked: RefCell::default(),
     };
-    let plan = plan_of(
+    let (plan, _, _) = accepted(
         balloon_archive(),
         &InstallRequest {
             roots: &roots,
@@ -186,15 +186,8 @@ fn a_balloon_only_archive_still_asks_the_balloon_root() {
 
 /// ゴースト本体 `test-ghost` に `companion_lines` を足し、`extra` のファイルを並べた書庫。
 fn ghost_with(companion_lines: &[&str], extra: &[&str]) -> NarBuilder {
-    let mut lines = vec![
-        "charset,UTF-8",
-        "type,ghost",
-        "name,emo",
-        "directory,test-ghost",
-    ];
-    lines.extend_from_slice(companion_lines);
     let mut builder = NarBuilder::new()
-        .file("install.txt", &install_txt(&lines))
+        .file("install.txt", &ghost_install_txt(companion_lines))
         .done()
         .file("ghost/master/descript.txt", b"ghost")
         .done();
@@ -281,6 +274,34 @@ fn a_companion_taken_from_its_own_home_folder_is_not_warned() {
     );
 }
 
+/// 全角の大小だけ違う綴りでも、取り出し元は同梱として見つかり、`balloon/<dir>/` は
+/// 本体から除かれる（#64）。
+#[test]
+fn a_full_width_companion_folder_is_carved_out_case_insensitively() {
+    let root = root_with_ghost("other");
+    let (plan, skipped, overridden) = accepted(
+        ghost_with(
+            &[
+                "balloon.directory,ＫＡＫＵ",
+                "balloon.source.directory,ＢＡＬ",
+            ],
+            &["ｂａｌ/descript.txt", "balloon/ｋａｋｕ/old.txt"],
+        ),
+        &InstallRequest {
+            roots: &SingleRoot(root.path()),
+            target_ghost: None,
+        },
+    );
+
+    assert!(skipped.is_empty(), "取り出し元が見つからない: {skipped:?}");
+    assert_eq!(
+        relative_files(&plan[0]),
+        vec!["install.txt", "ghost/master/descript.txt"]
+    );
+    assert_eq!(overridden, vec!["ＫＡＫＵ"]);
+    assert_eq!(relative_files(&plan[1]), vec!["descript.txt"]);
+}
+
 /// 飛ばした同梱の名前の `balloon/<dir>/` は本体に残り、外す場所にも警告にも入らない。
 #[test]
 fn a_skipped_companion_leaves_the_archive_folder_in_the_body() {
@@ -322,7 +343,7 @@ fn the_target_ghost_is_looked_up_under_the_answered_root() {
             balloon: HashMap::new(),
             asked: RefCell::default(),
         };
-        let plan = plan_of(
+        let (plan, _, _) = accepted(
             archive(),
             &InstallRequest {
                 roots: &found,

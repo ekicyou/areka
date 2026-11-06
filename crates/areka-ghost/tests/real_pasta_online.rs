@@ -10,6 +10,7 @@
 //! # env ゲート（`tests/ghost/real_pasta_test.rs` と同じ語法）
 //! `HOST32_PASTA_DLL`（pasta DLL のフルパス）が未設定なら silent skip。設定済みだが DLL 不在なら
 //! 明示 fail。helper exe は `HOST32_HELPER_EXE` 優先→`target/i686-pc-windows-msvc/{debug,release}`。
+//! `PASTA_DEBUG=0` で回す（9276 を取り合う）。
 //!
 //! # フィクスチャ
 //! pasta は辞書（`dic/`）・`scripts/`・`pasta.toml` を `ghost/master` から読むので、DLL 単体の
@@ -30,11 +31,9 @@
 //! 返ったこと ⑵ 見張りの間の OnSecondChange の `Status` に `online` が載っていたこと ⑶ 守り手を
 //! 落とした後は間隔内に OnSecondChange へ `Value`（雑談か時報）が返ること、を併せて確かめる。
 //!
-//! # 共有した補助・写した補助
-//! 交信の記録（`ghost/recorder.rs`）と既定のシステム変数（`ghost/common.rs`）はパス指定で取り込む。
-//! `ghost/real_pasta_test.rs` は `crate::spine_e2e_test` に依存し自身の `#[test]` も持つので取り込めず、
-//! helper の解決（`resolve_helper_exe`）と `BoxedBackend` だけを写した
-//! （`ghost/snapshot_capture_test.rs` の同名の項目と同一）。
+//! # 共有した補助
+//! 交信の記録と `BoxedBackend`（`ghost/recorder.rs`）、既定のシステム変数・helper の解決・有界の
+//! 終了（`ghost/common.rs`）はパス指定で取り込む。
 
 #[path = "ghost/common.rs"]
 mod common;
@@ -49,15 +48,15 @@ use areka_ghost::shiori_wiring::real_connect;
 use areka_ghost::sink::DiscardSink;
 use areka_ghost::ticker::TickerConfig;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
-use areka_kanade::{CloseReason, ShioriBackend};
+use areka_kanade::ShioriBackend;
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 use sample_ghost_kit::SampleRoot;
-use shiori_host32_host::{
-    ExitKind, HelperStatus, RequestError, RequestHeaders, ShutdownError, ValueReply,
-};
 
-use crate::recorder::{ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle};
+use crate::common::{real_pasta_turn, resolve_helper_exe, run_bounded_shutdown};
+use crate::recorder::{
+    BoxedBackend, ExchangeKind, ExchangeOutcome, ExchangeRecord, Recorder, RecorderHandle,
+};
 
 /// emo2 の雑談の間隔の上限（`pasta.toml` の `talk_interval_max`・秒）。
 const TALK_INTERVAL_MAX_SECS: usize = 30;
@@ -76,90 +75,6 @@ const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 /// `shutdown()` の有界観測。
 const SHUTDOWN_BOUND: Duration = Duration::from_secs(30);
-
-/// `Box<dyn ShioriBackend>` を `Recorder` に包むための委譲（`snapshot_capture_test.rs` と同一）。
-struct BoxedBackend(Box<dyn ShioriBackend>);
-
-impl ShioriBackend for BoxedBackend {
-    fn get(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<Option<String>, RequestError> {
-        self.0.get(id, references, status)
-    }
-
-    fn notify(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-    ) -> Result<(), RequestError> {
-        self.0.notify(id, references, status)
-    }
-
-    // 新しい 2 メソッドも中身へそのまま渡す（既定のままだとヘッダと応答のレベルが黙って落ちる）。
-    fn get_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<Option<ValueReply>, RequestError> {
-        self.0.get_with_headers(id, references, status, headers)
-    }
-
-    fn notify_with_headers(
-        &mut self,
-        id: &str,
-        references: &[String],
-        status: Option<&str>,
-        headers: &RequestHeaders<'_>,
-    ) -> Result<(), RequestError> {
-        self.0.notify_with_headers(id, references, status, headers)
-    }
-
-    fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
-        self.0.unload()
-    }
-
-    fn status(&mut self) -> HelperStatus {
-        self.0.status()
-    }
-}
-
-/// i686 helper の解決（`real_pasta_test.rs::resolve_helper_exe` と同一）。
-fn resolve_helper_exe() -> Result<PathBuf, String> {
-    if let Ok(explicit) = std::env::var("HOST32_HELPER_EXE") {
-        let p = PathBuf::from(&explicit);
-        if p.is_file() {
-            return Ok(p);
-        }
-        return Err(format!(
-            "HOST32_HELPER_EXE={explicit:?} が指すファイルが存在しません（i686 helper を先にビルド）"
-        ));
-    }
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(std::path::Path::to_path_buf)
-        .unwrap_or_else(|| manifest_dir.clone());
-    let target_base = workspace_root.join("target").join("i686-pc-windows-msvc");
-    for profile in ["debug", "release"] {
-        let candidate = target_base.join(profile).join("shiori-host32-helper.exe");
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-    Err(format!(
-        "i686 helper exe が見つかりません（探索先: {}\\{{debug,release}}\\shiori-host32-helper.exe）。\
-         PowerShell で先に i686 helper をビルドしてください: \
-         cargo build -p shiori-host32-helper --target i686-pc-windows-msvc",
-        target_base.display()
-    ))
-}
 
 fn is_second_change_get(r: &ExchangeRecord) -> bool {
     r.kind == ExchangeKind::Get && r.id.as_deref() == Some("OnSecondChange")
@@ -199,9 +114,15 @@ fn wait_records(
 
 #[test]
 fn emo2_does_not_start_chatting_while_online() {
-    let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
+    // この実行ファイルで実 pasta を起こすのはこのテストだけだが、`ghost` の束ねと同じ形で順番を取る。
+    let _turn = real_pasta_turn();
+    // 空・空白だけの値は未設定と同じに skip する（snapshot_capture_test と同じ扱い）。
+    let Some(pasta_dll) = std::env::var("HOST32_PASTA_DLL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    else {
         eprintln!(
-            "HOST32_PASTA_DLL 未設定のため実 pasta の online 追験を skip（任意 gate・要件 8.4）。"
+            "HOST32_PASTA_DLL 未設定（または空）のため実 pasta の online 追験を skip（任意 gate・要件 8.4）。"
         );
         return;
     };
@@ -315,15 +236,5 @@ fn emo2_does_not_start_chatting_while_online() {
         },
     );
 
-    let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<Result<(), String>>(0);
-    std::thread::spawn(move || {
-        let result = runtime
-            .shutdown(CloseReason::System)
-            .map_err(|err| format!("{err:?}"));
-        let _ = done_tx.send(result);
-    });
-    match done_rx.recv_timeout(SHUTDOWN_BOUND) {
-        Ok(result) => assert!(result.is_ok(), "shutdown は Ok(()) を返すはず: {result:?}"),
-        Err(_) => panic!("shutdown が {SHUTDOWN_BOUND:?} 以内に完了しなかった（宙吊りの疑い）"),
-    }
+    run_bounded_shutdown("shutdown after the online watch", SHUTDOWN_BOUND, runtime);
 }

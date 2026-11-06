@@ -2,20 +2,13 @@
 //!
 //! 一時フォルダは `temp-path-kit` の `under_target` の下だけに組む。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use temp_path_kit::TempPath;
 
 use super::{BasewareRoots, StoreKind, find_ghost, install_root, list_balloons, survey};
+use crate::catalog::test_support::{put_balloon, put_ghost_in};
 use crate::catalog::{BasewareRoot, RootMark, scan_balloons};
-
-/// `<store>/<folder>/ghost/master/descript.txt` を置く。
-fn put_ghost_in(store: &Path, folder: &str) -> PathBuf {
-    let dir = store.join(folder);
-    std::fs::create_dir_all(dir.join(r"ghost\master")).unwrap();
-    std::fs::write(dir.join(r"ghost\master\descript.txt"), "name,G\r\n").unwrap();
-    dir
-}
 
 /// 一時の置き場 `t`（ゴーストを直に並べる）を先頭に、普通の根 `a` を後ろに置いた並び。
 fn temp_then_plain(label: &str) -> (TempPath, PathBuf, PathBuf, BasewareRoots) {
@@ -45,8 +38,8 @@ fn temporary_root_ghost_store_is_the_folder_itself() {
 #[test]
 fn head_temporary_ghost_wins_over_same_folder_name() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-wins");
-    let in_t = put_ghost_in(&t, "G");
-    let in_a = put_ghost_in(&a.join("ghost"), "g");
+    let in_t = put_ghost_in(&t, "G", "name,G");
+    let in_a = put_ghost_in(&a.join("ghost"), "g", "name,G");
 
     let hit = find_ghost(&roots, "g").expect("当たる");
     assert_eq!(hit.dir, in_t);
@@ -64,9 +57,7 @@ fn head_temporary_ghost_wins_over_same_folder_name() {
 #[test]
 fn temporary_root_does_not_look_for_balloons() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-balloon");
-    let bal = t.join(r"balloon\b");
-    std::fs::create_dir_all(&bal).unwrap();
-    std::fs::write(bal.join("descript.txt"), "name,B\r\n").unwrap();
+    put_balloon(&t, "b", "B");
 
     assert!(scan_balloons(&roots.roots()[0]).is_empty());
     assert!(list_balloons(&roots).is_empty());
@@ -77,7 +68,7 @@ fn temporary_root_does_not_look_for_balloons() {
 #[test]
 fn temporary_root_is_never_install_destination() {
     let (_tmp, t, a, roots) = temp_then_plain("catalog-roots-temp-install");
-    put_ghost_in(&t, "g");
+    put_ghost_in(&t, "g", "name,G");
 
     // 見えている項目が一時の置き場にあっても、そこへは入れない。
     let seen = install_root(&roots, StoreKind::Ghost, "g").expect("入れ先");
@@ -94,4 +85,43 @@ fn temporary_root_is_never_install_destination() {
     // 一時の置き場しか無ければ入れ先は無い。
     let only = BasewareRoots::new(vec![BasewareRoot::temporary(t.clone())]);
     assert_eq!(install_root(&only, StoreKind::Ghost, "new"), None);
+}
+
+/// 一時の置き場の次の根が見つからないとき、飛ばした先頭はその根（一時の置き場ではない・#32）。
+#[test]
+fn head_skipped_names_the_first_plain_root_after_the_temporary_one() {
+    let tmp = TempPath::under_target("catalog-roots-temp-skipped");
+    let t = tmp.child("t");
+    let gone = tmp.child("gone");
+    let a = tmp.child("a");
+    std::fs::create_dir_all(&t).unwrap();
+    std::fs::create_dir_all(&a).unwrap();
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::temporary(t),
+        BasewareRoot::new(gone.clone()),
+        BasewareRoot::new(a.clone()),
+    ]);
+
+    let got = install_root(&roots, StoreKind::Ghost, "new").expect("入れ先");
+    assert_eq!(got.root, a);
+    assert_eq!(got.head_skipped, Some(gone));
+}
+
+/// 一時の置き場が同じフォルダ名を隠していても、入れ先はその奥で見えている根（#R4-g3-1）。
+/// 一時の置き場を先に除いてから探すので、`b` の `g` を `a` で覆わない（呼び手の並びと同じ答え）。
+#[test]
+fn install_root_sees_through_a_temporary_root_hiding_the_same_folder() {
+    let (tmp, t, a, _) = temp_then_plain("catalog-roots-temp-hides");
+    let b = tmp.child("b");
+    put_ghost_in(&t, "g", "name,G");
+    put_ghost_in(&b.join("ghost"), "g", "name,G");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::temporary(t),
+        BasewareRoot::new(a),
+        BasewareRoot::new(b.clone()),
+    ]);
+
+    let got = install_root(&roots, StoreKind::Ghost, "g").expect("入れ先");
+    assert_eq!(got.root, b);
+    assert_eq!(got.head_skipped, None);
 }

@@ -53,6 +53,11 @@ const FLAG_ENCRYPTED: u16 = 1;
 /// 汎用目的ビット 11＝「名前は UTF-8」。
 const FLAG_UTF8_NAME: u16 = 1 << 11;
 
+/// 書庫の末尾に読む長さ（終端記録 22＋書庫コメント最大 65535＋zip64 の目印 20）。
+///
+/// コメントが最大でも、終端記録とその直前の zip64 の目印がこの窓に収まる。
+pub(crate) const TAIL_WINDOW: usize = ZIP64_LOCATOR_LEN + EOCD_LEN + u16::MAX as usize;
+
 /// 受け入れる宣言サイズの総和の上限（1 GiB）。
 ///
 /// 伸長済みのバイト列を全エントリぶん保持する設計なので、この値がそのまま
@@ -87,6 +92,7 @@ pub(crate) struct RawEntry {
     /// 圧縮方式。ここまで来たものは 0 か 8 のどちらか。
     pub method: u16,
     /// 書庫のバイト列の中で、このエントリの圧縮データが占める範囲。
+    /// 目次だけの読み（`read_central_headers` に `None`）では空の範囲 `0..0`。
     pub data: Range<usize>,
 }
 
@@ -96,14 +102,53 @@ pub(crate) struct RawEntry {
 /// サイズぶんを切り出す。ローカルヘッダ側の長さと CRC は使わないので、データ記述子
 /// （汎用目的ビット 3）が立っていても読める。
 pub(crate) fn read_central_directory(bytes: &[u8]) -> Result<Vec<RawEntry>, RefuseReason> {
-    let eocd = find_eocd(bytes)?;
-    let (count, cd_offset, cd_end) = read_eocd(bytes, eocd)?;
+    let span = locate_central_directory(bytes, bytes.len() as u64)?;
+    // 範囲は `locate_central_directory` が書庫の長さで確かめてある。
+    let start = span.offset as usize;
+    read_central_headers(&bytes[start..start + span.size], &span, Some(bytes))
+}
 
-    let mut entries = Vec::with_capacity(count);
+/// 中央ディレクトリ（目次）の場所。位置はファイルの頭から数える。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct CentralSpan {
+    /// エントリ数。
+    pub count: usize,
+    /// 目次の始まり（ファイルの頭からの位置）。
+    pub offset: u64,
+    /// 目次の長さ。
+    pub size: usize,
+}
+
+/// 終端記録を探して目次の場所を返す。`tail` はファイルの最後の `tail.len()` バイト
+/// （ファイルが短ければ全部）、`archive_len` はファイル全体の長さ。
+pub(crate) fn locate_central_directory(
+    tail: &[u8],
+    archive_len: u64,
+) -> Result<CentralSpan, RefuseReason> {
+    let eocd = find_eocd(tail, archive_len)?;
+    read_eocd(tail, eocd, archive_len)
+}
+
+/// 目次のバイト列 `cd`（`span` の範囲を切り出したもの）から `span.count` 件を読む。
+///
+/// `whole` が `Some` なら各件のローカルヘッダもその場で確かめて `data` を埋める（断る順は
+/// 件ごとに 目次 → ローカルヘッダ → 宣言の総和）。`None` なら**目次だけの読み**で、
+/// `data` は空の範囲（`0..0`）になり伸長には使えない（投げ込みの判定だけが使う）。
+/// 拒否に載せる位置はファイルの頭から数える。
+pub(crate) fn read_central_headers(
+    cd: &[u8],
+    span: &CentralSpan,
+    whole: Option<&[u8]>,
+) -> Result<Vec<RawEntry>, RefuseReason> {
+    let base = span.offset as usize;
+    let mut entries = Vec::with_capacity(span.count);
     let mut declared_total: u64 = 0;
-    let mut at = cd_offset;
-    for index in 0..count {
-        let (entry, next) = read_central_header(bytes, at, cd_end, index)?;
+    let mut at = 0;
+    for index in 0..span.count {
+        let (mut entry, next, (local, comp_size)) = read_central_header(cd, base, at, index)?;
+        if let Some(bytes) = whole {
+            entry.data = locate_entry_data(bytes, local, comp_size, index)?;
+        }
         declared_total = declared_total.saturating_add(entry.uncompressed_size);
         if declared_total > MAX_TOTAL_DECLARED_SIZE {
             return Err(unsupported(&entry.name_raw, index, Unsupported::TooLarge));
@@ -174,14 +219,13 @@ pub(crate) fn inflate_entry(bytes: &[u8], entry: &RawEntry) -> Result<Vec<u8>, R
 ///
 /// 書庫コメントは 64 KiB まで置けるので、末尾から `EOCD_LEN + 65535` バイトだけを
 /// 後ろから走査する。署名の並びは中身のバイト列にも偶然現れ得るので、コメント長の
-/// 欄が「そこから書庫の終わりまで」と辻褄の合う位置だけを採る。
-fn find_eocd(bytes: &[u8]) -> Result<usize, RefuseReason> {
-    let last = bytes.len().checked_sub(EOCD_LEN).ok_or_else(|| {
-        corrupt(format!(
-            "終端記録が入る長さが無い（{} バイト）",
-            bytes.len()
-        ))
-    })?;
+/// 欄が「そこから書庫の終わりまで」と辻褄の合う位置だけを採る。`bytes` の終わりは
+/// ファイルの終わりで、返す位置は `bytes` の中の位置。
+fn find_eocd(bytes: &[u8], archive_len: u64) -> Result<usize, RefuseReason> {
+    let last = bytes
+        .len()
+        .checked_sub(EOCD_LEN)
+        .ok_or_else(|| corrupt(format!("終端記録が入る長さが無い（{archive_len} バイト）")))?;
     let first = last.saturating_sub(u16::MAX as usize);
     for at in (first..=last).rev() {
         if &bytes[at..at + 4] != EOCD_SIGNATURE {
@@ -195,13 +239,12 @@ fn find_eocd(bytes: &[u8]) -> Result<usize, RefuseReason> {
         }
     }
     Err(corrupt(format!(
-        "終端記録（PK\\x05\\x06）が末尾に見つからない（書庫 {} バイト）",
-        bytes.len()
+        "終端記録（PK\\x05\\x06）が末尾に見つからない（書庫 {archive_len} バイト）"
     )))
 }
 
-/// 終端記録を読み、(エントリ数, 中央ディレクトリの開始, 中央ディレクトリの終わり) を返す。
-fn read_eocd(bytes: &[u8], eocd: usize) -> Result<(usize, usize, usize), RefuseReason> {
+/// 終端記録を読み、目次の場所を返す。範囲は書庫全体の長さ `archive_len` で確かめる。
+fn read_eocd(bytes: &[u8], eocd: usize, archive_len: u64) -> Result<CentralSpan, RefuseReason> {
     let cut = || corrupt("終端記録が途中で切れている");
     let disk = u16_at(bytes, eocd + 4).ok_or_else(cut)?;
     let cd_disk = u16_at(bytes, eocd + 6).ok_or_else(cut)?;
@@ -227,32 +270,34 @@ fn read_eocd(bytes: &[u8], eocd: usize) -> Result<(usize, usize, usize), RefuseR
         return Err(unsupported(b"", 0, Unsupported::MultiDisk));
     }
 
-    let cd_offset = cd_offset as usize;
-    let cd_size = cd_size as usize;
-    let cd_end = cd_offset
-        .checked_add(cd_size)
-        .filter(|end| *end <= bytes.len())
-        .ok_or_else(|| {
-            corrupt(format!(
-                "中央ディレクトリの位置が範囲外（位置 {cd_offset}・長さ {cd_size}・書庫 {} バイト）",
-                bytes.len()
-            ))
-        })?;
-    Ok((count_total as usize, cd_offset, cd_end))
+    // 両方 u32 なので u64 の和はあふれない。
+    if u64::from(cd_offset) + u64::from(cd_size) > archive_len {
+        return Err(corrupt(format!(
+            "中央ディレクトリの位置が範囲外（位置 {cd_offset}・長さ {cd_size}・書庫 {archive_len} バイト）"
+        )));
+    }
+    Ok(CentralSpan {
+        count: count_total as usize,
+        offset: u64::from(cd_offset),
+        size: cd_size as usize,
+    })
 }
 
 // ---- 中央ディレクトリ ----
 
-/// 中央ディレクトリの 1 件を `at` から読み、エントリと次の件の位置を返す。
+/// 目次 `bytes` の 1 件を `at` から読み、エントリ（`data` は空）・次の件の位置・
+/// (ローカルヘッダの位置, 圧縮サイズ) を返す。`base` は目次のファイルの頭からの位置で、
+/// 拒否に載せる位置へ足す。
 fn read_central_header(
     bytes: &[u8],
+    base: usize,
     at: usize,
-    cd_end: usize,
     index: usize,
-) -> Result<(RawEntry, usize), RefuseReason> {
+) -> Result<(RawEntry, usize, (usize, usize)), RefuseReason> {
     if bytes.get(at..at + 4) != Some(CENTRAL_SIGNATURE) {
         return Err(corrupt(format!(
-            "中央ディレクトリ {index} 件目の署名が合わない（位置 {at}）"
+            "中央ディレクトリ {index} 件目の署名が合わない（位置 {}）",
+            base + at
         )));
     }
     let cut = || corrupt(format!("中央ディレクトリ {index} 件目が途中で切れている"));
@@ -270,9 +315,10 @@ fn read_central_header(
 
     let name_at = at + CENTRAL_HEADER_LEN;
     let next = name_at + name_len + extra_len + comment_len;
-    if next > cd_end {
+    if next > bytes.len() {
         return Err(corrupt(format!(
-            "中央ディレクトリ {index} 件目が中央ディレクトリの外へはみ出す（終わり {cd_end}）"
+            "中央ディレクトリ {index} 件目が中央ディレクトリの外へはみ出す（終わり {}）",
+            base + bytes.len()
         )));
     }
     let name_raw = bytes
@@ -298,7 +344,6 @@ fn read_central_header(
         ));
     }
 
-    let data = locate_entry_data(bytes, local_offset as usize, comp_size as usize, index)?;
     Ok((
         RawEntry {
             index,
@@ -309,9 +354,10 @@ fn read_central_header(
             crc32,
             uncompressed_size: uncomp_size as u64,
             method,
-            data,
+            data: 0..0,
         },
         next,
+        (local_offset as usize, comp_size as usize),
     ))
 }
 
@@ -349,6 +395,11 @@ fn locate_entry_data(
 }
 
 // ---- 拒否の組み立てと数の読み ----
+
+/// 書庫そのものが受け入れる大きさを越えるときの拒否（読む前に断る）。
+pub(crate) fn archive_too_large() -> RefuseReason {
+    unsupported(b"", 0, Unsupported::TooLarge)
+}
 
 /// 構造そのものが読めないときの拒否。説明文が壊れ方を言い分ける。
 fn corrupt(detail: impl Into<String>) -> RefuseReason {
