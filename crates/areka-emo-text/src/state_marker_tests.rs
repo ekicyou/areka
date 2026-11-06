@@ -1,7 +1,7 @@
 //! 印の合図（`\![*]`・`%*` の汎用の `\!` の合図・名前 `*`）を目印の字として積む檻。
 //!
-//! 読み手が `\![*]` を汎用の合図にする（タスク 7.2）までは台本を組み立てても合図が出ないので、
-//! 合図の列を直接組む（7.2 が出す形＝`CueCommand::command_carrier("*", [])`）。
+//! 台本の読み手（`areka-parsers` の `sakura/decode.rs`）を通さず、読み手が出すのと同じ合図の列を
+//! 直接組む（`CueCommand::command_carrier("*", [])`）。
 
 use areka_sakura::contract::TalkCue;
 

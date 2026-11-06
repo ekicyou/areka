@@ -8,7 +8,7 @@
 //! - `descript-plain.txt`  — cursor.* 未指定バルーン（Invert 縮退＝塗り=既定 font.color・文字=255−c）。
 //! - `menu.txt`            — 短メニュー台本（4 項目・注入 cue 列の対応表）。
 //!
-//! 本テストは 2 本:
+//! 本テストは 3 本（開始点の [`choice_fixtures_start_at_writing_corner_regardless_of_image_size`] と次の 2 本）:
 //! 1. [`fixtures_parse_to_expected_choice_styles`]（純・GPU 不要）: fixture descript を **実 balloon
 //!    パーサ**（`areka_parsers::balloon::parse_str`）で parse し、cursor.* 指定→`SquareFill`・
 //!    未指定→`Invert` へ解決されることを固定する（fixture が in-code モデルでなく実 parse される

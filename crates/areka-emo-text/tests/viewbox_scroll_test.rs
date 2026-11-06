@@ -17,7 +17,7 @@
 //!    `line_layout_creations`／`blits`／`full_clears` の増分がすべて 0。
 //! 2. **可視窓が移動するスクロールフレーム → 行描画実行回数の増分が小さい**（確定行を再描画しない）:
 //!    typewriter があふれてスクロールが発火するフレームで `draw_text_layout_calls` の増分が
-//!    可視行数（＝全域再描画で描かれる行数）より**厳密に小さく**、かつ露出帯交差行の tight bound
+//!    可視行数（＝全域再描画で描かれる行数）より**厳密に小さく**、かつ露出帯交差行の上限
 //!    以下。`line_layout_creations` の増分も可視行数より小さい（確定行は再生成されない）。
 //!
 //! ## 負のコントロール（検証の有効性）
@@ -74,9 +74,8 @@ const PITCH: u32 = 14;
 /// 行 8 は 124 > 120）。旧ピッチ 15 でも 8 行（117 ≤ 120・132 > 120）——**行数は偶然一致する**
 /// だけで、根拠の式は 15 の等差から 14 の等差へ変わっている。
 const FILL_LINES: usize = 8;
-/// 露出帯交差行の tight bound（実測 2）。増分は**ダーティ矩形ごとの交差行数の和**で数える。
-/// 内訳は「露出帯の矩形 ∩ 1 行」＋「変化行の矩形 ∩ 1 行」＝ 1 + 1 ——露出帯は概ね 1 行 pitch 高
-/// ゆえ交差は「あふれで流入した変化行」だけに限られ、2 枚とも同じその 1 行に交差する。
+/// 露出帯交差行の上限。増分は**ダーティ矩形ごとの交差行数の和**で数える。
+/// 実測 2（「露出帯の矩形 ∩ 1 行」＋「変化行の矩形 ∩ 1 行」＝ 1 + 1）。上限は 1 の余裕を見て 3。
 const EXPOSURE_BAND_DRAW_BOUND: u64 = 3;
 /// 全 emit グリフが可視な注入時刻（reveal 時刻は ≤ 0.5s ゆえ 100.0 で必ず全可視＝
 /// フレーム間差はスクロール／内容変化のみに帰着し、リビール進行が混ざらない）。
@@ -92,10 +91,10 @@ const LINE_GLYPHS: &[char] = &[
 const _: () = assert!((FILL_LINES as u32 - 1) * PITCH + FONT_H <= IMAGE.1);
 const _: () = assert!(FILL_LINES as u32 * PITCH + FONT_H > IMAGE.1);
 
-// ── テスト土台（draw_readback_test / actor.rs runtime_tests と同一方針・headless GPU） ──
+// ── テスト土台（draw_readback_test と同一方針・headless GPU） ──
 
 /// テスト用 BalloonModel：validrect＝画像全域（top0/bottom120/left0/right100）・origin (0,0)・
-/// font 高さ 12（pitch 15 を明示）・横書き（既定）。1 行 1 グリフゆえ折返し閾値は効かせない。
+/// font 高さ 12（pitch 14＝12＋行間 2）・横書き（既定）。1 行 1 グリフゆえ折返し閾値は効かせない。
 fn model() -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
@@ -141,7 +140,7 @@ fn stats(runtime: &Rc<RefCell<TextLayerRuntime>>, actor: &ActorKey) -> DrawStats
 
 /// 観測可能な完了状態（task 11）: 実 pump（register→present_frame）で actor を駆動し、
 /// (1) 内容・可視窓とも不変のフレームで全統計増分が 0（NoChange gating）、(2) あふれ→スクロール
-/// フレームで `draw_text_layout_calls` 増分が可視行数より厳密に小さく露出帯交差行の tight bound
+/// フレームで `draw_text_layout_calls` 増分が可視行数より厳密に小さく露出帯交差行の上限
 /// 以下・`line_layout_creations` 増分も可視行数より小さい（確定行を再描画・再生成しない）を檻化する。
 #[test]
 fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
@@ -232,11 +231,11 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
         draw_delta < visible_line_count,
         "再描画レス(fixture依存 tight check): スクロールフレームの DrawTextLayout 増分 {draw_delta} は可視行数 {visible_line_count} より厳密に小さい（全域再描画なら {visible_line_count}）"
     );
-    // tight bound: 露出帯は概ね 1 行 pitch 高＝交差は「あふれで流入した変化行」だけ。
-    // 実測 2 ＝ 露出帯の矩形 ∩ 1 行 ＋ 変化行の矩形 ∩ 1 行（矩形ごとの交差行数の和）。
+    // 実測 2（露出帯の矩形 ∩ 1 行 ＋ 変化行の矩形 ∩ 1 行・矩形ごとの交差行数の和）。
+    // 上限は 1 の余裕を見て 3。
     assert!(
         draw_delta <= EXPOSURE_BAND_DRAW_BOUND,
-        "DrawTextLayout 増分 {draw_delta} は露出帯交差行の tight bound {EXPOSURE_BAND_DRAW_BOUND} 以下（露出帯 ∪ 変化行に限定）"
+        "DrawTextLayout 増分 {draw_delta} は露出帯交差行の上限 {EXPOSURE_BAND_DRAW_BOUND} 以下（露出帯 ∪ 変化行に限定）"
     );
     // 確定行の行レイアウトは再生成されない（現在行/変化行ぶんのみ・保持機構＝面ピクセル＋blit）。
     assert!(

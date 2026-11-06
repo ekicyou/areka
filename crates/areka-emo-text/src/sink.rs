@@ -5,11 +5,11 @@
 //! スレッド上で呼ばれ、cue を UI ドレインへ非ブロック送出する（`UiSender` が配送口そのもの）。
 //!
 //! 演者非依存の `CueSink` 1 本へ集約する（旧 `SurfaceSink`/`TextSink` の 2 分割は
-//! broadcast＋演者側 relevance ゆえ不要・R11.6）。ghost live-path も `CueSink` 注入で結線する
-//! （task 8.1 で旧 `TextSink` 経路を撤去し `CueSink` 一本へ集約）。
+//! broadcast＋演者側 relevance ゆえ不要・R11.6）。ghost live-path も `CueSink` 注入で結線する。
 //!
-//! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` のみ・panic しない
-//! （`emit` は infallible 契約・log-first）。
+//! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` 1 行・panic しない
+//! （`emit` は infallible 契約・log-first）。複製が落ちるときのトークの終わりの合図（`Drop`）だけは
+//! `tracing::warn!`。
 
 use std::ops::ControlFlow;
 

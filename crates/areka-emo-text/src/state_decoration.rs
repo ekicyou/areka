@@ -230,6 +230,8 @@ impl ActorTextState {
     }
 
     /// 所有外キーの最新の引数列（後続仕様の消費者が読む・戻す操作で空になる・要件 2.5）。
+    /// 本番の呼び手はまだ無い継ぎ目で、名指す spec（`anchor-style-canon`・`choice-marker-styling`・
+    /// `text-align-shadow-canon`）が閉じたら消す（呼び手が付いていればこの一文を消す）。
     pub fn unowned_vocab(&self) -> &BTreeMap<String, Vec<String>> {
         &self.decor.unowned
     }
@@ -288,13 +290,14 @@ impl ActorTextState {
 
     /// 無効表示への一括の戻し（`\f[disable]`・要件 10.2）。
     ///
-    /// **タスク 4.2 の裁定**——`\f[disable]` も `\f[default]` と同じ「一括の戻し」であり、
+    /// **裁定**——`\f[disable]` も `\f[default]` と同じ「一括の戻し」であり、
     /// 所有外キーの保持も空にする。要件 10.2 が「**全項目**を無効表示の見た目に合わせる」
     /// と述べ、要件 10.4 が戻す操作の対象を「装飾状態の全項目（後続仕様が登記する項目を
     /// 含む）」と定めている以上、後続仕様の項目である所有外キーだけが `\f[disable]` を
     /// 生き延びるのは「全項目」に反する。ゆえに 2 つの綴りの違いは**戻し先の層だけ**とする。
-    /// この裁定の結果、`look.rs::apply_font_tag` の `key == "disable"` の腕は
-    /// `key == "default"` の腕と同様に本番経路から到達しない（テストからのみ呼ばれる）。
+    /// この裁定の結果、装飾状態の道は `look.rs::apply_font_tag` の `key == "disable"` の腕を
+    /// `key == "default"` の腕と同様に通らない（その腕を通るのは `look.rs::classify_font_tag` の
+    /// 分類とテストだけ）。
     pub(super) fn reset_look_disabled(&mut self) {
         self.reset_look_to(BaseLayer::Disable);
     }
@@ -331,9 +334,9 @@ impl ActorTextState {
     pub(super) fn apply_font_args(&mut self, actor: &ActorKey, tokens: &[&str], quiet: bool) {
         // 一括の戻し（`\f[default]`）は「戻す操作」1 か所を通す（要件 10.3）——
         // 見た目だけを置き換える apply_font_tag の腕では所有外キーの保持が残ってしまう。
-        // ゆえに `look.rs::apply_font_tag` の `key == "default"` の腕は本番経路から到達しない
-        // （テストからのみ呼ばれる）。所有外キーの保持を戻しに含めるため、本番はこちらを
-        // 通す（要件 10.4）。
+        // ゆえに装飾状態の道は `look.rs::apply_font_tag` の `key == "default"` の腕を通らない
+        // （その腕を通るのは `look.rs::classify_font_tag` の分類とテストだけ）。所有外キーの
+        // 保持を戻しに含めるため、装飾状態はこちらを通す（要件 10.4）。
         // `\f[disable]` も同じ一括の戻しで、違うのは戻し先の層だけ
         // （[`ActorTextState::reset_look_disabled`] の裁定・要件 10.2）。
         match tokens.first().copied() {
@@ -595,7 +598,7 @@ impl TextLayerState {
     /// （`ClearAll`→[`ActorTextState::reset_for_new_talk`]）は同じ実体
     /// （[`ActorTextState::reset_look`]）を通り、別々の戻し方を持たない。後続仕様の
     /// クリック待ち（`\x`）もここを通す前提だが、**本番の呼び出し元はまだ無い**
-    /// （引受先＝`talk-fast-forward`）。
+    /// （引受先＝`talk-fast-forward`）。名指す spec が閉じたら消す（呼び手が付いていればこの一文を消す）。
     /// 既に表示済みの文字の見た目は変わらない（要件 10.7）。
     pub fn reset_decoration(&mut self, scope: Option<&ActorKey>) {
         match scope {

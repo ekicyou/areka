@@ -32,9 +32,9 @@
 //! 実 GPU と実窓は使わず、同一入力に対して常に同一の結果を返す。使う外の仕組みは
 //! 2 つだけで、テーマによって要るものが違う。
 //!
-//! - `assets`・`definition`・`faces` はファイル読み込みと純粋層の解決だけ。
+//! - `assets`・`definition`・`faces`・`scale` はファイル読み込みと純粋層の解決だけ。
 //! - `bake` は画像復号（WIC）を使う。COM を MTA で張る。
-//! - `region`・`wrapping`・`script`・`scale` は **DirectWrite の factory を使う**
+//! - `region`・`wrapping`・`script` は **DirectWrite の factory を使う**
 //!   （文字の送り幅と行送りを実測するため）。既定書体が入っていない環境では
 //!   `region` の寸法の検査が先に赤くなる。
 //!

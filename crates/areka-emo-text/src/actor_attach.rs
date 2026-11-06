@@ -390,7 +390,7 @@ impl TextLayerRuntime {
             return trace_unchanged(actor, k_new);
         }
 
-        // 装着と同一の導出（`ResolvedBalloonText::resolve` → `register_actor`）で binding／
+        // 装着と同一の導出（`resolve_stamped` → `finish_registration`）で binding／
         // layout 入力を再構築する（単一構築経路・R4.3）。純粋状態（TextLayerState）には
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
         let collapsed = resolved.region.is_collapsed();

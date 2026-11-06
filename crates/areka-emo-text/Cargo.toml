@@ -57,11 +57,11 @@ areka-emo-present = { path = "../areka-emo-present" }
 areka-emo-compose = { path = "../areka-emo-compose" }
 
 [dev-dependencies]
-# 統合テスト（tests/attach_wiring_test.rs）: 2 target 結線シナリオで EmoPresenter へ渡す
+# 統合テストと例（tests/ の実 GPU の結線・検体のテストと examples/）: EmoPresenter へ渡す
 # 合成入力（EmoWorld/AtlasTable）を上流公開 API（bake→EmoWorld）で組む
-# （emo-present presenter.rs テストと同技法・テスト専用）。
+# （emo-present presenter.rs テストと同技法・テストと例の専用）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
-# 観測 example（examples/emo-text-layer.rs・task 9.2）のログ初期化
+# 観測 example（examples/emo-text-layer.rs）のログ初期化
 # （RUST_LOG 対応・emo-present example と同型。example 専用＝dev-deps）。
 tracing-subscriber = { workspace = true }
 # ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。

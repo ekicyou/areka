@@ -131,7 +131,7 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
     );
 }
 
-/// 並び位置が子の数を超えるときは末尾へ挿さる（bevy の `insert_children` の切り詰め）。
+/// 並び位置が子の数を超えるときは末尾へ挿さる（`surface_window_child.rs` が子の数で切り詰める）。
 #[test]
 fn window_child_index_past_end_is_clamped_to_last() {
     let (_dq, compositor) = make_dispatcher_and_compositor();

@@ -683,7 +683,9 @@ impl ResolvedChoiceStyle {
     ///
     /// `default_font_color` は [`Invert`](ResolvedChoiceStyle::Invert) の paint 材料であり本メソッドの
     /// 分岐には用いないが、将来の非正典 variant がバルーン既定色を焼き込む拡張余地として受ける
-    /// （安定シーム）。同一入力→同一出力の純関数（失敗経路なし・縮退は値で表現）。
+    /// （安定シーム）。本番で使う分岐はまだ無い継ぎ目で、名指す spec（`choice-marker-styling`）が
+    /// 閉じたら消す（使う分岐が付いていればこの一文を消す）。
+    /// 同一入力→同一出力の純関数（失敗経路なし・縮退は値で表現）。
     pub fn resolve(cursor: Option<&BalloonCursor>, default_font_color: (u8, u8, u8)) -> Self {
         let _ = default_font_color;
         // cursor 不在 → 未指定バルーン＝Invert（4.3/6.1）。
@@ -781,7 +783,8 @@ fn style_has_underline(style: &str) -> bool {
 /// `SquareFill { fill=brush.color, text=font.color }` を組む（欠落成分は `0` 既定・防御）。
 ///
 /// 正典 fixture では brush/font とも全成分指定ゆえ既定は発火しない。style を持つが色を欠く
-/// 防御経路では各成分 `0` を採る（決定論・design は部分色の既定を規定しないため最小既定）。
+/// 防御経路では各成分 `0` を採る（ukadoc が `cursor.brush.color.*`・`cursor.font.color.*` の既定を
+/// 0 と書く正典どおり）。
 fn square_fill_from(cursor: &BalloonCursor) -> ResolvedChoiceStyle {
     ResolvedChoiceStyle::SquareFill {
         fill: color_tuple(cursor.brush_color()),

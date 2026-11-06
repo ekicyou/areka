@@ -113,7 +113,7 @@ const BAND_OVERHANG_MAX: u32 = 0;
 /// 帯を行ボックスの中央へ寄せる量（image px・`font.height,28` の実フォント `Yu Gothic UI`）。
 ///
 /// `round(max(0, 行ボックス丈 37.24 − 帯の丈 30) / 2) = round(3.62) = 4`
-/// （`areka_emo_text::choice::highlight_band_offset` の値。要件 13.1）。本ファイルは
+/// （`choice.rs` の帯の寄せの式で字の箱の上端 t = 0 のときの値。要件 13.1）。本ファイルは
 /// 読み戻した帯の**絶対位置**をこの値で固定する——offset が 0 へ戻れば帯 y0..29 になって赤くなる。
 const BAND_OFFSET_28: u32 = 4;
 
@@ -556,7 +556,7 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
 
         let (x0, x1) = row_x_span(&rows[ordinal], w);
         // 窓は行の書き出し（＝帯の上端）を基準に、上下へ SCAN_MARGIN ずつ開ける。
-        // ordinal 0 は書き出しが面の縁（0）なので上へは開かない（`saturating_sub` が 0 に留める）。
+        // ordinal 0 も帯の上端が y4 にあるので、窓は面の縁（y0）まで 4 画素上へ開く。
         let block_top = row_top(&rows[ordinal]).floor().max(0.0) as u32;
         let y0 = block_top.saturating_sub(SCAN_MARGIN);
         let y1 = (block_top + PITCH_28 as u32 + SCAN_MARGIN).min(h);

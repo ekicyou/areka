@@ -3,7 +3,8 @@
 //!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで取り出す（検体は読まない）。
-//! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs` も使う。
+//! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs`・`state_anchor_tests.rs`・
+//! `state_decoration_carry_tests.rs` も使う。
 
 use std::collections::BTreeMap;
 use std::sync::LazyLock;

@@ -1,7 +1,6 @@
-// task 7.2 の檻: UI スレッド常駐ランタイム（TextLayerRuntime／spawn_emo_text／
-// present_frame）。実 pump 上の終了指示・全送信元切断・個別失敗継続の 3 経路
-// （R1.2/R1.3/R1.4）と、注入時刻フレーム駆動での可視グリフ進行・未解決 actor の
-// 蓄積＋スキップ＋再試行・装着済み actor の Present 完結（R9.3）を檻化する。
+// UI スレッド常駐ランタイム（TextLayerRuntime／spawn_emo_text／present_frame）のテスト
+// （`actor_*_tests.rs`・`sink` のテスト）が共有する部品（`crate::actor::test_support`）。
+// cue の組み立て・予約スロットの World・読み戻し・箱の束・受信口の drain・記録の捕捉を置く。
 
 use std::collections::BTreeMap;
 use std::ops::{ControlFlow, RangeInclusive};
@@ -107,9 +106,9 @@ pub(crate) fn opaque_count(bytes: &[u8]) -> usize {
     bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
 }
 
-// ══ task 8.1: 選択肢契約 API（inject_choice_hover／choice_hit_rows／choice_active・純粋・COM 不要） ══
+// ══ 選択肢契約 API（inject_choice_hover／choice_hit_rows／choice_active・純粋・COM 不要） ══
 
-/// 選択肢テキストを載せる Choice cue（duration はクラスタ数×REVEAL_INTERVAL・runtime_tests の cue 流儀）。
+/// 選択肢テキストを載せる Choice cue（duration はクラスタ数×REVEAL_INTERVAL・[`cue`] と同じ流儀）。
 pub(crate) fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
     TalkCue {
         at,
@@ -123,7 +122,7 @@ pub(crate) fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&st
     }
 }
 
-// ══ task 8.2: 提示パイプラインとヒット行スナップショット配線（COM・headless・R3.1/3.2/3.3/5.2/6.3） ══
+// ══ 提示パイプラインとヒット行スナップショット配線（COM・headless・R3.1/3.2/3.3/5.2/6.3） ══
 
 /// 3 資源（GraphicsCore/WucGraphicsResource/予約スロット）を積んだ World を組む土台。
 /// 返り値は (world, window, slot)。COM は本番 UI スレッド（MTA）を再現する。

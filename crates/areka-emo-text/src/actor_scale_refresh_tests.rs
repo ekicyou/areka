@@ -172,7 +172,7 @@ fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
     assert_eq!(
         rt.routing[&PlaceKey::balloon(&actor)].image_size,
         NATIVE,
-        "k=1.25 の物理寸 500×280 から image px 原寸 400×224 が導出される"
+        "k=1.25 の物理寸 500×280 と一緒に渡した image px 原寸 400×224 がそのまま残る"
     );
     let region_before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 

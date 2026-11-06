@@ -200,7 +200,7 @@
   - staysee の検体の手書きの読みを parsers の「キー,値」の読みに替える
   - 完了の姿: 指摘 25 の `tests/` の組と指摘 26・30 の場所が直り、`tests/` のテストが緑
   - _Requirements: 2.1, 4.6_
-- [ ] 5.5 古くなった説明を直し、継ぎ目 4 つに消す時を書き足す（指摘 27・議題 6）
+- [x] 5.5 古くなった説明を直し、継ぎ目 4 つに消す時を書き足す（指摘 27・議題 6）
   - コードとテストと例と `Cargo.toml` の説明を今のコードに合わせ、作業の経緯の文を消す
   - `#[allow(dead_code)]` の印を持たない継ぎ目 4 つ（装飾の 2 つ・選択肢の既定の文字色・箱のフォントの置き場）に「名指す spec が閉じたら消す」を書き足す
   - 完了の姿: 指摘 27 の場所と継ぎ目 4 つの説明が直り、ビルドとテストが緑
@@ -263,3 +263,4 @@
 - 5.2: `actor_runtime_frame_tests.rs` の `with_log_cage` は 4.4 で対照の `error!` を持ったので残す（design の「名前を変えるだけ」とは違う）。sink.rs の包みは消した（`log_capture_kit::capture` の番兵が捕捉窓の死を落とす）。`highlight_band_offset` を `#[cfg(test)]` にしたので、兄弟の持ち物 `canvas.rs:204` の説明のリンクが切れる（向こうへ知らせた）。`tests/line_pitch_readback_test.rs:116` の説明も古い道を書いている（5.5 で直す）。
 - lib のテスト数は 1196（5.3 で重なりを 14 本消した）。
 - 飾りの無い絵は `tests/decoration_readback/mod.rs` の `plain_shot`（書字方向ごとの `OnceLock`・画素だけを覚える）。同じ台本が同じ画素になる前提は横書きでしか確かめていない。`areka_balloon_fixture_test.rs:20-21` の WIC の古い説明は 5.4 で直し済み（5.5 で重ねない）（5.4）。
+- 継ぎ目 4 つ（`unowned_vocab`・`reset_decoration`・`default_font_color`・`box_font_dirs`）には名指す spec と「閉じたら消す」を書いた。`tests/viewbox_scroll_test.rs:141` に「（task 11）」が 1 つ残る（研究 27 に無い・6.1 のかけ直しで見る）（5.5）。

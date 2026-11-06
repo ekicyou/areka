@@ -37,7 +37,7 @@ const ATTACHED: &str =
 /// 数十フレーム（0.1 秒刻み）。
 const FRAMES: usize = 40;
 
-/// 窓に差し込み口をもう 1 つと枠の面を足す（emo-present の装着と同じく差し込み口が枠より手前）。
+/// 窓に差し込み口の子をもう 1 つ足す。
 fn add_slot(world: &mut World, window: Entity, name: &str) -> Entity {
     let id = world
         .spawn((

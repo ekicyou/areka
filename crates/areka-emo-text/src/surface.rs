@@ -5,7 +5,8 @@
 //! 再合成（emo-compose 再駆動）を強要しない。
 //!
 //! **層規律**: COM 層——UI スレッド専有。`windows`（DXGI/WUC）を触るのは
-//! 本モジュールと draw のみ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
+//! 本モジュール（子の `surface_window_child` を含む）と draw・viewbox_draw（それぞれの子を含む）・
+//! 印の面の `marker_surface` だけ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
 //!
 //! # 構造（emo-present `SwapChainPresenter`（`pub(crate)`）と同型・wintf pub ヘルパから lift）
 //!

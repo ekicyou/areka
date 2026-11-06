@@ -1,4 +1,4 @@
-//! # emo-text-layer — 注入時刻駆動の観測用専用 example（task 9.2・R11.1–11.5/11.7–11.9）
+//! # emo-text-layer — 注入時刻駆動の観測用専用 example（R11.1–11.5/11.7–11.9）
 //!
 //! emo2 fixture のバルーン枠（`balloons0.png`）2 窓（\0=sakura／\1=kero）を実表示し、
 //! fixture スクリプト（`ghost/master/dic/boot.pasta` の起動朝挨拶）由来のハードコード

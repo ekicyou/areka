@@ -57,7 +57,7 @@ const INK_ALPHA_MIN: u8 = 128;
 /// 普通のバルーンの定義（validrect は全域＝面は画像の大きさ）。
 const BALLOON: &str = "charset,UTF-8\nfont.name,Yu Gothic UI\nfont.height,28\n";
 
-/// 箱の束（実機の形と収まらない形の 2 つの箱をサーフェス 0 と 1 に置く）。
+/// 箱の束（実機の形と収まらない形の箱をサーフェス 0 と 1、縦書きの右から左と左から右の箱を 2 と 3 に置く）。
 const SHELL: &str = "\
 balloon.real
 {
@@ -275,7 +275,7 @@ fn shoot_frames_described(
     }
 }
 
-/// シェルのサーフェス `surface`（0＝実機の形・1＝収まらない形）の箱へ台本を流して提示し、箱の面を読み戻す。
+/// シェルのサーフェス `surface`（0＝実機の形・1＝収まらない形・2＝縦書きの右から左・3＝縦書きの左から右）の箱へ台本を流して提示し、箱の面を読み戻す。
 fn shoot_box(surface: u32, k: f32, script: &[CueCommand]) -> Shot {
     let (mut world, window, slot) = com_world();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());

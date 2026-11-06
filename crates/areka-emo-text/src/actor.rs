@@ -165,8 +165,8 @@ pub use crate::choice::HitRectPx;
 ///
 /// 提示フレーム同期スナップショットの 1 行分——1 選択肢セグメントの窓物理 px 矩形に、
 /// 下流 `ChoiceSelection` 構成材料（`ordinal`/`id`/`label`/`references`）を同梱し、契約の
-/// 再照会を不要にする（design.md「下流契約」）。スナップショットの population は present_actor
-/// （task 8.2）が担い、本 task（8.1）では per-actor スナップショットは空のまま。
+/// 再照会を不要にする（design.md「下流契約」）。スナップショットは present_actor
+/// （`actor_present.rs`）が提示に成功するたびに入れ直す。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChoiceHitRow {
     /// 元の範囲の種類（選択肢／アンカー・[`crate::state::ChoiceSpan::kind`] の写し）。
@@ -263,10 +263,10 @@ pub struct TextLayerRuntime {
     /// design Error Handling「未 binding actor の cue」）。
     unresolved_warned: BTreeSet<PlaceKey>,
     /// actor → hover 注入状態（`None`＝ハイライト無し・[`inject_choice_hover`](Self::inject_choice_hover)
-    /// で更新・present_actor の装飾（task 8.2）が読む・UI スレッド専用）。
+    /// で更新・present_actor の装飾が読む・UI スレッド専用）。
     choice_hover: HashMap<PlaceKey, Option<usize>>,
     /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
-    /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
+    /// の照会源）。present_actor（`actor_present.rs`）が提示に成功するたびに入れ直す。
     choice_snapshot: HashMap<PlaceKey, Vec<ChoiceHitRow>>,
     /// `\_l` の座標解決の縮退（`CursorDegrade`＝`Unparsable`／`CenterAxisMismatch`・5.1〜5.3）の actor ごと warn-once 持続状態。present_actor が
     /// [`LayoutEngine::layout_styled`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
@@ -292,7 +292,8 @@ pub struct TextLayerRuntime {
     /// 普通のバルーン（要件 5.4）。本番の差し込みは箱の束の受け取り（`actor_box.rs`）が行う。
     surface_resolver: Option<SurfaceKeyResolver>,
     /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。
-    /// 箱の束の受け取りが入れ、読み込む側（`balloon-font-file`）が読む。
+    /// 箱の束の受け取りが入れ、読み込む側（`balloon-font-file`）が読む。本番の呼び手はまだ無い継ぎ目で、
+    /// 名指す spec（`balloon-font-file`）が閉じたら消す（呼び手が付いていればこの一文を消す）。
     box_font_dirs: Vec<PathBuf>,
     /// 「箱を隠す印」の立っているスコープ（`actor_box.rs` の `hide_boxes`）。台詞の頭（`ClearAll`）で下ろす。
     hidden_boxes: BTreeSet<ActorKey>,
@@ -893,7 +894,7 @@ mod surface_limit_tests;
 #[path = "actor_frame_memo_tests.rs"]
 mod frame_memo_tests;
 
-/// task 7.2: バルーン背景色の受け口（要件 4.6）。
+/// バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]
 mod decoration;
 

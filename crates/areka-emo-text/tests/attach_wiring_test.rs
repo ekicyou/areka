@@ -385,9 +385,9 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     );
 }
 
-// ══ task 7.3 ①: `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・R8.2） ══
+// ══ `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・R8.2） ══
 
-/// **7.1 で修理した production 契約の檻**（7.1 レビュー指摘・本 task が担当の正本）。
+/// **production 契約の檻**（`from_view` が物理寸を読むことを確かめる正本）。
 ///
 /// # なぜ in-crate では檻に入らないのか
 ///

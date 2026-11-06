@@ -99,8 +99,8 @@ fn a_bigger_height_actually_paints_bigger_glyphs_through_the_frame_path() {
 /// （どちらも既定の大きさの「い」1 文字だけ）。違うのは行送りだけ——描画側の配線では
 /// 説明できない差を見ている。
 ///
-/// 較正: `present_actor` を従来の `LayoutEngine::layout_with_cursor_warn` へ戻す
-/// （番号列を渡さない）と行送りが既定のままになり、最下行が一致して本述語が赤になる。
+/// 較正: `present_actor` が配置へ番号列を渡さない形にすると行送りが既定のままになり、
+/// 最下行が一致して本述語が赤になる。
 #[test]
 fn the_line_pitch_follows_the_biggest_size_on_the_line_through_the_frame_path() {
     let (plain, size) = run_script(&[text("　"), newline(), text("い")]);

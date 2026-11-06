@@ -137,7 +137,8 @@ impl TextLayerRuntime {
     }
 
     /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。
-    /// 束が来るまでは空。読み込みそのものは `balloon-font-file` が行う。
+    /// 束が来るまでは空。読み込みそのものは `balloon-font-file` が行う。本番の呼び手はまだ無い継ぎ目で、
+    /// 名指す spec（`balloon-font-file`）が閉じたら消す（呼び手が付いていればこの一文を消す）。
     pub fn box_font_dirs(&self) -> &[PathBuf] {
         &self.box_font_dirs
     }

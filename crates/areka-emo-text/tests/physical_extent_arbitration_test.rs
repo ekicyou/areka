@@ -156,7 +156,7 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
     tally
 }
 
-// ── 較正（本タスクの観測可能な完了・design.md C3 Validation） ──────────────────
+// ── 較正（観測できる完了の確かめ・design.md C3 Validation） ──────────────────
 
 /// 比集合導出・整数オラクル・本番経路ヘルパの 3 点を、既知値の逐語再現で較正する。
 ///

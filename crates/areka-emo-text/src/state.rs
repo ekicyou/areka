@@ -72,7 +72,7 @@ pub use route::{SurfaceFallback, SurfaceKeyOutcome};
 /// `line_gap` のみを保持する。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextLayerConfig {
-    /// 行間（image px・整数値）。`1lh = 1em + 行間` の「行間」にあたる量で、既定は 2
+    /// 行間（image px・0 以上の有限の値で小数も通る）。`1lh = 1em + 行間` の「行間」にあたる量で、既定は 2
     /// （裁定 2026-09-05・根拠は `doc/COMPAT_ARCHITECTURE.md` §8・R1.2/R1.6）。
     pub line_gap: f32,
 }
@@ -84,7 +84,7 @@ impl Default for TextLayerConfig {
 }
 
 impl TextLayerConfig {
-    /// 行送りピッチ＝`font_height + line_gap`（切り上げなし・両項とも整数 px・R1.2/R3.1）。
+    /// 行送りピッチ＝`font_height + line_gap`（切り上げなし・両項とも 0 以上の有限の px で小数も通る・R1.2/R3.1）。
     ///
     /// 行送り・`\_l` の `lh` 係数・比率つき改行の送り量・選択肢の帯の上限は、いずれも
     /// この 1 本の式を源にする（別々の係数を持たない・R3.5）。書字方向が縦書きのときは
