@@ -160,7 +160,7 @@ crates/wintf/src/
         ├── clip_geometry.rs    # ClipShape → ID2D1Geometry（矩形→unit_rect・角丸→path geometry・Geometry→そのまま）
         ├── emit.rs             # emit（DC へ再生・SetTransform の規則・層の作り）
         ├── emit_test_support.rs# WARP の足場: warp_dc・render_tree_to_pixels・read_back・pixel_near
-        ├── emit_tests.rs       # 画素の見本（6.3 の 12 件）
+        ├── emit_tests.rs       # 画素の見本（6.3 の 14 件）
         └── README.md           # 戦略の文だけ残し、型の写しを外す（5.10）
 crates/wintf/examples/
 └── visual_tree_demo.rs         # 木で重ね方・回転・切り抜きを描く（7.1）
@@ -174,7 +174,7 @@ crates/wintf/examples/
 - `crates/wintf/src/ecs/graphics/mod.rs` — `pub mod visual;` はそのまま（フォルダになる）。`pub use visual::*` で新しい型も `wintf::ecs::*` に出る。
 - `crates/wintf/src/ecs/graphics/clip.rs` — `ClipShape::Geometry(ID2D1Geometry)` を足す。`unsafe impl Send/Sync`（工場の根拠の注記）。`PartialEq` は COM の番地比べのまま（それは正しい）。
 - `crates/wintf/src/ecs/graphics/systems/render.rs` — `RenderSurfaceData` に `Option<&DrawTree>` を足し、`DrawImage` の直後に `emit(&dc, transform, &tree.commands)` を 1 回呼ぶ。失敗は今の `EndDraw` の記録に乗る。
-- `crates/wintf/src/ecs/graphics/systems/surface.rs` — `MarkDirtyFilter` に `Changed<DrawTree>`、`MarkDirtyData` に `Option<Ref<DrawTree>>`（中身の変化に数える）。`SurfaceCreationFilter` を `(Or<(With<GraphicsCommandList>, With<DrawTree>)>, Or<(…, Changed<DrawTree>)>)` へ。`cleanup_surface_on_commandlist_removed` に `RemovedComponents<DrawTree>` を足し、filter を `(Without<GraphicsCommandList>, Without<DrawTree>)` へ。
+- `crates/wintf/src/ecs/graphics/systems/surface.rs` — `MarkDirtyFilter` に `Changed<DrawTree>`、`MarkDirtyData` に `Option<Ref<DrawTree>>`（中身の変化に数える）。`SurfaceCreationFilter` を `(Or<(With<GraphicsCommandList>, With<DrawTree>)>, Or<(…, Changed<DrawTree>)>)` へ。`cleanup_surface_on_commandlist_removed` に `RemovedComponents<DrawTree>` を足し、filter を `(Without<GraphicsCommandList>, Without<DrawTree>)` へ。片方（命令の列か `DrawTree`）だけが外れて片方が残るときは描き直しの印を立てる。
 - `crates/wintf/src/ecs/graphics/systems/window_pos.rs` — `invalidate_dependent_components` に: `VisualDrawContent` を全部外す（命令の列は装置の持ち物）・`DrawTree` の中身を空にする（図形は工場の持ち物）・`Visual.clip` が `Geometry` の部品は `warn!`（実体名）を残して `None` へ戻す。
 - `crates/wintf/src/ecs/graphics/systems/clip_sync.rs` — 鍵の計算で `Some(ClipShape::Geometry(_))` を「切り抜きなし」として扱い、鍵が変わる回に `warn!`（実体名・範囲外の旨）を 1 度出す（3.8）。
 - `crates/wintf/src/ecs/graphics/visual_manager.rs` — 変更なし（`VisualGraphics` を持つ部品にだけ見た目を作る今の作りで足りる）。
@@ -288,7 +288,7 @@ flowchart TD
 | 5.13 | 使い手の無いコードの棚卸 | 「残す・消す」の表 | — | — |
 | 6.1 | WARP の足場 | `emit_test_support.rs` | `warp_dc`・`render_tree_to_pixels`・`read_back` | — |
 | 6.2 | 全体テストで常に回る | `src/` の `#[cfg(test)]`（環境変数の門なし） | — | — |
-| 6.3 | 12 件の画素の答え | `emit_tests.rs` | — | — |
+| 6.3 | 14 件の画素の答え | `emit_tests.rs` | — | — |
 | 6.4 | 見本はコードの中・境界を避け・±1 | `pixel_near`・見本の置き方 | — | — |
 | 6.5 | WARP は画素の答えに限る・`tech.md` | `tech.md` の例外 | — | — |
 | 6.6 | 数の部品の純粋なテスト | `aabb_tests.rs`・`matrix3x2_tests.rs`・`transform2d_tests.rs` | — | — |

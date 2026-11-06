@@ -10,39 +10,8 @@
 + 大雑把には`u64`のhash値配列として扱う。
 + lisを利用し、描画要素の追加・削除・移動を検出
 
-#### 宣言
-```rust
-enum DrawCommand{
-    Draw(DrawItem),
-    PushClipRect(ClipRect),
-    PopClipRect,
-    PushClipGeometryEntity(ClipGeometryEntity),
-    PushClipGeometryRect(ClipGeometryRect),
-    PopClipGeometry,
-}
+#### 型の定義
+型の定義はこの文書に写さない。正本はソース（`command.rs`・`builder.rs`・`clip_geometry.rs`・`../draw_tree.rs`）と `.kiro/specs/wintf-visual-tree/design.md`。
 
-struct DrawItem{
-    hash: u64,
-    world_mat: Matrix3x2,
-    entity: Entity,
-    world_aabb: Aabb,
-}
-
-struct ClipRect{
-    world_aabb: Aabb,
-}
-
-struct ClipGeometryEntity{
-    world_mat: Matrix3x2,
-    entity: Entity,
-    world_aabb: Aabb,
-}
-
-struct ClipGeometryRect{
-    world_mat: Matrix3x2,
-    geometry: ID2D1Geometry,
-    world_aabb: Aabb,
-}
-
-
-```
+#### 節にする Visual
+中身の無いまとめ役の Visual は、`WorldVisual` が無いと描画面の持ち主になり、子孫を訪れない。節にするには `VisualTransform`（恒等でも）を付ける。

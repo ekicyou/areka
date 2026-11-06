@@ -135,7 +135,7 @@
   - 完了の姿: `cargo run -p wintf --example visual_tree_demo` で窓に出る（ビルドが通り、起動して窓を出し有界に終わる）
   - _Boundary: wintf examples_
   - _Requirements: 7.1_
-- [ ] 8.2 (P) steering と描画の木の説明書を更新する
+- [x] 8.2 (P) steering と描画の木の説明書を更新する
   - `structure.md` の `visual/` の行を `graphics/visual/` へ直し、命令の列 1 本の道と木の道の分岐・描画面の有無の既定を書く
   - `tech.md` の Testing に「描画の木の画素の答えに限って WARP」の例外を書く
   - 描画の木の説明書から型の写しを外し、戦略の文だけを残す
