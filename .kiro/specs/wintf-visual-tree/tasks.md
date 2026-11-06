@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 土台: Visual の居場所への移設と性質の一本化
+- [x] 1. 土台: Visual の居場所への移設と性質の一本化
 - [x] 1.1 作りかけの描画の木を Visual の居場所へ移す
   - 今の `Visual` の 1 ファイルをフォルダにし、作りかけの描画の木の部品（描く中身・局所の変形・見た目の版・世界の行列・平らにする係と描く列）をその下へ移す（ファイルの割り振りは設計の File Structure Plan のとおり）
   - 別の層としての `ecs::visual` を外す（`ecs/mod.rs` で外すのは `pub mod visual;` の 1 行だけ・`DPI`／`ZOrderPairStrategy` ほかの再公開と `ecs/window/zorder_*` は動かさない）
@@ -13,7 +13,7 @@
   - 描画面の持ち主の切り抜きの同期は、任意の図形を「切り抜きなし」と読み替え、範囲外の旨を実体名つきで `warn!` に 1 度だけ残す（同期の控えに図形を持たない）。読み替えは鍵を作る純粋な関数に置く
   - 完了の姿: 鍵の関数の純粋なテストで任意の図形が「切り抜きなし」の鍵になり `warn!` が 1 度だけ出る。`tests/graphics/clip_sync_system_test.rs` ほか矩形・角丸の持ち主の切り抜きの既存の実 GPU のテストが緑
   - _Requirements: 1.5, 1.6, 2.6, 3.2, 3.8, 5.8, 5.9_
-- [ ] 1.3 テストで節の描く中身を作る道具を用意する
+- [x] 1.3 テストで節の描く中身を作る道具を用意する
   - 実の GPU も D3D の装置も使わず、工場から作る CPU の的（WIC のビットマップの的を `ID2D1DeviceContext` として使う）で、単色の矩形 1 つを描いて閉じた命令の列を作る `#[cfg(test)]` の道具を visual 層のテストの兄弟ファイルに置く
   - 道具は自分で COM を初期化する（テストはスレッドごとに走るので、`com/wic_tests.rs` と同じく呼ぶたびに `CoInitializeEx`）
   - 3・4・5 の純粋なテストは、描く中身の在る節をこの道具で作る（5.4 の WARP の足場は画素の読み戻し用で別）
@@ -156,3 +156,4 @@
 
 ## Implementation Notes
 - 1.2: 持ち主の切り抜きの同期は任意の図形を目印の鍵 `GEOMETRY_AS_NONE_KEY=(-1,-1,0,None)` で「切り抜きなし」に読み替える。`graphics/visual/version.rs` の doc に捨てた `VisualClip/VisualFlags` の名が残る（4.2 で書き換える）
+- 1.3: 節の描く中身の道具は `graphics/visual/draw_content_test_support.rs` の `solid_rect_content(rect)`（WIC の的・工場に結びつくので WARP の再生には使えない）

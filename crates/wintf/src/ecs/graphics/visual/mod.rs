@@ -17,6 +17,11 @@ mod transform;
 mod version;
 mod world_visual;
 
+#[cfg(test)]
+pub(crate) mod draw_content_test_support;
+#[cfg(test)]
+mod draw_content_tests;
+
 pub use draw_content::*;
 pub use transform::*;
 pub use version::*;
