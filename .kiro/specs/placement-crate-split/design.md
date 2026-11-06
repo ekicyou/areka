@@ -437,7 +437,7 @@ tracing-subscriber = { workspace = true }
 
 | モジュール（ファイル） | 立つ条件 | 頼る相手 | 中身 |
 |---|---|---|---|
-| `test_support`（`test_support.rs`） | `#[cfg(any(test, feature = "test-support"))] pub mod` | 配置の型・windows | `WA`・`with_com_initialized`・`EMILY_SHAPED_GHOST_DESCRIPT`・`EMILY_SHAPED_SHELL_DESCRIPT`・`emily_shaped_scopes`・`synth_declared_dpi_ghost` |
+| `test_support`（`test_support.rs`） | `#[cfg(any(test, feature = "test-support"))] pub mod` | 配置の型・windows・std | `WA`・`with_com_initialized`・`EMILY_SHAPED_GHOST_DESCRIPT`・`EMILY_SHAPED_SHELL_DESCRIPT`・`emily_shaped_scopes`・`synth_declared_dpi_ghost`、割った片割れが共に使う組ごとのモジュール `zorder_pair_deferred`・`measure_template`（設計の討議 議題 2） |
 | `sample_test_support`（`sample_test_support.rs`） | `#[cfg(test)] mod` | sample-ghost-kit | `emo2_root`・`balloon_root`・`r_post_and_komainu_shell_root`・`konnoyayame_shell_root` と、その確かめ（`sample_test_support_tests.rs`） |
 | `shared_test_support`（`placement_shared_test_support.rs`） | `#[cfg(test)] pub(crate) mod` | temp-path-kit | `TempDir`・`synth_balloon_dir`・`MEASURE_DPI`・`write_self_alpha_one_descript` |
 
@@ -474,6 +474,20 @@ pub fn synth_declared_dpi_ghost(
     balloon_dpi: &str,
     balloon_windowposition: Option<(i32, i32)>,
 ) -> (PathBuf, PathBuf);
+/// 割った spawn_zorder_pair_deferred_tests の片割れが共に使う（wintf の兄弟の表と対で保つ）。
+pub mod zorder_pair_deferred {
+    pub const DEFERRED_NEEDLES: [(&str, &str); 6];
+    pub const BAND_NEEDLES: [(&str, &str); 3];
+    /// // で始まる行を落とした本文（今の中身のまま）。
+    pub fn code_only(source: &str) -> String;
+}
+/// 割った measure_template_tests の片割れが共に使う。
+pub mod measure_template {
+    /// 註釈と文字列リテラルを除いた本文（今の中身のまま）。
+    pub fn code_only(source: &str) -> String;
+    /// code_only の前提（見落としを生む文字の形が無いこと）を生のソースに対して主張する。
+    pub fn assert_no_blind_spot_literals(raw: &str, file: &str);
+}
 
 // crates/areka-placement/src/reseed_test_support.rs（reseed::test_support）
 pub fn booted_world(dpi: u16) -> (World, GhostWindows);
@@ -635,7 +649,7 @@ pub(crate) fn crate_path(krate: &str, path: &str) -> std::path::PathBuf;
 | `transition_signoff_procedure_tests` | ― | 判定器の一族と一緒に移す。読む先は本体の `src/placement_tests/transition_judge_offset_signoff_tests.rs` と `.kiro/specs/completed/…`（crate ではない） |
 | `zorder_property_deferral_tests` | 残す。`CARGO_MANIFEST_DIR` からの `../areka-sylphya/src` は crate の深さが同じなので変えない（配置が依存する下の crate を読む向き）。配置の crate が別の crate を読む唯一の所なので、その行に「配置が依存する下の crate を読む唯一の所・読み口は作らない」と 1 行書く | ― |
 
-- 割った片割れは、走査器（`code_only` ほか）と語の表を自分のファイルに持つ。wintf の `zorder_pair_deferred_vocabulary_tests.rs` と同じ形で、語の表は wintf・配置・本体の 3 つのファイルに並ぶ。各ファイルの表の上の注に「表へ足すときは 3 つ全部へ」と書く。
+- 割った片割れが共に使う語の表（`DEFERRED_NEEDLES`・`BAND_NEEDLES`）と走査器（`code_only`・`assert_no_blind_spot_literals` と、その前提の定数）は、配置の `test_support`（`test-support` 機能）の中に組ごとの小さなモジュールとして 1 つだけ置く: `test_support::zorder_pair_deferred`（`DEFERRED_NEEDLES`・`BAND_NEEDLES`・行の註釈を落とす `code_only`）と `test_support::measure_template`（註釈と文字列を除く `code_only`・`assert_no_blind_spot_literals` とその前提の定数）。2 つの `code_only` は中身が違う（前者は `//` の行を落とすだけ、後者は註釈と文字列リテラルを除く）ので 1 つにまとめず、名前も中身も今のまま組ごとに置く。配置の片割れは `crate::test_support::<組>::…`、本体の片割れは `areka_placement::test_support::<組>::…` を使う（写しを作らない・3.6）。語の表の写しは今と同じ 2 か所（wintf の `zorder_pair_deferred_vocabulary_tests.rs` と配置の `test_support`）で止まり、表の上の注「片方だけを増やすと守りが片肺になる・両方のファイルへ足す」の相手を新しい置き場に直す。ワークスペースのほかの `code_only` の写しは寄せない（目標でないこと）。
 - 範囲が黙って狭まらない（5.5）: 木を歩くテストは、配置の側が配置の `src`、本体の側が本体の `src` を歩き、合わせて移す前と同じ範囲になる。どちらの側も、自分の crate の実在する正例を見つけられることを先に確かめる（較正）。
 
 **実装の注**
@@ -793,9 +807,16 @@ wintf の ZOrderPairStrategy・tracing を引く）。
   1. 機能だけが立つビルド（本体のテストを組むときの配置）で、`test-support` の項目が `#[cfg(test)]` の項目に頼って組めなくなる → 段 2 の `cargo check --workspace --all-targets` で必ず組む。
   2. `transition_judge.rs`（999 行）と `main.rs`（986 行）の余裕が小さい → D4 の手当て。
   3. テストが新しい実行ファイルに分かれ、同時に回る実行ファイルが 1 つ増える → MTA と落ちの報告の写しで本体・wintf と同じ形にする。揺れが出たら `load-flake.ps1 -Binary areka-placement-lib` で測る。
-  4. 割ったテストの語の表が 3 つのファイルに並ぶ → 各表の上の注で「3 つ全部へ足す」を書く。
+  4. 割ったテストの語の表と走査器 → 配置の `test_support` に 1 つだけ置き、本体の片割れはそれを使う（写しは wintf と配置の 2 か所のまま）。
 - 範囲の外で気づいたこと（直さない）:
   - `areka-emo-present`・`areka-emo-text` のテストが `expect_one`・`ExpectField` を自前で持つ。完了の棚卸で扱う。
   - `crates/areka/src/session_end_sync_send_tests.rs` のワークスペース全体の走査は、置き場を `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（読み口の規則の名前を付けた例外）。
   - `crates/areka/examples/collision-probe.rs` の説明（90 行あたり）の `../pilot/...` を読むという記述は、今の中身と合っていない古い説明に見える。4.2 で触るときに確かめ、直すかは `audit-areka-app` へ申し送る。
 - 要件との対応の記録（設計の討議で要件の字面を改めた 2 件）: 要件 1.7 は「外の crate は `workspace = true`・ワークスペースの中の crate は path」（D11 の形）に、要件 3.2 は「既にある `emo2_balloon_root` を広げて使う」（D6 の形）に、要件の文を直した。
+
+## 設計の討議で決めたこと（2026-11-06・開発者「全部承認」）
+
+- **議題 1（本体のテスト専用のフォルダ）**: D1 のとおり crates/areka/src/placement_tests/（`mod.rs` 形・本体の慣習どおり）に、配置と本体をまたぐ 21 ファイルを集める。使う本体の部品の隣へばらすと、配置のテストが本体じゅうに散ってほかの audit の持ち物と混ざるため。
+- **議題 2（割った片割れが共に使う表と走査器）**: 写さず、配置の `test_support` の組ごとのモジュール（`zorder_pair_deferred`・`measure_template`）に 1 つだけ置き、本体の片割れは `areka_placement::test_support::<組>::…` を使う。2 つの `code_only` は中身が違うので 1 つにまとめない。語の表の写しは wintf と配置の 2 か所のまま。
+- **議題 3（読み口の及ぶ範囲）**: D7 のとおり、本体のほかの 5 ファイル 6 か所も読み口へ寄せる。読み方の規則は「自分の crate は相対・別の crate は読み口」の 1 つで、例外は名前を付けた `session_end_sync_send_tests.rs` だけ。
+- 設計の検証（GO）の重大な問題 1・2 は、自明な直しとして反映済み（読み口の規則の 1 本化・名前を付けた例外・要件 1.7 と 3.2 の字面の直し）。

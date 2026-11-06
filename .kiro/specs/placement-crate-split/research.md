@@ -327,3 +327,8 @@
 - 新しいテストの実行ファイル → 3 つ目の落ちの報告の写しと `load-flake.ps1 -Binary areka-placement-lib`。
 - 割ったテストの語の表が wintf・配置・本体の 3 つに並ぶ → 表の上の注で「3 つ全部へ」。
 - 範囲の外で気づいたこと: `areka-emo-present/src/scale_tests.rs`・`areka-emo-text/tests/attach_wiring_test.rs` が `expect_one`（と `ExpectField`）を自前で持つ。完了の棚卸で扱う（この仕様では直さない）。
+
+### 設計の討議の決めの根拠（2026-11-06）
+
+- 割った 2 組のテストの片割れが共に使う表と走査器を配置の `test_support` に置くのは、写しを作らない約束（要件 3.6）を守り、本体 → 配置のコードの依存（コンパイラが名前の食い違いを見張る）で共有するため。`spawn_zorder_pair_deferred_tests` の `code_only`（`//` の行を落とすだけ）と `measure_template_tests` の `code_only`（註釈と文字列リテラルを除く）は中身が違うことを確かめたので、組ごとのモジュールに分けて置く。
+- 読み口の規則を「自分の crate は相対・別の crate は読み口」にしたのは、本体が自分の crate を文字で読む所が 15 ファイル・41 か所あり、全部を読み口へ寄せるのは移すだけを超えるため。別の crate を読む所だけを読み口に集めれば、「読み口を grep すれば別の crate を読む所が全部出る」が成り立つ。
