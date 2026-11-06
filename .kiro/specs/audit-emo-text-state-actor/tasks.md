@@ -233,7 +233,7 @@
 ## Implementation Notes
 
 - テストの部品は `actor_test_support.rs`（`actor.rs` の `#[cfg(test)] pub(crate) mod test_support`）と `state_test_support.rs`（`state.rs` の同じ形）に置き、他のモジュールのテストは `crate::actor::test_support`／`crate::state::test_support` から引く。1 度だけ組む表はファイルごとの `static LazyLock` と `box_in(&表, 名前)`（1.1・1.2）。
-- research.md 4 節 指摘 15 の `actor_lookahead_tests.rs:77` の `font` は挙げた場所の誤りで、本物は `lookahead_tests.rs:68`（`audit-emo-text-layout-draw` の持ち物なので残す・1.2）。
+- research.md 4 節 指摘 15 の `actor_lookahead_tests.rs:77` の `font` は挙げた場所の誤りで、本物は `lookahead_tests.rs:68`（`audit-emo-text-layout-draw` の持ち物なので残す・1.2）。同じファイルの箱の表の写し（`lookahead_tests.rs` の `set_boxes`）も兄弟の持ち物で、1.1 で誤って直したため、最終の確かめで元へ戻した。
 - 申し合わせの答え（11-06・audit-emo-text-layout-draw）: ⑵⑶⑷⑸ はこちらで直してよい（⑵ は向こうの 1.2 も同じ `layout_test_support.rs` を触る・後から着く方が取り込む）。⑴⑹ は了解（⑹ は向こうの 14.2 で直す）。⑺ はこちらの 2.4 で `actor_present.rs` の中で右と下を切る（向こうの `surface_extent()` は使わず、向こうの 13.2 は取りやめ・近い辺は向こうの申し送り）。向こうの 11.4 が `state_decoration_tests.rs:424,438` の `"cursorbrush"` を `"cursorbrushcolor"` に替える（了承済み）。
 - 向こうから知らされた件: `actor_present.rs:616` の BudouX の区切りの毎フレームのかけ直し → 3.10。`state_decoration.rs:296-297,334-336` の古い説明と `actor_decoration_frame_tests.rs:115` の `layout_with_cursor_warn` を名指す説明 → 5.5。`surface.rs:568,571` の負の数の桁あふれ → 2.4 の上限と一緒に見る。
 - `tests/` の共有の部品は `tests/support/mod.rs`（先頭に `#![allow(dead_code)]`）。各テストは `#[path = "support/mod.rs"] mod support;`、`decoration_readback/mod.rs` の中からは `#[path = "../support/mod.rs"] mod shared;` で引く（1.4）。
