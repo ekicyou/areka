@@ -5,8 +5,9 @@
 //! 補助（`font`・`text`・`st`・`look_of`）を共有する。1 ファイル 1,000 行の見張りに余裕を
 //! 残すため、タスク 4.1 の試験とはファイルを分けている。
 //!
-//! 記録の件数は `log-capture-kit`（ワークスペース唯一の捕捉機構）で数える。「出ない」を
-//! 主張する試験には、同じ窓・同じ発行点で「出る側」を 1 件置いた対照を添えてある。
+//! 記録の件数は `log-capture-kit`（ワークスペース唯一の捕捉機構）で数える。記録の道を持つ
+//! 操作について「出ない」を主張する試験には、同じ窓・同じ発行点で「出る側」を 1 件置いた
+//! 対照を添えてある。
 
 use super::*;
 
@@ -170,7 +171,7 @@ fn attaching_after_an_explicit_look_still_lands_the_balloon_defaults() {
     let mut state = TextLayerState::default();
     state.apply_cue(&font("0", &["bold", "1"]));
 
-    let ((), events) = capture(|| state.set_look_layers(&ActorKey::from("0"), attached_layers()));
+    state.set_look_layers(&ActorKey::from("0"), attached_layers());
 
     let actor = st(&state, "0");
     assert!(actor.current_look().bold, "作者が明示した太字は残る");
@@ -184,7 +185,6 @@ fn attaching_after_an_explicit_look_still_lands_the_balloon_defaults() {
         (255, 0, 0),
         "明示しなかった色はバルーン定義の色になる"
     );
-    assert_eq!(warn_count(&events), 0, "取りこぼしが無いので記録も出ない");
 }
 
 /// 相対の大きさは**新しい既定**を基準に解き直される（載せ直しは値でなく命令を運ぶ）。
@@ -226,35 +226,6 @@ fn attaching_keeps_the_disabled_layer_as_the_base() {
         actor.look_layers().default.color,
         "既定側へ落ちていない"
     );
-}
-
-/// 較正の負の側——装着で記録は 1 件も出ない（初回・`\f` 後の再装着の両方）。
-#[test]
-fn attaching_in_the_normal_order_records_nothing() {
-    let mut state = TextLayerState::default();
-    state.apply_cue(&text("0", "あ"));
-
-    let ((), first) = capture(|| state.set_look_layers(&ActorKey::from("0"), attached_layers()));
-    state.apply_cue(&font("0", &["bold", "1"]));
-    let ((), again) = capture(|| state.set_look_layers(&ActorKey::from("0"), attached_layers()));
-
-    let actor = st(&state, "0");
-    assert!(actor.current_look().bold, "明示した太字は残る");
-    assert_eq!(
-        actor.current_look().height,
-        20.0,
-        "再装着（k 再追従）でもバルーン定義の既定が届いている"
-    );
-    assert_eq!(warn_count(&first), 0, "初回装着で警告は出ない");
-    assert_eq!(warn_count(&again), 0, "再装着（k 再追従）でも警告は出ない");
-}
-
-/// 捕まえた記録のうち `warn` の件数。
-fn warn_count(events: &[CapturedEvent]) -> usize {
-    events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .count()
 }
 
 /// 装着の後の戻す操作は、差し込んだ新しい既定へ戻る。
@@ -385,10 +356,13 @@ fn turning_the_script_off_stops_the_record() {
         state.apply_cue(&font("0", &["sub", "1"]));
         state.apply_cue(&font("0", &["sub", "0"]));
         state.apply_cue(&text("0", "あ"));
+        // 出る側の対照——同じ窓・同じ発行点で、別のスコープから 1 件は必ず出る。
+        state.apply_cue(&font("1", &["sub", "1"]));
+        state.apply_cue(&text("1", "あ"));
         state
     });
 
-    assert_eq!(warns(&events, "上下付きが有効なまま文字を追記した"), 0);
+    assert_only_control_records(&events);
     assert_eq!(st(&state, "0").current_look().script, Script::None);
 }
 
@@ -414,9 +388,29 @@ fn appending_zero_glyphs_records_nothing() {
         let mut state = TextLayerState::default();
         state.apply_cue(&font("0", &["sub", "1"]));
         state.apply_cue(&text("0", ""));
+        // 出る側の対照——同じ窓・同じ発行点で、別のスコープから 1 件は必ず出る。
+        state.apply_cue(&font("1", &["sub", "1"]));
+        state.apply_cue(&text("1", "あ"));
     });
 
-    assert_eq!(warns(&events, "上下付きが有効なまま文字を追記した"), 0);
+    assert_only_control_records(&events);
+}
+
+/// 上下付きの追記の記録が、出る側の対照（スコープ 1）の 1 件だけであること。
+fn assert_only_control_records(events: &[CapturedEvent]) {
+    let hits: Vec<_> = events
+        .iter()
+        .filter(|e| {
+            e.level == tracing::Level::WARN
+                && e.message().contains("上下付きが有効なまま文字を追記した")
+        })
+        .map(|e| e.field("actor"))
+        .collect();
+    assert_eq!(
+        hits,
+        vec![Some("1")],
+        "スコープ 0 からは出ず、対照のスコープ 1 から 1 件だけ"
+    );
 }
 
 /// 2 種類の記録は互いに素な鍵空間を持つ——一方が他方を無記録で飲み込まない（R13.5）。

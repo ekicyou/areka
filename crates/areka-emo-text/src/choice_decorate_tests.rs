@@ -5,7 +5,7 @@
 // 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
 
-use super::test_support::{region, region_in, seg, yes_no};
+use super::test_support::{NO_OFFSET, region, region_in, seg, yes_no};
 use super::*;
 
 use crate::canvas::{GlyphRunContent, RegionTransform, Resident, TextEffects};
@@ -39,9 +39,6 @@ fn canvas(residents: Vec<Resident>) -> ContentCanvas {
 
 /// 装飾テストのハイライト帯（em ボックス丈 10.0 と**異なる**値＝焼込みが観測可能）。
 const TEST_BAND: f32 = 12.0;
-
-/// 既存ケースの帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
-const NO_OFFSET: f32 = 0.0;
 
 /// 帯の寄せの焼込みが観測可能な値（0 とも em ボックス丈とも異なる）。
 const TEST_OFFSET: f32 = 3.0;
@@ -178,41 +175,12 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
     );
 }
 
-/// Observable（R3.3 の帯単一化）: 装飾は受け取った `band_extent` を Choice 住人へそのまま
-/// 焼き込む（em ボックス丈 10.0 ではなく 12.0）——COM 層のハイライト矩形／ダーティ帯は
-/// この値だけを読み、`derive_hit_rows` へ渡す値と同一にすることで帯が数値一致する。
+/// Observable（R3.3 の帯単一化・R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_extent`
+/// （em ボックス丈 10.0 ではなく 12.0）と `band_offset` を Choice 住人へそのまま焼き込む——COM 層の
+/// ハイライト矩形の起点とダーティ帯はこの値だけを読み、`derive_hit_rows` へ渡す値と同一にする
+/// ことで帯の丈と**位置**まで数値一致する。
 #[test]
-fn decorate_bakes_band_extent_into_choice_residents() {
-    let region = region(0, 0, 400, 224);
-    let input = canvas(vec![
-        glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 12.0)),
-    ]);
-    let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
-    let out = decorate_canvas(
-        input,
-        &segments,
-        Some(0),
-        square_fill(),
-        (0, 0, 0),
-        &region,
-        WritingMode::HorizontalTb,
-        &bands_of(TEST_BAND, NO_OFFSET),
-    );
-    for i in [0usize, 1] {
-        assert_eq!(
-            choice(&out.residents[i]).band_extent,
-            TEST_BAND,
-            "住人 {i}: hover 有無に依らず帯を焼き込む（hover 解除フレームのダーティ帯にも要る）"
-        );
-    }
-}
-
-/// Observable（R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_offset` も Choice 住人へ
-/// そのまま焼き込む——COM 層のハイライト矩形の起点とダーティ帯の超過分はこの値を読み、
-/// `derive_hit_rows` へ渡す値と同一にすることで帯の**位置**まで数値一致する。
-#[test]
-fn decorate_bakes_band_offset_into_choice_residents() {
+fn decorate_bakes_band_extent_and_offset_into_choice_residents() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
@@ -230,10 +198,11 @@ fn decorate_bakes_band_offset_into_choice_residents() {
         &bands_of(TEST_BAND, TEST_OFFSET),
     );
     for i in [0usize, 1] {
+        let c = choice(&out.residents[i]);
         assert_eq!(
-            choice(&out.residents[i]).band_offset,
-            TEST_OFFSET,
-            "住人 {i}: hover 有無に依らず帯の寄せを焼き込む（hover 解除フレームのダーティ帯にも要る）"
+            (c.band_extent, c.band_offset),
+            (TEST_BAND, TEST_OFFSET),
+            "住人 {i}: hover 有無に依らず帯の丈と寄せを焼き込む（hover 解除フレームのダーティ帯にも要る）"
         );
     }
 }
@@ -739,10 +708,11 @@ fn vertical_line_bands_read_the_em_box_from_metrics() {
             bands.iter().all(|b| b.offset == want && b.extent == 28.0),
             "{mode:?}: 寄せは metrics の値の丸め {want}・厚みは em: {bands:?}"
         );
-        assert_eq!(
-            line_bands(&lines, WritingMode::HorizontalTb, &OffCentre),
-            line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics),
-            "{mode:?}: 横書きの帯は vertical_em_box_left を読まない"
-        );
     }
+    let (_, lines, _, _) = two_choice_columns(WritingMode::VerticalRl);
+    assert_eq!(
+        line_bands(&lines, WritingMode::HorizontalTb, &OffCentre),
+        line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics),
+        "横書きの帯は vertical_em_box_left を読まない"
+    );
 }

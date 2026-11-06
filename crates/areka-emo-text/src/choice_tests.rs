@@ -1,4 +1,4 @@
-use super::test_support::{line, region, seg, span};
+use super::test_support::{NO_OFFSET, line, region, seg, span};
 use super::*;
 use crate::layout::{FixedMetrics, LineRect};
 
@@ -198,10 +198,6 @@ use crate::writing::WritingMode;
 /// のとき従来（行矩形 block 帯）と完全一致することを既存期待値がそのまま檻にする（非退行）。
 const HIT_BAND: f32 = 10.0;
 
-/// 既存ケースの帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
-/// `band_offset == 0` のとき帯は行矩形の block 近端に揃い、寄せを入れる前と完全一致する（非退行）。
-const NO_OFFSET: f32 = 0.0;
-
 // ── derive_hit_rows: canvas-local ヒット矩形（文字幅・block 帯・原点差引き） ──
 
 /// 横書き・原点 (0,0): ヒット矩形の行内範囲＝セグメントの inline_range（**文字幅**）・
@@ -258,29 +254,6 @@ fn derive_horizontal_subtracts_validrect_origin_to_canvas_local() {
         },
         "絶対 image px から validrect 原点を差し引いた canvas-local"
     );
-}
-
-/// 縦書き（vertical_rl / vertical_lr）: 行内軸＝y（inline_range）・ブロック軸＝x（行矩形の
-/// left..right 帯）。軸割当が横書きと入れ替わる（正準表）。
-#[test]
-fn derive_vertical_assigns_inline_to_y_and_block_to_x() {
-    let region = region(0, 0, 400, 224);
-    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
-        // 縦書き列矩形: x 帯 377..387（block・font 10）・y 全長 0..20。
-        let lines = [line((377.0, 0.0, 387.0, 20.0), &[])];
-        let segs = [seg(0, 1, (5.0, 15.0))]; // 行内軸（y）の文字幅範囲。
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(HIT_BAND, NO_OFFSET));
-        assert_eq!(
-            rows[0].rect,
-            LineRect {
-                left: 377.0, // block 帯＝行矩形 left（x）
-                top: 5.0,    // inline＝セグメント i0（y）
-                right: 387.0,
-                bottom: 15.0,
-            },
-            "{mode:?}: 行内=y・ブロック=x の軸割当"
-        );
-    }
 }
 
 /// 複数セグメント（同一行 2 個＋別行 1 個）→ 入力順どおり 3 行、それぞれ ordinal と矩形を保持。
@@ -587,16 +560,13 @@ fn line_bands_match_the_actor_wide_value_when_no_line_is_decorated() {
         line((0.0, 0.0, 100.0, EM), &[]),
         line((0.0, 12.0, 100.0, 12.0 + EM), &[]),
     ];
-    let metrics = FixedMetrics;
 
-    let bands = line_bands(&lines, WritingMode::HorizontalTb, &metrics);
+    let bands = line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics);
 
-    let before = highlight_band_extent(EM, metrics.line_box_height(EM), metrics.line_pitch(EM));
-    let before_offset = highlight_band_offset(metrics.line_box_height(EM), before);
-    for band in &bands {
-        assert_eq!(band.extent, before);
-        assert_eq!(band.offset, before_offset);
-    }
+    // 行ボックス 13.3（10 × 1.33）・行送り 12（10 + 2）→ 丈は行送りで頭打ちの 12・
+    // 寄せは round((13.3 − 12) / 2) ＝ 1。
+    let extents: Vec<_> = bands.iter().map(|b| (b.extent, b.offset)).collect();
+    assert_eq!(extents, vec![(12.0, 1.0); 2], "2 行とも同じ帯");
 }
 
 /// `derive_hit_rows` は行ごとの帯の丈をヒット矩形のブロック軸寸にそのまま使う（要件 11.5）。
@@ -777,12 +747,15 @@ fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
 /// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から符号つきの
 /// `band_offset` だけずれて始まる（R13.7）。右から左は負の寄せ（行矩形の左へ出る）、左から右は
 /// 正の寄せ（ここでは明示の帯 −1 と 2 で足し算だけを見る）。行内軸（y）は寄せの影響を受けない。
+/// 寄せ 0 では行内＝y（セグメントの範囲）・ブロック＝x（行矩形の left..right）の軸割当そのもの。
 #[test]
 fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
     let region = region(0, 0, 400, 224);
     for (mode, offset) in [
         (WritingMode::VerticalRl, -1.0),
         (WritingMode::VerticalLr, 2.0),
+        (WritingMode::VerticalRl, NO_OFFSET),
+        (WritingMode::VerticalLr, NO_OFFSET),
     ] {
         let lines = [line((377.0, 0.0, 387.0, 20.0), &[])]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
@@ -795,7 +768,7 @@ fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
                 right: 387.0 + offset,
                 bottom: 15.0
             },
-            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せ 0 なら 377..387 で赤）"
+            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せを足さなければ −1・2 の行で赤）"
         );
     }
 }

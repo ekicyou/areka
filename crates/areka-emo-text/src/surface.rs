@@ -608,46 +608,9 @@ impl TextSurface {
 mod tests {
     use super::*;
     use crate::actor::TextSlotBinding;
+    use crate::actor::test_support::{make_dispatcher_and_compositor, spawn_reserved_slot};
 
-    use bevy_ecs::hierarchy::ChildOf;
-    use bevy_ecs::name::Name;
-
-    use windows::UI::Composition::Compositor;
-    use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
-
-    use wintf::com::wuc::create_dispatcher_queue_controller;
-    use wintf::ecs::{Arrangement, GraphicsCommandList, GraphicsCore, Visual, VisualGraphics};
-
-    /// テスト用 WUC apartment / dispatcher（emo-present chain.rs / mount.rs テストと同一方針）。
-    ///
-    /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、ASTA を第一候補・失敗時
-    /// NONE を保険とする（記憶 areka-wuc-runs-on-mta-thread: 未初期化スレッドでは ASTA が通る）。
-    /// controller は Compositor より長寿命を要するため呼び出し側で保持する。
-    fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
-    {
-        let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-            .or_else(|e_asta| {
-                create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
-            })
-            .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-        let compositor = Compositor::new().expect("Compositor::new 失敗");
-        (dq, compositor)
-    }
-
-    /// emo-present `VisualMount` と同型の予約スロット（`Name("emo-text-layer-slot")`＋
-    /// `Visual` のみ・窓の子・内容なし）を World に組む。返り値は (window, slot)。
-    fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
-        let window = world.spawn_empty().id();
-        let slot = world
-            .spawn((
-                Name::new("emo-text-layer-slot"),
-                Visual::default(),
-                ChildOf(window),
-            ))
-            .id();
-        world.flush();
-        (window, slot)
-    }
+    use wintf::ecs::{Arrangement, GraphicsCommandList, GraphicsCore, VisualGraphics};
 
     /// タスク 5 観測完了状態の檻:
     /// 供給面を装着したスロットに対して提示と読み戻しが行え、読み戻したバイト列から

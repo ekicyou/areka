@@ -25,7 +25,7 @@ use super::present::{
 };
 use super::test_support::{
     REVEAL_INTERVAL, balloon, box_layout, box_name, com_world, cue, emote, fake_resolver,
-    opaque_count, read_back, spawn_reserved_slot, text,
+    opaque_count, physical, read_back, spawn_reserved_slot, text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
@@ -44,13 +44,6 @@ fn model(validrect: ValidRect, font_height: Option<u32>) -> BalloonModel {
         Font::new(None, font_height, FontColor::new(None, None, None)),
         None,
         None,
-    )
-}
-
-fn physical(size: (u32, u32), k: f32) -> (u32, u32) {
-    (
-        (size.0 as f32 * k).ceil() as u32,
-        (size.1 as f32 * k).ceil() as u32,
     )
 }
 

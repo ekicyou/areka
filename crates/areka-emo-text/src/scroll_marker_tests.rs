@@ -16,11 +16,6 @@ fn auto_at(auto_first: usize) -> PlaceScroll {
 // ---- 矢印の送り（要件 5.1〜5.4） ----
 
 #[test]
-fn arrow_step_is_two_lines() {
-    assert_eq!(ARROW_STEP_LINES, 2);
-}
-
-#[test]
 fn older_from_auto_starts_manual_two_lines_back() {
     let mut s = auto_at(5);
     assert_eq!(

@@ -157,10 +157,6 @@ fn places_iterates_every_place_in_key_order() {
             (at("1", boxed("a")), glyphs(&["い"])),
         ]
     );
-    assert_eq!(
-        state.place_state(&at("1", boxed("a"))).unwrap().items(),
-        glyphs(&["い"])
-    );
     assert!(state.place_state(&at("1", boxed("b"))).is_none());
 }
 

@@ -22,13 +22,14 @@
 //! `BreakMemo::runs` で見る: 見える字だけ増えるフレームは区切り直さず、項目が増えるか消して同じ数を
 //! 書き直すと区切り直す。最後の 1 本は区切りの覚えの有無で読み戻しの画素が同じことを見る。
 
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
 
 use super::test_support::{balloon, choice, com_world, cue, fake_resolver, geo_model, instant};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
+use crate::state::test_support::font;
 use crate::wrap::WrapMode;
 
 /// バルーン面の代表寸。
@@ -94,16 +95,6 @@ impl Rig {
             .frame_rebuilds(&self.place)
             .expect("装着済みの描き手")
     }
-}
-
-fn font(tokens: &[&str]) -> TalkCue {
-    instant(
-        "0",
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
 }
 
 fn instant_text(body: &str) -> TalkCue {
@@ -188,7 +179,7 @@ fn hover_change_rebuilds() {
 fn font_tag_only_rebuilds() {
     let mut rig = Rig::new(&[instant_text("アヒル")], SETTLED);
     // `\f` だけは項目を増やさずに今の見た目を変える。
-    rig.rt.apply_cue(&font(&["bold", "1"]));
+    rig.rt.apply_cue(&font("0", &["bold", "1"]));
     assert_eq!(
         rig.frame(SETTLED),
         2,

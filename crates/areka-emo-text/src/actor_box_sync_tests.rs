@@ -15,7 +15,8 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{
     COARSE_WRAP_MESSAGE, FONT_HEIGHT_ZERO, IGNORED_ORIGIN_MESSAGE, ROP_FALLBACK_MESSAGE,
-    box_layout, box_name, cue, emote, fake_resolver, items_at, spawn_reserved_slot, text,
+    box_layout, box_name, capture_checked, cue, emote, fake_resolver, items_at,
+    spawn_reserved_slot, text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -183,7 +184,7 @@ fn only_boxes_with_text_register_and_same_placement_is_a_no_op() {
     );
     assert_eq!(f.registered(0, "b"), None, "文字の無い箱 b は登録しない");
 
-    let ((), events) = capture(|| {
+    let ((), events) = capture_checked(|| {
         f.sync(Some(1.0));
         f.sync(Some(1.0));
     });
@@ -289,7 +290,7 @@ fn surface_cue_alone_does_not_move_the_registration() {
 
     for key in ["1", "4", "-1"] {
         f.rt.apply_cue(&emote("0", key));
-        let ((), events) = capture(|| f.sync(Some(1.0)));
+        let ((), events) = capture_checked(|| f.sync(Some(1.0)));
         assert_eq!(
             messages(&events, REGISTER_MESSAGE),
             0,
@@ -440,7 +441,7 @@ fn overflowing_box_is_kept_and_warned_once() {
     let mut f = fixture();
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
-    let ((), events) = capture(|| f.sync(Some(1.0)));
+    let ((), events) = capture_checked(|| f.sync(Some(1.0)));
     assert_eq!(
         messages(&events, OVERFLOW_MESSAGE),
         0,
@@ -466,7 +467,7 @@ fn overflowing_box_is_kept_and_warned_once() {
     f.show("0");
     f.sync(Some(1.0));
     f.show("3");
-    let ((), events) = capture(|| {
+    let ((), events) = capture_checked(|| {
         f.sync(Some(1.0));
         f.sync(Some(2.0));
     });

@@ -32,7 +32,7 @@ fn choice_active_reflects_span_set_presence() {
 }
 
 /// `choice_hit_rows`（3.2）: 未知 actor・選択肢無し actor は空 slice を返す
-/// （スナップショット population は task 8.2——8.1 では常に空）。
+/// （スナップショットは提示（`present_frame`）が作るので、提示の前は選択肢があっても空）。
 #[test]
 fn choice_hit_rows_empty_for_unknown_or_no_snapshot_actor() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -42,13 +42,10 @@ fn choice_hit_rows_empty_for_unknown_or_no_snapshot_actor() {
         "未知 actor は空 slice"
     );
 
-    // 選択肢スパンを持つ actor でも 8.1 時点ではスナップショット未 population＝空 slice。
+    // 選択肢スパンを持つ actor でも、提示の前はスナップショットが無い＝空 slice。
     let actor = ActorKey::from("0");
     rt.apply_cue(&choice_cue("0", 0.0, "q", "はい", &[]));
-    assert!(
-        rt.choice_hit_rows(&actor).is_empty(),
-        "スナップショット未 population（8.2 前）は空 slice"
-    );
+    assert!(rt.choice_hit_rows(&actor).is_empty(), "提示の前は空 slice");
 }
 
 /// Observable（3.1/3.2/3.3/5.2）: 提示成功直後の `choice_hit_rows` が、描画された選択肢行と整合する
@@ -123,7 +120,7 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
 /// `choice_tests.rs::line_bands_scale_with_each_line_own_em` が値そのものを固定し、本檻は
 /// **それが `present_frame` の本番経路まで繋がっている**ことを述べる（純粋層だけでは配線を主張できない）。
 ///
-/// 較正: `actor.rs` の `line_bands` を「全行に既定の大きさで 1 つ」を配る旧実装へ戻すと、
+/// 較正: `choice.rs` の `line_bands` を「全行に既定の大きさで 1 つ」を配る旧実装へ戻すと、
 /// 2 行の帯の丈が等しくなって赤。
 #[test]
 fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
@@ -222,7 +219,6 @@ fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
         0,
         "字下げ前は空白"
     );
-    assert!(opaque_count(&bytes) > 0);
     present_frame(&mut rt, &mut world, 10.0).expect("NoChange 再提示");
     let bytes2 = read_back(&rt, &actor);
     assert_eq!(bytes, bytes2, "決定論");

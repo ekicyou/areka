@@ -7,23 +7,10 @@ use super::*;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 
-use windows::UI::Composition::Compositor;
-use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
-
-use wintf::com::wuc::create_dispatcher_queue_controller;
 use wintf::ecs::{Arrangement, GraphicsCommandList, HitTest, Visual};
 
 use crate::actor::TextSlotBinding;
-use crate::actor::test_support::window_children;
-
-/// テスト用 WUC dispatcher と Compositor（`surface.rs` の既存テストと同じ作り方）。
-fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {
-    let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
-        .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-    let compositor = Compositor::new().expect("Compositor::new 失敗");
-    (dq, compositor)
-}
+use crate::actor::test_support::{make_dispatcher_and_compositor, window_children};
 
 /// 窓と、その直接の子 2 つ（差し込み口・絵）を組む。返り値は (window, slot, picture)。
 fn spawn_window_with_slot_and_picture(world: &mut World) -> (Entity, Entity, Entity) {

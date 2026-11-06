@@ -34,7 +34,8 @@
 //! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
 //! `PURE_SOURCES` には純粋層のほか、結線層のうち `windows` を触らないファイル
 //! （例: `actor_attach`／`actor_present`／`actor_scroll` と、`windows` を触らない兄弟テスト）も載る。
-//! 走査が禁じるのは `windows` 系 crate と `wintf::com`（DirectWrite・D2D・DXGI の包み）で、
+//! 走査が禁じるのは `windows` 系 crate と `wintf::com`（DirectWrite・D2D・DXGI の包み・
+//! `use wintf::{com::…}` のまとめた形も字 `com::` で拾う）で、
 //! `wintf::ecs` の資源（`GraphicsCore`／`WucGraphicsResource` など）を取り込むのは許す。
 //!
 //! ## 依存方向（強制）
@@ -525,6 +526,8 @@ mod tests {
             "windows_numerics",
             "extern crate windows",
             "wintf::com",
+            // `use wintf::{com::.., ecs::..};` のまとめた import は `wintf::com` の字にならない。
+            "com::",
         ];
         for (name, src) in PURE_SOURCES {
             for pat in FORBIDDEN {

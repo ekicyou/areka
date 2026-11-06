@@ -18,7 +18,9 @@ use wintf::ecs::WucGraphicsResource;
 use super::box_sync_tests::{layout, select};
 use super::region_collapse_tests::model as parse_model;
 use super::scroll::placed_markers;
-use super::test_support::{com_world, cue, geo_model, opaque_count, window_children};
+use super::test_support::{
+    com_world, cue, geo_model, opaque_count, physical, read_back, window_children,
+};
 use super::test_support::{emote, text};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
@@ -386,19 +388,11 @@ fn assert_matches_full_redraw(
     label: &str,
 ) {
     present_frame(rt, world, DONE).expect(label);
-    let live = rt
-        .surface(&place.actor)
-        .expect("面")
-        .read_back()
-        .expect("read_back");
+    let live = read_back(rt, &place.actor);
     let render = rt.surfaces.remove(place).expect("描き手");
     rt.retired_renders.push((render, rt.routing[place].slot));
     present_frame(rt, world, DONE).expect("描き直しの提示");
-    let full = rt
-        .surface(&place.actor)
-        .expect("描き直しの面")
-        .read_back()
-        .expect("read_back");
+    let full = read_back(rt, &place.actor);
     assert!(opaque_count(&full) > 0, "{label}: 描き直しの面に字が在る");
     assert_eq!(live.len(), full.len());
     // 面の幅は描画範囲 326 × 2 倍。違う行（物理 px）を挙げる。
@@ -427,13 +421,9 @@ fn scrolling_back_matches_a_full_redraw_of_the_same_window() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let actor = ActorKey::from("0");
     let place = PlaceKey::balloon(&actor);
-    let physical = (
-        (BALLOON.0 as f32 * K).ceil() as u32,
-        (BALLOON.1 as f32 * K).ceil() as u32,
-    );
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, K, physical, BALLOON),
+        TextSlotBinding::new(slot, window, K, physical(BALLOON, K), BALLOON),
         ResolvedBalloonText::resolve(&default_balloon_model(), BALLOON),
     );
     for i in 0..15 {

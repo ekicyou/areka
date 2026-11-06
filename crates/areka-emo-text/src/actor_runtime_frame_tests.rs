@@ -10,7 +10,7 @@ use log_capture_kit::count_levels;
 use wintf::ecs::{GraphicsCommandList, VisualGraphics};
 
 use super::test_support::{
-    com_world, cue, geo_model, opaque_count, pump_until_idle, spawn_reserved_slot,
+    com_world, cue, geo_model, opaque_count, pump_until_idle, read_back, spawn_reserved_slot,
 };
 use super::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
@@ -297,14 +297,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     );
 
     // 注入時刻フレームごとの進行（reveal interval=0.05〔duration 由来〕・r=[0.0, 0.05, 0.10]）。
-    let read = |rt: &TextLayerRuntime| -> usize {
-        opaque_count(
-            &rt.surface(&actor)
-                .expect("装着済み actor の供給面")
-                .read_back()
-                .expect("read_back"),
-        )
-    };
+    let read = |rt: &TextLayerRuntime| -> usize { opaque_count(&read_back(rt, &actor)) };
     let n1 = read(&rt);
     assert!(n1 > 0, "t=0.0 で 1 グリフ目が可視（非透明ピクセルあり）");
 
@@ -466,14 +459,7 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
 
     // 全リビール済み時刻で提示——両供給面にインクが載る。
     present_frame(&mut rt, &mut world, 10.0).expect("装着＋描画フレーム");
-    let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize {
-        opaque_count(
-            &rt.surface(a)
-                .expect("装着済み供給面")
-                .read_back()
-                .expect("read_back"),
-        )
-    };
+    let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize { opaque_count(&read_back(rt, a)) };
     assert!(read(&rt, &sakura) > 0, "actor 0 にインクが載る");
     assert!(read(&rt, &kero) > 0, "actor 1 にインクが載る");
     // ClearAll 前の FullClear 累計（基準）——ここまで FullClear は発生していない。

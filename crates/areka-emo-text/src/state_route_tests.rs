@@ -15,7 +15,7 @@ use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{cue, items_of};
 use super::*;
-use crate::actor::test_support::{box_in, box_index, box_layout};
+use crate::actor::test_support::{box_in, box_index, box_layout, capture_checked};
 
 /// 箱の構成:
 /// - 0: element1=a・element2=b（既定は a）
@@ -178,9 +178,9 @@ fn row5_unresolved_changes_nothing() {
 }
 
 #[test]
-fn row6_surface_missing_in_shell_is_unresolved_and_changes_nothing() {
-    // 番号は読めるが今のシェルに無いサーフェスは、閉包が Unresolved を返す（状態は同じ扱い）。
-    // 記録の無いスコープでも何も作らない。
+fn row6_unresolved_on_an_unseen_scope_creates_nothing() {
+    // 番号は読めるが今のシェルに無いサーフェスでは、閉包が Unresolved を返す（閉包の答えは
+    // ここでは直に渡す）。記録の無いスコープでも何も作らない。
     let mut state = state_with_boxes();
     let before = state.clone();
     state.route_surface(&key("1"), SurfaceKeyOutcome::Unresolved);
@@ -225,7 +225,7 @@ fn row8_named_box_on_current_surface_switches_without_warning() {
     // 要件 4.3・4.9.
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
-    let (_, events) = capture(|| state.apply_cue(&select("0", "b")));
+    let (_, events) = capture_checked(|| state.apply_cue(&select("0", "b")));
     assert_eq!(state.destination(&key("0")), boxed("b"));
     assert!(
         warns(&events).is_empty(),
@@ -262,7 +262,7 @@ fn row10_integer_balloon_surface_does_nothing() {
     show(&mut state, "0", 0);
     state.apply_cue(&select("0", "b"));
     let before = state.clone();
-    let ((), events) = capture(|| {
+    let ((), events) = capture_checked(|| {
         state.apply_cue(&select("0", "2"));
         state.apply_cue(&select("0", "-1"));
     });
@@ -401,10 +401,7 @@ fn state_with_traits() -> TextLayerState {
         let mut looks = crate::look::LookLayers::default();
         looks.default.height = height;
         looks.disable.height = height;
-        let TextPlace::Box(name) = boxed(name) else {
-            unreachable!()
-        };
-        (name, BoxTraits { looks, follow })
+        (box_in(&INDEX, name), BoxTraits { looks, follow })
     })
     .collect();
     state.set_box_traits(traits);

@@ -7,7 +7,8 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::test_support::{
-    FONT_HEIGHT_ZERO, com_world, cue, geo_model, insert_gpu, opaque_count, spawn_reserved_slot,
+    FONT_HEIGHT_ZERO, capture_checked, com_world, cue, geo_model, insert_gpu, opaque_count,
+    read_back, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -266,11 +267,7 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         (240, 120),
         "供給面は新 k の物理寸 ceil(region×k) で再生成される（R8.2・旧寸の再利用禁止）"
     );
-    let bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let bytes = read_back(&rt, &actor);
     assert!(
         opaque_count(&bytes) > 0,
         "保存済み状態から新 k で再描画される（空表示へ落ちない・R8.4 の前提）"
@@ -391,7 +388,7 @@ fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line(
         "装着では既定辺への縮退も出る"
     );
 
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, binding, &model))
             .collect::<Vec<_>>()
@@ -463,7 +460,7 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
         2,
         "⑵ 入力が変わったフレームは解き直す（変わり目の 1 回）"
     );
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, binding, &moved))
             .collect::<Vec<_>>()
@@ -523,7 +520,7 @@ fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
         "変わり目の 1 回は解き直し、未指定の origin 成分ごとに 1 件（x・y）"
     );
 
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, scaled, &model))
             .collect::<Vec<_>>()
@@ -566,7 +563,7 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
     let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), binding, &model));
     assert_eq!(count_warn(&attached, FONT_HEIGHT_ZERO), 1, "装着に 1 件");
 
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, binding, &model))
             .collect::<Vec<_>>()
@@ -635,11 +632,7 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
     insert_gpu(&mut world);
     present_frame(&mut rt, &mut world, 10.0).expect("立ち直りの回");
     assert!(rt.is_attached(&actor), "作り直した装置の回に作り直さない");
-    let bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let bytes = read_back(&rt, &actor);
     assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
 }
 

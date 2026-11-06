@@ -11,17 +11,14 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows_numerics::Matrix3x2;
 use wintf::ecs::pointer::build_bubble_path;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{
-    AlphaMaskResource, GlobalArrangement, HitTest, Point, PointF, Rect, SizeI, WindowPos,
-    WucGraphicsResource, hit_test_in_window,
-};
+use wintf::ecs::{AlphaMaskResource, HitTest, PointF, WucGraphicsResource, hit_test_in_window};
 
 use super::super::box_sync_tests::{layout, select};
 use super::super::test_support::{
-    com_world, emote, fake_resolver, geo_model, text, window_children,
+    arranged, com_world, emote, fake_resolver, geo_model, spawn_hit_window, spawn_picture, text,
+    window_children,
 };
 use super::super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use super::*;
@@ -345,51 +342,10 @@ fn scale_one_and_a_half_places_and_sizes_the_arrows() {
 fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
     let (mut world, _w, _slot) = com_world();
     const WINDOW: (u32, u32) = (100, 50);
-    let arranged = |left: f32, top: f32, size: (u32, u32)| GlobalArrangement {
-        transform: Matrix3x2::translation(left, top),
-        bounds: Rect {
-            left,
-            top,
-            right: left + size.0 as f32,
-            bottom: top + size.1 as f32,
-        },
-    };
-    let window = world
-        .spawn((
-            arranged(0.0, 0.0, WINDOW),
-            HitTest::none(),
-            WindowPos {
-                position: Some(Point { x: 0, y: 0 }),
-                size: Some(SizeI {
-                    width: WINDOW.0 as i32,
-                    height: WINDOW.1 as i32,
-                }),
-                ..Default::default()
-            },
-        ))
-        .id();
+    let window = spawn_hit_window(&mut world, WINDOW);
     // 絵: x ≥ 50 が不透明。製品と同じく文字の面と印の面より後ろ（末尾）に並ぶ。
-    let mut px = vec![0u8; (WINDOW.0 * WINDOW.1 * 4) as usize];
-    for y in 0..WINDOW.1 {
-        for x in 50..WINDOW.0 {
-            px[((y * WINDOW.0 + x) * 4 + 3) as usize] = 255;
-        }
-    }
-    let mut picture_mask = AlphaMaskResource::new();
-    picture_mask.set(AlphaMask::from_pbgra32(
-        &px,
-        WINDOW.0,
-        WINDOW.1,
-        WINDOW.0 * 4,
-    ));
-    let picture = world
-        .spawn((
-            arranged(0.0, 0.0, WINDOW),
-            HitTest::alpha_mask(),
-            picture_mask,
-            ChildOf(window),
-        ))
-        .id();
+    let picture = spawn_picture(&mut world, WINDOW, 50);
+    world.entity_mut(picture).insert(ChildOf(window));
     world.flush();
 
     let mut markers = attach(&mut world, window, 0, WINDOW, (0.0, 0.0));

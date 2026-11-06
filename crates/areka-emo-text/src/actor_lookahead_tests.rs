@@ -25,7 +25,7 @@ use bevy_ecs::prelude::World;
 use dola::cue::{CuePayload, CuePlayer, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::pump_until_idle;
+use super::test_support::{capture_checked, pump_until_idle};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, spawn_emo_text};
 use crate::layout::{FixedMetrics, PositionedLine};
 use crate::place::PlaceKey;
@@ -602,8 +602,8 @@ fn a_stray_cue_falls_back_to_the_arrived_text_without_losing_glyphs() {
 #[test]
 fn char_by_char_wrap_is_stable_and_never_consults_the_lookahead() {
     let (staged, staged_events) =
-        capture(|| walk(EMO2_BOOT_TALK, "1", &char_by_char_model(), NINE_WIDE));
-    let (old, old_events) = capture(|| {
+        capture_checked(|| walk(EMO2_BOOT_TALK, "1", &char_by_char_model(), NINE_WIDE));
+    let (old, old_events) = capture_checked(|| {
         walk_with(
             EMO2_BOOT_TALK,
             "1",

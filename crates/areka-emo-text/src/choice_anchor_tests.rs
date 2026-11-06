@@ -13,7 +13,7 @@
 use super::test_support::region_in;
 use super::*;
 use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
-use crate::state::test_support::applied;
+use crate::state::test_support::{applied, spans};
 use crate::state::{SpanKind, TextLayerState};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
@@ -64,12 +64,9 @@ fn choice(id: &str, s: &str) -> TalkCue {
 
 /// 普通のバルーンの場所の範囲の列（種類と位置だけ）。
 fn kinds_and_ranges(state: &TextLayerState) -> Vec<(SpanKind, core::ops::Range<usize>)> {
-    state
-        .actor_state(&ActorKey::from(ACTOR))
-        .expect("場所の状態")
-        .choices()
-        .iter()
-        .map(|s| (s.kind, s.glyph_range.clone()))
+    spans(state, ACTOR)
+        .into_iter()
+        .map(|s| (s.kind, s.glyph_range))
         .collect()
 }
 
@@ -253,16 +250,9 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
             (SpanKind::Choice, 1..3),
             (SpanKind::Choice, 4..7),
             (SpanKind::Anchor, 7..9),
-        ]
+        ],
+        "同じ種類の範囲は重ならない"
     );
-    for (i, (kind, range)) in spans.iter().enumerate() {
-        for (later_kind, later) in &spans[i + 1..] {
-            assert!(
-                kind != later_kind || range.end <= later.start,
-                "同じ種類の範囲が重なっている: {range:?} と {later:?}"
-            );
-        }
-    }
     assert_eq!(
         hit(&state, 0.0).1,
         vec![
@@ -304,7 +294,7 @@ fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
 /// 前置き 19 字の後の選択肢「はいいえ」は 1 列目に「は」・2 列目に「いいえ」。列の左辺は
 /// 右から左で 1 列目 30・2 列目 18（列送り 12）、左から右で 0・12。寄せは右から左 −2・左から右 ＋2
 /// （上の `vertical_anchor_band_has_the_same_shape_as_a_choice` と同じ）。期待値を数で書くので、
-/// 列ごとの行矩形を読まない、または縦書きの枝を横書きの式へ戻すと赤になる（`research.md` 21 節）。
+/// 列ごとの行矩形を読まない、または縦書きの枝を横書きの式へ戻すと赤になる。
 #[test]
 fn vertical_choice_across_columns_has_a_band_on_each_column() {
     let state = applied(&[

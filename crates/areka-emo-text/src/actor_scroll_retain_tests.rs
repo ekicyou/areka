@@ -33,7 +33,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
 
 use super::test_support::{
-    REVEAL_INTERVAL, com_world, count_px, cue, inked, opaque_count, spawn_reserved_slot,
+    REVEAL_INTERVAL, com_world, count_px, cue, inked, opaque_count, physical, read_back,
+    spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
@@ -44,14 +45,6 @@ const IMAGE: (u32, u32) = (288, 203);
 const REGION_SIZE: (u32, u32) = (216, 93);
 /// 実機と同じ字の丈（`font.height,28` → 行送り 30＝28 ＋ 行間 2）。
 const FONT_HEIGHT: u32 = 28;
-
-/// バルーン面の物理寸（`ceil(image × k)`）。
-fn physical(k: f32) -> (u32, u32) {
-    (
-        (IMAGE.0 as f32 * k).ceil() as u32,
-        (IMAGE.1 as f32 * k).ceil() as u32,
-    )
-}
 
 /// 実物の相方側バルーン記述（`descript.txt` ＋ `balloonk0s.txt` の 2 層マージ相当）。
 ///
@@ -106,14 +99,11 @@ fn oracle_frame(world: &mut World, cues: &[TalkCue], actor: &ActorKey, t: f64, k
     }
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, k, physical(k), IMAGE),
+        TextSlotBinding::new(slot, window, k, physical(IMAGE, k), IMAGE),
         ResolvedBalloonText::resolve(&kero_model(), IMAGE),
     );
     present_frame(&mut rt, world, t).expect("オラクル提示フレーム");
-    rt.surface(actor)
-        .expect("オラクル供給面")
-        .read_back()
-        .expect("オラクル read_back")
+    read_back(&rt, actor)
 }
 
 /// 台本を 1 字ずつ通しで駆動し、各フレームを積み上げ側とオラクル側で突き合わせる。
@@ -133,25 +123,20 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
     }
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, k, physical(k), IMAGE),
+        TextSlotBinding::new(slot, window, k, physical(IMAGE, k), IMAGE),
         ResolvedBalloonText::resolve(&kero_model(), IMAGE),
     );
 
     // 供給面の寸＝ceil(文字描画範囲 × k)。先頭可視行の帯は上端 0 から字の丈 × k ぶん
     // （送りの式より先頭可視行は常に描画面の上端 0 に来る）。
-    let w = (REGION_SIZE.0 as f32 * k).ceil() as u32;
-    let h = (REGION_SIZE.1 as f32 * k).ceil() as u32;
+    let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
     let steps = ((t_end / frame_period).ceil() as usize) + 2;
     let mut checked = 0usize;
     for step in 1..=steps {
         let t = step as f64 * frame_period;
         present_frame(&mut rt, &mut world, t).expect("提示フレーム");
-        let live = rt
-            .surface(&actor)
-            .expect("供給面")
-            .read_back()
-            .expect("read_back");
+        let live = read_back(&rt, &actor);
         assert_eq!(
             live.len(),
             (w * h * 4) as usize,
@@ -184,11 +169,7 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
         "k={k}: 台本を通しで駆動した（実際 {checked} フレーム）"
     );
 
-    let last = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let last = read_back(&rt, &actor);
     assert!(
         count_px(&last, w, (0, 0, w, head_band), inked) > 0,
         "k={k}: 最終フレームの先頭可視行の帯 [0,{head_band}) にインクが在る\
@@ -241,8 +222,7 @@ fn present_actor_leading_gap_keeps_earlier_lines_visible_k2() {
 fn assert_leading_gap_lap(k: f32) {
     let (cues, t_end) = leading_gap_cues("1");
     let last = drive_lap(k, REVEAL_INTERVAL, &cues, t_end);
-    let w = (REGION_SIZE.0 as f32 * k).ceil() as u32;
-    let h = (REGION_SIZE.1 as f32 * k).ceil() as u32;
+    let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
     let head = count_px(&last, w, (0, 0, w, head_band), inked);
     let below = count_px(&last, w, (0, head_band, w, h), inked);

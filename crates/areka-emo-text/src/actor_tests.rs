@@ -1,26 +1,6 @@
 use super::TextSlotBinding;
 use bevy_ecs::prelude::World;
 
-/// k=1.0（現行契約の物理 1:1）: `image_size` は `surface_size` と同値、
-/// slot/window/scale/surface_size は透過保持される。
-#[test]
-fn binding_identity_scale_keeps_surface_size() {
-    let mut world = World::new();
-    let slot = world.spawn_empty().id();
-    let window = world.spawn_empty().id();
-
-    let binding = TextSlotBinding::new(slot, window, 1.0, (434, 687), (434, 687));
-    assert_eq!(binding.slot, slot);
-    assert_eq!(binding.window, window);
-    assert_eq!(binding.scale, 1.0);
-    assert_eq!(binding.surface_size, (434, 687));
-    assert_eq!(
-        binding.image_size,
-        (434, 687),
-        "k=1.0 のとき image_size == surface_size（k≠1.0 では乖離する＝本 fixture は k=1.0）"
-    );
-}
-
 /// image px 原寸は**導出せず透過する**（2026-07-30・旧「`round(物理 / k)` 一点導出」の後継檻）。
 ///
 /// k と物理寸から image px 原寸を計算し直す変異（＝旧実装の復活）を殺す。k=1.25・物理
@@ -33,6 +13,11 @@ fn binding_passes_image_size_through_without_deriving_it() {
     let window = world.spawn_empty().id();
 
     let binding = TextSlotBinding::new(slot, window, 1.25, (127, 94), (101, 75));
+    assert_eq!(
+        (binding.slot, binding.window, binding.scale),
+        (slot, window, 1.25),
+        "差し込み口・窓・拡大率は透過"
+    );
     assert_eq!(
         binding.image_size,
         (101, 75),

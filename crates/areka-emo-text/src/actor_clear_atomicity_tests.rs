@@ -1,7 +1,8 @@
 use areka_sakura::contract::{ActorKey, CueCommand};
 
 use super::test_support::{
-    choice_cue, com_world, count_px, cue, geo_model, inked, opaque_count, spawn_reserved_slot,
+    choice_cue, com_world, count_px, cue, geo_model, inked, opaque_count, read_back,
+    spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::{SpanKind, TextLayerConfig};
@@ -44,13 +45,9 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
         "Clear は選択肢スパンを消し choice_active=false（5.1）"
     );
 
-    // Clear 後フレーム: 全透明へ戻り、ヒット行は空のまま・choice_active も false のまま。
+    // Clear 後フレーム（提示の後もヒット行が空のままなのは
+    // `clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic` が見る）。
     present_frame(&mut rt, &mut world, 12.0).expect("Clear 後フレーム");
-    assert!(
-        rt.choice_hit_rows(&actor).is_empty(),
-        "Clear 後の提示もヒット行は空"
-    );
-    assert!(!rt.choice_active(&actor), "Clear 後も choice_active=false");
 
     // 新しい選択肢集合を注入——stale hover（Some(0)）を引き継がず、ハイライト無しで描画される（5.4）。
     rt.apply_cue(&choice_cue("0", 13.0, "OnA", "あか", &["a"]));
@@ -61,14 +58,7 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
     assert_eq!(rows[0].id, "OnA", "新選択肢のみ（前選択肢は残らない・5.3）");
     assert_eq!(rows[1].id, "OnB");
 
-    let read = |rt: &TextLayerRuntime| -> usize {
-        opaque_count(
-            &rt.surface(&actor)
-                .expect("供給面")
-                .read_back()
-                .expect("read_back"),
-        )
-    };
+    let read = |rt: &TextLayerRuntime| -> usize { opaque_count(&read_back(rt, &actor)) };
     let after_new = read(&rt);
     // hover を明示 None にして再提示——Clear が hover を既に None へ揃えていれば NoChange
     // （ハイライトの増減なし）。stale hover が残っていれば present で剥がれてピクセルが減る。
@@ -141,14 +131,7 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     rt.apply_cue(&choice_cue("0", 13.0, "N0", "あか", &["a"]));
     rt.apply_cue(&choice_cue("1", 13.0, "N1", "あお", &["b"]));
     present_frame(&mut rt, &mut world, 20.0).expect("新選択肢提示");
-    let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize {
-        opaque_count(
-            &rt.surface(a)
-                .expect("供給面")
-                .read_back()
-                .expect("read_back"),
-        )
-    };
+    let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize { opaque_count(&read_back(rt, a)) };
     assert_eq!(
         rt.choice_hit_rows(&a0).len(),
         1,
@@ -207,11 +190,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
         .iter()
         .map(|r| (r.rect.top as u32, r.rect.bottom.ceil() as u32))
         .collect();
-    let base_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let base_bytes = read_back(&rt, &actor);
     for (i, &(y0, y1)) in bands.iter().enumerate() {
         assert!(
             count_px(&base_bytes, width, (0, y0, width, y1), inked) > 0,
@@ -224,11 +203,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
     present_frame(&mut rt, &mut world, 12.0).expect("FullClear フレーム提示");
 
     // 同一 post-present 観測①: 供給面は全域透明（選択肢行の帯のインクも消える・FullClear＝描画 0 件の全域リセット・7.3/7.4）。
-    let cleared_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let cleared_bytes = read_back(&rt, &actor);
     assert_eq!(
         opaque_count(&cleared_bytes),
         0,
@@ -277,31 +252,15 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         rt.choice_active(&actor),
         "集合1 提示後は choice_active=true"
     );
-    let old_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let old_bytes = read_back(&rt, &actor);
     assert!(opaque_count(&old_bytes) > 0, "集合1 は画素が描かれる");
 
-    // ── ClearAll 注入——present を待たず旧集合のヒット行が残らない（原子的無効化・5.2）。
+    // ── ClearAll 注入（提示前の無効化は `clear_all_resets_hover_and_hit_rows_for_every_actor` が見る）。
     rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
-    assert!(
-        rt.choice_hit_rows(&actor).is_empty(),
-        "ClearAll 直後（提示前）に旧集合のヒット行は残らない（5.2）"
-    );
-    assert!(
-        !rt.choice_active(&actor),
-        "ClearAll 直後に choice_active=false（5.1）"
-    );
 
     // ── FullClear フレーム提示（2 段階クリアの第 1 相・8.3 と同型）——旧集合の画素が消える。
     present_frame(&mut rt, &mut world, 12.0).expect("FullClear フレーム提示");
-    let cleared_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let cleared_bytes = read_back(&rt, &actor);
     assert_eq!(
         opaque_count(&cleared_bytes),
         0,
@@ -327,15 +286,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     );
 
     // 画素: 新集合の行バンドにインクがある＝新選択肢が描かれている（7.3/7.4）。
-    let new_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
-    assert!(
-        opaque_count(&new_bytes) > 0,
-        "集合2 は画素が描かれる（stale 空表示でない）"
-    );
+    let new_bytes = read_back(&rt, &actor);
     for (i, r) in new_rows.iter().enumerate() {
         let (y0, y1) = (r.rect.top as u32, r.rect.bottom.ceil() as u32);
         assert!(

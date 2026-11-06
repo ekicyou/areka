@@ -1,21 +1,20 @@
 //! # 本番と同じ経路を歩く検査の続き（台本の形・中断・後から届く `\f`・起動直後の順・要件 1・2・4）
 //!
 //! 経路の土台（[`Rig`]・[`Talk`]）と判定の関数（[`reveal_violations`]）は
-//! `actor_lookahead_tests.rs` のものをそのまま使う（検査 1〜7 と同じ経路・同じ判定）。
-//! ここでは検査 1 の形を、書字方向・改行・選択肢・2 つの場所に広げ（検査 8）、トークの中断と
+//! `actor_lookahead_tests.rs` のものをそのまま使う（検査 1〜8 と同じ経路・同じ判定）。
+//! ここでは検査 1 の形を、書字方向・改行・選択肢・2 つの場所に広げ（検査 12）、トークの中断と
 //! 次のトーク（検査 9）、字の無い行の後の字と後から届く `\f[height,…]`（検査 10）、
 //! 先渡しがバルーンの装着・箱の束より先に届く起動直後の順（検査 11）を見る。
 
 use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 use dola::cue::{CueCommand, CuePayload};
-use log_capture_kit::capture;
 
 use super::box_sync_tests::layout;
 use super::lookahead_tests::{
     ANCHOR, Delivery, EMO2_BOOT_FINAL, EMO2_BOOT_TALK, NINE_WIDE, Rig, Stage, Talk, balloon_model,
     budoux_model, reveal_violations, rows_of, show, walk, warns,
 };
-use super::test_support::fake_resolver;
+use super::test_support::{capture_checked, fake_resolver};
 use crate::layout::FixedMetrics;
 use crate::place::PlaceKey;
 use crate::state::SurfaceKeyOutcome;
@@ -43,9 +42,9 @@ fn balloons(actors: &[&str]) -> Vec<PlaceKey> {
         .collect()
 }
 
-// ── 検査 8: 縦書き・改行・選択肢・2 つの場所 ──
+// ── 検査 12: 縦書き・改行・選択肢・2 つの場所 ──
 
-/// 検査 8 の台本の形 1 つ。
+/// 検査 12 の台本の形 1 つ。
 struct Shape {
     name: &'static str,
     script: &'static str,
@@ -120,7 +119,7 @@ fn walk_shape(shape: &Shape, delivery: Delivery) -> Vec<Vec<Stage>> {
     walk_places(&rig, &mut talk, &balloons(shape.actors))
 }
 
-/// 検査 8: 検査 1 の形を、縦書きのバルーン・`\n`（割合付きを含む）を挟む台本・`\q` の選択肢を
+/// 検査 12: 検査 1 の形を、縦書きのバルーン・`\n`（割合付きを含む）を挟む台本・`\q` の選択肢を
 /// 含む台本・本体側と相方側が交互に話す台本で流し、スコープごとに同じ判定の関数にかける。
 /// どの形も、先渡しを落とした対照では「動いた」と判定される（＝形が折り返しの付け替えを踏んでいる）
 /// （要件 1.1・1.2・1.6・1.7・4.4・4.5）。
@@ -157,7 +156,7 @@ fn every_shape_reveals_without_moving_glyphs() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// 検査 8 の選択肢: 各段階で、選択肢の強調の範囲とクリックの範囲を、判定にかけたのと同じ行の列から
+/// 検査 12 の選択肢: 各段階で、選択肢の強調の範囲とクリックの範囲を、判定にかけたのと同じ行の列から
 /// 本番の提示と同じ関数（`choice_ranges`）で出し、強調の範囲が
 /// 覆う字が行の列に見えている選択肢の字と同じで、クリックの範囲が強調と同じ行内の範囲であること
 /// （要件 4.4）。
@@ -378,7 +377,7 @@ const BOXED_BOOT_TALK: &str =
 fn a_preview_before_attaching_still_lays_out_on_the_full_text() {
     let mut failures = Vec::new();
     for late in [LateStart::Attach, LateStart::BoxLayout, LateStart::Resolver] {
-        let (stages, events) = capture(|| {
+        let (stages, events) = capture_checked(|| {
             let mut rig = Rig::new();
             let (script, actor) = match late {
                 LateStart::Attach => (BOLD_BOOT_TALK, "1"),

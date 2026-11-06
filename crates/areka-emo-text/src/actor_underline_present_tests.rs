@@ -29,7 +29,7 @@ use windows::core::{BOOL, HSTRING};
 use wintf::com::dwrite::dwrite_create_factory;
 
 use super::test_support::box_layout;
-use super::test_support::{com_world, cue};
+use super::test_support::{com_world, cue, physical};
 use super::test_support::{emote, fake_resolver};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
@@ -189,13 +189,6 @@ impl Shot {
     fn is_ink(&self, x: u32, y: u32) -> bool {
         self.alpha(x, y) >= INK_ALPHA_MIN
     }
-}
-
-fn physical(image: (u32, u32), k: f32) -> (u32, u32) {
-    (
-        (image.0 as f32 * k).ceil() as u32,
-        (image.1 as f32 * k).ceil() as u32,
-    )
 }
 
 fn apply(rt: &mut TextLayerRuntime, script: &[CueCommand]) {

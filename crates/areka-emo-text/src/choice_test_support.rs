@@ -1,14 +1,16 @@
 //! 選択肢のテストの共有の部品（`choice_*_tests.rs` が引く・写しを 1 つに）。
 
 use super::LineChoiceSegment;
+use crate::layout::test_support::model_rect;
 use crate::layout::{LineRect, PositionedGlyph, PositionedLine};
 use crate::look::StyleId;
 use crate::region::TextRegion;
 use crate::state::{ChoiceSpan, SpanKind, TextItem};
 use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+
+/// 帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
+/// 帯は行矩形の block 近端に揃い、寄せを入れる前と完全一致する（非退行）。
+pub(crate) const NO_OFFSET: f32 = 0.0;
 
 /// validrect 原点 (left, top) を持つ横書きの `TextRegion`（画像原寸 400×224）。
 pub(crate) fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
@@ -23,14 +25,9 @@ pub(crate) fn region_in(
     right: i32,
     bottom: i32,
 ) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
+    let model = model_rect(
+        (None, None),
+        (Some(top), Some(bottom), Some(left), Some(right)),
     );
     TextRegion::resolve(&model, (400, 224), mode)
 }

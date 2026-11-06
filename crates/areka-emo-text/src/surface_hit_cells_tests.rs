@@ -7,26 +7,15 @@
 
 use super::*;
 
-use windows_numerics::Matrix3x2;
-use wintf::ecs::{GlobalArrangement, Point, PointF, Rect, SizeI, WindowPos, hit_test_in_window};
+use wintf::ecs::{PointF, hit_test_in_window};
+
+use crate::actor::test_support::{arranged, spawn_hit_window, spawn_picture};
 
 /// シェルの窓の大きさ（物理 px）。
 const WINDOW: (u32, u32) = (200, 120);
 /// 箱の文字の面の左上と大きさ（物理 px）。左 80 px は絵の透明な所・右 40 px は不透明な所に掛かる。
 const BOX_AT: (f32, f32) = (20.0, 20.0);
 const BOX_SIZE: (u32, u32) = (120, 40);
-
-fn arranged(left: f32, top: f32, size: (u32, u32)) -> GlobalArrangement {
-    GlobalArrangement {
-        transform: Matrix3x2::translation(left, top),
-        bounds: Rect {
-            left,
-            top,
-            right: left + size.0 as f32,
-            bottom: top + size.1 as f32,
-        },
-    }
-}
 
 fn cell(left: f32, top: f32, right: f32, bottom: f32) -> HitRectPx {
     HitRectPx {
@@ -37,44 +26,12 @@ fn cell(left: f32, top: f32, right: f32, bottom: f32) -> HitRectPx {
     }
 }
 
-/// 絵のマスク: x < 100 は透明（α 0）・x ≥ 100 は不透明（α 255）。
-fn picture_mask() -> AlphaMask {
-    let (w, h) = WINDOW;
-    let mut px = vec![0u8; (w * h * 4) as usize];
-    for y in 0..h {
-        for x in 100..w {
-            px[((y * w + x) * 4 + 3) as usize] = 255;
-        }
-    }
-    AlphaMask::from_pbgra32(&px, w, h, w * 4)
-}
-
 /// 窓（当たり判定なし）の子に、製品と同じ並び「箱 → 絵」で 2 entity を組む。返り値: (窓, 箱, 絵)。
 fn shell_with_box() -> (World, Entity, Entity, Entity) {
     let mut world = World::new();
-    let window = world
-        .spawn((
-            arranged(0.0, 0.0, WINDOW),
-            HitTest::none(),
-            WindowPos {
-                position: Some(Point { x: 0, y: 0 }),
-                size: Some(SizeI {
-                    width: WINDOW.0 as i32,
-                    height: WINDOW.1 as i32,
-                }),
-                ..Default::default()
-            },
-        ))
-        .id();
-    let mut picture_res = AlphaMaskResource::new();
-    picture_res.set(picture_mask());
-    let picture = world
-        .spawn((
-            arranged(0.0, 0.0, WINDOW),
-            HitTest::alpha_mask(),
-            picture_res,
-        ))
-        .id();
+    let window = spawn_hit_window(&mut world, WINDOW);
+    // 絵のマスク: x < 100 は透明（α 0）・x ≥ 100 は不透明（α 255）。
+    let picture = spawn_picture(&mut world, WINDOW, 100);
     let box_entity = world
         .spawn((
             arranged(BOX_AT.0, BOX_AT.1, BOX_SIZE),

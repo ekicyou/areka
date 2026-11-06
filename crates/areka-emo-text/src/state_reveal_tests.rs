@@ -74,6 +74,8 @@ fn reveal_cursor_chases_tail_when_next_chunk_start_is_earlier() {
         reveal_times_of(&state, "0"),
         vec![0.0, 0.25, 0.5, 0.75, 1.0, 1.25]
     );
+    // items はリビール中の追記も即時に 6 グリフ（未リビール分も保持＝無損失・R3.6）。
+    assert_eq!(items_of(&state, "0").len(), 6);
 
     let actor = ActorKey::from("0");
     assert_eq!(state.visible_glyphs(&actor, 0.9), 4); // chunk 境界で加速しない
@@ -93,18 +95,6 @@ fn reveal_times_are_monotonic_non_decreasing() {
 }
 
 // ── R3.6: リビール中の後続 cue も後出し優先で即時反映 ──
-
-/// 追記: リビール中の Text 追記は items へ即時反映され、schedule は末尾を追う。
-#[test]
-fn text_append_during_reveal_applies_immediately() {
-    let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("abcd".into())));
-    state.apply_cue(&cue("0", 0.3, CueCommand::Text("ef".into())));
-
-    // items は即時に 6 グリフ（未リビール分も保持＝無損失）。
-    assert_eq!(items_of(&state, "0").len(), 6);
-    assert_eq!(reveal_times_of(&state, "0").len(), 6);
-}
 
 /// 改行: LineBreak はリビール枠（時刻）を消費しない——schedule はグリフのみ対象。
 #[test]

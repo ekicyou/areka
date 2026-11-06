@@ -7,34 +7,19 @@
 // 述語は 3 つとも「装飾を含む台本」と「含まない台本」の差で述べ、従来の入口（`layout`／
 // `render`）へ戻すと赤になる形にしてある（各テストの「較正」を参照）。
 
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use log_capture_kit::capture;
 
-use super::test_support::{com_world, cue, geo_model, opaque_count};
+use super::test_support::{com_world, cue, geo_model, opaque_count, text};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
+use crate::state::test_support::font;
 
 /// バルーン面の代表寸（既定 12px の文字が横に十分並び、行が数本入る大きさ）。
 const IMAGE: (u32, u32) = (240, 160);
 
 /// 全グリフが出そろう十分に後の注入時刻（reveal を待たない）。
 const SETTLED: f64 = 100.0;
-
-/// `\f[トークン…]` を運ぶ汎用キャリアの cue（再生時間 0・`state_decoration_tests` と同流儀）。
-fn font(tokens: &[&str]) -> TalkCue {
-    cue(
-        "0",
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
-
-fn text(body: &str) -> TalkCue {
-    cue("0", 0.0, CueCommand::Text(body.to_owned()))
-}
 
 fn newline() -> TalkCue {
     cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 })
@@ -80,8 +65,8 @@ fn last_inked_row(bytes: &[u8], size: (u32, u32)) -> Option<u32> {
 /// 文字の大きさが既定のままになり、非透明画素数が装飾なしと並んで本述語が赤になる。
 #[test]
 fn a_bigger_height_actually_paints_bigger_glyphs_through_the_frame_path() {
-    let (plain, _) = run_script(&[text("あい")]);
-    let (styled, _) = run_script(&[font(&["height", "40"]), text("あい")]);
+    let (plain, _) = run_script(&[text("0", "あい")]);
+    let (styled, _) = run_script(&[font("0", &["height", "40"]), text("0", "あい")]);
 
     let plain_ink = opaque_count(&plain);
     let styled_ink = opaque_count(&styled);
@@ -103,13 +88,13 @@ fn a_bigger_height_actually_paints_bigger_glyphs_through_the_frame_path() {
 /// 最下行が一致して本述語が赤になる。
 #[test]
 fn the_line_pitch_follows_the_biggest_size_on_the_line_through_the_frame_path() {
-    let (plain, size) = run_script(&[text("　"), newline(), text("い")]);
+    let (plain, size) = run_script(&[text("0", "　"), newline(), text("0", "い")]);
     let (styled, styled_size) = run_script(&[
-        font(&["height", "60"]),
-        text("　"),
-        font(&["default"]),
+        font("0", &["height", "60"]),
+        text("0", "　"),
+        font("0", &["default"]),
         newline(),
-        text("い"),
+        text("0", "い"),
     ]);
     assert_eq!(size, styled_size, "面の寸法は台本によらず同じ（前提）");
 
@@ -136,7 +121,7 @@ fn a_dead_candidate_list_is_recorded_once_by_the_shared_catalog() {
     const MISSING: &str = "areka-no-such-font-xyz";
 
     let (_, events) = capture(|| {
-        run_script(&[font(&["name", MISSING]), text("あい")]);
+        run_script(&[font("0", &["name", MISSING]), text("0", "あい")]);
     });
 
     let records: Vec<&str> = events

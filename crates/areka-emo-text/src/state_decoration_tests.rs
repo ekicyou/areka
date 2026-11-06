@@ -442,14 +442,14 @@ fn unowned_key_keeps_the_latest_arguments() {
 #[test]
 fn carrier_with_another_name_is_ignored() {
     let mut state = state_with_bold_then_text();
+    let before = state.clone();
     state.apply_cue(&cue(
         "0",
         0.0,
         CueCommand::command_carrier("raise", vec!["OnTest".to_owned()]),
     ));
 
-    assert!(st(&state, "0").current_look().bold, "装飾状態は不変");
-    assert_eq!(st(&state, "0").items().len(), 2, "内容も不変");
+    assert_eq!(state, before, "装飾・内容・記録の覚えのどれも変わらない");
 }
 
 /// 不正な指定（未知のキー・キー無し）は当該項目を変えず、解析も再生も中断しない。

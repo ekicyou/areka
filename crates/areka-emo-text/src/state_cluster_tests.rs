@@ -111,7 +111,6 @@ fn choice_cue_range_counts_clusters() {
         .choices();
     assert_eq!(spans.len(), 1);
     assert_eq!(spans[0].glyph_range, 0..3);
-    assert_eq!(spans[0].glyph_range.len(), 3);
     assert_eq!(
         items_of(&state, "0"),
         &[

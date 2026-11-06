@@ -3,8 +3,9 @@
 // 純粋状態へ差し込む配線（要件 4.6／3.1）。
 //
 // 檻に入れるのは判断分岐だけ——「背景を受け取っているか」「装着で 2 層が届くか」
-// 「再追従が同じ背景で作り直しを起こさないか」の 3 点。COM は要らない
+// 「再追従が同じ背景で作り直しを起こさないか」の 3 点。ここまでは COM は要らない
 // （`register_actor_binding`／`refresh_actor_binding` は純粋な導出と HashMap 更新のみ）。
+// 最後の 1 本（描き手の組み立ての失敗）だけは実 GPU（`com_world`）を使う。
 
 use areka_parsers::balloon::{
     BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
@@ -15,7 +16,7 @@ use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
-use super::test_support::{ROP_FALLBACK_MESSAGE, spawn_reserved_slot};
+use super::test_support::{ROP_FALLBACK_MESSAGE, capture_checked, spawn_reserved_slot};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::color::mix_disabled;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -278,7 +279,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     assert_eq!(underline[0].field_str("balloon"), Some("飾りの検体"));
     assert_eq!(underline[0].field_str("style"), Some("underline"));
 
-    let (answers, same) = capture(|| {
+    let (answers, same) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, bind, &model))
             .collect::<Vec<_>>()
@@ -292,7 +293,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
 
     let (window, slot) = (bind.window, bind.slot);
     let scaled = TextSlotBinding::new(slot, window, 1.5, (600, 336), NATIVE);
-    let (answer, rescaled) = capture(|| rt.refresh_actor_binding(&actor, scaled, &model));
+    let (answer, rescaled) = capture_checked(|| rt.refresh_actor_binding(&actor, scaled, &model));
     assert!(answer, "拡大率の変わる再追従は作り直す");
     assert_eq!(
         warns(&rescaled, ROP_FALLBACK_MESSAGE).len() + warns(&rescaled, UNDERLINE_FALLBACK).len(),

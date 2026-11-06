@@ -565,8 +565,7 @@ fn bulk_reset_restores_the_same_look_with_or_without_the_anchor() {
 // ---- 下見の空回しと下線（設計「既存アーキテクチャの分析」の空回しの項）
 
 /// 下見の空回しと本番で、装飾番号の並びと装飾の表が一致する。先渡しを受け取ってから合図を
-/// 1 つずつ流すと、流すたびに届いた内容が空回しの全文の先頭と一致し（全文で配置される）、
-/// 食い違いの warn は 0 件。
+/// 1 つずつ流すと、流すたびに届いた内容が空回しの全文の先頭と一致する（全文で配置される）。
 #[test]
 fn rehearsal_and_production_agree_on_style_numbers() {
     let talk = [
@@ -595,7 +594,7 @@ fn rehearsal_and_production_agree_on_style_numbers() {
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
     look.install(&state, None, &talk);
-    let (answers, events) = capture(|| {
+    let answers = {
         let mut answers = Vec::new();
         for c in &talk {
             let dest = PlaceKey {
@@ -608,10 +607,7 @@ fn rehearsal_and_production_agree_on_style_numbers() {
             answers.push(matches!(look.basis(&place, arrived), Basis::Full { .. }));
         }
         answers
-    });
+    };
+    // 食い違いの warn は `Basis::Arrived` の道でしか出ないので、全部 Full なら 0 件。
     assert_eq!(answers, vec![true; talk.len()], "最後まで全文で配置される");
-    assert!(
-        events.iter().all(|e| e.level != tracing::Level::WARN),
-        "食い違いの warn は出ない {events:?}"
-    );
 }

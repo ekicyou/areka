@@ -9,17 +9,6 @@ use super::*;
 use areka_parsers::balloon::{BalloonCursor, CursorColor};
 use log_capture_kit::capture;
 
-/// fixture 実導出の cursor.*（square・brush=(105,25,25)・font=(255,255,255)・pen/blend 未指定）。
-fn fixture_cursor() -> BalloonCursor {
-    BalloonCursor::new(
-        Some("square".to_string()),
-        CursorColor::new(Some(105), Some(25), Some(25)), // brush.color＝矩形内色
-        CursorColor::new(None, None, None),              // pen.color（M1 非参照）
-        CursorColor::new(Some(255), Some(255), Some(255)), // font.color＝hover 白文字
-        None,                                            // blendmethod（既定 none）
-    )
-}
-
 /// cursor 全体を組む簡易ビルダ。
 fn cursor(
     style: Option<&str>,
@@ -84,7 +73,13 @@ fn resolve_style_upper_none_is_no_marker() {
 /// fixture 実導出形（square＋brush(105,25,25)＋font(255,255,255)）→ SquareFill。
 #[test]
 fn resolve_fixture_square_is_square_fill() {
-    let c = fixture_cursor();
+    // fixture 実導出の cursor.*（pen・blendmethod は未指定）。
+    let c = cursor(
+        Some("square"),
+        (Some(105), Some(25), Some(25)),
+        (Some(255), Some(255), Some(255)),
+        None,
+    );
     assert_eq!(
         ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
         ResolvedChoiceStyle::SquareFill {
@@ -113,33 +108,6 @@ fn resolve_specified_colors_without_style_defaults_to_square_fill() {
 }
 
 // ── resolve: underline 系と blendmethod は SquareFill のまま（縮退表・6.5・記録は出さない） ──
-
-/// underline 系の style（`underline`・`square+underline`）は SquareFill へ縮退し、blendmethod は
-/// ROP 系（`notmaskpen`）でも `none` でも variant を変えない（色ベース・警告は登録の側が出す）。
-#[test]
-fn underline_styles_and_any_blendmethod_resolve_to_square_fill() {
-    for (style, blend) in [
-        ("underline", None),
-        ("square+underline", None),
-        ("square", Some("notmaskpen")),
-        ("square", Some("none")),
-    ] {
-        let c = cursor(
-            Some(style),
-            (Some(105), Some(25), Some(25)),
-            (Some(255), Some(255), Some(255)),
-            blend,
-        );
-        assert_eq!(
-            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-            ResolvedChoiceStyle::SquareFill {
-                fill: (105, 25, 25),
-                text: (255, 255, 255),
-            },
-            "style={style} blend={blend:?}"
-        );
-    }
-}
 
 // ── paint: 描画実行用 (fill, text) 正規形 ──
 
@@ -193,7 +161,8 @@ fn styled(style: Option<&str>, blend: Option<&str>) -> BalloonCursor {
 }
 
 /// ROP 系・下線系のバルーンで resolve の返り値は今のまま（SquareFill）・記録は 0 件
-/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・要件 2.5・2.7）。
+/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・要件 2.5・2.7）。blendmethod は
+/// ROP 系でも `none` でも variant を変えない（色ベース・警告は登録の側が出す）。
 #[test]
 fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
     let square = ResolvedChoiceStyle::SquareFill {
@@ -204,6 +173,8 @@ fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
         styled(Some("square"), Some("mergepennot")),
         styled(Some("underline"), None),
         styled(Some("square+underline"), Some("xor")),
+        styled(Some("square"), Some("notmaskpen")),
+        styled(Some("square"), Some("none")),
     ] {
         let (answer, events) = capture(|| ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)));
         assert_eq!(answer, square, "返り値は今のまま: {c:?}");

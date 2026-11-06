@@ -18,9 +18,18 @@ use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
+use windows::System::DispatcherQueueController;
+use windows::UI::Composition::Compositor;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
+use windows_numerics::Matrix3x2;
+use wintf::com::wuc::create_dispatcher_queue_controller;
+use wintf::ecs::widget::bitmap_source::AlphaMask;
+use wintf::ecs::{
+    AlphaMaskResource, GlobalArrangement, GraphicsCore, HitTest, Point, Rect, SizeI, Visual,
+    WindowPos, WucGraphicsResource,
+};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 use super::{ChoiceHitRow, SurfaceKeyOutcome, SurfaceKeyResolver, TextLayerRuntime};
@@ -86,7 +95,20 @@ pub(crate) fn cursor_model() -> BalloonModel {
     ))
 }
 
-/// emo-present `VisualMount` と同型の予約スロット（surface.rs テストと同型）。
+/// テスト用 WUC dispatcher と Compositor（emo-present chain.rs / mount.rs テストと同一方針）。
+///
+/// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、ASTA を第一候補・失敗時
+/// NONE を保険とする（未初期化スレッドでは ASTA が通る）。controller は Compositor より
+/// 長寿命を要するため呼び出し側で保持する。
+pub(crate) fn make_dispatcher_and_compositor() -> (DispatcherQueueController, Compositor) {
+    let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
+        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
+        .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
+    let compositor = Compositor::new().expect("Compositor::new 失敗");
+    (dq, compositor)
+}
+
+/// emo-present `VisualMount` と同型の予約スロット。
 /// 返り値は (window, slot)。
 pub(crate) fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
     let window = world.spawn_empty().id();
@@ -99,6 +121,55 @@ pub(crate) fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
         .id();
     world.flush();
     (window, slot)
+}
+
+// ── 当たり判定の World（窓・絵） ──
+
+/// 左上 `(left, top)`・大きさ `size` の配置（窓のクライアント物理 px）。
+pub(crate) fn arranged(left: f32, top: f32, size: (u32, u32)) -> GlobalArrangement {
+    GlobalArrangement {
+        transform: Matrix3x2::translation(left, top),
+        bounds: Rect {
+            left,
+            top,
+            right: left + size.0 as f32,
+            bottom: top + size.1 as f32,
+        },
+    }
+}
+
+/// 位置 (0,0)・大きさ `size` の、自分では当たらない窓。
+pub(crate) fn spawn_hit_window(world: &mut World, size: (u32, u32)) -> Entity {
+    world
+        .spawn((
+            arranged(0.0, 0.0, size),
+            HitTest::none(),
+            WindowPos {
+                position: Some(Point { x: 0, y: 0 }),
+                size: Some(SizeI {
+                    width: size.0 as i32,
+                    height: size.1 as i32,
+                }),
+                ..Default::default()
+            },
+        ))
+        .id()
+}
+
+/// 窓いっぱいの絵（親は呼び手が付ける）。マスクは `x < opaque_from_x` が透明・それより右が不透明。
+pub(crate) fn spawn_picture(world: &mut World, size: (u32, u32), opaque_from_x: u32) -> Entity {
+    let (w, h) = size;
+    let mut px = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        for x in opaque_from_x..w {
+            px[((y * w + x) * 4 + 3) as usize] = 255;
+        }
+    }
+    let mut mask = AlphaMaskResource::new();
+    mask.set(AlphaMask::from_pbgra32(&px, w, h, w * 4));
+    world
+        .spawn((arranged(0.0, 0.0, size), HitTest::alpha_mask(), mask))
+        .id()
 }
 
 /// 非透明ピクセル数（BGRA 密配列の α ≠ 0・draw.rs 檻と同じ述語）。
@@ -151,6 +222,14 @@ pub(crate) fn window_children(world: &World, window: Entity) -> Vec<Entity> {
         .get::<Children>(window)
         .map(|c| c.iter().copied().collect())
         .unwrap_or_default()
+}
+
+/// 拡大率 `k` の物理寸（`ceil(size × k)`・本番の差し込み口と同じ丸め）。
+pub(crate) fn physical(size: (u32, u32), k: f32) -> (u32, u32) {
+    (
+        (size.0 as f32 * k).ceil() as u32,
+        (size.1 as f32 * k).ceil() as u32,
+    )
 }
 
 /// actor の供給面を読み戻す（BGRA 密配列）。
@@ -359,6 +438,11 @@ pub(crate) fn capture_checked<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent
         "対照の 1 件のほかに ERROR が出たか、対照が数えられていない: {events:?}"
     );
     (value, events)
+}
+
+/// 捕まえた記録のうち水準が `level` のものの数。
+pub(crate) fn level_count(events: &[CapturedEvent], level: tracing::Level) -> usize {
+    events.iter().filter(|e| e.level == level).count()
 }
 
 /// 記録の欄を f32 として読む（`{:?}` 表現の細部に依存しないよう、解析してから比べる）。

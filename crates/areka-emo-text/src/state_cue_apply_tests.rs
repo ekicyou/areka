@@ -1,7 +1,9 @@
 use log_capture_kit::count_levels;
+use tracing::Level;
 
 use super::test_support::{REVEAL_INTERVAL, cue, cue_dur, items_of, reveal_times_of};
 use super::*;
+use crate::actor::test_support::{capture_checked, level_count};
 
 // ── R2.1: Text 追記 ──
 
@@ -69,10 +71,6 @@ fn clear_resets_actor_state_to_initial() {
         .actor_state(&ActorKey::from("0"))
         .expect("actor state should exist");
     assert_eq!(actor, &ActorTextState::default());
-    assert!(actor.is_empty());
-    assert!(actor.items().is_empty());
-    assert!(actor.reveal().is_empty());
-    assert!(actor.reveal().times().is_empty());
 }
 
 #[test]
@@ -236,27 +234,6 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
     assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25]);
 }
 
-/// 複数 Choice cue は ordinal が単調増加し、glyph_range は互いに素・追記順単調
-/// （design.md「Data Models §不変条件」1）。先行テキスト・改行を挟んでも序数空間は
-/// グリフのみ（非グリフ item を数えない）。
-#[test]
-fn multiple_choice_cues_have_monotonic_ordinal_and_disjoint_ranges() {
-    let mut state = TextLayerState::default();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into()))); // グリフ 0
-    state.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 })); // 非グリフ
-    state.apply_cue(&choice_cue("0", 0.2, "q0", "はい", &[])); // グリフ 1..3
-    state.apply_cue(&choice_cue("0", 0.3, "q1", "いいえ", &[])); // グリフ 3..6
-
-    let spans = choices_of(&state, "0");
-    assert_eq!(spans.len(), 2);
-    assert_eq!(spans[0].ordinal, 0);
-    assert_eq!(spans[0].glyph_range, 1..3);
-    assert_eq!(spans[1].ordinal, 1);
-    assert_eq!(spans[1].glyph_range, 3..6);
-    // 互いに素・単調（end0 <= start1）。
-    assert!(spans[0].glyph_range.end <= spans[1].glyph_range.start);
-}
-
 /// 配送順スパン記録（R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
 /// `ChoiceSpan` は**配送順**に並び（label が配送順に一致）・`ordinal` は **0,1,2 と厳密に
 /// 単調増加**し（design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
@@ -278,10 +255,6 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     // ordinal は 0,1,2 と厳密単調増加。
     let ordinals: Vec<usize> = spans.iter().map(|s| s.ordinal).collect();
     assert_eq!(ordinals, vec![0, 1, 2]);
-    assert!(
-        spans.windows(2).all(|w| w[0].ordinal < w[1].ordinal),
-        "ordinal は厳密単調増加でなければならない: {ordinals:?}"
-    );
 
     // 配送順が保存される（label／id が配送順に一致）。
     assert_eq!(
@@ -297,14 +270,6 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     assert_eq!(spans[0].glyph_range, 2..4);
     assert_eq!(spans[1].glyph_range, 5..8);
     assert_eq!(spans[2].glyph_range, 8..11);
-
-    // 互いに素かつ追記順単調（不変条件 1: end_i <= start_{i+1}）。
-    assert!(
-        spans
-            .windows(2)
-            .all(|w| w[0].glyph_range.end <= w[1].glyph_range.start),
-        "glyph_range は互いに素・追記順単調でなければならない"
-    );
 }
 
 /// R1.5 縮退（design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
@@ -340,7 +305,7 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
 /// 反復 Choice cue（非空 text）は once-guard 警告を一切発火しない（撤去済み）。
 #[test]
 fn repeated_nonempty_choice_cues_do_not_warn() {
-    let ((), counts) = count_levels(|| {
+    let ((), events) = capture_checked(|| {
         let mut state = TextLayerState::default();
         state.apply_cue(&choice_cue("0", 0.0, "a", "はい", &[]));
         state.apply_cue(&choice_cue("0", 0.5, "b", "いいえ", &[]));
@@ -348,7 +313,8 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
     });
 
     assert_eq!(
-        counts.warn, 0,
+        level_count(&events, Level::WARN),
+        0,
         "once-guard は撤去済み——非空 Choice は警告しない"
     );
 }
@@ -359,7 +325,7 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
 /// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。once-guard 警告も無い。
 #[test]
 fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
-    let (state, counts) = count_levels(|| {
+    let (state, events) = capture_checked(|| {
         let mut state = TextLayerState::default();
         state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
         state.apply_cue(&cue(
@@ -412,7 +378,7 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
     // Cursor は choices を作らない。
     assert!(choices_of(&state, "0").is_empty());
     // once-guard 警告は発火しない。
-    assert_eq!(counts.warn, 0);
+    assert_eq!(level_count(&events, Level::WARN), 0);
 }
 
 /// Cursor アームがグリフ／reveal 状態を一切変えないことを、対照実行（Cursor cue を
@@ -494,9 +460,11 @@ fn clear_resets_choices_alongside_items() {
     let actor = state
         .actor_state(&ActorKey::from("0"))
         .expect("actor state should exist");
-    assert!(actor.choices().is_empty(), "Clear は choices も初期化する");
-    assert!(actor.items().is_empty());
-    assert_eq!(actor, &ActorTextState::default());
+    assert_eq!(
+        actor,
+        &ActorTextState::default(),
+        "Clear は choices も items と同時に初期化する"
+    );
 }
 
 /// `ClearAll` は全 actor スコープの choices を items と同時に初期化する（R5.3）。
@@ -615,8 +583,14 @@ fn normalized_degrades_negative_line_gap_to_zero_with_warning() {
 /// 妥当な行間は値も警告も変えない（正常経路で警告を出さない）。
 #[test]
 fn normalized_keeps_valid_line_gap_without_warning() {
-    let (config, counts) = count_levels(|| TextLayerConfig::default().normalized());
+    // 出る側の対照——同じ窓・同じ発行点で、負の行間から 1 件は必ず出る。
+    let ((config, _), counts) = count_levels(|| {
+        (
+            TextLayerConfig::default().normalized(),
+            TextLayerConfig { line_gap: -1.0 }.normalized(),
+        )
+    });
 
     assert_eq!(config, TextLayerConfig::default());
-    assert_eq!(counts.warn, 0);
+    assert_eq!(counts.warn, 1, "対照の負の行間の 1 件だけ");
 }

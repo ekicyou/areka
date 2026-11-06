@@ -24,7 +24,7 @@ use super::region_collapse_tests::{
 };
 use super::test_support::{
     box_layout, capture_checked, choice_cue, com_world, cue, emote, fake_resolver, geo_model,
-    opaque_count, text, window_children,
+    opaque_count, read_back, text, window_children,
 };
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
@@ -105,11 +105,7 @@ fn a_collapsed_balloon_is_never_attached_and_the_neighbour_is_drawn() {
         rt.is_attached(&other),
         "隣のスコープが装着されない（要件 2.6）"
     );
-    let bytes = rt
-        .surface(&other)
-        .expect("隣の面")
-        .read_back()
-        .expect("read_back");
+    let bytes = read_back(&rt, &other);
     assert!(opaque_count(&bytes) > 0, "隣のスコープの字が描かれない");
     assert_eq!(attach_messages(&events), 1, "装着は隣のスコープの 1 回だけ");
 }

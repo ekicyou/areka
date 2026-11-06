@@ -122,18 +122,10 @@ fn changing_the_image_rebuilds_once_on_the_next_refresh() {
     assert_eq!(look_at(&rt, &place), InlineMarkerLook::Dot);
 }
 
-/// 箱はそのスコープの普通のバルーンの印を使う（ほかのスコープの絵は効かない）。
+/// ほかのスコープの絵は箱の印に効かない（箱は自分のスコープの普通のバルーンの印を使う・
+/// 自分のスコープの絵が効くことは `changing_the_image_while_a_box_is_shown_restamps_the_box` が見る）。
 #[test]
-fn a_box_uses_the_marker_of_its_scope() {
-    let img = image();
-    let mut f = fixture();
-    f.rt.set_inline_marker(ActorKey::from("1"), Some(other_image()));
-    f.rt.set_inline_marker(ActorKey::from("0"), Some(Arc::clone(&img)));
-    f.show("0");
-    f.rt.apply_cue(&text("0", "あ"));
-    f.sync(Some(1.0));
-    assert_eq!(look_at(&f.rt, &f.key(0, "a")), InlineMarkerLook::Image(img));
-
+fn another_scope_image_does_not_reach_the_box() {
     let mut g = fixture();
     g.rt.set_inline_marker(ActorKey::from("1"), Some(other_image()));
     g.show("0");

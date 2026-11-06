@@ -214,6 +214,11 @@ fn clear_drops_hover_of_the_destination_place_only() {
     };
     rt.inject_choice_hover(&actor, Some(0));
     rt.inject_choice_hover_at(&box_a, Some(0));
+    assert_eq!(
+        rt.choice_hover.get(&box_a),
+        Some(&Some(0)),
+        "前提: 消す前は箱にも強調がある"
+    );
 
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));

@@ -4,7 +4,8 @@
 //! cue を送った複製を落とすと `TalkEnded` が cue の後に 1 回届く／登録の原本と cue を送らなかった複製は
 //! 送らない／`choice_wait_began` が `ChoiceWaitBegan` として cue と同じ順で届く／`spawn_emo_text` の
 //! ドレインが始まりで押下の口を開き、終わりで全部の場所を済みにして口を閉じ、次のトークの先渡しでも
-//! 口を閉じる／2 つの受け口の形は両方を読み飛ばす／送れないときの記録は警告・エラー 1 行ずつ。
+//! 口を閉じる／2 つの印（終わり・始まり）は 3 つの受け口のうち印の受け口へだけ渡る／送れないときの記録は
+//! 警告・エラー 1 行ずつ。
 //!
 //! 選択待ちに入ったかの欄は外から読めないので、公開の押下の口 `settle_choices_at` が効くか
 //! （`choice_active` が偽になるか）で観測する。
@@ -15,16 +16,19 @@ use std::rc::Rc;
 
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
 use log_capture_kit::count_levels;
+use tracing::Level;
 
 use super::{EmoTextSink, TextMsg, handle_text_msg_with};
-use crate::actor::test_support::{balloon, choice, instant, pump_until_idle, spawn_message_drain};
+use crate::actor::test_support::{
+    balloon, capture_checked, choice, instant, level_count, pump_until_idle, spawn_message_drain,
+};
 use crate::actor::{TextLayerRuntime, spawn_emo_text};
 use crate::state::TextLayerConfig;
 
 /// cue を送った複製を落とすと、トークの終わりがその cue の後に 1 回だけ届く。
 #[test]
 fn talk_end_arrives_once_after_the_cues_of_the_dropped_clone() {
-    let ((), counts) = count_levels(|| {
+    let ((), events) = capture_checked(|| {
         let (original, records) = spawn_message_drain("emo-text-talk-end-test");
         let mut talk = original.clone();
         let (c0, c1) = (
@@ -42,9 +46,10 @@ fn talk_end_arrives_once_after_the_cues_of_the_dropped_clone() {
         );
         drop(original);
     });
+    // ERROR は `capture_checked` が対照の 1 件だけであることを確かめる。
     assert_eq!(
-        (counts.warn, counts.error),
-        (0, 0),
+        level_count(&events, Level::WARN),
+        0,
         "正常な終わりは記録を伴わない"
     );
 }
@@ -94,9 +99,9 @@ fn choice_wait_began_arrives_in_the_same_order_as_cues() {
     drop(original);
 }
 
-/// 終わりと始まりは 4 つ目の受け口へそのまま渡り、`on_cue` は呼ばれない。
+/// 終わりと始まりは 3 つ目の受け口（印の受け口）へそのまま渡り、`on_cue`・`on_upcoming` は呼ばれない。
 #[test]
-fn talk_marks_route_to_fourth_receiver_only() {
+fn talk_marks_route_to_the_mark_receiver_only() {
     for msg in [TextMsg::TalkEnded, TextMsg::ChoiceWaitBegan] {
         let got = std::cell::RefCell::new(None);
         let result = handle_text_msg_with::<String>(
@@ -113,9 +118,9 @@ fn talk_marks_route_to_fourth_receiver_only() {
     }
 }
 
-/// 4 つ目の受け口の失敗は `Err` で基盤へ返る（基盤が `error!`＋続行）。
+/// 印の受け口の失敗は `Err` で基盤へ返る（基盤が `error!`＋続行）。
 #[test]
-fn fourth_receiver_failure_propagates_as_err() {
+fn mark_receiver_failure_propagates_as_err() {
     let result = handle_text_msg_with(
         TextMsg::TalkEnded,
         |_, _| -> Result<(), String> { panic!("on_cue must not be called") },
@@ -190,7 +195,8 @@ fn drain_opens_the_press_on_choice_wait_began() {
 /// 終わりを受けたドレインは全部の場所を済みにし、押下の口を閉じる。
 #[test]
 fn drain_settles_every_place_and_closes_the_press_on_talk_end() {
-    let ((), counts) = count_levels(|| {
+    // 正常な終わりの適用はエラーを伴わない（`capture_checked` が ERROR を対照の 1 件だけと確かめる）。
+    capture_checked(|| {
         let (runtime, original, mut talk) = drain_with_choices();
         talk.choice_wait_began();
         drop(talk);
@@ -204,7 +210,6 @@ fn drain_settles_every_place_and_closes_the_press_on_talk_end() {
         assert!(active(&runtime, "1"), "終わりの後は押下の口が閉じている");
         drop(original);
     });
-    assert_eq!(counts.error, 0, "正常な終わりの適用はエラーを伴わない");
 }
 
 /// 次のトークの先渡しを受けたドレインも押下の口を閉じる。

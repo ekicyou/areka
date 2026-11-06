@@ -90,8 +90,7 @@ fn anchor_range_covers_the_marker_but_the_title_does_not() {
     assert_eq!(spans.len(), 1);
     assert_eq!(spans[0].kind, SpanKind::Anchor);
     assert_eq!(spans[0].glyph_range, 0..3);
-    assert_eq!(spans[0].label, "本文");
-    assert!(!spans[0].label.contains(MARKER_GLYPH));
+    assert_eq!(spans[0].label, "本文", "印の字は名札に入らない");
 }
 
 fn region(validrect: (i32, i32, i32, i32), mode: WritingMode) -> TextRegion {

@@ -412,6 +412,7 @@ fn ignored_origin_warns(warns: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 /// 「上流が空文字へ変わっても両辺が揃って通る」ので、空でないことを何も確かめられない。
 fn assert_ignored_origin_warning(
     warn: &CapturedEvent,
+    balloon: &str,
     key: &str,
     resolved: f32,
     range_min: f32,
@@ -444,12 +445,10 @@ fn assert_ignored_origin_warning(
         corner,
         "実際に用いた書き始めの角の欄"
     );
-    // 呼出側は本体（スコープ 0）か相方（スコープ 1）で、名前を入れていない（要件 3.12）。
-    assert!(
-        matches!(
-            warn.field_str("balloon"),
-            Some("スコープ0のバルーン" | "スコープ1のバルーン")
-        ),
+    // 呼出側は名前を入れていない（要件 3.12）。
+    assert_eq!(
+        warn.field_str("balloon"),
+        Some(balloon),
         "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）: {warn:?}"
     );
 }
@@ -477,6 +476,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         0.0,
         SAKURA_LEFT,
@@ -485,6 +485,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     );
     assert_ignored_origin_warning(
         ignored[1],
+        "スコープ0のバルーン",
         "origin.y",
         0.0,
         SAKURA_TOP,
@@ -516,6 +517,7 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         0.0,
         SAKURA_LEFT,
@@ -654,6 +656,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         0.0,
         SAKURA_LEFT,
@@ -662,6 +665,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     );
     assert_ignored_origin_warning(
         ignored[1],
+        "スコープ0のバルーン",
         "origin.y",
         0.0,
         SAKURA_TOP,
@@ -742,6 +746,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         5.0,
         SAKURA_LEFT,
@@ -778,9 +783,23 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
         "選り分けた origin の警告は 2 件: {warns:?}"
     );
     assert_ignored_origin_warning(
-        ignored[0], "origin.x", 0.0, KERO_LEFT, KERO_RIGHT, KERO_LEFT,
+        ignored[0],
+        "スコープ1のバルーン",
+        "origin.x",
+        0.0,
+        KERO_LEFT,
+        KERO_RIGHT,
+        KERO_LEFT,
     );
-    assert_ignored_origin_warning(ignored[1], "origin.y", 0.0, KERO_TOP, KERO_BOTTOM, KERO_TOP);
+    assert_ignored_origin_warning(
+        ignored[1],
+        "スコープ1のバルーン",
+        "origin.y",
+        0.0,
+        KERO_TOP,
+        KERO_BOTTOM,
+        KERO_TOP,
+    );
 
     let coarse: Vec<&CapturedEvent> = warns
         .iter()
