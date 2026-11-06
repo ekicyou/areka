@@ -52,7 +52,7 @@ updated_at: 2026-10-23
 - `drag/` - ドラッグ状態管理とディスパッチ
 - `clickthrough/` - 別プロセスへのクリック透過（`WS_EX_TRANSPARENT` 動的トグル＋αマスク）
 - `tooltip/` - マウスが止まったことの検出と標準のツールチップ（範囲の登録・出す番の状態機械・OS の境界〔`unsafe` は `os.rs` だけ〕・画面更新の末尾の判定。`completed/areka-P0-wintf-tooltip`）
-- `visual/` - Visual の描画内容・変換・クリップ・更新版の追跡
+- `graphics/visual/` - Visual の描画内容・変換・クリップ・更新版の追跡。描画の道は 2 本に分かれる: 命令の列（`GraphicsCommandList`）1 本の道は今のまま描画面へ描き、描画の木（`DrawTree`・`graphics/visual/draw/`）の道は木の各 Visual を描画面の持ち主の下へ畳んで描く。描画面の持ち主になるのは、命令の列を持つ Visual・目印 `OwnSurface` を持つ Visual・`WorldVisual` を持たないただの Visual で（規則は `wants_own_surface` の 1 か所）、`VisualDrawContent` か `VisualTransform` を持って `WorldVisual` が付いた Visual は節になり、描画面を持たずに持ち主の描画面へ描く
 - `dola/` - DolaRuntimeのECS Component化
 - `world/` - schedule labels、vsync、フレーム進行
 - `app.rs` - アプリケーション状態管理（ウィンドウカウント、ディスプレイ構成変更）
