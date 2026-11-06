@@ -54,6 +54,33 @@ fn test_mark_dirty_surfaces_updates_frame() {
     assert_eq!(dirty.requested_frame, 42);
 }
 
+/// 命令の列を持たず根の部品（DrawTree）だけを持つ根も、根の部品の変化で描き直しの印が立つ（1.8・1.9）。
+#[test]
+fn test_mark_dirty_surfaces_on_draw_tree_change() {
+    use wintf::ecs::DrawTree;
+
+    let mut world = World::new();
+    world.insert_resource(FrameCount(1));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(mark_dirty_surfaces);
+
+    let entity = world
+        .spawn((
+            SurfaceGraphics::default(),
+            SurfaceGraphicsDirty::default(),
+            DrawTree::default(),
+        ))
+        .id();
+    schedule.run(&mut world);
+
+    world.resource_mut::<FrameCount>().0 = 42;
+    world.get_mut::<DrawTree>(entity).unwrap().set_changed();
+    schedule.run(&mut world);
+
+    let dirty = world.get::<SurfaceGraphicsDirty>(entity).unwrap();
+    assert_eq!(dirty.requested_frame, 42);
+}
+
 // ========== Task 1.1: SurfaceCreationStats テスト ==========
 
 #[test]

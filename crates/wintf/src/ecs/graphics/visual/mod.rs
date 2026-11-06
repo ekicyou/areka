@@ -31,6 +31,7 @@ mod visual_tests;
 mod world_visual_tests;
 
 pub use draw::command::*;
+pub(crate) use draw::emit;
 pub use draw_content::*;
 pub use draw_tree::*;
 pub use systems::*;

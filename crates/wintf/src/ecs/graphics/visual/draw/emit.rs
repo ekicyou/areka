@@ -15,7 +15,6 @@ use windows_numerics::Matrix3x2;
 ///   層の中身に対して効く（D2D の既定・変えるのは `wintf-d2d-composite-rules`）。
 /// - 戻ってきたとき DC の変換は `root` に戻してある。D2D の描画の呼び出しは HRESULT を返さず、
 ///   失敗は呼び手の `EndDraw` の結果に出る。
-#[allow(dead_code, reason = "`render_surface`（7.2）が呼ぶまで使い手が無い")]
 pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCommand]) {
     let identity = Matrix3x2::identity();
     for command in commands {
