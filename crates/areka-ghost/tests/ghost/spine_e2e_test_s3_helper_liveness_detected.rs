@@ -123,7 +123,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     handle.set_status(HelperStatus::Exited(ExitKind::Abnormal(1)));
 
     // ---- kanade へ Tick を 1 回だけ注入する（Steady pump の唯一の駆動源）。----
-    // Steady{talk: None} + Tick → OnSecondChange GET が shiori actor へ届く
+    // Tick → OnSecondChange（挨拶の後なら GET・再生中なら NOTIFY・上の DD-IT-12 の注記）が shiori actor へ届く
     // （steady.rs on_tick）。run_shiori_loop はメッセージ到達の冒頭で必ず
     // backend.status() を確認するため（親モジュール rustdoc 参照）、この 1 通の
     // Tick 到達だけで死活検出（Exited 初回観測→ShioriDown 送出）と OnSecondChange

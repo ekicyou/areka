@@ -235,8 +235,8 @@ fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
 
     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
     // deadline 超過による強制終了が既に Unload まで完走済み（上の有界待機で確認済み）
-    // であるため、ここでの `ForceQuit` 送出は kanade が既に自発停止済みであることの
-    // 冪等パスを実地で運動させる（S4 と同旨）。close talk（`\_w[49999950]` で止まった
+    // である。ここでの `ForceQuit` が届く道と、送出が失敗する冪等の道のどちらを通るかは
+    // 時機次第で、どちらでも全 join が有界時間で完走することを確かめる（S4 と同旨）。close talk（`\_w[49999950]` で止まった
     // まま）は dispatcher の active slot に残っているはずだが、dispatcher への Close
     // 送出は稼働中 active talk へ `SakuraMsg::Close` を送って即座に中断させてから
     // join する（`close_active_if_any`・dispatcher.rs）ため、恒久的に止まった close

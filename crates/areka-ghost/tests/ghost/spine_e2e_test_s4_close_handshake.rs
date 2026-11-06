@@ -160,12 +160,11 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     );
 
     // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
-    // close 握手が既に Unload まで完走済み（上の有界待機で確認済み）であるため、
-    // ここでの `ForceQuit` 送出は kanade が既に自発停止済み（もしくは自発停止処理の
-    // 最終盤）であることの冪等パスを実地で運動させる——`shutdown()` 自身の
-    // 「kanade already stopped before ForceQuit send」分岐（design.md「終了
-    // （shutdown）シーケンス」・runtime.rs 3.2 の status report で code-reading のみで
-    // 検証済みだった経路）を、本 e2e が初めて実地の回帰檻として固定する。
+    // close 握手は既に Unload まで完走済み（上の有界待機で確認済み）。ここでの
+    // `ForceQuit` が kanade へ届く道と、kanade が既に止まっていて送出が失敗する冪等の道
+    // （`shutdown()` の「kanade already stopped before ForceQuit send」分岐）のどちらを
+    // 通るかは時機次第で、本テストはその別を確かめない。どちらでも全 join が有界時間で
+    // 完走することを確かめる。
     crate::common::run_bounded_shutdown(
         "shutdown after S4 regular close handshake completion",
         super::BOUND,
