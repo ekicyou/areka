@@ -252,6 +252,14 @@
 - 本体の dev-dependency の `test-support` が試験のビルドで本体の bin にも効く（2.9）ことが、実機テスト・`areka-test-binary-stability` の測りの前提に響かないか。
 - テストが新しい実行ファイルに分かれた後、`cargo test --workspace -j 4` の同時に回る実行ファイルの数が増えることが、揺れるテストの出方に響かないか（要件 3.8・3.9 の写しのほかに要るものが無いか）。
 
+### 要件の討議で設計の段へ回したもの（2026-11-06）
+
+- 上の「決めること」7（判定器の一族の置き場の名前）は設計の段で決める。`runtime-crate-split` で `areka-runtime` のテスト専用へ移すときにもそのまま使える名前にする。
+- 移し方（4 章の案 A〜C・一時の別名を途中の 1 コミットに使うか）は設計の段で決める。
+- `reseed::tests` の `booted_world`・`new_shell`・`char_positions` は検体の入口（`emo2_root`）に頼るので、`test-support` 機能にそのままは入れられない。本体のテスト 3 本へどう渡すか（検体の道を引数で受ける形に割る・本体の側へ移す）は設計の段で決める。
+- 1,000 行の例外表は項目を増やさない（roadmap の決め「どの spec も例外表に触れない」・要件 1.9）。`transition_judge.rs`（999 行）と根（971 行）が書き換えと rustfmt の後に超えるなら、ファイルを分けて収める。
+- examples の `window-placement.rs` を配置の crate へ移すと、配置の crate の開発用の依存に `sample-ghost-kit`・`tracing-subscriber` が要る（どちらもワークスペースの中か `Cargo.lock` に既にある＝要件 1.6 の「外から足さない」は守れる）。
+
 ---
 
 （次の手: 要件の討議で 6 章の議題 1〜8 の答えを決め、要件 3.1〜3.5・5.6・7.1〜7.3・1.7 を必要なら書き換えてから `/kiro-design placement-crate-split` へ。）
