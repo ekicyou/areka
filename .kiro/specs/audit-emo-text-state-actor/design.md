@@ -290,9 +290,9 @@ flowchart TD
 - 切る所: 文字の面の矩形の**右と下**を、画像の右と下で切る（`actor_present.rs:245` で `right = region.right().min(lim.0)`・`bottom = region.bottom().min(lim.1)`）。`lim` は普通のバルーンなら `binding.image_size`、箱なら `(min(箱の幅, シェルの幅 − site.x), min(箱の高さ, シェルの高さ − site.y))` を `i64` で求めて `f32` へ。切った矩形が空なら `Ok(false)`（描かない＝窓の外なので見える画素は同じ）。
   - 左と上は切らない。面の原点が `region.left/top` であることを、`canvas.rs`・`choice.rs`・`viewbox_draw_render.rs`・印の描き方が前提にしているため（左と上を切るには原点のずれを向こうの持ち物まで通す＝議題 1 の別の案）。描き手は面の大きさ（`surface.size()`）から計画するので、右と下を切ってもスクロールで現れる帯は今どおり描き直される。
 - 面の大きさの上限: 物理寸の一辺 `MAX_SURFACE_SIDE: u32 = 16_384`、面積 `MAX_SURFACE_AREA: u64 = 1 << 25`（どちらも `actor_present.rs` の `pub(crate) const`。値と根拠は兄弟の `audit-emo-compose` の `MAX_EXTENT`・`MAX_AREA` と同じ＝Direct3D 11 の機能水準 11 の 2D テクスチャの一辺の最大と、8K の画面より大きい面積）。左や上に大きな負の validrect を書かれた面は、ここで止まる。越えたら作らず、作れなかった場所の覚えに入れて `error!` を 1 回（場所・物理寸・上限）。
-- 作れなかった場所の覚え: `TextLayerRuntime` に `surface_failed: HashMap<PlaceKey, ((u32, u32), (f32, f32))>`（物理寸と物理の位置）。物理の位置を求めた直後に、覚えと同じなら `Ok(false)`。作るのが `Err` なら覚えて、その回だけ `Err` を返す。作れたら覚えを消す。`drop_renders_after_device_change` で全部消す（新しい装置で作り直してみる）。
+- 作れなかった場所の覚え: `TextLayerRuntime` に `surface_failed: HashMap<PlaceKey, ((u32, u32), (f32, f32))>`（物理寸と物理の位置）。物理の位置を求めた直後に、覚えと同じなら `Ok(false)`。覚えるのは**入力で答えが決まる失敗だけ**＝上限を越えたときと、その寸で面を付ける（`TextSurface::attach`／`attach_window_child`）のが `Err` だったとき。その回だけ `Err` を返す。面を作る前の資源の確かめ（`actor_present.rs:273-298` の Compositor・`GraphicsCore` が無いか無効）は覚えず、今どおり毎フレーム試し直す（wintf の `init_wuc_resource` は WUC の資源を `GraphicsCore` と別に作り直し、失敗すれば次の回に試し直すため、一時の失敗を覚えると文字が戻らない）。作れたら覚えを消す。`drop_renders_after_device_change` で全部消し（新しい装置で作り直してみる）、`WucGraphicsResource` の変わった時刻が進んだときも全部消す。
 - 箱が乗るシェルの画像の大きさ: `TextLayerRuntime` に `box_shell_size: HashMap<PlaceKey, (u32, u32)>`。`register_box`（`actor_box.rs:453` 付近）で入れ、登録を外す所（`:460`）と表を替える所（`:70`）で消す。登録し直しの判断（`:337`）に「シェルの大きさが変わった」を足す。
-- 印の面: `actor_present.rs:538-541` の `physical_extent(binding.image_size)` を、上の `lim` で切った大きさにする。`ActorRender` に `markers_failed: Option<(u32, u32)>`（作れなかった物理寸）。同じ寸なら作らず `Ok(())`、`Err` なら覚える。上限も同じ定数で見る。
+- 印の面: `actor_present.rs:538-541` の `physical_extent(binding.image_size)` を、上の `lim` で切った大きさにする。`ActorRender` に `markers_failed: Option<(u32, u32)>`（作れなかった物理寸）。同じ寸なら作らず `Ok(())`。覚えるのは文字の面と同じく入力で答えが決まる失敗（上限越え・その寸での作成の `Err`）だけ。上限も同じ定数で見る。
 - 矢印の広がり: `actor_decoration.rs:207` の `image_size.0 as i32` をやめ、`(i64::from(..), i64::from(..))` で渡す。`scroll_marker.rs` の `ResolvedMarkerPlacement::resolve`・`default_marker_position` と `marker_surface.rs` の `PlacedMarker.at` を `i64` にする。`MarkerCoord::resolve`（`areka-parsers`）は形を変えず、`scroll_marker.rs:290` で `FromEnd(v) => e + i64::from(v)` のようにこちらで解く。`w - 20` は `i64` の引き算になり落ちない。
 - 掛け算: `surface.rs:96,99,163,478` の `width * height * 4`・`width * 4` を `width as usize * height as usize * 4` の形に。
 - `region.rs`（validrect の解決）は変えない。
@@ -360,7 +360,7 @@ pub(super) fn build_actor_render(
 | 消した回数 | 新しい `TextLayerState::clears_at(&PlaceKey)`（箱の場所も） | 同じフレームで消して同じ数を書き直すと、項目の数が同じになる |
 | 強調 | `choice_hover[place]` を押した選択肢で絞った後の値 | 外から入る |
 | 今の見た目 | `current_look()` を値で比べる | `\f` だけで項目が増えずに変わる |
-| 全文の先読み | 文字の層の新しい数 `lookahead_rev`（`install`・`reinstall`・`forget_boxes` を呼ぶ `actor.rs`・`actor_box.rs` の 4 か所で 1 つ進める）と `lookahead.number(place)` | 外から入れ直される。`lookahead.rs`（向こうの持ち物）は変えない |
+| 全文の先読み | 文字の層の新しい数 `lookahead_rev`（`install`（`actor.rs:433`）・`reinstall`（`actor.rs:609`）・`forget_boxes`（`actor_box.rs:79`）を呼ぶ 3 か所で 1 つ進める） | 外から入れ直される。`lookahead.rs`（向こうの持ち物）は変えない。場所ごとの区間の番号（`lookahead.number`）は `#[cfg(test)]` の読み口なので鍵にしない。`clears_at` と `lookahead_rev` で足りる＝描き手を持つ場所は全消しのとき必ず消した回数が進み、箱の回数・区間・描き手は `set_box_layout` の中で一緒に捨てられる（この理由を `FrameMemo` の説明に書く） |
 | 配置の入力 | `layout_input[place]`（`ResolvedBalloonText`）を値で比べる（覚えに複製を持ち、外れたときだけ複製し直す） | 登録し直しで描き手を捨てずに替わる |
 
 - 鍵が同じなら、覚えたキャンバスで描き手を回す。当たりの行の写し（`hit_rows`）は覚えた行・区切り・帯から作り直す（今の答えと同じ）。
@@ -396,6 +396,7 @@ pub(crate) fn forget_pristine_places(&mut self, keep: impl Fn(&PlaceKey) -> bool
 - 外す条件は「`*state == ActorTextState::default()`」かつ「面を持たない」（`keep` は `TextLayerRuntime` が `surfaces.contains_key` を渡す）。作りたてと同じなら、外しても次に字が来たとき `place_entry` が同じものを作り直すので、振る舞いは変わらない。登録で見た目の 2 層を入れたスコープ（`set_look_layers`）は作りたてと違うので外れない。面を持つ場所は外さない（次のフレームで画面を消すのがこの走査だから・`actor_present.rs:65-79` の説明）。
 - 呼ぶ所は `TextLayerRuntime::apply_cue` の `ClearAll` の後（状態を進めた後）だけ。空回しの写し（`lookahead`）では呼ばない（写しは捨てられる）。
 - スコープごとの行き先（`routes`）は、全消しで既定へ戻すだけの今のまま（全消しのたびの走査で、毎フレームではない）。
+- 外した場所の消した回数（`clear_count`）がその後進まなくても困らない。登録したスコープは外さないので、`crates/areka` が回数を見る場所は残る。
 - **波及**: なし。
 
 #### 上書きの記録 1 回（指摘 19・申し合わせ）
@@ -491,6 +492,7 @@ impl TextLayerRuntime {
 | `SeenGraphicsCore`（`actor_present.rs`） | 消す（`seen_graphics` へ） |
 | `TextSurface`（`surface.rs`） | `staging` を消す・`hit_cells` を `HitMaskCache` に替える |
 | `PlacedMarker`（`marker_surface.rs`） | `at` を `(i64, i64)` に |
+| `ResolvedMarkerPlacement`（`scroll_marker.rs`） | 置き場の計算と答えを `i64` に（`resolve`・`default_marker_position`） |
 | `TextLayerState`（`state.rs`） | 形は同じ。`clears_at`・`forget_pristine_places`（`pub(crate)`）を足す |
 
 ## Error Handling
@@ -498,7 +500,8 @@ impl TextLayerRuntime {
 | 場面 | 記録 | 返し方 |
 |---|---|---|
 | 面の物理寸が上限（一辺 16,384・面積 2^25）を越える | `error!`（場所・物理寸・上限）を覚えに入れたとき 1 回 | 作らない。`Ok(false)`（描かない） |
-| 面を作るのが失敗した | 源の `device_err` の `error!`（今どおり）。覚えに入れる | その回だけ `Err`、入力が変わるまで `Ok(false)`（`crates/areka` の記録も 1 回で止まる） |
+| その寸で面を付けるのが失敗した | 源の `device_err` の `error!`（今どおり）。覚えに入れる | その回だけ `Err`、入力が変わるか装置・WUC の資源が作り直されるまで `Ok(false)`（`crates/areka` の記録も 1 回で止まる） |
+| 面を作る前の資源（Compositor・`GraphicsCore`）が無いか無効 | 今どおり `error!` | 今どおり `Err`。覚えに入れず、次のフレームで試し直す（一時の失敗のため） |
 | 印の面を作るのが失敗した・上限を越える | 同上（`markers_failed`） | その回だけ `Err`、以後は矢印を出さない |
 | 描き手の組み立てが失敗した | 今どおり（源の `error!`）。窓の子は作らない | `Err`（今どおり） |
 | 箱がシェルの画像からはみ出す（極端な数を含む） | `warn!` を箱ごとに 1 回（今どおり・上限で止める足し算で正しく出る） | 何もしない |
@@ -521,6 +524,7 @@ impl TextLayerRuntime {
 | 3 | 箱の `size,16000,16000` で、箱の面と印の面が「箱とシェルの画像の重なり」を越えない（同） | 1 GB の面と CPU のマスク |
 | 3 | 上限を越える面（左に大きな負の validrect）で `error!` が 1 回だけ、10 フレーム回しても増えない（同） | 毎フレーム記録 |
 | 3 | 箱の大きさ `u32::MAX` で矢印の置き場の計算が落ちない（`scroll_marker_tests.rs`） | `as i32` で負・`w - 20` で落ちる |
+| 3 | Compositor の資源が無いフレームの後に資源が入ると、同じ入力のままで面ができて字が出る（一時の失敗を覚えない・実 GPU・`actor_surface_limit_tests.rs`） | （新しい覚えの穴を塞ぐ確かめ） |
 | 4 | `highlight_band_extent(f32::NAN, 1.0, 1.0)` が落ちない・有限の値で前と同じ答え（`choice_tests.rs`） | `clamp` が panic |
 | 5 | `build_actor_render` に失敗する組み立てを渡すと、装着の閉包が呼ばれず、窓の子の数が増えない（`actor_box_present_tests.rs`） | 子が毎回 1 つ増える |
 | 6 | 同じ World に 2 つの文字の層を置き、装置の資源を作り直すと、両方とも描き手を捨てて作り直す（実 GPU・`actor_runtime_frame_tests.rs`） | 後の方が古い装置の描き手を使い続ける |
