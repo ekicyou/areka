@@ -132,7 +132,7 @@
 
 要件の末尾の 3 件（1〜3）は**開発者へ**（答えで公開の形・テストの作りが変わる）。ギャップ分析で見えた 4〜13 は **設計の段（`/kiro-design`）で決める設計判断**＝要件は変えない（12 だけは要件 1.11 に写して閉じた）。推奨は「推」。設計の段への約束: 4 の根の印は使い手が置くものではなく係が自動で入れる（要件 1.1・1.8「節を置くだけで」の字面を守る）。
 
-1. **「描画面の中の節」の見分け方**（要件 1.2・brief 議題 1）: 推＝専用の印を置かず「持ち主の子孫で `Visual` を持たず、描画の木の部品のいずれかを持つ実体」。コードの裏づけ: 窓の下の `Visual` は全部が描画面を持つ（`graphics/visual.rs`）。ただし N4（節の下の `Visual` が今の 2 つの係を壊す）は議題 12 へ。
+1. **「描画面の中の節」の見分け方**（要件 1.2・brief 議題 1）: **確定（2026-11-06 討議）**＝節も `Visual`（最小の描画単位）。新しい描き方の部品（`VisualDrawContent`・`VisualTransform`・`VisualClip`）を持ち `GraphicsCommandList` を持たない `Visual` は既定で描画面なし＝節。目印（例 `OwnSurface`）で描画面あり。今の描き方の `Visual` は変えない。**設計への含み**: `on_visual_add`／`insert_graphics_parts_on_window_join` が `VisualGraphics`・`SurfaceGraphics` を入れる条件に、この規則を足す（同じ bundle で入る部品を hook が見られるかは着手で確かめる）。節の下の描画面の持ち主（N4）は要件 1.11 で記録して切る。到達点（既定は描画面なし・更新の頻度で自動昇格）は要件の Introduction。
 2. **名前の衝突の解き方**（要件 5.9・brief 議題 2）: 推＝描画の木の側を改名。候補 `ecs::draw_tree`（brief）／`ecs::surface_tree`（「描画面の下の木」が名前で分かる）。型の名前は変えない。`structure.md:55` と `tests/visual/`（`Visual` 部品のテスト・そのまま）の説明も直す。
 3. **WARP の答えのずれ**（要件 6.4・brief 議題 3）: 推＝コードの中の値・±1・境界から離れた画素。`wintf-d2d-composite-rules` の議題 4 もこれに揃える。
 4. **木だけの根の印**（要件 1.8・1.9・`surface.rs` に届く）: ㋐ 推＝専用の部品（例 `SurfaceDrawTree`／`DrawTreeRoot`。平らにした `Vec<DrawCommand>` の控えと `unit_rect` を持ち、埋める係が木の変化で `set_changed`）。`surface.rs` の 3 つの filter と `render.rs` の読む部品に足す。㋑ `GraphicsCommandList::empty()` を根に置く約束にして `surface.rs` を触らない（要件 1.8 の「命令の列を持たず」と字面が合わない・使い手に約束を強いる）。

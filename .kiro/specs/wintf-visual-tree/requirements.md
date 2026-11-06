@@ -11,7 +11,9 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 
 併せて、起票時と見直し 2 本（`audit-wintf-graphics-world`・`audit-wintf-runtime`）が申し送った傷を直し、答えの画素を WARP（D2D を CPU の描き手で動かす）の決定論のテストで固定できる足場を作る。
 
-この文書の「wintf」は `crates/wintf` の描画の道全体を指す。「描画面の持ち主」は自分の描画面を持つ実体（今の `Visual` 部品を持ち、窓の下に在るもの）、「節」はその子孫のうち描画の木の部品を持つ実体、「木」は描画面の持ち主を根とする節の集まりを指す。
+この文書の「wintf」は `crates/wintf` の描画の道全体を指す。**Visual が最小の描画単位**で、木は Visual の木である（Visual より小さな単位は無い・2026-11-06 討議）。「描画面の持ち主」は自分の描画面（WUC の Visual と `CompositionDrawingSurface`）を持つ Visual、「節」は自分の描画面を持たず、いちばん近い描画面の持ち主の描画面へ D2D で描き込まれる Visual、「木」は描画面の持ち主を根とする節の集まりを指す。「新しい描き方の部品」は `VisualDrawContent`・`VisualTransform`・`VisualClip`（と可視の旗）を指す。
+
+**到達点（2026-11-06 開発者）**: 既定は「描画面なし」で、更新が頻繁になった Visual から描画面を作る（更新の頻度で自動で昇格・降格する）。本 spec はその土台＝「描画面の有無を Visual ごとに選べる形」を作り、新しい描き方の Visual の既定を「描画面なし」にする。今の描き方の Visual の既定は変えない。自動の昇格・降格は差分の描き直し（`wintf-visual-damage-redraw`）の後の別の spec（本 spec の完了時の棚卸で起票する）。
 
 ## Boundary Context
 
@@ -45,7 +47,10 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 #### Acceptance Criteria
 
 1. While 描画面の持ち主が子孫に節を持つ, when その描画面が描かれる, the wintf shall 根の自分の命令の列（在れば）を先に描き、続けて節を深さ優先の前順（親が先・兄弟は `Children` の並び順）で同じ描画面に描く。
-2. The wintf shall 描画面の持ち主を、その描画面の木の根と見なし、根より下で自分の描画面を持つ実体（今の `Visual` 部品を持つもの）とその子孫を、根の木の節と見なさない。
+2. The wintf shall 描画面の持ち主を、その描画面の木の根と見なし、根より下で自分の描画面を持つ Visual とその子孫を、根の木の節と見なさない。
+2a. While Visual が新しい描き方の部品のいずれかを持ち、`GraphicsCommandList` を持たず、描画面を持つ目印（名前は設計で決める・例 `OwnSurface`）を持たない, the wintf shall その Visual を節とし、自分の WUC の Visual と描画面を作らない（新しい描き方の既定は「描画面なし」）。
+2b. While Visual が `GraphicsCommandList` を持つ, or 新しい描き方の部品を 1 つも持たない, the wintf shall 今どおりその Visual に WUC の Visual（と、命令の列があれば描画面）を持たせる（今の描き方の既定は変えない）。
+2c. While Visual が描画面を持つ目印を持つ, the wintf shall 新しい描き方の部品の有無に依らず、その Visual に WUC の Visual と描画面を持たせ、その下の木の根とする（手動の昇格の口）。
 3. When 節が描く中身（`VisualDrawContent`）を持たない, the wintf shall その節自身は描かず、子孫の節は描く。
 4. When 節が局所の変形（`VisualTransform`）を持たない, the wintf shall 恒等の変形として扱う。
 5. When 節が切り抜き（`VisualClip`）を持たない, the wintf shall 切り抜きを加えずに描く。
@@ -54,7 +59,7 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 8. While 描画面の持ち主が命令の列を持たず節だけを持つ, the wintf shall その描画面を作り、木を描く（木だけでも画面に出る）。
 9. When そのフレームの描画の前に、節の描く中身・変形・切り抜き・可視の旗が変わる, or 節が足される・外れる・親が変わる, the wintf shall 同じフレームの描画でその描画面を描き直す（次のフレームへ遅らせない）。
 10. While 描画面の持ち主が子孫に節を持たない, the wintf shall 今と同じく命令の列 1 本を `SOURCE_OVER` で描き、答えの画素を変えない。
-11. If 節の子孫に自分の描画面を持つ実体（今の `Visual` 部品を持つもの）がある, then the wintf shall その旨を実体名つきで `error!` に記録し、その実体と子孫を根の木の節と見なさない（黙って切らない）。
+11. If 節の子孫に自分の描画面を持つ Visual（今の描き方の Visual・目印を持つ Visual）がある, then the wintf shall その旨を実体名つきで `error!` に記録し、その Visual と子孫を根の木の節と見なさない（黙って切らない）。節の下の描画面の持ち主を支えること（配置の伝播と WUC の木の同期が節をまたぐこと）は自動の昇格の spec の範囲とし、本 spec の申し送りに書く。
 
 ### Requirement 2: 節ごとの重ね方・補間・変形・切り抜き
 
@@ -147,6 +152,6 @@ wintf の描画は今、描画面（WUC の `CompositionDrawingSurface`）1 枚�
 
 要件は下の推奨案で書いた。要件の討議で覆してよい。
 
-1. **「描画面の中の節」の見分け方**（要件 1.2）: 推奨＝専用の印の部品を置かず、「描画面の持ち主の子孫のうち、自分の描画面を持たない（今の `Visual` 部品を持たない）実体で、描画の木の部品のいずれかを持つもの」を節と見る。理由: 窓の下の `Visual` は全部が自分の描画面を持つ（2026-11-06 時点）ので、`Visual` を持たないことが「描画面の中」の十分な印になり、部品を 1 つ増やさずに済む。
+1. **「描画面の中の節」の見分け方**（要件 1.2・1.2a〜2c・1.11）: **確定（2026-11-06 討議・開発者「承認」）**＝節も Visual（Visual が最小の描画単位）。新しい描き方の部品を持つ Visual は既定で描画面なし＝節。`GraphicsCommandList` で描く Visual と何も持たない Visual は今どおり描画面あり。描画面を持たせたい Visual には目印（例 `OwnSurface`）を付ける。到達点（既定は描画面なし・更新の頻度で自動昇格）は Introduction に書き、自動の昇格・降格は差分の描き直しの後の別 spec。当初の推奨（`Visual` 部品を持たない実体を節とする）は、brief の「WUC の Visual を持たない子」を ECS の `Visual` 部品と読み違えていたので覆した。
 2. **名前の衝突の解き方**（要件 5.9）: 推奨＝`ecs::visual`（描画の木の層）のモジュール名を変える（例 `ecs::draw_tree`）。型の名前（`VisualDrawContent` など）は変えない。理由: 棚卸㉟の約束で `ecs::graphics::Visual`・`VisualGraphics` は変えない。描画の木は外からの参照 0 なので、モジュール名を変えても壊れる使い手が無い。
 3. **WARP の答えのずれ**（要件 6.4）: **確定（2026-11-06 討議・推奨案）**＝見本はテストのコードの中の値（単色の小さな絵）で持ち、境界から離れた画素だけを比べ、1 チャネルあたり ±1 を許す。見本の画像ファイルと作り直しの手順は持たない。理由: 固定する答えは順・重ね方・変形・切り抜きが効いたかで、単色の数点で足りる。`wintf-d2d-composite-rules` の議題 4 もこれに揃える。
