@@ -6,8 +6,13 @@
 //!
 //! wintf 側の本番ファイル 8 本に対する同じ形の走査は
 //! `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
-//! 本ファイルは areka 側の 7 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、
-//! その記録＝`diag.rs`）と、グループ機構が新設した 5 本——を受け持つ。
+//! areka 側の 7 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、その記録＝`diag.rs`）と、
+//! グループ機構が新設した 5 本——は crate ごとに 2 つの片割れで受け持つ（spec:
+//! placement-crate-split 要件 5.2・5.3）。本ファイルは配置の crate の片割れで、配置の 4 本と
+//! 配置の `src` の木を見る。本体の 3 本（`emo2_boot` のもの）・帯のファイル・本体の `src` の木は
+//! 本体の `crates/areka/src/placement_tests/spawn_zorder_pair_deferred_tests.rs` が見る。
+//! 語の表と走査器は 2 つの片割れが共に使う [`crate::test_support::zorder_pair_deferred`] に
+//! 1 つだけあり、どちらの片割れも自分の crate の実物で較正する。
 //!
 //! 窓の拡張スタイルを完全一致で押さえるのは
 //! `spawn_assembly_tests::t_i2_no_window_has_ws_ex_topmost` である（`ex_style` と `style` の
@@ -34,9 +39,9 @@
 //!
 //! wintf 側と同じく語の表は 2 つに分かれる。最小化・タスクバーの語（`DEFERRED_NEEDLES`）は今も
 //! 先送りのまま。常に手前の帯の語（`BAND_NEEDLES`）は `stay-on-top-directives` が実装したが、
-//! areka 側でそれを持つのは受け口（`emo2_boot/window_state_cue.rs`）と取り出しの相
+//! areka 側でそれを持つのは本体の受け口（`emo2_boot/window_state_cue.rs`）と取り出しの相
 //! （`emo2_boot/frame/window_state.rs`）だけと決めてある。よってどちらの表の語も重なり順の機構の
-//! 本番ファイルには無いことを主張し続け、対照として帯の語の持ち主に語が在ることも主張する。
+//! 本番ファイルには無いことを主張し続ける（帯の語の持ち主に語が在る対照は本体の片割れが持つ）。
 //!
 //! # 行コメントを除いてから探す理由
 //!
@@ -56,66 +61,23 @@ use wintf::ecs::WindowStyle;
 
 use super::spawn_ghost_windows;
 use super::test_support::{ghost_window_entities, titles, two_scope_placements};
+use crate::test_support::zorder_pair_deferred::{
+    BAND_NEEDLES, DEFERRED_NEEDLES, code_only, deferred_hits, rust_sources_under,
+};
 
-/// 重なり順の 2 機構が全部を書いた areka 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
+/// 重なり順の 2 機構が全部を書いた、配置の crate の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
 ///
 /// 前半 2 本はペア機構（`ghost-window-zorder`）——ペア宣言を付ける組立（`spawn.rs`）と
-/// その記録（`diag.rs`）。後半 5 本はグループ機構（`areka-P0-scope-zorder-pinning`）が
-/// 新設したもの（うち `zorder_chain_compose.rs` は鎖方式の合成層）。下の
+/// その記録（`diag.rs`）。後半 2 本はグループ機構（`areka-P0-scope-zorder-pinning`）が
+/// 新設したもの（うち `zorder_chain_compose.rs` は鎖方式の合成層。グループ機構の残りの 3 本は
+/// 本体にあり、本体の片割れの名簿に載る）。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
-/// 「実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
-const PRODUCTION_FILES: [&str; 7] = [
+/// 「この crate に実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
+const PRODUCTION_FILES: [&str; 4] = [
     "src/spawn.rs",
     "src/diag.rs",
     "src/zorder_chain_compose.rs",
     "src/zorder_group_ledger.rs",
-    "../areka/src/emo2_boot/zorder_cue.rs",
-    "../areka/src/emo2_boot/frame/zorder_drain.rs",
-    "../areka/src/emo2_boot/frame/zorder_descript.rs",
-];
-
-/// 先送り語彙（小文字）と、それが何の入口かの説明。
-///
-/// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
-/// ままである。兄弟の wintf 側テスト（`zorder_pair_deferred_vocabulary_tests.rs`）と同じ 2 つの表
-/// （この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、どちらの表へ
-/// 足すときも両方のファイルへ足すこと。
-const DEFERRED_NEEDLES: [(&str, &str); 6] = [
-    (
-        "minimize",
-        "最小化（`\\![set,windowstate,minimize]`／`OnWindowStateMinimize`・要件 8.3／8.4／8.5）",
-    ),
-    ("iconic", "最小化状態の読み取り（要件 8.5）"),
-    (
-        "onwindowstate",
-        "`OnWindowStateMinimize`／`OnWindowStateRestore`（要件 8.4）",
-    ),
-    (
-        "onfullscreenapp",
-        "`OnFullScreenAppMinimize`／`OnFullScreenAppRestore`（要件 8.4）",
-    ),
-    ("appwindow", "タスクバー露出の切り替え（要件 8.5）"),
-    (
-        "taskbar",
-        "タスクバー・アプリ切り替え一覧の扱い（要件 8.5）",
-    ),
-];
-
-/// 帯の語（小文字）。常に手前を読むのは受け口と取り出しの相のファイル [`BAND_FILES`] だけであり
-/// （`stay-on-top-directives`）、重なり順の機構の本番ファイルには 1 つも無い。
-const BAND_NEEDLES: [(&str, &str); 3] = [
-    (
-        "topmost",
-        "常に手前の帯（`\\v`／`\\![set,windowstate,stayontop]` の働き）",
-    ),
-    ("stayontop", "`\\![set,windowstate,stayontop]`"),
-    ("windowstate", "`\\![set,windowstate,...]`"),
-];
-
-/// 帯の語を持つ areka 側の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
-const BAND_FILES: [&str; 2] = [
-    "../areka/src/emo2_boot/window_state_cue.rs",
-    "../areka/src/emo2_boot/frame/window_state.rs",
 ];
 
 fn source_path(relative: &str) -> PathBuf {
@@ -128,26 +90,7 @@ fn read_source(relative: &str) -> String {
         .unwrap_or_else(|e| panic!("本番ファイルを読めなかった（{}）: {e}", path.display()))
 }
 
-/// 行頭が `//` の行（通常のコメント・doc コメント）を落とした本文。
-fn code_only(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn deferred_hits(code: &str) -> Vec<(&'static str, &'static str)> {
-    let lowered = code.to_lowercase();
-    DEFERRED_NEEDLES
-        .iter()
-        .chain(BAND_NEEDLES.iter())
-        .filter(|(needle, _)| lowered.contains(*needle))
-        .copied()
-        .collect()
-}
-
-/// 先送り語彙は、本フィーチャーの areka 側本番ファイルのコードに 1 つも無い。
+/// 先送り語彙は、本フィーチャーの配置の crate の本番ファイルのコードに 1 つも無い。
 #[test]
 fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources() {
     let mut scanned_files = 0usize;
@@ -169,7 +112,7 @@ fn deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources()
         let hits = deferred_hits(&code);
         assert!(
             hits.is_empty(),
-            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯の語を持つのは {BAND_FILES:?} だけ）: {hits:?}"
+            "{relative}: 先送りの語か帯の語が本番コードに現れている（帯の語を持つのは本体の受け口と取り出しの相だけ）: {hits:?}"
         );
 
         scanned_files += 1;
@@ -231,25 +174,6 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
         code.contains("WS_EX_TOOLWINDOW"),
         "コードだけの本文から窓スタイルの実体が消えている"
     );
-}
-
-/// 帯の語を持つのは受け口と取り出しの相のファイルであり、そのコード（コメントを除く）で帯の語の
-/// 走査が語を見つける（上の「無い」の主張の対照・持ち主が改名や移動をすれば赤くなる）。
-#[test]
-fn the_band_files_are_where_the_band_words_live() {
-    for relative in BAND_FILES {
-        let code = code_only(&read_source(relative));
-        assert!(
-            deferred_hits(&code)
-                .iter()
-                .any(|(n, _)| BAND_NEEDLES.iter().any(|(b, _)| b == n)),
-            "{relative}: 帯の語が見つからない（帯の語の持ち主が動いた？）"
-        );
-        assert!(
-            !PRODUCTION_FILES.contains(&relative),
-            "{relative} が重なり順の機構の名簿に入っている"
-        );
-    }
 }
 
 // -------------------------------------------------------------------------
@@ -321,33 +245,12 @@ fn ghost_windows_carry_no_always_on_top_minimize_or_taskbar_bits() {
     }
 }
 
-/// `src` 配下の `.rs` を再帰で集め、`CARGO_MANIFEST_DIR` からの相対パス（`/` 区切り）で返す。
+/// 配置の `src` 配下の `.rs` を、`CARGO_MANIFEST_DIR` からの相対パス（`/` 区切り）で返す。
 fn all_source_files() -> Vec<String> {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut stack = vec![manifest.join("src"), manifest.join("../areka/src")];
-    let mut found = Vec::new();
-    while let Some(dir) = stack.pop() {
-        let entries = std::fs::read_dir(&dir)
-            .unwrap_or_else(|e| panic!("ソースの木を辿れなかった（{}）: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("ディレクトリ項目を読めなかった").path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
-                let relative = path
-                    .strip_prefix(&manifest)
-                    .expect("マニフェスト配下のはず")
-                    .to_string_lossy()
-                    .replace(std::path::MAIN_SEPARATOR, "/");
-                found.push(relative);
-            }
-        }
-    }
-    found.sort();
-    found
+    rust_sources_under(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
 }
 
-/// 重なり順の 2 機構（ペア・グループ）が全部を書いた areka 側の本番ファイル
+/// 重なり順の 2 機構（ペア・グループ）が全部を書いた、配置の crate の本番ファイル
 /// ＝ファイル名が `zorder_` で始まり、テストでもテスト専用の道具立てでもないもの。
 ///
 /// 共有ファイルへ足した継ぎ目（`spawn.rs`／`diag.rs`）はこの名前の規則に合わないので、
@@ -378,20 +281,18 @@ fn zorder_production_sources() -> Vec<String> {
 fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
     let actual = zorder_production_sources();
 
-    // ① 道具の較正: 既知の正例が挙がり、既知の偽例（テスト・テスト専用の道具立て）は挙がらない。
+    // ① 道具の較正（この crate の実物で）: 既知の正例が挙がり、木に在る既知の偽例（テスト）は挙がらない。
     assert!(
         actual.contains(&"src/zorder_group_ledger.rs".to_string()),
         "実物の走査が効いていない（既知の本番ファイルを見つけられない）: {actual:?}"
     );
     assert!(
-        !actual.iter().any(|p| p.ends_with("_tests.rs")),
-        "テストファイルを本番ファイルとして数えている: {actual:?}"
+        all_source_files().contains(&"src/zorder_group_ledger_tests.rs".to_string()),
+        "較正の外れが失われた: 既知のテストファイルが木に無い（別の対照へ差し替えること）"
     );
     assert!(
-        !actual
-            .iter()
-            .any(|p| p == "../areka/src/emo2_boot/frame/zorder_drain_test_support.rs"),
-        "テスト専用の道具立てを本番ファイルとして数えている: {actual:?}"
+        !actual.iter().any(|p| p.ends_with("_tests.rs")),
+        "テストファイルを本番ファイルとして数えている: {actual:?}"
     );
 
     // ② 実物が名簿から漏れていない。

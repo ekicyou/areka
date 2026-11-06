@@ -12,11 +12,9 @@
 //!
 //! # 層境界（6.3）
 //!
-//! `crates/areka/src/placement/` 本体は `EmoPresenter` を **import しない**。装着コードは全て
-//! 本 example 内にあり、areka-emo-present は dev-dependency として example からのみ使う。
-//! placement モジュールへは `#[path]` include でアクセスする（areka は bin crate で lib target を
-//! 持たないため。placement の非テストコードは `super::`／外部 crate のみを参照し `crate::` パスを
-//! 持たないので、example の私有モジュールとして include 可能——production コードは無改変）。
+//! 配置の crate（`crates/areka-placement/src/`）は `EmoPresenter` を **import しない**。装着コードは全て
+//! 本 example 内にある。配置は crate の公開面（`areka_placement::…`）で使う
+//! （spec: placement-crate-split 要件 4.1）。
 //!
 //! # TargetId 対応（example の裁量）
 //!
@@ -25,7 +23,7 @@
 //!
 //! # 使い方
 //! ```text
-//! cargo run -p areka --example window-placement
+//! cargo run -p areka-placement --example window-placement
 //! ```
 //!
 //! ## 終了手段
@@ -36,7 +34,7 @@
 //! - **Ctrl+C**（コンソールから起動した場合）
 //! - **`AREKA_APP_SMOKE_EXIT_MS=<ms>`**: 指定 ms 後に全ゴースト窓を自動 despawn して正常終了する
 //!   env ゲート（main.rs の smoke ゲートと同名・同義。hands-off のビルド/起動確認用。
-//!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka --example window-placement`）
+//!   例: `AREKA_APP_SMOKE_EXIT_MS=5000 cargo run -p areka-placement --example window-placement`）
 //!
 //! # 手動観測プロトコル（3.1/3.5/4.1〜4.5・design「examples/window-placement.rs（実 DPI 受け入れ）」）
 //!
@@ -98,19 +96,7 @@ use areka_emo_present::{
     EmoPresenter, PresentCommand, ShellTarget, TargetId, build_balloon_target, load_shell_target,
 };
 
-/// 窓配置機構本体（`crates/areka/src/placement/`）を example の私有モジュールとして include する。
-///
-/// areka は bin crate（lib target なし）のため `use areka::placement` はできない。placement の
-/// 非テストコードは `super::`／外部 crate のみを参照する（`crate::` パスは `#[cfg(test)]` 内のみ）
-/// ため、`#[path]` include で production コード無改変のままアクセスできる（6.3: 本体は
-/// `EmoPresenter` を import しない——装着コードは全て本 example 側）。
-/// `#[allow(dead_code)]` は「main.rs だけが消費する公開面（フォールバック用 API 等）」を
-/// example ビルドで未使用警告にしないための include 側指定。
-#[path = "../src/placement/mod.rs"]
-#[allow(dead_code)]
-mod placement;
-
-use placement::spawn::{
+use areka_placement::spawn::{
     GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
 };
 
@@ -234,7 +220,7 @@ fn build_and_spawn(world: &mut World) {
     let balloon_dir = balloon_root();
 
     // placement 本体の準備パイプライン（load→config→measure→primary work area→resolve）。
-    let prepared = match placement::prepare_ghost_windows(&ghost_root, &balloon_dir) {
+    let prepared = match areka_placement::prepare_ghost_windows(&ghost_root, &balloon_dir) {
         Ok(p) => p,
         Err(e) => {
             tracing::error!(
@@ -258,7 +244,7 @@ fn build_and_spawn(world: &mut World) {
 
     // MonitorSnapshot（task 8.1・DD15 基盤）: 実モニタ work area 集合を忠実転写した
     // Resource を挿入（bottom 吸着ドラッグ（4.7・task 8.2）の消費用・セッション内固定）。
-    world.insert_resource(placement::follow::MonitorSnapshot::from_monitors(
+    world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
 
@@ -291,7 +277,7 @@ fn build_and_spawn(world: &mut World) {
     for scope in windows.scopes().collect::<Vec<_>>() {
         // 初期 surface id: 測りと同じく、候補の並びのうちシェルに在る最初の面（窓寸法と表示 surface の原寸が一致する）。
         let probe = shell_target.build_world();
-        let surface_id = placement::descript_window_keys::first_existing(
+        let surface_id = areka_placement::descript_window_keys::first_existing(
             &prepared.default_surfaces.candidates(scope),
             |id| probe.surface(id).is_some(),
         )

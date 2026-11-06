@@ -42,3 +42,5 @@ sample-ghost-kit = { path = "../sample-ghost-kit" }
 temp-path-kit = { path = "../temp-path-kit" }
 # 実濾過（EnvFilter）の観測と捕捉の窓を差すテストが使う（本体の表と同じ版・ワークスペースの表から受ける）。
 tracing-subscriber = { workspace = true }
+# examples/window-placement.rs の smoke 自動 close の計時（本体・wintf と同じ版・Cargo.lock に新しいクレートは増えない）。
+async-io = { version = "2.6", default-features = false }

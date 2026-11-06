@@ -34,6 +34,8 @@
 
 use std::collections::BTreeSet;
 
+use crate::crate_source_test_support::crate_source;
+
 /// 要件 10.2 が名指しする 11 分岐。並びも語も要件本文の逐語である。
 ///
 /// 9 番目を tasks.md は「shell 設定の適用」と言い換えているが、ここは要件の字面
@@ -66,18 +68,21 @@ const BRANCHES: [&str; 11] = [
 const TEST_FILES: [(&str, &str, &str); 8] = [
     (
         "placement/zorder_group_ledger_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_group_ledger_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_group_ledger.rs"),
+        crate_source!("areka-placement", "src/zorder_group_ledger_tests.rs"),
+        crate_source!("areka-placement", "src/zorder_group_ledger.rs"),
     ),
     (
         "placement/zorder_group_ledger_state_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_group_ledger_state_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_group_ledger.rs"),
+        crate_source!("areka-placement", "src/zorder_group_ledger_state_tests.rs"),
+        crate_source!("areka-placement", "src/zorder_group_ledger.rs"),
     ),
     (
         "placement/zorder_group_ledger_written_order_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_group_ledger_written_order_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_group_ledger.rs"),
+        crate_source!(
+            "areka-placement",
+            "src/zorder_group_ledger_written_order_tests.rs"
+        ),
+        crate_source!("areka-placement", "src/zorder_group_ledger.rs"),
     ),
     (
         "emo2_boot/zorder_cue_tests.rs",
@@ -96,8 +101,8 @@ const TEST_FILES: [(&str, &str, &str); 8] = [
     ),
     (
         "placement/zorder_chain_compose_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_chain_compose_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_chain_compose.rs"),
+        crate_source!("areka-placement", "src/zorder_chain_compose_tests.rs"),
+        crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
         "emo2_boot/frame/zorder_drain_projection_tests.rs",

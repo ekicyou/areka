@@ -49,12 +49,12 @@
 ### 使ってよい依存
 
 - `areka-placement` の本番の依存は次に限る: wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows・thiserror（1.7）。
-- `areka-placement` の開発用の依存は次に限る: log-capture-kit・temp-path-kit・sample-ghost-kit・tracing-subscriber（どれもワークスペースの中か `Cargo.lock` に既にある）。
+- `areka-placement` の開発用の依存は次に限る: log-capture-kit・temp-path-kit・sample-ghost-kit・tracing-subscriber・async-io（どれもワークスペースの中か `Cargo.lock` に既にある。async-io は移した `examples/window-placement.rs` が時間を計るのに使う・D5）。
 - `areka-placement` は `areka` に依存しない（1.8）。本体 → 配置の一方向だけ。
 - 共有のテスト用の crate（log-capture-kit・sample-ghost-kit・temp-path-kit）は、どの crate でも本番の依存表（optional を含む）に書かない（3.4）。
 - `test-support` 機能の下の項目が頼ってよいのは、配置の本番の項目と、ほかの `test-support` の項目と、std・windows・wintf・bevy_ecs だけ。`#[cfg(test)]` だけの項目と共有のテスト用の crate には頼らない。
 - 読み方の規則は 1 つ: **自分の crate のファイルは相対の道で読み、別の crate のファイルは読み口で読む**。本体のテストが別の crate のファイルを読むのは、本体が依存する crate（下の crate）だけで、必ず読み口 `crate_source!`／`crate_path` を通す。配置のテストは本体のファイルを読まない。配置の crate が別の crate を読むのは `zorder_property_deferral_tests` の `../areka-sylphya/src`（配置が依存する下の crate）1 か所だけなので、配置には読み口を作らず、その行に理由を 1 行書く。
-- 名前を付けた例外: `crates/areka/src/session_end_sync_send_tests.rs` はワークスペースの全部の `crates/*/src` を歩く見張りで、依存の向きの外の crate も読む。この仕様では動かさず、置き場（ワークスペース全体の見張りの家＝`log-capture-kit/tests/`）へ移すことを `audit-areka-app` へ申し送る。
+- 名前を付けた例外: ワークスペース全体を歩く見張りの 3 本で、依存の向きの外の crate も読む。`crates/areka/src/session_end_sync_send_tests.rs`（ワークスペースの全部の `crates/*/src` を歩く）・`crates/areka/src/emo2_boot/frame_attach_tests.rs`（`CARGO_MANIFEST_DIR` から `.parent()` で上がり、`crates/` の下の全部の crate を歩く）・`crates/areka/src/readonly_tests.rs`（全部の crate のソースを歩く）。この仕様では動かさず、3 本とも置き場（ワークスペース全体の見張りの家＝`log-capture-kit/tests/`）へ移すことを `audit-areka-app` へ申し送る。
 
 ### 見直しの引き金
 
@@ -129,7 +129,7 @@ graph TB
 | D2 | 移し方 | 研究の案 C（段に分ける）。段 1 だけ本体の `main.rs` に一時の別名 `use areka_placement as placement;` を置き、公開面をコンパイラに数えさせる。段 3 で本体の道を書き換えて別名を外す。最終形に別名は残らない | 案 B（一度に全部）＝数百件のエラーが一度に出て、どの `pub` が何のためかを確かめにくい |
 | D3 | 本体のテストへ `reseed::tests` の補助を渡す方法 | `booted_world`・`new_shell`・`char_positions` と、それらが中で使う補助だけを `reseed_test_support.rs`（`reseed::test_support`・`test-support` 機能）へ移す。3 つは見本のゴーストに頼らないので、そのまま開ける | 本体の側へ写す（3.6 の写しの禁止に反する） |
 | D4 | 1,000 行の上限（1.9） | 例外表に項目を足さない。根（`lib.rs`）は `PlacementError` を `error.rs` へ出し、判定器の宣言を外すので 約 910 行に減る。`transition_judge.rs`（999 行）は、書き換えと rustfmt の後に 1,000 行を超えたときだけ、観測行の読み（`optional_fields`・`parse_transition_line`・`parse_transition_log`）を兄弟のファイル `transition_judge_parse.rs` へ出す（`verdict` を出してある形と同じ）。`main.rs`（986 行）は宣言の差し替えで 989 行以下に収める | 例外表に足す（roadmap の決め「どの spec も例外表に触れない」に反する） |
-| D5 | examples の開発用の依存 | `areka-placement` の `[dev-dependencies]` に `sample-ghost-kit`（path）と `tracing-subscriber`（`workspace = true`）を足す。どちらもワークスペースの中か `Cargo.lock` に既にある | なし |
+| D5 | examples の開発用の依存 | `areka-placement` の `[dev-dependencies]` に `sample-ghost-kit`（path）と `tracing-subscriber`（`workspace = true`）と `async-io`（`version = "2.6", default-features = false`・本体と wintf と同じ版と形）を足す。async-io は移した `window-placement.rs` が `async_io::Timer` で時間を計るのに使う。どれもワークスペースの中か `Cargo.lock` に既にあり、新しい crate は増えない | なし |
 | D6 | 見本のゴーストのバルーンの入口（3.2 の「`balloon_root` を足す」） | 本体の `emo2_boot/sample_test_support.rs` に同じ働きの `emo2_balloon_root` が既にあるので、新しい名前は足さずにそれを使い、`emo2_root` と合わせて `pub(crate)` に広げる（同じ働きの関数を 2 つにしない＝3.6） | 字面どおり `balloon_root` を足す（同じ中身の関数が 2 つになる） |
 | D7 | 下の crate を読む読み口の及ぶ範囲（5.4） | 5.4 は本体の crate 全体の約束なので、配置から来たテストだけでなく、本体のほかの 5 ファイル 6 か所（`input_events/file_drop_wiring_tests.rs`・`log_history_convention_tests.rs`・`tick_gate_config_producers_tests.rs`・`boot_shell_tests.rs`・`emo2_boot/film_playback_e2e_tests.rs`）も読み口へ寄せる。文書（`doc/`）と `target/` を読む所は crate ではないので変えない | 配置から来たテストだけに使い、ほかは申し送る（本体に読み方が 2 通り残る） |
 | D8 | テストの支えの置き場の決まり | 配置の中の支えを、頼る相手で 3 つに分ける: `test_support`（外へ開く・配置の型と windows だけ）・`sample_test_support`（見本のゴースト・慣習どおり）・`shared_test_support`（一時フォルダと合成の検体）。外へ開くものは、どれも `test_support` という名のモジュールか、`test-support` の印を付けた項目にある | 1 つのファイルに `#[cfg]` を混ぜる（どの項目が外へ開くか読み取りにくい） |
@@ -366,7 +366,7 @@ flowchart TB
 
 - 入: 本体の bin（本番・P0）、本体のテスト（`test-support`・P0）、本体の examples（P1）。
 - 出: wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows・thiserror（P0）。
-- 開発用: log-capture-kit・temp-path-kit・sample-ghost-kit・tracing-subscriber（P1）。`log-capture-kit` の `env-filter` 機能は付けない（有効にしてよいのは wintf だけという番人の決まり）。
+- 開発用: log-capture-kit・temp-path-kit・sample-ghost-kit・tracing-subscriber・async-io（P1・D5）。`log-capture-kit` の `env-filter` 機能は付けない（有効にしてよいのは wintf だけという番人の決まり）。
 
 **口の種類**: Cargo の約束 [x]
 
@@ -392,6 +392,7 @@ log-capture-kit = { path = "../log-capture-kit" }
 sample-ghost-kit = { path = "../sample-ghost-kit" }
 temp-path-kit = { path = "../temp-path-kit" }
 tracing-subscriber = { workspace = true }
+async-io = { version = "2.6", default-features = false }
 ```
 
 - 各行の上には、ほかの crate と同じ型の理由の注（「[dependencies] へは決して置かない」ほか）を写す。
@@ -631,7 +632,7 @@ pub(crate) fn crate_path(krate: &str, path: &str) -> std::path::PathBuf;
 
 **実装の注**
 
-- 確かめ: `grep -rnE '"(\.\./)+(wintf|areka-|log-capture|sample-ghost|temp-path|real-run|dola|shiori)' crates/areka/src` と、`CARGO_MANIFEST_DIR` から `".."` で crate の外へ上がる所（`grep -rnE '"\.\."|"\.\./\.\."' crates/areka/src`）が、読み口と名前を付けた例外（`session_end_sync_send_tests.rs`）の外で 0 件。
+- 確かめ: `grep -rnE '"(\.\./)+(wintf|areka-|log-capture|sample-ghost|temp-path|real-run|dola|shiori)' crates/areka/src` と、`CARGO_MANIFEST_DIR` から `".."` で crate の外へ上がる所（`grep -rnE '"\.\."|"\.\./\.\."' crates/areka/src`）が、読み口と名前を付けた例外（`session_end_sync_send_tests.rs`）の外で 0 件。`.parent()` で crate の外へ上がる名前を付けた例外の `emo2_boot/frame_attach_tests.rs`・`readonly_tests.rs` は、この grep の形には当たらない（ワークスペース全体を歩く見張りとして例外に入れる）。
 
 #### SourceReadTests
 
@@ -811,7 +812,7 @@ wintf の ZOrderPairStrategy・tracing を引く）。
   4. 割ったテストの語の表と走査器 → 配置の `test_support` に 1 つだけ置き、本体の片割れはそれを使う（写しは wintf と配置の 2 か所のまま）。
 - 範囲の外で気づいたこと（直さない）:
   - `areka-emo-present`・`areka-emo-text` のテストが `expect_one`・`ExpectField` を自前で持つ。完了の棚卸で扱う。
-  - `crates/areka/src/session_end_sync_send_tests.rs` のワークスペース全体の走査は、置き場を `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（読み口の規則の名前を付けた例外）。
+  - ワークスペース全体を歩く見張りの 3 本（`crates/areka/src/session_end_sync_send_tests.rs`・`crates/areka/src/emo2_boot/frame_attach_tests.rs`・`crates/areka/src/readonly_tests.rs`）は、置き場を `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（読み口の規則の名前を付けた例外）。
   - `crates/areka/examples/collision-probe.rs` の説明（90 行あたり）の `../pilot/...` を読むという記述は、今の中身と合っていない古い説明に見える。4.2 で触るときに確かめ、直すかは `audit-areka-app` へ申し送る。
 - 要件との対応の記録（設計の討議で要件の字面を改めた 2 件）: 要件 1.7 は「外の crate は `workspace = true`・ワークスペースの中の crate は path」（D11 の形）に、要件 3.2 は「既にある `emo2_balloon_root` を広げて使う」（D6 の形）に、要件の文を直した。
 
@@ -819,5 +820,5 @@ wintf の ZOrderPairStrategy・tracing を引く）。
 
 - **議題 1（本体のテスト専用のフォルダ）**: D1 のとおり crates/areka/src/placement_tests/（`mod.rs` 形・本体の慣習どおり）に、配置と本体をまたぐ 21 ファイルを集める。使う本体の部品の隣へばらすと、配置のテストが本体じゅうに散ってほかの audit の持ち物と混ざるため。
 - **議題 2（割った片割れが共に使う表と走査器）**: 写さず、配置の `test_support` の組ごとのモジュール（`zorder_pair_deferred`・`measure_template`）に 1 つだけ置き、本体の片割れは `areka_placement::test_support::<組>::…` を使う。2 つの `code_only` は中身が違うので 1 つにまとめない。語の表の写しは wintf と配置の 2 か所のまま。
-- **議題 3（読み口の及ぶ範囲）**: D7 のとおり、本体のほかの 5 ファイル 6 か所も読み口へ寄せる。読み方の規則は「自分の crate は相対・別の crate は読み口」の 1 つで、例外は名前を付けた `session_end_sync_send_tests.rs` だけ。
+- **議題 3（読み口の及ぶ範囲）**: D7 のとおり、本体のほかの 5 ファイル 6 か所も読み口へ寄せる。読み方の規則は「自分の crate は相対・別の crate は読み口」の 1 つで、例外は名前を付けたワークスペース全体の見張りの 3 本（`session_end_sync_send_tests.rs`・`emo2_boot/frame_attach_tests.rs`・`readonly_tests.rs`）だけ（後の 2 本は段 4 の実装で見つかった）。
 - 設計の検証（GO）の重大な問題 1・2 は、自明な直しとして反映済み（読み口の規則の 1 本化・名前を付けた例外・要件 1.7 と 3.2 の字面の直し）。

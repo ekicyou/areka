@@ -140,8 +140,10 @@ fn balloon_bakes_per_file(balloon_dir: &Path) -> BTreeMap<String, (u32, u32)> {
 /// 動く絵の検体を `target\` の下の小さなゴーストの形へ写す（`ghost\master`・`shell\master`・
 /// `balloon`）。
 fn animated_ghost() -> TempPath {
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../areka-emo-compose/tests/fixtures/animated-playback");
+    let fixture = crate::crate_source_test_support::crate_path(
+        "areka-emo-compose",
+        "tests/fixtures/animated-playback",
+    );
     let root = TempPath::under_target("measure-bake-count");
     let ghost_master = root.path().join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("ghost/master");

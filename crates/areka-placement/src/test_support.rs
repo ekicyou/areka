@@ -126,3 +126,203 @@ pub fn emily_shaped_scopes() -> Vec<usize> {
     .into_keys()
     .collect()
 }
+
+/// 割った `measure_template_tests` の 2 つの片割れ（配置の crate と本体）が共に使う走査器
+/// （spec: placement-crate-split 要件 3.6・5.3）。写しを作らず、ここに 1 つだけ置く。
+pub mod measure_template {
+    /// 見張る綴り。
+    ///
+    /// 末尾の `(` を落としてあるのは、`use areka_parsers::shell::parse;` で名前だけ持ち込んで
+    /// `parse(` と呼ぶ形も同じ 1 本で捕まえるため（`use` 行にもこの綴りが現れる）。
+    pub const SHELL_PARSE: &str = "shell::parse";
+
+    /// 行コメント・ブロックコメント・文字列リテラルを落とした本文。
+    ///
+    /// 説明文（`//!`・`///`・`//`）の中の綴りを拾って偽陽性にせず、文字列リテラルへ逃がした綴りも
+    /// 数えないための下拵え。本関数が扱えるのはコメントと通常の文字列リテラルだけで、
+    /// 二重引用符の文字リテラルと生文字列（`r"…"`・`r#"…"#`）は扱わない。これらが持ち込まれると
+    /// その `"` を文字列の始まりと読み違え、以降の本文を丸ごと文字列の中身として飲み込む——
+    /// つまり失敗の向きは「赤になる」ではなく**静かに見逃す**である。だから散文で戒めるのではなく、
+    /// 走査の前に [`assert_no_blind_spot_literals`] でこの 2 形式が 0 件であることを機械で主張する。
+    /// 綴りを拾えること・説明文の中の綴りを拾わないことは、各片割れの較正 2 本が自分の crate の
+    /// 実物で確かめる。
+    pub fn code_only(source: &str) -> String {
+        let chars: Vec<char> = source.chars().collect();
+        let mut out = String::with_capacity(source.len());
+        let mut i = 0;
+        // ブロックコメントの入れ子の深さ（Rust のブロックコメントは入れ子になる）。
+        let mut block_depth = 0usize;
+        while i < chars.len() {
+            let c = chars[i];
+            let next = chars.get(i + 1).copied();
+            if block_depth > 0 {
+                if c == '/' && next == Some('*') {
+                    block_depth += 1;
+                    i += 2;
+                } else if c == '*' && next == Some('/') {
+                    block_depth -= 1;
+                    i += 2;
+                } else {
+                    if c == '\n' {
+                        out.push('\n');
+                    }
+                    i += 1;
+                }
+                continue;
+            }
+            if c == '/' && next == Some('/') {
+                while i < chars.len() && chars[i] != '\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            if c == '/' && next == Some('*') {
+                block_depth = 1;
+                i += 2;
+                continue;
+            }
+            if c == '"' {
+                i += 1;
+                while i < chars.len() {
+                    match chars[i] {
+                        '\\' => i += 2,
+                        '"' => {
+                            i += 1;
+                            break;
+                        }
+                        '\n' => {
+                            out.push('\n');
+                            i += 1;
+                        }
+                        _ => i += 1,
+                    }
+                }
+                continue;
+            }
+            out.push(c);
+            i += 1;
+        }
+        out
+    }
+
+    /// 二重引用符の文字リテラルの綴り（この綴り自体を走査対象へ書かないよう、文字列で持つ）。
+    const CHAR_QUOTE_LITERAL: &str = "'\"'";
+
+    /// [`code_only`] の前提条件を生のソースに対して主張する。
+    ///
+    /// 走査器はコメントと通常の文字列リテラルしか落とせない。二重引用符の文字リテラルや生文字列が
+    /// 混ざると本物の呼び出しを静かに見逃すので、見逃しが起こり得る形式が 0 件であることを
+    /// 本文の判定の**前**に確かめる。走査対象のファイルは今日すべて、どちらの形式も 0 件である。
+    pub fn assert_no_blind_spot_literals(raw: &str, file: &str) {
+        assert!(
+            !raw.contains(CHAR_QUOTE_LITERAL),
+            "{file}: 二重引用符の文字リテラルが持ち込まれた。走査器はこの形式を扱えない\
+             （本物の呼び出しを静かに見逃す）。こういうリテラルを持ち込む前に走査器を強くすること"
+        );
+        let bytes = raw.as_bytes();
+        for i in 0..bytes.len() {
+            // 生文字列の始まり＝識別子の途中でない `r` に `"` か `#` が続く形。
+            if bytes[i] != b'r' {
+                continue;
+            }
+            if i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
+                continue;
+            }
+            if matches!(bytes.get(i + 1), Some(b'"') | Some(b'#')) {
+                panic!(
+                    "{file}: 生文字列が持ち込まれた。走査器はこの形式を扱えない\
+                     （本物の呼び出しを静かに見逃す）。こういうリテラルを持ち込む前に走査器を強くすること"
+                );
+            }
+        }
+    }
+}
+
+/// 割った `spawn_zorder_pair_deferred_tests` の 2 つの片割れ（配置の crate と本体）が共に使う
+/// 語の表と走査器（spec: placement-crate-split 要件 3.6・5.3）。写しを作らず、ここに 1 つだけ置く。
+/// [`measure_template`] の `code_only` とは中身が違う（こちらは `//` の行を落とすだけ）のでまとめない。
+pub mod zorder_pair_deferred {
+    /// 先送り語彙（小文字）と、それが何の入口かの説明。
+    ///
+    /// 最小化・タスクバーの扱いは別の spec（`tasktray-minimize` ほか）の持ち物で、まだ先送りの
+    /// ままである。兄弟の wintf 側テスト（`crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs`）
+    /// と同じ 2 つの表（この表と [`BAND_NEEDLES`]）を持つ。片方だけを増やすと守りが片肺になるので、
+    /// どちらの表へ足すときも両方のファイル（wintf の兄弟とこのファイル）へ足すこと。
+    pub const DEFERRED_NEEDLES: [(&str, &str); 6] = [
+        (
+            "minimize",
+            "最小化（`\\![set,windowstate,minimize]`／`OnWindowStateMinimize`・要件 8.3／8.4／8.5）",
+        ),
+        ("iconic", "最小化状態の読み取り（要件 8.5）"),
+        (
+            "onwindowstate",
+            "`OnWindowStateMinimize`／`OnWindowStateRestore`（要件 8.4）",
+        ),
+        (
+            "onfullscreenapp",
+            "`OnFullScreenAppMinimize`／`OnFullScreenAppRestore`（要件 8.4）",
+        ),
+        ("appwindow", "タスクバー露出の切り替え（要件 8.5）"),
+        (
+            "taskbar",
+            "タスクバー・アプリ切り替え一覧の扱い（要件 8.5）",
+        ),
+    ];
+
+    /// 帯の語（小文字）。常に手前を読むのは本体の受け口と取り出しの相のファイルだけであり
+    /// （`stay-on-top-directives`）、重なり順の機構の本番ファイルには 1 つも無い。
+    pub const BAND_NEEDLES: [(&str, &str); 3] = [
+        (
+            "topmost",
+            "常に手前の帯（`\\v`／`\\![set,windowstate,stayontop]` の働き）",
+        ),
+        ("stayontop", "`\\![set,windowstate,stayontop]`"),
+        ("windowstate", "`\\![set,windowstate,...]`"),
+    ];
+
+    /// 行頭が `//` の行（通常のコメント・doc コメント）を落とした本文。
+    pub fn code_only(source: &str) -> String {
+        source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// `manifest/src` 配下の `.rs` を再帰で集め、`manifest` からの相対パス（`/` 区切り）で返す。
+    /// 各片割れは自分の crate の `CARGO_MANIFEST_DIR` を渡す（自分の木だけを歩く）。
+    pub fn rust_sources_under(manifest: &std::path::Path) -> Vec<String> {
+        let mut stack = vec![manifest.join("src")];
+        let mut found = Vec::new();
+        while let Some(dir) = stack.pop() {
+            let entries = std::fs::read_dir(&dir)
+                .unwrap_or_else(|e| panic!("ソースの木を辿れなかった（{}）: {e}", dir.display()));
+            for entry in entries {
+                let path = entry.expect("ディレクトリ項目を読めなかった").path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                    let relative = path
+                        .strip_prefix(manifest)
+                        .expect("マニフェスト配下のはず")
+                        .to_string_lossy()
+                        .replace(std::path::MAIN_SEPARATOR, "/");
+                    found.push(relative);
+                }
+            }
+        }
+        found.sort();
+        found
+    }
+
+    /// 本文に現れる先送りの語と帯の語（小文字にして探す）。
+    pub fn deferred_hits(code: &str) -> Vec<(&'static str, &'static str)> {
+        let lowered = code.to_lowercase();
+        DEFERRED_NEEDLES
+            .iter()
+            .chain(BAND_NEEDLES.iter())
+            .filter(|(needle, _)| lowered.contains(*needle))
+            .copied()
+            .collect()
+    }
+}

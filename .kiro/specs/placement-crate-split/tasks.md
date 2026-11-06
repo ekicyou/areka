@@ -85,37 +85,37 @@
   - 完了の状態: ワークスペース全体が全部の対象で組め、本体の `src` で `crate::placement::` が 0 件・段 3 のコミット
   - _Requirements: 2.4_
 
-- [ ] 5. 文字で読むテストと examples を置き直す（段 4）
-- [ ] 5.1 examples を crate の公開面で使う形にする
+- [x] 5. 文字で読むテストと examples を置き直す（段 4）
+- [x] 5.1 examples を crate の公開面で使う形にする
   - `window-placement.rs` を配置の crate の examples へ `git mv` し、`#[path]` の取り込みをやめて公開面で使う（足りない公開面は外として開ける）
   - `collision-probe.rs` は本体に残し、配置の `#[path]` を外して依存として使う（`emo2_boot` の `#[path]` はそのまま）。説明の古い `../pilot/...` の記述は確かめて、直すかは申し送りに書く
   - 2.3 で一時につないだ `measure_template_tests` の examples の読み先を、移した先に合わせる
   - 完了の状態: 両方の examples が警告なしに組める
   - _Requirements: 4.1, 4.2, 4.3_
-- [ ] 5.2 本体の読み口を作り、下の crate を読む所を寄せる
+- [x] 5.2 本体の読み口を作り、下の crate を読む所を寄せる
   - 本体のテストのときだけ立つ読み口（コンパイルの時に読むマクロと、在ることを確かめて道を返す関数）を作り、読んでよい crate の範囲を説明に書く
   - 本体のほかの 5 ファイル 6 か所の、下の crate を読む所を読み口へ寄せる
   - 完了の状態: 触ったテストが緑
   - _Requirements: 5.4, 5.5_
-- [ ] 5.3 `measure_template_tests` を確かめていることで 2 つに割る
+- [x] 5.3 `measure_template_tests` を確かめていることで 2 つに割る
   - 採寸と表示の外形の一致と配置のファイル（配置の examples を含む）の走査を配置の crate に、本体のファイルの走査を本体のテスト専用のフォルダに置く
   - 共に使う走査器（註釈と文字列を除く `code_only`・見落としの形が無いことの主張とその前提の定数）を、配置の外へ開く支えの組ごとのモジュールに 1 つだけ置き、両方の片割れがそれを使う
   - どちらの片割れも、自分の crate の実物で走査器の較正（当たりと外れ）を通す。2.3 の一時のつなぎ（配置から本体を読む道）は残さない
   - 完了の状態: 2 つの片割れが緑で、合わせて移す前と同じファイルを覆う
   - _Requirements: 5.2, 5.3, 5.5, 3.6_
-- [ ] 5.4 `spawn_zorder_pair_deferred_tests` を crate ごとに割る
+- [x] 5.4 `spawn_zorder_pair_deferred_tests` を crate ごとに割る
   - 配置のファイルの名簿と配置の `src` の木の走査を配置に、`emo2_boot` のファイルの名簿・帯のファイル・本体の `src` の木の走査を本体に置く
   - 共に使う語の表（2 つ）と行の註釈を落とす `code_only` を、配置の外へ開く支えの別の組ごとのモジュールに 1 つだけ置く（5.3 の `code_only` とは中身が違うのでまとめない。同じ支えのファイルを触るので 5.3 の後）
   - wintf の兄弟の表の上の注「両方のファイルへ足す」の相手を新しい置き場に直す
   - 完了の状態: 2 つの片割れが自分の crate の正例で較正を通して緑で、合わせて移す前と同じ木を歩く
   - _Requirements: 5.2, 5.3, 5.5, 3.6_
-- [ ] 5.5 分岐の対応表と残りの文字で読むテストの読み先を最終形にする
+- [x] 5.5 分岐の対応表と残りの文字で読むテストの読み先を最終形にする
   - 分岐の対応表 2 本を割らずに、配置と wintf の行は読み口で、本体の行は相対の道で読む形にする
   - 判定器の一族の手順のテストの読み先を、本体の中の相対の道として確かめる
   - 配置に残る `zorder_property_deferral_tests` の下の crate を読む 1 行に、読み口を作らない理由を 1 行書く
   - 完了の状態: 対応表の「どの分岐も 1 本以上のテストで覆われている」が緑で、読み先が無ければコンパイルか panic で止まる
   - _Requirements: 5.2, 5.3, 5.4, 5.5_
-- [ ] 5.6 段 4 の読み方の規則を確かめる
+- [x] 5.6 段 4 の読み方の規則を確かめる
   - 読み口の外で、下の crate へ上がる相対の道と `CARGO_MANIFEST_DIR` から crate の外へ上がる所を grep し、配置の crate から本体を読む所も grep する
   - 完了の状態: どちらの grep も、名前を付けた例外（`session_end_sync_send_tests.rs`）と配置の `zorder_property_deferral_tests.rs` の `../areka-sylphya` の 1 行を除いて 0 件で、ワークスペース全体を全部の対象で組んで警告 0・段 4 のコミット
   - _Requirements: 5.2, 5.4, 4.3_
@@ -213,3 +213,8 @@
 - 出所は `module_path!()` から決まるので、移した時点で `areka::placement::measure` が `areka_placement::measure` に変わった。本体の measure_bake_count・measure_bake_log の期待値は段 2 で直した（7.1 が持つのは明示の `DIAG_TARGET` ほか）。
 - 3.1 の grep 0 件は配置の crate と `placement_tests` の範囲。本体の `emo2_boot`・`input_events` と areka-emo-text の同名の補助は文字列を返す別物で、触っていない。
 - 4.1: 本体の `src` は、コードと説明のどちらでも `crate::placement::`・素の `placement::` が 0 件（説明の 36 か所も `areka_placement::` へ直した）。ファイルのパスの記述（`src/placement/<name>.rs` の形）は 15 ファイルの 60 行に残る。その中には `emo2_boot/assets_tests.rs`・`frame_test_support.rs`・`frame_transition_atomicity_tests.rs`・`main_monitor_snapshot_seam_tests.rs`・`placement_tests/zorder_*_branch_coverage_tests.rs` など 7.2 の一覧に無いファイルもあるので、7.2 で一緒に直し、7.6 の grep で 0 を確かめる。
+- 段 4（5.1〜5.6）は 1 回の実装係にまとめた（1 つのコミットの段・トークンを抑えるため）。レビューの 1 回目は文書の食い違いで差し戻し、design.md だけを直して 2 回目で承認。
+- 5.1: 移した `window-placement.rs` が `async_io::Timer` を使うので、配置の開発用の依存に `async-io`（本体・wintf と同じ `version = "2.6", default-features = false`・`Cargo.lock` に crate は増えない）を足し、design.md の「使ってよい依存」・D5・PlacementCrate に書き足した。要件 1.6 の字面（「足してよいのはワークスペースの中の path 依存だけ」）は、もとから D5 が認める tracing-subscriber も締め出すので、完了の棚卸で 1.6 の文を「新しい crate を `Cargo.lock` に入れない」の読みに合わせるかを決める。5.1 で新しく開けた公開の項目は無い。
+- 5.6: 名前を付けた例外は、ワークスペース全体を歩く見張りの 3 本（`session_end_sync_send_tests.rs`・`emo2_boot/frame_attach_tests.rs`・`readonly_tests.rs`）になった。後の 2 本は `.parent()` で上がるので設計の grep に当たらない。3 本とも `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（完了の棚卸で起票）。
+- 共に使う走査器は `areka_placement::test_support::{measure_template, zorder_pair_deferred}` に 1 つずつ（`rust_sources_under`・`deferred_hits`・`SHELL_PARSE` も、両方の片割れが使うのでここに置いた）。
+- 7.2 へ: `crates/areka/examples/collision-probe.rs` の 76・96・100・103・107・111・115 行（`placement/{spawn,source,measure,mod}.rs:<行>`）と `collision-probe/setup.rs` の 42 行（`window-placement.rs:259-261`）・76 行（`placement/spawn.rs`）の説明のパス。90 行の古い `../pilot/...` の記述（`emo2_root` は今は sample_ghost_kit から来る）は直さず、`audit-areka-app` へ申し送る。

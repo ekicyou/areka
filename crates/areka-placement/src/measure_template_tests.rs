@@ -13,6 +13,15 @@
 //!    であり、どちらか一方だけが自前の読み込みへ戻ると (1) の一致はその場では緑のまま、
 //!    実機でだけ「採寸した窓の大きさと表示された絵の外形が食い違う」形で現れる（要件 3.6）。
 //!
+//! # 2 つの片割れ（spec: placement-crate-split 要件 5.2・5.3）
+//!
+//! 本ファイルは配置の crate の片割れで、(1) と、配置のファイル（`measure.rs`・
+//! `measure_first_frame.rs`・`examples/window-placement.rs`）の走査を持つ。本体のファイル
+//! （`emo2_boot/assets.rs`・本体の examples）の走査は本体の
+//! `crates/areka/src/placement_tests/measure_template_tests.rs` が持つ。走査器は 2 つの片割れが
+//! 共に使う [`crate::test_support::measure_template`] に 1 つだけあり、どちらの片割れも自分の
+//! crate の実物で走査器を較正する。
+//!
 //! `measure_tests.rs` は 981 行で追記の余地が無いため、本ファイルを兄弟として新設した
 //! （要件 7.12）。検体は共有の受け口（`placement_shared_test_support.rs`）経由でのみ受け、
 //! `vendors/sample_ghost/` の直パスは書かない（要件 7.11）。
@@ -25,6 +34,9 @@ use areka_emo_present::shell_target::load_shell_target;
 
 use super::{build_shell_assets, compose_size};
 use crate::sample_test_support::{konnoyayame_shell_root, r_post_and_komainu_shell_root};
+use crate::test_support::measure_template::{
+    SHELL_PARSE, assert_no_blind_spot_literals, code_only,
+};
 use crate::test_support::with_com_initialized;
 
 // ---------------------------------------------------------------------------
@@ -165,122 +177,14 @@ fn measure_and_present_agree_on_konnoyayame() {
 // (2) 本文走査（読み込みの複製が戻ったら赤になる）
 // ---------------------------------------------------------------------------
 
-/// 見張る綴り。
-///
-/// 末尾の `(` を落としてあるのは、`use areka_parsers::shell::parse;` で名前だけ持ち込んで
-/// `parse(` と呼ぶ形も同じ 1 本で捕まえるため（`use` 行にもこの綴りが現れる）。
-const SHELL_PARSE: &str = "shell::parse";
-
-/// 行コメント・ブロックコメント・文字列リテラルを落とした本文。
-///
-/// 説明文（`//!`・`///`・`//`）の中の綴りを拾って偽陽性にせず、文字列リテラルへ逃がした綴りも
-/// 数えないための下拵え。本関数が扱えるのはコメントと通常の文字列リテラルだけで、
-/// 二重引用符の文字リテラルと生文字列（`r"…"`・`r#"…"#`）は扱わない。これらが持ち込まれると
-/// その `"` を文字列の始まりと読み違え、以降の本文を丸ごと文字列の中身として飲み込む——
-/// つまり失敗の向きは「赤になる」ではなく**静かに見逃す**である。だから散文で戒めるのではなく、
-/// 走査の前に [`assert_no_blind_spot_literals`] でこの 2 形式が 0 件であることを機械で主張する。
-/// 綴りを拾えること・説明文の中の綴りを拾わないことは、この下の 2 本の較正が実物で確かめる。
-fn code_only(source: &str) -> String {
-    let chars: Vec<char> = source.chars().collect();
-    let mut out = String::with_capacity(source.len());
-    let mut i = 0;
-    // ブロックコメントの入れ子の深さ（Rust のブロックコメントは入れ子になる）。
-    let mut block_depth = 0usize;
-    while i < chars.len() {
-        let c = chars[i];
-        let next = chars.get(i + 1).copied();
-        if block_depth > 0 {
-            if c == '/' && next == Some('*') {
-                block_depth += 1;
-                i += 2;
-            } else if c == '*' && next == Some('/') {
-                block_depth -= 1;
-                i += 2;
-            } else {
-                if c == '\n' {
-                    out.push('\n');
-                }
-                i += 1;
-            }
-            continue;
-        }
-        if c == '/' && next == Some('/') {
-            while i < chars.len() && chars[i] != '\n' {
-                i += 1;
-            }
-            continue;
-        }
-        if c == '/' && next == Some('*') {
-            block_depth = 1;
-            i += 2;
-            continue;
-        }
-        if c == '"' {
-            i += 1;
-            while i < chars.len() {
-                match chars[i] {
-                    '\\' => i += 2,
-                    '"' => {
-                        i += 1;
-                        break;
-                    }
-                    '\n' => {
-                        out.push('\n');
-                        i += 1;
-                    }
-                    _ => i += 1,
-                }
-            }
-            continue;
-        }
-        out.push(c);
-        i += 1;
-    }
-    out
-}
-
-/// 二重引用符の文字リテラルの綴り（この綴り自体を走査対象へ書かないよう、文字列で持つ）。
-const CHAR_QUOTE_LITERAL: &str = "'\"'";
-
-/// [`code_only`] の前提条件を生のソースに対して主張する。
-///
-/// 走査器はコメントと通常の文字列リテラルしか落とせない。二重引用符の文字リテラルや生文字列が
-/// 混ざると本物の呼び出しを静かに見逃すので、見逃しが起こり得る形式が 0 件であることを
-/// 本文の判定の**前**に確かめる。走査対象のファイルは今日すべて、どちらの形式も 0 件である。
-fn assert_no_blind_spot_literals(raw: &str, file: &str) {
-    assert!(
-        !raw.contains(CHAR_QUOTE_LITERAL),
-        "{file}: 二重引用符の文字リテラルが持ち込まれた。走査器はこの形式を扱えない\
-         （本物の呼び出しを静かに見逃す）。こういうリテラルを持ち込む前に走査器を強くすること"
-    );
-    let bytes = raw.as_bytes();
-    for i in 0..bytes.len() {
-        // 生文字列の始まり＝識別子の途中でない `r` に `"` か `#` が続く形。
-        if bytes[i] != b'r' {
-            continue;
-        }
-        if i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
-            continue;
-        }
-        if matches!(bytes.get(i + 1), Some(b'"') | Some(b'#')) {
-            panic!(
-                "{file}: 生文字列が持ち込まれた。走査器はこの形式を扱えない\
-                 （本物の呼び出しを静かに見逃す）。こういうリテラルを持ち込む前に走査器を強くすること"
-            );
-        }
-    }
-}
-
 /// 較正（当たり）: 本文の中の実際の呼び出しを [`code_only`] が落とさない。
 ///
-/// 当たりは合成せず、`git HEAD` の実物から採る——`frame_test_support.rs` の `empty_world` は
-/// `areka_parsers::shell::parse("")` を本文で呼んでおり、この綴りが説明文の中ではなく
+/// 当たりは合成せず、この crate の実物から採る——`measure_tests.rs` は
+/// `areka_parsers::shell::parse(&before)` を本文で呼んでおり、この綴りが説明文の中ではなく
 /// 関数の本体に在ることが対照の要点である。
 #[test]
 fn the_source_scan_still_sees_a_real_call() {
-    let code = code_only(include_str!(
-        "../../areka/src/emo2_boot/frame_test_support.rs"
-    ));
+    let code = code_only(include_str!("measure_tests.rs"));
     assert!(
         code.contains(SHELL_PARSE),
         "較正が死んでいる: 本文の中の実際の呼び出しを走査が拾えない"
@@ -289,17 +193,23 @@ fn the_source_scan_still_sees_a_real_call() {
 
 /// 較正（外れ）: 説明文の中にしか無い綴りを [`code_only`] が落とす。
 ///
-/// これも実物から採る——`assets_tests.rs` の `boot_read_honours_the_files_own_charset_declaration`
-/// の doc コメントだけがこの綴りを持ち、本文には 1 件も無い。
+/// これも実物から採る——`measure_tests.rs` は本文の呼び出しのほかに、説明文の中にもこの綴りを
+/// 持つ。本文だけにすると、説明文の行にある綴りの数だけちょうど減ることを確かめる。
 #[test]
 fn the_source_scan_drops_a_spelling_that_only_lives_in_a_comment() {
-    let raw = include_str!("../../areka/src/emo2_boot/assets_tests.rs");
+    let raw = include_str!("measure_tests.rs");
+    let in_comments = raw
+        .lines()
+        .filter(|line| line.trim_start().starts_with("//"))
+        .map(|line| line.matches(SHELL_PARSE).count())
+        .sum::<usize>();
     assert!(
-        raw.contains(SHELL_PARSE),
+        in_comments > 0,
         "較正の当たりが失われた: 説明文の中の綴りが実物から消えている（別の対照へ差し替えること）"
     );
-    assert!(
-        !code_only(raw).contains(SHELL_PARSE),
+    assert_eq!(
+        code_only(raw).matches(SHELL_PARSE).count(),
+        raw.matches(SHELL_PARSE).count() - in_comments,
         "較正が死んでいる: 説明文の中の綴りを走査が拾ってしまう"
     );
 }
@@ -330,42 +240,17 @@ fn the_measure_side_does_not_parse_the_shell_itself() {
     }
 }
 
-/// 要件 3.6: 起動側（`emo2_boot::assets`）も同じく自前でやり直していない。
-///
-/// 採寸側と起動側は「同じ絵を見る」ことが要件であり、片側だけが自前の読み込みへ戻る形が
-/// いちばん危うい（実機でしか現れない）。2 か所を同じ 1 本の綴りで見張る。
-#[test]
-fn the_boot_side_does_not_parse_the_shell_itself() {
-    let raw = include_str!("../../areka/src/emo2_boot/assets.rs");
-    assert_no_blind_spot_literals(raw, "assets.rs");
-    let code = code_only(raw);
-    assert!(
-        !code.contains(SHELL_PARSE),
-        "assets.rs の本文にシェルの解析が戻っている（読み込みの権威は load_shell_target 1 本）"
-    );
-}
-
-/// 要件 3.2: `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない。
+/// 要件 3.2: `load_shell_target` を呼ぶ examples 3 本も自前でやり直していない（この crate の 1 本。
+/// 本体の 2 本は本体の片割れが見る）。
 ///
 /// examples は製品と同じ入口で絵を読むことが前提の手元確認の道具であり、ここで自前の解析へ
-/// 戻ると、目視で見た絵と製品の絵が静かに別物になる。名前を持ち込むだけの
-/// `emo-present.rs`・`collision-probe.rs` は読み込みをしないので対象に含めない。
+/// 戻ると、目視で見た絵と製品の絵が静かに別物になる。
 #[test]
 fn the_examples_do_not_parse_the_shell_themselves() {
-    let files = [
-        (
-            "examples/emo-present/setup.rs",
-            include_str!("../../areka/examples/emo-present/setup.rs"),
-        ),
-        (
-            "examples/collision-probe/setup.rs",
-            include_str!("../../areka/examples/collision-probe/setup.rs"),
-        ),
-        (
-            "examples/window-placement.rs",
-            include_str!("../../areka/examples/window-placement.rs"),
-        ),
-    ];
+    let files = [(
+        "examples/window-placement.rs",
+        include_str!("../examples/window-placement.rs"),
+    )];
     for (file, raw) in files {
         assert_no_blind_spot_literals(raw, file);
         let code = code_only(raw);

@@ -3,7 +3,7 @@ use super::pointer::on_probe_pointer_moved;
 use super::state::{ProbeBoot, ProbePhase};
 use super::{
     AtlasTable, CommandSender, EmoPresenter, EmoWorld, OnPointerMoved, Path, WicDecoderArm, World,
-    load_shell_target, placement, spawn_ghost_windows,
+    load_shell_target, spawn_ghost_windows,
 };
 
 // ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ fn build_and_spawn(world: &mut World) {
     let balloon_dir = balloon_root();
 
     // placement 本体の準備パイプライン（load→config→measure→primary work area→resolve・実モニタ列挙）。
-    let mut prepared = match placement::prepare_ghost_windows(&ghost_root, &balloon_dir) {
+    let mut prepared = match areka_placement::prepare_ghost_windows(&ghost_root, &balloon_dir) {
         Ok(p) => p,
         Err(e) => {
             tracing::error!(
@@ -40,7 +40,7 @@ fn build_and_spawn(world: &mut World) {
     };
 
     // MonitorSnapshot（bottom 吸着 resize が work area を引く消費用・`window-placement.rs:259-261` 前例）。
-    world.insert_resource(placement::follow::MonitorSnapshot::from_monitors(
+    world.insert_resource(areka_placement::follow::MonitorSnapshot::from_monitors(
         &wintf::ecs::window::monitor::enumerate_monitors(),
     ));
 
@@ -56,7 +56,7 @@ fn build_and_spawn(world: &mut World) {
         placeholder = PLACEHOLDER_SIZE,
         "collision-probe: scope0 char を placeholder 誤寸で spawn（本番 resize 経路のみで最終一致させる）"
     );
-    p0.char_size = placement::resolver::SizePx {
+    p0.char_size = areka_placement::resolver::SizePx {
         w: PLACEHOLDER_SIZE,
         h: PLACEHOLDER_SIZE,
     };

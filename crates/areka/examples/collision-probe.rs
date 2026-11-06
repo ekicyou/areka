@@ -34,13 +34,13 @@
 //!
 //! # `#[path]` 私有 include（read-only 再利用・production 不改変）
 //!
-//! `areka` は bin crate（lib target なし）ゆえ `use areka::...` は不可能。本 probe は次の3モジュールを
-//! `#[path]` で私有 include する（`window-placement.rs:107-113` と同型）:
+//! `areka` は bin crate（lib target なし）ゆえ `use areka::...` は不可能。本 probe は次の2モジュールを
+//! `#[path]` で私有 include する。配置（`spawn_ghost_windows`／`resize_window_to`）は crate の公開面
+//! `areka_placement::…` で使う（spec: placement-crate-split 要件 4.2）:
 //!
 //! - `../src/emo2_boot/target_map.rs`（scope→`TargetId` 写像の正本・既に `crate::` フリー）
 //! - `../src/emo2_boot/hit_region.rs`（[`resolve_hit_region`]／`HitRegion` 契約・非テストコードは
 //!   `super::target_map` と外部 crate のみ参照＝`crate::` フリー）
-//! - `../src/placement/mod.rs`（`spawn_ghost_windows`／`resize_window_to` の read-only 再利用）
 //!
 //! **`target_map` と `hit_region` は example クレートルートに宣言する**（入れ子にしない）。これにより
 //! `hit_region.rs` 内部の `super::target_map` が本 probe の `target_map` へ解決される（design「配置の
@@ -56,7 +56,7 @@
 //! 3. **窓 client 寸は本番の窓寸規則で与える**: `spawn_ghost_windows` を**意図的に誤った placeholder 寸**
 //!    （100×100）で呼んで窓を作り、`apply(ShowSurface{1000, binds})` 成立後に
 //!    [`EmoPresenter::target_physical_size`]（**k 適用後の物理寸権威**）を読み、**本番の反映関数**
-//!    [`placement::follow::resize_window_to`] で窓へ適用する（戻り値 `true` を assert）。読む照会を
+//!    [`areka_placement::follow::resize_window_to`] で窓へ適用する（戻り値 `true` を assert）。読む照会を
 //!    `text_slot_view(...).surface_size()`（native 原寸）にしてはならない——k≠1.0 では窓が原寸へ
 //!    引き戻される（照会 1 トークンの取り違えが静かな欠陥になる）。placeholder を
 //!    誤寸にするのは「最終一致が本番 resize 経路を通ってしか成立しない」ことを構図で保証するため。
@@ -225,22 +225,15 @@ mod target_map;
 #[allow(dead_code)]
 mod hit_region;
 
-/// 窓配置機構本体（`spawn_ghost_windows`／`resize_window_to`）を read-only 再利用（production 無改変）。
-/// placement 非テストコードは `super::`／外部 crate のみを参照する（`crate::` は `#[cfg(test)]` 内のみ）ため
-/// `#[path]` include で成立する（`window-placement.rs:107-113` と同型）。
-#[path = "../src/placement/mod.rs"]
-#[allow(dead_code)]
-mod placement;
-
-use hit_region::resolve_hit_region;
-use placement::spawn::{
+use areka_placement::spawn::{
     GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
 };
+use hit_region::resolve_hit_region;
 
 // ---------------------------------------------------------------------------
 // 本体分割の接続（`areka-P0-file-slimming` task 8.12・純移動）
 //
-// **上の 3 つの `#[path = "../src/..."]` 私有 include はこのファイルに残す。** 相対パスは宣言元
+// **上の 2 つの `#[path = "../src/..."]` 私有 include はこのファイルに残す。** 相対パスは宣言元
 // ファイルのディレクトリ（`crates/areka/examples/`）から解決されるため、サブディレクトリの子へ
 // 移すと `../src/...` が届かなくなる（本タスクの最重要制約）。
 //

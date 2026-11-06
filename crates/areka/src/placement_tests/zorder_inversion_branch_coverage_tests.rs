@@ -10,6 +10,8 @@
 
 use std::collections::BTreeSet;
 
+use crate::crate_source_test_support::crate_source;
+
 /// 要件 8.2 の 10 分岐（並びも語も要件本文の逐語）と、design の Testing Strategy「替え玉で 1 巡」の
 /// 7（結び直しの 5 通り）・4 と 8（外し損ねの巡の輪の確かめ）。
 const BRANCHES: [&str; 16] = [
@@ -35,23 +37,32 @@ const BRANCHES: [&str; 16] = [
 const TEST_FILES: [(&str, &str, &str); 11] = [
     (
         "placement/zorder_group_ledger_written_order_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_group_ledger_written_order_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_group_ledger.rs"),
+        crate_source!(
+            "areka-placement",
+            "src/zorder_group_ledger_written_order_tests.rs"
+        ),
+        crate_source!("areka-placement", "src/zorder_group_ledger.rs"),
     ),
     (
         "placement/zorder_chain_compose_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_chain_compose_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_chain_compose.rs"),
+        crate_source!("areka-placement", "src/zorder_chain_compose_tests.rs"),
+        crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
         "placement/zorder_chain_compose_written_order_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_chain_compose_written_order_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_chain_compose.rs"),
+        crate_source!(
+            "areka-placement",
+            "src/zorder_chain_compose_written_order_tests.rs"
+        ),
+        crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
         "placement/zorder_chain_inversion_order_tests.rs",
-        include_str!("../../../areka-placement/src/zorder_chain_inversion_order_tests.rs"),
-        include_str!("../../../areka-placement/src/zorder_chain_compose.rs"),
+        crate_source!(
+            "areka-placement",
+            "src/zorder_chain_inversion_order_tests.rs"
+        ),
+        crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
         "emo2_boot/frame/zorder_drain_written_order_tests.rs",
@@ -65,28 +76,40 @@ const TEST_FILES: [(&str, &str, &str); 11] = [
     ),
     (
         "wintf/zorder_chain_release_tests.rs",
-        include_str!("../../../wintf/src/ecs/window/zorder_chain_release_tests.rs"),
-        include_str!("../../../wintf/src/ecs/window/zorder_chain.rs"),
+        crate_source!("wintf", "src/ecs/window/zorder_chain_release_tests.rs"),
+        crate_source!("wintf", "src/ecs/window/zorder_chain.rs"),
     ),
     (
         "wintf/zorder_chain_apply_release_tests.rs",
-        include_str!("../../../wintf/src/ecs/window/zorder_chain_apply_release_tests.rs"),
-        include_str!("../../../wintf/src/ecs/window/zorder_chain_apply.rs"),
+        crate_source!(
+            "wintf",
+            "src/ecs/window/zorder_chain_apply_release_tests.rs"
+        ),
+        crate_source!("wintf", "src/ecs/window/zorder_chain_apply.rs"),
     ),
     (
         "wintf/zorder_chain_order_inversion_tests.rs",
-        include_str!("../../../wintf/src/ecs/window/zorder_chain_order_inversion_tests.rs"),
-        include_str!("../../../wintf/src/ecs/window/zorder_chain_apply.rs"),
+        crate_source!(
+            "wintf",
+            "src/ecs/window/zorder_chain_order_inversion_tests.rs"
+        ),
+        crate_source!("wintf", "src/ecs/window/zorder_chain_apply.rs"),
     ),
     (
         "wintf/zorder_pair_establish_release_tests.rs",
-        include_str!("../../../wintf/src/ecs/window/zorder_pair_establish_release_tests.rs"),
-        include_str!("../../../wintf/src/ecs/window/zorder_pair_establish.rs"),
+        crate_source!(
+            "wintf",
+            "src/ecs/window/zorder_pair_establish_release_tests.rs"
+        ),
+        crate_source!("wintf", "src/ecs/window/zorder_pair_establish.rs"),
     ),
     (
         "wintf/zorder_pair_maintain_release_tests.rs",
-        include_str!("../../../wintf/src/ecs/window/zorder_pair_maintain_release_tests.rs"),
-        include_str!("../../../wintf/src/ecs/window/zorder_pair_maintain.rs"),
+        crate_source!(
+            "wintf",
+            "src/ecs/window/zorder_pair_maintain_release_tests.rs"
+        ),
+        crate_source!("wintf", "src/ecs/window/zorder_pair_maintain.rs"),
     ),
 ];
 

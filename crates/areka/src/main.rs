@@ -41,6 +41,8 @@ mod reference_brain;
 /// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
+#[cfg(test)]
+mod crate_source_test_support;
 /// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く
 /// （spec: placement-crate-split 要件 3.7・3.9）。
 #[cfg(test)]

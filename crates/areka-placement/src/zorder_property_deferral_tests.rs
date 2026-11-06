@@ -166,6 +166,7 @@ fn vocabulary_entries_containing(needle: &str) -> Vec<(&'static str, &'static st
 
 /// 統一プロパティシステム（`areka-sylphya`）のソース木の根。
 fn sylphya_src_dir() -> PathBuf {
+    // 配置が依存する下の crate を読む唯一の所なので、読み口は作らない（spec: placement-crate-split 要件 5.2）。
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("areka-sylphya")
