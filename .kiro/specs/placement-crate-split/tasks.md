@@ -175,7 +175,7 @@
 
 - [x] 8. 移しただけであることを示す（段 7）
 - [x] 8.1 前後の比べと静的な確かめをそろえる
-  - 完了の時のテストの名前の一覧を取り、着手の一覧と多重集合で比べ、差が設計の表の 11 名（各 +1）だけであることを示す（doc コメントのコードが新しく回ったら `text` の囲みにして 0 に戻す）
+  - 完了の時のテストの名前の一覧を取り、着手の一覧と多重集合で比べ、差が設計の表の 13 名（各 +1）だけであることを示す（doc コメントのコードが新しく回ったら `text` の囲みにして 0 に戻す）
   - ワークスペース全体を全部の対象で組んで警告 0、配置の crate の本番の依存の木に本体が出ないこと、`Cargo.lock` の差が新しい crate と本体の依存だけであること、本番のソースの `windows` の名前空間が 2 つだけであることを示す
   - 第三者の表を `cargo about generate` で作り直す
   - 完了の状態: 証跡が実装の記録にそろい、説明できない差が無い
@@ -246,3 +246,12 @@
   - `2026-11-06T10:47:51.244783Z DEBUG actor{actor=emo-text}: areka_placement::diag: [diag.window_move] route=BalloonFollow entity=31v0 kind=balloon scope=1 x=1120 y=330 w=- h=- dpi=192`
   - `2026-11-06T10:47:37.597073Z  INFO actor{actor=emo-text}: areka_placement::sticky_group_ledger: sticky: 窓の組の一覧 event="sticky_groups" action="descript_seed" groups=[StickyGroup { members: {0, 1}, source: Descript }]`
   - `2026-11-06T10:47:52.579509Z  INFO actor{actor=emo-text}: areka_placement::follow::sticky_follow: sticky: 組の相手をドラッグに連れ動かした event="sticky_follow" trigger="drag" scope=0 partners=[1] dx=240 dy=-120`
+- 完了時の棚卸（2026-11-06）: その場で解決 6 件・起票 0 件（既にある brief へ足したもの 1 件）。
+  - 完了時にその場で解決: 要件 1.6 の字面を「ワークスペースの中の path 依存と `Cargo.lock` に既にある crate だけ・新しい crate を入れない」に直した（`34fcf3fc`）。
+  - 完了時にその場で解決: タスク 8.1 の「11 名」を「13 名」に直した（このコミット）。
+  - 完了時にその場で解決: `crate_source_test_support.rs` の頭の説明の例外を 3 本に、`collision-probe.rs` の 89〜91 行の古い `../pilot/...` の記述と 105 行の `measure.rs:221` を今のコードに直した（`3fb9cae8`）。
+  - 完了時にその場で解決: `doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/briefing-assets.md` の行番号を今のコードに合わせた（41 件と、内容が古くなっていた briefing-assets.md の 221・227・228・229・262 行の書き直し・`70044cb2`）。この spec の前から古かった所も含む。ledger の `*.toml` には行番号つきの参照が無かった。
+  - 完了時にその場で解決: `structure.md` の log-capture-kit の Modules に `expect.rs` を足した（`bfd0b93d`）。
+  - 完了時にその場で解決（直さないと決めたもの）: `log-capture-kit/tests/with_default_guard_test.rs` の `KNOWN_DEV_DEPENDENTS` は較正用の陽性の部分集合で全数の表ではないので、areka-placement を足さない。
+  - 既にある brief へ足した: ワークスペース全体を歩く見張り 3 本を `log-capture-kit/tests/` へ移すこと＝`audit-areka-app` の brief の「件 1」（設計で `audit-areka-app` へ申し送ると決めてあった。手順 3 の「進行中の他 spec の担当範囲と重なる」に当たる＝受け持ちが `audit-areka-app` と `audit-emo2-boot-*`）。
+
