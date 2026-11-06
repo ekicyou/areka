@@ -163,6 +163,16 @@ pub(crate) fn render_tree_to_pixels(
     h: u32,
     root_transform: Matrix3x2,
 ) -> Pixels {
+    let commands = tree_commands(world, root, None);
+    replay_to_pixels(&commands, w, h, root_transform)
+}
+
+/// 根 `root` の下の木を組んだ描く列。`viewport` が `None` なら本番と同じ根の `Arrangement.size`。
+pub(crate) fn tree_commands(
+    world: &mut World,
+    root: Entity,
+    viewport: Option<Aabb>,
+) -> Vec<DrawCommand> {
     let top = world
         .get::<Children>(root)
         .map(|c| c.to_vec())
@@ -180,11 +190,13 @@ pub(crate) fn render_tree_to_pixels(
         &mut visited,
     );
 
-    let size = world
-        .get::<crate::ecs::layout::Arrangement>(root)
-        .map(|a| a.size)
-        .unwrap_or_default();
-    let viewport = Aabb::new(0.0, 0.0, size.width, size.height);
+    let viewport = viewport.unwrap_or_else(|| {
+        let size = world
+            .get::<crate::ecs::layout::Arrangement>(root)
+            .map(|a| a.size)
+            .unwrap_or_default();
+        Aabb::new(0.0, 0.0, size.width, size.height)
+    });
     let factory = warp_factory();
     let unit: ID2D1Geometry = unsafe {
         factory.CreateRectangleGeometry(&D2D_RECT_F {
@@ -210,7 +222,51 @@ pub(crate) fn render_tree_to_pixels(
         None,
         &visited,
     );
+    commands
+}
 
+/// 列 `commands` を `emit` で `w×h` の透明な的へ再生し、読み戻す。
+pub(crate) fn replay_to_pixels(
+    commands: &[DrawCommand],
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+) -> Pixels {
+    draw_to_pixels(w, h, root_transform, |dc| {
+        emit(dc, root_transform, commands);
+        let mut after = Matrix3x2::default();
+        // SAFETY: Windows API 境界。
+        unsafe { dc.GetTransform(&mut after) };
+        assert_eq!(after, root_transform, "emit は DC の変換を根に戻す");
+    })
+}
+
+/// 木を持たない描画面の今の道（`render_surface`）と同じ形: 根の変換のまま命令の列を 1 度
+/// `DrawImage`（`LINEAR`・`SOURCE_OVER`）する。
+pub(crate) fn render_list_to_pixels(
+    list: &ID2D1CommandList,
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+) -> Pixels {
+    draw_to_pixels(w, h, root_transform, |dc| unsafe {
+        dc.DrawImage(
+            list,
+            None,
+            None,
+            D2D1_INTERPOLATION_MODE_LINEAR,
+            D2D1_COMPOSITE_MODE_SOURCE_OVER,
+        )
+    })
+}
+
+/// `w×h` の透明な的に `root_transform` を置いて `draw` で描き、読み戻す。
+fn draw_to_pixels(
+    w: u32,
+    h: u32,
+    root_transform: Matrix3x2,
+    draw: impl FnOnce(&ID2D1DeviceContext),
+) -> Pixels {
     let dc = warp_dc();
     let target = make_bitmap(&dc, w, h, D2D1_BITMAP_OPTIONS_TARGET);
     let staging = make_bitmap(
@@ -227,11 +283,8 @@ pub(crate) fn render_tree_to_pixels(
         dc.BeginDraw();
         dc.SetTransform(&root_transform);
         dc.Clear(Some(&D2D1_COLOR_F::default()));
-        emit(&dc, root_transform, &commands);
-        let mut after = Matrix3x2::default();
-        dc.GetTransform(&mut after);
+        draw(&dc);
         dc.EndDraw(None, None).expect("EndDraw");
-        assert_eq!(after, root_transform, "emit は DC の変換を根に戻す");
         dc.SetTarget(None);
         staging.CopyFromBitmap(None, &target, None).unwrap();
         let mapped = staging.Map(D2D1_MAP_OPTIONS_READ).unwrap();
