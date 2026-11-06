@@ -210,7 +210,7 @@ mod tests {
     use log_capture_kit::count_levels;
 
     use super::{EmoTextSink, TextMsg, handle_text_msg_with};
-    use crate::actor::test_support::{cue, pump_until_idle, spawn_message_drain};
+    use crate::actor::test_support::{capture_checked, cue, pump_until_idle, spawn_message_drain};
 
     // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
 
@@ -346,7 +346,8 @@ mod tests {
     /// あわせて疎通の正準観測: clone 間で interleave した emit が FIFO で配送される（R1.1）。
     #[test]
     fn close_directive_terminates_drain_cleanly_after_fifo_delivery() {
-        let ((), counts) = count_levels(|| {
+        // 対照の 1 件のほかに ERROR が出ないことは `capture_checked` が確かめる。
+        let ((), _events) = capture_checked(|| {
             let (mut sink, terminated, records) = spawn_recording_drain(None);
             let mut sink2 = sink.clone();
 
@@ -373,17 +374,13 @@ mod tests {
             drop(sink);
             drop(sink2);
         });
-        assert_eq!(
-            counts.error, 0,
-            "終了指示によるクリーン終了は error ログを伴わない"
-        );
     }
 
     /// ケース2: 全送信元切断（全 `EmoTextSink` clone drop）——queue 済み cue を届け切った上で
     /// error ログを伴わずクリーンに終了する（R1.4 相当）。
     #[test]
     fn dropping_all_sinks_terminates_drain_cleanly() {
-        let ((), counts) = count_levels(|| {
+        let ((), _events) = capture_checked(|| {
             let (mut sink, terminated, records) = spawn_recording_drain(None);
             let sink2 = sink.clone();
 
@@ -406,10 +403,6 @@ mod tests {
                 "切断前に queue 済みの cue は破棄されず届く"
             );
         });
-        assert_eq!(
-            counts.error, 0,
-            "全送信元切断によるクリーン終了は error ログを伴わない"
-        );
     }
 
     /// ケース3a: 個別配送失敗（handler の `Err`）——panic せず error ログ 1 件を記録した上で、
@@ -499,7 +492,7 @@ mod tests {
     /// 実 channel: `preview` の後に `emit` した順で、先渡しの便りが合図より前に取り出される。
     #[test]
     fn preview_is_drained_before_subsequent_cues() {
-        let ((), counts) = count_levels(|| {
+        let ((), _events) = capture_checked(|| {
             let (mut sink, records) = spawn_message_drain("emo-text-preview-test");
 
             let c0 = cue("0", 0.0, CueCommand::Text("アヒルや".into()));
@@ -521,7 +514,6 @@ mod tests {
                 "先渡しは写しとして合図より前に、合図は積んだ順に届く"
             );
         });
-        assert_eq!(counts.error, 0, "正常な先渡しは error ログを伴わない");
     }
 
     /// 停止後の `preview` は panic せず error 1 件だけを残す（`emit`・`close` と同じ規律）。

@@ -1,5 +1,7 @@
 //! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合（R6.1/6.2/6.3）
 //!
+//! 出典 spec: `areka-P0-choice-render`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//!
 //! design.md「Testing Strategy > E2E/実機 item 1（emo2_boot 統合）」の正典述語を張る:
 //! **実 emo2 fixture ＋ menu.pasta 経路でメニュー cue 列 →選択肢描画〔headless readback〕**。
 //!
@@ -91,7 +93,7 @@ const EXPECTED_MENU: &[(&str, &str)] = &[
 fn real_emo2_fixture_descript_resolves_square_fill_style() {
     let model = merged_balloon_model();
 
-    // 実フォント（既定 ＭＳ ゴシック盲点の回避・記憶 emo-text-byte-equiv-default-font-blindspot）。
+    // 実フォント（既定 ＭＳ ゴシック盲点の回避）。
     assert_eq!(
         model.font().name(),
         Some("Yu Gothic UI"),
@@ -278,10 +280,9 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
 
     // ── (c) ordinal 1（「エモの位置調整」）を hover 注入 → 再提示 → read_back ──
     //
-    // ホバーするのを**先頭でない行**にするのは、下の縦範囲の検査で「字の上端が帯の内」を
-    // 反証可能にするためである。先頭行は帯の上端が面の縁（y0）にあり、走査窓をそれより上へ
-    // 開けようがないので、上端の判定は窓の取り方だけで必ず成り立ってしまう（字がベースラインごと
-    // 上へずれても窓に切られて緑のまま）。ordinal 1 なら帯の上端は行送り 1 つぶん下にあり、
+    // ホバーするのを**先頭でない行**にするのは、帯を行ボックスの中央へ寄せる量（先頭行の帯は
+    // 面の縁より 4 画素下の y4 から）が行送りの先の行にも効くことを、下の縦範囲の検査で
+    // 確かめるためである。ordinal 1 の帯の上端は行送り 1 つぶんとその寄せの分だけ下にあり、
     // 窓はその 4 画素上から見られる。
     rt.inject_choice_hover(&actor, Some(1));
     present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");

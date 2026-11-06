@@ -113,7 +113,7 @@ pub(crate) fn cursor_model() -> BalloonModel {
     ))
 }
 
-/// テスト用 WUC dispatcher と Compositor（emo-present の mount.rs のテストと同一方針）。
+/// テスト用 WUC dispatcher と Compositor。
 ///
 /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、ASTA を第一候補・失敗時
 /// NONE を保険とする（未初期化スレッドでは ASTA が通る）。controller は Compositor より

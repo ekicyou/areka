@@ -761,7 +761,7 @@ pub(crate) struct CursorFallback {
 impl CursorFallback {
     /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`style_has_underline`] の、
     /// 知らない style は [`is_canon_style`] の、ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する（[`ResolvedChoiceStyle::resolve`] は
-    /// `none` 以外の style を一律に SquareFill へ落とし、ROP 系も分岐に効かないため、どちらの判定も持たない）。
+    /// `none` 以外の style を一律に SquareFill へ落とし、ROP 系も分岐に効かないため、どの判定も持たない）。
     pub(crate) fn of(cursor: &BalloonCursor) -> CursorFallback {
         CursorFallback {
             blendmethod: rop_blendmethod(cursor).map(str::to_string),
@@ -791,9 +791,10 @@ fn is_canon_style(style: &str) -> bool {
         || style_has_underline(style)
 }
 
-/// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視）。
+/// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視の完全一致・
+/// `underlined` のような正典に無い値は知らない値として [`is_canon_style`] の側で拾う）。
 fn style_has_underline(style: &str) -> bool {
-    style.to_ascii_lowercase().contains("underline")
+    style.eq_ignore_ascii_case("underline") || style.eq_ignore_ascii_case("square+underline")
 }
 
 /// `SquareFill { fill=brush.color, text=font.color }` を組む（欠落成分は `0` 既定・防御）。

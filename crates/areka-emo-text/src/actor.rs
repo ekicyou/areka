@@ -68,7 +68,7 @@ impl TextSlotBinding {
     ///
     /// k の正規化（0 以下・非有限→warn!＋1.0 縮退）は [`ScaleContract::new`] に委譲する。
     ///
-    /// # image px 原寸は**導出しない**（2026-07-30 是正・k<1 の 1px 往復欠陥）
+    /// # image px 原寸は**導出しない**（k<1 の 1px 往復欠陥を避ける）
     ///
     /// 旧実装は `image_size = round(physical_size / k)` と**逆写像で復元**していたが、これは
     /// k<1 で厳密な逆写像にならない。順写像は丸め権威 `ScaleRatio::scale_len`（round half away

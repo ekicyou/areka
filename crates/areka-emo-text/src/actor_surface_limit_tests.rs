@@ -477,8 +477,10 @@ fn over_limit_arrow_image_logs_once_in_ten_frames() {
         "10 フレームで 1 回: {events:?}"
     );
     assert!(
-        events.iter().any(|e| e.message() == ARROW_LIMIT_MESSAGE),
-        "矢印の絵の上限の記録: {events:?}"
+        events
+            .iter()
+            .any(|e| e.message() == ARROW_LIMIT_MESSAGE && e.field("max_area").is_some()),
+        "矢印の絵の上限の記録（面積の上限の欄つき）: {events:?}"
     );
     assert!(results.iter().all(Result::is_ok), "{results:?}");
     assert!(rt.surfaces[&place].markers.is_some(), "印の面はある");

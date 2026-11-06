@@ -1,5 +1,7 @@
 //! # choice_fixture_test — choice-render 検証の test-local 最小適合 fixture（R7.6）
 //!
+//! 出典 spec: `areka-P0-choice-render`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//!
 //! design.md「Testing Strategy > Integration Tests #5（7.6）」の正典述語を張る:
 //! **実フォント出力の目視確認（既定フォント盲点の回避）＋ test-local 最小 fixture を tests 配下に
 //! 自前で用意**する。fixture は `tests/fixtures/emo2-choice/`:
@@ -17,7 +19,8 @@
 //!    解決し、4 項目メニュー＋ordinal 1（先頭でない行）の hover を通し経路（`register_actor`→`apply_cue`→
 //!    `inject_choice_hover`→`present_frame`→`read_back`）で描画する。pixel 檻（hover 行のセグメント
 //!    矩形へ塗り色＋白文字画素が載る）に加え、read_back を白背景へ合成して **PNG を既知パスへ保存**し、
-//!    実フォント出力の目視確認を pixel 檻へ伴わせる（記憶 emo-text-byte-equiv-default-font-blindspot）。
+//!    実フォント出力の目視確認を pixel 檻へ伴わせる（既定のテストフォントで通っても、実フォントの字送り・descent
+//!    では別の見え方をし得るため）。
 
 #[path = "support/mod.rs"]
 mod support;

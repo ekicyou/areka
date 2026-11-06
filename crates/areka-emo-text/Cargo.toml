@@ -37,7 +37,7 @@ bevy_ecs = { workspace = true }
 # vendored-models＝既定日本語モデル同梱でネットワーク/ファイル I/O 不要（オフライン CI 整合・8.1）。
 budouy = { version = "0.2.2", default-features = false, features = ["std", "vendored-models"] }
 # COM 層（surface.rs）は D3D11/DXGI 直呼び（CopyResource/Map/Present・IDXGISwapChain1 等）を要する。
-# workspace 既定へ `Win32_Graphics_Dxgi` を上乗せする（emo-present chain.rs と同型・swap chain 本体型）。
+# workspace 既定へ `Win32_Graphics_Dxgi`（swap chain 本体の型）を上乗せする。
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
 # 下線を集める受け手（IDWriteTextRenderer）の `#[implement]`（spec: areka-P0-balloon-text-bugs 要件 3.2）。
 # 版は書かない＝ワークスペースのピン（`windows` と同じ 0.62 の系列）。0.100 系は互換が無いので取らない。

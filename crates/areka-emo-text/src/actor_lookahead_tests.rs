@@ -688,7 +688,8 @@ fn after_scroll_violations(
 
 /// 検査 8: 先渡しありの台本が 2 行だけ入る欄からあふれても、表示済みの字の行の割り当てが
 /// 変わらず、出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。先渡しなしの対照では
-/// あふれの後の段階で字が動く（台本の形の確かめ・要件 1.1〜1.7・2.1〜2.4・3.1・3.2）。
+/// あふれの後の段階で字が動く（台本の形の確かめ・spec `areka-P0-reflow-scroll-path-test` 要件 1.1〜1.7・
+/// 2.1〜2.4・3.1・3.2）。
 #[test]
 fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
     let (stages, windows) = walk_with_windows(SCROLL_TALK, Delivery::Staged);
@@ -737,7 +738,7 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
         trace(&old, &old_windows)
     );
 
-    // 要件 2: 先渡しありの全段階で表示済みの字が動かない。
+    // `areka-P0-reflow-scroll-path-test` 要件 2: 先渡しありの全段階で表示済みの字が動かない。
     let violations = reveal_violations(&stages);
     assert!(
         violations.is_empty(),
@@ -747,7 +748,7 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
         trace(&stages, &windows)
     );
 
-    // 要件 3: 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
+    // `areka-P0-reflow-scroll-path-test` 要件 3: 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
     let old_last = old.last().expect("段階がある");
     assert_eq!(
         Some(last_window),

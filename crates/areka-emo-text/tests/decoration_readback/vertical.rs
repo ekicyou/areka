@@ -22,8 +22,8 @@
 //!
 //! ## 裁定との照合は述語にしない（要件 12.4）
 //!
-//! 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「下線は列の右側」だが、本仕様は縦書きの
-//! 線の位置を **DirectWrite の既定に委ねる**（開発者裁定 2026-09-11）。下線は spec
+//! 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「下線は列の右側」だが、出典 spec
+//! `areka-P0-text-decoration-canon` は縦書きの線の位置を **DirectWrite の既定に委ねる**（同 spec の開発者裁定）。下線は spec
 //! `areka-P0-balloon-text-bugs`（件 3）から areka が塗るが、縦書きは DirectWrite が教える位置と
 //! 太さのまま D2D の既定の描き方と同じ向きに回して塗る（D2D 自身の下線との一致は
 //! `src/viewbox_draw_underline_tests.rs` の実 GPU の檻が固定・要件 3.4）ので、側と位置は変わらない。

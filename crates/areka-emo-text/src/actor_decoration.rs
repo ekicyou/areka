@@ -144,8 +144,10 @@ pub(super) fn warn_ignored_origin(
     }
 }
 
-/// 選択肢の飾りの縮退（`cursor.blendmethod` の ROP 系・`cursor.style` の下線系）を、置き場ごとに
-/// 値が決まったときだけ `warn!` で知らせる（spec real-run-log-noise 要件 2.1〜2.4）。
+/// 選択肢の飾りの縮退（`cursor.blendmethod` の ROP 系・`cursor.style` の下線系）と、正典の 4 つの
+/// どれでもない `cursor.style`（既定の square で描く）を、置き場ごとに値が決まったときだけ `warn!` で
+/// 知らせる（spec real-run-log-noise 要件 2.1〜2.4・知らない style は spec audit-emo-text-state-actor の
+/// 2 回目のかけ直し R2-12）。
 ///
 /// 以前は純粋な解決（[`ResolvedChoiceStyle::resolve`]）の中にあり、解き直しのたびに出ていた。
 /// 文言は移動の前後で 1 文字も変えず、名前の欄 `balloon` だけを足した（ほかの作者向けの警告と

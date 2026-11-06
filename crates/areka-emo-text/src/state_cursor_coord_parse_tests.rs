@@ -171,7 +171,7 @@ fn parse_centery_is_center_y() {
 
 /// `@` 接頭は「現在の文字描画位置からの相対座標」＝数値本体を要求する書式であり、正典に
 /// `@centerx` という形は無い。中央指定の判定を `@` 剥離の**前**に置くので `@centerx` は
-/// 該当せず、`@` を剥がした本体が数値でないため Invalid へ落ちる（design.md「語彙
+/// 該当せず、`@` を剥がした本体が数値でないため Invalid へ落ちる（spec `areka-P0-cursor-tag-canon` の design.md「語彙
 /// `CursorCoord`」事後条件 `parse_cursor_coord("@centerx") == Invalid`）。
 #[test]
 fn parse_at_prefixed_center_is_invalid() {
@@ -181,7 +181,7 @@ fn parse_at_prefixed_center_is_invalid() {
 
 /// 正典は `centerx`／`centery` を小文字で記す。大小文字の扱いは正典沈黙ゆえ
 /// `doc/COMPAT_ARCHITECTURE.md` §8 の「小文字の完全一致のみ」の先例に揃える
-/// （design.md 事後条件 `parse_cursor_coord("CENTERX") == Invalid`）。
+/// （spec `areka-P0-cursor-tag-canon` の design.md 事後条件 `parse_cursor_coord("CENTERX") == Invalid`）。
 #[test]
 fn parse_uppercase_center_is_invalid() {
     assert_eq!(parse_cursor_coord("CENTERX"), CursorCoord::Invalid);

@@ -690,7 +690,7 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
 
 // ── 帯を行ボックスの中央へ寄せる（highlight_band_offset／derive_hit_rows の offset 適用） ──
 //
-// 実機の目視（2026-09-06・開発者裁定 第 2 回・R13）: 帯を行矩形のブロック軸近端へ揃えると、
+// 実機の目視（`areka-P0-emo2-conformance-e2e` の開発者裁定 第 2 回・R13）: 帯を行矩形のブロック軸近端へ揃えると、
 // 行送りで頭打ちになった帯が行ボックスの中で上に余り、下でインクを切る（「色反転位置が
 // 2 ドット程上すぎる」）。帯を広げるのではなく、余りを上下へ等分して帯を内側へ寄せる。
 

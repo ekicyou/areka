@@ -154,7 +154,7 @@ fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, 
     assert_eq!(warn.field_str("axis"), Some(axis), "行内軸の欄");
     assert_eq!(number_field(warn, "wrap_threshold"), wrap_threshold);
     assert_eq!(number_field(warn, "inline_limit"), inline_limit);
-    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（shell-balloon 要件 3.12）。
+    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（`areka-P0-shell-balloon` 要件 3.12）。
     assert_eq!(
         warn.field_str("balloon"),
         Some("スコープ1のバルーン"),
@@ -445,7 +445,7 @@ fn assert_ignored_origin_warning(
         corner,
         "実際に用いた書き始めの角の欄"
     );
-    // 呼出側は名前を入れていない（shell-balloon 要件 3.12）。
+    // 呼出側は名前を入れていない（`areka-P0-shell-balloon` 要件 3.12）。
     assert_eq!(
         warn.field_str("balloon"),
         Some(balloon),
@@ -813,7 +813,7 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
     assert_coarse_warning(coarse[0], "x", KERO_WRAP_X, KERO_RIGHT);
 }
 
-// ── shell-balloon 要件 3.12: 名前の欄は結線が入れた名前・未設定はスコープから導く ──
+// ── `areka-P0-shell-balloon` 要件 3.12: 名前の欄は結線が入れた名前・未設定はスコープから導く ──
 
 /// 結線が名前（バルーンのフォルダ名）を入れたスコープは、2 つの警告の名前の欄にその名前を出す。
 /// 入れていないスコープは `スコープ{番号}のバルーン` のまま（名前はスコープごと）。

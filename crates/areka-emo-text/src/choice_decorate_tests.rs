@@ -675,7 +675,8 @@ fn vertical_em_box_left_default_centres_the_em_box_in_the_column_box() {
 /// と同じ）で、`line_bands` の縦書きの寄せがその値の丸め（−7.4 → −7・＋0.6 → 1）になる——行の箱の
 /// 比からは出ない（`FixedMetrics` の真ん中なら em 28 で −5／5）。横書きの出力は `FixedMetrics` と同じ。
 ///
-/// 較正: `line_bands` の縦書きの枝を行の箱の比の式へ戻すと −4／5 で赤。
+/// 較正: `line_bands` の縦書きの枝を Yu Gothic UI の割合の定数の式（spec `vertical-choice-hover-band` の
+/// design.md）へ戻すと −4／5 で赤。
 #[test]
 fn vertical_line_bands_read_the_em_box_from_metrics() {
     use crate::layout::{FixedMetrics, GlyphMetrics};

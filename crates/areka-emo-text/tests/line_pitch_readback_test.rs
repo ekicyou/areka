@@ -154,8 +154,8 @@ const LINE_TEXT: &str = "昼間から";
 
 /// ホバーの検査に使う選択肢（id・表示文字列）。要件 5.6／3.6 が名指ししている 2 つである。
 ///
-/// 2 つとも測るのは、1 つ目の帯の上端が面の先頭（y0）にあり、それだけでは「字の上端が帯の中」の
-/// 判定が反証にならないからである。2 つ目の帯の上端は y60 にある。
+/// 2 つとも測るのは、帯を行ボックスの中央へ寄せる量（[`BAND_OFFSET_28`]）が 1 行目だけでなく
+/// 行送りの先の行にも効くことを確かめるためである。帯の上端は 1 つ目が y4、2 つ目が y64 にある。
 const CHOICES: [(&str, &str); 2] = [("OnFirst", "閉じる"), ("OnSecond", "もどる")];
 
 fn model() -> BalloonModel {
@@ -169,7 +169,7 @@ fn canon_metrics() -> DWriteMetrics {
     balloon_metrics(&ResolvedBalloonText::resolve(&model(), IMAGE))
 }
 
-// ══ cue（全リビール済みフレームで読むので duration は素直に焼く） ══════════════════════
+// ══ cue（全リビール済みフレームで読む・duration を焼くのは Text だけで選択肢は 0） ══════
 
 fn text_cue(text: &str) -> TalkCue {
     support::cue("0", 0.0, CueCommand::Text(text.into()), 0.05)

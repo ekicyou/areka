@@ -236,7 +236,7 @@ fn choice_cue_appends_glyphs_and_records_nonempty_span() {
 
 /// 配送順スパン記録（R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
 /// `ChoiceSpan` は**配送順**に並び（label が配送順に一致）・`ordinal` は **0,1,2 と厳密に
-/// 単調増加**し（design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
+/// 単調増加**し（spec `areka-P0-choice-render` の design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
 /// 序数空間はグリフのみ（挟んだ改行等の非グリフ item を数えない）。
 #[test]
 fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
@@ -272,7 +272,7 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
     assert_eq!(spans[2].glyph_range, 8..11);
 }
 
-/// R1.5 縮退（design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
+/// R1.5 縮退（spec `areka-P0-choice-render` の design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
 /// グリフ追記なし・reveal 不変。空 Choice は届くたびに warn する（1 回で黙らせない）。
 #[test]
 fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
@@ -509,7 +509,7 @@ fn non_balloon_commands_do_not_disturb_state() {
     assert_eq!(state, before);
 }
 
-// ── TextLayerConfig 既定値（design.md 正準: 行間 line_gap=2） ──
+// ── TextLayerConfig 既定値（spec `areka-P0-emo-text-line-height-canon` の design.md 正準: 行間 line_gap=2） ──
 
 #[test]
 fn config_defaults_match_design_canon() {
@@ -518,7 +518,7 @@ fn config_defaults_match_design_canon() {
     assert_eq!(config.line_gap, 2.0);
 }
 
-// ── 行送りの式（design.md §4.1 正典表・R1.2/R3.1/R3.5/R1.6） ──
+// ── 行送りの式（spec `areka-P0-emo-text-line-height-canon` の design.md §4.1 正典表・R1.2/R3.1/R3.5/R1.6） ──
 
 /// 行送り＝フォント高さ＋行間（切り上げなし）。正典表の 3 例をそのまま固定する。
 #[test]

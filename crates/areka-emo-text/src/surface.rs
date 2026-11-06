@@ -8,7 +8,7 @@
 //! 本モジュール（子の `surface_window_child` を含む）と draw・viewbox_draw（それぞれの子を含む）・
 //! 印の面の `marker_surface` だけ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
 //!
-//! # 構造（emo-present `SwapChainPresenter`（`pub(crate)`）と同型・wintf pub ヘルパから lift）
+//! # 構造（wintf の公開ヘルパで組む自前の swap chain 供給面）
 //!
 //! - 供給面 = `create_composition_swap_chain`（flip model・premultiplied・B8G8R8A8・
 //!   BufferCount=2）＋ `CompositorInteropExt::create_composition_surface_for_swap_chain`。
@@ -18,7 +18,7 @@
 //!   確定ピクセルを保持したままスクロールを表現する（viewbox 方式・R1.2）。
 //! - 提示・readback は常に **front** を対象にする（`CopyResource(backbuffer, front)`→`Present(0)`／
 //!   `CopyResource(staging, front)`→`Map(READ)`）。flip model の backbuffer は直接 Map 不可のため
-//!   front を読む——記憶 gpu-draw-verification-offscreen-d2d-target。
+//!   front を読む（readback 経路の決めは spec `areka-P0-emo-text-layer` の design.md）。
 
 use bevy_ecs::prelude::*;
 
@@ -301,7 +301,7 @@ impl TextSurface {
     /// 初回装着（UI スレッド・`&mut World`）: 自前 swapchain 供給面を生成し、
     /// `binding.slot`（予約スロット entity）へ `VisualGraphics::new(sprite)`（自前
     /// `SurfaceBrush` 装着済み SpriteVisual）＋`Arrangement`（物理 px 直接・
-    /// offset＝validrect 原点×k）を insert する（mount.rs の donor パターンの写し）。
+    /// offset＝validrect 原点×k）を insert する。
     ///
     /// `GraphicsCommandList` は挿入しない＝wintf の widget 描画経路は発火せず、
     /// バルーン surface 本体の再合成を要求しない（R9.3 構造）。
@@ -376,7 +376,7 @@ impl TextSurface {
         let context =
             unsafe { d3d.GetImmediateContext() }.map_err(device_err("GetImmediateContext"))?;
 
-        // SpriteVisual ＋ SurfaceBrush（mount.rs と同一パターン・SetSize は物理 px）。
+        // SpriteVisual ＋ SurfaceBrush（SetSize は物理 px）。
         let sprite = compositor
             .CreateSpriteVisual()
             .map_err(device_err("CreateSpriteVisual"))?;
@@ -450,7 +450,7 @@ impl TextSurface {
     /// `stride = width*4` の密 BGRA 配列）。
     ///
     /// flip model の backbuffer は直接 Map 不可のため、最新確定面 front を読む
-    /// （表示内容＝`present` の転送元と同一・記憶 gpu-draw-verification-offscreen-d2d-target）。
+    /// （表示内容＝`present` の転送元と同一）。
     pub fn read_back(&self) -> Result<Vec<u8>, TextLayerError> {
         let (w, h) = self.size;
         let src_res: ID3D11Resource = self.sources[self.front]
@@ -548,8 +548,8 @@ impl TextSurface {
         let back = &self.sources[1 - self.front];
         // SAFETY: front/back は attach 済み・同一デバイス・同寸・別テクスチャの ID3D11Texture2D。
         // `cast::<ID3D11Resource>` は同一 COM オブジェクトの別インターフェース取得で失敗しない
-        // （失敗は `expect` で致命——本来到達しない・記憶 areka-log-first-no-silent-failure に照らし
-        // ここは COM 契約違反＝致命扱い）。CopyResource/CopySubresourceRegion は immediate context
+        // （失敗は `expect` で致命——本来到達しない。失敗は記録して `Err` で返すのが本モジュールの
+        // 規律だが、ここが落ちるのは COM 契約違反なので致命扱い）。CopyResource/CopySubresourceRegion は immediate context
         // への発行のみで、box は面寸内へクランプ済み（範囲外アクセスなし）。
         let (dx, dy) = blit;
         if dx == 0 && dy == 0 {

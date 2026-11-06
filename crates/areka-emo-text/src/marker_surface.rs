@@ -36,7 +36,7 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, GraphicsCore};
 
-use super::present::{MAX_SURFACE_SIDE, over_surface_limit};
+use super::present::{MAX_SURFACE_AREA, MAX_SURFACE_SIDE, over_surface_limit};
 use crate::TextLayerError;
 use crate::draw::create_d2d_target_bitmap;
 use crate::region::ScaleContract;
@@ -154,6 +154,7 @@ impl MarkerSurface {
                 w = m.image.width,
                 h = m.image.height,
                 max_side = MAX_SURFACE_SIDE,
+                max_area = MAX_SURFACE_AREA,
                 "{ARROW_LIMIT_MESSAGE}"
             );
         }

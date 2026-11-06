@@ -102,7 +102,7 @@ pub(crate) const EXPECTED_RIGHT: f32 = 309.0;
 /// scope ごとの描画範囲の下辺（`validrect.bottom,-47` → 高さ − 47・image px）。
 ///
 /// 本体側は 205 − 47 ＝ 158・相方側は 135 − 47 ＝ 88。下辺だけが scope で違う。
-pub(crate) const EXPECTED_BOTTOM: [(u32, f32); 2] = [(0, 158.0), (1, 88.0)];
+const EXPECTED_BOTTOM: [(u32, f32); 2] = [(0, 158.0), (1, 88.0)];
 
 /// 解決される文字の高さ（`font.height,12` の素通し・image px）。
 pub(crate) const EXPECTED_FONT_HEIGHT: f32 = 12.0;

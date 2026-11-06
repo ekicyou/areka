@@ -1,5 +1,7 @@
 //! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（R9.1/R9.2/R9.5）
 //!
+//! 出典 spec: `areka-P0-emo-text-layer`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//!
 //! 2 つの target（sakura/kero 相当）を実 `EmoPresenter` に登録して表示を確立し、
 //! `text_slot_view(target)`（emo-present の読み取り専用 additive 増分・R9.1/R9.2）で得た
 //! view を結線 API（`register_actor_view`——view → `TextSlotBinding` → routing 登録）で

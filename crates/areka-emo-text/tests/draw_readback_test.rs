@@ -1,5 +1,7 @@
 //! # draw_readback_test — UI スレッド上の描画・読み戻しの通し構造検証
 //!
+//! 出典 spec: `areka-P0-emo-text-layer`（このファイルが挙げる要件の番号と design.md はこの spec のもの）。
+//!
 //! design.md「Testing Strategy > Integration Tests #4（描画実行）」の正典述語を、
 //! **通し経路**（sink emit → UI ドレイン → `present_frame` → `read_back`）で檻化する
 //! （R7.3/R8.5/R9.1/R9.3）:

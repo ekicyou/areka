@@ -273,9 +273,9 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
         "2 度目も確定行は再生成されない: 生成増分 {create_delta2} < 可視行数 {visible_line_count}"
     );
 
-    // ── 再描画レスの fixture 非依存な決定的不変（G3・脆弱な `< visible_line_count` に依存しない）──
-    // 上の `< visible_line_count` は可視 8 行 fixture でしか成立しない（可視 2〜3 行の小 fixture では
-    // draw_delta＝矩形ごとの交差行数の和が可視行数に達し得る）。以下は fixture の可視行数に依らず成立する
+    // ── 再描画レスの fixture 非依存な決定的不変（G3）──
+    // 上の露出帯の上限（3）と `create_delta < visible_line_count` は可視 8 行のこの fixture に合わせた数で、
+    // 可視 2〜3 行の小 fixture では言えない。以下は fixture の可視行数に依らず成立する
     // 再描画レスの決定的証拠であり、これらが本檻の真の負のコントロールである:
     //   (a) blit==+1（上で assert 済み）: viewbox は確定ピクセルを面内 blit で保持する。全域再描画は
     //       保持せず毎フレーム描き直す＝blit 0。全域再描画へ戻すと blits +1 assert が fixture に依らず落ちる。

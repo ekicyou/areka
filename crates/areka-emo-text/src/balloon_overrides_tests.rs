@@ -191,7 +191,7 @@ fn outline_is_forwarded_without_warning() {
 }
 
 /// W9: 無効表示の大きさ `0` は列に入ったうえで受け口の「正でない」判定が記録 1 件に映り、
-/// `20` は記録 0 件（研究 §14——相対指定は転記層が `u32` で読むため配線へ届かない）。
+/// `20` は記録 0 件（spec `areka-P0-balloon-font-descript-keys` の research.md §14——相対指定は転記層が `u32` で読むため配線へ届かない）。
 #[test]
 fn disable_height_rejected_by_receiver_is_forwarded_and_warned_once() {
     let (zero, events) = run("disable.font.height,0\r\n");

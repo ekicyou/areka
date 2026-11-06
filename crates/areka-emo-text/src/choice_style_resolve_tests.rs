@@ -222,26 +222,33 @@ fn cursor_fallback_is_empty_for_none_unspecified_and_square() {
         styled(None, None),
         styled(Some("none"), None),
         styled(Some("SQUARE"), None),
+        // `none` も大小無視で正典（spec audit-emo-text-state-actor の 2 回目のかけ直し R2-12）。
+        styled(Some("NONE"), None),
         BalloonCursor::default(),
     ] {
         assert_eq!(CursorFallback::of(&c), CursorFallback::default(), "{c:?}");
     }
 }
 
-/// 正典の 4 つのどれでもない `style`（綴り誤りの `squre`）は元の値を返す（描く形は既定の square）。
+// ══ spec audit-emo-text-state-actor（2・3 回目のかけ直し R2-12・R3-4）: 正典の 4 つでない style は元の値を返す ══
+
+/// 正典の 4 つのどれでもない `style` は元の値を返す（描く形は既定の square）。綴り誤りの `squre` の
+/// ほか、`underline` を含むだけの `squareunderline`（`+` の抜け）・`underlined` も下線系に数えない。
 #[test]
 fn cursor_fallback_returns_unknown_style() {
-    let c = styled(Some("squre"), None);
-    assert_eq!(
-        CursorFallback::of(&c),
-        CursorFallback {
-            blendmethod: None,
-            underline_style: None,
-            unknown_style: Some("squre".to_string()),
-        }
-    );
-    assert!(matches!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill { .. }
-    ));
+    for style in ["squre", "squareunderline", "underlined"] {
+        let c = styled(Some(style), None);
+        assert_eq!(
+            CursorFallback::of(&c),
+            CursorFallback {
+                blendmethod: None,
+                underline_style: None,
+                unknown_style: Some(style.to_string()),
+            }
+        );
+        assert!(matches!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill { .. }
+        ));
+    }
 }

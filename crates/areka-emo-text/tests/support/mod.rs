@@ -305,7 +305,7 @@ fn is_fill(px: &[u8]) -> bool {
 /// （`cursor.font.color` 255,255,255）で、premultiplied では帯の外なら B ＝ G ＝ R ＝ α、帯の上に
 /// 載った字は B ＝ 25 ＋ 230 × 被覆率 になる。塗り帯 (105,25,25) の青チャネルは 25 止まり
 /// （縁が半透明なら更に小さい）なので、「青チャネル 128 以上」で白文字だけを拾える。
-pub fn is_hover_text(px: &[u8]) -> bool {
+fn is_hover_text(px: &[u8]) -> bool {
     px[3] >= 128 && px[0] >= 128
 }
 
@@ -346,9 +346,9 @@ pub fn to_canvas_local(r: &ChoiceHitRow, ox: f32, oy: f32) -> (f32, f32, f32, f3
 }
 
 /// 走査窓を hover 行の帯の**上下**へ伸ばす画素数（上端・下端どちらの判定も窓で切らないため）。
-pub const SCAN_MARGIN: u32 = 4;
+const SCAN_MARGIN: u32 = 4;
 /// ハイライト矩形の下端から hover 文字のインクがはみ出してよい上限（画素）＝ **0**。
-/// 裁定 2026-09-06（第 2 回・R13.3）——**緩めてはならない**（R12.2）。
+/// `areka-P0-emo2-conformance-e2e` の裁定（第 2 回・R13.3）——**緩めてはならない**（R12.2）。
 const BAND_OVERHANG_MAX: u32 = 0;
 
 /// 強調の帯の期待値（hover 行の行矩形の上端・帯の丈・行ボックスの中央へ寄せる量）。
@@ -463,7 +463,7 @@ pub fn assert_hover_band(
     assert!(
         overhang == BAND_OVERHANG_MAX,
         "[{tag}] hover 行の文字のインク下端 y{} がハイライト矩形の下端 y{} から {overhang} 画素はみ出した\
-         ＝**文字の下が切れる**（R3.3/4.2）。裁定 2026-09-06（第 2 回・R13.3）が許すのは \
+         ＝**文字の下が切れる**（R3.3/4.2）。`areka-P0-emo2-conformance-e2e` の裁定（第 2 回・R13.3）が許すのは \
          {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接行の帯と重なり、\
          どの選択肢を指しているかの一意性が壊れる）。**許容幅を緩めてもならない**（R12.2）。\
          この数値を添えて開発者の裁定を仰ぐこと",

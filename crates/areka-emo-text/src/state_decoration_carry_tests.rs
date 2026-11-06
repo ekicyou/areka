@@ -1,4 +1,4 @@
-//! 装飾の持ち運び（design.md「装飾の持ち運び」・Testing Strategy の
+//! 装飾の持ち運び（spec `areka-P0-shell-balloon` の design.md「装飾の持ち運び」・Testing Strategy の
 //! `state_decoration_carry_tests.rs` の場面・要件 3.13〜3.17・3.19・5.4・10.5）。
 //!
 //! 箱の構成はテストの中の surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る

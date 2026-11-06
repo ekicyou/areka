@@ -188,7 +188,7 @@ fn horizontal_region() -> TextRegion {
 /// 一致だけの空虚な檻にしないため、末尾時刻の絶対値（actor 0 のあふれ発火窓・
 /// actor 1 の Clear 後可視数）も同時に固定する。
 #[test]
-fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instances() {
+fn same_cues_and_times_yield_identical_visible_counts_and_windows_via_channel_and_direct() {
     // 代表 cue 列: actor "0"（全角・明示改行 4 行→あふれ）と actor "1"（半角・Clear 割込み）。
     let cues = vec![
         cue("0", 0.0, CueCommand::Text("あい".into())),
@@ -210,11 +210,11 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
     let region = horizontal_region();
 
     // 実 channel のインスタンス 1 本（自分の pump スレッド）＋直結参照 1 本。
-    let via_channel_a = run_channel_pipeline(cues.clone());
+    let via_channel = run_channel_pipeline(cues.clone());
     let direct = run_direct_pipeline(&cues);
 
-    let trace_a = observe(
-        &via_channel_a,
+    let trace_channel = observe(
+        &via_channel,
         &actors,
         &probe_times,
         &region,
@@ -233,7 +233,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
     // R2.5/R3.5: channel 経由と直結適用が全観測点（可視数・行列・可視窓）で一致＝搬送路は
     // cue を変形しない（受信→状態適用の忠実性）。
     assert_eq!(
-        trace_a, trace_direct,
+        trace_channel, trace_direct,
         "channel 経由と直結適用で可視化決定が一致する"
     );
 
@@ -246,7 +246,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
             .expect("observation exists")
             .clone()
     };
-    let a0 = last_of(&trace_a, "0");
+    let a0 = last_of(&trace_channel, "0");
     assert_eq!(a0.visible, 6, "actor 0 は全 6 グリフがリビール済み");
     assert_eq!(a0.lines.len(), 4);
     assert_eq!(
@@ -258,7 +258,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
         "actor 0 は 4 行あふれで縦スクロール（横書き）"
     );
     // actor 1 は Clear 後の "xyz"＋"!" のみ（Clear 前の "abcd" は破棄）・あふれなし。
-    let a1 = last_of(&trace_a, "1");
+    let a1 = last_of(&trace_channel, "1");
     assert_eq!(a1.visible, 4, "actor 1 は Clear 後の 4 グリフのみ可視");
     assert_eq!(a1.lines.len(), 2);
     assert_eq!(
@@ -456,17 +456,17 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
         cues.push(cue("0", at, CueCommand::Text("あ".into())));
     }
 
-    let state_a = run_channel_pipeline(cues);
+    let state = run_channel_pipeline(cues);
     let actors = [ActorKey::from("0")];
-    let probe_times = [0.0, 1.0, 3.0, 6.0, 10.0];
+    let probe_times = [1.0, 10.0];
 
-    let trace_a = observe(&state_a, &actors, &probe_times, &region, mode, 10.0);
+    let trace = observe(&state, &actors, &probe_times, &region, mode, 10.0);
 
     let actor = ActorKey::from("0");
     // リビール途中（t=1.0・可視 5）: 5 列（各列 全角 1 グリフ）・末尾の保留改行は空列を
     // 開かず蒸発する（遅延化で幽霊空列が消える）。最新列（5 列目 i=4）の左端 298 ≥ 36 → 非発火。
-    assert_eq!(state_a.visible_glyphs(&actor, 1.0), 5);
-    let at_1s = trace_a.iter().find(|o| o.t == 1.0).expect("t=1.0 の観測");
+    assert_eq!(state.visible_glyphs(&actor, 1.0), 5);
+    let at_1s = trace.iter().find(|o| o.t == 1.0).expect("t=1.0 の観測");
     assert_eq!(at_1s.lines.len(), 5);
     assert_eq!(
         at_1s.window,
@@ -479,8 +479,8 @@ fn vertical_fixture_pipeline_scrolls_horizontally() {
 
     // 全量リビール（t=10.0・可視 27・最終グリフのリビール時刻 6.5）: 27 列目の左端 34 < 36 →
     // 横スクロール発火（vertical_rl＝内容が右へ＝ブロック軸オフセット +12）。
-    assert_eq!(state_a.visible_glyphs(&actor, 10.0), 27);
-    let at_10s = trace_a.iter().find(|o| o.t == 10.0).expect("t=10.0 の観測");
+    assert_eq!(state.visible_glyphs(&actor, 10.0), 27);
+    let at_10s = trace.iter().find(|o| o.t == 10.0).expect("t=10.0 の観測");
     assert_eq!(at_10s.lines.len(), 27);
     assert_eq!(
         at_10s.window,

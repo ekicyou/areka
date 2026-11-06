@@ -77,8 +77,8 @@ const INK_ALPHA_MIN: u8 = 128;
 /// 表示に効く 7 項目（要件 5.1・`\f[…]` のトークン列）。
 ///
 /// 横書き（入口）と縦書き（[`vertical`]）が**同じ表**を回す——片方だけ項目が抜けるのを防ぐ。
-/// 母数は入口の `the_visible_keys_are_the_seven_that_directwrite_can_range` が固定する
-/// （表が空になるとどちらのループも恒真で緑になる）。
+/// 母数は入口（`decoration_readback_test.rs`）の `VISIBLE_KEYS.len() == 7` の const assert が
+/// 固定する（表が空になるとどちらのループも恒真で緑になる）。
 pub(crate) const VISIBLE_KEYS: &[(&str, &[&str])] = &[
     ("name", &["name", ALT_FONT]),
     ("height", &["height", "44"]),

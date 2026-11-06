@@ -312,11 +312,13 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     );
 }
 
+// ══ spec audit-emo-text-state-actor（2・3 回目のかけ直し R2-12・R3-5）: 知らない cursor.style の警告 ══
+
 /// 知らない `cursor.style` の警告の文言。
 const UNKNOWN_STYLE: &str = "cursor.style が正典の値（square・underline・square+underline・none）のどれでもない: 既定の square で描く";
 
 /// 知らない `cursor.style`（`squre`）のバルーンは装着で 1 件（`style` の欄が元の値）、値の同じ
-/// 再追従で 0 件。
+/// 再追従で 0 件、値を `sqare` に替えた再追従で 1 件（欄は新しい値）。
 #[test]
 fn unknown_cursor_style_warns_once_naming_the_value() {
     let mut world = World::new();
@@ -338,6 +340,12 @@ fn unknown_cursor_style_warns_once_naming_the_value() {
         0,
         "値の同じ再追従で 0 件"
     );
+
+    let sqare = cursor_model("sqare", "none");
+    let (_, changed) = capture(|| rt.refresh_actor_binding(&actor, bind, &sqare));
+    let unknown = warns(&changed, UNKNOWN_STYLE);
+    assert_eq!(unknown.len(), 1, "値を替えた再追従で 1 件");
+    assert_eq!(unknown[0].field_str("style"), Some("sqare"));
 }
 
 /// audit-emo-text-state-actor 指摘 5: 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない

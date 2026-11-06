@@ -531,7 +531,7 @@ fn the_disable_tag_is_a_bulk_reset_too() {
 
 // ---------------------------------------------------- §13 記録なしの失敗経路が無い（R13.5）
 
-/// 失敗の分類（design.md「Error Handling」の分類表）と実装の腕を字面で突き合わせる。
+/// 失敗の分類（spec `areka-P0-text-decoration-canon` の design.md「Error Handling」の分類表）と実装の腕を字面で突き合わせる。
 ///
 /// 値の比較では「記録なしで飲み込む経路」を見張れない——記録を落としても値は同じだからである。
 /// ゆえに `apply_font_args` の `match` の腕を 1 つずつ数え、各腕が記録へ落ちることを固定する。

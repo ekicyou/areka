@@ -24,12 +24,12 @@
 //! （現物は素通しで、正規化は [`ScaleContract::new`] へ委譲されている）。
 //! 搬送層が scale を変換するよう変わった場合、その変換は本檻の外であり、注入点の再設計が要る。
 //!
-//! ## 道具の較正（[[subagent-tooling-can-be-wrong-calibrate-it]]）
+//! ## 道具の較正
 //!
 //! 検証の道具そのものが壊れていても緑は出る。裁定時の初回集計は実際に道具の誤りを踏んだ。
-//! そのため本ファイルは、比集合導出ヘルパと 2 つの寸導出ヘルパ（本番経路・整数オラクル）が
-//! **既知値を逐語再現する**ことを最初に確かめる較正テストを備える。
-//! 較正が緑でない限り、後続の判定は意味を持たない。
+//! そのため本ファイルは、比集合導出ヘルパが**既知値を逐語再現する**ことを最初に確かめる
+//! 較正テストを備え、2 つの寸導出ヘルパ（本番経路・整数オラクル）の既知値は 6/5・12/5 の
+//! 代表例のテストが固定する。較正が緑でない限り、後続の判定は意味を持たない。
 
 use areka_emo_compose::ScaleRatio;
 use areka_emo_text::region::{ImagePx, ScaleContract};
@@ -154,8 +154,8 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
 
 /// 比集合導出を、既知値の逐語再現で較正する。
 ///
-/// 判定に使う道具が壊れていても緑は出るため、後続の判定より先に道具の側を固定する
-/// （[[subagent-tooling-can-be-wrong-calibrate-it]]）。ここで確かめるのは次の 2 点である
+/// 判定に使う道具が壊れていても緑は出るため、後続の判定より先に道具の側を固定する。
+/// ここで確かめるのは次の 2 点である
 /// （返る比が既約かつ重複なしであることは [`reachable_ratios`] の組み立てそのもの）。
 ///
 /// 1. 到達比がちょうど [`REACHABLE_RATIO_COUNT`] 個（＝23）であること。
@@ -165,7 +165,7 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
 /// 本番経路のヘルパと整数オラクルの既知値の逐語再現（比 6/5・寸 25 で 31 と 30、比 12/5 で
 /// 61 と 60）は [`error_counts_fixed_for_six_fifths_and_twelve_fifths`] の代表例が受け持つ。
 #[test]
-fn helpers_are_calibrated_against_known_values() {
+fn ratio_set_helper_is_calibrated_against_known_values() {
     let ratios = reachable_ratios();
 
     assert_eq!(
@@ -223,7 +223,7 @@ fn helpers_are_calibrated_against_known_values() {
 /// OS の DPI 状態にも描画資源にも触れない純粋な算術として走る。
 #[test]
 fn supply_extent_bounds_hold_for_all_reachable_ratios() {
-    // 到達比の個数（総当たりの前提）は `helpers_are_calibrated_against_known_values` が固定する。
+    // 到達比の個数（総当たりの前提）は `ratio_set_helper_is_calibrated_against_known_values` が固定する。
     let ratios = reachable_ratios();
     for &(num, den) in &ratios {
         for v in 1..=MAX_EXTENT {
@@ -270,7 +270,7 @@ fn supply_extent_bounds_hold_for_all_reachable_ratios() {
 /// 欠陥の正体が「1.2 の f32 表現」一点である——という裁定根拠⑶の傍証でもある。
 ///
 /// なお 2 比が到達比集合に実在することは較正テスト
-/// [`helpers_are_calibrated_against_known_values`] が担保する（ここでは重ねない）。
+/// [`ratio_set_helper_is_calibrated_against_known_values`] が担保する（ここでは重ねない）。
 ///
 /// ## 同一入力に対し常に同一結果であること（requirements 3.7）
 ///
@@ -329,7 +329,7 @@ fn error_counts_fixed_for_six_fifths_and_twelve_fifths() {
 ///
 /// 対象の 21 比は一覧を直書きせず、[`reachable_ratios`] から [`ERROR_RATIOS`] を除いて導く。
 /// 到達比集合の個数（[`REACHABLE_RATIO_COUNT`]）と [`ERROR_RATIOS`] が集合に含まれることは
-/// [`helpers_are_calibrated_against_known_values`] が固定するので、残りはちょうど 21 比になり、
+/// [`ratio_set_helper_is_calibrated_against_known_values`] が固定するので、残りはちょうど 21 比になり、
 /// 比集合の変化を取りこぼさない（design.md Revalidation Triggers）。
 ///
 /// ## 同一入力に対し常に同一結果であること（requirements 3.7）
