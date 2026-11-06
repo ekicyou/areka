@@ -550,12 +550,16 @@ SSP（`C:\wintools\ssp\ssp.exe`・ゴースト「えも2DEBUG」）を起こし�
 - 「drive のテストの期待（`text_playback_duration + 待ち`）が本番の式と違う」: 占有の終わり（horizon）は dola が `start + duration` を秒で足すので、テストの和は本番と同じ。開始時刻の期待 2 か所だけ整数 ms の式へ直した（R7）。
 - charset の `validation_tests.rs` の emo2 の検体のテストに非 ASCII を足す案: 検体の原文をそのまま固めるテストなので変えない。
 
-### 13.3 範囲の中で開発者の裁定が要るもの（要件 2.3・まだ直していない）
+### 13.3 範囲の中で開発者の裁定が要ったもの（要件 2.3・2026-11-06 に推奨案で裁定・直した）
 
 | 番号 | 組 | 指摘 | 当たる種類・正典・推奨 |
 |---|---|---|---|
 | R2 | Must | `shiori`・`readme` の値が `..` や絶対パスでゴーストのフォルダの外を指せる（指摘 1 はシェル名だけ） | ③（SSP 互換・正典の振る舞い。SSP は測っていない）。正典: https://ukatech.shillest.net/ukadoc-spec/descript/ghost/#readme「readme,ファイル名」「インストール時やオーナードローメニューから開かれるゴーストの説明テキストファイル名。」「既定値: readme.txt」／https://ukatech.shillest.net/ukadoc-spec/descript/ghost/#shiori「shiori,ファイル名」「そのゴーストが使用するSHIORIのファイル名。」「既定値: shiori.dll」。一度直したが戻した（今は前と同じ振る舞い）。推奨＝**readme は直す**: 外を指す値は既定の名と同じに扱う（値が無ければ `crates/areka/src/readme.rs` の `resolve_path` が `readme.txt` へ落ちる）。本当の危うさは、OS の関連付けがゴーストの外のファイルを開くこと。**shiori は記録だけ**: `warn!` を残して値はそのまま使う（ゴーストはもともと好きな DLL を持ち込めるので、断っても守りはほとんど増えず、`shiori,..\shared\x.dll` のゴーストが起動しなくなる＝`shiori_wiring.rs:146`・`shiori_inproc.rs:575` は値が無いと Err） |
 | R18 | Should | `\w9[小声で]`・`\b2[注]`・`\p1[注]`・`\w[x]` が Raw になり待ち・切り替えと字が消える（指摘 27 と同じ類） | ①（完了 spec `sakura-tag-word-boundary` 要件 4.3・`sakura-parse` 要件 18.1 が今の振る舞いを固める）＋③（SSP の測りが要る）。推奨＝SSP の MCP で `\w9[x]`・`\b2[x]` を測ってから、指摘 27 と同じく「タグ＋字」に寄せる |
+
+裁定と直し（2026-11-06・開発者「推奨通り承認」・コミット 66e317ab）:
+- **R2**: `areka-parsers` の `package/resolve_shell.rs` に共有の判定 `points_outside`（`..`・根・ドライブ／UNC の頭）を置いた。外を指す `readme` は値なしと同じに扱い（`crates/areka/src/readme.rs` の `resolve_path` が `readme.txt` へ落ちる）`warn!` に値を残す。外を指す `shiori` は `warn!` だけで値をそのまま使う。読み手はどれも `resolve_with_shell` を通る（`catalog.rs` の `identity` は素の名しか受けないので抜け道でない）。テスト `readme_pointing_outside_ghost_is_dropped_with_warn` ほか 4 本。
+- **R18**: SSP が起動していなかったので測らず、ukadoc と指摘 27 の前例に従った。`\w9[x]`・`\b2[x]`・`\p1[x]` は短縮形のタグ＋字の `[x]`、`\w[x]` は知らないタグ `\w` ＋字の `[x]`（`w` を `NO_ARG_TAGS` へ）。未閉じの `\b1[` も残りを Raw で呑まない。完了 spec `sakura-tag-word-boundary` 要件 4.3 と `sakura-parse` 要件 18.1 の振る舞いを改めた。ukadoc の角括弧の形 `\b[2]`・`\p[1]` は変わらない。
 
 ### 13.4 範囲の外へ渡すもの（本 spec では直さない）
 
@@ -565,6 +569,7 @@ SSP（`C:\wintools\ssp\ssp.exe`・ゴースト「えも2DEBUG」）を起こし�
 - `Animation::interval_written`: 最後の読み手（`areka-emo-compose` の fold の `merge_brace`）が残っている＝相手が main に未着地なので、欄は残した（タスク 7.1 の書きどおり・着地の後に消す）。
 - `\n[3e38]` のような大きな有限の値で、改行を重ねると配置が inf／NaN になる件（R17・指摘 3 の残り）: parsers で上限を決める「元からある頭打ち」が無い（要件 7.6 の作法）。推奨＝配置の側（`areka-emo-text/src/layout_scan.rs`）で非有限の位置を守る起票（進行役が今ある brief か roadmap へ足す）。
 - 描く語（`overlay` ほか）の pattern で欄 2 の面の番号が読めないと 0 番の面を描く件（R3）: parsers は `target` に原文を写しているので、語を解く `areka-emo-compose`（`audit-emo-compose`）で記録できる。
+- `doc/COMPAT_ARCHITECTURE.md:241` の「短縮形は数字の後の `[` を角括弧の形として取る（`\w2[x]`）」の文は R18 の後は古い。本 spec が触れる `doc/` は台帳の 2 行だけ（design 370 行・要件 7.9）なので、完了の段（`/kiro-complete` の文書の同期）で直す。
 - clippy の `drain_collect`（`areka-sakura/src/drive.rs:325`）は前からある警告で、audit は指していない（要件 4.7＝機械的には直さない）。
 
 ### 13.5 残した 2 件（要件 2.2 の ①・要件 7.2）
@@ -574,5 +579,5 @@ SSP（`C:\wintools\ssp\ssp.exe`・ゴースト「えも2DEBUG」）を起こし�
 ### 13.6 結果
 
 - 2 周目（直しの差分の読み直しと、呼び手のクレートのテスト）で出た新しい指摘: **0 件**。見出しの無い `{` の枝の余分な括弧を 1 つ畳み、R3 の直しは `areka-seriko` のテストを赤にしたので戻して範囲の外へ渡した。R2 の直しは③に当たるので戻して裁定待ちへ移し、R19 は推奨案の承認で直した（その差分も読み直して指摘 0 件）。
-- ただし 13.3 の 2 件（R2・R18）は開発者の裁定待ちで、範囲の中の新しい指摘として**まだ残っている**。要件 6.3 の「新しい指摘 0 件（要件 2.2 で残すと裁定した指摘を除く）」は、この 2 件の裁定と、それに沿った直しの後に満たす。R17 は範囲の外へ渡した（13.4）。R19 は直した（13.2）。
+- 13.3 の 2 件（R2・R18）は 2026-11-06 に推奨案で裁定され、直した（コミット 66e317ab）。その差分への 2 周目（差分の読み直しと、呼び手のクレート `areka-parsers`・`areka-sakura`・`areka-ghost`・`areka-emo-text`・`areka` の bin のテスト・`crates/` 全体の字面の検索）で出た範囲の中の新しい指摘: **0 件**。要件 6.3 の「新しい指摘 0 件（要件 2.2 で残すと裁定した指摘を除く）」を満たした。範囲の外へは `doc/COMPAT_ARCHITECTURE.md:241` の古い文を 1 件渡した（13.4）。
 - 残した指摘: 59・60 の 2 件（13.5）。

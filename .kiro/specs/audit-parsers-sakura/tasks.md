@@ -180,7 +180,7 @@
   - `/kiro-discovery` で 3 件を起票する: ウェイトの `最小-最大` からランダムに選ぶ振る舞い（7.7）・トークの終わりの時刻が ms の格子から 1 ulp 外れうる件（design の「残る危うさ」）・旧形の `\q` を選択肢として出す振る舞い（設計の討議の議題 3）
   - 3 件が roadmap に載り、brief が在る
   - _Requirements: 7.7_
-- [ ] 8.2 範囲へ audit をかけ直し、新しい指摘 0 件を記録する（T26）
+- [x] 8.2 範囲へ audit をかけ直し、新しい指摘 0 件を記録する（T26）
   - 要件 1 と同じ作法（範囲だけ・全部読む・上限を外して全件）で `/ponytail:ponytail-audit` をかけ直す。新しい指摘が出たら要件 2 と同じ扱いで直してかけ直す
   - 59・60 を残した理由（要件 2.2 の ①・完了 spec の要件 5.1）を検証の記録に書く
   - 検証の記録に、新しい指摘の件数「0」と残した 2 件が明示されている
@@ -224,3 +224,4 @@
 - 8.1: 起票の 4 件はどれも既存の brief へ追記した（`audit-dola`＝1 ulp と `CuePlayer::stop`・`range-choice-tag`＝旧形の `\q`・`seriko-legacy-pattern-format`＝ウェイトの範囲のランダム・`coverage-roadmap-refresh`＝台帳の bindgroup の欄と古い名指し）。roadmap の末尾の節「audit-parsers-sakura の申し送り」に 4 行。spec の数と版の席は次の棚卸で組む。
 - 8.2（途中・2026-11-06）: かけ直しで範囲の中の新しい指摘 R1〜R19。R1・R4〜R16・R19 は直した（R19 は完了 spec `areka-P0-mayuna-compose` の D2 を改めた・推奨案で承認）。R3 と R17 は範囲の外へ（R17 は `audit-emo-text-layout-draw` の brief へ追記）。R2（`shiori`／`readme` の外を指す値）と R18（`\w9[x]` ほか）は開発者の裁定待ちで、コードは今の振る舞いのまま。裁定が出たら直し、2 周目をかけて 8.2 を閉じる（research.md §13.6）。8.2 の実装係が机なしで `cargo test -p areka` の結合テスト（実機の起動を含む）を回してしまった（i686 の部品が無く早々に落ちた）。
 - 8.3（2026-11-06・コミット 28e30598）: `tools/test-all.ps1` を排他テストの机で 1 回＝all steps green（x64 workspace tests 543 s・i686 43 s ほか）。本 spec が触って 1,000 行を越えるのは前から越えていた 3 本だけ（`areka-emo-present/src/cache_tests.rs` 1301→1300・`areka-ghost/tests/ghost/inproc_e2e_test.rs` 1160→1160・`areka-seriko/src/actor_bind_loop_tests.rs` 1375→1374＝どれも範囲の外で型の追随だけ）。R2・R18 の裁定でコードが変われば、触ったクレートのテストと全体テストを回し直す。
+- 8.2（閉じ・2026-11-06）: R2・R18 は開発者が推奨案で裁定し、コミット 66e317ab で直した（R18 は SSP が止まっていたので測らず ukadoc と指摘 27 の前例に従った・完了 spec `sakura-tag-word-boundary` 要件 4.3 と `sakura-parse` 要件 18.1 を改めた）。2 周目の新しい指摘 0 件（research §13.6）。`doc/COMPAT_ARCHITECTURE.md:241` の短縮形と `[` の古い文は完了の段で直す（§13.4）。8.3 の全体テストはこの直しの前なので、最後の確かめで回し直す。
