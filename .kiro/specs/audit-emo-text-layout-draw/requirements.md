@@ -166,7 +166,7 @@
 | 1 | 必ず直す | 直す（申し送り R17・要件 5） |
 | 2〜5 | 必ず直す | 直す |
 | 6 | 必ず直す | 直す。完了 spec `areka-P0-balloon-font-descript-keys` の要件 5.5 どおり、バルーンの既定の `font.underline`・`font.strike` を描く。`areka-P0-text-decoration-canon` は既定の線の描き方を別に決めていない（`research.md` 11 節）＝種類 ⑶ に当たらない。今の誤りを固めているテスト（`viewbox_draw_decoration_tests.rs:641-669`）は向きを逆に直す |
-| 7 | 必ず直す | 直す。**並べ方（折り返しの位置）は変えず、文字の面の大きさだけを画像の大きさで頭打ちにする**＝画像の外の字は今も見えないので、見た目は変わらない（種類 ⑶ に当たらない・SSP の測りは要らない）。直す所は範囲の外の `actor_present.rs` なので、触る前に `audit-emo-text-state-actor` と申し合わせる（要件 7.2） |
+| 7 | 必ず直す | 直す。**並べ方（折り返しの位置）は変えず、文字の面の大きさだけを画像の大きさで頭打ちにする**＝画像の外の字は今も見えないので、見た目は変わらない（種類 ⑶ に当たらない・SSP の測りは要らない）。直す所は範囲の外の `actor_present.rs` なので、触る前に `audit-emo-text-state-actor` と申し合わせる（要件 7.2）。この spec で切るのは遠い辺（right・bottom）だけ。近い辺（left・top）が画像の外へ負に解けて面が画像より大きく残る場合は申し送る（2026-11-06 設計の段・開発者「推奨案を承認」） |
 | 8 | 必ず直す | 直す |
 | 9〜16 | 直したほうがよい | 直す |
 | 17 | 直したほうがよい | 直す。消去と同じフレームで見えるようになった字は、そのフレームで描く（0 フレーム）。「透明フラッシュは FullClear の 1 フレームのみ」はコードの説明（`viewbox_draw.rs:256-257`）だけにあり、完了 spec にも裁定にも無い＝裁定「1 フレーム遅らせる解は取らない」（2026-09-13）に従い、説明も直す |
@@ -177,12 +177,12 @@
 | 22〜27 | 直したほうがよい | 直す |
 | 28 | できれば | 直す。ただし `look_tests.rs`・`color_tests.rs` の calibration の組は**残す**（種類 ⑴・完了 spec の R15.3・R15.6 が名指しで求めた作法） |
 | 29 | できれば | 直す（説明だけ）。`cursor_tag.rs:90` の振る舞いは変えない |
-| 30 | できれば | 直す。ただし `RegionTransform` の行列の口（`identity`・`apply`・`then`・`to_matrix`・`is_translation_only`・`debug_assert_m1_translation_only`）は**残す**（種類 ⑵・合成メソッドを D2D の全部へ広げる予定の口・`audit-emo-compose` の指摘 20 と同じ扱い）。`ScaleContract::author_dpi` と `new` の第 2 引数は消し、`actor*` の呼び手は `audit-emo-text-state-actor` と申し合わせてから直す（要件 7.7）。走らない記録だけのテスト（`#[ignore]`）とその部品は消す |
+| 30 | できれば | 直す。ただし `RegionTransform` の行列の口（`identity`・`apply`・`then`・`to_matrix`・`is_translation_only`・`debug_assert_m1_translation_only`）は**残す**（種類 ⑵・合成メソッドを D2D の全部へ広げる予定の口・`audit-emo-compose` の指摘 20 と同じ扱い）。`ScaleContract::author_dpi` と `new` の第 2 引数は**残す**（2026-11-06 設計の段で改め・開発者「推奨案を承認」。`crates/areka/src/input_events/balloon_pure_core_tests.rs:156` が `new` を使うので、消すと要件 7.6 に反する＝要件 3.4。`crates/areka` に触れてよいウェーブへ申し送る）。走らない記録だけのテスト（`#[ignore]`）とその部品は消す |
 | 31 | できれば | 直す。ただし `\_l` が範囲の外のときの毎フレームの `debug!`（`cursor_tag.rs:201`・`layout_scan.rs:292`）は**残す**（種類 ⑴・design の縮退表の「一回化しない」の決め） |
 | 32〜34 | できれば | 直す |
 | 35 | できれば | 直す（既定の書体での作り直しを消す）。完了 spec の R4.2 の作り直しは開発者の裁定で改める |
 
-要件 9 の「新しい指摘 0 件」の数からは、残すと裁定した 19（振る舞い）・20・28 の calibration の組・30 の `RegionTransform` の口・31 の毎フレームの `debug!` を外す（要件 3.5）。
+要件 9 の「新しい指摘 0 件」の数からは、残すと裁定した 19（振る舞い）・20・28 の calibration の組・30 の `RegionTransform` の口と `ScaleContract::author_dpi`・31 の毎フレームの `debug!`・7 の近い辺の面の寸を外す（要件 3.5）。
 
 ### spec の切り方（要件 3.7）
 

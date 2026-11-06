@@ -500,3 +500,45 @@
 - **10 節の 4（指摘 17）**: 「透明フラッシュは FullClear の 1 フレームのみ」は `viewbox_draw.rs:256-257` のコードの説明だけにある。`.kiro/specs/completed/` の文書を grep して 0 件＝完了 spec の要件にも開発者の裁定にも無い。裁定「1 フレーム遅らせる解は取らない・状態の持ち方を変えて 0 フレームで解け」（2026-09-13）とぶつかるのはコードの説明だけ。
 - **指摘 19**: 完了 spec `areka-P0-cursor-tag-canon` の要件 2.6（requirements.md:79）は「解決後の位置が文字描画範囲の外側になるとき…指定どおりの位置を字義どおり用い（内側への自動的な寄せを行わず）、DEBUG レベルのログを記録する」と、`\_l` の行き先が validrect の外になる場合をはっきり決めている。validrect の絶対上限の裁定（2026-09-05）は折り返しの規則で、`\_l` の行き先そのものは同 spec が個別に決めた。
 - **10 節の 1・2（指摘 7・20）**: 討議の推奨案は、どちらも SSP の測りに頼らない形にした（7＝配置は変えず面の寸だけを頭打ちにする＝見える振る舞いは変わらない・20＝上限を置かず、害は 1・11・12 の直しで消す）。推奨案で決まれば測りは要らない。
+
+## 12. 設計の段の確かめと決め（2026-11-06・設計の生成）
+
+- 発見の型: **軽い発見**（今のシステムへの直し・新しい依存も外の API も無い）。外の調べは ukadoc だけ。読んだ決まり: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。作法は ponytail（いちばん小さな完全な直し・消せるものは消す・呼び手まで直し切る）に従った。兄弟の完了 spec `audit-emo-compose` の requirements.md「上限の決め方」と design.md の形を手本にした。測った時点は `main` `73c5b25d`（ギャップ分析と同じ・コードの変更なし）。
+
+### 12.1 設計の段で見つけたこと
+
+- **指摘 30 の前提の誤り（申し送りと裁定・12.5）**: `crates/areka/src/input_events/balloon_pure_core_tests.rs:156` が `ScaleContract::new(CAGE_K, None)` を呼ぶ（`Get-ChildItem -Recurse crates -Include *.rs | Select-String 'ScaleContract::new'` で範囲の外の呼び手を数えた: `crates/areka` 1・`crates/areka-emo-text/tests/` 4・`src/` の actor 5）。3 節の 30 の「`crates/areka` はどれも使わない」は誤りで、`new` の第 2 引数を消すと要件 7.6 に反する。欄 `author_dpi` を読む所は範囲の外に無い。
+- **指摘 21 が範囲の外のテストを赤にする**: `state_decoration_tests.rs:424,438` は `\f[cursorbrush,1]` を「他の持ち物」として確かめる。ukadoc に `cursorbrush` は無い（`cursorbrushcolor` はある）。前方一致をやめると不明になる＝申し合わせの後で 1 語を替える（要件 7.2）。
+- **ukadoc の `cursor…`・`anchor…` のキー**（ukadoc MCP で「\f[cursor」「\f[anchor」を引いた・各項目の URL は <https://ukatech.shillest.net/ukadoc-spec/list/sakura-script/#f-cursorstyle> の並び）: `cursor…` 12（`cursorstyle`・`cursorcolor`・`cursorbrushcolor`・`cursorpencolor`・`cursorfontcolor`・`cursormethod` と、それぞれの `cursornotselect…`）。`anchor…` 19（`anchorstyle`・`anchorcolor`・`anchorbrushcolor`・`anchorpencolor`・`anchorfontcolor`・`anchormethod`、同じ 6 つの `anchornotselect…`・`anchorvisited…`、`anchor.font.color`）。ukadoc は `cursorcolor` と `cursorbrushcolor` を 1 つの項目「\f[cursorcolor,色指定]もしくは\f[cursorbrushcolor,色指定]」に並べるので、項目の数では 10 と 16 になる（`look.rs:540` の説明の「10・17」と近い）。
+- **台詞の切れ目は必ず `request_clear` を通る**: 台本の頭には `ClearAll` が付く（`crates/areka-ghost/tests/ghost/inproc_e2e_test.rs:67`「非空台本は先頭に ClearAll」）。`ClearAll`・`Clear` はどちらも `actor.rs:378,393` で `ViewboxExecutor::request_clear` を呼ぶ。書体の台帳（`FontCatalog`）は場所ごとに 1 つで、計測器（`DWriteMetrics`）と描き手が `Rc` で共有する（`draw_metrics.rs:115-117`）。指摘 11 の寿命の決めはこの経路に乗る。
+- **`\_l` の縮退の guard**: 鍵は（キャラクター, 縮退の種類）で、`actor.rs:249` の `TextLayerRuntime` がフレームをまたいで持つ。本番の配置の呼び手は `actor_present.rs:624` の `layout_styled` 1 つで、いつも guard を渡す。guard の無い `LayoutEngine::layout` の呼び手はテストだけ。`CursorDegrade` を網羅で `match` する所はツリー全体で 0（`crates/areka` 0）。
+- **指摘 7 の近い辺（申し送りと裁定・12.5）**: `resolve_coord` は負の値を反対の辺から読むので、`validrect.left` が画像の幅より大きい負の値なら left は負になる。面の位置は `actor_present.rs:250-251` で validrect の左上に置かれ、面の中の座標は `canvas.rs:341-342`・`choice.rs`（5 か所）が validrect の左上を引いて作る。面の寸だけを切ると、近い辺が外のときは見た目が変わるか、面が画像より大きく残るかのどちらかになる。
+- **公開の口の範囲の外の使い手**（grep）: `classify_font_tag`＝`crates/areka` の `check_script_judge.rs:135`・`strict_judges.rs:34`（形は変えない）。`draw::DEFAULT_FONT_NAME`＝`tests/staysee_balloon_fixture/region.rs:46`（名前を残して別名にするので壊れない）。`TextRegion::resolve`＝`crates/areka` と `tests/` の多数（形は変えない）。`layout_with_cursor_warn`・`segment_starting_at`・`StyleTable`・`CursorDegrade`・`RegionTransform` は `crates/areka` 0。
+- 指摘 9 の `segment_advance_sum` は渡された列の先頭から字の番号を数えるので、呼び手が `&items[今の位置..]` と番号の差を渡せば、関数の形を変えずに済む。
+
+### 12.2 まとめの 3 つの見方（design-synthesis）
+
+- **一般化**: 位置が有限でなくなるのは「保留の改行の適用」と「`\_l` の解決」の 2 か所だけで、どちらも「その送りを捨てて記録する」の同じ規則になる。記録の一回化は今ある guard に種類を 1 つ足すだけで両方に効く。描き直しの計画の 16・17・18 は「前に描いた中身が分かるか」の 1 つの状態の形で解ける（`Option`）。
+- **作るか借りるか**: 全部 std と今の型で足りる（`HashMap` の索引・`binary_search_by_key`・`saturating_*`）。LRU などの新しい仕組みは入れない。
+- **削り**: 案 B の型（位置を有限に保つ型）は要らない（2 か所の 1 行の確かめで足りる）。指摘 11 の数の上限は置かない（寿命で足りる）。`FramePlan::FullClear` の変種は残す（範囲の外のテストが使う・消すと要件 7.9 を越える）。
+
+### 12.3 項目 (a)〜(e) の決め
+
+- (a) 指摘 1 の `warn!` の一回化: `CursorWarnGuard` に種類 `NonFinite` を足し、キャラクターごと・種類ごとに 1 回（フレームをまたいで残る）。指摘 2 も同じ種類を使う（記録の文が実際と合う）。guard の無い道は毎回記録する。
+- (b) 指摘 11 の上限: 数の上限は置かない。表の寿命を「1 つの台詞のあいだ」（`ClearAll`・`Clear` の `request_clear`）に揃える。元からある頭打ちは「今の台詞が使う見た目の数」で、`StyleTable` と `LineLayoutStore` がすでに従う寿命と同じ。既定の鍵の成功した字幅は残す（字の種類の数が頭打ち）。`warned` は器の一生に 1 回のまま。
+- (c) 直し方: 案 A。指摘 26 の下見の片づけで、改行の守りは 1 か所になる。
+- (d) 9・10 の前後の測り: 測らない。手間の次数が下がることはコードの形から決まり、要件に性能の目標の数は無い。檻は「大きな入力で結果が直す前と同じ」。
+- (e) 並び: テストの部品の寄せ（25）→ 重複の削り（28・`#[ignore]` の削除）→ 失敗しえないテスト（24）を先に置き、狭いファイルに場所を空けてから檻を足す。範囲の外に触る所（7 の 2 行・21 の 1 語）は申し合わせを待てるよう後ろに置く。
+
+### 12.4 設計の見直しの門（design-review-gate）
+
+- 機械の確かめ: 要件の番号 51 個が全部 design.md の対応表にある。境界の 4 節が埋まっている。File Structure Plan に実在のパスがある。部品の全部にファイルがある。
+- 判断の確かめ（2 回）: 1 回目で `writing.rs`・`wrap.rs` の変更の行の漏れと、申し合わせの表の大きなタスクの番号の食い違いを直した。2 回目で直すべき所は無かった。
+- **要件と食い違う所（開発者の裁定が要る）**: 設計の議題 1（指摘 30 の `ScaleContract::new`）。要件の討議の裁定「消す」と要件 7.6・3.4 が食い違う（前提の誤り）。設計の議題 2（指摘 7 の近い辺）は裁定の届かない残りで、推奨案を付けた。
+
+### 12.5 設計の段の裁定（2026-11-06・開発者「推奨案を承認」）
+
+- 指摘 30 の `ScaleContract::author_dpi` と `new` の第 2 引数: 案イ＝このウェーブでは消さない。かけ直しの 0 件の数から外し、`crates/areka` に触れてよいウェーブへ申し送る（呼び手 `crates/areka/src/input_events/balloon_pure_core_tests.rs:156`・emo-text の `actor*` 5・`tests/` 4）。この件の `audit-emo-text-state-actor` との申し合わせは要らない。指摘 30 の残りは要件の討議のまま（小さな使われないコードは消す・`RegionTransform` の口は残す・`#[ignore]` の記録だけのテストは消す）。
+- 指摘 7 の近い辺: 案甲＝この spec では遠い辺だけを画像の大きさで切る。left・top が画像の外へ負に解ける場合は申し送る。
+- これで門の判断の確かめに残った食い違いは無い。`requirements.md` の確定の表の 7・30 の行と「新しい指摘 0 件」から外す番号を合わせて改めた。
+
