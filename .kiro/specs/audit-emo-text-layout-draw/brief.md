@@ -78,4 +78,4 @@
 - **件: `
 [3e38]` のような大きな有限の割合で、改行を重ねると配置の位置が inf／NaN になる**（区分 B 相当）。`areka-parsers` は非有限の割合だけを既定 1.0 へ倒す（同 spec の指摘 3）。有限で大きな値は、上限を「元からある頭打ち」から決められない（同 spec の要件 7.6 の作法）ので、parsers では縛らない。
 - **望む姿**: 配置の側（`crates/areka-emo-text/src/layout_scan.rs` の改行の送り）で、位置が非有限になる送りを守り、`warn!` で記録する。
-- 出どころ: `.kiro/specs/audit-parsers-sakura/research.md` §13.3・§13.4 の R17。
+- 出どころ: `.kiro/specs/completed/audit-parsers-sakura/research.md` §13.3・§13.4 の R17。
