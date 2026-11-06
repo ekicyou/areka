@@ -110,6 +110,9 @@ use crate::canvas::TextEffects;
 use crate::choice::ResolvedChoiceStyle;
 use crate::inline_marker::InlineMarkerLook;
 use crate::look::LookLayers;
+use crate::surface::device_err;
+#[cfg(test)]
+use crate::surface::none_err;
 use crate::writing::WritingMode;
 
 // 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
@@ -806,33 +809,6 @@ fn create_target_bitmap(
     surface: &TextSurface,
 ) -> Result<ID2D1Bitmap1, TextLayerError> {
     create_d2d_target_bitmap(dc, surface.front_tex())
-}
-
-/// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を
-/// [`TextLayerError::Device`] にする（surface.rs と同型の log-first ヘルパ）。
-///
-/// 比較専用オラクル [`DrawExecutor::new`]（`#[cfg(test)]`）専用ゆえ同じく cfg(test)
-/// で保全する（本番の欠落写像は各所の [`device_err`] が担う）。
-#[cfg(test)]
-fn none_err(context: &'static str) -> TextLayerError {
-    tracing::error!(
-        context,
-        "必須リソースが欠落（デバイス未初期化 または 前提不成立）"
-    );
-    TextLayerError::Device {
-        hresult: 0,
-        context,
-    }
-}
-
-/// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（surface.rs と同型の
-/// log-first ヘルパ: `error!`＋`Err` 戻り値・panic 禁止）。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
-    move |e| {
-        let hresult = e.code().0;
-        tracing::error!(hresult, context, "DirectWrite/D2D 呼び出しが失敗");
-        TextLayerError::Device { hresult, context }
-    }
 }
 
 #[cfg(test)]

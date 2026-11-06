@@ -47,18 +47,20 @@ mod window_child;
 use window_child::HitMaskCache;
 
 /// `windows_core::Error` を [`TextLayerError::Device`]（ログ＋`HRESULT`＋文脈）へ写像する
-/// クロージャ（log-first: `error!`＋`Err` 戻り値・panic 禁止）。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
+/// クロージャ（log-first: `error!`＋`Err`・panic 禁止）。crate で 1 つ・場所は `context` で示す。
+pub(crate) fn device_err(
+    context: &'static str,
+) -> impl FnOnce(windows::core::Error) -> TextLayerError {
     move |e| {
         let hresult = e.code().0;
-        tracing::error!(hresult, context, "D3D/DXGI/WUC 呼び出しが失敗");
+        tracing::error!(hresult, context, "D3D/DXGI/D2D/WUC 呼び出しが失敗");
         TextLayerError::Device { hresult, context }
     }
 }
 
 /// `Option` が `None`（本来到達しない成功時 None・デバイス未初期化・entity 不在）を
-/// [`TextLayerError::Device`] にする（log-first）。
-fn none_err(context: &'static str) -> TextLayerError {
+/// [`TextLayerError::Device`] にする（log-first・crate で 1 つ）。
+pub(crate) fn none_err(context: &'static str) -> TextLayerError {
     tracing::error!(
         context,
         "必須リソースが欠落（デバイス未初期化 または 前提 entity 不在）"

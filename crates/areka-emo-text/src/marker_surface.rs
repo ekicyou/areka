@@ -40,7 +40,7 @@ use crate::TextLayerError;
 use crate::draw::create_d2d_target_bitmap;
 use crate::region::ScaleContract;
 use crate::scroll_marker::MarkerKind;
-use crate::surface::TextSurface;
+use crate::surface::{TextSurface, device_err};
 
 /// 面に描く 1 つの矢印: 種類・左上（面の左上を原点とする image px）・絵（原寸・乗算済み BGRA）。
 #[derive(Debug, Clone, PartialEq)]
@@ -338,15 +338,6 @@ pub(crate) fn marker_bitmap(
         )
     }
     .map_err(device_err("CreateBitmap(marker)"))
-}
-
-/// `windows_core::Error` を [`TextLayerError::Device`] へ写す（log-first・surface.rs と同型）。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
-    move |e| {
-        let hresult = e.code().0;
-        tracing::error!(hresult, context, "印の面の D2D 呼び出しが失敗");
-        TextLayerError::Device { hresult, context }
-    }
 }
 
 #[cfg(test)]
