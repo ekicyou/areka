@@ -14,5 +14,5 @@
 //   NewLine{ ratio:1.0 }
 //   Choice{ id:"OnLater", text:"あとで",     references:["r3"] }
 //
-// 目視確認（PNG）では ordinal 0（"はい"）に hover を注入し、その行だけが
-// SquareFill（cursor 指定時）／Invert（未指定時）のハイライト矩形＋反転文字で塗られる。
+// 目視確認（PNG）では ordinal 1（"いいえ"）に hover を注入し、その行だけが
+// SquareFill（cursor 指定のバルーン）のハイライト矩形＋白文字で塗られる（Invert のバルーンでは描かない）。

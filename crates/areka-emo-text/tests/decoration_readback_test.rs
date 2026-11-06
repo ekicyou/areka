@@ -98,19 +98,9 @@ fn the_font_gate_closes_on_a_missing_family() {
 
 // ══ 表 の母数 ══════════════════════════════════════════════════════════════════════════
 
-#[test]
-fn the_visible_keys_are_the_seven_that_directwrite_can_range() {
-    assert_eq!(
-        VISIBLE_KEYS.len(),
-        7,
-        "表示に効くのは DirectWrite の範囲指定で素直に表せる 7 項目"
-    );
-    assert_eq!(
-        VOCABULARY_ONLY_KEYS.len(),
-        3,
-        "語彙のみは sub／sup／outline の 3 項目"
-    );
-}
+// 表示に効くのは DirectWrite の範囲指定で素直に表せる 7 項目・語彙のみは sub／sup／outline の 3 項目。
+const _: () = assert!(VISIBLE_KEYS.len() == 7);
+const _: () = assert!(VOCABULARY_ONLY_KEYS.len() == 3);
 
 // ══ 1. 表示に効く 7 項目は画素を変える（要件 5.1） ═════════════════════════════════════
 

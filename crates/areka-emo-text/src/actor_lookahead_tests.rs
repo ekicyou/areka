@@ -185,11 +185,16 @@ impl Rig {
 
     /// 場所の行ごとの字の並び。
     pub(super) fn rows(&self, place: &PlaceKey, t: f64) -> Vec<Vec<String>> {
-        self.lines(place, t)
-            .iter()
-            .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
-            .collect()
+        row_texts(&self.lines(place, t))
     }
+}
+
+/// 行の列の、行ごとの字の並び。
+fn row_texts(lines: &[PositionedLine]) -> Vec<Vec<String>> {
+    lines
+        .iter()
+        .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
+        .collect()
 }
 
 /// 刻印済みの再生機 1 つと、その台本の判定の時刻（トークの頭からの秒・昇順）。
@@ -665,7 +670,7 @@ fn walk_with_windows(
         };
         stages.push(Stage {
             time: t,
-            rows: rig.rows(&place, t),
+            rows: row_texts(&lines),
         });
         windows.push(window);
     }

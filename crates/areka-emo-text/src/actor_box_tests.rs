@@ -119,10 +119,7 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
     // 閉包も新しい束のものに入れ替わる（解決できない鍵は何も変えない）。
     rt.apply_cue(&emote("0", "1"));
     assert_eq!(rt.state().current_surface(&actor), Some(0));
-    assert_eq!(
-        rt.state().destination(&actor),
-        TextPlace::Box(box_name(&box_layout(NEW_SHELL), 0, "x"))
-    );
+    assert_eq!(rt.state().destination(&actor), new_x);
 }
 
 /// 箱の名前ごとの既定の見た目は、その箱の `balloon.*`ブレスから解決した 2 層（白を混色の相手）で、

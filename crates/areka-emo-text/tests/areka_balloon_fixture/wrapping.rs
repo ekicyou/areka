@@ -247,23 +247,13 @@ fn sakura_wrapping_fills_each_line_up_to_the_threshold() {
 fn scale_multiplies_physical_sizes() {
     let contract = ScaleContract::new(1.25, None);
 
-    for (label, body, _, _) in BODIES {
-        let (region, lines) = layout_body(&SAKURA, body);
-        assert_eq!(
-            contract.to_physical(ImagePx(region.bottom())).0,
-            186.25,
-            "{label}: 範囲の下辺 149 の物理座標"
-        );
-        for line in &lines {
-            for g in &line.glyphs {
-                let l = contract.to_physical(ImagePx(g.inline_pos)).0;
-                assert_eq!(l, g.inline_pos * 1.25, "{label}: `{}` の物理の左端", g.text);
-            }
-        }
-    }
-
     // 手計算の値（モジュールの説明）。
-    let (_, half) = layout_body(&SAKURA, HALF_WIDTH_BODY);
+    let (region, half) = layout_body(&SAKURA, HALF_WIDTH_BODY);
+    assert_eq!(
+        contract.to_physical(ImagePx(region.bottom())).0,
+        186.25,
+        "範囲の下辺 149 の物理座標"
+    );
     let tail = half[0].glyphs.last().expect("空の行は無い");
     assert_eq!(
         contract

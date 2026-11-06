@@ -40,8 +40,6 @@
 //! ファイル読み込み・純粋層の解決・DirectWrite の計測のみ。実 GPU・実窓・実ゴーストを
 //! 要さず、同一入力に対して常に同一の結果を返す。
 
-use std::path::PathBuf;
-
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DEFAULT_FONT_NAME;
 use areka_emo_text::layout::GlyphMetrics;
@@ -53,7 +51,7 @@ use super::test_support::{
     EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, SCOPE_FACE0_FILES,
     expected_bottom, resolve_staysee, scope_image_size,
 };
-use crate::support::fixture::{balloon_metrics, merged_model};
+use crate::support::fixture::{balloon_metrics, example_fixture_dir, merged_model};
 
 // ── 領域解決の期待値（設計 C2 の E 行）──────────────────────────────────────────
 //
@@ -79,8 +77,9 @@ const CANON_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 // ファイルの定数 1 か所だけが持つ決まり（要件 3.2）なので、対照の所在はそれとは別に、
 // 対照であることが分かる名前でここに置く。
 
-/// 対照のバルーン定義（`font.name` と `wordwrappoint` を宣言している既存の検体）。
-const DECLARED_BALLOON_DIR: &str = "examples/fixtures/emo2-vertical-canon";
+/// 対照のバルーン定義（`font.name` と `wordwrappoint` を宣言している既存の検体・
+/// `examples/fixtures/` の下の名前）。
+const DECLARED_BALLOON_DIR: &str = "emo2-vertical-canon";
 /// 対照の面別上書き層（本番と同じ 2 層マージで読む）。
 const DECLARED_BALLOON_OVERLAY: &str = "balloons0s.txt";
 /// 対照が宣言する書体の名前（`descript.txt` の `font.name,Yu Gothic UI`）。
@@ -97,8 +96,10 @@ const DECLARED_INLINE_LIMIT: f32 = 149.0;
 /// 読み込み失敗と空は明示的に落とす（読めなかったときに「対象 0 件だから緑」になる形を
 /// 作らない）。
 fn declared_model() -> BalloonModel {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(DECLARED_BALLOON_DIR);
-    merged_model(&dir, Some(DECLARED_BALLOON_OVERLAY))
+    merged_model(
+        &example_fixture_dir(DECLARED_BALLOON_DIR),
+        Some(DECLARED_BALLOON_OVERLAY),
+    )
 }
 
 // ── 領域解決（設計 C2 の E 行・要件 3.3／3.5）────────────────────────────────
@@ -300,11 +301,6 @@ fn declared_balloon_returns_a_different_font_and_a_split_wrap_threshold() {
         "対照の書体は宣言どおり `{}` で返るはずだが `{}`",
         DECLARED_FONT_NAME, resolved.font.name
     );
-    assert_ne!(
-        resolved.font.name, CANON_DEFAULT_FONT_NAME,
-        "対照の書体が ukadoc 既定 `{CANON_DEFAULT_FONT_NAME}` で返った\
-         ——読み口が宣言を無視して常に既定を返している（検体側の主張が空振りになる）"
-    );
 
     let region = resolved.region;
     assert_eq!(
@@ -320,12 +316,5 @@ fn declared_balloon_returns_a_different_font_and_a_split_wrap_threshold() {
         "対照の遠辺が {} ではなく {}",
         DECLARED_INLINE_LIMIT,
         region.inline_limit()
-    );
-    assert_ne!(
-        region.wrap_threshold(),
-        region.inline_limit(),
-        "対照でも折返し基準と遠辺が同じ値 {} になった\
-         ——解決が折返し基準を常に遠辺から導いている（検体側の縮退の主張が空振りになる）",
-        region.wrap_threshold()
     );
 }

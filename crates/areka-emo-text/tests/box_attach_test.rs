@@ -96,12 +96,7 @@ fn resolver() -> SurfaceKeyResolver {
 }
 
 fn cue(command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: actor(),
-        command,
-        duration: 0.0,
-    }
+    support::cue("0", 0.0, command, 0.0)
 }
 
 fn actor() -> ActorKey {

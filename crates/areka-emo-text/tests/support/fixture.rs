@@ -38,7 +38,7 @@ static EMO2: LazyLock<SampleRoot> =
     LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
 
 /// emo2 検体のゴーストフォルダ（pasta 辞書は `ghost/master/dic/` 下に在る）。
-pub fn emo2_folder() -> PathBuf {
+fn emo2_folder() -> PathBuf {
     EMO2.folder().to_path_buf()
 }
 
@@ -183,7 +183,7 @@ pub fn png_native_size(path: &Path) -> (u32, u32) {
 }
 
 /// DirectWrite の factory（文字の寸法を測るのに要るのはこれだけ——実 GPU も実窓も要らない）。
-pub fn dwrite_factory() -> IDWriteFactory2 {
+fn dwrite_factory() -> IDWriteFactory2 {
     dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
         .expect("DirectWrite factory を生成できる（文字の寸法の観測はこれが前提）")
 }
@@ -238,13 +238,13 @@ pub fn init_com_for_this_thread() {
 #[derive(Debug, Default)]
 pub struct AlphaCensus {
     /// 走査した画素の総数。
-    pub total: u64,
+    total: u64,
     /// α ＝ 0（完全な透明）。
-    pub transparent: u64,
+    transparent: u64,
     /// 0 < α < 255（半透明）。
-    pub partial: u64,
+    partial: u64,
     /// α ＝ 255（完全な不透明）。
-    pub opaque: u64,
+    opaque: u64,
 }
 
 /// アトラス頁の矩形 `uv` を 1 画素ずつ走査して α の内訳を数える。
@@ -340,7 +340,7 @@ pub fn assert_three_alpha_kinds(scope: u32, file_name: &str, census: &AlphaCensu
 ///
 /// 宛先まで確かめるのは、別の層が出した無関係な記録を数え込んで「件数が合っている」ように
 /// 見えるのを防ぐためである。
-pub const BALLOON_LOG_TARGET: &str = "areka_emo_present::balloon";
+const BALLOON_LOG_TARGET: &str = "areka_emo_present::balloon";
 
 /// 本番の読み込みの経路（面の系列解決→面 0 に `descript.txt` と面別の設定を重ねたモデル）を
 /// 走らせ、（面の系列, 面 0 のモデル）を返す。系列解決の失敗と面 0 の不在は名指しで落とす。

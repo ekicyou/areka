@@ -10,12 +10,11 @@
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-use areka_emo_present::balloon::{ResolvedFace, resolve_balloon_faces};
 use areka_emo_text::actor::ResolvedBalloonText;
-use areka_parsers::balloon::{BalloonModel, parse_str};
+use areka_parsers::balloon::BalloonModel;
 use sample_ghost_kit::SampleRoot;
 
-use crate::support::fixture::read_balloon_file;
+use crate::support::fixture::{merged_model, read_balloon_file};
 
 /// 既定バルーンの検体。プロセス寿命で保持する（`SampleRoot` は破棄で複製の木を消すため）。
 static STAYSEE: LazyLock<SampleRoot> = LazyLock::new(|| {
@@ -106,22 +105,6 @@ pub(crate) fn expected_frame_size(file_name: &str) -> (u32, u32) {
 /// どちらの scope でも解決される面の本数（面 0〜3）。
 pub(crate) const EXPECTED_FACE_COUNT: usize = 4;
 
-/// 当該 scope の面の系列を本番と同じ公開 API で解決する（記録の捕捉は呼び出し側の仕事）。
-///
-/// 失敗と面 0 の不在は名指しで落とす（「解けなかったから対象 0 件で緑」を作らない）。
-pub(crate) fn resolve_faces(scope: u32) -> Vec<ResolvedFace> {
-    let faces = resolve_balloon_faces(&staysee_root(), scope).unwrap_or_else(|e| {
-        panic!("scope {scope} の面の系列解決が失敗した（面 0 が解決できたことが前提）: {e}")
-    });
-    assert!(
-        faces.iter().any(|f| f.surface_id == 0),
-        "scope {scope}: 解決結果に面 0 が無い（実測 {} 面: {:?}）",
-        faces.len(),
-        faces.iter().map(|f| f.surface_id).collect::<Vec<_>>()
-    );
-    faces
-}
-
 // ── 定義ファイルの読み口（要件 3.3）──────────────────────────────────────────
 
 /// 検体のテキストファイルを本番と同じ規約（既定 Ansi・ファイル内の `charset` 宣言優先）で
@@ -135,7 +118,7 @@ pub(crate) fn read_decoded(name: &str) -> String {
 ///
 /// StayseeBalloon は面別上書き層（`balloons0s.txt` 等）を持たないので第 2 引数は `None`。
 pub(crate) fn staysee_model() -> BalloonModel {
-    parse_str(&read_decoded("descript.txt"), None)
+    merged_model(&staysee_root(), None)
 }
 
 // ── 領域と書体の入口（要件 3.3・3.5・設計 C2 の E 行／F 行）────────────────────

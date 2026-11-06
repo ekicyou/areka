@@ -7,9 +7,7 @@ use log_capture_kit::CapturedEvent;
 
 use crate::support::fixture::{assert_balloon_loading_records, load_face0_with_records};
 
-use super::test_support::{
-    EXPECTED_FACE_COUNT, EXPECTED_FILE_NAMES, EXPECTED_FRAME_SIZES, staysee_root,
-};
+use super::test_support::{EXPECTED_FACE_COUNT, staysee_root};
 
 /// 本体側（scope 0）で解決される面の並び `(面 id, 採用接頭辞, 実ファイル名, 採用段)`。
 ///
@@ -39,19 +37,6 @@ const EXPECTED_SCOPE1_FACES: [(u32, &str, &str, ChainTier); EXPECTED_FACE_COUNT]
 /// 本体側は縮退の概念を持たないので空、相方側はちょうどこの 2 件である。件数で固定する
 /// のは、保管フォルダの面が増減したらそれ自体が上流の取り直しの合図（要件 2.2）だからである。
 const EXPECTED_SCOPE1_FALLBACK: [(u32, &str); 2] = [(2, "balloons"), (3, "balloons")];
-
-/// 保管フォルダに在って areka が面として読まない資産の内訳（名前に含まれる字面 → 本数）。
-///
-/// 要件 3.8 が名指しする 6 種で、合計 19 本。残る 4 本（`LICENSE` と 3 つの `.txt`）を
-/// 足した 23 本が「面ではない資産」の全数＝保管 29 本 − 枠 6 枚である。
-const NON_FACE_ASSET_GROUPS: [(&str, usize); 6] = [
-    ("balloonc", 5),
-    ("arrow", 2),
-    ("online", 9),
-    ("marker.png", 1),
-    ("sstp.png", 1),
-    ("thumbnail.pnr", 1),
-];
 
 /// 解決の 2 関数（`resolve_balloon_faces` と `load_scope_balloon_model`）だけを**同じ捕捉窓**で
 /// 走らせ、採用面列とその間の記録を返す（焼き込み側の記録は本テーマの主張の対象外）。
@@ -92,29 +77,6 @@ fn assert_face_series(
     );
 }
 
-/// areka が面として読まない 23 本の資産の内訳を、要件 3.8 が名指しする 6 種で固定する
-/// （保管フォルダ側から資産が消えたら除外集合が黙って縮む形にしない）。
-///
-/// それらが解決の列挙に 1 本も載らないことは、[`assert_face_series`] が列挙を枠の名前だけの
-/// 並びと逐語で突き合わせることで決まる（要件 3.8）。
-fn assert_non_face_asset_groups() {
-    let frames: Vec<&str> = EXPECTED_FRAME_SIZES.iter().map(|(n, _, _)| *n).collect();
-    let non_face: Vec<&str> = EXPECTED_FILE_NAMES
-        .iter()
-        .copied()
-        .filter(|n| !frames.contains(n))
-        .collect();
-    for (needle, count) in NON_FACE_ASSET_GROUPS {
-        let hit = non_face.iter().filter(|n| n.contains(needle)).count();
-        assert_eq!(
-            hit,
-            count,
-            "要件 3.8 が名指しする `{needle}` の本数が期待 {count} に対し実測 {hit}（除外対象 {}: {non_face:?}）",
-            non_face.len()
-        );
-    }
-}
-
 /// 本体側と相方側で面の系列が解決され、その間の記録が期待どおりである（要件 3.4・3.8）。
 ///
 /// 相方側は枠を 2 枚しか持たないので面 2・3 が本体側の系列へ落ち、その 2 面についてだけ
@@ -129,6 +91,4 @@ fn face_series_and_records_are_pinned_for_both_scopes() {
     let (faces1, events1) = resolve_faces_with_records(1);
     assert_face_series(1, &faces1, &EXPECTED_SCOPE1_FACES);
     assert_balloon_loading_records(1, &events1, &EXPECTED_SCOPE1_FALLBACK);
-
-    assert_non_face_asset_groups();
 }

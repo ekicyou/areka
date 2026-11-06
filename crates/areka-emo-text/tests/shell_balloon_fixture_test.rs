@@ -16,6 +16,11 @@
 //! `\s` の解決は偽の閉包（数字ならその番号を表示・`-1` は非表示）。本番の閉包はシェルの
 //! サーフェスの在不在で解くが、検体の 0〜3 はすべて在るので同じ結果になる。
 
+#[path = "support/mod.rs"]
+mod support;
+
+use support::fixture::read_balloon_file;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -25,7 +30,6 @@ use areka_emo_text::actor::{SurfaceKeyResolver, TextLayerRuntime};
 use areka_emo_text::look::TextLook;
 use areka_emo_text::place::{PlaceKey, TextPlace};
 use areka_emo_text::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
-use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{parse, parse_boxes};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
 use bevy_ecs::prelude::World;
@@ -41,15 +45,13 @@ const BALLOON: ((u8, u8, u8), f32) = ((0, 0, 0), 12.0);
 
 // ── 検体 → 読み手 → 畳み込み ──
 
+/// 検体を本番と同じ規約（既定 Ansi・`charset` 宣言優先）で読む。
 fn fixture_text() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
-        .join("shell-balloon")
-        .join("surfaces.txt");
-    let bytes = std::fs::read(&path)
-        .unwrap_or_else(|e| panic!("検体 {} の読取に失敗した: {e}", path.display()));
-    decode(&bytes, DefaultEncoding::Utf8)
+        .join("shell-balloon");
+    read_balloon_file(&dir, "surfaces.txt")
 }
 
 /// 検体を読み手と畳み込みへ通した表（実行ファイルで 1 度だけ作る）。
@@ -97,12 +99,7 @@ fn runtime() -> TextLayerRuntime {
 // ── 台本（指令の列） ──
 
 fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
+    support::cue(actor, 0.0, command, 0.0)
 }
 
 fn s(actor: &str, id: &str) -> TalkCue {

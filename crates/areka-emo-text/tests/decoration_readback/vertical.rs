@@ -28,7 +28,7 @@
 //! 太さのまま D2D の既定の描き方と同じ向きに回して塗る（D2D 自身の下線との一致は
 //! `src/viewbox_draw_underline_tests.rs` の実 GPU の檻が固定・要件 3.4）ので、側と位置は変わらない。
 //! ゆえにここは「今日の既定はこの側だ」という**実測の固定**に留め、裁定との一致は述語にしない
-//! ——照合結果は `doc/COMPAT_ARCHITECTURE.md` §8 への登記（task 9.1）が書く。
+//! ——照合結果（不一致）は `doc/COMPAT_ARCHITECTURE.md` §8 に登記してある。
 //!
 //! ## 装着 → 台本の順（task 8.1 からの申し送り）
 //!
@@ -118,7 +118,7 @@ fn measure(mode: &str, tokens: &[&str], what: &str) -> ((u32, u32), (u32, u32), 
 ///
 /// 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「列の右側」で、今日の DirectWrite の
 /// 既定はその**反対側**である。本仕様は縦書きの線の位置を DirectWrite に委ねる裁定なので、
-/// ここは実測を固定するに留める（照合の登記は task 9.1）。
+/// ここは実測を固定するに留める（照合の結果は `doc/COMPAT_ARCHITECTURE.md` §8 に登記してある）。
 const UNDERLINE_SIDE: Side = Side::Left;
 
 /// 打ち消し線が出る側（2 方向とも同じ）——字を貫くので列の中央 1/3。

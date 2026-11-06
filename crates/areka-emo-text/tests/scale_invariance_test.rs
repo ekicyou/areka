@@ -25,9 +25,7 @@ use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::{ImagePx, PhysicalPx, ScaleContract};
 use areka_emo_text::state::{TextItem, TextLayerState};
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 // ── テスト土台 ──────────────────────────────────────────────────────────────
@@ -43,15 +41,7 @@ fn model(
     validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
     writing_mode: Option<&str>,
 ) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(origin.0, origin.1),
-        WordWrapPoint::new(wordwrap.0, wordwrap.1),
-        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        writing_mode.map(str::to_owned),
-        None,
-    )
+    support::geometry_model(origin, wordwrap, validrect, None, writing_mode)
 }
 
 /// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）

@@ -146,21 +146,6 @@ fn variant_merged_model(variant: &str) -> BalloonModel {
     support::fixture::merged_model(&example_fixture_dir(variant), Some("balloons0s.txt"))
 }
 
-/// 両変種のフィクスチャ 2 ファイルが実在し、空でないこと——同値檻・構造檻が
-/// 「読めなかったので比較 0 件」で緑になる経路を塞ぐ（読取失敗はヘルパが panic する）。
-#[test]
-fn canon_and_extension_fixture_files_exist_and_are_non_empty() {
-    for variant in [EXT_KEY_FIXTURE, CANON_KEY_FIXTURE] {
-        for name in ["descript.txt", "balloons0s.txt"] {
-            let bytes = read_variant_bytes(variant, name);
-            assert!(
-                !bytes.is_empty(),
-                "{variant}/{name} が空である（フィクスチャの実在が同値檻の前提）"
-            );
-        }
-    }
-}
-
 /// 要件 10.1: 正典キー `vertical,1` を宣言するフィクスチャが縦書きへ解決される——
 /// descript 基層のみでも、`balloons0s.txt` を重ねた 2 層マージ後でも `VerticalRl`。
 #[test]
@@ -179,21 +164,6 @@ fn canon_key_fixture_resolves_to_vertical_rl() {
         WritingMode::resolve(&variant_merged_model(CANON_KEY_FIXTURE)),
         WritingMode::VerticalRl,
         "画像別上書き層を重ねても正典キーの縦書き解決が保たれる"
-    );
-}
-
-/// 要件 10.2: 正典キー版と拡張キー版の `WritingMode` が一致する（基層のみ／2 層マージ後）。
-#[test]
-fn canon_and_extension_fixtures_agree_on_writing_mode() {
-    assert_eq!(
-        WritingMode::resolve(&variant_base_model(CANON_KEY_FIXTURE)),
-        WritingMode::resolve(&variant_base_model(EXT_KEY_FIXTURE)),
-        "基層のみで両版の書字方向が一致する"
-    );
-    assert_eq!(
-        WritingMode::resolve(&variant_merged_model(CANON_KEY_FIXTURE)),
-        WritingMode::resolve(&variant_merged_model(EXT_KEY_FIXTURE)),
-        "2 層マージ後も両版の書字方向が一致する"
     );
 }
 

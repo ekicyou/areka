@@ -24,9 +24,7 @@ use std::rc::Rc;
 use areka_emo_present::{EmoPresenter, TargetId};
 use areka_emo_text::actor::{TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
@@ -168,12 +166,10 @@ fn expect_one<'a>(events: &'a [LogEvent], needle: &str) -> &'a LogEvent {
 
 /// テスト用 BalloonModel（幾何は既定: validrect 未指定＝画像全域・font 未指定＝既定）。
 fn geo_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, None, FontColor::new(None, None, None)),
+    support::geometry_model(
+        (Some(0), Some(0)),
+        (None, None),
+        (None, None, None, None),
         None,
         None,
     )

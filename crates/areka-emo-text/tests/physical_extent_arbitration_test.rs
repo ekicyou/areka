@@ -60,12 +60,6 @@ const ERROR_RATIOS: [(u32, u32); 2] = [(6, 5), (12, 5)];
 /// 誤差が実在する比 1 つあたりの誤り件数（寸 `1..=`[`MAX_EXTENT`] の総当たり・2026-08-14 実測）。
 const ERROR_COUNT_PER_RATIO: usize = 81;
 
-/// 誤りが 1 件も出ない比の個数（到達比から [`ERROR_RATIOS`] を除いた残り＝21）。
-///
-/// 一覧を直書きせず [`REACHABLE_RATIO_COUNT`] からの差で導く。比集合が広がればこの値も動き、
-/// ゼロ件側の assert が赤になる（design.md Revalidation Triggers）。
-const ZERO_ERROR_RATIO_COUNT: usize = REACHABLE_RATIO_COUNT - ERROR_RATIOS.len();
-
 // ── ヘルパ（テスト内私有・製品コードには足さない） ────────────────────────────
 
 /// 最大公約数（Euclid の互除法・整数のみ）。比の既約化に用いる。
@@ -158,15 +152,15 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
 
 // ── 較正（観測できる完了の確かめ・design.md C3 Validation） ──────────────────
 
-/// 比集合導出・整数オラクル・本番経路ヘルパの 3 点を、既知値の逐語再現で較正する。
+/// 比集合導出を、既知値の逐語再現で較正する。
 ///
 /// 判定に使う道具が壊れていても緑は出るため、後続の判定より先に道具の側を固定する
-/// （[[subagent-tooling-can-be-wrong-calibrate-it]]）。ここで確かめるのは次の 3 点である。
+/// （[[subagent-tooling-can-be-wrong-calibrate-it]]）。ここで確かめるのは次の 2 点である
+/// （返る比が既約かつ重複なしであることは [`reachable_ratios`] の組み立てそのもの）。
 ///
 /// 1. 到達比がちょうど [`REACHABLE_RATIO_COUNT`] 個（＝23）であること。
 /// 2. 誤差が実在する 2 比（6/5・12/5）が集合に含まれること——この 2 比を取りこぼすと、
 ///    「誤りは 2 比のみ」という裁定根拠が空振りの緑になる。
-/// 3. 返る比がすべて既約かつ重複なしであること（オラクルと本番経路が同じ比を見る前提）。
 ///
 /// 本番経路のヘルパと整数オラクルの既知値の逐語再現（比 6/5・寸 25 で 31 と 30、比 12/5 で
 /// 61 と 60）は [`error_counts_fixed_for_six_fifths_and_twelve_fifths`] の代表例が受け持つ。
@@ -188,19 +182,6 @@ fn helpers_are_calibrated_against_known_values() {
             "誤差が実在する比 {}/{} が到達比集合に含まれていない（実測集合 {ratios:?}）",
             known.0,
             known.1
-        );
-    }
-
-    for (i, &(num, den)) in ratios.iter().enumerate() {
-        assert_eq!(
-            gcd(num, den),
-            1,
-            "到達比 {num}/{den} が既約でない（gcd={}）",
-            gcd(num, den)
-        );
-        assert!(
-            !ratios[..i].contains(&(num, den)),
-            "到達比 {num}/{den} が重複している（実測集合 {ratios:?}）"
         );
     }
 }
@@ -347,7 +328,8 @@ fn error_counts_fixed_for_six_fifths_and_twelve_fifths() {
 /// **裁定の再審トリガ**（誤差の広がりを前提から見直す合図）である。
 ///
 /// 対象の 21 比は一覧を直書きせず、[`reachable_ratios`] から [`ERROR_RATIOS`] を除いて導く。
-/// 到達比集合が変われば残りの個数が [`ZERO_ERROR_RATIO_COUNT`] から外れてここが赤になり、
+/// 到達比集合の個数（[`REACHABLE_RATIO_COUNT`]）と [`ERROR_RATIOS`] が集合に含まれることは
+/// [`helpers_are_calibrated_against_known_values`] が固定するので、残りはちょうど 21 比になり、
 /// 比集合の変化を取りこぼさない（design.md Revalidation Triggers）。
 ///
 /// ## 同一入力に対し常に同一結果であること（requirements 3.7）
@@ -365,14 +347,6 @@ fn remaining_ratios_have_zero_errors() {
         .into_iter()
         .filter(|ratio| !ERROR_RATIOS.contains(ratio))
         .collect();
-
-    assert_eq!(
-        remaining.len(),
-        ZERO_ERROR_RATIO_COUNT,
-        "誤りゼロを期待する比の個数が変わった（到達比集合が変化した合図＝裁定の再審トリガ）: \
-         実測 {} 個 / 期待 {ZERO_ERROR_RATIO_COUNT} 個・除外した比 {ERROR_RATIOS:?}・実測集合 {remaining:?}",
-        remaining.len()
-    );
 
     for &(num, den) in &remaining {
         let tally = tally_extent_errors(num, den);

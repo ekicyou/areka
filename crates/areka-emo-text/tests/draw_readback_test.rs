@@ -16,7 +16,7 @@
 //!    二重適用＝面内で (36,46) へずれる変異を殺す）。インクの行矩形はみ出し（縦書きで
 //!    数 px 超え得る——task 6.3 申し送り）は供給面クリップで validrect 内に閉じる。
 //!
-//! 6.3 の in-source 檻（draw.rs）が **DrawExecutor 単体**（layout/canvas/render を
+//! in-source の檻（`src/draw_oracle_tests.rs`）が **DrawExecutor 単体**（layout/canvas/render を
 //! テストが直結）で同種の述語を張るのに対し、本テストは結線層〜COM 層の**実配線**
 //! （`spawn_emo_text` の実 pump ドレイン・`present_frame` の装着/描画/提示）を通す。
 //!
@@ -27,7 +27,7 @@
 //! - R9.3: グリフ更新フレームは供給面の Present のみで完結する（World の entity 数
 //!   不変・`GraphicsCommandList` 不挿入＝バルーン surface 本体の再合成を強要しない）。
 //! - R8.5: M1 の実挙動はテキスト描画のみ＝グリフ未リビール時（可視 0）と Clear 後に
-//!   インク源が存在しない（Image/Surface シーム住人の inert は draw.rs 6.3 檻が正典・
+//!   インク源が存在しない（Image/Surface シーム住人の inert は `src/canvas.rs` の檻が正典・
 //!   本テストはその通し側の帰結「テキスト以外のインク源なし」を assert する）。
 
 #[path = "support/mod.rs"]
@@ -46,9 +46,7 @@ use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
 use areka_emo_text::state::TextLayerConfig;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::prelude::World;
 use wintf::ecs::{Arrangement, DPI, GraphicsCommandList, VisualGraphics};
@@ -74,14 +72,12 @@ const PITCH: u32 = 14;
 /// いた。本檻の意図は書字開始角の縮退（そこから始まるインクの観測）なので、正典推奨形の
 /// 未宣言へ直してある（spec `areka-P0-balloon-vertical-canon` の DD5・要件 10.9）。
 fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(46), Some(-56), Some(36), Some(-44)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        writing_mode.map(str::to_owned),
+    support::geometry_model(
+        (None, None),
+        (None, None),
+        (Some(46), Some(-56), Some(36), Some(-44)),
         None,
+        writing_mode,
     )
 }
 

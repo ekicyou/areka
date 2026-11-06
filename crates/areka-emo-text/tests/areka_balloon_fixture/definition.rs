@@ -209,7 +209,8 @@ fn production_loading_records_only_the_expected_fallbacks_and_models_the_declare
     }
 }
 
-/// 透過の宣言が起動時と同じ入口で `use_self_alpha,1` に読める（要件 5.9）。記録も 0 件の側で見る。
+/// 透過の宣言が起動時と同じ入口で `use_self_alpha,1` に読める（要件 5.9）。同じ窓で、扱いを決めた
+/// `info!` がちょうど 1 件出る（記録を出す入口を通った対照）ことを見てから、WARN 以上が 0 件と言う。
 #[test]
 fn use_self_alpha_is_declared_on() {
     let root = balloon_root();
@@ -218,6 +219,17 @@ fn use_self_alpha_is_declared_on() {
         use_self_alpha,
         UseSelfAlpha::On,
         "`use_self_alpha,1` のはず"
+    );
+    let decided: Vec<(Option<&str>, Option<&str>)> = events
+        .iter()
+        .filter(|e| e.target == "areka_emo_present::self_alpha")
+        .filter(|e| e.level == tracing::Level::INFO)
+        .map(|e| (e.field_str("kind"), e.field_str("treatment")))
+        .collect();
+    assert_eq!(
+        decided,
+        vec![(Some("balloon"), Some("1"))],
+        "透過の扱いを決めた記録（対照）"
     );
     let warns: Vec<String> = events
         .iter()

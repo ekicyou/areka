@@ -29,6 +29,7 @@
 #[path = "../support/mod.rs"]
 mod shared;
 
+use std::cell::RefCell;
 use std::sync::OnceLock;
 
 use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
@@ -45,6 +46,7 @@ use areka_emo_text::actor::{
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use bevy_ecs::prelude::World;
 
 // ══ 台本と描画環境の定数 ═══════════════════════════════════════════════════════════════
 
@@ -121,12 +123,7 @@ pub(crate) fn model(writing_mode: Option<&str>) -> BalloonModel {
 // ══ cue（`\f` は再生時間 0 の汎用キャリア） ════════════════════════════════════════════
 
 fn cue(command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command,
-        duration: 0.0,
-    }
+    shared::cue("0", 0.0, command, 0.0)
 }
 
 /// `\f[トークン…]` を運ぶ cue（`state.rs` が名前で自己選別して装飾へ届く）。
@@ -194,8 +191,18 @@ pub(crate) fn run(writing_mode: Option<&str>, script: &[TalkCue]) -> Shot {
 
 /// [`run`] の、バルーン定義を呼び手が渡す形（[`model_with`] で組んだ定義で撮る）。
 pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
-    let mut world = make_world_with_gpu();
-    let (window, slot) = spawn_reserved_slot(&mut world);
+    thread_local! {
+        /// テストのスレッドごとの World（装置は 1 度だけ作り、撮るたびに予約スロットだけ足す）。
+        static WORLD: RefCell<Option<World>> = const { RefCell::new(None) };
+    }
+    WORLD.with_borrow_mut(|world| {
+        let world = world.get_or_insert_with(make_world_with_gpu);
+        shoot(world, model, script)
+    })
+}
+
+fn shoot(world: &mut World, model: &BalloonModel, script: &[TalkCue]) -> Shot {
+    let (window, slot) = spawn_reserved_slot(world);
 
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -207,7 +214,7 @@ pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
     for c in script {
         rt.apply_cue(c);
     }
-    present_frame(&mut rt, &mut world, SETTLED).expect("装着＋描画フレーム");
+    present_frame(&mut rt, world, SETTLED).expect("装着＋描画フレーム");
 
     let (width, height) = surface_size(&rt, &actor);
     Shot {

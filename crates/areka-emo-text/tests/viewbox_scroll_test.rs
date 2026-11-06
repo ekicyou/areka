@@ -24,7 +24,7 @@
 //!
 //! `ViewboxExecutor` を全域再描画へ戻す改変（可視窓移動フレームでも全可視行を毎回
 //! `DrawTextLayout` する）を入れると、スクロールフレームの `draw_text_layout_calls` 増分＝
-//! 可視行数となり、条件 2 の `draw_delta < visible_line_count` が落ちる。同時に条件 1 も、
+//! 可視行数（8）となり、条件 2 の `draw_delta <= EXPOSURE_BAND_DRAW_BOUND`（3）が落ちる。同時に条件 1 も、
 //! 不変フレームで全域を描き直すため増分 0 が破れて落ちる。ゆえに本檻は再描画レス実装のみで green。
 //!
 //! ## 幾何（決定論・ブロック軸は整数格子で厳密）
@@ -50,9 +50,7 @@ use areka_emo_text::actor::{
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::viewbox_draw::DrawStats;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::prelude::World;
 
@@ -96,13 +94,11 @@ const _: () = assert!(FILL_LINES as u32 * PITCH + FONT_H > IMAGE.1);
 /// テスト用 BalloonModel：validrect＝画像全域（top0/bottom120/left0/right100）・origin (0,0)・
 /// font 高さ 12（pitch 14＝12＋行間 2）・横書き（既定）。1 行 1 グリフゆえ折返し閾値は効かせない。
 fn model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(0), Some(IMAGE.1 as i32), Some(0), Some(IMAGE.0 as i32)),
-        Font::new(None, Some(FONT_H), FontColor::new(None, None, None)),
-        None,
+    support::geometry_model(
+        (Some(0), Some(0)),
+        (None, None),
+        (Some(0), Some(IMAGE.1 as i32), Some(0), Some(IMAGE.0 as i32)),
+        Some(FONT_H),
         None,
     )
 }
@@ -222,15 +218,6 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
     let draw_delta = after_scroll.draw_text_layout_calls - before_scroll.draw_text_layout_calls;
     let create_delta = after_scroll.line_layout_creations - before_scroll.line_layout_creations;
 
-    // 可視 8 行 fixture 限定の tight check（fixture 非依存の主檻は下部の blit==1＋depth-invariance）:
-    // 全域再描画へ戻すと draw_text_layout_calls 増分＝可視行数となり本 assert が落ちる。実 viewbox は
-    // 確定行を面内 blit で保持し露出帯 ∪ 変化行しか描かない＝増分は可視行数より厳密に小さい。
-    // ※ この `< visible_line_count` は可視 8 行ゆえ成立する fixture 依存の tight check であって、
-    //   fixture 非依存の再描画レス決定的証明はテスト末尾の blit==1＋depth-invariance（下部参照）。
-    assert!(
-        draw_delta < visible_line_count,
-        "再描画レス(fixture依存 tight check): スクロールフレームの DrawTextLayout 増分 {draw_delta} は可視行数 {visible_line_count} より厳密に小さい（全域再描画なら {visible_line_count}）"
-    );
     // 実測 2（露出帯の矩形 ∩ 1 行 ＋ 変化行の矩形 ∩ 1 行・矩形ごとの交差行数の和）。
     // 上限は 1 の余裕を見て 3。
     assert!(

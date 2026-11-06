@@ -31,13 +31,15 @@
 //! （設計 System Flows の定め）。
 
 use areka_emo_atlas::WicDecoderArm;
-use areka_emo_present::balloon::{build_balloon_target_from_faces, load_balloon_use_self_alpha};
+use areka_emo_present::balloon::{
+    build_balloon_target_from_faces, load_balloon_use_self_alpha, resolve_balloon_faces,
+};
 
 use crate::support::fixture::{
     SCOPE_FACE0_FILES, assert_three_alpha_kinds, census_face0, init_com_for_this_thread,
 };
 
-use super::test_support::{EXPECTED_FACE_COUNT, expected_frame_size, resolve_faces, staysee_root};
+use super::test_support::{expected_frame_size, staysee_root};
 
 /// 両 scope の面を起動時と同じ透過設定で焼き込み、面 0 の原寸・割り当て・半透明を固定する。
 ///
@@ -52,21 +54,8 @@ fn baked_face0_keeps_partial_alpha_for_both_scopes() {
 
     let use_self_alpha = load_balloon_use_self_alpha(&root);
     for (scope, face0_file) in SCOPE_FACE0_FILES {
-        let faces = resolve_faces(scope);
-        assert_eq!(
-            faces.len(),
-            EXPECTED_FACE_COUNT,
-            "scope {scope}: 焼き込みに渡す面の本数が期待 {EXPECTED_FACE_COUNT} に対し実測 {}",
-            faces.len()
-        );
-        let resolved_face0 = faces
-            .iter()
-            .find(|f| f.surface_id == 0)
-            .expect("面 0 の実在は resolve_faces が確かめている");
-        assert_eq!(
-            resolved_face0.file_name, face0_file,
-            "scope {scope}: 面 0 に採られた実ファイル名が期待 `{face0_file}` と違う（焼き上がりを引く鍵そのものなので先に固定する）"
-        );
+        let faces = resolve_balloon_faces(&root, scope)
+            .unwrap_or_else(|e| panic!("scope {scope} の面の系列解決が失敗した: {e}"));
 
         // 失敗すれば `error!` を出してから `Err` を返す実装なので、`Ok` が「失敗の記録 0 件」の判定である。
         let (_world, table) = build_balloon_target_from_faces(

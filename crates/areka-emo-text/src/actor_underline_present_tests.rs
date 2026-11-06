@@ -18,8 +18,11 @@
 //!
 //! 「違う画素」の述語は、同じ台本を 2 度撮って 1 バイトも違わないこと（較正）を先に確かめる。
 
+use std::cell::RefCell;
+
 use areka_parsers::balloon::parse_str;
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL,
@@ -29,7 +32,7 @@ use windows::core::{BOOL, HSTRING};
 use wintf::com::dwrite::dwrite_create_factory;
 
 use super::test_support::box_layout;
-use super::test_support::{com_world, cue, physical};
+use super::test_support::{com_world, cue, physical, spawn_reserved_slot};
 use super::test_support::{emote, fake_resolver};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
@@ -191,6 +194,20 @@ impl Shot {
     }
 }
 
+thread_local! {
+    /// テストのスレッドごとの World（装置は 1 度だけ作り、撮るたびに予約スロットだけ足す）。
+    static WORLD: RefCell<Option<World>> = const { RefCell::new(None) };
+}
+
+/// このスレッドの World に予約スロットを 1 つ足して `f` を呼ぶ。
+fn with_slot<R>(f: impl FnOnce(&mut World, (Entity, Entity)) -> R) -> R {
+    WORLD.with_borrow_mut(|world| {
+        let world = world.get_or_insert_with(|| com_world().0);
+        let reserved = spawn_reserved_slot(world);
+        f(world, reserved)
+    })
+}
+
 fn apply(rt: &mut TextLayerRuntime, script: &[CueCommand]) {
     for c in script {
         rt.apply_cue(&cue("0", 0.0, c.clone()));
@@ -240,7 +257,18 @@ fn shoot_frames_described(
     cues: &[TalkCue],
     frames: &[f64],
 ) -> Shot {
-    let (mut world, window, slot) = com_world();
+    with_slot(|world, reserved| shoot_frames_in(world, reserved, descript, image, k, cues, frames))
+}
+
+fn shoot_frames_in(
+    world: &mut World,
+    (window, slot): (Entity, Entity),
+    descript: &str,
+    image: (u32, u32),
+    k: f32,
+    cues: &[TalkCue],
+    frames: &[f64],
+) -> Shot {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor_binding(
@@ -252,7 +280,7 @@ fn shoot_frames_described(
         rt.apply_cue(c);
     }
     for &t in frames {
-        present_frame(&mut rt, &mut world, t).expect("提示が Ok");
+        present_frame(&mut rt, world, t).expect("提示が Ok");
     }
     let surface = rt.surface(&actor).expect("装着済みの面");
     let (w, h) = surface.size();
@@ -270,14 +298,23 @@ fn shoot_frames_described(
 
 /// シェルのサーフェス `surface`（0＝実機の形・1＝収まらない形・2＝縦書きの右から左・3＝縦書きの左から右）の箱へ台本を流して提示し、箱の面を読み戻す。
 fn shoot_box(surface: u32, k: f32, script: &[CueCommand]) -> Shot {
-    let (mut world, window, slot) = com_world();
+    with_slot(|world, reserved| shoot_box_in(world, reserved, surface, k, script))
+}
+
+fn shoot_box_in(
+    world: &mut World,
+    (window, slot): (Entity, Entity),
+    surface: u32,
+    k: f32,
+    script: &[CueCommand],
+) -> Shot {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut world, box_layout(SHELL), fake_resolver(), vec![]);
+    rt.set_box_layout(world, box_layout(SHELL), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", &surface.to_string()));
     apply(&mut rt, script);
     let shell = TextSlotBinding::new(slot, window, k, physical(REAL, k), REAL);
-    rt.sync_box_bindings(&mut world, &[(ActorKey::from("0"), Some((shell, surface)))]);
-    present(&mut rt, &mut world);
+    rt.sync_box_bindings(world, &[(ActorKey::from("0"), Some((shell, surface)))]);
+    present(&mut rt, world);
     let key = rt
         .box_sites
         .keys()

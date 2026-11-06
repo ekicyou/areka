@@ -68,42 +68,32 @@
 //! 重複する接頭辞は除去）に合わせた。同 crate の `decoration_readback_test.rs` ＋
 //! `decoration_readback/` が同型の先例である。
 
-#[cfg(test)]
 #[path = "support/mod.rs"]
 mod support;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/test_support.rs"]
 mod test_support;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/assets.rs"]
 mod assets;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/definition.rs"]
 mod definition;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/faces.rs"]
 mod faces;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/bake.rs"]
 mod bake;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/region.rs"]
 mod region;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/wrapping.rs"]
 mod wrapping;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/script.rs"]
 mod script;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/scale.rs"]
 mod scale;

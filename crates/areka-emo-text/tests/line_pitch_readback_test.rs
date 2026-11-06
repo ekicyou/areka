@@ -23,7 +23,7 @@
 //!    `areka-P0-emo2-conformance-e2e` R13）。同日の第 1 の裁定（2 画素のはみ出しを許容する）は
 //!    開発者が実機の目視で覆した。事情はその関数の doc に書いた。塗り帯は不透明なので、
 //!    α だけでインクを拾うと帯そのものを字と数えてしまう——文字は色で切り分けて拾う
-//!    （[`is_hover_text`]）。
+//!    （[`support::is_hover_text`]）。
 //!
 //! ## 読み戻しの条件
 //!
@@ -44,7 +44,8 @@ mod support;
 
 use support::fixture::{assert_real_font_present, balloon_metrics};
 use support::{
-    is_fill, is_hover_text, make_world_with_gpu, read_back, spawn_reserved_slot, surface_size,
+    Band, assert_hover_band, make_world_with_gpu, read_back, spawn_reserved_slot, surface_size,
+    to_canvas_local, y_span_where,
 };
 
 use areka_emo_text::actor::{
@@ -96,40 +97,12 @@ const INK_HEIGHT_TOLERANCE: u32 = 2;
 /// インクとみなす α の下限（アンチエイリアスの薄い端を落とす二値化・design §Data Models）。
 const INK_ALPHA_MIN: u8 = 128;
 
-/// ホバー塗り帯の下端から文字のインクがはみ出してよい上限（image px）＝ **0**。
-///
-/// **裁定 2026-09-06（第 2 回・spec `areka-P0-emo2-conformance-e2e` 要件 13.3）**: 開発者が
-/// 実機の目視で「色反転位置が 2 ドット程上すぎる」と判じ、**2 画素のはみ出しを許容する**という
-/// 同日の裁定を覆した。あるべき姿は帯を広げることでも、はみ出しを許すことでもなく、
-/// **帯を行ボックスの中央へ寄せること**である——帯の丈（行送りで頭打ち）が行ボックス丈より
-/// 短い分を上下へ等分し、その半分だけ帯を下げる（[`BAND_OFFSET_28`]）。
-///
-/// 帯は広げない——帯を行送りより広げると隣接する行の帯と重なり、どの選択肢を指しているかの
-/// 一意性が壊れる（`emo-text-line-height-canon` design §「帯の防御式を保つ」）。
-/// **この上限は 0 であり、緩めてはならない**（同 spec 要件 12.2）。はみ出しが出た場合は
-/// 許容幅を上げず、画素数を添えて開発者の裁定を仰ぐこと。
-const BAND_OVERHANG_MAX: u32 = 0;
-
 /// 帯を行ボックスの中央へ寄せる量（image px・`font.height,28` の実フォント `Yu Gothic UI`）。
 ///
 /// `round(max(0, 行ボックス丈 37.24 − 帯の丈 30) / 2) = round(3.62) = 4`
 /// （`choice.rs` の帯の寄せの式で字の箱の上端 t = 0 のときの値。要件 13.1）。本ファイルは
 /// 読み戻した帯の**絶対位置**をこの値で固定する——offset が 0 へ戻れば帯 y0..29 になって赤くなる。
 const BAND_OFFSET_28: u32 = 4;
-
-/// 走査窓を塗り帯の**上下**へ余分に伸ばす画素数。
-///
-/// 下側: 窓の下端を帯の下端と揃えると、帯からはみ出したインクが窓の外に落ちて**測れないまま
-/// 緑になる**（要件 7.3 の「緑のまま意味を失う」）。1 画素でもはみ出したら検出できるよう、
-/// 窓は帯より 4 画素深く取る。
-///
-/// 上側: 窓の上端を帯の上端と揃えると、「字の上端が帯の上端以上」は窓の取り方だけで必ず成り立ち、
-/// 字が上へずれても窓に切られて緑のままになる（判定が反証にならない）。ゆえに窓は帯より 4 画素
-/// 上からも見る。帯より上に来るのはホバーしていない行で、その字は黒（premultiplied の青チャネルは
-/// 0）ゆえ [`is_hover_text`] に当たらず、塗り色 (25,25,105,255) でもないので帯の検出も 1 本のままである。
-///
-/// 上下いずれの側も、隣の選択肢の行は行送り 2 つぶん（60）離れているのでこの窓には入らない。
-const SCAN_MARGIN: u32 = 4;
 
 // ══ バルーン記述（実 parser を通す・実フォント指定） ═══════════════════════════════════
 
@@ -199,34 +172,20 @@ fn canon_metrics() -> DWriteMetrics {
 // ══ cue（全リビール済みフレームで読むので duration は素直に焼く） ══════════════════════
 
 fn text_cue(text: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Text(text.into()),
-        duration: text.chars().count() as f64 * 0.05,
-    }
+    support::cue("0", 0.0, CueCommand::Text(text.into()), 0.05)
 }
 
 fn newline_cue() -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::NewLine { ratio: 1.0 },
-        duration: 0.0,
-    }
+    support::cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }, 0.0)
 }
 
 fn choice_cue(id: &str, text: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Choice {
-            id: id.into(),
-            text: text.into(),
-            references: vec![id.to_ascii_lowercase()],
-        },
-        duration: text.chars().count() as f64 * 0.05,
-    }
+    let command = CueCommand::Choice {
+        id: id.into(),
+        text: text.into(),
+        references: vec![id.to_ascii_lowercase()],
+    };
+    support::cue("0", 0.0, command, 0.0)
 }
 
 /// cue 列を装着済み runtime へ流し、全リビール済みの時刻で 1 フレーム提示する。
@@ -282,57 +241,12 @@ fn ink_runs(
     runs
 }
 
-/// x 帯 `[x0, x1)`・y 帯 `[y0, y1)` で述語に合う画素が現れた y の**最小と最大**（無ければ `None`）。
-///
-/// 字の中にインクの無い y が挟まっても（「昼」の下部の横棒のように）1 つの丈として測れる。
-fn ink_extent(
-    bytes: &[u8],
-    width: u32,
-    x0: u32,
-    x1: u32,
-    y0: u32,
-    y1: u32,
-    pred: impl Fn(&[u8]) -> bool,
-) -> Option<(u32, u32)> {
-    let runs = ink_runs(bytes, width, x0, x1, y0, y1, pred);
-    Some((runs.first()?.0, runs.last()?.1))
-}
-
-/// x 帯 `[x0, x1)`・y 帯 `[y0, y1)` で述語に合う画素の**個数**（退化していないことの確認用）。
-fn ink_count(
-    bytes: &[u8],
-    width: u32,
-    x0: u32,
-    x1: u32,
-    y0: u32,
-    y1: u32,
-    pred: impl Fn(&[u8]) -> bool,
-) -> usize {
-    let mut n = 0usize;
-    for y in y0..y1 {
-        for x in x0..x1 {
-            let i = ((y * width + x) * 4) as usize;
-            if pred(&bytes[i..i + 4]) {
-                n += 1;
-            }
-        }
-    }
-    n
-}
-
 /// α が閾値以上の画素を「インク」とみなす述語（アンチエイリアスの薄い端を落とす二値化）。
 fn is_ink(px: &[u8]) -> bool {
     px[3] >= INK_ALPHA_MIN
 }
 
-/// `ChoiceHitRow::rect`（バルーン窓物理 px）の行内軸を供給面の座標（validrect-local）へ写す。
-fn row_x_span(row: &ChoiceHitRow, width: u32) -> (u32, u32) {
-    let x0 = (row.rect.left - VR_ORIGIN.0).floor().max(0.0) as u32;
-    let x1 = ((row.rect.right - VR_ORIGIN.0).ceil().max(0.0) as u32).min(width);
-    (x0, x1)
-}
-
-/// 同上（行送り軸の上端）。
+/// `ChoiceHitRow::rect`（バルーン窓物理 px）の行送り軸の上端を供給面の座標（validrect-local）へ写す。
 fn row_top(row: &ChoiceHitRow) -> f32 {
     row.rect.top - VR_ORIGIN.1
 }
@@ -399,7 +313,7 @@ fn canon_pitch_advance_and_ink_height_match_the_ruling() {
     present_cues(&mut rt, &mut world, &[text_cue(INK_SAMPLE_CHAR)]);
     let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
-    let (top, bottom) = ink_extent(&bytes, w, 0, w, 0, h, is_ink)
+    let (top, bottom) = y_span_where(&bytes, w, 0, w, 0, h, is_ink)
         .expect("1 字を描いたのでインクが在る（無ければ描画が退化している）");
     let ink_height = bottom - top + 1;
     let lo = INK_HEIGHT_28 - INK_HEIGHT_TOLERANCE;
@@ -469,12 +383,12 @@ fn two_lines_ink_does_not_overlap_at_the_ruled_pitch() {
 ///
 /// 1. **帯そのものを文字と数えない。** 塗り帯は不透明なので、α だけでインクを拾うと帯の画素に
 ///    当たり、返る縦範囲は帯の縦範囲になる。それでは「字の上端が帯の中にある」が字の有無に
-///    関わらず成り立ってしまう（字が消えても緑）。ゆえに文字は色で分けて拾い（[`is_hover_text`]）、
+///    関わらず成り立ってしまう（字が消えても緑）。ゆえに文字は色で分けて拾い（[`support::is_hover_text`]）、
 ///    **字が実際に在ること**（画素数 > 0）も併せて確かめる。
 /// 2. **窓で上端も下端も切らない。** 走査窓を帯とぴったり同じにすると、はみ出したインクが窓の
 ///    外へ落ちて下端の判定が恒真になり、同じ理屈で上端の判定も——窓の上端が帯の上端と同じなら
 ///    「字の上端は帯の上端以上」は窓の取り方だけで必ず成り立つ——恒真になる。窓は帯の上下へ
-///    [`SCAN_MARGIN`] 画素ずつ開け、字の上端・下端がどちらも窓の内側にあることも確かめる（要件 7.3）。
+///    [`support::SCAN_MARGIN`] 画素ずつ開け、字の上端・下端がどちらも窓の内側にあることも確かめる（要件 7.3）。
 ///
 /// ホバーは 2 度入れる。どちらの選択肢でも帯の上端は面の縁より [`BAND_OFFSET_28`] 画素下に
 /// あるので、窓はその分だけ上へ開く（ordinal 0 は帯 y4..33・窓の上端 y0）。字がベースラインごと
@@ -508,8 +422,8 @@ fn two_lines_ink_does_not_overlap_at_the_ruled_pitch() {
 /// 帯の**位置**だけであり、丈もヒット行の出どころも変えていない。隣の行の帯は
 /// `offset + 丈 = 34 > 行送り 30` でも `30 + 4 = 34` から始まるので**接して重ならない**。
 ///
-/// 走査の窓: ホバー行の x 帯だけを見て、y はその行のヒット矩形の上端の [`SCAN_MARGIN`] 上から
-/// 帯の丈 ＋ [`SCAN_MARGIN`] までとする（2 つの選択肢の間に空行を 1 行入れてあるので、
+/// 走査の窓: ホバー行の x 帯だけを見て、y はその行のヒット矩形の上端の [`support::SCAN_MARGIN`] 上から
+/// 帯の丈 ＋ [`support::SCAN_MARGIN`] までとする（2 つの選択肢の間に空行を 1 行入れてあるので、
 /// 次の行のインクが窓へ入らない）。
 #[test]
 fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
@@ -554,78 +468,24 @@ fn hover_band_centers_in_the_line_box_and_contains_choice_ink() {
         present_frame(&mut rt, &mut world, 100.0).expect("ホバー提示");
         let (bytes, (w, h)) = (read_back(&rt, &actor), surface_size(&rt, &actor));
 
-        let (x0, x1) = row_x_span(&rows[ordinal], w);
-        // 窓は行の書き出し（＝帯の上端）を基準に、上下へ SCAN_MARGIN ずつ開ける。
-        // ordinal 0 も帯の上端が y4 にあるので、窓は面の縁（y0）まで 4 画素上へ開く。
-        let block_top = row_top(&rows[ordinal]).floor().max(0.0) as u32;
-        let y0 = block_top.saturating_sub(SCAN_MARGIN);
-        let y1 = (block_top + PITCH_28 as u32 + SCAN_MARGIN).min(h);
-        assert!(
-            x0 < x1 && y0 < y1,
-            "走査窓が非退化: 「{label}」 x{x0}..{x1} y{y0}..{y1}"
-        );
-
-        // ── 塗り帯 ──
-        let band = ink_runs(&bytes, w, x0, x1, y0, y1, is_fill);
-        assert_eq!(
-            band.len(),
-            1,
-            "「{label}」のホバー行の塗り帯は 1 本（実測 {band:?}）"
-        );
-        let (band_top, band_bottom) = band[0];
-        assert_eq!(
-            band_bottom - band_top + 1,
-            PITCH_28 as u32,
-            "「{label}」の塗り帯の丈は行送り {PITCH_28}（帯 ＝ clamp(行ボックス丈 37.24, 28, 30)・実測 y{band_top}..{band_bottom}）"
-        );
-        // 帯の**絶対位置**を固定する（R13.1）。行の書き出しは ordinal ごとに行送り 2 つぶんずつ
-        // 下がり、そこから offset だけ内側へ寄る——ordinal 0 は y4..33・ordinal 1 は y64..93。
-        // offset を 0 へ戻すと y0..29／y60..89 になってここが赤くなる。
-        let expected_band_top = BAND_OFFSET_28 + (ordinal as u32) * (PITCH_28 as u32) * 2;
-        assert_eq!(
-            (band_top, band_bottom),
-            (expected_band_top, expected_band_top + PITCH_28 as u32 - 1),
-            "「{label}」の塗り帯は行ボックスの中央へ {BAND_OFFSET_28} 画素寄せて置かれる（実測 y{band_top}..{band_bottom}）"
-        );
-
-        // ── 文字だけのインク（帯と切り分ける・字が在ることも確かめる） ──
-        let text_pixels = ink_count(&bytes, w, x0, x1, y0, y1, is_hover_text);
-        assert!(
-            text_pixels > 0,
-            "「{label}」のホバー行に白文字の画素が 1 つも無い（字が描かれていないのに帯だけで緑になる取り違えを塞ぐ・窓 x{x0}..{x1} y{y0}..{y1}）"
-        );
-        let (text_top, text_bottom) = ink_extent(&bytes, w, x0, x1, y0, y1, is_hover_text)
-            .expect("画素数が 0 でない以上、白文字の縦範囲は在る");
-        assert!(
-            text_bottom < y1 - 1,
-            "「{label}」の文字のインクの下端 y{text_bottom} が走査窓の下端 y{y1} に接している——窓が下端を切っている疑いがあり、はみ出しの測定が信用できない（窓を深くすること・要件 7.3）"
-        );
-        // 上端側の対の門。これが在って初めて、下の「字の上端が帯の上端の内」が窓の取り方ではなく
-        // 描画結果を見た判定になる（字が上へずれたら、まず窓の上端に届いてここが赤くなる）。
-        // 帯が行ボックスの中央へ寄った後は ordinal 0 でも帯の上端が y4 にあるので、窓は面の縁
-        // （y0）まで開き、上端の反証可能性は 2 つの選択肢のどちらでも成り立つ。
-        assert!(
-            text_top > y0,
-            "「{label}」の文字のインクの上端 y{text_top} が走査窓の上端 y{y0} に接している——窓が上端を切っている疑いがあり、上端の判定が信用できない（窓を上へ開けること・要件 7.3）"
-        );
-
-        eprintln!(
-            "[line-pitch-readback] 「{label}」（ordinal {ordinal}・font.height {FONT_HEIGHT}）: 窓 x{x0}..{x1} y{y0}..{y1} / 帯 y{band_top}..{band_bottom}（丈 {}）/ 文字 y{text_top}..{text_bottom}（{text_pixels} 画素）/ 上の余白 {} 画素（負なら帯の上へはみ出し）/ 下のはみ出し {} 画素",
-            band_bottom - band_top + 1,
-            text_top as i64 - band_top as i64,
-            text_bottom.saturating_sub(band_bottom)
-        );
-
-        // 上端は帯の中に収まる（文字の上が帯からはみ出さない・要件 5.6）。
-        assert!(
-            text_top >= band_top,
-            "「{label}」の文字のインクの上端 y{text_top} は塗り帯の上端 y{band_top} の内にある（要件 5.6・窓 y{y0}..{y1}）"
-        );
-        // 下端のはみ出しは 0（裁定 2026-09-06 第 2 回・`areka-P0-emo2-conformance-e2e` R13.3）。
-        let overhang = text_bottom.saturating_sub(band_bottom);
-        assert!(
-            overhang == BAND_OVERHANG_MAX,
-            "塗り帯の下端 y{band_bottom} から文字のインクの下端 y{text_bottom} が {overhang} 画素はみ出した（選択肢「{label}」・font.height {FONT_HEIGHT}・帯の丈 {PITCH_28}・帯の寄せ {BAND_OFFSET_28}）。裁定 2026-09-06（第 2 回・R13.3）が許すのは {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接する行の帯と重なり、どの選択肢を指しているかの一意性が壊れる）。**許容幅を裁定なしで緩めてもならない**（R12.2）。この数値を添えて開発者の裁定を仰ぐこと（本関数の doc に寄せの前後の実測表がある）"
+        // 窓は行の書き出し（＝帯の上端）を基準に、上下へ SCAN_MARGIN ずつ開ける。窓の下端は
+        // 「次の行」の上端（帯の上端 ＋ 行送り）＋ SCAN_MARGIN。ordinal 0 も帯の上端が y4 にあるので、
+        // 窓は面の縁（y0）まで 4 画素上へ開く。行の書き出しは ordinal ごとに行送り 2 つぶんずつ
+        // 下がる——帯は ordinal 0 が y4..33・ordinal 1 が y64..93。offset を 0 へ戻すと
+        // y0..29／y60..89 になって赤くなる。
+        let row = to_canvas_local(&rows[ordinal], VR_ORIGIN.0, VR_ORIGIN.1);
+        let next_row = (row.0, row.1 + PITCH_28, row.2, row.3 + PITCH_28);
+        assert_hover_band(
+            &format!("「{label}」（ordinal {ordinal}・font.height {FONT_HEIGHT}）"),
+            &bytes,
+            (w, h),
+            row,
+            next_row,
+            Band {
+                line_top: (ordinal as u32) * (PITCH_28 as u32) * 2,
+                height: PITCH_28 as u32,
+                offset: BAND_OFFSET_28,
+            },
         );
     }
 }

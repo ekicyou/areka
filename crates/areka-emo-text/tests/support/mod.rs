@@ -7,10 +7,12 @@
 //!    headless の World（本番の UI スレッドと同じ MTA）と、emo-present `VisualMount` と同型の
 //!    予約スロット。
 //! 2. **presenter の検体**——surface 1000 ＝ 絵 1 枚の `(EmoWorld, AtlasTable)` と `ShowSurface`。
-//! 3. **指令とポンプ**——間隔つきの cue と、積んだメッセージを処理し切って抜ける pump。
-//! 4. **読み戻しと画素の数え上げ**——供給面の読み戻し・不透明の数・矩形の中の数え上げ・
+//! 3. **幾何だけのバルーン定義**——origin・wordwrappoint・validrect・書体の高さ・書字方向だけの
+//!    `BalloonModel`。
+//! 4. **指令とポンプ**——間隔つきの cue と、積んだメッセージを処理し切って抜ける pump。
+//! 5. **読み戻しと画素の数え上げ**——供給面の読み戻し・不透明の数・矩形の中の数え上げ・
 //!    選択肢の強調の帯の確かめ・白背景へ合成した PNG の書き出し。
-//! 5. **検体・フォント・バルーンの検体の組**——子の [`fixture`]（`support/fixture.rs`）。
+//! 6. **検体・フォント・バルーンの検体の組**——子の [`fixture`]（`support/fixture.rs`）。
 
 // テストの実行ファイルごとに使う部品が違い、使わない部品が dead_code になるため。
 #![allow(dead_code)]
@@ -28,6 +30,9 @@ use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
 use areka_emo_text::actor::{ChoiceHitRow, TextLayerRuntime};
 use areka_emo_text::place::PlaceKey;
+use areka_parsers::balloon::{
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+};
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
@@ -69,7 +74,7 @@ pub fn spawn_reserved_slot(world: &mut World) -> (Entity, Entity) {
 
 // ══ presenter の検体（上流の公開 API で本物を組む） ═══════════════════════════════════════
 
-pub fn elem(path: &str, x: i64, y: i64) -> Element {
+fn elem(path: &str, x: i64, y: i64) -> Element {
     Element {
         layer: 0,
         path: ElementPath::new(path.to_string()),
@@ -78,7 +83,7 @@ pub fn elem(path: &str, x: i64, y: i64) -> Element {
     }
 }
 
-pub fn shell_of(surfaces: Vec<Surface>) -> Shell {
+fn shell_of(surfaces: Vec<Surface>) -> Shell {
     let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
     Shell {
         surfaces,
@@ -91,7 +96,7 @@ pub fn shell_of(surfaces: Vec<Surface>) -> Shell {
 }
 
 /// 座標由来のグラデーション（全不透明・`salt` で target ごとに画素を変える）の BGRA 密配列。
-pub fn gradient_image(w: u32, h: u32, salt: u8) -> Vec<u8> {
+fn gradient_image(w: u32, h: u32, salt: u8) -> Vec<u8> {
     let mut img: Vec<u8> = Vec::with_capacity((w * 4 * h) as usize);
     for y in 0..h {
         for x in 0..w {
@@ -157,6 +162,29 @@ pub fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: Tar
     assert!(matches!(outcome, Ok(())), "ShowSurface は Ok: {outcome:?}");
 }
 
+// ══ 幾何だけのバルーン定義 ═════════════════════════════════════════════════════════════
+
+/// origin・wordwrappoint・validrect・書体の高さ・書字方向だけを宣言した `BalloonModel`。
+/// validrect の並びは `ValidRect::new` と同じ (top, bottom, left, right)。書字方向は生の文字列の
+/// 転記（解釈は `WritingMode::resolve`）。
+pub fn geometry_model(
+    origin: (Option<i32>, Option<i32>),
+    wordwrap: (Option<i32>, Option<i32>),
+    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
+    font_height: Option<u32>,
+    writing_mode: Option<&str>,
+) -> BalloonModel {
+    BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(origin.0, origin.1),
+        WordWrapPoint::new(wordwrap.0, wordwrap.1),
+        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
+        Font::new(None, font_height, FontColor::new(None, None, None)),
+        writing_mode.map(str::to_owned),
+        None,
+    )
+}
+
 // ══ 指令とポンプ ═════════════════════════════════════════════════════════════════════════
 
 /// テスト用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
@@ -213,7 +241,7 @@ pub fn opaque_count(bytes: &[u8]) -> usize {
 }
 
 /// 矩形 `(left, top, right, bottom)` の中で述語に合う画素を数える（矩形は面の内へ切り詰める）。
-pub fn count_in_rect(
+fn count_in_rect(
     bytes: &[u8],
     width: u32,
     height: u32,
@@ -436,7 +464,7 @@ pub fn assert_hover_band(
     );
 }
 
-// ══ PNG の書き出し（依存追加なし・viewbox_draw.rs の診断ダンプと同一アルゴリズム） ══════
+// ══ PNG の書き出し（依存追加なし・`src/viewbox_draw_png_dump_tests.rs` の診断ダンプと同一アルゴリズム） ══════
 
 /// read_back（premultiplied BGRA）を白背景へ合成した PNG を `AREKA_DIAG_OUT`（無指定は
 /// `CARGO_TARGET_TMPDIR`＝crate 専用 tmp）の `name` へ保存し、そのパスを返す。

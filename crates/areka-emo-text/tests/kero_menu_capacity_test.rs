@@ -57,7 +57,7 @@ use areka_emo_text::segment::{SegmentPlan, segment_plan};
 use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::BalloonModel;
-use areka_sakura::contract::{ActorKey, TalkCue};
+use areka_sakura::contract::ActorKey;
 
 /// 相方（エモ）側バルーンの面別上書き層（scope 1・`balloonk0.png` 288×203 向け）。
 const KERO_OVERLAY: &str = "balloonk0s.txt";
@@ -504,12 +504,12 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
     let text = "あ".repeat(40);
     let mut state = TextLayerState::default();
     let actor = ActorKey::from("0");
-    state.apply_cue(&TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
-        command: areka_sakura::contract::CueCommand::Text(text.clone()),
-        duration: 0.0,
-    });
+    state.apply_cue(&support::cue(
+        "0",
+        0.0,
+        areka_sakura::contract::CueCommand::Text(text.clone()),
+        0.0,
+    ));
 
     for kind in [WrapKind::CharByChar, WrapKind::Segmented] {
         let lines = layout_script(

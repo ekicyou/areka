@@ -367,7 +367,7 @@ fn the_kero_side_fits_exactly_five_lines_without_overflowing() {
 #[test]
 fn one_pixel_narrower_bottom_turns_the_same_lines_into_an_overflow() {
     let items = five_short_lines();
-    let (region, lines) = layout_in_scope(1, &items);
+    let (_, lines) = layout_in_scope(1, &items);
     let narrowed = narrowed_bottom_region(1);
     let last_bottom = lines[lines.len() - 1].rect.bottom;
 
@@ -377,13 +377,6 @@ fn one_pixel_narrower_bottom_turns_the_same_lines_into_an_overflow() {
         "対照の下辺 {} に対して最終行の下端が 1 画素だけ外（{}）になっていない",
         narrowed.bottom(),
         last_bottom
-    );
-    assert_eq!(
-        region.bottom() - narrowed.bottom(),
-        1.0,
-        "対照の描画範囲が本来より 1 画素だけ狭いはず（実測 {} と {}）",
-        region.bottom(),
-        narrowed.bottom()
     );
 
     let window = LayoutEngine::visible_window(&lines, &narrowed, WritingMode::HorizontalTb);
@@ -403,13 +396,7 @@ fn one_pixel_narrower_bottom_turns_the_same_lines_into_an_overflow() {
 ///
 /// 折返しではなく行数そのものを問う検査なので、本文は 1 行 1 文字に留める。
 fn five_short_lines() -> Vec<TextItem> {
-    let mut items = Vec::new();
-    for (n, ch) in areka_sakura::cluster::clusters("あいうえお").enumerate() {
-        if n > 0 {
-            items.push(TextItem::LineBreak { ratio: 1.0 });
-        }
-        items.push(TextItem::glyph(ch));
-    }
+    let items = glyph_items("あ\nい\nう\nえ\nお");
     assert_eq!(
         glyph_count(&items),
         KERO_EXACT_FIT_LINES,

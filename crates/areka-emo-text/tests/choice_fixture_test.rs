@@ -22,7 +22,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
-use support::fixture::{read_balloon_file, read_script_file};
+use support::fixture::{command_cues, read_balloon_file, read_script_file};
 use support::{
     Band, assert_hover_band, dump_png_on_white, fill_pixels_in_rect, make_world_with_gpu,
     opaque_count, read_back, spawn_reserved_slot, surface_size, to_canvas_local,
@@ -177,14 +177,24 @@ fn fixtures_parse_to_expected_choice_styles() {
         "ResolvedBalloonText.choice_style も plain fixture では Invert"
     );
 
-    // ── menu.txt の項目数（\q[…]）が注入 cue 列（4 項目）と一致する（台本と注入の対応検証） ──
+    // ── menu.txt の台本を実 sakura パイプラインへ通した選択肢 (id, 表示文字) の列が、注入 cue 列
+    //    （MENU）と同じ並びである（台本と注入の対応検証）。`//` の注釈行は台本ではないので外す。 ──
     let menu = read_script_file(&fixture_dir(), "menu.txt");
-    let q_count = menu.matches("\\q[").count();
+    let script: String = menu.lines().filter(|l| !l.starts_with("//")).collect();
+    let from_script: Vec<(String, String)> = command_cues(&script)
+        .into_iter()
+        .filter_map(|c| match c.command {
+            CueCommand::Choice { id, text, .. } => Some((id, text)),
+            _ => None,
+        })
+        .collect();
+    let injected: Vec<(String, String)> = MENU
+        .iter()
+        .map(|(id, text, _)| (id.to_string(), text.to_string()))
+        .collect();
     assert_eq!(
-        q_count,
-        MENU.len(),
-        "menu.txt の \\q 項目数が注入 cue 列（{} 項目）と一致する: {q_count}",
-        MENU.len()
+        from_script, injected,
+        "menu.txt の選択肢 (id, 表示文字) が注入 cue 列と一致する"
     );
 }
 
@@ -199,25 +209,16 @@ const MENU: &[(&str, &str, &str)] = &[
 ];
 
 fn choice_cue(id: &str, text: &str, references: &str) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::Choice {
-            id: id.into(),
-            text: text.into(),
-            references: vec![references.into()],
-        },
-        duration: text.chars().count() as f64 * 0.05,
-    }
+    let command = CueCommand::Choice {
+        id: id.into(),
+        text: text.into(),
+        references: vec![references.into()],
+    };
+    support::cue("0", 0.0, command, 0.0)
 }
 
 fn newline_cue() -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command: CueCommand::NewLine { ratio: 1.0 },
-        duration: 0.0,
-    }
+    support::cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }, 0.0)
 }
 
 /// Observable（R7.6）: cursor.* 指定 fixture を**実フォント（Yu Gothic UI）**で解決し、4 項目メニュー
