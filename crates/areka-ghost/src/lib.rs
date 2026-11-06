@@ -1,6 +1,6 @@
 //! `areka-ghost` — ⓪ghost 結線層。
 //!
-//! descript.txt 起点のマウント解決（`areka_parsers::package::resolve`）を入力として、
+//! descript.txt 起点のマウント解決（`areka_parsers::package::resolve_with_shell`）を入力として、
 //! shiori 通信層（`shiori-host32-host` 経由の kanade shiori actor）・kanade（③）・
 //! sakura（④・per-talk dispatcher 経由）・ticker（時刻供給）を起動順に結線し、
 //! 終了時は逆順で統括する（design.md「Architecture」「System Flows」）。

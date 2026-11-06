@@ -395,7 +395,6 @@ mod bake_entry_tests {
     /// element のみを持つ最小 surface（collision/animation 空）。
     fn surface(id: u32, elements: Vec<Element>) -> Surface {
         Surface {
-            id,
             targets: vec![AppendTarget::Single(id)],
             elements,
             collisions: Vec::new(),

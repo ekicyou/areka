@@ -25,13 +25,12 @@
 //! ## 構成
 //!
 //! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・シェルの読み込み（[`shell_target`]）・
-//! 合成キャッシュ（[`cache`]）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
+//! 合成キャッシュ（`cache`）・表示の記録（`display`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・
 //! 提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
 /// scope 別バルーン系列解決の**単一権威**であり、解決した面画像を **シェルと同一の**
-/// compose/present 経路へ載せる入力適合層（`BalloonFrameSource`）。scope 番号→接頭辞優先連鎖
-/// （`prefix_chain`）・面 ID 単位の連鎖探索（`resolve_balloon_faces`）・scope 別バルーン定義の
+/// compose/present 経路へ載せる入力適合層。面 ID 単位の連鎖探索（`resolve_balloon_faces`）・scope 別バルーン定義の
 /// 2 層マージ（`load_scope_balloon_model`）を公開し、`build_balloon_target` が
 /// `attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
 pub mod balloon;
@@ -39,7 +38,7 @@ pub mod balloon;
 pub mod balloon_definitions;
 /// 印の族（スクロールの矢印・クリック待ち）の表と名前の連鎖、番号ごとの絵の選び（`balloon_marker`）。
 pub mod balloon_marker;
-pub mod cache;
+pub(crate) mod cache;
 pub mod command;
 /// 表示の記録（`record_display`）。原寸の合成結果を D2D bitmap にし、論理 px の宛先矩形で描く命令を
 /// 閉じたコマンドリストへ記録する（拡大率 k を含まない）。`pub(crate)` 内部モジュール。
@@ -59,8 +58,8 @@ pub mod scale;
 /// 採った扱いを記録する。シェルとバルーンの入口が共用する `pub(crate)` 内部モジュール。
 pub(crate) mod self_alpha;
 /// シェルの読み込みの権威（`shell_target`）。シェルのフォルダから「焼いた絵＋面の表を必要な数だけ
-/// 組める値」（`ShellTarget`）を作る唯一の入口（`load_shell_target`）と、fs を触らない核
-/// （`build_shell_target`）を持つ。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を決める
+/// 組める値」（`ShellTarget`）を作る入口（`load_shell_target`・記録を黙らせた `load_shell_target_quiet`）と、fs を触らない核
+/// （`build_core`・テストは `build_shell_target` 経由）を持つ。シェルのフォルダ直下のファイル名から「番号 → 面の画像」を決める
 /// 純粋な判定（`select_surface_images`）の名前の判定は、バルーンの系列解決と同じ 1 つの実装
 /// （`balloon::face_digits_of`）を接頭辞 `surface` で共有する。
 pub mod shell_target;
@@ -71,13 +70,8 @@ pub mod shell_target;
 /// いるため、消費側（結線・実機 probe の期待ゲート）が上流 crate を直接依存に加えずとも型を名指し
 /// できるようにする（再輸出であって別型の新設ではない——`areka_emo_compose::ScaleRatio` と同一型）。
 pub use areka_emo_compose::ScaleRatio;
-pub use balloon::{build_balloon_target, build_balloon_target_from_faces};
-pub use cache::{CacheEntry, ComposeCache};
+pub use balloon::{BalloonLoadError, build_balloon_target, build_balloon_target_from_faces};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{AppliedScale, ClientHit, EmoPresenter, ScaleChange, TextSlotView};
 pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
-pub use shell_target::{
-    ShellLoadError, ShellTarget, SurfaceImageSelection, build_shell_target,
-    build_shell_target_with_boxes, load_shell_target, load_shell_target_quiet,
-    select_surface_images,
-};
+pub use shell_target::{ShellLoadError, ShellTarget, load_shell_target, load_shell_target_quiet};

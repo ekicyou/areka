@@ -1,8 +1,8 @@
 //! parts の子: 部品の働きのコマの配線（spec: seriko-pattern-calls 要件 3.8・4.5・11.2）。
 //!
 //! 部品 1 つの時計（入れ物の clocks）と部品の欄を一緒に [`CallPlays`] として貸し、[`run_calls`] で
-//! 当てる（相手は同じ部品の面の animation）。呼ぶのは抽選・`always`・引き金の始まりの後、コマを置く前
-//! （一番上と同じ・同じ時刻の 2 度目の開始の止めはこの順が前提）。`Residual`（終わって最後のコマを
+//! 当てる（相手は同じ部品の面の animation）。呼ぶのは引き金の後と、抽選・`always` の始まりの後の 2 回、
+//! コマを置く前（一番上と同じ・同じ時刻の 2 度目の開始の止めはこの順が前提）。`Residual`（終わって最後のコマを
 //! 残したもの）は再生中に数えない。呼ばれるだけ（`never`）の時計は、抽選で始まった時計と同じく、
 //! 部品が見えない間も捨てない（見えなかった間も進んでいた扱い・parts の `drop_transient_where`）。
 
@@ -24,7 +24,6 @@ struct PartPlays<'a> {
     stopped: &'a mut BTreeSet<ClockKey>,
     pattern: &'a mut PatternState,
     part: PartKey,
-    anims: &'a [LoopAnimation],
     scope: &'a ActorKey,
     slot: Slot,
     started: Vec<u32>,
@@ -45,8 +44,7 @@ impl CallPlays for PartPlays<'_> {
         if let Some(PartAnim::Playing { acts_through, .. }) =
             self.clocks.get_mut(&(self.part, animation))
         {
-            // 合図の時刻が前の刻みより前でも印を戻さない（同じコマを 2 度当てない）。
-            *acts_through = Some(acts_through.map_or(through_ms, |t| t.max(through_ms)));
+            *acts_through = Some(through_ms);
         }
     }
 
@@ -71,14 +69,10 @@ impl CallPlays for PartPlays<'_> {
         );
     }
 
-    fn stop(&mut self, animation: u32) {
+    fn stop(&mut self, animation: u32, always: bool) {
         let key = (self.part, animation);
         self.clocks.remove(&key);
         unwrite(self.pattern, self.part, animation);
-        let always = self
-            .anims
-            .iter()
-            .any(|a| a.id == animation && matches!(a.trigger, LoopTrigger::Always { .. }));
         if always {
             self.stopped.insert(key);
         }
@@ -128,7 +122,6 @@ pub(super) fn run_part_calls(
         stopped,
         pattern,
         part,
-        anims,
         scope,
         slot,
         started: Vec::new(),

@@ -6,8 +6,7 @@
 //! 「Out of Boundary: 表示の実行手段の判断化」）。
 
 use super::{
-    EmoPresenter, EmoWorld, PatternState, PresentError, PresentOutcome, TargetId,
-    VisibilityOwnership, World, reply_channel,
+    EmoPresenter, EmoWorld, PatternState, PresentError, TargetId, VisibilityOwnership, World,
 };
 
 /// 回数つきの動く絵の子（面の表の `FilmSheet.laps` が在る子）の欄を外す＝経過 0 へ戻す
@@ -70,7 +69,7 @@ impl EmoPresenter {
     /// # 失敗（いずれも `error!` ＋ `Err`・可視性は変えない）
     ///
     /// - **未装着** target。
-    /// - **表示が一度も確立していない**（`last_show` が `None`）: 可視化する内容が無い。中身の無い枠を
+    /// - **表示が一度も確立していない**（`last_show` が `None`・[`PresentError::NotShown`]）: 可視化する内容が無い。中身の無い枠を
     ///   画面へ出さない（Requirement 3.4「内容が空のバルーンが可視である状態を作らない」と同じ側へ倒す）。
     /// - **漏斗の再通過が失敗した**: `apply_show` は表示成立点より手前で early return するため前状態が
     ///   保たれる。その上で可視性も付与しない（失敗した絵を出さない）。
@@ -88,7 +87,7 @@ impl EmoPresenter {
                 ?target,
                 "show_target: 表示が一度も確立していない（可視化する内容が無い）"
             );
-            return Err(PresentError::TargetNotAttached(target));
+            return Err(PresentError::NotShown(target));
         };
         // 通し直すコマは、隠れている間に預かったコマ（最新）か、無ければ最後に成立した入力のコマ。
         // 隠れていた対象を出すときは回数つきの子を経過 0 から始める（見えている対象への重ねがけでは
@@ -100,42 +99,19 @@ impl EmoPresenter {
             strip_finite_films(&t.emo_world, &mut pattern);
         }
 
-        // 単一漏斗の再通過（k 再導出・キャッシュヒットなら再合成なし）。結果は `reply` で受ける——
-        // `apply_show` は全経路で高々 1 回応答してから戻るため、同期呼び出しの直後に必ず値が在る。
-        // 状態の後追い推測（`applied` や `current_surface_id` の照合）で成否を組み立てると、k 不変かつ
-        // 失敗という組み合わせを成功と誤読するため、契約そのものを読む。
-        let (tx, rx) = reply_channel::<PresentOutcome>();
-        self.apply_show(
-            world,
-            target,
-            surface_id,
-            binds,
-            pattern,
-            Some(tx),
-            !was_visible,
-        );
-        match rx.recv() {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => {
-                // `apply_show` は失敗を error! 済みだが、それは「合成／デバイスが失敗した」ことしか
-                // 語らない。可視化の要求が果たされなかったことはここでしか分からない。
-                tracing::error!(
-                    ?target,
-                    surface_id,
-                    error = %e,
-                    "show_target: 漏斗の再通過が失敗（可視化しない・前状態を維持）"
-                );
-                return Err(e);
-            }
-            Err(e) => {
-                tracing::error!(
-                    ?target,
-                    surface_id,
-                    error = %e,
-                    "show_target: 適用結果の応答が失われた（可視化しない）"
-                );
-                return Err(PresentError::TargetNotAttached(target));
-            }
+        // 単一漏斗の再通過（k 再導出・キャッシュヒットなら再合成なし）。成否は戻り値で読む——状態の
+        // 後追い推測（`applied` や `current_surface_id` の照合）で組み立てると、k 不変かつ失敗という
+        // 組み合わせを成功と誤読する。
+        if let Err(e) = self.apply_show(world, target, surface_id, binds, pattern, !was_visible) {
+            // `apply_show` は失敗を error! 済みだが、それは「合成／デバイスが失敗した」ことしか
+            // 語らない。可視化の要求が果たされなかったことはここでしか分からない。
+            tracing::error!(
+                ?target,
+                surface_id,
+                error = %e,
+                "show_target: 漏斗の再通過が失敗（可視化しない・前状態を維持）"
+            );
+            return Err(e);
         }
 
         let Some(t) = self.targets.get_mut(&target) else {

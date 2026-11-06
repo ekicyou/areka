@@ -72,3 +72,10 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## audit-parsers-sakura の申し送り（2026-11-06 同 spec のタスク 8.1 の `/kiro-discovery` で追記）
+
+小さい 2 件は新しい spec にせず、同じ dola を直す本 spec へ「件 N」で足した（触る場所が同じものを 1 本にまとめる決まり）。どちらも区分 B 相当の持ち越し。範囲のファイルは本文の範囲に入っている。
+
+- **件 1: トークの終わりの時刻が ms の格子から 1 ulp 外れうる**。`audit-parsers-sakura` は台本の開始時刻を整数 ms で積み、命令ごとに 1 回だけ秒へ直す形にした（同 spec の design.md「開始時刻の積み（8）」）。けれど終わりの時刻は dola が f64 の和で出す＝`crates/dola/src/cue/sheet.rs` の `absolute_end_time`（85〜91 行目・`cue.start_time + cue.duration` の max）と、canonical 変換が焼き込む占有の終わり（`crates/dola/src/cue/schedule.rs` 69 行目の `max(start_time + duration)`）。150 ms＋800 ms が 0.9500000000000001 になり、Tick の式 `(now-base) as f64 / 1000.0` と比べて `TalkDone` と後始末が 1 刻み遅れうる（同 spec の design.md「残る危うさ」・research.md 12 節で測った）。直し方（終わりを ms の格子で出す・合図の長さを整数 ms で持つ、など）は要件の段で選ぶ。呼び手は `crates/areka-sakura/src/compile.rs` の `append_epilogue`（`sheet.absolute_end_time()`）。
+- **件 2: `CuePlayer::stop` を呼ぶ本番のコードが 0**。`crates/dola/src/cue/runtime.rs` 361 行目の `stop` は、`audit-parsers-sakura` の指摘 78 の直しの後、呼ぶのが dola のテストだけになった（同 spec の tasks.md の Implementation Notes「8.1 への申し送り（6.1 のレビュー）」）。消すか、語彙の口として理由の doc を付けて残すかを、この spec の見直しで決める（消す前にツリー全体の参照を確かめる＝本文の Constraints）。

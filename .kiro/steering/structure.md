@@ -96,7 +96,7 @@ updated_at: 2026-10-23
 - 代表的なコンポーネント: `DolaAnimator`（`DolaRuntime` を内部所有、`unsafe impl Send + Sync`）
 - 主要システム: `tick_dola_animators`（`Query<&mut DolaAnimator>` + `Res<FrameTime>` で全エンティティ一括tick）
 - 安全性保証: `Query<&mut>` の排他アクセスにより1 tick 1回・単一スレッドでの更新を型レベルで保証
-- 消費パターン: 後続システムが `Query<&DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る
+- 消費パターン: 後続システムが `Query<&mut DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る（読む口は `&mut self`・`Query<&DolaAnimator>` では組み立たない・返す値の中の `Rc` を外へ持ち出さない）
 
 **7. World Scheduling** (`world/`)
 - 責務: schedule label、vsync、フレーム時間管理
@@ -194,7 +194,8 @@ COMオブジェクトをラップするECSコンポーネントは、以下の�
 
 #### GPUリソース (`XxxGraphics`)
 - **特性**: Direct3D/Direct2D/WUC（Windows.UI.Composition）デバイスに依存
-- **デバイスロスト対応**: `invalidate()`メソッドと`generation`フィールドを実装
+- **デバイスロスト対応**: `invalidate()`（または中身を空にする口）と`is_valid()`を実装する。装置が無効になった回、`GraphicsSetup` の先頭の `invalidate_dependent_components` が有効な `WindowGraphics`・`VisualGraphics`・`SurfaceGraphics`・`BitmapSourceGraphics` を倒し、`GraphicsCommandList` を全部外し、最後に `WucGraphicsResource` を倒す。続く `init_graphics_core` → `init_wuc_resource` → `init_window_graphics`（同じ単一スレッドのスケジュール）と後段の作る係が `!is_valid()` を見て作り直す。新しい `XxxGraphics` を足すときは、この無効化の係に倒す行を足す。窓の部品は作り直しの回数を `generation` で数える
+- **下流の控え**: 装置に結びつく控えを wintf の部品の外に持つ側は、`Res<GraphicsCore>` の変化の印（作り直しと失いのとき立つ）を合図に控えを捨て、`is_valid()` の間だけ作り直す。`HasGraphicsResources` の変化は窓が出るたびにも立つので合図にしない
 - **命名**: `XxxGraphics`サフィックス
 - **例**:
   - `WindowGraphics` - ウィンドウレベルGPU資源
@@ -321,7 +322,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **記録の捕捉の引き継ぎ**: `spawn_actor` は、親のスレッドで log-capture-kit の捕捉の窓が開いているときだけ、その窓（Dispatch）を子のアクターのスレッドへ引き継ぐ（印の型 `CaptureWindowMarker` を `downcast_raw` で問う・窓の外では何もしない＝本番の記録は変わらない）。log-capture-kit は `[dev-dependencies]` だけに置き、`[dependencies]` には置かない（`actor-thread-log-capture` 2026-10-31）。
 
 ### Engine Crates（⓪③④⑤＋talk 契約・固有名は roadmap のエンジン表参照）
-- **`areka-ghost`（⓪・結線層）**: descript.txt 起点のマウント解決（`areka_parsers::package::resolve`）を入力に、shiori 通信層（host-32 経由）・kanade・sakura・ticker を起動順に結線し、終了時は逆順で統括する最上位 owner。
+- **`areka-ghost`（⓪・結線層）**: descript.txt 起点のマウント解決（`areka_parsers::package::resolve_with_shell`）を入力に、shiori 通信層（host-32 経由）・kanade・sakura・ticker を起動順に結線し、終了時は逆順で統括する最上位 owner。
 - **`areka-kanade`（③・conductor）**: **運行表（scheduling state machine）の正本**。ghost の boot/steady/close 各フェーズの運行判断。純粋状態機械＋アクターシェル＋メッセージ境界差し替えの三層構造。**sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）。UI（右クリックメニュー）からの複数件の SHIORI リソース照会（`KanadeMsg::ResourceQuery`）は**運行状態機械を経ずにアクターの殻で答える**（`actor_resources.rs`）——会話できる状態（`Phase::Steady`）のときだけ往復し、起動・終了系列の固定の呼出順へ割り込まない。送出の許可表は 1 か所のまま。外からの台本とイベント（MCP の `sakurascript`・`raise_event`）は SSTP の 2 つの入口 `KanadeMsg::SstpSend`／`KanadeMsg::SstpNotify` で受け、運行表の `schedule/sstp.rs` が受け付けを決める。外から頼まれたイベントの名前（`EventId::Sstp`）は許可表を通らない（`areka-P0-mcp-kanade-tools` 2026-10-19）。
 - **`areka-sakura`（④・さくらスクリプト再生）**: SHIORI が返す Value を時間軸上で再生する **per-talk transient** エンジン＝`areka_parsers::sakura::parse` の `Instruction` 列から dola `CueSheet` へのコンパイラ。再生制御そのもの（状態機械・horizon・broadcast）は **dola `cue` が唯一のエンジン**（dola 節参照）。
 - **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。部品（element定義の子・pattern定義の先）の時計は `parts.rs` の `PartClocks`（スコープ × 部品の番号 × animation の番号・一番上の切り替えでは捨てない）で、コマは `PatternState` の部品の欄で運ぶ。interval の 3 語（`talk,数値`・`runonce`・`periodic,数値`）は抽選せず、「始めるか・何時に始まったことにするか」だけを `trigger.rs` の `Armed`（純関数と小さな状態）が決める（一番上の配線は `looper_trigger.rs`・部品は `parts_trigger.rs`。「再生中か」は開始の時刻で測る）。文字が現れる時刻は、文字の層と同じ式の写しを `talk.rs` に持つ（文字の層の式を変えたら写しも変える）。依存の向きは `table.rs` → `timeline.rs`／`trigger.rs`／`talk.rs` → `looper.rs`／`parts.rs` → `actor.rs`（2026-10-10・`areka-P0-seriko-trigger-intervals`）。pattern定義でアニメーションを呼ぶ語（start・stop・insert・alternativestart／alternativestop・parallelstart／parallelstop）は重ねず再生の働きとして受ける＝再生表のコマを描くコマと働きのコマに分けるのは `table_calls.rs`、働きのコマを予定の時刻の順に当てる純粋な係は `calls.rs`、その配線は一番上が `looper_calls.rs`・部品が `parts_calls.rs`（語の見分けの正本は emo-compose の `pattern_word.rs`・`seriko-pattern-calls` 2026-10-31）。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。

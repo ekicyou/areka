@@ -1,21 +1,20 @@
 //! [`apply_named_bind`] の 4 つの結果の試験（spec: areka-P0-offline-surface-dump 要件 5.1・5.3・5.4・14.2）。
 
+use super::tests::groups_of;
 use super::*;
 use crate::resolve::SurfaceTarget;
 use crate::state::{BindApplyOutcome, ScopeStates};
 
 /// 本体側に「目」（既定・1301/1303）と「服」（mustselect・1500/1501）を持つ表。
 fn resolver() -> BindResolver {
-    let mut sakura = BTreeMap::new();
-    sakura.insert(("目".to_string(), "開き".to_string()), 1301);
-    sakura.insert(("目".to_string(), "閉じ".to_string()), 1303);
-    sakura.insert(("服".to_string(), "制服".to_string()), 1500);
-    sakura.insert(("服".to_string(), "私服".to_string()), 1501);
-    let options = BindOptionDecls {
-        sakura_mustselect: BTreeSet::from(["服".to_string()]),
-        ..BindOptionDecls::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,開き\r\n\
+         sakura.bindgroup1303.name,目,閉じ\r\n\
+         sakura.bindgroup1500.name,服,制服\r\n\
+         sakura.bindgroup1501.name,服,私服\r\n\
+         sakura.bindoption0.group,服,mustselect\r\n",
+    ))
 }
 
 fn shown_states(ids: &[u32]) -> (ScopeStates, ActorKey) {
@@ -81,4 +80,32 @@ fn mustselect_off_is_kept() {
     let result = apply_named_bind(&mut states, &resolver(), &scope, "服", "制服", false);
     assert_eq!(result, NamedBindResult::MustSelectKept { id: 1500 });
     assert_eq!(states.current_binds(&scope).ids(), &[1500]);
+}
+
+/// スコープ 2（`char2`）も自分の表で当てる: 既定のカテゴリは排他で、`mustselect` の OFF は外さない
+/// （要件 14.2）。本体側の同じ名前は引かない。
+#[test]
+fn scope_two_applies_exclusive_and_keeps_mustselect() {
+    let r = BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1303.name,目,閉じ\r\n\
+         char2.bindgroup41.name,目,開き\r\n\
+         char2.bindgroup43.name,目,閉じ\r\n\
+         char2.bindgroup50.name,服,制服\r\n\
+         char2.bindoption0.group,服,mustselect\r\n",
+    ));
+    let mut states = ScopeStates::new(DefaultBinds::uniform(build_static_bindset(&[41, 50])));
+    let scope = ActorKey::from("2");
+    states.apply(&scope, SurfaceTarget::Show(10));
+
+    let result = apply_named_bind(&mut states, &r, &scope, "目", "閉じ", true);
+    assert!(
+        matches!(result, NamedBindResult::Applied { id: 43, .. }),
+        "本体側の 1303 でなく char2 の 43 を引く: {result:?}"
+    );
+    assert_eq!(states.current_binds(&scope).ids(), &[43, 50], "41 が外れる");
+
+    let result = apply_named_bind(&mut states, &r, &scope, "服", "制服", false);
+    assert_eq!(result, NamedBindResult::MustSelectKept { id: 50 });
+    assert_eq!(states.current_binds(&scope).ids(), &[43, 50]);
 }

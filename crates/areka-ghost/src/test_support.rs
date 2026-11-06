@@ -105,7 +105,7 @@ impl CueSink for NoopSink {
 }
 
 /// `ghost/master/descript.txt` を `descript`（行の並び）で書き、本番と同じ経路
-/// （`package::resolve`・`ShioriMount` は `#[non_exhaustive]`）で `ShioriMount` を得る。
+/// （`package::resolve_with_shell`・`ShioriMount` は `#[non_exhaustive]`）で `ShioriMount` を得る。
 /// 返り値の [`TempPath`] をテストの間だけ生かしておくこと（破棄で中身ごと消える）。
 pub(crate) fn shiori_mount(tag: &str, descript: &str) -> (TempPath, ShioriMount) {
     let temp = TempPath::new(tag);
@@ -117,7 +117,7 @@ pub(crate) fn shiori_mount(tag: &str, descript: &str) -> (TempPath, ShioriMount)
     std::fs::write(master_dir.join("descript.txt"), descript)
         .expect("fixture descript.txt 書き込みに失敗");
 
-    let mount = package::resolve(&root, DefaultEncoding::Ansi)
+    let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
         .expect("fixture ghost_root の resolve に失敗");
     (temp, mount.shiori)
 }

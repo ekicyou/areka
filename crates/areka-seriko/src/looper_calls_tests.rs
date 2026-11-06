@@ -6,10 +6,12 @@ use std::sync::{Arc, Mutex};
 
 use areka_emo_compose::BindSet;
 
-use super::test_support::{cell, scope, started, switch, table_of};
+use super::test_support::{cell, note_balloon, started, switch};
 use super::tests::counting_rng;
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::count;
+use crate::test_support::{capture_logs, empty_states, scope, table_of};
 
 /// 絵の面（中身は空）。
 const SURFACES: &str = "surface100\n{\n}\nsurface101\n{\n}\nsurface110\n{\n}\n\
@@ -50,13 +52,9 @@ fn config(text: &str, rng: LoopRng, pick_rng: LoopRng) -> SerikoLoopConfig {
     }
 }
 
-fn no_binds() -> ScopeStates {
-    ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()))
-}
-
 /// シェルの面 0 を出した状態のランタイム。
 fn shell_shown(text: &str, rng: LoopRng, pick_rng: LoopRng) -> (LoopRuntime, ScopeStates) {
-    let mut states = no_binds();
+    let mut states = empty_states();
     states.apply(&scope(), SurfaceTarget::Show(0));
     (LoopRuntime::new(config(text, rng, pick_rng)), states)
 }
@@ -94,7 +92,7 @@ fn alternativestart_starts_the_pick_from_head_at_call_time_in_the_same_show() {
     }
 }
 
-/// `never` を足しても、同じ種なら抽選の結果は今と同じ（3.6・11.3）。
+/// `never` を足しても、同じ種なら抽選の結果は変わらない（3.6・11.3）。
 #[test]
 fn adding_a_never_animation_keeps_the_lottery() {
     const PLAIN: &str = "surface0\n{\n\
@@ -197,7 +195,7 @@ fn refresh_applies_calls_at_the_event_time_and_always_lap_head_keeps_last_draw()
         animation1.pattern1,overlay,111,500,0,0\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(CALLER, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     let shown = switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40).expect("Show");
     assert_eq!(started(&rt, Slot::Shell, 1), Some(40));
     let DisplayCommand::Show { pattern, .. } = shown else {
@@ -231,7 +229,7 @@ fn periodic_start_applies_its_head_call_in_the_same_tick() {
 ";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     rt.on_tick(0, &mut states);
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
     assert_eq!(started(&rt, Slot::Shell, 1), None, "切り替えでは鳴らない");
@@ -252,7 +250,7 @@ fn balloon_surface_applies_calls_the_same_way() {
         rng: lottery,
         pick_rng: picker,
     });
-    let mut states = no_binds();
+    let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
     rt.on_tick(0, &mut states);
     rt.on_tick(1000, &mut states);
@@ -351,7 +349,7 @@ fn balloon_surface_emits_the_balloon_shift() {
         rng: lottery,
         pick_rng: seeded_rng(0),
     });
-    let mut states = no_binds();
+    let mut states = empty_states();
     states.apply_balloon(&scope(), SurfaceTarget::Show(0));
     rt.on_tick(0, &mut states);
     rt.on_tick(1000, &mut states);
@@ -383,7 +381,7 @@ fn runonce_move_applied_at_the_event_time_is_queued() {
         animation0.pattern1,overlay,100,100,0,0\n}\n";
     let (lottery, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(config(RUNONCE, lottery, seeded_rng(0)));
-    let mut states = no_binds();
+    let mut states = empty_states();
     switch(&mut rt, &mut states, SurfaceTarget::Show(0), 40);
     assert_eq!(
         rt.take_shifts(),
@@ -407,11 +405,314 @@ fn settled_surface_carries_no_shift() {
         ));
         crate::settle_surface(&table, 0, &BindSet::default(), 0)
     };
-    let zeroed = MOVES
+    // 最後の `-1` を外し、最後に描くコマ（101）が欄に残る形で比べる。
+    let kept = MOVES.replace("animation0.pattern6,overlay,-1,100,0,0\n", "");
+    assert_ne!(kept, MOVES, "`-1` のコマを外せた");
+    let zeroed = kept
         .replace(",3,5", ",0,0")
         .replace(",7,5", ",0,0")
         .replace(",0,9999", ",0,0");
-    let moved = settle(MOVES);
+    let moved = settle(&kept);
     assert_eq!(moved, settle(&zeroed));
-    assert_eq!(moved.get(0), None, "`-1` で止まった後");
+    assert_eq!(
+        moved.get(0).map(|f| (f.surface_id, f.x, f.y)),
+        Some((101, 0, 0)),
+        "最後に描くコマが、ずれの入らない位置で欄に残る"
+    );
+}
+
+/// `-1` のコマのすぐ後に待ち 0 の働きのコマがあっても、経過 50 で止まり欄が外れる（面 4294967295 を
+/// 欄に置かない・ukadoc pattern の項）。
+#[test]
+fn minus_one_then_zero_wait_insert_stops_and_clears_the_cell() {
+    let text = "surface0\n{\n\
+        animation0.interval,random,2\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,-1,50,0,0\n\
+        animation0.pattern2,insert,0,0,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (picker, _) = pick_rng(0);
+    let (mut rt, mut states) = shell_shown(text, lottery, picker);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 0), Some(100));
+    rt.on_tick(1050, &mut states);
+    assert_eq!(cell(&states, Slot::Shell, 0), None, "-1 で欄が外れる");
+    assert_eq!(started(&rt, Slot::Shell, 0), None, "再生は止まる");
+}
+
+/// `-1` と `-2` のすぐ後に待ち 0 の働きのコマがあっても、warn の番号は止めた描くコマの番号:
+/// `-1` は warn しない、`-2` は 1 回だけ `surface_id=-2` で warn する。続くのが待ち 0 の描くコマでも
+/// 同じ（要件 4.1）。
+#[test]
+fn negative_then_zero_wait_action_frame_warns_with_the_drawn_number() {
+    for tail in ["insert,0,0,0,0", "overlay,110,0,0,0"] {
+        let text = "surface0\n{\n\
+        animation0.interval,random,2\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,-1,50,0,0\n\
+        animation0.pattern2,insert,0,0,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,101,0,0,0\n\
+        animation1.pattern1,overlay,-2,50,0,0\n\
+        animation1.pattern2,insert,0,0,0,0\n}\n"
+            .replace("insert,0,0,0,0", tail);
+        let (lottery, _probe) = counting_rng(&[0, 0]);
+        let (picker, _) = pick_rng(0);
+        let (mut rt, mut states) = shell_shown(&text, lottery, picker);
+        let lines = crate::test_support::capture_logs(|| {
+            rt.on_tick(0, &mut states);
+            rt.on_tick(1000, &mut states);
+            rt.on_tick(1050, &mut states);
+        });
+        let warned: Vec<_> = lines
+            .iter()
+            .filter(|l| l.contains("以外の負 surface"))
+            .collect();
+        assert_eq!(warned.len(), 1, "{warned:?}");
+        assert!(warned[0].contains("animation_id=1"), "{warned:?}");
+        assert!(warned[0].contains("surface_id=-2"), "{warned:?}");
+    }
+}
+
+/// 再生が末尾に着く刻みに抽選が当たっても、その刻みまでの古い再生の働きのコマを先に当てる:
+/// 抽選はその後に引くので、末尾に着いた 0 は同じ刻みで抽選に戻り、当たれば同じ時刻に始め直す
+/// （`periodic` と同じ順・seriko-pattern-calls 要件 3.1）。
+#[test]
+fn last_action_frame_on_the_ending_tick_is_not_lost_to_the_lottery() {
+    let text = "surface0\n{\n\
+        animation0.interval,random,2\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,101,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n}\n";
+    let (lottery, probe) = counting_rng(&[0, 0]);
+    let (picker, _) = pick_rng(0);
+    let (mut rt, mut states) = shell_shown(text, lottery, picker);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states); // animation0 が 1000 に始まる。start,1 は 2000。
+    rt.on_tick(2000, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(2000));
+    assert_eq!(
+        probe.lock().unwrap().calls,
+        2,
+        "2000 は末尾に着いた後に引く"
+    );
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(2000),
+        "同じ時刻に始め直す"
+    );
+}
+
+/// `periodic` の次の回の時刻と、前の回の終わりの働きのコマが重なっても、前の回のコマを先に当ててから
+/// 同じ時刻に始め直す（回を飛ばさない・部品と同じ順・seriko-pattern-calls 要件 3.1・
+/// areka-P0-seriko-trigger-intervals 要件 3.1）。
+#[test]
+fn last_action_frame_on_the_periodic_restart_tick_is_not_lost() {
+    const PERIODIC: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,1000,0,0\n\
+        animation0.pattern2,start,1\n\
+        animation1.interval,never\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,500,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(PERIODIC, lottery, seeded_rng(0)));
+    let mut states = empty_states();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1100, &mut states); // periodic は 1030 に鳴る。start,1 は 2030。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
+    rt.on_tick(2030, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(2030), "前の回の start,1");
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030), "回を飛ばさない");
+}
+
+/// 先に当てる段の呼び出しが、引き金の始める animation をちょうど開始の時刻に始めたときは、その再生を
+/// 入れ替えず、頭の働きのコマを 1 度だけ当てる（選びの乱数も 1 度だけ・seriko-pattern-calls 要件 3.1・5.2）。
+#[test]
+fn call_starting_the_trigger_animation_at_its_start_time_fires_its_head_once() {
+    const SELF_CALL: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,alternativestart,(5,6)\n\
+        animation0.pattern1,overlay,120,1000,0,0\n\
+        animation0.pattern2,start,0\n\
+        animation5.interval,never\n\
+        animation5.pattern0,overlay,110,0,0,0\n\
+        animation6.interval,never\n\
+        animation6.pattern0,overlay,111,0,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let (picker, bounds) = pick_rng(0);
+    let mut rt = LoopRuntime::new(config(SELF_CALL, lottery, picker));
+    let mut states = empty_states();
+    let logs = capture_logs(|| {
+        rt.on_tick(0, &mut states);
+        switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+        rt.on_tick(1100, &mut states); // 1030 に鳴り、頭の選びを 1 度引く。
+        assert_eq!(bounds.lock().unwrap().len(), 1);
+        rt.on_tick(2030, &mut states); // 前の回の start,0 と次の回が 2030 で重なる。
+    });
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+    assert_eq!(
+        bounds.lock().unwrap().len(),
+        2,
+        "2030 の頭の選びは 1 度だけ"
+    );
+    // 呼び出しが始めた再生を「再生中」と見て見送らず、2030 の回も鳴らした記録を残す。
+    assert_eq!(
+        count(&logs, "seriko: trigger periodic を鳴らした"),
+        2,
+        "{logs:?}"
+    );
+}
+
+/// 遅れた刻みで 2 つの `periodic` の開始の時刻が番号と逆の順に並び、その間に別の再生の `stop,1` が
+/// 来るときも、時刻の順に当てる（1 は 2030 に始まり 2500 に止まる・0 は 3030 に始まる・
+/// seriko-pattern-calls 要件 3.1・4.1・areka-P0-seriko-trigger-intervals 要件 3.1）。
+#[test]
+fn trigger_starts_and_calls_in_a_late_tick_run_in_time_order() {
+    const LATE: &str = "surface0\n{\n\
+        animation0.interval,periodic,3\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,5000,0,0\n\
+        animation1.interval,periodic,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,100,2470,0,0\n\
+        animation2.pattern1,stop,1\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(LATE, lottery, seeded_rng(0)));
+    let mut states = empty_states();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    assert_eq!(started(&rt, Slot::Shell, 2), Some(30));
+    rt.on_tick(3100, &mut states); // 1 は 2030・stop,1 は 2500・0 は 3030。
+    assert_eq!(started(&rt, Slot::Shell, 1), None, "2500 に止まる");
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(3030));
+}
+
+/// 引き金の「再生中か」は、開始の時刻までの働きのコマを当てた後で測る（2000 に止められた 0 は
+/// 2030 に再生中でないので鳴る・areka-P0-seriko-trigger-intervals 要件 3.1・3.3）。
+#[test]
+fn periodic_stopped_by_a_call_before_its_boundary_restarts_at_the_boundary() {
+    const STOPPED: &str = "surface0\n{\n\
+        animation0.interval,periodic,1\n\
+        animation0.pattern0,overlay,120,0,0,0\n\
+        animation0.pattern1,overlay,130,1500,0,0\n\
+        animation2.interval,runonce\n\
+        animation2.pattern0,overlay,100,1970,0,0\n\
+        animation2.pattern1,stop,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[]);
+    let mut rt = LoopRuntime::new(config(STOPPED, lottery, seeded_rng(0)));
+    let mut states = empty_states();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1100, &mut states); // 0 は 1030 に鳴る（2530 まで続く見込み）。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(1030));
+    rt.on_tick(2100, &mut states); // stop,0 は 2000・次の周は 2030。
+    assert_eq!(started(&rt, Slot::Shell, 0), Some(2030));
+}
+
+/// 窓が開いた刻みに生まれた一番上の `always` に、それより前の時刻の呼び出しは当たらない（閉じている
+/// 間に抽選の 1 が 1000 に始まり、`stop,0` は 1030・窓は 1050 に開く。0 は 1050 に生まれて動き続け、
+/// 止めた印も付かない・seriko-pattern-calls 要件 3.1・4.1）。
+#[test]
+fn earlier_stop_does_not_hit_an_always_born_when_the_window_opens() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,always\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,101,100,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,30,0,0\n\
+        animation1.pattern1,stop,0\n\
+        animation1.pattern2,overlay,111,5000,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(SerikoLoopConfig {
+        shell_table: AnimationTable::empty(),
+        balloon_tables: BTreeMap::from([(scope(), table_of(&format!("{TEXT}{SURFACES}")))]),
+        rng: lottery,
+        pick_rng: seeded_rng(0),
+    });
+    let mut states = empty_states();
+    states.apply_balloon(&scope(), SurfaceTarget::Show(0));
+    let note = |states: &mut ScopeStates, open: bool| note_balloon(states, open, 0);
+    note(&mut states, false);
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    assert_eq!(started(&rt, Slot::Balloon, 1), Some(1000), "前提");
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        None,
+        "前提: 閉じている間は生まれない"
+    );
+    note(&mut states, true);
+    rt.on_tick(1050, &mut states);
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        Some(1050),
+        "1030 の stop,0 は当たらない"
+    );
+    rt.on_tick(1100, &mut states);
+    assert_eq!(
+        started(&rt, Slot::Balloon, 0),
+        Some(1050),
+        "止めた印も付かない"
+    );
+}
+
+/// 抽選の境目の刻みより前の時刻に別の再生の `start,1` が抽選の 1 を始めていたら、抽選は 1 を再生中と
+/// 見て乱数を引かない（`runonce` の 0 が 30 に鳴り、`start,1` は 1010・刻みは 1050・
+/// seriko-pattern-calls 要件 3.1・areka-P0-seriko-loop 要件 2.3）。
+#[test]
+fn lottery_sees_a_play_started_by_an_earlier_call_in_the_same_tick() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,runonce\n\
+        animation0.pattern0,overlay,100,980,0,0\n\
+        animation0.pattern1,start,1\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,0,0,0\n\
+        animation1.pattern1,overlay,111,5000,0,0\n}\n";
+    let (lottery, probe) = counting_rng(&[0]);
+    let mut rt = LoopRuntime::new(config(TEXT, lottery, seeded_rng(0)));
+    let mut states = empty_states();
+    rt.on_tick(0, &mut states);
+    switch(&mut rt, &mut states, SurfaceTarget::Show(0), 30).expect("Show");
+    rt.on_tick(1050, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 1), Some(1010));
+    assert_eq!(probe.lock().unwrap().calls, 0, "1 は 1010 から再生中");
+}
+
+/// 面を出し直して始め直した一番上の `always` にも、合図の時刻より前の呼び出しは当たらない（抽選の 1 が
+/// 1000 に始まり、`stop,0` は 1050 と 1150。1100 の刻みで止まった 0 を 1170 の出し直しが始め直す・
+/// seriko-pattern-calls 要件 3.1・3.5・4.1）。
+#[test]
+fn earlier_stop_does_not_hit_an_always_restarted_by_reshow() {
+    const TEXT: &str = "surface0\n{\n\
+        animation0.interval,always\n\
+        animation0.pattern0,overlay,100,0,0,0\n\
+        animation0.pattern1,overlay,101,100,0,0\n\
+        animation1.interval,random,2\n\
+        animation1.pattern0,overlay,110,50,0,0\n\
+        animation1.pattern1,stop,0\n\
+        animation1.pattern2,overlay,111,100,0,0\n\
+        animation1.pattern3,stop,0\n\
+        animation1.pattern4,overlay,120,5000,0,0\n}\n";
+    let (lottery, _probe) = counting_rng(&[0]);
+    let (mut rt, mut states) = shell_shown(TEXT, lottery, seeded_rng(0));
+    rt.on_tick(0, &mut states);
+    rt.on_tick(1000, &mut states);
+    rt.on_tick(1100, &mut states);
+    assert_eq!(started(&rt, Slot::Shell, 0), None, "前提: 1050 に止まる");
+    assert!(rt.on_surface_shown(&scope(), Slot::Shell));
+    rt.refresh(&scope(), Slot::Shell, Some(1170), &mut states);
+    assert_eq!(
+        started(&rt, Slot::Shell, 0),
+        Some(1170),
+        "1150 の stop,0 は当たらない"
+    );
 }

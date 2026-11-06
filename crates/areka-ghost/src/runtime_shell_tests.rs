@@ -47,11 +47,11 @@ fn named_shell_boot_mounts_it_and_set_shell_dir_rewrites_it() {
     );
 
     // 書き換えの口: マウントのシェルだけが新しいフォルダを指す（bindgroup は起動時のまま）。
-    assert_eq!(runtime.mount().bindgroups.sakura_default_on, vec![3]);
+    assert_eq!(runtime.mount().bindgroups[&0].default_on, vec![3]);
     let shell_master = root.join("shell").join("master");
     runtime.set_shell_dir(shell_master.clone());
     assert_eq!(runtime.mount().shell.dir, shell_master);
-    assert_eq!(runtime.mount().bindgroups.sakura_default_on, vec![3]);
+    assert_eq!(runtime.mount().bindgroups[&0].default_on, vec![3]);
 
     shutdown_bounded(runtime);
     drop(temp);

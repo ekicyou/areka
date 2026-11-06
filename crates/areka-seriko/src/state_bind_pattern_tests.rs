@@ -1,3 +1,8 @@
+//! 着せ替えの適用・一番上の欄の保持・残留コマの掃除の決定論テスト。
+//!
+//! 番号の出どころ: R・D と `apply_bind` の節の要件 3.x は areka-P0-mayuna-compose、ほかの無印の要件
+//! （5.1・6.1・6.2・2.1）は areka-P0-seriko-loop、「bindopt」は areka-P0-bindoption-exclusivity の要件。
+
 use super::test_support::*;
 use super::*;
 
@@ -7,7 +12,7 @@ use super::*;
 /// binds は直前集合∪{新 id}、surface_id は現在表示中の id と一致すること。
 #[test]
 fn apply_bind_shown_set_change_emits_changed_show() {
-    let mut states = empty_states(); // static = {1100, 1207}
+    let mut states = fresh_states(); // static = {1100, 1207}
     let scope = ActorKey::from("0");
 
     // シェル面を Shown(2100) に確定させる。
@@ -35,7 +40,7 @@ fn apply_bind_shown_set_change_emits_changed_show() {
 /// 非表示シーンでの集合変化 → 発行なし・状態のみ更新（D5：Hidden への強制 Show 禁止）。
 #[test]
 fn apply_bind_hidden_set_change_is_state_only() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // シェル面を Hidden にする。
@@ -61,7 +66,7 @@ fn apply_bind_hidden_set_change_is_state_only() {
 /// 未知（未表示）scope での集合変化 → 発行なし・状態のみ更新（D5）。
 #[test]
 fn apply_bind_unknown_scope_set_change_is_state_only() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // 一度も Show していない scope。
@@ -89,7 +94,7 @@ fn apply_bind_unknown_scope_set_change_is_state_only() {
 /// 同一集合への変化 → Unchanged・状態書き込みなし・発行なし（冪等・R3.6・D9）。
 #[test]
 fn apply_bind_same_set_is_unchanged() {
-    let mut states = empty_states(); // static = {1100, 1207}
+    let mut states = fresh_states(); // static = {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -120,7 +125,7 @@ fn apply_bind_same_set_is_unchanged() {
 /// 1 回目 Changed（集合変化）、2 回目 Unchanged（既に含む）。
 #[test]
 fn apply_bind_idempotent_on_on_shown() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -138,10 +143,10 @@ fn apply_bind_idempotent_on_on_shown() {
     );
 }
 
-/// 非退行（R3.8）: 一連の apply_bind はシェル面・バルーン面の状態機械を変更しない。
+/// 表示の状態には触れない（R3.8）: 一連の apply_bind はシェル面・バルーン面の状態機械を変更しない。
 #[test]
 fn apply_bind_does_not_touch_shell_or_balloon_state() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
 
     // シェル面 Shown(2100)・バルーン面 Shown(2) を確定。
@@ -170,7 +175,7 @@ fn apply_bind_does_not_touch_shell_or_balloon_state() {
 /// 2 回目 Changed は直前集合を保持したまま両 id を載せる。
 #[test]
 fn apply_bind_accumulates_across_two_binds_when_shown() {
-    let mut states = empty_states(); // static = {1100, 1207}
+    let mut states = fresh_states(); // static = {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -299,7 +304,7 @@ fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
     );
 }
 
-/// 非退行（R3.8）: 排他置換はシェル面・バルーン面の状態機械を一切変更しない。
+/// 表示の状態には触れない（R3.8）: 排他置換はシェル面・バルーン面の状態機械を一切変更しない。
 #[test]
 fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([
@@ -342,27 +347,12 @@ fn apply_bind_exclusive_target_in_category_ids_stays_present() {
 
 // ---- commit_pattern / current_pattern（per-(scope, slot) PatternState・要件 5.1/6.1/6.2） ----
 
-use areka_emo_compose::{ComposeMethod, PatternFrame};
-
-/// テスト用の非空 PatternState（単一コマ・Overlay）。
-fn pat(anim_id: u32, surface_id: u32) -> PatternState {
-    let mut p = PatternState::default();
-    p.set(
-        anim_id,
-        PatternFrame {
-            surface_id,
-            method: ComposeMethod::Overlay,
-            x: 0,
-            y: 0,
-        },
-    );
-    p
-}
+use crate::test_support::{one_frame_pattern as pat, overlay_frame as frame};
 
 /// current_pattern 既定（要件 5.1）: 未格納の (scope, slot) は空 PatternState を返す（両 slot）。
 #[test]
 fn current_pattern_absent_returns_empty() {
-    let states = empty_states();
+    let states = fresh_states();
     let scope = ActorKey::from("0");
     assert!(states.current_pattern(&scope, Slot::Shell).is_empty());
     assert!(states.current_pattern(&scope, Slot::Balloon).is_empty());
@@ -371,7 +361,7 @@ fn current_pattern_absent_returns_empty() {
 /// 冪等 commit（要件 6.2）: 同値の再 commit は Unchanged・書込副作用なし。
 #[test]
 fn commit_pattern_same_value_is_unchanged_no_write() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -392,7 +382,7 @@ fn commit_pattern_same_value_is_unchanged_no_write() {
 /// 空 commit の冪等（要件 6.2）: 未格納 (==空) へ空を commit は同値ゆえ Unchanged（書込なし）。
 #[test]
 fn commit_pattern_empty_on_shown_without_prior_is_unchanged() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     assert_eq!(
@@ -405,7 +395,7 @@ fn commit_pattern_empty_on_shown_without_prior_is_unchanged() {
 /// 表示中シェル slot の pattern 変化（要件 6.1）: 現 surface id＋現 binds＋新 pattern の Show を発行。
 #[test]
 fn commit_pattern_different_on_shown_shell_emits_changed_show() {
-    let mut states = empty_states(); // static binds {1100, 1207}
+    let mut states = fresh_states(); // static binds {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -427,7 +417,7 @@ fn commit_pattern_different_on_shown_shell_emits_changed_show() {
 /// 表示中バルーン slot の pattern 変化（要件 6.1）: binds 非同梱の ShowBalloon を発行。
 #[test]
 fn commit_pattern_different_on_shown_balloon_emits_changed_showballoon() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
 
@@ -449,7 +439,7 @@ fn commit_pattern_different_on_shown_balloon_emits_changed_showballoon() {
 #[test]
 fn commit_pattern_on_non_shown_slot_is_unchanged() {
     // Hidden shell slot。
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     states.apply(&scope, SurfaceTarget::Hide);
@@ -471,7 +461,7 @@ fn commit_pattern_on_non_shown_slot_is_unchanged() {
 /// slot 独立（要件 5.1）: 同一 scope の Shell / Balloon pattern は別々に保持される。
 #[test]
 fn commit_pattern_slots_are_independent() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
@@ -487,7 +477,7 @@ fn commit_pattern_slots_are_independent() {
 /// surface 切替で格納 pattern クリア（design ScopeStates 拡張）: 別 id への Changed 前に空へリセット。
 #[test]
 fn apply_surface_switch_clears_stored_pattern() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
     states.commit_pattern(&scope, Slot::Shell, pat(7, 1410));
@@ -513,7 +503,7 @@ fn apply_surface_switch_clears_stored_pattern() {
 /// バルーン面 surface 切替で格納 pattern クリア（design・シェル面と同一経路）。
 #[test]
 fn apply_balloon_surface_switch_clears_stored_pattern() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let scope = ActorKey::from("0");
     states.apply_balloon(&scope, SurfaceTarget::Show(2));
     states.commit_pattern(&scope, Slot::Balloon, pat(3, 6));
@@ -537,7 +527,7 @@ fn apply_balloon_surface_switch_clears_stored_pattern() {
 /// bind 変化の Show 再発行は current_pattern を同梱（design）: 現在コマを保ったまま再合成する。
 #[test]
 fn apply_bind_reemit_carries_current_pattern() {
-    let mut states = empty_states(); // static {1100, 1207}
+    let mut states = fresh_states(); // static {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));
 
@@ -560,16 +550,6 @@ fn apply_bind_reemit_carries_current_pattern() {
 }
 
 // ---- 残留コマの掃除（bind から外れた ID の保持コマ除去・bindopt 7.1/7.2/7.4/7.5） ----
-
-/// テスト用のコマ 1 枚（`Overlay`・オフセットなし）。
-fn frame(surface_id: u32) -> PatternFrame {
-    PatternFrame {
-        surface_id,
-        method: ComposeMethod::Overlay,
-        x: 0,
-        y: 0,
-    }
-}
 
 /// 排他置換で外れたパーツの保持コマが**同じ発行で**消える（bindopt 7.1/7.2）。
 ///
@@ -696,7 +676,7 @@ fn commit_bind_state_only_still_drops_residual_frames() {
     );
 }
 
-/// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8 の非退行）。
+/// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8）。
 #[test]
 fn commit_bind_does_not_touch_balloon_pattern() {
     let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::from_ids([1402])));
@@ -728,7 +708,7 @@ fn residual_frame_removal_emits_info_marker() {
     residual.set(9000, frame(9001));
     states.commit_pattern(&scope, Slot::Shell, residual);
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
     });
 
@@ -748,7 +728,7 @@ fn residual_frame_removal_emits_info_marker() {
 
 /// 保持コマを持たない ID が外れただけでは除去ログを出さない（実際に取り除いた事実のみ残す・7.5）。
 ///
-/// **不在主張には同一捕捉内の陽性対照を併置する**（`looper_tests` の既存流儀）。同じ捕捉区間で
+/// **不在主張には同一捕捉内の陽性対照を併置する**（`looper_tests` と同じ形）。同じ捕捉区間で
 /// 1402 の保持コマを**現に持つ** scope0 の排他置換も走らせ、除去痕跡がちょうど 1 行出ることを
 /// 同時に主張する——捕捉が空でも通ってしまう恒真の檻にしないため。あわせて状態側（scope1 の
 /// pattern が手つかず）でも反証し、ログ経路が壊れても判別能力が残るようにする。ID 単位の在庫
@@ -773,7 +753,7 @@ fn no_removal_log_when_dropped_id_has_no_residual_frame() {
     unrelated.set(9000, frame(9001));
     states.commit_pattern(&without_frame, Slot::Shell, unrelated.clone());
 
-    let logs = capture_logs(|| {
+    let logs = capture_text(|| {
         states.apply_bind_exclusive(&with_frame, &[1400, 1401, 1402, 1403], 1400);
         states.apply_bind_exclusive(&without_frame, &[1400, 1401, 1402, 1403], 1400);
     });
@@ -804,7 +784,7 @@ fn no_removal_log_when_dropped_id_has_no_residual_frame() {
 /// `shown_slots` は `Shown` の (scope, slot, surface_id) のみ列挙する（`Hidden`／未知は除外・要件 2.1）。
 #[test]
 fn shown_slots_enumerates_only_shown_shell_and_balloon() {
-    let mut states = empty_states();
+    let mut states = fresh_states();
     let s0 = ActorKey::from("0");
     let s1 = ActorKey::from("1");
 
@@ -815,11 +795,7 @@ fn shown_slots_enumerates_only_shown_shell_and_balloon() {
     states.apply(&s1, SurfaceTarget::Show(3000));
     states.apply(&s1, SurfaceTarget::Hide);
 
-    let mut shown = states.shown_slots();
-    shown.sort_by(|a, b| {
-        a.0.cmp(&b.0)
-            .then(format!("{:?}", a.1).cmp(&format!("{:?}", b.1)))
-    });
+    let shown = states.shown_slots();
 
     // scope0 の Shell/Balloon 2 件のみ（scope1 は Hidden ゆえ除外）。
     assert_eq!(shown.len(), 2, "Shown な slot のみ列挙（Hidden は除外）");

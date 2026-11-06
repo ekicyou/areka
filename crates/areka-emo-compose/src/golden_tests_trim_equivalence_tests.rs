@@ -5,6 +5,7 @@ use super::{
     AtlasTable, BindSet, Composer, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId,
     Shell, SurfaceSet, bake,
 };
+use areka_parsers::shell::AppendTarget;
 
 // ============================================================================
 // task 8.3: トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
@@ -110,7 +111,7 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let s0 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 0)
+        .find(|s| s.targets == [AppendTarget::Single(0)])
         .expect("emo2 surfaces.txt に surface0 が存在する");
     assert_eq!(s0.elements.len(), 1, "surface0 は element0 単層");
     assert_eq!(

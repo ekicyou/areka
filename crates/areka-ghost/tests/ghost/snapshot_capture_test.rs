@@ -153,7 +153,7 @@ fn capture_real_pasta_snapshots() {
     .expect("HOST32_PASTA_DLL を emo2 の ghost/master へ写せませんでした");
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を real_connect へ渡す。
-    let mount = package::resolve(&root, DefaultEncoding::Ansi)
+    let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
         .expect("採取フィクスチャは実マウント解決を成功裏に通過すべき（boot 内部と同一契約）");
 
     // --- 実 backend へ Recorder を合成した Custom wiring（design.md「Batch/Job Contract」）---

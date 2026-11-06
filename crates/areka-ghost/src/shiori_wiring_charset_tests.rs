@@ -2,7 +2,7 @@
 //! （タスク 3.2・要件 1.3／2.1／2.4／2.6／7.1／9.4／10.3）。
 //!
 //! 窓も 32bit 成果物も実 SHIORI も要さない。descript の固定物は本番と同じ経路
-//! （`package::resolve`）で作り（`ShioriMount` は `#[non_exhaustive]`）、決定の結果は
+//! （`package::resolve_with_shell`）で作り（`ShioriMount` は `#[non_exhaustive]`）、決定の結果は
 //! `CharsetNegotiator::current`／`policy` で、記録は `capture_events` の観測で固定する。
 //!
 //! # 「0 件」の主張が恒真にならない理由

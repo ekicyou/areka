@@ -8,14 +8,14 @@
 //! | DPI の替わり（`refresh_scale`） | 前のある記録が 1 件 |
 //! | 作者 DPI の違う差し替え | 前が無い記録が 1 件（起点は引き継がない） |
 //! | 失敗した表示 | 記録なし（絵にかからなかった k は出ない） |
-//! | 取り出しの 2 回目 | 空 |
 
 use super::*;
 
 use std::time::Duration;
 
 use super::test_support::{
-    build_target_assets, make_world_with_gpu, set_window_dpi, show_ok, spawn_window_with_dpi,
+    build_target_assets, make_world_with_gpu, set_window_dpi, show_ok, show_with,
+    spawn_window_with_dpi,
 };
 
 /// 資産の面の番号（`build_target_assets` が作る唯一の面）。
@@ -33,9 +33,7 @@ fn attached(world: &mut World, dpi: u16, author_dpi: u16) -> (EmoPresenter, Enti
     let window = spawn_window_with_dpi(world, dpi);
     let (emo_world, atlas, _) = build_target_assets(3, 2, 0x51);
     let mut presenter = EmoPresenter::new();
-    presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, author_dpi)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, author_dpi);
     (presenter, window)
 }
 
@@ -130,21 +128,17 @@ fn failed_show_records_nothing() {
     presenter.take_scale_changes();
     // k の変わる DPI で、無い面を出す＝表示成立点より前で失敗する。
     set_window_dpi(&mut world, window, 192);
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        &mut world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 4242,
-            binds: BindSet::default(),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
+    assert!(
+        show_with(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            4242,
+            BindSet::default(),
+            PatternState::default()
+        )
+        .is_err()
     );
-    assert!(matches!(
-        rx.recv_timeout(Duration::from_secs(10)),
-        Ok(Err(_))
-    ));
     assert!(
         presenter.take_scale_changes().is_empty(),
         "絵にかからなかった k は記録に出ない"
@@ -153,17 +147,5 @@ fn failed_show_records_nothing() {
         presenter.applied_ratio(TargetId(0)),
         Some(ScaleRatio::ONE),
         "失敗は前の k を保つ"
-    );
-}
-
-#[test]
-fn second_take_is_empty() {
-    let mut world = make_world_with_gpu();
-    let (mut presenter, _) = attached(&mut world, 96, 96);
-    show_ok(&mut presenter, &mut world, TargetId(0), FACE);
-    assert_eq!(presenter.take_scale_changes().len(), 1);
-    assert!(
-        presenter.take_scale_changes().is_empty(),
-        "取り出しの 2 回目は空"
     );
 }

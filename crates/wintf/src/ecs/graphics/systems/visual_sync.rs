@@ -1,4 +1,5 @@
 use super::init::format_entity_name;
+use crate::ecs::common::ancestors;
 use crate::ecs::graphics::{Visual, VisualGraphics};
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use crate::ecs::window::Window;
@@ -6,67 +7,106 @@ use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, error};
+use windows::UI::Composition::{ContainerVisual, Visual as WucVisual};
 use windows::core::Interface;
 
-/// ChildOf変更またはVisualGraphics追加を検出してVisual階層を同期するシステム (R3, R6, R7)
+/// 木の同期の係が子として書き換える部品（ChildOf + VisualGraphics を持つ全 Entity）
+type SyncChildData = (
+    Entity,
+    &'static ChildOf,
+    &'static mut VisualGraphics,
+    Option<&'static Name>,
+);
+
+/// 木の同期の係が読むだけの部品（VisualGraphics を持つ全 Entity）
+type SyncReadData = (
+    Entity,
+    &'static VisualGraphics,
+    Option<&'static ChildOf>,
+    Option<&'static Name>,
+);
+
+/// 性質の同期の係が読む部品
+type PropertySyncData = (
+    Entity,
+    &'static Arrangement,
+    &'static GlobalArrangement,
+    &'static Visual,
+    &'static VisualGraphics,
+    Option<&'static Name>,
+    Has<Window>,
+);
+
+/// 性質の同期の係が見る変化（配置・見た目の部品・見た目の作り直し）
+type PropertySyncFilter = Or<(
+    Changed<Arrangement>,
+    Changed<GlobalArrangement>,
+    Changed<Visual>,
+    // 見た目が作り直された部品にも写す
+    Changed<VisualGraphics>,
+)>;
+
+/// 同じ WUC の見た目か（控えは `VisualGraphics::visual()` の複製なので同じポインタになる）。
+fn same_visual(a: Option<&WucVisual>, b: &WucVisual) -> bool {
+    a.is_some_and(|a| a.as_raw() == b.as_raw())
+}
+
+/// ECS の ChildOf/Children の木を WUC の見た目の木へ写すシステム (R3, R6, R7)
 ///
-/// ECSのChildOf/Children階層とDirectCompositionのVisual階層を同期する。
-/// Phase 6改善: parent_visual.is_none()で未同期を検出し、毎フレーム処理可能に。
-/// - ChildOf追加/変更時: 子VisualGraphicsを親VisualGraphicsに追加
-/// - VisualGraphics追加時: 既存のChildOf関係を元に親Visualに追加
-/// - parent_visualがNone: 階層未構築なので同期実行
-/// - 親がVisualGraphicsを持たない場合（LayoutRootなど）: Visual階層のルートとして処理済みマーク
+/// 未同期の見分けは「控えの親（`parent_visual`）が、いま居るべき親と違う」。居るべき親は、
+/// - 親が `VisualGraphics` を持ち見た目がある: その見た目
+/// - 親が `VisualGraphics` を持つが見た目がまだ無い: 保留（何もしない）
+/// - 親が `VisualGraphics` を持たない（LayoutRoot など）: 根（自分自身の見た目を控えに置く）
 ///
-/// 重要: 親→子の順序でAddVisualを呼ぶ必要がある（DirectComposition要件）。
-/// 深さでソートして親が先に処理されるようにする。
+/// 付け替え（ChildOf の変更）では、古い親の子から外してから新しい親を同期し直す。
+/// 親が後から見た目を持てば、根の印と違うので同期し直される。
+///
+/// 重要: 親→子の順序で挿入する必要がある。深さでソートして親が先に処理されるようにする。
 /// 兄弟間のZ-orderはChildrenコンポーネントの順序を権威的ソースとする。
 ///
-/// 注意: エラーは無視する（親が先に削除されている場合など）
+/// 係には `Err` を返す先が無いので、失敗は記録だけにする（外す失敗は親が先に消えた場合が
+/// あるので `debug!`、子の全部を外す失敗は `error!`）。
 pub fn visual_hierarchy_sync_system(
-    mut vg_queries: ParamSet<(
-        // ChildOf + VisualGraphics を持つ全Entity
-        Query<(Entity, &ChildOf, &mut VisualGraphics, Option<&Name>)>,
-        // 親エンティティクエリ
-        Query<(&VisualGraphics, Option<&Name>)>,
-    )>,
+    mut vg_queries: ParamSet<(Query<SyncChildData>, Query<SyncReadData>)>,
     child_of_query: Query<&ChildOf>,
     // Children コンポーネント（兄弟順序の権威的ソース）
     children_query: Query<&Children>,
 ) {
-    // Phase 1: 未同期（parent_visual==None）のエンティティと親情報を収集
-    // affected_parents: 未同期の子を持つ親エンティティの集合
+    // Phase 1: 未同期の子を持つ親と、古い親から外す見た目を集める
     let mut affected_parents = std::collections::HashSet::new();
     // 深さ付き親情報: (parent_entity, depth) — depth は親の深さ（浅い順に処理するため）
     let mut parent_depths: std::collections::HashMap<Entity, usize> =
         std::collections::HashMap::new();
+    // (古い親の見た目, 子の見た目)
+    let mut detach: Vec<(WucVisual, WucVisual)> = Vec::new();
     {
-        let child_query = vg_queries.p0();
-        for (_entity, child_of, child_vg, _child_name) in child_query.iter() {
-            // parent_visualがNoneなら未同期
-            // NOTE(W3b-V): この検出は「キャッシュ未設定」のみを未同期と見なすため、
-            // 既に親 Visual を持つ子の ChildOf 変更（再ペアレント）は検出されない。
-            // 再ペアレント後は旧親の DComp Visual に接続されたまま ECS 階層と乖離し、
-            // 後で旧親側が別の未同期子により再同期されると remove_all_visuals で
-            // 切り離されたまま新親へ再接続されない（tests/visual/
-            // hierarchy_reparent_gap_test.rs で現行挙動を固定。修正は挙動変更のため
-            // P47 に記録）。
-            if child_vg.parent_visual().is_none() {
-                let parent_entity = child_of.parent();
-                affected_parents.insert(parent_entity);
-
-                // 親の深さを計算（まだ計算していない場合）
-                // NOTE(W3b-V): この走査は ChildOf チェーンの終端到達を前提とする
-                // （間接巡回 A→B→A があると終了しない。巡回ガードは P48 参照）。
-                if !parent_depths.contains_key(&parent_entity) {
-                    let mut depth = 0;
-                    let mut current = parent_entity;
-                    while let Ok(co) = child_of_query.get(current) {
-                        depth += 1;
-                        current = co.parent();
-                    }
-                    parent_depths.insert(parent_entity, depth);
-                }
+        let query = vg_queries.p1();
+        for (_entity, child_vg, child_of, _name) in query.iter() {
+            let (Some(child_of), Some(own)) = (child_of, child_vg.visual()) else {
+                continue;
+            };
+            let parent_entity = child_of.parent();
+            let expected = match query.get(parent_entity) {
+                Ok((_, parent_vg, _, _)) => match parent_vg.visual() {
+                    Some(v) => v,
+                    None => continue, // 親の見た目がまだ無い: 保留
+                },
+                Err(_) => own, // 親が見た目の部品を持たない: 根
+            };
+            let cached = child_vg.parent_visual();
+            if same_visual(cached, expected) {
+                continue;
             }
+            if let Some(old) = cached.filter(|old| !same_visual(Some(own), old)) {
+                detach.push((old.clone(), own.clone()));
+            }
+            affected_parents.insert(parent_entity);
+            parent_depths.entry(parent_entity).or_insert_with(|| {
+                ancestors(parent_entity, |e| {
+                    child_of_query.get(e).ok().map(|c| c.parent())
+                })
+                .count()
+            });
         }
     }
 
@@ -74,7 +114,18 @@ pub fn visual_hierarchy_sync_system(
         return;
     }
 
-    // Phase 2: affected_parents を深さでソート（浅い親が先 → 親→子の順序で処理）
+    // Phase 2: 付け替えた子を古い親の子から外す（親が先に消えた場合があるので debug!）
+    for (old_parent, child) in &detach {
+        if let Err(e) = old_parent
+            .cast::<ContainerVisual>()
+            .and_then(|cv| cv.Children())
+            .and_then(|c| c.Remove(child))
+        {
+            debug!(error = ?e, "[visual_hierarchy_sync] Remove from old parent failed");
+        }
+    }
+
+    // Phase 3: affected_parents を深さでソート（浅い親が先 → 親→子の順序で処理）
     let mut sorted_parents: Vec<Entity> = affected_parents.into_iter().collect();
     sorted_parents.sort_by_key(|e| parent_depths.get(e).copied().unwrap_or(0));
 
@@ -83,15 +134,18 @@ pub fn visual_hierarchy_sync_system(
         "[visual_hierarchy_sync] Processing affected parents (sorted by depth)"
     );
 
-    // Phase 3: 各 affected_parent について Children 順で子 Visual を再配置
+    // Phase 4: 各 affected_parent について Children 順で子 Visual を再配置
     for parent_entity in sorted_parents {
         let parent_depth = parent_depths.get(&parent_entity).copied().unwrap_or(0);
 
-        // 親の Visual と名前（ログ用）を取得
+        // 親の Visual と名前（ログ用）を取得。None = 親が見た目の部品を持たない（根）
         let (parent_visual, parent_name) = {
             let parent_query = vg_queries.p1();
             match parent_query.get(parent_entity) {
-                Ok((pv, name)) => (pv.visual().cloned(), name.map(|n| n.to_string())),
+                Ok((_, pv, _, name)) => match pv.visual() {
+                    Some(v) => (Some(v.clone()), name.map(|n| n.to_string())),
+                    None => continue,
+                },
                 Err(_) => (None, None),
             }
         };
@@ -99,11 +153,10 @@ pub fn visual_hierarchy_sync_system(
         let parent_display = parent_name.as_deref().unwrap_or(&parent_fallback);
 
         if let Some(ref parent_visual) = parent_visual {
-            // 親の VisualCollection を取得（WUC。基底 Visual は Children を持たないため
-            // ContainerVisual/SpriteVisual へ cast する必要があるが、Children() は
-            // ICompositor経由で cast 済みのため Visual からは呼べない。SpriteVisual へ cast）。
+            // 親の VisualCollection を取得（基底 Visual は Children を持たないため
+            // ContainerVisual へ cast する）。
             let parent_children = match parent_visual
-                .cast::<windows::UI::Composition::ContainerVisual>()
+                .cast::<ContainerVisual>()
                 .and_then(|cv| cv.Children())
             {
                 Ok(c) => c,
@@ -118,7 +171,14 @@ pub fn visual_hierarchy_sync_system(
             };
 
             // 親の既存 Visual 子をすべて削除して Z-order をリセット
-            let _ = parent_children.RemoveAll();
+            if let Err(e) = parent_children.RemoveAll() {
+                error!(
+                    parent = %parent_display,
+                    error = ?e,
+                    "[visual_hierarchy_sync] RemoveAll failed"
+                );
+                continue;
+            }
 
             // Children コンポーネントの順序で子 Visual を再追加。
             //
@@ -159,8 +219,10 @@ pub fn visual_hierarchy_sync_system(
                             );
                         }
 
-                        // parent_visual キャッシュを更新
-                        child_vg.set_parent_visual(Some(parent_visual.clone()));
+                        // 控えが同じなら書かない（変化の印を立てない）
+                        if !same_visual(child_vg.parent_visual(), parent_visual) {
+                            child_vg.set_parent_visual(Some(parent_visual.clone()));
+                        }
                     }
                 }
             }
@@ -171,13 +233,13 @@ pub fn visual_hierarchy_sync_system(
                     let mut child_query = vg_queries.p0();
                     if let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(child_entity)
                     {
-                        if child_vg.parent_visual().is_some() {
-                            continue; // 既に同期済み
-                        }
                         let child_visual = match child_vg.visual() {
                             Some(v) => v.clone(),
                             None => continue,
                         };
+                        if same_visual(child_vg.parent_visual(), &child_visual) {
+                            continue; // 既に根の印
+                        }
 
                         let child_name_str = child_name.map(|n| n.to_string());
                         let child_fallback = format!("Entity({:?})", child_entity);
@@ -188,8 +250,8 @@ pub fn visual_hierarchy_sync_system(
                             depth = parent_depth + 1,
                             "[visual_hierarchy_sync] Visual hierarchy root"
                         );
-                        // 自分自身の Visual を設定して「処理済み」とマーク
-                        child_vg.set_parent_visual(Some(child_visual.clone()));
+                        // 自分自身の Visual を設定して「根」と印す
+                        child_vg.set_parent_visual(Some(child_visual));
                     }
                 }
             }
@@ -199,32 +261,15 @@ pub fn visual_hierarchy_sync_system(
 
 /// Visual プロパティ同期システム (R8)
 ///
-/// ArrangementまたはOpacity変更を検知してVisualのプロパティを同期する。
+/// ArrangementまたはOpacity変更、または見た目の作り直しを検知してVisualのプロパティを同期する。
 /// - Arrangement.offset → Visual.SetOffsetX/SetOffsetY
 /// - Opacity → Visual.SetOpacity
 ///
-/// DirectCompositionのVisual Offsetは物理ピクセル単位で指定する必要がある。
+/// WUC の Visual の Offset は物理ピクセル単位で指定する必要がある。
 /// Arrangement.offset（論理座標）にGlobalArrangement.transform（累積DPIスケール）を適用して物理座標に変換。
 ///
 /// Compositionスケジュールで実行。
-pub fn visual_property_sync_system(
-    changed_entities: Query<
-        (
-            Entity,
-            &Arrangement,
-            &GlobalArrangement,
-            &Visual,
-            &VisualGraphics,
-            Option<&Name>,
-            Has<Window>,
-        ),
-        Or<(
-            Changed<Arrangement>,
-            Changed<GlobalArrangement>,
-            Changed<Visual>,
-        )>,
-    >,
-) {
+pub fn visual_property_sync_system(changed_entities: Query<PropertySyncData, PropertySyncFilter>) {
     for (entity, arrangement, global_arrangement, visual_component, vg, name, is_window) in
         changed_entities.iter()
     {
@@ -232,7 +277,8 @@ pub fn visual_property_sync_system(
             continue;
         };
 
-        let entity_name = format_entity_name(entity, name);
+        // 名前は失敗の記録のときだけ作る（位置が動くたびに全部の見た目が通る道）
+        let entity_name = || format_entity_name(entity, name);
 
         // Offset同期: Arrangementのoffset（論理座標）にGlobalArrangementのscale（累積DPIスケール）を適用
         // ただし、WindowエンティティはWin32がCompositionTargetを通じて位置を管理するため、
@@ -254,7 +300,7 @@ pub fn visual_property_sync_system(
             };
             if let Err(e) = visual_com.SetOffset(offset) {
                 error!(
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     error = ?e,
                     "[visual_property_sync] SetOffset failed"
                 );
@@ -269,10 +315,14 @@ pub fn visual_property_sync_system(
         };
         if let Err(e) = visual_com.SetOpacity(opacity_value) {
             error!(
-                entity = %entity_name,
+                entity = %entity_name(),
                 error = ?e,
                 "[visual_property_sync] SetOpacity failed"
             );
         }
     }
 }
+
+#[cfg(test)]
+#[path = "visual_sync_tests.rs"]
+mod visual_sync_tests;

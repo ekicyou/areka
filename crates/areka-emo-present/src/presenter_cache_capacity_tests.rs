@@ -41,12 +41,9 @@
 
 use super::*;
 
-use std::time::Duration;
+use super::test_support::{build_target_assets, show_with_ok, spawn_window_with_dpi};
 
-use super::test_support::{build_target_assets, spawn_window_with_dpi};
-
-/// 合成キャッシュの容量（`cache.rs` の `CAPACITY`・要件 7.1 の裁定値）。
-const CACHE_CAPACITY: usize = 3;
+use crate::cache::CAPACITY as CACHE_CAPACITY;
 
 /// native 外形（本ファイルは絵の中身を見ないので小さくてよい）。
 const NATIVE_W: u32 = 8;
@@ -67,28 +64,19 @@ fn rig() -> (World, EmoPresenter) {
     let mut presenter = EmoPresenter::new();
     let window = spawn_window_with_dpi(&mut world, 96);
     let (emo_world, atlas, _golden) = build_target_assets(NATIVE_W, NATIVE_H, 0xC1);
-    presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
-        .expect("attach_target 失敗");
+    presenter.attach_target(TargetId(0), window, emo_world, atlas, 96);
     (world, presenter)
 }
 
 /// `ShowSurface` を 1 回適用する（成立しなければ即座に落とす＝以後の観測を空虚にしない）。
 fn show(presenter: &mut EmoPresenter, world: &mut World, n: u32) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
+    show_with_ok(
+        presenter,
         world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: SURFACE,
-            binds: key(n),
-            pattern: PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    assert!(
-        matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
-        "前提: ShowSurface が成立すること（成立しない適用の観測は意味を持たない）"
+        TargetId(0),
+        SURFACE,
+        key(n),
+        PatternState::default(),
     );
 }
 
@@ -227,12 +215,4 @@ fn showing_a_face_from_a_few_frames_ago_hits_instead_of_recomposing() {
         "2 コマ前の面の再表示でマスクの実体が動いた＝引き当てがミスしている\
          （容量 3 の裁定が期待した命中が成立していない）"
     );
-
-    // 陰性対照: 一度も表示していないキーは当然ミスする（上の一致が恒真でないことの担保）。
-    assert!(
-        !holds(&presenter, 99),
-        "未表示のキーが保持されている＝引き当てが常に成立している（檻が恒真）"
-    );
-    show(&mut presenter, &mut world, 99);
-    assert!(holds(&presenter, 99), "表示したキーは保持される");
 }

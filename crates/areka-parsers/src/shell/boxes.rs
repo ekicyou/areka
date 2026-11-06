@@ -12,18 +12,11 @@
 //! - 箱の element定義 `elementN,balloon,名前,X,Y` は番号・名前・X・Y を文字列のまま持ち、
 //!   欠けた欄は空文字列にする。
 
-use super::decode::parse_targets;
-use super::lexer::{Token, lex};
+use super::decode::{Reading, field_string, is_box_element_method, parse_targets};
 use super::model::AppendTarget;
+use super::parse::parse_all;
 
-/// surfaces.txt の箱に関わるブレスの転記（ブレスの登場順）。
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct ShellBoxes {
-    /// `balloon.*`・`surface*`・`surface.append*` の各ブレス（登場順）。
-    pub definitions: Vec<BoxDefinition>,
-}
-
-/// 箱に関わるブレス 1 つ。
+/// 箱に関わるブレス 1 つ（`balloon.*`・`surface*`・`surface.append*` のどれか）。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum BoxDefinition {
@@ -66,72 +59,69 @@ pub struct BoxElementLine {
     pub y: String,
 }
 
-/// surfaces.txt の文面から箱に関わるブレスを登場順に転記する（純粋・失敗しない）。
+/// surfaces.txt の文面から箱に関わるブレスを登場順に並べて返す（純粋・失敗しない）。
 ///
-/// 字句解析は画像の読み手と同じ `lexer::lex`。閉じたブレス（`BlockStart`..`BlockEnd`）だけを
-/// 見る。見出しの判定順は画像の読み手と同じく `surface.append*` を `surface*` より先にする
-/// （`kero.surface.alias` は `surface` で始まらないので当たらない）。
-pub fn parse_boxes(text: &str) -> ShellBoxes {
-    let mut definitions = Vec::new();
-    let mut open: Option<(Vec<String>, Vec<Vec<String>>)> = None;
-
-    for token in lex(text) {
-        match token {
-            Token::BlockStart(header) => open = Some((header, Vec::new())),
-            Token::Line(fields) => {
-                if let Some((_, body)) = open.as_mut() {
-                    body.push(fields);
-                }
-            }
-            Token::BlockEnd => {
-                if let Some((header, body)) = open.take() {
-                    definitions.extend(transcribe_block(&header, body));
-                }
-            }
-            Token::TopLevel(_) | Token::Raw(_) => {}
-        }
-    }
-
-    ShellBoxes { definitions }
+/// `parse_all` の射影。閉じたブレスだけを見る。見出しの判定順は画像の読み手と同じく
+/// `surface.append*` を `surface*` より先にする（`kero.surface.alias` は `surface` で始まらないので当たらない）。
+pub fn parse_boxes(text: &str) -> Vec<BoxDefinition> {
+    parse_all(text).boxes
 }
 
-/// ブレス 1 つを、箱に関わるものなら転記する（他のブレスは `None`）。
-fn transcribe_block(header: &[String], body: Vec<Vec<String>>) -> Option<BoxDefinition> {
+/// 閉じたブレス 1 つを、箱に関わるものなら転記する（他のブレスは `None`・`parse_all` が呼ぶ）。
+///
+/// `reading` は画像の読み手と同じ上限で見出しを読むための箱の側の状態（崩れは `parse_all` が捨てる＝
+/// 記録は画像の側の 1 回だけ）。記述子が 1 つも残らない `surface*` 系のブレスは画像の読み手と同じく並べない。
+pub(crate) fn transcribe_block(
+    header: &[String],
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) -> Option<BoxDefinition> {
     let head = header.first().map(String::as_str).unwrap_or("");
     let rest = header.get(1..).unwrap_or(&[]);
 
     if head.starts_with("balloon.") {
         // 見出しに `,` があっても原文のまま名前へ残す（名前の検証は畳み込み）。
         let name = header.join(",")["balloon.".len()..].to_string();
-        return Some(BoxDefinition::Brace(BoxBrace { name, lines: body }));
+        return Some(BoxDefinition::Brace(BoxBrace {
+            name,
+            lines: body.to_vec(),
+        }));
+    }
+    if head == "surface.alias" {
+        return None;
     }
     if let Some(number) = head.strip_prefix("surface.append") {
-        return Some(BoxDefinition::Append(surface_lines(number, rest, &body)));
+        return surface_lines(number, rest, body, reading).map(BoxDefinition::Append);
     }
     if let Some(number) = head.strip_prefix("surface") {
-        return Some(BoxDefinition::Surface(surface_lines(number, rest, &body)));
+        return surface_lines(number, rest, body, reading).map(BoxDefinition::Surface);
     }
     None
 }
 
 /// `surface*`・`surface.append*`ブレスの見出しと箱の element定義を転記する。
-fn surface_lines(number: &str, rest: &[String], body: &[Vec<String>]) -> BoxSurfaceLines {
-    let field = |fields: &[String], i: usize| fields.get(i).cloned().unwrap_or_default();
+fn surface_lines(
+    number: &str,
+    rest: &[String],
+    body: &[Vec<String>],
+    reading: &mut Reading,
+) -> Option<BoxSurfaceLines> {
+    let targets = parse_targets(number, rest, reading);
+    if targets.is_empty() {
+        return None;
+    }
     let elements = body
         .iter()
-        .filter(|fields| fields.get(1).map(String::as_str) == Some("balloon"))
+        .filter(|fields| is_box_element_method(fields.get(1).map_or("", String::as_str)))
         .filter_map(|fields| {
             let element = fields.first()?.strip_prefix("element")?.to_string();
             Some(BoxElementLine {
                 element,
-                name: field(fields, 2),
-                x: field(fields, 3),
-                y: field(fields, 4),
+                name: field_string(fields, 2),
+                x: field_string(fields, 3),
+                y: field_string(fields, 4),
             })
         })
         .collect();
-    BoxSurfaceLines {
-        targets: parse_targets(number, rest),
-        elements,
-    }
+    Some(BoxSurfaceLines { targets, elements })
 }

@@ -5,61 +5,41 @@
 
 use super::*;
 
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
-use areka_emo_atlas::{MemoryDecoder, UseSelfAlpha};
+use areka_emo_atlas::MemoryDecoder;
 use areka_parsers::balloon::MarkerCoord;
-use log_capture_kit::CapturedEvent;
 use tracing::Level;
 
 use crate::balloon::resolve_balloon_faces;
-use crate::balloon_marker::MarkerImage;
-
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new() -> Self {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/test-tmp")
-            .join(format!("balloon-definitions-{}-{n}", std::process::id()));
-        std::fs::create_dir_all(&path).expect("一時フォルダ");
-        TempDir(path)
-    }
-
-    fn write(&self, name: &str, text: &str) {
-        std::fs::write(self.0.join(name), text).expect("ファイル");
-    }
-
-    /// 名前だけのファイルを置き、偽の読み手に `w`×`h` の絵を登録する。
-    fn image(&self, dec: &mut MemoryDecoder, name: &str, w: u32, h: u32) {
-        self.write(name, "");
-        let bgra = vec![0x80; (w * h * 4) as usize];
-        dec.insert(self.0.join(name), w, h, w * 4, bgra, true);
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-const ALPHA: AlphaParams = AlphaParams {
-    use_self_alpha: UseSelfAlpha::On,
-};
+use crate::balloon::test_support::{ALPHA, CapturedEvent, FieldUnquoted, TempDir, size};
 
 fn load(dir: &TempDir, dec: &MemoryDecoder) -> (ScopeBalloonDefinitions, Vec<CapturedEvent>) {
-    let faces = resolve_balloon_faces(&dir.0, 0).expect("面 0 は在る");
-    log_capture_kit::capture(|| load_scope_balloon_definitions(&dir.0, 0, &faces, dec, ALPHA))
+    let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
+    log_capture_kit::capture(|| load_scope_balloon_definitions(dir.path(), 0, &faces, dec, ALPHA))
 }
 
-fn size(img: &Option<Arc<MarkerImage>>) -> Option<(u32, u32)> {
-    img.as_ref().map(|i| (i.width, i.height))
+/// 指摘 20: 空の面列を渡すと、面 0 の定義が無い `error!` を 1 行出して空の定義を返す
+/// （panic しない・面 0 必在の契約を破った呼び手でも続ける）。
+#[test]
+fn empty_faces_record_one_error_and_give_empty_definition() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+
+    let (defs, events) = log_capture_kit::capture(|| {
+        load_scope_balloon_definitions(dir.path(), 0, &[], &dec, ALPHA)
+    });
+    let errors: Vec<&CapturedEvent> = events.iter().filter(|e| e.level == Level::ERROR).collect();
+    assert_eq!(errors.len(), 1, "{events:?}");
+    assert!(
+        errors[0].message().contains("面 0 の定義が無い"),
+        "{errors:?}"
+    );
+    let empty = FaceDefinition {
+        model: areka_parsers::balloon::parse_str("", None),
+        arrows: MarkerPair::default(),
+    };
+    assert_eq!(defs, ScopeBalloonDefinitions::single(0, empty));
 }
 
 /// 面 2 の設定ファイルの `validrect`・書体・矢印の鍵は面 2 の定義にだけ入る（要件 1.3・1.7）。
@@ -76,7 +56,7 @@ fn face_override_lands_only_in_its_face() {
         "validrect.top,20\r\nfont.height,22\r\narrow0.x,-7\r\narrow.filename,two\r\n",
     );
     for name in ["balloons0.png", "balloons1.png", "balloons2.png"] {
-        dir.write(name, "");
+        dir.touch(name);
     }
     dir.image(&mut dec, "arrow0.png", 3, 3);
     dir.image(&mut dec, "arrow1.png", 4, 4);
@@ -122,7 +102,7 @@ fn faces_without_own_settings_equal_face0() {
     dir.write("descript.txt", "validrect.top,1\r\n");
     dir.write("balloons0s.txt", "validrect.top,3\r\nfont.height,12\r\n");
     for name in ["balloons0.png", "balloons1.png", "balloons2.png"] {
-        dir.write(name, "");
+        dir.touch(name);
     }
     dir.image(&mut dec, "arrow0.png", 3, 3);
 
@@ -142,7 +122,7 @@ fn arrow_images_resolved_once_per_name_and_shared() {
     let mut dec = MemoryDecoder::new();
     dir.write("descript.txt", "validrect.top,1\r\n");
     for face in 0..=5 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons2s.txt", "validrect.top,2\r\n");
     dir.write("balloons3s.txt", "validrect.top,3\r\n");
@@ -154,19 +134,13 @@ fn arrow_images_resolved_once_per_name_and_shared() {
 
     let (defs, events) = load(&dir, &dec);
 
-    let count = |level: Level, prefix: &str| {
-        events
-            .iter()
-            .filter(|e| e.level == level && e.message().starts_with(prefix))
-            .count()
-    };
     assert_eq!(
-        count(Level::DEBUG, "balloon_marker: 印の絵を解いた"),
+        count(&events, Level::DEBUG, "balloon_marker: 印の絵を解いた"),
         2,
         "名前ごとに 1 回"
     );
     assert_eq!(
-        count(Level::WARN, "balloon_marker: 印の絵が片方しか無い"),
+        count(&events, Level::WARN, "balloon_marker: 印の絵が片方しか無い"),
         1,
         "warn は重複しない"
     );
@@ -191,7 +165,7 @@ fn unreadable_coordinate_warns_once_per_key_and_value() {
     dir.write("balloons2s.txt", "arrow1.y,zz\r\n");
     dir.write("balloons3s.txt", "arrow1.y,zz\r\n");
     for name in ["balloons0.png", "balloons2.png", "balloons3.png"] {
-        dir.write(name, "");
+        dir.touch(name);
     }
 
     let (defs, events) = load(&dir, &dec);
@@ -201,7 +175,7 @@ fn unreadable_coordinate_warns_once_per_key_and_value() {
         .iter()
         .filter(|e| e.level == Level::WARN && e.message().starts_with("balloon_definitions:"))
         .map(|e| {
-            let f = |n: &str| e.field(n).expect(n).trim_matches('"').to_string();
+            let f = |n: &str| e.field_unquoted(n).expect(n).to_string();
             (f("key"), f("value"))
         })
         .collect();
@@ -221,7 +195,7 @@ fn missing_face_falls_back_to_face0_with_debug() {
     let dir = TempDir::new();
     let dec = MemoryDecoder::new();
     dir.write("descript.txt", "");
-    dir.write("balloons0.png", "");
+    dir.touch("balloons0.png");
     let (defs, _) = load(&dir, &dec);
 
     let (def, events) = log_capture_kit::capture(|| defs.for_face(5).clone());
@@ -250,7 +224,7 @@ fn inline_marker_per_face_and_face0_fallback() {
     let mut dec = MemoryDecoder::new();
     dir.write("descript.txt", "marker.filename,mine\r\n");
     for face in 0..=3 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons2s.txt", "marker.filename,two\r\n");
     dir.write("balloons3s.txt", "marker.filename,two\r\n");
@@ -292,7 +266,7 @@ fn inline_marker_missing_explicit_warns_and_falls_back() {
     let dir = TempDir::new();
     let mut dec = MemoryDecoder::new();
     dir.write("descript.txt", "marker.filename,nothere\r\n");
-    dir.write("balloons0.png", "");
+    dir.touch("balloons0.png");
     dir.image(&mut dec, "markers.png", 4, 4);
 
     let (defs, events) = load(&dir, &dec);
@@ -306,10 +280,7 @@ fn inline_marker_missing_explicit_warns_and_falls_back() {
         .collect();
     assert_eq!(warns.len(), 1);
     let w = warns[0];
-    assert_eq!(
-        w.field("name").map(|v| v.trim_matches('"')),
-        Some("nothere")
-    );
+    assert_eq!(w.field_unquoted("name"), Some("nothere"));
     assert_eq!(w.field("scope"), Some("0"));
     assert!(w.field("balloon_dir").is_some());
 }
@@ -321,7 +292,7 @@ fn inline_marker_none_records_info_once() {
     let dec = MemoryDecoder::new();
     dir.write("descript.txt", "");
     for face in 0..=2 {
-        dir.write(&format!("balloons{face}.png"), "");
+        dir.touch(&format!("balloons{face}.png"));
     }
     dir.write("balloons1s.txt", "validrect.top,1\r\n");
     dir.write("balloons2s.txt", "marker.filename,other\r\n");
@@ -341,4 +312,52 @@ fn inline_marker_none_records_info_once() {
         1,
         "面 2 の書いた名前 other が無い"
     );
+}
+
+/// 矢印でない数の鍵の読めない値も同じ `warn!` の輪で (鍵, 値) ごとに 1 回（audit-parsers-sakura 指摘 18）。
+#[test]
+fn unreadable_numeric_key_warns_once() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+    dir.write("descript.txt", "font.height,28px\r\n");
+    dir.write("balloons0.png", "");
+
+    let (_, events) = load(&dir, &dec);
+
+    let warns: Vec<(String, String)> = events
+        .iter()
+        .filter(|e| e.level == Level::WARN && e.message().starts_with("balloon_definitions:"))
+        .map(|e| {
+            let f = |n: &str| e.field(n).expect(n).trim_matches('"').to_string();
+            (f("key"), f("value"))
+        })
+        .collect();
+    assert_eq!(warns, vec![("font.height".to_string(), "28px".to_string())]);
+}
+
+/// 指摘 40: `descript.txt` の無いバルーンで上書きを持つ面が 2 つあっても、descript は読み込み 1 回に
+/// つき 1 回だけ読むので、読めない `warn!` も 1 件だけ（面ごとに読み直さない）。
+#[test]
+fn missing_descript_warns_once_across_overriding_faces() {
+    let dir = TempDir::new();
+    let dec = MemoryDecoder::new();
+    for face in 0..=2 {
+        dir.touch(&format!("balloons{face}.png"));
+    }
+    dir.write("balloons1s.txt", "validrect.top,1\r\n");
+    dir.write("balloons2s.txt", "validrect.top,2\r\n");
+
+    let (defs, events) = load(&dir, &dec);
+
+    assert_eq!(
+        count(
+            &events,
+            Level::WARN,
+            "balloon: バルーン既定設定（descript.txt）の読取に失敗"
+        ),
+        1,
+        "{events:?}"
+    );
+    assert_eq!(defs.for_face(1).model.validrect().top(), Some(1));
+    assert_eq!(defs.for_face(2).model.validrect().top(), Some(2));
 }

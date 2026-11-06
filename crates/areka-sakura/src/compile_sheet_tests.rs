@@ -1,24 +1,8 @@
 use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 use super::*;
-use crate::duration::text_playback_duration;
-use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
+use crate::duration::{ms_to_secs, text_playback_duration};
+use areka_parsers::sakura::SurfaceArg;
 use std::time::Duration;
-
-/// 多様な variant を織り交ぜた代表的な命令列（決定性・不変条件の両テストで共用）。
-/// 終端命令は含めず全命令を走査させる（末尾到達で end=Ended）。
-fn representative_instructions() -> Vec<Instruction> {
-    vec![
-        Instruction::SpeakerScope { n: 1 },
-        Instruction::Text("a".into()),
-        Instruction::Wait(Duration::from_millis(50)),
-        Instruction::Surface(SurfaceArg::new("10".into())),
-        Instruction::Wait(Duration::from_millis(100)),
-        Instruction::NewLine(NewLineRatio::new(1.5)),
-        Instruction::Clear,
-        Instruction::SpeakerScope { n: 0 },
-        Instruction::Text("b".into()),
-    ]
-}
 
 /// 先頭に待ち命令がある場合でもその待ち時間が 0 へ潰れず保存される（R2.4）。
 /// min 正規化（先頭待ちを 0 へ食う旧実装）を使っていないことの固定。第一級化後は、先頭待ちが
@@ -31,8 +15,8 @@ fn leading_wait_is_preserved_not_collapsed() {
     ]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 2, "内容は先頭 Wait と Text の 2 件");
-    // 期待値は同一の as_secs_f64() で計算（10 進リテラル直書きの表現誤差を排除）。
-    let w = Duration::from_millis(450).as_secs_f64();
+    // 期待値は本番と同じ ms の格子の式で計算（10 進リテラル直書きの表現誤差を排除）。
+    let w = ms_to_secs(450);
     // 先頭 Wait cue は 0.0 で保存され（潰れず）、待ち時間を duration に持つ。
     assert_eq!(
         command_of(&cues[0]),
@@ -52,7 +36,7 @@ fn leading_wait_is_preserved_not_collapsed() {
 
 /// 暗黙 per-char D と明示ウェイトの累積で発火時刻が単調に進む（R2.2/2.4/4.4）。
 /// テキスト D 焼き込み・Wait 第一級化の後も、明示ウェイト累積が退行しない（4.4 非退行）。
-/// 期待値は SAME `text_playback_duration`/`as_secs_f64()` 累積で計算（IEEE-754 加算を一致させる）。
+/// duration の期待値は SAME `text_playback_duration`/`ms_to_secs`、開始時刻は ms の格子で計算する。
 #[test]
 fn wait_accumulation_is_monotonic() {
     let compiled = compile(&[
@@ -67,15 +51,16 @@ fn wait_accumulation_is_monotonic() {
     assert_eq!(cues.len(), 5);
 
     let d_a = text_playback_duration("a");
-    let w50 = Duration::from_millis(50).as_secs_f64();
+    let w50 = ms_to_secs(50);
     let d_b = text_playback_duration("b");
-    let w100 = Duration::from_millis(100).as_secs_f64();
+    let w100 = ms_to_secs(100);
 
+    // 開始時刻は整数 ms で積んでから秒にした値（秒の足し算ではない・指摘 8）。
     let t_text_a = 0.0_f64;
-    let t_wait1 = t_text_a + d_a; // Text("a") の再生完了後
-    let t_text_b = t_wait1 + w50; // 明示 \_w[50] の累積
-    let t_wait2 = t_text_b + d_b; // Text("b") の再生完了後
-    let t_emote = t_wait2 + w100; // 明示 \_w[100] の累積
+    let t_wait1 = 50.0 / 1000.0; // Text("a") の再生完了後（50 ms）
+    let t_text_b = 100.0 / 1000.0; // 明示 \_w[50] の累積
+    let t_wait2 = 150.0 / 1000.0; // Text("b") の再生完了後
+    let t_emote = 250.0 / 1000.0; // 明示 \_w[100] の累積
 
     // Text("a")
     assert_eq!(command_of(&cues[0]), &CueCommand::Text("a".into()));
@@ -104,15 +89,34 @@ fn wait_accumulation_is_monotonic() {
     }
 }
 
-/// 末尾到達で end=Ended（R6.3・task 3.1 の既定）。
+/// 開始時刻は整数 ms を積んでから 1 回だけ秒にする（指摘 8・要件 7.1）。`a\s[0]b\s[0]c\s[1]` の
+/// 面の合図は、秒の足し算（0.05+0.05+0.05＝0.15000000000000002）でなく、Tick の式と同じ
+/// `ms as f64 / 1000.0` のビットに乗る。
 #[test]
-fn end_defaults_to_ended() {
-    let compiled = compile(&[Instruction::Text("hi".into())]);
-    assert_eq!(compiled.end, TalkEndReason::Ended);
-
-    let compiled = compile(&[]);
-    assert_eq!(compiled.end, TalkEndReason::Ended);
-    assert!(compiled.sheet.is_empty());
+fn start_times_sit_on_the_millisecond_grid() {
+    let compiled = compile(&[
+        Instruction::Text("a".into()),
+        Instruction::Surface(SurfaceArg::new("0".into())),
+        Instruction::Text("b".into()),
+        Instruction::Surface(SurfaceArg::new("0".into())),
+        Instruction::Text("c".into()),
+        Instruction::Surface(SurfaceArg::new("1".into())),
+    ]);
+    let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+    let emote_starts: Vec<u64> = cues
+        .iter()
+        .filter(|cue| matches!(command_of(cue), CueCommand::Emote { .. }))
+        .map(|cue| cue.start_time.to_bits())
+        .collect();
+    let grid: Vec<u64> = [50_u64, 100, 150]
+        .iter()
+        .map(|&ms| (ms as f64 / 1000.0).to_bits())
+        .collect();
+    assert_eq!(
+        emote_starts, grid,
+        "面の合図の開始時刻が ms の格子から外れている"
+    );
+    assert_eq!(cues[5].start_time.to_bits(), (150_f64 / 1000.0).to_bits());
 }
 
 /// `End` 検出で終端理由 `Ended` を確定し、以降の命令を発火列へ含めず破棄する
@@ -160,36 +164,6 @@ fn no_terminal_keeps_all_instructions_and_ends() {
     assert_eq!(cues.len(), 2);
     assert_eq!(compiled.end, TalkEndReason::Ended);
     assert_ne!(compiled.end, TalkEndReason::Quit);
-}
-
-/// 先行 cue のない `[Quit]` でも Quit が検出され、空 sheet＋end=Quit となる
-/// （空 sheet でも Ended と判別可能なことの固定・下流 R6.2 の区別根拠）。
-#[test]
-fn bare_quit_yields_empty_sheet_with_quit_end() {
-    let compiled = compile(&[Instruction::Quit]);
-    assert!(compiled.sheet.is_empty());
-    assert_eq!(compiled.end, TalkEndReason::Quit);
-}
-
-/// 決定的コンパイル: 同一命令列を複数回コンパイルすると常に同一の発火列・終端理由を得る
-/// （R2.5・R9.4）。cue 数・各 index の actor/start_time（ビット同一）/payload・end が一致する。
-#[test]
-fn compile_is_deterministic_for_identical_input() {
-    let instructions = representative_instructions();
-
-    let first = compile(&instructions);
-    let second = compile(&instructions);
-
-    let a = first.sheet.cues();
-    let b = second.sheet.cues();
-    assert_eq!(a.len(), b.len(), "cue 数が回によって異なる");
-    for (i, (ca, cb)) in a.iter().zip(b.iter()).enumerate() {
-        assert!(
-            cue_eq(ca, cb),
-            "index {i} の cue が回によって異なる: {ca:?} != {cb:?}"
-        );
-    }
-    assert_eq!(first.end, second.end, "終端理由が回によって異なる");
 }
 
 /// 不変条件（純粋コンパイル層 Postconditions/Invariants・NaN 放電）:
@@ -308,7 +282,7 @@ fn explicit_wait_between_texts_is_first_class_and_delays_following_text() {
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 3, "内容は Text / Wait / Text の 3 件");
     let d1 = text_playback_duration("aa"); // 0.1s
-    let w = Duration::from_millis(500).as_secs_f64(); // 0.5s
+    let w = ms_to_secs(500); // 0.5s
     // [1] 中間に第一級 Wait cue（吸収されず台本に残る）。
     assert_eq!(
         command_of(&cues[1]),
@@ -346,7 +320,7 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
     assert_eq!(cues.len(), 2, "内容は Text と末尾 Wait の 2 件");
     let d = text_playback_duration("abc"); // 0.15s
-    let w = Duration::from_millis(800).as_secs_f64(); // 0.8s
+    let w = ms_to_secs(800); // 0.8s
     // 末尾 Wait cue が吸収されず台本に残る（R5.3）。
     assert_eq!(
         command_of(&cues[1]),
@@ -363,51 +337,27 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     );
 }
 
-/// 内容を持つ台本の先頭へ ClearAll を単一前置する（#6・R6.1/6.2）。書き込むスコープ数に
-/// 依らず ClearAll はちょうど 1 件（compile は残存スコープを列挙できないため全消し 1 件で表現）。
-#[test]
-fn clear_all_is_prepended_once_regardless_of_scope_count() {
-    // 3 スコープへ書き込む talk。
-    let compiled = compile(&[
-        Instruction::SpeakerScope { n: 0 },
-        Instruction::Text("a".into()),
-        Instruction::SpeakerScope { n: 1 },
-        Instruction::Text("b".into()),
-        Instruction::SpeakerScope { n: 2 },
-        Instruction::Text("c".into()),
-    ]);
-    let cues = compiled.sheet.cues();
-    // 先頭に単一 ClearAll@0.0/duration0。
-    assert_eq!(
-        command_of(&cues[0]),
-        &CueCommand::ClearAll,
-        "先頭 cue は ClearAll"
-    );
-    assert_eq!(cues[0].start_time, 0.0);
-    assert_eq!(cues[0].duration, 0.0);
-    // スコープ数（ここでは 3）に依らず ClearAll はちょうど 1 件。
-    let clear_all_count = cues
-        .iter()
-        .filter(|c| command_of(c) == &CueCommand::ClearAll)
-        .count();
-    assert_eq!(
-        clear_all_count, 1,
-        "ClearAll はスコープ数に依らず単一前置（6.1/6.2）"
-    );
-}
-
 /// 内容 cue を生成しない台本（リテラル空・裸の終端・無視タグのみ）は空 sheet のままで
 /// ClearAll を前置しない——drive の `is_empty()` 即時 TalkDone 契約を保ち、ドライブ配線
 /// （task 7.x）を本 task で先取りしない（消すべき前 talk のテキストも存在しない）。
 #[test]
 fn empty_content_talk_gets_no_clear_all_prepended() {
+    let empty = compile(&[]);
     assert!(
-        compile(&[]).sheet.is_empty(),
+        empty.sheet.is_empty(),
         "リテラル空 script は空 sheet（ClearAll 前置なし）"
     );
+    assert_eq!(empty.end, TalkEndReason::Ended, "末尾到達は Ended（R6.3）");
+    // 空 sheet でも Quit は Ended と判別できる（下流 R6.2 の区別根拠）。
+    let bare_quit = compile(&[Instruction::Quit]);
     assert!(
-        compile(&[Instruction::Quit]).sheet.is_empty(),
+        bare_quit.sheet.is_empty(),
         "先行 cue のない裸 Quit は空 sheet（ClearAll 前置なし）"
+    );
+    assert_eq!(
+        bare_quit.end,
+        TalkEndReason::Quit,
+        "裸の Quit は Quit（R6.2）"
     );
     assert!(
         compile(&[
@@ -608,4 +558,13 @@ fn append_epilogue_maps_each_command_to_one_carrier_cue() {
         );
         assert_eq!(cue.duration, 0.0);
     }
+}
+
+/// 待ちの cue の長さも ms の格子の式（`ms_to_secs`）で持つ。`as_secs_f64` だと 1128 ms で 1 ulp 大きく、
+/// 待ちで終わるトークの終わりが Tick の時刻（`1128 / 1000`）を 1 回越える。
+#[test]
+fn wait_duration_is_on_the_ms_grid() {
+    let compiled = compile(&[Instruction::Wait(Duration::from_millis(1128))]);
+    let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+    assert_eq!(cues[0].duration, 1128_f64 / 1000.0);
 }

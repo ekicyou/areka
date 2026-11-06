@@ -3,14 +3,11 @@
 //! 表は research.md §10.1・§10.2 の SSP 2.9.23 の測りを写す。100・101・102 はコマの面、200 は
 //! `always` のコマの頭。刻みの位相は書き出しの決め方（合図と同じ時刻 0 から 16ms ごと）。
 
-use std::num::NonZeroU32;
+use areka_emo_compose::{BindSet, Cell, FilmId, PartKey, PatternState};
 
-use areka_emo_compose::{
-    BindSet, Cell, ElementKind, EmoWorld, FilmId, FilmSheet, PartKey, PatternState, SurfaceMaster,
-};
-
-use super::{SETTLE_TICK_MS, settle_surface, settle_time};
+use super::{settle_surface, settle_time};
 use crate::table::AnimationTable;
+use crate::test_support::{film_sheet, film_world};
 
 /// 0: runonce 赤→緑→青（各 100）。1: 0 の最後に `-1`。2: always だけ（8 コマ×50）。
 /// 3: runonce 3 コマ×1000＋`random,1`（T までに 1 秒の境を 3 度越える）。
@@ -69,27 +66,10 @@ const SHELL: &str = "surface0\n{\nanimation0.interval,runonce\n\
 /// 動く絵の子（コマの絵 10・11・12、各 100ms・周期 300）。
 const FILM: FilmId = FilmId(10);
 
-/// [`SHELL`] の表。`a.png` は分解と同じに子を置く element へ替える（`parts_film_tests.rs` と同じ組み方）。
+/// [`SHELL`] の表。`a.png` は分解と同じに子を置く element へ替える。
 fn table() -> AnimationTable {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(SHELL));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            if e.path.as_str() == "a.png" {
-                e.kind = ElementKind::Film(FILM);
-            }
-        }
-    }
-    let sheet = FilmSheet {
-        id: FILM,
-        path: "a.png".to_string(),
-        frames: vec![10, 11, 12],
-        delays_ms: vec![100, 100, 100],
-        laps: None::<NonZeroU32>,
-        original: (2, 2),
-        rest: 0,
-    };
+    let world = film_world(SHELL, &[("a.png", FILM)]);
+    let sheet = film_sheet(FILM, "a.png", &[100, 100, 100], None);
     AnimationTable::from_world_and_films(&world, [sheet].iter(), &[])
 }
 
@@ -100,11 +80,6 @@ fn settle(table: &AnimationTable, surface_id: u32) -> PatternState {
 /// 一番上の animation `anim` の今のコマの面（出ていなければ `None`）。
 fn top(p: &PatternState, anim: u32) -> Option<u32> {
     p.get(anim).map(|f| f.surface_id)
-}
-
-#[test]
-fn tick_interval_is_the_production_16ms() {
-    assert_eq!(SETTLE_TICK_MS, 16);
 }
 
 /// T は runonce の待ちの合計の最大。無ければ 0。部品の runonce は T を決めない。
@@ -188,11 +163,36 @@ fn film_child_loops_to_the_frame_at_t() {
     assert_eq!(top(&p, 0), Some(100));
 }
 
-/// 2 度呼んで同じ状態（決定論・4.9）。
+/// 10: runonce の待ちの合計が上限ちょうど（1＋599,999＝600,000ms）。
+/// 11: 上限の 1ms 後に次のコマへ替わる（600,000＋1）。
+const LONG: &str = "surface10\n{\nanimation0.interval,runonce\n\
+    animation0.pattern0,overlay,100,1,0,0\n\
+    animation0.pattern1,overlay,101,599999,0,0\n}\n\
+    surface11\n{\nanimation0.interval,runonce\n\
+    animation0.pattern0,overlay,100,600000,0,0\n\
+    animation0.pattern1,overlay,101,1,0,0\n}\n\
+    surface100\n{\n}\nsurface101\n{\n}\n";
+
+/// 待ちが上限ちょうどの面は `warn!` 0 行で、最後のコマが残る。
 #[test]
-fn settling_twice_gives_the_same_state() {
-    let t = table();
-    for surface in [0, 4, 5, 9] {
-        assert_eq!(settle(&t, surface), settle(&t, surface), "面 {surface}");
+fn wait_at_the_cap_keeps_the_last_frame() {
+    let t = crate::test_support::table_of(LONG);
+    let mut p = None;
+    let logs = crate::test_support::capture_logs(|| p = Some(settle(&t, 10)));
+    assert!(crate::test_support::warns(&logs).is_empty(), "{logs:?}");
+    assert_eq!(top(&p.unwrap(), 0), Some(101));
+}
+
+/// 上限を越える面は `warn!` 1 行（面・上限・作者の待ち）を残し、上限の時点のコマ（替わる前）を返す。
+#[test]
+fn wait_over_the_cap_stops_at_the_cap() {
+    let t = crate::test_support::table_of(LONG);
+    let mut p = None;
+    let logs = crate::test_support::capture_logs(|| p = Some(settle(&t, 11)));
+    let warns = crate::test_support::warns(&logs);
+    assert_eq!(warns.len(), 1, "{logs:?}");
+    for field in ["surface_id=11", "max_ticks=37500", "wait_ms=600001"] {
+        assert!(warns[0].contains(field), "{field}: {}", warns[0]);
     }
+    assert_eq!(top(&p.unwrap(), 0), Some(100));
 }

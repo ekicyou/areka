@@ -36,17 +36,13 @@ pub mod compile;
 pub mod contract;
 pub mod drive;
 pub mod duration;
-pub mod error;
 pub mod strict;
-pub mod strict_tap;
+pub(crate) mod strict_tap;
 pub mod sysvar;
 
 pub use anchor_pair::{AnchorFinding, AnchorIssue, pair_anchors};
-pub use compile::{
-    ChoiceTimeoutDirective, CompiledTalk, compile, compile_strict, parse_choice_timeout,
-};
+pub use compile::{ChoiceTimeoutDirective, CompiledTalk, compile, parse_choice_timeout};
 pub use drive::{spawn_talk, talk_handler};
-pub use error::SakuraError;
 pub use sysvar::expand_system_vars;
 
 // 下流の import パス安定化（DD-1: 下流は `areka_sakura::contract::*` 経由で参照）。

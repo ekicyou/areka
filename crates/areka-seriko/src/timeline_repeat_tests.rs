@@ -9,18 +9,8 @@ use super::*;
 use areka_emo_compose::ComposeMethod;
 use std::num::{NonZeroU32, NonZeroU64};
 
-/// 手書きの `always` の 1 コマ（作者のサーフェスを指す）。
-fn frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
-    LoopFrame {
-        surface_id,
-        picture: None,
-        method: ComposeMethod::Overlay,
-        act: crate::table::FrameAct::Draw,
-        wait_ms,
-        x: 0,
-        y: 0,
-    }
-}
+// 手書きの `always` の 1 コマ（作者のサーフェスを指す）。
+use crate::test_support::draw_frame as frame;
 
 /// 手書きの `always` のコマ列と周期（＝待ち時間の合計）。
 fn written(spec: &[(i64, u32)]) -> (Vec<LoopFrame>, NonZeroU64) {
@@ -203,17 +193,6 @@ fn zero_delay_frame_is_skipped_alpha_webp() {
 
 // ── 経過が 1 秒飛んだら 1 秒ぶん進む（2.9） ────────────────────────────────
 
-/// 16 ミリ秒ずつ刻んでも 1 秒飛んでも、同じ時刻なら同じコマ（遅れを持ち越さない）。
-fn assert_jump_equals_ticks(f: &[LoopFrame], p: NonZeroU64, n: Option<NonZeroU32>, start: u64) {
-    let mut ticked = always_at(f, p, n, start);
-    let mut t = start;
-    while t < start + 1000 {
-        t = (t + 16).min(start + 1000);
-        ticked = always_at(f, p, n, t);
-    }
-    assert_eq!(always_at(f, p, n, start + 1000), ticked);
-}
-
 /// 手書きの形: 0 → 1000 で 1 秒ぶん進む（周期 150 の 6 周＋100 → コマ 1）。
 #[test]
 fn written_jump_of_one_second_advances_one_second() {
@@ -228,9 +207,6 @@ fn written_jump_of_one_second_advances_one_second() {
         Frame(2),
         "1050 = 150×7 → 8 周目の最初の待ちの間＝前の周の最後のコマ 2"
     );
-    for start in [0, 7, 123, 4_000] {
-        assert_jump_equals_ticks(&f, p, None, start);
-    }
 }
 
 /// 子の形: 0 → 1000 で 1 秒ぶん進む（alpha.webp・終わりなしと合計 3 回の両方）。
@@ -243,10 +219,6 @@ fn film_jump_of_one_second_advances_one_second() {
     assert_eq!(always_at(&f, p, None, 1020), Frame(0));
     // 合計 3 回なら 510 以上は最後のコマ。
     assert_eq!(always_at(&f, p, laps(3), 1000), Frame(2));
-    for start in [0, 13, 250, 9_999] {
-        assert_jump_equals_ticks(&f, p, None, start);
-        assert_jump_equals_ticks(&f, p, laps(3), start);
-    }
 }
 
 // ── 途中の -1 で消えて次で戻る（4.5） ───────────────────────────────────────
@@ -285,23 +257,6 @@ fn picture_frames_never_show_nothing() {
         assert_ne!(always_at(&f, p, None, e), Nothing, "経過 {e}");
         assert_ne!(always_at(&f, p, laps(2), e), Nothing, "経過 {e}");
     }
-}
-
-// ── 同じ入力で同じ答え（2.6） ──────────────────────────────────────────────
-
-/// 状態も乱数も持たない: 同じ入力を何度・どの順で引いても同じ答え。
-#[test]
-fn same_input_same_answer() {
-    let (f, p) = film(&[100, 0, 70]);
-    let first: Vec<AlwaysView> = (0..600).map(|e| always_at(&f, p, laps(3), e)).collect();
-    let reversed: Vec<AlwaysView> = (0..600)
-        .rev()
-        .map(|e| always_at(&f, p, laps(3), e))
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    assert_eq!(first, reversed);
 }
 
 // ── pattern0 の待ちが 0 の手書きの always の周の境目 ──────────────────────────

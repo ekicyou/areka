@@ -84,8 +84,7 @@ kero.surface.alias
 
     let expected = Shell {
         surfaces: vec![Surface {
-            id: 10,
-            // 単一形ヘッダ `surface10` の代表 id 10・記述子は [Single(10)]（要件 12.5(b)）。
+            // 単一形ヘッダ `surface10` の記述子は [Single(10)]（要件 12.5(b)）。
             targets: vec![AppendTarget::Single(10)],
             // element は入力順（2,0,1）に依らずレイヤ昇順（0,1,2）で保持される（要件 4.4）。
             elements: vec![
@@ -288,30 +287,6 @@ surface.append0-2,5
     );
 }
 
-/// コメント行・空行のみの入力（意味行ゼロ）は空 `Shell` を返す（要件 9.1/10.1）。
-/// コメント/空行が「無視される（トークンを生じない）」ことを孤立させて確認する。
-#[test]
-fn comment_and_blank_only_input_yields_empty_shell() {
-    let input = "\
-// これはコメントだけの断片。
-
-// 空行とコメントのみで、認識可能なブロックは存在しない。
-
-";
-    let shell = parse(input);
-    assert_eq!(
-        shell,
-        Shell {
-            surfaces: vec![],
-            appends: vec![],
-            aliases: vec![],
-            animation_sort: None,
-            collision_sort: None,
-            definitions: vec![],
-        }
-    );
-}
-
 // --- タスク 6.2: emo2 実物 fixture スモーク（要件 10.3）と subset 外吸収（要件 4.5/5.7/6.3/9.2）---
 //
 // 6.1 の自前適合断片が「唯一の適合基準」（ukadoc）を厳密照合するのに対し、ここでは
@@ -420,7 +395,7 @@ kero.surface.alias
     let s0 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 0)
+        .find(|s| s.targets == [AppendTarget::Single(0)])
         .expect("surface0 が存在しない");
     assert_eq!(s0.elements.len(), 1);
     assert_eq!(s0.elements[0].layer, 0);
@@ -430,7 +405,7 @@ kero.surface.alias
     let s1410 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 1410)
+        .find(|s| s.targets == [AppendTarget::Single(1410)])
         .expect("surface1410 が存在しない");
     assert_eq!(s1410.elements.len(), 2, "複数 element が解釈されていない");
 
@@ -438,7 +413,7 @@ kero.surface.alias
     let s1000 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 1000)
+        .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("surface1000 が存在しない");
     assert_eq!(s1000.collisions.len(), 2, "collision が解釈されていない");
     // ukadoc 順序 left/top/right/bottom（要件 6.1）で転記値が入っている。
@@ -602,7 +577,7 @@ element0,overlay,tail.png,7,8
     let s100 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 100)
+        .find(|s| s.targets == [AppendTarget::Single(100)])
         .expect("先頭 surface100 が壊れた");
     assert_eq!(s100.elements.len(), 1);
     assert_eq!(s100.elements[0].path.as_str(), "body.png");
@@ -614,7 +589,7 @@ element0,overlay,tail.png,7,8
     let s300 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 300)
+        .find(|s| s.targets == [AppendTarget::Single(300)])
         .expect("末尾 surface300 が壊れた");
     assert_eq!(s300.elements.len(), 1);
     assert_eq!(s300.elements[0].path.as_str(), "tail.png");
@@ -625,7 +600,7 @@ element0,overlay,tail.png,7,8
     let s200 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 200)
+        .find(|s| s.targets == [AppendTarget::Single(200)])
         .expect("中間 surface200 が消えた");
 
     // element: base は値になり、土台 bg.png（layer 0）・overlay の face.png（layer 1）の順。

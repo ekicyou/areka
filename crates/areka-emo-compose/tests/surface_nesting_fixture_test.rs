@@ -11,7 +11,15 @@ use std::path::PathBuf;
 
 use areka_emo_compose::{EmoWorld, fold_boxes};
 use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_parsers::shell::{AppendTarget, Surface, parse, parse_boxes};
+
+/// 単一形の見出し（`surfaceN`）のブレスの番号（検体のブレスはどれも単一形）。
+fn id_of(surface: &Surface) -> u32 {
+    match surface.targets[..] {
+        [AppendTarget::Single(id)] => id,
+        _ => panic!("単一形でないブレス: {:?}", surface.targets),
+    }
+}
 
 fn fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -54,7 +62,7 @@ fn is_digits(s: &str) -> bool {
 fn the_fixture_parses_into_the_documented_surfaces() {
     let shell = parse(&fixture_text());
 
-    let braces: BTreeSet<u32> = shell.surfaces.iter().map(|s| s.id).collect();
+    let braces: BTreeSet<u32> = shell.surfaces.iter().map(id_of).collect();
     assert_eq!(
         braces,
         BTreeSet::from([0, 1, 2, 10, 12, 30, 31, 32, 40, 41, 50, 60, 61, 62, 70, 71]),
@@ -72,7 +80,7 @@ fn the_fixture_parses_into_the_documented_surfaces() {
     let numeric: Vec<(u32, &str)> = shell
         .surfaces
         .iter()
-        .flat_map(|s| s.elements.iter().map(move |e| (s.id, e.path.as_str())))
+        .flat_map(|s| s.elements.iter().map(move |e| (id_of(s), e.path.as_str())))
         .filter(|(_, p)| is_digits(p))
         .collect();
     assert_eq!(
@@ -105,7 +113,7 @@ fn the_fixture_parses_into_the_documented_surfaces() {
             assert!(
                 fixture_dir().join(path).is_file(),
                 "surface{} の {path} がフォルダに無い",
-                surface.id
+                id_of(surface)
             );
         }
     }

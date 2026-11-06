@@ -8,7 +8,7 @@
 //! - descript は `charset::decode`（既定 `Ansi`）＋`kv::parse_kv` で読み、鍵は ASCII
 //!   小文字化して引く。`menu`／`type` の**値**は trim＋ASCII 小文字化して比べる（R5）。
 //!   素性の値は無加工。
-//! - 1 体のゴーストの解決（`package::resolve`）とは別の読み手で、それを呼ばない（要件 2.10）。
+//! - 1 体のゴーストの解決（`package::resolve_with_shell`）とは別の読み手で、それを呼ばない（要件 2.10）。
 //! - 記憶・解決順・既定の定数は知らない（`areka-sylphya`・`areka-nar` に依存しない）。
 //! - 失敗は縮退（`warn!`＋除外）で、列挙は `Result` を返さない。格納フォルダが無いのは 0 件。
 //! - 並びはフォルダ名のバイト順（`String::cmp`）。`recommended.*` は使わない（要件 2.5）。

@@ -55,7 +55,6 @@ const STAGE2: &str = "bake: 動く絵の 1 枚目を読めなかったので";
 fn bake_samples(limits: AnimationLimits) -> (BakeResult, String) {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/testdata/animated");
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements: SAMPLES
             .iter()

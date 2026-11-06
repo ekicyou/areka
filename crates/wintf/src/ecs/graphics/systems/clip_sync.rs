@@ -1,7 +1,7 @@
 //! WUC モードのクリップ同期システム
 //!
 //! Visual.clip の変更を検知し、`ClipShape` の 3 変種を Windows.UI.Composition の
-//! clip 型（`InsetClip` / `CompositionGeometricClip` + geometry）へ等価写像して
+//! 角丸矩形の図形による切り抜き（`CompositionGeometricClip`・矩形は角丸 0）へ写して
 //! WUC `Visual` に適用する。DComp 版（IDCompositionRectangleClip）の意味論を等価に写す。
 
 use crate::ecs::graphics::Visual;
@@ -16,8 +16,12 @@ use windows::core::Interface;
 
 /// WUC モードのクリップ同期システム
 ///
-/// Arrangement, GlobalArrangement, Visual のいずれかが変更されたエンティティについて、
+/// Arrangement, GlobalArrangement, Visual, VisualGraphics のいずれかが変更されたエンティティについて、
 /// Visual.clip に基づいて WUC clip を作成・適用する。
+///
+/// 最後に当てた切り抜きの鍵（物理の幅・高さ・拡大率・形）を `VisualGraphics` に控え、
+/// 同じなら作り直さない（位置だけ変わった回）。鍵の書き込みは変化の印を立てない。
+/// 見た目が作り直された部品は鍵が空なので、新しい見た目へ当て直す。
 ///
 /// # DPI スケーリング
 /// - クリップ矩形のサイズに GlobalArrangement の累積スケール値を適用して物理ピクセル座標に変換
@@ -29,18 +33,19 @@ use windows::core::Interface;
 /// WucGraphicsResource が未初期化の場合はスキップする。
 pub fn clip_sync_system(
     wuc_resource: Option<Res<WucGraphicsResource>>,
-    query: Query<
+    mut query: Query<
         (
             Entity,
             &Arrangement,
             &GlobalArrangement,
             &Visual,
-            &VisualGraphics,
+            &mut VisualGraphics,
         ),
         Or<(
             Changed<Arrangement>,
             Changed<GlobalArrangement>,
             Changed<Visual>,
+            Changed<VisualGraphics>,
         )>,
     >,
 ) {
@@ -51,20 +56,31 @@ pub fn clip_sync_system(
         return;
     };
 
-    for (entity, arrangement, ga, visual, vg) in query.iter() {
-        let Some(visual_com) = vg.visual() else {
+    for (entity, arrangement, ga, visual, mut vg) in query.iter_mut() {
+        let Some(visual_com) = vg.visual().cloned() else {
             continue;
         };
 
         let size = &arrangement.size;
+        // 物理ピクセル座標に変換
+        let scale_x = ga.scale_x();
+        let scale_y = ga.scale_y();
+        let key = match &visual.clip {
+            Some(shape) if size.width > 0.0 && size.height > 0.0 => (
+                size.width * scale_x,
+                size.height * scale_y,
+                scale_x,
+                Some(shape.clone()),
+            ),
+            _ => (0.0, 0.0, 0.0, None),
+        };
+        if vg.clip_key() == Some(&key) {
+            continue;
+        }
 
-        match &visual.clip {
-            Some(clip_shape) if size.width > 0.0 && size.height > 0.0 => {
-                // 物理ピクセル座標に変換
-                let scale_x = ga.scale_x();
-                let scale_y = ga.scale_y();
-                let physical_width = size.width * scale_x;
-                let physical_height = size.height * scale_y;
+        match &key.3 {
+            Some(clip_shape) => {
+                let (physical_width, physical_height) = (key.0, key.1);
 
                 let clip_res = build_clip(
                     compositor,
@@ -93,6 +109,7 @@ pub fn clip_sync_system(
                         "[clip_sync] SetClip failed"
                     );
                 } else {
+                    vg.bypass_change_detection().set_clip_key(key.clone());
                     debug!(
                         entity = ?entity,
                         clip_shape = ?clip_shape,
@@ -112,6 +129,7 @@ pub fn clip_sync_system(
                         "[clip_sync] SetClip(None) failed"
                     );
                 } else {
+                    vg.bypass_change_detection().set_clip_key(key.clone());
                     trace!(
                         entity = ?entity,
                         "[clip_sync] Clip cleared"
@@ -124,7 +142,7 @@ pub fn clip_sync_system(
 
 /// `ClipShape` の 3 変種を WUC `CompositionClip` へ等価写像する。
 ///
-/// - `Rectangle` → `CreateInsetClip()`（全 inset 0・矩形範囲そのまま）。
+/// - `Rectangle` → 角丸 0 の `RoundedRectangleGeometry`（明示サイズ）→ `CreateGeometricClipWithGeometry`。
 /// - `RoundedRectangle{radius}` → `CreateRoundedRectangleGeometry()`
 ///   （`SetSize` + `SetCornerRadius`）→ `CreateGeometricClipWithGeometry`。
 /// - `RoundedRectangleIndividual{4角}` → 角ごとの半径が異なる clip は WUC の

@@ -40,7 +40,7 @@ type HandlerResult = Option<LRESULT>;
 ///
 /// World借用区切り方式による処理（3ステッププロトコル）:
 /// ① World借用 → echo判定に基づきWindowPos更新, BoxStyle更新 → 借用解放
-/// ② try_tick_on_vsync() (内部で借用→解放)
+/// ② flush_window_pos_commands_guarded() (再入ガードを取って流す)
 /// ③ flush_window_pos_commands() (SetWindowPos実行、ラッパー経由)
 ///
 /// echo判定: `is_self_initiated()` TLS フラグが `true` の場合、
@@ -82,7 +82,7 @@ pub(super) fn WM_WINDOWPOSCHANGED(
     // ------------------------------------------------------------------
     {
         {
-            // DpiChangeContextを先に取得（try_tick_on_vsync前に消費する必要がある）
+            // DpiChangeContextを先に取得（② の流しの前に消費する必要がある）
             // is_echo にかかわらず常に実行
             let dpi_context = crate::ecs::window::DpiChangeContext::take();
 
@@ -288,12 +288,9 @@ pub(super) fn WM_WINDOWPOSCHANGED(
             // world_borrowスコープ終了: 借用解放
 
             // ------------------------------------------------------------------
-            // ② try_tick_on_vsync() (内部で借用→解放)
+            // ② flush_window_pos_commands_guarded() (再入ガードを取って流す)
             // ------------------------------------------------------------------
-            {
-                use crate::ecs::world::VsyncTick;
-                let _ = world.try_tick_on_vsync();
-            }
+            crate::ecs::world::flush_window_pos_commands_guarded();
 
             // ------------------------------------------------------------------
             // ③ flush_window_pos_commands() (SetWindowPos実行、ラッパー経由)

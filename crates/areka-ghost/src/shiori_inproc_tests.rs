@@ -217,8 +217,8 @@ fn inproc_connect_accepts_a_relative_mount_folder() {
 
     let ghost = dll_ghost("inproc-relative-mount");
     let relative_root = relative_from_cwd(ghost.path());
-    let mount =
-        package::resolve(&relative_root, DefaultEncoding::Utf8).expect("fixture の resolve");
+    let mount = package::resolve_with_shell(&relative_root, DefaultEncoding::Utf8, None)
+        .expect("fixture の resolve");
     assert!(
         mount.shiori.dir.is_relative(),
         "fixture は相対のフォルダのはず: {}",

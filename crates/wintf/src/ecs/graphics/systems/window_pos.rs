@@ -1,7 +1,9 @@
 use super::init::format_entity_name;
 use crate::ecs::drag::WindowDragging;
-use crate::ecs::graphics::GraphicsCore;
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
+use crate::ecs::graphics::{
+    GraphicsCommandList, GraphicsCore, SurfaceGraphics, VisualGraphics, WindowGraphics,
+};
 use crate::ecs::widget::bitmap_source::BitmapSourceGraphics;
 use crate::ecs::window::transition_diag::{ORIGIN_WINDOW_POS, WriteTag};
 use crate::ecs::window::{SetWindowPosCommand, Window, WindowHandle, WindowPos};
@@ -32,7 +34,8 @@ pub fn apply_window_pos_changes(
     >,
 ) {
     for (entity, window_handle, window_pos, name, is_dragging) in query.iter() {
-        let entity_name = format_entity_name(entity, name);
+        // 名前はその記録が点いているときだけ作る（窓が動くたびに通る道）
+        let entity_name = || format_entity_name(entity, name);
 
         let position = window_pos.position.unwrap_or_default();
         let size = window_pos.size.unwrap_or_default();
@@ -43,7 +46,7 @@ pub fn apply_window_pos_changes(
             || size.width == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
         {
             trace!(
-                entity = %entity_name,
+                entity = %entity_name(),
                 x = position.x,
                 y = position.y,
                 width = size.width,
@@ -59,7 +62,7 @@ pub fn apply_window_pos_changes(
             Err(e) => {
                 // 変換失敗時はフォールバック：元の座標を使用
                 warn!(
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     error = %e,
                     "[apply_window_pos_changes] Failed to transform window coordinates. Using original values."
                 );
@@ -78,7 +81,7 @@ pub fn apply_window_pos_changes(
         }
 
         debug!(
-            entity = %entity_name,
+            entity = %entity_name(),
             client_xy = format_args!("({},{})", position.x, position.y),
             client_size = format_args!("{}x{}", size.width, size.height),
             win_xy = format_args!("({},{})", x, y),
@@ -106,7 +109,7 @@ pub fn apply_window_pos_changes(
         SetWindowPosCommand::enqueue(cmd);
 
         debug!(
-            entity = %entity_name,
+            entity = %entity_name(),
             x = position.x,
             y = position.y,
             width = size.width,
@@ -116,38 +119,55 @@ pub fn apply_window_pos_changes(
     }
 }
 
-/// 依存コンポーネント無効化
-/// Phase 2: DComp Query（WindowGraphics, VisualGraphics, SurfaceGraphics）を除去。
-/// 現状は WucGraphicsResource と BitmapSourceGraphics を無効化する
-/// （BitmapSourceGraphics は DComp 非依存）。
+/// 依存コンポーネント無効化（`GraphicsSetup` の先頭・装置を作る係より前）
 ///
-/// NOTE(W3b-V): Phase 2 の除去により、本システムは DComp 系コンポーネント
-/// （WindowGraphics / VisualGraphics / SurfaceGraphics）を無効化しない。一方で
-/// 再初期化側（init_window_graphics / visual_resource_management_system）は
-/// `!is_valid()` を再作成の前提条件とするため、デバイスロスト時にこれらは旧デバイス
-/// 由来の COM ポインタを保持したまま「有効」と判定され続け、検出（P40）が実装されても
-/// DComp パイプラインは復旧しない（tests/graphics/window_pos_systems_test.rs の
-/// stale 特性化テストで現行挙動を固定。無効化対象の再追加は挙動変更のため
-/// P40 の設計判断・セル断片 W3b-V の分析を参照）。
+/// 装置が在って無効なとき、有効な窓・見た目・描画面・画像の部品を倒し、命令の列
+/// （古い装置に属する）を全部外し、最後に WUC の資源を倒す（合成の木の部品を先に捨て、
+/// 合成器を最後に捨てる）。可変で触るだけで変化の印が立つので、有効なものだけを触る。
+/// 装置が無効な回には毎回走るが、倒れたものには触らないので同じ印を何度も立てない。
+#[allow(clippy::too_many_arguments)]
 pub fn invalidate_dependent_components(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<ResMut<WucGraphicsResource>>,
-    mut bitmap_source_query: Query<&mut BitmapSourceGraphics>,
+    mut windows: Query<&mut WindowGraphics>,
+    mut visuals: Query<&mut VisualGraphics>,
+    mut surfaces: Query<&mut SurfaceGraphics>,
+    mut bitmaps: Query<&mut BitmapSourceGraphics>,
+    command_lists: Query<Entity, With<GraphicsCommandList>>,
+    mut commands: Commands,
 ) {
-    if let Some(gc) = graphics {
-        if !gc.is_valid() {
-            warn!(
-                "[invalidate_dependent_components] GraphicsCore invalid - invalidating all dependent components"
-            );
-
-            // WucGraphicsResource の無効化
-            if let Some(mut wgr) = wuc_resource {
-                wgr.invalidate();
-            }
-
-            for mut bsg in bitmap_source_query.iter_mut() {
-                bsg.invalidate();
-            }
-        }
+    if !graphics.is_some_and(|gc| !gc.is_valid()) {
+        return;
+    }
+    let mut count = 0usize;
+    for mut wg in windows.iter_mut().filter(|c| c.is_valid()) {
+        wg.invalidate();
+        count += 1;
+    }
+    for mut vg in visuals.iter_mut().filter(|c| c.is_valid()) {
+        vg.invalidate();
+        count += 1;
+    }
+    for mut sg in surfaces.iter_mut().filter(|c| c.is_valid()) {
+        sg.clear();
+        count += 1;
+    }
+    for mut bsg in bitmaps.iter_mut().filter(|c| c.is_valid()) {
+        bsg.invalidate();
+        count += 1;
+    }
+    for entity in command_lists.iter() {
+        commands.entity(entity).remove::<GraphicsCommandList>();
+        count += 1;
+    }
+    if let Some(mut wgr) = wuc_resource.filter(|r| r.is_valid()) {
+        wgr.invalidate();
+        count += 1;
+    }
+    if count > 0 {
+        warn!(
+            count,
+            "[invalidate_dependent_components] GraphicsCore invalid - invalidated dependent components"
+        );
     }
 }

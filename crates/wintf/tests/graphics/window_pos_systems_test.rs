@@ -1,8 +1,7 @@
 //! window_pos.rs 系システムのギャップテスト (W3b-T)
 //!
-//! - invalidate_dependent_components: WucGraphicsResource 連動は既存テスト
-//!   （dcomp_integration_test）で固定済みだが、BitmapSourceGraphics の無効化ループと
-//!   no-op 経路は未検証だったため追加する。
+//! - invalidate_dependent_components: 装置が無効なとき窓・見た目・描画面・画像・WUC を
+//!   全部倒し、命令の列を外すこと。装置の資源が無いときの no-op 経路。
 //! - apply_window_pos_changes: SetWindowPosCommand キュー（TLS）は覗き見 API が
 //!   ないため、分岐の完走 characterization に留める（所見・提案はセル断片に記録）。
 //!
@@ -82,34 +81,81 @@ fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
     });
 }
 
-/// GraphicsCore 無効時でも WUC 系コンポーネント（VisualGraphics / SurfaceGraphics）は
-/// 無効化されず stale なまま「有効」と判定され続ける（Phase 2 で無効化対象から除外された
-/// 現行挙動の固定）。再初期化側は `!is_valid()` を前提とするため、デバイスロスト検出
-/// （P40）が実装されてもこのままでは WUC パイプラインは復旧しない（W3b-V 断片参照）
-///
-/// WUC 移行: invalidate_dependent_components は WucGraphicsResource を無効化する。
+/// 無効化の確かめに使う数（見た目の部品に変化の印が立った数）
+#[derive(Resource, Default)]
+struct ChangedVisuals(usize);
+
+fn count_changed_visuals(
+    query: Query<(), Changed<wintf::ecs::VisualGraphics>>,
+    mut counter: ResMut<ChangedVisuals>,
+) {
+    counter.0 = query.iter().count();
+}
+
+/// GraphicsCore 無効時に窓・見た目・描画面・画像・WUC が全部無効になり、命令の列が外れる。
+/// 倒れた部品には二度と可変で触らない（2 回目の無効化で見た目の変化の印が立たない）。
 #[test]
-fn invalidate_leaves_wuc_graphics_components_stale() {
+fn invalidate_invalidates_all_and_removes_command_lists() {
     crate::common::on_gpu_owner_thread(move || {
         use windows::Foundation::Size;
         use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
         use windows::UI::Composition::Visual;
         use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-        use windows::core::Interface;
-        use wintf::ecs::{SurfaceGraphics, VisualGraphics, WucGraphicsResource};
+        use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, WS_POPUP};
+        use windows::core::{Interface, w};
+        use wintf::ecs::world::FrameCount;
+        use wintf::ecs::{
+            GraphicsCommandList, HasGraphicsResources, SurfaceGraphics, VisualGraphics,
+            WindowGraphics, WucGraphicsResource, init_window_graphics, init_wuc_resource,
+        };
 
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
-        let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
-        let d2d = graphics.d2d_device().expect("d2d device");
-        let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource");
+        // 表示しない最上位の窓（WindowGraphics は実の HWND が要る）
+        let hwnd = unsafe {
+            CreateWindowExW(
+                Default::default(),
+                w!("STATIC"),
+                w!(""),
+                WS_POPUP,
+                0,
+                0,
+                8,
+                8,
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+        .expect("hidden window");
+
+        let mut world = World::new();
+        world.insert_resource(GraphicsCore::new().expect("GraphicsCore creation"));
+        world.insert_resource(FrameCount(1));
+        let window = world
+            .spawn((
+                Window::default(),
+                WindowHandle {
+                    hwnd,
+                    instance: HINSTANCE::default(),
+                },
+                HasGraphicsResources,
+            ))
+            .id();
+        let mut setup = Schedule::default();
+        setup.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
+        setup.add_systems((init_wuc_resource, init_window_graphics).chain());
+        setup.run(&mut world);
+        assert!(world.get::<WindowGraphics>(window).unwrap().is_valid());
+
+        let wuc_resource = world.resource::<WucGraphicsResource>();
         let compositor = wuc_resource.compositor().expect("compositor").clone();
         let gd = wuc_resource
             .graphics_device()
             .expect("graphics_device")
             .clone();
-
         let visual: Visual = compositor
             .CreateSpriteVisual()
             .expect("visual")
@@ -128,40 +174,51 @@ fn invalidate_leaves_wuc_graphics_components_stale() {
         let brush = compositor
             .CreateSurfaceBrushWithSurface(&surface)
             .expect("brush");
-
-        // デバイスロストを模擬
-        graphics.invalidate();
-
-        let mut world = World::new();
-        world.insert_resource(graphics);
-        world.insert_resource(wuc_resource);
+        let mut bsg = BitmapSourceGraphics::new();
+        bsg.set_bitmap(create_test_bitmap(world.resource::<GraphicsCore>()));
         let entity = world
             .spawn((
                 VisualGraphics::new(visual),
                 SurfaceGraphics::new(surface, brush, (4, 4)),
+                bsg,
+                GraphicsCommandList::empty(),
             ))
             .id();
 
-        run_invalidate(&mut world);
+        // デバイスロストを模擬
+        world.resource_mut::<GraphicsCore>().invalidate();
+        world.init_resource::<ChangedVisuals>();
+        let mut schedule = Schedule::default();
+        schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
+        schedule.add_systems((invalidate_dependent_components, count_changed_visuals).chain());
+        schedule.run(&mut world);
 
-        // WucGraphicsResource は無効化される（既存設計どおり）
+        assert!(!world.resource::<WucGraphicsResource>().is_valid());
+        assert!(!world.get::<WindowGraphics>(window).unwrap().is_valid());
+        assert!(!world.get::<VisualGraphics>(entity).unwrap().is_valid());
+        assert!(!world.get::<SurfaceGraphics>(entity).unwrap().is_valid());
         assert!(
-            !world.resource::<WucGraphicsResource>().is_valid(),
-            "WucGraphicsResource should be invalidated"
+            !world
+                .get::<BitmapSourceGraphics>(entity)
+                .unwrap()
+                .is_valid()
+        );
+        assert!(
+            world.get::<GraphicsCommandList>(entity).is_none(),
+            "command lists belong to the old device and must be removed"
         );
 
-        // 一方 VisualGraphics / SurfaceGraphics は旧デバイス由来の COM ポインタを
-        // 保持したまま「有効」と判定され続ける（characterization: 再初期化トリガー不発）
-        let vg = world.get::<VisualGraphics>(entity).unwrap();
-        assert!(
-            vg.is_valid(),
-            "characterization: VisualGraphics stays stale-valid (not invalidated)"
+        schedule.run(&mut world);
+        assert_eq!(
+            world.resource::<ChangedVisuals>().0,
+            0,
+            "already-invalid parts must not be touched mutably again"
         );
-        let sg = world.get::<SurfaceGraphics>(entity).unwrap();
-        assert!(
-            sg.is_valid(),
-            "characterization: SurfaceGraphics stays stale-valid (not invalidated)"
-        );
+
+        world.clear_entities();
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
     });
 }
 

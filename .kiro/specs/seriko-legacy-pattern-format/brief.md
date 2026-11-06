@@ -71,3 +71,12 @@
 - **要件定義のモデル**: Opus（今ある読み手に行の読み分けを足し、新しい書式と同じ型へ写す形・新しい境界や並行の設計に当たらない）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: roadmap の spec 台帳にこの spec の行が無い（brief を持つ数 166 と台帳の 165 が合わない件の正体）。
+
+## audit-parsers-sakura の申し送り（2026-11-06 同 spec のタスク 8.1 の `/kiro-discovery` で追記・同 spec の要件 7.7）
+
+- **追記の件: パターンのウェイト `最小-最大` から毎回ランダムに選ぶ**（区分 C・新しい機能）。ukadoc（`animation*.pattern*`）「SSPのみ「最小ウェイト-最大ウェイト」とマイナス文字で区切った書き方もでき、その場合は最小～最大間でランダムに選択される。」（https://ukatech.shillest.net/ukadoc-spec/descript/shell-surfaces/ の `#animation-star-.pattern-star`・`audit-parsers-sakura` の research.md 5 節・17 行目の表の 5）。
+- **今の姿**: 前は黙って 0 になっていた。`audit-parsers-sakura` の指摘 5 の直しで、読み手（`crates/areka-parsers/src/shell/decode.rs` の 288 行目あたり）は**最小値**を待ちにして `ShellIssue::WaitRange`（`model.rs`・`warn!`「ランダムは未対応」）を積む形になった（同 spec の要件 7.6・design.md の 309 行目）。`Pattern` は待ちを 1 つだけ持つ。
+- **望む姿**: `Pattern` が最小と最大を持ち、再生のたびに範囲から選ぶ。`WaitRange` の `warn!` は要らなくなる。
+- **なぜこの spec へ**: 触る場所が同じ＝`animation*.pattern*` の欄の読み（`shell/decode.rs`・`model.rs`）。旧書式の行もウェイトの欄を持つので、同じ読みに乗る。ただし本文の Scope の Out（下流は区別しない）と違い、この件は再生の側（`crates/areka-seriko/src/` のパターンの待ちを読む所＝`timeline.rs`・`table.rs` など）にも触れる＝In を広げる。乱数は抽選と同じ出どころを使い、決定論のテストでは種を固定する。
+- **規模**: +2〜3 タスク（S 5〜8 → 7〜11）。範囲の両端の大小が逆・片方が数でない、の扱いは要件の段で ukadoc を引き、読めない点は SSP の MCP で測る。
+- **同じウェーブに置かない相手**: 本文のとおり＋`crates/areka-seriko/src/` のパターンの再生を触る spec（`seriko-trigger-lottery-gaps`・`seriko-talk-clock-fidelity`）。

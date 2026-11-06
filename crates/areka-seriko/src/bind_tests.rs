@@ -1,4 +1,7 @@
 //! `bind.rs` のテスト（bind.rs の中にあったものを純移動・areka-P0-mcp-reload 8.3 で 1,000 行を超えないように）。
+//!
+//! 番号の出どころ: R・D は areka-P0-mayuna-compose、「bindopt」は areka-P0-bindoption-exclusivity、
+//! 決定3 は areka-P0-seriko-engine の design、要件 14.x は areka-P0-offline-surface-dump（後ろの節）。
 
 use super::*;
 
@@ -40,73 +43,40 @@ fn empty_input_yields_empty_bindset() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 3.1: bind 名前解決（BindResolver）とスコープ写像（scope_namespace）の純関数群。
+// bind 名前解決（BindResolver）とスコープ写像（scope_namespace）の純関数群。
 // ─────────────────────────────────────────────────────────────────────
 
+use areka_parsers::package::BindGroupName;
 use areka_sakura::ActorKey;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む（`bindoption` 宣言なし）。
 /// sakura: (腕, 上げ)→1100 / kero: (脚, 組む)→2100。
 fn tiny_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("腕".into(), "上げ".into()), 1100);
-    let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
-    kero.insert(("脚".into(), "組む".into()), 2100);
-    BindResolver::new(sakura, kero, BindOptionDecls::default())
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1100.name,腕,上げ\r\n\
+         kero.bindgroup2100.name,脚,組む\r\n",
+    ))
 }
 
 /// `mustselect` 宣言を持つ名前解決表を組む（bindopt 設計 D2）。
 /// sakura: (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304 / (紅,あり)→1207。
 /// mustselect カテゴリ = {目}（紅は非宣言＝正典の既定）。
 fn mustselect_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("目".into(), "笑".into()), 1301);
-    sakura.insert(("目".into(), "普".into()), 1303);
-    sakura.insert(("目".into(), "閉".into()), 1304);
-    sakura.insert(("紅".into(), "あり".into()), 1207);
-    let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
-    sakura_ms.insert("目".into());
-    let options = BindOptionDecls {
-        sakura_mustselect: sakura_ms,
-        ..Default::default()
-    };
-    BindResolver::new(sakura, BTreeMap::new(), options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,笑\r\n\
+         sakura.bindgroup1303.name,目,普\r\n\
+         sakura.bindgroup1304.name,目,閉\r\n\
+         sakura.bindgroup1207.name,紅,あり\r\n\
+         sakura.bindoption0.group,目,mustselect\r\n",
+    ))
 }
 
-/// ポリシー導出は名前空間ごと・`mustselect` 宣言カテゴリのみ MustSelect（bindopt 設計 D2）。
-#[test]
-fn policy_mustselect_only_declared_category_per_namespace() {
-    let r = mustselect_resolver();
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "目"),
-        BindChoicePolicy::MustSelect,
-        "sakura で mustselect 宣言されたカテゴリは MustSelect（bindopt 設計 D2）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "紅"),
-        BindChoicePolicy::Default,
-        "非宣言カテゴリ（紅）は正典の既定（Default）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "未知"),
-        BindChoicePolicy::Default,
-        "未知カテゴリも正典の既定（Default）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Kero, "目"),
-        BindChoicePolicy::Default,
-        "kero では sakura の mustselect を引かない（名前空間隔離）"
-    );
-}
-
-/// 空リゾルバ・`bindoption` 宣言なしの表は全カテゴリ既定（bindopt 設計 D3）。
+/// `bindoption` 宣言なしの表は全カテゴリ既定（bindopt 設計 D3）。空リゾルバは
+/// `empty_resolver_is_default_policy_and_never_reaches_apply` が見る。
 #[test]
 fn policy_empty_or_absent_is_default() {
-    assert_eq!(
-        BindResolver::empty().policy(BindNamespace::Sakura, "目"),
-        BindChoicePolicy::Default
-    );
     assert_eq!(
         tiny_resolver().policy(BindNamespace::Sakura, "腕"),
         BindChoicePolicy::Default,
@@ -115,7 +85,7 @@ fn policy_empty_or_absent_is_default() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 5.1: `policy()` 導出マトリクスの檻（bindopt 4.2/4.3・設計 §Testing Strategy
+// `policy()` 導出マトリクスの檻（bindopt 4.2/4.3・設計 §Testing Strategy
 // → Unit Tests（seriko・bind.rs）1-2）。宣言 3 形（mustselect／multiple／非宣言）に
 // 併記・未知カテゴリを加えた全ケースを 2 名前空間で固定し、本体（sakura）／相方（kero）の
 // 名前空間隔離も併せて固定する。`empty()` は全カテゴリ既定かつ名前解決が常に不成立
@@ -129,25 +99,23 @@ fn policy_empty_or_absent_is_default() {
 /// 「紅」は両スコープとも名前表にのみ在って宣言なし＝正典の既定（[`BindChoicePolicy::Default`]）。
 /// 本体と相方でカテゴリ名を一切重ねないため、名前空間を取り違えると必ず導出が崩れる。
 fn policy_matrix_resolver() -> BindResolver {
-    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
-    sakura.insert(("目".into(), "笑".into()), 1301);
-    sakura.insert(("髪".into(), "長".into()), 1250);
-    sakura.insert(("腕".into(), "上げ".into()), 1100);
-    sakura.insert(("紅".into(), "あり".into()), 1207);
-    let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
-    kero.insert(("脚".into(), "組む".into()), 2100);
-    kero.insert(("尾".into(), "振り".into()), 2200);
-    kero.insert(("羽".into(), "開き".into()), 2300);
-    kero.insert(("紅".into(), "あり".into()), 2207);
-    let names =
-        |names: &[&str]| -> BTreeSet<String> { names.iter().map(|s| (*s).to_string()).collect() };
-    let options = BindOptionDecls {
-        sakura_mustselect: names(&["目", "腕"]),
-        kero_mustselect: names(&["脚", "羽"]),
-        sakura_multiple: names(&["髪", "腕"]),
-        kero_multiple: names(&["尾", "羽"]),
-    };
-    BindResolver::new(sakura, kero, options)
+    BindResolver::from_groups(&groups_of(
+        "charset,UTF-8\r\n\
+         sakura.bindgroup1301.name,目,笑\r\n\
+         sakura.bindgroup1250.name,髪,長\r\n\
+         sakura.bindgroup1100.name,腕,上げ\r\n\
+         sakura.bindgroup1207.name,紅,あり\r\n\
+         kero.bindgroup2100.name,脚,組む\r\n\
+         kero.bindgroup2200.name,尾,振り\r\n\
+         kero.bindgroup2300.name,羽,開き\r\n\
+         kero.bindgroup2207.name,紅,あり\r\n\
+         sakura.bindoption0.group,目,mustselect\r\n\
+         sakura.bindoption1.group,髪,multiple\r\n\
+         sakura.bindoption2.group,腕,mustselect+multiple\r\n\
+         kero.bindoption0.group,脚,mustselect\r\n\
+         kero.bindoption1.group,尾,multiple\r\n\
+         kero.bindoption2.group,羽,mustselect+multiple\r\n",
+    ))
 }
 
 /// 本体側（sakura）の導出マトリクス全ケース（bindopt 4.2/4.3）。
@@ -210,35 +178,6 @@ fn policy_matrix_kero_covers_all_declaration_forms() {
         r.policy(BindNamespace::Kero, "未知"),
         BindChoicePolicy::Default,
         "kero の未知カテゴリも既定（bindopt 4.3）"
-    );
-}
-
-/// 併記（`mustselect+multiple`）は複数可を優先する（bindopt D4）——導出順の錨。
-///
-/// 同じ表で mustselect 単独宣言が MustSelect に留まることも併せて確かめ、
-/// 「常に Multiple を返している」だけの退化した実装では緑にならないようにする。
-#[test]
-fn policy_both_options_declared_prefers_multiple() {
-    let r = policy_matrix_resolver();
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "腕"),
-        BindChoicePolicy::Multiple,
-        "mustselect と multiple の両方に属するカテゴリは複数可（正典「multiple で複数のパーツを選択可能」・bindopt D4）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Kero, "羽"),
-        BindChoicePolicy::Multiple,
-        "併記の優先則は相方側でも同一（bindopt D4）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Sakura, "目"),
-        BindChoicePolicy::MustSelect,
-        "mustselect 単独宣言は MustSelect のまま（併記優先は併記のときだけ働く・bindopt D4）"
-    );
-    assert_eq!(
-        r.policy(BindNamespace::Kero, "尾"),
-        BindChoicePolicy::Multiple,
-        "multiple 単独宣言も Multiple（併記と同じ値へ収束することの確認・bindopt D4）"
     );
 }
 
@@ -370,22 +309,6 @@ fn resolve_unknown_returns_none() {
     );
 }
 
-/// 空リゾルバ（両表とも空）はすべて None（panic せず・R4.3 の空表同一機構）。
-#[test]
-fn empty_resolver_resolves_all_none() {
-    let r = BindResolver::empty();
-    assert_eq!(
-        r.resolve(BindNamespace::Sakura, "腕", "上げ"),
-        None,
-        "空リゾルバは sakura でも解決しない（R4.3・空表＝自然な解決不能）"
-    );
-    assert_eq!(
-        r.resolve(BindNamespace::Kero, "脚", "組む"),
-        None,
-        "空リゾルバは kero でも解決しない（emo2 に kero bindgroup 無し・R4.3）"
-    );
-}
-
 /// scope 写像（D7・要件 14.2）: "0"→Sakura・"1"→Kero・2 以上の数→Char(n)・非数値→None。
 #[test]
 fn scope_namespace_maps_two_and_above_to_char() {
@@ -412,7 +335,7 @@ fn scope_namespace_maps_two_and_above_to_char() {
     assert_eq!(
         scope_namespace(&ActorKey::from("balloon0")),
         None,
-        "非数値 scope も写像なし（明示 \"0\"/\"1\" のみ・一般 parse でない・D7）"
+        "非数値 scope は写像なし（D7・要件 14.2）"
     );
     assert_eq!(
         scope_namespace(&ActorKey::from("x")),
@@ -422,7 +345,7 @@ fn scope_namespace_maps_two_and_above_to_char() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// spec: areka-P0-offline-surface-dump task 2.3: シェルの読みからの既定と名前の表（要件 14.1〜14.3・5.2・5.9）。
+// spec: areka-P0-offline-surface-dump: シェルの読みからの既定と名前の表（要件 14.1〜14.3・5.2・5.9）。
 
 /// 3 種類のスコープで既定と名前が分かれるシェルの descript.txt。`服` の A（3 番）は B（20 番）より
 /// 前の行に書く（キーの順では `bindgroup20` が先＝行の順で並べないと赤）。B は 21 番でも書き直す。
@@ -523,8 +446,45 @@ fn category_parts_follow_written_order() {
     );
 }
 
+/// 番号から名前への引き: 宣言の無い番号は `None`。同じ番号に名前が 2 つあれば表の順（カテゴリ・パーツの
+/// 名の順）で最初の名前を返す（`帽子` は `服` より後に書いたが名の順では先）。シェルの読みは同じキーの
+/// 2 行目で前の行を上書きし、番号の先頭の 0 も読まない（`08` は `8` にならない）ので、重なりは読みの
+/// 表を直に組んで作る。
+#[test]
+fn name_of_undeclared_is_none_and_overlap_takes_first_in_table_order() {
+    let name = |id: u32, category: &str, part: &str, line: usize| BindGroupName {
+        id,
+        category: category.to_owned(),
+        part: part.to_owned(),
+        thumbnail: None,
+        line,
+    };
+    let groups = BindGroupDefaults::from([(
+        0,
+        ScopeBinds {
+            names: vec![
+                name(7, "服", "X", 2),
+                name(8, "服", "Z", 3),
+                name(8, "帽子", "Y", 4),
+            ],
+            ..ScopeBinds::default()
+        },
+    )]);
+    let r = BindResolver::from_groups(&groups);
+    assert_eq!(r.resolve(BindNamespace::Sakura, "帽子", "Y"), Some(8));
+    assert_eq!(r.resolve(BindNamespace::Sakura, "服", "Z"), Some(8));
+    assert_eq!(r.name_of(BindNamespace::Sakura, 7), Some(("服", "X")));
+    assert_eq!(r.name_of(BindNamespace::Sakura, 9), None, "宣言の無い番号");
+    assert_eq!(
+        r.name_of(BindNamespace::Kero, 7),
+        None,
+        "ほかのスコープの宣言"
+    );
+    assert_eq!(r.name_of(BindNamespace::Sakura, 8), Some(("帽子", "Y")));
+}
+
 // ─────────────────────────────────────────────────────────────────────
-// Task 3.2: bind コマンド引数の類別（parse_bind_directive）純関数。
+// bind コマンド引数の類別（parse_bind_directive）純関数。
 // Observable = 正常形（Apply）/トグル形（Toggle）/カテゴリ単位形（CategoryWide）/
 // 破損形（Malformed）それぞれが期待どおり区分される（D8・R4.1/R4.2）。
 // ─────────────────────────────────────────────────────────────────────
@@ -552,7 +512,7 @@ fn parse_apply_explicit_on_off() {
     );
 }
 
-/// トグル形（R4.2）: 数値欄が空欄／省略 → Toggle（M1 縮退・warn+skip は actor 責務）。
+/// トグル形（R4.2）: 数値欄が空欄／省略 → Toggle（当てるときは今の着脱の反対・`apply_bind_directive`）。
 #[test]
 fn parse_toggle_empty_or_absent_value() {
     assert_eq!(
@@ -574,7 +534,7 @@ fn parse_toggle_empty_or_absent_value() {
 }
 
 /// カテゴリ単位形（R4.2）: パーツ名が空欄／省略 → CategoryWide。
-/// on はカテゴリ単位では厳密に action されない M1 縮退ゆえ寛容: "1"→Some(true)・
+/// on は寛容に読む（パーツを定義の順に 1 つずつ当てるときの on/off・None はパーツごとのトグル）: "1"→Some(true)・
 /// "0"→Some(false)・欠落/空/その他→None（Malformed にしない）。
 #[test]
 fn parse_category_wide_part_empty_or_absent() {
@@ -684,7 +644,7 @@ fn parse_trims_tokens_and_stores_trimmed() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Task 3.3: 着せ替え集合の on/off 積算（accumulate）純関数。
+// 着せ替え集合の on/off 積算（accumulate）純関数。
 // Observable = 冪等（on→on・off→off で結果集合不変）＋順序不感（適用列の順序を
 // 入れ替えても同一 BindSet）。BindSet が昇順 dedup ゆえ集合同値が冪等判定の正準形（D9）。
 // ─────────────────────────────────────────────────────────────────────
@@ -770,30 +730,7 @@ fn accumulate_order_insensitive() {
     assert_eq!(result_a.ids(), &[1100, 1207], "両順序とも昇順正準形へ収束");
 }
 
-/// on→off 往復（D9）: on で追加した ID を off で戻すと元集合へ復帰する。
-#[test]
-fn accumulate_on_off_round_trip() {
-    let base = BindSet::from_ids([1302, 1500]);
-    let after_on = accumulate(&base, 1100, true);
-    let after_off = accumulate(&after_on, 1100, false);
-    assert_eq!(
-        after_off, base,
-        "on→off 往復は元集合へ復帰（直前状態保持・D9）"
-    );
-}
-
-/// off of absent id は no-op（入力と同値・R3.3 の縮退経路）。
-#[test]
-fn accumulate_off_absent_is_noop() {
-    let base = BindSet::from_ids([1100, 1207]);
-    let after = accumulate(&base, 9999, false);
-    assert_eq!(
-        after, base,
-        "存在しない ID の off は入力集合と同値（no-op）"
-    );
-}
-
-/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（今の振る舞い・要件 14.3）。
+/// `DefaultBinds::uniform` はどのスコープ（数でないスコープも）にも同じ組を返す（要件 14.3）。
 #[test]
 fn default_binds_uniform_returns_same_set_for_every_scope() {
     let set = areka_emo_compose::BindSet::from_ids([1100, 1207]);

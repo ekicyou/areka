@@ -150,11 +150,6 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
     //    dev-dependency の型を持ち込む判断は本タスクの境界（走査）を超える。
     // ⑶ 表に載せても**素通りにはならない**——[`each_exception_declares_whether_it_uniquifies_by_process_identifier`]
     //    が「一意化している」という主張をソースと突き合わせるので、後から一意化を外せば赤になる。
-    (
-        "crates/areka-emo-present/src/balloon_test_support.rs",
-        Why::ProcessUnique,
-        "プロセス識別子＋単調連番＋Drop の再帰削除を自前で持つ（窓口の移植元と同型）。要件 12.2 の移行対象外",
-    ),
     // `crates/areka-sylphya/src/persist/io.rs` はかつてここに載っていたが、タスク 10.7 が
     // 入口 3 箇所すべてを窓口へ寄せたので**当たりが 0 件になり、表から落とした**（本表の
     // doc の「起草の 16 ファイルとの突合」を参照）。
@@ -249,13 +244,13 @@ const ALLOWED_ENTRY_POINT_USES: &[(&str, Why, &str)] = &[
 ];
 
 /// [`ALLOWED_ENTRY_POINT_USES`] の件数（逐語）。表を増やすときはここも編集する（要件 12.4）。
-const ALLOWED_COUNT: usize = 14;
+const ALLOWED_COUNT: usize = 13;
 
 /// 種別ごとの件数（逐語）。表の**中身**が黙って入れ替わらないようにする。
 ///
 /// 件数の合計だけを縛ると、一意化を止めた 1 件を「読み出しのみ」と言い換えて総数を保つ、
 /// という書き換えが通ってしまう。種別ごとに割っておけば分類の移動も明示的な編集になる。
-const PROCESS_UNIQUE_COUNT: usize = 12;
+const PROCESS_UNIQUE_COUNT: usize = 11;
 /// 同上（読み出しのみ）。
 const READ_ONLY_COUNT: usize = 2;
 

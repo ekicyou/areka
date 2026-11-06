@@ -2,7 +2,7 @@
 //!
 //! 全関数が純粋（引数のみに依存・I/O なし・スレッド／GPU／実時間非依存）。時刻と乱数は注入シーム
 //! （`LoopRng`・`u64` 経過時刻）で受け取り、実 entropy 源・実クロックを評価経路から排除する（7.1）。
-//! これにより注入 tick＋注入乱数で全分岐を決定論的にテストできる（[deterministic-test-coverage-mandate]）。
+//! これにより注入 tick＋注入乱数で全分岐を決定論的にテストできる。
 //!
 //! # 構成
 //!
@@ -45,7 +45,7 @@ pub fn should_fire(k: u32, rng: &mut LoopRng) -> bool {
 }
 
 /// 1000ms 絶対グリッド境界（毎秒抽選の写像・catch-up 1 回）。
-pub struct LotteryBoundary {
+pub(crate) struct LotteryBoundary {
     next_boundary_ms: u64,
 }
 
@@ -88,7 +88,7 @@ pub enum FrameStatus {
     Pending,
     /// `frames[i]` が現在コマ（4.2 現在コマ 1 枚）。
     Active(usize),
-    /// 現在コマの surface_id が負（`-1` 等）→ 停止・ベース復帰（4.3）。
+    /// `i` 以下に surface_id が負（`-1` 等）の描くコマが在る → 停止・ベース復帰（4.3）。
     Stopped,
     /// `-1` なし末尾到達 → `frames[i]`（最終コマ）残留・終了状態（4.4/9.4）。
     FinishedResidual(usize),
@@ -98,7 +98,8 @@ pub enum FrameStatus {
 ///
 /// コマ k のデッドライン `t_k = Σ_{j<=k} wait_ms[j]`（`wait_k` は前コマからコマ k へ切り替わる遅延）。
 /// 現在 index は `t_k <= elapsed_ms` を満たす最大の k。誰も満たさない（`elapsed < t_0`）なら
-/// [`FrameStatus::Pending`]。現在コマの `surface_id < 0` なら [`FrameStatus::Stopped`]（method/x/y 無視・
+/// [`FrameStatus::Pending`]。i 以下に負の描くコマ（[`stop_frame`]）が在れば [`FrameStatus::Stopped`]
+/// （`-1` の後に待ち 0 のコマが続いても、刻みが `-1` の短い窓を飛び越えても止まる・method/x/y 無視・
 /// 4.3。`-1` と他負値の区別＋warn! は LoopRuntime 責務）。末尾かつ非負なら [`FrameStatus::FinishedResidual`]
 /// （末尾残留・恒久・4.4/9.4）、それ以外は [`FrameStatus::Active`]。デッドラインは単調非減少ゆえ、超過時点で
 /// 走査を打ち切れる（`wait == 0` 連鎖は同一デッドラインを共有し末尾 index が現在コマになる）。
@@ -106,7 +107,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
     match current_frame_index(frames, elapsed_ms) {
         None => FrameStatus::Pending,
         Some(i) => {
-            if frames[i].surface_id < 0 && frames[i].act == FrameAct::Draw {
+            if stop_frame(frames, i).is_some() {
                 FrameStatus::Stopped
             } else if i == frames.len() - 1 {
                 FrameStatus::FinishedResidual(i)
@@ -118,7 +119,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus {
 }
 
 /// 経過を周期で割った「何周目か（0 始まり）」と「その周の頭からの経過」（丸めない）。
-pub fn lap_of(elapsed_ms: u64, period_ms: NonZeroU64) -> (u64, u64) {
+pub(crate) fn lap_of(elapsed_ms: u64, period_ms: NonZeroU64) -> (u64, u64) {
     (elapsed_ms / period_ms.get(), elapsed_ms % period_ms.get())
 }
 
@@ -140,6 +141,15 @@ pub(crate) fn current_frame_index(frames: &[LoopFrame], elapsed_ms: u64) -> Opti
     current
 }
 
+/// `i` 以下で最初の負の番号の描くコマ（`-1` 等・再生はそこで止まる・無ければ `None`）。`always` は
+/// 通らない（途中の `-1` の先へ進む・4.5）。
+pub(crate) fn stop_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
+    let end = frames.len().min(i.saturating_add(1));
+    frames[..end]
+        .iter()
+        .position(|f| f.act == FrameAct::Draw && f.surface_id < 0)
+}
+
 /// `i` 以下で最後の描くコマ（無ければ `None`＝欄を外す・spec: seriko-pattern-calls 1.3/7.7）。
 ///
 /// 働きのコマは絵を重ねないので、今のコマが働きのコマでも前の絵（`base` のコマを含む）を残す。
@@ -151,7 +161,7 @@ pub(crate) fn visible_frame(frames: &[LoopFrame], i: usize) -> Option<usize> {
 
 /// `always` の今のコマ（[`always_at`] の答え）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AlwaysView {
+pub(crate) enum AlwaysView {
     /// 何も出さない（1 周目の最初の待ちの前・負の番号のコマに居る間）。
     Nothing,
     /// このコマを出す。
@@ -167,7 +177,7 @@ pub enum AlwaysView {
 /// - そうでなければ周の頭からの経過で [`frame_at`] と同じ累積の待ちを引く（待ち 0 のコマは同じ時刻を
 ///   共有し後ろが勝つ）。最初の待ちの前は、1 周目なら何も出さず、2 周目以降は前の周の最後のコマ。
 /// - 負の番号の描くコマ（絵を指すコマは除く）に居る間は何も出さない（働きのコマの `-1` は止めない）。
-pub fn always_at(
+pub(crate) fn always_at(
     frames: &[LoopFrame],
     period_ms: NonZeroU64,
     laps: Option<NonZeroU32>,
@@ -229,20 +239,8 @@ mod calls_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_emo_compose::ComposeMethod;
-
-    /// テスト用 1 コマ（method/x/y は frame_at では無視されるため既定 Overlay/0）。
-    fn frame(surface_id: i64, wait_ms: u32) -> LoopFrame {
-        LoopFrame {
-            surface_id,
-            picture: None,
-            method: ComposeMethod::Overlay,
-            act: crate::table::FrameAct::Draw,
-            wait_ms,
-            x: 0,
-            y: 0,
-        }
-    }
+    // 1 コマ（method/x/y は frame_at では無視されるため既定 Overlay/0）。
+    use crate::test_support::draw_frame as frame;
 
     // ── seeded_rng / should_fire ─────────────────────────────────────────────
 
@@ -513,11 +511,6 @@ mod tests {
         );
         // 恒久: 任意に大きな経過でも FinishedResidual(2) のまま（残留・9.4）。
         assert_eq!(
-            frame_at(&frames, 172),
-            FrameStatus::FinishedResidual(2),
-            "残留は恒久"
-        );
-        assert_eq!(
             frame_at(&frames, u64::MAX),
             FrameStatus::FinishedResidual(2),
             "u64::MAX 経過でも末尾残留は不変（恒久）"
@@ -565,11 +558,10 @@ mod tests {
             FrameStatus::Stopped,
             "-2 も負値ゆえ Stopped"
         );
-        // -2 コマで停止（frame_at は現在コマのみ見るので、その先の 80 でも 101 が現在コマ）。
         assert_eq!(
             frame_at(&frames, 80),
-            FrameStatus::FinishedResidual(2),
-            "80 で末尾 101 残留"
+            FrameStatus::Stopped,
+            "-2 の先の 101 へは進まない"
         );
     }
 
@@ -586,23 +578,5 @@ mod tests {
         // -1 が末尾に含まれる wait 0 連鎖 → Stopped。
         let frames = vec![frame(1, 0), frame(2, 0), frame(-1, 0)];
         assert_eq!(frame_at(&frames, 0), FrameStatus::Stopped, "末尾 -1 → 停止");
-    }
-
-    /// 疎 index 由来（table.rs が 0/1/3 を密 Vec へ正規化）でも位置ベースで一貫評価。
-    #[test]
-    fn frame_at_sparse_derived_dense_vec() {
-        // 疎 pattern index 0/1/3 は table.rs で密 Vec[3] に正規化済み。frame_at は位置で評価。
-        // waits 0/40/80（kero 相当）。t = [0, 40, 120]。末尾 -1。
-        let frames = vec![frame(2106, 0), frame(2110, 40), frame(-1, 80)];
-        assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 40), FrameStatus::Active(1));
-        assert_eq!(frame_at(&frames, 120), FrameStatus::Stopped);
-    }
-
-    /// `FrameStatus` は `Send`（純関数の返値がスレッド越え搬送に耐える）。
-    #[test]
-    fn frame_status_is_send() {
-        fn assert_send<T: Send>() {}
-        assert_send::<FrameStatus>();
     }
 }

@@ -54,7 +54,7 @@ pub const KIND_SURFACE: &str = "surface";
 /// この寸で表示記録を載せた（外れでは原寸 D2D bitmap 生成＋描画命令の記録を伴い、ヒットでは
 /// 合成メモが保持する記録をそのまま載せる）。原寸の外形の変化を含み得る。
 pub const SURFACE_STAGE_UPLOAD: &str = "upload";
-/// 新しい寸で可視化した（`set_bounds`・可視性付与の後）。
+/// 新しい寸で可視化した（`set_layout`・可視性付与の後）。
 pub const SURFACE_STAGE_VISUALIZE: &str = "visualize";
 /// 再表示を見送った（拡大率不変・不可視）。
 pub const SURFACE_STAGE_SKIPPED: &str = "skipped";
@@ -85,8 +85,11 @@ pub const SURFACE_REASON_INVISIBLE: &str = "invisible";
 /// 仕様 `areka-P0-dpi-transition-atomicity` の requirements.md 4.6 直下の注記〔2026-08-20〕。
 /// 除外の選り分けの実装は `areka` の `placement::transition_judge::summarize`）。
 ///
-/// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。
-pub const SURFACE_REASON_ALL: &[&str] = &[SURFACE_REASON_K_UNCHANGED, SURFACE_REASON_INVISIBLE];
+/// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。読み手は語彙の檻（テスト）だけ
+/// （判定側は [`SURFACE_REASON_INVISIBLE`] を直に名指す）。
+#[cfg(test)]
+pub(super) const SURFACE_REASON_ALL: &[&str] =
+    &[SURFACE_REASON_K_UNCHANGED, SURFACE_REASON_INVISIBLE];
 
 // ---------------------------------------------------------------------------
 // フィールド名
@@ -218,16 +221,6 @@ pub(super) fn stamp_of(world: &World) -> Stamp {
         (Some(frame), Some(tick_start)) => transition_diag::stamp_from_world(frame, tick_start),
         _ => Stamp { frame: 0, t_us: 0 },
     }
-}
-
-/// 段階別計時（perf サマリ行）へ載せるフレーム番号（Requirement 2.8・D12）。
-///
-/// 刻印と**同じ資源**から読む——perf 行と `surface` 行が同一フレーム番号で突合できることが
-/// 本フィールドの唯一の存在理由であり、供給元が 2 つになると突合が静かに壊れる。
-pub(super) fn frame_of(world: &World) -> u32 {
-    world
-        .get_resource::<FrameCount>()
-        .map_or(0, |frame| frame.0)
 }
 
 #[cfg(test)]

@@ -1,15 +1,16 @@
 //! 閉じる → 出すの競り合いを、着く順の全部の並びで固定する（spec: areka-P0-animated-image-playback
 //! task 4.4・要件 2.3・3.3・design Testing 7）。
 //!
-//! 面の表・コマ・指令の送り方は 4.2 の `presenter_film_tests.rs` の補助をそのまま使う（面 0 ＝
+//! 面の表・コマ・指令の送り方は 4.2 と同じ `presenter_test_support.rs` の補助を使う（面 0 ＝
 //! 回数つき `fin.png`（3 コマ）と終わりなし `end.png`（2 コマ）を並べたバルーン、面 1 ＝静止画）。
 //! コマの番号は子の `frames` の添字（0 が経過 0 の絵）。回数つきの「コマ k」は 2、新しい指令の
 //! 「コマ 1」は 1。終わりなしは全部の指令でコマ 1（経過 0 と違う絵）に置き、外されたら絵が変わる。
 
 use super::*;
 
-use super::film_tests::{T, ack, build_balloon, frames, golden, hide, send, shown};
-use super::test_support::make_world_with_gpu;
+use super::test_support::{
+    T, ack, build_balloon, frames, golden, hide, make_world_with_gpu, send, shown,
+};
 
 /// 「隠す → `show_target`」の後に着くもの。
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -79,7 +80,7 @@ fn every_arrival_order_after_reshow_shows_rest_until_the_new_command() {
     let rest_picture = golden(0, &none, &rest);
     let fresh_picture = golden(0, &none, &fresh);
     let still_picture = golden(1, &none, &PatternState::default());
-    // 前提: 4 つの絵がどれも違う（外し・外し忘れ・終わりなしの外れが絵の違いで見える）。
+    // 前提: 見分けたい 5 組の絵が違う（外し・外し忘れ・終わりなしの外れが絵の違いで見える）。
     let k_picture = golden(0, &none, &at_k);
     let end_stripped = golden(0, &none, &frames(&w, None, None));
     for (a, b) in [

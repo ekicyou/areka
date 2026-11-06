@@ -1,0 +1,22 @@
+{
+  "feature_name": "audit-wintf-graphics-world",
+  "created_at": "2026-11-05T09:22:35Z",
+  "updated_at": "2026-11-05T22:25:52Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}

@@ -147,7 +147,6 @@ fn bake_atlas(base: &Path, rels: &[&str]) -> AtlasTable {
         })
         .collect();
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements,
         collisions: Vec::new(),

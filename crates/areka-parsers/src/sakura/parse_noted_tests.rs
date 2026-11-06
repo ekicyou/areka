@@ -106,8 +106,9 @@ fn percent_star_span_is_two_chars() {
 #[test]
 fn folded_legacy_q_span_covers_both_brackets() {
     for (s, folded) in [
-        // 浮く `[...]` が次のタグの手前で切れるときだけ畳まれる（既存の規則）。
+        // 閉じた題 `[...]` は、後ろが次のタグでも地の文でも畳まれる（指摘 25）。
         (r"\q[ID][題]\e", r"\q[ID][題]"),
+        (r"\q[ID][題]です", r"\q[ID][題]"),
         (r"前\q*[ID][題]", r"\q*[ID][題]"),
     ] {
         let reads = parse_noted(s);
@@ -162,7 +163,8 @@ fn unknown_tag_is_noted_on_spellings_without_an_arm() {
         // 素通しのタグ（角括弧つき）。
         (r"\i[5]", r"\i[5]"),
         (r"\&[amp]", r"\&[amp]"),
-        (r"\w[2]", r"\w[2]"),
+        // `\w` の後の `[2]` は字（かけ直しの R18）。
+        (r"\w[2]", r"\w"),
         (r"\q*[ID]", r"\q*[ID]"),
         // 旧い 2 連の `\q`（畳んだ全部に 1 つ）。
         (r"\q[ID][題]\e", r"\q[ID][題]"),
@@ -218,6 +220,10 @@ fn argument_defaulted_is_noted_where_reading_falls_back() {
         // 改行の比: 引数が在って `half` でも数でもない。
         r"\n[abc]",
         r#"\n[""]"#,
+        // 改行の比: 数として読めても有限でない（指摘 3）。
+        r"\n[NaN]",
+        r"\n[inf]",
+        r"\n[1e40]",
         // 話者のスコープ: 引数なし・非数。
         r"\p[x]",
         r"\p[]",
@@ -281,16 +287,4 @@ fn raw_iff_unknown_tag_or_unclosed() {
             assert_eq!(is_raw, has, "{r:?} in {s:?}");
         }
     }
-}
-
-/// 字句は `w`／`b`／`p` の短縮形しか作らないので、想定外の短縮形の腕は台本からは届かない。
-/// トークンを直接組んで本体へ渡し、この腕でも `Raw` と知らないタグの印が揃うことを固定する。
-#[test]
-fn unexpected_shorthand_arm_is_raw_with_unknown_tag() {
-    use crate::sakura::{decode::decode_noted, lexer::Token};
-    let reads = decode_noted(vec![(Token::Shorthand { word: 'x', n: 5 }, 0..3)]);
-    assert_eq!(reads.len(), 1);
-    assert_eq!(reads[0].instruction, Instruction::Raw(r"\x5".to_string()));
-    assert_eq!(reads[0].span, 0..3);
-    assert_eq!(reads[0].notes, vec![UnknownTag]);
 }

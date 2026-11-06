@@ -135,13 +135,13 @@ mod tests {
     /// 任意内容で書く（`None` なら shell descript 自体を作らない＝不在ケース）。
     ///
     /// `shell_dir_name` はゴースト側 descript の `seriko.defaultsurfacedirectoryname`
-    /// へそのまま渡され、`areka_parsers::package::resolve` がそれを shell dir 名として
+    /// へそのまま渡され、`areka_parsers::package::resolve_with_shell` がそれを shell dir 名として
     /// 解決する（`master` 固定にすると「フォールバック値がたまたま `master` と一致する」
     /// だけで検出力を持たない偽陽性テストになるため、呼び出し側が任意名を選べるように
     /// している）。
     ///
     /// `MountModel` は `#[non_exhaustive]` ゆえ他クレートから構造体リテラルで
-    /// 直接構築できない（design 契約どおり）ため、`areka_parsers::package::resolve`
+    /// 直接構築できない（design 契約どおり）ため、`areka_parsers::package::resolve_with_shell`
     /// を通して実物を得る（`resolve_tests.rs` の tempdir fixture 流儀を踏襲）。
     fn resolve_mount_with_shell_descript(
         root: &Path,
@@ -163,7 +163,7 @@ mod tests {
             fs::write(shell_dir.join("descript.txt"), contents).expect("write shell descript.txt");
         }
 
-        areka_parsers::package::resolve(root, DefaultEncoding::Utf8)
+        areka_parsers::package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
             .expect("fixture tree resolves to a MountModel")
     }
 
@@ -179,7 +179,7 @@ mod tests {
         )
         .expect("write ghost descript.txt");
         fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
-        areka_parsers::package::resolve(root, DefaultEncoding::Utf8)
+        areka_parsers::package::resolve_with_shell(root, DefaultEncoding::Utf8, None)
             .expect("fixture tree resolves to a MountModel")
     }
 

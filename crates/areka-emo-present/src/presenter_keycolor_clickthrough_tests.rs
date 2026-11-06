@@ -173,18 +173,15 @@ fn keyed_out_pixels_leave_the_hit_mask_and_the_rest_stay_inside() {
     ];
 
     let mut presenter = EmoPresenter::new();
-    for (target, shell, _, surface_id, _, at) in faces {
+    for (target, shell, _, surface_id, _, _) in faces {
         let window = spawn_window_with_dpi(&mut world, 96);
-        presenter
-            .attach_target(
-                &mut world,
-                target,
-                window,
-                shell.build_world(),
-                shell.atlas().clone(),
-                96,
-            )
-            .unwrap_or_else(|e| panic!("{at}: attach_target が失敗した: {e:?}"));
+        presenter.attach_target(
+            target,
+            window,
+            shell.build_world(),
+            shell.atlas().clone(),
+            96,
+        );
         show_ok(&mut presenter, &mut world, target, surface_id);
     }
 

@@ -139,9 +139,10 @@ fn map_error_hresult_is_parse_error() {
 /// backend を組む（手で写した接続の道具は持たない・#34）。fixture は backend より長く生かすこと。
 fn build_real_backend() -> (temp_path_kit::TempPath, Box<dyn ShioriBackend>) {
     let ghost = super::tests::dll_ghost("inproc-adapter");
-    let mount = areka_parsers::package::resolve(
+    let mount = areka_parsers::package::resolve_with_shell(
         ghost.path(),
         areka_parsers::charset::DefaultEncoding::Utf8,
+        None,
     )
     .expect("fixture の resolve");
     let backend = inproc_connect(mount.shiori)().expect("テストの DLL へ接続できること");

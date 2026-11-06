@@ -187,3 +187,135 @@ fn append_collision_uses_same_representation_as_surface() {
         surface_shell.surfaces[0].collisions
     );
 }
+
+/// 範囲の幅が上限 8193 を越える記述子は飛ばして `RangeTooWide`（error）を積む（指摘 6）。
+/// 記述子が残らないブレスは積まず、ほかの記述子とほかのブレスは読む。箱の転記も同じ上限で読む。
+#[test]
+fn range_wider_than_cap_is_skipped_and_recorded() {
+    use crate::shell::{BoxDefinition, ShellIssue, parse_all};
+    let input = "\
+surface0-4294967295
+{
+element0,overlay,a.png,0,0
+}
+surface.append5,0-4294967295
+{
+collision0,1,2,3,4,Head
+}
+";
+    let text = parse_all(input);
+    assert!(text.shell.surfaces.is_empty());
+    assert_eq!(text.shell.appends.len(), 1);
+    assert_eq!(text.shell.appends[0].targets, vec![AppendTarget::Single(5)]);
+    assert_eq!(
+        text.issues,
+        vec![
+            ShellIssue::RangeTooWide {
+                heading: "surface0-4294967295".into(),
+                text: "0-4294967295".into(),
+            },
+            ShellIssue::RangeTooWide {
+                heading: "surface.append5,0-4294967295".into(),
+                text: "0-4294967295".into(),
+            },
+        ]
+    );
+    assert_eq!(text.issues[0].severity(), tracing::Level::ERROR);
+    // 箱の転記も同じ記述子を飛ばす（記録は画像の側の 1 回だけ）。
+    assert_eq!(text.boxes.len(), 1);
+    match &text.boxes[0] {
+        BoxDefinition::Append(lines) => {
+            assert_eq!(lines.targets, vec![AppendTarget::Single(5)])
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// 上限の境: 幅 8193（`0-8192`）は読み、幅 8194（`0-8193`）は飛ばす。番号の値にはかけない。
+#[test]
+fn range_width_cap_boundary() {
+    use crate::shell::{ShellIssue, parse_all};
+    let text = parse_all("surface0-8192\n{\n}\n");
+    assert_eq!(
+        text.shell.surfaces[0].targets,
+        vec![AppendTarget::Range {
+            start: 0,
+            end: 8192
+        }]
+    );
+    assert!(text.issues.is_empty());
+
+    let text = parse_all("surface0-8193\n{\n}\n");
+    assert!(text.shell.surfaces.is_empty());
+    assert_eq!(
+        text.issues,
+        vec![ShellIssue::RangeTooWide {
+            heading: "surface0-8193".into(),
+            text: "0-8193".into(),
+        }]
+    );
+
+    let text = parse_all("surface10000\n{\n}\nsurface10000-18192\n{\n}\n");
+    assert_eq!(text.shell.surfaces.len(), 2);
+    assert_eq!(
+        text.shell.surfaces[0].targets,
+        vec![AppendTarget::Single(10000)]
+    );
+    assert_eq!(
+        text.shell.surfaces[1].targets,
+        vec![AppendTarget::Range {
+            start: 10000,
+            end: 18192
+        }]
+    );
+    assert!(text.issues.is_empty());
+}
+
+/// 上限はシェル全体の範囲の幅の合計にかかる（1 行に並べても、見出しを重ねても膨らまない）。
+/// 除外の範囲は広げないので上限をかけない。
+#[test]
+fn range_width_cap_is_shell_wide() {
+    use crate::shell::{ShellIssue, parse_all};
+    let text = parse_all("surface0-8192,0-8192\n{\n}\n");
+    assert_eq!(
+        text.shell.surfaces[0].targets,
+        vec![AppendTarget::Range {
+            start: 0,
+            end: 8192
+        }]
+    );
+    assert_eq!(
+        text.issues,
+        vec![ShellIssue::RangeTooWide {
+            heading: "surface0-8192,0-8192".into(),
+            text: "0-8192".into(),
+        }]
+    );
+
+    let text = parse_all("surface0-8192\n{\n}\nsurface8193-8193\n{\n}\n");
+    assert_eq!(text.shell.surfaces.len(), 1);
+    assert_eq!(
+        text.issues,
+        vec![ShellIssue::RangeTooWide {
+            heading: "surface8193-8193".into(),
+            text: "8193-8193".into(),
+        }]
+    );
+
+    let text = parse_all("surface.append0,0-8192,!0-4294967295\n{\n}\n");
+    assert_eq!(
+        text.shell.appends[0].targets,
+        vec![
+            AppendTarget::Single(0),
+            AppendTarget::Range {
+                start: 0,
+                end: 8192
+            },
+            AppendTarget::ExcludeRange {
+                start: 0,
+                end: 4294967295
+            },
+        ]
+    );
+    assert!(text.issues.is_empty());
+}

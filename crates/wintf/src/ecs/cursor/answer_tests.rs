@@ -150,3 +150,20 @@ fn push_is_noop_without_query() {
     assert_eq!(on_mouse_hover(&world, window), Some(LRESULT(0)));
     assert_eq!(last_shown(hwnd(40)), None);
 }
+
+#[test]
+fn removing_window_handle_forgets_only_that_window() {
+    clear_last_shown();
+    remember_shown(hwnd(50), cursor(1));
+    remember_shown(hwnd(51), cursor(2));
+    let mut world = World::new();
+    let window = world
+        .spawn(WindowHandle {
+            hwnd: hwnd(50),
+            instance: Default::default(),
+        })
+        .id();
+    world.entity_mut(window).remove::<WindowHandle>();
+    assert_eq!(last_shown(hwnd(50)), None);
+    assert_eq!(last_shown(hwnd(51)), Some(cursor(2)));
+}

@@ -128,7 +128,6 @@ fn parse_fixture(bytes: &[u8]) -> Shell {
 fn expected_shell() -> Shell {
     Shell {
         surfaces: vec![Surface {
-            id: 0,
             targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,

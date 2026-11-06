@@ -6,6 +6,7 @@ use super::{
     AtlasTable, BindSet, ComposedSurface, Composer, EmoWorld, MemoryDecoder, PackConfig, Path,
     PatternState, SetId, Shell, SurfaceSet, bake,
 };
+use areka_parsers::shell::AppendTarget;
 
 /// 決定的な既知画像を tightly-packed premultiplied BGRA で生成する。
 ///
@@ -75,7 +76,7 @@ fn surface0_element0_single_layer_equals_inserted_image() {
     let s0 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 0)
+        .find(|s| s.targets == [AppendTarget::Single(0)])
         .expect("emo2 surfaces.txt に surface0 が存在する");
     assert_eq!(
         s0.elements.len(),

@@ -5,8 +5,8 @@
 //! - 大小差・前後空白・CRLF 寛容。
 //! - UTF-8 BOM 前置でも走査開始前に BOM を読み飛ばして検出。
 //! - 宣言なし（balloons0s.txt 由来）は `None`。
-//! - 非 ASCII バイト先行で走査打ち切り → `None`。
-//! - 4096 バイト上限超えの宣言は打ち切り → `None`。
+//! - 非 ASCII の行より後の宣言も見つける（位置を問わない・7.11(b)）。
+//! - 4,096 バイトを越えた所の宣言も見つける（窓を置かない・7.11(b)）。
 //! - `charset:`（コロン・カンマなし異体）は不一致 → `None`。
 
 use super::prescan::prescan_charset;
@@ -40,32 +40,30 @@ fn no_declaration_returns_none() {
     assert_eq!(prescan_charset(bytes), None);
 }
 
-/// charset 行より前に非 ASCII バイトが現れると走査を打ち切り `None`。
+/// charset 行より前に非 ASCII の行があっても、宣言を見つける（位置を問わない・7.11(b)）。
 #[test]
-fn non_ascii_before_declaration_cuts_off() {
-    // 先頭行に非 ASCII バイト（0x82 = SJIS リード）を含む → 走査打ち切り。
+fn non_ascii_before_declaration_is_still_found() {
+    // 先頭行に非 ASCII バイト（0x82 = SJIS リード）を含む。
     let mut bytes = vec![b'a', b',', 0x82, 0xA0, b'\n'];
     bytes.extend_from_slice(b"charset,UTF-8\n");
-    assert_eq!(prescan_charset(&bytes), None);
+    assert_eq!(prescan_charset(&bytes), Some("UTF-8".to_string()));
 }
 
-/// 4096 バイトの ASCII パディング超えに置いた宣言は上限打ち切りで `None`。
+/// 4,096 バイトを越えた所に置いた宣言も見つける（窓を置かない・7.11(b)）。
 #[test]
-fn declaration_beyond_4096_cap_is_ignored() {
-    // 4096 バイトを ASCII コメント行で埋めてから charset 宣言を置く。
+fn declaration_beyond_4096_bytes_is_found() {
     let mut bytes = Vec::new();
-    // '#' と '\n' で満たす（改行様式は寛容だが上限内には宣言が無い）。
     while bytes.len() < 4096 {
         bytes.push(b'#');
     }
     bytes.push(b'\n');
     bytes.extend_from_slice(b"charset,UTF-8\n");
-    assert_eq!(prescan_charset(&bytes), None);
+    assert_eq!(prescan_charset(&bytes), Some("UTF-8".to_string()));
 }
 
-/// 上限直前に置いた宣言は検出される（上限境界の正常側）。
+/// 先頭の宣言は、後ろに長い行が続いても検出される。
 #[test]
-fn declaration_within_4096_cap_is_detected() {
+fn declaration_before_long_padding_is_detected() {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"charset,UTF-8\n");
     while bytes.len() < 4000 {
@@ -79,6 +77,17 @@ fn declaration_within_4096_cap_is_detected() {
 fn colon_variant_is_rejected() {
     let bytes = b"charset:UTF-8\ntype,balloon\n";
     assert_eq!(prescan_charset(bytes), None);
+}
+
+/// UTF-8 で読めない字を含む宣言の行も、鍵が `charset` なら宣言として返す（値は読めた分の字・
+/// 解けないラベルとして decode が記録する）。
+#[test]
+fn declaration_line_with_non_utf8_bytes_is_still_found() {
+    let bytes = b"charset,Shift_JIS\x81\x40\nname,x\n";
+    assert_eq!(
+        prescan_charset(bytes),
+        Some("Shift_JIS\u{FFFD}@".to_string())
+    );
 }
 
 /// 空入力は panic せず `None`。

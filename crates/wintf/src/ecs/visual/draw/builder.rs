@@ -54,7 +54,10 @@ enum ClipKind {
 /// *性能*（コマンド発行 / hash / diff / 直列 emit の負荷削減）のための刈り込み。
 /// カリングを入れると `DrawCommand` 列は viewport 依存になるので、hash 差分更新と
 /// 併用する場合は viewport を差分キーに含めること。
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "`wintf-visual-tree` が本番へ上げるまで使い手が無い"
+)]
 pub(crate) fn build(
     out: &mut Vec<DrawCommand>,
     unit_rect: &ID2D1Geometry,

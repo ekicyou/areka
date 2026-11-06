@@ -6,13 +6,13 @@
 //! 無い表（`emo2` を含む）の列は `looper_parts_emo2_tests.rs` と `areka` の
 //! `spine_seriko_loop_tests.rs` が書き換えずに固定している。
 
-use std::num::NonZeroU32;
+use areka_emo_compose::FilmId;
 
-use areka_emo_compose::{BindSet, ElementKind, EmoWorld, FilmId, FilmSheet, SurfaceMaster};
-
+use super::test_support::switch_at;
 use super::tests::{cfg, counting_rng};
 use super::*;
 use crate::resolve::SurfaceTarget;
+use crate::test_support::{empty_states, film_sheet, film_world};
 
 const FILM: FilmId = FilmId(10);
 /// 1 コマの待ち時間。
@@ -20,27 +20,13 @@ const DELAY_MS: u64 = 100;
 /// 画面の更新の刻み。
 const TICK_MS: u64 = 16;
 
-/// 面 0 に動く絵 `a.png` を 1 つ置いた表（分解と同じ形を手で組む＝`parts_film_tests.rs` と同じ組み方）。
+/// 面 0 に動く絵 `a.png` を 1 つ置いた表（分解と同じ形を手で組む）。
 fn one_film_table() -> AnimationTable {
-    let mut world = EmoWorld::build(&areka_parsers::shell::parse(
+    let world = film_world(
         "surface0\n{\nelement0,overlay,a.png,0,0\n}\n",
-    ));
-    let w = world.world_mut();
-    let mut q = w.query::<&mut SurfaceMaster>();
-    for mut master in q.iter_mut(w) {
-        for e in &mut master.elements {
-            e.kind = ElementKind::Film(FILM);
-        }
-    }
-    let sheet = FilmSheet {
-        id: FILM,
-        path: "a.png".into(),
-        frames: vec![10, 11, 12],
-        delays_ms: vec![DELAY_MS as u32; 3],
-        laps: None::<NonZeroU32>,
-        original: (2, 2),
-        rest: 0,
-    };
+        &[("a.png", FILM)],
+    );
+    let sheet = film_sheet(FILM, "a.png", &[DELAY_MS as u32; 3], None);
     AnimationTable::from_world_and_films(&world, [sheet].iter(), &[])
 }
 
@@ -48,15 +34,9 @@ fn one_film_table() -> AnimationTable {
 fn shown() -> (LoopRuntime, ScopeStates) {
     let (rng, _probe) = counting_rng(&[]);
     let mut rt = LoopRuntime::new(cfg(one_film_table(), rng));
-    let mut states = ScopeStates::new(crate::DefaultBinds::uniform(BindSet::default()));
-    let scope = ActorKey::from("0");
+    let mut states = empty_states();
     assert!(rt.on_tick(0, &mut states).is_empty());
-    let crate::state::ApplyOutcome::Changed(_) = states.apply(&scope, SurfaceTarget::Show(0))
-    else {
-        panic!("面 0 の表示の指令が出ない");
-    };
-    rt.on_surface_changed(&scope, Slot::Shell);
-    rt.refresh(&scope, Slot::Shell, None, &mut states);
+    switch_at(&mut rt, &mut states, SurfaceTarget::Show(0), None).expect("面 0 の表示の指令");
     (rt, states)
 }
 

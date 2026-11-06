@@ -4,13 +4,13 @@
 //! （[`TalkDriver`]）をテストのスレッドの上で直に回す（`spawn_talk` の本体と同じ `handle`）。
 //! 別のスレッドから後で届く知らせだけは実の talk スレッドで回し、talk の終わった後にテストのスレッドから送る。
 
-use super::test_support::{NoopSink, TalkNotice};
+use super::test_support::{NoopSink, TalkNotice, dones, driver};
 use super::*;
 use crate::contract::{CueCommand, TalkCue};
 use crate::strict::{DetectionPoint, RECORD_TARGET, StrictJudges};
 use dola::cue::CueProbe;
 use log_capture_kit::CapturedEvent;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -74,17 +74,6 @@ impl CueSink for SurfaceProbeSink {
     }
 }
 
-fn driver(
-    sinks: Vec<Box<dyn CueSink + Send>>,
-    hooks: Option<StrictHooks>,
-) -> (TalkDriver<TalkNotice>, Receiver<TalkNotice>) {
-    let (tx, rx) = mpsc::channel();
-    (
-        TalkDriver::new(sinks, SystemVarSnapshot::default(), tx, hooks),
-        rx,
-    )
-}
-
 /// 窓の無いゴーストの受け手の組（知らせない受け手 2 つ）。
 fn windowless() -> Vec<Box<dyn CueSink + Send>> {
     vec![Box::new(TraceSink), Box::new(NoopSink)]
@@ -113,15 +102,6 @@ fn sequence(events: &[CapturedEvent]) -> Vec<String> {
             RECORD_TARGET => Some(ev.field_str("point").unwrap_or_default().to_string()),
             "strict_test::cue" => Some("cue".to_string()),
             _ => None,
-        })
-        .collect()
-}
-
-fn dones(rx: &Receiver<TalkNotice>) -> Vec<TalkDone> {
-    rx.try_iter()
-        .filter_map(|notice| match notice {
-            TalkNotice::Done(done) => Some(done),
-            TalkNotice::ChoiceWaiting(_) => None,
         })
         .collect()
 }

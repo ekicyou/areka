@@ -109,7 +109,6 @@ fn load(text: &str) -> Loaded {
             .retain(|e| element_kind(&e.path) == ElementKind::Image);
     }
     surfaces.extend(world.base_images().used.iter().map(|(&id, name)| Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: vec![Element {
             layer: 0,

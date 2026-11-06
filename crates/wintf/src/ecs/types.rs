@@ -5,7 +5,6 @@
 //! ゼロコスト `From`/`Into` 変換を提供する。
 
 use bevy_ecs::prelude::*;
-use tracing::warn;
 use windows::Win32::Foundation::{POINT, SIZE};
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D_SIZE_F};
 use windows_numerics::Vector2;
@@ -87,21 +86,6 @@ impl PointF {
 pub struct Size {
     pub width: f32,
     pub height: f32,
-}
-
-impl Size {
-    /// サイズのバリデーション（負の値チェック）
-    ///
-    /// 負の値が検出された場合は警告ログを出力します。
-    /// これはmayレベルの推奨事項であり、実行時エラーとはしません。
-    pub fn validate(&self) {
-        if self.width < 0.0 {
-            warn!(width = self.width, "Size.width is negative");
-        }
-        if self.height < 0.0 {
-            warn!(height = self.height, "Size.height is negative");
-        }
-    }
 }
 
 // ============================================================================
@@ -370,81 +354,6 @@ mod tests {
         let d2d: D2D_RECT_F = original.into();
         let back: Rect = d2d.into();
         assert_eq!(original, back);
-    }
-
-    // --- Default 値テスト ---
-
-    #[test]
-    fn test_point_default() {
-        let p = Point::default();
-        assert_eq!(p.x, 0);
-        assert_eq!(p.y, 0);
-    }
-
-    #[test]
-    fn test_pointf_default() {
-        let p = PointF::default();
-        assert_eq!(p.x, 0.0);
-        assert_eq!(p.y, 0.0);
-    }
-
-    #[test]
-    fn test_size_default() {
-        let s = Size::default();
-        assert_eq!(s.width, 0.0);
-        assert_eq!(s.height, 0.0);
-    }
-
-    #[test]
-    fn test_sizei_default() {
-        let s = SizeI::default();
-        assert_eq!(s.width, 0);
-        assert_eq!(s.height, 0);
-    }
-
-    #[test]
-    fn test_offset_default() {
-        let o = Offset::default();
-        assert_eq!(o.x, 0.0);
-        assert_eq!(o.y, 0.0);
-    }
-
-    #[test]
-    fn test_rect_default() {
-        let r = Rect::default();
-        assert_eq!(r.left, 0.0);
-        assert_eq!(r.top, 0.0);
-        assert_eq!(r.right, 0.0);
-        assert_eq!(r.bottom, 0.0);
-    }
-
-    // --- PartialEq テスト ---
-
-    #[test]
-    fn test_point_equality() {
-        let a = Point { x: 1, y: 2 };
-        let b = Point { x: 1, y: 2 };
-        let c = Point { x: 3, y: 4 };
-        assert_eq!(a, b);
-        assert_ne!(a, c);
-    }
-
-    #[test]
-    fn test_size_equality() {
-        let a = Size {
-            width: 100.0,
-            height: 50.0,
-        };
-        let b = Size {
-            width: 100.0,
-            height: 50.0,
-        };
-        let c = Size {
-            width: 200.0,
-            height: 50.0,
-        };
-        assert_eq!(a, b);
-        assert_ne!(a, c);
     }
 
     // --- コンストラクタテスト ---

@@ -24,7 +24,7 @@
 
 use super::*;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use areka_emo_atlas::{MemoryDecoder, WicDecoderArm};
 use areka_emo_compose::{BindSet, ComposeError, Composer, PatternState};
@@ -32,8 +32,10 @@ use areka_parsers::shell::parse;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    CapturedEvent, capture_events, claudia_shell_dir, with_com_initialized, write_descript,
+    CapturedEvent, claudia_shell_dir, insert_solid, warn_lines, with_com_initialized,
+    write_descript,
 };
+use log_capture_kit::capture;
 
 /// 画像 1 枚の登録内容（ファイル名・実寸・全画素の色＝premultiplied BGRA 不透明）。
 type Image = (&'static str, (u32, u32), [u8; 4]);
@@ -59,23 +61,12 @@ fn shell_dir() -> PathBuf {
     PathBuf::from(r"C:\areka-test\shell-target-element-base")
 }
 
-/// 全画素が同じ色の不透明な絵を復号器へ登録する。
-fn insert_solid(dec: &mut MemoryDecoder, dir: &Path, (name, (w, h), color): Image) {
-    let bgra: Vec<u8> = color
-        .iter()
-        .copied()
-        .cycle()
-        .take((w * h * 4) as usize)
-        .collect();
-    dec.insert(dir.join(name), w, h, w * 4, bgra, true);
-}
-
 /// 文面を読み、`files` をフォルダ直下に在るファイル名・`images` を復号器の中身として焼く。
 fn bake(text: &str, files: &[&str], images: &[Image]) -> ShellTarget {
     let dir = shell_dir();
     let mut dec = MemoryDecoder::new();
-    for &image in images {
-        insert_solid(&mut dec, &dir, image);
+    for &(name, size, color) in images {
+        insert_solid(&mut dec, &dir, name, size, color);
     }
     build_shell_target(
         parse(text),
@@ -138,7 +129,6 @@ fn base_element_zero_underlays_the_overlay_part() {
         "前提: 登録済みの絵だけを焼くので脱落は 0 件: {:?}",
         target.bake_errors()
     );
-    assert_ne!(BODY, SURFACE26, "前提: 土台の絵と面の画像は大きさが違う");
 
     let composed = snapshot(&target, 26).expect("面 26 は合成できる");
     assert_eq!(
@@ -250,7 +240,7 @@ fn undrawable_element_zero_leaves_the_surface_as_without_the_line() {
 /// ⑷（要件 1.7）: 読み込めない `element0,base,missing.png` は、`,overlay,` に書き替えた文面と
 /// 同じ脱落の記録（`missing.png` を名指す 1 件）を残し、同じ面の部品は描かれ、合成結果も等しい。
 ///
-/// 記録の `warn!` はこの `bake_errors` を `load_shell_target` が出すので、中身の一致で足りる。
+/// 記録の `error!` はこの `bake_errors` を `load_shell_target` が出すので、中身の一致で足りる。
 /// 較正として、`missing.png` を復号器に入れると脱落が 0 件になる（＝1 件は `missing.png` の分）。
 #[test]
 fn unreadable_base_image_is_recorded_like_overlay_and_the_part_is_drawn() {
@@ -306,7 +296,7 @@ fn unreadable_base_image_is_recorded_like_overlay_and_the_part_is_drawn() {
 // ── 入口の警告（要件 2.1・2.2・2.3・2.6・4.2）──────────────────────────────────────
 //
 // ここから先は `load_shell_target` を通すので fs に触れる。surfaces.txt は `TempPath` に置き、
-// 描ける行が指す絵（`body.png`・`face.png`）はすべて復号器に入れる——焼く段の脱落の `warn!` が
+// 描ける行が指す絵（`body.png`・`face.png`）はすべて復号器に入れる——焼く段の脱落の `error!` が
 // 混ざると、本 spec の警告の数が数えられなくなるためである。
 
 /// 本 spec の警告の本文。
@@ -341,31 +331,14 @@ fn load_events(text: &str, times: usize) -> Vec<CapturedEvent> {
     std::fs::write(dir.child("surfaces.txt"), text).expect("記述ファイル作成");
     write_descript(dir.path());
     let mut dec = MemoryDecoder::new();
-    insert_solid(&mut dec, dir.path(), ("body.png", BODY, COLOR_BODY));
-    insert_solid(&mut dec, dir.path(), ("face.png", FACE, COLOR_FACE));
-    let ((), events) = capture_events(|| {
+    insert_solid(&mut dec, dir.path(), "body.png", BODY, COLOR_BODY);
+    insert_solid(&mut dec, dir.path(), "face.png", FACE, COLOR_FACE);
+    let ((), events) = capture(|| {
         for _ in 0..times {
             load_shell_target(dir.path(), &dec).expect("シェルは読める");
         }
     });
     events
-}
-
-/// `warn` 以上の記録を「本文|欄=値…」の文字列にする（`message` 以外の欄は名前の昇順）。
-fn warn_or_worse(events: &[CapturedEvent]) -> Vec<String> {
-    events
-        .iter()
-        .filter(|e| e.level <= tracing::Level::WARN)
-        .map(|e| {
-            let mut line = e.message().to_string();
-            for (name, value) in e.fields_map() {
-                if name != "message" {
-                    line.push_str(&format!("|{name}={value}"));
-                }
-            }
-            line
-        })
-        .collect()
 }
 
 /// 本 spec の警告の件数。
@@ -382,7 +355,7 @@ fn undrawn_count(events: &[CapturedEvent]) -> usize {
 fn undrawable_line_warns_once_with_heading_element_and_method() {
     let events = load_events(WITH_UNDRAWN, 1);
     assert_eq!(
-        warn_or_worse(&events),
+        warn_lines(&events),
         vec![format!(
             "{UNDRAWN_WARN}|element=\"2\"|heading=\"surface0,1\"|method=\"replace\""
         )]
@@ -393,7 +366,7 @@ fn undrawable_line_warns_once_with_heading_element_and_method() {
 #[test]
 fn drawable_only_shell_warns_nothing() {
     let events = load_events(DRAWABLE_ONLY, 1);
-    assert_eq!(warn_or_worse(&events), Vec::<String>::new());
+    assert_eq!(warn_lines(&events), Vec::<String>::new());
 }
 
 /// 要件 4.2: 警告は読み込み 1 回につき 1 行 1 件——2 回読むとちょうど 2 倍になる。
@@ -420,7 +393,7 @@ const CLAUDIA_EXTENT: (u32, u32) = (333, 500);
 fn claudia_base_surfaces_are_full_size_without_warnings() {
     with_com_initialized(|| {
         let dec = WicDecoderArm::new().expect("COM 初期化下で WIC ファクトリが作れる");
-        let (target, events) = capture_events(|| {
+        let (target, events) = capture(|| {
             load_shell_target(&claudia_shell_dir(), &dec).expect("claudia のシェルは読める")
         });
         // 3 面の外形を並べて比べる（赤のとき、どの面がどの大きさに縮んだかが一度に見える）。

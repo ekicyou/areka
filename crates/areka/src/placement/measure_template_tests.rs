@@ -5,7 +5,7 @@
 //!
 //! 1. **外形の一致**: 里々の標準テンプレート `R_POST_and_KOMAINU` と YAYA の標準テンプレート
 //!    `konnoyayame` について、採寸経路（[`build_shell_assets`] → [`compose_size`]）と
-//!    表示経路（`load_shell_target` → `ShellTarget::build_world` → `Composer::compose`）の
+//!    表示経路（`load_shell_target` → `ShellTarget::take_world` → `Composer::compose`）の
 //!    外形が、面 0・面 10 のどちらでも同じ値になること。期待値は要件 3.1 が挙げる実測
 //!    （`R_POST_and_KOMAINU` は 236×462／140×160・`konnoyayame` は 260×390／200×200）。
 //! 2. **複製が戻っていないこと**: `measure.rs` と `emo2_boot/assets.rs` の本文が、シェルの
@@ -48,7 +48,7 @@ struct Template {
     surface10: (i32, i32),
 }
 
-/// 表示経路の外形を得る（`ShellTarget::build_world` が組んだ面の表を素の `Composer` で合成する）。
+/// 表示経路の外形を得る（`ShellTarget::take_world` が渡す面の表を素の `Composer` で合成する）。
 ///
 /// [`compose_size`] と同じ入力（bind なし・空 pattern）で合成し、外形だけを取り出す。
 /// 採寸側の関数を流用せず `Composer::compose` を直に呼ぶのは、一致の検査が「同じ関数を 2 度
@@ -92,9 +92,9 @@ fn assert_both_paths_agree(template: &Template) {
         let measured10 = measured(KERO_SURFACE_ID, &mut composer);
 
         // B: 表示経路（起動時の資産組立 `build_boot_assets` が通る 2 段と同じ形）。
-        let target = load_shell_target(&template.shell_dir, &decoder)
+        let mut target = load_shell_target(&template.shell_dir, &decoder)
             .unwrap_or_else(|e| panic!("{}: 表示経路のシェル読み込みに失敗: {e}", template.name));
-        let present_world = target.build_world();
+        let present_world = target.take_world();
         let presented0 = present_extent(
             &mut composer,
             &present_world,

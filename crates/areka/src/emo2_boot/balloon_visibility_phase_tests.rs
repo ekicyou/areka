@@ -623,16 +623,13 @@ fn hide_touches_only_the_balloon_target() {
     attach_headless(&mut presenter, &mut world, 0);
     // キャラクター窓の target は balloon target でないので共有の道具を通さず直に装着する。
     let shell_window = world.spawn_empty().id();
-    presenter
-        .attach_target(
-            &mut world,
-            crate::emo2_boot::target_map::shell_target(0),
-            shell_window,
-            EmoWorld::build(&areka_parsers::shell::parse("")),
-            AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
-            96,
-        )
-        .expect("headless 装着は成功する");
+    presenter.attach_target(
+        crate::emo2_boot::target_map::shell_target(0),
+        shell_window,
+        EmoWorld::build(&areka_parsers::shell::parse("")),
+        AtlasTable::new(Vec::new(), Vec::new(), Vec::new()),
+        96,
+    );
     let mut state = BalloonVisibilityState::default();
     let observations = VisibilityObservations::default();
 

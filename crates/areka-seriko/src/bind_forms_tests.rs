@@ -140,7 +140,7 @@ fn ssp_row4_category_toggle_after_last_part_keeps_last_part() {
     }
 }
 
-/// 測り 5: `目,,0`（`mustselect`・ノーマルを着た後）→ 目はノーマルのまま。各パーツが今どおり外さない。
+/// 測り 5: `目,,0`（`mustselect`・ノーマルを着た後）→ 目はノーマルのまま。どのパーツも外さない。
 #[test]
 fn ssp_row5_mustselect_category_off_keeps_worn_part() {
     let (mut states, resolver, scope) = setup();
@@ -188,7 +188,7 @@ fn ssp_row7_part_toggle_takes_off_worn_part() {
     assert_eq!(ids(&states, &scope), vec![NORMAL]);
 }
 
-/// パーツ名つきの `1`／`0` は今の当て方を 1 回（要件 3.3）。
+/// パーツ名つきの `1`／`0` はそのパーツへ 1 回当てる（要件 3.3）。
 #[test]
 fn named_form_applies_once() {
     let (mut states, resolver, scope) = setup();

@@ -42,21 +42,20 @@ pub(crate) enum Token {
     /// 正準形 `\word[args]`（`word` は確定済みのタグ名で直後が `[`、args は `]` までをカンマ分割）。
     ///
     /// `word` は本文を含まない 1〜3 文字（`\_X`／`\__X` 形を含む）。例外で 2 文字になる
-    /// のは短縮対象語＋1 桁（`w2` 等）と旧仕様の選択肢 `q*` の 2 形。
+    /// のは旧仕様の選択肢 `q*`／`q0`〜`q9`。
     Tag { word: String, args: Vec<String> },
     /// 角括弧を伴わないタグの綴り（先頭の `\` を除く）。
     ///
     /// 既知 1 文字タグ `e` `c` `-` `n` `0` `1` `h` `u` のほか、未知の 1 文字語や
     /// `\_` 始まりの 2〜3 文字形（`_a` `_q` `__c` `__q` 等）も同じ載荷に載る。
-    /// 入力末尾の裸 `\` は綴り `"\\"` として載せる。
+    /// 入力末尾の裸 `\` は空の綴り `""` として載せる（decode が `Raw("\\")` に組み直す）。
     Bare(String),
     /// 短縮形 `\<word>N`（`word` は短縮対象語・`N` は 1 桁）。
     ///
-    /// 待ち短縮 `\wN`（`word='w'`）・バルーン面短縮 `\bN`（`word='b'`）・話者スコープ
-    /// 括弧なし形 `\pN`（`word='p'`・ukadoc `\pID`＝任意番号 0〜9）を語に依らず同一規律で
-    /// 表す一般化トークン。意味写像（`'w'`→待ち／`'b'`→バルーン面／`'p'`→話者スコープ）は
-    /// `decode` の責務（→ 対象語は `SHORTHAND_WORDS`）。
-    Shorthand { word: char, n: u8 },
+    /// 待ち短縮 `\wN`（`ShorthandWord::Wait`）・バルーン面短縮 `\bN`（`ShorthandWord::Balloon`）・
+    /// 話者スコープ括弧なし形 `\pN`（`ShorthandWord::Scope`・ukadoc `\pID`＝任意番号 0〜9）を
+    /// 語に依らず同一規律で表す一般化トークン。語ごとの意味写像は `decode` の責務。
+    Shorthand { word: ShorthandWord, n: u8 },
     /// `%keyword`（システム変数・`%` を除いたキーワードを保持）。
     SysVar(String),
     /// タグ間プレーンテキスト。
@@ -71,7 +70,38 @@ pub(crate) enum Token {
 /// `\pN`（ukadoc: `\p[ID]`/`\pID`＝任意番号・`0〜9` のみ）も同一の shorthand 規律で
 /// 扱う。判定規則（**1 桁**数字・直後 `[` なら正準タグ優先）は語に依らず共通で、
 /// `\pN` の単一桁制約（`\p10` = scope 1 ＋ リテラル `"0"`）はこの 1 桁消費で満たされる。
-const SHORTHAND_WORDS: &[char] = &['w', 'b', 'p'];
+/// 3 つの腕の型なので、decode に想定外の語への守りの腕は要らない（指摘 66）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ShorthandWord {
+    /// `\wN`（待ち）。
+    Wait,
+    /// `\bN`（バルーン面）。
+    Balloon,
+    /// `\pN`（話者スコープ）。
+    Scope,
+}
+
+/// タグ名の 1 文字目が短縮対象語なら、その語を返す。
+fn shorthand_word(c: char) -> Option<ShorthandWord> {
+    match c {
+        'w' => Some(ShorthandWord::Wait),
+        'b' => Some(ShorthandWord::Balloon),
+        'p' => Some(ShorthandWord::Scope),
+        _ => None,
+    }
+}
+
+/// 引数を取らないタグの綴り（ukadoc の台帳で字の形だけが載るもの・指摘 27）。
+///
+/// この綴りの後の `[` は角括弧の道に入らず字のまま（SSP で `\1[小声で]`・`\e[注]` を
+/// 測った結果＝research.md 11 節）。`+` と `v` は完了した spec の決め（`\+[x]` は Raw・
+/// `\v[1]` は raise でない）を保つため入れない（設計の討議の議題 2）。`c` は
+/// `\c[char,…]` があるので入れない。`w` は ukadoc に `\w時間`（1〜9）しか無いので入れる
+/// （`\w[x]` は `\w` と字の `[x]`・かけ直しの R18）。
+const NO_ARG_TAGS: &[&str] = &[
+    "*", "-", "0", "1", "4", "5", "6", "7", "C", "_!", "_+", "_?", "_V", "__c", "__t", "_n", "_q",
+    "a", "e", "h", "t", "u", "w", "z",
+];
 
 /// さくらスクリプト文字列を構文トークン列へ分割する（mod 内非公開）。
 ///
@@ -171,8 +201,15 @@ fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
                 }
                 flush_text!();
                 let (tok, next) = scan_tag(&chars, i);
+                let title_end = legacy_q_title_end(&tok, &chars, next);
                 emit(tok, b..byte_at(next));
                 i = next;
+                // 旧形の題 `[…]` は中の `%`・`\` を読まず 1 つの Text で出す（指摘 25）。
+                if let Some(end) = title_end {
+                    let title = chars[i..end].iter().map(|&(_, c)| c).collect();
+                    emit(Token::Text(title), byte_at(i)..byte_at(end));
+                    i = end;
+                }
             }
             '%' => {
                 flush_text!();
@@ -189,6 +226,23 @@ fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
     flush_text!();
 }
 
+/// 旧形の選択肢 `\q…[ID]` の直後に閉じた題 `[…]` があれば、題の終わり（最初の `]` の
+/// 次の添字）を返す（ukadoc「\q[ID][タイトル]または\q*[ID][タイトル]」[旧仕様]・指摘 25）。
+///
+/// 題の後ろが地の文でも題だけを切り出せるので、decode の `is_legacy_q_head` が畳める。
+fn legacy_q_title_end(tok: &Token, chars: &[(usize, char)], next: usize) -> Option<usize> {
+    let Token::Tag { word, args } = tok else {
+        return None;
+    };
+    if !word.starts_with('q') || args.len() != 1 || chars.get(next)?.1 != '[' {
+        return None;
+    }
+    chars[next..]
+        .iter()
+        .position(|&(_, c)| c == ']')
+        .map(|k| next + k + 1)
+}
+
 /// `\` で始まるタグを走査する。`i` は `\` の位置。次に読むべき添字を返す。
 ///
 /// 形態:
@@ -198,12 +252,12 @@ fn scan(input: &str, emit: &mut dyn FnMut(Token, Range<usize>)) {
 fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     // `\` の次の文字が無ければ（入力末尾の裸 `\`）bare 扱いで継続。
     let Some(&(_, first)) = chars.get(i + 1) else {
-        return (Token::Bare("\\".to_string()), i + 1);
+        return (Token::Bare(String::new()), i + 1);
     };
 
     // ワード（コマンド語）を読む: 最大 3 文字で頭打ちにし（`[`／`\`／`%` でも止まる）、
-    // 長さは `bare_tag_len` の規則で確定してから `[` を判定する。例外は短縮対象語＋1 桁と
-    // 旧仕様の選択肢 `q*[` の 2 形で、読み取り結果をそのまま使う。
+    // 長さは `bare_tag_len` の規則で確定してから `[` を判定する。例外は旧仕様の選択肢
+    // `q*[` で、読み取り結果をそのまま使う。
     // 短縮対象語（`\w`/`\b`/`\p`）は 1 文字読んだ時点で次が数字なら短縮形を優先する。
     let word_start = i + 1;
     let mut j = word_start;
@@ -211,15 +265,15 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     // 先頭 1 文字を確定（少なくとも word は 1 文字ある）。
     j += 1;
 
-    // 短縮形判定（語に依らず共通・要件 1.2）: word が 1 文字（短縮対象語）で、
-    // 続く文字が 1 桁数字、かつその数字の次が `[` でない（`\w[2]`/`\b2[x]` は正準タグ）。
-    if SHORTHAND_WORDS.contains(&first)
+    // 短縮形判定（語に依らず共通・要件 1.2）: word が 1 文字（短縮対象語）で、続く文字が
+    // 1 桁数字。数字の次の `[` は字のまま（ukadoc に `\w9[…]`・`\b2[…]`・`\p1[…]` の形は
+    // 無い＝指摘 27 と同じ「タグ＋字」・かけ直しの R18）。
+    if let Some(word) = shorthand_word(first)
         && let Some(&(_, d)) = chars.get(j)
         && d.is_ascii_digit()
-        && chars.get(j + 1).map(|&(_, c)| c) != Some('[')
     {
         let n = (d as u8) - b'0';
-        return (Token::Shorthand { word: first, n }, j + 1);
+        return (Token::Shorthand { word, n }, j + 1);
     }
 
     // それ以外: ワードを `[`／`\`／`%` の手前まで、ただし 3 文字で頭打ちにして読み進める
@@ -233,24 +287,23 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
 
     let mut word: String = chars[word_start..j].iter().map(|&(_, c)| c).collect();
 
-    // `[` を見る前にタグ名の長さを確定する。例外は短縮対象語＋1 桁（短縮形判定を
-    // 抜けた以上、次は必ず `[`）で、読み取り結果をそのまま使う。
-    let shorthand_digit = SHORTHAND_WORDS.contains(&first)
+    // `[` を見る前にタグ名の長さを確定する。例外は旧仕様の選択肢 `\q*[ID][タイトル]`
+    // （`*` は通し番号・`*` か 1 桁の数の直後が `[` のときだけ。`\q10[…]` の 2 桁は当たらない）。
+    let legacy_q_star = first == 'q'
         && chars
             .get(word_start + 1)
-            .is_some_and(|&(_, d)| d.is_ascii_digit());
-    // 例外その二: 旧仕様の選択肢 `\q*[ID][タイトル]`（`*` の直後が `[` のときだけ）。
-    let legacy_q_star = first == 'q'
-        && chars.get(word_start + 1).map(|&(_, c)| c) == Some('*')
+            .is_some_and(|&(_, c)| c == '*' || c.is_ascii_digit())
         && chars.get(word_start + 2).map(|&(_, c)| c) == Some('[');
-    if !(shorthand_digit || legacy_q_star) {
+    if !legacy_q_star {
         let len = bare_tag_len(&word);
         word = word.chars().take(len).collect();
         j = word_start + len;
     }
 
-    // 角括弧があれば引数を走査、無ければ bare タグ。
-    if let Some(&(_, '[')) = chars.get(j) {
+    // 角括弧があれば引数を走査、無ければ bare タグ。引数を取らないタグの後の `[` は字。
+    if let Some(&(_, '[')) = chars.get(j)
+        && !NO_ARG_TAGS.contains(&word.as_str())
+    {
         match scan_bracket_args(chars, j) {
             BracketScan::Closed { args, next } => (Token::Tag { word, args }, next),
             // 未閉じ `[` / `"`（要件 10.3/13.8）: 区切れないため `\` から入力末尾までを
@@ -361,7 +414,8 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
                 cur.push(']');
                 k += 2;
             }
-            '"' => {
+            // 引数の途中の `"` はただの字（下の `other` の腕）。
+            '"' if cur.is_empty() && !quote_consumed => {
                 // クォート開始（要件 13.4）。閉じ `"` まで読み、内側 `,` は保護。
                 // 二重化 `""` はリテラル `"` として取り込む。
                 // この引数はクォートを消費した（sole `[""]` を空 1 引数へ確定するため）。

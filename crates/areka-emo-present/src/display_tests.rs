@@ -1,7 +1,8 @@
 //! 記録レシピ（T-N1）と丸めの一致（T-N3）を固定する GPU 非依存の檻。
 //!
-//! T-N1 が固定する性質は 4 点のみ：bitmap 寸＝合成結果の原寸・pitch＝合成結果の実 stride
-//! （w*4 から再算出しない）・宛先矩形＝`(0, 0, w, h)`・補間＝`D2D1_INTERPOLATION_MODE_LINEAR`。
+//! T-N1 が固定する性質は 4 点のみ：bitmap 寸＝合成結果の原寸・pitch＝合成結果の stride・
+//! 宛先矩形＝`(0, 0, w, h)`・補間＝`D2D1_INTERPOLATION_MODE_LINEAR`。`ComposedSurface` は常に
+//! stride＝w*4 なので、pitch を w*4 から算出しても区別できない（詰め物つきの面を作る口が無い）。
 //! 拡大率 k を引数に取らないことは `DisplayRecipe::for_surface` の署名そのものが保証する
 //! （コンパイル時の性質であり、実行時テストでは検証しない）。
 //!
@@ -15,7 +16,7 @@ use wintf::ecs::{GlobalArrangement, Rect, calculate_surface_size_from_global_arr
 
 use crate::mount::logical_arrangement;
 
-/// 複数寸で「bitmap 寸＝native・pitch＝実 stride・dest＝(0,0,w,h)・補間＝LINEAR」を固定する。
+/// 複数寸で「bitmap 寸＝native・pitch＝stride・dest＝(0,0,w,h)・補間＝LINEAR」を固定する。
 #[test]
 fn recipe_uses_native_size_stride_full_dest_and_linear() {
     for (w, h) in [(1u32, 1u32), (8, 6), (382, 547)] {
@@ -30,7 +31,7 @@ fn recipe_uses_native_size_stride_full_dest_and_linear() {
         assert_eq!(
             recipe.pitch,
             surface.stride(),
-            "pitch は合成結果の実 stride と一致するべき（w*4 の再算出ではない）"
+            "pitch は合成結果の stride と一致するべき"
         );
         assert_eq!(
             recipe.dest,
@@ -55,8 +56,8 @@ fn recipe_uses_native_size_stride_full_dest_and_linear() {
 /// `ceil ≥ round` ゆえ差は負にならず、小数部が (0, 0.5) のときだけ wintf が 1 px 大きい。
 /// その 1 px は窓 client（`scaled_extent` 寸）の外にあり見えない（要件 2.1・4.3 の許容）。
 ///
-/// 表の 4 行目までは設計 §丸めの一致の表そのもの。5 行目以降は端数 0.5 ちょうど（両者とも
-/// 切り上げ＝差 0）と、小数部 (0, 0.5) の追加例（差 +1）を足した較正である。
+/// 表の 4 行目までは設計 §丸めの一致の表そのもの。5 行目は整数の拡大率 k=1（差 0）、6 行目は
+/// 端数 0.5 ちょうど（両者とも切り上げ＝差 0）、7 行目は小数部 (0, 0.5) の追加例（差 +1）である。
 #[test]
 fn surface_size_matches_scaled_extent_within_one_pixel() {
     // (原寸 w, 原寸 h, k の分子, k の分母, 期待する差 (w, h))
@@ -116,18 +117,11 @@ fn surface_size_matches_scaled_extent_within_one_pixel() {
                  wintf={wintf_size:?} scaled_extent={scaled:?}"
             );
             let diff = (wintf_size.0 - scaled.0, wintf_size.1 - scaled.1);
-            assert!(
-                diff.0 <= 1 && diff.1 <= 1,
-                "差は 1 px 以内: {w}x{h} k={num}/{den} diff={diff:?}"
-            );
             assert_eq!(
                 diff, expected_diff,
                 "丸めの一致表と一致すべき: {w}x{h} k={num}/{den} \
                  wintf={wintf_size:?} scaled_extent={scaled:?}"
             );
-            if den == 1 {
-                assert_eq!(diff, (0, 0), "整数の拡大率では差 0: {w}x{h} k={num}/{den}");
-            }
         }
     }
 }
