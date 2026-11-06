@@ -104,6 +104,8 @@ pub fn element_kind(path: &ElementPath) -> ElementKind {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NestTable {
     surfaces: BTreeMap<u32, SurfaceParts>,
+    /// 部品として入れる面（面の表に在り、行の数が予算に届かないもの）。①〜③ の先の門はこの 1 つ。
+    enterable: BTreeSet<u32>,
 }
 
 /// 1 つのサーフェスが指す先（[`NestTable`] の 1 行）。
@@ -127,6 +129,15 @@ pub struct SurfaceParts {
 impl NestTable {
     /// 面の表から作る（[`EmoWorld::nest_table`] の中身）。
     pub(crate) fn from_world(world: &EmoWorld) -> NestTable {
+        // 行の数が予算に届く面は、合成・外形・持ち込みの走査が部品として入らない（`Budget::enter`）。
+        let enterable: BTreeSet<u32> = world
+            .surface_ids()
+            .filter(|&c| {
+                world
+                    .surface(c)
+                    .is_some_and(|m| surface_rows(m) < VISIT_BUDGET)
+            })
+            .collect();
         let mut surfaces = BTreeMap::new();
         for id in world.surface_ids() {
             let Some(master) = world.surface(id) else {
@@ -137,14 +148,7 @@ impl NestTable {
                 .elements
                 .iter()
                 .filter_map(|e| match e.kind {
-                    // 行の数が予算を越える面は、合成・外形・持ち込みの走査が部品として入らない（指摘 9）。
-                    ElementKind::Surface(c)
-                        if world
-                            .surface(c)
-                            .is_some_and(|m| surface_rows(m) < VISIT_BUDGET) =>
-                    {
-                        Some(c)
-                    }
+                    ElementKind::Surface(c) if enterable.contains(&c) => Some(c),
                     _ => None,
                 })
                 .collect();
@@ -161,8 +165,10 @@ impl NestTable {
                 // 合成と同じ辺: 着せ替えの手順の「描く」コマ（純 `bind` の全部・`bind+random` は手順が空）。
                 bind_targets.extend(world.bind_steps(id, anim.id).iter().filter_map(
                     |s| match *s {
-                        BindStep::Draw { surface, .. } => Some((anim.id, surface)),
-                        BindStep::Insert { .. } => None,
+                        BindStep::Draw { surface, .. } if enterable.contains(&surface) => {
+                            Some((anim.id, surface))
+                        }
+                        _ => None,
                     },
                 ));
             }
@@ -188,7 +194,8 @@ impl NestTable {
                 .filter(|a| is_always_interval(&a.interval))
                 .filter_map(|a| {
                     let p = rest_pattern(a).filter(|p| is_implemented_name(p.method.as_str()))?;
-                    Some((a.id, u32::try_from(p.surface_id).ok()?))
+                    let target = u32::try_from(p.surface_id).ok()?;
+                    enterable.contains(&target).then_some((a.id, target))
                 })
                 .collect();
             always_rest.sort_unstable();
@@ -203,7 +210,10 @@ impl NestTable {
                 surfaces.insert(id, row);
             }
         }
-        NestTable { surfaces }
+        NestTable {
+            surfaces,
+            enterable,
+        }
     }
 
     /// 1 行も載っていないか。
@@ -295,7 +305,10 @@ impl NestTable {
             .into_iter()
             .flatten();
         for (id, frame) in top_frames.chain(part_frames) {
-            if frame.method.is_implemented() && (!is_bind(id) || binds.contains(id)) {
+            if frame.method.is_implemented()
+                && (!is_bind(id) || binds.contains(id))
+                && self.enterable.contains(&frame.surface_id)
+            {
                 Self::enter(frame.surface_id, top, out, seen);
             }
         }

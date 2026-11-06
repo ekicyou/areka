@@ -204,7 +204,7 @@
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
 - [ ] 10. かけ直し 5 回目の指摘の直し（research.md 19 節・案 A の条件にまだ届かないので直して同じ条件でもう一度かける）
-- [ ] 10.1 実装の側の直し（箱の子の報告の増え方・予算の断り方・持ち込みの記録・見える部品の門・説明）
+- [x] 10.1 実装の側の直し（箱の子の報告の増え方・予算の断り方・持ち込みの記録・見える部品の門・説明）
   - _Requirements: 2.1, 4.4, 4.5, 6.2_
 - [ ] 10.2 テストの直し（境目・必ず通る確かめ・写し・古い説明）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
@@ -245,3 +245,4 @@
 - 11-06 audit-seriko が main へ着地（PR #427・82144a96）＝こちらが後から着く側。取り込むときに `parts_tests.rs` の同じテスト（向こうは旧名 `part_hidden_by_a_later_frame_in_the_same_tick_is_not_left_in_the_field`・こちらは改名済み）を両方の直しに合わせる。1,000 行の例外表の件数は今の main で 7
 - 9.1: `HitMemo` の覚えの長さも根をまたぐ予算から引く。読み込みの走査（外形の表・シェルの外形・`shape_issues`・`NestReport`）の予算の `error!` は呼び出し 1 回に 1 行（`*_limited` の口）。`Records` は面の表のリソース（`EmoWorld::records()`）・箱もそれに従う。無い番号への箱の追記は番号ごとに 1 件（欄は足さない）。行の数が予算に届く子は `NestTable.children` から外れる（その子の箱の `InChildSurface` は出ない・合成も置かない）。明細 3 は誤り（element のメソッドは畳み込みで必ず Overlay）
 - 9.2: テスト 442→437。部品に `ops_limited`・`errors`・`append_def`（4 引数）・`image_map`、`visible_parts_of` は `&BindSet`。範囲の外: `.kiro/specs/completed/areka-P0-recompose-budget/research.md:68` が改名前の `surface1000_recompose_steady_state_zero_allocation`（今は `surface1000_recompose_capacities_do_not_grow`）を名指す（完了済みの記録・触らない）
+- 10.1: `InChildSurface` は辺 (親, 子) ごとに 1 件（完了 spec areka-P0-surface-element-nesting の「箱 1 つにつき 1 件」を design 議題 7 の下で改めた）。`Budget::enter` は n > limit なら残りを使わず断る。持ち込みの予算の記録も根をまたいで 1 度。`NestTable.enterable` を見える部品の全部の門に。`from_name` は debug!（先の無い未知の語は `UndrawnPattern` が拾う＝emo-present が warn!）。`ExtentTooLarge` の文の上限は定数から作る（面積は 33554432 と出る）

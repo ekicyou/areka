@@ -142,7 +142,8 @@ pub enum BoxIssue {
     /// `name` はそのブレスの最初の箱の名前。
     AppendTargetMissing { surface: u32, name: String },
     /// element定義で子として置かれたサーフェスが箱を持つ。箱は親の中に置かない
-    /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。
+    /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。辺 (親, 子) ごとに 1 件で、`name` は子の
+    /// 最初の箱の名前（子の箱の数を掛けると、子を置く親の数×箱の数まで増えるため）。
     InChildSurface {
         parent: u32,
         child: u32,
@@ -155,7 +156,7 @@ pub enum BoxIssue {
 /// `images`（面の画像だけで在る番号）は `surface.append*`ブレスの存在の条件に、`world`（画像の
 /// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs に触れず、記録は
 /// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` と知らない記述子の記録だけはここで出す・指摘 78。
-/// どちらも `world` を組んだときの出し分けに従い、黙らせる組み方の面の表なら出さない・指摘 7）。
+/// どちらも `world` を組んだときの出し分けに従い、黙らせる組み方の面の表なら出さない）。
 pub fn fold_boxes(
     boxes: &ShellBoxes,
     images: &BTreeMap<u32, String>,
@@ -177,14 +178,14 @@ pub fn fold_boxes(
     (layout, BoxReport { issues })
 }
 
-/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに箱 1 つにつき 1 件載せる
+/// element定義で子として置かれたサーフェスの箱を、辺 (親, 子) ごとに 1 件（子の最初の箱の名前で）載せる
 /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。置き場所の表は変えない（子の箱は親の中に
 /// 置かれず、子を一番上に表示したときは今までどおり置かれる・要件 6.2〜6.4）。
 ///
 /// 辺は面の表の入れ子の表（[`EmoWorld::nest_table`] の `children`＝面の表に在る子だけ）から取る。
 /// 面の表に無い番号は子として描かれず、無い番号の報告（`NestIssue::MissingTarget`）が受け持つので
 /// ここでは見ない。同じ親が同じ子を何度置いても辺は 1 本に数える。並びは親の番号の昇順 →
-/// element定義の番号の昇順 → 箱の並び（子の element番号の昇順）。
+/// element定義の番号の昇順。件数は辺の数で止まる（子の箱の数を掛けない）。
 fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<BoxIssue>) {
     if layout.is_empty() {
         return;
@@ -196,16 +197,13 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
         };
         let mut seen = BTreeSet::new();
         for &child in parts.children.iter().filter(|&&c| seen.insert(c)) {
-            issues.extend(
-                layout
-                    .placements(child)
-                    .iter()
-                    .map(|p| BoxIssue::InChildSurface {
-                        parent,
-                        child,
-                        name: p.name.as_str().to_string(),
-                    }),
-            );
+            if let Some(first) = layout.placements(child).first() {
+                issues.push(BoxIssue::InChildSurface {
+                    parent,
+                    child,
+                    name: first.name.as_str().to_string(),
+                });
+            }
         }
     }
 }
@@ -215,7 +213,7 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
 /// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し、`surface.append*`ブレスは
 /// 「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。どちらも同じ element番号の
 /// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose
-/// 設計の議題 7 案 A）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（指摘 8）。
+/// 設計の議題 7 案 A）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（箱の行の数を掛けない）。
 fn distribute<'a>(
     boxes: &'a ShellBoxes,
     images: &BTreeMap<u32, String>,

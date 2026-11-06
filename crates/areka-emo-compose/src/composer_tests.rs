@@ -282,7 +282,7 @@ fn compose_error_display_strings_are_exact() {
             h: 2
         }
         .to_string(),
-        "surface 7 extent 16385x2 exceeds the size limit (side 16384 or area 2^25)",
+        "surface 7 extent 16385x2 exceeds the size limit (side 16384 or area 33554432 pixels)",
     );
     assert_eq!(
         ComposeError::ExtentTooLarge {
@@ -291,7 +291,7 @@ fn compose_error_display_strings_are_exact() {
             h: 4_097
         }
         .to_string(),
-        "surface 7 extent 8192x4097 exceeds the size limit (side 16384 or area 2^25)",
+        "surface 7 extent 8192x4097 exceeds the size limit (side 16384 or area 33554432 pixels)",
     );
 }
 

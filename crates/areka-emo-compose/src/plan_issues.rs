@@ -15,8 +15,9 @@ use std::collections::HashMap;
 use areka_parsers::shell::SortOrder;
 
 use crate::budget::VISIT_BUDGET;
-use crate::method::is_implemented_name;
+use crate::method::{is_implemented_name, is_known_name};
 use crate::nesting::{nest_edges, pattern_edge, reaches};
+use crate::pattern_word::{PatternWord, pattern_word};
 use crate::world::EmoWorld;
 
 /// 定義だけで決まる形の誤り 1 件。
@@ -34,7 +35,8 @@ pub enum ShapeIssue {
         target: u32,
     },
     /// 面を指す pattern の描画メソッドが描かないもの（`method` は欄の原文）。合成はそのコマを描かない。
-    /// 面の番号を指さない語（`start` 等の 7 語・`move`）と負の番号は数えない。
+    /// 面の番号を指さない語（`start` 等の 7 語・`move`）は数えない。負の番号は、知っている語（`replace,-1` 等）なら
+    /// 数えず、未知の語なら先が無くても数える（未知の語の記録はここだけが warn で出す）。
     UndrawnPattern {
         surface: u32,
         animation: u32,
@@ -69,21 +71,25 @@ pub(crate) fn shape_issues_limited(world: &EmoWorld, limit: usize) -> Vec<ShapeI
         for anim in &master.animations {
             for p in &anim.patterns {
                 let method = p.method.as_str();
-                let Some(target) = pattern_edge(p) else {
-                    continue;
-                };
-                let cycle = *cycles
-                    .entry((target, surface))
-                    .or_insert_with(|| reaches(&edges, target, surface, limit, &mut reported));
-                if cycle {
-                    issues.push(ShapeIssue::Cycle {
-                        surface,
-                        animation: anim.id,
-                        pattern: p.index,
-                        target,
-                    });
+                let edge = pattern_edge(p);
+                // 描かない pattern: 先を指すもの、または先が無くても未知の重ね方の語。
+                let undrawn = !is_implemented_name(method)
+                    && (edge.is_some()
+                        || (pattern_word(method) == PatternWord::Draw && !is_known_name(method)));
+                if let Some(target) = edge {
+                    let cycle = *cycles
+                        .entry((target, surface))
+                        .or_insert_with(|| reaches(&edges, target, surface, limit, &mut reported));
+                    if cycle {
+                        issues.push(ShapeIssue::Cycle {
+                            surface,
+                            animation: anim.id,
+                            pattern: p.index,
+                            target,
+                        });
+                    }
                 }
-                if !is_implemented_name(method) {
+                if undrawn {
                     issues.push(ShapeIssue::UndrawnPattern {
                         surface,
                         animation: anim.id,

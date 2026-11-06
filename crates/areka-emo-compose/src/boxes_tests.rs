@@ -830,7 +830,7 @@ fn append_existence_matches_image_fold_for_range_and_exclusion() {
     );
 }
 
-/// 指摘 8: 無い番号への追記は、箱の行がいくつあっても番号ごとに 1 件（最初の箱の名前）。
+/// 無い番号への追記は、箱の行がいくつあっても番号ごとに 1 件（最初の箱の名前）。
 #[test]
 fn append_to_missing_surface_reports_once_per_surface() {
     let text = [
@@ -849,7 +849,7 @@ fn append_to_missing_surface_reports_once_per_surface() {
     assert_eq!(report.issues, vec![missing(8), missing(9)]);
 }
 
-/// 指摘 7: 箱の畳み込みは面の表を組んだときの記録の出し分けに従う。写す行が上限（2^20）を越える範囲の
+/// 箱の畳み込みは面の表を組んだときの記録の出し分けに従う。写す行が上限（2^20）を越える範囲の
 /// 見出し（`surface1-1025` に 1,024 行）の `error!` は、出す組み方の面の表なら 1 行、黙らせる組み方なら 0 行。
 #[test]
 fn box_fold_follows_the_records_of_the_world() {

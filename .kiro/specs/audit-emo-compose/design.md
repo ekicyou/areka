@@ -296,6 +296,8 @@ flowchart TD
 
 **決め（議題 7・案 A）**
 - 追記（`fold_append`）と 2 つ目の波括弧（`merge_brace`）は、同じ 1 つの足し方を通す（1 本にまとめる）。箱（`boxes.rs` の `distribute`）の追記と波括弧も同じ足し方。
+  - 子として置かれたサーフェスの箱の報告 `InChildSurface` は辺 (親, 子) ごとに 1 件で、`name` は子の最初の箱の名前。完了 spec `areka-P0-surface-element-nesting` の設計の「箱 1 つにつき 1 件」をここで改める（理由: 子を置く親の数×箱の数まで件数が増えるため）。
+  - 箱の側は、同じ element番号で名前の違う箱が重なっても記録しない（公開の `BoxIssue` に種類を足さないため・名前の重なりは `ElementDuplicateName` が出る）。
   - **element**: 同じ element番号でも前の行を除かず、両方を足す（描く順は書いた順＝element番号の昇順への安定ソートで、同じ番号の中は前の行が先）。同じ番号が重なったときだけ `warn!`（面・element番号・SSP と同じく「二重定義」と分かる文言）。違う番号を足すのは定めた振る舞いなので、今どおり `debug!`。
   - **animation**: すでにある animation番号の後の行（interval も pattern も）は全部捨てる（先勝ち）。捨てたときは `warn!`（面・animation番号）。無い番号の animation は足す（今と同じ）。`merge_animations`（追記の丸ごと置き換え）と、その `warn!`「append が既存 animation id を再定義」は消す。
   - **collision**: 測れなかったので今のまま（波括弧は同じ collision番号の前の行を除いて末尾へ・追記は重ねて足す）。この違いを足し方の説明に「SSP で測れなかった・今のまま」と書き残す。

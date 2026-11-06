@@ -8,7 +8,7 @@
 use crate::normalized::SurfaceMaster;
 use crate::world::Records;
 
-/// 1 回の走査の範囲で数えてよい「入る面と積み荷」の数。
+/// 1 回の走査の範囲で数えてよい「入る面とその面の行の全部と積み荷」の数。
 /// 根拠（3.2・2026-11-06）: 面の数だけを数えていたときの測り。release・NAGI（Intel Core Ultra 9 185H）・15 段の菱形で 1 面あたり約 226 ns＝16.667 ms に約 73,000 面→2^16 に切り下げ。
 /// 6.1 で積み荷も、7.1 でなめる行も、8.1 で面の行の全部（[`surface_rows`]）も数える単位に変えたので、測り直しの候補
 /// （`examples/compose_timing.rs` の `diamond13` が 1 単位あたりの時間を出す）。
@@ -52,9 +52,14 @@ impl Budget {
 
     /// 面に 1 つ入る前に呼ぶ。入る 1 とその面の行の数 `rows`（[`surface_rows`]）をまとめて引けたら true。
     /// 足りなければ残りを使い切り、範囲で初めてのときだけ `error!`（`walk`＝走査の名前・`root`＝根の面・
-    /// 予算）を出して false（呼び手は入らない）。
+    /// 予算）を出して false（呼び手は入らない）。どの予算にも収まらない面（入る分が予算そのものより多い）は
+    /// 残りを使わずにその面だけ断る（後ろの兄弟は入れる＝見える部品の表がその子だけ外すのと揃う）。
     pub(crate) fn enter(&mut self, rows: usize, walk: &'static str, root: u32) -> bool {
         let n = rows.saturating_add(1);
+        if n > self.limit {
+            self.report(walk, root);
+            return false;
+        }
         self.take_up_to(n, walk, root) == n
     }
 
@@ -63,17 +68,25 @@ impl Budget {
     pub(crate) fn take_up_to(&mut self, n: usize, walk: &'static str, root: u32) -> usize {
         let granted = n.min(self.left);
         self.left -= granted;
-        if granted < n && !self.reported {
-            self.reported = true;
-            tracing::error!(
-                target: "areka_emo_compose",
-                walk,
-                root,
-                budget = self.limit,
-                "入れ子の広がりが予算を越えた: まだ入っていない枝を捨てる"
-            );
+        if granted < n {
+            self.report(walk, root);
         }
         granted
+    }
+
+    /// 範囲で初めて断ったときだけ `error!` を出す。
+    fn report(&mut self, walk: &'static str, root: u32) {
+        if self.reported {
+            return;
+        }
+        self.reported = true;
+        tracing::error!(
+            target: "areka_emo_compose",
+            walk,
+            root,
+            budget = self.limit,
+            "入れ子の広がりが予算を越えた: まだ入っていない枝を捨てる"
+        );
     }
 
     /// 尽きたことを記録したか（黙らせる組み方では初めから true）。
@@ -118,6 +131,20 @@ mod tests {
         assert!(out.contains("walk=\"plan\""), "走査の名前: {out}");
         assert!(out.contains("root=7"), "根の面: {out}");
         assert!(out.contains("budget=3"), "予算の値: {out}");
+    }
+
+    /// どの予算にも収まらない面は、残りを使わずにその面だけ断る（後ろの小さな面は入れる）。記録は 1 行。
+    #[test]
+    fn surface_larger_than_the_budget_is_refused_without_spending_the_rest() {
+        let mut entered = Vec::new();
+        let out = capture_logs(|| {
+            let mut budget = Budget::new(4);
+            entered.push(budget.enter(4, "plan", 0));
+            entered.push(budget.enter(1, "plan", 0));
+            entered.push(budget.enter(1, "plan", 0));
+        });
+        assert_eq!(entered, [false, true, true]);
+        assert_eq!(out.matches("level=ERROR").count(), 1, "{out}");
     }
 
     /// 黙らせる組み方では、同じく断るが記録は出さない。

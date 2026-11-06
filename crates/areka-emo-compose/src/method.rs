@@ -4,7 +4,7 @@
 //! 実装状態（実装済み＝`overlay`・型シームのみ＝それ以外）を保持する。emo2 実測で使用される
 //! `overlay`（および同義の `add`/`bind`）のみ実挙動を持ち、`overlay-fast`・`interpolate`・
 //! `replace`・`asis`・`reduce`・`blend-*` 群などは未実装シームとして口だけを保つ。未実装メソッド
-//! 参照時はパニックせずログで観測可能に扱う（未知の語は `from_name` が `warn!`・未実装メソッドの命令は
+//! 参照時はパニックせずログで観測可能に扱う（未知の語は `from_name` が `debug!`・未実装メソッドの命令は
 //! 下流の `blit` 実行器が `debug!` を出して飛ばす。本モジュールは登録簿＝型シームのみを提供する）。
 //!
 //! # 表現の選択（BlendMode）
@@ -19,7 +19,7 @@
 
 use std::borrow::Cow;
 
-use tracing::warn;
+use tracing::debug;
 
 /// ukadoc 由来の合成（描画）メソッド全量列挙。
 ///
@@ -131,7 +131,7 @@ pub enum BlendKind {
 /// メソッド名の正規化（前後の空白を落とし・小文字にし・`-` と `_` を除く）。
 ///
 /// [`ComposeMethod::from_name`] と [`crate::world::EmoWorld::dangling_pattern_targets`] が
-/// **同じ規則**で語を比べるための唯一の定義である。`from_name` は未知の語で `warn!` を出すので
+/// **同じ規則**で語を比べるための唯一の定義である。`from_name` は未知の語で `debug!` を出すので
 /// 照会の側からは呼べない（要件 3.5）が、正規化だけはここを共有する。
 ///
 /// 合成のたびに引かれるので、もう正規化済みの語（ふつうの `overlay` など）は写さずに借りて返す（指摘 29）。
@@ -168,7 +168,9 @@ impl ComposeMethod {
         // 正規化は [`canonical_method_name`] 1 か所に置く（同じ規則を引く
         // `EmoWorld::dangling_pattern_targets` と静かにずれないため）。
         known_method(&canonical_method_name(name)).unwrap_or_else(|| {
-            warn!(method = %name, "未知の合成メソッド名: Unknown シームへ吸収");
+            // 利用者向けの warn は読み込みの形の誤り（`ShapeIssue::UndrawnPattern`・未知の語は先が無くても数える）が
+            // 1 件 1 行で出す。
+            debug!(target: "areka_emo_compose", method = %name, "未知の合成メソッド名: Unknown シームへ吸収");
             ComposeMethod::Unknown(name.into())
         })
     }
@@ -193,9 +195,14 @@ fn known_method(canon: &str) -> Option<ComposeMethod> {
 }
 
 /// 記録を出さずに「この描画メソッドの語が描かれるか」を答える
-/// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `warn!` を出さない）。
+/// （`ComposeMethod::from_name(name).is_implemented()` と同じ答え・未知の語で `debug!` を出さない）。
 pub(crate) fn is_implemented_name(name: &str) -> bool {
     known_method(&canonical_method_name(name)).is_some_and(|m| m.is_implemented())
+}
+
+/// 記録を出さずに「この描画メソッドの語が登録簿に在るか」を答える（未知の語なら false）。
+pub(crate) fn is_known_name(name: &str) -> bool {
+    known_method(&canonical_method_name(name)).is_some()
 }
 
 /// 正規化済み（小文字・区切り除去）メソッド名を [`BlendMode`] へ写像する。

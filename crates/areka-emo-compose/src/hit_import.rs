@@ -31,7 +31,7 @@ pub struct HitRegions(pub Vec<Collision>);
 
 /// 面の表の全サーフェスを根に 1 回ずつ列を求め、持ち込みが在るサーフェスにだけ [`HitRegions`] を付ける
 /// （[`EmoWorld::build_with_images`] の最後で呼ぶ）。持ち込みが 1 つも無いサーフェスには何も付けない。
-/// 広がりの予算は根の面 1 つにつき 1 つ（`records` が `Quiet` なら尽きても記録を出さない）。きれいに
+/// 広がりの予算は根の面 1 つにつき 1 つ（尽きた記録は呼び出し 1 回に 1 行・`records` が `Quiet` なら出さない）。きれいに
 /// 終わった面の覚え（[`HitMemo`]）は根の間で 1 つを共有する。根をまたいで持ち込む領域の数と、覚えに
 /// 入れる列の長さの合計は、それぞれ [`IMPORT_BUDGET`] 1 つで数える（[`attach_hit_regions_limited`]）。
 pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
@@ -49,16 +49,20 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
     let mut left = limit;
     let mut found = Vec::new();
     let mut memo = HitMemo::new(limit);
+    // 広がりの予算の `error!` は呼び出し 1 回に 1 行（2 根目からは黙らせる・他の読み込みの走査と同じ）。
+    let mut reported = !records.emits();
     for id in emo.surface_ids() {
         let Some(master) = emo.surface(id) else {
             continue;
         };
-        let list = regions_of(
-            emo,
-            master,
-            &mut Budget::with_records(VISIT_BUDGET, records),
-            Some(&mut memo),
-        );
+        let walk_records = if reported {
+            Records::Quiet
+        } else {
+            Records::Emit
+        };
+        let mut budget = Budget::with_records(VISIT_BUDGET, walk_records);
+        let list = regions_of(emo, master, &mut budget, Some(&mut memo));
+        reported |= budget.reported();
         // 列は［持ち込み］→［直接］なので、長さが違えば持ち込みが在る（根は領域を切り詰めない）。
         let imported = list.len() - master.collisions.len();
         if imported > left {

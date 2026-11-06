@@ -201,3 +201,25 @@ fn composing_unknown_sort_repeatedly_adds_no_warn() {
     assert_eq!(shots[0], shots[1], "絵は毎回同じ");
     assert_eq!(shots[0], shots[2], "絵は毎回同じ");
 }
+
+/// 先の無い（負の番号の）pattern は、未知の語なら描かない pattern に数え、知っている語なら数えない。
+#[test]
+fn unknown_word_without_a_target_is_undrawn_but_known_word_is_not() {
+    let issues = |method: &str| {
+        let text = format!(
+            "surface0\n{{\nelement0,overlay,base.png,0,0\n\
+             animation0.interval,sometimes\nanimation0.pattern0,{method},-1,0,0,0\n}}\n"
+        );
+        shape_issues(&EmoWorld::build(&parse(&text)))
+    };
+    assert_eq!(
+        issues("foo"),
+        vec![ShapeIssue::UndrawnPattern {
+            surface: 0,
+            animation: 0,
+            pattern: 0,
+            method: "foo".to_string(),
+        }]
+    );
+    assert_eq!(issues("replace"), vec![]);
+}

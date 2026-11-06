@@ -394,7 +394,7 @@ fn build_plan_clears_out_ops() {
     assert_eq!(e1, Extent { w: 80, h: 60 }, "外形＝element 原寸");
 }
 
-// ── audit-emo-compose 指摘 2・23: 外形が GPU の面の最大寸（一辺 16,384）か面積の上限（2^25 画素）を越えたら
+// ── audit-emo-compose 指摘 2・23: 外形が GPU の面の最大寸（一辺 `MAX_EXTENT`）か面積の上限（`MAX_AREA` 画素）を越えたら
 // 確保せずに失敗する ──
 
 /// `top` の計画を建て、結果と捕まえた記録の ERROR の行数を返す。

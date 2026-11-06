@@ -119,6 +119,11 @@ fn diamond_walks_are_cut_once_per_scope_and_compose_the_same() {
     let build = capture_logs(|| world = Some(world_of(LAST, 2)));
     let (world, atlas) = world.expect("組める");
     assert_once_per_scope(&build, "hit_import");
+    assert_eq!(
+        errors_only(&build).matches("walk=\"hit_import\"").count(),
+        1,
+        "持ち込みの予算の記録は根をまたいで 1 行"
+    );
     // 外形は束縛のとき（`bind_atlas`）に根ごとに 1 度だけたどる（指摘 8）。
     assert_once_per_scope(&build, "extent");
 
@@ -362,8 +367,8 @@ fn hit_import_counts_the_imported_regions_against_the_budget() {
     assert_eq!(errors(&logs, "hit_import", 0), 1, "{}", errors_only(&logs));
 }
 
-/// 面積の上限（指摘 23）: 一辺は上限の内でも、面積が 2^25 画素を越える外形は `ExtentTooLarge`。
-/// ちょうど 2^25 画素（8192×4096）は通る。一辺の上限（指摘 90）: 面積は上限の内の 16385×2 も
+/// 面積の上限（指摘 23）: 一辺は上限の内でも、面積が `plan::MAX_AREA` 画素を越える外形は `ExtentTooLarge`。
+/// ちょうど `plan::MAX_AREA` 画素（8192×4096）は通る。一辺の上限 `plan::MAX_EXTENT`（指摘 90）: 面積は上限の内の 16385×2 も
 /// `ExtentTooLarge`、16384×2 は通る。
 #[test]
 fn extent_over_the_area_limit_is_too_large() {
@@ -403,7 +408,7 @@ fn extent_over_the_area_limit_is_too_large() {
     );
 }
 
-/// 指摘 1・2: 読み込みの走査（外形の表・シェルの外形・無い番号と循環の報告・形の誤り）は根ごと・組ごとに
+/// 読み込みの走査（外形の表・シェルの外形・無い番号と循環の報告・形の誤り）は根ごと・組ごとに
 /// 予算を新しくするが、予算が尽きた `error!` は呼び出し 1 回につき 1 行だけ。面 0 … 9 の鎖（element定義と
 /// pattern定義の両方で次の面を指す）で予算 4 なら、面 0〜6 の根と組がどれも尽きる。
 #[test]

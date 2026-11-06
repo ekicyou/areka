@@ -22,7 +22,7 @@ impl ComposedSurface {
     /// 指定サイズの全透明（全 0）premultiplied BGRA サーフェスを確保する。
     ///
     /// `bytes.len() = width * 4 * height` を満たす 0 埋めバッファを割り当てる。
-    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。幅と高さは外形の一辺の上限（16,384）以下で
+    /// 下流 `blit` 実行器がこのバッファへ画素を転写する。幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下で
     /// あること（`stride()` を u32 であふれさせない・debug で確かめる）。
     pub fn new(width: u32, height: u32) -> Self {
         debug_assert_within_extent(width, height);
@@ -45,7 +45,7 @@ impl ComposedSurface {
 
     /// 行ストライド（バイト）。常に `width * 4`。
     pub fn stride(&self) -> u32 {
-        // 幅は合成で上限（一辺 16,384）以下に抑えるので u32 で足りる。
+        // 幅は合成で上限（一辺 `plan::MAX_EXTENT`）以下に抑えるので u32 で足りる。
         self.width * 4
     }
 
@@ -88,7 +88,7 @@ impl ComposedSurface {
     /// `areka-emo-present` の予算のテストが席を `w×h` へ合わせるために直に呼ぶ。本番の合成先
     /// （`compose_into` → [`crate::blit`]）が通るのは**まさにこのメソッド**である。
     ///
-    /// 幅と高さは外形の一辺の上限（16,384）以下であること（[`new`] と同じく debug で確かめる）。
+    /// 幅と高さは外形の一辺の上限（`plan::MAX_EXTENT`）以下であること（[`new`] と同じく debug で確かめる）。
     ///
     /// [`new`]: ComposedSurface::new
     ///

@@ -1,7 +1,7 @@
 //! 子として置かれたサーフェスの箱（spec: areka-P0-surface-element-nesting 要件 6.1〜6.4・8.1）。
 //!
 //! 箱の置き場所の表は入れ子で変えない（子の箱は親の中に置かれない）。代わりに面の表の
-//! element定義の辺 (親, 子) ごとに、子の箱 1 つにつき [`BoxIssue::InChildSurface`] を 1 件載せる。
+//! element定義の辺 (親, 子) ごとに、子の最初の箱の名前で [`BoxIssue::InChildSurface`] を 1 件載せる。
 
 use std::path::Path;
 
@@ -71,13 +71,13 @@ fn placing_a_box_child_adds_exactly_one_report_and_keeps_the_layout() {
     assert_eq!(issues_after, expected);
 }
 
-/// 箱 1 つにつき 1 件・辺 (親, 子) ごと・並びは親 → element定義 → 箱（要件 6.1）。
+/// 辺 (親, 子) ごとに 1 件・名前は子の最初の箱・並びは親 → element定義（要件 6.1）。
 ///
-/// 子 5 は箱 2 つ（element番号の昇順に b・a）、子 6 は箱 1 つ。親 1 は 6 と 5 を置き、5 を 2 度置く
+/// 子 5 は箱 2 つ（element番号の昇順に b・a＝最初は b）、子 6 は箱 1 つ。親 1 は 6 と 5 を置き、5 を 2 度置く
 /// （同じ辺は 1 本）。親 0 は 5 を置く。3 段目（6 の子 7）は箱を持たないので載らない。
 /// 面の表に無い番号（9）を指す行は、無い番号の報告の受け持ちなのでここには載らない。
 #[test]
-fn one_report_per_box_per_parent_child_edge_in_order() {
+fn one_report_per_parent_child_edge_in_order() {
     let text = "balloon.a\n{\nsize,10,10\n}\nballoon.b\n{\nsize,10,10\n}\n\
         surface1\n{\nelement0,overlay,6,0,0\nelement1,overlay,5,0,0\nelement2,overlay,5,3,3\nelement3,overlay,9,0,0\n}\n\
         surface0\n{\nelement0,overlay,5,0,0\n}\n\
@@ -89,11 +89,42 @@ fn one_report_per_box_per_parent_child_edge_in_order() {
         only_in_child(&issues),
         vec![
             in_child(0, 5, "b"),
-            in_child(0, 5, "a"),
             in_child(1, 6, "a"),
-            in_child(1, 5, "b"),
-            in_child(1, 5, "a"),
+            in_child(1, 5, "b")
         ]
+    );
+}
+
+/// 子を置く親が多く、子の箱も多くても、件数は辺の数で止まる（親の数×箱の数にしない）。
+#[test]
+fn many_parents_and_many_child_boxes_report_one_per_edge() {
+    const PARENTS: u32 = 30;
+    const BOXES: u32 = 40;
+    let mut text = String::new();
+    for e in 1..=BOXES {
+        text.push_str(&format!("balloon.b{e}\n{{\nsize,10,10\n}}\n"));
+    }
+    text.push_str("surface500\n{\nelement0,overlay,p.png,0,0\n");
+    for e in 1..=BOXES {
+        text.push_str(&format!("element{e},balloon,b{e},0,0\n"));
+    }
+    text.push_str("}\n");
+    for parent in 0..PARENTS {
+        text.push_str(&format!(
+            "surface{parent}\n{{\nelement0,overlay,500,0,0\n}}\n"
+        ));
+    }
+    let (layout, issues) = fold(&text);
+    assert_eq!(
+        layout.placements(500).len(),
+        BOXES as usize,
+        "子の箱は全部置かれる"
+    );
+    assert_eq!(
+        only_in_child(&issues),
+        (0..PARENTS)
+            .map(|p| in_child(p, 500, "b1"))
+            .collect::<Vec<_>>()
     );
 }
 

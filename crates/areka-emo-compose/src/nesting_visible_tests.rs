@@ -808,7 +808,7 @@ fn cut_cycle_edges_from_every_top_are_reported() {
     }
 }
 
-/// 指摘 9: 行の数が予算に届く面は、合成・外形・持ち込みと同じく部品に数えない（面 1 は予算−1 行で数え、
+/// 行の数が予算に届く面は、合成・外形・持ち込みと同じく部品に数えない（面 1 は予算−1 行で数え、
 /// 面 2 は予算ちょうどの行で数えない）。
 #[test]
 fn surface_with_rows_at_the_budget_is_not_a_visible_part() {
@@ -826,5 +826,36 @@ fn surface_with_rows_at_the_budget_is_not_a_visible_part() {
     world
         .nest_table()
         .visible_parts(0, &BindSet::default(), &PatternState::default(), &mut out);
+    assert_eq!(out, [1]);
+}
+
+/// 予算に収まらない子が先に並び、小さな兄弟が後ろに並んでも、兄弟は合成で描かれ部品に数えられる
+/// （収まらない子は残りの予算を使わずにその子だけ外す・合成と見える部品が一致する）。同じ子を指す
+/// `always` の経過 0 と有効な純 `bind` の先も部品に数えない。
+#[test]
+fn sibling_after_a_child_over_the_budget_is_drawn_and_visible() {
+    let budget = crate::budget::VISIT_BUDGET;
+    let mut text = String::from(
+        "surface0\n{\nelement0,overlay,2,0,0\nelement1,overlay,1,0,0\n\
+         animation0.interval,always\nanimation0.pattern0,overlay,2,0,0,0\n\
+         animation1.interval,bind\nanimation1.pattern0,overlay,2,0,0,0\n}\n\
+         surface1\n{\nelement0,overlay,p.png,0,0\n}\nsurface2\n{\n",
+    );
+    for c in 0..budget {
+        text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+    }
+    text.push_str("}\n");
+    let atlas = bake_atlas(Path::new("shell/master"), &["p.png"]);
+    let world = crate::plan_test_support::bound_world(&parse(&text), &[], &atlas);
+    let (binds, pattern) = (BindSet::from_ids([1]), PatternState::default());
+    assert_eq!(
+        ops(&world, &atlas, 0, &binds, &pattern).len(),
+        1,
+        "兄弟 1 の絵を描く"
+    );
+    let mut out = Vec::new();
+    world
+        .nest_table()
+        .visible_parts(0, &binds, &pattern, &mut out);
     assert_eq!(out, [1]);
 }

@@ -74,7 +74,7 @@ pub struct EmoWorld {
 }
 
 /// 面の表を組む段の記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。面の表のリソースにも置き、
-/// 後から面の表を読む畳み込み（箱の [`crate::fold_boxes`]）が同じ組み方を引く（指摘 7）。
+/// 後から面の表を読む畳み込み（箱の [`crate::fold_boxes`]）が同じ組み方を引く（黙らせる組み方の面の表なら箱の記録も出さない）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Resource)]
 pub(crate) enum Records {
     Emit,

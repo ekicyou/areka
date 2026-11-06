@@ -362,7 +362,7 @@ fn dangling_pattern_targets_skips_negative_targets_and_existing_faces() {
 /// 数えない（要件 3.5・指摘 133）。
 ///
 /// 綴りの比べ方は `ComposeMethod::from_name` と同じ（前後の空白を落とし・小文字にし・`-` と `_`
-/// を除く）。`from_name` は未知の語で `warn!` を出すので、この照会からは呼ばない。
+/// を除く）。`from_name` は未知の語で `debug!` を出すので、この照会からは呼ばない。
 #[test]
 fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
     let methods = [
@@ -383,7 +383,7 @@ fn dangling_pattern_targets_skips_methods_that_take_animation_ids() {
     let world = world_with_patterns(patterns, &BTreeMap::new());
 
     // 照会そのものは記録を 1 本も出さない（`ComposeMethod::from_name` を呼ぶと未知の語で
-    // `warn!` が出る。出すのは上流の権威の役目）。
+    // `debug!` が出る。出すのは上流の権威の役目）。
     let mut targets = None;
     let logs = crate::log_capture::capture_logs(|| {
         targets = Some(world.dangling_pattern_targets());
