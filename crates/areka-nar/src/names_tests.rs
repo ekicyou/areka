@@ -579,6 +579,29 @@ fn the_case_fold_is_unicode_not_ascii_only() {
     );
 }
 
+/// 畳みは 1 字ずつ大文字へ（NTFS の大文字表の形）。語末の `Σ` を `ς` にする小文字化だと
+/// `aΣ` と `aσ` が別物に見えるが、NTFS では同じ名前なので衝突にする（`aς` と `aσ` も同じ）。
+#[test]
+fn the_case_fold_maps_every_sigma_to_one_name() {
+    for (first, second) in [("aΣ", "aσ"), ("aς", "aσ")] {
+        let reason = refusal(
+            NarBuilder::new()
+                .file(first, b"x")
+                .done()
+                .file(second, b"y")
+                .done(),
+        );
+
+        assert_eq!(
+            reason,
+            RefuseReason::CaseCollision {
+                a: first.to_owned(),
+                b: second.to_owned(),
+            }
+        );
+    }
+}
+
 /// ファイルと、別のエントリが暗に作るフォルダは同じ宛先を取り合うので衝突する。
 /// 順を逆にしても、大小だけ違っても同じ（#6）。
 #[test]
