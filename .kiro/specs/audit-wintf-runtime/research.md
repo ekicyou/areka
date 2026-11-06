@@ -1265,3 +1265,20 @@ crate の外から見えない口（`pub(crate)` と private）。知らせに�
 | `postmessage_click_demo` | 緑。`Color toggled: RED -> YELLOW`（2 秒）・`YELLOW -> RED`（4 秒）・`10s: Closing window`、終了コード 0 |
 | `tooltip_demo`（`TOOLTIP_DEMO_EXIT_MS=20000`） | **緑**（2 回目）。1 回目は送った鍵が 1 つも届かなかった。真の原因は手順の台本の `INPUT` の大きさの誤り（x64 で 40 バイトのところを 32 バイトと宣言し、SendInput が全部断って 0 を返した）で、台本は戻り値を見ずに「送った」と書き、前面の窓の pid の確かめも関数の出力が戻り値に混ざって常に真だった。台本を直し（大きさ 40・戻り値が入れた数と等しいかを見る・pid の確かめは真偽だけを返す）、窓を立てない空回しで確かめてから 2 回目を回した。2 回目: 鍵ごとに前面の窓の pid がデモ（26836）であることを確かめて送った。Alt+F4 で `(other)` が閉じ（窓の一覧から消えた）、その後の F9 で panic せず（149・F9 の行は出ない＝実体が無いので戻った）、F8 を 2 度で `F8: 「1 行」の範囲を取り消した removed=true`・`F8: 「1 行」の範囲を登録し直した id=Some(..)`（154 の道は成功の側を通った。失敗の `error!` の側は透過の窓を閉じないと通らない）、20 秒で `TOOLTIP_DEMO_EXIT_MS=20000 に達したので終わる`・終了コード 0 |
 
+## 16. vblank のスレッドの実機の確かめ（タスク 8.2・2026-11-06）
+
+- 実機の 3 場面（ディスプレイの消灯・ロック画面・リモートデスクトップ）は回していない。開発者がどれも操作できないため（2026-11-06 の開発者の言）。
+- 3 場面で起きるのは、`DwmFlush` が待たずに戻ることか、失敗を返すことのどちらかである。この 2 つと平常の場合は、2.1 で足した決定論のテスト（`crates/wintf/src/runtime/tick_bridge_vsync_tests.rs`）が押さえている。開発者の承認を得て、これを静的な証跡として 8.2 を閉じる（実機の証跡と静的な構造の証跡は同じ重みとする決め）。
+
+| 状態 | テスト | 確かめる振る舞い |
+|---|---|---|
+| 待って戻った | `vsync_once_waited_flush_notifies_without_sleep` | 眠らずに知らせる |
+| 待たずに戻った（消灯・ロック・リモートで起こる） | `vsync_once_unwaited_flush_sleeps_the_rest_then_notifies` | 残りの時間だけ眠ってから知らせる（空回りしない） |
+| 失敗を返した | `vsync_once_failed_flush_logs_sleeps_and_still_notifies` | `error!` を残し、眠ってから、それでも知らせる |
+| 補いの時間の境目 | `compensation_boundaries` | 0・途中・周期以上の境目 |
+| スレッドの落ち | `join_vsync_leaves_one_error_for_a_panicked_thread` | `error!` が 1 件 |
+| 終わった後 | `relay_stops_without_waking_once_the_loop_has_returned` | ループが戻った後は起こさない |
+
+- 確かめていないこと: 実機でのスレッド別の CPU の値と、補いの trace の行。
+- `wintf-dwmflush-wait-compensation` は、予定どおりこの spec の完了のときに台帳から閉じる（14 節）。
+
