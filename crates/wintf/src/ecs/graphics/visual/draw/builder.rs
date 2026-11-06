@@ -113,7 +113,7 @@ fn visit(
 
     // ① クリップ計画（4 値）。push はここでは積まない。
     // ③ Culled は push を出す *前* に return するので bracket（push/pop 対）は均衡を保つ。
-    let (new_eff, pop) = match plan_clip(clip, &clip_rect, unit_rect, entity, world_mat, eff) {
+    let (new_eff, pop) = match plan_clip(clip, &clip_rect, unit_rect, world_mat, eff) {
         ClipKind::Culled => return,
         ClipKind::NoClip => (eff, None),
         ClipKind::Rect { push, new_eff } => {
@@ -136,6 +136,9 @@ fn visit(
                 world_mat,
                 world_aabb,
                 entity,
+                command_list: content.command_list.clone(),
+                interpolation_mode: content.interpolation_mode,
+                composite_mode: content.composite_mode,
             }));
         }
     }
@@ -172,7 +175,6 @@ fn plan_clip(
     clip: Option<&ClipShape>,
     clip_rect: &Aabb,
     unit_rect: &ID2D1Geometry,
-    entity: Entity,
     world_mat: Matrix3x2,
     eff: Aabb,
 ) -> ClipKind {
@@ -205,7 +207,7 @@ fn plan_clip(
                     return ClipKind::Culled;
                 }
                 ClipKind::Geometry {
-                    push: DrawCommand::PushClipGeometryRect(ClipGeometryRect {
+                    push: DrawCommand::PushClipGeometry(ClipGeometry {
                         world_mat: m,
                         world_aabb,
                         geometry: unit_rect.clone(), // 共有 → ポインタ安定（clone は AddRef のみ）
@@ -215,7 +217,7 @@ fn plan_clip(
             }
         }
         ClipShape::Geometry(local_geom) => {
-            // local geometry は遅延適用（emit 側で SetTransform(world_mat)）。
+            // 局所の図形はそのまま持ち、世界への変換は world_mat で渡す。
             // 有効 AABB は geometry のバウンディングボックスで保守的に絞る。
             let world_aabb = geometry_bounds(local_geom, &world_mat);
             let new_eff = eff.intersect(world_aabb);
@@ -223,10 +225,10 @@ fn plan_clip(
                 return ClipKind::Culled;
             }
             ClipKind::Geometry {
-                push: DrawCommand::PushClipGeometryEntity(ClipGeometryEntity {
+                push: DrawCommand::PushClipGeometry(ClipGeometry {
                     world_mat,
                     world_aabb,
-                    entity,
+                    geometry: local_geom.clone(),
                 }),
                 new_eff,
             }

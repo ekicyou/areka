@@ -69,7 +69,7 @@
   - _Requirements: 3.9, 4.2, 4.3, 4.4_
 
 - [ ] 5. 平らにする係と描く係
-- [ ] 5.1 描く列の形と木の根の部品を整える
+- [x] 5.1 描く列の形と木の根の部品を整える
   - 図形の切り抜きの push を 1 つにまとめ（図形＋局所→世界の変換）、欄を後の spec が読める公開にし、未使用の印を外す
   - 根の部品（平らな列と回転した矩形の切り抜きに使う単位矩形の図形）を作り、複数スレッドの根拠を注記する
   - 完了の姿: `cargo build -p wintf` が通り、描く列の型に未使用の印が無い（配線前の未使用の警告は 8.3 で 0 にする）
@@ -165,3 +165,4 @@
 - 4.1: `fill_world_visuals` の口は設計の Contracts と違う（`children_of_root: &[Entity]`・変化の引数なし）。4.2 で変化の引数と版を足し、4.2 か 7.1 で design の Contracts を実際の口に合わせて直す。持ち主の境は `Has<VisualGraphics> || WorldVisual なし`
 - 4.2 レビュー: 7.1 の「装置が無効な回は何もせず」で `fill_world_visuals` を呼ばずに戻ると、その回の `Ref` の変化が捨てられ版が上がらない。7.1 では無効な回にも版を上げる道を残すか、要らない根拠を設計に書く
 - 4.2: 見えない部分木の子孫も「版だけ」たどる（visited・行列には入れない）＝隠れている間の中身の変化も版に残る
+- 5.1: 根の部品は `graphics/visual/draw_tree.rs` の `DrawTree { pub commands, pub(crate) unit_rect }`（7.1/7.3 と window_pos.rs から書くので pub(crate)）。`DrawItem.hash` はまだ古い COM 番地入り＝5.2 で直す

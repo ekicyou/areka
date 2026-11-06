@@ -13,6 +13,7 @@ use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 
 mod draw;
 mod draw_content;
+mod draw_tree;
 mod systems;
 mod transform;
 mod version;
@@ -29,7 +30,9 @@ mod visual_tests;
 #[cfg(test)]
 mod world_visual_tests;
 
+pub use draw::command::*;
 pub use draw_content::*;
+pub use draw_tree::*;
 pub use systems::*;
 pub use transform::*;
 pub use version::*;
