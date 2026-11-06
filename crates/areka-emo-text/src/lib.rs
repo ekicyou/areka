@@ -194,6 +194,10 @@ mod tests {
         ("actor_attach.rs", include_str!("actor_attach.rs")),
         ("actor_present.rs", include_str!("actor_present.rs")),
         (
+            "actor_frame_memo_tests.rs",
+            include_str!("actor_frame_memo_tests.rs"),
+        ),
+        (
             "actor_surface_limit_tests.rs",
             include_str!("actor_surface_limit_tests.rs"),
         ),
@@ -507,7 +511,7 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 85, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 86, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",

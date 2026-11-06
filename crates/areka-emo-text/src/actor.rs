@@ -891,6 +891,10 @@ mod scroll_present_tests;
 #[path = "actor_surface_limit_tests.rs"]
 mod surface_limit_tests;
 
+#[cfg(test)]
+#[path = "actor_frame_memo_tests.rs"]
+mod frame_memo_tests;
+
 /// task 7.2: バルーン背景色の受け口（要件 4.6）。
 #[path = "actor_decoration.rs"]
 mod decoration;
