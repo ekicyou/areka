@@ -280,7 +280,6 @@ pub(crate) fn elem(path: &str, x: i64, y: i64) -> Element {
 
 pub(crate) fn surface(id: u32, elements: Vec<Element>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements,
         collisions: Vec::new(),
@@ -542,7 +541,6 @@ fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str
 fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
     bake_world(
         shell_of(vec![Surface {
-            id: 1000,
             targets: vec![AppendTarget::Single(1000)],
             elements: Vec::new(),
             collisions: vec![
@@ -652,7 +650,6 @@ fn film(dec: &mut MemoryDecoder, rel: &str, frames: Vec<DecodedImage>, laps: Opt
 pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
     let surfaces = vec![
         Surface {
-            id: 0,
             targets: vec![areka_parsers::shell::AppendTarget::Single(0)],
             elements: vec![
                 balloon_element(0, "frame.png", 0),
@@ -670,7 +667,6 @@ pub(super) fn build_balloon() -> (EmoWorld, AtlasTable) {
             animations: Vec::new(),
         },
         Surface {
-            id: 1,
             targets: vec![areka_parsers::shell::AppendTarget::Single(1)],
             elements: vec![balloon_element(0, "s1.png", 0)],
             collisions: Vec::new(),

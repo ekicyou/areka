@@ -7,6 +7,7 @@ use super::test_support::{
     shell_master_dir, surface1000_bind_parts,
 };
 use super::{BindSet, ComposedSurface};
+use areka_parsers::shell::AppendTarget;
 
 /// 合成結果の (x,y) 画素の α バイト（BGRA の index+3）を読む。
 fn alpha_at(s: &ComposedSurface, x: u32, y: u32) -> u8 {
@@ -23,7 +24,7 @@ fn surface1000_is_all_bind_no_static_elements() {
     let s1000 = shell
         .surfaces
         .iter()
-        .find(|s| s.id == 1000)
+        .find(|s| s.targets == [AppendTarget::Single(1000)])
         .expect("emo2 surfaces.txt に surface1000 が存在する");
     assert!(
         s1000.elements.is_empty(),

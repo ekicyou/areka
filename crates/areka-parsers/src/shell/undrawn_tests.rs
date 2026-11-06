@@ -234,7 +234,6 @@ element1,replace,open2.png,0,0
             .map(|a| a.elements.len())
             .sum::<usize>();
     let boxes: usize = parse_boxes(text)
-        .definitions
         .iter()
         .map(|d| match d {
             BoxDefinition::Surface(s) | BoxDefinition::Append(s) => s.elements.len(),
@@ -246,4 +245,13 @@ element1,replace,open2.png,0,0
     // 較正: 3 つのどれもが 0 でない（どれか 1 つが全部を拾う形では成り立たない）。
     assert_eq!((images, boxes, undrawn), (4, 2, 8));
     assert_eq!(images + boxes + undrawn, ELEMENT_LINES);
+}
+
+/// 見出しがちょうど `surface.alias` のブレスは画像の読み手も箱の転記も読まないので、描けない行にも数えない。
+#[test]
+fn surface_alias_brace_gives_no_undrawn_line() {
+    assert_eq!(
+        parse_undrawn_elements("surface.alias\n{\nelement0,add,x.png,0,0\n}\n"),
+        Vec::<UndrawnElementLine>::new()
+    );
 }

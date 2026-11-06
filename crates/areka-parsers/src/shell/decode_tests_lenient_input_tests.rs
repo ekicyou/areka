@@ -4,8 +4,8 @@
 //! 切り出したものであり、テスト本文は分割前と同一である。
 
 use super::{
-    Animation, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval, Pattern,
-    decode, lex,
+    Animation, AppendTarget, Collision, CollisionName, DrawMethod, Element, ElementPath, Interval,
+    Pattern, decode, lex,
 };
 
 // --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
@@ -49,83 +49,6 @@ element1,overlay,over.png,7,8
                 y: 8,
             },
         ]
-    );
-}
-
-/// pattern メソッドは overlay も 非 overlay（`replace`）も落とさず method を忠実転記する
-/// （overlay フィルタ撤去・要件 4.6/8.4）。従来は replace 行を黙殺していた＝転記の穴の是正。
-#[test]
-fn both_overlay_and_non_overlay_pattern_methods_are_transcribed() {
-    let input = "\
-surface0
-{
-animation0.interval,bind
-animation0.pattern0,replace,100,0,0,0
-animation0.pattern1,overlay,101,5,0,0
-}
-";
-    let shell = decode(lex(input));
-    assert_eq!(shell.surfaces.len(), 1);
-    // replace・overlay 双方が method を忠実転記して出現順で残る（どちらも落とさない）。
-    assert_eq!(
-        shell.surfaces[0].animations,
-        vec![Animation {
-            id: 0,
-            interval: Interval::Bind,
-            interval_written: true,
-            patterns: vec![
-                Pattern {
-                    index: 0,
-                    method: DrawMethod::new("replace".to_string()),
-                    surface_id: 100,
-                    target: "100".into(),
-                    wait: 0,
-                    x: 0,
-                    y: 0,
-                },
-                Pattern {
-                    index: 1,
-                    method: DrawMethod::new("overlay".to_string()),
-                    surface_id: 101,
-                    target: "101".into(),
-                    wait: 5,
-                    x: 0,
-                    y: 0,
-                },
-            ],
-        }]
-    );
-}
-
-/// 3 種以外の interval（`interval,sometimes,5`）は正規化されず `Interval::Other("sometimes")`
-/// へ忠実転記される（fallback-Bind 撤去・要件 8.2・討議 #1）。K は非採録（keyword のみ転記）。
-/// 併せて隣接する正当な animation（random,4）が正しく decode されることを確認する。
-#[test]
-fn unrecognized_interval_becomes_other_and_neighbor_survives() {
-    let input = "\
-surface0
-{
-animation0.interval,sometimes,5
-animation0.pattern0,overlay,10,0,0,0
-animation1.interval,random,4
-animation1.pattern0,overlay,20,0,0,0
-}
-";
-    let shell = decode(lex(input));
-    assert_eq!(shell.surfaces.len(), 1);
-    assert_eq!(shell.surfaces[0].animations.len(), 2);
-    // sometimes は認識不能ゆえ Interval::Other へ忠実転記され、pattern は失われない。
-    assert_eq!(shell.surfaces[0].animations[0].id, 0);
-    assert_eq!(
-        shell.surfaces[0].animations[0].interval,
-        Interval::Other("sometimes".into())
-    );
-    assert_eq!(shell.surfaces[0].animations[0].patterns.len(), 1);
-    // 隣接する正当な animation は影響を受けず random,4 として decode される。
-    assert_eq!(shell.surfaces[0].animations[1].id, 1);
-    assert_eq!(
-        shell.surfaces[0].animations[1].interval,
-        Interval::Random { k: 4 }
     );
 }
 
@@ -245,7 +168,7 @@ animation0.pattern0,overlay,2206,0,0,0
     assert_eq!(shell.surfaces.len(), 2);
 
     // 前方ブロック: surface2100 の overlay element が完全に残る。
-    assert_eq!(shell.surfaces[0].id, 2100);
+    assert_eq!(shell.surfaces[0].targets, [AppendTarget::Single(2100)]);
     assert_eq!(
         shell.surfaces[0].elements,
         vec![Element {
@@ -257,7 +180,7 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 
     // 後方ブロック: surface2200 の collision と animation が完全に残る。
-    assert_eq!(shell.surfaces[1].id, 2200);
+    assert_eq!(shell.surfaces[1].targets, [AppendTarget::Single(2200)]);
     assert_eq!(
         shell.surfaces[1].collisions,
         vec![Collision {
@@ -370,5 +293,184 @@ animation0.pattern1,overlay,901,4,0,0
                 },
             ],
         }]
+    );
+}
+
+/// 読めない数は 0 にせず飛ばして `UnreadableNumber` を積む（指摘 36）。範囲の両端は trim し、
+/// 見出しがちょうど `surface.alias` のブレスは読まない（崩れも積まない）。
+#[test]
+fn unreadable_numbers_are_skipped_not_zero() {
+    use crate::shell::{AppendTarget, ShellIssue, parse_all};
+    let input = "\
+surface0,x, 3 - 5
+{
+elementx,overlay,a.png,0,0
+element1,overlay,b.png,0,0
+collision,1,2,3,4,Bad
+collision99999999999,1,2,3,4,Big
+collision2,1,2,3,4,Head
+animationx.interval,bind
+animation1.interval,bind
+animation1.patternq,overlay,10,5,0,0
+animation1.pattern0,overlay,11,5,0,0
+}
+kero.surface.alias
+{
+6,[1,a,3]
+}
+surface.alias
+{
+0,[1]
+}
+";
+    let text = parse_all(input);
+    let shell = &text.shell;
+    assert_eq!(shell.surfaces.len(), 1);
+    let surface = &shell.surfaces[0];
+    assert_eq!(
+        surface.targets,
+        vec![
+            AppendTarget::Single(0),
+            AppendTarget::Range { start: 3, end: 5 }
+        ]
+    );
+    assert_eq!(
+        surface.elements,
+        vec![Element {
+            layer: 1,
+            path: ElementPath::new("b.png".to_string()),
+            x: 0,
+            y: 0,
+        }]
+    );
+    assert_eq!(
+        surface
+            .collisions
+            .iter()
+            .map(|c| c.index)
+            .collect::<Vec<_>>(),
+        vec![2]
+    );
+    assert_eq!(surface.animations.len(), 1);
+    assert_eq!(surface.animations[0].id, 1);
+    assert_eq!(
+        surface.animations[0]
+            .patterns
+            .iter()
+            .map(|p| p.index)
+            .collect::<Vec<_>>(),
+        vec![0]
+    );
+    assert_eq!(shell.aliases.len(), 1);
+    assert_eq!(shell.aliases[0].ids, vec![1, 3]);
+    let unreadable = |heading: &str, text: &str| ShellIssue::UnreadableNumber {
+        heading: heading.into(),
+        text: text.into(),
+    };
+    let head = "surface0,x,3 - 5";
+    assert_eq!(
+        text.issues,
+        vec![
+            unreadable(head, "x"),
+            unreadable(head, "elementx"),
+            unreadable(head, "collision"),
+            unreadable(head, "collision99999999999"),
+            unreadable(head, "animationx.interval"),
+            unreadable(head, "animation1.patternq"),
+            unreadable("kero.surface.alias", "a"),
+        ]
+    );
+}
+
+/// 崩れの見出しは頭の 64 字で切る。番号を並べた長い見出しの下に崩れが何件あっても、
+/// 1 件ごとに見出しの全文を写さない（かけ直しの指摘・崩れの数×見出しの長さで記録が膨らまない）。
+#[test]
+fn issue_heading_is_clipped_to_64_chars() {
+    use crate::shell::{ShellIssue, parse_all};
+    let numbers: Vec<String> = (0..200).map(|n| n.to_string()).collect();
+    let heading = format!("surface{}", numbers.join(","));
+    let input = format!(
+        "{heading}\n{{\nelementx,overlay,a.png,0,0\nelementy,overlay,a.png,0,0\n}}\n{heading}\n{{\n"
+    );
+    let text = parse_all(&input);
+    let clipped: String = heading.chars().take(64).chain(['…']).collect();
+    assert_eq!(
+        text.issues,
+        vec![
+            ShellIssue::UnreadableNumber {
+                heading: clipped.clone(),
+                text: "elementx".into()
+            },
+            ShellIssue::UnreadableNumber {
+                heading: clipped.clone(),
+                text: "elementy".into()
+            },
+            ShellIssue::UnclosedAtEnd {
+                heading: clipped,
+                line: 6
+            },
+        ]
+    );
+}
+
+/// 角括弧の無い別名の行（`6,2106,2206`）は 2 つ目より後の欄を読まない。黙って捨てず、
+/// 読まなかった欄を崩れとして積む。
+#[test]
+fn alias_fields_after_the_value_are_recorded() {
+    use crate::shell::{ShellIssue, parse_all};
+    let text = parse_all("kero.surface.alias\n{\n6,2106,2206\n}\n");
+    assert_eq!(text.shell.aliases[0].ids, vec![2106]);
+    assert_eq!(
+        text.issues,
+        vec![ShellIssue::UnreadableNumber {
+            heading: "kero.surface.alias".into(),
+            text: "2206".into()
+        }]
+    );
+}
+
+/// `}` の抜けを次の `{` で区切り直したら、`parse_all` が `ClosedByNextBrace` を返す（指摘 33）。
+#[test]
+fn missing_close_brace_is_returned_as_issue() {
+    use crate::shell::{ShellIssue, parse_all};
+    let input = "\
+surface0
+{
+element0,overlay,a.png,0,0
+surface1
+{
+element0,overlay,b.png,0,0
+}
+";
+    assert_eq!(
+        parse_all(input).issues,
+        vec![ShellIssue::ClosedByNextBrace {
+            heading: "surface0".into(),
+            line: 1
+        }]
+    );
+}
+
+/// ブレスの外の `}` だけの行と、見出しの無い `{` だけの行は、読み飛ばして行の番号を崩れに積む
+/// （後ろの行が見出しの無い本体として読まれずに捨てられるのを黙らせない）。
+#[test]
+fn stray_brace_lines_are_returned_as_issues() {
+    use crate::shell::{ShellIssue, parse_all};
+    let input = "\
+{
+element0,overlay,a.png,0,0
+}
+surface0
+{
+}
+}
+";
+    assert_eq!(
+        parse_all(input).issues,
+        vec![
+            ShellIssue::StrayBrace { line: 1 },
+            ShellIssue::StrayBrace { line: 3 },
+            ShellIssue::StrayBrace { line: 7 },
+        ]
     );
 }

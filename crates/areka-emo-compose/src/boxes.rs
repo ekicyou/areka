@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_parsers::balloon::{self, BalloonModel};
-use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine, ShellBoxes};
+use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine};
 
 use crate::fold::expand_targets;
 use crate::world::EmoWorld;
@@ -155,7 +155,7 @@ pub enum BoxIssue {
 /// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs にも記録にも触れない
 /// （記録の水準は入口が決める）。
 pub fn fold_boxes(
-    boxes: &ShellBoxes,
+    boxes: &[BoxDefinition],
     images: &BTreeMap<u32, String>,
     world: &EmoWorld,
 ) -> (BoxLayout, BoxReport) {
@@ -214,13 +214,13 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
 /// `surface.append*`ブレスは「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。
 /// 無い番号への追記は箱の行ごとに報告へ載せる。
 fn distribute<'a>(
-    boxes: &'a ShellBoxes,
+    boxes: &'a [BoxDefinition],
     images: &BTreeMap<u32, String>,
     issues: &mut Vec<BoxIssue>,
 ) -> BTreeMap<u32, Vec<&'a BoxElementLine>> {
     let mut existing: BTreeSet<u32> = images.keys().copied().collect();
     let mut lines: BTreeMap<u32, Vec<&BoxElementLine>> = BTreeMap::new();
-    for definition in &boxes.definitions {
+    for definition in boxes {
         match definition {
             BoxDefinition::Surface(surface) => {
                 for id in expand_targets(&surface.targets) {
@@ -342,10 +342,10 @@ fn place(
 /// `balloon.*`ブレスを登場順に定義の表へ畳む（同じ名前は後のもので丸ごと置き換え・要件 1.8）。
 ///
 /// 置き換えたブレスが採られなければ、その名前の定義は無くなる（前の定義へは戻さない）。
-fn fold_braces(boxes: &ShellBoxes, issues: &mut Vec<BoxIssue>) -> BTreeMap<BoxName, BoxDef> {
+fn fold_braces(boxes: &[BoxDefinition], issues: &mut Vec<BoxIssue>) -> BTreeMap<BoxName, BoxDef> {
     let mut defs = BTreeMap::new();
     let mut seen = BTreeSet::new();
-    for definition in &boxes.definitions {
+    for definition in boxes {
         let BoxDefinition::Brace(BoxBrace { name, lines }) = definition else {
             continue;
         };

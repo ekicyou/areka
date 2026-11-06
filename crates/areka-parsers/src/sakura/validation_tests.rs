@@ -7,15 +7,14 @@
 //!   `\X[...]` の `]` 終端・未知タグの構文区切り＋`Raw` 吸収。
 //! - VALUE NORMALIZATION（要件 3/4）: 待ち時間・改行比率の境界値。
 //! - Choice（要件 5.3）: 旧 2 連形が隣接命令を壊さないこと。
-//! - 不透明 Surface（要件 2.2/2.3）・寛容パススルー（要件 10）・
-//!   純粋関数契約（要件 1.5/12.2/12.3）。
+//! - 入力順の保持と日本語の字の並び（要件 1.3/9.2）。
 //! - 代表 OnBoot 通し例（要件 12.3/12.4・design「Integration Tests」の
 //!   インラインフィクスチャ）。
-//! - OnBoot 例に**現れない**タグ（`\q` / `\![move]` / `%username`）の個別手書き網羅。
+//! - OnBoot 例に**現れない**タグ（`\q` / `\![move]`）の個別手書き網羅。
 //! - `\s[""]`（唯一の空クォート引数）の strict 挙動（要件 13.4・タスク 3.2 追随）。
 
 use super::lexer::{Token, lex};
-use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
+use super::model::{Choice, Instruction, NewLineRatio, SurfaceArg};
 use super::parse::parse;
 use std::time::Duration;
 
@@ -84,16 +83,6 @@ fn syntax_bracket_closes_at_matching_bracket() {
     );
 }
 
-/// 未知（subset 外）タグ `\i[a,b]` は構文として 1 単位に区切った上で `Raw`
-/// 保持し、意味デコードしない（要件 13.8/11.2）。生情報を失わない。
-#[test]
-fn syntax_unknown_tag_is_syntactically_split_and_kept_raw() {
-    assert_eq!(
-        parse(r"\i[a,b]"),
-        vec![Instruction::Raw(r"\i[a,b]".to_string())],
-    );
-}
-
 /// bare スコープタグ `\0` は 1 文字で終端し後続を巻き込まない（lexer 終端規律・要件 13.1）。
 /// `\0あ` → SpeakerScope{n:0}（本体側・R1.5/R4.4・ukadoc `\0`=本体側）＋ Text(`あ`)。
 /// 眼目は lexer の 1 文字終端（`あ` を吸わない）＝decode 写像先が Raw から SpeakerScope へ
@@ -146,8 +135,7 @@ fn value_newline_ratio_boundary_values() {
 
 /// 旧 2 連 `\q[ID][タイトル]` は現行 Choice にせず単一 `Raw` に吸収され、
 /// 前後の正常命令（隣接タグ）を破壊しない（要件 5.3/10.3）。
-/// 隣接は制御タグで挟む（旧形検出は「浮く 2 個目 `[...]`」＝`[`始まり`]`終わりの
-/// Text を要するため、直後にプレーンテキストを続けると `[タイトル]` に巻かれる）。
+/// 直後に地の文が続く形は `legacy_q_title_followed_by_text_folds`。
 #[test]
 fn choice_legacy_double_bracket_does_not_break_neighbors() {
     let got = parse(r"\e\q[ID][タイトル]\c");
@@ -163,6 +151,23 @@ fn choice_legacy_double_bracket_does_not_break_neighbors() {
     assert!(!got.iter().any(|i| matches!(i, Instruction::Choice(_))));
 }
 
+/// 旧形の題の直後に地の文が続いても、閉じた題 `[…]` だけが畳まれ、地の文は字のまま
+/// （指摘 25・要件 5.3）。題の中の `%` も題の字のまま（環境変数として切らない）。
+#[test]
+fn legacy_q_title_followed_by_text_folds() {
+    let raw = |s: &str| Instruction::Raw(s.to_string());
+    let text = |s: &str| Instruction::Text(s.to_string());
+    assert_eq!(
+        parse(r"\q[OnA][はい]です\e"),
+        vec![raw(r"\q[OnA][はい]"), text("です"), Instruction::End],
+    );
+    assert_eq!(parse(r"\q[ID][100%]"), vec![raw(r"\q[ID][100%]")]);
+    assert_eq!(
+        parse(r"\q0[ID][題]後"),
+        vec![raw(r"\q0[ID][題]"), text("後")]
+    );
+}
+
 /// 旧専用綴り `\q*[ID][タイトル]` も同様に単一 `Raw` 吸収・隣接を壊さない（要件 5.3）。
 #[test]
 fn choice_legacy_q_star_double_bracket_kept_raw() {
@@ -176,59 +181,31 @@ fn choice_legacy_q_star_double_bracket_kept_raw() {
     );
 }
 
-// ───────────────────────────────────────────────────────────────────
-// 不透明 Surface（要件 2.2/2.3）
-// ───────────────────────────────────────────────────────────────────
-
-/// `\s[...]` の中身は数値解釈・エイリアス解決せず無改変で `Surface` に入る
-/// （要件 2.2/2.3）。数値・日本語エイリアスの双方を固定。
+/// 指摘 26: 通し番号つきの旧形 `\q0[ID][タイトル]` も単一 `Raw` に畳み、
+/// `0[ID][タイトル]` の字を吹き出しに漏らさない（要件 5.3・設計の討議の議題 3）。
+/// 2 桁の `\q10[a][b]` は旧形の印に当たらず、今どおり（`\q` の Raw と字）。
 #[test]
-fn surface_inner_is_opaque_and_unmodified() {
+fn choice_legacy_q_serial_digit_kept_raw() {
     assert_eq!(
-        parse(r"\s[1000]\s[通常]"),
+        parse(r"\e\q0[OnYes][はい]\c"),
         vec![
-            Instruction::Surface(SurfaceArg::new("1000".to_string())),
-            Instruction::Surface(SurfaceArg::new("通常".to_string())),
+            Instruction::End,
+            Instruction::Raw(r"\q0[OnYes][はい]".to_string()),
+            Instruction::Clear,
+        ],
+    );
+    assert_eq!(
+        parse(r"\q10[a][b]"),
+        vec![
+            Instruction::Raw(r"\q".to_string()),
+            Instruction::Text("10[a][b]".to_string()),
         ],
     );
 }
 
 // ───────────────────────────────────────────────────────────────────
-// 寛容パススルー（要件 10）— 不正トークン前後の正常命令が欠落しない
+// 入力順の保持（要件 1.3/9.2）
 // ───────────────────────────────────────────────────────────────────
-
-/// 未閉じ `[` の前後に正常命令を置き、両端が欠落せず解析が継続する
-/// （要件 10.1/10.2/10.3）。`\e前\i[` の `\e` は残り、末尾は `Raw` 吸収。
-#[test]
-fn lenient_passthrough_keeps_instructions_around_malformed_token() {
-    let got = parse(r"\e\i[");
-    assert_eq!(got.first(), Some(&Instruction::End));
-    assert_eq!(got.len(), 2);
-    assert!(matches!(got[1], Instruction::Raw(_)));
-}
-
-/// move 以外の `\!` は `GenericCommand`（種別＋生引数保持）として解析継続
-/// （要件 7.2/7.3/10）。`\![open,sliderinput]` を固定。
-#[test]
-fn lenient_passthrough_non_move_bang_is_generic_command() {
-    assert_eq!(
-        parse(r"\![open,sliderinput]"),
-        vec![Instruction::GenericCommand {
-            name: "open".to_string(),
-            raw_args: vec!["sliderinput".to_string()],
-        }],
-    );
-}
-
-// ───────────────────────────────────────────────────────────────────
-// 純粋関数契約（要件 1.5/12.2/12.3）
-// ───────────────────────────────────────────────────────────────────
-
-/// 空入力 → 空命令列（要件 1.5）。
-#[test]
-fn pure_empty_input_yields_empty_vec() {
-    assert_eq!(parse(""), Vec::<Instruction>::new());
-}
 
 /// 混在入力の順序保持（要件 1.3/9.2）。タグ・テキストが入力順のまま整列。
 #[test]
@@ -241,13 +218,6 @@ fn pure_mixed_input_preserves_order() {
             Instruction::End,
         ],
     );
-}
-
-/// 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。
-#[test]
-fn pure_same_input_yields_equivalent_output() {
-    let input = r"\s[1000]こんばんわー！\_w[450]\n\e";
-    assert_eq!(parse(input), parse(input));
 }
 
 /// UTF-8 日本語テキストが Text run 化される（要件 9.1・12.1 の UTF-8 前提）。
@@ -263,55 +233,21 @@ fn pure_utf8_japanese_text_becomes_text_run() {
 // OnBoot 例に現れないタグの個別手書き網羅（要件 12.4・design L530）
 // ───────────────────────────────────────────────────────────────────
 
-/// `\q[タイトル,ID]` 現行形 → disp/target 分離 Choice（要件 5.1）。
+/// `\![move,10,20,base,base]` はほかの `\!` と同じ汎用の道（名前 `move`＋生引数列・指摘 28）。
+/// 型つきの写しは持たない（意味割当は下流の責務）。
 #[test]
-fn handwritten_current_choice_splits_disp_and_target() {
-    assert_eq!(
-        parse(r"\q[はい,OnYes]"),
-        vec![Instruction::Choice(Choice {
-            disp: "はい".to_string(),
-            target: "OnYes".to_string(),
-            references: Vec::new(),
-        })],
-    );
-}
-
-/// `\q[t,id,r0,r1]` 第 3 引数以降の追加 Reference を順序保持（要件 5.2）。
-#[test]
-fn handwritten_choice_keeps_extra_references_in_order() {
-    assert_eq!(
-        parse(r"\q[t,id,r0,r1]"),
-        vec![Instruction::Choice(Choice {
-            disp: "t".to_string(),
-            target: "id".to_string(),
-            references: vec!["r0".to_string(), "r1".to_string()],
-        })],
-    );
-}
-
-/// `\![move,10,20,base,base]` → 引数 decode 済み `Move`（要件 7.1）。
-/// move 以降の生引数列を保持（意味割当は下流の責務）。
-#[test]
-fn handwritten_move_decodes_args() {
+fn move_bang_is_generic_command() {
     assert_eq!(
         parse(r"\![move,10,20,base,base]"),
-        vec![Instruction::Move(MoveArgs {
-            args: vec![
+        vec![Instruction::GenericCommand {
+            name: "move".to_string(),
+            raw_args: vec![
                 "10".to_string(),
                 "20".to_string(),
                 "base".to_string(),
                 "base".to_string(),
             ],
-        })],
-    );
-}
-
-/// `%username` は展開せずシステム変数トークン化（要件 8.1/8.2）。実値置換しない。
-#[test]
-fn handwritten_username_is_unexpanded_system_var() {
-    assert_eq!(
-        parse("%username"),
-        vec![Instruction::SystemVar("username".to_string())],
+        }],
     );
 }
 

@@ -155,3 +155,28 @@ fn playback_is_identical_before_and_after_expansion() {
     // 照合を素通りしていない（値の入る台詞は実際に展開されている）ことも押さえる。
     assert_eq!(expand_system_vars("%usernameさん", &vars), r"太\\郎\%xさん");
 }
+
+/// 元へ戻すときの警告は、置き換えた名と台本の長さだけを書き、台本そのものは書かない
+/// （大きな台本でも記録が台本の大きさに比例しない）。
+#[test]
+fn fallback_warning_names_vars_not_script() {
+    let vars = snapshot(&[("username", "3太郎")]);
+    let script = format!(r"\w%username%username{}", "長い台詞".repeat(1000));
+    let (out, events) = log_capture_kit::capture(|| expand_system_vars(&script, &vars));
+    assert_eq!(out, script, "読みが変わるので元の台詞のまま");
+    let warn = events
+        .iter()
+        .find(|e| e.field_str("event") == Some("sysvar_expand_fallback"))
+        .expect("元へ戻した警告が 1 件ある");
+    assert_eq!(warn.field("vars"), Some(r#"["username"]"#));
+    assert_eq!(
+        warn.field("script_bytes"),
+        Some(script.len().to_string().as_str())
+    );
+    for (name, value) in &warn.fields {
+        assert!(
+            !value.debug.contains("長い台詞"),
+            "欄 {name} に台本が書かれている"
+        );
+    }
+}

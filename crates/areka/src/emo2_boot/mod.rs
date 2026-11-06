@@ -172,7 +172,7 @@ use self::zorder_cue::ZOrderDirective;
 /// と同流儀・working donor 準拠）。
 #[derive(Debug, thiserror::Error)]
 pub enum BootWiringError {
-    /// ゴーストのマウント解決（`areka_parsers::package::resolve`）失敗。
+    /// ゴーストのマウント解決（`areka_parsers::package::resolve_with_shell`）失敗。
     ///
     /// `MountError`（`StartPointMissing`／`ShellDirMissing` 等）は `std::error::Error`
     /// 未実装のため `#[from]` にせず値保持する（呼び手が variant 内容で warn/error 分類）。

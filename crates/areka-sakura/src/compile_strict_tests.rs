@@ -6,12 +6,12 @@
 //!    数えない。`CuePlayer` が配った順と控えの順番が一致する。
 //! 4. `\e`・`\-` の後ろは控えない。
 
-use super::test_support::cue_eq;
+use super::test_support::assert_cues_eq;
 use super::*;
+use crate::drive::test_support::RecordingSink;
 use crate::strict::{DetectionPoint, StrictJudges};
 use areka_parsers::sakura::{MARKER_COMMAND, parse, parse_noted};
-use dola::cue::{CuePlayer, CueSink, TalkCue};
-use std::sync::{Arc, Mutex};
+use dola::cue::CuePlayer;
 
 /// 拾う `\!` は `open`・`set`・`move`（`move` の第 1 引数 `nosuch` だけは拾わない）と、
 /// 受け手の表で文字の層が拾う印 `*`（script-small-tags 要件 6.5）。
@@ -110,11 +110,7 @@ fn strict_scan_builds_the_same_cues() {
         for judges in [&FakeJudges as &dyn StrictJudges, &AllWrong] {
             let (traced, trace) = strict(script, judges);
             let (a, b) = (plain.sheet.cues(), traced.sheet.cues());
-            assert_eq!(a.len(), b.len(), "合図の数: {script}");
-            assert!(
-                a.iter().zip(b).all(|(x, y)| cue_eq(x, y)),
-                "合図の列: {script}"
-            );
+            assert_cues_eq(a, b, &format!("合図の列: {script}"));
             assert_eq!(plain.end, traced.end, "終わりの理由: {script}");
             let delivered = b
                 .iter()
@@ -231,20 +227,13 @@ fn nothing_after_end_or_quit() {
     );
 }
 
-struct Recording(Arc<Mutex<Vec<TalkCue>>>);
-
-impl CueSink for Recording {
-    fn emit(&mut self, cue: TalkCue) {
-        self.0.lock().unwrap().push(cue);
-    }
-}
-
 /// `CuePlayer` が配った合図を、（合図の形, 台本の綴り）にして返す。
 fn delivered(script: &str) -> (Vec<(String, Option<&str>)>, StrictTrace) {
     let (compiled, trace) = strict(script, &FakeJudges);
-    let records = Arc::new(Mutex::new(Vec::new()));
+    let sink = RecordingSink::new();
+    let records = sink.records();
     let mut player = CuePlayer::from_sheet(&compiled.sheet);
-    player.register_sink(Box::new(Recording(records.clone())));
+    player.register_sink(Box::new(sink));
     player.tick(1.0e9);
     let cues = records.lock().unwrap().clone();
     assert_eq!(cues.len(), trace.cue_spans.len(), "配られた数と位置の数");

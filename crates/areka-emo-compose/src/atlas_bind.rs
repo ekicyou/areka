@@ -85,7 +85,6 @@ mod tests {
     /// element のみを持つ最小 surface（collision/animation 空・単一ターゲット）。
     fn surface(id: u32, elements: Vec<Element>) -> Surface {
         Surface {
-            id,
             targets: vec![AppendTarget::Single(id)],
             elements,
             collisions: Vec::new(),

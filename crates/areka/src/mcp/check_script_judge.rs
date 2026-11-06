@@ -1,27 +1,26 @@
 //! `check_script` の判断（読み取りの列と事実 → 診断の列）と診断の文言（spec: areka-P0-mcp-author-tools）。
 //!
 //! 窓も World も要らない純粋な関数だけを置く。判定は自分で持たず、再生が実際に使う関数
-//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`parse_choice_timeout`・`classify_font_tag`・
+//! （`parse_noted` の印・`ConsumerLedger::consumer_of`・`choice_timeout_of`・strict と同じ見分けの点
+//! （`strict::read_note_point`・`command_point`）・`classify_font_tag`・
 //! `surface_missing`・`balloon_missing`（`areka_seriko`）・`pair_anchors`）の答えを診断の種類へ写すだけにする。
 
 use std::ops::Range;
 
 use areka_emo_text::look::{FontClass, classify_font_tag};
 use areka_mcp::tools::check_script::{Diagnostic, Kind};
-use areka_parsers::sakura::{Instruction, Read, ReadNote};
-use areka_sakura::strict::{self, CharCursor};
-use areka_sakura::{AnchorIssue, ChoiceTimeoutDirective, pair_anchors, parse_choice_timeout};
+use areka_parsers::sakura::{Instruction, Read};
+use areka_sakura::compile::choice_timeout_of;
+use areka_sakura::strict::{self, CharCursor, DetectionPoint};
+use areka_sakura::{AnchorIssue, pair_anchors};
 use areka_seriko::{SkinLookup, balloon_missing, surface_missing};
 
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
 
 // 文言の正本は `areka_sakura::strict`（strict の記録と同じ定数。文書の正本は `doc/ssp-mcp/areka-tools.md`）。
 pub(in crate::mcp) const MSG_UNKNOWN_TAG: &str = strict::MSG_UNKNOWN_TAG;
-pub(in crate::mcp) const MSG_UNKNOWN_COMMAND: &str = strict::MSG_UNKNOWN_COMMAND;
 pub(in crate::mcp) const MSG_MISSING_SURFACE: &str = strict::MSG_MISSING_SURFACE;
 pub(in crate::mcp) const MSG_MISSING_BALLOON: &str = strict::MSG_MISSING_BALLOON;
-pub(in crate::mcp) const MSG_UNCLOSED: &str = strict::MSG_UNCLOSED;
-pub(in crate::mcp) const MSG_DEFAULTED: &str = strict::MSG_DEFAULTED;
 pub(in crate::mcp) const MSG_IGNORED: &str = strict::MSG_IGNORED;
 pub(in crate::mcp) const MSG_ANCHOR_UNCLOSED: &str = strict::MSG_ANCHOR_UNCLOSED;
 pub(in crate::mcp) const MSG_ANCHOR_REOPENED: &str = strict::MSG_ANCHOR_REOPENED;
@@ -54,27 +53,18 @@ pub(crate) fn diagnose(
     for (index, read) in reads.iter().enumerate() {
         let span = read.span.clone();
         for note in &read.notes {
-            let (kind, message) = match note {
-                ReadNote::UnknownTag => (Kind::UnknownTag, MSG_UNKNOWN_TAG),
-                ReadNote::Unclosed => (Kind::UnreadableArgument, MSG_UNCLOSED),
-                ReadNote::ArgumentDefaulted => (Kind::UnreadableArgument, MSG_DEFAULTED),
-                // 読む段が後から足す印は、その意味が決まるまで診ない（誤って知らせる枝を作らない）。
-                _ => continue,
-            };
-            out.push(kind, &span, message);
+            out.push_point(strict::read_note_point(note), &span);
         }
 
         match &read.instruction {
             Instruction::SpeakerScope { n } => scope = *n,
             Instruction::GenericCommand { name, raw_args } => {
                 let first = raw_args.first().map(String::as_str);
-                if ledger.consumer_of(name, first).is_none() {
-                    out.push(Kind::UnknownCommand, &span, MSG_UNKNOWN_COMMAND);
-                } else if name == "set"
-                    && first == Some("choicetimeout")
-                    && parse_choice_timeout(raw_args) == ChoiceTimeoutDirective::Unreadable
+                let handled = ledger.consumer_of(name, first).is_some();
+                if let Some(point) =
+                    strict::command_point(handled, choice_timeout_of(name, raw_args))
                 {
-                    out.push(Kind::UnreadableArgument, &span, MSG_DEFAULTED);
+                    out.push_point(point, &span);
                 }
                 // `\+`・`\_+` も `change,ghost` の `GenericCommand` として来る。
                 if name == "change" {
@@ -84,12 +74,6 @@ pub(crate) fn diagnose(
                         Some("balloon") => balloon_switched = true,
                         _ => {}
                     }
-                }
-            }
-            Instruction::Move(args) => {
-                let first = args.args.first().map(String::as_str);
-                if ledger.consumer_of("move", first).is_none() {
-                    out.push(Kind::UnknownCommand, &span, MSG_UNKNOWN_COMMAND);
                 }
             }
             Instruction::Font { args } => {
@@ -126,7 +110,20 @@ pub(crate) fn diagnose(
                     out.push(Kind::UnpairedTag, &span, message);
                 }
             }
-            _ => {}
+            // 診るものの無い命令（字・待ち・改行・選択肢・位置・終わり・消去・変数・知らないタグ
+            // （印で診た）と、切替の後の絵・バルーン）。命令が増えたらここでコンパイルが止まる。
+            Instruction::Text(_)
+            | Instruction::Surface(_)
+            | Instruction::BalloonSurface(_)
+            | Instruction::Wait(_)
+            | Instruction::NewLine(_)
+            | Instruction::Choice(_)
+            | Instruction::Cursor { .. }
+            | Instruction::End
+            | Instruction::Clear
+            | Instruction::Quit
+            | Instruction::SystemVar(_)
+            | Instruction::Raw(_) => {}
         }
     }
     out.list
@@ -158,6 +155,27 @@ impl Out<'_> {
             message,
         });
     }
+
+    /// strict と同じ見分けの点を診断にする。
+    fn push_point(&mut self, point: DetectionPoint, span: &Range<usize>) {
+        self.push(kind_of(point), span, point.message());
+    }
+}
+
+/// 点の種類の綴り（`DetectionPoint::kind`）を診断の種類へ。種類の決まりは strict の 1 か所だけ。
+fn kind_of(point: DetectionPoint) -> Kind {
+    [
+        Kind::UnknownTag,
+        Kind::UnknownCommand,
+        Kind::MissingSurface,
+        Kind::MissingBalloon,
+        Kind::UnreadableArgument,
+        Kind::Ignored,
+        Kind::UnpairedTag,
+    ]
+    .into_iter()
+    .find(|k| k.as_str() == point.kind())
+    .expect("every DetectionPoint::kind is a check_script Kind")
 }
 
 #[cfg(test)]

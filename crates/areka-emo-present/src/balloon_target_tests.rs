@@ -3,7 +3,7 @@ use super::*;
 use super::test_support::{TempDir, emo2_balloon_root};
 use crate::shell_target::test_support::insert_solid;
 use areka_emo_atlas::{AnimationInfo, DecodedImage, ElementId, MemoryDecoder};
-use areka_parsers::shell::parse;
+use areka_parsers::shell::{AppendTarget, parse};
 
 /// R5.1/R5.3 転記一致（観測完了基準）: synthetic surfaces.txt → `shell::parse` の往復で、
 /// 各面の surface id（`{ID}`）と element path（採用面の**実ファイル名**）が転記一致する。
@@ -35,7 +35,7 @@ fn synthetic_text_transcribes_face_id_and_path() {
         let surface = shell
             .surfaces
             .iter()
-            .find(|s| s.id == face.surface_id)
+            .find(|s| s.targets == [AppendTarget::Single(face.surface_id)])
             .unwrap_or_else(|| panic!("surface id {} が転記されていない", face.surface_id));
         assert_eq!(
             surface.elements.len(),

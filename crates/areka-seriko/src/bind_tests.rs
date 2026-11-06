@@ -46,6 +46,7 @@ fn empty_input_yields_empty_bindset() {
 // bind 名前解決（BindResolver）とスコープ写像（scope_namespace）の純関数群。
 // ─────────────────────────────────────────────────────────────────────
 
+use areka_parsers::package::BindGroupName;
 use areka_sakura::ActorKey;
 
 /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む（`bindoption` 宣言なし）。
@@ -446,16 +447,30 @@ fn category_parts_follow_written_order() {
 }
 
 /// 番号から名前への引き: 宣言の無い番号は `None`。同じ番号に名前が 2 つあれば表の順（カテゴリ・パーツの
-/// 名の順）で最初の名前を返す（`帽子` は `服` より後に書いたが名の順では先）。同じキーの 2 行目は前の行を
-/// 上書きするので、重なりは番号の綴りの違い（`08` と `8`）で書く。
+/// 名の順）で最初の名前を返す（`帽子` は `服` より後に書いたが名の順では先）。シェルの読みは同じキーの
+/// 2 行目で前の行を上書きし、番号の先頭の 0 も読まない（`08` は `8` にならない）ので、重なりは読みの
+/// 表を直に組んで作る。
 #[test]
 fn name_of_undeclared_is_none_and_overlap_takes_first_in_table_order() {
-    let r = BindResolver::from_groups(&groups_of(
-        "charset,UTF-8\r\n\
-         sakura.bindgroup7.name,服,X\r\n\
-         sakura.bindgroup08.name,服,Z\r\n\
-         sakura.bindgroup8.name,帽子,Y\r\n",
-    ));
+    let name = |id: u32, category: &str, part: &str, line: usize| BindGroupName {
+        id,
+        category: category.to_owned(),
+        part: part.to_owned(),
+        thumbnail: None,
+        line,
+    };
+    let groups = BindGroupDefaults::from([(
+        0,
+        ScopeBinds {
+            names: vec![
+                name(7, "服", "X", 2),
+                name(8, "服", "Z", 3),
+                name(8, "帽子", "Y", 4),
+            ],
+            ..ScopeBinds::default()
+        },
+    )]);
+    let r = BindResolver::from_groups(&groups);
     assert_eq!(r.resolve(BindNamespace::Sakura, "帽子", "Y"), Some(8));
     assert_eq!(r.resolve(BindNamespace::Sakura, "服", "Z"), Some(8));
     assert_eq!(r.name_of(BindNamespace::Sakura, 7), Some(("服", "X")));

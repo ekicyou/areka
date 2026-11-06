@@ -3,13 +3,14 @@
 //! 1. 埋め込みの台本を組み立てた合図の列は、同じ字を直に書いた台本の合図の列と等しい。
 //! 2. 捨てた番号は理由ごとに警告を 1 行だけ残し、合図を作らず、後ろの台本は今どおり組み上がる。
 
-use super::test_support::{command_of, compile, cue_eq};
+use super::test_support::{assert_cues_eq, command_of, compile};
 use super::*;
 use areka_parsers::sakura::parse;
 
-fn same_cues(a: &CompiledTalk, b: &CompiledTalk) -> bool {
-    let (a, b) = (a.sheet.cues(), b.sheet.cues());
-    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| cue_eq(x, y)) && !a.is_empty()
+/// 2 つの台本の合図の列が等しく、空でない（空どうしの一致で緑にしない）。
+fn assert_same_cues(a: &CompiledTalk, b: &CompiledTalk, what: &str) {
+    assert!(!a.sheet.is_empty(), "{what}: 合図が無い");
+    assert_cues_eq(a.sheet.cues(), b.sheet.cues(), what);
 }
 
 /// 埋め込みと直書きの合図の列が等しい（1.5〜1.8）。全角の空白だけの台本と、ぱすたの起動の形
@@ -31,7 +32,7 @@ fn embedded_script_compiles_like_the_direct_one() {
     ];
     for (embedded, direct) in pairs {
         let (a, b) = (compile(&parse(embedded)), compile(&parse(direct)));
-        assert!(same_cues(&a, &b), "{embedded} と {direct}");
+        assert_same_cues(&a, &b, &format!("{embedded} と {direct}"));
         assert_eq!(a.end, b.end, "{embedded}");
     }
     // 全角の空白だけの台本は本文の合図を 1 つ持つ（バルーンを開く・1.6）。
@@ -73,9 +74,10 @@ fn dropped_char_code_warns_once_and_emits_nothing() {
         assert!(alone.sheet.is_empty(), "{tag} は合図を作らない");
 
         let after = compile(&parse(&format!("{tag}い\\n\\s[1]")));
-        assert!(
-            same_cues(&after, &compile(&parse("い\\n\\s[1]"))),
-            "{tag} の後ろ"
+        assert_same_cues(
+            &after,
+            &compile(&parse("い\\n\\s[1]")),
+            &format!("{tag} の後ろ"),
         );
     }
 }

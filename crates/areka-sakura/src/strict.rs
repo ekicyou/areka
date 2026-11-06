@@ -220,6 +220,31 @@ pub fn record(ghost: &str, finding: CueFinding, place: &Place) {
     );
 }
 
+/// 読みの印の点（`compile` と `check_script` の見分けの決まりの 1 か所）。
+pub fn read_note_point(note: &areka_parsers::sakura::ReadNote) -> DetectionPoint {
+    use areka_parsers::sakura::ReadNote;
+    match note {
+        ReadNote::UnknownTag => DetectionPoint::ReadUnknownTag,
+        ReadNote::Unclosed => DetectionPoint::ReadUnclosed,
+        ReadNote::ArgumentDefaulted => DetectionPoint::ReadDefaulted,
+    }
+}
+
+/// `\!` の点。`handled` は誰かが拾うか、`choice_timeout` は
+/// [`choice_timeout_of`](crate::compile::choice_timeout_of) の答え。誰も拾わなければ
+/// `CommandUnhandled`、拾われて時間が読めなければ `ChoiceTimeoutUnreadable`。
+pub fn command_point(
+    handled: bool,
+    choice_timeout: Option<crate::compile::ChoiceTimeoutDirective>,
+) -> Option<DetectionPoint> {
+    use crate::compile::ChoiceTimeoutDirective::Unreadable;
+    match (handled, choice_timeout) {
+        (false, _) => Some(DetectionPoint::CommandUnhandled),
+        (true, Some(Unreadable)) => Some(DetectionPoint::ChoiceTimeoutUnreadable),
+        (true, _) => None,
+    }
+}
+
 #[cfg(test)]
 #[path = "strict_tests.rs"]
 mod tests;

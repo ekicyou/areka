@@ -92,7 +92,6 @@ fn build_shell_assets() -> (EmoWorld, AtlasTable) {
     let (w, h) = SHELL_NATIVE;
     let base = Path::new("shell/master");
     let surfaces = vec![Surface {
-        id: 1000,
         targets: vec![AppendTarget::Single(1000)],
         elements: vec![Element {
             layer: 0,

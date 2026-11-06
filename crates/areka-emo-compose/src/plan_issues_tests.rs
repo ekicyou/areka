@@ -67,7 +67,6 @@ fn world_of(text: &str) -> (EmoWorld, AtlasTable) {
     let base = Path::new("shell/master");
     let rels = ["base.png", "part.png"];
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements: rels
             .iter()

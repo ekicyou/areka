@@ -157,7 +157,6 @@ fn anim(id: u32, interval: Interval, frames: &[(i64, u32)]) -> Animation {
 /// アニメ列を持つ surface 1 件。
 fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: Vec::new(),
         collisions: Vec::new(),

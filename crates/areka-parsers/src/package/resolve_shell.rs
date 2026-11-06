@@ -1,34 +1,39 @@
-//! resolve_shell — シェル名つきの解決（`resolve` の本体）。
+//! resolve_shell — 展開済みゴーストパッケージの 2 点マウントの解決。
 //!
-//! 展開済みゴーストパッケージのルートから `ghost/master/descript.txt` を起点に
-//! SHIORI / shell の 2 点マウントを解決する。制御フローは design.md「System Flows」
-//! の mermaid に忠実（パス合成 → 存在 → 読取 → decode → kv → names → shiori →
-//! shelldir → shell 存在確認 → 構築）。charset 判定・KV 分割は foundation へ委譲し
-//! 再実装しない（Req 1.5）。参照キーは name / sakura.name / kero.name / shiori /
-//! seriko.defaultsurfacedirectoryname のみ（install.txt / balloon 系 / NAR には触れない）。
+//! ゴーストのルートから `ghost/master/descript.txt` を起点に SHIORI / shell の
+//! 2 点マウントを解決する（パス合成 → 読取 → decode → kv → names → shiori →
+//! シェル名 → shell 存在確認 → bindgroup → 構築）。charset 判定・KV 分割は foundation へ
+//! 委ね再実装しない（Req 1.5）。ゴーストの descript で読む鍵は名前（`name`・
+//! `sakura.name`・`sakura.name2`・`kero.name`）・`shiori`・`shiori.encoding`・
+//! `shiori.forceencoding`・`readme`・`seriko.defaultsurfacedirectoryname`。
 //!
-//! シェル名を受ける形に広げてある。名前なしは今日の規則
-//! （`seriko.defaultsurfacedirectoryname`、無ければ `master`）、名前ありは
-//! `shell/<名>/` を選ぶ。既存の `resolve` は名前なしでここへ委ねる。
+//! シェル名は呼び手が `Some(名)` で選ぶか、`None` で今日の規則
+//! （`seriko.defaultsurfacedirectoryname`、無ければ `master`）に任せる。
+//! SHIORI の置き場の綴りは [`shiori_dir`] の 1 か所だけが持つ。
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use crate::charset::{DefaultEncoding, decode};
-use crate::kv::parse_kv;
+use crate::kv::parse_kv_lowercased;
 
 use super::model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
 use super::resolve_bind::read_bindgroup_defaults;
 
-/// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。
-const GHOST_MASTER: &str = "ghost/master";
 /// 起点定義ファイル名（Req 1.1）。
 const DESCRIPT_FILE: &str = "descript.txt";
 /// shell ルート（Req 3.1/3.2）。
 const SHELL_ROOT: &str = "shell";
 /// shell 既定ディレクトリ名（ukadoc 正典・Req 3.1）。
 const DEFAULT_SHELL_DIR: &str = "master";
+
+/// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。`ghost` と `master` を
+/// ネイティブの区切りで継ぐ（`"ghost/master"` の 1 成分にしない・指摘 10）。
+pub fn shiori_dir(ghost_root: &Path) -> PathBuf {
+    ghost_root.join("ghost").join("master")
+}
 
 /// ゴーストの `ghost/master/descript.txt` だけを読み、名前情報を返す（シェルは見ない）。
 ///
@@ -38,7 +43,7 @@ pub fn read_ghost_names(
     ghost_root: &Path,
     default_encoding: DefaultEncoding,
 ) -> Result<GhostNames, MountError> {
-    let map = read_ghost_descript(&ghost_root.join(GHOST_MASTER), default_encoding)?;
+    let map = read_ghost_descript(&shiori_dir(ghost_root), default_encoding)?;
     Ok(names_from(&map))
 }
 
@@ -64,8 +69,47 @@ fn read_ghost_descript(
         }
     };
 
-    // charset 判定 + デコード + KV 分割は foundation へ委譲（Req 1.5）。
-    Ok(parse_kv(&decode(&bytes, default_encoding)))
+    // charset 判定 + デコード + KV 分割は foundation へ委譲（Req 1.5）。鍵は大文字と小文字を
+    // 区別せず、空の値は「無し」と同じに扱う（指摘 11）。
+    Ok(parse_kv_lowercased(&decode(&bytes, default_encoding)))
+}
+
+/// 成分がちょうど 1 つの普通のフォルダ名のときだけ返す（`..`・絶対パス・`.`・`a/b` は断る）。
+fn folder_name(value: &str) -> Option<&OsStr> {
+    let mut components = Path::new(value).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(name)), None) => Some(name),
+        _ => None,
+    }
+}
+
+/// 基のフォルダから外へ出うる相対パスか（`..`・根・ドライブ／UNC の頭を含む）。
+fn points_outside(value: &str) -> bool {
+    Path::new(value).components().any(|c| {
+        matches!(
+            c,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    })
+}
+
+/// `seriko.defaultsurfacedirectoryname` の値を確かめて既定のシェル名にする。
+///
+/// 無いか空なら黙って `master`。空でなく 1 つのフォルダ名でない値は、`shell/` の外を
+/// 指しうるので使わず、値とゴーストの根を `warn!` に残して `master`（指摘 1・2）。
+fn default_shell_name<'a>(map: &'a BTreeMap<String, String>, ghost_root: &Path) -> &'a OsStr {
+    // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
+    let Some(value) = map.get("seriko.defaultsurfacedirectoryname") else {
+        return OsStr::new(DEFAULT_SHELL_DIR);
+    };
+    folder_name(value).unwrap_or_else(|| {
+        tracing::warn!(
+            value = %value,
+            ghost_root = %ghost_root.display(),
+            "既定のシェル名が 1 つのフォルダ名でない: master を使う"
+        );
+        OsStr::new(DEFAULT_SHELL_DIR)
+    })
 }
 
 /// KV から名前情報を取る（欠落は None・推測しない・Req 1.4）。
@@ -101,7 +145,7 @@ pub fn resolve_with_shell(
     shell: Option<&str>,
 ) -> Result<MountModel, MountError> {
     // ghost/master（SHIORI マウント先）と起点 descript.txt を読む（名前だけの読みと同じ部品）。
-    let shiori_dir = ghost_root.join(GHOST_MASTER);
+    let shiori_dir = shiori_dir(ghost_root);
     let map = read_ghost_descript(&shiori_dir, default_encoding)?;
     let names = names_from(&map);
 
@@ -109,7 +153,19 @@ pub fn resolve_with_shell(
     let shiori = ShioriMount {
         dir: shiori_dir,
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori_2c_30d5_30a1_30a4_30eb_540d:1
-        file: map.get("shiori").cloned(),
+        // 外を指しても記録だけで使う（ゴーストは元々好きな DLL を持ち込める・R2）。
+        file: map
+            .get("shiori")
+            .inspect(|value| {
+                if points_outside(value) {
+                    tracing::warn!(
+                        value = %value,
+                        ghost_root = %ghost_root.display(),
+                        "shiori の値が ghost/master の外を指す: そのまま使う"
+                    );
+                }
+            })
+            .cloned(),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori.encoding_2c_6587_5b57_30b3_30fc_30c9:1
         encoding: map.get("shiori.encoding").cloned(),
         // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#shiori.forceencoding_2c_6587_5b57_30b3_30fc_30c9:1
@@ -117,13 +173,10 @@ pub fn resolve_with_shell(
     };
 
     // shell マウント: 呼び手の名 → 指定名 → 既定 master（Req 3.1/3.2）→ 物理存在確認（Req 3.3）。
-    let shell_name = shell.unwrap_or_else(|| {
-        map
-            // ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#seriko.defaultsurfacedirectoryname_2c_30c7_30a3_30ec_30af_30c8_30ea_540d:1
-            .get("seriko.defaultsurfacedirectoryname")
-            .map(String::as_str)
-            .unwrap_or(DEFAULT_SHELL_DIR)
-    });
+    let shell_name = match shell {
+        Some(name) => OsStr::new(name),
+        None => default_shell_name(&map, ghost_root),
+    };
     let shell_dir = ghost_root.join(SHELL_ROOT).join(shell_name);
     if !shell_dir.is_dir() {
         return Err(MountError::ShellDirMissing {
@@ -145,6 +198,20 @@ pub fn resolve_with_shell(
         shiori,
         shell,
         bindgroups,
-        readme: map.get("readme").cloned(),
+        // 外を指す値は無いのと同じ（OS の関連付けでゴーストの外のファイルを開かせない・R2）。
+        readme: map
+            .get("readme")
+            .filter(|value| {
+                let outside = points_outside(value);
+                if outside {
+                    tracing::warn!(
+                        value = %value,
+                        ghost_root = %ghost_root.display(),
+                        "readme の値がゴーストのフォルダの外を指す: 既定の名を使う"
+                    );
+                }
+                !outside
+            })
+            .cloned(),
     })
 }

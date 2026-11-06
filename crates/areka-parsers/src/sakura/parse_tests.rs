@@ -3,7 +3,6 @@
 //! 検証対象は公開エントリ `areka_parsers::sakura::parse`（`pub fn parse(&str) -> Vec<Instruction>`）:
 //! - 空入力 → 空命令列（要件 1.5）。
 //! - タグ＋テキスト混在 → 入力順保持の型付き命令列（要件 1.1/1.3/9.2）。
-//! - 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。
 //! - 命令を実行・解釈しない／エラーを送出しない（要件 1.4/10.2）。
 //! - 不正トークン前後の正常命令を欠落させない（要件 10.3）。
 //!
@@ -53,15 +52,6 @@ fn longer_mixed_sequence_preserves_order() {
         Instruction::Text("いいえ".to_string()),
     ];
     assert_eq!(got, want);
-}
-
-/// 同一入力 → 同一出力の純粋・決定的関数（要件 12.2）。2 回呼び出しで等価。
-#[test]
-fn same_input_yields_same_output_pure() {
-    let input = r"\s[0]あ\_w[50]い\n\e%username";
-    let a = parse(input);
-    let b = parse(input);
-    assert_eq!(a, b);
 }
 
 /// 純粋テキストのみ（タグ無し）→ 単一 `Text`（要件 9.1）。

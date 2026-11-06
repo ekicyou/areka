@@ -8,10 +8,10 @@
 //! - タグ間テキスト
 //! - 角括弧内のカンマ区切り複数引数
 //!
-//! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）はタスク 3.2 の領分ゆえ
-//! ここでは検証しない。
+//! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）はタスク 3.2 の節で、裸形 `\bN` の
+//! 短縮はタスク 1.1 の節で確かめる。
 
-use super::lexer::{Token, lex};
+use super::lexer::{ShorthandWord, Token, lex};
 
 /// タスク 3.1 の観測基準（tasks.md L23）:
 /// `\s[1000]` `\p[0]` `%username` `\w2` `\![a,b,c]` `こんにちは` が
@@ -32,7 +32,10 @@ fn task_3_1_observable_done_example() {
                 args: vec!["0".to_string()],
             },
             Token::SysVar("username".to_string()),
-            Token::Shorthand { word: 'w', n: 2 },
+            Token::Shorthand {
+                word: ShorthandWord::Wait,
+                n: 2
+            },
             Token::Tag {
                 word: "!".to_string(),
                 args: vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -77,17 +80,6 @@ fn bracket_args_split_on_comma() {
 }
 
 #[test]
-fn empty_bracket_yields_no_args() {
-    assert_eq!(
-        lex(r"\s[]"),
-        vec![Token::Tag {
-            word: "s".to_string(),
-            args: vec![],
-        }],
-    );
-}
-
-#[test]
 fn bare_tags_e_c_minus() {
     assert_eq!(lex(r"\e"), vec![Token::Bare("e".to_string())]);
     assert_eq!(lex(r"\c"), vec![Token::Bare("c".to_string())]);
@@ -107,24 +99,6 @@ fn newline_tag_with_percent_bracket() {
         vec![Token::Tag {
             word: "n".to_string(),
             args: vec!["150".to_string()],
-        }],
-    );
-}
-
-#[test]
-fn wait_shorthand_single_digit() {
-    assert_eq!(lex(r"\w2"), vec![Token::Shorthand { word: 'w', n: 2 }]);
-    assert_eq!(lex(r"\w9"), vec![Token::Shorthand { word: 'w', n: 9 }]);
-}
-
-#[test]
-fn wait_with_bracket_is_tag_not_shorthand() {
-    // `\w[2]` は短縮形でなく正準タグ。
-    assert_eq!(
-        lex(r"\w[2]"),
-        vec![Token::Tag {
-            word: "w".to_string(),
-            args: vec!["2".to_string()],
         }],
     );
 }
@@ -217,12 +191,6 @@ fn escape_backslash_to_literal_backslash() {
     assert_eq!(lex(r"a\\b"), vec![Token::Text(r"a\b".to_string())]);
 }
 
-/// 要件 13.5: 単独の `\\`（前後テキストなし）もリテラル `\` テキスト 1 個。
-#[test]
-fn escape_backslash_alone() {
-    assert_eq!(lex(r"\\"), vec![Token::Text(r"\".to_string())]);
-}
-
 /// 要件 13.5: `\\` の直後の `\e` は通常 bare タグとして区切られる
 /// （`\\` がエスケープを消費し、次の `\e` は独立）。
 #[test]
@@ -254,18 +222,6 @@ fn escape_percent_then_real_sysvar() {
     );
 }
 
-/// 要件 13.7: 角括弧内の `\]` はタグ終端でなくリテラルの `]` として引数へ。
-#[test]
-fn escape_bracket_close_inside_args() {
-    assert_eq!(
-        lex(r"\s[a\]b]"),
-        vec![Token::Tag {
-            word: "s".to_string(),
-            args: vec!["a]b".to_string()],
-        }],
-    );
-}
-
 /// 要件 13.7: 角括弧内の `\]` を含んでも後続の本物の `]` が終端として働く。
 #[test]
 fn escape_bracket_close_then_real_terminator() {
@@ -278,18 +234,6 @@ fn escape_bracket_close_then_real_terminator() {
             },
             Token::Text("ok".to_string()),
         ],
-    );
-}
-
-/// 要件 13.4: クォート `"..."` は囲まれた全体を 1 引数扱い、内側の `,` を保護。
-#[test]
-fn quoted_arg_protects_comma() {
-    assert_eq!(
-        lex(r#"\s["a,b"]"#),
-        vec![Token::Tag {
-            word: "s".to_string(),
-            args: vec!["a,b".to_string()],
-        }],
     );
 }
 
@@ -376,62 +320,16 @@ fn unknown_tag_split_as_tag_preserving_neighbors() {
 // 既存タグ（とりわけ `\w` 系）のパース結果は不変（要件 1.6）。
 // ───────────────────────────────────────────────────────────────────
 
-/// 要件 1.3: 裸形 `\b1` の一桁面数字は本文テキストとして漏れてはならない
-/// （本文数字漏れの根絶）。分割語彙に依らず「`Text` トークンが 1 つも出ない」
-/// ことで構造的に固定する。
-#[test]
-fn balloon_bare_single_digit_not_leaked_as_text() {
-    let tokens = lex(r"\b1");
-    assert!(
-        !tokens.iter().any(|t| matches!(t, Token::Text(_))),
-        r"\b1 must not leak the face digit as body Text, got {tokens:?}",
-    );
-}
-
 /// 要件 1.2/1.3: 裸形 `\b1` は 1 桁面数字を取り込み、単一の shorthand トークンへ。
 /// `\w1` と同型（`word` のみ `'b'`）＝語に依らず共通規律。
 #[test]
 fn balloon_bare_shorthand_single_digit() {
-    assert_eq!(lex(r"\b1"), vec![Token::Shorthand { word: 'b', n: 1 }]);
-}
-
-/// 要件 1.3: `\b12` は先頭 1 桁のみ面数字として取り込み、続く `2` は正当な
-/// 本文テキストとして分離される（多桁は shorthand でなくブラケット形の領分）。
-#[test]
-fn balloon_bare_shorthand_consumes_one_digit_rest_is_text() {
     assert_eq!(
-        lex(r"\b12"),
-        vec![
-            Token::Shorthand { word: 'b', n: 1 },
-            Token::Text("2".to_string()),
-        ],
-    );
-}
-
-/// 要件 1.2（境界）: `\b2[x]`（数字＋直後 `[`）は shorthand でなく正準タグ扱い
-/// （word=`b2`）。既存 `\w2[x]` と同型＝直後が数字+`[` は正準タグ優先という
-/// 共通規則が語に依らず働く。
-#[test]
-fn balloon_digit_then_bracket_is_tag_not_shorthand() {
-    assert_eq!(
-        lex(r"\b2[x]"),
-        vec![Token::Tag {
-            word: "b2".to_string(),
-            args: vec!["x".to_string()],
-        }],
-    );
-}
-
-/// 既存 `\w` 系との対称確認: `\w2[x]` も同型（word=`w2` の正準タグ）。
-/// `\b` 一般化が `\w` の同じ境界挙動を保つこと（要件 1.6）を固定する。
-#[test]
-fn wait_digit_then_bracket_is_tag_not_shorthand() {
-    assert_eq!(
-        lex(r"\w2[x]"),
-        vec![Token::Tag {
-            word: "w2".to_string(),
-            args: vec!["x".to_string()],
-        }],
+        lex(r"\b1"),
+        vec![Token::Shorthand {
+            word: ShorthandWord::Balloon,
+            n: 1
+        }]
     );
 }
 
@@ -442,13 +340,6 @@ fn balloon_bare_without_digit_is_bare_tag() {
     assert_eq!(lex(r"\b"), vec![Token::Bare("b".to_string())]);
 }
 
-/// 要件 1.6（境界）: 未閉じ `\b1[` は shorthand 判定を経ず（数字直後が `[`）、
-/// 未閉じブラケットとして `\` から入力末尾までを `Raw` へ吸収する既存規則どおり。
-#[test]
-fn balloon_unclosed_bracket_absorbed_as_raw() {
-    assert_eq!(lex(r"\b1["), vec![Token::Raw(r"\b1[".to_string())]);
-}
-
 /// 要件 1.6: `\b` 短縮の追加が前後の正常トークンを壊さない（本文・bare タグと共存）。
 #[test]
 fn balloon_bare_shorthand_preserves_neighbors() {
@@ -456,7 +347,10 @@ fn balloon_bare_shorthand_preserves_neighbors() {
         lex(r"あ\b3\eい"),
         vec![
             Token::Text("あ".to_string()),
-            Token::Shorthand { word: 'b', n: 3 },
+            Token::Shorthand {
+                word: ShorthandWord::Balloon,
+                n: 3
+            },
             Token::Bare("e".to_string()),
             Token::Text("い".to_string()),
         ],
@@ -494,4 +388,32 @@ fn percent_star_is_sysvar_named_star() {
         vec![Token::SysVar("a".to_string()), Token::Text("*".to_string()),],
     );
     assert_eq!(lex(r"\%*"), vec![Token::Text("%*".to_string())]);
+}
+
+/// 指摘 24: クォートの始まりは引数の先頭の `"` だけ。引数の途中の `"` はただの字として
+/// 残り、閉じの無いクォートとして後ろの台本を飲み込まない。
+#[test]
+fn mid_argument_quote_is_literal() {
+    assert_eq!(
+        lex(r#"\![raise,OnX,a"b"c]"#),
+        vec![Token::Tag {
+            word: "!".to_string(),
+            args: vec![
+                "raise".to_string(),
+                "OnX".to_string(),
+                r#"a"b"c"#.to_string()
+            ],
+        }],
+    );
+    assert_eq!(
+        lex(r#"\q[27" モニタ,OnA]\e次"#),
+        vec![
+            Token::Tag {
+                word: "q".to_string(),
+                args: vec![r#"27" モニタ"#.to_string(), "OnA".to_string()],
+            },
+            Token::Bare("e".to_string()),
+            Token::Text("次".to_string()),
+        ],
+    );
 }

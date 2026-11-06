@@ -603,7 +603,6 @@ mod tests {
     /// animation 群を持つ plain surface 1 件（単一 id 形）。
     fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
         Surface {
-            id,
             targets: vec![AppendTarget::Single(id)],
             elements: Vec::new(),
             collisions: Vec::new(),

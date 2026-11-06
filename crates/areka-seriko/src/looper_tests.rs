@@ -30,7 +30,6 @@ pub(crate) fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
 /// animation 1 本を持つ surface 1 件。
 pub(crate) fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: Vec::new(),
         collisions: Vec::new(),

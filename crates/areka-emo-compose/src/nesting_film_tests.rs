@@ -188,7 +188,6 @@ fn fixture_world_with(extra: &str) -> (EmoWorld, AtlasTable) {
         })
         .collect();
     let surfaces = vec![Surface {
-        id: 0,
         targets: vec![AppendTarget::Single(0)],
         elements,
         collisions: Vec::new(),

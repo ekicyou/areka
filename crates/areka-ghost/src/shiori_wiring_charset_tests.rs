@@ -2,7 +2,7 @@
 //! （タスク 3.2・要件 1.3／2.1／2.4／2.6／7.1／9.4／10.3）。
 //!
 //! 窓も 32bit 成果物も実 SHIORI も要さない。descript の固定物は本番と同じ経路
-//! （`package::resolve`）で作り（`ShioriMount` は `#[non_exhaustive]`）、決定の結果は
+//! （`package::resolve_with_shell`）で作り（`ShioriMount` は `#[non_exhaustive]`）、決定の結果は
 //! `CharsetNegotiator::current`／`policy` で、記録は `capture_events` の観測で固定する。
 //!
 //! # 「0 件」の主張が恒真にならない理由
@@ -27,7 +27,7 @@ use crate::test_log_capture::capture_events;
 /// 起動ログの宛先（`shiori_wiring` の `LOG_TARGET` と同じ綴り・design §Monitoring）。
 const BOOT_TARGET: &str = "ghost-boot";
 
-/// descript の 2 キーを持つ固定物を本番と同じ経路（`package::resolve`）で作る。
+/// descript の 2 キーを持つ固定物を本番と同じ経路（`package::resolve_with_shell`）で作る。
 ///
 /// `ShioriMount` は `#[non_exhaustive]` ゆえ `areka-parsers` の外から struct リテラルでは
 /// 組めない（本ファイル以外の既存テストと同じ理由・同じ手口）。返り値の [`TempPath`] を
@@ -53,7 +53,7 @@ fn build_shiori_mount(
     std::fs::write(master_dir.join("descript.txt"), descript)
         .expect("fixture descript.txt 書き込みに失敗");
 
-    let mount = package::resolve(&root, DefaultEncoding::Ansi)
+    let mount = package::resolve_with_shell(&root, DefaultEncoding::Ansi, None)
         .expect("fixture ghost_root の resolve に失敗");
     (temp, mount.shiori)
 }

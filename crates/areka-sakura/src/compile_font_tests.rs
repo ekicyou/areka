@@ -11,7 +11,7 @@
 //! 較正（要件 15.2）: `duration` を非 0 にする誤りは (1)、腕を catch-all より後ろに置いて
 //! cue が生成されなくなる誤りは (1)(2)(4) の cue 本数と種別の断言が、それぞれ赤にする。
 
-use super::test_support::{assert_clear_all_prefix_and_rest, compile, cue_eq};
+use super::test_support::{assert_clear_all_prefix_and_rest, assert_cues_eq, compile};
 use super::*;
 use crate::contract::FONT_TAG_CARRIER;
 use crate::duration::text_playback_duration;
@@ -77,15 +77,12 @@ fn font_is_zero_duration_carrier_between_neighbours() {
 /// 引数の 4 つの形（要件 2.2 の受理形）が台本まで無変形で届く（空トークンを潰さない）。
 #[test]
 fn font_arg_shapes_are_carried_verbatim() {
-    // 表の母数を先に固定する（表が空になるとループが恒真で緑になる）。
     let shapes: [Vec<String>; 4] = [
         vec![],                                                     // `\f[]` / 裸の `\f`
         vec![String::new()],                                        // `\f[""]`
         vec!["bold".into(), String::new()],                         // `\f[bold,]`
         vec!["color".into(), "255".into(), "0".into(), "0".into()], // `\f[color,255,0,0]`
     ];
-    assert_eq!(shapes.len(), 4, "引数の形は 4 通り");
-
     for want in shapes {
         let compiled = compile(&[Instruction::Font { args: want.clone() }]);
         let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
@@ -135,19 +132,7 @@ fn font_does_not_change_other_cue_timings() {
         "装飾の cue は 3 件（捨てられていない）"
     );
     let others: Vec<&Cue> = rest.iter().filter(|c| font_tokens(c).is_none()).collect();
-    assert_eq!(
-        others.len(),
-        base.len(),
-        "装飾以外の cue の本数が装飾の有無で変わらない"
-    );
-    for (i, (a, b)) in base.iter().zip(others.iter()).enumerate() {
-        assert!(
-            cue_eq(a, b),
-            "装飾の有無で cue[{i}] が変わった: {:?} != {:?}",
-            (a.start_time, a.duration, &a.payload),
-            (b.start_time, b.duration, &b.payload)
-        );
-    }
+    assert_cues_eq(base, &others, "装飾以外の cue は装飾の有無で変わらない");
 
     // 台本全体の占有時間も不変（`\f` は時間を進めない）。
     let horizon = |t: &CompiledTalk| {

@@ -34,7 +34,8 @@
 //! 宛先で 1 行）、画像だけで面を組んだ `info!`（同 要件 7.3）である。一覧の 1 件だけが
 //! 取れないときは `warn!` を出してその 1 件を飛ばす（`list_file_names`）。
 //! 形の誤り（`shape_issues`）の各件の `warn!`（spec: areka-P0-offline-surface-dump 要件 7.5）も
-//! ここで 1 度だけ出す。[`ShellTarget::build_world`] は新しい記録を出さず、畳み込みと面の画像の記録も
+//! ここで 1 度だけ出す。surfaces.txt の読みの崩れの各件は `RangeTooWide` を `error!`、ほかを `warn!`（audit-parsers-sakura）。
+//! [`ShellTarget::build_world`] は新しい記録を出さず、畳み込みと面の画像の記録も
 //! 出さない（読み込みの核が 1 度だけ出す・emo-bake-log-overlap 要件 2.2）。装着の記録は組むたびに出る。
 //!
 //! 同じ中身を通る [`load_shell_target_quiet`]（採寸の読み）は上の読み込みの記録を 1 本も出さず、
@@ -57,8 +58,7 @@ use areka_emo_compose::{
 };
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{
-    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, ShellBoxes, Surface,
-    parse_boxes, parse_undrawn_elements,
+    AppendTarget, BoxDefinition, CursorBrace, Element, ElementPath, Shell, ShellText, Surface,
 };
 
 use crate::balloon::face_digits_of;
@@ -388,9 +388,13 @@ fn load_shell_target_with(
             });
         }
     };
-    let shell = areka_parsers::shell::parse(&content);
-    let boxes = parse_boxes(&content);
-    let undrawn = parse_undrawn_elements(&content);
+    let ShellText {
+        shell,
+        boxes,
+        undrawn,
+        cursor_braces,
+        issues,
+    } = areka_parsers::shell::parse_all(&content);
     // 面を 1 つも定義しないときは、今の「書かれていない番号を画像から認める」枝
     // （`EmoWorld::build_with_images`）が面の画像から面を組む（要件 6.2・6.3）。画像も無ければ失敗。
     let image_only = shell.surfaces.is_empty();
@@ -438,9 +442,16 @@ fn load_shell_target_with(
         use_self_alpha,
         records,
     );
-    target.cursor_braces = areka_parsers::shell::parse_cursor_braces(&content);
+    target.cursor_braces = cursor_braces;
 
     if records.emits() {
+        for issue in &issues {
+            if issue.severity() == tracing::Level::ERROR {
+                tracing::error!("{}", issue.message());
+            } else {
+                tracing::warn!("{}", issue.message());
+            }
+        }
         if target.ignored_pna != 0 {
             tracing::warn!(
                 shell_dir = %shell_dir.display(),
@@ -486,7 +497,6 @@ fn load_shell_target_with(
         if !target.boxes.is_empty() {
             tracing::info!(
                 braces = boxes
-                    .definitions
                     .iter()
                     .filter(|d| matches!(d, BoxDefinition::Brace(_)))
                     .count(),
@@ -530,17 +540,10 @@ pub(crate) fn build_shell_target(
     decoder: &impl ElementDecoder,
     use_self_alpha: UseSelfAlpha,
 ) -> ShellTarget {
-    build_shell_target_with_boxes(
-        shell,
-        &ShellBoxes::default(),
-        selection,
-        shell_dir,
-        decoder,
-        use_self_alpha,
-    )
+    build_shell_target_with_boxes(shell, &[], selection, shell_dir, decoder, use_self_alpha)
 }
 
-/// `build_shell_target` に箱の転記（[`parse_boxes`] の結果）を足した fs を触らない核。
+/// `build_shell_target` に箱の転記（[`parse_boxes`](areka_parsers::shell::parse_boxes) の結果）を足した fs を触らない核。
 ///
 /// 箱の表は [`fold_boxes`] が作り、読み捨てた事実は報告として [`ShellTarget`] に載せるだけで
 /// 記録を出さない（記録は [`load_shell_target`] が読み込み 1 回につき 1 度だけ出す）。入れ子の
@@ -549,7 +552,7 @@ pub(crate) fn build_shell_target(
 #[cfg(test)] // 呼び手はテストだけ（本番の入口は `build_core` を直に呼ぶ）。
 pub(crate) fn build_shell_target_with_boxes(
     shell: Shell,
-    boxes: &ShellBoxes,
+    boxes: &[BoxDefinition],
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -569,7 +572,7 @@ pub(crate) fn build_shell_target_with_boxes(
 /// 核の中身（1 本）。`records` は焼く段と面の表の記録を出すかどうかだけを切り替える（要件 2.1）。
 fn build_core(
     shell: Shell,
-    boxes: &ShellBoxes,
+    boxes: &[BoxDefinition],
     selection: SurfaceImageSelection,
     shell_dir: &Path,
     decoder: &impl ElementDecoder,
@@ -888,7 +891,6 @@ fn list_file_names(shell_dir: &Path, records: LoadRecords) -> Result<Vec<String>
 /// `AtlasTable::resolve` は文字列の完全一致で引くので、ここがずれると絵は記録も無く描かれない。
 fn base_image_surface(id: u32, file: &str) -> Surface {
     Surface {
-        id,
         targets: vec![AppendTarget::Single(id)],
         elements: vec![Element {
             layer: 0,

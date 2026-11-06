@@ -265,7 +265,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     }
 
     /// Phase 2: 直前の tick() で収集された Payload スライスを返す。
-    /// 次の tick() まで何度でも参照可能。
+    /// 次の tick() まで何度でも参照可能（`notify_barrier_resolved` でも空になる）。
     pub fn ready(&self) -> &[T] {
         &self.ready_buffer
     }
@@ -288,6 +288,9 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         }
         self.current_barrier = None;
         self.barrier_timeout_offset = None;
+        // 集めは区切りの tick で配り済み。空にして、同じ時刻の次の tick が冪等の守りに止められず
+        // 区切りの後ろを集められるようにする（解決が次の Tick より先に来る形）。
+        self.ready_buffer.clear();
     }
 
     // ── ルーティング ──
