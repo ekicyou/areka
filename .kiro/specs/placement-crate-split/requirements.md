@@ -58,7 +58,7 @@
 3. The 分割作業 shall 今の `placement/mod.rs` の中身を新しい crate の根（`lib.rs`）とする。
 4. When 移動を終えたとき, the 本体の crate `areka` shall 配置を `areka-placement` への path 依存として使い、`crates/areka/src/placement/` を持たない。
 5. The 分割作業 shall ワークスペースの根の `Cargo.toml` を変えない。
-6. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのはワークスペースの中の path 依存だけ）。
+6. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのは、ワークスペースの中の path 依存と、`Cargo.lock` に既にある crate だけ。新しい crate を `Cargo.lock` に入れない）。
 7. The `areka-placement` クレート shall 本番の依存を、今の配置が本番で使う外の crate（wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows・thiserror）に収め、ワークスペースのほかの crate と同じ形で受ける（外の crate〔bevy_ecs・tracing・thiserror・windows〕は `workspace = true`、ワークスペースの中の crate〔wintf・areka-*〕は `{ path = "../…" }`。根の `[workspace.dependencies]` に areka 系の crate は無く、根を変えずに〔1.5〕書けるのはこの形だけ）。`windows` の機能はワークスペースの表のものをそのまま受け、本番のソースが使う機能は `Win32_Foundation`・`Win32_UI_WindowsAndMessaging` の範囲に収める）。
 8. The `areka-placement` クレート shall 本体の crate `areka` に依存しない。
 9. The `areka-placement` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。例外表の項目は増やさず（パスの書き換えだけ）、書き換えや整形で上限を超えるファイルは分けて収める。
