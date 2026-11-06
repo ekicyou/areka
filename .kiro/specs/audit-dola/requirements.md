@@ -97,7 +97,7 @@
 #### Acceptance Criteria
 
 1. The 本 spec の直し shall どのファイルも 1,000 行の番人を越えさせない（足すなら新しいファイルへ）
-2. The 本 spec の直し shall 記録の無い失敗の道を作らない（失敗は `error!` の記録とエラーの戻り値の両方で表す）
+2. The 本 spec の直し shall 記録の無い失敗の道を作らない（失敗は `error!` の記録とエラーの戻り値の両方で表す。dola には記録の依存が無いので、dola の中では失敗を戻り値（`Err`・`TriggerResult::Error`）で返し、`error!` は呼び手の境目で出す＝要件 11.6）
 3. The 本 spec の直し shall 終了の道を正規の実装にする（終了を省く小細工をしない）
 4. The 本 spec の直し shall 文字化けをコンソールの文字コードの切り替えで逃げず、読む側を直す
 5. The 本 spec の直し shall 時刻を正確に扱う（待ち時間や時刻を、直しの都合で丸めない）
@@ -114,7 +114,7 @@
 2. The 本 spec の直し shall 範囲の外のファイルについて、直しのために要る変更のほかは手を入れない（範囲の外の指摘を見つけても、その範囲の spec の持ち物として残す）
 3. While C18 のあいだ, the 本 spec の直し shall 次のファイルに手を入れない: 本体 `crates/areka/` の全部・`crates/areka-emo-text` の `sink*`・`actor*`・wintf の `ecs/mod.rs`・`ecs/world/mod.rs`・`placement-crate-split` が触る外のファイル（`log-capture-kit` のテスト 2 つ・wintf の `ecs/window_proc/` の 2 つ・`tools/perf/fixtures/`・`tools/perf/fixtures-loop/`）
 4. While C18 のあいだ, the 本 spec の直し shall dola の公開の形（範囲の外から呼べる型・関数・欄の名前と形）を、足すことのほかは変えない（C18 の約束 ⑶）
-5. If 確定した指摘が dola の公開の形を変えずには直せないとき, then the 本 spec shall C18 のあいだはその指摘を直さず、相手の spec の着地の後に本 spec の中で直すか、受け手の spec を台帳で確かめて申し送るかを要件の討議の議題にする
+5. If 確定した指摘が dola の公開の形を変えずには直せないとき, then the 本 spec shall C18 のあいだはその指摘を直さず、C18 のほかの 7 本がすべて `main` に着地した後の段で、本 spec の中で直す（2026-11-06 討議・開発者「分けない」＝要件 11.1・11.2）
 6. The 本 spec の直し shall `vendors/` の下に手を入れない
 
 ### Requirement 7: トークの終わりの時刻を ms の格子に載せる（件 1）
@@ -139,10 +139,10 @@
 #### Acceptance Criteria
 
 1. While C18 のあいだ, the 本 spec の直し shall `CuePlayer::stop` を消さない（範囲の外の `crates/areka/src/emo2_boot/frame/window_state_tests.rs` が呼び、C18 では本体に触れない）
-2. When 要件の討議を行うとき, the 要件の討議 shall `CuePlayer::stop` を、⑴ 本番に呼び手が無い理由を書いた説明を付けて語彙の口として残すか、⑵ 消すことを本体に触れられる後の spec へ申し送るかを、議題にする
-3. When 討議で ⑴ に決まったとき, the 本 spec の直し shall `CuePlayer::stop` の説明に、本番に呼び手が無い実在の理由を書く
-4. When 討議で ⑵ に決まったとき, the 本 spec shall 受け手の spec が台帳に実在し、本体の呼び手のテストを直せる持ち場であることを確かめてから、申し送りを記録に残す
-5. If audit が `CuePlayer::stop` を要らないコードとして指したとき, then the ギャップ分析 shall その指摘を件 2 と同じものとして扱い、8.2 の議題にまとめる
+2. When C18 のほかの 7 本がすべて `main` に着地した後, the 本 spec の直し shall `CuePlayer::stop` を消し、本体の呼び手 `crates/areka/src/emo2_boot/frame/window_state_tests.rs:496` を、player を捨てる形（本番の `drive.rs` の `drop(player)` と同じ）に直す（2026-11-06 討議・推奨案で確定）
+3. When 8.2 を直すとき, the 本 spec の直し shall 同じ形の `CuePlayer::skip_barrier`（`research.md` #15・本番から呼べない）も消し、「選択肢 0 件の区切りは `skip_barrier` で抜ける」と書いた説明を「上流が player を捨てて抜ける」に改める
+4. The 本 spec のテスト shall 8.2 の後も、中断した台本で状態が変わらないこと（`window_state_tests.rs` の檻の的）を、player を捨てる形で縛り続ける
+5. If audit が `CuePlayer::stop` を要らないコードとして指したとき, then the ギャップ分析 shall その指摘を件 2 と同じものとして扱う
 
 ### Requirement 9: dola の clippy を `-D warnings` で緑にする（件 3）
 
@@ -162,7 +162,32 @@
 #### Acceptance Criteria
 
 1. When 直しを全部終えたとき, the 検証 shall 同じ範囲へもう一度 `/ponytail:ponytail-audit` を、要件 1 と同じ作法（上限なし・全部読む）でかける
-2. When もう一度かけた audit が指摘を出したとき, the 本 spec の直し shall 直しが生んだ指摘も含めて直し、新しい指摘が 0 件になるまで繰り返す（要件 2 で直さずに残すと裁定された指摘と、要件 6.5 で C18 の後へ回すと決めた指摘は数えない）
+2. When もう一度かけた audit が指摘を出したとき, the 本 spec の直し shall 直しが生んだ指摘も含めて直し、新しい指摘が 0 件になるまで繰り返す（要件 2 で直さずに残すと裁定された指摘は数えない。打ち切りは 10.6）
 3. The 検証 shall 新しい指摘が 0 件であることを、かけ直した audit の結果として記録に残す
 4. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`） shall 緑で終わる
 5. When 直しを全部終えたとき, the 検証 shall 要件 9.1 の静的検査が警告 0 で通ることを、走らせた結果として記録に残す
+6. If かけ直しが 5 回目になっても 0 件に収まらず、5 回目の指摘に「必ず直す」と本番の振る舞いに関わるものが 1 件も無いとき, then the 本 spec shall 開発者に一言知らせたうえで、5 回目の指摘を直したところで打ち切り、検証の記録に「5 回目で打ち切った・残りは直し済み」と書いて全体テストへ進む（2026-11-06 討議・audit-seriko と同じ形）
+
+### Requirement 11: 要件の討議で確定した直す対象と残す指摘（2026-11-06・議題 1 は開発者「分けない」・議題 3〜10 は推奨案）
+
+**Objective:** As a 開発者, I want 討議で決めた直す対象と、残すと裁定した指摘と、議題ごとの直し方の決めを 1 か所で引きたい, so that 設計とタスクが決めから外れない
+
+指摘の番号は `research.md` §3 の通し番号（#1〜#88）。
+
+#### Acceptance Criteria
+
+1. The 本 spec shall 1 本の spec のまま進め、`research.md` §3 の 88 件のうち 11.3 で残すと決めた分を除く全部を、3 つの組とも直す（2026-11-06 開発者「分けない」。タスクが 20 を越えても同じ範囲の 2 本目へは切らない）
+2. The 本 spec shall 直しを 2 つの段に分ける。前の段＝公開の形を変えない直しと件 1・件 3（C18 のあいだに取る）。後の段＝C18 のほかの 7 本がすべて `main` に着地した後に取る直し＝公開の形を変える 18 件（#11〜#19・#25・#26・#52・#56・#66・#70・#73・#77・#78）と件 2（要件 8.2・8.3）
+3. The 本 spec shall 次のものだけを直さずに残す（要件 2.5 の記録）
+   - #4 の付随（最後の区切りより後に置いたトリガーは、親が先に終わって発火しない）: ⑴ 開発者の裁定＝完了 `dola-nested-storyboard` 要件 3.3「トリガーを長さに足さない」を守る。#4 の本体（台本の長さに先頭の遅れが入らない）は直す
+   - #11 の `CueCommand::WaitForInput` と `CuePlayer::resolve_click`: ⑵ わざと置いた口＝`talk-fast-forward` の `\x` の受け皿。残す理由を説明に書く（11.4）
+   - #25 の機能 `yaml`: ⑵ 持ち主の spec＝`dola-yaml-backend` が決まっている
+4. When #11 を直すとき, the 本 spec の直し shall 後の段で、効かない時間切れ（`WaitForInput` の `timeout` の欄・`BarrierKind::Timeout`・その時間切れの枝）を消し、残す `WaitForInput` と `resolve_click` の説明に「`talk-fast-forward` の `\x` の受け皿」という実在の理由を書く。ukadoc の `\x`・`\x[noclear]` には時間切れの引数が無い（`ukadoc:list/sakura-script/wait/x`）＝消しても正典に反しない
+5. When #12・#16・#17・#26 を直すとき, the 本 spec の直し shall 後の段で、配送の制御（Routing）・`CueTarget::Window`・`CueCommand::EntityRef`・`PlaybackState`／`ScheduleRequest` を、それを受ける範囲の外の枝とテストごと消す（完了した spec が置いた理由＝M-dialogue の受け皿・退役した相手の関数は、もう過ぎている）
+6. When #29・#38 の失敗を記録に残すとき, the 本 spec の直し shall dola に記録の依存を足さず、dola は戻り値で失敗を返し、`error!` は呼び手の境目（wintf の `tick_dola_animators`）で出す（`cue/sink.rs` の「記録は呼び手の境目」と同じ作り）
+7. When #5 を直すとき, the dola のコンパイル shall 「前のエントリに続く」を配列の順で決める。変数を持つ遷移は同じ変数の配列上の直前のエントリに続け（完了 `dola-compiled-transition` 要件 3.5 に合わせる）、変数を持たないエントリ（純粋なキーフレーム・トリガー）は配列の 1 つ前のエントリに続ける
+8. When #7 を直すとき, the dola の競合の判定 shall 「同じ変数に生きた項目があれば競合」とし、インスタンスごとの相対の時刻どうしを比べる重なりの判定を消す
+9. When #29 を直すとき, the dola の検証 shall 負の delay を拒む（delay・duration は 0 以上、time_scale は 0 より大きい、数値はどれも有限、loop_count は 1 以上か −1）
+10. When #31 を直すとき, the dola のコンパイル shall トリガーと純粋なキーフレームに書いた `between` を、`between` の始まりの時刻で発火・配置するものとして扱う（完了 `dola-nested-storyboard` の「トリガーでも at/between/keyframe を使える」を守る）。トリガー以外のエントリに書いた `trigger_start_offset` は検証で拒む
+11. When #33 を直すとき, the dola shall `relative_to` から出した終わりの値も値域と比べて `ValueOutOfRange` を出し、コンパイル結果の `min_value`／`max_value` を、完了 `dola-compiled-transition` 要件 5.6 の用途どおりランタイムでの値のクランプに使う
+12. When 件 3 の `too_many_arguments` を直すとき, the 本 spec の直し shall `runtime/instance_manager/mod.rs` の分は #60 の直し（`create_instance` を消す）で消し、`compile/resolve.rs` の分は理由を書いた `#[expect(clippy::too_many_arguments, reason = ...)]` で許す（引数の束の型は作らない）
