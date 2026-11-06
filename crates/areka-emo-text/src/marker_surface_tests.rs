@@ -8,7 +8,7 @@ use std::sync::Arc;
 use areka_emo_present::balloon_marker::MarkerImage;
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::{ChildOf, Children};
+use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
 use windows_numerics::Matrix3x2;
@@ -19,8 +19,10 @@ use wintf::ecs::{
     WucGraphicsResource, hit_test_in_window,
 };
 
-use super::super::box_sync_tests::{emote, layout, resolver, select, text};
-use super::super::test_support::{com_world, geo_model};
+use super::super::box_sync_tests::{layout, select};
+use super::super::test_support::{
+    com_world, emote, fake_resolver, geo_model, text, window_children,
+};
 use super::super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use super::*;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -45,13 +47,6 @@ fn placed(kind: MarkerKind, at: (i32, i32), image: &Arc<MarkerImage>) -> PlacedM
         at,
         image: Arc::clone(image),
     }
-}
-
-fn children_of(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().copied().collect())
-        .unwrap_or_default()
 }
 
 /// World の資源（GraphicsCore・Compositor）で印の面を挿す（`present_frame` と同じ取り出し方・
@@ -107,14 +102,14 @@ fn balloon_marker_is_inserted_right_before_the_slot_with_an_empty_mask() {
     );
     let place = PlaceKey::balloon(&actor);
     let index = rt
-        .marker_child_index(&children_of(&world, window), &place)
+        .marker_child_index(&window_children(&world, window), &place)
         .expect("差し込み口の位置");
     assert_eq!(index, 0);
 
     let markers = attach(&mut world, window, index, (200, 100), (0.0, 0.0));
     let child = markers.window_child().expect("窓の子");
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![child, slot, picture],
         "印の面 → 文字の面 → 絵（先頭ほど手前）"
     );
@@ -136,7 +131,7 @@ fn balloon_marker_is_inserted_right_before_the_slot_with_an_empty_mask() {
     assert_eq!(markers.size(), (200, 100));
 
     markers.despawn(&mut world);
-    assert_eq!(children_of(&world, window), vec![slot, picture]);
+    assert_eq!(window_children(&world, window), vec![slot, picture]);
     assert!(world.get_entity(child).is_err());
 }
 
@@ -147,7 +142,7 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
     let (mut world, window, slot) = com_world();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&text("0", "あ"));
     rt.apply_cue(&select("0", "b"));
@@ -173,12 +168,12 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
         rt.surfaces[k].surface.window_child().expect("箱の文字の面")
     };
     let (a_text, b_text) = (text_of(&rt, &a), text_of(&rt, &b));
-    assert_eq!(children_of(&world, window), vec![slot, b_text, a_text]);
+    assert_eq!(window_children(&world, window), vec![slot, b_text, a_text]);
 
     let mut markers = Vec::new();
     for k in [&b, &a] {
         let index = rt
-            .marker_child_index(&children_of(&world, window), k)
+            .marker_child_index(&window_children(&world, window), k)
             .expect("箱の文字の面の位置");
         let m = attach(&mut world, window, index, (10, 10), (0.0, 0.0));
         markers.push(m.window_child().expect("窓の子"));
@@ -186,7 +181,7 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
     }
     let (b_mark, a_mark) = (markers[0], markers[1]);
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, b_mark, b_text, a_mark, a_text],
         "箱ごとに印の面 → 文字の面、element番号の大きい順"
     );
@@ -195,13 +190,13 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
     let render = rt.surfaces.remove(&a).expect("a の面");
     render.markers.expect("a の印").despawn(&mut world);
     render.surface.despawn_window_child(&mut world);
-    let children = children_of(&world, window);
+    let children = window_children(&world, window);
     assert_eq!(children, vec![slot, b_mark, b_text]);
     assert_eq!(rt.box_child_index(&children, &a), Some(3));
     present_frame(&mut rt, &mut world, LATE).expect("作り直しの提示");
     let a_text = text_of(&rt, &a);
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, b_mark, b_text, a_text]
     );
 }
@@ -366,7 +361,7 @@ fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
     let mut markers = attach(&mut world, window, 0, WINDOW, (0.0, 0.0));
     let marker = markers.window_child().expect("窓の子");
     world.entity_mut(marker).insert(arranged(0.0, 0.0, WINDOW));
-    assert_eq!(children_of(&world, window), vec![marker, picture]);
+    assert_eq!(window_children(&world, window), vec![marker, picture]);
     // 左の矢印は透けた絵の上、右の矢印は不透明な絵の上。左の矢印の 1 列目は透明（α 0）。
     let mut bgra = [255u8; 4].repeat(4 * 4);
     for y in 0..4 {

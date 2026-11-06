@@ -7,20 +7,20 @@
 //! 置き場所）で見る。`World` は予約スロットの entity を得るためだけに使い、COM は使わない。
 //! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
-use std::collections::BTreeMap;
-
-use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::{BoxLayout, BoxPlacement};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{cue, spawn_reserved_slot};
-use super::{ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding};
+use super::test_support::{
+    COARSE_WRAP_MESSAGE, IGNORED_ORIGIN_MESSAGE, ROP_FALLBACK_MESSAGE, box_layout, box_name, cue,
+    emote, fake_resolver, items_at, spawn_reserved_slot, text,
+};
+use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::{PlaceKey, TextPlace};
-use crate::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
+use crate::state::{TextItem, TextLayerConfig};
 
 /// サーフェス 0 は箱 a・b、1 は a を別の位置に、2 は b だけ、3 は a をサーフェスからはみ出す位置に置く。
 /// 4 は箱を持たない（画像だけのサーフェス）。
@@ -66,38 +66,7 @@ const OVERFLOW_MESSAGE: &str =
 const REGISTER_MESSAGE: &str = "箱の置き場所を登録した（面は次の提示で作る）";
 
 pub(super) fn layout() -> BoxLayout {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-}
-
-pub(super) fn name(layout: &BoxLayout, surface: u32, name: &str) -> BoxName {
-    layout
-        .placements(surface)
-        .iter()
-        .find(|p| p.name.as_str() == name)
-        .expect("文面にある箱の名前")
-        .name
-        .clone()
-}
-
-/// 偽の閉包: 数字ならその番号を表示、`-1` は非表示。
-pub(super) fn resolver() -> SurfaceKeyResolver {
-    Box::new(|key: &str| match key {
-        "-1" => SurfaceKeyOutcome::Hide,
-        _ => key
-            .parse()
-            .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show),
-    })
-}
-
-pub(super) fn emote(actor: &str, key: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Emote { key: key.into() })
-}
-
-pub(super) fn text(actor: &str, t: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(t.into()))
+    box_layout(SHELL)
 }
 
 pub(super) fn select(actor: &str, name: &str) -> TalkCue {
@@ -125,7 +94,7 @@ pub(super) fn fixture() -> Fixture {
     let (window, slot) = spawn_reserved_slot(&mut world);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     Fixture {
         world,
         rt,
@@ -158,10 +127,10 @@ impl Fixture {
             .sync_box_bindings(&mut self.world, &[(ActorKey::from("0"), shell)]);
     }
 
-    pub(super) fn key(&self, surface: u32, box_name: &str) -> PlaceKey {
+    pub(super) fn key(&self, surface: u32, name: &str) -> PlaceKey {
         PlaceKey {
             actor: ActorKey::from("0"),
-            place: TextPlace::Box(name(&self.layout, surface, box_name)),
+            place: TextPlace::Box(box_name(&self.layout, surface, name)),
         }
     }
 
@@ -183,11 +152,8 @@ impl Fixture {
         binding.zip(site)
     }
 
-    fn items(&self, surface: u32, box_name: &str) -> Vec<TextItem> {
-        self.rt
-            .state()
-            .place_state(&self.key(surface, box_name))
-            .map_or_else(Vec::new, |s| s.items().to_vec())
+    fn items(&self, surface: u32, name: &str) -> Vec<TextItem> {
+        items_at(&self.rt, "0", self.key(surface, name).place)
     }
 }
 
@@ -239,7 +205,10 @@ fn layout_input_uses_the_box_size_as_the_image_size_with_white_background() {
     f.sync(Some(1.0));
 
     let key = f.key(0, "a");
-    let def = f.layout.def(&name(&f.layout, 0, "a")).expect("a の定義");
+    let def = f
+        .layout
+        .def(&box_name(&f.layout, 0, "a"))
+        .expect("a の定義");
     let expected = ResolvedBalloonText::resolve_with_background(
         &def.model,
         def.size,
@@ -456,7 +425,7 @@ fn replacing_the_bundle_drops_registrations() {
     f.sync(Some(1.0));
     assert!(!f.rt.box_sites.is_empty());
 
-    f.rt.set_box_layout(&mut f.world, layout(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout(), fake_resolver(), vec![]);
     assert!(f.rt.box_sites.is_empty(), "置き場所の登録は残らない");
     assert!(
         f.rt.routing.keys().all(|k| k.place == TextPlace::Balloon),
@@ -584,17 +553,11 @@ element1,balloon,c,10,10
 }
 ";
 
-/// 折り返しの基準の警告の文言（発行点と 1 文字も違わないこと）。
-const COARSE_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
-
-/// 無視した書き出し位置の警告の文言（発行点と 1 文字も違わないこと）。
-const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
-
 /// 2 つの警告の（文言, 名前の欄, 成分の欄）。
 fn definition_warnings(events: &[CapturedEvent]) -> Vec<(&str, Option<&str>, Option<&str>)> {
     events
         .iter()
-        .filter(|e| e.message() == COARSE_MESSAGE || e.message() == IGNORED_ORIGIN_MESSAGE)
+        .filter(|e| e.message() == COARSE_WRAP_MESSAGE || e.message() == IGNORED_ORIGIN_MESSAGE)
         .map(|e| (e.message(), e.field_str("balloon"), e.field_str("key")))
         .collect()
 }
@@ -604,11 +567,9 @@ fn definition_warnings(events: &[CapturedEvent]) -> Vec<(&str, Option<&str>, Opt
 /// 箱の束を受け取り直す（読み込み直す）ともう一度出す。
 #[test]
 fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
-    let world = EmoWorld::build(&parse(COARSE_BOX_SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(COARSE_BOX_SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    let layout = box_layout(COARSE_BOX_SHELL);
     let mut f = fixture();
-    f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout.clone(), fake_resolver(), vec![]);
     f.layout = layout.clone();
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
@@ -617,7 +578,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
     assert_eq!(
         definition_warnings(&events),
         vec![
-            (COARSE_MESSAGE, Some("c"), None),
+            (COARSE_WRAP_MESSAGE, Some("c"), None),
             (IGNORED_ORIGIN_MESSAGE, Some("c"), Some("origin.x")),
         ],
         "最初の登録で 2 つの警告を、名前の欄をブレスの名前にして出す"
@@ -643,7 +604,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
         "登録し直しでは 2 度目を出さない"
     );
 
-    f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout, fake_resolver(), vec![]);
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(1.0)));
@@ -669,19 +630,13 @@ element1,balloon,r,0,0
 }
 ";
 
-/// ROP 系の飾りの警告の文言（発行点と 1 文字も違わないこと）。
-const ROP_FALLBACK_MESSAGE: &str =
-    "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";
-
 /// T5（要件 2.1〜2.4・5.1）: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
 /// 外して付け直しても 0 件、箱の束を差し替えた後の登録で 1 件。
 #[test]
 fn box_cursor_fallback_warns_once_per_box_name() {
-    let world = EmoWorld::build(&parse(ROP_BOX_SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(ROP_BOX_SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    let layout = box_layout(ROP_BOX_SHELL);
     let mut f = fixture();
-    f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout.clone(), fake_resolver(), vec![]);
     f.layout = layout.clone();
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
@@ -717,7 +672,7 @@ fn box_cursor_fallback_warns_once_per_box_name() {
         "外して付け直しても 0 件"
     );
 
-    f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout, fake_resolver(), vec![]);
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(1.0)));

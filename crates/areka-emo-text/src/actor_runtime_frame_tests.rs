@@ -7,10 +7,11 @@ use areka_parsers::balloon::{
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
 use bevy_ecs::prelude::World;
 use log_capture_kit::count_levels;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::{GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
+use wintf::ecs::{GraphicsCommandList, VisualGraphics};
 
-use super::test_support::{cue, geo_model, opaque_count, pump_until_idle, spawn_reserved_slot};
+use super::test_support::{
+    com_world, cue, geo_model, opaque_count, pump_until_idle, spawn_reserved_slot,
+};
 use super::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
@@ -256,17 +257,7 @@ fn present_frame_reports_device_error_without_panic_when_resources_missing() {
 fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
     // 本番 UI スレッド（MTA）を再現（WucGraphicsResource::new は DQTAT_COM_NONE を使う
     // ため COM 未初期化スレッドでは失敗する——wintf wuc_resource.rs テストと同一方針）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    let (window, slot) = spawn_reserved_slot(&mut world);
-    world.insert_resource(core);
-    world.insert_resource(wuc);
+    let (mut world, window, slot) = com_world();
 
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -343,17 +334,7 @@ fn present_frame_attaches_once_and_progresses_glyphs_per_injected_frame() {
 /// additive アクセサ）から外部が読み出せる。未装着 actor は `None`。
 #[test]
 fn draw_stats_readable_after_present_frame() {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    let (window, slot) = spawn_reserved_slot(&mut world);
-    world.insert_resource(core);
-    world.insert_resource(wuc);
+    let (mut world, window, slot) = com_world();
 
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -440,18 +421,8 @@ fn resolve_wires_wrap_mode_from_balloon_model() {
 /// （提示層でも全 render をクリアしないと #6＝前会話残留が再現する）。
 #[test]
 fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    let (window0, slot0) = spawn_reserved_slot(&mut world);
+    let (mut world, window0, slot0) = com_world();
     let (window1, slot1) = spawn_reserved_slot(&mut world);
-    world.insert_resource(core);
-    world.insert_resource(wuc);
 
     let sakura = ActorKey::from("0");
     let kero = ActorKey::from("1");

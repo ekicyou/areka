@@ -6,10 +6,11 @@
 //! 確かめは 7.8）。箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
-use bevy_ecs::hierarchy::Children;
 
-use super::box_sync_tests::{Fixture, emote, fixture, layout, resolver, select, text};
-use super::test_support::{choice_cue, com_world, cue};
+use super::box_sync_tests::{Fixture, fixture, layout, select};
+use super::test_support::{
+    box_name, choice_cue, com_world, cue, emote, fake_resolver, text, window_children,
+};
 use super::{
     ChoiceHitRow, HitRectPx, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
 };
@@ -149,7 +150,7 @@ fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
     );
 
     let mut f = two_boxes_shown();
-    f.rt.set_box_layout(&mut f.world, layout(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout(), fake_resolver(), vec![]);
     assert_eq!(shown(&f), vec![], "箱の束の差し替え");
 }
 
@@ -255,7 +256,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     let k = 1.5;
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
 
     // スコープ 0 は箱 a（サーフェス 0・(10,20)）へ、スコープ 1 は同じ定義を普通のバルーンとして。
     rt.apply_cue(&emote("0", "0"));
@@ -268,13 +269,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     let shell = TextSlotBinding::new(slot, window, k, shell_physical, shell_image);
     rt.sync_box_bindings(&mut world, &[(actor(), Some((shell, 0)))]);
 
-    let name_a = layout
-        .placements(0)
-        .iter()
-        .find(|p| p.name.as_str() == "a")
-        .expect("a")
-        .name
-        .clone();
+    let name_a = box_name(&layout, 0, "a");
     let def = layout.def(&name_a).expect("a の定義");
     let other = ActorKey::from("1");
     rt.register_actor(
@@ -326,12 +321,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
         .get(&box_a)
         .and_then(|r| r.surface.window_child())
         .expect("箱の面は窓の子を持つ");
-    let children: Vec<bevy_ecs::entity::Entity> = world
-        .get::<Children>(window)
-        .expect("窓の子")
-        .iter()
-        .copied()
-        .collect();
+    let children = window_children(&world, window);
     let slot_at = children
         .iter()
         .position(|c| *c == slot)

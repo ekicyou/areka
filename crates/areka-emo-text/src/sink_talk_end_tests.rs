@@ -12,95 +12,25 @@
 use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
-use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink};
 use log_capture_kit::count_levels;
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 use super::{EmoTextSink, TextMsg, handle_text_msg, handle_text_msg_with};
+use crate::actor::test_support::{balloon, choice, instant, pump_until_idle, spawn_message_drain};
 use crate::actor::{TextLayerRuntime, spawn_emo_text};
-use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
-
-fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
-}
-
-fn text(actor: &str, s: &str) -> TalkCue {
-    cue(actor, CueCommand::Text(s.to_owned()))
-}
-
-fn choice(actor: &str, id: &str) -> TalkCue {
-    cue(
-        actor,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: id.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
-
-fn balloon(actor: &str) -> PlaceKey {
-    PlaceKey::balloon(&ActorKey::from(actor))
-}
-
-/// 事前に積んだ便りを全部処理してから抜ける bounded pump（`sink.rs` の檻と同じ手口）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ（テストスレッド＝pump）。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
-}
-
-/// 4 つの受け口の形で届いた便りを全部記録するドレイン。
-fn spawn_recording_drain() -> (EmoTextSink, Arc<Mutex<Vec<TextMsg>>>) {
-    let records = Arc::new(Mutex::new(Vec::new()));
-    let (on_cue, on_upcoming, on_mark) = (
-        Arc::clone(&records),
-        Arc::clone(&records),
-        Arc::clone(&records),
-    );
-    let (tx, _detached_drain) = areka_actor::spawn_ui(
-        "emo-text-talk-end-test",
-        move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
-            handle_text_msg_with(
-                msg,
-                |c, _| {
-                    on_cue.lock().expect("records").push(TextMsg::Cue(c));
-                    Ok(())
-                },
-                |u| {
-                    on_upcoming
-                        .lock()
-                        .expect("records")
-                        .push(TextMsg::Upcoming(u));
-                    Ok(())
-                },
-                |m| {
-                    on_mark.lock().expect("records").push(m);
-                    Ok(())
-                },
-            )
-        },
-    )
-    .expect("spawn_ui on the test (pump) thread must succeed");
-    (EmoTextSink::new(tx), records)
-}
 
 /// cue を送った複製を落とすと、トークの終わりがその cue の後に 1 回だけ届く。
 #[test]
 fn talk_end_arrives_once_after_the_cues_of_the_dropped_clone() {
     let ((), counts) = count_levels(|| {
-        let (original, records) = spawn_recording_drain();
+        let (original, records) = spawn_message_drain("emo-text-talk-end-test");
         let mut talk = original.clone();
-        let (c0, c1) = (text("0", "アヒル"), text("1", "や"));
+        let (c0, c1) = (
+            instant("0", CueCommand::Text("アヒル".into())),
+            instant("1", CueCommand::Text("や".into())),
+        );
         talk.emit(c0.clone());
         talk.emit(c1.clone());
         drop(talk);
@@ -122,9 +52,9 @@ fn talk_end_arrives_once_after_the_cues_of_the_dropped_clone() {
 /// 登録の原本と cue を送らなかった複製は、落ちても終わりを送らない。複製は印を持ち越さない。
 #[test]
 fn original_and_silent_clones_send_no_talk_end() {
-    let (original, records) = spawn_recording_drain();
+    let (original, records) = spawn_message_drain("emo-text-talk-end-test");
     let mut talk = original.clone();
-    talk.emit(text("0", "前"));
+    talk.emit(instant("0", CueCommand::Text("前".into())));
     // cue を送った複製からの複製も、自分で送るまでは印が立たない。
     let silent = talk.clone();
     let silent2 = original.clone();
@@ -134,7 +64,7 @@ fn original_and_silent_clones_send_no_talk_end() {
     pump_until_idle();
     assert_eq!(
         *records.lock().expect("records"),
-        vec![TextMsg::Cue(text("0", "前"))],
+        vec![TextMsg::Cue(instant("0", CueCommand::Text("前".into())))],
         "原本・送らなかった複製は終わりを送らない"
     );
     drop(talk);
@@ -143,7 +73,7 @@ fn original_and_silent_clones_send_no_talk_end() {
 /// 選択待ちの始まりは cue と同じ口へ積まれ、積んだ順に（終わりより前に）届く。
 #[test]
 fn choice_wait_began_arrives_in_the_same_order_as_cues() {
-    let (original, records) = spawn_recording_drain();
+    let (original, records) = spawn_message_drain("emo-text-talk-end-test");
     let mut talk = original.clone();
     let (c0, c1) = (choice("0", "a"), choice("0", "b"));
     talk.emit(c0.clone());
@@ -189,12 +119,13 @@ fn fourth_receiver_failure_propagates_as_err() {
 /// 送れないとき: 終わりは警告 1 行、始まりはエラー 1 行（どちらも panic しない）。
 #[test]
 fn undeliverable_marks_log_one_line_each() {
-    let (original, _records) = spawn_recording_drain();
+    let (original, _records) = spawn_message_drain("emo-text-talk-end-test");
     original.close();
     pump_until_idle();
 
     let mut talk = original.clone();
-    let ((), emitted) = count_levels(|| talk.emit(text("0", "届かない")));
+    let ((), emitted) =
+        count_levels(|| talk.emit(instant("0", CueCommand::Text("届かない".into()))));
     assert_eq!(emitted.error, 1, "前提: 停止後の emit はエラー 1 行");
 
     let ((), began) = count_levels(|| talk.choice_wait_began());

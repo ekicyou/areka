@@ -6,14 +6,15 @@
 //! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs` も使う。
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::BoxName;
 use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{cue, items_of};
 use super::*;
+use crate::actor::test_support::{box_in, box_index, box_layout};
 
 /// 箱の構成:
 /// - 0: element1=a・element2=b（既定は a）
@@ -49,31 +50,16 @@ element1,balloon,c,0,0
 }
 ";
 
-/// 文面を畳んだ箱の表（サーフェス番号 → element番号の昇順の名前）。
+/// 文面を畳んだ箱の表（サーフェス番号 → element番号の昇順の名前・1 度だけ組む）。
+static INDEX: LazyLock<BTreeMap<u32, Vec<BoxName>>> =
+    LazyLock::new(|| box_index(&box_layout(SHELL), 0..=3));
+
 pub(super) fn index() -> BTreeMap<u32, Vec<BoxName>> {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
-    (0..=3)
-        .map(|id| {
-            let names = layout
-                .placements(id)
-                .iter()
-                .map(|p| p.name.clone())
-                .collect();
-            (id, names)
-        })
-        .collect()
+    INDEX.clone()
 }
 
 pub(super) fn boxed(name: &str) -> TextPlace {
-    let index = index();
-    let found = index
-        .values()
-        .flatten()
-        .find(|n| n.as_str() == name)
-        .expect("文面にある箱の名前");
-    TextPlace::Box(found.clone())
+    TextPlace::Box(box_in(&INDEX, name))
 }
 
 pub(super) fn key(actor: &str) -> ActorKey {

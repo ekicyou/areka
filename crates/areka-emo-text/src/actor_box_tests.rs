@@ -3,15 +3,12 @@
 //! 箱の束はテストの中に持つ surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。箱の面はまだ作られない（面の登録は 7.4）ので、`World` は空でよい。COM は使わない。
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use areka_emo_compose::{BoxLayout, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
 use bevy_ecs::prelude::World;
 
-use super::test_support::cue;
+use super::test_support::{box_layout, box_name, cue, emote, fake_resolver, items_at, text};
 use super::{SurfaceKeyResolver, TextLayerRuntime};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
@@ -55,44 +52,9 @@ element1,balloon,a,0,0
 }
 ";
 
-fn layout(text: &str) -> BoxLayout {
-    let world = EmoWorld::build(&parse(text));
-    let (layout, report) = fold_boxes(&parse_boxes(text), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-}
-
-/// 文面にある箱の場所（名前は公開の構築口を持たないので表から拾う）。
-fn boxed(layout: &BoxLayout, surface: u32, name: &str) -> TextPlace {
-    let found = layout
-        .placements(surface)
-        .iter()
-        .find(|p| p.name.as_str() == name)
-        .expect("文面にある箱の名前");
-    TextPlace::Box(found.name.clone())
-}
-
-/// 偽の閉包: 数字ならその番号を表示、`-1` は非表示、それ以外は解決できない。
-fn fake_resolver() -> SurfaceKeyResolver {
-    Box::new(|key: &str| match key {
-        "-1" => SurfaceKeyOutcome::Hide,
-        _ => key
-            .parse()
-            .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show),
-    })
-}
-
 /// 何を聞いても解決できない閉包（差し替えで閉包が入れ替わったかを見る）。
 fn never_resolver() -> SurfaceKeyResolver {
     Box::new(|_: &str| SurfaceKeyOutcome::Unresolved)
-}
-
-fn emote(actor: &str, key: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Emote { key: key.into() })
-}
-
-fn text(actor: &str, t: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(t.into()))
 }
 
 fn font(actor: &str, tokens: &[&str]) -> TalkCue {
@@ -113,20 +75,14 @@ fn place(actor: &str, place: TextPlace) -> PlaceKey {
     }
 }
 
-fn items_at(rt: &TextLayerRuntime, actor: &str, at: TextPlace) -> Vec<TextItem> {
-    rt.state()
-        .place_state(&place(actor, at))
-        .map_or_else(Vec::new, |s| s.items().to_vec())
-}
-
 /// 箱の束を差し替えた直後: 箱の場所の文字は空、各スコープの今のサーフェス番号は保たれ、
 /// 行き先は新しい表での既定。普通のバルーンの場所には触れない（要件 6.8）。
 #[test]
 fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
     let mut world = World::new();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    let old = layout(OLD_SHELL);
-    let old_a = boxed(&old, 0, "a");
+    let old = box_layout(OLD_SHELL);
+    let old_a = TextPlace::Box(box_name(&old, 0, "a"));
     rt.set_box_layout(&mut world, old, fake_resolver(), vec![]);
 
     rt.apply_cue(&emote("0", "0"));
@@ -137,8 +93,8 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
         vec![TextItem::glyph("あ")]
     );
 
-    let new = layout(NEW_SHELL);
-    let new_x = boxed(&new, 0, "x");
+    let new = box_layout(NEW_SHELL);
+    let new_x = TextPlace::Box(box_name(&new, 0, "x"));
     rt.set_box_layout(&mut world, new, never_resolver(), vec![]);
 
     let actor = ActorKey::from("0");
@@ -170,7 +126,7 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
     assert_eq!(rt.state().current_surface(&actor), Some(0));
     assert_eq!(
         rt.state().destination(&actor),
-        boxed(&layout(NEW_SHELL), 0, "x")
+        TextPlace::Box(box_name(&box_layout(NEW_SHELL), 0, "x"))
     );
 }
 
@@ -181,12 +137,12 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
 fn box_traits_come_from_the_brace_and_arrive_before_the_index() {
     let mut world = World::new();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut world, layout(OLD_SHELL), fake_resolver(), vec![]);
+    rt.set_box_layout(&mut world, box_layout(OLD_SHELL), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&font("0", &["color", "255", "0", "0"]));
 
-    let new = layout(NEW_SHELL);
-    let new_x = boxed(&new, 0, "x");
+    let new = box_layout(NEW_SHELL);
+    let new_x = TextPlace::Box(box_name(&new, 0, "x"));
     let TextPlace::Box(x_name) = &new_x else {
         unreachable!("箱の場所")
     };
@@ -238,12 +194,17 @@ fn font_search_dirs_are_readable_in_the_given_order() {
     assert!(rt.box_font_dirs().is_empty(), "束が来るまでは空");
 
     let dirs = vec![PathBuf::from("shell"), PathBuf::from("ghost")];
-    rt.set_box_layout(&mut world, layout(OLD_SHELL), fake_resolver(), dirs.clone());
+    rt.set_box_layout(
+        &mut world,
+        box_layout(OLD_SHELL),
+        fake_resolver(),
+        dirs.clone(),
+    );
     assert_eq!(rt.box_font_dirs(), dirs.as_slice());
 
     rt.set_box_layout(
         &mut world,
-        layout(NEW_SHELL),
+        box_layout(NEW_SHELL),
         fake_resolver(),
         vec![PathBuf::from("other")],
     );

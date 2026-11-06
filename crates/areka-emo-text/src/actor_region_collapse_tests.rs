@@ -24,18 +24,15 @@
 //! 捕捉窓の内側で対照の `error!` を 1 件出し、その 1 件が数えられていることを件数の主張と
 //! 同時に確かめる（`actor_region_warn_tests.rs` と同じ流儀）。
 
-use std::collections::BTreeMap;
-
-use areka_emo_compose::{BoxLayout, EmoWorld, fold_boxes};
 use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::shell::{parse, parse_boxes};
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::CapturedEvent;
 
-use super::box_sync_tests::{emote, resolver, text};
-use super::test_support::spawn_reserved_slot;
+use super::test_support::{
+    box_layout, capture_checked, emote, fake_resolver, number_field, spawn_reserved_slot, text,
+};
 use super::{TextLayerRuntime, TextSlotBinding};
 use crate::place::{PlaceKey, TextPlace};
 use crate::state::TextLayerConfig;
@@ -94,28 +91,9 @@ pub(super) fn model(source: &str) -> BalloonModel {
     parse_str(source, None)
 }
 
-pub(super) fn box_layout(source: &str) -> BoxLayout {
-    let world = EmoWorld::build(&parse(source));
-    let (layout, report) = fold_boxes(&parse_boxes(source), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-}
-
-/// 捕捉窓の中で `f` を走らせ、`(潰れの警告, 戻りの情報)` の一覧を返す。対照の `error!` が
-/// 数えられていることもここで確かめる。
+/// 捕捉窓の中で `f` を走らせ、`(潰れの警告, 戻りの情報)` の一覧を返す（対照の `error!` つき）。
 fn capturing(f: impl FnOnce()) -> (Vec<CapturedEvent>, Vec<CapturedEvent>) {
-    let ((), events) = capture(|| {
-        tracing::error!("捕捉窓が生きていることの対照イベント");
-        f();
-    });
-    assert_eq!(
-        events
-            .iter()
-            .filter(|e| e.level == tracing::Level::ERROR)
-            .count(),
-        1,
-        "捕捉窓の対照イベントが数えられていない。この窓の件数の主張は証拠にならない"
-    );
+    let ((), events) = capture_checked(f);
     let pick = |level: tracing::Level, message: &str| -> Vec<CapturedEvent> {
         events
             .iter()
@@ -127,14 +105,6 @@ fn capturing(f: impl FnOnce()) -> (Vec<CapturedEvent>, Vec<CapturedEvent>) {
         pick(tracing::Level::WARN, COLLAPSED),
         pick(tracing::Level::INFO, RECOVERED),
     )
-}
-
-fn number(event: &CapturedEvent, name: &str) -> f32 {
-    let raw = event
-        .field(name)
-        .unwrap_or_else(|| panic!("欄 {name} が記録に載っていない"));
-    raw.parse()
-        .unwrap_or_else(|_| panic!("欄 {name} の値 {raw} を数値として読めない"))
 }
 
 struct Balloon {
@@ -187,10 +157,10 @@ fn attaching_a_collapsed_region_warns_once_with_the_name_and_values() {
     assert_eq!(infos.len(), 0);
     let warn = &warns[0];
     assert_eq!(warn.field_str("balloon"), Some("スコープ1のバルーン"));
-    assert_eq!(number(warn, "left"), 50.0);
-    assert_eq!(number(warn, "top"), 0.0);
-    assert_eq!(number(warn, "right"), 40.0);
-    assert_eq!(number(warn, "bottom"), 80.0);
+    assert_eq!(number_field(warn, "left"), 50.0);
+    assert_eq!(number_field(warn, "top"), 0.0);
+    assert_eq!(number_field(warn, "right"), 40.0);
+    assert_eq!(number_field(warn, "bottom"), 80.0);
     assert_eq!(warn.field("image_size"), Some("(100.0, 80.0)"));
 }
 
@@ -224,8 +194,8 @@ fn returning_to_a_positive_region_logs_info_once() {
     assert_eq!(warns.len(), 0);
     assert_eq!(infos.len(), 1, "戻ったら情報 1 回（要件 2.4）");
     assert_eq!(infos[0].field_str("balloon"), Some("スコープ1のバルーン"));
-    assert_eq!(number(&infos[0], "width"), 80.0);
-    assert_eq!(number(&infos[0], "height"), 80.0);
+    assert_eq!(number_field(&infos[0], "width"), 80.0);
+    assert_eq!(number_field(&infos[0], "height"), 80.0);
 
     let (warns, infos) = capturing(|| {
         b.attach(HEALTHY_BALLOON);
@@ -280,7 +250,12 @@ impl Shell {
         let mut world = World::new();
         let (window, slot) = spawn_reserved_slot(&mut world);
         let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-        rt.set_box_layout(&mut world, box_layout(SHELL_COLLAPSED), resolver(), vec![]);
+        rt.set_box_layout(
+            &mut world,
+            box_layout(SHELL_COLLAPSED),
+            fake_resolver(),
+            vec![],
+        );
         Shell {
             world,
             rt,
@@ -340,10 +315,10 @@ fn registering_a_collapsed_box_warns_once_with_the_box_name() {
     };
     let warn = &warns[0];
     assert_eq!(warn.field_str("balloon"), Some(name.as_str()));
-    assert_eq!(number(warn, "left"), 60.0);
-    assert_eq!(number(warn, "right"), 50.0);
-    assert_eq!(number(warn, "top"), 0.0);
-    assert_eq!(number(warn, "bottom"), 50.0);
+    assert_eq!(number_field(warn, "left"), 60.0);
+    assert_eq!(number_field(warn, "right"), 50.0);
+    assert_eq!(number_field(warn, "top"), 0.0);
+    assert_eq!(number_field(warn, "bottom"), 50.0);
     assert_eq!(warn.field("image_size"), Some("(100.0, 50.0)"));
 }
 
@@ -403,7 +378,7 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
         s.rt.set_box_layout(
             &mut s.world,
             box_layout(SHELL_COLLAPSED),
-            resolver(),
+            fake_resolver(),
             vec![],
         );
         s.speak_into_box();
@@ -416,7 +391,12 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
     );
 
     let (warns, infos) = capturing(|| {
-        s.rt.set_box_layout(&mut s.world, box_layout(SHELL_HEALTHY), resolver(), vec![]);
+        s.rt.set_box_layout(
+            &mut s.world,
+            box_layout(SHELL_HEALTHY),
+            fake_resolver(),
+            vec![],
+        );
         s.speak_into_box();
         s.sync();
     });
@@ -425,8 +405,8 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
         (0, 1),
         "正の束で戻ったら情報 1 回"
     );
-    assert_eq!(number(&infos[0], "width"), 80.0);
-    assert_eq!(number(&infos[0], "height"), 50.0);
+    assert_eq!(number_field(&infos[0], "width"), 80.0);
+    assert_eq!(number_field(&infos[0], "height"), 50.0);
 }
 
 // ── 面の片付け（要件 2.9・ECS・実 GPU） ──
@@ -437,7 +417,7 @@ fn replacing_the_bundle_keeps_the_memory_and_recovery_logs_info_once() {
 // 窓の子の面は窓の子ごと消す。差し込み口が居なければ警告して何もしない。
 
 mod release {
-    use bevy_ecs::hierarchy::{ChildOf, Children};
+    use bevy_ecs::hierarchy::ChildOf;
     use bevy_ecs::name::Name;
     use bevy_ecs::prelude::World;
     use log_capture_kit::capture;
@@ -445,7 +425,7 @@ mod release {
     use wintf::ecs::{Arrangement, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource};
 
     use super::super::TextSlotBinding;
-    use super::super::test_support::com_world;
+    use super::super::test_support::{com_world, window_children};
     use super::IMAGE;
     use crate::surface::TextSurface;
 
@@ -478,13 +458,6 @@ mod release {
         (compositor, core)
     }
 
-    fn children(world: &World, window: bevy_ecs::entity::Entity) -> Vec<bevy_ecs::entity::Entity> {
-        world
-            .get::<Children>(window)
-            .map(|c| c.iter().copied().collect())
-            .unwrap_or_default()
-    }
-
     /// 差し込み口の面を外すと文字の層の部品（`VisualGraphics`・`Arrangement`）が無くなり、差し込み口の
     /// entity と並びは残る。付け直すと差し込み口は枠の面より手前のまま、未同期の絵として装着される
     /// （`visual_sync` が `Children` の順に入れ直す印＝親の Visual がまだ無い）。
@@ -512,13 +485,13 @@ mod release {
             world.get::<Visual>(slot).is_some() && world.get::<Name>(slot).is_some(),
             "差し込み口そのもの（emo-present の領分）は残る"
         );
-        assert_eq!(children(&world, window), vec![slot, frame]);
+        assert_eq!(window_children(&world, window), vec![slot, frame]);
 
         let _again =
             TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (2.0, 1.0))
                 .expect("付け直し");
         assert_eq!(
-            children(&world, window),
+            window_children(&world, window),
             vec![slot, frame],
             "付け直しても差し込み口は枠の面より手前"
         );
@@ -547,11 +520,11 @@ mod release {
         )
         .expect("窓の子の装着");
         let child = surface.window_child().expect("窓の子");
-        assert_eq!(children(&world, window), vec![slot, child, frame]);
+        assert_eq!(window_children(&world, window), vec![slot, child, frame]);
 
         surface.release(&mut world, slot);
         assert!(world.get_entity(child).is_err(), "窓の子が消えていない");
-        assert_eq!(children(&world, window), vec![slot, frame]);
+        assert_eq!(window_children(&world, window), vec![slot, frame]);
         assert!(world.get_entity(slot).is_ok(), "差し込み口は残る");
     }
 
@@ -572,6 +545,6 @@ mod release {
             .filter(|e| e.level == tracing::Level::WARN)
             .count();
         assert_eq!(warns, 1, "差し込み口が居ないときは警告 1 回");
-        assert_eq!(children(&world, window), vec![frame]);
+        assert_eq!(window_children(&world, window), vec![frame]);
     }
 }

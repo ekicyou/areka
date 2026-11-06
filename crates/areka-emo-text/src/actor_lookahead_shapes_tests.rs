@@ -10,11 +10,12 @@ use areka_sakura::contract::{ActorKey, FONT_TAG_CARRIER};
 use dola::cue::{CueCommand, CuePayload};
 use log_capture_kit::capture;
 
-use super::box_sync_tests::{layout, resolver};
+use super::box_sync_tests::layout;
 use super::lookahead_tests::{
     ANCHOR, Delivery, EMO2_BOOT_FINAL, EMO2_BOOT_TALK, NINE_WIDE, Rig, Stage, Talk, balloon_model,
     budoux_model, reveal_violations, rows_of, show, walk, warns,
 };
+use super::test_support::fake_resolver;
 use crate::layout::FixedMetrics;
 use crate::place::PlaceKey;
 use crate::state::SurfaceKeyOutcome;
@@ -398,9 +399,12 @@ fn a_preview_before_attaching_still_lays_out_on_the_full_text() {
                 LateStart::Attach => rig.attach(actor, &budoux_model(), NINE_WIDE),
                 LateStart::BoxLayout => {
                     let mut rt = rig.runtime.borrow_mut();
-                    rt.set_box_layout(&mut rig.world, layout(), resolver(), vec![]);
+                    rt.set_box_layout(&mut rig.world, layout(), fake_resolver(), vec![]);
                 }
-                LateStart::Resolver => rig.runtime.borrow_mut().set_surface_resolver(resolver()),
+                LateStart::Resolver => rig
+                    .runtime
+                    .borrow_mut()
+                    .set_surface_resolver(fake_resolver()),
             }
             walk_places(&rig, &mut talk, &balloons(&[actor])).remove(0)
         });

@@ -13,18 +13,19 @@
 
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::{ChildOf, Children};
+use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::CapturedEvent;
 use wintf::ecs::{Arrangement, Visual, VisualGraphics};
 
-use super::box_sync_tests::{emote, resolver, text};
 use super::region_collapse_tests::{
-    COLLAPSED_BALLOON, HEALTHY_BALLOON, IMAGE, SHELL_COLLAPSED, SHELL_HEALTHY, SHELL_IMAGE,
-    box_layout, model,
+    COLLAPSED_BALLOON, HEALTHY_BALLOON, IMAGE, SHELL_COLLAPSED, SHELL_HEALTHY, SHELL_IMAGE, model,
 };
-use super::test_support::{choice_cue, com_world, cue, geo_model, opaque_count};
+use super::test_support::{
+    box_layout, capture_checked, choice_cue, com_world, cue, emote, fake_resolver, geo_model,
+    opaque_count, text, window_children,
+};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
 use crate::state::TextLayerConfig;
@@ -49,31 +50,15 @@ fn add_slot(world: &mut World, window: Entity, name: &str) -> Entity {
     id
 }
 
-fn children(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().copied().collect())
-        .unwrap_or_default()
-}
-
 /// 捕捉窓の中で `f` を走らせ、全部の記録を返す。対照の `error!` 1 件だけが ERROR で、WARN が 0 件で
-/// あることをここで確かめる（要件 2.2）。
+/// あることを確かめる（要件 2.2）。
 fn quiet(f: impl FnOnce()) -> Vec<CapturedEvent> {
-    let ((), events) = capture(|| {
-        tracing::error!("捕捉窓が生きていることの対照イベント");
-        f();
-    });
-    let count = |level: tracing::Level| events.iter().filter(|e| e.level == level).count();
-    assert_eq!(
-        count(tracing::Level::ERROR),
-        1,
-        "対照の 1 件のほかに ERROR が出た（要件 2.2）: {events:?}"
-    );
-    assert_eq!(
-        count(tracing::Level::WARN),
-        0,
-        "提示が WARN を出した: {events:?}"
-    );
+    let ((), events) = capture_checked(f);
+    let warns = events
+        .iter()
+        .filter(|e| e.level == tracing::Level::WARN)
+        .count();
+    assert_eq!(warns, 0, "提示が WARN を出した: {events:?}");
     events
 }
 
@@ -155,7 +140,7 @@ fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
         rt.choice_hit_rows(&actor).is_empty(),
         "当たり行が残っている"
     );
-    assert_eq!(children(&world, window), vec![slot, frame]);
+    assert_eq!(window_children(&world, window), vec![slot, frame]);
 
     assert!(rt.refresh_actor_binding(&actor, binding, &model(HEALTHY_BALLOON)));
     let events = quiet(|| {
@@ -174,7 +159,7 @@ fn collapsing_after_drawing_releases_the_surface_and_recovery_reattaches() {
         "付け直しの絵は未同期＝visual_sync が Children の順に入れ直す"
     );
     assert_eq!(
-        children(&world, window),
+        window_children(&world, window),
         vec![slot, frame],
         "差し込み口は枠より手前"
     );
@@ -190,7 +175,7 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
     let shell = TextSlotBinding::new(slot, window, 1.0, SHELL_IMAGE, SHELL_IMAGE);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let speak = |rt: &mut TextLayerRuntime, world: &mut World, source: &str| {
-        rt.set_box_layout(world, box_layout(source), resolver(), vec![]);
+        rt.set_box_layout(world, box_layout(source), fake_resolver(), vec![]);
         rt.apply_cue(&emote("0", "0"));
         rt.apply_cue(&text("0", "あ"));
         rt.sync_box_bindings(world, &[(ActorKey::from("0"), Some((shell, 0)))]);
@@ -228,7 +213,7 @@ fn a_collapsed_box_is_not_drawn_nor_shown_and_recovery_reattaches() {
     );
     assert!(rt.choice_hit_rows_at(&collapsed).is_empty());
     assert!(rt.shown_boxes(&scope0).is_empty(), "潰れた箱を写しに載せた");
-    assert_eq!(children(&world, window), vec![slot, slot1]);
+    assert_eq!(window_children(&world, window), vec![slot, slot1]);
     assert!(
         rt.is_attached(&scope1),
         "隣のスコープが描かれない（要件 2.6）"

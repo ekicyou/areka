@@ -1,6 +1,9 @@
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER};
 
-use super::test_support::{choice_cue, com_world, cue, cursor_model, geo_model, opaque_count};
+use super::test_support::{
+    choice_cue, com_world, count_px, cue, cursor_model, geo_model, inked, opaque_count, read_back,
+    row_px,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::choice::ResolvedChoiceStyle;
 use crate::state::TextLayerConfig;
@@ -235,38 +238,27 @@ fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     assert_eq!(rows[0].rect.top, indent_y, "先頭選択肢 2lh 字下げ");
     assert_eq!(rows[1].rect.left, 0.0);
     assert!(rows[0].rect.top < rows[1].rect.top && rows[1].rect.top < rows[2].rect.top);
-    let surface = rt.surface(&actor).expect("供給面");
     let width = image.0;
-    let bytes = surface.read_back().expect("read_back");
-    let ink_in_rect = |b: &[u8], x0: u32, y0: u32, x1: u32, y1: u32| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                if b[((y * width + x) * 4) as usize + 3] != 0 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    let bytes = read_back(&rt, &actor);
     let band = |r: &super::ChoiceHitRow| (r.rect.top as u32, r.rect.bottom.ceil() as u32);
     let (r0y0, r0y1) = band(&rows[0]);
     assert!(
-        ink_in_rect(&bytes, indent_x as u32, r0y0, width, r0y1) > 0,
+        count_px(&bytes, width, (indent_x as u32, r0y0, width, r0y1), inked) > 0,
         "字下げ位置にインク（draw==hit）"
     );
     assert_eq!(
-        ink_in_rect(&bytes, 0, r0y0, (indent_x as u32).saturating_sub(10), r0y1),
+        count_px(
+            &bytes,
+            width,
+            (0, r0y0, (indent_x as u32).saturating_sub(10), r0y1),
+            inked
+        ),
         0,
         "字下げ前は空白"
     );
     assert!(opaque_count(&bytes) > 0);
     present_frame(&mut rt, &mut world, 10.0).expect("NoChange 再提示");
-    let bytes2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let bytes2 = read_back(&rt, &actor);
     assert_eq!(bytes, bytes2, "決定論");
 }
 
@@ -310,14 +302,7 @@ fn present_with_hover_adds_highlight_pixels_over_non_hover_frame() {
 
     // hover 無しで提示（素の選択肢テキスト）＝スナップショット population・hover 未注入。
     present_frame(&mut rt, &mut world, 10.0).expect("hover 無し提示");
-    let read = |rt: &TextLayerRuntime| -> usize {
-        opaque_count(
-            &rt.surface(&actor)
-                .expect("供給面")
-                .read_back()
-                .expect("read_back"),
-        )
-    };
+    let read = |rt: &TextLayerRuntime| -> usize { opaque_count(&read_back(rt, &actor)) };
     let plain = read(&rt);
     assert!(plain > 0, "選択肢テキストが描画される");
     assert_eq!(
@@ -372,52 +357,15 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     let width = image.0;
 
     // ── 画素プローブ（premultiplied BGRA・α=255 ゆえ B=25,G=25,R=105,A=255 が塗り色の厳密表現）──
-    // 矩形内の塗り色（105,25,25）画素数。
-    let fill_in_rect = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil() as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil() as u32).min(image.1);
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
-    // 矩形内の白文字（≈255,255,255）画素数——全チャネル閾値で AA 端を除いた芯を数える。
-    let white_in_rect = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil() as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil() as u32).min(image.1);
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] >= 200 && b[i + 1] >= 200 && b[i + 2] >= 200 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    // 塗り色（105,25,25）の画素。
+    let fill = |px: &[u8]| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255;
+    // 白文字（≈255,255,255）の画素——全チャネル閾値で AA 端を除いた芯を数える。
+    let white = |px: &[u8]| px[0] >= 200 && px[1] >= 200 && px[2] >= 200 && px[3] == 255;
+    // 矩形内の塗り色画素数・白文字画素数。
+    let fill_in_rect = |b: &[u8], r: &super::ChoiceHitRow| count_px(b, width, row_px(r), fill);
+    let white_in_rect = |b: &[u8], r: &super::ChoiceHitRow| count_px(b, width, row_px(r), white);
     // 面全域の塗り色画素数（hover 解除で塗りが完全消滅することの檻）。
-    let fill_total = |b: &[u8]| -> usize {
-        let mut n = 0usize;
-        let mut i = 0usize;
-        while i + 3 < b.len() {
-            if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
-                n += 1;
-            }
-            i += 4;
-        }
-        n
-    };
+    let fill_total = |b: &[u8]| count_px(b, width, (0, 0, u32::MAX, u32::MAX), fill);
     let calls = |rt: &TextLayerRuntime| -> u64 {
         rt.draw_stats(&actor)
             .expect("draw_stats")
@@ -428,11 +376,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（ダーティ限定を測る台）");
-    let base_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let base_bytes = read_back(&rt, &actor);
     assert_eq!(
         fill_total(&base_bytes),
         0,
@@ -455,11 +399,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
         rows.len()
     );
-    let hover_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hover_bytes = read_back(&rt, &actor);
     // 7.2: ordinal-0 セグメント矩形へ塗り色＋白文字画素が出現する。
     assert!(
         fill_in_rect(&hover_bytes, &rows[0]) > 0,
@@ -485,11 +425,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         hover_calls,
         "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
     );
-    let hover_bytes2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hover_bytes2 = read_back(&rt, &actor);
     assert_eq!(
         hover_bytes, hover_bytes2,
         "決定論（hover 状態・バイト同一）"
@@ -510,11 +446,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         off_delta < rows.len() as u64,
         "hover off も全域再描画ではない: 増分 {off_delta}"
     );
-    let off_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off_bytes = read_back(&rt, &actor);
     // 7.2: 塗り色画素が面全域から消滅する（素描画へ戻る）。
     assert_eq!(
         fill_total(&off_bytes),
@@ -524,11 +456,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
     present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
-    let off_bytes2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off_bytes2 = read_back(&rt, &actor);
     assert_eq!(
         off_bytes, off_bytes2,
         "決定論（hover off 状態・バイト同一）"
@@ -585,63 +513,36 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     let height = image.1;
 
     // ── 画素プローブ（premultiplied BGRA・α=255・k=1.0/committed=0 ゆえ窓物理 px＝image px）──
-    // rect の floor/ceil 画素境界（9.2 と同流儀）。
-    let bounds = |r: &super::ChoiceHitRow| -> (u32, u32, u32, u32) {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil() as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil() as u32).min(height);
-        (x0, x1, y0, y1)
-    };
-    // 矩形 interior（AA 端を避けて 1px 内側へ）——「塗りが全域不透明化する」を端の縁取りに惑わされず測る。
+    // 矩形 interior（rect の floor/ceil 画素境界から AA 端を避けて 1px 内側へ・面の内側へ切り詰め）——
+    // 「塗りが全域不透明化する」を端の縁取りに惑わされず測る。
     let interior = |r: &super::ChoiceHitRow| -> (u32, u32, u32, u32) {
-        let (x0, x1, y0, y1) = bounds(r);
-        (x0 + 1, x1.saturating_sub(1), y0 + 1, y1.saturating_sub(1))
+        let (x0, y0, x1, y1) = row_px(r);
+        (
+            x0 + 1,
+            y0 + 1,
+            x1.min(width).saturating_sub(1),
+            y1.min(height).saturating_sub(1),
+        )
     };
-    let area = |(x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
+    let area = |(x0, y0, x1, y1): (u32, u32, u32, u32)| -> usize {
         (x1.saturating_sub(x0) as usize) * (y1.saturating_sub(y0) as usize)
     };
     // 不透明画素数（α=255・塗りが矩形を全域不透明化することの述語）。
-    let opaque_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    let opaque_in = |b: &[u8], rect| count_px(b, width, rect, |px| px[3] == 255);
     // 既定文字色（塗り色）(fr,fg,fb) の厳密一致画素数——BGRA ゆえ B=fb,G=fg,R=fr,A=255。
-    let fill_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] == fb && b[i + 1] == fg && b[i + 2] == fr && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
+    let fill_in = |b: &[u8], rect| {
+        count_px(b, width, rect, |px| {
+            px[0] == fb && px[1] == fg && px[2] == fr && px[3] == 255
+        })
     };
     // 反転文字色（255−c＝白）近傍画素数——AA 芯を各チャネル ±55（255→≥200・9.2 白閾値と等価）で数える。
-    let text_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                let db = (b[i] as i16 - tb as i16).abs();
-                let dg = (b[i + 1] as i16 - tg as i16).abs();
-                let dr = (b[i + 2] as i16 - tr as i16).abs();
-                if db <= 55 && dg <= 55 && dr <= 55 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
+    let text_in = |b: &[u8], rect| {
+        count_px(b, width, rect, |px| {
+            px[0].abs_diff(tb) <= 55
+                && px[1].abs_diff(tg) <= 55
+                && px[2].abs_diff(tr) <= 55
+                && px[3] == 255
+        })
     };
     let calls = |rt: &TextLayerRuntime| -> u64 {
         rt.draw_stats(&actor)
@@ -653,11 +554,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（hover 行限定を測る台）");
-    let base = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let base = read_back(&rt, &actor);
     let r0_int = interior(&rows[0]);
     let r0_area = area(r0_int);
     assert!(r0_area > 0, "行 0 の interior 領域は非空");
@@ -691,11 +588,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
         rows.len()
     );
-    let hov = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hov = read_back(&rt, &actor);
     // 7.2/4.3【背景塗り】: hover 行のセグメント矩形は既定文字色（黒）塗りで interior 全域が不透明化する。
     assert_eq!(
         opaque_in(&hov, r0_int),
@@ -738,11 +631,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         hover_calls,
         "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
     );
-    let hov2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hov2 = read_back(&rt, &actor);
     assert_eq!(hov, hov2, "決定論（hover 状態・バイト同一）");
     let steady_calls = calls(&rt);
 
@@ -755,11 +644,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         off_delta, 1,
         "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
     );
-    let off = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off = read_back(&rt, &actor);
     // 7.2/4.3: 反転縮退の塗りが消える（素描画へ戻る）。interior は未充填へ・反転文字（白）消滅。
     assert!(
         opaque_in(&off, r0_int) < r0_area,
@@ -774,11 +659,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
     present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
-    let off2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off2 = read_back(&rt, &actor);
     assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
 }
 
@@ -877,38 +758,17 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     );
     let (width, height) = image;
 
-    // 面全域の塗り色（premultiplied BGRA の (25,25,105,255)）画素数。
-    let fill_total = |b: &[u8]| -> usize {
-        b.chunks_exact(4)
-            .filter(|px| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255)
-            .count()
-    };
+    // 塗り色（premultiplied BGRA の (25,25,105,255)）の画素。
+    let fill = |px: &[u8]| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255;
+    // 面全域の塗り色画素数。
+    let fill_total = |b: &[u8]| count_px(b, width, (0, 0, u32::MAX, u32::MAX), fill);
     // ヒット矩形の内側の塗り色画素数。
-    let fill_in_row = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil().max(0.0) as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil().max(0.0) as u32).min(height);
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    let fill_in_row = |b: &[u8], r: &super::ChoiceHitRow| count_px(b, width, row_px(r), fill);
     // 面全域で塗り色画素を持つ行の範囲（上端, 下端）——読み戻した帯の縦位置。
     let fill_rows = |b: &[u8]| -> Option<(u32, u32)> {
         let mut span: Option<(u32, u32)> = None;
         for y in 0..height {
-            let hit = (0..width).any(|x| {
-                let i = ((y * width + x) * 4) as usize;
-                b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255
-            });
-            if hit {
+            if count_px(b, width, (0, y, width, y + 1), fill) > 0 {
                 span = Some(match span {
                     None => (y, y),
                     Some((t, _)) => (t, y),
@@ -917,12 +777,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         }
         span
     };
-    let read = |rt: &TextLayerRuntime| -> Vec<u8> {
-        rt.surface(&actor)
-            .expect("供給面")
-            .read_back()
-            .expect("read_back")
-    };
+    let read = |rt: &TextLayerRuntime| -> Vec<u8> { read_back(rt, &actor) };
 
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();

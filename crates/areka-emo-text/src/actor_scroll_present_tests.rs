@@ -12,14 +12,14 @@ use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_parsers::balloon::{ArrowKeys, BalloonModel, MarkerCoord, MarkerPoint};
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::World;
 use wintf::ecs::WucGraphicsResource;
 
-use super::box_sync_tests::{emote, layout, select, text};
+use super::box_sync_tests::{layout, select};
 use super::region_collapse_tests::model as parse_model;
 use super::scroll::placed_markers;
-use super::test_support::{com_world, cue, geo_model, opaque_count};
+use super::test_support::{com_world, cue, geo_model, opaque_count, window_children};
+use super::test_support::{emote, text};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
 use crate::scroll_marker::{
@@ -99,13 +99,6 @@ fn shown(rt: &TextLayerRuntime, place: &PlaceKey) -> (bool, bool) {
     )
 }
 
-fn children_of(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().copied().collect())
-        .unwrap_or_default()
-}
-
 /// 押し出された行が無いうちは印の面を作らず、あふれた次の提示で上の矢印が出る。手動で戻すと
 /// 次の提示で下の矢印も出て、自動へ帰ると下の矢印が消える（要件 3.1〜3.3・3.8）。
 #[test]
@@ -129,7 +122,7 @@ fn arrows_follow_the_pushed_out_lines_on_the_next_present() {
     assert_eq!(shown(&rt, &place), (true, false), "古い側に隠れた行");
     let surface = rt.marker_surface(&actor).expect("印の面");
     let child = surface.window_child().expect("窓の子");
-    assert_eq!(children_of(&world, window)[0], child, "文字の面の直前");
+    assert_eq!(window_children(&world, window)[0], child, "文字の面の直前");
 
     rt.scroll_manual_at(&place, ScrollDir::Older, 2);
     assert_eq!(
@@ -206,7 +199,7 @@ fn model_change_moves_the_arrow_and_drops_the_old_marker_surface() {
         .marker_surface(&actor)
         .and_then(|s| s.window_child())
         .expect("新しい印の面");
-    let children = children_of(&world, window);
+    let children = window_children(&world, window);
     assert_eq!(children.iter().filter(|c| **c == new).count(), 1);
     assert!(!children.contains(&old));
     assert_eq!(
@@ -315,7 +308,7 @@ fn collapse_drops_the_marker_surface_with_the_text_surface() {
         world.get_entity(marker).is_err(),
         "印の面の entity が残っている"
     );
-    assert!(!children_of(&world, window).contains(&marker));
+    assert!(!window_children(&world, window).contains(&marker));
     assert!(rt.marker_surface(&actor).is_none());
     assert_eq!(rt.marker_at_point(&place, UP), None);
 }
@@ -330,7 +323,7 @@ fn marker_failure_keeps_the_box_in_the_shown_copy() {
     rt.set_box_layout(
         &mut world,
         layout(),
-        super::box_sync_tests::resolver(),
+        super::test_support::fake_resolver(),
         vec![],
     );
     rt.set_balloon_markers(actor.clone(), pair());

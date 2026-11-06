@@ -16,46 +16,23 @@
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
+use super::test_support::{balloon, choice, instant};
 use crate::place::PlaceKey;
 use crate::state::{ActorTextState, ChoiceSpan, SpanKind, TextLayerState};
-
-fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
-}
-
-fn choice(actor: &str, id: &str) -> TalkCue {
-    cue(
-        actor,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: id.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
 
 /// アンカーの範囲を 1 つ記録する cue の列（開き → 文字 → 閉じ）。
 fn anchor(actor: &str, id: &str) -> [TalkCue; 3] {
     [
-        cue(
+        instant(
             actor,
             CueCommand::AnchorBegin {
                 id: id.to_owned(),
                 references: Vec::new(),
             },
         ),
-        cue(actor, CueCommand::Text(id.to_owned())),
-        cue(actor, CueCommand::AnchorEnd),
+        instant(actor, CueCommand::Text(id.to_owned())),
+        instant(actor, CueCommand::AnchorEnd),
     ]
-}
-
-fn balloon(actor: &str) -> PlaceKey {
-    PlaceKey::balloon(&ActorKey::from(actor))
 }
 
 fn place<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {
@@ -107,7 +84,7 @@ fn settle_moves_the_boundary_to_the_span_count_and_stops_there() {
 /// 範囲の無い場所: 済ませても何も起きず、済んでいない選択肢も無い。
 #[test]
 fn settle_on_a_place_without_spans_is_harmless() {
-    let mut state = applied(&[cue("0", CueCommand::Text("字".into()))]);
+    let mut state = applied(&[instant("0", CueCommand::Text("字".into()))]);
     assert!(!place(&state, "0").has_live_choice());
     assert!(state.settle_choices_at(&balloon("0")));
     assert!(place(&state, "0").choices().is_empty());
@@ -148,7 +125,7 @@ fn anchors_are_never_settled() {
 fn clear_resets_the_boundary() {
     let mut state = applied(&[choice("0", "a"), choice("0", "b")]);
     state.settle_choices_at(&balloon("0"));
-    state.apply_cue(&cue("0", CueCommand::Clear));
+    state.apply_cue(&instant("0", CueCommand::Clear));
     state.apply_cue(&choice("0", "c"));
     assert_eq!(settled_flags(&state, "0"), vec![(SpanKind::Choice, false)]);
     assert!(place(&state, "0").has_live_choice());
@@ -159,7 +136,7 @@ fn clear_resets_the_boundary() {
 fn clear_all_resets_the_boundary_of_every_place() {
     let mut state = applied(&[choice("0", "a"), choice("1", "b")]);
     state.settle_all_choices();
-    state.apply_cue(&cue("0", CueCommand::ClearAll));
+    state.apply_cue(&instant("0", CueCommand::ClearAll));
     state.apply_cue(&choice("0", "c"));
     state.apply_cue(&choice("1", "d"));
     assert_eq!(settled_flags(&state, "0"), vec![(SpanKind::Choice, false)]);
@@ -354,7 +331,8 @@ fn closing_the_choice_wait_makes_the_press_a_no_op_again() {
 use bevy_ecs::prelude::World;
 use log_capture_kit::capture;
 
-use super::box_sync_tests::{SHELL_IMAGE, emote, layout, name, resolver, select};
+use super::box_sync_tests::{SHELL_IMAGE, layout, select};
+use super::test_support::{box_name, emote, fake_resolver};
 use super::test_support::{choice_cue, com_world};
 use super::{ResolvedBalloonText, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
@@ -475,7 +453,7 @@ fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&select("0", "b"));
     rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &[]));
@@ -485,7 +463,7 @@ fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
 
     let box_b = PlaceKey {
         actor: actor.clone(),
-        place: TextPlace::Box(name(&layout, 0, "b")),
+        place: TextPlace::Box(box_name(&layout, 0, "b")),
     };
     settled_row_is_unpressable_and_unlit(&mut rt, &mut world, &box_b);
     assert!(!rt.choice_active(&actor), "箱の選択肢が全部済んだ");

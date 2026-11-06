@@ -28,9 +28,9 @@ use windows::Win32::Graphics::DirectWrite::{
 use windows::core::{BOOL, HSTRING};
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::box_sync_tests::{emote, resolver};
-use super::region_collapse_tests::box_layout;
+use super::test_support::box_layout;
 use super::test_support::{com_world, cue};
+use super::test_support::{emote, fake_resolver};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
 use crate::state::TextLayerConfig;
@@ -279,7 +279,7 @@ fn shoot_frames_described(
 fn shoot_box(surface: u32, k: f32, script: &[CueCommand]) -> Shot {
     let (mut world, window, slot) = com_world();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut world, box_layout(SHELL), resolver(), vec![]);
+    rt.set_box_layout(&mut world, box_layout(SHELL), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", &surface.to_string()));
     apply(&mut rt, script);
     let shell = TextSlotBinding::new(slot, window, k, physical(REAL, k), REAL);

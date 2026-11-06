@@ -14,8 +14,9 @@ use bevy_ecs::prelude::World;
 
 use super::TextLayerRuntime;
 use super::TextSlotBinding;
-use super::box_sync_tests::{fixture, text};
+use super::box_sync_tests::fixture;
 use super::test_support::spawn_reserved_slot;
+use super::test_support::text;
 use crate::inline_marker::InlineMarkerLook;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;

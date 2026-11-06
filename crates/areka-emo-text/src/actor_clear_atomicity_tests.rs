@@ -1,10 +1,7 @@
 use areka_sakura::contract::{ActorKey, CueCommand};
-use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use super::test_support::{
-    choice_cue, com_world, cue, geo_model, opaque_count, spawn_reserved_slot,
+    choice_cue, com_world, count_px, cue, geo_model, inked, opaque_count, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::{SpanKind, TextLayerConfig};
@@ -89,17 +86,8 @@ fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
 /// 純粋状態の全スコープ消去と原子的に無効化する。後続の新選択肢集合は stale hover を引き継がない。
 #[test]
 fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-    let mut world = World::new();
-    let (window0, slot0) = spawn_reserved_slot(&mut world);
+    let (mut world, window0, slot0) = com_world();
     let (window1, slot1) = spawn_reserved_slot(&mut world);
-    world.insert_resource(core);
-    world.insert_resource(wuc);
 
     let a0 = ActorKey::from("0");
     let a1 = ActorKey::from("1");
@@ -191,19 +179,6 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
 
 // ══ task 9.4: ライフサイクル無効化の同一フレーム原子性（画素消滅＋契約無効化の同時観測・R5.1/5.2/5.3/7.3/7.4） ══
 
-/// 指定バンド（y0..y1・全幅）内の非透明画素数（draw.rs α≠0 述語・9.1 の ink_in_rect と同型）。
-fn ink_in_band(bytes: &[u8], width: u32, y0: u32, y1: u32) -> usize {
-    let mut n = 0usize;
-    for y in y0..y1 {
-        for x in 0..width {
-            if bytes[((y * width + x) * 4) as usize + 3] != 0 {
-                n += 1;
-            }
-        }
-    }
-    n
-}
-
 /// Observable（5.1/5.2/7.3/7.4・シナリオA=Clear）: Clear 注入→FullClear フレームの**同一 post-present 観測**で、
 /// 選択肢行バンドのインク消滅・`choice_hit_rows` 空・`choice_active=false` の三者が**同時**に成立する
 /// （8.3 は present 前の契約レベル原子性——9.4 は FullClear 提示後の画素消滅を契約空と同一フレームで束ねる）。
@@ -239,7 +214,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
         .expect("read_back");
     for (i, &(y0, y1)) in bands.iter().enumerate() {
         assert!(
-            ink_in_band(&base_bytes, width, y0, y1) > 0,
+            count_px(&base_bytes, width, (0, y0, width, y1), inked) > 0,
             "ベースライン: 選択肢行 {i} バンドにインクがある"
         );
     }
@@ -256,7 +231,7 @@ fn clear_fullclear_pixels_vanish_with_empty_hit_rows_same_frame_atomic() {
         .expect("read_back");
     for (i, &(y0, y1)) in bands.iter().enumerate() {
         assert_eq!(
-            ink_in_band(&cleared_bytes, width, y0, y1),
+            count_px(&cleared_bytes, width, (0, y0, width, y1), inked),
             0,
             "FullClear 後: 選択肢行 {i} バンドのインクが消滅する（7.3/7.4）"
         );
@@ -348,7 +323,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     );
     for (i, &(y0, y1)) in old_bands.iter().enumerate() {
         assert_eq!(
-            ink_in_band(&cleared_bytes, width, y0, y1),
+            count_px(&cleared_bytes, width, (0, y0, width, y1), inked),
             0,
             "旧選択肢行 {i} バンドの画素が消滅する（7.3/7.4）"
         );
@@ -389,7 +364,7 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
     for (i, r) in new_rows.iter().enumerate() {
         let (y0, y1) = (r.rect.top as u32, r.rect.bottom.ceil() as u32);
         assert!(
-            ink_in_band(&new_bytes, width, y0, y1) > 0,
+            count_px(&new_bytes, width, (0, y0, width, y1), inked) > 0,
             "集合2: 新選択肢行 {i} バンドにインクがある（描画==ヒット・7.3/7.4）"
         );
     }

@@ -746,7 +746,7 @@ mod tests;
 
 #[cfg(test)]
 #[path = "actor_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "actor_runtime_frame_tests.rs"]

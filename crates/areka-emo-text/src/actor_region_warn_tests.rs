@@ -49,9 +49,11 @@ use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::CapturedEvent;
 
-use super::test_support::spawn_reserved_slot;
+use super::test_support::{
+    COARSE_WRAP_MESSAGE, IGNORED_ORIGIN_MESSAGE, capture_checked, number_field, spawn_reserved_slot,
+};
 use super::{TextLayerRuntime, TextSlotBinding};
 use crate::place::PlaceKey;
 use crate::region::TextRegion;
@@ -78,10 +80,6 @@ const WIDER_IMAGE: (u32, u32) = (300, 203);
 const WIDER_RIGHT: f32 = 252.0;
 /// 別原寸での折返し基準。
 const WIDER_WRAP_X: f32 = 266.0;
-
-/// 警告の文言（`actor.rs` の発行点と 1 文字も違わないこと自体を固定する——手順書 §5.7 の
-/// grep 語であり、変えると実機走行の判定が静かに壊れる・要件 14.3）。
-const WARN_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
 
 /// 出荷 fixture `emo2-kakukaku` の共通 `descript.txt` から関連キーだけを写した基層。
 ///
@@ -135,41 +133,22 @@ fn single_layer(source: &str) -> BalloonModel {
     parse_str(source, None)
 }
 
-/// 捕捉窓の中で `f` を走らせ、`(戻り値, WARN イベント一覧, ERROR 件数)` を返す。
-///
-/// 対照の `error!` を窓の内側で 1 件発行するのは、「WARN が 0 件」という主張が捕捉窓の
-/// 死によって恒真になるのを防ぐためである（呼出側は ERROR 件数 1 を必ず併せて確認する）。
-fn capturing<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>, usize) {
-    let (value, events) = capture(|| {
-        tracing::error!("捕捉窓が生きていることの対照イベント");
-        f()
-    });
-    let warns: Vec<CapturedEvent> = events
-        .iter()
+/// 捕捉窓の中で `f` を走らせ、`(戻り値, WARN イベント一覧)` を返す。対照の `error!` が 1 件だけ
+/// ERROR に数えられていることは [`capture_checked`] が確かめる（「WARN が 0 件」を恒真にしない）。
+fn capturing<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>) {
+    let (value, events) = capture_checked(f);
+    let warns = events
+        .into_iter()
         .filter(|e| e.level == tracing::Level::WARN)
-        .cloned()
         .collect();
-    let errors = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::ERROR)
-        .count();
-    (value, warns, errors)
-}
-
-/// 数値欄を f32 として読む（`{:?}` 表現の細部に依存しないよう、解析してから比べる）。
-fn number_field(event: &CapturedEvent, name: &str) -> f32 {
-    let raw = event
-        .field(name)
-        .unwrap_or_else(|| panic!("欄 {name} が警告に載っていない"));
-    raw.parse::<f32>()
-        .unwrap_or_else(|_| panic!("欄 {name} の値 {raw} を数値として読めない"))
+    (value, warns)
 }
 
 /// 4 欄と文言を丸ごと確かめる（軸・折返し基準・遠辺は呼出側が期待値を渡す）。
 fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, inline_limit: f32) {
     assert_eq!(
         warn.message(),
-        WARN_MESSAGE,
+        COARSE_WRAP_MESSAGE,
         "文言は上流と 1 文字も違ってはならない（手順書 §5.7 の grep 語・要件 14.3）"
     );
     assert_eq!(warn.field_str("axis"), Some(axis), "行内軸の欄");
@@ -208,7 +187,7 @@ fn attaching_a_coarse_balloon_warns_once_with_balloon_axis_and_both_values() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("1");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -216,10 +195,6 @@ fn attaching_a_coarse_balloon_warns_once_with_balloon_axis_and_both_values() {
         );
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の件数の主張は証拠にならない"
-    );
     assert_eq!(
         warns.len(),
         1,
@@ -235,7 +210,7 @@ fn attaching_a_vertical_coarse_balloon_warns_with_the_inline_axis_of_the_block_d
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("1");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -243,7 +218,6 @@ fn attaching_a_vertical_coarse_balloon_warns_with_the_inline_axis_of_the_block_d
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert_eq!(
         warns.len(),
         1,
@@ -260,7 +234,7 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -268,10 +242,6 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
         );
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert_eq!(
         warns.len(),
         0,
@@ -295,7 +265,7 @@ fn repeated_refresh_with_unchanged_values_adds_no_warning() {
         &merged(KERO_OVERLAY),
     );
 
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         let mut changed = Vec::new();
         for _ in 0..3 {
             changed.push(rt.refresh_actor_binding(
@@ -307,10 +277,6 @@ fn repeated_refresh_with_unchanged_values_adds_no_warning() {
         changed
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert_eq!(
         changed,
         vec![false, false, false],
@@ -338,10 +304,9 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn() {
 
     // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
     let scaled = TextSlotBinding::new(slot, window, 2.0, (576, 406), KERO_IMAGE);
-    let (changed, warns, errors) =
+    let (changed, warns) =
         capturing(|| rt.refresh_actor_binding(&actor, scaled, &merged(KERO_OVERLAY)));
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(
         changed,
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
@@ -373,7 +338,7 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
     );
 
     // 面が別寸へ切り替わる（`\b` 相当）——粗さは残るが値が変わる。
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             binding(slot, window, WIDER_IMAGE),
@@ -381,7 +346,6 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
         )
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(changed, "面実寸が変われば再追従は起きる（前提の確認）");
     assert_eq!(
         warns.len(),
@@ -396,10 +360,6 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
 // 上の 6 本は `origin` を宣言しない入力なので、下の追加分とは別の警告を見ている。
 // 同じ捕捉窓に 2 種類の警告が混ざりうるため、下の群は**文言で選り分けてから**数える
 // （総数 0 件を主張するときだけは選り分けない——選り分けない 0 のほうが強い主張である）。
-
-/// 無視した `origin` 宣言の警告の文言（`actor_decoration.rs` の発行点と 1 文字も違わないこと
-/// 自体を固定する——折返しの警告と同じ捕捉窓で選り分ける鍵がこの文字列だからである・要件 3.3）。
-const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
 
 /// 基層へ足す `origin` 宣言——両成分とも範囲の外（本体側の 36..356／46..168 に対し 0）。
 const ORIGIN_BOTH_OUTSIDE: &str = concat!("origin.x,0\n", "origin.y,0\n");
@@ -501,7 +461,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -509,7 +469,6 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     let ignored = ignored_origin_warns(&warns);
     assert_eq!(
         ignored.len(),
@@ -541,7 +500,7 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -549,7 +508,6 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     let ignored = ignored_origin_warns(&warns);
     assert_eq!(
         ignored.len(),
@@ -574,7 +532,7 @@ fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -582,10 +540,6 @@ fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
         );
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert_eq!(
         warns.len(),
         0,
@@ -607,7 +561,7 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
         &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
     );
 
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         let mut changed = Vec::new();
         for _ in 0..3 {
             changed.push(rt.refresh_actor_binding(
@@ -619,10 +573,6 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
         changed
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert_eq!(
         changed,
         vec![false, false, false],
@@ -651,7 +601,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
 
     // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
     let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), SAKURA_IMAGE);
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             scaled,
@@ -659,10 +609,6 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
         )
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert!(
         changed,
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
@@ -691,7 +637,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
         &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
     );
 
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             binding(slot, window, SAKURA_WIDER_IMAGE),
@@ -699,7 +645,6 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
         )
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(changed, "面実寸が変われば再追従は起きる（前提の確認）");
     let ignored = ignored_origin_warns(&warns);
     assert_eq!(
@@ -777,7 +722,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     );
 
     // binding は装着時と同値のまま——動かすのはバルーン定義の origin.x だけ。
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             binding(slot, window, SAKURA_IMAGE),
@@ -785,7 +730,6 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
         )
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(
         changed,
         "無視した宣言の値が変われば領域は別物であり、再追従は起きる（前提の確認）"
@@ -814,7 +758,7 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("1");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -822,7 +766,6 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert_eq!(
         warns.len(),
         3,
@@ -841,7 +784,7 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
 
     let coarse: Vec<&CapturedEvent> = warns
         .iter()
-        .filter(|e| e.message() == WARN_MESSAGE)
+        .filter(|e| e.message() == COARSE_WRAP_MESSAGE)
         .collect();
     assert_eq!(
         coarse.len(),
@@ -863,7 +806,7 @@ fn warnings_carry_the_balloon_label_set_by_the_wiring() {
     let unlabelled = ActorKey::from("0");
     rt.set_balloon_label(&labelled, "kakukaku".to_owned());
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             labelled.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -876,7 +819,6 @@ fn warnings_carry_the_balloon_label_set_by_the_wiring() {
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     let names: Vec<(&str, Option<&str>)> = warns
         .iter()
         .map(|w| (w.message(), w.field_str("balloon")))
@@ -884,10 +826,10 @@ fn warnings_carry_the_balloon_label_set_by_the_wiring() {
     assert_eq!(
         names,
         vec![
-            (WARN_MESSAGE, Some("kakukaku")),
+            (COARSE_WRAP_MESSAGE, Some("kakukaku")),
             (IGNORED_ORIGIN_MESSAGE, Some("kakukaku")),
             (IGNORED_ORIGIN_MESSAGE, Some("kakukaku")),
-            (WARN_MESSAGE, Some("スコープ0のバルーン")),
+            (COARSE_WRAP_MESSAGE, Some("スコープ0のバルーン")),
         ],
         "名前を入れたスコープは入れた名前・入れていないスコープはスコープから導く"
     );

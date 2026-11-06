@@ -15,7 +15,7 @@ use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
-use super::test_support::spawn_reserved_slot;
+use super::test_support::{ROP_FALLBACK_MESSAGE, spawn_reserved_slot};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::color::mix_disabled;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -234,8 +234,6 @@ fn resolve_is_resolve_with_a_white_background() {
 
 // ══ spec real-run-log-noise 要件 2.1〜2.4・5.1: 選択肢の飾りの警告は置き場ごとに値が決まったときだけ ══
 
-/// ROP 系の飾りの警告の文言（今のまま 1 文字も変えない）。
-const ROP_FALLBACK: &str = "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";
 /// 下線系の飾りの警告の文言（今のまま 1 文字も変えない）。
 const UNDERLINE_FALLBACK: &str = "cursor.style underline 系は M1 未対応: SquareFill へ縮退";
 
@@ -273,7 +271,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     let model = cursor_model("underline", "mergepennot");
 
     let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), bind, &model));
-    let rop = warns(&attached, ROP_FALLBACK);
+    let rop = warns(&attached, ROP_FALLBACK_MESSAGE);
     let underline = warns(&attached, UNDERLINE_FALLBACK);
     assert_eq!(rop.len(), 1, "装着で ROP 系の warn が 1 件");
     assert_eq!(underline.len(), 1, "装着で下線系の warn が 1 件");
@@ -289,7 +287,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     });
     assert_eq!(answers, vec![false; 3]);
     assert_eq!(
-        warns(&same, ROP_FALLBACK).len() + warns(&same, UNDERLINE_FALLBACK).len(),
+        warns(&same, ROP_FALLBACK_MESSAGE).len() + warns(&same, UNDERLINE_FALLBACK).len(),
         0,
         "値の同じ再追従 3 回で 0 件"
     );
@@ -299,14 +297,14 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     let (answer, rescaled) = capture(|| rt.refresh_actor_binding(&actor, scaled, &model));
     assert!(answer, "拡大率の変わる再追従は作り直す");
     assert_eq!(
-        warns(&rescaled, ROP_FALLBACK).len() + warns(&rescaled, UNDERLINE_FALLBACK).len(),
+        warns(&rescaled, ROP_FALLBACK_MESSAGE).len() + warns(&rescaled, UNDERLINE_FALLBACK).len(),
         0,
         "拡大率の変わる再追従でも飾りの値は同じなので 0 件"
     );
 
     let xor = cursor_model("underline", "xor");
     let (_, changed) = capture(|| rt.refresh_actor_binding(&actor, scaled, &xor));
-    let rop = warns(&changed, ROP_FALLBACK);
+    let rop = warns(&changed, ROP_FALLBACK_MESSAGE);
     assert_eq!(rop.len(), 1, "blendmethod だけ替えると ROP 系だけ 1 件");
     assert_eq!(rop[0].field_str("blendmethod"), Some("xor"));
     assert_eq!(

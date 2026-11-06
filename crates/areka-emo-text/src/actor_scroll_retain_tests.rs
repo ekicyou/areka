@@ -32,7 +32,9 @@ use areka_parsers::balloon::{
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
 
-use super::test_support::{com_world, cue, opaque_count, spawn_reserved_slot};
+use super::test_support::{
+    REVEAL_INTERVAL, com_world, count_px, cue, inked, opaque_count, spawn_reserved_slot,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
 
@@ -42,8 +44,6 @@ const IMAGE: (u32, u32) = (288, 203);
 const REGION_SIZE: (u32, u32) = (216, 93);
 /// 実機と同じ字の丈（`font.height,28` → 行送り 30＝28 ＋ 行間 2）。
 const FONT_HEIGHT: u32 = 28;
-/// reveal 間隔（秒/グリフ・`test_support::cue` が焼く duration と対）。
-const REVEAL_INTERVAL: f64 = 0.05;
 
 /// バルーン面の物理寸（`ceil(image × k)`）。
 fn physical(k: f32) -> (u32, u32) {
@@ -95,19 +95,6 @@ fn leading_gap_cues(actor: &str) -> (Vec<TalkCue>, f64) {
     let (mut cues, t_end) = boot_cues(actor);
     cues.insert(0, cue(actor, 0.0, CueCommand::NewLine { ratio: 1.5 }));
     (cues, t_end)
-}
-
-/// 行送り軸の帯 `[y0, y1)` の非透明ピクセル数（BGRA 密配列・物理 px）。
-fn ink_in_band(bytes: &[u8], w: u32, y0: u32, y1: u32) -> usize {
-    let mut count = 0;
-    for y in y0..y1 {
-        for x in 0..w {
-            if bytes[((y * w + x) * 4 + 3) as usize] != 0 {
-                count += 1;
-            }
-        }
-    }
-    count
 }
 
 /// まっさらな runtime に同じ cue 列を積み、**その 1 フレームだけ**提示した面を返す（オラクル）。
@@ -176,8 +163,8 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
             opaque_count(&oracle) > 0,
             "k={k} t={t}: オラクル面にインクが在る（空面同士の一致を排除）"
         );
-        let head_oracle = ink_in_band(&oracle, w, 0, head_band);
-        let head_live = ink_in_band(&live, w, 0, head_band);
+        let head_oracle = count_px(&oracle, w, (0, 0, w, head_band), inked);
+        let head_live = count_px(&live, w, (0, 0, w, head_band), inked);
         assert_eq!(
             head_oracle > 0,
             head_live > 0,
@@ -203,7 +190,7 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
         .read_back()
         .expect("read_back");
     assert!(
-        ink_in_band(&last, w, 0, head_band) > 0,
+        count_px(&last, w, (0, 0, w, head_band), inked) > 0,
         "k={k}: 最終フレームの先頭可視行の帯 [0,{head_band}) にインクが在る\
          （症状 F: 最新の 1 行しか見えない）"
     );
@@ -257,8 +244,8 @@ fn assert_leading_gap_lap(k: f32) {
     let w = (REGION_SIZE.0 as f32 * k).ceil() as u32;
     let h = (REGION_SIZE.1 as f32 * k).ceil() as u32;
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
-    let head = ink_in_band(&last, w, 0, head_band);
-    let below = ink_in_band(&last, w, head_band, h);
+    let head = count_px(&last, w, (0, 0, w, head_band), inked);
+    let below = count_px(&last, w, (0, head_band, w, h), inked);
     assert!(
         head > 0,
         "k={k}: 冒頭に空きが在る台本でも、送りの後の先頭可視行の帯 [0,{head_band}) に\

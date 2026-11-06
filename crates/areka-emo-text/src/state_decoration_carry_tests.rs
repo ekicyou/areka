@@ -15,14 +15,15 @@
 //! 写しのときに生まれるので、場所の状態を直に覗くより、利用者に見えるものを確かめる方が確かである。
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use areka_emo_compose::{BoxName, EmoWorld, FontFollow, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::{BoxName, FontFollow};
 use areka_sakura::contract::{CueCommand, FONT_TAG_CARRIER};
 
 use super::super::route_tests::{key, select, show};
 use super::super::test_support::cue;
 use super::super::{BoxTraits, SurfaceKeyOutcome, TextLayerState};
+use crate::actor::test_support::{box_in, box_index, box_layout};
 use crate::look::{LookLayers, StyleId, TextLook};
 use crate::place::{PlaceKey, TextPlace};
 
@@ -65,34 +66,26 @@ element2,balloon,a,0,40
 const RED: (u8, u8, u8) = (255, 0, 0);
 const BLUE: (u8, u8, u8) = (0, 0, 255);
 
-/// 文面を畳んだ箱の表と、箱の名前ごとの `font.follow`。
-fn folded() -> (BTreeMap<u32, Vec<BoxName>>, BTreeMap<BoxName, FontFollow>) {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
-    let mut follow = BTreeMap::new();
-    let index = (0..=4)
-        .map(|id| {
-            let names: Vec<BoxName> = layout
-                .placements(id)
-                .iter()
-                .map(|p| p.name.clone())
-                .collect();
-            for name in &names {
-                follow.insert(name.clone(), layout.def(name).expect("箱の定義").follow);
-            }
-            (id, names)
-        })
+/// 文面を畳んだ箱の表と、箱の名前ごとの `font.follow`（1 度だけ組む）。
+type Folded = (BTreeMap<u32, Vec<BoxName>>, BTreeMap<BoxName, FontFollow>);
+
+static FOLDED: LazyLock<Folded> = LazyLock::new(|| {
+    let layout = box_layout(SHELL);
+    let index = box_index(&layout, 0..=4);
+    let follow = index
+        .values()
+        .flatten()
+        .map(|name| (name.clone(), layout.def(name).expect("箱の定義").follow))
         .collect();
     (index, follow)
+});
+
+fn folded() -> &'static Folded {
+    &FOLDED
 }
 
 fn name(n: &str) -> BoxName {
-    folded()
-        .1
-        .into_keys()
-        .find(|b| b.as_str() == n)
-        .expect("文面にある箱の名前")
+    box_in(&folded().0, n)
 }
 
 fn bx(n: &str) -> TextPlace {
@@ -128,6 +121,7 @@ fn default_of(place: &TextPlace) -> TextLook {
 fn traits() -> BTreeMap<BoxName, BoxTraits> {
     folded()
         .1
+        .clone()
         .into_iter()
         .map(|(n, follow)| {
             let looks = layers_of(&TextPlace::Box(n.clone()));
@@ -140,7 +134,7 @@ fn traits() -> BTreeMap<BoxName, BoxTraits> {
 fn state() -> TextLayerState {
     let mut state = TextLayerState::default();
     state.set_box_traits(traits());
-    state.set_box_index(folded().0);
+    state.set_box_index(folded().0.clone());
     for actor in ["0", "1"] {
         state.set_look_layers(&key(actor), layers_of(&TextPlace::Balloon));
     }
@@ -206,7 +200,7 @@ fn shared(state: &TextLayerState, actor: &str) -> TextPlace {
 
 #[test]
 fn follow_kind_comes_from_font_follow_and_unwritten_means_scope() {
-    let follow = folded().1;
+    let follow = &folded().1;
     assert_eq!(follow[&name("a")], FontFollow::Scope, "書かない＝スコープ");
     assert_eq!(follow[&name("c")], FontFollow::Scope);
     assert_eq!(follow[&name("x")], FontFollow::Balloon);
@@ -439,7 +433,7 @@ fn shell_switch_points_owner_at_the_new_default_with_the_spec() {
 
     // 同じ表: 既定 a（スコープに従う）。
     state.set_box_traits(traits());
-    state.set_box_index(folded().0);
+    state.set_box_index(folded().0.clone());
     assert_eq!(shared(&state, "0"), bx("a"));
     assert_eq!(now(&mut state, "0").color, RED);
 
@@ -508,7 +502,7 @@ fn written_glyph_styles_never_change() {
     );
 
     // シェルの切替の後も、普通のバルーンの文字は書いたときの見た目。
-    state.set_box_index(folded().0);
+    state.set_box_index(folded().0.clone());
     assert_eq!(glyph(&state, "0", TextPlace::Balloon, 0).color, RED);
 }
 

@@ -8,7 +8,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 
-use super::box_sync_tests::{fixture, text};
+use super::box_sync_tests::fixture;
+use super::test_support::text;
 use super::test_support::{choice_cue, com_world, cue, geo_model};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::layout::{FixedMetrics, VisibleWindow};

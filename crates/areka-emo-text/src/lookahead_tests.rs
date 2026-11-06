@@ -6,12 +6,11 @@
 
 use std::collections::BTreeMap;
 
-use areka_emo_compose::{EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::*;
+use crate::actor::test_support::{box_index, box_layout};
 use crate::look::LookLayers;
 use crate::place::TextPlace;
 use crate::segment::segment_plan;
@@ -36,15 +35,7 @@ element2,balloon,b,0,60
 
 /// 検体の箱の表を状態へ入れる（箱の名前は公開の構築口を持たないので文面を畳んで取り出す）。
 fn set_boxes(state: &mut TextLayerState) {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
-    let names = layout
-        .placements(0)
-        .iter()
-        .map(|p| p.name.clone())
-        .collect();
-    state.set_box_index(BTreeMap::from([(0, names)]));
+    state.set_box_index(box_index(&box_layout(SHELL), 0..=0));
 }
 
 /// 箱の表を入れた状態。

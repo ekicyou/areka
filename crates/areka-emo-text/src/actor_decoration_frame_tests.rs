@@ -8,12 +8,9 @@
 // `render`）へ戻すと赤になる形にしてある（各テストの「較正」を参照）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
-use bevy_ecs::prelude::World;
 use log_capture_kit::capture;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
-use super::test_support::{cue, geo_model, opaque_count, spawn_reserved_slot};
+use super::test_support::{com_world, cue, geo_model, opaque_count};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
 
@@ -49,17 +46,7 @@ fn newline() -> TalkCue {
 /// ここで別経路を組むと「配線が実在する」の主張が空振りする。
 fn run_script(script: &[TalkCue]) -> (Vec<u8>, (u32, u32)) {
     // 本番 UI スレッド（MTA）を再現（`actor_runtime_frame_tests` と同一方針）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-        .expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    let (window, slot) = spawn_reserved_slot(&mut world);
-    world.insert_resource(core);
-    world.insert_resource(wuc);
+    let (mut world, window, slot) = com_world();
 
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());

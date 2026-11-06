@@ -4,15 +4,17 @@
 //! `parse_boxes` → `fold_boxes` で畳んで箱の表を作る（検体は読まない）。COM は使わない。
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::BoxName;
 use areka_sakura::contract::{ActorKey, CueCommand};
 
-use super::test_support::{choice_cue, cue};
-use super::{SurfaceKeyResolver, TextLayerRuntime};
+use super::TextLayerRuntime;
+use super::test_support::{
+    box_in, box_index, box_layout, choice_cue, cue, emote, fake_resolver, items_at,
+};
 use crate::place::{PlaceKey, TextPlace};
-use crate::state::{ChoiceSpan, SpanKind, SurfaceKeyOutcome, TextItem, TextLayerConfig};
+use crate::state::{ChoiceSpan, SpanKind, TextItem, TextLayerConfig};
 
 /// サーフェス 0 は箱 a・b（先頭は a）、1 は箱 b だけ、2 は箱なし（表に載らない）。
 const SHELL: &str = "\
@@ -35,59 +37,19 @@ element1,balloon,b,0,0
 }
 ";
 
-fn index() -> BTreeMap<u32, Vec<BoxName>> {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    (0..=2)
-        .map(|id| {
-            let names = layout
-                .placements(id)
-                .iter()
-                .map(|p| p.name.clone())
-                .collect();
-            (id, names)
-        })
-        .collect()
-}
+/// 1 度だけ組む箱の表（サーフェス 0〜2）。
+static INDEX: LazyLock<BTreeMap<u32, Vec<BoxName>>> =
+    LazyLock::new(|| box_index(&box_layout(SHELL), 0..=2));
 
 fn boxed(name: &str) -> TextPlace {
-    let found = index()
-        .into_values()
-        .flatten()
-        .find(|n| n.as_str() == name)
-        .expect("文面にある箱の名前");
-    TextPlace::Box(found)
-}
-
-/// 偽の閉包: 数字ならその番号を表示、`-1` は非表示、それ以外は解決できない。
-fn fake_resolver() -> SurfaceKeyResolver {
-    Box::new(|key: &str| match key {
-        "-1" => SurfaceKeyOutcome::Hide,
-        _ => key
-            .parse()
-            .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show),
-    })
-}
-
-fn emote(actor: &str, key: &str) -> areka_sakura::contract::TalkCue {
-    cue(actor, 0.0, CueCommand::Emote { key: key.into() })
+    TextPlace::Box(box_in(&INDEX, name))
 }
 
 /// 箱の表を入れた（閉包の有無は呼び手が決める）ランタイム。
 fn runtime_with_boxes() -> TextLayerRuntime {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.state.set_box_index(index());
+    rt.state.set_box_index(INDEX.clone());
     rt
-}
-
-fn items_at(rt: &TextLayerRuntime, actor: &str, place: TextPlace) -> Vec<TextItem> {
-    rt.state()
-        .place_state(&PlaceKey {
-            actor: ActorKey::from(actor),
-            place,
-        })
-        .map_or_else(Vec::new, |s| s.items().to_vec())
 }
 
 /// 閉包が無いあいだは、箱の表があっても `\s` を読まず、行き先は普通のバルーンのまま（要件 5.4）。

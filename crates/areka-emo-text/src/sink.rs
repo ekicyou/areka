@@ -220,12 +220,11 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+    use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
     use log_capture_kit::count_levels;
-    use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-    use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
     use super::{EmoTextSink, TextMsg, handle_text_msg, handle_text_msg_with};
+    use crate::actor::test_support::{cue, pump_until_idle, spawn_message_drain};
 
     // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
 
@@ -249,16 +248,6 @@ mod tests {
     }
 
     // ── テスト土台（実 channel・実 spawn_ui・bounded pump） ──
-
-    /// テスト用 cue（state.rs の cue ヘルパと同型）。
-    fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-        TalkCue {
-            at,
-            actor: ActorKey::from(actor),
-            command,
-            duration: 0.0,
-        }
-    }
 
     /// drain タスク終了の観測用センチネル。handler クロージャへ move し、drain future が
     /// drop された時（`Ok(Break)` 終了・全送信元切断終了のいずれも）に flag が立つ。
@@ -302,18 +291,6 @@ mod tests {
         )
         .expect("spawn_ui on the test (pump) thread must succeed");
         (EmoTextSink::new(tx), terminated, records)
-    }
-
-    /// 事前 queue 済みメッセージを全て処理し、queue が空になった時点で抜ける bounded pump。
-    ///
-    /// `PostQuitMessage` の `WM_QUIT` は posted メッセージ（spawn_local の wake 含む）が
-    /// 尽きた後にのみ配送されるため、drain タスクは queue 済み cue を全て処理してから
-    /// pump が復帰する（heartbeat・deadline・sleep 不要の決定論・ハングしない）。
-    fn pump_until_idle() {
-        // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけの
-        // 無害な Win32 呼び出し（テストスレッド＝pump スレッド）。
-        unsafe { PostQuitMessage(0) };
-        MessageLoop::run(|_, _| FilterResult::Forward);
     }
 
     // ── 注入可能形（単一の出力契約 dola::cue::CueSink + Clone + Send + 'static） ──
@@ -539,29 +516,7 @@ mod tests {
     #[test]
     fn preview_is_drained_before_subsequent_cues() {
         let ((), _warns, errors) = with_log_cage(|| {
-            let records = Arc::new(Mutex::new(Vec::new()));
-            let recs = Arc::clone(&records);
-            let (tx, _detached_drain) = areka_actor::spawn_ui(
-                "emo-text-preview-test",
-                move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
-                    handle_text_msg_with(
-                        msg,
-                        |c, _| {
-                            recs.lock().expect("records lock").push(TextMsg::Cue(c));
-                            Ok(())
-                        },
-                        |u| {
-                            recs.lock()
-                                .expect("records lock")
-                                .push(TextMsg::Upcoming(u));
-                            Ok(())
-                        },
-                        |_| Ok(()),
-                    )
-                },
-            )
-            .expect("spawn_ui on the test (pump) thread must succeed");
-            let mut sink = EmoTextSink::new(tx);
+            let (mut sink, records) = spawn_message_drain("emo-text-preview-test");
 
             let c0 = cue("0", 0.0, CueCommand::Text("アヒルや".into()));
             let c1 = cue("0", 0.1, CueCommand::Clear);

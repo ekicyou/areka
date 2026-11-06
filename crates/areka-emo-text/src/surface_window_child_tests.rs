@@ -4,7 +4,7 @@
 
 use super::*;
 
-use bevy_ecs::hierarchy::{ChildOf, Children};
+use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 
 use windows::UI::Composition::Compositor;
@@ -14,6 +14,7 @@ use wintf::com::wuc::create_dispatcher_queue_controller;
 use wintf::ecs::{Arrangement, GraphicsCommandList, HitTest, Visual};
 
 use crate::actor::TextSlotBinding;
+use crate::actor::test_support::window_children;
 
 /// テスト用 WUC dispatcher と Compositor（`surface.rs` の既存テストと同じ作り方）。
 fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {
@@ -39,13 +40,6 @@ fn spawn_window_with_slot_and_picture(world: &mut World) -> (Entity, Entity, Ent
         .id();
     world.flush();
     (window, slot, picture)
-}
-
-fn children_of(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().collect())
-        .unwrap_or_default()
 }
 
 /// 窓の子の面は、指定の並び位置（差し込み口の直後＝1）に挿さり、字の矩形 0 個のマスクの当たり判定を持ち、
@@ -74,7 +68,7 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
 
     // --- 並び: 差し込み口 → 箱 → 絵（箱は絵より手前・要件 3.7） ---
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, child, picture],
         "窓の子の面は Children の指定位置（1）へ挿さる"
     );
@@ -131,7 +125,7 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "片付けで窓の子の entity が消える"
     );
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, picture],
         "片付けた後の窓の子は元の並びに戻る"
     );
@@ -157,7 +151,7 @@ fn window_child_index_past_end_is_clamped_to_last() {
     )
     .expect("attach_window_child 失敗");
     let child = surface.window_child().expect("entity を持つ");
-    assert_eq!(children_of(&world, window), vec![slot, picture, child]);
+    assert_eq!(window_children(&world, window), vec![slot, picture, child]);
 }
 
 /// 窓の entity が居ないときは panic せず `Device` の誤りを返し、子を作らない（log-first）。
