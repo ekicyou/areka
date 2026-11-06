@@ -44,7 +44,7 @@
 | 5.9 モジュール名 | `ecs/mod.rs:14` `pub mod visual;`（公開）・`ecs/graphics/mod.rs:6` `pub mod visual;`（`Visual` 部品）・`ecs::graphics::*` を `ecs` の根で再公開。統合テストの `tests/visual/` は `Visual` 部品のテスト | 直す: 描画の木の側を改名（議題 2）。`structure.md:55` の `visual/` の行も直す |
 | 5.10 README の写し | `draw/README.md`（48 行・`DrawCommand` 等の写し＝30 番） | 直す: 型の写しを消し、ソースへの参照だけ残すか README を消す |
 | 5.11 `moved` の単位 | `matrix3x2.rs:16-26`（単位の正方形の 4 角を比べる＝88 番） | 直す: 比べる矩形（`Aabb`）を引数で受けてその角を比べる形か、平行移動は px で・線形の部分は別に比べる形（議題 10）。使い手は今 0・`wintf-visual-damage-redraw` が使う |
-| 5.12 `allow(dead_code)` と使い手 0 の働き | `builder.rs:57`・`command.rs:1`（理由つき）。`Aabb::{contains, intersect, union, translate}`＋演算子・`Point2`・`moved`・`pivot_srt`／`to_affine` は使い手 0（88 番） | 配線すれば印は外せる。使い手 0 の働きは消さず純粋なテストで固定（要件 6.6） |
+| 5.12・5.13 `allow(dead_code)` と使い手 0 の働き | `builder.rs:57`・`command.rs:1`（理由つき）。`Aabb::{contains, intersect, union, translate}`＋演算子・`Point2`・`moved`・`pivot_srt`／`to_affine` は使い手 0（88 番） | 配線すれば印は外せる。使い手 0 の働きは最後に棚卸し、後の spec に名指しの使い手があるものだけ残してテストで固定、見込みの無いものは消す（2026-11-06 開発者・要件 5.13。見直し 2 本の「消さない」の約束はこの棚卸で終わる） |
 | 6.1 WARP の足場 | `GraphicsCore::create` は `D3D_DRIVER_TYPE_HARDWARE` 固定・私的（`core.rs:147-172`・`:271-274`）。`com/d3d11.rs::d3d11_create_device` は公開で driver type を受ける。`crates/` に WARP の装置は 0 | Missing: WARP の D3D→DXGI→`ID2D1Factory1::CreateDevice`→DC の足場（議題 9） |
 | 6.1 読み戻し | wintf には無い。先例は `areka-emo-present/src/display_gpu_tests.rs:138-185`（`CPU_READ|CANNOT_DRAW` の staging へ `CopyFromBitmap` → `Map(READ)` → pitch を踏まえて行複写・約 40 行）。emo-present は wintf の下流なので借りられない | Missing: wintf のテストの中に同じ形の写し（`#[cfg(test)]` の兄弟ファイル） |
 | 6.2 全体テストで常に回る | `tools/test-all.ps1` の `cargo test --workspace --no-fail-fast -j 4` | `src/` の `#[cfg(test)]` に置けば自動で入る。環境変数の門を付けなければよい。`src/` のテストには落ちの報告と MTA の常駐（`test_crash_report.rs:142-146`）が付く |
@@ -133,7 +133,7 @@
 要件の末尾の 3 件（1〜3）は**開発者へ**（答えで公開の形・テストの作りが変わる）。ギャップ分析で見えた 4〜13 は **設計の段（`/kiro-design`）で決める設計判断**＝要件は変えない（12 だけは要件 1.11 に写して閉じた）。推奨は「推」。設計の段への約束: 4 の根の印は使い手が置くものではなく係が自動で入れる（要件 1.1・1.8「節を置くだけで」の字面を守る）。
 
 1. **「描画面の中の節」の見分け方**（要件 1.2・brief 議題 1）: **確定（2026-11-06 討議）**＝節も `Visual`（最小の描画単位）。新しい描き方の部品（`VisualDrawContent`・`VisualTransform`・`VisualClip`）を持ち `GraphicsCommandList` を持たない `Visual` は既定で描画面なし＝節。目印（例 `OwnSurface`）で描画面あり。今の描き方の `Visual` は変えない。**設計への含み**: `on_visual_add`／`insert_graphics_parts_on_window_join` が `VisualGraphics`・`SurfaceGraphics` を入れる条件に、この規則を足す（同じ bundle で入る部品を hook が見られるかは着手で確かめる）。節の下の描画面の持ち主（N4）は要件 1.11 で記録して切る。到達点（既定は描画面なし・更新の頻度で自動昇格）は要件の Introduction。
-2. **名前の衝突の解き方**（要件 5.9・brief 議題 2）: 推＝描画の木の側を改名。候補 `ecs::draw_tree`（brief）／`ecs::surface_tree`（「描画面の下の木」が名前で分かる）。型の名前は変えない。`structure.md:55` と `tests/visual/`（`Visual` 部品のテスト・そのまま）の説明も直す。
+2. **名前の衝突と性質の重なり**（要件 5.9・brief 議題 2）: **確定（2026-11-06 討議）**＝`ecs/visual/` を `ecs/graphics/visual/`（フォルダ化）へまとめる。`VisualFlags`→`Visual.is_visible`、`VisualClip`→`Visual.clip`（`ClipShape::Geometry(ID2D1Geometry)` を足す・`clip_sync` は `Geometry` を `warn!` 1 度で読み飛ばす）。節の `opacity ≠ 1.0` は `warn!` 1 度で 1.0。**設計への含み**: `NodeData` は `&Visual`（可視・clip・opacity）＋`Option<&VisualTransform>`＋`Option<&VisualDrawContent>`＋`&Arrangement`（clip の大きさ・局所の位置）＋`Option<&Children>` に変わる。`ClipShape` に COM の型が入るので `Send/Sync` の注記（要件 5.8）と `PartialEq`／`Hash` の扱い（議題 11 と同じ・番地を混ぜない）が要る。`tests/visual/`（`Visual` 部品のテスト）はそのまま。`structure.md:55` は `graphics/visual/` へ。
 3. **WARP の答えのずれ**（要件 6.4・brief 議題 3）: 推＝コードの中の値・±1・境界から離れた画素。`wintf-d2d-composite-rules` の議題 4 もこれに揃える。
 4. **木だけの根の印**（要件 1.8・1.9・`surface.rs` に届く）: ㋐ 推＝専用の部品（例 `SurfaceDrawTree`／`DrawTreeRoot`。平らにした `Vec<DrawCommand>` の控えと `unit_rect` を持ち、埋める係が木の変化で `set_changed`）。`surface.rs` の 3 つの filter と `render.rs` の読む部品に足す。㋑ `GraphicsCommandList::empty()` を根に置く約束にして `surface.rs` を触らない（要件 1.8 の「命令の列を持たず」と字面が合わない・使い手に約束を強いる）。
 5. **`WorldVisual` の座標系**（要件 2.2・2.9・4.1）: ㋐ 推＝根からの DIP（DPI が変わっても `WorldVisual` が変わらない・`build` の `root_mat` の引数は消え、`emit` が根の変形を掛ける・間引きの viewport は描画面の矩形を拡大で割った DIP）。㋑ 物理ピクセル（`build` のまま・DPI の変化で全節が埋め直し）。
@@ -142,7 +142,7 @@
 8. **切り抜きのアンチエイリアス**（要件 2.4・6.4）: `PER_PRIMITIVE`（D2D の既定・境界が滑らか）か `ALIASED`（境界が決定論に近い）。推＝既定のまま、見本は境界を避ける。
 9. **WARP の装置の作り方**（要件 6.1）: ㋐ 推＝テストの足場だけで作る（`d3d11_create_device` ＋ `D2D1CreateFactory` の 10 数行・`GraphicsCore` の公開面を増やさない）。㋑ `GraphicsCore::new_with_driver(D3D_DRIVER_TYPE)` を公開（`wintf-d2d-composite-rules` も使うが、本番の口に WARP が混ざる）。
 10. **`Matrix3x2Ext::moved` の直し方**（要件 5.11）: ㋐ 推＝比べる矩形（`Aabb`・DIP か px）を引数で受け、その 4 角の変換後の差を `eps_px` で比べる（名前どおり）。㋑ 平行移動（M31・M32）は px でそのまま、線形の部分は別の許容で比べる。使い手 0 なので署名を変えてよい。
-11. **`VisualDrawContent`／`VisualClip` の `impl Hash`**（要件 4.5）: ㋐ 推＝外す（使い手は `hash_draw` だけ・番地を混ぜる元を残さない）。㋑ 版を混ぜる形に書き直す（部品が版を持たないので不自然）。
+11. **`VisualDrawContent`／`ClipShape::Geometry` の `impl Hash`**（要件 4.5・`VisualClip` は議題 2 で `ClipShape` へ）: ㋐ 推＝外す（使い手は `hash_draw` だけ・番地を混ぜる元を残さない）。㋑ 版を混ぜる形に書き直す（部品が版を持たないので不自然）。
 12. **節の下の `Visual`**（要件 1.2・N4）: ㋐ 推＝埋める係が見つけたら `error!` を 1 行（実体名）残し、その実体と子孫を節と見ない（既存の係の壊れは直さず文書に書く）。㋑ 黙って切る（記録の無い失敗の道になる）。→ **閉じた**: 要件 1.11 に ㋐ を書いた（記録の無い失敗の道は作らない・`logging.md`）。
 13. **再帰か明示のスタックか**（要件 5.3・5.4）: ㋐ 推＝明示のスタック（`insert_graphics_parts_on_window_join` と同じ形・あふれないことが構造で言える）。㋑ 再帰に深さの引数（差分が小さい・1,024 段の再帰はスレッドの既定の 2 MB で足りる見込み）。
 
