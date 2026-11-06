@@ -79,3 +79,7 @@
 
 - **件 1: トークの終わりの時刻が ms の格子から 1 ulp 外れうる**。`audit-parsers-sakura` は台本の開始時刻を整数 ms で積み、命令ごとに 1 回だけ秒へ直す形にした（同 spec の design.md「開始時刻の積み（8）」）。けれど終わりの時刻は dola が f64 の和で出す＝`crates/dola/src/cue/sheet.rs` の `absolute_end_time`（85〜91 行目・`cue.start_time + cue.duration` の max）と、canonical 変換が焼き込む占有の終わり（`crates/dola/src/cue/schedule.rs` 69 行目の `max(start_time + duration)`）。150 ms＋800 ms が 0.9500000000000001 になり、Tick の式 `(now-base) as f64 / 1000.0` と比べて `TalkDone` と後始末が 1 刻み遅れうる（同 spec の design.md「残る危うさ」・research.md 12 節で測った）。直し方（終わりを ms の格子で出す・合図の長さを整数 ms で持つ、など）は要件の段で選ぶ。呼び手は `crates/areka-sakura/src/compile.rs` の `append_epilogue`（`sheet.absolute_end_time()`）。
 - **件 2: `CuePlayer::stop` を呼ぶ本番のコードが 0**。`crates/dola/src/cue/runtime.rs` 361 行目の `stop` は、`audit-parsers-sakura` の指摘 78 の直しの後、呼ぶのが dola のテストだけになった（同 spec の tasks.md の Implementation Notes「8.1 への申し送り（6.1 のレビュー）」）。消すか、語彙の口として理由の doc を付けて残すかを、この spec の見直しで決める（消す前にツリー全体の参照を確かめる＝本文の Constraints）。
+
+## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
+
+- **件 3: 今の clippy で `-D warnings` が赤**。`cargo clippy -p dola --all-targets --no-deps -- -D warnings` が lib で 21 件・lib test で 23 件を出す（`collapsible_if` が `crates/dola/src/validate/rules.rs`・`validate/mod.rs` ほかに多数、`too_many_arguments`〔`runtime/instance_manager/mod.rs` 71 行目ほか〕、`manual_range_contains`、`doc_lazy_continuation`〔`runtime/conflict_resolver.rs` 42 行目〕）。振る舞いを変えずに直すか、決めて許す。起票の訳: 持ち主のこの spec の受け持ちの範囲と重なる。

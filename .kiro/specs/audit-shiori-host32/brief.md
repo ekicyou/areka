@@ -76,3 +76,9 @@
 ## 2026-10-23 `shiori4-api` からの申し送り
 
 - 開発者の決定（10-23「COM-SHIORI インターフェースの作りかけは排除し、shiori4 に完全移行」）で、`crates/shiori-abi/`（COM の面）と `crates/shiori4-testdll/` は `shiori4-api` が消す。この spec が着手するときに、まだ残っていれば受け持ちから外してよい（直しても消えるファイル）。
+
+## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
+
+- **件 1: i686 の helper が素の `LoadLibraryW` で SHIORI の DLL を読む**。`crates/shiori-host32-helper/src/shiori_proxy.rs` は依存の探し先を絞っていない。`audit-ghost-catalog` は同じプロセス内の読み込み（`crates/areka-ghost/src/shiori_inproc.rs`）を `LoadLibraryExW` と `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` へ直した（同 spec の #28）。helper の側も同じ形へそろえる。
+- **件 2: helper が親の環境変数をそのまま受け継ぎ、`PASTA_DEBUG` が立っていると pasta が 127.0.0.1:9276 を取り合う**。`crates/shiori-host32-host/src/process_host.rs`（262〜272 行目あたり）は環境を消さずに helper を起こす。`crates/real-run-kit/src/launch.rs`（213〜214 行目）は子へ `PASTA_DEBUG=0` を渡して避けている。`audit-ghost-catalog` は実物の pasta のテストを錠で 1 本ずつにして当座をしのいだ（`crates/areka-ghost/tests/ghost/common.rs` の `real_pasta_turn`）。helper を起こす所で `PASTA_DEBUG=0` を渡すか、渡す口を設けるかを決める。
+- 起票の訳（2 件とも）: 持ち主のこの spec の受け持ちの範囲と重なる。
