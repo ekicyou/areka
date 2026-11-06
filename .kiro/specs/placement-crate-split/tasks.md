@@ -173,19 +173,19 @@
   - _Depends: 7.1, 7.2, 7.3, 7.4, 7.5_
   - _Requirements: 5.10, 6.6_
 
-- [ ] 8. 移しただけであることを示す（段 7）
+- [x] 8. 移しただけであることを示す（段 7）
 - [x] 8.1 前後の比べと静的な確かめをそろえる
   - 完了の時のテストの名前の一覧を取り、着手の一覧と多重集合で比べ、差が設計の表の 11 名（各 +1）だけであることを示す（doc コメントのコードが新しく回ったら `text` の囲みにして 0 に戻す）
   - ワークスペース全体を全部の対象で組んで警告 0、配置の crate の本番の依存の木に本体が出ないこと、`Cargo.lock` の差が新しい crate と本体の依存だけであること、本番のソースの `windows` の名前空間が 2 つだけであることを示す
   - 第三者の表を `cargo about generate` で作り直す
   - 完了の状態: 証跡が実装の記録にそろい、説明できない差が無い
   - _Requirements: 1.6, 1.7, 1.8, 8.1, 8.2, 8.3, 8.4, 8.8_
-- [ ] 8.2 全体テストを回す
+- [x] 8.2 全体テストを回す
   - 排他テストの机を取って `tools/test-all.ps1` を 1 回回す（約 50 分・裏で走らせる）
   - 触っていない crate だけが赤のときは止めて報告し、赤の crate だけをもう 1 回回す
   - 完了の状態: 全体テストが緑
   - _Requirements: 8.5_
-- [ ] 8.3 実機テストを新しい出所の名前で 1 本回す
+- [x] 8.3 実機テストを新しい出所の名前で 1 本回す
   - 画面の操作の順を排他テストの机で取り、`window_link_real_run.rs` を `areka_placement=debug` を含む `RUST_LOG` で 1 回走らせる
   - 拾ったログに配置の診断の行（新しい出所の名前）があることを示す。ほかの実機テストは回さない
   - 完了の状態: 実機テストが緑で、診断の行の抜き書きが記録にある・段 7 のコミット
@@ -241,3 +241,8 @@
 - 7.6: `crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` で `src/placement/`・`areka::placement`（`placement_tests` を除く）・`areka/examples/window-placement` が 0 件。分岐の対応表の `"placement/…_tests.rs"` は見出しの札でパスではない。
 - 8.1: 完了の一覧（`78d19323`・`target/placement-crate-split/tests-after.txt`）は `: test$` が 14071（着手 14058 から +13）。最後の `::` から後ろの多重集合の差は 13 名で各 +1・減りは 0。設計の表の 11 名に、新しい読み口 `crate_source_test_support.rs` の自分の確かめ 2 本（`the_reader_reads_a_lower_crate`・`a_missing_path_stops_with_a_panic`）が加わる。この 2 本は移したテストではないので、設計の表（「部品と口」Verification）に行を足した（タスクの文の「11 名」は 13 名と読む）。新しい文書のテストは 0。
 - 8.1: `cargo check --workspace --all-targets` 警告 0。`cargo tree -p areka-placement -e normal` に本体（`areka v`）は出ない。`Cargo.lock` の差（`8c518c5b` から）は新しい crate の項と本体の依存の 1 行だけ。配置の本番のソースの `windows` の名前空間は `Win32::Foundation`・`Win32::UI::WindowsAndMessaging` の 2 つだけ。`cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` の差は MIT の数 254→255 と `areka-placement 0.1.0` の 1 行だけ。
+- 8.2: 排他テストの机を取って `pwsh -NoProfile -File tools/test-all.ps1` を 1 回（`b08abb60`・始めた時の未コミット 0）。13 段すべて OK（x64 のワークスペース 518 秒・i686 41 秒）・`all steps green`。
+- 8.3: 排他テストの机を取って `AREKA_WINDOW_LINK_REAL_RUN=1 cargo test -p areka --test window_link_real_run` を 1 回（RUST_LOG に `areka_placement=debug`）。1 passed・JUDGE 13 件すべて PASS。`target/wl-signoff/run1.log` に `areka_placement::diag` の行が 95・`run2.log` に 17、旧い `areka::placement` の行は 0。抜き書き:
+  - `2026-11-06T10:47:51.244783Z DEBUG actor{actor=emo-text}: areka_placement::diag: [diag.window_move] route=BalloonFollow entity=31v0 kind=balloon scope=1 x=1120 y=330 w=- h=- dpi=192`
+  - `2026-11-06T10:47:37.597073Z  INFO actor{actor=emo-text}: areka_placement::sticky_group_ledger: sticky: 窓の組の一覧 event="sticky_groups" action="descript_seed" groups=[StickyGroup { members: {0, 1}, source: Descript }]`
+  - `2026-11-06T10:47:52.579509Z  INFO actor{actor=emo-text}: areka_placement::follow::sticky_follow: sticky: 組の相手をドラッグに連れ動かした event="sticky_follow" trigger="drag" scope=0 partners=[1] dx=240 dy=-120`
