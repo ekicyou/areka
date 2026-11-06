@@ -12,8 +12,8 @@ use wintf::ecs::window::StayOnTop;
 use super::super::*;
 use crate::emo2_boot::frame::window_state::run_window_state_phase;
 use crate::emo2_boot::window_state_cue::WindowStateDirective;
-use crate::placement::spawn::GhostWindows;
-use crate::placement::zorder_group_ledger::parse_zorder_tokens;
+use areka_placement::spawn::GhostWindows;
+use areka_placement::zorder_group_ledger::parse_zorder_tokens;
 
 /// ゴーストの全部の窓（キャラクターとバルーン）。
 fn all_windows(windows: &GhostWindows) -> Vec<Entity> {

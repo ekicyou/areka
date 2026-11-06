@@ -31,7 +31,7 @@ use crate::emo2_boot::ghost_switch::{
 };
 use crate::emo2_boot::spine::{Progress, ScriptedShioriBackend, wait_until};
 use crate::ghost_session::{GhostSlot, open_ghost_windows};
-use crate::placement::spawn::{GhostWindowMarker, GhostWindows};
+use areka_placement::spawn::{GhostWindowMarker, GhostWindows};
 
 /// B の `descript.txt` の `name`（フォルダ名と違う綴り＝Ref7 がフォルダ名でなく名前を運ぶことを見る）。
 pub(super) const B_NAME: &str = "ビー";

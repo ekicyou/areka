@@ -46,7 +46,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::BOOL;
 
 const REAL_RUN_ENV: &str = "AREKA_WINDOW_LINK_REAL_RUN";
-const RUST_LOG: &str = "info,kanade=debug,areka::placement=debug,areka::input_events=debug,\
+const RUST_LOG: &str = "info,kanade=debug,areka_placement=debug,areka::input_events=debug,\
 areka::menu=debug,wintf::ecs::window_proc::keyboard=debug,wintf::ecs::clickthrough=debug";
 const SAKURA: &str = "ぱすた";
 const KERO: &str = "窓";

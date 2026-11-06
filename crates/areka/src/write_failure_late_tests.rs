@@ -12,7 +12,7 @@ use wintf::AppExit;
 
 use super::*;
 use crate::app_exit::FirstExit;
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 fn failure(reason: &str) -> PersistFailure {
     PersistFailure {
@@ -31,7 +31,7 @@ fn installed_world() -> World {
     world
 }
 
-fn count(events: &[LogEvent], event: &str) -> usize {
+fn count(events: &[CapturedEvent], event: &str) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
@@ -46,7 +46,7 @@ fn a_failure_after_another_origin_is_told_at_close() {
     quit_app(&mut world, ExitOrigin::Escape);
     sender(&world).unwrap().send(failure("late")).unwrap();
 
-    let (_, drained) = capture_logs(|| drain_system(&mut world));
+    let (_, drained) = capture(|| drain_system(&mut world));
 
     assert_eq!(count(&drained, "memory_write_failed"), 0, "{drained:?}");
     assert_eq!(
@@ -55,7 +55,7 @@ fn a_failure_after_another_origin_is_told_at_close() {
     );
 
     let late = take_receiver(&mut world);
-    let (told, events) = capture_logs(|| tell_at_close(None, None, late, true));
+    let (told, events) = capture(|| tell_at_close(None, None, late, true));
 
     assert_eq!(
         told.expect_err("告げたので失敗").code(),
@@ -80,7 +80,7 @@ fn a_failure_after_a_write_failure_is_still_drained() {
     quit_app(&mut world, ExitOrigin::MemoryWriteFailed(failure("first")));
     sender(&world).unwrap().send(failure("second")).unwrap();
 
-    let (_, events) = capture_logs(|| drain_system(&mut world));
+    let (_, events) = capture(|| drain_system(&mut world));
 
     assert_eq!(count(&events, "memory_write_failed"), 1, "{events:?}");
     assert!(take_receiver(&mut world).unwrap().try_recv().is_err());
@@ -94,7 +94,7 @@ fn a_failure_after_os_session_end_is_drained_and_logged() {
     quit_app(&mut world, ExitOrigin::SessionEnd);
     sender(&world).unwrap().send(failure("late")).unwrap();
 
-    let (_, events) = capture_logs(|| drain_system(&mut world));
+    let (_, events) = capture(|| drain_system(&mut world));
 
     assert_eq!(count(&events, "memory_write_failed"), 1, "{events:?}");
     assert_eq!(

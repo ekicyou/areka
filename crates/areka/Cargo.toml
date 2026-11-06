@@ -37,6 +37,8 @@ areka-mcp = { path = "../areka-mcp" }
 # 書ける根の形の判断と写す手続き（areka-P0-user-data-root・要件 4.6）。ワークスペースの中の
 # path 依存で、外部（crates.io）依存の追加ではない。
 areka-user-data = { path = "../areka-user-data" }
+# 窓配置（spec: placement-crate-split 要件 1.4）。ワークスペースの中の path 依存で、外部（crates.io）依存の追加ではない。
+areka-placement = { path = "../areka-placement" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
@@ -91,6 +93,8 @@ sample-ghost-kit = { path = "../sample-ghost-kit" }
 # 実機の試験の窓口（spec: areka-P0-real-run-mcp-kit）。検体の窓口を本番の表に持つので、
 # [dependencies] へは決して置かない（見張り sample_path_guard_test が赤にする＝D-2）。
 real-run-kit = { path = "../real-run-kit" }
+# 配置のテストの支えを本体のテストにだけ開ける（spec: placement-crate-split 要件 3.5）。本番の表の同じ依存に機能を足すだけ。
+areka-placement = { path = "../areka-placement", features = ["test-support"] }
 # オフラインの書き出しの検体の 1 色塗りの α 付き PNG を書き、書き出した PNG を RGBA で読む
 # （spec: areka-P0-offline-surface-dump）。areka-emo-atlas と同じ版で、Cargo.lock に新しいクレートは増えない。
 image = { version = "0.25.10", default-features = false, features = ["png"] }

@@ -39,7 +39,7 @@ use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standar
 use crate::emo2_boot::spine::{Progress, RecordedCall, run_bounded_watching};
 use crate::install::procedure::Overwritten;
 use crate::install::{InstallOrder, InstallOrigin, SubmitVerdict, submit};
-use crate::placement::persist::PersistWiring;
+use areka_placement::persist::PersistWiring;
 
 /// 書庫が置くファイル（宛先のゴーストのフォルダからの相対）と中身。
 const MARKER: &str = "ghost/master/overwritten.txt";

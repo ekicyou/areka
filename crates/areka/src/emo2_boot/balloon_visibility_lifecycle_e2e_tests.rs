@@ -42,7 +42,7 @@ use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use crate::emo2_boot::target_map::balloon_target;
 use crate::input_events::balloon::BalloonWiring;
-use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::{configured_timeout_secs, run_balloon_visibility_phase};
 
@@ -168,7 +168,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     world.insert_resource(FrameTime(now));
 
     // ── 本番の相を 1 フレーム回す ──
-    let (_, events) = capture_logs(|| run_balloon_visibility_phase(&mut wiring, &mut world));
+    let (_, events) = capture(|| run_balloon_visibility_phase(&mut wiring, &mut world));
 
     // ⑴ 判断中核が持つ占有終端が台本の占有区間の終端と一致する。
     assert_eq!(
@@ -178,7 +178,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
     );
 
     // ⑵ その終端を起点に計測が確立している（起点を現在時刻に取り違えるとここで落ちる）。
-    let started: Vec<&LogEvent> = events
+    let started: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains("タイムアウト計測を開始"))
         .collect();

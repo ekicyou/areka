@@ -347,7 +347,7 @@ fn a_wait_ended_by_a_no_change_pass_also_re_arms_the_record() {
 ///
 /// 計画の解決（areka の `resolve_member`）は在庫と entity の実在だけを見て HWND を
 /// 要求しないので、計画は HWND 生成より前に公開されうる（`WindowHandle` は
-/// `placement/spawn.rs` のとおり entity より遅れて付く）。ここで印を落とすと、
+/// `crates/areka-placement/src/spawn.rs` のとおり entity より遅れて付く）。ここで印を落とすと、
 /// あとからハンドルが現れても**計画の内容は変わらないので再公開されず、印は二度と
 /// 立たない**＝鎖が永久に書かれない。
 #[test]

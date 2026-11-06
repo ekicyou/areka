@@ -4,12 +4,12 @@
 
 ## Problem
 
-開発者は、areka のコードに残っているバグ・危ない所・負荷に弱い所・テストの抜け・遅い所・要らないコードを、一度まとめて直したい。今までは、各 spec が自分の触る所だけを見てきた。全体を同じ物差しで見直したことはない。物差しは ponytail のプラグイン（5.3.2・利用者全体に入れてある）の `/ponytail:ponytail-audit`。この spec は **areka 本体の配置のうち追従と移り変わりの判定** を受け持つ。
+開発者は、areka のコードに残っているバグ・危ない所・負荷に弱い所・テストの抜け・遅い所・要らないコードを、一度まとめて直したい。今までは、各 spec が自分の触る所だけを見てきた。全体を同じ物差しで見直したことはない。物差しは ponytail のプラグイン（5.3.2・利用者全体に入れてある）の `/ponytail:ponytail-audit`。この spec は **配置の crate（`areka-placement`）のうち追従と移り変わりの判定** を受け持つ。
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/placement/` の `follow*`・`transition_*`。
-- 大きさ: 47 ファイル・コード 7,154 行・テスト 19,569 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
+- 受け持つファイル: `crates/areka-placement/src/` の `follow*`（`follow.rs`・`follow/` の下の全部・`follow_*_tests.rs`・`follow_test_support.rs`）と `transition_*`、`crates/areka/src/placement_tests/` の `transition_*`（テスト専用の判定器 `transition_judge*` とその檻・`transition_signoff*`）。`placement-crate-split`（2026-11-06）が `crates/areka/src/placement/` から移した。
+- 大きさ: 56 ファイル・コード 5,778 行・テスト 24,099 行（`placement-crate-split` の段 5 `dfc9974f` の時点。`_tests.rs`・`_test_support.rs`・`placement_tests/` の全部をテストに数えた）。起票のとき（main `e3c2cbe4`）は `crates/areka/src/placement/` の 47 ファイル・コード 7,154 行・テスト 19,569 行。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
 ## Desired Outcome
@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`placement-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 1 本目。受け持つファイルはその着地で `crates/areka-placement/src/` へ移り、同 spec がこの brief の「受け持つファイル」を書き換える。`transition_*` のうちテスト専用の判定器 `transition_judge*` は本体へ、のちに `areka-runtime` へ移る）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`placement-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 1 本目。受け持つファイルはその着地で `crates/areka-placement/src/` へ移り、同 spec がこの brief の「受け持つファイル」を書き換えた。`transition_*` のうちテスト専用の判定器 `transition_judge*` は本体へ、のちに `areka-runtime` へ移る）。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
@@ -72,3 +72,32 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## placement-crate-split からの申し送り
+
+`placement-crate-split`（配置を `crates/areka-placement` へ分けた spec）は配置の振る舞いを変えなかった。直したくなった所は直さず、ここへ書いた。行番号は分けた時点（段 5 `dfc9974f`）のもので、着手のときに確かめ直す。
+
+### ⑴ 直さなかった不具合・重なり
+
+- 分ける作業のあいだに見つけた不具合は無い。
+- wintf との重なり（整理は直さずに残した）: `follow/work_area.rs` の `MonitorSnapshot` が包む `Monitor`（wintf の列挙の型）。`diag.rs` の `MonitorRecord`・`resolver.rs` の `RectPx` の重なりは `audit-placement-core` が持つ。
+
+### ⑵ 理由の文が古くなった `#[allow]` と説明
+
+配置は bin の中のモジュールから lib の crate になり、examples も `#[path]` でソースを取り込まなくなった。次の理由の文は「areka は lib を持たない bin crate ゆえ `pub` でも dead_code を免除されない」「examples は `#[path]` で取り込む」を前提にしていて、もう事実でない。lib の `pub` の項目には lint が鳴らないので、属性そのものが要るかも確かめる。
+
+- `follow.rs` の `#[allow(unused_imports)]`: 83（理由 80〜82 行）・103（98〜102 行）・112（110〜111 行）・130 と 132（126〜129 行）・138（134〜137 行・「結線は main.rs／runtime 側の領分」）・157（153〜156 行）・167（165〜166 行）・171（169〜170 行）。147〜149 行の説明（「areka は bin crate であり `pub(crate)` はクレート内に留まる」）も、今は `pub use` なので古い。
+- `follow/work_area.rs:278` の `#[allow(dead_code)]`（理由 275〜277 行）。
+- `follow/work_area_clamp.rs` の `#[allow(dead_code)]`: 38・41・44・48・63・79・95・118・202（理由はモジュールの説明 18〜20 行と各行の「examples には無い」「同上」）。
+- `transition_diag.rs` の `#[allow(dead_code)]` 14 個: 94・115・139・160・192・244・248・261・271・275・378・416・499・770（各行の理由は「語彙先着」で、拠り所のモジュールの説明 38〜43 行が「areka は lib ターゲットを持たない bin crate」を理由にしている）。
+- 属性ではない説明: `follow/offset_space.rs:49〜58`（結線の履歴に「areka は lib target を持たない bin crate」）、`crates/areka/src/placement_tests/transition_judge.rs:47`（判定器を本番に置かない理由に「bin crate ゆえ」）。
+- 古くなっていない `#[allow]`（理由が今も事実）: `follow.rs:108`・`follow.rs:123`・`follow/window_move.rs:449`。
+
+### ⑶ 外から使うために開けた項目（2.5・段 2）
+
+本体の bin と本体のテストが外から使うので、`pub(crate)` から `pub` にした。要らない公開が無いかを見直す。`follow*` 以外の分は `audit-placement-core` に書いた。すべて `crates/areka-placement/src/` の下。
+
+- `follow.rs` の再公開: `OffsetRescale`／`rescale_follow_offset` の組・`on_char_drag_end`（組から分けた）・`ClampScene`／`place_chain_in_work_area`（組から分けた）・move_shift の組 `apply_balloon_shift`・`apply_char_shift`・`rebase_shift_axes`・`shift_is_current`。
+- 再公開の裏の定義: `follow/drag_follow.rs` `on_char_drag_end`・`BalloonFollowTrigger`・`follow_balloon`、`follow/move_shift.rs` の 4 関数、`follow/sticky_follow.rs` `CharDragSession`・`begin_char_drag`、`follow/work_area_clamp.rs` `ClampScene`・`place_chain_in_work_area`。
+- 公開の項目が名指すためだけに開けた型（要件 2.5 の注つき）: `follow/work_area_clamp.rs` `ChainPlacement`・`ChainClampOutcome`。
+- 段 2 で素の `pub` にした本番の項目（本体のテストが使う）: `follow/work_area_clamp.rs` `WORK_AREA_CLAMP_TAG`・`follow/drag_follow.rs` `on_balloon_drag`・`follow/sticky_follow.rs` `sync_drag_writer`（`follow.rs` の再公開も組から分けた）。

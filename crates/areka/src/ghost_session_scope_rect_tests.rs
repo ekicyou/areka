@@ -342,10 +342,10 @@ fn os_window_rect_real_window_answers_physical_pixels_from_unaware_thread() {
 mod wiring {
     use super::super::*;
     use super::{LEFT_SCREEN, keys, rect_of};
-    use crate::placement::follow::OffsetBase;
-    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-    use crate::placement::source::GhostTitles;
-    use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+    use areka_placement::follow::OffsetBase;
+    use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+    use areka_placement::source::GhostTitles;
+    use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
     use areka_sylphya::{AskerContext, AskerId, DottedResolution, MirrorImage, SharedMirror};
     use bevy_ecs::schedule::Schedule;
     use bevy_ecs::schedule::SingleThreadedExecutor;

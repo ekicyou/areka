@@ -4,7 +4,7 @@
 //! # ここが押さえる欠陥
 //!
 //! 拡大率遷移で追従オフセットが新しい値へ追随しても、続く窓書込が
-//! [`resize_window_to`](crate::placement::follow::resize_window_to) の**手順 4 のべき等
+//! [`resize_window_to`](areka_placement::follow::resize_window_to) の**手順 4 のべき等
 //! skip**（位置と寸がともに同一）で抜けると、手順 6 の随伴追従に到達しない。すると
 //! 「オフセットは直ったのにバルーンは次に何かが動くまで古い位置に居る」——本仕様が
 //! 消しに来た欠陥そのものが残る。`dpi_phase_with` は追随の戻り値と反映の戻り値を
@@ -39,9 +39,9 @@
 use wintf::ecs::WindowPos;
 use wintf::ecs::window::SetWindowPosCommand;
 
-use crate::placement::diag::PlacementRoute;
-use crate::placement::follow::BalloonFollow;
-use crate::placement::resolver::PointPx;
+use areka_placement::diag::PlacementRoute;
+use areka_placement::follow::BalloonFollow;
+use areka_placement::resolver::PointPx;
 
 use super::test_support::{
     FakeReports, FrameHarness, s2_monitors_with_work_area, s2_work_area_for_dpi,

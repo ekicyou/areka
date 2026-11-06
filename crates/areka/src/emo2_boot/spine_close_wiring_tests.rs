@@ -25,7 +25,7 @@ use super::{
     ScriptedShioriBackend, SpineHarness, wait_until,
 };
 use crate::emo2_boot::frame::run_ghost_quit_phase;
-use crate::placement::spawn::GhostWindowMarker;
+use areka_placement::spawn::GhostWindowMarker;
 
 /// 終了挨拶（`OnClose` の応答）。実物と同じく **`\-`（終了指令）で終わる**。
 ///

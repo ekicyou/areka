@@ -9,7 +9,7 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::placement::test_support::capture_logs;
+use log_capture_kit::capture;
 
 /// 一時の置き場（フォルダそのものがゴーストの置き場）にゴーストを置く。
 fn put_temporary_ghost(temp: &Path, folder: &str) -> PathBuf {
@@ -40,7 +40,7 @@ fn running_ghost_in_temporary_root_installs_into_remembered_root() {
     let dest = CatalogDestinations::new(list_with_temporary(&temp, std::slice::from_ref(&one)))
         .expect("作れる")
         .with_running(Some(running));
-    let (answers, events) = capture_logs(|| [dest.ghost_root("emo"), dest.ghost_root("Fresh")]);
+    let (answers, events) = capture(|| [dest.ghost_root("emo"), dest.ghost_root("Fresh")]);
     assert_eq!(
         answers,
         [one.clone(), one],

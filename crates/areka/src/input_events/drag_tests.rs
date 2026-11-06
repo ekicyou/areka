@@ -21,7 +21,7 @@ use wintf::ecs::{PhysicalPoint, Point, WindowPos};
 use super::super::{MouseWiring, on_char_pointer_moved, on_char_pointer_pressed};
 use super::on_char_drag_start;
 use super::test_support::{Rig, SCOPE, ended, fake_hit, started};
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 押した位置の窓の中の点（当たり判定のある位置）。
 const PRESS_LOCAL: Point = Point { x: 60, y: 100 };
@@ -389,12 +389,12 @@ fn wrapper_keeps_window_position_and_saved_pairs_unchanged() {
 /// A9 の 1 件: 送らない経路の記録（`mouse_drag_dropped`／`mouse_send_failed`）がちょうど 1 件で、
 /// 理由・種類・重さが期待どおり。
 fn assert_one_record(
-    events: &[LogEvent],
+    events: &[CapturedEvent],
     event: &str,
     reason: Option<&str>,
     level: tracing::Level,
 ) {
-    let records: Vec<&LogEvent> = events
+    let records: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| {
             matches!(
@@ -416,21 +416,21 @@ fn assert_one_record(
 }
 
 /// 本番の配りで開始を 1 回配り、その間の記録を返す。
-fn dispatch_start_capturing(rig: &mut Rig) -> Vec<LogEvent> {
+fn dispatch_start_capturing(rig: &mut Rig) -> Vec<CapturedEvent> {
     let press = offset(rig.position_of(rig.char_w), PRESS_LOCAL);
     rig.put(started(rig.char_w, press));
-    capture_logs(|| rig.tick()).1
+    capture(|| rig.tick()).1
 }
 
 /// 受け手を直に呼んで開始を 1 回知らせ、その間の記録を返す（本番の配りでは作れない防御の枝）。
-fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<LogEvent> {
+fn call_start_capturing(rig: &mut Rig, entity: Entity, target: Entity) -> Vec<CapturedEvent> {
     let ev = Phase::Bubble(DragStartEvent {
         target,
         position: PhysicalPoint::new(0, 0),
         is_primary: true,
         timestamp: Instant::now(),
     });
-    capture_logs(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1
+    capture(|| on_char_drag_start(&mut rig.world, entity, entity, &ev)).1
 }
 
 /// A9（要件 8.2・9.2）: `MouseWiring` なし → `mouse_drag_dropped`（`no_wiring`・debug）1 件・知らせ 0 件。
@@ -502,7 +502,7 @@ fn no_window_pos_records_one_drop() {
         .position = None;
     rig.put(started(rig.char_w, press));
 
-    let events = capture_logs(|| rig.tick()).1;
+    let events = capture(|| rig.tick()).1;
 
     assert_one_record(
         &events,

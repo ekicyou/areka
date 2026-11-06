@@ -4,12 +4,12 @@
 
 ## Problem
 
-開発者は、areka のコードに残っているバグ・危ない所・負荷に弱い所・テストの抜け・遅い所・要らないコードを、一度まとめて直したい。今までは、各 spec が自分の触る所だけを見てきた。全体を同じ物差しで見直したことはない。物差しは ponytail のプラグイン（5.3.2・利用者全体に入れてある）の `/ponytail:ponytail-audit`。この spec は **areka 本体の配置の残り（窓の出し方・設定・保存・重なりの順・DPI ほか）** を受け持つ。
+開発者は、areka のコードに残っているバグ・危ない所・負荷に弱い所・テストの抜け・遅い所・要らないコードを、一度まとめて直したい。今までは、各 spec が自分の触る所だけを見てきた。全体を同じ物差しで見直したことはない。物差しは ponytail のプラグイン（5.3.2・利用者全体に入れてある）の `/ponytail:ponytail-audit`。この spec は **配置の crate（`areka-placement`）の残り（窓の出し方・設定・保存・重なりの順・DPI ほか）** を受け持つ。
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/placement/` のうち、`audit-placement-follow` の持ち物でないもの全部。
-- 大きさ: 73 ファイル・コード 7,661 行・テスト 20,167 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
+- 受け持つファイル: `crates/areka-placement/` のうち `audit-placement-follow` の持ち物でないもの全部（`Cargo.toml`・`examples/` を含む）と、`crates/areka/src/placement_tests/` のうち `transition_*` でないもの（`mod.rs` を含む）。`placement-crate-split`（2026-11-06）が `crates/areka/src/placement/` から移した。
+- 大きさ: 114 ファイル・コード 10,459 行・テスト 27,424 行（`placement-crate-split` の段 5 `dfc9974f` の時点。`_tests.rs`・`_test_support.rs`・`test_support.rs`・`test_crash_report.rs`・`placement_tests/` の全部をテストに数えた）。起票のとき（main `e3c2cbe4`）は `crates/areka/src/placement/` の 73 ファイル・コード 7,661 行・テスト 20,167 行。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
 ## Desired Outcome
@@ -46,7 +46,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`placement-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 1 本目。受け持つファイルはその着地で `crates/areka-placement/src/` へ移り、同 spec がこの brief の「受け持つファイル」を書き換える）。
+- **Upstream**: ponytail のプラグイン 5.3.2（`~/.claude/plugins`・`/ponytail:ponytail-audit`）。前に着地を待つ spec＝`placement-crate-split`（2026-10-28 `/kiro-discovery`・本体の crate 分けの 1 本目。受け持つファイルはその着地で `crates/areka-placement/src/` へ移り、同 spec がこの brief の「受け持つファイル」を書き換えた）。
 - **Downstream**: なし。
 
 ## Existing Spec Touchpoints
@@ -72,3 +72,45 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## placement-crate-split からの申し送り
+
+`placement-crate-split`（配置を `crates/areka-placement` へ分けた spec）は配置の振る舞いを変えなかった。直したくなった所は直さず、ここへ書いた。行番号は分けた時点（段 5 `dfc9974f`）のもので、着手のときに確かめ直す。
+
+### ⑴ 直さなかった不具合・重なり
+
+- 分ける作業のあいだに見つけた不具合は無い。
+- wintf との重なり（整理は直さずに残した）: `diag.rs` の `MonitorRecord` と wintf の `ecs/window/transition_diag.rs` の `MonitorRecord`、`resolver.rs` の `RectPx` と wintf の矩形の型。`follow/work_area.rs` の `MonitorSnapshot` が包む `Monitor` の重なりは `audit-placement-follow` が持つ。
+
+### ⑵ 理由の文が古くなった `#[allow]` と説明
+
+配置は bin の中のモジュールから lib の crate になり、examples も `#[path]` でソースを取り込まなくなった。次の理由の文は「areka は lib を持たない bin crate ゆえ `pub` でも dead_code を免除されない」「examples は `#[path]` で取り込む」を前提にしていて、もう事実でない。lib の `pub` の項目には lint が鳴らないので、属性そのものが要るかも確かめる。
+
+- `#[allow]`: `lib.rs:71`（`#[allow(unused_imports)]`・理由は 69〜70 行）・`lib.rs:123`（「`#[path]` include する example」）・`lib.rs:789`（「呼び手は example とテスト」・`pub` なので属性が要らない見込み）。
+- `diag.rs:53〜56` の説明（残る 2 つの `#[allow(dead_code)]`＝167 行・248 行の前置き）が「areka は bin crate」を理由にしている。167・248 行の個別の理由（語彙の口・檻専用の列）は今も事実。
+- 属性ではない説明: `descript_window_keys.rs:7`・`measure_first_frame.rs:11`・`spawn.rs:35`・`spawn.rs:537`（examples の `#[path]` 取り込みのために `crate::` を使わない、という理由）、`crates/areka/src/placement_tests/spawn_assembly_tests.rs:185`（「example の `#[path]` include 不変条件」）。
+- 古くなっていない `#[allow(dead_code)]`（理由が今も事実）: `descript_window_keys.rs:188`・`lib.rs:838`・`resolver.rs:418`・`source.rs:131`・`zorder_group_ledger.rs:668`。
+
+### ⑶ 外から使うために開けた項目（2.5・3.3・3.8・段 2）
+
+本体の bin と本体のテストが外から使うので、`pub(crate)` から `pub` にした。要らない公開が無いかを見直す。`follow*` の分は `audit-placement-follow` に書いた。すべて `crates/areka-placement/src/` の下。
+
+- `lib.rs` のモジュール（E0603）: `balloon_limit`・`balloon_lock`・`balloon_syncscale`・`descript_window_keys`・`dpi_sync`・`face_windowposition`・`reseed`・`reset_balloon_pos`・`reset_pos`・`script_alignment`・`sticky_group_ledger`・`zorder_chain_compose`・`zorder_group_ledger`。
+- `lib.rs`: `pub use windowposition::scale_signed` と定義の `windowposition.rs::scale_signed`（E0364）・`load_scope_windowpositions`・`primary_monitor`。
+- 項目: `source.rs` `read_kv_lenient`・`balloon_limit.rs` `apply_balloon_limit`・`balloon_lock.rs` `BalloonLockLedger`・`seed_balloon_lock`・`replace_balloon_lock_descript`・`apply_script_balloon_lock`・`balloon_syncscale.rs` `register`・`dpi_sync.rs` `DpiSyncHold`・`HoldSite`・`current_frame`・`apply_dpi_phase_gate`・`defers_window_write`・`face_windowposition.rs` `apply_face_windowposition`・`reseed.rs` `BalloonPlacementInputs`・`apply_shell_descript`・`reanchor_char_windows`・`reset_pos.rs` のフィールド `DefaultPlacementBasis.source`・`.balloon`（E0451）。
+- 段 2 で素の `pub` にした本番の項目（本体のテストが使う）: `dpi_sync.rs` `DPI_SYNC_HOLD_MAX_FRAMES`・`DpiSyncDecision`・`evaluate`・`DpiSyncOutcome` とフィールド（`decision`・`window_dpi`・`table_dpi`・`since_frame`）・`DpiSyncHold.since_frame`、`balloon_limit.rs` `BALLOON_LIMIT_CLAMP_TAG`、`balloon_lock.rs` `HoldReason`・`BalloonLockLedger::reason`。
+- `cfg(any(test, feature = "test-support"))` で開けた支え: `lib.rs` `pub mod test_support`（`WA`・`with_com_initialized`・`synth_declared_dpi_ghost`・`EMILY_SHAPED_GHOST_DESCRIPT`・`EMILY_SHAPED_SHELL_DESCRIPT`・`emily_shaped_scopes`）・`spawn.rs` `pub mod test_support`（`two_scope_placements`・`titles`・`ghost_window_entities`。`fake_window_handle` は `cfg(test)`）・`reseed.rs` `pub mod test_support`（`booted_world`・`new_shell`・`char_positions` が `pub`・補助は `pub(crate)`）・`source.rs` `GhostTitles::from_scope_titles`・`persist.rs` `project_restore`。
+- `cfg(feature = "test-support")` だけで開けた支え（3.8）: `measure.rs` `pub mod test_support`（`measure_with_reader`・`measure_baked` への入口）。
+
+### ⑷ 依存の向きの規約が名指さない参照と輪（7.7）
+
+`lib.rs` の頭の規約が名指すのは `resolver`・`config`・`measure`・`spawn`・`follow`・`diag` の 6 つだけで、次の参照は規約の外として変えなかった。
+
+- 根を引く子: `reset_pos` → 根の `primary_monitor`、`follow/offset_space` → 根の `scale_signed`（後者のモジュールは `audit-placement-follow` の持ち物。根の側の形をこちらで決める）。
+- 名指さない 21 モジュールの間の輪。
+- 名指す 6 つのうち、名指さない所を引くもの（分けた時点の数え方＝本番のコードと機能で立つ子の `use (super|crate)::`）: `measure` → `error`・`descript_window_keys`、`spawn` → `chain_finalize`・`source`、`follow` → `balloon_limit`・`balloon_lock`・`dpi_sync`・`persist`・`transition_diag`・`chain_finalize`・`sticky_group_ledger`・`windowposition`・根の `scale_signed`。説明のリンクだけの参照: `diag.rs:112` → `super::spawn::wire_zorder_pair`・`follow/offset_space.rs:251` → `crate::measure::MeasureScaling`。
+
+### ⑸ examples の古い説明
+
+- この brief の持ち物の `crates/areka-placement/examples/window-placement.rs` には古いパスの説明は残っていない。
+- 本体の `crates/areka/examples/collision-probe.rs:90` の `../pilot/...` の記述は古い（`emo2_root` は今は sample_ghost_kit から来る）。持ち物は `audit-areka-app` で、そちらへも申し送る（`placement-crate-split` の完了の棚卸で起票）。

@@ -14,8 +14,8 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::emo2_boot::{shell_carry, skin_facts_copy};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::descript_window_keys::fallback_candidates;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::descript_window_keys::fallback_candidates;
+use areka_placement::spawn::GhostWindows;
 
 use super::balloon_face::{FaceCause, select_balloon_face};
 use super::{

@@ -106,12 +106,12 @@ use tracing::{debug, warn};
 
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-use crate::placement::follow::{
+use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use areka_placement::follow::{
     BalloonFollow, BalloonFollowTrigger, OffsetRescale, follow_balloon, rescale_follow_offset,
 };
-use crate::placement::spawn::BalloonKeywordBase;
-use crate::placement::transition_diag::{
+use areka_placement::spawn::BalloonKeywordBase;
+use areka_placement::transition_diag::{
     OFFSET_VERDICT_ANCHORED, OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED,
     OFFSET_VERDICT_SATURATED, OFFSET_VERDICT_UNCHANGED, OFFSET_VERDICT_UNRESOLVED,
     log_offset_rescale,
@@ -271,7 +271,7 @@ pub(super) fn rescale_balloon_follow_offset(
 ///
 /// # なぜ要るか
 ///
-/// 通常の遷移では [`resize_window_to`](crate::placement::follow::resize_window_to) の手順 6 が
+/// 通常の遷移では [`resize_window_to`](areka_placement::follow::resize_window_to) の手順 6 が
 /// 新しいオフセットで随伴追従を出すため、キャラ 1・バルーン 1 の書込で両窓が同時に落ち着く。
 /// しかし位置と寸がともに同一だと同関数は**手順 4 のべき等 skip で `false` を返し**
 /// （`window_move.rs:337-345`）、手順 6 の追従へ到達しない。この腕を放置すると

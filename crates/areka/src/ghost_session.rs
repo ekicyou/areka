@@ -29,7 +29,6 @@ use crate::emo2_boot;
 use crate::emo2_boot::runtime_boot::CueSinkSources;
 use crate::input_events;
 use crate::menu;
-use crate::placement;
 use crate::readme;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
@@ -88,15 +87,15 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
 
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
-        placement::spawn::register_ghost_windows_click_through,
+        areka_placement::spawn::register_ghost_windows_click_through,
     );
     world
         .resource_mut::<Schedules>()
         .add_systems(FrameFinalize, app_exit::attach_os_close_request);
-    placement::spawn::wire_zorder_pair(world);
+    areka_placement::spawn::wire_zorder_pair(world);
     // スコープ → 窓の印の表を出す系（mcp-scope-rect-property 要件 3.3）。
     ghost_session_scope_rect::register(world);
-    placement::balloon_syncscale::register(world);
+    areka_placement::balloon_syncscale::register(world);
 }
 
 /// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ
@@ -108,11 +107,11 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
 #[derive(Clone)]
 pub(crate) struct StartupDescriptValues {
     /// 採寸 k₀ と attach（`attach_target`）が共有する作者基準 DPI。
-    pub(crate) author_dpi: placement::AuthorDpi,
+    pub(crate) author_dpi: areka_placement::AuthorDpi,
     /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
     pub(crate) zorder_raw: Option<String>,
     /// 準備が採寸に使ったスコープごとの既定の面（descript-window-keys 要件 2.2）。起動の資産も同じ値で組む。
-    pub(crate) default_surfaces: placement::DefaultSurfaces,
+    pub(crate) default_surfaces: areka_placement::DefaultSurfaces,
 }
 
 /// 配置の準備（[`prepare_ghost_windows`]）が決めた起動のシェル（areka-P0-shell-balloon-switch
@@ -141,7 +140,7 @@ fn take_boot_shell(world: &mut World, ghost_root: &Path) -> Option<String> {
 pub(crate) enum OpenWindowsError {
     /// 配置の準備が通らない（モニタ 0 台・起動中の削除等）。
     #[error(transparent)]
-    Placement(#[from] placement::PlacementError),
+    Placement(#[from] areka_placement::PlacementError),
     /// 窓を積む作業プールが World に無い（本番では `EcsWorld::new` が必ず挿す＝配線の誤り）。
     #[error("窓を作るための作業プールが World に無い")]
     TaskPoolMissing,
@@ -157,7 +156,7 @@ pub(crate) enum OpenWindowsError {
 ///   スケジュールで World 適用）で窓を組み立てる（`FrameFinalize` への系の結線は
 ///   [`register_systems`] が先に済ませる）。smoke の自動終了はここでは仕掛けない（呼び手の
 ///   `fn main` が 1 度目の成功の直後に 1 度だけ仕掛ける・要件 3.5）。
-/// - 失敗時（モニタ 0 台・起動中の削除等）: [`placement::PlacementError`] を包んで返す。
+/// - 失敗時（モニタ 0 台・起動中の削除等）: [`areka_placement::PlacementError`] を包んで返す。
 ///   呼び手（`main`）が「起動窓を開けない」を告知して終了コード 1 で終える
 ///   （baseware-root-layout 要件 6.4・窓を開かずに居座らない＝要件 6.6）。
 ///
@@ -196,7 +195,7 @@ pub(crate) struct PreparedWindows {
 ///
 /// - 最初に作業プール（[`WintfTaskPool`]）の有無を確かめる。無ければ配置の準備に入らず
 ///   `error!(event = "task_pool_missing")` の上で [`OpenWindowsError::TaskPoolMissing`]。
-/// - 配置の準備の失敗は [`placement::PlacementError`] を包んで返す。
+/// - 配置の準備の失敗は [`areka_placement::PlacementError`] を包んで返す。
 pub(crate) fn prepare_ghost_windows(
     world: &mut World,
     cfg: &ConfigInputs,
@@ -214,7 +213,7 @@ pub(crate) fn prepare_ghost_windows(
     // 取り出し、同じ値を資産と実行系へ運ぶ
     // （areka-P0-shell-balloon-switch 要件 6.2〜6.4）。
     let shell = crate::boot_resolve::decide_boot_shell(&cfg.ghost_root);
-    let prepared = placement::prepare_ghost_windows_for_shell(
+    let prepared = areka_placement::prepare_ghost_windows_for_shell(
         &cfg.ghost_root,
         &cfg.balloon_root,
         shell.as_deref(),
@@ -290,23 +289,26 @@ pub(crate) fn prepare_ghost_windows(
         // 2 源は同時に挿す（片方だけ古い運転を作らない・atom C6）。
         world.insert_resource(sources.snapshot);
         world.insert_resource(sources.dpi_table);
-        let windows = placement::spawn::spawn_ghost_windows(world, &placements, &titles);
+        let windows = areka_placement::spawn::spawn_ghost_windows(world, &placements, &titles);
         // 寄せた起動の印は窓の一式ごとに上書きで据える（切り替えで古い値を残さない・window-work-area-clamp 4.6）。
-        world.insert_resource(placement::persist::RestoredPositionsClamped(
+        world.insert_resource(areka_placement::persist::RestoredPositionsClamped(
             restored_clamped,
         ));
         world.insert_resource(default_basis);
         // 窓の組の帳簿も窓の束と一緒に据える（窓が在るので据えた後に書き手が付け直す・要件 3.8・6.1）。
-        placement::sticky_group_ledger::seed_sticky_descript(world, sticky_window_raw.as_deref());
+        areka_placement::sticky_group_ledger::seed_sticky_descript(
+            world,
+            sticky_window_raw.as_deref(),
+        );
         // 動かせない指定の帳簿も窓を作った後に据える（据える前に作った窓へ書き手が届く・要件 4.1）。
-        placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove);
+        areka_placement::balloon_lock::seed_balloon_lock(world, &balloon_dontmove);
         // 記憶から戻したスコープは既定配置ではない（scg 7.3）。台帳の既定位置を外し
         // 覚えた印を据える——起動の並べ直しは今の位置でなく印で決める（left/right は今の幅で
         // 隣り合わせ、none・印なし・組の窓・台本の印は動かさない・dpi-realign-remembered-chain 6.3〜6.5）。
         // 既定位置を残すと利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
         // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
         if !restored_scopes.is_empty()
-            && let Some(mut gw) = world.get_resource_mut::<placement::spawn::GhostWindows>()
+            && let Some(mut gw) = world.get_resource_mut::<areka_placement::spawn::GhostWindows>()
         {
             for (&scope, &mark) in &restored_scopes {
                 gw.clear_default_char_pos(scope);

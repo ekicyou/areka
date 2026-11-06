@@ -18,15 +18,15 @@ use wintf::ecs::window::{OnCloseRequest, OnSessionEnd, ZOrderChainPlan};
 
 use crate::emo2_boot::frame::ZOrderAbsentReports;
 use crate::input_events::MouseWiring;
-use crate::placement::balloon_lock::BalloonLockLedger;
-use crate::placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
-use crate::placement::chain_realign::ChainRealignPending;
-use crate::placement::diag::DESPAWNED_SKIP_TAG;
-use crate::placement::follow::CharDragSession;
-use crate::placement::spawn::{
+use areka_placement::balloon_lock::BalloonLockLedger;
+use areka_placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
+use areka_placement::chain_realign::ChainRealignPending;
+use areka_placement::diag::DESPAWNED_SKIP_TAG;
+use areka_placement::follow::CharDragSession;
+use areka_placement::spawn::{
     BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
 };
-use crate::placement::sticky_group_ledger::StickyGroupLedger;
+use areka_placement::sticky_group_ledger::StickyGroupLedger;
 
 /// どの終了操作から来たか（記録の語彙・受け手は分岐しない）。
 ///

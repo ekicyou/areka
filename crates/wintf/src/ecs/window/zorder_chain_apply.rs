@@ -268,7 +268,7 @@ pub fn apply_zorder_chain(
         if outcome.handle_missing {
             // **まだ一度も書けていない**——印は「書くべきものがある」の合図であって
             // 「観測して直せ」ではない。窓ハンドルは entity より遅れて付く
-            // （`placement/spawn.rs` の `Added<WindowHandle>`）ので、計画は HWND 生成より
+            // （`crates/areka-placement/src/spawn.rs` の `Added<WindowHandle>`）ので、計画は HWND 生成より
             // 前に公開されうる。ここで印を落とすと、あとからハンドルが現れても
             // **計画の内容は変わらないので再公開されず、印は二度と立たない**＝鎖が
             // 永久に書かれない。よって 1 本も書けなかった巡は印を戻す。

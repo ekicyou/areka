@@ -8,7 +8,7 @@ use super::*;
 // Anchored 付き）、各窓へ偽 WindowHandle を注入し MonitorSnapshot を挿入した World 上で、
 // 合成 (scope, SizePx) を resnap_from_sizes へ直接注入して観測する（Req1.3/3.1/3.4/4.5）。
 
-use crate::placement::resolver::SizePx;
+use areka_placement::resolver::SizePx;
 
 use wintf::ecs::{Point, SizeI};
 
@@ -347,9 +347,9 @@ fn a_move_in_the_same_frame_as_a_grow_clamp_uses_the_clamped_rect() {
         FrameHarness, PerTargetSizes, SPAWN_SIZE_1, synth_assets, zero_clock,
     };
     use crate::emo2_boot::move_cue::{PositionCue, parse_move_directive};
-    use crate::placement::chain_finalize::ChainFinalized;
-    use crate::placement::follow::Anchored;
-    use crate::placement::resolver::Anchor;
+    use areka_placement::chain_finalize::ChainFinalized;
+    use areka_placement::follow::Anchored;
+    use areka_placement::resolver::Anchor;
     use std::{cell::RefCell, rc::Rc, sync::mpsc};
     use wintf::ecs::WindowHandle;
 
