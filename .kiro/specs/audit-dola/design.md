@@ -103,6 +103,7 @@ flowchart LR
 - **前の段**（C18 のあいだ・要件 11.2）: 公開の形を変えない直しと、件 1・件 3。公開の口を**足す**直し（`has_instances`・`DolaError::InvalidNumber`）はここで取る。公開の口を消す直しのうち、テストだけの読み替え（`update` → `tick`＋`last_result`・`CuePlayer::ready()` → 記録する受け手）もここで済ませる。
 - **後の段**（C18 のほかの 7 本＝`wintf-visual-tree`・`placement-crate-split`・`audit-wintf-layout-widget`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-kanade`・`audit-sylphya-actor` がすべて `main` に着地した後）: 公開の形を変える 18 件（#11〜#19・#25・#26・#52・#56・#66・#70・#73・#77・#78）と件 2（要件 8.2・8.3）と要件 7.9。後の段の最初のタスクの頭で、7 本の着地を `git log origin/main` で確かめ、`main` を枝へ取り込み、消す口の呼び手をツリー全体で grep し直し、本体 `crates/areka/` などに触るそのときのセッションと申し合わせる（要件 6.1）。
 - 1 本の spec・1 本の枝・1 本の PR のまま（要件 11.1）。前の段の直しも、完了の PR で `main` へ入る。
+- **C19 との重なり**（2026-11-06 設計の討議 議題 1・開発者「承認」）: 後の段は C18 の着地のすぐ後に走り切る（4 束・本体に触るのは `emo2_boot/frame/window_state_tests.rs` と `emo2_boot/talk_lifecycle.rs` の 2 ファイルだけ）。C19 の見込みの `dola-yaml-backend` は本 spec の着地を待ち、`runtime-module-untangle` は `emo2_boot/` を `runtime/` へ改名するので本体の 2 ファイルで重なる＝この 2 点を、ウェーブを組むセッションへ共有メモで申し送った。C19 が先に始まったときは、`runtime-module-untangle` のセッションと申し合わせ、改名の後の道で直す。後の段の頭の grep のし直しは、道の改名（`emo2_boot` → `runtime`・`placement-crate-split` による `crate::placement::` の書き換え）も拾う。
 
 ### Technology Stack
 
@@ -272,7 +273,7 @@ pub(crate) fn sum_on_ms_grid(a: f64, b: f64) -> f64;
 - `absolute_fire_time(cue)` = `sum_on_ms_grid(absolute_start_time, cue.start_time)`。
 - `TimedSchedule::tick` の到達: `pop_if(|e| !(sum_on_ms_grid(start_time, e.offset()) > current_time))`（NaN の扱いを今と同じにするため `!(>)`・#80）。
 - `is_completed`: `current_time >= sum_on_ms_grid(start_time, horizon)`。`occupancy_horizon()` も同じ式。
-- 並べ替えは 5 か所とも `total_cmp`（降順は `b.offset().total_cmp(&a.offset())`）。NaN を含む並びは、NaN が符号で両端に分かれる形に決まる（負の NaN が昇順の先頭・正の NaN が末尾。x86 で計算から生まれる NaN＝`inf - inf`・`0.0 / 0.0` は符号の桁が立った負の NaN）（#10）。
+- 並べ替えは 5 か所とも `total_cmp`（降順は `b.offset().total_cmp(&a.offset())`）。比べる前に両方へ `+ 0.0` を足して −0.0 を +0.0 にそろえ、同じ瞬間の合図を台本の順に保つ（例 `(a + 0.0).total_cmp(&(b + 0.0))`・設計の討議 議題 3）。NaN を含む並びは、NaN が符号で両端に分かれる形に決まる（負の NaN が昇順の先頭・正の NaN が末尾。x86 で計算から生まれる NaN＝`inf - inf`・`0.0 / 0.0` は符号の桁が立った負の NaN）（#10）。
 
 ### storyboard の層
 
@@ -335,7 +336,7 @@ pub fn has_instances(&self) -> bool;
 
 #### `DynamicValue` の等しさ（#28）
 
-- 私的な関数 `float_key(v: f64) -> u64`（0.0 と −0.0 を同じ値・どの NaN も 1 つの値・ほかは `to_bits`）を作り、`Hash` と手書きの `PartialEq`（Float の腕だけ鍵で比べ、ほかの腕は今の derive と同じ）の両方で使う。`Eq` の注「実用上ない前提」を消す。
+- 私的な関数 `float_key(v: f64) -> u64`（0.0 と −0.0 を同じ値・どの NaN も 1 つの値・ほかは `to_bits`）を作り、`Hash` と手書きの `PartialEq`（Float の腕だけ鍵で比べ、ほかの腕は今の derive と同じ）の両方で使う。`Eq` の注「実用上ない前提」を消す。結果、`Float(NaN) == Float(NaN)` は真になる（設計の討議 議題 4 で確定・範囲の外の 14 ファイルは NaN どうしの不等に頼らない）。
 
 ## 指摘ごとの直し方
 
@@ -359,7 +360,7 @@ pub fn has_instances(&self) -> bool;
 | # | 段 | 直し方 | 範囲の外 | 縛るテスト |
 |---|---|---|---|---|
 | 9 | 前 | 相対の終わりを私的な関数 1 本にし、`absolute_end_time` と `to_talk_schedule` の両方が呼ぶ（clamp を通す）。`schedule.rs:356-366` の説明を事実に合わせる | — | 新 `end_time_equals_occupancy_horizon_for_non_finite_durations`（長さ [NaN, +inf, −3]）（`tests/cue/sheet_test.rs`） |
-| 10 | 前 | `sheet.rs:41-46`・`schedule.rs:142-146・165-169`・`compile/mod.rs:229-233・290-295` を `total_cmp` に。「panic しない」の注を直す | — | 新 `sort_with_many_nan_follows_total_order`（`f64::NAN` と `f64::INFINITY - f64::INFINITY`（負の NaN）を合わせて 24 件含む `CueSheet::new` と `to_talk_schedule`）（`tests/cue/sheet_test.rs`）・新 compile の並べ替えの 1 本（`tests/compile/boundary_test.rs`） |
+| 10 | 前 | `sheet.rs:41-46`・`schedule.rs:142-146・165-169`・`compile/mod.rs:229-233・290-295` を `total_cmp` に。「panic しない」の注を直す | — | 新 `sort_with_many_nan_follows_total_order`（`f64::NAN` と `f64::INFINITY - f64::INFINITY`（負の NaN）を合わせて 24 件含む `CueSheet::new` と `to_talk_schedule`）・新 `negative_zero_keeps_script_order`（−0.0 と +0.0 の合図が台本の順のまま）（`tests/cue/sheet_test.rs`）・新 compile の並べ替えの 1 本（`tests/compile/boundary_test.rs`） |
 | 11 | 後 | `WaitForInput` の `timeout` 欄・`BarrierKind::Timeout`・`barrier_timeout_offset`・時間切れの枝（`schedule.rs:199-215・236-254`）・`BarrierReached::Timeout` を消す。`WaitForInput` と `resolve_click` の説明に「`talk-fast-forward` の `\x` の受け皿」と書く（要件 11.4） | `areka-sakura/src/drive.rs` は `other =>` で受ける＝変更なし | —（消す直し。残る口は既存の `resolve_click` のテストが縛る） |
 | 12 | 後 | `RoutingCommand`・`EntityKey`・`CuePayload::Routing`・`Entry::Routing`・`routing_buffer`・`next_routing` を消す（要件 11.5）。`schedule.rs` の冒頭の説明「3 種」を直す | なし（grep 0） | — |
 | 13 | 後 | `filtered_ready`・`CuePlayer::ready`・`CuePlayer::remaining` を消し、配送の門の中で `self.schedule.ready()` から直に配る。テストの読み替えは前の段で済ませる | なし | — |
@@ -610,4 +611,4 @@ pub fn has_instances(&self) -> bool;
 
 - **#3 と #7 の組**: 項目が生きている間は消えない形（#3）に替えると、「同じ変数に生きた項目があれば競合」（#7）が、最後のセグメントを過ぎて値を保っているだけのインスタンスも相手に数える。これは要件 11.8 の決めどおり（生きたインスタンスの値は大きい group_id が勝つ）で、Never の台本は相手が終わるまで始まらない。既存の競合のテストの大半はもともとこの結果（`research.md` §3 #7）。
 - **#32 の読み込みの重さ**: 読み込みのたびに全ストーリーボードを compile する。代わりに start ごとの検査を省く（#58）ので、読み込み 1 回・start 多数の使い方では軽くなる。
-- **後の段の待ち**: C18 のほかの 7 本の着地が遅れると、後の段も遅れる。前の段でテストの読み替えを済ませておくことで、後の段の差分は公開の口を消す所と範囲の外の数ファイルに絞られる。
+- **後の段の待ち**: C18 のほかの 7 本の着地が遅れると、後の段も遅れる。後の段が C19 の始まりと重なったときの扱いは「2 つの段」の「C19 との重なり」。前の段でテストの読み替えを済ませておくことで、後の段の差分は公開の口を消す所と範囲の外の数ファイルに絞られる。
