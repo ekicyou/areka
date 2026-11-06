@@ -14,8 +14,8 @@ use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{
-    COARSE_WRAP_MESSAGE, IGNORED_ORIGIN_MESSAGE, ROP_FALLBACK_MESSAGE, box_layout, box_name, cue,
-    emote, fake_resolver, items_at, spawn_reserved_slot, text,
+    COARSE_WRAP_MESSAGE, FONT_HEIGHT_ZERO, IGNORED_ORIGIN_MESSAGE, ROP_FALLBACK_MESSAGE,
+    box_layout, box_name, cue, emote, fake_resolver, items_at, spawn_reserved_slot, text,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -680,5 +680,55 @@ fn box_cursor_fallback_warns_once_per_box_name() {
         messages(&events, ROP_FALLBACK_MESSAGE),
         1,
         "箱の束を差し替えた後の登録で 1 件"
+    );
+}
+
+// ══ 指摘 7: 箱の解決は表を入れたときに名前ごとに 1 度だけ ══
+
+/// 書体の高さ 0 の箱 z を、サーフェス 0 と 1 の別の位置に置く。
+const ZERO_HEIGHT_BOX_SHELL: &str = "balloon.z
+{
+size,100,50
+font.height,0
+}
+surface0
+{
+element1,balloon,z,0,0
+}
+surface1
+{
+element1,balloon,z,10,10
+}
+";
+
+/// 指摘 7（要件 2.1・4.5・4.6）: 書体の高さ 0 の箱は、表を入れたときに警告 1 件。隠して登録し直す・
+/// 拡大率を変える・サーフェスを切り替えるの 3 つの登録し直しの後も 1 件のまま。
+#[test]
+fn box_resolution_warns_once_at_table_set_not_per_registration() {
+    let layout = box_layout(ZERO_HEIGHT_BOX_SHELL);
+    let mut f = fixture();
+    let ((), events) = capture(|| {
+        f.rt.set_box_layout(&mut f.world, layout.clone(), fake_resolver(), vec![]);
+        f.layout = layout;
+        f.show("0");
+        f.rt.apply_cue(&text("0", "あ"));
+        f.sync(Some(1.0));
+        f.rt.hide_boxes(&ActorKey::from("0"));
+        f.sync(Some(1.0));
+        f.rt.hidden_boxes.clear();
+        f.sync(Some(1.0));
+        f.sync(Some(2.0));
+        f.picture = Some(1);
+        f.sync(Some(2.0));
+    });
+    assert_eq!(
+        messages(&events, REGISTER_MESSAGE),
+        4,
+        "最初の登録と 3 つの登録し直しは起きている"
+    );
+    assert_eq!(
+        messages(&events, FONT_HEIGHT_ZERO),
+        1,
+        "警告は表を入れたときの 1 件だけ"
     );
 }

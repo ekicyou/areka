@@ -268,8 +268,18 @@ impl TextLayerRuntime {
         image_size: (u32, u32),
         background: (u8, u8, u8),
     ) -> ResolvedBalloonText {
-        let mut resolved =
-            ResolvedBalloonText::resolve_with_background(model, image_size, background);
+        self.stamped(
+            actor,
+            ResolvedBalloonText::resolve_with_background(model, image_size, background),
+        )
+    }
+
+    /// 解いた値へその actor の印の見た目を押す（`resolve_stamped` と箱の登録の覚えの複製）。
+    pub(super) fn stamped(
+        &self,
+        actor: &ActorKey,
+        mut resolved: ResolvedBalloonText,
+    ) -> ResolvedBalloonText {
         resolved.font.inline_marker = self.inline_marker_of(actor);
         resolved
     }

@@ -11,7 +11,7 @@
 //!
 //! 窓の子の entity を消すので `World` に触れる（純粋な走査の外）。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
@@ -21,9 +21,11 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use tracing::{debug, warn};
 
-use super::{SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration};
+use super::{
+    ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration,
+};
 use crate::choice::{CursorFallback, HitRectPx};
-use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
+use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
 use crate::state::{BoxTraits, SurfaceFallback};
@@ -32,8 +34,8 @@ impl TextLayerRuntime {
     /// 箱の束を受け取る（UI スレッドから・装着の相とシェルの切替が呼ぶ）。
     ///
     /// 1. 前の箱の面（シェルの窓の子）を片付け、箱の場所ごとの実行時の表も捨てる。
-    /// 2. 箱の名前ごとの既定の 2 層と種類を状態へ渡す。2 層はブレスの定義を白を混色の相手として
-    ///    解いた `font.looks`（拡大率に依らない・design.md「装飾の持ち運び」）。
+    /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製・指摘 7）、
+    ///    既定の 2 層（その `font.looks`・拡大率に依らない・design.md「装飾の持ち運び」）と種類を状態へ渡す。
     /// 3. 新しい表を状態へ入れる。状態は箱の場所の文字を捨て、各スコープの今のサーフェス番号を保ち、
     ///    行き先を新しい表での既定へ引き直す（要件 6.8）。種類は 3 の持ち運びの判定が引くので、
     ///    **2 を 3 より先に**行う（tasks.md Implementation Notes 5.4）。
@@ -70,6 +72,7 @@ impl TextLayerRuntime {
         }
         self.box_overflow_warned.clear();
         self.box_definition_warned.clear();
+        self.box_resolved.clear();
         self.shown_boxes.clear();
         // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・要件 2.7）。
         self.lookahead.forget_boxes();
@@ -79,9 +82,10 @@ impl TextLayerRuntime {
             .map(|(id, placements)| (id, placements.iter().map(|p| p.name.clone()).collect()))
             .collect();
         // 置き場所の表は名前のブレスが採られたものだけを載せる（`fold_boxes`）ので、定義は必ず引ける。
-        let traits: BTreeMap<BoxName, BoxTraits> = index
-            .values()
-            .flatten()
+        // 同じ名前が幾つのサーフェスに在っても解くのは 1 度（指摘 7）。
+        let names: BTreeSet<&BoxName> = index.values().flatten().collect();
+        let traits: BTreeMap<BoxName, BoxTraits> = names
+            .into_iter()
             .filter_map(|name| {
                 let def = layout.def(name);
                 if def.is_none() {
@@ -93,18 +97,18 @@ impl TextLayerRuntime {
                 def.map(|def| (name.clone(), def))
             })
             .map(|(name, def)| {
-                // 2 層は大きさに依らないので、フォントの解決だけを通す
-                // （`ResolvedBalloonText::resolve_with_background` の `font` と同じ導出）。
-                let looks =
-                    ResolvedFont::resolve_with_background(&def.model, DEFAULT_BALLOON_BACKGROUND)
-                        .looks;
-                (
-                    name,
-                    BoxTraits {
-                        looks,
-                        follow: def.follow,
-                    },
-                )
+                // 解決の中の作者向けの警告は、ここで名前ごとに 1 度だけ出る。
+                let resolved = ResolvedBalloonText::resolve_with_background(
+                    &def.model,
+                    def.size,
+                    DEFAULT_BALLOON_BACKGROUND,
+                );
+                let traits = BoxTraits {
+                    looks: resolved.font.looks.clone(),
+                    follow: def.follow,
+                };
+                self.box_resolved.insert(name.clone(), resolved);
+                (name, traits)
             })
             .collect();
         debug!(
@@ -417,9 +421,16 @@ impl TextLayerRuntime {
             );
             return;
         };
-        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。
-        let resolved =
-            self.resolve_stamped(&key.actor, &def.model, def.size, DEFAULT_BALLOON_BACKGROUND);
+        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。表を入れたときの覚えを複製して押す（指摘 7）。
+        let Some(memo) = self.box_resolved.get(&want.site.name) else {
+            // 覚えは表に載る名前ごとに入るので構造上起こらない。
+            warn!(
+                name = want.site.name.as_str(),
+                "箱の解決の覚えが無いので登録しない（構造不変の破れ）"
+            );
+            return;
+        };
+        let resolved = self.stamped(&key.actor, memo.clone());
         if self.box_definition_warned.insert(want.site.name.clone()) {
             let name = want.site.name.as_str();
             attach::warn_coarse_wrap_threshold(name, &resolved, None);

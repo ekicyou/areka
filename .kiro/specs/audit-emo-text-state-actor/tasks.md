@@ -90,7 +90,7 @@
   - 同じ World に 2 つの文字の層を置き、装置を作り直すと両方とも描き手を作り直す実 GPU のテストを置く
   - 完了の姿: そのテストが緑で、印を共有の資源に戻すと後の層の確かめが落ちる
   - _Requirements: 1.5, 2.1, 4.5, 4.6, 6.7_
-- [ ] 3.4 箱の解決を表を入れたときに名前ごとに 1 度だけ行う（指摘 7）
+- [x] 3.4 箱の解決を表を入れたときに名前ごとに 1 度だけ行う（指摘 7）
   - 箱の表を入れるときに名前ごとの解決を覚え、見た目の層はその答えから取り、登録は覚えを複製して印を押すだけにする。表を替えるときに覚えも替える
   - 書体の高さ 0 の箱を、隠して登録し直す・拡大率を変える・サーフェスを切り替えるの 3 つの後で、警告が表を入れたときの 1 回のままのテストを置く
   - 完了の姿: そのテストが緑で、登録ごとに解決する形に戻すと警告の数の確かめが落ちる
@@ -246,3 +246,4 @@
 - `ResolvedMarkerPlacement::resolve` は design の「呼び手で `i64::from` を渡す」と違い、`(u32, u32)` を受けて中で i64 に広げる。広がりは負にならず、呼び手で `as i32` に戻す道もふさがる（2.5）。
 - 箱の切る大きさは `actor_box.rs` の私的な `image_limit`（箱の大きさとシェルの画像の重なり）。シェルの大きさは `TextLayerRuntime.box_shell_size`。印の矩形の式は `marker_surface.rs` の `marker_span` 1 つ（2.5）。
 - 片付けは `ActorRender::discard(self, world, slot: Option<Entity>)`、解決と印は `resolve_stamped`（`stamp_inline_marker` は消えた）、登録の後半は `finish_registration`、変化なしの記録は `trace_unchanged`。3.4 で「覚えを複製して印を押すだけ」が要るなら、`resolve_stamped` から押す所を切り出す（design.md:342 の `stamp_inline_marker` は今は無い）。`actor_attach.rs` 390 行あたりの注釈は古いので 5.5 で直す（3.2）。
+- 箱の解決の覚えは `TextLayerRuntime.box_resolved: BTreeMap<BoxName, ResolvedBalloonText>`（印を押す前）。登録は `stamped(&actor, memo.clone())`。design.md:342 の `stamp_inline_marker` は今の `stamped`（5.5 で直す）（3.4）。

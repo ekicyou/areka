@@ -300,6 +300,9 @@ pub struct TextLayerRuntime {
     /// 定義の 2 つの警告（折り返しの基準・無視した書き出し位置）を出した箱の名前。箱の登録には
     /// 前の配置の入力が毎回無いので、名前ごとに 1 度だけにする。箱の束を差し替えると空に戻す。
     box_definition_warned: BTreeSet<BoxName>,
+    /// 箱の名前 → 白を混色の相手として解いた値（印は押す前・指摘 7）。箱の束の受け取りが名前ごとに
+    /// 1 度だけ解いて入れ、登録は複製して印を押すだけ。解決は拡大率に依らないので、表を替えるまで古びない。
+    box_resolved: BTreeMap<BoxName, ResolvedBalloonText>,
     /// いま描画範囲（validrect）が潰れている場所（幅か高さが 0 以下・件 2）。登録口
     /// （`actor_attach.rs` の `note_region_collapse`）が状態の変わり目に 1 回だけ記録するための
     /// 記憶で、登録を外しても・箱の束を差し替えても消さない＝隠す・出す・付け直しで記録が
@@ -372,6 +375,7 @@ impl TextLayerRuntime {
             box_shell_size: HashMap::new(),
             box_overflow_warned: BTreeSet::new(),
             box_definition_warned: BTreeSet::new(),
+            box_resolved: BTreeMap::new(),
             collapsed_regions: BTreeSet::new(),
             shown_boxes: HashMap::new(),
             lookahead: TalkLookahead::default(),

@@ -379,6 +379,10 @@ pub(crate) const COARSE_WRAP_MESSAGE: &str = "折返し基準が描画範囲の�
 /// 無視した `origin` 宣言の警告（`actor_decoration.rs` の発行点）。
 pub(crate) const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
 
+/// 書体の高さ 0 の警告（`draw.rs`・解き直しの中の作者向けの `warn!`）。
+pub(crate) const FONT_HEIGHT_ZERO: &str =
+    "font.height が 0（DirectWrite fontsize は正値必須）のため既定値 12 へフォールバックする";
+
 /// ROP 系の飾りの警告。
 pub(crate) const ROP_FALLBACK_MESSAGE: &str =
     "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";

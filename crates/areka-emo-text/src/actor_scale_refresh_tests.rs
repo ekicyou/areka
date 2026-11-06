@@ -7,7 +7,7 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::test_support::{
-    com_world, cue, geo_model, insert_gpu, opaque_count, spawn_reserved_slot,
+    FONT_HEIGHT_ZERO, com_world, cue, geo_model, insert_gpu, opaque_count, spawn_reserved_slot,
 };
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -535,10 +535,6 @@ fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
         "変わり目の後の同じ再追従 3 回は解き直さない"
     );
 }
-
-/// 要件 1.7 の代表（`draw.rs`・解き直しの中の作者向けの `warn!`）。
-const FONT_HEIGHT_ZERO: &str =
-    "font.height が 0（DirectWrite fontsize は正値必須）のため既定値 12 へフォールバックする";
 
 /// `WARN` の事象のうち、本文が `message` のものの数。
 fn count_warn(events: &[CapturedEvent], message: &str) -> usize {
