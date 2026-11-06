@@ -83,3 +83,14 @@
 - **146（直し済み）**: 親の無い根の bounds の伸ばし方。`src/ecs/layout/arrangement.rs` の `From<Arrangement> for GlobalArrangement` を `GlobalArrangement::default() * arrangement` にした。
 - **144 とその根（直し済み）**: taffy のノードを消すときの失敗の捨て方。`src/ecs/layout/taffy.rs` の `remove_node`（木から先に消し、消せたときだけ対応を消す）と `src/ecs/layout/systems/taffy_systems.rs` の `cleanup_removed_entities_system`（失敗を `error!` で残す）を直した。
 - **`Arrangement` の on_add フック（判断はこちら）**: on_add フックが、生成の束に入れた `GlobalArrangement` を既定値で上書きする。本番にその使い方は無く今は欠陥ではないが、束で両方を入れる書き方が黙って効かない。指摘にするかはこちらで決める。
+
+## 2026-11-06 棚卸㉟の再測定（main `18e4cb30`）
+
+- **前提の変化**: C17 の 2 本が範囲の本番を直した。`audit-wintf-runtime` の直しは上の申し送りの節のとおり（数え直さない）。`audit-wintf-graphics-world` は `ecs/widget/bitmap_source/systems.rs`・`ecs/widget/shapes/rectangle.rs` に装置の失いからの立ち直り（命令の列が外されたら描き直す・装置の文脈を 1 回だけ取る）を入れ、`ecs/layout/systems/window_pos_systems.rs` の説明を直した。この 3 つはギャップ分析でその直しの後の形を見る。
+- **触るファイル**: `crates/wintf/src/ecs/layout*`・`ecs/widget*` の 50 ファイル・本番 7,217 行・テスト 4,251 行（空行を含む・`_tests.rs`・`tests`・`_test_support` をテストに数えた）。大きいのは `layout/hit_test/mod.rs` 632・`layout/systems/monitor_systems.rs` 576 ほか＝1,000 行に近いファイルは無い。直しが範囲の外へ及ぶなら、呼び手は `ecs/mod.rs`（`widget` の再公開の行）・`ecs/world/mod.rs`（layout と widget の system の登録 41 か所）。
+- **規模**: 指摘の数で決まる。C17 の wintf の見直し 2 本は 23・28 タスクになった＝20 を越えたら要件の討議で同じ範囲の 2 本目へ切る。
+- **先に要るもの**: 無い。C18 の `wintf-visual-tree` は `ecs/mod.rs`・`ecs/world/mod.rs` に触る＝同じウェーブでは、この spec はこの 2 つに触らない（直しが要れば、相手の着地の後に回すか、相手のセッションと申し合わせて行を分ける）。`ecs/visual/`・`ecs/graphics/` には触らない。C18 のほかの 6 本とは重ならない（`crates/areka/` にも、`placement-crate-split` が触る wintf の `ecs/window_proc/` の 2 つにも触らない）。
+- **優先度の区分**: A（開発者 10-19「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（受け持つ範囲の見直しで、新しい境目も骨組みの分かれ道も無い）。
+- **分割の案**: 今は無し（上の規模のとおり）。
+- **見つけた穴・古くなった記述**: Current State の「コード 9,130 行・テスト 2,426 行」は起票のときの数え方＝上の数に読み替える。

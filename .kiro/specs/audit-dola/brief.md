@@ -83,3 +83,14 @@
 ## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
 
 - **件 3: 今の clippy で `-D warnings` が赤**。`cargo clippy -p dola --all-targets --no-deps -- -D warnings` が lib で 21 件・lib test で 23 件を出す（`collapsible_if` が `crates/dola/src/validate/rules.rs`・`validate/mod.rs` ほかに多数、`too_many_arguments`〔`runtime/instance_manager/mod.rs` 71 行目ほか〕、`manual_range_contains`、`doc_lazy_continuation`〔`runtime/conflict_resolver.rs` 42 行目〕）。振る舞いを変えずに直すか、決めて許す。起票の訳: 持ち主のこの spec の受け持ちの範囲と重なる。
+
+## 2026-11-06 棚卸㉟の再測定（main `18e4cb30`）
+
+- **前提の変化**: C17 で `crates/dola/` に触ったのは `audit-parsers-sakura` だけ（`src/cue/schedule.rs` の `notify_barrier_resolved` で集めた束を空にする 3 行と説明 1 行）。件 1〜3 はそれぞれの申し送りの節のとおり。
+- **触るファイル**: `crates/dola/` の 109 ファイル・合わせて 24,944 行（うちテスト 18,237）。大きいのは `tests/cue/schedule_test.rs` 960・`src/cue/command_tests.rs` 830＝1,000 行に近い本番のファイルは無い。dola を使う外の所は、本体 `crates/areka` の 54 ファイル（多くは `emo2_boot` のテスト）・`areka-sakura`・`areka-emo-text` の `sink.rs`／`actor_lookahead*`・wintf の `ecs/dola/mod.rs`・`ecs/mod.rs`・`ecs/world/mod.rs`・`ecs/graphics/core.rs`。
+- **規模**: 指摘の数で決まる。C17 の見直しは 18〜28 タスクになった＝20 を越えたら要件の討議で同じ範囲の 2 本目へ切る。
+- **先に要るもの**: 無い。C18 では、dola の公開の形を変えて外の呼び手を直す直しは取らない（本体 `crates/areka/` は `placement-crate-split`、`areka-emo-text` の `sink*`・`actor*` は `audit-emo-text-state-actor`、wintf の `ecs/mod.rs`・`ecs/world/mod.rs` は `wintf-visual-tree` が触る）。件 1 は dola の中で閉じる直し方（終わりを ms の格子で出す）なら並べてよい。合図の長さを整数 ms で持つ形にするなら呼び手が多いので、相手の着地の後に回す。
+- **優先度の区分**: A（開発者 10-19「とにかく指摘事項は全部直す方針です」）。件 1〜3 は B 相当の持ち越し。
+- **要件定義のモデル**: Opus（受け持つ範囲の見直しで、新しい境目も骨組みの分かれ道も無い）。
+- **分割の案**: 今は無し（上の規模のとおり）。
+- **見つけた穴・古くなった記述**: 件 2 の「呼ぶのは dola のテストだけ」は違う＝本体の `crates/areka/src/emo2_boot/frame/window_state_tests.rs:496` も `CuePlayer::stop` を呼ぶ。消すならこのテストも直す（C18 では本体に触らない約束＝消すのは相手の着地の後か、理由の doc を付けて残す）。件 1 の「`schedule.rs` 69 行目の `max(start_time + duration)`」は欄の説明で、焼き込みの計算は `src/cue/sheet.rs` の `to_talk_schedule`（説明は 154 行目）。Current State の「コード 8,778 行・テスト 15,932 行」は上の数に読み替える。

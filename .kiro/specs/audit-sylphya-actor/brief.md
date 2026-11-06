@@ -72,3 +72,15 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 2026-11-06 棚卸㉟の再測定（main 18e4cb30）
+
+- 前提の変化: 11-04 の後、`audit-ghost-catalog` が `crates/areka-sylphya/` に 2 つ足した＝`SylphyaMsg::RemoveFlat`・`Effect::RemoveFlatPerAsker`・`SylphyaPublisher::remove_flat`（`src/actor.rs`・読み直しで消えた名前を区画から消す）と、`Arc<T>` の `PersistIo` の実装（`src/persist/io.rs`）。檻とテストも足した。どちらも受け持つ範囲の中＝audit の対象。`areka-actor`・`areka-talk` は変わっていない。
+- 触るファイル: `crates/areka-sylphya/`・`crates/areka-actor/`・`crates/areka-talk/` の 46 ファイル・コード約 6,900 行（檻を含む）。1,000 行に近いファイルは無い。
+- 規模: 指摘の数で決まる（C17 の見直しは大きいタスク 6〜18 本）。
+- 先に要るもの: なし。直に待つ v0.2.0 の spec＝3 本（`shiori4-api`・`sylphya-sqlite-kvs`〔その後に `mcp-set-property`〕・`talk-script-metadata`）。
+- C18 の相手との重なり: 受け持つファイルの重なりは 0。ただし直しが及ぶ先が一番広い＝⑴ `areka-actor` は kanade（24 ファイル）・emo-text（10）・`crates/areka`（55）ほか 9 クレートが、`areka-talk` は kanade（42）が、sylphya は `crates/areka`（73・うち `placement/` の 17＝`placement-crate-split` が動かす）が使う＝C18 では公開の形を変えない（足すだけはよい） ⑵ `crates/log-capture-kit/tests/temp_path_guard_test.rs`（`placement-crate-split` が触る）が `persist/io.rs` の一時のパスの入口を見ている＝入口を足さない・変えない。
+- 優先度の区分: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- 要件定義のモデル: Opus（見直し＝新しい境界も並行の保証も作らない）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: Current State の数（36 ファイル・コード 6,447 行・テスト 3,190 行）は古い（上の数）。`Arc` の実装が入ったので、`crates/areka` のテストの包み（`boot_resolve_tests.rs:422` の `SharedFakeIo`・`emo2_boot/frame/switch_finish_tests.rs:59`・`emo2_boot/frame_chain_finalize_persist_test_support.rs:40`）は要らなくなった見込み＝範囲の外（本体の見直しの持ち物）。

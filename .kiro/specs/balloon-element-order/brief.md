@@ -105,3 +105,6 @@
 - 要件定義のモデル: Fable（合成・表示・文字・wintf にまたがる／兄弟の重なり順の裁定）。
 - 分割の案: 無し。
 - 見つけた穴・古くなった記述: 無し。
+
+## 2026-11-06 棚卸㉟で拾った申し送り（audit-emo-compose から）
+- 完了した `audit-emo-compose` の tasks.md 3.6 が完了の棚卸へ渡した件: 箱の行どうしが同じ element 番号で（名前は違う）重なるときだけ、何も記録されない。`BoxIssue`（`crates/areka-emo-compose/src/boxes.rs` 96 行目付近）にこの場合の変種が無く、emo-present の `log_box_issue` も受け口を持たない。箱の element の並びを触るこの spec で、変種と記録の受け口を足すか決める。区分 B（潜在）・版に縛らない列のまま。

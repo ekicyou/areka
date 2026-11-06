@@ -94,3 +94,6 @@
 - **要件定義のモデル**: Opus に改める（時計と起点の持ち主の判断は `talk-anchor-interrupt-ticks` へ移った。残りは今の刻みの上の数えの直しとテスト）。
 - **分割の案**: なし。
 - **見つけた穴・古くなった記述**: 上の 2 か所。`talk-anchor-interrupt-ticks` の brief の隣の spec の節の「`seriko-talk-clock-fidelity`（区分 B・先に着地する見込み）」も同じく古い。
+
+## 2026-11-06 棚卸㉟で拾った申し送り（audit-seriko から）
+- 完了した `audit-seriko` で、トリガーの記録の出し先が `areka_seriko::looper::top_trigger`・`parts::part_trigger` から `areka_seriko::trigger` に変わった。また、同じ刻で面が切り替わるときの `pick_rng` の引く順が変わった。どちらも「v0.2.0 の seriko の spec の注に残す」と audit-seriko の tasks.md（完了の棚卸へ渡すもの）が決めていたが、どの brief にも書かれていなかったので、時刻の土台を直すこの spec の要件の段で前提として読む（文書だけの申し送り・区分 C）。

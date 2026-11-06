@@ -104,17 +104,6 @@
 2. **名前の衝突の解き方**: `ecs::visual`（この層）を改名するか（例: `ecs::draw_tree`）、今の `ecs::graphics::Visual` の側を改名するか。公開の型の名前が変わる。
 3. **WARP の答えのずれ**: 許容差 ±1 にするか、見本の画像を作り直す手順を持つか（`wintf-d2d-composite-rules` の議題 4 をこちらで先に決める）。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-
-- 前提の変化: 描画の木（`crates/wintf/src/ecs/visual/`）と数の部品（`crates/wintf/src/numerics/`）は起票の後も変更 0・外からの参照 0 のまま。WARP の装置を作る所も repo にまだ無い。11-02 着地の `areka-test-binary-stability` が、wintf のライブラリのテストの実行ファイルに「落ちの報告」と「プロセスの寿命の MTA を立てる初期化子」を足した（`crates/wintf/src/test_crash_report.rs`・`crates/wintf/src/lib.rs` の `#[cfg(test)] mod test_crash_report`）。そのため `crates/wintf/src/` の中のテストは COM を自分で初期化しなくても暗黙の MTA に居る。`crates/wintf/tests/` の結合テストにはこれが効かない＝WARP の決定論のテストの足場は `src/` の中のテストに置けば、落ちの報告が付き、一時的な MTA の解体で落ちる件も避けられる。本番の描画の道は変わらない（`render.rs` の `BeginDraw` は全面だけ・`render.rs:60-61` のまま）。
-- 触るファイル: `crates/wintf/src/ecs/visual/`（`draw/` を含む・どれも 300 行以下）・`ecs/graphics/systems/render.rs`（156 行）・`ecs/graphics/visual.rs`（名前の衝突の解き方しだい）・`ecs/mod.rs`・`ecs/world/`（スケジュールへの登録）・`numerics/`・描く係を置くなら `com/d2d/`・`examples/` の 1 本・新しい WARP の足場のファイル。1,000 行に近いファイルは無い。
-- 規模: 14〜18 タスク（台帳の 12〜18 の下を上げた＝傷 8 つ・描く係・配線と system・名前・WARP の足場・example・文書）。20 以下＝分けない。
-- 先に要るもの: 見直しの `audit-wintf-graphics-world`（`ecs/` の描画・世界・`visual/`）・`audit-wintf-runtime`（`numerics/`・`com/`・`examples/`）＝台帳のまま。本体（`crates/areka`）の crate 分けには触らない。同じウェーブに置けない相手＝`wintf-d2d-composite-rules`・`wintf-visual-damage-redraw`（`ecs/visual/`・`render.rs`）・`compose-f16-precision`（`com/wuc.rs`）。
-- 優先度の区分: A（開発者 10-21「新しいビジュアル層・描画層として取り込んでほしい」）。
-- 要件定義のモデル: Fable（骨組みを決める分かれ目を先例が決めていない＝描画の木を WUC の描画面の下に置くとき、位置の正本の layout と節の変形をどう掛け合わせるか・どの子孫を木の節と見るか〔議題 1〕。後の 4 本がこの形に乗る）。
-- 分割の案: 無し。
-- 見つけた穴・古くなった記述: Current State の「`crates/wintf/src/ecs/mod.rs:13` の `pub mod visual;`」は今は 14 行目。ほかの 8 つの傷と描画の道の記述は今の main と一致。
-
 ## 2026-11-05 `audit-wintf-graphics-world` からの申し送り
 
 `audit-wintf-graphics-world` の要件の討議（2026-11-05・開発者「承認」）で、`crates/wintf/src/ecs/visual/` の指摘は直さずにこの spec へ渡すと決めた。全文はあちらの `research.md` の 22〜30 番と `requirements.md` の「指摘の扱い」。
@@ -133,3 +122,15 @@
 - **23**: `numerics/` にテストが 1 本も無い（`Transform2D::pivot_srt` の `m21` の符号を裏返しても赤にならない）。Desired Outcome の「純粋なテスト」として渡す。
 - **88**: 使い手 0 の働き（`Aabb::{contains, intersect, union, translate}` と演算子の多く・`Point2`・`Matrix3x2Ext::moved`・`Transform2D::{pivot_srt, to_affine}`）。`moved` には単位の誤り（名は `eps_px` だが単位の正方形の角しか比べない）があり、直す価値がある。
 - **数え方**: あちらの直しは傷 1〜8 のどれも直していない。`audit-wintf-graphics-world` の申し送り（`ecs/visual/`）とは指す行が重ならないが、傷 3・4 は両方から同じ傷を指すので、ギャップ分析では 1 件として数える。
+
+## 2026-11-06 棚卸㉟の再測定（main `18e4cb30`）
+
+- **前提の変化**: 待っていた `audit-wintf-graphics-world`・`audit-wintf-runtime` が 11-06 に着地した。`ecs/visual/` で変わったのは `draw/builder.rs:57`・`draw/command.rs:1` の `allow(dead_code)` に理由が付いただけ＝傷 1〜8 はどれも残る（あちらの申し送りの節のとおり）。`numerics/` は `aabb.rs` の import 1 行だけ。描画の木は今も外からの参照 0・WARP の装置を作る所も無い。
+- **描画の道の変化**: `ecs/graphics/systems/render.rs`（156→146 行）の `render_surface` に装置の失いからの立ち直りが入った（`BeginDraw` の失敗を `GraphicsCore::note_draw_failure` に渡し、失いなら残りの面を描かずに抜ける）。木を描く分岐もこの道に乗せる。全面だけの `BeginDraw` の注記は 57 行目（Current State の「`render.rs:60-61`」は古い）。工場は 1 つになった（`ecs/graphics/core.rs:155-156`）＝傷 7 の手本の `command_list.rs` の注記は事実に合った。`ecs/graphics/visual.rs` に、窓の下へ後から付けた `Visual` にも見た目の部品 3 つを入れる system（`insert_graphics_parts_on_window_join`・`PreRenderSurface` の先頭）が足された＝窓の下の `Visual` は全部が自分の描画面を持つ。議題 1（「描画面の中の節」＝`Visual` を持たない子孫か、専用の印か）の分かれ道はそのまま残る。
+- **触るファイル**: `ecs/visual/`（11 ファイル・どれも 301 行以下）・`ecs/graphics/systems/render.rs` 146・`ecs/graphics/visual.rs` 190（名前の衝突の解き方しだい）・`ecs/mod.rs`（14 行目 `pub mod visual;`）・`ecs/world/mod.rs` 717（スケジュール）・`numerics/`・描く係を置くなら `com/d2d/`・`examples/` 1 本・WARP の足場の新しいファイル（`src/` の中のテストに置けば落ちの報告と MTA が付く）・`.kiro/steering/structure.md`／`tech.md`。1,000 行に近いファイルは無い。
+- **規模**: 15〜19（棚卸㉞の 14〜18 に、申し送りの `visual/draw/README.md` の写し〔30 番〕と `numerics` の使い手 0 の働きと `moved` の単位の誤り〔88 番〕を足した）。20 以下＝分けない。
+- **先に要るもの**: 無い（待つ見直し 2 本は着地）。同じウェーブに置けない相手は `wintf-d2d-composite-rules`・`wintf-visual-damage-redraw`・`compose-f16-precision`（棚卸㉞のまま）。C18 の `audit-wintf-layout-widget` とは `ecs/mod.rs`・`ecs/world/mod.rs` を分け合いうる＝あちらがこの 2 つに触らない約束で並べる。
+- **優先度の区分**: A（開発者 10-21「新しいビジュアル層・描画層として取り込んでほしい」）。
+- **要件定義のモデル**: Fable（骨組みを決める分かれ目を先例が決めていない＝WUC の描画面の下の木で、位置の正本の layout と節の変形の掛け合わせ方・どの子孫を節と見るか〔議題 1〕。見直し 2 本はどちらも決めなかった。後の 4 本がこの形に乗る）。
+- **分割の案**: 無し。
+- **古くなった記述**: Current State の「`crates/wintf/src/ecs/mod.rs:13`」は 14 行目、「`render.rs:60-61`」は 57 行目。
