@@ -4,7 +4,7 @@ use areka_parsers::shell::{
 };
 use bevy_ecs::world::World;
 
-use crate::fold::{expand_targets, fold_shell_with};
+use crate::fold::{expand_targets_with, fold_shell_with};
 use crate::method::ComposeMethod;
 use crate::normalized::SurfaceMaster;
 use crate::plan_test_support::{
@@ -144,7 +144,11 @@ fn enumeration_expands_in_description_order() {
         vec![AppendTarget::Single(2), AppendTarget::Single(1)],
         vec![elem(0, "d.png", 0, 0)],
     );
-    assert_eq!(expand_targets(&surf.targets), vec![2, 1], "記述の順");
+    assert_eq!(
+        expand_targets_with(&surf.targets, Records::Emit),
+        vec![2, 1],
+        "記述の順"
+    );
     let mut world = fresh_world();
     fold_shell_with(&mut world, &shell_of(vec![surf]), Records::Emit);
 
@@ -323,38 +327,47 @@ fn append_only_sees_earlier_defined_surfaces() {
 /// (1) 単一除外: `Single(0),Single(5),Exclude(5)` は 0 を残し 5 を減算する（要件 2.5）。
 #[test]
 fn expand_targets_subtracts_single_exclude() {
-    let ids = expand_targets(&[
-        AppendTarget::Single(0),
-        AppendTarget::Single(5),
-        AppendTarget::Exclude(5),
-    ]);
+    let ids = expand_targets_with(
+        &[
+            AppendTarget::Single(0),
+            AppendTarget::Single(5),
+            AppendTarget::Exclude(5),
+        ],
+        Records::Emit,
+    );
     assert_eq!(ids, vec![0], "id=0 は残り、id=5 は除外される");
 }
 
 /// (2) 範囲除外: `Range{1,5}, ExcludeRange{2,4}` は両端含みで 2,3,4 を減算し {1,5}（要件 2.5）。
 #[test]
 fn expand_targets_subtracts_exclude_range_inclusive() {
-    let ids = expand_targets(&[
-        AppendTarget::Range { start: 1, end: 5 },
-        AppendTarget::ExcludeRange { start: 2, end: 4 },
-    ]);
+    let ids = expand_targets_with(
+        &[
+            AppendTarget::Range { start: 1, end: 5 },
+            AppendTarget::ExcludeRange { start: 2, end: 4 },
+        ],
+        Records::Emit,
+    );
     assert_eq!(ids, vec![1, 5], "2,3,4 が両端含みで減算される");
 }
 
 /// (3) 除外なし回帰: `Range{1,3}` は減算ロジック導入後も {1,2,3} のまま変わらない。
 #[test]
 fn expand_targets_without_exclude_is_unchanged() {
-    let ids = expand_targets(&[AppendTarget::Range { start: 1, end: 3 }]);
+    let ids = expand_targets_with(&[AppendTarget::Range { start: 1, end: 3 }], Records::Emit);
     assert_eq!(ids, vec![1, 2, 3]);
 }
 
 /// (4) 除外は記述位置に依らず集合全体へ効く（`!` 記述子が範囲の前でも減算される・design）。
 #[test]
 fn expand_targets_exclude_applies_regardless_of_position() {
-    let ids = expand_targets(&[
-        AppendTarget::Exclude(2),
-        AppendTarget::Range { start: 1, end: 3 },
-    ]);
+    let ids = expand_targets_with(
+        &[
+            AppendTarget::Exclude(2),
+            AppendTarget::Range { start: 1, end: 3 },
+        ],
+        Records::Emit,
+    );
     assert_eq!(ids, vec![1, 3], "前置の除外でも展開結果から減算される");
 }
 
@@ -739,21 +752,27 @@ fn interleaved_redefinition_is_appearance_order_deterministic() {
 /// 指摘 75: 除外の範囲は番号へ広げずに引く。`surface0,!0-4294967295` は短く終わり、0 は除外される。
 #[test]
 fn expand_targets_full_u32_exclude_range_is_not_expanded() {
-    let ids = expand_targets(&[
-        AppendTarget::Single(0),
-        AppendTarget::ExcludeRange {
-            start: 0,
-            end: u32::MAX,
-        },
-    ]);
+    let ids = expand_targets_with(
+        &[
+            AppendTarget::Single(0),
+            AppendTarget::ExcludeRange {
+                start: 0,
+                end: u32::MAX,
+            },
+        ],
+        Records::Emit,
+    );
     assert!(ids.is_empty(), "0 は除外される");
-    let ids = expand_targets(&[
-        AppendTarget::Range { start: 1, end: 9 },
-        AppendTarget::Single(3),
-        AppendTarget::ExcludeRange { start: 7, end: 5 },
-        AppendTarget::Exclude(2),
-        AppendTarget::ExcludeRange { start: 9, end: 9 },
-    ]);
+    let ids = expand_targets_with(
+        &[
+            AppendTarget::Range { start: 1, end: 9 },
+            AppendTarget::Single(3),
+            AppendTarget::ExcludeRange { start: 7, end: 5 },
+            AppendTarget::Exclude(2),
+            AppendTarget::ExcludeRange { start: 9, end: 9 },
+        ],
+        Records::Emit,
+    );
     assert_eq!(
         ids,
         vec![1, 3, 4, 8, 3],
@@ -770,7 +789,7 @@ fn expand_targets_many_single_excludes_subtract_correctly() {
     }];
     // 偶数 0〜199998 の単独の除外を 10 万個（逆順に並べ、まとめの並べ直しも突く）。
     targets.extend((0..100_000u32).rev().map(|n| AppendTarget::Exclude(n * 2)));
-    let ids = expand_targets(&targets);
+    let ids = expand_targets_with(&targets, Records::Emit);
     let expected: Vec<u32> = (0..=8000).filter(|n| n % 2 == 1).collect();
     assert_eq!(ids, expected, "偶数だけが除外され、並びは記述の順");
 }

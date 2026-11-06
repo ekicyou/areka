@@ -297,7 +297,7 @@ fn add_lines(
 
 /// `surface.append` 定義 1 件を展開し、**その時点で既にある id のみ**へ追記する（要件 2.2/2.4/3.7）。
 ///
-/// ターゲット記述子を plain と同一規則で展開し（単一・列挙・両端含む範囲・[`expand_targets`]）、
+/// ターゲット記述子を plain と同一規則で展開し（単一・列挙・両端含む範囲・[`expand_targets_with`]）、
 /// 各 id が [`SurfaceIndex`] に存在する場合は対象 [`SurfaceMaster`] へ波括弧と同じ [`add_lines`] で
 /// in-place に足す（despawn/respawn しない）。波括弧が 1 行も無くても [`SurfaceImages`] に画像が在る番号は
 /// 「既にある面」に数え、空の [`SurfaceMaster`] をその場で作ってから同じ追記を行う（要件 3.7・C6）。
@@ -406,15 +406,12 @@ fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
 /// 依らず展開結果全体へ効く（ukadoc: `!` は集合から除去）。生存 id の記述順・重複は保つ（design
 /// 「展開結果の適用順は記述順」）。
 ///
-/// emo2 は除外を使用しないため実処理は型シームだが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
+/// emo2 は除外を使用しないが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
 ///
 /// 範囲の幅に上限はかけない: 読む側（parsers）がシェル全体の範囲の幅の合計に上限をかけ、越えた記述子を捨てて記録するので、ここへ届く展開は有界。
-pub(crate) fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
-    expand_targets_with(targets, Records::Emit)
-}
-
-/// [`expand_targets`] と同じ展開で、知らない記述子の記録を出すかどうかを `records` で切り替える。
-fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
+///
+/// 知らない記述子の記録を出すかどうかは `records` で切り替える（面と箱の畳み込みが面の表の組み方を渡す）。
+pub(crate) fn expand_targets_with(targets: &[AppendTarget], records: Records) -> Vec<u32> {
     // (1) 包含 id を記述順に列挙（重複はそのまま保つ）。
     let mut included: Vec<u32> = Vec::new();
     // (2) 除外は両端含みの範囲 (lo, hi) のまま集める（記述位置に依らず全体へ効かせるため先に全走査）。

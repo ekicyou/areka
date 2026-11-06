@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_parsers::balloon::{self, BalloonModel};
 use areka_parsers::shell::{BoxBrace, BoxDefinition, BoxElementLine, ShellBoxes};
 
-use crate::fold::{expand_targets, may_copy};
+use crate::fold::{expand_targets_with, may_copy};
 use crate::world::{EmoWorld, Records};
 
 /// 箱の名前（`balloon.名前`ブレスの名前）。中身は文字列として読むだけ。
@@ -138,7 +138,8 @@ pub enum BoxIssue {
         name: String,
         image_element: u32,
     },
-    /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。
+    /// `surface.append*`ブレスの対象のサーフェスがその時点で無い（要件 2.2・10.1）。番号ごとに 1 件で、
+    /// `name` はそのブレスの最初の箱の名前。
     AppendTargetMissing { surface: u32, name: String },
     /// element定義で子として置かれたサーフェスが箱を持つ。箱は親の中に置かない
     /// （spec: areka-P0-surface-element-nesting 要件 6.1・8.1）。
@@ -153,7 +154,8 @@ pub enum BoxIssue {
 ///
 /// `images`（面の画像だけで在る番号）は `surface.append*`ブレスの存在の条件に、`world`（画像の
 /// element番号）は箱が画像より下に書かれたかの判定に使う。本関数は fs に触れず、記録は
-/// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` だけはここで出す・指摘 78）。
+/// 入口が決める（範囲の見出しで写す行が上限を越えたときの `error!` と知らない記述子の記録だけはここで出す・指摘 78。
+/// どちらも `world` を組んだときの出し分けに従い、黙らせる組み方の面の表なら出さない・指摘 7）。
 pub fn fold_boxes(
     boxes: &ShellBoxes,
     images: &BTreeMap<u32, String>,
@@ -161,7 +163,7 @@ pub fn fold_boxes(
 ) -> (BoxLayout, BoxReport) {
     let mut issues = Vec::new();
     let defs = fold_braces(boxes, &mut issues);
-    let surfaces = distribute(boxes, images, &mut issues)
+    let surfaces = distribute(boxes, images, world.records(), &mut issues)
         .into_iter()
         .map(|(id, lines)| {
             let placements = place(id, &lines, &defs, world, &mut issues);
@@ -213,10 +215,11 @@ fn report_child_boxes(layout: &BoxLayout, world: &EmoWorld, issues: &mut Vec<Box
 /// 見出しの展開は `fold.rs` と共用。`surface*`ブレスはその番号の前の行へ足し、`surface.append*`ブレスは
 /// 「その時点で既にある番号（面の画像だけで在る番号を含む）」にだけ足す。どちらも同じ element番号の
 /// 前の行を残して両方を足す（面の `fold.rs` の `add_lines` と同じ規則・spec: audit-emo-compose
-/// 設計の議題 7 案 A）。無い番号への追記は箱の行ごとに報告へ載せる。
+/// 設計の議題 7 案 A）。無い番号への追記は番号ごとに 1 件、最初の箱の名前で報告へ載せる（指摘 8）。
 fn distribute<'a>(
     boxes: &'a ShellBoxes,
     images: &BTreeMap<u32, String>,
+    records: Records,
     issues: &mut Vec<BoxIssue>,
 ) -> BTreeMap<u32, Vec<&'a BoxElementLine>> {
     let mut existing: BTreeSet<u32> = images.keys().copied().collect();
@@ -226,8 +229,8 @@ fn distribute<'a>(
     for definition in &boxes.definitions {
         match definition {
             BoxDefinition::Surface(surface) => {
-                let ids = expand_targets(&surface.targets);
-                if !may_copy(&mut copied, &ids, surface.elements.len(), Records::Emit) {
+                let ids = expand_targets_with(&surface.targets, records);
+                if !may_copy(&mut copied, &ids, surface.elements.len(), records) {
                     continue;
                 }
                 for id in ids {
@@ -236,20 +239,18 @@ fn distribute<'a>(
                 }
             }
             BoxDefinition::Append(append) => {
-                let ids = expand_targets(&append.targets);
-                if !may_copy(&mut copied, &ids, append.elements.len(), Records::Emit) {
+                let ids = expand_targets_with(&append.targets, records);
+                if !may_copy(&mut copied, &ids, append.elements.len(), records) {
                     continue;
                 }
                 for id in ids {
                     if existing.contains(&id) {
                         lines.entry(id).or_default().extend(&append.elements);
-                    } else {
-                        issues.extend(append.elements.iter().map(|line| {
-                            BoxIssue::AppendTargetMissing {
-                                surface: id,
-                                name: line.name.clone(),
-                            }
-                        }));
+                    } else if let Some(line) = append.elements.first() {
+                        issues.push(BoxIssue::AppendTargetMissing {
+                            surface: id,
+                            name: line.name.clone(),
+                        });
                     }
                 }
             }

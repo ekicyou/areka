@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::budget::{Budget, surface_rows};
-use crate::world::EmoWorld;
+use crate::world::{EmoWorld, Records};
 
 /// 走査の積み荷: 面へ親の原点から `(x, y)` ずらして入る（`quiet` なら循環を黙って飛ばす）か、面から出る。
 pub(crate) enum Step {
@@ -40,10 +40,13 @@ pub(crate) trait Outline: Copy {
 }
 
 /// 走査の作業場（経路にある面の集合・積み荷の列・段の列）。どれも走査が終わると空に戻る。
+/// `reported` だけは根をまたいで持ち越す: 同じ作業場で表 1 つを作るあいだ、予算が尽きた `error!` は
+/// 最初の根の 1 度だけ（2 つ目からは記録を出さない予算で回す・指摘 1）。
 pub(crate) struct Scratch<R> {
     on_path: HashSet<u32>,
     stack: Vec<Step>,
     levels: Vec<Level<R>>,
+    reported: bool,
 }
 
 impl<R> Default for Scratch<R> {
@@ -52,6 +55,7 @@ impl<R> Default for Scratch<R> {
             on_path: HashSet::new(),
             stack: Vec::new(),
             levels: Vec::new(),
+            reported: false,
         }
     }
 }
@@ -65,7 +69,8 @@ impl<R> Default for Scratch<R> {
 ///
 /// `memo` が在れば、きれいに終わった面の答えを覚え、後で同じ面に入るとき予算の残りが「入る分＋下で数えた
 /// 数」以上ならそれだけ一度に引いて覚えた答えを使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと
-/// 同じ）。予算が尽きたら `name`（走査の名前）と根の面で `error!` を 1 行出す。
+/// 同じ）。予算が尽きたら `name`（走査の名前）と根の面で `error!` を 1 行出す（作業場 `s` で既に出していれば
+/// 出さない）。
 pub(crate) fn walk<R: Outline>(
     s: &mut Scratch<R>,
     world: &EmoWorld,
@@ -78,7 +83,12 @@ pub(crate) fn walk<R: Outline>(
     s.on_path.clear();
     s.stack.clear();
     s.levels.clear();
-    let mut budget = Budget::new(limit);
+    let records = if s.reported {
+        Records::Quiet
+    } else {
+        Records::Emit
+    };
+    let mut budget = Budget::with_records(limit, records);
     let mut answer = None;
     s.stack.push(Step::Enter {
         surface: root,
@@ -162,5 +172,6 @@ pub(crate) fn walk<R: Outline>(
         });
         s.stack[children..].reverse();
     }
+    s.reported |= budget.reported();
     answer
 }

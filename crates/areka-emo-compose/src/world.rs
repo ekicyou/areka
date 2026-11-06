@@ -73,8 +73,9 @@ pub struct EmoWorld {
     world: World,
 }
 
-/// 面の表を組む段の記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// 面の表を組む段の記録を出すかどうか（中身は同じ 1 本）。クレートの中だけで使う。面の表のリソースにも置き、
+/// 後から面の表を読む畳み込み（箱の [`crate::fold_boxes`]）が同じ組み方を引く（指摘 7）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Resource)]
 pub(crate) enum Records {
     Emit,
     Quiet,
@@ -126,6 +127,7 @@ impl EmoWorld {
             collision_sort: shell.collision_sort.clone(),
         });
         world.insert_resource(SurfaceImages(images.clone()));
+        world.insert_resource(records);
 
         let mut emo = EmoWorld { world };
         emo.populate_from_shell(shell, records);
@@ -137,6 +139,14 @@ impl EmoWorld {
         let steps = crate::bind_steps::BindSteps::build(&emo);
         emo.world.insert_resource(steps);
         emo
+    }
+
+    /// 面の表を組んだときの記録の出し分け（[`EmoWorld::build_with_images_quiet`] なら `Quiet`）。
+    pub(crate) fn records(&self) -> Records {
+        self.world
+            .get_resource::<Records>()
+            .copied()
+            .unwrap_or(Records::Emit)
     }
 
     /// 面 `surface` の着せ替え animation `animation` の描く手順（`bind` 種でなければ空）。
@@ -232,7 +242,7 @@ impl EmoWorld {
     ///
     /// `build` 後・compose 前に一度呼ぶ（design Preconditions）。全 surface entity の
     /// `SurfaceMaster.elements` を `AtlasTable::resolve` で `ElementId` へ解決し、平行な
-    /// [`AtlasBinding`] を各 entity へ挿入する。未解決 element はパニックせず `warn`＋`None`。
+    /// [`AtlasBinding`] を各 entity へ挿入する。未解決 element はパニックせず `debug!`＋`None`（脱落は読み込みの入口が error で 1 度出している）。
     /// 束縛後の compose 経路に `resolve` は現れない（毎フレーム O(1) の `entry` 引き）。
     ///
     /// 束縛の次に動く絵を子へ分解する（[`crate::film`]・要件 1.1〜1.4）。**同じ面の表に呼ぶのは

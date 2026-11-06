@@ -305,3 +305,40 @@ fn spent_budget_does_not_import_children_not_yet_entered() {
     // 予算が足りれば 3 つとも持ち込む（本番の組み方）。
     assert_eq!(w.hit_regions(0).map(<[_]>::len), Some(3));
 }
+
+/// 指摘 6（2000 根の形の小さな版）: 面 1000 に "Y" が 20 行、面 100+i が "Z" 1 行と面 1000 を置き、面 i が
+/// "Y" 1 行と面 100+i を置く（i は 20 組）。根をまたいで共有する覚えは面 100+i ごとに 21 本の列を持つので、
+/// 上限が無ければ合計 440 本になる。覚えの予算 100 では合計が 100 以下で止まり、後の面は覚えず、どの根の
+/// 答えも覚えを使わないときと同じ。
+#[test]
+fn memo_stops_at_its_budget_and_answers_stay_the_same() {
+    use super::{HitMemo, regions_of};
+    use crate::budget::{Budget, VISIT_BUDGET};
+
+    const N: u32 = 20;
+    let mut text = String::from("surface1000\n{\n");
+    for c in 0..20 {
+        text.push_str(&format!("collision{c},0,0,5,5,Y\n"));
+    }
+    text.push_str("}\n");
+    for i in 0..N {
+        text.push_str(&format!(
+            "surface{}\n{{\nelement0,overlay,1000,0,0\ncollision0,0,0,5,5,Z\n}}\n\
+             surface{i}\n{{\nelement0,overlay,{},0,0\ncollision0,0,0,5,5,Y\n}}\n",
+            100 + i,
+            100 + i
+        ));
+    }
+    let w = world_of(&text);
+    let mut memo = HitMemo::new(100);
+    for id in w.surface_ids() {
+        let master = w.surface(id).expect("面");
+        let with_memo = regions_of(&w, master, &mut Budget::new(VISIT_BUDGET), Some(&mut memo));
+        let without = regions_of(&w, master, &mut Budget::new(VISIT_BUDGET), None);
+        assert_eq!(with_memo, without, "根 {id}");
+    }
+    let stored: usize = memo.map.values().map(|(_, list)| list.len()).sum();
+    assert!(stored <= 100, "覚えの合計 {stored} 本は上限以下");
+    assert!(memo.contains_key(&100), "初めの面は覚える");
+    assert!(!memo.contains_key(&(100 + N - 1)), "上限の後の面は覚えない");
+}

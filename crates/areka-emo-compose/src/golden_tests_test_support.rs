@@ -1,6 +1,6 @@
 //! `golden_tests` の複数テーマから参照される共有 fixture ヘルパ（テスト関数を持たない）。
 //!
-//! emo2 fixture のパス解決・surfaces.txt パース・`AlphaParams`・画像スペック生成・
+//! emo2 fixture のパス解決・surfaces.txt パース・`AlphaParams`・
 //! surface1000 の bind パーツ土台（`BindPart` / `surface1000_bind_parts` /
 //! `build_atlas_for_surface1000` / `compose_surface1000`）・不透明画素の計数を集約する。
 //! 単一テーマからしか参照されないヘルパは各テーマファイル側へ残してある。

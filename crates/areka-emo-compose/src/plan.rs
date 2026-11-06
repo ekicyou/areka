@@ -47,7 +47,7 @@ use crate::world::{AtlasBinding, EmoWorld, Records, SurfaceIndex};
 mod extent;
 pub(crate) use extent::{MAX_AREA, MAX_EXTENT, build_extents};
 #[cfg(test)]
-pub(crate) use extent::{compute_extent, compute_extent_limited};
+pub(crate) use extent::{build_extents_limited, compute_extent, compute_extent_limited};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
 ///

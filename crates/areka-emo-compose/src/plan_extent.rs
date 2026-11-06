@@ -54,10 +54,19 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
 /// 全部の面の外形の表を作る（指摘 8・[`EmoWorld::bind_atlas`] の最後に 1 度だけ）。予算は根の面 1 つにつき
 /// [`VISIT_BUDGET`]（範囲は合成 1 回と同じ。この表は入る面とその行を数え、命令列はさらに段の積み荷も数えるので、命令列は
 /// この表より先に切れることがある）。きれいに終わった面の覚えは根の間で共有する
-/// （覚えの有る無しで答えと記録は変わらない）。
+/// （覚えの有る無しで答えと記録は変わらない）。予算が尽きた `error!` は表 1 つにつき 1 度だけ（作業場を根の間で
+/// 共有する・指摘 1）。
 pub(crate) fn build_extents(world: &EmoWorld, atlas: &AtlasTable) -> SurfaceExtents {
+    build_extents_limited(world, atlas, crate::budget::VISIT_BUDGET)
+}
+
+/// [`build_extents`] の中身。`budget` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは小さな数）。
+pub(crate) fn build_extents_limited(
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    budget: usize,
+) -> SurfaceExtents {
     let (mut scratch, mut memo) = (Scratch::default(), ExtentMemo::new());
-    let budget = crate::budget::VISIT_BUDGET;
     let extents = world
         .surface_ids()
         .map(|id| {
@@ -89,7 +98,7 @@ impl Outline for (i64, i64) {
 /// シェルの外形と共有する [`crate::outline_walk::walk`] で、ここは面ごとの寄与だけを渡す（指摘 84）。
 ///
 /// `memo` が在れば（[`build_extents`] が全部の面を根に回すとき・外形を直に確かめるテストの口は渡さない）、きれいに終わった面の
-/// 右下を覚え、後で同じ面に入るとき予算の残りが「入る 1 ＋下で数えた数」以上ならそれだけ一度に引いて
+/// 右下を覚え、後で同じ面に入るとき予算の残りが「入る分（入る 1 ＋面の行の全部）＋下で数えた数」以上ならそれだけ一度に引いて
 /// 覚えた右下を使う（足りなければ今どおり入る＝答えと記録は覚えが無いときと同じ）。段ごとの右下を
 /// その面の原点からの相対で持ち、段が終わったら親の原点へずらして重ねるので、覚えた右下も同じ形で重なる。
 ///

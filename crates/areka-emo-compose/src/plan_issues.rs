@@ -46,7 +46,14 @@ pub enum ShapeIssue {
 /// 面の表から形の誤りを集める。並びは知らない `animation-sort` が先頭、続いて面の番号の昇順 → animation の書いた順 → pattern の書いた順で、
 /// 1 つの pattern が両方に当たれば `Cycle` が先。
 pub fn shape_issues(world: &EmoWorld) -> Vec<ShapeIssue> {
+    shape_issues_limited(world, VISIT_BUDGET)
+}
+
+/// [`shape_issues`] の中身。`limit` は [`reaches`] 1 回の予算（本番は [`VISIT_BUDGET`]・テストは小さな数）。
+/// 予算が尽きた `error!` は呼び出し 1 回につき 1 度だけ（指摘 2）。
+pub(crate) fn shape_issues_limited(world: &EmoWorld, limit: usize) -> Vec<ShapeIssue> {
     let edges = nest_edges(world);
+    let mut reported = false;
     // 同じ（先, 面）の組は答えが同じなので 1 度だけたどる（指摘 132 と同じ型）。
     let mut cycles: HashMap<(u32, u32), bool> = HashMap::new();
     let mut issues = Vec::new();
@@ -67,7 +74,7 @@ pub fn shape_issues(world: &EmoWorld) -> Vec<ShapeIssue> {
                 };
                 let cycle = *cycles
                     .entry((target, surface))
-                    .or_insert_with(|| reaches(&edges, target, surface, VISIT_BUDGET));
+                    .or_insert_with(|| reaches(&edges, target, surface, limit, &mut reported));
                 if cycle {
                     issues.push(ShapeIssue::Cycle {
                         surface,

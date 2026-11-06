@@ -38,8 +38,8 @@ pub fn shell_bounds(world: &EmoWorld, atlas: &AtlasTable) -> ShellBounds {
 }
 
 /// [`shell_bounds`] の中身。`limit` は根の面 1 つの広がりの予算（本番は [`VISIT_BUDGET`]・テストは
-/// 小さな数）。きれいに終わった面の覚えは根の間で 1 つを共有する。根ごとの外形は表から引く（予算は表を
-/// 作ったときの [`VISIT_BUDGET`]）。
+/// 小さな数）。きれいに終わった面の覚えと作業場は根の間で 1 つを共有する（予算が尽きた `error!` は
+/// 呼び出し 1 回につき 1 度だけ・指摘 1）。根ごとの外形は表から引く（予算は表を作ったときの [`VISIT_BUDGET`]）。
 pub(crate) fn shell_bounds_limited(
     world: &EmoWorld,
     atlas: &AtlasTable,

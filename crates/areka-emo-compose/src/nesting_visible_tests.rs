@@ -759,3 +759,24 @@ fn cut_cycle_edges_from_every_top_are_reported() {
         assert_eq!(cut_all, report, "{}: 切った辺の和＝報告の循環", case.name);
     }
 }
+
+/// 指摘 9: 行の数が予算に届く面は、合成・外形・持ち込みと同じく部品に数えない（面 1 は予算−1 行で数え、
+/// 面 2 は予算ちょうどの行で数えない）。
+#[test]
+fn surface_with_rows_at_the_budget_is_not_a_visible_part() {
+    let budget = crate::budget::VISIT_BUDGET;
+    let mut text = String::from("surface0\n{\nelement0,overlay,1,0,0\nelement1,overlay,2,0,0\n}\n");
+    for (id, rows) in [(1, budget - 1), (2, budget)] {
+        text.push_str(&format!("surface{id}\n{{\n"));
+        for c in 0..rows {
+            text.push_str(&format!("collision{c},0,0,1,1,R\n"));
+        }
+        text.push_str("}\n");
+    }
+    let world = EmoWorld::build(&parse(&text));
+    let mut out = Vec::new();
+    world
+        .nest_table()
+        .visible_parts(0, &BindSet::default(), &PatternState::default(), &mut out);
+    assert_eq!(out, [1]);
+}

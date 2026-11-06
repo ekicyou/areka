@@ -187,10 +187,10 @@ fn fixture_yields_exactly_the_planted_issues() {
 fn spent_budget_answers_not_reached() {
     let edges = BTreeMap::from([(0, vec![1]), (1, vec![2]), (2, vec![3])]);
     let mut reached = None;
-    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 5)));
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 5, &mut false)));
     assert_eq!(reached, Some(true));
     assert!(logs.is_empty(), "{logs}");
-    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 4)));
+    let logs = capture_logs(|| reached = Some(super::reaches(&edges, 0, 3, 4, &mut false)));
     assert_eq!(reached, Some(false));
     assert_eq!(logs.matches("level=ERROR").count(), 1, "{logs}");
     assert!(

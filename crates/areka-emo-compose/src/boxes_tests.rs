@@ -830,3 +830,47 @@ fn append_existence_matches_image_fold_for_range_and_exclusion() {
         }]
     );
 }
+
+/// 指摘 8: 無い番号への追記は、箱の行がいくつあっても番号ごとに 1 件（最初の箱の名前）。
+#[test]
+fn append_to_missing_surface_reports_once_per_surface() {
+    let text = [
+        two_braces(),
+        block(
+            "surface.append8,9",
+            &["element1,balloon,a,0,0", "element2,balloon,b,0,0"],
+        ),
+    ]
+    .concat();
+    let (_, report, _) = fold_images(&text, &[]);
+    let missing = |surface| BoxIssue::AppendTargetMissing {
+        surface,
+        name: "a".into(),
+    };
+    assert_eq!(report.issues, vec![missing(8), missing(9)]);
+}
+
+/// 指摘 7: 箱の畳み込みは面の表を組んだときの記録の出し分けに従う。写す行が上限（2^20）を越える範囲の
+/// 見出し（`surface1-1025` に 1,024 行）の `error!` は、出す組み方の面の表なら 1 行、黙らせる組み方なら 0 行。
+#[test]
+fn box_fold_follows_the_records_of_the_world() {
+    let mut text = two_braces();
+    text.push_str("surface1-1025\n{\n");
+    for c in 0..1024 {
+        text.push_str(&format!("element{c},balloon,a,0,0\n"));
+    }
+    text.push_str("}\n");
+    let (shell, boxes) = (areka_parsers::shell::parse(&text), parse_boxes(&text));
+    let images = BTreeMap::new();
+    let copy_limit = |world: &EmoWorld| {
+        let logs = crate::log_capture::capture_logs(|| drop(fold_boxes(&boxes, &images, world)));
+        logs.lines()
+            .filter(|l| l.contains("範囲の見出しで写す行の数が畳み込みの上限を越えた"))
+            .count()
+    };
+    assert_eq!(copy_limit(&EmoWorld::build_with_images(&shell, &images)), 1);
+    assert_eq!(
+        copy_limit(&EmoWorld::build_with_images_quiet(&shell, &images)),
+        0
+    );
+}

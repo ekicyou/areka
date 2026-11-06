@@ -32,8 +32,8 @@ pub struct HitRegions(pub Vec<Collision>);
 /// 面の表の全サーフェスを根に 1 回ずつ列を求め、持ち込みが在るサーフェスにだけ [`HitRegions`] を付ける
 /// （[`EmoWorld::build_with_images`] の最後で呼ぶ）。持ち込みが 1 つも無いサーフェスには何も付けない。
 /// 広がりの予算は根の面 1 つにつき 1 つ（`records` が `Quiet` なら尽きても記録を出さない）。きれいに
-/// 終わった面の覚え（[`HitMemo`]）は根の間で 1 つを共有する。根をまたいで持ち込む領域の数は
-/// [`IMPORT_BUDGET`] 1 つで数える（[`attach_hit_regions_limited`]）。
+/// 終わった面の覚え（[`HitMemo`]）は根の間で 1 つを共有する。根をまたいで持ち込む領域の数と、覚えに
+/// 入れる列の長さの合計は、それぞれ [`IMPORT_BUDGET`] 1 つで数える（[`attach_hit_regions_limited`]）。
 pub(crate) fn attach_hit_regions(emo: &mut EmoWorld, records: Records) {
     attach_hit_regions_limited(emo, records, IMPORT_BUDGET)
 }
@@ -44,11 +44,11 @@ pub(crate) const IMPORT_BUDGET: usize = 1 << 20;
 
 /// [`attach_hit_regions`] の中身。`limit` は根をまたいで持ち込む領域の数の予算（本番は [`IMPORT_BUDGET`]・
 /// テストは小さな数）。尽きたら `error!` を 1 行出し（`records` が `Quiet` なら出さない）、その面から先には
-/// 持ち込みを付けない。
+/// 持ち込みを付けない。覚えに入れる列の長さの合計も同じ `limit` で抑える（[`HitMemo`]）。
 pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, limit: usize) {
     let mut left = limit;
     let mut found = Vec::new();
-    let mut memo = HitMemo::new();
+    let mut memo = HitMemo::new(limit);
     for id in emo.surface_ids() {
         let Some(master) = emo.surface(id) else {
             continue;
@@ -89,7 +89,39 @@ pub(crate) fn attach_hit_regions_limited(emo: &mut EmoWorld, records: Records, l
 
 /// きれいに終わった面（その下で先祖へ戻る辺を捨てず、予算にも断られなかった面）の、入る分と下で予算に数えた数と
 /// 持ち込み済みの列。きれいに終わった面の下に循環は無いので、どの経路から入っても答えは同じ。
-pub(crate) type HitMemo = HashMap<u32, (usize, Vec<Collision>)>;
+///
+/// 覚えた列は根をまたいで持ち続けるので、覚えに入れる列の長さの合計を根をまたぐ 1 つの予算 `left` から引き、
+/// 足りなくなったら以後は何も覚えない（覚えが無いときと同じく入り直すだけ＝答えと記録は変わらない・指摘 6）。
+pub(crate) struct HitMemo {
+    map: HashMap<u32, (usize, Vec<Collision>)>,
+    left: usize,
+}
+
+impl HitMemo {
+    /// 覚えに入れる列の長さの合計が `limit` までの空の覚え。
+    pub(crate) fn new(limit: usize) -> Self {
+        Self {
+            map: HashMap::new(),
+            left: limit,
+        }
+    }
+
+    /// 面 `id` の答えを覚える。列の長さが残りを越えたら覚えず、以後も覚えない。
+    fn insert(&mut self, id: u32, spent: usize, list: &[Collision]) {
+        if list.len() > self.left {
+            self.left = 0;
+            return;
+        }
+        self.left -= list.len();
+        self.map.insert(id, (spent, list.to_vec()));
+    }
+
+    /// 面 `id` を覚えているか（テストの確かめ口）。
+    #[cfg(test)]
+    pub(crate) fn contains_key(&self, id: &u32) -> bool {
+        self.map.contains_key(id)
+    }
+}
 
 /// 持ち込みの走査の段: 面と、element の読み位置と、その段で集めた列と、親の element定義の X,Y と、
 /// きれいに終わるかと、この面に入る分（入る 1 ＋面の行）と段の下で予算に数えた数。
@@ -148,7 +180,7 @@ pub(crate) fn regions_of(
                 continue;
             };
             let (dx, dy) = element.transform.offset();
-            if let Some((n, list)) = memo.as_deref().and_then(|m| m.get(&c))
+            if let Some((n, list)) = memo.as_deref().and_then(|m| m.map.get(&c))
                 && budget.take(n + list.len())
             {
                 level.spent = level.spent.saturating_add(n + list.len());
@@ -193,7 +225,7 @@ pub(crate) fn regions_of(
         if done.clean
             && let Some(m) = memo.as_deref_mut()
         {
-            m.insert(done.master.id, (done.spent, done.out.clone()));
+            m.insert(done.master.id, done.spent, &done.out);
         }
         let Some(up) = levels.last_mut() else {
             return done.out;

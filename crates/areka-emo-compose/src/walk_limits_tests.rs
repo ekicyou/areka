@@ -239,8 +239,11 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
     let ids: Vec<u32> = world.surface_ids().collect();
     let mut hits = [0; 3];
     for limit in 0..=80 {
-        let (mut extent_memo, mut bounds_memo, mut hit_memo) = Default::default();
-        let mut scratch = BoundsScratch::default();
+        let (mut extent_memo, mut bounds_memo) = Default::default();
+        let mut hit_memo = crate::hit_import::HitMemo::new(crate::hit_import::IMPORT_BUDGET);
+        // シェルの外形は作業場を根の間で共有する（予算の `error!` は作業場 1 つにつき 1 度・指摘 1）ので、
+        // 覚えを使わない側も作業場を 1 つにして比べる。
+        let (mut scratch, mut again_scratch) = (BoundsScratch::default(), BoundsScratch::default());
         for &id in &ids {
             let mut again = (Extent { w: 0, h: 0 }, None, Vec::new());
             let again_logs = capture_logs(|| {
@@ -252,8 +255,7 @@ fn memo_gives_the_same_answers_and_records_as_walking_again() {
                     limit,
                     None,
                 );
-                let fresh = &mut BoundsScratch::default();
-                again.1 = walk(fresh, None, &world, &atlas, id, limit);
+                again.1 = walk(&mut again_scratch, None, &world, &atlas, id, limit);
                 let master = world.surface(id).expect("面");
                 again.2 = regions_of(&world, master, &mut Budget::new(limit), None);
             });
@@ -395,4 +397,33 @@ fn extent_over_the_area_limit_is_too_large() {
             h: 4097
         })
     );
+}
+
+/// 指摘 1・2: 読み込みの走査（外形の表・シェルの外形・無い番号と循環の報告・形の誤り）は根ごと・組ごとに
+/// 予算を新しくするが、予算が尽きた `error!` は呼び出し 1 回につき 1 行だけ。面 0 … 9 の鎖（element定義と
+/// pattern定義の両方で次の面を指す）で予算 4 なら、面 0〜6 の根と組がどれも尽きる。
+#[test]
+fn load_walks_report_the_spent_budget_once_per_call() {
+    let mut text = String::from("charset,UTF-8\n");
+    for i in 0..10 {
+        text.push_str(&format!(
+            "surface{i}\n{{\nelement0,overlay,{0},0,0\n\
+             animation0.interval,never\nanimation0.pattern0,overlay,{0},0,0,0\n}}\n",
+            i + 1
+        ));
+    }
+    text.push_str("surface10\n{\nelement0,overlay,s.png,0,0\n}\n");
+    let atlas = bake_atlas(Path::new("shell/master"), &["s.png"]);
+    let world = bound_world(&parse(&text), &[], &atlas);
+    let count = |logs: String| logs.matches("level=ERROR").count();
+    let extents = capture_logs(|| drop(crate::plan::build_extents_limited(&world, &atlas, 4)));
+    assert_eq!(count(extents), 1, "外形の表");
+    let bounds = capture_logs(|| {
+        let _ = crate::plan_bounds::shell_bounds_limited(&world, &atlas, 4);
+    });
+    assert_eq!(count(bounds), 1, "シェルの外形");
+    let report = capture_logs(|| drop(crate::nesting::NestReport::from_world_limited(&world, 4)));
+    assert_eq!(count(report), 1, "無い番号と循環の報告");
+    let issues = capture_logs(|| drop(crate::plan_issues::shape_issues_limited(&world, 4)));
+    assert_eq!(count(issues), 1, "形の誤り");
 }

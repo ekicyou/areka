@@ -104,11 +104,16 @@ pub(crate) fn claim_inserts(s: &mut PlanScratch, level: &Level<'_>) {
 }
 
 /// `a` から差し込みの連鎖を、作業場の小さなスタック（`s.chain`＝展開中の祖先と手順の読み位置）でたどる。
+/// 手順の表はスタックの頭の着せ替えが変わったときだけ引き直す（指摘 4）。
 fn claim_from(s: &mut PlanScratch, level: &Level<'_>, root: u32) {
     open_claim(s, level, root);
+    let (mut head, mut steps) = (None, &[][..]);
     while let Some(top) = s.chain.last_mut() {
         let (a, i) = *top;
-        let Some(&step) = level.world.bind_steps(level.surface_id, a).get(i) else {
+        if head != Some(a) {
+            (head, steps) = (Some(a), level.world.bind_steps(level.surface_id, a));
+        }
+        let Some(&step) = steps.get(i) else {
             s.chain.pop();
             continue;
         };
@@ -142,12 +147,16 @@ fn expands(level: &Level<'_>, id: u32) -> bool {
 /// `Insert { B }` は [`claim_inserts`] が B を A のものにしたときだけ、その位置に B の寄与（B の今のコマか
 /// B の手順）を B 自身の座標で積む（6.1・6.3・6.7）。`s.done` は段の中で積んだ B（同じ B を 2 度積まない）。
 /// `insert` の連鎖は作業場の小さなスタック（`s.chain`）でたどる。`a` の手順は空でないこと（呼び手が
-/// [`push_direct`] で確かめる）。
+/// [`push_direct`] で確かめる）。手順の表はスタックの頭の着せ替えが変わったときだけ引き直す（指摘 4）。
 pub(crate) fn push_bind_contribution(s: &mut PlanScratch, level: &Level<'_>, a: u32) {
     s.chain.push((a, 0));
+    let (mut head, mut steps) = (None, &[][..]);
     while let Some(top) = s.chain.last_mut() {
         let (a, i) = *top;
-        let Some(&step) = level.world.bind_steps(level.surface_id, a).get(i) else {
+        if head != Some(a) {
+            (head, steps) = (Some(a), level.world.bind_steps(level.surface_id, a));
+        }
+        let Some(&step) = steps.get(i) else {
             s.chain.pop();
             continue;
         };

@@ -35,7 +35,8 @@ pub(crate) struct Budget {
 }
 
 impl Budget {
-    /// 記録を出す予算。本番の口は [`VISIT_BUDGET`] を、テストは小さな数を渡す。
+    /// 記録を出す予算（テストの口・本番の走査は記録の出し分けを渡す [`Budget::with_records`]）。
+    #[cfg(test)]
     pub(crate) fn new(limit: usize) -> Self {
         Self::with_records(limit, Records::Emit)
     }

@@ -14,12 +14,12 @@ use areka_parsers::shell::{Animation, ElementPath, Interval, Pattern};
 
 use crate::bind::BindSet;
 use crate::bind_steps::BindStep;
-use crate::budget::{Budget, VISIT_BUDGET};
+use crate::budget::{Budget, VISIT_BUDGET, surface_rows};
 use crate::method::is_implemented_name;
 use crate::pattern::{Cell, PatternState};
 use crate::pattern_word::{PatternWord, pattern_word};
 use crate::plan::is_bind_interval;
-use crate::world::EmoWorld;
+use crate::world::{EmoWorld, Records};
 
 /// element定義が置くもの。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,7 +137,14 @@ impl NestTable {
                 .elements
                 .iter()
                 .filter_map(|e| match e.kind {
-                    ElementKind::Surface(c) if world.surface(c).is_some() => Some(c),
+                    // 行の数が予算を越える面は、合成・外形・持ち込みの走査が部品として入らない（指摘 9）。
+                    ElementKind::Surface(c)
+                        if world
+                            .surface(c)
+                            .is_some_and(|m| surface_rows(m) < VISIT_BUDGET) =>
+                    {
+                        Some(c)
+                    }
                     _ => None,
                 })
                 .collect();
@@ -360,7 +367,14 @@ impl NestReport {
     /// （[`pattern_edge`]・7 語と `move` を除く）。着せ替えの有効・無効や
     /// 描画メソッドが動くかには依らない（どの一番上から見ても切られうる辺を全部挙げる）。
     pub(crate) fn from_world(world: &EmoWorld) -> NestReport {
+        Self::from_world_limited(world, VISIT_BUDGET)
+    }
+
+    /// [`NestReport::from_world`] の中身。`limit` は [`reaches`] 1 回の予算（本番は [`VISIT_BUDGET`]・テストは
+    /// 小さな数）。予算が尽きた `error!` は報告 1 つにつき 1 度だけ（指摘 2）。
+    pub(crate) fn from_world_limited(world: &EmoWorld, limit: usize) -> NestReport {
         let edges = nest_edges(world);
+        let mut reported = false;
         // 同じ（子, 親）の組は答えが同じなので 1 度だけたどる（同じ子を指す element定義の数だけたどり直さない・指摘 132）。
         let mut cycles: HashMap<(u32, u32), bool> = HashMap::new();
 
@@ -386,7 +400,7 @@ impl NestReport {
                 };
                 let cycle = *cycles
                     .entry((child, id))
-                    .or_insert_with(|| reaches(&edges, child, id, VISIT_BUDGET));
+                    .or_insert_with(|| reaches(&edges, child, id, limit, &mut reported));
                 if cycle {
                     issues.push(NestIssue::Cycle {
                         surface: id,
@@ -436,17 +450,30 @@ pub(crate) fn pattern_edge(p: &Pattern) -> Option<u32> {
 /// `from` から辺をたどって `to` へ着けるか（`from == to` も着いたに数える）。`limit` は呼び出し 1 回の
 /// 広がりの予算（本番は [`VISIT_BUDGET`]）。取り出した面を `from` の他は「1 ＋その面から出る辺の数」ずつ
 /// 数え（なめる辺も仕事・指摘 130 と同じ型）、尽きたら着かないと答える（残りの辺は循環として報告しない・
-/// 合成の祖先の確かめが循環を止める）。
+/// 合成の祖先の確かめが循環を止める）。尽きた `error!` は `reported` が偽のときだけ出し、出したら真にする
+/// （呼び手は表 1 つのあいだ同じ印を渡す＝組の数だけ出さない・指摘 2）。
 // ponytail: 呼び手は（子, 親）の組ごとに 1 度呼び、1 回は予算いっぱいまでなめる（組の数 × 予算）。読み込み 1 回だけなので、遅ければ強連結成分で 1 度に引く。
-pub(crate) fn reaches(edges: &BTreeMap<u32, Vec<u32>>, from: u32, to: u32, limit: usize) -> bool {
+pub(crate) fn reaches(
+    edges: &BTreeMap<u32, Vec<u32>>,
+    from: u32,
+    to: u32,
+    limit: usize,
+    reported: &mut bool,
+) -> bool {
     #[cfg(test)]
     REACHES_CALLS.with(|n| n.set(n.get() + 1));
-    let mut budget = Budget::new(limit);
+    let records = if *reported {
+        Records::Quiet
+    } else {
+        Records::Emit
+    };
+    let mut budget = Budget::with_records(limit, records);
     let mut seen = BTreeSet::from([from]);
     let mut stack = vec![from];
     while let Some(s) = stack.pop() {
         let out = edges.get(&s).map_or(&[][..], Vec::as_slice);
         if s != from && !budget.enter(out.len(), "reaches", from) {
+            *reported = true;
             return false;
         }
         if s == to {
