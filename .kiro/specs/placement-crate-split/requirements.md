@@ -27,6 +27,7 @@
   - 新しい crate `crates/areka-placement/` の新設と、配置の本番とテストの移動（履歴を残す移動）。
   - 配置の公開面の付け替え（外から使われる項目だけを `pub` にする）と、本体の参照の書き換え。
   - テストの支えの開け方（`test-support` 機能）、テストと examples の置き場の移し替え。
+  - ログを捕まえる支えの汎用の部分（`ExpectField`・`expect_one`）を `crates/log-capture-kit/src` へ下ろすこと（議題 1）。`crates/areka/src/emo2_boot/sample_test_support.rs` に `balloon_root` を足すこと。
   - 配置を名指すパスの書き換え: 1,000 行の番人の例外表ほか `log-capture-kit` の表、ソースを文字列で読むテスト、配置の中の自分を指すパス、文書（`doc/`・網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所・`.kiro/steering/structure.md`）、`tools/perf` の見本、ソースの説明の中のパス。
   - ログの出所の名前の付け替えと、名前で読んでいる所の書き換え。
   - `audit-placement-core`・`audit-placement-follow` の brief の「受け持つファイル」の新しいパスへの書き換え。
@@ -80,16 +81,19 @@
 
 #### Acceptance Criteria
 
-1. The `areka-placement` クレート shall 配置の外のテストが使う支え（`test_support` の `capture_logs`・`LogEvent`・`ExpectField`・`expect_one` と、`placement_shared_test_support` の `balloon_root`・`emo2_root`・`emily_shaped_scopes`・`with_com_initialized`・`WA` ほか）を、`test-support` という名の機能を付けたときだけ外から使える形で開ける。
-2. The 本体の crate `areka` shall `areka-placement` の `test-support` 機能を、テストのビルドの依存（dev-dependency）でだけ付ける。
-3. The 分割作業 shall テストの支えの写しを作らず、1 つの支えを 1 か所だけに置く。
-4. Where `capture_logs` の汎用の部分を `log-capture-kit` へ下ろす場合, the 分割作業 shall 下ろした部分を `areka-placement` の側に残さず、どちらか 1 か所だけに置く。
-5. The 分割作業 shall 配置のテストのうち本体のほかの部分を使う 3 本（`reset_balloon_pos_tests.rs`→`emo2_boot::switch_assets`・`spawn_assembly_tests.rs`→`input_events::attach_char_pointer_handlers`・`transition_judge_tests.rs`→`emo2_boot::target_map`）を本体に残す。
-6. The 分割作業 shall `#[cfg(test)]` だけの判定器 `transition_judge.rs`・`transition_judge_offset.rs`・`transition_judge_verdict.rs`（とそのテストの一族＝`transition_judge*.rs`・`transition_signoff_tests.rs`・`transition_signoff_procedure_tests.rs`）を、配置のフォルダから本体のテスト専用のモジュールへ移し、本番のビルドに含めない。
-7. The 分割作業 shall 本体の `emo2_boot` のテストのうち `transition_judge*` を使う 2 本（`frame_transition_atomicity_tests.rs`・`frame_transition_branch_tests.rs`）が、移した先の判定器を使って前と同じ合否を示すようにする。
-8. The `areka-placement` クレートのテストの実行ファイル shall 本体と wintf のテストの実行ファイルと同じく、テストを走らせる前にプロセスの寿命の MTA を立てる。
-9. When `areka-placement` のテストの実行ファイルがテストの途中で落ちたとき, the そのテストの実行ファイル shall 本体と wintf のテストの実行ファイルと同じ形の落ちの報告を標準エラーへ出す（3.8 と 3.9 は、本体の `emo2_boot/crash_report_test_support.rs`・wintf の `test_crash_report.rs` に並ぶ 3 つ目の写しで満たす）。
-10. Where 揺れるテストを回す道具 `tools/load-flake.ps1` を新しい crate のテストに向ける場合, the 道具 shall `-Binary` で `areka-placement` のテストの実行ファイルを選べる。
+1. The 分割作業 shall ログを捕まえる支えのうち汎用の部分（`ExpectField`・`expect_one`）を `log-capture-kit` へ下ろし、本体と配置のテストは `log_capture_kit` の `capture`・`CapturedEvent`・`ExpectField`・`expect_one` を直に使う（配置の `test_support` の包み `capture_logs`・`LogEvent` は残さない）。
+2. The 分割作業 shall 見本のゴーストの入口（`emo2_root`・`balloon_root`）を、ワークスペースの慣習（crate ごとに `sample_test_support` を 1 つ持ち、`sample-ghost-kit` をそこからだけ引く）に従って置き、本体のテストは本体の `emo2_boot/sample_test_support.rs`（`balloon_root` を足す）を使う。
+3. The `areka-placement` クレート shall 配置の外のテストが使う支えのうち、配置の型と `windows` だけで書けるもの（`WA`・`with_com_initialized`・`emily_shaped_scopes`・`GhostTitles::from_scope_titles`・`persist::project_restore`・`spawn` のテストの支えほか）を、`test-support` という名の機能を付けたときだけ外から使える形で開ける。
+4. The 分割作業 shall 共有のテスト用の crate（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）を、どの crate の本番の依存表（optional を含む）にも書かず、今の番人（`with_default_guard_test.rs`・`sample_path_guard_test.rs`）の決まりを変えない。
+5. The 本体の crate `areka` shall `areka-placement` の `test-support` 機能を、テストのビルドの依存（dev-dependency）でだけ付ける。
+6. The 分割作業 shall テストの支えの写しを作らず、1 つの支えを 1 か所だけに置く（見本のゴーストの入口は 3.2 の慣習どおり crate ごとに 1 つ）。
+7. The 分割作業 shall 配置のテストのうち本体のほかの部分を使う 5 本（`reset_balloon_pos_tests.rs`→`emo2_boot::switch_assets`・`spawn_assembly_tests.rs`→`input_events::attach_char_pointer_handlers`・`transition_judge_tests.rs`→`emo2_boot::target_map`・`measure_bake_count_tests.rs` と `measure_bake_log_tests.rs`→`emo2_boot::assets`）を本体に残す。
+8. Where 本体に残すテストが配置の私有の関数（`measure_bake_*` が呼ぶ `measure_with_reader`・`measure_baked`・`measure_scope_sizes` ほか）を呼ぶ場合, the `areka-placement` クレート shall その関数を `test-support` 機能の下でだけ開け、要件 2.1 の例外として開けた項目を記録する（本番の公開面は広げない）。
+9. The 分割作業 shall `#[cfg(test)]` だけの判定器 `transition_judge.rs`・`transition_judge_offset.rs`・`transition_judge_verdict.rs`（とそのテストの一族＝`transition_judge*.rs`・`transition_signoff_tests.rs`・`transition_signoff_procedure_tests.rs`）を、配置のフォルダから本体のテスト専用のモジュールへ移し、本番のビルドに含めない。
+10. The 分割作業 shall 本体の `emo2_boot` のテストのうち `transition_judge*` を使う 2 本（`frame_transition_atomicity_tests.rs`・`frame_transition_branch_tests.rs`）が、移した先の判定器を使って前と同じ合否を示すようにする。
+11. The `areka-placement` クレートのテストの実行ファイル shall 本体と wintf のテストの実行ファイルと同じく、テストを走らせる前にプロセスの寿命の MTA を立てる。
+12. When `areka-placement` のテストの実行ファイルがテストの途中で落ちたとき, the そのテストの実行ファイル shall 本体と wintf のテストの実行ファイルと同じ形の落ちの報告を標準エラーへ出す（3.11 と 3.12 は、本体の `emo2_boot/crash_report_test_support.rs`・wintf の `test_crash_report.rs` に並ぶ 3 つ目の写しで満たし、配置は GPU の許可の持ち手を持たないので wintf の形を写す）。
+13. The 揺れるテストを回す道具 `tools/load-flake.ps1` shall `-Binary` で `areka-placement` のテストの実行ファイル（`areka-placement-lib`＝`-p areka-placement --lib`）を選べる。
 
 ### Requirement 4: examples の置き場
 
@@ -114,7 +118,7 @@
 5. If ソースを文字列で読むテストが読む先のファイルを見つけられない場合, then the そのテスト shall 黙って通らず赤になる。crate ごとに割ったソースの木を歩くテストは、合わせて移す前と同じ範囲（本体と配置の両方の `src`）を歩き、範囲が黙って狭まらない。
 6. The 分割作業 shall 文書（`doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/` の `briefing-assets.md` と網羅台帳 `ledger/*.toml` の根拠の場所・`.kiro/steering/structure.md`）にある配置のパスを、移した先のパスへ書き換える。
 7. The 分割作業 shall ソースと道具の説明の中にある配置のパス（wintf・`pilot`・`ukadoc-survey`・本体の `emo2_boot`・`tools/perf/judge-followup.py` ほか）を、移した先のパスへ書き換える。
-8. The 分割作業 shall `tools/perf/fixtures/` と `tools/perf/fixtures-loop/` の見本の `run.log` を手で書き換えず、見本を作る `tools/perf/fixtures/generate.py` を直して作り直す。
+8. The 分割作業 shall `tools/perf/fixtures/` の見本の `run.log` を手で書き換えず、見本を作る `tools/perf/fixtures/generate.py` を直して作り直す。作り手の無い `tools/perf/fixtures-loop/` の見本は、出所の名前の 1 語（`areka::placement:` → `areka_placement:`）だけをスクリプトで置き換え（手で書かない例外・行のほかの部分は変えない）、どちらの後も性能の道具の自分の確かめ（SelfTest）を回して緑を示す。
 9. The 分割作業 shall `audit-placement-core`・`audit-placement-follow` の brief の「受け持つファイル」を、移した先のパスへ書き換える。
 10. When 書き換えを終えたとき, the 分割作業 shall 古いパス `crates/areka/src/placement/`（と `src/placement/`）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書 `roadmap-history.md`・`.kiro/specs/completed/` と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
 
@@ -139,11 +143,13 @@
 
 #### Acceptance Criteria
 
-1. The `areka-placement` クレート shall 根（`lib.rs`）に依存の向きの規約の文を持ち、その文が新しい crate の中の実際の参照と一致する。
+1. The `areka-placement` クレート shall 根（`lib.rs`）に依存の向きの規約の文を持ち、その文が名指すモジュール（`resolver`・`config`・`measure`・`spawn`・`follow`・`diag`）の間の約束であることを文の中で明記し、その範囲で新しい crate の中の実際の参照と一致する。
 2. The 分割作業 shall 規約の文と実際の参照の食い違い 5 件（`resolver.rs` が `tracing`・`wintf::ecs::DPI`・`config`・`follow::OffsetBase` を引く／`diag.rs` が `bevy_ecs::Entity`・`wintf::ecs::ZOrderPairStrategy` を引く／`config.rs` が `tracing` を引く／`measure.rs` が根の `PlacementError` を引き根と参照し合う／`spawn` と `follow` が互いに引き合う）を 1 件ずつ解消する。
 3. Where 食い違いを参照の側で直すことが項目の置き場を移すだけで済む場合, the 分割作業 shall 参照を規約に合わせて直す。
 4. Where 食い違いを参照の側で直すと項目の置き場を移すだけで済まない場合, the 分割作業 shall 参照を変えず、規約の文を実際の参照に合わせて書き直す。
 5. The 分割作業 shall 食い違いの解消で配置の振る舞いを変えない。
+6. The 分割作業 shall 食い違いを次のとおり解消する: ① `OffsetBase` を `resolver` へ移して `follow` から再公開し（7.3）、`tracing`・`DPI`・`config` の参照は規約の文の並びを実際に合わせる（7.4）／② `diag`・③ `config` は規約の文を書き直す（7.4）／④ `PlacementError` を独立のファイルへ移して根から再公開する（7.3・`source.rs` の同じ形も同時に解く）／⑤ 規約の文に「同じ段どうしは引き合ってよい」を書く。
+7. The 分割作業 shall 規約が名指さないモジュールの参照（根を引く子 `reset_pos`→`primary_monitor`・`follow/offset_space`→`scale_signed` と、名指さない 21 モジュールの間の輪）を変えず、`audit-placement-core` へ申し送りとして記録する。
 
 ### Requirement 8: 振る舞いを変えないことの検証
 
@@ -151,7 +157,7 @@
 
 #### Acceptance Criteria
 
-1. The 分割作業 shall 配置の振る舞い（窓の置き場・追従・保存と復元・DPI の追従・前後の並び・ログの中身）を変えない。直したくなった不具合は直さず、`audit-placement-core`・`audit-placement-follow` へ申し送りとして記録する。
+1. The 分割作業 shall 配置の振る舞い（窓の置き場・追従・保存と復元・DPI の追従・前後の並び・ログの中身）を変えない。直したくなった不具合は直さず、`audit-placement-core`・`audit-placement-follow` へ申し送りとして記録する。理由の文が移した後に事実でなくなる `#[allow(dead_code)]`・`#[allow(unused_imports)]`（約 51 個・「areka は lib を持たない bin」「`#[path]` で取り込む examples」を理由にするもの）も、属性と文を変えず、一覧をこの 2 本へ申し送る。
 2. When 着手のときと完了のとき, the 分割作業 shall `cargo test --workspace --no-fail-fast -- --list` を取り、`: test$` の行から名前の末尾（最後の `::` から後ろ）の多重集合を作り、前後で一致することを示す。
 3. If 前後の多重集合が一致しない場合, then the 分割作業 shall 名前を改めたテストを対応表で 1 件ずつ説明し、説明できない差を残さない。
 4. The 分割作業 shall `cargo check --workspace --all-targets` の警告を 0 件のまま保つ。
@@ -160,22 +166,18 @@
 7. The 分割作業 shall 実機で回すテストを上の 1 本だけにし、ほかは構造の証跡（テストの名前の一覧の比べ・警告・全体テスト・grep）で足りるとする。
 8. The 分割作業 shall `THIRD-PARTY-NOTICES.md` を `cargo about generate` で作り直し、手で書かない。
 
-## 要件の段で決めること（議題の候補・推奨つき）
+## 設計の段への申し送り
 
-brief が「要件の段で決める」とした点。上の要件は推奨案で書いた。要件の討議で開発者が別の案を選べば、該当する受入基準を書き換える。
-
-1. **依存の向きの規約の食い違い 5 件**（要件 7）。推奨（設計の段で「移すだけで済むか」を確かめて確定）:
-   - ① `resolver.rs`: `config` の型を引数に取るのが配置式の本体で、`OffsetBase`・`DPI` は出力の型＝移すだけでは済まない見込み → **規約の文を書き直す**（「`resolver` は純粋〔World と窓を触らない〕・`config` の型と `DPI`・`OffsetBase` の値の型と `tracing` だけを引く」の形）。`OffsetBase` を `resolver` 側へ移して `follow` から再公開する形が移すだけで済むなら、その部分は参照を直す。
-   - ② `diag.rs`: `Entity`・`ZOrderPairStrategy` は記録の中身の型＝**規約の文を書き直す**（「`diag` は記録の型と `tracing` だけ・`World` に触らない」の形）。
-   - ③ `config.rs` の `tracing`: **規約の文を書き直す**（全段で `tracing` を許す一文）。
-   - ④ `measure.rs` ↔ 根の `PlacementError`: `PlacementError` を独立のモジュールへ移し、根から再公開する＝移すだけで済む → **参照を直す**。
-   - ⑤ `spawn` ↔ `follow`: 同じ段で違反ではない → **規約の文に「同じ段どうしは引き合ってよい」を明記**。
-2. **落ちの報告と MTA の初期化子の 3 つ目の写し**（要件 3.8・3.9）。推奨は **置く**（移したテストには GPU と COM を使うものがあり、初期化子が無いと移す前の実行ファイルで直した落ち〔件 3〕が新しい実行ファイルで戻る＝振る舞いを変えないため）。
-3. **`tools/load-flake.ps1` の `-Binary` に新しい実行ファイルを足すか**（要件 3.10）。推奨は **足す**（`areka-placement-lib` を `-p areka-placement --lib` に結ぶ 1 行。揺れたときに新しい実行ファイルを狙えないと測り直しができない）。
-4. **`capture_logs` の汎用の部分を `log-capture-kit` へ下ろすか**（要件 3.4）。推奨は **下ろさない**（`test-support` 機能で開けるだけにする。下ろすのは移すだけを超える）。
-5. **数の取り直し**（議題ではなく申し送り）: brief の「`placement::test_support` を外の 194 ファイルが使う」は、11-06 の測りで約 40 ファイル（`placement::test_support` か `placement::{…test_support…}` を書くファイル・配置の中を除く）。配置を指す本体のファイルは 173（配置自身を除く）。設計の段で数え直す。
-6. **brief の触るファイルの一覧に無かった所**（申し送り・同じウェーブの兄弟の触るファイルと重ならないことは 11-06 に確かめた）: `crates/log-capture-kit/tests/with_default_guard_test.rs`（表に配置のパス 3 つ）・説明の中のパス（wintf の `api_owner_chain_probe_tests.rs`・`ecs/window/window_band_pipeline_real_tests.rs`・`ecs/window/zorder_pair_maintain_always_on_top_tests.rs`・`runtime/tick_bridge.rs`、`crates/pilot/examples/pilot-dropfiles-on-wuc-window/main.rs`、`crates/ukadoc-survey/src/evidence/candidates.rs`、本体の `emo2_boot/hit_region.rs`・`emo2_boot/frame_transition_atomicity_tests.rs`、`tools/perf/judge-followup.py`）。
+1. **数の取り直し**（議題ではなく申し送り）: brief の「`placement::test_support` を外の 194 ファイルが使う」は、11-06 の測りで約 40 ファイル（`placement::test_support` か `placement::{…test_support…}` を書くファイル・配置の中を除く）。配置を指す本体のファイルは 173（配置自身を除く）。設計の段で数え直す。
+2. **brief の触るファイルの一覧に無かった所**（申し送り・同じウェーブの兄弟の触るファイルと重ならないことは 11-06 に確かめた）: `crates/log-capture-kit/tests/with_default_guard_test.rs`（表に配置のパス 3 つ）・説明の中のパス（wintf の `api_owner_chain_probe_tests.rs`・`ecs/window/window_band_pipeline_real_tests.rs`・`ecs/window/zorder_pair_maintain_always_on_top_tests.rs`・`runtime/tick_bridge.rs`、`crates/pilot/examples/pilot-dropfiles-on-wuc-window/main.rs`、`crates/ukadoc-survey/src/evidence/candidates.rs`、本体の `emo2_boot/hit_region.rs`・`emo2_boot/frame_transition_atomicity_tests.rs`、`tools/perf/judge-followup.py`）。
 
 ## 要件の討議で決めたこと
 
 - **議題 3（ファイルを文字として読むテストの置き場）**（2026-11-06 開発者「参照場所があちこちに飛ぶのはソース管理できなくなる。あとで読む人が素直に読めるソースコードの書き方をしないとダメ。それをするのが『整理』」・承認）: 自分の crate のファイルは自分の crate のテストが読み、別の crate を読むのはコードの依存と同じ向き（上が下を読む）に限る。`measure_template_tests`・`spawn_zorder_pair_deferred_tests` は crate ごとに割り、分岐の対応表 2 本は本体へ移して crate の名前とパスで読む読み口 1 つにまとめる（要件 5.2〜5.5）。初めの推奨「配置に残して `../../areka/…` を読む」は、下の crate が上の crate を読む逆向きの参照になるので退けた。
+- **議題 1（テストの支えの開け方）**（承認）: 汎用のログの支え `ExpectField`・`expect_one` を `log-capture-kit` へ下ろし、本体も配置も `log_capture_kit` を直に使う。見本のゴーストの入口は crate ごとの `sample_test_support` の慣習に従い、本体は本体のものを使う。配置の型と `windows` だけで書ける支えだけを `test-support` 機能で開ける。共有のテスト用の crate を本番の依存表に書かず、番人の決まりを変えない（要件 3.1〜3.6）。`log-capture-kit/src` は C18 の兄弟が触らないことを確かめた（roadmap の C18 の「触るファイル」に 1 行の追記が要る）。
+- **議題 2（`measure_bake_count_tests`・`measure_bake_log_tests` の置き場）**（承認）: 本体の `emo2_boot::assets` を使うので本体に残し、呼ぶ私有の関数は `test-support` 機能の下でだけ開ける（要件 3.7・3.8）。
+- **議題 4（依存の向きの規約の範囲）**（承認）: 規約の文は名指す 6 モジュールの間の約束と明記する。5 件の解き方は要件 7.6、名指さない所の参照と輪は `audit-placement-core` へ申し送る（要件 7.7）。
+- **議題 5（`tools/perf/fixtures-loop/` の見本）**（承認）: 作り手が無いので、出所の名前の 1 語だけをスクリプトで置き換える例外とし、SelfTest を回す（要件 5.8）。
+- **議題 6（古くなる `#[allow(...)]` の理由の文）**（承認）: 属性と文を変えず、一覧を `audit-placement-core`・`audit-placement-follow` へ申し送る（要件 8.1）。
+- **議題 7（落ちの報告と MTA の初期化子の 3 つ目の写し）**（承認）: 置く。wintf の `test_crash_report.rs` の形を写す（要件 3.11・3.12）。
+- **議題 8（`tools/load-flake.ps1` の `-Binary`）**（承認）: 足す（要件 3.13）。
