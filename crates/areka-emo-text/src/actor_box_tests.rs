@@ -5,13 +5,14 @@
 
 use std::path::PathBuf;
 
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
 
 use super::test_support::{box_layout, box_name, cue, emote, fake_resolver, items_at, text};
 use super::{SurfaceKeyResolver, TextLayerRuntime};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
+use crate::state::test_support::font;
 use crate::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
 
 /// 前のシェル: サーフェス 0 は箱 a（スコープに従う）だけ。
@@ -55,17 +56,6 @@ element1,balloon,a,0,0
 /// 何を聞いても解決できない閉包（差し替えで閉包が入れ替わったかを見る）。
 fn never_resolver() -> SurfaceKeyResolver {
     Box::new(|_: &str| SurfaceKeyOutcome::Unresolved)
-}
-
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
 }
 
 fn place(actor: &str, place: TextPlace) -> PlaceKey {

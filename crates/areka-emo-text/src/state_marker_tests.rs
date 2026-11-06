@@ -5,7 +5,7 @@
 
 use areka_sakura::contract::TalkCue;
 
-use super::test_support::{cue, items_of};
+use super::test_support::{applied, cue, items_of, spans, text};
 use super::*;
 use crate::inline_marker::MARKER_GLYPH;
 use crate::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
@@ -19,18 +19,6 @@ fn marker(actor: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::command_carrier("*", vec![]))
 }
 
-fn text(actor: &str, s: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(s.into()))
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
-}
-
 fn glyph_texts(state: &TextLayerState, actor: &str) -> Vec<String> {
     items_of(state, actor)
         .iter()
@@ -39,13 +27,6 @@ fn glyph_texts(state: &TextLayerState, actor: &str) -> Vec<String> {
             _ => None,
         })
         .collect()
-}
-
-fn spans(state: &TextLayerState, actor: &str) -> Vec<ChoiceSpan> {
-    state
-        .actor_state(&ActorKey::from(actor))
-        .map(|s| s.choices().to_vec())
-        .unwrap_or_default()
 }
 
 /// `\![*]\q[晴れてる,X1]`: 目印の字が 1 つ、選択肢の範囲はその後ろ、選択肢は 1 つ（要件 4.1・5.7）。

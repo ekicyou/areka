@@ -8,7 +8,7 @@ use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
 use log_capture_kit::capture;
 
 use super::route_tests::{boxed, key, select, show, state_with_boxes};
-use super::test_support::cue;
+use super::test_support::{applied, cue, font, spans, text};
 use super::*;
 use crate::look::{StyleId, TextLook};
 use crate::lookahead::{Basis, TalkLookahead, advance_state};
@@ -28,10 +28,6 @@ fn close(actor: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::AnchorEnd)
 }
 
-fn text(actor: &str, s: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(s.into()))
-}
-
 fn choice(actor: &str, id: &str, s: &str) -> TalkCue {
     cue(
         actor,
@@ -42,22 +38,6 @@ fn choice(actor: &str, id: &str, s: &str) -> TalkCue {
             references: Vec::new(),
         },
     )
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
-}
-
-/// スコープの普通のバルーンの場所の範囲の列（場所が無ければ空）。
-fn spans(state: &TextLayerState, actor: &str) -> Vec<ChoiceSpan> {
-    state
-        .actor_state(&key(actor))
-        .map(|s| s.choices().to_vec())
-        .unwrap_or_default()
 }
 
 /// 箱の場所の範囲の列（場所が無ければ空）。
@@ -401,17 +381,6 @@ fn rehearsal_emits_no_records() {
 }
 
 // ---- 既定の下線（要件 5.1・5.3〜5.5）
-
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
 
 /// スコープの普通のバルーンの場所の内容。
 fn balloon<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {

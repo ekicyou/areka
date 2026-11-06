@@ -24,27 +24,11 @@
 //! 装飾の表 [`super::ActorTextState::styles`] で引き直した [`crate::look::TextLook`] が観測点で、
 //! DirectWrite も GPU も要らない。
 
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand};
 
-use super::super::test_support::cue;
+use super::super::test_support::{cue, font, text};
 use super::super::{ActorTextState, TextItem, TextLayerState};
 use crate::look::{StyleId, TextLook};
-
-/// `\f[トークン…]` を運ぶ汎用キャリアの cue（再生時間 0）。
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
-
-fn text(actor: &str, body: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(body.to_owned()))
-}
 
 fn st<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {
     state

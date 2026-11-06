@@ -18,6 +18,7 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 use super::test_support::{balloon, choice, instant};
 use crate::place::PlaceKey;
+use crate::state::test_support::applied;
 use crate::state::{ActorTextState, ChoiceSpan, SpanKind, TextLayerState};
 
 /// アンカーの範囲を 1 つ記録する cue の列（開き → 文字 → 閉じ）。
@@ -48,14 +49,6 @@ fn settled_flags(state: &TextLayerState, actor: &str) -> Vec<(SpanKind, bool)> {
         .iter()
         .map(|span: &ChoiceSpan| (span.kind, s.is_settled_choice(span)))
         .collect()
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
 }
 
 /// 境目の範囲: 済ませる前は全部が済んでおらず、済ませると今ある選択肢の全部が済む

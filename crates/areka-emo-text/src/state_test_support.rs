@@ -1,4 +1,5 @@
 use super::*;
+use areka_sakura::contract::FONT_TAG_CARRIER;
 
 /// FP 丸めに依存しない reveal 間隔（0.25 は 2 の冪＝正確表現）。duration 駆動 reveal では
 /// `interval = duration / N` ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むことで
@@ -54,4 +55,53 @@ pub(super) fn reveal_times_of(state: &TextLayerState, actor: &str) -> Vec<f64> {
         .reveal()
         .times()
         .to_vec()
+}
+
+// ══ 状態のテストで共通の組み立て（書体・文字・適用・区間・位置） ══
+
+/// `\f[トークン…]` を運ぶ汎用キャリアの cue（再生時間 0）。
+pub(crate) fn font(actor: &str, tokens: &[&str]) -> TalkCue {
+    cue(
+        actor,
+        0.0,
+        CueCommand::command_carrier(
+            FONT_TAG_CARRIER,
+            tokens.iter().map(|t| (*t).to_owned()).collect(),
+        ),
+    )
+}
+
+/// 文字の cue（時刻 0）。
+pub(crate) fn text(actor: &str, s: &str) -> TalkCue {
+    cue(actor, 0.0, CueCommand::Text(s.into()))
+}
+
+/// 文字の cue を今の行き先へ書く。
+pub(crate) fn write(state: &mut TextLayerState, actor: &str, s: &str) {
+    state.apply_cue(&text(actor, s));
+}
+
+/// 空の状態へ cue の列を順に当てた状態。
+pub(crate) fn applied(cues: &[TalkCue]) -> TextLayerState {
+    let mut state = TextLayerState::default();
+    for c in cues {
+        state.apply_cue(c);
+    }
+    state
+}
+
+/// スコープの普通のバルーンの場所の範囲の列（場所が無ければ空）。
+pub(crate) fn spans(state: &TextLayerState, actor: &str) -> Vec<ChoiceSpan> {
+    state
+        .actor_state(&ActorKey::from(actor))
+        .map(|s| s.choices().to_vec())
+        .unwrap_or_default()
+}
+
+/// スコープと場所の組の鍵。
+pub(crate) fn at(actor: &str, place: TextPlace) -> PlaceKey {
+    PlaceKey {
+        actor: ActorKey::from(actor),
+        place,
+    }
 }

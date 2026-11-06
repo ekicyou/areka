@@ -12,7 +12,7 @@ use areka_emo_compose::BoxName;
 use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{cue, items_of};
+use super::test_support::{cue, font, items_of};
 use super::*;
 use crate::actor::test_support::{box_in, box_index, box_layout};
 
@@ -386,17 +386,6 @@ fn empty_box_index_never_leaves_balloon() {
 }
 
 // ---- 装飾の持ち運び（要件 3.13〜3.17・3.19。場面の網羅は state_decoration_carry_tests.rs）
-
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
 
 fn look_at(state: &TextLayerState, actor: &str, place: TextPlace) -> crate::look::TextLook {
     state

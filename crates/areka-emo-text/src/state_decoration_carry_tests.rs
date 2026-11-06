@@ -18,14 +18,14 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use areka_emo_compose::{BoxName, FontFollow};
-use areka_sakura::contract::{CueCommand, FONT_TAG_CARRIER};
+use areka_sakura::contract::CueCommand;
 
 use super::super::route_tests::{key, select, show};
-use super::super::test_support::cue;
+use super::super::test_support::{at, cue, write};
 use super::super::{BoxTraits, SurfaceKeyOutcome, TextLayerState};
 use crate::actor::test_support::{box_in, box_index, box_layout};
 use crate::look::{LookLayers, StyleId, TextLook};
-use crate::place::{PlaceKey, TextPlace};
+use crate::place::TextPlace;
 
 const SHELL: &str = "\
 balloon.a
@@ -142,14 +142,7 @@ fn state() -> TextLayerState {
 }
 
 fn font(state: &mut TextLayerState, actor: &str, tokens: &[&str]) {
-    state.apply_cue(&cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    ));
+    state.apply_cue(&super::super::test_support::font(actor, tokens));
 }
 
 fn red(state: &mut TextLayerState, actor: &str) {
@@ -158,17 +151,6 @@ fn red(state: &mut TextLayerState, actor: &str) {
 
 fn blue(state: &mut TextLayerState, actor: &str) {
     font(state, actor, &["color", "0", "0", "255"]);
-}
-
-fn text(state: &mut TextLayerState, actor: &str, s: &str) {
-    state.apply_cue(&cue(actor, 0.0, CueCommand::Text(s.into())));
-}
-
-fn at(actor: &str, place: TextPlace) -> PlaceKey {
-    PlaceKey {
-        actor: key(actor),
-        place,
-    }
 }
 
 /// 書いた文字の見た目（番号列を表で引き直したもの・配置層と同じ引き方）。
@@ -181,7 +163,7 @@ fn glyph(state: &TextLayerState, actor: &str, place: TextPlace, ordinal: usize) 
 
 /// 今の行き先へ 1 文字書き、その文字の見た目を返す（続きの文字が受け取る見た目）。
 fn now(state: &mut TextLayerState, actor: &str) -> TextLook {
-    text(state, actor, "・");
+    write(state, actor, "・");
     let place = state.destination(&key(actor));
     let last = state
         .place_state(&at(actor, place.clone()))
@@ -459,10 +441,10 @@ fn written_glyph_styles_never_change() {
     let mut state = state();
     show(&mut state, "0", 3);
     red(&mut state, "0");
-    text(&mut state, "0", "ふ");
+    write(&mut state, "0", "ふ");
     show(&mut state, "0", 0);
     font(&mut state, "0", &["bold", "1"]);
-    text(&mut state, "0", "あ");
+    write(&mut state, "0", "あ");
     let balloon_ids = state
         .actor_state(&key("0"))
         .unwrap()
@@ -512,7 +494,7 @@ fn box_place_has_its_defaults_before_any_text() {
     show(&mut state, "0", 1); // x（写しが走らないので場所はまだ無い）
     assert!(state.place_state(&at("0", bx("x"))).is_none());
     font(&mut state, "0", &["bold", "1"]);
-    text(&mut state, "0", "x");
+    write(&mut state, "0", "x");
     let s = state.place_state(&at("0", bx("x"))).unwrap();
     assert_ne!(s.glyph_styles()[0], StyleId::DEFAULT);
     let g = glyph(&state, "0", bx("x"), 0);

@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+use crate::state::test_support::applied;
 use crate::state::{SpanKind, TextLayerState};
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -61,14 +62,6 @@ fn choice(id: &str, s: &str) -> TalkCue {
             references: Vec::new(),
         },
     )
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
 }
 
 /// 普通のバルーンの場所の範囲の列（種類と位置だけ）。

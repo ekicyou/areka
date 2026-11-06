@@ -12,7 +12,7 @@
   - 画素の数え上げの写しのずれは、切り詰める形（正しい方）に揃える
   - 完了の姿: `research.md` 4 節の指摘 15 に挙がったアクターの部品の写しが `src/` から消え、emo-text のテストが写しを消す前と同じ数だけ緑
   - _Requirements: 2.1, 2.3, 4.6_
-- [ ] 1.2 状態のテストの部品を状態のテストの部品ファイルへまとめる
+- [x] 1.2 状態のテストの部品を状態のテストの部品ファイルへまとめる
   - 状態のテストの部品（書体・文字・適用・区間・位置）を状態のテストの部品ファイルへ寄せ、`state_*` のテストの写しを消して引く
   - 完了の姿: 指摘 15 に挙がった状態の部品の写しが消え、`state_*` のテストが同じ数だけ緑
   - _Requirements: 2.1, 2.3, 4.6_
@@ -229,3 +229,8 @@
   - 1,000 行の番人の例外表と一時の入口の番人・`vendors/`・`Cargo.lock`・`crates/areka/` に差分が無いこと、実機の根と一時フォルダを `target` の外に作っていないこと、道具の出力の文字コードを変えていないことを差分で確かめる
   - 完了の姿: 全体テストが緑で、上の差分が 0
   - _Requirements: 4.4, 5.1, 6.1, 6.2, 6.6, 6.8, 6.9, 6.10, 6.11_
+
+## Implementation Notes
+
+- テストの部品は `actor_test_support.rs`（`actor.rs` の `#[cfg(test)] pub(crate) mod test_support`）と `state_test_support.rs`（`state.rs` の同じ形）に置き、他のモジュールのテストは `crate::actor::test_support`／`crate::state::test_support` から引く。1 度だけ組む表はファイルごとの `static LazyLock` と `box_in(&表, 名前)`（1.1・1.2）。
+- research.md 4 節 指摘 15 の `actor_lookahead_tests.rs:77` の `font` は挙げた場所の誤りで、本物は `lookahead_tests.rs:68`（`audit-emo-text-layout-draw` の持ち物なので残す・1.2）。

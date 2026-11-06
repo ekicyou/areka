@@ -733,7 +733,7 @@ mod anchor;
 
 #[cfg(test)]
 #[path = "state_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "state_cue_apply_tests.rs"]

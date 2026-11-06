@@ -5,22 +5,11 @@
 //! - 0: a・b（既定は a） 1: b・a（既定は b） 2: c だけ 3: 箱なし
 
 use super::route_tests::{boxed, key, place_items, select, show, state_with_boxes};
-use super::test_support::cue;
+use super::test_support::{at, cue, write};
 use super::*;
-
-fn text(state: &mut TextLayerState, actor: &str, s: &str) {
-    state.apply_cue(&cue(actor, 0.0, CueCommand::Text(s.into())));
-}
 
 fn glyphs(s: &[&str]) -> Vec<TextItem> {
     s.iter().map(|c| TextItem::glyph(c)).collect()
-}
-
-fn at(actor: &str, place: TextPlace) -> PlaceKey {
-    PlaceKey {
-        actor: key(actor),
-        place,
-    }
 }
 
 /// スコープ 0 に、普通のバルーン「ふ」・箱 a「あ」・箱 b「び」（行き先は b）、
@@ -28,14 +17,14 @@ fn at(actor: &str, place: TextPlace) -> PlaceKey {
 fn written() -> TextLayerState {
     let mut state = state_with_boxes();
     show(&mut state, "0", 3);
-    text(&mut state, "0", "ふ");
+    write(&mut state, "0", "ふ");
     show(&mut state, "0", 0);
-    text(&mut state, "0", "あ");
+    write(&mut state, "0", "あ");
     state.apply_cue(&select("0", "b"));
-    text(&mut state, "0", "び");
+    write(&mut state, "0", "び");
     show(&mut state, "1", 1);
     state.apply_cue(&select("1", "a"));
-    text(&mut state, "1", "い");
+    write(&mut state, "1", "い");
     state
 }
 
@@ -46,7 +35,7 @@ fn switching_destination_keeps_text_of_previous_places() {
     let mut state = written();
     // `\s` で箱の無いサーフェスや別の箱へ移っても、前の箱の文字は消えない。
     show(&mut state, "0", 2);
-    text(&mut state, "0", "し");
+    write(&mut state, "0", "し");
     show(&mut state, "0", 3);
     assert_eq!(place_items(&state, "0", boxed("a")), glyphs(&["あ"]));
     assert_eq!(place_items(&state, "0", boxed("b")), glyphs(&["び"]));
@@ -57,7 +46,7 @@ fn switching_destination_keeps_text_of_previous_places() {
     );
     // 戻ってきた箱へは続きから書かれる。
     show(&mut state, "0", 0);
-    text(&mut state, "0", "う");
+    write(&mut state, "0", "う");
     assert_eq!(place_items(&state, "0", boxed("a")), glyphs(&["あ", "う"]));
 }
 
@@ -98,7 +87,7 @@ fn clear_empties_only_destination_box_and_returns_to_write_start() {
     assert_eq!(state.clear_count(&key("1")), 0);
 
     // 書き出し位置へ戻る: 次の文字は空の箱の先頭から書かれる。
-    text(&mut state, "0", "べ");
+    write(&mut state, "0", "べ");
     assert_eq!(place_items(&state, "0", boxed("b")), glyphs(&["べ"]));
     assert_eq!(state.destination(&key("0")), boxed("b"), "行き先は変えない");
 }
@@ -107,11 +96,11 @@ fn clear_empties_only_destination_box_and_returns_to_write_start() {
 fn clear_on_balloon_destination_behaves_as_before_and_leaves_boxes() {
     // 箱の無い構成: 本 spec の前と同じ。
     let mut plain = TextLayerState::default();
-    text(&mut plain, "0", "ふ");
+    write(&mut plain, "0", "ふ");
     plain.apply_cue(&cue("0", 0.0, CueCommand::Clear));
     assert!(plain.actor_state(&key("0")).unwrap().is_empty());
     assert_eq!(plain.clear_count(&key("0")), 1);
-    text(&mut plain, "0", "へ");
+    write(&mut plain, "0", "へ");
     assert_eq!(
         place_items(&plain, "0", TextPlace::Balloon),
         glyphs(&["へ"])
