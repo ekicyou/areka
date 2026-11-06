@@ -76,3 +76,15 @@
 ## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
 
 - **件 1: 今の clippy で `-D warnings` が赤**。`cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` が lib で `collapsible_if` を 1 件、lib test で `type_complexity` を 5 件（`crates/areka-kanade/src/actor_online_tests.rs` 21 行目ほか）出す。振る舞いを変えずに直す。起票の訳: 持ち主のこの spec の受け持ちの範囲と重なる。
+
+## 2026-11-06 棚卸㉟の再測定（main 18e4cb30）
+
+- 前提の変化: 11-04 の後、`crates/areka-kanade/` は 1 つも変わっていない。Upstream の `mcp-reload` は 10-22 に着地した＝待つものは無い（roadmap の spec 台帳の「Dependencies: areka-P0-mcp-reload」も古い）。`audit-ghost-catalog` の申し送り（clippy の `collapsible_if` 1 件・`type_complexity` 5 件）は残っている（`actor_online_tests.rs` 21 行目の `spawn_with` の戻りの組は今もそのまま・cargo は回していない）。
+- 触るファイル: `crates/areka-kanade/` の 146 ファイル・コード約 11,200 行・テスト約 36,100 行。上限の近く＝`actor_tests.rs` 983 行・`schedule/steady.rs` 973・`schedule/events.rs` 943・`schedule/steady_flow_tests.rs` 931・`tests/kanade/steady_test.rs` 924。
+- 規模: 指摘の数で決まる（C17 の見直しは大きいタスク 6〜18 本・この範囲はコードが一番多い）。20 を越えたら指摘の組で 2 本目に切る。
+- 先に要るもの: なし。直に待つ v0.2.0 の spec＝3 本（`shiori4-api`・`talk-anchor-interrupt-ticks`・`talk-script-metadata`）。
+- C18 の相手との重なり: 受け持つファイルの重なりは 0。直しが及ぶ先の約束＝⑴ 呼び手は `crates/areka`（139 ファイル）と `crates/areka-ghost`（30）＝公開の形を変えない（`crates/areka/` は `placement-crate-split` が書き換える） ⑵ kanade が使う `areka-talk`（`SecurityLevel`・`StartTalk`・`ScriptOrigin`）と `areka-actor`（`reply_channel`・`ReplySender`・`spawn_ui`・`ActorHandle`）の形は `audit-sylphya-actor` が変えない。dola・wintf には依らない。
+- 優先度の区分: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- 要件定義のモデル: Opus（見直し＝新しい境界も並行の保証も作らない）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: Upstream の「`mcp-reload`（2026-10-19 に着手中）…その着地の後に着手する」は古い（10-22 着地）。Current State の数（133 ファイル・コード 10,281 行・テスト 33,493 行）も古い（上の数）。

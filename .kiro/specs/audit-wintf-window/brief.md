@@ -80,3 +80,6 @@
 - **3（位置だけを指定した窓）**: 生成の側（`runtime/window_factory.rs` の `initial_pos_flags`）だけで直した。片方だけ与えた窓の座標の換算（枠の厚み）は `ecs/window/window_pos/mod.rs` の `to_window_coords_for_creation` の素通しのまま（`ecs/window/window_pos/tests.rs` が固定・あちらの設計の討議の裁定 3）。素通しのままでよいかはこちらで決める。
 - **6（生成に失敗した窓）**: 印 `WindowCreationFailed` を置き、`ecs/window/window_system.rs` の `create_windows` の問い合わせ（`:35-41`）に `Without<WindowCreationFailed>` を足した。一時的な失敗からは自動で立ち直らない（あちらの設計の討議の裁定 4）。立ち直らせる側（印を外す側）をどこに置くかはこちらで決める。
 - **DPI の変わり目で中心を保つ動き**: `taffy_flex_demo` で Window 1 を副モニターの原点 (-2304,355) へ送ると、DPI 192→144 の伸び縮みで中心を保ち (-2104,530) に着く（大きさの差の半分）。実行時の窓と DPI の規則（`src/ecs/window`）の動きで、正しいかはこちらで確かめる。example は着地点を主張しない。
+
+## 2026-11-06 棚卸㉟で拾った申し送り（audit-wintf-graphics-world から）
+- 完了した `audit-wintf-graphics-world` の設計（design.md 34 行目）と調べ書き（research.md 342 行目）が、`crates/wintf/src/ecs/window_proc/window_pos.rs` の「2 つ目の、錠を取らない flush（③）」をこの spec へ渡すと書いている。この brief の申し送りには `audit-wintf-runtime` の分しか無かったので、ここへ足す。区分 B（潜在）・版は v0.2.0 の前の隙間と同じ席。要件の段で、③ を見直しの範囲に入れるか決める。

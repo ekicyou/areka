@@ -107,16 +107,15 @@
 - **共通の約束**（roadmap の同じ節）: ルートの `Cargo.toml` は触らない（`members = ["crates/*"]`）。新しい外の依存を足さない。`THIRD-PARTY-NOTICES.md` は `cargo about generate` で作り直す。`Cargo.lock` が動くので `/release` の版上げと同じウェーブに置かない。`crates/areka` を触るほかの spec と同じウェーブに置かない。1,000 行の上限は新しい crate でも同じ。
 - **Fable**: Opus で足りる（新しい境目は今のモジュールの境目そのまま）。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+## 2026-11-06 棚卸㉟の再測定（main `18e4cb30`）
 
-- **前提の変化**: 前提の 2 つがそろった＝v0.1.0 を公開した（main `932406f9`・版の印 `v0.1.0`）、`areka-test-binary-stability` が着地した（`.kiro/specs/completed/areka-test-binary-stability/`）。その spec は配置のファイルを 1 つも動かしていない。
-- **新しく決めること**: その spec が、テストのプロセスの落ちの報告とプロセスの寿命の MTA を立てる初期化子を、テストの実行ファイルごとの写しとして置いた（本体は `crates/areka/src/emo2_boot/crash_report_test_support.rs`・wintf は `crates/wintf/src/test_crash_report.rs`・依存を足さないための写し）。配置のテストを新しい crate の実行ファイルへ移すと、そのテストは落ちの報告も MTA の手当て（放された DLL を後から呼んで落ちる件の直し）も持たなくなる。新しい crate に 3 つ目の写しを置くかを要件の段で決める（推奨は置く）。揺れの測りの道具 `tools/load-flake.ps1` の `-Binary` は `areka-bin`・`wintf-lib` の 2 つだけ＝新しい実行ファイルを足すかも同じく決める。
-- **触るファイル（測り直し・起票は `d6054e4d`）**: 配置の本番 37 ファイル 14,828 行（空でない行・ファイルの中のテストを含む）・テスト 120 ファイル 44,037 行。増えたのは 10-30〜11-01 の着地による。上限の近く＝`follow/window_move.rs` 1,231 行（例外の表に載る）・`transition_judge.rs` 999・`follow/drag_follow.rs` 978・`mod.rs` 971。外から配置を指す所は 169 ファイル 553 回（起票は 153・526）。
-- **本体の中の呼び手**: 配置を引く本番のファイルは `emo2_boot/` 27・`input_events/` 12・`menu/` 3・`mcp/` 1・直下 4（`main.rs` 986 行・`ghost_session.rs` 943 行・`ghost_session_scope_rect.rs`・`app_exit.rs`）。テストを含めると `emo2_boot/` 99・`input_events/` 33・`menu/` 8・`mcp/` 3・`install/` 3・直下 22、`examples/` 2 本・`tests/` 2 本（`window_link_real_run.rs`・`emo2_real_run.rs`）。
-- **本体の外で触る所（同じウェーブの見直しが避ける所）**: `crates/log-capture-kit/tests/file_length_guard_test.rs`（配置のパス 3）・`temp_path_guard_test.rs`（2＝`measure_tests.rs` と `placement_monitor_tests.rs`・起票は 1）→ `audit-test-kits`。`crates/wintf/src/ecs/window_proc/window_pos_tests.rs` 14 行目（出所の名前）・`lifecycle.rs` 34 行目（説明の中の名前）→ `audit-wintf-window`。`Cargo.lock`（新しい crate の行）・`THIRD-PARTY-NOTICES.md`（作り直す）・`doc/COMPAT_ARCHITECTURE.md` の中ほどのパス（表の末尾ではない）・網羅台帳の根拠のパス・`tools/perf/fixtures/*/run.log` → `audit-tools-perf-judge`（`tools/perf/judge-perf.py` は 694 行目の説明で出所の名前を挙げるだけで、拾うのは欄の名前の見込み）。
-- **規模**: 12〜15 → 13〜16（落ちの報告の写しで 1 タスク増える見込み）。
-- **先に要るもの**: 前提は満たした。待つ見直しは無い（見直し `audit-placement-core`・`audit-placement-follow` がこの spec を待つ）。
+- **前提の変化**: C17 の見直し 3 本（`audit-emo-present`・`audit-parsers-sakura`・`audit-emo-compose`）が配置の 8 ファイルを小さく直した（`measure.rs`・`persist.rs`〔930→928 行〕・`mod.rs`・`source.rs` ほか・合わせて 53 行足し 32 行消し）。境目と外への依存の形は変わらない。`doc-tree-tidy` は `doc/COMPAT_ARCHITECTURE.md` と `doc/ukadoc-coverage/` を動かさなかった＝この spec が書き換える文書のパスはそのまま。11-05 に起票の `doc-compat-architecture-rename` は `doc/COMPAT_ARCHITECTURE.md` を改名する＝この spec と同じウェーブに置かない（どちらが先でも、後の方が新しい名前で grep し直す）。
+- **新しく決めること（棚卸㉞から持ち越し）**: 落ちの報告と MTA の初期化子の写し（本体 `crates/areka/src/emo2_boot/crash_report_test_support.rs`・wintf `crates/wintf/src/test_crash_report.rs`）を新しい crate に 3 つ目として置くか（推奨は置く）、`tools/load-flake.ps1` の `-Binary` に新しい実行ファイルを足すかを要件の段で決める。
+- **触るファイル**: 配置は 160 ファイル・上限の近くは `follow/window_move.rs` 1,231（例外の表）・`transition_judge.rs` 999・`follow/drag_follow.rs` 978・`mod.rs` 971・`persist.rs` 928。配置を指す本体のファイルは 169（`placement` 自身を除く）。本体の外は棚卸㉞のとおり（`log-capture-kit` のテスト 2 つ・wintf の `ecs/window_proc/window_pos_tests.rs:14`・`lifecycle.rs:34`・`Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`doc/COMPAT_ARCHITECTURE.md`〔配置のパス 25 か所〕・網羅台帳 `assets.toml` 6・`sakura-script.toml` 7・`doc/ukadoc-coverage/briefing-assets.md` 12・`.kiro/steering/structure.md`）。
+- **足りなかった所**: 出所の名前 `areka::placement` の行は `tools/perf/fixtures/*/run.log` 20 ファイルのほかに、`tools/perf/fixtures-loop/` の `run.log` 21 ファイルと、見本を作る `tools/perf/fixtures/generate.py:211` にある。見本は手で直さず `generate.py` を直して作り直す。`tools/perf/judge-perf.py` で名前を挙げるのは 695 行目の説明だけ（棚卸㉞の 694 は 1 行ずれた）。
+- **規模**: 13〜16（変わらない・見本の作り直しは機械の直し）。
+- **先に要るもの**: 無い（C17 は全部着地）。同じウェーブの約束: 見直しの 6 本は `crates/areka/` と、この spec が触る本体の外のファイル（上の一覧と `tools/perf/fixtures-loop/`・`generate.py`）に触らない。`Cargo.lock` の席はこの spec。
 - **優先度の区分**: A（開発者が 10-28 に crate 分けを頼んだ）。
 - **要件定義のモデル**: Opus（新しい境目は今のモジュールの境目そのまま）。
 - **分割の案**: なし。
-- **古くなった記述**: 「`placement::test_support` を外の 194 ファイルが使う」は今の数え方で確かめられない（`crate::placement::test_support` を引く外のファイルは 37）＝着手のときに数え直す。
+- **古くなった記述**: 「`placement::test_support` を外の 194 ファイルが使う」は着手のときに数え直す（棚卸㉞のまま）。

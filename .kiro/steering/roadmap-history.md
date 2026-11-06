@@ -972,6 +972,8 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 - 棚卸しの基準実数（2026-10-08 更新㉜・steering 同期時の実測・`main` `4b406af0` 基準）: 完了 **253**（`completed/` 直下の実測エントリ数＝フォルダ 252＋`graphics-rendering-stability.md` 1） / **spec.json 有りの active = 1**（`areka-P0-release-cycle`＝リリースのたびに繰り返して使う spec・完了へ移さない） / **brief-only = 81**（`.kiro/specs/` 直下の実測。`roadmap.md` の spec 台帳の 82 本は、この 81 本＋`release-cycle`）。open PR 0 本。M1 は 2026-09-11、**M2（α）は 2026-10-02 に完成宣言済み**（PR#210）。**初回リリース `v0.0.2` は 2026-10-06 に公開**。現行はウェーブ C4 の残り 1 本（`ghost-session-test-load-flake`）と、次のウェーブを組む棚卸（`/kiro-next`）の前。**着手の優先度は 4 区分＝A 開発者が起票を頼んだもの ＞ B バグ ＞ C ukadoc の拾い残し・バグでない持ち越し ＞ D 夢・据え置き・保留**（2026-10-07 開発者指示で 10-05 の 3 段を改めた・並べ方の手順の正本は `/kiro-next` のスキル）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。前回（㉛・棚卸㉒・`f26aa1c1`）の数えは完了 238・brief-only 77。
 - 棚卸しの基準実数（2026-10-10 更新㉝・棚卸㉓の実測・`main` `ee3af616` 基準）: 完了 **254**（`completed/` 直下の実測エントリ数＝フォルダ 253＋`graphics-rendering-stability.md` 1） / **spec.json 有りの active = 1**（`areka-P0-release-cycle`＝リリースのたびに繰り返して使う spec・完了へ移さない） / **brief-only = 95**（`.kiro/specs/` 直下の実測。`roadmap.md` の spec 台帳の 96 本は、この 95 本＋`release-cycle`。棚卸㉓で分割 4 本・覚え書きからの起票 6 本を足した）。open PR 0 本。M1 は 2026-09-11、**M2（α）は 2026-10-02 に完成宣言済み**（PR#210）。**初回リリース `v0.0.2` は 2026-10-06 に公開**。ウェーブ C4 の 16 本は 2026-10-10 にすべて着地し、棚卸㉓でウェーブ C5（8 本＝`anchor-tag-canon`・`seriko-trigger-intervals`・`property-name-case-fold`・`extent-element-offset`・`baseware-root-list`・`ssp-bts-salvage`・`mcp-stdio-bridge`・`winget-manifest-submission`）を組んだ。**着手の優先度は 4 区分＝A 開発者が起票を頼んだもの ＞ B バグ ＞ C ukadoc の拾い残し・バグでない持ち越し ＞ D 夢・据え置き・保留**（2026-10-07 開発者指示で 10-05 の 3 段を改めた・並べ方の手順の正本は `/kiro-next` のスキル）。棚卸の経緯の正本は `roadmap.md`／`roadmap-history.md`。前回（㉜・2026-10-08・`4b406af0`）の数えは完了 253・brief-only 81。
 
+- 棚卸しの基準実数（2026-11-04 更新㊻・棚卸㉞・`main` `932406f9`〔タグ `v0.1.0`〕基準・その前は 2026-11-01 更新㊺＝棚卸㉝・`13b80ab1`）: 完了 **326**（`completed/` 直下の実測エントリ数＝フォルダ 325＋`graphics-rendering-stability.md` 1・C16 の `areka-test-binary-stability` が 11-02 に完了） / **spec.json 有りの active = 0** / **brief-only = 161**（`.kiro/specs/` 直下の実測。`roadmap.md` の spec 台帳の 161 本と一致＝同 spec の完了の棚卸で `areka-test-wait-wording` を起票し、棚卸㉞の起票は 0 本）。open PR 0 本。M1 は 2026-09-11、M2 は 2026-10-02 に完成宣言済み（PR#210）。**公開済みは `v0.0.2`（10-06）・`v0.0.3`（10-18）・`v0.1.0`（11-04・PR#421）**。**着手の大枠は「版の段」**（今の版は v0.2.0＝wintf・dola の基幹の整備・26 本。ponytail の見直しの 33 本と本体の crate 分けの 6 本は v0.1.0 の後の隙間で取り、v0.2.0 と触るファイルが重なる分は v0.2.0 の作り直しの前に済ませる・2026-10-22 開発者）。**今の版が残っているあいだ、後の版の spec はウェーブに入れない**（2026-10-16 開発者）。**同じ版の中の並びは 4 区分＝A 開発者が起票を頼んだもの ＞ B バグ ＞ C ukadoc の拾い残し・バグでない持ち越し ＞ D 夢・据え置き・保留**（2026-10-07 開発者指示・並べ方の手順の正本は `/kiro-next` のスキル）。棚卸㉞のウェーブ C17＝v0.2.0 の `doc-tree-tidy`＋v0.2.0 の前に済ませる見直し 7 本（Opus 8）・v0.2.0 の着地まで約 11 ウェーブ（C17〜C27 の見込み）。
+
 ## 2026-09-24 棚卸⑯退避（roadmap.md のウェーブ表から退避した旧 A1 後段②・A2〜A5 の行・全文正本・非改変）
 
 > 棚卸⑯（2026-09-24・main `0b01f654`）で、#13 から括り出し #58 `ghost-restart-unit` を前に切り出し、#50 の先進坑 #59 `pilot-balloon-asset-swap` を独立の spec にしたため、ウェーブを B1〜B7 へ組み直した。下は組み直す前の行の全文。
@@ -2942,3 +2944,118 @@ C16 の後に見込むウェーブは無い（v0.1.0 に残るのは `doc/pasta-
 11. **報告の後の開発者の決め**（2026-11-01・`/kiro-wave` で C16 の 4 本を始めた後）: ⑴ 2026-11-01 開発者「コミュニケーションボックスはリアクター待ちです」＝`balloon-communicatebox` を v0.1.0 から windows-reactor 待ちへ ⑵ 2026-11-01 開発者「popup-menu-shell-lookもだいぶ怪しい。そもそもオーナードローメニューはやらないと裁定したし、メニューで凝ったことをしたって、リアクターが来れば作り直し」＝`popup-menu-shell-look` も windows-reactor 待ちへ・生きている決まり 6 は解かない（10 の ⑴ はこれで決まった） ⑶ 2026-11-01 開発者「ウェーブ自体が怪しい」＝C16 の最初の組みを取りやめた。v0.1.0 に残るのは `areka-test-binary-stability`（測ることが本体）と `winget-release-automation`（外の待ち）だけで、どちらも静かな机かほかの仕事の無い時に回すもの＝割り込みを並べると v0.1.0 が遅れる。C16 は `areka-test-binary-stability` の 1 本だけに組み直した（Opus）。始めた 4 本のセッションは開発者が消した・どれもマージしない（`emo-balloon-merge-log-overlap` の枝に要件の初期化のコミットが 1 つ残っただけ）。v0.1.0 は 4 → 2 本、windows-reactor 待ちは 4 → 6 本。残る決め＝10 の ⑵（winget を版の門に残すか）・⑷・⑸。
 12. **続けての開発者の決め**（2026-11-01 開発者の承認（棚卸㉝の後・ツールチップは「境界領域です。リアクター描画にした方が良い可能性がある。WinUIで描画できる要素ですからね」））: 「リアクター待ちにすべき spec が無いか」の洗い出し（台帳のメニュー・入力欄・ダイアログ・設定画面・ツールチップ・タスクトレイの語）から、⑴ `inputbox-user-input`（v0.3.0）・`menu-thumbnail-preview`（v0.4.0）・`shell-tooltip`・`balloon-link-hover`（版に縛らない）を windows-reactor 待ちへ（windows-reactor 待ちは 6 → 10 本・v0.3.0 は 4 → 3・v0.4.0 は 6 → 5・版に縛らない列は 32 → 30） ⑵ `audit-areka-input-menu` は右クリックメニューの部分を、`audit-wintf-input` はツールチップの部分を範囲から外す ⑶ `script-impact-tiers` は同意の窓の部分だけ windows-reactor 待ち ⑷ `link-context-copy` は今のまま（今の Win32 のメニューを使い回すだけで、本体は行き先の決め方とクリップボード）。待たせないと見たもの＝`ghost-call`・`dressup-change-events`・`mcp-user-response`（メニューや入力の答えに触れるのは一部）・`shell-balloon-scale-setting`・`areka-usage-stats`（設定画面は前から windows-reactor 待ちと書いてある）。完了済みの `wintf-tooltip` のツールチップも、リアクターの描画に替える候補として windows-reactor 待ちの段に書いた。
 13. **さらに続けての開発者の決め**（2026-11-01 開発者「winget-release-automation これは0.1.0では無理でしょう。まだ0.0.2が通っていません。」）: 10 の ⑵ が決まった＝`winget-release-automation` を v0.1.0 の版の門から外し、版に縛らない列の「外の待ち」へ移した（v0.1.0 は 2 → 1 本・版に縛らない列は 30 → 31 本・合計 161 のまま）。v0.1.0 に残るのは C16 の `areka-test-binary-stability` と `doc/pasta-real-run.md` の実機の確かめだけ → `/release 0.1.0`。
+
+## 2026-11-06 棚卸㉟退避（`roadmap.md` から逐語で移した・main `18e4cb30`）
+
+### 旧「ウェーブ編成」の表（C17 の行・次の候補・ウェーブの外・保留）
+
+| Wave | ユニット（並べた順） | 開始コマンド | 編成根拠（触るファイルと、同じウェーブの間の約束） |
+|---|---|---|---|
+| **C17**（8 本・今の版 v0.2.0 の 1 本＋v0.2.0 の前に済ませる見直し 7 本・Opus 8・見直しの規模は指摘の数で決まる） | ① ✅ `doc-tree-tidy`（v0.2.0・A・ぶら下がる 0・6〜10・開発者「このspecだけは0.1.0の直後」・11-05 着地・`completed/doc-tree-tidy`）／見直し（どれも A・v0.1.0 の後の隙間・**v0.2.0 の作り直しの前に済ませる**・括弧は直に待つ v0.2.0 の spec の数）② ✅ `audit-parsers-sakura`（8・11-06 着地・`completed/audit-parsers-sakura`）③ ✅ `audit-emo-present`（8・11-06 着地・`completed/audit-emo-present`）④ ✅ `audit-wintf-graphics-world`（7・wintf と描画の鎖の頭 `wintf-visual-tree` が待つ・11-06 着地・`completed/audit-wintf-graphics-world`）⑤ ✅ `audit-ghost-catalog`（7・11-06 着地・`completed/audit-ghost-catalog`）⑥ ✅ `audit-wintf-runtime`（6・`wintf-visual-tree` が待つ・11-06 着地・`completed/audit-wintf-runtime`）⑦ ✅ `audit-emo-compose`（6・11-06 着地・`completed/audit-emo-compose`）⑧ ✅ `audit-seriko`（6・11-06 着地・`completed/audit-seriko`） | `/kiro-start <名>` | 触るファイル: ① `doc/`・`docs/` と、動かしたパスを名指すファイル（クレートの中の名指しは 91 ファイル・うち `crates/areka` 12・名指しの多いのは `doc/COMPAT_ARCHITECTURE.md` の 18 ファイルと `doc/ssp-mcp/`・brief の「2026-11-04 棚卸㉞の再測定」）／② 〜 ⑧ は各 brief の「受け持つファイル」（`crates/areka-parsers/`・`crates/areka-sakura/`／`crates/areka-emo-present/`／`crates/wintf/src/ecs/` の残り／`crates/areka-ghost/`・`crates/areka-nar/`・`crates/areka-user-data/`／`crates/wintf/` の `src/ecs/` の外／`crates/areka-emo-compose/`／`crates/areka-seriko/`）と、直しが及ぶ呼び出し元。**約束**: ⑴ ② 〜 ⑧ の受け持つファイルで `doc/`・`docs/` を名指すのは 4 行だけ（`areka-sakura` の `strict.rs` 5・15 行目＝`doc/ssp-mcp/areka-tools.md`、`sysvar.rs` 44 行目と `areka-ghost` の `sylphya_wiring.rs` 38 行目＝`doc/COMPAT_ARCHITECTURE.md`）。① はこのウェーブでは `doc/COMPAT_ARCHITECTURE.md` と `doc/ssp-mcp/` の名前を変えない（変えると決めたら、見直しの範囲のその行は相手の着地の後に直す）。② 〜 ⑧ は `doc/`・`docs/` を名指す行を足さず、変えない ⑵ 見直しどうしは同じウェーブに並べてよい（範囲は互いに重ならない・呼び出し元へ直しが及ぶときは相手のセッションと申し合わせてから触る） ⑶ 誰も依存を足さない（`Cargo.lock` の席は空けておく）・emo-text にファイルを足さない ⑷ 本体の crate 分けの 6 本と `clippy-199-lints` は並べない（① は crate 分けが書き換える `doc/COMPAT_ARCHITECTURE.md`・網羅台帳の証拠のパス・`structure.md` を分け合う） |
+| **次のウェーブの候補**（次の棚卸で組む） | **今の版は v0.2.0**（26 本）。C17 の後の見込みは下の「その先のウェーブ」（C18〜C20）。v0.2.0 の着地は C17 を入れて**約 11 ウェーブ（C17〜C27 の見込み）**＝一番長い道は本体の crate 分けの 6 本の直列（C18〜C23）→ その後の本体の見直し（`audit-areka-app`・`audit-areka-install-update` ほか）→ `draw-methods-canon`・`dola-interrupt-ticks`・`sylphya-sqlite-kvs`・`shiori4-api` → `talk-anchor-interrupt-ticks`・`instant-to-interrupt-ticks`・`draw-methods-blend`・`element-clipping-option`・`mcp-set-property` → `seriko-talk-clock-fidelity`。v0.2.0 の 26 本の待ちの突き合わせは各 brief の「2026-11-04 棚卸㉞の再測定」（要約は「棚卸㉞の裁定」の 3）。 | — | 先頭の判定は棚卸㉞の測り。 |
+| **ウェーブの外** | 測ることが本体（静かな机で 1 本ずつ）＝`present-emit-tail-latency`・`install-live-target-hazards`・`real-run-input-guard-observations`・`helper-first-load-refusal`／外の待ち＝`winget-release-automation`（winget-pkgs の手提出 PR 450070〔v0.0.2〕が取り込まれたら席の空きに挟む）／余力の枠＝`multi-ghost-runtime` → `ghost-call`（v0.1.0 は公開した＝行き先は開発者の決め・「棚卸㉞の裁定」の 9） | — | 机の空きを開発者が決めたときに 1 本ずつ挟む。重い走行は赤が出たテストに絞り、全体の負荷の走行は最後の 1 回だけ（1 回 約 50 分） |
+| **保留** | `tick-gate-adoption` | — | 「長い試行はしない」と両立する短い A/B の測り方を先に組む。計測を汚すので他と並べない |
+
+### 旧「C17 の開始コマンド」
+
+**C17 の開始コマンド**（`/kiro-next` の報告と同じ形・俯瞰の HTML がこの塊をコピーのボタンつきで出す・`/kiro-wave` はこの塊と spec 台帳の Fable の列を読む）:
+
+```
+Wave C17 8本（v0.2.0 1本＋見直し 7本）
+【本来の次の版 v0.2.0】
+Opus
+/kiro-start doc-tree-tidy
+
+【v0.2.0 の作り直しの前に済ませる見直し（v0.1.0 の後の隙間）】
+Opus
+```
+
+### その先のウェーブ（2026-11-04 の見込み）
+
+見込みは次の棚卸で測り直す（C17 が全部着地したと置いて組んだ・v0.2.0 の spec と、v0.2.0 が待つ見直しと crate 分けだけで組んだ＝割り込みはその棚卸で選ぶ）。
+
+| ウェーブ | spec | 入る条件 | 要件定義 |
+|---|---|---|---|
+| C18（見込み・8 本） | `placement-crate-split`・`wintf-visual-tree`（v0.2.0）・`audit-wintf-layout-widget`・`audit-dola`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-kanade`・`audit-sylphya-actor` | C17 の全部の着地（`wintf-visual-tree` は `audit-wintf-graphics-world`・`audit-wintf-runtime` を待つ・`placement-crate-split` は `doc-tree-tidy` と同じウェーブに置かない）。**約束**: 見直しの 6 本は `crates/areka/` と `placement-crate-split` が触る外のファイル（`log-capture-kit` のテストの 2 つ・wintf の `ecs/window_proc/` の 2 つ・`tools/perf/fixtures/`）に触らない。`Cargo.lock` の席は `placement-crate-split` | `wintf-visual-tree`＝Fable（骨組みの分かれ道＝木を WUC の面の下にどう置くか）・ほかは Opus |
+| C19（見込み・8 本） | `runtime-module-untangle`・`wintf-d2d-composite-rules`（v0.2.0）・`dola-yaml-backend`（v0.2.0）・`audit-placement-core`・`audit-placement-follow`・`audit-mcp-update-crates`・`audit-shiori-host32`・`audit-emo-atlas` | `placement-crate-split`・`wintf-visual-tree`・`audit-wintf-layout-widget`・`audit-dola` の着地。`runtime-module-untangle` は wintf の `test_crash_report.rs` を触る（`audit-wintf-runtime` は C17 で済む）。**約束**: 見直しの 5 本は `crates/areka/` に触らない。`Cargo.lock` の席は `dola-yaml-backend` | `wintf-d2d-composite-rules`＝Fable（同期の 1 画素の読み戻しと写しの順の保証）・ほかは Opus |
+| C20（見込み・8 本） | `runtime-crate-split`・`wintf-visual-damage-redraw`（v0.2.0）・`balloon-flip-side-rules`（v0.2.0）・`audit-wintf-window`・`audit-wintf-input`・`audit-test-kits`・`audit-tools-perf-run`・`audit-tools-scripts` | `runtime-module-untangle`・`wintf-d2d-composite-rules`・`audit-placement-core`・`audit-placement-follow` の着地。**約束**: `wintf-visual-damage-redraw` はクレートを足さない（`Cargo.lock` の席は新しいクレートを作る `runtime-crate-split`）・見直しの 5 本は `crates/areka/` に触らない | どれも Opus |
+
+C20 の後も v0.2.0 は約 7 ウェーブ（C21〜C27 の見込み）残る＝crate 分けの残り 3 本（`input-crate-split` → `session-module-gather` → `session-crate-split`）と本体の見直し 8 本の後に、v0.2.0 の残り約 21 本。
+
+```
+Wave C18（見込み）8本（v0.2.0 1本＋見直しと crate 分け 7本）
+【本来の次の版 v0.2.0】
+Fable
+/kiro-start wintf-visual-tree
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start placement-crate-split
+/kiro-start audit-wintf-layout-widget
+/kiro-start audit-dola
+/kiro-start audit-emo-text-state-actor
+/kiro-start audit-emo-text-layout-draw
+/kiro-start audit-kanade
+/kiro-start audit-sylphya-actor
+```
+
+```
+Wave C19（見込み）8本（v0.2.0 2本＋見直しと crate 分け 6本）
+【本来の次の版 v0.2.0】
+Fable
+/kiro-start wintf-d2d-composite-rules
+Opus
+/kiro-start dola-yaml-backend
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start runtime-module-untangle
+/kiro-start audit-placement-core
+/kiro-start audit-placement-follow
+/kiro-start audit-mcp-update-crates
+/kiro-start audit-shiori-host32
+/kiro-start audit-emo-atlas
+```
+
+```
+Wave C20（見込み）8本（v0.2.0 2本＋見直しと crate 分け 6本）
+【本来の次の版 v0.2.0】
+Opus
+/kiro-start wintf-visual-damage-redraw
+/kiro-start balloon-flip-side-rules
+
+【v0.2.0 の作り直しの前に済ませる見直しと crate 分け】
+Opus
+/kiro-start runtime-crate-split
+/kiro-start audit-wintf-window
+/kiro-start audit-wintf-input
+/kiro-start audit-test-kits
+/kiro-start audit-tools-perf-run
+/kiro-start audit-tools-scripts
+```
+
+### 旧「棚卸㉞の裁定」（2026-11-04）
+
+
+> 棚卸㉝（11-01・main `13b80ab1`）の後、C16 の `areka-test-binary-stability` が 11-02 に着地し、`doc/pasta-real-run.md` の実機の確かめを経て、11-04 に v0.1.0 を公開した（PR#421・タグ `v0.1.0`）。今の版は v0.2.0（wintf・dola の基幹の整備・26 本）になった。
+
+1. **測り直した範囲**: 速い道は使わない（版が変わり、見込みのウェーブが無かった）。28 本（5 サブエージェント・Opus）＝v0.2.0 の 26 本全部と、v0.2.0 の待つ道の頭の `placement-crate-split`・`runtime-module-untangle`。28 本とも brief に「2026-11-04 棚卸㉞の再測定」の節を書いた（古い再測定の節は消し、今も効く行は新しい節へ移した）。残り物の拾い出しは道具の結果が 16 行＝直に読み、格上げするものは無かった。
+2. **規模とモデルの改め**（台帳に写した）: `draw-methods-canon` 13〜16 → 20〜25（D2D の道の初めての見立て・一度切り出した spec なので切らない・22 を越えたら画素の読み手 5 つの付け替えを後続へ出す案は brief に）／`wintf-visual-tree` 12〜18 → 14〜18／`wintf-d2d-composite-rules` 10〜14 → 12〜16／`instant-to-interrupt-ticks` 8〜12 → 10〜14（本番の時刻の読み手が 12 か所増えた）／`seriko-talk-clock-fidelity` 8〜12 → 5〜8（起点と時計の 2 件は `talk-anchor-interrupt-ticks` が引き取った）／`placement-crate-split` 12〜15 → 13〜16。Fable の印は `sylphya-sqlite-kvs` に足した（新しい「名前と層の読み書き」の口を 3 つのクレートと MCP へ引く・複数のプロセスが同じ sqlite のファイルへ書く順の保証を新しく決める）。`shiori4-api` は 20 を越えたまま（台帳の「要件で切る」どおり要件の段で 3 本に切る案を brief に書いた＝後半の「本体の受け側と台本の待ちの列」は Fable の候補）。
+3. **v0.2.0 の待ちの突き合わせ**（版の段の「v0.1.0 の後の隙間」の ⑷）: 10-22 の突き合わせの後に起票した 8 本（`shiori4-api`・`ghost-alias-file`・`talk-script-metadata`・`ghost-switch-balloon-fallback`・`balloon-flip-side-rules`・`window-resetwindowpos-hold`・`balloon-script-offset-align`・`doc-tree-tidy`）も、どれも見直しか crate 分けを待つ（`doc-tree-tidy` だけは待つ相手が無い＝先頭）。足した待ちの大きいもの＝`draw-methods-canon`（`Element` を字面で組むファイルが 44 に増え、本体の crate 分けの 6 本と本体の見直しを待つ）・`dola-interrupt-ticks`（見直し 12 本を足し、crate 分けの 6 本も）・`sylphya-sqlite-kvs`（`audit-areka-install-update` を足した）・`balloon-flip-side-rules`／`balloon-script-offset-align`（`audit-placement-core`・`audit-placement-follow`＝後者の「重ならない」は誤りになった）。外した待ち＝`talk-thread-count-growth` の `audit-tools-scripts`・`compose-f16-precision` の `audit-emo-atlas`・`draw-methods-blend` の `audit-parsers-sakura`。順の改め＝`element-clipping-option` は `draw-methods-canon` の後（D2D の切り抜きで描く形は、合成を木へ移す canon の後）・`instant-to-interrupt-ticks` は `talk-anchor-interrupt-ticks` を待たない（`dola-interrupt-ticks` の後なら同じウェーブに並べられる）・`seriko-talk-clock-fidelity` は `talk-anchor-interrupt-ticks` の後のまま（後者の brief の「fidelity が先」は古い）。
+4. **分割は無し**。起票も無し（覚え書きから格上げしたものも無い）。
+5. **ウェーブ C17 を 8 本で組んだ**（v0.2.0 の 1 本＋v0.2.0 の前に済ませる見直し 7 本・Opus 8）: ① `doc-tree-tidy` ／見直し ② `audit-parsers-sakura` ③ `audit-emo-present` ④ `audit-wintf-graphics-world` ⑤ `audit-ghost-catalog` ⑥ `audit-wintf-runtime` ⑦ `audit-emo-compose` ⑧ `audit-seriko`。見直しは、直に待つ v0.2.0 の spec が多い順（8・8・7・7・6・6・6）に、`doc-tree-tidy` と触るファイルが重ならないもの（受け持つファイルで `doc/`・`docs/` を名指すのが 0 か、名前を変えない 2 つの文書だけ）を取った。
+6. **`doc-tree-tidy` の「1 本だけで」の読み**: brief の「ほかの spec の設計が文書のパスを名指す前の早いウェーブに、1 本だけで走らせる」を、「文書を動かす spec は 1 本だけ・同じウェーブの spec と触るファイルを重ねない」と読んだ（同じ brief の「着手の前に、そのとき動いている spec の触るファイルと突き合わせる」と合わせて）。crate 分けの 6 本とは同じウェーブに置けない（どちらも `doc/COMPAT_ARCHITECTURE.md`・網羅台帳の証拠のパス・`structure.md` を書き換える）。どの読みでも crate 分けの道は 1 ウェーブ遅れる＝C17 で 7 席を見直しに使う方が v0.2.0 は早く着く。読みが違えば C17 は `doc-tree-tidy` の 1 本だけにする（開発者の決め＝10 の ⑴）。
+7. **入れなかった先頭**: `placement-crate-split`（ぶら下がりが一番多いが `doc-tree-tidy` と並べられない＝C18 の頭）・`audit-wintf-layout-widget`・`audit-dola`・`audit-emo-text-*`・`audit-kanade`・`audit-sylphya-actor`・`audit-mcp-update-crates`・`audit-shiori-host32`・`audit-emo-atlas`（直に待つ v0.2.0 の spec が少ない＝C18・C19 へ）・`audit-wintf-window`・`audit-test-kits`・`audit-tools-perf-judge`（`placement-crate-split` が触るファイルを持つ＝C20 以降）・`audit-impl-watch`・`audit-ukadoc-survey`・`audit-pilot`（v0.2.0 と重ならない＝いつでも）。`tick-gate-adoption` は保留のまま。
+8. **v0.2.0 の着地まで約 11 ウェーブ（C17〜C27 の見込み）**。一番長い道は本体の crate 分けの 6 本の直列（C18〜C23）。見込みの C18〜C20 は「その先のウェーブ」。
+9. **見つけた穴**: ⑴ `placement-crate-split`・`runtime-crate-split` で本体のテストが別の実行ファイルへ移ると、✅ `areka-test-binary-stability` が置いた落ちの報告とプロセスの間ずっと持つ MTA（DLL の外れでの落ちの直し）を失う＝新しいクレートに 3 つ目の写しを置くか（brief は置く案を推す）と、`tools/load-flake.ps1 -Binary` に値を足すかを要件の段で決める ⑵ `audit-shiori-host32` の受け持つ `crates/shiori-abi`・`shiori4-testdll` は `shiori4-api` が消す＝見直しの手間が無駄になる（その見直しの要件の段で外すか決める） ⑶ `element-clipping-option` は版の段に居ない `extent-element-offset`（外形の決め）と `animated-image-import`（読み手を分け合う）に掛かる ⑷ `collisionex-regions` は `input_events/mod.rs` の説明の 1 行のためだけに本体の crate 分けの 4 本を待つ＝要件の段でその行を範囲から外せば待ちが消える。
+10. **開発者に決めてほしいこと**（どれも C17 の着手を止めない・⑴ だけは C17 の形が変わる）: ⑴ `doc-tree-tidy` を見直し 7 本と同じウェーブで走らせてよいか（推す＝よい・6 の読み）／C17 を `doc-tree-tidy` の 1 本だけにするか ⑵ 版の段の「v0.1.0 の余力の枠」（`multi-ghost-runtime` → `ghost-call`）と「v0.1.0 から外した 5 本」の行き先（v0.1.0 は公開した） ⑶ `element-clipping-option` の前に `extent-element-offset`・`animated-image-import` を v0.2.0 へ入れるか（入れないなら外形の扱いを `element-clipping-option` が決める） ⑷ 棚卸㉝からの答え待ち＝`clippy-199-lints` の段 1・`balloon-append-tags`・`ghost-alias-file`（brief の頭は「いつか」・台帳は v0.2.0）・`multi-ghost-runtime` の時期。
+
+### 旧「直接修正候補」（棚卸㉞の分）
+
+> **2026-11-04 棚卸㉞で直した**（どれも動きを変えない）: ⑴ `crates/areka-sakura/src/contract.rs` の `SakuraMsg::Tick` の説明＝本番の経過は `dola::runtime::clock::now()` からでなく、areka-ghost の dispatcher（`dispatcher.rs` の `on_tick`）が ticker の単調なミリ秒（既定は `GetTickCount64`）から出す、に直した ⑵ `crates/areka-emo-compose/src/method.rs` の `BlendKind` の説明＝「全量列挙（SSP 2.8.35〜2.8.40）」は誤り（soft-light〔2.8.39〕と linear-burn・linear-light・pin-light・subtract・vivid-light〔2.8.40〕が無い）＝19 種と足りない 6 種を書いた ⑶ spec 台帳の `talk-script-metadata` の並びの「kanade の `msg.rs` が `mcp-strict-errors` と重なる」を外した（✅ 10-30 着地） ⑷ spec 台帳の `audit-placement-follow` の「v0.2.0 と重ならない」を改め、`audit-placement-core` とともに `balloon-flip-side-rules`・`balloon-script-offset-align` より先に取る、とした ⑸ spec 台帳の `shiori4-api` に shiori4 の 0.1.1（`shiori3-legacy-host`・`shiori2-helpers` を足した版・crates.io で確かめた）を書き足した ⑹ spec 台帳の規模と Fable の列を棚卸㉞の測りに合わせた（「棚卸㉞の裁定」の 2）。
+
+> **直さずに各 spec へ渡したもの**: 測り直した 28 本の brief の古い記述（行の番号・数・着地した相手・見直しと crate 分けの待ち）＝各 brief の「2026-11-04 棚卸㉞の再測定」の節に書いた（本文は spec の要件の段で直す）。`image-webp` は crates.io の最新がまだ 0.2.4＝固定コミットの取り込みは外さない（覚え書きのとおり）。
+
+### 覚え書きから消した項（解決済み）
+
+- **テストの `BoxedBackend` の写しが 3 つ**（XS・棚卸㉙・完了 `script-security-level` の Implementation Notes）。`crates/areka-ghost/tests/ghost/{inproc_e2e_test,snapshot_capture_test}.rs` と `tests/real_pasta_online.rs` に同じ形の入れ物がある。振る舞いは変わらないテストの手入れ＝次に areka-ghost のテストを触る spec（見直しの `audit-ghost-catalog` ほか）が 1 か所へまとめる。

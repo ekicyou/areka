@@ -73,3 +73,16 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 2026-11-06 棚卸㉟の再測定（main 18e4cb30）
+
+- 前提の変化: 11-04 の後、`audit-wintf-graphics-world` が `src/actor_present.rs` に装置の作り直しを見て描き手を捨てる所（`drop_renders_after_device_change`・`SeenGraphicsCore`）を足し、`actor_scale_refresh_tests.rs`・`marker_surface_tests.rs` も直した。`audit-emo-present`・`audit-parsers-sakura` は `examples/` と `tests/` の 3 つ・`actor_lookahead_tests.rs` を少し直した。どれも受け持つ範囲の中＝足された所も audit の対象。持ち込みの件（`actor_box.rs:236-237,427`）は今も直っていない（行の位置も同じ）。
+- 触るファイル: `crates/areka-emo-text/` の 121 ファイル（`examples/` 12 と、どちらの持ち物にも名の無い `inline_marker*`・`marker_surface*`・`scroll_marker*` を含む）・コード約 10,800 行・テスト約 34,600 行。上限の近く＝`surface.rs` 995 行・`actor_choice_contract_tests.rs` 991・`choice_tests.rs` 980。
+- 規模: 指摘の数で決まる（C17 の見直しは大きいタスク 6〜18 本）。20 を越えたら指摘の組で 2 本目に切る。
+- 先に要るもの: なし。直に待つ v0.2.0 の spec＝3 本（`compose-f16-precision`・`dola-interrupt-ticks`・`seriko-talk-clock-fidelity`）＋条件つき 2 本（`draw-methods-canon`・`element-clipping-option`＝`Element` の欄を足すとき）。
+- emo-text の 1 本だけの席: `surface.rs` が 995 行で、直せば新しいファイルが要る見込み＝C18 ではこの spec が席（`lib.rs` の `PURE_SOURCES`／`SOURCES_OUTSIDE_THE_PURE_SCAN` と母数 83）を使う。`lib.rs` はもともとこの spec の持ち物。`audit-emo-text-layout-draw` は新しいファイルを足さない。
+- C18 の相手との重なり: 受け持つファイルの重なりは 0。直しが及ぶ先の約束が要る＝⑴ `crates/areka/` の呼び手（60 ファイル・多くが `placement-crate-split` の書き換える `use crate::placement::` の行を持つ）に触らない＝公開の形を変えない ⑵ `wintf-visual-tree` が名前の衝突（同 brief の議題 2）で `ecs::graphics::Visual`・`VisualGraphics` の側を改名すると、この範囲の約 20 ファイル（`surface.rs`・`surface_window_child.rs`・`tests/` ほか）に及ぶ＝同じウェーブなら `ecs::visual` の側を改名してもらう ⑶ `audit-wintf-layout-widget` の `Arrangement`・`HitTest`・`AlphaMaskResource`・`LayoutScale`・`AlphaMask`、`audit-dola` の `dola::cue::CueSink`（`sink.rs`）、`audit-sylphya-actor` の `areka-actor` の形は、相手が変えない ⑷ `audit-emo-text-layout-draw` とは同じクレートの別のファイル＝互いの関数の形を変えるときは申し合わせる。
+- 優先度の区分: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- 要件定義のモデル: Opus（見直し＝新しい境界も並行の保証も作らない）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: Current State の数（102 ファイル・コード 9,170 行・テスト 29,332 行）は古い（上の数）。`SeenGraphicsCore` の doc は「1 つの World に文字の層は 1 つ」を前提にしている＝audit で確かめる。

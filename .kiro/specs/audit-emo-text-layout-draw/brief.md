@@ -79,3 +79,16 @@
 [3e38]` のような大きな有限の割合で、改行を重ねると配置の位置が inf／NaN になる**（区分 B 相当）。`areka-parsers` は非有限の割合だけを既定 1.0 へ倒す（同 spec の指摘 3）。有限で大きな値は、上限を「元からある頭打ち」から決められない（同 spec の要件 7.6 の作法）ので、parsers では縛らない。
 - **望む姿**: 配置の側（`crates/areka-emo-text/src/layout_scan.rs` の改行の送り）で、位置が非有限になる送りを守り、`warn!` で記録する。
 - 出どころ: `.kiro/specs/completed/audit-parsers-sakura/research.md` §13.3・§13.4 の R17。
+
+## 2026-11-06 棚卸㉟の再測定（main 18e4cb30）
+
+- 前提の変化: 11-04 の後、受け持つファイルは 1 つも変わっていない（emo-text で変わった 9 ファイルはどれも `audit-emo-text-state-actor` の持ち物）。`audit-parsers-sakura` の申し送り（R17・大きな有限の割合の改行で位置が inf／NaN）は今も直っていない（`layout_scan.rs` の `apply_pending_newline` は `block_dir * pitch * sum` を守らずに足す・`is_finite` の守りは無い）。
+- 触るファイル: `crates/areka-emo-text/src/` の 81 ファイル・コード約 10,800 行・テスト約 27,600 行。上限の近く＝`draw_format_metrics_tests.rs` 922 行。
+- 規模: 指摘の数で決まる（C17 の見直しは大きいタスク 6〜18 本）。20 を越えたら指摘の組で 2 本目に切る。
+- 先に要るもの: なし。直に待つ v0.2.0 の spec＝2 本（`compose-f16-precision`・`dola-interrupt-ticks`）。
+- emo-text の 1 本だけの席: C18 では `audit-emo-text-state-actor` が使う（`surface.rs` 995 行）。この spec は `crates/areka-emo-text/src/` に新しいファイルを足さない＝`lib.rs`（あちらの持ち物）に触らない。壊れたら落ちるテストは今ある兄弟のテストのファイルへ足す（1,000 行を越えるなら席の持ち主と申し合わせる）。
+- C18 の相手との重なり: 受け持つファイルの重なりは 0。直しが及ぶ先の約束＝⑴ `crates/areka/` に触らない ⑵ `wintf-visual-tree` が `ecs::graphics::Visual` の側を改名すると `draw_oracle_tests.rs`・`viewbox_draw_test_support.rs` に及ぶ＝同じウェーブなら `ecs::visual` の側を改名してもらう ⑶ `audit-emo-text-state-actor` とは同じクレートの別のファイル＝`actor*`・`state*` が呼ぶ関数の形を変えるときは申し合わせる。
+- 優先度の区分: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- 要件定義のモデル: Opus（見直し＝新しい境界も並行の保証も作らない）。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: Current State の数（76 ファイル・コード 10,135 行・テスト 24,371 行）は古い（上の数）。
