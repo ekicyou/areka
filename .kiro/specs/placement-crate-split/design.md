@@ -35,7 +35,7 @@
 - 配置を名指すパスと出所の名前の書き換え（番人の表・文字で読むテスト・文書・道具・説明・2 本の audit の brief・`structure.md`）。
 - 依存の向きの規約の文と、食い違い 5 件の解消（`OffsetBase` の置き場・`PlacementError` の置き場）。
 - 検証の手順（多重集合・警告・全体テスト・実機 1 本・性能の道具の確かめ・`THIRD-PARTY-NOTICES.md`）。
-- steering の追記（`structure.md` の crate の一覧、`roadmap.md` の C18 の「触るファイル」と新旧のパスの対応表の行）。
+- steering の追記: `structure.md` の crate の一覧（この枝で書く）。`roadmap.md` は、C18 の「触るファイル」に足す分（`log-capture-kit/src` ほか）を 11-06 に棚卸のセッションへ伝えた（行は roadmap の持ち主の棚卸が書く）。新旧のパスの対応表の行は完了の段（`/kiro-complete`）で書く。この枝の途中では `roadmap.md` を書かない（並走の枝との衝突を避ける）。
 
 ### この仕様が持たないもの
 
@@ -53,7 +53,8 @@
 - `areka-placement` は `areka` に依存しない（1.8）。本体 → 配置の一方向だけ。
 - 共有のテスト用の crate（log-capture-kit・sample-ghost-kit・temp-path-kit）は、どの crate でも本番の依存表（optional を含む）に書かない（3.4）。
 - `test-support` 機能の下の項目が頼ってよいのは、配置の本番の項目と、ほかの `test-support` の項目と、std・windows・wintf・bevy_ecs だけ。`#[cfg(test)]` だけの項目と共有のテスト用の crate には頼らない。
-- 本体のテストが別の crate のファイルを読むのは、本体が依存する crate（下の crate）だけで、必ず読み口 `crate_source!`／`crate_path` を通す。配置のテストは本体のファイルを読まない。
+- 読み方の規則は 1 つ: **自分の crate のファイルは相対の道で読み、別の crate のファイルは読み口で読む**。本体のテストが別の crate のファイルを読むのは、本体が依存する crate（下の crate）だけで、必ず読み口 `crate_source!`／`crate_path` を通す。配置のテストは本体のファイルを読まない。配置の crate が別の crate を読むのは `zorder_property_deferral_tests` の `../areka-sylphya/src`（配置が依存する下の crate）1 か所だけなので、配置には読み口を作らず、その行に理由を 1 行書く。
+- 名前を付けた例外: `crates/areka/src/session_end_sync_send_tests.rs` はワークスペースの全部の `crates/*/src` を歩く見張りで、依存の向きの外の crate も読む。この仕様では動かさず、置き場（ワークスペース全体の見張りの家＝`log-capture-kit/tests/`）へ移すことを `audit-areka-app` へ申し送る。
 
 ### 見直しの引き金
 
@@ -211,7 +212,7 @@ crates/areka/src/
 - `tools/load-flake.ps1` — `-Binary` に `areka-placement-lib` を足す（説明 52 行・注 68 行・`ValidateSet` 69 行・209 行の選び）（3.13）。
 - `doc/COMPAT_ARCHITECTURE.md`・`doc/ukadoc-coverage/briefing-assets.md`・`doc/ukadoc-coverage/ledger/assets.toml`・`ledger/sakura-script.toml`・`.kiro/steering/structure.md`（5.6）。
 - `.kiro/specs/audit-placement-core/brief.md`・`.kiro/specs/audit-placement-follow/brief.md`（5.9 と申し送り）。
-- `.kiro/steering/roadmap.md`（steering の追記だけ）— C18 の②の「触るファイル」に `log-capture-kit/src`・wintf の `test_crash_report.rs` の説明・`tools/load-flake.ps1`・本体の 5 ファイル（D7）を足し、新旧のパスの対応表の判定器の行の「本体のテスト専用のモジュール」を `crates/areka/src/placement_tests/` と書き、本体に残すテストの行を 1 行足す。
+- `.kiro/steering/roadmap.md` — この枝の途中では書かない。C18 の②の「触るファイル」に足す分（`log-capture-kit/src`・wintf の `test_crash_report.rs` の説明・`tools/load-flake.ps1`・本体の 5 ファイル〔D7〕）は棚卸のセッションへ伝える（11-06 に `log-capture-kit/src` ほかは伝え済み・残りは設計の確定のときに伝える）。新旧のパスの対応表の判定器の行（「本体のテスト専用のモジュール」＝`crates/areka/src/placement_tests/`）と本体に残すテストの 1 行は、完了の段（`/kiro-complete`）で書く。
 - `Cargo.lock`・`THIRD-PARTY-NOTICES.md` — 道具が作り直す（8.8）。
 
 ### パスの書き換えの対応
@@ -594,7 +595,7 @@ pub fn expect_one<'a>(events: &'a [CapturedEvent], needle: &str) -> &'a Captured
 - `crates/areka/src/crate_source_test_support.rs`（`main.rs` が `#[cfg(test)] mod crate_source_test_support;`）。
 - 読んでよいのは本体自身と、本体が依存する crate だけ（説明に書く）。crate の名前は `crates/` の下のフォルダ名。
 - 文字を読む所（`include_str!` だった所）は `crate_source!`、走る時に道が要る所（見本のフォルダ・`read_to_string`）は `crate_path` を使う。
-- 使う所: 分岐の対応表 2 本（表の全部の行＝配置・本体・wintf を同じ形で並べる）・`measure_bake_count_tests` の見本のフォルダ・D7 の 6 か所。自分の crate の兄弟のファイルを読む所（片割れ 2 組・`transition_signoff_procedure_tests`）は今の相対の `include_str!`／`CARGO_MANIFEST_DIR` のまま。
+- 使う所: 分岐の対応表 2 本の配置と wintf の行・`measure_bake_count_tests` の見本のフォルダ（`areka-emo-compose`）・D7 の 6 か所。自分の crate のファイルを読む所（分岐の対応表の本体の行・片割れ 2 組・`transition_signoff_procedure_tests`）は相対の `include_str!`／`CARGO_MANIFEST_DIR` で読む（規則は「自分の crate は相対・別の crate は読み口」の 1 つ）。
 
 **口の種類**: マクロと関数 [x]
 
@@ -615,7 +616,7 @@ pub(crate) fn crate_path(krate: &str, path: &str) -> std::path::PathBuf;
 
 **実装の注**
 
-- 確かめ: `grep -rnE '"(\.\./)+(wintf|areka-|log-capture|sample-ghost|temp-path|real-run|dola|shiori)' crates/areka/src` が読み口の外で 0 件。
+- 確かめ: `grep -rnE '"(\.\./)+(wintf|areka-|log-capture|sample-ghost|temp-path|real-run|dola|shiori)' crates/areka/src` と、`CARGO_MANIFEST_DIR` から `".."` で crate の外へ上がる所（`grep -rnE '"\.\."|"\.\./\.\."' crates/areka/src`）が、読み口と名前を付けた例外（`session_end_sync_send_tests.rs`）の外で 0 件。
 
 #### SourceReadTests
 
@@ -630,9 +631,9 @@ pub(crate) fn crate_path(krate: &str, path: &str) -> std::path::PathBuf;
 |---|---|---|
 | `measure_template_tests` | `measure_and_present_agree_on_r_post_and_komainu`・`…_on_konnoyayame`・`the_measure_side_does_not_parse_the_shell_itself`（`measure.rs`・`measure_first_frame.rs`）・`the_examples_do_not_parse_the_shell_themselves`（`examples/window-placement.rs`）と、走査器の較正 2 本（自分の crate の実物から採る: 当たり＝`measure_tests.rs` の本文の `areka_parsers::shell::parse` の呼び出し、外れ＝同じファイルの説明文の中の綴りが本文だけにすると消えること） | `the_source_scan_still_sees_a_real_call`（`emo2_boot/frame_test_support.rs`）・`the_source_scan_drops_a_spelling_that_only_lives_in_a_comment`（`emo2_boot/assets_tests.rs`）・`the_boot_side_does_not_parse_the_shell_itself`（`emo2_boot/assets.rs`）・`the_examples_do_not_parse_the_shell_themselves`（`examples/emo-present/setup.rs`・`examples/collision-probe/setup.rs`） |
 | `spawn_zorder_pair_deferred_tests` | 配置の本番ファイルの名簿（`src/spawn.rs`・`src/diag.rs`・`src/zorder_chain_compose.rs`・`src/zorder_group_ledger.rs`）で `deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources`・`the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for`（`src/spawn.rs` を使う較正）・`ghost_windows_carry_no_always_on_top_minimize_or_taskbar_bits`・`the_scanned_roster_covers_every_zorder_production_source_in_this_crate`（配置の `src` の木） | `emo2_boot` の本番ファイルの名簿（`src/emo2_boot/zorder_cue.rs`・`frame/zorder_drain.rs`・`frame/zorder_descript.rs`）で `deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources`・`the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for`（本体の実物で較正）・`the_band_files_are_where_the_band_words_live`・`the_scanned_roster_covers_every_zorder_production_source_in_this_crate`（本体の `src` の木・較正の外れは `src/emo2_boot/frame/zorder_drain_test_support.rs`） |
-| `zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests` | ― | 割らずに移す。表の行は全部 `crate_source!("areka-placement", …)`・`crate_source!("areka", …)`・`crate_source!("wintf", …)` で読み、「どの分岐も 1 本以上のテストで覆われている」の確かめを保つ |
+| `zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests` | ― | 割らずに移す。配置の行は `crate_source!("areka-placement", …)`、wintf の行は `crate_source!("wintf", …)`、本体の行は相対の `include_str!("../emo2_boot/…")` で読み、「どの分岐も 1 本以上のテストで覆われている」の確かめを保つ |
 | `transition_signoff_procedure_tests` | ― | 判定器の一族と一緒に移す。読む先は本体の `src/placement_tests/transition_judge_offset_signoff_tests.rs` と `.kiro/specs/completed/…`（crate ではない） |
-| `zorder_property_deferral_tests` | 残す。`CARGO_MANIFEST_DIR` からの `../areka-sylphya/src` は crate の深さが同じなので変えない（配置が依存する下の crate を読む向き） | ― |
+| `zorder_property_deferral_tests` | 残す。`CARGO_MANIFEST_DIR` からの `../areka-sylphya/src` は crate の深さが同じなので変えない（配置が依存する下の crate を読む向き）。配置の crate が別の crate を読む唯一の所なので、その行に「配置が依存する下の crate を読む唯一の所・読み口は作らない」と 1 行書く | ― |
 
 - 割った片割れは、走査器（`code_only` ほか）と語の表を自分のファイルに持つ。wintf の `zorder_pair_deferred_vocabulary_tests.rs` と同じ形で、語の表は wintf・配置・本体の 3 つのファイルに並ぶ。各ファイルの表の上の注に「表へ足すときは 3 つ全部へ」と書く。
 - 範囲が黙って狭まらない（5.5）: 木を歩くテストは、配置の側が配置の `src`、本体の側が本体の `src` を歩き、合わせて移す前と同じ範囲になる。どちらの側も、自分の crate の実在する正例を見つけられることを先に確かめる（較正）。
@@ -739,7 +740,7 @@ wintf の ZOrderPairStrategy・tracing を引く）。
 - 警告（8.4）: `cargo check --workspace --all-targets` の警告 0。
 - 全体テスト（8.5）: `pwsh -NoProfile -File tools/test-all.ps1`（所要 約 50 分・机は impl-watch の排他テストの机で取る）。
 - 実機（8.6・8.7・6.3）: `crates/areka/tests/window_link_real_run.rs` を新しい `RUST_LOG`（`areka_placement=debug` を含む）で 1 回。拾うログに `areka_placement::diag` の診断の行があることを示す。画面の操作は排他テストの机で順を取る。
-- grep（5.10・6.6）: `grep -rn "src/placement/" crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` と `grep -rn "areka::placement" …`（同じ範囲・`target/` を除く）が 0 件。
+- grep（5.10・6.6）: `grep -rn "src/placement/" crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` と `grep -rnE "areka::placement(::|=|\b)" …`（同じ範囲・`target/` を除く・本体の `areka::placement_tests` は当たらない）が 0 件。
 - 性能の道具（6.7・6.8・5.8）: `judge-perf.py`・`judge-followup.py` が出所の名前に頼らない（`primary_dpi=` と文言で拾う）ことを記録する（6.8 は発動しない見込み）。見本を作り直した後、`python tools/perf/judge-perf.py --selftest` と、`fixtures-loop/` を読む自分の確かめ（`perf_compare_selftest.py`・`perf_ledger_selftest.py`・`judge_followup_selftest.py` ほか grep で挙がる全部）を回して緑を示す。
 - 本番の `windows` の名前空間（1.7）: 配置の本番のファイル（`*_tests.rs`・`*_test_support.rs`・`test_crash_report.rs`・`test_support.rs` を除く）で `windows::Win32::` の後ろが `Foundation`・`UI::WindowsAndMessaging` だけであることを grep で示す。
 - 第三者の表（8.8）: `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`（`tools/test-all.ps1 -License` の段と同じ）。
@@ -793,4 +794,8 @@ wintf の ZOrderPairStrategy・tracing を引く）。
   2. `transition_judge.rs`（999 行）と `main.rs`（986 行）の余裕が小さい → D4 の手当て。
   3. テストが新しい実行ファイルに分かれ、同時に回る実行ファイルが 1 つ増える → MTA と落ちの報告の写しで本体・wintf と同じ形にする。揺れが出たら `load-flake.ps1 -Binary areka-placement-lib` で測る。
   4. 割ったテストの語の表が 3 つのファイルに並ぶ → 各表の上の注で「3 つ全部へ足す」を書く。
-- 範囲の外で気づいたこと（直さない）: `areka-emo-present`・`areka-emo-text` のテストが `expect_one`・`ExpectField` を自前で持つ。完了の棚卸で扱う。
+- 範囲の外で気づいたこと（直さない）:
+  - `areka-emo-present`・`areka-emo-text` のテストが `expect_one`・`ExpectField` を自前で持つ。完了の棚卸で扱う。
+  - `crates/areka/src/session_end_sync_send_tests.rs` のワークスペース全体の走査は、置き場を `log-capture-kit/tests/` へ移すことを `audit-areka-app` へ申し送る（読み口の規則の名前を付けた例外）。
+  - `crates/areka/examples/collision-probe.rs` の説明（90 行あたり）の `../pilot/...` を読むという記述は、今の中身と合っていない古い説明に見える。4.2 で触るときに確かめ、直すかは `audit-areka-app` へ申し送る。
+- 要件との対応の記録（設計の討議で要件の字面を改めた 2 件）: 要件 1.7 は「外の crate は `workspace = true`・ワークスペースの中の crate は path」（D11 の形）に、要件 3.2 は「既にある `emo2_balloon_root` を広げて使う」（D6 の形）に、要件の文を直した。

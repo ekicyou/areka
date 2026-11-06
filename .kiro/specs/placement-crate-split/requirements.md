@@ -59,7 +59,7 @@
 4. When 移動を終えたとき, the 本体の crate `areka` shall 配置を `areka-placement` への path 依存として使い、`crates/areka/src/placement/` を持たない。
 5. The 分割作業 shall ワークスペースの根の `Cargo.toml` を変えない。
 6. The 分割作業 shall ワークスペースの外から新しい依存を足さない（足してよいのはワークスペースの中の path 依存だけ）。
-7. The `areka-placement` クレート shall 本番の依存を、今の配置が本番で使う外の crate（wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows・thiserror）に収め、どれもワークスペースのほかの crate と同じく `workspace = true` で受ける（`windows` の機能はワークスペースの表のものをそのまま受け、本番のソースが使う機能は `Win32_Foundation`・`Win32_UI_WindowsAndMessaging` の範囲に収める）。
+7. The `areka-placement` クレート shall 本番の依存を、今の配置が本番で使う外の crate（wintf・bevy_ecs・tracing・areka-parsers・areka-emo-compose・areka-emo-present・areka-sylphya・areka-emo-atlas・areka-ghost・windows・thiserror）に収め、ワークスペースのほかの crate と同じ形で受ける（外の crate〔bevy_ecs・tracing・thiserror・windows〕は `workspace = true`、ワークスペースの中の crate〔wintf・areka-*〕は `{ path = "../…" }`。根の `[workspace.dependencies]` に areka 系の crate は無く、根を変えずに〔1.5〕書けるのはこの形だけ）。`windows` の機能はワークスペースの表のものをそのまま受け、本番のソースが使う機能は `Win32_Foundation`・`Win32_UI_WindowsAndMessaging` の範囲に収める）。
 8. The `areka-placement` クレート shall 本体の crate `areka` に依存しない。
 9. The `areka-placement` クレート shall 1 ファイル 1,000 行の上限と、その例外表の決まりを、本体と同じく守る。例外表の項目は増やさず（パスの書き換えだけ）、書き換えや整形で上限を超えるファイルは分けて収める。
 
@@ -82,7 +82,7 @@
 #### Acceptance Criteria
 
 1. The 分割作業 shall ログを捕まえる支えのうち汎用の部分（`ExpectField`・`expect_one`）を `log-capture-kit` へ下ろし、本体と配置のテストは `log_capture_kit` の `capture`・`CapturedEvent`・`ExpectField`・`expect_one` を直に使う（配置の `test_support` の包み `capture_logs`・`LogEvent` は残さない）。
-2. The 分割作業 shall 見本のゴーストの入口（`emo2_root`・`balloon_root`）を、ワークスペースの慣習（crate ごとに `sample_test_support` を 1 つ持ち、`sample-ghost-kit` をそこからだけ引く）に従って置き、本体のテストは本体の `emo2_boot/sample_test_support.rs`（`balloon_root` を足す）を使う。
+2. The 分割作業 shall 見本のゴーストの入口（`emo2_root`・`balloon_root`）を、ワークスペースの慣習（crate ごとに `sample_test_support` を 1 つ持ち、`sample-ghost-kit` をそこからだけ引く）に従って置き、本体のテストは本体の `emo2_boot/sample_test_support.rs` を使う（同じ働きの `emo2_root`・`emo2_balloon_root` が既にあるので、新しい関数は足さず `pub(crate)` に広げる）。
 3. The `areka-placement` クレート shall 配置の外のテストが使う支えのうち、配置の型と `windows` だけで書けるもの（`WA`・`with_com_initialized`・`emily_shaped_scopes`・`GhostTitles::from_scope_titles`・`persist::project_restore`・`spawn` のテストの支えほか）を、`test-support` という名の機能を付けたときだけ外から使える形で開ける。
 4. The 分割作業 shall 共有のテスト用の crate（`log-capture-kit`・`sample-ghost-kit`・`temp-path-kit`）を、どの crate の本番の依存表（optional を含む）にも書かず、今の番人（`with_default_guard_test.rs`・`sample_path_guard_test.rs`）の決まりを変えない。
 5. The 本体の crate `areka` shall `areka-placement` の `test-support` 機能を、テストのビルドの依存（dev-dependency）でだけ付ける。
@@ -133,7 +133,7 @@
 3. When `RUST_LOG` に `areka_placement=debug` を与えたとき, the areka shall 配置の診断のログ（`diag` を含む）を出す。
 4. The 分割作業 shall 語彙として付けた直書きの出所（`"areka::persist::*"` ほか、モジュールのパスに頼らないもの）を変えない。
 5. The 分割作業 shall ログの出所を名前で読む所（`diag_tests.rs`・`follow_window_move_diag_tests.rs`・`measure_bake_count_tests.rs` と `measure_bake_log_tests.rs` の `"areka::placement::measure"`・`crates/areka/tests/window_link_real_run.rs` の `RUST_LOG`・wintf の `ecs/window_proc/window_pos_tests.rs` の `RUST_LOG`・wintf の `ecs/window_proc/lifecycle.rs` の説明・`tools/perf/judge-perf.py` の説明ほか）を、新しい出所の名前へ書き換える。
-6. When 書き換えを終えたとき, the 分割作業 shall 古い出所の名前 `areka::placement` を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
+6. When 書き換えを終えたとき, the 分割作業 shall 古い出所の名前 `areka::placement`（`areka::placement::`・`areka::placement=`・行末の `areka::placement` の形。本体の `placement_tests` の出所 `areka::placement_tests` は当たりにしない）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep して 0 件であることを示す（歴史の文書と、新旧のパスの対応表を持つ `roadmap.md` は除く）。
 7. The 分割作業 shall 性能の判定の道具（`tools/perf/judge-perf.py`・`judge-followup.py` ほか）がログの出所の名前に頼って行を読んでいるかを確かめ、結果を記録する。
 8. If 性能の判定の道具がログの出所の名前に頼って行を読んでいる場合, then the 分割作業 shall その読み方を新しい名前へ直し、道具の自分の確かめ（SelfTest）を回して緑を示す。
 
