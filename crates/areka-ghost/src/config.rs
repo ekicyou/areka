@@ -92,7 +92,7 @@ fn resolve_shell_name(mount: &MountModel, default_encoding: DefaultEncoding) -> 
             tracing::warn!(
                 event = "shell_name_missing",
                 path = %descript_path.display(),
-                "shell descript に name キーが無い——shell ディレクトリ名へフォールバックする"
+                "shell descript の name が無いか空——shell ディレクトリ名へフォールバックする"
             );
             shell_dir_basename(shell_dir)
         }

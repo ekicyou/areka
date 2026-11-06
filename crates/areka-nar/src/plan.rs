@@ -52,7 +52,7 @@ pub(crate) struct Placement {
     pub kind: ElementKind,
     /// ghost／shell／supplement／balloon 本体は `manifest.name`・同梱バルーンは `directory`。
     pub name: String,
-    /// 宛先の根。計画を組むとき呼び手に 1 回だけ尋ねた答え（要件 5.4・5.5）。
+    /// 宛先の根。計画を組むとき呼び手に 1 回だけ尋ねた答え（要件 5.4・5.5）。同梱は本体の根の写し。
     pub root: PathBuf,
     /// 置き先の絶対パス。
     pub destination: PathBuf,

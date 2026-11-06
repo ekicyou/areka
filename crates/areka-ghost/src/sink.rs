@@ -121,9 +121,6 @@ fn command_kind(command: &CueCommand) -> &'static str {
         CueCommand::Custom { .. } => "Custom",
         CueCommand::NewLine { .. } => "NewLine",
         CueCommand::BalloonSurface { .. } => "BalloonSurface",
-        // task 6.1 で exhaustive を回復させるための最小アーム（他の内容 cue と同格の
-        // 良性ログラベル）。Cursor 専用の消費・分類（CAGE）は task 8 の領分——ここでは
-        // command_kind ログの網羅性のみ回復させる（1.2/1.4 のアーム先行・cage 後追いと同型）。
         CueCommand::Cursor { .. } => "Cursor",
         CueCommand::Wait => "Wait",
         CueCommand::ClearAll => "ClearAll",
@@ -232,8 +229,8 @@ mod tests {
     }
 
     /// 全 `CueCommand` variant が期待どおりの `command_kind` へ写ることを確認する
-    /// （`contract::cue_target_of` の全 variant テストと同じ流儀・将来 variant 追加時に
-    /// このテストの拡張漏れをコンパイラの exhaustive match が防ぐ）。
+    /// （`contract::cue_target_of` の全 variant テストと同じ流儀）。本体の `command_kind` は
+    /// catch-all を持たないので、variant が増えるとコンパイラが直しを迫る。このテストへの追加は手で行う。
     #[test]
     fn command_kind_covers_every_cue_command_variant() {
         assert_eq!(command_kind(&CueCommand::Text("x".into())), "Text");

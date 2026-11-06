@@ -914,7 +914,8 @@ fn a_stray_work_folder_that_will_not_go_is_reported_instead_of_stopping_the_inst
 
 /// 根から宛先へ降りる途中の段（`ghost\<T>\shell`）がリンク（ジャンクション）なら、
 /// たどってその先へ入れる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。利用者が
-/// 置き場を別のドライブの場所へ移した形で、更新もインストールも止めない。
+/// 置き場を移した形で、更新もインストールも止めない。同じボリュームの中の置き場ならたどる。
+/// 別のボリュームを指すリンクの先へは `rename` で入れ替えられず、確定の段で失敗する（何も変わらない）。
 #[test]
 fn a_link_between_the_root_and_the_destination_is_followed_and_the_install_lands_behind_it() {
     let work = root_with_ghost("tester");

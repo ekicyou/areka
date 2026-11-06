@@ -117,8 +117,8 @@ pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
 /// boot 系列の sylphya アクターを起動する（本番 IO＝[`FsPersistIo`]・運行 sink 未配線＝M1）。
 ///
 /// `roots` は層別 profile root（ghost/shell/app/balloon）。起動時に全スコープを寛容ロードして
-/// 初期鏡像へ投影する（不在スコープは空扱い・emo2 fixture の read-only でも汚染しない——M1 本番
-/// 経路に永続書込呼出は無い・design Implementation Notes）。返る [`SylphyaParts`] の reader は
+/// 初期鏡像へ投影する（不在スコープは空扱い）。書き込みは呼び手の `persist_put` と、`boot` の
+/// profile の根の作成（`runtime.rs` の step 2b）が行う。返る [`SylphyaParts`] の reader は
 /// 結線直後から無待機で読める。
 ///
 /// `failures` は保存の失敗の受け口（要件 1.3）。`Some` なら保存が失敗するたびに中身を 1 件送る。

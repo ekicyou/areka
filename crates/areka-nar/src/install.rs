@@ -300,7 +300,8 @@ pub(crate) fn stage_placement(
 
     // 宛先そのものがリンクならたどらない。たどると、リンクの先を写した木で入れ替える。
     // 根から宛先へ降りる途中の段（`ghost\<T>\shell` など）のリンクは利用者が移した置き場なので
-    // たどる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。
+    // たどる（要件 9.6 が見るのは宛先そのものと宛先の中だけ）。同じボリュームの中の置き場ならたどる。
+    // 別のボリュームを指すリンクの先へは `rename` で入れ替えられず、確定の段で失敗する（何も変わらない）。
     if std::fs::symlink_metadata(&placement.destination)
         .is_ok_and(|meta| meta.file_type().is_symlink())
     {

@@ -183,33 +183,31 @@ pub struct InstallRoot {
 }
 
 /// 入れる根を決める（要件 5.1〜5.3）。見つかる根が 1 つも無ければ `None`。
-/// 一時の置き場は入れ先にしない（見えている項目の根でも、いちばん上の根でも飛ばす）。
+/// 一時の置き場は入れ先にしない。先に並びから除いてから探すので、一時の置き場が
+/// 同じフォルダ名を隠していても、その奥で見えている根を答える。
 pub fn install_root(roots: &BasewareRoots, kind: StoreKind, folder: &str) -> Option<InstallRoot> {
+    let roots = &BasewareRoots::new(
+        roots
+            .roots()
+            .iter()
+            .filter(|r| !r.is_temporary())
+            .cloned()
+            .collect(),
+    );
     let visible = match kind {
         StoreKind::Ghost => find_ghost(roots, folder).map(|e| e.root),
         StoreKind::Balloon => find_balloon(roots, folder).map(|e| e.root),
     };
-    let temporary = |dir: &Path| {
-        roots
-            .roots()
-            .iter()
-            .any(|r| r.is_temporary() && same_root(r.dir(), dir))
-    };
-    if let Some(root) = visible.filter(|root| !temporary(root)) {
+    if let Some(root) = visible {
         return Some(InstallRoot {
             root,
             head_skipped: None,
         });
     }
-    let top = roots
-        .present()
-        .find(|r| !r.is_temporary())?
-        .dir()
-        .to_path_buf();
+    let top = roots.present().next()?.dir().to_path_buf();
     let head_skipped = roots
         .roots()
-        .iter()
-        .find(|r| !r.is_temporary())
+        .first()
         .filter(|head| !head.dir().is_dir())
         .map(|head| head.dir().to_path_buf());
     Some(InstallRoot {

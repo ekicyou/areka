@@ -106,3 +106,22 @@ fn head_skipped_names_the_first_plain_root_after_the_temporary_one() {
     assert_eq!(got.root, a);
     assert_eq!(got.head_skipped, Some(gone));
 }
+
+/// 一時の置き場が同じフォルダ名を隠していても、入れ先はその奥で見えている根（#R4-g3-1）。
+/// 一時の置き場を先に除いてから探すので、`b` の `g` を `a` で覆わない（呼び手の並びと同じ答え）。
+#[test]
+fn install_root_sees_through_a_temporary_root_hiding_the_same_folder() {
+    let (tmp, t, a, _) = temp_then_plain("catalog-roots-temp-hides");
+    let b = tmp.child("b");
+    put_ghost_in(&t, "g", "name,G");
+    put_ghost_in(&b.join("ghost"), "g", "name,G");
+    let roots = BasewareRoots::new(vec![
+        BasewareRoot::temporary(t),
+        BasewareRoot::new(a),
+        BasewareRoot::new(b.clone()),
+    ]);
+
+    let got = install_root(&roots, StoreKind::Ghost, "g").expect("入れ先");
+    assert_eq!(got.root, b);
+    assert_eq!(got.head_skipped, None);
+}
