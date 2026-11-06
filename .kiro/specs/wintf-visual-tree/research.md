@@ -148,7 +148,7 @@
 
 ## 8. 次の段
 
-要件の討議（`/kiro-requirements-discussion`）で 7 節の 13 件を扱い、答えを要件へ写してから `/kiro-design wintf-visual-tree`。設計の段では 5 節の 1・2・7 を先に測る。
+要件の討議は 2026-11-06 に終わり（7 節の 1〜3 は確定・4〜13 は 10 節の決め）、設計は `design.md`（検証は `design-validation.md`・GO 条件つき）。検証の重大 1（`ParamSet`）・重大 3（`Arrangement` の変化で組み直す）と小さな指摘は設計の討議で設計書に写した。重大 2（装置の失いで節が持ち主へ化ける）は設計の討議の議題。
 
 ## 9. 設計の段の調べ（2026-11-06・`/kiro-spec-design -y`）
 

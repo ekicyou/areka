@@ -42,7 +42,8 @@
 
 - `wintf-visual-damage-redraw`: 前の列の保持・LIS・描き直す範囲・写し。本 spec は `DrawTree.commands`（平らな列）・`DrawItem.hash`／`world_aabb`・`WorldVisual.subtree_world_aabb`・`VisualVersion`・`Matrix3x2Ext::moved` を**形のまま**残す。
 - `wintf-d2d-composite-rules`: `D2D1_BLEND_MODE`・不透明度の層・自前の入れ物・読み戻し。層（`PushLayer`）の中で `SOURCE_OVER` でない重ね方がどう効くかの決め（本 spec は D2D の既定＝層は透明から始まる、で固定し、変える権限をあちらに渡す）。
-- `audit-wintf-layout-widget`: `ecs/mod.rs`・`ecs/world/mod.rs` はあちらが触らない約束。本 spec は `ecs::graphics::Visual`・`VisualGraphics` の名前を変えない。
+- `audit-wintf-layout-widget`: `ecs/mod.rs`・`ecs/world/mod.rs` はあちらが触らない約束。本 spec は `ecs::graphics::Visual`・`VisualGraphics` の名前を変えない。**あちらのテスト `ecs/layout/systems/monitor_systems_transition_tests.rs:32` が `include_str!` で `ecs/world/mod.rs` を読み、`schedules.insert(Schedule::new(Update));` の字面（149 行目）を見張る**＝本 spec はこの行を変えない・動かない（触るのは `PreRenderSurface` の `add_systems` の塊だけ）。
+- `placement-crate-split`（同じウェーブ・2026-11-06 棚卸セッションの申し送り）: `ecs/mod.rs` で外すのは `pub mod visual;` の 1 行だけ。`wintf::ecs::DPI`・`ZOrderPairStrategy` ほかの再公開は動かさず、`ecs/window/zorder_chain*.rs`・`zorder_pair_*.rs` は動かさない（配置のテストが文字として読む）。
 - 節の下の描画面の持ち主を支えること（配置の伝播と WUC の木の同期が節をまたぐこと）＝自動の昇格の spec。
 - `areka-emo-text` の文字の層・emo の合成（`areka-emo-compose`／`-present`）。
 
@@ -178,7 +179,7 @@ crates/wintf/examples/
 - `crates/wintf/src/ecs/graphics/systems/clip_sync.rs` — 鍵の計算で `Some(ClipShape::Geometry(_))` を「切り抜きなし」として扱い、鍵が変わる回に `warn!`（実体名・範囲外の旨）を 1 度出す（3.8）。
 - `crates/wintf/src/ecs/graphics/visual_manager.rs` — 変更なし（`VisualGraphics` を持つ部品にだけ見た目を作る今の作りで足りる）。
 - `crates/wintf/src/ecs/world/mod.rs` — `PreRenderSurface` の登録: `insert_graphics_parts_on_window_join` を `sync_surface_owner_parts` に置き換え、`update_draw_trees` を `visual_resource_management_system` の後・`deferred_surface_creation_system` の前に足す。
-- `crates/wintf/src/ecs/graphics/systems/init.rs`／`tests/visual/window_join_test.rs` — 名前の置き換えに追随（`insert_graphics_parts_on_window_join` → `sync_surface_owner_parts`）。
+- `insert_graphics_parts_on_window_join` の名前を綴るのは `world/mod.rs:329` だけ（`init.rs`・`tests/visual/window_join_test.rs` は綴っていない・検証で確認）。`window_join_test.rs` は筋が同じなので緑のまま。
 - `.kiro/steering/structure.md` — `ecs/` の節の `visual/` の行を `graphics/visual/` へ直し、描画の道（命令の列 1 本の道と木の道の分岐・描画面の有無の既定）を書く。
 - `.kiro/steering/tech.md` — Testing の「GPU のテストは実のハードウェア GPU」に「描画の木の画素の答えに限って WARP」の例外を書く。
 
@@ -380,6 +381,7 @@ flowchart TD
 - 版: `Ref<Visual>.is_changed() || Ref<VisualDrawContent>.is_changed()` の節は `VisualVersion.bump()`（4.3）。`VisualTransform` は読まない（4.4）。`Visual` の変化には `opacity`・`transform_origin` も含まれる（版が余分に上がるだけで約束は破らない・doc に書く）。
 - 不透明度: `Ref<Visual>.is_changed()` かつ `opacity != 1.0` の節は `warn!`（実体名・「節の不透明度の層は `wintf-d2d-composite-rules` の範囲・1.0 で描く」）。変化の回だけ出るので 1 度（3.9）。
 - 書き込みは値が変わるときだけ（`WorldVisual` の `PartialEq` を足して比べる）。
+- 配置の変化（検証の重大 3）: 戻り値の「変化あり」には、根の `Arrangement` の変化（viewport）と、`Visual.clip` が `Some` の節の `Ref<Arrangement>.is_changed()`（切り抜きの大きさ）も数える。版は上げない（damage-redraw の約束は変えない）。
 
 **Contracts**: Service [x]
 
@@ -389,9 +391,10 @@ flowchart TD
 pub(crate) fn fill_world_visuals(
     root: Entity,
     root_name: Option<&Name>,
-    nodes: &mut Query<FillData>,            // (Entity, Ref<Visual>, Option<&VisualTransform>,
+    nodes: &mut Query<FillData>,            // (Entity, Ref<Visual>, Ref<Arrangement>, Option<&VisualTransform>,
                                             //  Option<Ref<VisualDrawContent>>, &mut WorldVisual,
                                             //  &mut VisualVersion, Option<Ref<Children>>, Has<VisualGraphics>)
+    root_arrangement_changed: bool,         // 根の Ref<Arrangement>.is_changed()（viewport が変わる＝組み直す）
     children_of_root: Option<&Children>,
     root_children_changed: bool,
     visited: &mut Vec<(Entity, usize)>,     // 前順の列と深さ（容量を使い回す）
@@ -403,7 +406,7 @@ pub(crate) fn fill_world_visuals(
 
 **Implementation Notes**
 - Integration: `update_draw_trees` が根ごとに呼ぶ。`Query` の書き込みは `iter_many_mut` 相当の `get_mut` で 1 節ずつ。
-- Validation: `world_visual_tests.rs`（純粋・`World` と `Schedule` を組む）: 2 段の変形の積・反転の外接矩形・部分木の和・見えない部分木を飛ばす・変形だけの変化で版が上がらない・中身の変化で 1 つ上がる・深さの上限で止まる・輪で落ちない・節の下の持ち主で `error!` が出る（`log-capture-kit`）。
+- Validation: `world_visual_tests.rs`（純粋・`World` と `Schedule` を組む）: 2 段の変形の積・反転の外接矩形・部分木の和・見えない部分木を飛ばす・変形だけの変化で版が上がらない・中身の変化で 1 つ上がる・根の大きさを変えると「変化あり」になり版は上がらない・深さの上限で止まる・輪で落ちない・節の下の持ち主で `error!` が出る（`log-capture-kit`）。
 - Risks: 毎フレーム根ごとに全節を訪れる（差分はしない）。節は数十〜数百の見込みで、今の `propagate_global_arrangements` と同じ桁。
 
 #### `DrawTree`
@@ -526,10 +529,10 @@ pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCom
 | Intent | 根ごとに `fill_world_visuals` → 変化があれば `build` → `DrawTree` を書く・入れる・外す |
 | Requirements | 1.8, 1.9, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1 |
 
-- 読むもの: `Res<GraphicsCore>`（無効なら戻る・`is_changed()` なら全部組み直す）・根の `Query<(Entity, &Arrangement, Option<&Children>, Option<&mut DrawTree>, Option<&Name>), With<VisualGraphics>>`・節の `Query<FillData>`・`Query<NodeData>`・`RemovedComponents<VisualDrawContent | VisualTransform | ChildOf | OwnSurface>`・`Commands`。
-- 手順（根ごと）: ① 根の直下に節（`VisualGraphics` を持たない `Children`）が無ければ `DrawTree` が在るとき `remove`・次へ。② `fill_world_visuals` を呼び「変化あり」を得る。③ 組み直す条件＝変化あり、または `RemovedComponents` が 1 件でも在る（議題 6 ㋐・全部の根）、または `Res<GraphicsCore>` が変わった、または `DrawTree` が無い。④ `unit_rect` が無ければ工場から `CreateRectangleGeometry((0,0,1,1))`（失敗は `error!`＋この根を飛ばす）。⑤ `build` → 在る `DrawTree` は `commands` を入れ替えて `Changed`、無ければ `commands.entity(root).insert(DrawTree { commands, unit_rect })`（同じ schedule の次の係から見える＝`deferred_surface_creation_system`・`mark_dirty_surfaces` が同じ回に拾う・1.8・1.9）。
+- 読むもの: `Res<GraphicsCore>`（無効なら戻る・`is_changed()` なら全部組み直す）・根の `Query<(Entity, Ref<Arrangement>, Option<&Children>, Option<&mut DrawTree>, Option<&Name>), With<VisualGraphics>>`・節の **`ParamSet<(Query<FillData>, Query<NodeData>)>`**（`FillData` は `&mut WorldVisual`／`&mut VisualVersion`、`NodeData` は `&WorldVisual`／`&VisualVersion` を持つので、同じ係に並べると bevy が B0001 で落とす。`visual_hierarchy_sync_system`（`visual_sync.rs:70`）と同じ `ParamSet` の形で `set.p0()` で埋め、`set.p1()` で組む・検証の重大 1）・`RemovedComponents<VisualDrawContent | VisualTransform | ChildOf | OwnSurface>`・`Commands`。
+- 手順（根ごと）: ① 根の直下に節（`VisualGraphics` を持たない `Children`）が無ければ `DrawTree` が在るとき `remove`・次へ。② `fill_world_visuals` を呼び「変化あり」を得る（根の `Arrangement` の変化＝viewport・切り抜きを持つ節の `Arrangement` の変化を含む・検証の重大 3）。③ 組み直す条件は純粋な関数 `fn needs_rebuild(changed: bool, removed_any: bool, core_changed: bool, has_tree: bool) -> bool`＝変化あり、または `RemovedComponents` が 1 件でも在る（議題 6 ㋐・全部の根）、または `Res<GraphicsCore>` が変わった、または `DrawTree` が無い（真理値表を `systems_tests.rs` で固定）。④ `unit_rect` が無ければ工場から `CreateRectangleGeometry((0,0,1,1))`（失敗は `error!`＋この根を飛ばす）。⑤ `build` → 在る `DrawTree` は `commands` を入れ替えて `Changed`、無ければ `commands.entity(root).insert(DrawTree { commands, unit_rect })`（同じ schedule の次の係から見える＝`deferred_surface_creation_system`・`mark_dirty_surfaces` が同じ回に拾う・1.8・1.9）。
 - 置き場: `PreRenderSurface`・`visual_resource_management_system` の後・`deferred_surface_creation_system` の前。
-- Validation: `update_draw_trees` は工場を `Res<GraphicsCore>` から取る（工場だけの別の資源は作らない・公開面を増やさない）ので、純粋なテストでは回せない。判断の分岐は `fill_world_visuals`・`build` の純粋なテストが持ち、`update_draw_trees` 自体の檻は「`DrawTree` の出入り」と「`RemovedComponents` で全部組み直す」の 2 本を `tests/graphics/` の実 GPU の統合テストで持つ（`GraphicsCore::new()` を使う今の `surface_systems_test.rs` の形）。
+- Validation: `update_draw_trees` は工場を `Res<GraphicsCore>` から取る（工場だけの別の資源は作らない・公開面を増やさない）ので、純粋なテストでは回せない。判断の分岐は `fill_world_visuals`・`build`・`needs_rebuild` の純粋なテストが持ち、`update_draw_trees` 自体の檻は「`DrawTree` の出入り」の 1 本だけを `tests/graphics/` の実 GPU の統合テストで持つ（`GraphicsCore::new()` を使う今の `surface_systems_test.rs` の形）。
 
 ### graphics/systems（今の道の口）
 
@@ -540,7 +543,7 @@ pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCom
 | `deferred_surface_creation_system` | `SurfaceCreationFilter = (Or<(With<GraphicsCommandList>, With<DrawTree>)>, Or<(Changed<GlobalArrangement>, Changed<GraphicsCommandList>, Changed<VisualGraphics>, Changed<DrawTree>)>)` | 1.8 |
 | `cleanup_surface_on_commandlist_removed` | `RemovedComponents<DrawTree>` も読む・filter を `(Without<GraphicsCommandList>, Without<DrawTree>)` へ | 1.8 |
 | `invalidate_dependent_components` | `VisualDrawContent` を全部外す・`DrawTree` を空にする・`Visual.clip` の `Geometry` を `None`＋`warn!` | 3.4 |
-| `clip_sync_system` | 鍵の形で `Geometry` を `None` に読み替え、鍵が変わる回に `warn!`（実体名・範囲外の旨）を 1 度 | 3.8 |
+| `clip_sync_system` | 鍵の形で `Geometry` を `None` に読み替え、鍵が変わる回に `warn!`（実体名・範囲外の旨）を 1 度。`VisualGraphics.clip_key` は `ID2D1Geometry` を控えに持たない（doc に 1 行） | 3.8 |
 
 ### numerics（整理）
 
@@ -639,7 +642,7 @@ graph TB
 
 ### 画素のテスト（WARP・`draw/emit_tests.rs`・6.3）
 
-足場 `emit_test_support.rs`: `warp_dc()`（`d3d11_create_device(None, D3D_DRIVER_TYPE_WARP, HMODULE::default(), BGRA_SUPPORT, …)` → `cast::<IDXGIDevice>` → `D2D1CreateFactory::<ID2D1Factory1>(MULTI_THREADED)` → `CreateDevice` → `CreateDeviceContext`・`SetDpi(96, 96)`）・`render_tree_to_pixels(world, root, w, h, root_transform)`（`fill_world_visuals`→`build`→ビットマップの的に `BeginDraw`・透明で塗り・`emit`・`EndDraw`→`CPU_READ|CANNOT_DRAW` の staging へ `CopyFromBitmap`→`Map(READ)`・行を詰める＝emo-present の `replay_and_read_back` と同じ形）・`pixel_near(actual, expected, x, y)`（1 チャネル ±1）。見本は単色の小さな絵（命令の列に `FillRectangle` 1 つ）をコードの値で持ち、比べる点は境界から 2 画素以上離す。
+足場 `emit_test_support.rs`: `warp_dc()`（`d3d11_create_device(None, D3D_DRIVER_TYPE_WARP, HMODULE::default(), BGRA_SUPPORT, …)` → `cast::<IDXGIDevice>` → `D2D1CreateFactory::<ID2D1Factory1>(MULTI_THREADED)` → `CreateDevice` → `CreateDeviceContext`・`SetDpi(96, 96)`。工場と装置は `OnceLock` で 1 度だけ作り、テストごとに作るのは DC と的のビットマップだけ＝14 件で装置を 14 回作らない）・`render_tree_to_pixels(world, root, w, h, root_transform)`（`fill_world_visuals`→`build`→ビットマップの的に `BeginDraw`・透明で塗り・`emit`・`EndDraw`→`CPU_READ|CANNOT_DRAW` の staging へ `CopyFromBitmap`→`Map(READ)`・行を詰める＝emo-present の `replay_and_read_back` と同じ形）・`pixel_near(actual, expected, x, y)`（1 チャネル ±1）。見本は単色の小さな絵（命令の列に `FillRectangle` 1 つ）をコードの値で持ち、比べる点は境界から 2 画素以上離す。
 
 | # | 固定する答え | 要件 |
 |---|---|---|
