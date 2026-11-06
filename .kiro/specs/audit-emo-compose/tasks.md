@@ -197,6 +197,12 @@
 - [x] 8.3 テストの直し（指摘 144〜173）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
+- [ ] 9. かけ直し 4 回目の指摘の直し（research.md 18 節・開発者 11-06「案 A」＝47 件を直し、最後の audit で必ず直す・直したほうがよいが 0 件なら終わり。そのとき出た「できれば」は同じ回に直し、次の audit はかけない）
+- [ ] 9.1 実装の側の直し（覚えの記憶の上限・読み込みの予算の記録のあふれ・箱の記録の組み方と追記の報告・知らない描画メソッドの命令・手順の表引き・見える部品の行の多い面・説明）
+  - _Requirements: 2.1, 4.4, 4.5, 6.2_
+- [ ] 9.2 テストの直し（境目・静的な檻・重なり・写し・古い説明・名前）
+  - _Requirements: 2.1, 4.4, 4.5, 5.3_
+
 ## Implementation Notes
 
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）
