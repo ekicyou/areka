@@ -32,6 +32,10 @@
 //! `#[cfg(test)] mod tests` 内）で、その和が `src/*.rs` の実ファイル集合と
 //! 一致することを `every_source_file_is_either_scanned_or_explicitly_excluded` が突き合わせる
 //! （この段落は列挙を数えるためのものではない——数える場所は 2 つの一覧の側にある）。
+//! `PURE_SOURCES` には純粋層のほか、結線層のうち `windows` を触らないファイル
+//! （例: `actor_attach`／`actor_present`／`actor_scroll` と、`windows` を触らない兄弟テスト）も載る。
+//! 走査が禁じるのは `windows` 系 crate と `wintf::com`（DirectWrite・D2D・DXGI の包み）で、
+//! `wintf::ecs` の資源（`GraphicsCore`／`WucGraphicsResource` など）を取り込むのは許す。
 //!
 //! ## 依存方向（強制）
 //!
@@ -415,6 +419,11 @@ mod tests {
         ("underline.rs", include_str!("underline.rs")),
         // script-small-tags の行の中の印の目印の字と形の計算（純粋）。
         ("inline_marker.rs", include_str!("inline_marker.rs")),
+        (
+            "inline_marker_tests.rs",
+            include_str!("inline_marker_tests.rs"),
+        ),
+        ("underline_tests.rs", include_str!("underline_tests.rs")),
         // balloon-scroll-arrows の手動の位置と送りの規則（純粋）。
         ("scroll_marker.rs", include_str!("scroll_marker.rs")),
         (
@@ -499,24 +508,23 @@ mod tests {
         "viewbox_draw_underline_tests.rs",
         "viewbox_draw_vertical_band_readback_tests.rs",
         "viewbox_draw_vertical_band_scroll_tests.rs",
-        "inline_marker_tests.rs",
-        "underline_tests.rs",
     ];
 
-    /// 層規律の構造檻: 純粋層モジュール（state/writing/region/layout/canvas/look/color）の
-    /// ソースに `windows` 系 crate への依存（import／パス参照）が一切無いことを検証する。
+    /// 層規律の構造檻: [`PURE_SOURCES`] のソースに `windows` 系 crate と `wintf::com` への
+    /// 依存（import／パス参照）が一切無いことを検証する（`wintf::ecs` の資源は許す）。
     /// （design.md「依存方向（強制）」——純粋層に `windows` の import が現れたらレビューエラー）
     #[test]
     fn pure_layer_modules_have_no_windows_imports() {
         // 列挙は静的なので、走査面が痩せても述語そのものは緑のままになる。
         // 母数を先に固定して「黙って減る」経路を塞ぐ（増やすときは 2 箇所を明示的に編集する）。
-        assert_eq!(PURE_SOURCES.len(), 86, "走査する純粋層モジュールの母数");
+        assert_eq!(PURE_SOURCES.len(), 88, "走査する純粋層モジュールの母数");
         const FORBIDDEN: &[&str] = &[
             "use windows",
             "windows::",
             "windows_core",
             "windows_numerics",
             "extern crate windows",
+            "wintf::com",
         ];
         for (name, src) in PURE_SOURCES {
             for pat in FORBIDDEN {
