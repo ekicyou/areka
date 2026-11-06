@@ -486,7 +486,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 
 - 20・21・23〜37 番は振る舞いを変えない直し（まとめる・消す・説明）で、今のテストが緑のままであることで確かめる。21 番は骨組みのテスト（10 番の行）も通す。
 - 記録の文を守る確かめ: 20・30 番の後も `monitor_systems_tests.rs:350`（「Redriving window DPI from updated Monitor」が出る）が緑で、`crates/areka/src/placement/transition_judge_reobservation_tests.rs` が全体テストで緑であること。13 番の後も、`Visual` だけを付けた部品に `GlobalArrangement` が入ること（`crates/wintf/tests/layout/component_hooks_test.rs` など今のテストで見る）。
-- 前後の確かめ: 1・2 番は配置の答えが変わる（正しくなる方へ）ので、`crates/wintf/tests/layout/` の配置のテストを前後で回す。7・10・11・12・21 番は描画の流れに触るので、`audit-wintf-graphics-world` の立ち直りのテスト（`crates/wintf/tests/graphics/device_lost_recovery_test.rs` など）と `crates/wintf/tests/widget/bitmap_source_integration_test.rs` を前後で回す。13 番は emo-present・emo-text の当たり判定のテストを全体テストで見る。
+- 前後の確かめ: 1・2 番は配置の答えが変わる（正しくなる方へ）ので、`crates/wintf/tests/layout/` の配置のテストを前後で回す。7・10・11・12・21 番は描画の流れに触るので、`audit-wintf-graphics-world` の立ち直りのテスト（`crates/wintf/tests/graphics/device_lost_recovery_test.rs` など）と `crates/wintf/tests/widget/bitmap_source_integration_test.rs` を前後で回す。13 番は、束で既定でない `GlobalArrangement` を渡す範囲の外のテスト `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs:58`（`audit-wintf-window` の持ち物・書き換えない）を、13 番のタスクで直す前と後に回す（押す点は子の部品の中なので答えは変わらない見込み・design-validation.md）。emo-present・emo-text の当たり判定のテストは全体テストで見る（emo-text の `marker_surface_tests.rs:319`・`surface_hit_cells_tests.rs:19` は `Arrangement` を一緒に入れないのでフックが走らず、影響しない）。
 
 ## Performance & Scalability
 - 12 番で、止まった打ち出し表示の毎回の描画と描画面の更新が無くなる（今は毎秒 60 回・測ってはいない）。
@@ -533,7 +533,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 
 ## Risks
 - **配置の答えが変わる**（1・2 番）: 後から `BoxStyle` を付ける形を前提に答えを固定したテストがあれば赤になる。正しい答えへ直す（陳腐化したテストの扱いの決まりに従う）。
-- **`GlobalArrangement` を束で渡すテストの答えが変わる**（13 番）: 今は上書きされて伝播で作り直されていた値が残る。emo-text の `marker_surface_tests.rs` などが束で渡しているので、全体テストで見る。
+- **`GlobalArrangement` を束で渡すテストの答えが変わる**（13 番）: 今は上書きされて伝播で作り直されていた値が残る。値の扱いが変わるのは木の中で `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs:58`（`Window::default()` と既定でない `GlobalArrangement` を一緒に作る）だけで、押す点は子の部品の中なので答えは変わらない見込み。13 番のタスクで前後に回す。赤になったら、持ち主の `audit-wintf-window` の範囲なので書き換えずに止まって報告する。
 - **打ち出し表示の完了が遅れる**（4 番）: 最後の待ちの分だけ `Completed` が後になる。`is_completed()` で次へ進む使い手（`mock-shell.rs` は入れるだけ・本番の areka は `Typewriter` を使わない）は待ちの分だけ遅れる。これが正しい振る舞い。
 - **画像の命令の列に透明の消しが入る**（21 番）: `bitmap_source_integration_test.rs` の画素のテストで確かめる。
 
