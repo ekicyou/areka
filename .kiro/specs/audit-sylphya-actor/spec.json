@@ -1,16 +1,16 @@
 {
   "feature_name": "audit-sylphya-actor",
   "created_at": "2026-11-06T06:11:03Z",
-  "updated_at": "2026-11-06T06:20:00Z",
+  "updated_at": "2026-11-06T07:32:04Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

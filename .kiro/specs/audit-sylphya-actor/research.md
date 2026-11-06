@@ -141,3 +141,43 @@
 - **R4（#18）**: `ukadoc-survey` の抜き出しが `FlatEntry` の欄を減らしても同じ要素を拾うか（「要素ごとの最初の文字列」の規則なので拾う見込み）・`zorder_property_deferral_tests.rs` の公開の const の名簿が変わらないか。
 
 ---
+
+## 10. 設計の段の調べ（2026-11-06・`/kiro-spec-design -y`）
+
+- **Discovery の種類**: light（今のクレートの直し・新しい依存なし・外の API の調べなし）。読み手は分けず、設計の 1 人が範囲の該当ファイルと範囲の外の呼び手を開いて確かめた。
+- **使った道具・決まり**: `kiro-spec-design` の rules（design-principles・design-discovery-light・design-synthesis・design-review-gate）・ponytail（いちばん小さい完全な変更）・形の手本は完了した `audit-ghost-catalog` の design.md。
+
+### 10.1 設計に回した事項の答え（§8.1）
+
+- **B1・R1（#2）**: 区間の出入りを数える自前の受け手（`tracing::Subscriber` の最小の実装・`enter` で +1・`exit` で −1）をポンプのスレッドの既定に据え、handler の中で 1・ポンプの filter（poll の外）で 0 を見る。前例は `crates/areka-actor/src/spawn_log_capture_tests.rs` の `NotAWindow`・`crates/log-capture-kit` の 6 つの自作の受け手。呼び出し地点の関心がプロセス全体に焼き付く機序（`log-capture-kit` の crate doc）を避けるため、テストは 1 本だけの独り立ちのバイナリ `tests/ui_span_test.rs` に置く。`tracing::Instrument` は `tracing` 0.1.44 の `lib.rs` で無条件に公開されている（`pub use self::instrument::Instrument;`）＝依存も機能の指定も増えない。
+- **B2・R3（#1）**: 範囲の外の知らせ（`crates/areka/src/alert.rs`）は `PersistFailureCause::Io(reason)` を「理由: {reason}」の 1 行でそのまま出す。前後の行は「記憶を書けないので、ゴーストを起こさずに起動を止めました。」（起動の前）か「記憶を書けなくなったので、areka を終了しました。」（走っている間・`write_failure.rs` の `fatal`）と「直し方: この置き場を書ける状態にしてください。…」。理由の文に「どのファイルが・なぜ使えないか・中身を消していないこと」を入れれば足りる（文面は design.md の #1 の節）。縛るテストの置き場は `persist/persist_unreadable_tests.rs`（`persist_tests.rs` 879 行に足さない）。
+- **B3（#3）**: 錠は 2 段＝プロセスの中の `static SAVE_GATE: Mutex<()>` と、`PersistIo` に既定つきで足す `lock_for_update`（`FsPersistIo` だけが `sylphya.toml.lock` を `share_mode(0)`＋`FILE_FLAG_DELETE_ON_CLOSE` で開く）。待つ上限 1 秒・10 ms ごとに取り直す・取れなければ `error!`＋`Degraded(Io)`。一時の名前 `sylphya.toml.tmp` と `temp_path_for` は変えない。`temp_path_guard_test.rs` の走査語は一時の入口の 2 つの綴り（`concat!` で組んだ語）だけで、錠のパスを宛先から組む形は当たらない（`TempPath` の 3 か所も変えない）。
+- **B4（#14・#20・#22・#12）**: #14＝`spawn_parts`（crate 内）を本番と檻が呼ぶ。#20＝後継の像を `Option` で遅らせ、書き換える 4 つの枝だけが作る。#22＝`KeyParseError::TextAfterParen` を足す（範囲の外で `KeyParseError` は 0 か所＝足してよい）。#12＝`test_log_capture.rs` は消さずに共有の型の上の 2 つの関数へ縮める（`crates/log-capture-kit/src/event.rs` の注が「`areka-sylphya` の `assert_logged`」を名指すので、名を残せば範囲の外の注が古びない）。
+- **B5・R4（#18）**: #18 を残すと決めたので調べは要らない。
+
+### 10.2 設計で確かめた事実（Research Log）
+
+- `PersistIo` の範囲の外の実装は 20（どれも `crates/areka` のテストの写しで、`read`・`commit`（一部 `withholds`）だけを書く）。既定つきの口を足しても書き直しは要らない。門に止める偽の IO は範囲の外に無い（`SAVE_GATE` で他のテストを止め続ける心配が無い）。
+- `save_scope` の範囲の外の呼び手は `crates/areka/src/boot_resolve.rs`（`save_app`）と `roots/edit.rs` の 2 つ。どちらも UI スレッドから呼ぶ＝錠の待ちの上限 1 秒がそのまま UI の待ちの上限になる。
+- 範囲の外で `MirrorImage::flat_global`・`FormatDoc::is_all_absent`・`SylphyaMsg::PersistPut`・`KeyParseError` を使う所は 0（grep）。`MirrorImage { .. }` の字面の組み立ても範囲の外に 0。`barrier()` は範囲の外で 20 か所以上が使う（消さない）。
+- `wintf_winmsg_executor::JoinHandle` は `Future`（0.0.5 の `lib.rs`）＝`spawn_local` で待つ見張りのタスクを作れる（#5 の「全送り手が落ちたら終わる」の観測）。
+- `run_inbox` は toy(a)（`tests/toy_worker_test.rs`）の echo worker の中で使われる＝`spawn.rs` の単体テスト 4 本は toy(a) の 5 本と同じ規約を見る写し（#11）。
+- 行番号の訂正（§3 の時点の番号の一部が古かった）: #6 の「写しでない 1 件」は `ledger_key_determinism_tests.rs` の `criterion_ext_event_names_reserved_only_not_resolution_vocab`（321〜341 行目）・#15 のテストは `actor_failure_sink_tests.rs` の `spawn_without_receiver_behaves_as_today`（71〜92 行目）。
+- 範囲の外のテストの fixture に `format-version` を持たない `sylphya.toml`（`"old = 1"`・`"new = 2"`）を置く物がある（`crates/areka-user-data` の 4 ファイル・`crates/areka-mcp-bridge/src/config_prepare_tests.rs`）。どれも記憶のフォルダの写しと置き場の決めを見るテストで、sylphya の保存は通らない見込み。全体テスト（T11）で確かめる（赤なら、その範囲の spec のセッションと申し合わせる＝要件 6.6）。
+
+### 10.3 合成（design-synthesis）
+
+- **一般化**: #1 と #3 は同じ「読んで重ねて書く」の 2 つの穴（読めなかった分を消す・2 人が交互に混ざる）。1 か所（`save_scope`）で「錠を取る → 読めるか決める → 書く」の順にまとめた。
+- **作るか借りるか**: 錠は OS の共有の決まり（`share_mode(0)`）をそのまま使う（`areka-nar` の棚の錠と同じ形・依存 0）。期限つきの待ちは既存の `ReplyReceiver::recv_timeout`。区間は `tracing::Instrument`。新しく作る仕組みは無い。
+- **簡素化**: 錠の型・新しい理由の variant・理由の enum は作らない（錠は `std::fs::File` のまま返し、理由は文字列で `PersistFailureCause::Io` に入れる）。`test_log_capture.rs` は消さずに縮める。範囲の外のファイルの変更は 0。
+
+### 10.4 設計の審査（design-review-gate）
+
+- 機械の確かめ: requirements.md の 41 の番号がすべて design.md に在る・境界の 4 節が埋まっている・ファイルの構成に具体的なパス・登場する部品（`spawn_parts`・`post_barrier`・`lock_within`・`SAVE_GATE`・`EnterDepth`・`run_pump_until`）はすべてファイルに割り当て済み。
+- 直した所（1 回目）: ⑴ 錠の期限切れの理由の文が、本当に書けないフォルダ（拒み 5）でも「ほかの areka」と言う誤りを、最後の失敗で分けた ⑵ #4 の縛るテストが、直しを外すと赤でなく止まる形だったのを、別のスレッドで呼んで期限つきで待つ形へ ⑶ プロセスの中の錠が同じバイナリの他のテストを待たせることを前提に書いた。2 回目で新しい指摘なし＝通過。
+
+### 10.5 開発者に確かめたい点（設計の討議へ）
+
+1. #1 の帰結: 使えない記憶のファイルが在ると、`crates/areka` の今の扱いにより、起動の前の書き込みなら起動を止め、走っている間の書き込みなら areka を終える（どちらも理由の窓が出る）。完了した `areka-P0-sylphya` の要件 6.3 の「起動継続を妨げない」は読む側（`load_scope`）で今も守る。推奨: このまま（記憶を消す代わりに止まる・要件の討議の決めのとおり）。
+2. 空のファイル（中身が空白だけ）は守る中身が無いので上書きする。推奨: このまま。
+3. 錠の待ちの上限 1 秒（UI スレッドの直の保存も同じ上限）。推奨: このまま。
