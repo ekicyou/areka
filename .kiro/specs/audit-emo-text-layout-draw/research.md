@@ -546,3 +546,4 @@
 ## 13. タスクの後に足した指摘（2026-11-07）
 
 - **指摘 36（直したほうがよい）**: `viewbox_draw_render.rs:607-616` の `marker_bitmap_for` は `marker_bitmap(..).ok()?` で失敗を覚えない。一辺 16,384 を越える行の中の印の絵があると、毎フレーム作り直しと `error!` が出る（記録のあふれ・指摘 12 と同じ種類）。出どころ: `audit-emo-text-state-actor` のかけ直しの audit（同 spec の `MarkerSurface::draw` にも同じ穴があり、あちらで直した）。直しはタスク 10.5。残す 3 種類のどれにも当たらないので直す（要件 3.6）。
+- **指摘 37（できれば）**: 説明の根拠にリポジトリの外の AI の記憶の名（「記憶 areka-log-first-no-silent-failure」など）や `[[…]]` を挙げている所が範囲に 7 か所ある（`draw.rs:27`・`draw_metrics.rs:372-373`・`region.rs:167`・`viewbox_draw.rs:11,278-279`・`viewbox_draw_plan.rs:24`・`viewbox_draw_png_dump_tests.rs:377`、ほかに `viewbox_draw_decoration.rs:312` は要確認）。読み手がたどれない。出どころ: `audit-emo-text-state-actor` のかけ直しの audit（2026-11-07・あちらの持ち物は直し済み）。直しはタスク 13.1・13.2。
