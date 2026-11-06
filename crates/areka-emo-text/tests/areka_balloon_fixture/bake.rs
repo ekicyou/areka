@@ -11,8 +11,8 @@
 //!
 //! ## 走査が本物であることの示し方
 //!
-//! `staysee_balloon_fixture/bake.rs` と同じく、走査した画素の総数を矩形の面積と突き合わせ、
-//! 内訳の合計が総数と一致し、不透明・透明・半透明の 3 種がすべて 1 つ以上あることまで固定する
+//! `staysee_balloon_fixture/bake.rs` と同じく、割り当ての矩形を元の画像の全体（左上 0,0・原寸）と突き合わせ、
+//! 不透明・透明・半透明の 3 種がすべて 1 つ以上あることまで固定する
 //! （走査が矩形の一部分に偏ればどれかが 0 になる）。
 //!
 //! ## 「焼き込みの失敗の記録が 0 件」の判定方法
@@ -21,30 +21,14 @@
 //! もって判定する。面の系列解決の記録（相方側の面 2・3 の縮退の `WARN` 2 件）は `definition.rs`
 //! が固定するので、ここでは捕捉しない。
 
-use areka_emo_atlas::{AtlasTable, WicDecoderArm};
+use areka_emo_atlas::WicDecoderArm;
 use areka_emo_present::balloon::{
     build_balloon_target_from_faces, load_balloon_use_self_alpha, resolve_balloon_faces,
 };
 
-use crate::support::fixture::{
-    AlphaCensus, assert_three_alpha_kinds, census_face0, init_com_for_this_thread,
-};
+use crate::support::fixture::{assert_three_alpha_kinds, census_face0, init_com_for_this_thread};
 
 use super::test_support::{SCOPE_FACE0_FILES, balloon_root, expected_png_size};
-
-/// 焼き上がった面 0 の α を数え、走査した総数が面の面積（`areka-balloon` の面 0 は縁まで
-/// 割り当てられる）と一致することまで言う。
-fn census_whole_face0(table: &AtlasTable, scope: u32, file_name: &str) -> AlphaCensus {
-    let (w, h) = expected_png_size(file_name);
-    let census = census_face0(table, scope, file_name, (w, h));
-    assert_eq!(
-        census.total,
-        u64::from(w) * u64::from(h),
-        "scope {scope}: 面 0 `{file_name}` の走査総数が面の面積 {w}×{h} と違う（実測 {}）",
-        census.total
-    );
-    census
-}
 
 /// 両 scope の面を起動時と同じ経路・透過設定で焼き込み、面 0 に 3 種の α が残ることを固定する。
 #[test]
@@ -73,7 +57,9 @@ fn baked_face0_keeps_partial_alpha_for_both_scopes() {
                     panic!("scope {scope}: {} 面の焼き込みが失敗した: {e}", faces.len())
                 });
 
-        let census = census_whole_face0(&table, scope, face0_file);
+        // `areka-balloon` の面 0 は縁まで割り当てられる（元の画像がそのまま残る）。
+        let (w, h) = expected_png_size(face0_file);
+        let census = census_face0(&table, scope, face0_file, (w, h), (0, 0, w, h));
         assert_three_alpha_kinds(scope, face0_file, &census);
     }
 }

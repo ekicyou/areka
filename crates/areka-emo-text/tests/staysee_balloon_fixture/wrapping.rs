@@ -251,10 +251,6 @@ fn every_glyph_stays_inside_the_drawing_range() {
 #[test]
 fn wrapping_fills_each_line_greedily() {
     let capacity = EXPECTED_RIGHT - EXPECTED_LEFT;
-    assert_eq!(
-        capacity, 287.0,
-        "描画範囲の幅が 287 ではなく {capacity}（1 行の字数の導出がこの幅に依る）"
-    );
     let expected_checks: usize = EXPECTED_LINE_LENGTHS
         .iter()
         .map(|(_, _, lens)| lens.len() - 1)

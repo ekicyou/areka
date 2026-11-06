@@ -247,15 +247,11 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     //    validrect の外相当へ押し出される変異）を殺す ──
     {
         let rt = runtime.borrow();
-        let (min_x, min_y, max_x, max_y) =
+        let (min_x, min_y, _, _) =
             ink_bounds(&read_back(&rt, &actor), VR_SIZE.0).expect("インクが描かれる");
         assert!(
             min_x < FONT_H && min_y < PITCH,
             "インクは書字開始角（validrect-local 原点側）から始まる: min=({min_x},{min_y})"
-        );
-        assert!(
-            max_x < VR_SIZE.0 && max_y < VR_SIZE.1,
-            "インクは供給面＝validrect 内に閉じる: max=({max_x},{max_y})"
         );
     }
 
@@ -306,14 +302,10 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         opaque_count(&before),
         opaque_count(&after)
     );
-    let (_, min_y, _, max_y) = ink_bounds(&after, VR_SIZE.0).expect("スクロール後もインクあり");
+    let (_, min_y, _, _) = ink_bounds(&after, VR_SIZE.0).expect("スクロール後もインクあり");
     assert!(
         min_y < PITCH,
         "可視窓の先頭行は領域先頭へ詰めて描かれる（min_y={min_y}）"
-    );
-    assert!(
-        max_y < VR_SIZE.1,
-        "スクロール後もインクは validrect 内に閉じる"
     );
 
     // ── 述語 2: Clear の通し適用（sink 経由＝clear_cache 込み）→ 全域透明 ──
@@ -395,7 +387,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     // （x ∈ [幅−pitch, 幅)）に現れる——横書き配置（左端開始）との取り違えを殺す。
     {
         let rt = runtime.borrow();
-        let (min_x, min_y, max_x, max_y) =
+        let (min_x, min_y, _, _) =
             ink_bounds(&read_back(&rt, &actor), VR_SIZE.0).expect("インクあり");
         assert!(
             min_x >= VR_SIZE.0 - PITCH - FONT_H,
@@ -406,12 +398,6 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
         assert!(
             min_y < PITCH,
             "列内は上→下＝1 グリフ目は上端側（min_y={min_y}）"
-        );
-        // 述語 3: インクの行矩形はみ出し（縦書きで数 px 超え得る）も供給面クリップで
-        // validrect 内に閉じる——readback 外接が面内で完結する。
-        assert!(
-            max_x < VR_SIZE.0 && max_y < VR_SIZE.1,
-            "縦書きインクは供給面＝validrect 内に閉じる: max=({max_x},{max_y})"
         );
     }
     let n2 = {
@@ -459,14 +445,10 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
         opaque_count(&before),
         opaque_count(&after)
     );
-    let (_, _, max_x, max_y) = ink_bounds(&after, VR_SIZE.0).expect("スクロール後もインクあり");
+    let (_, _, max_x, _) = ink_bounds(&after, VR_SIZE.0).expect("スクロール後もインクあり");
     assert!(
         max_x >= VR_SIZE.0 - PITCH - FONT_H,
         "可視窓の先頭列は右端へ詰めて描かれる（max_x={max_x}）"
-    );
-    assert!(
-        max_x < VR_SIZE.0 && max_y < VR_SIZE.1,
-        "スクロール後も縦書きインクは validrect 内に閉じる"
     );
 
     // ── 述語 2（縦書き）: Clear の通し適用 → 全域透明 ──

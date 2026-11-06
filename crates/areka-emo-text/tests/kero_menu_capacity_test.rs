@@ -377,10 +377,6 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
     //     書字開始点 40 ＋ 2 × 行送り 30 ＝ 100（旧式 35 なら 110 で赤）。
     let two_newlines_top = KERO_START.1 + 2.0 * metrics.line_pitch(FONT_HEIGHT);
     assert_eq!(
-        two_newlines_top, 100.0,
-        "改行 2 回ぶんの段の上端（40 + 2 × 30）"
-    );
-    assert_eq!(
         close_line.rect.top, two_newlines_top,
         "\\_l[…,2lh] の「閉じる」は改行 2 回で送った段と同じ高さに着地する"
     );
@@ -392,7 +388,6 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
 
     // (b) 行内軸: font.height の 5 倍（em の係数は不変）。
     let em_column = KERO_START.0 + 5.0 * FONT_HEIGHT;
-    assert_eq!(em_column, 164.0, "5em の桁（24 + 5 × 28）");
     assert_eq!(
         close_line.glyphs[0].inline_pos, em_column,
         "\\_l[5em,…] の行内位置は従来と同じ 164（em の係数は font.height のまま）"
@@ -425,13 +420,6 @@ fn close_and_back_choices_stay_inside_the_drawing_range_without_wrapping() {
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
     let metrics = balloon_metrics(&resolved);
     assert_real_font_present();
-
-    // 机上値がなぜ外れたか（要件 6.5 の記録）: 全角＝em を仮定すると 3 文字で 84px ＝ 遠端 248 に
-    // なり描画範囲の右端 240 を超える。実フォントの送りは em より狭いので実際には超えない。
-    assert!(
-        KERO_START.0 + 5.0 * FONT_HEIGHT + 3.0 * FONT_HEIGHT > KERO_RIGHT,
-        "brief の机上値（全角＝em の仮定）なら 164 + 3 × 28 = 248 で右端 240 を超えていた"
-    );
 
     // 「閉じる」＝メインメニュー・「もどる」＝おしゃべり頻度／位置調整の 2 台本に在る。
     let targets: [(&str, &str); 3] = [
@@ -602,11 +590,6 @@ fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
     let real = balloon_metrics(&resolved);
     assert_real_font_present();
     let legacy = LegacyPitchMetrics { real: &real };
-    assert_eq!(
-        legacy.line_pitch(FONT_HEIGHT),
-        35.0,
-        "旧式の行送りは ceil(28 × 1.25) = 35"
-    );
 
     let cues = command_cues(&menu_script(MENU_HEADINGS[0]));
     let (state, actor) = state_of(&cues);

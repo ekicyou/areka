@@ -1,4 +1,4 @@
-//! 折り返しと、描画範囲への内包を拡大率 1.0 と 1.25 で固定する。
+//! 折り返しと、描画範囲への内包と、物理の寸法への変換を固定する。
 //!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.5**・設計「Testing Strategy」の `wrapping.rs`・
 //! 「描画範囲の解け方」の表・「文のファイル」の書体）。
@@ -41,27 +41,26 @@
 //!
 //! ## 拡大率（`staysee_balloon_fixture/scale.rs` と同じ形）
 //!
-//! k ＝ 1.0 と 1.25 で本番と同じ構築口 [`TextSlotBinding::new`] から枠の配置を組み、その
-//! 画像の寸法で範囲を解いて流す。画像の座標での行の並びは k に依らず同じで、物理の寸法への変換
-//! （[`ScaleContract`]）が k 倍になる。k ＝ 1.25 の手計算: 書き始め 14 → 17.5・半角の行の右端
+//! 行の並びは画像の寸法で解いた画像の座標のまま固定し、物理の寸法への変換（[`ScaleContract`]）
+//! が k 倍になることを k ＝ 1.25 の手計算の絶対値で言う: 書き始め 14 → 17.5・半角の行の右端
 //! 296 → 370・2 行目の上端 25 → 31.25・範囲の下辺 149 → 186.25・行ボックスの丈 12 →
-//! `ceil(15.0)` ＝ 15。
+//! `ceil(15.0)` ＝ 15。k ごとに行を解き直して比べる形は置かない（テストが自分で画像の寸法を
+//! 渡すと k は入力に入らず、同じ純関数を同じ値で呼び直すだけになる）。
 //!
 //! ## 空振りで緑にならないための備え
 //!
 //! 内包はグリフが 0 でも真になるので、行数とグリフの総数を先に固定してから 4 辺を言う。
 //! 貪欲に詰めたこと（次の行の先頭を足すと基準を超える）は最終行で空回りするので、発火の回数
-//! （本文 3 本 × 各 2 回 ＝ 6 回）を数えて固定する。拡大率のループも踏んだ本数を数える。
+//! （本文 3 本 × 各 2 回 ＝ 6 回）を数えて固定する。
 //!
 //! ## 決定論
 //!
 //! ファイル読み込み・純粋層の解決・DirectWrite の計測だけ。実 GPU・実窓は使わない。
 
-use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
+use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::layout::{LayoutEngine, PositionedLine};
 use areka_emo_text::region::{ImagePx, ScaleContract, TextRegion};
 use areka_emo_text::writing::WritingMode;
-use bevy_ecs::prelude::World;
 
 use crate::support::fixture::{
     FULL_WIDTH_BODY, HALF_WIDTH_BODY, MIXED_BODY, assert_rect_inside, glyph_items, lay_out,
@@ -73,9 +72,6 @@ use super::test_support::{
 };
 
 // ── 期待値（設計「描画範囲の解け方」の表と書体から手で書いた値）──────────────────
-
-/// 観測する拡大率（設計 `wrapping.rs`: 1.0 と 1.25）。
-const SCALES: [f32; 2] = [1.0, 1.25];
 
 /// scope ごとの面 0 の書き始め（寸法・範囲・折り返し基準は `test_support.rs` の表から引く）。
 struct ScopeExpectation {
@@ -128,42 +124,27 @@ const BODIES: [(&str, &str, &[usize], &[f32]); 3] = [
 // ── 本番と同じ読み込みと折り返しの経路 ──────────────────────────────────────────
 
 /// 本番の読み込み（面の系列解決→面 0 に `descript.txt` と面別の設定を重ねたモデル）で
-/// 枠の配置の画像の寸法から範囲と書体を解く。
-fn resolve_scope(exp: &ScopeExpectation, binding: &TextSlotBinding) -> ResolvedBalloonText {
+/// 面 0 の画像の寸法から範囲と書体を解く。
+fn resolve_scope(exp: &ScopeExpectation) -> ResolvedBalloonText {
     let (_, model) = load_face0(&balloon_root(), exp.scope);
-    ResolvedBalloonText::resolve(&model, binding.image_size)
-}
-
-/// 面 0 を拡大率 k で置いたときの枠の配置を本番と同じ構築口で組む（`scale.rs` と同じ形）。
-fn binding(world: &mut World, exp: &ScopeExpectation, k: f32) -> TextSlotBinding {
-    let image_size = scope_image_size(exp.scope);
-    let (w, h) = image_size;
-    let surface = ((w as f32 * k).ceil() as u32, (h as f32 * k).ceil() as u32);
-    let slot = world.spawn_empty().id();
-    let window = world.spawn_empty().id();
-    TextSlotBinding::new(slot, window, k, surface, image_size)
+    ResolvedBalloonText::resolve(&model, scope_image_size(exp.scope))
 }
 
 /// 範囲が表のとおりであることを確かめてから、本文を全文可視で流す。
-fn layout_body(
-    exp: &ScopeExpectation,
-    binding: &TextSlotBinding,
-    body: &str,
-) -> (TextRegion, Vec<PositionedLine>) {
-    let resolved = resolve_scope(exp, binding);
+fn layout_body(exp: &ScopeExpectation, body: &str) -> (TextRegion, Vec<PositionedLine>) {
+    let resolved = resolve_scope(exp);
     let region = resolved.region;
     let scope = exp.scope;
-    let k = binding.scale;
     assert_eq!(
         (region.left(), region.top(), region.right(), region.bottom()),
         expected_region(scope),
-        "scope {scope} k={k}: 範囲が設計の表と違う（物理の寸法が解決へ渡っている疑い）"
+        "scope {scope}: 範囲が設計の表と違う"
     );
-    assert_eq!(region.start(), exp.start, "scope {scope} k={k}: 書き始め");
+    assert_eq!(region.start(), exp.start, "scope {scope}: 書き始め");
     assert_eq!(
         region.wrap_threshold(),
         expected_wrap_threshold(scope),
-        "scope {scope} k={k}: 折り返し基準"
+        "scope {scope}: 折り返し基準"
     );
     assert_eq!(
         resolved.font.height, FONT_HEIGHT,
@@ -197,50 +178,42 @@ fn assert_contained(label: &str, region: &TextRegion, lines: &[PositionedLine], 
     }
 }
 
-// ── 本体側: 行数・字数・上端・右端と内包（拡大率 1.0 と 1.25）───────────────────
+// ── 本体側: 行数・字数・上端・右端と内包 ─────────────────────────────────────────
 
 /// 3 本文の行の字数・上端・右端が導いた値どおりで、すべてのグリフが範囲の内側にある。
 #[test]
 fn sakura_bodies_wrap_into_the_derived_lines_and_stay_inside() {
-    let mut world = World::new();
-    let mut visited = 0usize;
-    for k in SCALES {
-        let b = binding(&mut world, &SAKURA, k);
-        for (label, body, lens, ends) in BODIES {
-            let label = format!("{label} k={k}");
-            let (region, lines) = layout_body(&SAKURA, &b, body);
-            let actual: Vec<usize> = lines.iter().map(|l| l.glyphs.len()).collect();
-            assert_eq!(actual, lens, "{label}: 各行の字数");
-            assert_contained(&label, &region, &lines, lens.iter().sum());
+    for (label, body, lens, ends) in BODIES {
+        let (region, lines) = layout_body(&SAKURA, body);
+        let actual: Vec<usize> = lines.iter().map(|l| l.glyphs.len()).collect();
+        assert_eq!(actual, lens, "{label}: 各行の字数");
+        assert_contained(label, &region, &lines, lens.iter().sum());
 
-            for (n, line) in lines.iter().enumerate() {
-                let top = SAKURA.start.1 + LINE_PITCH * n as f32;
-                assert_eq!(line.rect.top, top, "{label}: {} 行目の上端", n + 1);
-                assert_eq!(
-                    line.rect.bottom - line.rect.top,
-                    LINE_BOX,
-                    "{label}: {} 行目の行ボックスの丈",
-                    n + 1
-                );
-                let head = &line.glyphs[0];
-                assert_eq!(
-                    head.inline_pos,
-                    SAKURA.start.0,
-                    "{label}: {} 行目の書き始め",
-                    n + 1
-                );
-                let tail = line.glyphs.last().expect("空の行は無い");
-                assert_eq!(
-                    tail.inline_pos + tail.advance,
-                    ends[n],
-                    "{label}: {} 行目の右端",
-                    n + 1
-                );
-            }
+        for (n, line) in lines.iter().enumerate() {
+            let top = SAKURA.start.1 + LINE_PITCH * n as f32;
+            assert_eq!(line.rect.top, top, "{label}: {} 行目の上端", n + 1);
+            assert_eq!(
+                line.rect.bottom - line.rect.top,
+                LINE_BOX,
+                "{label}: {} 行目の行ボックスの丈",
+                n + 1
+            );
+            let head = &line.glyphs[0];
+            assert_eq!(
+                head.inline_pos,
+                SAKURA.start.0,
+                "{label}: {} 行目の書き始め",
+                n + 1
+            );
+            let tail = line.glyphs.last().expect("空の行は無い");
+            assert_eq!(
+                tail.inline_pos + tail.advance,
+                ends[n],
+                "{label}: {} 行目の右端",
+                n + 1
+            );
         }
-        visited += 1;
     }
-    assert_eq!(visited, SCALES.len(), "踏んだ拡大率の本数");
 }
 
 /// 折り返しが貪欲であること——次の行の先頭の 1 字を足すと基準 296 を超える。
@@ -248,11 +221,9 @@ fn sakura_bodies_wrap_into_the_derived_lines_and_stay_inside() {
 /// 送り幅も字種ごとに 6／12 であることを同じ走査で確かめる（字数の導出の前提）。
 #[test]
 fn sakura_wrapping_fills_each_line_up_to_the_threshold() {
-    let mut world = World::new();
-    let b = binding(&mut world, &SAKURA, 1.0);
     let mut checks = 0usize;
     for (label, body, _, _) in BODIES {
-        let (_, lines) = layout_body(&SAKURA, &b, body);
+        let (_, lines) = layout_body(&SAKURA, body);
         for (n, line) in lines.iter().enumerate() {
             for g in &line.glyphs {
                 let want = if g.text.is_ascii() {
@@ -280,24 +251,15 @@ fn sakura_wrapping_fills_each_line_up_to_the_threshold() {
     assert_eq!(checks, 6, "貪欲の検査の発火の回数（本文 3 本 × 各 2 回）");
 }
 
-// ── 拡大率: 画像の座標は同じ・物理の寸法は k 倍 ──────────────────────────────────
+// ── 拡大率: 物理の寸法は k 倍 ────────────────────────────────────────────────────
 
-/// 拡大率 1.25 で画像の座標の行の並びが 1.0 と同じで、物理の寸法への変換が k 倍になる。
+/// 拡大率 1.25 で、画像の座標の行の並びから物理の寸法への変換が k 倍になる。
 #[test]
-fn scale_keeps_image_lines_and_multiplies_physical_sizes() {
-    let mut world = World::new();
-    let unit = binding(&mut world, &SAKURA, 1.0);
-    let scaled = binding(&mut world, &SAKURA, 1.25);
-    assert_eq!(scaled.scale, 1.25, "枠の配置が保つ k");
-    let contract = ScaleContract::new(scaled.scale, None);
+fn scale_multiplies_physical_sizes() {
+    let contract = ScaleContract::new(1.25, None);
 
     for (label, body, _, _) in BODIES {
-        let (_, base) = layout_body(&SAKURA, &unit, body);
-        let (region, lines) = layout_body(&SAKURA, &scaled, body);
-        assert_eq!(
-            lines, base,
-            "{label}: k=1.25 の画像の座標の行の並びが k=1.0 と違う"
-        );
+        let (region, lines) = layout_body(&SAKURA, body);
         assert_eq!(
             contract.to_physical(ImagePx(region.bottom())).0,
             186.25,
@@ -312,7 +274,7 @@ fn scale_keeps_image_lines_and_multiplies_physical_sizes() {
     }
 
     // 手計算の値（モジュールの説明）。
-    let (_, half) = layout_body(&SAKURA, &scaled, HALF_WIDTH_BODY);
+    let (_, half) = layout_body(&SAKURA, HALF_WIDTH_BODY);
     let tail = half[0].glyphs.last().expect("空の行は無い");
     assert_eq!(
         contract
@@ -343,28 +305,21 @@ fn scale_keeps_image_lines_and_multiplies_physical_sizes() {
 // ── 相方側: 下の辺で止まらない長さの本文 1 本 ────────────────────────────────────
 
 /// 相方側へ混ぜた本文 1 本を流すと、行の字数は本体側と同じで、上端は 14 から 14 刻み、
-/// すべてのグリフが範囲の内側にあり、あふれの送りは起きない（拡大率 1.0 と 1.25）。
+/// すべてのグリフが範囲の内側にあり、あふれの送りは起きない。
 #[test]
 fn kero_body_stays_inside_without_reaching_the_bottom() {
-    let mut world = World::new();
-    let mut visited = 0usize;
-    for k in SCALES {
-        let b = binding(&mut world, &KERO, k);
-        let label = format!("相方側 k={k}");
-        let (region, lines) = layout_body(&KERO, &b, MIXED_BODY);
-        let actual: Vec<usize> = lines.iter().map(|l| l.glyphs.len()).collect();
-        assert_eq!(actual, [31, 31, 28], "{label}: 各行の字数");
-        let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
-        assert_eq!(tops, [14.0, 28.0, 42.0], "{label}: 各行の上端");
-        assert_contained(&label, &region, &lines, 90);
+    let label = "相方側";
+    let (region, lines) = layout_body(&KERO, MIXED_BODY);
+    let actual: Vec<usize> = lines.iter().map(|l| l.glyphs.len()).collect();
+    assert_eq!(actual, [31, 31, 28], "{label}: 各行の字数");
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, [14.0, 28.0, 42.0], "{label}: 各行の上端");
+    assert_contained(label, &region, &lines, 90);
 
-        let window = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
-        assert_eq!(
-            (window.first_visible_line, window.block_offset),
-            (0, 0.0),
-            "{label}: 下の辺で止まった（あふれの送りが起きた）"
-        );
-        visited += 1;
-    }
-    assert_eq!(visited, SCALES.len(), "踏んだ拡大率の本数");
+    let window = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
+    assert_eq!(
+        (window.first_visible_line, window.block_offset),
+        (0, 0.0),
+        "{label}: 下の辺で止まった（あふれの送りが起きた）"
+    );
 }

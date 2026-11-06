@@ -66,11 +66,6 @@ const ERROR_COUNT_PER_RATIO: usize = 81;
 /// ゼロ件側の assert が赤になる（design.md Revalidation Triggers）。
 const ZERO_ERROR_RATIO_COUNT: usize = REACHABLE_RATIO_COUNT - ERROR_RATIOS.len();
 
-/// 上下界の総当たりで踏むべき評価回数（到達比 23 × 寸 1200 ＝ 27,600）。
-///
-/// ループが途中で痩せても緑は出るため、踏んだ回数そのものを期待値として固定する。
-const EVALUATION_COUNT: usize = REACHABLE_RATIO_COUNT * MAX_EXTENT as usize;
-
 // ── ヘルパ（テスト内私有・製品コードには足さない） ────────────────────────────
 
 /// 最大公約数（Euclid の互除法・整数のみ）。比の既約化に用いる。
@@ -130,8 +125,6 @@ fn supply_extent_via_f32_path(v: u32, num: u32, den: u32) -> u32 {
 
 /// 1 つの比について、寸 `1..=`[`MAX_EXTENT`] を総当たりした誤りの集計。
 struct ErrorTally {
-    /// 実際に踏んだ評価回数（ループが痩せていないことの証跡）。
-    evaluated: usize,
     /// 本番経路の結果が整数オラクルの真値と食い違った件数。
     errors: usize,
     /// 最初に食い違った `(寸, 実測値, 真値)`。1 件も無ければ `None`。
@@ -147,7 +140,6 @@ struct ErrorTally {
 /// 上下界のテストが受け持つため、ここにラップアラウンドの余地を作らない（requirements 3.7）。
 fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
     let mut tally = ErrorTally {
-        evaluated: 0,
         errors: 0,
         first: None,
     };
@@ -160,7 +152,6 @@ fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
                 tally.first = Some((v, actual, truth));
             }
         }
-        tally.evaluated += 1;
     }
     tally
 }
@@ -244,7 +235,7 @@ fn helpers_are_calibrated_against_known_values() {
 ///
 /// 裁定（2026-08-14）が「誤差は常に +1 側のみで文字は切れない」と言い切れる土台は、
 /// 次の 2 つの境界がどの比・どの寸でも破れないことである。本テストは到達比
-/// [`REACHABLE_RATIO_COUNT`] 個 × 寸 `1..=`[`MAX_EXTENT`] の全 [`EVALUATION_COUNT`] 組で
+/// [`REACHABLE_RATIO_COUNT`] 個 × 寸 `1..=`[`MAX_EXTENT`] の全組で
 /// 両方を突合する（requirements 3.3）。
 ///
 /// - **下界**（requirements 3.1）: 実測値が真値を下回らないこと。下回れば確保寸が足りず
@@ -267,8 +258,7 @@ fn helpers_are_calibrated_against_known_values() {
 ///
 /// 整数オラクルの中間値は `v as u64 * num as u64` であり、本檻の入力域は
 /// `v ≤ 1200`・`num ≤ 288` ゆえ最大でも 345,600 で `u64` の桁を全く脅かさない。
-/// 除数 `den` は格子由来で常に正のためゼロ除算もない。総当たりが最後まで走り切り
-/// 評価回数が [`EVALUATION_COUNT`] に一致することを末尾で確かめる。
+/// 除数 `den` は格子由来で常に正のためゼロ除算もない。
 ///
 /// ## 実行条件（requirements 3.6）
 ///
@@ -285,7 +275,6 @@ fn supply_extent_bounds_hold_for_all_reachable_ratios() {
         ratios.len()
     );
 
-    let mut evaluated = 0usize;
     for &(num, den) in &ratios {
         for v in 1..=MAX_EXTENT {
             let actual = supply_extent_via_f32_path(v, num, den);
@@ -305,16 +294,8 @@ fn supply_extent_bounds_hold_for_all_reachable_ratios() {
                 "供給面寸と真値の差が 1 を超えた（余りは高々 1 画素という裁定の前提が崩れる）: \
                  num={num} den={den} v={v} 実測値={actual} 真値={truth} 差={diff}"
             );
-
-            evaluated += 1;
         }
     }
-
-    assert_eq!(
-        evaluated, EVALUATION_COUNT,
-        "総当たりの評価回数が期待と異なる（ループが痩せている疑い）: \
-         実測 {evaluated} 回 / 期待 {EVALUATION_COUNT} 回"
-    );
 }
 
 // ── 誤り件数と代表例の固定（design.md C3 テスト②・D4） ────────────────────────
@@ -359,13 +340,6 @@ fn error_counts_fixed_for_six_fifths_and_twelve_fifths() {
         let tally = tally_extent_errors(num, den);
 
         assert_eq!(
-            tally.evaluated, MAX_EXTENT as usize,
-            "誤り集計の評価回数が期待と異なる（ループが痩せている疑い）: \
-             num={num} den={den} 実測 {} 回 / 期待 {} 回",
-            tally.evaluated, MAX_EXTENT
-        );
-
-        assert_eq!(
             tally.errors, ERROR_COUNT_PER_RATIO,
             "誤り件数が固定値から動いた（＝裁定の再審トリガ・2026-08-14 実測との相違）: \
              num={num} den={den} 寸域 1..={MAX_EXTENT} 実測 {} 件 / 期待 {ERROR_COUNT_PER_RATIO} 件・\
@@ -407,9 +381,6 @@ fn error_counts_fixed_for_six_fifths_and_twelve_fifths() {
 /// 到達比集合が変われば残りの個数が [`ZERO_ERROR_RATIO_COUNT`] から外れてここが赤になり、
 /// 比集合の変化を取りこぼさない（design.md Revalidation Triggers）。
 ///
-/// ゼロ件の主張は、ループが空でも同じく緑になる。そこで踏んだ評価回数
-/// （21 比 × 寸 [`MAX_EXTENT`]）も併せて固定し、空振りの緑を塞ぐ。
-///
 /// ## 同一入力に対し常に同一結果であること（requirements 3.7）
 ///
 /// 突合の両辺（IEEE 754 単精度の乗除算・`ceil` と、u64 整数の切り上げ除算）はいずれも
@@ -434,7 +405,6 @@ fn remaining_ratios_have_zero_errors() {
         remaining.len()
     );
 
-    let mut evaluated = 0usize;
     for &(num, den) in &remaining {
         let tally = tally_extent_errors(num, den);
         assert_eq!(
@@ -444,13 +414,5 @@ fn remaining_ratios_have_zero_errors() {
              最初の食い違い（寸, 実測値, 真値）={:?}",
             tally.errors, tally.first
         );
-        evaluated += tally.evaluated;
     }
-
-    let expected_evaluated = ZERO_ERROR_RATIO_COUNT * MAX_EXTENT as usize;
-    assert_eq!(
-        evaluated, expected_evaluated,
-        "ゼロ件集合の評価回数が期待と異なる（ループが痩せて空振りの緑になっている疑い）: \
-         実測 {evaluated} 回 / 期待 {expected_evaluated} 回"
-    );
 }

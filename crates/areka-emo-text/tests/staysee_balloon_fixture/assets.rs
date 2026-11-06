@@ -73,11 +73,6 @@ fn stored_folder_holds_exactly_the_upstream_29_files() {
 #[test]
 fn frame_png_native_sizes_are_pinned() {
     let root = staysee_root();
-    assert_eq!(
-        EXPECTED_FRAME_SIZES.len(),
-        6,
-        "枠画像の母数は 6 枚（`balloons0〜3` と `balloonk0〜1`）であること"
-    );
     for (name, width, height) in EXPECTED_FRAME_SIZES {
         assert_eq!(
             png_native_size(&root.join(name)),

@@ -100,7 +100,6 @@ fn read_utf8(name: &str) -> String {
 fn every_text_file_is_bomless_utf8_starting_with_the_charset_line() {
     let mut names: Vec<&str> = kv_tables().iter().map(|(n, _)| *n).collect();
     names.push(README);
-    assert_eq!(names.len(), 9, "文のファイルは 9 つ（{names:?}）");
     for name in names {
         let text = read_utf8(name);
         let first = text.lines().next().unwrap_or_default();

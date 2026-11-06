@@ -276,12 +276,15 @@ fn census_alpha(page: &AtlasPage, uv: Rect) -> AlphaCensus {
 
 /// 焼き上がった面 0 のエントリの原寸が `size` であることを確かめ、頁の矩形の α を数える。
 ///
-/// 走査した総数が矩形の面積と一致し、母数が 0 でなく、内訳の合計が総数と一致することまで言う。
+/// 割り当ての矩形を、元の画像の中で残るはずの矩形 `kept`（左上 x・y と幅・高さ。元の画像から
+/// 完全な透明の縁を除いたもの・縁の無い絵では元の画像そのもの）と突き合わせる。走査した
+/// 総数を割り当ての矩形の面積と比べても数え方から真なので、元の画像の側から言う。
 pub fn census_face0(
     table: &AtlasTable,
     scope: u32,
     file_name: &str,
     size: (u32, u32),
+    kept: (u32, u32, u32, u32),
 ) -> AlphaCensus {
     let id = table.resolve(SetId(0), file_name).unwrap_or_else(|| {
         panic!(
@@ -306,26 +309,13 @@ pub fn census_face0(
             table.pages().len()
         )
     });
-    let uv = placement.uv_rect;
-    let census = census_alpha(page, uv);
+    let (uv, at) = (placement.uv_rect, placement.trim_offset);
     assert_eq!(
-        census.total,
-        u64::from(uv.w) * u64::from(uv.h),
-        "scope {scope}: 面 0 `{file_name}` で走査した画素の総数が矩形 {}×{} の面積と違う（実測 {}）",
-        uv.w,
-        uv.h,
-        census.total
+        (i64::from(at.x), i64::from(at.y), uv.w, uv.h),
+        (i64::from(kept.0), i64::from(kept.1), kept.2, kept.3),
+        "scope {scope}: 面 0 `{file_name}`（元の画像 {w}×{h}）で割り当てられた矩形（左上・幅・高さ）が期待と違う（切り詰めすぎか、縁が残った）"
     );
-    assert!(
-        census.total > 0,
-        "scope {scope}: 面 0 `{file_name}` の走査範囲が空である（母数 0 では内訳の主張は何も確かめない）"
-    );
-    assert_eq!(
-        census.transparent + census.partial + census.opaque,
-        census.total,
-        "scope {scope}: 面 0 `{file_name}` の内訳の合計が走査総数と合わない（実測 {census:?}）"
-    );
-    census
+    census_alpha(page, uv)
 }
 
 /// 半透明が残り、走査が矩形の一部分に偏っていない（不透明・透明・半透明の 3 種がすべて実在する）。

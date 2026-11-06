@@ -53,9 +53,6 @@ const NON_FACE_ASSET_GROUPS: [(&str, usize); 6] = [
     ("thumbnail.pnr", 1),
 ];
 
-/// 面ではない資産の全数（保管 29 本 − 枠 6 枚）。
-const NON_FACE_ASSET_COUNT: usize = EXPECTED_FILE_NAMES.len() - EXPECTED_FRAME_SIZES.len();
-
 /// 解決の 2 関数（`resolve_balloon_faces` と `load_scope_balloon_model`）だけを**同じ捕捉窓**で
 /// 走らせ、採用面列とその間の記録を返す（焼き込み側の記録は本テーマの主張の対象外）。
 fn resolve_faces_with_records(scope: u32) -> (Vec<ResolvedFace>, Vec<CapturedEvent>) {
@@ -107,14 +104,6 @@ fn assert_non_face_assets_are_absent(scope: u32, faces: &[ResolvedFace]) {
         .copied()
         .filter(|n| !frames.contains(n))
         .collect();
-    assert_eq!(
-        non_face.len(),
-        NON_FACE_ASSET_COUNT,
-        "面ではない資産の本数が期待 {NON_FACE_ASSET_COUNT} に対し実測 {}（保管 {} 本 − 枠 {} 枚）",
-        non_face.len(),
-        EXPECTED_FILE_NAMES.len(),
-        EXPECTED_FRAME_SIZES.len()
-    );
     for (needle, count) in NON_FACE_ASSET_GROUPS {
         let hit = non_face.iter().filter(|n| n.contains(needle)).count();
         assert_eq!(

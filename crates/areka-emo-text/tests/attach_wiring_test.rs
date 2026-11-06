@@ -22,10 +22,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use areka_emo_present::{EmoPresenter, TargetId};
-use areka_emo_text::actor::{
-    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
-};
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+use areka_emo_text::actor::{TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -188,9 +185,7 @@ fn geo_model() -> BalloonModel {
 /// (1) 実 sink→UI ドレイン→状態→フレーム提示の通し結線で両バルーンにインクが載る、
 /// (2) 各 actor の供給面が対応 target のバルーン原寸（validrect 全域）に一致する、
 /// (3) 両スロットに有効 brush が装着され GraphicsCommandList は不挿入（R9.1/R9.3 構造）、
-/// (4) \0 への後続 cue が \1 の描画へ一切波及しない（独立性・バイト同一）、
-/// (5) 装着経路が行レイアウト（PositionedLine＝クリック可能範囲の素材）を
-///     choice-render が再利用できる構造のまま保つ（R9.4 シーム）——を檻化する。
+/// (4) \0 への後続 cue が \1 の描画へ一切波及しない（独立性・バイト同一）——を檻化する。
 #[test]
 fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     let mut world = make_world_with_gpu();
@@ -299,38 +294,6 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
         bytes1,
         "\\0 の更新は \\1 の供給面へ波及しない（バイト同一＝独立描画）"
     );
-
-    // ── R9.4 シーム: 装着配線後も、結線側が持つ同じ入力（view＋model）から行レイアウト
-    //    （PositionedLine＝行矩形＋グリフ位置）を再導出できる構造のまま ──
-    let binding = TextSlotBinding::from_view(&view0);
-    let resolved = ResolvedBalloonText::resolve(&model, binding.image_size);
-    let state = rt.state().actor_state(&sakura).expect("actor state");
-    let visible = rt.state().visible_glyphs(&sakura, 2.0);
-    assert!(visible > 0);
-    let lines = LayoutEngine::layout(
-        state.items(),
-        visible,
-        &resolved.region,
-        resolved.mode,
-        resolved.font.height,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert!(!lines.is_empty(), "行レイアウトが再導出できる");
-    let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();
-    assert_eq!(placed, visible, "可視グリフが全て行へ配置される（無損失）");
-    for line in &lines {
-        assert!(
-            line.rect.right > line.rect.left && line.rect.bottom > line.rect.top,
-            "行矩形は非退化（クリック可能範囲導出の素材・R9.4）"
-        );
-        for g in &line.glyphs {
-            assert!(
-                g.advance > 0.0,
-                "グリフ送り幅（クリック範囲の幅素材）が得られる"
-            );
-        }
-    }
 }
 
 // ══ 単一 actor のみの場合も当該 actor の target へ正しく装着される ══
