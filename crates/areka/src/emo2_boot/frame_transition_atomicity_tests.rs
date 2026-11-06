@@ -81,7 +81,7 @@ use crate::placement::follow::BalloonFollow;
 use crate::placement::resolver::PointPx;
 use crate::placement::test_support::{LogEvent, capture_logs};
 use crate::placement::transition_diag::{FIELD_DIFF, KIND_GROUND};
-use crate::placement::transition_judge::{
+use crate::placement_tests::transition_judge::{
     GROUND_DIFF_MAX, PATH_A_WRITES_MAX, TRANSITION_FRAME_BOUND, WRITES_PER_WINDOW_MAX,
     parse_transition_line,
 };

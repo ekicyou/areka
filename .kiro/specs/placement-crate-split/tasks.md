@@ -12,32 +12,32 @@
   - 完了の状態: 一覧のファイルが在り、行の数が記録にある
   - _Requirements: 8.2_
 
-- [ ] 2. 新しい crate へ移し、公開面を開ける（段 1）
-- [ ] 2.1 配置の crate の骨組みを作る
+- [x] 2. 新しい crate へ移し、公開面を開ける（段 1）
+- [x] 2.1 配置の crate の骨組みを作る
   - 新しい lib の crate の `Cargo.toml` を、ほかの crate の慣習（`publish = false` と理由を同じ行・`.workspace = true` の項目）で書く
   - 本番の依存は設計の 11 個（ワークスペースの中は path・外は `workspace = true`）、開発用の依存は log-capture-kit・sample-ghost-kit・temp-path-kit・tracing-subscriber、機能は `test-support` 1 つ（説明の 1 行つき）
   - 本番の依存表に共有のテスト用の crate を書かない。本体に依存しない。根の `Cargo.toml` は変えない
   - 本体の `Cargo.toml` に、本番の path 依存と、`test-support` を付けた開発用の依存を足す
   - 完了の状態: 両方の `Cargo.toml` が設計の「口の種類」の形どおりで、根の `Cargo.toml` に差分が無い
   - _Requirements: 1.1, 1.5, 1.6, 1.7, 1.8, 3.4, 3.5_
-- [ ] 2.2 配置のファイルを履歴を残して移す
+- [x] 2.2 配置のファイルを履歴を残して移す
   - 旧 `placement/mod.rs` を新しい crate の根へ、本体へ残す 21 ファイル（判定器の一族 15・境をまたぐテスト 4・分岐の対応表 2）を本体のテスト専用のフォルダへ、ほかの全部を新しい crate へ `git mv` する
   - 新しい crate の中の自分を指す道を crate の根を指す道へ書き換える（出所の名前は crate の名前から自動で付く）
   - 完了の状態: 本体に旧 `src/placement/` が無く、`git status` が移動（rename）として示す
   - _Requirements: 1.2, 1.3, 1.4, 2.3, 3.7, 3.9, 6.1_
-- [ ] 2.3 移動で切れた読み先と番人の表をつなぎ直す
+- [x] 2.3 移動で切れた読み先と番人の表をつなぎ直す
   - 文字で読むテスト（`measure_template_tests`・分岐の対応表 2 本・`spawn_zorder_pair_deferred_tests`・`zorder_property_deferral_tests`・`transition_signoff_procedure_tests`）の `include_str!`・`#[path]`・`CARGO_MANIFEST_DIR` の読み先を、移した先の場所へ相対の道のまま一時につなぎ直す（最終形は段 4 の 5.x で置き換える）
   - 番人の表（1,000 行の例外表の 3 項目・一時の入口の表の 2 項目・`with_default` の表の 3 項目）を移した先の最終のパスへ書き換え、理由の文の主語を新しい crate に合わせる（項目の数は変えない）
   - 完了の状態: 移動で実在しなくなった読み先と表の項目が 0 件で、log-capture-kit のテストが緑
   - _Requirements: 5.1, 5.5_
-- [ ] 2.4 本体のテスト専用のフォルダを組み込む
+- [x] 2.4 本体のテスト専用のフォルダを組み込む
   - フォルダの頭に置いた理由と子の宣言だけを書き、本体の根がテストのときだけ宣言する
   - 移した 21 ファイルの中の親を指す道を、配置の crate の公開の道へ書き換える（本体の部品を指す道はそのまま）
   - 本体の根に一時の別名（配置の crate を旧い名前で指す）を置き、本体の根の旧い宣言を外す
   - `emo2_boot` の `frame_transition_*` の 2 本が、移した先の判定器を指すようにする
   - 完了の状態: 本体の根から配置の宣言が消え、テスト専用のフォルダの宣言が `#[cfg(test)]` の下にある
   - _Requirements: 3.7, 3.9, 3.10_
-- [ ] 2.5 コンパイラに数えさせて公開面を開ける
+- [x] 2.5 コンパイラに数えさせて公開面を開ける
   - 本体の本番の組み立てのエラー（E0603・E0616・E0624・E0364・`private_interfaces`）を 1 件ずつ見て、外から使われる項目だけを `pub` にする
   - 外から使われない項目は `pub(crate)` のまま残す。公開の項目が名指すために開けた型には、項目の上に要件 2.5 の 1 行の注を書く
   - 開けた項目の一覧を実装の記録に残す（後で 7.5 の申し送りに使う）
@@ -194,3 +194,14 @@
 ## Implementation Notes
 
 - 1.1: 着手の一覧は `8c518c5b` で `cargo test --workspace --no-fail-fast -- --list` から取った。`: test$` の行は 14058（`target/placement-crate-split/tests-before.txt`）。
+- 段 1 は途中の形ではワークスペースが読めない（src の無い crate）ので、2.1〜2.5 を 1 回の実装係にまとめた。
+- 2.5 で開けた項目（すべて `crates/areka-placement/src` の下・理由は本体の bin が外から使う。7.5 の申し送りに使う）:
+  - lib.rs のモジュール: balloon_limit・balloon_lock・balloon_syncscale・descript_window_keys・dpi_sync・face_windowposition・reseed・reset_balloon_pos・reset_pos・script_alignment・sticky_group_ledger・zorder_chain_compose・zorder_group_ledger（E0603）
+  - lib.rs: `pub use windowposition::scale_signed` と定義 `windowposition.rs::scale_signed`（E0364）・`load_scope_windowpositions`・`primary_monitor`
+  - source.rs `read_kv_lenient`・balloon_limit.rs `apply_balloon_limit`・balloon_lock.rs `BalloonLockLedger`・`seed_balloon_lock`・`replace_balloon_lock_descript`・`apply_script_balloon_lock`・balloon_syncscale.rs `register`
+  - dpi_sync.rs `DpiSyncHold`・`HoldSite`・`current_frame`・`apply_dpi_phase_gate`・`defers_window_write`・face_windowposition.rs `apply_face_windowposition`
+  - reseed.rs `BalloonPlacementInputs`・`apply_shell_descript`・`reanchor_char_windows`・reset_pos.rs のフィールド `DefaultPlacementBasis.source`・`.balloon`（E0451）
+  - follow.rs の再公開: `OffsetRescale`／`rescale_follow_offset` の組・`on_char_drag_end`（組から分けた）・`ClampScene`／`place_chain_in_work_area`（組から分けた）・move_shift の組 `apply_balloon_shift`・`apply_char_shift`・`rebase_shift_axes`・`shift_is_current`
+  - 再公開の裏の定義: follow/drag_follow.rs `on_char_drag_end`・`BalloonFollowTrigger`・`follow_balloon`、follow/move_shift.rs の 4 関数、follow/sticky_follow.rs `CharDragSession`・`begin_char_drag`、follow/work_area_clamp.rs `ClampScene`・`place_chain_in_work_area`
+  - 公開の項目が名指すためだけに開けた型（要件 2.5 の注つき）: follow/work_area_clamp.rs `ChainPlacement`・`ChainClampOutcome`
+- 段 1 で消した lib.rs の判定器の宣言の説明（17 行）の代わりは無い。`crates/areka-emo-present/src/presenter/transition_record.rs:86` の説明の `placement::transition_judge::summarize` は 7.2（5.7）で直す。

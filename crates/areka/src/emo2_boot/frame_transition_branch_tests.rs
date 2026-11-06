@@ -65,7 +65,7 @@ use crate::placement::diag::{PlacementRoute, WindowKind};
 use crate::placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
 use crate::placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
 use crate::placement::test_support::{LogEvent, capture_logs};
-use crate::placement::transition_judge::WRITES_PER_WINDOW_MAX;
+use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
 
 use super::emo2_frame_system;
 use super::test_support::{

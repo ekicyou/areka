@@ -64,15 +64,15 @@ const OVER_LIMIT_ALLOWED: &[(&str, &str)] = &[
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
     (
-        "crates/areka/src/placement/follow/window_move.rs",
+        "crates/areka-placement/src/follow/window_move.rs",
         "着手前から超過している本番ソース。分割は本仕様の範囲外（要件 10.4）",
     ),
     (
-        "crates/areka/src/placement/transition_judge_tests.rs",
+        "crates/areka/src/placement_tests/transition_judge_tests.rs",
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
     (
-        "crates/areka/src/placement/transition_judge_verdict_tests.rs",
+        "crates/areka/src/placement_tests/transition_judge_verdict_tests.rs",
         "着手前から超過している本番の隣の兄弟テストファイル。分割は本仕様の範囲外（要件 10.4）",
     ),
     (

@@ -44,7 +44,13 @@ mod shiori_demo;
 /// 窓配置機構（areka-P0-window-placement）。ゴースト定義からキャラ窓・バルーン窓の
 /// 初期配置を解決し窓 entity を組み立てる配置パイプライン。`ghost_session::open_ghost_windows`
 /// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
-mod placement;
+// 一時の別名（spec: placement-crate-split 段 1）: 本体の `crate::placement::` を段 3 で書き換えたら外す。
+use areka_placement as placement;
+
+/// 配置の crate は本体を使えないので、配置と本体のほかの部分をまたぐテストと判定器はここに置く
+/// （spec: placement-crate-split 要件 3.7・3.9）。
+#[cfg(test)]
+mod placement_tests;
 
 /// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
 mod tick_gate_config;
