@@ -324,13 +324,21 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     }
 
     // (4) 正確な注入時刻で提示し、readback 述語を検証する。
-    let failures_before = world.resource::<Verdict>().failures.len();
-    run_checkpoint(demo, world, stage, t_check);
-    let failed_now = world.resource::<Verdict>().failures.len() > failures_before;
+    if demo.hold {
+        // --hold は目視用: 述語の確かめを飛ばし、提示だけして次のステージへ進む（指摘 18）。
+        let mut rt = demo.runtime.borrow_mut();
+        if let Err(e) = present_frame(&mut rt, world, t_check) {
+            warn!(error = %e, "hold の提示フレームで失敗（次のステージへ進む）");
+        }
+    } else {
+        let failures_before = world.resource::<Verdict>().failures.len();
+        run_checkpoint(demo, world, stage, t_check);
+        let failed_now = world.resource::<Verdict>().failures.len() > failures_before;
 
-    if failed_now {
-        finish(demo, world); // 早期打切り（失敗は記録済み・FAIL 出力へ）。
-        return;
+        if failed_now {
+            finish(demo, world); // 早期打切り（失敗は記録済み・FAIL 出力へ）。
+            return;
+        }
     }
 
     demo.stage += 1;
