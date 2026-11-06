@@ -1274,7 +1274,7 @@ crate の外から見えない口（`pub(crate)` と private）。知らせに�
 |---|---|---|
 | 待って戻った | `vsync_once_waited_flush_notifies_without_sleep` | 眠らずに知らせる |
 | 待たずに戻った（消灯・ロック・リモートで起こる） | `vsync_once_unwaited_flush_sleeps_the_rest_then_notifies` | 残りの時間だけ眠ってから知らせる（空回りしない） |
-| 失敗を返した | `vsync_once_failed_flush_logs_sleeps_and_still_notifies` | `error!` を残し、眠ってから、それでも知らせる |
+| 失敗を返した | `vsync_once_failed_flush_logs_sleeps_and_still_notifies` | `debug!` を残し（設計の「失敗の扱い」の表のとおり）、眠ってから、それでも知らせる |
 | 補いの時間の境目 | `compensation_boundaries` | 0・途中・周期以上の境目 |
 | スレッドの落ち | `join_vsync_leaves_one_error_for_a_panicked_thread` | `error!` が 1 件 |
 | 終わった後 | `relay_stops_without_waking_once_the_loop_has_returned` | ループが戻った後は起こさない |
