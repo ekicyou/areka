@@ -751,6 +751,7 @@ wintf の ZOrderPairStrategy・tracing を引く）。
 | `crash_filter_is_installed_before_the_tests_start` ほか 写しの 5 本 | 各 +1 | 3.12 の 3 つ目の写し（配置のテストの実行ファイル） |
 | `the_examples_do_not_parse_the_shell_themselves`・`the_source_scan_still_sees_a_real_call`・`the_source_scan_drops_a_spelling_that_only_lives_in_a_comment` | 各 +1 | `measure_template_tests` を crate ごとに割った（5.3） |
 | `deferred_window_state_vocabulary_is_absent_from_this_features_areka_sources`・`the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for`・`the_scanned_roster_covers_every_zorder_production_source_in_this_crate` | 各 +1 | `spawn_zorder_pair_deferred_tests` を crate ごとに割った（5.3） |
+| `the_reader_reads_a_lower_crate`・`a_missing_path_stops_with_a_panic` | 各 +1（0→1） | 新しい読み口 `crate_source_test_support.rs` の自分の確かめ（5.4・5.5・読み先が無ければ止まる）。段 7 の比べで見つかり書き足した（移したテストではない） |
 
 - 文書のテスト: lib になると doc コメントの中のコードが回る。新しく出たら多重集合に現れるので、その囲みを ```` ```text ```` にして 0 に戻す（見込みは 0）。
 - 警告（8.4）: `cargo check --workspace --all-targets` の警告 0。

@@ -174,7 +174,7 @@
   - _Requirements: 5.10, 6.6_
 
 - [ ] 8. 移しただけであることを示す（段 7）
-- [ ] 8.1 前後の比べと静的な確かめをそろえる
+- [x] 8.1 前後の比べと静的な確かめをそろえる
   - 完了の時のテストの名前の一覧を取り、着手の一覧と多重集合で比べ、差が設計の表の 11 名（各 +1）だけであることを示す（doc コメントのコードが新しく回ったら `text` の囲みにして 0 に戻す）
   - ワークスペース全体を全部の対象で組んで警告 0、配置の crate の本番の依存の木に本体が出ないこと、`Cargo.lock` の差が新しい crate と本体の依存だけであること、本番のソースの `windows` の名前空間が 2 つだけであることを示す
   - 第三者の表を `cargo about generate` で作り直す
@@ -239,3 +239,5 @@
 - 7.4: `-Binary areka-placement-lib` → `cargo test -p areka-placement --lib --`。負荷は回さず、選びの文を値ごとに評価して確かめた。
 - 7.5: 受け持ちは core 114・follow 56（計 170・glob で分けるので重ならない）。古くなった `#[allow]` は範囲の 46 個のうち 36 個（core 3・follow 33）。要件 8.1 の「約 51」は見込みの数。
 - 7.6: `crates tools doc .kiro/steering/structure.md .kiro/steering/tech.md` で `src/placement/`・`areka::placement`（`placement_tests` を除く）・`areka/examples/window-placement` が 0 件。分岐の対応表の `"placement/…_tests.rs"` は見出しの札でパスではない。
+- 8.1: 完了の一覧（`78d19323`・`target/placement-crate-split/tests-after.txt`）は `: test$` が 14071（着手 14058 から +13）。最後の `::` から後ろの多重集合の差は 13 名で各 +1・減りは 0。設計の表の 11 名に、新しい読み口 `crate_source_test_support.rs` の自分の確かめ 2 本（`the_reader_reads_a_lower_crate`・`a_missing_path_stops_with_a_panic`）が加わる。この 2 本は移したテストではないので、設計の表（「部品と口」Verification）に行を足した（タスクの文の「11 名」は 13 名と読む）。新しい文書のテストは 0。
+- 8.1: `cargo check --workspace --all-targets` 警告 0。`cargo tree -p areka-placement -e normal` に本体（`areka v`）は出ない。`Cargo.lock` の差（`8c518c5b` から）は新しい crate の項と本体の依存の 1 行だけ。配置の本番のソースの `windows` の名前空間は `Win32::Foundation`・`Win32::UI::WindowsAndMessaging` の 2 つだけ。`cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` の差は MIT の数 254→255 と `areka-placement 0.1.0` の 1 行だけ。
