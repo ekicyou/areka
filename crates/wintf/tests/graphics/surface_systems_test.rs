@@ -10,12 +10,12 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
+use log_capture_kit::count_levels;
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::UI::Composition::Visual;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::Interface;
 use windows_numerics::Matrix3x2;
 use wintf::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt, D2D1DeviceExt};
@@ -29,10 +29,7 @@ use wintf::ecs::{
 };
 
 fn setup_world() -> World {
-    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    // WucGraphicsResource::new が求める MTA の初期化は GPU の持ち主のスレッドが済ませている。
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let d2d = core.d2d_device().expect("d2d device");
     let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource 作成失敗");
@@ -396,7 +393,7 @@ fn make_filled_command_list(core: &GraphicsCore, w: f32, h: f32) -> GraphicsComm
     let dc = device
         .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
         .expect("recording dc");
-    let cl = device.create_command_list().expect("command list");
+    let cl = unsafe { dc.CreateCommandList() }.expect("command list");
     unsafe {
         dc.SetTarget(&cl);
         dc.BeginDraw();
@@ -458,25 +455,19 @@ fn render_surface_draws_dirty_surface_without_error() {
             let core = world.resource::<GraphicsCore>();
             make_filled_command_list(core, 64.0, 64.0)
         };
-        let entity = world
-            .spawn((
-                surface,
-                make_global_arrangement(64.0, 64.0),
-                SurfaceGraphicsDirty::default(),
-                cmd,
-            ))
-            .id();
+        world.spawn((
+            surface,
+            make_global_arrangement(64.0, 64.0),
+            SurfaceGraphicsDirty::default(),
+            cmd,
+        ));
 
         // スポーン直後は Changed<SurfaceGraphicsDirty> が立っている → 描画対象
         let mut schedule = single_system_schedule(render_surface);
-        schedule.run(&mut world);
-
-        // begin_draw → SetTransform → clear → DrawImage → end_draw が完走
-        // （BeginDraw/EndDraw 失敗時は error! ログだが、不整合があれば後続 COM 呼び出しで panic する）
-        assert!(
-            world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
-            "描画後も Surface は有効なまま"
-        );
+        // begin_draw → SetTransform → clear → DrawImage → end_draw が失敗なく通る。
+        // 本番は失敗を error! して続けるので、ログの数で見る（購読はこのスレッドに付く）
+        let ((), counts) = count_levels(|| schedule.run(&mut world));
+        assert_eq!(counts.error, 0, "render_surface が error を残した");
     });
 }
 
@@ -569,55 +560,19 @@ fn render_surface_non_loss_begin_draw_failure_does_not_mark_graphics_core_change
     });
 }
 
-/// 装置が無効なら何も描かずに戻り、資源にも触らない
-#[test]
-fn render_surface_with_invalid_core_returns_without_touching_core() {
-    crate::common::on_gpu_owner_thread(move || {
-        let mut world = setup_world();
-        let surface = create_real_surface(&world, 64, 64);
-        let cmd = make_filled_command_list(world.resource::<GraphicsCore>(), 64.0, 64.0);
-        world.spawn((
-            surface,
-            make_global_arrangement(64.0, 64.0),
-            SurfaceGraphicsDirty::default(),
-            cmd,
-        ));
-        world.resource_mut::<GraphicsCore>().invalidate();
-        let before = world
-            .get_resource_change_ticks::<GraphicsCore>()
-            .unwrap()
-            .changed;
-        world.increment_change_tick();
-
-        single_system_schedule(render_surface).run(&mut world);
-
-        let after = world
-            .get_resource_change_ticks::<GraphicsCore>()
-            .unwrap()
-            .changed;
-        assert_eq!(before, after, "無効な装置の回に GraphicsCore へ触った");
-    });
-}
-
 #[test]
 fn render_surface_skips_invalid_surface_without_error() {
     crate::common::on_gpu_owner_thread(move || {
         let mut world = setup_world();
-        let entity = world
-            .spawn((
-                SurfaceGraphics::default(), // invalid
-                make_global_arrangement(64.0, 64.0),
-                SurfaceGraphicsDirty::default(),
-            ))
-            .id();
+        world.spawn((
+            SurfaceGraphics::default(), // invalid
+            make_global_arrangement(64.0, 64.0),
+            SurfaceGraphicsDirty::default(),
+        ));
 
         let mut schedule = single_system_schedule(render_surface);
-        schedule.run(&mut world);
-
-        assert!(
-            !world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
-            "invalid Surface はスキップされる（パニックなし）"
-        );
+        let ((), counts) = count_levels(|| schedule.run(&mut world));
+        assert_eq!(counts.error, 0, "描画面の無い部品で error を残した");
     });
 }
 

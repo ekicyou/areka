@@ -97,38 +97,10 @@ where
 
 mod fixture_self_tests {
     use windows::UI::Composition::Compositor;
-    use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
     use super::on_gpu_owner_thread;
 
-    /// フルスタック（GraphicsCore + WucGraphicsResource＝Compositor）を生成→破棄する最小操作。
-    fn make_and_drop_full_stack() {
-        let core = GraphicsCore::new().expect("GraphicsCore::new");
-        let d2d = core.d2d_device().expect("d2d_device");
-        let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new");
-        assert!(wuc.is_valid());
-        // 最小合成操作: Compositor から SpriteVisual を 1 個作る。
-        let _visual = wuc
-            .compositor()
-            .expect("compositor")
-            .CreateSpriteVisual()
-            .expect("CreateSpriteVisual");
-        // スコープ終端で core/wuc が同一（オーナー）スレッド上で drop される。
-    }
-
-    /// 単独実行: オーナースレッド上で 1 回フルスタック生成→破棄が完走する（要件 1.1）。
-    #[test]
-    fn owner_thread_single_full_cycle() {
-        on_gpu_owner_thread(make_and_drop_full_stack);
-    }
-
-    /// 複数テスト連続実行の縮図: 同一オーナースレッド上で **2 回連続** フルスタック生成→破棄しても
-    /// クラッシュしない（別スレッド 2 個目なら AV する構造を、オーナースレッド集約で回避・要件 1.1/1.3）。
-    #[test]
-    fn owner_thread_two_full_cycles_no_crash() {
-        on_gpu_owner_thread(make_and_drop_full_stack);
-        on_gpu_owner_thread(make_and_drop_full_stack);
-    }
+    // 生成→破棄の繰り返しの確かめは `wuc_restart_regression_test.rs` の檻が受け持つ。
 
     /// 値の受け渡しと、オーナースレッド常駐 DispatcherQueue を再利用した Compositor 生成が
     /// 成立すること（オーナースレッドでは生の controller 生成はせず、常駐 DQ を使う）。

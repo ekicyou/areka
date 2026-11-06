@@ -2,9 +2,6 @@
 //!
 //! 対象: `Dimension` / `LengthPercentageAuto` / `LengthPercentage` / `Rect<T>` と
 //! それぞれの taffy 型への From 変換、TaffyZero/TaffyAuto 定数。
-//!
-//! 注意: `LengthPercentageAuto::Percent` / `LengthPercentage::Percent` の taffy 変換は
-//! `Dimension::Percent` と異なり 1/100 正規化を行わない（現状挙動の固定。proposals.md P49 参照）。
 
 use wintf::ecs::layout::{
     Dimension, LengthPercentage, LengthPercentageAuto, Rect, TaffyAuto, TaffyZero,
@@ -83,17 +80,11 @@ fn test_length_percentage_auto_px_auto_to_taffy() {
     assert_eq!(auto, taffy::LengthPercentageAuto::auto());
 }
 
-/// 現状仕様の固定: LengthPercentageAuto::Percent は値をそのまま taffy に渡す（÷100 なし）
-///
-/// ドキュメントコメントは「0.0～100.0 の範囲で指定」と謳うが、taffy 側は 0.0-1.0 を
-/// 期待するため、Dimension::Percent（÷100 あり）と整合しない。修正は挙動変更のため
-/// 本ループでは現状挙動を固定する（proposals.md P49）。
+/// LengthPercentageAuto::Percent は 0.0～100.0 で受け、taffy の 0.0～1.0 へ 100 で割って渡す
 #[test]
-fn test_length_percentage_auto_percent_to_taffy_not_normalized() {
+fn test_length_percentage_auto_percent_to_taffy_is_normalized() {
     let pct: taffy::LengthPercentageAuto = LengthPercentageAuto::Percent(50.0).into();
-    // ÷100 されず percent(50.0) のまま（= taffy 解釈では 5000%）
-    assert_eq!(pct, taffy::LengthPercentageAuto::percent(50.0));
-    assert_ne!(pct, taffy::LengthPercentageAuto::percent(0.5));
+    assert_eq!(pct, taffy::LengthPercentageAuto::percent(0.5));
 }
 
 // ===== LengthPercentage → taffy::LengthPercentage =====
@@ -117,16 +108,14 @@ fn test_length_percentage_constructors_and_constants() {
     );
 }
 
-/// Px バリアントの taffy 変換と、Percent の現状仕様固定（÷100 なし。P49 参照）
+/// Px バリアントの taffy 変換と、Percent を 100 で割って渡すこと
 #[test]
 fn test_length_percentage_to_taffy() {
     let px: taffy::LengthPercentage = LengthPercentage::Px(3.0).into();
     assert_eq!(px, taffy::LengthPercentage::length(3.0));
 
     let pct: taffy::LengthPercentage = LengthPercentage::Percent(25.0).into();
-    // ÷100 されず percent(25.0) のまま（= taffy 解釈では 2500%）
-    assert_eq!(pct, taffy::LengthPercentage::percent(25.0));
-    assert_ne!(pct, taffy::LengthPercentage::percent(0.25));
+    assert_eq!(pct, taffy::LengthPercentage::percent(0.25));
 }
 
 // ===== Rect<T> =====

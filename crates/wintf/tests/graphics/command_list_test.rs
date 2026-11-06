@@ -4,7 +4,6 @@
 //! 直接のユニットテストが存在しなかったため追加する。
 //! 対象: crates/wintf/src/ecs/graphics/command_list.rs
 
-use wintf::com::d2d::D2D1DeviceExt;
 use wintf::ecs::{GraphicsCommandList, GraphicsCore};
 
 /// empty() は内部 CommandList を持たない
@@ -18,8 +17,8 @@ fn empty_has_no_command_list() {
 #[test]
 fn new_wraps_real_command_list() {
     let graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let device = graphics.d2d_device().expect("d2d device");
-    let raw = device.create_command_list().expect("command list");
+    let dc = graphics.device_context().expect("device context");
+    let raw = unsafe { dc.CreateCommandList() }.expect("command list");
 
     let component = GraphicsCommandList::new(raw.clone());
     assert!(component.command_list().is_some());
@@ -31,8 +30,8 @@ fn new_wraps_real_command_list() {
 #[test]
 fn clone_and_partial_eq_semantics() {
     let graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let device = graphics.d2d_device().expect("d2d device");
-    let raw = device.create_command_list().expect("command list");
+    let dc = graphics.device_context().expect("device context");
+    let raw = unsafe { dc.CreateCommandList() }.expect("command list");
 
     let a = GraphicsCommandList::new(raw);
     let b = a.clone();
@@ -42,7 +41,7 @@ fn clone_and_partial_eq_semantics() {
     assert_ne!(a, GraphicsCommandList::empty());
 
     // 別個に作成した CommandList は別ポインタなので非等価
-    let other = device.create_command_list().expect("second command list");
+    let other = unsafe { dc.CreateCommandList() }.expect("second command list");
     assert_ne!(a, GraphicsCommandList::new(other));
 }
 

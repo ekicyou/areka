@@ -5,33 +5,11 @@
 //! - test_8x8_rgb.bmp（αなし）のPBGRA32変換確認
 //! - invalid.binのエラーハンドリング確認
 
-use std::path::PathBuf;
 use windows::Win32::Graphics::Imaging::IWICBitmapSource;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-use windows_core::Interface;
 use wintf::ecs::widget::bitmap_source::WicCore;
 use wintf::ecs::widget::bitmap_source::systems::load_bitmap_source;
 
-/// テストアセットディレクトリのパスを取得
-fn test_asset_path(filename: &str) -> PathBuf {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    PathBuf::from(manifest_dir)
-        .join("tests")
-        .join("assets")
-        .join(filename)
-}
-
-/// COMを初期化するヘルパー
-fn with_com_initialized<T, F: FnOnce() -> T>(f: F) -> T {
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let result = f();
-    unsafe {
-        CoUninitialize();
-    }
-    result
-}
+use super::common::{test_asset_path, with_com_initialized};
 
 // ============================================================
 // PNG画像読み込みテスト（αチャネル付き）
@@ -200,43 +178,4 @@ fn get_bitmap_size(source: &IWICBitmapSource) -> (u32, u32) {
 /// IWICBitmapSourceからピクセル形式を取得
 fn get_pixel_format(source: &IWICBitmapSource) -> windows::core::GUID {
     unsafe { source.GetPixelFormat().expect("GetPixelFormat failed") }
-}
-
-// ============================================================
-// WicCoreの基本テスト
-// ============================================================
-
-#[test]
-fn test_wic_core_creation_in_integration() {
-    with_com_initialized(|| {
-        let result = WicCore::new();
-        assert!(
-            result.is_ok(),
-            "WicCore creation should succeed in integration test"
-        );
-
-        let wic_core = result.unwrap();
-        assert!(
-            !wic_core.factory().as_raw().is_null(),
-            "factory should not be null"
-        );
-    });
-}
-
-#[test]
-fn test_wic_core_clone_in_integration() {
-    with_com_initialized(|| {
-        let wic_core = WicCore::new().expect("WicCore creation failed");
-        let cloned = wic_core.clone();
-
-        // 両方のファクトリが有効であることを確認
-        assert!(
-            !wic_core.factory().as_raw().is_null(),
-            "original factory should be valid"
-        );
-        assert!(
-            !cloned.factory().as_raw().is_null(),
-            "cloned factory should be valid"
-        );
-    });
 }

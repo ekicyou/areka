@@ -39,50 +39,6 @@ pub enum BoxPosition {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct BoxInset(pub Rect<LengthPercentageAuto>);
 
-/// Flexコンテナ（値オブジェクト）
-///
-/// 注: BoxStyleのflex_direction, justify_content, align_itemsを直接使用することを推奨。
-/// この型は後方互換性のために維持されています。
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FlexContainer {
-    pub direction: taffy::FlexDirection,
-    pub justify_content: Option<taffy::JustifyContent>,
-    pub align_items: Option<taffy::AlignItems>,
-}
-
-impl Default for FlexContainer {
-    fn default() -> Self {
-        Self {
-            direction: taffy::FlexDirection::Row,
-            justify_content: None,
-            align_items: None,
-        }
-    }
-}
-
-/// Flexアイテム（値オブジェクト）
-///
-/// 注: BoxStyleのflex_grow, flex_shrink, flex_basis, align_selfを直接使用することを推奨。
-/// この型は後方互換性のために維持されています。
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FlexItem {
-    pub grow: f32,
-    pub shrink: f32,
-    pub basis: Dimension,
-    pub align_self: Option<taffy::AlignSelf>,
-}
-
-impl Default for FlexItem {
-    fn default() -> Self {
-        Self {
-            grow: 0.0,
-            shrink: 1.0,
-            basis: Dimension::Auto,
-            align_self: None,
-        }
-    }
-}
-
 // taffy の Flex 関連型を re-export（テストと外部利用のため）
 pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyContent};
 

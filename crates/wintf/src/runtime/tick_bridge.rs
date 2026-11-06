@@ -2,30 +2,31 @@
 //!
 //! 専用 VSync スレッドが `DwmFlush()` で vblank を検出し、共有
 //! `event_listener::Event` を `notify(usize::MAX)`（全リスナ起床）で notify する。
-//! UI スレッド側の待機タスク（後続タスク 2.3 の `AsyncTickTask`）は
+//! UI スレッド側の待機タスク（tick のタスク [`run_async_tick`]・クリック透過の中継 [`relay_vblank`]）は
 //! `bridge.event().listen().await` で 1 フレームごとに起床できる。
 //!
 //! # 周期
-//! `DwmFlush()` は次の vblank までブロックするため、ループは固定 16.67ms の
-//! sleep を持たずモニターのリフレッシュレートに自然追従する（実 vblank 同期・
-//! 要件 4.4）。旧 `PostMessageW(WM_VSYNC)` 経路は本ブリッジでは持たない（要件 4.1）。
+//! `DwmFlush()` は次の vblank までブロックするため、ふだんの周期は画面の更新周期に
+//! 追従する。消灯・ロック・リモートデスクトップ・DWM の失敗などで `DwmFlush()` が
+//! 待たずに戻った回（呼ぶ前から 1ms 未満）だけ、呼ぶ前から数えて約 16ms になるまで
+//! 眠ってから起こす（空回りで CPU を張り付かせない）。起こしは失敗の回も含めて毎周
+//! 必ず 1 回撃つ（[`vsync_once`]）。旧 `PostMessageW(WM_VSYNC)` 経路は本ブリッジでは
+//! 持たない。
 //!
 //! # 生存期間（RAII）
 //! 本ユニットは自己完結の RAII で、スレッドの生存期間を `stop_flag → join` の
 //! 順序規律で管理する（旧 `WinThreadMgrInner::drop` の規律を継承）。`Drop` で
 //! stop フラグを立て、スレッドを `join()` する。
 //!
-//! 最終的にはこのインスタンスを `WinApp` が所有する（設計: 「`Event` は `WinApp`
-//! が所有」）。`WinApp::run` の全結線（後続タスク 4.3）でフィールドとして保持され、
-//! `WinApp` の drop に生存期間が委譲される。本タスクの時点では結線は行わず、
-//! ブリッジ自身が自前のスレッドを所有し Drop で join する。
+//! `WinApp::run` が `run` の間だけローカルに所有し、`run` から戻るときの drop で
+//! スレッドを止めて join する。
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use event_listener::Event;
 use tracing::{debug, error, trace};
@@ -80,7 +81,7 @@ impl VsyncEventBridge {
     /// 共有 vblank 通知イベントへの参照を返す。
     ///
     /// 呼び出し側は `bridge.event().listen()` で `EventListener` を arm できる
-    /// （`AsyncTickTask`・テスト用）。返す `Arc` を clone して保持してもよい。
+    /// （[`run_async_tick`]・テスト用）。返す `Arc` を clone して保持してもよい。
     pub(crate) fn event(&self) -> &Arc<event_listener::Event> {
         &self.vblank_event
     }
@@ -96,9 +97,7 @@ impl VsyncEventBridge {
     fn stop(&mut self) {
         if let Some(handle) = self.handle.take() {
             self.stop_flag.store(true, Ordering::Release);
-            if handle.join().is_err() {
-                trace!("wintf-vsync thread join returned Err (thread panicked)");
-            }
+            join_vsync(handle);
             debug!("VsyncEventBridge stopped (wintf-vsync thread joined)");
         }
     }
@@ -110,8 +109,50 @@ impl Drop for VsyncEventBridge {
     }
 }
 
-/// VSync スレッド本体。`DwmFlush()` で vblank を待ち、毎回 `Event` を全リスナ起床
-/// で notify する。`stop` が立つまでループする。
+/// vblank のスレッドを待ち合わせる。panic で終わっていたら `error!` を 1 行残す。
+fn join_vsync(handle: JoinHandle<()>) {
+    if handle.join().is_err() {
+        error!("[VsyncEventBridge] wintf-vsync スレッドが panic で終わっていた");
+    }
+}
+
+/// これより短く戻った `DwmFlush` は「待たずに戻った」とみなす。
+const WAITED_AT_LEAST: Duration = Duration::from_millis(1);
+/// 待たずに戻った回に、呼ぶ前から数えて合わせる 1 周の長さ。
+const FALLBACK_PERIOD: Duration = Duration::from_millis(16);
+
+/// 待たずに戻った回だけ、`FALLBACK_PERIOD` に足りない長さを返す（状態を持たない）。
+fn compensation(waited: Duration) -> Option<Duration> {
+    (waited < WAITED_AT_LEAST).then(|| FALLBACK_PERIOD - waited)
+}
+
+/// vblank のスレッドの 1 周。時刻・`DwmFlush`・眠り方を差し込める。
+/// `Err` は debug に HRESULT を 1 行、補った回は trace を 1 行。最後に必ず 1 回 notify する。
+fn vsync_once(
+    now: &mut impl FnMut() -> Instant,
+    flush: impl FnOnce() -> windows::core::Result<()>,
+    sleep: impl FnOnce(Duration),
+    event: &Event,
+) {
+    let before = now();
+    if let Err(e) = flush() {
+        // 熱い経路だが間引かない（待てなかった回は補いで約 16ms ごとに抑えられる）。
+        debug!(hresult = ?e.code(), "[vsync_loop] DwmFlush が失敗した");
+    }
+    let waited = now().saturating_duration_since(before);
+    if let Some(rest) = compensation(waited) {
+        sleep(rest);
+        trace!(
+            ?waited,
+            ?rest,
+            "[vsync_loop] DwmFlush が待たずに戻ったので補って眠った"
+        );
+    }
+    // vblank（または補いの周期）ごとに全リスナを起床（データは搬送しない）。
+    event.notify(usize::MAX);
+}
+
+/// VSync スレッド本体。`stop` が立つまで [`vsync_once`] を回す。
 fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
     // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる（要件 2.3）。
     // 失敗しても vblank 検出は続ける——このスレッドの CPU が `unregistered_rest` へ
@@ -123,66 +164,15 @@ fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
     }
 
     while !stop.load(Ordering::Acquire) {
-        // SAFETY: Win32 境界。`DwmFlush` は引数を取らず、DWM 合成の次フレーム
-        // （vblank）まで現スレッドをブロックして `windows::core::Result<()>` を返す。
-        // 副作用は本スレッドのブロックのみで、共有状態には触れない。
-        let flushed = unsafe { DwmFlush() };
-
-        match flushed {
-            Ok(()) => {
-                // vblank 到来 — 全リスナを起床（複数 tick タスク対応・
-                // データは搬送しない起床通知のみ）。
-                event.notify(usize::MAX);
-            }
-            Err(_) => {
-                // DWM 無効など稀な失敗。スピンホットを避けるためおおよそ 60Hz
-                // 相当だけ待ってからリトライする（本環境では通常到達しない）。
-                thread::sleep(std::time::Duration::from_millis(15));
-            }
-        }
-    }
-}
-
-/// vblank 駆動の UI スレッド async tick タスク（要件 4.2 / 4.3 / 4.5）。
-///
-/// `VsyncEventBridge` が共有する `event_listener::Event` の起床通知を待ち、起床ごとに
-/// 1 フレーム分の ECS tick（`try_tick_world` の 13 本スケジュール）を実行して再待機する
-/// ループを `spawn_local` で UI スレッドに投入する。複数 tick タスクは不要（単一 World）。
-///
-/// **固定周期ではない。** 起床は `vsync_loop` の `DwmFlush()`（次 vblank まで待つ）が出す
-/// ので、実効のフレーム周期は**画面の更新周期**である（120Hz の実機なら約 8.3ms）。
-/// 固定 60Hz なのは DWM が使えないときのフォールバック（`vsync_loop` の `Err` 腕）だけで
-/// ある。この注記は areka-P0-dpi-transition-atomicity task 4.3 が付けた——判定の上限を
-/// 「1 コマ」で置くときに 16.7ms を無条件の値と読む誤りが実際に起きたため。
-///
-/// # 再入の二重防御（要件 4.3）
-/// 本タスクの 1 フレーム実行は [`tick_one_frame`] を通し、`IS_TICK_FLUSH_IN_PROGRESS`
-/// 再入ガード（`crate::ecs::world::engage_tick_flush_guard`）を engage する。これは
-/// ライブラリ側 wndproc 再入防止（`RefCell` の借用チェック）と二重防御になり、
-/// nested-message やレガシー `try_tick_on_vsync` 経路と同一フラグを共有して二重 tick を防ぐ。
-///
-/// # 結線
-/// 本タスクの `WinApp::run` への結線は後続タスク（run 全結線）で行う。本タスクは spawn
-/// エントリのみを提供する。
-pub(crate) struct AsyncTickTask;
-
-impl AsyncTickTask {
-    /// vblank 駆動の tick ループを UI スレッドの `spawn_local` で投入する。
-    ///
-    /// - `event`: `VsyncEventBridge::event()` から得た共有 vblank 通知（`Arc<Event>`）。
-    /// - `world`: 共有 World への `Weak`（強参照を持たない・設計 State Management）。
-    ///   shutdown 時は `upgrade()` が `None` を返し、ループは安全に終了する。
-    /// - `running`: `WinApp::run` のループがまだ回っているか。下りた後の起床では
-    ///   フレームを回さずに終える（[`run_async_tick`] 参照）。
-    ///
-    /// 投入のみ行い実行はメッセージループ（`block_on`/`MessageLoop::run`）に委ねる。
-    // `WinApp::run`（task 4.3 結線済み）が呼ぶ。
-    pub(crate) fn spawn(
-        event: Arc<Event>,
-        world: Weak<RefCell<EcsWorld>>,
-        running: Rc<Cell<bool>>,
-    ) -> crate::executor::JoinHandle<()> {
-        crate::executor::spawn_local(run_async_tick(event, world, running))
+        vsync_once(
+            &mut Instant::now,
+            // SAFETY: Win32 境界。`DwmFlush` は引数を取らず、DWM 合成の次フレーム
+            // （vblank）まで現スレッドをブロックして `windows::core::Result<()>` を返す。
+            // 副作用は本スレッドのブロックのみで、共有状態には触れない。
+            || unsafe { DwmFlush() },
+            thread::sleep,
+            &event,
+        );
     }
 }
 
@@ -207,7 +197,8 @@ impl AsyncTickTask {
 /// `false` = 再入ガードまたは World 借用に失敗して何もしなかった。
 ///
 /// `flush_window_pos_commands()` は World 借用解放後に呼ぶ（同期 `WM_WINDOWPOSCHANGED`
-/// が World を借用しても競合しない）。レガシー `try_tick_on_vsync` と同じ規律。
+/// が World を借用しても競合しない）。流しはガードを持ったまま行う
+/// （`flush_window_pos_commands_guarded` と同じ規律）。
 pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
     // 門は 1 フレームに 1 度だけ問う（プロセス共有の旗を読んで倒すのはこの 1 箇所）。
     tick_one_frame_with(world, |world| world.decide_tick(Instant::now()))
@@ -234,7 +225,7 @@ fn tick_one_frame_with(
     world: &Rc<RefCell<EcsWorld>>,
     decide: impl FnOnce(&mut EcsWorld) -> crate::ecs::world::tick_gate::TickDecision,
 ) -> bool {
-    // ── 再入防止ガード（レガシー vsync.rs と共有・二重防御）─────────
+    // ── 再入防止ガード（`flush_window_pos_commands_guarded` と共有・二重防御）─────────
     let Some(_guard) = crate::ecs::world::engage_tick_flush_guard() else {
         trace!("[tick_one_frame] Re-entry blocked by IS_TICK_FLUSH_IN_PROGRESS");
         return false;
@@ -264,7 +255,25 @@ fn tick_one_frame_with(
     // _guard drop で IS_TICK_FLUSH_IN_PROGRESS = false に戻る
 }
 
-/// vblank 駆動の tick ループ本体（`spawn_local` で UI スレッドに駆動される async タスク）。
+/// vblank 駆動の UI スレッド async tick タスク（要件 4.2 / 4.3 / 4.5）。
+///
+/// `VsyncEventBridge` が共有する `event_listener::Event` の起床通知を待ち、起床ごとに
+/// 1 フレーム分の ECS tick（`try_tick_world` の 13 本スケジュール）を実行して再待機する
+/// ループ。`WinApp::run` が `spawn_local` で UI スレッドに投入する。複数 tick タスクは不要（単一 World）。
+///
+/// **固定周期ではない。** 起床は `vsync_loop` の `DwmFlush()`（次 vblank まで待つ）が出す
+/// ので、実効のフレーム周期は**画面の更新周期**である（120Hz の実機なら約 8.3ms）。
+/// `DwmFlush()` が待たずに戻った回（消灯・ロック・失敗など）だけ、呼ぶ前から約 16ms に
+/// なるまで眠ってから起こす（[`vsync_once`]）。この注記は areka-P0-dpi-transition-atomicity task 4.3 が付けた——判定の上限を
+/// 「1 コマ」で置くときに 16.7ms を無条件の値と読む誤りが実際に起きたため。
+///
+/// # 再入の二重防御（要件 4.3）
+/// 本タスクの 1 フレーム実行は [`tick_one_frame`] を通し、`IS_TICK_FLUSH_IN_PROGRESS`
+/// 再入ガード（`crate::ecs::world::engage_tick_flush_guard`）を engage する。これは
+/// ライブラリ側 wndproc 再入防止（`RefCell` の借用チェック）と二重防御になり、
+/// 窓の書き込みの流し（`crate::ecs::world::flush_window_pos_commands_guarded`・
+/// `WM_WINDOWPOSCHANGED` の後に呼ばれる）と同一フラグを共有し、流しの中から入れ子で
+/// 届いた tick と、tick の中から入れ子で届いた流しを読み飛ばす（二重 tick を防ぐ）。
 ///
 /// notify 取りこぼし防止規律（設計）: await の **前** に `listener = event.listen()` を
 /// arm する。これにより `tick_one_frame` 実行中に届いた notify も次の `listener.await`
@@ -277,12 +286,16 @@ fn tick_one_frame_with(
 ///
 /// World は `Weak` のまま待ち、起きてから `upgrade()` する（待ちの間に強参照を握らない）。
 /// `None`（strong 所有者が drop 済み）でも終える。
-async fn run_async_tick(
+///
+/// 自分で終わるのは起床が来たときだけである。正常な終了では `run()` の戻りで vblank の
+/// スレッドが止まり起床が来ないので、タスクは待ちのまま残る（`run` 1 回につき 1 度の
+/// 小さな残り・World は `Weak` なので握らない）。
+pub(crate) async fn run_async_tick(
     event: Arc<Event>,
     world: Weak<RefCell<EcsWorld>>,
     running: Rc<Cell<bool>>,
 ) {
-    debug!("AsyncTickTask started (vblank-driven UI-thread tick loop)");
+    debug!("tick task started (vblank-driven UI-thread tick loop)");
     loop {
         // 先に listen() を arm（処理中に届く notify を落とさない）。
         let listener = event.listen();
@@ -291,11 +304,11 @@ async fn run_async_tick(
         listener.await;
 
         if !running.get() {
-            debug!("AsyncTickTask stopping (message loop has returned)");
+            debug!("tick task stopping (message loop has returned)");
             return;
         }
         let Some(world) = world.upgrade() else {
-            debug!("AsyncTickTask stopping (world dropped — shutdown)");
+            debug!("tick task stopping (world dropped — shutdown)");
             return;
         };
 
@@ -303,6 +316,38 @@ async fn run_async_tick(
         tick_one_frame(&world);
     }
 }
+
+/// vblank ごとにクリック透過の起こしを中継する。World が落ちたか run が戻った後は終わる。
+///
+/// 先に `listen()` を arm してから待つ（処理中に届く vblank を落とさない）。`wake` を
+/// vblank の `Event` とは別の `Arc` に保つので、カーソル移動の起こしが tick タスクを
+/// 余計に起こさない。[`run_async_tick`] と同じく、終わるのは起床が来たときだけで、
+/// 正常な終了の後は待ちのまま残る（`run` 1 回につき 1 度の小さな残り）。
+pub(crate) async fn relay_vblank(
+    vblank: Arc<Event>,
+    world: Weak<RefCell<EcsWorld>>,
+    wake: Arc<Event>,
+    running: Rc<Cell<bool>>,
+) {
+    loop {
+        let listener = vblank.listen();
+        if world.upgrade().is_none() {
+            debug!("ClickThrough VSync relay stopping (world dropped — shutdown)");
+            return;
+        }
+        listener.await;
+        // ループが戻った後の起床は中継しない（tick タスクと同じ守り）。
+        if !running.get() {
+            debug!("ClickThrough VSync relay stopping (message loop has returned)");
+            return;
+        }
+        wake.notify(usize::MAX);
+    }
+}
+
+#[cfg(test)]
+#[path = "tick_bridge_vsync_tests.rs"]
+mod vsync_tests;
 
 #[cfg(test)]
 mod tests {
@@ -418,7 +463,7 @@ mod tests {
         drop(bridge);
     }
 
-    // ── AsyncTickTask (task 2.3) ──────────────────────────────────
+    // ── tick のタスク (task 2.3) ──────────────────────────────────
 
     /// 再入安全スキップ（要件 4.3）: World が既に `borrow_mut` 済みのとき
     /// `tick_one_frame` は tick せず `false` を返す（二重 tick なし・panic なし）。
@@ -507,6 +552,19 @@ mod tests {
         fast_forward_warmup(&world);
 
         let before = world.borrow().world().resource::<FrameCount>().0;
+        // 省略の回にも掃き出しが走ることを、積んだ 1 本がキューから消えることで見る
+        // （HWND は空なので書込は失敗し `warn!` が出るだけ・キューはスレッドごと）。
+        crate::ecs::window::SetWindowPosCommand::enqueue(
+            crate::ecs::window::SetWindowPosCommand::new(
+                windows::Win32::Foundation::HWND::default(),
+                0,
+                0,
+                1,
+                1,
+                windows::Win32::UI::WindowsAndMessaging::SWP_NOZORDER,
+                None,
+            ),
+        );
         let processed = tick_one_frame_with(&world, |world| {
             world.decide_tick_with(WakeSnapshot {
                 bits: 0,
@@ -523,11 +581,9 @@ mod tests {
             before,
             "省略の回は 13 本を回さないのでフレーム番号は進まない"
         );
-        // 窓書込の掃き出しはガードが外れる**前**に呼ばれる。ガードが戻っていることは
-        // 「省略の回でも関数が flush まで通り抜けた」ことの証跡である（D-3）。
         assert!(
-            !crate::ecs::world::is_tick_flush_in_progress(),
-            "省略の回も flush まで進んでから再入ガードが外れているべき"
+            crate::ecs::window::drain_window_pos_commands().is_empty(),
+            "省略の回も窓書込の掃き出しが走り、積んだ指令が残らないべき（D-3）"
         );
     }
 
@@ -578,11 +634,11 @@ mod tests {
         let running = Rc::new(Cell::new(true));
         let frame = || world.borrow().world().resource::<FrameCount>().0;
 
-        let _task = AsyncTickTask::spawn(
+        let _task = crate::executor::spawn_local(run_async_tick(
             Arc::clone(&event),
             Rc::downgrade(&world),
             Rc::clone(&running),
-        );
+        ));
         crate::executor::block_on(async {}); // 待ちを立てさせる
         let held_while_waiting = Rc::strong_count(&world) - 1;
 

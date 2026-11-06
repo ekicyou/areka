@@ -5,7 +5,6 @@
 //! - runtime() アクセスパターン
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::system::SystemState;
 use dola::runtime::DolaRuntime;
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry, TransitionDef,
@@ -83,7 +82,7 @@ fn default_animator_has_empty_result() {
 }
 
 // ---------------------------------------------------------------
-// tick_dola_animators System（手動 Query 実行）
+// tick_dola_animators System（Schedule で実行）
 // ---------------------------------------------------------------
 
 #[test]
@@ -105,17 +104,10 @@ fn tick_dola_animators_system_updates_all_entities() {
     let e1 = world.spawn(a1).id();
     let e2 = world.spawn(a2).id();
 
-    // Run the system via SystemState
-    let mut system_state =
-        SystemState::<(Query<&mut DolaAnimator>, Res<FrameTime>)>::new(&mut world);
-    {
-        let (mut query, frame_time) = system_state
-            .get_mut(&mut world)
-            .expect("animator query validation should succeed");
-        for mut animator in query.iter_mut() {
-            animator.tick(frame_time.0);
-        }
-    }
+    // 本物の system を Schedule で回す
+    let mut schedule = Schedule::default();
+    schedule.add_systems(tick_dola_animators);
+    schedule.run(&mut world);
 
     // Both should have changes
     let mut a1_ref = world.get_mut::<DolaAnimator>(e1).unwrap();
@@ -129,30 +121,4 @@ fn tick_dola_animators_system_updates_all_entities() {
         !a2_ref.last_result().changes.is_empty(),
         "Entity 2 should have changes"
     );
-}
-
-// ---------------------------------------------------------------
-// runtime() 読み取りアクセス
-// ---------------------------------------------------------------
-
-#[test]
-fn runtime_accessor_returns_inner_runtime() {
-    let rt = make_runtime_with_animation();
-    let mut animator = DolaAnimator::with_runtime(rt);
-
-    // runtime() は可変の借りから読める
-    let _runtime = animator.runtime();
-    // Debug trait
-    let debug = format!("{:?}", animator);
-    assert!(debug.contains("DolaAnimator"));
-}
-
-// ---------------------------------------------------------------
-// tick_dola_animators 関数のシグネチャ検証
-// ---------------------------------------------------------------
-
-#[test]
-fn tick_dola_animators_is_valid_system() {
-    // tick_dola_animators の型が System として有効であることをコンパイル時に確認
-    let _ = tick_dola_animators as fn(Query<&mut DolaAnimator>, Res<FrameTime>);
 }

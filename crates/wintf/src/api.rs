@@ -148,6 +148,7 @@ pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
 /// 後発の破棄が無効 HWND を撃つ。破棄に先立って本関数で切り離すことで独立破棄の
 /// semantics へ戻し、要件 5.9（破棄が重複しても異常終了しない）を構造的に満たす。
 /// 失敗は握り潰さず `Err` で返す。
+/// owner を持たない窓では OS が偽の失敗を返す。呼ぶ前に owner の有無を読むこと。
 #[inline(always)]
 pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, 0).map(|_| ())
@@ -298,6 +299,53 @@ pub fn get_process_times() -> Result<CpuTimes> {
     })
 }
 
+/// 試験の窓（定義済みの "Static"・見えない・0×0）を作る。壊すのは呼んだ側。
+#[cfg(test)]
+pub(crate) fn create_test_window(
+    ex: WINDOW_EX_STYLE,
+    style: WINDOW_STYLE,
+    parent: Option<HWND>,
+    title: PCWSTR,
+) -> HWND {
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    // SAFETY: Win32 境界。定義済 "Static" クラスで 0×0 の窓を生成する（呼び出し側が破棄する）。
+    unsafe {
+        let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
+        CreateWindowExW(
+            ex,
+            w!("Static"),
+            title,
+            style,
+            0,
+            0,
+            0,
+            0,
+            parent,
+            None,
+            Some(hinstance.into()),
+            None,
+        )
+        .expect("CreateWindowExW should create a test window")
+    }
+}
+
+/// 試験の窓を作って `f` を回し、panic でも必ず `DestroyWindow` してから panic を投げ直す。
+#[cfg(test)]
+pub(crate) fn with_test_window<R>(
+    ex: WINDOW_EX_STYLE,
+    style: WINDOW_STYLE,
+    parent: Option<HWND>,
+    f: impl FnOnce(HWND) -> R + std::panic::UnwindSafe,
+) -> R {
+    let hwnd = create_test_window(ex, style, parent, w!("wintf-test-window"));
+    let result = std::panic::catch_unwind(move || f(hwnd));
+    // SAFETY: Win32 境界。上で生成した所有ウィンドウを破棄する（テスト後始末）。
+    unsafe {
+        let _ = DestroyWindow(hwnd);
+    }
+    result.unwrap_or_else(|e| std::panic::resume_unwind(e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,35 +407,17 @@ mod tests {
     /// 実所有のテスト HWND（非表示ポップアップ "Static"）を生成する。
     /// `ecs/clickthrough/controller_tests.rs` の生成レシピと同一。呼び出し側が破棄する。
     fn create_test_hwnd(title: PCWSTR) -> HWND {
-        create_test_window(title, WINDOW_STYLE(WS_POPUP.0), None)
+        create_test_window(WINDOW_EX_STYLE(0), WINDOW_STYLE(WS_POPUP.0), None, title)
     }
 
     /// テスト専用親窓の子として非表示の実窓を生成する（兄弟列を閉じるため）。
     fn create_test_child_hwnd(parent: HWND, title: PCWSTR) -> HWND {
-        create_test_window(title, WINDOW_STYLE(WS_CHILD.0), Some(parent))
-    }
-
-    fn create_test_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HWND {
-        use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-        // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
-        unsafe {
-            let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
-            CreateWindowExW(
-                WINDOW_EX_STYLE(0),
-                w!("Static"),
-                title,
-                style,
-                0,
-                0,
-                0,
-                0,
-                parent,
-                None,
-                Some(hinstance.into()),
-                None,
-            )
-            .expect("CreateWindowExW should create a hidden test window")
-        }
+        create_test_window(
+            WINDOW_EX_STYLE(0),
+            WINDOW_STYLE(WS_CHILD.0),
+            Some(parent),
+            title,
+        )
     }
 
     /// テスト HWND を破棄する（後始末）。
@@ -483,6 +513,23 @@ mod tests {
     }
 
     #[test]
+    fn with_test_window_destroys_the_window_and_rethrows_on_panic() {
+        let seen = std::sync::Mutex::new(None);
+        let caught = std::panic::catch_unwind(|| {
+            with_test_window(WINDOW_EX_STYLE(0), WINDOW_STYLE(WS_POPUP.0), None, |hwnd| {
+                *seen.lock().unwrap() = Some(hwnd.0 as isize);
+                panic!("test body panics");
+            })
+        });
+        assert!(caught.is_err(), "本体の panic は投げ直されるはず");
+        let hwnd = HWND(seen.lock().unwrap().expect("本体が走ったはず") as *mut _);
+        assert!(
+            !unsafe { IsWindow(Some(hwnd)) }.as_bool(),
+            "panic でも窓は壊されているはず"
+        );
+    }
+
+    #[test]
     fn get_window_above_and_below_report_absence_as_ok_none() {
         // デスクトップウィンドウは兄弟を持たないため、前後いずれの隣接窓も存在しない。
         // 「隣が無い」は失敗ではなく正常な不在であり Ok(None) で返る。
@@ -545,9 +592,10 @@ mod tests {
         // それぞれ別の答えになることを固定する。
         let parent = create_test_hwnd(w!("wintf-visible-test-parent"));
         let shown = create_test_window(
-            w!("wintf-visible-test-shown"),
+            WINDOW_EX_STYLE(0),
             WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
             Some(parent),
+            w!("wintf-visible-test-shown"),
         );
         let hidden = create_test_child_hwnd(parent, w!("wintf-visible-test-hidden"));
 

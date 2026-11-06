@@ -3,11 +3,11 @@
 //! # Clip Demo
 //!
 //! visual-clip 機能の検証デモ。3 種類の ClipShape バリアントを
-//! GPU 合成（WUC / DirectComposition）パイプラインで表示し、クリッピングの動作を目視確認する。
+//! GPU 合成（Windows.UI.Composition＝WUC）パイプラインで表示し、クリッピングの動作を目視確認する。
 //!
 //! ## 構成
 //!
-//! - **GPU 合成ウィンドウ** — DirectComposition パイプラインでのクリップ
+//! - **GPU 合成ウィンドウ** — WUC パイプラインでのクリップ
 //!
 //! ウィンドウに3つのクリップ領域を配置:
 //! 1. `ClipShape::Rectangle` — 矩形クリップ
@@ -26,7 +26,7 @@ use std::time::Duration;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
-use windows::Win32::UI::WindowsAndMessaging::{WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW};
+use windows::Win32::UI::WindowsAndMessaging::WS_OVERLAPPEDWINDOW;
 use windows::core::Result;
 use wintf::ecs::layout::{
     BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto,
@@ -38,9 +38,9 @@ use wintf::ecs::window::WindowStyle;
 use wintf::ecs::{ClipShape, Point, Visual, Window, WindowPos};
 use wintf::*;
 
-/// DComp クリップデモウィンドウマーカー
+/// WUC クリップデモウィンドウマーカー
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub struct DCompClipWindow;
+pub struct WucClipWindow;
 
 fn main() -> Result<()> {
     human_panic::setup_panic!();
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     });
 
     println!("\nClip Demo:");
-    println!("  GPU 合成ウィンドウ — DirectComposition クリップ（タイトルバー有、リサイズ可能）");
+    println!("  GPU 合成ウィンドウ — WUC クリップ（タイトルバー有、リサイズ可能）");
     println!("\nウィンドウに3種類のクリップが表示されます:");
     println!("  上段: Rectangle（矩形クリップ）");
     println!("  中段: RoundedRectangle（均一角丸 radius=20）");
@@ -74,9 +74,9 @@ fn main() -> Result<()> {
 
 /// 非同期デモ実行
 async fn run_demo(tx: wintf::ecs::widget::bitmap_source::CommandSender) {
-    info!("[ClipDemo] Creating DComp clip window");
+    info!("[ClipDemo] Creating WUC clip window");
     let _ = tx.send(Box::new(|world: &mut World| {
-        create_dcomp_clip_window(world);
+        create_wuc_clip_window(world);
     }));
 
     // 60秒後に自動終了
@@ -88,7 +88,7 @@ async fn run_demo(tx: wintf::ecs::widget::bitmap_source::CommandSender) {
 
 /// 全デモウィンドウを閉じる
 fn close_all_windows(world: &mut World) {
-    let mut query = world.query_filtered::<Entity, With<DCompClipWindow>>();
+    let mut query = world.query_filtered::<Entity, With<WucClipWindow>>();
     let entities: Vec<Entity> = query.iter(world).collect();
     for entity in entities {
         info!("[ClipDemo] Removing entity {:?}", entity);
@@ -246,14 +246,14 @@ fn create_clip_section(
 }
 
 // ============================================================================
-// GPU 合成（DComp）ウィンドウ
+// GPU 合成（WUC）ウィンドウ
 // ============================================================================
 
-fn create_dcomp_clip_window(world: &mut World) {
+fn create_wuc_clip_window(world: &mut World) {
     let window_entity = world
         .spawn((
-            Name::new("ClipDemo-DComp-Window"),
-            DCompClipWindow,
+            Name::new("ClipDemo-WUC-Window"),
+            WucClipWindow,
             BoxStyle {
                 position: Some(BoxPosition::Absolute),
                 flex_direction: Some(taffy::FlexDirection::Column),
@@ -268,12 +268,13 @@ fn create_dcomp_clip_window(world: &mut World) {
                 ..Default::default()
             },
             Window {
-                title: "Clip Demo (DComp)".to_string(),
+                title: "Clip Demo (WUC)".to_string(),
                 ..Default::default()
             },
+            // ex_style は本体が生成時に WS_EX_NOREDIRECTIONBITMAP を必ず付けるので既定のまま
             WindowStyle {
                 style: WS_OVERLAPPEDWINDOW,
-                ex_style: WS_EX_NOREDIRECTIONBITMAP,
+                ..Default::default()
             },
         ))
         .id();
@@ -281,7 +282,7 @@ fn create_dcomp_clip_window(world: &mut World) {
     // メインコンテナ（白背景）
     let container = world
         .spawn((
-            Name::new("DComp-Container"),
+            Name::new("WUC-Container"),
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 0.95,
@@ -300,9 +301,9 @@ fn create_dcomp_clip_window(world: &mut World) {
 
     // ヘッダー
     world.spawn((
-        Name::new("DComp-Header"),
+        Name::new("WUC-Header"),
         Label {
-            text: "DComp Clip Demo (DirectComposition)".to_string(),
+            text: "WUC Clip Demo (Windows.UI.Composition)".to_string(),
             font_family: "Segoe UI".to_string(),
             font_size: 16.0,
             ..Default::default()
@@ -332,7 +333,7 @@ fn create_dcomp_clip_window(world: &mut World) {
     create_clip_demo_children(world, container);
 
     info!(
-        "[ClipDemo] DComp clip window created (entity={:?})",
+        "[ClipDemo] WUC clip window created (entity={:?})",
         window_entity
     );
 }

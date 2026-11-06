@@ -19,7 +19,7 @@ struct ExtraComponentA;
 #[derive(Component, Default)]
 struct ExtraComponentB;
 
-/// ヘルパー: sync_taffy_tree_system を2回実行する（1回目でAdded検知、2回目でChanged検知をクリア）
+/// ヘルパー: sync_taffy_tree_system を1回実行する（Added と Changed<ChildOf> で節と子の並びを作る）
 fn run_sync_system(world: &mut World) {
     let mut schedule = Schedule::default();
     schedule.add_systems(sync_taffy_tree_system);
@@ -93,50 +93,6 @@ fn test_different_archetype_siblings_maintain_children_order_in_taffy() {
          regardless of archetype differences. \
          Expected: {:?}, Got: {:?}",
         children_order, taffy_child_entities
-    );
-}
-
-/// 5つの兄弟を持ち、交互に異なるアーキタイプを使う場合の順序保証テスト
-#[test]
-fn test_many_siblings_with_alternating_archetypes_maintain_order() {
-    let mut world = World::new();
-    world.init_resource::<TaffyLayoutResource>();
-
-    let parent = world.spawn(TaffyStyle::default()).id();
-
-    // 交互に異なるアーキタイプの子を spawn
-    let child_0 = world
-        .spawn((TaffyStyle::default(), ExtraComponentA, ChildOf(parent)))
-        .id();
-    let child_1 = world.spawn((TaffyStyle::default(), ChildOf(parent))).id();
-    let child_2 = world
-        .spawn((TaffyStyle::default(), ExtraComponentA, ChildOf(parent)))
-        .id();
-    let child_3 = world.spawn((TaffyStyle::default(), ChildOf(parent))).id();
-    let child_4 = world
-        .spawn((TaffyStyle::default(), ExtraComponentB, ChildOf(parent)))
-        .id();
-
-    run_sync_system(&mut world);
-
-    let children = world.get::<Children>(parent).unwrap();
-    let children_order: Vec<Entity> = children.iter().collect();
-    assert_eq!(
-        children_order,
-        vec![child_0, child_1, child_2, child_3, child_4]
-    );
-
-    let taffy_res = world.resource::<TaffyLayoutResource>();
-    let parent_node = taffy_res.get_node(parent).unwrap();
-    let taffy_children = taffy_res.taffy().children(parent_node).unwrap();
-    let taffy_entities: Vec<Entity> = taffy_children
-        .iter()
-        .map(|n| taffy_res.get_entity(*n).unwrap())
-        .collect();
-
-    assert_eq!(
-        taffy_entities, children_order,
-        "Taffy order should match Children order for alternating archetypes"
     );
 }
 

@@ -29,9 +29,10 @@ fn test_update_arrangements_skips_window_offset() {
             Arrangement {
                 offset: Offset { x: 100.0, y: 200.0 },
                 scale: LayoutScale::default(),
+                // taffy の結果（800x600）と違う大きさにして、上書きされたことを見分ける
                 size: Size {
-                    width: 800.0,
-                    height: 600.0,
+                    width: 0.0,
+                    height: 0.0,
                 },
             },
         ))

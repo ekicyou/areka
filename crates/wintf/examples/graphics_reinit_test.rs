@@ -1,19 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy_ecs::prelude::*;
-use std::sync::Mutex;
-use std::sync::mpsc::channel;
-use std::thread;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tracing_subscriber::EnvFilter;
 use windows::core::Result;
 use wintf::ecs::Window;
+use wintf::ecs::layout::{BoxPosition, BoxSize, BoxStyle, Dimension};
 use wintf::ecs::widget::brushes::{Brush, Brushes};
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::{
-    GraphicsCore, Point, SizeI, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle,
-    WindowPos,
+    GraphicsCore, Point, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle, WindowPos,
 };
 use wintf::*;
+
+/// 4 秒の確かめが通ったら立つ（立たずに終わったら終了コード 1）。
+static PASSED: AtomicBool = AtomicBool::new(false);
 
 /// GraphicsCore再初期化システムの統合テスト
 ///
@@ -22,22 +24,22 @@ use wintf::*;
 /// - GraphicsCore無効化による依存コンポーネントの自動無効化
 /// - GraphicsCore再初期化と全依存コンポーネントの再初期化
 /// - 複数ウィンドウでの同時再初期化
-
-type WorldCommand = Box<dyn FnOnce(&mut World) + Send>;
-
 fn main() -> Result<()> {
     println!("\n========== GraphicsCore Reinitialization Test ==========\n");
 
     human_panic::setup_panic!();
 
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
+
     let mgr = WinApp::new()?;
     let world = mgr.world();
 
-    let (tx, rx) = channel::<WorldCommand>();
-    let rx = Mutex::new(rx);
-
-    // テストシナリオスレッド
-    thread::spawn(move || {
+    // テストシナリオ
+    world.borrow().spawn(|tx| async move {
         // 0秒: ウィンドウを2つ作成
         println!("[Timer] 0s: Creating two windows");
         let _ = tx.send(Box::new(|world: &mut World| {
@@ -46,12 +48,17 @@ fn main() -> Result<()> {
                     title: "Test Window 1 (Red)".to_string(),
                     ..Default::default()
                 },
+                // 窓の大きさはレイアウトから決まる（BoxStyle が無いと 0 で描画面が作られない）
+                BoxStyle {
+                    position: Some(BoxPosition::Absolute),
+                    size: Some(BoxSize {
+                        width: Some(Dimension::Px(600.0)),
+                        height: Some(Dimension::Px(400.0)),
+                    }),
+                    ..Default::default()
+                },
                 WindowPos {
                     position: Some(Point { x: 100, y: 100 }),
-                    size: Some(SizeI {
-                        width: 600,
-                        height: 400,
-                    }),
                     ..Default::default()
                 },
                 Rectangle::new(),
@@ -63,12 +70,17 @@ fn main() -> Result<()> {
                     title: "Test Window 2 (Blue)".to_string(),
                     ..Default::default()
                 },
+                // 窓の大きさはレイアウトから決まる（BoxStyle が無いと 0 で描画面が作られない）
+                BoxStyle {
+                    position: Some(BoxPosition::Absolute),
+                    size: Some(BoxSize {
+                        width: Some(Dimension::Px(600.0)),
+                        height: Some(Dimension::Px(400.0)),
+                    }),
+                    ..Default::default()
+                },
                 WindowPos {
                     position: Some(Point { x: 750, y: 100 }),
-                    size: Some(SizeI {
-                        width: 600,
-                        height: 400,
-                    }),
                     ..Default::default()
                 },
                 Rectangle::new(),
@@ -79,7 +91,7 @@ fn main() -> Result<()> {
         }));
 
         // 3秒: GraphicsCoreを無効化（デバイスロストをシミュレート）
-        thread::sleep(Duration::from_secs(3));
+        async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 3s: Simulating device loss (invalidating GraphicsCore)");
         let _ = tx.send(Box::new(|world: &mut World| {
             if let Some(mut graphics) = world.get_resource_mut::<GraphicsCore>() {
@@ -95,7 +107,7 @@ fn main() -> Result<()> {
         }));
 
         // 4秒: 再初期化状態の確認
-        thread::sleep(Duration::from_secs(1));
+        async_io::Timer::after(Duration::from_secs(1)).await;
         println!("\n[Timer] 4s: Verifying reinitialization");
         let _ = tx.send(Box::new(|world: &mut World| {
             let graphics_valid = world
@@ -116,7 +128,9 @@ fn main() -> Result<()> {
             println!("[Test] GraphicsCore.is_valid() = {}", graphics_valid);
 
             let mut all_success = true;
+            let mut count = 0;
             for (entity, handle, wg, v, s) in query.iter(world) {
+                count += 1;
                 let wg_valid = wg.is_valid();
                 let v_valid = v.is_valid();
                 let s_valid = s.is_valid();
@@ -136,21 +150,32 @@ fn main() -> Result<()> {
                         generation
                     );
                 } else if generation == 0 && wg_valid && v_valid && s_valid {
-                    println!("  ⏳ [WAIT] 初回作成状態（generation=0）");
+                    println!("  ❌ [FAIL] 作り直されていない（generation=0）");
+                    all_success = false;
                 } else {
                     println!("  ❌ [FAIL] コンポーネントが無効または未初期化");
                     all_success = false;
                 }
             }
 
+            if count == 0 {
+                println!("  ❌ [FAIL] 確かめる窓が 1 つも無い");
+                all_success = false;
+            }
             if all_success && graphics_valid {
-                println!("\n  🎉🎉🎉 [TEST SUCCESS] 全コンポーネントが正常に再初期化されました！");
+                PASSED.store(true, Ordering::SeqCst);
+                println!(
+                    "\n  🎉🎉🎉 [TEST SUCCESS] {} 窓とも正常に再初期化されました！",
+                    count
+                );
+            } else {
+                println!("\n  ❌ [TEST FAIL] 作り直しの確かめに失敗しました");
             }
             println!("========================================\n");
         }));
 
         // 7秒: 1つ目のウィンドウからRectangle削除（視覚効果のため）
-        thread::sleep(Duration::from_secs(3));
+        async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 7s: Removing Rectangle from first window (visual effect)");
         let _ = tx.send(Box::new(|world: &mut World| {
             let mut query = world.query::<(Entity, &WindowHandle)>();
@@ -165,7 +190,7 @@ fn main() -> Result<()> {
         }));
 
         // 10秒: ウィンドウを1つ閉じる
-        thread::sleep(Duration::from_secs(3));
+        async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 10s: Closing one window");
         let _ = tx.send(Box::new(|world: &mut World| {
             let mut query = world.query::<(Entity, &WindowHandle)>();
@@ -181,7 +206,7 @@ fn main() -> Result<()> {
         }));
 
         // 13秒: 最後のウィンドウを閉じる
-        thread::sleep(Duration::from_secs(3));
+        async_io::Timer::after(Duration::from_secs(3)).await;
         println!("\n[Timer] 13s: Closing last window");
         let _ = tx.send(Box::new(|world: &mut World| {
             let mut query = world.query::<(Entity, &WindowHandle)>();
@@ -205,20 +230,11 @@ fn main() -> Result<()> {
     println!("  Phase 6 (13s): Close last window and exit");
     println!("\n========================================\n");
 
-    // コマンド実行システム
-    world
-        .borrow_mut()
-        .add_systems(wintf::ecs::world::Update, move |world: &mut World| {
-            let Ok(rx_guard) = rx.lock() else {
-                return;
-            };
-
-            for command in rx_guard.try_iter() {
-                command(world);
-            }
-        });
-
     mgr.run()?;
 
+    if !PASSED.load(Ordering::SeqCst) {
+        eprintln!("[TEST FAIL] 作り直しの確かめが通らなかった");
+        std::process::exit(1);
+    }
     Ok(())
 }

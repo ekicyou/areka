@@ -26,7 +26,7 @@ pub(crate) fn on_red_box_pressed(
     // 左クリック検出
     if state.left_down {
         info!(
-            "[Bubble] RedBox: Left-click, sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
+            "[Bubble] RedBox: Left-click, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
             sender,
             entity,
             state.client_point.x,
@@ -173,7 +173,7 @@ pub(crate) fn on_green_box_pressed(
 
                 // 通常の左クリック：色をトグル（緑 ⇔ 黄緑）
                 info!(
-                    "[Tunnel] GreenBox: Captured event, stopping propagation (Left), sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Tunnel] GreenBox: Captured event, stopping propagation (Left), sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     state.client_point.x,
@@ -223,7 +223,7 @@ pub(crate) fn on_green_box_pressed(
             // 右クリック処理
             if state.right_down {
                 info!(
-                    "[Bubble] GreenBox: Right-click, sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Bubble] GreenBox: Right-click, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     state.client_point.x,
@@ -269,7 +269,7 @@ pub(crate) fn on_green_child_pressed(
     match ev {
         Phase::Tunnel(_) => {
             info!(
-                "[Tunnel] GreenBoxChild: This should NOT be called if parent captured (Left), sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
+                "[Tunnel] GreenBoxChild: This should NOT be called if parent captured (Left), sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
                 sender,
                 entity,
                 state.client_point.x,
@@ -286,7 +286,7 @@ pub(crate) fn on_green_child_pressed(
             // 右クリック処理
             if state.right_down {
                 info!(
-                    "[Bubble] GreenBoxChild: Right-click detected, changing to orange, sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Bubble] GreenBoxChild: Right-click detected, changing to orange, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
                     state.client_point.x,
@@ -330,7 +330,7 @@ pub(crate) fn on_green_box_moved(
     let wlabel = window_label(world, entity);
     let state = ev.value();
 
-    // 10フレームに1回程度ログ出力（頻繁すぎないように）
+    // 30回に1回ログ出力（頻繁すぎないように）
     static MOVE_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let count = MOVE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if count % 30 == 0 {
@@ -370,7 +370,7 @@ pub(crate) fn on_blue_box_pressed(
     // 左クリック検出
     if state.left_down {
         info!(
-            "[Bubble] BlueBox: Left-click detected! Toggling size, sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
+            "[Bubble] BlueBox: Left-click detected! Toggling size, sender={:?}, entity={:?}, client=({:.1},{:.1}), local=({:.1},{:.1}), L={}, R={}, Ctrl={}",
             sender,
             entity,
             state.client_point.x,

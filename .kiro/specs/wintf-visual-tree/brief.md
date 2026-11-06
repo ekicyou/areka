@@ -123,3 +123,13 @@
 - **新しく見つけた 1 件（あちらの 30 番）**: `visual/draw/README.md` が `visual/draw/command.rs` の型を写して載せていて、片方だけ古くなる。この件はこちらで引き受ける。`builder.rs:57` の `#[allow(dead_code)]` と `command.rs:1` の `#![allow(dead_code)]` には、なぜ残すかの説明があちらで付く。
 - **傷 7 の手本について（あちらの 8 番）**: 傷 7 が手本にする `crates/wintf/src/ecs/graphics/command_list.rs` の `Send`/`Sync` の注記は、「同じ工場の系列だから安全」という前提が違っていた。`D2D1CreateDevice` は呼ぶたびに自分の工場を作るため、`GraphicsCore` の工場と装置の工場は別物になる。あちらが工場を 1 つに直し、注記も事実に合わせる。傷 7 の根拠は、あちらの着地の後の注記を手本にする。
 - **傷 6 の上限について（あちらの 9 番・2026-11-05 実装の着手時に追記）**: あちらは親をたどる走査を `crates/wintf/src/ecs/common/ancestors.rs` に 1 つ置き、上限 1,024 段を越えたら `error!` を 1 行残して止める。傷 6 の `visit` の番兵は下へ向かう再帰で別物だが、上限の値は同じ 1,024 に揃えられる。
+
+## `audit-wintf-runtime` からの申し送り（2026-11-06）
+
+`audit-wintf-runtime` の要件の討議（裁定 2）で、`crates/wintf/src/numerics/` の指摘 4 件は直さずにこの spec へ渡すと決めた。全文はあちらの `.kiro/specs/completed/audit-wintf-runtime/research.md` の 14 節「申し送り」と「描画の木の傷との重なり」（働きの使い手の表は 4 節）。あちらは `numerics/` を import の 1 行（`numerics/aabb.rs`）のほか変えていない。
+
+- **21（傷 3）**: 「軸に沿うか」の判定が `Matrix3x2Ext::axis_aligned`・`Aabb::transform` の近道（ちょうど 0）と `builder::is_rect_preserving`（1e-4 の許容・90 度の回転も認める）で食い違う。こちらで 1 つにまとめる。
+- **22（傷 4）**: 矩形の空・交わり・変形が `Aabb` と `draw/builder.rs` で二重にあり、NaN の矩形と空の矩形の変形で答えが逆になる。こちらで `numerics` の側へ寄せる。
+- **23**: `numerics/` にテストが 1 本も無い（`Transform2D::pivot_srt` の `m21` の符号を裏返しても赤にならない）。Desired Outcome の「純粋なテスト」として渡す。
+- **88**: 使い手 0 の働き（`Aabb::{contains, intersect, union, translate}` と演算子の多く・`Point2`・`Matrix3x2Ext::moved`・`Transform2D::{pivot_srt, to_affine}`）。`moved` には単位の誤り（名は `eps_px` だが単位の正方形の角しか比べない）があり、直す価値がある。
+- **数え方**: あちらの直しは傷 1〜8 のどれも直していない。`audit-wintf-graphics-world` の申し送り（`ecs/visual/`）とは指す行が重ならないが、傷 3・4 は両方から同じ傷を指すので、ギャップ分析では 1 件として数える。

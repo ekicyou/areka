@@ -10,19 +10,6 @@ fn test_size_default() {
 }
 
 #[test]
-fn test_size_copy_clone() {
-    let size1 = Size {
-        width: 100.0,
-        height: 50.0,
-    };
-    let size2 = size1; // Copy
-    let size3 = size1.clone(); // Clone
-
-    assert_eq!(size1, size2);
-    assert_eq!(size1, size3);
-}
-
-#[test]
 fn test_arrangement_local_bounds_positive_size() {
     let arrangement = Arrangement {
         offset: Offset { x: 10.0, y: 20.0 },
@@ -95,21 +82,6 @@ fn test_global_arrangement_from_arrangement() {
 
     let global: GlobalArrangement = arrangement.into();
 
-    // デバッグ出力
-    eprintln!(
-        "transform.M11={}, M12={}, M21={}, M22={}, M31={}, M32={}",
-        global.transform.M11,
-        global.transform.M12,
-        global.transform.M21,
-        global.transform.M22,
-        global.transform.M31,
-        global.transform.M32
-    );
-    eprintln!(
-        "bounds.left={}, top={}, right={}, bottom={}",
-        global.bounds.left, global.bounds.top, global.bounds.right, global.bounds.bottom
-    );
-
     // transform検証
     assert_eq!(global.transform.M11, 2.0); // scale x
     assert_eq!(global.transform.M22, 2.0); // scale y
@@ -118,15 +90,14 @@ fn test_global_arrangement_from_arrangement() {
     assert_eq!(global.transform.M31, 20.0);
     assert_eq!(global.transform.M32, 40.0);
 
-    // bounds検証: local_bounds()がtransformで変換される
-    // local_bounds = (0,0,100,50)
-    // transform = scale(2,2) + translate(20,40) (scaleされたoffset)
-    // 左上 (0,0): x' = 2*0 + 20 = 20, y' = 2*0 + 40 = 40 → (20,40)
-    // 右下 (100,50): x' = 2*100 + 20 = 220, y' = 2*50 + 40 = 140 → (220,140)
-    assert_eq!(global.bounds.left, 20.0);
-    assert_eq!(global.bounds.top, 40.0);
-    assert_eq!(global.bounds.right, 220.0);
-    assert_eq!(global.bounds.bottom, 140.0);
+    // bounds検証: 親の無い根は恒等の親の下の子と同じ決まり（`default() * arr`）。
+    // ずらしは親の倍率（1）で伸ばし、自分の倍率では伸ばさない。大きさは自分の倍率で伸ばす
+    // 左上 = offset = (10,20)・右下 = (10 + 100*2, 20 + 50*2) = (210,120)
+    assert_eq!(global.bounds.left, 10.0);
+    assert_eq!(global.bounds.top, 20.0);
+    assert_eq!(global.bounds.right, 210.0);
+    assert_eq!(global.bounds.bottom, 120.0);
+    assert_eq!(global, GlobalArrangement::default() * arrangement);
 }
 
 #[test]

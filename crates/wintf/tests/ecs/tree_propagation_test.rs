@@ -12,6 +12,7 @@
 //! 期待値は `From<Arrangement> for GlobalArrangement` / `Mul<Arrangement> for GlobalArrangement`
 //! の代数（`arrangement.rs`）から独立に導出する（特性化）。
 
+use bevy_ecs::change_detection::Tick;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use wintf::ecs::{
@@ -102,11 +103,11 @@ fn sync_simple_applies_scale_to_root_global() {
     assert_eq!(g.transform.M22, 3.0);
     assert_eq!(g.transform.M31, 20.0); // 10 * 2
     assert_eq!(g.transform.M32, 60.0); // 20 * 3
-    // bounds = local_bounds(0,0,100,50) を scale(2,3)+translate(20,60) で変換
-    assert_eq!(g.bounds.left, 20.0);
-    assert_eq!(g.bounds.top, 60.0);
-    assert_eq!(g.bounds.right, 220.0); // 100*2 + 20
-    assert_eq!(g.bounds.bottom, 210.0); // 50*3 + 60
+    // bounds は恒等の親の下の子と同じ決まり: ずらしは自分の倍率で伸ばさず、大きさは伸ばす
+    assert_eq!(g.bounds.left, 10.0);
+    assert_eq!(g.bounds.top, 20.0);
+    assert_eq!(g.bounds.right, 210.0); // 10 + 100*2
+    assert_eq!(g.bounds.bottom, 170.0); // 20 + 50*3
 }
 
 /// `sync_simple_transforms` はルート（Children なし）のみを対象とし、
@@ -170,9 +171,18 @@ fn sync_simple_resyncs_orphaned_entity_via_removed_components() {
 // mark_dirty_trees: 変更エンティティから祖先へのダーティビット伝播
 // =============================================================================
 
+/// `before` より後に `e` の `ArrangementTreeChanged` が変更の印を受けたか。
+/// 新しく組んだ system の初回は全部を「変わった」と見るので、刻みを直に比べる。
+fn tree_changed_since(world: &World, e: Entity, before: Tick) -> bool {
+    world
+        .entity(e)
+        .get_change_ticks::<ArrangementTreeChanged>()
+        .unwrap()
+        .is_changed(before, world.read_change_tick())
+}
+
 /// 深いリーフの `Arrangement` 変更が `mark_dirty_trees` で祖先（ルート含む）の
 /// `ArrangementTreeChanged` を `Changed` にする（祖先方向への伝播）。
-/// ルートの M が Changed になることを検出システムで観測する。
 #[test]
 fn mark_dirty_propagates_change_from_leaf_to_root() {
     let mut world = World::new();
@@ -192,43 +202,23 @@ fn mark_dirty_propagates_change_from_leaf_to_root() {
         ))
         .id();
 
-    // 変更追跡をリセットするため一度 tick を進める。
-    let mut clear = Schedule::default();
-    clear.add_systems(|_q: Query<&ArrangementTreeChanged>| {});
-    clear.run(&mut world);
-    world.clear_trackers();
-
-    // リーフの Arrangement を変更。
-    world.get_mut::<Arrangement>(leaf).unwrap().offset.x = 7.0;
-
-    // mark_dirty_trees のみ実行。
+    // 一度回して system の前回の刻みを据える（初回は全部を変わったと見るため）。
     let mut s = Schedule::default();
     s.add_systems(mark_dirty_trees::<Arrangement, GlobalArrangement, ArrangementTreeChanged>);
     s.run(&mut world);
+    // 控えの後に刻みを 1 つ進め、この後の変更と system の実行を控えより新しい刻みに置く。
+    let before = world.read_change_tick();
+    world.clear_trackers();
 
-    // ルートの M が Changed になっているか検出（リーフ変更が祖先 root まで伝播）。
-    world.insert_resource(DirtyProbe(false));
-    let root_id = root;
-    let mut detect = Schedule::default();
-    detect.add_systems(
-        move |q: Query<(Entity, Ref<ArrangementTreeChanged>)>, mut done: ResMut<DirtyProbe>| {
-            for (e, m) in q.iter() {
-                if e == root_id && m.is_changed() {
-                    done.0 = true;
-                }
-            }
-        },
-    );
-    detect.run(&mut world);
+    // リーフの Arrangement を変更して、もう一度回す。
+    world.get_mut::<Arrangement>(leaf).unwrap().offset.x = 7.0;
+    s.run(&mut world);
 
     assert!(
-        world.resource::<DirtyProbe>().0,
+        tree_changed_since(&world, root, before),
         "leaf の Arrangement 変更が mark_dirty_trees で root の ArrangementTreeChanged まで伝播するはず"
     );
 }
-
-#[derive(Resource)]
-struct DirtyProbe(bool);
 
 /// `mark_dirty_trees` は `ChildOf` 変更（再ペアレント）でもダーティビットを伝播する
 /// （`Changed<ChildOf>` 経路）。新しい親の祖先チェーンが Changed になることを観測する。
@@ -248,34 +238,20 @@ fn mark_dirty_reacts_to_childof_change() {
         ))
         .id();
 
-    // 一度実行して変更追跡をクリア。
-    let mut s = propagation_schedule();
-    s.run(&mut world);
-    world.clear_trackers();
-
-    // child を root_b へ再ペアレント（ChildOf 変更）。
-    world.entity_mut(child).insert(ChildOf(root_b));
-
+    // 一度回して system の前回の刻みを据える。
     let mut md = Schedule::default();
     md.add_systems(mark_dirty_trees::<Arrangement, GlobalArrangement, ArrangementTreeChanged>);
     md.run(&mut world);
+    // 控えの後に刻みを 1 つ進め、この後の変更と system の実行を控えより新しい刻みに置く。
+    let before = world.read_change_tick();
+    world.clear_trackers();
 
-    // 新しい親 root_b の M が Changed になっている（child の ChildOf 変更が祖先へ伝播）。
-    world.insert_resource(DirtyProbe(false));
-    let target = root_b;
-    let mut detect = Schedule::default();
-    detect.add_systems(
-        move |q: Query<(Entity, Ref<ArrangementTreeChanged>)>, mut done: ResMut<DirtyProbe>| {
-            for (e, m) in q.iter() {
-                if e == target && m.is_changed() {
-                    done.0 = true;
-                }
-            }
-        },
-    );
-    detect.run(&mut world);
+    // child を root_b へ再ペアレント（ChildOf 変更）して、もう一度回す。
+    world.entity_mut(child).insert(ChildOf(root_b));
+    md.run(&mut world);
+
     assert!(
-        world.resource::<DirtyProbe>().0,
+        tree_changed_since(&world, root_b, before),
         "ChildOf 変更が新しい親 root_b の ArrangementTreeChanged まで伝播するはず"
     );
 }
@@ -342,20 +318,21 @@ fn propagate_three_level_chain_accumulates() {
     let mut s = propagation_schedule();
     s.run(&mut world);
 
-    // child: parent.bounds.left=20、scaled_offset=(5*2,10*2)=(10,20)、result_scale=2
+    // child: parent.bounds=(10,20)（根のずらしは自分の倍率で伸ばさない）、
+    // scaled_offset=(5*2,10*2)=(10,20)、result_scale=2
     let cg = global(&world, child);
-    assert_eq!(cg.bounds.left, 30.0);
-    assert_eq!(cg.bounds.top, 60.0);
-    assert_eq!(cg.bounds.right, 90.0); // 30 + 30*2
-    assert_eq!(cg.bounds.bottom, 100.0); // 60 + 20*2
+    assert_eq!(cg.bounds.left, 20.0);
+    assert_eq!(cg.bounds.top, 40.0);
+    assert_eq!(cg.bounds.right, 80.0); // 20 + 30*2
+    assert_eq!(cg.bounds.bottom, 80.0); // 40 + 20*2
 
-    // grandchild: parent(child).bounds.left=30、child の累積 scale=2、
+    // grandchild: parent(child).bounds.left=20、child の累積 scale=2、
     // scaled_offset=(2*2,3*2)=(4,6)、result_scale=2*1.5=3
     let gg = global(&world, grandchild);
-    assert_eq!(gg.bounds.left, 34.0);
-    assert_eq!(gg.bounds.top, 66.0);
-    assert_eq!(gg.bounds.right, 64.0); // 34 + 10*3
-    assert_eq!(gg.bounds.bottom, 90.0); // 66 + 8*3
+    assert_eq!(gg.bounds.left, 24.0);
+    assert_eq!(gg.bounds.top, 46.0);
+    assert_eq!(gg.bounds.right, 54.0); // 24 + 10*3
+    assert_eq!(gg.bounds.bottom, 70.0); // 46 + 8*3
 }
 
 /// 幅広ツリー: ルートの複数の子がそれぞれ独立に正しい global を得る
@@ -402,8 +379,8 @@ fn propagate_wide_tree_processes_all_children() {
     assert_eq!(g3.bounds.top, 8.0); // 4*2
 }
 
-/// 静的サブツリー最適化: 収束後に変更なしで再実行しても global は不変
-/// （`set_if_neq` + `Changed<M>` ゲートにより伝播がスキップされる）。
+/// 冪等: 収束後に変更なしで再実行しても global は不変
+/// （伝播を飛ばしたかどうかは見分けない。結果が変わらないことだけを確かめる）。
 #[test]
 fn propagate_is_idempotent_when_nothing_changes() {
     let mut world = World::new();
