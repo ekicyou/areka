@@ -129,7 +129,7 @@ crates/areka-actor/tests/ui_span_test.rs                      # #2 の縛るテ�
 - `src/spawn.rs` — #11（toy(a) と重なる単体テスト 4 本と、それだけが使う道具 `run_bounded` を消す）。
 
 **範囲の外（1 つだけ）**
-- `crates/log-capture-kit/tests/with_default_guard_test.rs` — #2（`ALLOWED_DIRECT_CALLS` に `("crates/areka-actor/tests/ui_span_test.rs", "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）")` を足し、`ALLOWED_DIRECT_CALLS_COUNT` を 5 → 6）。`placement-crate-split` が同じ表の placement の 3 行を書き換えるなら、その着地の後に main を取り込んでから足す。
+- `crates/log-capture-kit/tests/with_default_guard_test.rs` — #2（`ALLOWED_DIRECT_CALLS` に `("crates/areka-actor/tests/ui_span_test.rs", "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）")` を足し、`ALLOWED_DIRECT_CALLS_COUNT` を 5 → 6）。`placement-crate-split` と申し合わせ済み（2026-11-06）：向こうは同じ表の placement の 3 行のパスと理由の文を書き換える（行の数と件数 5 は変えない）。こちらは向こうの着地の後に main を取り込んでから 1 行と件数 5 → 6 を足す。こちらが先に着地することになったら、向こうへ一言知らせる（向こうが後から合わせる）。
 
 **`crates/areka-talk/src/`**
 - `tests.rs` — #7（`StartTalk::new` の既定を見る 3 本を残して消す）。
