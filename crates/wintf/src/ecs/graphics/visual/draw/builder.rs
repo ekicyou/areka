@@ -42,7 +42,8 @@ enum ClipKind {
 /// - `unit_rect`: (0,0)-(1,1) の矩形の図形。回転・せん断した矩形の切り抜きを図形へ上げるとき共有する。
 /// - `viewport`: 根の `Arrangement.size` の矩形（根からの DIP）。これと切り抜きの外の節は間引く。
 ///   無限の矩形も渡せる（交わりにだけ使い、変形しない）。
-/// - `root`・`root_name`: 記録に載せる根（描画面の持ち主）。
+/// - `root`・`root_name`: 記録に載せる根（描画面の持ち主）。根が自分の `VisualDrawContent` を持てば
+///   （節から昇格した持ち主）、それを先頭の 1 件として恒等の行列（根の局所の DIP）で出す（子より前・間引かない）。
 ///
 /// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす（5.1, 5.2）。
 ///
@@ -58,6 +59,15 @@ pub(crate) fn build(
     visited: &[(Entity, usize)],
 ) {
     out.clear();
+    if let Ok((_, _, _, Some(c), version, _)) = nodes.get(root) {
+        out.push(draw_item(
+            root,
+            version,
+            c,
+            Matrix3x2::identity(),
+            c.local_aabb,
+        ));
+    }
     // 開いている切り抜き: (深さ, 閉じる命令, その下の有効な矩形)。
     let mut open: Vec<(usize, DrawCommand, Aabb)> = Vec::new();
     // 間引いた節の深さ。これより深い間は子孫なので飛ばす。
@@ -114,26 +124,43 @@ pub(crate) fn build(
         if let Some(c) = content
             && !world.content_world_aabb.intersect(new_eff).is_empty()
         {
-            out.push(DrawCommand::Draw(DrawItem {
-                hash: hash_draw(
-                    entity,
-                    version.map_or(0, |v| v.0),
-                    c.interpolation_mode,
-                    c.composite_mode,
-                    &world.world_mat,
-                ),
+            out.push(draw_item(
                 entity,
-                world_mat: world.world_mat,
-                world_aabb: world.content_world_aabb,
-                command_list: c.command_list.clone(),
-                interpolation_mode: c.interpolation_mode,
-                composite_mode: c.composite_mode,
-            }));
+                version,
+                c,
+                world.world_mat,
+                world.content_world_aabb,
+            ));
         }
     }
     while let Some((_, pop, _)) = open.pop() {
         out.push(pop);
     }
+}
+
+/// 描く 1 件。
+fn draw_item(
+    entity: Entity,
+    version: Option<&VisualVersion>,
+    c: &VisualDrawContent,
+    world_mat: Matrix3x2,
+    world_aabb: Aabb,
+) -> DrawCommand {
+    DrawCommand::Draw(DrawItem {
+        hash: hash_draw(
+            entity,
+            version.map_or(0, |v| v.0),
+            c.interpolation_mode,
+            c.composite_mode,
+            &world_mat,
+        ),
+        entity,
+        world_mat,
+        world_aabb,
+        command_list: c.command_list.clone(),
+        interpolation_mode: c.interpolation_mode,
+        composite_mode: c.composite_mode,
+    })
 }
 
 /// 切り抜きを計画する。どの分岐でも切り抜きの世界の外接矩形を `eff` と交え、空なら `Culled`。

@@ -261,3 +261,33 @@ fn unit_rect_recreated_after_device_loss_recovery() {
     // 古い物は控えで生かしてあるので番地は使い回されない
     assert_ne!(before.as_raw(), after.as_raw());
 }
+
+/// 持ち主の `VisualTransform` は WUC では効かない: 変わった回に 1 度だけ `warn!` を残す（1.2c）。
+#[test]
+fn owner_transform_warns_once_per_change() {
+    use log_capture_kit::{LineFormat, capture_lines};
+    let mut ecs = EcsWorld::new();
+    let world = ecs.world_mut();
+    let window = world.spawn(Window::default()).id();
+    let owner = world
+        .spawn((
+            Visual::default(),
+            VisualTransform::default(),
+            OwnSurface,
+            ChildOf(window),
+        ))
+        .id();
+    let warns = |world: &mut World| {
+        let ((), lines) = capture_lines(LineFormat::LevelFields, || {
+            world.run_schedule(PreRenderSurface)
+        });
+        lines
+            .iter()
+            .filter(|l| l.starts_with("level=WARN") && l.contains("持ち主の VisualTransform"))
+            .count()
+    };
+    assert_eq!(warns(world), 1, "入った回に 1 度");
+    assert_eq!(warns(world), 0, "変わらなければ残さない");
+    world.get_mut::<VisualTransform>(owner).unwrap().0.rotation = 0.5;
+    assert_eq!(warns(world), 1, "変わった回にまた 1 度");
+}

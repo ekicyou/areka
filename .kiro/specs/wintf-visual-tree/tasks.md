@@ -175,3 +175,4 @@
 - 7.1: 組む係は `graphics/visual/systems.rs` の `update_draw_trees`（無効な回も fill は回し版を上げる・build はしない）。昇格・降格は `TreeEdits` で全部の根を組み直す。降格で `DrawTree` も外す。装置の失いの後は 7.3 で `unit_rect = None` にしないと古い工場の図形が再利用される
 - 7.2: 片づけの係は命令の列か DrawTree の片方だけが外れたら描き直しの印を立てる（設計に無い追加・design.md 177 行に足す）。この枝のテストは 7.4 で足す
 - 9: 全体テスト（c34bb80b）緑・563 秒・Cargo.toml/Cargo.lock の差分 0・wintf の追加行に areka の語 0・新しいテスト 13 本はすべて兄弟ファイル（draw_tree は tests/graphics の統合テスト）
+- 最終検証 I-1（裁定: 推奨案）: 持ち主へ上げた節は自分の `VisualDrawContent` を木の先頭の 1 件として恒等の行列で描く。DrawTree は直下に節が在るか自分の中身が在れば入る。持ち主の `VisualTransform` は無視して変化の回に warn!（毎フレーム動かすと毎フレーム出る）

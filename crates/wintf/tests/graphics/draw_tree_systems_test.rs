@@ -207,6 +207,55 @@ fn promoted_node_drops_out_of_root_tree() {
     });
 }
 
+/// 中身を持つ節が持ち主へ上がったら（直下に節が無くても）自分の中身の 1 件で根の部品が入り、
+/// 描画面が作られる。中身の差し替えで同一性が変わり、中身を外せば根の部品も描画面も消える（1.2b）
+#[test]
+fn promoted_node_with_own_content_gets_tree_and_surface() {
+    crate::common::on_gpu_owner_thread(move || {
+        let (mut ecs, owner) = setup(());
+        let world = ecs.world_mut();
+        let b = add_node(world, owner);
+        world.run_schedule(PreRenderSurface);
+        *world.get_mut::<GlobalArrangement>(b).unwrap() = GlobalArrangement {
+            transform: Matrix3x2::identity(),
+            bounds: Rect {
+                left: 0.0,
+                top: 0.0,
+                right: 4.0,
+                bottom: 4.0,
+            },
+        };
+
+        world.entity_mut(b).insert(OwnSurface);
+        world.run_schedule(PreRenderSurface);
+        assert!(
+            world.get::<DrawTree>(owner).is_none(),
+            "上がった節は元の根の列から外れる"
+        );
+        assert_eq!(tree_len(world, b), 1, "自分の中身の 1 件");
+        assert!(surface_valid(world, b), "上がった節に描画面が作られる");
+
+        let hash = |w: &World| match &w.get::<DrawTree>(b).unwrap().commands[0] {
+            wintf::ecs::DrawCommand::Draw(item) => item.hash,
+            other => panic!("先頭が描く 1 件でない: {other:?}"),
+        };
+        let before = hash(world);
+        let c = content(world.resource::<GraphicsCore>());
+        world.entity_mut(b).insert(c);
+        world.run_schedule(PreRenderSurface);
+        assert_ne!(hash(world), before, "中身の差し替えで同一性が変わる");
+
+        world.entity_mut(b).remove::<VisualDrawContent>();
+        world.run_schedule(PreRenderSurface);
+        assert!(
+            world.get::<DrawTree>(b).is_none(),
+            "中身を外せば根の部品が消える"
+        );
+        assert!(!surface_valid(world, b), "描画面が片づく");
+        world.clear_entities();
+    });
+}
+
 /// 命令の列を持つ根から木の列だけが外れたら、描画面を残して描き直しの印を立てる（7.2）
 #[test]
 fn cleanup_marks_dirty_when_only_draw_tree_removed() {

@@ -464,3 +464,35 @@ fn invisible_node_is_skipped() {
     pixel_near(&px, CLEAR, 10, 10);
     pixel_near(&px, CLEAR, 13, 13);
 }
+
+#[test]
+fn promoted_node_draws_same_picture_as_node() {
+    // 節 n（赤）とその子（青）を根の下で描いた絵と、n を根にして（昇格）描画面の位置へ置いた絵。
+    let mut world = World::new();
+    let root = root16(&mut world);
+    let n = world
+        .spawn((
+            Visual::default(),
+            at(4.0, 4.0, 8.0, 8.0),
+            solid(rect8(), RED),
+            ChildOf(root),
+        ))
+        .id();
+    world.spawn((
+        Visual::default(),
+        at(2.0, 2.0, 4.0, 4.0),
+        solid(rect(0.0, 0.0, 4.0, 4.0), BLUE),
+        ChildOf(n),
+    ));
+    let as_node = render_tree_to_pixels(&mut world, root, 16, 16, Matrix3x2::identity());
+    // 持ち主の位置は WUC の見た目のオフセット＝根の変換の平行移動。
+    let place = Matrix3x2::translation(4.0, 4.0);
+    let as_root = render_tree_to_pixels(&mut world, n, 16, 16, place);
+    pixel_near(&as_root, RED, 5, 5); // 根の自分の中身
+    pixel_near(&as_root, BLUE, 7, 7); // 子が上
+    pixel_near(&as_root, CLEAR, 14, 14);
+    assert!(
+        as_node.bytes == as_root.bytes,
+        "昇格した節の絵が節のときと違う"
+    );
+}

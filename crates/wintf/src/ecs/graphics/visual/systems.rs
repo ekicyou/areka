@@ -2,7 +2,7 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 
 use super::draw::builder::{NodeData, build};
@@ -147,7 +147,9 @@ impl TreeEdits<'_, '_> {
 }
 
 /// 描画面の持ち主（根）ごとに節の `WorldVisual`・`VisualVersion` を埋め、組み直す回だけ
-/// 平らな列を作って根の部品 [`DrawTree`] へ書く・入れる。直下に節が無くなった根からは外す。
+/// 平らな列を作って根の部品 [`DrawTree`] へ書く・入れる。直下に節が無く自分の `VisualDrawContent` も
+/// 無い根からは外す。根の自分の中身は列の先頭の 1 件になり、変わった回に根の版を上げて組み直す。
+/// 持ち主の `VisualTransform` は WUC では効かないので、入った・変わった回に `warn!` を 1 行残して無視する。
 ///
 /// 装置が無効な回も埋めることはする（版の上がりと行列を捨てない・装置は要らない）が、組まない
 /// （図形は工場から作る）。立ち直りの回は `Res<GraphicsCore>` の変化で全部の根を組み直す。
@@ -157,16 +159,16 @@ impl TreeEdits<'_, '_> {
 pub fn update_draw_trees(
     mut commands: Commands,
     graphics: Option<Res<GraphicsCore>>,
-    mut roots: Query<
-        (
-            Entity,
-            Ref<Arrangement>,
-            Option<Ref<Children>>,
-            Option<&mut DrawTree>,
-            Option<&Name>,
-        ),
-        With<VisualGraphics>,
-    >,
+    mut roots: Query<(
+        Entity,
+        Ref<Arrangement>,
+        Option<Ref<Children>>,
+        Option<&mut DrawTree>,
+        Option<&Name>,
+        Option<Ref<VisualDrawContent>>,
+        Option<Ref<VisualTransform>>,
+        Ref<VisualGraphics>,
+    )>,
     node_kinds: Query<(), (With<WorldVisual>, Without<VisualGraphics>)>,
     mut set: ParamSet<(Query<FillData>, Query<NodeData>)>,
     mut edits: TreeEdits,
@@ -175,14 +177,24 @@ pub fn update_draw_trees(
     let removed_any = edits.any();
     let factory = graphics.as_ref().and_then(|g| g.d2d_factory());
     let core_changed = graphics.as_ref().is_some_and(|g| g.is_changed());
-    for (root, arrangement, kids, tree, name) in roots.iter_mut() {
+    for (root, arrangement, kids, tree, name, own, transform, graphics_parts) in roots.iter_mut() {
+        if transform.is_some_and(|t| t.is_changed() || graphics_parts.is_added()) {
+            warn!(
+                entity = %format_entity_name(root, name),
+                "[update_draw_trees] 描画面の持ち主の VisualTransform は WUC では効かないので無視する"
+            );
+        }
+        let own_changed = own.as_ref().is_some_and(|c| c.is_changed());
+        if own_changed && let Ok((.., Some(mut version), _, _, _)) = set.p0().get_mut(root) {
+            version.bump();
+        }
         let top: &[Entity] = kids.as_deref().map_or(&[], |k| &**k);
-        if !top.iter().any(|&c| node_kinds.contains(c)) {
+        if own.is_none() && !top.iter().any(|&c| node_kinds.contains(c)) {
             if tree.is_some() {
                 commands.entity(root).remove::<DrawTree>();
                 trace!(
                     root = %format_entity_name(root, name),
-                    "[update_draw_trees] 直下に節が無くなったので根の部品を外す"
+                    "[update_draw_trees] 直下に節も自分の中身も無くなったので根の部品を外す"
                 );
             }
             continue;
@@ -195,7 +207,7 @@ pub fn update_draw_trees(
             top,
             kids.as_ref().is_some_and(|k| k.is_changed()),
             &mut visited,
-        );
+        ) || own_changed;
         let Some(factory) = factory else { continue };
         if !needs_rebuild(changed, removed_any, core_changed, tree.is_some()) {
             continue;

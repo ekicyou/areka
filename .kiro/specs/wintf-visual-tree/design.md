@@ -141,10 +141,15 @@ crates/wintf/src/
 │   ├── transform2d_tests.rs    # 合成の順と符号（6.6・pivot_srt の符号を裏返すと赤）
 │   ├── calc_hash.rs            # 変更なし
 │   └── mod.rs                  # Point2 の宣言を外す
+├── ecs/graphics/systems/
+│   ├── clip_sync_tests.rs      # clip_key_for の純粋なテスト（ClipShape::Geometry は切り抜きなし・3.8）
+│   └── window_pos_tests.rs     # 装置の失いで DrawTree の unit_rect が空になる（外のテストから見えない欄）
 └── ecs/graphics/visual/        # 旧 ecs/graphics/visual.rs をフォルダ化（5.9）
     ├── mod.rs                  # Visual 部品・フック・持ち主の規則 wants_own_surface・OwnSurface・子モジュールの宣言と再公開
     ├── visual_tests.rs         # wants_own_surface の真理値表（純粋）
     ├── draw_content.rs         # VisualDrawContent（Hash を外す・Send/Sync の注記・require）
+    ├── draw_content_test_support.rs # テストの描く中身を作る道具（WIC の的・装置なし・6.7）
+    ├── draw_content_tests.rs   # 道具で作った節を World に置く（6.7）
     ├── transform.rs            # VisualTransform（require）
     ├── version.rs              # VisualVersion（変更なし）
     ├── world_visual.rs         # WorldVisual ＋ fill_world_visuals（前順で world・逆順で subtree の和）
@@ -336,7 +341,7 @@ flowchart TD
 - Persistence & consistency: 規則の答えが変わる回（部品の出入り・`ChildOf` の変化）に `sync_surface_owner_parts` が揃える。外すときは 3 部品を `remove`（根の部品 `DrawTree` も一緒に外す・`DrawTree` は根にだけ在る・`VisualGraphics` の on_remove フックが WUC の親から外す・`SurfaceGraphics` は捨てられる）。
 
 **Implementation Notes**
-- Integration: `insert_graphics_parts_on_window_join` の名前は `sync_surface_owner_parts` へ変わる（`world/mod.rs`・`tests/visual/window_join_test.rs` が追随）。
+- Integration: `insert_graphics_parts_on_window_join` の名前は `sync_surface_owner_parts` へ変わる（`world/mod.rs` が追随。`tests/visual/window_join_test.rs` は名前を綴っていないので変えない・筋が同じなので緑のまま）。
 - Validation: `visual_tests.rs` に規則の真理値表。`tests/visual/graphics_auto_creation_test.rs` は「何も持たない Visual は持ち主」のまま緑。
 - Risks: フックが同じバンドルの部品を見られない版の挙動なら、フックは今どおり無条件に入れ、`sync_surface_owner_parts` が同じ `PreRenderSurface` の先頭で外す（`visual_resource_management_system` より前なので WUC の見た目は作られない）。どちらでも規則は 1 か所。
 
@@ -427,12 +432,14 @@ pub struct DrawTree {
     pub commands: Vec<DrawCommand>,
     /// (0,0)-(1,1) の矩形の図形。回転した矩形の切り抜きを図形へ上げるとき共有する。
     /// 装置の失いで空に戻り、次の組み直しで工場から作り直す。
-    unit_rect: Option<ID2D1Geometry>,
+    /// `pub(crate)`: 書き手が `visual/systems.rs`（作る）と `systems/window_pos.rs`（失いで空にする）の 2 つ。
+    pub(crate) unit_rect: Option<ID2D1Geometry>,
 }
 unsafe impl Send for DrawTree {}  // 注記: 中の COM は工場（図形）と装置（命令の列）の持ち物・ClipShape と同じ根拠
 unsafe impl Sync for DrawTree {}
 ```
-- 入れる・外すのは `update_draw_trees` だけ（使い手は置かない・研究 §7 の前文）。根に節が 1 つでも在れば入れ、無くなれば外す。
+- 入れる・外すのは `update_draw_trees` だけ（使い手は置かない・研究 §7 の前文）。根の直下に節が 1 つでも在るか、根が自分の `VisualDrawContent` を持てば入れ、どちらも無くなれば外す。
+- 根が自分の `VisualDrawContent` を持つ（節から `OwnSurface` で昇格した持ち主）とき、列の先頭はその 1 件（恒等の行列＝根の局所の DIP・`emit` の `root` が根の変換を掛ける・子の節より前＝画家の順で親が先）。同一性は他の件と同じ `hash_draw(根, 根の VisualVersion, 補間, 重ね方, 恒等)`。持ち主の `VisualTransform` は WUC では効かない（`update_draw_trees` が入った・変わった回に `warn!` を 1 行残して無視する）。
 - `Changed<DrawTree>` が「木を描き直す」合図。`update_draw_trees` は列を組み直した回だけ書く（組み直さない回は触らない）。
 - 装置の失い: `invalidate_dependent_components` が `commands.clear()`・`unit_rect = None`（`set_changed` は立てない・立ち直りの回の組み直しが立てる）。
 
@@ -478,7 +485,7 @@ pub(crate) fn build(
     unit_rect: &ID2D1Geometry,
     viewport: Aabb,                 // 根の Arrangement.size の矩形（DIP）
     nodes: &Query<NodeData>,        // (&Visual, &Arrangement, &WorldVisual, Option<&VisualDrawContent>,
-                                    //  Option<&VisualVersion>, Option<&Children>, Has<VisualGraphics>)
+                                    //  Option<&VisualVersion>, Option<&Name>)
     root: Entity,
     root_name: Option<&Name>,
     visited: &[(Entity, usize)],    // fill_world_visuals の前順の列と深さ（見える節だけ・境界で切ってある）
@@ -488,6 +495,7 @@ pub(crate) fn build(
 - 節の局所の変形は `VisualTransform × 平行移動(Arrangement.offset)`（設計議題 1・開発者 2026-11-06「承認」）: 位置の正本は持ち主も節も layout（`Arrangement.offset`・DIP）で、`VisualTransform` はその上の追加の変形（WinUI Composition の `Offset` と `TransformMatrix` の重ね方と同じ）。節に layout を使わなければ `offset` は 0 なので答えは変わらない。`Arrangement.scale` は描画に使わない（DPI の倍率は `emit` の `root`）。`Arrangement.size` は切り抜きの大きさ（2.4）。この積は `fill_world_visuals` が行う（`build` は `WorldVisual` を読むだけ）。
 - 切り抜きの計画（`plan_clip`）: `Visual.clip` が `None` → `NoClip`。`Rectangle` かつ `world_mat.axis_aligned()` → `PushClipRect(local_rect.transform(world_mat))`。`Rectangle` で回転・せん断 → `PushClipGeometry { geometry: unit_rect, world_mat: unit_to_rect(local_rect) * world_mat }`。`RoundedRectangle*` → `clip_geometry::rounded_rect(factory, size, 4 つの半径)` で path geometry（4 角の弧・均一も個別も同じ 1 本の道・大きさは `Arrangement.size`・2.4）。`Geometry(g)` → `PushClipGeometry { geometry: g.clone(), world_mat }`。どの分岐でも `new_eff = eff ∩ clip_world_aabb`・空なら `Culled`（push も pop も出さない）。
 - 図形の外接矩形は `ID2D1Geometry::GetBounds(Some(&world_mat))` を `Result` で受け、`Err` は `error!`（実体名・HRESULT）を残して `Culled`（5.2・0 の矩形に化かさない）。path geometry の作成の失敗も同じ（5.1）。
+- 根の自分の中身: 根（`root`）が `VisualDrawContent` を持てば、`out` の先頭に恒等の行列・`local_aabb` の 1 件を出す（間引かない・切り抜きは WUC の持ち主の役目なので push しない）。
 - 描く 1 件: 中身が在り `content_world_aabb` が `new_eff` と交わるときだけ `Draw` を出す（2.8 の間引き・1.3）。`hash_draw(entity, version, interpolation, composite, world_mat)`（`CalcHash` で小数を正規化・番地を使わない・4.5）。
 - 矩形の働きは `Aabb::{is_empty, intersect, transform}` だけを使う（5.6）。`builder.rs` の `aabb_intersect`／`aabb_is_empty`／`aabb_intersects`／`transform_aabb`／`is_rect_preserving` は消す。`unit_to_rect` は残す（`numerics` に無い・使い手はここだけ）。
 
@@ -533,8 +541,8 @@ pub(crate) fn emit(dc: &ID2D1DeviceContext, root: Matrix3x2, commands: &[DrawCom
 | Intent | 根ごとに `fill_world_visuals` → 変化があれば `build` → `DrawTree` を書く・入れる・外す |
 | Requirements | 1.8, 1.9, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1 |
 
-- 読むもの: `Res<GraphicsCore>`（無効なら埋めるだけで組まない・`is_changed()` なら全部組み直す）・根の `Query<(Entity, Ref<Arrangement>, Option<&Children>, Option<&mut DrawTree>, Option<&Name>), With<VisualGraphics>>`・節の **`ParamSet<(Query<FillData>, Query<NodeData>)>`**（`FillData` は `&mut WorldVisual`／`&mut VisualVersion`、`NodeData` は `&WorldVisual`／`&VisualVersion` を持つので、同じ係に並べると bevy が B0001 で落とす。`visual_hierarchy_sync_system`（`visual_sync.rs:70`）と同じ `ParamSet` の形で `set.p0()` で埋め、`set.p1()` で組む・検証の重大 1）・`RemovedComponents<VisualDrawContent | VisualTransform | ChildOf | OwnSurface | VisualGraphics>`（`VisualGraphics` の外れ＝降格・`GraphicsCommandList` の外れでも起きる）・節に `VisualGraphics` が入った（昇格）`Query<(), (Added<VisualGraphics>, With<WorldVisual>)>`（この 6 つは `SystemParam` の `TreeEdits` にまとめ、`any()` で読み切る）・`Commands`。
-- 手順（根ごと）: ① 根の直下に節（`VisualGraphics` を持たない `Children`）が無ければ `DrawTree` が在るとき `remove`・次へ。② `fill_world_visuals` を呼び「変化あり」を得る（根の `Arrangement` の変化＝viewport・切り抜きを持つ節の `Arrangement` の変化を含む・検証の重大 3）。③ 組み直す条件は純粋な関数 `fn needs_rebuild(changed: bool, removed_any: bool, core_changed: bool, has_tree: bool) -> bool`＝変化あり、または `RemovedComponents` が 1 件でも在るか節に `VisualGraphics` が入った（昇格）（議題 6 ㋐・全部の根）、または `Res<GraphicsCore>` が変わった、または `DrawTree` が無い（真理値表を `systems_tests.rs` で固定）。④ `unit_rect` が無ければ工場から `CreateRectangleGeometry((0,0,1,1))`（失敗は `error!`＋この根を飛ばす）。⑤ `build` → 在る `DrawTree` は `commands` を入れ替えて `Changed`、無ければ `commands.entity(root).insert(DrawTree { commands, unit_rect })`（同じ schedule の次の係から見える＝`deferred_surface_creation_system`・`mark_dirty_surfaces` が同じ回に拾う・1.8・1.9）。
+- 読むもの: `Res<GraphicsCore>`（無効なら埋めるだけで組まない・`is_changed()` なら全部組み直す）・根の `Query<(Entity, Ref<Arrangement>, Option<Ref<Children>>, Option<&mut DrawTree>, Option<&Name>, Option<Ref<VisualDrawContent>>, Option<Ref<VisualTransform>>, Ref<VisualGraphics>)>`（`Ref<VisualGraphics>` が持ち主に限る）・節の **`ParamSet<(Query<FillData>, Query<NodeData>)>`**（`FillData` は `&mut WorldVisual`／`&mut VisualVersion`、`NodeData` は `&WorldVisual`／`&VisualVersion` を持つので、同じ係に並べると bevy が B0001 で落とす。`visual_hierarchy_sync_system`（`visual_sync.rs:70`）と同じ `ParamSet` の形で `set.p0()` で埋め、`set.p1()` で組む・検証の重大 1）・`RemovedComponents<VisualDrawContent | VisualTransform | ChildOf | OwnSurface | VisualGraphics>`（`VisualGraphics` の外れ＝降格・`GraphicsCommandList` の外れでも起きる）・節に `VisualGraphics` が入った（昇格）`Query<(), (Added<VisualGraphics>, With<WorldVisual>)>`（この 6 つは `SystemParam` の `TreeEdits` にまとめ、`any()` で読み切る）・`Commands`。
+- 手順（根ごと）: ⓪ 根が `VisualTransform` を持ち、それが変わったか根に `VisualGraphics` が入った回は `warn!`（実体名・持ち主の変形は WUC では効かないので無視する）を 1 行。根の自分の `VisualDrawContent` が入った・変わった回は根の `VisualVersion` を `set.p0()` で 1 つ上げる（根は `fill_world_visuals` が訪れないため）。① 根の直下に節（`VisualGraphics` を持たない `Children`）が無く、根が自分の `VisualDrawContent` も持たなければ `DrawTree` が在るとき `remove`・次へ（中身の外れは `TreeEdits` の `RemovedComponents<VisualDrawContent>` で全部の根を組み直す）。② `fill_world_visuals` を呼び「変化あり」を得る（根の `Arrangement` の変化＝viewport・切り抜きを持つ節の `Arrangement` の変化を含む・検証の重大 3）。根の自分の中身の変化も「変化あり」に足す。③ 組み直す条件は純粋な関数 `fn needs_rebuild(changed: bool, removed_any: bool, core_changed: bool, has_tree: bool) -> bool`＝変化あり、または `RemovedComponents` が 1 件でも在るか節に `VisualGraphics` が入った（昇格）（議題 6 ㋐・全部の根）、または `Res<GraphicsCore>` が変わった、または `DrawTree` が無い（真理値表を `systems_tests.rs` で固定）。④ `unit_rect` が無ければ工場から `CreateRectangleGeometry((0,0,1,1))`（失敗は `error!`＋この根を飛ばす）。⑤ `build` → 在る `DrawTree` は `commands` を入れ替えて `Changed`、無ければ `commands.entity(root).insert(DrawTree { commands, unit_rect })`（同じ schedule の次の係から見える＝`deferred_surface_creation_system`・`mark_dirty_surfaces` が同じ回に拾う・1.8・1.9）。
 - 置き場: `PreRenderSurface`・`visual_resource_management_system` の後・`deferred_surface_creation_system` の前。
 - Validation: `update_draw_trees` は工場を `Res<GraphicsCore>` から取る（工場だけの別の資源は作らない・公開面を増やさない）ので、純粋なテストでは回せない。判断の分岐は `fill_world_visuals`・`build`・`needs_rebuild` の純粋なテストが持ち、`update_draw_trees` 自体の檻は「`DrawTree` の出入り」の 1 本だけを `tests/graphics/` の実 GPU の統合テストで持つ（`GraphicsCore::new()` を使う今の `surface_systems_test.rs` の形）。
 

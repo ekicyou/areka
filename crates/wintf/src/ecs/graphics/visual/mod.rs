@@ -54,7 +54,9 @@ pub use world_visual::*;
 /// 新しい描き方の部品（`VisualDrawContent`・`VisualTransform`）を持つ `Visual` は既定で
 /// 描画面を持たない節になる（一度節になれば、装置の失いで中身が外れても節のまま）。
 /// `GraphicsCommandList` を持つ `Visual` と何も持たない `Visual` は描画面の持ち主。
-/// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける。
+/// 節を持ち主へ戻す（手動で昇格する）には目印 [`OwnSurface`] を付ける。昇格した持ち主の
+/// `VisualDrawContent` は自分の描画面の木の先頭の 1 件として子より先に描かれる。持ち主の
+/// `VisualTransform` は WUC では効かない（入った・変わった回に `warn!` を 1 度残して無視する）。
 ///
 /// # ライフタイムイベント
 /// - `on_add`: `Arrangement::default()`を自動挿入
@@ -74,7 +76,8 @@ pub struct Visual {
 
 /// 描画面を持つ目印（手動の昇格の口）。在れば新しい描き方の部品の有無に依らず、
 /// その `Visual` は描画面の持ち主（WUC の Visual と描画面を持ち、その下の木の根）になる。
-/// 一度節になった `Visual` を持ち主へ戻すのもこの目印で行う。
+/// 一度節になった `Visual` を持ち主へ戻すのもこの目印で行う。自分の `VisualDrawContent` は
+/// 描画面に描かれ続ける（子の節が無くても）。`VisualTransform` は無視される（`warn!` が 1 度）。
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct OwnSurface;
 
