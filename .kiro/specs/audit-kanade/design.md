@@ -69,7 +69,8 @@
 |---|---|---|---|
 | `crates/areka-ghost/src/ticker.rs` | #7 | `audit-ghost-catalog`（着地済み） | `TickerMsg::WakeKanadeAt(MonotonicMs)`・`impl From<MonotonicMs> for TickerMsg`・`spawn_ticker` の待ちに 1 回だけの起こしを足す・`spawn_loop_ticker` は新しい値を読み飛ばす |
 | `crates/areka-ghost/src/ticker_tests.rs` | #7 | 同上 | 起こしの残り時間の純粋な関数のテストと、刻み役が期限で `ChoiceTimeoutDue` を 1 回送るテスト |
-| `crates/areka-ghost/src/runtime.rs` | #7 | 同上 | 刻み役が本物のとき（`TickerMode::Real`）だけ、起こしの線を作って `KanadeConfig.choice_wake` に渡し、刻み役の起動の後に中継（`spawn_relay::<MonotonicMs, TickerMsg>`）でつなぐ。中継の取っ手は今の 2 本と同じく持って畳む |
+| `crates/areka-ghost/src/runtime.rs` | #7 | 同上 | 刻み役が本物のとき（`TickerMode::Real`）だけ、起こしの線を作って `KanadeConfig.choice_wake` に渡し、刻み役の起動の後に中継（`spawn_relay::<MonotonicMs, TickerMsg>`）でつなぐ。中継の取っ手は今の 2 本と同じく持って畳む。取っ手は公開の束 `GhostHandles` に `choice_wake_relay: Option<ActorHandle>` として足し（`into_parts` が渡す）、畳むときは `down_relay` の後に join する |
+| `crates/areka-ghost/src/runtime_tests.rs`・`tests/ghost/spine_e2e_test_s2_connect_failure.rs`・`spine_e2e_test_s3_helper_liveness_detected.rs`・`spine_e2e_test_s6_full_disconnect.rs`・`sylphya_integration_test.rs` | #7 | `audit-ghost-catalog`（着地済み） | `GhostHandles` を欄を全部挙げて分けている所（`runtime_tests.rs:144`・`s2:67`・`s3:149`・`s6:89`・`sylphya_integration_test.rs:132`）に `choice_wake_relay: _` を 1 つずつ足す |
 | `crates/areka-ghost/tests/ghost/spine_e2e_test.rs`・`sylphya_integration_test.rs` | #62 | `audit-ghost-catalog`（着地済み） | `resources::resource_username(x)` を `resources::resource_get("username", x)` に（後者は注の名前だけ） |
 | `crates/areka/src/log_history.rs` | #92 | 要件 6.1 の例外 | `TARGET_SCRIPT` の値を `areka_kanade::script_log::TARGET` に（名前は残す＝`log_history_tests.rs` ほかの使い手は変わらない） |
 | `crates/areka/src/mcp/sakurascript_log_tests.rs` | #92 | 要件 6.1 の例外 | 一致を縛るテスト `kanade_target_is_the_log_history_script_target` と、それだけが使う `use` を消す |
@@ -83,9 +84,10 @@
 
 - #6 の番号の運び道を測った結果（「#6」の節）、要件 6.1 の例外に挙げた 3 つのファイルの外へ **2 つ** 及ぶ: `crates/areka/src/emo2_boot/balloon_visibility.rs`（読み口 1 つ・約 4 行）と `crates/areka/src/emo2_boot/frame/wiring.rs`（読み口 1 つ・約 5 行・`placement` を名指すファイル）。押されたバルーンに出ている台詞のトークの番号を持つのは、表示の側の可視の状態（`BalloonVisibilityState.talk_id`・時間切れの知らせ `BalloonTimeout` と同じ源）だけで、その欄は `emo2_boot` の外から読めないため。
 - 入力の側だけで閉じる形（中断の旗の線 `NoUserBreakSignal::TalkStarted` に番号を載せる）は採らない。入力の段は表示の更新の段より先に回るので、新しいトーク Y の始まりが届いた時点で画面にはまだ X の台詞が出ており、入力の側の番号は Y になる＝#6 の行き違いが残る（「#6」の節）。
-- 手順: T17 に入る前に、`placement-crate-split` のセッションへ「2 ファイルに読み口を 1 つずつ足す（行は足すだけで、`crate::placement::` を名指す行には触らない）」と知らせて申し合わせる。要件 6.1 の例外の列にこの 2 ファイルを足すことは、設計の討議で開発者に確かめる。後から着地した側が行を合わせる（どちらも足すだけなので、ぶつかるのは `use` の行だけの見立て）。
+- 申し合わせ済み（2026-11-06 `placement-crate-split` の返事）: 同 spec は `balloon_visibility.rs` に触らず、`frame/wiring.rs` は 36 行目の `use crate::placement::zorder_group_ledger::ZOrderGroupLedger;` を `areka_placement::…` に書き換えるだけで、ほかの行には触らない。どちらも同 spec の着地の後に足してよい。足す行で配置の型を使うなら `areka_placement::…` で書く。要件 6.1 の例外の列にこの 2 ファイルを足すことは、設計の討議で開発者に確かめる。後から着地した側が行を合わせる（どちらも足すだけなので、ぶつかるのは `use` の行だけの見立て）。
 - `user_break_tests.rs`・`shell_box_handler_tests.rs` は `UserBreak` の行だけを直す（要件 9.9）。新しいテストは新しいファイル `user_break_talk_id_tests.rs` に置き、`capture_logs`・`LogEvent`・`ExpectField` を使わない（記録を見る要が無い形にした）。
 - `log_history.rs` は 1 行、`sakurascript_log_tests.rs` はテスト 1 本の削除（#92）。どちらも `crate::placement::` を名指さない。
+- **実装を始める時期**: この spec の実装（`/kiro-impl`）は `placement-crate-split` の着地の後に、新しい形（`areka_placement::…`・同 spec が動かす `log-capture-kit` の `ExpectField`・`expect_one`）の上で始める（2026-11-06 棚卸の頼み・開発者は `placement-crate-split` と `wintf-visual-tree` を先に実装させる予定）。同 spec は着地したらこのセッションへ知らせる約束（共有のメモにも記録）。
 
 ## つくり
 
@@ -166,6 +168,7 @@ crates/areka-kanade/tests/kanade/boot_test.rs                  # #50（tests/kan
 - 3 字の定数は `crate::sstp` に `pub(crate) const LINE_BREAKERS: [char; 3]`（CR・LF・NUL）を 1 つ置き、`validate_notify` の中の閉包もこれで書く（同じ字の組が 2 か所に写らない）。
 - **ID**: 送ってよいかの判定（`allowed`）の頭に「ID の綴りに 3 字が無い」を足す。当たれば今の `event_id_not_allowed`（`error!`＋`ShioriOutcome::Failed(ShioriFailure::Internal)`）。名前を変えて送ることはしない（別のイベントになる）。外の値が ID になりうるのは選択（`\q` の ID）とアンカーの名前だけで、その応答待ちの失敗は今の規律で 204 と同じに扱われる（ゴーストは降りない）。外から頼まれた名前（`Sstp`・`Property`）は入口と送る点の `validate_notify` で既に断っている。固定の名前（`Static`・`Translate`）は定数なので当たらない。
 - **Reference**: 今の `replace_absent_markers` の輪に、欠番の印の判定の後で「3 字を含めば取り除いて `warn!`（`event = "reference_line_break_removed"`・ID・添字）」を足す（関数の名は `clean_references` に）。翻訳の要求の添字 1 にちょうど NUL 1 字の欠番の印は今どおり残す（先に飛ばす）。ほかの位置の欠番の印は今どおり空文字にする。
+- **順**: ID の検査と送ってよいかの判定（`allowed`・`Sstp`／`Property` の `validate_notify` を含む）は、取り除く前の生の Reference で行い、通った呼び出しだけを取り除いて送る。今の `round_trip_raw` は欠番の印の置き換え（`actor.rs:637`）が判定（`:664`）より前にあるので、この 2 つの順を入れ替える（先に取り除くと、外から頼まれた `Sstp`／`Property` の Reference の改行を断る今の検査が黙って効かなくなる）。
 - #56 で `Sstp` と `Property` の腕を 1 つにまとめる（同じ検査）。
 
 **二段目の扱いを「Reference は取り除いて送る・ID は断る」にした理由と、採らなかった形**
@@ -178,6 +181,7 @@ crates/areka-kanade/tests/kanade/boot_test.rs                  # #50（tests/kan
 - `actor_header_guard_tests.rs`（新）:
   - `a_reference_with_line_breaks_is_sent_without_them`: Ref0 に 3 字を含む GET を `round_trip_request` で送る → 偽の shiori が受けた Ref0 に 3 字が無い・`reference_line_break_removed` の WARN が 1 件。取り除きを外すと赤。
   - `an_event_id_with_a_line_break_is_refused_before_the_wire`: `EventId::Choice` の名前に LF を含む GET → 偽の shiori は何も受けない・答えは `Failed(Internal)`・`event_id_not_allowed` の ERROR が 1 件。検査を外すと送られて赤。
+  - `an_sstp_reference_with_a_line_break_is_still_refused_at_the_wire`: `EventId::Sstp` の Ref に LF を含む NOTIFY → 今どおり送る前に断られる（偽の shiori は何も受けない・`Failed(Internal)`）。取り除きを判定より前に戻すと送られて赤。
   - `the_translate_absent_marker_survives_the_guard`: 翻訳の要求の添字 1 の欠番の印は NUL のまま届き、WARN は 0 件（二段目が印を壊さない）。
 - 記録の捕まえは殻のテストが今使う `log_capture_kit::capture` の形（`actor_error_response_tests.rs` と同じ）。
 
@@ -218,7 +222,7 @@ sequenceDiagram
 - `spawn_loop_ticker` の輪は `WakeKanadeAt` を読み飛ばす（`Close` だけで止まる今のまま）。
 
 **結線（`crates/areka-ghost/src/runtime.rs`）**
-- `options.ticker` が `TickerMode::Real` のときだけ、kanade の起動の前に `let (wake_tx, wake_rx) = mpsc::channel::<MonotonicMs>();` を作って `config.choice_wake = Some(wake_tx)`。刻み役の起動の後に `spawn_relay::<MonotonicMs, TickerMsg>("choice-wake-relay", wake_rx, ticker_tx.clone())`。中継の取っ手は今の `start_relay_handle`・`down_relay_handle` と同じく `GhostRuntime` に持ち、同じ順で畳む（kanade が止まると送り端が落ち、中継は自然に終わる）。`TickerMode::Disabled`（決定論のテスト）は今のまま `None`。
+- `options.ticker` が `TickerMode::Real` のときだけ、kanade の起動の前に `let (wake_tx, wake_rx) = mpsc::channel::<MonotonicMs>();` を作って `config.choice_wake = Some(wake_tx)`。刻み役の起動の後に `spawn_relay::<MonotonicMs, TickerMsg>("choice-wake-relay", wake_rx, ticker_tx.clone())`。中継の取っ手は今の `start_relay_handle`・`down_relay_handle` と同じく `GhostRuntime` に持ち、同じ順で畳む（kanade が止まると送り端が落ち、中継は自然に終わる）。`into_parts` は取っ手を全部 `GhostHandles`（公開の束）で渡すので、欄 `choice_wake_relay: Option<ActorHandle>` を足し、畳む順は「kanade の join → `down_relay` → `choice_wake_relay` → 刻み役の `Close`」（kanade の後に止まるので、中継が刻み役の送り端を持っていても詰まらない）。欄を全部挙げて分けている `areka-ghost` のテスト 5 か所は `choice_wake_relay: _` を足す（「範囲の外で触るファイル」の表）。`TickerMode::Disabled`（決定論のテスト）は今のまま `None`。
 
 **採らなかった形**
 - 刻み役の kanade の系統を細かくする（50 ms など）: OnSecondChange の 1 秒の周期が崩れ、50 ms の丸めも残る。
@@ -430,8 +434,8 @@ T19 の検証の記録にこの表を写し、audit のかけ直しで同じ所�
 | T13 | 後始末の手順を 1 つに: #46 | `common_harness.rs` と約 30 か所の各ファイル | T12 |
 | T14 | 結合テストの定常とマウス: #43・#49・#51・#52・#53・#86（steady・mouse）・#87・#88・#18（`manual_contains` 3） | `steady_test.rs`・`mouse_test_*.rs` | T13 |
 | T15 | 結合テストの終了・失敗・選択・照会: #37〜#42・#48・#50・#86（full_run・idle_pump）・#89・#90・#91・#18（`manual_contains` 4・`doc_lazy_continuation` 3） | `status_query_test.rs`・`failure_test.rs`・`common_mock_shiori.rs`・`choice_test_stage_failure_tests.rs`・`idle_pump_test.rs`・`full_run_test.rs`・`close_test_boot_greeting_tests.rs`・`choice_test_timeout_directive_tests.rs`・`choice_test_test_support.rs`・`choice_test_timeout_tests.rs`・`boot_test.rs`（消す）・`tests/kanade.rs`・`close_test_handshake_tests.rs` | T13 |
-| T16 | 選択待ちの時間切れを期限ちょうどに: #7 | `msg.rs`・`types.rs`・`mod.rs`・`steady.rs`・`actor.rs`・`steady_choice_wake_tests.rs`（新）・`tests/kanade/choice_test.rs`・`choice_test_wake_tests.rs`（新）・範囲の外 `ticker.rs`・`ticker_tests.rs`・`runtime.rs` | T2・T6・T15 |
-| T17 | 利用者の中断のトークの番号: #6・#71・#18（`user_break_tests.rs`） | `msg.rs`・`types.rs`・`mod.rs`・`actor.rs`・`schedule/user_break.rs`・`UserBreak` を組む kanade のテスト・範囲の外 `input_events/user_break.rs`・`user_break_tests.rs`・`shell_box_handler_tests.rs`・`user_break_talk_id_tests.rs`（新）・申し合わせの `balloon_visibility.rs`・`frame/wiring.rs` | T16・`placement-crate-split` との申し合わせ |
+| T16 | 選択待ちの時間切れを期限ちょうどに: #7 | `msg.rs`・`types.rs`・`mod.rs`・`steady.rs`・`actor.rs`・`steady_choice_wake_tests.rs`（新）・`tests/kanade/choice_test.rs`・`choice_test_wake_tests.rs`（新）・範囲の外 `ticker.rs`・`ticker_tests.rs`・`runtime.rs`・`GhostHandles` を分ける `areka-ghost` のテスト 5 か所 | T2・T6・T15 |
+| T17 | 利用者の中断のトークの番号: #6・#71・#18（`user_break_tests.rs`） | `msg.rs`・`types.rs`・`mod.rs`・`actor.rs`・`schedule/user_break.rs`・`UserBreak` を組む kanade のテスト・範囲の外 `input_events/user_break.rs`・`user_break_tests.rs`・`shell_box_handler_tests.rs`・`user_break_talk_id_tests.rs`（新）・申し合わせの `balloon_visibility.rs`・`frame/wiring.rs` | T16・`placement-crate-split` の着地（申し合わせ済み） |
 | T18 | 古い注: #94・#95（残り）・#96 | §3 の #94〜#96 の一覧のファイル | T1〜T17 |
 | T19 | 仕上げ: clippy の 0 件（要件 7.1・9.8）→ audit のかけ直しと直し（要件 8.1〜8.4）→ 全体テスト（要件 8.5） | 範囲の全部 | 全部 |
 
