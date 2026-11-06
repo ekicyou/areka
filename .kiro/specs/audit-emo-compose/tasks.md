@@ -209,6 +209,10 @@
 - [x] 10.2 テストの直し（境目・必ず通る確かめ・写し・古い説明）
   - _Requirements: 2.1, 4.4, 4.5, 5.3_
 
+- [ ] 11. かけ直し 6 回目の指摘の直し（research.md 20 節）
+- [ ] 11.1 25 件をまとめて直す（reaches の断り方・build_plan の失敗の記録を 1 度に・境目と名前のテスト・説明）
+  - _Requirements: 2.1, 4.4, 4.5, 5.3, 6.2_
+
 ## Implementation Notes
 
 - 1.1: 命令列の口は `plan_test_support::ops()`。`ops()` を通らない口の写しが nesting_film_tests.rs・nesting_visible_tests.rs・plan_always_tests.rs・plan_bind_random_tests.rs・plan_extent_tests.rs に残る＝1.2 で寄せる（2.4 の形の変更を 1 か所で受けるため）。`plan_ops_tests` の appends_without_clearing だけは `push_static_element_ops` を直に呼ぶ（2.4 で直す）
