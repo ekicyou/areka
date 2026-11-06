@@ -380,12 +380,13 @@ fn draw_stats_readable_after_present_frame() {
         "初回フレームで行 TextLayout 生成が計上される: {stats:?}"
     );
 
-    // 後続フレームで観測値が単調増加する（リビール進行＝現在行の再描画）。
+    // 後続フレームでリビールが進むと現在行を描き直し、累計が増える（累計は減らないので
+    // 「前以上」では次のフレームで何も描かなくても通る・指摘 13）。
     present_frame(&mut rt, &mut world, 0.06).expect("フレーム t=0.06");
     let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
     assert!(
-        stats2.draw_text_layout_calls >= stats.draw_text_layout_calls,
-        "描画呼び出し回数は単調非減少: {} -> {}",
+        stats2.draw_text_layout_calls > stats.draw_text_layout_calls,
+        "リビールが進んだフレームで描画呼び出しが増える: {} -> {}",
         stats.draw_text_layout_calls,
         stats2.draw_text_layout_calls
     );

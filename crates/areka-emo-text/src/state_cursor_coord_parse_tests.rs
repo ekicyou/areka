@@ -239,16 +239,3 @@ fn parse_non_finite_is_invalid() {
     assert_eq!(parse_cursor_coord("NaN"), CursorCoord::Invalid);
     assert_eq!(parse_cursor_coord("inf"), CursorCoord::Invalid);
 }
-
-/// 全域性: どの `&str` を与えてもパニックせず必ず値を返す（決定論・total function）。
-#[test]
-fn parse_is_total_over_arbitrary_strings() {
-    for raw in [
-        "", "0", "-0", "5", "-3", "5.0", "5em", "5lh", "50%", "@5", "@5em", "@5%", "@-2", "abc",
-        "em", "lh", "%", "@", "5xx", "@abc", "  ", "5 em", "e", "@@5", "1e3", "1.2.3", "centerx",
-        "centery", "@centerx", "CENTERX", "center", "centerxx",
-    ] {
-        // パニックしないことを踏むのが主眼（戻り値の variant は各専用テストで固定）。
-        let _ = parse_cursor_coord(raw);
-    }
-}

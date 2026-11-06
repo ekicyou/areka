@@ -152,7 +152,7 @@
   - 選択肢の見た目に `cursor.style,NONE` を書いたときのテストを置く
   - 完了の姿: 2 本が緑で、それぞれの分岐の確かめを消すと落ちる
   - _Requirements: 2.1, 4.5, 4.6, 6.7_
-- [ ] 4.2 `src/` の失敗しえないテストを直すか消す（指摘 13 の前半）
+- [x] 4.2 `src/` の失敗しえないテストを直すか消す（指摘 13 の前半）
   - `research.md` 4 節の指摘 13 の `src/` の場所を、宛先を直す・比べ方を直す・重なりを消す形で直す。同じ読みを 2 回呼んで比べる `lib.rs` の確かめも消す
   - 完了の姿: 直したテストが緑で、守る分岐を壊すと落ちることを 1 つずつ確かめてある
   - _Requirements: 2.1, 4.6_
@@ -256,3 +256,4 @@
 - 装置の失敗の記録は `surface.rs` の `pub(crate) device_err`／`none_err` の 1 組（文は「D3D/DXGI/D2D/WUC 呼び出しが失敗」）。記録の対象は `areka_emo_text::surface` の 1 つにまとまった（3.11）。
 - 飛ばした書体の指定の警告は `look.rs` の `apply_overrides(layer, cursor_text, prefix, overrides)` が出す（宛先 `areka_emo_text::look`・文は `balloon_overrides::SKIPPED`）。`balloon_overrides::overrides(model)` は 1 引数になった（公開だが呼び手は `draw.rs` だけ）。`look.rs:378` の「純粋層は warn!/debug! を出さない」は `\f` の状態機械の節の話（5.5 で範囲を言い添えてよい）（3.12）。
 - `sink::handle_text_msg` は消えた。lib のテスト数は 1213（包みだけを試すテストを 1 本消した）（3.13）。
+- lib のテスト数は 1212（4.2 で失敗しえないテストを 3 本消した）。

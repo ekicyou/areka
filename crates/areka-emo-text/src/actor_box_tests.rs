@@ -173,7 +173,7 @@ fn hide_flag_is_per_scope_and_cleared_at_the_head_of_a_talk() {
     assert!(rt.hidden_boxes.contains(&zero));
     assert!(!rt.hidden_boxes.contains(&one), "別のスコープには立たない");
 
-    rt.apply_cue(&cue("1", 0.0, CueCommand::Clear));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
     assert!(rt.hidden_boxes.contains(&zero), "\\c では下ろさない");
 
     rt.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));

@@ -195,39 +195,6 @@ fn later_cues_apply_immediately_without_overwrite_guard() {
     assert_eq!(items_of(&state, "0"), expected.as_slice());
 }
 
-// ── R2.4/R2.5: 純粋・決定論（同一 cue 列→同一状態） ──
-
-#[test]
-fn same_cue_sequence_yields_identical_state() {
-    let sequence = vec![
-        cue("0", 0.0, CueCommand::Text("アヒルやアヒル！".into())),
-        cue("0", 0.4, CueCommand::NewLine { ratio: 1.0 }),
-        cue("1", 0.5, CueCommand::Text("なんやそれ".into())),
-        cue("0", 0.8, CueCommand::Text("ガーガー".into())),
-        cue("1", 0.9, CueCommand::Clear),
-        cue(
-            "0",
-            1.0,
-            CueCommand::Choice {
-                id: "yes".into(),
-                text: "はい".into(),
-                references: vec![],
-            },
-        ),
-        cue("1", 1.1, CueCommand::Text("……".into())),
-    ];
-
-    let mut a = TextLayerState::default();
-    let mut b = TextLayerState::default();
-    for c in &sequence {
-        a.apply_cue(c);
-    }
-    for c in &sequence {
-        b.apply_cue(c);
-    }
-    assert_eq!(a, b);
-}
-
 // ── Choice/Cursor 実消費（W4 choice-render・タスク 1.2） ──
 
 /// actor の choices を取得する（未生成なら panic ＝テスト失敗として扱う）。

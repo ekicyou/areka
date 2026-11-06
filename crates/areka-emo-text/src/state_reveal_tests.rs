@@ -139,40 +139,6 @@ fn clear_during_reveal_discards_unrevealed_and_resets_pacing() {
     assert_eq!(state.visible_glyphs(&actor, 0.5), 1);
 }
 
-// ── R3.5/10.2: 決定論（同一 cue 列＋同一注入時刻列→各時刻の可視数が常に一致） ──
-
-#[test]
-fn same_cues_and_times_yield_identical_visible_counts() {
-    let sequence = vec![
-        cue("0", 0.0, CueCommand::Text("アヒルやアヒル！".into())),
-        cue("0", 0.4, CueCommand::NewLine { ratio: 1.0 }),
-        cue("1", 0.5, CueCommand::Text("なんやそれ".into())),
-        cue("0", 0.8, CueCommand::Text("ガーガー".into())),
-        cue("1", 0.9, CueCommand::Clear),
-        cue("1", 1.1, CueCommand::Text("……".into())),
-    ];
-    // 注入時刻列（フレーム時刻のつもり・cue 境界を跨ぐサンプル点）。
-    let probe_times: Vec<f64> = (0..40).map(|i| i as f64 * 0.05).collect();
-
-    let mut a = TextLayerState::default();
-    let mut b = TextLayerState::default();
-    for c in &sequence {
-        a.apply_cue(c);
-        b.apply_cue(c);
-    }
-
-    for actor in [ActorKey::from("0"), ActorKey::from("1")] {
-        for &t in &probe_times {
-            assert_eq!(
-                a.visible_glyphs(&actor, t),
-                b.visible_glyphs(&actor, t),
-                "actor {actor} at t={t}"
-            );
-        }
-    }
-    assert_eq!(a, b);
-}
-
 // ── 境界: 空テキスト・未知 actor・複数 chunk 連結 ──
 
 #[test]

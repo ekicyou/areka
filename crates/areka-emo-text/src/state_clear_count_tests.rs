@@ -91,9 +91,9 @@ fn other_cues_do_not_move_the_count() {
     }
 }
 
-/// 同じ cue の列からは同じ回数になる（決定論）。
+/// 消去と全消しの混じった cue の列は、スコープごとの回数をこの値にする。
 #[test]
-fn same_cue_sequence_yields_same_counts() {
+fn mixed_clear_sequence_yields_these_counts() {
     let sequence = vec![
         cue("0", 0.0, CueCommand::Text("あ".into())),
         cue("1", 0.1, CueCommand::Text("い".into())),
@@ -104,15 +104,8 @@ fn same_cue_sequence_yields_same_counts() {
         cue("0", 0.6, CueCommand::ClearAll),
     ];
     let mut a = TextLayerState::default();
-    let mut b = TextLayerState::default();
     for c in &sequence {
         a.apply_cue(c);
-    }
-    for c in &sequence {
-        b.apply_cue(c);
-    }
-    for actor in ["0", "1", "2", "3"] {
-        assert_eq!(count(&a, actor), count(&b, actor), "scope {actor}");
     }
     assert_eq!(
         [
