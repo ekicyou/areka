@@ -87,7 +87,7 @@ fn visit(
     eff: Aabb,
 ) {
     // 入り口: 祖先クリップで既に有効領域が空なら部分木ごと不可視 → 丸ごとスキップ。
-    if aabb_is_empty(&eff) {
+    if eff.is_empty() {
         return;
     }
 
@@ -129,8 +129,8 @@ fn visit(
     // ② 自ノードの描画（有効 AABB と交差する時だけ発行）。
     // world_aabb は DrawItem 用にどのみち計算する値なので、追加コストは交差判定のみ。
     if let Some(content) = draw {
-        let world_aabb = transform_aabb(&content.local_aabb, &world_mat);
-        if aabb_intersects(&world_aabb, &new_eff) {
+        let world_aabb = content.local_aabb.transform(world_mat);
+        if !world_aabb.intersect(new_eff).is_empty() {
             out.push(DrawCommand::Draw(DrawItem {
                 hash: hash_draw(content, &world_mat),
                 world_mat,
@@ -187,9 +187,9 @@ fn plan_clip(
             let local = clip_rect;
             if world_mat.axis_aligned() {
                 // 矩形保存 → そのまま world 矩形へ焼き込み。world_aabb は厳密。
-                let world_aabb = transform_aabb(local, &world_mat);
-                let new_eff = aabb_intersect(&eff, &world_aabb);
-                if aabb_is_empty(&new_eff) {
+                let world_aabb = local.transform(world_mat);
+                let new_eff = eff.intersect(world_aabb);
+                if new_eff.is_empty() {
                     return ClipKind::Culled;
                 }
                 ClipKind::Rect {
@@ -200,8 +200,8 @@ fn plan_clip(
                 // 昇格: 単位矩形→local矩形 に world を合成した実効変換に畳む。
                 let m = unit_to_rect(local) * world_mat;
                 let world_aabb = geometry_bounds(unit_rect, &m);
-                let new_eff = aabb_intersect(&eff, &world_aabb);
-                if aabb_is_empty(&new_eff) {
+                let new_eff = eff.intersect(world_aabb);
+                if new_eff.is_empty() {
                     return ClipKind::Culled;
                 }
                 ClipKind::Geometry {
@@ -218,8 +218,8 @@ fn plan_clip(
             // local geometry は遅延適用（emit 側で SetTransform(world_mat)）。
             // 有効 AABB は geometry のバウンディングボックスで保守的に絞る。
             let world_aabb = geometry_bounds(local_geom, &world_mat);
-            let new_eff = aabb_intersect(&eff, &world_aabb);
-            if aabb_is_empty(&new_eff) {
+            let new_eff = eff.intersect(world_aabb);
+            if new_eff.is_empty() {
                 return ClipKind::Culled;
             }
             ClipKind::Geometry {
@@ -232,26 +232,6 @@ fn plan_clip(
             }
         }
     }
-}
-
-/// 2 つの AABB の交差領域。空になり得る（`aabb_is_empty` で判定）。
-fn aabb_intersect(a: &Aabb, b: &Aabb) -> Aabb {
-    Aabb::new(
-        a.left().max(b.left()),
-        a.top().max(b.top()),
-        a.right().min(b.right()),
-        a.bottom().min(b.bottom()),
-    )
-}
-
-/// 退化（幅 or 高さ ≤ 0）なら空とみなす。ゼロ面積クリップもここで捕捉される。
-fn aabb_is_empty(a: &Aabb) -> bool {
-    a.right() <= a.left() || a.bottom() <= a.top()
-}
-
-/// 2 つの AABB が正の面積で重なるか（境界接触のみは非交差扱い）。
-fn aabb_intersects(a: &Aabb, b: &Aabb) -> bool {
-    a.left() < b.right() && b.left() < a.right() && a.top() < b.bottom() && b.top() < a.bottom()
 }
 
 /// geometry を `m` で変換した後の world AABB。オブジェクト生成なし（GetBounds 一発）。
@@ -280,29 +260,4 @@ fn unit_to_rect(r: &Aabb) -> Matrix3x2 {
         M31: r.left(),
         M32: r.top(),
     }
-}
-
-/// AABB の 4 隅を変換して外接 AABB を得る（任意アフィン対応）。
-fn transform_aabb(a: &Aabb, m: &Matrix3x2) -> Aabb {
-    let corners = [
-        (a.left(), a.top()),
-        (a.right(), a.top()),
-        (a.right(), a.bottom()),
-        (a.left(), a.bottom()),
-    ];
-    let (mut left, mut top, mut right, mut bottom) = (
-        f32::INFINITY,
-        f32::INFINITY,
-        f32::NEG_INFINITY,
-        f32::NEG_INFINITY,
-    );
-    for (x, y) in corners {
-        let wx = x * m.M11 + y * m.M21 + m.M31;
-        let wy = x * m.M12 + y * m.M22 + m.M32;
-        left = left.min(wx);
-        top = top.min(wy);
-        right = right.max(wx);
-        bottom = bottom.max(wy);
-    }
-    Aabb::new(left, top, right, bottom)
 }

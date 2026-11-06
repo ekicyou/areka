@@ -88,14 +88,26 @@ impl Aabb {
         p.X >= self.0.left && p.X < self.0.right && p.Y >= self.0.top && p.Y < self.0.bottom
     }
 
+    /// 空（NaN・退化を含む）は `EMPTY` へそろえる。
+    #[inline]
+    fn or_empty(self) -> Aabb {
+        if self.is_empty() { Aabb::EMPTY } else { self }
+    }
+
+    /// 交わり。離れた矩形・空・NaN との交わりは `EMPTY`。
     #[inline]
     pub fn intersect(self, o: Aabb) -> Aabb {
+        // f32::max/min は NaN を捨てるので、先に空を弾く
+        if self.is_empty() || o.is_empty() {
+            return Aabb::EMPTY;
+        }
         Aabb::new(
             self.0.left.max(o.0.left),
             self.0.top.max(o.0.top),
             self.0.right.min(o.0.right),
             self.0.bottom.min(o.0.bottom),
         )
+        .or_empty()
     }
 
     #[inline]
@@ -139,7 +151,8 @@ impl Aabb {
                 a.y().min(b.y()),
                 a.x().max(b.x()),
                 a.y().max(b.y()),
-            );
+            )
+            .or_empty();
         }
 
         // --- 一般（回転/シアー）：4隅を Point2 で変換して bbox ---
@@ -157,7 +170,7 @@ impl Aabb {
             min_y = min_y.min(p.y());
             max_y = max_y.max(p.y());
         }
-        Aabb::new(min_x, min_y, max_x, max_y)
+        Aabb::new(min_x, min_y, max_x, max_y).or_empty()
     }
 }
 
@@ -236,3 +249,7 @@ impl MulAssign<Matrix3x2> for Aabb {
         *self = *self * m;
     }
 }
+
+#[cfg(test)]
+#[path = "aabb_tests.rs"]
+mod aabb_tests;

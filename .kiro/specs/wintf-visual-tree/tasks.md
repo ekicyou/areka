@@ -27,7 +27,7 @@
   - 純粋なテストで 0・90・180・270 度と 1e-5 の残りが「沿う」、45 度とせん断が「沿わない」、平行移動 0.5 と許容 1.0 で「動かない」・2.0 で「動いた」を固定する
   - 完了の姿: 兄弟のテストファイルのテストが緑で、判定の実装が 1 つだけ在る
   - _Requirements: 5.5, 5.11, 6.6_
-- [ ] 2.2 矩形の働きを 1 つの実装に寄せ、NaN と空を空として扱う
+- [x] 2.2 矩形の働きを 1 つの実装に寄せ、NaN と空を空として扱う
   - 空の判定・交わり・和・変形が NaN を含む矩形と空の矩形を「空」とし、変形しても空のまま返す
   - 変形の近道は 2.1 の判定を使う
   - 純粋なテストで NaN・退化・空・離れた矩形の交わり・空を単位元とする和・反転の変形で左上右下が揃うことを固定する
@@ -158,3 +158,4 @@
 - 1.2: 持ち主の切り抜きの同期は任意の図形を目印の鍵 `GEOMETRY_AS_NONE_KEY=(-1,-1,0,None)` で「切り抜きなし」に読み替える。`graphics/visual/version.rs` の doc に捨てた `VisualClip/VisualFlags` の名が残る（4.2 で書き換える）
 - 1.3: 節の描く中身の道具は `graphics/visual/draw_content_test_support.rs` の `solid_rect_content(rect)`（WIC の的・工場に結びつくので WARP の再生には使えない）
 - 2.1: 軸の判定は `numerics/matrix3x2.rs` の `Matrix3x2Ext::axis_aligned` だけ（`Aabb::transform` の近道もこれを使う・90 度の外接矩形のテストは 2.2 で足す）。builder の `transform_aabb` は 2.2 で数の部品へ寄せる
+- 2.2: 無限の矩形を `Aabb::transform` に通すと inf*0 で NaN→EMPTY になる。viewport は交わりにだけ使い、変形しないこと。builder の自前の矩形の働きは 2.2 で消した
