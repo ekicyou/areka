@@ -255,8 +255,8 @@ sequenceDiagram
 **kanade の形**
 - `msg.rs`: `KanadeMsg::UserBreak { scope: u32, talk_id: Option<TalkId> }`。doc に「`talk_id` は押されたバルーンに出ていた台詞のトーク（表示の側が観測できなければ `None`）」。
 - `types.rs`: `Input::UserBreak { scope, talk_id }`。`actor.rs`・`mod.rs` はそのまま写す。
-- `schedule/user_break.rs` の `on_user_break(state, scope, talk_id)`: 再生中のトーク `current` があり、`talk_id != Some(current)` なら、止めずに `debug!`（`event = "balloon_break_no_talk"`・`reason = "other_talk"`・両方の番号）を残して表 C（`balloon_events::on_idle_double_click`）へ渡す（要件 9.9「合わなければ表 C」）。表 C は再生中なら送らずに理由を記録する（C1）。`None` も「合わない」に入れる（観測できない押下で、見えていないかもしれないトークを止めない）。再生中でないときは今どおり表 C、二重の中断の判定と受け入れは今のまま。
-- `talk_id` を `Option` にした理由: 表示の側は「観測できない」を `None` で運ぶ決まり（可視の照会 `balloon_visible: Option<bool>` と同じ）で、`Emo2Wiring` の無い構成（入力の側のテストの多く）でも知らせの形は 1 つで済む。時間切れの知らせ（`TalkId` のまま・番号が無ければ送らない）と違い、中断は「隠せ」と組で送るので、番号が無くても kanade へ届けて表 C に裁かせる（黙って止めないことを記録に残す）。
+- `schedule/user_break.rs` の `on_user_break(state, scope, talk_id)`: 再生中のトーク `current` があり、`talk_id` が `Some(x)` で `x != current` なら、止めずに `debug!`（`event = "balloon_break_no_talk"`・`reason = "other_talk"`・両方の番号）を残して表 C（`balloon_events::on_idle_double_click`）へ渡す（要件 9.9「合わなければ表 C」）。表 C は再生中なら送らずに理由を記録する（C1）。`None`（表示の側が番号を知らない）は今どおり今のトークを止める（2026-11-06 設計の討議の議題 2・開発者「承認」）。本番でも、配送から番号を受け取っていないトークでは表示の側の会話開始の合図が `TalkStarted { talk_id: None }` になるので、`None` で止めないと、そのトークではダブルクリックの中断が効かなくなる。`None` の場面では #6 の行き違いが残る（番号の分かる場面だけ直る）。再生中でないときは今どおり表 C、二重の中断の判定と受け入れは今のまま。
+- `talk_id` を `Option` にした理由: 表示の側は「観測できない」を `None` で運ぶ決まり（可視の照会 `balloon_visible: Option<bool>` と同じ）で、`Emo2Wiring` の無い構成（入力の側のテストの多く）でも知らせの形は 1 つで済む。時間切れの知らせ（`TalkId` のまま・番号が無ければ送らない）と違い、中断は「隠せ」と組で送るので、番号が無くても kanade へ届け、kanade が今どおり今のトークを止める。
 
 **入力の側の形（`crates/areka/src/input_events/user_break.rs`）**
 - `fn shown_talk_id(world: &World) -> Option<TalkId>`（`world.get_non_send::<Emo2Wiring>().and_then(Emo2Wiring::shown_talk_id)`）。
@@ -265,7 +265,7 @@ sequenceDiagram
 - `balloon_visibility.rs`: `pub(crate) fn talk_id(&self) -> Option<TalkId>`。`frame/wiring.rs`: `pub(crate) fn shown_talk_id(&self) -> Option<TalkId>`（今の読み口 `presenter()` と同じ「読む口だけを開ける」形）。
 
 **縛るテスト**
-- kanade `schedule/user_break_tests.rs`: `a_break_for_another_talk_stops_nothing_and_goes_to_table_c`（Y を再生中に `talk_id: Some(X)` → `CancelChoice` が出ない・帳簿 `user_break_talk` は空・`balloon_break_no_talk`（`other_talk`）が 1 件。照合を外すと Y が止まって赤）・`a_break_without_a_talk_id_stops_nothing`（`None` → 同じ）・今の受け入れのテストは `talk_id: Some(今のトーク)` で同じ結果。
+- kanade `schedule/user_break_tests.rs`: `a_break_for_another_talk_stops_nothing_and_goes_to_table_c`（Y を再生中に `talk_id: Some(X)` → `CancelChoice` が出ない・帳簿 `user_break_talk` は空・`balloon_break_no_talk`（`other_talk`）が 1 件。照合を外すと Y が止まって赤）・`a_break_without_a_talk_id_stops_the_current_talk`（`None` → 今どおり今のトークを止める・`CancelChoice` が出て帳簿 `user_break_talk` に今のトーク。`None` を「合わない」に入れると赤）・今の受け入れのテストは `talk_id: Some(今のトーク)` で同じ結果。
 - `crates/areka/src/input_events/user_break_talk_id_tests.rs`（新）`send_break_carries_the_talk_id_it_was_given`: `UserBreakWiring::new(..)` に線をつないで `send_break(&wiring, 2, Some(TalkId(7)))` → kanade の受け端に `UserBreak { scope: 2, talk_id: Some(TalkId(7)) }`・表示の側に `TalkLifecycleSignal::UserBreak`。記録は見ない（`capture_logs` を使わない）。読み口 2 つは欄を返すだけの配線なので、檻に入れない（判断の分岐は kanade の照合が持つ）。
 - 今のテストの直し: kanade の `UserBreak` を組むテスト（`user_break_tests.rs`・`balloon_events_*_tests.rs`・`change_*_tests.rs`・`external_state_tests.rs`・`talk_gap_tests.rs`・`msg_tests.rs`・`types.rs` の doc ほか）は `talk_id: Some(今のトーク)` を足して同じ結果を見る。`crates/areka` の 2 つのテストのファイルは `UserBreak { scope: N }` の行だけを `talk_id: None` 入りに。
 
@@ -467,7 +467,7 @@ T19 の検証の記録にこの表を写し、audit のかけ直しで同じ所�
 - #3: 送らずに捨てる入口は今の `warn!`（`raise_event_not_steady`・`property_event_not_steady`）に理由を足す。返事のある `RaiseEvent` は今どおり `NotSteady` を返す。
 - #7: 起こしの頼みが送れないときは `warn!`（`choice_wake_send_failed`）で続ける（毎秒の刻みが拾う）。期限の知らせが空振りしたときは `trace!`。刻み役が kanade へ送れないときは今の sticky の扱い（`info!` を 1 回）。
 - #8: 帳簿の食い違いは `warn!`（`choice_timeout_ledger_stale`）＋その場で帳簿を消す（同じ枝を毎秒通らない）。
-- #6: 番号が合わない中断は `debug!`（`balloon_break_no_talk`・`reason = "other_talk"`）＋表 C（表 C が送らない理由を記録する）。送り出しの失敗は今の `error!`（`balloon_break_send_failed`）に番号を足す。
+- #6: 番号が `Some` で今のトークと合わない中断は `debug!`（`balloon_break_no_talk`・`reason = "other_talk"`）＋表 C（表 C が送らない理由を記録する）。送り出しの失敗は今の `error!`（`balloon_break_send_failed`）に番号を足す。
 - #2: 今の `settle` の決まり（返信端へ 1 回）。
 - 新しい `panic!`・`unwrap` は本番に足さない。テストの道具は失敗を捨てない（#38・#39・#47 の形）。
 
