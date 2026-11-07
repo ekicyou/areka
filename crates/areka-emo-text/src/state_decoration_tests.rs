@@ -1,5 +1,7 @@
 //! スコープの装飾状態と番号の配管（[`super::Decoration`]・`state.rs` の腕）の決定論テスト
-//! （タスク 4.1・要件 3.1／3.2／3.3／3.4／3.5／3.7／3.8／3.9・2.5・10.7・15.3）。
+//! （要件 3.1／3.2／3.3／3.4／3.5／3.7／3.8／3.9・2.5・10.7・15.3）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! ## 章立て
 //!
@@ -11,9 +13,8 @@
 //! | §4 | 内容の消去・改行・カーソル移動では装飾が戻らない | 3.7 |
 //! | §5 | 台本の先頭（全消去）で装飾が既定へ戻る | 3.8 |
 //! | §6 | 所有外のキーは値を保持し表示を変えない・キャリア名の自己選別 | 2.5 |
-//! | §7 | 較正——過去に壊れうる形を再現すると赤になる述語 | 15.3 |
 //!
-//! タスク 4.2（「戻す操作」の公開・装着時の 2 層の差し込み・記録の 1 度化）は
+//! 「戻す操作」の公開・装着時の 2 層の差し込み・記録の 1 度化は
 //! 子モジュール [`reset`]（`state_decoration_reset_tests.rs`）が担う——1 ファイル
 //! 1,000 行の見張りに余裕を残すためのファイル分けで、本ファイルの補助を共有する。
 //!
@@ -24,27 +25,11 @@
 //! 装飾の表 [`super::ActorTextState::styles`] で引き直した [`crate::look::TextLook`] が観測点で、
 //! DirectWrite も GPU も要らない。
 
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand};
 
-use super::super::test_support::cue;
+use super::super::test_support::{cue, font, text};
 use super::super::{ActorTextState, TextItem, TextLayerState};
 use crate::look::{StyleId, TextLook};
-
-/// `\f[トークン…]` を運ぶ汎用キャリアの cue（再生時間 0）。
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
-
-fn text(actor: &str, body: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(body.to_owned()))
-}
 
 fn st<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {
     state
@@ -237,7 +222,8 @@ fn choice_glyphs_carry_current_decoration() {
 /// `Text` の腕は 0 文字を上位で分岐せず [`super::ActorTextState::push_current_style`] を
 /// 無条件に呼ぶので、ガードが無ければ「既定と異なる見た目をグリフ 0 個で表へ積む」が実際に
 /// 起きる。空の `Text` は上流に実在する（`state_reveal_tests.rs` の空チャンクの試験が流して
-/// いる）。ゆえにこの述語が `push_current_style` の 0 文字ガードを踏む唯一の試験である。
+/// いる）。ゆえにこの述語は `push_current_style` の 0 文字ガードを踏む（空の `Text` を流す試験は
+/// ほかに `state_decoration_reset_tests.rs` の `appending_zero_glyphs_records_nothing` がある）。
 #[test]
 fn empty_text_appends_no_style_number() {
     let mut state = TextLayerState::default();
@@ -459,14 +445,14 @@ fn unowned_key_keeps_the_latest_arguments() {
 #[test]
 fn carrier_with_another_name_is_ignored() {
     let mut state = state_with_bold_then_text();
+    let before = state.clone();
     state.apply_cue(&cue(
         "0",
         0.0,
         CueCommand::command_carrier("raise", vec!["OnTest".to_owned()]),
     ));
 
-    assert!(st(&state, "0").current_look().bold, "装飾状態は不変");
-    assert_eq!(st(&state, "0").items().len(), 2, "内容も不変");
+    assert_eq!(state, before, "装飾・内容・記録の覚えのどれも変わらない");
 }
 
 /// 不正な指定（未知のキー・キー無し）は当該項目を変えず、解析も再生も中断しない。
@@ -480,71 +466,6 @@ fn malformed_font_tag_leaves_the_look_unchanged() {
     state.apply_cue(&font("0", &["bold", "yes"]));
 
     assert_eq!(st(&state, "0").current_look(), &before);
-}
-
-// ---------------------------------------------------------------- §7 較正
-
-/// 較正: 内容の消去で装飾まで消える誤り（旧 `Clear` の `= ActorTextState::default()`）。
-#[test]
-fn calibration_content_clear_must_not_reset_decoration() {
-    let mut state = state_with_bold_then_text();
-    state.apply_cue(&cue("0", 0.0, CueCommand::Clear));
-
-    assert_ne!(
-        st(&state, "0").current_look(),
-        &st(&state, "0").look_layers().default,
-        "内容の消去で装飾まで既定へ戻っている（`\\c` は装飾を戻さない）"
-    );
-}
-
-/// 較正: 本体側の指定が相方側にも効く誤り（スコープが 1 つの装飾状態を共有している）。
-#[test]
-fn calibration_scopes_must_not_share_decoration() {
-    let mut state = TextLayerState::default();
-    state.apply_cue(&font("0", &["bold", "1"]));
-    state.apply_cue(&text("1", "い"));
-
-    assert_ne!(
-        st(&state, "1").current_look(),
-        st(&state, "0").current_look(),
-        "本体側と相方側が同じ装飾状態を共有している"
-    );
-    assert_eq!(
-        st(&state, "1").glyph_styles()[0],
-        StyleId::DEFAULT,
-        "相方側の文字が本体側の指定を受け取っている"
-    );
-}
-
-/// 較正: 装飾の指定が既に追記済みの文字へ遡って効く誤り（番号列でなく 1 つの見た目で描く）。
-#[test]
-fn calibration_decoration_must_not_apply_retroactively() {
-    let mut state = TextLayerState::default();
-    state.apply_cue(&text("0", "あ"));
-    state.apply_cue(&font("0", &["bold", "1"]));
-    state.apply_cue(&text("0", "い"));
-
-    let ids = st(&state, "0").glyph_styles();
-    assert_ne!(
-        ids[0], ids[1],
-        "追記済みの文字と後の文字が同じ番号になっている"
-    );
-    assert!(
-        !look_of(&state, "0", 0).bold,
-        "指定より前の文字にまで太字が遡って効いている"
-    );
-}
-
-/// 較正: 台本の先頭の全消去で装飾が戻らない誤り（内容だけ消して装飾を残す）。
-#[test]
-fn calibration_clear_all_must_reset_decoration() {
-    let mut state = state_with_bold_then_text();
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
-
-    assert!(
-        !st(&state, "0").current_look().bold,
-        "台本の先頭で装飾が戻っていない（`\\c` と同じ扱いになっている）"
-    );
 }
 
 #[path = "state_decoration_reset_tests.rs"]

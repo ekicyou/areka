@@ -15,7 +15,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, error};
 
 use super::{Emo2Wiring, balloon_target};
-use crate::placement::face_windowposition::apply_face_windowposition;
+use areka_placement::face_windowposition::apply_face_windowposition;
 
 /// 書き手を呼んだ契機（記録の欄）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

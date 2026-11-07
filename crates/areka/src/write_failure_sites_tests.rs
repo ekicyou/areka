@@ -31,10 +31,10 @@ use crate::emo2_boot::ghost_switch::{
 };
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::ghost_session::{GhostSlot, StartupDescriptValues};
-use crate::placement::AuthorDpi;
-use crate::placement::persist::{char_pos_entries, persist_entries};
-use crate::placement::resolver::PointPx;
 use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
+use areka_placement::AuthorDpi;
+use areka_placement::persist::{char_pos_entries, persist_entries};
+use areka_placement::resolver::PointPx;
 
 /// 要件 1 の表の 13 種（1.1 のアプリの記憶 6 種＋1.2 のゴーストごとの記憶 7 種）。
 /// 読み取りだけの行列（`readonly_sites_tests.rs`）も同じ表を読む。
@@ -361,7 +361,7 @@ fn every_write_kind_reaches_the_desk() {
     let descript = StartupDescriptValues {
         author_dpi: AuthorDpi::DEFAULT,
         zorder_raw: None,
-        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+        default_surfaces: areka_placement::DefaultSurfaces::builtin(),
     };
     let boot = boot_first_ghost(
         world,

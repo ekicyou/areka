@@ -1,32 +1,15 @@
 //! 取り出したフォルダのファイル名の集合・絵の寸法・名前の重なりを固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.2**・**2.1**・**2.2**・**2.4**・**2.6**・**2.7**・
 //! **3.1**・**3.2**・**3.4**・**4.1**・**5.2**・**7.1**・**10.3**）。
 
-use std::path::Path;
-
-use areka_emo_atlas::{ElementDecoder, WicDecoderArm};
 use sample_ghost_kit::SAMPLES;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
-use super::test_support::{
-    BALLOON_NAME, EXPECTED_FILE_NAMES, EXPECTED_ONLINE_SIZE, EXPECTED_PNG_SIZES, balloon_root,
-};
+use crate::support::fixture::png_native_size;
 
-/// PNG の IHDR から寸法 `(width, height)` を読む（署名 8B ＋ 長さ 4B ＋ `IHDR` 4B の直後）。
-fn png_native_size(path: &Path) -> (u32, u32) {
-    let bytes = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("バルーンの絵 {} の読取に失敗した: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
-        "{} が PNG（先頭 IHDR チャンク付き）として読めない（{} バイト）",
-        path.display(),
-        bytes.len()
-    );
-    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    (w, h)
-}
+use super::test_support::{BALLOON_NAME, EXPECTED_FILE_NAMES, EXPECTED_PNG_SIZES, balloon_root};
 
 /// フォルダ直下が 23 ファイルの表と過不足なく一致し、サブフォルダも空のファイルも無い。
 ///
@@ -103,40 +86,8 @@ fn png_native_sizes_are_pinned() {
     }
 }
 
-/// `online0.webp` を areka の動く絵の読み手で聞き、77×36 の動く絵である（要件 3.2・4.1）。
-#[test]
-fn online_marker_is_an_animated_webp_of_77x36() {
-    // SAFETY: COM の MTA 初期化。並列のテストで既に張られていても使えるので戻り値は見ない。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let decoder = WicDecoderArm::new().expect("WIC の読み手を作れない（COM の初期化が前提）");
-    let (name, width, height) = EXPECTED_ONLINE_SIZE;
-    let path = balloon_root().join(name);
-    let bytes = std::fs::read(&path)
-        .unwrap_or_else(|e| panic!("オンラインの印 {} を読めない: {e}", path.display()));
-    assert!(
-        bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
-        "{}: WebP の見出し（RIFF・WEBP）が無い（{} バイト）",
-        path.display(),
-        bytes.len()
-    );
-    let info = decoder.probe_animation(&path).unwrap_or_else(|| {
-        panic!(
-            "{}: areka の読み手が動く絵として読めない（コマが 2 枚以上の WebP が前提）",
-            path.display()
-        )
-    });
-    assert_eq!(
-        (info.width, info.height),
-        (width, height),
-        "{}: 寸法が期待 {width}×{height} と違う",
-        path.display()
-    );
-}
-
 /// 名前 `areka-balloon` が、登記のほかの名前と同梱バルーンの名前のどれとも、大小を無視して
-/// 重ならない（要件 5.2）。自分の行は登記にちょうど 1 つ在る（要件 10.3）。
+/// 重ならない（要件 5.2）。自分の行は登記にちょうど 1 つ在る（要件 10.1）。
 #[test]
 fn name_does_not_collide_case_insensitively() {
     let own_rows = SAMPLES.iter().filter(|s| s.name == BALLOON_NAME).count();

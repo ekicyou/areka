@@ -29,10 +29,10 @@ use wintf::ecs::WindowHandle;
 
 use super::test_support::PerTargetSizes;
 use super::*;
-use crate::placement::follow::{MonitorSnapshot, OffsetBase};
-use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
+use areka_placement::follow::{MonitorSnapshot, OffsetBase};
+use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::spawn_ghost_windows;
 
 // ── 記憶の送り口 ────────────────────────────────────────────────────────────
 

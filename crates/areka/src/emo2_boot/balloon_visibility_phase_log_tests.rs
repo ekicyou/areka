@@ -11,10 +11,10 @@
 use tracing::Level;
 
 use super::*;
-use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 可視性の相が書いた行だけを拾う。
-fn visibility_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains("[balloon-visibility]"))
@@ -43,7 +43,7 @@ fn measurement_origin_is_written_with_its_level_and_fields() {
         },
     ];
 
-    let (_, events) = capture_logs(|| emit_visibility_logs(&logs, &[]));
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[]));
 
     let lines = visibility_lines(&events);
     assert_eq!(lines.len(), 3, "事象 1 件につき 1 行: {events:?}");
@@ -94,7 +94,7 @@ fn choice_talk_origins_are_written_with_their_level_and_fields() {
         },
     ];
 
-    let (_, events) = capture_logs(|| emit_visibility_logs(&logs, &[]));
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[]));
 
     let lines = visibility_lines(&events);
     assert_eq!(lines.len(), 2, "事象 1 件につき 1 行: {events:?}");
@@ -127,7 +127,7 @@ fn choice_talk_origins_are_written_with_their_level_and_fields() {
 fn timeout_notice_without_talk_id_is_written_as_a_warning() {
     let logs = vec![VisibilityLogEvent::TimeoutNoticeWithoutTalkId];
 
-    let (_, events) = capture_logs(|| emit_visibility_logs(&logs, &[]));
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[]));
 
     let lines = visibility_lines(&events);
     assert_eq!(lines.len(), 1, "事象 1 件につき 1 行: {events:?}");

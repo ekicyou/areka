@@ -39,7 +39,7 @@ use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::target_map::balloon_target;
 use crate::input_events::balloon::{BalloonWiring, ChoiceSelection};
-use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 use wintf::ecs::FrameTime;
 
 // ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ fn reveal_text(harness: &Harness, scope: u32, text: &str) {
 }
 
 /// `[balloon-visibility]` を名乗る行だけを取り出す（他所のログは配線の関心事ではない）。
-fn visibility_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains("[balloon-visibility]"))
@@ -182,7 +182,7 @@ fn frame_without_attached_balloon_is_silent() {
     let mut harness = Harness::new();
     let mut world = world_at(0.0);
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.frame(&mut world);
         calibrate();
     });
@@ -221,12 +221,12 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
         );
     }
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.frame(&mut world);
         harness.frame(&mut world);
     });
 
-    let errors: Vec<&LogEvent> = visibility_lines(&events)
+    let errors: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
         .filter(|e| e.level == Level::ERROR)
         .collect();
@@ -241,7 +241,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
         "scope が 1 行から確定する"
     );
 
-    let explicit: Vec<&LogEvent> = visibility_lines(&events)
+    let explicit: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
         .filter(|e| e.field("trigger") == Some("\"explicit\""))
         .collect();
@@ -279,9 +279,9 @@ fn failed_show_is_logged_and_rolled_back() {
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     reveal_text(&harness, 0, "あい");
 
-    let (_, first) = capture_logs(|| harness.frame(&mut world));
+    let (_, first) = capture(|| harness.frame(&mut world));
 
-    let errors: Vec<&LogEvent> = visibility_lines(&first)
+    let errors: Vec<&CapturedEvent> = visibility_lines(&first)
         .into_iter()
         .filter(|e| e.level == Level::ERROR)
         .collect();
@@ -305,7 +305,7 @@ fn failed_show_is_logged_and_rolled_back() {
     );
 
     // 次フレーム: 観測は変わらない（グリフ数も可視状態も同じ）ため、遷移も外因検出も起きない。
-    let (_, second) = capture_logs(|| {
+    let (_, second) = capture(|| {
         harness.frame(&mut world);
         calibrate();
     });
@@ -343,9 +343,9 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
         },
     );
 
-    let (_, events) = capture_logs(|| harness.frame(&mut world));
+    let (_, events) = capture(|| harness.frame(&mut world));
 
-    let explicit: Vec<&LogEvent> = visibility_lines(&events)
+    let explicit: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
         .filter(|e| e.field("trigger") == Some("\"explicit\""))
         .collect();
@@ -416,7 +416,7 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
     let runtime = Rc::clone(harness.wiring.runtime());
     let mut state = BalloonVisibilityState::default();
 
-    let (observations, events) = capture_logs(|| {
+    let (observations, events) = capture(|| {
         let held = runtime.borrow_mut(); // 相の外側が保持している状態を作る
         let first = collect_observations(
             &presenter,
@@ -448,14 +448,14 @@ fn runtime_borrow_failure_yields_no_glyph_observation() {
         "可視状態は表示層から引けている（借用失敗と無関係の軸）"
     );
     assert_eq!(observations.1.scopes[&0].visible_glyphs, None);
-    let errors: Vec<&LogEvent> = visibility_lines(&events)
+    let errors: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
         .filter(|e| e.level == Level::ERROR)
         .collect();
     assert_eq!(errors.len(), 1, "同じ縮退が続く間の記録は 1 件: {errors:?}");
 
     // 借用が戻れば観測が成立し、次の縮退で再び 1 回鳴らせるよう武装し直している。
-    let (recovered, events) = capture_logs(|| {
+    let (recovered, events) = capture(|| {
         collect_observations(
             &presenter,
             &runtime,
@@ -519,7 +519,7 @@ fn missing_pointer_wiring_is_logged_once_and_suppresses_nothing() {
     let runtime = Rc::clone(harness.wiring.runtime());
     let mut state = BalloonVisibilityState::default();
 
-    let (observations, events) = capture_logs(|| {
+    let (observations, events) = capture(|| {
         let first = collect_observations(
             &presenter,
             &runtime,
@@ -640,7 +640,7 @@ fn hide_touches_only_the_balloon_target() {
     // 同じ捕捉窓へ**未装着 scope への非表示**を 1 件混ぜる。表示層は未装着 target に対しても
     // 非表示の適用点で 1 行出す（同 `:117`）ため、「キャラクター窓の target が現れない」という
     // 否定側の主張が、窓が何も捕まえていないことによって恒真になっていないことを同時に示せる。
-    let (outcome, events) = capture_logs(|| {
+    let (outcome, events) = capture(|| {
         issue_actions(
             &mut presenter,
             &mut world,
@@ -662,7 +662,7 @@ fn hide_touches_only_the_balloon_target() {
         "掃除対象として scope を返す"
     );
 
-    let applied: Vec<&LogEvent> = events
+    let applied: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.message().contains("apply(Hide): 非表示へ"))
         .collect();
@@ -757,7 +757,7 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
         VisibilityLogEvent::DisplayEndSignalMissing,
     ];
 
-    let (_, events) = capture_logs(|| emit_visibility_logs(&logs, &[]));
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[]));
 
     let lines = visibility_lines(&events);
     assert_eq!(lines.len(), 7, "事象 1 件につき 1 行: {events:?}");
@@ -816,7 +816,7 @@ fn transition_of_a_show_that_did_not_take_is_not_written() {
         },
     ];
 
-    let (_, events) = capture_logs(|| emit_visibility_logs(&logs, &[0]));
+    let (_, events) = capture(|| emit_visibility_logs(&logs, &[0]));
 
     let lines = visibility_lines(&events);
     assert_eq!(lines.len(), 2, "scope 0 の表示だけが落ちる: {events:?}");
@@ -838,12 +838,12 @@ fn disconnected_lifecycle_channel_is_logged_once() {
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     harness.disconnect_lifecycle();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.frame(&mut world);
         harness.frame(&mut world);
     });
 
-    let errors: Vec<&LogEvent> = visibility_lines(&events)
+    let errors: Vec<&CapturedEvent> = visibility_lines(&events)
         .into_iter()
         .filter(|e| e.level == Level::ERROR)
         .collect();

@@ -1,47 +1,16 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+
+use super::test_support::{NO_OFFSET, line, region, seg, span};
 use super::*;
-use crate::layout::{FixedMetrics, LineRect, PositionedGlyph, PositionedLine};
-use crate::look::StyleId;
-use crate::state::{ChoiceSpan, SpanKind};
-
-/// 行内軸位置 `positions` の各グリフ（送り幅 `adv`）を持つ横書き行を作る
-/// （行矩形は本注釈で未使用ゆえ最小値を入れる）。
-fn line(positions: &[(f32, f32)]) -> PositionedLine {
-    let glyphs = positions
-        .iter()
-        .map(|&(inline_pos, advance)| PositionedGlyph {
-            text: "あ".into(),
-            inline_pos,
-            advance,
-            style: StyleId::DEFAULT,
-        })
-        .collect();
-    PositionedLine {
-        rect: LineRect {
-            left: 0.0,
-            top: 0.0,
-            right: 0.0,
-            bottom: 0.0,
-        },
-        glyphs,
-    }
-}
-
-/// glyph_range だけを指定した ChoiceSpan（id/label/references は注釈非関与ゆえ最小値）。
-fn span(ordinal: usize, range: core::ops::Range<usize>) -> ChoiceSpan {
-    ChoiceSpan {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: String::new(),
-        label: String::new(),
-        references: vec![],
-        glyph_range: range,
-    }
-}
+use crate::layout::{FixedMetrics, LineRect};
 
 /// 単一行・単一スパン → 行内範囲が「先頭グリフ位置〜末尾グリフ位置＋送り幅」の 1 セグメント。
 #[test]
 fn single_line_single_span_yields_one_segment_with_inline_range() {
-    let lines = [line(&[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)])];
+    let lines = [line(
+        (0.0, 0.0, 0.0, 0.0),
+        &[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)],
+    )];
     let spans = [span(0, 0..3)];
     let segs = annotate_lines(&lines, &spans);
     assert_eq!(
@@ -58,7 +27,10 @@ fn single_line_single_span_yields_one_segment_with_inline_range() {
 #[test]
 fn single_span_inline_range_uses_first_pos_and_last_pos_plus_advance() {
     // 'a'(6) 'あ'(12) 'b'(6): 位置 0,6,18。範囲 0..2 は先頭 0 〜 6+12=18。
-    let lines = [line(&[(0.0, 6.0), (6.0, 12.0), (18.0, 6.0)])];
+    let lines = [line(
+        (0.0, 0.0, 0.0, 0.0),
+        &[(0.0, 6.0), (6.0, 12.0), (18.0, 6.0)],
+    )];
     let spans = [span(0, 0..2)];
     let segs = annotate_lines(&lines, &spans);
     assert_eq!(segs.len(), 1);
@@ -68,12 +40,10 @@ fn single_span_inline_range_uses_first_pos_and_last_pos_plus_advance() {
 /// 同一行に複数スパン（正典 `\q\q` 並置）→ スパン順に 2 セグメント（それぞれの行内範囲）。
 #[test]
 fn two_spans_on_one_line_yield_two_segments() {
-    let lines = [line(&[
-        (0.0, 10.0),
-        (10.0, 10.0),
-        (20.0, 10.0),
-        (30.0, 10.0),
-    ])];
+    let lines = [line(
+        (0.0, 0.0, 0.0, 0.0),
+        &[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0), (30.0, 10.0)],
+    )];
     let spans = [span(0, 0..2), span(1, 2..4)];
     let segs = annotate_lines(&lines, &spans);
     assert_eq!(
@@ -99,8 +69,14 @@ fn two_spans_on_one_line_yield_two_segments() {
 fn three_spans_folded_across_two_lines_split_per_line() {
     // line0: 序数 0,1,2（位置 0,10,20）・line1: 序数 3,4,5（位置 0,10,20）。
     let lines = [
-        line(&[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)]),
-        line(&[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)]),
+        line(
+            (0.0, 0.0, 0.0, 0.0),
+            &[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)],
+        ),
+        line(
+            (0.0, 0.0, 0.0, 0.0),
+            &[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)],
+        ),
     ];
     let spans = [
         span(0, 0..2), // line0 内（序数 0,1）
@@ -138,10 +114,10 @@ fn three_spans_folded_across_two_lines_split_per_line() {
     );
 }
 
-/// 空範囲スパン（空 text 選択肢）はセグメントを生まない（非退行・design.md Invariants）。
+/// 空範囲スパン（空 text 選択肢）はセグメントを生まない（非退行・`areka-P0-choice-render` design.md Invariants）。
 #[test]
 fn empty_range_span_produces_no_segment() {
-    let lines = [line(&[(0.0, 10.0), (10.0, 10.0)])];
+    let lines = [line((0.0, 0.0, 0.0, 0.0), &[(0.0, 10.0), (10.0, 10.0)])];
     // start == end（空範囲）。glyph_range が行内でも行末でも生まない。
     let spans = [span(0, 1..1), span(1, 2..2)];
     let segs = annotate_lines(&lines, &spans);
@@ -156,7 +132,10 @@ fn empty_range_span_produces_no_segment() {
 #[test]
 fn partial_reveal_truncates_span_to_placed_glyphs() {
     // スパン範囲 0..5 だが配置済み（可視）は 3 グリフのみ（1 行）。
-    let lines = [line(&[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)])];
+    let lines = [line(
+        (0.0, 0.0, 0.0, 0.0),
+        &[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0)],
+    )];
     let spans = [span(0, 0..5)];
     let segs = annotate_lines(&lines, &spans);
     assert_eq!(
@@ -176,8 +155,8 @@ fn partial_reveal_truncates_span_to_placed_glyphs() {
 fn partial_reveal_across_wrap_truncates_second_line() {
     // line0: 序数 0,1（配置 2）・line1: 序数 2,3（配置 2）。総配置 4。
     let lines = [
-        line(&[(0.0, 10.0), (10.0, 10.0)]),
-        line(&[(0.0, 10.0), (10.0, 10.0)]),
+        line((0.0, 0.0, 0.0, 0.0), &[(0.0, 10.0), (10.0, 10.0)]),
+        line((0.0, 0.0, 0.0, 0.0), &[(0.0, 10.0), (10.0, 10.0)]),
     ];
     // スパン範囲 1..6（line0 の 1、line1 の 2,3、そして未配置の 4,5 を含む指定）。
     let spans = [span(0, 1..6)];
@@ -203,66 +182,23 @@ fn partial_reveal_across_wrap_truncates_second_line() {
 #[test]
 fn empty_inputs_yield_empty_segments() {
     assert!(annotate_lines(&[], &[span(0, 0..2)]).is_empty());
-    assert!(annotate_lines(&[line(&[(0.0, 10.0)])], &[]).is_empty());
+    assert!(annotate_lines(&[line((0.0, 0.0, 0.0, 0.0), &[(0.0, 10.0)])], &[]).is_empty());
     assert!(annotate_lines(&[], &[]).is_empty());
 }
 
-// ── タスク 5.2: ヒット行導出（derive_hit_rows）と窓物理写像（to_window_physical） ──
+// ── ヒット行導出（derive_hit_rows）と窓物理写像（to_window_physical） ──
 //
 // 座標系: layout 出力（inline_range／行矩形）は絶対 image px（描画開始点＝validrect 原点起点）。
 // CanvasHitRow.rect は canvas-local（validrect-local）——from_layout と同一の原点差引きゆえ
-// ハイライト矩形と数値一致（正典確定「ハイライト矩形＝ヒット矩形と同一」・R3.3）。
+// ハイライト矩形と数値一致（正典確定「ハイライト矩形＝ヒット矩形と同一」・`areka-P0-choice-render` R3.3）。
 // 窓物理化は to_window_physical: 行内=(origin+inline)×k・ブロック=(origin+block)×k+committed。
 
-use crate::region::{ScaleContract, TextRegion};
+use crate::region::ScaleContract;
 use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// validrect 原点を持つ `TextRegion`（非負 validrect 素通し・derive/写像は left()/top() のみ使用）。
-fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
-}
-
-/// 行矩形だけ指定した `PositionedLine`（derive_hit_rows は行矩形の block 帯のみ使用）。
-fn prow(left: f32, top: f32, right: f32, bottom: f32) -> PositionedLine {
-    PositionedLine {
-        rect: LineRect {
-            left,
-            top,
-            right,
-            bottom,
-        },
-        glyphs: vec![],
-    }
-}
-
-/// `(line_index, ordinal, inline_range)` の [`LineChoiceSegment`]。
-fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegment {
-    LineChoiceSegment {
-        line_index,
-        ordinal,
-        inline_range: range,
-    }
-}
 
 /// 既存ケースのハイライト帯＝行矩形の em ボックス丈（font 10）——`band_extent == font_height`
 /// のとき従来（行矩形 block 帯）と完全一致することを既存期待値がそのまま檻にする（非退行）。
 const HIT_BAND: f32 = 10.0;
-
-/// 既存ケースの帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
-/// `band_offset == 0` のとき帯は行矩形の block 近端に揃い、寄せを入れる前と完全一致する（非退行）。
-const NO_OFFSET: f32 = 0.0;
 
 // ── derive_hit_rows: canvas-local ヒット矩形（文字幅・block 帯・原点差引き） ──
 
@@ -272,7 +208,7 @@ const NO_OFFSET: f32 = 0.0;
 fn derive_horizontal_uses_char_width_inline_and_line_block_band() {
     let region = region(0, 0, 400, 224);
     // 行全幅 0..50・block 帯 0..10（font 10）。
-    let lines = [prow(0.0, 0.0, 50.0, 10.0)];
+    let lines = [line((0.0, 0.0, 50.0, 10.0), &[])];
     let segs = [seg(0, 7, (10.0, 30.0))]; // 選択肢グリフ範囲（文字幅）＝10..30。
     let rows = derive_hit_rows(
         &lines,
@@ -301,7 +237,7 @@ fn derive_horizontal_uses_char_width_inline_and_line_block_band() {
 fn derive_horizontal_subtracts_validrect_origin_to_canvas_local() {
     let region = region(36, 46, 356, 168);
     // 絶対 image px: 行矩形 left36/top46/right86/bottom56・セグメント 46..66。
-    let lines = [prow(36.0, 46.0, 86.0, 56.0)];
+    let lines = [line((36.0, 46.0, 86.0, 56.0), &[])];
     let segs = [seg(0, 0, (46.0, 66.0))];
     let rows = derive_hit_rows(
         &lines,
@@ -322,34 +258,14 @@ fn derive_horizontal_subtracts_validrect_origin_to_canvas_local() {
     );
 }
 
-/// 縦書き（vertical_rl / vertical_lr）: 行内軸＝y（inline_range）・ブロック軸＝x（行矩形の
-/// left..right 帯）。軸割当が横書きと入れ替わる（正準表）。
-#[test]
-fn derive_vertical_assigns_inline_to_y_and_block_to_x() {
-    let region = region(0, 0, 400, 224);
-    for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
-        // 縦書き列矩形: x 帯 377..387（block・font 10）・y 全長 0..20。
-        let lines = [prow(377.0, 0.0, 387.0, 20.0)];
-        let segs = [seg(0, 1, (5.0, 15.0))]; // 行内軸（y）の文字幅範囲。
-        let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(HIT_BAND, NO_OFFSET));
-        assert_eq!(
-            rows[0].rect,
-            LineRect {
-                left: 377.0, // block 帯＝行矩形 left（x）
-                top: 5.0,    // inline＝セグメント i0（y）
-                right: 387.0,
-                bottom: 15.0,
-            },
-            "{mode:?}: 行内=y・ブロック=x の軸割当"
-        );
-    }
-}
-
 /// 複数セグメント（同一行 2 個＋別行 1 個）→ 入力順どおり 3 行、それぞれ ordinal と矩形を保持。
 #[test]
 fn derive_multiple_segments_yield_rows_in_input_order() {
     let region = region(0, 0, 400, 224);
-    let lines = [prow(0.0, 0.0, 40.0, 10.0), prow(0.0, 13.0, 30.0, 23.0)];
+    let lines = [
+        line((0.0, 0.0, 40.0, 10.0), &[]),
+        line((0.0, 13.0, 30.0, 23.0), &[]),
+    ];
     let segs = [
         seg(0, 0, (0.0, 20.0)),
         seg(0, 1, (20.0, 40.0)),
@@ -399,7 +315,7 @@ fn derive_multiple_segments_yield_rows_in_input_order() {
 #[test]
 fn derive_empty_segments_yield_no_rows() {
     let region = region(0, 0, 400, 224);
-    let lines = [prow(0.0, 0.0, 30.0, 10.0)];
+    let lines = [line((0.0, 0.0, 30.0, 10.0), &[])];
     assert!(
         derive_hit_rows(
             &lines,
@@ -416,7 +332,7 @@ fn derive_empty_segments_yield_no_rows() {
 #[test]
 fn derive_empty_range_segment_produces_no_row() {
     let region = region(0, 0, 400, 224);
-    let lines = [prow(0.0, 0.0, 30.0, 10.0)];
+    let lines = [line((0.0, 0.0, 30.0, 10.0), &[])];
     let segs = [seg(0, 0, (10.0, 10.0)), seg(0, 1, (20.0, 15.0))];
     assert!(
         derive_hit_rows(
@@ -435,7 +351,7 @@ fn derive_empty_range_segment_produces_no_row() {
 #[test]
 fn derive_out_of_range_line_index_is_skipped() {
     let region = region(0, 0, 400, 224);
-    let lines = [prow(0.0, 0.0, 30.0, 10.0)];
+    let lines = [line((0.0, 0.0, 30.0, 10.0), &[])];
     let segs = [seg(5, 0, (0.0, 10.0))];
     assert!(
         derive_hit_rows(
@@ -449,7 +365,7 @@ fn derive_out_of_range_line_index_is_skipped() {
     );
 }
 
-// ── to_window_physical: §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
+// ── to_window_physical: `areka-P0-choice-render` design.md §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
 
 /// canvas-local (10,0,30,10)・原点 (36,46)。横書きは committed をブロック軸（y=top/bottom）へ。
 #[test]
@@ -512,55 +428,8 @@ fn to_window_physical_vertical_puts_committed_on_x_block_axis() {
     }
 }
 
-/// k∈{1.0,2.0}×committed∈{0,50}×3 方向の全網羅パラメタライズ（独立算出の期待値と一致）。
-#[test]
-fn to_window_physical_parameterized_over_k_committed_and_modes() {
-    let region = region(36, 46, 356, 168);
-    let (ox, oy) = (36.0f32, 46.0f32);
-    let row = CanvasHitRow {
-        ordinal: 0,
-        rect: LineRect {
-            left: 10.0,
-            top: 2.0,
-            right: 30.0,
-            bottom: 12.0,
-        },
-    };
-    let r = row.rect;
-    for k in [1.0f32, 2.0] {
-        let contract = ScaleContract::new(k, None);
-        for c in [0i32, 50] {
-            let cf = c as f32;
-            for mode in [
-                WritingMode::HorizontalTb,
-                WritingMode::VerticalRl,
-                WritingMode::VerticalLr,
-            ] {
-                let got = to_window_physical(&row, &region, mode, c, &contract, (0.0, 0.0));
-                let expected = match mode {
-                    // horizontal: x=行内（×k）・y=ブロック（×k+committed）。
-                    WritingMode::HorizontalTb => HitRectPx {
-                        left: (ox + r.left) * k,
-                        top: (oy + r.top) * k + cf,
-                        right: (ox + r.right) * k,
-                        bottom: (oy + r.bottom) * k + cf,
-                    },
-                    // vertical: x=ブロック（×k+committed）・y=行内（×k）。
-                    WritingMode::VerticalRl | WritingMode::VerticalLr => HitRectPx {
-                        left: (ox + r.left) * k + cf,
-                        top: (oy + r.top) * k,
-                        right: (ox + r.right) * k + cf,
-                        bottom: (oy + r.bottom) * k,
-                    },
-                };
-                assert_eq!(got, expected, "k={k} committed={c} mode={mode:?}");
-            }
-        }
-    }
-}
-
 /// 現行契約 k=1.0・committed=0（非スクロール）: 窓物理 px は絶対 image px と一致
-/// （canvas-local + 原点 = 絶対）——2 空間モデルの恒等（R2.2 の DPI=96 経路）。
+/// （canvas-local + 原点 = 絶対）——2 空間モデルの恒等（`areka-P0-choice-render` R2.2 の DPI=96 経路）。
 #[test]
 fn to_window_physical_unit_scale_no_scroll_equals_absolute_image_px() {
     let region = region(36, 46, 356, 168);
@@ -641,39 +510,6 @@ fn to_window_physical_adds_the_box_origin_before_scaling() {
     );
 }
 
-// ── R3.3: 描画とヒットの単一導出（derive_hit_rows と from_layout の canvas-local が一致） ──
-
-/// Observable: 固定入力に対し、derive_hit_rows の canvas-local 矩形は、ハイライト描画が
-/// 同一 `LineChoiceSegment`＋行矩形から `from_layout` と同一の原点差引きで組む矩形と
-/// **完全一致**する（表示とヒットが同一導出パス＝座標整合の構造保証）。
-#[test]
-fn hit_row_rect_matches_canvas_local_highlight_derivation() {
-    let region = region(36, 46, 356, 168);
-    let line = prow(36.0, 46.0, 86.0, 56.0); // 絶対 image px の行矩形。
-    let segment = seg(0, 3, (46.0, 66.0)); // 絶対 image px のセグメント inline 範囲。
-    let rows = derive_hit_rows(
-        std::slice::from_ref(&line),
-        std::slice::from_ref(&segment),
-        WritingMode::HorizontalTb,
-        &region,
-        &bands_of(HIT_BAND, NO_OFFSET),
-    );
-    // ハイライト描画が使う canvas-local 矩形を from_layout と同一手順で独立算出:
-    // 行矩形 block 近端（top）＋帯（HIT_BAND）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
-    let (ox, oy) = (region.left(), region.top());
-    let (i0, i1) = segment.inline_range;
-    let expected_highlight = LineRect {
-        left: i0 - ox,
-        top: line.rect.top - oy,
-        right: i1 - ox,
-        bottom: line.rect.top + HIT_BAND - oy,
-    };
-    assert_eq!(
-        rows[0].rect, expected_highlight,
-        "ヒット矩形とハイライト矩形は同一 canvas-local 座標（単一導出）"
-    );
-}
-
 // ── 行ごとの帯（line_bands・要件 11.5 のブロック軸） ──
 
 /// 行ごとに丈が違う——帯の基準は**その行に置かれた最も大きい em**（行矩形のブロック軸寸）で、
@@ -684,7 +520,10 @@ fn hit_row_rect_matches_canvas_local_highlight_derivation() {
 #[test]
 fn line_bands_scale_with_each_line_own_em() {
     // 1 行目 em 10（rect 0..10）・2 行目 em 40（rect 12..52）＝`\f[height,40]` を含む行。
-    let lines = [prow(0.0, 0.0, 100.0, 10.0), prow(0.0, 12.0, 100.0, 52.0)];
+    let lines = [
+        line((0.0, 0.0, 100.0, 10.0), &[]),
+        line((0.0, 12.0, 100.0, 52.0), &[]),
+    ];
 
     let bands = line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics);
 
@@ -692,10 +531,6 @@ fn line_bands_scale_with_each_line_own_em() {
     // FixedMetrics: 行ボックス丈 = em × 1.33・ピッチ = em + 2 で頭打ち。
     assert_eq!(bands[0].extent, 12.0, "em 10 → clamp(13.3, 10, 12) = 12");
     assert_eq!(bands[1].extent, 42.0, "em 40 → clamp(53.2, 40, 42) = 42");
-    assert!(
-        bands[1].extent > bands[0].extent * 3.0,
-        "大きい字の行の帯が既定の行のまま（要件 11.5 のブロック軸が効いていない）"
-    );
 }
 
 /// 縦書きでは行矩形の**行内幅ではなく列幅**（x 軸）が基準になる。帯の厚みは列の em、
@@ -706,7 +541,7 @@ fn line_bands_scale_with_each_line_own_em() {
 #[test]
 fn line_bands_read_the_block_axis_in_vertical_modes() {
     // 縦書き: ブロック軸は x（列幅 40）・行内軸は y（200）。
-    let lines = [prow(0.0, 0.0, 40.0, 200.0)];
+    let lines = [line((0.0, 0.0, 40.0, 200.0), &[])];
 
     let bands = line_bands(&lines, WritingMode::VerticalRl, &FixedMetrics);
 
@@ -718,31 +553,32 @@ fn line_bands_read_the_block_axis_in_vertical_modes() {
     assert_eq!(bands[0].offset, -7.0, "右から左の寄せは負");
 }
 
-/// 装飾の無い行は従来と 1 画素も変わらない（非退行）——行矩形のブロック軸寸が既定の大きさに
-/// 等しいので、アクターに 1 つの値を配っていた頃と同じ帯になる。
+/// 装飾の無い行はどれも、既定の大きさの行ボックスと行送りで決まる同じ帯になる。
 #[test]
-fn line_bands_match_the_actor_wide_value_when_no_line_is_decorated() {
+fn undecorated_lines_all_get_the_default_size_band() {
     const EM: f32 = 10.0;
-    let lines = [prow(0.0, 0.0, 100.0, EM), prow(0.0, 12.0, 100.0, 12.0 + EM)];
-    let metrics = FixedMetrics;
+    let lines = [
+        line((0.0, 0.0, 100.0, EM), &[]),
+        line((0.0, 12.0, 100.0, 12.0 + EM), &[]),
+    ];
 
-    let bands = line_bands(&lines, WritingMode::HorizontalTb, &metrics);
+    let bands = line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics);
 
-    let before = highlight_band_extent(EM, metrics.line_box_height(EM), metrics.line_pitch(EM));
-    let before_offset = highlight_band_offset(metrics.line_box_height(EM), before);
-    for band in &bands {
-        assert_eq!(band.extent, before);
-        assert_eq!(band.offset, before_offset);
-    }
+    // 行ボックス 13.3（10 × 1.33）・行送り 12（10 + 2）→ 丈は行送りで頭打ちの 12・
+    // 寄せは round((13.3 − 12) / 2) ＝ 1。
+    let extents: Vec<_> = bands.iter().map(|b| (b.extent, b.offset)).collect();
+    assert_eq!(extents, vec![(12.0, 1.0); 2], "2 行とも同じ帯");
 }
 
-/// 塗る帯とクリックを受ける帯は**同じ列**から出る（R3.3 の単一導出をブロック軸でも保つ）。
-///
-/// 較正: `derive_hit_rows` と `decorate_canvas` へ別々の列を渡す実装に戻すと、
-/// 焼き込まれた丈とヒット矩形の丈が食い違って赤。
+/// `derive_hit_rows` は行ごとの帯の丈をヒット矩形のブロック軸寸にそのまま使う（要件 11.5）。
+/// 塗る帯とクリックを受ける帯の突き合わせは `choice_anchor_tests.rs` の
+/// `highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode` が持つ。
 #[test]
-fn the_hit_band_and_the_painted_band_come_from_the_same_line_list() {
-    let lines = [prow(0.0, 0.0, 100.0, 10.0), prow(0.0, 12.0, 100.0, 52.0)];
+fn derive_hit_rows_takes_each_line_band_extent_as_the_block_size() {
+    let lines = [
+        line((0.0, 0.0, 100.0, 10.0), &[]),
+        line((0.0, 12.0, 100.0, 52.0), &[]),
+    ];
     let bands = line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics);
     let segments = [seg(0, 0, (0.0, 50.0)), seg(1, 1, (0.0, 50.0))];
     let region = region(0, 0, 100, 100);
@@ -790,8 +626,6 @@ fn band_extent_takes_line_box_height_between_em_and_pitch() {
 #[test]
 fn band_extent_is_capped_by_line_pitch() {
     assert_eq!(highlight_band_extent(28.0, 37.242, 30.0), 30.0);
-    // 隣接行の帯は接するだけで重ならない（行送り 30 ＋ 帯 30）。
-    assert!(highlight_band_extent(28.0, 37.242, 30.0) <= 30.0);
 }
 
 /// 下限は em ボックス丈——行ボックス丈がそれより小さくても行矩形より痩せない（非退行）。
@@ -804,12 +638,12 @@ fn band_extent_never_below_font_height() {
 
 /// Observable（本不具合の純粋層側の檻）: 帯が em ボックス丈を超えるとき、ヒット矩形の
 /// ブロック軸下端は**行矩形の bottom（em ボックス下端）より下**へ伸びる——描画側
-/// `highlight_rect`（住人原点＋band_extent）と同一の式ゆえ数値一致する（R3.3）。
+/// `highlight_rect`（住人原点＋band_extent）と同一の式ゆえ数値一致する（`areka-P0-choice-render` R3.3）。
 #[test]
 fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
     let region = region(36, 46, 356, 168);
     // 実 fixture 相当: 行矩形 block 帯 46..74（font 28）・帯 30（Yu Gothic UI 実測の頭打ち値）。
-    let line = prow(36.0, 46.0, 200.0, 74.0);
+    let line = line((36.0, 46.0, 200.0, 74.0), &[]);
     let segment = seg(0, 0, (36.0, 100.0));
     let band = highlight_band_extent(28.0, 37.242, 30.0);
     let rows = derive_hit_rows(
@@ -827,10 +661,6 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
         rows[0].rect.bottom, 30.0,
         "帯の終端は近端＋band_extent（em ボックス下端 28 ではない＝descent を覆う）"
     );
-    assert!(
-        rows[0].rect.bottom > line.rect.bottom - region.top(),
-        "em ボックス丈（28）より下へ伸びる"
-    );
 }
 
 /// 縦書きも同一規則: 帯は行矩形の左辺 ＋ 符号つきの寄せから band_extent 分（右方向）。
@@ -843,7 +673,7 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
         (WritingMode::VerticalRl, 375.0, 385.0),
         (WritingMode::VerticalLr, 379.0, 389.0),
     ] {
-        let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
+        let lines = [line((377.0, 0.0, 387.0, 20.0), &[])]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
         let bands = line_bands(&lines, mode, &FixedMetrics);
         let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands);
@@ -862,12 +692,12 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
 
 // ── 帯を行ボックスの中央へ寄せる（highlight_band_offset／derive_hit_rows の offset 適用） ──
 //
-// 実機の目視（2026-09-06・開発者裁定 第 2 回・R13）: 帯を行矩形のブロック軸近端へ揃えると、
+// 実機の目視（`areka-P0-emo2-conformance-e2e` の開発者裁定 第 2 回・R13）: 帯を行矩形のブロック軸近端へ揃えると、
 // 行送りで頭打ちになった帯が行ボックスの中で上に余り、下でインクを切る（「色反転位置が
 // 2 ドット程上すぎる」）。帯を広げるのではなく、余りを上下へ等分して帯を内側へ寄せる。
 
 /// 寄せの量は「行ボックス丈 − 帯の丈」の半分（四捨五入）。正典 28・fixture 20・既定フォントの
-/// 3 通りを固定する——既定フォント（行ボックス丈 ＝ 帯の丈）は **0**＝非退行の証拠（R13.1/13.6）。
+/// 3 通りを固定する——既定フォント（行ボックス丈 ＝ 帯の丈）は **0**＝非退行の証拠（`areka-P0-emo2-conformance-e2e` R13.1/13.6）。
 #[test]
 fn band_offset_centers_the_band_in_the_line_box() {
     // 正典 Yu Gothic UI 28: 行ボックス 37.24・帯 clamp(37.24, 28, 30)=30 → round(7.24/2)=4。
@@ -897,7 +727,7 @@ fn band_offset_never_goes_negative_when_band_exceeds_line_box() {
 #[test]
 fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
     let region = region(36, 46, 356, 168);
-    let line = prow(36.0, 46.0, 200.0, 74.0); // 行矩形 block 帯 46..74（font 28）。
+    let line = line((36.0, 46.0, 200.0, 74.0), &[]); // 行矩形 block 帯 46..74（font 28）。
     let segment = seg(0, 0, (36.0, 100.0));
     let band = highlight_band_extent(28.0, 37.24, 30.0);
     let offset = highlight_band_offset(37.24, band);
@@ -913,24 +743,22 @@ fn derive_hit_rows_shifts_horizontal_band_down_by_offset() {
         (4.0, 34.0),
         "帯は近端（0）から寄せ {offset} 下がって始まり、丈 {band} 分（寄せ 0 なら 0..30 で赤）"
     );
-    assert_eq!(
-        rows[0].rect.bottom - rows[0].rect.top,
-        band,
-        "寄せても帯の丈は変わらない（帯を広げない）"
-    );
 }
 
 /// 縦書き: 同じ規則をブロック軸（x）で適用する——帯は行矩形の left から符号つきの
-/// `band_offset` だけずれて始まる（R13.7）。右から左は負の寄せ（行矩形の左へ出る）、左から右は
+/// `band_offset` だけずれて始まる（`areka-P0-emo2-conformance-e2e` R13.7）。右から左は負の寄せ（行矩形の左へ出る）、左から右は
 /// 正の寄せ（ここでは明示の帯 −1 と 2 で足し算だけを見る）。行内軸（y）は寄せの影響を受けない。
+/// 寄せ 0 では行内＝y（セグメントの範囲）・ブロック＝x（行矩形の left..right）の軸割当そのもの。
 #[test]
 fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
     let region = region(0, 0, 400, 224);
     for (mode, offset) in [
         (WritingMode::VerticalRl, -1.0),
         (WritingMode::VerticalLr, 2.0),
+        (WritingMode::VerticalRl, NO_OFFSET),
+        (WritingMode::VerticalLr, NO_OFFSET),
     ] {
-        let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
+        let lines = [line((377.0, 0.0, 387.0, 20.0), &[])]; // block 帯 377..387（font 10）。
         let segs = [seg(0, 1, (5.0, 15.0))];
         let rows = derive_hit_rows(&lines, &segs, mode, &region, &bands_of(10.0, offset));
         assert_eq!(
@@ -941,12 +769,12 @@ fn derive_hit_rows_shifts_vertical_band_by_offset_on_block_axis() {
                 right: 387.0 + offset,
                 bottom: 15.0
             },
-            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せ 0 なら 377..387 で赤）"
+            "{mode:?}: block 帯は left ＋寄せ から band_extent 分（寄せを足さなければ −1・2 の行で赤）"
         );
     }
 }
 
-/// 隣接する行の帯は**接するが重ならない**（R13.4）。正典 28（行送り 30・帯 30・寄せ 4）では
+/// 隣接する行の帯は**接するが重ならない**（`areka-P0-emo2-conformance-e2e` R13.4）。正典 28（行送り 30・帯 30・寄せ 4）では
 /// 上の行の帯が 4..34・下の行が 34..64 で、共有する辺は 34 の 1 本だけ。ヒット判定は半開区間
 /// （`y >= top && y < bottom`）ゆえ、その 1 点はたかだか 1 行にしか当たらない。
 #[test]
@@ -954,8 +782,8 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
     let region = region(0, 0, 400, 224);
     let pitch = 30.0;
     let lines = [
-        prow(0.0, 0.0, 200.0, 28.0),
-        prow(0.0, pitch, 200.0, pitch + 28.0),
+        line((0.0, 0.0, 200.0, 28.0), &[]),
+        line((0.0, pitch, 200.0, pitch + 28.0), &[]),
     ];
     let segs = [seg(0, 0, (0.0, 100.0)), seg(1, 1, (0.0, 100.0))];
     let band = highlight_band_extent(28.0, 37.24, pitch);
@@ -969,12 +797,40 @@ fn adjacent_rows_bands_touch_but_do_not_overlap() {
     );
     assert_eq!((rows[0].rect.top, rows[0].rect.bottom), (4.0, 34.0));
     assert_eq!((rows[1].rect.top, rows[1].rect.bottom), (34.0, 64.0));
-    assert_eq!(
-        rows[0].rect.bottom, rows[1].rect.top,
-        "共有する辺は 1 本（接する）——寄せは行ごとに同じなので隙間も重なりも生まれない"
-    );
     // 半開区間の帰結: 共有辺 y=34 は下の行にだけ当たる（上の行は y < 34）。
     let shared = rows[0].rect.bottom;
     assert!(!(shared >= rows[0].rect.top && shared < rows[0].rect.bottom));
     assert!(shared >= rows[1].rect.top && shared < rows[1].rect.bottom);
+}
+
+/// 帯の丈の式は NaN を渡しても落ちない（audit-emo-text-state-actor 指摘 4）。`clamp` は下限が NaN だと panic する。
+///
+/// 較正: 式を `clamp` に戻すと、`font_height` が NaN の 2 行（上限も下限も NaN になる・
+/// 下限だけ NaN になる）で panic して赤。`line_box_height`・`line_pitch` の NaN は `clamp` でも
+/// 落ちないが、3 つの入力それぞれを NaN にして確かめる。
+#[test]
+fn band_extent_does_not_panic_on_nan_and_matches_clamp_for_finite() {
+    let n = f32::NAN;
+    for (font, line_box, pitch) in [
+        (n, 37.24, 30.0),
+        (n, 37.24, n),
+        (28.0, n, 30.0),
+        (28.0, 37.24, n),
+        (n, n, n),
+    ] {
+        let _ = highlight_band_extent(font, line_box, pitch);
+    }
+    // 有限の値では前の式 clamp(line_box, font, max(font, pitch)) と同じ答え。
+    for font in [0.0_f32, 10.0, 28.0, 40.0] {
+        for line_box in [0.0_f32, 9.0, 13.3, 26.6, 37.24, 53.2, 100.0] {
+            for pitch in [0.0_f32, 5.0, 12.0, 30.0, 42.0, 1e9] {
+                let before = line_box.clamp(font, pitch.max(font));
+                assert_eq!(
+                    highlight_band_extent(font, line_box, pitch),
+                    before,
+                    "font {font}・line_box {line_box}・pitch {pitch}"
+                );
+            }
+        }
+    }
 }

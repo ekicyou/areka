@@ -9,13 +9,12 @@ use std::ops::ControlFlow;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::BoxName;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use dola::cue::{CueFinding, CueProbe, CueSink};
 use log_capture_kit::count_levels;
 
-use super::test_support::{cue, pump_until_idle};
+use super::test_support::{box_index, box_layout, cue, pump_until_idle};
 use super::{TextLayerRuntime, spawn_emo_text};
 use crate::sink::{EmoTextSink, TextMsg};
 use crate::state::{SurfaceKeyOutcome, TextLayerConfig};
@@ -33,15 +32,7 @@ element1,balloon,a,0,0
 ";
 
 fn index() -> BTreeMap<u32, Vec<BoxName>> {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    let names = layout
-        .placements(0)
-        .iter()
-        .map(|p| p.name.clone())
-        .collect();
-    BTreeMap::from([(0, names)])
+    box_index(&box_layout(SHELL), 0..=0)
 }
 
 fn select(key: &str) -> TalkCue {

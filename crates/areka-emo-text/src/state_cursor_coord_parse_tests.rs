@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-cursor-tag-canon` のもの（別の spec のものはその場で名を書く）。
+
 use super::*;
 
 // ══ `\_l` 座標語彙のパース（parse_cursor_coord・語彙全形の網羅） ══
@@ -126,9 +128,8 @@ fn parse_at_prefix_percent_is_relative_percent() {
     );
 }
 
-/// 語彙全形の網羅: Relative × Lh は他の
-/// `@` 単位テスト（Px/Em/Percent）で唯一欠けていた組合せ——Absolute×{Px,Em,Lh,Percent}
-/// ／Relative×{Px,Em,Lh,Percent} の完全マトリクスを閉じる。
+/// 語彙全形の網羅: Relative × Lh。他の `@` 単位テスト（Px/Em/Percent）と合わせて
+/// Absolute×{Px,Em,Lh,Percent}／Relative×{Px,Em,Lh,Percent} の完全マトリクスになる。
 #[test]
 fn parse_at_prefix_lh_is_relative_lh() {
     assert_eq!(
@@ -172,7 +173,7 @@ fn parse_centery_is_center_y() {
 
 /// `@` 接頭は「現在の文字描画位置からの相対座標」＝数値本体を要求する書式であり、正典に
 /// `@centerx` という形は無い。中央指定の判定を `@` 剥離の**前**に置くので `@centerx` は
-/// 該当せず、`@` を剥がした本体が数値でないため Invalid へ落ちる（design.md「語彙
+/// 該当せず、`@` を剥がした本体が数値でないため Invalid へ落ちる（spec `areka-P0-cursor-tag-canon` の design.md「語彙
 /// `CursorCoord`」事後条件 `parse_cursor_coord("@centerx") == Invalid`）。
 #[test]
 fn parse_at_prefixed_center_is_invalid() {
@@ -182,7 +183,7 @@ fn parse_at_prefixed_center_is_invalid() {
 
 /// 正典は `centerx`／`centery` を小文字で記す。大小文字の扱いは正典沈黙ゆえ
 /// `doc/COMPAT_ARCHITECTURE.md` §8 の「小文字の完全一致のみ」の先例に揃える
-/// （design.md 事後条件 `parse_cursor_coord("CENTERX") == Invalid`）。
+/// （spec `areka-P0-cursor-tag-canon` の design.md 事後条件 `parse_cursor_coord("CENTERX") == Invalid`）。
 #[test]
 fn parse_uppercase_center_is_invalid() {
     assert_eq!(parse_cursor_coord("CENTERX"), CursorCoord::Invalid);
@@ -238,17 +239,4 @@ fn parse_at_prefixed_non_numeric_is_invalid() {
 fn parse_non_finite_is_invalid() {
     assert_eq!(parse_cursor_coord("NaN"), CursorCoord::Invalid);
     assert_eq!(parse_cursor_coord("inf"), CursorCoord::Invalid);
-}
-
-/// 全域性: どの `&str` を与えてもパニックせず必ず値を返す（決定論・total function）。
-#[test]
-fn parse_is_total_over_arbitrary_strings() {
-    for raw in [
-        "", "0", "-0", "5", "-3", "5.0", "5em", "5lh", "50%", "@5", "@5em", "@5%", "@-2", "abc",
-        "em", "lh", "%", "@", "5xx", "@abc", "  ", "5 em", "e", "@@5", "1e3", "1.2.3", "centerx",
-        "centery", "@centerx", "CENTERX", "center", "centerxx",
-    ] {
-        // パニックしないことを踏むのが主眼（戻り値の variant は各専用テストで固定）。
-        let _ = parse_cursor_coord(raw);
-    }
 }

@@ -12,11 +12,11 @@ use bevy_ecs::world::World;
 use super::{reset_balloon_enabled, reset_balloon_item};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem};
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::reset_pos::DefaultPlacementBasis;
-use crate::placement::source::{DescriptSource, GhostTitles};
-use crate::placement::spawn::spawn_ghost_windows;
-use crate::placement::test_support::capture_logs;
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::reset_pos::DefaultPlacementBasis;
+use areka_placement::source::{DescriptSource, GhostTitles};
+use areka_placement::spawn::spawn_ghost_windows;
+use log_capture_kit::capture;
 
 fn basis() -> DefaultPlacementBasis {
     DefaultPlacementBasis {
@@ -80,7 +80,7 @@ fn select_resets_with_menu_trigger_and_sends_nothing_to_ghost() {
     let ItemBody::Action(action) = item(&world).body else {
         panic!("葉である");
     };
-    let (_, events) = capture_logs(|| action(&mut world, &MenuContext { scope: 0 }));
+    let (_, events) = capture(|| action(&mut world, &MenuContext { scope: 0 }));
     let triggers: Vec<_> = events
         .iter()
         .filter(|e| e.field_str("event") == Some("balloon_pos_reset_skipped"))

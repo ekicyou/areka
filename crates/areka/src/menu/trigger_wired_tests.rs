@@ -21,7 +21,7 @@ use super::*;
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::input_events::RegionSource;
 use crate::menu::plan::PlanEntry;
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 
 /// 当たり判定の代役（このテストでは当たり判定を引かないので中身は使われない）。
 fn no_region(scope: u32, x: i64, y: i64) -> HitRegion {
@@ -173,7 +173,7 @@ fn a_right_click_on_every_emily_shaped_window_builds_a_menu_without_panic() {
         &mut world,
         MenuWiring::with_to_screen(menu_tx, shifted_to_screen),
     );
-    let windows: Vec<Entity> = crate::placement::shared_test_support::emily_shaped_scopes()
+    let windows: Vec<Entity> = areka_placement::test_support::emily_shaped_scopes()
         .into_iter()
         .map(|scope| {
             world

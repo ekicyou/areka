@@ -11,7 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::WM_DPICHANGED;
 /// 診断手順書が指定する `RUST_LOG`（design.md「診断手順書」・要件 1.4/1.5）。
 /// 観測点がこの directive で点灯することを機械的に固定するため、リテラルを共有する。
 const PROCEDURE_DIRECTIVES: &str =
-    "info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka::placement::diag=debug";
+    "info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka_placement::diag=debug";
 
 /// 位置書込の共通経路（`guarded_set_window_pos`）まで開ける directive。
 /// `wintf::ecs::window` は前方一致ゆえ `wintf::ecs::window_proc` も併せて開く。

@@ -1,8 +1,8 @@
 use super::init::{calculate_surface_size_from_global_arrangement, format_entity_name};
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::{
-    GraphicsCommandList, GraphicsCore, SurfaceCreationStats, SurfaceGraphics, SurfaceGraphicsDirty,
-    VisualGraphics,
+    DrawTree, GraphicsCommandList, GraphicsCore, SurfaceCreationStats, SurfaceGraphics,
+    SurfaceGraphicsDirty, VisualGraphics,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
@@ -20,12 +20,14 @@ type MarkDirtyData = (
     &'static mut SurfaceGraphicsDirty,
     Ref<'static, SurfaceGraphics>,
     Option<Ref<'static, GraphicsCommandList>>,
+    Option<Ref<'static, DrawTree>>,
     Option<&'static GlobalArrangement>,
 );
 
-/// 描き直しの印の係が見る変化（中身・描画面・配置）
+/// 描き直しの印の係が見る変化（中身＝命令の列と木の列・描画面・配置）
 type MarkDirtyFilter = Or<(
     Changed<GraphicsCommandList>,
+    Changed<DrawTree>,
     Changed<SurfaceGraphics>,
     Changed<GlobalArrangement>,
 )>;
@@ -40,13 +42,15 @@ type SurfaceCreationData = (
     Option<&'static Name>,
 );
 
-/// 描画面を作る係が見る変化（配置・中身・見た目の作り直し）
+/// 描画面を作る係が見る変化（配置・中身・見た目の作り直し）。命令の列か木の列を持つ部品が対象
+/// （木だけの根にも描画面を作る）。
 type SurfaceCreationFilter = (
-    With<GraphicsCommandList>,
+    Or<(With<GraphicsCommandList>, With<DrawTree>)>,
     Or<(
         Changed<GlobalArrangement>,
         Changed<GraphicsCommandList>,
         Changed<VisualGraphics>,
+        Changed<DrawTree>,
     )>,
 );
 
@@ -57,6 +61,7 @@ type SurfaceCreationFilter = (
 ///
 /// 検知対象:
 /// - GraphicsCommandList: 描画コマンドの変更
+/// - DrawTree: 根の木の列の変更（組み直し・入った回）
 /// - SurfaceGraphics: Surfaceの再作成（Added含む）
 /// - GlobalArrangement: スケール成分の変更（DPIスケール対応）。位置だけの変化では描き直さない
 ///   （描く中身は拡大率にしか依らない。大きさの変化は描画面の作り直しが `Changed<SurfaceGraphics>` で拾う）
@@ -67,8 +72,10 @@ pub fn mark_dirty_surfaces(
     mut changed_query: Query<MarkDirtyData, MarkDirtyFilter>,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    for (mut dirty, surface, cmd_list, arrangement) in changed_query.iter_mut() {
-        let content_changed = surface.is_changed() || cmd_list.is_some_and(|c| c.is_changed());
+    for (mut dirty, surface, cmd_list, tree, arrangement) in changed_query.iter_mut() {
+        let content_changed = surface.is_changed()
+            || cmd_list.is_some_and(|c| c.is_changed())
+            || tree.is_some_and(|t| t.is_changed());
         let scale = arrangement.map(GlobalArrangement::scale);
         if !content_changed && scale.is_none_or(|s| s == dirty.drawn_scale) {
             continue;
@@ -82,8 +89,8 @@ pub fn mark_dirty_surfaces(
 
 /// 遅延Surface作成システム (最適化版)
 ///
-/// GraphicsCommandListが存在するEntityに対してSurfaceを条件付きで作成する。
-/// - 対象: VisualGraphics + GraphicsCommandList を持つEntity
+/// GraphicsCommandList か DrawTree が存在するEntityに対してSurfaceを条件付きで作成する。
+/// - 対象: VisualGraphics + (GraphicsCommandList か DrawTree) を持つEntity
 /// - サイズ: GlobalArrangement.boundsから物理ピクセルサイズを計算
 /// - 条件: サイズが有効（幅・高さが1以上）な場合のみ作成
 /// - サイズ変更: 既存Surfaceとサイズ不一致の場合は再作成
@@ -276,13 +283,15 @@ pub fn deferred_surface_creation_system(
     }
 }
 
-/// GraphicsCommandList削除時のSurface解放システム
+/// GraphicsCommandList・DrawTree削除時のSurface解放システム
 ///
-/// GraphicsCommandListが削除されたEntityからSurfaceGraphicsをクリアする。
+/// どちらかが削除され、両方とも無くなったEntityからSurfaceGraphicsをクリアする。
+/// 片方が残る部品（木だけの根・命令の列だけの根）は描画面を残し、描き直しの印を立てる
+/// （外れた側の絵を残さない）。
 /// VisualGraphicsはVisual階層を維持するため削除しない。
 /// SurfaceGraphicsコンポーネント自体は残し、内容をclear()する。
 ///
-/// 命令の列がまだ無い部品だけを片づける（`Without<GraphicsCommandList>`）。立ち直りで外した
+/// 命令の列も木の列もまだ無い部品だけを片づける（`Without<GraphicsCommandList>`・`Without<DrawTree>`）。立ち直りで外した
 /// 命令の列が同じ回に付き直り、作り直したばかりの描画面を空にしないため。
 ///
 /// # Requirements
@@ -291,15 +300,25 @@ pub fn deferred_surface_creation_system(
 ///
 /// Note: commands.remove()ではなくclear()を使用し、
 /// コンポーネントの存在自体は維持する（事前配置パターン）。
+#[allow(clippy::type_complexity)]
 pub fn cleanup_surface_on_commandlist_removed(
     mut removed: RemovedComponents<GraphicsCommandList>,
+    mut removed_tree: RemovedComponents<DrawTree>,
     mut query: Query<
         (Entity, &VisualGraphics, &mut SurfaceGraphics, Option<&Name>),
-        Without<GraphicsCommandList>,
+        (Without<GraphicsCommandList>, Without<DrawTree>),
+    >,
+    mut remaining: Query<
+        &mut SurfaceGraphicsDirty,
+        Or<(With<GraphicsCommandList>, With<DrawTree>)>,
     >,
     mut stats: ResMut<SurfaceCreationStats>,
 ) {
-    for entity in removed.read() {
+    for entity in removed.read().chain(removed_tree.read()) {
+        if let Ok(mut dirty) = remaining.get_mut(entity) {
+            dirty.set_changed();
+            continue;
+        }
         // SurfaceGraphicsを持つEntityのみ処理
         if let Ok((entity, visual_graphics, mut surface_graphics, name)) = query.get_mut(entity) {
             // 既にinvalidな場合はスキップ

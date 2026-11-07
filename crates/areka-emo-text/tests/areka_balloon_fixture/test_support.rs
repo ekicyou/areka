@@ -1,5 +1,7 @@
 //! テーマ間で共有する検体の取得と、要件の数値から手で書いた期待値の表。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.1**・**2.2**・**3.1**・**3.2**・**5.4**〜**5.7**・
 //! **5.9**・**6.2**・**7.1**・**10.3**）。
 //!
@@ -71,6 +73,62 @@ pub(crate) const EXPECTED_PNG_SIZES: [(&str, u32, u32); 13] = [
     ("arrow1.png", 11, 10),
     ("sstp.png", 7, 9),
 ];
+
+/// 各 scope の面 0 として焼き込まれる絵の名前（共有の部品の定数・要件 2.1・2.2）。
+pub(crate) use crate::support::fixture::SCOPE_FACE0_FILES;
+
+/// [`EXPECTED_PNG_SIZES`] から絵の寸法を引く。表に無い名前は名指しで落とす。
+pub(crate) fn expected_png_size(file_name: &str) -> (u32, u32) {
+    EXPECTED_PNG_SIZES
+        .iter()
+        .find(|(name, _, _)| *name == file_name)
+        .map(|&(_, w, h)| (w, h))
+        .unwrap_or_else(|| panic!("`{file_name}` が期待値の表 EXPECTED_PNG_SIZES に無い"))
+}
+
+/// scope の面 0 の絵の名前（[`SCOPE_FACE0_FILES`] から引く）。
+pub(crate) fn scope_face0_file(scope: u32) -> &'static str {
+    SCOPE_FACE0_FILES
+        .iter()
+        .find(|(s, _)| *s == scope)
+        .map(|(_, file)| *file)
+        .unwrap_or_else(|| panic!("scope {scope} の面 0 の絵が表に無い"))
+}
+
+/// scope の面 0 の寸法（image px）。[`EXPECTED_PNG_SIZES`] から引く。
+pub(crate) fn scope_image_size(scope: u32) -> (u32, u32) {
+    expected_png_size(scope_face0_file(scope))
+}
+
+/// 範囲の 4 辺（左・上・右・下・image px）。
+pub(crate) type Edges = (f32, f32, f32, f32);
+
+/// scope ごとの面 0 を解いた範囲（左・上・右・下・image px）と折り返し基準 x
+/// （設計「描画範囲の解け方」の表）。
+///
+/// 範囲は `validrect.left,0`・`top,0`・`right,326` と `bottom`（本体側 `-20` → 169 − 20 ＝ 149・
+/// 相方側は面別の `-14` → 96 − 14 ＝ 82）、基準は 326 − 30 ＝ 296（`wordwrappoint.x,-30`）。
+pub(crate) const EXPECTED_FACE0_REGIONS: [(u32, Edges, f32); 2] = [
+    (0, (0.0, 0.0, 326.0, 149.0), 296.0),
+    (1, (0.0, 0.0, 326.0, 82.0), 296.0),
+];
+
+/// scope の面 0 の範囲を引く。
+pub(crate) fn expected_region(scope: u32) -> Edges {
+    expected_face0_region_row(scope).1
+}
+
+/// scope の面 0 の折り返し基準 x を引く。
+pub(crate) fn expected_wrap_threshold(scope: u32) -> f32 {
+    expected_face0_region_row(scope).2
+}
+
+fn expected_face0_region_row(scope: u32) -> (u32, Edges, f32) {
+    *EXPECTED_FACE0_REGIONS
+        .iter()
+        .find(|(s, _, _)| *s == scope)
+        .unwrap_or_else(|| panic!("scope {scope} の範囲の期待値が表に無い"))
+}
 
 /// オンラインの印 `online0.webp` の寸法（要件 3.2）。
 pub(crate) const EXPECTED_ONLINE_SIZE: (&str, u32, u32) = ("online0.webp", 77, 36);

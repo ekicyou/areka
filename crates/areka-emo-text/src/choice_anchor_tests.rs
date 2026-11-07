@@ -1,5 +1,7 @@
 //! 選択肢とアンカーが同じ列に並ぶときの当たりの檻（要件 2.1〜2.3・2.8・8.4）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-anchor-tag-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 行の注釈（[`annotate_lines`]）と当たりの行（[`derive_hit_rows`]）は範囲の位置と通し番号しか
 //! 読まないので、種類がアンカーでも選択肢と同じに働く。ここではそれを、合図（`AnchorBegin`／
 //! `Text`／`Choice`／`AnchorEnd`）から組んだ範囲の列と、決まった字幅の配置（`FixedMetrics`）で
@@ -10,12 +12,11 @@
 //! （行ボックス 13.3 を行送り 12 で頭打ちにして中央へ寄せる）なので、ブロック軸は
 //! 1 行目 1..13・2 行目 13..25・3 行目 25..37。
 
+use super::test_support::region_in;
 use super::*;
 use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+use crate::state::test_support::{applied, choice, close, open, spans};
 use crate::state::{SpanKind, TextLayerState};
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 const ACTOR: &str = "0";
@@ -30,55 +31,16 @@ fn cue_at(at: f64, duration: f64, command: CueCommand) -> TalkCue {
     }
 }
 
-fn open(id: &str) -> TalkCue {
-    cue_at(
-        0.0,
-        0.0,
-        CueCommand::AnchorBegin {
-            id: id.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
-
-fn close() -> TalkCue {
-    cue_at(0.0, 0.0, CueCommand::AnchorEnd)
-}
-
-/// 届いた時点で全部の字が出る文字。
+/// 届いた時点で全部の字が出る文字（`state::test_support::text` は字数に応じた再生時間を持つので使わない）。
 fn text(s: &str) -> TalkCue {
     cue_at(0.0, 0.0, CueCommand::Text(s.into()))
 }
 
-/// 届いた時点で全部の字が出る選択肢。
-fn choice(id: &str, s: &str) -> TalkCue {
-    cue_at(
-        0.0,
-        0.0,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: s.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
-}
-
 /// 普通のバルーンの場所の範囲の列（種類と位置だけ）。
 fn kinds_and_ranges(state: &TextLayerState) -> Vec<(SpanKind, core::ops::Range<usize>)> {
-    state
-        .actor_state(&ActorKey::from(ACTOR))
-        .expect("場所の状態")
-        .choices()
-        .iter()
-        .map(|s| (s.kind, s.glyph_range.clone()))
+    spans(state, ACTOR)
+        .into_iter()
+        .map(|s| (s.kind, s.glyph_range))
         .collect()
 }
 
@@ -108,16 +70,7 @@ fn arranged(
 ) -> (Vec<PositionedLine>, TextRegion) {
     let actor = ActorKey::from(ACTOR);
     let place = state.actor_state(&actor).expect("場所の状態");
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(0), Some(200), Some(0), Some(40)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    let region = TextRegion::resolve(&model, (400, 224), mode);
+    let region = region_in(mode, 0, 0, 40, 200);
     let lines = LayoutEngine::layout(
         place.items(),
         state.visible_glyphs(&actor, t),
@@ -158,9 +111,9 @@ fn anchor_across_a_wrap_has_a_hit_segment_on_each_line() {
     // 「あい」＋アンカー「うえおか」＋「き」: 1 行目＝あいうえ・2 行目＝おかき。
     let state = applied(&[
         text("あい"),
-        open("x"),
+        open(ACTOR, "x", &[]),
         text("うえおか"),
-        close(),
+        close(ACTOR),
         text("き"),
     ]);
     let (segments, rows) = hit(&state, 0.0);
@@ -195,7 +148,7 @@ fn hit_area_stops_at_what_has_been_revealed() {
     // アンカーを開いて 6 字を 1 秒に 1 字（字 i は時刻 i に出る）。話している最中なので、
     // 閉じはまだ届いていない。
     let mut state = applied(&[
-        open("x"),
+        open(ACTOR, "x", &[]),
         cue_at(0.0, 6.0, CueCommand::Text("あいうえおか".into())),
     ]);
     assert_eq!(kinds_and_ranges(&state), vec![(SpanKind::Anchor, 0..6)]);
@@ -217,7 +170,7 @@ fn hit_area_stops_at_what_has_been_revealed() {
         assert_eq!(&rows, want, "出た字 {shown}");
     }
     // 全部出た後に閉じが届いても、当たりは変わらない。
-    state.apply_cue(&close());
+    state.apply_cue(&close(ACTOR));
     assert_eq!(hit(&state, 6.0).1, expected[6]);
 }
 
@@ -227,12 +180,12 @@ fn mixed_choices_and_anchors_keep_their_rects_and_kinds() {
     // 選択肢「はい」＋「か」＋アンカー「あい」＋選択肢「いいえ」:
     // 1 行目＝はいかあ・2 行目＝いいいえ。アンカーだけが折り返しをまたぐ。
     let state = applied(&[
-        choice("yes", "はい"),
+        choice(ACTOR, "yes", "はい"),
         text("か"),
-        open("x"),
+        open(ACTOR, "x", &[]),
         text("あい"),
-        close(),
-        choice("no", "いいえ"),
+        close(ACTOR),
+        choice(ACTOR, "no", "いいえ"),
     ]);
     assert_eq!(
         hit(&state, 0.0).1,
@@ -252,15 +205,15 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
     // アンカー a「あ＋選択肢『はい』＋い」＋選択肢「いいえ」＋アンカー b「うえ」:
     // 1 行目＝あはいい・2 行目＝いいえう・3 行目＝え。
     let state = applied(&[
-        open("a"),
+        open(ACTOR, "a", &[]),
         text("あ"),
-        choice("yes", "はい"),
+        choice(ACTOR, "yes", "はい"),
         text("い"),
-        close(),
-        choice("no", "いいえ"),
-        open("b"),
+        close(ACTOR),
+        choice(ACTOR, "no", "いいえ"),
+        open(ACTOR, "b", &[]),
         text("うえ"),
-        close(),
+        close(ACTOR),
     ]);
     let spans = kinds_and_ranges(&state);
     // アンカー a（0..4）が選択肢「はい」（1..3）を包む。
@@ -271,16 +224,9 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
             (SpanKind::Choice, 1..3),
             (SpanKind::Choice, 4..7),
             (SpanKind::Anchor, 7..9),
-        ]
+        ],
+        "同じ種類の範囲は重ならない"
     );
-    for (i, (kind, range)) in spans.iter().enumerate() {
-        for (later_kind, later) in &spans[i + 1..] {
-            assert!(
-                kind != later_kind || range.end <= later.start,
-                "同じ種類の範囲が重なっている: {range:?} と {later:?}"
-            );
-        }
-    }
     assert_eq!(
         hit(&state, 0.0).1,
         vec![
@@ -293,15 +239,21 @@ fn same_kind_ranges_are_disjoint_and_an_anchor_may_wrap_a_choice() {
     );
 }
 
-/// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形（要件 1.7）。
+/// 縦書きのアンカーの当たりの帯は、同じ字の範囲の選択肢の帯と同じ形（`vertical-choice-hover-band` 要件 1.7）。
 /// 帯は厚み＝列の em 10・寄せは em の箱を列の箱の真ん中に置いた値の丸め＝右から左 round(−1.65)＝−2・
 /// 左から右 round(1.65)＝2（列の箱 13.3 が em を越える分 s＝3.3・列は右から左で 30..40・左から右で 0..10）。期待値を数で書くので、`line_bands` の縦書きの枝を
 /// 戻すと赤になる。
 #[test]
 fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
     // 「か」＋範囲「あいう」＋「き」を、範囲がアンカーのときと選択肢のときで並べる。
-    let anchor = applied(&[text("か"), open("x"), text("あいう"), close(), text("き")]);
-    let as_choice = applied(&[text("か"), choice("x", "あいう"), text("き")]);
+    let anchor = applied(&[
+        text("か"),
+        open(ACTOR, "x", &[]),
+        text("あいう"),
+        close(ACTOR),
+        text("き"),
+    ]);
+    let as_choice = applied(&[text("か"), choice(ACTOR, "x", "あいう"), text("き")]);
     for (mode, want) in [
         (WritingMode::VerticalRl, (28.0, 38.0)),
         (WritingMode::VerticalLr, (2.0, 12.0)),
@@ -318,16 +270,16 @@ fn vertical_anchor_band_has_the_same_shape_as_a_choice() {
 }
 
 /// 縦書きで列をまたぐ選択肢は、またいだ列ごとに当たりの行を 1 つずつ持ち、どの行の帯もその列の
-/// 行矩形の左辺＋寄せから厚み em（要件 1.5）。列は 20 字（描画範囲の丈 200 ÷ 字の丈 10）なので、
+/// 行矩形の左辺＋寄せから厚み em（`vertical-choice-hover-band` 要件 1.5）。列は 20 字（描画範囲の丈 200 ÷ 字の丈 10）なので、
 /// 前置き 19 字の後の選択肢「はいいえ」は 1 列目に「は」・2 列目に「いいえ」。列の左辺は
 /// 右から左で 1 列目 30・2 列目 18（列送り 12）、左から右で 0・12。寄せは右から左 −2・左から右 ＋2
 /// （上の `vertical_anchor_band_has_the_same_shape_as_a_choice` と同じ）。期待値を数で書くので、
-/// 列ごとの行矩形を読まない、または縦書きの枝を横書きの式へ戻すと赤になる（`research.md` 21 節）。
+/// 列ごとの行矩形を読まない、または縦書きの枝を横書きの式へ戻すと赤になる。
 #[test]
 fn vertical_choice_across_columns_has_a_band_on_each_column() {
     let state = applied(&[
         text("あいうえおかきくけこさしすせそたちつて"),
-        choice("x", "はいいえ"),
+        choice(ACTOR, "x", "はいいえ"),
     ]);
     for (mode, first, second) in [
         // 右から左: 30 − 2 ＝ 28・18 − 2 ＝ 16。
@@ -352,14 +304,14 @@ fn vertical_choice_across_columns_has_a_band_on_each_column() {
     }
 }
 
-/// 強調へ渡す帯（`ranges.bands`）とクリックを受ける範囲のブロック軸は同じ帯から出る（要件 3.6・
+/// 強調へ渡す帯（`ranges.bands`）とクリックを受ける範囲のブロック軸は同じ帯から出る（`choice-ranges-one-function` 要件 3.6・
 /// 4.2）。期待値は帯と行の矩形から組み直すので、片方の帯だけをずらすと決まった字幅のまま赤になる。
 #[test]
 fn highlight_bands_and_hit_rows_share_one_band_in_every_writing_mode() {
-    let horizontal = applied(&[text("あい"), choice("x", "うえおか"), text("き")]);
+    let horizontal = applied(&[text("あい"), choice(ACTOR, "x", "うえおか"), text("き")]);
     let vertical = applied(&[
         text("あいうえおかきくけこさしすせそたちつて"),
-        choice("x", "はいいえ"),
+        choice(ACTOR, "x", "はいいえ"),
     ]);
     for (mode, state) in [
         (WritingMode::HorizontalTb, &horizontal),

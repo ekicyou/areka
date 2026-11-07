@@ -37,11 +37,11 @@ use super::test_support::attach_headless;
 use crate::emo2_boot::frame::run_zorder_drain_phase;
 use crate::emo2_boot::target_map::balloon_target;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
-use crate::placement::follow::OffsetBase;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
-use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
+use areka_placement::follow::OffsetBase;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::spawn_ghost_windows;
+use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
 // 檻の組み立て

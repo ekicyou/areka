@@ -10,24 +10,24 @@ use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
-use crate::placement::balloon_lock::apply_script_balloon_lock;
-use crate::placement::chain_finalize::{
+use areka_placement::balloon_lock::apply_script_balloon_lock;
+use areka_placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ChainSlot, ScopeChainState, ScriptPlaced,
     boot_pair_decision, mark_non_positive_widths, moved_default_pos, note_chain_deferral,
 };
-use crate::placement::chain_realign;
-use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-use crate::placement::dpi_sync::{self, HoldSite};
-use crate::placement::follow::{
+use areka_placement::chain_realign;
+use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use areka_placement::dpi_sync::{self, HoldSite};
+use areka_placement::follow::{
     ClampScene, move_window_to, place_chain_in_work_area, resize_window_to,
 };
-use crate::placement::persist::persist_unremembered_char_positions;
-use crate::placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
-use crate::placement::reset_pos::reset_window_positions;
-use crate::placement::resolver::{PointPx, SizePx};
-use crate::placement::script_alignment::apply_script_alignment;
-use crate::placement::spawn::GhostWindows;
-use crate::placement::sticky_group_ledger::{
+use areka_placement::persist::persist_unremembered_char_positions;
+use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
+use areka_placement::reset_pos::reset_window_positions;
+use areka_placement::resolver::{PointPx, SizePx};
+use areka_placement::script_alignment::apply_script_alignment;
+use areka_placement::spawn::GhostWindows;
+use areka_placement::sticky_group_ledger::{
     StickyGroupLedger, apply_reset_sticky, apply_set_sticky,
 };
 
@@ -445,7 +445,7 @@ pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
 /// 走査はスコープの昇順で最初に躓いた理由 1 つで打ち切るので、仕分けもその 1 つで決まる。
 /// 同じ巡に areka 自身の理由と未表示が重なっていれば、先に躓いたスコープの側で決まる。
 ///
-/// [`CHAIN_FINALIZE_STALL_FRAMES`]: crate::placement::chain_finalize::CHAIN_FINALIZE_STALL_FRAMES
+/// [`CHAIN_FINALIZE_STALL_FRAMES`]: areka_placement::chain_finalize::CHAIN_FINALIZE_STALL_FRAMES
 pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     source: &S,
     world: &mut World,
@@ -620,7 +620,7 @@ pub(super) fn realign_chain_once(presenter: &EmoPresenter, world: &mut World) {
 /// [`realign_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
 ///
 /// 判断そのもの（武装しているか・待ち札が残っていないか・解き直して武装を解く）は
-/// [`crate::placement::chain_realign`] が持つ。ここが供給するのは走査だけである——
+/// [`areka_placement::chain_realign`] が持つ。ここが供給するのは走査だけである——
 /// 「全スコープの窓寸が実表示寸へ揃ったか」の判定を起動時確定と**同一の実装**
 /// （[`collect_chain_states`]）で行うために、走査を関数として渡す。
 ///

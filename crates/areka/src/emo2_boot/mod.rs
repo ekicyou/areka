@@ -138,7 +138,7 @@ use bevy_ecs::world::World;
 use tracing::{error, info, warn};
 use wintf::ecs::{Update, update_typewriters};
 
-use crate::placement::{AuthorDpi, DefaultSurfaces};
+use areka_placement::{AuthorDpi, DefaultSurfaces};
 
 use self::adapter::PresentBridge;
 use self::assets::{

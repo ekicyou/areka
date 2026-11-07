@@ -17,14 +17,14 @@ use bevy_ecs::prelude::World;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
-use crate::placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainFinalized, ScopeChainState};
-use crate::placement::chain_realign::{
+use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainFinalized, ScopeChainState};
+use areka_placement::chain_realign::{
     arm_chain_realign, realign_chain_once_with, snapshot_char_rects,
 };
-use crate::placement::follow::OffsetBase;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::follow::OffsetBase;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
 use super::shell_target;
 use super::test_support::{
@@ -528,8 +528,8 @@ fn a_three_body_chain_uses_the_previous_result_as_the_next_base() {
 #[test]
 fn a_realigned_window_outside_the_work_area_flips_to_the_other_side() {
     let (mut world, gw) = chain3_world();
-    world.insert_resource(crate::placement::follow::MonitorSnapshot {
-        work_areas: vec![crate::placement::resolver::RectPx {
+    world.insert_resource(areka_placement::follow::MonitorSnapshot {
+        work_areas: vec![areka_placement::resolver::RectPx {
             left: 1000,
             top: 0,
             right: 2000,
@@ -572,7 +572,7 @@ fn a_realigned_window_outside_the_work_area_flips_to_the_other_side() {
     );
     let clamp: Vec<&String> = logs
         .iter()
-        .filter(|l| l.contains(crate::placement::follow::WORK_AREA_CLAMP_TAG))
+        .filter(|l| l.contains(areka_placement::follow::WORK_AREA_CLAMP_TAG))
         .collect();
     assert!(
         clamp.iter().any(|l| l.contains("scene=\"dpi-realign\"")

@@ -1,5 +1,7 @@
 //! 定義ファイル（`descript.txt`・`install.txt`）の復号と読み取りを固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **3.3**／**7.1**・設計 **C2** の B 行）。
 
 use std::collections::BTreeMap;

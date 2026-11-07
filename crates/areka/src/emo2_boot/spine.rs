@@ -35,7 +35,7 @@
 //! （`crate::emo2_boot::{PresentBridge, Emo2Wiring, run_attach_phase, ...}`）へ到達できない。
 //! spine は Tick 注入＋GPU readback＋frame フェーズ直接駆動を **in-process** で行う必要があり
 //! （bin を起動する外部テストでは不能）、既存 repo 慣行（`emo2_boot::wire_tests`・
-//! `placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
+//! `areka_placement::spawn` のテスト）に従い **in-crate `#[cfg(test)]` モジュール** として置く。
 //!
 //! # 依存の申し送り（CONCERNS 相当）
 //!
@@ -45,7 +45,7 @@
 //! `shiori-host32-host`（既に areka-ghost/areka-kanade 経由で推移ビルド済み・x64・新規外部依存
 //! ではない）を追加した。
 
-use crate::placement::follow::OffsetBase;
+use areka_placement::follow::OffsetBase;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::rc::Rc;
@@ -79,9 +79,9 @@ use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{DPI, GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
 use super::adapter::PresentBridge;
 use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
@@ -456,7 +456,7 @@ fn make_world_with_gpu() -> (GpuPermit, World) {
     (gpu, world)
 }
 
-/// scope0/scope1 の 2 スコープぶんの合成配置（placement::spawn テストの emo2 相当値を踏襲）。
+/// scope0/scope1 の 2 スコープぶんの合成配置（areka_placement::spawn テストの emo2 相当値を踏襲）。
 ///
 /// attach フェーズは窓 `Entity` のみを消費し `WindowPos`/寸法は読まないため、位置値は attach の
 /// 成否に無関係（`GhostWindows::scopes()` が `[0,1]` を返すことだけが load-bearing）。両 scope の

@@ -19,6 +19,8 @@ mod core_test;
 mod dcomp_integration_test;
 #[path = "graphics/device_lost_recovery_test.rs"]
 mod device_lost_recovery_test;
+#[path = "graphics/draw_tree_systems_test.rs"]
+mod draw_tree_systems_test;
 #[path = "graphics/init_window_graphics_test.rs"]
 mod init_window_graphics_test;
 #[path = "graphics/surface_optimization_test.rs"]

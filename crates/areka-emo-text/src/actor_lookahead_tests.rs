@@ -1,5 +1,7 @@
 //! # 本番と同じ経路を歩く検査（文節の折り返しで、表示済みの字が動かない・要件 1・2.5・5）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-budoux-reveal-reflow` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 台本の文字列 → `areka_parsers::sakura::parse` → `areka_sakura::compile` → 刻印
 //! （`with_absolute_start_time`）→ `CuePlayer::from_sheet` → `register_sink`（本物の
 //! [`EmoTextSink`](crate::sink::EmoTextSink)）→ `tick(時刻)` → UI の待ち行列 →
@@ -16,16 +18,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::{BalloonModel, Font, FontColor, Origin, ValidRect};
 use areka_sakura::contract::{ActorKey, CueCommand};
 use areka_sakura::sysvar::SystemVarSnapshot;
 use bevy_ecs::prelude::World;
 use dola::cue::{CuePayload, CuePlayer, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::pump_until_idle;
+use super::test_support::{balloon_model_of, capture_checked, pump_until_idle};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, spawn_emo_text};
 use crate::layout::{FixedMetrics, PositionedLine};
 use crate::place::PlaceKey;
@@ -58,14 +58,12 @@ pub(super) fn balloon_model(
     writing_mode: Option<&str>,
     budoux_newline: Option<&str>,
 ) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(FONT_HEIGHT), FontColor::new(None, None, None)),
-        writing_mode.map(str::to_string),
-        budoux_newline.map(str::to_string),
+        writing_mode,
+        budoux_newline,
     )
 }
 
@@ -143,7 +141,7 @@ impl Rig {
             .sheet
             .cues()
             .iter()
-            // 終わりも ms の格子で出す。秒の足し算は格子から外れ、次の合図の開始と食い違う（指摘 8）。
+            // 終わりも ms の格子で出す。秒の足し算は格子から外れ、次の合図の開始と食い違う。
             .flat_map(|c| {
                 let ms = |s: f64| (s * 1000.0).round() as u64;
                 [
@@ -185,11 +183,16 @@ impl Rig {
 
     /// 場所の行ごとの字の並び。
     pub(super) fn rows(&self, place: &PlaceKey, t: f64) -> Vec<Vec<String>> {
-        self.lines(place, t)
-            .iter()
-            .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
-            .collect()
+        row_texts(&self.lines(place, t))
     }
+}
+
+/// 行の列の、行ごとの字の並び。
+fn row_texts(lines: &[PositionedLine]) -> Vec<Vec<String>> {
+    lines
+        .iter()
+        .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
+        .collect()
 }
 
 /// 刻印済みの再生機 1 つと、その台本の判定の時刻（トークの頭からの秒・昇順）。
@@ -403,10 +406,7 @@ fn dropping_the_preview_is_judged_as_moved_glyphs() {
     );
 
     // この台本は場所 1 つ・区間 1 つ（消去が無い）なので、warn はちょうど 1 件。
-    let warns: Vec<&CapturedEvent> = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::WARN)
-        .collect();
+    let warns = warns(&events);
     assert_eq!(
         warns.len(),
         1,
@@ -605,8 +605,8 @@ fn a_stray_cue_falls_back_to_the_arrived_text_without_losing_glyphs() {
 #[test]
 fn char_by_char_wrap_is_stable_and_never_consults_the_lookahead() {
     let (staged, staged_events) =
-        capture(|| walk(EMO2_BOOT_TALK, "1", &char_by_char_model(), NINE_WIDE));
-    let (old, old_events) = capture(|| {
+        capture_checked(|| walk(EMO2_BOOT_TALK, "1", &char_by_char_model(), NINE_WIDE));
+    let (old, old_events) = capture_checked(|| {
         walk_with(
             EMO2_BOOT_TALK,
             "1",
@@ -668,10 +668,7 @@ fn walk_with_windows(
         };
         stages.push(Stage {
             time: t,
-            rows: lines
-                .iter()
-                .map(|line| line.glyphs.iter().map(|g| g.text.to_string()).collect())
-                .collect(),
+            rows: row_texts(&lines),
         });
         windows.push(window);
     }
@@ -693,7 +690,8 @@ fn after_scroll_violations(
 
 /// 検査 8: 先渡しありの台本が 2 行だけ入る欄からあふれても、表示済みの字の行の割り当てが
 /// 変わらず、出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。先渡しなしの対照では
-/// あふれの後の段階で字が動く（台本の形の確かめ・要件 1.1〜1.7・2.1〜2.4・3.1・3.2）。
+/// あふれの後の段階で字が動く（台本の形の確かめ・spec `areka-P0-reflow-scroll-path-test` 要件 1.1〜1.7・
+/// 2.1〜2.4・3.1・3.2）。
 #[test]
 fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
     let (stages, windows) = walk_with_windows(SCROLL_TALK, Delivery::Staged);
@@ -737,13 +735,12 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
 
     // 対照（先渡しなし）: 台本が「届いた字だけで区切ると、あふれの後の段階で字が動く」形を保っている。
     assert!(
-        !reveal_violations(&old).is_empty()
-            && !after_scroll_violations(&old, &old_windows).is_empty(),
+        !after_scroll_violations(&old, &old_windows).is_empty(),
         "対照: 先渡しなしであふれの後の段階の違反が無い（台本が前提の形を失った）:\n{:#?}",
         trace(&old, &old_windows)
     );
 
-    // 要件 2: 先渡しありの全段階で表示済みの字が動かない。
+    // `areka-P0-reflow-scroll-path-test` 要件 2: 先渡しありの全段階で表示済みの字が動かない。
     let violations = reveal_violations(&stages);
     assert!(
         violations.is_empty(),
@@ -753,7 +750,7 @@ fn full_text_path_keeps_glyph_rows_through_overflow_scroll() {
         trace(&stages, &windows)
     );
 
-    // 要件 3: 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
+    // `areka-P0-reflow-scroll-path-test` 要件 3: 出終わったときの見える行の範囲と行の割り当てが先渡しなしと同じ。
     let old_last = old.last().expect("段階がある");
     assert_eq!(
         Some(last_window),

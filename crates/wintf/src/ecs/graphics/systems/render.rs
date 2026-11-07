@@ -1,8 +1,9 @@
 use super::init::format_entity_name;
 use crate::com::d2d::D2D1DeviceContextExt;
 use crate::com::wuc::DrawingSurfaceInteropExt;
+use crate::ecs::graphics::visual::emit;
 use crate::ecs::graphics::{
-    GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
+    DrawTree, GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
@@ -19,12 +20,14 @@ type RenderSurfaceData = (
     &'static SurfaceGraphics,
     &'static GlobalArrangement,
     Option<&'static GraphicsCommandList>,
+    Option<&'static DrawTree>,
     Option<&'static Name>,
 );
 
 /// Surfaceへの自己描画（Phase 4: 自己描画方式）
 ///
-/// 各Entityが自分のSurfaceに自分のGraphicsCommandListのみを描画する。
+/// 各Entityが自分のSurfaceに自分のGraphicsCommandListを描画し、根の木（DrawTree）が在れば
+/// その直後に木の列を 1 度再生する（木が無ければ命令の列だけ＝今までと同じ画素）。
 /// 子の描画は各子が自分のSurfaceで行い、WUC の見た目（Visual）の木で合成する。
 ///
 /// - Changed<SurfaceGraphicsDirty>を持つEntityが対象
@@ -48,7 +51,7 @@ pub fn render_surface(
         return;
     }
 
-    for (entity, surface, global_arrangement, cmd_list_opt, name) in surfaces.iter() {
+    for (entity, surface, global_arrangement, cmd_list_opt, tree, name) in surfaces.iter() {
         let Some(surface_ref) = surface.surface() else {
             continue;
         };
@@ -132,6 +135,10 @@ pub fn render_surface(
                     D2D1_COMPOSITE_MODE_SOURCE_OVER,
                 );
             }
+        }
+        // 木の節は根の後に同じ描画面へ（変換は上の拡大＋offset を根に）。失敗は EndDraw に出る。
+        if let Some(tree) = tree {
+            emit(&dc, transform, &tree.commands);
         }
 
         if let Err(e) = surface_interop.end_draw() {

@@ -110,6 +110,9 @@ use crate::canvas::TextEffects;
 use crate::choice::ResolvedChoiceStyle;
 use crate::inline_marker::InlineMarkerLook;
 use crate::look::LookLayers;
+use crate::surface::device_err;
+#[cfg(test)]
+use crate::surface::none_err;
 use crate::writing::WritingMode;
 
 // 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
@@ -214,7 +217,7 @@ pub struct ResolvedFont {
     /// 未解決の Regular の顔で、[`FontCatalog::pick`] が解決した顔へ差し替える。
     pub face: FontFace,
     /// 行の中の印（`\![*]`・`%*`）の見た目（要件 5.1）。解決は既定の丸を入れ、runtime が
-    /// アクターごとに覚えた印の絵を解いた直後に押す（`actor_decoration.rs` の `stamp_inline_marker`）。
+    /// アクターごとに覚えた印の絵を解いた直後に押す（`actor_decoration.rs` の `resolve_stamped`）。
     pub inline_marker: InlineMarkerLook,
 }
 
@@ -238,10 +241,10 @@ impl ResolvedFont {
     /// [`crate::color::mix_disabled`] が唯一の実装点）。背景を知らない呼び手は
     /// [`resolve`](Self::resolve) を使い、[`DEFAULT_BALLOON_BACKGROUND`]（白）が採られる。
     ///
-    /// バルーン定義の飾り 5 本（`font.bold` ほか）と `disable.font.*` は、空の列で組んだ土台の
-    /// 2 層を基に [`crate::balloon_overrides::overrides`] がトークン列へ写し、
+    /// バルーン定義の飾り 5 本（`font.bold` ほか）と `disable.font.*` は、
+    /// [`crate::balloon_overrides::overrides`] がトークン列へ写し、
     /// [`LookLayers::from_balloon`] の 2 引数へ渡す（読み取りの所有は
-    /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空で、土台と同じ結果になる。
+    /// `areka-P0-balloon-font-descript-keys`）。宣言が無ければ列は空になる。
     /// 影の 4 キー（`font.shadowcolor.*`／`font.shadowstyle`）は渡さない——所有は
     /// `text-align-shadow-canon`。
     pub fn resolve_with_background(model: &BalloonModel, background: (u8, u8, u8)) -> ResolvedFont {
@@ -292,16 +295,7 @@ impl ResolvedFont {
         candidates.push(name.clone());
         candidates.extend(fallback_chain.iter().cloned());
 
-        let base = LookLayers::from_balloon(
-            candidates.clone(),
-            height,
-            color,
-            background,
-            cursor_text,
-            &[],
-            &[],
-        );
-        let overrides = crate::balloon_overrides::overrides(model, &base);
+        let overrides = crate::balloon_overrides::overrides(model);
 
         ResolvedFont {
             face: FontFace::regular(&name),
@@ -806,33 +800,6 @@ fn create_target_bitmap(
     surface: &TextSurface,
 ) -> Result<ID2D1Bitmap1, TextLayerError> {
     create_d2d_target_bitmap(dc, surface.front_tex())
-}
-
-/// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を
-/// [`TextLayerError::Device`] にする（surface.rs と同型の log-first ヘルパ）。
-///
-/// 比較専用オラクル [`DrawExecutor::new`]（`#[cfg(test)]`）専用ゆえ同じく cfg(test)
-/// で保全する（本番の欠落写像は各所の [`device_err`] が担う）。
-#[cfg(test)]
-fn none_err(context: &'static str) -> TextLayerError {
-    tracing::error!(
-        context,
-        "必須リソースが欠落（デバイス未初期化 または 前提不成立）"
-    );
-    TextLayerError::Device {
-        hresult: 0,
-        context,
-    }
-}
-
-/// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（surface.rs と同型の
-/// log-first ヘルパ: `error!`＋`Err` 戻り値・panic 禁止）。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
-    move |e| {
-        let hresult = e.code().0;
-        tracing::error!(hresult, context, "DirectWrite/D2D 呼び出しが失敗");
-        TextLayerError::Device { hresult, context }
-    }
 }
 
 #[cfg(test)]

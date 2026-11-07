@@ -22,9 +22,15 @@ impl Verdict {
             self.checks += 1;
             info!(check = label, "readback 検証 OK");
         } else {
-            error!(check = label, "readback 検証 FAIL");
-            self.failures.push(label.to_string());
+            self.fail(label);
         }
+    }
+
+    /// 失敗を log-first で記録する（例の失敗はすべてここを通す・`error!` を出してから積む）。
+    pub(super) fn fail(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        error!(failure = %msg, "emo-text-layer: 検証 FAIL");
+        self.failures.push(msg);
     }
 }
 
@@ -41,7 +47,8 @@ fn is_opaque(bytes: &[u8], w: u32, x: u32, y: u32) -> bool {
 /// 行送り軸（block 軸）方向のインク範囲（validrect-local 物理 px）。
 ///
 /// 軸読み替え正準表: horizontal_tb＝最下インク行（+y）・vertical_rl＝右端から最左インク列
-/// までの距離（−x 方向）。改行・折返しで行/列が増えると単調に伸びる。
+/// までの距離（−x 方向）・vertical_lr＝左端から最右インク列までの距離（+x 方向）。
+/// 改行・折返しで行/列が増えると単調に伸びる。
 pub(super) fn block_extent(bytes: &[u8], w: u32, h: u32, mode: WritingMode) -> u32 {
     let mut extent = 0u32;
     for y in 0..h {

@@ -24,7 +24,7 @@ use crate::input_events::{MouseWiring, RegionSource};
 use crate::menu::captions::QUERY_TIMEOUT;
 use crate::menu::plan::PlanEntry;
 use crate::menu::{ItemBody, MenuWiring};
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 
 /// 当たり判定の代役（このテストでは当たり判定を引かないので中身は使われない）。
 fn no_region(scope: u32, x: i64, y: i64) -> HitRegion {

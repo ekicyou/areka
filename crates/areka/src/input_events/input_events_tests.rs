@@ -1,7 +1,7 @@
 use super::*;
 use crate::emo2_boot::hit_region::HitRegion;
-use crate::placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
+use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};

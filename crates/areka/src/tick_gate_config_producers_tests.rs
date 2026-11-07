@@ -242,7 +242,7 @@ fn the_areka_table_lists_every_file_that_marks_the_wake() {
 /// 名簿の現物はワークスペース相対で読む（読めなければその場で落ちる＝静かには壊れない）。
 #[test]
 fn the_wintf_module_roster_names_every_areka_zorder_producer() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../wintf/src/ecs/world/tick_wake.rs");
+    let path = crate::crate_source_test_support::crate_path("wintf", "src/ecs/world/tick_wake.rs");
     let src = std::fs::read_to_string(&path).unwrap_or_else(|e| {
         panic!(
             "起床の旗の名簿が読めない（置き場所が変わったか）: {} — {e}",

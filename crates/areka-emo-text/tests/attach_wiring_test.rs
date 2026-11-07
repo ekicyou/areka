@@ -1,4 +1,6 @@
-//! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（task 8・R9.1/R9.2/R9.5）
+//! # attach_wiring_test — 予約スロットへの装着配線の統合テスト（R9.1/R9.2/R9.5）
+//!
+//! 出典 spec: `areka-P0-emo-text-layer`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
 //! 2 つの target（sakura/kero 相当）を実 `EmoPresenter` に登録して表示を確立し、
 //! `text_slot_view(target)`（emo-present の読み取り専用 additive 増分・R9.1/R9.2）で得た
@@ -10,137 +12,33 @@
 //! - GPU/WUC は headless 実資源（`GraphicsCore::new()`・presenter.rs テストと同一方針）。
 //! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 
-use std::cell::RefCell;
-use std::path::Path;
-use std::rc::Rc;
-use std::time::Duration;
+#[path = "support/mod.rs"]
+mod support;
 
-use areka_actor::reply_channel;
-use areka_emo_atlas::{
-    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
+use support::{
+    build_target_assets, make_world_with_gpu, opaque_count, pump_until_idle, read_back,
+    show_surface,
 };
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
-use areka_emo_text::actor::{
-    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
-};
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine, WrapPlan};
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use areka_emo_present::{EmoPresenter, TargetId};
+use areka_emo_text::actor::{TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{DPI, GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
+use wintf::ecs::{DPI, GraphicsCommandList, VisualGraphics};
 
-// ── GPU/WUC フィクスチャ（emo-present presenter.rs テストと同一方針） ──────────────────
-
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World を組む。
-/// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
+fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+    support::cue(actor, at, command, 0.0)
 }
 
 // ── 合成入力の生成補助（presenter.rs テストと同技法・上流公開 API で本物を組む） ─────────
-
-fn elem(path: &str, x: i64, y: i64) -> Element {
-    Element {
-        layer: 0,
-        path: ElementPath::new(path.to_string()),
-        x,
-        y,
-    }
-}
-
-fn shell_of(surfaces: Vec<Surface>) -> Shell {
-    let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-    Shell {
-        surfaces,
-        appends: Vec::new(),
-        aliases: Vec::new(),
-        animation_sort: None,
-        collision_sort: None,
-        definitions,
-    }
-}
-
-/// surface 1000 = 単一 element（`w×h` 全不透明・座標由来グラデーション）の
-/// `(EmoWorld, AtlasTable)` を返す（バルーン枠画像に相当する合成入力）。
-fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
-    let base = Path::new("shell/master");
-    let surfaces = vec![Surface {
-        targets: vec![AppendTarget::Single(1000)],
-        elements: vec![elem("p.png", 0, 0)],
-        collisions: Vec::new(),
-        animations: Vec::new(),
-    }];
-
-    let mut dec = MemoryDecoder::new();
-    let stride = w * 4;
-    let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            img.push((x as u8).wrapping_mul(3).wrapping_add(salt));
-            img.push((y as u8).wrapping_mul(5).wrapping_add(salt));
-            img.push(((x + y) as u8).wrapping_mul(7).wrapping_add(salt));
-            img.push(0xFF);
-        }
-    }
-    dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-    let set = SurfaceSet {
-        surfaces: &surfaces,
-        base_dir: base,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On,
-        },
-    };
-    let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(
-        baked.errors.is_empty(),
-        "atlas bake セットアップは失敗しない"
-    );
-
-    let mut world = EmoWorld::build(&shell_of(surfaces));
-    world.bind_atlas(&baked.table, SetId(0));
-    (world, baked.table)
-}
-
-/// `ShowSurface` を適用して表示を確立する（reply Ok を要求）。
-fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target,
-            surface_id: 1000,
-            binds: BindSet::default(),
-            pattern: areka_emo_compose::PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    let outcome = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("reply（ShowSurface）を受信できない");
-    assert!(matches!(outcome, Ok(())), "ShowSurface は Ok: {outcome:?}");
-}
 
 /// sakura/kero 相当の 2 target（原寸が異なる 2 バルーン）を表示確立まで組む。
 /// 返り値: (presenter, window0, window1)。原寸は target0=(140,80)・target1=(120,60)。
@@ -156,7 +54,7 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
 
     let mut presenter = EmoPresenter::new();
     presenter
-        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）。本番は boot が descript の実値を
         // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
         .attach_target(TargetId(0), window0, emo_world0, atlas0, 96);
     presenter.attach_target(TargetId(1), window1, emo_world1, atlas1, 96);
@@ -165,7 +63,7 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
     (presenter, window0, window1)
 }
 
-// ── k≠1 の単一 target フィクスチャ（task 7.3・R8.2 の `from_view` 檻用） ─────────────────
+// ── k≠1 の単一 target フィクスチャ（`areka-P0-emo-dpi-scaling` R8.2 の `from_view` 檻用） ─────────────────
 
 /// k>1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
 ///
@@ -174,24 +72,24 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
 /// 丸めそのもの（k<1 の衝突）の檻は [`SUB_UNITY_NATIVE`] 側が所有する。
 const SCALED_NATIVE: (u32, u32) = (140, 80);
 
-/// k<1 檻の native 原寸（2026-07-30）。
+/// k<1 檻の native 原寸。
 ///
 /// # なぜこの値か——k<1 では順写像が**単射でない**
 ///
 /// 丸め権威 `scale_len` は k=4/5 で `142 → round(113.6) = 114` と `143 → round(114.4) = 114`
 /// を返す。**異なる 2 つの原寸が同一の物理寸へ潰れる**のだから、物理寸から原寸を復元する
-/// 逆写像は原理的に存在し得ない——旧導出はどちらか一方で必ず間違える。同様に 77 と 78 は
+/// 逆写像は原理的に存在し得ない——逆写像の導出はどちらか一方で必ず間違える。同様に 77 と 78 は
 /// ともに 62 へ潰れる。
 ///
 /// k>1 でこれが起きないのは、順写像が拡大写像で異なる原寸が異なる物理寸へ分離されるからである
 /// （縮小写像である k<1 のみ鳩ノ巣で衝突する）。ゆえに「k≥1 で緑」は k<1 の証拠にならない。
 ///
-/// 実測（2026-07-30）: 旧導出を復活させるとこの (142, 77) は (143, 78) を返して落ちる。
+/// 逆写像の導出に戻すと、この (142, 77) は (143, 78) を返して落ちる。
 const SUB_UNITY_NATIVE: (u32, u32) = (142, 77);
 
 /// 窓 DPI を指定して balloon 相当の単一 target（native 原寸 [`SCALED_NATIVE`]）を表示確立まで組む。
 ///
-/// 作者基準 DPI は正典既定の 96（ukadoc・D1）ゆえ **k = window_dpi / 96**（192 → k=2）。
+/// 作者基準 DPI は正典既定の 96（ukadoc・`areka-P0-emo-dpi-scaling` design D1）ゆえ **k = window_dpi / 96**（192 → k=2）。
 /// `setup_two_targets` は k=1.0 に固定されており、k=1 では `surface_size()` と `physical_size()`
 /// が恒等で**取り違えが数値的に観測できない**——本フィクスチャはその盲点を潰すためにある。
 fn setup_scaled_target(world: &mut World, window_dpi: u16) -> (EmoPresenter, Entity) {
@@ -217,7 +115,7 @@ fn setup_target_with_dpis(
     (presenter, window)
 }
 
-// ── ログ捕捉（R8.7 の観測・共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
+// ── ログ捕捉（`areka-P0-emo-dpi-scaling` R8.7 の観測・共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
 //
 // 捕捉窓・常駐の仕掛け・空振り検出はすべて `log_capture_kit::capture` が持つ。統合テスト
 // （`tests/`）は消費 crate の外側から `use` する別 crate だが、引き方は in-crate テストと
@@ -236,7 +134,7 @@ fn setup_target_with_dpis(
 type LogEvent = CapturedEvent;
 
 /// 構造化フィールドの Debug 表現を取り出し、**欠落は失敗**とする判定アダプタ
-/// （フィールド名も 7.4 の判定契約のうち）。
+/// （フィールド名も実機サインオフの判定契約のうち）。
 ///
 /// `field` ではなく別名にしてあるのは、[`CapturedEvent`] が同名の固有メソッドを持つためで
 /// ある。拡張トレイトに `field` を生やすと固有メソッドが黙って優先され、欠落時に panic する
@@ -268,48 +166,15 @@ fn expect_one<'a>(events: &'a [LogEvent], needle: &str) -> &'a LogEvent {
 
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
-/// テスト用 cue。
-fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
-}
-
 /// テスト用 BalloonModel（幾何は既定: validrect 未指定＝画像全域・font 未指定＝既定）。
 fn geo_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, None, FontColor::new(None, None, None)),
+    support::geometry_model(
+        (Some(0), Some(0)),
+        (None, None),
+        (None, None, None, None),
         None,
         None,
     )
-}
-
-/// 事前 queue 済みメッセージを全て処理し queue が空になった時点で抜ける bounded pump
-/// （actor.rs 結線テストの決定論パターン——WM_QUIT は posted メッセージが尽きた後に配送）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけ。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
-}
-
-/// 非透明ピクセル数（BGRA 密配列の α ≠ 0）。
-fn opaque_count(bytes: &[u8]) -> usize {
-    bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
-}
-
-/// 装着済み actor の供給面 readback。
-fn read_back(rt: &TextLayerRuntime, actor: &ActorKey) -> Vec<u8> {
-    rt.surface(actor)
-        .expect("装着済み actor の供給面")
-        .read_back()
-        .expect("read_back")
 }
 
 // ══ 観測可能な完了状態: 2 target 結線シナリオで actor 別バルーンへ独立描画（R9.5） ══
@@ -318,9 +183,7 @@ fn read_back(rt: &TextLayerRuntime, actor: &ActorKey) -> Vec<u8> {
 /// (1) 実 sink→UI ドレイン→状態→フレーム提示の通し結線で両バルーンにインクが載る、
 /// (2) 各 actor の供給面が対応 target のバルーン原寸（validrect 全域）に一致する、
 /// (3) 両スロットに有効 brush が装着され GraphicsCommandList は不挿入（R9.1/R9.3 構造）、
-/// (4) \0 への後続 cue が \1 の描画へ一切波及しない（独立性・バイト同一）、
-/// (5) 装着経路が行レイアウト（PositionedLine＝クリック可能範囲の素材）を
-///     choice-render が再利用できる構造のまま保つ（R9.4 シーム）——を檻化する。
+/// (4) \0 への後続 cue が \1 の描画へ一切波及しない（独立性・バイト同一）——を檻化する。
 #[test]
 fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     let mut world = make_world_with_gpu();
@@ -429,38 +292,6 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
         bytes1,
         "\\0 の更新は \\1 の供給面へ波及しない（バイト同一＝独立描画）"
     );
-
-    // ── R9.4 シーム: 装着配線後も、結線側が持つ同じ入力（view＋model）から行レイアウト
-    //    （PositionedLine＝行矩形＋グリフ位置）を再導出できる構造のまま ──
-    let binding = TextSlotBinding::from_view(&view0);
-    let resolved = ResolvedBalloonText::resolve(&model, binding.image_size);
-    let state = rt.state().actor_state(&sakura).expect("actor state");
-    let visible = rt.state().visible_glyphs(&sakura, 2.0);
-    assert!(visible > 0);
-    let lines = LayoutEngine::layout(
-        state.items(),
-        visible,
-        &resolved.region,
-        resolved.mode,
-        resolved.font.height,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert!(!lines.is_empty(), "行レイアウトが再導出できる");
-    let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();
-    assert_eq!(placed, visible, "可視グリフが全て行へ配置される（無損失）");
-    for line in &lines {
-        assert!(
-            line.rect.right > line.rect.left && line.rect.bottom > line.rect.top,
-            "行矩形は非退化（クリック可能範囲導出の素材・R9.4）"
-        );
-        for g in &line.glyphs {
-            assert!(
-                g.advance > 0.0,
-                "グリフ送り幅（クリック範囲の幅素材）が得られる"
-            );
-        }
-    }
 }
 
 // ══ 単一 actor のみの場合も当該 actor の target へ正しく装着される ══
@@ -552,30 +383,30 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     );
 }
 
-// ══ task 7.3 ①: `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・R8.2） ══
+// ══ `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・`areka-P0-emo-dpi-scaling` R8.2） ══
 
-/// **7.1 で修理した production 契約の檻**（7.1 レビュー指摘・本 task が担当の正本）。
+/// **production 契約の檻**（`from_view` が物理寸を読むことを確かめる正本）。
 ///
 /// # なぜ in-crate では檻に入らないのか
 ///
 /// [`TextSlotBinding::from_view`] の入力 `TextSlotView` は emo-present の**私有フィールド型**で
 /// 公開コンストラクタを持たず、唯一の構築点が `EmoPresenter::text_slot_view`（実 GPU 表示確立が
 /// 前提）である。ゆえに `surface_size()`（native）を渡す**旧実装へ戻す変異**は
-/// `cargo test -p areka-emo-text` の全 in-crate ターゲットで誰にも殺されない（レビュアー実測）。
+/// `cargo test -p areka-emo-text` の全 in-crate ターゲットで誰にも殺されない。
 /// 本ケースは実 presenter から得た本物の view でその向きを固定する。
 ///
 /// # なぜ k=2（窓 DPI 192／author 96）でなければならないのか
 ///
 /// k=1 では `surface_size() == physical_size()` が**恒等**であり、正しい実装と旧実装が
 /// 数値的に区別できない（＝檻が空虚になる）。既存の `setup_two_targets` は k=1.0 固定ゆえ
-/// この盲点をそのまま踏んでいた（3.2+3.3 の申し送り「lib 自体は無傷」が偽になった経緯）。
+/// この盲点をそのまま踏んでいた。
 ///
 /// 檻の内容は 3 点:
 /// 1. `binding.surface_size == view.physical_size()`（物理原寸を保持する）、
 /// 2. `binding.image_size == view.surface_size()`（image px 原寸＝作者画像空間は **k 不変**）、
-/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（R8.2 の可観測な帰結）。
+/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（`areka-P0-emo-dpi-scaling` R8.2 の可観測な帰結）。
 ///    旧実装では image 空間が 1/k へ縮み、供給面が k に依らずほぼ一定になる——「k を変えても
-///    文字が拡大されない」静かな欠陥（6.5 一次実走で実機検出された症状）そのもの。
+///    文字が拡大されない」静かな欠陥（`areka-P0-emo-dpi-scaling` の実機走行で見つかった症状）そのもの。
 #[test]
 fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     let mut world = make_world_with_gpu();
@@ -607,7 +438,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
         "image px 原寸は view の native をそのまま透過する（作者画像空間＝k 不変）"
     );
 
-    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（R8.2 の可観測な帰結） ──
+    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（`areka-P0-emo-dpi-scaling` R8.2 の可観測な帰結） ──
     let model = geo_model();
     let sakura = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -625,7 +456,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     );
 }
 
-/// **k<1 の 1px 往復欠陥の回帰檻**（2026-07-30 新設・実 presenter 経路）。
+/// **k<1 の 1px 往復欠陥の回帰檻**（実 presenter 経路）。
 ///
 /// # 何を守っているか
 ///
@@ -636,13 +467,13 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
 ///
 /// 本ケースは作者 DPI 120／窓 DPI 96（k=4/5）で native [`SUB_UNITY_NATIVE`]=(142,77) を通し、
 /// `binding.image_size` が **(142,77) のまま**であることを実 presenter 経由で固定する。
-/// 逆写像を復活させると (143,78) になり落ちる（＝旧実装への排他キル・2026-07-30 実測）。
+/// 逆写像を復活させると (143,78) になり落ちる（＝逆写像の実装への排他キル）。
 ///
 /// # なぜ k>1 の兄弟檻では足りなかったか
 ///
 /// `from_view_reads_physical_size_so_image_space_stays_k_invariant` は k=2 で「どちらの寸を
 /// 読むか」の**向き**を固定するが、k≥1 では逆写像も厳密に復元するため**丸めの破れは起きない**。
-/// k<1 は本 spec のどの檻も実機サインオフ（125%/200%＝k>1）も通っておらず、休眠していたのは
+/// k<1 は `areka-P0-emo-dpi-scaling` のどの檻も実機サインオフ（125%/200%＝k>1）も通っておらず、休眠していたのは
 /// 同梱 emo2 fixture が DPI を宣言しない（＝96）という**データ上の偶然**にすぎなかった。
 ///
 /// # 本番到達性
@@ -685,19 +516,19 @@ fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
     );
 }
 
-// ══ task 7.3 ②: k 再追従の**ログ観測契約**（R8.7・task 7.4 実機サインオフの判定源） ══
+// ══ k 再追従の**ログ観測契約**（`areka-P0-emo-dpi-scaling` R8.7・実機サインオフの判定源） ══
 
-/// 再追従が決定論的に**ログで観測できる**ことを固定する（R8.7）。
+/// 再追従が決定論的に**ログで観測できる**ことを固定する（`areka-P0-emo-dpi-scaling` R8.7）。
 ///
-/// task 7.4 の実機サインオフは、これらのフィールドを grep して判定する:
+/// 実機サインオフは、これらのフィールドを grep して判定する:
 /// - 再追従 `info!`: `actor` ／ `k_old` ／ `k_new`（k の遷移そのもの）、
 /// - 2 回目の装着 `info!`: `physical_size`（新 k の供給面寸）。
 ///
-/// **判定は絶対値でなく比で行う**（7.4 本文）——ここでも `physical_size` の比が
-/// `k_new / k_old` に一致することまで固定する。フィールド名の改名・ログ削除は 7.4 の判定基準を
+/// **判定は絶対値でなく比で行う**——ここでも `physical_size` の比が
+/// `k_new / k_old` に一致することまで固定する。フィールド名の改名・ログ削除は実機サインオフの判定基準を
 /// 静かに壊すため、名前と値の双方を実行テストで固定する（`expect_field` は欠落で panic する）。
 ///
-/// 併せて「装着 `info!` は `ActorRender` 不在時のみ」（7.1 で doc を改訂した契約）も
+/// 併せて「装着 `info!` は `ActorRender` 不在時のみ」（`register_actor_binding` の doc の契約）も
 /// 実測する: 同一 actor で装着ログが**2 回**出るのは、間に再追従による破棄が挟まったときだけ。
 #[test]
 fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
@@ -726,7 +557,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     assert_eq!(
         first_attach.expect_field("physical_size"),
         "(140, 80)",
-        "k=1 の供給面寸（7.4 の比較基準）"
+        "k=1 の供給面寸（実機サインオフの比較基準）"
     );
 
     // ── 窓 DPI を 192 へ（実機のモニタ跨ぎ相当）→ presenter の適用 k が 2.0 へ跳ぶ ──
@@ -737,14 +568,14 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     let view2 = presenter.text_slot_view(TargetId(0)).expect("view（k=2）");
     assert_eq!(view2.scale(), 2.0, "前提: 再表示で適用 k が 2.0 へ跳ぶ");
 
-    // ── 再追従ログ: actor ／ k_old ／ k_new（R8.7 の本体） ──
+    // ── 再追従ログ: actor ／ k_old ／ k_new（`areka-P0-emo-dpi-scaling` R8.7 の本体） ──
     let (refreshed, refresh_events) = capture(|| rt.refresh_actor_scale(&sakura, &view2, &model));
     assert!(refreshed, "k 変化の再追従は true");
     let refresh_log = expect_one(&refresh_events, "文字層の再追従");
     assert_eq!(
         refresh_log.level,
         tracing::Level::INFO,
-        "再追従は info!（実機 grep の水準・R8.7）"
+        "再追従は info!（実機 grep の水準・`areka-P0-emo-dpi-scaling` R8.7）"
     );
     assert_eq!(refresh_log.expect_field("actor"), "0", "actor フィールド");
     assert_eq!(
@@ -765,13 +596,13 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     assert_eq!(
         second_attach.expect_field("physical_size"),
         "(280, 160)",
-        "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（7.4 は絶対値でなくこの比で判定する）"
+        "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（絶対値でなくこの比で判定する）"
     );
 
     // ── 装着 info! は「ActorRender 不在時のみ」——判定キー全同値の走査では 3 回目が出ない ──
     assert!(
         !rt.refresh_actor_scale(&sakura, &view2, &model),
-        "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・R4.5/R8.5）"
+        "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・`areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5）"
     );
     let (_, idle_events) =
         capture(|| present_frame(&mut rt, &mut world, 1.0).expect("同値 k 後の提示"));

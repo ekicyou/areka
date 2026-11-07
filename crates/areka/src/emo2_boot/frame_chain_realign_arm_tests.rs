@@ -24,8 +24,8 @@
 use bevy_ecs::entity::Entity;
 use wintf::ecs::SizeI;
 
-use crate::placement::chain_finalize::{ChainFinalized, ChainRect};
-use crate::placement::chain_realign::ChainRealignPending;
+use areka_placement::chain_finalize::{ChainFinalized, ChainRect};
+use areka_placement::chain_realign::ChainRealignPending;
 
 use super::dpi::size_changed;
 use super::test_support::{
