@@ -104,6 +104,16 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
     }
 }
 
+/// 応答の台本が「台本あり」か（空でなければ真・空白だけも台本）。返事の写し（`first_reply_of`）と
+/// 外から頼まれたイベントの腕がこれ 1 つで決める（SSP は空白だけの台本も再生して今のトークを置き換える）。
+/// 定常の Value の腕からは呼ばない。audit-kanade の design.md 「指摘ごとの直し方」の #5 の行は定常も挙げるが、
+/// 定常は今でもどの Value も再生する（空白だけも台本として扱えている）。ここで判定を挟むと変わるのは空の
+/// 台本 `""` の再生だけで、それは design.md 「変わること」⑸ に無い（空の台本の再生は今日どおり・
+/// `translate_skipped_empty`）。
+pub(crate) fn has_script(script: &str) -> bool {
+    !script.is_empty()
+}
+
 /// トークの番号を 1 つ取り、次の番号へ進める（採番はここだけ・同じ番号を 2 回使わない）。
 pub(in crate::schedule) fn take_talk_id(state: &mut State) -> TalkId {
     let talk_id = TalkId(state.next_talk_id);

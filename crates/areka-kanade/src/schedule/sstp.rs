@@ -105,9 +105,9 @@ pub(super) fn on_notify(
 
 /// 応答待ちの控えが在るときの `Input::ShioriReply` の腕（`route` が `on_shiori_reply` より先に呼ぶ）。
 ///
-/// 控えを必ず取り出す。相が `Steady` で空でない（trim して 1 文字以上の）台本なら [`on_send`] と同じ
+/// 控えを必ず取り出す。相が `Steady` で空でない（空白だけも含む・[`super::has_script`]）台本なら [`on_send`] と同じ
 /// 掃除・採番で新しいトークを始め（`origin = NOTIFY_ORIGIN`）、再生の開始に strict の印を立てる。翻訳は
-/// `step` の出口の規則が元のイベント（`EventId::Sstp`）の出どころで預ける。空・空白だけ・204（エラー
+/// `step` の出口の規則が元のイベント（`EventId::Sstp`）の出どころで預ける。空・204（エラー
 /// 応答は殻が 204 に写す）は何もせず今のトークを残す。それ以外（失敗など）は今日の道へ渡す。
 pub(super) fn on_notify_reply(
     mut state: State,
@@ -122,7 +122,7 @@ pub(super) fn on_notify_reply(
         return super::on_shiori_reply(state, outcome, origin, config);
     }
     match outcome {
-        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if super::has_script(&script) => {
             super::clear_choice_ledger(&mut state, "sstp_notify");
             let (talk_id, mut start) =
                 super::start_talk(&mut state, NOTIFY_ORIGIN, script, ScriptOrigin::MCP_NOTIFY);

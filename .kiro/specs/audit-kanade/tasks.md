@@ -77,7 +77,7 @@
   - `marked_request_with_pending_change_sends_nothing_and_leaves_for_ghost_change` と `raise_and_property_events_are_dropped_while_close_or_change_is_pending`（4 通り）が緑で、枝を外すと赤になる
   - _Depends: 2.1_
   - _Requirements: 3.1, 4.1, 4.2, 5.2, 9.1, 9.3_
-- [ ] 5.2 「台本があるか」を 1 つの判定にする（#5）
+- [x] 5.2 「台本があるか」を 1 つの判定にする（#5）
   - 判定を 1 つの関数にして 3 か所から呼び、空白だけの答えも台本として扱う
   - ずれを固定していたテストを `whitespace_only_answer_is_a_script_on_every_path` に改め、SSTP の NOTIFY に空白だけの答えで再生が始まる 1 件を足す
   - 2 本が緑で、trim に戻すと赤になる
@@ -311,3 +311,5 @@
 
 - 4.1: `schedule_tests.rs` は 842 行（design の見込み約 810）。#36 の −30 行は、`state_in` がもとから `..base_state()` の形で消す行が無かったための見込み違い。直し漏れではない。
 - 4.2: design #30 の行は「ChangePending に Notified」を `change_phase_unexpected` と組むが、コードは `change_input_ignored` を出す。テストはコードに合わせた。私的な関数のテストは子のモジュール `change_tests.rs` に置ける。
+- 5.2: design #5 の行（定常の Value の腕からも `has_script` を呼ぶ）からずらした。定常はもとからどの Value も再生するので、空白だけの扱いは 3 か所とも同じになった。定常で判定を挟むと変わるのは空の台本 `""` だけで、それは「変わること」⑸ に無い（audit 系は推奨案で決めてよいとのお許し・11-04）。残る食い違い: RaiseEvent の道では `""` が NoReply、定常では空のトークで置き換える（前からある・COMPAT_ARCHITECTURE:308 の裁定どおり）。
+- 5.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:308` が空白だけを「無かった」と読み、旧名のテスト `empty_blank_and_no_content_are_no_reply` を名指す。`crates/areka/src/mcp/raise_event_tests.rs:389` の注も同じ。振る舞いの変化: `OnInstallCompleteEx` の答えが空白だけなら、続く `OnInstallComplete` を送らなくなる。

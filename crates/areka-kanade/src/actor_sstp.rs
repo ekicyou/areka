@@ -18,14 +18,14 @@ pub(crate) enum FirstReply {
     Failed,
 }
 
-/// 空でない（trim して 1 文字以上の）`Value` → Script、空・空白だけの `Value`・`NoContent`・
+/// 空でない（空白だけも含む・[`crate::schedule::has_script`]）`Value` → Script、空の `Value`・`NoContent`・
 /// `Notified`・`Unloaded` → NoReply、`Failed` → Failed。
 ///
 /// エラー応答は送出点（`round_trip_request`）で既に 204／NOTIFY の完了へ写っているので返事なしになる。
 /// `Unloaded` は通知の入口の往復からは生じないが、写しの表を閉じるため返事なしに置く。
 pub(crate) fn first_reply_of(outcome: &ShioriOutcome) -> FirstReply {
     match outcome {
-        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if crate::schedule::has_script(script) => {
             FirstReply::Script(script.clone())
         }
         ShioriOutcome::Value(_, _)

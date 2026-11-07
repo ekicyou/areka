@@ -208,13 +208,14 @@ fn notify_reaches_shiori_and_answers_the_script_before_translation() {
     close(rig);
 }
 
-/// ⑵ 204・空白だけ・エラー応答は `NoScript` で、何も再生しない（`OnTranslate` も送らない）。
+/// ⑵ 204・空の台本・エラー応答は `NoScript` で、何も再生しない（`OnTranslate` も送らない）。
+/// 空白だけの台本は台本（`raise_reply_tests::whitespace_only_answer_is_a_script_on_every_path`）。
 #[test]
 fn notify_without_script_is_no_script_and_starts_nothing() {
     let answers: [(&str, MakeOutcome); 3] = [
         ("204", || ShioriOutcome::NoContent),
-        ("空白だけ", || {
-            ShioriOutcome::Value(" \t\r\n\u{3000}".into(), areka_talk::SecurityLevel::Local)
+        ("空の台本", || {
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local)
         }),
         ("エラー応答", || {
             ShioriOutcome::Failed(ShioriFailure::Shiori("500 Internal Server Error".into()))

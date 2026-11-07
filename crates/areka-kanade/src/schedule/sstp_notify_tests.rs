@@ -207,19 +207,15 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
     }
 }
 
-/// ⑹ 返り値なし・空・空白だけ（エラー応答は殻が 204 に写す）は一括が空で、今のトークと
+/// ⑹ 返り値なし・空（エラー応答は殻が 204 に写す）は一括が空で、今のトークと
 /// 選択肢が残り、talk は始まらない（要件 2.4・3.2・3.4）。
 #[test]
-fn no_value_empty_or_blank_keeps_the_current_talk() {
+fn no_value_or_empty_keeps_the_current_talk() {
     let outcomes = [
         ("204", ShioriOutcome::NoContent),
         (
             "空",
             ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
-        ),
-        (
-            "空白だけ",
-            ShioriOutcome::Value(" \t\r\n　".to_string(), areka_talk::SecurityLevel::Local),
         ),
     ];
     for (label, outcome) in outcomes {
@@ -253,6 +249,25 @@ fn no_value_empty_or_blank_keeps_the_current_talk() {
         assert!(warn_or_above(&events).is_empty(), "{label}: {events:#?}");
         logged_once(&events, Level::DEBUG, "sstp_notify_no_script");
     }
+}
+
+/// ⑹b 空白だけの答えは台本で、今のトークを次の番号のトークで置き換える（SSP と同じ・`has_script`）。
+#[test]
+fn whitespace_only_answer_starts_a_talk() {
+    let (state, actions) = notify_then_reply(
+        steady(active(9, "OnMouseDoubleClick")),
+        "OnNotListed",
+        &["r0"],
+        None,
+        ShioriOutcome::Value(" \t\r\n　".to_string(), areka_talk::SecurityLevel::Local),
+    );
+    assert_playing_notify_talk(&state, 10);
+    assert_eq!(
+        state.prev_talk,
+        Some(TalkId(9)),
+        "置き換えた古い番号を控える"
+    );
+    assert_eq!(translate_request(&actions).script, " \t\r\n　");
 }
 
 /// ⑺ 許可の表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.2）。
