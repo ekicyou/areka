@@ -16,7 +16,7 @@ use wintf::ecs::cursor::{CursorAsk, CursorQuery, CursorReply, cursor_size_for_dp
 
 use super::{CursorFile, ShellCursorAssets, build_shell_cursors};
 use crate::emo2_boot::shell_cursor_table::{CursorScene, Shape, SystemCursor};
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 const TARGET: &str = "areka::emo2_boot::shell_cursor_assets";
 

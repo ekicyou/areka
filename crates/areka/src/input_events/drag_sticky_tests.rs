@@ -12,10 +12,10 @@ use wintf::ecs::Point;
 use wintf::ecs::drag::{DragConfig, DraggingState};
 
 use super::test_support::{Rig, ended, started};
-use crate::placement::follow::{AnchorSource, Anchored, MonitorSnapshot, sync_drag_writer};
-use crate::placement::persist::{char_pos_from_origin_x, char_pos_to_origin_x, project_restore};
-use crate::placement::resolver::{Anchor, PointPx, RectPx, SizePx};
-use crate::placement::sticky_group_ledger::seed_sticky_descript;
+use areka_placement::follow::{AnchorSource, Anchored, MonitorSnapshot, sync_drag_writer};
+use areka_placement::persist::{char_pos_from_origin_x, char_pos_to_origin_x, project_restore};
+use areka_placement::resolver::{Anchor, PointPx, RectPx, SizePx};
+use areka_placement::sticky_group_ledger::seed_sticky_descript;
 
 /// 押した位置の窓の中の物理 px。
 const PRESS_LOCAL: Point = Point { x: 20, y: 30 };

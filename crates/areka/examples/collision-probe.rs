@@ -34,13 +34,13 @@
 //!
 //! # `#[path]` 私有 include（read-only 再利用・production 不改変）
 //!
-//! `areka` は bin crate（lib target なし）ゆえ `use areka::...` は不可能。本 probe は次の3モジュールを
-//! `#[path]` で私有 include する（`window-placement.rs:107-113` と同型）:
+//! `areka` は bin crate（lib target なし）ゆえ `use areka::...` は不可能。本 probe は次の2モジュールを
+//! `#[path]` で私有 include する。配置（`spawn_ghost_windows`／`resize_window_to`）は crate の公開面
+//! `areka_placement::…` で使う（spec: placement-crate-split 要件 4.2）:
 //!
 //! - `../src/emo2_boot/target_map.rs`（scope→`TargetId` 写像の正本・既に `crate::` フリー）
 //! - `../src/emo2_boot/hit_region.rs`（[`resolve_hit_region`]／`HitRegion` 契約・非テストコードは
 //!   `super::target_map` と外部 crate のみ参照＝`crate::` フリー）
-//! - `../src/placement/mod.rs`（`spawn_ghost_windows`／`resize_window_to` の read-only 再利用）
 //!
 //! **`target_map` と `hit_region` は example クレートルートに宣言する**（入れ子にしない）。これにより
 //! `hit_region.rs` 内部の `super::target_map` が本 probe の `target_map` へ解決される（design「配置の
@@ -56,7 +56,7 @@
 //! 3. **窓 client 寸は本番の窓寸規則で与える**: `spawn_ghost_windows` を**意図的に誤った placeholder 寸**
 //!    （100×100）で呼んで窓を作り、`apply(ShowSurface{1000, binds})` 成立後に
 //!    [`EmoPresenter::target_physical_size`]（**k 適用後の物理寸権威**）を読み、**本番の反映関数**
-//!    [`placement::follow::resize_window_to`] で窓へ適用する（戻り値 `true` を assert）。読む照会を
+//!    [`areka_placement::follow::resize_window_to`] で窓へ適用する（戻り値 `true` を assert）。読む照会を
 //!    `text_slot_view(...).surface_size()`（native 原寸）にしてはならない——k≠1.0 では窓が原寸へ
 //!    引き戻される（照会 1 トークンの取り違えが静かな欠陥になる）。placeholder を
 //!    誤寸にするのは「最終一致が本番 resize 経路を通ってしか成立しない」ことを構図で保証するため。
@@ -73,7 +73,7 @@
 //! **ダブルクリックでは終了しない**（2026-08-05 実機で確認）。本 probe が装着するポインタ
 //! ハンドラは [`on_probe_pointer_moved`]（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
 //! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
-//! `areka-P0-input-events` task 2.7 で**退役**し（`placement/spawn.rs` の当該コメント参照）、
+//! `areka-P0-input-events` task 2.7 で**退役**し（`crates/areka-placement/src/spawn.rs` の当該コメント参照）、
 //! 正典の脱出口（**Ctrl+左ダブルクリック**・DD-IE-7）は `input_events::attach_char_pointer_handlers`
 //! （`pub(crate)`・内部が `crate::` パスを使うため example から `#[path]` include できない）が
 //! 担うようになったためである。素のダブルクリックは本来 `KanadeMsg::Mouse(DoubleClick)` の送出契機で
@@ -86,33 +86,33 @@
 //! `pasta.dll` を**絶対パスで**与える。相対パスだと `pasta.dll` の LOAD が `0x8007007E` で失敗する）に
 //! 従う。ただし本 probe に**その制約はかからない**——理由は次の 2 点で、混同しないこと:
 //!
-//! 1. **本 probe の fixture ルートは常に絶対解決される**: [`emo2_root`] のアンカーはコンパイル時に
-//!    埋め込まれる `CARGO_MANIFEST_DIR`（＝`crates/areka` の絶対パス）であり、続く `../pilot/...` は
-//!    そのアンカーからの相対要素にすぎない。**プロセスの作業ディレクトリに依存しない**ため、どこから
+//! 1. **本 probe の fixture ルートは常に絶対解決される**: [`emo2_root`] は `sample_ghost_kit` の
+//!    `SampleRoot::acquire("emo2")` が用意した検体の**絶対パス**（`SampleRoot::folder`）を返す。
+//!    **プロセスの作業ディレクトリに依存しない**ため、どこから
 //!    `cargo run` しても同一の emo2 fixture を読む（起動側で絶対パスを与える必要がない）。
 //! 2. **本 probe は `pasta.dll` を一切ロードしない**: SHIORI（`pasta.dll`）も host-32 helper も起動しない
 //!    ため、`0x8007007E`（DLL LOAD 失敗）の経路自体が存在しない。**読むものは少なくない**が、いずれも
 //!    データファイルの読取であって DLL のロードではない——実際の読取先は次のとおり:
-//!    - **ghost の `descript.txt`**（`placement/source.rs:142-143`・寛容読取）・**shell の
-//!      `descript.txt`**（`source.rs:146-156`・読取失敗は致命）・**バルーンの `descript.txt`**
-//!      （`source.rs:197-201`・作者基準 DPI の取得）——起点が `descript.txt` であることは
+//!    - **ghost の `descript.txt`**（`crates/areka-placement/src/source.rs:152-154`・寛容読取）・**shell の
+//!      `descript.txt`**（`source.rs:156-167`・読取失敗は致命）・**バルーンの `descript.txt`**
+//!      （`source.rs:207-211`・作者基準 DPI の取得）——起点が `descript.txt` であることは
 //!      [[areka-ghost-boot-descript-not-install]] の正典どおり
-//!    - **shell の `surfaces.txt` と面画像**（採寸側 `placement/measure.rs:328-345` ＋ probe 自身の
+//!    - **shell の `surfaces.txt` と面画像**（採寸側 `crates/areka-placement/src/measure.rs:394-405` ＋ probe 自身の
 //!      [`load_shell_assets`]）
-//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:221` の `measure_balloon_surface0`）と
-//!      **`windowposition` 定義**（`placement/mod.rs:341` の `apply_scope_windowpositions`）
+//!    - **バルーンパッケージの面定義・面画像**（`measure.rs:433` の `measure_balloon_surface0`）と
+//!      **`windowposition` 定義**（`crates/areka-placement/src/lib.rs:583` の `apply_scope_windowpositions`）
 //!
 //!    ゆえに中断ログ「collision-probe: 配置準備に失敗」（`build_and_spawn` の early return）は
 //!    `PlacementError::Mount`／`DescriptRead`／`Measure` 経由であり、**shell だけでなく ghost/balloon の
-//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages`＝`placement/mod.rs:307-348` が読取の全体像）。
+//!    `descript.txt` やバルーン資産も疑う**こと（`prepare_stages`＝`crates/areka-placement/src/lib.rs:373-455` が読取の全体像）。
 //!
 //! # 作者基準 DPI の出所（k 論証への影響・実測済み）
 //!
-//! 採寸経路（`prepare_stages`・`placement/mod.rs:319-322`）は **descript から読んだ実 author_dpi**
+//! 採寸経路（`prepare_stages`・`crates/areka-placement/src/lib.rs:400-407`）は **descript から読んだ実 author_dpi**
 //! （shell=`seriko.dpi`／balloon=`dpi`）で起動時 k₀ を作るのに対し、本 probe は `attach_target` へ
 //! **96 を直書き**しており `PreparedPlacement::author_dpi` を消費しない。emo2 fixture では両者が
 //! **たまたま一致する**——fixture の shell descript に `seriko.dpi` 宣言が無く既定 96 になるためで、
-//! これは in-repo テスト `placement/source.rs:534-538`
+//! これは in-repo テスト `crates/areka-placement/src/source_tests.rs:264-268`
 //! （`shell_author_dpi_emo2_fixture_is_default_96`）と実行ログ（`primary_dpi=192 shell_author_dpi=96
 //! balloon_author_dpi=96` ／ `apply(ShowSurface): ... author_dpi=96 window_dpi=Some((192,192))`）の
 //! 双方で確認できる。**`seriko.dpi` を宣言する別ゴーストへ差し替えると窓寸（採寸 k₀）と表示 k が
@@ -225,22 +225,15 @@ mod target_map;
 #[allow(dead_code)]
 mod hit_region;
 
-/// 窓配置機構本体（`spawn_ghost_windows`／`resize_window_to`）を read-only 再利用（production 無改変）。
-/// placement 非テストコードは `super::`／外部 crate のみを参照する（`crate::` は `#[cfg(test)]` 内のみ）ため
-/// `#[path]` include で成立する（`window-placement.rs:107-113` と同型）。
-#[path = "../src/placement/mod.rs"]
-#[allow(dead_code)]
-mod placement;
-
-use hit_region::resolve_hit_region;
-use placement::spawn::{
+use areka_placement::spawn::{
     GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
 };
+use hit_region::resolve_hit_region;
 
 // ---------------------------------------------------------------------------
 // 本体分割の接続（`areka-P0-file-slimming` task 8.12・純移動）
 //
-// **上の 3 つの `#[path = "../src/..."]` 私有 include はこのファイルに残す。** 相対パスは宣言元
+// **上の 2 つの `#[path = "../src/..."]` 私有 include はこのファイルに残す。** 相対パスは宣言元
 // ファイルのディレクトリ（`crates/areka/examples/`）から解決されるため、サブディレクトリの子へ
 // 移すと `../src/...` が届かなくなる（本タスクの最重要制約）。
 //

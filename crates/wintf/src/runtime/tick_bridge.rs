@@ -384,7 +384,7 @@ mod tests {
     /// # 門が閉じたまま呼ばれたら緑にしない
     ///
     /// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実 DWM の通知を測った」
-    /// という記録に化ける。既存の手本（`crates/areka/src/placement/transition_signoff_tests.rs`
+    /// という記録に化ける。既存の手本（`crates/areka/src/placement_tests/transition_signoff_tests.rs`
     /// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
     fn require_explicit_vblank_run() {
         assert!(

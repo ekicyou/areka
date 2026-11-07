@@ -30,7 +30,7 @@ use crate::emo2_boot::move_cue::{MoveDirective, PositionCue, parse_move_directiv
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::chain_finalize::ChainFinalized;
+use areka_placement::chain_finalize::ChainFinalized;
 
 use super::test_support::{
     FrameHarness, PerTargetSizes, SPAWN_SIZE_0, all_shown, capture_logs, pos_of, synth_assets,

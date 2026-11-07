@@ -13,7 +13,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 use super::user_break::UserBreakWiring;
 use super::{BalloonWiring, click_selection, selection_events, settle_after_selection};

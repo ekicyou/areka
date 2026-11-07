@@ -26,7 +26,7 @@ use crate::emo2_boot::assets::build_boot_assets;
 use crate::emo2_boot::sample_test_support::{emo2_balloon_root, emo2_root};
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::input_events::balloon::BalloonWiring;
-use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 use super::test_support::{dpi_world, size_of, zero_clock};
 use super::*;
@@ -48,7 +48,7 @@ use super::*;
 fn gpu_frame_world() -> (
     crate::emo2_boot::spine::GpuPermit,
     World,
-    crate::placement::spawn::GhostWindows,
+    areka_placement::spawn::GhostWindows,
 ) {
     // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
     // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
@@ -100,7 +100,7 @@ fn advance_frame(world: &mut World, wiring: Emo2Wiring) -> Emo2Wiring {
 }
 
 /// `[balloon-visibility]` を名乗る行だけを取り出す（他所のログは相順の関心事ではない）。
-fn visibility_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn visibility_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains("[balloon-visibility]"))
@@ -108,7 +108,7 @@ fn visibility_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
 }
 
 /// 本制御が発行していない可視性変化として記録された行だけを取り出す。
-fn explicit_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn explicit_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     visibility_lines(events)
         .into_iter()
         .filter(|e| e.field("trigger") == Some("\"explicit\""))
@@ -206,7 +206,7 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
     );
 
     // フレーム 2: 外から可視になったことを相が検出し、以後の比較相手が「可視」に揃う。
-    let (next, events) = capture_logs(|| advance_frame(&mut world, wiring));
+    let (next, events) = capture(|| advance_frame(&mut world, wiring));
     wiring = next;
     let explicit = explicit_lines(&events);
     assert_eq!(
@@ -224,7 +224,7 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
             reply: None,
         })
         .expect("受信端は結線資源が保持している");
-    let (next, events) = capture_logs(|| advance_frame(&mut world, wiring));
+    let (next, events) = capture(|| advance_frame(&mut world, wiring));
     wiring = next;
 
     let explicit = explicit_lines(&events);

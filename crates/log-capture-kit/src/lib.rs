@@ -215,6 +215,7 @@
 
 mod capture;
 mod event;
+mod expect;
 #[cfg(feature = "env-filter")]
 mod filter;
 mod global;
@@ -224,6 +225,7 @@ pub use capture::capture;
 pub use event::{
     CapturedEvent, FieldValue, LevelCounts, LineFormat, capture_lines, count_levels, format_line,
 };
+pub use expect::{ExpectField, expect_one};
 #[cfg(feature = "env-filter")]
 pub use filter::capture_under_filter;
 pub use global::install_global_capture_all;

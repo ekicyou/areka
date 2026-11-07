@@ -21,7 +21,7 @@ use super::resolve::ActiveGhost;
 use crate::emo2_boot::consumer_ledger::ConsumerLedger;
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::skin_facts_copy;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::spawn::GhostWindows;
 
 const TOOL: &str = "check_script";
 

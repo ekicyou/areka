@@ -12,7 +12,7 @@
 use super::test_support::*;
 use super::*;
 
-use crate::placement::zorder_group_ledger::GroupSource;
+use areka_placement::zorder_group_ledger::GroupSource;
 
 // ---------------------------------------------------------------------------
 // 窓の正本が無い間は取り出さない（要件 1.4・move の相と同じ保留の作法）

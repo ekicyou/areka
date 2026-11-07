@@ -2,7 +2,7 @@ use super::test_support::{
     headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
-use crate::placement::follow::OffsetBase;
+use areka_placement::follow::OffsetBase;
 use bevy_ecs::world::World;
 use std::sync::mpsc;
 
@@ -149,9 +149,9 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
 
 use crate::input_events::attach_char_pointer_handlers;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{CharWindowMarker, spawn_ghost_windows};
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{CharWindowMarker, spawn_ghost_windows};
 
 /// emo2 相当 2 スコープぶんの解決済み配置（spawn.rs 檻の two_scope_placements と同値）。
 fn two_scopes() -> Vec<ScopePlacement> {

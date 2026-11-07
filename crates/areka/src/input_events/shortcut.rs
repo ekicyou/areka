@@ -9,8 +9,8 @@ use wintf::ecs::window::{KeyDown, OnKeyDown};
 
 use crate::menu::reset_balloon_pos_frame::reset_balloon_enabled;
 use crate::menu::reset_pos_frame::{raise_reset_window_pos, reset_position_enabled};
-use crate::placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
-use crate::placement::spawn::GhostWindowMarker;
+use areka_placement::reset_balloon_pos::{BalloonResetTrigger, reset_balloon_positions};
+use areka_placement::spawn::GhostWindowMarker;
 
 /// 仮想キー F10（`VK_F10`）。
 const VK_F10: u16 = 0x79;

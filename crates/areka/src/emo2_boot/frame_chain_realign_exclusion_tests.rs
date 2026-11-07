@@ -23,12 +23,12 @@ use wintf::ecs::drag::DraggingState;
 use wintf::ecs::{Point, WindowPos};
 
 use crate::emo2_boot::move_cue::{apply_move_directive, parse_move_directive};
-use crate::placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainRect, ScriptPlaced};
-use crate::placement::chain_realign::{
+use areka_placement::chain_finalize::{ADJACENT_TOLERANCE_PX, ChainRect, ScriptPlaced};
+use areka_placement::chain_realign::{
     ChainRealignPending, arm_chain_realign, note_script_moved, realign_chain_once_with,
     snapshot_char_rects,
 };
-use crate::placement::sticky_group_ledger::seed_sticky_descript;
+use areka_placement::sticky_group_ledger::seed_sticky_descript;
 
 use super::chain_realign_adjacency_tests::{
     GAP_WITHOUT_REALIGN, boot_remembered_at_high, chain3_pos, chain3_scan, chain3_world, char_pos,

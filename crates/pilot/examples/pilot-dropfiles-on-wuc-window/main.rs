@@ -108,7 +108,7 @@ fn spawn_window(world: &mut World) -> Entity {
                 title: "pilot-dropfiles-on-wuc-window".to_string(),
                 ..Default::default()
             },
-            // 本番 `crates/areka/src/placement/spawn.rs` の `window_style` に宣言だけを足す
+            // 本番 `crates/areka-placement/src/spawn.rs` の `window_style` に宣言だけを足す
             // （最前面にしない・ドラッグ移動なし）。
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,

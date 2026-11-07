@@ -9,15 +9,15 @@
 // =============================================================================
 
 use super::*;
-use crate::placement::follow::OffsetBase;
 use areka_emo_compose::ScaleRatio;
+use areka_placement::follow::OffsetBase;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 
-use crate::placement::follow::{Anchored, BalloonFollow, MonitorSnapshot};
-use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::follow::{Anchored, BalloonFollow, MonitorSnapshot};
+use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 /// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム）。

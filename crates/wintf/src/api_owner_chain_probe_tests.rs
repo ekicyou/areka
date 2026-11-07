@@ -12,7 +12,7 @@
 //!
 //! # 窓の作り
 //!
-//! 本番のゴースト窓（`crates/areka/src/placement/spawn.rs` の `window_style`＝`WS_POPUP`＋
+//! 本番のゴースト窓（`crates/areka-placement/src/spawn.rs` の `window_style`＝`WS_POPUP`＋
 //! `WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_ACCEPTFILES`）のうち、`WS_POPUP`＋`WS_EX_TOOLWINDOW`
 //! だけで作り、`ShowWindow(SW_SHOWNOACTIVATE)` で**実際に表示状態**にする——「既に表示中の窓の
 //! 張り替え」が問いだからである。寸法は 0x0 なので画面には 1 ピクセルも出ないが、

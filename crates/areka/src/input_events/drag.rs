@@ -3,7 +3,7 @@
 //! 3 つの部品を置く:
 //!
 //! - [`on_char_drag_start`]: `OnDragStart` の受け手。Bubble の相でだけ開始を 1 回知らせる。
-//! - [`on_char_drag_end_and_notify`]: `OnDragEnd` の包み。`placement::spawn` が付けた位置の保存
+//! - [`on_char_drag_end_and_notify`]: `OnDragEnd` の包み。`areka_placement::spawn` が付けた位置の保存
 //!   （[`on_char_drag_end`]）を**先に**同じ引数で呼び、その後 Bubble の相でだけ終了を 1 回知らせる。
 //! - [`notify_drag`]: 画面の物理 px から、スコープ・SHIORI へ渡す座標・当たり判定を引いて
 //!   `KanadeMsg::Mouse` を送る。送らないと決めたときは理由を 1 件記録する。
@@ -18,7 +18,7 @@ use wintf::ecs::drag::{DragEndEvent, DragStartEvent};
 use wintf::ecs::pointer::{Phase, PhysicalPoint};
 
 use super::{MouseWiring, char_scope, resolve_hit_owned};
-use crate::placement::follow::{begin_char_drag, on_char_drag_end};
+use areka_placement::follow::{begin_char_drag, on_char_drag_end};
 
 /// キャラクター窓のドラッグの開始を kanade へ 1 回知らせる（要件 1.1〜1.4）。
 ///

@@ -199,8 +199,8 @@ fn registration_names(bytes: &[u8], line_offset: usize, line: &str) -> Vec<Strin
 /// していることを要る。
 ///
 /// **設計にはこの種の実例の引用が無い**ので、実物の綴りから形を決めた——
-/// `const SHELL_DPI_KEY: &str = "seriko.dpi";`（`crates/areka/src/placement/source.rs`）と
-/// `shell_kv.get("seriko.zorder")`（`crates/areka/src/placement/config.rs`）の 2 形が
+/// `const SHELL_DPI_KEY: &str = "seriko.dpi";`（`crates/areka-placement/src/source.rs`）と
+/// `shell_kv.get("seriko.zorder")`（`crates/areka-placement/src/config.rs`）の 2 形が
 /// 実物の設定キーの置かれ方である。
 fn config_keys(bytes: &[u8], line_offset: usize, line: &str) -> Vec<String> {
     let mut out = Vec::new();

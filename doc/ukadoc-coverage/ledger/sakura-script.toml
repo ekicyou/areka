@@ -1470,7 +1470,7 @@ note = """
 正典に対のイベントは無いので、ゴーストへ知らせは送らない。右クリックのメニューの「バルーン位置初期化」と近道 Ctrl＋Shift＋F10 も同じ初期化を行う。
 壊れ方: 無い。標準の位置の材料や窓の組が無いときは何もしない。
 ログ: 戻したら info! の balloon_pos_reset にスコープ・位置・ずらし・きっかけを残す。材料が無いときやスコープを解けなかったときは warn! の balloon_pos_reset_skipped に理由ときっかけを残す。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetballoonpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、初期化は crates/areka/src/placement/reset_balloon_pos.rs の reset_balloon_positions。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetballoonpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、初期化は crates/areka-placement/src/reset_balloon_pos.rs の reset_balloon_positions。
 [群: 窓の位置の初期化]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![execute。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![executesntp の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -1487,7 +1487,7 @@ note = """
 OnResetWindowPos は送らない（送るのは右クリックのメニューの「シェル位置初期化」を選んだときだけ・SSP 2.9.18 の 2026-10-17 の実測と同じ）。
 壊れ方: 無い。並べ直す材料（窓の組・配置の設定・主モニタ）が無いときは何もしない。
 ログ: 並べ直したら info! の reset_window_pos に対象の窓と位置を残す。材料が無いときや大きさの揃わない窓を外したときは warn! の reset_window_pos_skipped。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetwindowpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、並べ直しは crates/areka/src/placement/reset_pos.rs の reset_window_positions。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetwindowpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、並べ直しは crates/areka-placement/src/reset_pos.rs の reset_window_positions。
 [群: 窓の位置の初期化]
 [版: 本文は 2.7 RC1 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![execute。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![executesntp の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -2847,7 +2847,7 @@ note = """
 実装済み。台本で作ったすべての組を解き、組を descript の `seriko.sticky-window` で作った組だけに戻す。
 壊れ方: 無い。
 ログ: info! の sticky_groups（action が reset）に残った組を残す。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reset, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka/src/placement/sticky_group_ledger.rs。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reset, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka-placement/src/sticky_group_ledger.rs。
 [群: 窓の位置と見え方]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reset。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2951,7 +2951,7 @@ note = """
 実装済み。`\\![set,alignmenttodesktop,方向]` と同じに扱う（同じ受け口・同じ語の読み・同じ寿命）。`bottom` と `top` のほか、`left`・`right`・`free`・`default` も同じに受ける。
 壊れ方: 無い。
 ログ: `\\![set,alignmenttodesktop,方向]` の項と同じ。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka/src/placement/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -2970,7 +2970,7 @@ note = """
 読めない語は `free` と同じに吸着を外して窓を今の位置に留める（SSP 2.9.18 の測りに合わせる）。値が欠けているとき（空や空白だけの値を含む）は何も変えない。どちらもトークは止めない。
 壊れ方: 無い。
 ログ: 向きを変えたら info! の alignment_changed。読めない語は warn! の alignment_unknown_word、値が欠けたときや窓が無いときは warn! の alignment_skipped に理由を残す。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka/src/placement/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -2987,7 +2987,7 @@ note = """
 実装済み。現スコープのキャラクターの窓の吸着を外し、窓を今の位置に留める（以後のドラッグは上下左右に自由）。`\\![set,alignmenttodesktop,方向]` の項と同じ受け口・同じ語の読み・同じ寿命（ゴーストが終わるまで保つ）。
 壊れ方: 無い。
 ログ: info! の alignment_changed（to が free）。窓が無いときは warn! の alignment_skipped。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka/src/placement/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -3309,7 +3309,7 @@ note = """
 ID のどれかが既にほかの組（descript の組を含む）に入っている・異なる ID が 2 つ未満・同じ ID の重ね書き・数として読めない ID のときは、その指令では組を作らず、ほかの組は変えない。今は窓が無い ID は受けて、連れ動かす相手から外す。どれもトークは止めない。
 壊れ方: 無い。
 ログ: 組を作ったら info! の sticky_groups、捨てたら warn! の sticky_group_rejected に引数と理由、窓が無い ID は warn! の sticky_member_absent。連れ動いたら info! の sticky_follow（ドラッグの途中の 1 回ごとには残さない）、`ignore-sticky-window` で動かさなかったら info! の sticky_follow_ignored。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka/src/placement/sticky_group_ledger.rs（parse_sticky_tokens と StickyGroupLedger）、連れ動きは crates/areka/src/placement/follow/sticky_follow.rs。
+根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka-placement/src/sticky_group_ledger.rs（parse_sticky_tokens と StickyGroupLedger）、連れ動きは crates/areka-placement/src/follow/sticky_follow.rs。
 [群: 窓の位置と見え方]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """

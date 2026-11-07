@@ -2,7 +2,8 @@ use super::init::format_entity_name;
 use crate::ecs::drag::WindowDragging;
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::{
-    GraphicsCommandList, GraphicsCore, SurfaceGraphics, VisualGraphics, WindowGraphics,
+    ClipShape, DrawTree, GraphicsCommandList, GraphicsCore, SurfaceGraphics, Visual,
+    VisualDrawContent, VisualGraphics, WindowGraphics,
 };
 use crate::ecs::widget::bitmap_source::BitmapSourceGraphics;
 use crate::ecs::window::transition_diag::{ORIGIN_WINDOW_POS, WriteTag};
@@ -121,8 +122,9 @@ pub fn apply_window_pos_changes(
 
 /// 依存コンポーネント無効化（`GraphicsSetup` の先頭・装置を作る係より前）
 ///
-/// 装置が在って無効なとき、有効な窓・見た目・描画面・画像の部品を倒し、命令の列
-/// （古い装置に属する）を全部外し、最後に WUC の資源を倒す（合成の木の部品を先に捨て、
+/// 装置が在って無効なとき、有効な窓・見た目・描画面・画像の部品を倒し、命令の列と節の描く中身
+/// （古い装置に属する）を全部外し、描画の木の列と単位矩形（古い工場の図形）を空にし、
+/// 任意の図形の切り抜きを「切り抜きなし」へ戻し、最後に WUC の資源を倒す（合成の木の部品を先に捨て、
 /// 合成器を最後に捨てる）。可変で触るだけで変化の印が立つので、有効なものだけを触る。
 /// 装置が無効な回には毎回走るが、倒れたものには触らないので同じ印を何度も立てない。
 #[allow(clippy::too_many_arguments)]
@@ -134,6 +136,9 @@ pub fn invalidate_dependent_components(
     mut surfaces: Query<&mut SurfaceGraphics>,
     mut bitmaps: Query<&mut BitmapSourceGraphics>,
     command_lists: Query<Entity, With<GraphicsCommandList>>,
+    draw_contents: Query<Entity, With<VisualDrawContent>>,
+    mut draw_trees: Query<&mut DrawTree>,
+    mut clips: Query<(Entity, &mut Visual, Option<&Name>)>,
     mut commands: Commands,
 ) {
     if !graphics.is_some_and(|gc| !gc.is_valid()) {
@@ -160,6 +165,32 @@ pub fn invalidate_dependent_components(
         commands.entity(entity).remove::<GraphicsCommandList>();
         count += 1;
     }
+    // 外しても WorldVisual は残るので節のまま（持ち主へ化けない）
+    for entity in draw_contents.iter() {
+        commands.entity(entity).remove::<VisualDrawContent>();
+        count += 1;
+    }
+    for mut tree in draw_trees.iter_mut() {
+        if tree.commands.is_empty() && tree.unit_rect.is_none() {
+            continue;
+        }
+        // 変化の印は立てない（立ち直りの回の組み直しが立てる）
+        let tree = tree.bypass_change_detection();
+        tree.commands.clear();
+        tree.unit_rect = None;
+        count += 1;
+    }
+    for (entity, mut visual, name) in clips.iter_mut() {
+        if !matches!(visual.clip, Some(ClipShape::Geometry(_))) {
+            continue;
+        }
+        visual.clip = None;
+        warn!(
+            entity = %format_entity_name(entity, name),
+            "[invalidate_dependent_components] 装置の失いで切り抜きの図形を捨てた。`Res<GraphicsCore>` の変化を合図に作り直すこと"
+        );
+        count += 1;
+    }
     if let Some(mut wgr) = wuc_resource.filter(|r| r.is_valid()) {
         wgr.invalidate();
         count += 1;
@@ -171,3 +202,7 @@ pub fn invalidate_dependent_components(
         );
     }
 }
+
+#[cfg(test)]
+#[path = "window_pos_tests.rs"]
+mod window_pos_tests;

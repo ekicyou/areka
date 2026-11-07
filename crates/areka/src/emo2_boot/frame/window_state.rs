@@ -25,7 +25,7 @@ use wintf::ecs::window::{BandOp, StayOnTop, WindowBandQueue};
 
 use crate::boot_config::BootContext;
 use crate::emo2_boot::window_state_cue::WindowStateDirective;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::spawn::GhostWindows;
 
 /// ゴーストごとの常に手前の状態（`Emo2Wiring` の欄・既定＝受信端なし・オフ）。
 ///

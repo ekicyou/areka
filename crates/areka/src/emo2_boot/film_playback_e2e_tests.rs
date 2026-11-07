@@ -49,9 +49,11 @@ const BLUE_254: [u8; 4] = [0, 0, 254, 255];
 const GREEN_254: [u8; 4] = [0, 254, 0, 255];
 
 fn fixture(sub: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../areka-emo-compose/tests/fixtures/animated-playback")
-        .join(sub)
+    crate::crate_source_test_support::crate_path(
+        "areka-emo-compose",
+        "tests/fixtures/animated-playback",
+    )
+    .join(sub)
 }
 
 /// WIC の読み手に要る COM の MTA 初期化（既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視）。

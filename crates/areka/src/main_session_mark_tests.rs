@@ -37,7 +37,7 @@ use crate::emo2_boot::ghost_switch_test_support::{
 };
 use crate::emo2_boot::spine::RecordedCall;
 use crate::ghost_session::{GhostBootInputsSource, GhostSession, GhostSlot, StartupDescriptValues};
-use crate::placement::AuthorDpi;
+use areka_placement::AuthorDpi;
 
 fn fault(kind: ShioriFaultKind) -> ShioriFault {
     ShioriFault {
@@ -179,7 +179,7 @@ fn first_boot(rig: &mut SwitchRig, ghost: GhostDecision, origin: BootOrigin, arg
         &StartupDescriptValues {
             author_dpi: AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         },
         &ghost,
         &balloon,

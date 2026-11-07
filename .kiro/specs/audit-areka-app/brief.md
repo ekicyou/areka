@@ -72,3 +72,8 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## placement-crate-split からの申し送り（2026-11-06）
+
+- **件 1: ワークスペース全体を歩く見張り 3 本の置き場**。`crates/areka/src/session_end_sync_send_tests.rs`・`crates/areka/src/emo2_boot/frame_attach_tests.rs`・`crates/areka/src/readonly_tests.rs` は、本体のテストなのにワークスペースの全部の crate（依存の向きの外の crate も含む）を歩く。placement-crate-split の読み方の規則（「自分の crate は相対・別の crate は読み口 `crate_source!`／`crate_path`」）の、名前を付けた例外にしてある（設計の「使ってよい依存」）。ワークスペース全体の見張りの置き場 `crates/log-capture-kit/tests/` へ移す（走査は `workspace_scan/mod.rs` を使う）。`emo2_boot/frame_attach_tests.rs` の受け持ちは `audit-emo2-boot-*` の範囲なので、移すときはその spec と申し合わせる。
+

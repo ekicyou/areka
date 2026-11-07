@@ -26,7 +26,7 @@ use super::test_support::{
     capture_logs, headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// Bubble 相の合成 `PointerState`（client 物理 px・moved ハンドラは他フィールド非参照）。
 fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
