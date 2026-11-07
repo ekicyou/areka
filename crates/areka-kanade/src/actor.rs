@@ -495,6 +495,10 @@ fn execute_batch(
             Action::CancelChoice { talk_id } => {
                 send_talk_command(sakura, TalkCommand::CancelChoice { talk_id });
             }
+            // 起こしの線をまだ持たない構成＝毎秒の Tick が期限を拾うので、頼みは送らない。
+            Action::ArmChoiceWake(at) => {
+                tracing::trace!(target: "kanade", event = "choice_wake_unwired", at_ms = at.0, "起こしの線が無い——期限は毎秒の Tick が拾う");
+            }
             Action::ShioriRequest(call) => {
                 // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
                 // origin は `&'static str` 契約を維持する（DD-1）: スケジューラ起源は固定 ID を

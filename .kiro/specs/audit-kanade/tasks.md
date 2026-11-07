@@ -243,7 +243,7 @@
   - _Requirements: 3.1, 3.3, 4.1, 7.1, 7.2, 9.1, 9.7, 9.8_
 
 - [ ] 16. 選択待ちの時間切れを期限ちょうどに出す（#7）
-- [ ] 16.1 段取りに期限の知らせと起こしの頼みを足す
+- [x] 16.1 段取りに期限の知らせと起こしの頼みを足す
   - 入力に期限の知らせ、行いに起こしの頼みを足し、網羅の match の全部に腕を足す
   - 選択待ちで期限が決まれば起こしの頼みを 1 つ返し、期限の知らせでは今の時間切れの判定をその時刻で呼ぶ（定常の外と空振りは trace）。完了 spec の「Tick で判定」を改めた旨を doc に 1 行
   - `steady_choice_wake_tests.rs` の 3 本が緑で、知らせの腕を外すと赤。10,500 で出ず 10,501 で 1 回だけ出る
@@ -319,3 +319,4 @@
 - 12.3: #47 の `record` は design の `expected_call(call.clone())` が組めない（`ShioriCall` に Clone が無い）ので、`RecordedCall::from_call` を pub にして使った。指摘の外に残る写し（19.2 のかけ直しで拾う候補）: `command_tags`／`describe`（status_query_test・choice_test_test_support・translate_test）、`choice_test_stage_failure_tests.rs:159` の `MouseInput { .. }` の直書き。
 - 15.2 指摘の外に残る（19.2 のかけ直しで拾う候補）: close_test の silent_close・force_quit の `assert_eq!(last.method, CallMethod::Unload)` は直後の等式に含まれる重い assert（#86 の一覧に無い）。
 - 15.3 指摘の外（19.2 の候補）: `establish_choice_wait` の中の Tick が `MonotonicMs(1_000)` の直書きで、`CHOICE_DISPLAY_END_MS` と同じ値を 2 か所に持つ。
+- 16.1→16.2 の引き継ぎ: `Input::ChoiceTimeoutDue` の `cfg_attr(not(test), expect(dead_code))`（types.rs）を 16.2 で消す。actor.rs の `ArmChoiceWake` の腕（trace `choice_wake_unwired` だけ）を 16.2 で本物の送りに替える。

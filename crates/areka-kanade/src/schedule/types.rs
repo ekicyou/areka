@@ -62,6 +62,19 @@ pub(crate) enum Input {
         display_end: MonotonicMs,
         timeout_directive_secs: Option<f64>,
     },
+    /// 選択待ちの期限の知らせ（刻み役 → kanade・[`Action::ArmChoiceWake`] の頼みに 1 回だけ応える）。
+    ///
+    /// 判断は [`steady::on_choice_timeout_due`] が持つ。`Tick` と違い `last_now` を進めず、pump も出さない。
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "殻の写し（KanadeMsg::ChoiceTimeoutDue）は 16.2 で足す"
+        )
+    )]
+    ChoiceTimeoutDue {
+        now: MonotonicMs,
+    },
     /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。
     ///
     /// `scope` は「どのバルーンで起きたか」を運ぶだけで、受理の判断には使わない。
@@ -389,6 +402,10 @@ pub(crate) enum Action {
     CancelChoice {
         talk_id: TalkId,
     },
+    /// 選択待ちの期限で 1 回だけ起こす頼み（殻が刻み役へ渡し、期限で [`Input::ChoiceTimeoutDue`] が返る）。
+    ///
+    /// 発行点は [`steady::on_choice_waiting`] だけ（期限つきの帳簿を作った時・無期限では出さない）。
+    ArmChoiceWake(MonotonicMs),
     /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
     Notice(crate::change::KanadeNotice),
     /// 翻訳の依頼（殻が `OnTranslate` を往復させ、結果を [`Input::TranslateDone`] で再投入する）。

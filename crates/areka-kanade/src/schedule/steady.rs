@@ -154,8 +154,8 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
 /// # 確立後の状態
 /// 帳簿は [`ChoicePhase::Waiting`]（入力待ち）で確立し、候補 ID 列を通知どおりの表示順で保持する
 /// （DD-7）。これがタスク 4.3 の受領検証（候補集合照合・talk_id 突合）と、タスク 4.5 の deadline
-/// 到達判定が読む前提になる。[`Phase`] は一切触らない（DD-3）。Action は発行しない
-/// （通知は kanade 内部の帳簿確立のみで完結する）。
+/// 到達判定が読む前提になる。[`Phase`] は一切触らない（DD-3）。期限つきなら
+/// [`Action::ArmChoiceWake`]`(deadline)` を 1 つだけ返し、無期限なら Action を返さない。
 pub(super) fn on_choice_waiting(
     mut state: State,
     talk_id: TalkId,
@@ -206,7 +206,9 @@ pub(super) fn on_choice_waiting(
         deadline,
         phase: ChoicePhase::Waiting,
     });
-    (state, Vec::new())
+    // 期限が決まった時点で刻み役に 1 回だけ起こしてもらう（期限ちょうどに判定するため・#7）。
+    let actions = deadline.map(Action::ArmChoiceWake).into_iter().collect();
+    (state, actions)
 }
 
 /// Steady での選択確定の受領検証とカスケード第 1 段の発行（設計 C4 規則 1／2）。
@@ -513,7 +515,8 @@ pub(super) fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
 
 /// 選択待ちの期限到達を判定し、到達していれば `OnChoiceTimeout` を発行する（C4 規則 5・Req7.3）。
 ///
-/// [`on_tick`] が既存 pump 処理に**先行して**呼ぶ。発行した場合は [`Some`]（発行 Action 列）を返し、
+/// [`on_tick`]（既存 pump 処理に**先行して**）と期限の知らせ（[`on_choice_timeout_due`]）の 2 つから
+/// 呼ぶ（完了 `areka-P0-choice-select-events` の「Tick で判定」を期限ちょうどに出すため改めた・要件 9.5）。発行した場合は [`Some`]（発行 Action 列）を返し、
 /// 呼び手はその Tick の pump を発行しない（規則 5「この Tick は pump を発行しない・次 Tick から
 /// 再開」）。発行しない場合は [`None`] を返し、Tick は通常どおり進む。
 ///
@@ -663,6 +666,23 @@ fn on_timeout_reply(
         "タイムアウト後に応答なし——選択待ちを解除しトークを終了させる（Req7.5・DD-11）"
     );
     (state, vec![Action::CancelChoice { talk_id }])
+}
+
+/// Steady での選択待ちの期限の知らせ（[`Input::ChoiceTimeoutDue`]・#7）。
+///
+/// 判定は [`fire_choice_timeout_if_due`] をその時刻でそのまま呼ぶ（`on_tick` と同じ判定・二重には
+/// 出ない）。出なければ（帳簿が無い・選択が先に済んだ・期限の前）trace だけで空。`last_now` も pump も触らない。
+pub(super) fn on_choice_timeout_due(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
+    if let Some(actions) = fire_choice_timeout_if_due(&mut state, now) {
+        return (state, actions);
+    }
+    tracing::trace!(
+        target: "kanade",
+        event = "choice_timeout_due_not_fired",
+        now_ms = now.0,
+        "選択待ちの期限の知らせ——時間切れに当たらず何もしない"
+    );
+    (state, Vec::new())
 }
 
 /// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6・選択タイムアウト先行判定）。
@@ -921,3 +941,7 @@ mod choice_tests;
 #[cfg(test)]
 #[path = "steady_choice_timeout_tests.rs"]
 mod choice_timeout_tests;
+
+#[cfg(test)]
+#[path = "steady_choice_wake_tests.rs"]
+mod choice_wake_tests;

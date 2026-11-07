@@ -130,6 +130,7 @@ fn kind(action: &Action) -> String {
         Action::Notice(_) => "Notice".to_string(),
         Action::ResourceOutcome { .. } => "ResourceOutcome".to_string(),
         Action::Translate(_) => "Translate".to_string(),
+        Action::ArmChoiceWake(at) => format!("ArmChoiceWake:{}", at.0),
     }
 }
 

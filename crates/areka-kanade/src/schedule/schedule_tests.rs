@@ -553,7 +553,13 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
         "未指定は既定 30_000ms を起点へ加算（DD-8）"
     );
     assert!(matches!(ledger.phase, ChoicePhase::Waiting));
-    assert!(actions.is_empty(), "帳簿確立は Action を発行しない");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::ArmChoiceWake(MonotonicMs(32_000))]
+        ),
+        "帳簿確立は期限の起こしの頼みだけを出す（#7）"
+    );
 }
 
 /// DD-8・Req7.6／7.7: 期限は指令 3 値語彙どおりに写る（実値で突合）。

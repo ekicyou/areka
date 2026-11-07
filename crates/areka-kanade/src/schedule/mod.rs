@@ -297,6 +297,21 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
         // TranslateDone: 預けた一括の再開・故障・帳簿なしの判断ごと translate::on_done へ渡す。
         Input::TranslateDone(result) => translate::on_done(state, result),
 
+        // ChoiceTimeoutDue: Steady だけが選択待ちの帳簿を持つ。ほかの相は観測だけ（`last_now` は動かさない）。
+        Input::ChoiceTimeoutDue { now } => match state.phase {
+            Phase::Steady { .. } => steady::on_choice_timeout_due(state, now),
+            _ => {
+                tracing::trace!(
+                    target: "kanade",
+                    event = "choice_timeout_due_ignored",
+                    now_ms = now.0,
+                    phase = phase_label(&state.phase),
+                    "非 Steady の相に届いた選択待ちの期限の知らせ——何もしない"
+                );
+                (state, Vec::new())
+            }
+        },
+
         // BalloonTimeout: 番号の照合と送るかどうかごと balloon_events::on_timeout_notice へ渡す（表 D）。
         Input::BalloonTimeout { talk_id } => balloon_events::on_timeout_notice(state, talk_id),
 

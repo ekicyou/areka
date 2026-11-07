@@ -130,7 +130,13 @@ fn nested_script_choice_runs_two_stages() {
         },
         &config(),
     );
-    assert!(actions.is_empty(), "待ちの知らせは行動を出さない");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::ArmChoiceWake(MonotonicMs(31_000))]
+        ),
+        "待ちの知らせは期限の起こしの頼みだけを出す"
+    );
     assert!(s.choice.is_some(), "新しいトークの待ちができる");
 
     let (next, actions) = step(
