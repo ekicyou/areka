@@ -8,10 +8,12 @@ use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-/// 1 本のテストが待つ上限（受信の上限はこの内側に収める）。
+/// 往復の応答とループの終わりを待つ上限（手空きの証拠は別の上限 [`IDLE_WAIT`] で待つ）。
 const BOUND: Duration = Duration::from_secs(5);
-/// 手空きの証拠を待つ上限（保守周期の 4 倍）。
-const IDLE_WAIT: Duration = Duration::from_secs(2);
+/// テストで回す手空きの周期（本番の [`IDLE_INTERVAL`] より短くし、本物の周期と競わない）。
+const IDLE_TICK: Duration = Duration::from_millis(5);
+/// 手空きの証拠を待つ上限（壊れていれば待つ長さ。緑なら数十 ms で抜ける）。
+const IDLE_WAIT: Duration = Duration::from_secs(10);
 
 /// 手空きの回数を数え、他スレッドから死活状態を切り替えられる fake backend。
 ///
@@ -72,7 +74,13 @@ fn start_runner() -> Runner {
         idles: idles.clone(),
     };
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, Box::new(probe), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(
+            rx,
+            Box::new(probe),
+            on_down_tx,
+            ShioriProbe::default(),
+            IDLE_TICK,
+        )
     });
     Runner {
         tx,
@@ -130,7 +138,7 @@ fn on_idle_is_called_while_idle() {
     assert!(
         reached,
         "何も送らずに {waited:?} 待ったが手空きの通知が届かなかった（観測した手空き回数={seen}・\
-         上限={IDLE_WAIT:?}・保守周期={IDLE_INTERVAL:?}）"
+         上限={IDLE_WAIT:?}・保守周期={IDLE_TICK:?}）"
     );
     assert!(!down, "死活は正常なのに ShioriDown が届いた");
 }
@@ -203,7 +211,7 @@ fn helper_exit_during_idle_reports_shiori_down_once() {
         runner.finish();
         panic!(
             "helper を異常終了させ何も送らずに {first_waited:?} 待ったが ShioriDown が届かなかった\
-             （受信結果={:?}・観測した手空き回数={idles}・上限={IDLE_WAIT:?}・保守周期={IDLE_INTERVAL:?}）",
+             （受信結果={:?}・観測した手空き回数={idles}・上限={IDLE_WAIT:?}・保守周期={IDLE_TICK:?}）",
             first.map(|_| "ShioriDown 以外の通知")
         );
     }

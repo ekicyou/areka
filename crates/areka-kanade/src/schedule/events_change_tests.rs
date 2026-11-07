@@ -7,15 +7,8 @@ use super::*;
 use crate::change::{
     BootOrigin, ChangeOrigin, ChangeRequest, ChangeTarget, ChangedFrom, ShioriMethod,
 };
+use crate::schedule::translate_test_support::{change_request, config, strings as s};
 use crate::status::ExecutionStatus;
-
-fn target() -> ChangeTarget {
-    ChangeTarget {
-        sakura_name: "かなで".to_string(),
-        name: "Kanade Ghost".to_string(),
-        dir: r"C:\areka\ghost\kanade".to_string(),
-    }
-}
 
 fn get_parts(call: ShioriCall) -> (EventId, Vec<String>) {
     match call {
@@ -24,69 +17,10 @@ fn get_parts(call: ShioriCall) -> (EventId, Vec<String>) {
     }
 }
 
-fn s(v: &[&str]) -> Vec<String> {
-    v.iter().map(|x| x.to_string()).collect()
-}
-
 #[test]
-fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
-    // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）、
-    // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）、
-    // ネットワーク更新の 19 語を足して 42 語（areka-P0-network-update 要件 2.15・9.13）、
-    // シェル・バルーン切替の 3 語を足して 45 語（areka-P0-shell-balloon-switch 要件 8.2）、
-    // 翻訳の `OnTranslate` を足して 46 語（areka-P0-translate-pipeline 要件 3.4）、
-    // ドラッグの 2 語を足して 48 語（areka-P0-mouse-drag-events 要件 7.1）、
-    // バルーンの寿命の 3 語を足して 51 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）、
-    // アンカーの 2 語を足して 53 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）、
-    // シェル位置初期化の `OnResetWindowPos` を足して 54 語（areka-P0-move-canon 要件 8.3）、
-    // shiori の読み直しの `OnDestroy` を足して 55 語（areka-P0-mcp-reload 要件 4.1）、
-    // マウスの解放・クリック・ホイール・出入りの 9 語（`OnMouseUp`・`OnMouseUpEx`・`OnMouseClick`・
-    // `OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave`・`OnMouseEnterAll`・
-    // `OnMouseLeaveAll`）を足して 64 語（mouse-click-wheel-events 要件 10.1）、
-    // 倍率の `OnShellScaling`・`OnBalloonScaling` を足して 66 語（shell-scale-linkage 要件 5.1・5.2）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 66);
-    for id in [
-        "OnGhostChanging",
-        "OnGhostChanged",
-        "OnBoot",
-        "OnMouseMove",
-        "OnInstallBegin",
-        "OnInstallComplete",
-        "OnInstallCompleteEx",
-        "OnInstallCompleteAll",
-        "OnInstallFailure",
-        "OnInstallRefuse",
-        "OnGhostTermsAccept",
-        "OnGhostTermsDecline",
-        "OnFileDrop2",
-        "OnDirectoryDrop",
-        "OnUpdateProcessExec",
-        "OnUpdateBegin",
-        "OnUpdateReady",
-        "OnUpdate.OnDownloadBegin",
-        "OnUpdate.OnMD5CompareBegin",
-        "OnUpdate.OnMD5CompareComplete",
-        "OnUpdate.OnMD5CompareFailure",
-        "OnUpdateComplete",
-        "OnUpdateFailure",
-        "OnUpdateOtherBegin",
-        "OnUpdateOtherReady",
-        "OnUpdateOther.OnDownloadBegin",
-        "OnUpdateOther.OnMD5CompareBegin",
-        "OnUpdateOther.OnMD5CompareComplete",
-        "OnUpdateOther.OnMD5CompareFailure",
-        "OnUpdateOtherComplete",
-        "OnUpdateOtherFailure",
-        "OnUpdateResult",
-        "OnUpdateResultEx",
-        "OnShellChanging",
-        "OnShellChanged",
-        "OnBalloonChange",
-        "OnResetWindowPos",
-    ] {
-        assert_eq!(allowed_static(id), Some(id));
-        assert!(is_allowed_event_id(id));
-    }
+fn allowed_static_returns_the_table_spelling_and_none_off_the_table() {
+    // 表に載る語の全体は許可表の完全一致のテストが固定する。ここは綴りを返す形だけを 1 語で見る。
+    assert_eq!(allowed_static("OnGhostChanging"), Some("OnGhostChanging"));
     for id in [
         "OnTalk",
         "OnHour",
@@ -115,15 +49,19 @@ fn on_ghost_changing_is_get_with_target_and_origin_in_ref0_to_ref3() {
         (ChangeOrigin::Automatic, "automatic"),
     ] {
         let req = ChangeRequest {
-            target: target(),
             origin,
-            raise_event: true,
+            ..change_request()
         };
         let (id, refs) = get_parts(on_ghost_changing(&req, &ExecutionSnapshot::INACTIVE));
         assert_eq!(id, EventId::Static("OnGhostChanging"));
         assert_eq!(
             refs,
-            s(&["かなで", word, "Kanade Ghost", r"C:\areka\ghost\kanade"])
+            s(&[
+                "ポスト",
+                word,
+                "R_POST_and_KOMAINU",
+                r"C:\areka\ghost\r_post"
+            ])
         );
     }
 }
@@ -133,15 +71,14 @@ fn on_ghost_changing_keeps_empty_sakura_name_in_place() {
     let req = ChangeRequest {
         target: ChangeTarget {
             sakura_name: String::new(),
-            ..target()
+            ..change_request().target
         },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
+        ..change_request()
     };
     let (_, refs) = get_parts(on_ghost_changing(&req, &ExecutionSnapshot::INACTIVE));
     assert_eq!(
         refs,
-        s(&["", "manual", "Kanade Ghost", r"C:\areka\ghost\kanade"])
+        s(&["", "manual", "R_POST_and_KOMAINU", r"C:\areka\ghost\r_post"])
     );
 }
 
@@ -191,7 +128,7 @@ fn on_ghost_changed_keeps_empty_script_in_ref1() {
 
 #[test]
 fn on_boot_after_halt_carries_halt_in_ref6_and_fallen_ghost_in_ref7() {
-    let mut config = KanadeConfig::new("master", "1.0.0");
+    let mut config = config();
     config.boot_origin = BootOrigin::Halted {
         ghost_name: "Kanade Ghost".to_string(),
     };
@@ -205,8 +142,8 @@ fn on_boot_after_halt_carries_halt_in_ref6_and_fallen_ghost_in_ref7() {
 
 #[test]
 fn on_boot_without_halt_is_ref0_only() {
-    let plain = KanadeConfig::new("master", "1.0.0");
-    let mut changed = KanadeConfig::new("master", "1.0.0");
+    let plain = config();
+    let mut changed = config();
     changed.boot_origin = BootOrigin::ChangedFrom(ChangedFrom {
         sakura_name: "えも".to_string(),
         script: String::new(),
@@ -254,7 +191,7 @@ fn raise_passes_references_verbatim_as_get_or_notify() {
 }
 
 #[test]
-fn value_replaces_active_talk_except_second_change() {
+fn value_replaces_active_talk_except_second_change_and_scaling() {
     for origin in ["OnMouseMove", "OnMouseDoubleClick", "OnGhostChanging"] {
         assert!(value_replaces_active_talk(origin), "{origin} は置き換える");
     }

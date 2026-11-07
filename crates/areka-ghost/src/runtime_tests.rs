@@ -147,9 +147,14 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
         shiori: shiori_handle,
         start_relay: start_relay_handle,
         down_relay: down_relay_handle,
+        choice_wake_relay,
         ticker: _,
         sylphya: sylphya_handle,
     } = handles;
+    assert!(
+        choice_wake_relay.is_none(),
+        "choice_wake_relay must be None when TickerMode::Disabled was used"
+    );
 
     // shutdown() と同等の手順を手作業で駆動する（ForceQuit→join→Close→join→
     // shiori/relay join・design.md「終了（shutdown）シーケンス」）。
@@ -667,4 +672,101 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
         ) && v == "1234"),
         "中間値 1234 は最終値 1777 に上書きされているべき（last-write-wins）: {loaded:?}"
     );
+}
+
+// ---- 起こしの中継（audit-kanade #7・要件 9.5・5.3） ----
+
+/// 刻み役が本物のときだけ起こしの中継が起き、`into_parts` の束に `Some` で載る（`Disabled` で
+/// `None` なのは `into_parts_exposes_live_senders_and_all_handles_for_manual_teardown` が見る）。
+/// 取り出した部品で kanade → 下りの中継 → 起こしの中継 → 刻み役の Close の順に畳めることも見る。
+#[test]
+fn choice_wake_relay_exists_only_with_the_real_ticker() {
+    let temp = TempPath::new("ghost-runtime-choice-wake-relay-exists-only-with-the-real-ticker");
+    let root = temp.path().to_path_buf();
+    write_ghost(&root);
+
+    let mut options = fake_options(root);
+    options.ticker = TickerMode::Real(crate::ticker::TickerConfig::default());
+    let parts = boot(options).expect("boot (Real)").into_parts();
+    let GhostParts {
+        kanade,
+        dispatcher,
+        ticker,
+        sylphya,
+        sylphya_reader: _,
+        handles,
+    } = parts;
+    let GhostHandles {
+        kanade: kanade_handle,
+        dispatcher: dispatcher_handle,
+        shiori: shiori_handle,
+        start_relay: start_relay_handle,
+        down_relay: down_relay_handle,
+        choice_wake_relay,
+        ticker: ticker_handle,
+        sylphya: sylphya_handle,
+    } = handles;
+    let choice_wake_relay =
+        choice_wake_relay.expect("choice_wake_relay must be Some with TickerMode::Real");
+    let ticker = ticker.expect("ticker sender must be Some with TickerMode::Real");
+    let ticker_handle = ticker_handle.expect("ticker handle must be Some with TickerMode::Real");
+
+    run_bounded(
+        "manual teardown with the real ticker",
+        std::time::Duration::from_secs(10),
+        move || {
+            kanade
+                .send(KanadeMsg::ForceQuit {
+                    reason: areka_kanade::CloseReason::System,
+                })
+                .expect("kanade should still accept ForceQuit");
+            kanade_handle
+                .join()
+                .expect("kanade should terminate normally");
+            dispatcher
+                .send(DispatcherMsg::Close)
+                .expect("dispatcher should still accept Close");
+            dispatcher_handle
+                .join()
+                .expect("dispatcher should terminate normally");
+            shiori_handle
+                .join()
+                .expect("shiori should terminate normally");
+            start_relay_handle
+                .join()
+                .expect("start-relay should terminate normally");
+            down_relay_handle
+                .join()
+                .expect("down-relay should terminate normally");
+            // 刻み役がまだ動いていても、kanade の停止で起こしの線の送り端が落ちて中継は終わる。
+            choice_wake_relay
+                .join()
+                .expect("choice-wake-relay should terminate before the ticker Close");
+            ticker
+                .send(TickerMsg::Close)
+                .expect("ticker should still accept Close");
+            ticker_handle
+                .join()
+                .expect("ticker should terminate normally after Close");
+            sylphya.close();
+            sylphya_handle
+                .join()
+                .expect("sylphya should terminate normally");
+        },
+    );
+}
+
+/// 刻み役が本物の構成でも正規の終了が詰まらずに `Ok` で終わる（kanade → 下りの中継 →
+/// 起こしの中継 → 刻み役の Close の順・中継は kanade の停止で送り端が落ちて自然に終わる）。
+#[test]
+fn shutdown_with_the_real_ticker_joins_the_choice_wake_relay() {
+    let temp =
+        TempPath::new("ghost-runtime-shutdown-with-the-real-ticker-joins-the-choice-wake-relay");
+    let root = temp.path().to_path_buf();
+    write_ghost(&root);
+
+    let mut options = fake_options(root);
+    options.ticker = TickerMode::Real(crate::ticker::TickerConfig::default());
+    let runtime = boot(options).expect("boot (Real)");
+    shutdown_bounded(runtime);
 }

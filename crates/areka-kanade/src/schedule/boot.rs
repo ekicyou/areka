@@ -1,17 +1,16 @@
 //! boot 系列の Phase 分岐（Req 1・状態機械図の Idle→…→Steady）。
 //!
-//! 本モジュールは boot 各待ち点（[`Phase::Idle`] からの起動・BootInit / BootType /
-//! BootMain / BootVersion の応答進行）の遷移本体を担う。タスク 2.3 が本体を実装する。
-//! 2.1 では骨格（呼出面）のみを用意し、[`crate::schedule::mod`] の `step` から
-//! フェーズ分岐として呼び出せるようにする。
+//! 本モジュールは boot 各待ち点（[`Phase::Idle`] からの起動・BootInit / BootPrefetch /
+//! BootType / BootMain / BootVersion の応答進行）の遷移本体を担い、運行表の `step`
+//! （`schedule/mod.rs`）からフェーズ分岐として呼ばれる。
 
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources};
 use crate::change::{BootOrigin, KanadeNotice, ReloadScope, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
-use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkId};
+use crate::talk::{ScriptOrigin, StartTalk, TalkDone};
 use resources::ResourceOutcome;
 
-/// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
+/// boot 系列（Idle / BootInit / BootPrefetch / BootType / BootMain / BootVersion）のフェーズ分岐。
 ///
 /// 起動指示受領から基盤バージョン通知完了までの正典順序を状態機械として実装する
 /// （Req 1.1–1.4・1.6）。各段階でスクリプト（Value）が返った場合は一意な talk_id を
@@ -78,7 +77,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::Notified => {
                 let mut state = state;
                 state.phase = Phase::BootPrefetch;
-                let call = resources::resource_username(&state.snapshot_without_talk());
+                let call = resources::resource_get("username", &state.snapshot_without_talk());
                 (state, vec![Action::ShioriRequest(call)])
             }
             other => unexpected_reply(state, "BootInit", other),
@@ -144,6 +143,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 
 /// prefetch 応答（username GET）を [`ResourceOutcome`] へ写像し、sink 呼出指示＋完了固定ログを添えて
 /// 起動の根（[`boot_root`]）を発行する（根があれば BootType・無ければ OnBoot で BootMain）（R4.1・R9.3）。
+/// 読み直しの起動（[`BootOrigin::Reloaded`]）は根も OnBoot も送らず basewareversion へ直行する
+/// （areka-P0-mcp-reload 要件 3.3・4.3）。
 ///
 /// 写像: 200 Value→[`ResourceOutcome::Value`]／204→[`ResourceOutcome::NoContent`]／失敗（タイムアウト・
 /// IPC 断）→[`ResourceOutcome::Failed`]。失敗時は `warn!` を残しつつ **boot を殺さず**続行する（起動を
@@ -151,8 +152,9 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 /// 起動を続行する。
 ///
 /// リソース照会は talk を生成しない（Invariant）——結果は [`Action::ResourceOutcome`] で sink へ渡すのみで
-/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(根または OnBoot)]` の順であり、
-/// シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する（design boot 図）。
+/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(根または OnBoot)]` の順
+/// （読み直しでは `[ResourceOutcome, (初回の記録だけの StartTalk)?, ShioriRequest(basewareversion の
+/// NOTIFY)]`）であり、シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する（design boot 図）。
 ///
 /// # 完了固定ログ（R9.3 grep 証跡）
 /// 経路によらず `info!(target: "areka_kanade::resource", id = "username", outcome = <value|no_content|
@@ -162,36 +164,19 @@ fn on_prefetch_reply(
     outcome: ShioriOutcome,
     config: &KanadeConfig,
 ) -> (State, Vec<Action>) {
-    let (resource_outcome, label) = match outcome {
-        ShioriOutcome::Value(body, _) => (ResourceOutcome::Value(body), "value"),
-        ShioriOutcome::NoContent => (ResourceOutcome::NoContent, "no_content"),
-        ShioriOutcome::Failed(failure) => {
+    // 写像はメニューの照会と同じ 1 つ（想定外の答えの warn もそちら）。boot は失敗の warn と完了の記録だけ持つ。
+    let resource_outcome = resources::outcome_of("username", outcome);
+    let label = match &resource_outcome {
+        ResourceOutcome::Value(_) => "value",
+        ResourceOutcome::NoContent => "no_content",
+        ResourceOutcome::Failed(reason) => {
             tracing::warn!(
                 target: "areka_kanade::resource",
                 id = "username",
-                error = %failure,
+                error = %reason,
                 "username リソース照会が失敗——warn＋Failed を sink へ渡し boot 続行（起動を殺さない・R4.1）"
             );
-            (ResourceOutcome::Failed(failure.to_string()), "failed")
-        }
-        // GET 応答が Notified/Unloaded になることは構造上あり得ない（NOTIFY/Unload 専用の完了語彙）。
-        // 防御的に Failed 扱いとし、固定ログを 1 回だけ出して boot を続行する（log-first・起動を殺さない）。
-        other => {
-            let kind = match other {
-                ShioriOutcome::Notified => "notified",
-                ShioriOutcome::Unloaded => "unloaded",
-                _ => "unknown",
-            };
-            tracing::warn!(
-                target: "areka_kanade::resource",
-                id = "username",
-                reply = %kind,
-                "username 照会が想定外の応答（GET は Value/NoContent/Failed のみ）——防御的に Failed 扱いで続行"
-            );
-            (
-                ResourceOutcome::Failed(format!("unexpected prefetch outcome: {kind}")),
-                "failed",
-            )
+            "failed"
         }
     };
     // R9.3 grep 証跡: prefetch 完了固定ログ（target・fields・message 固定・必ず 1 回・研究 §12-10）。
@@ -217,7 +202,7 @@ fn on_prefetch_reply(
     }
     // 起動の根（username 照会の応答後に 1 つだけ選ぶ・照会の段は不変）。根があれば BootType で
     // その応答を待ち、既存の腕（204 → OnBoot・台本 → OnBoot を飛ばす）へ合流する。根が無ければ
-    // OnBoot（BootMain）へ直行する（今日の boot_gate の枝）。
+    // OnBoot（BootMain）へ直行する（boot_gate の記録の枝）。
     if let Some(root) = boot_root(&state, config) {
         state.phase = Phase::BootType;
         (state, vec![sink, Action::ShioriRequest(root)])
@@ -287,8 +272,7 @@ fn to_baseware_version(
     let talk = if let Some(script) = script {
         // Value 経路: 挨拶 talk を採番し、first_boot_epilogue を末尾へ添付して起動する
         // （epilogue 空＝従来 StartTalk::new と同値・design C9 Some アーム）。
-        let talk_id = TalkId(state.next_talk_id);
-        state.next_talk_id += 1;
+        let talk_id = super::take_talk_id(&mut state);
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "起動グリーティングを再生起動");
         actions.push(Action::StartTalk(StartTalk {
             talk_id,
@@ -301,15 +285,14 @@ fn to_baseware_version(
         // （[`ActiveTalk`]）に載るため、`OnChoiceTimeout` Ref0 の供給源は起動経路に依らず同一。
         Some(ActiveTalk {
             talk_id,
-            origin: "boot",
+            origin: super::sstp::BOOT_GREETING_ORIGIN,
             script,
         })
     } else if !config.first_boot_epilogue.is_empty() {
         // 204 かつ epilogue 非空（初回かつ挨拶トーク皆無・204-204）: epilogue-only StartTalk
         // （空 script・末尾 SET 1 件＝即時完走）を発行し、Some として正規追跡する（design C9 None アーム）。
         // これにより記録は挨拶 talk と同一の書込経路（cue 1 本）に載る。
-        let talk_id = TalkId(state.next_talk_id);
-        state.next_talk_id += 1;
+        let talk_id = super::take_talk_id(&mut state);
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）");
         actions.push(Action::StartTalk(StartTalk {
             talk_id,
@@ -320,7 +303,7 @@ fn to_baseware_version(
         }));
         Some(ActiveTalk {
             talk_id,
-            origin: "boot",
+            origin: super::sstp::BOOT_GREETING_ORIGIN,
             // epilogue-only talk の起動 script は空——保持規律は挨拶経路と同一（DD-10）。
             script: String::new(),
         })
@@ -357,8 +340,8 @@ fn record_pending_close(mut state: State, reason: CloseReason) -> (State, Vec<Ac
 }
 
 /// boot 進行で想定外の応答（GET 待ちに Notified 等）を受けた場合の防御アーム（warn!＋維持）。
-fn unexpected_reply(state: State, phase: &str, _outcome: ShioriOutcome) -> (State, Vec<Action>) {
-    tracing::warn!(target: "kanade", event = "boot_unexpected_reply", phase = phase, "boot 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続");
+fn unexpected_reply(state: State, phase: &str, outcome: ShioriOutcome) -> (State, Vec<Action>) {
+    tracing::warn!(target: "kanade", event = "boot_unexpected_reply", phase = phase, reply = outcome.kind(), "boot 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続");
     (state, Vec::new())
 }
 

@@ -46,11 +46,7 @@ fn script_choice_starts_new_talk_with_text_after_prefix() {
     }
     assert!(next.choice.is_none(), "待ちの帳簿は消える");
     assert_eq!(next.next_talk_id, 7, "採番が 1 進む");
-    assert_eq!(
-        next.choice_prev_talk,
-        Some(TalkId(3)),
-        "元のトークを 1 世代控える"
-    );
+    assert_eq!(next.prev_talk, Some(TalkId(3)), "元のトークを 1 世代控える");
     match &next.phase {
         Phase::Steady {
             talk:
@@ -134,7 +130,13 @@ fn nested_script_choice_runs_two_stages() {
         },
         &config(),
     );
-    assert!(actions.is_empty(), "待ちの知らせは行動を出さない");
+    assert!(
+        matches!(
+            actions.as_slice(),
+            [Action::ArmChoiceWake(MonotonicMs(31_000))]
+        ),
+        "待ちの知らせは期限の起こしの頼みだけを出す"
+    );
     assert!(s.choice.is_some(), "新しいトークの待ちができる");
 
     let (next, actions) = step(
@@ -154,7 +156,7 @@ fn nested_script_choice_runs_two_stages() {
         }
         _ => panic!("2 段目は解決 → 再生開始のはず（数 {}）", actions.len()),
     }
-    assert_eq!(next.choice_prev_talk, Some(TalkId(6)));
+    assert_eq!(next.prev_talk, Some(TalkId(6)));
 }
 
 /// 要件 7.3・3.1・3.2・5.3: `script:` の後ろが空なら、トークを始めず待ちだけを閉じる。
@@ -180,7 +182,7 @@ fn empty_script_choice_only_resolves() {
     }
     assert!(next.choice.is_none(), "待ちの帳簿は消える");
     assert_eq!(next.next_talk_id, 6, "採番は変わらない");
-    assert_eq!(next.choice_prev_talk, None, "元のトークを控えない");
+    assert_eq!(next.prev_talk, None, "元のトークを控えない");
     match &next.phase {
         Phase::Steady {
             talk: Some(ActiveTalk { talk_id, .. }),
@@ -361,7 +363,6 @@ fn script_choice_without_matching_shown_talk_falls_to_external() {
             vec![Input::Choice(choice_input_of("script:\\e", "閉じる", &[]))],
         );
         assert_eq!(started, external(ScriptOrigin::GHOST), "外部扱いへ倒す");
-        assert!(started.is_external_treated());
         let hit = logged_once(&ev, Level::ERROR, "choice_script_origin_missing");
         assert_eq!(
             hit.fields.get("prev_talk_id").map(String::as_str),

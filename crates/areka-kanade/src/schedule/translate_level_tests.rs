@@ -7,9 +7,10 @@
 use tracing::Level;
 
 use super::*;
-use crate::msg::{EventId, KanadeConfig};
+use crate::msg::EventId;
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::step;
+use crate::schedule::translate_test_support::config;
 use crate::talk::{ScriptOrigin, StartTalk};
 
 const TALK: TalkId = TalkId(7);
@@ -43,7 +44,6 @@ fn resume(
     ScriptOrigin,
     Vec<crate::schedule::log_capture::CapturedEvent>,
 ) {
-    let cfg = KanadeConfig::new("master", "1.0.0");
     let mut out = None;
     let ev = capture(|| {
         out = Some(step(
@@ -52,7 +52,7 @@ fn resume(
                 script: "訳".to_string(),
                 level,
             })),
-            &cfg,
+            &config(),
         ))
     });
     let (_, actions) = out.expect("step は必ず値を返す");

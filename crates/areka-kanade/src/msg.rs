@@ -6,12 +6,14 @@
 //! 構成される（envelope 規約・Req 3.2）。
 //!
 //! # 依存規律（Allowed Dependencies）
-//! 本ファイルは `std`・[`crate::talk`]・**`areka_actor::ReplySender` のみ**に
-//! 依存する（クレート内では実行状態 [`crate::status`] とリソース照会の結果語彙
-//! `schedule::resources::ResourceOutcome` を借りる）。`shiori-host32-host`（`RequestError` 等）は一切 import しない
+//! 本ファイルが依存するのは `std`・`areka_actor::ReplySender`・`areka_talk::SecurityLevel`・
+//! `thiserror`（[`ShioriFailure`] の導出）と、クレート内の語彙
+//! （[`crate::talk`]・[`crate::change`]・[`crate::online`]・[`crate::status`]・
+//! [`crate::sstp`]・[`crate::anchor_input`]・[`crate::request_origin`]・
+//! `schedule::resources::ResourceOutcome`）だけである。`shiori-host32-host`（`RequestError` 等）は一切 import しない
 //! ——[`ShioriFailure`] は host32 非依存の**再表現**（`String` 保持）であり
-//! `RequestError` の re-export ではない。host32 型は `shiori/real.rs`（後続
-//! タスク）に封じ込め、この境界型は差し替え可能な mock/real の共通面となる
+//! `RequestError` の re-export ではない。host32 型は `shiori/real.rs` に
+//! 封じ込め、この境界型は差し替え可能な mock/real の共通面となる
 //! （Req 5.1）。
 //!
 //! # GET／NOTIFY の型区別（Req 5.2）
@@ -52,10 +54,10 @@ impl CloseReason {
 
 /// kanade の終了系列がどの起因で走ったか（UI へ渡す公開語彙・R15.3）。
 ///
-/// 運行状態機械が内部に持つ `TermCause`（`schedule/mod.rs` の `Unloading{cause}`）の**公開面への
+/// 運行状態機械が内部に持つ `TermCause`（`schedule/types.rs`・`Unloading{cause}` が運ぶ）の**公開面への
 /// 写し**である。内部型をそのまま公開すると運行状態機械の内部（`Phase`／`Action`／`step`）まで
 /// 公開面へ引きずり出されるため（DD-9 の露出規律）、5 値だけを持つ独立の enum を置く。
-/// 値の対応は 1 対 1 で、写す点は [`crate::actor`] の停止通知だけである。
+/// 値の対応は 1 対 1 で、写す点は停止通知の投函（`actor_stop.rs`）だけである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KanadeStopCause {
     /// 終了挨拶が終了指令（`\-`）で終わった正規の終了。
@@ -72,7 +74,7 @@ pub enum KanadeStopCause {
 
 /// kanade の終了系列が完了したことの UI への通知（R15.3・D15 の 2）。
 ///
-/// `Action::StopSelf` の実行点（[`crate::actor`]）から運行の通知の「停止」
+/// `Action::StopSelf` の実行点（[`crate::actor`] から `actor_stop.rs` の投函）で運行の通知の「停止」
 /// （[`crate::change::KanadeNotice::Stopped`]）に包んで**非ブロッキングに 1 度だけ**送る。
 /// 受け手（UI スレッドの毎フレーム結線）はこれを合図に全ゴースト窓を閉じる。原因を問わず
 /// 送る——終了挨拶を終えた正規終了も、期限超過も、強制終了も、窓を閉じる点では同じ扱いである。
@@ -113,11 +115,12 @@ pub struct MouseInput {
     pub y: i64,
     /// 当たり判定名（Ref4・不透明転写・`None`＝判定外）。
     pub region: Option<String>,
-    /// イベント種別（移動／ダブルクリック）。
+    /// イベント種別（移動・ダブルクリック・ドラッグ・ボタンの解放・ホイール・出入りの 7 種）。
     pub kind: MouseEventKind,
 }
 
-/// マウスイベント種別（OnMouseMove／OnMouseDoubleClick／OnMouseDragStart／OnMouseDragEnd に対応）。
+/// マウスイベント種別（7 種・OnMouseMove／OnMouseDoubleClick／OnMouseDragStart／OnMouseDragEnd／
+/// OnMouseUp 系／OnMouseWheel／OnMouseEnter 系に対応）。
 ///
 /// ドラッグの 2 つはボタンも取り消しの印も持たない: 窓のドラッグは左ボタンでだけ始まり Ref5 は
 /// 常に "0"、取り消しを区別する値は Reference に足さない（areka-P0-mouse-drag-events 要件 2.2・4.6）。
@@ -200,19 +203,21 @@ pub enum KanadeMsg {
     Boot,
     /// 1 秒相当の Tick（時刻同梱・DD-3）。pump 駆動と close 期限判定を兼ねる。
     Tick { now: MonotonicMs },
+    /// 選択待ちの期限の知らせ。刻み役が選択待ちの期限で 1 回だけ送る。`Tick` と違い
+    /// OnSecondChange を出さない（`last_now` も pump も動かさない）。
+    ChoiceTimeoutDue { now: MonotonicMs },
     /// sakura（mock sink 含む）からの再生完了通知。
     TalkDone(crate::talk::TalkDone),
     /// 通常 close 指示（OnClose 握手を開始・終了権限は SHIORI 側）。
     CloseRequest { reason: CloseReason },
     /// 強制終了指示（OS シャットダウン・デバッグ）。quit ゲートを迂回し終了系列へ直行。
     ForceQuit { reason: CloseReason },
-    /// SHIORI 死活の暫定 seam（DD-4・lifecycle 正本確定時に実型へ差し替え）。
-    /// 種類は型で運ぶ（理由の綴りで判別しない）。
+    /// SHIORI 死活の報告（shiori/real.rs が送る）。種類は型で運ぶ（理由の綴りで判別しない）。
     ShioriDown {
         kind: ShioriDownKind,
         reason: String,
     },
-    /// マウス入力（移動／ダブルクリック）。Steady でのみ受理され、他フェーズでは安全に
+    /// マウス入力（[`MouseEventKind`] の 7 種）。Steady でのみ受理され、他フェーズでは安全に
     /// 無視される（横断ルーティングは schedule 層・DD-IE-8）。additive 増分（Req 4.4）。
     Mouse(MouseInput),
     /// 停止規約の Close（即時停止・非常口。正規終了は運行表経由）。
@@ -240,10 +245,13 @@ pub enum KanadeMsg {
     },
     /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。additive 増分。
     ///
-    /// `scope` は「どのバルーンで起きたか」を運ぶだけで、止めるかどうかは再生中かどうかだけで決まる。
+    /// `scope` は「どのバルーンで起きたか」を運ぶだけで、受理の判断には使わない。
+    /// 止めるのは再生中のトークが `talk_id` と食い違わないときだけ（`None` は今のトークを止める）。
     UserBreak {
         /// ダブルクリックされたバルーンのスコープ番号。
         scope: u32,
+        /// 押されたバルーンに出ていた台詞のトーク（表示の側が観測できなければ `None`）。
+        talk_id: Option<crate::talk::TalkId>,
     },
     /// SHIORI リソースの複数件照会（UI → kanade）。additive 増分。
     ///
@@ -345,12 +353,12 @@ pub enum ShioriMsg {
 ///
 /// - [`EventId::Static`]: スケジューラ起源の固定 ID。`schedule/events.rs`／`schedule/resources.rs`
 ///   の構築関数のみが構成し、固定表（`ALLOWED_EVENT_IDS`／`ALLOWED_RESOURCE_IDS`）で検証される。
-/// - [`EventId::Choice`]: 選択起源の任意名イベント（`\q` の `On` 始まり ID）。ゴースト作者が
+/// - [`EventId::Choice`]: 選択起源の任意名イベント（`\q` と `\_a` の `On` 始まり ID）。ゴースト作者が
 ///   書いた名前を逐語で運ぶ（事前の固定登録を要さない・Req2.6）。
 ///
 /// # 不変条件
-/// [`EventId::Choice`] は選択カスケードの planner のみが構成する（`On` 始まり保証の発生源を
-/// 1 点に閉じる）。スケジューラ起源の経路が `Choice` を作ることはない。
+/// [`EventId::Choice`] を構成するのは `schedule::events::on_choice_named` だけである（`On` 始まり
+/// 保証の発生源を 1 点に閉じる）。スケジューラ起源の経路が `Choice` を作ることはない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventId {
     /// スケジューラ起源の固定 ID（構築関数のみが構成・固定表で検証）。
@@ -422,11 +430,25 @@ pub enum ShioriOutcome {
     Failed(ShioriFailure),
 }
 
+impl ShioriOutcome {
+    /// 記録に載せる答えの種類の 1 語（台本の中身は載せない）。
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            Self::Value(..) => "value",
+            Self::NoContent => "no_content",
+            Self::Notified => "notified",
+            Self::Unloaded => "unloaded",
+            Self::Failed(_) => "failed",
+        }
+    }
+}
+
 /// 呼出失敗の区別語彙（host32 非依存の再表現・thiserror）。
 ///
-/// 既存4語彙（`Handshake`／`Timeout`／`Ipc`／`Shiori`）は `RequestError` の**境界写像**であり、
-/// shiori 境界（`shiori/real.rs` の `map_error`）でのみ構成される。`Internal` は境界写像から
-/// **決して生成されない**——kanade 内部で検出した内部規律違反（許可集合外 ID の送出企図等）に
+/// 既存4語彙（`Handshake`／`Timeout`／`Ipc`／`Shiori`）は輸送路の失敗を表す。shiori 側
+/// （`shiori/real.rs`: `RequestError` の境界写像 `map_error` と、接続・応答の失敗）と、actor の
+/// 送受の失敗（`actor.rs`: SHIORI への通路の切断・応答の喪失＝`Ipc`）で構成される。`Internal` は
+/// これらの経路から**決して生成されない**——kanade 内部で検出した内部規律違反（許可集合外 ID の送出企図等）に
 /// 対してのみ kanade 自身が構成する（DD-IT-11）。
 #[derive(Debug, thiserror::Error)]
 pub enum ShioriFailure {
@@ -550,6 +572,10 @@ pub struct KanadeConfig {
     /// script 種別の記録の名（`get_active_ghost_list` と同じ値）。既定は空文字。結線は
     /// `areka-ghost` の `resolve_kanade_config` が入れる。
     pub ghost_name: String,
+    /// 選択待ちの期限で 1 回だけ起こしてもらう頼みの線（既定 `None`）。`Some` なら殻が期限の
+    /// 時刻を送り、刻み役がその時刻に [`KanadeMsg::ChoiceTimeoutDue`] を返す。`None` なら毎秒の
+    /// `Tick` が期限を拾う。結線は `areka-ghost` の runtime が刻み役の本物のときだけ入れる。
+    pub choice_wake: Option<std::sync::mpsc::Sender<MonotonicMs>>,
 }
 
 impl KanadeConfig {
@@ -573,6 +599,7 @@ impl KanadeConfig {
             boot_origin: BootOrigin::Plain,
             online: &online::PROCESS,
             ghost_name: String::new(),
+            choice_wake: None,
         }
     }
 }

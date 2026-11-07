@@ -1,6 +1,6 @@
 //! 要求の出どころの規則の檻（要件 1.1・1.3・1.7・2.2〜2.7・3.3・3.4）。
 //!
-//! design の写しの表の 5 行・4 つのカテゴリの基本の出どころ・応答のレベルの解釈の 4 通りを見る。
+//! design の写しの表の 5 行・5 つのカテゴリの基本の出どころ・応答のレベルの解釈の 4 通りを見る。
 
 use super::*;
 use crate::schedule::log_capture::{capture, logged_once};
@@ -90,12 +90,11 @@ fn property_event_is_areka_internal_property_local() {
             row("local", "areka", "internal,property"),
             "{name}"
         );
-        assert_eq!(RequestOrigin::base_of(&id), ScriptOrigin::PROPERTY);
     }
 }
 
 #[test]
-fn base_origins_of_the_four_categories() {
+fn base_origins_of_the_five_categories() {
     // 応答の台本の基本の出どころ（1.1・1.3・1.7）。
     assert_eq!(
         RequestOrigin::base_of(&EventId::Static("OnBoot")),
@@ -112,6 +111,10 @@ fn base_origins_of_the_four_categories() {
     assert_eq!(
         RequestOrigin::base_of(&EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE)),
         ScriptOrigin::MCP_SEND
+    );
+    assert_eq!(
+        RequestOrigin::base_of(&EventId::Property("OnPastaShellScale".to_string())),
+        ScriptOrigin::PROPERTY
     );
 }
 

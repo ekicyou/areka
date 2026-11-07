@@ -14,7 +14,7 @@ use super::*;
 use crate::change::{ShioriMethod, TalkGap};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
-use areka_actor::ReplyReceiver;
+use areka_actor::{ReplyError, ReplyReceiver};
 use tracing::Level;
 
 /// 印の無い依頼を送り、結果の受信端を返す。

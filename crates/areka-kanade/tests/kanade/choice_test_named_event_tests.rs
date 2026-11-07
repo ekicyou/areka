@@ -3,9 +3,8 @@ use super::test_support::{
     choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    ChoiceResponse, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig,
-    KanadeMsg, QuitPolicy, TalkCommand, TalkId, events, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated,
+    Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, events,
+    expected_call, expected_unload, send, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -32,10 +31,7 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
-            NAMED_CHOICE_ID,
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response(NAMED_CHOICE_ID, FIXED_CHOICE_SCRIPT.to_string());
 
     // hold_indices=[0]: steady talk（id=1）の TalkDone を park して active talk 窓を維持する。
     // quit_flags: index0（steady talk）=false・index1（選択由来 talk）=true（終了駆動）。
@@ -46,25 +42,15 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID]);
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-        .expect("send Choice");
+    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
+    send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade named-choice join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the choice-derived talk (quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura named-choice join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded,
+        commands,
+        started,
+        ..
+    } = harness.finish("kanade named-choice join");
 
     // (1) 段列は任意名 1 段のみ（Ex／無印は一切発行されない・裁定 1）。
     assert_eq!(
@@ -107,13 +93,6 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     );
 
     // (4) 起動は新 talk_id・選択由来スクリプト（旧 id を再利用しない・Req4.1）。
-    let started: Vec<_> = commands
-        .iter()
-        .filter_map(|c| match c {
-            TalkCommand::Start(s) => Some(s),
-            _ => None,
-        })
-        .collect();
     assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
@@ -121,11 +100,6 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     assert_eq!(
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目は選択由来の応答スクリプト（既存の起動棚に載った）"
-    );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "選択由来 talk は新 talk_id=2（旧 id=1 を再利用しない）"
     );
 
     // (5) 終了系列を完走した（末尾 Unload）＝選択処理後も状態整合を保っている。

@@ -11,21 +11,21 @@ use crate::msg::ShioriOutcome;
 use crate::sstp::{SstpNotifyOutcome, SstpSendOutcome};
 
 /// 最初の一括の往復の結果（`ShioriOutcome` は複製できないので殻が写す）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub(crate) enum FirstReply {
     Script(String),
     NoReply,
     Failed,
 }
 
-/// 空でない（trim して 1 文字以上の）`Value` → Script、空・空白だけの `Value`・`NoContent`・
+/// 空でない（空白だけも含む・[`crate::schedule::has_script`]）`Value` → Script、空の `Value`・`NoContent`・
 /// `Notified`・`Unloaded` → NoReply、`Failed` → Failed。
 ///
 /// エラー応答は送出点（`round_trip_request`）で既に 204／NOTIFY の完了へ写っているので返事なしになる。
 /// `Unloaded` は通知の入口の往復からは生じないが、写しの表を閉じるため返事なしに置く。
 pub(crate) fn first_reply_of(outcome: &ShioriOutcome) -> FirstReply {
     match outcome {
-        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if crate::schedule::has_script(script) => {
             FirstReply::Script(script.clone())
         }
         ShioriOutcome::Value(_, _)
@@ -75,7 +75,7 @@ pub(crate) enum SstpReply {
 /// 一括の処理の後に返事を組んで 1 回だけ送る。`stopped` は一括の処理が止まりで終わったこと。
 ///
 /// 受け手が居ない（待ちの上限で先に答えた）のは異常ではないので `debug!` だけで運行を続ける。
-pub(crate) fn answer(pending: SstpReply, stopped: bool, first: Option<&FirstReply>) {
+pub(crate) fn answer(pending: SstpReply, stopped: bool, first: Option<FirstReply>) {
     let sent = match pending {
         SstpReply::Send { reply, accepted } => {
             let outcome = match (stopped, accepted) {
@@ -89,7 +89,7 @@ pub(crate) fn answer(pending: SstpReply, stopped: bool, first: Option<&FirstRepl
             let outcome = match (stopped, accepted, first) {
                 (true, _, _) => SstpNotifyOutcome::Failed,
                 (false, false, _) => SstpNotifyOutcome::NotAccepted,
-                (false, true, Some(FirstReply::Script(s))) => SstpNotifyOutcome::Script(s.clone()),
+                (false, true, Some(FirstReply::Script(s))) => SstpNotifyOutcome::Script(s),
                 (false, true, Some(FirstReply::NoReply)) => SstpNotifyOutcome::NoScript,
                 (false, true, Some(FirstReply::Failed)) => SstpNotifyOutcome::Failed,
                 (false, true, None) => {

@@ -10,34 +10,21 @@
 //! 予約があっても終了系列へ進めない）・自ら `\-` に達したときの終了を固定する。
 
 use super::*;
-use crate::change::{
-    ChangeOrigin, ChangeRequest, ChangeTarget, GapLeft, RaiseOutcome, ShioriMethod,
-};
+use crate::change::{GapLeft, RaiseOutcome, ShioriMethod};
 use crate::msg::{
-    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
+    ChoiceInput, CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall,
+    ShioriFailure, ShioriOutcome,
 };
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
-use crate::schedule::steady::test_support::base_state;
+use crate::schedule::steady::test_support::expect_get_call;
+use crate::schedule::translate_test_support::config as cfg;
+use crate::schedule::translate_test_support::{change_request, steady_none};
 use crate::schedule::{ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, TermCause, step};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
-/// 再生中のトークの番号（`steady_some` に渡す）。
+/// 再生中のトークの番号（`steady_some` が使う）。
 const TALK: TalkId = TalkId(4);
-
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
-/// `Steady{talk: None}`（終了の保留なし）。
-fn steady_none() -> State {
-    State {
-        phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
-        next_talk_id: 5,
-        ..base_state()
-    }
-}
 
 /// `Steady{talk: Some(TALK)}`（終了の保留なし）。
 fn steady_some() -> State {
@@ -58,31 +45,10 @@ fn await_gap(s: State) -> (State, Vec<Action>) {
     step(s, Input::AwaitTalkGap { raise: None }, &cfg())
 }
 
-fn talk_done(s: State, reason: TalkEndReason, quit_reserved: bool) -> State {
-    let done = TalkDone {
-        talk_id: TALK,
-        reason,
-        quit_reserved,
-    };
-    step(s, Input::TalkDone(done), &cfg()).0
-}
-
 /// 見張りが在り、結果がまだ決まっていないこと。
 fn assert_waiting(s: &State, label: &str) {
     let watch = s.talk_gap.as_ref().expect("見張りが在る");
     assert!(watch.outcome.is_none(), "{label}: まだ決まっていない");
-}
-
-fn change_request() -> ChangeRequest {
-    ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: r"C:\areka\ghost\r_post".to_string(),
-        },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
-    }
 }
 
 #[test]
@@ -117,7 +83,7 @@ fn unmarked_request_while_playing_reaches_at_the_end_of_the_talk() {
     .0;
     assert_waiting(&s, "Tick の後");
 
-    let mut s = talk_done(s, TalkEndReason::Ended, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Ended, false).0;
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
     assert_eq!(
         take_outcome(&mut s),
@@ -128,14 +94,21 @@ fn unmarked_request_while_playing_reaches_at_the_end_of_the_talk() {
 #[test]
 fn user_break_without_quit_reservation_reaches() {
     let (s, _) = await_gap(steady_some());
-    let (s, actions) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, actions) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TALK),
+        },
+        &cfg(),
+    );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TALK),
-        "中断は今日どおり止める指示を 1 件出す"
+        "中断は止める指示を 1 件出す"
     );
     assert_waiting(&s, "止めた応答を待つ間");
 
-    let mut s = talk_done(s, TalkEndReason::Interrupted, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Interrupted, false).0;
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
     assert_eq!(
         take_outcome(&mut s),
@@ -145,9 +118,16 @@ fn user_break_without_quit_reservation_reaches() {
 }
 
 #[test]
-fn user_break_with_quit_reservation_goes_to_closing_as_today() {
+fn user_break_with_quit_reservation_goes_to_closing() {
     let (s, _) = await_gap(steady_some());
-    let (s, _) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, _) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TALK),
+        },
+        &cfg(),
+    );
     let done = TalkDone {
         talk_id: TALK,
         reason: TalkEndReason::Interrupted,
@@ -161,7 +141,7 @@ fn user_break_with_quit_reservation_goes_to_closing_as_today() {
                 cause: TermCause::Quit
             }
         ),
-        "今日どおり終了系列へ進む"
+        "終了系列へ進む"
     );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
     assert_eq!(
@@ -175,7 +155,7 @@ fn user_break_with_quit_reservation_goes_to_closing_as_today() {
 #[test]
 fn talk_reaching_quit_by_itself_is_closing() {
     let (s, _) = await_gap(steady_some());
-    let mut s = talk_done(s, TalkEndReason::Quit, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Quit, false).0;
     assert!(matches!(s.phase, Phase::Unloading { .. }));
     assert_eq!(
         take_outcome(&mut s),
@@ -195,10 +175,7 @@ fn close_request_while_watching_is_closing() {
         },
         &cfg(),
     );
-    assert!(
-        s.pending_close.is_some(),
-        "再生中の閉鎖要求は今日どおり保留される"
-    );
+    assert!(s.pending_close.is_some(), "再生中の閉鎖要求は保留される");
     assert_eq!(
         take_outcome(&mut s),
         Some(TalkGap::Left {
@@ -233,7 +210,7 @@ fn decided_outcome_is_not_changed_by_later_steps() {
         },
         &cfg(),
     );
-    let mut s = talk_done(s, TalkEndReason::Ended, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Ended, false).0;
     assert_eq!(
         take_outcome(&mut s),
         Some(TalkGap::Left {
@@ -241,6 +218,56 @@ fn decided_outcome_is_not_changed_by_later_steps() {
         }),
         "最初に決まった結果のまま"
     );
+}
+
+/// 定常でない相の見極め: 切替の相、または切替の帳簿が在る降ろす相（`raise_event` 無しの切替）は
+/// `GhostChange`、帳簿の無い降ろす相は `Closing`。
+#[test]
+fn undecided_watch_outside_steady_is_ghost_change_only_while_changing() {
+    let changing = || {
+        Some(crate::schedule::change::ChangeState {
+            req: change_request(),
+            script: None,
+        })
+    };
+    let unloading = || Phase::Unloading {
+        cause: TermCause::Quit,
+    };
+    let cases = [
+        (
+            "ChangeTalkWait",
+            Phase::ChangeTalkWait {
+                talk_id: TALK,
+                deadline: None,
+            },
+            None,
+            GapLeft::GhostChange,
+        ),
+        (
+            "Unloading+change",
+            unloading(),
+            changing(),
+            GapLeft::GhostChange,
+        ),
+        ("Unloading", unloading(), None, GapLeft::Closing),
+    ];
+    for (label, phase, change, reason) in cases {
+        let mut s = State {
+            phase,
+            change,
+            talk_gap: Some(GapWatch {
+                marked: Marked::Talk(TALK),
+                outcome: None,
+            }),
+            ..steady_none()
+        };
+        observe(&mut s, None);
+        assert_eq!(
+            take_outcome(&mut s),
+            Some(TalkGap::Left { reason }),
+            "{label}"
+        );
+    }
 }
 
 #[test]
@@ -263,9 +290,7 @@ fn request_outside_steady_or_with_pending_close_is_not_steady() {
         (
             "ClosePending",
             State {
-                phase: Phase::ClosePending {
-                    reason: CloseReason::System,
-                },
+                phase: Phase::ClosePending,
                 ..steady_none()
             },
         ),
@@ -357,8 +382,8 @@ const SHELL_CHANGING: &str = "OnShellChanging";
 /// 印の台詞の番号（`steady_none` の採番 5 から始まる）。
 const MARKED: TalkId = TalkId(5);
 
-/// 印の台詞にも印の無い台詞にも使う同じ台本（終了の予約の有無は完了通知が運ぶ）。
-const SCRIPT: &str = "SCRIPT_WITH_QUIT";
+/// 印の応答の台本（終了の予約の有無は完了通知が運ぶ）。
+const MARKED_SCRIPT: &str = "MARKED_SCRIPT";
 
 fn shell_changing() -> GapRaise {
     GapRaise {
@@ -389,6 +414,31 @@ fn reply(s: State, outcome: ShioriOutcome, origin: &'static str) -> (State, Vec<
     crate::schedule::translate_test_support::pass_translate(next, &cfg())
 }
 
+/// 頭をダブルクリックし、`OnMouseDoubleClick` の GET を送った状態にする（その応答を本番の道で返すため）。
+fn double_click(s: State) -> State {
+    let (s, actions) = step(
+        s,
+        Input::Mouse(MouseInput {
+            scope: 0,
+            x: 10,
+            y: 20,
+            region: Some("Head".to_string()),
+            kind: MouseEventKind::DoubleClick {
+                button: MouseButton::Left,
+            },
+        }),
+        &cfg(),
+    );
+    assert!(
+        actions.iter().any(|a| matches!(
+            a,
+            Action::ShioriRequest(ShioriCall::Get { id, .. }) if id.as_str() == "OnMouseDoubleClick"
+        )),
+        "前提: OnMouseDoubleClick の GET を送る"
+    );
+    s
+}
+
 fn done_of(
     s: State,
     talk_id: TalkId,
@@ -404,21 +454,11 @@ fn done_of(
 }
 
 fn value() -> ShioriOutcome {
-    ShioriOutcome::Value(SCRIPT.to_string(), areka_talk::SecurityLevel::Local)
+    ShioriOutcome::Value(MARKED_SCRIPT.to_string(), areka_talk::SecurityLevel::Local)
 }
 
 fn is_playing(s: &State, id: TalkId) -> bool {
     matches!(&s.phase, Phase::Steady { talk: Some(active) } if active.talk_id == id)
-}
-
-/// GET の Action から (イベント名, Reference 列) を取り出す。
-fn get_call(action: &Action) -> (String, Vec<String>) {
-    match action {
-        Action::ShioriRequest(ShioriCall::Get { id, references, .. }) => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET の ShioriRequest のはず"),
-    }
 }
 
 /// 印の依頼を送り、その応答の台本で印の台詞（[`MARKED`]）を始めた状態。
@@ -438,7 +478,7 @@ fn marked_request_sends_the_event_by_get_with_the_references_as_given() {
     let (s, actions) = out.expect("step は必ず結果を返す");
     assert_eq!(actions.len(), 1, "印のイベントをちょうど 1 件送る");
     assert_eq!(
-        get_call(&actions[0]),
+        expect_get_call(&actions[0]),
         (SHELL_CHANGING.to_string(), shell_changing().references),
         "Reference は渡したまま"
     );
@@ -481,6 +521,23 @@ fn marked_request_outside_steady_or_with_pending_close_sends_nothing() {
 }
 
 #[test]
+fn marked_request_with_pending_change_sends_nothing_and_leaves_for_ghost_change() {
+    // 再生中に切替が保留になった後の印の依頼: ゴーストへ `OnShellChanging` を送らない。
+    let s = State {
+        pending_change: Some(change_request()),
+        ..steady_some()
+    };
+    let (mut s, actions) = await_marked(s);
+    assert!(actions.is_empty(), "切替の保留中は印のイベントを送らない");
+    assert_eq!(
+        take_outcome(&mut s),
+        Some(TalkGap::Left {
+            reason: GapLeft::GhostChange
+        })
+    );
+}
+
+#[test]
 fn marked_talk_played_to_the_end_is_reached_completed() {
     // 何も再生していないときの印の台詞。
     let (mut s, _) = done_of(marked_talk_playing(), MARKED, TalkEndReason::Ended, false);
@@ -511,7 +568,7 @@ fn marked_talk_replaced_by_another_reply_is_reached_replaced_at_the_end_of_the_r
     let s = marked_talk_playing();
     // 再生中のダブルクリックの応答が印の台詞を置き換える（旧トークの完了は dispatcher が捨てて届かない）。
     let (s, _) = reply(
-        s,
+        double_click(s),
         ShioriOutcome::Value("OTHER".to_string(), areka_talk::SecurityLevel::Local),
         "OnMouseDoubleClick",
     );
@@ -552,7 +609,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
         &cfg(),
     );
     assert_eq!(actions.len(), 1, "選択はカスケードの GET を 1 件送る");
-    get_call(&actions[0]);
+    expect_get_call(&actions[0]);
     let (s, _) = reply(
         s,
         ShioriOutcome::Value("CHOSEN".to_string(), areka_talk::SecurityLevel::Local),
@@ -561,7 +618,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
     let replacing = TalkId(6);
     assert!(is_playing(&s, replacing));
     assert_eq!(
-        s.choice_prev_talk,
+        s.prev_talk,
         Some(MARKED),
         "選択の置き換えは印の台詞の番号を 1 世代だけ控える"
     );
@@ -570,7 +627,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
     let mut out = None;
     let ev = capture(|| out = Some(done_of(s, MARKED, TalkEndReason::Ended, false)));
     let (s, _) = out.expect("step は必ず結果を返す");
-    logged_once(&ev, Level::INFO, "talk_done_stale_choice");
+    logged_once(&ev, Level::INFO, "talk_done_stale");
     assert_waiting(&s, "遅れた旧トークの完了の後");
 
     let (mut s, _) = done_of(s, replacing, TalkEndReason::Ended, false);
@@ -598,7 +655,7 @@ fn choice_timeout_release_of_the_marked_talk_is_completed() {
         },
         &cfg(),
     );
-    assert_eq!(get_call(&actions[0]).0, "OnChoiceTimeout");
+    assert_eq!(expect_get_call(&actions[0]).0, "OnChoiceTimeout");
     let (s, actions) = reply(s, ShioriOutcome::NoContent, "OnChoiceTimeout");
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == MARKED),
@@ -644,7 +701,14 @@ fn no_content_reply_is_reached_no_talk() {
 #[test]
 fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() {
     for quit_reserved in [true, false] {
-        let (s, _) = step(marked_talk_playing(), Input::UserBreak { scope: 0 }, &cfg());
+        let (s, _) = step(
+            marked_talk_playing(),
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(MARKED),
+            },
+            &cfg(),
+        );
         let mut out = None;
         let ev = capture(|| {
             out = Some(done_of(
@@ -668,37 +732,11 @@ fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() 
             ),
             "quit_reserved={quit_reserved}: OnBalloonBreak の GET 1 本だけ"
         );
-        assert!(
-            s.user_break_talk.is_none(),
-            "中断の帳簿は今日どおり空になる"
-        );
+        assert!(s.user_break_talk.is_none(), "中断の帳簿は空になる");
         assert_not_logged(&ev, "talk_done_break_quit");
         logged_once(&ev, Level::INFO, "talk_gap_marked_break");
         assert_eq!(take_outcome(&mut s), Some(TalkGap::CancelledByUser));
     }
-}
-
-#[test]
-fn the_same_script_without_the_mark_goes_to_closing_when_broken() {
-    // 同じ台本を印の無い応答（ダブルクリック）で始め、印の無い依頼で見張って同じ中断を掛ける。
-    let (s, _) = reply(steady_none(), value(), "OnMouseDoubleClick");
-    assert!(is_playing(&s, MARKED));
-    let (s, _) = await_gap(s);
-    let (s, _) = step(s, Input::UserBreak { scope: 0 }, &cfg());
-    let (mut s, actions) = done_of(s, MARKED, TalkEndReason::Interrupted, true);
-    assert!(matches!(
-        s.phase,
-        Phase::Unloading {
-            cause: TermCause::Quit
-        }
-    ));
-    assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
-    assert_eq!(
-        take_outcome(&mut s),
-        Some(TalkGap::Left {
-            reason: GapLeft::Closing
-        })
-    );
 }
 
 #[test]

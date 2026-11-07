@@ -7,21 +7,11 @@
 //!
 //! 往復は呼出スレッドで同期に走るので、記録はスレッドローカルの捕捉窓で拾える。
 
+use super::tests::{fake_shiori, get, probe_get_call};
 use super::*;
 use crate::schedule::log_capture::{CapturedEvent, capture};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
-use std::sync::mpsc;
-use std::thread;
 use tracing::Level;
-
-/// テスト用 GET 呼出（`OnBoot`・許可表にある固定 ID）。
-fn probe_get_call() -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Static("OnBoot"),
-        references: vec!["master".to_string()],
-        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-    }
-}
 
 /// テスト用 NOTIFY 呼出（`OnInitialize`・許可表にある固定 ID）。
 fn probe_notify_call() -> ShioriCall {
@@ -38,17 +28,12 @@ fn round_trip_with_failure(
     call: ShioriCall,
     failure: ShioriFailure,
 ) -> (ShioriOutcome, Vec<CapturedEvent>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || {
-        if let Ok(ShioriMsg::Request { call: _, reply }) = shiori_rx.recv() {
-            let _ = reply.send(ShioriOutcome::Failed(failure));
-        }
-    });
-
+    let (shiori_tx, helper) = fake_shiori(ShioriOutcome::Failed(failure));
     let mut outcome: Option<ShioriOutcome> = None;
     let events = capture(|| {
         outcome = Some(round_trip_request(&shiori_tx, call));
     });
+    drop(shiori_tx);
     helper.join().expect("fake shiori thread");
     (outcome.expect("round_trip_request returns"), events)
 }
@@ -109,38 +94,28 @@ fn other_failures_stay_failed_without_error_response_record() {
 }
 
 /// 偽の shiori が受けた名前と Reference（送られなければ None）。
-type Sent = Option<(String, Vec<String>)>;
+pub(super) type Sent = Option<(String, Vec<String>)>;
 
 /// 1 件の Request を受け、送られた名前と Reference を控えて `NoContent` を返す偽の shiori を立てて
 /// `call` を往復させる。戻り値は応答・偽の shiori が受けた中身（送られなければ None）・捕えた記録。
-fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Vec<CapturedEvent>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || {
-        if let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {
-            let (ShioriCall::Get { id, references, .. }
-            | ShioriCall::Notify { id, references, .. }) = call;
-            let _ = reply.send(ShioriOutcome::NoContent);
-            return Some((id.as_str().to_string(), references));
-        }
-        None
-    });
-
+pub(super) fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Vec<CapturedEvent>) {
+    let (shiori_tx, helper) = fake_shiori(ShioriOutcome::NoContent);
     let mut outcome: Option<ShioriOutcome> = None;
     let events = capture(|| {
         outcome = Some(round_trip_request(&shiori_tx, call));
     });
     drop(shiori_tx);
-    let sent = helper.join().expect("fake shiori thread");
+    let sent = helper.join().expect("fake shiori thread").map(|call| {
+        let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) =
+            call;
+        (id.as_str().to_string(), references)
+    });
     (outcome.expect("round_trip_request returns"), sent, events)
 }
 
 /// 外から頼まれた名前（`EventId::Sstp`）の GET。
 fn probe_sstp_call(event: &str, references: &[&str]) -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Sstp(event.to_string()),
-        references: references.iter().map(|r| r.to_string()).collect(),
-        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-    }
+    get(EventId::Sstp(event.to_string()), references)
 }
 
 /// 送出の檻の `EventId::Sstp` の受理（mcp-kanade-tools 要件 2.1・2.7・6.1）: 検査を満たす名前は
@@ -175,7 +150,7 @@ fn sstp_origin_valid_name_is_sent_verbatim_without_warning() {
     }
 }
 
-/// 検査を破る `EventId::Sstp`（名前か Reference に CR・LF・NUL・空の名前）は送らず、今日の檻と同じ
+/// 検査を破る `EventId::Sstp`（名前か Reference に CR・LF・NUL・空の名前）は送らず、ほかの許可外の名前と同じ
 /// `error!`（`event_id_not_allowed`）＋`Failed(Internal)` になる。
 #[test]
 fn sstp_origin_invalid_name_or_reference_is_not_sent_and_logs_error() {
@@ -200,6 +175,10 @@ fn sstp_origin_invalid_name_or_reference_is_not_sent_and_logs_error() {
                 && e.level == Level::ERROR
                 && e.event.as_deref() == Some("event_id_not_allowed")),
             "{event:?}／{references:?} は event_id_not_allowed の error! を残すはず"
+        );
+        assert!(
+            !events.iter().any(|e| e.level == Level::WARN),
+            "{event:?}／{references:?} は取り除く前の生の値で断る（取り除きの WARN を出さない）"
         );
     }
 }

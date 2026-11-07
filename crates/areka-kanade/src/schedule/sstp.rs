@@ -12,7 +12,7 @@ use crate::talk::ScriptOrigin;
 pub(crate) const SEND_ORIGIN: &str = "SstpSend";
 /// SSTP NOTIFY の応答の `origin`（殻が `EventId::Sstp` の往復に載せる固定のラベル）。
 pub(crate) const NOTIFY_ORIGIN: &str = "SstpNotify";
-/// 起動の挨拶のトークの `ActiveTalk::origin`（`schedule/boot.rs` の `to_baseware_version` が置く綴り）。
+/// 起動の挨拶のトークの `ActiveTalk::origin`（`schedule/boot.rs` の `to_baseware_version` もこの定数を置く）。
 pub(super) const BOOT_GREETING_ORIGIN: &str = "boot";
 
 /// 受け付けた台本の再生の開始に strict の印を立てる（真のときだけ・翻訳は台本と出どころだけを替える）。
@@ -38,9 +38,10 @@ pub(crate) fn accepts(state: &State) -> bool {
 
 /// `Input::SstpSend` の腕。受け付けないなら状態を変えず `debug!`（`sstp_not_accepted`）だけで空の一括。
 ///
-/// 受け付けたら選択肢の帳簿と 1 世代の控えを消し、共通の手で採番・枠の差し替えをし、再生の開始に
+/// 受け付けたら台本から CR・LF・NUL を取り除き（取り除いたら `info!`（`sstp_send_line_breaks_removed`）を
+/// 1 件）、選択肢の帳簿を消し、共通の手で採番・枠の差し替え（古い番号を控えへ）をし、再生の開始に
 /// strict の印を立て、翻訳へ預ける（0 文字なら預けずに再生の開始をそのまま返す）。旧トークの
-/// 後始末は今日の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
+/// 後始末は定常の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
 pub(super) fn on_send(
     mut state: State,
     script: String,
@@ -50,8 +51,14 @@ pub(super) fn on_send(
         tracing::debug!(target: "kanade", event = "sstp_not_accepted", kind = "send", phase = super::phase_label(&state.phase), "普段の状態でない——外からの台本を受け付けない");
         return (state, Vec::new());
     }
+    // 外からの台本の改行が SHIORI への頭書きの行を切らないよう、受け付けた直後に取り除く（SSP と同じ見え方）。
+    let before = script.chars().count();
+    let script = script.replace(crate::sstp::LINE_BREAKERS, "");
+    let removed = before - script.chars().count();
+    if removed > 0 {
+        tracing::info!(target: "kanade", event = "sstp_send_line_breaks_removed", removed, "外からの台本の CR・LF・NUL を取り除いた");
+    }
     super::clear_choice_ledger(&mut state, "sstp_send");
-    state.choice_prev_talk = None;
     let (talk_id, mut start) = super::start_talk(
         &mut state,
         SEND_ORIGIN,
@@ -106,10 +113,11 @@ pub(super) fn on_notify(
 
 /// 応答待ちの控えが在るときの `Input::ShioriReply` の腕（`route` が `on_shiori_reply` より先に呼ぶ）。
 ///
-/// 控えを必ず取り出す。相が `Steady` で空でない（trim して 1 文字以上の）台本なら [`on_send`] と同じ
+/// 控えを必ず取り出す。相が `Steady` で空でない（空白だけも含む・[`super::has_script`]）台本なら [`on_send`] と同じ
 /// 掃除・採番で新しいトークを始め（`origin = NOTIFY_ORIGIN`）、再生の開始に strict の印を立てる。翻訳は
-/// `step` の出口の規則が元のイベント（`EventId::Sstp`）の出どころで預ける。空・空白だけ・204（エラー
-/// 応答は殻が 204 に写す）は何もせず今のトークを残す。それ以外（失敗など）は今日の道へ渡す。
+/// `step` の出口の規則が元のイベント（`EventId::Sstp`）の出どころで預ける。空・204（エラー
+/// 応答は殻が 204 に写す）は何もせず今のトークを残す。それ以外（失敗など）は
+/// `on_shiori_reply` へ渡す。
 pub(super) fn on_notify_reply(
     mut state: State,
     outcome: ShioriOutcome,
@@ -123,9 +131,8 @@ pub(super) fn on_notify_reply(
         return super::on_shiori_reply(state, outcome, origin, config);
     }
     match outcome {
-        ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
+        ShioriOutcome::Value(script, _) if super::has_script(&script) => {
             super::clear_choice_ledger(&mut state, "sstp_notify");
-            state.choice_prev_talk = None;
             let (talk_id, mut start) =
                 super::start_talk(&mut state, NOTIFY_ORIGIN, script, ScriptOrigin::MCP_NOTIFY);
             mark_strict(&mut start, strict);

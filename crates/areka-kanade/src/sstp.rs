@@ -18,13 +18,16 @@ pub enum SstpSendOutcome {
 pub enum SstpNotifyOutcome {
     /// SHIORI が空でない台本を返し、再生を始めた。中身は SHIORI が返したまま（翻訳の前）。
     Script(String),
-    /// 返り値なし・空か空白だけ・エラー応答（何も再生していない・今の再生に触れていない）。
+    /// 返り値なし・空の台本・エラー応答（何も再生していない・今の再生に触れていない）。
     NoScript,
     /// 起動・終了・切替の手順の途中で送らなかった。
     NotAccepted,
     /// 往復が失敗した、またはこの依頼の処理の中で kanade が止まった。
     Failed,
 }
+
+/// 頭書きの行を切る 3 字（CR・LF・NUL）。外からの値の検査と取り除きはこの 1 つで書く。
+pub(crate) const LINE_BREAKERS: [char; 3] = ['\r', '\n', '\0'];
 
 /// `validate_notify` が断る理由。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +44,7 @@ pub fn validate_notify(event: &str, references: &[String]) -> Result<(), NotifyA
     if event.trim().is_empty() {
         return Err(NotifyArgError::EmptyEvent);
     }
-    let breaks = |s: &str| s.contains(['\r', '\n', '\0']);
+    let breaks = |s: &str| s.contains(LINE_BREAKERS);
     if breaks(event) || references.iter().any(|r| breaks(r)) {
         return Err(NotifyArgError::ControlCharacter);
     }

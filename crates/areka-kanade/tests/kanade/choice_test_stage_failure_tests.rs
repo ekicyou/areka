@@ -2,10 +2,11 @@ use super::test_support::{
     CANONICAL_CHOICE_ID, choice_get_ids, choice_input, establish_choice_wait,
 };
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, Harness, KanadeConfig,
-    KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy, TalkCommand, expected_unload,
-    join_bounded, spawn_harness_gated_failing,
+    CallMethod, CloseReason, Driven, FailKind, FailOn, Fixture, KanadeConfig, KanadeMsg,
+    MouseButton, MouseEventKind, QuitPolicy, TalkCommand, expected_unload, send,
+    spawn_harness_gated_failing,
 };
+use crate::mouse_test::test_support::mouse_input;
 
 // ============================================================================
 // 群 3: Req4.5・DD-12 — 選択起因の失敗は終了系列へ倒れない
@@ -37,38 +38,25 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
         fixture,
         QuitPolicy::PerTalk(vec![false, true]),
         vec![0],
-        FailOn {
-            id: "OnChoiceSelectEx",
-            kind: FailKind::Ipc,
-        },
+        FailOn::new("OnChoiceSelectEx", FailKind::Ipc),
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
-        .expect("send Choice");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)),
+    );
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade choice-failed join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close, not via the choice-stage failure");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura choice-failed join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade choice-failed join");
 
     // (1) 失敗段は 204 相当で次段へ前進した（Fault へ倒れていれば無印は発行されない）。
     assert_eq!(
@@ -146,41 +134,26 @@ fn non_choice_failure_during_choice_wait_still_faults() {
         fixture,
         QuitPolicy::PerTalk(vec![false]),
         vec![0],
-        FailOn {
-            id: "OnMouseDoubleClick",
-            kind: FailKind::Ipc,
-        },
+        FailOn::new("OnMouseDoubleClick", FailKind::Ipc),
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     // 選択待ち（帳簿 Waiting）の窓で非 choice GET を発行させ、その応答を失敗させる。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(MouseInput {
-            scope: 0,
-            x: 10,
-            y: 20,
-            region: Some("Head".to_string()),
-            kind: MouseEventKind::DoubleClick {
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DoubleClick {
                 button: MouseButton::Left,
             },
-        }))
-        .expect("send Mouse during choice wait");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
+            10,
+            20,
+            0,
+            Some("Head"),
+        )),
+    );
 
     // 免除が漏れていなければ、非 choice の Failed は終了系列を駆動して join が成功する。
-    join_bounded("kanade non-choice-failed join", DEFAULT_TIMEOUT, kanade).expect(
-        "non-choice failure must still drive Unloading{Fault} even while a choice ledger exists",
-    );
-    drop(sender);
-    sakura.join_bounded("mock-sakura non-choice-failed join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade non-choice-failed join");
 
     // (1) 失敗させた GET は現に発行された（空虚な合格でない）。
     assert!(

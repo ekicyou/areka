@@ -1,7 +1,7 @@
-use super::test_support::{mouse_gets, move_input};
+use super::test_support::{mouse_input, no_mouse_call};
 use super::{
-    CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg,
-    QuitPolicy, TalkId, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CloseReason, Driven, FIXED_FAREWELL_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MouseEventKind,
+    QuitPolicy, TalkId, expected_unload, send, spawn_harness, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -16,7 +16,7 @@ use super::{
 /// マウス GET は構造的に発行されない。close talk（quit:true）で終了系列を駆動し記録を確定する。
 ///
 /// # 非空虚性
-/// もし非 Steady のマウスが GET を発行していれば `mouse_gets` が空でなくなり落ちる。終了が正常完走
+/// もし非 Steady のマウスが GET か NOTIFY を出していれば `no_mouse_call` が偽になり落ちる。終了が正常完走
 /// （末尾 Unload）することで「無視しただけで運行は乱れていない（状態不変）」を確認する。
 #[test]
 fn phase_ignore_before_boot_no_mouse_get() {
@@ -27,38 +27,48 @@ fn phase_ignore_before_boot_no_mouse_get() {
     );
 
     // Boot より前に Mouse を注入（Idle で処理される＝非 Steady・無視）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(move_input(5, 6, 0, Some("Head"))))
-        .expect("send Mouse before Boot");
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 5, 6, 0, Some("Head"))),
+    );
+    // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DragStart,
+            5,
+            6,
+            0,
+            Some("Head"),
+        )),
+    );
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse idle-ignore join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence");
-    drop(sender);
-    sakura.join_bounded("mock-sakura idle-ignore join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse idle-ignore join");
 
     // Idle のマウスは GET を発行しない（記録に現れない）。
     assert!(
-        mouse_gets(&recorded).is_empty(),
+        no_mouse_call(&recorded),
         "Boot 完了前（Idle）の Mouse はマウス GET を発行しないはず: {:?}",
         recorded
     );
-    // 状態不変の観測: 終了系列は正常完走（末尾 Unload）。
+    // 状態不変の観測: 到達する StartTalk は close talk だけで、終了系列は正常完走（末尾 Unload）。
+    assert_eq!(
+        started
+            .iter()
+            .map(|s| s.script.as_str())
+            .collect::<Vec<_>>(),
+        vec![FIXED_FAREWELL_SCRIPT],
+        "Boot 完了前のマウスは talk を起こさない"
+    );
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),
@@ -94,39 +104,40 @@ fn phase_ignore_during_close_series_no_mouse_get() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     // CloseRequest は Steady{None} の即握手＝OnClose GET→別れの Value→close talk（保留）→CloseTalkWait。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
     // close 系列中（CloseTalkWait）の Mouse 注入（横断アームで無視・GET 不発）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(move_input(9, 9, 0, Some("Head"))))
-        .expect("send Mouse during close series");
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 9, 9, 0, Some("Head"))),
+    );
+    // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DragStart,
+            9,
+            9,
+            0,
+            Some("Head"),
+        )),
+    );
     // close talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse close-ignore join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after the close talk is released as quit:true");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura close-ignore join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse close-ignore join");
 
     // CloseTalkWait のマウスは GET を発行しない（記録に現れない）。
     assert!(
-        mouse_gets(&recorded).is_empty(),
+        no_mouse_call(&recorded),
         "close 系列中（CloseTalkWait）の Mouse はマウス GET を発行しないはず: {:?}",
         recorded
     );
@@ -177,39 +188,40 @@ fn pending_close_guard_suppresses_mouse_get() {
     );
 
     // Boot → `Steady{Some(挨拶 id=1)}`（挨拶 talk 保留）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     // 挨拶再生中の close 指示 → `Steady{Some}` ゆえ即握手せず pending_close に記録（OnClose まだ）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest during greeting");
+        },
+    );
     // pending_close 成立窓での Mouse 注入 → ガードで GET 不発（release 前ゆえ Mouse は必ずこの窓で処理）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(move_input(11, 22, 0, Some("Head"))))
-        .expect("send Mouse while close pending");
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 11, 22, 0, Some("Head"))),
+    );
+    // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DragStart,
+            11,
+            22,
+            0,
+            Some("Head"),
+        )),
+    );
     // 挨拶 talk（Ended）を解放 → pending_close を消化して begin_close（OnClose→別れ→close talk quit:true）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse pending-close join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade completes the deferred close handshake and terminates");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura pending-close join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse pending-close join");
 
     // (1) pending_close 中のマウスは GET を発行しない（記録に現れない）。
     assert!(
-        mouse_gets(&recorded).is_empty(),
+        no_mouse_call(&recorded),
         "pending_close 中の Mouse はマウス GET を発行しないはず（close 優先ガード）: {:?}",
         recorded
     );
