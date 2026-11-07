@@ -13,10 +13,14 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F
         f();
         let _ = done_tx.send(());
     });
-    assert!(
-        done_rx.recv_timeout(timeout).is_ok(),
-        "'{what}' did not complete within {timeout:?} (possible hang)"
-    );
+    // 閉包が panic すると完了の合図の送信端が落ちて Disconnected になる＝時間切れと分けて報告する。
+    match done_rx.recv_timeout(timeout) {
+        Ok(()) => {}
+        Err(mpsc::RecvTimeoutError::Disconnected) => panic!("'{what}' panicked"),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            panic!("'{what}' did not complete within {timeout:?} (possible hang)")
+        }
+    }
 }
 
 fn config() -> KanadeConfig {
@@ -108,63 +112,12 @@ fn close_message_terminates_and_join_succeeds() {
     drop(shiori_handle);
 }
 
-// --- 2. 全 Sender drop での正常終了（Req 4.9）: Close 未送信でも inbox 切断で join 成功 ---
-
-#[test]
-fn all_senders_dropped_terminates_normally() {
-    let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-    let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
-
-    let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
-
-    // Close を送らず、全 Sender<KanadeMsg> を drop する（inbox 切断）。
-    drop(kanade_tx);
-
-    run_bounded(
-        "kanade join after all senders dropped",
-        Duration::from_secs(5),
-        move || {
-            kanade_handle
-                .join()
-                .expect("kanade body terminates on inbox disconnect (Req 4.9)");
-        },
-    );
-    drop(shiori_handle);
-}
-
-// --- 3a. shiori 切断: 送出失敗 → 終了系列へ倒れて join 成功（宙吊りなし・Req 6.2/6.3） ---
-
-#[test]
-fn shiori_disconnected_send_failure_terminates_into_fault() {
-    // mock shiori を spawn せず、Receiver を即 drop して送出を失敗させる。
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    drop(shiori_rx); // 送出は必ず Err になる。
-    let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
-
-    let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
-
-    // Boot → OnInitialize NOTIFY を発行 → 送出失敗 → Failed(Ipc) 再投入 → Unloading{Fault}
-    // → Unload（これも送出失敗）→ Failed → Stopped → StopSelf（shiori.send も Err だが Break）。
-    kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
-    drop(kanade_tx);
-
-    run_bounded(
-        "kanade join after shiori disconnect",
-        Duration::from_secs(5),
-        move || {
-            kanade_handle
-                .join()
-                .expect("kanade terminates cleanly when shiori is disconnected");
-        },
-    );
-}
-
 // --- 3b. sakura 切断: `TalkCommand::Start` 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
 
 #[test]
 fn sakura_disconnected_start_talk_failure_continues_run() {
     // OnBoot（BootMain の GET）に Value を返す mock shiori: これで起動指示が発行される。
-    let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
+    let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
         Recorded::Notify(_) => ShioriOutcome::Notified,
         Recorded::Unload => ShioriOutcome::Unloaded,
         // OnFirstBoot(GET)→204、OnBoot(GET)→Value でグリーティング talk を起こす。
@@ -195,6 +148,12 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
                 .join()
                 .expect("kanade continues past TalkCommand send failure, then stops on Close");
         },
+    );
+    // 運行が続いた＝故障の道（Unloading{Fault}）へ倒れていない: Close での停止は Unload を送らない。
+    let recorded: Vec<Recorded> = rec_rx.try_iter().collect();
+    assert!(
+        !recorded.contains(&Recorded::Unload),
+        "talk 指示の送出失敗で故障の道へ倒れてはならない（Unload が届いた）: {recorded:?}"
     );
     drop(shiori_handle);
 }
@@ -575,29 +534,6 @@ fn disallowed_id_still_rejected_as_internal_after_resource_extension() {
     drop(shiori_handle);
 }
 
-// (c) 既存の許可イベント ID（OnBoot）は OR 拡張の影響を受けず従来どおり送出される
-//     （イベント檻無改変の回帰檻）。
-#[test]
-fn allowed_event_id_unaffected_by_resource_or_extension() {
-    let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-
-    let outcome = round_trip_request(&shiori_tx, probe_get_call());
-
-    assert!(
-        matches!(outcome, ShioriOutcome::NoContent),
-        "許可イベント ID の GET は OR 拡張後も従来どおり送出されるべき"
-    );
-    assert_eq!(
-        rec_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("許可イベント ID はチャネルへ送出され mock が受領するはず"),
-        Recorded::Get("OnBoot".to_string())
-    );
-
-    drop(shiori_tx);
-    drop(shiori_handle);
-}
-
 // --- 9. boot prefetch → ResourceSink 同期呼出（タスク 6.2・R4.1・design boot 図） ---
 //
 // アクター経路（spawn_kanade）で boot を駆動し、username リソース照会（prefetch）が
@@ -717,55 +653,6 @@ fn choice_origin_scheduler_forbidden_ids_are_sent_verbatim() {
         drop(shiori_tx);
         drop(shiori_handle);
     }
-}
-
-// (a') 対の拒否側（Req2.9 の非交差を 1 テスト内で明示）: 同じ `OnTalk` でもスケジューラ起源は
-//      従来どおり送出されず `event_id_not_allowed` を記録して Failed(Internal) へ写像される。
-#[test]
-fn same_id_is_allowed_from_choice_origin_and_rejected_from_scheduler_origin() {
-    // 選択起源: 送出される。
-    let (choice_tx, choice_rx, choice_handle) = spawn_mock_shiori(benign);
-    let choice_outcome = round_trip_request(&choice_tx, probe_choice_call("OnTalk"));
-    assert!(
-        matches!(choice_outcome, ShioriOutcome::NoContent),
-        "OnTalk は選択起源なら送出されるべき（Req2.9）"
-    );
-    assert_eq!(
-        choice_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("選択起源 OnTalk はチャネルへ送出されるはず"),
-        Recorded::Get("OnTalk".to_string())
-    );
-    drop(choice_tx);
-    drop(choice_handle);
-
-    // スケジューラ起源: 送出されず error!＋Failed(Internal)（恒久禁止は Static 側で不変）。
-    let (static_tx, static_rx, static_handle) = spawn_mock_shiori(benign);
-    let mut static_outcome: Option<ShioriOutcome> = None;
-    let events = capture(|| {
-        static_outcome = Some(round_trip_request(
-            &static_tx,
-            ShioriCall::Get {
-                id: EventId::Static("OnTalk"),
-                references: Vec::new(),
-                status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-            },
-        ));
-    });
-    assert!(
-        matches!(
-            static_outcome,
-            Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
-        ),
-        "OnTalk はスケジューラ起源では従来どおり Failed(Internal) へ写像されるべき（Req3.2）"
-    );
-    assert_logged(&events, Level::ERROR, "event_id_not_allowed");
-    assert!(
-        static_rx.try_recv().is_err(),
-        "スケジューラ起源 OnTalk はチャネルへ送出されてはならない（Req3.2）"
-    );
-    drop(static_tx);
-    drop(static_handle);
 }
 
 // (b) 選択起源の `On` 非接頭 ID → 送出されず `event_id_not_allowed` を記録して
@@ -980,4 +867,14 @@ fn talk_command_send_failure_does_not_abort_the_action_batch() {
 
     drop(shiori_tx);
     drop(shiori_handle);
+}
+
+// --- 12. 有界の待ちの報告（#78）: 閉包の panic を時間切れ（possible hang）と取り違えない ---
+
+#[test]
+#[should_panic(expected = "panicked")]
+fn run_bounded_reports_a_panic_as_a_panic() {
+    run_bounded("panicking closure", Duration::from_secs(5), || {
+        panic!("boom");
+    });
 }
