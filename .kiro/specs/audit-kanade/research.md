@@ -275,3 +275,11 @@ ukadoc に定めが無い #1・#5 を、討議の前に SSP の MCP で測った
 - **#4**: 欄 `choice_prev_talk` を `prev_talk` に改名（17 ファイル）。名前が中身と食い違ったままだと、かけ直しの audit がまた指す。
 - **束**: ファイルのまとまりで 19 本（要件 9.10）。1,000 行の近いファイルを減らす束（T1〜T4）を先に、範囲の外へ及ぶ #7（T16）・#6（T17）を後ろに置いた。
 - **合成（design-synthesis）**: 一般化＝「頭書きを切る 3 字」は `crate::sstp::LINE_BREAKERS` 1 つにまとめ、入口の検査・送る点の検査・SEND の取り除きの 3 か所が使う。採る・作る＝標準の `str::replace`／`contains` と今の中継の部品で足り、新しい部品は作らない。削る＝#7 の取り消しの知らせは作らない（古い起こしは空振りして `trace!` だけ）。
+
+## 12. 着手の前の基準（2026-11-07・タスク 1.1）
+
+`placement-crate-split` は着地済みで `main` をこの枝へ取り込み済み（`8f989143`）。`crates/areka-placement` があり、`crates/areka-kanade` に `crate::placement` の名指しは 0 件。コードは変えていない。
+
+- **テスト**（`cargo test -p areka-kanade`・緑）: lib（`src/lib.rs`）713 通過・失敗 0・無視 0／結合（`tests/kanade.rs`）86 通過・失敗 0・無視 0／doc 0 件。直しの後も、この 799 本が同じ結果であること（要件 4.5・7.2。足したテストの分だけ数は増える）。
+- **clippy**（`cargo clippy -p areka-kanade --all-targets --no-deps`）: 警告 16 件（lib 1・lib test 5 のうち 1 は lib と重なり・結合 11）。内訳は `manual_contains` 7・`type_complexity` 4・`doc_lazy_continuation` 3・`collapsible_if` 1・`drain_collect` 1。§1「clippy の実測」と同じ。
+- **行数**: 「1,000 行の番人」の表の 13 ファイルは、表の「今」の数と全部同じ（最大は `src/actor_tests.rs` の 983）。束の順を見直す要は無い。
