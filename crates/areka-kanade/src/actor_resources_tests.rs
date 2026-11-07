@@ -37,6 +37,16 @@ fn all_phases() -> Vec<Phase> {
             talk_id: TalkId(7),
             deadline: None,
         },
+        Phase::ChangePending,
+        Phase::ChangeTalkWait {
+            talk_id: TalkId(7),
+            deadline: None,
+        },
+        Phase::ChangeClosePending,
+        Phase::ChangeCloseTalkWait {
+            talk_id: TalkId(7),
+            deadline: None,
+        },
         Phase::Unloading {
             cause: TermCause::Quit,
         },
@@ -94,8 +104,8 @@ fn only_steady_is_queryable() {
     assert_eq!(queryable_count, 2, "照会できるのは Steady の 2 形だけ");
     assert_eq!(
         phases.len() - queryable_count,
-        12,
-        "残り 12 形は照会できない"
+        16,
+        "残り 16 形は照会できない"
     );
 }
 

@@ -332,22 +332,26 @@ fn sstp_send_source_uses_sstp_send_owned_reference1() {
 #[test]
 fn translate_reply_level_rides_on_the_result_and_makoto_gets_only_the_script() {
     use areka_talk::SecurityLevel;
+    // （応答, レベル, MAKOTO の口が受ける台本）。204・誤りは展開した元の台本を受ける。
     let cases = [
         (
             ShioriOutcome::Value("訳".to_string(), SecurityLevel::External),
             SecurityLevel::External,
+            "訳",
         ),
         (
             ShioriOutcome::Value("訳".to_string(), SecurityLevel::Local),
             SecurityLevel::Local,
+            "訳",
         ),
-        (ShioriOutcome::NoContent, SecurityLevel::Local),
+        (ShioriOutcome::NoContent, SecurityLevel::Local, "太郎さん"),
         (
             ShioriOutcome::Failed(ShioriFailure::Shiori("500 Internal Server Error".into())),
             SecurityLevel::Local,
+            "太郎さん",
         ),
     ];
-    for (reply, level) in cases {
+    for (reply, level, script) in cases {
         let observed = run(reply, &[]);
         let done = observed.result.expect("輸送路の失敗ではない");
         assert_eq!(done.level, level, "翻訳の応答のレベル（204・誤りは local）");
@@ -355,6 +359,10 @@ fn translate_reply_level_rides_on_the_result_and_makoto_gets_only_the_script() {
             observed.makoto.len(),
             1,
             "MAKOTO の口は台詞だけを 1 回受ける"
+        );
+        assert_eq!(
+            observed.makoto[0].0, script,
+            "MAKOTO の口が受けるのは期待の台本"
         );
     }
 }

@@ -48,6 +48,15 @@ fn from_failure_maps_each_reachable_arm_to_its_kind_and_display_reason() {
     }
 }
 
+/// エラー応答の腕は写しの判断には届かないが、記録に出る文言はほかの腕と同じ語彙で固定する。
+#[test]
+fn shiori_error_response_display_wording() {
+    assert_eq!(
+        ShioriFailure::Shiori("400".to_string()).to_string(),
+        "shiori error response: 400"
+    );
+}
+
 #[test]
 fn from_down_maps_both_kinds_and_keeps_reason_verbatim() {
     assert_eq!(

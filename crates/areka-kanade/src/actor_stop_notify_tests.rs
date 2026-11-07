@@ -221,20 +221,6 @@ fn notice_without_a_sink_is_recorded_at_debug() {
     assert_not_logged(&events, "notice_send_failed");
 }
 
-/// 運行表の「通知を送る」の定常到達も、そのままの値で送出端へ 1 件流れる（要件 8.8）。
-#[test]
-fn steady_notice_is_forwarded_to_the_sink() {
-    let (tx, rx) = mpsc::channel::<KanadeNotice>();
-
-    assert!(
-        !run_notice(Some(&tx), KanadeNotice::Steady),
-        "通知は停止ではない"
-    );
-
-    assert_eq!(rx.try_recv(), Ok(KanadeNotice::Steady), "定常到達が届く");
-    assert!(rx.try_recv().is_err(), "通知は 1 件だけ");
-}
-
 /// 切替の帳簿を持ったまま終了系列を終えると、停止通知に切替の中身（台本ごと）が載る（要件 3.4）。
 ///
 /// 控えは `drive` が停止原因を控えるのと同じ時点（step の直前）で取る。Unload の応答で

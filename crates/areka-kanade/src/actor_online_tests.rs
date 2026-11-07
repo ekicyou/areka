@@ -15,15 +15,16 @@ use std::time::Duration;
 
 const LIMIT: Duration = Duration::from_secs(10);
 
-/// 偽の shiori を立てて、`online` を差し替えた kanade を起こす。記録は `(名前, Status)`。
-fn spawn_with(
-    online: &'static OnlineCounter,
-) -> (
+/// `spawn_with` の戻り（kanade の送信端・握り・偽の shiori の記録・運行の通知）。
+type Spawned = (
     Sender<KanadeMsg>,
     ActorHandle,
     Receiver<(String, Option<String>)>,
     Receiver<KanadeNotice>,
-) {
+);
+
+/// 偽の shiori を立てて、`online` を差し替えた kanade を起こす。記録は `(名前, Status)`。
+fn spawn_with(online: &'static OnlineCounter) -> Spawned {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
     let (calls_tx, calls) = mpsc::channel();
     std::thread::spawn(move || {
