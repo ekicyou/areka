@@ -10,7 +10,7 @@
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use areka_kanade::{ExecutionStateUpdate, KanadeMsg};
+use areka_kanade::{ExecutionStateUpdate, KanadeMsg, TalkId};
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::World;
 use wintf::ecs::Input;
@@ -258,6 +258,7 @@ fn press_with_visibility(
     selected_now: bool,
     balloon_visible: Option<bool>,
 ) -> bool {
+    let talk_id = shown_talk_id(world);
     let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
         tracing::trace!(
             event = "balloon_break_no_wiring",
@@ -313,17 +314,25 @@ fn press_with_visibility(
             false
         }
         PressVerdict::Break => {
-            send_break(&wiring, scope);
+            send_break(&wiring, scope, talk_id);
             true
         }
     }
+}
+
+/// 押されたバルーンに出ている台詞のトークの番号（表示の側の可視の状態が持つ・audit-kanade #6）。
+/// `Emo2Wiring` が無い・番号を知らないは `None`（kanade は今のトークを止める）。
+fn shown_talk_id(world: &World) -> Option<TalkId> {
+    world
+        .get_non_send::<Emo2Wiring>()
+        .and_then(Emo2Wiring::shown_talk_id)
 }
 
 /// 中断の送り出し: 「隠せ」→「止めろ」を 1 件ずつ。どちらの失敗も記録し、もう一方の送出は
 /// やめない——止める要求だけ落ちると「バルーンは消えたのに再生が続く」になるので、隣の
 /// `fn send_selection` より重い水準で記録する（要件 1.7・2.8）。普通のバルーンの窓と箱の
 /// 両方の入口が使う（areka-P0-shell-balloon 要件 9.6）。
-fn send_break(wiring: &UserBreakWiring, scope: usize) {
+fn send_break(wiring: &UserBreakWiring, scope: usize, talk_id: Option<TalkId>) {
     if wiring
         .lifecycle_tx
         .send(TalkLifecycleSignal::UserBreak)
@@ -337,11 +346,13 @@ fn send_break(wiring: &UserBreakWiring, scope: usize) {
     }
     let msg = KanadeMsg::UserBreak {
         scope: scope as u32,
+        talk_id,
     };
     if wiring.kanade.send(msg).is_err() {
         tracing::error!(
             event = "balloon_break_send_failed",
             scope,
+            talk_id = ?talk_id,
             "運行の側へ中断の要求を渡せない（受け手が消えている）: 再生は止まらない"
         );
     }
@@ -360,6 +371,7 @@ pub(crate) fn on_box_press(
     double_click: DoubleClick,
     selected_now: bool,
 ) -> BoxPressVerdict {
+    let talk_id = shown_talk_id(world);
     let Some(mut wiring) = world.get_non_send_mut::<UserBreakWiring>() else {
         tracing::trace!(
             event = "box_break_no_wiring",
@@ -384,7 +396,7 @@ pub(crate) fn on_box_press(
             reason = "no_user_break",
             "中断を禁じる区間: 箱の左ダブルクリックで止めず隠さない"
         ),
-        BoxPressVerdict::Break => send_break(&wiring, scope),
+        BoxPressVerdict::Break => send_break(&wiring, scope, talk_id),
         BoxPressVerdict::ShellOp | BoxPressVerdict::ConsumedBySelection => {}
     }
     verdict
@@ -393,3 +405,7 @@ pub(crate) fn on_box_press(
 #[cfg(test)]
 #[path = "user_break_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "user_break_talk_id_tests.rs"]
+mod talk_id_tests;

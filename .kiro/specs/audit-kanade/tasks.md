@@ -268,7 +268,7 @@
   - _Depends: 16.2, 16.3_
   - _Requirements: 3.1, 3.2, 5.3, 6.3, 6.7, 9.5_
 
-- [ ] 17. 利用者の中断にトークの番号を載せる（#6・#71・#18 の `user_break_tests.rs`）
+- [x] 17. 利用者の中断にトークの番号を載せる（#6・#71・#18 の `user_break_tests.rs`）
 - [x] 17.1 kanade の中断の知らせに番号を足し、合わない中断を表 C へ渡す
   - 知らせと入力に番号の欄（Option）を足し、殻と段取りへそのまま写す
   - 番号が Some で今のトークと違えば止めずに debug を残して表 C へ。None は今どおり今のトークを止める
@@ -276,7 +276,7 @@
   - `a_break_for_another_talk_stops_nothing_and_goes_to_table_c` と `a_break_without_a_talk_id_stops_the_current_talk` が緑で、照合を外す・None を「合わない」に入れると赤
   - _Depends: 16.2_
   - _Requirements: 3.1, 3.2, 4.1, 4.5, 6.3, 7.1, 9.1, 9.9_
-- [ ] 17.2 areka の入力の側が表示の側の番号を運ぶ（範囲の外 `crates/areka`）
+- [x] 17.2 areka の入力の側が表示の側の番号を運ぶ（範囲の外 `crates/areka`）
   - 着地した `placement-crate-split` の形（`areka_placement::…`）に従い、`frame/wiring.rs` は読み口 1 つを足すほかの行に触らない。足す行に配置の型や `crate::placement::` が要るときは、触る前に同 spec のセッションへ知らせる
   - 表示の可視の状態と結線に読み口を 1 つずつ足し、押下の入口がそれを読んで中断の送り出しへ渡す
   - 2 つのテストのファイルは `UserBreak` の行だけを直し、新しいテストのファイルで番号が運ばれることを見る（記録は見ない）
