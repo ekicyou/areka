@@ -210,24 +210,6 @@ mod tests {
         }
     }
 
-    /// Req2.5: 同一入力に対して常に同一の列を導く（副作用も内部状態も持たない）。
-    #[test]
-    fn plan_cascade_is_deterministic_for_repeated_input() {
-        for id in [
-            "Onおしゃべり頻度メニュー",
-            "On",
-            "on_menu",
-            "script:\\e",
-            "choice1",
-            "",
-        ] {
-            let first = plan_cascade(id);
-            for _ in 0..8 {
-                assert_eq!(plan_cascade(id), first, "同一入力 {id:?} が別の列を導いた");
-            }
-        }
-    }
-
     // === choice_deadline: DD-8 の 3 値語彙（Req7.6/7.7） ===
 
     const DEFAULT_MS: u64 = 30_000;
@@ -358,20 +340,5 @@ mod tests {
             choice_deadline(MonotonicMs(1_000), Some(f64::NAN), DEFAULT_MS),
             None
         );
-    }
-
-    /// 同一入力に対して常に同一の期限を返す（副作用なし・実時刻を読まない）。
-    #[test]
-    fn choice_deadline_is_deterministic_for_repeated_input() {
-        for directive in [None, Some(0.0), Some(-1.0), Some(2.5)] {
-            let first = choice_deadline(MonotonicMs(1_000), directive, DEFAULT_MS);
-            for _ in 0..8 {
-                assert_eq!(
-                    choice_deadline(MonotonicMs(1_000), directive, DEFAULT_MS),
-                    first,
-                    "同一入力 {directive:?} が別の期限を導いた"
-                );
-            }
-        }
     }
 }

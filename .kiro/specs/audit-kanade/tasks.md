@@ -172,7 +172,7 @@
   - 直したテストが緑
   - _Requirements: 3.1, 4.2, 4.5, 7.1, 7.2, 9.1, 9.7_
 
-- [ ] 11. 選択と切替のテストを直す（#28・#31・#73・#74・#75）
+- [x] 11. 選択と切替のテストを直す（#28・#31・#73・#74・#75）
   - 値を他のテストが縛る 2 本と、直に呼ぶ 3 本を消す
   - 切替の受理の後の時間切れで故障へ倒れても切替の帳簿が残ることを 1 本、残段なしと時間切れの確定と取り消しを 1 本足す
   - 時間切れ待ちの下ごしらえを帳簿つきの下ごしらえから作る
@@ -315,3 +315,4 @@
 - 5.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:308` が空白だけを「無かった」と読み、旧名のテスト `empty_blank_and_no_content_are_no_reply` を名指す。`crates/areka/src/mcp/raise_event_tests.rs:389` の注も同じ。振る舞いの変化: `OnInstallCompleteEx` の答えが空白だけなら、続く `OnInstallComplete` を送らなくなる。
 - 6.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:354` が消した関数名 `replace_absent_markers` を名指す（今は `clean_references`・`reference_line_break_removed` の warn も足された）。
 - 10.1: #35 の 2 組目は design と逆の側（sstp_tests の `sstp_notify_derives_status_from_the_snapshot`）を消した。sstp_notify 側が `step` から `state.snapshot()` へのつながりを縛るただ 1 本だったため（要件 3.3）。
+- 11: `steady_choice_timeout_tests.rs` は 840 行（design の見込み約 760）。#74 で消したのは直に呼ぶ 3 本（うち 2 本は `steady_choice_tests.rs`）で、design の −100 は `step()` を通る側を消す前提の見込み違い。

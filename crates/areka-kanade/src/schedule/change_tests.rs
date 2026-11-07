@@ -317,6 +317,35 @@ fn both_204_unloads_silently() {
     assert_eq!(script_of(&s), None);
 }
 
+/// 受理の後に `OnGhostChanging` が時間切れで失敗しても、故障で降ろす相へ進みつつ切替の帳簿は残る
+/// （areka は停止通知の切替の中身を見て、SHIORI の失敗の後でも切替を続ける）。
+#[test]
+fn failure_after_accept_unloads_as_fault_and_keeps_change_ledger() {
+    let (s, _) = step(
+        steady(),
+        Input::ChangeGhost(req(ChangeOrigin::Manual, true)),
+        &cfg(),
+    );
+    let (s, actions) = reply(
+        s,
+        ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout("30s".to_string())),
+    );
+    assert!(
+        matches!(
+            s.phase,
+            Phase::Unloading {
+                cause: TermCause::Fault(_)
+            }
+        ),
+        "SHIORI の失敗は故障で降ろす相へ"
+    );
+    assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
+    assert!(
+        s.change.is_some(),
+        "故障の道でも切替の帳簿は降ろす相まで残る"
+    );
+}
+
 #[test]
 fn deadline_is_armed_on_first_tick_when_entered_without_time() {
     let (s, _) = step(

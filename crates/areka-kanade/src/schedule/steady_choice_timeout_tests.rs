@@ -28,17 +28,15 @@ fn steady_waiting(
     script: &str,
     deadline: Option<MonotonicMs>,
 ) -> State {
-    let mut s = steady_some(talk_id, next_id);
+    let mut s = steady_with_ledger(talk_id, next_id, &["OnMenu"], ChoicePhase::Waiting);
     match &mut s.phase {
         Phase::Steady { talk: Some(active) } => active.script = script.to_string(),
-        _ => unreachable!("steady_some は Steady{{Some}} を返す"),
+        _ => unreachable!("steady_with_ledger は Steady{{Some}} を返す"),
     }
-    s.choice = Some(ChoiceState {
-        talk_id,
-        candidates: vec!["OnMenu".to_string()],
-        deadline,
-        phase: ChoicePhase::Waiting,
-    });
+    s.choice
+        .as_mut()
+        .expect("steady_with_ledger は帳簿を持つ")
+        .deadline = deadline;
     s
 }
 
@@ -331,40 +329,6 @@ fn choice_timeout_no_content_cancels_choice() {
         ),
         _ => panic!("expected Steady{{Some}} preserved"),
     }
-    assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
-}
-
-/// Req4.5／7.5: タイムアウト GET の失敗も 204 と同一＝解除で継続（終了系列へ倒れない）。
-///
-/// カスケード段の檻と同じく `steady::step` の直接駆動で steady 側の処理を固定する（層を分けた
-/// 単体檻）。`step()` 経由の end-to-end（DD-12 の免除アームが効くこと）は
-/// [`timeout_failed_via_step_cancels_without_unloading`] が固定する。
-#[test]
-fn choice_timeout_failed_is_treated_as_no_content_cancel() {
-    let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
-    let mut out = None;
-    let ev = capture(|| {
-        out = Some(super::step(
-            s,
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout(
-                    "30s".to_string(),
-                )),
-                origin: "OnChoiceTimeout",
-            },
-        ));
-    });
-    let (next, actions) = out.expect("step は必ず結果を返す");
-    assert!(
-        !matches!(next.phase, Phase::Unloading { .. }),
-        "選択由来の失敗で終了系列へ倒れない（Req4.5）"
-    );
-    match actions.as_slice() {
-        [Action::CancelChoice { talk_id }] => assert_eq!(*talk_id, TalkId(3)),
-        _ => panic!("失敗は 204 と同一＝CancelChoice のみ（Req7.5）"),
-    }
-    assert!(next.choice.is_none());
-    assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
     assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
 }
 
