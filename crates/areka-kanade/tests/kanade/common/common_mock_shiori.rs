@@ -211,8 +211,6 @@ fn call_id(call: &ShioriCall) -> &str {
 pub enum BlockOn {
     /// 指定 id の最初の GET 呼出をブロックする（例: `"OnSecondChange"`）。
     Get(&'static str),
-    /// 指定 id の最初の NOTIFY 呼出をブロックする。
-    Notify(&'static str),
 }
 
 impl BlockOn {
@@ -220,7 +218,6 @@ impl BlockOn {
     fn matches(&self, call: &ShioriCall) -> bool {
         match (self, call) {
             (BlockOn::Get(id), ShioriCall::Get { id: cid, .. }) => cid.as_str() == *id,
-            (BlockOn::Notify(id), ShioriCall::Notify { id: cid, .. }) => cid.as_str() == *id,
             _ => false,
         }
     }

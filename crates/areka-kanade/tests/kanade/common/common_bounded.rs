@@ -17,12 +17,6 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 // ハング検出ヘルパ
 // ============================================================================
 
-/// 期限付き待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければテストを
-/// 失敗させる（どのテストもハングしない・Req 7.3）。areka-actor のテスト慣行に倣う。
-pub fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-    run_join_bounded(what, timeout, f);
-}
-
 /// 内部: クロージャを別スレッドで走らせ、`recv_timeout` の期限で完了を判定する。
 pub(super) fn run_join_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
     use std::sync::mpsc::sync_channel;

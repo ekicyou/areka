@@ -293,7 +293,7 @@ pub fn spawn_mock_sakura_gated(
                     .wait(inner)
                     .expect("sakura gate condvar wait");
             }
-            let to_send: Vec<TalkDone> = inner.parked.drain(..).collect();
+            let to_send: Vec<TalkDone> = std::mem::take(&mut inner.parked);
             drop(inner);
             for done in to_send {
                 // kanade 停止済みで送れなくても無害（続行）。

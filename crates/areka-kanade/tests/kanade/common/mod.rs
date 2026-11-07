@@ -11,7 +11,7 @@
 //!   遅延なし）どおり [`KanadeMsg::TalkDone`] を kanade inbox へ返す mock 再生系宛先。
 //! - [`expected_call`]: `areka_kanade::events::*` の [`ShioriCall`] を [`RecordedCall`] へ
 //!   変換する導出関数（fixture・検証・実装が単一の正本＝events 表を共有・Req 7.1）。
-//! - [`run_bounded`] / [`join_bounded`]: 期限付き待機によるハング検出ヘルパ
+//! - [`join_bounded`]: 期限付き待機によるハング検出ヘルパ
 //!   （どのテストもハングしない・Req 7.3）。
 //! - [`Harness`] / [`spawn_harness`]: mock shiori・mock sakura sink・`spawn_kanade` を
 //!   組み立てた駆動ハーネス（4.2〜4.6 が再利用する）。
@@ -71,11 +71,6 @@ mod smoke;
 // ============================================================================
 
 pub use bounded::{DEFAULT_TIMEOUT, drive_ticks_until_disconnect, join_bounded};
-// `run_bounded` は現時点で消費者を持たない（module doc「未使用許容（プレースホルダ段階）」）。
-// 項目そのものは `#![allow(dead_code)]` が許容するが、ファサード再輸出は `unused_imports` の
-// 対象になるため、この 1 本だけ局所的に許容する（ワークスペース警告の基準値を維持）。
-#[allow(unused_imports)]
-pub use bounded::run_bounded;
 pub use fixture::{
     ChoiceResponse, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
     MouseResponse,
