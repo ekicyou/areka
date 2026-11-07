@@ -292,7 +292,7 @@
   - _Requirements: 3.1, 6.7, 9.1_
 
 - [ ] 19. 仕上げの確かめ
-- [ ] 19.1 clippy を 0 件にする
+- [x] 19.1 clippy を 0 件にする
   - `cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` を回し、残る警告を直す
   - 警告 0 件で通り、直す前と同じテストが同じ結果で通る
   - _Requirements: 7.1, 7.2, 9.8_
