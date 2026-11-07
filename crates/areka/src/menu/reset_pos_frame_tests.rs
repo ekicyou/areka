@@ -14,16 +14,16 @@ use super::{
     PendingResetRaise, ResetDecision, decide_reset, poll_reset_raise, raise_reset_window_pos,
 };
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
-fn count(events: &[LogEvent], event: &str) -> usize {
+fn count(events: &[CapturedEvent], event: &str) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
         .count()
 }
 
-fn outcome_of(events: &[LogEvent]) -> Vec<(tracing::Level, String)> {
+fn outcome_of(events: &[CapturedEvent]) -> Vec<(tracing::Level, String)> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("reset_pos_menu_outcome"))
@@ -73,7 +73,7 @@ fn decide_reset_classifies_all_seven_answers() {
 #[test]
 fn raise_without_sender_resets_at_once() {
     let mut world = World::new();
-    let (_, events) = capture_logs(|| raise_reset_window_pos(&mut world));
+    let (_, events) = capture(|| raise_reset_window_pos(&mut world));
     assert!(world.get_non_send::<PendingResetRaise>().is_none());
     assert_eq!(
         outcome_of(&events),
@@ -94,7 +94,7 @@ fn raise_with_closed_sender_resets_at_once() {
         Some(tx),
         PathBuf::from("ghost/A"),
     ))));
-    let (_, events) = capture_logs(|| raise_reset_window_pos(&mut world));
+    let (_, events) = capture(|| raise_reset_window_pos(&mut world));
     assert!(world.get_non_send::<PendingResetRaise>().is_none());
     assert!(
         count(&events, "reset_window_pos_skipped") >= 1,
@@ -110,7 +110,7 @@ fn raise_sends_event_and_holds_one_pending_receiver() {
         Some(tx),
         PathBuf::from("ghost/A"),
     ))));
-    let (_, events) = capture_logs(|| raise_reset_window_pos(&mut world));
+    let (_, events) = capture(|| raise_reset_window_pos(&mut world));
     assert_eq!(
         count(&events, "reset_window_pos_skipped"),
         0,
@@ -134,7 +134,7 @@ fn raise_sends_event_and_holds_one_pending_receiver() {
 }
 
 /// 答えを置いた保留で 1 tick 回し、（保留が残ったか, 記録）を返す。`None` は答えを送らない。
-fn poll_with(answer: Option<RaiseOutcome>, drop_sender: bool) -> (bool, Vec<LogEvent>) {
+fn poll_with(answer: Option<RaiseOutcome>, drop_sender: bool) -> (bool, Vec<CapturedEvent>) {
     let (tx, rx) = reply_channel::<RaiseOutcome>();
     let mut world = World::new();
     world.insert_non_send(PendingResetRaise(rx));
@@ -146,7 +146,7 @@ fn poll_with(answer: Option<RaiseOutcome>, drop_sender: bool) -> (bool, Vec<LogE
     } else {
         _alive = tx;
     }
-    let (_, events) = capture_logs(|| poll_reset_raise(&mut world));
+    let (_, events) = capture(|| poll_reset_raise(&mut world));
     (world.get_non_send::<PendingResetRaise>().is_some(), events)
 }
 
@@ -235,10 +235,10 @@ fn wired_world(windows: bool) -> (World, mpsc::Receiver<KanadeMsg>) {
     crate::menu::wire_menu(&mut world, mpsc::channel().0);
     super::register(&mut world);
     if windows {
-        crate::placement::spawn::spawn_ghost_windows(
+        areka_placement::spawn::spawn_ghost_windows(
             &mut world,
             &[],
-            &crate::placement::source::GhostTitles::from_scope_titles(Vec::<(usize, String)>::new()),
+            &areka_placement::source::GhostTitles::from_scope_titles(Vec::<(usize, String)>::new()),
         );
     }
     (world, rx)

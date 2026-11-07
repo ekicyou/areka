@@ -15,8 +15,8 @@ use bevy_ecs::world::World;
 use super::*;
 use crate::emo2_boot::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
 use crate::emo2_boot::target_map::{balloon_target, shell_target};
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::source::{DescriptSource, GhostTitles};
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::source::{DescriptSource, GhostTitles};
 
 /// 今のシェル（面 1・2、別名 `今` は 2）と今のバルーン（面 0・1）。
 const NOW_SHELL: &str = "surface1\n{\n}\nsurface2\n{\n}\nkero.surface.alias\n{\n今,[2]\n}\n";

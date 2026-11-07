@@ -49,9 +49,9 @@ use crate::emo2_boot::ghost_switch_test_support::{
 use crate::emo2_boot::spine::{GpuPermit, Progress, RecordedCall, wait_until};
 use crate::ghost_session::GhostSlot;
 use crate::mcp::resolve;
-use crate::placement::follow::MonitorSnapshot;
-use crate::placement::resolver::RectPx;
-use crate::placement::spawn::spawn_ghost_windows;
+use areka_placement::follow::MonitorSnapshot;
+use areka_placement::resolver::RectPx;
+use areka_placement::spawn::spawn_ghost_windows;
 
 /// 合成の作業領域（配置の準備と窓の追従の両方が読む）。
 const WORK_AREA: RectPx = RectPx {
@@ -323,7 +323,7 @@ impl GpuRig {
 /// A の起動の配置（作業領域だけ合成・作者 DPI 96）で 2 スコープの窓を生やし、偽 HWND と
 /// `DPI::from_dpi(dpi, dpi)` を持たせる（`WindowPos` への書込の口が通る・実窓には触れない）。
 fn spawn_windows(rig: &mut SwitchRig, dpi: u16) {
-    let prepared = crate::placement::prepare_ghost_windows_with_work_area(
+    let prepared = areka_placement::prepare_ghost_windows_with_work_area(
         &rig.root.ghost_dir("A"),
         &rig.root.balloon_dir(BALLOON),
         WORK_AREA,

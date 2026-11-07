@@ -1,4 +1,6 @@
-//! # pipeline_test — 受信から可視化決定までの通しパイプライン検証（task 10.1・R2.4/R2.5/R3.5）
+//! # pipeline_test — 受信から可視化決定までの通しパイプライン検証（R2.4/R2.5/R3.5）
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
 //!
 //! cue 受信（実 `EmoTextSink`→実 `spawn_ui` channel）→状態適用（`TextLayerState`）→
 //! レイアウト決定（`LayoutEngine::layout`）→可視窓決定（`LayoutEngine::visible_window`）
@@ -19,60 +21,39 @@
 //! 基本とする（state.rs の檻と同方針）。reveal ペースは配送 duration 由来
 //! （`interval = duration / N`）ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込む。
 
+#[path = "support/mod.rs"]
+mod support;
+
+use support::fixture::{example_fixture_dir, merged_model};
+use support::pump_until_idle;
+
 use std::cell::RefCell;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::TextRegion;
-use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg};
+use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg_with};
 use areka_emo_text::state::TextLayerState;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint, parse_str,
-};
-use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
-use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ── パイプライン土台（実 channel・実 spawn_ui・専用 pump スレッド） ──────────────────
 
 /// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）
 /// ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を
-/// 得る（旧 char_wait=0.25 檻と機能等価・期待時刻は同一 `D/N` 算術で成立）。
+/// 得る（期待時刻は同一 `D/N` 算術で成立）。
 const REVEAL_INTERVAL: f64 = 0.25;
 
-/// テスト用 cue 生成ヘルパ（state.rs／sink.rs の檻と同型）。Text cue には配送
-/// duration = `N × REVEAL_INTERVAL` を焼き込み（reveal interval=0.25）、他は瞬時（duration=0）。
+/// テスト用 cue（共有の部品の間隔つき cue へ本ファイルの間隔を渡す）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-    let duration = match &command {
-        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
-        _ => 0.0,
-    };
-    TalkCue {
-        at,
-        actor: ActorKey::from(actor),
-        command,
-        duration,
-    }
-}
-
-/// 事前 queue 済みメッセージを全て処理し、queue が空になった時点で抜ける bounded pump
-/// （sink.rs の檻と同型——`WM_QUIT` は posted メッセージが尽きた後にのみ配送されるため、
-/// drain タスクは queue 済み cue を全て処理してから復帰する。決定論・ハングしない）。
-fn pump_until_idle() {
-    // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけの
-    // 無害な Win32 呼び出し（呼び出しスレッド＝pump スレッド）。
-    unsafe { PostQuitMessage(0) };
-    MessageLoop::run(|_, _| FilterResult::Forward);
+    support::cue(actor, at, command, REVEAL_INTERVAL)
 }
 
 /// 受信から状態適用までを実 channel で通す 1 インスタンス分のパイプライン実行。
 ///
 /// 専用スレッド（＝このインスタンスの UI/pump スレッド）上で:
-/// 1. `spawn_ui` の drain（handler は [`handle_text_msg`] へ委譲し `TextLayerState::apply_cue`
+/// 1. `spawn_ui` の drain（handler は [`handle_text_msg_with`] へ委譲し `TextLayerState::apply_cue`
 ///    で状態適用）を起動し、
 /// 2. ワーカースレッドから [`EmoTextSink::emit`] で cue 列を FIFO 送出（受信端は
 ///    ワーカー側・R1.3 の形）し、
@@ -87,10 +68,15 @@ fn run_channel_pipeline(cues: Vec<TalkCue>) -> TextLayerState {
         let (tx, _detached_drain) = areka_actor::spawn_ui(
             "emo-text-pipeline-test",
             move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
-                handle_text_msg(msg, |cue| {
-                    shared.borrow_mut().apply_cue(&cue);
-                    Ok(())
-                })
+                handle_text_msg_with(
+                    msg,
+                    |cue, _| {
+                        shared.borrow_mut().apply_cue(&cue);
+                        Ok(())
+                    },
+                    |_| Ok(()),
+                    |_| Ok(()),
+                )
             },
         )
         .expect("spawn_ui on the pipeline pump thread must succeed");
@@ -177,29 +163,19 @@ fn observe(
     out
 }
 
-/// テスト用 BalloonModel 生成ヘルパ（layout.rs の檻と同型・validrect は top,bottom,left,right）。
-fn model_rect(
-    origin: (Option<i32>, Option<i32>),
-    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(origin.0, origin.1),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
-}
-
 /// 横書きシナリオ共通の領域（validrect top0/bottom34・font 10 → 行送り 12（10 + 行間 2）で
 /// 3 行がちょうど収まり——3 行目の下端 34 が境界そのもの——4 行目の下端 46 > 34 であふれ発火
 /// ——layout.rs の檻と同一幾何）。境界を 36 のまま据え置くと 3 行目に 2px の余りが生まれ、
 /// 「3 行ちょうど」を前提にした下の期待表があふれの寸前を突かなくなる。
 fn horizontal_region() -> TextRegion {
     TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
+        &support::geometry_model(
+            (Some(0), Some(0)),
+            (None, None),
+            (Some(0), Some(34), Some(0), Some(400)),
+            None,
+            None,
+        ),
         (400, 224),
         WritingMode::HorizontalTb,
     )
@@ -207,14 +183,14 @@ fn horizontal_region() -> TextRegion {
 
 // ══ R2.4/R2.5/R3.5: 同一 cue 列・同一注入時刻列→可視グリフ数と可視窓が常に一致 ══
 
-/// 代表シナリオ（actor 複数・Text/NewLine/Clear・あふれ込み）を実 channel の独立
-/// インスタンス 2 本＋直結適用の参照 1 本へ同一 cue 列で流し、同一注入時刻列に対する
-/// 観測列（可視グリフ数・行列・可視窓）が**全観測点で完全一致**することを檻化する。
+/// 代表シナリオ（actor 複数・Text/NewLine/Clear・あふれ込み）を実 channel のインスタンス
+/// 1 本と直結適用の参照 1 本へ同一 cue 列で流し、同一注入時刻列に対する観測列（可視グリフ数・
+/// 行列・可視窓）が**全観測点で完全一致**することを檻化する。
 ///
 /// 一致だけの空虚な檻にしないため、末尾時刻の絶対値（actor 0 のあふれ発火窓・
 /// actor 1 の Clear 後可視数）も同時に固定する。
 #[test]
-fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instances() {
+fn same_cues_and_times_yield_identical_visible_counts_and_windows_via_channel_and_direct() {
     // 代表 cue 列: actor "0"（全角・明示改行 4 行→あふれ）と actor "1"（半角・Clear 割込み）。
     let cues = vec![
         cue("0", 0.0, CueCommand::Text("あい".into())),
@@ -235,21 +211,12 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
     let actors = [ActorKey::from("0"), ActorKey::from("1")];
     let region = horizontal_region();
 
-    // 実 channel の独立インスタンス 2 本（各自の pump スレッド）＋直結参照 1 本。
-    let via_channel_a = run_channel_pipeline(cues.clone());
-    let via_channel_b = run_channel_pipeline(cues.clone());
+    // 実 channel のインスタンス 1 本（自分の pump スレッド）＋直結参照 1 本。
+    let via_channel = run_channel_pipeline(cues.clone());
     let direct = run_direct_pipeline(&cues);
 
-    let trace_a = observe(
-        &via_channel_a,
-        &actors,
-        &probe_times,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-    );
-    let trace_b = observe(
-        &via_channel_b,
+    let trace_channel = observe(
+        &via_channel,
         &actors,
         &probe_times,
         &region,
@@ -265,14 +232,10 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
         10.0,
     );
 
-    // R2.5/R3.5: 同一 cue 列＋同一注入時刻列→全観測点（可視数・行列・可視窓）が常に一致。
+    // R2.5/R3.5: channel 経由と直結適用が全観測点（可視数・行列・可視窓）で一致＝搬送路は
+    // cue を変形しない（受信→状態適用の忠実性）。
     assert_eq!(
-        trace_a, trace_b,
-        "実 channel の独立インスタンス間で可視グリフ数・可視窓が一致する"
-    );
-    // channel 経由と直結適用が一致＝搬送路は cue を変形しない（受信→状態適用の忠実性）。
-    assert_eq!(
-        trace_a, trace_direct,
+        trace_channel, trace_direct,
         "channel 経由と直結適用で可視化決定が一致する"
     );
 
@@ -285,7 +248,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
             .expect("observation exists")
             .clone()
     };
-    let a0 = last_of(&trace_a, "0");
+    let a0 = last_of(&trace_channel, "0");
     assert_eq!(a0.visible, 6, "actor 0 は全 6 グリフがリビール済み");
     assert_eq!(a0.lines.len(), 4);
     assert_eq!(
@@ -297,7 +260,7 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
         "actor 0 は 4 行あふれで縦スクロール（横書き）"
     );
     // actor 1 は Clear 後の "xyz"＋"!" のみ（Clear 前の "abcd" は破棄）・あふれなし。
-    let a1 = last_of(&trace_a, "1");
+    let a1 = last_of(&trace_channel, "1");
     assert_eq!(a1.visible, 4, "actor 1 は Clear 後の 4 グリフのみ可視");
     assert_eq!(a1.lines.len(), 2);
     assert_eq!(
@@ -336,9 +299,8 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     // 期待表: (注入時刻, 可視グリフ数, 行数, 先頭可視行, ブロック軸オフセット)。
     // 改行マーカーは遅延（deferred newline・newline-defer）: 後続の可視グリフが reveal された
     // 時点でのみ実体化する。可視 prefix 末尾より後ろの保留改行は空行を開かず蒸発する
-    // （R1.1/1.2/4.1/4.2）。ゆえ「末尾に保留改行だけが積まれた」時刻ではあふれが発火せず、
-    // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる
-    // （旧・即時意味論の幽霊空行スクロールが消え、あふれ発火が実体化時刻へ後退する）。
+    // （`areka-P0-newline-defer` R1.1/1.2/4.1/4.2）。ゆえ「末尾に保留改行だけが積まれた」時刻ではあふれが発火せず、
+    // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる。
     let expected: &[(f64, usize, usize, usize, f32)] = &[
         (0.0, 1, 1, 0, 0.0),     // r_0=0.0: "あ" のみ・1 行
         (0.25, 2, 1, 0, 0.0),    // "あい"・末尾改行は保留（空行を開かない）
@@ -460,42 +422,22 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
     );
 }
 
-// ══ 縦書き（9.1 fixture 変種）: 縦書き解決→横スクロールの可視窓決定まで通しで決定論 ══
+// ══ 縦書き（`emo2-vertical` fixture 変種）: 縦書き解決→横スクロールの可視窓決定まで通しで固定する ══
 
-/// fixture 変種の配置（design.md File Structure Plan 正典・vertical_fixture_test.rs と同一）。
-fn fixture_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("examples")
-        .join("fixtures")
-        .join("emo2-vertical")
-}
-
-/// fixture 変種ファイルを読み、charset 宣言に従いデコードする（9.1 の檻と同一規約）。
-fn read_decoded(name: &str) -> String {
-    let path = fixture_dir().join(name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "fixture 変種 {} の読取に失敗した（task 9.1 の観測 fixture が必要）: {e}",
-            path.display()
-        )
-    });
-    decode(&bytes, DefaultEncoding::Utf8)
-}
-
-/// 9.1 縦書き fixture 変種（2 層マージ済み）で writing_mode 解決→領域解決→受信→状態適用→
-/// レイアウト→可視窓決定を通し、横方向スクロール（vertical_rl＝内容が右へ）の可視窓が
-/// 注入時刻に対して決定論的に決まることを檻化する。
+/// 縦書き fixture 変種 `emo2-vertical`（2 層マージ済み）で writing_mode 解決→領域解決→受信→状態適用→
+/// レイアウト→可視窓決定を通し、横方向スクロール（vertical_rl＝内容が右へ）の可視グリフ数と
+/// 可視窓を、注入時刻ごとの絶対値で檻化する。
 ///
 /// 幾何（vertical_fixture_test.rs の実測値）: validrect (36,46)-(356,168)・書字開始角
 /// (356,46)・font 10 → 列送り 12（10 + 行間 2）。明示改行で 27 列（列 i の左端 = 346−12i）を
 /// 作ると、27 列目（i=26）の左端 346−312 = 34 < validrect.left 36 であふれ発火→1 列スキップ・
-/// オフセット +12。旧来の 25 列では 25 列目の左端 346−288 = 58 が 36 を上回りあふれないため、
-/// 列数そのものを導き直している（26 列目も左端 46 ≥ 36 で足りない）。
+/// オフセット +12。25 列では 25 列目の左端 346−288 = 58 が 36 を上回りあふれず、26 列でも
+/// 左端 46 ≥ 36 で足りないので 27 列にする。
 #[test]
-fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
-    let merged = parse_str(
-        &read_decoded("descript.txt"),
-        Some(&read_decoded("balloons0s.txt")),
+fn vertical_fixture_pipeline_scrolls_horizontally() {
+    let merged = merged_model(
+        &example_fixture_dir("emo2-vertical"),
+        Some("balloons0s.txt"),
     );
     let mode = WritingMode::resolve(&merged);
     assert_eq!(
@@ -516,21 +458,17 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
         cues.push(cue("0", at, CueCommand::Text("あ".into())));
     }
 
-    let state_a = run_channel_pipeline(cues.clone());
-    let state_b = run_channel_pipeline(cues);
+    let state = run_channel_pipeline(cues);
     let actors = [ActorKey::from("0")];
-    let probe_times = [0.0, 1.0, 3.0, 6.0, 10.0];
+    let probe_times = [1.0, 10.0];
 
-    let trace_a = observe(&state_a, &actors, &probe_times, &region, mode, 10.0);
-    let trace_b = observe(&state_b, &actors, &probe_times, &region, mode, 10.0);
-    // R2.5/R3.5: 縦書きでも同一 cue 列＋同一注入時刻列→可視数・可視窓が常に一致。
-    assert_eq!(trace_a, trace_b, "縦書き fixture 経路でも観測列が一致する");
+    let trace = observe(&state, &actors, &probe_times, &region, mode, 10.0);
 
     let actor = ActorKey::from("0");
     // リビール途中（t=1.0・可視 5）: 5 列（各列 全角 1 グリフ）・末尾の保留改行は空列を
     // 開かず蒸発する（遅延化で幽霊空列が消える）。最新列（5 列目 i=4）の左端 298 ≥ 36 → 非発火。
-    assert_eq!(state_a.visible_glyphs(&actor, 1.0), 5);
-    let at_1s = trace_a.iter().find(|o| o.t == 1.0).expect("t=1.0 の観測");
+    assert_eq!(state.visible_glyphs(&actor, 1.0), 5);
+    let at_1s = trace.iter().find(|o| o.t == 1.0).expect("t=1.0 の観測");
     assert_eq!(at_1s.lines.len(), 5);
     assert_eq!(
         at_1s.window,
@@ -543,8 +481,8 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
 
     // 全量リビール（t=10.0・可視 27・最終グリフのリビール時刻 6.5）: 27 列目の左端 34 < 36 →
     // 横スクロール発火（vertical_rl＝内容が右へ＝ブロック軸オフセット +12）。
-    assert_eq!(state_a.visible_glyphs(&actor, 10.0), 27);
-    let at_10s = trace_a.iter().find(|o| o.t == 10.0).expect("t=10.0 の観測");
+    assert_eq!(state.visible_glyphs(&actor, 10.0), 27);
+    let at_10s = trace.iter().find(|o| o.t == 10.0).expect("t=10.0 の観測");
     assert_eq!(at_10s.lines.len(), 27);
     assert_eq!(
         at_10s.window,

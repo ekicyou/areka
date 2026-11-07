@@ -1,4 +1,4 @@
-2026-08-23T10:00:00.000000Z INFO areka::placement: 起動時 DPI 構成 primary_dpi=192 shell_author_dpi=96 balloon_author_dpi=96 k_shell=2 k_balloon=2
+2026-08-23T10:00:00.000000Z INFO areka_placement: 起動時 DPI 構成 primary_dpi=192 shell_author_dpi=96 balloon_author_dpi=96 k_shell=2 k_balloon=2
 2026-08-23T10:00:05.001234Z DEBUG areka::perf: perf(process): プロセス CPU snap=1 t_s=5 wall_ms=5001 cpu_us=4000000 kernel_us=1000000 user_us=3000000 threads=3
 2026-08-23T10:00:05.001234Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=19224 name=main role=ui cpu_us=2000000 kernel_us=500000 user_us=1500000
 2026-08-23T10:00:05.001234Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=19300 name=wintf-vsync role=vblank cpu_us=500000 kernel_us=200000 user_us=300000

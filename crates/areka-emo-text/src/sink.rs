@@ -1,15 +1,17 @@
 //! # sink — cue 受信口（結線層）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+//!
 //! **単一の出力契約** [`dola::cue::CueSink`] を実装する `EmoTextSink` と搬送 envelope
 //! `TextMsg` を担う。`emit` は cue 再生ランタイム（`CuePlayer`）／sakura drive の worker
 //! スレッド上で呼ばれ、cue を UI ドレインへ非ブロック送出する（`UiSender` が配送口そのもの）。
 //!
 //! 演者非依存の `CueSink` 1 本へ集約する（旧 `SurfaceSink`/`TextSink` の 2 分割は
-//! broadcast＋演者側 relevance ゆえ不要・R11.6）。ghost live-path も `CueSink` 注入で結線する
-//! （task 8.1 で旧 `TextSink` 経路を撤去し `CueSink` 一本へ集約）。
+//! broadcast＋演者側 relevance ゆえ不要・`areka-P0-cue-playback-duration` R11.6）。ghost live-path も `CueSink` 注入で結線する。
 //!
-//! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` のみ・panic しない
-//! （`emit` は infallible 契約・log-first）。
+//! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` 1 行・panic しない
+//! （`emit` は infallible 契約・log-first）。複製が落ちるときのトークの終わりの合図（`Drop`）だけは
+//! `tracing::warn!`。
 
 use std::ops::ControlFlow;
 
@@ -20,7 +22,7 @@ use dola::cue::CueProbe;
 /// UI ドレインへの搬送 envelope（`Send + 'static`・design.md 結線層 正本）。
 ///
 /// [`EmoTextSink`] が worker スレッドから積み、UI ドレイン（`spawn_ui` の drain タスク）が
-/// [`handle_text_msg`] で写像する。cue と終了指示を同一 FIFO 口で運ぶことで、
+/// [`handle_text_msg_with`] で写像する。cue と終了指示を同一 FIFO 口で運ぶことで、
 /// 「Close より前に積まれた cue は必ず先に処理される」順序保証を channel に委ねる。
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextMsg {
@@ -34,19 +36,19 @@ pub enum TextMsg {
     Upcoming(Vec<TalkCue>),
     /// 終了指示（結線側が talk 経路の畳み込みで送る・`Ok(Break)` 経路）。
     Close,
-    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く・件 1）。
+    /// トークの終わり（cue を送った複製が落ちるときに 1 回・そのトークの cue の後に届く・areka-P0-balloon-text-bugs 件 1）。
     TalkEnded,
-    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し・件 1）。
+    /// 再生が選択待ちに入った（[`dola::cue::CueSink::choice_wait_began`] の写し・areka-P0-balloon-text-bugs 件 1）。
     ChoiceWaitBegan,
 }
 
 /// **単一の出力契約** [`dola::cue::CueSink`] の実装——broadcast された全 cue を UI ドレインへ
 /// 非ブロック送出する受信口（担当外 cue も届き、reveal を汚さず duration を honor する）。
 ///
-/// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.text_sink`
-///   へ登録・注入可能な形・注入自体は emo2-boot の責務・R10.1/R11.6）。
+/// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイム／`GhostBootOptions.sinks`
+///   へ登録・注入可能な形・注入自体は emo2-boot の責務・`areka-P0-cue-playback-duration` R10.1/R11.6）。
 /// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側
-///   （R1.3 前半)。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
+///   （R1.3 前半）。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
 /// - cue は FIFO で UI ドレインへ到達する（unbounded・非ブロック）。
 ///
 /// # Invariants
@@ -66,7 +68,7 @@ impl Clone for EmoTextSink {
     }
 }
 
-/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る（件 1）。
+/// **トークの終わり**——cue を送った複製が落ちるときに [`TextMsg::TalkEnded`] を 1 回送る（areka-P0-balloon-text-bugs 件 1）。
 ///
 /// 複製はトークの再生が所有し、最後まで・中断・置き換えのどの終わり方でも落ちる。同じ口の FIFO で
 /// そのトークの cue の後に並び、置き換えでは配送が古いトークのスレッドを合流してから新しいトークを
@@ -122,20 +124,20 @@ impl EmoTextSink {
     }
 }
 
-/// **単一の出力契約**（R11.6・task 4.1）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+/// **単一の出力契約**（`areka-P0-cue-playback-duration` R11.6）: 演者非依存の [`dola::cue::CueSink`] を実装する。
 ///
 /// `CuePlayer` は登録された全 sink へ全 cue を broadcast し、emo-text は担当（Balloon）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
-/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・R2.2/R2.3）。配送先スロットの
-/// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ廃した（task 8.1 で暫定並存の
-/// `TextSink` 実装を撤去し `CueSink` 一本へ集約）。
+/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・`areka-P0-cue-playback-duration` R2.2/R2.3）。配送先スロットの
+/// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ廃し、
+/// `CueSink` 一本にしている。
 impl dola::cue::CueSink for EmoTextSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(TextMsg::Cue(cue));
     }
 
     /// 名前の形の `\b[名前]`（鍵が整数として読めない＝`resolve_balloon_key` の名前の形）だけ口付きで積む。
-    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる（要件 4.2）。ほかは `emit` と同じ。
+    /// 箱を探すのは UI の取り出しなので、知らせもそこで決まる（`mcp-strict-errors` 要件 4.2）。ほかは `emit` と同じ。
     fn emit_with(&mut self, cue: TalkCue, probe: &CueProbe) {
         match &cue.command {
             CueCommand::BalloonSurface { key } if key.parse::<i64>().is_err() => {
@@ -145,7 +147,7 @@ impl dola::cue::CueSink for EmoTextSink {
         }
     }
 
-    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（要件 2.1）。
+    /// 先渡しを写して [`TextMsg::Upcoming`] として合図と同じ口へ積む（`areka-P0-budoux-reveal-reflow` 要件 2.1）。
     /// 積めなかったとき（UI ドレイン停止後）は `emit`・`close` と同じく `error!` 1 行のみ・panic しない。
     fn preview(&mut self, upcoming: &[TalkCue]) {
         if self.tx.send(TextMsg::Upcoming(upcoming.to_vec())).is_err() {
@@ -156,7 +158,7 @@ impl dola::cue::CueSink for EmoTextSink {
         }
     }
 
-    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む（件 1）。
+    /// 選択待ちの始まりを [`TextMsg::ChoiceWaitBegan`] として合図と同じ口へ積む（areka-P0-balloon-text-bugs 件 1）。
     /// 積めなかったとき（UI ドレイン停止後）は `preview` と同じく `error!` 1 行のみ・panic しない。
     fn choice_wait_began(&mut self) {
         if self.tx.send(TextMsg::ChoiceWaitBegan).is_err() {
@@ -169,32 +171,18 @@ impl dola::cue::CueSink for EmoTextSink {
 
 /// 終了規律の正準写像（design.md 結線層——drain handler の器）。
 ///
-/// UI ドレインの handler は本関数へ委譲し、cue の処理（状態機械適用等）だけを `on_cue` で
-/// 差し込む（[`TextMsg::ProbedCue`] も口を捨てて `on_cue` へ渡す）。終了経路はちょうど 2 つ（R1.4 相当）:
+/// cue の処理（状態機械適用等）を `on_cue`、先渡し（[`TextMsg::Upcoming`]）を `on_upcoming`、
+/// トークの印（[`TextMsg::TalkEnded`]・[`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）を
+/// `on_talk_mark` で差し込む。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
+/// 終了経路はちょうど 2 つ（R1.4 相当）:
 ///
-/// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（`on_cue` は呼ばれない・
+/// - [`TextMsg::Close`] 受領 → `Ok(ControlFlow::Break(()))`（受け取りはどれも呼ばれない・
 ///   基盤 `spawn_ui` が error ログなしで drain を終了する）。
 /// - 全 [`UiSender`]（＝全 [`EmoTextSink`] クローン）drop → drain の `recv` が閉じて正常終了
 ///   （本関数の外・基盤の規約）。
 ///
-/// 個別 cue の処理失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
+/// 受け取りの失敗は `Err` として返し、基盤が `error!`＋継続する（R1.5——
 /// **失敗は終了経路ではない**・ループを殺さない）。
-///
-/// 先渡し（[`TextMsg::Upcoming`]）・トークの終わり（[`TextMsg::TalkEnded`]）・選択待ちの始まり
-/// （[`TextMsg::ChoiceWaitBegan`]）は読み飛ばす（字は `Cue` で届くので失われない）。
-/// これらを使う取り出しは [`handle_text_msg_with`] を用いる。
-pub fn handle_text_msg<E>(
-    msg: TextMsg,
-    on_cue: impl FnOnce(TalkCue) -> Result<(), E>,
-) -> Result<ControlFlow<()>, E> {
-    handle_text_msg_with(msg, |cue, _| on_cue(cue), |_| Ok(()), |_| Ok(()))
-}
-
-/// [`handle_text_msg`] に先渡しの受け取り `on_upcoming` と、トークの印（[`TextMsg::TalkEnded`]・
-/// [`TextMsg::ChoiceWaitBegan`] のどちらかだけが渡る）の受け取り `on_talk_mark` を差し込める形
-/// （終了規律は同じ）。`on_cue` の 2 つ目は [`TextMsg::ProbedCue`] の口（`Cue` なら `None`）。
-///
-/// 先渡し・印の受け取りの失敗も `Err` として返し、基盤が `error!`＋継続する。
 pub fn handle_text_msg_with<E>(
     msg: TextMsg,
     on_cue: impl FnOnce(TalkCue, Option<CueProbe>) -> Result<(), E>,
@@ -220,45 +208,27 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+    use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
     use log_capture_kit::count_levels;
-    use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-    use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
-    use super::{EmoTextSink, TextMsg, handle_text_msg, handle_text_msg_with};
+    use super::{EmoTextSink, TextMsg, handle_text_msg_with};
+    use crate::actor::test_support::{capture_checked, cue, pump_until_idle, spawn_message_drain};
 
     // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
 
-    /// クロージャを共有のログ捕捉窓の中で実行し、（結果, WARN 件数, ERROR 件数）を返す。
-    ///
-    /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-    /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
-    ///
-    /// 捕捉の範囲は**呼出スレッド**に閉じる。drain タスクは本テストスレッド（＝pump スレッド）
-    /// 上で走るため、handler／基盤 drain ループ／`emit` 失敗経路の全ログが窓に入る。
-    /// ただし「スレッドの範囲に閉じるから並行実行でも安全」は誤りである——差し替わるのは
-    /// スレッドローカルの既定 dispatcher だけで、そのログを評価するかどうかを決める callsite の
-    /// **有効判定（interest）キャッシュはプロセス全体で 1 つ**しかなく、その発行点を最初に
-    /// 踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドが先に踏むと `never` が
-    /// 大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。共有機構は
-    /// ⑴ probe の常駐 ⑵ 窓の内側での有効判定の再計算 ⑶ 番兵イベントによる空振り検出の
-    /// 3 点でこれを塞ぐ（機序は `log_capture_kit` の crate doc）。
-    fn with_log_cage<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
-        let (out, counts) = count_levels(f);
-        (out, counts.warn, counts.error)
-    }
+    // 記録は `log-capture-kit` の `count_levels` で数える（WARN/ERROR 件数の唯一の定義元）。
+    //
+    // 捕捉の範囲は**呼出スレッド**に閉じる。drain タスクは本テストスレッド（＝pump スレッド）
+    // 上で走るため、handler／基盤 drain ループ／`emit` 失敗経路の全ログが窓に入る。
+    // ただし「スレッドの範囲に閉じるから並行実行でも安全」は誤りである——差し替わるのは
+    // スレッドローカルの既定 dispatcher だけで、そのログを評価するかどうかを決める callsite の
+    // **有効判定（interest）キャッシュはプロセス全体で 1 つ**しかなく、その発行点を最初に
+    // 踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドが先に踏むと `never` が
+    // 大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。共有機構は
+    // ⑴ probe の常駐 ⑵ 窓の内側での有効判定の再計算 ⑶ 番兵イベントによる空振り検出の
+    // 3 点でこれを塞ぐ（機序は `log_capture_kit` の crate doc）。
 
     // ── テスト土台（実 channel・実 spawn_ui・bounded pump） ──
-
-    /// テスト用 cue（state.rs の cue ヘルパと同型）。
-    fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
-        TalkCue {
-            at,
-            actor: ActorKey::from(actor),
-            command,
-            duration: 0.0,
-        }
-    }
 
     /// drain タスク終了の観測用センチネル。handler クロージャへ move し、drain future が
     /// drop された時（`Ok(Break)` 終了・全送信元切断終了のいずれも）に flag が立つ。
@@ -273,8 +243,8 @@ mod tests {
 
     /// 記録 handler で `spawn_ui` し、`(sink, terminated, records)` を返す。
     ///
-    /// - handler は [`handle_text_msg`]（終了規律の正準写像）へ委譲し、cue を `records` へ
-    ///   push する（＝「描画を担う側」への配送先スタンドイン。状態機械適用は task 7.2 の領分）。
+    /// - handler は [`handle_text_msg_with`]（終了規律の正準写像）へ委譲し、cue を `records` へ
+    ///   push する（＝「描画を担う側」への配送先スタンドイン。状態機械の適用はここでは見ない）。
     /// - `poison` が指す本文の Text cue は `Err` を返す（個別配送失敗の再現・R1.5）。
     /// - 本テストスレッドが pump スレッドを演じる（`spawn_ui` と pump は同一スレッド必須）。
     fn spawn_recording_drain(
@@ -289,31 +259,24 @@ mod tests {
             move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
                 // センチネルを handler クロージャへ捕捉（drain future の drop で flag が立つ）。
                 let _hold = &sentinel;
-                handle_text_msg(msg, |cue| {
-                    if let (Some(p), CueCommand::Text(text)) = (poison, &cue.command) {
-                        if text == p {
-                            return Err(format!("poison cue rejected: {text}"));
+                handle_text_msg_with(
+                    msg,
+                    |cue, _| {
+                        if let (Some(p), CueCommand::Text(text)) = (poison, &cue.command) {
+                            if text == p {
+                                return Err(format!("poison cue rejected: {text}"));
+                            }
                         }
-                    }
-                    recs.lock().expect("records lock").push(cue);
-                    Ok(())
-                })
+                        recs.lock().expect("records lock").push(cue);
+                        Ok(())
+                    },
+                    |_| Ok(()),
+                    |_| Ok(()),
+                )
             },
         )
         .expect("spawn_ui on the test (pump) thread must succeed");
         (EmoTextSink::new(tx), terminated, records)
-    }
-
-    /// 事前 queue 済みメッセージを全て処理し、queue が空になった時点で抜ける bounded pump。
-    ///
-    /// `PostQuitMessage` の `WM_QUIT` は posted メッセージ（spawn_local の wake 含む）が
-    /// 尽きた後にのみ配送されるため、drain タスクは queue 済み cue を全て処理してから
-    /// pump が復帰する（heartbeat・deadline・sleep 不要の決定論・ハングしない）。
-    fn pump_until_idle() {
-        // SAFETY: PostQuitMessage は現スレッドの message queue へ quit 要求を積むだけの
-        // 無害な Win32 呼び出し（テストスレッド＝pump スレッド）。
-        unsafe { PostQuitMessage(0) };
-        MessageLoop::run(|_, _| FilterResult::Forward);
     }
 
     // ── 注入可能形（単一の出力契約 dola::cue::CueSink + Clone + Send + 'static） ──
@@ -321,23 +284,26 @@ mod tests {
     /// 単一出力契約（`dola::cue::CueSink`）への登録可能性を型で検証する（トレイトはフルパス束縛で参照）。
     fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
 
-    /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへの登録・`GhostBootOptions.text_sink` への
+    /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへの登録・`GhostBootOptions.sinks` への
     /// 注入が可能な**単一の出力契約**（`dola::cue::CueSink + Clone + Send + 'static`）を満たす
-    /// （R10.1/R11.6・task 4.1 の単一トレイト・注入自体は emo2-boot の責務）。
+    /// （`areka-P0-cue-playback-duration` R10.1/R11.6・単一トレイト・注入自体は emo2-boot の責務）。
     #[test]
     fn emo_text_sink_satisfies_cue_sink_contract() {
         assert_cue_sink_contract::<EmoTextSink>();
     }
 
-    // ── 終了規律の正準写像（handle_text_msg・純粋部） ──
+    // ── 終了規律の正準写像（handle_text_msg_with・純粋部） ──
 
     /// `TextMsg::Close` → `Ok(Break)`（終了指示＝クリーン終了経路・R1.4 相当の写像）。
     /// on_cue は呼ばれない。
     #[test]
     fn handle_text_msg_maps_close_to_break() {
-        let result = handle_text_msg::<String>(TextMsg::Close, |_| {
-            panic!("on_cue must not be called for Close")
-        });
+        let result = handle_text_msg_with::<String>(
+            TextMsg::Close,
+            |_, _| panic!("on_cue must not be called for Close"),
+            |_| panic!("on_upcoming must not be called for Close"),
+            |_| panic!("on_talk_mark must not be called for Close"),
+        );
         assert_eq!(result, Ok(ControlFlow::Break(())));
     }
 
@@ -346,10 +312,15 @@ mod tests {
     fn handle_text_msg_delivers_cue_and_continues() {
         let delivered = std::cell::RefCell::new(None);
         let sent = cue("0", 1.5, CueCommand::Text("アヒル".into()));
-        let result = handle_text_msg::<String>(TextMsg::Cue(sent.clone()), |c| {
-            *delivered.borrow_mut() = Some(c);
-            Ok(())
-        });
+        let result = handle_text_msg_with::<String>(
+            TextMsg::Cue(sent.clone()),
+            |c, _| {
+                *delivered.borrow_mut() = Some(c);
+                Ok(())
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        );
         assert_eq!(result, Ok(ControlFlow::Continue(())));
         assert_eq!(
             delivered.into_inner(),
@@ -362,9 +333,11 @@ mod tests {
     /// Break にはしない＝失敗は終了経路ではない）。
     #[test]
     fn handle_text_msg_propagates_cue_failure_as_err() {
-        let result = handle_text_msg(
+        let result = handle_text_msg_with(
             TextMsg::Cue(cue("0", 0.0, CueCommand::Clear)),
-            |_| -> Result<(), String> { Err("delivery failed".into()) },
+            |_, _| -> Result<(), String> { Err("delivery failed".into()) },
+            |_| Ok(()),
+            |_| Ok(()),
         );
         assert_eq!(result, Err("delivery failed".to_string()));
     }
@@ -375,7 +348,8 @@ mod tests {
     /// あわせて疎通の正準観測: clone 間で interleave した emit が FIFO で配送される（R1.1）。
     #[test]
     fn close_directive_terminates_drain_cleanly_after_fifo_delivery() {
-        let ((), _warns, errors) = with_log_cage(|| {
+        // 対照の 1 件のほかに ERROR が出ないことは `capture_checked` が確かめる。
+        let ((), _events) = capture_checked(|| {
             let (mut sink, terminated, records) = spawn_recording_drain(None);
             let mut sink2 = sink.clone();
 
@@ -402,17 +376,13 @@ mod tests {
             drop(sink);
             drop(sink2);
         });
-        assert_eq!(
-            errors, 0,
-            "終了指示によるクリーン終了は error ログを伴わない"
-        );
     }
 
     /// ケース2: 全送信元切断（全 `EmoTextSink` clone drop）——queue 済み cue を届け切った上で
     /// error ログを伴わずクリーンに終了する（R1.4 相当）。
     #[test]
     fn dropping_all_sinks_terminates_drain_cleanly() {
-        let ((), _warns, errors) = with_log_cage(|| {
+        let ((), _events) = capture_checked(|| {
             let (mut sink, terminated, records) = spawn_recording_drain(None);
             let sink2 = sink.clone();
 
@@ -435,17 +405,13 @@ mod tests {
                 "切断前に queue 済みの cue は破棄されず届く"
             );
         });
-        assert_eq!(
-            errors, 0,
-            "全送信元切断によるクリーン終了は error ログを伴わない"
-        );
     }
 
     /// ケース3a: 個別配送失敗（handler の `Err`）——panic せず error ログ 1 件を記録した上で、
     /// 後続 cue の受理を継続する（R1.5・失敗はループを殺さない）。
     #[test]
     fn delivery_failure_is_logged_and_subsequent_cues_processed() {
-        let ((), _warns, errors) = with_log_cage(|| {
+        let ((), counts) = count_levels(|| {
             let (mut sink, terminated, records) = spawn_recording_drain(Some("poison"));
 
             let before = cue("0", 0.0, CueCommand::Text("前".into()));
@@ -469,7 +435,7 @@ mod tests {
             );
         });
         assert_eq!(
-            errors, 1,
+            counts.error, 1,
             "個別配送失敗はちょうど 1 件の error ログとして記録される"
         );
     }
@@ -486,30 +452,20 @@ mod tests {
         assert!(terminated.load(Ordering::SeqCst), "前提: drain は停止済み");
 
         // 停止後の emit×2＋close×1: panic せず、各呼び出しが error 1 件のみ。
-        let ((), _warns, errors) = with_log_cage(|| {
+        let ((), counts) = count_levels(|| {
             sink.emit(cue("0", 1.0, CueCommand::Text("届かない".into())));
             sink.emit(cue("0", 1.1, CueCommand::Clear));
             sink.close();
         });
         assert_eq!(
-            errors, 3,
+            counts.error, 3,
             "停止後の emit/close は 1 呼び出しにつき error 1 件のみ（panic なし・受理継続）"
         );
     }
 
-    // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・要件 2.1） ──
+    // ── 先渡し（TextMsg::Upcoming・budoux-reveal-reflow task 1.3・`areka-P0-budoux-reveal-reflow` 要件 2.1） ──
 
-    /// 今の形 `handle_text_msg` は先渡しを読み飛ばす（`Ok(Continue)`・on_cue は呼ばれない）。
-    #[test]
-    fn handle_text_msg_skips_upcoming() {
-        let result = handle_text_msg::<String>(
-            TextMsg::Upcoming(vec![cue("0", 0.0, CueCommand::Clear)]),
-            |_| panic!("on_cue must not be called for Upcoming"),
-        );
-        assert_eq!(result, Ok(ControlFlow::Continue(())));
-    }
-
-    /// 新しい形 `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
+    /// `handle_text_msg_with` は先渡しを無変形で on_upcoming へ渡し、失敗は `Err` で返す。
     #[test]
     fn handle_text_msg_with_routes_upcoming_and_propagates_failure() {
         let list = vec![cue("0", 0.0, CueCommand::Text("アヒル".into()))];
@@ -538,30 +494,8 @@ mod tests {
     /// 実 channel: `preview` の後に `emit` した順で、先渡しの便りが合図より前に取り出される。
     #[test]
     fn preview_is_drained_before_subsequent_cues() {
-        let ((), _warns, errors) = with_log_cage(|| {
-            let records = Arc::new(Mutex::new(Vec::new()));
-            let recs = Arc::clone(&records);
-            let (tx, _detached_drain) = areka_actor::spawn_ui(
-                "emo-text-preview-test",
-                move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
-                    handle_text_msg_with(
-                        msg,
-                        |c, _| {
-                            recs.lock().expect("records lock").push(TextMsg::Cue(c));
-                            Ok(())
-                        },
-                        |u| {
-                            recs.lock()
-                                .expect("records lock")
-                                .push(TextMsg::Upcoming(u));
-                            Ok(())
-                        },
-                        |_| Ok(()),
-                    )
-                },
-            )
-            .expect("spawn_ui on the test (pump) thread must succeed");
-            let mut sink = EmoTextSink::new(tx);
+        let ((), _events) = capture_checked(|| {
+            let (mut sink, records) = spawn_message_drain("emo-text-preview-test");
 
             let c0 = cue("0", 0.0, CueCommand::Text("アヒルや".into()));
             let c1 = cue("0", 0.1, CueCommand::Clear);
@@ -582,7 +516,6 @@ mod tests {
                 "先渡しは写しとして合図より前に、合図は積んだ順に届く"
             );
         });
-        assert_eq!(errors, 0, "正常な先渡しは error ログを伴わない");
     }
 
     /// 停止後の `preview` は panic せず error 1 件だけを残す（`emit`・`close` と同じ規律）。
@@ -593,11 +526,11 @@ mod tests {
         pump_until_idle();
         assert!(terminated.load(Ordering::SeqCst), "前提: drain は停止済み");
 
-        let ((), _warns, errors) = with_log_cage(|| {
+        let ((), counts) = count_levels(|| {
             sink.preview(&[cue("0", 1.0, CueCommand::Text("届かない".into()))]);
         });
         assert_eq!(
-            errors, 1,
+            counts.error, 1,
             "停止後の preview は error 1 件のみ（panic なし）"
         );
     }

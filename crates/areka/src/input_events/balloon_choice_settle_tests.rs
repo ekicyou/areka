@@ -136,7 +136,7 @@ use wintf::ecs::{GraphicsCore, Point, Visual, WucGraphicsResource};
 
 use super::test_support::headless_emo2_wiring;
 use super::{BalloonWiring, ChoiceSelection, on_balloon_pointer_pressed};
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// 左シングルクリック（窓の client 物理 px）。
 fn left_press(x: i32, y: i32) -> Phase<PointerState> {

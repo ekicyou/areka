@@ -1,4 +1,6 @@
-//! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す（task 12.2・要件 10.4）
+//! # shell_balloon_fixture_test — 検体を読み手から文字の層まで通す（要件 10.4）
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 検体 `tests/fixtures/shell-balloon/surfaces.txt` を、読み手（`parse_boxes`・`parse`）→
 //! 畳み込み（`fold_boxes`）→ 文字の層（`TextLayerRuntime::set_box_layout`）へ通し、台本を
@@ -16,15 +18,20 @@
 //! `\s` の解決は偽の閉包（数字ならその番号を表示・`-1` は非表示）。本番の閉包はシェルの
 //! サーフェスの在不在で解くが、検体の 0〜3 はすべて在るので同じ結果になる。
 
+#[path = "support/mod.rs"]
+mod support;
+
+use support::fixture::read_balloon_file;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 use areka_emo_compose::{BoxLayout, EmoWorld, FontFollow, fold_boxes};
 use areka_emo_text::actor::{SurfaceKeyResolver, TextLayerRuntime};
 use areka_emo_text::look::TextLook;
 use areka_emo_text::place::{PlaceKey, TextPlace};
 use areka_emo_text::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
-use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::shell::{parse, parse_boxes};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
 use bevy_ecs::prelude::World;
@@ -40,18 +47,17 @@ const BALLOON: ((u8, u8, u8), f32) = ((0, 0, 0), 12.0);
 
 // ── 検体 → 読み手 → 畳み込み ──
 
+/// 検体を本番と同じ規約（既定 Ansi・`charset` 宣言優先）で読む。
 fn fixture_text() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
-        .join("shell-balloon")
-        .join("surfaces.txt");
-    let bytes = std::fs::read(&path)
-        .unwrap_or_else(|e| panic!("検体 {} の読取に失敗した: {e}", path.display()));
-    decode(&bytes, DefaultEncoding::Utf8)
+        .join("shell-balloon");
+    read_balloon_file(&dir, "surfaces.txt")
 }
 
-fn layout() -> BoxLayout {
+/// 検体を読み手と畳み込みへ通した表（実行ファイルで 1 度だけ作る）。
+static LAYOUT: LazyLock<BoxLayout> = LazyLock::new(|| {
     let text = fixture_text();
     let world = EmoWorld::build(&parse(&text));
     let (layout, report) = fold_boxes(&parse_boxes(&text), &BTreeMap::new(), &world);
@@ -61,7 +67,7 @@ fn layout() -> BoxLayout {
         "検体は正しく書いたシェル（報告 0 件）"
     );
     layout
-}
+});
 
 fn names(layout: &BoxLayout, surface: u32) -> Vec<&str> {
     layout
@@ -83,19 +89,19 @@ fn fake_resolver() -> SurfaceKeyResolver {
 /// 検体の箱の束を受け取った文字の層。
 fn runtime() -> TextLayerRuntime {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut World::new(), layout(), fake_resolver(), Vec::new());
+    rt.set_box_layout(
+        &mut World::new(),
+        LAYOUT.clone(),
+        fake_resolver(),
+        Vec::new(),
+    );
     rt
 }
 
 // ── 台本（指令の列） ──
 
 fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
+    support::cue(actor, 0.0, command, 0.0)
 }
 
 fn s(actor: &str, id: &str) -> TalkCue {
@@ -141,7 +147,7 @@ fn place(actor: &str, at: &str) -> PlaceKey {
     let place = match at {
         "" => TextPlace::Balloon,
         name => TextPlace::Box(
-            layout()
+            LAYOUT
                 .surfaces()
                 .flat_map(|(_, ps)| ps.iter().map(|p| p.name.clone()).collect::<Vec<_>>())
                 .find(|n| n.as_str() == name)
@@ -193,11 +199,11 @@ fn look(rt: &TextLayerRuntime, actor: &str, at: &str) -> ((u8, u8, u8), f32) {
 
 #[test]
 fn fixture_folds_three_box_kinds_and_their_placements() {
-    let layout = layout();
-    assert_eq!(names(&layout, 0), ["tate", "yoko"], "element番号の昇順");
-    assert_eq!(names(&layout, 1), ["tate"]);
-    assert_eq!(names(&layout, 2), Vec::<&str>::new(), "箱の無いサーフェス");
-    assert_eq!(names(&layout, 3), ["fuda"], "surface.append3 で足した箱");
+    let layout = &*LAYOUT;
+    assert_eq!(names(layout, 0), ["tate", "yoko"], "element番号の昇順");
+    assert_eq!(names(layout, 1), ["tate"]);
+    assert_eq!(names(layout, 2), Vec::<&str>::new(), "箱の無いサーフェス");
+    assert_eq!(names(layout, 3), ["fuda"], "surface.append3 で足した箱");
     let pos = |id: u32| {
         let p = &layout.placements(id)[0];
         (p.x, p.y)
@@ -254,7 +260,6 @@ fn script_routes_text_to_default_and_named_boxes_across_surfaces() {
     // サーフェスにも置き場所がある＝再び出る（6.3・6.5）。続きは同じ箱へ書く。
     play(&mut rt, &[s("0", "0")]);
     assert_eq!(dest(&rt, "0"), place("0", "tate").place);
-    assert_eq!(names(&layout(), 0), ["tate", "yoko"]);
     play(&mut rt, &[b("0", "yoko"), t("0", "か")]);
     assert_eq!(text_at(&rt, "0", "yoko"), "うえか");
 

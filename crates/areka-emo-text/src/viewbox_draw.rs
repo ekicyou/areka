@@ -60,7 +60,7 @@ use crate::draw::{FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS}
 use crate::layout::VisibleWindow;
 use crate::look::{FontKey, StyleTable};
 use crate::region::ScaleContract;
-use crate::surface::TextSurface;
+use crate::surface::{TextSurface, device_err, none_err};
 use crate::viewbox::{ScrollPlanner, ScrollState};
 use crate::writing::WritingMode;
 
@@ -310,29 +310,6 @@ impl ViewboxExecutor {
             surface,
             &StyleTable::default(),
         )
-    }
-}
-
-/// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を [`TextLayerError::Device`] に
-/// する（draw.rs/surface.rs と同型の log-first ヘルパ）。
-fn none_err(context: &'static str) -> TextLayerError {
-    tracing::error!(
-        context,
-        "必須リソースが欠落（デバイス未初期化 または 前提不成立）"
-    );
-    TextLayerError::Device {
-        hresult: 0,
-        context,
-    }
-}
-
-/// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（draw.rs/surface.rs と同型の
-/// log-first ヘルパ: `error!`＋`Err` 戻り値・panic 禁止）。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
-    move |e| {
-        let hresult = e.code().0;
-        tracing::error!(hresult, context, "DirectWrite/D2D 呼び出しが失敗");
-        TextLayerError::Device { hresult, context }
     }
 }
 

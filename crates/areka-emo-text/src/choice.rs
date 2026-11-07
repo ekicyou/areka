@@ -1,5 +1,7 @@
 //! # choice — 選択肢固有の純粋導出の集約モジュール（純粋層）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `Choice` cue が state 層へ載せた選択肢スパン（[`ChoiceSpan`]・items のグリフ序数範囲）を、
 //! layout 層が配置した行列（[`PositionedLine`]）へ写し、行×選択肢の注釈
 //! （[`LineChoiceSegment`]）を導出する純関数群を単独所有する。描画（装飾）とヒット照会は
@@ -77,6 +79,9 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
         // 配置済みグリフを行を跨いで 0 起点で数えた累積和（= items 全体のグリフ序数と一致）。
         let mut line_start = 0usize;
         for (line_index, line) in lines.iter().enumerate() {
+            if line_start >= span_end {
+                break;
+            }
             let line_end = line_start + line.glyphs.len();
             // 純整数の交差 [span_start, span_end) ∩ [line_start, line_end)。
             let lo = span_start.max(line_start);
@@ -121,7 +126,7 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 ///   ゆえにピッチで頭打ちにする。実測 Yu Gothic UI 28px（行送り 30 ＝ 28 + 行間 2）では
 ///   `clamp(37.24, 28, max(28, 30)) = 30`——次行の帯へ食い込まない。
 ///   `line_pitch < font_height` の病的設定では下限が勝つ（帯 ＝ `font_height`）。
-/// - 行送り比 `\n[ratio]` で ratio < 1 を指定した行間縮小時は帯が隣接行へ届き得る（M1 既知の
+/// - 行送り比 `\n[ratio]` で ratio < 1 を指定した行間縮小時は帯が隣接行へ届き得る（既知の
 ///   縮退——正典 fixture は ratio ≥ 1）。
 ///
 /// ## 帯の丈だけでは足りない（位置も要る）
@@ -129,20 +134,23 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
 /// 行ボックス丈 37.24 を丈 30 では覆いきれないため、帯をどこへ置くかで見え方が変わる。帯を
 /// 行矩形のブロック軸**近端**へ揃えていた頃の読み戻しは「上に 7 画素の余白を残したまま下で
 /// 2 画素を切る」であった。**帯を広げるのではなく、字の箱の中央へ寄せる**のが正しい
-/// ——寄せる量は [`highlight_band_offset`] が決める（spec `areka-P0-emo2-conformance-e2e`
+/// ——寄せる量は [`band_offset_on_char_box`] が決める（spec `areka-P0-emo2-conformance-e2e`
 /// R13.1・開発者裁定 2026-09-06 第 2 回。同日の第 1 の裁定「2 画素のはみ出しを許容する」は
 /// この裁定が覆した）。帯の丈そのものは本関数のままで、広げない。
+///
+/// 式は `max` と `min` で書く（有限の値では上の `clamp` と同じ答え・NaN を渡しても落ちない）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch: f32) -> f32 {
     let upper = line_pitch.max(font_height);
-    line_box_height.clamp(font_height, upper)
+    // clamp は下限が NaN だと panic する。max/min なら有限の値で同じ答えのまま落ちない（audit-emo-text-state-actor 指摘 4）。
+    line_box_height.max(font_height).min(upper)
 }
 
 /// ハイライト帯／ヒット帯を字の箱の中央へ寄せる量を決める（純粋・**描画とヒットの唯一の源**）。
 /// 本関数は字の箱の上端 t ＝ 0 の場合で、本番の横書きの帯は t を足した同じ式から出る。
 ///
-/// ## なぜ寄せるのか（開発者裁定 2026-09-06 第 2 回・R13.1）
+/// ## なぜ寄せるのか（開発者裁定 2026-09-06 第 2 回・`areka-P0-emo2-conformance-e2e` R13.1）
 ///
 /// [`highlight_band_extent`] の帯は行送りピッチで頭打ちになるので、行ボックス丈より短くなり得る
 /// （実測 Yu Gothic UI `font.height,28`: 行ボックス 37.24・帯 30）。DirectWrite は行ボックスの
@@ -166,9 +174,9 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 ///
 /// 行ボックス丈が em ボックス丈に等しいフォント（既定 ＭＳ ゴシック）では帯 ＝ 行ボックスゆえ
 /// offset は 0 になり、寄せる前と 1 画素も変わらない（既定フォントの byte 等価 golden が
-/// 1 バイトも動かないことが offset 0 の証拠・R13.6）。
+/// 1 バイトも動かないことが offset 0 の証拠・`areka-P0-emo2-conformance-e2e` R13.6）。
 ///
-/// ## 隣接行と重ならない（R13.4）
+/// ## 隣接行と重ならない（`areka-P0-emo2-conformance-e2e` R13.4）
 ///
 /// 28 では `offset + 帯 = 34` が行送り 30 を超えるが、次の行の帯も `30 + 4 = 34` から始まるので
 /// **接するだけで重ならない**。ヒット判定は半開区間（`crates/areka/src/input_events/balloon.rs`
@@ -180,9 +188,10 @@ pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch:
 /// 行矩形の上端から `t`（[`GlyphMetrics::horizontal_char_box_top`]）だけ下に在る。帯の寄せは
 /// 本番では `round(max(0, t) + max(0, 行ボックス − 帯) / 2)`（丸め 1 回）＝帯を**字の箱の中央**へ
 /// 置く量で、本関数はそのうち字の箱の上端が行矩形の上端に在る（`t = 0`）ときの値を返す。
-/// `t = 0` では `0.0 + x` が `x` とビットまで同じなので、上の表の値は変わらない（要件 5.1）。
+/// `t = 0` では `0.0 + x` が `x` とビットまで同じなので、上の表の値は変わらない（`emo-text-line-gap` 要件 5.1）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+#[cfg(test)]
 pub fn highlight_band_offset(line_box_height: f32, band_extent: f32) -> f32 {
     band_offset_on_char_box(0.0, line_box_height, band_extent)
 }
@@ -204,7 +213,7 @@ pub struct LineBand {
     pub extent: f32,
     /// 行矩形の左辺（横書きは上辺）から帯の起点までの**符号つき**の量。横書き＝帯を字の箱の
     /// 中央へ置く量 `round(max(0, t) + max(0, 行ボックス − 帯) / 2)`（`t` は
-    /// [`GlyphMetrics::horizontal_char_box_top`]・`t = 0` で [`highlight_band_offset`] の出力・
+    /// [`GlyphMetrics::horizontal_char_box_top`]・`t = 0` で `highlight_band_offset` の出力・
     /// 0 以上）・縦書き＝
     /// `round(metrics.vertical_em_box_left(em, mode))`（em の箱を書体の縦書きの基線に中央で
     /// 重ねた所・右から左は負になり得る＝帯は行矩形の左へ出る）。
@@ -213,15 +222,15 @@ pub struct LineBand {
 
 /// 行ごとの帯を 1 度だけ決める（純粋・[`decorate_canvas`] と [`derive_hit_rows`] へ同じ列を配る）。
 ///
-/// ## なぜ行ごとなのか（要件 11.5）
+/// ## なぜ行ごとなのか（`areka-P0-text-decoration-canon` 要件 11.5）
 ///
 /// 帯の丈をバルーン定義の既定の大きさから**アクターに 1 つ**決めていた頃は、`\f[height,40]` を
 /// 含む選択肢が表示 42 画素でも帯は 14 画素で、**文字の上下がクリックできなかった**。行の丈は
-/// 既に「その行に置かれた文字のうち最も大きい em」になっている（要件 7.9・行矩形のブロック軸寸）
+/// 既に「その行に置かれた文字のうち最も大きい em」になっている（`areka-P0-text-decoration-canon` 要件 7.9・行矩形のブロック軸寸）
 /// ので、そこから行ごとに引き直す。
 ///
-/// 要件 3.5「装飾は hover の判定と当たり判定を変えない」は hover の**表示規則**（文字色の
-/// 差し替えと帯の塗りが装飾より優先されること）を述べたもので、帯の**寸法**は要件 11.5 が
+/// `areka-P0-text-decoration-canon` 要件 3.5「装飾は hover の判定と当たり判定を変えない」は hover の**表示規則**（文字色の
+/// 差し替えと帯の塗りが装飾より優先されること）を述べたもので、帯の**寸法**は`areka-P0-text-decoration-canon` 要件 11.5 が
 /// 「装飾込みから導く」と定める側である（行内軸は既にそう実装されている）。
 ///
 /// 塗る帯とクリックを受ける帯は同じ列から出る——片方だけを広げると「見えている帯の外が
@@ -303,7 +312,7 @@ pub struct HitRectPx {
 /// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝行矩形の
 /// 左辺（横書きは上辺）＋符号つきの `band_offset` から `band_extent` 分**
 /// （[`LineBand`] の 2 値。横書きは [`highlight_band_extent`] の descent 込みの帯を
-/// [`LineBand::offset`] が字の箱の中央へ寄せた位置（[`highlight_band_offset`] は字の箱の
+/// [`LineBand::offset`] が字の箱の中央へ寄せた位置（`highlight_band_offset` は字の箱の
 /// 上端 t ＝ 0 のとき）、縦書きは列の em の帯を em の箱へ
 /// 重ねた位置で、右から左の寄せは負。ハイライト描画（`highlight_rect`）と同一の
 /// 2 値を受け取ることで帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px の
@@ -321,7 +330,7 @@ pub struct HitRectPx {
 /// §座標写像式（正本）は入力を「canvas-local（validrect-local）」と明記し
 /// [`to_window_physical`] が `region` 原点を戻す。layout 出力（`inline_range`／行矩形）は
 /// **絶対 image px**（描画開始点＝validrect 原点起点）ゆえ、canvas-local 化には validrect 原点が
-/// 必須。よって本関数は `region` を受け取り原点差引きを行う（追加・新規関数・呼び手は task 8）。
+/// 必須。よって本関数は `region` を受け取り原点差引きを行う（呼び手は結線層の提示）。
 ///
 /// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
 ///
@@ -358,7 +367,7 @@ pub fn derive_hit_rows(
         // 絶対 image px のヒット矩形を組む（横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。
         // block 近端（横書き＝rect.top・縦書き＝rect.left）は描画（住人 transform の offset＝
         // 行矩形の近端）と同一の起点ゆえ、band_extent と band_offset が同値なら帯は描画と数値一致
-        // する（R3.3/R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
+        // する（R3.3・`areka-P0-emo2-conformance-e2e` R13.2・`band_extent == font_height` かつ `band_offset == 0` なら従来の
         // 行矩形 block 帯と完全一致＝非退行）。
         let abs = match mode {
             WritingMode::HorizontalTb => LineRect {
@@ -441,7 +450,7 @@ pub fn to_window_physical(
 }
 
 /// 表示されている字 1 字ずつの矩形（送りの幅 × 行の高さ。字の形の画素ではない）を、文字の面の
-/// 左上を原点とする物理 px で返す（要件 9.4・箱の文字の面の当たり判定の材料）。
+/// 左上を原点とする物理 px で返す（`areka-P0-shell-balloon` 要件 9.4・箱の文字の面の当たり判定の材料）。
 ///
 /// `lines` は配置の結果（見えている字だけが載る＝表示の進み具合を反映済み）。式は
 /// [`to_window_physical`] から面の装着位置（`(場所の左上 + 領域の原点) × k`）を引いたもの:
@@ -452,7 +461,7 @@ pub fn to_window_physical(
 /// `min(行矩形の近い辺, 近い辺 + offset)`（縦書きの右から左は offset が負で左へ広がる）、遠い辺は
 /// `max(行矩形の遠い辺, 近い辺 + 帯の offset + extent)`。
 /// `bands` は [`decorate_canvas`]・[`derive_hit_rows`] へ渡すのと同じ [`line_bands`] の列で、帯が
-/// em を越えるフォントでも選択肢の当たり行・強調の帯の全部が字の矩形に入る（要件 8.3・R3.3 の
+/// em を越えるフォントでも選択肢の当たり行・強調の帯の全部が字の矩形に入る（`areka-P0-shell-balloon` 要件 8.3・R3.3 の
 /// 単一導出）。帯の無い行は行矩形だけ。送りの幅が 0 の字は矩形を持たない。同一入力→同一出力（純粋）。
 pub fn glyph_cells(
     lines: &[PositionedLine],
@@ -517,7 +526,7 @@ pub fn glyph_cells(
 ///
 /// `bands`（[`line_bands`] の出力・行ごとの [`LineBand`]）から当該行の 2 値を引いて Choice 住人へ
 /// 焼き込み、COM 層のハイライト矩形とダーティ帯がこの 2 値を読む——[`derive_hit_rows`] へ**同じ列**
-/// を渡すことで描画帯とヒット帯の数値一致（R3.3/R13.2）を呼び手 1 箇所で担保する。
+/// を渡すことで描画帯とヒット帯の数値一致（R3.3・`areka-P0-emo2-conformance-e2e` R13.2）を呼び手 1 箇所で担保する。
 ///
 /// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
 ///
@@ -564,10 +573,9 @@ pub fn decorate_canvas(
     }
     let mut canvas = canvas;
     for (index, resident) in canvas.residents.iter_mut().enumerate() {
-        // GlyphRun 以外（Image/Surface/既 Choice）は素通し。run はローカル系のまま複製する。
-        let run = match &resident.content {
-            ResidentContent::GlyphRun(run) => run.clone(),
-            _ => continue,
+        // GlyphRun 以外（Image/Surface/既 Choice）は素通し。run の複製はセグメントを持つ行だけ（下）。
+        let ResidentContent::GlyphRun(run) = &resident.content else {
+            continue;
         };
         // 行内軸の resident 原点（絶対 image px）＝ validrect 原点 + 住人 inline offset ＝ 行矩形 inline。
         // from_layout がグリフから差し引く原点と同一——絶対 inline_range をこれで resident-local 化する。
@@ -613,6 +621,8 @@ pub fn decorate_canvas(
         } else {
             None
         };
+        // run はローカル系のまま複製する。
+        let run = run.clone();
         resident.content = ResidentContent::Choice(ChoiceLineContent {
             run,
             segments: row_segments,
@@ -625,7 +635,7 @@ pub fn decorate_canvas(
     canvas
 }
 
-/// ハイライトスタイル差替シーム（cursor.\* 解決＋矩形反転縮退＋将来非正典スタイルの開放口）。
+/// ハイライトスタイル差替シーム（cursor.\* 解決＋矩形反転＋将来非正典スタイルの開放口）。
 ///
 /// balloon の `cursor.*` スタイルモデル（[`BalloonCursor`]）を hover ハイライトの描画正規形へ
 /// 解決する純粋 enum（design.md「純粋層 / ChoicePure」・要件 4.2/4.3/6.1/6.5）。解決は
@@ -646,7 +656,7 @@ pub enum ResolvedChoiceStyle {
         /// hover 文字色（`cursor.font.color`）。
         text: (u8, u8, u8),
     },
-    /// cursor.\* 未指定バルーンの矩形反転縮退（要件 4.3/6.1・M1 実導出＝縮退ではない）。
+    /// cursor.\* 未指定バルーンの矩形反転（要件 4.3/6.1・正典の導出で縮退ではない）。
     ///
     /// [`paint`](ResolvedChoiceStyle::paint) が塗り＝バルーン既定 `font.color`・文字＝各成分 `255−c` を返す
     /// （既定黒文字なら黒矩形＋白文字＝古典反転と同観）。
@@ -660,22 +670,26 @@ impl ResolvedChoiceStyle {
     ///
     /// 判定（design.md 縮退表＋正典確定）:
     /// - `cursor` 不在、または cursor.\* 全キー未指定 → [`Invert`](ResolvedChoiceStyle::Invert)
-    ///   （未指定バルーン判定・M1 実導出・縮退ではない＝warn なし・要件 4.3/6.1）。
+    ///   （未指定バルーン判定・縮退ではない＝warn なし・要件 4.3/6.1）。
     /// - `cursor.style,none` → [`NoMarker`](ResolvedChoiceStyle::NoMarker)（正典・マーカー無し）。
     /// - `cursor.style` underline 系（`underline`／`square+underline`）→
     ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill) へ縮退（在る色を採る・要件 6.5）。
     /// - `cursor.style` square または style 未指定（既定 square）で他キー在り →
     ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill)（`fill=brush.color`・`text=font.color`・要件 4.2）。
+    /// - `cursor.style` が正典の 4 つのどれでもない値 → 既定 square と同じく
+    ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill)（ukadoc は知らない値の扱いを書かない）。
     /// - `cursor.blendmethod` が ROP 系（`none` 以外）→ `none` 扱い
     ///   （色ベース描画・variant は style 判定どおりで不変・要件 6.5）。
     ///
-    /// 本メソッドは記録を出さない。縮退した元の値は [`CursorFallback::of`] が同じ判定で返し、
+    /// 本メソッドは記録を出さない。縮退した元の値は [`CursorFallback::of`] が取り出し、
     /// 警告は登録の側が置き場ごとに値が決まったときに 1 件出す（spec real-run-log-noise 要件 2.6:
     /// 解き直し 1 回で本メソッドは 2 回呼ばれ、置き場の名前も知らないため）。
     ///
     /// `default_font_color` は [`Invert`](ResolvedChoiceStyle::Invert) の paint 材料であり本メソッドの
     /// 分岐には用いないが、将来の非正典 variant がバルーン既定色を焼き込む拡張余地として受ける
-    /// （安定シーム）。同一入力→同一出力の純関数（失敗経路なし・縮退は値で表現）。
+    /// （安定シーム）。本番で使う分岐はまだ無い継ぎ目で、名指す spec（`choice-marker-styling`）が
+    /// 閉じたら消す（使う分岐が付いていればこの一文を消す）。
+    /// 同一入力→同一出力の純関数（失敗経路なし・縮退は値で表現）。
     pub fn resolve(cursor: Option<&BalloonCursor>, default_font_color: (u8, u8, u8)) -> Self {
         let _ = default_font_color;
         // cursor 不在 → 未指定バルーン＝Invert（4.3/6.1）。
@@ -690,8 +704,7 @@ impl ResolvedChoiceStyle {
         // style 解決（none→NoMarker・それ以外＝underline 系の縮退も既定 square も SquareFill）。
         match cursor.style() {
             Some(s) if s.eq_ignore_ascii_case("none") => ResolvedChoiceStyle::NoMarker,
-            // underline 系は SquareFill へ縮退（元の値は CursorFallback::of が同じ判定で返す）。
-            Some(s) if style_has_underline(s) => square_fill_from(cursor),
+            // underline 系も none 以外の 1 つとして SquareFill へ縮退（元の値は CursorFallback::of が取り出す）。
             // square 明示・style 未指定（既定 square）ともに SquareFill（正典確定 cursor.* マップ）。
             _ => square_fill_from(cursor),
         }
@@ -742,18 +755,25 @@ pub(crate) struct CursorFallback {
     pub(crate) blendmethod: Option<String>,
     /// 下線系の cursor.style の値（SquareFill で描く）。
     pub(crate) underline_style: Option<String>,
+    /// 正典の 4 つ（square・underline・square+underline・none）のどれでもない cursor.style の値
+    /// （ukadoc は知らない値の扱いを書かないので、既定の square＝SquareFill で描く）。
+    pub(crate) unknown_style: Option<String>,
 }
 
 impl CursorFallback {
-    /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`ResolvedChoiceStyle::resolve`]
-    /// と同じ [`style_has_underline`] で、ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する
-    /// （`resolve` では ROP 系は分岐に効かないため判定を持たない）。
+    /// `cursor.*` から縮退した元の値を取り出す（純粋）。下線系は [`style_has_underline`] の、
+    /// 知らない style は [`is_canon_style`] の、ROP 系は [`rop_blendmethod`] の 1 か所だけで判定する（[`ResolvedChoiceStyle::resolve`] は
+    /// `none` 以外の style を一律に SquareFill へ落とし、ROP 系も分岐に効かないため、どの判定も持たない）。
     pub(crate) fn of(cursor: &BalloonCursor) -> CursorFallback {
         CursorFallback {
             blendmethod: rop_blendmethod(cursor).map(str::to_string),
             underline_style: cursor
                 .style()
                 .filter(|s| style_has_underline(s))
+                .map(str::to_string),
+            unknown_style: cursor
+                .style()
+                .filter(|s| !is_canon_style(s))
                 .map(str::to_string),
         }
     }
@@ -766,15 +786,24 @@ fn rop_blendmethod(cursor: &BalloonCursor) -> Option<&str> {
         .filter(|bm| !bm.eq_ignore_ascii_case("none"))
 }
 
-/// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視）。
+/// `cursor.style` が正典の値（`square`・`none`・underline 系）かを判定する（大小無視）。
+fn is_canon_style(style: &str) -> bool {
+    style.eq_ignore_ascii_case("square")
+        || style.eq_ignore_ascii_case("none")
+        || style_has_underline(style)
+}
+
+/// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視の完全一致・
+/// `underlined` のような正典に無い値は知らない値として [`is_canon_style`] の側で拾う）。
 fn style_has_underline(style: &str) -> bool {
-    style.to_ascii_lowercase().contains("underline")
+    style.eq_ignore_ascii_case("underline") || style.eq_ignore_ascii_case("square+underline")
 }
 
 /// `SquareFill { fill=brush.color, text=font.color }` を組む（欠落成分は `0` 既定・防御）。
 ///
 /// 正典 fixture では brush/font とも全成分指定ゆえ既定は発火しない。style を持つが色を欠く
-/// 防御経路では各成分 `0` を採る（決定論・design は部分色の既定を規定しないため最小既定）。
+/// 防御経路では各成分 `0` を採る（ukadoc が `cursor.brush.color.*`・`cursor.font.color.*` の既定を
+/// 0 と書く正典どおり）。
 fn square_fill_from(cursor: &BalloonCursor) -> ResolvedChoiceStyle {
     ResolvedChoiceStyle::SquareFill {
         fill: color_tuple(cursor.brush_color()),
@@ -790,6 +819,10 @@ fn color_tuple(c: CursorColor) -> (u8, u8, u8) {
 #[cfg(test)]
 #[path = "choice_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "choice_test_support.rs"]
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "choice_style_resolve_tests.rs"]

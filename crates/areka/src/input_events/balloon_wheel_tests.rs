@@ -25,7 +25,7 @@ use crate::emo2_boot::frame::balloon_runtime_test_support::{
     balloon_is_manual, manual_balloon_runtime,
 };
 use crate::emo2_boot::hit_region::HitRegion;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// バルーン窓（scope 0）の子を持ち主にし、回転を載せる。
 fn spawn_rotation(world: &mut World, vertical: i16, horizontal: i16) {

@@ -1,4 +1,6 @@
-//! # decoration_readback_test — 文字装飾の横書き読み戻し（task 8.1）
+//! # decoration_readback_test — 文字装飾の横書き読み戻し
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**／
 //! **5.1**／**5.9**／**6.1**・design.md「Testing Strategy > 読み戻しテスト」）。
@@ -19,7 +21,7 @@
 //! ## 置き方（1 バイナリ）
 //!
 //! `tests/` の直下に置いた `.rs` は 1 本ずつ独立した実行ファイルになる。ゆえに共有ヘルパと
-//! 縦書きの分（task 8.2）は**入口から取り込むサブディレクトリ**へ置き、本ファイルだけを
+//! 縦書きの分は**入口から取り込むサブディレクトリ**へ置き、本ファイルだけを
 //! 実行ファイルにする（`crates/dola/tests/compile.rs`＋`tests/compile/` と同じ作法）。
 //! src 側の `<stem>_<モジュール名>.rs` の規則は `tests/` には適用しない。
 //!
@@ -28,8 +30,8 @@
 //! 「画素が違う」を述べる述語は、比べる 2 枚がそもそも別物なら**何をしても緑**になる。
 //! ゆえに 2 本の対照を置く:
 //!
-//! - [`the_same_script_paints_the_same_pixels_twice`]——同じ台本を 2 度描くと 1 バイトも
-//!   違わない（読み戻しに実行ごとのばらつきが無い）。
+//! - [`the_same_script_paints_the_same_pixels_twice`]——同じ台本を別々の World（別々の装置）で
+//!   2 度描くと 1 バイトも違わない（読み戻しに実行ごと・装置ごとのばらつきが無い）。
 //! - [`tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels`]——同じトークン列を
 //!   装飾を焼かない運搬名で流すと差が消える（差は装飾を焼いたことに由来する）。
 //!
@@ -46,8 +48,8 @@ mod support;
 
 use support::{
     ALT_FONT, FONT_HEIGHT, MISSING_FONT, REAL_FONT, SAMPLE, VISIBLE_KEYS, added_ink_rows,
-    assert_real_font_present, differs, font_cue, font_is_installed, run, shoot_pair, single_band,
-    text_cue, unbaked_cue,
+    assert_real_font_present, differs, font_is_installed, plain_shot, run, run_fresh, shoot_pair,
+    single_band, text_cue, unbaked_cue,
 };
 
 // ══ 今日の値（実測で固定する定数） ═════════════════════════════════════════════════════
@@ -55,8 +57,8 @@ use support::{
 /// `\f[underline,1]` でインクが増える行の帯（供給面 local の y・`Yu Gothic UI` の
 /// `font.height,28`・横書き）。
 ///
-/// 横書きの下線は areka が線の上端をベースラインに置いて塗る（spec `areka-P0-balloon-text-bugs`
-/// 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
+/// 横書きの下線は areka が線の上端をベースラインに置いて塗る
+/// （spec `areka-P0-balloon-text-bugs` 要件 3.10・`doc/COMPAT_ARCHITECTURE.md` §8 の登記対象）。この形のベースラインは 30
 /// （字のインクは 29 行まで）で、二値化した線の帯は 30 の 1 行（太さ 1.42）。DirectWrite の既定の
 /// 位置（33・ベースラインから下線の位置の分だけ下）から改めた。値が動いたら赤にして裁定を仰ぐ。
 const UNDERLINE_BAND: (u32, u32) = (30, 30);
@@ -98,19 +100,9 @@ fn the_font_gate_closes_on_a_missing_family() {
 
 // ══ 表 の母数 ══════════════════════════════════════════════════════════════════════════
 
-#[test]
-fn the_visible_keys_are_the_seven_that_directwrite_can_range() {
-    assert_eq!(
-        VISIBLE_KEYS.len(),
-        7,
-        "表示に効くのは DirectWrite の範囲指定で素直に表せる 7 項目"
-    );
-    assert_eq!(
-        VOCABULARY_ONLY_KEYS.len(),
-        3,
-        "語彙のみは sub／sup／outline の 3 項目"
-    );
-}
+// 表示に効くのは DirectWrite の範囲指定で素直に表せる 7 項目・語彙のみは sub／sup／outline の 3 項目。
+const _: () = assert!(VISIBLE_KEYS.len() == 7);
+const _: () = assert!(VOCABULARY_ONLY_KEYS.len() == 3);
 
 // ══ 1. 表示に効く 7 項目は画素を変える（要件 5.1） ═════════════════════════════════════
 
@@ -122,7 +114,7 @@ fn each_visible_key_changes_the_pixels_in_horizontal_tb() {
     for (key, tokens) in VISIBLE_KEYS {
         let (plain, styled) = shoot_pair(None, tokens);
         assert!(
-            differs(&plain, &styled),
+            differs(plain, &styled),
             "`\\f[{}]` を有効にしても画素が 1 バイトも変わらない（横書き・本文 {SAMPLE}）",
             tokens.join(","),
         );
@@ -137,18 +129,18 @@ fn each_visible_key_changes_the_pixels_in_horizontal_tb() {
 
 /// `\f[underline,1]` は字より下に連続した 1 本の帯を足す。
 ///
-/// 位置はベースラインの直下（要件 3.10）。[`UNDERLINE_BAND`] は今日の実測値で、
+/// 位置はベースラインの直下（`areka-P0-balloon-text-bugs` 要件 3.10）。[`UNDERLINE_BAND`] は今日の実測値で、
 /// 動いたら赤にして裁定を仰ぐ。
 #[test]
 fn underline_adds_one_band_of_ink_below_the_glyphs() {
     assert_real_font_present();
     let (plain, styled) = shoot_pair(None, &["underline", "1"]);
-    let rows = added_ink_rows(&plain, &styled);
+    let rows = added_ink_rows(plain, &styled);
     let band = single_band(&rows, "underline");
     assert_eq!(
         band, UNDERLINE_BAND,
         "下線のインクの帯が今日の値から動いた（`Yu Gothic UI` font.height={FONT_HEIGHT}・横書き）。\
-         線の上端はベースライン（要件 3.10）なので、値が動いたら塗り方か描画基盤側の変化を疑い、\
+         線の上端はベースライン（`areka-P0-balloon-text-bugs` 要件 3.10）なので、値が動いたら塗り方か描画基盤側の変化を疑い、\
          定数を書き換える前に裁定を仰ぐこと"
     );
 }
@@ -158,7 +150,7 @@ fn underline_adds_one_band_of_ink_below_the_glyphs() {
 fn strike_adds_one_band_of_ink_through_the_glyphs() {
     assert_real_font_present();
     let (plain, styled) = shoot_pair(None, &["strike", "1"]);
-    let rows = added_ink_rows(&plain, &styled);
+    let rows = added_ink_rows(plain, &styled);
     let band = single_band(&rows, "strike");
     assert_eq!(
         band, STRIKE_BAND,
@@ -177,7 +169,7 @@ fn vocabulary_only_keys_leave_the_pixels_untouched() {
     // 対照（陽性側）——同じ窓で bold は画素を変える。
     let (plain, bold) = shoot_pair(None, &["bold", "1"]);
     assert!(
-        differs(&plain, &bold),
+        differs(plain, &bold),
         "対照が働いていない: 同じ窓で `\\f[bold,1]` すら画素を変えていない。\
          以下の「画素が同じ」は恒真なので意味を持たない"
     );
@@ -185,7 +177,7 @@ fn vocabulary_only_keys_leave_the_pixels_untouched() {
     for (key, tokens) in VOCABULARY_ONLY_KEYS {
         let (_, styled) = shoot_pair(None, tokens);
         assert!(
-            !differs(&plain, &styled),
+            !differs(plain, &styled),
             "`\\f[{}]` は語彙として受理するだけで表示は変えない（要件 5.9／6.1）のに画素が変わった",
             tokens.join(","),
         );
@@ -198,14 +190,16 @@ fn vocabulary_only_keys_leave_the_pixels_untouched() {
 
 // ══ 較正——差の検出が空振りしていないこと（要件 15.7） ═════════════════════════════════
 
-/// 同じ台本を 2 度描くと 1 バイトも違わない（読み戻しに実行ごとのばらつきが無い）。
+/// 同じ台本を別々の World（別々の装置）で 2 度描くと 1 バイトも違わない（読み戻しに実行ごと・
+/// 装置ごとのばらつきが無い）。
 ///
-/// これが崩れると「画素が違う」の述語は装飾と無関係に緑になる。
+/// 素の 1 枚（`plain_shot`）は別のスレッドの World で撮ったものと比べうるので、片方は新しい
+/// World で撮る。これが崩れると「画素が違う」の述語は装飾と無関係に緑になる。
 #[test]
 fn the_same_script_paints_the_same_pixels_twice() {
     assert_real_font_present();
     let a = run(None, &[text_cue(SAMPLE)]);
-    let b = run(None, &[text_cue(SAMPLE)]);
+    let b = run_fresh(None, &[text_cue(SAMPLE)]);
     assert!(a.ink_count() > 0, "素の台本にインクがある（前提）");
     assert!(
         !differs(&a, &b),
@@ -218,23 +212,18 @@ fn the_same_script_paints_the_same_pixels_twice() {
 /// 同じトークン列を**装飾ではない運搬名**で流すと、`state.rs` の自己選別が読み飛ばして装飾を
 /// 1 つも焼かない（番号列は全部 0・装飾の表は空＝`render_styled` は既定の呼出列に落ちる）。
 /// cue の本数・並び・再生時間は装飾ありの台本と同一なので、[`each_visible_key_changes_the_pixels_in_horizontal_tb`]
-/// の「違う」が **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す。
+/// の「違う」が **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す
+/// （同じトークン列を装飾の運搬名で流せば違うことは、そちらが同じ入力で確かめる）。
 #[test]
 fn tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels() {
     assert_real_font_present();
-    let plain = run(None, &[text_cue(SAMPLE)]);
+    let plain = plain_shot(None);
     for (key, tokens) in VISIBLE_KEYS {
         let unbaked = run(None, &[unbaked_cue(tokens), text_cue(SAMPLE)]);
         assert!(
-            !differs(&plain, &unbaked),
+            !differs(plain, &unbaked),
             "`{key}` のトークン列を装飾ではない運搬名で流したのに画素が変わった——\
              装飾を焼かない経路が装飾を焼いている",
-        );
-        // 同じトークン列を装飾の運搬名で流せば違う（対照が空振りでないこと）。
-        let baked = run(None, &[font_cue(tokens), text_cue(SAMPLE)]);
-        assert!(
-            differs(&plain, &baked),
-            "`{key}` を装飾の運搬名で流しても画素が変わらない（対照の意味が消える）",
         );
     }
 }

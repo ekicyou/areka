@@ -1,3 +1,5 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-dpi-scaling` のもの（別の spec のものはその場で名を書く）。
+
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -6,31 +8,34 @@ use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
-use super::test_support::{com_world, cue, geo_model, opaque_count, spawn_reserved_slot};
+use super::test_support::{
+    FONT_HEIGHT_ZERO, balloon_model_of, capture_checked, choice_cue, com_world, cue, geo_model,
+    insert_gpu, opaque_count, read_back, spawn_reserved_slot,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::PlaceKey;
 use crate::state::TextLayerConfig;
 
-// ══ task 7.1: 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
+// ══ 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
 //
 // `TextSlotView` は emo-present の私有フィールド型で in-crate から構築できない
 // （公開コンストラクタなし・`text_slot_view` は実 GPU 表示確立が前提）。よって本檻は
 // 公開口 `refresh_actor_scale` が `TextSlotBinding::from_view` の直後に委譲する内側シーム
 // `refresh_actor_binding`（binding 直渡し・以降の判断分岐は完全に同一）を駆動する。
-// view 経由の全経路（`from_view` の物理寸読み取りを含む）は GPU 統合テストの領分（task 7.3）。
+// view 経由の全経路（`from_view` の物理寸読み取りを含む）は GPU 統合テスト（`tests/attach_wiring_test.rs`）の領分。
 
 /// 代表 native 原寸（emo2 balloon 相当）と、k を通した物理寸（`scaled_extent` 相当の実値）。
 /// k=1.25: 400×1.25=500 / 224×1.25=280。k=2: 800 / 448。
 const NATIVE: (u32, u32) = (400, 224);
 
-/// R4.5/R8.5（churn ガード）: **判定キーが全同値**（binding 全体＝k・物理寸・image 原寸・
+/// `areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5（churn ガード）: **判定キーが全同値**（binding 全体＝k・物理寸・image 原寸・
 /// slot・window ＋ 再解決した文字描画領域）の再追従要求は **false** を返し、routing／
 /// layout 入力を 1 バイトも動かさない（毎フレーム再結線の禁止）。
 ///
 /// 「k が同値」は no-op の**十分条件ではない**——寸／領域が変われば再構築する
 /// （`refresh_actor_binding_with_same_k_but_different_image_size_rebuilds` /
-/// `refresh_actor_binding_with_same_binding_but_changed_region_rebuilds`・R4.4）。
+/// `refresh_actor_binding_with_same_binding_but_changed_region_rebuilds`・`areka-P0-kero-balloon` R4.4）。
 #[test]
 fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
     let mut world = World::new();
@@ -53,7 +58,7 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
 
     assert!(
         !changed,
-        "判定キーが全同値の再追従要求は no-op で false（R4.5/R8.5）"
+        "判定キーが全同値の再追従要求は no-op で false（`areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5）"
     );
     assert_eq!(
         rt.routing[&PlaceKey::balloon(&actor)],
@@ -67,7 +72,7 @@ fn refresh_actor_binding_with_all_keys_equal_is_noop_returning_false() {
     );
 }
 
-/// R4.4: **k が同値でも面実寸（`image_size`）が変われば再構築する**。
+/// `areka-P0-kero-balloon` R4.4: **k が同値でも面実寸（`image_size`）が変われば再構築する**。
 /// 「k 同値なら常に no-op」という旧判定では、同 k のまま別寸のバルーン面へ切替えた
 /// （`\b` 等）ときに旧寸の文字層が残る——判定キーを binding 全体へ広げてこれを閉塞する。
 #[test]
@@ -91,7 +96,10 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
         &geo_model(),
     );
 
-    assert!(changed, "k 同値でも面実寸が違えば再構築する（R4.4）");
+    assert!(
+        changed,
+        "k 同値でも面実寸が違えば再構築する（`areka-P0-kero-balloon` R4.4）"
+    );
     let after = rt.routing[&PlaceKey::balloon(&actor)];
     assert_eq!(after.scale, 1.25, "k は同値のまま");
     assert_eq!(
@@ -110,7 +118,7 @@ fn refresh_actor_binding_with_same_k_but_different_image_size_rebuilds() {
     );
 }
 
-/// R4.4: **binding が全同値でも、再解決した文字描画領域が変われば再構築する**
+/// `areka-P0-kero-balloon` R4.4: **binding が全同値でも、再解決した文字描画領域が変われば再構築する**
 /// （scope 別 `validrect` の差し替え等——判定キーの後半 `ResolvedBalloonText` 側）。
 #[test]
 fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
@@ -126,10 +134,8 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
     // origin は宣言しない——本檻の関心は「validrect だけが変わったとき region が変わるか」で
     // あり origin は付随物である（かつての `Origin::new(Some(0), Some(0))` は解決後
     // validrect [24,360]×[16,200] の外にあり、範囲外の宣言の扱いに依存していた）。
-    let narrowed = BalloonModel::new(
-        WindowPosition::new(None, None),
+    let narrowed = balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(Some(16), Some(200), Some(24), Some(360)),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
@@ -139,7 +145,7 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
 
     assert!(
         changed,
-        "binding 同値でも文字描画領域が違えば再構築する（R4.4）"
+        "binding 同値でも文字描画領域が違えば再構築する（`areka-P0-kero-balloon` R4.4）"
     );
     assert_eq!(
         rt.routing[&PlaceKey::balloon(&actor)],
@@ -170,7 +176,7 @@ fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
     assert_eq!(
         rt.routing[&PlaceKey::balloon(&actor)].image_size,
         NATIVE,
-        "k=1.25 の物理寸 500×280 から image px 原寸 400×224 が導出される"
+        "k=1.25 の物理寸 500×280 と一緒に渡した image px 原寸 400×224 がそのまま残る"
     );
     let region_before = rt.layout_input[&PlaceKey::balloon(&actor)].region;
 
@@ -264,11 +270,7 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         (240, 120),
         "供給面は新 k の物理寸 ceil(region×k) で再生成される（R8.2・旧寸の再利用禁止）"
     );
-    let bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let bytes = read_back(&rt, &actor);
     assert!(
         opaque_count(&bytes) > 0,
         "保存済み状態から新 k で再描画される（空表示へ落ちない・R8.4 の前提）"
@@ -278,8 +280,8 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
     // 装着済みの状態で「何もしない」ことを観測する（毎フレーム再結線＝供給面の作り直しと
     // 全再描画を毎フレーム走らせる変異は、ここで is_attached／統計が動くことで死ぬ）。
     //
-    // **キルの排他性（実測・task 7.3 で再測）**: 「判定キー全同値でも ActorRender を破棄する」
-    // 変異は本ケースが殺すが**排他キルではない**——task 7.3 の統合檻
+    // **キルの排他性（実測）**: 「判定キー全同値でも ActorRender を破棄する」
+    // 変異は本ケースが殺すが**排他キルではない**——統合檻
     // `attach_wiring_test::scale_refresh_logs_k_transition_and_reattach_physical_size`
     // （同値 k のフレームで装着 `info!` が再発火しないことを見る）も同時に落ちる＝**共倒れ 2 本**。
     // 「churn ガードそのものを撤去する（全同値でも true を返して再構築する）」変異も
@@ -338,19 +340,18 @@ fn refresh_actor_scale_for_unregistered_actor_is_noop() {
 // 「`debug` まで開けた記録」は捕捉した全水準のうち `TRACE` を除いたものとして数える
 // （`capture_under_filter` の機能 `env-filter` は wintf だけが引く決まり・log-capture-kit の doc）。
 
-/// 件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
+/// spec real-run-log-noise の件 1（`region.rs`・未指定の origin 成分ごとに 1 行）。
 const ORIGIN_TO_CORNER: &str = "未指定の origin 成分を書字開始角へ寄せる";
-/// 件 1 と同じ解決の中のもう 1 つの `debug!`（要件 1.5）。
+/// 件 1 と同じ解決の中のもう 1 つの `debug!`（`real-run-log-noise` 要件 1.5）。
 const DEFAULT_EDGE: &str = "未指定座標成分を既定辺へ縮退する";
-/// 件 2（`actor_attach.rs`・何も変わらなかった再追従）。
+/// 件 2（`actor_attach.rs`・何も変わらなかった再追従）。文の中の R4.5 は `areka-P0-kero-balloon` の
+/// もの（本番の記録の文の写しなので文は書き換えない）。
 const NOTHING_CHANGED: &str = "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）";
 
 /// `origin`・`wordwrappoint`・`validrect` を書かないバルーン（解き直すたびに件 1 が成分ごとに出る）。
 fn unspecified_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
@@ -366,7 +367,7 @@ fn count_at_debug(events: &[CapturedEvent], message: &str) -> usize {
         .count()
 }
 
-/// T1（要件 1.1・1.2・1.5・5.1）: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
+/// T1（`real-run-log-noise` 要件 1.1・1.2・1.5・5.1）: 値の同じ再追従 3 回は、`debug` まで開けた記録に件 1・件 2・
 /// 既定辺へ縮退を 1 件も出さない。件 2 は `trace` で、1 回の再追従にちょうど 1 件出る。
 #[test]
 fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line() {
@@ -389,7 +390,7 @@ fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line(
         "装着では既定辺への縮退も出る"
     );
 
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, binding, &model))
             .collect::<Vec<_>>()
@@ -413,7 +414,7 @@ fn refresh_with_same_inputs_writes_no_resolve_lines_at_debug_and_one_trace_line(
     assert_eq!(traced[0].level, Level::TRACE, "件 2 の水準は TRACE");
 }
 
-/// T3（要件 1.6・5.6）: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
+/// T3（`real-run-log-noise` 要件 1.6・5.6）: 解き直しを省いても判定の答えは今と同じで、入力が変われば解き直す。
 ///
 /// ⑴ 文字の設定が変わる定義への付け替えは `true` ⑵ 文字の設定に効かないキー（`windowposition`）
 /// だけを替えた定義は解き直したうえで `false`、その後の同じ定義の再追従 3 回は解き直さない
@@ -430,10 +431,8 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
     rt.register_actor_binding(actor.clone(), binding, &model);
 
     // ⑴ 文字の大きさの変わる定義。
-    let taller = BalloonModel::new(
-        WindowPosition::new(None, None),
+    let taller = balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(30), FontColor::new(None, None, None)),
         None,
@@ -461,7 +460,7 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
         2,
         "⑵ 入力が変わったフレームは解き直す（変わり目の 1 回）"
     );
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, binding, &moved))
             .collect::<Vec<_>>()
@@ -497,7 +496,7 @@ fn refresh_skips_only_same_inputs_and_answers_as_before() {
     );
 }
 
-/// T2（要件 1.4・1.5）: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
+/// T2（`real-run-log-noise` 要件 1.4・1.5）: 拡大率だけ変えた再追従 1 回は解き直し、件 1 が未指定の成分ごとに 1 件
 /// （x・y の計 2 件）・返り値 `true`。その後の同じ再追従 3 回では 0 件（変わり目ごとに 1 件）。
 #[test]
 fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
@@ -521,7 +520,7 @@ fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
         "変わり目の 1 回は解き直し、未指定の origin 成分ごとに 1 件（x・y）"
     );
 
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, scaled, &model))
             .collect::<Vec<_>>()
@@ -534,10 +533,6 @@ fn refresh_with_new_scale_resolves_once_then_stays_quiet() {
     );
 }
 
-/// 要件 1.7 の代表（`draw.rs`・解き直しの中の作者向けの `warn!`）。
-const FONT_HEIGHT_ZERO: &str =
-    "font.height が 0（DirectWrite fontsize は正値必須）のため既定値 12 へフォールバックする";
-
 /// `WARN` の事象のうち、本文が `message` のものの数。
 fn count_warn(events: &[CapturedEvent], message: &str) -> usize {
     events
@@ -546,7 +541,7 @@ fn count_warn(events: &[CapturedEvent], message: &str) -> usize {
         .count()
 }
 
-/// T7（要件 1.7・5.1 の代表）: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
+/// T7（`real-run-log-noise` 要件 1.7・5.1 の代表）: `font.height,0` のバルーンは、装着に `warn` 1 件、値の同じ
 /// 再追従 3 回で 0 件、拡大率の変わる再追従（＝解き直し）で 1 件。
 #[test]
 fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
@@ -555,10 +550,8 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let binding = TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE);
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
+    let model = balloon_model_of(
         Origin::new(None, None),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, Some(0), FontColor::new(None, None, None)),
         None,
@@ -568,7 +561,7 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
     let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), binding, &model));
     assert_eq!(count_warn(&attached, FONT_HEIGHT_ZERO), 1, "装着に 1 件");
 
-    let (answers, events) = capture(|| {
+    let (answers, events) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, binding, &model))
             .collect::<Vec<_>>()
@@ -595,7 +588,7 @@ fn font_height_zero_warns_once_per_resolve_not_per_refresh() {
 /// 無効な装置では作らず、作り直した装置の回に作る。印が立たない回は作り直さない。
 #[test]
 fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
-    use wintf::ecs::{GraphicsCore, VisualGraphics, WucGraphicsResource};
+    use wintf::ecs::{GraphicsCore, VisualGraphics};
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -620,14 +613,7 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
     );
 
     // 有効なまま作り直した装置（印が立つ）: 同じ回に新しい描き手を作る。
-    let recreate = |world: &mut World| {
-        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
-            .expect("WucGraphicsResource::new 失敗");
-        world.insert_resource(core);
-        world.insert_resource(wuc);
-    };
-    recreate(&mut world);
+    insert_gpu(&mut world);
     present_frame(&mut rt, &mut world, 10.0).expect("作り直した装置の回");
     let second = slot_visual(&world).expect("作り直した装置で差し込み口に見た目が付く");
     assert_ne!(second, first, "古い装置の描き手を使い続けた");
@@ -641,13 +627,97 @@ fn device_change_drops_renders_and_recreates_them_on_a_valid_core() {
     assert!(!rt.is_attached(&actor), "無効な装置で描き手を残すか作った");
     assert!(slot_visual(&world).is_none(), "差し込み口から外していない");
 
-    recreate(&mut world);
+    insert_gpu(&mut world);
     present_frame(&mut rt, &mut world, 10.0).expect("立ち直りの回");
     assert!(rt.is_attached(&actor), "作り直した装置の回に作り直さない");
-    let bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let bytes = read_back(&rt, &actor);
     assert!(opaque_count(&bytes) > 0, "保存済みの状態から描き直さない");
+}
+
+/// audit-emo-text-state-actor 指摘 6: 装置の変化の印は文字の層ごと。同じ World に 2 つの文字の層を置き、装置を作り直すと、
+/// 先に回った層も後に回った層も描き手を作り直す（印が World に 1 つだと、後の層は先の層が控えた
+/// 印を読んで「変わっていない」とし、古い装置の描き手を使い続ける）。
+#[test]
+fn device_change_recreates_renders_of_every_text_layer_in_the_world() {
+    use wintf::ecs::VisualGraphics;
+    let (mut world, window, slot) = com_world();
+    let (window2, slot2) = spawn_reserved_slot(&mut world);
+    let layer = |slot, window| {
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        rt.register_actor_binding(
+            ActorKey::from("0"),
+            TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
+            &geo_model(),
+        );
+        rt
+    };
+    let mut first = layer(slot, window);
+    let mut later = layer(slot2, window2);
+    let visual = |world: &World, slot| {
+        world
+            .get::<VisualGraphics>(slot)
+            .and_then(|v| v.visual().cloned())
+    };
+    present_frame(&mut first, &mut world, 10.0).expect("先の層の初回提示");
+    present_frame(&mut later, &mut world, 10.0).expect("後の層の初回提示");
+    let before = (
+        visual(&world, slot).expect("先の層の見た目"),
+        visual(&world, slot2).expect("後の層の見た目"),
+    );
+
+    insert_gpu(&mut world);
+    present_frame(&mut first, &mut world, 10.0).expect("先の層の作り直しの回");
+    present_frame(&mut later, &mut world, 10.0).expect("後の層の作り直しの回");
+    let after = (
+        visual(&world, slot).expect("先の層の新しい見た目"),
+        visual(&world, slot2).expect("後の層の新しい見た目"),
+    );
+    assert_ne!(after.0, before.0, "先の層が古い装置の描き手を使い続けた");
+    assert_ne!(after.1, before.1, "後の層が古い装置の描き手を使い続けた");
+}
+
+/// 再追従で捨てた描き手は差し込み口からも外す: 新しい拡大率の物理寸が上限を越えて面を作れなくても、
+/// 前の拡大率の字の絵が差し込み口に残らず、見えなくなった選択肢の当たり行も残らない
+/// （k=1 で幅 9,000 の画像を 200% へ＝18,000）。
+#[test]
+fn refresh_to_an_over_limit_size_leaves_no_old_text_on_the_slot() {
+    use wintf::ecs::VisualGraphics;
+    let (mut world, window, slot) = com_world();
+    let actor = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    rt.apply_cue(&choice_cue("0", 0.0, "c1", "はい", &[]));
+    let wide = (9000, 60);
+    rt.register_actor_binding(
+        actor.clone(),
+        TextSlotBinding::new(slot, window, 1.0, wide, wide),
+        &geo_model(),
+    );
+    let slot_visual = |world: &World| {
+        world
+            .get::<VisualGraphics>(slot)
+            .and_then(|v| v.visual().cloned())
+    };
+    present_frame(&mut rt, &mut world, 10.0).expect("k=1 の提示");
+    assert!(slot_visual(&world).is_some(), "k=1 では字の絵が付く");
+    assert!(
+        !rt.choice_hit_rows(&actor).is_empty(),
+        "k=1 では選択肢を押せる"
+    );
+    assert!(rt.refresh_actor_binding(
+        &actor,
+        TextSlotBinding::new(slot, window, 2.0, (18000, 120), wide),
+        &geo_model(),
+    ));
+    present_frame(&mut rt, &mut world, 10.0).expect("上限越えは Err にしない");
+    assert!(!rt.is_attached(&actor), "上限を越える面は作らない");
+    assert!(
+        slot_visual(&world).is_none(),
+        "前の字の絵が差し込み口に残る"
+    );
+    assert!(
+        rt.choice_hit_rows(&actor).is_empty(),
+        "見えない選択肢の当たり行が残る"
+    );
 }

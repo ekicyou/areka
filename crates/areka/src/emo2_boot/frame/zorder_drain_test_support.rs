@@ -12,10 +12,10 @@ use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Sender, channel};
 use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 
-use crate::placement::follow::OffsetBase;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
+use areka_placement::follow::OffsetBase;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::spawn_ghost_windows;
 
 /// 1 スコープぶんの合成配置（値は互いに重ならない程度に散らしただけで、意味を持たない）。
 ///

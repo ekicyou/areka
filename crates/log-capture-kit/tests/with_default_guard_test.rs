@@ -100,18 +100,18 @@ const KIT_DEFINITION_PREFIX: &str = "crates/log-capture-kit/src/";
 /// （要件 5.3）でアクターの起動の 1 件が加わり 5 件。
 const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
     (
-        "crates/areka/src/placement/diag_tests.rs",
+        "crates/areka-placement/src/diag_tests.rs",
         "実濾過（EnvFilter）の観測が要るが capture_under_filter は共有 crate の env-filter \
-         フィーチャ下にあり、areka は当該フィーチャを有効にしない（有効にしてよいのは wintf のみ）\
+         フィーチャ下にあり、areka-placement は当該フィーチャを有効にしない（有効にしてよいのは wintf のみ）\
          ため移行不能。窓の直前で ensure_interest_probes() を呼んでおり硬化は保たれている——\
          この呼出を「未使用」として外すと窓が静かに硬化を失う",
     ),
     (
-        "crates/areka/src/placement/follow_transition_diag_tests.rs",
+        "crates/areka-placement/src/follow_transition_diag_tests.rs",
         "同上（実濾過が要る・窓の直前の ensure_interest_probes() で硬化を保っている）",
     ),
     (
-        "crates/areka/src/placement/follow_window_move_diag_tests.rs",
+        "crates/areka-placement/src/follow_window_move_diag_tests.rs",
         "同上（実濾過が要る・窓の直前の ensure_interest_probes() で硬化を保っている）",
     ),
     (

@@ -208,7 +208,7 @@ def talk_line(at: datetime, event: str) -> str:
 
 def boot_line(at: datetime) -> str:
     return (
-        f"{ts(at)} INFO areka::placement: 起動時 DPI 構成 primary_dpi=96 "
+        f"{ts(at)} INFO areka_placement: 起動時 DPI 構成 primary_dpi=96 "
         f"shell_author_dpi=96 balloon_author_dpi=96 k_shell=1 k_balloon=1"
     )
 

@@ -1,6 +1,8 @@
 //! actor の子: 登録と再追従（装着先の解決・大きさの再追従・粗いバルーン定義の警告・
 //! 潰れた描画範囲の状態の変わり目の記録）。
 //! 足す予定の spec: balloon-font-file。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-kero-balloon` のもの（別の spec のものはその場で名を書く）。
 
 use areka_emo_present::TextSlotView;
 use areka_parsers::balloon::BalloonModel;
@@ -37,7 +39,7 @@ impl ResolveInputs {
         self.image_size == image_size && self.background == background && self.model == *model
     }
 
-    /// 覚えた入力の選択肢の飾りの縮退の値（飾りの警告の「前の値」・要件 2.3）。
+    /// 覚えた入力の選択肢の飾りの縮退の値（飾りの警告の「前の値」・`real-run-log-noise` 要件 2.3）。
     fn cursor_fallback(&self) -> CursorFallback {
         CursorFallback::of(self.model.cursor())
     }
@@ -58,11 +60,11 @@ impl ResolveInputs {
 /// 「読み込み（装着）1 回につき 1 件」という意味を持つのは actor の登録口である。ゆえに
 /// 解決からは粗さの記録を外し、記録は本関数が担う。文言と 4 つの欄（`balloon`・`axis`・
 /// `wrap_threshold`・`inline_limit`）は移動の前後で 1 文字も変えていない——実機走行の判定は
-/// この語を grep する（要件 14.3・手順書 §5.7）。`balloon` の欄は場所の名前（普通のバルーンは
-/// 結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前・shell-balloon
-/// 要件 3.11・3.12）で、呼び手が渡す。
+/// この語を grep する（`areka-P0-emo2-conformance-e2e` 要件 14.3・同じ spec の手順書 §5.7）。`balloon` の欄は場所の名前（普通のバルーンは
+/// 結線が入れた名前か `スコープ{番号}のバルーン`、箱は `balloon.*`ブレスの名前・
+/// `areka-P0-shell-balloon` 要件 3.11・3.12）で、呼び手が渡す。
 ///
-/// # 件数（要件 14.2）
+/// # 件数（`areka-P0-emo2-conformance-e2e` 要件 14.2）
 ///
 /// `previous` は当該 actor の**前回の**解決済み領域（未登録＝装着なら `None`）。値が新しく
 /// 決まったとき——初回、または前回と異なる領域——だけ 1 件書く:
@@ -97,7 +99,7 @@ pub(super) fn warn_coarse_wrap_threshold(
 
 impl TextLayerRuntime {
     /// 描画範囲の潰れを場所の記憶と突き合わせ、状態の変わり目に 1 回だけ記録する
-    /// （件 2・要件 2.3〜2.5・2.7）。呼び手は登録口——普通のバルーンの
+    /// （areka-P0-balloon-text-bugs 件 2・要件 2.3〜2.5・2.7）。呼び手は登録口——普通のバルーンの
     /// [`register_actor`](Self::register_actor)（装着・再追従が合流する）と箱の `register_box`。
     ///
     /// - 潰れに入った（記憶に無く、いま潰れている）: `warn!` 1 回。どのバルーンのどの値かが
@@ -139,20 +141,20 @@ impl TextLayerRuntime {
 
     /// actor と装着先（予約スロット）＋layout 入力の対応を登録する（結線側の口——
     /// `ActorKey → TargetId` の対応は結線側が所有し、emo-present `TextSlotView` の読み値
-    /// から [`TextSlotBinding::new`]／[`ResolvedBalloonText::resolve`] で組んで渡す・R9.5）。
+    /// から [`TextSlotBinding::new`]／[`ResolvedBalloonText::resolve`] で組んで渡す・`areka-P0-emo-text-layer` R9.5）。
     ///
     /// 未解決のまま蓄積していた actor は次の [`present_frame`] で再試行され装着される。
     ///
-    /// # 粗いバルーン定義の警告はここが書く（要件 14.2・2026-09-06）
+    /// # 粗いバルーン定義の警告はここが書く（`areka-P0-emo2-conformance-e2e` 要件 14.2・2026-09-06）
     ///
     /// 折返し基準が描画範囲の遠辺の外に解決されたことを知らせる `warn!` は本口が書く——
     /// 「読み込み（装着）1 回につき 1 件」という意味を持つ層がここだからである
     /// （本ファイルの `warn_coarse_wrap_threshold` の doc に経緯）。
     ///
-    /// 範囲外ゆえ無視した `origin` 宣言の警告（本 spec 要件 3.1〜3.5）も同じ理由で本口が書く。
+    /// 範囲外ゆえ無視した `origin` 宣言の警告（`areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.5）も同じ理由で本口が書く。
     /// 関数の本体だけは `actor_decoration.rs` に置く（本ファイルの行数の余白のため）。
     ///
-    /// 描画範囲の潰れの状態の変わり目の記録（件 2）も本口が書く（`note_region_collapse`）。
+    /// 描画範囲の潰れの状態の変わり目の記録（areka-P0-balloon-text-bugs 件 2）も本口が書く（`note_region_collapse`）。
     pub fn register_actor(
         &mut self,
         actor: ActorKey,
@@ -170,27 +172,27 @@ impl TextLayerRuntime {
         warn_coarse_wrap_threshold(&label, &resolved, previous);
         decoration::warn_ignored_origin(&label, &resolved, previous);
         self.note_region_collapse(&place, &label, &resolved);
-        // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（要件 3.1／4.6）。
+        // 2 層（既定・無効表示・選択肢文字色）を純粋状態へ差し込む唯一の点（`areka-P0-text-decoration-canon` 要件 3.1／4.6）。
         // 装着も再追従もここへ合流するので、`\f[default]`／`\f[disable]` の戻し先は
         // 常に「今装着されているバルーン定義」で解決した値になる。
         self.state
             .set_look_layers(&actor, resolved.font.looks.clone());
-        // 既定の見た目が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（要件 2.2）。
+        // 既定の見た目が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（`areka-P0-budoux-reveal-reflow` 要件 2.2）。
         self.rehearse_again();
         self.routing.insert(place.clone(), binding);
         self.layout_input.insert(place, resolved);
     }
 
-    /// 統合配線の一点口（R9.5・task 8）: `ActorKey → TargetId` 対応の解決結果
+    /// 統合配線の一点口（`areka-P0-emo-text-layer` R9.5）: `ActorKey → TargetId` 対応の解決結果
     /// （`EmoPresenter::text_slot_view(target)` の view——対応関係の所有は結線側・
     /// example/emo2-boot）と 2 層マージ済み balloon model から、binding
     /// （[`TextSlotBinding::from_view`]）と layout 入力（[`ResolvedBalloonText::resolve`]・
     /// 入力は必ず binding の `image_size`＝**image px**）を導出して
     /// [`register_actor`](Self::register_actor) へ登録する。
     ///
-    /// 物理 px を領域解決へ渡す誤配線をこの口で構造閉塞する（2 空間モデル——design.md
+    /// 物理 px を領域解決へ渡す誤配線をこの口で構造閉塞する（2 空間モデル——`areka-P0-emo-text-layer` design.md
     /// 「DPI/スケール契約」）。行レイアウト（`PositionedLine`）・クリック可能範囲の
-    /// choice-render 再利用シーム（R9.4）には手を触れない——本口は入力の供給のみで、
+    /// choice-render 再利用シーム（`areka-P0-emo-text-layer` R9.4）には手を触れない——本口は入力の供給のみで、
     /// レイアウト出力の形を変えない。
     ///
     /// `text_slot_view` は初回 `ShowSurface` 前は `None` を返すため、呼び手は表示確立後に
@@ -206,12 +208,13 @@ impl TextLayerRuntime {
 
     /// **単一構築経路の内側**（binding 直渡し・装着側）: view からの読み取りは呼び手側の
     /// [`TextSlotBinding::from_view`] 一点で完結し、以降の導出——`binding.image_size` を入力と
-    /// する [`ResolvedBalloonText::resolve`] と [`register_actor`](Self::register_actor) への
-    /// 登録——は装着でも再追従でも完全に同一である（第 2 の構築流儀を作らない・R4.3/R8.1）。
+    /// する解決（`resolve_stamped`）と登録の後半（`finish_registration`・中で
+    /// [`register_actor`](Self::register_actor) へ登録する）——は装着でも再追従でも完全に同一である
+    /// （第 2 の構築流儀を作らない・`areka-P0-kero-balloon` R4.3／`areka-P0-emo-dpi-scaling` R8.1）。
     ///
     /// 再追従側（[`refresh_actor_binding`](Self::refresh_actor_binding)）は判定キーに解決済み
-    /// 領域を含む都合で `resolve` を**判定前に自分で 1 回だけ**呼び、その値のまま
-    /// `register_actor` へ合流する（二重 resolve の回避——導出そのものは本メソッドと同一）。
+    /// 領域を含む都合で `resolve_stamped` を**判定前に自分で 1 回だけ**呼び、その値のまま
+    /// `finish_registration` へ合流する（二重 resolve の回避——導出そのものは本メソッドと同一）。
     pub(super) fn register_actor_binding(
         &mut self,
         actor: ActorKey,
@@ -219,15 +222,25 @@ impl TextLayerRuntime {
         model: &BalloonModel,
     ) {
         let background = self.background_of(&actor);
-        let mut resolved =
-            ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
-        self.stamp_inline_marker(&actor, &mut resolved);
-        let place = PlaceKey::balloon(&actor);
-        // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
+        let resolved = self.resolve_stamped(&actor, model, binding.image_size, background);
+        self.finish_registration(&actor, binding, model, background, resolved);
+    }
+
+    /// 登録の後半（装着と再追従の作り直しで同じ）: 前の飾りの縮退を取り → 登録し → 入力を覚える。
+    fn finish_registration(
+        &mut self,
+        actor: &ActorKey,
+        binding: TextSlotBinding,
+        model: &BalloonModel,
+        background: (u8, u8, u8),
+        resolved: ResolvedBalloonText,
+    ) {
+        let place = PlaceKey::balloon(actor);
+        // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（`real-run-log-noise` 要件 2.3）。
         let previous = self.cursor_fallback_at(&place);
         self.register_actor(actor.clone(), binding, resolved);
         self.remember_inputs(
-            &actor,
+            actor,
             place,
             model,
             binding.image_size,
@@ -247,7 +260,7 @@ impl TextLayerRuntime {
     /// 再追従の中の段は解いた値が `layout_input` に等しいと確かめた後に呼ぶ＝不変条件を保つ）。
     ///
     /// 入れ直すときに、選択肢の飾りの縮退の値を `previous`（入れ直す前の記憶の値・呼び手が
-    /// `register_actor` の前に取り出す）と比べて警告する（`warn_cursor_fallback`・要件 2.1〜2.4）。
+    /// `register_actor` の前に取り出す）と比べて警告する（`warn_cursor_fallback`・`real-run-log-noise` 要件 2.1〜2.4）。
     fn remember_inputs(
         &mut self,
         actor: &ActorKey,
@@ -271,7 +284,7 @@ impl TextLayerRuntime {
     }
 
     /// balloon target の**再追従シーム**（適用 k・面実寸・文字描画領域の変化に追従する・
-    /// R4.3〜R4.7／R8.1/8.2/8.3/8.5/8.7・design D11/D3）。
+    /// `areka-P0-kero-balloon` R4.3〜R4.7・design D3／`areka-P0-emo-dpi-scaling` R8.1/8.2/8.3/8.5/8.7・design D11）。
     ///
     /// 窓 DPI 変化（モニタ跨ぎ移動・表示スケール変更）で emo-present の適用 k が変わったとき、
     /// あるいは同じ k のままバルーン面の実寸や当該 scope の `validrect` が変わったとき、
@@ -280,16 +293,16 @@ impl TextLayerRuntime {
     /// 当該 actor の `ActorRender`（供給面・描画実行部・実測 metrics）を破棄する。次の
     /// [`present_frame`] の初回解決分岐が**新 k の物理寸**（`ceil(validrect 寸 × k)`／
     /// `validrect 原点 × k`）で再生成する——既存の生成式をそのまま再利用し、旧寸供給面は
-    /// 再利用しない（R8.2）。
+    /// 再利用しない（`areka-P0-emo-dpi-scaling` R8.2）。
     ///
-    /// # リビール状態は保存される（R8.3・`Clear`/`ClearAll` と別物）
+    /// # リビール状態は保存される（`areka-P0-emo-dpi-scaling` R8.3・`Clear`/`ClearAll` と別物）
     ///
     /// 破棄するのは描画資源だけで、純粋状態（[`TextLayerState`]——typewriter 進行・確定行）には
     /// 触れない（[`register_actor`](Self::register_actor) が `routing`＋`layout_input` しか
     /// 上書きしない既存構造がこれを担保する）。確定行 TextLayout キャッシュは `ActorRender` に
-    /// 宿るため、破棄→再生成で次フレームは保存済み状態から**全再描画**される（R8.4）。
+    /// 宿るため、破棄→再生成で次フレームは保存済み状態から**全再描画**される（`areka-P0-emo-dpi-scaling` R8.4）。
     ///
-    /// # 戻り値（churn ガード・R4.5/R8.5）
+    /// # 戻り値（churn ガード・`areka-P0-kero-balloon` R4.5／`areka-P0-emo-dpi-scaling` R8.5）
     ///
     /// 再追従を行ったとき `true`、行わなかったとき `false`。判定キー——binding 全体
     /// （k・物理寸・image 原寸・slot・window）と `model`×`image_size` から解き直した
@@ -353,25 +366,18 @@ impl TextLayerRuntime {
                 .get(&place)
                 .is_some_and(|it| it.font.inline_marker == self.inline_marker_of(actor))
         {
-            trace!(
-                actor = %actor,
-                k = k_new,
-                "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
-            );
-            return false;
+            return trace_unchanged(actor, k_new);
         }
         // 判定キー＝binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸で
         // model から解き直した文字描画領域の**連言**（D3・R4.4）。k の同値のみを根拠に再追従を
         // 省略すると、同 k のまま面実寸や scope 別 `validrect` が変わったときに旧寸の文字層が
         // 残る。k は双方とも ScaleContract 正規化済み（TextSlotBinding::new 経由）の同一表現
         // ゆえ、（derive した `PartialEq` 経由の）厳密一致で「変化なし」を判定してよい
-        // （f32 は出口ビュー——ここでは比較にのみ使い、寸法演算には一切用いない・D4）。
+        // （f32 は出口ビュー——ここでは比較にのみ使い、寸法演算には一切用いない・`areka-P0-emo-dpi-scaling` の D4）。
         //
         // 再解決は純関数ゆえ判定前にここで **1 回だけ**行い、再構築側でもこの値をそのまま使う
         // （二重 resolve・第 2 の構築流儀を作らない・R4.3）。
-        let mut resolved =
-            ResolvedBalloonText::resolve_with_background(model, binding.image_size, background);
-        self.stamp_inline_marker(actor, &mut resolved);
+        let resolved = self.resolve_stamped(actor, model, binding.image_size, background);
         if current == binding && self.layout_input.get(&place) == Some(&resolved) {
             // 中の段: 解いた値が今と同じ——記憶だけを新しい入力へ替える（不変条件は保たれる）。
             let previous = self.cursor_fallback_at(&place);
@@ -383,33 +389,18 @@ impl TextLayerRuntime {
                 background,
                 previous,
             );
-            trace!(
-                actor = %actor,
-                k = k_new,
-                "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
-            );
-            return false;
+            return trace_unchanged(actor, k_new);
         }
 
-        // 装着と同一の導出（`ResolvedBalloonText::resolve` → `register_actor`）で binding／
+        // 装着と同一の導出（`resolve_stamped` → `finish_registration`）で binding／
         // layout 入力を再構築する（単一構築経路・R4.3）。純粋状態（TextLayerState）には
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
         let collapsed = resolved.region.is_collapsed();
-        // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（要件 2.3）。
-        let previous = self.cursor_fallback_at(&place);
-        self.register_actor(actor.clone(), binding, resolved);
-        self.remember_inputs(
-            actor,
-            place.clone(),
-            model,
-            binding.image_size,
-            background,
-            previous,
-        );
+        self.finish_registration(actor, binding, model, background, resolved);
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
-        // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（R4.3/R8.4）。
+        // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（`areka-P0-kero-balloon` R4.3／`areka-P0-emo-dpi-scaling` R8.4）。
         // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で
-        // 差し込み口から外す（ここで捨てると前の字の絵が差し込み口に残る・件 2 要件 2.9）。
+        // 差し込み口から外す（ここで捨てると前の字の絵が差し込み口に残る・areka-P0-balloon-text-bugs 件 2 要件 2.9）。
         if collapsed {
             info!(
                 actor = %actor,
@@ -421,9 +412,9 @@ impl TextLayerRuntime {
             );
             return true;
         }
-        // 印の面は窓の子なので、World を持つ次の提示の頭で消す（描画資源と一緒に捨てると残る）。
-        if let Some(markers) = self.surfaces.remove(&place).and_then(|r| r.markers) {
-            self.retired_markers.push(markers);
+        // 差し込み口の絵と窓の子は World を持つ次の提示の頭で外す（ここで落とすだけだと前の字が残る）。
+        if let Some(render) = self.surfaces.remove(&place) {
+            self.retired_renders.push((render, current.slot));
         }
         info!(
             actor = %actor,
@@ -435,4 +426,14 @@ impl TextLayerRuntime {
         );
         true
     }
+}
+
+/// 再追従の上の段と中の段の記録（作り直さない・常に `false` を返す）。
+fn trace_unchanged(actor: &ActorKey, k: f32) -> bool {
+    trace!(
+        actor = %actor,
+        k,
+        "文字層の再追従: 適用 k・面実寸・文字描画領域がいずれも同値のため再結線・再生成を行わない（churn ガード・R4.5）"
+    );
+    false
 }

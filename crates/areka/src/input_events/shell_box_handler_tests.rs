@@ -40,8 +40,8 @@ use crate::input_events::user_break::{UserBreakWiring, drain_no_user_break_signa
 use crate::input_events::{
     MouseWiring, RegionSource, on_char_pointer_moved, on_char_pointer_pressed,
 };
-use crate::placement::spawn::CharWindowMarker;
-use crate::placement::test_support::capture_logs;
+use areka_placement::spawn::CharWindowMarker;
+use log_capture_kit::capture;
 
 const SHELL: &str = "\
 balloon.a
@@ -234,7 +234,7 @@ fn pointer(at: (i32, i32), double_click: DoubleClick) -> PointerState {
     }
 }
 
-fn hover_injections(events: &[crate::placement::test_support::LogEvent]) -> usize {
+fn hover_injections(events: &[log_capture_kit::CapturedEvent]) -> usize {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("box_choice_hover_inject"))
@@ -354,7 +354,7 @@ fn press_outside_boxes_is_unchanged() {
 #[test]
 fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
     let mut f = Fixture::new();
-    let (handled, events) = capture_logs(|| {
+    let (handled, events) = capture(|| {
         let first = f.moved(ROW, on_a(true));
         let second = f.moved((51, 15), on_a(true));
         first && second
@@ -371,7 +371,7 @@ fn move_over_box_choice_highlights_once_without_sending_to_the_shell() {
 fn move_over_box_body_records_hover_and_reaches_the_shell() {
     let mut f = Fixture::new();
     assert!(f.moved(ROW, on_a(true)));
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         f.moved(BODY, on_a(true));
         f.moved((52, 41), on_a(true));
     });
@@ -390,7 +390,7 @@ fn move_over_box_body_records_hover_and_reaches_the_shell() {
 fn move_to_another_box_and_outside() {
     let mut f = Fixture::new();
     f.moved(ROW, on_a(true));
-    let (_, events) = capture_logs(|| f.moved((250, 10), on_b()));
+    let (_, events) = capture(|| f.moved((250, 10), on_b()));
     assert_eq!(f.hover(), (Some(name("b")), None));
     assert_eq!(hover_injections(&events), 1, "前の箱の強調を外す");
     assert!(!f.moved((500, 400), BoxPoint::default()));
@@ -437,7 +437,7 @@ fn leaving_the_shell_window_clears_hover_and_highlight() {
         .id();
     f.world.spawn((PointerLeave, ChildOf(win)));
 
-    let ((), events) = capture_logs(|| clear_box_hover_on_leave(&mut f.world));
+    let ((), events) = capture(|| clear_box_hover_on_leave(&mut f.world));
     assert_eq!(f.hover(), (None, None));
     assert_eq!(hover_injections(&events), 1, "強調を外す: {events:?}");
 }
@@ -515,7 +515,7 @@ fn leaving_the_shell_window_clears_an_anchor_highlight() {
         .id();
     f.world.spawn((PointerLeave, ChildOf(win)));
 
-    let ((), events) = capture_logs(|| clear_box_hover_on_leave(&mut f.world));
+    let ((), events) = capture(|| clear_box_hover_on_leave(&mut f.world));
     assert_eq!(f.hover(), (None, None));
     assert_eq!(hover_injections(&events), 1, "強調を外す: {events:?}");
 }
@@ -523,7 +523,7 @@ fn leaving_the_shell_window_clears_an_anchor_highlight() {
 // ---------------------------------------------------------------- 前段の呼び出しの位置
 
 /// 写しの借用の失敗の記録（前段が走ったことの印）を数える。
-fn snapshot_borrow_failures(events: &[crate::placement::test_support::LogEvent]) -> usize {
+fn snapshot_borrow_failures(events: &[log_capture_kit::CapturedEvent]) -> usize {
     events
         .iter()
         .filter(|e| {
@@ -542,7 +542,7 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
     let runtime = Rc::clone(&f.runtime);
     let _held = runtime.borrow_mut();
 
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         let ev = Phase::Bubble(pointer(BODY, DoubleClick::None));
         on_char_pointer_moved(&mut f.world, f.entity, f.entity, &ev);
     });
@@ -552,7 +552,7 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
         "移動は素通りしてシェルへ届く"
     );
 
-    let (pressed, events) = capture_logs(|| {
+    let (pressed, events) = capture(|| {
         let ev = Phase::Bubble(pointer(ROW, DoubleClick::None));
         on_char_pointer_pressed(&mut f.world, f.entity, f.entity, &ev)
     });
@@ -564,9 +564,9 @@ fn real_handlers_call_the_prelude_before_the_existing_path() {
 // ---------------------------------------------------------------- 実機の判定の記録
 
 fn lines_of<'a>(
-    events: &'a [crate::placement::test_support::LogEvent],
+    events: &'a [log_capture_kit::CapturedEvent],
     event: &str,
-) -> Vec<&'a crate::placement::test_support::LogEvent> {
+) -> Vec<&'a log_capture_kit::CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(event))
@@ -577,9 +577,9 @@ fn lines_of<'a>(
 /// 箱の外の押下は残さない。
 #[test]
 fn box_press_logs_the_verdict_once() {
-    use crate::placement::test_support::ExpectField;
+    use log_capture_kit::ExpectField;
     let mut f = Fixture::new();
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         f.pressed(BODY, DoubleClick::None, on_a(false));
         f.pressed(BODY, DoubleClick::None, BoxPoint::default());
     });
@@ -594,7 +594,7 @@ fn box_press_logs_the_verdict_once() {
 #[test]
 fn box_hover_change_logs_only_on_change() {
     let mut f = Fixture::new();
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         f.moved(BODY, on_a(true));
         f.moved((52, 41), on_a(true));
         f.moved((250, 10), on_b());
@@ -612,15 +612,12 @@ fn box_hover_change_logs_only_on_change() {
 /// 箱 a の行を左の単押しで押し、その間の記録と、知らせの取り出しが kanade へ送った伝言を返す。
 fn press_row_and_drain(
     point: BoxPoint,
-) -> (
-    Vec<crate::placement::test_support::LogEvent>,
-    Vec<DispatcherMsg>,
-) {
+) -> (Vec<log_capture_kit::CapturedEvent>, Vec<DispatcherMsg>) {
     use crate::input_events::choice_drain::{drain_choice_selections, wire_choice_drain};
     let mut f = Fixture::new();
     let (kanade_tx, kanade_rx) = mpsc::channel();
     wire_choice_drain(&mut f.world, kanade_tx);
-    let (handled, events) = capture_logs(|| f.pressed(ROW, DoubleClick::None, point));
+    let (handled, events) = capture(|| f.pressed(ROW, DoubleClick::None, point));
     assert!(handled, "処理した");
     drain_choice_selections(&mut f.world);
     (events, kanade_rx.try_iter().collect())
@@ -642,7 +639,7 @@ fn selected_fields(event: &str) -> BTreeMap<&'static str, String> {
     ])
 }
 
-fn fields_of(event: &crate::placement::test_support::LogEvent) -> BTreeMap<&str, String> {
+fn fields_of(event: &log_capture_kit::CapturedEvent) -> BTreeMap<&str, String> {
     event
         .fields_map()
         .into_iter()
@@ -709,7 +706,7 @@ fn box_selection_send_failure_is_recorded_under_the_kind() {
     ] {
         let mut f = Fixture::new();
         f.world.remove_non_send::<ChoiceSelectionInbox>();
-        let (_, events) = capture_logs(|| f.pressed(ROW, DoubleClick::None, point));
+        let (_, events) = capture(|| f.pressed(ROW, DoubleClick::None, point));
         let errors = lines_of(&events, failed)
             .into_iter()
             .filter(|e| e.level == tracing::Level::ERROR)

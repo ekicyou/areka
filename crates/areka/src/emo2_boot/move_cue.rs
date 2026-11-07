@@ -17,7 +17,7 @@ use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 use wintf::ecs::world::tick_wake;
 
-use crate::placement::script_alignment::{AlignmentWord, parse_alignment_word};
+use areka_placement::script_alignment::{AlignmentWord, parse_alignment_word};
 
 #[path = "move_cue_args.rs"]
 mod args;
@@ -39,10 +39,10 @@ pub enum PositionCue {
     /// `\![move]`——1 つの窓を動かす（`apply_move_directive`）。
     Move(MoveDirective),
     /// `\![execute,resetwindowpos]`——すべての窓を既定の位置へ並べ直す
-    /// （`placement::reset_pos::reset_window_positions`・`OnResetWindowPos` は送らない＝要件 8.7）。
+    /// （`areka_placement::reset_pos::reset_window_positions`・`OnResetWindowPos` は送らない＝要件 8.7）。
     ResetWindowPos,
     /// `\![set,alignmenttodesktop,方向]`／`\![set,alignmentondesktop,方向]`——実行者のスコープの
-    /// キャラクターの窓の吸着の向きを変える（`placement::script_alignment`・要件 1）。
+    /// キャラクターの窓の吸着の向きを変える（`areka_placement::script_alignment`・要件 1）。
     SetAlignment { scope: u32, word: AlignmentWord },
     /// `\![set,sticky-window,…]`——ID の並びを読まずに運ぶ（読みと拒否は帳簿が持つ・要件 3.1）。
     SetSticky { tokens: Vec<String> },
@@ -51,7 +51,7 @@ pub enum PositionCue {
     /// `\![execute,resetballoonpos]`——すべてのバルーンを標準の位置へ戻す（要件 7.1）。
     ResetBalloonPos,
     /// `\![lock,balloonmove]`（`locked: true`）／`\![unlock,balloonmove]`（`false`）——実行者のスコープの
-    /// バルーンを利用者のドラッグで動かさない指定を当てる・解く（`placement::balloon_lock`・要件 5.1・5.2）。
+    /// バルーンを利用者のドラッグで動かさない指定を当てる・解く（`areka_placement::balloon_lock`・要件 5.1・5.2）。
     BalloonMoveLock { scope: u32, locked: bool },
 }
 
@@ -87,7 +87,7 @@ pub enum AxisSpec {
     ///
     /// 物理 px への換算（k 倍）は移動先の計算（`move_cue_geometry.rs` の `compute_move_target`）の責務である。
     /// `windowposition.x/y` と同種の「作者基準で書かれた画面オフセット」であり、同じ
-    /// 写像（`placement::scale_signed`）を通す。差分/座標の解釈は基準解決に委ねる（R-6）。
+    /// 写像（`areka_placement::scale_signed`）を通す。差分/座標の解釈は基準解決に委ねる（R-6）。
     Px(i32),
 }
 

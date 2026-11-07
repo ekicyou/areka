@@ -4,8 +4,8 @@
 //! 観測する（実窓も GPU も要らない）。既存の `input_events_tests.rs` と同じ観測方法である。
 
 use super::*;
-use crate::placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use areka_kanade::MouseInput;
+use areka_placement::spawn::{CharWindowMarker, GhostWindowMarker};
 use std::sync::mpsc;
 use wintf::ecs::Point;
 

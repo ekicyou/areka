@@ -25,7 +25,7 @@ use super::test_support::{
     capture_logs, headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// `hover[scope]=Some(k)`（`ordinal=Some`）を仕込んだ `BalloonWiring` を World へ NonSend 挿入する。
 fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: Option<usize>) {

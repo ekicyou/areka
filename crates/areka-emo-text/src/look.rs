@@ -202,7 +202,7 @@ impl LookLayers {
             color,
             ..canon
         };
-        apply_overrides(&mut default, cursor_text, font_overrides);
+        apply_overrides(&mut default, cursor_text, "font.", font_overrides);
         // 無効表示は色だけが違う——項目を列挙せず既定層から複製するので、
         // 後続仕様が TextLook へ項目を足しても「色以外は既定と同じ」が自動で保たれる
         // （要件 4.5）。キーごとの違いは下の差し込みだけが作る（要件 4.7）。
@@ -210,7 +210,12 @@ impl LookLayers {
             color: mix_disabled(default.color, background),
             ..default.clone()
         };
-        apply_overrides(&mut disable, cursor_text, disable_overrides);
+        apply_overrides(
+            &mut disable,
+            cursor_text,
+            "disable.font.",
+            disable_overrides,
+        );
         LookLayers {
             default,
             disable,
@@ -228,11 +233,15 @@ impl LookLayers {
 /// バルーン定義に書かれた値どうしが互いを参照して順序に依存する事態を作らないためで、
 /// そもそも正典の descript にこの語は現れない。
 ///
-/// 綴り誤りは黙って落とさず、その 1 件を飛ばして残りを差し込む——記録はバルーン定義を
-/// 読む側（`areka-P0-balloon-font-descript-keys`）が行を特定できる位置で出すのが正しく、
-/// ここでは行番号もファイル名も持たないからである（記録は [`crate::balloon_overrides`] が
-/// 同じ [`apply_font_tag`] で事前に判定して `warn!` で出す）。
-fn apply_overrides(layer: &mut TextLook, cursor_text: (u8, u8, u8), overrides: &[Vec<String>]) {
+/// 綴り誤りは黙って落とさず、その 1 件を飛ばして残りを差し込み、適用と同じ 1 回で `warn!` に
+/// 残す。記録の `key` は descript のキー名（`prefix`＋受け口のキー。例 `font.bold`／
+/// `disable.font.height`）で、基底と無効表示の同名キーを書いた行を区別できる。
+fn apply_overrides(
+    layer: &mut TextLook,
+    cursor_text: (u8, u8, u8),
+    prefix: &str,
+    overrides: &[Vec<String>],
+) {
     if overrides.is_empty() {
         return;
     }
@@ -243,7 +252,15 @@ fn apply_overrides(layer: &mut TextLook, cursor_text: (u8, u8, u8), overrides: &
     };
     for tokens in overrides {
         let args: Vec<&str> = tokens.iter().map(String::as_str).collect();
-        let _ = apply_font_tag(layer, &base, &args);
+        if let Err(FontTagIssue { key, value, reason }) = apply_font_tag(layer, &base, &args) {
+            tracing::warn!(
+                key = format!("{prefix}{key}"),
+                value,
+                reason,
+                "{}",
+                crate::balloon_overrides::SKIPPED
+            );
+        }
     }
 }
 

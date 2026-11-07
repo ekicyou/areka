@@ -11,7 +11,7 @@
 //! | 作業領域源の実行時同期 | `frame_work_area_sync_tests.rs`（task 5.1） |
 //! | 作業領域変化を契機とする再スナップ | `frame_work_area_resnap_tests.rs`（task 5.2・主に拡大率 96・合流を見る 1 件だけ 192） |
 //! | 再導出結果なしの窓（`None` 経路） | `frame_dpi_reproject_none_tests.rs`（`dpi-window-vanish` S2・単一フレーム） |
-//! | 判定器の `reason=invisible`／`k-unchanged` の選り分け | `placement/transition_judge_tests.rs`（純関数） |
+//! | 判定器の `reason=invisible`／`k-unchanged` の選り分け | `crates/areka/src/placement_tests/transition_judge_tests.rs`（純関数） |
 //!
 //! 本ファイルが持つのは、そこに**無い**側——同じ分岐を**要件 7.2 が名指しする 2 水準
 //! （120 と 192）の両方**で、かつ複数モニタの作業領域を注入した状態で走らせることと、
@@ -60,12 +60,12 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
-use crate::placement::WORK_AREA_SYNC_CONTEXT;
-use crate::placement::diag::{PlacementRoute, WindowKind};
-use crate::placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
-use crate::placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
-use crate::placement::test_support::{LogEvent, capture_logs};
-use crate::placement::transition_judge::WRITES_PER_WINDOW_MAX;
+use crate::placement_tests::transition_judge::WRITES_PER_WINDOW_MAX;
+use areka_placement::WORK_AREA_SYNC_CONTEXT;
+use areka_placement::diag::{PlacementRoute, WindowKind};
+use areka_placement::dpi_sync::{DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncHold, evaluate};
+use areka_placement::follow::{BalloonFollow, MonitorDpiTable, MonitorSnapshot};
+use log_capture_kit::{CapturedEvent, capture};
 
 use super::emo2_frame_system;
 use super::test_support::{
@@ -136,7 +136,7 @@ fn writes_for(
 }
 
 /// 捕捉行のうち WARN で、`needle` を本文に含むものの件数。
-fn warnings_containing(events: &[LogEvent], needle: &str) -> usize {
+fn warnings_containing(events: &[CapturedEvent], needle: &str) -> usize {
     events
         .iter()
         .filter(|e| e.level == tracing::Level::WARN)
@@ -442,7 +442,7 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at(dpi: u16) {
     // 表は永遠に追いつかない。上限に達するまでは 1 件も書かず、警告も出さない。
     for _ in 0..DPI_SYNC_HOLD_MAX_FRAMES - 1 {
         harness.advance_frame();
-        let (_, events) = capture_logs(|| {
+        let (_, events) = capture(|| {
             harness.run_placement_phases(&mut source);
         });
         let writes = harness.drain_writes();
@@ -460,7 +460,7 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at(dpi: u16) {
     }
 
     harness.advance_frame();
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         harness.run_placement_phases(&mut source);
     });
     let writes = harness.drain_writes();
@@ -853,7 +853,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns_at(dpi: u16) {
 
     harness.set_monitor_table(Vec::new());
     harness.advance_frame();
-    let (change, events) = capture_logs(|| harness.run_placement_phases(&mut source));
+    let (change, events) = capture(|| harness.run_placement_phases(&mut source));
 
     assert!(change.is_none(), "dpi={dpi}: 空の表で源を差し替えている");
     assert_eq!(
@@ -885,7 +885,7 @@ fn an_empty_monitor_table_keeps_everything_and_warns_at(dpi: u16) {
         s2_taskbar_hidden_work_area(dpi),
     ));
     harness.advance_frame();
-    let (change, events) = capture_logs(|| harness.run_placement_phases(&mut source));
+    let (change, events) = capture(|| harness.run_placement_phases(&mut source));
     assert!(
         change.is_some(),
         "dpi={dpi}: 台が戻っても差し替えが起きない（0 台の腕から抜けていない）"
@@ -958,7 +958,7 @@ fn a_window_off_all_monitors_is_resolved_by_the_nearest_fallback_not_left_in_pla
     let held_ground = harness.ground_point(0);
     harness.set_monitor_table(Vec::new());
     harness.advance_frame();
-    let (change, _events) = capture_logs(|| harness.run_placement_phases(&mut source));
+    let (change, _events) = capture(|| harness.run_placement_phases(&mut source));
     assert!(change.is_none(), "モニタ 0 台で源を差し替えている");
     assert!(
         harness.drain_writes().is_empty(),
