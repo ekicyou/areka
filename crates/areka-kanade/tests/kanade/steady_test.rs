@@ -35,8 +35,8 @@
 //!
 //! # active talk 中 Tick の NOTIFY（Ref3=0）——統合層で被覆する
 //! 「再生中の Tick が OnSecondChange を NOTIFY（Ref3=0・応答無視）で発行する」（DD-6・Req 3.3）は
-//! 純粋状態機械のユニットテスト（`src/schedule/steady.rs::tests::steady_some_tick_emits_notify`／
-//! `steady_some_value_is_discarded_without_start_talk`）でも被覆されるが、本ファイルは**統合層でも**
+//! 純粋状態機械のユニットテスト（`src/schedule/steady_flow_tests.rs` の `steady_some_tick_emits_notify`／
+//! `steady_some_non_mouse_value_is_discarded_dd6`）でも被覆されるが、本ファイルは**統合層でも**
 //! これを決定的に検証する（`active_talk_tick_emits_notify_ref3_zero`）。
 //!
 //! 決定的な active-talk 窓は、保留機能付きハーネス（`spawn_harness_gated`＋`SakuraGate`）で作る:

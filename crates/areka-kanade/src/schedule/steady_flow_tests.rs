@@ -170,7 +170,7 @@ fn close_pending_tick_emits_no_second_change() {
         },
         &config(),
     );
-    // close::step は現状 stub（pump 非発行）——OnSecondChange が出ないことを検証。
+    // close::step は ClosePending の Tick で last_now を更新するだけ（pump しない）——OnSecondChange が出ないことを検証。
     assert_no_second_change(&actions);
 }
 
@@ -290,39 +290,11 @@ fn steady_some_notified_stays_and_emits_nothing() {
     assert!(actions.is_empty());
 }
 
-// --- Steady{Some} + 非マウス Value → warn!+破棄・Steady{Some} 維持・StartTalk なし（DD-6 防御） ---
-// origin は非マウス（OnSecondChange）——マウス origin は置換アームへ抜けるため、DD-6 破棄は
-// 非マウス origin 限定に狭まった（origin 別 reply 政策・DD-IE-2）。
-
-#[test]
-fn steady_some_value_is_discarded_without_start_talk() {
-    let (next, actions) = step(
-        steady_some(TalkId(3), 6),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("late".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "OnSecondChange",
-        },
-        &config(),
-    );
-    match next.phase {
-        Phase::Steady {
-            talk: Some(ActiveTalk { talk_id, .. }),
-        } => assert_eq!(talk_id, TalkId(3), "active talk は維持される"),
-        _ => panic!("expected Steady{{Some}} preserved"),
-    }
-    assert_eq!(next.next_talk_id, 6, "破棄ゆえ採番しない");
-    assert!(
-        !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
-        "Value-during-talk は StartTalk しない（DD-6）"
-    );
-    assert!(actions.is_empty(), "キュー・中断も発行しない");
-}
-
 // === origin 別 reply 政策: 置換 vs DD-6 防御破棄（Req 4.1／4.3／4.4・DD-IE-2／DD-IE-3） ===
 // 置換檻（マウス origin→置換）と DD-6 保存檻（非マウス origin→warn＋破棄）は**対**であり
 // 同一テスト群に配置する。実機では実 pasta の talking 自衛（204 相当）により置換が構造的に
-// 発火しないため mock 檻が唯一の検証手段。origin の match は wildcard にしない（第 3 の origin
-// 追加時にレビューで必ず政策を意識させるため）。
+// 発火しないため mock 檻が唯一の検証手段。置き換えるかは `events::value_replaces_active_talk` が
+// 決め、倍率の 2 語は info!＋破棄、残り（今は OnSecondChange だけ）は `_` の腕で DD-6 破棄。
 
 // --- (c) Steady{None} + Value（マウス origin）→ StartTalk・ActiveTalk.origin=マウス名（4.1・DD-IE-3） ---
 
@@ -411,8 +383,8 @@ fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
 }
 
 // --- DD-6 保存: Steady{Some} + Value + 非マウス origin(OnSecondChange) → warn＋破棄・維持（4.3/4.4） ---
-// 置換檻（上）と対。DD-6 防御の意味は「全 origin 防御」から「非マウス origin 限定の防御」へ
-// 狭まる——マウス origin は上の置換アームへ抜けるため、本檻は非マウス origin でのみ発火する。
+// 置換檻（上）と対。置き換える出どころ（マウス 2 語・汎用の入口）と倍率の 2 語は別の腕へ抜けるため、
+// DD-6 破棄はそれ以外の出どころでだけ起きる。
 
 #[test]
 fn steady_some_non_mouse_value_is_discarded_dd6() {
