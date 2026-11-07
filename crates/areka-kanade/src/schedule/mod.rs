@@ -276,7 +276,7 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
         Input::Anchor(a) => anchor::on_anchor(state, a),
 
         // UserBreak: 場面で振り分けず、受理の規則ごと user_break::on_user_break へ渡す。
-        Input::UserBreak { scope } => user_break::on_user_break(state, scope),
+        Input::UserBreak { scope, talk_id } => user_break::on_user_break(state, scope, talk_id),
 
         // ChangeGhost: 受理の規則ごと change::on_change_ghost へ渡す。
         Input::ChangeGhost(req) => change::on_change_ghost(state, req),

@@ -72,8 +72,10 @@ pub(crate) enum Input {
     ///
     /// `scope` は「どのバルーンで起きたか」を運ぶだけで、受理の判断には使わない。
     /// 受理の規則は [`user_break::on_user_break`] が持ち、場面を問わず横断の腕から呼ぶ。
+    /// `talk_id` は押されたバルーンに出ていた台詞のトーク（観測できなければ `None`）。
     UserBreak {
         scope: u32,
+        talk_id: Option<TalkId>,
     },
     /// ゴーストの切替の要求（UI → kanade）。受理の判断は [`change::on_change_ghost`] が持つ。
     ChangeGhost(crate::change::ChangeRequest),

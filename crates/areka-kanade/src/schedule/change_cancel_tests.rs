@@ -11,7 +11,14 @@ const USER: CloseReason = CloseReason::User { scope: 0 };
 /// 利用者の中断を受けてから、そのトークの `TalkDone{Interrupted}` を返す。
 /// 止める指示は今日の中断と同じ単一の閉じ口（`CancelChoice`）であることも確かめる。
 fn break_talk(s: State, talk_id: TalkId, quit_reserved: bool) -> (State, Vec<Action>) {
-    let (s, actions) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, actions) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(talk_id),
+        },
+        &cfg(),
+    );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id: t }] if *t == talk_id),
         "中断の指示は今日と同じ（バルーンを隠す規則に触れない）"

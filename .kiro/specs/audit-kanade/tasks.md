@@ -269,7 +269,7 @@
   - _Requirements: 3.1, 3.2, 5.3, 6.3, 6.7, 9.5_
 
 - [ ] 17. 利用者の中断にトークの番号を載せる（#6・#71・#18 の `user_break_tests.rs`）
-- [ ] 17.1 kanade の中断の知らせに番号を足し、合わない中断を表 C へ渡す
+- [x] 17.1 kanade の中断の知らせに番号を足し、合わない中断を表 C へ渡す
   - 知らせと入力に番号の欄（Option）を足し、殻と段取りへそのまま写す
   - 番号が Some で今のトークと違えば止めずに debug を残して表 C へ。None は今どおり今のトークを止める
   - 中断を組む kanade のテストに今のトークの番号を足し、状態の下ごしらえを 1 つに、戻りの組に型の別名を置く
@@ -321,3 +321,4 @@
 - 15.3 指摘の外（19.2 の候補）: `establish_choice_wait` の中の Tick が `MonotonicMs(1_000)` の直書きで、`CHOICE_DISPLAY_END_MS` と同じ値を 2 か所に持つ。
 - 16.1→16.2 の引き継ぎ: `Input::ChoiceTimeoutDue` の `cfg_attr(not(test), expect(dead_code))`（types.rs）を 16.2 で消す。actor.rs の `ArmChoiceWake` の腕（trace `choice_wake_unwired` だけ）を 16.2 で本物の送りに替える。
 - 16.4: 畳む順は design §#7 の文（kanade → `down_relay` → `choice_wake_relay` → 刻み役の Close）に合わせ、刻み役の Close と join を down-relay の後へ移した（範囲の外の表の「down_relay の後に join」とも食い違わない）。詰まりも取り残しも無いことをレビューで確かめた。起こしを kanade・中継・刻み役を通して 1 本で追うテストは無い（各側のテストと結線の 2 本だけ）。
+- 17.1 のコミットは crates/areka がビルドできない（`KanadeMsg::UserBreak` の欄が増えた 5 か所）。直しは 17.2 の持ち場で、17.2 のコミットで緑に戻る。

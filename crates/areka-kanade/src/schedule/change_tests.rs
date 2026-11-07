@@ -424,7 +424,14 @@ fn held(raise_event: bool) -> State {
 
 /// 利用者の中断を受けてから `TalkDone{Interrupted}` を返す。
 fn broken(s: State, quit_reserved: bool) -> (State, Vec<Action>) {
-    let (s, actions) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, actions) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(4)),
+        },
+        &cfg(),
+    );
     assert!(matches!(actions.as_slice(), [Action::CancelChoice { .. }]));
     let done = TalkDone {
         talk_id: TalkId(4),

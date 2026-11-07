@@ -79,7 +79,13 @@ pub(super) fn assert_not_sent(ev: &[CapturedEvent], id: &str, reason: &str, phas
 fn steady_broken(scope: u32) -> (State, TalkId) {
     let mut s = steady_none();
     let talk = start_translated(&mut s, 2_000, FINAL);
-    let actions = feed(&mut s, Input::UserBreak { scope });
+    let actions = feed(
+        &mut s,
+        Input::UserBreak {
+            scope,
+            talk_id: Some(talk),
+        },
+    );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == talk),
         "前提: 中断は受け入れられている"
@@ -324,7 +330,13 @@ fn reply_and_start(s: &mut State, origin: &'static str) -> TalkId {
 
 /// 中断して止まり終えた結果が「切替の中止の知らせ → OnBalloonBreak」の順であることを確かめる。
 fn assert_cancelled_then_break(s: &mut State, talk: TalkId, scope: u32) {
-    feed(s, Input::UserBreak { scope });
+    feed(
+        s,
+        Input::UserBreak {
+            scope,
+            talk_id: Some(talk),
+        },
+    );
     let actions = feed(s, done(talk, TalkEndReason::Interrupted, true));
     assert!(
         matches!(s.phase, Phase::Steady { talk: None }),
@@ -391,7 +403,13 @@ fn a4_shell_changing_talk_break_sends() {
         },
     );
     let talk = reply_and_start(&mut s, "OnShellChanging");
-    feed(&mut s, Input::UserBreak { scope: 0 });
+    feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(talk),
+        },
+    );
     let actions = feed(&mut s, done(talk, TalkEndReason::Interrupted, true));
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
     assert_eq!(
@@ -426,7 +444,13 @@ fn a4_close_farewell_break_sends_nothing() {
     );
     let talk = reply_and_start(&mut s, "OnClose");
     assert!(matches!(s.phase, Phase::CloseTalkWait { .. }));
-    feed(&mut s, Input::UserBreak { scope: 0 });
+    feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(talk),
+        },
+    );
     let (actions, ev) = feed_capturing(&mut s, done(talk, TalkEndReason::Interrupted, false));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
     assert_not_sent(&ev, "OnBalloonBreak", "not_steady", "Unloading");
@@ -480,7 +504,13 @@ fn a4_boot_greeting_break_sends_nothing() {
         timeout_sent: false,
         timeout_pending: false,
     });
-    feed(&mut s, Input::UserBreak { scope: 0 });
+    feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(3)),
+        },
+    );
     let (actions, ev) = feed_capturing(&mut s, done(TalkId(3), TalkEndReason::Interrupted, false));
     assert!(matches!(s.phase, Phase::BootVersion { talk: None }));
     assert_no_balloon_event(&actions, "起動の途中");
@@ -564,7 +594,13 @@ fn missing_or_mismatched_shown_sends_empty_script_with_a_warning() {
             ..steady_none()
         };
         s.shown = shown;
-        feed(&mut s, Input::UserBreak { scope: 0 });
+        feed(
+            &mut s,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(TalkId(3)),
+            },
+        );
         let (actions, ev) =
             feed_capturing(&mut s, done(TalkId(3), TalkEndReason::Interrupted, false));
         assert_eq!(
@@ -604,7 +640,13 @@ fn b4_wins_over_b5_and_drops_the_pending_timeout() {
 #[test]
 fn second_break_signal_still_sends_one_balloon_break() {
     let (mut s, talk) = steady_broken(1);
-    let actions = feed(&mut s, Input::UserBreak { scope: 0 });
+    let actions = feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(talk),
+        },
+    );
     assert!(actions.is_empty(), "2 回目の合図は何も出さない");
     assert_eq!(
         s.user_break_talk,

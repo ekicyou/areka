@@ -59,7 +59,13 @@ fn holding(held: Held) -> (State, TalkId) {
         );
     }
     if matches!(held, Held::Break | Held::Both) {
-        feed(&mut s, Input::UserBreak { scope: 1 });
+        feed(
+            &mut s,
+            Input::UserBreak {
+                scope: 1,
+                talk_id: Some(talk),
+            },
+        );
         assert_eq!(
             s.user_break_talk,
             Some(BreakNote {
@@ -280,7 +286,13 @@ fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
             s.shown.as_ref().is_some_and(|shown| !shown.timeout_pending),
             "{at}: 送り出しの台詞の間は預からない（D1）"
         );
-        feed(&mut s, Input::UserBreak { scope: 0 });
+        feed(
+            &mut s,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(talk),
+            },
+        );
         assert!(s.user_break_talk.is_some(), "{at}: 前提: 中断の控え");
 
         // 期限は送り出しの相に入るときに決まっているので、刻み 1 回で期限切れになる。
@@ -331,7 +343,13 @@ fn translate_transport_failure_drops_the_break_note_with_one_talk_gone_line() {
         s.shown.as_ref().is_none_or(|shown| !shown.timeout_pending),
         "翻訳を待つ間は預からない（D2）"
     );
-    feed(&mut s, Input::UserBreak { scope: 1 });
+    feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 1,
+            talk_id: Some(talk),
+        },
+    );
     assert_eq!(
         s.user_break_talk.map(|note| note.talk_id),
         Some(talk),

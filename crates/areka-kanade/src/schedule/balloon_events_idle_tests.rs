@@ -37,7 +37,13 @@ fn finish(s: &mut State, talk: TalkId) {
 #[test]
 fn c4_idle_double_click_sends_balloon_close_then_c3_refuses_the_second() {
     let (mut s, talk) = steady_after_talk();
-    let (actions, ev) = feed_capturing(&mut s, Input::UserBreak { scope: 1 });
+    let (actions, ev) = feed_capturing(
+        &mut s,
+        Input::UserBreak {
+            scope: 1,
+            talk_id: Some(talk),
+        },
+    );
     assert_eq!(
         gets(&actions),
         vec![("OnBalloonClose", &[FINAL.to_string()][..])],
@@ -63,7 +69,13 @@ fn c4_idle_double_click_sends_balloon_close_then_c3_refuses_the_second() {
     );
     assert_not_logged(&ev, "balloon_event_not_sent");
 
-    let (actions, ev) = feed_capturing(&mut s, Input::UserBreak { scope: 1 });
+    let (actions, ev) = feed_capturing(
+        &mut s,
+        Input::UserBreak {
+            scope: 1,
+            talk_id: Some(talk),
+        },
+    );
     assert!(actions.is_empty(), "2 回目は何も送らない");
     assert_not_sent(&ev, "OnBalloonClose", "already_sent", "Steady");
 }
@@ -72,7 +84,13 @@ fn c4_idle_double_click_sends_balloon_close_then_c3_refuses_the_second() {
 #[test]
 fn c4_without_shown_talk_sends_empty_script_with_a_warning() {
     let mut s = steady_none();
-    let (actions, ev) = feed_capturing(&mut s, Input::UserBreak { scope: 0 });
+    let (actions, ev) = feed_capturing(
+        &mut s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: None,
+        },
+    );
     assert_eq!(
         gets(&actions),
         vec![("OnBalloonClose", &[String::new()][..])]
@@ -101,7 +119,13 @@ fn c1_not_steady_phases_send_nothing_and_record_why() {
     for (label, phase) in phases {
         let (mut s, _) = steady_after_talk();
         s.phase = phase;
-        let (actions, ev) = feed_capturing(&mut s, Input::UserBreak { scope: 0 });
+        let (actions, ev) = feed_capturing(
+            &mut s,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: None,
+            },
+        );
         assert!(actions.is_empty(), "{label}: 何も送らない");
         assert_not_sent(&ev, "OnBalloonClose", "not_steady", label);
         assert!(
@@ -116,7 +140,13 @@ fn c1_not_steady_phases_send_nothing_and_record_why() {
 fn c2_close_pending_sends_nothing_and_records_why() {
     let (mut s, _) = steady_after_talk();
     s.pending_close = Some(CloseReason::System);
-    let (actions, ev) = feed_capturing(&mut s, Input::UserBreak { scope: 0 });
+    let (actions, ev) = feed_capturing(
+        &mut s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: None,
+        },
+    );
     assert_no_balloon_event(&actions, "終了の保留中");
     assert!(
         !actions

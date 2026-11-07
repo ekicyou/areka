@@ -180,7 +180,13 @@ fn shown_talk_keeps_the_change_farewell_script() {
 fn replacing_the_talk_drops_the_break_note_with_one_talk_gone_line() {
     let mut s = steady_none();
     let first = start_translated(&mut s, 2_000, FINAL);
-    feed(&mut s, Input::UserBreak { scope: 1 });
+    feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 1,
+            talk_id: Some(first),
+        },
+    );
     assert_eq!(
         s.user_break_talk,
         Some(BreakNote {

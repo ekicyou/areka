@@ -116,7 +116,14 @@ fn unmarked_request_while_playing_reaches_at_the_end_of_the_talk() {
 #[test]
 fn user_break_without_quit_reservation_reaches() {
     let (s, _) = await_gap(steady_some());
-    let (s, actions) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, actions) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TALK),
+        },
+        &cfg(),
+    );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TALK),
         "中断は今日どおり止める指示を 1 件出す"
@@ -135,7 +142,14 @@ fn user_break_without_quit_reservation_reaches() {
 #[test]
 fn user_break_with_quit_reservation_goes_to_closing_as_today() {
     let (s, _) = await_gap(steady_some());
-    let (s, _) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, _) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TALK),
+        },
+        &cfg(),
+    );
     let done = TalkDone {
         talk_id: TALK,
         reason: TalkEndReason::Interrupted,
@@ -672,7 +686,14 @@ fn no_content_reply_is_reached_no_talk() {
 #[test]
 fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() {
     for quit_reserved in [true, false] {
-        let (s, _) = step(marked_talk_playing(), Input::UserBreak { scope: 0 }, &cfg());
+        let (s, _) = step(
+            marked_talk_playing(),
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(MARKED),
+            },
+            &cfg(),
+        );
         let mut out = None;
         let ev = capture(|| {
             out = Some(done_of(
@@ -712,7 +733,14 @@ fn the_same_script_without_the_mark_goes_to_closing_when_broken() {
     let (s, _) = reply(double_click(steady_none()), value(), "OnMouseDoubleClick");
     assert!(is_playing(&s, MARKED));
     let (s, _) = await_gap(s);
-    let (s, _) = step(s, Input::UserBreak { scope: 0 }, &cfg());
+    let (s, _) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(MARKED),
+        },
+        &cfg(),
+    );
     let (mut s, actions) = done_of(s, MARKED, TalkEndReason::Interrupted, true);
     assert!(matches!(
         s.phase,

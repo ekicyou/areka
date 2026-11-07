@@ -179,7 +179,7 @@ pub fn spawn_kanade_translating(
                     display_end,
                     timeout_directive_secs,
                 },
-                KanadeMsg::UserBreak { scope } => Input::UserBreak { scope },
+                KanadeMsg::UserBreak { scope, talk_id } => Input::UserBreak { scope, talk_id },
                 KanadeMsg::ChangeGhost(req) => Input::ChangeGhost(req),
                 KanadeMsg::RaiseEvent {
                     id,

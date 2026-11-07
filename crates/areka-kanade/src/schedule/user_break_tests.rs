@@ -18,8 +18,8 @@ fn config() -> KanadeConfig {
     KanadeConfig::new("master", "1.0.0")
 }
 
-/// 再生中のトークが無い場面を `phase` だけ差し替えて組む。
-fn not_playing(phase: Phase) -> State {
+/// 場面を `phase` だけ差し替えて組む（再生中のトークの有無は `phase` が決める）。
+fn with_phase(phase: Phase) -> State {
     State {
         phase,
         last_now: Some(MonotonicMs(500)),
@@ -37,16 +37,6 @@ fn active(talk_id: TalkId) -> ActiveTalk {
     }
 }
 
-/// 再生中のトークが在る場面を `phase` だけ差し替えて組む。
-fn playing(phase: Phase) -> State {
-    State {
-        phase,
-        last_now: Some(MonotonicMs(500)),
-        next_talk_id: 6,
-        ..State::initial()
-    }
-}
-
 /// 「再生中のトークが在る」場面のうち 3 つ（普段の会話・起動の挨拶・終了の挨拶。`fn current_talk_id` は
 /// 切り替えのお別れの 2 つの相でも番号を返すが、そこでの中断は切り替えの中止という別の結論なので並べない）。
 ///
@@ -55,19 +45,19 @@ fn playing_states(talk_id: TalkId) -> Vec<(&'static str, State)> {
     vec![
         (
             "Steady{Some}",
-            playing(Phase::Steady {
+            with_phase(Phase::Steady {
                 talk: Some(active(talk_id)),
             }),
         ),
         (
             "BootVersion{Some}",
-            playing(Phase::BootVersion {
+            with_phase(Phase::BootVersion {
                 talk: Some(active(talk_id)),
             }),
         ),
         (
             "CloseTalkWait",
-            playing(Phase::CloseTalkWait {
+            with_phase(Phase::CloseTalkWait {
                 talk_id,
                 deadline: Some(MonotonicMs(30_500)),
             }),
@@ -116,6 +106,9 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
     );
 }
 
+/// 場面の名と、その場面を組む関数の組。
+type PhaseCase = (&'static str, fn() -> Phase);
+
 // --- 判断分岐 ⑵: 止める再生が無い（要件 2.2・6.2） ---
 
 /// 再生中のトークが無ければ、中断の要求は何も止めず、状態を変えない（要件 2.2）。場面で
@@ -124,7 +117,7 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
 /// `balloon_events_idle_tests.rs`）。
 #[test]
 fn user_break_without_playing_talk_stops_nothing() {
-    let phases: [(&str, fn() -> Phase); 4] = [
+    let phases: [PhaseCase; 4] = [
         ("Steady{None}", || Phase::Steady { talk: None }),
         ("Idle", || Phase::Idle),
         ("Stopped", || Phase::Stopped),
@@ -133,8 +126,11 @@ fn user_break_without_playing_talk_stops_nothing() {
     ];
     for (label, phase) in phases {
         let (next, actions, ev) = step_capturing(
-            not_playing(phase()),
-            Input::UserBreak { scope: 1 },
+            with_phase(phase()),
+            Input::UserBreak {
+                scope: 1,
+                talk_id: None,
+            },
             &config(),
         );
         let expected: &[&str] = if label == "Steady{None}" {
@@ -195,7 +191,14 @@ fn user_break_without_playing_talk_stops_nothing() {
 fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
     for (label, state) in playing_states(TalkId(3)) {
         let before = std::mem::discriminant(&state.phase);
-        let (next, actions, ev) = step_capturing(state, Input::UserBreak { scope: 0 }, &config());
+        let (next, actions, ev) = step_capturing(
+            state,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(TalkId(3)),
+            },
+            &config(),
+        );
         match actions.as_slice() {
             [Action::CancelChoice { talk_id }] => assert_eq!(
                 *talk_id,
@@ -240,14 +243,24 @@ fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
 fn second_user_break_for_the_same_talk_is_ignored() {
     let cfg = config();
     let (accepted, first) = step(
-        playing(Phase::Steady {
+        with_phase(Phase::Steady {
             talk: Some(active(TalkId(3))),
         }),
-        Input::UserBreak { scope: 0 },
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(3)),
+        },
         &cfg,
     );
     assert_eq!(first.len(), 1, "1 件目は停止の指示を出す");
-    let (next, second, ev) = step_capturing(accepted, Input::UserBreak { scope: 0 }, &cfg);
+    let (next, second, ev) = step_capturing(
+        accepted,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(3)),
+        },
+        &cfg,
+    );
     assert!(
         second.is_empty(),
         "2 件目は指示を 1 つも出さない（要件 2.4）"
@@ -278,10 +291,13 @@ fn scope_number_does_not_change_the_verdict() {
     let cfg = config();
     for scope in [0_u32, 1, 7, u32::MAX] {
         let (next, actions) = step(
-            playing(Phase::Steady {
+            with_phase(Phase::Steady {
                 talk: Some(active(TalkId(3))),
             }),
-            Input::UserBreak { scope },
+            Input::UserBreak {
+                scope,
+                talk_id: Some(TalkId(3)),
+            },
             &cfg,
         );
         assert!(
@@ -297,8 +313,11 @@ fn scope_number_does_not_change_the_verdict() {
         );
 
         let (next, actions) = step(
-            not_playing(Phase::Steady { talk: None }),
-            Input::UserBreak { scope },
+            with_phase(Phase::Steady { talk: None }),
+            Input::UserBreak {
+                scope,
+                talk_id: None,
+            },
             &cfg,
         );
         assert!(
@@ -311,6 +330,77 @@ fn scope_number_does_not_change_the_verdict() {
     }
 }
 
+// --- 判断分岐 ⑷: 押されたバルーンのトークが今のトークでない（#6・要件 9.9） ---
+
+/// 読み終えたトーク X のバルーンを押した瞬間に Y が始まっていたら、Y は止めず、帳簿も控えず、
+/// 理由 `other_talk` を 1 行残して表 C（読み終えたバルーンを閉じた知らせ）へ渡す。表 C は再生中なら
+/// 送らない（C1）ので、SHIORI への要求も 0。
+#[test]
+fn a_break_for_another_talk_stops_nothing_and_goes_to_table_c() {
+    for (label, state) in playing_states(TalkId(3)) {
+        let (next, actions, ev) = step_capturing(
+            state,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(TalkId(2)),
+            },
+            &config(),
+        );
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a, Action::CancelChoice { .. })),
+            "{label}: 利用者が見ていない今のトークは止めない"
+        );
+        assert_no_shiori_request(&actions, label);
+        assert!(
+            next.user_break_talk.is_none(),
+            "{label}: 中断の相手を控えない"
+        );
+        let logged = logged_once(&ev, Level::DEBUG, "balloon_break_no_talk");
+        assert_eq!(
+            logged.fields.get("reason").map(String::as_str),
+            Some("other_talk"),
+            "{label}: 理由は「別のトーク」。\n捕捉={ev:#?}"
+        );
+        assert_eq!(
+            (
+                logged.fields.get("pressed_talk_id").map(String::as_str),
+                logged.fields.get("current_talk_id").map(String::as_str)
+            ),
+            (Some("2"), Some("3")),
+            "{label}: 両方の番号を載せる。\n捕捉={ev:#?}"
+        );
+    }
+}
+
+/// 表示の側が番号を知らない（`None`）なら、今どおり今のトークを止める。
+#[test]
+fn a_break_without_a_talk_id_stops_the_current_talk() {
+    for (label, state) in playing_states(TalkId(3)) {
+        let (next, actions) = step(
+            state,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: None,
+            },
+            &config(),
+        );
+        assert!(
+            matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TalkId(3)),
+            "{label}: 番号が無ければ今のトークを止める"
+        );
+        assert_eq!(
+            next.user_break_talk,
+            Some(BreakNote {
+                talk_id: TalkId(3),
+                scope: 0
+            }),
+            "{label}: 今のトークを帳簿に控える"
+        );
+    }
+}
+
 // --- 判断分岐 ⑶: 選択肢を待っている最中の中断（要件 2.6・9.4） ---
 
 /// 選択待ちの最中に中断を受け入れたら、その時点で帳簿を消す。完了通知の前でも後でも、
@@ -318,7 +408,7 @@ fn scope_number_does_not_change_the_verdict() {
 #[test]
 fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
     let cfg = config();
-    let mut waiting = playing(Phase::Steady {
+    let mut waiting = with_phase(Phase::Steady {
         talk: Some(active(TalkId(3))),
     });
     waiting.choice = Some(ChoiceState {
@@ -328,7 +418,14 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
         phase: ChoicePhase::Waiting,
     });
 
-    let (accepted, actions) = step(waiting, Input::UserBreak { scope: 0 }, &cfg);
+    let (accepted, actions) = step(
+        waiting,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(3)),
+        },
+        &cfg,
+    );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TalkId(3)),
         "選択待ちの最中でも停止の指示は 1 件だけ"
@@ -375,10 +472,13 @@ fn user_break_while_choice_waiting_drops_the_ledger_before_any_timeout() {
 /// 中断を受け入れた状態（定常で `TalkId(3)` を再生中 → 中断 1 件）を組む。
 fn after_user_break(cfg: &KanadeConfig) -> State {
     let (accepted, actions) = step(
-        playing(Phase::Steady {
+        with_phase(Phase::Steady {
             talk: Some(active(TalkId(3))),
         }),
-        Input::UserBreak { scope: 0 },
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(3)),
+        },
         cfg,
     );
     assert_eq!(actions.len(), 1, "前提: 中断は受け入れられている");
@@ -450,7 +550,7 @@ fn user_break_without_reserved_quit_returns_to_steady() {
 #[test]
 fn reserved_quit_without_user_break_does_not_end_the_ghost() {
     let cfg = config();
-    let playing_without_break = playing(Phase::Steady {
+    let playing_without_break = with_phase(Phase::Steady {
         talk: Some(active(TalkId(3))),
     });
     assert!(
@@ -494,11 +594,14 @@ fn next_tick_after_user_break_asks_for_the_next_talk() {
 fn user_break_during_the_farewell_talk_ends_the_ghost() {
     let cfg = config();
     let (accepted, actions) = step(
-        playing(Phase::CloseTalkWait {
+        with_phase(Phase::CloseTalkWait {
             talk_id: TalkId(3),
             deadline: Some(MonotonicMs(30_500)),
         }),
-        Input::UserBreak { scope: 0 },
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(TalkId(3)),
+        },
         &cfg,
     );
     assert_eq!(actions.len(), 1, "前提: 別れの台詞の中断も受け入れられる");
@@ -529,7 +632,7 @@ fn user_break_ledger_is_emptied_by_any_completion_of_the_current_talk() {
         ("Quit", TalkEndReason::Quit),
         ("Interrupted", TalkEndReason::Interrupted),
     ] {
-        let mut state = playing(Phase::Steady {
+        let mut state = with_phase(Phase::Steady {
             talk: Some(active(TalkId(3))),
         });
         state.user_break_talk = Some(BreakNote {

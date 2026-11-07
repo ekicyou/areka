@@ -618,7 +618,14 @@ fn farewell_talk_drops_talking_after_every_ending() {
             step(state, done(talk_id, TalkEndReason::Quit), &config())
         }),
         ("利用者の中断", |state, talk_id| {
-            let (state, stop) = step(state, Input::UserBreak { scope: 0 }, &config());
+            let (state, stop) = step(
+                state,
+                Input::UserBreak {
+                    scope: 0,
+                    talk_id: Some(talk_id),
+                },
+                &config(),
+            );
             assert!(
                 matches!(stop.as_slice(), [Action::CancelChoice { .. }]),
                 "中断を受理して止める"
