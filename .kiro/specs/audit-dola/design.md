@@ -104,6 +104,7 @@ flowchart LR
 - **後の段**（C18 のほかの 7 本＝`wintf-visual-tree`・`placement-crate-split`・`audit-wintf-layout-widget`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-kanade`・`audit-sylphya-actor` がすべて `main` に着地した後）: 公開の形を変える 18 件（#11〜#19・#25・#26・#52・#56・#66・#70・#73・#77・#78）と件 2（要件 8.2・8.3）と要件 7.9。後の段の最初のタスクの頭で、7 本の着地を `git log origin/main` で確かめ、`main` を枝へ取り込み、消す口の呼び手をツリー全体で grep し直し、本体 `crates/areka/` などに触るそのときのセッションと申し合わせる（要件 6.1）。
 - 1 本の spec・1 本の枝・1 本の PR のまま（要件 11.1）。前の段の直しも、完了の PR で `main` へ入る。
 - **C19 との重なり**（2026-11-06 設計の討議 議題 1・開発者「承認」）: 後の段は C18 の着地のすぐ後に走り切る（4 束・本体に触るのは `emo2_boot/frame/window_state_tests.rs` と `emo2_boot/talk_lifecycle.rs` の 2 ファイルだけ）。C19 の見込みの `dola-yaml-backend` は本 spec の着地を待ち、`runtime-module-untangle` は `emo2_boot/` を `runtime/` へ改名するので本体の 2 ファイルで重なる＝この 2 点を、ウェーブを組むセッションへ共有メモで申し送った。C19 が先に始まったときは、`runtime-module-untangle` のセッションと申し合わせ、改名の後の道で直す。後の段の頭の grep のし直しは、道の改名（`emo2_boot` → `runtime`・`placement-crate-split` による `crate::placement::` の書き換え）も拾う。
+- **C18 の先行 3 本の取り込み**（2026-11-07）: `placement-crate-split`（PR#433）・`wintf-visual-tree`（PR#434）・`audit-emo-text-state-actor`（PR#435）の着地を枝へ取り込んだ（競合なし）。`crates/dola/` と wintf の `ecs/dola/mod.rs` は変わらず、前の段の直しと重ならない。本体の 2 ファイルは道が変わらず（`window_state_tests.rs:496`・`talk_lifecycle.rs:290`）、emo-text の `EntityRef` の 3 か所は行だけ動いた（上の表に反映）。残りの 4 本の着地は後の段の門（タスク 17.1）で確かめる。
 
 ### Technology Stack
 
@@ -177,9 +178,9 @@ crates/dola/
 | `crates/areka-sakura/src/compile_sheet_tests.rs` | 前 | 件 1（#8） | 2 本（`trailing_explicit_wait_remains_in_sheet_and_extends_extent`・`append_epilogue_appends_carrier_at_tail_horizon_without_extending`）の期待を格子の値か `absolute_end_time()` から作る |
 | `crates/wintf/src/ecs/dola/mod.rs` | 前 | #38・#39 | `tick_dola_animators` で `TriggerResult::Error` を `error!` に・旗の判断に `has_instances()`・旗の説明（175-181 行目）を直す・檻 1 本 |
 | `crates/areka/src/emo2_boot/frame/window_state_tests.rs` | 後 | 件 2 | 496 行目の `player.stop()` を、player を捨てる形（`drive.rs` の `drop(player)` と同じ）へ |
-| `crates/areka/src/emo2_boot/talk_lifecycle.rs` | 後 | 7.9 | 288 行目の `cue.at + cue.duration` を `dola::cue::sum_on_ms_grid(cue.at, cue.duration)` へ・286-287 行目の注も |
+| `crates/areka/src/emo2_boot/talk_lifecycle.rs` | 後 | 7.9 | 290 行目の `cue.at + cue.duration` を `dola::cue::sum_on_ms_grid(cue.at, cue.duration)` へ・288-289 行目の注と 9 行目の冒頭の説明の式も |
 | `crates/areka-seriko/src/actor.rs`・`actor_dispatch_tests.rs` | 後 | #17 | `EntityRef` の守りの枝（742-752 行目）と、その記録の檻（157-212 行目ほか・注の語）を消す |
-| `crates/areka-emo-text/src/actor.rs`・`state.rs`・`state_cue_apply_tests.rs` | 後 | #17 | `EntityRef` の腕（actor.rs:412・state.rs:674）とテスト（581 行目）を消す |
+| `crates/areka-emo-text/src/actor.rs`・`state.rs`・`state_cue_apply_tests.rs` | 後 | #17 | `EntityRef` の腕（actor.rs:469・state.rs:692）とテスト（503 行目）を消す（行は `audit-emo-text-state-actor` の着地の後・2026-11-07 に測り直した） |
 | `crates/areka-ghost/src/sink.rs` | 後 | #17 | `command_kind` の `EntityRef` の腕（120 行目）とテスト（252 行目）を消す |
 | `crates/areka-sakura/src/drive_delivery_tests.rs` | 後 | #77 | `PendingChoice { .. }` の `text` の欄（613-621 行目）を消す |
 | `Cargo.lock` | 後 | #25 | `toml` 0.8 の項と dola の依存の行（cargo が書く） |
@@ -353,7 +354,7 @@ pub fn has_instances(&self) -> bool;
 | 5 | 前 | 依存のグラフに配列順の辺（上の「コンパイル」）。78-79 行目の注を直す | — | 新 2 本: 前方参照のある連結（期待 [5,6] 0→1・[6,7] 1→2）と、at の無い keyframe を挟む正しい文書が通る（`tests/compile/time_resolution_test/sequential.rs`） |
 | 6 | 前 | 根ごとの呼び出しの後で `path`・`in_stack` を空に、根は `doc.storyboard.keys()`（`BTreeMap` の順）で回す。DFS は #49 で反復 | — | 新 `trigger_cycle_reported_once_without_bystander`（{a→b, b→a, c→a} で `TriggerCycle` がちょうど 1 件・中身 [a,b,a]）・改 `validation_test.rs:377-385` の集合の比べ（`tests/trigger/validation_test.rs`） |
 | 7 | 前 | `detect_overlaps` の 153-180 行目を消し、同じ変数に生きた項目があれば競合（要件 11.8）。176 行目の P 番号の注も | — | 新 `never_blocks_overlap_on_wall_clock`（A Never を t=0・x は delay 5、B を t=5.0 → B は `Err(Conflict)`）（`tests/runtime/conflict_resolution_test/conflict_detection.rs`） |
-| 8 | 前 | 件 1: `sum_on_ms_grid` を足し、上の 7 か所で使う | 前: `areka-sakura/src/compile_sheet_tests.rs` の 2 本。後: `areka/src/emo2_boot/talk_lifecycle.rs:288`（7.9） | 新 4 本（下の「テストの方針」の件 1）・改 T1 の 1 本を `tick(0.95)` に（`runtime_test_broadcast_tests.rs:210-250`）・ほかの T1 は期待を `absolute_end_time()` から |
+| 8 | 前 | 件 1: `sum_on_ms_grid` を足し、上の 7 か所で使う | 前: `areka-sakura/src/compile_sheet_tests.rs` の 2 本。後: `areka/src/emo2_boot/talk_lifecycle.rs:290`（7.9） | 新 4 本（下の「テストの方針」の件 1）・改 T1 の 1 本を `tick(0.95)` に（`runtime_test_broadcast_tests.rs:210-250`）・ほかの T1 は期待を `absolute_end_time()` から |
 
 ### Should fix（cue の層）
 
@@ -474,7 +475,7 @@ pub fn has_instances(&self) -> bool;
 
 - **件 2**（要件 8）: 前の段では `CuePlayer::stop` に触らない（8.1）。後の段で `stop` を消し、`window_state_tests.rs:496` の `player.stop()` を player を捨てる形（`drop(player)`）に直す（8.2）。`skip_barrier` も消す（8.3・#15）。dola の中の呼び手（`runtime_test_broadcast_tests.rs:293`・`runtime_test_occupancy_horizon_tests.rs:168`）も捨てる形へ。中断した台本で状態が変わらないことは `script_stopped_before_the_directive_leaves_the_state` が捨てる形で縛り続ける（8.4）。audit は `stop` を別の指摘にしていない＝件 2 と同じものとして扱う（8.5）。
 - **件 3**（要件 9）: 26 か所。`collapsible_if` 18（`validate/rules.rs` 11・`validate/mod.rs` 3・`timeline_manager/mod.rs` 2・`subscription_manager/mod.rs`・`conflict_resolver.rs`）は振る舞いを変えずに畳む。`too_many_arguments` は `instance_manager/mod.rs:71` を #60 で消し、`compile/resolve.rs:284` に `#[expect(clippy::too_many_arguments, reason = "...")]`（理由＝「解決の途中の表を 1 か所で受ける私的な関数で、束の型を作ると同じ欄の写しが増える」・要件 11.12）。`manual_range_contains` 2（`loop_controller/tests.rs`）・`doc_lazy_continuation`（`facade.rs:323` の字下げ）・`assertions_on_constants`（`schedule_test.rs:827` を `const { assert!(..) }`）・`module_inception`（`conflict_detection.rs:6` の入れ子の mod を外す）・`single_match`（#41）。公開の関数の引数の数は変えない（9.3）。`clippy-199-lints` の brief に済んだ記録を足す（9.4）。
-- **要件 7.9**（後の段）: `sum_on_ms_grid` を `pub` にして `dola::cue` から再公開し、`talk_lifecycle.rs:288` を `dola::cue::sum_on_ms_grid(cue.at, cue.duration)` にする（直後の非有限の守りはそのまま）。
+- **要件 7.9**（後の段）: `sum_on_ms_grid` を `pub` にして `dola::cue` から再公開し、`talk_lifecycle.rs:290` を `dola::cue::sum_on_ms_grid(cue.at, cue.duration)` にする（直後の非有限の守りはそのまま）。
 
 ## タスクの束と見立て
 
