@@ -83,9 +83,7 @@ fn a_state_outside_the_termination_sequence_carries_no_cause() {
         Phase::Idle,
         Phase::Steady { talk: None },
         Phase::Stopped,
-        Phase::ClosePending {
-            reason: crate::msg::CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
     ] {
         assert_eq!(
             stop_cause_of(&state_in(phase)),

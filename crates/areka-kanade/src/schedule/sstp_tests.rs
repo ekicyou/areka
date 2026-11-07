@@ -479,12 +479,7 @@ fn send_is_not_accepted_outside_the_steady_state() {
                 talk: active(1, BOOT_GREETING_ORIGIN),
             },
         ),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("CloseTalkWait", Phase::CloseTalkWait { talk_id, deadline }),
         ("ChangePending", Phase::ChangePending),
         (

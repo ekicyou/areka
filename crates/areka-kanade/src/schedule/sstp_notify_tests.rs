@@ -372,12 +372,7 @@ fn notify_is_not_accepted_outside_the_steady_state() {
         ("BootType", Phase::BootType),
         ("BootMain", Phase::BootMain),
         ("BootVersion{None}", Phase::BootVersion { talk: None }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("CloseTalkWait", Phase::CloseTalkWait { talk_id, deadline }),
         ("ChangePending", Phase::ChangePending),
         (

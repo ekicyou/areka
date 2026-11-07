@@ -191,12 +191,7 @@ fn d2_notice_one_behind_a_cueless_talk_is_dropped() {
 fn d1_not_steady_phases_send_nothing_and_record_why() {
     let phases = [
         ("BootVersion", Phase::BootVersion { talk: None }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("ChangePending", Phase::ChangePending),
         ("ChangeClosePending", Phase::ChangeClosePending),
         (

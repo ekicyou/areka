@@ -76,9 +76,7 @@ fn name_not_starting_with_on_is_sent_verbatim() {
 fn boot_and_shutdown_phases_drop_with_one_warn() {
     let phases = [
         Phase::BootMain,
-        Phase::ClosePending {
-            reason: CloseReason::System,
-        },
+        Phase::ClosePending,
         Phase::Unloading {
             cause: TermCause::Quit,
         },

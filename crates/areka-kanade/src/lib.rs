@@ -36,9 +36,6 @@ pub mod msg;
 pub mod online;
 pub mod request_origin;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
-// schedule には書くだけで読まない欄（`ClosePending.reason`・`ActiveTalk.origin`）が残り、
-// 外すと dead_code が鳴るため allow を付けたままにしてある。
-#[allow(dead_code)]
 pub(crate) mod schedule;
 pub mod shiori;
 // SSTP の入口の外向けの型と検査（MCP の側と送出の檻が使う正本・std だけ）。

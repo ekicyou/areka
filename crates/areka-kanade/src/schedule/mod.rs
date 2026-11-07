@@ -375,7 +375,7 @@ fn phase_label(phase: &Phase) -> &'static str {
         Phase::BootMain => "BootMain",
         Phase::BootVersion { .. } => "BootVersion",
         Phase::Steady { .. } => "Steady",
-        Phase::ClosePending { .. } => "ClosePending",
+        Phase::ClosePending => "ClosePending",
         Phase::CloseTalkWait { .. } => "CloseTalkWait",
         Phase::ChangePending => "ChangePending",
         Phase::ChangeTalkWait { .. } => "ChangeTalkWait",
@@ -608,9 +608,7 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
         | Phase::BootMain
         | Phase::BootVersion { .. } => boot::step(state, input, config),
         Phase::Steady { .. } => steady::step(state, input),
-        Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
-            close::step(state, input, config)
-        }
+        Phase::ClosePending | Phase::CloseTalkWait { .. } => close::step(state, input, config),
         Phase::ChangePending
         | Phase::ChangeTalkWait { .. }
         | Phase::ChangeClosePending
@@ -640,7 +638,7 @@ fn awaits_reply(phase: &Phase) -> bool {
             | Phase::BootMain
             | Phase::BootVersion { .. }
             | Phase::Steady { .. }
-            | Phase::ClosePending { .. }
+            | Phase::ClosePending
             | Phase::ChangePending
             | Phase::ChangeClosePending
     )

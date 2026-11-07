@@ -698,7 +698,7 @@ fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
         &actions[0],
         &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
 }
 
 #[test]
@@ -757,6 +757,6 @@ fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
         &actions[0],
         &events::on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE),
     );
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
     assert!(s.pending_close.is_none());
 }

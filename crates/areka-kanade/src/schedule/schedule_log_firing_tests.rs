@@ -302,9 +302,7 @@ fn warn_steady_phase_unexpected_logs() {
 fn warn_close_notified_unexpected_logs() {
     // ClosePending + Notified（OnClose は GET ゆえ構造上あり得ない）→ close_notified_unexpected。
     let ev = run_step(
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Input::ShioriReply {
             outcome: ShioriOutcome::Notified,
             origin: "test",
@@ -317,9 +315,7 @@ fn warn_close_notified_unexpected_logs() {
 fn warn_close_reply_unexpected_logs() {
     // ClosePending + Unloaded（Value/NoContent/Notified 以外）→ close_reply_unexpected。
     let ev = run_step(
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Input::ShioriReply {
             outcome: ShioriOutcome::Unloaded,
             origin: "test",
@@ -332,9 +328,7 @@ fn warn_close_reply_unexpected_logs() {
 fn warn_close_pending_input_ignored_logs() {
     // ClosePending + 無関係入力（CloseRequest）→ close_pending_input_ignored。
     let ev = run_step(
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Input::CloseRequest {
             reason: CloseReason::User { scope: 0 },
         },
@@ -750,13 +744,7 @@ fn trace_mouse_input_ignored_logs_dropped_drag_input() {
         (MouseEventKind::DragStart, "DragStart"),
         (MouseEventKind::DragEnd, "DragEnd"),
     ] {
-        for phase in [
-            Phase::BootMain,
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-            Phase::Stopped,
-        ] {
+        for phase in [Phase::BootMain, Phase::ClosePending, Phase::Stopped] {
             let ev = run_step(phase, drag_input(kind));
             let ignored = logged_once(&ev, Level::TRACE, "mouse_input_ignored");
             let input = ignored.fields.get("input").map(String::as_str);

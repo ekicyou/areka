@@ -263,9 +263,7 @@ fn request_outside_steady_or_with_pending_close_is_not_steady() {
         (
             "ClosePending",
             State {
-                phase: Phase::ClosePending {
-                    reason: CloseReason::System,
-                },
+                phase: Phase::ClosePending,
                 ..steady_none()
             },
         ),

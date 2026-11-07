@@ -93,7 +93,7 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
             // 中止のあとの終了要求は今日どおり OnClose を出す（要件 5.6）。
             let (after, actions) = close_request(s);
             assert_eq!(only_get(&actions).0, "OnClose", "{label}");
-            assert!(matches!(after.phase, Phase::ClosePending { .. }), "{label}");
+            assert!(matches!(after.phase, Phase::ClosePending), "{label}");
         }
     }
 }
@@ -171,12 +171,7 @@ fn close_request_while_waiting_changing_reply_waits_for_it_then_closes() {
     );
     let (s, actions) = talk_done(s, TalkId(5), TalkEndReason::Ended);
     assert_eq!(on_close_sends(&actions), 1, "OnClose はここで 1 件");
-    assert!(matches!(
-        s.phase,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 }
-        }
-    ));
+    assert!(matches!(s.phase, Phase::ClosePending));
 
     // 204 が返った: そのまま今日の OnClose の握手へ。
     let (s, _) = step(
@@ -187,12 +182,7 @@ fn close_request_while_waiting_changing_reply_waits_for_it_then_closes() {
     let s = yield_to_close(s);
     let (s, actions) = reply(s, ShioriOutcome::NoContent);
     assert_eq!(only_get(&actions).0, "OnClose");
-    assert!(matches!(
-        s.phase,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 }
-        }
-    ));
+    assert!(matches!(s.phase, Phase::ClosePending));
     assert!(s.pending_close.is_none(), "保留の終了は消化される");
 }
 
@@ -209,7 +199,7 @@ fn close_request_during_changing_talk_lets_it_finish_then_closes() {
     ));
     let (s, actions) = talk_done(s, talk_id, TalkEndReason::Ended);
     assert_eq!(on_close_sends(&actions), 1, "台詞の完了で OnClose を 1 件");
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
 }
 
 #[test]
@@ -223,12 +213,7 @@ fn close_request_after_change_on_close_was_sent_never_sends_it_again() {
     let (s, _) = reply(s, ShioriOutcome::NoContent);
     assert!(matches!(s.phase, Phase::ChangeClosePending));
     let s = yield_to_close(s);
-    assert!(matches!(
-        s.phase,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 }
-        }
-    ));
+    assert!(matches!(s.phase, Phase::ClosePending));
     let (s, a1) = reply(
         s,
         ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),

@@ -378,7 +378,7 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
                 }),
             }
         }
-        Phase::ChangeClosePending => Phase::ClosePending { reason },
+        Phase::ChangeClosePending => Phase::ClosePending,
         Phase::ChangeCloseTalkWait { talk_id, deadline } => {
             Phase::CloseTalkWait { talk_id, deadline }
         }

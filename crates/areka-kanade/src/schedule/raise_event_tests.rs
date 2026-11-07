@@ -56,9 +56,7 @@ fn event_not_in_allowed_table_is_dropped_with_one_warn() {
 fn request_outside_steady_is_dropped_with_one_warn_and_not_queued() {
     let phases = [
         Phase::BootMain,
-        Phase::ClosePending {
-            reason: CloseReason::System,
-        },
+        Phase::ClosePending,
         Phase::ChangePending,
         Phase::Unloading {
             cause: TermCause::Quit,

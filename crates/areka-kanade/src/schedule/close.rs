@@ -6,10 +6,10 @@
 //! であり、本モジュールはその応答（Value／NoContent）分岐から先を実装する。
 //!
 //! # close 握手の状態遷移（Req 4.1〜4.7・DD-11）
-//! - `ClosePending{reason}` + `ShioriReply{Value(script)}` → 応答スクリプトを一意 talk_id
+//! - `ClosePending` + `ShioriReply{Value(script)}` → 応答スクリプトを一意 talk_id
 //!   で再生起動要求（StartTalk）として配送し、`CloseTalkWait` へ遷移して再生完了通知を
 //!   待つ（Req 4.2・2.1・運行保留）。
-//! - `ClosePending{reason}` + `ShioriReply{NoContent}`（204）→ **応答なし＝無言終了**
+//! - `ClosePending` + `ShioriReply{NoContent}`（204）→ **応答なし＝無言終了**
 //!   （DD-11: 204 は拒否ではない・OnCloseAll は発行しない）。追加イベントを発行せず
 //!   `Unloading{CloseSilent}` へ直行する（Req 4.6）。
 //! - `CloseTalkWait{talk_id}` + `TalkDone{talk_id, reason: Ended | Interrupted}` →
@@ -39,7 +39,7 @@ use crate::talk::StartTalk;
 /// `TalkEndReason::Quit`・ForceQuit・ShioriDown・Failed は横断アームで捌かれ本層には届かない。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
-        Phase::ClosePending { .. } => on_close_pending(state, input, config),
+        Phase::ClosePending => on_close_pending(state, input, config),
         Phase::CloseTalkWait { .. } => on_close_talk_wait(state, input, config),
         // ルーティング上ここには ClosePending / CloseTalkWait 以外は届かない（防御アーム）。
         _ => {
@@ -210,7 +210,6 @@ pub(super) fn talk_wait_tick(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msg::CloseReason;
     use crate::schedule::log_capture::{capture, logged_once};
     use crate::schedule::step;
     use crate::talk::{TalkDone, TalkEndReason, TalkId};
@@ -228,9 +227,9 @@ mod tests {
     }
 
     /// ClosePending 状態を任意の last_now / next_id で構築する。
-    fn close_pending(reason: CloseReason, last_now: Option<MonotonicMs>, next_id: u64) -> State {
+    fn close_pending(last_now: Option<MonotonicMs>, next_id: u64) -> State {
         State {
-            phase: Phase::ClosePending { reason },
+            phase: Phase::ClosePending,
             last_now,
             next_talk_id: next_id,
             ..State::initial()
@@ -260,7 +259,7 @@ mod tests {
     fn value_starts_close_talk_then_quit_unloads() {
         let d = 30_000; // 既定。
         let (s1, actions1) = step(
-            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
@@ -317,7 +316,7 @@ mod tests {
     #[test]
     fn value_then_ended_proceeds_to_quit() {
         let (s1, _a1) = step(
-            close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("stay".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
@@ -377,7 +376,7 @@ mod tests {
     #[test]
     fn value_then_interrupted_proceeds_to_quit_same_as_ended() {
         let (s1, _a1) = step(
-            close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("stay".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
@@ -418,7 +417,7 @@ mod tests {
     #[test]
     fn no_content_causes_silent_close() {
         let (next, actions) = step(
-            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
                 origin: "test",
@@ -556,19 +555,14 @@ mod tests {
     #[test]
     fn close_pending_tick_updates_last_now_and_stays() {
         let (next, actions) = step(
-            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000)), 5),
             Input::Tick {
                 now: MonotonicMs(2_000),
             },
             &config(),
         );
         assert!(
-            matches!(
-                next.phase,
-                Phase::ClosePending {
-                    reason: CloseReason::User { scope: 0 }
-                }
-            ),
+            matches!(next.phase, Phase::ClosePending),
             "ClosePending を維持"
         );
         assert_eq!(
@@ -584,7 +578,7 @@ mod tests {
     #[test]
     fn value_with_no_prior_tick_enters_wait_with_none_deadline() {
         let (next, actions) = step(
-            close_pending(CloseReason::System, None, 5),
+            close_pending(None, 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
                 origin: "test",
@@ -606,19 +600,14 @@ mod tests {
     #[test]
     fn close_pending_notified_is_defensive_and_stays() {
         let (next, actions) = step(
-            close_pending(CloseReason::User { scope: 0 }, Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
                 origin: "test",
             },
             &config(),
         );
-        assert!(matches!(
-            next.phase,
-            Phase::ClosePending {
-                reason: CloseReason::User { scope: 0 }
-            }
-        ));
+        assert!(matches!(next.phase, Phase::ClosePending));
         assert!(actions.is_empty());
     }
 

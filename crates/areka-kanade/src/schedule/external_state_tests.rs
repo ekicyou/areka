@@ -38,12 +38,7 @@ fn phases() -> Vec<(&'static str, Phase)> {
     vec![
         ("Idle", Phase::Idle),
         ("Steady{Some}", Phase::Steady { talk: talk() }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("ChangePending", Phase::ChangePending),
         (
             "Unloading",
@@ -440,7 +435,7 @@ fn plays_a_talk(phase: &Phase) -> bool {
         }
         Phase::BootVersion { talk: None } | Phase::Steady { talk: None } => false,
         Phase::BootVersion { talk: Some(_) } | Phase::Steady { talk: Some(_) } => true,
-        Phase::ClosePending { .. } | Phase::ChangePending | Phase::ChangeClosePending => false,
+        Phase::ClosePending | Phase::ChangePending | Phase::ChangeClosePending => false,
         Phase::CloseTalkWait { .. }
         | Phase::ChangeTalkWait { .. }
         | Phase::ChangeCloseTalkWait { .. } => true,

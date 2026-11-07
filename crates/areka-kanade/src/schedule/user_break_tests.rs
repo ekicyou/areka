@@ -9,7 +9,7 @@ use super::super::balloon_events::BreakNote;
 use super::super::{
     Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, log_capture, step,
 };
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall};
+use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use log_capture::{CapturedEvent, capture, logged_once};
 use tracing::Level;
@@ -129,9 +129,7 @@ fn user_break_without_playing_talk_stops_nothing() {
         ("Idle", || Phase::Idle),
         ("Stopped", || Phase::Stopped),
         // `OnClose` の応答待ち。再生中のトークが無いので同じ腕に落ちる（設計「on_user_break の規則」）。
-        ("ClosePending", || Phase::ClosePending {
-            reason: CloseReason::System,
-        }),
+        ("ClosePending", || Phase::ClosePending),
     ];
     for (label, phase) in phases {
         let (next, actions, ev) = step_capturing(

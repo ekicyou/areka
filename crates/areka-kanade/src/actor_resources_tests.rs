@@ -1,5 +1,5 @@
 use super::*;
-use crate::msg::{CloseReason, ShioriCall, ShioriFailure, ShioriOutcome};
+use crate::msg::{ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::{ActiveTalk, TermCause};
 use crate::talk::TalkId;
 use areka_actor::reply_channel;
@@ -30,9 +30,7 @@ fn all_phases() -> Vec<Phase> {
         Phase::Steady {
             talk: Some(active_talk()),
         },
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Phase::CloseTalkWait {
             talk_id: TalkId(7),
             deadline: None,
@@ -68,7 +66,7 @@ fn expected_queryable(phase: &Phase) -> bool {
         | Phase::BootType
         | Phase::BootMain
         | Phase::BootVersion { .. }
-        | Phase::ClosePending { .. }
+        | Phase::ClosePending
         | Phase::CloseTalkWait { .. }
         | Phase::ChangePending
         | Phase::ChangeTalkWait { .. }

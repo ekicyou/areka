@@ -132,9 +132,8 @@ pub(crate) enum Phase {
     Steady {
         talk: Option<ActiveTalk>,
     },
-    ClosePending {
-        reason: CloseReason,
-    },
+    /// `OnClose` の応答待ち（終了の理由は `OnClose` を組んだ時点で使い切る）。
+    ClosePending,
     CloseTalkWait {
         talk_id: TalkId,
         deadline: Option<MonotonicMs>,

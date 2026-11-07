@@ -111,12 +111,7 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
     s.pending_close = Some(CloseReason::User { scope: 0 });
     let (next, actions) = step(s, Input::Tick { now }, &config());
     assert!(
-        matches!(
-            next.phase,
-            Phase::ClosePending {
-                reason: CloseReason::User { scope: 0 }
-            }
-        ),
+        matches!(next.phase, Phase::ClosePending),
         "pending_close あり Tick は握手を開始し ClosePending へ"
     );
     assert!(next.pending_close.is_none(), "pending_close は消化される");
@@ -158,9 +153,7 @@ fn boot_phase_tick_emits_no_second_change() {
 #[test]
 fn close_pending_tick_emits_no_second_change() {
     let s = State {
-        phase: Phase::ClosePending {
-            reason: CloseReason::System,
-        },
+        phase: Phase::ClosePending,
         ..base_state()
     };
     let (_next, actions) = step(
@@ -552,12 +545,7 @@ fn steady_talk_done_with_pending_close_begins_handshake() {
         &config(),
     );
     assert!(
-        matches!(
-            next.phase,
-            Phase::ClosePending {
-                reason: CloseReason::System
-            }
-        ),
+        matches!(next.phase, Phase::ClosePending),
         "talk 完了時に保留 close を消化して握手開始"
     );
     assert!(next.pending_close.is_none(), "pending_close は消化される");
@@ -581,12 +569,7 @@ fn steady_none_close_request_begins_handshake_now() {
         },
         &config(),
     );
-    assert!(matches!(
-        next.phase,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 }
-        }
-    ));
+    assert!(matches!(next.phase, Phase::ClosePending));
     assert_eq!(actions.len(), 1);
     assert_shiori(
         &actions[0],

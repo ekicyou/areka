@@ -190,7 +190,6 @@ fn phase_shape(phase: &Phase) -> String {
         | Phase::ChangeCloseTalkWait { talk_id, deadline } => {
             format!("{label}({}, {deadline:?})", talk_id.0)
         }
-        Phase::ClosePending { reason } => format!("{label}({reason:?})"),
         _ => label.to_string(),
     }
 }

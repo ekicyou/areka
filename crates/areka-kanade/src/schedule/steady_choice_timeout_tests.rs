@@ -601,7 +601,7 @@ fn close_handshake_transition_clears_choice_ledger() {
         }),
         &cfg,
     );
-    assert!(matches!(next.phase, Phase::ClosePending { .. }));
+    assert!(matches!(next.phase, Phase::ClosePending));
     assert_eq!(close_actions.len(), 1, "握手開始は OnClose GET を発行する");
     assert!(
         next.choice.is_none(),

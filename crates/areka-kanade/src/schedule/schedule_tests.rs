@@ -299,9 +299,7 @@ fn mouse_input_in_non_steady_phases_is_ignored() {
     for phase in [
         Phase::Idle,
         Phase::BootMain,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Phase::Stopped,
     ] {
         let before = std::mem::discriminant(&phase);
@@ -484,9 +482,7 @@ fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
                 script: String::new(),
             }),
         },
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Phase::Stopped,
     ] {
         let before = std::mem::discriminant(&phase);
@@ -638,9 +634,7 @@ fn choice_waiting_in_non_steady_phase_does_not_establish_ledger() {
                 script: String::new(),
             }),
         },
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
     ] {
         let before = std::mem::discriminant(&phase);
         let (next, actions) = step(

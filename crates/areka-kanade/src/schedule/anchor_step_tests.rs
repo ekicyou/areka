@@ -5,7 +5,6 @@
 //! 入れ直して、送った GET の列と始めた台詞を数える。実 SHIORI は使わない。期待はすべて手書き。
 
 use super::*;
-use crate::msg::CloseReason;
 use crate::schedule::log_capture::assert_not_logged;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ChoicePhase, ChoiceState, TermCause, phase_label};
@@ -349,9 +348,7 @@ fn anchor_outside_steady_is_rejected_and_nothing_is_queued() {
     let phases = [
         Phase::Idle,
         Phase::BootMain,
-        Phase::ClosePending {
-            reason: CloseReason::System,
-        },
+        Phase::ClosePending,
         Phase::ChangePending,
         Phase::Unloading {
             cause: TermCause::Quit,

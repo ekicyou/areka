@@ -87,12 +87,7 @@ fn c4_without_shown_talk_sends_empty_script_with_a_warning() {
 fn c1_not_steady_phases_send_nothing_and_record_why() {
     let phases = [
         ("BootVersion", Phase::BootVersion { talk: None }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("ChangePending", Phase::ChangePending),
         ("ChangeClosePending", Phase::ChangeClosePending),
         (

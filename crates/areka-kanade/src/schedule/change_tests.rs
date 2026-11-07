@@ -194,9 +194,7 @@ fn reject_outside_idle_steady_warns_notifies_and_keeps_state() {
         },
         pending_close,
         State {
-            phase: Phase::ClosePending {
-                reason: CloseReason::System,
-            },
+            phase: Phase::ClosePending,
             ..steady()
         },
         accepted,
@@ -502,7 +500,7 @@ fn pending_close_wins_over_held_change() {
         "切替の中止（終了要求）を通知する"
     );
     assert_eq!(sent_events(&actions), vec!["OnClose".to_string()]);
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
     assert!(s.pending_change.is_none() && s.change.is_none());
 }
 
