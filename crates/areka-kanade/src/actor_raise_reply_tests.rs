@@ -309,7 +309,7 @@ fn name_outside_the_table_is_not_allowed_and_nothing_is_sent() {
 
 /// 返信端が無い依頼もそのまま送られ、次の依頼も受ける。
 #[test]
-fn without_reply_the_event_is_sent_as_today() {
+fn without_reply_the_event_is_still_sent() {
     let rig = spawn_rig(Box::new(|| {
         ShioriOutcome::Value("\\h\\s[0]はい\\e".into(), areka_talk::SecurityLevel::Local)
     }));

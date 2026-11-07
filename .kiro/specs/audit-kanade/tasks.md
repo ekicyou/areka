@@ -296,7 +296,7 @@
   - `cargo clippy -p areka-kanade --all-targets --no-deps -- -D warnings` を回し、残る警告を直す
   - 警告 0 件で通り、直す前と同じテストが同じ結果で通る
   - _Requirements: 7.1, 7.2, 9.8_
-- [ ] 19.2 audit をかけ直して新しい指摘を 0 件にする
+- [x] 19.2 audit をかけ直して新しい指摘を 0 件にする
   - 同じ範囲へ要件 1 と同じ作法（上限なし・全部読む）で audit をかけ、出た指摘を直して繰り返す。残すと裁定した #63 の部分は数えない
   - 収束しなければ、打ち切る前に各回の数と組の内訳を添えて開発者に知らせる
   - かけ直しの結果（0 件、または裁定）が `research.md` に記録され、直さずに残す 1 件の表が写されている
@@ -322,3 +322,5 @@
 - 16.1→16.2 の引き継ぎ: `Input::ChoiceTimeoutDue` の `cfg_attr(not(test), expect(dead_code))`（types.rs）を 16.2 で消す。actor.rs の `ArmChoiceWake` の腕（trace `choice_wake_unwired` だけ）を 16.2 で本物の送りに替える。
 - 16.4: 畳む順は design §#7 の文（kanade → `down_relay` → `choice_wake_relay` → 刻み役の Close）に合わせ、刻み役の Close と join を down-relay の後へ移した（範囲の外の表の「down_relay の後に join」とも食い違わない）。詰まりも取り残しも無いことをレビューで確かめた。起こしを kanade・中継・刻み役を通して 1 本で追うテストは無い（各側のテストと結線の 2 本だけ）。
 - 17.1 のコミットは crates/areka がビルドできない（`KanadeMsg::UserBreak` の欄が増えた 5 か所）。直しは 17.2 の持ち場で、17.2 のコミットで緑に戻る。
+- 19.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:327` と `:347` が改名前のテスト名 `user_break_with_quit_reservation_goes_to_closing_as_today`・`transport_failure_on_translate_stops_like_todays_fault` を名指す（今は `user_break_with_quit_reservation_goes_to_closing`・`transport_failure_on_translate_stops_like_the_source_event_fault`）。
+- 19.2 要件 1 の作法からのずれ: 3 回目からは Nice を本物の欠陥（嘘を言う注・使われないコード・揃えて変えないと食い違う写し・決して落ちない assert）のときだけ挙げ、5 回目からは指摘ごとに [prod]／[test/doc] の印を付けた。上限なし・全部の行を読む点は要件 1 のまま（research.md §13）。

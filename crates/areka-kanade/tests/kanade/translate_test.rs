@@ -554,9 +554,9 @@ fn run_failing(fail: &'static str, inputs: Vec<KanadeMsg>) -> (Vec<Seen>, Option
 /// 要件 4.5: `OnTranslate` の輸送路の失敗で止まるときの停止の原因と後の運びは、元のイベントの
 /// GET が同じ輸送路の失敗をしたときの故障と同じ（再生は始まらず、降ろして止まる）。
 #[test]
-fn transport_failure_on_translate_stops_like_todays_fault() {
+fn transport_failure_on_translate_stops_like_the_source_event_fault() {
     let (after_translate, stopped) = run_failing("OnTranslate", vec![double_click()]);
-    let (after_source, today) = run_failing("OnMouseDoubleClick", vec![double_click()]);
+    let (after_source, source_fault) = run_failing("OnMouseDoubleClick", vec![double_click()]);
 
     let fault = KanadeStopCause::Fault(ShioriFault::from_failure(&ShioriFailure::Ipc(
         "helper gone".into(),
@@ -566,7 +566,7 @@ fn transport_failure_on_translate_stops_like_todays_fault() {
         handoff: None,
     });
     assert_eq!(stopped, expected, "OnTranslate の輸送路の失敗は故障");
-    assert_eq!(stopped, today, "停止の原因は元の GET の故障と同じ");
+    assert_eq!(stopped, source_fault, "停止の原因は元の GET の故障と同じ");
     assert_eq!(after_translate[1..], [Seen::Call(expected_unload())]);
     assert_eq!(
         after_source[1..],
@@ -603,7 +603,7 @@ fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
 
     let change = || vec![KanadeMsg::ChangeGhost(change_request())];
     let (after_translate, stopped) = run_failing("OnTranslate", change());
-    let (_, today) = run_failing("OnGhostChanging", change());
+    let (_, source_fault) = run_failing("OnGhostChanging", change());
     let fault = KanadeStopCause::Fault(ShioriFault::from_failure(&ShioriFailure::Ipc(
         "helper gone".into(),
     )));
@@ -615,7 +615,10 @@ fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
         }),
         "表示しなかった送り出しの台詞は次のゴーストへ渡さない"
     );
-    assert_eq!(stopped, today, "原因と中身は OnGhostChanging の故障と同じ");
+    assert_eq!(
+        stopped, source_fault,
+        "原因と中身は OnGhostChanging の故障と同じ"
+    );
     assert_eq!(after_translate[1..], [Seen::Call(expected_unload())]);
 }
 

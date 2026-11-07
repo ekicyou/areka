@@ -334,7 +334,7 @@ fn invalid_arguments_send_nothing_and_warn_once() {
 
 /// 往復の失敗は控えを取り出したうえで `on_shiori_reply`（終了系列）へ渡す。
 #[test]
-fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
+fn failed_reply_takes_the_note_and_goes_to_on_shiori_reply() {
     let (state, actions) = notify_then_reply(
         steady(active(9, "OnMouseDoubleClick")),
         "OnX",

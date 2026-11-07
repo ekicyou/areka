@@ -118,7 +118,7 @@ fn user_break_without_quit_reservation_reaches() {
 }
 
 #[test]
-fn user_break_with_quit_reservation_goes_to_closing_as_today() {
+fn user_break_with_quit_reservation_goes_to_closing() {
     let (s, _) = await_gap(steady_some());
     let (s, _) = step(
         s,

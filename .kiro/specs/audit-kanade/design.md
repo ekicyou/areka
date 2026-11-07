@@ -181,8 +181,8 @@ crates/areka-kanade/tests/kanade/boot_test.rs                  # #50（tests/kan
 - `actor_header_guard_tests.rs`（新）:
   - `a_reference_with_line_breaks_is_sent_without_them`: Ref0 に 3 字を含む GET を `round_trip_request` で送る → 偽の shiori が受けた Ref0 に 3 字が無い・`reference_line_break_removed` の WARN が 1 件。取り除きを外すと赤。
   - `an_event_id_with_a_line_break_is_refused_before_the_wire`: `EventId::Choice` の名前に LF を含む GET → 偽の shiori は何も受けない・答えは `Failed(Internal)`・`event_id_not_allowed` の ERROR が 1 件。検査を外すと送られて赤。
-  - `an_sstp_reference_with_a_line_break_is_still_refused_at_the_wire`: `EventId::Sstp` の Ref に LF を含む NOTIFY → 今どおり送る前に断られる（偽の shiori は何も受けない・`Failed(Internal)`）。取り除きを判定より前に戻すと送られて赤。
-  - `the_translate_absent_marker_survives_the_guard`: 翻訳の要求の添字 1 の欠番の印は NUL のまま届き、WARN は 0 件（二段目が印を壊さない）。
+  - （タスク 19.2 で消した・確かめは `actor_error_response_tests::sstp_origin_invalid_name_or_reference_is_not_sent_and_logs_error` が持つ）`an_sstp_reference_with_a_line_break_is_still_refused_at_the_wire`: `EventId::Sstp` の Ref に LF を含む NOTIFY → 今どおり送る前に断られる（偽の shiori は何も受けない・`Failed(Internal)`）。取り除きを判定より前に戻すと送られて赤。
+  - （タスク 19.2 で消した・確かめは `actor_translate::tests::on_translate_receives_expanded_script_and_request_status` が持つ）`the_translate_absent_marker_survives_the_guard`: 翻訳の要求の添字 1 の欠番の印は NUL のまま届き、WARN は 0 件（二段目が印を壊さない）。
 - 記録の捕まえは殻のテストが今使う `log_capture_kit::capture` の形（`actor_error_response_tests.rs` と同じ）。
 
 ### #7 選択待ちの時間切れを期限ちょうどに（kanade と `areka-ghost` の刻み役）
@@ -235,7 +235,7 @@ sequenceDiagram
 - `schedule/steady_choice_wake_tests.rs`（新）:
   - `choice_waiting_with_a_deadline_asks_for_a_wake_at_the_deadline`: 表示の終わり 10,001・指令 0.5 → 行いに `ArmChoiceWake(10_501)` が 1 つ。指令 0 と -1（無効化）では 0 件。
   - `the_deadline_notice_fires_exactly_at_the_deadline`: 帳簿を作った後に `ChoiceTimeoutDue { now: 10_500 }` → 行いが空・帳簿は `Waiting` のまま。`{ now: 10_501 }` → `OnChoiceTimeout` の GET が 1 つ・帳簿は `TimeoutInFlight`。その後の `Tick(11_000)` では二度目が出ない。知らせの腕を外すと赤。
-  - `a_late_notice_after_the_choice_is_resolved_does_nothing`: 選択を確定した後に `ChoiceTimeoutDue` → 行いが空・OnSecondChange も出ない。
+  - `a_late_notice_after_the_choice_is_accepted_does_nothing`: 選択を確定した後に `ChoiceTimeoutDue` → 行いが空・OnSecondChange も出ない。
 - `tests/kanade/choice_test_wake_tests.rs`（新・`choice_test.rs` の子）`kanade_asks_the_ticker_and_fires_on_the_deadline_notice`: `choice_wake` に送り端を入れた構成で起こし、選択待ちを作る → 受け端に期限の値が 1 つ届く → `KanadeMsg::ChoiceTimeoutDue { now: 期限 }` を送る → 記録に `OnChoiceTimeout` の GET が 1 件（毎秒の刻みは送らない）。
 - `crates/areka-ghost/src/ticker_tests.rs`: `wake_remaining_is_zero_at_and_after_the_wake_and_max_without_one`（純粋な関数）と `the_ticker_sends_one_deadline_notice_to_kanade`（時計を固定の値に差し替えた刻み役へ `WakeKanadeAt(その値)` を送る → kanade の受け端に `ChoiceTimeoutDue { now }` が 1 通・続けて待っても 2 通目は来ない）。
 

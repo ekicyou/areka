@@ -283,3 +283,49 @@ ukadoc に定めが無い #1・#5 を、討議の前に SSP の MCP で測った
 - **テスト**（`cargo test -p areka-kanade`・緑）: lib（`src/lib.rs`）713 通過・失敗 0・無視 0／結合（`tests/kanade.rs`）86 通過・失敗 0・無視 0／doc 0 件。直しの後も、この 799 本が同じ結果であること（要件 4.5・7.2。足したテストの分だけ数は増える）。
 - **clippy**（`cargo clippy -p areka-kanade --all-targets --no-deps`）: 警告 16 件（lib 1・lib test 5 のうち 1 は lib と重なり・結合 11）。内訳は `manual_contains` 7・`type_complexity` 4・`doc_lazy_continuation` 3・`collapsible_if` 1・`drain_collect` 1。§1「clippy の実測」と同じ。
 - **行数**: 「1,000 行の番人」の表の 13 ファイルは、表の「今」の数と全部同じ（最大は `src/actor_tests.rs` の 983）。束の順を見直す要は無い。
+
+## 13. かけ直しの結果（タスク 19.2・2026-11-07）
+
+### やり方
+
+- 要件 1 と同じ作法でかけた。数の上限を置かず、`crates/areka-kanade` の 147 ファイル（うち `.rs` 146）を全部の行まで読む。読むだけの読み手 8〜9 人に範囲を分けて渡し、出た指摘はどれもその行を開いて本当かを確かめてから数えた。
+- 3 回目からは、Nice の組は本物の欠陥のときだけ挙げる決まりにした（嘘を言う注・使われないコード・揃えて変えないと食い違う写し・決して落ちない assert）。好みの書き方の違いは挙げない。
+- 5 回目からは、指摘ごとに「本番の振る舞い（production）」か「テスト・注（test-doc）」かの印を付けた。
+- 各回の指摘は全部直し、回ごとに 1 つずつコミットした。残すと裁定した #63 の部分は数えない。
+
+### 回ごとの数
+
+| 回 | 指摘 | 組の内訳 | 本番の振る舞いが変わった直し | コミット |
+|---|---|---|---|---|
+| 1 | 165 | Must 0・Should 14・Nice 151 | ゴーストの切替の保留中はマウスの入力を捨てる（`mouse_change_pending`）。記録の event `talk_done_stale_choice` を `talk_done_stale` に改名。`boot_unexpected_reply` に `reply` の欄を足した。クレートの根からの `ExternalStates` の再輸出をやめた | `22266c24` |
+| 2 | 94 | Should 17（Must・Nice の分けは記録していない） | クレートの根からの再輸出をさらに 5 つやめた。最初の答えの写しは、RaiseEvent か SSTP の返信を待つ人が居るときだけ取る | `365f411d` |
+| 3 | 35 | Should 2（同上） | `shiori_wait_cut` の文言。バルーンのダブルクリックを断る記録に、押されたトークの番号を載せた | `4c8ae3a7` |
+| 4 | 36 | Should 1（同上） | 資源の問い合わせは、`ALLOWED_RESOURCE_IDS` に無い ID を往復の前に断る（`resource_id_not_allowed`）。`change_rejected_phase` の理由に `close_pending` を足した | `a9bda95c` |
+| 5 | 29 | Must 0・Should 0・本番の振る舞い 0（全部 test-doc） | なし（使われない腕を消した・`pub` を `pub(crate)` にした・記録の文言を直した） | `3810676e` |
+
+### 裁定
+
+- 字面の 0 件には収束しなかった（165→94→35→36→29）。
+- 5 回目で打ち切った。開発者の決まり（`audit-seriko` のときの裁定「かけ直しは 5 回目で区切ってよい。条件は Must が 0 件で、本番の振る舞いの指摘が 0 件のこと。その回の指摘を直してから区切る」）による。5 回目は 2 つの条件をどちらも満たした（Must 0 件・本番の振る舞いの指摘 0 件）。その回の 29 件は直して `3810676e` に入れた。
+
+### 直さずに残す 1 件
+
+§3 の表の行をそのまま写す。
+
+| # | 場所 | 中身 | 直し | 範囲外 | 残す候補 |
+|---|---|---|---|---|---|
+| 63 | `src/status.rs:29-36`（`Minimizing`・`Induction`・`Passive`・`TimeCritical`・`Opening`）・`:73-114`（`OpeningKinds`・`OpeningKind`） | 本番は一度も作らない（テストの外の使い手 0 件）。しかも `:75` は「空集合は Opening 自体を非アクティブとする」と書くのに `OpeningKinds::new(vec![])` は `opening()` を出す＝将来この欄に源をつないだ人が踏む | 残すなら空の Opening を出さないように `render` を直す（または消す） | — | ⑴⑵ `status.rs:23`「残 5 状態は語彙に留め…（status-execution-states Req6.1/6.2）」・`:167`「行の存在自体が語彙保持の表明である（Req2.5）」 |
+
+### 範囲の確かめ（diff）
+
+- 触ってはならない所: `git diff 1806882f^..HEAD --stat -- vendors crates/areka-talk crates/areka-actor Cargo.lock` の出力は空（0 行）。パスが実在して空なのではないことを `git ls-files` で確かめた（`vendors` → `vendors/pasta`・`crates/areka-talk` → `crates/areka-talk/Cargo.toml`・`crates/areka-actor` → `crates/areka-actor/Cargo.toml`・`Cargo.lock` → `Cargo.lock`）。
+- `crate::placement::` を名指す行: `git diff 1806882f^..HEAD -U0` の足した行・消した行のうち、`crate::placement::` を含むものは 0 行。
+- `crates/areka-kanade` の外で変わったファイル（`git diff 1806882f^..HEAD --stat -- . ':!crates/areka-kanade' ':!.kiro'`）は 17 個で、どれも design.md 「範囲の外で触るファイル」の表にある:
+  - `crates/areka-ghost/src/ticker.rs`・`ticker_tests.rs`・`runtime.rs`（#7）
+  - `crates/areka-ghost/src/runtime_tests.rs`・`tests/ghost/spine_e2e_test_s2_connect_failure.rs`・`spine_e2e_test_s3_helper_liveness_detected.rs`・`spine_e2e_test_s6_full_disconnect.rs`（#7）
+  - `crates/areka-ghost/tests/ghost/spine_e2e_test.rs`・`sylphya_integration_test.rs`（#62・後者は #7 も）
+  - `crates/areka/src/log_history.rs`・`mcp/sakurascript_log_tests.rs`（#92）
+  - `crates/areka/src/input_events/user_break.rs`・`user_break_tests.rs`・`shell_box_handler_tests.rs`・`user_break_talk_id_tests.rs`（新）（#6）
+  - 申し合わせの 2 つ `crates/areka/src/emo2_boot/balloon_visibility.rs`・`emo2_boot/frame/wiring.rs`（#6・各 6 行）
+- 表の文より多く変えた所が 1 つある: `crates/areka-ghost/src/runtime_tests.rs` は、表の「欄を全部挙げて分けている所に `choice_wake_relay: _` を足す」に加えて、起こしの中継が本物の刻み役のときだけ起きることを見るテスト `choice_wake_relay_exists_only_with_the_real_ticker` を 1 本足した（タスク 16.4・持ち主の表の行は同じ #7）。
+- `placement-crate-split` の触るファイル（design.md 「範囲の外」に挙げた `log-capture-kit` の `file_length_guard_test.rs`・`temp_path_guard_test.rs`、wintf の `ecs/window_proc/` の 2 つ、`tools/perf/fixtures/`・`tools/perf/fixtures-loop/`）は、上の 17 個に 1 つも入っていない。
