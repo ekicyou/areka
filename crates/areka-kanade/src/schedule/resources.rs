@@ -3,8 +3,8 @@
 //! 本モジュールは kanade の **SHIORI リソース照会増分**（design「kanade（リソース照会増分）」）
 //! の許可語彙 [`ALLOWED_RESOURCE_IDS`] とその判定 [`is_allowed_resource_id`] を提供する。
 //! イベント発火の許可集合（[`crate::schedule::events::ALLOWED_EVENT_IDS`]）とは**別族**であり、
-//! egress チョークポイント（`actor.rs` の `round_trip_request`）の submit ガードは
-//! 「`is_allowed_event_id(id)` ∨ `is_allowed_resource_id(id)`」へ拡張される（既存イベント檻は
+//! egress チョークポイント（`actor.rs` の `round_trip_raw` が呼ぶ `refuse_unless_allowed`）の submit ガードは
+//! 「`is_allowed_event_id(id)` ∨ `is_allowed_resource_id(id)`」で判定する（既存イベント檻は
 //! 無改変・許可外は従来どおり `ShioriFailure::Internal`・Req4.1）。
 //!
 //! # 別族である理由（design 論点1・Boundary Commitments）
@@ -33,9 +33,9 @@ use crate::status::{ExecutionSnapshot, ExecutionStatus};
 /// （areka-P0-move-canon 要件 8.2）・「バルーン位置初期化」の項目名（areka-P0-window-link-directives
 /// 要件 7.6）・「ネットワーク更新」の項目名の古い名前 `updatebuttoncaption`（popup-menu-extra-resources
 /// 要件 4.1）である。`popupmenu.type` 系は**問い合わせない**裁定なので載せない
-/// （要件 3.8）。n≧2 の `char*.popupmenu.visible` も α に窓が無いので載せない（要件 3.6）。
+/// （要件 3.8）。n≧2 の `char*.popupmenu.visible` も n≧2 の窓が無いので載せない（要件 3.6）。
 ///
-/// SEAM(α 後・159 項目汎用化): SHIORI Resource は正典で 159 項目ある。語彙拡張は本集合への
+/// SEAM(159 項目汎用化): SHIORI Resource は正典で 159 項目ある。語彙拡張は本集合への
 /// ID 追加（additive）で行い、判定側と構築側（[`resource_get`]）は無改変で追随する。
 pub const ALLOWED_RESOURCE_IDS: &[&str] = &[
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_resource.html#username:1
@@ -87,7 +87,7 @@ pub fn is_allowed_resource_id(id: &str) -> bool {
 /// 純粋関数（副作用なし・要件 3.2）。
 ///
 /// `id` は [`ALLOWED_RESOURCE_IDS`] の要素であることを**求めない**——送出可否の判定は egress
-/// チョークポイント（`actor.rs` の `round_trip_request`）が [`is_allowed_resource_id`] で行い、
+/// チョークポイント（`actor.rs` の `round_trip_raw` が呼ぶ `refuse_unless_allowed`）が [`is_allowed_resource_id`] で行い、
 /// 許可外は従来どおり `ShioriFailure::Internal` で拒否される（檻は 1 か所・Req4.1）。
 ///
 /// `&'static str` に据えるのは [`ShioriCall`] の `id: EventId::Static(&'static str)` 契約
@@ -100,7 +100,8 @@ pub fn resource_get(id: &'static str, snapshot: &ExecutionSnapshot) -> ShioriCal
     }
 }
 
-/// リソース照会の結果語彙（prefetch 段が SHIORI 応答から写像し [`ResourceSink`] へ渡す）。
+/// リソース照会の結果語彙（SHIORI 応答から `outcome_of` で写す。起動の先読みは [`ResourceSink`] へ、
+/// メニューの照会（`actor_resources.rs`）は返信端へ渡す）。
 ///
 /// - [`Value`](ResourceOutcome::Value): 200 応答の値（不透明文字列）。
 /// - [`NoContent`](ResourceOutcome::NoContent): 204 / 空値（既定値縮退は消費側 sakura の責務・R4.2）。
@@ -194,7 +195,7 @@ mod tests {
                 "resetballoonpositionbutton.caption",
                 "updatebuttoncaption",
             ],
-            "リソース許可集合は利用者名＋枠 9 種の項目名＋本体側／相方側の表示可否＋更新先と番号の起点＋「ネットワーク更新」の項目名の古い名前の 15 名"
+            "リソース許可集合は利用者名＋メニュー枠 7 種の項目名＋本体側／相方側の表示可否＋更新先と番号の起点＋位置初期化の項目名 2 つ＋「ネットワーク更新」の項目名の古い名前の 15 名"
         );
         for id in ALLOWED_RESOURCE_IDS {
             assert!(
@@ -213,7 +214,7 @@ mod tests {
             "kero.popupmenu.type",
             "char2.popupmenu.type",
             "char2.popupmenu.visible",
-            // Reference 付きの照会は α で送らない（areka-P0-network-update 裁定 11）。
+            // Reference 付きの照会は送らない（areka-P0-network-update 裁定 11）。
             "other_homeurl_override",
         ] {
             assert!(

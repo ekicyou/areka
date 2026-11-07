@@ -5,7 +5,7 @@
 //! （下記「基準→既存檻の対応表」）、本群が新たに埋めるのは、実アクター（`spawn_kanade`・別スレッド）
 //! ＋実 `round_trip_request` 経路を通した **[`ResourceSink`] 境界での結果配送**——とりわけ
 //! 204→sink `NoContent` と タイムアウト→sink `Failed`＋boot 続行——である。これは
-//! `actor.rs` §9（Value 応答のみ・sink 経由）と `schedule/boot.rs`（純粋 step・sink 非経由の
+//! `actor_tests.rs`（Value 応答のみ・sink 経由）と `schedule/boot_reply_branch_tests.rs`（純粋 step・sink 非経由の
 //! `Action::ResourceOutcome` 検査）が覆う範囲の**外**にある唯一の統合シームであり、design
 //! Testing Strategy → Integration Tests 1 が明記する「200→sink に `Value`・204→`NoContent`・
 //! タイムアウト→`Failed`＋boot 続行」の後二者を sink 到達として直接観測する。
@@ -16,20 +16,19 @@
 //! （Instant/sleep 非依存の決定的注入）。全経路 x64 純粋・非決定 I/O なし。終了は quit シナリオ
 //! （`Fixture::quitting()`＋close talk quit:true）で駆動し、`join_bounded` の期限内 join 成功が
 //! 「boot が prefetch を越えて完走し正規終了した」ことの完了バリアになる（ハングは panic 化・Req 7.3）。
-//! 統合スレッド構成ゆえ既知の並列 Defender-rescan flakiness を避けるべく `--test-threads=1` で回す。
 //!
 //! # 基準→既存檻の対応表（6.1／6.2 で既に caged・本群は統合シームのみ追加）
-//! - **prefetch 順序（R9.3）**: `boot.rs::prefetch_username_get_is_issued_once_between_initialize_and_firstboot`
-//!   （純粋 step）／`actor.rs §9::boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink`
+//! - **prefetch 順序（R9.3）**: `boot_reply_branch_tests.rs::prefetch_username_get_is_issued_once_between_initialize_and_firstboot`
+//!   （純粋 step）／`actor_tests.rs::boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink`
 //!   （アクター経路）／`full_run_test.rs::full_run_boot_pump_close_terminates_deterministically`（統合・正典記録列）。
 //!   本群の [`prefetch_204_delivers_no_content_to_sink_and_boot_proceeds`] も記録列先頭で再確認する。
-//! - **結果写像＋boot 続行（R4.1/4.2）**: `boot.rs::prefetch_maps_outcomes_to_resource_outcome`
-//!   （200→Value／204→NoContent／timeout→Failed）／`boot.rs::prefetch_failure_continues_boot_not_fault`
+//! - **結果写像＋boot 続行（R4.1/4.2）**: `boot_reply_branch_tests.rs::prefetch_maps_outcomes_to_resource_outcome`
+//!   （200→Value／204→NoContent／timeout→Failed）／`boot_reply_branch_tests.rs::prefetch_failure_continues_boot_not_fault`
 //!   （Failed は Unloading{Fault} へ倒れず OnFirstBoot へ続行）。本群は sink 到達＋実スレッド続行を追加する。
-//! - **許可外リソース ID 拒否＋egress 許可語彙（R4.1/3.2）**: `actor.rs §8::disallowed_id_still_rejected_as_internal_after_resource_extension`
+//! - **許可外リソース ID 拒否＋egress 許可語彙（R4.1/3.2）**: `actor_tests.rs::disallowed_id_still_rejected_as_internal_after_resource_extension`
 //!   （Failed(Internal)）／`steady_test.rs::sporadic_value_starts_unique_talk`
 //!   （egress スイープが「イベント許可 ∨ リソース許可」へ更新・username を許可語彙へ追加）。
-//! - **完了固定ログ 1 回（R9.3）**: `boot.rs::prefetch_emits_fixed_completion_log_exactly_once`
+//! - **完了固定ログ 1 回（R9.3）**: `boot_reply_branch_tests.rs::prefetch_emits_fixed_completion_log_exactly_once`
 //!   （3 経路とも `log_capture::assert_resource_prefetch_logged_once` で target/level/outcome/message 一致・1 回）。
 
 use std::sync::{Arc, Mutex};

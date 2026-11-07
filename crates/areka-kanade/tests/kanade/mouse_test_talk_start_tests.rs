@@ -26,18 +26,20 @@ const FIXED_MOUSE_REPLACE_SCRIPT: &str = r"\0\s[0]なにかな？\e";
 //   cage 8 は OnSecondChange 起動 talk（id=1）とマウス起動 talk（id=2）の混在でも talk_id が単調・再利用
 //   されないことも見る（設計 Integration #4）。
 //
-// ## 置換檻（cage 8）と DD-6 保存の対（pairing）と非 wildcard の証明
-// active talk 中の「マウス Value→置換／非マウス Value→防御破棄（DD-6）」は origin 別 reply 政策の
-// 中核であり、両者は対で固定する（設計 Integration #3・「origin の match は wildcard にしない」）。対の
+// ## 置換檻（cage 8）と DD-6 保存の対（pairing）
+// active talk 中の「マウス Value→置換／OnSecondChange の Value→防御破棄（DD-6）」は origin 別 reply 政策の
+// 中核であり、両者は対で固定する（設計 Integration #3）。置き換えるかの判断は述語
+// `events::value_replaces_active_talk` の 1 か所にある。対の
 // 片方（非マウス出所＝active talk 中の OnSecondChange pump は NOTIFY（Ref3=0・Status: talking）で発行され
 // talk を起こさない）は、同じ駆動の `steady_test.rs` の `active_talk_tick_emits_notify_ref3_zero` が見る。
 // **この統合ハーネスでは非マウス Value が active talk 中に届く経路は構造的に存在しない**——`Steady{Some}`
 // の OnSecondChange pump は NOTIFY（Ref3=0）で発行され、mock shiori は NOTIFY へ常に `Notified` を返す
 // （Value を運ばない・common `respond` の NOTIFY アーム）。ゆえに DD-6 の**リテラルな Value 破棄分岐**（`Steady{Some}`+`Value`+非マウス origin→warn＋破棄）は純粋状態機械の単体檻
-// `schedule::steady::tests::steady_some_non_mouse_value_is_discarded_dd6`／同 `..._logs`（mod.rs）が唯一の
+// `schedule::steady::flow_tests::steady_some_non_mouse_value_is_discarded_dd6` と
+// `schedule::log_firing_tests::warn_steady_value_during_talk_logs` が唯一の
 // 検証点である。統合層（`active_talk_tick_emits_notify_ref3_zero`）は、その破棄分岐を**防御的 backstop に
 // 留める構造的前提**——「非マウス出所は active talk 中に GET でなく NOTIFY で発行され Value を運べない＝置換を
-// 起こさない」——を決定的に固定し、cage 8（マウス出所→置換）と対で origin 一致判定の非 wildcard 性を固定する。
+// 起こさない」——を決定的に固定し、cage 8（マウス出所→置換）と対で origin 別の政策を固定する。
 
 /// cage 7 (c): `Steady{None}` のマウス GET へ Value 応答 → StartTalk 起動（Req4.1・8.1(c)）。
 ///
@@ -144,8 +146,9 @@ fn mouse_value_from_steady_none_starts_talk() {
 /// Boot→Tick1（steady talk 起動・保留）→Mouse（置換・保留）を kanade が処理し終えるまで release_all は空振り
 /// しない（park 数バリアが race を閉じる）。`release_all` 後、park された 2 本を採番順（TalkDone(1,Ended)→
 /// TalkDone(2,Quit)）で drain 送出する:
-/// - TalkDone(1,Ended): slot は既に Some(2)＝**未知 talk_id** ゆえ `unknown_talk_done`（error＋現 Phase 維持）で
-///   破棄される（＝旧 talk の Done は stale として棄却・状態整合・DD-IE-2）。
+/// - TalkDone(1,Ended): slot は既に Some(2)。置き換えた旧 talk（1 世代保持の `prev_talk`）と一致するので
+///   `talk_done_stale_choice`（info＋現 Phase 維持）で破棄される（＝旧 talk の Done は stale として棄却・
+///   状態整合・DD-IE-2・C4 規則 9）。`unknown_talk_done`（error）は真に未知の id にだけ出る。
 /// - TalkDone(2,Quit): slot Some(2) と一致＝既知 quit → Unloading{Quit}→Unload→StopSelf（終了駆動）。
 ///
 /// # 非空虚性・discriminative 性

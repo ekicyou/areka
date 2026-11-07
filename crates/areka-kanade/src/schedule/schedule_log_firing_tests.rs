@@ -242,9 +242,9 @@ fn warn_boot_reply_ignored_logs() {
 
 #[test]
 fn warn_steady_value_during_talk_logs() {
-    // Steady{Some} + 非マウス Value（DD-6 防御・narrowed）→ steady_value_during_talk。
-    // origin は非マウス（OnSecondChange）——マウス origin は置換アームへ抜けて warn しない
-    // ため、DD-6 破棄ログの発火には非マウス origin が必要（DD-IE-2 の意味の縮小）。
+    // Steady{Some} + OnSecondChange の Value（DD-6 防御）→ steady_value_during_talk。
+    // `value_replaces_active_talk` が真の origin（OnSecondChange と倍率の 2 語以外）は置換アームへ、
+    // 倍率の 2 語は info の破棄へ抜けて warn しないため、DD-6 破棄ログの発火には OnSecondChange が要る。
     let ev = run_step(
         steady_with_talk(TalkId(5)),
         Input::ShioriReply {
@@ -463,10 +463,6 @@ fn warn_mouse_extended_unexpected_kind_logs() {
     logged_once(&ev, Level::WARN, "mouse_extended_unexpected_kind");
     assert!(actions.is_some_and(|a| a.is_empty()), "移動は送らない");
 }
-
-// ============================================================
-// 観測用ログ（level = INFO）— TalkEndReason::Interrupted の防御的非 quit 扱い
-// ============================================================
 
 // ============================================================
 // 選択確定の受領検証とカスケード駆動（タスク 4.3・設計ログ語彙表）
@@ -705,10 +701,14 @@ fn warn_choice_waiting_stale_logs() {
     }
 }
 
+// ============================================================
+// 観測用ログ（level = INFO）— TalkEndReason::Interrupted の非 quit 扱い
+// ============================================================
+
 #[test]
 fn info_talk_done_interrupted_as_non_quit_logs() {
-    // 既知 talk の reason=Interrupted → 防御的に非 quit 扱い（Ended と同一経路）へ委譲。
-    // M1 では到達しない想定だが、到達した場合にどの reason だったか観測できることを検証する。
+    // 既知 talk の reason=Interrupted → 非 quit 扱い（Ended と同一経路）へ委譲。
+    // 選択タイムアウトの解除経路の正規の到達点（DD-11）で、どの reason だったかを info で観測できることを検証する。
     let ev = run_step(
         steady_with_talk(TalkId(5)),
         Input::TalkDone(TalkDone {

@@ -1,9 +1,8 @@
 //! boot 系列の Phase 分岐（Req 1・状態機械図の Idle→…→Steady）。
 //!
-//! 本モジュールは boot 各待ち点（[`Phase::Idle`] からの起動・BootInit / BootType /
-//! BootMain / BootVersion の応答進行）の遷移本体を担う。タスク 2.3 が本体を実装する。
-//! 2.1 では骨格（呼出面）のみを用意し、[`crate::schedule::mod`] の `step` から
-//! フェーズ分岐として呼び出せるようにする。
+//! 本モジュールは boot 各待ち点（[`Phase::Idle`] からの起動・BootInit / BootPrefetch /
+//! BootType / BootMain / BootVersion の応答進行）の遷移本体を担い、運行表の `step`
+//! （`schedule/mod.rs`）からフェーズ分岐として呼ばれる。
 
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources};
 use crate::change::{BootOrigin, KanadeNotice, ReloadScope, ShioriMethod};

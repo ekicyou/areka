@@ -19,8 +19,8 @@
 //!
 //! # 追加: boot 挨拶の統合檻（DD-IT-12・Req 1.5/2.4/3.1）
 //! さらに boot 起動挨拶（default fixture・挨拶 talk＝StartTalk index 0）を保留ハーネスで active に
-//! 保ち、DD-IT-12 の「挨拶を正規追跡する」意味論を統合層で 3 本、決定的に観測する（いずれも
-//! additive・既存 4 シナリオは無改変）:
+//! 保ち、DD-IT-12 の「挨拶を正規追跡する」意味論を統合層で 3 本、決定的に観測する
+//! （`close_test_boot_greeting_tests.rs`）:
 //! 5. **挨拶 active 中の Tick → NOTIFY（Ref3=0・Status: talking）**（Req 1.5/2.4）: 挨拶 talk を保留し、
 //!    その最中の Tick が BOOT 挨拶由来の playing-semantics（NOTIFY・talking）を出すことを観測する
 //!    （＝boot が `Steady{Some(挨拶)}` へ完了し、その slot 由来で pump を発行している証左）。
@@ -30,6 +30,9 @@
 //! 7. **挨拶中 CloseRequest → CloseTalkWait 経由 OnClose**（Req 3.1）: 挨拶再生中の close は即握手せず
 //!    `pending_close` に記録され、挨拶 TalkDone 着弾で通常 talk と同じ握手（OnClose GET→別れ→close talk）が
 //!    始まる（DD-IT-12「挨拶中 close は通常 talk と同じ CloseTalkWait」）。
+//!
+//! ほかに、終了の指示のスコープが `OnClose` の References に届く檻（`close_test_scope_references_tests.rs`）と
+//! 停止通知の檻 3 本（`close_test_stop_notify_tests.rs`）がある。
 
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, TalkId, events,

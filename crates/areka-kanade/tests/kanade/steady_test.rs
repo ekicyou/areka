@@ -1,12 +1,12 @@
 //! 定常運転の統合検証（pump ゲート・talk 調停・Value→StartTalk）。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、
-//! 定常運転（`Phase::Steady`）の観測可能な振る舞いを 2 パターン、単一の合否として検証する:
+//! 定常運転（`Phase::Steady`）の観測可能な振る舞いを、テストごとに単一の合否として検証する（主な 3 つ）:
 //!
 //! - **応答なし（204）→ 再生起動要求なし**（Req 2.3）: `OnSecondChange` GET（Ref3=1）が
-//!   204 を返す間、boot talk 以外の再生起動要求は宛先へ一切到達しない。
+//!   204 を返す間、close talk 以外の再生起動要求は宛先へ一切到達しない（boot は挨拶なし）。
 //! - **散発的 Value → 一意 talk_id 付きの再生起動要求**（Req 2.1・3.3）: 特定の
-//!   `OnSecondChange` GET 出現で fixture が Value を返すと、boot talk とは別の一意 talk_id を
+//!   `OnSecondChange` GET 出現で fixture が Value を返すと、一意 talk_id（先頭採番 id=1）を
 //!   持つ steady talk が宛先へ到達する（＝OnSecondChange Value が boot と同一 talk 経路を通る・
 //!   Req 3.3）。
 //! - **再生中 Tick → NOTIFY（Ref3=0）・応答無視で StartTalk なし**（Req 3.3・DD-6）: talk を
@@ -44,7 +44,7 @@
 //! ない。TalkDone は「二つの Tick の間に割り込み得る唯一のメッセージ」であり、これを送らない限り
 //! 次 Tick は必ず `Steady{Some}` から処理され NOTIFY（Ref3=0）を発行する（interleaving が起きない・
 //! sleep も wall-clock も用いない）。観測後に保留を解放（`release_all`）すれば `Steady{None}` へ復帰
-//! し、以降は 2 パターンと同じ quit 経路（OnClose→別れの talk→終了）で記録列を確定できる。
+//! し、以降は他のテストと同じ quit 経路（OnClose→別れの talk→終了）で記録列を確定できる。
 //!
 //! # 追加: 送出 ID egress スイープと完了後の GET 再開（Testing Strategy #13／#12）
 //! - 送出 ID の egress スイープ（#13・Req 3.2／3.3）: 自発トーク（`OnSecondChange` Value→StartTalk）が
@@ -57,7 +57,7 @@
 //!   `active_talk_tick_emits_notify_ref3_zero` は NOTIFY 窓までしか観測せず、close_test の別れの台詞は
 //!   `CloseTalkWait` から終了へ進んで定常へ戻らないゆえ、`Steady{Some}`→TalkDone→`Steady{None}` の
 //!   復帰は本 cage が埋める（純粋状態
-//!   機械では `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
+//!   機械では `steady_flow_tests.rs` の `steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId,
@@ -88,7 +88,7 @@ fn drive_steady(fixture: Fixture, tick_count: u64, quit_flags: Vec<bool>) -> Dri
         QuitPolicy::PerTalk(quit_flags),
     );
 
-    // 起動指示（boot 系列→OnBoot Value→boot talk 起動）。
+    // 起動指示（boot 系列→OnBoot 204→`Steady{None}` 直行・挨拶なし boot ゆえ StartTalk なし）。
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
 
     // 毎秒 Tick を数回（定常運転の pump を駆動）。時刻は注入 Tick のみで進行させる。
@@ -331,7 +331,7 @@ fn active_talk_tick_emits_notify_ref3_zero() {
         vec![0],
     );
 
-    // 起動指示（boot 系列→OnBoot Value→boot talk・即 TalkDone＝未知 talk・無害）。
+    // 起動指示（boot 系列→OnBoot 204→`Steady{None}` 直行・挨拶なし boot ゆえ StartTalk なし）。
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
 
     // Tick 1（now=1s）: Steady{None}→GET→Value→steady talk（保留）→Steady{Some}。
@@ -553,7 +553,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
 /// `farewell_talk_without_quit_tag_still_terminates` は別れの台詞（`CloseTalkWait`）が定常へ戻らず
 /// 終了することを観測するもので、**steady talk 完了**（`Steady{Some}`→TalkDone→`Steady{None}`）
 /// からの GET 再開は統合層で未観測ゆえ、本 cage が additive に埋める（純粋状態機械では
-/// `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
+/// `steady_flow_tests.rs` の `steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 ///
 /// # 決定的駆動（バリア駆動・壁時計 deadline・join 後表明）
 /// 挨拶なし boot で `Steady{None}` 直行。保留ハーネスで最初の steady talk（受領 index 0）を保留し

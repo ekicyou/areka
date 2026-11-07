@@ -6,12 +6,13 @@
 //! 構成される（envelope 規約・Req 3.2）。
 //!
 //! # 依存規律（Allowed Dependencies）
-//! 本ファイルは `std`・[`crate::talk`]・**`areka_actor::ReplySender` のみ**に
-//! 依存する（クレート内では実行状態 [`crate::status`] とリソース照会の結果語彙
-//! `schedule::resources::ResourceOutcome` を借りる）。`shiori-host32-host`（`RequestError` 等）は一切 import しない
+//! 本ファイルが依存するのは `std`・`areka_actor::ReplySender` と、クレート内の語彙
+//! （[`crate::talk`]・[`crate::change`]・[`crate::online`]・[`crate::status`]・
+//! [`crate::sstp`]・[`crate::anchor_input`]・[`crate::request_origin`]・
+//! `schedule::resources::ResourceOutcome`）だけである。`shiori-host32-host`（`RequestError` 等）は一切 import しない
 //! ——[`ShioriFailure`] は host32 非依存の**再表現**（`String` 保持）であり
-//! `RequestError` の re-export ではない。host32 型は `shiori/real.rs`（後続
-//! タスク）に封じ込め、この境界型は差し替え可能な mock/real の共通面となる
+//! `RequestError` の re-export ではない。host32 型は `shiori/real.rs` に
+//! 封じ込め、この境界型は差し替え可能な mock/real の共通面となる
 //! （Req 5.1）。
 //!
 //! # GET／NOTIFY の型区別（Req 5.2）
@@ -55,7 +56,7 @@ impl CloseReason {
 /// 運行状態機械が内部に持つ `TermCause`（`schedule/mod.rs` の `Unloading{cause}`）の**公開面への
 /// 写し**である。内部型をそのまま公開すると運行状態機械の内部（`Phase`／`Action`／`step`）まで
 /// 公開面へ引きずり出されるため（DD-9 の露出規律）、5 値だけを持つ独立の enum を置く。
-/// 値の対応は 1 対 1 で、写す点は [`crate::actor`] の停止通知だけである。
+/// 値の対応は 1 対 1 で、写す点は停止通知の投函（`actor_stop.rs`）だけである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KanadeStopCause {
     /// 終了挨拶が終了指令（`\-`）で終わった正規の終了。
@@ -72,7 +73,7 @@ pub enum KanadeStopCause {
 
 /// kanade の終了系列が完了したことの UI への通知（R15.3・D15 の 2）。
 ///
-/// `Action::StopSelf` の実行点（[`crate::actor`]）から運行の通知の「停止」
+/// `Action::StopSelf` の実行点（[`crate::actor`] から `actor_stop.rs` の投函）で運行の通知の「停止」
 /// （[`crate::change::KanadeNotice::Stopped`]）に包んで**非ブロッキングに 1 度だけ**送る。
 /// 受け手（UI スレッドの毎フレーム結線）はこれを合図に全ゴースト窓を閉じる。原因を問わず
 /// 送る——終了挨拶を終えた正規終了も、期限超過も、強制終了も、窓を閉じる点では同じ扱いである。
@@ -113,11 +114,12 @@ pub struct MouseInput {
     pub y: i64,
     /// 当たり判定名（Ref4・不透明転写・`None`＝判定外）。
     pub region: Option<String>,
-    /// イベント種別（移動／ダブルクリック）。
+    /// イベント種別（移動・ダブルクリック・ドラッグ・ボタンの解放・ホイール・出入りの 7 種）。
     pub kind: MouseEventKind,
 }
 
-/// マウスイベント種別（OnMouseMove／OnMouseDoubleClick／OnMouseDragStart／OnMouseDragEnd に対応）。
+/// マウスイベント種別（7 種・OnMouseMove／OnMouseDoubleClick／OnMouseDragStart／OnMouseDragEnd／
+/// OnMouseUp 系／OnMouseWheel／OnMouseEnter 系に対応）。
 ///
 /// ドラッグの 2 つはボタンも取り消しの印も持たない: 窓のドラッグは左ボタンでだけ始まり Ref5 は
 /// 常に "0"、取り消しを区別する値は Reference に足さない（areka-P0-mouse-drag-events 要件 2.2・4.6）。
@@ -215,7 +217,7 @@ pub enum KanadeMsg {
         kind: ShioriDownKind,
         reason: String,
     },
-    /// マウス入力（移動／ダブルクリック）。Steady でのみ受理され、他フェーズでは安全に
+    /// マウス入力（[`MouseEventKind`] の 7 種）。Steady でのみ受理され、他フェーズでは安全に
     /// 無視される（横断ルーティングは schedule 層・DD-IE-8）。additive 増分（Req 4.4）。
     Mouse(MouseInput),
     /// 停止規約の Close（即時停止・非常口。正規終了は運行表経由）。

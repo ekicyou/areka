@@ -8,7 +8,9 @@
 //! 期待 Reference 構成は必ず `events::on_choice_*` 構築子から `expected_call` で導出し、檻側に
 //! ハードコードしない（fixture・assert・実装の三点一正本・Req7.1）。
 //!
-//! # 檻一覧（本ファイルが単一 pass/fail として固定する 3 群）
+//! # 檻一覧（単一 pass/fail として固定する 6 群・置き場は兄弟の `choice_test_*_tests.rs`）
+//! 群の外に、時間の指令の檻（`choice_test_timeout_directive_tests.rs`）と期限の知らせの檻
+//! （`choice_test_wake_tests.rs`）もある。
 //! **群 1（Req9.2(a)・任意名形）**
 //! 1. [`on_id_choice_fires_named_event_only_then_resolves_and_starts`]: `On` 始まり ID は任意名
 //!    イベント **1 段のみ**を発行し（`OnChoiceSelectEx`／`OnChoiceSelect` を発行しない・裁定 1）、
@@ -36,7 +38,7 @@
 //!
 //! **群 5（Req9.2(d)・Req7.3／7.4／7.5・タイムアウト）**
 //! 7. [`choice_timeout_fires_then_204_cancels_and_rejects_later_choice`]: 注入 Tick のみで期限へ
-//!    到達し、`OnChoiceTimeout`（Ref0=起動スクリプト）GET が発行され、204 で `TalkCommand::Cancel`
+//!    到達し、`OnChoiceTimeout`（Ref0=起動スクリプト）GET が発行され、204 で `TalkCommand::CancelChoice`
 //!    が届き、注入した `TalkDone{Interrupted}` で `Steady{None}` へ復帰し、以降の `Choice` 注入が
 //!    棄却される。
 //! 8. [`choice_timeout_value_replaces_talk_via_existing_start_path`]: タイムアウト応答が Value なら

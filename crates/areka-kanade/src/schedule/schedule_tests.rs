@@ -79,7 +79,7 @@ fn known_quit_from_close_talk_wait_goes_to_unloading_quit() {
 
 #[test]
 fn known_interrupted_from_steady_is_routed_as_non_quit() {
-    // Interrupted は防御的に非 quit 扱い（Ended と同一経路）へ委譲される。
+    // Interrupted は非 quit 扱い（Ended と同一経路）へ委譲される（選択タイムアウトの解除の正規の到達点・DD-11）。
     // steady::on_talk_done は pending_close が無ければ Steady{None} へ復帰する。
     let phase = steady_with_talk(TalkId(5));
     let (next, actions) = step(

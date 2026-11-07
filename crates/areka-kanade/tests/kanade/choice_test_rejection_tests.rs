@@ -23,7 +23,7 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // `ChoicePhase::Cascading`／`TimeoutInFlight` の最中に別の選択確定を**注入して**割り込ませることは
 // 統合経路では構造上できない——段の進行中の二重確定棄却（`choice_rejected_busy`）と 1 世代 stale
 // 防御（`talk_done_stale_choice`）は、状態を直接構成する `step()` 直呼びの純関数檻が担当する
-// （`schedule::steady::tests::choice_during_cascade_or_timeout_is_rejected_as_busy`・
+// （`schedule::steady::choice_tests::choice_during_cascade_or_timeout_is_rejected_as_busy`・
 // `schedule::tests::stale_choice_talk_done_is_demoted_to_info_and_keeps_state`。ログ語彙は
 // `schedule::log_firing_tests` が固定する）。
 //

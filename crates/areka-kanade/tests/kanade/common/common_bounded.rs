@@ -57,7 +57,7 @@ pub fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Resul
 /// `sender.send` が `Err`（Receiver drop＝kanade スレッド終了＝inbox 切断）を返すまで
 /// 反復送出する（反復回数の上限は持たない・上限非依存の完了バリア）。
 ///
-/// 供給ペーシングは送出ごとの [`std::thread::yield_now`] 1 回で足る（kanade へ処理を譲る）。
+/// 供給ペーシングは送出ごとの短い sleep（200µs）で kanade へ処理を譲る（理由はループ内の注）。
 /// 滞留した Tick は切断時に破棄され意味論に影響しない（設計 Implementation Notes）。
 ///
 /// # 非空虚性（ハング→失敗変換・7.3）

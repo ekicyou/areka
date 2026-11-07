@@ -42,7 +42,7 @@ pub(crate) fn handoff_of(state: &State) -> Option<ChangeHandoff> {
 
 /// 停止通知を投函する（R15.3・design D15 の 2）。
 ///
-/// `sink` が `None` なら何もしない（通知端を結線していない構成＝既存の呼び手はすべてこちら）。
+/// `sink` が `None` なら何もしない（通知端を結線していない構成。本番の起動は `Some` を渡す）。
 /// 送出失敗は受信端（UI）が既に落ちていることを意味するだけで異常ではないが、**沈黙で捨てる
 /// 経路を作らない**（steering: areka-log-first-no-silent-failure）ため `warn!` を 1 件残す。
 /// panic はしない——ここで落ちると終了系列そのものが完走しなくなる。

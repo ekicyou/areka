@@ -16,7 +16,7 @@
 //! テスト側の connect クロージャが自前結線する。これも上記既存 E2E の手順
 //! （`ParentMessageWindow::create` → `spawn` → `pump_until_hello_or` → `send_request(Load)`）を
 //! 忠実に写している。connect が成功すれば `Box<dyn ShioriBackend>`（実体は
-//! `ShioriConnection { window, helper: HelperLifecycle::new(handle) }`）を返し、失敗は
+//! `ShioriConnection { window, helper: HelperLifecycle::new(helper) }`）を返し、失敗は
 //! `Err(String)`（→ `ShioriDown`）で返す。
 //!
 //! # 親窓 1 枚制約
@@ -45,6 +45,9 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 /// と同型）。env `HOST32_HELPER_EXE` 最優先 → ワークスペース
 /// `target/i686-pc-windows-msvc/{debug,release}/shiori-host32-helper.exe`。いずれも不在なら
 /// `Err(String)`（connect 失敗として ShioriDown へ写る・helper 成果物不備を明示）。
+///
+/// 同じ探し方の写しが他のクレートにある（`crates/areka-ghost/tests/ghost/common.rs`・
+/// `crates/shiori-host32-host/tests/` の 5 本・`crates/pilot/examples/shiori-host-32/main.rs`）。
 fn resolve_helper_exe() -> Result<PathBuf, String> {
     if let Ok(explicit) = std::env::var("HOST32_HELPER_EXE") {
         let p = PathBuf::from(&explicit);

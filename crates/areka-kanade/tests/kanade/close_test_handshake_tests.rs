@@ -342,7 +342,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
 ///
 /// # 非空虚性
 /// - ForceQuit が終了へ直行しなければ join が期限超過して panic する。
-/// - DD-10 の best-effort NOTIFY は force_quit がインラインで組む OnClose（Ref0=reason）であり、
+/// - DD-10 の best-effort NOTIFY は force_quit が `events::on_close_notify` で組む OnClose（Ref0=reason）であり、
 ///   events 表の OnClose **GET** とは Method が異なる。GET と NOTIFY を取り違えると (b) が落ちる。
 #[test]
 fn force_quit_terminates_directly_with_best_effort_onclose_notify() {

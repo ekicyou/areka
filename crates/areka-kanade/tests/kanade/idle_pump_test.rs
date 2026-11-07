@@ -40,7 +40,7 @@ fn uptime() -> Duration {
 
 /// 待機中のホスト窓へ同期送出すると上限内に成功復帰し、即終了した stand-in の死活報告が
 /// 手空きの初回に届く（全体 5 秒以内）。2 通目が来ないことは短い期限では主張しない
-/// （要件 4.8）——手空きが回った証拠つきで `real_idle_tests.rs` の Test-B が見張る。
+/// （要件 4.8）——手空きが回った証拠つきで `real_idle_tests.rs` の `helper_exit_during_idle_reports_shiori_down_once` が見張る。
 #[test]
 fn sync_send_to_idle_window_returns_within_bound() {
     let _ = uptime();

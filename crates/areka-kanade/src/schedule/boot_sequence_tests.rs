@@ -526,7 +526,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
             origin: "test",
         },
         &cfg,
-    ); // BootInit→BootType
+    ); // BootInit→BootPrefetch（username GET）
     let (s, _) = step(
         s,
         Input::ShioriReply {
@@ -534,7 +534,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
             origin: "test",
         },
         &cfg,
-    ); // BootType→BootMain（OnBoot GET）
+    ); // BootPrefetch→BootType（OnFirstBoot GET）
     let (s, _) = pass_translate(
         step(
             s,
@@ -548,7 +548,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
             &cfg,
         ),
         &cfg,
-    ); // BootMain(Value)→BootVersion{talk: Some(id=1)}
+    ); // BootType(Value・OnBoot を飛ばす)→BootVersion{talk: Some(id=1)}
     let (s, _) = step(
         s,
         Input::ShioriReply {

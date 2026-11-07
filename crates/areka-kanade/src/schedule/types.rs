@@ -31,7 +31,7 @@ pub(crate) enum Input {
         kind: crate::msg::ShioriDownKind,
         reason: String,
     },
-    /// マウス入力（移動／ダブルクリック）。Steady のみ `steady::on_mouse` へ委譲し、
+    /// マウス入力（[`MouseEventKind`](crate::msg::MouseEventKind) の 7 種）。Steady のみ `steady::on_mouse` へ委譲し、
     /// 他フェーズでは状態を変えず安全に無視する（DD-IE-8）。
     Mouse(MouseInput),
     /// 直前の Action::ShioriRequest／ShioriUnload の結果（シェルが即時再投入）。
@@ -305,7 +305,7 @@ impl State {
     ///
     /// [`steady::on_choice`] と [`steady::on_cascade_reply`] は検証・分解のために帳簿を
     /// [`Option::take`] してから呼出を組み立てるため、その最中は `self.choice` が空である。
-    /// これらの呼出点は手元の帳簿から得た真偽値をここへ渡す——[`snapshot`](State::snapshot) を
+    /// どちらの呼出点も選択待ちが続いているので `true` を直に渡す——[`snapshot`](State::snapshot) を
     /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（設計 C5 の源は
     /// `Waiting|Cascading|TimeoutInFlight` の全段である）。
     ///

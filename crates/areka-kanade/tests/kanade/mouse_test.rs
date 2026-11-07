@@ -1,12 +1,13 @@
-//! マウスイベント発行の単一 pass/fail 檻（Req8.1・8.2 — 設計 Testing Strategy「Unit Tests
-//! （kanade・mouse_test.rs — Req8 (a)(b)(d)＋フェーズ規律）」の 6 檻）。
+//! マウスイベント発行の単一 pass/fail 檻（Req8.1・8.2）。下の cage 1〜6（設計 Testing Strategy
+//! 「Unit Tests（kanade・mouse_test.rs — Req8 (a)(b)(d)＋フェーズ規律）」）に加え、cage 7・8
+//! （`mouse_test_talk_start_tests.rs`・マウス応答の talk）とドラッグの K3〜K7（`mouse_test_drag_tests.rs`）を持つ。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、`KanadeMsg::Mouse`
 //! 注入に対する運行系の観測可能な振る舞いを、実時間 sleep なし・注入時刻/入力のみ・全 join 期限付きで
 //! 単一の合否として検証する。期待 Reference 構成は必ず `events::on_mouse_*` 構築子から `expected_call`
 //! で導出し、ハーネス側にハードコードしない（fixture・assert・実装の三点一正本・Req7.1）。
 //!
-//! # 檻一覧（設計 Testing Strategy #1〜#6）
+//! # cage 1〜6 の一覧（設計 Testing Strategy #1〜#6・置き場は `event_layout_tests`／`phase_guard_tests`）
 //! 1. **(a) OnMouseMove layout**: `Steady{None}` で Move（region=Some("Head")）注入 → 記録 GET が
 //!    `expected_call(on_mouse_move(x,y,0,Some("Head"),&INACTIVE))` と一致（Ref0..6・Ref2="0"・Ref5="0"・
 //!    Ref6="mouse"・Status 行なし）。

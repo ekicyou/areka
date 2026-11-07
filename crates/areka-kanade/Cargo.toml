@@ -17,8 +17,8 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-# shiori/real.rs のテストが RequestError::Ipc の内側 IpcError を構築するためだけの
-# workspace path dep（本体 import は shiori-host32-host 経由・host32 境界は real.rs に閉じる）。
+# shiori/real.rs のテストと結合テスト 2 本（idle_pump_test・real_helper_test）が IPC の型を
+# 組み立てるための workspace path dep（本体 import は shiori-host32-host 経由・host32 境界は real.rs に閉じる）。
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }
 # ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
 # ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、

@@ -6,7 +6,7 @@
 //! によるログ発行以外の副作用を持たない（可観測性の側効果であり状態・出力の決定性に
 //! 影響しない・DD-3）。DD-9 により本モジュールは `pub(crate)` に閉じる。
 //!
-//! # 責務分割（本タスク 2.1 の担当範囲）
+//! # 責務分割
 //! 本 `mod.rs` は**由来・状態を問わない横断遷移**（[`Input::TalkDone`] の理由が
 //! [`TalkEndReason::Quit`] の場合／[`Input::ForceQuit`]／[`Input::ShioriDown`]／[`Input::ShioriReply`] の
 //! 失敗）と、Unload 完了・防御アーム（未知 talk_id・Idle 以外の Boot・応答待ちでない
@@ -36,7 +36,7 @@ pub(crate) mod change;
 pub(crate) mod choice;
 pub(crate) mod close;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
-/// クレート公開面への露出は [`crate::events`] ファサード経由（[`crate::lib`] 参照）。
+/// クレート公開面への露出は [`crate::events`] ファサード経由（`lib.rs` 参照）。
 pub mod events;
 /// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
 #[cfg(test)]
@@ -149,8 +149,8 @@ pub(in crate::schedule) fn start_talk(
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
 /// [`Action`] の列を返す純粋関数（`tracing` ログ発行のみ側効果として許容）。
 ///
-/// 本タスク 2.1 は**横断遷移**（由来・状態を問わず終了系列へ進む共通ロジック）と
-/// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
+/// 本関数は**横断遷移**（由来・状態を問わず終了系列へ進む共通ロジック）と
+/// 防御アームを受け持ち、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
 ///
 /// どの入力でも、遷移の前後で元のイベントの控えと翻訳の出口の規則（[`translate::before`]・
@@ -423,9 +423,10 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
 
 /// 終了系列（Quit）の共通終端: Unloading{Quit}＋ShioriUnload。
 ///
-/// 到達点は 3 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）、利用者の中断で
-/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）、そして別れの台詞の完了
-/// （[`close`] の `close_talk_done_quit`・終わり方を問わない）である。いずれも同じ遷移を採る
+/// 到達点は 4 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）、利用者の中断で
+/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）、別れの台詞の完了
+/// （[`close`] の `close_talk_done_quit`・終わり方を問わない）、そして切替の送り出しの台詞の完了
+/// （[`change`] の `change_talk_done_unload`）である。いずれも同じ遷移を採る
 /// （設計「終了の予約」「close の規則改訂」）。`at` は対象トークの完了かつ close 系遷移の
 /// 掃除点（C4 規則 7）の識別子。
 fn to_unloading_quit(mut state: State, at: &'static str) -> (State, Vec<Action>) {

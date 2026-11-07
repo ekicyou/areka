@@ -251,7 +251,7 @@ pub(super) fn on_timeout_notice(mut state: State, talk_id: TalkId) -> (State, Ve
     (state, actions)
 }
 
-/// 3 つの入口に共通する門（要件 4.4・設計 D8）: 相が `Steady{talk: None}` で、終了の要求を保留して
+/// 2 つの入口（[`after_talk_done`]・[`on_idle_double_click`]）に共通する門（要件 4.4・設計 D8）: 相が `Steady{talk: None}` で、終了の要求を保留して
 /// いないこと。送れなければ記録に載せる理由を返す。
 fn steady_idle(state: &State) -> Result<(), &'static str> {
     if !matches!(state.phase, Phase::Steady { talk: None }) {
