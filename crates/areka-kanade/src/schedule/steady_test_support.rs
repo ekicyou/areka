@@ -1,4 +1,5 @@
 use super::*;
+use crate::schedule::ActiveTalk;
 pub(super) fn config() -> KanadeConfig {
     KanadeConfig::new("master", "1.0.0")
 }

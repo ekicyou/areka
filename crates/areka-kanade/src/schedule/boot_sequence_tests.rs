@@ -3,6 +3,7 @@ use super::*;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
+use crate::talk::TalkId;
 
 // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 

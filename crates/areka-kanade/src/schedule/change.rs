@@ -131,17 +131,13 @@ pub(super) fn has_pending(state: &State) -> bool {
 /// 終了の保留が在れば終了が勝つ: 保留の切替を捨てて「切替の中止（終了要求）」を通知し、
 /// 残り（保留の終了の握手）は定常の完了の処理へ任せる。無ければ保留を取り出して切替を始める
 /// （`raise_event` 無しなら黙って降ろす）。
-pub(super) fn consume_pending(
-    mut state: State,
-    done: TalkDone,
-    config: &KanadeConfig,
-) -> (State, Vec<Action>) {
+pub(super) fn consume_pending(mut state: State, done: TalkDone) -> (State, Vec<Action>) {
     let Some(req) = state.pending_change.take() else {
-        return steady::step(state, Input::TalkDone(done), config);
+        return steady::step(state, Input::TalkDone(done));
     };
     if state.pending_close.is_some() {
         tracing::info!(target: "kanade", event = "change_yield_to_close", phase = phase_label(&state.phase), to = %req.target.name, "保留の切替より終了の保留が勝つ——切替を取りやめる");
-        let (state, mut actions) = steady::step(state, Input::TalkDone(done), config);
+        let (state, mut actions) = steady::step(state, Input::TalkDone(done));
         let notice = KanadeNotice::ChangeCancelled {
             reason: CancelReason::CloseRequest,
         };
@@ -230,15 +226,14 @@ pub(super) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 fn on_reply_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     let closing = matches!(state.phase, Phase::ChangeClosePending);
     if !closing && let Some(reason) = state.pending_close {
-        return on_yielded_reply(state, input, reason, config);
+        return on_yielded_reply(state, input, reason);
     }
     match input {
         Input::ShioriReply {
             outcome: ShioriOutcome::Value(script, _),
             ..
         } => {
-            let talk_id = TalkId(state.next_talk_id);
-            state.next_talk_id += 1;
+            let talk_id = super::take_talk_id(&mut state);
             let deadline = deadline_from(state.last_now, config);
             if !closing && let Some(change) = state.change.as_mut() {
                 change.script = Some(script.clone());
@@ -388,19 +383,13 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
 
 /// 終了要求で取りやめた `ChangePending` の応答: 台本は定常のトークとして流し（完了で保留の終了を
 /// 消化）、204 は保留の終了を今日の握手（`OnClose` GET）で始める。
-fn on_yielded_reply(
-    mut state: State,
-    input: Input,
-    reason: CloseReason,
-    config: &KanadeConfig,
-) -> (State, Vec<Action>) {
+fn on_yielded_reply(mut state: State, input: Input, reason: CloseReason) -> (State, Vec<Action>) {
     match input {
         Input::ShioriReply {
             outcome: ShioriOutcome::Value(script, _),
             ..
         } => {
-            let talk_id = TalkId(state.next_talk_id);
-            state.next_talk_id += 1;
+            let talk_id = super::take_talk_id(&mut state);
             tracing::info!(target: "kanade", event = "change_yielded_talk_start", talk_id = talk_id.0, "取りやめた切替の台本——定常のトークとして流し完了で終了の握手へ");
             state.phase = Phase::Steady {
                 talk: Some(ActiveTalk {
@@ -420,7 +409,7 @@ fn on_yielded_reply(
         } => {
             state.pending_close = None;
             state.phase = Phase::Steady { talk: None };
-            steady::step(state, Input::CloseRequest { reason }, config)
+            steady::step(state, Input::CloseRequest { reason })
         }
         Input::Tick { now } => {
             state.last_now = Some(now);

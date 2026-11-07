@@ -297,9 +297,8 @@ fn warn_steady_input_ignored_logs() {
     // steady::step の `_` アーム（Steady に無関係な入力）。step() 経由では Boot は mod.rs、
     // ForceQuit/ShioriDown は横断アームで捌かれ steady へ届かない。構造上発生しない防御
     // アームゆえ steady::step を直接駆動して検証する。
-    let cfg = config();
     let ev = capture(|| {
-        let _ = steady::step(state_in(Phase::Steady { talk: None }), Input::Boot, &cfg);
+        let _ = steady::step(state_in(Phase::Steady { talk: None }), Input::Boot);
     });
     assert_logged(&ev, Level::WARN, "steady_input_ignored");
 }
@@ -308,14 +307,12 @@ fn warn_steady_input_ignored_logs() {
 fn warn_steady_phase_unexpected_logs() {
     // steady::step に非 Steady Phase（BootMain）が届いた場合の防御。ルーティング上
     // 到達不能ゆえ steady::step を直接駆動して検証する。
-    let cfg = config();
     let ev = capture(|| {
         let _ = steady::step(
             state_in(Phase::BootMain),
             Input::Tick {
                 now: MonotonicMs(1_000),
             },
-            &cfg,
         );
     });
     assert_logged(&ev, Level::WARN, "steady_phase_unexpected");
@@ -547,7 +544,6 @@ fn info_choice_resolved_logs() {
 /// `tests/kanade/choice_test.rs` の統合檻が免除の正・非 choice 経路の負の両方向で固定する。
 #[test]
 fn error_choice_shiori_failed_as_204_logs() {
-    let cfg = config();
     let s = state_with_ledger(
         &["choice1"],
         ChoicePhase::Cascading {
@@ -562,7 +558,6 @@ fn error_choice_shiori_failed_as_204_logs() {
                 outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
                 origin: "OnChoiceSelect",
             },
-            &cfg,
         );
     });
     assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");

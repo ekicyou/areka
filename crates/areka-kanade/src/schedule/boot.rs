@@ -8,7 +8,7 @@
 use super::{Action, ActiveTalk, Input, Phase, State, events, resources};
 use crate::change::{BootOrigin, KanadeNotice, ReloadScope, ShioriMethod};
 use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
-use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkId};
+use crate::talk::{ScriptOrigin, StartTalk, TalkDone};
 use resources::ResourceOutcome;
 
 /// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
@@ -287,8 +287,7 @@ fn to_baseware_version(
     let talk = if let Some(script) = script {
         // Value 経路: 挨拶 talk を採番し、first_boot_epilogue を末尾へ添付して起動する
         // （epilogue 空＝従来 StartTalk::new と同値・design C9 Some アーム）。
-        let talk_id = TalkId(state.next_talk_id);
-        state.next_talk_id += 1;
+        let talk_id = super::take_talk_id(&mut state);
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "起動グリーティングを再生起動");
         actions.push(Action::StartTalk(StartTalk {
             talk_id,
@@ -308,8 +307,7 @@ fn to_baseware_version(
         // 204 かつ epilogue 非空（初回かつ挨拶トーク皆無・204-204）: epilogue-only StartTalk
         // （空 script・末尾 SET 1 件＝即時完走）を発行し、Some として正規追跡する（design C9 None アーム）。
         // これにより記録は挨拶 talk と同一の書込経路（cue 1 本）に載る。
-        let talk_id = TalkId(state.next_talk_id);
-        state.next_talk_id += 1;
+        let talk_id = super::take_talk_id(&mut state);
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "epilogue-only 起動記録トークを再生起動（挨拶トーク皆無）");
         actions.push(Action::StartTalk(StartTalk {
             talk_id,

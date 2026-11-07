@@ -4,9 +4,9 @@ use super::test_support::{
 };
 use super::*;
 use crate::msg::ShioriCall;
-use crate::schedule::step;
 use crate::schedule::translate_test_support::pass_translate;
-use crate::talk::TalkEndReason;
+use crate::schedule::{ActiveTalk, step};
+use crate::talk::{StartTalk, TalkEndReason};
 
 // ============================================================
 // 選択肢タイムアウト（タスク 4.5・C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
@@ -352,7 +352,6 @@ fn choice_timeout_failed_is_treated_as_no_content_cancel() {
                 )),
                 origin: "OnChoiceTimeout",
             },
-            &config(),
         ));
     });
     let (next, actions) = out.expect("step は必ず結果を返す");

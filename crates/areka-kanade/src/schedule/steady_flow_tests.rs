@@ -1,9 +1,9 @@
 use super::test_support::{assert_no_second_change, base_state, config, steady_none, steady_some};
 use super::*;
 use crate::msg::ShioriCall;
-use crate::schedule::step;
+use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
-use crate::talk::TalkEndReason;
+use crate::talk::{StartTalk, TalkEndReason};
 
 /// 単一 Action が期待 ShioriCall（GET/NOTIFY・id・references）と一致することを検証する。
 fn assert_shiori(action: &Action, expected: &ShioriCall) {

@@ -104,6 +104,13 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
     }
 }
 
+/// トークの番号を 1 つ取り、次の番号へ進める（採番はここだけ・同じ番号を 2 回使わない）。
+pub(in crate::schedule) fn take_talk_id(state: &mut State) -> TalkId {
+    let talk_id = TalkId(state.next_talk_id);
+    state.next_talk_id += 1;
+    talk_id
+}
+
 /// 台本 1 つを新しいトークとして始める（採番・枠の差し替え・再生開始の行動を返す）。
 ///
 /// 選択肢の帳簿・`choice_prev_talk`・解決・記録は呼び手の仕事で、ここでは触らない。
@@ -114,8 +121,7 @@ pub(in crate::schedule) fn start_talk(
     script: String,
     origin: ScriptOrigin,
 ) -> (TalkId, Action) {
-    let talk_id = TalkId(state.next_talk_id);
-    state.next_talk_id += 1;
+    let talk_id = take_talk_id(state);
     state.phase = Phase::Steady {
         talk: Some(ActiveTalk {
             talk_id,
@@ -456,7 +462,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
                 TalkEndReason::Interrupted | TalkEndReason::Ended
                     if change::has_pending(&state) =>
                 {
-                    change::consume_pending(state, done, config)
+                    change::consume_pending(state, done)
                 }
                 TalkEndReason::Interrupted => {
                     // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
@@ -543,7 +549,7 @@ fn on_shiori_reply(
                 .as_ref()
                 .is_some_and(|ledger| choice_in_flight(&ledger.phase)))
     {
-        return steady::step(state, Input::ShioriReply { outcome, origin }, config);
+        return steady::step(state, Input::ShioriReply { outcome, origin });
     }
 
     // 応答待ちフェーズでの Failed は横断的に Unloading{Fault} へ（Req 6.1）。
@@ -588,7 +594,7 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
         | Phase::BootType
         | Phase::BootMain
         | Phase::BootVersion { .. } => boot::step(state, input, config),
-        Phase::Steady { .. } => steady::step(state, input, config),
+        Phase::Steady { .. } => steady::step(state, input),
         Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
             close::step(state, input, config)
         }

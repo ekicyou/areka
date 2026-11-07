@@ -27,7 +27,7 @@
 
 use super::{Action, Input, Phase, State, TermCause, to_unloading_quit};
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriOutcome};
-use crate::talk::{StartTalk, TalkId};
+use crate::talk::StartTalk;
 
 /// close 握手（ClosePending / CloseTalkWait）のフェーズ分岐。
 ///
@@ -62,8 +62,7 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
             ShioriOutcome::Value(script, _) => {
                 // 応答スクリプトあり: 一意 talk_id を採番し再生起動要求として配送、
                 // CloseTalkWait へ遷移して再生完了通知まで運行を保留する（Req 4.2・2.1）。
-                let talk_id = TalkId(state.next_talk_id);
-                state.next_talk_id += 1;
+                let talk_id = super::take_talk_id(&mut state);
                 let deadline = deadline_from(state.last_now, config);
                 tracing::info!(target: "kanade", event = "close_talk_start", talk_id = talk_id.0, "OnClose 応答スクリプト——close talk を再生起動し完了を待機");
                 state.phase = Phase::CloseTalkWait { talk_id, deadline };
@@ -88,8 +87,7 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
             }
             other => {
                 // Value/NoContent/Notified 以外（Unloaded 等）は待ち点に不整合。
-                let _ = other;
-                tracing::warn!(target: "kanade", event = "close_reply_unexpected", "ClosePending で想定外の SHIORI 応答——現 Phase 維持で継続");
+                tracing::warn!(target: "kanade", event = "close_reply_unexpected", reply = other.kind(), "ClosePending で想定外の SHIORI 応答——現 Phase 維持で継続");
                 (state, Vec::new())
             }
         },
@@ -98,8 +96,7 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
             state.last_now = Some(now);
             (state, Vec::new())
         }
-        other => {
-            let _ = other;
+        _ => {
             tracing::warn!(target: "kanade", event = "close_pending_input_ignored", "ClosePending に無関係な入力——現 Phase 維持で継続");
             (state, Vec::new())
         }
@@ -166,8 +163,7 @@ fn on_close_talk_wait(
                 }
             }
         }
-        other => {
-            let _ = other;
+        _ => {
             tracing::warn!(target: "kanade", event = "close_talk_wait_input_ignored", "CloseTalkWait に無関係な入力——現 Phase 維持で継続");
             (state, Vec::new())
         }
@@ -191,7 +187,7 @@ mod tests {
     use crate::msg::CloseReason;
     use crate::schedule::log_capture::{capture, logged_once};
     use crate::schedule::step;
-    use crate::talk::{TalkDone, TalkEndReason};
+    use crate::talk::{TalkDone, TalkEndReason, TalkId};
     use tracing::Level;
 
     fn config() -> KanadeConfig {

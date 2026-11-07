@@ -23,14 +23,12 @@
 //! タスク 2.5 の責務）。
 
 use super::choice::{CascadePlan, choice_deadline, plan_cascade};
-use super::{
-    Action, ActiveTalk, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State, events,
-};
+use super::{Action, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State, events};
 use crate::msg::{
     ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriCall,
     ShioriOutcome,
 };
-use crate::talk::{StartTalk, TalkDone, TalkId};
+use crate::talk::{ScriptOrigin, TalkDone, TalkId};
 
 #[path = "steady_choice_script.rs"]
 mod choice_script;
@@ -41,7 +39,7 @@ mod choice_script;
 /// TalkDone{reason: Ended | Interrupted}／CloseRequest）を処理する。Tick は pump ゲート
 /// （GET/NOTIFY 使い分け）・ShioriReply は talk 調停（Value→StartTalk）・TalkDone/CloseRequest
 /// は保留 close の記録／消化を担う。
-pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State, Vec<Action>) {
+pub(crate) fn step(state: State, input: Input) -> (State, Vec<Action>) {
     match input {
         Input::Tick { now } => on_tick(state, now),
         // origin（DD-IE-3）はマウス GET origin 別 reply 政策（本タスク 2.3）で消費する:
@@ -50,8 +48,7 @@ pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State
         Input::TalkDone(done) => on_talk_done(state, done),
         Input::CloseRequest { reason } => on_close_request(state, reason),
         // 上記以外（Boot・ForceQuit 等）は横断アームで捌かれ Steady には届かない。
-        other => {
-            let _ = &other;
+        _ => {
             tracing::warn!(target: "kanade", event = "steady_input_ignored", "Steady に無関係な入力を無視");
             (state, Vec::new())
         }
@@ -405,8 +402,8 @@ fn on_cascade_reply(
     let outcome = match outcome {
         ShioriOutcome::Value(script, _) => {
             // Value 短絡（Req2.4）: 以降の段を発行せず、解決と新トーク起動を同一バッチへ。
-            let new_talk_id = TalkId(state.next_talk_id);
-            state.next_talk_id += 1;
+            let (new_talk_id, start) =
+                super::start_talk(&mut state, origin, script, ScriptOrigin::GHOST);
             tracing::info!(
                 target: "kanade",
                 event = "steady_talk",
@@ -415,21 +412,11 @@ fn on_cascade_reply(
                 prev_talk_id = old_talk_id.0,
                 "選択由来の応答にスクリプト——単一 slot 調停で差し替え再生起動（Req4.1／4.3）"
             );
-            state.phase = Phase::Steady {
-                talk: Some(ActiveTalk {
-                    talk_id: new_talk_id,
-                    origin,
-                    script: script.clone(),
-                }),
-            };
             // choice 起因の slot 差替——旧 talk_id を 1 世代保持する（遷移規則 9・消費は 4.6）。
             state.choice_prev_talk = Some(old_talk_id);
             return (
                 state,
-                vec![
-                    resolve_choice(old_talk_id, choice_id, "value"),
-                    Action::StartTalk(StartTalk::new(new_talk_id, script)),
-                ],
+                vec![resolve_choice(old_talk_id, choice_id, "value"), start],
             );
         }
         ShioriOutcome::NoContent => "no_content",
@@ -454,9 +441,9 @@ fn on_cascade_reply(
                 phase = "Steady{Cascading}",
                 choice_id = %choice_id,
                 origin = origin,
+                reply = other.kind(),
                 "カスケード段に想定外の SHIORI 応答——204 相当で継続（会話を止めない）"
             );
-            let _ = other;
             "unexpected"
         }
     };
@@ -627,8 +614,8 @@ fn on_timeout_reply(
     let outcome = match outcome {
         ShioriOutcome::Value(script, _) => {
             // 置換起動（Req7.4）: 既存の起動経路（採番＋slot 上書き＋StartTalk）をそのまま使う。
-            let new_talk_id = TalkId(state.next_talk_id);
-            state.next_talk_id += 1;
+            let (new_talk_id, start) =
+                super::start_talk(&mut state, origin, script, ScriptOrigin::GHOST);
             tracing::info!(
                 target: "kanade",
                 event = "steady_talk",
@@ -637,19 +624,9 @@ fn on_timeout_reply(
                 prev_talk_id = talk_id.0,
                 "タイムアウト応答にスクリプト——既存の起動経路で置換再生（Req7.4）"
             );
-            state.phase = Phase::Steady {
-                talk: Some(ActiveTalk {
-                    talk_id: new_talk_id,
-                    origin,
-                    script: script.clone(),
-                }),
-            };
             // choice 起因の slot 差替——旧 talk_id を 1 世代保持する（遷移規則 9・消費は 4.6）。
             state.choice_prev_talk = Some(talk_id);
-            return (
-                state,
-                vec![Action::StartTalk(StartTalk::new(new_talk_id, script))],
-            );
+            return (state, vec![start]);
         }
         ShioriOutcome::NoContent => "no_content",
         ShioriOutcome::Failed(failure) => {
@@ -673,9 +650,9 @@ fn on_timeout_reply(
                 phase = "Steady{TimeoutInFlight}",
                 talk_id = talk_id.0,
                 origin = origin,
+                reply = other.kind(),
                 "タイムアウト応答に想定外の SHIORI 応答——204 相当で継続（会話を止めない）"
             );
-            let _ = other;
             "unexpected"
         }
     };
@@ -743,7 +720,9 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
 
 /// Steady での ShioriReply（origin 別 talk 起動政策・Req 2.1／2.3／3.3／4.1／4.3／4.4・DD-IE-2／DD-IE-3）。
 ///
-/// mod.rs は非 Failed 応答のみを Steady へ委譲する（Failed は横断アームで Unloading{Fault}）。`origin`
+/// mod.rs は Value／NoContent を Steady へ委譲する（定常の Notified は mod.rs が先に受けて返し、Failed は横断
+/// アームで Unloading{Fault}）。例外はアンカー・クリックの段の列・in-flight な選択の応答待ちで、このときは
+/// Failed を含む全部の応答が届き、先頭の腕（アンカー・クリック・選択）が台本以外を捌く。`origin`
 /// は応答の出所イベント ID（actor が発行 call の id を転記・pump は "OnSecondChange"／マウスは
 /// "OnMouseMove"／"OnMouseDoubleClick"）。これを ActiveTalk へ転記し、再生中の分岐に用いる:
 /// - `talk: None` + `Value(script)` → 一意 talk_id 採番＋StartTalk・`Steady{Some(origin)}` へ（origin ラベルは
@@ -754,7 +733,7 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
 ///   kanade 側は slot 上書きと採番のみ＝新調停なし・Req 4.3・DD-IE-2）。
 /// - `talk: Some` + `Value` + origin が `OnSecondChange` → 既存 DD-6 防御破棄・warn!＋破棄・維持。
 /// - `talk: Some` + `Value` + origin が `OnShellScaling`・`OnBalloonScaling` → info!＋破棄・維持。
-/// - `talk: Some` + `Notified` → NOTIFY pump の応答・`Steady{Some}` 維持（無視）。
+/// - 上のどれでもない応答（Notified・Unloaded・Failed）→ [`steady_reply_unexpected`] が warn＋維持。
 fn on_reply(
     mut state: State,
     outcome: ShioriOutcome,
@@ -797,23 +776,13 @@ fn on_reply(
     match state.phase {
         Phase::Steady { talk: None } => match outcome {
             ShioriOutcome::Value(script, _) => {
-                let talk_id = TalkId(state.next_talk_id);
-                state.next_talk_id += 1;
-                tracing::info!(target: "kanade", event = "steady_talk", talk_id = talk_id.0, origin = origin, "応答にスクリプト——再生起動");
                 // origin は応答の出所（動的化・DD-IE-3）。pump なら "OnSecondChange"、マウスなら
                 // 当該マウスイベント名がそのまま ActiveTalk のラベルに載る。script は起動値の
                 // 保持（DD-10・`OnChoiceTimeout` Ref0 の供給源。新しい情報源を作らない）。
-                state.phase = Phase::Steady {
-                    talk: Some(ActiveTalk {
-                        talk_id,
-                        origin,
-                        script: script.clone(),
-                    }),
-                };
-                (
-                    state,
-                    vec![Action::StartTalk(StartTalk::new(talk_id, script))],
-                )
+                let (talk_id, start) =
+                    super::start_talk(&mut state, origin, script, ScriptOrigin::GHOST);
+                tracing::info!(target: "kanade", event = "steady_talk", talk_id = talk_id.0, origin = origin, "応答にスクリプト——再生起動");
+                (state, vec![start])
             }
             ShioriOutcome::NoContent => {
                 // 204: talk なし（Req 2.3／4.2）。Steady{None} を維持し次 Tick で pump 再開。
@@ -822,10 +791,6 @@ fn on_reply(
             other => steady_reply_unexpected(state, "Steady{None}", other),
         },
         Phase::Steady { talk: Some(_) } => match outcome {
-            ShioriOutcome::Notified => {
-                // NOTIFY pump（Ref3=0）の応答。構造的に無視し Steady{Some} を維持する。
-                (state, Vec::new())
-            }
             // 出所別の Value 政策（DD-IE-2）。置き換えるかの判断は述語
             // `events::value_replaces_active_talk` の 1 か所に置く（`OnSecondChange` と倍率の 2 語以外は置き換える）。
             ShioriOutcome::Value(script, _) => match origin {
@@ -833,37 +798,26 @@ fn on_reply(
                     // 置換（Req 4.3・DD-IE-2）: マウス 2 語・汎用の入口の Value は active talk を差し替える。
                     // kanade 側は新 talk_id 採番＋slot 上書き＋StartTalk のみ。旧 talk の後始末
                     // （Close-then-spawn・旧 Done の stale 破棄）は dispatcher 既存実装へ完全委譲する。
-                    let talk_id = TalkId(state.next_talk_id);
-                    state.next_talk_id += 1;
+                    let (talk_id, start) =
+                        super::start_talk(&mut state, origin, script, ScriptOrigin::GHOST);
                     tracing::info!(target: "kanade", event = "steady_talk_replace", talk_id = talk_id.0, origin = origin, "active talk 中に置き換える出所の Value——単一 slot 置換（新 talk_id 採番）");
                     // slot 置換の掃除点（C4 規則 7・**マウス由来を含む**）: 旧トークの選択待ちは
                     // 置換で消滅する。加えて 1 世代 stale 保持も「次の slot 差替」で消す（規則 9）
                     // ——choice 起因でない置換が挟まれた時点で、保持していた旧 id は 2 世代前になる。
                     super::clear_choice_ledger(&mut state, "steady_talk_replace");
                     state.choice_prev_talk = None;
-                    state.phase = Phase::Steady {
-                        talk: Some(ActiveTalk {
-                            talk_id,
-                            origin,
-                            script: script.clone(),
-                        }),
-                    };
-                    (
-                        state,
-                        vec![Action::StartTalk(StartTalk::new(talk_id, script))],
-                    )
+                    (state, vec![start])
                 }
                 // 倍率の 2 語の応答は話している最中なら台詞を差し替えない（shell-scale-linkage 要件 5.11）。
                 "OnShellScaling" | "OnBalloonScaling" => {
                     tracing::info!(target: "kanade", event = "scale_reply_dropped_while_talking", origin = origin, "話している最中の倍率のイベントの応答——台詞を差し替えずに捨てる");
                     (state, Vec::new())
                 }
-                // DD-6 防御破棄（`OnSecondChange` 限定）。上の置換アームへ抜けない出どころは `OnSecondChange`
-                // と倍率の 2 語だけで、倍率の 2 語はすぐ上の腕が捌くため、ここへ届くのは pump（OnSecondChange）
-                // の Value のみ。active talk は NOTIFY を発行するため構造上ここへは届かないはずだが、万一届いても
-                // StartTalk・キュー・中断を一切行わず破棄し、idle-talk 檻の防御規律を保存する。
+                // DD-6 防御破棄。述語が置き換えないとし、すぐ上の腕も捌かない出どころ（今は pump の
+                // OnSecondChange だけ）の Value。active talk は NOTIFY を発行するため構造上ここへは届かないはずだが、
+                // 万一届いても StartTalk・キュー・中断を一切行わず破棄し、idle-talk 檻の防御規律を保存する。
                 _ => {
-                    tracing::warn!(target: "kanade", event = "steady_value_during_talk", origin = origin, "active talk 中に OnSecondChange の Value——構造上想定外・破棄（キュー/中断なし・DD-6）");
+                    tracing::warn!(target: "kanade", event = "steady_value_during_talk", origin = origin, "active talk 中に置き換えない出どころの Value——構造上想定外・破棄（キュー/中断なし・DD-6）");
                     (state, Vec::new())
                 }
             },
@@ -950,9 +904,9 @@ fn steady_phase_unexpected(state: State, input: &str) -> (State, Vec<Action>) {
 fn steady_reply_unexpected(
     state: State,
     phase: &str,
-    _outcome: ShioriOutcome,
+    outcome: ShioriOutcome,
 ) -> (State, Vec<Action>) {
-    tracing::warn!(target: "kanade", event = "steady_unexpected_reply", phase = phase, "Steady 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続");
+    tracing::warn!(target: "kanade", event = "steady_unexpected_reply", phase = phase, reply = outcome.kind(), "Steady 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続");
     (state, Vec::new())
 }
 

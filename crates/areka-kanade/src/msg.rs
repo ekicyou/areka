@@ -422,6 +422,19 @@ pub enum ShioriOutcome {
     Failed(ShioriFailure),
 }
 
+impl ShioriOutcome {
+    /// 記録に載せる答えの種類の 1 語（台本の中身は載せない）。
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            Self::Value(..) => "value",
+            Self::NoContent => "no_content",
+            Self::Notified => "notified",
+            Self::Unloaded => "unloaded",
+            Self::Failed(_) => "failed",
+        }
+    }
+}
+
 /// 呼出失敗の区別語彙（host32 非依存の再表現・thiserror）。
 ///
 /// 既存4語彙（`Handshake`／`Timeout`／`Ipc`／`Shiori`）は `RequestError` の**境界写像**であり、

@@ -4,8 +4,9 @@ use super::test_support::{
 };
 use super::*;
 use crate::msg::ShioriCall;
-use crate::schedule::step;
 use crate::schedule::translate_test_support::pass_translate;
+use crate::schedule::{ActiveTalk, step};
+use crate::talk::StartTalk;
 
 // --- A. 棄却分岐（規則 1）: すべて状態不変・Action なし ---
 
@@ -358,7 +359,6 @@ fn cascade_failed_is_treated_as_no_content_stage_advance() {
             outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout("30s".to_string())),
             origin: "OnChoiceSelectEx",
         },
-        &config(),
     );
     assert!(
         !matches!(next.phase, Phase::Unloading { .. }),
@@ -389,7 +389,6 @@ fn cascade_failed_at_last_stage_resolves_without_start() {
             )),
             origin: "OnChoiceSelect",
         },
-        &config(),
     );
     assert!(!matches!(next.phase, Phase::Unloading { .. }));
     match actions.as_slice() {
