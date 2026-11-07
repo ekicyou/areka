@@ -58,7 +58,8 @@
 //! 窓を維持する。選択待ち帳簿は「現行 talk と一致する `ChoiceWaiting`」でしか確立しないため、この
 //! 窓が全群の前提である。カスケードは kanade drive ループの同期往復（execute-batch/reinject-last）で
 //! 1 メッセージ処理内に完結するため、段の途中に Tick も別の選択確定も割り込まない。終了は末尾 talk を
-//! quit:true にして駆動し、kanade の期限付き join 成功をもって全記録の確定点とする。
+//! quit:true にして駆動し（群 3 の `non_choice_failure_during_choice_wait_still_faults` だけは例外で、
+//! 終了は Fault 経路が駆動する）、kanade の期限付き join 成功をもって全記録の確定点とする。
 //!
 //! # 期限（deadline）の作り方——実時刻を一切読まない
 //! 注入する `ChoiceWaiting` は `timeout_directive_secs: None`（＝既定値

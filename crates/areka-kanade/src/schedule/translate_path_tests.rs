@@ -211,7 +211,7 @@ fn state_shape(s: &State) -> String {
         s.prev_talk.map(|t| t.0),
         s.anchor,
         s.mouse_click,
-        s.user_break_talk.map(|note| note.talk_id.0),
+        s.user_break_talk,
         s.shown,
         s.pending_change,
         s.sstp_notify,

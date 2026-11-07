@@ -1,8 +1,8 @@
 //! 切替の中止と終了要求への譲りのテスト（areka-P0-ghost-shell-balloon-switch 要件 2.9・5.1〜5.4・5.6・5.7・10.4）。
 //!
 //! 送り出しの台詞を利用者が中断したら（`\-` の予約が在っても）切替を中止して定常へ戻ること、
-//! 中止のあとの終了要求が今日どおり `OnClose` を出すこと、切替の 4 相に届いた終了要求が切替を
-//! 取りやめて今日の終了の握手へ合流し `OnClose` を二度送らないことを `step` 経由で固定する。
+//! 中止のあとの終了要求が定常と同じく `OnClose` を出すこと、切替の 4 相に届いた終了要求が切替を
+//! 取りやめて終了の握手へ合流し `OnClose` を二度送らないことを `step` 経由で固定する。
 
 use super::*;
 
@@ -59,7 +59,7 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
             assert!(s.change.is_none(), "{label}: 切替の帳簿は消える");
             assert!(s.user_break_talk.is_none(), "{label}: 中断の帳簿も空");
 
-            // 中止のあとの終了要求は今日どおり OnClose を出す（要件 5.6）。
+            // 中止のあとの終了要求は定常と同じく OnClose を出す（要件 5.6）。
             let (after, actions) = close_request(s);
             assert_eq!(only_get(&actions).0, "OnClose", "{label}");
             assert!(matches!(after.phase, Phase::ClosePending), "{label}");
@@ -138,7 +138,7 @@ fn close_request_while_waiting_changing_reply_waits_for_it_then_closes() {
     assert_eq!(on_close_sends(&actions), 1, "OnClose はここで 1 件");
     assert!(matches!(s.phase, Phase::ClosePending));
 
-    // 204 が返った: そのまま今日の OnClose の握手へ。
+    // 204 が返った: そのまま OnClose の握手へ。
     let (s, _) = step(
         steady(),
         Input::ChangeGhost(req(ChangeOrigin::Manual, true)),
@@ -169,7 +169,7 @@ fn close_request_during_changing_talk_lets_it_finish_then_closes() {
 
 #[test]
 fn close_request_after_change_on_close_was_sent_never_sends_it_again() {
-    // ChangeClosePending: 応答を待って今日の終了の握手の続きへ。
+    // ChangeClosePending: 応答を待って終了の握手の続きへ。
     let (s, _) = step(
         steady(),
         Input::ChangeGhost(req(ChangeOrigin::Manual, true)),

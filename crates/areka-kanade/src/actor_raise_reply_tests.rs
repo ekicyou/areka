@@ -2,7 +2,7 @@
 //!
 //! 本物の殻（[`spawn_kanade_with_stop_sink`]）を偽の shiori のスレッドにつなぎ、`KanadeMsg::RaiseEvent`
 //! に付けた返信端へ 5 値が 1 つずつ返ることを見る: 台本・空白だけの台本・空の台本・204・NOTIFY の完了・
-//! 失敗・起動の途中（定常の前）・許可表に無い名前。返信端が無い依頼は今日どおり送られ、受け手が
+//! 失敗・起動の途中（定常の前）・許可表に無い名前。返信端が無い依頼もそのまま送られ、受け手が
 //! 居なくなった返信端でも運行が続くことも見る。
 //!
 //! 待ちはすべて受信端の受け取りで揃える（返事・運行の通知・偽の shiori の記録）。期限は
@@ -160,7 +160,7 @@ fn script_reply_is_script_after_the_talk_is_started() {
 }
 
 /// 空の台本と 204 は `NoReply`。依頼のイベントの往復は 1 回で、OnTranslate は続かない（空の台本の再生は運行表の
-/// 今日どおりの振る舞い）。
+/// 通常の振る舞い）。
 #[test]
 fn empty_and_no_content_are_no_reply() {
     let answers: [(&str, Answer); 2] = [
@@ -226,7 +226,7 @@ fn notify_completion_is_no_reply() {
     close(rig);
 }
 
-/// 往復の失敗は `Failed`。kanade は今日どおり終了系列へ進み、返事はその後（降ろして止まった後）に届く。
+/// 往復の失敗は `Failed`。kanade は終了系列へ進み、返事はその後（降ろして止まった後）に届く。
 #[test]
 fn failed_round_trip_is_failed_after_the_fault_sequence() {
     let rig = spawn_rig(Box::new(|| {
@@ -307,7 +307,7 @@ fn name_outside_the_table_is_not_allowed_and_nothing_is_sent() {
     close(rig);
 }
 
-/// 返信端が無い依頼は今日どおり送られ、次の依頼も受ける。
+/// 返信端が無い依頼もそのまま送られ、次の依頼も受ける。
 #[test]
 fn without_reply_the_event_is_sent_as_today() {
     let rig = spawn_rig(Box::new(|| {

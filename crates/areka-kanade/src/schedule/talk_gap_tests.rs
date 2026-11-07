@@ -23,7 +23,7 @@ use crate::schedule::{ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, TermCa
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
-/// 再生中のトークの番号（`steady_some` に渡す）。
+/// 再生中のトークの番号（`steady_some` が使う）。
 const TALK: TalkId = TalkId(4);
 
 /// `Steady{talk: Some(TALK)}`（終了の保留なし）。
@@ -104,7 +104,7 @@ fn user_break_without_quit_reservation_reaches() {
     );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == TALK),
-        "中断は今日どおり止める指示を 1 件出す"
+        "中断は止める指示を 1 件出す"
     );
     assert_waiting(&s, "止めた応答を待つ間");
 
@@ -141,7 +141,7 @@ fn user_break_with_quit_reservation_goes_to_closing_as_today() {
                 cause: TermCause::Quit
             }
         ),
-        "今日どおり終了系列へ進む"
+        "終了系列へ進む"
     );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
     assert_eq!(
@@ -175,10 +175,7 @@ fn close_request_while_watching_is_closing() {
         },
         &cfg(),
     );
-    assert!(
-        s.pending_close.is_some(),
-        "再生中の閉鎖要求は今日どおり保留される"
-    );
+    assert!(s.pending_close.is_some(), "再生中の閉鎖要求は保留される");
     assert_eq!(
         take_outcome(&mut s),
         Some(TalkGap::Left {
@@ -735,10 +732,7 @@ fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() 
             ),
             "quit_reserved={quit_reserved}: OnBalloonBreak の GET 1 本だけ"
         );
-        assert!(
-            s.user_break_talk.is_none(),
-            "中断の帳簿は今日どおり空になる"
-        );
+        assert!(s.user_break_talk.is_none(), "中断の帳簿は空になる");
         assert_not_logged(&ev, "talk_done_break_quit");
         logged_once(&ev, Level::INFO, "talk_gap_marked_break");
         assert_eq!(take_outcome(&mut s), Some(TalkGap::CancelledByUser));

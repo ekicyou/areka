@@ -38,7 +38,7 @@ pub(crate) mod close;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
 /// クレート公開面への露出は [`crate::events`] ファサード経由（`lib.rs` 参照）。
 pub mod events;
-/// 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
+/// テスト専用のログ捕捉ヘルパ（捕捉窓と表明）。
 #[cfg(test)]
 pub(crate) mod log_capture;
 /// マウスの解放・ホイール・出入りの受理と、クリックの段の列。

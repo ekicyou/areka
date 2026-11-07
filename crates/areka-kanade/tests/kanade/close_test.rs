@@ -18,7 +18,7 @@
 //! 4. **強制終了直行**（Req 4.4・DD-10）: ForceQuit → best-effort OnClose NOTIFY → Unload →
 //!    StopSelf へ直行し join 成功。
 //!
-//! # 追加: boot 挨拶の統合檻（DD-IT-12・Req 1.5/2.4/3.1）
+//! # boot 挨拶の統合檻（DD-IT-12・Req 1.5/2.4/3.1）
 //! さらに boot 起動挨拶（default fixture・挨拶 talk＝StartTalk index 0）を保留ハーネスで active に
 //! 保ち、DD-IT-12 の「挨拶を正規追跡する」意味論を統合層で 2 本、決定的に観測する
 //! （`close_test_boot_greeting_tests.rs`）:

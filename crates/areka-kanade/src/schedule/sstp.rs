@@ -41,7 +41,7 @@ pub(crate) fn accepts(state: &State) -> bool {
 /// 受け付けたら台本から CR・LF・NUL を取り除き（取り除いたら `info!`（`sstp_send_line_breaks_removed`）を
 /// 1 件）、選択肢の帳簿を消し、共通の手で採番・枠の差し替え（古い番号を控えへ）をし、再生の開始に
 /// strict の印を立て、翻訳へ預ける（0 文字なら預けずに再生の開始をそのまま返す）。旧トークの
-/// 後始末は今日の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
+/// 後始末は定常の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
 pub(super) fn on_send(
     mut state: State,
     script: String,
@@ -116,7 +116,8 @@ pub(super) fn on_notify(
 /// 控えを必ず取り出す。相が `Steady` で空でない（空白だけも含む・[`super::has_script`]）台本なら [`on_send`] と同じ
 /// 掃除・採番で新しいトークを始め（`origin = NOTIFY_ORIGIN`）、再生の開始に strict の印を立てる。翻訳は
 /// `step` の出口の規則が元のイベント（`EventId::Sstp`）の出どころで預ける。空・204（エラー
-/// 応答は殻が 204 に写す）は何もせず今のトークを残す。それ以外（失敗など）は今日の道へ渡す。
+/// 応答は殻が 204 に写す）は何もせず今のトークを残す。それ以外（失敗など）は
+/// `on_shiori_reply` へ渡す。
 pub(super) fn on_notify_reply(
     mut state: State,
     outcome: ShioriOutcome,

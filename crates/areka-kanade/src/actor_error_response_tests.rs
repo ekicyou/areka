@@ -150,7 +150,7 @@ fn sstp_origin_valid_name_is_sent_verbatim_without_warning() {
     }
 }
 
-/// 検査を破る `EventId::Sstp`（名前か Reference に CR・LF・NUL・空の名前）は送らず、今日の檻と同じ
+/// 検査を破る `EventId::Sstp`（名前か Reference に CR・LF・NUL・空の名前）は送らず、ほかの許可外の名前と同じ
 /// `error!`（`event_id_not_allowed`）＋`Failed(Internal)` になる。
 #[test]
 fn sstp_origin_invalid_name_or_reference_is_not_sent_and_logs_error() {

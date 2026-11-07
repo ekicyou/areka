@@ -2,8 +2,10 @@
 //!
 //! 本モジュールは close 各待ち点（[`Phase::ClosePending`] の OnClose 応答待ち・
 //! [`Phase::CloseTalkWait`] の close talk 再生完了待ち／期限判定）の遷移本体を担う。
-//! OnClose GET 自体は steady 側（`begin_close`）が ClosePending への遷移時に発行済み
-//! であり、本モジュールはその応答（Value／NoContent）分岐から先を実装する。
+//! OnClose GET 自体は、steady 側（`begin_close`）が ClosePending への遷移時に、または切替の
+//! 相（`change.rs`）が `OnGhostChanging` の 204 で `ChangeClosePending` へ移るときに発行済みで
+//! （後者は終了要求で `yield_to_close` が `ClosePending` へ移す）、本モジュールはその応答
+//! （Value／NoContent）分岐から先を実装する。
 //!
 //! # close 握手の状態遷移（Req 4.1〜4.7・DD-11）
 //! - `ClosePending` + `ShioriReply{Value(script)}` → 応答スクリプトを一意 talk_id

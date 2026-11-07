@@ -403,7 +403,7 @@ fn held(raise_event: bool) -> State {
 }
 
 /// 利用者の中断を受けてから、そのトークの `TalkDone{Interrupted}` を返す。
-/// 止める指示は今日の中断と同じ単一の閉じ口（`CancelChoice`）であることも確かめる。
+/// 止める指示は定常の中断と同じ単一の閉じ口（`CancelChoice`）であることも確かめる。
 fn break_talk(s: State, talk_id: TalkId, quit_reserved: bool) -> (State, Vec<Action>) {
     let (s, actions) = step(
         s,
@@ -415,7 +415,7 @@ fn break_talk(s: State, talk_id: TalkId, quit_reserved: bool) -> (State, Vec<Act
     );
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id: t }] if *t == talk_id),
-        "中断の指示は今日と同じ（バルーンを隠す規則に触れない）"
+        "中断の指示は定常と同じ（バルーンを隠す規則に触れない）"
     );
     let done = TalkDone {
         talk_id,

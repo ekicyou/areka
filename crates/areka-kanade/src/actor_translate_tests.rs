@@ -278,7 +278,7 @@ fn absent_marker_from_outside_is_replaced_on_existing_send_path() {
 
 /// 外からの台本（SSTP SEND）の依頼は `on_translate_sstp` で組み立てる: Reference0＝展開の後の台詞・
 /// Reference1＝`sstp-send,owned`・Reference2 以降なし。MAKOTO の口の 2 つ目は空文字、記録の欄は
-/// `sstp-send`（要件 4.4）。イベントの出どころの依頼は上のテストのとおり今日のまま（要件 4.6）。
+/// `sstp-send`（要件 4.4）。イベントの出どころの依頼は上のテストのとおり（要件 4.6）。
 #[test]
 fn sstp_send_source_uses_sstp_send_owned_reference1() {
     let observed = run_from(

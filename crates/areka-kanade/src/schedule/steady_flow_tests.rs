@@ -1,6 +1,6 @@
 use super::test_support::{assert_shiori, config, steady_none, steady_some};
 use super::*;
-use crate::msg::ShioriCall;
+use crate::msg::{MouseButton, MouseEventKind, MouseInput, ShioriCall};
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkEndReason};
@@ -539,8 +539,6 @@ fn steady_some_close_request_records_pending_only() {
 // === マウス GET 発行（Req 1.4／2.1／3.1・DD-IE-1／DD-IE-8） ===
 // step() 経由（横断アーム込み）で駆動し、期待 GET は
 // events:: の構築子と共有する（Reference 手書き重複を作らない）。
-
-use crate::msg::{MouseButton, MouseEventKind, MouseInput};
 
 fn mouse_move_input(region: Option<&str>) -> MouseInput {
     MouseInput {

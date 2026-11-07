@@ -262,17 +262,9 @@ fn prefetch_first_boot_false_skips_onfirstboot_and_starts_from_onboot() {
 fn first_boot_true_204_falls_through_to_onboot() {
     let cfg = config(); // 既定 first_boot=true
     let s = drive_to_prefetch(&cfg);
-    // BootPrefetch 204 → OnFirstBoot GET / BootType（従来どおり）。
-    let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
-    assert!(
-        matches!(s.phase, Phase::BootType),
-        "first_boot=true は BootType（OnFirstBoot 待ち）へ"
-    );
-    assert_eq!(
-        get_ids(&actions),
-        ["OnFirstBoot"],
-        "first_boot=true は OnFirstBoot GET を発行する（3.1）"
-    );
+    // BootPrefetch 204 → OnFirstBoot GET / BootType（表明は
+    // prefetch_username_get_is_issued_once_between_initialize_and_firstboot が持つ）。
+    let (s, _) = reply(s, ShioriOutcome::NoContent, &cfg);
     // BootType 204 → OnBoot GET / BootMain（204 フォールスルー・3.2）。
     let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     assert!(

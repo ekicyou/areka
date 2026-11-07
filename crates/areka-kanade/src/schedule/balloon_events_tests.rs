@@ -2,19 +2,17 @@
 //!
 //! どれも最上位の [`step`] に実際の入力を順に入れて駆動する（時刻は `Tick` で注入する）。
 //! ここではトークの控え（`State.shown`）と中断の控え（`State.user_break_talk`）の出入りを固定する
-//! ——翻訳の後の最終の台本が控えに入ること、切替の `OnClose` の別れの台詞も控えに入ること、
-//! 別の応答による置き換えで中断の控えが捨てられ理由の記録が 1 行出ること（要件 1.2・1.3・1.8・
-//! 2.2・3.2・7.2）。表 B の檻は `balloon_events_done_tests.rs` に置き、ここの補助を使う。
+//! ——翻訳の後の最終の台本が控えに入ること、切替の `OnClose` の別れの台詞も控えに入ること（要件 1.2・
+//! 1.3・2.2・3.2）。表 B の檻は `balloon_events_done_tests.rs` に、置き換えで控えを捨てる檻は
+//! `balloon_events_cleanup_tests.rs` に置き、ここの補助を使う。
 
-use super::super::log_capture::{capture, logged_once};
 use super::super::{Input, Phase, step};
+use super::ShownTalk;
 use super::done_tests::done;
-use super::{BreakNote, ShownTalk};
-use crate::msg::{MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriOutcome};
+use crate::msg::{MonotonicMs, ShioriOutcome};
 use crate::schedule::translate_test_support::change_request;
 use crate::schedule::{Action, State};
 use crate::talk::{ScriptOrigin, TalkEndReason, TalkId};
-use tracing::Level;
 
 pub(super) use crate::schedule::translate_test_support::config as cfg;
 
@@ -178,69 +176,4 @@ fn shown_talk_keeps_the_change_farewell_script() {
     );
     let shown = s.shown.as_ref().expect("別れの台詞も控えに入る");
     assert_eq!((shown.talk_id, shown.script.as_str()), (talk_id, FINAL));
-}
-
-/// 中断を出した後、止まり終える前に別の応答がトークを置き換えたら、置き換えの `step` の出口で
-/// 中断の控えを捨て、理由 `talk_gone` を 1 行記録する（要件 1.8・7.2）。控えは新しいトークへ進む。
-#[test]
-fn replacing_the_talk_drops_the_break_note_with_one_talk_gone_line() {
-    let mut s = steady_none();
-    let first = start_translated(&mut s, 2_000, FINAL);
-    feed(
-        &mut s,
-        Input::UserBreak {
-            scope: 1,
-            talk_id: Some(first),
-        },
-    );
-    assert_eq!(
-        s.user_break_talk,
-        Some(BreakNote {
-            talk_id: first,
-            scope: 1
-        }),
-        "受理で相手と scope を控える"
-    );
-
-    // 再生中のダブルクリックの応答が今のトークを置き換える。
-    feed(
-        &mut s,
-        Input::Mouse(MouseInput {
-            scope: 0,
-            x: 10,
-            y: 20,
-            region: Some("Head".to_string()),
-            kind: MouseEventKind::DoubleClick {
-                button: MouseButton::Left,
-            },
-        }),
-    );
-    let ev = capture(|| {
-        let actions = reply_value(&mut s, ORIGINAL, "OnMouseDoubleClick");
-        assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    });
-    assert!(s.user_break_talk.is_none(), "置き換えで中断の控えは捨てる");
-    let line = logged_once(&ev, Level::INFO, "balloon_event_not_sent");
-    assert_eq!(
-        line.fields.get("reason").map(String::as_str),
-        Some("talk_gone"),
-        "捨てた理由は相手のトークが現行でなくなったこと。\n捕捉={ev:#?}"
-    );
-    assert_eq!(
-        line.fields.get("talk_id").map(String::as_str),
-        Some(first.0.to_string().as_str()),
-        "捨てた控えの相手の番号を載せる。\n捕捉={ev:#?}"
-    );
-
-    let actions = feed(
-        &mut s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
-    );
-    let (second, _) = started(&actions);
-    assert_ne!(second, first);
-    assert_eq!(
-        s.shown.as_ref().map(|shown| shown.talk_id),
-        Some(second),
-        "控えは置き換えたトークへ進む"
-    );
 }

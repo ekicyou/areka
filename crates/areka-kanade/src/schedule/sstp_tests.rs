@@ -227,7 +227,7 @@ fn send_strips_line_breaks_before_playing_and_translating() {
     ));
 }
 
-/// strict の台本の後でも、kanade が自分で始める台本（起動の挨拶）は印を持たない（要件 3.8）。
+/// strict の台本の後に外から頼まれたイベントが返した台本は印を持たない。起動の挨拶も既定で印を持たない（要件 3.8）。
 #[test]
 fn own_talks_after_a_strict_send_are_not_strict() {
     let cfg = config();

@@ -140,21 +140,20 @@ pub fn spawn_harness(config: KanadeConfig, fixture: Fixture, quit_policy: QuitPo
 
 /// 停止通知の投函端つき駆動ハーネスを組み立てる（R15.3・[`spawn_harness`] の派生）。
 ///
-/// [`spawn_harness`] と同一の結線で、kanade に `stop_sink` を渡す。`Some` なら終了系列の完了
-/// （`Action::StopSelf`）で [`KanadeNotice::Stopped`] が 1 件届き、`None` なら通知は出ない
-/// （＝[`spawn_harness`] と同一挙動）。
+/// [`spawn_harness`] と同一の結線で、kanade に `stop_sink` を渡す。終了系列の完了
+/// （`Action::StopSelf`）で [`KanadeNotice::Stopped`] が 1 件届く。
 ///
 /// 受信端をテスト側で先に drop しておけば「送出失敗しても停止は完走する」経路も踏める。
 pub fn spawn_harness_with_stop_sink(
     config: KanadeConfig,
     fixture: Fixture,
     quit_policy: QuitPolicy,
-    stop_sink: Option<Sender<KanadeNotice>>,
+    stop_sink: Sender<KanadeNotice>,
 ) -> Harness {
     assemble(
         config,
         spawn_mock_shiori(fixture),
-        stop_sink,
+        Some(stop_sink),
         immediate_sakura(quit_policy),
     )
     .0
@@ -208,10 +207,16 @@ pub fn spawn_harness_failing_with_stop_sink(
     fixture: Fixture,
     quit_policy: QuitPolicy,
     fail_on: FailOn,
-    stop_sink: Option<Sender<KanadeNotice>>,
+    stop_sink: Sender<KanadeNotice>,
 ) -> Harness {
     let shiori = spawn_mock_shiori_failing(fixture, fail_on);
-    assemble(config, shiori, stop_sink, immediate_sakura(quit_policy)).0
+    assemble(
+        config,
+        shiori,
+        Some(stop_sink),
+        immediate_sakura(quit_policy),
+    )
+    .0
 }
 
 /// 保留 sakura ＋失敗注入 shiori の駆動ハーネスを組み立てる（両派生の合成）。

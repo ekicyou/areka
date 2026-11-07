@@ -7,10 +7,10 @@
 //! すべて本表から導出され、fixture・検証・実装が単一の正本を共有する（Req 7.1・DD-9）。
 //!
 //! # 公開面（DD-9 の例外）
-//! `schedule/` は `pub(crate)` に閉じるが、本モジュールの Reference 表構成関数のみ例外的に
-//! `pub` とする。`tests/` 配下の統合テストクレートは `pub(crate)` を参照できないため、
-//! ハーネスが同一の値を fixture の期待値として再利用できるよう、これらの関数だけを
-//! クレートの公開面（[`crate::events`] 経由）に露出する。運行状態機械の内部実装
+//! `schedule/` は `pub(crate)` に閉じるが、[`crate::events`] が再び公開する Reference 表構成関数
+//! （と許可集合・`SourceEvent`）だけは例外的に `pub` とする。`tests/` 配下の統合テストクレートは
+//! `pub(crate)` を参照できないため、ハーネスが同一の値を fixture の期待値として再利用できるよう、
+//! これらだけをクレートの公開面に露出する。再び公開しない構成関数と判定は `pub(crate)` に置く。運行状態機械の内部実装
 //! （Phase／State／Action／Input／step 本体・boot/steady/close の遷移ロジック）は
 //! `pub(crate)` のまま非公開である。
 //!
@@ -294,7 +294,7 @@ pub fn is_allowed_event_id(id: &str) -> bool {
 ///
 /// 汎用の入口が外から受けた名前を [`EventId::Static`] と再生中のトークの `origin` の両方へ
 /// 使える形に写す照合（要件 7.2）。判定は逐語（大小文字の揺れは補正しない）。
-pub fn allowed_static(id: &str) -> Option<&'static str> {
+pub(crate) fn allowed_static(id: &str) -> Option<&'static str> {
     ALLOWED_EVENT_IDS
         .iter()
         .copied()
@@ -305,7 +305,7 @@ pub fn allowed_static(id: &str) -> Option<&'static str> {
 ///
 /// `OnSecondChange` と倍率の 2 語（`OnShellScaling`・`OnBalloonScaling`・shell-scale-linkage
 /// 要件 5.11）の応答は捨て、それ以外（マウス・汎用の入口・`OnGhostChanging`）は置き換える。
-pub fn value_replaces_active_talk(origin: &str) -> bool {
+pub(crate) fn value_replaces_active_talk(origin: &str) -> bool {
     !matches!(
         origin,
         "OnSecondChange" | "OnShellScaling" | "OnBalloonScaling"
@@ -323,7 +323,7 @@ pub fn value_replaces_active_talk(origin: &str) -> bool {
 /// `OnTalk` も選択起源なら発火できる（Req2.9・裁定 8）。
 ///
 /// 大小文字の揺れ（`on`／`ONMENU`）は正典の書式ではないため補正せず拒否する（逐語判定）。
-pub fn is_allowed_choice_event(id: &str) -> bool {
+pub(crate) fn is_allowed_choice_event(id: &str) -> bool {
     id.starts_with("On")
 }
 
@@ -390,7 +390,7 @@ pub fn on_ghost_changing(req: &ChangeRequest, snapshot: &ExecutionSnapshot) -> S
 /// Ref4〜6＝空、Ref7＝シェルのフォルダ名）。
 ///
 /// 切替時の台本が無ければ Ref1 は空のまま位置を保つ（要件 4.1・11.5）。
-pub fn on_ghost_changed(
+pub(crate) fn on_ghost_changed(
     from: &ChangedFrom,
     shell_folder: &str,
     snapshot: &ExecutionSnapshot,
@@ -719,7 +719,7 @@ pub fn on_choice_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
 /// 並びは [`on_choice_select_ex`] と同じで、Ref0 が選択肢のラベルの代わりにアンカーの範囲に
 /// 表示された文字になる。引数（`\_a[ID,r2,r3...]` の 2 番目以降）は記述順のまま逐語で載せ、
 /// 無ければ Ref2 以降の位置を作らない（要件 4.6。上記「空参照列の規約」を参照）。
-pub fn on_anchor_select_ex(
+pub(crate) fn on_anchor_select_ex(
     text: &str,
     id: &str,
     references: &[String],
@@ -732,7 +732,7 @@ pub fn on_anchor_select_ex(
 ///
 /// 先に送った `OnAnchorSelectEx` が 204 のときだけ続けて送る（areka-P0-anchor-tag-canon 要件 4.2）。
 /// Reference は常に 1 個で、範囲の文字・引数は載せない。
-pub fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+pub(crate) fn on_anchor_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     select_get("OnAnchorSelect", id, snapshot)
 }
 
@@ -819,13 +819,13 @@ pub fn on_translate(expanded: &str, source: &SourceEvent, status: ExecutionStatu
 }
 
 /// SSTP SEND の台本の `OnTranslate` の Ref1（出所＝SSTP SEND・送り手が台本を持つ）。
-pub const REF1_SSTP_SEND_OWNED: &str = "sstp-send,owned";
+pub(crate) const REF1_SSTP_SEND_OWNED: &str = "sstp-send,owned";
 
 /// 外から頼まれた任意の名前の GET（`EventId::Sstp`・渡された Reference をそのまま）。
 ///
 /// 許可表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.1・2.2）。
 /// 本関数は `EventId::Sstp` を構成する唯一点である。
-pub fn sstp_notify(
+pub(crate) fn sstp_notify(
     id: String,
     references: Vec<String>,
     snapshot: &ExecutionSnapshot,
@@ -844,7 +844,7 @@ pub(crate) const PROPERTY_EVENT_ORIGIN: &str = "PropertyEvent";
 ///
 /// 名前は逐語（`On` で始まらなくてよい）、Reference は欠番を詰めず台本の順。名前と Reference の検査は
 /// 呼び手（`change::on_property_event`）が済ませている。本関数は `EventId::Property` を構成する唯一点である。
-pub fn property_event(
+pub(crate) fn property_event(
     id: String,
     references: Vec<String>,
     snapshot: &ExecutionSnapshot,
@@ -861,7 +861,7 @@ pub fn property_event(
 ///
 /// Ref2・3 の欠番は列を Ref1 で止めて表す（要件 4.4）。イベントへの応答の翻訳は
 /// [`on_translate`] のまま（要件 4.6）。要求の出どころは MCP の SEND（要件 2.4）。
-pub fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> ShioriCall {
+pub(crate) fn on_translate_sstp(expanded: &str, status: ExecutionStatus) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Translate(RequestOrigin::MCP_SEND_TRANSLATE),
         references: vec![expanded.to_string(), REF1_SSTP_SEND_OWNED.to_string()],
@@ -894,7 +894,11 @@ pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCa
 /// Reference は常に 3 個。Ref2（中断位置）は今は作らず空で送り、位置は保つ（要件 1.4・
 /// 縮退の追跡先は `balloon-break-position`）。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
-pub fn on_balloon_break(script: &str, scope: u32, snapshot: &ExecutionSnapshot) -> ShioriCall {
+pub(crate) fn on_balloon_break(
+    script: &str,
+    scope: u32,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnBalloonBreak"),
         references: vec![script.to_string(), scope.to_string(), String::new()],
@@ -906,7 +910,7 @@ pub fn on_balloon_break(script: &str, scope: u32, snapshot: &ExecutionSnapshot) 
 ///
 /// Reference は常に 1 個（要件 3.2）。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonClose:1
-pub fn on_balloon_close(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+pub(crate) fn on_balloon_close(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnBalloonClose"),
         references: vec![script.to_string()],
@@ -918,7 +922,7 @@ pub fn on_balloon_close(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCal
 ///
 /// 時間切れの時点で待ち時間の残りは無いので Ref1 は常に `0`（要件 2.3）。
 // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
-pub fn on_balloon_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+pub(crate) fn on_balloon_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnBalloonTimeout"),
         references: vec![script.to_string(), "0".to_string()],

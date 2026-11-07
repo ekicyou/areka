@@ -31,7 +31,7 @@ fn kanade_and_shiori_msgs_are_send_static() {
 /// `EventId` はチョークポイントが出所別の受理規則を適用するためだけの区別であり、
 /// SHIORI へ出る文字列は `as_str()`（および `Display`）が与える逐語表現のみである。
 #[test]
-fn event_id_as_str_is_verbatim_wire_form_for_both_origins() {
+fn event_id_as_str_is_verbatim_wire_form_for_every_category() {
     assert_eq!(EventId::Static("OnBoot").as_str(), "OnBoot");
     assert_eq!(
         EventId::Static("basewareversion").as_str(),
@@ -62,6 +62,11 @@ fn event_id_as_str_is_verbatim_wire_form_for_both_origins() {
     assert_eq!(
         EventId::Property("PastaShellScale".to_string()).as_str(),
         "PastaShellScale"
+    );
+    // 翻訳の要求は出どころに依らず `OnTranslate`。
+    assert_eq!(
+        EventId::Translate(crate::request_origin::RequestOrigin::MCP_SEND_TRANSLATE).as_str(),
+        "OnTranslate"
     );
 }
 

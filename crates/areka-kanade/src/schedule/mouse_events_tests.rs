@@ -207,20 +207,6 @@ fn hover_sends_one_of_the_four_names() {
 
 // --- 定常の入口からの委譲 ---
 
-/// 要件 8.2: 話の最中でも送る（入口の委譲を `step` から通す）。
-#[test]
-fn step_delegates_in_steady_even_while_talking() {
-    for state in [steady_none(), steady_talking()] {
-        let (state, actions) = step(
-            state,
-            Input::Mouse(input(up(ClickButton::Right, false))),
-            &config(),
-        );
-        assert_eq!(only_get(&actions).0, "OnMouseUp");
-        assert!(state.mouse_click.is_some());
-    }
-}
-
 /// 要件 8.3: 閉じの握手の保留中は 3 つとも送らない（段の記憶も置かない）。
 #[test]
 fn step_sends_nothing_while_close_is_pending() {
@@ -403,7 +389,8 @@ fn unexpected_reply_moves_on_like_no_content() {
     }
 }
 
-/// 要件 5.4・8.1: 話の最中の台本は話を置き換える（出所は返事のあったイベントの名前）。
+/// 要件 5.4・8.1・8.2: 話の最中でも送り（入口の委譲を `step` から通す）、話の最中の台本は話を置き換える
+/// （出所は返事のあったイベントの名前）。
 #[test]
 fn script_while_talking_replaces_the_talk() {
     let state = released(steady_talking(), ClickButton::Right, false);

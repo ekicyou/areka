@@ -445,9 +445,10 @@ impl ShioriOutcome {
 
 /// 呼出失敗の区別語彙（host32 非依存の再表現・thiserror）。
 ///
-/// 既存4語彙（`Handshake`／`Timeout`／`Ipc`／`Shiori`）は `RequestError` の**境界写像**であり、
-/// shiori 境界（`shiori/real.rs` の `map_error`）でのみ構成される。`Internal` は境界写像から
-/// **決して生成されない**——kanade 内部で検出した内部規律違反（許可集合外 ID の送出企図等）に
+/// 既存4語彙（`Handshake`／`Timeout`／`Ipc`／`Shiori`）は輸送路の失敗を表す。shiori 側
+/// （`shiori/real.rs`: `RequestError` の境界写像 `map_error` と、接続・応答の失敗）と、actor の
+/// 送受の失敗（`actor.rs`: SHIORI への通路の切断・応答の喪失＝`Ipc`）で構成される。`Internal` は
+/// これらの経路から**決して生成されない**——kanade 内部で検出した内部規律違反（許可集合外 ID の送出企図等）に
 /// 対してのみ kanade 自身が構成する（DD-IT-11）。
 #[derive(Debug, thiserror::Error)]
 pub enum ShioriFailure {

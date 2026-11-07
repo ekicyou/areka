@@ -7,13 +7,13 @@
 //! - [`Phase::ChangeClosePending`]（切替の `OnClose` の応答待ち）
 //! - [`Phase::ChangeCloseTalkWait`]（その別れの台詞の完了待ち／期限判定）
 //!
-//! 降ろすときの停止原因は今日の値（`Quit`・`CloseSilent`・`DeadlineExceeded`・`Fault`）のまま使い、
+//! 降ろすときの停止原因は終了の握手と同じ値（`Quit`・`CloseSilent`・`DeadlineExceeded`・`Fault`）のまま使い、
 //! 「切替で止まった」ことは [`State::change`] が停止通知の切替の中身として表す。終了の握手
 //! （`close.rs`）とは期限の計算（[`deadline_from`]）と台詞の待ちの Tick の判定（[`talk_wait_tick`]）を共有する。
 //!
 //! 送り出しの台詞を利用者が中断したら切替を中止して定常へ戻る（[`cancel_by_user_break`]）。
 //! 定常へ戻る経路はここにだけ置き、終了の握手には足さない。終了要求が届いたら切替を取りやめ、
-//! 相ごとに今日の終了の握手へ合流する（[`yield_to_close`]）。
+//! 相ごとに終了の握手へ合流する（[`yield_to_close`]）。
 //!
 //! 汎用の通知の入口（外から頼まれた許可表のイベントを定常でだけ送る）の判断
 //! [`on_raise_event`] と、`\![get,property]` の返しのイベントの判断 [`on_property_event`] もここに置く。
@@ -165,7 +165,7 @@ pub(super) fn consume_pending(mut state: State, done: TalkDone) -> (State, Vec<A
 /// 終了系列（Quit）へ進む。トークに保留の切替が掛かっていたら捨てる（`\-` の予約・到達が勝つ）。
 ///
 /// 捨てたときは切替の中止（終了要求＝台本の `\-`）を先頭で通知する。受け手は同じ順の通路で
-/// 後に届く停止通知より先に切替の予約を解き、その停止を今日の終了として扱える。
+/// 後に届く停止通知より先に切替の予約を解き、その停止を通常の終了として扱える。
 pub(super) fn quit_dropping_pending(mut state: State, at: &'static str) -> (State, Vec<Action>) {
     let dropped = state.pending_change.take();
     let (state, mut actions) = to_unloading_quit(state, at);
@@ -341,7 +341,7 @@ fn on_talk_wait(
 /// 送り出しの台詞の利用者の中断: 切替を中止し、ゴーストを降ろさず元の定常へ戻す。
 ///
 /// 切替の相に届く `Interrupted` は利用者の中断だけ（選択の帳簿は受理で消してある）。バルーンを
-/// 隠すのは中断の受理の側（今日の規則のまま）で、ここは運行と通知だけを扱う。
+/// 隠すのは中断の受理の側（定常と同じ規則）で、ここは運行と通知だけを扱う。
 fn cancel_by_user_break(mut state: State, talk_id: TalkId) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "change_cancelled", reason = "user_break", talk_id = talk_id.0, phase = phase_label(&state.phase), "送り出しの台詞を利用者が中断した——切替を中止して定常へ戻る");
     state.change = None;
@@ -352,7 +352,7 @@ fn cancel_by_user_break(mut state: State, talk_id: TalkId) -> (State, Vec<Action
     (state, vec![Action::Notice(notice)])
 }
 
-/// 切替の相への終了要求: 切替を取りやめ（中止を通知し）、相ごとに今日の終了の握手へ合流する。
+/// 切替の相への終了要求: 切替を取りやめ（中止を通知し）、相ごとに終了の握手へ合流する。
 ///
 /// - `ChangePending` → 終了を保留して応答を待つ（[`on_yielded_reply`]）。
 /// - `ChangeTalkWait` → その台詞を定常のトークとして最後まで流し、完了で `OnClose`（定常の保留の終了）。
@@ -394,7 +394,7 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
 }
 
 /// 終了要求で取りやめた `ChangePending` の応答: 台本は定常のトークとして流し（完了で保留の終了を
-/// 消化）、204 は保留の終了を今日の握手（`OnClose` GET）で始める。
+/// 消化）、204 は保留の終了を終了の握手（`OnClose` GET）で始める。
 fn on_yielded_reply(mut state: State, input: Input, reason: CloseReason) -> (State, Vec<Action>) {
     match input {
         Input::ShioriReply {

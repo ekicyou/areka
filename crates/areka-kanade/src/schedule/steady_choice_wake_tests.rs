@@ -91,7 +91,7 @@ fn the_deadline_notice_fires_exactly_at_the_deadline() {
 
 /// 選択を確定した後に遅れて届いた知らせは空振り（trace だけ・OnSecondChange も出ない）。定常の外でも同じ。
 #[test]
-fn a_late_notice_after_the_choice_is_resolved_does_nothing() {
+fn a_late_notice_after_the_choice_is_accepted_does_nothing() {
     let (s, _) = step(
         waiting_until_10_501(),
         Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),

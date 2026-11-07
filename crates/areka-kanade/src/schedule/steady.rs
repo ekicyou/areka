@@ -384,32 +384,17 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
 ///   `[ResolveChoice{old}]` のみを発行する（起動なし・Req4.2／5.3）。
 /// - 構造上起こらない応答（GET に対する `Notified`／`Unloaded`）は防御的に警告し、会話を選択待ちの
 ///   まま停止させないため 204 と同一に扱う（Error Strategy「選択系の失敗は会話を止めない」）。
+#[allow(clippy::too_many_arguments)]
 fn on_cascade_reply(
     mut state: State,
-    ledger: ChoiceState,
+    old_talk_id: TalkId,
+    candidates: Vec<String>,
+    deadline: Option<MonotonicMs>,
+    choice_id: String,
+    next: Option<CascadeNext>,
     outcome: ShioriOutcome,
     origin: &'static str,
 ) -> (State, Vec<Action>) {
-    let ChoiceState {
-        talk_id: old_talk_id,
-        candidates,
-        deadline,
-        phase,
-    } = ledger;
-    let (choice_id, next) = match phase {
-        ChoicePhase::Cascading { choice_id, next } => (choice_id, next),
-        // 呼び出し元が Cascading のみを委譲する（構造上到達しない）。帳簿を復元して防御する。
-        other => {
-            state.choice = Some(ChoiceState {
-                talk_id: old_talk_id,
-                candidates,
-                deadline,
-                phase: other,
-            });
-            return steady_reply_unexpected(state, "Steady{choice}", outcome);
-        }
-    };
-
     let outcome = match outcome {
         ShioriOutcome::Value(script, _) => {
             // Value 短絡（Req2.4）: 以降の段を発行せず、解決と新トーク起動を同一バッチへ。
@@ -778,8 +763,16 @@ fn on_reply(
     // 判定は origin 文字列でなく in-flight 帳簿の照合で行う（DD-1）。
     if let Some(ledger) = state.choice.take() {
         match ledger.phase {
-            ChoicePhase::Cascading { .. } => {
-                return on_cascade_reply(state, ledger, outcome, origin);
+            ChoicePhase::Cascading { choice_id, next } => {
+                let ChoiceState {
+                    talk_id,
+                    candidates,
+                    deadline,
+                    ..
+                } = ledger;
+                return on_cascade_reply(
+                    state, talk_id, candidates, deadline, choice_id, next, outcome, origin,
+                );
             }
             // タイムアウト GET の応答も同じく先行して捌く（C4 規則 6・Req7.4／7.5）。
             ChoicePhase::TimeoutInFlight => {

@@ -65,7 +65,7 @@ pub enum CancelReason {
 pub enum KanadeNotice {
     /// 定常に入った。
     Steady,
-    /// 切替を中止した（定常へ戻る。ただし終了要求・`\-` の予約が勝った場合は、このあと今日どおり停止へ進む）。
+    /// 切替を中止した（定常へ戻る。ただし終了要求・`\-` の予約が勝った場合は、このあと停止へ進む）。
     ChangeCancelled { reason: CancelReason },
     /// kanade が止まった。
     Stopped(KanadeStopped),
@@ -130,7 +130,7 @@ pub enum RaiseOutcome {
     Script,
     /// 返事なし（204・空の台本・エラー応答・NOTIFY の完了）。
     NoReply,
-    /// 往復が失敗した（kanade は今日どおり終了系列へ進む）。
+    /// 往復が失敗した（kanade は終了系列へ進む）。
     Failed,
 }
 

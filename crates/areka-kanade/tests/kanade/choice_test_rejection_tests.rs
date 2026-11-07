@@ -49,7 +49,8 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // `Harness::finish`（recv ループの join 完了後に読む・後始末は全群でこれ 1 つ）を使う。
 //
 // # 終了の駆動は `ForceQuit`——**檻の弁別力を退行時にも保つため**
-// 群 1〜5 は「末尾 talk の quit:true」で終了を駆動するが、本群はそれを採らない。棄却が壊れる退行では
+// 群 1〜5 は「末尾 talk の quit:true」で終了を駆動する（群 3 の
+// `non_choice_failure_during_choice_wait_still_faults` だけは Fault 経路が駆動する）が、本群はそれを採らない。棄却が壊れる退行では
 // **起動される talk の本数そのものが変わる**ため、`QuitPolicy::PerTalk` の index と quit フラグの
 // 対応がずれて終了が駆動されず、檻が「期限付き join の失敗」（＝どの表明が破れたか分からない形）で
 // しか落ちなくなる（実測で確認済み）。`ForceQuit` は quit ゲートを迂回して終了系列へ直行する

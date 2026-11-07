@@ -251,7 +251,7 @@ fn mock_shiori_injects_mouse_response() {
         _ => panic!("expected 204 (NoContent) for un-injected OnMouseDoubleClick"),
     }
 
-    // 両 GET が events 導出の期待値どおり記録される（Ref layout 込みの突合は `mouse_test_event_layout_tests` が担う）。
+    // 両 GET が id の順で記録される（Ref layout 込みの突合は `mouse_test_event_layout_tests` が担う）。
     let recorded = shiori.recorded();
     assert_eq!(recorded.len(), 2);
     assert_eq!(recorded[0].id, "OnMouseMove");

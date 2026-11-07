@@ -10,7 +10,7 @@
 //! 偽物は最初の `OnTranslate` を、テストが放すまで握れる。握っている間は kanade が応答待ちで
 //! 止まっている。放したときに偽物の受け口へ次の要求が積まれていないことを確かめてから応答する
 //! （＝待ちの間に SHIORI へ何も送られていない・要件 5.3）。再生側は TalkDone を返さないので、
-//! 始めた台詞はテストが TalkDone を送るまで再生中のまま（今日の「再生中」の規則で入力が処理される）。
+//! 始めた台詞はテストが TalkDone を送るまで再生中のまま（「再生中」の規則で入力が処理される）。
 //!
 //! 見出し（要件 3.6）は、kanade が SHIORI へ渡す呼出（GET・ID・Reference・Status）までをこの層で
 //! 見て、線の見出しは本物の組み立て（`shiori_host32_host::build_request`）に同じ呼出を通して比べる。
@@ -302,9 +302,9 @@ type WaitCase = (&'static str, fn() -> Vec<KanadeMsg>, fn() -> Vec<Seen>);
 
 /// 要件 5.3・5.4・8.1 ⑺: `OnTranslate` を握っている間にマウス・毎秒の時刻・終了の要求・切替の
 /// 要求・外からの依頼を送る。握っている間は SHIORI へ何も送られず、放した後に再生の開始が先に
-/// 出て、その後で各入力が今日の「再生中」の規則で処理される。
+/// 出て、その後で各入力が「再生中」の規則で処理される。
 ///
-/// 今日の「再生中」の規則: マウスと外からの依頼は `Status: talking` の GET、毎秒の時刻は
+/// 「再生中」の規則: マウスと外からの依頼は `Status: talking` の GET、毎秒の時刻は
 /// Ref3=0 の NOTIFY。終了と切替の要求は台詞が終わるまで保留され、TalkDone の後で握手に入る
 /// （終了は `OnClose`、切替は `OnGhostChanging` → 切替の `OnClose`）。
 #[test]
@@ -404,7 +404,7 @@ fn inputs_during_translate_wait_run_after_start_under_talking_rules() {
         assert_eq!(
             from_first(&log.seen, "OnMouseDoubleClick"),
             expected.as_slice(),
-            "{name}: 再生の開始が先・その後に今日の「再生中」の規則で処理される"
+            "{name}: 再生の開始が先・その後に「再生中」の規則で処理される"
         );
     }
 }
@@ -552,7 +552,7 @@ fn run_failing(fail: &'static str, inputs: Vec<KanadeMsg>) -> (Vec<Seen>, Option
 }
 
 /// 要件 4.5: `OnTranslate` の輸送路の失敗で止まるときの停止の原因と後の運びは、元のイベントの
-/// GET が同じ輸送路の失敗をした今日の故障と同じ（再生は始まらず、降ろして止まる）。
+/// GET が同じ輸送路の失敗をしたときの故障と同じ（再生は始まらず、降ろして止まる）。
 #[test]
 fn transport_failure_on_translate_stops_like_todays_fault() {
     let (after_translate, stopped) = run_failing("OnTranslate", vec![double_click()]);
@@ -577,7 +577,7 @@ fn transport_failure_on_translate_stops_like_todays_fault() {
 
 /// 停止通知の切替の中身（要件 6.2・4.5）は、`OnGhostChanging` の台詞なら翻訳の
 /// 後の台詞を運ぶ。切替の送り出しの翻訳で輸送路が失敗したら、中身は空（`None`）で、原因は
-/// `OnGhostChanging` そのものが同じ失敗をした今日の故障と同じ。
+/// `OnGhostChanging` そのものが同じ失敗をしたときの故障と同じ。
 #[test]
 fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
     let translated = r"\0訳した送り出し\e";

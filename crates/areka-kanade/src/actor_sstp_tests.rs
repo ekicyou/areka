@@ -445,7 +445,7 @@ fn raise_outside(rig: &Rig) -> RaiseOutcome {
     rx.recv_timeout(LIMIT).expect("返事が届く")
 }
 
-/// ⑻ 同じ許可の表に無い名前を汎用の通知で送ると今日どおり `NotAllowed`（送られない）。外から頼むと
+/// ⑻ 同じ許可の表に無い名前を汎用の通知で送ると `NotAllowed`（送られない）。外から頼むと
 /// 偽の shiori へ届き、その後も汎用の通知では断られたまま（外からの依頼が許可の表を開かない）。
 #[test]
 fn outside_name_is_refused_by_raise_event_but_reaches_shiori_by_notify() {

@@ -137,8 +137,8 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
 /// （Req9.2(b) 後段・2.4・4.6・裁定 2）。
 ///
 /// # 非空虚性・discriminative 性
-/// [`canonical_choice_cascades_ex_then_select_and_resolves_without_start`] と**同一 ID・同一入力**で
-/// 応答だけを Value に替えた対の檻である。`OnChoiceSelect` が記録列に現れないこと（＝Value 後も
+/// [`canonical_choice_cascades_ex_then_select_and_resolves_without_start`] と同じ ID の選択確定で、
+/// 一段目の応答を Value に替えた対の檻である（終わり方は違う）。`OnChoiceSelect` が記録列に現れないこと（＝Value 後も
 /// 後続段を撃つ退行の検出）と、解決→起動が新 talk_id で起きること（＝Value 短絡が起動へ繋がること）を
 /// 対で固定する。
 #[test]

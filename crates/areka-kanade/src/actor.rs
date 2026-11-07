@@ -640,7 +640,7 @@ pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -
 
 /// 送出の檻を通して送り、SHIORI の結果を写さずに返す（エラー応答も `Failed` のまま）。
 ///
-/// 許可表の検査・Reference の掃除・`shiori_request` の記録・往復をここで行う。今日の呼び手は
+/// 許可表の検査・Reference の掃除・`shiori_request` の記録・往復をここで行う。ほかの呼び手は
 /// [`round_trip_request`] を通し、翻訳の往復（`actor_translate`）はエラー応答を自分で読むので
 /// これを直接呼ぶ（`shiori_error_response` を重ねて出さない）。
 ///

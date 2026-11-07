@@ -184,41 +184,33 @@ pub(crate) fn warn_or_above(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
+/// 応答を `origin: "test"` で `step` に入れ、続きの状態を返す。
+fn reply(s: State, outcome: ShioriOutcome, cfg: &KanadeConfig) -> State {
+    step(
+        s,
+        Input::ShioriReply {
+            outcome,
+            origin: "test",
+        },
+        cfg,
+    )
+    .0
+}
+
 /// 起動の手順を実の `step` でたどり、起動の挨拶の台詞が翻訳を待っているところまで進める。
 pub(crate) fn boot_until_greeting_deferred(cfg: &KanadeConfig) -> State {
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            cfg,
-        )
-        .0
-    };
     let (s, _) = step(State::initial(), Input::Boot, cfg);
-    let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
-    let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
+    let s = reply(s, ShioriOutcome::Notified, cfg); // BootInit → BootPrefetch
+    let s = reply(s, ShioriOutcome::NoContent, cfg); // BootPrefetch → BootType
     reply(
         s,
         ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
+        cfg,
     ) // → 翻訳待ち（BootVersion{挨拶} へ進む手前）
 }
 
 /// 起動の手順を実の `step` でたどり、起動の挨拶が流れている `Steady` まで進める。
 pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            cfg,
-        )
-        .0
-    };
     let s = boot_until_greeting_deferred(cfg);
     let (s, _) = step(
         s,
@@ -227,7 +219,7 @@ pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
         ))),
         cfg,
     );
-    let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
+    let s = reply(s, ShioriOutcome::Notified, cfg); // → Steady{挨拶}
     assert!(
         matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == BOOT_GREETING_ORIGIN),
         "挨拶が流れている Steady のはず"

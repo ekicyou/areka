@@ -332,7 +332,7 @@ fn invalid_arguments_send_nothing_and_warn_once() {
     }
 }
 
-/// 往復の失敗は控えを取り出したうえで今日の道（終了系列）へ渡す。
+/// 往復の失敗は控えを取り出したうえで `on_shiori_reply`（終了系列）へ渡す。
 #[test]
 fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
     let (state, actions) = notify_then_reply(
@@ -344,7 +344,7 @@ fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
     );
     assert!(
         matches!(state.phase, Phase::Unloading { .. }),
-        "今日どおり終了系列へ: {}",
+        "終了系列へ: {}",
         phase_label(&state.phase)
     );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));

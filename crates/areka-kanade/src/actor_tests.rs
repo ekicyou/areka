@@ -31,8 +31,7 @@ fn noop_sink() -> crate::schedule::resources::ResourceSink {
     Box::new(|_, _| {})
 }
 
-/// mock shiori アクター: 任意の Request/Unload に良性応答を返し Close で停止する。
-/// 受領した ShioriMsg の要約を記録列へ蓄積する。
+/// 受領した ShioriMsg の要約（mock shiori が記録列へ蓄積する）。
 #[derive(Debug, Clone, PartialEq)]
 enum Recorded {
     Get(String),
@@ -41,8 +40,9 @@ enum Recorded {
     Close,
 }
 
-/// mock shiori を spawn し、(送信端, 記録受信端, join ハンドル) を返す。
-/// `answer` は (受領イベント要約) に対し返す ShioriOutcome を決める。
+/// mock shiori アクターを spawn し、(送信端, 記録受信端, join ハンドル) を返す。
+/// 受領した Request/Unload を記録し、`answer` が (受領イベント要約) に対して決めた ShioriOutcome を
+/// 返す。Close を記録して停止する。
 fn spawn_mock_shiori(
     answer: impl Fn(&Recorded) -> ShioriOutcome + Send + 'static,
 ) -> (Sender<ShioriMsg>, Receiver<Recorded>, ActorHandle) {

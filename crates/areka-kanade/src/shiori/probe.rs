@@ -276,7 +276,7 @@ fn try_fire(inner: &ProbeInner, budget: WaitBudget) -> Option<ShioriCut> {
                 target: "shiori-actor",
                 event = "shiori_unblock_unavailable",
                 stage,
-                "外から解く手が無い（接続前か InProc）——待ちは今日どおり続く"
+                "外から解く手が無い（接続前か InProc）——待ちはそのまま続く"
             );
             false
         }

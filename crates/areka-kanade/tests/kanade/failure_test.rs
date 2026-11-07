@@ -144,7 +144,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
             Fixture::default(),
             QuitPolicy::PerTalk(vec![false]),
             FailOn::on_initialize(kind).with_text(INJECTED),
-            Some(stop_tx),
+            stop_tx,
         );
 
         // Boot を駆動 → OnInitialize 失敗 → Unloading{Fault} → Unload → Stopped → StopSelf。
@@ -224,7 +224,7 @@ fn shiori_down_case(
         KanadeConfig::new("master", "1.0.0"),
         Fixture::default(),
         QuitPolicy::PerTalk(vec![false]),
-        Some(stop_tx),
+        stop_tx,
     );
 
     // 起動して定常運転へ落ち着かせる（boot 系列は Boot 処理内で同期完走する）。
@@ -644,7 +644,7 @@ fn send_failure_delivers_a_disconnected_fault() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::default(),
         QuitPolicy::PerTalk(vec![false]),
-        Some(stop_tx),
+        stop_tx,
     );
     let Harness {
         sender,

@@ -735,7 +735,7 @@ fn missing_source_plays_the_script_with_an_error() {
     let (s, actions) = out.expect("step は必ず値を返す");
     assert!(
         matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script == ORIGINAL),
-        "台詞を捨てずに今日どおり再生する"
+        "台詞を捨てずにそのまま再生する"
     );
     assert!(s.translate.is_none());
     let hit = logged_once(&ev, Level::ERROR, "translate_source_missing");

@@ -105,14 +105,14 @@ pub fn resource_get(id: &'static str, snapshot: &ExecutionSnapshot) -> ShioriCal
 /// メニューの照会（`actor_resources.rs`）は返信端へ渡す）。
 ///
 /// - [`Value`](ResourceOutcome::Value): 200 応答の値（不透明文字列）。
-/// - [`NoContent`](ResourceOutcome::NoContent): 204 / 空値（既定値縮退は消費側 sakura の責務・R4.2）。
+/// - [`NoContent`](ResourceOutcome::NoContent): 204（値なし）（既定値縮退は消費側 sakura の責務・R4.2）。
 /// - [`Failed`](ResourceOutcome::Failed): タイムアウト・IPC 断等の照会失敗（理由文字列を保持）。
 ///   失敗でも boot は殺さず続行する（prefetch 段が warn＋本語彙を sink へ渡す・R4.1）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResourceOutcome {
     /// 200 応答の値（不透明文字列）。
     Value(String),
-    /// 204 / 空値（既定値縮退は消費側 sakura に残置・R4.2）。
+    /// 204（値なし）（既定値縮退は消費側 sakura に残置・R4.2）。
     NoContent,
     /// 照会失敗（タイムアウト・IPC 断等・理由文字列を保持）。
     Failed(String),

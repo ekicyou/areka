@@ -2,7 +2,7 @@
 //!
 //! 許可表に無いイベント・定常以外での依頼は `warn!` 1 件で捨てて動作 0、定常なら渡した
 //! Reference のまま GET／NOTIFY を出すこと、その応答が再生中のトークを置き換えること
-//! （`OnSecondChange` の応答は今日どおり置き換えない）を `step` 経由で固定する。
+//! （`OnSecondChange` の応答は置き換えない）を `step` 経由で固定する。
 
 use super::*;
 use crate::change::ShioriMethod;
@@ -128,10 +128,7 @@ fn second_change_reply_during_talk_is_still_discarded() {
     });
     let (s, actions) = out.expect("step は必ず結果を返す");
     logged_once(&ev, Level::WARN, "steady_value_during_talk");
-    assert!(
-        actions.is_empty(),
-        "OnSecondChange の応答は今日どおり捨てる"
-    );
+    assert!(actions.is_empty(), "OnSecondChange の応答は捨てる");
     assert!(matches!(s.phase, Phase::Steady { talk: Some(t) } if t.talk_id == TalkId(4)));
 }
 

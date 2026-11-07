@@ -49,20 +49,14 @@ pub(crate) fn script_body(id: &str) -> Option<&str> {
 ///
 /// # 判定規則（この 3 分岐で全 ID を尽くす）
 /// 1. [`script_body`] が `Some` → [`CascadePlan::Script`]
-/// 2. `id.starts_with("On")` → [`CascadePlan::Named`]
+/// 2. [`events::is_allowed_choice_event`] が真（`On` 接頭） → [`CascadePlan::Named`]
 /// 3. それ以外 → [`CascadePlan::Canonical`]
 ///
 /// 判定順序は規則 1 を先に置く（`script:` は小文字始まりゆえ規則 2 とは実際には交差しないが、
 /// `script:` の判定が常に先に効くことを構造で固定する）。
 ///
-/// # 境界の読み
-/// - `"On"` 単独は `starts_with("On")` に一致するため [`CascadePlan::Named`]。任意名イベント
-///   `On` を逐語発火する形であり、正典形へは落とさない。
-/// - `"on..."`（小文字始まり）は一致しないため [`CascadePlan::Canonical`]。判定は大文字小文字を
-///   区別する（正典のイベント名は `On` 始まりで大小を区別するため）。
-/// - `""`（空文字列）はいずれの接頭辞にも一致しないため [`CascadePlan::Canonical`]。
-/// - 比較はバイト列の接頭辞一致であり、後続が非 ASCII でも UTF-8 境界を割らない
-///   （`"On"` / `"script:"` はともに ASCII のみで構成される）。
+/// 規則 2 の境界（`"On"` 単独・大小文字・空文字列）は [`events::is_allowed_choice_event`] の規則に
+/// 従う（境界の檻も `events_tests.rs` の `is_allowed_choice_event_accepts_only_on_prefixed_names_verbatim`）。
 ///
 /// 外部状態を読まないため、同一 ID に対して常に同一の [`CascadePlan`] を返す（Req2.5）。
 pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
@@ -136,27 +130,6 @@ mod tests {
         // Req2.9: スケジューラ起源の恒久禁止 ID も、選択起源では逐語で 1 段に載せる。
         assert_eq!(plan_cascade("OnTalk"), CascadePlan::Named);
         assert_eq!(plan_cascade("OnHour"), CascadePlan::Named);
-    }
-
-    /// 境界: `"On"` 単独も接頭辞一致＝Named（正典形へ落とさない）。
-    #[test]
-    fn plan_cascade_named_for_bare_on() {
-        assert_eq!(plan_cascade("On"), CascadePlan::Named);
-    }
-
-    /// Req2.2 境界: 小文字始まりは `On` に一致しない＝正典形（Ex 先行・無印後続）。
-    #[test]
-    fn plan_cascade_canonical_for_lowercase_on_prefix() {
-        assert_eq!(plan_cascade("on_menu"), CascadePlan::Canonical);
-        assert_eq!(plan_cascade("on"), CascadePlan::Canonical);
-        assert_eq!(plan_cascade("oN"), CascadePlan::Canonical);
-    }
-
-    /// 境界: 2 文字目が大文字（`"ONFOO"`）は `starts_with("On")` に一致せず正典形。
-    #[test]
-    fn plan_cascade_canonical_for_all_uppercase_on() {
-        assert_eq!(plan_cascade("ONFOO"), CascadePlan::Canonical);
-        assert_eq!(plan_cascade("ON"), CascadePlan::Canonical);
     }
 
     /// Req2.2: 通常の非 `On` 始まり ID と空文字列はいずれも正典形。

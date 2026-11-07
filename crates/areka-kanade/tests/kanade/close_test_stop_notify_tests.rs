@@ -35,7 +35,7 @@ fn harness_with_stop_channel(fixture: Fixture) -> (Harness, mpsc::Receiver<Kanad
         fixture,
         // boot talk（index 0）は quit:false。終了は下の指示が駆動する。
         QuitPolicy::PerTalk(vec![false]),
-        Some(stop_tx),
+        stop_tx,
     );
     (harness, stop_rx)
 }
@@ -113,16 +113,9 @@ fn silent_close_delivers_the_close_silent_cause() {
 /// `Err` になって本檻が落ちる。
 #[test]
 fn a_dropped_receiver_does_not_stop_the_termination_sequence() {
-    let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
+    let (harness, stop_rx) = harness_with_stop_channel(Fixture::default());
     // 通知の受信端を先に落とす（UI が既に消えている状況）。
     drop(stop_rx);
-
-    let harness = spawn_harness_with_stop_sink(
-        KanadeConfig::new("master", "1.0.0"),
-        Fixture::default(),
-        QuitPolicy::PerTalk(vec![false]),
-        Some(stop_tx),
-    );
 
     send(&harness, KanadeMsg::Boot);
     send(
