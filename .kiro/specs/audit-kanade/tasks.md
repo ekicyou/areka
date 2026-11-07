@@ -91,7 +91,7 @@
   - _Requirements: 3.1, 3.3, 9.1_
 
 - [ ] 6. 外から来た台本の守り（#1・#54・#55・#56）
-- [ ] 6.1 SEND の入口で CR・LF・NUL を取り除く（#1 一段目）
+- [x] 6.1 SEND の入口で CR・LF・NUL を取り除く（#1 一段目）
   - 3 字の定数を 1 つ置き、NOTIFY の検査の閉包もそれで書く
   - 受け付けの直後に 3 字を取り除いて info を 1 件残す。返事の語は変えない
   - `send_strips_line_breaks_before_playing_and_translating` が緑で、取り除きを外すと赤になる

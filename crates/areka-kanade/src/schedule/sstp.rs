@@ -38,7 +38,8 @@ pub(crate) fn accepts(state: &State) -> bool {
 
 /// `Input::SstpSend` の腕。受け付けないなら状態を変えず `debug!`（`sstp_not_accepted`）だけで空の一括。
 ///
-/// 受け付けたら選択肢の帳簿を消し、共通の手で採番・枠の差し替え（古い番号を控えへ）をし、再生の開始に
+/// 受け付けたら台本から CR・LF・NUL を取り除き（取り除いたら `info!`（`sstp_send_line_breaks_removed`）を
+/// 1 件）、選択肢の帳簿を消し、共通の手で採番・枠の差し替え（古い番号を控えへ）をし、再生の開始に
 /// strict の印を立て、翻訳へ預ける（0 文字なら預けずに再生の開始をそのまま返す）。旧トークの
 /// 後始末は今日の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
 pub(super) fn on_send(
@@ -49,6 +50,13 @@ pub(super) fn on_send(
     if !accepts(&state) {
         tracing::debug!(target: "kanade", event = "sstp_not_accepted", kind = "send", phase = super::phase_label(&state.phase), "普段の状態でない——外からの台本を受け付けない");
         return (state, Vec::new());
+    }
+    // 外からの台本の改行が SHIORI への頭書きの行を切らないよう、受け付けた直後に取り除く（SSP と同じ見え方）。
+    let before = script.chars().count();
+    let script = script.replace(crate::sstp::LINE_BREAKERS, "");
+    let removed = before - script.chars().count();
+    if removed > 0 {
+        tracing::info!(target: "kanade", event = "sstp_send_line_breaks_removed", removed, "外からの台本の CR・LF・NUL を取り除いた");
     }
     super::clear_choice_ledger(&mut state, "sstp_send");
     let (talk_id, mut start) = super::start_talk(

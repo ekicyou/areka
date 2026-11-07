@@ -269,6 +269,32 @@ fn empty_send_is_not_deferred_to_translate() {
     }
 }
 
+/// 外からの台本の CR・LF・NUL は受け付けた直後に取り除かれ、再生の開始と翻訳の依頼のどちらにも
+/// 残らない。取り除いたら `info!`（`sstp_send_line_breaks_removed`・取り除いた字数）が 1 件（#1 一段目）。
+/// 3 字だけの台本は空の台本になり、翻訳へ預けずに再生の開始を返す。
+#[test]
+fn send_strips_line_breaks_before_playing_and_translating() {
+    let mut out = None;
+    let events = capture(|| {
+        out = Some(step(
+            steady(None),
+            send("1行目\r\n2行目\u{0}3行目", None),
+            &config(),
+        ))
+    });
+    let (state, actions) = out.unwrap();
+    assert_deferred(&state, &actions, 10, "1行目2行目3行目");
+    let removed = logged_once(&events, Level::INFO, "sstp_send_line_breaks_removed");
+    assert_eq!(removed.fields.get("removed").map(String::as_str), Some("3"));
+
+    let (state, actions) = step(steady(None), send("\r\n\0", None), &config());
+    assert!(state.translate.is_none());
+    assert!(matches!(
+        actions.as_slice(),
+        [Action::StartTalk(start)] if start.talk_id == TalkId(10) && start.script.is_empty()
+    ));
+}
+
 /// strict の台本の後でも、kanade が自分で始める台本（起動の挨拶）は印を持たない（要件 3.8）。
 #[test]
 fn own_talks_after_a_strict_send_are_not_strict() {

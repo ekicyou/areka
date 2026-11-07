@@ -26,6 +26,9 @@ pub enum SstpNotifyOutcome {
     Failed,
 }
 
+/// 頭書きの行を切る 3 字（CR・LF・NUL）。外からの値の検査と取り除きはこの 1 つで書く。
+pub(crate) const LINE_BREAKERS: [char; 3] = ['\r', '\n', '\0'];
+
 /// `validate_notify` が断る理由。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotifyArgError {
@@ -41,7 +44,7 @@ pub fn validate_notify(event: &str, references: &[String]) -> Result<(), NotifyA
     if event.trim().is_empty() {
         return Err(NotifyArgError::EmptyEvent);
     }
-    let breaks = |s: &str| s.contains(['\r', '\n', '\0']);
+    let breaks = |s: &str| s.contains(LINE_BREAKERS);
     if breaks(event) || references.iter().any(|r| breaks(r)) {
         return Err(NotifyArgError::ControlCharacter);
     }
