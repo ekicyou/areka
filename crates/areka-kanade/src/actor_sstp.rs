@@ -75,7 +75,7 @@ pub(crate) enum SstpReply {
 /// 一括の処理の後に返事を組んで 1 回だけ送る。`stopped` は一括の処理が止まりで終わったこと。
 ///
 /// 受け手が居ない（待ちの上限で先に答えた）のは異常ではないので `debug!` だけで運行を続ける。
-pub(crate) fn answer(pending: SstpReply, stopped: bool, first: Option<&FirstReply>) {
+pub(crate) fn answer(pending: SstpReply, stopped: bool, first: Option<FirstReply>) {
     let sent = match pending {
         SstpReply::Send { reply, accepted } => {
             let outcome = match (stopped, accepted) {
@@ -89,7 +89,7 @@ pub(crate) fn answer(pending: SstpReply, stopped: bool, first: Option<&FirstRepl
             let outcome = match (stopped, accepted, first) {
                 (true, _, _) => SstpNotifyOutcome::Failed,
                 (false, false, _) => SstpNotifyOutcome::NotAccepted,
-                (false, true, Some(FirstReply::Script(s))) => SstpNotifyOutcome::Script(s.clone()),
+                (false, true, Some(FirstReply::Script(s))) => SstpNotifyOutcome::Script(s),
                 (false, true, Some(FirstReply::NoReply)) => SstpNotifyOutcome::NoScript,
                 (false, true, Some(FirstReply::Failed)) => SstpNotifyOutcome::Failed,
                 (false, true, None) => {

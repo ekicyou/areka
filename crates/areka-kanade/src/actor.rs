@@ -252,11 +252,7 @@ pub fn spawn_kanade_translating(
                 send_raise_reply(tx, &id, outcome);
             }
             if let Some(pending) = sstp_reply {
-                crate::actor_sstp::answer(
-                    pending,
-                    matches!(flow, Drive::Stop),
-                    first_reply.as_ref(),
-                );
+                crate::actor_sstp::answer(pending, matches!(flow, Drive::Stop), first_reply);
             }
             // 台詞の切れ目の結果は、決まった依頼の処理の後に 1 回だけ送る（停止の直前でも送る）。
             if let Some(outcome) = crate::schedule::talk_gap::take_outcome(&mut state) {

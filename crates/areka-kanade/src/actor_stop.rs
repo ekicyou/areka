@@ -31,6 +31,10 @@ pub(crate) fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
 
 /// 運行状態の切替の帳簿を、停止通知に載せる切替の中身へ写す（切替の相を経ていなければ `None`）。
 pub(crate) fn handoff_of(state: &State) -> Option<ChangeHandoff> {
+    // 使うのは終了系列の停止通知だけ——切替の相の毎秒の刻みで台本を複製しない。
+    if !matches!(state.phase, Phase::Unloading { .. }) {
+        return None;
+    }
     state.change.as_ref().map(|change| ChangeHandoff {
         script: change.script.clone(),
     })
