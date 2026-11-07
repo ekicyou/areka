@@ -161,7 +161,7 @@ fn the_loop_writes_the_current_call_around_each_round_trip() {
         let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
         let loop_probe = probe.clone();
         let handle = std::thread::spawn(move || {
-            run_shiori_loop(rx, Box::new(backend), on_down_tx, loop_probe)
+            run_shiori_loop(rx, Box::new(backend), on_down_tx, loop_probe, IDLE_INTERVAL)
         });
 
         assert_eq!(

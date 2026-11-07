@@ -350,13 +350,13 @@ fn report_exit_once(
 
 /// shiori アクターの受信ループ（本番・テスト共通の唯一の dispatch 経路）。
 ///
-/// `ShioriMsg` を [`IDLE_INTERVAL`] を上限とする有限待ち（`recv_timeout`）で受け、
+/// `ShioriMsg` を `idle_interval`（本番は [`IDLE_INTERVAL`]）を上限とする有限待ち（`recv_timeout`）で受け、
 /// [`handle_call`] の結果を同梱 `reply` へちょうど 1 回送る。`Unload` は `backend.unload()`
 /// （正規 clean shutdown）へ委譲し、成功／異常終了／失敗をそれぞれログ区分した上で応答する。
 /// `Close` は即時停止する。全 `Sender<ShioriMsg>` drop（`Disconnected`）でも正常終了する。
 ///
 /// # 手空き
-/// 待ちが [`IDLE_INTERVAL`] の間メッセージなしで明けるたび（`Timeout`）、
+/// 待ちが `idle_interval` の間メッセージなしで明けるたび（`Timeout`）、
 /// [`ShioriBackend::on_idle`] を呼び、続けて死活監視を行ってから待ち直す。ログは出さない。
 /// 手空きの処理は待ちの腕の中だけで行い、往復（`get`／`notify`／`unload`）の内側からは呼ばない。
 ///
@@ -376,11 +376,12 @@ fn run_shiori_loop(
     mut backend: Box<dyn ShioriBackend>,
     on_down: Sender<KanadeMsg>,
     probe: ShioriProbe,
+    idle_interval: Duration,
 ) {
     let mut unloaded = false;
     let mut down_reported = false;
     loop {
-        let msg = match rx.recv_timeout(IDLE_INTERVAL) {
+        let msg = match rx.recv_timeout(idle_interval) {
             Ok(msg) => msg,
             Err(RecvTimeoutError::Timeout) => {
                 // 手空き: 保守の機会 → 死活監視 → 待ち直す（ログは出さない・往復の外でだけ呼ぶ）。
@@ -513,7 +514,7 @@ pub fn spawn_shiori_actor(
                 // 外から待ちを解く手は接続の成功後に一度だけ据える（受信ループより前）。
                 actor_probe.install_unblock(backend.unblock_handle());
                 // on_down は受信ループの生存期間中保持する（死活報告の届け先・Req 3.4）。
-                run_shiori_loop(rx, backend, on_down, actor_probe);
+                run_shiori_loop(rx, backend, on_down, actor_probe, IDLE_INTERVAL);
             }
             Err(reason) => {
                 // 接続が無いので解く手も無い（死活報告より前に据える）。
