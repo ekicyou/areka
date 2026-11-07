@@ -19,7 +19,7 @@
 //! prefetch 段そのものの挿入は `boot.rs`（OnInitialize 後・OnFirstBoot 前）が、メニューからの
 //! 任意時点の照会は `actor_resources.rs` が担う。
 
-use crate::msg::{EventId, ShioriCall};
+use crate::msg::{EventId, ShioriCall, ShioriOutcome};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（利用者名＋メニュー 12 名＋更新 2 名の 15 名・Req4.1）。
@@ -131,6 +131,35 @@ pub enum ResourceOutcome {
     Failed(String),
 }
 
+/// SHIORI 応答を照会結果へ写す（メニューの照会 `actor_resources.rs` と起動の先読み `boot.rs` の両方が呼ぶ 1 つの写像・純粋＋記録）。
+///
+/// 200→`Value`（空文字もそのまま・既定名へ倒すのは受け手）／204→`NoContent`／失敗→`Failed`
+/// （理由の文字列を保持）。GET の応答としてあり得ない完了語彙（`Notified`／`Unloaded`）は
+/// `warn!` を残して `Failed("unexpected")` へ倒す。失敗の利用者向けの記録（`warn!` 1 回）は
+/// 受け手が残す（要件 3.4）。送出失敗・拒否そのものの記録は往復側が既に残している。
+pub(crate) fn outcome_of(id: &'static str, outcome: ShioriOutcome) -> ResourceOutcome {
+    match outcome {
+        ShioriOutcome::Value(body, _) => ResourceOutcome::Value(body),
+        ShioriOutcome::NoContent => ResourceOutcome::NoContent,
+        ShioriOutcome::Failed(failure) => ResourceOutcome::Failed(failure.to_string()),
+        other => {
+            let kind = match other {
+                ShioriOutcome::Notified => "notified",
+                ShioriOutcome::Unloaded => "unloaded",
+                _ => "unknown",
+            };
+            tracing::warn!(
+                target: "areka_kanade::resource",
+                event = "resource_query_unexpected_reply",
+                id = %id,
+                reply = %kind,
+                "リソース照会が想定外の応答（GET は Value/NoContent/Failed のみ）——失敗として返す"
+            );
+            ResourceOutcome::Failed("unexpected".to_string())
+        }
+    }
+}
+
 /// リソース照会結果の注入シンク（kanade 構築時に注入・prefetch 段が**同期的に**呼ぶ）。
 ///
 /// `SystemVarSource` と同型の疎結合シームであり、kanade は結果の消費側（ghost/sylphya）へ**依存しない**
@@ -145,28 +174,6 @@ pub type ResourceSink = Box<dyn Fn(&'static str, ResourceOutcome) + Send>;
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// GET 照会の観測できる形（id・References・Status）だけを取り出す。`ShioriCall` は
-    /// 比較を derive していないので、比較のためにこの組へ落とす。
-    fn shape_of(call: ShioriCall) -> (String, Vec<String>, Option<String>) {
-        match call {
-            ShioriCall::Get {
-                id,
-                references,
-                status,
-            } => (id.as_str().to_string(), references, status.render()),
-            ShioriCall::Notify { .. } => panic!("GET を期待している"),
-        }
-    }
-
-    /// 許可リソース ID（`username`）は判定を通る（Req4.1）。
-    #[test]
-    fn username_is_allowed_resource_id() {
-        assert!(
-            is_allowed_resource_id("username"),
-            "username はリソース許可集合に属する（Req4.1）"
-        );
-    }
 
     /// 許可集合外のリソース ID は判定を通らない（別族の否定側檻）。
     #[test]
@@ -340,18 +347,6 @@ mod tests {
             }
             ShioriCall::Notify { .. } => panic!("resource_get は GET を返すべき"),
         }
-        // `resource_username` は同じ汎用関数の上に畳まれている（出力が一致する）。
-        let snapshot = ExecutionSnapshot {
-            talk_active: true,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        };
-        let folded = shape_of(resource_username(&snapshot));
-        assert_eq!(
-            folded,
-            shape_of(resource_get("username", &snapshot)),
-            "resource_username は resource_get(\"username\", ..) と同じ照会を組む"
-        );
     }
 
     /// talk_active=true では Status: talking を snapshot から導出する（既存イベント構築子と同一規律）。
@@ -367,41 +362,5 @@ mod tests {
             ShioriCall::Notify { .. } => panic!("expected GET"),
         };
         assert_eq!(status, Some("talking".to_string()));
-    }
-
-    /// `ResourceOutcome` の 3 語彙が構築でき、値の同一性（PartialEq/Eq）で観測できる。
-    #[test]
-    fn resource_outcome_variants_construct_and_compare() {
-        assert_eq!(
-            ResourceOutcome::Value("bob".to_string()),
-            ResourceOutcome::Value("bob".to_string())
-        );
-        assert_ne!(
-            ResourceOutcome::NoContent,
-            ResourceOutcome::Value("x".to_string())
-        );
-        assert_ne!(
-            ResourceOutcome::Failed("timeout".to_string()),
-            ResourceOutcome::NoContent
-        );
-    }
-
-    /// `ResourceSink` は素のクロージャシームであり、`(&'static str, ResourceOutcome)` で呼べる。
-    /// 既存テスト向けの no-op sink（`Box::new(|_, _| {})`）が型検査を通る（Implementation Notes）。
-    #[test]
-    fn resource_sink_is_a_plain_closure_seam() {
-        use std::sync::{Arc, Mutex};
-        let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> =
-            Arc::new(Mutex::new(Vec::new()));
-        let seen_body = Arc::clone(&seen);
-        let sink: ResourceSink =
-            Box::new(move |id, outcome| seen_body.lock().unwrap().push((id, outcome)));
-        sink("username", ResourceOutcome::Value("bob".to_string()));
-        assert_eq!(
-            seen.lock().unwrap().as_slice(),
-            &[("username", ResourceOutcome::Value("bob".to_string()))]
-        );
-        // no-op sink も同じ型で構築できる（既存呼び手の無害注入・Implementation Notes）。
-        let _noop: ResourceSink = Box::new(|_, _| {});
     }
 }

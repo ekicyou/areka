@@ -21,8 +21,8 @@ use std::sync::mpsc::Sender;
 use areka_actor::ReplySender;
 
 use crate::actor::round_trip_request;
-use crate::msg::{ShioriMsg, ShioriOutcome};
-use crate::schedule::resources::{ResourceOutcome, resource_get};
+use crate::msg::ShioriMsg;
+use crate::schedule::resources::{ResourceOutcome, outcome_of, resource_get};
 use crate::schedule::{Phase, State};
 
 /// いま SHIORI へリソースを問い合わせてよいか（純粋関数）。
@@ -31,35 +31,6 @@ use crate::schedule::{Phase, State};
 /// 終了握手（`ClosePending`／`CloseTalkWait`）・`Unloading`・`Stopped` は偽（要件 3.10）。
 pub(crate) fn queryable(phase: &Phase) -> bool {
     matches!(phase, Phase::Steady { .. })
-}
-
-/// SHIORI 応答を照会結果へ写す（`schedule/boot.rs` の prefetch 段と同じ写像・純粋＋記録）。
-///
-/// 200→`Value`（空文字もそのまま・既定名へ倒すのは受け手）／204→`NoContent`／失敗→`Failed`
-/// （理由の文字列を保持）。GET の応答としてあり得ない完了語彙（`Notified`／`Unloaded`）は
-/// `warn!` を残して `Failed("unexpected")` へ倒す。失敗の利用者向けの記録（`warn!` 1 回）は
-/// 受け手が残す（要件 3.4）。送出失敗・拒否そのものの記録は往復側が既に残している。
-pub(crate) fn outcome_of(id: &'static str, outcome: ShioriOutcome) -> ResourceOutcome {
-    match outcome {
-        ShioriOutcome::Value(body, _) => ResourceOutcome::Value(body),
-        ShioriOutcome::NoContent => ResourceOutcome::NoContent,
-        ShioriOutcome::Failed(failure) => ResourceOutcome::Failed(failure.to_string()),
-        other => {
-            let kind = match other {
-                ShioriOutcome::Notified => "notified",
-                ShioriOutcome::Unloaded => "unloaded",
-                _ => "unknown",
-            };
-            tracing::warn!(
-                target: "areka_kanade::resource",
-                event = "resource_query_unexpected_reply",
-                id = %id,
-                reply = %kind,
-                "リソース照会が想定外の応答（GET は Value/NoContent/Failed のみ）——失敗として返す"
-            );
-            ResourceOutcome::Failed("unexpected".to_string())
-        }
-    }
 }
 
 /// 照会に答える。応答は入力の id と同じ順・同じ長さで **1 回だけ**返す。

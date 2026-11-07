@@ -1,5 +1,5 @@
 use super::*;
-use crate::msg::{CloseReason, ShioriCall, ShioriFailure};
+use crate::msg::{CloseReason, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::{ActiveTalk, TermCause};
 use crate::talk::TalkId;
 use areka_actor::reply_channel;
@@ -109,7 +109,7 @@ fn only_steady_is_queryable() {
     );
 }
 
-/// SHIORI 応答から照会結果への写像（`boot.rs` の prefetch 段と同じ 3 分岐＋想定外）。
+/// SHIORI 応答から照会結果への写像（3 分岐＋想定外・起動の先読みも同じ関数を呼ぶ）。
 #[test]
 fn shiori_outcome_maps_onto_resource_outcome() {
     assert_eq!(

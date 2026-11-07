@@ -162,36 +162,19 @@ fn on_prefetch_reply(
     outcome: ShioriOutcome,
     config: &KanadeConfig,
 ) -> (State, Vec<Action>) {
-    let (resource_outcome, label) = match outcome {
-        ShioriOutcome::Value(body, _) => (ResourceOutcome::Value(body), "value"),
-        ShioriOutcome::NoContent => (ResourceOutcome::NoContent, "no_content"),
-        ShioriOutcome::Failed(failure) => {
+    // 写像はメニューの照会と同じ 1 つ（想定外の答えの warn もそちら）。boot は失敗の warn と完了の記録だけ持つ。
+    let resource_outcome = resources::outcome_of("username", outcome);
+    let label = match &resource_outcome {
+        ResourceOutcome::Value(_) => "value",
+        ResourceOutcome::NoContent => "no_content",
+        ResourceOutcome::Failed(reason) => {
             tracing::warn!(
                 target: "areka_kanade::resource",
                 id = "username",
-                error = %failure,
+                error = %reason,
                 "username リソース照会が失敗——warn＋Failed を sink へ渡し boot 続行（起動を殺さない・R4.1）"
             );
-            (ResourceOutcome::Failed(failure.to_string()), "failed")
-        }
-        // GET 応答が Notified/Unloaded になることは構造上あり得ない（NOTIFY/Unload 専用の完了語彙）。
-        // 防御的に Failed 扱いとし、固定ログを 1 回だけ出して boot を続行する（log-first・起動を殺さない）。
-        other => {
-            let kind = match other {
-                ShioriOutcome::Notified => "notified",
-                ShioriOutcome::Unloaded => "unloaded",
-                _ => "unknown",
-            };
-            tracing::warn!(
-                target: "areka_kanade::resource",
-                id = "username",
-                reply = %kind,
-                "username 照会が想定外の応答（GET は Value/NoContent/Failed のみ）——防御的に Failed 扱いで続行"
-            );
-            (
-                ResourceOutcome::Failed(format!("unexpected prefetch outcome: {kind}")),
-                "failed",
-            )
+            "failed"
         }
     };
     // R9.3 grep 証跡: prefetch 完了固定ログ（target・fields・message 固定・必ず 1 回・研究 §12-10）。
