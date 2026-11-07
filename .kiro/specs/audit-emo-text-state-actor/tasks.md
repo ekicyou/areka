@@ -266,3 +266,4 @@
 - 継ぎ目 4 つ（`unowned_vocab`・`reset_decoration`・`default_font_color`・`box_font_dirs`）には名指す spec と「閉じたら消す」を書いた。`tests/viewbox_scroll_test.rs:141` に「（task 11）」が 1 つ残る（研究 27 に無い・6.1 のかけ直しで見る）（5.5）。
 - `lib.rs` の母数は 88（5.6 で `inline_marker_tests.rs`・`underline_tests.rs` を走査する側へ移した・走査 88＋除外 63＝151）。禁じる字に `wintf::com` を足した（5.6）。
 - 例の失敗は `Verdict::fail`（`error!` の後に積む）か `setup_abort` を通る。`--hold` の手での 1 回は research.md 18 節（200%・50 回のループで自分で閉じない）。ダブルクリックで閉じる所は、隔離の中から SendInput を送れず（err=5）、外は auto mode が拒んだので試せていない。例は進行役が pid を確かめて止めた（5.7）。
+- 完了時の棚卸（2026-11-07）: その場で解決 0 件・起票 0 件。アイドル CPU が上限 3.0% を超える件は、起票済みの `tick-gate-adoption`（待機中の CPU を 3% 未満へ）の範囲で、この spec の前後で上がっていない（research.md 20 節）。兄弟の持ち物に残る同じ形の穴は `audit-emo-text-layout-draw` の範囲（知らせ済み）。例の自動判定が k=1.0 を前提にする件は、設計の議題 3 で決めた。
