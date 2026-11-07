@@ -193,8 +193,14 @@ fn the_loop_writes_the_current_call_around_each_round_trip() {
         assert_eq!(
             *seen.lock().unwrap(),
             vec![
-                ShioriBusy::Request("OnBoot".into()),
-                ShioriBusy::Request("OnClose".into()),
+                ShioriBusy::Request {
+                    id: "OnBoot".into(),
+                    notify: false,
+                },
+                ShioriBusy::Request {
+                    id: "OnClose".into(),
+                    notify: true,
+                },
                 ShioriBusy::Unload,
             ],
             "unload_ok={unload_ok}: 往復の最中の値"

@@ -121,7 +121,7 @@
   - _Depends: 4.1_
   - _Requirements: 3.1, 3.2, 3.3, 6.1, 6.3, 6.7, 9.1, 9.9_
 
-- [ ] 8. SHIORI の殻
+- [x] 8. SHIORI の殻
 - [x] 8.1 (P) 往復の手の組み立てを 1 つにする（#14・#18 の `real.rs`・#83）
   - 4 つの手が共通の組み立てを呼び、本文検査の件数を新しい形に合わせる（版と印を必ず通す趣旨は保つ）
   - `collapsible_if` を直し、要らない包みを消す
@@ -134,7 +134,7 @@
   - 2 本が緑で、記録や印を消すと赤。手空きのテスト 4 本が数十 ms で抜ける
   - 8.1 と同じ `real.rs`・`real_tests.rs` を触るので 8.1 の後に回す
   - _Requirements: 3.1, 4.1, 4.2, 9.1_
-- [ ] 8.3 記録の段の名を後始末の NOTIFY にだけ付ける（#67）
+- [x] 8.3 記録の段の名を後始末の NOTIFY にだけ付ける（#67）
   - 塞がりの印に GET か NOTIFY かを持たせ、`on_close_notify` は NOTIFY の OnClose だけに付ける（外の使い手 0 件を grep で確かめる）
   - `an_on_close_get_that_was_waiting_is_not_labelled_on_close_notify` が緑で、見分けを外すと赤
   - 8.1・8.2 と同じ `real.rs` を触るので 8.2 の後に回す

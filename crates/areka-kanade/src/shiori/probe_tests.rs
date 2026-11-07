@@ -40,6 +40,22 @@ fn far_budget() -> WaitBudget {
     }
 }
 
+/// GET の往復の最中。
+fn get(id: &str) -> ShioriBusy {
+    ShioriBusy::Request {
+        id: id.into(),
+        notify: false,
+    }
+}
+
+/// NOTIFY の往復の最中。
+fn notify(id: &str) -> ShioriBusy {
+    ShioriBusy::Request {
+        id: id.into(),
+        notify: true,
+    }
+}
+
 fn busy_probe(busy: ShioriBusy, unblock: Option<ShioriUnblock>) -> ShioriProbe {
     let probe = ShioriProbe::default();
     probe.set_busy(busy);
@@ -60,7 +76,7 @@ fn events_named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a Captured
 #[test]
 fn finishing_within_the_limit_does_not_cut_and_logs_no_warning() {
     let (unblock, calls, _rx) = counting_unblock(Ok(()));
-    let probe = busy_probe(ShioriBusy::Request("OnBoot".into()), Some(unblock));
+    let probe = busy_probe(get("OnBoot"), Some(unblock));
     let budget = far_budget();
 
     let guard = probe.arm(budget);
@@ -102,16 +118,8 @@ fn finishing_within_the_limit_does_not_cut_and_logs_no_warning() {
 #[test]
 fn firing_names_the_stage_calls_the_unblock_once_and_warns_once() {
     let cases = [
-        (
-            ShioriBusy::Request("OnClose".into()),
-            "on_close_notify",
-            Some("OnClose"),
-        ),
-        (
-            ShioriBusy::Request("OnBoot".into()),
-            "in_flight_request",
-            Some("OnBoot"),
-        ),
+        (notify("OnClose"), "on_close_notify", Some("OnClose")),
+        (get("OnBoot"), "in_flight_request", Some("OnBoot")),
         (ShioriBusy::Unload, "unload", None),
         (ShioriBusy::Idle, "idle", None),
     ];
@@ -155,11 +163,26 @@ fn firing_names_the_stage_calls_the_unblock_once_and_warns_once() {
     }
 }
 
+/// 後始末より前から待っていた OnClose の GET（利用者が閉じ、SHIORI が固まった後に OS の終了が
+/// 来た）は `in_flight_request`。後始末の通知（NOTIFY の OnClose）だけが `on_close_notify`。
+#[test]
+fn an_on_close_get_that_was_waiting_is_not_labelled_on_close_notify() {
+    for (busy, stage) in [
+        (get("OnClose"), "in_flight_request"),
+        (notify("OnClose"), "on_close_notify"),
+    ] {
+        let (unblock, _calls, _rx) = counting_unblock(Ok(()));
+        let probe = busy_probe(busy.clone(), Some(unblock));
+        let cut = try_fire(&probe.0, far_budget());
+        assert_eq!(cut.map(|c| c.stage), Some(stage), "{busy:?}");
+    }
+}
+
 /// 手動の口: 張られた見張りが今の呼び出しの段で解き、`finish` がその結果を返す。
 #[test]
 fn manual_cut_through_the_watchdog_thread_returns_the_cut() {
     let (unblock, calls, rx) = counting_unblock(Ok(()));
-    let probe = busy_probe(ShioriBusy::Request("OnClose".into()), Some(unblock));
+    let probe = busy_probe(notify("OnClose"), Some(unblock));
 
     let guard = probe.arm(far_budget());
     probe.cut_now();
@@ -247,7 +270,7 @@ fn missing_unblock_logs_error_and_reports_not_unblocked() {
 #[test]
 fn failing_unblock_logs_error_and_reports_not_unblocked() {
     let (unblock, calls, _rx) = counting_unblock(Err("access denied".into()));
-    let probe = busy_probe(ShioriBusy::Request("OnClose".into()), Some(unblock));
+    let probe = busy_probe(notify("OnClose"), Some(unblock));
     let (cut, events) = capture(|| try_fire(&probe.0, far_budget()));
 
     assert_eq!(
@@ -279,7 +302,7 @@ fn failing_unblock_logs_error_and_reports_not_unblocked() {
 #[test]
 fn manual_cut_before_arming_is_kept_and_fires_on_the_next_arm() {
     let (unblock, calls, rx) = counting_unblock(Ok(()));
-    let probe = busy_probe(ShioriBusy::Request("OnBoot".into()), Some(unblock));
+    let probe = busy_probe(get("OnBoot"), Some(unblock));
 
     probe.cut_now();
     assert_eq!(calls.load(Ordering::SeqCst), 0, "張る前は何もしない");
@@ -299,7 +322,7 @@ fn manual_cut_before_arming_is_kept_and_fires_on_the_next_arm() {
 #[test]
 fn when_finish_wins_the_race_the_watchdog_does_not_cut() {
     let (unblock, calls, _rx) = counting_unblock(Ok(()));
-    let probe = busy_probe(ShioriBusy::Request("OnClose".into()), Some(unblock));
+    let probe = busy_probe(notify("OnClose"), Some(unblock));
 
     let guard = probe.arm(far_budget());
     probe
@@ -371,7 +394,7 @@ fn the_unblock_is_installed_only_once() {
 #[test]
 fn dropping_the_guard_without_finish_stops_the_watchdog() {
     let (unblock, calls, rx) = counting_unblock(Ok(()));
-    let probe = busy_probe(ShioriBusy::Request("OnClose".into()), Some(unblock));
+    let probe = busy_probe(notify("OnClose"), Some(unblock));
 
     drop(probe.arm(far_budget()));
     assert!(lock(&probe.0.armed).tx.is_none(), "送信端は残らない");

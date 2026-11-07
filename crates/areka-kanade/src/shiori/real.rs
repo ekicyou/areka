@@ -368,7 +368,7 @@ fn report_exit_once(
 /// する）際に自然に drop される。
 ///
 /// # 今の呼び出しの記録
-/// 往復の直前に [`ShioriBusy::Request`]（イベント名）、直後（応答を送る前）に
+/// 往復の直前に [`ShioriBusy::Request`]（イベント名と GET か NOTIFY か）、直後（応答を送る前）に
 /// [`ShioriBusy::Idle`] を `probe` へ書く。`Unload` の直前に [`ShioriBusy::Unload`]、`unload` が
 /// 戻ったら成否を問わず [`ShioriBusy::Unloaded`] を書く。読むのは上限の見張りだけ。
 fn run_shiori_loop(
@@ -396,10 +396,14 @@ fn run_shiori_loop(
         report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
         match msg {
             ShioriMsg::Request { call, reply } => {
-                let id = match &call {
-                    ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id.as_str(),
+                let (id, notify) = match &call {
+                    ShioriCall::Get { id, .. } => (id, false),
+                    ShioriCall::Notify { id, .. } => (id, true),
                 };
-                probe.set_busy(ShioriBusy::Request(id.to_string()));
+                probe.set_busy(ShioriBusy::Request {
+                    id: id.to_string(),
+                    notify,
+                });
                 let outcome = handle_call(backend.as_mut(), call);
                 // 応答より先に書く（応答を受け取った側が見る値を往復の後の値に揃える）。
                 probe.set_busy(ShioriBusy::Idle);
