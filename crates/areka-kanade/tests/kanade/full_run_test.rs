@@ -143,7 +143,6 @@ fn drive_full_run() {
         boot_talk.talk_id,
         close_talk.talk_id
     );
-    assert_ne!(boot_talk.talk_id, close_talk.talk_id, "talk_id は一意");
 
     // ========================================================================
     // (c) close 指示→再生完了通知を待って終了系列が完走
@@ -172,14 +171,6 @@ fn drive_full_run() {
         expected_unload(),
         "記録列の末尾は Unload（終了系列完走）で閉じるはず"
     );
-    assert_eq!(last.method, CallMethod::Unload);
-
-    // OnClose→…→Unload の順序（OnClose が Unload より前）。
-    let unload_index = recorded.len() - 1;
-    assert!(
-        onclose_index < unload_index,
-        "OnClose（{onclose_index}）は Unload（{unload_index}）より前に現れるはず"
-    );
 
     // 終了系列以外（pump フェーズ）で Unload は 1 度だけ（末尾のみ）。
     let unload_count = recorded
@@ -187,6 +178,13 @@ fn drive_full_run() {
         .filter(|c| c.method == CallMethod::Unload)
         .count();
     assert_eq!(unload_count, 1, "Unload は終了系列で 1 度だけ発行される");
+
+    // pump: 送った刻み 3 本がどれも OnSecondChange として届く（GET か NOTIFY かは問わない）。
+    let ticks = recorded.iter().filter(|c| c.id == "OnSecondChange").count();
+    assert_eq!(
+        ticks, 3,
+        "刻み 3 本ぶんの OnSecondChange が記録に残るはず: {recorded:?}"
+    );
 }
 
 /// 主観測: boot→pump→close→終了の運行全体を単一の合否として検証し、反復実行で同一結果に

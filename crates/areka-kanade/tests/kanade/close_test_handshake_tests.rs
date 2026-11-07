@@ -382,16 +382,21 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
     assert_eq!(last.method, CallMethod::Unload);
 
     // (b) DD-10 の best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
-    //     force_quit がインラインで組む退化 NOTIFY（events 表由来ではない）に一致させる。
-    let force_notify = force_quit_onclose_notify(CloseReason::User { scope: 0 });
+    //     DD-IT-8: NOTIFY は `events::on_close_notify` が組む（通常握手の `events::on_close` は GET）。
+    //     snapshot は Unloading{Forced} 遷移後の INACTIVE（Status 行なし・DD-IT-4）。
+    let force_notify = expected_call(events::on_close_notify(
+        CloseReason::User { scope: 0 },
+        &ExecutionSnapshot::INACTIVE,
+    ));
     let notify_index = recorded
         .iter()
         .position(|c| *c == force_notify)
         .expect("ForceQuit の best-effort OnClose NOTIFY（Ref0=user）が現れるはず（DD-10）");
     let unload_index = recorded.len() - 1;
-    assert!(
-        notify_index < unload_index,
-        "OnClose NOTIFY（{notify_index}）は Unload（{unload_index}）より前に現れるはず（DD-10 順序）"
+    assert_eq!(
+        notify_index + 1,
+        unload_index,
+        "OnClose NOTIFY は Unload の直前に現れるはず（DD-10 順序）: {recorded:?}"
     );
 
     // (c) close 握手（OnClose GET）は通っていない: ForceQuit は握手を経ず直行する。
@@ -407,22 +412,4 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
         .filter(|c| c.method == CallMethod::Unload)
         .count();
     assert_eq!(unload_count, 1, "Unload は終了系列で 1 度だけ発行される");
-}
-
-// ============================================================================
-// 期待値導出ヘルパ（ForceQuit の best-effort OnClose NOTIFY）
-// ============================================================================
-
-/// ForceQuit（DD-10）が Action 先頭に積む best-effort OnClose **NOTIFY** の期待記録。
-///
-/// DD-IT-8: この NOTIFY は `events::on_close_notify` が単一列挙点として構成する（`force_quit` は
-/// もはや inline 構築しない）。通常握手の [`events::on_close`] は **GET** を返すため force_quit には
-/// 流用できず、NOTIFY 版を別に用いる。snapshot は Unloading{Forced} 遷移後の
-/// [`ExecutionSnapshot::INACTIVE`]（Status 行なし・DD-IT-4）。events 表から導出することで、ハーネスに
-/// References/Status 文字列をハードコードしない。
-fn force_quit_onclose_notify(reason: CloseReason) -> RecordedCall {
-    expected_call(events::on_close_notify(
-        reason,
-        &ExecutionSnapshot::INACTIVE,
-    ))
 }

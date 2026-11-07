@@ -228,7 +228,7 @@
   - 3 本が緑で、起動の道が失敗を出さなくなるとテストの順に依らず赤
   - _Depends: 13_
   - _Requirements: 3.1, 4.1, 4.2, 9.1_
-- [ ] 15.2 待ちと刻みのテストを決定論にする（#40・#41・#42・#86 の full_run・idle_pump・#89・#91）
+- [x] 15.2 待ちと刻みのテストを決定論にする（#40・#41・#42・#86 の full_run・idle_pump・#89・#91）
   - 期限を既定の時間切れに揃え、刻みの数を記録で見る
   - 要らない待ちと誤った注を消し、短い sleep に揃える。回らない輪と古い注を消す
   - 前の assert で必ず通る assert を消し、Unload の順を等式で見る
@@ -317,3 +317,4 @@
 - 10.1: #35 の 2 組目は design と逆の側（sstp_tests の `sstp_notify_derives_status_from_the_snapshot`）を消した。sstp_notify 側が `step` から `state.snapshot()` へのつながりを縛るただ 1 本だったため（要件 3.3）。
 - 11: `steady_choice_timeout_tests.rs` は 840 行（design の見込み約 760）。#74 で消したのは直に呼ぶ 3 本（うち 2 本は `steady_choice_tests.rs`）で、design の −100 は `step()` を通る側を消す前提の見込み違い。
 - 12.3: #47 の `record` は design の `expected_call(call.clone())` が組めない（`ShioriCall` に Clone が無い）ので、`RecordedCall::from_call` を pub にして使った。指摘の外に残る写し（19.2 のかけ直しで拾う候補）: `command_tags`／`describe`（status_query_test・choice_test_test_support・translate_test）、`choice_test_stage_failure_tests.rs:159` の `MouseInput { .. }` の直書き。
+- 15.2 指摘の外に残る（19.2 のかけ直しで拾う候補）: close_test の silent_close・force_quit の `assert_eq!(last.method, CallMethod::Unload)` は直後の等式に含まれる重い assert（#86 の一覧に無い）。
