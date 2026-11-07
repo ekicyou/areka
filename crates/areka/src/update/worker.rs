@@ -27,9 +27,9 @@ use super::procedure::{EngineRun, GhostResources, Raised, UpdatePorts, run_order
 use super::{TargetKind, TargetSpec, UpdateOrder};
 use crate::exit_wait::WorkGate;
 
-/// 照会する SHIORI リソース（1 回の照会で 2 つ）。
-const HOMEURL: &str = "homeurl";
-const USEORIGIN1: &str = "useorigin1";
+/// 照会する SHIORI リソース（1 回の照会で 2 つ）。窓口の `homeurl` の照会も同じ名前を使う。
+pub(super) const HOMEURL: &str = "homeurl";
+pub(super) const USEORIGIN1: &str = "useorigin1";
 
 /// 窓口から背景スレッドへ渡す仕事（依頼と、依頼を受けた時点の kanade の送出端・並びの写し）。
 pub(crate) struct UpdateJob {
