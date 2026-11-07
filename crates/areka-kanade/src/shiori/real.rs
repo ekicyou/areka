@@ -140,6 +140,24 @@ pub trait ShioriBackend {
 /// 増えない。
 pub const IDLE_INTERVAL: Duration = Duration::from_millis(500);
 
+impl ShioriConnection {
+    /// 4 つの手が共通に使う client の組み立て: 接続の版を渡し、`resource`（GET の手）のときに
+    /// 限り資源の印を付ける。版と印をここ 1 か所で決めるので、手ごとに食い違わない。
+    fn client(&mut self, id: &str, resource: bool) -> Shiori3Client<'_> {
+        // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
+        // GET と NOTIFY に同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
+        // 文字コードの規則は結線側が持ち、本層には書かない。
+        let client =
+            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
+        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない・要件 3.7）。
+        if resource && is_allowed_resource_id(id) {
+            client.for_resource()
+        } else {
+            client
+        }
+    }
+}
+
 impl ShioriBackend for ShioriConnection {
     fn get(
         &mut self,
@@ -147,15 +165,7 @@ impl ShioriBackend for ShioriConnection {
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
-        // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
-        // 文字コードの規則は結線側が持ち、本層には書かない。
-        let mut client =
-            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
-        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない・要件 3.7）。
-        if is_allowed_resource_id(id) {
-            client = client.for_resource();
-        }
-        client.get(id, references, status)
+        self.client(id, true).get(id, references, status)
     }
 
     fn notify(
@@ -164,11 +174,8 @@ impl ShioriBackend for ShioriConnection {
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError> {
-        // GET と同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
         // NOTIFY は資源の問い合わせではないので印を付けない。
-        Shiori3Client::new(&self.window, &mut self.negotiator)
-            .with_version(self.version)
-            .notify(id, references, status)
+        self.client(id, false).notify(id, references, status)
     }
 
     fn get_with_headers(
@@ -179,12 +186,8 @@ impl ShioriBackend for ShioriConnection {
         headers: &RequestHeaders<'_>,
     ) -> Result<Option<ValueReply>, RequestError> {
         // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade・要件 3.5）。
-        let mut client =
-            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
-        if is_allowed_resource_id(id) {
-            client = client.for_resource();
-        }
-        client.get_with_headers(id, references, status, headers)
+        self.client(id, true)
+            .get_with_headers(id, references, status, headers)
     }
 
     fn notify_with_headers(
@@ -194,8 +197,7 @@ impl ShioriBackend for ShioriConnection {
         status: Option<&str>,
         headers: &RequestHeaders<'_>,
     ) -> Result<(), RequestError> {
-        Shiori3Client::new(&self.window, &mut self.negotiator)
-            .with_version(self.version)
+        self.client(id, false)
             .notify_with_headers(id, references, status, headers)
     }
 
@@ -328,20 +330,21 @@ fn report_exit_once(
     down_reported: &mut bool,
     on_down: &Sender<KanadeMsg>,
 ) {
-    if !unloaded && !*down_reported {
-        if let HelperStatus::Exited(kind) = backend.status() {
-            *down_reported = true;
-            tracing::error!(
-                target: "shiori-actor",
-                event = "helper_exited",
-                exit = ?kind,
-                "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
-            );
-            let _ = on_down.send(KanadeMsg::ShioriDown {
-                kind: ShioriDownKind::HelperExited,
-                reason: format!("helper exited unexpectedly: {kind:?}"),
-            });
-        }
+    if !unloaded
+        && !*down_reported
+        && let HelperStatus::Exited(kind) = backend.status()
+    {
+        *down_reported = true;
+        tracing::error!(
+            target: "shiori-actor",
+            event = "helper_exited",
+            exit = ?kind,
+            "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
+        );
+        let _ = on_down.send(KanadeMsg::ShioriDown {
+            kind: ShioriDownKind::HelperExited,
+            reason: format!("helper exited unexpectedly: {kind:?}"),
+        });
     }
 }
 

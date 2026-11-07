@@ -116,18 +116,12 @@ fn fake_unload(f: impl FnMut() -> Result<ExitKind, ShutdownError> + Send + 'stat
     }
 }
 
-/// backend を `Box<dyn ShioriBackend>` へ格上げする（`spawn_shiori_actor` の connect closure
-/// と同じ形——純 x64 の偽装注入シームをテストでも同一の型で通す）。
-fn boxed(backend: FakeBackend) -> Box<dyn ShioriBackend> {
-    Box::new(backend)
-}
-
 /// runner を spawn し、Request を 1 往復させて outcome を返す（fake backend・helper 不要）。
 fn round_trip_via_runner(backend: FakeBackend, call: ShioriCall) -> ShioriOutcome {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Request { call, reply })
@@ -418,7 +412,7 @@ fn unload_ok_clean_returns_unloaded() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
@@ -445,7 +439,7 @@ fn unload_ok_non_clean_logs_warn_and_returns_unloaded() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
@@ -466,7 +460,7 @@ fn unload_err_logs_error_and_returns_failed_ipc() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
@@ -495,7 +489,7 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
 
     // 1 通目のメッセージ到達で死活検出される。
@@ -577,7 +571,7 @@ fn death_report_suppressed_after_successful_unload() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
 
     // 1 通目の Unload: 到達時点では status=Running（死活報告なし）→ unload 成功で unloaded=true。
@@ -621,7 +615,7 @@ fn all_senders_dropped_terminates_runner() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(rx, Box::new(backend), on_down_tx, ShioriProbe::default())
     });
     // 何も送らず全 Sender を drop → recv が Err → ループ正常終了。
     drop(tx);
@@ -714,7 +708,8 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
 /// （要件 9.8 の趣旨で実機依存の檻を作らない）。ゆえに「作り直していない」ことは**本番ファイル
 /// `real.rs` 1 本の本文**で機械的に確かめる: そこに交渉状態の構築子が 1 つも無く、応答待ち・
 /// 片道の 2 つの入口とそのヘッダつき版 2 つ（areka-P0-script-security-level 要件 2.1）の計 4 つが
-/// いずれも接続のフィールドを借用して結線へ渡している。
+/// 共通に呼ぶ client の組み立て 1 か所だけが接続のフィールドを借用して結線へ渡している（4 つの手が
+/// その組み立てを呼ぶことは `real_resource_mark_tests.rs` が固定する）。
 ///
 /// 検査の射程はこの 1 ファイルに限る（「クレート全体に構築子が無い」ではない）。交渉状態を
 /// 作ってよい正当な構築点は接続の値を組む 2 か所——`crates/areka-ghost/src/shiori_wiring.rs`
@@ -734,7 +729,7 @@ fn the_connection_owns_one_negotiator_and_never_mints_one_per_call() {
     );
     assert_eq!(
         SOURCE.matches("&mut self.negotiator").count(),
-        4,
-        "応答待ち・片道の入口とそのヘッダつき版の計 4 つがともに接続のフィールドを借用して結線へ渡すべき（要件 5.1）"
+        1,
+        "4 つの手が共通に呼ぶ client の組み立て 1 か所だけが接続のフィールドを借用して結線へ渡すべき（要件 5.1）"
     );
 }
