@@ -1,6 +1,8 @@
 //! 毎フレームの矢印の出し分けと当たりの写しの檻（balloon-scroll-arrows task 4.3・要件 3.1〜3.4・
 //! 3.8・5.7・7.3・8.6・11.1）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 実 GPU で提示し、矢印が出ているかを公開の当たりの口（`marker_at_point`）で読む: 押し出された行の
 //! 有無が変わった次の提示で矢印が合うこと、モデルを替えると置き場が替わり古い印の面が窓の子から
 //! 消えること、α < 0.5 の画素で当たらないこと。箱の足りない番号の埋め方は純粋な引き当てで見る。
@@ -12,14 +14,16 @@ use areka_emo_present::balloon_marker::{MarkerImage, MarkerPair};
 use areka_parsers::balloon::{ArrowKeys, BalloonModel, MarkerCoord, MarkerPoint};
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::World;
 use wintf::ecs::WucGraphicsResource;
 
-use super::box_sync_tests::{emote, layout, select, text};
+use super::box_sync_tests::{layout, select};
 use super::region_collapse_tests::model as parse_model;
 use super::scroll::placed_markers;
-use super::test_support::{com_world, cue, geo_model, opaque_count};
+use super::test_support::{
+    com_world, cue, geo_model, opaque_count, physical, read_back, window_children,
+};
+use super::test_support::{emote, text};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::place::{PlaceKey, TextPlace};
 use crate::scroll_marker::{
@@ -99,13 +103,6 @@ fn shown(rt: &TextLayerRuntime, place: &PlaceKey) -> (bool, bool) {
     )
 }
 
-fn children_of(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().copied().collect())
-        .unwrap_or_default()
-}
-
 /// 押し出された行が無いうちは印の面を作らず、あふれた次の提示で上の矢印が出る。手動で戻すと
 /// 次の提示で下の矢印も出て、自動へ帰ると下の矢印が消える（要件 3.1〜3.3・3.8）。
 #[test]
@@ -129,7 +126,7 @@ fn arrows_follow_the_pushed_out_lines_on_the_next_present() {
     assert_eq!(shown(&rt, &place), (true, false), "古い側に隠れた行");
     let surface = rt.marker_surface(&actor).expect("印の面");
     let child = surface.window_child().expect("窓の子");
-    assert_eq!(children_of(&world, window)[0], child, "文字の面の直前");
+    assert_eq!(window_children(&world, window)[0], child, "文字の面の直前");
 
     rt.scroll_manual_at(&place, ScrollDir::Older, 2);
     assert_eq!(
@@ -174,7 +171,7 @@ fn transparent_arrow_pixels_and_outside_do_not_hit() {
     assert_eq!(rt.marker_at_point(&place, (-1.0, -1.0)), None);
 }
 
-/// 再追従でモデルの矢印の鍵が替わると、置き場が替わり（要件 3.4・8.6）、古い拡大率の印の面は
+/// 再追従でモデルの矢印の鍵が替わると、置き場が替わり（要件 3.4・8.6）、前の印の面は
 /// 次の提示で窓の子から消えて新しい面に替わる（窓の子を残さない）。
 #[test]
 fn model_change_moves_the_arrow_and_drops_the_old_marker_surface() {
@@ -206,7 +203,7 @@ fn model_change_moves_the_arrow_and_drops_the_old_marker_surface() {
         .marker_surface(&actor)
         .and_then(|s| s.window_child())
         .expect("新しい印の面");
-    let children = children_of(&world, window);
+    let children = window_children(&world, window);
     assert_eq!(children.iter().filter(|c| **c == new).count(), 1);
     assert!(!children.contains(&old));
     assert_eq!(
@@ -315,7 +312,7 @@ fn collapse_drops_the_marker_surface_with_the_text_surface() {
         world.get_entity(marker).is_err(),
         "印の面の entity が残っている"
     );
-    assert!(!children_of(&world, window).contains(&marker));
+    assert!(!window_children(&world, window).contains(&marker));
     assert!(rt.marker_surface(&actor).is_none());
     assert_eq!(rt.marker_at_point(&place, UP), None);
 }
@@ -330,7 +327,7 @@ fn marker_failure_keeps_the_box_in_the_shown_copy() {
     rt.set_box_layout(
         &mut world,
         layout(),
-        super::box_sync_tests::resolver(),
+        super::test_support::fake_resolver(),
         vec![],
     );
     rt.set_balloon_markers(actor.clone(), pair());
@@ -384,7 +381,8 @@ fn default_balloon_model() -> BalloonModel {
 }
 
 /// 今の提示の面が、同じ見える範囲を全域で描き直した面と行ごとに同じこと。描き直しは再追従と同じく
-/// 描画資源だけを捨てて次の提示で作り直す（手動の位置は場所の状態なので残る）。
+/// 描き手を捨て（差し込み口と印の面の窓の子は次の提示の頭で外す）、次の提示で作り直す（手動の位置は
+/// 場所の状態なので残る）。
 fn assert_matches_full_redraw(
     rt: &mut TextLayerRuntime,
     world: &mut World,
@@ -392,18 +390,11 @@ fn assert_matches_full_redraw(
     label: &str,
 ) {
     present_frame(rt, world, DONE).expect(label);
-    let live = rt
-        .surface(&place.actor)
-        .expect("面")
-        .read_back()
-        .expect("read_back");
-    rt.surfaces.remove(place);
+    let live = read_back(rt, &place.actor);
+    let render = rt.surfaces.remove(place).expect("描き手");
+    rt.retired_renders.push((render, rt.routing[place].slot));
     present_frame(rt, world, DONE).expect("描き直しの提示");
-    let full = rt
-        .surface(&place.actor)
-        .expect("描き直しの面")
-        .read_back()
-        .expect("read_back");
+    let full = read_back(rt, &place.actor);
     assert!(opaque_count(&full) > 0, "{label}: 描き直しの面に字が在る");
     assert_eq!(live.len(), full.len());
     // 面の幅は描画範囲 326 × 2 倍。違う行（物理 px）を挙げる。
@@ -432,13 +423,9 @@ fn scrolling_back_matches_a_full_redraw_of_the_same_window() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let actor = ActorKey::from("0");
     let place = PlaceKey::balloon(&actor);
-    let physical = (
-        (BALLOON.0 as f32 * K).ceil() as u32,
-        (BALLOON.1 as f32 * K).ceil() as u32,
-    );
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, K, physical, BALLOON),
+        TextSlotBinding::new(slot, window, K, physical(BALLOON, K), BALLOON),
         ResolvedBalloonText::resolve(&default_balloon_model(), BALLOON),
     );
     for i in 0..15 {

@@ -1,21 +1,25 @@
-// task 7.2 の檻: バルーン背景色の受け口（[`TextLayerRuntime::set_balloon_background`]／
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
+
+// バルーン背景色の受け口（[`TextLayerRuntime::set_balloon_background`]／
 // `background_of`）と、装着の 1 点（[`TextLayerRuntime::register_actor`]）で 2 層を
 // 純粋状態へ差し込む配線（要件 4.6／3.1）。
 //
 // 檻に入れるのは判断分岐だけ——「背景を受け取っているか」「装着で 2 層が届くか」
-// 「再追従が同じ背景で作り直しを起こさないか」の 3 点。COM は要らない
+// 「再追従が同じ背景で作り直しを起こさないか」の 3 点。ここまでは COM は要らない
 // （`register_actor_binding`／`refresh_actor_binding` は純粋な導出と HashMap 更新のみ）。
+// 最後の 1 本（描き手の組み立ての失敗）だけは実 GPU（`com_world`）を使う。
 
 use areka_parsers::balloon::{
-    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WordWrapPoint,
+    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect,
 };
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
-use super::test_support::spawn_reserved_slot;
+use super::test_support::{
+    ROP_FALLBACK_MESSAGE, balloon_model_of, capture_checked, spawn_reserved_slot,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::color::mix_disabled;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -30,10 +34,8 @@ const NATIVE: (u32, u32) = (400, 224);
 /// これで「装着で 2 層が届く」の述語が恒真にならない——届かなければ状態は
 /// [`LookLayers::default`] のまま残り、比較が赤になる。
 fn styled_model() -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(
             Some("Meiryo".to_string()),
@@ -207,8 +209,6 @@ fn refreshing_after_the_background_changed_rebuilds_once() {
 /// R4.6: 背景の受け口は actor ごとに独立する（本体側の背景が相方側に効かない）。
 #[test]
 fn the_background_slot_is_per_actor() {
-    let mut world = World::new();
-    let (_, _) = spawn_reserved_slot(&mut world);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.set_balloon_background(ActorKey::from("0"), TINTED);
 
@@ -234,8 +234,6 @@ fn resolve_is_resolve_with_a_white_background() {
 
 // ══ spec real-run-log-noise 要件 2.1〜2.4・5.1: 選択肢の飾りの警告は置き場ごとに値が決まったときだけ ══
 
-/// ROP 系の飾りの警告の文言（今のまま 1 文字も変えない）。
-const ROP_FALLBACK: &str = "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";
 /// 下線系の飾りの警告の文言（今のまま 1 文字も変えない）。
 const UNDERLINE_FALLBACK: &str = "cursor.style underline 系は M1 未対応: SquareFill へ縮退";
 
@@ -258,7 +256,7 @@ fn warns<'a>(events: &'a [CapturedEvent], message: &str) -> Vec<&'a CapturedEven
         .collect()
 }
 
-/// T4（要件 2.1〜2.4・5.1）: ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
+/// `real-run-log-noise` 要件 2.1〜2.4・5.1: ROP 系と下線系のバルーンを名前を入れて装着すると 2 つの `warn` が
 /// 1 件ずつ（`balloon` の欄が入れた名前）。値の同じ再追従 3 回で 0 件、拡大率の変わる再追従でも
 /// 0 件、`blendmethod` だけ `xor` に替えた再追従で ROP 系だけ 1 件。
 ///
@@ -273,7 +271,7 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     let model = cursor_model("underline", "mergepennot");
 
     let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), bind, &model));
-    let rop = warns(&attached, ROP_FALLBACK);
+    let rop = warns(&attached, ROP_FALLBACK_MESSAGE);
     let underline = warns(&attached, UNDERLINE_FALLBACK);
     assert_eq!(rop.len(), 1, "装着で ROP 系の warn が 1 件");
     assert_eq!(underline.len(), 1, "装着で下線系の warn が 1 件");
@@ -282,31 +280,31 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
     assert_eq!(underline[0].field_str("balloon"), Some("飾りの検体"));
     assert_eq!(underline[0].field_str("style"), Some("underline"));
 
-    let (answers, same) = capture(|| {
+    let (answers, same) = capture_checked(|| {
         (0..3)
             .map(|_| rt.refresh_actor_binding(&actor, bind, &model))
             .collect::<Vec<_>>()
     });
     assert_eq!(answers, vec![false; 3]);
     assert_eq!(
-        warns(&same, ROP_FALLBACK).len() + warns(&same, UNDERLINE_FALLBACK).len(),
+        warns(&same, ROP_FALLBACK_MESSAGE).len() + warns(&same, UNDERLINE_FALLBACK).len(),
         0,
         "値の同じ再追従 3 回で 0 件"
     );
 
     let (window, slot) = (bind.window, bind.slot);
     let scaled = TextSlotBinding::new(slot, window, 1.5, (600, 336), NATIVE);
-    let (answer, rescaled) = capture(|| rt.refresh_actor_binding(&actor, scaled, &model));
+    let (answer, rescaled) = capture_checked(|| rt.refresh_actor_binding(&actor, scaled, &model));
     assert!(answer, "拡大率の変わる再追従は作り直す");
     assert_eq!(
-        warns(&rescaled, ROP_FALLBACK).len() + warns(&rescaled, UNDERLINE_FALLBACK).len(),
+        warns(&rescaled, ROP_FALLBACK_MESSAGE).len() + warns(&rescaled, UNDERLINE_FALLBACK).len(),
         0,
         "拡大率の変わる再追従でも飾りの値は同じなので 0 件"
     );
 
     let xor = cursor_model("underline", "xor");
     let (_, changed) = capture(|| rt.refresh_actor_binding(&actor, scaled, &xor));
-    let rop = warns(&changed, ROP_FALLBACK);
+    let rop = warns(&changed, ROP_FALLBACK_MESSAGE);
     assert_eq!(rop.len(), 1, "blendmethod だけ替えると ROP 系だけ 1 件");
     assert_eq!(rop[0].field_str("blendmethod"), Some("xor"));
     assert_eq!(
@@ -314,4 +312,94 @@ fn cursor_fallback_warns_once_per_place_when_the_value_is_decided() {
         0,
         "下線系は 0 件"
     );
+}
+
+// ══ spec audit-emo-text-state-actor（2・3 回目のかけ直し R2-12・R3-5）: 知らない cursor.style の警告 ══
+
+/// 知らない `cursor.style` の警告の文言。
+const UNKNOWN_STYLE: &str = "cursor.style が正典の値（square・underline・square+underline・none）のどれでもない: 既定の square で描く";
+
+/// 知らない `cursor.style`（`squre`）のバルーンは装着で 1 件（`style` の欄が元の値）、値の同じ
+/// 再追従で 0 件、値を `sqare` に替えた再追従で 1 件（欄は新しい値）。
+#[test]
+fn unknown_cursor_style_warns_once_naming_the_value() {
+    let mut world = World::new();
+    let (bind, actor) = binding(&mut world);
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.set_balloon_label(&actor, "飾りの検体".to_string());
+    let model = cursor_model("squre", "none");
+
+    let ((), attached) = capture(|| rt.register_actor_binding(actor.clone(), bind, &model));
+    let unknown = warns(&attached, UNKNOWN_STYLE);
+    assert_eq!(unknown.len(), 1, "装着で知らない style の warn が 1 件");
+    assert_eq!(unknown[0].field_str("balloon"), Some("飾りの検体"));
+    assert_eq!(unknown[0].field_str("style"), Some("squre"));
+
+    let (answer, same) = capture_checked(|| rt.refresh_actor_binding(&actor, bind, &model));
+    assert!(!answer);
+    assert_eq!(
+        warns(&same, UNKNOWN_STYLE).len(),
+        0,
+        "値の同じ再追従で 0 件"
+    );
+
+    let sqare = cursor_model("sqare", "none");
+    let (_, changed) = capture(|| rt.refresh_actor_binding(&actor, bind, &sqare));
+    let unknown = warns(&changed, UNKNOWN_STYLE);
+    assert_eq!(unknown.len(), 1, "値を替えた再追従で 1 件");
+    assert_eq!(unknown[0].field_str("style"), Some("sqare"));
+}
+
+/// audit-emo-text-state-actor 指摘 5: 描き手の組み立てが失敗すれば、面を付ける閉包は呼ばれず、窓の子の entity は増えない
+/// （面を付けるのは書体・計測器・描き手が全部通った後）。組み立ては無効にした `GraphicsCore` で
+/// 落とし、閉包は生きた装置で本物の窓の子の面を付ける——先に呼べば子が 1 つ増えて赤になる。
+#[test]
+fn failing_build_never_attaches_and_leaves_no_window_child() {
+    use super::decoration::build_actor_render;
+    use super::test_support::{com_world, geo_model, window_children};
+    use crate::surface::TextSurface;
+    use wintf::ecs::{GraphicsCore, WucGraphicsResource};
+
+    let (mut world, window, _slot) = com_world();
+    let compositor = world
+        .resource::<WucGraphicsResource>()
+        .compositor()
+        .cloned()
+        .expect("compositor");
+    let live = world
+        .remove_resource::<GraphicsCore>()
+        .expect("GraphicsCore");
+    let mut dead = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+    dead.invalidate();
+    let before = window_children(&world, window);
+    let resolved = ResolvedBalloonText::resolve(&geo_model(), NATIVE);
+    let mut called = false;
+
+    let result = build_actor_render(
+        &dead,
+        || {
+            called = true;
+            TextSurface::attach_window_child(
+                &mut world,
+                window,
+                0,
+                &compositor,
+                &live,
+                (4, 4),
+                (0.0, 0.0),
+            )
+        },
+        &resolved.font,
+        resolved.mode,
+        &TextLayerConfig::default(),
+        &ActorKey::from("sakura"),
+    );
+
+    assert!(result.is_err(), "無効な装置では組み立てが失敗する");
+    assert_eq!(
+        window_children(&world, window),
+        before,
+        "窓の子の entity を残さない"
+    );
+    assert!(!called, "組み立てが失敗したら面を付ける閉包を呼ばない");
 }

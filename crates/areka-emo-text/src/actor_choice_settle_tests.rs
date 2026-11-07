@@ -1,61 +1,41 @@
 //! 選択肢の「済み」の境目の檻（areka-P0-balloon-text-bugs 件 1・要件 1.10〜1.13）。
 //!
-//! タスク 4.3 の部分は GPU なしで、場所の状態（`ActorTextState`）の境目と層の状態
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
+//!
+//! 前半は GPU なしで、場所の状態（`ActorTextState`）の境目と層の状態
 //! （`TextLayerState`）の口だけを固定する: 境目の範囲・消去（`\c`・台詞の頭）で 0 に戻ること・
 //! 済みにした後に足された選択肢は済んでいないこと・アンカーは済みにならないこと・
 //! 場所が無ければ何もしないこと・空回しの写しが境目も写すこと。
 //!
-//! タスク 4.4 の部分も GPU なしで、ランタイム（`TextLayerRuntime`）の済みの口を固定する: 選択待ちの
+//! 中ほども GPU なしで、ランタイム（`TextLayerRuntime`）の済みの口を固定する: 選択待ちの
 //! 前の押下の口は何もしない・後ならその場所の選択肢の問いが偽でほかの場所は真・全部済みで偽・
 //! アンカーは押せる範囲に残る・強調が外れる・当たり行の写しから選択肢の行がその場で消える。
-//! 提示で写しを作り直すときの外し方は実 GPU の檻（タスク 4.7）が固定する。
+//! 提示で写しを作り直すときの外し方は後半の実 GPU の檻が固定する。
 //!
-//! タスク 4.7 の部分は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行の座標の押下が
-//! 当たらないこと・WARN 0 行・済んだ行の強調が読み戻しに出ないこと・済む前と後で強調なしの読み戻しが
-//! 同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
+//! 後半は実 GPU で、普通のバルーンと箱の場所の両方について、済んだ行が当たり行から
+//! 消えること・済みと提示で WARN 0 行・済んだ行の強調が読み戻しに出ないこと・済む前と後で強調なしの
+//! 読み戻しが同じことを固定する（押下のハンドラからの通しは `areka` の `balloon_choice_settle_tests.rs`）。
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
+use super::test_support::{balloon, choice, instant};
 use crate::place::PlaceKey;
+use crate::state::test_support::applied;
 use crate::state::{ActorTextState, ChoiceSpan, SpanKind, TextLayerState};
-
-fn cue(actor: &str, command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from(actor),
-        command,
-        duration: 0.0,
-    }
-}
-
-fn choice(actor: &str, id: &str) -> TalkCue {
-    cue(
-        actor,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: id.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
 
 /// アンカーの範囲を 1 つ記録する cue の列（開き → 文字 → 閉じ）。
 fn anchor(actor: &str, id: &str) -> [TalkCue; 3] {
     [
-        cue(
+        instant(
             actor,
             CueCommand::AnchorBegin {
                 id: id.to_owned(),
                 references: Vec::new(),
             },
         ),
-        cue(actor, CueCommand::Text(id.to_owned())),
-        cue(actor, CueCommand::AnchorEnd),
+        instant(actor, CueCommand::Text(id.to_owned())),
+        instant(actor, CueCommand::AnchorEnd),
     ]
-}
-
-fn balloon(actor: &str) -> PlaceKey {
-    PlaceKey::balloon(&ActorKey::from(actor))
 }
 
 fn place<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {
@@ -71,14 +51,6 @@ fn settled_flags(state: &TextLayerState, actor: &str) -> Vec<(SpanKind, bool)> {
         .iter()
         .map(|span: &ChoiceSpan| (span.kind, s.is_settled_choice(span)))
         .collect()
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
 }
 
 /// 境目の範囲: 済ませる前は全部が済んでおらず、済ませると今ある選択肢の全部が済む
@@ -107,7 +79,7 @@ fn settle_moves_the_boundary_to_the_span_count_and_stops_there() {
 /// 範囲の無い場所: 済ませても何も起きず、済んでいない選択肢も無い。
 #[test]
 fn settle_on_a_place_without_spans_is_harmless() {
-    let mut state = applied(&[cue("0", CueCommand::Text("字".into()))]);
+    let mut state = applied(&[instant("0", CueCommand::Text("字".into()))]);
     assert!(!place(&state, "0").has_live_choice());
     assert!(state.settle_choices_at(&balloon("0")));
     assert!(place(&state, "0").choices().is_empty());
@@ -148,7 +120,7 @@ fn anchors_are_never_settled() {
 fn clear_resets_the_boundary() {
     let mut state = applied(&[choice("0", "a"), choice("0", "b")]);
     state.settle_choices_at(&balloon("0"));
-    state.apply_cue(&cue("0", CueCommand::Clear));
+    state.apply_cue(&instant("0", CueCommand::Clear));
     state.apply_cue(&choice("0", "c"));
     assert_eq!(settled_flags(&state, "0"), vec![(SpanKind::Choice, false)]);
     assert!(place(&state, "0").has_live_choice());
@@ -159,7 +131,7 @@ fn clear_resets_the_boundary() {
 fn clear_all_resets_the_boundary_of_every_place() {
     let mut state = applied(&[choice("0", "a"), choice("1", "b")]);
     state.settle_all_choices();
-    state.apply_cue(&cue("0", CueCommand::ClearAll));
+    state.apply_cue(&instant("0", CueCommand::ClearAll));
     state.apply_cue(&choice("0", "c"));
     state.apply_cue(&choice("1", "d"));
     assert_eq!(settled_flags(&state, "0"), vec![(SpanKind::Choice, false)]);
@@ -203,7 +175,7 @@ fn rehearsal_copy_carries_the_boundary() {
     assert_eq!(settled_flags(&copy, "0"), vec![(SpanKind::Choice, true)]);
 }
 
-// ══ タスク 4.4: ランタイムの済みの口（写し・強調・問いを同時に揃える・GPU なし） ══
+// ══ ランタイムの済みの口（写し・強調・問いを同時に揃える・GPU なし） ══
 
 use super::{ChoiceHitRow, TextLayerRuntime};
 use crate::choice::HitRectPx;
@@ -349,12 +321,13 @@ fn closing_the_choice_wait_makes_the_press_a_no_op_again() {
     assert_eq!(row_kinds(&rt, "0").len(), 3);
 }
 
-// ══ タスク 4.7: 済んだ行の振る舞い（実 GPU・普通のバルーンと箱） ══
+// ══ 済んだ行の振る舞い（実 GPU・普通のバルーンと箱） ══
 
 use bevy_ecs::prelude::World;
 use log_capture_kit::capture;
 
-use super::box_sync_tests::{SHELL_IMAGE, emote, layout, name, resolver, select};
+use super::box_sync_tests::{SHELL_IMAGE, layout, select};
+use super::test_support::{box_name, emote, fake_resolver};
 use super::test_support::{choice_cue, com_world};
 use super::{ResolvedBalloonText, TextSlotBinding, present_frame};
 use crate::place::TextPlace;
@@ -362,20 +335,9 @@ use crate::place::TextPlace;
 /// 全部の文字が見えている時刻。
 const LATE: f64 = 10.0;
 
-/// 押下の口が読む値（押せる範囲があるか・当たり行）で、その座標に当たる行があるか。
-/// 入力の層の `click_selection`／`judge_box_click` と同じ判定（押せる範囲が無ければ当たらない・
-/// 矩形は左上を含み右下を含まない）。
-fn press_hits(rt: &TextLayerRuntime, place: &PlaceKey, x: f32, y: f32) -> bool {
-    rt.hit_active(&place.actor)
-        && rt.choice_hit_rows_at(place).iter().any(|row| {
-            let r = row.rect;
-            x >= r.left && x < r.right && y >= r.top && y < r.bottom
-        })
-}
-
 /// 済んだ行の通しの檻（要件 1.10〜1.12）。`place` に選択肢 2 つを載せて装着済みの `rt` を受ける。
 ///
-/// 提示→当たり行あり→選択待ちの始まり→強調したまま場所を済み→その座標の押下は当たらない・
+/// 提示→当たり行あり→選択待ちの始まり→強調したまま場所を済み→その行は当たり行から消える・
 /// 済み・提示で WARN 0 行／済む前と後で強調なしの読み戻しが同じ／済んだ行に強調を入れても強調なしと同じ。
 /// 済む前の強調が読み戻しを変えることを先に確かめ、読み戻しの比べが効くことを担保する。
 fn settled_row_is_unpressable_and_unlit(
@@ -396,14 +358,6 @@ fn settled_row_is_unpressable_and_unlit(
         .find(|r| r.kind == SpanKind::Choice)
         .expect("前提: 選択肢の当たり行がある")
         .clone();
-    let (x, y) = (
-        (first.rect.left + first.rect.right) / 2.0,
-        (first.rect.top + first.rect.bottom) / 2.0,
-    );
-    assert!(
-        press_hits(rt, place, x, y),
-        "前提: 済む前はその座標の押下が当たる"
-    );
     let plain = read(rt);
     rt.inject_choice_hover_at(place, Some(first.ordinal));
     present_frame(rt, world, LATE).expect("強調の提示");
@@ -418,7 +372,6 @@ fn settled_row_is_unpressable_and_unlit(
     let ((), events) = capture(|| {
         rt.settle_choices_at(place);
         present_frame(rt, world, LATE).expect("済んだ後の提示");
-        let _ = press_hits(rt, place, x, y);
         tracing::warn!("対照の警告");
     });
     let warns: Vec<_> = events
@@ -428,11 +381,13 @@ fn settled_row_is_unpressable_and_unlit(
     assert_eq!(
         warns.len(),
         1,
-        "数えられるのは対照の 1 行だけ（済み・提示・押下の判定で WARN 0 行）: {warns:?}"
+        "数えられるのは対照の 1 行だけ（済み・提示で WARN 0 行）: {warns:?}"
     );
     assert!(
-        !press_hits(rt, place, x, y),
-        "済んだ行の座標の押下は選択にならない（要件 1.11）"
+        !rt.choice_hit_rows_at(place)
+            .iter()
+            .any(|r| r.kind == SpanKind::Choice && r.ordinal == first.ordinal),
+        "済んだ行は当たり行から消える（要件 1.11）"
     );
     assert_eq!(
         read(rt),
@@ -475,7 +430,7 @@ fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&select("0", "b"));
     rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &[]));
@@ -485,7 +440,7 @@ fn settled_box_row_is_unpressable_and_unlit_on_the_gpu() {
 
     let box_b = PlaceKey {
         actor: actor.clone(),
-        place: TextPlace::Box(name(&layout, 0, "b")),
+        place: TextPlace::Box(box_name(&layout, 0, "b")),
     };
     settled_row_is_unpressable_and_unlit(&mut rt, &mut world, &box_b);
     assert!(!rt.choice_active(&actor), "箱の選択肢が全部済んだ");

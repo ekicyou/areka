@@ -1,10 +1,12 @@
-//! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合（task 11.2・R6.1/6.2/6.3）
+//! # emo2_fixture_e2e_test — 実 emo2 fixture のメニュー cue 列 headless 統合（R6.1/6.2/6.3）
+//!
+//! 出典 spec: `areka-P0-choice-render`（断りの無い要件の番号と design.md の参照はこの spec のもの・別の spec のものはその場で名を書く）。
 //!
 //! design.md「Testing Strategy > E2E/実機 item 1（emo2_boot 統合）」の正典述語を張る:
 //! **実 emo2 fixture ＋ menu.pasta 経路でメニュー cue 列 →選択肢描画〔headless readback〕**。
 //!
-//! task 11.1（`choice_fixture_test.rs`）は tests 配下の **test-local** 最小 fixture で parse→resolve と
-//! 実フォント render を固定した。task 11.2 は **リポジトリに実在する emo2 fixture**
+//! `choice_fixture_test.rs` は tests 配下の **test-local** 最小 fixture で parse→resolve と
+//! 実フォント render を固定する。本ファイルは **リポジトリに実在する emo2 fixture**
 //! （`検体 emo2 の同梱バルーン emo2-kakukaku`）の実 descript／実 menu.pasta を
 //! 用い、cue 配送 →選択肢描画をエンドツーエンドで検証する（実窓は起動しない・headless readback のみ）。
 //!
@@ -15,7 +17,7 @@
 //!   **全 0＝退化**（基層のみでは描画領域が空）。
 //! - `balloons0s.txt`（画像別上書き層）: `balloons0.png`（実測 400×224）向けに `validrect`
 //!   （top,46／bottom,-56／left,36／right,-44）と `wordwrappoint.x,-49` を与え、2 層マージ後に
-//!   **非退化領域 (36,46)-(356,168)** を成立させる（region.rs の `two_layer_merged_fixture…` と同機構）。
+//!   **非退化領域 (36,46)-(356,168)** を成立させる（`src/region_tests.rs` の `two_layer_merged_fixture…` と同機構）。
 //! - `menu.pasta`（メニュー台本）: `＊メインメニュー選択肢` の本文に
 //!   `\q[おしゃべり頻度,…]\n\q[エモの位置調整,…]\_l[5em,2lh]\q[閉じる,…]` という
 //!   **実さくらスクリプト断片**（`\n` 改行 3 項目＋`\_l` 字下げ）を持つ。
@@ -37,10 +39,16 @@
 //! これが 6.1（E2E 証明）を実 fixture 内容で満たし、型／語彙シーム（6.2・Cursor/references/barrier の
 //! 保持）を保ち、スクロール完全対応は追わない（6.3・短メニュー＝領域内に収まる）。
 
-use std::path::PathBuf;
-use std::sync::LazyLock;
+#[path = "support/mod.rs"]
+mod support;
 
-use sample_ghost_kit::SampleRoot;
+use support::{
+    Band, assert_hover_band, dump_png_on_white, fill_pixels_in_rect, make_world_with_gpu,
+    opaque_count, read_back, spawn_reserved_slot, surface_size, to_canvas_local,
+    white_pixels_in_rect,
+};
+
+use support::fixture::{command_cues, emo2_balloon_root, menu_script, merged_model};
 
 use areka_emo_text::actor::{
     ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
@@ -49,78 +57,22 @@ use areka_emo_text::choice::ResolvedChoiceStyle;
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::balloon::BalloonModel;
 use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CueCommand, CuePayload, SystemVarSnapshot, TalkCue};
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
-use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
+use areka_sakura::contract::{ActorKey, CueCommand, CuePayload, SystemVarSnapshot};
 
-// ── 実 emo2 fixture の所在（リポジトリ実在ファイル・test-local でない） ─────────────────────
-
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-/// emo2 検体のゴーストフォルダ（メニュー台本は `ghost/master/dic/` 下に在る）。
-fn emo2_fixture_root() -> PathBuf {
-    EMO2.folder().to_path_buf()
-}
-
-/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
-fn emo2_balloon_root() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
-/// 実 fixture ファイル（与えた基準フォルダからの相対パス）を読み、`charset` 宣言に従いデコード
-/// する（parser-foundation の decode 経路）。descript／pasta とも UTF-8 ゆえ既定 UTF-8 で読む。
-fn read_fixture_under(base: PathBuf, rel: &str) -> String {
-    let mut path = base;
-    for seg in rel.split('/') {
-        path = path.join(seg);
-    }
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "実 emo2 fixture {} の読取に失敗した（task 11.2 は実在 fixture を用いる）: {e}",
-            path.display()
-        )
-    });
-    decode(&bytes, DefaultEncoding::Utf8)
-}
-
-/// balloons0.png の実測原寸（region.rs `FIXTURE_IMAGE_SIZE` と同値・image px）。
+/// balloons0.png の実測原寸（`src/region_tests.rs` の `FIXTURE_IMAGE_SIZE` と同値・image px）。
 const IMAGE_SIZE: (u32, u32) = (400, 224);
 
 /// 実 `descript.txt`（基層）＋`balloons0s.txt`（画像別上書き層）を 2 層マージした BalloonModel。
 /// 実機の balloon-parse と同一機構（`parse_str(descript, Some(image))`）——非退化領域が成立する。
 fn merged_balloon_model() -> BalloonModel {
-    let descript = read_fixture_under(emo2_balloon_root(), "descript.txt");
-    let image_layer = read_fixture_under(emo2_balloon_root(), "balloons0s.txt");
-    parse_str(&descript, Some(&image_layer))
+    merged_model(&emo2_balloon_root(), Some("balloons0s.txt"))
 }
 
-/// 実 `menu.pasta` の `＊メインメニュー選択肢` 本文からさくらスクリプト断片を抽出する。
-///
-/// pasta 本文行は `　　　エモ：＠通常　<さくらスクリプト>` の形——pasta 話者接頭辞は最初の ASCII
-/// `\`（さくらスクリプト開始）より前ゆえ、最初の `\` 以降を取れば純さくらスクリプト断片になる。
-/// メインメニュー本文行は `\q[おしゃべり頻度` と `\q[閉じる` を同時に含む唯一の行で一意に識別できる。
+/// 実 `menu.pasta` の `＊メインメニュー選択肢` 本文（純さくらスクリプト断片）。
 fn extract_main_menu_sakura() -> String {
-    let pasta = read_fixture_under(emo2_fixture_root(), "ghost/master/dic/menu.pasta");
-    let line = pasta
-        .lines()
-        .find(|l| l.contains("\\q[おしゃべり頻度") && l.contains("\\q[閉じる"))
-        .expect(
-            "menu.pasta に メインメニュー選択肢 本文行（\\q[おしゃべり頻度…\\q[閉じる…）が在る",
-        );
-    let start = line
-        .find('\\')
-        .expect("本文行はさくらスクリプト（\\）を含む");
-    line[start..].to_string()
+    menu_script("＊メインメニュー選択肢")
 }
 
 /// 実台本のメインメニュー 3 項目（`\q[disp,target]` の (target=id, disp=label)）。
@@ -141,7 +93,7 @@ const EXPECTED_MENU: &[(&str, &str)] = &[
 fn real_emo2_fixture_descript_resolves_square_fill_style() {
     let model = merged_balloon_model();
 
-    // 実フォント（既定 ＭＳ ゴシック盲点の回避・記憶 emo-text-byte-equiv-default-font-blindspot）。
+    // 実フォント（既定 ＭＳ ゴシック盲点の回避）。
     assert_eq!(
         model.font().name(),
         Some("Yu Gothic UI"),
@@ -254,151 +206,6 @@ fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
 
 // ══ テスト 3: 実 fixture ＋ 実 cue 列を headless 描画し readback で検証する（GPU・headless） ══════
 
-/// GraphicsCore ＋ WucGraphicsResource を実資源として載せた wintf World（headless・MTA・実窓なし）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-/// emo-present `VisualMount` と同型の予約スロット（(window, slot) を返す）。
-fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-layer-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    (window, slot)
-}
-
-/// コンパイル済み CueSheet の Command cue を配送エンベロープ `TalkCue` へ無変形複写する
-/// （Barrier/Routing は runtime の apply_cue 対象外——選択待ち／配送制御は本 spec スコープ外）。
-fn command_talk_cues(sheet: &areka_sakura::contract::CueSheet) -> Vec<TalkCue> {
-    sheet
-        .cues()
-        .iter()
-        .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
-            _ => None,
-        })
-        .collect()
-}
-
-/// ヒット行（窓物理 px）→ 供給面 readback（validrect-local＝canvas-local）矩形へ変換する。
-///
-/// 供給面は `ceil(validrect 寸 × k)` サイズで validrect 原点×k の窓内 offset へ mount される
-/// （surface.rs「Arrangement offset＝validrect 原点×k」）。ゆえに read_back は canvas-local——
-/// 窓物理ヒット矩形から validrect 原点（`region` の left/top×k）を差し引いて probe 座標へ戻す。
-fn to_canvas_local(r: &ChoiceHitRow, ox: f32, oy: f32) -> (f32, f32, f32, f32) {
-    (
-        r.rect.left - ox,
-        r.rect.top - oy,
-        r.rect.right - ox,
-        r.rect.bottom - oy,
-    )
-}
-
-/// SquareFill 塗り色（105,25,25・premultiplied α=255 ゆえ BGRA=(25,25,105,255)）を矩形内で数える。
-fn fill_pixels_in_rect(bytes: &[u8], width: u32, height: u32, rect: (f32, f32, f32, f32)) -> usize {
-    count_in_rect(bytes, width, height, rect, |px| {
-        px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
-    })
-}
-
-/// 白文字（≈255,255,255・全チャネル閾値で AA 端を除いた芯）を矩形内で数える。
-fn white_pixels_in_rect(
-    bytes: &[u8],
-    width: u32,
-    height: u32,
-    rect: (f32, f32, f32, f32),
-) -> usize {
-    count_in_rect(bytes, width, height, rect, |px| {
-        px[0] >= 200 && px[1] >= 200 && px[2] >= 200 && px[3] == 255
-    })
-}
-
-fn count_in_rect(
-    bytes: &[u8],
-    width: u32,
-    height: u32,
-    rect: (f32, f32, f32, f32),
-    pred: impl Fn(&[u8]) -> bool,
-) -> usize {
-    let x0 = rect.0.floor().max(0.0) as u32;
-    let x1 = (rect.2.ceil() as u32).min(width);
-    let y0 = rect.1.floor().max(0.0) as u32;
-    let y1 = (rect.3.ceil() as u32).min(height);
-    let mut n = 0usize;
-    for y in y0..y1 {
-        for x in x0..x1 {
-            let i = ((y * width + x) * 4) as usize;
-            if pred(&bytes[i..i + 4]) {
-                n += 1;
-            }
-        }
-    }
-    n
-}
-
-fn opaque_count(bytes: &[u8]) -> usize {
-    bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
-}
-
-/// hover 行の**文字だけ**を選ぶ述語（塗り帯を文字と数えないための切り分け）。
-///
-/// α だけでインクを拾うと不透明な塗り帯の画素にも当たり、返る縦範囲は帯の縦範囲そのものになる
-/// ——字が 1 画素も無くても「インクは帯の内」が成り立ってしまう。hover 文字は白
-/// （`cursor.font.color` 255,255,255）で、premultiplied では帯の外なら B ＝ G ＝ R ＝ α、帯の上に
-/// 載った字は B ＝ 25 ＋ 230 × 被覆率 になる。塗り帯 (105,25,25) の青チャネルは 25 止まり
-/// （縁が半透明なら更に小さい）なので、「青チャネル 128 以上」で白文字だけを拾える。
-fn is_hover_text(px: &[u8]) -> bool {
-    px[3] >= 128 && px[0] >= 128
-}
-
-/// 指定 x 帯 `[x0, x1)` × y 帯 `[y0, y1)` の中で、述語に合う画素が現れた **y の最小/最大**を返す
-/// （1 つも無ければ `None`）。ハイライト帯とインクの縦範囲を突き合わせるための走査。
-fn y_span_where(
-    bytes: &[u8],
-    width: u32,
-    x0: u32,
-    x1: u32,
-    y0: u32,
-    y1: u32,
-    pred: impl Fn(&[u8]) -> bool,
-) -> Option<(u32, u32)> {
-    let mut span: Option<(u32, u32)> = None;
-    for y in y0..y1 {
-        for x in x0..x1 {
-            let i = ((y * width + x) * 4) as usize;
-            if pred(&bytes[i..i + 4]) {
-                span = Some(match span {
-                    None => (y, y),
-                    Some((lo, _)) => (lo, y),
-                });
-                break;
-            }
-        }
-    }
-    span
-}
-
 /// Observable（R6.1/6.2/6.3）: 実 emo2 fixture（実 descript の SquareFill＋実 validrect）へ、
 /// 実 menu.pasta 由来の cue 列（Choice/NewLine/Cursor）を通し経路
 /// （`register_actor`→`apply_cue`→`present_frame`→`inject_choice_hover`→`read_back`）で描くと、
@@ -417,9 +224,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     // ── 実 fixture → 実 style ／ 実 menu.pasta → 実 cue 列 ──
     let model = merged_balloon_model();
     let sakura = extract_main_menu_sakura();
-    let instructions = areka_parsers::sakura::parse(&sakura);
-    let compiled = compile(&instructions, &SystemVarSnapshot::default());
-    let talk_cues = command_talk_cues(&compiled.sheet);
+    let talk_cues = command_cues(&sakura);
 
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor(
@@ -456,12 +261,8 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
         );
     }
 
-    let (w, h) = rt.surface(&actor).expect("供給面").size();
-    let base = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let (w, h) = surface_size(&rt, &actor);
+    let base = read_back(&rt, &actor);
     assert!(
         opaque_count(&base) > 0,
         "実フォント＋実 validrect で選択肢テキストが描画される（非退化）"
@@ -479,18 +280,13 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
 
     // ── (c) ordinal 1（「エモの位置調整」）を hover 注入 → 再提示 → read_back ──
     //
-    // ホバーするのを**先頭でない行**にするのは、下の縦範囲の検査で「字の上端が帯の内」を
-    // 反証可能にするためである。先頭行は帯の上端が面の縁（y0）にあり、走査窓をそれより上へ
-    // 開けようがないので、上端の判定は窓の取り方だけで必ず成り立ってしまう（字がベースラインごと
-    // 上へずれても窓に切られて緑のまま）。ordinal 1 なら帯の上端は行送り 1 つぶん下にあり、
+    // ホバーするのを**先頭でない行**にするのは、帯を行ボックスの中央へ寄せる量（先頭行の帯は
+    // 面の縁より 4 画素下の y4 から）が行送りの先の行にも効くことを、下の縦範囲の検査で
+    // 確かめるためである。ordinal 1 の帯の上端は行送り 1 つぶんとその寄せの分だけ下にあり、
     // 窓はその 4 画素上から見られる。
     rt.inject_choice_hover(&actor, Some(1));
     present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
-    let hover = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hover = read_back(&rt, &actor);
 
     // read_back（canvas-local）を probe するため、窓物理ヒット矩形から validrect 原点（×k=1.0）を差し引く。
     let region = TextRegion::resolve(&model, IMAGE_SIZE, WritingMode::HorizontalTb);
@@ -531,12 +327,11 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     // 帯の位置が y30..59 へ上がって（はみ出し 2 画素）やはり赤くなる。
     //
     // 窓を帯の上下へ 4 画素ずつ開けるのは、窓を帯とぴったり同じにすると帯からはみ出したインクが
-    // 窓の外へ落ち、**測れないまま緑になる**からである（spec
-    // `areka-P0-emo-text-line-height-canon` 要件 7.3）。これは上端にも同じく効く——窓の上端を帯の
+    // 窓の外へ落ち、**測れないまま緑になる**からである。これは上端にも同じく効く——窓の上端を帯の
     // 上端と揃えると「字の上端は帯の上端以上」が窓の取り方だけで必ず成り立ち、字が上へずれても
     // 緑のままになる。上の行（ordinal 0）の字は黒（premultiplied の青チャネルは 0）ゆえ白文字の
-    // 述語に当たらず、塗り色 (25,25,105,255) でもないので窓へ入っても数えられない。次行の字は
-    // 自分の block 起点から 7 画素下で始まるので、余白 4 では次行の字も窓へ入らない。
+    // 述語に当たらず、塗り色 (25,25,105,255) でもないので窓へ入っても数えられない。次行
+    // （ordinal 2）の字も hover していないので黒く、窓の下端へ入っても同じ理由で数えられない。
     //
     // インクは**文字だけ**を色で拾う（[`is_hover_text`]）。α だけで拾うと不透明な塗り帯そのものに
     // 当たり、返る縦範囲が帯の縦範囲になって「インクは帯の内」が字の有無に関わらず成り立つ。
@@ -549,207 +344,31 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     // 対し白文字 y37..61 ＝ 上の余白 7・はみ出し 2 画素、寄せた後が 帯 y34..63 に対し同じ白文字
     // y37..61 ＝ 上の余白 3・はみ出し **0** である（丈は変えていない）。
     // **帯を広げてはならない**（隣接行の帯と重なり、どの選択肢を指しているかの一意性が壊れる）。
-    // **はみ出しが出た場合は許容幅を上げず、画素数を添えて改めて開発者の裁定を仰ぐこと（R12.2）。**
-    /// 走査窓を hover 行の帯の**上下**へ伸ばす画素数（上端・下端どちらの判定も窓で切らないため）。
-    const SCAN_MARGIN: u32 = 4;
-    /// ハイライト矩形の下端から hover 文字のインクがはみ出してよい上限（画素）＝ **0**
-    /// （裁定 2026-09-06 第 2 回・R13.3。**緩めてはならない**・R12.2）。
-    const BAND_OVERHANG_MAX: u32 = 0;
+    // **はみ出しが出た場合は許容幅を上げず、画素数を添えて改めて開発者の裁定を仰ぐこと（`areka-P0-emo2-conformance-e2e` R12.2）。**
     /// ハイライト帯の丈＝行送り（`font.height` 28 ＋ 行間 2）。
     const BAND_HEIGHT: u32 = 30;
     /// 帯を行ボックスの中央へ寄せる量（画素・`font.height,28` の Yu Gothic UI）。
-    /// `round(max(0, 37.24 − 30) / 2) = round(3.62) = 4`（要件 13.1）。
+    /// `round(max(0, 37.24 − 30) / 2) = round(3.62) = 4`（`areka-P0-emo2-conformance-e2e` 要件 13.1）。
     const BAND_OFFSET: u32 = 4;
 
-    let x0 = row1_cl.0.floor().max(0.0) as u32;
-    let x1 = (row1_cl.2.ceil() as u32).min(w);
-    let block_top = row1_cl.1.floor().max(0.0) as u32;
-    let y0 = block_top.saturating_sub(SCAN_MARGIN);
-    let y1 = ((row2_cl.1.floor().max(0.0) as u32) + SCAN_MARGIN).min(h);
-    assert!(
-        x0 < x1 && y0 < y1 && y0 < block_top,
-        "走査窓が非退化で、かつ hover 行の block 起点 y{block_top} より上から見ている: x{x0}..{x1} y{y0}..{y1}"
-    );
-    let fill_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| {
-        px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
-    })
-    .expect("hover 行に塗り画素が在る");
-    assert_eq!(
-        fill_span.1 - fill_span.0 + 1,
-        BAND_HEIGHT,
-        "ハイライト帯の丈は行送り {BAND_HEIGHT}（font.height 28 ＋ 行間 2・帯 ＝ clamp(行ボックス丈 37.24, 28, 30)）: 実測 y{}..{}",
-        fill_span.0,
-        fill_span.1
-    );
-    // 帯の**絶対位置**（R13.1）: ordinal 1 の行矩形の上端は行送り 1 つぶん下（y30）で、帯はそこから
-    // 行ボックスの中央へ BAND_OFFSET だけ寄る＝ y34..63。寄せを 0 へ戻すと y30..59 で赤くなる。
-    assert_eq!(
-        (fill_span.0, fill_span.1),
-        (
-            BAND_HEIGHT + BAND_OFFSET,
-            BAND_HEIGHT + BAND_OFFSET + BAND_HEIGHT - 1
-        ),
-        "ハイライト帯は行ボックスの中央へ {BAND_OFFSET} 画素寄せて置かれる: 実測 y{}..{}",
-        fill_span.0,
-        fill_span.1
-    );
-    // 描画の帯とヒットの帯は同一の offset を配られる（R13.2・単一の源）。
-    assert_eq!(
-        fill_span.0 as f32, row1_cl.1,
-        "読み戻した塗りの上端 y{} はヒット矩形の上端 {} と一致する（描画とヒットの単一導出）",
-        fill_span.0, row1_cl.1
-    );
-    let text_pixels = count_in_rect(
+    assert_hover_band(
+        "emo2-fixture-e2e",
         &hover,
-        w,
-        h,
-        (x0 as f32, y0 as f32, x1 as f32, y1 as f32),
-        is_hover_text,
-    );
-    assert!(
-        text_pixels > 0,
-        "hover 行の走査窓 x{x0}..{x1} y{y0}..{y1} に白文字の画素が 1 つも無い\
-         （字が描かれていないのに帯だけで緑になる取り違えを塞ぐ）"
-    );
-    let ink_span = y_span_where(&hover, w, x0, x1, y0, y1, is_hover_text)
-        .expect("画素数が 0 でない以上、白文字の縦範囲は在る");
-    assert!(
-        ink_span.1 < y1 - 1,
-        "hover 文字のインク下端 y={} が走査窓の下端 y={y1} に接している——窓が下端を切っている\
-         疑いがあり、はみ出しの測定が信用できない（窓を深くすること・R7.3）",
-        ink_span.1
-    );
-    // 上端側の対の門。これが在って初めて、下の「字の上端が帯の内」が窓の取り方ではなく描画結果を
-    // 見た判定になる（字が上へずれたら、まず窓の上端に届いてここが赤くなる）。
-    assert!(
-        ink_span.0 > y0,
-        "hover 文字のインク上端 y={} が走査窓の上端 y={y0} に接している——窓が上端を切っている\
-         疑いがあり、上端の判定が信用できない（窓を上へ開けること・R7.3）",
-        ink_span.0
-    );
-    assert!(
-        ink_span.0 >= fill_span.0,
-        "hover 行の文字のインク上端 y={} がハイライト矩形の上端 y={} より上に出ている（帯が痩せている）",
-        ink_span.0,
-        fill_span.0
-    );
-    let overhang = ink_span.1.saturating_sub(fill_span.1);
-    assert!(
-        overhang == BAND_OVERHANG_MAX,
-        "hover 行の文字のインク下端 y={} がハイライト矩形の下端 y={} から {overhang} 画素はみ出した\
-         ＝**文字の下が切れる**（R3.3/4.2）。裁定 2026-09-06（第 2 回・R13.3）が許すのは \
-         {BAND_OVERHANG_MAX} 画素である。**帯を広げてはならない**（隣接行の帯と重なり、\
-         どの選択肢を指しているかの一意性が壊れる）。**許容幅を緩めてもならない**（R12.2）。\
-         この数値を添えて開発者の裁定を仰ぐこと",
-        ink_span.1,
-        fill_span.1
-    );
-    eprintln!(
-        "[emo2-fixture-e2e] hover 行（ordinal 1「エモの位置調整」）の縦範囲: 窓 x{x0}..{x1} y{y0}..{y1} / \
-         塗り y{}..{}（丈 {}）/ 白文字 y{}..{}（{text_pixels} 画素）/ 上の余白 {} 画素\
-         （負なら帯の上へはみ出し）/ 下のはみ出し {overhang} 画素（font.height=28・\
-         Yu Gothic UI 行ボックス 37.24 → 帯はピッチ 30（28+行間 2）で頭打ち）",
-        fill_span.0,
-        fill_span.1,
-        fill_span.1 - fill_span.0 + 1,
-        ink_span.0,
-        ink_span.1,
-        ink_span.0 as i64 - fill_span.0 as i64
+        (w, h),
+        row1_cl,
+        row2_cl,
+        Band {
+            // ordinal 1 の行矩形の上端は行送り 1 つぶん下（y30）。寄せを 0 へ戻すと帯 y30..59 で赤。
+            line_top: BAND_HEIGHT,
+            height: BAND_HEIGHT,
+            offset: BAND_OFFSET,
+        },
     );
 
     // ── 診断: read_back（premultiplied BGRA）を白背景へ合成して PNG を保存する（実ジオメトリ目視） ──
-    let out_dir =
-        std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| env!("CARGO_TARGET_TMPDIR").to_string());
-    let rgba = composite_on_white(&hover, w, h);
-    let png = encode_png_rgba(&rgba, w, h);
-    let path = format!("{out_dir}/emo2_fixture_menu_hover.png");
-    std::fs::write(&path, &png).expect("PNG 書き込み");
+    let path = dump_png_on_white("emo2_fixture_menu_hover.png", &hover, w, h);
     eprintln!(
         "[emo2-fixture-e2e] 実 fixture 統合 PNG を保存: {path} ({w}x{h}・emo2-kakukaku descript＋\
          menu.pasta メインメニュー 3 項目・ordinal 1「エモの位置調整」hover＝SquareFill 塗り(105,25,25)＋白文字)"
     );
-}
-
-// ── PNG エンコード（依存追加なし・choice_fixture_test.rs と同一アルゴリズム） ──────────────────
-
-/// premultiplied BGRA read_back を白背景へ合成した RGBA8 を返す。
-fn composite_on_white(bgra: &[u8], w: u32, h: u32) -> Vec<u8> {
-    let bg = [255u8, 255, 255];
-    let mut rgba = vec![0u8; (w * h * 4) as usize];
-    for (idx, px) in bgra.chunks_exact(4).enumerate() {
-        let (b, g, r, a) = (px[0] as u32, px[1] as u32, px[2] as u32, px[3] as u32);
-        let inv = 255 - a;
-        let o = idx * 4;
-        rgba[o] = (r + bg[0] as u32 * inv / 255).min(255) as u8;
-        rgba[o + 1] = (g + bg[1] as u32 * inv / 255).min(255) as u8;
-        rgba[o + 2] = (b + bg[2] as u32 * inv / 255).min(255) as u8;
-        rgba[o + 3] = 255;
-    }
-    rgba
-}
-
-/// CRC-32（PNG チャンク用・多項式 0xEDB88320）。
-fn crc32(data: &[u8]) -> u32 {
-    let mut crc: u32 = 0xFFFF_FFFF;
-    for &byte in data {
-        crc ^= byte as u32;
-        for _ in 0..8 {
-            let mask = (crc & 1).wrapping_neg();
-            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
-        }
-    }
-    !crc
-}
-
-/// Adler-32（zlib ストリーム末尾）。
-fn adler32(data: &[u8]) -> u32 {
-    let (mut a, mut b) = (1u32, 0u32);
-    for &byte in data {
-        a = (a + byte as u32) % 65521;
-        b = (b + a) % 65521;
-    }
-    (b << 16) | a
-}
-
-/// PNG チャンク（長さ＋種別＋データ＋CRC）を書き足す。
-fn png_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    let mut kd = Vec::with_capacity(4 + data.len());
-    kd.extend_from_slice(kind);
-    kd.extend_from_slice(data);
-    out.extend_from_slice(&kd);
-    out.extend_from_slice(&crc32(&kd).to_be_bytes());
-}
-
-/// RGBA8 を無圧縮 deflate（stored ブロック）で PNG エンコードする（依存追加なし）。
-fn encode_png_rgba(rgba: &[u8], w: u32, h: u32) -> Vec<u8> {
-    let mut raw = Vec::with_capacity((h * (1 + w * 4)) as usize);
-    for y in 0..h {
-        raw.push(0u8); // フィルタ 0
-        let row = ((y * w * 4) as usize)..(((y + 1) * w * 4) as usize);
-        raw.extend_from_slice(&rgba[row]);
-    }
-    let mut zlib = vec![0x78u8, 0x01];
-    let mut i = 0usize;
-    while i < raw.len() {
-        let chunk = (raw.len() - i).min(65535);
-        let bfinal = if i + chunk >= raw.len() { 1u8 } else { 0u8 };
-        zlib.push(bfinal); // BFINAL ＋ BTYPE=00（stored）
-        zlib.extend_from_slice(&(chunk as u16).to_le_bytes());
-        zlib.extend_from_slice(&(!(chunk as u16)).to_le_bytes());
-        zlib.extend_from_slice(&raw[i..i + chunk]);
-        i += chunk;
-    }
-    zlib.extend_from_slice(&adler32(&raw).to_be_bytes());
-
-    let mut out = Vec::new();
-    out.extend_from_slice(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-    let mut ihdr = Vec::new();
-    ihdr.extend_from_slice(&w.to_be_bytes());
-    ihdr.extend_from_slice(&h.to_be_bytes());
-    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]); // 8bit・color type 6（RGBA）
-    png_chunk(&mut out, b"IHDR", &ihdr);
-    png_chunk(&mut out, b"IDAT", &zlib);
-    png_chunk(&mut out, b"IEND", &[]);
-    out
 }

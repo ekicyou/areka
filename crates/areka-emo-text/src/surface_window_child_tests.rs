@@ -1,51 +1,29 @@
-//! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（task 7.2・要件 1.6・3.6・3.7・9.4）。
+//! 箱の文字の面（シェルの窓の直接の子）の装着と片付けの檻（要件 1.6・3.6・3.7・9.4）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! GPU/WUC は headless 実資源（`GraphicsCore::new()`・`surface.rs` の既存テストと同じ方針）。
 
 use super::*;
 
-use bevy_ecs::hierarchy::{ChildOf, Children};
+use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 
-use windows::UI::Composition::Compositor;
-use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
-
-use wintf::com::wuc::create_dispatcher_queue_controller;
 use wintf::ecs::{Arrangement, GraphicsCommandList, HitTest, Visual};
 
 use crate::actor::TextSlotBinding;
-
-/// テスト用 WUC dispatcher と Compositor（`surface.rs` の既存テストと同じ作り方）。
-fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {
-    let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
-        .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-    let compositor = Compositor::new().expect("Compositor::new 失敗");
-    (dq, compositor)
-}
+use crate::actor::test_support::{
+    make_dispatcher_and_compositor, spawn_reserved_slot, window_children,
+};
 
 /// 窓と、その直接の子 2 つ（差し込み口・絵）を組む。返り値は (window, slot, picture)。
 fn spawn_window_with_slot_and_picture(world: &mut World) -> (Entity, Entity, Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-layer-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
+    let (window, slot) = spawn_reserved_slot(world);
     let picture = world
         .spawn((Name::new("picture"), Visual::default(), ChildOf(window)))
         .id();
     world.flush();
     (window, slot, picture)
-}
-
-fn children_of(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().collect())
-        .unwrap_or_default()
 }
 
 /// 窓の子の面は、指定の並び位置（差し込み口の直後＝1）に挿さり、字の矩形 0 個のマスクの当たり判定を持ち、
@@ -74,7 +52,7 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
 
     // --- 並び: 差し込み口 → 箱 → 絵（箱は絵より手前・要件 3.7） ---
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, child, picture],
         "窓の子の面は Children の指定位置（1）へ挿さる"
     );
@@ -84,7 +62,7 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "窓の直接の子（差し込み口の下の子ではない・要件 3.6）"
     );
 
-    // --- 当たり判定は字の矩形のマスクで、装着の時は 0 個（何も受けない・要件 9.4・task 13） ---
+    // --- 当たり判定は字の矩形のマスクで、装着の時は 0 個（何も受けない・要件 9.4） ---
     assert_eq!(
         world.get::<HitTest>(child).copied(),
         Some(HitTest::alpha_mask()),
@@ -131,13 +109,13 @@ fn window_child_is_inserted_at_index_with_empty_hit_mask_and_despawned_on_cleanu
         "片付けで窓の子の entity が消える"
     );
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, picture],
         "片付けた後の窓の子は元の並びに戻る"
     );
 }
 
-/// 並び位置が子の数を超えるときは末尾へ挿さる（bevy の `insert_children` の切り詰め）。
+/// 並び位置が子の数を超えるときは末尾へ挿さる（`surface_window_child.rs` が子の数で切り詰める）。
 #[test]
 fn window_child_index_past_end_is_clamped_to_last() {
     let (_dq, compositor) = make_dispatcher_and_compositor();
@@ -157,7 +135,7 @@ fn window_child_index_past_end_is_clamped_to_last() {
     )
     .expect("attach_window_child 失敗");
     let child = surface.window_child().expect("entity を持つ");
-    assert_eq!(children_of(&world, window), vec![slot, picture, child]);
+    assert_eq!(window_children(&world, window), vec![slot, picture, child]);
 }
 
 /// 窓の entity が居ないときは panic せず `Device` の誤りを返し、子を作らない（log-first）。

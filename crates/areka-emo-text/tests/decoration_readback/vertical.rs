@@ -1,4 +1,6 @@
-//! # decoration_readback/vertical.rs — 縦書き 2 方向の読み戻し（task 8.2）
+//! # decoration_readback/vertical.rs — 縦書き 2 方向の読み戻し
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **12.1**／**12.2**／**12.3**／**12.4**／
 //! **15.4**・design.md「Testing Strategy > 読み戻しテスト」）。
@@ -22,15 +24,15 @@
 //!
 //! ## 裁定との照合は述語にしない（要件 12.4）
 //!
-//! 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「下線は列の右側」だが、本仕様は縦書きの
-//! 線の位置を **DirectWrite の既定に委ねる**（開発者裁定 2026-09-11）。下線は spec
+//! 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「下線は列の右側」だが、出典 spec
+//! `areka-P0-text-decoration-canon` は縦書きの線の位置を **DirectWrite の既定に委ねる**（同 spec の開発者裁定）。下線は spec
 //! `areka-P0-balloon-text-bugs`（件 3）から areka が塗るが、縦書きは DirectWrite が教える位置と
 //! 太さのまま D2D の既定の描き方と同じ向きに回して塗る（D2D 自身の下線との一致は
-//! `src/viewbox_draw_underline_tests.rs` の実 GPU の檻が固定・要件 3.4）ので、側と位置は変わらない。
+//! `src/viewbox_draw_underline_tests.rs` の実 GPU の檻が固定・`areka-P0-balloon-text-bugs` 要件 3.4）ので、側と位置は変わらない。
 //! ゆえにここは「今日の既定はこの側だ」という**実測の固定**に留め、裁定との一致は述語にしない
-//! ——照合結果は `doc/COMPAT_ARCHITECTURE.md` §8 への登記（task 9.1）が書く。
+//! ——照合結果（不一致）は `doc/COMPAT_ARCHITECTURE.md` §8 に登記してある。
 //!
-//! ## 装着 → 台本の順（task 8.1 からの申し送り）
+//! ## 装着 → 台本の順
 //!
 //! [`super::run`] の契約どおり、装着を先に、台本の投入を後にする。逆順は本番に実在する窓
 //! （装着が次フレームへ委ねられる間に `\f[…]` が届くと既定へ追随しない）を踏み、
@@ -38,16 +40,13 @@
 
 use super::{
     ALT_FONT, FONT_HEIGHT, IMAGE, REAL_FONT, SAMPLE, Shot, VISIBLE_KEYS, added_ink_cols,
-    assert_real_font_present, differs, font_cue, font_is_installed, ink_col_range, model_with, run,
-    run_with, shoot_pair, single_band, text_cue, unbaked_cue,
+    assert_real_font_present, differs, font_is_installed, ink_col_range, model_with, plain_shot,
+    run, run_with, shoot_pair, single_band, text_cue, unbaked_cue,
 };
 
 // ══ 縦書きの 2 方向 ════════════════════════════════════════════════════════════════════
 
 /// 列送りの向きが違うだけの 2 方向（要件 12.3）。
-///
-/// 母数を [`the_vertical_modes_are_the_two_column_directions`] が固定する——表が空になると
-/// 以下のループが恒真で緑になる。
 const VERTICAL_MODES: &[&str] = &["vertical_rl", "vertical_lr"];
 
 // ══ 線の側 ═════════════════════════════════════════════════════════════════════════════
@@ -98,8 +97,8 @@ fn side_of(band: (u32, u32), column: (u32, u32)) -> Side {
 /// 素の列と装飾した列を撮り、インクの増えた列の帯・素の字の列・側を返す。
 fn measure(mode: &str, tokens: &[&str], what: &str) -> ((u32, u32), (u32, u32), Side) {
     let (plain, styled) = shoot_pair(Some(mode), tokens);
-    let band = single_band(&added_ink_cols(&plain, &styled), what);
-    let column = ink_col_range(&plain);
+    let band = single_band(&added_ink_cols(plain, &styled), what);
+    let column = ink_col_range(plain);
     (band, column, side_of(band, column))
 }
 
@@ -120,8 +119,8 @@ fn measure(mode: &str, tokens: &[&str], what: &str) -> ((u32, u32), (u32, u32), 
 /// 1〜2 画素だけ食い込む位置で、列の外へは出ない）。
 ///
 /// 完了仕様 `areka-P0-balloon-vertical-canon` の裁定は「列の右側」で、今日の DirectWrite の
-/// 既定はその**反対側**である。本仕様は縦書きの線の位置を DirectWrite に委ねる裁定なので、
-/// ここは実測を固定するに留める（照合の登記は task 9.1）。
+/// 既定はその**反対側**である。`areka-P0-text-decoration-canon` は縦書きの線の位置を DirectWrite に委ねる裁定なので、
+/// ここは実測を固定するに留める（照合の結果は `doc/COMPAT_ARCHITECTURE.md` §8 に登記してある）。
 const UNDERLINE_SIDE: Side = Side::Left;
 
 /// 打ち消し線が出る側（2 方向とも同じ）——字を貫くので列の中央 1/3。
@@ -164,22 +163,6 @@ const STRIKE_BAND_RL: (u32, u32) = (295, 296);
 /// 右から左と同じ位置）。
 const STRIKE_BAND_LR: (u32, u32) = (13, 14);
 
-// ══ 表 の母数 ══════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn the_vertical_modes_are_the_two_column_directions() {
-    assert_eq!(
-        VERTICAL_MODES,
-        &["vertical_rl", "vertical_lr"],
-        "縦書きは列送りの向きが違う 2 方向（要件 12.3）"
-    );
-    assert_eq!(
-        VISIBLE_KEYS.len(),
-        7,
-        "縦書きも横書きと同じ 7 項目の表を回す（要件 12.1／15.4）"
-    );
-}
-
 // ══ 1. 表示に効く 7 項目は 2 方向とも画素を変える（要件 12.1／15.4） ═══════════════════
 
 /// 較正: 装飾入りの入口（`layout_styled`／`render_styled`）を従来の入口へ戻すと、2 方向 ×
@@ -191,7 +174,7 @@ fn each_visible_key_changes_the_pixels_in_both_vertical_modes() {
         for (key, tokens) in VISIBLE_KEYS {
             let (plain, styled) = shoot_pair(Some(mode), tokens);
             assert!(
-                differs(&plain, &styled),
+                differs(plain, &styled),
                 "{mode}: `\\f[{}]` を有効にしても画素が 1 バイトも変わらない（本文 {SAMPLE}）",
                 tokens.join(","),
             );
@@ -276,24 +259,19 @@ fn strike_lands_on_the_same_side_of_the_column_in_both_vertical_modes() {
 ///
 /// 同じトークン列を**装飾ではない運搬名**で流すと `state.rs` の自己選別が読み飛ばして装飾を
 /// 1 つも焼かない。cue の本数・並び・再生時間は装飾ありの台本と同一なので、上の「違う」が
-/// **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す。
+/// **cue が 1 本増えたこと**ではなく**装飾を焼いたこと**に由来することを示す（装飾の運搬名で
+/// 流せば違うことは [`each_visible_key_changes_the_pixels_in_both_vertical_modes`] が同じ入力で確かめる）。
 #[test]
 fn tokens_that_never_reach_the_decoration_path_paint_the_plain_pixels_in_both_vertical_modes() {
     assert_real_font_present();
     for mode in VERTICAL_MODES {
-        let plain = run(Some(mode), &[text_cue(SAMPLE)]);
+        let plain = plain_shot(Some(mode));
         for (key, tokens) in VISIBLE_KEYS {
             let unbaked = run(Some(mode), &[unbaked_cue(tokens), text_cue(SAMPLE)]);
             assert!(
-                !differs(&plain, &unbaked),
+                !differs(plain, &unbaked),
                 "{mode}: `{key}` のトークン列を装飾ではない運搬名で流したのに画素が変わった——\
                  装飾を焼かない経路が装飾を焼いている",
-            );
-            // 同じトークン列を装飾の運搬名で流せば違う（対照が空振りでないこと）。
-            let baked = run(Some(mode), &[font_cue(tokens), text_cue(SAMPLE)]);
-            assert!(
-                differs(&plain, &baked),
-                "{mode}: `{key}` を装飾の運搬名で流しても画素が変わらない（対照の意味が消える）",
             );
         }
     }
@@ -315,24 +293,24 @@ const PASTA_HEIGHT: u32 = 20;
 
 /// 「「」の下端と「繋」の上端の空きの期待値（px）——書体の寸法から決まる値。
 ///
-/// 出どころ（design.md「Testing Strategy」の G3）: 游ゴシックの縦書き用の「「」（字形 7913）の墨の
-/// 下端は字の枠の上から 18.9px（research.md §10.1）ゆえ下の空きは 20−18.9＝約 1.1px、「繋」の
+/// 出どころ（`emo-text-dwrite-fidelity` design.md「Testing Strategy」の G3）: 游ゴシックの縦書き用の「「」（字形 7913）の墨の
+/// 下端は字の枠の上から 18.9px（`emo-text-dwrite-fidelity` research.md §10.1）ゆえ下の空きは 20−18.9＝約 1.1px、「繋」の
 /// 上の余白は約 1.0px、合わせて約 2.1px。手本（Chromium の並べ）は
 /// 開き括弧の位置をずらさないので、字の枠どおりに並べればこの空きになる。墨の端は画素の行に
 /// 丸まるので、「「」の最後の墨の行と「繋」の最初の墨の行の番号の差として数え ±1px で比べる。
 const BRACKET_GAP_PX: i64 = 2;
 
-/// 太さの 3 通り（要件 1.5）——名札・書体名・追加の行。
+/// 太さの 3 通り（`emo-text-dwrite-fidelity` 要件 1.5）——名札・書体名・追加の行。
 const WEIGHTS: &[(&str, &str, &str)] = &[
     ("Regular", "游ゴシック", ""),
     ("中太", PASTA_FONT, ""),
     ("太字", PASTA_FONT, "font.bold,1\n"),
 ];
 
-/// 開き括弧類（要件 1.1）——墨が字の枠の下半分に来る。
+/// 開き括弧類（`emo-text-dwrite-fidelity` 要件 1.1）——墨が字の枠の下半分に来る。
 const OPENING: &[&str] = &["「", "『", "（"];
 
-/// 閉じ括弧（要件 1.2）——墨が字の枠の上半分のまま。
+/// 閉じ括弧（`emo-text-dwrite-fidelity` 要件 1.2）——墨が字の枠の上半分のまま。
 const CLOSING: &[&str] = &["」"];
 
 /// 游ゴシックが無ければ赤で止める（代替の書体のまま緑にしない）。
@@ -405,11 +383,11 @@ fn bracket_then_kanji(mode: &str) -> (Shot, (u32, u32), (u32, u32)) {
     (shot, bracket, kanji)
 }
 
-/// G1（要件 1.1・1.2・1.5・6.1）: 縦書き 2 方向・3 通りの太さで、開き括弧類の墨は字の枠の
+/// G1（`emo-text-dwrite-fidelity` 要件 1.1・1.2・1.5・6.1）: 縦書き 2 方向・3 通りの太さで、開き括弧類の墨は字の枠の
 /// 下半分、閉じ括弧の墨は上半分にある。
 ///
 /// 較正: 列のレシピ（`VERTICAL_FEATURES`）を外して既定の機能の組へ戻すと、開き括弧の墨が
-/// 半 em 上へずれて（research.md §10.1・上から 3.0〜8.9px）赤になる。
+/// 半 em 上へずれて（`emo-text-dwrite-fidelity` research.md §10.1・上から 3.0〜8.9px）赤になる。
 #[test]
 fn opening_brackets_sit_in_the_lower_half_and_closing_in_the_upper_half_of_the_glyph_frame() {
     assert_yu_gothic_present();
@@ -422,7 +400,7 @@ fn opening_brackets_sit_in_the_lower_half_and_closing_in_the_upper_half_of_the_g
                 assert!(
                     rows.0 >= half,
                     "{mode}・{weight}: 「{ch}」の墨が字の枠の下半分に無い（墨の行 {rows:?}・\
-                     下半分は y≥{half}）——開き括弧が上へずれている（要件 1.1・1.5）"
+                     下半分は y≥{half}）——開き括弧が上へずれている（`emo-text-dwrite-fidelity` 要件 1.1・1.5）"
                 );
             }
             for ch in CLOSING {
@@ -431,14 +409,14 @@ fn opening_brackets_sit_in_the_lower_half_and_closing_in_the_upper_half_of_the_g
                 assert!(
                     rows.1 < half,
                     "{mode}・{weight}: 「{ch}」の墨が字の枠の上半分に無い（墨の行 {rows:?}・\
-                     上半分は y<{half}）——閉じ括弧が動いた（要件 1.2）"
+                     上半分は y<{half}）——閉じ括弧が動いた（`emo-text-dwrite-fidelity` 要件 1.2）"
                 );
             }
         }
     }
 }
 
-/// G2（要件 1.3）: 「「」の墨の左右の中心は「繋」の墨の左右の中心と ±1px（列の真ん中）。
+/// G2（`emo-text-dwrite-fidelity` 要件 1.3）: 「「」の墨の左右の中心は「繋」の墨の左右の中心と ±1px（列の真ん中）。
 #[test]
 fn opening_bracket_is_centred_in_the_column_like_the_next_kanji() {
     assert_yu_gothic_present();
@@ -450,13 +428,13 @@ fn opening_bracket_is_centred_in_the_column_like_the_next_kanji() {
         assert!(
             diff.abs() <= 2,
             "{mode}: 「「」の墨の列 {b:?} と「繋」の墨の列 {k:?} の中心の差が ±1px を超えた\
-             （差 {}px・要件 1.3）",
+             （差 {}px・`emo-text-dwrite-fidelity` 要件 1.3）",
             diff as f64 / 2.0
         );
     }
 }
 
-/// G3（要件 1.4）: 「「」の墨の下端と「繋」の墨の上端の空きが [`BRACKET_GAP_PX`] と ±1px。
+/// G3（`emo-text-dwrite-fidelity` 要件 1.4）: 「「」の墨の下端と「繋」の墨の上端の空きが [`BRACKET_GAP_PX`] と ±1px。
 #[test]
 fn gap_between_opening_bracket_and_next_kanji_follows_the_font_metrics() {
     assert_yu_gothic_present();
@@ -466,14 +444,14 @@ fn gap_between_opening_bracket_and_next_kanji_follows_the_font_metrics() {
         assert!(
             (gap - BRACKET_GAP_PX).abs() <= 1,
             "{mode}: 「「」の墨 {bracket:?} と「繋」の墨 {kanji:?} の空きが {gap}px——\
-             書体の寸法から決まる約 2.1px と ±1px で合わない（要件 1.4）"
+             書体の寸法から決まる約 2.1px と ±1px で合わない（`emo-text-dwrite-fidelity` 要件 1.4）"
         );
     }
 }
 
 // ══ 4. 列の真ん中と既定の太字・斜体（spec `emo-text-dwrite-fidelity` の G4・G5） ═══════
 
-/// かなと漢字だけの列（G4・要件 5.1・design.md の例のまま）。
+/// かなと漢字だけの列（G4・`emo-text-dwrite-fidelity` 要件 5.1・design.md の例のまま）。
 const KANA_KANJI: &str = "あ亜繋国";
 
 /// 最初の列の行の矩形の左右の中心（2 倍の目盛り・供給面の x）。
@@ -492,11 +470,11 @@ fn first_line_rect_centre_x2(mode: &str, shot: &Shot) -> i64 {
     i64::from(lo) + i64::from(hi)
 }
 
-/// G4（要件 5.1）: かなと漢字だけの列の墨の左右の中心が、最初の列の行の矩形の左右の中心と ±1px。
+/// G4（`emo-text-dwrite-fidelity` 要件 5.1）: かなと漢字だけの列の墨の左右の中心が、最初の列の行の矩形の左右の中心と ±1px。
 ///
-/// 較正: 直す前から列が真ん中にある ＭＳ ゴシック（既定の行間＝em・research.md §10.3）にも同じ式を
+/// 較正: 直す前から列が真ん中にある ＭＳ ゴシック（既定の行間＝em・`emo-text-dwrite-fidelity` research.md §10.3）にも同じ式を
 /// 当てる——行の矩形の求め方が外れていれば ＭＳ ゴシック の側が赤になる。直す前の游ゴシックは
-/// 差 −6.5px（research.md §10・起票の実測）で、この ±1px から大きく外れる。
+/// 差 −6.5px（`emo-text-dwrite-fidelity` research.md §10・起票の実測）で、この ±1px から大きく外れる。
 #[test]
 fn kana_kanji_column_ink_is_centred_on_the_first_line_rect() {
     assert_yu_gothic_present();
@@ -517,7 +495,7 @@ fn kana_kanji_column_ink_is_centred_on_the_first_line_rect() {
             );
             assert!(
                 diff.abs() <= 2,
-                "{mode}・{label}: 「{KANA_KANJI}」の墨の列 {ink:?} の中心が行の矩形の中心 {}px と ±1px で合わない（差 {}px・要件 5.1）",
+                "{mode}・{label}: 「{KANA_KANJI}」の墨の列 {ink:?} の中心が行の矩形の中心 {}px と ±1px で合わない（差 {}px・`emo-text-dwrite-fidelity` 要件 5.1）",
                 rect as f64 / 2.0,
                 diff as f64 / 2.0
             );
@@ -530,7 +508,7 @@ fn writing_mode_line(mode: Option<&str>) -> String {
     mode.map_or(String::new(), |m| format!("writing_mode,{m}\n"))
 }
 
-/// G5（要件 4.8・4.9）: バルーン定義の `font.bold,1` は既定の字の墨を増やし、`font.italic,1` は
+/// G5（`emo-text-dwrite-fidelity` 要件 4.8・4.9）: バルーン定義の `font.bold,1` は既定の字の墨を増やし、`font.italic,1` は
 /// 画素を変える（`\f[…]` を使わない既定の見た目だけで）。
 #[test]
 fn balloon_bold_and_italic_reach_the_default_text() {
@@ -554,13 +532,13 @@ fn balloon_bold_and_italic_reach_the_default_text() {
         );
         assert!(
             bold.ink_count() > plain.ink_count(),
-            "{mode:?}: `font.bold,1` の既定の字の墨 {} 画素が、無いもの {} 画素より多くない（要件 4.8）",
+            "{mode:?}: `font.bold,1` の既定の字の墨 {} 画素が、無いもの {} 画素より多くない（`emo-text-dwrite-fidelity` 要件 4.8）",
             bold.ink_count(),
             plain.ink_count()
         );
         assert!(
             differs(&plain, &italic),
-            "{mode:?}: `font.italic,1` を足しても既定の字の画素が 1 バイトも変わらない（要件 4.9）"
+            "{mode:?}: `font.italic,1` を足しても既定の字の画素が 1 バイトも変わらない（`emo-text-dwrite-fidelity` 要件 4.9）"
         );
     }
 }

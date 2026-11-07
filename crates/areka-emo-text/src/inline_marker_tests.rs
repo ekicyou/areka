@@ -18,8 +18,6 @@ fn cell(left: f32, top: f32, right: f32, bottom: f32) -> CellRect {
 fn marker_glyph_and_stand_in_are_one_utf16_unit_each() {
     assert_eq!(MARKER_GLYPH, "\u{FFFC}");
     assert_eq!(MARKER_STAND_IN, "\u{3000}");
-    assert_eq!(MARKER_GLYPH.encode_utf16().count(), 1);
-    assert_eq!(MARKER_STAND_IN.encode_utf16().count(), 1);
 }
 
 #[test]

@@ -1,13 +1,16 @@
 //! # surface_window_child — 文字の面の片付けと、箱の文字の面（シェルの窓の直接の子）の装着・当たりのマスク
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `surface.rs` の子（`#[path]`）。供給面の生成は親の `TextSurface::create` を共有し、ここは
 //! 「窓の子として挿す・消す」「表示されている字の矩形で当たりのマスクを焼く」（要件 9.4）と、
-//! 差し込み口・窓の子のどちらの面も外す片付け `TextSurface::release`（`areka-P0-balloon-text-bugs`
-//! 要件 2.9）を持つ。
+//! 差し込み口・窓の子のどちらの面も外す片付け `TextSurface::release`
+//! （`areka-P0-balloon-text-bugs` 要件 2.9）を持つ。
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
+use std::sync::Arc;
 use windows::UI::Composition::Compositor;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, Arrangement, GraphicsCore, HitTest, Visual, VisualGraphics};
@@ -20,8 +23,16 @@ use crate::choice::HitRectPx;
 /// （要件 9.4）。矩形 `[left, right) × [top, bottom)` を外側へ丸めた画素が内で、面の外は切る。
 /// マスクは面と同じ物理寸なので、wintf の bounds 相対の比例写像は 1:1 になる。
 pub(crate) fn hit_cells_mask(size: (u32, u32), cells: &[HitRectPx]) -> AlphaMask {
+    let mut px = Vec::new();
+    fill_hit_cells(&mut px, size, cells);
+    AlphaMask::from_pbgra32(&px, size.0, size.1, size.0 * 4)
+}
+
+/// [`hit_cells_mask`] の画素を `px` へ埋め直す（`clear`＋`resize` は容量を超えるときだけ確保する）。
+fn fill_hit_cells(px: &mut Vec<u8>, size: (u32, u32), cells: &[HitRectPx]) {
     let (w, h) = size;
-    let mut px = vec![0u8; w as usize * h as usize * 4];
+    px.clear();
+    px.resize(w as usize * h as usize * 4, 0);
     let span = |lo: f32, hi: f32, len: u32| {
         let clip = |v: f32| v.clamp(0.0, len as f32) as usize;
         clip(lo.floor())..clip(hi.ceil())
@@ -33,7 +44,57 @@ pub(crate) fn hit_cells_mask(size: (u32, u32), cells: &[HitRectPx]) -> AlphaMask
             }
         }
     }
-    AlphaMask::from_pbgra32(&px, w, h, w * 4)
+}
+
+/// 窓の子の当たりのマスクの覚え（audit-emo-text-state-actor 指摘 9）: 最後に焼いた字の矩形・画素の作業場・今のマスクと予備の
+/// 2 枚。矩形が変わるたびに、予備を単独で持てれば焼き直し、持てなければ新しく作る
+/// （`areka-emo-present` の `presenter/budget.rs` の 2 枚を入れ替える形）。
+#[derive(Default)]
+pub(super) struct HitMaskCache {
+    cells: Vec<HitRectPx>,
+    px: Vec<u8>,
+    live: Option<Arc<AlphaMask>>,
+    spare: Option<Arc<AlphaMask>>,
+}
+
+impl HitMaskCache {
+    /// `entity` の当たりのマスクを字の矩形 `cells` へ合わせる。前に焼いた矩形と同じなら何もしない。
+    fn update(
+        &mut self,
+        world: &mut World,
+        entity: Entity,
+        size: (u32, u32),
+        cells: Vec<HitRectPx>,
+    ) {
+        if self.cells == cells {
+            return;
+        }
+        let Some(mut res) = world.get_mut::<AlphaMaskResource>(entity) else {
+            tracing::warn!(
+                ?entity,
+                "箱の文字の面の entity に当たりのマスクが無い——字の矩形でクリックを受けられない"
+            );
+            return;
+        };
+        fill_hit_cells(&mut self.px, size, &cells);
+        let (w, h) = size;
+        let fresh = |px: &[u8]| Arc::new(AlphaMask::from_pbgra32(px, w, h, w * 4));
+        let next = match self.spare.take() {
+            Some(mut shared) => match Arc::get_mut(&mut shared) {
+                Some(mask) => {
+                    mask.regenerate_from_pbgra32(&self.px, w, h, w * 4);
+                    shared
+                }
+                // 第三者が参照を握っている（wintf が写しを持つ）: 新しく作る。
+                None => fresh(&self.px),
+            },
+            // 予備がまだ無い（立ち上がりの 2 回）: 新しく作る。
+            None => fresh(&self.px),
+        };
+        res.set_shared(next.clone());
+        self.spare = self.live.replace(next);
+        self.cells = cells;
+    }
 }
 
 /// 箱の文字の面の entity が装着の時に持つ当たり判定: マスク判定で、字の矩形は 0 個（何も受けない）。
@@ -47,6 +108,8 @@ pub(crate) fn box_hit_components(size: (u32, u32)) -> (HitTest, AlphaMaskResourc
 
 /// 箱の文字の面の entity の当たりのマスクを、字の矩形の集まりへ差し替える（要件 9.4）。
 /// クリック透過の切り替えと窓のメッセージの振り分けは、どちらもこのマスクを読む。
+/// 製品の道は [`HitMaskCache`] を通る（覚えを持たないテストの口）。
+#[cfg(test)]
 pub(crate) fn set_child_hit_cells(
     world: &mut World,
     entity: Entity,
@@ -127,7 +190,7 @@ impl TextSurface {
         }
     }
 
-    /// 面の片付け（要件 2.9・描いた後に描画範囲が潰れたとき）: 差し込み口へ装着した面は、差し込み口
+    /// 面の片付け（`areka-P0-balloon-text-bugs` 要件 2.9・描いた後に描画範囲が潰れたとき）: 差し込み口へ装着した面は、差し込み口
     /// `slot` から文字の層の部品（`VisualGraphics`・`Arrangement`）を外す。`VisualGraphics` の外しで
     /// wintf が親の Visual から文字の絵を外し、差し込み口の entity と窓の `Children` の並びは残るので、
     /// 付け直しの装着で wintf の `visual_sync` が `Children` の順（差し込み口が枠の面より手前）に入れ直す。
@@ -153,14 +216,9 @@ impl TextSurface {
     /// 合わせる（要件 9.4）。前に焼いた集まりと同じなら何もしない。差し込み口へ装着した面（窓の子を
     /// 持たない）は何もしない（普通のバルーンの窓の当たり判定は emo-present の領分）。
     pub fn set_hit_cells(&mut self, world: &mut World, cells: Vec<HitRectPx>) {
-        let Some(entity) = self.window_child else {
-            return;
-        };
-        if self.hit_cells == cells {
-            return;
+        if let Some(entity) = self.window_child {
+            self.hit_mask.update(world, entity, self.size, cells);
         }
-        set_child_hit_cells(world, entity, self.size, &cells);
-        self.hit_cells = cells;
     }
 
     /// 窓の子として装着した面の entity（差し込み口へ装着した面は `None`）。

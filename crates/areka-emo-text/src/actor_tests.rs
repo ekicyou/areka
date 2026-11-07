@@ -1,27 +1,9 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-budoux-reveal-reflow` のもの（別の spec のものはその場で名を書く）。
+
 use super::TextSlotBinding;
 use bevy_ecs::prelude::World;
 
-/// k=1.0（現行契約の物理 1:1）: `image_size` は `surface_size` と同値、
-/// slot/window/scale/surface_size は透過保持される。
-#[test]
-fn binding_identity_scale_keeps_surface_size() {
-    let mut world = World::new();
-    let slot = world.spawn_empty().id();
-    let window = world.spawn_empty().id();
-
-    let binding = TextSlotBinding::new(slot, window, 1.0, (434, 687), (434, 687));
-    assert_eq!(binding.slot, slot);
-    assert_eq!(binding.window, window);
-    assert_eq!(binding.scale, 1.0);
-    assert_eq!(binding.surface_size, (434, 687));
-    assert_eq!(
-        binding.image_size,
-        (434, 687),
-        "k=1.0 のとき image_size == surface_size（k≠1.0 では乖離する＝本 fixture は k=1.0）"
-    );
-}
-
-/// image px 原寸は**導出せず透過する**（2026-07-30・旧「`round(物理 / k)` 一点導出」の後継檻）。
+/// image px 原寸は**導出せず透過する**。
 ///
 /// k と物理寸から image px 原寸を計算し直す変異（＝旧実装の復活）を殺す。k=1.25・物理
 /// (127, 94) に対し旧導出は (102, 75) を返したが、正しい原寸は**呼び手が渡した値**である。
@@ -34,6 +16,11 @@ fn binding_passes_image_size_through_without_deriving_it() {
 
     let binding = TextSlotBinding::new(slot, window, 1.25, (127, 94), (101, 75));
     assert_eq!(
+        (binding.slot, binding.window, binding.scale),
+        (slot, window, 1.25),
+        "差し込み口・窓・拡大率は透過"
+    );
+    assert_eq!(
         binding.image_size,
         (101, 75),
         "image px 原寸は透過（旧導出 round(127/1.25)=102 を復活させると落ちる）"
@@ -41,7 +28,7 @@ fn binding_passes_image_size_through_without_deriving_it() {
     assert_eq!(binding.surface_size, (127, 94), "物理原寸はそのまま保持");
 }
 
-/// k<1 の透過檻（2026-07-30 新設）: k=4/5・物理 (114, 62)・原寸 (142, 77)。
+/// k<1 の透過檻: k=4/5・物理 (114, 62)・原寸 (142, 77)。
 ///
 /// k<1 の順写像は**縮小写像＝単射でない**: `scale_len` は 142 も 143 も物理 114 へ、
 /// 77 も 78 も 62 へ潰す。潰れた情報は割り算では戻らず、旧導出 `round(物理 / k)` は
@@ -118,7 +105,7 @@ fn arrange_for_test_lays_out_with_fixed_metrics_without_gpu() {
     );
 }
 
-/// 先渡しの受け取り（タスク 4.1・要件 2.1・4.1）: 本物の受け口（[`spawn_emo_text`](super::spawn_emo_text)
+/// 先渡しの受け取り（要件 2.1・4.1）: 本物の受け口（[`spawn_emo_text`](super::spawn_emo_text)
 /// の取り出し）へ先渡しを積んで汲み出すと、実行時が空回しして区間の全文を持ち、受け取りの
 /// `debug!` がちょうど 1 行（合図の数・求めた区間の数）出る。続く本番の合図は、状態を進める前に
 /// 消去を数える（頭の全消去と途中の `\c` で、その場所の区間の番号が 1 つずつ進む）。

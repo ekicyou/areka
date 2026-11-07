@@ -1,34 +1,22 @@
 //! 印の合図（`\![*]`・`%*` の汎用の `\!` の合図・名前 `*`）を目印の字として積む檻。
 //!
-//! 読み手が `\![*]` を汎用の合図にする（タスク 7.2）までは台本を組み立てても合図が出ないので、
-//! 合図の列を直接組む（7.2 が出す形＝`CueCommand::command_carrier("*", [])`）。
+//! 断りの無い要件の番号と design.md の参照は spec `script-small-tags` のもの（別の spec のものはその場で名を書く）。
+//!
+//! 台本の読み手（`areka-parsers` の `sakura/decode.rs`）を通さず、読み手が出すのと同じ合図の列を
+//! 直接組む（`CueCommand::command_carrier("*", [])`）。
 
 use areka_sakura::contract::TalkCue;
 
-use super::test_support::{cue, items_of};
+use super::test_support::{applied, cue, items_of, spans, text};
 use super::*;
 use crate::inline_marker::MARKER_GLYPH;
+use crate::layout::test_support::{IMAGE, model_rect};
 use crate::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 
 fn marker(actor: &str) -> TalkCue {
     cue(actor, 0.0, CueCommand::command_carrier("*", vec![]))
-}
-
-fn text(actor: &str, s: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(s.into()))
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
 }
 
 fn glyph_texts(state: &TextLayerState, actor: &str) -> Vec<String> {
@@ -39,13 +27,6 @@ fn glyph_texts(state: &TextLayerState, actor: &str) -> Vec<String> {
             _ => None,
         })
         .collect()
-}
-
-fn spans(state: &TextLayerState, actor: &str) -> Vec<ChoiceSpan> {
-    state
-        .actor_state(&ActorKey::from(actor))
-        .map(|s| s.choices().to_vec())
-        .unwrap_or_default()
 }
 
 /// `\![*]\q[晴れてる,X1]`: 目印の字が 1 つ、選択肢の範囲はその後ろ、選択肢は 1 つ（要件 4.1・5.7）。
@@ -111,26 +92,20 @@ fn anchor_range_covers_the_marker_but_the_title_does_not() {
     assert_eq!(spans.len(), 1);
     assert_eq!(spans[0].kind, SpanKind::Anchor);
     assert_eq!(spans[0].glyph_range, 0..3);
-    assert_eq!(spans[0].label, "本文");
-    assert!(!spans[0].label.contains(MARKER_GLYPH));
+    assert_eq!(spans[0].label, "本文", "印の字は名札に入らない");
 }
 
 fn region(validrect: (i32, i32, i32, i32), mode: WritingMode) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(
+    let model = model_rect(
+        (Some(0), Some(0)),
+        (
             Some(validrect.0),
             Some(validrect.1),
             Some(validrect.2),
             Some(validrect.3),
         ),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
     );
-    TextRegion::resolve(&model, (400, 224), mode)
+    TextRegion::resolve(&model, IMAGE, mode)
 }
 
 fn layout(state: &TextLayerState, region: &TextRegion, mode: WritingMode) -> Vec<PositionedLine> {

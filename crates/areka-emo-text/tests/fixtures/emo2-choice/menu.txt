@@ -1,4 +1,4 @@
-// emo2-choice 短メニュー台本（task 11.1・R7.6）: 2〜4 項目の最小選択肢メニュー
+// emo2-choice 短メニュー台本（`areka-P0-choice-render` R7.6）: 2〜4 項目の最小選択肢メニュー
 //
 // choice-render の目視確認用に、実フォントで描く短いメニュー（4 項目）を定義する。
 // さくらスクリプト表現（\q タグ＝選択肢〔表示文字,ID〕・\n＝改行で各項目を別行へ）:
@@ -14,5 +14,5 @@
 //   NewLine{ ratio:1.0 }
 //   Choice{ id:"OnLater", text:"あとで",     references:["r3"] }
 //
-// 目視確認（PNG）では ordinal 0（"はい"）に hover を注入し、その行だけが
-// SquareFill（cursor 指定時）／Invert（未指定時）のハイライト矩形＋反転文字で塗られる。
+// 目視確認（PNG）では ordinal 1（"いいえ"）に hover を注入し、その行だけが
+// SquareFill（cursor 指定のバルーン）のハイライト矩形＋白文字で塗られる（Invert のバルーンでは描かない）。

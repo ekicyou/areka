@@ -1,5 +1,7 @@
 //! 選択肢と遅延座標指定の位置を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **3.6**・設計 **C2** の H 行・
 //! Data Models「Domain Model」）。
 //!
@@ -19,7 +21,7 @@
 //! ## 「選択肢の目印」は現状 hover の強調帯である
 //!
 //! areka が選択肢に与える目印は hover 時の帯（塗り色＋文字色）であり、独立した目印の画像は
-//! まだ持たない（α 後の `choice-marker-styling` が受け持つ）。ゆえに要件 3.6 の
+//! まだ持たない（`choice-marker-styling` が受け持つ）。ゆえに要件 3.6 の
 //! 「選択肢の目印が `validrect` の内側」は、帯の矩形の内包として観測する。帯とクリックを
 //! 受ける矩形は同じ 1 つの導出（[`line_bands`] → [`derive_hit_rows`]）から出るので、
 //! ここで測った矩形はそのまま描画される帯の矩形でもある。
@@ -46,17 +48,20 @@ use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::choice::{
     ResolvedChoiceStyle, annotate_lines, derive_hit_rows, highlight_band_extent, line_bands,
 };
-use areka_emo_text::layout::{LayoutEngine, PositionedLine, WrapPlan};
-use areka_emo_text::state::{ChoiceSpan, TextItem, TextLayerState};
+use areka_emo_text::layout::PositionedLine;
+use areka_emo_text::state::{ChoiceSpan, TextLayerState};
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::parse_str;
-use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CuePayload, SystemVarSnapshot, TalkCue};
+use areka_parsers::kv::parse_kv;
+use areka_sakura::contract::ActorKey;
 
 use super::test_support::{
     EXPECTED_ADVANCE_FULL, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT, EXPECTED_LINE_BOX,
     EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, expected_bottom, read_decoded,
-    resolve_staysee, scope_image_size, staysee_metrics,
+    resolve_staysee, scope_image_size,
+};
+use crate::support::fixture::{
+    self, assert_rect_inside, balloon_metrics, command_cues, glyph_count, lay_out,
 };
 
 // ── 流し込む台本（設計 C2 の H 行）──────────────────────────────────────────
@@ -92,45 +97,10 @@ const EXPECTED_LINES: usize = 3;
 
 // ── 本番と同じ 4 段（`kero_menu_capacity_test.rs` と同じ経路）──────────────────
 
-/// 台本を実 sakura パイプライン（`parse` → `compile`）で cue 列へ落とし、
-/// 文字状態機械が消費する Command cue だけを配送エンベロープへ無変形複写する。
-fn command_cues(script: &str) -> Vec<TalkCue> {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = compile(&instructions, &SystemVarSnapshot::default());
-    let cues: Vec<TalkCue> = compiled
-        .sheet
-        .cues()
-        .iter()
-        .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
-            _ => None,
-        })
-        .collect();
-    assert!(
-        !cues.is_empty(),
-        "台本 `{script}` から Command cue が 1 つも出なかった（cue 0 件では以降の観測が空振りになる）"
-    );
-    cues
-}
-
-/// cue 列を実 [`TextLayerState`] へ載せ、（状態, 唯一の actor）を返す。
+/// 台本を実 sakura パイプラインで cue 列へ落として実 [`TextLayerState`] へ載せ、
+/// （状態, 唯一の actor）を返す。
 fn state_of(script: &str) -> (TextLayerState, ActorKey) {
-    let mut state = TextLayerState::default();
-    for cue in command_cues(script) {
-        state.apply_cue(&cue);
-    }
-    let actors: Vec<ActorKey> = state.actors().map(|(k, _)| k.clone()).collect();
-    assert_eq!(
-        actors.len(),
-        1,
-        "台本 `{script}` は 1 スコープぶんの cue 列のはず（実測の actor: {actors:?}）"
-    );
-    (state, actors[0].clone())
+    fixture::state_of(&command_cues(script))
 }
 
 /// 配置の 1 回ぶん（描画範囲・行列・選択肢スパン）。
@@ -159,24 +129,12 @@ fn place(script: &str) -> Placed {
         .actor_state(&actor)
         .expect("apply_cue 済みの actor 状態が在る");
     let items = actor_state.items();
-    let visible = items
-        .iter()
-        .filter(|it| matches!(it, TextItem::Glyph { .. }))
-        .count();
+    let visible = glyph_count(items);
     assert_eq!(
         visible, EXPECTED_GLYPHS,
         "台本 `{script}` が載せたグリフが {EXPECTED_GLYPHS} 個ではなく {visible} 個"
     );
-    let metrics = staysee_metrics(&resolved);
-    let lines = LayoutEngine::layout(
-        items,
-        visible,
-        &resolved.region,
-        resolved.mode,
-        resolved.font.height,
-        &metrics,
-        WrapPlan::CharByChar,
-    );
+    let lines = lay_out(&resolved, items);
     let choices = actor_state.choices().to_vec();
     Placed {
         resolved,
@@ -328,13 +286,8 @@ fn the_script_records_both_choices_with_their_ids_and_labels() {
 fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
     let placed = place(SCRIPT);
     let region = &placed.resolved.region;
+    // 測る範囲そのものは `region.rs` の `staysee_text_region_is_pinned_for_both_scopes` が固定する。
     let bottom = expected_bottom(0);
-    assert_eq!(
-        (region.left(), region.top(), region.right(), region.bottom()),
-        (EXPECTED_LEFT, EXPECTED_TOP, EXPECTED_RIGHT, bottom),
-        "内包を測る描画範囲が期待値と違う（実測 {:?}）",
-        (region.left(), region.top(), region.right(), region.bottom())
-    );
     assert_eq!(
         placed.lines.len(),
         EXPECTED_LINES,
@@ -350,17 +303,13 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
     );
 
     // ⑵ 帯の実寸——丈 0 の帯や「帯が 1 本も無い」状態で内包が真になるのを防ぐ。
-    let metrics = staysee_metrics(&placed.resolved);
+    let metrics = balloon_metrics(&placed.resolved);
     let bands = line_bands(&placed.lines, placed.resolved.mode, &metrics);
     let want_extent =
         highlight_band_extent(EXPECTED_FONT_HEIGHT, EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH);
     assert_eq!(
         want_extent, EXPECTED_LINE_BOX,
         "既定書体の帯の丈は行ボックスの丈 {EXPECTED_LINE_BOX} と同じはずだが {want_extent}"
-    );
-    assert!(
-        want_extent > 0.0,
-        "帯の丈が {want_extent} ＝ 0 以下では内包を測っても何も示さない"
     );
     assert_eq!(
         bands.len(),
@@ -435,8 +384,8 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
         );
     }
 
-    // ⑷ 4 辺の内包——グリフ矩形と帯の両方を、1 画素も超えないことで言う。
-    let mut checked = 0usize;
+    // ⑷ 4 辺の内包——グリフ矩形と帯の両方を、1 画素も超えないことで言う（矩形の数は ⑶ の
+    // 帯の本数と各行の文字が先に固定している）。
     for (n, row) in rows.iter().enumerate() {
         let label = EXPECTED_CHOICES[n].1;
         let line = &placed.lines[n + 1];
@@ -452,7 +401,6 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
                 ),
                 bottom,
             );
-            checked += 1;
         }
         assert_containment(
             &format!("選択肢「{label}」の強調帯"),
@@ -464,40 +412,15 @@ fn choice_glyphs_and_bands_stay_inside_the_drawing_range() {
             ),
             bottom,
         );
-        checked += 1;
     }
-    let want_checks: usize = EXPECTED_CHOICES.iter().map(|(_, _, len)| len + 1).sum();
-    assert_eq!(
-        checked,
-        want_checks,
-        "内包を測った矩形が {want_checks} 個（選択肢の文字 {} 個＋帯 {} 本）ではなく {checked} 個",
-        want_checks - EXPECTED_CHOICES.len(),
-        EXPECTED_CHOICES.len()
-    );
 }
 
 /// 矩形 `(左, 上, 右, 下)` が描画範囲の内側に収まることを 4 辺それぞれで言う。
 fn assert_containment(where_: &str, rect: (f32, f32, f32, f32), bottom: f32) {
-    let (left, top, right, low) = rect;
-    assert!(
-        left >= EXPECTED_LEFT,
-        "{where_} の左端 {left} が描画範囲の左辺 {EXPECTED_LEFT} より外に出た（超過 {} px）",
-        EXPECTED_LEFT - left
-    );
-    assert!(
-        right <= EXPECTED_RIGHT,
-        "{where_} の右端 {right} が描画範囲の右辺 {EXPECTED_RIGHT} を超えた（超過 {} px）",
-        right - EXPECTED_RIGHT
-    );
-    assert!(
-        top >= EXPECTED_TOP,
-        "{where_} の上端 {top} が描画範囲の上辺 {EXPECTED_TOP} より外に出た（超過 {} px）",
-        EXPECTED_TOP - top
-    );
-    assert!(
-        low <= bottom,
-        "{where_} の下端 {low} が描画範囲の下辺 {bottom} を超えた（超過 {} px）",
-        low - bottom
+    assert_rect_inside(
+        where_,
+        rect,
+        (EXPECTED_LEFT, EXPECTED_TOP, EXPECTED_RIGHT, bottom),
     );
 }
 
@@ -574,13 +497,13 @@ fn resolve_variant(text: &str) -> ResolvedChoiceStyle {
 }
 
 /// 定義の文字列から `<接頭辞>.r/g/b` の 3 成分を読む（宣言そのものを期待値の源にする）。
+/// 行の読みは本番のバルーンの読み込みと同じ `parse_kv` に任せる。
 fn declared_color(text: &str, prefix: &str) -> (u8, u8, u8) {
+    let map = parse_kv(text);
     let read = |component: char| -> u8 {
-        let key = format!("{prefix}.{component},");
-        text.lines()
-            .find_map(|line| line.trim().strip_prefix(&key))
+        let key = format!("{prefix}.{component}");
+        map.get(&key)
             .unwrap_or_else(|| panic!("検体の `descript.txt` に `{key}` の行が無い"))
-            .trim()
             .parse()
             .unwrap_or_else(|e| panic!("`{key}` の値が 0〜255 の数ではない: {e}"))
     };
