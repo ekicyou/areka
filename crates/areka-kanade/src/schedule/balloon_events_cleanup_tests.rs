@@ -14,9 +14,7 @@ use super::super::log_capture::{CapturedEvent, capture};
 use super::super::{Input, Phase, TermCause};
 use super::BreakNote;
 use super::done_tests::{done, field};
-use super::tests::{
-    FINAL, ORIGINAL, cfg, feed, reply_value, start_translated, started, steady_none,
-};
+use super::tests::{FINAL, ORIGINAL, feed, reply_value, start_translated, started, steady_none};
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
 use crate::msg::{
     CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
@@ -182,11 +180,14 @@ fn finish_unloading(s: &mut State, talk: TalkId, at: &str) {
     assert!(matches!(s.phase, Phase::Stopped), "{at}: 止まる");
 }
 
+/// 経路の名と、その経路へ進める入力を作る関数。
+type Case = (&'static str, fn() -> Input);
+
 /// 強制の終了・SHIORI の故障: 控えを持ったまま終了系列へ直行すると、その `step` の出口で捨てて
 /// 記録し、遅れて届く完了・降ろし終えた応答まで 3 つのイベントを送らない（要件 1.6・4.4・7.2）。
 #[test]
 fn force_quit_and_shiori_down_drop_held_notes_with_one_talk_gone_line_each() {
-    let cases: [(&str, fn() -> Input); 2] = [
+    let cases: [Case; 2] = [
         ("ForceQuit", || Input::ForceQuit {
             reason: CloseReason::System,
         }),
@@ -282,24 +283,13 @@ fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
         feed(&mut s, Input::UserBreak { scope: 0 });
         assert!(s.user_break_talk.is_some(), "{at}: 前提: 中断の控え");
 
-        let now = 1_000_000;
-        let (mut actions, mut ev) = feed_all(
+        // 期限は送り出しの相に入るときに決まっているので、刻み 1 回で期限切れになる。
+        let (actions, ev) = feed_all(
             &mut s,
             vec![Input::Tick {
-                now: MonotonicMs(now),
+                now: MonotonicMs(1_000_000),
             }],
         );
-        if !matches!(s.phase, Phase::Unloading { .. }) {
-            // 期限が未設定だった（最初の Tick で決まる）なら、もう 1 度だけ期限ちょうどの Tick を入れる。
-            let (more, more_ev) = feed_all(
-                &mut s,
-                vec![Input::Tick {
-                    now: MonotonicMs(now + cfg().close_talk_deadline_ms),
-                }],
-            );
-            actions.extend(more);
-            ev.extend(more_ev);
-        }
         assert!(
             matches!(
                 s.phase,

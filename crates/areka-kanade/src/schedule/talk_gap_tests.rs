@@ -12,7 +12,8 @@
 use super::*;
 use crate::change::{GapLeft, RaiseOutcome, ShioriMethod};
 use crate::msg::{
-    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
+    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseButton, MouseEventKind, MouseInput,
+    ShioriCall, ShioriFailure, ShioriOutcome,
 };
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::steady::test_support::base_state;
@@ -374,6 +375,31 @@ fn reply(s: State, outcome: ShioriOutcome, origin: &'static str) -> (State, Vec<
     crate::schedule::translate_test_support::pass_translate(next, &cfg())
 }
 
+/// 頭をダブルクリックし、`OnMouseDoubleClick` の GET を送った状態にする（その応答を本番の道で返すため）。
+fn double_click(s: State) -> State {
+    let (s, actions) = step(
+        s,
+        Input::Mouse(MouseInput {
+            scope: 0,
+            x: 10,
+            y: 20,
+            region: Some("Head".to_string()),
+            kind: MouseEventKind::DoubleClick {
+                button: MouseButton::Left,
+            },
+        }),
+        &cfg(),
+    );
+    assert!(
+        actions.iter().any(|a| matches!(
+            a,
+            Action::ShioriRequest(ShioriCall::Get { id, .. }) if id.as_str() == "OnMouseDoubleClick"
+        )),
+        "前提: OnMouseDoubleClick の GET を送る"
+    );
+    s
+}
+
 fn done_of(
     s: State,
     talk_id: TalkId,
@@ -513,7 +539,7 @@ fn marked_talk_replaced_by_another_reply_is_reached_replaced_at_the_end_of_the_r
     let s = marked_talk_playing();
     // 再生中のダブルクリックの応答が印の台詞を置き換える（旧トークの完了は dispatcher が捨てて届かない）。
     let (s, _) = reply(
-        s,
+        double_click(s),
         ShioriOutcome::Value("OTHER".to_string(), areka_talk::SecurityLevel::Local),
         "OnMouseDoubleClick",
     );
@@ -683,7 +709,7 @@ fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() 
 #[test]
 fn the_same_script_without_the_mark_goes_to_closing_when_broken() {
     // 同じ台本を印の無い応答（ダブルクリック）で始め、印の無い依頼で見張って同じ中断を掛ける。
-    let (s, _) = reply(steady_none(), value(), "OnMouseDoubleClick");
+    let (s, _) = reply(double_click(steady_none()), value(), "OnMouseDoubleClick");
     assert!(is_playing(&s, MARKED));
     let (s, _) = await_gap(s);
     let (s, _) = step(s, Input::UserBreak { scope: 0 }, &cfg());

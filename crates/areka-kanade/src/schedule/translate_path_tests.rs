@@ -3,12 +3,13 @@
 //! SHIORI の台詞で再生を始める 8 か所の腕（design「Existing Architecture Analysis」の表）を 1 本ずつ、
 //! 前提の状態まで実際の入力で `step` を進めてから、元のイベントの台詞の応答を最上位の [`step`] に入れる。
 //! どの経路も ⑴ 一括が翻訳の行動 1 つだけになり ⑵ 翻訳の結果で預けた一括が順序どおり最終の台詞で返り
-//! ⑶ 翻訳の結果が元の台詞と同じなら、状態と一括が翻訳なしと同じ（[`assert_path`]）。出口の規則
-//! （`translate::after` の中の捕まえる呼び出し）を外すと、⑴ でどの経路も赤になる。
+//! ⑶ 翻訳の結果が元の台詞と同じなら、状態と一括が最終の台詞で返したときと台詞のほかは同じ
+//! （[`assert_path`]）。出口の規則（`translate::after` の中の捕まえる呼び出し）を外すと、⑴ でどの経路も
+//! 赤になる。
 //!
-//! 「翻訳なし」の比べる相手は [`step_untranslated`]（[`step`] から翻訳の入口と出口だけを除いた写し）で
-//! 同じ前提から作る。翻訳の帳簿と元のイベントの控え（`translate`・`reply_source`）は翻訳そのものの
-//! 欄なので比べない。
+//! ⑶ の比べる相手は、同じ前提から [`step`] を通して `Translated::local(ORIGINAL)` で返したもの
+//! （翻訳が台詞を変えなかったとき）。翻訳の帳簿と元のイベントの控え（`translate`・`reply_source`）は
+//! 翻訳そのものの欄なので比べない。
 //!
 //! あわせて、翻訳しない台詞（areka が作る起動の記録だけの台詞・0 文字の台詞・外から頼まれた
 //! `OnTranslate` の応答）、印のイベントの台詞の見張り、控えの書き換え（`OnChoiceTimeout` の
@@ -114,15 +115,6 @@ impl Drive {
         }
         started(&actions).talk_id
     }
-}
-
-/// 翻訳なしの `step`（[`step`] から翻訳の入口と出口だけを除いた写し）。比べる相手を作るためだけに使う。
-fn step_untranslated(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
-    let marked_reply = talk_gap::marked_reply(&state, &input);
-    let (mut state, actions) = route(state, input, config);
-    talk_gap::observe(&mut state, marked_reply);
-    balloon_events::settle(&mut state, &actions);
-    (state, actions)
 }
 
 /// 行動の種類（順序の確かめに使う）。
@@ -252,7 +244,7 @@ type Prepare = fn() -> (Drive, &'static str);
 /// ⑴ 元のイベントの台詞の応答で、一括が翻訳の行動 1 つだけになり、依頼に元の台詞・元のイベント
 /// （応答を待っていた GET）・捕まえた時点の Status が載る ⑵ 翻訳の結果で、預けた一括が `expected`
 /// の順で返り、再生の開始の台詞と再生中の台詞の控えが最終の台詞になる ⑶ 翻訳の結果が元の台詞と
-/// 同じとき、状態と一括が翻訳なし（[`step_untranslated`]）と同じ。
+/// 同じとき、状態と一括が ⑵ の最終の台詞を元の台詞に読み替えたものと同じ（翻訳は台詞だけを変える）。
 ///
 /// 返すのは ⑵ の後の駆動と返った一括（経路ごとの控えの確かめに使う）。
 fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
@@ -296,7 +288,7 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
         );
     }
 
-    // ⑶ 元の台詞のまま返る翻訳は、翻訳なしと同じ状態と一括になる（要件 5.5）。
+    // ⑶ 元の台詞のまま返る翻訳は、⑵ と台詞のほかは同じ状態と一括になる（要件 5.5）。
     let (mut t, origin) = prepare();
     t.reply(
         ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
@@ -305,17 +297,20 @@ fn assert_path(prepare: Prepare, expected: &[&str]) -> (Drive, Vec<Action>) {
     let same = t.feed(Input::TranslateDone(Ok(
         crate::schedule::translate::Translated::local(ORIGINAL),
     )));
-    let (b, origin) = prepare();
-    let reply = Input::ShioriReply {
-        outcome: ShioriOutcome::Value(ORIGINAL.into(), areka_talk::SecurityLevel::Local),
-        origin,
-    };
-    let (base, base_actions) = step_untranslated(b.s, reply, &b.cfg);
-    assert_eq!(shapes(&same), shapes(&base_actions), "一括が翻訳なしと同じ");
+    // 綴りは台詞を `{:?}` で（入れ子なら重ねて）逃がすので、逃がしに掛からない本文の語で読み替える。
+    let as_original = |shape: String| shape.replace("最終の台詞", "元の台詞");
+    assert_eq!(
+        shapes(&same),
+        shapes(&resumed)
+            .into_iter()
+            .map(as_original)
+            .collect::<Vec<_>>(),
+        "一括は台詞のほか同じ"
+    );
     assert_eq!(
         state_shape(&t.s),
-        state_shape(&base),
-        "状態が翻訳なしと同じ"
+        as_original(state_shape(&d.s)),
+        "状態は台詞のほか同じ"
     );
     (d, resumed)
 }
