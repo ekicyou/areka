@@ -11,18 +11,9 @@
 //!   遅延なし）どおり [`KanadeMsg::TalkDone`] を kanade inbox へ返す mock 再生系宛先。
 //! - [`expected_call`]: `areka_kanade::events::*` の [`ShioriCall`] を [`RecordedCall`] へ
 //!   変換する導出関数（fixture・検証・実装が単一の正本＝events 表を共有・Req 7.1）。
-//! - [`join_bounded`]: 期限付き待機によるハング検出ヘルパ
-//!   （どのテストもハングしない・Req 7.3）。
+//! - [`join_bounded`]: 期限付き待機によるハング検出ヘルパ（どのテストもハングしない・Req 7.3）。
 //! - [`Harness`] / [`spawn_harness`]: mock shiori・mock sakura sink・`spawn_kanade` を
 //!   組み立てた駆動ハーネス（4.2〜4.6 が再利用する）。
-//!
-//! # 未使用許容（プレースホルダ段階）
-//! 本モジュールが提供する要素の多くは後続タスク（4.2〜4.6・5）の `#[test]` から
-//! 初めて使われる。エントリポイントが全モジュールを先出し宣言する 4.1 時点では
-//! 一部が未使用となりコンパイル警告を招くため、モジュール全体に
-//! `#![allow(dead_code)]` を付す（プレースホルダ段階に限定した意図的許容）。
-
-#![allow(dead_code)]
 
 // ============================================================================
 // 責務単位の子モジュール（タスク 8.2・設計判断 #1 の `#[path]` フラット兄弟方式）
@@ -72,8 +63,7 @@ mod smoke;
 
 pub use bounded::{DEFAULT_TIMEOUT, drive_ticks_until_disconnect, join_bounded};
 pub use fixture::{
-    ChoiceResponse, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
-    MouseResponse,
+    FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Response,
 };
 pub use harness::{
     Harness, SinklessHarness, spawn_harness, spawn_harness_blocking, spawn_harness_failing,
@@ -87,5 +77,8 @@ pub use mock_shiori::{
     BlockOn, FailKind, FailOn, MockShiori, ShioriGate, spawn_mock_shiori,
     spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
 };
-pub use recording::{CallMethod, RecordedCall, expected_call, expected_translate, expected_unload};
+pub use recording::{
+    CallMethod, RecordedCall, binding, expected_call, expected_translate, expected_unload, pumps,
+    resumed_get_after_active_window, send, tick,
+};
 pub use window_actor::{WINDOW_CREATE_SERIAL, spawn_window_actor};

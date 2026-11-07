@@ -8,12 +8,12 @@
 //! 実時刻も sleep も読まない（要件 9.5）。
 
 use super::test_support::{
-    CANONICAL_CHOICE_ID, cascading_snapshot, choice_get_ids, command_tags, position_of, pumps,
+    CANONICAL_CHOICE_ID, cascading_snapshot, choice_get_ids, command_tags, position_of,
 };
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig,
     KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, TalkCommand, TalkDone, TalkEndReason, TalkId,
-    events, expected_call, join_bounded, spawn_harness_gated,
+    events, expected_call, join_bounded, pumps, spawn_harness_gated,
 };
 
 /// 注入 `ChoiceWaiting` の表示の終わり（期限の起点）。

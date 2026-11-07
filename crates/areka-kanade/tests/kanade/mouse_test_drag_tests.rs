@@ -8,28 +8,12 @@
 //! 同じ: 末尾の talk を quit:true にして終了の系列を走らせ、kanade の期限付き join が成功した時点で
 //! 記録を確定する（実時間の待ちなし）。
 
+use super::test_support::mouse_input;
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MouseEventKind, MouseInput, QuitPolicy, RecordedCall, events,
+    Harness, KanadeConfig, KanadeMsg, MouseEventKind, QuitPolicy, RecordedCall, events,
     expected_call, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
 };
-
-/// ドラッグの知らせを組む（`region` は不透明転写・`None`＝判定外）。
-fn drag_input(
-    kind: MouseEventKind,
-    x: i64,
-    y: i64,
-    scope: u32,
-    region: Option<&str>,
-) -> MouseInput {
-    MouseInput {
-        scope,
-        x,
-        y,
-        region: region.map(str::to_string),
-        kind,
-    }
-}
 
 /// 記録列からドラッグの 2 つの GET だけを処理順に抜き出す。
 fn drag_gets(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
@@ -88,8 +72,8 @@ fn drag_start_then_end_in_steady_records_both_gets_in_order() {
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
     for m in [
-        drag_input(MouseEventKind::DragStart, 10, 20, 1, Some("Head")),
-        drag_input(MouseEventKind::DragEnd, 70, 90, 1, None),
+        mouse_input(MouseEventKind::DragStart, 10, 20, 1, Some("Head")),
+        mouse_input(MouseEventKind::DragEnd, 70, 90, 1, None),
     ] {
         harness
             .sender
@@ -154,8 +138,8 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
     for m in [
-        drag_input(MouseEventKind::DragStart, 3, 4, 0, Some("Bust")),
-        drag_input(MouseEventKind::DragEnd, 5, 6, 0, Some("Bust")),
+        mouse_input(MouseEventKind::DragStart, 3, 4, 0, Some("Bust")),
+        mouse_input(MouseEventKind::DragEnd, 5, 6, 0, Some("Bust")),
     ] {
         harness
             .sender
@@ -225,7 +209,7 @@ fn drag_before_boot_is_not_sent_and_boot_completes() {
     for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
         harness
             .sender
-            .send(KanadeMsg::Mouse(drag_input(kind, 1, 2, 0, Some("Head"))))
+            .send(KanadeMsg::Mouse(mouse_input(kind, 1, 2, 0, Some("Head"))))
             .expect("send drag Mouse before Boot");
     }
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
@@ -268,7 +252,7 @@ fn drag_during_close_series_is_not_sent_and_close_completes() {
     for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
         harness
             .sender
-            .send(KanadeMsg::Mouse(drag_input(kind, 7, 8, 0, None)))
+            .send(KanadeMsg::Mouse(mouse_input(kind, 7, 8, 0, None)))
             .expect("send drag Mouse during close series");
     }
     gate.release_all();
@@ -310,7 +294,7 @@ fn drag_while_close_pending_is_not_sent_and_handshake_completes() {
     for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
         harness
             .sender
-            .send(KanadeMsg::Mouse(drag_input(kind, 11, 22, 0, Some("Head"))))
+            .send(KanadeMsg::Mouse(mouse_input(kind, 11, 22, 0, Some("Head"))))
             .expect("send drag Mouse while close pending");
     }
     gate.release_all();
@@ -359,7 +343,7 @@ fn drag_end_after_close_request_is_not_sent() {
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
     harness
         .sender
-        .send(KanadeMsg::Mouse(drag_input(
+        .send(KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragStart,
             30,
             40,
@@ -373,7 +357,7 @@ fn drag_end_after_close_request_is_not_sent() {
         .expect("send CloseRequest");
     harness
         .sender
-        .send(KanadeMsg::Mouse(drag_input(
+        .send(KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragEnd,
             50,
             60,

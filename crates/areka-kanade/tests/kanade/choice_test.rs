@@ -74,9 +74,9 @@ use areka_kanade::{
 };
 
 use super::common::{
-    CallMethod, ChoiceResponse, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
-    FailKind, FailOn, Fixture, Harness, QuitPolicy, RecordedCall, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated, spawn_harness_gated_failing,
+    CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, FailKind, FailOn,
+    Fixture, Harness, QuitPolicy, RecordedCall, Response, expected_call, expected_unload,
+    join_bounded, pumps, spawn_harness_gated, spawn_harness_gated_failing,
 };
 
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.3・要件 1.7 / 3.1 / 3.2）。

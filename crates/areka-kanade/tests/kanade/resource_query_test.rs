@@ -30,8 +30,8 @@ use areka_kanade::resources::ResourceOutcome;
 use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg};
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, Harness, MouseResponse, QuitPolicy,
-    RecordedCall, join_bounded, spawn_harness, spawn_harness_failing,
+    CallMethod, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, Harness, QuitPolicy, RecordedCall,
+    Response, join_bounded, spawn_harness, spawn_harness_failing,
 };
 
 /// 1 度に問う項目名（表示可否・説明書・終了）。順序・長さの突合に使う正本でもある。
@@ -161,9 +161,9 @@ fn config() -> KanadeConfig {
 fn caption_value_is_returned_verbatim() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_resource_response(
+        menu_fixture().with_response(
             README_CAPTION,
-            MouseResponse::Script("取扱説明書(&R)".to_string()),
+            Response::Script("取扱説明書(&R)".to_string()),
         ),
         QuitPolicy::PerTalk(vec![true]),
     );
@@ -197,7 +197,7 @@ fn caption_value_is_returned_verbatim() {
 fn empty_caption_is_returned_as_empty_value_not_no_content() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_resource_response(README_CAPTION, MouseResponse::Script(String::new())),
+        menu_fixture().with_response(README_CAPTION, Response::Script(String::new())),
         QuitPolicy::PerTalk(vec![true]),
     );
 
@@ -234,7 +234,7 @@ fn empty_caption_is_returned_as_empty_value_not_no_content() {
 fn absent_caption_is_returned_as_no_content() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_resource_response(README_CAPTION, MouseResponse::NoContent),
+        menu_fixture().with_response(README_CAPTION, Response::NoContent),
         QuitPolicy::PerTalk(vec![true]),
     );
 
@@ -321,10 +321,7 @@ fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
 fn query_before_boot_returns_no_content_for_every_id() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_resource_response(
-            README_CAPTION,
-            MouseResponse::Script("問い合わせた".to_string()),
-        ),
+        menu_fixture().with_response(README_CAPTION, Response::Script("問い合わせた".to_string())),
         QuitPolicy::PerTalk(vec![true]),
     );
 

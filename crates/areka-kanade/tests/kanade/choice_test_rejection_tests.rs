@@ -3,9 +3,8 @@ use super::test_support::{
     establish_choice_wait,
 };
 use super::{
-    ChoiceResponse, CloseReason, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness,
-    KanadeConfig, KanadeMsg, QuitPolicy, TalkCommand, TalkId, expected_unload, join_bounded,
-    spawn_harness_gated,
+    CloseReason, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg,
+    QuitPolicy, Response, TalkCommand, TalkId, expected_unload, join_bounded, spawn_harness_gated,
 };
 
 /// 選択待ちの候補集合に**含めない** ID（群 6 の候補照合の観測面・Req1.4）。
@@ -91,9 +90,9 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
+        .with_response(
             NAMED_CHOICE_ID,
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
+            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
         );
 
     // hold_indices=[0, 1]: steady talk（id=1）と選択由来 talk（id=2）の TalkDone を両方 park。
@@ -218,9 +217,9 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
+        .with_response(
             NAMED_CHOICE_ID,
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
+            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
         );
 
     // 保留構成・終了駆動は群 6 共通（hold_indices=[0, 1]＋ForceQuit）。

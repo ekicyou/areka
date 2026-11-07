@@ -3,9 +3,9 @@ use super::test_support::{
     choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    ChoiceResponse, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig,
-    KanadeMsg, QuitPolicy, TalkCommand, TalkId, events, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated,
+    DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, QuitPolicy,
+    Response, TalkCommand, TalkId, events, expected_call, expected_unload, join_bounded,
+    spawn_harness_gated,
 };
 
 // ============================================================================
@@ -32,9 +32,9 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
+        .with_response(
             NAMED_CHOICE_ID,
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
+            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
         );
 
     // hold_indices=[0]: steady talk（id=1）の TalkDone を park して active talk 窓を維持する。

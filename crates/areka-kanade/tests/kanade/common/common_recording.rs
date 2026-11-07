@@ -3,7 +3,11 @@
 //! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
 //! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
 
-use areka_kanade::{ExecutionSnapshot, ExecutionStatus, ShioriCall, events};
+use areka_kanade::{
+    BalloonBinding, ExecutionSnapshot, ExecutionStatus, KanadeMsg, MonotonicMs, ShioriCall, events,
+};
+
+use super::Harness;
 
 // ============================================================================
 // RecordedCall — 受理された shiori 呼出の記録単位
@@ -47,7 +51,7 @@ pub struct RecordedCall {
 
 impl RecordedCall {
     /// [`ShioriCall`] を記録単位へ変換する（GET/NOTIFY の別と id・References・Status を写す）。
-    pub(super) fn from_call(call: &ShioriCall) -> Self {
+    pub fn from_call(call: &ShioriCall) -> Self {
         match call {
             ShioriCall::Get {
                 id,
@@ -117,4 +121,55 @@ pub fn expected_translate(
         &source,
         ExecutionStatus::derive(snapshot),
     ))
+}
+
+// ============================================================================
+// 檻どうしで写していた小さな道具（1 か所で直せば全部の檻に効く）
+// ============================================================================
+
+/// 記録列から周期リクエスト（`OnSecondChange`）のみを処理順に抽出する（GET・NOTIFY 双方）。
+pub fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
+    recorded
+        .iter()
+        .filter(|c| c.id == "OnSecondChange")
+        .collect()
+}
+
+/// active talk 窓（`OnSecondChange` NOTIFY）**より後**に現れる最初の `OnSecondChange` GET
+/// （＝pump 再開・完了後の GET 復帰）を返す。NOTIFY が無ければ `None`。
+///
+/// `Steady{Some}` 中は NOTIFY のみで GET は出ず、TalkDone 着弾で `Steady{None}` へ復帰した後に初めて
+/// GET が現れるため、「NOTIFY より後の最初の GET」が完了後の pump 再開を一意に指す。
+pub fn resumed_get_after_active_window(recorded: &[RecordedCall]) -> Option<&RecordedCall> {
+    let notify_idx = recorded
+        .iter()
+        .position(|c| c.method == CallMethod::Notify && c.id == "OnSecondChange")?;
+    recorded
+        .iter()
+        .enumerate()
+        .find(|(i, c)| *i > notify_idx && c.method == CallMethod::Get && c.id == "OnSecondChange")
+        .map(|(_, c)| c)
+}
+
+/// kanade の受信箱へ 1 通送る。
+pub fn send(harness: &Harness, msg: KanadeMsg) {
+    harness.sender.send(msg).expect("send to kanade inbox");
+}
+
+/// kanade の受信箱へ `Tick` を 1 通送る。
+pub fn tick(harness: &Harness, now: u64) {
+    send(
+        harness,
+        KanadeMsg::Tick {
+            now: MonotonicMs(now),
+        },
+    );
+}
+
+/// キャラとバルーンの結びつけを組む。
+pub fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
+    BalloonBinding {
+        character_id,
+        balloon_id,
+    }
 }

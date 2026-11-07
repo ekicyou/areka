@@ -33,7 +33,7 @@ use areka_kanade::{
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
-    MouseResponse, QuitPolicy, RecordedCall, expected_call, expected_unload, join_bounded,
+    QuitPolicy, RecordedCall, Response, expected_call, expected_unload, join_bounded,
     spawn_harness, spawn_harness_gated,
 };
 
@@ -55,4 +55,4 @@ mod phase_guard_tests;
 mod talk_start_tests;
 #[cfg(test)]
 #[path = "mouse_test_test_support.rs"]
-mod test_support;
+pub(super) mod test_support;

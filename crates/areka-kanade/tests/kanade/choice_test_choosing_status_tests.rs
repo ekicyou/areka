@@ -1,11 +1,11 @@
 use super::test_support::{
     CANONICAL_CHOICE_ID, cascading_snapshot, choice_get_ids, choice_input, establish_choice_wait,
-    position_of, pumps,
+    position_of,
 };
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, Fixture, Harness, KanadeConfig,
     KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, events, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated,
+    join_bounded, pumps, spawn_harness_gated,
 };
 
 /// active talk のみ（選択待ちは終了済み）の運行状態＝`talking` 単独。

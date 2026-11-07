@@ -11,30 +11,18 @@
 
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::{
-    BalloonBinding, ChoiceInput, CloseReason, ExecutionSnapshot, ExecutionStateUpdate,
-    ExecutionStatus, KanadeConfig, KanadeMsg, MonotonicMs, TalkCommand, TalkId, events,
+    ChoiceInput, CloseReason, ExecutionSnapshot, ExecutionStateUpdate, ExecutionStatus,
+    KanadeConfig, KanadeMsg, MonotonicMs, TalkCommand, TalkId, events,
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call,
-    expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, binding,
+    expected_call, expected_unload, join_bounded, pumps, send, spawn_harness, spawn_harness_gated,
+    tick,
 };
 
 /// 選択待ちの候補（正典形＝`On` で始まらない）。
 const CHOICE_ID: &str = "頻度変更";
-
-fn send(harness: &Harness, msg: KanadeMsg) {
-    harness.sender.send(msg).expect("send to kanade inbox");
-}
-
-fn tick(harness: &Harness, now: u64) {
-    send(
-        harness,
-        KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        },
-    );
-}
 
 /// 問い合わせを 1 通送り、その場で返る答えを上限つきで受け取る（wire の形 `render()` で返す）。
 fn query(harness: &Harness) -> Option<String> {
@@ -59,13 +47,6 @@ fn ask_here(harness: &Harness, ask: bool, answers: &mut Vec<Option<String>>) {
         "同じ所で続けて 2 回問うと同じ値が返るはず（問い合わせは状態を変えない・要件 4.1）"
     );
     answers.push(first);
-}
-
-fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
-    recorded
-        .iter()
-        .filter(|c| c.id == "OnSecondChange")
-        .collect()
 }
 
 /// 偽の sakura が受けた指示の列を比べられる形へ写す（`TalkCommand` は `PartialEq` を持たない）。
@@ -114,13 +95,6 @@ fn gated_harness() -> (Harness, super::common::SakuraGate) {
         QuitPolicy::PerTalk(vec![false, true]),
         vec![0],
     )
-}
-
-fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-    BalloonBinding {
-        character_id,
-        balloon_id,
-    }
 }
 
 /// K1 の筋書き: 起動の前 → 起動直後 → 中断の無効化（真）→ バルーン → Tick1（再生中・完了は保留）→

@@ -70,7 +70,8 @@ use areka_kanade::{
 use super::common::{
     BlockOn, CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
     Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
-    expected_unload, join_bounded, spawn_harness, spawn_harness_blocking, spawn_harness_gated,
+    expected_unload, join_bounded, resumed_get_after_active_window, spawn_harness,
+    spawn_harness_blocking, spawn_harness_gated,
 };
 
 /// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
@@ -145,23 +146,6 @@ fn count_second_change_get(recorded: &[RecordedCall]) -> usize {
         .iter()
         .filter(|c| c.method == CallMethod::Get && c.id == "OnSecondChange")
         .count()
-}
-
-/// active talk 窓（`OnSecondChange` NOTIFY）**より後**に現れる最初の `OnSecondChange` GET
-/// （＝pump 再開・完了後の GET 復帰）を返す（Testing Strategy #12・Req 4.4）。
-///
-/// 記録列に `OnSecondChange` NOTIFY（Steady{Some} の active 窓）が無ければ `None`。NOTIFY 以降は
-/// `Steady{Some}` 中は NOTIFY のみで GET は出ず、TalkDone 着弾で `Steady{None}` へ復帰した後に初めて
-/// GET が現れるため、「NOTIFY より後の最初の GET」が完了後の pump 再開を一意に指す。
-fn resumed_get_after_active_window(recorded: &[RecordedCall]) -> Option<&RecordedCall> {
-    let notify_idx = recorded
-        .iter()
-        .position(|c| c.method == CallMethod::Notify && c.id == "OnSecondChange")?;
-    recorded
-        .iter()
-        .enumerate()
-        .find(|(i, c)| *i > notify_idx && c.method == CallMethod::Get && c.id == "OnSecondChange")
-        .map(|(_, c)| c)
 }
 
 /// 応答なし（204）→ 再生起動要求が発生しない（Req 2.3）。

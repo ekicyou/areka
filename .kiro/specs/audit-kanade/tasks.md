@@ -180,7 +180,7 @@
   - _Depends: 2.2_
   - _Requirements: 3.1, 3.3, 4.1, 4.5, 5.1, 9.1, 9.7_
 
-- [ ] 12. 結合テストの共有の道具をまとめる
+- [x] 12. 結合テストの共有の道具をまとめる
 - [x] 12.1 (P) 使われない有界の実行を消す（#17・#18 の `drain_collect`）
   - 有界の実行とその再輸出・許し・言及・使われない種類を消し、名指した物だけを消す（ファイル全体の dead_code の許しを外すのと、それで出る警告の物の始末は 12.3 が持つ）
   - `drain_collect` を clippy の示す形に
@@ -192,7 +192,7 @@
   - sakura の偽物は塞ぎつきの 1 本に、shiori の偽物は失敗と塞ぎの注入を受ける 1 本の輪に
   - 結合テストが全部同じ結果で緑
   - _Requirements: 3.1, 4.5, 9.1_
-- [ ] 12.3 記録の見方と台詞の表と入力の写しを 1 つにする（#47・#84・#85）
+- [x] 12.3 記録の見方と台詞の表と入力の写しを 1 つにする（#47・#84・#85）
   - 記録の見方の写しを共有の道具に 1 つずつ。表を 1 本の写像に、使われない欄と値を消す
   - マウスの入力の組み立てを 1 つ置き、5 つの写しを消す
   - 最後に共有の道具のファイル全体の dead_code の許しを外し（#17）、出た警告の物を使われていないと確かめて消す。結合テストが許しなしに警告を出さない
@@ -316,3 +316,4 @@
 - 6.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:354` が消した関数名 `replace_absent_markers` を名指す（今は `clean_references`・`reference_line_break_removed` の warn も足された）。
 - 10.1: #35 の 2 組目は design と逆の側（sstp_tests の `sstp_notify_derives_status_from_the_snapshot`）を消した。sstp_notify 側が `step` から `state.snapshot()` へのつながりを縛るただ 1 本だったため（要件 3.3）。
 - 11: `steady_choice_timeout_tests.rs` は 840 行（design の見込み約 760）。#74 で消したのは直に呼ぶ 3 本（うち 2 本は `steady_choice_tests.rs`）で、design の −100 は `step()` を通る側を消す前提の見込み違い。
+- 12.3: #47 の `record` は design の `expected_call(call.clone())` が組めない（`ShioriCall` に Clone が無い）ので、`RecordedCall::from_call` を pub にして使った。指摘の外に残る写し（19.2 のかけ直しで拾う候補）: `command_tags`／`describe`（status_query_test・choice_test_test_support・translate_test）、`choice_test_stage_failure_tests.rs:159` の `MouseInput { .. }` の直書き。

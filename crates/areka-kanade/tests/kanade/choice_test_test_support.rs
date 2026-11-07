@@ -102,14 +102,6 @@ pub(super) fn choice_get_ids(recorded: &[RecordedCall]) -> Vec<&str> {
         .collect()
 }
 
-/// 記録列から周期リクエスト（`OnSecondChange`）のみを処理順に抽出する（GET・NOTIFY 双方）。
-pub(super) fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
-    recorded
-        .iter()
-        .filter(|c| c.id == "OnSecondChange")
-        .collect()
-}
-
 /// 記録列における最初の一致位置（処理順の前後関係を突合するための索引）。
 pub(super) fn position_of(recorded: &[RecordedCall], method: CallMethod, id: &str) -> usize {
     recorded

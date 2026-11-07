@@ -12,8 +12,8 @@ use areka_kanade::{
 use areka_talk::ScriptOrigin;
 
 use super::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, MouseResponse, QuitPolicy,
-    expected_call, join_bounded, spawn_mock_sakura, spawn_mock_shiori,
+    CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, QuitPolicy, Response, expected_call,
+    join_bounded, spawn_mock_sakura, spawn_mock_shiori,
 };
 
 /// mock shiori 単独駆動: `OnBoot` GET へ即時に固定 Value を返し、記録が
@@ -202,17 +202,15 @@ fn mock_sakura_records_talk_command_arrival_order() {
 
 /// 4.1 配管の疎通: マウス GET へ script Value と 204 を任意注入でき、mock がそれを返す。
 ///
-/// `Fixture::with_mouse_response` で `OnMouseMove` に script を注入・`OnMouseDoubleClick` は
+/// `Fixture::with_response` で `OnMouseMove` に script を注入・`OnMouseDoubleClick` は
 /// 未注入（既定 204）とし、events 表から導出した両 GET を送って注入どおりの [`ShioriOutcome`]
 /// が返ることを確認する（4.2／4.3 の (c)/(d) 檻の土台＝注入点が実在することの証明）。
 #[test]
 fn mock_shiori_injects_mouse_response() {
     const MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
     // OnMouseMove へ script を注入・OnMouseDoubleClick は未注入（既定 204）。
-    let fixture = Fixture::default().with_mouse_response(
-        "OnMouseMove",
-        MouseResponse::Script(MOUSE_SCRIPT.to_string()),
-    );
+    let fixture =
+        Fixture::default().with_response("OnMouseMove", Response::Script(MOUSE_SCRIPT.to_string()));
     let shiori = spawn_mock_shiori(fixture);
 
     // (c) script 注入: OnMouseMove GET → Value（events 表から導出・ハードコードしない）。

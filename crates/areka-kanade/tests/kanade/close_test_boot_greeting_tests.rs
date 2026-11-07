@@ -3,7 +3,7 @@ use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_BOOT_SCRIPT,
     FIXED_FAREWELL_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
     RecordedCall, TalkId, drive_ticks_until_disconnect, events, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated,
+    join_bounded, resumed_get_after_active_window, spawn_harness_gated,
 };
 
 /// `fetch` が返す記録列が `pred` を満たすまで壁時計 deadline（[`DEFAULT_TIMEOUT`]）まで yield して
@@ -31,23 +31,6 @@ where
         }
         std::thread::yield_now();
     }
-}
-
-/// `OnSecondChange` NOTIFY（active talk 窓）**より後**に現れる最初の `OnSecondChange` GET を返す
-/// （＝pump 再開＝`Steady{None}` 復帰の一意な指標）。NOTIFY が無ければ `None`。
-///
-/// `Steady{Some}` 中は NOTIFY のみで GET は出ず、TalkDone 着弾で `Steady{None}` へ復帰した後に初めて
-/// GET が現れるため、「NOTIFY より後の最初の GET」が完了後の pump 再開を一意に指す（steady_test の
-/// `resumed_get_after_active_window` と同旨）。
-fn resumed_get_after_notify(recorded: &[RecordedCall]) -> Option<&RecordedCall> {
-    let notify_idx = recorded
-        .iter()
-        .position(|c| c.method == CallMethod::Notify && c.id == "OnSecondChange")?;
-    recorded
-        .iter()
-        .enumerate()
-        .find(|(i, c)| *i > notify_idx && c.method == CallMethod::Get && c.id == "OnSecondChange")
-        .map(|(_, c)| c)
 }
 
 // ============================================================================
@@ -203,13 +186,13 @@ fn boot_greeting_active_tick_emits_notify_talking() {
 /// （quit:true）を起こして終了を駆動する。挨拶 talk（受領 index 0）を保留し、復帰後の steady talk は
 /// 受領 index 1。Tick 供給は反復回数上限でなく `drive_ticks_until_disconnect`（inbox 切断バリア＋壁時計
 /// deadline）へ一本化し、kanade が復帰後 pump talk で終了して inbox を切断するまで 1 秒刻みの Tick を
-/// 供給する。復帰の表明は join 後の最終記録列（`resumed_get_after_notify`＝active 窓後の GET）が担う。
+/// 供給する。復帰の表明は join 後の最終記録列（`resumed_get_after_active_window`＝active 窓後の GET）が担う。
 ///
 /// # 非空虚性
 /// - 挨拶が slot と照合されず `Steady{Some}` に留まれば GET は現れず終了も駆動されない。kanade が終了せず
 ///   inbox が切断されないため Tick send が成功し続け、`drive_ticks_until_disconnect` が DEFAULT_TIMEOUT の
 ///   壁時計 deadline に達して panic する（＝相関しなかったことを決定論的に検出する）。加えて join 後の
-///   `resumed_get_after_notify` も `None` で最終表明が落ちる。
+///   `resumed_get_after_active_window` も `None` で最終表明が落ちる。
 #[test]
 fn boot_greeting_talkdone_resumes_get_pump() {
     // 挨拶あり（default）＋復帰後 GET occurrence 0 に Value（steady talk を起こし終了駆動）。
@@ -299,7 +282,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     // (b) 完了後の GET 再開（DD-IT-12 相関成立の統合証左）: active 窓（NOTIFY）より後に OnSecondChange
     //     GET が現れ、Ref3=1・Status なし（`Steady{None}`＝挨拶 slot と照合されて復帰した証左）。復帰後の
     //     GET の now はループ依存ゆえ、now 非依存の Ref3／Status のみを events から導出して照合する。
-    let resumed_get = resumed_get_after_notify(&recorded).expect(
+    let resumed_get = resumed_get_after_active_window(&recorded).expect(
         "active 窓の後に pump 再開 GET が現れるはず（挨拶 TalkDone が slot と照合された証左）",
     );
     let expected_shape = expected_call(events::on_second_change(

@@ -1,13 +1,12 @@
 use super::test_support::{
     CANONICAL_CHOICE_ID, CHOICE_DEADLINE_MS, FIXED_CHOICE_SCRIPT, cascading_snapshot,
     choice_get_ids, choice_gets, choice_input, command_tags, establish_choice_wait, position_of,
-    pumps,
 };
 use super::{
-    CallMethod, ChoiceResponse, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot,
-    FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
-    TalkCommand, TalkDone, TalkEndReason, TalkId, events, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated,
+    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture,
+    Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, Response, TalkCommand, TalkDone,
+    TalkEndReason, TalkId, events, expected_call, expected_unload, join_bounded, pumps,
+    spawn_harness_gated,
 };
 
 // ============================================================================
@@ -255,9 +254,9 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
+        .with_response(
             "OnChoiceTimeout",
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
+            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
         );
 
     // quit_flags: index0（steady talk・保留）=false・index1（タイムアウト由来 talk）=true（終了駆動）。

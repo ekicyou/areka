@@ -21,13 +21,14 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
+use super::mouse_test::test_support::mouse_input;
 use areka_actor::reply_channel;
 use areka_kanade::{
     ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, CloseReason, ExecutionSnapshot,
     ExecutionStatus, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
-    MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriFault,
-    ShioriMethod, ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId,
-    TranslateSeams, events, spawn_kanade_translating,
+    MonotonicMs, MouseButton, MouseEventKind, ShioriCall, ShioriFailure, ShioriFault, ShioriMethod,
+    ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId, TranslateSeams, events,
+    spawn_kanade_translating,
 };
 use shiori_host32_host::{Charset, Method, RequestHeaders, ShioriRequest, build_request};
 
@@ -100,27 +101,6 @@ fn describe(command: TalkCommand) -> String {
     }
 }
 
-fn record(call: &ShioriCall) -> RecordedCall {
-    let (method, id, references, status) = match call {
-        ShioriCall::Get {
-            id,
-            references,
-            status,
-        } => (CallMethod::Get, id, references, status),
-        ShioriCall::Notify {
-            id,
-            references,
-            status,
-        } => (CallMethod::Notify, id, references, status),
-    };
-    RecordedCall {
-        method,
-        id: id.as_str().to_string(),
-        references: references.clone(),
-        status: status.render(),
-    }
-}
-
 /// 偽物を起こし、素通しの口つきの kanade（停止通知の受け口あり）をつなぐ。
 fn spawn_rig(spec: WireSpec) -> Rig {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
@@ -144,7 +124,7 @@ fn spawn_rig(spec: WireSpec) -> Rig {
             }
             match msg {
                 ShioriMsg::Request { call, reply } => {
-                    let recorded = record(&call);
+                    let recorded = RecordedCall::from_call(&call);
                     let id = recorded.id.clone();
                     let outcome = if recorded.method == CallMethod::Notify {
                         ShioriOutcome::Notified
@@ -259,15 +239,15 @@ fn talking() -> ExecutionSnapshot {
 }
 
 fn double_click() -> KanadeMsg {
-    KanadeMsg::Mouse(MouseInput {
-        scope: 0,
-        x: 10,
-        y: 20,
-        region: Some("Head".to_string()),
-        kind: MouseEventKind::DoubleClick {
+    KanadeMsg::Mouse(mouse_input(
+        MouseEventKind::DoubleClick {
             button: MouseButton::Left,
         },
-    })
+        10,
+        20,
+        0,
+        Some("Head"),
+    ))
 }
 
 /// [`double_click`] が送る GET（`snapshot` はそのときの状態）。
@@ -276,13 +256,7 @@ fn double_click_call(snapshot: &ExecutionSnapshot) -> ShioriCall {
 }
 
 fn mouse_move() -> KanadeMsg {
-    KanadeMsg::Mouse(MouseInput {
-        scope: 0,
-        x: 11,
-        y: 21,
-        region: None,
-        kind: MouseEventKind::Move,
-    })
+    KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 11, 21, 0, None))
 }
 
 fn change_request() -> ChangeRequest {
@@ -713,7 +687,7 @@ fn assert_farewell_scene(
         "{name}: 握手の要求（OnClose・OnGhostChanging）に Status の行は無い"
     );
 
-    let first_id = record(&handshakes[0]).id;
+    let first_id = RecordedCall::from_call(&handshakes[0]).id;
     let source = handshakes.last().expect("握手の要求は 1 件以上");
     let translate = expected_translate(FAREWELL_SCRIPT, source, &talking());
     let mut expected: Vec<Seen> = handshakes.into_iter().map(call).collect();

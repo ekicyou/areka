@@ -1,7 +1,8 @@
-use super::test_support::{mouse_gets, move_input};
+use super::test_support::{mouse_gets, mouse_input};
 use super::{
     CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg,
-    QuitPolicy, TalkId, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    MouseEventKind, QuitPolicy, TalkId, expected_unload, join_bounded, spawn_harness,
+    spawn_harness_gated,
 };
 
 // ============================================================================
@@ -29,7 +30,13 @@ fn phase_ignore_before_boot_no_mouse_get() {
     // Boot より前に Mouse を注入（Idle で処理される＝非 Steady・無視）。
     harness
         .sender
-        .send(KanadeMsg::Mouse(move_input(5, 6, 0, Some("Head"))))
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::Move,
+            5,
+            6,
+            0,
+            Some("Head"),
+        )))
         .expect("send Mouse before Boot");
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
     harness
@@ -105,7 +112,13 @@ fn phase_ignore_during_close_series_no_mouse_get() {
     // close 系列中（CloseTalkWait）の Mouse 注入（横断アームで無視・GET 不発）。
     harness
         .sender
-        .send(KanadeMsg::Mouse(move_input(9, 9, 0, Some("Head"))))
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::Move,
+            9,
+            9,
+            0,
+            Some("Head"),
+        )))
         .expect("send Mouse during close series");
     // close talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf。
     gate.release_all();
@@ -188,7 +201,13 @@ fn pending_close_guard_suppresses_mouse_get() {
     // pending_close 成立窓での Mouse 注入 → ガードで GET 不発（release 前ゆえ Mouse は必ずこの窓で処理）。
     harness
         .sender
-        .send(KanadeMsg::Mouse(move_input(11, 22, 0, Some("Head"))))
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::Move,
+            11,
+            22,
+            0,
+            Some("Head"),
+        )))
         .expect("send Mouse while close pending");
     // 挨拶 talk（Ended）を解放 → pending_close を消化して begin_close（OnClose→別れ→close talk quit:true）。
     gate.release_all();

@@ -14,41 +14,15 @@
 
 use areka_actor::reply_channel;
 use areka_kanade::{
-    BalloonBinding, CloseReason, ExecutionSnapshot, ExecutionStateUpdate, KanadeConfig, KanadeMsg,
-    MonotonicMs, OnlineCounter, events, resources::ResourceOutcome,
+    CloseReason, ExecutionSnapshot, ExecutionStateUpdate, KanadeConfig, KanadeMsg, MonotonicMs,
+    OnlineCounter, events, resources::ResourceOutcome,
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call,
-    expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, binding,
+    expected_call, expected_unload, join_bounded, pumps, send, spawn_harness, spawn_harness_gated,
+    tick,
 };
-
-fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-    BalloonBinding {
-        character_id,
-        balloon_id,
-    }
-}
-
-fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
-    recorded
-        .iter()
-        .filter(|c| c.id == "OnSecondChange")
-        .collect()
-}
-
-fn send(harness: &Harness, msg: KanadeMsg) {
-    harness.sender.send(msg).expect("send to kanade inbox");
-}
-
-fn tick(harness: &Harness, now: u64) {
-    send(
-        harness,
-        KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        },
-    );
-}
 
 /// 期限付き join の後に記録列を確定する（終了は駆動した close の別れ talk quit:true）。
 fn finish(harness: Harness, what: &str) -> Vec<RecordedCall> {

@@ -3,9 +3,9 @@ use super::test_support::{
     choice_gets, choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    ChoiceResponse, CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
-    Fixture, Harness, KanadeConfig, KanadeMsg, QuitPolicy, TalkCommand, TalkId, events,
-    expected_call, expected_unload, join_bounded, spawn_harness_gated,
+    CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
+    KanadeConfig, KanadeMsg, QuitPolicy, Response, TalkCommand, TalkId, events, expected_call,
+    expected_unload, join_bounded, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -171,9 +171,9 @@ fn canonical_choice_ex_value_short_circuits_select() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
+        .with_response(
             "OnChoiceSelectEx",
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
+            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
         );
 
     // quit_flags: index0（steady talk）=false・index1（選択由来 talk）=true（終了駆動）。

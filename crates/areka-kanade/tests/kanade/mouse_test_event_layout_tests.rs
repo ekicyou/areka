@@ -1,8 +1,8 @@
-use super::test_support::{mouse_gets, move_input};
+use super::test_support::{mouse_gets, mouse_input};
 use super::{
     CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, MouseResponse,
-    QuitPolicy, RecordedCall, StartTalk, events, expected_call, expected_unload, join_bounded,
+    Harness, KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy,
+    RecordedCall, Response, StartTalk, events, expected_call, expected_unload, join_bounded,
     spawn_harness,
 };
 
@@ -10,17 +10,6 @@ use super::{
 struct Driven {
     recorded: Vec<RecordedCall>,
     started: Vec<StartTalk>,
-}
-
-/// DoubleClick 入力を組む（Ref5 はボタン識別）。
-fn dbl_input(x: i64, y: i64, scope: u32, region: Option<&str>, button: MouseButton) -> MouseInput {
-    MouseInput {
-        scope,
-        x,
-        y,
-        region: region.map(str::to_string),
-        kind: MouseEventKind::DoubleClick { button },
-    }
 }
 
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ 各 Mouse を FIFO 注入 → CloseRequest → 終了完走まで駆動し
@@ -91,7 +80,7 @@ fn onmousemove_layout_matches_events_table() {
     let (x, y, scope) = (10_i64, 20_i64, 0_u32);
     let driven = drive_mouse_steady_none(
         Fixture::quitting().without_boot_greeting(),
-        vec![move_input(x, y, scope, Some("Head"))],
+        vec![mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))],
         // close talk が唯一の StartTalk（挨拶なし・204 マウス）＝index 0 を quit:true で終了駆動。
         vec![true],
     );
@@ -186,7 +175,7 @@ fn onmousemove_region_none_ref4_empty() {
     let (x, y, scope) = (1_i64, 2_i64, 1_u32);
     let driven = drive_mouse_steady_none(
         Fixture::quitting().without_boot_greeting(),
-        vec![move_input(x, y, scope, None)],
+        vec![mouse_input(MouseEventKind::Move, x, y, scope, None)],
         vec![true],
     );
 
@@ -237,8 +226,24 @@ fn double_click_ref5_left_right() {
     let driven = drive_mouse_steady_none(
         Fixture::quitting().without_boot_greeting(),
         vec![
-            dbl_input(x, y, scope, Some("Face"), MouseButton::Left),
-            dbl_input(x, y, scope, Some("Face"), MouseButton::Right),
+            mouse_input(
+                MouseEventKind::DoubleClick {
+                    button: MouseButton::Left,
+                },
+                x,
+                y,
+                scope,
+                Some("Face"),
+            ),
+            mouse_input(
+                MouseEventKind::DoubleClick {
+                    button: MouseButton::Right,
+                },
+                x,
+                y,
+                scope,
+                Some("Face"),
+            ),
         ],
         vec![true],
     );
@@ -307,11 +312,11 @@ fn no_content_produces_no_start_talk() {
     // OnMouseMove へ明示的に 204 を注入（未注入既定と同値だが、設計 #4 の意図を明示する）。
     let fixture = Fixture::quitting()
         .without_boot_greeting()
-        .with_mouse_response("OnMouseMove", MouseResponse::NoContent);
+        .with_response("OnMouseMove", Response::NoContent);
 
     let driven = drive_mouse_steady_none(
         fixture,
-        vec![move_input(x, y, scope, Some("Head"))],
+        vec![mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))],
         vec![true],
     );
 
