@@ -153,6 +153,10 @@ impl ExecutionStatus {
     /// 状態列を正典順へ整列し、状態種ごとに重複を除いて構成する。
     /// 不変条件（正典順・重複なし）を**構成の時点で**保証する唯一の内部コンストラクタ。
     fn from_states(mut states: Vec<ExecutionState>) -> ExecutionStatus {
+        // 種類の空な Opening は非アクティブ（`OpeningKinds` の doc）なので集合から落とす。
+        states.retain(
+            |s| !matches!(s, ExecutionState::Opening(OpeningKinds(kinds)) if kinds.is_empty()),
+        );
         // 安定ソート＋種別鍵の隣接重複除去で「正典順・各状態種は高々1つ」を保証する。
         states.sort_by_key(ExecutionState::canonical_index);
         states.dedup_by_key(|s| s.canonical_index());

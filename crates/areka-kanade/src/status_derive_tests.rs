@@ -176,3 +176,17 @@ fn empty_bindings_emit_no_balloon() {
     };
     assert_eq!(render(&online_empty).as_deref(), Some("online"));
 }
+
+/// #63: 種類の空な `Opening` は非アクティブ（`OpeningKinds` の doc のとおり）。
+/// 空の `Opening` だけなら行を出さず、ほかの状態と並べても `opening()` を出さない。
+#[test]
+fn an_empty_opening_set_renders_no_opening() {
+    let empty = || ExecutionState::Opening(OpeningKinds::new(Vec::new()));
+    assert_eq!(ExecutionStatus::from_states(vec![empty()]).render(), None);
+    assert_eq!(
+        ExecutionStatus::from_states(vec![ExecutionState::Talking, empty()])
+            .render()
+            .as_deref(),
+        Some("talking")
+    );
+}

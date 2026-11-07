@@ -140,7 +140,7 @@
   - 8.1・8.2 と同じ `real.rs` を触るので 8.2 の後に回す
   - _Requirements: 3.1, 4.1, 6.3, 9.1, 9.7_
 
-- [ ] 9. 許しと小物
+- [x] 9. 許しと小物
 - [x] 9.1 段取りへの dead_code の許しを外し、隠れていた欄を消す（#16）
   - 許しとその注を消し、終了の保留の相から読まれない理由の欄を消す。本番 3 か所と組むテスト約 20 か所を直す
   - `cargo clippy -p areka-kanade --all-targets --no-deps` に dead_code が出ず、段取りのテストが全部緑
@@ -152,7 +152,7 @@
   - 殻のテストが全部緑
   - _Depends: 5.2, 6.2_
   - _Requirements: 3.1, 3.3, 9.1_
-- [ ] 9.3 空の Opening を Status に出さない（#63）
+- [x] 9.3 空の Opening を Status に出さない（#63）
   - 種類の空な Opening を集合から落とす。5 状態の語彙は残す
   - `an_empty_opening_set_renders_no_opening` が緑で、落とす 1 行を外すと赤
   - _Requirements: 2.5, 3.1, 4.1, 9.1, 9.6_
