@@ -313,6 +313,108 @@ fn spawn_ticker_keeps_kanade_alive_after_dispatcher_disconnects() {
     );
 }
 
+// ---- kanade の 1 回だけの起こし（選択待ちの期限・要件 9.5） ----
+
+#[test]
+fn wake_remaining_is_zero_at_and_after_the_wake_and_max_without_one() {
+    assert_eq!(wake_remaining(None, MonotonicMs(10_001)), Duration::MAX);
+    // 丸めず ms ちょうど。
+    assert_eq!(
+        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(10_001)),
+        Duration::from_millis(500)
+    );
+    assert_eq!(
+        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(10_500)),
+        Duration::from_millis(1)
+    );
+    assert_eq!(
+        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(10_501)),
+        Duration::ZERO
+    );
+    assert_eq!(
+        wake_remaining(Some(MonotonicMs(10_501)), MonotonicMs(12_000)),
+        Duration::ZERO
+    );
+}
+
+#[test]
+fn the_ticker_sends_one_deadline_notice_to_kanade() {
+    struct TestDispatcherMsg;
+    impl From<Tick> for TestDispatcherMsg {
+        fn from(_: Tick) -> Self {
+            TestDispatcherMsg
+        }
+    }
+
+    // 時計は 10,501 に止めたまま（どの刻みの境界にも届かない＝Tick は 1 通も出ない）。
+    let (started_tx, started_rx) = mpsc::channel::<()>();
+    let config = TickerConfig {
+        base_interval: Duration::from_millis(50),
+        kanade_interval: Duration::from_millis(1000),
+        clock: shared_clock(Arc::new(Mutex::new(10_501)), started_tx),
+    };
+    let (kanade_tx, kanade_rx) = mpsc::channel::<KanadeMsg>();
+    let (dispatcher_tx, _dispatcher_rx) = mpsc::channel::<TestDispatcherMsg>();
+    let (stop_tx, handle) = spawn_ticker(config, kanade_tx, dispatcher_tx);
+    started_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("ticker should read the clock once at startup");
+
+    stop_tx
+        .send(TickerMsg::from(MonotonicMs(10_501)))
+        .expect("send WakeKanadeAt");
+
+    match kanade_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("kanade should receive the deadline notice")
+    {
+        KanadeMsg::ChoiceTimeoutDue { now } => assert_eq!(now, MonotonicMs(10_501)),
+        _ => unreachable!("only ChoiceTimeoutDue is due on a stopped clock"),
+    }
+    // 頼みは 1 回だけ: 50 ms の刻みで何度も目を覚ましても 2 通目は来ない。
+    assert!(
+        kanade_rx.recv_timeout(Duration::from_millis(300)).is_err(),
+        "the deadline notice must be sent only once"
+    );
+
+    stop_tx.send(TickerMsg::Close).expect("send Close");
+    run_bounded(
+        "ticker join after the deadline notice",
+        Duration::from_secs(5),
+        move || {
+            handle
+                .join()
+                .expect("ticker terminates normally after Close");
+        },
+    );
+}
+
+#[test]
+fn spawn_loop_ticker_ignores_wake_kanade_at() {
+    let (started_tx, _started_rx) = mpsc::channel::<()>();
+    let config = LoopTickerConfig {
+        interval: Duration::from_millis(16),
+        clock: shared_clock(Arc::new(Mutex::new(0)), started_tx),
+    };
+    let deliver: Box<dyn FnMut(Tick) + Send> = Box::new(|_tick: Tick| {});
+    let (stop_tx, handle) = spawn_loop_ticker(config, deliver);
+
+    // 読み飛ばして動き続け、Close で止まる。
+    stop_tx
+        .send(TickerMsg::WakeKanadeAt(MonotonicMs(0)))
+        .expect("send WakeKanadeAt");
+    stop_tx.send(TickerMsg::Close).expect("send Close");
+    run_bounded(
+        "loop ticker join after WakeKanadeAt and Close",
+        Duration::from_secs(5),
+        move || {
+            handle
+                .join()
+                .expect("loop ticker terminates normally after Close");
+        },
+    );
+}
+
 // ---- 単発ループレーン: spawn_loop_ticker ----
 
 #[test]

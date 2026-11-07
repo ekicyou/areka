@@ -256,7 +256,7 @@
   - `kanade_asks_the_ticker_and_fires_on_the_deadline_notice` が緑（受け端に期限が 1 つ届き、知らせで OnChoiceTimeout の GET が 1 件）
   - _Depends: 16.1, 6.2, 15.3_
   - _Requirements: 3.1, 4.1, 5.2, 6.3, 9.5_
-- [ ] 16.3 刻み役に 1 回だけの起こしを足す（範囲の外 `areka-ghost` の ticker）
+- [x] 16.3 刻み役に 1 回だけの起こしを足す（範囲の外 `areka-ghost` の ticker）
   - 起こしの頼みの値と写しを足し、待ちの残りに起こしまでの残りを加え、期限で kanade へ知らせを 1 通送る。ループの刻み役は読み飛ばす
   - 残りの純粋な関数のテストと、固定の時計で知らせが 1 通だけ届くテストが緑
   - _Depends: 16.2_
