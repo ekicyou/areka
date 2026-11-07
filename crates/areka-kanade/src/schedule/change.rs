@@ -78,7 +78,7 @@ pub(super) fn on_change_ghost(mut state: State, req: ChangeRequest) -> (State, V
 
 /// 横断の腕 `Input::RaiseEvent`（汎用の通知の入口）の判断。
 ///
-/// 許可表に無いイベントと定常以外での依頼は `warn!` の上で捨てる（待ち行列に積まない）。
+/// 許可表に無いイベントと、定常以外か終了・切替の保留中の依頼は `warn!` の上で捨てる（待ち行列に積まない）。
 /// 定常なら渡された Reference 列のまま GET／NOTIFY を送る。応答は定常の応答の腕へ流れ、
 /// 再生中なら [`events::value_replaces_active_talk`] に従って今のトークを置き換える。
 pub(super) fn on_raise_event(
@@ -91,17 +91,31 @@ pub(super) fn on_raise_event(
         tracing::warn!(target: "kanade", event = "raise_event_not_allowed", id = %id, "許可表に無いイベントの依頼——送らずに捨てる");
         return (state, Vec::new());
     };
-    if !matches!(state.phase, Phase::Steady { .. }) {
-        tracing::warn!(target: "kanade", event = "raise_event_not_steady", id, phase = phase_label(&state.phase), "定常以外でのイベントの依頼——送らずに捨てる（積まない）");
+    if let Some(reason) = drop_reason(&state) {
+        tracing::warn!(target: "kanade", event = "raise_event_not_steady", id, reason, phase = phase_label(&state.phase), "定常以外か終了・切替の保留中のイベントの依頼——送らずに捨てる（積まない）");
         return (state, Vec::new());
     }
     let call = events::raise(id, references, method, &state.snapshot());
     (state, vec![Action::ShioriRequest(call)])
 }
 
+/// 通知の依頼を送らずに捨てる理由（`None` は送ってよい）。保留中に送ると答えの台詞が今の台詞を
+/// 置き換え、終了・切替がその台詞の終わりまで遅れる（マウス・外からの台本・台詞の切れ目と同じ決まり）。
+fn drop_reason(state: &State) -> Option<&'static str> {
+    if !matches!(state.phase, Phase::Steady { .. }) {
+        Some("not_steady")
+    } else if state.pending_close.is_some() {
+        Some("close_pending")
+    } else if state.pending_change.is_some() {
+        Some("change_pending")
+    } else {
+        None
+    }
+}
+
 /// 横断の腕 `Input::PropertyEvent`（`\![get,property]` の返しのイベント）の判断。
 ///
-/// 定常以外での依頼と、名前か Reference が [`crate::sstp::validate_notify`] を破るものは `warn!` の上で
+/// 定常以外か終了・切替の保留中の依頼と、名前か Reference が [`crate::sstp::validate_notify`] を破るものは `warn!` の上で
 /// 捨てる（積まない）。それ以外は逐語の名前の GET を 1 つ送る。応答は定常の応答の腕へ流れ、
 /// 再生中なら [`events::value_replaces_active_talk`] に従って今のトークを置き換える。
 pub(super) fn on_property_event(
@@ -109,8 +123,8 @@ pub(super) fn on_property_event(
     id: String,
     references: Vec<String>,
 ) -> (State, Vec<Action>) {
-    if !matches!(state.phase, Phase::Steady { .. }) {
-        tracing::warn!(target: "kanade", event = "property_event_not_steady", id = ?id, phase = phase_label(&state.phase), "定常以外での返しのイベント——送らずに捨てる（積まない）");
+    if let Some(reason) = drop_reason(&state) {
+        tracing::warn!(target: "kanade", event = "property_event_not_steady", id = ?id, reason, phase = phase_label(&state.phase), "定常以外か終了・切替の保留中の返しのイベント——送らずに捨てる（積まない）");
         return (state, Vec::new());
     }
     if let Err(error) = crate::sstp::validate_notify(&id, &references) {

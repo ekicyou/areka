@@ -52,9 +52,10 @@ pub(crate) enum Marked {
 /// 捨てる記録は、送り手を持つ殻が残す）。
 /// 1. 相が定常でない → `Left{NotSteady}`
 /// 2. 終了の保留あり → `Left{NotSteady}`（終了の保留に印のイベントを送らない＝要件 5.7）
-/// 3. 印が許可表に無い → `NotSent{NotAllowed}`
-/// 4. 印あり → 印のイベントを送り（許可表の照合と組み立ては汎用の入口と同じ関数）、応答を待つ
-/// 5. 印なし → 見張る（結果は同じ `step` の末尾の [`observe`] が決める）
+/// 3. 切替の保留あり → `Left{GhostChange}`（印のイベントを送らない・[`decide`] の決めと揃える）
+/// 4. 印が許可表に無い → `NotSent{NotAllowed}`
+/// 5. 印あり → 印のイベントを送り（許可表の照合と組み立ては汎用の入口と同じ関数）、応答を待つ
+/// 6. 印なし → 見張る（結果は同じ `step` の末尾の [`observe`] が決める）
 pub(super) fn begin(mut state: State, raise: Option<GapRaise>) -> (State, Vec<Action>) {
     let mut watch = GapWatch {
         marked: Marked::None,
@@ -66,6 +67,13 @@ pub(super) fn begin(mut state: State, raise: Option<GapRaise>) -> (State, Vec<Ac
             &mut watch,
             TalkGap::Left {
                 reason: GapLeft::NotSteady,
+            },
+        );
+    } else if state.pending_change.is_some() {
+        settle(
+            &mut watch,
+            TalkGap::Left {
+                reason: GapLeft::GhostChange,
             },
         );
     } else if let Some(raise) = raise {

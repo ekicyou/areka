@@ -71,7 +71,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 9.1_
 
 - [ ] 5. 入口の決まりをそろえる
-- [ ] 5.1 保留中の切れ目の印と通知の依頼を送らない（#2・#3）
+- [x] 5.1 保留中の切れ目の印と通知の依頼を送らない（#2・#3）
   - 切替の保留中は台詞の切れ目の印のイベントを送らずに切替へ向かう
   - 終了・切替の保留中の RaiseEvent と property の返しを送らず、理由を足した warn を残して捨てる
   - `marked_request_with_pending_change_sends_nothing_and_leaves_for_ghost_change` と `raise_and_property_events_are_dropped_while_close_or_change_is_pending`（4 通り）が緑で、枝を外すと赤になる

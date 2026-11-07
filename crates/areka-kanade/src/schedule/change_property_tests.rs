@@ -90,6 +90,63 @@ fn boot_and_shutdown_phases_drop_with_one_warn() {
 }
 
 #[test]
+fn raise_and_property_events_are_dropped_while_close_or_change_is_pending() {
+    // 終了・切替の保留中は、汎用の通知の入口も返しの入口も送らずに捨てる（#3・要件 9.3）。
+    let pending = |reason: &str| match reason {
+        "close_pending" => State {
+            pending_close: Some(CloseReason::System),
+            ..steady_talking()
+        },
+        _ => State {
+            pending_change: Some(ChangeRequest {
+                target: ChangeTarget {
+                    sakura_name: "ポスト".to_string(),
+                    name: "R_POST_and_KOMAINU".to_string(),
+                    dir: "R_POST_DIR".to_string(),
+                },
+                origin: ChangeOrigin::Manual,
+                raise_event: true,
+            }),
+            ..steady_talking()
+        },
+    };
+    for reason in ["close_pending", "change_pending"] {
+        let raise = Input::RaiseEvent {
+            id: "OnBoot".to_string(),
+            references: vec!["a".to_string()],
+            method: crate::change::ShioriMethod::Notify,
+        };
+        let entries = [
+            (raise, "raise_event_not_steady"),
+            (
+                Input::PropertyEvent {
+                    id: "OnX".to_string(),
+                    references: vec!["a".to_string()],
+                },
+                "property_event_not_steady",
+            ),
+        ];
+        for (input, event) in entries {
+            let mut out = None;
+            let ev = capture(|| out = Some(step(pending(reason), input, &cfg())));
+            let (_, actions) = out.expect("step は必ず結果を返す");
+            let line = logged_once(&ev, Level::WARN, event);
+            assert_eq!(
+                warn_count(&ev),
+                1,
+                "{reason} {event}: warn! はちょうど 1 件"
+            );
+            assert_eq!(
+                line.fields.get("reason").map(String::as_str),
+                Some(reason),
+                "{event}: 理由を記録に載せる"
+            );
+            assert!(actions.is_empty(), "{reason} {event}: 送らない");
+        }
+    }
+}
+
+#[test]
 fn invalid_name_or_reference_drops_with_one_warn() {
     for (id, refs) in [
         ("", &["a"][..]),

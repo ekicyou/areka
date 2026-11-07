@@ -481,6 +481,23 @@ fn marked_request_outside_steady_or_with_pending_close_sends_nothing() {
 }
 
 #[test]
+fn marked_request_with_pending_change_sends_nothing_and_leaves_for_ghost_change() {
+    // 再生中に切替が保留になった後の印の依頼: ゴーストへ `OnShellChanging` を送らない（#2）。
+    let s = State {
+        pending_change: Some(change_request()),
+        ..steady_some()
+    };
+    let (mut s, actions) = await_marked(s);
+    assert!(actions.is_empty(), "切替の保留中は印のイベントを送らない");
+    assert_eq!(
+        take_outcome(&mut s),
+        Some(TalkGap::Left {
+            reason: GapLeft::GhostChange
+        })
+    );
+}
+
+#[test]
 fn marked_talk_played_to_the_end_is_reached_completed() {
     // 何も再生していないときの印の台詞。
     let (mut s, _) = done_of(marked_talk_playing(), MARKED, TalkEndReason::Ended, false);
