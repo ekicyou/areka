@@ -46,7 +46,7 @@ use wintf::ecs::world::tick_wake;
 /// 重なりの指令（この層は解釈しないので、受け取ったトークンをそのまま運ぶ）。
 ///
 /// 解釈（数値モード／明示モードの読み分け・拒否判定・正規化）は台帳の状態を要するため、
-/// 取り出しの相が [`parse_zorder_tokens`](crate::placement::zorder_group_ledger::parse_zorder_tokens)
+/// 取り出しの相が [`parse_zorder_tokens`](areka_placement::zorder_group_ledger::parse_zorder_tokens)
 /// を通して行う。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ZOrderDirective {

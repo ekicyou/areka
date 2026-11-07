@@ -1,15 +1,18 @@
-//! 場所ごとの提示と、箱の四角・選択肢の行の窓の座標での照会（task 7.5・要件 3.4・3.9・5.1・8.1・
+//! 場所ごとの提示と、箱の四角・選択肢の行の窓の座標での照会（要件 3.4・3.9・5.1・8.1・
 //! 8.2・9.3）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 写し（`shown_boxes`）の更新と外し方・普通のバルーンの窓の文字の数・場所を指す照会と強調は
 //! COM を使わずに見る。箱の面を実際に作って提示する通しの 1 本だけが COM を使う（描画の中身の
-//! 確かめは 7.8）。箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
+//! 確かめは `tests/box_attach_test.rs`）。箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
 use areka_sakura::contract::{ActorKey, CueCommand};
-use bevy_ecs::hierarchy::Children;
 
-use super::box_sync_tests::{Fixture, emote, fixture, layout, resolver, select, text};
-use super::test_support::{choice_cue, com_world, cue};
+use super::box_sync_tests::{Fixture, fixture, layout, select};
+use super::test_support::{
+    box_name, choice_cue, com_world, cue, emote, fake_resolver, text, window_children,
+};
 use super::{
     ChoiceHitRow, HitRectPx, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
 };
@@ -104,8 +107,8 @@ fn clear_drops_only_the_destination_box() {
 }
 
 /// `\b[名前]` で行き先だけが替わっても、前の箱の文字は出たまま（要件 4.5）なので外さない。
-/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない・本 spec 要件 1.6・2.1）。
-/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す（要件 6.2・6.6・本 spec 要件 1.1〜1.3）。
+/// 台本の `\s` の受け取りでも外さない（絵はまだ替わっていない・`areka-P0-shell-balloon-frame-align` 要件 1.6・2.1）。
+/// 置き場所の変わる絵の切替と絵の非表示は、その同期で外す（要件 6.2・6.6・`areka-P0-shell-balloon-frame-align` 要件 1.1〜1.3）。
 #[test]
 fn only_the_picture_number_drops_boxes_from_the_snapshot() {
     let mut f = two_boxes_shown();
@@ -149,13 +152,13 @@ fn clear_all_hide_and_bundle_replacement_empty_the_snapshot() {
     );
 
     let mut f = two_boxes_shown();
-    f.rt.set_box_layout(&mut f.world, layout(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout(), fake_resolver(), vec![]);
     assert_eq!(shown(&f), vec![], "箱の束の差し替え");
 }
 
 /// 普通のバルーンの窓に今出ている文字の数: 表示している絵が箱を持つ面なら 0、そうでなければ普通の
-/// バルーンの場所の見えている文字の数（要件 5.1・5.2・6.9・本 spec 要件 1.8）。台本の `\s` の
-/// 受け取りには従わない。箱の表が空なら絵の番号に依らない（本 spec 要件 4.5）。
+/// バルーンの場所の見えている文字の数（要件 5.1・5.2・6.9・`areka-P0-shell-balloon-frame-align` 要件 1.8）。台本の `\s` の
+/// 受け取りには従わない。箱の表が空なら絵の番号に依らない（`areka-P0-shell-balloon-frame-align` 要件 4.5）。
 #[test]
 fn balloon_shown_glyphs_follows_the_shown_picture_number() {
     let mut f = fixture();
@@ -192,8 +195,8 @@ fn balloon_shown_glyphs_follows_the_shown_picture_number() {
         "\\s[4] を受け取っても絵が 0 のままなら窓に出さない"
     );
 
-    // 箱の表が空のシェル（箱の束がまだ無いランタイム）は、絵の番号に依らず本 spec の前と同じ値
-    // （要件 5.4・本 spec 要件 4.5）。
+    // 箱の表が空のシェル（箱の束がまだ無いランタイム）は、絵の番号に依らず普通のバルーンの場所の
+    // 見えている文字の数（要件 5.4・`areka-P0-shell-balloon-frame-align` 要件 4.5）。
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.apply_cue(&text("0", "あい"));
     rt.apply_cue(&emote("0", "0"));
@@ -255,7 +258,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     let k = 1.5;
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
 
     // スコープ 0 は箱 a（サーフェス 0・(10,20)）へ、スコープ 1 は同じ定義を普通のバルーンとして。
     rt.apply_cue(&emote("0", "0"));
@@ -268,13 +271,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
     let shell = TextSlotBinding::new(slot, window, k, shell_physical, shell_image);
     rt.sync_box_bindings(&mut world, &[(actor(), Some((shell, 0)))]);
 
-    let name_a = layout
-        .placements(0)
-        .iter()
-        .find(|p| p.name.as_str() == "a")
-        .expect("a")
-        .name
-        .clone();
+    let name_a = box_name(&layout, 0, "a");
     let def = layout.def(&name_a).expect("a の定義");
     let other = ActorKey::from("1");
     rt.register_actor(
@@ -326,12 +323,7 @@ fn box_choice_rows_equal_balloon_rows_shifted_by_the_box_position() {
         .get(&box_a)
         .and_then(|r| r.surface.window_child())
         .expect("箱の面は窓の子を持つ");
-    let children: Vec<bevy_ecs::entity::Entity> = world
-        .get::<Children>(window)
-        .expect("窓の子")
-        .iter()
-        .copied()
-        .collect();
+    let children = window_children(&world, window);
     let slot_at = children
         .iter()
         .position(|c| *c == slot)

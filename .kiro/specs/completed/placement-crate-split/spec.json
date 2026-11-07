@@ -1,0 +1,26 @@
+{
+  "feature_name": "placement-crate-split",
+  "created_at": "2026-11-06T06:11:51Z",
+  "updated_at": "2026-11-06T11:06:44Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-11-06T11:06:44Z"
+    }
+  },
+  "ready_for_implementation": false
+}

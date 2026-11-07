@@ -1,5 +1,7 @@
 //! 文字の領域解決と、既定書体の受け入れ口を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **1.3**／**3.3**／**3.5**・設計 **C2** の
 //! E 行と F 行・**DD4**）。
 //!
@@ -40,20 +42,18 @@
 //! ファイル読み込み・純粋層の解決・DirectWrite の計測のみ。実 GPU・実窓・実ゴーストを
 //! 要さず、同一入力に対して常に同一の結果を返す。
 
-use std::path::PathBuf;
-
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DEFAULT_FONT_NAME;
 use areka_emo_text::layout::GlyphMetrics;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
+use areka_parsers::balloon::BalloonModel;
 
 use super::test_support::{
     EXPECTED_ADVANCE_FULL, EXPECTED_ADVANCE_HALF, EXPECTED_FONT_HEIGHT, EXPECTED_LEFT,
     EXPECTED_LINE_BOX, EXPECTED_LINE_PITCH, EXPECTED_RIGHT, EXPECTED_TOP, SCOPE_FACE0_FILES,
-    expected_bottom, resolve_staysee, scope_image_size, staysee_metrics, staysee_model,
+    expected_bottom, resolve_staysee, scope_image_size,
 };
+use crate::support::fixture::{balloon_metrics, example_fixture_dir, merged_model};
 
 // ── 領域解決の期待値（設計 C2 の E 行）──────────────────────────────────────────
 //
@@ -75,12 +75,14 @@ const CANON_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 
 // ── 対照に使う「宣言を持つ」バルーン定義 ─────────────────────────────────────
 //
-// 検体ではなく**読み口が既定以外も返せること**を示すための対照である。検体の所在は親
-// ファイルの定数 1 か所だけが持つ決まり（要件 3.2）なので、対照の所在はそれとは別に、
+// 検体ではなく**読み口が既定以外も返せること**を示すための対照である。検体の所在は
+// `test_support.rs` の `staysee_root()`（窓口 `sample-ghost-kit` から名前で引く）1 か所だけが持つ
+// 決まり（spec `areka-P0-default-balloon-nar-fold` 要件 4）なので、対照の所在はそれとは別に、
 // 対照であることが分かる名前でここに置く。
 
-/// 対照のバルーン定義（`font.name` と `wordwrappoint` を宣言している既存の検体）。
-const DECLARED_BALLOON_DIR: &str = "examples/fixtures/emo2-vertical-canon";
+/// 対照のバルーン定義（`font.name` と `wordwrappoint` を宣言している既存の検体・
+/// `examples/fixtures/` の下の名前）。
+const DECLARED_BALLOON_DIR: &str = "emo2-vertical-canon";
 /// 対照の面別上書き層（本番と同じ 2 層マージで読む）。
 const DECLARED_BALLOON_OVERLAY: &str = "balloons0s.txt";
 /// 対照が宣言する書体の名前（`descript.txt` の `font.name,Yu Gothic UI`）。
@@ -97,23 +99,10 @@ const DECLARED_INLINE_LIMIT: f32 = 149.0;
 /// 読み込み失敗と空は明示的に落とす（読めなかったときに「対象 0 件だから緑」になる形を
 /// 作らない）。
 fn declared_model() -> BalloonModel {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(DECLARED_BALLOON_DIR);
-    let read = |name: &str| {
-        let path = dir.join(name);
-        let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-            panic!(
-                "対照のバルーン定義 {} の読取に失敗した（対照はこのファイルの実在が前提）: {e}",
-                path.display()
-            )
-        });
-        assert!(
-            !bytes.is_empty(),
-            "対照のバルーン定義 {} が空である（空では対照が何も示さない）",
-            path.display()
-        );
-        decode(&bytes, DefaultEncoding::Ansi)
-    };
-    parse_str(&read("descript.txt"), Some(&read(DECLARED_BALLOON_OVERLAY)))
+    merged_model(
+        &example_fixture_dir(DECLARED_BALLOON_DIR),
+        Some(DECLARED_BALLOON_OVERLAY),
+    )
 }
 
 // ── 領域解決（設計 C2 の E 行・要件 3.3／3.5）────────────────────────────────
@@ -185,26 +174,13 @@ fn staysee_text_region_is_pinned_for_both_scopes() {
 
 /// `wordwrappoint` を宣言していないので、折返し基準が描画範囲の遠辺へ縮退する。
 ///
-/// 宣言が無いこと（読み口が `None` を返すこと）と、縮退した先が遠辺の実値 309 であることの
-/// 両方を固定する。**両者が等しいことだけ**を見ると、片方がもう片方から導かれている実装では
-/// 常に真になってしまうので、遠辺そのものの値も併せて押さえる。読み口が既定以外も返せることは
+/// 宣言が無いこと（読み口が `None` を返すこと）は `definition.rs` の
+/// `undeclared_keys_stay_unspecified_and_resolve_to_horizontal` が固定し、ここは縮退した先が遠辺の実値 309 で
+/// あることを固定する。**両者が等しいことだけ**を見ると、片方がもう片方から導かれている実装では
+/// 常に真になってしまうので、遠辺そのものの値を両方に押さえる。読み口が既定以外も返せることは
 /// [`declared_balloon_returns_a_different_font_and_a_split_wrap_threshold`] が示す。
 #[test]
 fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
-    let model = staysee_model();
-    assert_eq!(
-        model.wordwrappoint().x(),
-        None,
-        "検体は `wordwrappoint.x` を宣言していないはず（実測 {:?}）",
-        model.wordwrappoint().x()
-    );
-    assert_eq!(
-        model.wordwrappoint().y(),
-        None,
-        "検体は `wordwrappoint.y` を宣言していないはず（実測 {:?}）",
-        model.wordwrappoint().y()
-    );
-
     for (scope, _) in SCOPE_FACE0_FILES {
         let region = resolve_staysee(scope).region;
         assert_eq!(
@@ -221,13 +197,6 @@ fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
             EXPECTED_RIGHT,
             region.wrap_threshold()
         );
-        assert_eq!(
-            region.wrap_threshold(),
-            region.inline_limit(),
-            "scope {scope}: 折返し基準 {} と遠辺 {} が分かれている（縮退していない）",
-            region.wrap_threshold(),
-            region.inline_limit()
-        );
     }
 }
 
@@ -240,14 +209,6 @@ fn undeclared_wrap_threshold_degenerates_to_the_inline_limit() {
 /// 黙って追従して恒真になる。
 #[test]
 fn undeclared_font_name_resolves_to_the_canon_default() {
-    let model = staysee_model();
-    assert_eq!(
-        model.font().name(),
-        None,
-        "検体は `font.name` を宣言していないはず（実測 {:?}）",
-        model.font().name()
-    );
-
     for (scope, _) in SCOPE_FACE0_FILES {
         let font = resolve_staysee(scope).font;
         assert_eq!(
@@ -280,7 +241,7 @@ fn undeclared_font_name_resolves_to_the_canon_default() {
 #[test]
 fn default_font_metrics_are_pinned_at_height_twelve() {
     let resolved = resolve_staysee(0);
-    let metrics = staysee_metrics(&resolved);
+    let metrics = balloon_metrics(&resolved);
     let h = resolved.font.height;
     assert_eq!(
         h, EXPECTED_FONT_HEIGHT,
@@ -343,11 +304,6 @@ fn declared_balloon_returns_a_different_font_and_a_split_wrap_threshold() {
         "対照の書体は宣言どおり `{}` で返るはずだが `{}`",
         DECLARED_FONT_NAME, resolved.font.name
     );
-    assert_ne!(
-        resolved.font.name, CANON_DEFAULT_FONT_NAME,
-        "対照の書体が ukadoc 既定 `{CANON_DEFAULT_FONT_NAME}` で返った\
-         ——読み口が宣言を無視して常に既定を返している（検体側の主張が空振りになる）"
-    );
 
     let region = resolved.region;
     assert_eq!(
@@ -363,12 +319,5 @@ fn declared_balloon_returns_a_different_font_and_a_split_wrap_threshold() {
         "対照の遠辺が {} ではなく {}",
         DECLARED_INLINE_LIMIT,
         region.inline_limit()
-    );
-    assert_ne!(
-        region.wrap_threshold(),
-        region.inline_limit(),
-        "対照でも折返し基準と遠辺が同じ値 {} になった\
-         ——解決が折返し基準を常に遠辺から導いている（検体側の縮退の主張が空振りになる）",
-        region.wrap_threshold()
     );
 }

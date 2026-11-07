@@ -19,7 +19,7 @@ use tracing::Level;
 use super::super::test_support::{Frame, TALK_ID, seen};
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, ExpectField, capture};
 
 /// 待ち時間（秒）と前の台詞の占有終端（talk 相対秒）。
 const WAIT: f64 = 2.0;
@@ -79,7 +79,7 @@ fn expiry_frame() -> Frame {
 }
 
 /// 可視性の相が書いた行だけを拾う。
-fn notice_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn notice_lines(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.message().contains("[balloon-visibility]"))
@@ -97,7 +97,7 @@ fn timeout_frame_sends_one_notice_to_the_ghost_in_the_slot() {
     talk_until_just_before_timeout(&mut state, &world);
     assert_eq!(received(&rx), vec![], "満了の前は送らない");
 
-    let ((), events) = capture_logs(|| frame(&mut state, &world, expiry_frame()));
+    let ((), events) = capture(|| frame(&mut state, &world, expiry_frame()));
     assert_eq!(received(&rx), vec![TALK_ID], "満了のフレームに 1 通");
     let lines = notice_lines(&events);
     assert_eq!(lines.len(), 1, "送ったら 1 行: {events:?}");
@@ -130,7 +130,7 @@ fn notice_without_a_ghost_in_the_slot_is_not_sent_and_logged() {
         ("置き場が空（切替の最中）", &empty_slot),
         ("kanade への送出端が無い", &no_kanade),
     ] {
-        let ((), events) = capture_logs(|| notify_timeout(world, Some(TALK_ID)));
+        let ((), events) = capture(|| notify_timeout(world, Some(TALK_ID)));
         let lines = notice_lines(&events);
         assert_eq!(lines.len(), 1, "{case}: 理由を 1 行: {events:?}");
         assert_eq!(lines[0].level, Level::WARN, "{case}");
@@ -151,7 +151,7 @@ fn notice_to_a_gone_receiver_is_logged_as_an_error() {
     let world = world_with_ghost(Some(tx));
     drop(rx);
 
-    let ((), events) = capture_logs(|| notify_timeout(&world, Some(TALK_ID)));
+    let ((), events) = capture(|| notify_timeout(&world, Some(TALK_ID)));
 
     let lines = notice_lines(&events);
     assert_eq!(lines.len(), 1, "理由を 1 行: {events:?}");
@@ -170,7 +170,7 @@ fn frame_without_a_notice_is_silent() {
     let (tx, rx) = mpsc::channel();
     let world = world_with_ghost(Some(tx));
 
-    let ((), events) = capture_logs(|| {
+    let ((), events) = capture(|| {
         notify_timeout(&world, None);
         tracing::info!("[balloon-visibility] 較正（捕捉窓の生存確認）");
     });

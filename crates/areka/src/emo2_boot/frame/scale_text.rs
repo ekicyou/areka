@@ -8,9 +8,9 @@ use areka_sakura::ActorKey;
 use wintf::ecs::FrameTime;
 use wintf::ecs::world::tick_wake;
 
-use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-use crate::placement::dpi_sync::{self, HoldSite};
-use crate::placement::spawn::GhostWindows;
+use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use areka_placement::dpi_sync::{self, HoldSite};
+use areka_placement::spawn::GhostWindows;
 
 use super::{
     Emo2Wiring, GhostWindowKind, ScaleReportSource, TalkClock, balloon_target,

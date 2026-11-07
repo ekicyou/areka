@@ -15,8 +15,8 @@ use tracing::{info, warn};
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
 use crate::ghost_session::GhostSlot;
-use crate::placement::reset_pos::reset_window_positions;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::reset_pos::reset_window_positions;
+use areka_placement::spawn::GhostWindows;
 
 /// 「シェル位置初期化」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の後）。
 pub(crate) fn register(world: &mut World) {

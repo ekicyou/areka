@@ -345,8 +345,10 @@ fn production_boot_emits_each_load_record_once() {
 fn animated_hidden_shell_boot_emits_each_load_record_once() {
     const ANIMATED: &str = "animated";
     const ANIMATED_NAME: &str = "AnimatedShell";
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../areka-emo-compose/tests/fixtures/animated-playback/shell");
+    let fixture = crate::crate_source_test_support::crate_path(
+        "areka-emo-compose",
+        "tests/fixtures/animated-playback/shell",
+    );
     let mut rig = rig_a();
     let ghost_dir = rig.root.ghost_dir("A");
     add_hidden_shell_from(&fixture, &ghost_dir, ANIMATED, ANIMATED_NAME);

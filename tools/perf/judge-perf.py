@@ -692,7 +692,7 @@ J_PERF_IDENT_FIELDS = ("target_id", "surface_id", "cache_hit", "key_hash")
 J_PERF_REQUIRED_FIELDS = J_PERF_IDENT_FIELDS + J_PERF_STAGE_FIELDS + J_PERF_ALLOC_FIELDS
 
 #: マシン条件に必ず載せる DPI 構成の出どころ（2.1→2.2 申し送り 2）。
-#: run-meta.txt に DPI は無い。run.log の起動時ログ（`areka::placement`）と表示成立点の行
+#: run-meta.txt に DPI は無い。run.log の起動時ログ（`areka_placement`）と表示成立点の行
 #: から拾う。合成コストは DPI に比例し、ベースラインは 2 モニタ混在 DPI で採取されるため、
 #: DPI を書かないレポートは再現できない。
 J_DPI_BOOT_FIELDS = (

@@ -1,20 +1,25 @@
-//! 箱の束の受け取りと、箱を隠す印（task 7.3・要件 3.10・6.8）。
+//! 箱の束の受け取りと、箱を隠す印（要件 3.10・6.8）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 箱の束はテストの中に持つ surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
-//! （検体は読まない）。箱の面はまだ作られない（面の登録は 7.4）ので、`World` は空でよい。COM は使わない。
+//! （検体は読まない）。箱の面の登録と装着は `actor_box_sync_tests.rs` が見るので、ここの `World` は
+//! 空か差し込み口だけでよい。COM は使わない。
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use areka_emo_compose::{BoxLayout, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
 
-use super::test_support::cue;
-use super::{SurfaceKeyResolver, TextLayerRuntime};
+use super::box_sync_tests::OVERFLOW_MESSAGE;
+use super::test_support::{
+    box_layout, box_name, capture_checked, cue, emote, fake_resolver, items_at,
+    spawn_reserved_slot, text,
+};
+use super::{SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding};
 use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
 use crate::place::{PlaceKey, TextPlace};
+use crate::state::test_support::font;
 use crate::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
 
 /// 前のシェル: サーフェス 0 は箱 a（スコープに従う）だけ。
@@ -55,55 +60,9 @@ element1,balloon,a,0,0
 }
 ";
 
-fn layout(text: &str) -> BoxLayout {
-    let world = EmoWorld::build(&parse(text));
-    let (layout, report) = fold_boxes(&parse_boxes(text), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-}
-
-/// 文面にある箱の場所（名前は公開の構築口を持たないので表から拾う）。
-fn boxed(layout: &BoxLayout, surface: u32, name: &str) -> TextPlace {
-    let found = layout
-        .placements(surface)
-        .iter()
-        .find(|p| p.name.as_str() == name)
-        .expect("文面にある箱の名前");
-    TextPlace::Box(found.name.clone())
-}
-
-/// 偽の閉包: 数字ならその番号を表示、`-1` は非表示、それ以外は解決できない。
-fn fake_resolver() -> SurfaceKeyResolver {
-    Box::new(|key: &str| match key {
-        "-1" => SurfaceKeyOutcome::Hide,
-        _ => key
-            .parse()
-            .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show),
-    })
-}
-
 /// 何を聞いても解決できない閉包（差し替えで閉包が入れ替わったかを見る）。
 fn never_resolver() -> SurfaceKeyResolver {
     Box::new(|_: &str| SurfaceKeyOutcome::Unresolved)
-}
-
-fn emote(actor: &str, key: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Emote { key: key.into() })
-}
-
-fn text(actor: &str, t: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(t.into()))
-}
-
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
 }
 
 fn place(actor: &str, place: TextPlace) -> PlaceKey {
@@ -113,20 +72,14 @@ fn place(actor: &str, place: TextPlace) -> PlaceKey {
     }
 }
 
-fn items_at(rt: &TextLayerRuntime, actor: &str, at: TextPlace) -> Vec<TextItem> {
-    rt.state()
-        .place_state(&place(actor, at))
-        .map_or_else(Vec::new, |s| s.items().to_vec())
-}
-
 /// 箱の束を差し替えた直後: 箱の場所の文字は空、各スコープの今のサーフェス番号は保たれ、
 /// 行き先は新しい表での既定。普通のバルーンの場所には触れない（要件 6.8）。
 #[test]
 fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
     let mut world = World::new();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    let old = layout(OLD_SHELL);
-    let old_a = boxed(&old, 0, "a");
+    let old = box_layout(OLD_SHELL);
+    let old_a = TextPlace::Box(box_name(&old, 0, "a"));
     rt.set_box_layout(&mut world, old, fake_resolver(), vec![]);
 
     rt.apply_cue(&emote("0", "0"));
@@ -137,8 +90,8 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
         vec![TextItem::glyph("あ")]
     );
 
-    let new = layout(NEW_SHELL);
-    let new_x = boxed(&new, 0, "x");
+    let new = box_layout(NEW_SHELL);
+    let new_x = TextPlace::Box(box_name(&new, 0, "x"));
     rt.set_box_layout(&mut world, new, never_resolver(), vec![]);
 
     let actor = ActorKey::from("0");
@@ -168,25 +121,22 @@ fn replacing_the_bundle_drops_box_text_keeps_surface_and_resets_destination() {
     // 閉包も新しい束のものに入れ替わる（解決できない鍵は何も変えない）。
     rt.apply_cue(&emote("0", "1"));
     assert_eq!(rt.state().current_surface(&actor), Some(0));
-    assert_eq!(
-        rt.state().destination(&actor),
-        boxed(&layout(NEW_SHELL), 0, "x")
-    );
+    assert_eq!(rt.state().destination(&actor), new_x);
 }
 
 /// 箱の名前ごとの既定の見た目は、その箱の `balloon.*`ブレスから解決した 2 層（白を混色の相手）で、
-/// 箱の種類は表より先に入る（Implementation Notes 5.4）。前の表に無かった箱に閉じる箱 x が
+/// 箱の種類は表より先に入る。前の表に無かった箱に閉じる箱 x が
 /// 新しい既定になるとき、前の箱 a の `\f` の指定は x へ写らない。
 #[test]
 fn box_traits_come_from_the_brace_and_arrive_before_the_index() {
     let mut world = World::new();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut world, layout(OLD_SHELL), fake_resolver(), vec![]);
+    rt.set_box_layout(&mut world, box_layout(OLD_SHELL), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&font("0", &["color", "255", "0", "0"]));
 
-    let new = layout(NEW_SHELL);
-    let new_x = boxed(&new, 0, "x");
+    let new = box_layout(NEW_SHELL);
+    let new_x = TextPlace::Box(box_name(&new, 0, "x"));
     let TextPlace::Box(x_name) = &new_x else {
         unreachable!("箱の場所")
     };
@@ -223,7 +173,7 @@ fn hide_flag_is_per_scope_and_cleared_at_the_head_of_a_talk() {
     assert!(rt.hidden_boxes.contains(&zero));
     assert!(!rt.hidden_boxes.contains(&one), "別のスコープには立たない");
 
-    rt.apply_cue(&cue("1", 0.0, CueCommand::Clear));
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Clear));
     assert!(rt.hidden_boxes.contains(&zero), "\\c では下ろさない");
 
     rt.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
@@ -238,14 +188,68 @@ fn font_search_dirs_are_readable_in_the_given_order() {
     assert!(rt.box_font_dirs().is_empty(), "束が来るまでは空");
 
     let dirs = vec![PathBuf::from("shell"), PathBuf::from("ghost")];
-    rt.set_box_layout(&mut world, layout(OLD_SHELL), fake_resolver(), dirs.clone());
+    rt.set_box_layout(
+        &mut world,
+        box_layout(OLD_SHELL),
+        fake_resolver(),
+        dirs.clone(),
+    );
     assert_eq!(rt.box_font_dirs(), dirs.as_slice());
 
     rt.set_box_layout(
         &mut world,
-        layout(NEW_SHELL),
+        box_layout(NEW_SHELL),
         fake_resolver(),
         vec![PathBuf::from("other")],
     );
     assert_eq!(rt.box_font_dirs(), [PathBuf::from("other")].as_slice());
+}
+
+/// 箱 a（100×50）を `(x, y)` に置くシェルの文面（audit-emo-text-state-actor 指摘 1・要件 7）。
+fn shell_with_box_at(x: i64, y: i64) -> String {
+    format!("balloon.a\n{{\nsize,100,50\n}}\nsurface0\n{{\nelement1,balloon,a,{x},{y}\n}}\n")
+}
+
+/// 置き場所に `i64::MAX` を含む箱でも、位置に大きさを足す 4 つの足し算（当たりの矩形の右と下・
+/// はみ出しの判断の x と y）は上限で止まる（`audit-emo-text-state-actor` 要件 7.1・7.2）: はみ出しの警告は 2 度の同期でちょうど
+/// 1 回出て、当たりの矩形は裏返らない。x だけ・y だけが上限の置き場所も並べるので、どの足し算を
+/// ただの足し算に戻しても、試験の作りではあふれて落ちる（`audit-emo-text-state-actor` 要件 7.3・y だけの置き場所は x 側が
+/// 収まるので `||` が y の足し算まで届く）。
+#[test]
+fn box_at_the_integer_max_site_warns_once_and_keeps_its_hit_rect_upright() {
+    for (x, y) in [(i64::MAX, 0), (0, i64::MAX), (i64::MAX, i64::MAX)] {
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        let layout = box_layout(&shell_with_box_at(x, y));
+        let key = place("0", TextPlace::Box(box_name(&layout, 0, "a")));
+        rt.set_box_layout(&mut world, layout, fake_resolver(), vec![]);
+        rt.apply_cue(&emote("0", "0"));
+        rt.apply_cue(&text("0", "あ"));
+        let shell = TextSlotBinding::new(slot, window, 1.0, (200, 300), (200, 300));
+
+        let ((), events) = capture_checked(|| {
+            for _ in 0..2 {
+                rt.sync_box_bindings(&mut world, &[(ActorKey::from("0"), Some((shell, 0)))]);
+            }
+        });
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.message() == OVERFLOW_MESSAGE)
+                .count(),
+            1,
+            "({x}, {y}): 上限で止まった端はサーフェスの画像より大きい＝はみ出す"
+        );
+
+        rt.refresh_shown_boxes(&[key], 10.0);
+        let [shown] = rt.shown_boxes(&ActorKey::from("0")) else {
+            panic!("({x}, {y}): 文字の出ている箱 a が 1 つ載る")
+        };
+        assert!(
+            shown.rect.right >= shown.rect.left && shown.rect.bottom >= shown.rect.top,
+            "({x}, {y}): 当たりの矩形は裏返らない: {:?}",
+            shown.rect
+        );
+    }
 }

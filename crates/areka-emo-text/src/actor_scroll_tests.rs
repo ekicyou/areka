@@ -1,5 +1,7 @@
 //! 手動の送りの公開の口の檻（design.md「公開の口（`actor_scroll_tests.rs`）」・要件 8.1〜8.3・8.5・8.8）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 消去・隠した・面の切り替え・箱を外したで手動が捨てられること、場所ごとに別々なこと、
 //! 手動の位置で選択肢の当たりの写しが戻した分だけずれること（`committed` を通る）を固定する。
 //! 「手動か」は私有の表を `marker_visibility(..).down`（＝手動の位置が在る）で読む。
@@ -8,7 +10,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 
-use super::box_sync_tests::{fixture, text};
+use super::box_sync_tests::fixture;
+use super::test_support::text;
 use super::test_support::{choice_cue, com_world, cue, geo_model};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::layout::{FixedMetrics, VisibleWindow};

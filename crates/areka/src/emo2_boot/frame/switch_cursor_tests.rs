@@ -46,7 +46,7 @@ fn shell_switch_hands_the_new_cursor_table_to_the_char_window_answer() {
     let window = world
         .spawn((
             wintf::ecs::Window::default(),
-            crate::placement::spawn::CharWindowMarker { scope: 0 },
+            areka_placement::spawn::CharWindowMarker { scope: 0 },
         ))
         .id();
     let SwapFinish::Shell {

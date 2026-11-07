@@ -49,7 +49,7 @@ use crate::ghost_session::{
     GhostBootInputs, GhostBootInputsSource, GhostSlot, StartupDescriptValues, boot_ghost,
     register_systems,
 };
-use crate::placement::AuthorDpi;
+use areka_placement::AuthorDpi;
 
 /// 既定のバルーン（emo2 の同梱）。
 pub(crate) const BALLOON: &str = "emo2-kakukaku";
@@ -437,7 +437,7 @@ impl SwitchRig {
         let descript = StartupDescriptValues {
             author_dpi: AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         };
         let session = boot_ghost(&mut self.world, inputs, &descript, &ghost, &balloon);
         self.world.insert_non_send(GhostSlot(Some(session)));

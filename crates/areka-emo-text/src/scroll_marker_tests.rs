@@ -1,4 +1,6 @@
-//! `PlaceScroll` の送りの規則の檻（design.md「純粋な判断（`scroll_marker_tests.rs`）」）。
+//! `PlaceScroll` の送りの規則の檻（spec `balloon-scroll-arrows` の design.md「純粋な判断（`scroll_marker_tests.rs`）」）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 自動の先頭行 `auto_first` は本来 `window_for` が毎フレーム覚え直す。ここでは私有の欄を
 //! 直接置いて、送りの規則だけを固定する。
@@ -14,11 +16,6 @@ fn auto_at(auto_first: usize) -> PlaceScroll {
 }
 
 // ---- 矢印の送り（要件 5.1〜5.4） ----
-
-#[test]
-fn arrow_step_is_two_lines() {
-    assert_eq!(ARROW_STEP_LINES, 2);
-}
 
 #[test]
 fn older_from_auto_starts_manual_two_lines_back() {
@@ -251,16 +248,12 @@ fn forget_drops_manual_and_remainder() {
     assert_eq!(s.forget(StopReason::Cleared), ScrollChange::Unchanged);
 }
 
-// ---- 見える範囲・出る条件・置き場（task 3.2・要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7・8.5・8.7） ----
+// ---- 見える範囲・出る条件・置き場（要件 3.1〜3.4・3.7・4.1・4.2・7.1・7.2・7.7・8.5・8.7） ----
 
+use crate::layout::test_support::{IMAGE, broken_lines, model_rect};
 use crate::layout::{FixedMetrics, WrapPlan};
 use crate::state::TextItem;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, MarkerCoord, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// layout の檻と同じ画像原寸。
-const IMAGE: (u32, u32) = (400, 224);
+use areka_parsers::balloon::MarkerCoord;
 
 /// 書字方向ごとの描画範囲（validrect: top,bottom,left,right）。どれも 3 行ちょうどが収まる。
 fn region_of(mode: WritingMode) -> TextRegion {
@@ -269,37 +262,14 @@ fn region_of(mode: WritingMode) -> TextRegion {
         WritingMode::VerticalRl => (Some(0), Some(224), Some(360), Some(400)),
         WritingMode::VerticalLr => (Some(0), Some(224), Some(0), Some(34)),
     };
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(rect.0, rect.1, rect.2, rect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
+    let model = model_rect((None, None), rect);
     TextRegion::resolve(&model, IMAGE, mode)
-}
-
-/// n 行（各行 全角 1 字・明示改行で区切る）の item 列。`leading_break` で冒頭に保留改行を置く。
-fn items_of(n: usize, leading_break: bool) -> Vec<TextItem> {
-    let mut items = Vec::new();
-    if leading_break {
-        items.push(TextItem::LineBreak { ratio: 1.0 });
-    }
-    for i in 0..n {
-        if i > 0 {
-            items.push(TextItem::LineBreak { ratio: 1.0 });
-        }
-        items.push(TextItem::glyph("あ"));
-    }
-    items
 }
 
 /// n 行を `font_height` で並べる。
 fn laid(n: usize, mode: WritingMode, region: &TextRegion, font_height: f32) -> Vec<PositionedLine> {
     LayoutEngine::layout(
-        &items_of(n, false),
+        &broken_lines(n),
         n,
         region,
         mode,
@@ -427,7 +397,7 @@ fn manual_line_zero_puts_oldest_line_at_region_start_even_after_leading_break() 
     let mode = WritingMode::HorizontalTb;
     let region = region_of(mode);
     let lines = LayoutEngine::layout(
-        &items_of(5, true),
+        &[vec![TextItem::LineBreak { ratio: 1.0 }], broken_lines(5)].concat(),
         5,
         &region,
         mode,
@@ -576,4 +546,37 @@ fn placement_without_coords_uses_the_ssp_measured_default() {
         default_marker_position(MarkerKind::Down, (100, 50)),
         (80, 35)
     );
+}
+
+/// audit-emo-text-state-actor 指摘 3: 広がり（箱の大きさ）が `i32` に入らない `u32::MAX` や `2^31` でも、置き場の計算が落ちず、
+/// 既定の置き場（`幅 − 20`・`高さ − 15`）と右端・下端からの座標を広がりのまま解く。x だけ・y だけを
+/// 別々に大きくする（片方の軸を `as i32` に戻すと、その軸の case が落ちる）。
+#[test]
+fn placement_with_an_extent_beyond_i32_resolves_without_overflow() {
+    use MarkerCoord::FromEnd;
+    let from_end = keys(
+        pt(Some(FromEnd(-12)), Some(FromEnd(-8))),
+        pt(Some(FromEnd(-12)), Some(FromEnd(-8))),
+    );
+    for big in [u32::MAX, 1 << 31] {
+        for (axis, extent) in [("x", (big, 50)), ("y", (50, big))] {
+            let (w, h) = (i64::from(extent.0), i64::from(extent.1));
+            assert_eq!(
+                ResolvedMarkerPlacement::resolve(&ArrowKeys::default(), extent),
+                ResolvedMarkerPlacement {
+                    up: (w - 20, 15),
+                    down: (w - 20, h - 15),
+                },
+                "{axis}・{big}: 既定の置き場"
+            );
+            assert_eq!(
+                ResolvedMarkerPlacement::resolve(&from_end, extent),
+                ResolvedMarkerPlacement {
+                    up: (w - 12, h - 8),
+                    down: (w - 12, h - 8),
+                },
+                "{axis}・{big}: 右端・下端からの座標"
+            );
+        }
+    }
 }

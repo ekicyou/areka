@@ -99,6 +99,7 @@ dependencies = [
  "areka-mcp",
  "areka-nar",
  "areka-parsers",
+ "areka-placement",
  "areka-sakura",
  "areka-seriko",
  "areka-sylphya",
@@ -314,6 +315,28 @@ dependencies = [
  "sample-ghost-kit",
  "temp-path-kit",
  "tracing",
+]
+
+[[package]]
+name = "areka-placement"
+version = "0.1.0"
+dependencies = [
+ "areka-emo-atlas",
+ "areka-emo-compose",
+ "areka-emo-present",
+ "areka-ghost",
+ "areka-parsers",
+ "areka-sylphya",
+ "async-io",
+ "bevy_ecs",
+ "log-capture-kit",
+ "sample-ghost-kit",
+ "temp-path-kit",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+ "windows",
+ "wintf",
 ]
 
 [[package]]

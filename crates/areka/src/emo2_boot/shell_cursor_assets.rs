@@ -18,7 +18,7 @@ use super::shell_cursor_table::{
     CursorIssue, CursorRows, GhostCursorKeys, Shape, candidate_paths, read_cursor_braces,
     read_ghost_cursor_keys,
 };
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 
 /// シェル 1 つぶんのカーソル（NonSend の資源そのもの）。既定値は「行も差し替えも無い」。
 #[derive(Default)]

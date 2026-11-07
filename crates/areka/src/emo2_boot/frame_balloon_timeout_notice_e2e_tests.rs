@@ -50,7 +50,7 @@ struct Cage {
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     kanade: mpsc::Receiver<KanadeMsg>,
     _present_tx: mpsc::Sender<PresentCommand>,
-    _gw: crate::placement::spawn::GhostWindows,
+    _gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。欄は宣言の順に落ちるので、最後に置いて装置の世界より後に返す。
     _gpu: crate::emo2_boot::spine::GpuPermit,
 }
@@ -133,10 +133,10 @@ impl Cage {
     }
 
     /// 注入した時刻で本番の相順を 1 フレーム回し、その間のログを返す。
-    fn frame_at(&mut self, now: f64) -> Vec<LogEvent> {
+    fn frame_at(&mut self, now: f64) -> Vec<CapturedEvent> {
         self.world.insert_resource(FrameTime(now));
         let wiring = self.wiring.take().expect("結線は檻が持っている");
-        let (wiring, events) = capture_logs(|| advance_frame(&mut self.world, wiring));
+        let (wiring, events) = capture(|| advance_frame(&mut self.world, wiring));
         self.wiring = Some(wiring);
         events
     }
@@ -185,7 +185,7 @@ fn expire_at(cage: &mut Cage, horizon: f64, deadline: f64) {
         vec![TALK],
         "知らせに受け口が受けた番号が載って 1 通だけ届く"
     );
-    let notified: Vec<&LogEvent> = events
+    let notified: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| e.field("event") == Some("\"balloon_timeout_notified\""))
         .collect();

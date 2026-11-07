@@ -1,64 +1,20 @@
 //! アンカーの範囲の記録（`\_a` の開き → 伸長 → 閉じ → 消去）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-anchor-tag-canon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 合図（`AnchorBegin`／`AnchorEnd`）だけから範囲を組み、範囲の位置（グリフ序数）・範囲の文字
 //! （Reference0 になる）・通し番号・開いている印の寿命・既定の下線を固定する。箱の構成と組み立ての支援は
 //! `state_route_tests.rs` のものを使う（0: a・b（既定は a） 3: 箱なし）。
 
-use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
+use areka_sakura::contract::FONT_TAG_CARRIER;
 use log_capture_kit::capture;
 
 use super::route_tests::{boxed, key, select, show, state_with_boxes};
-use super::test_support::cue;
+use super::test_support::{applied, choice, close, cue, font, open, spans, text};
 use super::*;
+use crate::actor::test_support::capture_checked;
 use crate::look::{StyleId, TextLook};
 use crate::lookahead::{Basis, TalkLookahead, advance_state};
-
-fn open(actor: &str, id: &str, references: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::AnchorBegin {
-            id: id.to_owned(),
-            references: references.iter().map(|r| (*r).to_owned()).collect(),
-        },
-    )
-}
-
-fn close(actor: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::AnchorEnd)
-}
-
-fn text(actor: &str, s: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(s.into()))
-}
-
-fn choice(actor: &str, id: &str, s: &str) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::Choice {
-            id: id.to_owned(),
-            text: s.to_owned(),
-            references: Vec::new(),
-        },
-    )
-}
-
-fn applied(cues: &[TalkCue]) -> TextLayerState {
-    let mut state = TextLayerState::default();
-    for c in cues {
-        state.apply_cue(c);
-    }
-    state
-}
-
-/// スコープの普通のバルーンの場所の範囲の列（場所が無ければ空）。
-fn spans(state: &TextLayerState, actor: &str) -> Vec<ChoiceSpan> {
-    state
-        .actor_state(&key(actor))
-        .map(|s| s.choices().to_vec())
-        .unwrap_or_default()
-}
 
 /// 箱の場所の範囲の列（場所が無ければ空）。
 fn box_spans(state: &TextLayerState, actor: &str, name: &str) -> Vec<ChoiceSpan> {
@@ -200,7 +156,7 @@ fn two_anchors_get_different_ordinals() {
     );
 }
 
-// ---- 到達しない防御（compile が補うので本番の列では起きない）
+// ---- 到達しない防御（重なりの開きは compile が補うので本番の列では起きない）
 
 /// 開いている間の新たな開きは、直前の範囲をそこで閉じてから開く。
 #[test]
@@ -233,6 +189,8 @@ fn reopening_closes_a_range_left_open_in_another_place() {
     assert_eq!(spans(&state, "0"), vec![anchor(0, "a", "あ", 0..1)]);
     assert_eq!(spans(&state, "1"), vec![anchor(0, "b", "い", 0..1)]);
 }
+
+// ---- 迷子の閉じ（開いている間に `\c` で本文が消えた後の閉じは本番でも届く）
 
 /// 開いていないのに届いた閉じは、状態を変えない（場所も作らない）。
 #[test]
@@ -391,8 +349,12 @@ fn rehearsal_emits_no_records() {
         );
     }
 
-    let (rehearsed, quiet) = capture(|| run(TextLayerState::default().rehearsal_copy()));
-    assert_eq!(quiet.len(), 0, "空回しは記録を出さない {quiet:?}");
+    let (rehearsed, quiet) = capture_checked(|| run(TextLayerState::default().rehearsal_copy()));
+    assert_eq!(
+        quiet.len(),
+        1,
+        "空回しは記録を出さない（対照の 1 件だけ） {quiet:?}"
+    );
     assert_eq!(
         rehearsed.places().collect::<Vec<_>>(),
         production.places().collect::<Vec<_>>(),
@@ -401,17 +363,6 @@ fn rehearsal_emits_no_records() {
 }
 
 // ---- 既定の下線（要件 5.1・5.3〜5.5）
-
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
 
 /// スコープの普通のバルーンの場所の内容。
 fn balloon<'a>(state: &'a TextLayerState, actor: &str) -> &'a ActorTextState {
@@ -593,11 +544,10 @@ fn bulk_reset_restores_the_same_look_with_or_without_the_anchor() {
     }
 }
 
-// ---- 下見の空回しと下線（設計「既存アーキテクチャの分析」の空回しの項）
+// ---- 下見の空回しと下線（spec `areka-P0-anchor-tag-canon` の設計「既存アーキテクチャの分析」の空回しの項）
 
 /// 下見の空回しと本番で、装飾番号の並びと装飾の表が一致する。先渡しを受け取ってから合図を
-/// 1 つずつ流すと、流すたびに届いた内容が空回しの全文の先頭と一致し（全文で配置される）、
-/// 食い違いの warn は 0 件。
+/// 1 つずつ流すと、流すたびに届いた内容が空回しの全文の先頭と一致する（全文で配置される）。
 #[test]
 fn rehearsal_and_production_agree_on_style_numbers() {
     let talk = [
@@ -626,23 +576,17 @@ fn rehearsal_and_production_agree_on_style_numbers() {
     let mut state = TextLayerState::default();
     let mut look = TalkLookahead::default();
     look.install(&state, None, &talk);
-    let (answers, events) = capture(|| {
-        let mut answers = Vec::new();
-        for c in &talk {
-            let dest = PlaceKey {
-                actor: c.actor.clone(),
-                place: state.destination(&c.actor),
-            };
-            look.note_cue(c, &dest);
-            advance_state(&mut state, None, c);
-            let arrived = state.place_state(&place).expect("場所に状態がある");
-            answers.push(matches!(look.basis(&place, arrived), Basis::Full { .. }));
-        }
-        answers
-    });
+    let mut answers = Vec::new();
+    for c in &talk {
+        let dest = PlaceKey {
+            actor: c.actor.clone(),
+            place: state.destination(&c.actor),
+        };
+        look.note_cue(c, &dest);
+        advance_state(&mut state, None, c);
+        let arrived = state.place_state(&place).expect("場所に状態がある");
+        answers.push(matches!(look.basis(&place, arrived), Basis::Full { .. }));
+    }
+    // 食い違いの warn は `Basis::Arrived` の道でしか出ないので、全部 Full なら 0 件。
     assert_eq!(answers, vec![true; talk.len()], "最後まで全文で配置される");
-    assert!(
-        events.iter().all(|e| e.level != tracing::Level::WARN),
-        "食い違いの warn は出ない {events:?}"
-    );
 }

@@ -54,12 +54,12 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use crate::placement::config::BalloonXMode;
-use crate::placement::dpi_sync::DpiSyncHold;
-use crate::placement::follow::{Anchored, BalloonFollow, on_balloon_drag};
-use crate::placement::resolver::{Anchor, PointPx, SizePx, keyword_balloon_pos};
-use crate::placement::spawn::BalloonKeywordBase;
-use crate::placement::transition_diag::{OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED};
+use areka_placement::config::BalloonXMode;
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::follow::{Anchored, BalloonFollow, on_balloon_drag};
+use areka_placement::resolver::{Anchor, PointPx, SizePx, keyword_balloon_pos};
+use areka_placement::spawn::BalloonKeywordBase;
+use areka_placement::transition_diag::{OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED};
 
 use super::test_support::{
     FakeReports, FrameHarness, capture_logs, s2_monitors_with_work_area, s2_neighbor_work_area,
@@ -242,7 +242,7 @@ fn settle_at(harness: &mut FrameHarness, source: &mut FakeReports, dpi: u16) {
     for scope in harness.scopes().to_vec() {
         assert_eq!(
             follow_of(harness, scope).base(),
-            crate::placement::follow::OffsetBase {
+            areka_placement::follow::OffsetBase {
                 offset: BASE_OFFSETS[scope],
                 dpi: Some(DPI::from_dpi(dpi, dpi)),
             },
@@ -857,7 +857,7 @@ fn a_balloon_only_drag_establishes_the_base_at_the_current_display_dpi() {
 
         assert_eq!(
             follow_of(&harness, scope).base(),
-            crate::placement::follow::OffsetBase {
+            areka_placement::follow::OffsetBase {
                 offset: DRAG_OFFSET,
                 dpi: Some(DPI::from_dpi(LOW_DPI, LOW_DPI)),
             },
@@ -905,7 +905,7 @@ fn a_drag_established_offset_follows_by_the_same_rule_as_an_author_specified_one
         // 基準対はドラッグで焼き直されたまま動かない（追随は基準を書かない）。
         assert_eq!(
             follow_of(&harness, scope).base(),
-            crate::placement::follow::OffsetBase {
+            areka_placement::follow::OffsetBase {
                 offset: DRAG_OFFSET,
                 dpi: Some(DPI::from_dpi(LOW_DPI, LOW_DPI)),
             },

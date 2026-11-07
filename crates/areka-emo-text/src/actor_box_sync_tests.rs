@@ -1,26 +1,29 @@
-//! 毎フレームの箱の同期（task 7.4・要件 3.1〜3.3・3.5・3.9・6.1〜6.3・6.5・9.3）。
+//! 毎フレームの箱の同期（要件 3.1〜3.3・3.5・3.9・6.1〜6.3・6.5・9.3）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 置き場所は結線が渡す「シェルの窓がいま表示している絵の番号」だけから導く（spec
 //! `areka-P0-shell-balloon-frame-align` 要件 1.1〜1.5）。台本の `\s` は文字の行き先だけを決める。
 //!
-//! 面はまだ作られない（箱の面の提示は 7.5）ので、ここでは「登録の状態」（装着先・配置の入力・
+//! 面はここでは作らない（箱の面の提示は `actor_box_present_tests.rs`）ので、ここでは「登録の状態」（装着先・配置の入力・
 //! 置き場所）で見る。`World` は予約スロットの entity を得るためだけに使い、COM は使わない。
 //! 箱の束はテストの中に持つ surfaces.txt の文面を畳んで作る（検体は読まない）。
 
-use std::collections::BTreeMap;
-
-use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::{BoxLayout, BoxPlacement};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{cue, spawn_reserved_slot};
-use super::{ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding};
+use super::test_support::{
+    COARSE_WRAP_MESSAGE, FONT_HEIGHT_ZERO, IGNORED_ORIGIN_MESSAGE, ROP_FALLBACK_MESSAGE,
+    box_layout, box_name, capture_checked, cue, emote, fake_resolver, items_at, physical,
+    spawn_reserved_slot, text,
+};
+use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::{PlaceKey, TextPlace};
-use crate::state::{SurfaceKeyOutcome, TextItem, TextLayerConfig};
+use crate::state::{TextItem, TextLayerConfig};
 
 /// サーフェス 0 は箱 a・b、1 は a を別の位置に、2 は b だけ、3 は a をサーフェスからはみ出す位置に置く。
 /// 4 は箱を持たない（画像だけのサーフェス）。
@@ -59,45 +62,14 @@ element1,balloon,a,150,0
 pub(super) const SHELL_IMAGE: (u32, u32) = (200, 300);
 
 /// はみ出しの警告の文言（発行点と 1 文字も違わないこと）。
-const OVERFLOW_MESSAGE: &str =
+pub(super) const OVERFLOW_MESSAGE: &str =
     "箱がサーフェスの画像からはみ出している——採ったうえで、はみ出した部分は窓の端で切れる";
 
 /// 登録したときの記録の文言（同じ置き場所で何もしないことを数えるのに使う）。
 const REGISTER_MESSAGE: &str = "箱の置き場所を登録した（面は次の提示で作る）";
 
 pub(super) fn layout() -> BoxLayout {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
-    layout
-}
-
-pub(super) fn name(layout: &BoxLayout, surface: u32, name: &str) -> BoxName {
-    layout
-        .placements(surface)
-        .iter()
-        .find(|p| p.name.as_str() == name)
-        .expect("文面にある箱の名前")
-        .name
-        .clone()
-}
-
-/// 偽の閉包: 数字ならその番号を表示、`-1` は非表示。
-pub(super) fn resolver() -> SurfaceKeyResolver {
-    Box::new(|key: &str| match key {
-        "-1" => SurfaceKeyOutcome::Hide,
-        _ => key
-            .parse()
-            .map_or(SurfaceKeyOutcome::Unresolved, SurfaceKeyOutcome::Show),
-    })
-}
-
-pub(super) fn emote(actor: &str, key: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Emote { key: key.into() })
-}
-
-pub(super) fn text(actor: &str, t: &str) -> TalkCue {
-    cue(actor, 0.0, CueCommand::Text(t.into()))
+    box_layout(SHELL)
 }
 
 pub(super) fn select(actor: &str, name: &str) -> TalkCue {
@@ -125,7 +97,7 @@ pub(super) fn fixture() -> Fixture {
     let (window, slot) = spawn_reserved_slot(&mut world);
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     Fixture {
         world,
         rt,
@@ -138,11 +110,13 @@ pub(super) fn fixture() -> Fixture {
 
 impl Fixture {
     pub(super) fn shell(&self, scale: f32) -> TextSlotBinding {
-        let physical = (
-            (SHELL_IMAGE.0 as f32 * scale).ceil() as u32,
-            (SHELL_IMAGE.1 as f32 * scale).ceil() as u32,
-        );
-        TextSlotBinding::new(self.slot, self.window, scale, physical, SHELL_IMAGE)
+        TextSlotBinding::new(
+            self.slot,
+            self.window,
+            scale,
+            physical(SHELL_IMAGE, scale),
+            SHELL_IMAGE,
+        )
     }
 
     /// 台本の `\s` と絵の差し替えの両方が届いた状態にする（`-1` は非表示）。
@@ -158,10 +132,10 @@ impl Fixture {
             .sync_box_bindings(&mut self.world, &[(ActorKey::from("0"), shell)]);
     }
 
-    pub(super) fn key(&self, surface: u32, box_name: &str) -> PlaceKey {
+    pub(super) fn key(&self, surface: u32, name: &str) -> PlaceKey {
         PlaceKey {
             actor: ActorKey::from("0"),
-            place: TextPlace::Box(name(&self.layout, surface, box_name)),
+            place: TextPlace::Box(box_name(&self.layout, surface, name)),
         }
     }
 
@@ -183,11 +157,8 @@ impl Fixture {
         binding.zip(site)
     }
 
-    fn items(&self, surface: u32, box_name: &str) -> Vec<TextItem> {
-        self.rt
-            .state()
-            .place_state(&self.key(surface, box_name))
-            .map_or_else(Vec::new, |s| s.items().to_vec())
+    fn items(&self, surface: u32, name: &str) -> Vec<TextItem> {
+        items_at(&self.rt, "0", self.key(surface, name).place)
     }
 }
 
@@ -217,7 +188,7 @@ fn only_boxes_with_text_register_and_same_placement_is_a_no_op() {
     );
     assert_eq!(f.registered(0, "b"), None, "文字の無い箱 b は登録しない");
 
-    let ((), events) = capture(|| {
+    let ((), events) = capture_checked(|| {
         f.sync(Some(1.0));
         f.sync(Some(1.0));
     });
@@ -239,7 +210,10 @@ fn layout_input_uses_the_box_size_as_the_image_size_with_white_background() {
     f.sync(Some(1.0));
 
     let key = f.key(0, "a");
-    let def = f.layout.def(&name(&f.layout, 0, "a")).expect("a の定義");
+    let def = f
+        .layout
+        .def(&box_name(&f.layout, 0, "a"))
+        .expect("a の定義");
     let expected = ResolvedBalloonText::resolve_with_background(
         &def.model,
         def.size,
@@ -293,7 +267,7 @@ fn scale_change_rebuilds_the_registration_and_keeps_text() {
 }
 
 /// 同じ名前の箱が新しい絵にあれば、その位置で登録し直す（要件 6.1）。置き場所を動かすのは
-/// 渡された絵の番号で、台本の `\s` の cue は要らない（本 spec 要件 1.1）。
+/// 渡された絵の番号で、台本の `\s` の cue は要らない（`areka-P0-shell-balloon-frame-align` 要件 1.1）。
 #[test]
 fn same_name_on_the_next_surface_moves_the_registration() {
     let mut f = fixture();
@@ -309,7 +283,7 @@ fn same_name_on_the_next_surface_moves_the_registration() {
 }
 
 /// 台本の `\s` の cue だけでは登録は動かない。絵の番号が同じなら、受け取った番号が箱の無い面・
-/// 別の置き場所の面・非表示のどれでも、登録はそのまま（本 spec 要件 1.1・1.6）。
+/// 別の置き場所の面・非表示のどれでも、登録はそのまま（`areka-P0-shell-balloon-frame-align` 要件 1.1・1.6）。
 #[test]
 fn surface_cue_alone_does_not_move_the_registration() {
     let mut f = fixture();
@@ -320,7 +294,7 @@ fn surface_cue_alone_does_not_move_the_registration() {
 
     for key in ["1", "4", "-1"] {
         f.rt.apply_cue(&emote("0", key));
-        let ((), events) = capture(|| f.sync(Some(1.0)));
+        let ((), events) = capture_checked(|| f.sync(Some(1.0)));
         assert_eq!(
             messages(&events, REGISTER_MESSAGE),
             0,
@@ -334,7 +308,7 @@ fn surface_cue_alone_does_not_move_the_registration() {
     }
 }
 
-/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る（本 spec 要件 1.1・1.2・1.4）。
+/// 絵の番号だけが替われば cue が無くても登録が動き・外れ・戻る（`areka-P0-shell-balloon-frame-align` 要件 1.1・1.2・1.4）。
 /// 文字の進み具合は保たれる。
 #[test]
 fn picture_number_alone_moves_unregisters_and_restores() {
@@ -367,7 +341,7 @@ fn picture_number_alone_moves_unregisters_and_restores() {
     assert_eq!(f.items(0, "b"), vec![TextItem::glyph("い")]);
 }
 
-/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る（本 spec 要件 1.3）。
+/// 差し込み口があっても絵の番号が無ければ（絵が非表示）登録を外す。文字は残る（`areka-P0-shell-balloon-frame-align` 要件 1.3）。
 #[test]
 fn no_picture_number_unregisters_and_keeps_text() {
     let mut f = fixture();
@@ -456,7 +430,7 @@ fn replacing_the_bundle_drops_registrations() {
     f.sync(Some(1.0));
     assert!(!f.rt.box_sites.is_empty());
 
-    f.rt.set_box_layout(&mut f.world, layout(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout(), fake_resolver(), vec![]);
     assert!(f.rt.box_sites.is_empty(), "置き場所の登録は残らない");
     assert!(
         f.rt.routing.keys().all(|k| k.place == TextPlace::Balloon),
@@ -471,7 +445,7 @@ fn overflowing_box_is_kept_and_warned_once() {
     let mut f = fixture();
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
-    let ((), events) = capture(|| f.sync(Some(1.0)));
+    let ((), events) = capture_checked(|| f.sync(Some(1.0)));
     assert_eq!(
         messages(&events, OVERFLOW_MESSAGE),
         0,
@@ -497,14 +471,14 @@ fn overflowing_box_is_kept_and_warned_once() {
     f.show("0");
     f.sync(Some(1.0));
     f.show("3");
-    let ((), events) = capture(|| {
+    let ((), events) = capture_checked(|| {
         f.sync(Some(1.0));
         f.sync(Some(2.0));
     });
     assert_eq!(messages(&events, OVERFLOW_MESSAGE), 0, "2 度目は出さない");
 }
 
-/// はみ出しの判定は拡大率に依らず native 原寸どうしで比べる（Implementation Notes 7.4）。
+/// はみ出しの判定は拡大率に依らず native 原寸どうしで比べる。
 /// k=2.0 で初めて面にする: 物理寸の箱（200×100）を native のサーフェス（200×300）と比べると
 /// 収まるサーフェス 0 の a（右端 10+200=210）が誤って警告になり、native の箱を物理寸のサーフェス
 /// （400×600）と比べるとはみ出すサーフェス 3 の a（右端 250）が警告されなくなる。
@@ -584,17 +558,11 @@ element1,balloon,c,10,10
 }
 ";
 
-/// 折り返しの基準の警告の文言（発行点と 1 文字も違わないこと）。
-const COARSE_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
-
-/// 無視した書き出し位置の警告の文言（発行点と 1 文字も違わないこと）。
-const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
-
 /// 2 つの警告の（文言, 名前の欄, 成分の欄）。
 fn definition_warnings(events: &[CapturedEvent]) -> Vec<(&str, Option<&str>, Option<&str>)> {
     events
         .iter()
-        .filter(|e| e.message() == COARSE_MESSAGE || e.message() == IGNORED_ORIGIN_MESSAGE)
+        .filter(|e| e.message() == COARSE_WRAP_MESSAGE || e.message() == IGNORED_ORIGIN_MESSAGE)
         .map(|e| (e.message(), e.field_str("balloon"), e.field_str("key")))
         .collect()
 }
@@ -604,11 +572,9 @@ fn definition_warnings(events: &[CapturedEvent]) -> Vec<(&str, Option<&str>, Opt
 /// 箱の束を受け取り直す（読み込み直す）ともう一度出す。
 #[test]
 fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
-    let world = EmoWorld::build(&parse(COARSE_BOX_SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(COARSE_BOX_SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    let layout = box_layout(COARSE_BOX_SHELL);
     let mut f = fixture();
-    f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout.clone(), fake_resolver(), vec![]);
     f.layout = layout.clone();
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
@@ -617,7 +583,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
     assert_eq!(
         definition_warnings(&events),
         vec![
-            (COARSE_MESSAGE, Some("c"), None),
+            (COARSE_WRAP_MESSAGE, Some("c"), None),
             (IGNORED_ORIGIN_MESSAGE, Some("c"), Some("origin.x")),
         ],
         "最初の登録で 2 つの警告を、名前の欄をブレスの名前にして出す"
@@ -643,7 +609,7 @@ fn box_definition_warnings_name_the_brace_and_fire_once_per_box_name() {
         "登録し直しでは 2 度目を出さない"
     );
 
-    f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout, fake_resolver(), vec![]);
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(1.0)));
@@ -669,19 +635,13 @@ element1,balloon,r,0,0
 }
 ";
 
-/// ROP 系の飾りの警告の文言（発行点と 1 文字も違わないこと）。
-const ROP_FALLBACK_MESSAGE: &str =
-    "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退";
-
-/// T5（要件 2.1〜2.4・5.1）: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
+/// `real-run-log-noise` 要件 2.1〜2.4・5.1: ROP 系の箱の定義で、最初の登録に 1 件（`balloon` の欄は箱の名前）、
 /// 外して付け直しても 0 件、箱の束を差し替えた後の登録で 1 件。
 #[test]
 fn box_cursor_fallback_warns_once_per_box_name() {
-    let world = EmoWorld::build(&parse(ROP_BOX_SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(ROP_BOX_SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "文面は誤りを持たない");
+    let layout = box_layout(ROP_BOX_SHELL);
     let mut f = fixture();
-    f.rt.set_box_layout(&mut f.world, layout.clone(), resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout.clone(), fake_resolver(), vec![]);
     f.layout = layout.clone();
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
@@ -717,7 +677,7 @@ fn box_cursor_fallback_warns_once_per_box_name() {
         "外して付け直しても 0 件"
     );
 
-    f.rt.set_box_layout(&mut f.world, layout, resolver(), vec![]);
+    f.rt.set_box_layout(&mut f.world, layout, fake_resolver(), vec![]);
     f.show("0");
     f.rt.apply_cue(&text("0", "あ"));
     let ((), events) = capture(|| f.sync(Some(1.0)));
@@ -725,5 +685,55 @@ fn box_cursor_fallback_warns_once_per_box_name() {
         messages(&events, ROP_FALLBACK_MESSAGE),
         1,
         "箱の束を差し替えた後の登録で 1 件"
+    );
+}
+
+// ══ audit-emo-text-state-actor 指摘 7: 箱の解決は表を入れたときに名前ごとに 1 度だけ ══
+
+/// 書体の高さ 0 の箱 z を、サーフェス 0 と 1 の別の位置に置く。
+const ZERO_HEIGHT_BOX_SHELL: &str = "balloon.z
+{
+size,100,50
+font.height,0
+}
+surface0
+{
+element1,balloon,z,0,0
+}
+surface1
+{
+element1,balloon,z,10,10
+}
+";
+
+/// audit-emo-text-state-actor 指摘 7（要件 2.1・4.5・4.6）: 書体の高さ 0 の箱は、表を入れたときに警告 1 件。隠して登録し直す・
+/// 拡大率を変える・サーフェスを切り替えるの 3 つの登録し直しの後も 1 件のまま。
+#[test]
+fn box_resolution_warns_once_at_table_set_not_per_registration() {
+    let layout = box_layout(ZERO_HEIGHT_BOX_SHELL);
+    let mut f = fixture();
+    let ((), events) = capture(|| {
+        f.rt.set_box_layout(&mut f.world, layout.clone(), fake_resolver(), vec![]);
+        f.layout = layout;
+        f.show("0");
+        f.rt.apply_cue(&text("0", "あ"));
+        f.sync(Some(1.0));
+        f.rt.hide_boxes(&ActorKey::from("0"));
+        f.sync(Some(1.0));
+        f.rt.hidden_boxes.clear();
+        f.sync(Some(1.0));
+        f.sync(Some(2.0));
+        f.picture = Some(1);
+        f.sync(Some(2.0));
+    });
+    assert_eq!(
+        messages(&events, REGISTER_MESSAGE),
+        4,
+        "最初の登録と 3 つの登録し直しは起きている"
+    );
+    assert_eq!(
+        messages(&events, FONT_HEIGHT_ZERO),
+        1,
+        "警告は表を入れたときの 1 件だけ"
     );
 }

@@ -15,12 +15,12 @@ use std::collections::HashMap;
 
 use crate::app_exit::close_windows_for_restart;
 use crate::emo2_boot::move_cue::{apply_move_directive, parse_move_directive};
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::follow::{Anchored, move_window_to};
-use crate::placement::persist::persist_entries;
-use crate::placement::resolver::{Anchor, ScopePlacement};
 use areka_emo_compose::ScaleRatio;
 use areka_parsers::charset::DefaultEncoding;
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::follow::{Anchored, move_window_to};
+use areka_placement::persist::persist_entries;
+use areka_placement::resolver::{Anchor, ScopePlacement};
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::SizeI;
 use wintf::ecs::window::drain_window_pos_commands;

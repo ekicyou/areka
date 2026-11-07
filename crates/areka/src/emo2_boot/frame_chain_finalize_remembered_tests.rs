@@ -26,11 +26,11 @@ use super::chain_realign_adjacency_tests::{
 use super::test_support::{FakeReports, FrameHarness, PerTargetSizes, capture_logs, pos_of};
 use super::{finalize_chain_once_with, resnap_with};
 use crate::app_exit::close_windows_for_restart;
-use crate::placement::chain_finalize::{AdjacencyMark, ChainFinalized};
-use crate::placement::follow::OffsetBase;
-use crate::placement::persist::{char_pos_entries, persist_entries};
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::spawn::GhostWindows;
+use areka_placement::chain_finalize::{AdjacencyMark, ChainFinalized};
+use areka_placement::follow::OffsetBase;
+use areka_placement::persist::{char_pos_entries, persist_entries};
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::spawn::GhostWindows;
 
 /// 覚えたとき（200%）の絵の大きさ（本体・相方）。
 const HIGH: [(u32, u32); 2] = [(764, 1094), (672, 596)];

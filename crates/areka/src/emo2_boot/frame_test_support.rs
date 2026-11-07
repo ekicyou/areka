@@ -1,18 +1,18 @@
 use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
-use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
-use crate::placement::follow::OffsetBase;
-use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
-use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
-use crate::placement::test_support::LogEvent;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_text::state::TextLayerConfig;
+use areka_placement::diag::WINDOW_MOVE_RECORD_TAG;
+use areka_placement::follow::OffsetBase;
+use areka_placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
+use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::spawn_ghost_windows;
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use bevy_ecs::system::SystemState;
+use log_capture_kit::CapturedEvent;
 use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
@@ -176,7 +176,7 @@ fn fake_handle(raw: usize) -> WindowHandle {
 /// 補正が混ざると恒等式が成立しなくなって主題が読めなくなる（設計 DD6: 恒等式は
 /// 「resolver／追従計算の出力時点の事後条件」であって表示位置の恒久不変量ではない）。
 /// ゆえに limit を無効にして関門を素通しさせる。limit の挙動そのものは
-/// `placement/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
+/// `crates/areka-placement/src/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
 /// （`resize_window_keep_position`）もそこで補正が掛かることを固定している。
 fn resnap_placements() -> Vec<ScopePlacement> {
     vec![
@@ -887,7 +887,7 @@ impl Drop for FrameHarness {
 }
 
 /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
-pub(super) fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
+pub(super) fn window_move_lines(events: &[CapturedEvent]) -> Vec<String> {
     events
         .iter()
         .map(|e| e.message().to_string())
@@ -896,7 +896,7 @@ pub(super) fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
 }
 
 /// 指定 entity の窓移動レコードから `route=` の語だけを取り出す（出現順）。
-pub(super) fn window_move_routes_of(events: &[LogEvent], entity: Entity) -> Vec<String> {
+pub(super) fn window_move_routes_of(events: &[CapturedEvent], entity: Entity) -> Vec<String> {
     let key = format!("entity={entity:?} ");
     window_move_lines(events)
         .iter()

@@ -1,7 +1,9 @@
-//! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（件 3・実 GPU）
+//! # actor_underline_present_tests — 下線を描く段で集めて寄せ、字の後に塗る（areka-P0-balloon-text-bugs 件 3・実 GPU）
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-text-bugs` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 出典 spec: `areka-P0-balloon-text-bugs`（要件 **3.1**・**3.2**・**3.3**・**3.4**・**3.5**・**3.6**・
-//! **3.8**・**3.11**・**4.3**、design「areka が塗る下線（件 3）」・テストの方針「結合 2・3・5」）。
+//! **3.8**・**3.10**・**3.11**・**4.3**、design「areka が塗る下線（areka-P0-balloon-text-bugs 件 3）」・テストの方針「結合 2・3・5」）。
 //!
 //! 本番の 1 フレームの経路（`present_frame`・実 DirectWrite の行送り・実 GPU）を通して読み戻す。
 //!
@@ -18,8 +20,11 @@
 //!
 //! 「違う画素」の述語は、同じ台本を 2 度撮って 1 バイトも違わないこと（較正）を先に確かめる。
 
+use std::cell::RefCell;
+
 use areka_parsers::balloon::parse_str;
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
+use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL,
@@ -28,11 +33,10 @@ use windows::Win32::Graphics::DirectWrite::{
 use windows::core::{BOOL, HSTRING};
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::box_sync_tests::{emote, resolver};
-use super::region_collapse_tests::box_layout;
-use super::test_support::{com_world, cue};
+use super::test_support::box_layout;
+use super::test_support::{com_world, cue, physical, spawn_reserved_slot};
+use super::test_support::{emote, fake_resolver, first_box_key};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
-use crate::place::TextPlace;
 use crate::state::TextLayerConfig;
 
 /// 実機の書体。
@@ -57,7 +61,7 @@ const INK_ALPHA_MIN: u8 = 128;
 /// 普通のバルーンの定義（validrect は全域＝面は画像の大きさ）。
 const BALLOON: &str = "charset,UTF-8\nfont.name,Yu Gothic UI\nfont.height,28\n";
 
-/// 箱の束（実機の形と収まらない形の 2 つの箱をサーフェス 0 と 1 に置く）。
+/// 箱の束（実機の形と収まらない形の箱をサーフェス 0 と 1、縦書きの右から左と左から右の箱を 2 と 3 に置く）。
 const SHELL: &str = "\
 balloon.real
 {
@@ -191,11 +195,18 @@ impl Shot {
     }
 }
 
-fn physical(image: (u32, u32), k: f32) -> (u32, u32) {
-    (
-        (image.0 as f32 * k).ceil() as u32,
-        (image.1 as f32 * k).ceil() as u32,
-    )
+thread_local! {
+    /// テストのスレッドごとの World（装置は 1 度だけ作り、撮るたびに予約スロットだけ足す）。
+    static WORLD: RefCell<Option<World>> = const { RefCell::new(None) };
+}
+
+/// このスレッドの World に予約スロットを 1 つ足して `f` を呼ぶ。
+fn with_slot<R>(f: impl FnOnce(&mut World, (Entity, Entity)) -> R) -> R {
+    WORLD.with_borrow_mut(|world| {
+        let world = world.get_or_insert_with(|| com_world().0);
+        let reserved = spawn_reserved_slot(world);
+        f(world, reserved)
+    })
 }
 
 fn apply(rt: &mut TextLayerRuntime, script: &[CueCommand]) {
@@ -247,7 +258,18 @@ fn shoot_frames_described(
     cues: &[TalkCue],
     frames: &[f64],
 ) -> Shot {
-    let (mut world, window, slot) = com_world();
+    with_slot(|world, reserved| shoot_frames_in(world, reserved, descript, image, k, cues, frames))
+}
+
+fn shoot_frames_in(
+    world: &mut World,
+    (window, slot): (Entity, Entity),
+    descript: &str,
+    image: (u32, u32),
+    k: f32,
+    cues: &[TalkCue],
+    frames: &[f64],
+) -> Shot {
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor_binding(
@@ -259,7 +281,7 @@ fn shoot_frames_described(
         rt.apply_cue(c);
     }
     for &t in frames {
-        present_frame(&mut rt, &mut world, t).expect("提示が Ok");
+        present_frame(&mut rt, world, t).expect("提示が Ok");
     }
     let surface = rt.surface(&actor).expect("装着済みの面");
     let (w, h) = surface.size();
@@ -275,22 +297,26 @@ fn shoot_frames_described(
     }
 }
 
-/// シェルのサーフェス `surface`（0＝実機の形・1＝収まらない形）の箱へ台本を流して提示し、箱の面を読み戻す。
+/// シェルのサーフェス `surface`（0＝実機の形・1＝収まらない形・2＝縦書きの右から左・3＝縦書きの左から右）の箱へ台本を流して提示し、箱の面を読み戻す。
 fn shoot_box(surface: u32, k: f32, script: &[CueCommand]) -> Shot {
-    let (mut world, window, slot) = com_world();
+    with_slot(|world, reserved| shoot_box_in(world, reserved, surface, k, script))
+}
+
+fn shoot_box_in(
+    world: &mut World,
+    (window, slot): (Entity, Entity),
+    surface: u32,
+    k: f32,
+    script: &[CueCommand],
+) -> Shot {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.set_box_layout(&mut world, box_layout(SHELL), resolver(), vec![]);
+    rt.set_box_layout(world, box_layout(SHELL), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", &surface.to_string()));
     apply(&mut rt, script);
     let shell = TextSlotBinding::new(slot, window, k, physical(REAL, k), REAL);
-    rt.sync_box_bindings(&mut world, &[(ActorKey::from("0"), Some((shell, surface)))]);
-    present(&mut rt, &mut world);
-    let key = rt
-        .box_sites
-        .keys()
-        .find(|key| key.place != TextPlace::Balloon)
-        .cloned()
-        .expect("箱が登録されている");
+    rt.sync_box_bindings(world, &[(ActorKey::from("0"), Some((shell, surface)))]);
+    present(&mut rt, world);
+    let key = first_box_key(&rt);
     let surface = rt.surface_at(&key).expect("箱の面");
     let (w, h) = surface.size();
     Shot {
@@ -560,7 +586,7 @@ fn box_text_surfaces_paint_the_bottom_row_underline_inside_the_surface() {
 /// 行の生成のときに原点 (0,0) で集めたはみ出しが、字を描く原点で集めた線を取りこぼすと、部分の
 /// 描き替えの範囲の外に出た線の画素が塗られずに残る。行の原点×拡大率が整数画素でない拡大率
 /// （1.25・1.5）で、寄せない形（実機の形）と寄せる形（収まらない形）の両方を確かめる。
-/// 今の形では、行の描き替えの範囲（字の箱＋実測のはみ出し＋ガード 1 image px）が線を覆うので緑。
+/// 行の描き替えの範囲（字の箱＋実測のはみ出し＋ガード 1 image px）が線を覆うので、違いは出ない。
 /// 較正: 描き替えの範囲のはみ出しを 0 にする欠陥を仕込むと、k=1.25 の実機の形で線の行（150・151）
 /// だけが違って赤になる（この檻は範囲の外に出た線を見逃さない）。
 #[test]
@@ -600,7 +626,7 @@ fn revealing_the_bottom_row_frame_by_frame_paints_the_same_pixels_as_one_frame()
 /// 縦書きの列のレシピ（spec `emo-text-dwrite-fidelity` 要件 5.1）で em の箱が列の箱の真ん中に来た後は、
 /// 2 方向とも字の墨が列の箱の真ん中にあり（k=1 の実測で右から左 5..=22・左から右 4..=23、
 /// 箱 0..=27 の中心 13.5 と一致）、線は列の箱の左端より 1〜2 列外＝面の外へ出るので、2 方向とも
-/// 寄せが効く。直す前の左から右は墨が箱の右へ約 5px 寄っていて線が面に収まり、寄せなかった。
+/// 寄せが効く。
 const VERTICAL: (u32, u32) = (118, 120);
 
 /// 縦書きの普通のバルーンの定義（validrect は全域）。

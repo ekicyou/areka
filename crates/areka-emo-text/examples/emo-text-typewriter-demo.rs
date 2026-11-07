@@ -19,9 +19,8 @@
 //! 自動判定つき）とは別物。
 
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use bevy_ecs::name::Name;
@@ -51,12 +50,19 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use sample_ghost_kit::SampleRoot;
 
-// ── 挨拶テキスト（さっきの画像と同じ・boot.pasta 起動朝 由来） ──
-const LINE1: &str = "おっはよー！";
-const LINE2: &str = "めっちゃええ朝やん！";
-const LINE3: &str = "今日もいくでー！";
+// 文字の層の例と同じ検体の読みと組み立てを引く（写しを持たない）。子は上の `use` 束縛を
+// `use super::{…};` で引く。`examples/` 直下に置くと別のターゲットになるので子のフォルダから引く。
+#[path = "emo-text-layer/fixture.rs"]
+mod fixture;
+#[path = "emo-text-layer/setup.rs"]
+mod setup;
+
+use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
+use self::setup::{
+    balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,
+    setup_abort, show_balloon,
+};
 
 /// `--emoji` のときの台詞（色つきの絵文字と、人が 1 文字と見る単位＝クラスタの目視用）。
 /// 家族（ZWJ）・国旗・肌色・異体字セレクタ・キーキャップ・結合文字（か゚）と、既定フォントが持つ ♥。
@@ -81,40 +87,12 @@ const CYCLE_SECS: f64 = 5.0;
 /// バルーン窓の初期位置（物理 px・スクリーン座標）。
 const BALLOON_POS: (i32, i32) = (360, 220);
 
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-/// 共有 fixture（emo2 が同時にインストールするバルーン）のディレクトリを窓口から得る。
-fn shared_balloon_dir() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
-fn read_decoded(path: &Path) -> Option<String> {
-    match std::fs::read(path) {
-        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Utf8)),
-        Err(e) => {
-            error!(path = %path.display(), error = %e, "balloon descript の読取に失敗");
-            None
-        }
-    }
-}
-
-fn load_balloon_model() -> Option<BalloonModel> {
-    let dir = shared_balloon_dir();
-    let base = read_decoded(&dir.join("descript.txt"))?;
-    let overlay = read_decoded(&dir.join("balloons0s.txt"))?;
-    Some(parse_str(&base, Some(&overlay)))
-}
-
 fn actor() -> ActorKey {
     ActorKey::from("0")
 }
 /// デモ用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
 /// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT 秒の typewriter 進行になる
-/// （全 cue at=0.0 なので reveal は連続的に累積・旧 char_wait 定数と機能等価）。
+/// （全 cue at=0.0 なので reveal は連続的に累積）。
 fn cue(at: f64, command: CueCommand) -> TalkCue {
     let duration = match &command {
         CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * CHAR_WAIT,
@@ -140,10 +118,14 @@ struct Demo {
     model: BalloonModel,
     runtime: Rc<RefCell<TextLayerRuntime>>,
     attached: bool,
+    /// GPU 資源を待ち始めた時刻（届かないまま上限を過ぎたら準備の失敗）。
+    gpu_wait_start: Option<std::time::Instant>,
     /// 現サイクルのタイプ開始フレーム時刻。
     cycle_start: f64,
     /// 現サイクルの cue を流し終えたか。
     fed: bool,
+    /// 提示フレームの失敗を `error!` で残し終えたか（最初の 1 回だけ `error!`）。
+    present_err_logged: bool,
 }
 
 fn main() -> windows::core::Result<()> {
@@ -153,7 +135,7 @@ fn main() -> windows::core::Result<()> {
         )
         .init();
 
-    let mgr = WinApp::new()?;
+    let mgr = WinApp::new().inspect_err(|e| error!(error = %e, "WinApp の作成に失敗"))?;
     let world = mgr.world();
     world
         .borrow_mut()
@@ -175,73 +157,24 @@ fn main() -> windows::core::Result<()> {
     println!("  ★ バルーンを「ダブルクリック」するとデモを終了します。");
     println!();
 
-    mgr.run()?;
+    mgr.run()
+        .inspect_err(|e| error!(error = %e, "メッセージループが失敗で終わった"))?;
     println!("[emo-text-typewriter-demo] 終了しました。おほほ、ごきげんよう！");
     Ok(())
 }
 
-fn setup_abort(msg: &str) -> ! {
-    error!("{msg}");
-    println!("[emo-text-typewriter-demo] セットアップ失敗: {msg}");
-    std::process::exit(1);
-}
-
 fn build_and_spawn(world: &mut World) {
-    let Ok(decoder) = WicDecoderArm::new() else {
-        setup_abort("WicDecoderArm 生成に失敗（COM 未初期化？）");
-    };
-    let Some(model) = load_balloon_model() else {
-        setup_abort("balloon descript の読取/解釈に失敗（共有 fixture の配置を確認）");
-    };
-    let balloon_dir = shared_balloon_dir();
-    let Ok(assets) = build_balloon_target(&balloon_dir, &decoder, 0) else {
-        setup_abort("バルーン枠アセットの構築に失敗");
-    };
-    // 窓寸 ≔ balloon surface0 の合成原寸（物理 px・等倍表示）。
-    let (w, h) = match Composer::new().compose(
-        &assets.0,
-        &assets.1,
-        0,
-        &BindSet::default(),
-        &areka_emo_compose::PatternState::default(),
-    ) {
-        Ok(cs) => (cs.width(), cs.height()),
-        Err(e) => setup_abort(&format!("balloon surface0 の採寸合成に失敗: {e}")),
-    };
-    if w == 0 || h == 0 {
-        setup_abort("balloon surface0 の合成外形が 0 寸");
-    }
+    let decoder = decoder();
+    let model = balloon_model(false);
+    let assets = balloon_assets(&decoder);
+    let (w, h) = balloon_size(&assets);
 
-    let win = world
-        .spawn((
-            Name::new("Typewriter-Balloon"),
-            Window {
-                title: "areka emo-text typewriter demo".to_string(),
-                ..Default::default()
-            },
-            WindowStyle {
-                style: WS_POPUP | WS_VISIBLE,
-                ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-            },
-            WindowPos {
-                position: Some(Point {
-                    x: BALLOON_POS.0,
-                    y: BALLOON_POS.1,
-                }),
-                size: Some(SizeI {
-                    width: w as i32,
-                    height: h as i32,
-                }),
-                ..Default::default()
-            },
-            // 窓自体はヒット対象外（透過）。バルーン本体（emo-present の surface entity・
-            // 子・HitTest::alpha_mask）がダブルクリックを受け、bubble で窓の
-            // OnPointerPressed へ届く。
-            HitTest::none(),
-            // ダブルクリック終了ハンドラ（bubble 相で double_click==Left を検出）。
-            OnPointerPressed(on_balloon_pressed),
-        ))
-        .id();
+    let win = create_balloon_window(world, "typewriter", BALLOON_POS.0, BALLOON_POS.1, w, h);
+    // 窓自体は透過。バルーン本体（子・HitTest::alpha_mask）がダブルクリックを受け、
+    // bubble で窓の OnPointerPressed（bubble 相で double_click==Left を検出）へ届く。
+    world
+        .entity_mut(win)
+        .insert(OnPointerPressed(on_balloon_pressed));
 
     world.insert_non_send(Demo {
         presenter: EmoPresenter::new(),
@@ -254,8 +187,10 @@ fn build_and_spawn(world: &mut World) {
             TextLayerConfig::default(),
         ))),
         attached: false,
+        gpu_wait_start: None,
         cycle_start: 0.0,
         fed: false,
+        present_err_logged: false,
     });
     info!(w, h, "emo-text-typewriter-demo: 窓生成とアセット構築を完了");
 }
@@ -304,41 +239,17 @@ fn drive_system(world: &mut World) {
 
 /// GPU 資源到達フレームで attach→ShowSurface→結線を 1 回だけ行う。
 fn try_attach(demo: &mut Demo, world: &mut World) {
-    let ready = world.get_resource::<GraphicsCore>().is_some()
-        && world
-            .get_resource::<WucGraphicsResource>()
-            .map(|r| r.is_valid())
-            .unwrap_or(false);
-    if !ready {
+    if !gpu_ready(world, &mut demo.gpu_wait_start) {
         return;
     }
-
-    let Some((emo_world, atlas)) = demo.assets.take() else {
-        setup_abort("アセットが二重消費された（構造不変の破れ）");
-    };
-    demo.presenter.attach_target(
+    if let Err(msg) = show_balloon(
+        &mut demo.presenter,
+        world,
         TargetId(0),
         demo.win,
-        emo_world,
-        atlas,
-        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
-        // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
-        96,
-    );
-    let (tx, rx) = reply_channel::<PresentOutcome>();
-    demo.presenter.apply(
-        world,
-        PresentCommand::ShowSurface {
-            target: TargetId(0),
-            surface_id: 0,
-            binds: BindSet::default(),
-            pattern: areka_emo_compose::PatternState::default(),
-            reply: Some(tx),
-        },
-    );
-    match rx.recv_timeout(Duration::from_secs(10)) {
-        Ok(Ok(())) => {}
-        other => setup_abort(&format!("ShowSurface が成立しない: {other:?}")),
+        demo.assets.take(),
+    ) {
+        setup_abort(&msg);
     }
 
     let Some(view) = demo.presenter.text_slot_view(TargetId(0)) else {
@@ -348,7 +259,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         .borrow_mut()
         .register_actor_view(actor(), &view, &demo.model);
 
-    // 実モニタ DPI をログ（物理 1:1・k=1.0 恒常）。
+    // 実モニタ DPI と合成スケール k をログ（k は窓のモニタ DPI ÷ 96・200% で 2.0）。
     if let Some(handle) = world.get::<WindowHandle>(demo.win) {
         info!(
             dpi = handle.get_dpi(),
@@ -388,8 +299,14 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
     // 毎フレーム、フレーム経過時間 t を注入して提示（typewriter が実時間で animate）。
     {
         let mut rt = demo.runtime.borrow_mut();
+        // 最初の 1 回は `error!`（例の失敗は `error!` を残す）・以後は毎フレーム繰り返しうるので `warn!`。
         if let Err(e) = present_frame(&mut rt, world, t) {
-            warn!(error = %e, "提示フレームで失敗（次フレーム再試行）");
+            if demo.present_err_logged {
+                warn!(error = %e, "提示フレームで失敗（次フレーム再試行）");
+            } else {
+                error!(error = %e, "提示フレームで失敗（次フレーム再試行・以後は warn）");
+                demo.present_err_logged = true;
+            }
         }
     }
 

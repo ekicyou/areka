@@ -34,15 +34,15 @@ use tracing::warn;
 use wintf::ecs::WindowPos;
 use wintf::ecs::window::monitor::Monitor;
 
-use crate::placement::diag::PlacementRoute;
-use crate::placement::dpi_sync::{self, HoldSite};
-use crate::placement::follow::{
+use areka_placement::diag::PlacementRoute;
+use areka_placement::dpi_sync::{self, HoldSite};
+use areka_placement::follow::{
     Anchored, MonitorDpiTable, MonitorSnapshot, MonitorSources, project_anchor, same_monitors,
 };
-use crate::placement::resolver::{Anchor, PointPx, SizePx};
-use crate::placement::spawn::CharWindowMarker;
-use crate::placement::transition_diag::{self, MonitorEntry};
-use crate::placement::{WORK_AREA_SYNC_CONTEXT, diag, monitor_records};
+use areka_placement::resolver::{Anchor, PointPx, SizePx};
+use areka_placement::spawn::CharWindowMarker;
+use areka_placement::transition_diag::{self, MonitorEntry};
+use areka_placement::{WORK_AREA_SYNC_CONTEXT, diag, monitor_records};
 
 use super::dpi::reproject_char_window_at_current_size;
 
@@ -155,7 +155,7 @@ pub(super) fn sync_monitor_snapshot_with(
 /// 拡大率も一緒に動いたフレームでは、拡大率の相（`Changed<DPI>` 駆動）が同じ窓を既に
 /// 新しい下端へ書き終えている。相の**前**に置くと、まだ旧寸のままの窓を先に動かして
 /// から相が書き直す 2 段書込になる。後に置けば、相が書き終えた窓は導出値が現在値と
-/// 一致して [`resize_window_to`](crate::placement::follow::resize_window_to) の
+/// 一致して [`resize_window_to`](areka_placement::follow::resize_window_to) の
 /// べき等 skip が書込ゼロで抜ける（＝合流）。
 ///
 /// # 対象の選び方——**射影 T の値が動くか**で決める
@@ -175,7 +175,7 @@ pub(super) fn sync_monitor_snapshot_with(
 ///
 /// # 整合待ちの窓は書かない（設計 C5 の 4 点目・task 6.5）
 ///
-/// 対象に選ばれても [`DpiSyncHold`](crate::placement::dpi_sync::DpiSyncHold) の付いた窓へは
+/// 対象に選ばれても [`DpiSyncHold`](areka_placement::dpi_sync::DpiSyncHold) の付いた窓へは
 /// 書かない。設計 D15 の原則は「待ち札のある窓への**すべての**窓書込を見送る」であり、例外は
 /// 随伴バルーンの追従 1 つだけである。本関数は設計 C5 が当初列挙した 3 点に入っていなかったが、
 /// それは列挙の抜けであった——C5 の言う「再スナップ」は

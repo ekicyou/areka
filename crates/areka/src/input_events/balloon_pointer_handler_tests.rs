@@ -28,7 +28,7 @@ use wintf::ecs::pointer::{Phase, PointerState};
 
 use super::test_support::{capture_logs, headless_emo2_wiring, runtime_with_active_choice};
 use super::*;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// Bubble 相の合成 `PointerState`（client 物理 px）を組む（moved ハンドラは double_click/ctrl 非参照）。
 fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {

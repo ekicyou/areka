@@ -48,7 +48,7 @@
 //! **直接**呼び、`SetWindowPosCommand` のキューを 1 度も通らない。`origin=dpi-suggested`
 //! が現れるのは同 `:468` が組む観測行（`write_line`）**だけ**であり、指令のタグ
 //! （`SetWindowPosCommand.tag`）にこの語を載せる経路は本番に 1 つも無い
-//! （タグを付ける 3 箇所＝`crates/areka/src/placement/follow/window_move.rs:632` の
+//! （タグを付ける 3 箇所＝`crates/areka-placement/src/follow/window_move.rs:730` の
 //! `PlacementRoute` 12 語／`crates/wintf/src/ecs/graphics/systems/window_pos.rs:102` の
 //! `origin=window-pos`／`crates/wintf/src/ecs/window/zorder_pair_maintain.rs:212` の
 //! `origin=zorder-pair`）。
@@ -73,18 +73,18 @@ use wintf::ecs::window::transition_diag::{
     WriteRecord, WriteStage, WriteTag, emit_line, write_line,
 };
 
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::chain_realign::ChainRealignPending;
-use crate::placement::diag::WindowKind;
-use crate::placement::dpi_sync::DpiSyncHold;
-use crate::placement::follow::BalloonFollow;
-use crate::placement::resolver::PointPx;
-use crate::placement::test_support::{LogEvent, capture_logs};
-use crate::placement::transition_diag::{FIELD_DIFF, KIND_GROUND};
-use crate::placement::transition_judge::{
+use crate::placement_tests::transition_judge::{
     GROUND_DIFF_MAX, PATH_A_WRITES_MAX, TRANSITION_FRAME_BOUND, WRITES_PER_WINDOW_MAX,
     parse_transition_line,
 };
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::chain_realign::ChainRealignPending;
+use areka_placement::diag::WindowKind;
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::follow::BalloonFollow;
+use areka_placement::resolver::PointPx;
+use areka_placement::transition_diag::{FIELD_DIFF, KIND_GROUND};
+use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{
     FakeReports, FrameHarness, PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of,
@@ -153,7 +153,7 @@ fn writes_for(writes: &[SetWindowPosCommand], scope: u32, kind: &str) -> Vec<Set
 ///
 /// キューではなく観測行を見るのは、経路 A が `SetWindowPosCommand` を 1 度も積まないため
 /// である（モジュール doc の「経路 A はキューを通らない」を参照）。
-fn path_a_write_lines(events: &[LogEvent]) -> (u32, u32) {
+fn path_a_write_lines(events: &[CapturedEvent]) -> (u32, u32) {
     let mut by_origin = 0u32;
     let mut by_stage = 0u32;
     for record in events
@@ -175,7 +175,7 @@ fn path_a_write_lines(events: &[LogEvent]) -> (u32, u32) {
 ///
 /// 解析器を通すのは、行の語彙が判定器の期待と食い違ったら**ここで落ちる**ようにするため
 /// である（`is_well_formed` が必須フィールドの欠落を拾う）。
-fn ground_records(events: &[LogEvent]) -> Vec<(u32, i32, u32)> {
+fn ground_records(events: &[CapturedEvent]) -> Vec<(u32, i32, u32)> {
     events
         .iter()
         .filter_map(|event| parse_transition_line(event.message()))
@@ -245,7 +245,7 @@ fn apply_scale_change(
     harness: &mut FrameHarness,
     source: &mut FakeReports,
     dpi: u16,
-) -> (bool, Vec<LogEvent>) {
+) -> (bool, Vec<CapturedEvent>) {
     let [size0, size1] = char_sizes(dpi);
     harness.set_monitor_table_for_dpi(dpi);
     harness.set_window_dpi(dpi);
@@ -261,7 +261,7 @@ fn apply_scale_change(
         .refresh
         .insert(balloon_target(1).0, scaled(balloon_spawn_size(), dpi));
     let sizes = chain_sizes(dpi);
-    capture_logs(|| {
+    capture(|| {
         harness.advance_frame();
         let change = harness.run_placement_phases(source);
         harness.run_chain_realign(&sizes);
@@ -526,7 +526,7 @@ fn transition_is_atomic_at(dpi: u16) {
     // 書式を変えても対照だけが生き残って「上の 0 件は空虚」を隠してしまう。
     // `window_pos.rs:468-489` が組む行と同じ材料（`stage=Sync`・`origin=dpi-suggested`・
     // scope と win_kind は番兵）である。
-    let (_probe, probe_events) = capture_logs(|| {
+    let (_probe, probe_events) = capture(|| {
         emit_line(&write_line(&WriteRecord {
             stamp: transition_diag_stamp(origin_frame),
             stage: WriteStage::Sync,

@@ -1,5 +1,5 @@
 charset,UTF-8
-// emo2-choice fixture（task 11.1・R7.6）: cursor.* 未指定バルーン descript
+// emo2-choice fixture（`areka-P0-choice-render` R7.6）: cursor.* 未指定バルーン descript
 //
 // cursor.* を 1 キーも持たない未指定バルーン。choice ハイライトは矩形反転縮退
 // （Invert・M1 実導出——塗り=バルーン既定 font.color・hover 文字=各成分 255−c）へ解決される。

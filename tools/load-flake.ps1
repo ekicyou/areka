@@ -49,7 +49,7 @@ load-flake.ps1 — CPU の負荷をかけて areka のテストを回し、回�
 
 spec areka-test-binary-stability（design「LoadFlake」）で足した口:
   -Filter は複数可（libtest の位置引数として 1 つずつ渡す）。
-  -Binary areka-bin（既定・-p areka --bin areka）／wintf-lib（-p wintf --lib）。
+  -Binary areka-bin（既定・-p areka --bin areka）／wintf-lib（-p wintf --lib）／areka-placement-lib（-p areka-placement --lib）。
   -SetEnv NAME=VALUE の並びは子の cargo の環境にだけ置く（このプロセスの環境は変えない）。conditions.txt に書く。
   -Ignored は libtest に --ignored --exact を渡す（較正のため）。
   summary.txt の回ごとの欄に AREKA-CRASH を含む行を全部写す（行の途中も探す）。全回のまとめに落ちの報告のあった回の数を足す。
@@ -65,8 +65,8 @@ param(
     [ValidateRange(0, 4096)][int]$Burners = -1,
     # テストの名前の絞り込み（空なら実行ファイルの全部）
     [string[]]$Filter = @(),
-    # 回す実行ファイル（areka-bin＝-p areka --bin areka・wintf-lib＝-p wintf --lib）
-    [ValidateSet('areka-bin', 'wintf-lib')][string]$Binary = 'areka-bin',
+    # 回す実行ファイル（areka-bin＝-p areka --bin areka・wintf-lib＝-p wintf --lib・areka-placement-lib＝-p areka-placement --lib）
+    [ValidateSet('areka-bin', 'wintf-lib', 'areka-placement-lib')][string]$Binary = 'areka-bin',
     # 子の cargo にだけ渡す環境変数（NAME=VALUE の並び）
     [string[]]$SetEnv = @(),
     # --ignored --exact を渡す（較正のため）
@@ -206,7 +206,11 @@ $roundResults = [System.Collections.Generic.List[object]]::new()
 $current = $null
 $startedAt = Get-Date
 
-$target = if ($Binary -eq 'wintf-lib') { '-p wintf --lib' } else { '-p areka --bin areka' }
+$target = switch ($Binary) {
+    'wintf-lib' { '-p wintf --lib' }
+    'areka-placement-lib' { '-p areka-placement --lib' }
+    default { '-p areka --bin areka' }
+}
 $testArgs = "$target --"
 foreach ($f in $Filter) { if ($f) { $testArgs += " `"$f`"" } }
 if ($Ignored) { $testArgs += ' --ignored --exact' }

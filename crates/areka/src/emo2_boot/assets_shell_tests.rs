@@ -59,7 +59,7 @@ fn named_shell_builds_assets_from_that_shells_pictures() {
         96,
         96,
         Some("second"),
-        &crate::placement::DefaultSurfaces::builtin(),
+        &areka_placement::DefaultSurfaces::builtin(),
     )
     .expect("名前の先のシェルの資産づくりは成功する");
     assert_eq!(named.shells.len(), 2, "要求 scope 集合 [0,1] に 1:1 対応");
@@ -112,7 +112,7 @@ fn shell_without_any_surface_maps_to_shell_empty_with_folder_wording() {
 /// 面がシェルに在るかは問わない（在るかの判断は測り・装着の相が持つ）。
 #[test]
 fn shell_assets_take_initial_surfaces_from_descript_defaults() {
-    use crate::placement::descript_window_keys::read_default_surfaces;
+    use areka_placement::descript_window_keys::read_default_surfaces;
     // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);

@@ -190,8 +190,8 @@ fn other_execute_and_position_tags_are_not_sent() {
 /// 要件 1.4・1.7・3.1・3.5・7.1）。吸着は実行者のスコープを持ち、組の ID は読まずにそのまま運ぶ。
 #[test]
 fn window_link_pairs_send_their_cues() {
-    use crate::placement::resolver::Anchor;
-    use crate::placement::script_alignment::AlignmentWord;
+    use areka_placement::resolver::Anchor;
+    use areka_placement::script_alignment::AlignmentWord;
     let cases: [(&str, &str, &[&str], PositionCue); 6] = [
         (
             "1",
@@ -257,7 +257,7 @@ fn alignment_with_non_numeric_actor_is_dropped_with_warn() {
     for selector in ["alignmenttodesktop", "alignmentondesktop"] {
         let (tx, rx) = channel::<PositionCue>();
         let mut sink = MoveCueSink::new(tx);
-        let (_, events) = crate::placement::test_support::capture_logs(|| {
+        let (_, events) = log_capture_kit::capture(|| {
             sink.emit(carrier_cue("sakura", "set", &[selector, "top"]))
         });
         assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));

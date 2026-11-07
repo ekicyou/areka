@@ -1,7 +1,9 @@
 //! # staysee_balloon_fixture_test — 既定バルーン `StayseeBalloon` を検体に値を固定する
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**3.1**／**3.3**／**3.4**／
-//! **3.8**／**3.11**／**5.4**／**7.1**・設計 **C2**）。検体の取り方は同 spec 要件 3.2・設計 C2 を
+//! **3.8**／**3.11**／**5.4**／**7.1**・設計 **C2**）。検体の取り方は `areka-P0-default-balloon-bundle` 要件 3.2・設計 C2 を
 //! 上書きした `areka-P0-default-balloon-nar-fold` 要件 **4.1**〜**4.3** による。
 //!
 //! ## このテストが塞ぐ穴
@@ -34,7 +36,7 @@
 //!
 //! - `assets`・`definition`・`faces` はファイル読み込みと純粋層の解決だけ。
 //! - `bake` は画像復号（WIC）を使う。COM を MTA で張る。
-//! - `region`・`wrapping`・`script`・`scale` は **DirectWrite の factory を使う**
+//! - `region`・`wrapping`・`script` は **DirectWrite の factory を使う**
 //!   （文字の送り幅と行送りを実測するため）。既定書体が入っていない環境では
 //!   `region` の寸法の検査が先に赤くなる。
 //!
@@ -54,7 +56,6 @@
 //! | `region` | `staysee_balloon_fixture/region.rs` | 文字の領域解決と既定書体の受け入れ口 |
 //! | `wrapping` | `staysee_balloon_fixture/wrapping.rs` | 折返しと描画範囲への内包 |
 //! | `script` | `staysee_balloon_fixture/script.rs` | 選択肢と遅延座標指定の位置 |
-//! | `scale` | `staysee_balloon_fixture/scale.rs` | 表示スケールの扱い |
 //!
 //! ### 置き場がテーマ別**ディレクトリ**である理由
 //!
@@ -68,38 +69,29 @@
 //! 重複する接頭辞は除去）に合わせた。同 crate の `decoration_readback_test.rs` ＋
 //! `decoration_readback/` が同型の先例である。
 
-#[cfg(test)]
+#[path = "support/mod.rs"]
+mod support;
+
 #[path = "staysee_balloon_fixture/test_support.rs"]
 mod test_support;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/assets.rs"]
 mod assets;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/definition.rs"]
 mod definition;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/faces.rs"]
 mod faces;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/bake.rs"]
 mod bake;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/region.rs"]
 mod region;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/wrapping.rs"]
 mod wrapping;
 
-#[cfg(test)]
 #[path = "staysee_balloon_fixture/script.rs"]
 mod script;
-
-#[cfg(test)]
-#[path = "staysee_balloon_fixture/scale.rs"]
-mod scale;

@@ -1,5 +1,7 @@
 //! # areka_balloon_fixture_test — 自作のバルーン `areka-balloon` の中身を固定する
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **12.1**〜**12.5**・設計「Testing Strategy」の
 //! 「中身のテスト」）。
 //!
@@ -17,8 +19,8 @@
 //!
 //! ## 決定論
 //!
-//! 実 GPU と実窓は使わない。`assets` はファイル読み込みと、動く絵の見出しを聞くための
-//! WIC の読み手（COM を MTA で張る）だけを使う。
+//! 実 GPU と実窓は使わない。動く絵と面 0 の絵は WIC の読み手（COM を MTA で張る・`online`・
+//! `bake`）で読む。
 //!
 //! ## テーマ別ファイル
 //!
@@ -35,26 +37,23 @@
 //! | `online` | `areka_balloon_fixture/online.rs` | オンラインの印のコマ・待ち時間・繰り返し・灯る点の α |
 //! | `wrapping` | `areka_balloon_fixture/wrapping.rs` | 折り返しの行数と字数・範囲への内包・拡大率 1.0 と 1.25 |
 
-#[cfg(test)]
+#[path = "support/mod.rs"]
+mod support;
+
 #[path = "areka_balloon_fixture/test_support.rs"]
 mod test_support;
 
-#[cfg(test)]
 #[path = "areka_balloon_fixture/assets.rs"]
 mod assets;
 
-#[cfg(test)]
 #[path = "areka_balloon_fixture/definition.rs"]
 mod definition;
 
-#[cfg(test)]
 #[path = "areka_balloon_fixture/bake.rs"]
 mod bake;
 
-#[cfg(test)]
 #[path = "areka_balloon_fixture/online.rs"]
 mod online;
 
-#[cfg(test)]
 #[path = "areka_balloon_fixture/wrapping.rs"]
 mod wrapping;

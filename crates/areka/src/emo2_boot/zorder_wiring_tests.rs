@@ -38,11 +38,11 @@ use wintf::ecs::window::{ZOrderChainPlan, apply_zorder_chain};
 
 use super::frame::run_zorder_drain_phase;
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
-use crate::placement::follow::OffsetBase;
-use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{spawn_ghost_windows, wire_zorder_pair};
-use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
+use areka_placement::follow::OffsetBase;
+use areka_placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::{spawn_ghost_windows, wire_zorder_pair};
+use areka_placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------- 道具立て
 

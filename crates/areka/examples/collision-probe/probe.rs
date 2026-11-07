@@ -3,7 +3,7 @@ use super::ratio::{assert_expected_ratio, format_ratio};
 use super::state::{ProbeBoot, ProbePhase};
 use super::{
     BindSet, EmoPresenter, GetClientRect, GraphicsCore, PatternState, PresentCommand, RECT,
-    ScaleRatio, TargetId, WindowHandle, World, WucGraphicsResource, placement, target_map,
+    ScaleRatio, TargetId, WindowHandle, World, WucGraphicsResource, target_map,
 };
 
 // ---------------------------------------------------------------------------
@@ -132,15 +132,15 @@ fn attach_show_and_resize(world: &mut World) {
     assert_drawn_anchor(&boot.presenter, target, applied, native);
 
     // donor 必須逸脱 #3: 本番の反映関数で placeholder 誤寸 → **物理寸**へ resize（戻り値 true を assert）。
-    let ok = placement::follow::resize_window_to(
+    let ok = areka_placement::follow::resize_window_to(
         world,
         boot.char_window,
-        placement::resolver::SizePx {
+        areka_placement::resolver::SizePx {
             w: physical.0 as i32,
             h: physical.1 as i32,
         },
         // 表示実寸への再スナップ＝毎フレーム再スナップと同一の経路（Req 1.2・task 1.4）。
-        placement::diag::PlacementRoute::Resnap,
+        areka_placement::diag::PlacementRoute::Resnap,
     );
     assert!(
         ok,

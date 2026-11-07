@@ -34,8 +34,8 @@ use crate::emo2_boot::shell_balloon_resolve::SkinCandidate;
 use crate::emo2_boot::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 use crate::emo2_boot::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::source::{DescriptSource, GhostTitles};
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::source::{DescriptSource, GhostTitles};
 
 // ---------------------------------------------------------------- 土台
 

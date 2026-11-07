@@ -1,32 +1,18 @@
-// ── タスク 5.4: canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
+// 断りの無い要件の番号と design.md の参照は spec `vertical-choice-hover-band` のもの（別の spec のものはその場で名を書く）。
+
+// ── canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
 //
-// design.md「純粋層 / ChoicePure」・要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
-// SquareFill）/4.3（未指定→Invert 反転）/4.5（描画実行の一点写像＝焼込済み純データ）。
+// `areka-P0-choice-render` design.md「純粋層 / ChoicePure」・`areka-P0-choice-render` 要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
+// SquareFill）/4.3（未指定→Invert 反転）。描画は焼き込み済みの純データからの一点写像で行う。
 // 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
 // resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
 
+use super::test_support::{NO_OFFSET, region, region_in, seg, yes_no};
 use super::*;
 
 use crate::canvas::{GlyphRunContent, RegionTransform, Resident, TextEffects};
 use crate::layout::PositionedGlyph;
 use crate::look::StyleId;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-/// validrect 原点を持つ `TextRegion`（left()/top() のみ inline 原点差引きに使用）。
-fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
-}
 
 /// 変換 offset `offset` の GlyphRun 住人（グリフ内容は装飾非関与ゆえ最小の 1 グリフ）。
 fn glyph_resident(offset: (f32, f32)) -> Resident {
@@ -53,20 +39,8 @@ fn canvas(residents: Vec<Resident>) -> ContentCanvas {
     }
 }
 
-/// `(line_index, ordinal, 絶対 inline_range)` の [`LineChoiceSegment`]。
-fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegment {
-    LineChoiceSegment {
-        line_index,
-        ordinal,
-        inline_range: range,
-    }
-}
-
 /// 装飾テストのハイライト帯（em ボックス丈 10.0 と**異なる**値＝焼込みが観測可能）。
 const TEST_BAND: f32 = 12.0;
-
-/// 既存ケースの帯の寄せ＝0（行ボックス丈 ＝ 帯の丈のフォント＝既定 ＭＳ ゴシックと同じ関係）。
-const NO_OFFSET: f32 = 0.0;
 
 /// 帯の寄せの焼込みが観測可能な値（0 とも em ボックス丈とも異なる）。
 const TEST_OFFSET: f32 = 3.0;
@@ -89,7 +63,7 @@ fn square_fill() -> ResolvedChoiceStyle {
 
 // ── 恒等（非退行）: セグメント空 → canvas 無変更 ──
 
-/// セグメント空 → 入力 canvas をまったく同一で返す（恒等・要件 1.4）。
+/// セグメント空 → 入力 canvas をまったく同一で返す（恒等・`areka-P0-choice-render` 要件 1.4）。
 #[test]
 fn empty_segments_returns_canvas_unchanged() {
     let region = region(0, 0, 400, 224);
@@ -203,41 +177,12 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
     );
 }
 
-/// Observable（R3.3 の帯単一化）: 装飾は受け取った `band_extent` を Choice 住人へそのまま
-/// 焼き込む（em ボックス丈 10.0 ではなく 12.0）——COM 層のハイライト矩形／ダーティ帯は
-/// この値だけを読み、`derive_hit_rows` へ渡す値と同一にすることで帯が数値一致する。
+/// Observable（`areka-P0-choice-render` R3.3 の帯単一化・`areka-P0-emo2-conformance-e2e` R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_extent`
+/// （em ボックス丈 10.0 ではなく 12.0）と `band_offset` を Choice 住人へそのまま焼き込む——COM 層の
+/// ハイライト矩形の起点とダーティ帯はこの値だけを読み、`derive_hit_rows` へ渡す値と同一にする
+/// ことで帯の丈と**位置**まで数値一致する。
 #[test]
-fn decorate_bakes_band_extent_into_choice_residents() {
-    let region = region(0, 0, 400, 224);
-    let input = canvas(vec![
-        glyph_resident((0.0, 0.0)),
-        glyph_resident((0.0, 12.0)),
-    ]);
-    let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
-    let out = decorate_canvas(
-        input,
-        &segments,
-        Some(0),
-        square_fill(),
-        (0, 0, 0),
-        &region,
-        WritingMode::HorizontalTb,
-        &bands_of(TEST_BAND, NO_OFFSET),
-    );
-    for i in [0usize, 1] {
-        assert_eq!(
-            choice(&out.residents[i]).band_extent,
-            TEST_BAND,
-            "住人 {i}: hover 有無に依らず帯を焼き込む（hover 解除フレームのダーティ帯にも要る）"
-        );
-    }
-}
-
-/// Observable（R13.1/13.2 の帯の寄せの単一化）: 装飾は受け取った `band_offset` も Choice 住人へ
-/// そのまま焼き込む——COM 層のハイライト矩形の起点とダーティ帯の超過分はこの値を読み、
-/// `derive_hit_rows` へ渡す値と同一にすることで帯の**位置**まで数値一致する。
-#[test]
-fn decorate_bakes_band_offset_into_choice_residents() {
+fn decorate_bakes_band_extent_and_offset_into_choice_residents() {
     let region = region(0, 0, 400, 224);
     let input = canvas(vec![
         glyph_resident((0.0, 0.0)),
@@ -255,32 +200,13 @@ fn decorate_bakes_band_offset_into_choice_residents() {
         &bands_of(TEST_BAND, TEST_OFFSET),
     );
     for i in [0usize, 1] {
+        let c = choice(&out.residents[i]);
         assert_eq!(
-            choice(&out.residents[i]).band_offset,
-            TEST_OFFSET,
-            "住人 {i}: hover 有無に依らず帯の寄せを焼き込む（hover 解除フレームのダーティ帯にも要る）"
+            (c.band_extent, c.band_offset),
+            (TEST_BAND, TEST_OFFSET),
+            "住人 {i}: hover 有無に依らず帯の丈と寄せを焼き込む（hover 解除フレームのダーティ帯にも要る）"
         );
     }
-}
-
-/// 非退行（R13.6）: 寄せ 0（行ボックス丈 ＝ 帯の丈の既定 ＭＳ ゴシック）を渡すと住人へ焼かれる
-/// 値も 0 になり、下流（ハイライト矩形／ダーティ帯）は寄せを入れる前と 1 画素も変わらない。
-#[test]
-fn decorate_bakes_zero_band_offset_for_flat_line_box_fonts() {
-    let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0))]);
-    let segments = [seg(0, 0, (0.0, 20.0))];
-    let out = decorate_canvas(
-        input,
-        &segments,
-        Some(0),
-        square_fill(),
-        (0, 0, 0),
-        &region,
-        WritingMode::HorizontalTb,
-        &bands_of(TEST_BAND, NO_OFFSET),
-    );
-    assert_eq!(choice(&out.residents[0]).band_offset, 0.0);
 }
 
 /// 縦書き（vertical_rl/lr）: 行内軸＝y。行内 offset.1=50 → 絶対 50..70 は top 原点差引きで local 0..20。
@@ -449,11 +375,11 @@ fn lines_without_segments_stay_glyph_run() {
     );
 }
 
-// ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し（不変条件 3・4.5/6.5） ──
+// ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し（`areka-P0-choice-render` の不変条件 3・4.5/6.5） ──
 
 /// hover=Some(99)（どのセグメントも持たない ordinal）→ 全住人 hovered/highlight None・
 /// ただしセグメント持ち行は Choice 住人化しセグメントは記録する（stale-safe 不変条件・
-/// Data Models §不変条件 3・要件 4.5/6.5）。
+/// Data Models §不変条件 3・`areka-P0-choice-render` 要件 4.5/6.5）。
 #[test]
 fn hover_stale_ordinal_yields_no_highlight() {
     let region = region(0, 0, 400, 224);
@@ -491,20 +417,6 @@ fn hover_stale_ordinal_yields_no_highlight() {
 // 配置（`LayoutEngine`・`FixedMetrics`＝行ボックス 1.33em）→ `line_bands` → `decorate_canvas`／
 // `derive_hit_rows` の本番と同じ道で、焼いた帯と当たりの帯をブロック軸（x）で突き合わせる。
 
-/// 書字方向 `mode` で解いた `TextRegion`（validrect 10,20〜390,220）。
-fn vregion(mode: WritingMode) -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(Some(20), Some(220), Some(10), Some(390)),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    TextRegion::resolve(&model, (400, 224), mode)
-}
-
 /// 縦書きの配置・行ごとの帯・選択肢の注釈の組。
 type Columns = (
     TextRegion,
@@ -516,24 +428,8 @@ type Columns = (
 /// 「はい」「いいえ」を 1 列ずつ並べた選択肢 2 つ（em 28）の配置と、その帯・注釈。
 fn two_choice_columns(mode: WritingMode) -> Columns {
     use crate::layout::{FixedMetrics, LayoutEngine, WrapPlan};
-    use crate::state::{SpanKind, TextItem};
-    let items = vec![
-        TextItem::glyph("は"),
-        TextItem::glyph("い"),
-        TextItem::LineBreak { ratio: 1.0 },
-        TextItem::glyph("い"),
-        TextItem::glyph("い"),
-        TextItem::glyph("え"),
-    ];
-    let span = |ordinal, glyph_range| ChoiceSpan {
-        kind: SpanKind::Choice,
-        ordinal,
-        id: String::new(),
-        label: String::new(),
-        references: vec![],
-        glyph_range,
-    };
-    let region = vregion(mode);
+    let (items, spans) = yes_no();
+    let region = region_in(mode, 10, 20, 390, 220);
     let lines = LayoutEngine::layout(
         &items,
         5,
@@ -544,7 +440,7 @@ fn two_choice_columns(mode: WritingMode) -> Columns {
         WrapPlan::CharByChar,
     );
     let bands = line_bands(&lines, mode, &FixedMetrics);
-    let segments = annotate_lines(&lines, &[span(0, 0..2), span(1, 2..5)]);
+    let segments = annotate_lines(&lines, &spans);
     (region, lines, bands, segments)
 }
 
@@ -643,7 +539,7 @@ fn vertical_adjacent_same_size_column_bands_do_not_overlap() {
 
 /// P3（要件 1.6）: `\f[height,40]` の字を含む列の帯の厚みは 40。隣の em 20 の列との帯の重なりの
 /// 量（正＝重なる幅・負＝間の幅、image px）を数で固定する。字のインクは隣と重ならないので列送りは
-/// 直さない（research.md 13.3 節）——帯だけが重なり得るのを、横書きの大きい行と同じ扱いで受け入れる。
+/// 直さない——帯だけが重なり得るのを、横書きの大きい行と同じ扱いで受け入れる。
 #[test]
 fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
     use crate::cursor_tag::CursorWarnGuard;
@@ -687,7 +583,7 @@ fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
         (WritingMode::VerticalRl, -6.0, 2.0),
         (WritingMode::VerticalLr, -6.0, 2.0),
     ] {
-        let region = vregion(mode);
+        let region = region_in(mode, 10, 20, 390, 220);
         let lines = LayoutEngine::layout_styled(
             &items,
             ids.len(),
@@ -781,7 +677,8 @@ fn vertical_em_box_left_default_centres_the_em_box_in_the_column_box() {
 /// と同じ）で、`line_bands` の縦書きの寄せがその値の丸め（−7.4 → −7・＋0.6 → 1）になる——行の箱の
 /// 比からは出ない（`FixedMetrics` の真ん中なら em 28 で −5／5）。横書きの出力は `FixedMetrics` と同じ。
 ///
-/// 較正: `line_bands` の縦書きの枝を 2.1 の割合の定数の式へ戻すと −4／5 で赤。
+/// 較正: `line_bands` の縦書きの枝を Yu Gothic UI の割合の定数の式（spec `vertical-choice-hover-band` の
+/// design.md）へ戻すと −4／5 で赤。
 #[test]
 fn vertical_line_bands_read_the_em_box_from_metrics() {
     use crate::layout::{FixedMetrics, GlyphMetrics};
@@ -814,10 +711,11 @@ fn vertical_line_bands_read_the_em_box_from_metrics() {
             bands.iter().all(|b| b.offset == want && b.extent == 28.0),
             "{mode:?}: 寄せは metrics の値の丸め {want}・厚みは em: {bands:?}"
         );
-        assert_eq!(
-            line_bands(&lines, WritingMode::HorizontalTb, &OffCentre),
-            line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics),
-            "{mode:?}: 横書きの帯は vertical_em_box_left を読まない"
-        );
     }
+    let (_, lines, _, _) = two_choice_columns(WritingMode::VerticalRl);
+    assert_eq!(
+        line_bands(&lines, WritingMode::HorizontalTb, &OffCentre),
+        line_bands(&lines, WritingMode::HorizontalTb, &FixedMetrics),
+        "横書きの帯は vertical_em_box_left を読まない"
+    );
 }
