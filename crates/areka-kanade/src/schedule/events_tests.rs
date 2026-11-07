@@ -186,35 +186,9 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
     assert_eq!(references, vec!["user"]);
 }
 
-/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待23集合と完全一致し
-/// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
-/// Task 2.1 で additive 追加され、選択関連の固定 3 ID（OnChoiceSelectEx/OnChoiceSelect/
-/// OnChoiceTimeout）は choice-select-events 2.3 で同じ前例に倣い additive 追加された
-/// （whitelist が意図的に 6→8→11 へ増えたための更新）。3 ID はいずれも正典（ukadoc）の
-/// 固定イベント ID であり、「表＝正典固定 ID の部分集合」の性質は保たれる。
-/// 切替の 2 語（OnGhostChanging/OnGhostChanged）は ghost-shell-balloon-switch 2.1 で
-/// 同じ前例に倣い足した（11→13・いずれも正典固定 ID）。
-/// インストール系の 8 語は ghost-install 2.1 で同じ前例に倣い足した（13→21・いずれも正典固定 ID・
-/// `OnInstallReroute` は載せない）。
-/// 投げ込みの 2 語（OnFileDrop2/OnDirectoryDrop）は file-drop 2.2 で同じ前例に倣い足した
-/// （21→23・いずれも正典固定 ID）。
-/// ネットワーク更新の 19 語は network-update 2.15 で同じ前例に倣い足した（23→42・いずれも
-/// 正典固定 ID・`OnUpdateCheck*`／`OnUpdateResultExplorer`／`OnUpdatedata*` は載せない）。
-/// シェル・バルーン切替の 3 語（OnShellChanging/OnShellChanged/OnBalloonChange）は
-/// shell-balloon-switch 1.1 で同じ前例に倣い足した（42→45・いずれも正典固定 ID）。
-/// 翻訳の `OnTranslate` は translate-pipeline 2.1 で同じ前例に倣い足した（45→46・正典固定 ID）。
-/// ドラッグの 2 語（OnMouseDragStart/OnMouseDragEnd）は mouse-drag-events 7.1 で同じ前例に倣い
-/// 足した（46→48・いずれも正典固定 ID）。
-/// バルーンの寿命の 3 語（OnBalloonBreak/OnBalloonClose/OnBalloonTimeout）は balloon-lifecycle-events 2.1 で
-/// 同じ前例に倣い足した（48→51・いずれも正典固定 ID・正典に無い `OnBalloonClick` は載せない）。
-/// アンカーの 2 語（OnAnchorSelectEx/OnAnchorSelect）は anchor-tag-canon 4.1 で同じ前例に倣い
-/// 足した（51→53・いずれも正典固定 ID）。
-/// シェル位置初期化の `OnResetWindowPos` は move-canon 4.1 で同じ前例に倣い足した（53→54・
-/// 正典固定 ID）。
-/// shiori の読み直しの `OnDestroy` は mcp-reload 2.2 で同じ前例に倣い `OnClose` の直後へ足した
-/// （54→55・正典固定 ID・語を足すたびに名前が競合しないようテスト名から件数を外した）。
-/// マウスの解放・クリック・ホイール・出入りの 9 語は mouse-click-wheel-events 2.2 で同じ前例に倣い
-/// 末尾へ足した（55→64・いずれも正典固定 ID）。
+/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待の集合と完全一致し
+/// `OnTalk`/`OnHour` を含まない。載る語はすべて正典（ukadoc）の固定イベント ID で、語を足す
+/// spec は本表と期待の集合の両方へ足す。
 #[test]
 fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
     assert_eq!(

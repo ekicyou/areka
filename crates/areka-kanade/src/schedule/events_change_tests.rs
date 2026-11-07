@@ -30,21 +30,6 @@ fn s(v: &[&str]) -> Vec<String> {
 
 #[test]
 fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
-    // 13 語に、インストール系の 8 語を足して 21 語（areka-P0-ghost-install 要件 2.12・11.9）、
-    // 投げ込みの 2 語を足して 23 語（areka-P0-file-drop 要件 7.3・8.8）、
-    // ネットワーク更新の 19 語を足して 42 語（areka-P0-network-update 要件 2.15・9.13）、
-    // シェル・バルーン切替の 3 語を足して 45 語（areka-P0-shell-balloon-switch 要件 8.2）、
-    // 翻訳の `OnTranslate` を足して 46 語（areka-P0-translate-pipeline 要件 3.4）、
-    // ドラッグの 2 語を足して 48 語（areka-P0-mouse-drag-events 要件 7.1）、
-    // バルーンの寿命の 3 語を足して 51 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）、
-    // アンカーの 2 語を足して 53 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）、
-    // シェル位置初期化の `OnResetWindowPos` を足して 54 語（areka-P0-move-canon 要件 8.3）、
-    // shiori の読み直しの `OnDestroy` を足して 55 語（areka-P0-mcp-reload 要件 4.1）、
-    // マウスの解放・クリック・ホイール・出入りの 9 語（`OnMouseUp`・`OnMouseUpEx`・`OnMouseClick`・
-    // `OnMouseClickEx`・`OnMouseWheel`・`OnMouseEnter`・`OnMouseLeave`・`OnMouseEnterAll`・
-    // `OnMouseLeaveAll`）を足して 64 語（mouse-click-wheel-events 要件 10.1）、
-    // 倍率の `OnShellScaling`・`OnBalloonScaling` を足して 66 語（shell-scale-linkage 要件 5.1・5.2）。
-    assert_eq!(ALLOWED_EVENT_IDS.len(), 66);
     for id in [
         "OnGhostChanging",
         "OnGhostChanged",

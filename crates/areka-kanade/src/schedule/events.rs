@@ -18,11 +18,12 @@
 //! | イベント | Method | M1 送出値 |
 //! |---|---|---|
 //! | `OnInitialize` | NOTIFY | References なし（空 Vec）。SHIORI だけの読み直しの起動でだけ Ref0=`reload`（`boot.rs` が載せる・areka-P0-mcp-reload 要件 4.3） |
-//! | `OnFirstBoot` | GET | Ref0=`"0"`（固定・Req 1.6） |
+//! | `OnFirstBoot` | GET | Ref0=`vanish_count` の 10 進（記録が無ければ `"0"`） |
 //! | `OnBoot` | GET | Ref0=`config.shell_name`（前回落ちたときだけ Ref1〜5=空・Ref6=`halt`・Ref7=落ちたゴースト名） |
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"）・"user" のみ Ref1=Ref2=スコープ番号（ForceQuit の NOTIFY は Ref0 のみ） |
+//! | `OnDestroy` | NOTIFY（台詞の切れ目の口の印） | Ref0=`reload`（SHIORI だけの読み直し・`areka` の `emo2_boot::reload` が渡す列のまま） |
 //! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし・Req3.1/3.5） |
 //! | `OnChoiceSelect` | GET | Ref0=選択肢 ID（Req3.2） |
 //! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし・Req3.3/3.5） |
@@ -62,6 +63,13 @@
 //! | `OnShellChanged` | GET（汎用の入口） | Ref0〜2=今のシェル名・ゴースト名・シェルのパス（渡された列のまま） |
 //! | `OnBalloonChange` | GET（汎用の入口） | Ref0〜1=バルーン名・パス（渡された列のまま） |
 //! | `OnTranslate` | GET | Ref0=展開済みの台詞・Ref1=欠番・Ref2=元のイベントの ID・Ref3=元の Reference をバイト値 1 で連ねたもの |
+//! | `OnTranslate`（SSTP SEND の台本） | GET | Ref0=展開済みの台詞・Ref1=`sstp-send,owned`（Ref2 以降なし） |
+//! | `OnMouseMove` | GET | Ref0/1=x/y・Ref2=`"0"`・Ref3=スコープ・Ref4=当たり判定（無ければ空）・Ref5=`"0"`・Ref6=`mouse` |
+//! | `OnMouseDoubleClick` | GET | `OnMouseMove` と同じ並び・Ref5=ボタン（左 `"0"`／右 `"1"`） |
+//! | `OnMouseUp`・`OnMouseClick` | GET | `OnMouseMove` と同じ並び・Ref5=ボタン（左 `"0"`／右 `"1"`／中 `"2"`） |
+//! | `OnMouseUpEx`・`OnMouseClickEx` | GET | `OnMouseMove` と同じ並び・Ref5=ボタン（`middle`／`xbutton1`／`xbutton2`） |
+//! | `OnMouseWheel` | GET | `OnMouseMove` と同じ並び・Ref2=回転量 |
+//! | `OnMouseEnter`・`OnMouseLeave`・`OnMouseEnterAll`・`OnMouseLeaveAll` | GET | `OnMouseMove` と同じ並び |
 //! | `OnMouseDragStart` | GET | Ref0/1=押した位置の x/y・Ref2=`"0"`・Ref3=スコープ・Ref4=当たり判定（無ければ空）・Ref5=`"0"`（左）・Ref6=`mouse` |
 //! | `OnMouseDragEnd` | GET | Ref0/1=終わった位置の x/y（取り消しは押した位置）・Ref2〜6 は `OnMouseDragStart` と同じ |
 //! | `OnBalloonBreak` | GET | Ref0=止めたトークの台本・Ref1=スコープ番号・Ref2=空（中断位置は作らない） |
@@ -69,6 +77,8 @@
 //! | `OnBalloonTimeout` | GET | Ref0=時間切れで隠れたバルーンに出ていた台本・Ref1=`0` |
 //! | `OnAnchorSelectEx` | GET | Ref0=アンカーの範囲の文字・Ref1=ID・Ref2 以降=引数（記述順・無ければ位置なし） |
 //! | `OnAnchorSelect` | GET | Ref0=ID |
+//! | `OnFileDrop2` | GET（汎用の入口） | Ref0=パスをバイト値 1 で連ねたもの・Ref1=スコープ・Ref2=同じ並びの MIME（渡された列のまま） |
+//! | `OnDirectoryDrop` | GET（汎用の入口） | Ref0=パス・Ref1=スコープ（渡された列のまま） |
 //! | `OnResetWindowPos` | GET（汎用の入口） | References なし（メニューの「シェル位置初期化」から） |
 //! | `OnShellScaling` | GET（汎用の入口） | Ref0〜3=横の後・横の前・縦の後・縦の前の百分率・Ref4=シェル番号（渡された列のまま） |
 //! | `OnBalloonScaling` | GET（汎用の入口） | Ref0〜3=横の後・横の前・縦の後・縦の前の百分率・Ref4=シェル番号（渡された列のまま） |
@@ -89,10 +99,9 @@ const REF1_OFFSCREEN_M1: &str = "0";
 // SEAM(Req1.6): 実測供給時は ExecutionSnapshot の geometry から導出する。
 const REF2_OVERLAP_M1: &str = "0";
 
-/// OnMouseMove Ref2（ホイール回転量）の M1 固定値＝increment シーム（Req2.4）。
+/// OnMouseMove Ref2（ホイール回転量）の値（Req2.4）。
 ///
-/// M1 はホイールイベントを送出しないため常に "0" で構成する。実ホイール量の供給が
-/// 実装されたら、この定数の載せ替え（呼び手が実値を渡す形へ）で拡張する。
+/// 移動の Ref2 は常に "0"（ホイールの量は `OnMouseWheel` が運ぶ）。
 pub(crate) const REF2_WHEEL_M1: &str = "0";
 /// マウス系イベント Ref6（入力デバイス種）の M1 固定値（DD-IE-6）。
 ///
@@ -128,7 +137,7 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnSecondChange",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnClose:1
     "OnClose",
-    // shiori の読み直しの 1 語（areka-P0-mcp-reload 要件 4.1・54→55 語）。NOTIFY・Ref0=`reload`。
+    // shiori の読み直しの 1 語（areka-P0-mcp-reload 要件 4.1）。NOTIFY・Ref0=`reload`。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnDestroy:1
     "OnDestroy",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseMove:1
@@ -208,7 +217,7 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnUpdateResult",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnUpdateResultEx:1
     "OnUpdateResultEx",
-    // シェル・バルーン切替の 3 語（areka-P0-shell-balloon-switch 要件 8.2・42→45 語）。
+    // シェル・バルーン切替の 3 語（areka-P0-shell-balloon-switch 要件 8.2）。
     // `OnShellChanging` は台詞の切れ目の口の印として、残り 2 語は汎用の入口から送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellChanging:1
     "OnShellChanging",
@@ -216,17 +225,17 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnShellChanged",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonChange:1
     "OnBalloonChange",
-    // 翻訳の 1 語（areka-P0-translate-pipeline 要件 3.4・45→46 語）。SHIORI が返した台詞を
+    // 翻訳の 1 語（areka-P0-translate-pipeline 要件 3.4）。SHIORI が返した台詞を
     // 再生の前に、その台詞を返した SHIORI へ送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnTranslate:1
     "OnTranslate",
-    // ドラッグの 2 語（areka-P0-mouse-drag-events 要件 7.1・46→48 語）。キャラクター窓を
+    // ドラッグの 2 語（areka-P0-mouse-drag-events 要件 7.1）。キャラクター窓を
     // 左ボタンで動かし始めたとき・終えたときに送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragStart:1
     "OnMouseDragStart",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseDragEnd:1
     "OnMouseDragEnd",
-    // バルーンの寿命の 3 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4・48→51 語）。利用者の
+    // バルーンの寿命の 3 語（areka-P0-balloon-lifecycle-events 要件 3.5・6.4）。利用者の
     // 中断の後・読み終えたバルーンを閉じたとき・時間切れで隠れたときに送る。クリックで閉じたことは
     // `OnBalloonClose` だけで知らせ、正典に無い `OnBalloonClick` は載せない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonBreak:1
@@ -235,19 +244,19 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnBalloonClose",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonTimeout:1
     "OnBalloonTimeout",
-    // アンカーの 2 語（areka-P0-anchor-tag-canon 要件 4.1・4.2・51→53 語）。バルーンの本文の
+    // アンカーの 2 語（areka-P0-anchor-tag-canon 要件 4.1・4.2）。バルーンの本文の
     // アンカー（`\_a`）が押されたときに送る。`On` で始まる ID の直接の送出は選択肢の任意名と
     // 同じ道（[`is_allowed_choice_event`]）を通るので、表には載らない。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelectEx:1
     "OnAnchorSelectEx",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnAnchorSelect:1
     "OnAnchorSelect",
-    // シェル位置初期化の 1 語（areka-P0-move-canon 要件 8.3・53→54 語）。右クリックのメニューの
+    // シェル位置初期化の 1 語（areka-P0-move-canon 要件 8.3）。右クリックのメニューの
     // 「シェル位置初期化」を選んだときに送る。`\![execute,resetwindowpos]` からは送らない（要件 8.7）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnResetWindowPos:1
     "OnResetWindowPos",
     // マウスの解放・クリック・ホイール・出入りの 9 語（mouse-click-wheel-events 要件 1.1・2.1・6.1・
-    // 7.5・10.1・55→64 語）。ボタンを放したとき・クリックのとき・ホイールを回したとき・当たり判定
+    // 7.5・10.1）。ボタンを放したとき・クリックのとき・ホイールを回したとき・当たり判定
     // やキャラクター窓に出入りしたときに送る。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseUp:1
     "OnMouseUp",
@@ -267,7 +276,7 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnMouseEnterAll",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnMouseLeaveAll:1
     "OnMouseLeaveAll",
-    // シェル・バルーンにかかった倍率の 2 語（shell-scale-linkage 要件 5.1・5.2・64→66 語）。
+    // シェル・バルーンにかかった倍率の 2 語（shell-scale-linkage 要件 5.1・5.2）。
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnShellScaling:1
     "OnShellScaling",
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnBalloonScaling:1
@@ -549,19 +558,16 @@ pub fn on_mouse_move(
     region: Option<&str>,
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Static("OnMouseMove"),
-        references: vec![
-            x.to_string(),
-            y.to_string(),
-            REF2_WHEEL_M1.to_string(),
-            scope.to_string(),
-            region.unwrap_or("").to_string(),
-            "0".to_string(),
-            REF6_DEVICE_MOUSE.to_string(),
-        ],
-        status: ExecutionStatus::derive(snapshot),
-    }
+    mouse_get(
+        "OnMouseMove",
+        x,
+        y,
+        REF2_WHEEL_M1,
+        scope,
+        region,
+        "0",
+        snapshot,
+    )
 }
 
 /// `OnMouseDoubleClick`（GET・Ref0..6 正典 layout）。
@@ -592,19 +598,16 @@ pub fn on_mouse_double_click(
         MouseButton::Left => "0",
         MouseButton::Right => "1",
     };
-    ShioriCall::Get {
-        id: EventId::Static("OnMouseDoubleClick"),
-        references: vec![
-            x.to_string(),
-            y.to_string(),
-            "0".to_string(),
-            scope.to_string(),
-            region.unwrap_or("").to_string(),
-            button_ref5.to_string(),
-            REF6_DEVICE_MOUSE.to_string(),
-        ],
-        status: ExecutionStatus::derive(snapshot),
-    }
+    mouse_get(
+        "OnMouseDoubleClick",
+        x,
+        y,
+        "0",
+        scope,
+        region,
+        button_ref5,
+        snapshot,
+    )
 }
 
 /// `OnMouseDragStart`（GET・Ref0..6 正典 layout・areka-P0-mouse-drag-events 要件 4）。
@@ -637,7 +640,7 @@ pub fn on_mouse_drag_end(
 }
 
 /// マウスの GET の共通の組み立て（Ref0..6 の固定の並び `[x, y, ref2, scope, region, ref5, "mouse"]`・
-/// Ref4 の `None` は空文字）。ドラッグの 2 つは Ref2・Ref5 とも "0" で呼ぶ。
+/// Ref4 の `None` は空文字）。移動・ダブルクリック・ドラッグの 2 つがこれを呼ぶ。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn mouse_get(
     id: &'static str,

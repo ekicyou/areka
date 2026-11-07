@@ -12,6 +12,7 @@
 //! いずれも同一入力に対して常に同一の結果を返す（Req2.5）。外部状態を読まないため、
 //! 呼び手が既定値・起点時刻を渡す形にしてある（config への依存を純関数へ持ち込まない）。
 
+use super::events;
 use crate::msg::MonotonicMs;
 
 /// 選択肢 ID から決まる発火段列（設計 C3・「カスケード則の正典裁定」1/7）。
@@ -68,7 +69,7 @@ pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1
     if script_body(id).is_some() {
         CascadePlan::Script
-    } else if id.starts_with("On") {
+    } else if events::is_allowed_choice_event(id) {
         CascadePlan::Named
     } else {
         CascadePlan::Canonical

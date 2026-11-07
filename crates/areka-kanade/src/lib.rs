@@ -76,18 +76,17 @@ pub use translate::{MakotoChain, ScriptExpander, TranslateSeams};
 ///
 /// `schedule/` は `pub(crate)` に閉じるが、`tests/` 配下の統合テストクレートは
 /// `pub(crate)` を参照できない。Req 7.1（fixture・検証・実装が単一の正本を共有）を
-/// 成立させる唯一の経路として、Reference 表構成関数のみを本ファサード経由で
-/// クレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等で到達可能）。
+/// 成立させる唯一の経路として、外（`tests/`・`areka`・`areka-ghost`）が使う Reference 表構成関数
+/// だけを本ファサード経由でクレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等）。
 /// 運行状態機械の内部（Phase／State／Action／Input／step 本体・遷移ロジック）は
 /// `pub(crate)` のまま非公開に保つ。
 pub mod events {
     pub use crate::schedule::events::{
-        ALLOWED_EVENT_IDS, SourceEvent, allowed_static, baseware_version, is_allowed_choice_event,
-        is_allowed_event_id, on_balloon_break, on_balloon_close, on_balloon_timeout, on_boot,
+        ALLOWED_EVENT_IDS, SourceEvent, baseware_version, is_allowed_event_id, on_boot,
         on_choice_named, on_choice_select, on_choice_select_ex, on_choice_timeout, on_close,
-        on_close_notify, on_first_boot, on_ghost_changed, on_ghost_changing, on_initialize,
-        on_mouse_double_click, on_mouse_drag_end, on_mouse_drag_start, on_mouse_move,
-        on_second_change, on_translate, raise, value_replaces_active_talk,
+        on_close_notify, on_first_boot, on_ghost_changing, on_initialize, on_mouse_double_click,
+        on_mouse_drag_end, on_mouse_drag_start, on_mouse_move, on_second_change, on_translate,
+        raise,
     };
 }
 
