@@ -45,7 +45,7 @@
 - `hit_test_entity_ex` の `NamedRegions` の答え（αのマスクを見ない・表に無い所は無名の当たり）が変わるとき → `hit-id-pass` が確かめ直す。
 - `ColorMapData::from_image` の失敗の約束（255 色まで・パスは UTF-16 のまま）が変わるとき → `hit-id-pass` が確かめ直す。
 - `monitor_systems_transition_tests.rs:32` が見張る `ecs/world/mod.rs` の字面が変わるとき（`wintf-visual-tree` が先に変えうる） → この spec は main を取り込み、テストがその字面に合っていることを確かめる。
-- `monitor_systems.rs` の記録の文「Redriving window DPI from updated Monitor (no WM_DPICHANGED required)」が変わるとき → `crates/areka/src/placement/transition_judge_reobservation_tests.rs:74` の実機ログの写し（逐語の fixture）と `monitor_systems_tests.rs:350` が壊れる。この spec は文を変えない（research.md 8.10）。
+- `monitor_systems.rs` の記録の文「Redriving window DPI from updated Monitor (no WM_DPICHANGED required)」が変わるとき → `crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs:74` の実機ログの写し（逐語の fixture）と `monitor_systems_tests.rs:350` が壊れる。この spec は文を変えない（research.md 8.10）。
 - `Arrangement` の付けたときのフックが「`GlobalArrangement` が無ければ入れる」をやめるとき → `ecs/graphics/visual.rs:19`・`:135`（`Visual` の付けたときのフックは `Arrangement` だけを入れ、`GlobalArrangement` はこのフックの連鎖に任せる）が確かめ直す。
 
 ## Architecture
@@ -390,7 +390,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 - 起動（`initialize_layout_root`）と新しいモニタ（`detect_display_change_system`）はこれをそのまま使う。値の更新（`update_monitor_layout_system`）は今と同じく `size` と `inset` だけをこれから写す。
 - `monitor_systems_transition_tests.rs` が数える 4 つの字面は変わらない（research.md 8.7）。
 - `monitor_systems_transition_tests.rs:32` は `include_str!("../../world/mod.rs")` で `ecs/world/mod.rs` の字面を見張る。同じウェーブの `wintf-visual-tree` が先にその行を変えたなら、この spec は main を取り込み、テストがその字面に合ったままであることを確かめるだけにする（`ecs/world/mod.rs` には触らない・要件 5.9）。
-- 記録の行は動かすだけで文を変えない。`[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`（`monitor_systems.rs:564`）は `crates/areka/src/placement/transition_judge_reobservation_tests.rs:74` が逐語の fixture に、`monitor_systems_tests.rs:350` が確かめに使う（research.md 8.10）。
+- 記録の行は動かすだけで文を変えない。`[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`（`monitor_systems.rs:564`）は `crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs:74` が逐語の fixture に、`monitor_systems_tests.rs:350` が確かめに使う（research.md 8.10）。
 
 ## 指摘ごとの直し方
 
@@ -414,7 +414,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 | 17 | `HSTRING::from(image_path)`（`com/wic.rs:35` と同じ） | なし |
 | 18 | 読み込みのテストを足す（Testing Strategy） | なし |
 | 19 | `apply_direction`（上の節） | なし |
-| 20 | `monitor_box_style`（上の節）。記録の行（`debug!` の文と欄）には触らない。特に「Redriving window DPI from updated Monitor (no WM_DPICHANGED required)」の文は 1 字も変えない | `crates/areka/src/placement/transition_judge_reobservation_tests.rs:74` が逐語で使う（触らない） |
+| 20 | `monitor_box_style`（上の節）。記録の行（`debug!` の文と欄）には触らない。特に「Redriving window DPI from updated Monitor (no WM_DPICHANGED required)」の文は 1 字も変えない | `crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs:74` が逐語で使う（触らない） |
 | 21 | 描く骨組み（上の節）。透明の色の定数 3 つを `record::TRANSPARENT` 1 つに | なし |
 | 22 | `TypewriterLayoutCache`・`BitmapSourceGraphics` の `unsafe impl Send/Sync` と説明を消す。`test_typewriter_layout_cache_is_send_sync` は残す（自動の導出を試す意味を持つ） | `GraphicsCommandList` などの慣習は `ecs/graphics/` の持ち物で変えない |
 | 23 | 消す: `InsertBitmapSourceResource`（`unsafe impl Send` ごと）・`test_asset_path`・`rectangle.rs` の `Color` 別名と `colors`（`#[deprecated]` ごと）とそのテスト・`LayoutScale::validate`・`task_pool.rs` の `drain_and_apply`・`send_command`・`is_empty` とそれを試すテスト（`bitmap_source/tests.rs:72-81`）・`ColorMapDef`・`ColorMapping`・`TypewriterTimeline::empty`・欄 `total_duration`。wintf の `serde` 機能は残す（`Shape`・`ShapeRegion` が使う） | 参照 0（research.md 2 節・8.8）。`Cargo.toml`・`Cargo.lock` は変えない |
@@ -487,7 +487,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 | 22 | 手書きの `unsafe impl` を消した後も `test_typewriter_layout_cache_is_send_sync` が通る（自動の導出を試す） | `widget/text/typewriter/tests.rs`（今のテスト） | 後で `Send` でない欄を足すと組み立たない |
 
 - 20・21・23〜37 番は振る舞いを変えない直し（まとめる・消す・説明）で、今のテストが緑のままであることで確かめる。21 番は骨組みのテスト（10 番の行）も通す。
-- 記録の文を守る確かめ: 20・30 番の後も `monitor_systems_tests.rs:350`（「Redriving window DPI from updated Monitor」が出る）が緑で、`crates/areka/src/placement/transition_judge_reobservation_tests.rs` が全体テストで緑であること。13 番の後も、`Visual` だけを付けた部品に `GlobalArrangement` が入ること（`crates/wintf/tests/layout/component_hooks_test.rs` など今のテストで見る）。
+- 記録の文を守る確かめ: 20・30 番の後も `monitor_systems_tests.rs:350`（「Redriving window DPI from updated Monitor」が出る）が緑で、`crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs` が全体テストで緑であること。13 番の後も、`Visual` だけを付けた部品に `GlobalArrangement` が入ること（`crates/wintf/tests/layout/component_hooks_test.rs` など今のテストで見る）。
 - 前後の確かめ: 1・2 番は配置の答えが変わる（正しくなる方へ）ので、`crates/wintf/tests/layout/` の配置のテストを前後で回す。7・10・11・12・21 番は描画の流れに触るので、`audit-wintf-graphics-world` の立ち直りのテスト（`crates/wintf/tests/graphics/device_lost_recovery_test.rs` など）と `crates/wintf/tests/widget/bitmap_source_integration_test.rs` を前後で回す。13 番は、束で既定でない `GlobalArrangement` を渡す範囲の外のテスト `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs:58`（`audit-wintf-window` の持ち物・書き換えない）を、13 番のタスクで直す前と後に回す（押す点は子の部品の中なので答えは変わらない見込み・design-validation.md）。emo-present・emo-text の当たり判定のテストは全体テストで見る（emo-text の `marker_surface_tests.rs:319`・`surface_hit_cells_tests.rs:19` は `Arrangement` を一緒に入れないのでフックが走らず、影響しない）。
 
 ## Performance & Scalability

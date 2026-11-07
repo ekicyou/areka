@@ -173,6 +173,7 @@
 - [ ] 6. 前提つきの 28 番
 - [ ] 6.1 `placement-crate-split` の着地の後に、画像の `path` の欄を読み取り専用にする
   - 前提: `placement-crate-split` が main に着地し、この枝が main を取り込んでいること。始めに確かめ、満たされていなければ手を付けずに止まり、開発者へ尋ねる（`crates/areka/` には触らない）
+  - 2026-11-07: `placement-crate-split` は PR#433（`ff31386f`）で main に着地し、この枝は同じ日に main を取り込んだ（`266cccbb`）。前提は満たされている。始めには、`mock-shell.rs:609` の `bitmap.path` がまだ在ることだけを確かめ直す
   - 満たされていれば欄を非公開にし、`crates/areka/examples/mock-shell.rs:609` を 4.4 の関数に替え、`crates/areka/examples/clickthrough_two_rects.rs:192` の説明を 4.2 の後の条件に合わせる
   - 取り込んだ main で `monitor_systems_transition_tests.rs` が見張る `ecs/world/mod.rs` の字面が変わっていれば、そのテストの期待だけを合わせる
   - 完了の状態: 欄を直接読む所がツリーに 0 件で、`crates/areka/` を含むワークスペースが組み立つ（または、前提が満たされず止まって尋ねた記録がある）
@@ -190,7 +191,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.8, 4.1, 4.2, 4.3, 4.6, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.7_
 
 - [ ] 7.2 全体テストを緑にする
-  - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（整形・ライセンスを含む）。`crates/areka/src/placement/transition_judge_reobservation_tests.rs` と emo-present・emo-text の当たり判定のテストが緑のままであることを見る
+  - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（整形・ライセンスを含む）。`crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs` と emo-present・emo-text の当たり判定のテストが緑のままであることを見る
   - 文字化けが出てもコンソールの文字コードで逃げない。依存は足さない
   - 完了の状態: 全体テストが緑
   - _Requirements: 5.2, 5.6, 5.7, 5.8, 6.6_

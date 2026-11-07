@@ -542,7 +542,7 @@ wintf の「置き場所」と「部品」である。`layout/` は、taffy（fl
 
 ### 8.10 変えてはならない所（2026-11-06・取りまとめ役からの申し送りを確かめた）
 
-- `crates/wintf/src/ecs/layout/systems/monitor_systems.rs:564` の記録の文「`[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`」は、`crates/areka/src/placement/transition_judge_reobservation_tests.rs:74` が実機ログの写し（逐語の fixture）として使い、`monitor_systems_tests.rs:350` も確かめに使う。20 番（`BoxStyle` の組み立てをまとめる）と 30 番（ログを削る）は、この行の文を変えない。完了した spec の手順書（`.kiro/specs/completed/areka-P0-dpi-window-vanish/diagnosis-procedure.md`）も実機の grep の語に使っている。
+- `crates/wintf/src/ecs/layout/systems/monitor_systems.rs:564` の記録の文「`[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`」は、`crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs:74` が実機ログの写し（逐語の fixture）として使い、`monitor_systems_tests.rs:350` も確かめに使う。20 番（`BoxStyle` の組み立てをまとめる）と 30 番（ログを削る）は、この行の文を変えない。完了した spec の手順書（`.kiro/specs/completed/areka-P0-dpi-window-vanish/diagnosis-procedure.md`）も実機の grep の語に使っている。
 - `crates/wintf/src/ecs/graphics/visual.rs:19`・`:135` の `Visual` の付けたときのフックは `Arrangement::default()` だけを入れ、`GlobalArrangement` と `ArrangementTreeChanged` は `Arrangement` のフックの連鎖に任せている。13 番の `insert_if_new` は「無ければ入れる」なので、この連鎖は今のまま効く（変わるのは、束で渡した値を上書きしなくなる所だけ）。
 
 ### 8.11 28 番の道（2026-11-06・取りまとめ役の答え・設計の討議で開発者に確かめる）
