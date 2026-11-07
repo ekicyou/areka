@@ -532,12 +532,8 @@ fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
 }
 
 /// 起動の挨拶の最中は断り、挨拶の後は受け付ける。
-///
-/// 挨拶の見分けは `boot.rs` が置く綴りと [`BOOT_GREETING_ORIGIN`] の一致に頼るので、
-/// `boot.rs` の綴りが変わればここが赤になる（要件 3.6）。
 #[test]
 fn send_during_the_boot_greeting_is_rejected_and_accepted_after_it() {
-    assert_eq!(BOOT_GREETING_ORIGIN, "boot");
     let cfg = config();
     assert_rejected("起動の挨拶の最中", boot_until_greeting_playing(&cfg));
 

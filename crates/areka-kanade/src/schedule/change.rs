@@ -9,7 +9,7 @@
 //!
 //! 降ろすときの停止原因は今日の値（`Quit`・`CloseSilent`・`DeadlineExceeded`・`Fault`）のまま使い、
 //! 「切替で止まった」ことは [`State::change`] が停止通知の切替の中身として表す。終了の握手
-//! （`close.rs`）とは期限の計算（[`deadline_from`]）だけを共有する。
+//! （`close.rs`）とは期限の計算（[`deadline_from`]）と台詞の待ちの Tick の判定（[`talk_wait_tick`]）を共有する。
 //!
 //! 送り出しの台詞を利用者が中断したら切替を中止して定常へ戻る（[`cancel_by_user_break`]）。
 //! 定常へ戻る経路はここにだけ置き、終了の握手には足さない。終了要求が届いたら切替を取りやめ、
@@ -18,7 +18,7 @@
 //! 汎用の通知の入口（外から頼まれた許可表のイベントを定常でだけ送る）の判断
 //! [`on_raise_event`] と、`\![get,property]` の返しのイベントの判断 [`on_property_event`] もここに置く。
 
-use super::close::deadline_from;
+use super::close::{TalkWaitTick, deadline_from, talk_wait_tick};
 use super::{
     Action, ActiveTalk, Input, Phase, State, TermCause, clear_choice_ledger, events, phase_label,
     steady, to_unloading_quit,
@@ -313,22 +313,20 @@ fn on_talk_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State
         }
         Input::Tick { now } => {
             state.last_now = Some(now);
-            match deadline {
-                None => {
-                    let d = MonotonicMs(now.0.saturating_add(config.close_talk_deadline_ms));
+            match talk_wait_tick(deadline, now, config) {
+                TalkWaitTick::Armed(d) => {
                     tracing::info!(target: "kanade", event = "change_deadline_armed", talk_id = talk_id.0, deadline_ms = d.0, "送り出しの台詞の最初の Tick——再生完了待ちの上限を設定");
                     state.phase = talk_wait(closing, talk_id, Some(d));
                     (state, Vec::new())
                 }
-                Some(d) if now >= d => {
-                    tracing::error!(target: "kanade", event = "change_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = now.0.saturating_sub(d.0), "送り出しの台詞の再生完了待ちが上限超過——打ち切って降ろす");
+                TalkWaitTick::Exceeded { overshoot_ms } => {
+                    tracing::error!(target: "kanade", event = "change_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = overshoot_ms, "送り出しの台詞の再生完了待ちが上限超過——打ち切って降ろす");
                     state.phase = Phase::Unloading {
                         cause: TermCause::DeadlineExceeded,
                     };
-                    clear_choice_ledger(&mut state, "change_deadline_exceeded");
                     (state, vec![Action::ShioriUnload])
                 }
-                Some(_) => (state, Vec::new()),
+                TalkWaitTick::Waiting => (state, Vec::new()),
             }
         }
         _ => {

@@ -137,10 +137,9 @@ fn on_close_talk_wait(
         }
         Input::Tick { now } => {
             state.last_now = Some(now);
-            match deadline {
-                None => {
+            match talk_wait_tick(deadline, now, config) {
+                TalkWaitTick::Armed(d) => {
                     // 握手入口で last_now が None だった場合、本 Tick を起点に上限を設定する。
-                    let d = MonotonicMs(now.0.saturating_add(config.close_talk_deadline_ms));
                     tracing::info!(target: "kanade", event = "close_deadline_armed", talk_id = talk_id.0, deadline_ms = d.0, "CloseTalkWait 最初の Tick——再生完了待ち上限を設定");
                     state.phase = Phase::CloseTalkWait {
                         talk_id,
@@ -148,19 +147,16 @@ fn on_close_talk_wait(
                     };
                     (state, Vec::new())
                 }
-                Some(d) if now >= d => {
+                TalkWaitTick::Exceeded { overshoot_ms } => {
                     // 上限超過（Req 4.7）: error! の上で終了系列を継続する。
-                    let overshoot = now.0.saturating_sub(d.0);
-                    tracing::error!(target: "kanade", event = "close_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = overshoot, "close talk 再生完了待ちが上限超過——終了系列を継続");
+                    tracing::error!(target: "kanade", event = "close_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = overshoot_ms, "close talk 再生完了待ちが上限超過——終了系列を継続");
                     state.phase = Phase::Unloading {
                         cause: TermCause::DeadlineExceeded,
                     };
                     (state, vec![Action::ShioriUnload])
                 }
-                Some(_) => {
-                    // 未超過: last_now を更新し CloseTalkWait を維持する（発行なし）。
-                    (state, Vec::new())
-                }
+                // 未超過: last_now を更新し CloseTalkWait を維持する（発行なし）。
+                TalkWaitTick::Waiting => (state, Vec::new()),
             }
         }
         _ => {
@@ -178,7 +174,37 @@ pub(super) fn deadline_from(
     last_now: Option<MonotonicMs>,
     config: &KanadeConfig,
 ) -> Option<MonotonicMs> {
-    last_now.map(|n| MonotonicMs(n.0.saturating_add(config.close_talk_deadline_ms)))
+    last_now.map(|n| deadline_after(n, config))
+}
+
+/// `now` から再生完了待ちの上限（`now + close_talk_deadline_ms`）を決める。
+fn deadline_after(now: MonotonicMs, config: &KanadeConfig) -> MonotonicMs {
+    MonotonicMs(now.0.saturating_add(config.close_talk_deadline_ms))
+}
+
+/// 台詞の完了待ちの Tick の判定（終了の別れの台詞と切替の送り出しの台詞が共有する）。
+pub(super) enum TalkWaitTick {
+    /// 期限がまだ無かった——この Tick を起点に決めた期限。
+    Armed(MonotonicMs),
+    /// 期限を過ぎた——降ろす。
+    Exceeded { overshoot_ms: u64 },
+    /// 期限の前——待ち続ける。
+    Waiting,
+}
+
+/// 「最初の Tick で期限を決める→過ぎたら降ろす→過ぎていなければ待つ」の判定を 1 か所に置く。
+pub(super) fn talk_wait_tick(
+    deadline: Option<MonotonicMs>,
+    now: MonotonicMs,
+    config: &KanadeConfig,
+) -> TalkWaitTick {
+    match deadline {
+        None => TalkWaitTick::Armed(deadline_after(now, config)),
+        Some(d) if now >= d => TalkWaitTick::Exceeded {
+            overshoot_ms: now.0.saturating_sub(d.0),
+        },
+        Some(_) => TalkWaitTick::Waiting,
+    }
 }
 
 #[cfg(test)]

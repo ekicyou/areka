@@ -12,7 +12,7 @@ use crate::talk::ScriptOrigin;
 pub(crate) const SEND_ORIGIN: &str = "SstpSend";
 /// SSTP NOTIFY の応答の `origin`（殻が `EventId::Sstp` の往復に載せる固定のラベル）。
 pub(crate) const NOTIFY_ORIGIN: &str = "SstpNotify";
-/// 起動の挨拶のトークの `ActiveTalk::origin`（`schedule/boot.rs` の `to_baseware_version` が置く綴り）。
+/// 起動の挨拶のトークの `ActiveTalk::origin`（`schedule/boot.rs` の `to_baseware_version` もこの定数を置く）。
 pub(super) const BOOT_GREETING_ORIGIN: &str = "boot";
 
 /// 受け付けた台本の再生の開始に strict の印を立てる（真のときだけ・翻訳は台本と出どころだけを替える）。

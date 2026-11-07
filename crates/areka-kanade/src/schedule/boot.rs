@@ -300,7 +300,7 @@ fn to_baseware_version(
         // （[`ActiveTalk`]）に載るため、`OnChoiceTimeout` Ref0 の供給源は起動経路に依らず同一。
         Some(ActiveTalk {
             talk_id,
-            origin: "boot",
+            origin: super::sstp::BOOT_GREETING_ORIGIN,
             script,
         })
     } else if !config.first_boot_epilogue.is_empty() {
@@ -318,7 +318,7 @@ fn to_baseware_version(
         }));
         Some(ActiveTalk {
             talk_id,
-            origin: "boot",
+            origin: super::sstp::BOOT_GREETING_ORIGIN,
             // epilogue-only talk の起動 script は空——保持規律は挨拶経路と同一（DD-10）。
             script: String::new(),
         })
