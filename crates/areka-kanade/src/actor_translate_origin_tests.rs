@@ -3,8 +3,8 @@
 //! ゴースト自身・`raise_event` の応答の台本と外からの台本の 3 つで、偽の SHIORI が受けた要求の
 //! カテゴリから導く 4 つのヘッダが要件どおりになり、`Reference*` の並びが今のままであることを確かめる。
 
-use super::tests::fake_shiori;
 use super::*;
+use crate::actor::tests::fake_shiori;
 use crate::msg::{EventId, ShioriCall, ShioriOutcome};
 use crate::request_origin::{OriginWire, RequestOrigin};
 use crate::schedule::events::SourceEvent;

@@ -34,12 +34,13 @@ pub(crate) fn pass_translate(
 
 /// 一括が GET 1 本だけであることを確かめ、(イベント名, Reference の並び) を返す。
 pub(crate) fn only_get(actions: &[Action]) -> (String, Vec<String>) {
-    match actions {
-        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET 1 本だけのはず（{} 件）", actions.len()),
-    }
+    assert_eq!(
+        actions.len(),
+        1,
+        "GET 1 本だけのはず（{} 件）",
+        actions.len()
+    );
+    super::steady::test_support::expect_get_call(&actions[0])
 }
 
 /// 選択肢の ID（`On` で始まらない正典の形＝選択はカスケードで `OnChoiceSelectEx`／`OnChoiceSelect` を送る）。
@@ -183,8 +184,8 @@ pub(crate) fn warn_or_above(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .collect()
 }
 
-/// 起動の手順を実の `step` でたどり、起動の挨拶が流れている `Steady` まで進める。
-pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
+/// 起動の手順を実の `step` でたどり、起動の挨拶の台詞が翻訳を待っているところまで進める。
+pub(crate) fn boot_until_greeting_deferred(cfg: &KanadeConfig) -> State {
     let reply = |s, outcome| {
         step(
             s,
@@ -199,10 +200,26 @@ pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
     let (s, _) = step(State::initial(), Input::Boot, cfg);
     let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
     let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
-    let s = reply(
+    reply(
         s,
         ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
-    ); // → BootVersion{挨拶}
+    ) // → 翻訳待ち（BootVersion{挨拶} へ進む手前）
+}
+
+/// 起動の手順を実の `step` でたどり、起動の挨拶が流れている `Steady` まで進める。
+pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
+    let reply = |s, outcome| {
+        step(
+            s,
+            Input::ShioriReply {
+                outcome,
+                origin: "test",
+            },
+            cfg,
+        )
+        .0
+    };
+    let s = boot_until_greeting_deferred(cfg);
     let (s, _) = step(
         s,
         Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(

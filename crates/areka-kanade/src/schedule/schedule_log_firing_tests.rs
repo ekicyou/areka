@@ -1,28 +1,10 @@
 use super::log_capture::{CapturedEvent, assert_logged, assert_not_logged, capture, logged_once};
+use super::tests::{state_in, steady_with_talk};
 use super::*;
 use crate::msg::{CloseReason, ShioriFailure};
 use crate::schedule::translate_test_support::config;
 use crate::talk::TalkDone;
 use tracing::Level;
-
-fn state_in(phase: Phase) -> State {
-    State {
-        phase,
-        last_now: Some(MonotonicMs(1_000)),
-        next_talk_id: 5,
-        ..State::initial()
-    }
-}
-
-fn steady_with_talk(talk_id: TalkId) -> Phase {
-    Phase::Steady {
-        talk: Some(ActiveTalk {
-            talk_id,
-            origin: "steady",
-            script: String::new(),
-        }),
-    }
-}
 
 /// `step()` を捕捉付きで駆動し、発行イベント列を返す（state は move）。
 fn run_step(state: State, input: Input) -> Vec<CapturedEvent> {

@@ -9,8 +9,9 @@ use crate::schedule::events::{on_translate_sstp, sstp_notify};
 use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::translate_test_support::{
-    CHOICE_ID, active, assert_no_choice_events_follow, boot_until_greeting_playing, change_request,
-    config, fingerprint, non_steady_states, steady, strings, warn_or_above,
+    CHOICE_ID, active, assert_no_choice_events_follow, boot_until_greeting_deferred,
+    boot_until_greeting_playing, change_request, config, fingerprint, non_steady_states, steady,
+    strings, warn_or_above,
 };
 use crate::schedule::{
     Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, step,
@@ -260,24 +261,7 @@ fn own_talks_after_a_strict_send_are_not_strict() {
     );
     assert!(!deferred_start(&s).strict);
     // 起動の挨拶（kanade が自分で始める台本）は既定の偽。
-    let (s, _) = step(State::initial(), Input::Boot, &cfg);
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            &cfg,
-        )
-        .0
-    };
-    let s = reply(s, ShioriOutcome::Notified);
-    let s = reply(s, ShioriOutcome::NoContent);
-    let s = reply(
-        s,
-        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
-    );
+    let s = boot_until_greeting_deferred(&cfg);
     let greeting = s
         .translate
         .as_ref()

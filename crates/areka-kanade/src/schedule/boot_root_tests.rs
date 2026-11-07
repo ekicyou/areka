@@ -343,7 +343,7 @@ fn first_boot_wins_over_updated_and_204_still_falls_through_to_on_boot() {
         &actions[1],
         &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0),
     );
-    // 根が OnFirstBoot なら 204 の腕は今日どおり OnBoot へ。
+    // 根が OnFirstBoot なら 204 の腕は OnBoot へ。
     let (s, next) = reply(s, ShioriOutcome::NoContent, &c);
     assert!(matches!(s.phase, Phase::BootMain));
     assert_eq!(next.len(), 1, "[OnBoot] の 1 件");

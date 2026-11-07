@@ -1,10 +1,11 @@
 use super::log_capture::{assert_logged, assert_not_logged, capture};
+use super::steady::test_support::assert_shiori;
 use super::*;
 use crate::msg::{MouseEventKind, MouseInput, ShioriFailure};
 use crate::schedule::translate_test_support::config;
 use tracing::Level;
 
-fn state_in(phase: Phase) -> State {
+pub(super) fn state_in(phase: Phase) -> State {
     State {
         phase,
         last_now: Some(MonotonicMs(1_000)),
@@ -13,7 +14,7 @@ fn state_in(phase: Phase) -> State {
     }
 }
 
-fn steady_with_talk(talk_id: TalkId) -> Phase {
+pub(super) fn steady_with_talk(talk_id: TalkId) -> Phase {
     Phase::Steady {
         talk: Some(ActiveTalk {
             talk_id,
@@ -292,30 +293,6 @@ fn mouse_input_in_non_steady_phases_is_ignored() {
     }
 }
 
-/// 単一 Action が期待 GET（id・references・status）と厳密一致することを検証する。
-/// ShioriCall は PartialEq を持たないため field 単位で比較する。
-fn assert_get(action: &Action, expected: &ShioriCall) {
-    match (action, expected) {
-        (
-            Action::ShioriRequest(ShioriCall::Get {
-                id,
-                references,
-                status,
-            }),
-            ShioriCall::Get {
-                id: eid,
-                references: erefs,
-                status: estatus,
-            },
-        ) => {
-            assert_eq!(id, eid, "GET id 不一致");
-            assert_eq!(references, erefs, "GET references 不一致");
-            assert_eq!(status.render(), estatus.render(), "GET status 不一致");
-        }
-        _ => panic!("期待した GET でない Action"),
-    }
-}
-
 /// ドラッグの GET を組む関数（`events::on_mouse_drag_start`／`_end`）の型。
 type DragGetBuilder = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
 
@@ -347,7 +324,7 @@ fn drag_input_in_steady_emits_matching_get() {
             "ドラッグの GET は phase を変えない"
         );
         assert_eq!(actions.len(), 1, "ドラッグの知らせ 1 件で GET を 1 件出す");
-        assert_get(&actions[0], &build(10, 20, 0, Some("head"), &active));
+        assert_shiori(&actions[0], &build(10, 20, 0, Some("head"), &active));
     }
 }
 

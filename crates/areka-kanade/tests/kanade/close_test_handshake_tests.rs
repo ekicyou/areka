@@ -129,7 +129,8 @@ fn farewell_talk_without_quit_tag_still_terminates() {
 /// （OnCloseAll 非発行・close talk 非起動＝DD-11）。
 ///
 /// # 駆動
-/// Boot → CloseRequest{User}（active talk なし＝即握手）→ OnClose GET(204) →
+/// Boot → CloseRequest{User}（active talk なしなら即握手・挨拶の再生中なら TalkDone の後に握手）→
+/// OnClose GET(204) →
 /// `Unloading{CloseSilent}` → Unload → StopSelf。
 ///
 /// # 非空虚性

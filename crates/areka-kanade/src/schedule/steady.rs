@@ -525,7 +525,7 @@ pub(super) fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
 /// 選択待ちの期限到達を判定し、到達していれば `OnChoiceTimeout` を発行する（C4 規則 5・Req7.3）。
 ///
 /// [`on_tick`]（既存 pump 処理に**先行して**）と期限の知らせ（[`on_choice_timeout_due`]）の 2 つから
-/// 呼ぶ（完了 `areka-P0-choice-select-events` の design.md:566「Tick で判定」を期限ちょうどに出すため改めた・要件 9.5）。発行した場合は [`Some`]（発行 Action 列）を返し、
+/// 呼ぶ（期限ちょうどに出すため・要件 9.5）。発行した場合は [`Some`]（発行 Action 列）を返し、
 /// 呼び手はその Tick の pump を発行しない（規則 5「この Tick は pump を発行しない・次 Tick から
 /// 再開」）。発行しない場合は [`None`] を返し、Tick は通常どおり進む。
 ///

@@ -6,7 +6,6 @@
 
 use super::*;
 use crate::change::ShioriMethod;
-use crate::schedule::log_capture::CapturedEvent;
 
 fn raise(s: State, id: &str, references: &[&str], method: ShioriMethod) -> (State, Vec<Action>) {
     let input = Input::RaiseEvent {
@@ -15,10 +14,6 @@ fn raise(s: State, id: &str, references: &[&str], method: ShioriMethod) -> (Stat
         method,
     };
     step(s, input, &cfg())
-}
-
-fn warn_count(events: &[CapturedEvent]) -> usize {
-    events.iter().filter(|e| e.level == Level::WARN).count()
 }
 
 fn steady_talking(origin: &'static str) -> State {

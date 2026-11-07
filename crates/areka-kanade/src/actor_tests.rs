@@ -283,6 +283,24 @@ pub(super) fn probe_get_call() -> ShioriCall {
     get(EventId::Static("OnBoot"), &["master"])
 }
 
+/// 1 件の Request を受けて控え、`reply` を返す偽の SHIORI。join すると受けた呼出が返る。兄弟の檻もこれを使う。
+pub(crate) fn fake_shiori(
+    reply: ShioriOutcome,
+) -> (
+    mpsc::Sender<ShioriMsg>,
+    thread::JoinHandle<Option<ShioriCall>>,
+) {
+    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+    let helper = thread::spawn(move || match shiori_rx.recv() {
+        Ok(ShioriMsg::Request { call, reply: tx }) => {
+            let _ = tx.send(reply);
+            Some(call)
+        }
+        _ => None,
+    });
+    (shiori_tx, helper)
+}
+
 // (a) shiori 送出失敗: Receiver を drop した Sender へ往復 → 送出が Err →
 //     `shiori_send_failed` を error! し `Failed(Ipc)` を返す。別スレッド不要。
 #[test]

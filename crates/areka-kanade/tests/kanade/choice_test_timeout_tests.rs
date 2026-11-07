@@ -200,8 +200,8 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
 /// 7.4・C4 規則 6・F3）。
 ///
 /// # 非空虚性・discriminative 性
-/// [`choice_timeout_fires_then_204_cancels_and_rejects_later_choice`] と**同一の期限・同一の注入
-/// Tick** で応答だけを Value に替えた対の檻である。
+/// [`choice_timeout_fires_then_204_cancels_and_rejects_later_choice`] と**同一の期限**で、期限到達の
+/// Tick だけを注入し応答を Value に替えた対の檻である。
 /// - `TalkCommand` 到着順が `Start(1)`→`Start(2)` であること＝置換起動は解決指示（`Resolve`）も
 ///   解除指示（`Cancel`）も伴わない（F3 の Value 分岐）。どちらかが混じれば落ちる。
 /// - 起動された talk が **新 talk_id=2**・**タイムアウト応答のスクリプト**であること＝旧 id の

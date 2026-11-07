@@ -1,8 +1,9 @@
 //! マウスの解放・ホイール・出入りの受理と、クリックの段の列の表のテスト
 //! （mouse-click-wheel-events 要件 1.1・1.7・2.1・2.4・2.6・3.2・6.1・6.2・7.5・8.2・8.3・9.1）。
 //!
-//! 表（[`plan_click`]）と受理（[`on_mouse_extended`]）は直に、定常の入口の委譲・閉じの握手の保留・
-//! 定常以外の棄却は最上位の `step` から通す。
+//! 表（[`plan_click`]）と受理（[`on_mouse_extended`]）は直に、定常の入口の委譲・閉じの握手の保留は
+//! 最上位の `step` から通す（定常以外の棄却は `schedule_tests.rs` の
+//! `mouse_input_in_non_steady_phases_is_ignored` が固定する）。
 
 use super::*;
 use crate::msg::{CloseReason, MonotonicMs, ShioriFailure, ShioriOutcome};

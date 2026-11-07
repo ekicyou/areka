@@ -7,12 +7,10 @@
 //!
 //! 往復は呼出スレッドで同期に走るので、記録はスレッドローカルの捕捉窓で拾える。
 
-use super::tests::{get, probe_get_call};
+use super::tests::{fake_shiori, get, probe_get_call};
 use super::*;
 use crate::schedule::log_capture::{CapturedEvent, capture};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
-use std::sync::mpsc;
-use std::thread;
 use tracing::Level;
 
 /// テスト用 NOTIFY 呼出（`OnInitialize`・許可表にある固定 ID）。
@@ -30,17 +28,12 @@ fn round_trip_with_failure(
     call: ShioriCall,
     failure: ShioriFailure,
 ) -> (ShioriOutcome, Vec<CapturedEvent>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || {
-        if let Ok(ShioriMsg::Request { call: _, reply }) = shiori_rx.recv() {
-            let _ = reply.send(ShioriOutcome::Failed(failure));
-        }
-    });
-
+    let (shiori_tx, helper) = fake_shiori(ShioriOutcome::Failed(failure));
     let mut outcome: Option<ShioriOutcome> = None;
     let events = capture(|| {
         outcome = Some(round_trip_request(&shiori_tx, call));
     });
+    drop(shiori_tx);
     helper.join().expect("fake shiori thread");
     (outcome.expect("round_trip_request returns"), events)
 }
@@ -106,23 +99,17 @@ pub(super) type Sent = Option<(String, Vec<String>)>;
 /// 1 件の Request を受け、送られた名前と Reference を控えて `NoContent` を返す偽の shiori を立てて
 /// `call` を往復させる。戻り値は応答・偽の shiori が受けた中身（送られなければ None）・捕えた記録。
 pub(super) fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Vec<CapturedEvent>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || {
-        if let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {
-            let (ShioriCall::Get { id, references, .. }
-            | ShioriCall::Notify { id, references, .. }) = call;
-            let _ = reply.send(ShioriOutcome::NoContent);
-            return Some((id.as_str().to_string(), references));
-        }
-        None
-    });
-
+    let (shiori_tx, helper) = fake_shiori(ShioriOutcome::NoContent);
     let mut outcome: Option<ShioriOutcome> = None;
     let events = capture(|| {
         outcome = Some(round_trip_request(&shiori_tx, call));
     });
     drop(shiori_tx);
-    let sent = helper.join().expect("fake shiori thread");
+    let sent = helper.join().expect("fake shiori thread").map(|call| {
+        let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) =
+            call;
+        (id.as_str().to_string(), references)
+    });
     (outcome.expect("round_trip_request returns"), sent, events)
 }
 

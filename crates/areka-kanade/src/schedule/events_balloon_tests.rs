@@ -1,5 +1,5 @@
-//! バルーンの寿命の 3 イベント（`OnBalloonBreak`・`OnBalloonClose`・`OnBalloonTimeout`）の組み立てと
-//! 送ってよいイベントの表の 3 行のテスト（areka-P0-balloon-lifecycle-events 要件 1.4・2.3・3.5・4.1・6.4）。
+//! バルーンの寿命の 3 イベント（`OnBalloonBreak`・`OnBalloonClose`・`OnBalloonTimeout`）の組み立ての
+//! テスト（areka-P0-balloon-lifecycle-events 要件 1.4・2.3・3.5・4.1・6.4）。
 //!
 //! どれも GET で、Reference の個数と値を列ごと突き合わせる。
 

@@ -8,7 +8,7 @@ use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriFaultKind};
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use crate::schedule::translate_test_support::config as cfg;
-use crate::schedule::translate_test_support::{change_request, pass_translate};
+use crate::schedule::translate_test_support::{change_request, pass_translate, steady};
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
@@ -137,14 +137,6 @@ fn results_that_get_never_produces_are_treated_as_no_content_with_a_warning() {
 // 元のイベントの控え（State::reply_source）
 // ============================================================
 
-fn steady() -> State {
-    State {
-        phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(500)),
-        ..State::initial()
-    }
-}
-
 fn stale_source() -> SourceEvent {
     SourceEvent {
         id: EventId::Static("OnSecondChange"),
@@ -163,7 +155,7 @@ fn raise(s: State, method: ShioriMethod) -> (State, Vec<Action>) {
 
 #[test]
 fn get_at_the_end_of_the_batch_is_noted_with_its_references() {
-    let (s, actions) = raise(steady(), ShioriMethod::Get);
+    let (s, actions) = raise(steady(None), ShioriMethod::Get);
     assert_eq!(actions.len(), 1);
     assert_eq!(
         s.reply_source,
@@ -178,7 +170,7 @@ fn get_at_the_end_of_the_batch_is_noted_with_its_references() {
 fn notify_at_the_end_of_the_batch_clears_the_note() {
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, _) = raise(s, ShioriMethod::Notify);
     assert_eq!(s.reply_source, None);
@@ -189,7 +181,7 @@ fn unload_at_the_end_of_the_batch_clears_the_note() {
     // 強制終了の一括は [NOTIFY, 降ろす往復]。最後の往復は降ろす往復。
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, actions) = step(
         s,
@@ -206,7 +198,7 @@ fn unload_at_the_end_of_the_batch_clears_the_note() {
 fn batch_without_round_trip_leaves_the_note_alone() {
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, actions) = step(
         s,
@@ -221,7 +213,7 @@ fn batch_without_round_trip_leaves_the_note_alone() {
 fn reply_takes_the_note_only_once() {
     let mut s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let reply = Input::ShioriReply {
         outcome: ShioriOutcome::NoContent,
@@ -235,7 +227,7 @@ fn reply_takes_the_note_only_once() {
 fn non_reply_input_does_not_take_the_note() {
     let mut s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let input = Input::Tick {
         now: MonotonicMs(600),
@@ -248,7 +240,7 @@ fn non_reply_input_does_not_take_the_note() {
 fn reply_with_no_round_trip_leaves_the_note_empty() {
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, actions) = step(
         s,
@@ -292,7 +284,7 @@ fn reply_whose_batch_sends_the_next_get_notes_that_get() {
 fn translate_at_the_end_of_the_batch_clears_the_note() {
     let mut s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let actions = after(
         &mut s,
@@ -642,7 +634,7 @@ fn talking() -> State {
             talk: Some(active(TALK)),
         },
         next_talk_id: 7,
-        ..steady()
+        ..steady(None)
     }
 }
 

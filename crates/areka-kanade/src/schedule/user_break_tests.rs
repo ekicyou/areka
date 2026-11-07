@@ -83,7 +83,7 @@ fn assert_no_shiori_request(actions: &[Action], at: &str) {
             .filter(|a| matches!(a, Action::ShioriRequest(_)))
             .count(),
         0,
-        "{at}: 受理では SHIORI へ 1 件も送らない（要件 3.9）"
+        "{at}: SHIORI へ 1 件も送らない（要件 3.9）"
     );
 }
 

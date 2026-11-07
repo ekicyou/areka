@@ -50,7 +50,7 @@ fn drive_full_run() {
         tick(&harness, i * 1_000);
     }
 
-    // close 指示。active talk なしゆえ即握手開始（OnClose GET→別れの Value→close talk）。
+    // close 指示（active talk なしなら即握手・boot 挨拶完了後に握手）。握手は OnClose GET→別れの Value→close talk。
     send(
         &harness,
         KanadeMsg::CloseRequest {

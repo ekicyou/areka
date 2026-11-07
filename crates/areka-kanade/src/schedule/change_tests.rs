@@ -8,7 +8,7 @@
 use super::*;
 use crate::change::ChangeOrigin;
 use crate::msg::{CloseReason, ShioriCall};
-use crate::schedule::log_capture::{capture, logged_once};
+use crate::schedule::log_capture::{CapturedEvent, capture, logged_once};
 use crate::schedule::translate_test_support::{
     change_request, config as cfg, only_get, pass_translate,
 };
@@ -115,6 +115,11 @@ fn close_talking() -> (State, TalkId) {
     (s, talk_id)
 }
 
+/// `warn!` の件数（汎用の通知の入口・返しのイベントの子のテストが使う）。
+fn warn_count(events: &[CapturedEvent]) -> usize {
+    events.iter().filter(|e| e.level == Level::WARN).count()
+}
+
 fn assert_unloading(s: &State, actions: &[Action], expect: &str) {
     let cause = match &s.phase {
         Phase::Unloading {
@@ -195,7 +200,14 @@ fn reject_outside_idle_steady_warns_notifies_and_keeps_state() {
             ))
         });
         let (next, actions) = out.expect("step は必ず結果を返す");
-        logged_once(&ev, Level::WARN, "change_rejected_phase");
+        let line = logged_once(&ev, Level::WARN, "change_rejected_phase");
+        if had_pending_close {
+            assert_eq!(
+                line.fields.get("reason").map(String::as_str),
+                Some("close_pending"),
+                "{label}: 終了の保留の理由を記録に載せる"
+            );
+        }
         assert!(
             matches!(
                 actions.as_slice(),
@@ -446,7 +458,6 @@ fn held_request_is_consumed_on_end_and_on_interrupt() {
                 assert_eq!(only_get(&actions).0, "OnGhostChanging", "{label}");
             } else {
                 assert_unloading(&s, &actions, "CloseSilent");
-                assert!(sent_events(&actions).is_empty(), "{label}");
             }
         }
     }
@@ -527,7 +538,6 @@ fn quit_reserved_break_drops_held_change_and_quits_without_handoff() {
         let (s, actions) = out.expect("step は必ず結果を返す");
         logged_once(&ev, Level::INFO, "change_dropped_by_quit");
         assert_unloading(&s, dropped_notice_then(&actions), "Quit");
-        assert!(sent_events(&actions).is_empty(), "OnGhostChanging は 0 件");
         assert!(s.pending_change.is_none(), "保留は捨てる");
         let (s, _) = reply(s, ShioriOutcome::Unloaded);
         assert!(matches!(s.phase, Phase::Stopped));

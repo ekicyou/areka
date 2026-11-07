@@ -59,6 +59,45 @@ pub(super) fn steady_with_ledger(
     s
 }
 
+/// 単一 Action が期待 ShioriCall（GET/NOTIFY・id・references）と一致することを検証する。
+pub(crate) fn assert_shiori(action: &Action, expected: &ShioriCall) {
+    match (action, expected) {
+        (
+            Action::ShioriRequest(ShioriCall::Get {
+                id,
+                references,
+                status,
+            }),
+            ShioriCall::Get {
+                id: eid,
+                references: erefs,
+                status: estatus,
+            },
+        ) => {
+            assert_eq!(id, eid, "GET id 不一致");
+            assert_eq!(references, erefs, "GET references 不一致");
+            assert_eq!(status, estatus, "GET status 不一致");
+        }
+        (
+            Action::ShioriRequest(ShioriCall::Notify {
+                id,
+                references,
+                status,
+            }),
+            ShioriCall::Notify {
+                id: eid,
+                references: erefs,
+                status: estatus,
+            },
+        ) => {
+            assert_eq!(id, eid, "NOTIFY id 不一致");
+            assert_eq!(references, erefs, "NOTIFY references 不一致");
+            assert_eq!(status, estatus, "NOTIFY status 不一致");
+        }
+        _ => panic!("ShioriRequest の GET/NOTIFY 種別が期待と不一致"),
+    }
+}
+
 /// GET Action から (イベント ID の wire 形, Reference 列) を取り出す（GET 以外は panic）。
 pub(crate) fn expect_get_call(action: &Action) -> (String, Vec<String>) {
     match action {

@@ -143,6 +143,8 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 
 /// prefetch 応答（username GET）を [`ResourceOutcome`] へ写像し、sink 呼出指示＋完了固定ログを添えて
 /// 起動の根（[`boot_root`]）を発行する（根があれば BootType・無ければ OnBoot で BootMain）（R4.1・R9.3）。
+/// 読み直しの起動（[`BootOrigin::Reloaded`]）は根も OnBoot も送らず basewareversion へ直行する
+/// （areka-P0-mcp-reload 要件 3.3・4.3）。
 ///
 /// 写像: 200 Value→[`ResourceOutcome::Value`]／204→[`ResourceOutcome::NoContent`]／失敗（タイムアウト・
 /// IPC 断）→[`ResourceOutcome::Failed`]。失敗時は `warn!` を残しつつ **boot を殺さず**続行する（起動を
@@ -150,8 +152,9 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 /// 起動を続行する。
 ///
 /// リソース照会は talk を生成しない（Invariant）——結果は [`Action::ResourceOutcome`] で sink へ渡すのみで
-/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(根または OnBoot)]` の順であり、
-/// シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する（design boot 図）。
+/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(根または OnBoot)]` の順
+/// （読み直しでは `[ResourceOutcome, (初回の記録だけの StartTalk)?, ShioriRequest(basewareversion の
+/// NOTIFY)]`）であり、シェルは sink 呼出（同期・返るまで待つ）を先に実行してから次の GET を送出する（design boot 図）。
 ///
 /// # 完了固定ログ（R9.3 grep 証跡）
 /// 経路によらず `info!(target: "areka_kanade::resource", id = "username", outcome = <value|no_content|
@@ -199,7 +202,7 @@ fn on_prefetch_reply(
     }
     // 起動の根（username 照会の応答後に 1 つだけ選ぶ・照会の段は不変）。根があれば BootType で
     // その応答を待ち、既存の腕（204 → OnBoot・台本 → OnBoot を飛ばす）へ合流する。根が無ければ
-    // OnBoot（BootMain）へ直行する（今日の boot_gate の枝）。
+    // OnBoot（BootMain）へ直行する（boot_gate の記録の枝）。
     if let Some(root) = boot_root(&state, config) {
         state.phase = Phase::BootType;
         (state, vec![sink, Action::ShioriRequest(root)])

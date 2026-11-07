@@ -1,5 +1,5 @@
-//! アンカーの 2 イベント（`OnAnchorSelectEx`・`OnAnchorSelect`）の組み立てと、送ってよいイベントの
-//! 表の 2 行のテスト（areka-P0-anchor-tag-canon 要件 4.1・4.2・4.6・4.7）。
+//! アンカーの 2 イベント（`OnAnchorSelectEx`・`OnAnchorSelect`）の組み立てのテスト
+//! （areka-P0-anchor-tag-canon 要件 4.1・4.2・4.6・4.7）。
 //!
 //! どちらも GET で、Reference の個数と値を列ごと突き合わせる。
 

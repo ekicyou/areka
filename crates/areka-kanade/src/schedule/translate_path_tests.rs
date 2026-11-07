@@ -9,7 +9,8 @@
 //!
 //! ⑶ の比べる相手は、同じ前提から [`step`] を通して `Translated::local(ORIGINAL)` で返したもの
 //! （翻訳が台詞を変えなかったとき）。翻訳の帳簿と元のイベントの控え（`translate`・`reply_source`）は
-//! 翻訳そのものの欄なので比べない。
+//! 翻訳そのものの欄、外から届いた写し（`external`）は翻訳と無関係なので比べない（ほかの欄は
+//! [`state_shape`] がすべて比べる）。
 //!
 //! あわせて、翻訳しない台詞（areka が作る起動の記録だけの台詞・0 文字の台詞・外から頼まれた
 //! `OnTranslate` の応答）、印のイベントの台詞の見張り、控えの書き換え（`OnChoiceTimeout` の
@@ -202,14 +203,18 @@ fn state_shape(s: &State) -> String {
         .as_ref()
         .map(|g| format!("({}, {:?})", marked_shape(&g.marked), g.outcome));
     format!(
-        "phase={} now={:?} next={} close={:?} choice={choice:?} prev={:?} break={:?} change={change:?} pending_change={:?} gap={gap:?}",
+        "phase={} now={:?} next={} close={:?} choice={choice:?} prev={:?} anchor={:?} click={:?} break={:?} shown={:?} change={change:?} pending_change={:?} gap={gap:?} notify={:?}",
         phase_shape(&s.phase),
         s.last_now,
         s.next_talk_id,
         s.pending_close,
         s.prev_talk.map(|t| t.0),
+        s.anchor,
+        s.mouse_click,
         s.user_break_talk.map(|note| note.talk_id.0),
+        s.shown,
         s.pending_change,
+        s.sstp_notify,
     )
 }
 

@@ -11,10 +11,11 @@
 //! SHIORI へ 1 通も送らず、全件 [`ResourceOutcome::NoContent`] を返す（受け手は既定名で出す）。
 //! 起動系列・終了系列の SHIORI 呼出順（固定の運行表）へ照会を割り込ませないためである。
 //!
-//! # 送出の檻は 1 か所のまま
-//! 往復は [`crate::actor::round_trip_request`] を通す。許可表（`ALLOWED_RESOURCE_IDS`）に無い id は
-//! そこで従来どおり拒否され（`error!`＋`ShioriFailure::Internal`）、その id だけが
-//! [`ResourceOutcome::Failed`] になる。残りの id は答える。
+//! # 送出の前にリソース許可表で断る・最後の檻は送出点
+//! 往復は [`crate::actor::round_trip_request`] を通す。その前に、リソース許可表（`ALLOWED_RESOURCE_IDS`）に
+//! 無い id は SHIORI へ送らずに断る（`error!`）。送出の檻はイベント許可表との論理和で見るので、
+//! イベントの id（`OnBoot` など）がリソースの GET として出ていかないよう、ここで先に止める。
+//! 断った id だけが [`ResourceOutcome::Failed`] になり、残りの id は答える。
 
 use std::sync::mpsc::Sender;
 
@@ -22,7 +23,9 @@ use areka_actor::ReplySender;
 
 use crate::actor::round_trip_request;
 use crate::msg::ShioriMsg;
-use crate::schedule::resources::{ResourceOutcome, outcome_of, resource_get};
+use crate::schedule::resources::{
+    ResourceOutcome, is_allowed_resource_id, outcome_of, resource_get,
+};
 use crate::schedule::{Phase, State};
 
 /// いま SHIORI へリソースを問い合わせてよいか（純粋関数）。
@@ -57,10 +60,18 @@ pub(crate) fn answer(
     let answers: Vec<(&'static str, ResourceOutcome)> = ids
         .into_iter()
         .map(|id| {
-            let outcome = if can_query {
-                outcome_of(id, round_trip_request(shiori, resource_get(id, &snapshot)))
-            } else {
+            let outcome = if !can_query {
                 ResourceOutcome::NoContent
+            } else if !is_allowed_resource_id(id) {
+                tracing::error!(
+                    target: "kanade",
+                    event = "resource_id_not_allowed",
+                    id = %id,
+                    "リソース許可表に無い id——SHIORI へ送らずその id だけ失敗として返す"
+                );
+                ResourceOutcome::Failed(format!("resource_id_not_allowed: {id}"))
+            } else {
+                outcome_of(id, round_trip_request(shiori, resource_get(id, &snapshot)))
             };
             (id, outcome)
         })

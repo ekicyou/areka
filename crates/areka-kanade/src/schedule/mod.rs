@@ -10,7 +10,7 @@
 //! 本 `mod.rs` は**由来・状態を問わない横断遷移**（[`Input::TalkDone`] の理由が
 //! [`TalkEndReason::Quit`] の場合／[`Input::ForceQuit`]／[`Input::ShioriDown`]／[`Input::ShioriReply`] の
 //! 失敗）と、Unload 完了・防御アーム（未知 talk_id・Idle 以外の Boot・応答待ちでない
-//! ShioriReply）を実装する。フェーズ固有の遷移は [`boot`]／[`steady`]／[`close`] の
+//! ShioriReply）を実装する。フェーズ固有の遷移は [`boot`]／[`steady`]／[`close`]／[`change`] の
 //! 各サブモジュールへ委譲する。
 //!
 //! # ログ規律（steering: areka-log-first-no-silent-failure）
@@ -610,7 +610,7 @@ fn unloading_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Acti
     (state, vec![Action::StopSelf])
 }
 
-/// フェーズ固有遷移への委譲（boot／steady／close）。
+/// フェーズ固有遷移への委譲（boot／steady／close／change）。
 fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
         Phase::Idle

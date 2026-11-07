@@ -83,7 +83,8 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
 fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
     let just_before = CHOICE_DISPLAY_END_MS + BOUNDARY_MS - 1;
     let deadline = CHOICE_DISPLAY_END_MS + BOUNDARY_MS;
-    let (recorded, commands) = run_choice_wait(Some(1.234), &[just_before, deadline]);
+    let (recorded, commands) =
+        run_choice_wait(Some(BOUNDARY_MS as f64 / 1000.0), &[just_before, deadline]);
 
     assert_eq!(
         choice_get_ids(&recorded),

@@ -83,11 +83,7 @@ fn on_initialize_references_differ_by_scope() {
             snap,
         ),
     );
-    // References だけが違う（取り違えの檻）。
-    assert!(matches!(
-        &shiori[0],
-        Action::ShioriRequest(ShioriCall::Notify { references, .. }) if references == &["reload"]
-    ));
+    // References だけが違う（取り違えの檻・`["reload"]` は上の assert_notify が固定する）。
     assert!(matches!(
         &ghost[0],
         Action::ShioriRequest(ShioriCall::Notify { references, .. }) if references.is_empty()

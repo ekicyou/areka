@@ -845,7 +845,7 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
 
 #[cfg(test)]
 #[path = "actor_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 // 停止通知の発行点そのものの檻（areka-P0-emo2-conformance-e2e R15.3）。
 // 発行は呼出スレッドで同期に走る素の関数ゆえ、スレッドローカルの捕捉窓で観測できる

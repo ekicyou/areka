@@ -46,7 +46,7 @@
 //! sleep も wall-clock も用いない）。観測後に保留を解放（`release_all`）すれば `Steady{None}` へ復帰
 //! し、以降は他のテストと同じ quit 経路（OnClose→別れの talk→終了）で記録列を確定できる。
 //!
-//! # 追加: 送出 ID egress スイープと完了後の GET 再開（Testing Strategy #13／#12）
+//! # 送出 ID egress スイープと完了後の GET 再開（Testing Strategy #13／#12）
 //! - 送出 ID の egress スイープ（#13・Req 3.2／3.3）: 自発トーク（`OnSecondChange` Value→StartTalk）が
 //!   **確実に発火する** `sporadic_value_starts_unique_talk` の run 全域の記録を同じテストの末尾で走査し、
 //!   `OnTalk`／`OnHour` が 1 件も現れず・Unload を除く全 SHIORI id が許可集合に属することを検証する
@@ -494,7 +494,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
 /// 着弾後の GET 再開（次 Tick）は観測しない。close_test の
 /// `farewell_talk_without_quit_tag_still_terminates` は別れの台詞（`CloseTalkWait`）が定常へ戻らず
 /// 終了することを観測するもので、**steady talk 完了**（`Steady{Some}`→TalkDone→`Steady{None}`）
-/// からの GET 再開は統合層で未観測ゆえ、本 cage が additive に埋める（純粋状態機械では
+/// からの GET 再開は統合層で未観測ゆえ、本 cage が埋める（純粋状態機械では
 /// `steady_flow_tests.rs` の `steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 ///
 /// # 決定的駆動（バリア駆動・壁時計 deadline・join 後表明）

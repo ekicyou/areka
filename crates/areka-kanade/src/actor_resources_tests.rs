@@ -304,3 +304,45 @@ fn a_failed_round_trip_on_the_query_path_does_not_claim_termination() {
         replied[0].1
     );
 }
+
+/// リソース許可表に無い id は、イベント許可表にあっても（`OnBoot`）SHIORI へ出さず、
+/// その id だけが失敗になる（`error!` を 1 件・要件 3.2）。
+#[test]
+fn an_event_id_is_refused_as_a_resource_without_a_round_trip() {
+    use crate::schedule::log_capture::{capture, logged_once};
+    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+    let fake = thread::spawn(move || {
+        let mut seen = Vec::new();
+        while let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {
+            let ShioriCall::Get { id, .. } = call else {
+                panic!("リソース照会は GET");
+            };
+            seen.push(id.as_str().to_string());
+            let _ = reply.send(ShioriOutcome::NoContent);
+        }
+        seen
+    });
+    let (reply_tx, reply_rx) = reply_channel();
+    let events = capture(|| {
+        answer(
+            &state_in(Phase::Steady { talk: None }),
+            &shiori_tx,
+            vec!["OnBoot", "username"],
+            reply_tx,
+        );
+    });
+    drop(shiori_tx);
+    logged_once(&events, tracing::Level::ERROR, "resource_id_not_allowed");
+    let replied = reply_rx.recv().expect("応答は必ず 1 回返る");
+    assert!(
+        matches!(&replied[0], ("OnBoot", ResourceOutcome::Failed(why)) if why.contains("OnBoot")),
+        "リソースでない id はその id だけ失敗になる: {:?}",
+        replied[0]
+    );
+    assert_eq!(replied[1], ("username", ResourceOutcome::NoContent));
+    assert_eq!(
+        fake.join().expect("偽 SHIORI は panic しない"),
+        vec!["username".to_string()],
+        "リソースでない id は SHIORI へ出さない"
+    );
+}

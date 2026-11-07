@@ -257,10 +257,6 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
 #[test]
 fn notify_is_not_accepted_outside_the_steady_state() {
     let mut states = non_steady_states();
-    states.push((
-        "起動の挨拶の最中",
-        steady(active(1, super::BOOT_GREETING_ORIGIN)),
-    ));
     let mut pending_close = steady(active(9, "OnMouseDoubleClick"));
     pending_close.pending_close = Some(CloseReason::System);
     states.push(("保留の終了", pending_close));

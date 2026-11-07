@@ -7,15 +7,14 @@
 //!
 //! 往復は呼出スレッドで同期に走るので、記録はスレッドローカルの捕捉窓で拾える。
 
-use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
 
 use tracing::Level;
 
 use super::*;
 use crate::actor::round_trip_request;
-use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::actor::tests::fake_shiori;
+use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::events::SourceEvent;
 use crate::schedule::log_capture::{CapturedEvent, capture};
 use crate::schedule::translate::{ScriptSource, TranslateRequest, TranslateResult};
@@ -25,21 +24,6 @@ use crate::translate::TranslateSeams;
 
 /// 元のイベントの ID（MAKOTO の口の第 2 引数・`OnTranslate` の Reference2）。
 const SOURCE_ID: &str = "OnMouseDoubleClick";
-
-/// 1 件の Request を受けて控え、`reply` を返す偽の SHIORI。join すると受けた呼出が返る。
-pub(super) fn fake_shiori(
-    reply: ShioriOutcome,
-) -> (Sender<ShioriMsg>, JoinHandle<Option<ShioriCall>>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || match shiori_rx.recv() {
-        Ok(ShioriMsg::Request { call, reply: tx }) => {
-            let _ = tx.send(reply);
-            Some(call)
-        }
-        _ => None,
-    });
-    (shiori_tx, helper)
-}
 
 /// 再生中（`talking`）の Status。依頼に載った値がそのまま届くことを見るため、既定と違う値にする。
 fn talking_status() -> ExecutionStatus {

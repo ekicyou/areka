@@ -34,8 +34,8 @@ use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg
 use crate::request_origin::{OriginWire, RequestOrigin, read_response_level};
 use crate::schedule::resources::is_allowed_resource_id;
 
-/// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表が
-/// 直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
+/// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表（`schedule/events.rs`）と
+/// kanade の殻（`actor.rs`）が直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
 pub use shiori_host32_host::shiori3::ABSENT_REFERENCE;
 
 /// 接続済み SHIORI 一式（`!Send` 資材はスレッド内で connect が生成する）。

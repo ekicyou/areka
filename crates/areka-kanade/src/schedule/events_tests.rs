@@ -444,7 +444,7 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
     }
 }
 
-/// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）で、かつ許可集合の要素で
+/// 下に並べた構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）で、かつ許可集合の要素で
 /// あること（DD-1・Service Interface Postcondition）。
 ///
 /// 選択起源（[`EventId::Choice`]）はカスケード planner のみが構成する不変条件を、構築関数側から
@@ -644,8 +644,8 @@ fn choice_constructors_carry_the_common_request_header() {
     }
 }
 
-/// 出所カテゴリの型分離（DD-1）: 任意名イベントのみ [`EventId::Choice`]、
-/// 固定 ID 3 種は [`EventId::Static`]。
+/// 出所カテゴリの型分離（DD-1）: 任意名イベントは [`EventId::Choice`]（固定 ID の選択関連 3 種が
+/// [`EventId::Static`] であることは `every_construction_function_returns_an_allowed_static_id` が固定する）。
 #[test]
 fn choice_constructors_split_event_id_category_by_origin() {
     let snap = ExecutionSnapshot::INACTIVE;
@@ -654,20 +654,6 @@ fn choice_constructors_split_event_id_category_by_origin() {
         matches!(event_id(&named), EventId::Choice(_)),
         "任意名イベントは選択起源（EventId::Choice）"
     );
-
-    let statics = [
-        on_choice_select_ex("ラベル", "ID", &[], &snap),
-        on_choice_select("ID", &snap),
-        on_choice_timeout("\\e", &snap),
-    ];
-    for call in &statics {
-        let id = event_id(call);
-        assert!(
-            matches!(id, EventId::Static(_)),
-            "固定 ID の選択関連イベントはスケジューラ起源の型を保つ id={}",
-            id.as_str()
-        );
-    }
 }
 
 // ---------------------------------------------------------------------------

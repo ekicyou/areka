@@ -86,9 +86,10 @@ pub fn is_allowed_resource_id(id: &str) -> bool {
 /// 任意のリソース ID への照会（GET・References なし・Status は snapshot から導出）を組み立てる
 /// 純粋関数（副作用なし・要件 3.2）。
 ///
-/// `id` は [`ALLOWED_RESOURCE_IDS`] の要素であることを**求めない**——送出可否の判定は egress
-/// チョークポイント（`actor.rs` の `round_trip_raw` が呼ぶ `refuse_unless_allowed`）が [`is_allowed_resource_id`] で行い、
-/// 許可外は従来どおり `ShioriFailure::Internal` で拒否される（檻は 1 か所・Req4.1）。
+/// `id` は [`ALLOWED_RESOURCE_IDS`] の要素であることを**求めない**——メニューと更新の照会
+/// （`actor_resources::answer`）は往復の前に許可表に無い ID を断り、本関数で組んだ GET の最後の
+/// 番は egress チョークポイント（`actor.rs` の `round_trip_raw` が呼ぶ `refuse_unless_allowed`）が
+/// [`is_allowed_resource_id`] で行い、許可外は `ShioriFailure::Internal` で拒否される（Req4.1）。
 ///
 /// `&'static str` に据えるのは [`ShioriCall`] の `id: EventId::Static(&'static str)` 契約
 /// （スケジューラ起源・DD-1）に従うためで、呼び手は許可表の要素そのものを渡す。

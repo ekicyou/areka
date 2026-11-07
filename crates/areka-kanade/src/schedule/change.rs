@@ -47,7 +47,7 @@ pub(crate) struct ChangeState {
 /// （受理しなかった要求は必ず UI へ返し、UI の目印を残さない）。
 pub(super) fn on_change_ghost(mut state: State, req: ChangeRequest) -> (State, Vec<Action>) {
     let rejected = match (&state.phase, &state.pending_close) {
-        (_, Some(_)) => Some("pending_close"),
+        (_, Some(_)) => Some("close_pending"),
         (Phase::Steady { talk: None }, None) => None,
         (Phase::Steady { talk: Some(_) }, None) if state.pending_change.is_some() => {
             Some("change_pending")

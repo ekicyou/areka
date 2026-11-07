@@ -8,7 +8,6 @@
 use super::*;
 use crate::msg::EventId;
 use crate::schedule::events::PROPERTY_EVENT_ORIGIN;
-use crate::schedule::log_capture::CapturedEvent;
 use crate::schedule::translate_test_support::strings;
 use crate::talk::ScriptOrigin;
 
@@ -18,10 +17,6 @@ fn property(s: State, id: &str, references: &[&str]) -> (State, Vec<Action>) {
         references: strings(references),
     };
     step(s, input, &cfg())
-}
-
-fn warn_count(events: &[CapturedEvent]) -> usize {
-    events.iter().filter(|e| e.level == Level::WARN).count()
 }
 
 fn steady_talking() -> State {
