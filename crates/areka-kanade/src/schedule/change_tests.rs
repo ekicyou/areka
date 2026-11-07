@@ -565,3 +565,26 @@ mod raise_event_tests;
 
 #[path = "change_property_tests.rs"]
 mod property_tests;
+
+/// 台詞の待ち以外の相が `on_talk_wait` に届いた場合の守りの腕（audit-kanade #30）。`step` の振り分けでは
+/// 届かないゆえ直に回す。warn を消すと赤。
+#[test]
+fn on_talk_wait_with_a_non_talk_wait_phase_warns_and_does_nothing() {
+    let mut out = None;
+    let ev = capture(|| {
+        out = Some(on_talk_wait(
+            steady(),
+            Input::Tick {
+                now: MonotonicMs(1_000),
+            },
+            &cfg(),
+        ))
+    });
+    logged_once(&ev, Level::WARN, "change_phase_unexpected");
+    let (state, actions) = out.expect("on_talk_wait は戻る");
+    assert!(actions.is_empty(), "守りの腕は何も出さない");
+    assert!(
+        matches!(state.phase, Phase::Steady { talk: None }),
+        "相を保つ"
+    );
+}

@@ -375,6 +375,102 @@ fn warn_close_phase_unexpected_logs() {
 }
 
 // ============================================================
+// 防御 / 無視アーム（level = WARN）— change.rs・mouse_events.rs（audit-kanade #30・#72）
+// ============================================================
+
+#[test]
+fn warn_change_phase_unexpected_logs() {
+    // change::step に切替でない Phase（Steady）が届いた場合の守りの腕。振り分け上届かないゆえ直に回す。
+    let cfg = config();
+    let mut actions = None;
+    let ev = capture(|| {
+        actions = Some(
+            change::step(
+                state_in(Phase::Steady { talk: None }),
+                Input::Tick {
+                    now: MonotonicMs(1_000),
+                },
+                &cfg,
+            )
+            .1,
+        );
+    });
+    logged_once(&ev, Level::WARN, "change_phase_unexpected");
+    assert!(
+        actions.is_some_and(|a| a.is_empty()),
+        "守りの腕は何も出さない"
+    );
+}
+
+#[test]
+fn warn_change_input_ignored_logs() {
+    // 応答待ち（ChangePending）に Notified・台詞の待ち（ChangeTalkWait）に応答・終了要求で取りやめた
+    // 応答待ち（`pending_close` 在り）に Notified → change_input_ignored（3 つの腕を 1 件ずつ）。
+    let cfg = config();
+    let yielded = State {
+        pending_close: Some(CloseReason::System),
+        ..state_in(Phase::ChangePending)
+    };
+    let reply = |outcome| Input::ShioriReply {
+        outcome,
+        origin: "test",
+    };
+    for (label, state, input) in [
+        (
+            "ChangePending",
+            state_in(Phase::ChangePending),
+            reply(ShioriOutcome::Notified),
+        ),
+        (
+            "ChangeTalkWait",
+            state_in(Phase::ChangeTalkWait {
+                talk_id: TalkId(2),
+                deadline: None,
+            }),
+            reply(ShioriOutcome::NoContent),
+        ),
+        (
+            "取りやめた ChangePending",
+            yielded,
+            reply(ShioriOutcome::Notified),
+        ),
+    ] {
+        let mut actions = None;
+        let ev = capture(|| {
+            actions = Some(change::step(state, input, &cfg).1);
+        });
+        logged_once(&ev, Level::WARN, "change_input_ignored");
+        assert!(
+            actions.is_some_and(|a| a.is_empty()),
+            "{label} は相を保ち何も出さない"
+        );
+    }
+}
+
+#[test]
+fn warn_mouse_extended_unexpected_kind_logs() {
+    // 呼び手が渡さない種類（移動）を拡張の口へ直に渡す → 送らず WARN。
+    let mut actions = None;
+    let ev = capture(|| {
+        actions = Some(
+            mouse_events::on_mouse_extended(
+                state_in(Phase::Steady { talk: None }),
+                crate::msg::MouseInput {
+                    scope: 0,
+                    x: 10,
+                    y: 20,
+                    region: None,
+                    kind: crate::msg::MouseEventKind::Move,
+                },
+            )
+            .1,
+        );
+    });
+    logged_once(&ev, Level::WARN, "mouse_extended_unexpected_kind");
+    assert!(actions.is_some_and(|a| a.is_empty()), "移動は送らない");
+}
+
+// ============================================================
 // 観測用ログ（level = INFO）— TalkEndReason::Interrupted の防御的非 quit 扱い
 // ============================================================
 
