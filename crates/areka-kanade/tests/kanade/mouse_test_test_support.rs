@@ -26,3 +26,9 @@ fn is_mouse_get(c: &RecordedCall) -> bool {
 pub(super) fn mouse_gets(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
     recorded.iter().filter(|c| is_mouse_get(c)).collect()
 }
+
+/// 記録のどの呼び出しの ID も `OnMouse` で始まらないか（「送らない」の確かめ）。GET に限らないので、
+/// 送らないはずのマウスが NOTIFY で出るように壊れても拾う。
+pub(super) fn no_mouse_call(recorded: &[RecordedCall]) -> bool {
+    !recorded.iter().any(|c| c.id.starts_with("OnMouse"))
+}

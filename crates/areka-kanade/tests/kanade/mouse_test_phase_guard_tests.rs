@@ -1,4 +1,4 @@
-use super::test_support::{mouse_gets, mouse_input};
+use super::test_support::{mouse_input, no_mouse_call};
 use super::{
     CloseReason, Driven, FIXED_FAREWELL_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MouseEventKind,
     QuitPolicy, TalkId, expected_unload, spawn_harness, spawn_harness_gated,
@@ -16,7 +16,7 @@ use super::{
 /// マウス GET は構造的に発行されない。close talk（quit:true）で終了系列を駆動し記録を確定する。
 ///
 /// # 非空虚性
-/// もし非 Steady のマウスが GET を発行していれば `mouse_gets` が空でなくなり落ちる。終了が正常完走
+/// もし非 Steady のマウスが GET か NOTIFY を出していれば `no_mouse_call` が偽になり落ちる。終了が正常完走
 /// （末尾 Unload）することで「無視しただけで運行は乱れていない（状態不変）」を確認する。
 #[test]
 fn phase_ignore_before_boot_no_mouse_get() {
@@ -37,6 +37,17 @@ fn phase_ignore_before_boot_no_mouse_get() {
             Some("Head"),
         )))
         .expect("send Mouse before Boot");
+    // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
+    harness
+        .sender
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DragStart,
+            5,
+            6,
+            0,
+            Some("Head"),
+        )))
+        .expect("send Mouse before Boot (drag)");
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
     harness
         .sender
@@ -45,15 +56,25 @@ fn phase_ignore_before_boot_no_mouse_get() {
         })
         .expect("send CloseRequest");
 
-    let Driven { recorded, .. } = harness.finish("kanade mouse idle-ignore join");
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse idle-ignore join");
 
     // Idle のマウスは GET を発行しない（記録に現れない）。
     assert!(
-        mouse_gets(&recorded).is_empty(),
+        no_mouse_call(&recorded),
         "Boot 完了前（Idle）の Mouse はマウス GET を発行しないはず: {:?}",
         recorded
     );
-    // 状態不変の観測: 終了系列は正常完走（末尾 Unload）。
+    // 状態不変の観測: 到達する StartTalk は close talk だけで、終了系列は正常完走（末尾 Unload）。
+    assert_eq!(
+        started
+            .iter()
+            .map(|s| s.script.as_str())
+            .collect::<Vec<_>>(),
+        vec![FIXED_FAREWELL_SCRIPT],
+        "Boot 完了前のマウスは talk を起こさない"
+    );
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),
@@ -108,6 +129,17 @@ fn phase_ignore_during_close_series_no_mouse_get() {
             Some("Head"),
         )))
         .expect("send Mouse during close series");
+    // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
+    harness
+        .sender
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DragStart,
+            9,
+            9,
+            0,
+            Some("Head"),
+        )))
+        .expect("send Mouse during close series (drag)");
     // close talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf。
     gate.release_all();
 
@@ -117,7 +149,7 @@ fn phase_ignore_during_close_series_no_mouse_get() {
 
     // CloseTalkWait のマウスは GET を発行しない（記録に現れない）。
     assert!(
-        mouse_gets(&recorded).is_empty(),
+        no_mouse_call(&recorded),
         "close 系列中（CloseTalkWait）の Mouse はマウス GET を発行しないはず: {:?}",
         recorded
     );
@@ -187,6 +219,17 @@ fn pending_close_guard_suppresses_mouse_get() {
             Some("Head"),
         )))
         .expect("send Mouse while close pending");
+    // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
+    harness
+        .sender
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DragStart,
+            11,
+            22,
+            0,
+            Some("Head"),
+        )))
+        .expect("send Mouse while close pending (drag)");
     // 挨拶 talk（Ended）を解放 → pending_close を消化して begin_close（OnClose→別れ→close talk quit:true）。
     gate.release_all();
 
@@ -196,7 +239,7 @@ fn pending_close_guard_suppresses_mouse_get() {
 
     // (1) pending_close 中のマウスは GET を発行しない（記録に現れない）。
     assert!(
-        mouse_gets(&recorded).is_empty(),
+        no_mouse_call(&recorded),
         "pending_close 中の Mouse はマウス GET を発行しないはず（close 優先ガード）: {:?}",
         recorded
     );

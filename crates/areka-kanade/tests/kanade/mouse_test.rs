@@ -14,7 +14,7 @@
 //! 3. **(b) Ref5 左右**: DoubleClick Left→Ref5="0"／Right→Ref5="1"（`on_mouse_double_click` 導出共有）。
 //! 4. **(d) 204→無動作**: マウス GET へ NoContent → StartTalk 不発（close talk のみ）・`Steady{None}` 維持
 //!    （204 は未注入の既定ゆえ檻 1 が同じ駆動で見る・末尾 Unload まで）。
-//! 5. **フェーズ無視**: 非 Steady（Boot 完了前=Idle／close 系列中=CloseTalkWait）で Mouse 注入 →
+//! 5. **フェーズ無視**: 非 Steady（Boot 完了前=Idle／close 系列中=CloseTalkWait）で Mouse（Move とドラッグ）注入 →
 //!    マウス GET は記録に現れない・状態不変（終了系列は正常完走）。
 //! 6. **pending_close ガード**: active talk 中に CloseRequest（→pending_close）→ Mouse 注入 →
 //!    マウス GET 不発・close 握手は既存どおり完走。

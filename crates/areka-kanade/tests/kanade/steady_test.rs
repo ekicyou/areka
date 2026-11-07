@@ -255,7 +255,7 @@ fn sporadic_value_starts_unique_talk() {
         &ExecutionSnapshot::INACTIVE,
     ));
     assert!(
-        driven.recorded.iter().any(|c| *c == expected_get),
+        driven.recorded.contains(&expected_get),
         "events 表導出の GET（Ref3=1・Status なし）と一致する OnSecondChange GET が記録列に現れるはず: {:?}",
         driven.recorded
     );
@@ -393,7 +393,7 @@ fn active_talk_tick_emits_notify_ref3_zero() {
         "NOTIFY pump の Ref3 は \"0\"（active talk 中・応答無視）"
     );
     assert!(
-        recorded.iter().any(|c| *c == expected_notify),
+        recorded.contains(&expected_notify),
         "active talk 中の Tick は OnSecondChange NOTIFY（Ref3=0）を発行するはず（GET でない）: {:?}",
         recorded
     );

@@ -269,13 +269,6 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
         TalkId(2),
         "置換 talk は新 talk_id=2（旧 id=1 を再利用しない）"
     );
-    // 置換 talk_id は旧 talk_id の直後（n+1・単調・再利用なし）。
-    assert_eq!(
-        started[1].talk_id.0,
-        started[0].talk_id.0 + 1,
-        "置換は旧 talk_id の直後（n+1）を採番する（単調・再利用なし）: {:?}",
-        started
-    );
 
     // (3) 状態整合: 旧 Done の stale 破棄後もハングせず、置換 talk の quit:true が終了系列を完走（末尾 Unload）。
     assert_eq!(
