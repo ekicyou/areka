@@ -14,7 +14,7 @@
 //!
 //! # 範囲
 //! 許可集合と判定（[`ALLOWED_RESOURCE_IDS`]／[`is_allowed_resource_id`]）・照会構築関数
-//! （汎用の [`resource_get`] とその上に畳まれた [`resource_username`]）・結果語彙
+//! （汎用の [`resource_get`]）・結果語彙
 //! [`ResourceOutcome`]・注入シーム [`ResourceSink`]（boot 系列 prefetch から呼ばれる）を持つ。
 //! prefetch 段そのものの挿入は `boot.rs`（OnInitialize 後・OnFirstBoot 前）が、メニューからの
 //! 任意時点の照会は `actor_resources.rs` が担う。
@@ -81,21 +81,6 @@ pub const ALLOWED_RESOURCE_IDS: &[&str] = &[
 /// あり、submit ガードは両者の論理和で送出可否を決める。
 pub fn is_allowed_resource_id(id: &str) -> bool {
     ALLOWED_RESOURCE_IDS.contains(&id)
-}
-
-/// `username` リソース照会（GET・References なし・Status は既存イベント同様 snapshot から導出）。
-///
-/// SHIORI Resource `username` への GET 照会を組み立てる純粋関数（副作用なし・Req4.1）。既存イベント
-/// 構築関数（`events::*`）と同じく `snapshot` から [`ExecutionStatus`] を導出し、送出時点の実行状態を
-/// wire 証跡へ載せる。boot prefetch 段は会話なしの作り方（`State::snapshot_without_talk`）で呼ぶ。
-///
-/// References は持たない（正典 Resource GET は Reference を要しない）。応答（200 Value／204／失敗）の
-/// [`ResourceOutcome`] への写像・[`ResourceSink`] 呼出・完了固定ログは prefetch 段（`boot.rs`）が担う。
-///
-/// 本体は汎用の [`resource_get`] に `"username"` を渡すだけの薄い呼び出しであり、組み上がる照会は
-/// 従来と同一である（boot 系列の既存呼び手は無改変）。
-pub fn resource_username(snapshot: &ExecutionSnapshot) -> ShioriCall {
-    resource_get("username", snapshot)
 }
 
 /// 任意のリソース ID への照会（GET・References なし・Status は snapshot から導出）を組み立てる
@@ -281,11 +266,11 @@ mod tests {
         }
     }
 
-    /// `resource_username` は GET・id=`"username"`・References なし・Status は snapshot 由来
+    /// `resource_get("username", ..)` は GET・id=`"username"`・References なし・Status は snapshot 由来
     /// （INACTIVE→ヘッダ行なし・Req4.1）。id は許可集合を通る。
     #[test]
-    fn resource_username_is_get_with_no_references() {
-        let call = resource_username(&ExecutionSnapshot::INACTIVE);
+    fn resource_get_username_is_get_with_no_references() {
+        let call = resource_get("username", &ExecutionSnapshot::INACTIVE);
         match call {
             ShioriCall::Get {
                 id,
@@ -311,11 +296,11 @@ mod tests {
                     "username は送出許可集合を通る"
                 );
             }
-            ShioriCall::Notify { .. } => panic!("resource_username は GET を返すべき"),
+            ShioriCall::Notify { .. } => panic!("resource_get は GET を返すべき"),
         }
     }
 
-    /// `resource_get` は任意の許可名について `resource_username` と同じ形の GET を組む
+    /// `resource_get` は任意の許可名について `"username"` と同じ形の GET を組む
     /// （id だけが違う・References なし・Status は snapshot 由来・要件 3.2）。
     #[test]
     fn resource_get_builds_the_same_shape_for_any_allowed_id() {
@@ -351,12 +336,15 @@ mod tests {
 
     /// talk_active=true では Status: talking を snapshot から導出する（既存イベント構築子と同一規律）。
     #[test]
-    fn resource_username_carries_talking_status_when_active() {
-        let call = resource_username(&ExecutionSnapshot {
-            talk_active: true,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        });
+    fn resource_get_carries_talking_status_when_active() {
+        let call = resource_get(
+            "username",
+            &ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+                ..ExecutionSnapshot::INACTIVE
+            },
+        );
         let status = match call {
             ShioriCall::Get { status, .. } => status.render(),
             ShioriCall::Notify { .. } => panic!("expected GET"),

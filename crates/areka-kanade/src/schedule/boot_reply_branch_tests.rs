@@ -30,7 +30,7 @@ fn drive_to_prefetch(cfg: &KanadeConfig) -> State {
     assert_eq!(actions.len(), 1, "prefetch は GET を 1 件だけ発行する");
     assert_get(
         &actions[0],
-        &resources::resource_username(&ExecutionSnapshot::INACTIVE),
+        &resources::resource_get("username", &ExecutionSnapshot::INACTIVE),
     );
     s
 }

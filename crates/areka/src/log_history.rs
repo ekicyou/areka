@@ -79,7 +79,7 @@ impl Kind {
 }
 
 /// 取り決めの target: 再生した台本を script 種別へ残す（info 以上で出す約束）。
-pub(crate) const TARGET_SCRIPT: &str = "areka::log::script";
+pub(crate) const TARGET_SCRIPT: &str = areka_kanade::script_log::TARGET;
 /// 取り決めの target: error 種別へ直接残す（info 以上で出す約束）。
 pub(crate) const TARGET_ERROR: &str = "areka::log::error";
 

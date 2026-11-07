@@ -78,7 +78,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::Notified => {
                 let mut state = state;
                 state.phase = Phase::BootPrefetch;
-                let call = resources::resource_username(&state.snapshot_without_talk());
+                let call = resources::resource_get("username", &state.snapshot_without_talk());
                 (state, vec![Action::ShioriRequest(call)])
             }
             other => unexpected_reply(state, "BootInit", other),

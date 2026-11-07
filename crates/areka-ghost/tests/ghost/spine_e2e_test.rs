@@ -165,7 +165,7 @@ pub(crate) fn expected_boot_prefix(config: &areka_kanade::KanadeConfig) -> Vec<R
     let inactive = &areka_kanade::ExecutionSnapshot::INACTIVE;
     vec![
         expected_from_shiori_call(events::on_initialize(inactive)),
-        expected_from_shiori_call(resources::resource_username(inactive)),
+        expected_from_shiori_call(resources::resource_get("username", inactive)),
         // 永続ファイルの無い fixture＝vanish 不在ゆえ Ref0="0"。
         expected_from_shiori_call(events::on_first_boot(inactive, 0)),
         expected_from_shiori_call(events::on_boot(config, inactive)),

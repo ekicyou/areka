@@ -101,10 +101,13 @@ fn drive_full_run() {
     let on_boot = events::on_boot(&config, &ExecutionSnapshot::INACTIVE);
     let expected_boot_prefix = vec![
         expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY
-        expected_call(resources::resource_username(&ExecutionSnapshot::INACTIVE)), // GET（prefetch・R4.1）→204
-        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)),     // GET →204
-        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)),     // GET →Value
-        expected_translate(FIXED_BOOT_SCRIPT, &on_boot, &talking), // GET（挨拶の翻訳）→204
+        expected_call(resources::resource_get(
+            "username",
+            &ExecutionSnapshot::INACTIVE,
+        )), // GET（prefetch・R4.1）→204
+        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)), // GET →204
+        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET →Value
+        expected_translate(FIXED_BOOT_SCRIPT, &on_boot, &talking),          // GET（挨拶の翻訳）→204
         expected_call(events::baseware_version(&config, &talking)), // NOTIFY（Status: talking）
     ];
     assert!(

@@ -33,7 +33,7 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     assert_eq!(actions.len(), 1);
     assert_get(
         &actions[0],
-        &resources::resource_username(&ExecutionSnapshot::INACTIVE),
+        &resources::resource_get("username", &ExecutionSnapshot::INACTIVE),
     );
 
     // 2b. BootPrefetch + NoContent(204) → [ResourceOutcome, OnFirstBoot GET] / BootType（R4.1）。

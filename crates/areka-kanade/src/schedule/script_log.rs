@@ -13,7 +13,7 @@ use super::translate::{Replied, ScriptSource};
 use super::{Action, Input, State};
 use crate::msg::KanadeConfig;
 
-/// 取り決めの target（`crates/areka/src/log_history.rs` の `TARGET_SCRIPT` と同じ字・areka のテストで一致を固定）。
+/// 取り決めの target（`crates/areka/src/log_history.rs` の `TARGET_SCRIPT` はこの定数を使う）。
 pub const TARGET: &str = "areka::log::script";
 /// 外からの台本（MCP の `sakurascript`）の表示の語。
 pub const SSTP_SEND_LABEL: &str = "SSTP(Local,Auth)";
