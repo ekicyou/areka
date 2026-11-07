@@ -46,11 +46,7 @@ fn script_choice_starts_new_talk_with_text_after_prefix() {
     }
     assert!(next.choice.is_none(), "待ちの帳簿は消える");
     assert_eq!(next.next_talk_id, 7, "採番が 1 進む");
-    assert_eq!(
-        next.choice_prev_talk,
-        Some(TalkId(3)),
-        "元のトークを 1 世代控える"
-    );
+    assert_eq!(next.prev_talk, Some(TalkId(3)), "元のトークを 1 世代控える");
     match &next.phase {
         Phase::Steady {
             talk:
@@ -154,7 +150,7 @@ fn nested_script_choice_runs_two_stages() {
         }
         _ => panic!("2 段目は解決 → 再生開始のはず（数 {}）", actions.len()),
     }
-    assert_eq!(next.choice_prev_talk, Some(TalkId(6)));
+    assert_eq!(next.prev_talk, Some(TalkId(6)));
 }
 
 /// 要件 7.3・3.1・3.2・5.3: `script:` の後ろが空なら、トークを始めず待ちだけを閉じる。
@@ -180,7 +176,7 @@ fn empty_script_choice_only_resolves() {
     }
     assert!(next.choice.is_none(), "待ちの帳簿は消える");
     assert_eq!(next.next_talk_id, 6, "採番は変わらない");
-    assert_eq!(next.choice_prev_talk, None, "元のトークを控えない");
+    assert_eq!(next.prev_talk, None, "元のトークを控えない");
     match &next.phase {
         Phase::Steady {
             talk: Some(ActiveTalk { talk_id, .. }),

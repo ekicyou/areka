@@ -38,7 +38,7 @@ pub(crate) fn accepts(state: &State) -> bool {
 
 /// `Input::SstpSend` の腕。受け付けないなら状態を変えず `debug!`（`sstp_not_accepted`）だけで空の一括。
 ///
-/// 受け付けたら選択肢の帳簿と 1 世代の控えを消し、共通の手で採番・枠の差し替えをし、再生の開始に
+/// 受け付けたら選択肢の帳簿を消し、共通の手で採番・枠の差し替え（古い番号を控えへ）をし、再生の開始に
 /// strict の印を立て、翻訳へ預ける（0 文字なら預けずに再生の開始をそのまま返す）。旧トークの
 /// 後始末は今日の置き換えと同じく dispatcher と [`super::balloon_events::settle`] に任せる。
 pub(super) fn on_send(
@@ -51,7 +51,6 @@ pub(super) fn on_send(
         return (state, Vec::new());
     }
     super::clear_choice_ledger(&mut state, "sstp_send");
-    state.choice_prev_talk = None;
     let (talk_id, mut start) = super::start_talk(
         &mut state,
         SEND_ORIGIN,
@@ -125,7 +124,6 @@ pub(super) fn on_notify_reply(
     match outcome {
         ShioriOutcome::Value(script, _) if !script.trim().is_empty() => {
             super::clear_choice_ledger(&mut state, "sstp_notify");
-            state.choice_prev_talk = None;
             let (talk_id, mut start) =
                 super::start_talk(&mut state, NOTIFY_ORIGIN, script, ScriptOrigin::MCP_NOTIFY);
             mark_strict(&mut start, strict);

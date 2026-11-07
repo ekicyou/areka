@@ -34,7 +34,7 @@
   - 使わない束縛と引数を消し、呼び手 5 か所を合わせる
   - `steady.rs` が減り、番号を見る今のテストが全部緑
   - _Requirements: 3.1, 3.2, 3.3, 5.1, 9.1_
-- [ ] 2.2 置き換えた古いトークの控えと、食い違った帳簿を直す（#4・#8）
+- [x] 2.2 置き換えた古いトークの控えと、食い違った帳簿を直す（#4・#8）
   - 古いトークの控えの欄を改名し、選択・マウスの答え・SSTP の台本・時間切れの答えのどの置き換えでも古い番号を入れる
   - 帳簿と今のトークの食い違いを warn にして、その場で帳簿を消す
   - `late_done_of_a_talk_replaced_by_a_mouse_answer_or_a_send_is_info_not_error` と `a_stale_choice_ledger_is_warned_once_and_cleared` が緑で、直しを外すと赤になる

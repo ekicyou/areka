@@ -157,7 +157,7 @@ fn fingerprint(s: &State) -> String {
         current_talk_id(&s.phase).map(|t| t.0),
         s.next_talk_id,
         s.choice.is_some(),
-        s.choice_prev_talk.map(|t| t.0),
+        s.prev_talk.map(|t| t.0),
         s.pending_close.is_some(),
         s.pending_change.is_some(),
         s.translate.is_some(),
@@ -340,13 +340,14 @@ fn send_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
     for no_user_break in [false, true] {
         let mut state = steady(active(9, "OnMouseDoubleClick"));
         state.external.no_user_break = no_user_break;
-        state.choice_prev_talk = Some(TalkId(8));
+        state.prev_talk = Some(TalkId(8));
         assert!(accepts(&state));
         let (state, actions) = step(state, send("\\h割り込み\\e", None), &config());
         assert_playing(&state, 10);
         assert_eq!(
-            state.choice_prev_talk, None,
-            "1 世代の控えは次の差し替えで消える"
+            state.prev_talk,
+            Some(TalkId(9)),
+            "1 世代の控えは次の差し替えで置き換えた古い番号に変わる"
         );
         assert!(
             !deferred_start(&state).strict,

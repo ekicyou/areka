@@ -288,7 +288,7 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     assert_eq!(next.next_talk_id, 7);
     assert!(next.choice.is_none(), "置換起動で帳簿は消える（Req7.4）");
     assert_eq!(
-        next.choice_prev_talk,
+        next.prev_talk,
         Some(TalkId(3)),
         "タイムアウト Value も choice 起因の slot 差替＝旧 talk_id を 1 世代保持（遷移規則 9）"
     );
@@ -535,11 +535,11 @@ fn talk_done_quit_clears_choice_ledger() {
     assert_choice_invariant(&next);
 }
 
-/// 規則 7: **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持も持ち越さない。
+/// 規則 7: **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持は置き換えた古い番号に変わる。
 #[test]
 fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
     let mut s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
-    s.choice_prev_talk = Some(TalkId(1));
+    s.prev_talk = Some(TalkId(1));
     let (next, actions) = step(
         s,
         Input::ShioriReply {
@@ -562,9 +562,10 @@ fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
         next.choice.is_none(),
         "slot 置換（マウス由来含む）で帳簿は消える（規則 7）"
     );
-    assert!(
-        next.choice_prev_talk.is_none(),
-        "次の slot 差替で 1 世代保持は消える（規則 9）"
+    assert_eq!(
+        next.prev_talk,
+        Some(TalkId(3)),
+        "次の slot 差替で 1 世代保持は置き換えた古い番号に変わる（規則 9）"
     );
     assert_choice_invariant(&next);
 }

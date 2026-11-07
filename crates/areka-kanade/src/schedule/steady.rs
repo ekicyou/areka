@@ -365,7 +365,7 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
 ///
 /// - [`ShioriOutcome::Value`] → 以降の段を発行せず（Req2.4）、新 talk_id を採番して slot を
 ///   差し替え（Req4.1／4.3）、`[ResolveChoice{old}, StartTalk(new)]` を**この順**で同一バッチに
-///   載せる（DD-4・Req4.6／5.1）。旧 talk_id は 1 世代だけ `choice_prev_talk` へ保持する
+///   載せる（DD-4・Req4.6／5.1）。旧 talk_id は 1 世代だけ `prev_talk` へ保持する
 ///   （遅延 `TalkDone` の info 降格に使う・遷移規則 9。消費側の防御アームは
 ///   [`super::on_talk_done`]）。
 /// - [`ShioriOutcome::NoContent`]／[`ShioriOutcome::Failed`]（error 記録・Req4.5）→ 残段あり:
@@ -412,8 +412,6 @@ fn on_cascade_reply(
                 prev_talk_id = old_talk_id.0,
                 "選択由来の応答にスクリプト——単一 slot 調停で差し替え再生起動（Req4.1／4.3）"
             );
-            // choice 起因の slot 差替——旧 talk_id を 1 世代保持する（遷移規則 9・消費は 4.6）。
-            state.choice_prev_talk = Some(old_talk_id);
             return (
                 state,
                 vec![resolve_choice(old_talk_id, choice_id, "value"), start],
@@ -533,12 +531,13 @@ pub(super) fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
 /// **現状この分岐は構造上到達不能である**——帳簿は対象 talk 一致時にしか確立されず
 /// （`on_choice_waiting`）、slot 差替・トーク完了・close 系遷移のすべてで掃除規律
 /// （C4 規則 7・[`super::clear_choice_ledger`]）が帳簿を落とすため、不一致のまま Tick へ
-/// 到達する経路を静的に構成できない。実際、檻は 1 件も存在しない。
+/// 到達する経路を静的に構成できない（檻は状態を直に組む `a_stale_choice_ledger_is_warned_once_and_cleared`）。
 ///
 /// それでも除去せず残すのは、これが破れたときの帰結が「`OnChoiceTimeout` の Ref0 に**他トークの
 /// 起動スクリプト**が載る」＝正典違反の送出であり、不変条件（帳簿の対象＝現行 talk）が将来の
-/// 改修で崩れた瞬間に無言で誤送出しないための最終防御だからである。発火せず trace で観測して
-/// 通常 Tick へ譲る（沈黙で捨てない・log-first）。到達したら不変条件の破れを意味する。
+/// 改修で崩れた瞬間に無言で誤送出しないための最終防御だからである。到達したら不変条件の破れを
+/// 意味するので、発火せず warn で残し、その場で帳簿を消して通常 Tick へ譲る（消さないと選択待ちが
+/// 黙って無期限になり、毎秒同じ枝を通り続ける）。
 fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec<Action>> {
     let ledger = state.choice.as_ref()?;
     if !matches!(ledger.phase, ChoicePhase::Waiting) {
@@ -555,14 +554,15 @@ fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec
             active.script.clone()
         }
         _ => {
-            tracing::trace!(
+            tracing::warn!(
                 target: "kanade",
                 event = "choice_timeout_ledger_stale",
                 talk_id = ledger_talk_id.0,
                 deadline_ms = deadline.0,
                 now_ms = now.0,
-                "現行トークと一致しない選択待ち帳簿——タイムアウトを発火せず通常 Tick へ（掃除は C4 規則 7）"
+                "現行トークと一致しない選択待ち帳簿——タイムアウトを発火せず帳簿を消して通常 Tick へ"
             );
+            super::clear_choice_ledger(state, "choice_timeout_ledger_stale");
             return None;
         }
     };
@@ -595,7 +595,7 @@ fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec
 /// - [`ShioriOutcome::Value`] → **既存の起動経路**で置換再生する（新 talk_id 採番・slot 差替・
 ///   帳簿消去・Req7.4）。旧トークの終了は dispatcher の Close-then-spawn が担うため、ここで
 ///   解決指示（[`Action::ResolveChoice`]）は発行しない（F3）。旧 talk_id は 1 世代だけ
-///   `choice_prev_talk` へ保持する（遷移規則 9・消費側の防御アームは [`super::on_talk_done`]）。
+///   `prev_talk` へ保持する（遷移規則 9・消費側の防御アームは [`super::on_talk_done`]）。
 /// - [`ShioriOutcome::NoContent`]／[`ShioriOutcome::Failed`]（error 記録・Req4.5）→ 帳簿を消し
 ///   [`Action::CancelChoice`] を発行する（Req7.5）。これは **Close funnel の正規の入口**であり
 ///   （DD-11）、dispatcher が slot を維持したまま `Close` を転送し、talk が返す
@@ -624,8 +624,6 @@ fn on_timeout_reply(
                 prev_talk_id = talk_id.0,
                 "タイムアウト応答にスクリプト——既存の起動経路で置換再生（Req7.4）"
             );
-            // choice 起因の slot 差替——旧 talk_id を 1 世代保持する（遷移規則 9・消費は 4.6）。
-            state.choice_prev_talk = Some(talk_id);
             return (state, vec![start]);
         }
         ShioriOutcome::NoContent => "no_content",
@@ -802,10 +800,8 @@ fn on_reply(
                         super::start_talk(&mut state, origin, script, ScriptOrigin::GHOST);
                     tracing::info!(target: "kanade", event = "steady_talk_replace", talk_id = talk_id.0, origin = origin, "active talk 中に置き換える出所の Value——単一 slot 置換（新 talk_id 採番）");
                     // slot 置換の掃除点（C4 規則 7・**マウス由来を含む**）: 旧トークの選択待ちは
-                    // 置換で消滅する。加えて 1 世代 stale 保持も「次の slot 差替」で消す（規則 9）
-                    // ——choice 起因でない置換が挟まれた時点で、保持していた旧 id は 2 世代前になる。
+                    // 置換で消滅する（旧 talk_id の控えは `start_talk` が入れた）。
                     super::clear_choice_ledger(&mut state, "steady_talk_replace");
-                    state.choice_prev_talk = None;
                     (state, vec![start])
                 }
                 // 倍率の 2 語の応答は話している最中なら台詞を差し替えない（shell-scale-linkage 要件 5.11）。

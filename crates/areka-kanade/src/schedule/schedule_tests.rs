@@ -462,7 +462,7 @@ fn initial_state_has_empty_choice_ledger() {
     let s = State::initial();
     assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
     assert!(
-        s.choice_prev_talk.is_none(),
+        s.prev_talk.is_none(),
         "初期状態に 1 世代保持の旧 talk_id は無い"
     );
 }
@@ -802,13 +802,13 @@ fn state_snapshot_preserves_the_talk_axis_of_phase() {
 //
 // choice 起因の slot 差替直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
 // dispatcher の slot 差替より前に投函され得る（design F1「順序の決定性と残余レース」）。
-// 到着した遅延 `TalkDone` は `choice_prev_talk` と照合して `talk_done_stale_choice`（info）
+// 到着した遅延 `TalkDone` は `prev_talk` と照合して `talk_done_stale_choice`（info）
 // で棄却し、`unknown_talk_done`（error）を**真に未知の id 専用**に保つ。
 
-/// `choice_prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
+/// `prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
 fn state_with_prev_talk(active: TalkId, prev: TalkId) -> State {
     let mut s = state_in(steady_with_talk(active));
-    s.choice_prev_talk = Some(prev);
+    s.prev_talk = Some(prev);
     s
 }
 
@@ -839,7 +839,7 @@ fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
     assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
     assert_not_logged(&ev, "unknown_talk_done");
     assert_eq!(
-        next.choice_prev_talk,
+        next.prev_talk,
         Some(TalkId(3)),
         "stale 帳簿は現 talk の TalkDone 到達まで保持する（1 世代・規則 9）"
     );
@@ -882,7 +882,7 @@ fn current_talk_done_clears_the_one_generation_stale_slot() {
         &cfg,
     );
     assert!(
-        after_current.choice_prev_talk.is_none(),
+        after_current.prev_talk.is_none(),
         "現 talk の TalkDone 到達で 1 世代保持を消去する（規則 9）"
     );
     // 消去後に届く旧 id は真に未知＝error へ戻る（保持は 1 世代のみ）。

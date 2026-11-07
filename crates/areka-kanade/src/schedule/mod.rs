@@ -113,7 +113,8 @@ pub(in crate::schedule) fn take_talk_id(state: &mut State) -> TalkId {
 
 /// 台本 1 つを新しいトークとして始める（採番・枠の差し替え・再生開始の行動を返す）。
 ///
-/// 選択肢の帳簿・`choice_prev_talk`・解決・記録は呼び手の仕事で、ここでは触らない。
+/// 置き換えた古いトークの番号は、置き換えの種類を問わずここで `prev_talk` に控える（古いトークが
+/// 無ければ控えは空になる＝1 世代だけ）。選択肢の帳簿・解決・記録は呼び手の仕事で、ここでは触らない。
 /// `label` は `ActiveTalk::origin`（記録用の綴り）、`origin` は再生の開始に付ける出どころ。
 pub(in crate::schedule) fn start_talk(
     state: &mut State,
@@ -122,6 +123,7 @@ pub(in crate::schedule) fn start_talk(
     origin: ScriptOrigin,
 ) -> (TalkId, Action) {
     let talk_id = take_talk_id(state);
+    state.prev_talk = current_talk_id(&state.phase);
     state.phase = Phase::Steady {
         talk: Some(ActiveTalk {
             talk_id,
@@ -434,7 +436,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
         Some(active) if active == done.talk_id => {
             // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
             // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
-            state.choice_prev_talk = None;
+            state.prev_talk = None;
             // 印の台詞（`OnShellChanging`）の利用者の中断かは、中断の帳簿を空にする前に見る。
             let marked_break = talk_gap::is_marked_break(&state, &done);
             talk_gap::note_marked_done(&mut state, &done, marked_break);
@@ -483,18 +485,19 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             balloon_events::after_talk_done(state, actions, &done, broke)
         }
         Some(_) | None => {
-            // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: choice 起因の slot 差替直後は、
+            // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: slot 差替（選択・マウスの答え・
+            // SSTP の台本・時間切れの答えのどれでも）の直後は、
             // 旧 talk の即時 `Done{Ended}`（再生層の即 settle）が dispatcher の slot 差替より前に
             // 投函され得る——この遅延 `Done` は**欠陥ではなく既知の順序レース**である。よって
             // 1 世代保持した旧 talk_id と照合し、一致するものは info で棄却して
             // `unknown_talk_done`（error）を真に未知の id 専用に保つ（正常系で error を出さない）。
             // 保持は消さない——消去点は現 talk の `TalkDone` 到達と次の slot 差替である（規則 9）。
-            if state.choice_prev_talk == Some(done.talk_id) {
+            if state.prev_talk == Some(done.talk_id) {
                 tracing::info!(
                     target: "kanade",
                     event = "talk_done_stale_choice",
                     talk_id = done.talk_id.0,
-                    "選択差替で置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
+                    "置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
                 );
                 return (state, Vec::new());
             }

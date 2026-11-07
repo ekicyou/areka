@@ -561,7 +561,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
     let replacing = TalkId(6);
     assert!(is_playing(&s, replacing));
     assert_eq!(
-        s.choice_prev_talk,
+        s.prev_talk,
         Some(MARKED),
         "選択の置き換えは印の台詞の番号を 1 世代だけ控える"
     );

@@ -255,7 +255,7 @@ fn cascade_value_emits_resolve_then_start_in_this_order() {
     assert_eq!(next.next_talk_id, 7);
     assert!(next.choice.is_none(), "解決で帳簿は消える");
     assert_eq!(
-        next.choice_prev_talk,
+        next.prev_talk,
         Some(TalkId(3)),
         "choice 起因の slot 差替で旧 talk_id を 1 世代保持する（遷移規則 9）"
     );

@@ -1,4 +1,4 @@
-use super::log_capture::{CapturedEvent, assert_logged, capture, logged_once};
+use super::log_capture::{CapturedEvent, assert_logged, assert_not_logged, capture, logged_once};
 use super::*;
 use crate::msg::{CloseReason, ShioriFailure};
 use crate::talk::TalkDone;
@@ -15,7 +15,7 @@ fn state_in(phase: Phase) -> State {
         next_talk_id: 5,
         pending_close: None,
         choice: None,
-        choice_prev_talk: None,
+        prev_talk: None,
         anchor: None,
         user_break_talk: None,
         shown: None,
@@ -118,7 +118,7 @@ fn error_close_deadline_exceeded_logs() {
         next_talk_id: 8,
         pending_close: None,
         choice: None,
-        choice_prev_talk: None,
+        prev_talk: None,
         anchor: None,
         user_break_talk: None,
         shown: None,
@@ -712,4 +712,86 @@ fn trace_mouse_close_pending_logs_once_for_drag_input() {
         logged_once(&ev, Level::TRACE, "mouse_close_pending");
         assert!(actions.is_empty(), "終了の握手の待ちでは GET を出さない");
     }
+}
+
+// ============================================================
+// 置き換えた古いトークの控えと、食い違った帳簿（audit-kanade #4・#8）
+// ============================================================
+
+/// 置き換えた古いトーク（4・新しいトークは 5）の遅い完了を、置き換えた後の状態へ届ける。
+fn late_done_after(replace: Input) -> Vec<CapturedEvent> {
+    let cfg = config();
+    capture(|| {
+        let (next, _) = step(state_in(steady_with_talk(TalkId(4))), replace, &cfg);
+        let _ = step(
+            next,
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(4),
+                reason: TalkEndReason::Ended,
+                quit_reserved: false,
+            }),
+            &cfg,
+        );
+    })
+}
+
+/// #4: マウスの答え・SSTP の台本で置き換えた古いトークの遅い完了は info で捨て、ERROR を出さない。
+#[test]
+fn late_done_of_a_talk_replaced_by_a_mouse_answer_or_a_send_is_info_not_error() {
+    let replaces = [
+        Input::ShioriReply {
+            outcome: ShioriOutcome::Value(
+                r"\0やあ\e".to_string(),
+                areka_talk::SecurityLevel::Local,
+            ),
+            origin: "OnMouseClick",
+        },
+        Input::SstpSend {
+            script: r"\0やあ\e".to_string(),
+            strict: None,
+        },
+    ];
+    for replace in replaces {
+        let ev = late_done_after(replace);
+        logged_once(&ev, Level::INFO, "talk_done_stale_choice");
+        assert_not_logged(&ev, "unknown_talk_done");
+    }
+}
+
+/// #8: 帳簿の相手と今のトークが食い違ったら、刻み 2 回でも WARN は 1 件で、帳簿は消える。
+#[test]
+fn a_stale_choice_ledger_is_warned_once_and_cleared() {
+    let mut state = state_in(steady_with_talk(TalkId(7)));
+    state.choice = Some(ChoiceState {
+        talk_id: TalkId(5),
+        candidates: vec!["OnMenu".to_string()],
+        deadline: Some(MonotonicMs(1_500)),
+        phase: ChoicePhase::Waiting,
+    });
+    let cfg = config();
+    let mut out = None;
+    let ev = capture(|| {
+        let (next, _) = step(
+            state,
+            Input::Tick {
+                now: MonotonicMs(2_000),
+            },
+            &cfg,
+        );
+        out = Some(
+            step(
+                next,
+                Input::Tick {
+                    now: MonotonicMs(3_000),
+                },
+                &cfg,
+            )
+            .0,
+        );
+    });
+    logged_once(&ev, Level::WARN, "choice_timeout_ledger_stale");
+    assert!(
+        out.expect("step は必ず結果を返す").choice.is_none(),
+        "食い違った帳簿は消える"
+    );
 }

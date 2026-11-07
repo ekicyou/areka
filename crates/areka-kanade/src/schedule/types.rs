@@ -216,15 +216,15 @@ pub(crate) struct State {
     pub pending_close: Option<CloseReason>,
     /// 選択待ち〜choice 系 in-flight の帳簿（`pending_close` と同型に Phase 外へ置く・DD-3）。
     pub choice: Option<ChoiceState>,
-    /// choice 起因の slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
+    /// slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
     ///
     /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
     /// `talk_done_stale_choice`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
     ///
-    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点は choice 起因の slot 差替
-    /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
-    /// 次の slot 差替（マウス由来の置換を含む）である。
-    pub choice_prev_talk: Option<TalkId>,
+    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点はどの slot 差替でも共通の
+    /// [`super::start_talk`]（選択・マウスの答え・SSTP の台本・時間切れの答え）、消去点は現 talk の
+    /// `TalkDone` 到達と次の slot 差替（次の旧 talk_id で上書き）である。
+    pub prev_talk: Option<TalkId>,
     /// アンカーのイベントの応答待ちの段（送る直前に置き、応答で必ず取り出す・[`anchor`]）。
     pub anchor: Option<anchor::AnchorStage>,
     /// クリックの段の列の応答待ち（送る直前に置き、応答で必ず取り出す・[`mouse_events`]）。
@@ -265,7 +265,7 @@ impl State {
             next_talk_id: 1,
             pending_close: None,
             choice: None,
-            choice_prev_talk: None,
+            prev_talk: None,
             anchor: None,
             mouse_click: None,
             user_break_talk: None,

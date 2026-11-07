@@ -228,7 +228,7 @@ fn state_shape(s: &State) -> String {
         s.last_now,
         s.next_talk_id,
         s.pending_close,
-        s.choice_prev_talk.map(|t| t.0),
+        s.prev_talk.map(|t| t.0),
         s.user_break_talk.map(|note| note.talk_id.0),
         s.pending_change,
     )
