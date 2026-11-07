@@ -21,7 +21,7 @@
 //! # 基準→既存檻の対応表（6.1／6.2 で既に caged・本群は統合シームのみ追加）
 //! - **prefetch 順序（R9.3）**: `boot.rs::prefetch_username_get_is_issued_once_between_initialize_and_firstboot`
 //!   （純粋 step）／`actor.rs §9::boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink`
-//!   （アクター経路）／`boot_test.rs::boot_sequence_matches_canonical_exactly`（統合・正典記録列）。
+//!   （アクター経路）／`full_run_test.rs::full_run_boot_pump_close_terminates_deterministically`（統合・正典記録列）。
 //!   本群の [`prefetch_204_delivers_no_content_to_sink_and_boot_proceeds`] も記録列先頭で再確認する。
 //! - **結果写像＋boot 続行（R4.1/4.2）**: `boot.rs::prefetch_maps_outcomes_to_resource_outcome`
 //!   （200→Value／204→NoContent／timeout→Failed）／`boot.rs::prefetch_failure_continues_boot_not_fault`
@@ -106,7 +106,7 @@ fn ids(recorded: &[RecordedCall]) -> Vec<&str> {
 #[test]
 fn prefetch_204_delivers_no_content_to_sink_and_boot_proceeds() {
     let shiori = spawn_mock_shiori(Fixture::quitting());
-    // boot 挨拶 talk（id1・quit:false）→ close talk（id2・quit:true）で終了駆動（boot_test と同型）。
+    // boot 挨拶 talk（id1・quit:false）→ close talk（id2・quit:true）で終了駆動（full_run_test と同型）。
     let (recorded, outcomes) = drive_prefetch(shiori, vec![false, true]);
 
     // criterion 1（順序）: 記録列先頭 3 件が OnInitialize NOTIFY → username GET → OnFirstBoot GET。

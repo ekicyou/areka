@@ -22,7 +22,7 @@ pub(super) fn choice_references() -> Vec<String> {
 }
 
 /// 注入 `ChoiceWaiting` の表示完了時刻（[`establish_choice_wait`] が投函する値）。
-const CHOICE_DISPLAY_END_MS: u64 = 1_000;
+pub(super) const CHOICE_DISPLAY_END_MS: u64 = 1_000;
 
 /// 選択肢タイムアウトの既定値（`KanadeConfig::choice_timeout_default_ms`・裁定 5・Req7.8）。
 ///
@@ -61,7 +61,12 @@ pub(super) fn choice_input(id: &str) -> ChoiceInput {
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ Tick1（`OnSecondChange` GET Value → steady talk id=1・
 /// TalkDone は保留）→ `ChoiceWaiting{talk_id:1, candidates}`。以降は `Steady{Some(1)}` かつ帳簿
 /// `Waiting` であり、`KanadeMsg::Choice` の受領検証（talk_id 一致・候補集合一致）を通過できる。
-pub(super) fn establish_choice_wait(sender: &Sender<KanadeMsg>, candidates: &[&str]) {
+/// `directive` は台本の時間の指令（`timeout_directive_secs`）。`None` は未指定＝既定値へ委譲する。
+pub(super) fn establish_choice_wait(
+    sender: &Sender<KanadeMsg>,
+    candidates: &[&str],
+    directive: Option<f64>,
+) {
     sender.send(KanadeMsg::Boot).expect("send Boot");
     sender
         .send(KanadeMsg::Tick {
@@ -73,8 +78,8 @@ pub(super) fn establish_choice_wait(sender: &Sender<KanadeMsg>, candidates: &[&s
             talk_id: TalkId(1),
             choice_ids: candidates.iter().map(|s| s.to_string()).collect(),
             display_end: MonotonicMs(CHOICE_DISPLAY_END_MS),
-            // 未指定＝既定値へ委譲（期限は CHOICE_DEADLINE_MS・DD-8 の未指定分岐）。
-            timeout_directive_secs: None,
+            // None＝未指定は既定値へ委譲（期限は CHOICE_DEADLINE_MS・DD-8 の未指定分岐）。
+            timeout_directive_secs: directive,
         })
         .expect("send ChoiceWaiting");
 }

@@ -3,8 +3,6 @@
 // 設計「File Structure Plan」に従い、全テストモジュールを先出しで宣言する。
 // 各 `*_test.rs` は後続タスク（4.2〜4.6・5）が `#[test]` を自ファイルへ追加するだけで
 // 済むよう、この時点では空のプレースホルダとして用意する（本ファイルは以後編集不要）。
-#[path = "kanade/boot_test.rs"]
-mod boot_test;
 #[path = "kanade/choice_test.rs"]
 mod choice_test;
 #[path = "kanade/close_test.rs"]

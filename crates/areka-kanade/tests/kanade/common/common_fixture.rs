@@ -53,7 +53,7 @@ pub struct Fixture {
     /// 非決定になる）。定常 pump（`Steady{None}` の GET・Req 2.1/2.3/3.3）を**決定的に**観測する
     /// テストは、この挨拶を出さない（`false`）ことで boot→`Steady{None}` へ直行させ競合を発生源から
     /// 断つ（設計 Testing Strategy「boot が 204 を返す fixture」）。挨拶 boot 自体の観測は
-    /// boot_test／full_run_test が担う。
+    /// full_run_test が担う。
     pub boot_greets: bool,
     /// `OnSecondChange`（GET）で Value を返す出現インデックス集合（0 始まり）。
     pub steady_value_indices: Vec<usize>,

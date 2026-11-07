@@ -21,7 +21,7 @@ use super::{
 /// 注入する Tick は次の 4 本だけで、いずれも `now` は檻が与える論理値である:
 ///
 /// 1. `Tick(CHOICE_DISPLAY_END_MS)`（[`establish_choice_wait`] 内）: steady talk を起こす。
-/// 2. `Tick(CHOICE_DEADLINE_MS - 1_000)`: **期限手前**——タイムアウトは発火せず通常 pump（NOTIFY）。
+/// 2. `Tick(CHOICE_DEADLINE_MS - 1)`: **期限手前**——タイムアウトは発火せず通常 pump（NOTIFY）。
 /// 3. `Tick(CHOICE_DEADLINE_MS)`: **期限到達**——`OnChoiceTimeout` GET を発行し、この周期は pump を
 ///    発行しない（C4 規則 5）。mock は当該 id へ未注入ゆえ 204 を返し、`CancelChoice` が発行される。
 /// 4. `Tick(CHOICE_DEADLINE_MS + 1_000)`: `TalkDone{Interrupted}` 注入後の pump——`Steady{None}` へ
@@ -69,13 +69,13 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
 
     // (2) 期限手前の Tick——発火しない（既定値の下限を固定する）。
     harness
         .sender
         .send(KanadeMsg::Tick {
-            now: MonotonicMs(CHOICE_DEADLINE_MS - 1_000),
+            now: MonotonicMs(CHOICE_DEADLINE_MS - 1),
         })
         .expect("send Tick just before the deadline");
     // (3) 期限到達の Tick——OnChoiceTimeout GET を発行し pump は出さない。
@@ -256,7 +256,7 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     harness
         .sender
         .send(KanadeMsg::Tick {

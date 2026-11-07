@@ -100,7 +100,7 @@ fn boot_greeting_active_tick_emits_notify_talking() {
 
     // (b) 確定記録に挨拶 active の OnSecondChange NOTIFY（Ref3=0・talking）が含まれる（Req 1.5/2.4）。
     assert!(
-        recorded.iter().any(|c| *c == expected_notify),
+        recorded.contains(&expected_notify),
         "確定記録に挨拶 active の OnSecondChange NOTIFY（Ref3=0・talking）が含まれるはず: {:?}",
         recorded
     );
@@ -213,7 +213,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     );
     assert_eq!(started[0].talk_id, TalkId(1), "挨拶 talk は先頭採番 id=1");
     assert!(
-        recorded.iter().any(|c| *c == expected_notify),
+        recorded.contains(&expected_notify),
         "挨拶 talk active 中の Tick は OnSecondChange NOTIFY（Ref3=0・talking）を発行するはず（DD-IT-12）"
     );
 
@@ -271,6 +271,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 ///   - **(B) OnClose 握手はその NOTIFY より後に始まる**: `Steady{Some}` の CloseRequest が `pending_close` を
 ///     迂回して即 `begin_close` する回帰（または `Steady{None}` 即握手）なら、OnClose GET が NOTIFY より前に
 ///     出て (B) が落ちる。
+///
 /// `release_all` → 挨拶 TalkDone{Ended} 着弾 → `pending_close` を消化して初めて
 /// `begin_close`（OnClose GET→別れの Value→close talk）→ `CloseTalkWait` → close talk（受領 index 1・
 /// quit:true）→ 終了系列完走。この順序で「OnClose は挨拶完了**後**に初めて出る」＝繰延が一意に固定される。

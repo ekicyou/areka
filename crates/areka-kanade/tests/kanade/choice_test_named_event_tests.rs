@@ -45,7 +45,7 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     harness
         .sender
         .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))

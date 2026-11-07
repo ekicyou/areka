@@ -15,7 +15,7 @@
 //!   発生源から断つ・DD-6）。
 //!
 //! # 決定性（Req 7.3）と同期イディオム
-//! full_run_test.rs／boot_test.rs と同じ手順で決定的に同期する: quit シナリオ
+//! full_run_test.rs と同じ手順で決定的に同期する: quit シナリオ
 //! （`Fixture::quitting()`＋末尾 talk quit:true）で Boot→Tick…→CloseRequest を送り、
 //! close talk の完了が終了系列（Unload→StopSelf）を駆動する。kanade の期限付き join が
 //! 成功すれば、それまでの全 shiori 呼出・全 StartTalk 配送は確定済みであり、実時間 sleep を
@@ -31,7 +31,7 @@
 //! 競合を発生源から断つ（設計 Testing Strategy「boot が 204 を返す fixture」）。挨拶を出さない boot は
 //! StartTalk を一切生まないため、Boot の後に処理される steady Tick は必ず `Steady{None}` から始まり
 //! GET（Ref3=1）を発行する（cross-thread な TalkDone が存在しない＝決定的）。挨拶 boot 自体の観測は
-//! boot_test／full_run_test が担う。
+//! full_run_test が担う。
 //!
 //! # active talk 中 Tick の NOTIFY（Ref3=0）——統合層で被覆する
 //! 「再生中の Tick が OnSecondChange を NOTIFY（Ref3=0・応答無視）で発行する」（DD-6・Req 3.3）は

@@ -100,7 +100,7 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
         vec![0, 1],
     );
 
-    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // 1 本目——受理される唯一の注入。
     harness
         .sender
@@ -210,7 +210,7 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
         vec![0, 1],
     );
 
-    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // (1) 候補外 ID——棄却されるはず（Req1.4）。
     harness
         .sender

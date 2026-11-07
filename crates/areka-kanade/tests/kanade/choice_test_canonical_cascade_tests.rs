@@ -44,7 +44,7 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     harness
         .sender
         .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
@@ -174,7 +174,7 @@ fn canonical_choice_ex_value_short_circuits_select() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     harness
         .sender
         .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))

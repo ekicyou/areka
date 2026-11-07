@@ -2,13 +2,13 @@
 //! 指令どおりの期限で `OnChoiceTimeout` を出すことを外側から確かめる檻（areka-P0-choice-timeout-directive
 //! タスク 3.3・要件 1.1／1.2／1.4／2.1／2.2／9.4 後半／9.5）。
 //!
-//! 共有の補助関数 `establish_choice_wait` は指令を `None`（未指定）に固定して投函するため使わない。
-//! 同じ注入列（Boot → `Tick(1_000)` で steady talk id=1 を起こす → `ChoiceWaiting`）を本ファイルの
-//! [`run_choice_wait`] に自前で書き、指令だけを差し替える。時刻はすべて注入 Tick の論理値であり、
+//! 選択待ちは共有の補助関数 `establish_choice_wait` に指令を渡して作る（Boot → `Tick(1_000)` で
+//! steady talk id=1 を起こす → `ChoiceWaiting`）。時刻はすべて注入 Tick の論理値であり、
 //! 実時刻も sleep も読まない（要件 9.5）。
 
 use super::test_support::{
-    CANONICAL_CHOICE_ID, cascading_snapshot, choice_get_ids, command_tags, position_of,
+    CANONICAL_CHOICE_ID, CHOICE_DISPLAY_END_MS, cascading_snapshot, choice_get_ids, command_tags,
+    establish_choice_wait, position_of,
 };
 use super::{
     CallMethod, CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg,
@@ -16,14 +16,11 @@ use super::{
     expected_call, pumps, spawn_harness_gated,
 };
 
-/// 注入 `ChoiceWaiting` の表示の終わり（期限の起点）。
-const DISPLAY_END_MS: u64 = 1_000;
-
 /// 境の値（ミリ秒）。台本 `\![set,choicetimeout,1234]` の `N`。対になる ghost のテストと共有する。
 const BOUNDARY_MS: u64 = 1_234;
 
 /// 既定の時間切れ（30 秒）を越えた先の時刻。無効化の指令がここでも閉じないことを見る。
-const PAST_DEFAULT_MS: u64 = DISPLAY_END_MS + 60_000;
+const PAST_DEFAULT_MS: u64 = CHOICE_DISPLAY_END_MS + 60_000;
 
 /// 選択待ちを指令付きで作り、`ticks` を順に注入し、最後に中断の完了と close で終わらせる。
 ///
@@ -44,18 +41,7 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
     );
 
     let tx = &harness.sender;
-    tx.send(KanadeMsg::Boot).expect("send Boot");
-    tx.send(KanadeMsg::Tick {
-        now: MonotonicMs(DISPLAY_END_MS),
-    })
-    .expect("send Tick that starts the steady talk");
-    tx.send(KanadeMsg::ChoiceWaiting {
-        talk_id: TalkId(1),
-        choice_ids: vec![CANONICAL_CHOICE_ID.to_string()],
-        display_end: MonotonicMs(DISPLAY_END_MS),
-        timeout_directive_secs: directive,
-    })
-    .expect("send ChoiceWaiting with the directive");
+    establish_choice_wait(tx, &[CANONICAL_CHOICE_ID], directive);
     for &now in ticks {
         tx.send(KanadeMsg::Tick {
             now: MonotonicMs(now),
@@ -95,8 +81,8 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
 ///   204 で `CancelChoice` が出る（同じ経路・要件 1.2）。
 #[test]
 fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
-    let just_before = DISPLAY_END_MS + BOUNDARY_MS - 1;
-    let deadline = DISPLAY_END_MS + BOUNDARY_MS;
+    let just_before = CHOICE_DISPLAY_END_MS + BOUNDARY_MS - 1;
+    let deadline = CHOICE_DISPLAY_END_MS + BOUNDARY_MS;
     let (recorded, commands) = run_choice_wait(Some(1.234), &[just_before, deadline]);
 
     assert_eq!(

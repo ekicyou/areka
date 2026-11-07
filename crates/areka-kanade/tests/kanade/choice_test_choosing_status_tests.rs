@@ -61,7 +61,7 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     // Tick2: 選択待ち中の周期リクエスト（期限 CHOICE_DEADLINE_MS より手前）。
     harness
         .sender

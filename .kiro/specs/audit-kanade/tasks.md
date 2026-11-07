@@ -220,7 +220,7 @@
   - マウスの結合テストが緑で、NOTIFY で出るように壊すと赤
   - _Requirements: 3.1, 4.1, 4.5, 7.1, 7.2, 9.1, 9.7, 9.8_
 
-- [ ] 15. 結合テストの終了・失敗・選択・照会
+- [x] 15. 結合テストの終了・失敗・選択・照会
 - [x] 15.1 失敗と照会のテストの競りを除く（#37・#38・#39）
   - 照会の送りの結果だけを捨てる形にして注を 1 行
   - 送り端を落とした後に有界に読んで Start だけを拾って判定する
@@ -234,7 +234,7 @@
   - 前の assert で必ず通る assert を消し、Unload の順を等式で見る
   - 直したテストが緑で、刻みを捨てるように壊すと赤
   - _Requirements: 3.1, 4.1, 4.2, 9.1_
-- [ ] 15.3 選択の結合テストを寄せ、起動の重なりを消す（#48・#50・#90・#18 の `manual_contains` 4・`doc_lazy_continuation` 3）
+- [x] 15.3 選択の結合テストを寄せ、起動の重なりを消す（#48・#50・#90・#18 の `manual_contains` 4・`doc_lazy_continuation` 3）
   - 選択待ちの下ごしらえに指令の引数を足し、写しと定数を消す
   - 起動のテストのファイルと mod の行を消す（全体の走りが同じ起動の列を見る）
   - 期限手前の刻みを期限の 1 ms 前に
@@ -318,3 +318,4 @@
 - 11: `steady_choice_timeout_tests.rs` は 840 行（design の見込み約 760）。#74 で消したのは直に呼ぶ 3 本（うち 2 本は `steady_choice_tests.rs`）で、design の −100 は `step()` を通る側を消す前提の見込み違い。
 - 12.3: #47 の `record` は design の `expected_call(call.clone())` が組めない（`ShioriCall` に Clone が無い）ので、`RecordedCall::from_call` を pub にして使った。指摘の外に残る写し（19.2 のかけ直しで拾う候補）: `command_tags`／`describe`（status_query_test・choice_test_test_support・translate_test）、`choice_test_stage_failure_tests.rs:159` の `MouseInput { .. }` の直書き。
 - 15.2 指摘の外に残る（19.2 のかけ直しで拾う候補）: close_test の silent_close・force_quit の `assert_eq!(last.method, CallMethod::Unload)` は直後の等式に含まれる重い assert（#86 の一覧に無い）。
+- 15.3 指摘の外（19.2 の候補）: `establish_choice_wait` の中の Tick が `MonotonicMs(1_000)` の直書きで、`CHOICE_DISPLAY_END_MS` と同じ値を 2 か所に持つ。

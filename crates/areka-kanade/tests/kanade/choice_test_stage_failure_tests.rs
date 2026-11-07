@@ -40,7 +40,7 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
         FailOn::new("OnChoiceSelectEx", FailKind::Ipc),
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     harness
         .sender
         .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
@@ -136,7 +136,7 @@ fn non_choice_failure_during_choice_wait_still_faults() {
         FailOn::new("OnMouseDoubleClick", FailKind::Ipc),
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     // 選択待ち（帳簿 Waiting）の窓で非 choice GET を発行させ、その応答を失敗させる。
     harness
         .sender
