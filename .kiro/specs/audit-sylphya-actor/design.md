@@ -49,7 +49,7 @@
 ### 見直しが要る変化（Revalidation Triggers）
 
 - `save_scope` が `Degraded` を返す場面が 2 つ増える（使えない既存のファイル・錠が取れない）。呼び手（`crates/areka/src/boot_resolve.rs`・`roots/edit.rs`・書き手のアクターの失敗の受け口）は署名も扱いも変わらない。`crates/areka` は `Degraded` を書けなかった知らせとして扱う（起動の前なら起動を止め、走っている間なら areka を終える）。下の「失敗の扱い」に、利用者から見た結果を書く。
-- `PersistIo` に既定つきの口 `lock_for_update` が増える（必須の口は足さない）。範囲の外の実装（`crates/areka` のテストの写し 19＝`placement/*`・`boot_resolve_tests.rs`・`emo2_boot/*`・`input_events/drag_test_support.rs`・`main_persist_wiring_seam_tests.rs` ほか）は書き直さずにコンパイルが通る（既定は錠を持たない）。
+- `PersistIo` に既定つきの口 `lock_for_update` が増える（必須の口は足さない）。範囲の外の実装は書き直さずにコンパイルが通る（既定は錠を持たない）。2026-11-07 に main（`placement-crate-split` PR#433 の着地の後）を取り込んで測り直した: 範囲の外の実装は 17 ファイルで、どれもテスト（`crates/areka` の 8＝`boot_resolve_tests.rs`・`emo2_boot/*` 4・`input_events/drag_test_support.rs`・`main_persist_wiring_seam_tests.rs`・`placement_tests/reset_balloon_pos_tests.rs`、新しい `crates/areka-placement/src/` の 9）。本番の実装は `FsPersistIo` だけで、`lock_for_update` の名もほかに無い。
 - C18 で並走する `placement-crate-split`（`crates/areka/src/placement/` を新しいクレートへ動かし、`temp_path_guard_test.rs` を書き直す）が使う名前と署名＝`PersistIo`（`read`・`commit`・`withholds`）・`FakePersistIo`・`PersistKey`・`Axis`・`PersistScope`・`ScopeRoots`・`spawn_sylphya`・`load_scope`・`SylphyaPublisher`（既存の口）は、名前も署名も変えない。この spec の足し算は既定つきの口と新しい名前だけ。
 - `SylphyaPublisher::barrier_within` が増える。後で `crates/areka/src/install/desk.rs` がこれへ乗り換える（`audit-areka-install-update` の件）。
 - 記憶のフォルダ（`profile\areka`）に、保存の間だけ `sylphya.toml.lock` が在る（閉じると消える）。
@@ -129,7 +129,7 @@ crates/areka-actor/tests/ui_span_test.rs                      # #2 の縛るテ�
 - `src/spawn.rs` — #11（toy(a) と重なる単体テスト 4 本と、それだけが使う道具 `run_bounded` を消す）。
 
 **範囲の外（1 つだけ）**
-- `crates/log-capture-kit/tests/with_default_guard_test.rs` — #2（`ALLOWED_DIRECT_CALLS` に `("crates/areka-actor/tests/ui_span_test.rs", "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）")` を足し、`ALLOWED_DIRECT_CALLS_COUNT` を 5 → 6）。`placement-crate-split` と申し合わせ済み（2026-11-06）：向こうは同じ表の placement の 3 行のパスと理由の文を書き換える（行の数と件数 5 は変えない）。こちらは向こうの着地の後に main を取り込んでから 1 行と件数 5 → 6 を足す。こちらが先に着地することになったら、向こうへ一言知らせる（向こうが後から合わせる）。
+- `crates/log-capture-kit/tests/with_default_guard_test.rs` — #2（`ALLOWED_DIRECT_CALLS` に `("crates/areka-actor/tests/ui_span_test.rs", "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）")` を足し、`ALLOWED_DIRECT_CALLS_COUNT` を 5 → 6）。`placement-crate-split` と申し合わせ済み（2026-11-06）：向こうは同じ表の placement の 3 行のパスと理由の文を書き換える（行の数と件数 5 は変えない）。こちらは向こうの着地の後に main を取り込んでから 1 行と件数 5 → 6 を足す。2026-11-06 に向こうが着地した（PR#433・`ff31386f`）。2026-11-07 に main を取り込んだ時点で、表の件数は 5 のまま・placement の 3 行は `crates/areka-placement/src/` のパスへ替わっている。
 
 **`crates/areka-talk/src/`**
 - `tests.rs` — #7（`StartTalk::new` の既定を見る 3 本を残して消す）。
@@ -436,7 +436,7 @@ impl SylphyaPublisher {
 2. 範囲の 3 つのクレートだけへ `/ponytail:ponytail-audit` をかけ直す。上限 20 件は外し、全部のファイルを 1 行目から最後まで読む（要件 7.1）。出た指摘は、直しが生んだ物も含めて直し、0 件になるまで繰り返す。数えないのは「直さない・回した指摘」の表の 5 件だけ（要件 7.2）。かけ直しの回と結果を `research.md` の「かけ直しの結果」に残す（要件 7.3）。
 3. `pwsh -NoProfile -File tools/test-all.ps1` が緑で終わる（要件 7.4）。
 4. 既定の枝との差分で約束を確かめ、結果を `research.md` に残す（要件 7.5）:
-   - `git diff --stat origin/main...HEAD -- crates/areka/ crates/log-capture-kit/tests/file_length_guard_test.rs crates/log-capture-kit/tests/temp_path_guard_test.rs crates/wintf/src/ecs/window_proc/ tools/perf/fixtures/ tools/perf/fixtures-loop/ vendors/ Cargo.lock` が空（要件 6.2・6.8・5.5）。
+   - `git diff --stat origin/main...HEAD -- crates/areka/ crates/areka-placement/ crates/log-capture-kit/tests/file_length_guard_test.rs crates/log-capture-kit/tests/temp_path_guard_test.rs crates/wintf/src/ecs/window_proc/ tools/perf/fixtures/ tools/perf/fixtures-loop/ vendors/ Cargo.lock` が空（要件 6.2・6.8・5.5）。
    - `git diff --name-only origin/main...HEAD` が範囲の 3 つのクレートと `.kiro/specs/audit-sylphya-actor/` の下と、`crates/log-capture-kit/tests/with_default_guard_test.rs` だけ。後者の差分は例外の 1 行と件数 5 → 6 だけ（要件 6.7）。
    - `git diff origin/main...HEAD -- crates/areka-sylphya/src/persist/io.rs` に、一時のパスの入口の綴りと `TempPath` の行の増減が無い（要件 6.3）。
    - 公開の形: 消した・変えた公開の物が `MirrorImage::flat_global`・`FormatDoc::is_all_absent`・`SylphyaMsg::PersistPut` の `reply` の 3 つだけで、どれも 3 つのクレートの外で 0 か所であることを grep で示す。足した物が `PersistIo::lock_for_update`・`SylphyaPublisher::barrier_within`・`KeyParseError::TextAfterParen` の 3 つであること（要件 6.1）。
