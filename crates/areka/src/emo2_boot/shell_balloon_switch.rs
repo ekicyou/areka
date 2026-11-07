@@ -40,8 +40,8 @@ use crate::boot_config::BootContext;
 use crate::boot_resolve::pick_index;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::source::DescriptSource;
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::source::DescriptSource;
 
 /// 切替の種別。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

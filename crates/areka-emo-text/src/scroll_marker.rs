@@ -1,5 +1,7 @@
 //! # scroll_marker — 場所ごとの手動の位置と送りの規則（純粋層）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! バルーン（箱）の文字を利用者が矢印やホイールで読み返す「手動の位置」を、場所ごとに
 //! [`PlaceScroll`] 1 つで持つ。手動の位置は「先頭に見せる行の番号」で、いつも
 //! `0 ≤ line < auto_first`（`auto_first`＝前のフレームの自動の送りの先頭行）に収まる。
@@ -16,7 +18,7 @@
 //!
 //! **層規律**: 純粋層。時計も窓も `World` も見ない（`PURE_SOURCES` に載せて走査する）。
 
-use areka_parsers::balloon::{ArrowKeys, MarkerPoint};
+use areka_parsers::balloon::{ArrowKeys, MarkerCoord, MarkerPoint};
 
 use crate::layout::{LayoutEngine, PositionedLine, VisibleWindow};
 use crate::region::TextRegion;
@@ -265,7 +267,7 @@ pub fn marker_visibility(window: &VisibleWindow, scroll: &PlaceScroll) -> Marker
 
 /// 座標が無いときの置き場（左上・image px）。SSP 2.9.26 で測った値:
 /// `arrow0`＝`(幅 − 20, 15)`・`arrow1`＝`(幅 − 20, 高さ − 15)`（要件 3.7・7.7）。
-pub fn default_marker_position(kind: MarkerKind, extent: (i32, i32)) -> (i32, i32) {
+pub fn default_marker_position(kind: MarkerKind, extent: (i64, i64)) -> (i64, i64) {
     let (w, h) = extent;
     match kind {
         MarkerKind::Up => (w - 20, 15),
@@ -277,23 +279,33 @@ pub fn default_marker_position(kind: MarkerKind, extent: (i32, i32)) -> (i32, i3
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedMarkerPlacement {
     /// `arrow0` の左上。
-    pub up: (i32, i32),
+    pub up: (i64, i64),
     /// `arrow1` の左上。
-    pub down: (i32, i32),
+    pub down: (i64, i64),
 }
 
 impl ResolvedMarkerPlacement {
-    /// x・y がそろった座標は広がりに解き、無ければ（片方だけも）既定の置き場にする
-    /// （要件 3.4・3.7・4.2・7.1・7.7）。
-    pub fn resolve(keys: &ArrowKeys, extent: (i32, i32)) -> Self {
+    /// x・y がそろった座標は広がり（画像の大きさ・箱は箱の大きさ）に解き、無ければ（片方だけも）
+    /// 既定の置き場にする（要件 3.4・3.7・4.2・7.1・7.7）。広がりは `i32` に入らないこともあるので
+    /// `i64` で解く（[`MarkerCoord::resolve`] の `i32` は使わない・audit-emo-text-state-actor 指摘 3）。
+    pub fn resolve(keys: &ArrowKeys, extent: (u32, u32)) -> Self {
+        let extent = (i64::from(extent.0), i64::from(extent.1));
         let at = |kind, point: &MarkerPoint| match point.both() {
-            Some((x, y)) => (x.resolve(extent.0), y.resolve(extent.1)),
+            Some((x, y)) => (coord(x, extent.0), coord(y, extent.1)),
             _ => default_marker_position(kind, extent),
         };
         Self {
             up: at(MarkerKind::Up, &keys.arrow0),
             down: at(MarkerKind::Down, &keys.arrow1),
         }
+    }
+}
+
+/// 座標 1 つを広がり `e` に対する左上原点の値へ解く（[`MarkerCoord::resolve`] と同じ意味を `i64` で）。
+fn coord(c: MarkerCoord, e: i64) -> i64 {
+    match c {
+        MarkerCoord::FromStart(v) | MarkerCoord::Literal(v) => i64::from(v),
+        MarkerCoord::FromEnd(v) => e + i64::from(v),
     }
 }
 

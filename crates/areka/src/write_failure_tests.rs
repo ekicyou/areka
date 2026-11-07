@@ -7,7 +7,7 @@ use wintf::AppExit;
 
 use super::*;
 use crate::app_exit::FirstExit;
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 fn failure(key: PersistKey, reason: &str) -> PersistFailure {
     PersistFailure {
@@ -27,7 +27,7 @@ fn installed_world() -> World {
     world
 }
 
-fn memory_write_failed(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn memory_write_failed(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("memory_write_failed"))
@@ -48,7 +48,7 @@ fn drain_one_failure_quits_with_the_new_origin_and_logs_once() {
         .send(first.clone())
         .unwrap();
 
-    let (_, events) = capture_logs(|| drain_system(&mut world));
+    let (_, events) = capture(|| drain_system(&mut world));
 
     assert_eq!(
         world.get_resource::<FirstExit>().map(|f| f.0.clone()),
@@ -85,7 +85,7 @@ fn drain_two_failures_keeps_the_first_origin() {
     tx.send(first.clone()).unwrap();
     tx.send(second).unwrap();
 
-    let (_, events) = capture_logs(|| drain_system(&mut world));
+    let (_, events) = capture(|| drain_system(&mut world));
 
     assert_eq!(
         world.get_resource::<FirstExit>().map(|f| f.0.clone()),
@@ -106,7 +106,7 @@ fn drain_without_install_does_nothing() {
 // ---------------------------------------------------------------------------
 // task 4.2: 起動を止める口・後始末の口（要件 2.2・2.3・2.5・2.6・6.1・7.5）
 
-fn alerts(events: &[LogEvent]) -> Vec<&LogEvent> {
+fn alerts(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some("alert"))
@@ -118,7 +118,7 @@ fn alerts(events: &[LogEvent]) -> Vec<&LogEvent> {
 #[test]
 fn stop_boot_with_suppressed_still_returns_the_error() {
     let f = failure(PersistKey::LastRunning, "denied");
-    let (err, events) = capture_logs(|| stop_boot_with(f, true));
+    let (err, events) = capture(|| stop_boot_with(f, true));
 
     assert_eq!(err.code(), windows::Win32::Foundation::E_FAIL);
     let a = alerts(&events);
@@ -152,7 +152,7 @@ fn log_only_logs_both_and_tells_nothing() {
         .unwrap();
     let clear = failure(PersistKey::LastRunning, "clear");
 
-    let (_, events) = capture_logs(|| log_only(&mut world, Some(clear)));
+    let (_, events) = capture(|| log_only(&mut world, Some(clear)));
 
     assert_eq!(memory_write_failed(&events).len(), 2, "{events:?}");
     assert!(alerts(&events).is_empty(), "{events:?}");
@@ -172,7 +172,7 @@ fn tell_at_close_prefers_the_origin_scene() {
     let scene = AlertScene::StartupWindow {
         reason: "origin".to_owned(),
     };
-    let (result, events) = capture_logs(|| {
+    let (result, events) = capture(|| {
         tell_at_close(
             Some(scene),
             Some(failure(PersistKey::LastRunning, "clear")),
@@ -194,7 +194,7 @@ fn tell_at_close_prefers_the_origin_scene() {
 /// 場面なし＋印を消せない → `Running` の告知 1 件で `Err`（抑止でも変わらない・要件 2.6）。
 #[test]
 fn tell_at_close_tells_the_clear_failure_as_running() {
-    let (result, events) = capture_logs(|| {
+    let (result, events) = capture(|| {
         tell_at_close(
             None,
             Some(failure(PersistKey::LastRunning, "clear")),
@@ -219,7 +219,7 @@ fn tell_at_close_tells_the_clear_failure_as_running() {
 /// 場面なし＋印は消せた＋残りの失敗 → 残りの最初の 1 件を `Running` で告げて `Err`。
 #[test]
 fn tell_at_close_tells_the_first_late_failure() {
-    let (result, events) = capture_logs(|| {
+    let (result, events) = capture(|| {
         tell_at_close(
             None,
             None,
@@ -241,7 +241,7 @@ fn tell_at_close_tells_the_first_late_failure() {
 /// 何も無い → 告知 0 件で `Ok`（要件 6.1・7.5）。
 #[test]
 fn tell_at_close_with_nothing_tells_nothing() {
-    let (result, events) = capture_logs(|| tell_at_close(None, None, late_with(vec![]), true));
+    let (result, events) = capture(|| tell_at_close(None, None, late_with(vec![]), true));
     assert!(result.is_ok());
     assert!(alerts(&events).is_empty(), "{events:?}");
     assert!(memory_write_failed(&events).is_empty(), "{events:?}");

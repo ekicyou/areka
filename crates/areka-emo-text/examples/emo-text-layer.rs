@@ -1,4 +1,6 @@
-//! # emo-text-layer — 注入時刻駆動の観測用専用 example（task 9.2・R11.1–11.5/11.7–11.9）
+//! # emo-text-layer — 注入時刻駆動の観測用専用 example（R11.1–11.5/11.7–11.9）
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
 //!
 //! emo2 fixture のバルーン枠（`balloons0.png`）2 窓（\0=sakura／\1=kero）を実表示し、
 //! fixture スクリプト（`ghost/master/dic/boot.pasta` の起動朝挨拶）由来のハードコード
@@ -23,7 +25,10 @@
 //! 既定ではシナリオが自動進行し（約 4.5 秒——最後のチェックポイントが talk 起点 3.8 秒）、
 //! 完了すると窓を閉じて `PASS`／`FAIL` を出力して終了する。
 //! `--hold` を付けると自動クローズせず talk をループ再生し、balloon 窓上での左ダブルクリックで終了する
-//! （実機での目視確認用・`--vertical` と併用可）。
+//! （実機での目視確認用・`--vertical` と併用可）。`--hold` ではチェックポイントの確かめも
+//! `PASS`／`FAIL` の出力も行わず、終了コードは判定に使わない（閉じれば 0）。ただし準備と装着の
+//! 失敗は hold でも `FAIL (セットアップ失敗: …)` を出して終了コード 1 で終わり、watchdog の超過は
+//! 窓を閉じずに `error!` を 1 回だけ残す。
 //!
 //! # fixture（R11.4/R11.7）
 //!
@@ -54,27 +59,28 @@
 //! ```
 //!
 //! 起動ログの `scale_k` が 1.0 であることを必ず確かめる——1.0 でなければ判定結果は無効である。
-//! （目視確認〔下記〕は逆に非 96 DPI で行う。）
+//! （目視確認〔下記〕は逆に非 96 DPI で、`--hold` を付けて行う。）
 //!
 //! # 実 DPI（dpi≠96）の手動確認手順（R11.9）
 //!
 //! 起動時に各バルーン窓の実モニタ DPI と合成スケール k を `info!` でログする。
-//! PASS/FAIL の自動判定は readback 述語（物理 1:1・k=1.0 前提）で決定論だが、
+//! PASS/FAIL の自動判定は readback 述語（物理 1:1・k=1.0 前提）で決定論だが k≠1 では無効なので、
 //! **バルーン枠とテキストの整合は非 96 DPI 環境で実際に目視確認すること**
-//! （emo-present example の task 5.3 手順と同型・記憶 areka-placement-real-ghost-first）:
+//! （emo-present example の手順と同型）:
 //!
 //! 1. Windows「設定 → システム → ディスプレイ → 拡大縮小」で対象モニタのスケールを
 //!    150%（dpi=144）または 200%（dpi=192）に設定する（あるいは既にそのスケールで
 //!    動いているモニタへ窓を移動する）。
-//! 2. 本 example を起動し、ログの `実モニタ DPI` が非 96 であることを確認する。
+//! 2. 本 example を `--hold` 付きで起動し、ログの `実モニタ DPI` が非 96 であることを確認する。
 //! 3. 観測する:
 //!    - (a) バルーン枠が surface 原寸（物理 px・等倍）で描かれ、ぼやけ／膨張が無い。
 //!    - (b) テキストが validrect 内（枠の内側余白）に収まり、枠画像とズレない。
-//!    - (c) readback 述語群がそのまま PASS する（DPI に依らず物理 px を読み戻すため）。
+//!    - (c) 窓が自分で閉じず talk がループし、balloon 上のダブルクリックで閉じる
+//!      （自動の判定は飛ばすので PASS/FAIL は出ない）。
 //! 4. 使用した DPI 値と (a)(b)(c) の結果を記録する。dpi=96 のみの確認は不十分である。
 //!
-//! **DoD 申し送り**: 実行時 k≠1 経路は上流（emo-present/placement）が k≠1 を供給し
-//! 次第、本 example を再実行して検証する（design「観測」DPI 観測の Revalidation Trigger）。
+//! 上流（emo-present/placement）は既に実モニタ DPI から k を供給している（200% で k=2.0）。
+//! k≠1 の経路は上の手順の目視で確かめる（design「観測」DPI 観測の Revalidation Trigger）。
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -137,13 +143,16 @@ mod verdict;
 
 // 子モジュールの項目もここで束ね直す（子同士は `use super::{…};` でこの束縛を引く）。
 // 新しい公開モジュールパスは生えない——子はすべて私有 `mod` である。
-use self::demo::{Demo, actor0, actor1};
+use self::demo::{Demo, actor0, actor1, build_and_spawn};
 use self::drive::drive_demo_system;
-use self::fixture::{
-    KERO_GAP_Y, SAKURA_POS, WATCHDOG_SECS, load_balloon_model, shared_balloon_dir,
+use self::fixture::{LINE1, LINE2, LINE3, load_balloon_model, shared_balloon_dir};
+use self::scenario::{
+    EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, WATCHDOG_SECS, stage_cues,
 };
-use self::scenario::{EXPOSURE_BAND_DRAW_BOUND, GATE_KERO, GATE_SAKURA, T_CHECK, stage_cues};
-use self::setup::build_and_spawn;
+use self::setup::{
+    balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, gpu_ready,
+    setup_abort, show_balloon,
+};
 use self::verdict::{
     Observations, Verdict, band_ink, block_extent, inline_extent_first_band, opaque_count,
 };
@@ -162,7 +171,7 @@ fn main() -> windows::core::Result<()> {
     let vertical = std::env::args().any(|a| a == "--vertical");
     let hold = std::env::args().any(|a| a == "--hold");
 
-    let mgr = WinApp::new()?;
+    let mgr = WinApp::new().inspect_err(|e| error!(error = %e, "WinApp の作成に失敗"))?;
     let world = mgr.world();
 
     world
@@ -183,7 +192,7 @@ fn main() -> windows::core::Result<()> {
         .add_systems(FrameFinalize, drive_demo_system);
 
     println!();
-    println!("areka emo-text-layer 観測 example（task 9.2）");
+    println!("areka emo-text-layer 観測 example");
     println!("================================================");
     println!(
         "  モード: {}（--vertical で縦書き fixture 変種へ切替）",
@@ -193,19 +202,28 @@ fn main() -> windows::core::Result<()> {
             "横書き horizontal_tb（既定）"
         }
     );
-    println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4.5 秒）");
     if hold {
+        println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（ループ再生）");
         println!(
             "  モード: --hold（目視確認）— talk をループ再生し、balloon 上でダブルクリックすると終了"
         );
     } else {
+        println!(
+            "  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4.5 秒）"
+        );
         println!(
             "  判定: readback 述語で自動判定し、最後に PASS/FAIL を 1 行出力（exit code 連動）"
         );
     }
     println!();
 
-    mgr.run()?;
+    mgr.run()
+        .inspect_err(|e| error!(error = %e, "メッセージループが失敗で終わった"))?;
+
+    // --hold は目視用: 判定も PASS/FAIL の出力もせず、閉じたら 0 で終わる（audit-emo-text-state-actor 指摘 18）。
+    if hold {
+        return Ok(());
+    }
 
     // run() 復帰後に判定を回収して単一 pass/fail を出力する。
     let verdict = world.borrow_mut().world_mut().remove_resource::<Verdict>();
@@ -216,6 +234,7 @@ fn main() -> windows::core::Result<()> {
         }
         Some(v) => {
             if !v.done {
+                error!(checks = v.checks, "emo-text-layer: シナリオ完了前に終了");
                 println!(
                     "[emo-text-layer] FAIL (シナリオ完了前に終了・{} checks 通過)",
                     v.checks
@@ -233,6 +252,7 @@ fn main() -> windows::core::Result<()> {
             std::process::exit(1);
         }
         None => {
+            error!("emo-text-layer: 判定リソース不在");
             println!("[emo-text-layer] FAIL (判定リソース不在)");
             std::process::exit(1);
         }

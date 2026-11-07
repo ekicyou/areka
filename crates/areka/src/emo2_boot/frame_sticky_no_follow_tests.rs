@@ -5,13 +5,13 @@
 //! よる大きさの変化・作業領域の変化で動かす。相手のスコープ 1 は吸着なしにして、自分の道では
 //! 動かないようにしておく——動けば連れ動きが紛れ込んだことになる。どの檻にも「スコープ 0 は
 //! 実際に動いた」という陽性の対を置く（相手が動かないのが無操作のおかげで通らないように）。
-//! 並べ直し（`resetwindowpos`）の檻は `placement/reset_pos_tests.rs` に置く。
+//! 並べ直し（`resetwindowpos`）の檻は `crates/areka-placement/src/reset_pos_tests.rs` に置く。
 
-use crate::placement::follow::{Anchored, MonitorSnapshot};
-use crate::placement::resolver::{Anchor, RectPx, SizePx};
-use crate::placement::script_alignment::{AlignmentWord, apply_script_alignment};
-use crate::placement::spawn::GhostWindows;
-use crate::placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
+use areka_placement::follow::{Anchored, MonitorSnapshot};
+use areka_placement::resolver::{Anchor, RectPx, SizePx};
+use areka_placement::script_alignment::{AlignmentWord, apply_script_alignment};
+use areka_placement::spawn::GhostWindows;
+use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 use wintf::ecs::window::drain_window_pos_commands;
 
 use super::test_support::{pos_of, resnap_world};

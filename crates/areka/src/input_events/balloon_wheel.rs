@@ -17,7 +17,7 @@ use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::{PointerState, dispatch_pointer_events};
 
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// `SPI_GETWHEELSCROLLLINES` が「1 画面ずつ」を表す値（`WHEEL_PAGESCROLL`・windows クレートに無い）。
 const WHEEL_PAGESCROLL: u32 = u32::MAX;

@@ -18,7 +18,7 @@ use crate::scope_bind_fixture_test_support::{
 // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
 use crate::emo2_boot::target_map::scope_of;
 // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
-use crate::placement::source::{load_balloon_author_dpi, load_descript_source};
+use areka_placement::source::{load_balloon_author_dpi, load_descript_source};
 
 /// 観測可能な完了条件（tasks.md task 2.6）: emo2 fixture を渡した統合テストが
 /// `BootAssets` の各フィールドに期待どおりのデータを含んで green で通る。
@@ -529,7 +529,7 @@ fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
     }
 
     /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——適用前の固定名採寸が
-    /// 返していた値と同一（`placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
+    /// 返していた値と同一（`areka_placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
     const SAKURA_FACE0: (u32, u32) = (400, 224);
 
     let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
@@ -780,7 +780,7 @@ const SHIFT_JIS_SURFACES_TXT: &[u8] = b"charset,Shift_JIS\nsurface0\n{\nelement0
 /// `shell::parse` を組み合わせた結果の等値——すなわちパーサ層の性質であって、
 /// `assets.rs` の読取が実際に `decode` を通っているかどうかには触れない。配線を
 /// `read_to_string` へ戻してもパーサ層の検査は緑のまま通り抜ける。配置採寸側の同種の檻は
-/// `placement/measure_tests.rs` にあるが、そちらは 1,000 行の上限に余裕が無く起動側を
+/// `crates/areka-placement/src/measure_tests.rs` にあるが、そちらは 1,000 行の上限に余裕が無く起動側を
 /// 同居させられないため、読取点それぞれの兄弟へ 1 本ずつ置く形にしている。
 ///
 /// 本検査が主張するのは「読取が失敗しないこと」までで、復号後の文字列そのものは見ない
@@ -833,7 +833,7 @@ fn screen_binds_split_per_scope_on_shared_scope_fixture() {
         None,
         &[0, 1, 2, 3],
         96,
-        &crate::placement::DefaultSurfaces::builtin(),
+        &areka_placement::DefaultSurfaces::builtin(),
         &decoder,
     ) {
         Ok(shell) => shell,

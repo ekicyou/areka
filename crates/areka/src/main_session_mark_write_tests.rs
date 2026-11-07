@@ -168,9 +168,9 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
         };
         unwritable(&app);
         let descript = crate::ghost_session::StartupDescriptValues {
-            author_dpi: crate::placement::AuthorDpi::DEFAULT,
+            author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         };
         let label = format!("{origin:?}");
         let boot = super::boot_first_ghost(&mut world, &cfg, origin, &descript, &ghost, &balloon);

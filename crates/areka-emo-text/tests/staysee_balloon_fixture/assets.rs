@@ -1,27 +1,48 @@
 //! 保管フォルダの名前集合と枠画像の原寸を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-default-balloon-bundle` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-default-balloon-bundle`（要件 **2.2**／**5.4**・設計 **C2** の A 行）。
 
-use std::path::Path;
+use super::test_support::{EXPECTED_FRAME_SIZES, staysee_root};
+use crate::support::fixture::png_native_size;
 
-use super::test_support::{EXPECTED_FILE_NAMES, EXPECTED_FRAME_SIZES, staysee_root};
-
-/// PNG の IHDR から原寸 `(width, height)` を読む（署名 8B ＋ 長さ 4B ＋ `IHDR` 4B の直後）。
+/// 上流 `ponapalt/StayseeBalloon` `fe1b02f3` の配布物に含まれる全 29 ファイル。
 ///
-/// 画像デコーダ（WIC）を持ち込まないのは本テーマを純粋層・非 COM に保つため。
-/// IHDR がストリーム先頭に在ることは PNG 仕様が定めているので固定オフセットで足りる。
-fn png_native_size(path: &Path) -> (u32, u32) {
-    let bytes = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("バルーン枠画像 {} の読取に失敗した: {e}", path.display()));
-    assert!(
-        bytes.len() >= 24 && &bytes[..8] == b"\x89PNG\r\n\x1a\n" && &bytes[12..16] == b"IHDR",
-        "{} が PNG（先頭 IHDR チャンク付き）として読めない",
-        path.display()
-    );
-    let w = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
-    let h = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    (w, h)
-}
+/// areka が読まないファイル（`thumbnail.pnr`・`online*`・`marker.png`・`sstp.png`・
+/// `balloonc*`・`arrow*`・`install.txt`）も削らず、告知ファイルを足しもしない
+/// （要件 2.2・5.4）。並びは `verification/provenance.md` §3 のハッシュ一覧と同じ昇順。
+const EXPECTED_FILE_NAMES: [&str; 29] = [
+    "LICENSE",
+    "arrow0.png",
+    "arrow1.png",
+    "balloonc0.png",
+    "balloonc1.png",
+    "balloonc2.png",
+    "balloonc3.png",
+    "balloonc4.png",
+    "balloonk0.png",
+    "balloonk1.png",
+    "balloons0.png",
+    "balloons1.png",
+    "balloons2.png",
+    "balloons3.png",
+    "descript.txt",
+    "install.txt",
+    "marker.png",
+    "online0.png",
+    "online1.png",
+    "online2.png",
+    "online3.png",
+    "online4.png",
+    "online5.png",
+    "online6.png",
+    "online7.png",
+    "online8.png",
+    "readme.txt",
+    "sstp.png",
+    "thumbnail.pnr",
+];
 
 /// 保管フォルダ直下のエントリ名が 29 本の固定集合と**過不足なく**一致し、サブフォルダが 0 である。
 ///
@@ -91,11 +112,6 @@ fn stored_folder_holds_exactly_the_upstream_29_files() {
 #[test]
 fn frame_png_native_sizes_are_pinned() {
     let root = staysee_root();
-    assert_eq!(
-        EXPECTED_FRAME_SIZES.len(),
-        6,
-        "枠画像の母数は 6 枚（`balloons0〜3` と `balloonk0〜1`）であること"
-    );
     for (name, width, height) in EXPECTED_FRAME_SIZES {
         assert_eq!(
             png_native_size(&root.join(name)),

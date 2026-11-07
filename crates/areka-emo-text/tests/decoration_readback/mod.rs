@@ -1,8 +1,10 @@
-//! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ（task 8.1／8.2）
+//! # decoration_readback/mod.rs — 読み戻しの共有ヘルパ
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-text-decoration-canon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 出典 spec: `areka-P0-text-decoration-canon`（要件 **15.4**／**15.7**／**15.8**）。
 //!
-//! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]・task 8.2）が
+//! 入口 `decoration_readback_test.rs`（横書き）と、縦書きの分（[`vertical`]）が
 //! 共有する道具だけをここに置く。中身は 4 つ:
 //!
 //! 1. **描画環境の用意**——headless の GPU World（実 GPU）と予約スロット。
@@ -26,27 +28,29 @@
 //! 正しく閉じることは、入口の `the_font_gate_closes_on_a_missing_family` が実在しない名前で
 //! 確かめる。
 
+#[path = "../support/mod.rs"]
+mod shared;
+
+use std::cell::RefCell;
+use std::sync::OnceLock;
+
+use shared::{make_world_with_gpu, opaque_count, read_back, spawn_reserved_slot, surface_size};
+
+/// 実フォントの門は共有の部品（`support/fixture.rs`）が持つ。期待値の前提になる実フォント
+/// `REAL_FONT` は、プロポーショナルで実物 `emo2-kakukaku` と同じ指定。
+pub(crate) use shared::fixture::{REAL_FONT, assert_real_font_present, font_is_installed};
+
 mod vertical;
 
 use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
 };
-use areka_emo_text::draw::FontCatalog;
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER, TalkCue};
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::com::dwrite::dwrite_create_factory;
-use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 
 // ══ 台本と描画環境の定数 ═══════════════════════════════════════════════════════════════
-
-/// 期待値の前提になる実フォント（プロポーショナル・実物 `emo2-kakukaku` と同じ指定）。
-pub(crate) const REAL_FONT: &str = "Yu Gothic UI";
 
 /// `\f[name,…]` の差し替え先（製品既定フォント——`REAL_FONT` と字形が明らかに違う）。
 pub(crate) const ALT_FONT: &str = "ＭＳ ゴシック";
@@ -75,8 +79,8 @@ const INK_ALPHA_MIN: u8 = 128;
 /// 表示に効く 7 項目（要件 5.1・`\f[…]` のトークン列）。
 ///
 /// 横書き（入口）と縦書き（[`vertical`]）が**同じ表**を回す——片方だけ項目が抜けるのを防ぐ。
-/// 母数は入口の `the_visible_keys_are_the_seven_that_directwrite_can_range` が固定する
-/// （表が空になるとどちらのループも恒真で緑になる）。
+/// 母数は入口（`decoration_readback_test.rs`）の `VISIBLE_KEYS.len() == 7` の const assert が
+/// 固定する（表が空になるとどちらのループも恒真で緑になる）。
 pub(crate) const VISIBLE_KEYS: &[(&str, &[&str])] = &[
     ("name", &["name", ALT_FONT]),
     ("height", &["height", "44"]),
@@ -118,37 +122,10 @@ pub(crate) fn model(writing_mode: Option<&str>) -> BalloonModel {
     model_with(REAL_FONT, FONT_HEIGHT, &extra)
 }
 
-// ══ 実フォントの門（本番の判断関数で判定する） ═════════════════════════════════════════
-
-fn factory() -> IDWriteFactory2 {
-    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite factory を生成できる")
-}
-
-/// 当該のフォント名がこの機械にインストールされているか——**本番の判断関数**
-/// `FontCatalog::family_for` で判定する。
-pub(crate) fn font_is_installed(name: &str) -> bool {
-    let catalog = FontCatalog::new(&factory()).expect("FontCatalog::new");
-    catalog.family_for(&[name.to_owned()]).is_some()
-}
-
-/// 実フォントが無ければ赤で止める（代替フォントのまま緑にしない）。
-pub(crate) fn assert_real_font_present() {
-    assert!(
-        font_is_installed(REAL_FONT),
-        "実フォント {REAL_FONT} がこの機械に無い。本ファイルの期待値は当該フォントの実描画を\
-         前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
-}
-
 // ══ cue（`\f` は再生時間 0 の汎用キャリア） ════════════════════════════════════════════
 
 fn cue(command: CueCommand) -> TalkCue {
-    TalkCue {
-        at: 0.0,
-        actor: ActorKey::from("0"),
-        command,
-        duration: 0.0,
-    }
+    shared::cue("0", 0.0, command, 0.0)
 }
 
 /// `\f[トークン…]` を運ぶ cue（`state.rs` が名前で自己選別して装飾へ届く）。
@@ -198,44 +175,15 @@ impl Shot {
 
     /// 面全体の非透明画素数（退化していないことの前提確認用）。
     pub(crate) fn ink_count(&self) -> usize {
-        self.bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
+        opaque_count(&self.bytes)
     }
-}
-
-/// `GraphicsCore` ＋ `WucGraphicsResource` を実資源として載せた wintf World（headless・MTA）。
-fn make_world_with_gpu() -> World {
-    // SAFETY: COM の MTA 初期化（S_FALSE/RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-    let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    let mut world = World::new();
-    world.insert_resource(core);
-    world.insert_resource(wuc);
-    world
-}
-
-/// emo-present `VisualMount` と同型の予約スロット。
-fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
-    let window = world.spawn_empty().id();
-    let slot = world
-        .spawn((
-            Name::new("emo-text-decoration-readback-slot"),
-            Visual::default(),
-            ChildOf(window),
-        ))
-        .id();
-    world.flush();
-    (window, slot)
 }
 
 /// 台本 1 本を**本番の 1 フレーム経路**（`present_frame`）へ通し、供給面を読み戻す。
 ///
 /// **順序が効く**——装着（`register_actor`）を先に、台本の投入を後にする。装着はバルーン定義から
 /// 導いた 2 層（既定・無効表示）を表示状態へ差し込む唯一の点で、現在の見た目が既に既定から
-/// 動いていると新しい既定へ追随しない（要件 4.1・task 4.2 の「装着時に 2 層を差し込む口」）。
+/// 動いていると新しい既定へ追随しない（要件 4.1・「装着時に 2 層を差し込む口」）。
 /// 装着より前に `\f[bold,1]` を流すと、以後その actor の文字は**バルーン定義の 28 px ではなく
 /// 素の既定 12 px**で描かれる。本番の起動順（装着 → 発話）はこの向きで、
 /// `line_pitch_readback_test.rs` の組み立ても同じである。
@@ -245,8 +193,26 @@ pub(crate) fn run(writing_mode: Option<&str>, script: &[TalkCue]) -> Shot {
 
 /// [`run`] の、バルーン定義を呼び手が渡す形（[`model_with`] で組んだ定義で撮る）。
 pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
-    let mut world = make_world_with_gpu();
-    let (window, slot) = spawn_reserved_slot(&mut world);
+    thread_local! {
+        /// テストのスレッドごとの World（装置は 1 度だけ作り、撮るたびに予約スロットだけ足す）。
+        static WORLD: RefCell<Option<World>> = const { RefCell::new(None) };
+    }
+    WORLD.with_borrow_mut(|world| {
+        let world = world.get_or_insert_with(make_world_with_gpu);
+        shoot(world, model, script)
+    })
+}
+
+/// [`run`] を新しく作った World（装置も新しい）で撮る。
+///
+/// [`plain_shot`] の 1 枚は別のスレッドの World で撮ったものでありうるので、装置をまたいでも
+/// 同じ画素になることを較正で確かめるために使う。
+pub(crate) fn run_fresh(writing_mode: Option<&str>, script: &[TalkCue]) -> Shot {
+    shoot(&mut make_world_with_gpu(), &model(writing_mode), script)
+}
+
+fn shoot(world: &mut World, model: &BalloonModel, script: &[TalkCue]) -> Shot {
+    let (window, slot) = spawn_reserved_slot(world);
 
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -258,29 +224,45 @@ pub(crate) fn run_with(model: &BalloonModel, script: &[TalkCue]) -> Shot {
     for c in script {
         rt.apply_cue(c);
     }
-    present_frame(&mut rt, &mut world, SETTLED).expect("装着＋描画フレーム");
+    present_frame(&mut rt, world, SETTLED).expect("装着＋描画フレーム");
 
-    let surface = rt.surface(&actor).expect("装着済み actor の供給面");
-    let (width, height) = surface.size();
+    let (width, height) = surface_size(&rt, &actor);
     Shot {
-        bytes: surface.read_back().expect("read_back"),
+        bytes: read_back(&rt, &actor),
         width,
         height,
     }
 }
 
+/// 素の台本の 1 枚。書字方向ごとに実行ファイルで 1 度だけ描き、以後は同じ 1 枚を返す
+/// （同じ台本が別の World でも同じ画素になることは入口の `the_same_script_paints_the_same_pixels_twice` が固定する）。
+pub(crate) fn plain_shot(writing_mode: Option<&str>) -> &'static Shot {
+    static SHOTS: [OnceLock<Shot>; 3] = [const { OnceLock::new() }; 3];
+    let slot = match writing_mode {
+        None => 0,
+        Some("vertical_rl") => 1,
+        Some("vertical_lr") => 2,
+        Some(other) => unreachable!("書字方向は横書きと縦書きの 2 方向だけ: {other}"),
+    };
+    SHOTS[slot].get_or_init(|| {
+        let shot = run(writing_mode, &[text_cue(SAMPLE)]);
+        assert!(shot.ink_count() > 0, "素の台本にもインクがある（前提）");
+        shot
+    })
+}
+
 /// 「素の台本」と「装飾を足した台本」の 2 枚を撮る（同じ書字方向・同じ本文）。
 ///
-/// 装飾ありの側は `\f[トークン…]` を本文の**前**に置く（要件 3.3——装飾は以降の文字に効く）。
-pub(crate) fn shoot_pair(writing_mode: Option<&str>, tokens: &[&str]) -> (Shot, Shot) {
-    let plain = run(writing_mode, &[text_cue(SAMPLE)]);
+/// 素の側は [`plain_shot`] の 1 枚を使い回す。装飾ありの側は `\f[トークン…]` を本文の**前**に
+/// 置く（要件 3.2——装飾は以降の文字に効く）。
+pub(crate) fn shoot_pair(writing_mode: Option<&str>, tokens: &[&str]) -> (&'static Shot, Shot) {
+    let plain = plain_shot(writing_mode);
     let styled = run(writing_mode, &[font_cue(tokens), text_cue(SAMPLE)]);
     assert_eq!(
         (plain.width, plain.height),
         (styled.width, styled.height),
         "面の寸法は台本によらず同じ（前提）"
     );
-    assert!(plain.ink_count() > 0, "素の台本にもインクがある（前提）");
     (plain, styled)
 }
 
@@ -294,7 +276,7 @@ pub(crate) fn differs(a: &Shot, b: &Shot) -> bool {
 /// 「素の側にインクが無く、装飾した側にインクがある」画素を持つ**行**（y）の一覧。
 ///
 /// 下線・打ち消し線はこの一覧に**連続した帯**として現れる（線は字の隙間も跨いで引かれるので、
-/// 字の無い x にもインクが増える）。横書き用——縦書きは列で数える（task 8.2）。
+/// 字の無い x にもインクが増える）。横書き用——縦書きは列で数える（[`vertical`]）。
 pub(crate) fn added_ink_rows(plain: &Shot, styled: &Shot) -> Vec<u32> {
     (0..plain.height)
         .filter(|&y| (0..plain.width).any(|x| styled.is_ink(x, y) && !plain.is_ink(x, y)))

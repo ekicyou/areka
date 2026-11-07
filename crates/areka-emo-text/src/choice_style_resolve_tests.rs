@@ -1,4 +1,6 @@
-// ── タスク 5.3: ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
+
+// ── ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
 //
 // design.md「純粋層 / ChoicePure」Service Interface（ResolvedChoiceStyle enum + resolve/paint）・
 // 縮退表（cursor.style underline 系→SquareFill／cursor.blendmethod ROP 系→none 扱い／
@@ -8,17 +10,6 @@
 use super::*;
 use areka_parsers::balloon::{BalloonCursor, CursorColor};
 use log_capture_kit::capture;
-
-/// fixture 実導出の cursor.*（square・brush=(105,25,25)・font=(255,255,255)・pen/blend 未指定）。
-fn fixture_cursor() -> BalloonCursor {
-    BalloonCursor::new(
-        Some("square".to_string()),
-        CursorColor::new(Some(105), Some(25), Some(25)), // brush.color＝矩形内色
-        CursorColor::new(None, None, None),              // pen.color（M1 非参照）
-        CursorColor::new(Some(255), Some(255), Some(255)), // font.color＝hover 白文字
-        None,                                            // blendmethod（既定 none）
-    )
-}
 
 /// cursor 全体を組む簡易ビルダ。
 fn cursor(
@@ -36,7 +27,7 @@ fn cursor(
     )
 }
 
-// ── resolve: 未指定 → Invert（M1 実導出・縮退ではない） ──
+// ── resolve: 未指定 → Invert（縮退ではない） ──
 
 /// cursor 不在（`None`）→ Invert（未指定バルーン判定・4.3/6.1）。
 #[test]
@@ -69,12 +60,28 @@ fn resolve_style_none_is_no_marker() {
     );
 }
 
+/// `cursor.style,NONE`（大文字）も大小を問わず NoMarker（黒い四角の印に変わらない）。
+#[test]
+fn resolve_style_upper_none_is_no_marker() {
+    let c = cursor(Some("NONE"), (None, None, None), (None, None, None), None);
+    assert_eq!(
+        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+        ResolvedChoiceStyle::NoMarker
+    );
+}
+
 // ── resolve: fixture square → SquareFill{(105,25,25),(255,255,255)} ──
 
 /// fixture 実導出形（square＋brush(105,25,25)＋font(255,255,255)）→ SquareFill。
 #[test]
 fn resolve_fixture_square_is_square_fill() {
-    let c = fixture_cursor();
+    // fixture 実導出の cursor.*（pen・blendmethod は未指定）。
+    let c = cursor(
+        Some("square"),
+        (Some(105), Some(25), Some(25)),
+        (Some(255), Some(255), Some(255)),
+        None,
+    );
     assert_eq!(
         ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
         ResolvedChoiceStyle::SquareFill {
@@ -92,83 +99,6 @@ fn resolve_specified_colors_without_style_defaults_to_square_fill() {
         (Some(105), Some(25), Some(25)),
         (Some(255), Some(255), Some(255)),
         None,
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-// ── resolve: underline 系 → SquareFill 縮退（縮退表・6.5・記録は出さない） ──
-
-/// `cursor.style,underline` → SquareFill へ縮退（在る色を採る・警告は登録の側が出す）。
-#[test]
-fn resolve_underline_degrades_to_square_fill() {
-    let c = cursor(
-        Some("underline"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        None,
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-/// `cursor.style,square+underline`（underline 系）→ SquareFill へ縮退。
-#[test]
-fn resolve_square_plus_underline_degrades_to_square_fill() {
-    let c = cursor(
-        Some("square+underline"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        None,
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-// ── resolve: blendmethod ROP 系 → none 扱い（variant は変えない・6.5・記録は出さない） ──
-
-/// `cursor.blendmethod,notmaskpen`（ROP 系）→ none 扱い（色ベース）へ縮退し variant は
-/// style（square）どおり SquareFill のまま（blend は無視・警告は登録の側が出す）。
-#[test]
-fn resolve_rop_blendmethod_is_treated_as_none_and_keeps_square_fill() {
-    let c = cursor(
-        Some("square"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        Some("notmaskpen"),
-    );
-    assert_eq!(
-        ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
-        ResolvedChoiceStyle::SquareFill {
-            fill: (105, 25, 25),
-            text: (255, 255, 255),
-        }
-    );
-}
-
-/// `cursor.blendmethod,none`（大小無視）は縮退ではなく variant はスタイルどおり。
-#[test]
-fn resolve_blendmethod_none_keeps_square_fill_without_degrade() {
-    let c = cursor(
-        Some("square"),
-        (Some(105), Some(25), Some(25)),
-        (Some(255), Some(255), Some(255)),
-        Some("none"),
     );
     assert_eq!(
         ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
@@ -231,7 +161,8 @@ fn styled(style: Option<&str>, blend: Option<&str>) -> BalloonCursor {
 }
 
 /// ROP 系・下線系のバルーンで resolve の返り値は今のまま（SquareFill）・記録は 0 件
-/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・要件 2.5・2.7）。
+/// （`draw.rs` からの 2 度目の呼び出しも同じく無音になる・`real-run-log-noise` 要件 2.5・2.7）。blendmethod は
+/// ROP 系でも `none` でも variant を変えない（色ベース・警告は登録の側が出す）。
 #[test]
 fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
     let square = ResolvedChoiceStyle::SquareFill {
@@ -242,6 +173,8 @@ fn resolve_rop_and_underline_keeps_answer_and_writes_no_record() {
         styled(Some("square"), Some("mergepennot")),
         styled(Some("underline"), None),
         styled(Some("square+underline"), Some("xor")),
+        styled(Some("square"), Some("notmaskpen")),
+        styled(Some("square"), Some("none")),
     ] {
         let (answer, events) = capture(|| ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)));
         assert_eq!(answer, square, "返り値は今のまま: {c:?}");
@@ -260,6 +193,7 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
         CursorFallback {
             blendmethod: Some("mergepennot".to_string()),
             underline_style: None,
+            unknown_style: None,
         }
     );
     assert_eq!(
@@ -267,6 +201,7 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
         CursorFallback {
             blendmethod: None,
             underline_style: Some("underline".to_string()),
+            unknown_style: None,
         }
     );
     assert_eq!(
@@ -274,8 +209,26 @@ fn cursor_fallback_returns_rop_blendmethod_and_underline_style() {
         CursorFallback {
             blendmethod: None,
             underline_style: Some("square+underline".to_string()),
+            unknown_style: None,
         }
     );
+}
+
+/// 下線系の `style` は大小を問わない（ukadoc の値と大小だけ違う `UNDERLINE`・`Square+Underline` も
+/// 下線系として返し、正典に無い値の側へは落とさない）。
+#[test]
+fn cursor_fallback_matches_underline_style_ignoring_case() {
+    for style in ["UNDERLINE", "Square+Underline"] {
+        assert_eq!(
+            CursorFallback::of(&styled(Some(style), None)),
+            CursorFallback {
+                blendmethod: None,
+                underline_style: Some(style.to_string()),
+                unknown_style: None,
+            },
+            "{style}"
+        );
+    }
 }
 
 /// `blendmethod` が `none`（大小無視）・未指定、`style` が `square`・未指定・`none` では縮退の値は無し。
@@ -287,8 +240,34 @@ fn cursor_fallback_is_empty_for_none_unspecified_and_square() {
         styled(Some("square"), None),
         styled(None, None),
         styled(Some("none"), None),
+        styled(Some("SQUARE"), None),
+        // `none` も大小無視で正典（spec audit-emo-text-state-actor の 2 回目のかけ直し R2-12）。
+        styled(Some("NONE"), None),
         BalloonCursor::default(),
     ] {
         assert_eq!(CursorFallback::of(&c), CursorFallback::default(), "{c:?}");
+    }
+}
+
+// ══ spec audit-emo-text-state-actor（2・3 回目のかけ直し R2-12・R3-4）: 正典の 4 つでない style は元の値を返す ══
+
+/// 正典の 4 つのどれでもない `style` は元の値を返す（描く形は既定の square）。綴り誤りの `squre` の
+/// ほか、`underline` を含むだけの `squareunderline`（`+` の抜け）・`underlined` も下線系に数えない。
+#[test]
+fn cursor_fallback_returns_unknown_style() {
+    for style in ["squre", "squareunderline", "underlined"] {
+        let c = styled(Some(style), None);
+        assert_eq!(
+            CursorFallback::of(&c),
+            CursorFallback {
+                blendmethod: None,
+                underline_style: None,
+                unknown_style: Some(style.to_string()),
+            }
+        );
+        assert!(matches!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill { .. }
+        ));
     }
 }

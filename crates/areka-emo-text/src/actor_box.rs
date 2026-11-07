@@ -1,5 +1,7 @@
 //! 箱の束の受け取りと、箱を隠す印（`actor.rs` の子・design.md「箱の登録と同期」）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 箱の束（置き場所の表・`\s` の解決の閉包・フォントを探す場所の順）は結線がシェルを読むたびに
 //! （装着の相とシェルの切替）渡す。受け取ると前の箱の面を片付け、箱の場所の文字を捨て、
 //! 新しい表を純粋状態へ入れる（要件 6.8）。普通のバルーンの場所には触れない。
@@ -11,7 +13,7 @@
 //!
 //! 窓の子の entity を消すので `World` に触れる（純粋な走査の外）。
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use areka_emo_compose::{BoxLayout, BoxName, BoxPlacement};
@@ -25,7 +27,7 @@ use super::{
     ResolvedBalloonText, SurfaceKeyResolver, TextLayerRuntime, TextSlotBinding, attach, decoration,
 };
 use crate::choice::{CursorFallback, HitRectPx};
-use crate::draw::{DEFAULT_BALLOON_BACKGROUND, ResolvedFont};
+use crate::draw::DEFAULT_BALLOON_BACKGROUND;
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract};
 use crate::state::{BoxTraits, SurfaceFallback};
@@ -34,11 +36,11 @@ impl TextLayerRuntime {
     /// 箱の束を受け取る（UI スレッドから・装着の相とシェルの切替が呼ぶ）。
     ///
     /// 1. 前の箱の面（シェルの窓の子）を片付け、箱の場所ごとの実行時の表も捨てる。
-    /// 2. 箱の名前ごとの既定の 2 層と種類を状態へ渡す。2 層はブレスの定義を白を混色の相手として
-    ///    解いた `font.looks`（拡大率に依らない・design.md「装飾の持ち運び」）。
+    /// 2. 箱の名前ごとにブレスの定義を白を混色の相手として 1 度だけ解いて覚え（登録はその複製・audit-emo-text-state-actor 指摘 7）、
+    ///    既定の 2 層（その `font.looks`・拡大率に依らない・design.md「装飾の持ち運び」）と種類を状態へ渡す。
     /// 3. 新しい表を状態へ入れる。状態は箱の場所の文字を捨て、各スコープの今のサーフェス番号を保ち、
     ///    行き先を新しい表での既定へ引き直す（要件 6.8）。種類は 3 の持ち運びの判定が引くので、
-    ///    **2 を 3 より先に**行う（tasks.md Implementation Notes 5.4）。
+    ///    **2 を 3 より先に**行う（`set_box_index` は今ある箱の種類で持ち運びを判定するため）。
     /// 4. `\s` の解決の閉包とフォントを探す場所の順（要件 3.10）を入れ替える。
     pub fn set_box_layout(
         &mut self,
@@ -56,10 +58,7 @@ impl TextLayerRuntime {
             .collect();
         for key in &stale {
             if let Some(render) = self.surfaces.remove(key) {
-                if let Some(markers) = render.markers {
-                    markers.despawn(world);
-                }
-                render.surface.despawn_window_child(world);
+                render.discard(world, None);
             }
         }
         self.routing.retain(|k, _| !is_box(k));
@@ -68,24 +67,28 @@ impl TextLayerRuntime {
         self.choice_hover.retain(|k, _| !is_box(k));
         self.choice_snapshot.retain(|k, _| !is_box(k));
         self.box_sites.clear();
+        self.box_shell_size.clear();
         let boxes: Vec<PlaceKey> = self.scrolls.keys().filter(|k| is_box(k)).cloned().collect();
         for key in &boxes {
             self.drop_box_scroll(key);
         }
         self.box_overflow_warned.clear();
         self.box_definition_warned.clear();
+        self.box_resolved.clear();
         self.shown_boxes.clear();
-        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・要件 2.7）。
+        // 箱の場所の区間の全文と数えも捨てる（新しい表では箱の場所が別物になる・`areka-P0-budoux-reveal-reflow` 要件 2.7）。
         self.lookahead.forget_boxes();
+        self.lookahead_rev += 1;
 
         let index: BTreeMap<u32, Vec<BoxName>> = layout
             .surfaces()
             .map(|(id, placements)| (id, placements.iter().map(|p| p.name.clone()).collect()))
             .collect();
         // 置き場所の表は名前のブレスが採られたものだけを載せる（`fold_boxes`）ので、定義は必ず引ける。
-        let traits: BTreeMap<BoxName, BoxTraits> = index
-            .values()
-            .flatten()
+        // 同じ名前が幾つのサーフェスに在っても解くのは 1 度（audit-emo-text-state-actor 指摘 7）。
+        let names: BTreeSet<&BoxName> = index.values().flatten().collect();
+        let traits: BTreeMap<BoxName, BoxTraits> = names
+            .into_iter()
             .filter_map(|name| {
                 let def = layout.def(name);
                 if def.is_none() {
@@ -97,18 +100,18 @@ impl TextLayerRuntime {
                 def.map(|def| (name.clone(), def))
             })
             .map(|(name, def)| {
-                // 2 層は大きさに依らないので、フォントの解決だけを通す
-                // （`ResolvedBalloonText::resolve_with_background` の `font` と同じ導出）。
-                let looks =
-                    ResolvedFont::resolve_with_background(&def.model, DEFAULT_BALLOON_BACKGROUND)
-                        .looks;
-                (
-                    name,
-                    BoxTraits {
-                        looks,
-                        follow: def.follow,
-                    },
-                )
+                // 解決の中の作者向けの警告は、ここで名前ごとに 1 度だけ出る。
+                let resolved = ResolvedBalloonText::resolve_with_background(
+                    &def.model,
+                    def.size,
+                    DEFAULT_BALLOON_BACKGROUND,
+                );
+                let traits = BoxTraits {
+                    looks: resolved.font.looks.clone(),
+                    follow: def.follow,
+                };
+                self.box_resolved.insert(name.clone(), resolved);
+                (name, traits)
             })
             .collect();
         debug!(
@@ -121,13 +124,13 @@ impl TextLayerRuntime {
         self.state.set_box_traits(traits);
         self.state.set_box_index(index);
         self.surface_resolver = Some(resolve);
-        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（要件 2.7）。
+        // 箱の表と解決の閉包が変わった＝空回しの出発点が変わったので、区間の全文を求め直す（`areka-P0-budoux-reveal-reflow` 要件 2.7）。
         self.rehearse_again();
         self.box_font_dirs = font_dirs;
         self.box_layout = layout;
     }
 
-    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える（要件 3.2・3.5）。
+    /// シェルの切替: 今の面が新しいシェルに無いスコープを seriko と同じ戻り先へ替える（`descript-window-keys` 要件 3.2・3.5）。
     /// [`Self::set_box_layout`] の直後に呼ぶ。替えたスコープがあったときだけ区間の全文を求め直す。
     pub fn fall_back_box_surfaces(&mut self, fallback: &SurfaceFallback) {
         if self.state.fall_back_surfaces(fallback) {
@@ -136,7 +139,8 @@ impl TextLayerRuntime {
     }
 
     /// 箱の `font.name` のフォントファイルを探す場所の順（シェル → ゴースト・要件 3.10）。
-    /// 束が来るまでは空。読み込みそのものは `balloon-font-file` が行う。
+    /// 束が来るまでは空。読み込みそのものは `balloon-font-file` が行う。本番の呼び手はまだ無い継ぎ目で、
+    /// 名指す spec（`balloon-font-file`）が閉じたら消す（呼び手が付いていればこの一文を消す）。
     pub fn box_font_dirs(&self) -> &[PathBuf] {
         &self.box_font_dirs
     }
@@ -197,6 +201,23 @@ impl TextLayerRuntime {
             .map_or((0.0, 0.0), |site| (site.x as f32, site.y as f32))
     }
 
+    /// 場所の面を切る右と下（場所の左上を原点とする image px）: 普通のバルーンは画像の大きさ、箱は
+    /// 箱の大きさとシェルの画像の重なり（`min(箱の幅, シェルの幅 − X)`・高さも同じ・`i64` で求める・
+    /// audit-emo-text-state-actor 指摘 3）。箱がシェルの右か下の外なら 0 以下（描かない）。
+    pub(super) fn image_limit(&self, place: &PlaceKey, binding: &TextSlotBinding) -> (f32, f32) {
+        let (w, h) = (
+            i64::from(binding.image_size.0),
+            i64::from(binding.image_size.1),
+        );
+        match (self.box_sites.get(place), self.box_shell_size.get(place)) {
+            (Some(site), Some(&(sw, sh))) => (
+                w.min(i64::from(sw).saturating_sub(site.x)) as f32,
+                h.min(i64::from(sh).saturating_sub(site.y)) as f32,
+            ),
+            _ => (w as f32, h as f32),
+        }
+    }
+
     /// 提示のたびに写しを作り直す（`present_frame` の最後）。`presented` はこのフレームで提示に
     /// 成功した場所。箱の場所で、今も出ていてよく（[`box_still_shown`](Self::box_still_shown)）、
     /// 文字が 1 字以上見えているものだけを、スコープごとに手前から並べる。
@@ -233,8 +254,8 @@ impl TextLayerRuntime {
                 rect: HitRectPx {
                     left: at(site.x),
                     top: at(site.y),
-                    right: at(site.x + i64::from(def.size.0)),
-                    bottom: at(site.y + i64::from(def.size.1)),
+                    right: at(site.x.saturating_add(i64::from(def.size.0))),
+                    bottom: at(site.y.saturating_add(i64::from(def.size.1))),
                 },
             });
         }
@@ -330,11 +351,12 @@ impl TextLayerRuntime {
             .box_sites
             .keys()
             .filter(|key| {
-                // 印の絵が変わった actor の箱も登録し直して押し直す（要件 5.1）。
+                // 印の絵が変わった actor の箱も登録し直して押し直す（`script-small-tags` 要件 5.1）。
                 self.inline_marker_changed.contains(&key.actor)
                     || desired.get(*key).is_none_or(|want| {
                         self.routing.get(*key) != Some(&want.binding)
                             || self.box_sites.get(*key) != Some(&want.site)
+                            || self.box_shell_size.get(*key) != Some(&want.surface_size)
                     })
             })
             .cloned()
@@ -393,7 +415,7 @@ impl TextLayerRuntime {
     /// 書き出し位置・選択肢の飾りの縮退＝spec real-run-log-noise 要件 2.1〜2.4）は名前の欄を
     /// `balloon.*`ブレスの名前にして、箱の名前ごとに 1 度だけ出す
     /// （登録し直しには前の配置の入力が無いので、毎回出さないよう名前で覚える・要件 3.11）。
-    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（件 2・要件 2.7）。
+    /// 描画範囲の潰れは場所の記憶と突き合わせて状態の変わり目に 1 回だけ記録する（areka-P0-balloon-text-bugs 件 2・要件 2.7）。
     fn register_box(&mut self, key: PlaceKey, want: DesiredBox) {
         let Some(def) = self.box_layout.def(&want.site.name) else {
             // `desired_box` が定義の在る名前だけを通すので構造上起こらない。
@@ -403,13 +425,16 @@ impl TextLayerRuntime {
             );
             return;
         };
-        let mut resolved = ResolvedBalloonText::resolve_with_background(
-            &def.model,
-            def.size,
-            DEFAULT_BALLOON_BACKGROUND,
-        );
-        // 箱もそのスコープの普通のバルーンの印を使う（要件 5.1）。
-        self.stamp_inline_marker(&key.actor, &mut resolved);
+        // 箱もそのスコープの普通のバルーンの印を使う（`script-small-tags` 要件 5.1）。表を入れたときの覚えを複製して押す（audit-emo-text-state-actor 指摘 7）。
+        let Some(memo) = self.box_resolved.get(&want.site.name) else {
+            // 覚えは表に載る名前ごとに入るので構造上起こらない。
+            warn!(
+                name = want.site.name.as_str(),
+                "箱の解決の覚えが無いので登録しない（構造不変の破れ）"
+            );
+            return;
+        };
+        let resolved = self.stamped(&key.actor, memo.clone());
         if self.box_definition_warned.insert(want.site.name.clone()) {
             let name = want.site.name.as_str();
             attach::warn_coarse_wrap_threshold(name, &resolved, None);
@@ -417,14 +442,17 @@ impl TextLayerRuntime {
             decoration::warn_cursor_fallback(name, &CursorFallback::of(def.model.cursor()), None);
         }
         let (w, h) = (i64::from(def.size.0), i64::from(def.size.1));
-        // 潰れの記録（件 2）。`def` の借用が切れた後に呼ぶ。
+        // 潰れの記録（areka-P0-balloon-text-bugs 件 2）。`def` の借用が切れた後に呼ぶ。
         self.note_region_collapse(&key, want.site.name.as_str(), &resolved);
         let (sw, sh) = (
             i64::from(want.surface_size.0),
             i64::from(want.surface_size.1),
         );
         let site = &want.site;
-        let overflows = site.x < 0 || site.y < 0 || site.x + w > sw || site.y + h > sh;
+        let overflows = site.x < 0
+            || site.y < 0
+            || site.x.saturating_add(w) > sw
+            || site.y.saturating_add(h) > sh;
         if overflows
             && self
                 .box_overflow_warned
@@ -450,6 +478,7 @@ impl TextLayerRuntime {
         );
         self.routing.insert(key.clone(), want.binding);
         self.layout_input.insert(key.clone(), resolved);
+        self.box_shell_size.insert(key.clone(), want.surface_size);
         self.box_sites.insert(key, want.site);
     }
 
@@ -458,6 +487,7 @@ impl TextLayerRuntime {
         self.routing.remove(key);
         self.layout_input.remove(key);
         self.box_sites.remove(key);
+        self.box_shell_size.remove(key);
         self.drop_box_scroll(key);
         // 見えない箱の当たり行を残さない（次の提示で再び導く）。
         self.choice_snapshot.remove(key);
@@ -467,10 +497,7 @@ impl TextLayerRuntime {
             boxes.retain(|b| b.name != *name);
         }
         if let Some(render) = self.surfaces.remove(key) {
-            if let Some(markers) = render.markers {
-                markers.despawn(world);
-            }
-            render.surface.despawn_window_child(world);
+            render.discard(world, None);
         }
         debug!(actor = %key.actor, place = ?key.place, "箱の置き場所の登録を外した（文字は保つ）");
     }

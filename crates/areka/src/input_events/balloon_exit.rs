@@ -11,7 +11,7 @@ use wintf::ecs::find_owner_window;
 use wintf::ecs::pointer::PointerLeave;
 
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 use super::{BalloonWiring, HoverAction, hover_action};
 

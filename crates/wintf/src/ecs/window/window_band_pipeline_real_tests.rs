@@ -8,7 +8,7 @@
 //! （`AREKA_WINTF_REAL_WINDOW_ZORDER`・`#[ignore]`）の内側に置き、主張は自分の窓の相対の順と
 //! 帯の印だけを見る。
 //!
-//! 並びは本番の `crates/areka/src/placement/spawn.rs` の `wire_zorder_pair` と同じである
+//! 並びは本番の `crates/areka-placement/src/spawn.rs` の `wire_zorder_pair` と同じである
 //! （並びそのものの固定は areka 側の兄弟のテスト `spawn_window_band_wiring_tests.rs` が持つ）。
 
 use bevy_ecs::prelude::*;

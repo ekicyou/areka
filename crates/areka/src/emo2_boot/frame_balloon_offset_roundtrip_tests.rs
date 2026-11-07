@@ -41,9 +41,9 @@
 use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{DPI, Point, WindowPos};
 
-use crate::placement::follow::{BalloonFollow, OffsetBase};
-use crate::placement::resolver::PointPx;
-use crate::placement::transition_diag::{OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED};
+use areka_placement::follow::{BalloonFollow, OffsetBase};
+use areka_placement::resolver::PointPx;
+use areka_placement::transition_diag::{OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED};
 
 use super::balloon_offset_follow::{OffsetFollowOutcome, rescale_balloon_follow_offset};
 use super::test_support::{FakeReports, FrameHarness, capture_logs};

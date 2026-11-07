@@ -17,7 +17,7 @@ use wintf::ecs::{Point, SizeI};
 
 use super::dpi::{GhostWindowKind, reconcile_window_size, rescale_drag_grab};
 use super::test_support::{FrameHarness, pos_of};
-use crate::placement::diag::PlacementRoute;
+use areka_placement::diag::PlacementRoute;
 
 /// 実測の形（件 9）の前の大きさ（拡大率 200% の画面）。
 const BEFORE: (u32, u32) = (1108, 1368);

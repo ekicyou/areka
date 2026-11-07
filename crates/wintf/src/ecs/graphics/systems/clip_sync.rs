@@ -4,9 +4,10 @@
 //! 角丸矩形の図形による切り抜き（`CompositionGeometricClip`・矩形は角丸 0）へ写して
 //! WUC `Visual` に適用する。DComp 版（IDCompositionRectangleClip）の意味論を等価に写す。
 
+use super::init::format_entity_name;
 use crate::ecs::graphics::Visual;
 use crate::ecs::graphics::clip::ClipShape;
-use crate::ecs::graphics::components::VisualGraphics;
+use crate::ecs::graphics::components::{ClipKey, VisualGraphics};
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use bevy_ecs::prelude::*;
@@ -22,6 +23,7 @@ use windows::core::Interface;
 /// 最後に当てた切り抜きの鍵（物理の幅・高さ・拡大率・形）を `VisualGraphics` に控え、
 /// 同じなら作り直さない（位置だけ変わった回）。鍵の書き込みは変化の印を立てない。
 /// 見た目が作り直された部品は鍵が空なので、新しい見た目へ当て直す。
+/// 任意の図形（`ClipShape::Geometry`）は [`clip_key_for`] が「切り抜きなし」へ読み替える。
 ///
 /// # DPI スケーリング
 /// - クリップ矩形のサイズに GlobalArrangement の累積スケール値を適用して物理ピクセル座標に変換
@@ -48,6 +50,7 @@ pub fn clip_sync_system(
             Changed<VisualGraphics>,
         )>,
     >,
+    names: Query<&Name>,
 ) {
     let Some(wuc_resource) = wuc_resource else {
         return;
@@ -61,19 +64,17 @@ pub fn clip_sync_system(
             continue;
         };
 
-        let size = &arrangement.size;
-        // 物理ピクセル座標に変換
         let scale_x = ga.scale_x();
-        let scale_y = ga.scale_y();
-        let key = match &visual.clip {
-            Some(shape) if size.width > 0.0 && size.height > 0.0 => (
-                size.width * scale_x,
-                size.height * scale_y,
-                scale_x,
-                Some(shape.clone()),
-            ),
-            _ => (0.0, 0.0, 0.0, None),
-        };
+        let key = clip_key_for(
+            entity,
+            names.get(entity).ok(),
+            visual.clip.as_ref(),
+            arrangement.size.width,
+            arrangement.size.height,
+            scale_x,
+            ga.scale_y(),
+            vg.clip_key(),
+        );
         if vg.clip_key() == Some(&key) {
             continue;
         }
@@ -137,6 +138,46 @@ pub fn clip_sync_system(
                 }
             }
         }
+    }
+}
+
+/// 任意の図形を「切り抜きなし」と読み替えたときの鍵。負の幅は実の鍵に現れないので、
+/// 図形なしの解除 `(0, 0, 0, None)` と区別でき、図形へ変わった回だけ鍵が変わる。
+/// 控えに図形（`ID2D1Geometry`）は持たない。
+const GEOMETRY_AS_NONE_KEY: ClipKey = (-1.0, -1.0, 0.0, None);
+
+/// 切り抜きの鍵（物理の幅・高さ・拡大率・形）を作る。大きさ 0 か形なしは解除の鍵。
+///
+/// 任意の図形は WUC での実現が範囲外なので「切り抜きなし」と読み替え、鍵が `prev` から
+/// 変わる回（＝図形へ変わった回）にだけ実体名つきの `warn!` を 1 度残す（3.8）。
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn clip_key_for(
+    entity: Entity,
+    name: Option<&Name>,
+    clip: Option<&ClipShape>,
+    width: f32,
+    height: f32,
+    scale_x: f32,
+    scale_y: f32,
+    prev: Option<&ClipKey>,
+) -> ClipKey {
+    match clip {
+        Some(ClipShape::Geometry(_)) => {
+            if prev != Some(&GEOMETRY_AS_NONE_KEY) {
+                warn!(
+                    entity = %format_entity_name(entity, name),
+                    "[clip_sync] 描画面の持ち主の任意の図形の切り抜きは WUC では範囲外なので切り抜かない"
+                );
+            }
+            GEOMETRY_AS_NONE_KEY
+        }
+        Some(shape) if width > 0.0 && height > 0.0 => (
+            width * scale_x,
+            height * scale_y,
+            scale_x,
+            Some(shape.clone()),
+        ),
+        _ => (0.0, 0.0, 0.0, None),
     }
 }
 
@@ -206,6 +247,8 @@ fn build_clip(
             }
             build_rounded_geometric_clip(compositor, physical_width, physical_height, uniform)
         }
+        // clip_key_for が先に「切り抜きなし」へ読み替えるので届かない。
+        ClipShape::Geometry(_) => Err(windows::Win32::Foundation::E_NOTIMPL.into()),
     }
 }
 
@@ -228,3 +271,7 @@ fn build_rounded_geometric_clip(
     let clip = compositor.CreateGeometricClipWithGeometry(&geometry)?;
     clip.cast::<CompositionClip>()
 }
+
+#[cfg(test)]
+#[path = "clip_sync_tests.rs"]
+mod clip_sync_tests;

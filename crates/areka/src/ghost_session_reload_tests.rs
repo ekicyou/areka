@@ -71,9 +71,9 @@ fn split_keeps_window_side_and_attach_copies_new_kanade() {
 
     let sample = acquire_emo2();
     let descript = StartupDescriptValues {
-        author_dpi: placement::AuthorDpi::DEFAULT,
+        author_dpi: areka_placement::AuthorDpi::DEFAULT,
         zorder_raw: None,
-        default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+        default_surfaces: areka_placement::DefaultSurfaces::builtin(),
     };
     let ghost = GhostDecision {
         route: GhostRoute::Argv,
@@ -197,9 +197,9 @@ fn set_names_delegates_to_runtime_or_returns_false() {
             modules: crate::cli::ModulePolicy::Load,
         },
         &StartupDescriptValues {
-            author_dpi: placement::AuthorDpi::DEFAULT,
+            author_dpi: areka_placement::AuthorDpi::DEFAULT,
             zorder_raw: None,
-            default_surfaces: crate::placement::DefaultSurfaces::builtin(),
+            default_surfaces: areka_placement::DefaultSurfaces::builtin(),
         },
         &ghost,
         &balloon,

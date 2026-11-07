@@ -312,9 +312,9 @@ fn a_shiori_reload_keeps_the_windows_and_rebuilds_only_the_runtime() {
 /// 読み直しが `close_windows_for_restart` を通ると帳簿が外れて赤。
 #[test]
 fn a_shiori_reload_keeps_the_sticky_ledger_and_anchor_source() {
-    use crate::placement::follow::AnchorSource;
-    use crate::placement::resolver::Anchor;
-    use crate::placement::sticky_group_ledger::{
+    use areka_placement::follow::AnchorSource;
+    use areka_placement::resolver::Anchor;
+    use areka_placement::sticky_group_ledger::{
         StickyGroupLedger, apply_set_sticky, seed_sticky_descript,
     };
 

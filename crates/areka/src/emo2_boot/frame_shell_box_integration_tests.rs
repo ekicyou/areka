@@ -65,7 +65,7 @@ struct Cage {
     present_tx: mpsc::Sender<PresentCommand>,
     lifecycle_tx: mpsc::Sender<TalkLifecycleSignal>,
     reports: mpsc::Receiver<areka_kanade::KanadeMsg>,
-    _gw: crate::placement::spawn::GhostWindows,
+    _gw: areka_placement::spawn::GhostWindows,
     /// GPU の装置の許可。`world` の装置より後に返すので欄の最後。
     _gpu: crate::emo2_boot::spine::GpuPermit,
 }
@@ -132,9 +132,9 @@ impl Cage {
     }
 
     /// 本番の相順を 1 フレーム回し、その間のログを返す。
-    fn frame(&mut self) -> Vec<LogEvent> {
+    fn frame(&mut self) -> Vec<CapturedEvent> {
         let wiring = std::mem::replace(&mut self.wiring, placeholder_wiring());
-        let (wiring, events) = capture_logs(|| advance_frame(&mut self.world, wiring));
+        let (wiring, events) = capture(|| advance_frame(&mut self.world, wiring));
         self.wiring = wiring;
         events
     }
@@ -209,7 +209,7 @@ fn placeholder_wiring() -> Emo2Wiring {
 }
 
 /// scope の普通のバルーンの窓を「出す」遷移の行の数（可視性の相が出す 1 行）。
-fn show_transitions(events: &[LogEvent], scope: u32) -> usize {
+fn show_transitions(events: &[CapturedEvent], scope: u32) -> usize {
     visibility_lines(events)
         .into_iter()
         .filter(|e| {

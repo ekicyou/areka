@@ -9,9 +9,9 @@ use super::chain_finalize_persist_test_support::{PersistStore, spawn_shown};
 use super::test_support::{PerTargetSizes, capture_logs, pos_of};
 use super::*;
 
-use crate::placement::chain_finalize::ChainFinalized;
-use crate::placement::follow::{MonitorSnapshot, OffsetBase};
-use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use areka_placement::chain_finalize::ChainFinalized;
+use areka_placement::follow::{MonitorSnapshot, OffsetBase};
+use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use areka_sylphya::{Axis, PersistKey};
 use wintf::ecs::window::drain_window_pos_commands;
 

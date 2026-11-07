@@ -16,8 +16,8 @@ use super::LEFT_SCREEN;
 use super::wiring::{fake_handle, placement};
 use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
+use areka_placement::source::GhostTitles;
+use areka_placement::spawn::spawn_ghost_windows;
 
 /// A の `OnBoot`: 台詞の途中で B への切替を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";

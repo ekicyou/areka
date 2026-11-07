@@ -1,34 +1,15 @@
-use areka_sakura::contract::{ActorKey, CueCommand, FONT_TAG_CARRIER};
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-choice-render` のもの（別の spec のものはその場で名を書く）。
 
-use super::test_support::{choice_cue, com_world, cue, cursor_model, geo_model, opaque_count};
+use areka_sakura::contract::{ActorKey, CueCommand};
+
+use super::test_support::{
+    choice_cue, com_world, count_px, cue, cursor_model, geo_model, inked, opaque_count, read_back,
+    row_px,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::choice::ResolvedChoiceStyle;
 use crate::state::TextLayerConfig;
-
-/// Observable（3.5/4.1）: 現存しない ordinal で `inject_choice_hover` を呼んでもパニックせず、
-/// `choice_active` は選択肢スパンの実状態を反映し続ける（選択肢あり＝true）。
-#[test]
-fn inject_choice_hover_nonexistent_ordinal_does_not_panic_and_choice_active_holds() {
-    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    let actor = ActorKey::from("0");
-    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
-    assert!(
-        rt.choice_active(&actor),
-        "選択肢スパンありで choice_active=true"
-    );
-
-    // 現存スパン（ordinal 0）に無い ordinal 999 を注入——panic せず縮退（debug ログ）。
-    rt.inject_choice_hover(&actor, Some(999));
-    // 実存 ordinal 0 の注入・解除も panic しない。
-    rt.inject_choice_hover(&actor, Some(0));
-    rt.inject_choice_hover(&actor, None);
-
-    // stale ordinal 注入後も choice_active はスパンの実状態を反映し続ける（hover は照会に影響しない）。
-    assert!(
-        rt.choice_active(&actor),
-        "stale ordinal 注入後も choice_active はスパン実状態を反映"
-    );
-}
+use crate::state::test_support::font;
 
 /// `choice_active`（1.3）: スパン非空で true・スパン無し／未知 actor で false。
 #[test]
@@ -47,10 +28,14 @@ fn choice_active_reflects_span_set_presence() {
         "Text のみ（選択肢スパン無し）actor は false"
     );
     assert!(!rt.choice_active(&unknown), "未知 actor は false");
+
+    // 現存しない ordinal の hover を注入しても panic せず、照会はスパンの実状態のまま（3.5/4.1）。
+    rt.inject_choice_hover(&choosing, Some(999));
+    assert!(rt.choice_active(&choosing), "stale ordinal 注入後も true");
 }
 
 /// `choice_hit_rows`（3.2）: 未知 actor・選択肢無し actor は空 slice を返す
-/// （スナップショット population は task 8.2——8.1 では常に空）。
+/// （スナップショットは提示（`present_frame`）が作るので、提示の前は選択肢があっても空）。
 #[test]
 fn choice_hit_rows_empty_for_unknown_or_no_snapshot_actor() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
@@ -60,26 +45,10 @@ fn choice_hit_rows_empty_for_unknown_or_no_snapshot_actor() {
         "未知 actor は空 slice"
     );
 
-    // 選択肢スパンを持つ actor でも 8.1 時点ではスナップショット未 population＝空 slice。
+    // 選択肢スパンを持つ actor でも、提示の前はスナップショットが無い＝空 slice。
     let actor = ActorKey::from("0");
     rt.apply_cue(&choice_cue("0", 0.0, "q", "はい", &[]));
-    assert!(
-        rt.choice_hit_rows(&actor).is_empty(),
-        "スナップショット未 population（8.2 前）は空 slice"
-    );
-}
-
-/// `ResolvedBalloonText` は balloon cursor モデルから解決した `choice_style` を運ぶ（Integration）。
-/// cursor.\* 未指定の geo_model → `Invert`（未指定バルーン＝M1 実導出）。
-#[test]
-fn resolved_balloon_text_carries_choice_style_from_cursor_model() {
-    let image = (120u32, 60u32);
-    let resolved = ResolvedBalloonText::resolve(&geo_model(), image);
-    assert_eq!(
-        resolved.choice_style,
-        ResolvedChoiceStyle::Invert,
-        "cursor.* 未指定バルーンは choice_style=Invert（既定文字色反転縮退）"
-    );
+    assert!(rt.choice_hit_rows(&actor).is_empty(), "提示の前は空 slice");
 }
 
 /// Observable（3.1/3.2/3.3/5.2）: 提示成功直後の `choice_hit_rows` が、描画された選択肢行と整合する
@@ -147,14 +116,14 @@ fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
     );
 }
 
-/// **装飾で大きくした選択肢は当たり帯も大きくなる**（要件 11.5 のブロック軸・本番の 1 フレーム経路）。
+/// **装飾で大きくした選択肢は当たり帯も大きくなる**（`areka-P0-text-decoration-canon` 要件 11.5 のブロック軸・本番の 1 フレーム経路）。
 ///
 /// 帯の丈をバルーン定義の既定の大きさから**アクターに 1 つ**決めていた頃は、`\f[height,40]` の
 /// 選択肢が表示 42 画素でも帯 14 画素で、文字の上下がクリックできなかった。純粋層の
 /// `choice_tests.rs::line_bands_scale_with_each_line_own_em` が値そのものを固定し、本檻は
 /// **それが `present_frame` の本番経路まで繋がっている**ことを述べる（純粋層だけでは配線を主張できない）。
 ///
-/// 較正: `actor.rs` の `line_bands` を「全行に既定の大きさで 1 つ」を配る旧実装へ戻すと、
+/// 較正: `choice.rs` の `line_bands` を「全行に既定の大きさで 1 つ」を配る旧実装へ戻すと、
 /// 2 行の帯の丈が等しくなって赤。
 #[test]
 fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
@@ -164,11 +133,7 @@ fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
     // 1 行目＝既定の大きさの選択肢・2 行目＝`\f[height,40]` の選択肢。
     rt.apply_cue(&choice_cue("0", 0.0, "OnSmall", "ちいさい", &[]));
     rt.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }));
-    rt.apply_cue(&cue(
-        "0",
-        0.0,
-        CueCommand::command_carrier(FONT_TAG_CARRIER, vec!["height".to_owned(), "40".to_owned()]),
-    ));
+    rt.apply_cue(&font("0", &["height", "40"]));
     rt.apply_cue(&choice_cue("0", 0.2, "OnBig", "おおきい", &[]));
     let image = (240u32, 200u32);
     rt.register_actor(
@@ -190,11 +155,11 @@ fn a_decorated_choice_gets_a_taller_hit_band_through_the_production_frame() {
     );
 }
 
-// task 9.1: 描画＋字下げの readback 統合檻（COM・headless・R7.1/7.4・draw==hit の R3.3）
+// 描画＋字下げの readback 統合檻（COM・headless・`areka-P0-choice-render` R7.1/7.4・draw==hit の `areka-P0-choice-render` R3.3）
 #[test]
 fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     const FONT_H: f32 = 12.0;
-    // 行送りは正典の式をそのまま呼ぶ（文字の大きさ + 行間・design §4.1 正典表）。
+    // 行送りは正典の式をそのまま呼ぶ（文字の大きさ + 行間・`areka-P0-emo-text-line-height-canon` design §4.1 正典表）。
     // 式をここに書き写さないので、行間の既定値が変わっても本テストは自動で追随する。
     let pitch: f32 = TextLayerConfig::default().line_pitch(FONT_H); // 12 + 2 = 14.0
     let indent_x: f32 = 5.0 * FONT_H; // 5em = 60.0
@@ -235,38 +200,29 @@ fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
     assert_eq!(rows[0].rect.top, indent_y, "先頭選択肢 2lh 字下げ");
     assert_eq!(rows[1].rect.left, 0.0);
     assert!(rows[0].rect.top < rows[1].rect.top && rows[1].rect.top < rows[2].rect.top);
-    let surface = rt.surface(&actor).expect("供給面");
     let width = image.0;
-    let bytes = surface.read_back().expect("read_back");
-    let ink_in_rect = |b: &[u8], x0: u32, y0: u32, x1: u32, y1: u32| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                if b[((y * width + x) * 4) as usize + 3] != 0 {
-                    n += 1;
-                }
-            }
-        }
-        n
+    let bytes = read_back(&rt, &actor);
+    let band = |r: &super::ChoiceHitRow| {
+        let (_, y0, _, y1) = row_px(r);
+        (y0, y1)
     };
-    let band = |r: &super::ChoiceHitRow| (r.rect.top as u32, r.rect.bottom.ceil() as u32);
     let (r0y0, r0y1) = band(&rows[0]);
     assert!(
-        ink_in_rect(&bytes, indent_x as u32, r0y0, width, r0y1) > 0,
+        count_px(&bytes, width, (indent_x as u32, r0y0, width, r0y1), inked) > 0,
         "字下げ位置にインク（draw==hit）"
     );
     assert_eq!(
-        ink_in_rect(&bytes, 0, r0y0, (indent_x as u32).saturating_sub(10), r0y1),
+        count_px(
+            &bytes,
+            width,
+            (0, r0y0, (indent_x as u32).saturating_sub(10), r0y1),
+            inked
+        ),
         0,
         "字下げ前は空白"
     );
-    assert!(opaque_count(&bytes) > 0);
     present_frame(&mut rt, &mut world, 10.0).expect("NoChange 再提示");
-    let bytes2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let bytes2 = read_back(&rt, &actor);
     assert_eq!(bytes, bytes2, "決定論");
 }
 
@@ -291,58 +247,7 @@ fn present_with_no_choices_yields_empty_choice_hit_rows() {
     );
 }
 
-/// Observable（3.3/4.x 配線・単一導出）: hover 注入が decorate→render まで配線され、ハイライト塗りで
-/// 非透明ピクセルが増える（Invert 縮退＝塗り＝既定黒文字色の矩形が hover 行へ載る）。ヒット行照会自体は
-/// hover 非依存（count 不変）。
-#[test]
-fn present_with_hover_adds_highlight_pixels_over_non_hover_frame() {
-    let (mut world, window, slot) = com_world();
-    let actor = ActorKey::from("0");
-    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
-    rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &["r1"]));
-    let image = (120u32, 60u32);
-    rt.register_actor(
-        actor.clone(),
-        TextSlotBinding::new(slot, window, 1.0, image, image),
-        ResolvedBalloonText::resolve(&geo_model(), image),
-    );
-
-    // hover 無しで提示（素の選択肢テキスト）＝スナップショット population・hover 未注入。
-    present_frame(&mut rt, &mut world, 10.0).expect("hover 無し提示");
-    let read = |rt: &TextLayerRuntime| -> usize {
-        opaque_count(
-            &rt.surface(&actor)
-                .expect("供給面")
-                .read_back()
-                .expect("read_back"),
-        )
-    };
-    let plain = read(&rt);
-    assert!(plain > 0, "選択肢テキストが描画される");
-    assert_eq!(
-        rt.choice_hit_rows(&actor).len(),
-        2,
-        "hover 前もヒット行は 2"
-    );
-
-    // ordinal 0 を hover 注入→再提示（choice_marker 変化で per-line 増分ダーティ＝Update）。
-    rt.inject_choice_hover(&actor, Some(0));
-    present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
-    let hovered = read(&rt);
-    assert!(
-        hovered > plain,
-        "hover が decorate→render へ配線され、ハイライト塗りで非透明ピクセルが増える: {plain} -> {hovered}"
-    );
-    // ヒット行照会は hover 非依存（count 不変）。
-    assert_eq!(
-        rt.choice_hit_rows(&actor).len(),
-        2,
-        "hover 後もヒット行は 2"
-    );
-}
-
-// task 9.2: hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
+// hover 画素檻＋ダーティ限定檻（COM・headless・`areka-P0-choice-render` R4.4/7.2/7.4）
 //
 // Observable: cursor.* 由来の SquareFill（塗り=(105,25,25)・文字=(255,255,255)）を持つバルーンで、
 // hover on/off を注入する対フレームにおいて (a) 塗り色画素と白文字画素が ordinal-0 セグメント矩形へ
@@ -372,52 +277,15 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     let width = image.0;
 
     // ── 画素プローブ（premultiplied BGRA・α=255 ゆえ B=25,G=25,R=105,A=255 が塗り色の厳密表現）──
-    // 矩形内の塗り色（105,25,25）画素数。
-    let fill_in_rect = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil() as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil() as u32).min(image.1);
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
-    // 矩形内の白文字（≈255,255,255）画素数——全チャネル閾値で AA 端を除いた芯を数える。
-    let white_in_rect = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil() as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil() as u32).min(image.1);
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] >= 200 && b[i + 1] >= 200 && b[i + 2] >= 200 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    // 塗り色（105,25,25）の画素。
+    let fill = |px: &[u8]| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255;
+    // 白文字（≈255,255,255）の画素——全チャネル閾値で AA 端を除いた芯を数える。
+    let white = |px: &[u8]| px[0] >= 200 && px[1] >= 200 && px[2] >= 200 && px[3] == 255;
+    // 矩形内の塗り色画素数・白文字画素数。
+    let fill_in_rect = |b: &[u8], r: &super::ChoiceHitRow| count_px(b, width, row_px(r), fill);
+    let white_in_rect = |b: &[u8], r: &super::ChoiceHitRow| count_px(b, width, row_px(r), white);
     // 面全域の塗り色画素数（hover 解除で塗りが完全消滅することの檻）。
-    let fill_total = |b: &[u8]| -> usize {
-        let mut n = 0usize;
-        let mut i = 0usize;
-        while i + 3 < b.len() {
-            if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
-                n += 1;
-            }
-            i += 4;
-        }
-        n
-    };
+    let fill_total = |b: &[u8]| count_px(b, width, (0, 0, u32::MAX, u32::MAX), fill);
     let calls = |rt: &TextLayerRuntime| -> u64 {
         rt.draw_stats(&actor)
             .expect("draw_stats")
@@ -428,11 +296,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（ダーティ限定を測る台）");
-    let base_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let base_bytes = read_back(&rt, &actor);
     assert_eq!(
         fill_total(&base_bytes),
         0,
@@ -450,16 +314,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         hover_delta, 1,
         "hover on はダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {hover_delta}"
     );
-    assert!(
-        hover_delta < rows.len() as u64,
-        "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
-        rows.len()
-    );
-    let hover_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hover_bytes = read_back(&rt, &actor);
     // 7.2: ordinal-0 セグメント矩形へ塗り色＋白文字画素が出現する。
     assert!(
         fill_in_rect(&hover_bytes, &rows[0]) > 0,
@@ -485,11 +340,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         hover_calls,
         "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
     );
-    let hover_bytes2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hover_bytes2 = read_back(&rt, &actor);
     assert_eq!(
         hover_bytes, hover_bytes2,
         "決定論（hover 状態・バイト同一）"
@@ -506,15 +357,7 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         off_delta, 1,
         "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
     );
-    assert!(
-        off_delta < rows.len() as u64,
-        "hover off も全域再描画ではない: 増分 {off_delta}"
-    );
-    let off_bytes = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off_bytes = read_back(&rt, &actor);
     // 7.2: 塗り色画素が面全域から消滅する（素描画へ戻る）。
     assert_eq!(
         fill_total(&off_bytes),
@@ -524,20 +367,16 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
     present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
-    let off_bytes2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off_bytes2 = read_back(&rt, &actor);
     assert_eq!(
         off_bytes, off_bytes2,
         "決定論（hover off 状態・バイト同一）"
     );
 }
 
-// task 9.3: 矩形反転縮退の pixel 檻（COM・headless・R4.3/6.1/7.2）。
+// 矩形反転縮退の pixel 檻（COM・headless・`areka-P0-choice-render` R4.3/6.1/7.2）。
 //
-// 9.2（`hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`）を cursor.\* 未指定
+// `hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage` を cursor.\* 未指定
 // バルーン（`geo_model`＝Invert 縮退）で反映する。正典確定「矩形反転縮退: セグメント矩形＝
 // バルーン既定 font.color 塗り・文字色＝各成分 255−c」を画素で固定する: hover 行のセグメント矩形が
 // **既定文字色（読取値・黒(0,0,0)）で全域不透明化**され、その上に**反転文字色（255−c＝白(255,255,255)）**の
@@ -548,14 +387,14 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     let (mut world, window, slot) = com_world();
     let actor = ActorKey::from("0");
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
-    // 3 選択肢を別行へ配置（9.2 と同型・hover 行が 1 行に限定されることを測る台）。
+    // 3 選択肢を別行へ配置（hover 画素檻と同型・hover 行が 1 行に限定されることを測る台）。
     rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
     rt.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
     rt.apply_cue(&choice_cue("0", 0.1, "OnNo", "いいえ", &["r1"]));
     rt.apply_cue(&cue("0", 0.2, CueCommand::NewLine { ratio: 1.0 }));
     rt.apply_cue(&choice_cue("0", 0.2, "OnMaybe", "どちらでも", &["r2"]));
     let image = (200u32, 100u32);
-    // cursor.\* 未指定 geo_model → Invert（矩形反転縮退・task 5.3 resolve）。
+    // cursor.\* 未指定 geo_model → Invert（矩形反転縮退・`ResolvedChoiceStyle::resolve`）。
     let resolved = ResolvedBalloonText::resolve(&geo_model(), image);
     assert_eq!(
         resolved.choice_style,
@@ -585,63 +424,36 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     let height = image.1;
 
     // ── 画素プローブ（premultiplied BGRA・α=255・k=1.0/committed=0 ゆえ窓物理 px＝image px）──
-    // rect の floor/ceil 画素境界（9.2 と同流儀）。
-    let bounds = |r: &super::ChoiceHitRow| -> (u32, u32, u32, u32) {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil() as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil() as u32).min(height);
-        (x0, x1, y0, y1)
-    };
-    // 矩形 interior（AA 端を避けて 1px 内側へ）——「塗りが全域不透明化する」を端の縁取りに惑わされず測る。
+    // 矩形 interior（rect の floor/ceil 画素境界から AA 端を避けて 1px 内側へ・面の内側へ切り詰め）——
+    // 「塗りが全域不透明化する」を端の縁取りに惑わされず測る。
     let interior = |r: &super::ChoiceHitRow| -> (u32, u32, u32, u32) {
-        let (x0, x1, y0, y1) = bounds(r);
-        (x0 + 1, x1.saturating_sub(1), y0 + 1, y1.saturating_sub(1))
+        let (x0, y0, x1, y1) = row_px(r);
+        (
+            x0 + 1,
+            y0 + 1,
+            x1.min(width).saturating_sub(1),
+            y1.min(height).saturating_sub(1),
+        )
     };
-    let area = |(x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
+    let area = |(x0, y0, x1, y1): (u32, u32, u32, u32)| -> usize {
         (x1.saturating_sub(x0) as usize) * (y1.saturating_sub(y0) as usize)
     };
     // 不透明画素数（α=255・塗りが矩形を全域不透明化することの述語）。
-    let opaque_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    let opaque_in = |b: &[u8], rect| count_px(b, width, rect, |px| px[3] == 255);
     // 既定文字色（塗り色）(fr,fg,fb) の厳密一致画素数——BGRA ゆえ B=fb,G=fg,R=fr,A=255。
-    let fill_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] == fb && b[i + 1] == fg && b[i + 2] == fr && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
+    let fill_in = |b: &[u8], rect| {
+        count_px(b, width, rect, |px| {
+            px[0] == fb && px[1] == fg && px[2] == fr && px[3] == 255
+        })
     };
-    // 反転文字色（255−c＝白）近傍画素数——AA 芯を各チャネル ±55（255→≥200・9.2 白閾値と等価）で数える。
-    let text_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                let db = (b[i] as i16 - tb as i16).abs();
-                let dg = (b[i + 1] as i16 - tg as i16).abs();
-                let dr = (b[i + 2] as i16 - tr as i16).abs();
-                if db <= 55 && dg <= 55 && dr <= 55 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
+    // 反転文字色（255−c＝白）近傍画素数——AA 芯を各チャネル ±55（255→≥200・hover 画素檻の白閾値と等価）で数える。
+    let text_in = |b: &[u8], rect| {
+        count_px(b, width, rect, |px| {
+            px[0].abs_diff(tb) <= 55
+                && px[1].abs_diff(tg) <= 55
+                && px[2].abs_diff(tr) <= 55
+                && px[3] == 255
+        })
     };
     let calls = |rt: &TextLayerRuntime| -> u64 {
         rt.draw_stats(&actor)
@@ -653,11 +465,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（hover 行限定を測る台）");
-    let base = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let base = read_back(&rt, &actor);
     let r0_int = interior(&rows[0]);
     let r0_area = area(r0_int);
     assert!(r0_area > 0, "行 0 の interior 領域は非空");
@@ -686,16 +494,13 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         hover_delta, 1,
         "hover on はダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {hover_delta}"
     );
-    assert!(
-        hover_delta < rows.len() as u64,
-        "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
-        rows.len()
+    let hov = read_back(&rt, &actor);
+    // ヒット行の照会は hover に依らない（数は変わらない）。
+    assert_eq!(
+        rt.choice_hit_rows(&actor).len(),
+        3,
+        "hover 後もヒット行は 3"
     );
-    let hov = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
     // 7.2/4.3【背景塗り】: hover 行のセグメント矩形は既定文字色（黒）塗りで interior 全域が不透明化する。
     assert_eq!(
         opaque_in(&hov, r0_int),
@@ -738,11 +543,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         hover_calls,
         "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
     );
-    let hov2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let hov2 = read_back(&rt, &actor);
     assert_eq!(hov, hov2, "決定論（hover 状態・バイト同一）");
     let steady_calls = calls(&rt);
 
@@ -755,11 +556,7 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         off_delta, 1,
         "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
     );
-    let off = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off = read_back(&rt, &actor);
     // 7.2/4.3: 反転縮退の塗りが消える（素描画へ戻る）。interior は未充填へ・反転文字（白）消滅。
     assert!(
         opaque_in(&off, r0_int) < r0_area,
@@ -774,15 +571,11 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
     present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
-    let off2 = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let off2 = read_back(&rt, &actor);
     assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
 }
 
-// ── 帯の寄せ（R13）: 実フォントの hover 移動・解除で塗りが消し残らない読み戻し ──
+// ── 帯の寄せ（`areka-P0-emo2-conformance-e2e` R13）: 実フォントの hover 移動・解除で塗りが消し残らない読み戻し ──
 
 /// 実フォント `Yu Gothic UI`・正典 `font.height,28` ＋ `cursor.*` 指定のバルーン定義。
 ///
@@ -790,14 +583,9 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
 /// ＭＳ ゴシック（比 1.0）の檻では寄せが 0 のままで、この経路は 1 度も踏まれない
 /// （既定フォント盲点）。
 fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
-    use areka_parsers::balloon::{
-        BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect,
-        WindowPosition, WordWrapPoint,
-    };
-    BalloonModel::new(
-        WindowPosition::new(None, None),
+    use areka_parsers::balloon::{BalloonCursor, CursorColor, Font, FontColor, Origin, ValidRect};
+    super::test_support::balloon_model_of(
         Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(
             Some("Yu Gothic UI".to_owned()),
@@ -816,7 +604,7 @@ fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
     ))
 }
 
-/// Observable（R13.1/13.2/13.5）: 実フォントで帯が行ボックスの中央へ寄った状態で hover を
+/// Observable（`areka-P0-emo2-conformance-e2e` R13.1/13.2/13.5）: 実フォントで帯が行ボックスの中央へ寄った状態で hover を
 /// **移動**させ、さらに**解除**しても、前の行の塗りが 1 画素も残らない。
 ///
 /// ダーティ矩形は em ボックス（`font.height`）＋実測インクはみ出しで組まれるので、帯の遠端側の
@@ -824,8 +612,8 @@ fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
 /// クリップの外へ落ちて塗りが残る（`expand_overhang_for_band`）。寄せを数えないままでは
 /// hover を移した後の面に前の行の帯の下端が残り、この檻が赤くなる。
 ///
-/// 併せて、ヒット矩形の上端が**行矩形の上端 ＋ 寄せ**であること（R13.1）と、寄せが描画とヒットへ
-/// 同一に配られること（R13.2＝読み戻した塗りの上端がヒット矩形の上端に一致）も固定する。
+/// 併せて、ヒット矩形の上端が**行矩形の上端 ＋ 寄せ**であること（`areka-P0-emo2-conformance-e2e` R13.1）と、寄せが描画とヒットへ
+/// 同一に配られること（`areka-P0-emo2-conformance-e2e` R13.2＝読み戻した塗りの上端がヒット矩形の上端に一致）も固定する。
 #[test]
 fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
@@ -877,38 +665,17 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     );
     let (width, height) = image;
 
-    // 面全域の塗り色（premultiplied BGRA の (25,25,105,255)）画素数。
-    let fill_total = |b: &[u8]| -> usize {
-        b.chunks_exact(4)
-            .filter(|px| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255)
-            .count()
-    };
+    // 塗り色（premultiplied BGRA の (25,25,105,255)）の画素。
+    let fill = |px: &[u8]| px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255;
+    // 面全域の塗り色画素数。
+    let fill_total = |b: &[u8]| count_px(b, width, (0, 0, u32::MAX, u32::MAX), fill);
     // ヒット矩形の内側の塗り色画素数。
-    let fill_in_row = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
-        let x0 = r.rect.left.floor().max(0.0) as u32;
-        let x1 = (r.rect.right.ceil().max(0.0) as u32).min(width);
-        let y0 = r.rect.top.floor().max(0.0) as u32;
-        let y1 = (r.rect.bottom.ceil().max(0.0) as u32).min(height);
-        let mut n = 0usize;
-        for y in y0..y1 {
-            for x in x0..x1 {
-                let i = ((y * width + x) * 4) as usize;
-                if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
-                    n += 1;
-                }
-            }
-        }
-        n
-    };
+    let fill_in_row = |b: &[u8], r: &super::ChoiceHitRow| count_px(b, width, row_px(r), fill);
     // 面全域で塗り色画素を持つ行の範囲（上端, 下端）——読み戻した帯の縦位置。
     let fill_rows = |b: &[u8]| -> Option<(u32, u32)> {
         let mut span: Option<(u32, u32)> = None;
         for y in 0..height {
-            let hit = (0..width).any(|x| {
-                let i = ((y * width + x) * 4) as usize;
-                b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255
-            });
-            if hit {
+            if count_px(b, width, (0, y, width, y + 1), fill) > 0 {
                 span = Some(match span {
                     None => (y, y),
                     Some((t, _)) => (t, y),
@@ -917,12 +684,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         }
         span
     };
-    let read = |rt: &TextLayerRuntime| -> Vec<u8> {
-        rt.surface(&actor)
-            .expect("供給面")
-            .read_back()
-            .expect("read_back")
-    };
+    let read = |rt: &TextLayerRuntime| -> Vec<u8> { read_back(rt, &actor) };
 
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
@@ -932,7 +694,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         0,
         "hover 無しでは塗りが 1 画素も無い"
     );
-    // R13.1: ヒット矩形の上端は行矩形の上端（0 / 行送り 1 つぶん）＋寄せ。
+    // `areka-P0-emo2-conformance-e2e` R13.1: ヒット矩形の上端は行矩形の上端（0 / 行送り 1 つぶん）＋寄せ。
     assert_eq!(
         (rows[0].rect.top, rows[1].rect.top),
         (offset, pitch + offset),
@@ -952,7 +714,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
         fill_in_row(&first, &rows[0]) > 0,
         "ordinal 0 の帯が塗られる"
     );
-    // R13.2: 読み戻した塗りの縦位置がヒット矩形の縦位置と一致する（描画とヒットへ同一の寄せ）。
+    // `areka-P0-emo2-conformance-e2e` R13.2: 読み戻した塗りの縦位置がヒット矩形の縦位置と一致する（描画とヒットへ同一の寄せ）。
     let painted = fill_rows(&first).expect("塗りが在る以上、その縦範囲も在る");
     assert_eq!(
         (painted.0, painted.1 + 1),
@@ -974,7 +736,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     let residue = fill_in_row(&moved, &rows[0]);
     assert_eq!(
         residue, 0,
-        "hover を移した後、前の行（ordinal 0・{:?}）に塗りが {residue} 画素消し残った——ダーティ帯の超過分が寄せ {offset} を数えていない（R13.5）",
+        "hover を移した後、前の行（ordinal 0・{:?}）に塗りが {residue} 画素消し残った——ダーティ帯の超過分が寄せ {offset} を数えていない（`areka-P0-emo2-conformance-e2e` R13.5）",
         rows[0].rect
     );
 
@@ -985,7 +747,7 @@ fn hover_move_and_release_leave_no_residue_with_band_offset_readback() {
     let left_over = fill_total(&off);
     assert_eq!(
         left_over, 0,
-        "hover 解除の後、面全域に塗りが {left_over} 画素消し残った（R13.5）"
+        "hover 解除の後、面全域に塗りが {left_over} 画素消し残った（`areka-P0-emo2-conformance-e2e` R13.5）"
     );
     assert!(opaque_count(&off) > 0, "解除後も素のグリフインクは描かれる");
 }

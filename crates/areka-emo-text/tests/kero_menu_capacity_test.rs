@@ -1,4 +1,6 @@
-//! # kero_menu_capacity_test — 実物バルーン × メニュー 3 台本の容量テスト（task 5.1）
+//! # kero_menu_capacity_test — 実物バルーン × メニュー 3 台本の容量テスト
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-line-height-canon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 出典 spec: `areka-P0-emo-text-line-height-canon`（要件 **8.1**／**8.2**／**8.4 (a)(c)**／
 //! **8.7**／**5.1**〜**5.4**／**6.5**／**3.4**／**4.1**／**4.2**・design.md §4.1 正典表・§4.3）。
@@ -35,94 +37,29 @@
 //!
 //! ## 行の高さの導出（本ファイルの期待値の根）
 //!
-//! 行の矩形は「上端＝行送り軸の位置・下端＝上端＋`font.height`」（`layout.rs` の `finish_line`）。
+//! 行の矩形は「上端＝行送り軸の位置・下端＝上端＋`font.height`」（`layout_scan.rs` の `finish_line`）。
 //! 先頭行の上端は書字開始点の 40 ゆえ、行の上端は 40 → 70 → 100、下端は 68 → 98 → **128**。
 //! 3 行目の下端 128 は描画範囲の下端 133 の内にあり、あふれ判定は発火しない（先頭可視行 0）。
 //! 旧式（`ceil(28 × 1.25)` ＝ 35）だと 3 行目の上端は 40 ＋ 2 × 35 ＝ 110・下端 138 > 133 で
 //! あふれる——それが対照テスト（`legacy_pitch_metrics_reproduces_the_dropped_first_line`）である。
 
-use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+#[path = "support/mod.rs"]
+mod support;
 
-use sample_ghost_kit::SampleRoot;
+use support::fixture::{
+    assert_real_font_present, balloon_metrics, command_cues, emo2_balloon_root, menu_script,
+    state_of,
+};
 
 use areka_emo_text::actor::ResolvedBalloonText;
 use areka_emo_text::draw::DWriteMetrics;
 use areka_emo_text::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::segment::{SegmentPlan, segment_plan};
-use areka_emo_text::state::{TextItem, TextLayerConfig, TextLayerState};
+use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{BalloonModel, parse_str};
-use areka_parsers::charset::{DefaultEncoding, decode};
-use areka_sakura::compile;
-use areka_sakura::contract::{ActorKey, CuePayload, SystemVarSnapshot, TalkCue};
-use windows::Win32::Graphics::DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, IDWriteFactory2};
-use wintf::com::dwrite::dwrite_create_factory;
-
-// ══ 実物の所在と読み込み（本番と同じ規約） ══════════════════════════════════════════════
-
-/// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
-static EMO2: LazyLock<SampleRoot> =
-    LazyLock::new(|| SampleRoot::acquire("emo2").expect("emo2 は登記済みの検体"));
-
-/// emo2 検体のゴーストフォルダ（pasta 辞書は `ghost/master/dic/` 下に在る）。
-fn emo2_fixture_root() -> PathBuf {
-    EMO2.folder().to_path_buf()
-}
-
-/// emo2 が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
-fn emo2_balloon_root() -> PathBuf {
-    EMO2.balloon("emo2-kakukaku")
-        .expect("emo2 の同梱バルーン")
-        .to_path_buf()
-}
-
-/// 実 fixture ファイル（与えた基準フォルダからの相対パス）の生バイト列を読む。
-///
-/// 読めなかったときに「対象 0 件だから緑」にならないよう、失敗と空は明示的に panic する。
-fn read_fixture_bytes(base: PathBuf, rel: &str) -> Vec<u8> {
-    let mut path: PathBuf = base;
-    for seg in rel.split('/') {
-        path = path.join(seg);
-    }
-    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
-        panic!(
-            "実 emo2 fixture {} の読取に失敗した（本檻はこのファイルの実在が前提）: {e}",
-            path.display()
-        )
-    });
-    assert!(
-        !bytes.is_empty(),
-        "実 emo2 fixture {} が空である",
-        path.display()
-    );
-    bytes
-}
-
-/// バルーン記述ファイルを本番と同じ規約で読む。
-///
-/// 本番経路 `areka_emo_present::balloon::load_scope_balloon_model` は
-/// `decode(&bytes, DefaultEncoding::Ansi)`（**既定 Ansi・ファイル内の `charset` 宣言優先**）で
-/// 読む。`emo2-kakukaku/descript.txt` は `charset,UTF-8` を宣言しており、面別上書き層は
-/// 宣言を持たないが純 ASCII ゆえどちらの既定でも同一である。
-fn read_balloon_layer(rel: &str) -> String {
-    decode(
-        &read_fixture_bytes(emo2_balloon_root(), rel),
-        DefaultEncoding::Ansi,
-    )
-}
-
-/// pasta 辞書を読む。
-///
-/// 辞書ファイルは `charset` 宣言を持たない（宣言はゴーストの `master/descript.txt` の
-/// `charset,UTF-8` が担う）ので、既定を UTF-8 として読む（`emo2_fixture_e2e_test.rs` と同じ規約）。
-fn read_pasta(rel: &str) -> String {
-    decode(
-        &read_fixture_bytes(emo2_fixture_root(), rel),
-        DefaultEncoding::Utf8,
-    )
-}
+use areka_parsers::balloon::BalloonModel;
+use areka_sakura::contract::ActorKey;
 
 /// 相方（エモ）側バルーンの面別上書き層（scope 1・`balloonk0.png` 288×203 向け）。
 const KERO_OVERLAY: &str = "balloonk0s.txt";
@@ -137,8 +74,6 @@ const SAKURA_IMAGE_SIZE: (u32, u32) = (400, 224);
 const KERO_BOTTOM: f32 = 133.0;
 /// 相方側の文字描画範囲の右端（image px）＝行内軸の絶対上限（hard）。
 const KERO_RIGHT: f32 = 240.0;
-/// 相方側の折返し基準（image px）＝基層の `wordwrappoint.x,-34` 由来。描画範囲の右端の**外**。
-const KERO_SOFT: f32 = 254.0;
 /// 実物の `font.height`（image px）。
 const FONT_HEIGHT: f32 = 28.0;
 /// 正典の行送りピッチ（`font.height + 行間 2`・design §4.1）。
@@ -146,12 +81,9 @@ const PITCH: f32 = 30.0;
 /// 書字開始点（相方側・image px）。
 const KERO_START: (f32, f32) = (24.0, 40.0);
 
-/// 2 層（`descript.txt` 基層＋面別上書き層）をマージした `BalloonModel`（本番と同じ `parse_str`）。
+/// 2 層（`descript.txt` 基層＋面別上書き層）をマージした `BalloonModel`（本番と同じ規約で読む）。
 fn merged_model(overlay: &str) -> BalloonModel {
-    parse_str(
-        &read_balloon_layer("descript.txt"),
-        Some(&read_balloon_layer(overlay)),
-    )
+    support::fixture::merged_model(&emo2_balloon_root(), Some(overlay))
 }
 
 // ══ 実台本（menu.pasta の 3 本の選択肢台本） ═════════════════════════════════════════════
@@ -167,90 +99,7 @@ const MENU_HEADINGS: [&str; 3] = [
     "＊エモの位置調整選択肢",
 ];
 
-/// 見出しで指した台本の本文（純さくらスクリプト断片）を実 `menu.pasta` から取り出す。
-fn menu_script(heading: &str) -> String {
-    let pasta = read_pasta("ghost/master/dic/menu.pasta");
-    let mut lines = pasta.lines();
-    lines
-        .find(|l| l.trim_end() == heading)
-        .unwrap_or_else(|| panic!("menu.pasta に見出し {heading} が在る"));
-    let body = lines
-        .find(|l| l.contains('\\'))
-        .unwrap_or_else(|| panic!("見出し {heading} の直後にさくらスクリプトを含む本文行が在る"));
-    let start = body
-        .find('\\')
-        .expect("本文行はさくらスクリプト（\\）を含む");
-    body[start..].to_string()
-}
-
-/// 実 sakura パイプライン（`parse` → `compile`）で台本を cue 列へ落とし、
-/// 文字状態機械が消費する Command cue だけを配送エンベロープへ無変形複写する。
-fn command_cues(script: &str) -> Vec<TalkCue> {
-    let instructions = areka_parsers::sakura::parse(script);
-    let compiled = compile(&instructions, &SystemVarSnapshot::default());
-    compiled
-        .sheet
-        .cues()
-        .iter()
-        .filter_map(|c| match &c.payload {
-            CuePayload::Command(cmd) => Some(TalkCue {
-                at: c.start_time,
-                actor: c.actor.clone(),
-                command: cmd.clone(),
-                duration: c.duration,
-            }),
-            _ => None,
-        })
-        .collect()
-}
-
-/// cue 列を実 `TextLayerState` へ載せ、（状態, 唯一の actor）を返す。
-fn state_of(cues: &[TalkCue]) -> (TextLayerState, ActorKey) {
-    let mut state = TextLayerState::default();
-    for cue in cues {
-        state.apply_cue(cue);
-    }
-    let actors: Vec<ActorKey> = state.actors().map(|(k, _)| k.clone()).collect();
-    assert_eq!(
-        actors.len(),
-        1,
-        "選択肢台本は 1 スコープぶんの cue 列である: {actors:?}"
-    );
-    (state, actors[0].clone())
-}
-
 // ══ metrics（実フォント）と、実フォント不在の検出 ═══════════════════════════════════════
-
-/// DirectWrite factory（GPU 不要——計測に要るのは factory だけ）。
-fn factory() -> IDWriteFactory2 {
-    dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite factory を生成できる")
-}
-
-/// 実フォントの送り幅が縮退していないことを先頭で確かめる（design「新規の決定論テスト」注記）。
-///
-/// `Yu Gothic UI` はプロポーショナル——仮名の送りは em（28）より**狭い**。この環境に当該フォントが
-/// 無いと DirectWrite が等幅の代替（全角＝em）へ落ち、本ファイルの数値の前提（送り ≈ 23）が
-/// 崩れたまま緑になり得る。ゆえに縮退を検出したら**赤で止める**。
-fn assert_real_font_present(metrics: &dyn GlyphMetrics) {
-    let a = metrics.advance("あ", FONT_HEIGHT);
-    assert!(
-        a < FONT_HEIGHT,
-        "実フォント Yu Gothic UI が見つからない（「あ」の送りが {a} ＝ em {FONT_HEIGHT} 以上の等幅値へ縮退している）。\
-         本ファイルの期待値はプロポーショナルな実フォントの実測を前提にしているので、\
-         代替フォントのまま緑にしない"
-    );
-}
-
-/// 実物のバルーン記述から解決した metrics（実フォント・正典の行間）。
-fn resolved_metrics(factory: &IDWriteFactory2, resolved: &ResolvedBalloonText) -> DWriteMetrics {
-    DWriteMetrics::new(
-        factory,
-        &resolved.font,
-        resolved.mode,
-        &TextLayerConfig::default(),
-    )
-    .expect("実 descript のフォントで DWriteMetrics を生成できる")
-}
 
 /// 行送りだけを**旧式**（`ceil(font_height × 1.25)`）へ戻すテスト専用の metrics（要件 8.7 の対照）。
 ///
@@ -353,32 +202,18 @@ fn line_bottoms(lines: &[PositionedLine]) -> Vec<f32> {
 /// | 位置調整 | 40 / 100 | 68 / 128 | 2 項目・2 段目（上端 70）は文字が無く**行を作らない** |
 #[test]
 fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     // 前提の実物ジオメトリ（値が変われば以下の期待値の導出ごと崩れるので先に固定する）。
+    // 描画範囲 (24,40)-(240,133)・開始点・折返し基準 254 は `shipped_fixture_region_test.rs` の
+    // `shipped_kero_scope_region_is_pinned` が同じ検体で固定する。
     assert_eq!(resolved.mode, WritingMode::HorizontalTb, "相方側は横書き");
     assert_eq!(
         resolved.font.height, FONT_HEIGHT,
         "実 descript の font.height"
-    );
-    assert_eq!(
-        (
-            resolved.region.left(),
-            resolved.region.top(),
-            resolved.region.right(),
-            resolved.region.bottom()
-        ),
-        (KERO_START.0, KERO_START.1, KERO_RIGHT, KERO_BOTTOM),
-        "相方側の文字描画範囲 (24,40)-(240,133)"
-    );
-    assert_eq!(
-        resolved.region.wrap_threshold(),
-        KERO_SOFT,
-        "折返し基準は基層の wordwrappoint.x,-34 由来の 254（描画範囲の右端の外）"
     );
     assert_eq!(
         resolved.region.inline_limit(),
@@ -439,7 +274,7 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
                 want_tops.to_vec(),
                 "{heading}／{kind:?}: 行の上端（先頭 40・以降 +30・カーソル指定は 40+2×30=100）"
             );
-            // 行の下端＝上端＋font.height（`layout.rs` の `finish_line`）——68 / 98 / 128。
+            // 行の下端＝上端＋font.height（`layout_scan.rs` の `finish_line`）——68 / 98 / 128。
             assert_eq!(
                 line_bottoms(&lines),
                 want_tops
@@ -485,15 +320,14 @@ fn three_menu_scripts_fit_without_scrolling_in_both_wrap_plans() {
 /// (b) 行内軸は `font.height` の 5 倍（24 ＋ 5 × 28 ＝ 164）に着地することを、
 /// 同じ台本の実経路で確かめる。
 ///
-/// (b) は本仕様の前後で変わらない値である（`em` の係数は `font.height` のまま・要件 4.2）。
+/// (b) は `areka-P0-emo-text-line-height-canon` の前後で変わらない値である（`em` の係数は `font.height` のまま・要件 4.2）。
 /// (a) だけが新しい行送りへ追随する（要件 4.1）。
 #[test]
 fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     let script = menu_script(MENU_HEADINGS[0]);
     assert!(
@@ -528,10 +362,6 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
     //     書字開始点 40 ＋ 2 × 行送り 30 ＝ 100（旧式 35 なら 110 で赤）。
     let two_newlines_top = KERO_START.1 + 2.0 * metrics.line_pitch(FONT_HEIGHT);
     assert_eq!(
-        two_newlines_top, 100.0,
-        "改行 2 回ぶんの段の上端（40 + 2 × 30）"
-    );
-    assert_eq!(
         close_line.rect.top, two_newlines_top,
         "\\_l[…,2lh] の「閉じる」は改行 2 回で送った段と同じ高さに着地する"
     );
@@ -543,7 +373,6 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
 
     // (b) 行内軸: font.height の 5 倍（em の係数は不変）。
     let em_column = KERO_START.0 + 5.0 * FONT_HEIGHT;
-    assert_eq!(em_column, 164.0, "5em の桁（24 + 5 × 28）");
     assert_eq!(
         close_line.glyphs[0].inline_pos, em_column,
         "\\_l[5em,…] の行内位置は従来と同じ 164（em の係数は font.height のまま）"
@@ -572,18 +401,10 @@ fn cursor_tag_lands_on_the_same_row_as_two_newlines_and_keeps_the_em_column() {
 /// 収まり（240 の内）と「縮退した等幅値ではない」（200 より遠い）の 2 つの境で挟む。
 #[test]
 fn close_and_back_choices_stay_inside_the_drawing_range_without_wrapping() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
-
-    // 机上値がなぜ外れたか（要件 6.5 の記録）: 全角＝em を仮定すると 3 文字で 84px ＝ 遠端 248 に
-    // なり描画範囲の右端 240 を超える。実フォントの送りは em より狭いので実際には超えない。
-    assert!(
-        KERO_START.0 + 5.0 * FONT_HEIGHT + 3.0 * FONT_HEIGHT > KERO_RIGHT,
-        "brief の机上値（全角＝em の仮定）なら 164 + 3 × 28 = 248 で右端 240 を超えていた"
-    );
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
     // 「閉じる」＝メインメニュー・「もどる」＝おしゃべり頻度／位置調整の 2 台本に在る。
     let targets: [(&str, &str); 3] = [
@@ -654,29 +475,29 @@ fn first_glyph_of(lines: &[PositionedLine], index: usize) -> usize {
 
 /// 本体（さくら）側バルーン `balloons0s.txt` は折返し基準（351）を描画範囲の右端（356）の
 /// **内**に自ら上書きしている。この場合、行内軸の絶対上限（hard）の判定は一度も発火せず、
-/// 折返しの位置は「折返し基準だけを見る参照」と一致しなければならない（本仕様の前後で
+/// 折返しの位置は「折返し基準だけを見る参照」と一致しなければならない（`areka-P0-emo-text-line-height-canon` の前後で
 /// 折返しの位置を変えない・要件 6.4）。
 ///
 /// 参照は本ファイルの中に置いた素朴な実装（送りを足し込み、基準を超えたら折る）である。
 ///
-/// この検査が空振りでないことの較正（2026-09-06・本ファイルで実施）: 参照の基準を折返し基準
+/// この検査が空振りでないことの較正: 参照の基準を折返し基準
 /// 351 から描画範囲の右端 356 へ差し替えると、参照の折返し位置は [14, 28] になり実配置の
 /// [13, 26, 39] と食い違って**赤になる**。すなわち本検査は「折返しが基準 351 に従っている」ことを
 /// 実際に区別している（両者が同じ値になるような緩い比較ではない）。
 #[test]
 fn sakura_side_wrap_positions_match_a_soft_only_reference() {
-    let factory = factory();
     let model = merged_model(SAKURA_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, SAKURA_IMAGE_SIZE);
-    let metrics = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&metrics);
+    let metrics = balloon_metrics(&resolved);
+    assert_real_font_present();
 
+    // 折返し基準 351 は `shipped_fixture_region_test.rs` の `shipped_sakura_scope_region_is_pinned` が
+    // 同じ検体で固定する。ここは絶対上限がその外の右端 356 であることだけを言う。
     let soft = resolved.region.wrap_threshold();
     let hard = resolved.region.inline_limit();
     assert_eq!(
-        (soft, hard),
-        (351.0, 356.0),
-        "本体側は折返し基準 351 を描画範囲の右端 356 の内に自ら上書きしている"
+        hard, 356.0,
+        "本体側は折返し基準 {soft} を描画範囲の右端 356 の内に自ら上書きしている"
     );
 
     // 折返し基準を確実に何度も超える長さの 1 行（40 文字・改行もカーソル指定も無い）。
@@ -685,12 +506,12 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
     let text = "あ".repeat(40);
     let mut state = TextLayerState::default();
     let actor = ActorKey::from("0");
-    state.apply_cue(&TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
-        command: areka_sakura::contract::CueCommand::Text(text.clone()),
-        duration: 0.0,
-    });
+    state.apply_cue(&support::cue(
+        "0",
+        0.0,
+        areka_sakura::contract::CueCommand::Text(text.clone()),
+        0.0,
+    ));
 
     for kind in [WrapKind::CharByChar, WrapKind::Segmented] {
         let lines = layout_script(
@@ -750,17 +571,11 @@ fn sakura_side_wrap_positions_match_a_soft_only_reference() {
 /// 違う。旧式の口は製品コードに残さない（テスト専用の metrics で注入する）。
 #[test]
 fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
-    let factory = factory();
     let model = merged_model(KERO_OVERLAY);
     let resolved = ResolvedBalloonText::resolve(&model, KERO_IMAGE_SIZE);
-    let real = resolved_metrics(&factory, &resolved);
-    assert_real_font_present(&real);
+    let real = balloon_metrics(&resolved);
+    assert_real_font_present();
     let legacy = LegacyPitchMetrics { real: &real };
-    assert_eq!(
-        legacy.line_pitch(FONT_HEIGHT),
-        35.0,
-        "旧式の行送りは ceil(28 × 1.25) = 35"
-    );
 
     let cues = command_cues(&menu_script(MENU_HEADINGS[0]));
     let (state, actor) = state_of(&cues);
@@ -805,32 +620,4 @@ fn legacy_pitch_metrics_reproduces_the_dropped_first_line() {
         0,
         "正典の行送り（30）ではスクロールしない"
     );
-}
-
-// ══ 実物の所在の生存確認 ═══════════════════════════════════════════════════════════════
-
-/// 本ファイルが指す実物の 3 ファイルが実在することを単独で確かめる。
-/// パスが腐って「読めないから対象 0 件で緑」になる形を作らないための錨。
-#[test]
-fn the_shipped_fixture_files_this_cage_points_at_exist() {
-    let balloon = emo2_balloon_root();
-    for path in [
-        balloon.join("descript.txt"),
-        balloon.join(KERO_OVERLAY),
-        balloon.join(SAKURA_OVERLAY),
-        emo2_fixture_root().join("ghost/master/dic/menu.pasta"),
-    ] {
-        assert!(
-            Path::new(&path).is_file(),
-            "実物 {} が見つからない",
-            path.display()
-        );
-    }
-    for heading in MENU_HEADINGS {
-        let script = menu_script(heading);
-        assert!(
-            script.contains("\\q["),
-            "{heading} の本文は \\q の選択肢を含む: {script}"
-        );
-    }
 }

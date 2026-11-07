@@ -1,17 +1,21 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+
 use super::{BalloonModel, DefaultEncoding, PathBuf, decode, error, parse_str};
 use sample_ghost_kit::SampleRoot;
 use std::sync::LazyLock;
 
-// ---------------------------------------------------------------------------
-// 定数・fixture パス解決
-// ---------------------------------------------------------------------------
+/// 挨拶の 3 行（fixture スクリプト boot.pasta「起動朝」由来・文字の層の例とタイプライターの例が共に引く）。
+///
+/// 1 行目（6 グリフ・typewriter 進行の観測対象）。
+pub(super) const LINE1: &str = "おっはよー！";
+/// 2 行目（10 グリフ・改行観測。横書き 1 行に収まり、縦書きでは複数列へ折返す）。
+pub(super) const LINE2: &str = "めっちゃええ朝やん！";
+/// 3 行目（8 グリフ・横書き行容量 4 行のうちの 3 行目）。
+pub(super) const LINE3: &str = "今日もいくでー！";
 
-/// \0（sakura）バルーン窓の初期位置（物理 px・スクリーン座標）。
-pub(super) const SAKURA_POS: (i32, i32) = (320, 160);
-/// \1（kero）バルーン窓の縦間隔（sakura 窓の直下に置く・物理 px）。
-pub(super) const KERO_GAP_Y: i32 = 32;
-/// シナリオ全体の watchdog（talk 起点相対秒・超過は FAIL）。
-pub(super) const WATCHDOG_SECS: f64 = 30.0;
+// ---------------------------------------------------------------------------
+// fixture パス解決（文字の層の例とタイプライターの例が `#[path]` で共に引く）
+// ---------------------------------------------------------------------------
 
 /// emo2 検体。段 ③ で `Drop` が複製を消すため、一時値にせずプロセス寿命で保持する。
 static EMO2: LazyLock<SampleRoot> =
@@ -25,16 +29,19 @@ pub(super) fn shared_balloon_dir() -> PathBuf {
         .to_path_buf()
 }
 
-/// example ローカル fixture 変種（縦書き観測用・task 9.1 成果）。
+/// example ローカル fixture 変種（縦書き観測用）。
 fn vertical_variant_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/fixtures/emo2-vertical")
 }
 
-/// balloon descript ファイルを読み、charset 宣言に従いデコードする
-/// （parser-foundation の decode 経路——tests/vertical_fixture_test.rs と同じ読み込み規約）。
+/// balloon descript ファイルを本番と同じ規約で読む（既定 Ansi・ファイル内の `charset` 宣言優先）。
+///
+/// 本番 `areka_emo_present::balloon::load_scope_balloon_model` と `tests/support/fixture.rs` の
+/// `read_balloon_file` と同じ `decode(&bytes, DefaultEncoding::Ansi)`。1 文字でも違う規約で読むと
+/// `charset` の行の無い層で例だけが本番と違う model を観測する。
 fn read_decoded(path: &std::path::Path) -> Option<String> {
     match std::fs::read(path) {
-        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Utf8)),
+        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Ansi)),
         Err(e) => {
             error!(path = %path.display(), error = %e, "balloon descript の読取に失敗");
             None

@@ -220,6 +220,66 @@ fn invalidate_invalidates_all_and_removes_command_lists() {
     });
 }
 
+/// 装置の失いで木の資源が倒れる: 節の描く中身が外れ（節のまま）、根の列が空になり、
+/// 任意の図形の切り抜きが「切り抜きなし」へ戻る（要件 3.4）。
+#[test]
+fn invalidate_drops_draw_tree_resources() {
+    use wintf::ecs::{ClipShape, DrawCommand, DrawTree, Visual, VisualDrawContent, WorldVisual};
+
+    let graphics = GraphicsCore::new().expect("GraphicsCore creation");
+    let geometry = unsafe {
+        graphics
+            .d2d_factory()
+            .expect("factory")
+            .CreateRectangleGeometry(&D2D_RECT_F {
+                left: 0.0,
+                top: 0.0,
+                right: 4.0,
+                bottom: 4.0,
+            })
+    }
+    .expect("geometry");
+    let dc = graphics.device_context().expect("device context");
+    let command_list = unsafe { dc.CreateCommandList() }.expect("command list");
+    unsafe { command_list.Close() }.expect("close");
+
+    let mut tree = DrawTree::default();
+    tree.commands.push(DrawCommand::PopClipRect);
+    let mut world = World::new();
+    world.insert_resource(graphics);
+    let root = world
+        .spawn((
+            Visual {
+                clip: Some(ClipShape::Geometry(geometry.into())),
+                ..Default::default()
+            },
+            tree,
+        ))
+        .id();
+    let node = world
+        .spawn((
+            Visual::default(),
+            VisualDrawContent::new_ex(
+                wintf::numerics::Aabb(D2D_RECT_F::default()),
+                command_list,
+                D2D1_INTERPOLATION_MODE_LINEAR,
+                D2D1_COMPOSITE_MODE_SOURCE_OVER,
+            ),
+        ))
+        .id();
+
+    world.resource_mut::<GraphicsCore>().invalidate();
+    run_invalidate(&mut world);
+
+    assert!(world.get::<VisualDrawContent>(node).is_none());
+    assert!(
+        world.get::<WorldVisual>(node).is_some(),
+        "中身を外しても節のまま"
+    );
+    assert!(world.get::<DrawTree>(root).unwrap().commands.is_empty());
+    assert_eq!(world.get::<Visual>(root).unwrap().clip, None);
+}
+
 /// GraphicsCore リソース不在時は早期リターン（Option<Res> = None 経路）
 #[test]
 fn invalidate_noop_without_graphics_resource() {

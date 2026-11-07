@@ -27,12 +27,12 @@ pub(crate) fn acquire_emo2() -> SampleRoot {
 }
 
 /// emo2 検体のゴーストフォルダ（読むだけのテスト向けの共有複製）。
-pub(super) fn emo2_root() -> PathBuf {
+pub(crate) fn emo2_root() -> PathBuf {
     EMO2.folder().to_path_buf()
 }
 
 /// emo2 検体が同時にインストールするバルーンのフォルダ（自分でパスを継ぎ足さない）。
-pub(super) fn emo2_balloon_root() -> PathBuf {
+pub(crate) fn emo2_balloon_root() -> PathBuf {
     EMO2.balloon("emo2-kakukaku")
         .expect("emo2 の同梱バルーン")
         .to_path_buf()
