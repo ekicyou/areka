@@ -56,7 +56,7 @@ pub(crate) mod talk_gap;
 mod talk_origin;
 /// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
 pub(crate) mod translate;
-/// 既存テスト用の「翻訳を台詞そのままで通す」補助（テスト専用）。
+/// 既存テスト用の「翻訳を台詞そのままで通す」補助と、SSTP・切れ目・翻訳の経路のテストの下ごしらえ（テスト専用）。
 #[cfg(test)]
 pub(crate) mod translate_test_support;
 /// 運行表の型の塊（同じ名前で見せる）。

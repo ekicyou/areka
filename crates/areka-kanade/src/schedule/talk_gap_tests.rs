@@ -10,14 +10,13 @@
 //! 予約があっても終了系列へ進めない）・自ら `\-` に達したときの終了を固定する。
 
 use super::*;
-use crate::change::{
-    ChangeOrigin, ChangeRequest, ChangeTarget, GapLeft, RaiseOutcome, ShioriMethod,
-};
+use crate::change::{GapLeft, RaiseOutcome, ShioriMethod};
 use crate::msg::{
     ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
 };
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::steady::test_support::base_state;
+use crate::schedule::translate_test_support::change_request;
 use crate::schedule::{ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, TermCause, step};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
@@ -71,18 +70,6 @@ fn talk_done(s: State, reason: TalkEndReason, quit_reserved: bool) -> State {
 fn assert_waiting(s: &State, label: &str) {
     let watch = s.talk_gap.as_ref().expect("見張りが在る");
     assert!(watch.outcome.is_none(), "{label}: まだ決まっていない");
-}
-
-fn change_request() -> ChangeRequest {
-    ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: r"C:\areka\ghost\r_post".to_string(),
-        },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
-    }
 }
 
 #[test]

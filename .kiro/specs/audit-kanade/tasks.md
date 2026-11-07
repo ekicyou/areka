@@ -158,7 +158,7 @@
   - _Requirements: 2.5, 3.1, 4.1, 9.1, 9.6_
 
 - [ ] 10. sstp・翻訳・切れ目のテストを寄せる
-- [ ] 10.1 下ごしらえを 1 つの道具に寄せ、重なるテストを消す（#34・#35）
+- [x] 10.1 下ごしらえを 1 つの道具に寄せ、重なるテストを消す（#34・#35）
   - 起動から挨拶の再生までなどの下ごしらえを翻訳のテストの道具に 1 つずつ置き、4 つのテストのファイルから呼ぶ。指紋は NOTIFY 入りに揃える
   - 3 組の重なりの片方を消す
   - 4 つのテストのファイルが全部緑
@@ -314,3 +314,4 @@
 - 5.2: design #5 の行（定常の Value の腕からも `has_script` を呼ぶ）からずらした。定常はもとからどの Value も再生するので、空白だけの扱いは 3 か所とも同じになった。定常で判定を挟むと変わるのは空の台本 `""` だけで、それは「変わること」⑸ に無い（audit 系は推奨案で決めてよいとのお許し・11-04）。残る食い違い: RaiseEvent の道では `""` が NoReply、定常では空のトークで置き換える（前からある・COMPAT_ARCHITECTURE:308 の裁定どおり）。
 - 5.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:308` が空白だけを「無かった」と読み、旧名のテスト `empty_blank_and_no_content_are_no_reply` を名指す。`crates/areka/src/mcp/raise_event_tests.rs:389` の注も同じ。振る舞いの変化: `OnInstallCompleteEx` の答えが空白だけなら、続く `OnInstallComplete` を送らなくなる。
 - 6.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:354` が消した関数名 `replace_absent_markers` を名指す（今は `clean_references`・`reference_line_break_removed` の warn も足された）。
+- 10.1: #35 の 2 組目は design と逆の側（sstp_tests の `sstp_notify_derives_status_from_the_snapshot`）を消した。sstp_notify 側が `step` から `state.snapshot()` へのつながりを縛るただ 1 本だったため（要件 3.3）。

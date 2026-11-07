@@ -4,24 +4,20 @@
 //! 外からの台本の腕（`accepts`・`on_send`）を固定する。
 
 use super::{BOOT_GREETING_ORIGIN, SEND_ORIGIN, accepts};
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
-use crate::msg::{
-    ChoiceInput, CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome,
-};
+use crate::msg::{ChoiceInput, CloseReason, EventId, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::schedule::events::{REF1_SSTP_SEND_OWNED, on_translate_sstp, sstp_notify};
-use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
+use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate::ScriptSource;
+use crate::schedule::translate_test_support::{
+    active, boot_until_greeting_playing, change_request, config, fingerprint, steady, strings,
+    warn_or_above,
+};
 use crate::schedule::{
-    Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id,
-    phase_label, step,
+    Action, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id, step,
 };
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
-
-fn strings(refs: &[&str]) -> Vec<String> {
-    refs.iter().map(|r| r.to_string()).collect()
-}
 
 /// 任意の名前の GET は `EventId::Sstp` で、渡された Reference をそのまま載せる（要件 2.1・2.2）。
 #[test]
@@ -53,7 +49,12 @@ fn sstp_notify_is_a_get_with_the_given_references_verbatim() {
 /// 許可の表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.2）。
 #[test]
 fn sstp_notify_does_not_pad_references_for_listed_names() {
-    for name in ["OnBalloonTimeout", "OnAnchorSelect", "OnBoot"] {
+    for name in [
+        "OnBalloonTimeout",
+        "OnAnchorSelect",
+        "OnChoiceSelect",
+        "OnBoot",
+    ] {
         match sstp_notify(name.to_string(), Vec::new(), &ExecutionSnapshot::INACTIVE) {
             ShioriCall::Get { id, references, .. } => {
                 assert_eq!(id, EventId::Sstp(name.to_string()));
@@ -61,19 +62,6 @@ fn sstp_notify_does_not_pad_references_for_listed_names() {
             }
             ShioriCall::Notify { .. } => panic!("SstpNotify は GET で送る"),
         }
-    }
-}
-
-/// 実行状態は渡した snapshot から導く（話し中なら `talking`）。
-#[test]
-fn sstp_notify_derives_status_from_the_snapshot() {
-    let snap = ExecutionSnapshot {
-        talk_active: true,
-        ..ExecutionSnapshot::INACTIVE
-    };
-    match sstp_notify("OnX".to_string(), Vec::new(), &snap) {
-        ShioriCall::Get { status, .. } => assert_eq!(status, ExecutionStatus::derive(&snap)),
-        ShioriCall::Notify { .. } => panic!("SstpNotify は GET で送る"),
     }
 }
 
@@ -109,67 +97,11 @@ fn on_translate_sstp_has_reference0_and_reference1_only() {
 // 受け付けの判定と外からの台本の腕（`accepts`・`on_send`）
 // ============================================================
 
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
 fn send(script: &str, strict: Option<bool>) -> Input {
     Input::SstpSend {
         script: script.to_string(),
         strict,
     }
-}
-
-fn active(talk_id: u64, origin: &'static str) -> Option<ActiveTalk> {
-    Some(ActiveTalk {
-        talk_id: TalkId(talk_id),
-        origin,
-        script: "\\h流れている台本\\e".to_string(),
-    })
-}
-
-fn steady(talk: Option<ActiveTalk>) -> State {
-    State {
-        phase: Phase::Steady { talk },
-        last_now: Some(MonotonicMs(500)),
-        next_talk_id: 10,
-        ..State::initial()
-    }
-}
-
-fn change_request() -> ChangeRequest {
-    ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: r"C:\areka\ghost\r_post".to_string(),
-        },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
-    }
-}
-
-/// 状態の見比べの指紋（`State` は `PartialEq` を持たないので、腕が触り得る欄を綴りにする）。
-fn fingerprint(s: &State) -> String {
-    format!(
-        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} reply={}",
-        phase_label(&s.phase),
-        current_talk_id(&s.phase).map(|t| t.0),
-        s.next_talk_id,
-        s.choice.is_some(),
-        s.prev_talk.map(|t| t.0),
-        s.pending_close.is_some(),
-        s.pending_change.is_some(),
-        s.translate.is_some(),
-        s.reply_source.is_some(),
-    )
-}
-
-fn warn_or_above(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.level == Level::WARN || e.level == Level::ERROR)
-        .collect()
 }
 
 /// 受け付けない状態: 空の一括・状態は変わらない・warn 以上 0 件・`debug!` 1 件（要件 3.6・3.9）。
@@ -515,41 +447,6 @@ fn send_is_not_accepted_outside_the_steady_state() {
     let mut pending_change = steady(active(9, "OnMouseDoubleClick"));
     pending_change.pending_change = Some(change_request());
     assert_rejected("保留の切替", pending_change);
-}
-
-/// 起動の手順を実の `step` でたどり、起動の挨拶が流れている `Steady` まで進める。
-fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            cfg,
-        )
-        .0
-    };
-    let (s, _) = step(State::initial(), Input::Boot, cfg);
-    let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
-    let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
-    let s = reply(
-        s,
-        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
-    ); // → BootVersion{挨拶}
-    let (s, _) = step(
-        s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
-            "\\h挨拶\\e",
-        ))),
-        cfg,
-    );
-    let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
-    assert!(
-        matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == BOOT_GREETING_ORIGIN),
-        "挨拶が流れている Steady のはず"
-    );
-    s
 }
 
 /// 起動の挨拶の最中は断り、挨拶の後は受け付ける。

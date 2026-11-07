@@ -19,8 +19,9 @@ use super::log_capture::{assert_not_logged, capture, logged_once};
 use super::steady::test_support::base_state;
 use super::talk_gap::Marked;
 use super::translate::ScriptSource;
+use super::translate_test_support::change_request;
 use super::*;
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget, GapRaise, ShioriMethod};
+use crate::change::{GapRaise, ShioriMethod};
 use crate::msg::{ChoiceInput, MouseButton, MouseEventKind, ShioriFailure, ShioriFaultKind};
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
@@ -343,22 +344,10 @@ fn close_farewell() -> (Drive, &'static str) {
     (d, "OnClose")
 }
 
-fn change_req() -> ChangeRequest {
-    ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: r"C:\areka\ghost\r_post".to_string(),
-        },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
-    }
-}
-
 /// 経路 3: 切替の要求で `OnGhostChanging` を送った。
 fn ghost_changing() -> (Drive, &'static str) {
     let mut d = Drive::new(steady_none(), cfg());
-    d.feed(Input::ChangeGhost(change_req()));
+    d.feed(Input::ChangeGhost(change_request()));
     (d, "OnGhostChanging")
 }
 

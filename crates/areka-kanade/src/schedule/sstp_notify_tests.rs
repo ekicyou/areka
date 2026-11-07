@@ -2,33 +2,27 @@
 //!
 //! `on_notify`（任意の名前の GET を 1 つ送り、応答待ちの控えを置く）と `on_notify_reply`（控えを
 //! 必ず取り出し、空でない台本なら外からの台本と同じ掃除と採番で新しいトークを始める）を固定する。
-//! 翻訳の Reference（外からの台本・返った台本）と strict の印もここで縛る。
+//! 返った台本の翻訳の Reference と strict の印もここで縛る。
 
 use super::{NOTIFY_ORIGIN, NotifyStage, accepts};
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
 use crate::msg::{
-    ChoiceInput, CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure,
-    ShioriOutcome,
+    ChoiceInput, CloseReason, EventId, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
 };
-use crate::schedule::events::{SourceEvent, on_translate, on_translate_sstp};
-use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
+use crate::schedule::events::{SourceEvent, on_translate};
+use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
+use crate::schedule::translate_test_support::{
+    active, boot_until_greeting_playing, change_request, config, fingerprint, steady, strings,
+    warn_or_above,
+};
 use crate::schedule::{
-    Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id,
-    phase_label, step,
+    Action, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id, phase_label,
+    step,
 };
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
-
-fn strings(refs: &[&str]) -> Vec<String> {
-    refs.iter().map(|r| r.to_string()).collect()
-}
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn notify(event: &str, refs: &[&str], strict: Option<bool>) -> Input {
     Input::SstpNotify {
@@ -43,47 +37,6 @@ fn reply(outcome: ShioriOutcome) -> Input {
         outcome,
         origin: NOTIFY_ORIGIN,
     }
-}
-
-fn active(talk_id: u64, origin: &'static str) -> Option<ActiveTalk> {
-    Some(ActiveTalk {
-        talk_id: TalkId(talk_id),
-        origin,
-        script: "\\h流れている台本\\e".to_string(),
-    })
-}
-
-fn steady(talk: Option<ActiveTalk>) -> State {
-    State {
-        phase: Phase::Steady { talk },
-        last_now: Some(MonotonicMs(500)),
-        next_talk_id: 10,
-        ..State::initial()
-    }
-}
-
-/// 状態の見比べの指紋（`State` は `PartialEq` を持たないので、腕が触り得る欄を綴りにする）。
-fn fingerprint(s: &State) -> String {
-    format!(
-        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} notify={:?} reply={}",
-        phase_label(&s.phase),
-        current_talk_id(&s.phase).map(|t| t.0),
-        s.next_talk_id,
-        s.choice.is_some(),
-        s.prev_talk.map(|t| t.0),
-        s.pending_close.is_some(),
-        s.pending_change.is_some(),
-        s.translate.is_some(),
-        s.sstp_notify,
-        s.reply_source.is_some(),
-    )
-}
-
-fn warn_or_above(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.level == Level::WARN || e.level == Level::ERROR)
-        .collect()
 }
 
 /// 一括が任意の名前の GET 1 つで、名前と Reference が渡されたままであることを確かめる。
@@ -270,21 +223,6 @@ fn whitespace_only_answer_starts_a_talk() {
     assert_eq!(translate_request(&actions).script, " \t\r\n　");
 }
 
-/// ⑺ 許可の表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.2）。
-#[test]
-fn listed_names_get_no_padded_references() {
-    for name in [
-        "OnBalloonTimeout",
-        "OnAnchorSelect",
-        "OnChoiceSelect",
-        "OnBoot",
-    ] {
-        let (state, actions) = step(steady(None), notify(name, &[], None), &config());
-        assert_single_get(&actions, name, &[]);
-        assert_eq!(state.sstp_notify, Some(NotifyStage { strict: None }));
-    }
-}
-
 /// ⑶ 選択肢の最中に台本が返ると帳簿が消え、その後の時間切れ・選択のイベントは 0 回（要件 3.3）。
 #[test]
 fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow() {
@@ -433,53 +371,6 @@ fn notify_is_not_accepted_outside_the_steady_state() {
     }
 }
 
-fn change_request() -> ChangeRequest {
-    ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: "C:/areka/ghost/r_post".to_string(),
-        },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
-    }
-}
-
-/// 起動の手順を実の `step` でたどり、起動の挨拶が流れている `Steady` まで進める。
-fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            cfg,
-        )
-        .0
-    };
-    let (s, _) = step(State::initial(), Input::Boot, cfg);
-    let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
-    let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
-    let s = reply(
-        s,
-        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
-    ); // → BootVersion{挨拶}
-    let (s, _) = step(
-        s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
-            "\\h挨拶\\e",
-        ))),
-        cfg,
-    );
-    let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
-    assert!(
-        matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == super::BOOT_GREETING_ORIGIN),
-        "挨拶が流れている Steady のはず"
-    );
-    s
-}
-
 /// 起動の挨拶の `TalkDone` の後は外から頼まれたイベントを受け付け、GET を 1 つ送る（要件 3.6）。
 #[test]
 fn notify_is_accepted_after_the_boot_greeting() {
@@ -553,13 +444,14 @@ fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
     );
 }
 
-/// ⑼ 外からの台本と返った台本の翻訳の Reference（要件 4.4・4.5）。殻が出どころで選ぶ組み立てを
-/// 依頼の出どころに当てて、送る Reference の列を確かめる。
+/// ⑼ 返った台本の翻訳の Reference（要件 4.5）。殻の組み立てを依頼の出どころに当てて、送る
+/// Reference の列を確かめる（外からの台本の Reference は `sstp_tests.rs` の
+/// `on_translate_sstp_has_reference0_and_reference1_only` で縛る）。
 #[test]
-fn translate_references_for_send_and_returned_script() {
+fn translate_references_for_returned_script() {
     let build = |req: &TranslateRequest| match &req.source {
         ScriptSource::Event(event) => on_translate(&req.script, event, req.status.clone()),
-        ScriptSource::SstpSend => on_translate_sstp(&req.script, req.status.clone()),
+        ScriptSource::SstpSend => panic!("返った台本は元のイベントの出どころで預ける"),
     };
     let refs_of = |call: ShioriCall| match call {
         ShioriCall::Get { id, references, .. } => {
@@ -568,17 +460,6 @@ fn translate_references_for_send_and_returned_script() {
         }
         ShioriCall::Notify { .. } => panic!("OnTranslate は GET"),
     };
-
-    let send = Input::SstpSend {
-        script: "\\h外\\e".to_string(),
-        strict: None,
-    };
-    let (_, actions) = step(steady(None), send, &config());
-    assert_eq!(
-        refs_of(build(translate_request(&actions))),
-        strings(&["\\h外\\e", "sstp-send,owned"]),
-        "外からの台本: Ref1＝sstp-send,owned・Ref2 以降なし"
-    );
 
     let (_, actions) = notify_then_reply(
         steady(None),
