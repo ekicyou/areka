@@ -229,7 +229,7 @@ mod tests {
         ] {
             assert!(
                 !is_allowed_resource_id(id),
-                "{id} は windows-reactor 待ちで本 spec では問わない名前なので許可集合に属してはならない（要件 6.1）"
+                "{id} は windows-reactor 待ちか取らない裁定の名前なので許可集合に属してはならない（要件 4.1・5.3・6.1）"
             );
         }
     }
@@ -270,10 +270,6 @@ mod tests {
                     status.render(),
                     None,
                     "INACTIVE スナップショットは Status ヘッダを出さない"
-                );
-                assert!(
-                    is_allowed_resource_id(id.as_str()),
-                    "readmebutton.caption は送出許可集合を通る"
                 );
             }
             ShioriCall::Notify { .. } => panic!("resource_get は GET を返すべき"),

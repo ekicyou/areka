@@ -23,8 +23,7 @@ use crate::change::{
     CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, KanadeNotice,
 };
 use crate::msg::{
-    KanadeStopCause, KanadeStopped, MonotonicMs, ShioriFault, ShioriFaultKind, ShioriMsg,
-    ShioriOutcome,
+    KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind, ShioriMsg, ShioriOutcome,
 };
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
@@ -44,7 +43,6 @@ fn stopped(cause: KanadeStopCause) -> KanadeNotice {
 fn state_in(phase: Phase) -> State {
     let mut state = State::initial();
     state.phase = phase;
-    state.last_now = Some(MonotonicMs(1_000));
     state
 }
 

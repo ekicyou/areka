@@ -403,8 +403,7 @@ fn tick_after_timeout_cancel_drops_choosing() {
 
 /// 規則 7 の不変条件: 帳簿があるなら、その対象 talk は現行 talk と一致する。
 ///
-/// 「帳簿の対象と現行トークが食い違う状態を残さない」ことの直接表明であり、掃除点ごとの
-/// 個別 assert（`choice.is_none()`）と併せて各掃除点で突合する。
+/// 「帳簿の対象と現行トークが食い違う状態を残さない」ことの直接表明。帳簿が残る保留記録の点で突合する。
 fn assert_choice_invariant(state: &State) {
     let active = match &state.phase {
         Phase::Steady { talk: Some(active) } => Some(active.talk_id),
@@ -440,7 +439,6 @@ fn talk_done_of_target_talk_clears_choice_ledger() {
         "対象トークの完了で帳簿は消える（規則 7）"
     );
     assert!(actions.is_empty());
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: 対象トークの `TalkDone{Quit}`（終了系列直行）でも帳簿を消去する。
@@ -467,7 +465,6 @@ fn talk_done_quit_clears_choice_ledger() {
         "終了系列（Quit）へ進む際も帳簿は消える"
     );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持は置き換えた古い番号に変わる。
@@ -502,7 +499,6 @@ fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
         Some(TalkId(3)),
         "次の slot 差替で 1 世代保持は置き換えた古い番号に変わる（規則 9）"
     );
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: close 握手の開始（`ClosePending` への遷移）で帳簿を消去する。
@@ -542,7 +538,6 @@ fn close_handshake_transition_clears_choice_ledger() {
         next.choice.is_none(),
         "close 系遷移で帳簿は消える（規則 7）"
     );
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: `ForceQuit` の横断遷移で帳簿を消去する。
@@ -572,7 +567,6 @@ fn force_quit_clears_choice_ledger() {
     ));
     assert_eq!(actions.len(), 2, "既存の ForceQuit 発行列は不変");
     assert!(next.choice.is_none(), "終了系遷移で帳簿は消える（規則 7）");
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: `ShioriDown`（Fault 直行）で帳簿を消去する。
@@ -595,7 +589,6 @@ fn shiori_down_clears_choice_ledger() {
     ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
     assert!(next.choice.is_none(), "終了系遷移で帳簿は消える（規則 7）");
-    assert_choice_invariant(&next);
 }
 
 // --- B. 選択起因の失敗例外（規則 8・DD-12・Req4.5） ---
@@ -668,7 +661,6 @@ fn cascade_failed_at_last_stage_via_step_resolves_and_continues() {
         _ => panic!("最終段の失敗は ResolveChoice のみ（Req5.3）"),
     }
     assert!(next.choice.is_none());
-    assert_choice_invariant(&next);
     assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
 }
 

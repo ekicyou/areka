@@ -3,13 +3,13 @@
 //! 翻訳の行動を台詞そのままで入れ直して続きを返す [`pass_translate`] のほか、状態・一括・設定の
 //! 下ごしらえと見比べの道具を置く。
 
-use super::log_capture::CapturedEvent;
+use super::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use super::sstp::BOOT_GREETING_ORIGIN;
 use super::{
     Action, ActiveTalk, Input, Phase, State, TermCause, current_talk_id, phase_label, step,
 };
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
-use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{ChoiceInput, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::talk::TalkId;
 use tracing::Level;
 
@@ -216,4 +216,50 @@ pub(crate) fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
         "挨拶が流れている Steady のはず"
     );
     s
+}
+
+/// 選択肢の帳簿が消えた後の状態へ時間切れの刻みと選択を入れ、選択のイベントが 1 度も送られないことを
+/// 確かめる（要件 3.3）。
+///
+/// 帳簿が残っていても下流の番号の照合が送出を止めるので、送出の 0 回に加えて「残った帳簿の防御が
+/// 働かなかった」こと（期限切れの帳簿の trace が無い・選択の棄却の理由が帳簿なし）を記録で縛る。
+/// 帳簿の掃除を外すとこの 2 つが赤になる。
+pub(crate) fn assert_no_choice_events_follow(state: State, cfg: &KanadeConfig) {
+    let mut out = None;
+    let events = capture(|| {
+        out = Some(step(
+            state,
+            Input::Tick {
+                now: MonotonicMs(60_000),
+            },
+            cfg,
+        ))
+    });
+    let (state, tick) = out.unwrap();
+    assert_eq!(choice_event_count(&tick), 0, "時間切れのイベントを送らない");
+    assert_not_logged(&events, "choice_timeout_ledger_stale");
+    let mut out = None;
+    let events = capture(|| {
+        out = Some(step(
+            state,
+            Input::Choice(ChoiceInput {
+                id: CHOICE_ID.to_string(),
+                label: "選択その1".to_string(),
+                scope: 0,
+                references: Vec::new(),
+            }),
+            cfg,
+        ))
+    });
+    let (_, choice) = out.unwrap();
+    assert!(
+        !choice.iter().any(|a| matches!(a, Action::ShioriRequest(_))),
+        "選択のイベントを送らない"
+    );
+    let rejected = logged_once(&events, Level::WARN, "choice_rejected_no_wait");
+    assert_eq!(
+        rejected.fields.get("reason").map(String::as_str),
+        Some("no_choice_wait"),
+        "選択待ちが無いので棄却される（残った帳簿との番号の食い違いではない）"
+    );
 }

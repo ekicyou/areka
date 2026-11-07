@@ -252,8 +252,8 @@ pub struct ExecutionSnapshot {
     //   フィールドを 1 本追加し、導出表の該当行を差し替える（持ち主＝要件 6.3 の宛先）。
     //
     // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態は、
-    //   欄に加えて**作り手**（`schedule/mod.rs` の `State::snapshot`／`State::snapshot_without_talk`
-    //   ——本番のスナップショットはこの 2 つからしか作らない）へ材料を届ける運搬も要る。
+    //   欄に加えて**作り手**（`schedule/types.rs` の `State::snapshot`／`State::snapshot_with_choice`／
+    //   `State::snapshot_without_talk`——本番のスナップショットはこの 3 つからしか作らない）へ材料を届ける運搬も要る。
     //   `choice_active`（源＝選択帳簿）と、写し（`ExternalStates`）から作る `no_user_break`・
     //   `online`・`balloons` がその実例である。不変を保証するのは **wire 送出契約**
     //   （カンマ連結書式・ヘッダ位置・空集合→行省略・Reference 連番）であって内部シグネチャではない。
@@ -261,7 +261,8 @@ pub struct ExecutionSnapshot {
 
 impl ExecutionSnapshot {
     /// 全実行状態が非アクティブなスナップショット（テストと構造体リテラルの既定値の継ぎ足し用）。
-    /// 本番の送出は `State::snapshot`／`State::snapshot_without_talk` から作り、これを直接渡さない。
+    /// 本番の送出は `State::snapshot`／`State::snapshot_with_choice`／`State::snapshot_without_talk` から作り、
+    /// これを直接渡さない。
     pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot {
         talk_active: false,
         choice_active: false,

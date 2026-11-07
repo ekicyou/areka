@@ -124,7 +124,7 @@ pub enum ShioriMethod {
 pub enum RaiseOutcome {
     /// 許可表に無い名前（送っていない）。
     NotAllowed,
-    /// 定常でない（送っていない・積んでもいない）。
+    /// 定常でないか、終了・切替の保留中（送っていない・積んでもいない）。
     NotSteady,
     /// 空でない台本が返った（空白だけも台本）。
     Script,
@@ -134,7 +134,7 @@ pub enum RaiseOutcome {
     Failed,
 }
 
-/// 台詞の切れ目の口に添える印のイベント（本仕様では `OnShellChanging` だけ）。
+/// 台詞の切れ目の口に添える印のイベント（シェルの切替の `OnShellChanging` と shiori の読み直しの `OnDestroy`）。
 ///
 /// 口（`KanadeMsg::AwaitTalkGap`）は印の有無で振る舞いを分ける。印が無ければ切れ目を待つだけで、
 /// 印があれば先にこのイベントを送り、その応答の台詞を追う（areka-P0-shell-balloon-switch 要件 8.11）。

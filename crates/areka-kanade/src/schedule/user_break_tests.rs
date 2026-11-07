@@ -73,10 +73,9 @@ fn assert_no_choice_timeout(actions: &[Action], at: &str) {
     );
 }
 
-/// 受理の指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
+/// 中断の合図に返った指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
 ///
-/// 受理そのものは何も送らない。中断を理由に送る `OnBalloonBreak` は、止めたトークの完了の後に
-/// 定常へ戻ったときだけ出る（場面ごとの期待は完了の檻と `balloon_events_done_tests.rs`）。
+/// 押されたバルーンが今のトークでない合図は何も止めず、表 C も再生中なので何も送らない。
 fn assert_no_shiori_request(actions: &[Action], at: &str) {
     assert_eq!(
         actions
@@ -351,6 +350,12 @@ fn a_break_for_another_talk_stops_nothing_and_goes_to_table_c() {
             ),
             (Some("2"), Some("3")),
             "{label}: 両方の番号を載せる。\n捕捉={ev:#?}"
+        );
+        let refused = logged_once(&ev, Level::INFO, "balloon_event_not_sent");
+        assert_eq!(
+            refused.fields.get("talk_id").map(String::as_str),
+            Some("2"),
+            "{label}: 送らなかった記録の番号は押されたトーク（今のトークではない）。\n捕捉={ev:#?}"
         );
     }
 }

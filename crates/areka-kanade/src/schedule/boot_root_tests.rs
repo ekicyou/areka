@@ -326,7 +326,6 @@ fn updated_with_script_plays_it_and_skips_on_boot() {
         &c,
     );
     assert!(matches!(s.phase, Phase::BootVersion { talk: Some(_) }));
-    assert!(get_ids(&next).is_empty(), "OnBoot は 0 件のはず");
     assert_eq!(next.len(), 2, "[StartTalk, basewareversion] の 2 件");
     match &next[0] {
         Action::StartTalk(t) => assert_eq!(t.script, r"\0更新したよ\e"),

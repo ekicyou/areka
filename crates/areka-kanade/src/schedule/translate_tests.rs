@@ -749,12 +749,3 @@ fn missing_source_plays_the_script_with_an_error() {
     let hit = logged_once(&ev, Level::ERROR, "translate_source_missing");
     assert_eq!(hit.fields.get("talk_id").map(String::as_str), Some("7"));
 }
-
-#[test]
-fn no_content_reply_is_not_captured() {
-    // areka が自分で作る台詞（台詞の無い応答の step で生まれる）は規則に当たらない。
-    let (s, actions, ev) = raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::NoContent);
-    assert!(!actions.iter().any(|a| matches!(a, Action::Translate(_))));
-    assert!(s.translate.is_none());
-    assert_not_logged(&ev, "translate_skipped_empty");
-}

@@ -69,7 +69,7 @@ pub(crate) fn expect_get_call(action: &Action) -> (String, Vec<String>) {
     }
 }
 
-/// 帳簿の段フェーズを取り出す（帳簿不在は panic）。
+/// 選択待ちの帳簿を取り出す（帳簿不在は panic）。
 pub(super) fn expect_ledger(state: &State) -> &ChoiceState {
     state.choice.as_ref().expect("選択待ち帳簿が存在するはず")
 }

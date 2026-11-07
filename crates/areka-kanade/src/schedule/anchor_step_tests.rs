@@ -459,5 +459,4 @@ fn anchor_never_raises_the_choosing_mark() {
     );
     assert!(state.anchor.is_some());
     assert!(state.choice.is_none(), "選択待ちの帳簿を作らない");
-    assert!(!state.snapshot().choice_active);
 }

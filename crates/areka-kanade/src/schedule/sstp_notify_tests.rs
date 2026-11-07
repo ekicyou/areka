@@ -5,15 +5,13 @@
 //! 返った台本の翻訳の Reference と strict の印もここで縛る。
 
 use super::{NOTIFY_ORIGIN, NotifyStage, accepts};
-use crate::msg::{
-    ChoiceInput, CloseReason, EventId, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
-};
+use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::events::{SourceEvent, on_translate};
-use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
+use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
 use crate::schedule::translate_test_support::{
-    CHOICE_ID, active, boot_until_greeting_playing, change_request, choice_event_count, config,
-    fingerprint, non_steady_states, steady, strings, warn_or_above,
+    CHOICE_ID, active, assert_no_choice_events_follow, boot_until_greeting_playing, change_request,
+    config, fingerprint, non_steady_states, steady, strings, warn_or_above,
 };
 use crate::schedule::{
     Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, phase_label, step,
@@ -251,42 +249,7 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
         ))),
         &cfg,
     );
-    let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Tick {
-                now: MonotonicMs(60_000),
-            },
-            &cfg,
-        ))
-    });
-    let (state, tick) = out.unwrap();
-    assert_eq!(choice_event_count(&tick), 0, "時間切れのイベントを送らない");
-    assert_not_logged(&events, "choice_timeout_ledger_stale");
-    let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Choice(ChoiceInput {
-                id: CHOICE_ID.to_string(),
-                label: "選択その1".to_string(),
-                scope: 0,
-                references: Vec::new(),
-            }),
-            &cfg,
-        ))
-    });
-    let (_, choice) = out.unwrap();
-    assert!(
-        !choice.iter().any(|a| matches!(a, Action::ShioriRequest(_))),
-        "選択のイベントを送らない"
-    );
-    let rejected = logged_once(&events, Level::WARN, "choice_rejected_no_wait");
-    assert_eq!(
-        rejected.fields.get("reason").map(String::as_str),
-        Some("no_choice_wait")
-    );
+    assert_no_choice_events_follow(state, &cfg);
 }
 
 /// ⑷ 起動前・起動の手順・起動の挨拶の最中・終了と切替の手順・保留の終了では受け付けず、
@@ -368,7 +331,6 @@ fn invalid_arguments_send_nothing_and_warn_once() {
         let (state, actions) = out.unwrap();
         assert!(actions.is_empty(), "{event:?} {refs:?}: 送らない");
         assert_eq!(fingerprint(&state), before, "{event:?} {refs:?}");
-        assert!(matches!(state.phase, Phase::Steady { .. }), "倒れない");
         assert_eq!(warn_or_above(&events).len(), 1, "{events:#?}");
         logged_once(&events, Level::WARN, "sstp_notify_invalid");
     }

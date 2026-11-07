@@ -125,7 +125,7 @@ fn raise(rig: &Rig, id: &str, method: ShioriMethod) -> RaiseOutcome {
 }
 
 /// 今までに偽の shiori が受けた呼び出し（待たない）。
-fn drain(calls: &Receiver<String>) -> Vec<String> {
+pub(super) fn drain(calls: &Receiver<String>) -> Vec<String> {
     calls.try_iter().collect()
 }
 

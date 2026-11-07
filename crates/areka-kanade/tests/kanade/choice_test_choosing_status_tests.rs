@@ -30,7 +30,7 @@ fn talking_only_snapshot() -> ExecutionSnapshot {
 /// `ChoiceWaiting` を確立してから **Tick2** を注入し（選択待ち中の pump）、`Choice` を注入して
 /// 正典形カスケードを 204／204 で走らせ（＝解決のみ・帳簿消去）、続けて **Tick3** を注入する
 /// （解決後の pump）。終了は `CloseRequest`＋保留解放（`TalkDone{Ended}`→close 握手→別れ talk
-/// quit:true）で駆動する。注入 Tick はいずれも期限 [`CHOICE_DEADLINE_MS`] より手前ゆえ、
+/// quit:true）で駆動する。注入 Tick はいずれも期限 `CHOICE_DEADLINE_MS` より手前ゆえ、
 /// タイムアウト経路は踏まない。
 ///
 /// # 非空虚性・discriminative 性

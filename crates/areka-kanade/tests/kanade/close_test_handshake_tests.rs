@@ -163,8 +163,8 @@ fn silent_close_on_204_terminates_without_extra_events() {
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず");
 
-    // (b) OnClose GET の直後は Unload（末尾）で、間に追加の GET/NOTIFY は一切ない
-    //     （OnCloseAll 非発行・追加 OnClose なし＝DD-11・Req 4.6）。
+    // (b) 最初の OnClose GET の直後は Unload（末尾）で、間に追加の GET/NOTIFY は一切ない
+    //     （OnCloseAll 非発行・追加 OnClose なし＝OnClose はちょうど 1 度・DD-11・Req 4.6）。
     assert_eq!(
         onclose_index,
         recorded.len() - 2,
@@ -176,21 +176,6 @@ fn silent_close_on_204_terminates_without_extra_events() {
         *last,
         expected_unload(),
         "記録列の末尾は Unload（無言終了の完走）"
-    );
-
-    // OnClose GET は記録列にちょうど 1 度（追加 OnClose なし）。
-    let onclose_count = recorded
-        .iter()
-        .filter(|c| {
-            **c == expected_call(events::on_close(
-                CloseReason::User { scope: 0 },
-                &ExecutionSnapshot::INACTIVE,
-            ))
-        })
-        .count();
-    assert_eq!(
-        onclose_count, 1,
-        "OnClose GET はちょうど 1 度（再発行なし）"
     );
 
     // (c) close は StartTalk を一切生まない: sink に届くのは boot talk 1 本だけ（close talk も

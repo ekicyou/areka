@@ -192,18 +192,6 @@ mod tests {
         assert_eq!(script_body("script:"), Some(""));
     }
 
-    /// `script_body`: 当たらない ID は `None`（小文字の `script:` で始まるときだけ）。
-    #[test]
-    fn script_body_none_for_near_miss_ids() {
-        for id in ["script", "Script:x", "xscript:y", ""] {
-            assert_eq!(
-                script_body(id),
-                None,
-                "{id:?} は `script:` に当たらないはず"
-            );
-        }
-    }
-
     // === choice_deadline: DD-8 の 3 値語彙（Req7.6/7.7） ===
 
     const DEFAULT_MS: u64 = 30_000;

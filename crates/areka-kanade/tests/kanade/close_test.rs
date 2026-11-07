@@ -8,7 +8,8 @@
 //! 1. **別れの台詞は `\-` 無しで終わっても終了する**（Req 3.6・3.7）: OnClose が別れの Value を
 //!    返し、close talk の TalkDone が quit:false（＝`Ended`）でも、kanade は定常運転へ戻らず
 //!    終了系列を完走する。Tick を 1 本も送らない構成ゆえ期限超過とも取り違えようがなく、
-//!    OnClose の後に現れる記録が Unload 1 件だけであることで「定常へ戻る経路は 0 本」を示す。
+//!    OnClose の後に現れる記録が別れの台詞の OnTranslate と Unload の 2 件だけであることで
+//!    「定常へ戻る経路は 0 本」を示す。
 //! 2. **無言終了**（Req 4.6）: OnClose が 204 → 追加イベントなしで終了系列へ直行し、記録列の末尾は
 //!    `[.., OnClose GET, Unload]`（OnCloseAll 非発行・close talk 非起動）。
 //! 3. **再生完了待ちの時間超過**（Req 4.7）: 保留ハーネスで close talk の TalkDone を差し止め、

@@ -46,8 +46,8 @@ fn drive_mouse_steady_none(mouse: Vec<MouseInput>) -> Driven {
 ///
 /// # 非空虚性
 /// 到達 StartTalk は close talk のみ（1 本）であり、記録には events 導出の OnMouseMove GET がちょうど 1 件
-/// 現れる。もし 204 で talk が起きれば started が 2 本になり落ちる。Ref2/Ref5/Ref6/Status を明示確認
-/// することで layout の退行（例: Ref6 欠落・Status 誤付与）を捕捉する。
+/// 現れる。もし 204 で talk が起きれば started が 2 本になり落ちる。記録を期待値と完全一致で比べるので、
+/// layout の退行（例: Ref6 欠落・Status 誤付与）もそこで捕捉する。
 #[test]
 fn onmousemove_layout_matches_events_table() {
     let (x, y, scope) = (10_i64, 20_i64, 0_u32);

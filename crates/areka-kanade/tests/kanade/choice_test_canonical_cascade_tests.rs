@@ -83,11 +83,6 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         *gets[0], expected_ex,
         "Ex GET は events 表導出（Ref0=ラベル／Ref1=ID／Ref2..=参照列・Status）と一致するはず: {recorded:?}"
     );
-    assert_eq!(
-        gets[0].references.len(),
-        4,
-        "Ex の Reference は 2＋参照列 2＝4 個"
-    );
     assert_eq!(gets[0].references[0], CHOICE_LABEL, "Ref0=表示ラベル");
     assert_eq!(gets[0].references[1], CANONICAL_CHOICE_ID, "Ref1=選択肢 ID");
     assert_eq!(

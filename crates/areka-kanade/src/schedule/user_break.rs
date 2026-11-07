@@ -36,7 +36,7 @@ pub(super) fn on_user_break(
             phase = phase_label(&state.phase),
             "中断の要求を受けたが再生中のトークが無い——何も止めない（要件 2.2）"
         );
-        return balloon_events::on_idle_double_click(state);
+        return balloon_events::on_idle_double_click(state, None);
     };
 
     // 押されたバルーンの台詞が今のトークでなければ（読み終えた X を押した瞬間に Y が始まった）、
@@ -52,7 +52,7 @@ pub(super) fn on_user_break(
             current_talk_id = talk_id.0,
             "押されたバルーンのトークは今のトークでない——何も止めない（表 C へ）"
         );
-        return balloon_events::on_idle_double_click(state);
+        return balloon_events::on_idle_double_click(state, Some(pressed));
     }
 
     if state

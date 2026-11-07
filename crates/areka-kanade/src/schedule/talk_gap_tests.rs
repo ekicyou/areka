@@ -385,8 +385,8 @@ const SHELL_CHANGING: &str = "OnShellChanging";
 /// 印の台詞の番号（`steady_none` の採番 5 から始まる）。
 const MARKED: TalkId = TalkId(5);
 
-/// 印の台詞にも印の無い台詞にも使う同じ台本（終了の予約の有無は完了通知が運ぶ）。
-const SCRIPT: &str = "SCRIPT_WITH_QUIT";
+/// 印の応答の台本（終了の予約の有無は完了通知が運ぶ）。
+const MARKED_SCRIPT: &str = "MARKED_SCRIPT";
 
 fn shell_changing() -> GapRaise {
     GapRaise {
@@ -457,7 +457,7 @@ fn done_of(
 }
 
 fn value() -> ShioriOutcome {
-    ShioriOutcome::Value(SCRIPT.to_string(), areka_talk::SecurityLevel::Local)
+    ShioriOutcome::Value(MARKED_SCRIPT.to_string(), areka_talk::SecurityLevel::Local)
 }
 
 fn is_playing(s: &State, id: TalkId) -> bool {

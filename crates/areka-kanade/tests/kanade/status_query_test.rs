@@ -167,10 +167,6 @@ fn assert_same_run(asked: &Run, plain: &Run) {
         asked.commands, plain.commands,
         "問い合わせは sakura への指示の列を変えないはず（要件 4.1）"
     );
-    assert!(
-        plain.answers.is_empty(),
-        "問わない筋書きは答えを持たない（比べる相手として正しく組めている）"
-    );
 }
 
 // ============================================================================

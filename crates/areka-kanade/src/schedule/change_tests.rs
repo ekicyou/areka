@@ -390,19 +390,23 @@ fn held(raise_event: bool) -> State {
     s
 }
 
-/// 利用者の中断を受けてから `TalkDone{Interrupted}` を返す。
-fn broken(s: State, quit_reserved: bool) -> (State, Vec<Action>) {
+/// 利用者の中断を受けてから、そのトークの `TalkDone{Interrupted}` を返す。
+/// 止める指示は今日の中断と同じ単一の閉じ口（`CancelChoice`）であることも確かめる。
+fn break_talk(s: State, talk_id: TalkId, quit_reserved: bool) -> (State, Vec<Action>) {
     let (s, actions) = step(
         s,
         Input::UserBreak {
             scope: 0,
-            talk_id: Some(TalkId(4)),
+            talk_id: Some(talk_id),
         },
         &cfg(),
     );
-    assert!(matches!(actions.as_slice(), [Action::CancelChoice { .. }]));
+    assert!(
+        matches!(actions.as_slice(), [Action::CancelChoice { talk_id: t }] if *t == talk_id),
+        "中断の指示は今日と同じ（バルーンを隠す規則に触れない）"
+    );
     let done = TalkDone {
-        talk_id: TalkId(4),
+        talk_id,
         reason: TalkEndReason::Interrupted,
         quit_reserved,
     };
@@ -427,7 +431,7 @@ fn held_request_is_consumed_on_end_and_on_interrupt() {
         type Finish = fn(State) -> (State, Vec<Action>);
         let finishes: [(&str, Finish); 3] = [
             ("ended", |s| talk_done(s, TalkId(4), TalkEndReason::Ended)),
-            ("user_break", |s| broken(s, false)),
+            ("user_break", |s| break_talk(s, TalkId(4), false)),
             ("interrupted", |s| {
                 talk_done(s, TalkId(4), TalkEndReason::Interrupted)
             }),
@@ -519,7 +523,7 @@ fn quit_reserved_break_drops_held_change_and_quits_without_handoff() {
     for raise_event in [true, false] {
         let s = held(raise_event);
         let mut out = None;
-        let ev = capture(|| out = Some(broken(s, true)));
+        let ev = capture(|| out = Some(break_talk(s, TalkId(4), true)));
         let (s, actions) = out.expect("step は必ず結果を返す");
         logged_once(&ev, Level::INFO, "change_dropped_by_quit");
         assert_unloading(&s, dropped_notice_then(&actions), "Quit");

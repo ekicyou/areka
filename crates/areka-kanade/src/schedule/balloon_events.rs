@@ -2,8 +2,8 @@
 //! を送るかどうかの判断を 1 か所に集める（areka-P0-balloon-lifecycle-events）。
 //!
 //! ここが持つのは 2 つの控えと、[`super::step`] の出口の処理 [`settle`]、トークの完了の後の判断
-//! [`after_talk_done`]（設計の表 B）、再生中のトークが無いときのダブルクリックの判断
-//! [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
+//! [`after_talk_done`]（設計の表 B）、再生中のトークが無いとき・押されたバルーンが今のトークでないときの
+//! ダブルクリックの判断 [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
 //! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本・出どころ。3 つのイベントの
 //!   Reference0 の源で、古い時間切れの知らせを退ける照合の相手。
 //! - [`BreakNote`]（`State.user_break_talk`）——利用者の中断を出した相手のトークと、ダブルクリック
@@ -175,8 +175,10 @@ pub(super) fn after_talk_done(
     (state, actions)
 }
 
-/// 再生中のトークが無いときに届いた中断の合図（設計の表 C。上から最初に当たった行だけを採る）。
-/// 読み終えたバルーンをダブルクリックで閉じた、の知らせで、相手は控えのトーク（直前に終えたトーク）。
+/// 読み終えたバルーンをダブルクリックで閉じた、の知らせ（設計の表 C。上から最初に当たった行だけを採る）。
+/// 相手は控えのトーク（直前に終えたトーク）。呼び手は [`super::user_break::on_user_break`] の 2 か所で、
+/// 再生中のトークが無いとき（`pressed`＝`None`）と、押されたバルーンのトーク `pressed` が再生中の
+/// トークと違うとき（C1 で断る）である。断った記録の番号は `pressed` があればそれ、無ければ控えのトーク。
 ///
 /// - C1・C2: 再生中のトークの無い定常でない・終了の要求を保留している → 送らず理由を記録する
 ///   （要件 3.4・4.4）。
@@ -185,10 +187,13 @@ pub(super) fn after_talk_done(
 ///
 /// 中断の受理の規則（止める・二重に止めない）には触れない。scope は呼び手
 /// [`super::user_break::on_user_break`] の記録に載っているので、ここでは受け取らない。
-pub(super) fn on_idle_double_click(mut state: State) -> (State, Vec<Action>) {
+pub(super) fn on_idle_double_click(
+    mut state: State,
+    pressed: Option<TalkId>,
+) -> (State, Vec<Action>) {
     let talk_id = state.shown.as_ref().map(|shown| shown.talk_id);
     if let Err(reason) = steady_idle(&state) {
-        log_not_sent(&state, Cause::Close.id(), reason, talk_id);
+        log_not_sent(&state, Cause::Close.id(), reason, pressed.or(talk_id));
         return (state, Vec::new());
     }
     let actions = send(&mut state, Cause::Close, talk_id)

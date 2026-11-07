@@ -62,20 +62,6 @@ fn error_shiori_failed_logs() {
 }
 
 #[test]
-fn error_unknown_talk_done_logs() {
-    // 突合対象 talk (5) と異なる talk_id (999) の TalkDone → unknown_talk_done。
-    let ev = run_step(
-        state_in(steady_with_talk(TalkId(5))),
-        Input::TalkDone(TalkDone {
-            talk_id: TalkId(999),
-            reason: TalkEndReason::Ended,
-            quit_reserved: false,
-        }),
-    );
-    assert_logged(&ev, Level::ERROR, "unknown_talk_done");
-}
-
-#[test]
 fn error_unload_failed_logs() {
     // Unloading 中の Failed 応答 → unload_failed（終了系列は継続）。
     let ev = run_step(

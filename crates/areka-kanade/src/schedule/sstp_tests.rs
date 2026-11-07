@@ -4,13 +4,13 @@
 //! 外からの台本の腕（`accepts`・`on_send`）を固定する。
 
 use super::{SEND_ORIGIN, accepts};
-use crate::msg::{ChoiceInput, CloseReason, EventId, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::schedule::events::{on_translate_sstp, sstp_notify};
-use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
+use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::translate_test_support::{
-    CHOICE_ID, active, boot_until_greeting_playing, change_request, choice_event_count, config,
-    fingerprint, non_steady_states, steady, strings, warn_or_above,
+    CHOICE_ID, active, assert_no_choice_events_follow, boot_until_greeting_playing, change_request,
+    config, fingerprint, non_steady_states, steady, strings, warn_or_above,
 };
 use crate::schedule::{
     Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, step,
@@ -334,43 +334,7 @@ fn send_during_choice_clears_the_ledger_and_no_choice_events_follow() {
         ))),
         &cfg,
     );
-    // 帳簿が残っていても下流の番号の照合が送出を止めるので、送出の 0 回に加えて
-    // 「残った帳簿の防御が働かなかった」こと（期限切れの帳簿の trace が無い・選択の棄却の理由が
-    // 帳簿なし）を記録で縛る。帳簿の掃除を外すとこの 2 つが赤になる。
-    let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Tick {
-                now: MonotonicMs(60_000),
-            },
-            &cfg,
-        ))
-    });
-    let (state, tick) = out.unwrap();
-    assert_eq!(choice_event_count(&tick), 0, "時間切れのイベントを送らない");
-    assert_not_logged(&events, "choice_timeout_ledger_stale");
-    let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Choice(ChoiceInput {
-                id: CHOICE_ID.to_string(),
-                label: "選択その1".to_string(),
-                scope: 0,
-                references: Vec::new(),
-            }),
-            &cfg,
-        ))
-    });
-    let (_, choice) = out.unwrap();
-    assert_eq!(choice_event_count(&choice), 0, "選択のイベントを送らない");
-    let rejected = logged_once(&events, Level::WARN, "choice_rejected_no_wait");
-    assert_eq!(
-        rejected.fields.get("reason").map(String::as_str),
-        Some("no_choice_wait"),
-        "選択待ちが無いので棄却される（残った帳簿との番号の食い違いではない）"
-    );
+    assert_no_choice_events_follow(state, &cfg);
 }
 
 /// ⑷ 起動前・起動の手順・終了と切替の手順・保留の終了と切替では受け付けない（要件 3.6・3.9）。

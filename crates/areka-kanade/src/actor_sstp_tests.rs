@@ -2,7 +2,7 @@
 //!
 //! 本物の殻と偽の shiori（`actor_raise_reply_tests` の組）で、返信端へ値がちょうど 1 回返ることを見る。
 
-use super::raise_reply_tests::{LIMIT, Respond, Rig, boot_to_steady, close, spawn_with};
+use super::raise_reply_tests::{LIMIT, Respond, Rig, boot_to_steady, close, drain, spawn_with};
 use super::*;
 use crate::change::ShioriMethod;
 use crate::msg::KanadeStopped;
@@ -71,11 +71,6 @@ fn send_notify(rig: &Rig, event: &str) -> ReplyReceiver<SstpNotifyOutcome> {
         })
         .expect("kanade に届く");
     rx
-}
-
-/// 今までに偽の shiori が受けた呼び出し（待たない）。
-fn drain(calls: &Receiver<String>) -> Vec<String> {
-    calls.try_iter().collect()
 }
 
 /// 今までに再生の側へ届いた再生の開始の台本（待たない）。

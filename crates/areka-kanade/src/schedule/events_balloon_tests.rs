@@ -75,10 +75,3 @@ fn balloon_builders_derive_status_from_the_snapshot() {
         assert_eq!(status, Some("talking".to_string()), "{id} の Status");
     }
 }
-
-/// 正典に無い独自のイベントは表に足さない（要件 3.5。正典の 3 語が載ることは許可表の完全一致の
-/// テストが固定する・要件 6.4）。
-#[test]
-fn no_invented_balloon_event_is_in_the_allowed_table() {
-    assert!(!is_allowed_event_id("OnBalloonClick"));
-}

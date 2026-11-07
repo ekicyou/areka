@@ -24,8 +24,7 @@ use super::{
 /// {mock shiori・mock sakura sink・spawn_kanade} を組み立てた駆動ハーネス。
 ///
 /// テストは [`sender`](Harness::sender) 経由で kanade inbox へ [`KanadeMsg`] を注入し、
-/// [`shiori`](Harness::shiori)/[`sakura`](Harness::sakura) の記録アクセサで観測する。
-/// 停止は kanade へ終了を駆動して [`Harness::finish`] で後始末する。sink が inbox の送信端の
+/// kanade へ終了を駆動してから [`Harness::finish`] で後始末して、返る [`Driven`] の記録で観測する。sink が inbox の送信端の
 /// クローンを持つため `sender` を drop しても kanade は止まらない（全 Sender drop の経路は
 /// [`SinklessHarness`] で踏む）。
 pub struct Harness {

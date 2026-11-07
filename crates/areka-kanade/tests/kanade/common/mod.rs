@@ -56,7 +56,7 @@ mod smoke;
 //
 // 子モジュール同士も、公開項目はこのファサード経由（`use super::{…}`）で引く。兄弟の直接
 // パスを使うのは、ファサードに載らない `pub(super)` の内部項目（`FixtureState`・
-// `run_join_bounded`）だけである。
+// `run_join_bounded`・`starts_of`）だけである。
 // ============================================================================
 
 pub use bounded::{DEFAULT_TIMEOUT, drive_ticks_until_disconnect, join_bounded};

@@ -24,7 +24,7 @@ use super::{
     expected_unload, send, single_stop_cause, spawn_harness_with_stop_sink, tick,
 };
 
-/// 通知端つきハーネスを組み、`ForceQuit`／`CloseRequest` のいずれかで終了系列へ入れる。
+/// 通知端つきハーネスを組む。
 ///
 /// 戻り値は（ハーネス, 停止通知の受信端）。呼び手は kanade を join してから受信端を読む
 /// ——join 成功は `StopSelf` の実行完了を意味するので、通知は既に投函済みである（race なし）。

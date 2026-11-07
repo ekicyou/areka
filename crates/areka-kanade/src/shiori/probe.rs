@@ -289,7 +289,7 @@ fn try_fire(inner: &ProbeInner, budget: WaitBudget) -> Option<ShioriCut> {
         limit_ms,
         elapsed_ms,
         unblocked,
-        "SHIORI の待ちを上限で打ち切った——補助プロセスを終わらせて待ちを解く"
+        "SHIORI の待ちが上限に達した——補助プロセスを終わらせて待ちを解こうとした（解けたかは unblocked）"
     );
     Some(ShioriCut { stage, unblocked })
 }

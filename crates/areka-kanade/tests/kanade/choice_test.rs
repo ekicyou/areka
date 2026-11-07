@@ -12,43 +12,43 @@
 //! 群の外に、時間の指令の檻（`choice_test_timeout_directive_tests.rs`）と期限の知らせの檻
 //! （`choice_test_wake_tests.rs`）もある。
 //! **群 1（Req9.2(a)・任意名形）**
-//! 1. [`on_id_choice_fires_named_event_only_then_resolves_and_starts`]: `On` 始まり ID は任意名
+//! 1. `on_id_choice_fires_named_event_only_then_resolves_and_starts`: `On` 始まり ID は任意名
 //!    イベント **1 段のみ**を発行し（`OnChoiceSelectEx`／`OnChoiceSelect` を発行しない・裁定 1）、
 //!    Value 応答が `ResolveChoice`→`Start`（この順・新 talk_id）を起こす。
 //!
 //! **群 2（Req9.2(b)・正典形）**
-//! 2. [`canonical_choice_cascades_ex_then_select_and_resolves_without_start`]: `OnChoiceSelectEx`
+//! 2. `canonical_choice_cascades_ex_then_select_and_resolves_without_start`: `OnChoiceSelectEx`
 //!    （Ref0=ラベル／Ref1=ID／Ref2 以降＝付随参照列）が先行し、204 で `OnChoiceSelect`（Ref0=ID）
 //!    へ前進し、最終段 204 では `ResolveChoice` のみで **StartTalk が生じない**。
-//! 3. [`canonical_choice_ex_value_short_circuits_select`]: 先行段が Value なら無印を**発行せず**
+//! 3. `canonical_choice_ex_value_short_circuits_select`: 先行段が Value なら無印を**発行せず**
 //!    `ResolveChoice`→`Start` へ短絡する（Req2.4・裁定 2）。
 //!
 //! **群 3（Req4.5・DD-12・選択起因の失敗）**
-//! 4. [`choice_stage_failure_continues_as_204_without_fault_termination`]: 段 GET の `Failed` が
+//! 4. `choice_stage_failure_continues_as_204_without_fault_termination`: 段 GET の `Failed` が
 //!    `Unloading{Fault}` へ**倒れず** 204 相当で次段へ前進し、解決まで到達したうえで、終了は
 //!    後から駆動した close によって起きる。
-//! 5. [`non_choice_failure_during_choice_wait_still_faults`]: 同じ選択待ち窓でも **choice 起源で
+//! 5. `non_choice_failure_during_choice_wait_still_faults`: 同じ選択待ち窓でも **choice 起源で
 //!    ない** GET の `Failed` は従来どおり `Unloading{Fault}` へ倒れる（DD-12 免除が非 choice 経路へ
 //!    漏れていないこと＝既存 `failure_test.rs` の規律が不変であることの境界固定）。
 //!
 //! **群 4（Req9.2(c)・Req6.1／6.2／6.4・実行状態表示）**
-//! 6. [`choosing_rides_pump_status_while_waiting_then_clears_after_resolution`]: 選択待ち確立後の
+//! 6. `choosing_rides_pump_status_while_waiting_then_clears_after_resolution`: 選択待ち確立後の
 //!    周期リクエストが **NOTIFY**（Ref3="0"）で `Status: talking,choosing` を帯び、解決後の周期
 //!    リクエストからは `choosing` が消えて `talking` 単独へ戻る。
 //!
 //! **群 5（Req9.2(d)・Req7.3／7.4／7.5・タイムアウト）**
-//! 7. [`choice_timeout_fires_then_204_cancels_and_rejects_later_choice`]: 注入 Tick のみで期限へ
+//! 7. `choice_timeout_fires_then_204_cancels_and_rejects_later_choice`: 注入 Tick のみで期限へ
 //!    到達し、`OnChoiceTimeout`（Ref0=起動スクリプト）GET が発行され、204 で `TalkCommand::CancelChoice`
 //!    が届き、注入した `TalkDone{Interrupted}` で `Steady{None}` へ復帰し、以降の `Choice` 注入が
 //!    棄却される。
-//! 8. [`choice_timeout_value_replaces_talk_via_existing_start_path`]: タイムアウト応答が Value なら
+//! 8. `choice_timeout_value_replaces_talk_via_existing_start_path`: タイムアウト応答が Value なら
 //!    既存の起動経路で置換再生される（新 talk_id・解決／解除指示は発行しない）。
 //!
 //! **群 6（Req9.2(e)・Req1.1／1.3／1.4・一回性と棄却）**
-//! 9. [`one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejected`]: 1 回の
+//! 9. `one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejected`: 1 回の
 //!    選択確定が **高々 1 カスケード・高々 1 選択解決・高々 1 起動要求**しか起こさず、解決後に
 //!    到着した同一 ID の遅延注入がイベントも指示も生まないこと。
-//! 10. [`choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open`]: 候補集合に無い ID の
+//! 10. `choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open`: 候補集合に無い ID の
 //!    注入が何も起こさず、**選択待ちを閉じない**（直後の候補内 ID が正常に通る）こと。
 //!
 //! # 決定性（Req9.1）と同期イディオム
@@ -62,8 +62,8 @@
 //!
 //! # 期限（deadline）の作り方——実時刻を一切読まない
 //! 注入する `ChoiceWaiting` は `timeout_directive_secs: None`（＝既定値
-//! [`CHOICE_TIMEOUT_DEFAULT_MS`] へ委譲）で、起点は `display_end = `[`CHOICE_DISPLAY_END_MS`] ゆえ
-//! 期限は [`CHOICE_DEADLINE_MS`] である。したがって**注入 Tick の `now` を選ぶだけ**で期限の手前／
+//! `CHOICE_TIMEOUT_DEFAULT_MS` へ委譲）で、起点は `display_end = CHOICE_DISPLAY_END_MS` ゆえ
+//! 期限は `CHOICE_DEADLINE_MS` である。したがって**注入 Tick の `now` を選ぶだけ**で期限の手前／
 //! 到達を作り分けられる（実時間待機も `Instant` 読み取りも一切ない・Req9.1／7.3）。
 //! 群 1〜4 は期限より手前の Tick しか注入しないためタイムアウト経路へは構造上到達せず、群 5 が
 //! 期限手前 → 期限到達の 2 点を注入してタイムアウトのみを踏む。

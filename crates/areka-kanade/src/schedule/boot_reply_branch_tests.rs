@@ -286,7 +286,7 @@ fn first_boot_true_204_falls_through_to_onboot() {
     );
 }
 
-/// 4.1: OnFirstBoot の Ref0 は `config.vanish_count` 由来（従来 literal 0 の置換）。
+/// 4.1: OnFirstBoot の Ref0 は `config.vanish_count` 由来。
 #[test]
 fn onfirstboot_ref0_reflects_config_vanish_count() {
     let mut cfg = config();

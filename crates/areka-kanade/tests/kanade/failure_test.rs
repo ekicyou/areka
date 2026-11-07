@@ -71,18 +71,17 @@ fn single_fault_notification(rx: &mpsc::Receiver<KanadeNotice>) -> ShioriFault {
 /// このファイルだけが注入する失敗の文言（記録の捕まえ口はバイナリで 1 つなので、他のテストの記録と混ざらない）。
 const INJECTED: &str = "failure_test だけが注入する失敗";
 
-/// 記録 `event`（`kanade` の error）のうち、欄 `field` が `text` と同じ文言のものが残っているか。
+/// `from` 番目以降の記録 `event`（`kanade` の error）のうち、欄 `field` が `text` と同じ文言のものが残っているか。
 ///
 /// 停止通知の理由が、対応する `error!` と同じ文言であることを確かめるのに使う。
 fn error_logged_with(
     buffer: &std::sync::Mutex<Vec<log_capture_kit::CapturedEvent>>,
+    from: usize,
     event: &str,
     field: &str,
     text: &str,
 ) -> bool {
-    buffer
-        .lock()
-        .expect("capture buffer mutex")
+    buffer.lock().expect("capture buffer mutex")[from..]
         .iter()
         .any(|ev| {
             ev.level == tracing::Level::ERROR
@@ -169,7 +168,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
             "{kind:?} の失敗の停止通知は種類と理由を運ぶはず"
         );
         assert!(
-            error_logged_with(&buffer, "shiori_failed", "error", &fault.reason),
+            error_logged_with(&buffer, 0, "shiori_failed", "error", &fault.reason),
             "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
             fault.reason
         );
@@ -218,6 +217,8 @@ fn shiori_down_case(
     expected_kind: ShioriFaultKind,
 ) {
     let reason = "shiori went down (failure_test)";
+    // 捕まえ口は 2 ケースで共有なので、このケースの記録だけを見る（前のケースの記録で通らない）。
+    let from = buffer.lock().expect("capture buffer mutex").len();
     let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let harness = spawn_harness_with_stop_sink(
         KanadeConfig::new("master", "1.0.0"),
@@ -256,7 +257,7 @@ fn shiori_down_case(
         "{down_kind:?} の死活報告の停止通知は種類と理由を運ぶはず"
     );
     assert!(
-        error_logged_with(buffer, "shiori_down", "reason", &fault.reason),
+        error_logged_with(buffer, from, "shiori_down", "reason", &fault.reason),
         "停止通知の理由は記録 shiori_down の reason と同じ文言のはず: {:?}",
         fault.reason
     );
@@ -675,7 +676,7 @@ fn send_failure_delivers_a_disconnected_fault() {
         "送出失敗の停止通知は「通信が切れた」の種類と理由を運ぶはず"
     );
     assert!(
-        error_logged_with(&buffer, "shiori_failed", "error", &fault.reason),
+        error_logged_with(&buffer, 0, "shiori_failed", "error", &fault.reason),
         "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
         fault.reason
     );
@@ -739,7 +740,7 @@ fn reply_dropped_delivers_a_disconnected_fault() {
         "応答の切断の停止通知は「通信が切れた」の種類と理由を運ぶはず"
     );
     assert!(
-        error_logged_with(&buffer, "shiori_failed", "error", &fault.reason),
+        error_logged_with(&buffer, 0, "shiori_failed", "error", &fault.reason),
         "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
         fault.reason
     );

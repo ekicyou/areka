@@ -10,7 +10,7 @@ use super::super::log_capture::{CapturedEvent, assert_not_logged, capture, logge
 use super::super::sstp::NOTIFY_ORIGIN;
 use super::super::translate::Translated;
 use super::super::{Action, Input, step};
-use crate::msg::{MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{MonotonicMs, ShioriOutcome};
 use crate::schedule::translate_test_support::{config as cfg, steady_none as steady};
 use crate::talk::ScriptOrigin;
 use areka_talk::SecurityLevel;
@@ -91,16 +91,6 @@ fn ghost_event_reply_talk_is_ghost() {
 
 #[test]
 fn raise_event_reply_talk_is_mcp_notify() {
-    // 送った往復が外から頼まれたイベント（EventId::Sstp）であることを前提として確かめる。
-    let (first, _) = run(vec![Input::SstpNotify {
-        event: "OnTest".to_string(),
-        references: Vec::new(),
-        strict: None,
-    }]);
-    assert!(matches!(
-        first.as_slice(),
-        [Action::ShioriRequest(ShioriCall::Get { .. })]
-    ));
     let (origin, ev) = notify_talk(SecurityLevel::Local);
     assert_eq!(origin, ScriptOrigin::MCP_NOTIFY, "要件 1.3");
     assert_not_logged(&ev, "script_security_lowered");

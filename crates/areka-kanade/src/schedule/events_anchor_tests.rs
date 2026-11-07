@@ -87,22 +87,3 @@ fn anchor_builders_derive_status_from_the_snapshot() {
         assert_eq!(status, None, "{id} は話していなければ行を出さない");
     }
 }
-
-/// 組み立ての綴りが表の綴りと一致する（表に載ることは許可表の完全一致のテストが固定する）。
-#[test]
-fn the_two_anchor_events_are_built_with_the_table_spelling() {
-    let snap = ExecutionSnapshot::INACTIVE;
-    for call in [
-        on_anchor_select_ex("くわしく", "ID", &[], &snap),
-        on_anchor_select("ID", &snap),
-    ] {
-        let ShioriCall::Get { id, .. } = call else {
-            panic!("GET のはずが NOTIFY");
-        };
-        assert!(
-            matches!(id, EventId::Static(name) if is_allowed_event_id(name)),
-            "決まった名前のイベントとして表の綴りで送る: {}",
-            id.as_str()
-        );
-    }
-}

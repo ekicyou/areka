@@ -246,7 +246,7 @@ pub fn spawn_kanade_translating(
                 wants_first,
             );
             // 返事はこの依頼の処理（応答を入れ直して動作を実行し終えるまで）が済んだ後に 1 回だけ送る。
-            // 往復が無かったのは、許可表に無い名前か定常以外での依頼（どちらも運行表が捨てた）。
+            // 往復が無かったのは、許可表に無い名前か、定常以外・終了や切替の保留中の依頼（どれも運行表が捨てた）。
             if let Some((tx, id, allowed)) = raise_reply {
                 let outcome = match (allowed, &first_reply) {
                     (false, _) => RaiseOutcome::NotAllowed,
