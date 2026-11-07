@@ -160,6 +160,8 @@ pub struct GhostRuntime {
     shiori_handle: ActorHandle,
     start_relay_handle: ActorHandle,
     down_relay_handle: ActorHandle,
+    /// 選択待ちの起こしの中継（kanade → 刻み役・`TickerMode::Real` 時のみ `Some`・#7）。
+    choice_wake_relay_handle: Option<ActorHandle>,
     ticker_handle: Option<ActorHandle>,
     /// sylphya（統一プロパティシステム）供給端。shutdown の `Close` 送出に使う。
     sylphya_publisher: SylphyaPublisher,
@@ -181,6 +183,9 @@ pub struct GhostHandles {
     pub shiori: ActorHandle,
     pub start_relay: ActorHandle,
     pub down_relay: ActorHandle,
+    /// 選択待ちの起こしの中継（kanade の起こしの頼みを刻み役へ写す）。`TickerMode::Real` 時のみ `Some`。
+    /// kanade の停止で送り端が落ちて自然に終わる。畳むのは `down_relay` の後・刻み役の Close の前。
+    pub choice_wake_relay: Option<ActorHandle>,
     /// `TickerMode::Real` 時のみ `Some`。
     pub ticker: Option<ActorHandle>,
     /// sylphya アクターの join ハンドル（掲示板供給者・shutdown 最終段で join）。
@@ -204,7 +209,7 @@ pub struct GhostParts {
     pub sylphya: SylphyaPublisher,
     /// sylphya 読み口（手動解体時の値検証・provider と同一鏡像を共有）。
     pub sylphya_reader: SylphyaReader,
-    /// kanade／dispatcher／shiori／start-relay／down-relay／ticker(Option)／sylphya の全 `ActorHandle`。
+    /// kanade／dispatcher／shiori／start-relay／down-relay／choice-wake-relay(Option)／ticker(Option)／sylphya の全 `ActorHandle`。
     pub handles: GhostHandles,
 }
 
@@ -312,10 +317,12 @@ impl GhostRuntime {
     /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。
     ///
     /// 手順: `KanadeMsg::ForceQuit(reason)` 送出 → kanade join → `DispatcherMsg::Close`
-    /// 送出 → dispatcher join →（ticker 起動時のみ）`TickerMsg::Close` 送出 → ticker
-    /// join → shiori join（明示送出なし。kanade 終了系列が既に `ShioriMsg::Close` を
-    /// 送出済み） → start-relay join → down-relay join（両 relay は明示 Close を持たず
-    /// 上流停止に連動する自然終了・「アクター別の停止経路」表参照）。
+    /// 送出 → dispatcher join → shiori join（明示送出なし。kanade 終了系列が既に
+    /// `ShioriMsg::Close` を送出済み） → start-relay join → down-relay join →（ticker 起動時のみ）
+    /// choice-wake-relay join → `TickerMsg::Close` 送出 → ticker join（relay は明示 Close を持たず
+    /// 上流停止に連動する自然終了・「アクター別の停止経路」表参照）。起こしの中継は刻み役の送り端を
+    /// 持つが、kanade の停止で上流が落ちて先に終わるので、刻み役の Close の前に join しても詰まらない
+    /// （audit-kanade #7・要件 5.3）。
     ///
     /// 冪等: 各段の送出失敗（対象が既に自発停止済み——例えば quit talk 経由の kanade
     /// 自己終了）は `debug!` の上で次段へ進む（正常系）。join の `Err`（panic 観測）は
@@ -332,6 +339,7 @@ impl GhostRuntime {
             shiori_handle,
             start_relay_handle,
             down_relay_handle,
+            choice_wake_relay_handle,
             ticker_handle,
             sylphya_publisher,
             sylphya_reader: _,
@@ -371,22 +379,6 @@ impl GhostRuntime {
             failures.push(("dispatcher", err));
         }
 
-        // 5・6. ticker（`TickerMode::Real` 時のみ起動されている・両方 no-op で完全スキップ）。
-        if let Some(ticker_tx) = ticker_tx
-            && ticker_tx.send(TickerMsg::Close).is_err()
-        {
-            tracing::debug!(
-                target: "ghost-shutdown",
-                "ticker already stopped before Close send; treating as idempotent"
-            );
-        }
-        if let Some(ticker_handle) = ticker_handle
-            && let Err(err) = ticker_handle.join()
-        {
-            tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
-            failures.push(("ticker", err));
-        }
-
         // 7. shiori join（送出なし。kanade 終了系列が ShioriMsg::Close を既に送出済み・
         //    「アクター別の停止経路」表参照。GhostRuntime は shiori_tx を保持しない）。
         if let Err(err) = shiori_handle.join() {
@@ -404,6 +396,31 @@ impl GhostRuntime {
         if let Err(err) = down_relay_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "down-relay", error = %err, "down-relay actor join failed");
             failures.push(("down-relay", err));
+        }
+
+        // 9b. choice-wake-relay join（`TickerMode::Real` 時のみ・自然終了: kanade 停止で起こしの線の
+        //     送り端が落ちる。刻み役の Close より前・#7）。
+        if let Some(handle) = choice_wake_relay_handle
+            && let Err(err) = handle.join()
+        {
+            tracing::error!(target: "ghost-shutdown", stage = "choice-wake-relay", error = %err, "choice-wake-relay actor join failed");
+            failures.push(("choice-wake-relay", err));
+        }
+
+        // 9c・9d. ticker（`TickerMode::Real` 時のみ起動されている・両方 no-op で完全スキップ）。
+        if let Some(ticker_tx) = ticker_tx
+            && ticker_tx.send(TickerMsg::Close).is_err()
+        {
+            tracing::debug!(
+                target: "ghost-shutdown",
+                "ticker already stopped before Close send; treating as idempotent"
+            );
+        }
+        if let Some(ticker_handle) = ticker_handle
+            && let Err(err) = ticker_handle.join()
+        {
+            tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
+            failures.push(("ticker", err));
         }
 
         // 10. sylphya Close＋join（既存段の後・供給者停止後に掲示板を畳む・design「shutdown」）。
@@ -457,6 +474,7 @@ impl GhostRuntime {
             shiori_handle,
             start_relay_handle,
             down_relay_handle,
+            choice_wake_relay_handle,
             ticker_handle,
             sylphya_publisher,
             sylphya_reader,
@@ -477,6 +495,7 @@ impl GhostRuntime {
                 shiori: shiori_handle,
                 start_relay: start_relay_handle,
                 down_relay: down_relay_handle,
+                choice_wake_relay: choice_wake_relay_handle,
                 ticker: ticker_handle,
                 sylphya: sylphya_handle,
             },
@@ -663,6 +682,17 @@ pub fn boot_with_origin(
     //     初回起動記録 epilogue を解決した config へ差し替える（read のみ・panic なし・不在は既定縮退）。
     let mut config = apply_boot_record_gate(config, &sylphya_reader, &ghost_asker);
 
+    //    選択待ちの起こしの線（#7・要件 9.5）。刻み役が本物のときだけ作る（`Disabled` は毎秒の
+    //    Tick を外から注入する決定論のテストなので `None` のまま）。
+    let choice_wake_rx = match options.ticker {
+        TickerMode::Real(_) => {
+            let (wake_tx, wake_rx) = mpsc::channel::<areka_kanade::MonotonicMs>();
+            config.choice_wake = Some(wake_tx);
+            Some(wake_rx)
+        }
+        TickerMode::Disabled => None,
+    };
+
     // 2d. 起動の由来とシェルのフォルダ名（要件 4.1）。フォルダ名が取れなければ
     //     `KanadeConfig::new` が写したシェル名のまま。
     config.boot_origin = origin;
@@ -782,6 +812,10 @@ pub fn boot_with_origin(
         }
         TickerMode::Disabled => (None, None),
     };
+    //    起こしの中継（kanade の頼み → `TickerMsg::WakeKanadeAt`・#7）は刻み役の起動の後につなぐ。
+    let choice_wake_relay_handle = choice_wake_rx.zip(ticker_tx.clone()).map(|(rx, tx)| {
+        spawn_relay::<areka_kanade::MonotonicMs, TickerMsg>("choice-wake-relay", rx, tx)
+    });
 
     // 10. boot 起点の起動指示（要件 2.4）。kanade は直前に spawn したばかりで
     //     常に生存しているはずだが、万一の送出失敗は panic せず観測のみに留める。
@@ -804,6 +838,7 @@ pub fn boot_with_origin(
         shiori_handle,
         start_relay_handle,
         down_relay_handle,
+        choice_wake_relay_handle,
         ticker_handle,
         sylphya_publisher,
         sylphya_reader,

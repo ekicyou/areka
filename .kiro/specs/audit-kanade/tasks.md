@@ -242,7 +242,7 @@
   - 選択の結合テストが緑で、期限手前の値を壊すと赤
   - _Requirements: 3.1, 3.3, 4.1, 7.1, 7.2, 9.1, 9.7, 9.8_
 
-- [ ] 16. 選択待ちの時間切れを期限ちょうどに出す（#7）
+- [x] 16. 選択待ちの時間切れを期限ちょうどに出す（#7）
 - [x] 16.1 段取りに期限の知らせと起こしの頼みを足す
   - 入力に期限の知らせ、行いに起こしの頼みを足し、網羅の match の全部に腕を足す
   - 選択待ちで期限が決まれば起こしの頼みを 1 つ返し、期限の知らせでは今の時間切れの判定をその時刻で呼ぶ（定常の外と空振りは trace）。完了 spec の「Tick で判定」を改めた旨を doc に 1 行
@@ -261,7 +261,7 @@
   - 残りの純粋な関数のテストと、固定の時計で知らせが 1 通だけ届くテストが緑
   - _Depends: 16.2_
   - _Requirements: 3.1, 3.2, 4.1, 4.2, 6.7, 9.5_
-- [ ] 16.4 起こしの線と中継を結線し、正規の順で畳む（範囲の外 `areka-ghost` の runtime）
+- [x] 16.4 起こしの線と中継を結線し、正規の順で畳む（範囲の外 `areka-ghost` の runtime）
   - 本物の刻み役のときだけ線を作って設定へ渡し、刻み役の起動の後に中継でつなぐ
   - 中継の取っ手を公開の束に足し、kanade → 下りの中継 → 起こしの中継 → 刻み役の Close の順で畳む。欄を全部挙げて分けるテスト 5 か所に 1 つ足す
   - `areka-ghost` のテストが全部緑で、終了の道が今どおり詰まらない
@@ -320,3 +320,4 @@
 - 15.2 指摘の外に残る（19.2 のかけ直しで拾う候補）: close_test の silent_close・force_quit の `assert_eq!(last.method, CallMethod::Unload)` は直後の等式に含まれる重い assert（#86 の一覧に無い）。
 - 15.3 指摘の外（19.2 の候補）: `establish_choice_wait` の中の Tick が `MonotonicMs(1_000)` の直書きで、`CHOICE_DISPLAY_END_MS` と同じ値を 2 か所に持つ。
 - 16.1→16.2 の引き継ぎ: `Input::ChoiceTimeoutDue` の `cfg_attr(not(test), expect(dead_code))`（types.rs）を 16.2 で消す。actor.rs の `ArmChoiceWake` の腕（trace `choice_wake_unwired` だけ）を 16.2 で本物の送りに替える。
+- 16.4: 畳む順は design §#7 の文（kanade → `down_relay` → `choice_wake_relay` → 刻み役の Close）に合わせ、刻み役の Close と join を down-relay の後へ移した（範囲の外の表の「down_relay の後に join」とも食い違わない）。詰まりも取り残しも無いことをレビューで確かめた。起こしを kanade・中継・刻み役を通して 1 本で追うテストは無い（各側のテストと結線の 2 本だけ）。
