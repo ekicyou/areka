@@ -7,18 +7,13 @@
 //!
 //! 往復は呼出スレッドで同期に走るので、記録はスレッドローカルの捕捉窓で拾える。
 
-use super::tests::get;
+use super::tests::{get, probe_get_call};
 use super::*;
 use crate::schedule::log_capture::{CapturedEvent, capture};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use std::sync::mpsc;
 use std::thread;
 use tracing::Level;
-
-/// テスト用 GET 呼出（`OnBoot`・許可表にある固定 ID）。
-fn probe_get_call() -> ShioriCall {
-    get(EventId::Static("OnBoot"), &["master"])
-}
 
 /// テスト用 NOTIFY 呼出（`OnInitialize`・許可表にある固定 ID）。
 fn probe_notify_call() -> ShioriCall {

@@ -1,6 +1,6 @@
 use super::log_capture::{assert_logged, assert_not_logged, capture};
 use super::*;
-use crate::msg::ShioriFailure;
+use crate::msg::{MouseEventKind, MouseInput, ShioriFailure};
 use crate::schedule::translate_test_support::config;
 use tracing::Level;
 
@@ -69,29 +69,6 @@ fn known_quit_from_close_talk_wait_goes_to_unloading_quit() {
         }
     ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
-}
-
-// --- 1b. TalkDone{reason:Interrupted} for a KNOWN talk → 非 quit 扱い（Ended と同一経路） ---
-
-#[test]
-fn known_interrupted_from_steady_is_routed_as_non_quit() {
-    // Interrupted は非 quit 扱い（Ended と同一経路）へ委譲される（選択タイムアウトの解除の正規の到達点・DD-11）。
-    // steady::on_talk_done は pending_close が無ければ Steady{None} へ復帰する。
-    let phase = steady_with_talk(TalkId(5));
-    let (next, actions) = step(
-        state_in(phase),
-        Input::TalkDone(TalkDone {
-            talk_id: TalkId(5),
-            reason: TalkEndReason::Interrupted,
-            quit_reserved: false,
-        }),
-        &config(),
-    );
-    assert!(
-        matches!(next.phase, Phase::Steady { talk: None }),
-        "Interrupted は Quit 系列へ進まず、Ended と同じ定常復帰へ"
-    );
-    assert!(actions.is_empty());
 }
 
 // --- 2. ForceQuit from any phase → [Notify OnClose, ShioriUnload] + Unloading{Forced} ---
@@ -272,11 +249,14 @@ fn initial_state_is_idle_with_monotonic_counter() {
     assert_eq!(s.last_now, None);
     assert_eq!(s.next_talk_id, 1);
     assert!(s.pending_close.is_none());
+    assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
+    assert!(
+        s.prev_talk.is_none(),
+        "初期状態に 1 世代保持の旧 talk_id は無い"
+    );
 }
 
 // --- 10. Mouse 横断ルーティング（DD-IE-8） ---
-
-use crate::msg::{MouseEventKind, MouseInput};
 
 fn mouse_move() -> MouseInput {
     MouseInput {
@@ -336,53 +316,6 @@ fn assert_get(action: &Action, expected: &ShioriCall) {
     }
 }
 
-// Steady では横断アームが steady::on_mouse へ委譲し、GET を発行する。
-// step() 経由（横断アーム込み）で GET が 1 件出ることを固定する。
-#[test]
-fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
-    // Steady{None} + Move → OnMouseMove GET（Status 行なし・INACTIVE）。phase 不変。
-    let (next, actions) = step(
-        state_in(Phase::Steady { talk: None }),
-        Input::Mouse(mouse_move()),
-        &config(),
-    );
-    assert!(
-        matches!(next.phase, Phase::Steady { talk: None }),
-        "マウス GET は phase を変えない"
-    );
-    assert_eq!(actions.len(), 1, "マウス入力で GET を 1 件発行する");
-    assert_get(
-        &actions[0],
-        &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot::INACTIVE),
-    );
-
-    // Steady{Some} + Move → GET のまま発行され Status: talking を帯びる（DD-IE-1）。phase 不変。
-    let (next, actions) = step(
-        state_in(steady_with_talk(TalkId(5))),
-        Input::Mouse(mouse_move()),
-        &config(),
-    );
-    assert!(
-        matches!(next.phase, Phase::Steady { talk: Some(_) }),
-        "active talk は維持される"
-    );
-    assert_eq!(actions.len(), 1);
-    assert_get(
-        &actions[0],
-        &events::on_mouse_move(
-            10,
-            20,
-            0,
-            Some("head"),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
-    );
-}
-
 /// ドラッグの GET を組む関数（`events::on_mouse_drag_start`／`_end`）の型。
 type DragGetBuilder = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
 
@@ -430,17 +363,6 @@ fn choice_input() -> ChoiceInput {
         scope: 0,
         references: vec!["a0".to_string()],
     }
-}
-
-/// DD-3: 選択帳簿は `State`（Phase 外）に置かれ、初期値は両方とも空である。
-#[test]
-fn initial_state_has_empty_choice_ledger() {
-    let s = State::initial();
-    assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
-    assert!(
-        s.prev_talk.is_none(),
-        "初期状態に 1 世代保持の旧 talk_id は無い"
-    );
 }
 
 /// C4 規則 1・Req1.3: 非 Steady フェーズの選択確定は棄却する（状態不変・Action なし）。
@@ -677,11 +599,7 @@ fn state_snapshot_marks_choice_active_in_every_ledger_phase() {
         },
         ChoicePhase::TimeoutInFlight,
     ] {
-        let label = match &phase {
-            ChoicePhase::Waiting => "Waiting",
-            ChoicePhase::Cascading { .. } => "Cascading",
-            ChoicePhase::TimeoutInFlight => "TimeoutInFlight",
-        };
+        let label = steady::choice_phase_label(&phase);
         let mut s = state_in(steady_with_talk(TalkId(5)));
         s.choice = Some(ChoiceState {
             talk_id: TalkId(5),

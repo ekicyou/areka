@@ -30,13 +30,13 @@
 //! FIFO 順で処理される（in-flight ≤ 1・割り込みなし）。
 
 use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
-    MouseEventKind, MouseInput, TalkId, events,
+    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MouseButton, MouseEventKind,
+    MouseInput, TalkId, events,
 };
 
 use super::common::{
     CallMethod, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness, QuitPolicy,
-    RecordedCall, Response, expected_call, expected_unload, spawn_harness, spawn_harness_gated,
+    RecordedCall, expected_call, expected_unload, send, spawn_harness, spawn_harness_gated, tick,
 };
 
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming 要件 1.7 / 3.1 / 3.2）。

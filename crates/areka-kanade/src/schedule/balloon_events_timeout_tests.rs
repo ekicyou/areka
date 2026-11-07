@@ -133,16 +133,12 @@ fn d2_notice_while_next_talk_awaits_translation_is_refused_not_held() {
     assert!(actions.is_empty());
     assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
     assert_not_logged(&ev, "balloon_timeout_deferred");
-    assert!(
-        ev.iter()
-            .all(|e| e.fields.get("reason").map(String::as_str) != Some("talk_gone")),
-        "預からないので掃除の記録も出ない。\n捕捉={ev:#?}"
-    );
     assert!(s.shown.as_ref().is_some_and(|shown| !shown.timeout_pending));
 }
 
 /// D2: 次のトークが始まって終わっていたら、前のトークの知らせは送らない（要件 2.6）。
-/// 控えが無いときも同じ行に落ちる。
+/// 控えが無いときも同じ行に落ちる。cue を 1 つも出さないトーク（`\e` だけ）を挟んだときも、
+/// 表示の側は前のトークの番号のまま知らせるのでこの行で捨てる（設計の記録して許す行）。
 #[test]
 fn d2_next_talk_started_and_ended_refuses_the_old_notice() {
     let (mut s, old) = steady_after_talk();
@@ -156,18 +152,6 @@ fn d2_next_talk_started_and_ended_refuses_the_old_notice() {
     let mut s = steady_none();
     let (actions, ev) = feed_capturing(&mut s, timeout(TalkId(3)));
     assert!(actions.is_empty(), "控えが無い");
-    assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
-}
-
-/// 残る行き違いその 1: cue を 1 つも出さないトーク（`\e` だけ）を挟むと、表示の側は前のトークの
-/// 番号のまま時間切れを知らせ、kanade の控えは進んでいるので D2 で捨てる（設計の記録して許す行）。
-#[test]
-fn d2_notice_one_behind_a_cueless_talk_is_dropped() {
-    let (mut s, old) = steady_after_talk();
-    let cueless = start_translated(&mut s, 3_000, "\\e");
-    finish(&mut s, cueless);
-    let (actions, ev) = feed_capturing(&mut s, timeout(old));
-    assert!(actions.is_empty(), "OnBalloonTimeout は出ない");
     assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
 }
 

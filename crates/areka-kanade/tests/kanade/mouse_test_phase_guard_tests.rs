@@ -1,7 +1,7 @@
 use super::test_support::{mouse_input, no_mouse_call};
 use super::{
     CloseReason, Driven, FIXED_FAREWELL_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MouseEventKind,
-    QuitPolicy, TalkId, expected_unload, spawn_harness, spawn_harness_gated,
+    QuitPolicy, TalkId, expected_unload, send, spawn_harness, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -27,34 +27,28 @@ fn phase_ignore_before_boot_no_mouse_get() {
     );
 
     // Boot より前に Mouse を注入（Idle で処理される＝非 Steady・無視）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
-            MouseEventKind::Move,
-            5,
-            6,
-            0,
-            Some("Head"),
-        )))
-        .expect("send Mouse before Boot");
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 5, 6, 0, Some("Head"))),
+    );
     // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragStart,
             5,
             6,
             0,
             Some("Head"),
-        )))
-        .expect("send Mouse before Boot (drag)");
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+        )),
+    );
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     let Driven {
         recorded, started, ..
@@ -110,36 +104,30 @@ fn phase_ignore_during_close_series_no_mouse_get() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     // CloseRequest は Steady{None} の即握手＝OnClose GET→別れの Value→close talk（保留）→CloseTalkWait。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
     // close 系列中（CloseTalkWait）の Mouse 注入（横断アームで無視・GET 不発）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
-            MouseEventKind::Move,
-            9,
-            9,
-            0,
-            Some("Head"),
-        )))
-        .expect("send Mouse during close series");
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 9, 9, 0, Some("Head"))),
+    );
     // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragStart,
             9,
             9,
             0,
             Some("Head"),
-        )))
-        .expect("send Mouse during close series (drag)");
+        )),
+    );
     // close talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf。
     gate.release_all();
 
@@ -200,36 +188,30 @@ fn pending_close_guard_suppresses_mouse_get() {
     );
 
     // Boot → `Steady{Some(挨拶 id=1)}`（挨拶 talk 保留）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     // 挨拶再生中の close 指示 → `Steady{Some}` ゆえ即握手せず pending_close に記録（OnClose まだ）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest during greeting");
+        },
+    );
     // pending_close 成立窓での Mouse 注入 → ガードで GET 不発（release 前ゆえ Mouse は必ずこの窓で処理）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
-            MouseEventKind::Move,
-            11,
-            22,
-            0,
-            Some("Head"),
-        )))
-        .expect("send Mouse while close pending");
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 11, 22, 0, Some("Head"))),
+    );
     // 入力の種類を見る前に効く守りなので、ドラッグも同じく出ない（mouse-drag-events K5・K6）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragStart,
             11,
             22,
             0,
             Some("Head"),
-        )))
-        .expect("send Mouse while close pending (drag)");
+        )),
+    );
     // 挨拶 talk（Ended）を解放 → pending_close を消化して begin_close（OnClose→別れ→close talk quit:true）。
     gate.release_all();
 

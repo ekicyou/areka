@@ -9,7 +9,6 @@ use super::*;
 use crate::msg::EventId;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use areka_actor::reply_channel;
-use shiori_host32_host::ShutdownError;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};

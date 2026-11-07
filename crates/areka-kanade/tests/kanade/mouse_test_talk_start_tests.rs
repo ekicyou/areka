@@ -1,8 +1,8 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
-    Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MonotonicMs,
-    MouseEventKind, QuitPolicy, Response, TalkId, events, expected_call, expected_unload,
-    spawn_harness, spawn_harness_gated,
+    Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg,
+    MouseEventKind, QuitPolicy, TalkId, events, expected_call, expected_unload, send,
+    spawn_harness, spawn_harness_gated, tick,
 };
 
 /// マウス GET へ注入する撫で talk スクリプト（cage 7・`Steady{None}` からの起動）。
@@ -60,25 +60,18 @@ fn mouse_value_from_steady_none_starts_talk() {
     let (x, y, scope) = (10_i64, 20_i64, 0_u32);
     let harness = spawn_harness(
         KanadeConfig::new("master", "1.0.0"),
-        Fixture::quitting().without_boot_greeting().with_response(
-            "OnMouseMove",
-            Response::Script(FIXED_MOUSE_SCRIPT.to_string()),
-        ),
+        Fixture::quitting()
+            .without_boot_greeting()
+            .with_response("OnMouseMove", FIXED_MOUSE_SCRIPT.to_string()),
         // マウス起動 talk（受領 index 0）を quit:true にして終了駆動（close talk は生じない）。
         QuitPolicy::PerTalk(vec![true]),
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
-            MouseEventKind::Move,
-            x,
-            y,
-            scope,
-            Some("Head"),
-        )))
-        .expect("send Mouse");
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))),
+    );
 
     // マウス talk の quit:true が終了系列を駆動する（CloseRequest 不要）。期限付き join。
     let Driven {
@@ -168,10 +161,7 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
     let fixture = Fixture::quitting()
         .with_steady_value_indices([0])
         .without_boot_greeting()
-        .with_response(
-            "OnMouseMove",
-            Response::Script(FIXED_MOUSE_REPLACE_SCRIPT.to_string()),
-        );
+        .with_response("OnMouseMove", FIXED_MOUSE_REPLACE_SCRIPT.to_string());
 
     // hold_indices=[0, 1]: steady talk（id=1）と置換 talk（id=2）の両 TalkDone を保留。
     // quit_flags: index0（steady talk）=false（Ended→stale 破棄・slot は既に置換済み）・
@@ -183,25 +173,14 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
         vec![0, 1],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     // Tick1（now=1s）: Steady{None}→GET→Value→steady talk（id=1・保留）→Steady{Some(1)}。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send Tick 1");
+    tick(&harness, 1_000);
     // active talk 窓（Steady{Some(1)}）で Move 注入: GET のまま Status: talking→Value→置換（id=2・保留）。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
-            MouseEventKind::Move,
-            x,
-            y,
-            scope,
-            Some("Head"),
-        )))
-        .expect("send Mouse during active talk");
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))),
+    );
     // 両保留を解放 → TalkDone(1,Ended)（stale 破棄）→ TalkDone(2,Quit)（終了駆動）。
     gate.release_all();
 

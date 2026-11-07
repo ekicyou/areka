@@ -3,7 +3,7 @@ use super::{
     CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT,
     Fixture, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, TalkId,
     drive_ticks_until_disconnect, events, expected_call, expected_unload,
-    resumed_get_after_active_window, spawn_harness_gated,
+    resumed_get_after_active_window, send, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -52,14 +52,11 @@ fn boot_greeting_talkdone_resumes_get_pump() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // 挨拶 active 中の Tick（now=1h）→ OnSecondChange NOTIFY（Ref3=0・talking）。
     let notify_now = MonotonicMs(3_600_000); // 1h → Ref0="1"。
-    harness
-        .sender
-        .send(KanadeMsg::Tick { now: notify_now })
-        .expect("send held-greeting Tick");
+    send(&harness, KanadeMsg::Tick { now: notify_now });
 
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
@@ -186,24 +183,21 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     );
 
     // Boot → `Steady{Some(挨拶 id=1)}`（挨拶 talk 保留）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // 挨拶再生中の close 指示。`Steady{Some}` ゆえ即握手せず `pending_close` に記録される（OnClose まだ）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest during greeting");
+        },
+    );
 
     // (A) 挨拶が active（`Steady{Some(挨拶)}`）であることを、Tick が NOTIFY（Ref3=0・talking）を出すことで
     //     確認する。`Steady{Some}` の Tick は `pending_close` を消化しない（NOTIFY 発行のみ・維持）ため、
     //     この Tick は握手を進めず「挨拶が今なお active・close は繰延中」という状態を可視化するだけである。
     let notify_now = MonotonicMs(3_600_000); // 1h → Ref0="1"。
-    harness
-        .sender
-        .send(KanadeMsg::Tick { now: notify_now })
-        .expect("send held-greeting Tick");
+    send(&harness, KanadeMsg::Tick { now: notify_now });
 
     let expected_notify = expected_call(events::on_second_change(
         notify_now,

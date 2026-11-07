@@ -3,8 +3,8 @@ use super::test_support::{
     choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, Response,
-    TalkCommand, events, expected_call, expected_unload, spawn_harness_gated,
+    Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, events,
+    expected_call, expected_unload, send, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -31,10 +31,7 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_response(
-            NAMED_CHOICE_ID,
-            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response(NAMED_CHOICE_ID, FIXED_CHOICE_SCRIPT.to_string());
 
     // hold_indices=[0]: steady talk（id=1）の TalkDone を park して active talk 窓を維持する。
     // quit_flags: index0（steady talk）=false・index1（選択由来 talk）=true（終了駆動）。
@@ -46,13 +43,13 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     );
 
     establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-        .expect("send Choice");
+    send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
 
     let Driven {
-        recorded, commands, ..
+        recorded,
+        commands,
+        started,
+        ..
     } = harness.finish("kanade named-choice join");
 
     // (1) 段列は任意名 1 段のみ（Ex／無印は一切発行されない・裁定 1）。
@@ -96,13 +93,6 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     );
 
     // (4) 起動は新 talk_id・選択由来スクリプト（旧 id を再利用しない・Req4.1）。
-    let started: Vec<_> = commands
-        .iter()
-        .filter_map(|c| match c {
-            TalkCommand::Start(s) => Some(s),
-            _ => None,
-        })
-        .collect();
     assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"

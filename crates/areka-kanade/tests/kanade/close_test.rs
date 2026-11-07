@@ -39,10 +39,10 @@ use areka_kanade::{
 };
 
 use super::common::{
-    CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
-    expected_translate, expected_unload, resumed_get_after_active_window, spawn_harness,
-    spawn_harness_gated, spawn_harness_with_stop_sink,
+    CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, Harness, QuitPolicy,
+    RecordedCall, drive_ticks_until_disconnect, expected_call, expected_translate, expected_unload,
+    resumed_get_after_active_window, send, single_stop_cause, spawn_harness, spawn_harness_gated,
+    spawn_harness_with_stop_sink, tick,
 };
 
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming 要件 1.7 / 3.1 / 3.2）。

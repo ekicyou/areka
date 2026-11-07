@@ -10,20 +10,18 @@
 //! - (c) close 指示から再生完了通知を待って終了系列（Unload→停止 join）が完走したこと。
 //!
 //! 決定性（Req 7.3）を担保するため、シナリオ全体を [`drive_full_run`] に閉じ込め、
-//! 単一 `#[test]` の中で複数回連続実行して同一結果になることを確認する（各反復は
-//! 新規ハーネスを spawn する）。
+//! 単一 `#[test]` の中で 5 回連続して通ることを確かめる（各反復は新規ハーネスを spawn する）。
 
 use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId,
-    events, resources,
+    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, StartTalk, TalkId, events, resources,
 };
 
 use super::common::{
     CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, QuitPolicy,
-    expected_call, expected_translate, expected_unload, spawn_harness,
+    expected_call, expected_translate, expected_unload, send, spawn_harness, tick,
 };
 
-/// 主観測の駆動と検証を 1 回分実行する（反復同一性のため単一関数に閉じる）。
+/// 主観測の駆動と検証を 1 回分実行する（反復のため単一関数に閉じる）。
 ///
 /// 各呼出は新規ハーネスを spawn し、boot→pump→close→終了の運行全体を注入 Tick のみで
 /// 駆動する。終了系列完了（kanade の期限付き join 成功）まで待った上で、shiori 記録列と
@@ -45,25 +43,20 @@ fn drive_full_run() {
     // --- 運行全体を注入で駆動する（実時間 sleep なし・時刻は Tick のみ） ---
 
     // 起動指示。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // 毎秒 Tick を数回（定常運転の pump を駆動）。OnSecondChange は 204 基調ゆえ talk なし。
     for i in 1..=3u64 {
-        harness
-            .sender
-            .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
-            })
-            .expect("send Tick");
+        tick(&harness, i * 1_000);
     }
 
     // close 指示。active talk なしゆえ即握手開始（OnClose GET→別れの Value→close talk）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // close talk（id 2）の TalkDone は mock sakura が quit:true で自動返送する
     // （PerTalk index 1）。これが終了系列（Unloading{Quit}→Unload→StopSelf）を駆動する。
@@ -86,6 +79,8 @@ fn drive_full_run() {
         ..ExecutionSnapshot::INACTIVE
     };
     let on_boot = events::on_boot(&config, &ExecutionSnapshot::INACTIVE);
+    // 挨拶の翻訳の期待は OnBoot の呼出を借りて先に組む（`ShioriCall` は Clone を持たない）。
+    let boot_translate = expected_translate(FIXED_BOOT_SCRIPT, &on_boot, &talking);
     let expected_boot_prefix = vec![
         expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY
         expected_call(resources::resource_get(
@@ -93,8 +88,8 @@ fn drive_full_run() {
             &ExecutionSnapshot::INACTIVE,
         )), // GET（prefetch・R4.1）→204
         expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)), // GET →204
-        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET →Value
-        expected_translate(FIXED_BOOT_SCRIPT, &on_boot, &talking),          // GET（挨拶の翻訳）→204
+        expected_call(on_boot),                                             // GET →Value
+        boot_translate,                                                     // GET（挨拶の翻訳）→204
         expected_call(events::baseware_version(&config, &talking)), // NOTIFY（Status: talking）
     ];
     assert!(
@@ -182,20 +177,13 @@ fn drive_full_run() {
     );
 }
 
-/// 主観測: boot→pump→close→終了の運行全体を単一の合否として検証し、反復実行で同一結果に
-/// なることを確認する（Req 7.1・7.2・7.3）。
+/// 主観測: boot→pump→close→終了の運行全体を単一の合否として検証し、新規ハーネスで 5 回連続して
+/// 通ることを確かめる（Req 7.1・7.2・7.3）。
 ///
 /// 各反復は新規ハーネスを spawn し、実時間 sleep を用いず注入 Tick のみで運行を進める。
-/// 5 反復すべてで (a)(b)(c) が green になれば、決定的観測として合格とする。
 #[test]
 fn full_run_boot_pump_close_terminates_deterministically() {
-    // 反復同一性（Req 7.3）: 複数回連続実行しても同一結果で green になることを確認する。
-    for iteration in 0..5 {
-        // 各反復は独立関数呼出＝新規ハーネス。失敗時にどの反復かを添えて報告する。
-        let result = std::panic::catch_unwind(drive_full_run);
-        assert!(
-            result.is_ok(),
-            "full_run は反復 {iteration} 回目で失敗した（決定性違反）"
-        );
+    for _ in 0..5 {
+        drive_full_run();
     }
 }

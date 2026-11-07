@@ -249,8 +249,8 @@ fn get_ok_none_maps_to_no_content() {
 }
 
 #[test]
-fn get_err_each_vocabulary_maps_to_failed() {
-    // Timeout
+fn get_err_maps_to_failed() {
+    // 語彙ごとの写像は map_error_* が固定する。ここは Err が Failed へ載ることだけを見る。
     let outcome = round_trip_via_runner(
         fake_get(|_, _, _| Err(RequestError::Timeout)),
         ShioriCall::Get {
@@ -262,57 +262,6 @@ fn get_err_each_vocabulary_maps_to_failed() {
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Timeout(_))),
         "Timeout: got {}",
-        describe(&outcome)
-    );
-
-    // Handshake
-    let outcome = round_trip_via_runner(
-        fake_get(|_, _, _| Err(RequestError::Handshake(HandshakeError::Timeout))),
-        ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-    );
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Handshake(_))),
-        "Handshake: got {}",
-        describe(&outcome)
-    );
-
-    // Ipc
-    let outcome = round_trip_via_runner(
-        fake_get(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed))),
-        ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-    );
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
-        "Ipc: got {}",
-        describe(&outcome)
-    );
-
-    // Shiori
-    let outcome = round_trip_via_runner(
-        fake_get(|_, _, _| {
-            Err(RequestError::Shiori(ShioriError::Status {
-                status: 400,
-                error_level: None,
-                error_description: None,
-            }))
-        }),
-        ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-    );
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Shiori(_))),
-        "Shiori: got {}",
         describe(&outcome)
     );
 }

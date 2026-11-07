@@ -5,9 +5,9 @@
 //! 定常以外の棄却は最上位の `step` から通す。
 
 use super::*;
-use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome};
+use crate::msg::{CloseReason, MonotonicMs, ShioriFailure, ShioriOutcome};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
-use crate::schedule::translate_test_support::config;
+use crate::schedule::translate_test_support::{config, only_get};
 use crate::schedule::{ActiveTalk, Input, Phase, step};
 use crate::talk::TalkId;
 use tracing::Level;
@@ -50,16 +50,6 @@ fn up(button: ClickButton, second_of_double: bool) -> MouseEventKind {
     MouseEventKind::ButtonUp {
         button,
         second_of_double,
-    }
-}
-
-/// 一括が GET 1 本だけであることを確かめ、(イベント名, Reference の並び) を返す。
-fn only_get(actions: &[Action]) -> (String, Vec<String>) {
-    match actions {
-        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET 1 本だけのはず（{} 件）", actions.len()),
     }
 }
 

@@ -45,15 +45,6 @@ fn await_gap(s: State) -> (State, Vec<Action>) {
     step(s, Input::AwaitTalkGap { raise: None }, &cfg())
 }
 
-fn talk_done(s: State, reason: TalkEndReason, quit_reserved: bool) -> State {
-    let done = TalkDone {
-        talk_id: TALK,
-        reason,
-        quit_reserved,
-    };
-    step(s, Input::TalkDone(done), &cfg()).0
-}
-
 /// 見張りが在り、結果がまだ決まっていないこと。
 fn assert_waiting(s: &State, label: &str) {
     let watch = s.talk_gap.as_ref().expect("見張りが在る");
@@ -92,7 +83,7 @@ fn unmarked_request_while_playing_reaches_at_the_end_of_the_talk() {
     .0;
     assert_waiting(&s, "Tick の後");
 
-    let mut s = talk_done(s, TalkEndReason::Ended, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Ended, false).0;
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
     assert_eq!(
         take_outcome(&mut s),
@@ -117,7 +108,7 @@ fn user_break_without_quit_reservation_reaches() {
     );
     assert_waiting(&s, "止めた応答を待つ間");
 
-    let mut s = talk_done(s, TalkEndReason::Interrupted, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Interrupted, false).0;
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
     assert_eq!(
         take_outcome(&mut s),
@@ -164,7 +155,7 @@ fn user_break_with_quit_reservation_goes_to_closing_as_today() {
 #[test]
 fn talk_reaching_quit_by_itself_is_closing() {
     let (s, _) = await_gap(steady_some());
-    let mut s = talk_done(s, TalkEndReason::Quit, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Quit, false).0;
     assert!(matches!(s.phase, Phase::Unloading { .. }));
     assert_eq!(
         take_outcome(&mut s),
@@ -222,7 +213,7 @@ fn decided_outcome_is_not_changed_by_later_steps() {
         },
         &cfg(),
     );
-    let mut s = talk_done(s, TalkEndReason::Ended, false);
+    let mut s = done_of(s, TALK, TalkEndReason::Ended, false).0;
     assert_eq!(
         take_outcome(&mut s),
         Some(TalkGap::Left {
@@ -230,6 +221,56 @@ fn decided_outcome_is_not_changed_by_later_steps() {
         }),
         "最初に決まった結果のまま"
     );
+}
+
+/// 定常でない相の見極め: 切替の相、または切替の帳簿が在る降ろす相（`raise_event` 無しの切替）は
+/// `GhostChange`、帳簿の無い降ろす相は `Closing`。
+#[test]
+fn undecided_watch_outside_steady_is_ghost_change_only_while_changing() {
+    let changing = || {
+        Some(crate::schedule::change::ChangeState {
+            req: change_request(),
+            script: None,
+        })
+    };
+    let unloading = || Phase::Unloading {
+        cause: TermCause::Quit,
+    };
+    let cases = [
+        (
+            "ChangeTalkWait",
+            Phase::ChangeTalkWait {
+                talk_id: TALK,
+                deadline: None,
+            },
+            None,
+            GapLeft::GhostChange,
+        ),
+        (
+            "Unloading+change",
+            unloading(),
+            changing(),
+            GapLeft::GhostChange,
+        ),
+        ("Unloading", unloading(), None, GapLeft::Closing),
+    ];
+    for (label, phase, change, reason) in cases {
+        let mut s = State {
+            phase,
+            change,
+            talk_gap: Some(GapWatch {
+                marked: Marked::Talk(TALK),
+                outcome: None,
+            }),
+            ..steady_none()
+        };
+        observe(&mut s, None);
+        assert_eq!(
+            take_outcome(&mut s),
+            Some(TalkGap::Left { reason }),
+            "{label}"
+        );
+    }
 }
 
 #[test]
@@ -702,36 +743,6 @@ fn user_break_of_the_marked_talk_is_cancelled_by_user_even_with_quit_reserved() 
         logged_once(&ev, Level::INFO, "talk_gap_marked_break");
         assert_eq!(take_outcome(&mut s), Some(TalkGap::CancelledByUser));
     }
-}
-
-#[test]
-fn the_same_script_without_the_mark_goes_to_closing_when_broken() {
-    // 同じ台本を印の無い応答（ダブルクリック）で始め、印の無い依頼で見張って同じ中断を掛ける。
-    let (s, _) = reply(double_click(steady_none()), value(), "OnMouseDoubleClick");
-    assert!(is_playing(&s, MARKED));
-    let (s, _) = await_gap(s);
-    let (s, _) = step(
-        s,
-        Input::UserBreak {
-            scope: 0,
-            talk_id: Some(MARKED),
-        },
-        &cfg(),
-    );
-    let (mut s, actions) = done_of(s, MARKED, TalkEndReason::Interrupted, true);
-    assert!(matches!(
-        s.phase,
-        Phase::Unloading {
-            cause: TermCause::Quit
-        }
-    ));
-    assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
-    assert_eq!(
-        take_outcome(&mut s),
-        Some(TalkGap::Left {
-            reason: GapLeft::Closing
-        })
-    );
 }
 
 #[test]

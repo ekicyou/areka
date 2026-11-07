@@ -6,7 +6,7 @@
 use super::*;
 use crate::msg::{MonotonicMs, ShioriCall, ShioriFailure};
 use crate::schedule::log_capture::{capture, logged_once};
-use crate::schedule::translate_test_support::config;
+use crate::schedule::translate_test_support::{config, only_get};
 use crate::schedule::{ActiveTalk, Input, step};
 use crate::talk::TalkId;
 use tracing::Level;
@@ -41,16 +41,6 @@ fn anchor(id: &str, text: &str, references: &[&str]) -> AnchorInput {
         text: text.to_string(),
         scope: 1,
         references: references.iter().map(|s| s.to_string()).collect(),
-    }
-}
-
-/// 一括が GET 1 本だけであることを確かめ、(イベント名, Reference の並び) を返す。
-fn only_get(actions: &[Action]) -> (String, Vec<String>) {
-    match actions {
-        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET 1 本だけのはず（{} 件）", actions.len()),
     }
 }
 

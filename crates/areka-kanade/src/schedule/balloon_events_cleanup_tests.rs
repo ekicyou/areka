@@ -10,7 +10,7 @@
 //! 預かりを持てない経路（切替の送り出しの台詞の間・翻訳へ預けている間）は、その入口で時間切れの
 //! 知らせが預からずに断られることを同じ檻の中で確かめ、中断の控えだけを持たせて駆動する。
 
-use super::super::log_capture::{CapturedEvent, capture};
+use super::super::log_capture::{CapturedEvent, assert_not_logged, capture};
 use super::super::{Input, Phase, TermCause};
 use super::BreakNote;
 use super::done_tests::{done, field};
@@ -145,11 +145,7 @@ fn assert_dropped(s: &State, ev: &[CapturedEvent], held: Held, talk: TalkId, pha
         expected,
         "{held:?}: 捨てた控えごとに理由 talk_gone を 1 行（要件 7.2）。\n捕捉={ev:#?}"
     );
-    assert!(
-        !ev.iter()
-            .any(|e| e.event.as_deref() == Some("balloon_event_sent")),
-        "{held:?}: 送った記録は出ない。\n捕捉={ev:#?}"
-    );
+    assert_not_logged(ev, "balloon_event_sent");
     assert!(s.user_break_talk.is_none(), "{held:?}: 中断の控えは下りる");
     assert!(
         s.shown.as_ref().is_none_or(|shown| !shown.timeout_pending),
@@ -161,13 +157,8 @@ fn assert_dropped(s: &State, ev: &[CapturedEvent], held: Held, talk: TalkId, pha
 fn assert_quiet_after(s: &mut State, inputs: Vec<Input>, at: &str) {
     let (actions, ev) = feed_all(s, inputs);
     assert_no_balloon_request(&actions, at);
-    assert!(
-        ev.iter().all(|e| !matches!(
-            e.event.as_deref(),
-            Some("balloon_event_sent" | "balloon_event_not_sent")
-        )),
-        "{at}: 捨てた後は何も記録しない。\n捕捉={ev:#?}"
-    );
+    assert_not_logged(&ev, "balloon_event_sent");
+    assert_not_logged(&ev, "balloon_event_not_sent");
 }
 
 /// 降ろし終えた応答。

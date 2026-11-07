@@ -3,10 +3,14 @@ use super::test_support::{
     steady_with_ledger,
 };
 use super::*;
-use crate::msg::ShioriCall;
+use crate::msg::{ShioriCall, ShioriFailure};
+use crate::schedule::log_capture::{
+    assert_logged, assert_no_error_logs, assert_not_logged, capture, logged_once, step_capturing,
+};
 use crate::schedule::translate_test_support::pass_translate;
-use crate::schedule::{ActiveTalk, step};
+use crate::schedule::{ActiveTalk, TermCause, step};
 use crate::talk::{StartTalk, TalkEndReason};
+use tracing::Level;
 
 // ============================================================
 // 選択肢タイムアウト（C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
@@ -15,9 +19,6 @@ use crate::talk::{StartTalk, TalkEndReason};
 // 完了状態の要求は「**注入時刻のみ**で期限到達・イベント発行・空応答時の解除までが再現し、
 // 実時間待機に依存しない」ことである。よって本群は一切スリープせず、`Input::Tick { now }` の
 // 注入値と帳簿の `deadline` の比較だけで全分岐を踏む（`deterministic-test-coverage-mandate`）。
-
-use crate::schedule::log_capture::{assert_logged, capture, logged_once};
-use tracing::Level;
 
 /// 選択待ち（`Waiting`）帳簿つきの `Steady{Some}` を、起動スクリプトと期限を指定して構築する。
 ///
@@ -38,24 +39,6 @@ fn steady_waiting(
         .expect("steady_with_ledger は帳簿を持つ")
         .deadline = deadline;
     s
-}
-
-/// `step` を捕捉つきで駆動する（遷移結果と捕捉ログを同時に取る）。
-fn step_capturing(
-    state: State,
-    input: Input,
-    config: &KanadeConfig,
-) -> (
-    State,
-    Vec<Action>,
-    Vec<crate::schedule::log_capture::CapturedEvent>,
-) {
-    let mut out = None;
-    let ev = capture(|| {
-        out = Some(step(state, input, config));
-    });
-    let (next, actions) = out.expect("step は必ず結果を返す");
-    (next, actions, ev)
 }
 
 // --- A. 期限到達（規則 5・Req7.3） ---
@@ -417,10 +400,6 @@ fn tick_after_timeout_cancel_drops_choosing() {
 // ============================================================
 // 帳簿の掃除・選択起因の失敗例外（C4 規則 7／8・DD-12・Req1.3／4.5／6.2）
 // ============================================================
-
-use crate::msg::ShioriFailure;
-use crate::schedule::TermCause;
-use crate::schedule::log_capture::{assert_no_error_logs, assert_not_logged};
 
 /// 規則 7 の不変条件: 帳簿があるなら、その対象 talk は現行 talk と一致する。
 ///

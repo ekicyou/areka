@@ -246,7 +246,7 @@ fn real_helper_boot_pump_close_completes() {
 
     // --- teardown: kanade 停止後に inbox 送信端を drop → mock sakura sink も自然終了 ---
     drop(kanade_inbox_tx);
-    sakura.join_bounded("real-helper mock-sakura join", DEFAULT_TIMEOUT);
+    let _ = sakura.join_bounded_then_commands("real-helper mock-sakura join", DEFAULT_TIMEOUT);
 
     // real shiori アクターは kanade 停止（StopSelf→ShioriMsg::Close 送出）で受信ループを抜け、
     // ShioriConnection（親窓＋helper）を RAII teardown する。期限付き join で完走を確認する。

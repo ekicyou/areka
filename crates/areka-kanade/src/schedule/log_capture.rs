@@ -10,10 +10,7 @@
 //! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する（spec:
 //! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは
 //! 「この crate の檻が照合する形（[`CapturedEvent`]）への変換」と表明ヘルパだけで、
-//! subscriber の設置も interest の管理も自前では行わない。以前ここにあった
-//! interest-keeper（プロセス全体の既定 subscriber を常駐させる方式）は、同じ機構が
-//! crate ごとに写し取られて写し損ねた側だけが静かに嘘をつく形だったため、共有 crate へ
-//! 一本化して撤去した。
+//! subscriber の設置も interest の管理も自前では行わない。
 //!
 //! 捕捉されるのは**呼出スレッド**で同期的に発火したイベントだけである。`step()` は
 //! テストスレッド上で同期的に走る純粋関数ゆえ確実に捕えられる（spawn したアクター
@@ -135,6 +132,18 @@ impl CapturedEvent {
 pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
     let ((), events) = log_capture_kit::capture(f);
     events.iter().map(CapturedEvent::from_canonical).collect()
+}
+
+/// `step` を捕捉つきで駆動する（遷移結果と捕捉ログを同時に取る）。
+pub(crate) fn step_capturing(
+    state: super::State,
+    input: super::Input,
+    config: &crate::msg::KanadeConfig,
+) -> (super::State, Vec<super::Action>, Vec<CapturedEvent>) {
+    let mut out = None;
+    let ev = capture(|| out = Some(super::step(state, input, config)));
+    let (next, actions) = out.expect("step は必ず結果を返す");
+    (next, actions, ev)
 }
 
 /// 捕捉列に `target="kanade"`・`event=event_name`・`level` のイベントが存在することを表明する。

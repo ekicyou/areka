@@ -12,7 +12,8 @@
 //! 書き下した `["user","1","1"]` が Reference1＝Reference2 も檻に入れる（要件 7.4）。
 
 use super::{
-    CallMethod, CloseReason, Driven, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, spawn_harness,
+    CallMethod, CloseReason, Driven, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, send,
+    spawn_harness,
 };
 
 #[test]
@@ -25,13 +26,13 @@ fn a_user_close_carries_the_window_scope_into_onclose_references() {
             Fixture::default().without_boot_greeting(),
             QuitPolicy::PerTalk(vec![]),
         );
-        harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-        harness
-            .sender
-            .send(KanadeMsg::CloseRequest {
+        send(&harness, KanadeMsg::Boot);
+        send(
+            &harness,
+            KanadeMsg::CloseRequest {
                 reason: CloseReason::User { scope },
-            })
-            .expect("send CloseRequest");
+            },
+        );
 
         let Driven { recorded, .. } = harness.finish("kanade scope-close join");
         let onclose: Vec<&Vec<String>> = recorded

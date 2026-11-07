@@ -4,7 +4,7 @@ use super::test_support::{
 };
 use super::{
     CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy,
-    Response, TalkCommand, expected_unload, spawn_harness_gated,
+    expected_unload, send, spawn_harness_gated,
 };
 
 /// 選択待ちの候補集合に**含めない** ID（群 6 の候補照合の観測面・Req1.4）。
@@ -86,10 +86,7 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_response(
-            NAMED_CHOICE_ID,
-            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response(NAMED_CHOICE_ID, FIXED_CHOICE_SCRIPT.to_string());
 
     // hold_indices=[0, 1]: steady talk（id=1）と選択由来 talk（id=2）の TalkDone を両方 park。
     // quit フラグは終了駆動に使わない（ForceQuit が迂回する）ため一律 false。
@@ -102,26 +99,23 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
 
     establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // 1 本目——受理される唯一の注入。
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-        .expect("send Choice (accepted)");
+    send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
     // 2・3 本目——解決で帳簿が消えた後に届く遅延通知（いずれも棄却されるはず・Req1.3）。
-    for nth in ["send Choice (late #1)", "send Choice (late #2)"] {
-        harness
-            .sender
-            .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-            .expect(nth);
+    for _ in 0..2 {
+        send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
     }
-    harness
-        .sender
-        .send(KanadeMsg::ForceQuit {
+    send(
+        &harness,
+        KanadeMsg::ForceQuit {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send ForceQuit");
+        },
+    );
 
     let Driven {
-        recorded, commands, ..
+        recorded,
+        commands,
+        started,
+        ..
     } = harness.finish("kanade choice-once join");
 
     // (1) カスケードは高々 1 回（3 注入でも段列は任意名 1 件のみ・Req1.1）。
@@ -143,13 +137,6 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     );
 
     // (3) 到達 StartTalk の内訳——選択由来は 2 本目ただ 1 本（遅延注入は talk を起こさない）。
-    let started: Vec<_> = commands
-        .iter()
-        .filter_map(|c| match c {
-            TalkCommand::Start(s) => Some(s),
-            _ => None,
-        })
-        .collect();
     assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
@@ -187,10 +174,7 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_response(
-            NAMED_CHOICE_ID,
-            Response::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response(NAMED_CHOICE_ID, FIXED_CHOICE_SCRIPT.to_string());
 
     // 保留構成・終了駆動は群 6 共通（hold_indices=[0, 1]＋ForceQuit）。
     let (harness, _gate) = spawn_harness_gated(
@@ -202,21 +186,18 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
 
     establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // (1) 候補外 ID——棄却されるはず（Req1.4）。
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(OUT_OF_CANDIDATE_CHOICE_ID)))
-        .expect("send Choice (out of candidates)");
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(OUT_OF_CANDIDATE_CHOICE_ID)),
+    );
     // (2) 候補内 ID——(1) が選択待ちを閉じていなければ受理されるはず。
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-        .expect("send Choice (in candidates)");
-    harness
-        .sender
-        .send(KanadeMsg::ForceQuit {
+    send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
+    send(
+        &harness,
+        KanadeMsg::ForceQuit {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send ForceQuit");
+        },
+    );
 
     let Driven {
         recorded, commands, ..

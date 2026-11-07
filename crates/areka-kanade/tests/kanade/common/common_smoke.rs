@@ -10,8 +10,8 @@ use areka_kanade::{
 use areka_talk::ScriptOrigin;
 
 use super::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, QuitPolicy, Response, expected_call,
-    join_bounded, spawn_mock_sakura, spawn_mock_shiori,
+    DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, QuitPolicy, expected_call, join_bounded,
+    spawn_mock_sakura, spawn_mock_shiori,
 };
 
 /// mock shiori 単独駆動: `OnBoot` GET へ即時に固定 Value を返し、記録が
@@ -44,9 +44,7 @@ fn mock_shiori_replies_and_records_onboot() {
 
     // 記録列が events 導出の期待値と一致する。
     let recorded = shiori.recorded();
-    assert_eq!(recorded, vec![expected.clone()]);
-    assert_eq!(recorded[0].method, CallMethod::Get);
-    assert_eq!(recorded[0].id, "OnBoot");
+    assert_eq!(recorded, vec![expected]);
     assert_eq!(recorded[0].references, vec!["master".to_string()]);
 
     // 停止駆動（Close）→期限付き join（ハングしない）。
@@ -104,7 +102,7 @@ fn mock_sakura_records_and_returns_talkdone() {
 
     // TalkCommand 送信端を drop → sink スレッドは自然終了（期限付き join）。
     drop(talk_tx);
-    sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
+    let _ = sakura.join_bounded_then_commands("mock-sakura join", DEFAULT_TIMEOUT);
 }
 
 /// design Testing Strategy 冒頭・C7 Ordering / delivery: mock sakura sink が
@@ -195,7 +193,7 @@ fn mock_sakura_records_talk_command_arrival_order() {
     assert_eq!(started[1].talk_id, TalkId(2));
 
     drop(talk_tx);
-    sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
+    let _ = sakura.join_bounded_then_commands("mock-sakura join", DEFAULT_TIMEOUT);
 }
 
 /// 配管の疎通: マウス GET へ script Value と 204 を任意注入でき、mock がそれを返す。
@@ -207,8 +205,7 @@ fn mock_sakura_records_talk_command_arrival_order() {
 fn mock_shiori_injects_mouse_response() {
     const MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
     // OnMouseMove へ script を注入・OnMouseDoubleClick は未注入（既定 204）。
-    let fixture =
-        Fixture::default().with_response("OnMouseMove", Response::Script(MOUSE_SCRIPT.to_string()));
+    let fixture = Fixture::default().with_response("OnMouseMove", MOUSE_SCRIPT.to_string());
     let shiori = spawn_mock_shiori(fixture);
 
     // (c) script 注入: OnMouseMove GET → Value（events 表から導出・ハードコードしない）。

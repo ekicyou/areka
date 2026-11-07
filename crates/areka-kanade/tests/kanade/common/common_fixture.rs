@@ -19,16 +19,6 @@ pub const FIXED_FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e-";
 // Fixture — イベント id → 応答の対応（シナリオ構成可能）
 // ============================================================================
 
-/// 表に載せた GET（マウス・選択由来・リソース）へ返す応答。
-///
-/// 表に載せない id は 204（NoContent）。`Script(String::new())` は **200 の空文字**であり 204 とは
-/// 別物である（リソースの要件 3.3／3.4 の「空を返す」と「値なしを返す」の区別はここで作る）。
-#[derive(Debug, Clone)]
-pub enum Response {
-    /// 200 の Value を返す（talk の台本なら StartTalk を起こす）。
-    Script(String),
-}
-
 /// mock shiori の応答表（Req 7.1）。シナリオごとに構成する。
 ///
 /// 基調は fixture 表どおり（OnInitialize→Notified／OnFirstBoot→204／OnBoot→固定 Value／
@@ -56,11 +46,13 @@ pub struct Fixture {
     pub steady_value_indices: Vec<usize>,
     /// `OnClose` を Value（quit talk）で返すなら true・204（無言終了）なら false。
     pub close_quits: bool,
-    /// 表に載らない GET（マウス・選択由来・リソース）の id → 応答の対応。
+    /// 表に載らない GET（マウス・選択由来・リソース）の id → 200 で返す Value の対応。
     ///
     /// キーは wire 形のイベント id（`"OnMouseMove"`・`"OnChoiceSelectEx"`・`\q` の任意名 ID）または
     /// SHIORI リソース名（`"readmebutton.caption"` 等）。含まれない id は 204（未知 GET と同じ）。
-    pub responses: HashMap<&'static str, Response>,
+    /// 空文字の値は **200 の空文字**であり 204 とは別物である（リソースの要件 3.3／3.4 の「空を返す」と
+    /// 「値なしを返す」の区別はここで作る）。
+    pub responses: HashMap<&'static str, String>,
 }
 
 impl Default for Fixture {
@@ -99,11 +91,11 @@ impl Fixture {
         self
     }
 
-    /// GET の id（マウス・選択由来・リソース）へ応答を設定する（連鎖記法）。
+    /// GET の id（マウス・選択由来・リソース）へ 200 で返す Value を設定する（連鎖記法）。
     ///
     /// 同一 id への再指定は後勝ちで上書きする。未設定の id は 204 のまま。
-    pub fn with_response(mut self, id: &'static str, response: Response) -> Self {
-        self.responses.insert(id, response);
+    pub fn with_response(mut self, id: &'static str, value: String) -> Self {
+        self.responses.insert(id, value);
         self
     }
 }
@@ -166,7 +158,7 @@ impl FixtureState {
                 }
                 // 表に載せた GET（マウス・選択由来・リソース）。どれも語彙が交わらないので表は 1 本。
                 other => match self.fixture.responses.get(other) {
-                    Some(Response::Script(value)) => {
+                    Some(value) => {
                         ShioriOutcome::Value(value.clone(), areka_talk::SecurityLevel::Local)
                     }
                     // 未設定の id・未知 GET はいずれも 204（保守的既定）。

@@ -1,8 +1,8 @@
 use super::test_support::onclose_get_index;
 use super::{
-    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
-    Fixture, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, events, expected_call,
-    expected_translate, expected_unload, spawn_harness, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT,
+    Fixture, KanadeConfig, KanadeMsg, QuitPolicy, RecordedCall, events, expected_call,
+    expected_translate, expected_unload, send, spawn_harness, spawn_harness_gated, tick,
 };
 
 // ============================================================================
@@ -42,15 +42,15 @@ fn farewell_talk_without_quit_tag_still_terminates() {
     // ＝台本が `\-` に辿り着かなかった場合そのものである。
     let harness = spawn_harness(config, fixture, QuitPolicy::PerTalk(vec![false]));
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk→quit:false）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // close talk の TalkDone{Ended} だけで終了系列が完走する（Tick は 1 本も送っていない）。
     let Driven {
@@ -113,13 +113,7 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         started
     );
 
-    // 終了系列: 末尾は Unload（正規終了経路）で 1 度だけ。
-    let last = recorded.last().expect("記録列は空でない");
-    assert_eq!(
-        *last,
-        expected_unload(),
-        "末尾は Unload（別れの台詞の完了で駆動された終了系列の完走）で閉じるはず"
-    );
+    // 終了系列: Unload は 1 度だけ（末尾が Unload であることは (c) の 2 件目で見た）。
     let unload_count = recorded
         .iter()
         .filter(|c| c.method == CallMethod::Unload)
@@ -152,13 +146,13 @@ fn silent_close_on_204_terminates_without_extra_events() {
         QuitPolicy::PerTalk(vec![false]),
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // 204 無言終了で終了系列完走（Unload→StopSelf）まで到達する。
     let Driven {
@@ -199,21 +193,10 @@ fn silent_close_on_204_terminates_without_extra_events() {
         "OnClose GET はちょうど 1 度（再発行なし）"
     );
 
-    // (c) close は StartTalk を一切生まない: sink には boot talk のみが届く（close talk 非起動）。
+    // (c) close は StartTalk を一切生まない: sink に届くのは boot talk 1 本だけ（close talk も
+    //     steady talk も起動しない）。
     assert!(
-        started.iter().all(|s| s.script != FIXED_FAREWELL_SCRIPT),
-        "204 無言終了では別れの close talk は起動しないはず: {:?}",
-        started
-    );
-    // steady script も出ない（Tick を送っていない・boot talk のみ）。
-    assert!(
-        started.iter().all(|s| s.script != FIXED_STEADY_SCRIPT),
-        "本シナリオで steady talk は起動しないはず: {:?}",
-        started
-    );
-    assert_eq!(
-        started.len(),
-        1,
+        started.len() == 1 && started[0].script == FIXED_BOOT_SCRIPT,
         "sink に届くのは boot talk 1 本のみ（close は talk を起こさない）: {:?}",
         started
     );
@@ -255,32 +238,22 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // Tick(now=1s): last_now=Some(1s) を確定（握手入口 deadline 基準を Some にする）。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send arming Tick");
+    tick(&harness, 1_000);
 
     // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk・保留）。
     // CloseTalkWait 進入時に deadline=1s+5s=6s が確定する。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // Tick(now=100s): deadline(6s)を大きく超過 → DeadlineExceeded → Unload → StopSelf。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(100_000),
-        })
-        .expect("send deadline-exceeding Tick");
+    tick(&harness, 100_000);
 
     // TalkDone が一度も来ないにもかかわらず、deadline 判定で終了系列が完走し join が成功する
     // （保留は解放しない＝kanade 停止後は releaser の recv_closed 安全弁が片づける）。
@@ -327,21 +300,16 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
     );
 
     // 起動して定常運転へ落ち着かせる（boot 系列は Boot 処理内で同期完走する）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send settle Tick");
+    send(&harness, KanadeMsg::Boot);
+    tick(&harness, 1_000);
 
     // 強制終了指示 → 終了系列へ直行（DD-10）。
-    harness
-        .sender
-        .send(KanadeMsg::ForceQuit {
+    send(
+        &harness,
+        KanadeMsg::ForceQuit {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send ForceQuit");
+        },
+    );
 
     // 直行終了で join 成功（＝終了へ直行した証拠）。
     let Driven { recorded, .. } = harness.finish("kanade force-quit join");

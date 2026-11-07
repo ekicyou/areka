@@ -12,8 +12,8 @@ use crate::schedule::events::{SourceEvent, on_translate};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
 use crate::schedule::translate_test_support::{
-    active, boot_until_greeting_playing, change_request, config, fingerprint, non_steady_states,
-    steady, strings, warn_or_above,
+    CHOICE_ID, active, boot_until_greeting_playing, change_request, choice_event_count, config,
+    fingerprint, non_steady_states, steady, strings, warn_or_above,
 };
 use crate::schedule::{
     Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, phase_label, step,
@@ -174,7 +174,7 @@ fn no_value_or_empty_keeps_the_current_talk() {
         let mut state = steady(active(9, "OnMouseDoubleClick"));
         state.choice = Some(ChoiceState {
             talk_id: TalkId(9),
-            candidates: vec!["選択1".to_string()],
+            candidates: vec![CHOICE_ID.to_string()],
             deadline: Some(MonotonicMs(1_000)),
             phase: ChoicePhase::Waiting,
         });
@@ -228,7 +228,7 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
     let mut state = steady(active(9, "OnMouseDoubleClick"));
     state.choice = Some(ChoiceState {
         talk_id: TalkId(9),
-        candidates: vec!["選択1".to_string()],
+        candidates: vec![CHOICE_ID.to_string()],
         deadline: Some(MonotonicMs(1_000)),
         phase: ChoicePhase::Waiting,
     });
@@ -262,21 +262,14 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
         ))
     });
     let (state, tick) = out.unwrap();
-    assert!(
-        !tick.iter().any(|a| matches!(
-            a,
-            Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. })
-                if matches!(id.as_str(), "OnChoiceSelectEx" | "OnChoiceSelect" | "OnChoiceTimeout" | "選択1")
-        )),
-        "時間切れのイベントを送らない"
-    );
+    assert_eq!(choice_event_count(&tick), 0, "時間切れのイベントを送らない");
     assert_not_logged(&events, "choice_timeout_ledger_stale");
     let mut out = None;
     let events = capture(|| {
         out = Some(step(
             state,
             Input::Choice(ChoiceInput {
-                id: "選択1".to_string(),
+                id: CHOICE_ID.to_string(),
                 label: "選択その1".to_string(),
                 scope: 0,
                 references: Vec::new(),

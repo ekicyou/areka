@@ -65,10 +65,10 @@ use areka_kanade::{
 };
 
 use super::common::{
-    BlockOn, CallMethod, DEFAULT_TIMEOUT, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
-    Fixture, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
-    expected_unload, resumed_get_after_active_window, spawn_harness, spawn_harness_blocking,
-    spawn_harness_gated,
+    CallMethod, DEFAULT_TIMEOUT, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
+    QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call, expected_unload,
+    resumed_get_after_active_window, send, spawn_harness, spawn_harness_blocking,
+    spawn_harness_gated, tick,
 };
 
 /// Boot→（steady Tick を tick_count 回）→CloseRequest を駆動し、終了完走まで待って記録を確定する。
@@ -89,25 +89,20 @@ fn drive_steady(fixture: Fixture, tick_count: u64, quit_flags: Vec<bool>) -> Dri
     );
 
     // 起動指示（boot 系列→OnBoot 204→`Steady{None}` 直行・挨拶なし boot ゆえ StartTalk なし）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // 毎秒 Tick を数回（定常運転の pump を駆動）。時刻は注入 Tick のみで進行させる。
     for i in 1..=tick_count {
-        harness
-            .sender
-            .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
-            })
-            .expect("send Tick");
+        tick(&harness, i * 1_000);
     }
 
     // close 指示。active talk なしなら即握手（OnClose GET→別れの Value→close talk→quit:true）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
     harness.finish("kanade steady join")
@@ -311,34 +306,24 @@ fn active_talk_tick_emits_notify_ref3_zero() {
     );
 
     // 起動指示（boot 系列→OnBoot 204→`Steady{None}` 直行・挨拶なし boot ゆえ StartTalk なし）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // Tick 1（now=1s）: Steady{None}→GET→Value→steady talk（保留）→Steady{Some}。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send Tick 1");
+    tick(&harness, 1_000);
 
     // Tick 2（now=2s）: Steady{Some}→NOTIFY（Ref3=0・応答無視）→Steady{Some} 維持。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(2_000),
-        })
-        .expect("send Tick 2");
+    tick(&harness, 2_000);
 
     // 保留 TalkDone（quit:false）を解放 → Steady{None} へ復帰。
     gate.release_all();
 
     // close 指示（active talk なしなら即握手／pending 経由でも同一終了へ収束）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
     let Driven {
@@ -366,11 +351,6 @@ fn active_talk_tick_emits_notify_ref3_zero() {
             ..ExecutionSnapshot::INACTIVE
         },
     ));
-    // Ref3="0"（talk 再生不能＝応答無視）であることを明示的に確認する。
-    assert_eq!(
-        expected_notify.references[3], "0",
-        "NOTIFY pump の Ref3 は \"0\"（active talk 中・応答無視）"
-    );
     assert!(
         recorded.contains(&expected_notify),
         "active talk 中の Tick は OnSecondChange NOTIFY（Ref3=0）を発行するはず（GET でない）: {:?}",
@@ -425,7 +405,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
     // OnSecondChange GET は常に 204（steady_value_indices 空）＝catch-up 観測を汚さない。
     // 挨拶なし boot（without_boot_greeting）で boot→Steady{None} へ直行させ、Tick 1 を確実に
     // `Steady{None}` の GET にする（DD-IT-12 の挨拶 talk race を断つ・挨拶 talk が active だと Tick 1 が
-    // NOTIFY になり block_on が空振りして wait_until_blocked が成立しない）。quit シナリオ
+    // NOTIFY になり ブロック対象の GET が空振りして wait_until_blocked が成立しない）。quit シナリオ
     // （OnClose→別れの Value→close talk）で終了系列を駆動する。
     let (harness, gate) = spawn_harness_blocking(
         KanadeConfig::new("master", "1.0.0"),
@@ -433,7 +413,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
         // quit_flags: [close=true]。挨拶なし boot ゆえ close talk が先頭 StartTalk＝index 0。steady talk は
         // 204 基調ゆえ生じない（PerTalk 範囲外 index は false＝万一 steady talk が生じても quit しない）。
         QuitPolicy::PerTalk(vec![true]),
-        BlockOn::Get("OnSecondChange"),
+        "OnSecondChange",
     );
 
     // 各 Tick の now は時（hour）境界に置き、Ref0（now/3_600_000）を 1→2→3 と異ならせる
@@ -443,13 +423,10 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
     let now3 = MonotonicMs(3 * 3_600_000); // 3h → Ref0="3"
 
     // 起動指示（boot 系列は即応で `Steady{None}` まで完走・挨拶なし boot ゆえ StartTalk なし）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // Tick 1: Steady{None} → OnSecondChange GET → mock が握る → kanade は round-trip でブロック。
-    harness
-        .sender
-        .send(KanadeMsg::Tick { now: now1 })
-        .expect("send Tick 1");
+    send(&harness, KanadeMsg::Tick { now: now1 });
 
     // kanade が Tick 1 の GET round-trip でブロック済みであることを有界に確認（決定的バリア）。
     assert!(
@@ -458,25 +435,19 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
     );
 
     // Tick 2・Tick 3 を送る（kanade はブロック中＝inbox に溜まる＝catch-up の対象）。
-    harness
-        .sender
-        .send(KanadeMsg::Tick { now: now2 })
-        .expect("send Tick 2");
-    harness
-        .sender
-        .send(KanadeMsg::Tick { now: now3 })
-        .expect("send Tick 3");
+    send(&harness, KanadeMsg::Tick { now: now2 });
+    send(&harness, KanadeMsg::Tick { now: now3 });
 
     // 解放 → Tick 1 の GET に 204 が返り、溜まっていた Tick 2・Tick 3 を順次処理する（catch-up）。
     gate.release();
 
     // close 指示（active talk なし＝即握手 OnClose GET→別れの Value→close talk→quit:true→終了）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
     let Driven { recorded, .. } = harness.finish("kanade blocking catch-up join");
@@ -562,23 +533,13 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // Tick 1: Steady{None}→GET(occ0)→Value→steady talk 0（保留）→Steady{Some}。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send Tick 1");
+    tick(&harness, 1_000);
 
     // Tick 2: Steady{Some}→OnSecondChange NOTIFY（Ref3=0・active 窓）。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(2_000),
-        })
-        .expect("send Tick 2");
+    tick(&harness, 2_000);
 
     // 保留 talk 0 の TalkDone{Ended}（quit:false）を解放 → Steady{None} 復帰。
     gate.release_all();

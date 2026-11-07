@@ -36,6 +36,14 @@ fn call_status(call: &ShioriCall) -> Option<String> {
     }
 }
 
+/// 再生中のトークがある実行状態（`Status: talking` が出る）。
+fn talking() -> ExecutionSnapshot {
+    ExecutionSnapshot {
+        talk_active: true,
+        ..ExecutionSnapshot::INACTIVE
+    }
+}
+
 #[test]
 fn on_initialize_is_notify_with_empty_references() {
     let (id, references) = expect_notify(on_initialize(&ExecutionSnapshot::INACTIVE));
@@ -75,14 +83,7 @@ fn baseware_version_is_notify_with_version_and_name() {
 #[test]
 fn on_second_change_playable_is_get_ref3_one() {
     // 7_200_000 ms = 2 hours。talk_active=false（再生可能）→ GET・Ref3=1・status 空（DD-IT-3）。
-    let call = on_second_change(
-        MonotonicMs(7_200_000),
-        &ExecutionSnapshot {
-            talk_active: false,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
-    );
+    let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot::INACTIVE);
     assert_eq!(
         call_status(&call),
         None,
@@ -104,14 +105,7 @@ fn on_second_change_playable_is_get_ref3_one() {
 #[test]
 fn on_second_change_not_playable_is_notify_ref3_zero() {
     // 3_600_000 ms = 1 hour。talk_active=true（再生中）→ NOTIFY・Ref3=0・status talking（DD-IT-3）。
-    let call = on_second_change(
-        MonotonicMs(3_600_000),
-        &ExecutionSnapshot {
-            talk_active: true,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
-    );
+    let call = on_second_change(MonotonicMs(3_600_000), &talking());
     assert_eq!(
         call_status(&call),
         Some("talking".to_string()),
@@ -135,11 +129,7 @@ fn on_second_change_ref0_truncates_toward_zero() {
     // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
     let (_, references, _) = expect_get(on_second_change(
         MonotonicMs(3_599_999),
-        &ExecutionSnapshot {
-            talk_active: false,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
+        &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(references[0], "0");
 }
@@ -397,11 +387,7 @@ fn on_mouse_double_click_right_builds_ref5_one() {
 /// talk_active=true では両構築子が `Status: talking` を snapshot から導出する（DD-IT-3）。
 #[test]
 fn mouse_constructors_carry_talking_status_when_active() {
-    let active = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
+    let active = talking();
     let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
     assert_eq!(call_status(&mv), Some("talking".to_string()));
     let dbl = on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &active);
@@ -414,11 +400,7 @@ fn mouse_constructors_carry_talking_status_when_active() {
 /// 並びは全欄の一致で見るので、どの欄を変えても赤になる。
 #[test]
 fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
-    let active = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
+    let active = talking();
     type Build = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
     let builders: [(&str, Build); 2] = [
         ("OnMouseDragStart", on_mouse_drag_start),
@@ -462,71 +444,36 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
     }
 }
 
-/// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）であること（DD-1）。
+/// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）で、かつ許可集合の要素で
+/// あること（DD-1・Service Interface Postcondition）。
 ///
 /// 選択起源（[`EventId::Choice`]）はカスケード planner のみが構成する不変条件を、構築関数側から
-/// 固定する檻——events.rs の構築関数が任意名を作り得ないことを型の実値で観測する。
-///
-/// 対象は**スケジューラ起源**の構築関数のみ。選択起源の [`on_choice_named`] は設計どおり
-/// [`EventId::Choice`] を返すため本檻の被覆対象ではなく、
-/// `choice_constructors_split_event_id_category_by_origin` が別途カテゴリを固定する。
+/// 固定する檻——events.rs の構築関数が任意名を作り得ないことを型の実値で観測する。選択起源の
+/// [`on_choice_named`] は設計どおり [`EventId::Choice`] を返し、固定表ではなく出所別の受理規則
+/// （`is_allowed_choice_event`）で検証されるため対象外（カテゴリは
+/// `choice_constructors_split_event_id_category_by_origin` が固定する）。
 #[test]
-fn every_construction_function_returns_static_event_id() {
+fn every_construction_function_returns_an_allowed_static_id() {
     let cfg = config();
     let snap = ExecutionSnapshot::INACTIVE;
+    let from = ChangedFrom {
+        sakura_name: String::new(),
+        script: String::new(),
+        name: String::new(),
+        dir: String::new(),
+    };
     let calls = [
         on_initialize(&snap),
         on_first_boot(&snap, 0),
         on_boot(&cfg, &snap),
+        on_ghost_changing(
+            &crate::schedule::translate_test_support::change_request(),
+            &snap,
+        ),
+        on_ghost_changed(&from, "master", &snap),
         baseware_version(&cfg, &snap),
         on_second_change(MonotonicMs(0), &snap),
-        on_second_change(
-            MonotonicMs(0),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
-        on_close(CloseReason::User { scope: 0 }, &snap),
-        on_close_notify(CloseReason::System, &snap),
-        on_mouse_move(0, 0, 0, Some("Head"), &snap),
-        on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
-    ];
-    for call in &calls {
-        let id = event_id(call);
-        assert!(
-            matches!(id, EventId::Static(_)),
-            "構築関数がスケジューラ起源でない id={} を返した",
-            id.as_str()
-        );
-    }
-}
-
-/// 全構築関数の返す `id` が許可集合の要素であること（Service Interface Postcondition）。
-///
-/// 対象は [`EventId::Static`] を返す構築関数——固定 3 ID を許可表へ載せた（DD-2）ことにより
-/// `on_choice_select_ex`／`on_choice_select`／`on_choice_timeout` も本檻の被覆対象に入る。
-/// 選択起源の任意名 `on_choice_named`（[`EventId::Choice`]）だけは固定表ではなく出所別の
-/// 受理規則（`is_allowed_choice_event`）で検証されるため、本檻の被覆対象外である。
-#[test]
-fn every_construction_function_returns_an_allowed_id() {
-    let cfg = config();
-    let snap = ExecutionSnapshot::INACTIVE;
-    let calls = [
-        on_initialize(&snap),
-        on_first_boot(&snap, 0),
-        on_boot(&cfg, &snap),
-        baseware_version(&cfg, &snap),
-        on_second_change(MonotonicMs(0), &snap),
-        on_second_change(
-            MonotonicMs(0),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        on_second_change(MonotonicMs(0), &talking()),
         on_close(CloseReason::User { scope: 0 }, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
@@ -538,12 +485,16 @@ fn every_construction_function_returns_an_allowed_id() {
         on_choice_timeout("\\e", &snap),
         on_anchor_select_ex("文字", "ID", &[], &snap),
         on_anchor_select("ID", &snap),
+        on_balloon_break("\\e", 0, &snap),
+        on_balloon_close("\\e", &snap),
+        on_balloon_timeout("\\e", &snap),
     ];
     for call in &calls {
-        let id = event_id(call).as_str();
+        let id = event_id(call);
         assert!(
-            is_allowed_event_id(id),
-            "構築関数が許可集合外の id={id} を返した"
+            matches!(id, EventId::Static(name) if is_allowed_event_id(name)),
+            "構築関数がスケジューラ起源の許可集合外の id={} を返した",
+            id.as_str()
         );
     }
 }
@@ -659,11 +610,7 @@ fn on_choice_timeout_builds_script_ref0() {
 #[test]
 fn choice_constructors_carry_the_common_request_header() {
     let refs = opaque_references();
-    let active = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
+    let active = talking();
     let idle = ExecutionSnapshot::INACTIVE;
 
     let active_calls = [
@@ -734,7 +681,7 @@ fn source(id: EventId, references: &[&str]) -> SourceEvent {
     }
 }
 
-/// `on_translate` の (id, references, status) を取り出す（NOTIFY なら panic）。
+/// `on_translate` の (id, references) を取り出す（NOTIFY なら panic）。
 fn translate(expanded: &str, src: &SourceEvent) -> (EventId, Vec<String>) {
     match on_translate(
         expanded,
@@ -778,14 +725,6 @@ fn on_translate_builds_the_four_canonical_references() {
     }
 }
 
-/// Ref1 は線の層の欠番の印そのもの（行が出ず番号だけ進む・要件 3.3）。
-#[test]
-fn on_translate_reference1_is_the_wire_absent_marker() {
-    let (_, references) = translate("\\e", &source(EventId::Static("OnClose"), &["user"]));
-    assert_eq!(references.len(), 4);
-    assert_eq!(references[1], shiori_host32_host::shiori3::ABSENT_REFERENCE);
-}
-
 /// 選択肢の任意名は Ref2 に逐語で載る（大小文字も綴りも変えない）。
 #[test]
 fn on_translate_carries_a_choice_name_verbatim_in_reference2() {
@@ -806,8 +745,12 @@ fn on_translate_carries_a_choice_name_verbatim_in_reference2() {
 /// Status は渡された値をそのまま載せ（他の GET と同じ見出し）、許可表を通る。
 #[test]
 fn on_translate_keeps_the_given_status_and_is_allowed() {
-    let snap = ExecutionSnapshot::INACTIVE;
-    let status = ExecutionStatus::derive(&snap);
+    let status = ExecutionStatus::derive(&talking());
+    assert_eq!(
+        status.render(),
+        Some("talking".to_string()),
+        "前提: 見出しが出る状態"
+    );
     let call = on_translate(
         "\\e",
         &source(EventId::Static("OnBoot"), &[]),

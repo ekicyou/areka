@@ -21,7 +21,7 @@
 use crate::msg::{CloseReason, KanadeConfig, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStateUpdate;
 use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkEndReason, TalkId};
-// テストの `use super::*` が引く名前（型の塊を `types.rs` へ出す前と同じ顔ぶれを保つ）。
+// テストの `use super::*` が引くテスト専用の名前。
 #[cfg(test)]
 use crate::msg::{ChoiceInput, MonotonicMs, ShioriCall};
 #[cfg(test)]

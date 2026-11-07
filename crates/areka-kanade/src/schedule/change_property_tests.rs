@@ -9,12 +9,13 @@ use super::*;
 use crate::msg::EventId;
 use crate::schedule::events::PROPERTY_EVENT_ORIGIN;
 use crate::schedule::log_capture::CapturedEvent;
+use crate::schedule::translate_test_support::strings;
 use crate::talk::ScriptOrigin;
 
 fn property(s: State, id: &str, references: &[&str]) -> (State, Vec<Action>) {
     let input = Input::PropertyEvent {
         id: id.to_string(),
-        references: references.iter().map(|r| r.to_string()).collect(),
+        references: strings(references),
     };
     step(s, input, &cfg())
 }

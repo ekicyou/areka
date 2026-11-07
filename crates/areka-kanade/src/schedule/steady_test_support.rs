@@ -28,20 +28,6 @@ pub(super) fn steady_some(talk_id: TalkId, next_id: u64) -> State {
     }
 }
 
-/// Action 列に OnSecondChange の ShioriRequest が一切ないことを検証する（ゲート閉）。
-pub(super) fn assert_no_second_change(actions: &[Action]) {
-    for a in actions {
-        if let Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. }) = a
-        {
-            assert_ne!(
-                id.as_str(),
-                "OnSecondChange",
-                "ゲートが閉じておらず OnSecondChange を発行した"
-            );
-        }
-    }
-}
-
 // ============================================================
 // 選択確定の受領検証とカスケード駆動（C4 規則 1／2／3・DD-4）
 // ============================================================

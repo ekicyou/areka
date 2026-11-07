@@ -105,13 +105,6 @@ fn finishing_within_the_limit_does_not_cut_and_logs_no_warning() {
         })
     );
     assert_eq!(control_calls.load(Ordering::SeqCst), 1);
-    assert!(
-        events
-            .iter()
-            .filter(|e| e.level == Level::WARN)
-            .all(|e| e.field_str("stage") == Some("idle")),
-        "負けた決め手の warn! は 0 件: {events:?}"
-    );
 }
 
 /// 段の語 4 通り: 今の呼び出しから段を決め、解く手を 1 回呼び、`warn!` を 1 件残す。

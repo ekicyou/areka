@@ -22,7 +22,7 @@ pub struct MockShiori {
     pub sender: Sender<ShioriMsg>,
     /// アクタースレッドの join ハンドル。
     pub handle: ActorHandle,
-    /// 受理した呼出の記録列（`(method, id, references)`）。
+    /// 受理した呼出の記録列（`(method, id, references, status)`）。
     calls: Arc<Mutex<Vec<RecordedCall>>>,
 }
 
@@ -36,7 +36,7 @@ impl MockShiori {
 /// mock shiori アクターを起動する。
 ///
 /// real と同一の [`ShioriMsg`] 型を受け、[`Fixture`] 表に従い同梱 `reply` へ即時応答する。
-/// 各 [`ShioriMsg::Request`] は `(method, id, references)` を記録列へ蓄積し、fixture の
+/// 各 [`ShioriMsg::Request`] は `(method, id, references, status)` を記録列へ蓄積し、fixture の
 /// 応答を `reply.send` で返す。[`ShioriMsg::Unload`] は記録の上 `Unloaded` を返す。
 /// [`ShioriMsg::Close`] で受信ループを終了する。
 pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
@@ -46,11 +46,11 @@ pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
 /// 3 つの mock shiori が共有する受信の輪（呼出の記録と Unload／Close の扱いはここ 1 か所）。
 ///
 /// - `fail_on`: 一致する**最初の**呼出に [`ShioriOutcome::Failed`] を返す（応答表は前進させない）。
-/// - `block`: 一致する**最初の**呼出を記録し、応答を決めてから [`ShioriGate::release`] まで握る。
+/// - `block`: id が一致する**最初の** GET を記録し、応答を決めてから [`ShioriGate::release`] まで握る。
 fn spawn_mock_shiori_loop(
     fixture: Fixture,
     fail_on: Option<FailOn>,
-    block: Option<(BlockOn, Arc<ShioriGateShared>)>,
+    block: Option<(&'static str, Arc<ShioriGateShared>)>,
 ) -> MockShiori {
     let calls: Arc<Mutex<Vec<RecordedCall>>> = Arc::new(Mutex::new(Vec::new()));
     let calls_body = Arc::clone(&calls);
@@ -75,8 +75,9 @@ fn spawn_mock_shiori_loop(
                     }
                     // 応答は握る前に決める（respond の出現カウンタは呼出順に前進させる＝1 呼出＝1 応答）。
                     let outcome = state.respond(&call);
-                    if block.as_ref().is_some_and(|(on, _)| on.matches(&call))
-                        && let Some((_, shared)) = block.take()
+                    if block.as_ref().is_some_and(
+                        |(on, _)| matches!(&call, ShioriCall::Get { id, .. } if id.as_str() == *on),
+                    ) && let Some((_, shared)) = block.take()
                     {
                         // 受領を通知（wait_until_blocked を起こす）→ release まで待つ。
                         let mut inner = shared.inner.lock().expect("shiori gate mutex");
@@ -218,28 +219,6 @@ fn call_id(call: &ShioriCall) -> &str {
 // ブロッキング mock shiori（呼出ブロック中の Tick catch-up を観測する）
 // ============================================================================
 
-/// ブロック対象の記述子（どの呼出を握り続けるか・COPYABLE）。
-///
-/// 実経路の SHIORI 呼出は本質的にブロックし得る（別プロセス往復）。mock は既定で即応するため
-/// その窓が存在しない。本記述子で「特定の 1 呼出」を選び、その往復を明示的な解放まで握って
-/// kanade を drive ループの `ReplyReceiver::recv` で止め、以降の Tick が inbox に溜まる catch-up
-/// 窓を決定的に作る。ブロックするのは各種別で**最初の**一致呼出のみ（以降は即応へ戻す）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BlockOn {
-    /// 指定 id の最初の GET 呼出をブロックする（例: `"OnSecondChange"`）。
-    Get(&'static str),
-}
-
-impl BlockOn {
-    /// この呼出が本記述子の対象か（method＋id 一致）を判定する。
-    fn matches(&self, call: &ShioriCall) -> bool {
-        match (self, call) {
-            (BlockOn::Get(id), ShioriCall::Get { id: cid, .. }) => cid.as_str() == *id,
-            _ => false,
-        }
-    }
-}
-
 /// ブロック解放を mock shiori の受信ループへ伝えるゲートの共有部（Mutex＋Condvar）。
 struct ShioriGateShared {
     inner: Mutex<ShioriGateInner>,
@@ -302,7 +281,9 @@ impl ShioriGate {
 
 /// ブロッキング mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生）。
 ///
-/// `block_on` が指す**最初の**呼出を受領したとき、記録した上で応答を送らず、受信ループ内で
+/// 実経路の SHIORI 呼出は本質的にブロックし得る（別プロセス往復）が、mock は既定で即応するため
+/// その窓が存在しない。そこで id が `block_get_id`（例: `"OnSecondChange"`）の**最初の** GET を
+/// 受領したとき、記録した上で応答を送らず、受信ループ内で
 /// [`ShioriGate::release`] まで Condvar で待つ（＝kanade の drive ループが `ReplyReceiver::recv`
 /// で同期ブロックする窓を作る）。ブロック中に kanade inbox へ溜まった Tick は、解放後に順次
 /// 処理される（catch-up・in-flight ≤ 1）。解放後の応答は当該呼出に対する fixture 既定
@@ -313,7 +294,10 @@ impl ShioriGate {
 /// 受信ループ内の Condvar 待ちは `release()` で解ける。テストが `release()` を呼ばずに終えても、
 /// StartTalk 送信端 drop 等で kanade 側 round-trip が畳まれるだけでは本スレッドは解けないが、
 /// テストは必ず `release()` を呼ぶ契約であり、全 join はテストの [`DEFAULT_TIMEOUT`] で有界。
-pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockShiori, ShioriGate) {
+pub fn spawn_mock_shiori_blocking(
+    fixture: Fixture,
+    block_get_id: &'static str,
+) -> (MockShiori, ShioriGate) {
     let shared = Arc::new(ShioriGateShared {
         inner: Mutex::new(ShioriGateInner {
             blocked_arrived: false,
@@ -321,6 +305,6 @@ pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockS
         }),
         cvar: std::sync::Condvar::new(),
     });
-    let shiori = spawn_mock_shiori_loop(fixture, None, Some((block_on, Arc::clone(&shared))));
+    let shiori = spawn_mock_shiori_loop(fixture, None, Some((block_get_id, Arc::clone(&shared))));
     (shiori, ShioriGate { shared })
 }

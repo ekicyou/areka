@@ -3,12 +3,12 @@
 //! 帳簿を直接置いた状態からの翻訳の結果の入力（[`on_done`]）。
 
 use super::*;
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget, ShioriMethod};
+use crate::change::ShioriMethod;
 use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriFaultKind};
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use crate::schedule::translate_test_support::config as cfg;
-use crate::schedule::translate_test_support::pass_translate;
+use crate::schedule::translate_test_support::{change_request, pass_translate};
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
@@ -365,15 +365,7 @@ fn waiting(phase: Phase, deferred: Vec<Action>) -> State {
 
 fn change_state(script: &str) -> ChangeState {
     ChangeState {
-        req: ChangeRequest {
-            target: ChangeTarget {
-                sakura_name: "B".to_string(),
-                name: "ghost B".to_string(),
-                dir: "C:/ghost/B".to_string(),
-            },
-            origin: ChangeOrigin::Manual,
-            raise_event: true,
-        },
+        req: change_request(),
         script: Some(script.to_string()),
     }
 }

@@ -212,8 +212,7 @@ pub enum KanadeMsg {
     CloseRequest { reason: CloseReason },
     /// 強制終了指示（OS シャットダウン・デバッグ）。quit ゲートを迂回し終了系列へ直行。
     ForceQuit { reason: CloseReason },
-    /// SHIORI 死活の暫定 seam（DD-4・lifecycle 正本確定時に実型へ差し替え）。
-    /// 種類は型で運ぶ（理由の綴りで判別しない）。
+    /// SHIORI 死活の報告（shiori/real.rs が送る）。種類は型で運ぶ（理由の綴りで判別しない）。
     ShioriDown {
         kind: ShioriDownKind,
         reason: String,

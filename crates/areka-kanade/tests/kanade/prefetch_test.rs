@@ -83,7 +83,7 @@ fn drive_prefetch(
 
     // kanade 停止後に送信端 drop → sakura sink スレッドも自然終了（期限付き join）。
     drop(kanade_tx);
-    sakura.join_bounded("mock-sakura prefetch join", DEFAULT_TIMEOUT);
+    let _ = sakura.join_bounded_then_commands("mock-sakura prefetch join", DEFAULT_TIMEOUT);
 
     let recorded = shiori.recorded();
     let outcomes = seen.lock().expect("sink mutex").clone();
@@ -100,7 +100,7 @@ fn ids(recorded: &[RecordedCall]) -> Vec<&str> {
 /// （criterion 1＋criterion 2 の sink 到達・R4.1/4.2・design Integration Tests 1「204→NoContent」）。
 ///
 /// `Fixture::quitting()` は username を fixture 表の未知 GET として 204 で返す（catch-all）。
-/// §9（actor.rs）は Value 応答のみを sink 到達として観測しており、204 の分岐（`on_prefetch_reply`
+/// `actor_tests.rs` の prefetch 檻は Value 応答のみを sink 到達として観測しており、204 の分岐（`on_prefetch_reply`
 /// の `NoContent` アーム）が sink まで届く経路は本統合檻が初めて覆う。
 #[test]
 fn prefetch_204_delivers_no_content_to_sink_and_boot_proceeds() {
@@ -146,7 +146,7 @@ fn prefetch_204_delivers_no_content_to_sink_and_boot_proceeds() {
 /// 実アクター経路で確認する（criterion 2「timeout→Failed＋boot 続行」・R4.1・design Integration Tests 1）。
 ///
 /// これは本群が埋める中核ギャップ: 実 [`ResourceSink`] へ `Failed` が届く経路も、実スレッド上で
-/// prefetch 失敗後に boot が完走する経路も、既存檻（§9＝Value のみ／boot.rs＝純粋 step・sink 非経由）の
+/// prefetch 失敗後に boot が完走する経路も、既存檻（`actor_tests.rs`＝Value のみ／boot.rs＝純粋 step・sink 非経由）の
 /// **外**にある。`FailKind::Timeout` を username GET へ注入し、`on_prefetch_reply` の Failed アーム
 /// →sink 配送→OnFirstBoot 続行が実 round_trip＋実スレッドで成立することを固定する。
 #[test]

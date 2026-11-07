@@ -86,25 +86,13 @@ fn state_in(phase: Phase) -> State {
 /// 会話できる状態（`Steady`）だけが照会できる（要件 3.10・終了中は既定名）。
 #[test]
 fn only_steady_is_queryable() {
-    let phases = all_phases();
-    let mut queryable_count = 0;
-    for phase in &phases {
+    for phase in &all_phases() {
         assert_eq!(
             queryable(phase),
             expected_queryable(phase),
             "フェーズごとの照会可否が期待と違う"
         );
-        if queryable(phase) {
-            queryable_count += 1;
-        }
     }
-    // 表の両側（真・偽）を実際に踏んでいること: 真は Steady の 2 形だけ。
-    assert_eq!(queryable_count, 2, "照会できるのは Steady の 2 形だけ");
-    assert_eq!(
-        phases.len() - queryable_count,
-        16,
-        "残り 16 形は照会できない"
-    );
 }
 
 /// SHIORI 応答から照会結果への写像（3 分岐＋想定外・起動の先読みも同じ関数を呼ぶ）。

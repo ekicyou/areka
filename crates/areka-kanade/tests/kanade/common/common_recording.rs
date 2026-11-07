@@ -135,6 +135,13 @@ pub fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
         .collect()
 }
 
+/// 記録列で `method` の `id` の呼出が最初に現れる位置（処理順の前後関係を突合するための索引）。
+pub fn position_of(recorded: &[RecordedCall], method: CallMethod, id: &str) -> Option<usize> {
+    recorded
+        .iter()
+        .position(|c| c.method == method && c.id == id)
+}
+
 /// active talk 窓（`OnSecondChange` NOTIFY）**より後**に現れる最初の `OnSecondChange` GET
 /// （＝pump 再開・完了後の GET 復帰）を返す。NOTIFY が無ければ `None`。
 ///

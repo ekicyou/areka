@@ -12,7 +12,7 @@ use super::super::{
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall};
 use crate::schedule::translate_test_support::config;
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
-use log_capture::{CapturedEvent, capture, logged_once};
+use log_capture::{logged_once, step_capturing};
 use tracing::Level;
 
 /// 場面を `phase` だけ差し替えて組む（再生中のトークの有無は `phase` が決める）。
@@ -60,20 +60,6 @@ fn playing_states(talk_id: TalkId) -> Vec<(&'static str, State)> {
             }),
         ),
     ]
-}
-
-/// `step` を捕捉つきで駆動する（遷移結果と捕捉ログを同時に取る）。
-fn step_capturing(
-    state: State,
-    input: Input,
-    config: &KanadeConfig,
-) -> (State, Vec<Action>, Vec<CapturedEvent>) {
-    let mut out = None;
-    let ev = capture(|| {
-        out = Some(step(state, input, config));
-    });
-    let (next, actions) = out.expect("step は必ず結果を返す");
-    (next, actions, ev)
 }
 
 /// 指示の列に `OnChoiceTimeout` の GET が 1 件も無いことを表明する（要件 2.6・3.9）。

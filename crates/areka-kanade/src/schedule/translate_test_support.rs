@@ -1,8 +1,7 @@
-//! 既存テスト用の補助（テスト専用）: 翻訳の行動が出たら、結果を台詞そのままで入れ直して続きを返す。
+//! crate の中のテストが共に使う補助（テスト専用）。
 //!
-//! 出口の規則が SHIORI の台詞の再生開始を `[Action::Translate]` に替えた後も、既存の `step` の
-//! テストが「`OnTranslate` が 204 を返した」ときの続き（預けた一括）を確かめられるようにする。
-//! あわせて、SSTP・切れ目・翻訳の経路のテストが共に使う下ごしらえを 1 つずつ置く。
+//! 翻訳の行動を台詞そのままで入れ直して続きを返す [`pass_translate`] のほか、状態・一括・設定の
+//! 下ごしらえと見比べの道具を置く。
 
 use super::log_capture::CapturedEvent;
 use super::sstp::BOOT_GREETING_ORIGIN;
@@ -10,7 +9,7 @@ use super::{
     Action, ActiveTalk, Input, Phase, State, TermCause, current_talk_id, phase_label, step,
 };
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
-use crate::msg::{KanadeConfig, MonotonicMs, ShioriOutcome};
+use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::talk::TalkId;
 use tracing::Level;
 
@@ -33,9 +32,34 @@ pub(crate) fn pass_translate(
     }
 }
 
-// ============================================================
-// SSTP・切れ目・翻訳の経路のテストが共に使う下ごしらえ
-// ============================================================
+/// 一括が GET 1 本だけであることを確かめ、(イベント名, Reference の並び) を返す。
+pub(crate) fn only_get(actions: &[Action]) -> (String, Vec<String>) {
+    match actions {
+        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
+            (id.as_str().to_string(), references.clone())
+        }
+        _ => panic!("GET 1 本だけのはず（{} 件）", actions.len()),
+    }
+}
+
+/// 選択肢の ID（`On` で始まらない正典の形＝選択はカスケードで `OnChoiceSelectEx`／`OnChoiceSelect` を送る）。
+pub(crate) const CHOICE_ID: &str = "選択1";
+
+/// 選択の 3 つのイベントと選択肢の ID そのものの名前の往復を数える。
+pub(crate) fn choice_event_count(actions: &[Action]) -> usize {
+    actions
+        .iter()
+        .filter(|action| match action {
+            Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. }) => {
+                matches!(
+                    id.as_str(),
+                    "OnChoiceSelectEx" | "OnChoiceSelect" | "OnChoiceTimeout"
+                ) || id.as_str() == CHOICE_ID
+            }
+            _ => false,
+        })
+        .count()
+}
 
 pub(crate) fn strings(refs: &[&str]) -> Vec<String> {
     refs.iter().map(|r| r.to_string()).collect()

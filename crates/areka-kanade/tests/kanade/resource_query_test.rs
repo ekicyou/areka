@@ -31,7 +31,7 @@ use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg};
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, Harness, QuitPolicy, RecordedCall,
-    Response, spawn_harness, spawn_harness_failing,
+    send, spawn_harness, spawn_harness_failing,
 };
 
 /// 1 度に問う項目名（表示可否・説明書・終了）。順序・長さの突合に使う正本でもある。
@@ -45,7 +45,6 @@ const MENU_IDS: [&str; 3] = [
 const README_CAPTION: &str = "readmebutton.caption";
 
 /// 照会の投函位置（単一 inbox の FIFO で処理される phase が決まる）。
-#[derive(Clone, Copy, PartialEq, Eq)]
 enum QueryAt {
     /// `Boot` より前に投函する＝`Phase::Idle`（会話できない状態）で処理される。
     BeforeBoot,
@@ -70,26 +69,20 @@ fn run_query(
 
     match at {
         QueryAt::BeforeBoot => {
-            harness
-                .sender
-                .send(query)
-                .expect("send ResourceQuery before Boot");
-            harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+            send(&harness, query);
+            send(&harness, KanadeMsg::Boot);
         }
         QueryAt::Steady => {
-            harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-            harness
-                .sender
-                .send(query)
-                .expect("send ResourceQuery after Boot");
+            send(&harness, KanadeMsg::Boot);
+            send(&harness, query);
         }
     }
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     let recorded = harness.finish("kanade resource-query join").recorded;
 
@@ -153,10 +146,7 @@ fn config() -> KanadeConfig {
 fn caption_value_is_returned_verbatim() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_response(
-            README_CAPTION,
-            Response::Script("取扱説明書(&R)".to_string()),
-        ),
+        menu_fixture().with_response(README_CAPTION, "取扱説明書(&R)".to_string()),
         QuitPolicy::PerTalk(vec![true]),
     );
 
@@ -183,13 +173,13 @@ fn caption_value_is_returned_verbatim() {
 /// （要件 3.3 の「空を返す」と要件 3.4 の「値なし」を取り違えない）。
 ///
 /// # 非空虚性
-/// 200 の空文字を 204 と同一視する後退は、ここだけが捕まえる（他の 4 檻は素通りする）。
+/// 200 の空文字を 204 と同一視する後退は、ここだけが捕まえる（他の 3 檻は素通りする）。
 /// 既定名へ倒すかどうかを決めるのは受け手であり、殻は空を空のまま運ぶ。
 #[test]
 fn empty_caption_is_returned_as_empty_value_not_no_content() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_response(README_CAPTION, Response::Script(String::new())),
+        menu_fixture().with_response(README_CAPTION, String::new()),
         QuitPolicy::PerTalk(vec![true]),
     );
 
@@ -272,7 +262,7 @@ fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
 fn query_before_boot_returns_no_content_for_every_id() {
     let harness = spawn_harness(
         config(),
-        menu_fixture().with_response(README_CAPTION, Response::Script("問い合わせた".to_string())),
+        menu_fixture().with_response(README_CAPTION, "問い合わせた".to_string()),
         QuitPolicy::PerTalk(vec![true]),
     );
 

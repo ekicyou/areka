@@ -9,7 +9,9 @@ use super::*;
 use crate::change::ChangeOrigin;
 use crate::msg::{CloseReason, ShioriCall};
 use crate::schedule::log_capture::{capture, logged_once};
-use crate::schedule::translate_test_support::{change_request, config as cfg, pass_translate};
+use crate::schedule::translate_test_support::{
+    change_request, config as cfg, only_get, pass_translate,
+};
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::{TalkDone, TalkEndReason};
 use tracing::Level;
@@ -49,16 +51,6 @@ fn talk_done(s: State, talk_id: TalkId, reason: TalkEndReason) -> (State, Vec<Ac
         quit_reserved: false,
     };
     step(s, Input::TalkDone(done), &cfg())
-}
-
-/// GET を 1 件だけ返したことを確かめ、(イベント名, Reference 列) を取り出す。
-fn only_get(actions: &[Action]) -> (String, Vec<String>) {
-    match actions {
-        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET がちょうど 1 件のはず"),
-    }
 }
 
 fn script_of(s: &State) -> Option<&str> {
@@ -368,21 +360,6 @@ fn deadline_is_armed_on_first_tick_when_entered_without_time() {
     ));
 }
 
-#[test]
-fn without_raise_event_unloads_silently_without_events() {
-    let (s, actions) = step(
-        steady(),
-        Input::ChangeGhost(req(ChangeOrigin::Automatic, false)),
-        &cfg(),
-    );
-    assert_unloading(&s, &actions, "CloseSilent");
-    assert_eq!(
-        script_of(&s),
-        None,
-        "送らなかったので台本は無し・帳簿は立つ"
-    );
-}
-
 // ---- 再生中に届いた切替の保留（要件 2.6・5.5・10.3・11.6） ----
 
 /// 定常でトーク（talk_id 4）を再生している状態。
@@ -477,6 +454,12 @@ fn without_raise_event_sends_neither_changing_nor_close() {
         steady(),
         Input::ChangeGhost(req(ChangeOrigin::Manual, false)),
         &cfg(),
+    );
+    assert_unloading(&s, &actions, "CloseSilent");
+    assert_eq!(
+        script_of(&s),
+        None,
+        "送らなかったので台本は無し・帳簿は立つ"
     );
     let (s, more) = reply(s, ShioriOutcome::Unloaded);
     assert!(matches!(s.phase, Phase::Stopped));

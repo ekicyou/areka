@@ -3,7 +3,7 @@ use super::test_support::{
 };
 use super::{
     CallMethod, CloseReason, Driven, FailKind, FailOn, Fixture, KanadeConfig, KanadeMsg,
-    MouseButton, MouseEventKind, QuitPolicy, TalkCommand, expected_unload,
+    MouseButton, MouseEventKind, QuitPolicy, TalkCommand, expected_unload, send,
     spawn_harness_gated_failing,
 };
 use crate::mouse_test::test_support::mouse_input;
@@ -42,16 +42,16 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
     );
 
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
-        .expect("send Choice");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)),
+    );
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
     gate.release_all();
 
     let Driven {
@@ -139,9 +139,9 @@ fn non_choice_failure_during_choice_wait_still_faults() {
 
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     // 選択待ち（帳簿 Waiting）の窓で非 choice GET を発行させ、その応答を失敗させる。
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DoubleClick {
                 button: MouseButton::Left,
             },
@@ -149,8 +149,8 @@ fn non_choice_failure_during_choice_wait_still_faults() {
             20,
             0,
             Some("Head"),
-        )))
-        .expect("send Mouse during choice wait");
+        )),
+    );
 
     // 免除が漏れていなければ、非 choice の Failed は終了系列を駆動して join が成功する。
     let Driven { recorded, .. } = harness.finish("kanade non-choice-failed join");

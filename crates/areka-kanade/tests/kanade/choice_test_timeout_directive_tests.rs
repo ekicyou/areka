@@ -8,12 +8,12 @@
 
 use super::test_support::{
     CANONICAL_CHOICE_ID, CHOICE_DISPLAY_END_MS, cascading_snapshot, choice_get_ids, command_tags,
-    establish_choice_wait, position_of,
+    establish_choice_wait,
 };
 use super::{
     CallMethod, CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg,
     MonotonicMs, QuitPolicy, RecordedCall, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
-    expected_call, pumps, spawn_harness_gated,
+    expected_call, position_of, pumps, spawn_harness_gated,
 };
 
 /// 境の値（ミリ秒）。台本 `\![set,choicetimeout,1234]` の `N`。対になる ghost のテストと共有する。
@@ -90,7 +90,8 @@ fn choice_timeout_directive_1234_fires_exactly_at_display_end_plus_1234() {
         vec!["OnChoiceTimeout"],
         "指令 1.234 秒では表示の終わり＋1234 ms で時間切れが 1 回だけ出るはず: {recorded:?}"
     );
-    let timeout_pos = position_of(&recorded, CallMethod::Get, "OnChoiceTimeout");
+    let timeout_pos = position_of(&recorded, CallMethod::Get, "OnChoiceTimeout")
+        .expect("OnChoiceTimeout が記録されているはず");
     assert_eq!(
         recorded[timeout_pos],
         expected_call(events::on_choice_timeout(

@@ -210,7 +210,7 @@ mod tests {
     use crate::schedule::log_capture::{capture, logged_once};
     use crate::schedule::step;
     use crate::schedule::translate_test_support::{config, pass_translate};
-    use crate::talk::{TalkDone, TalkEndReason, TalkId};
+    use crate::talk::{TalkDone, TalkEndReason};
     use tracing::Level;
 
     /// `close_talk_deadline_ms` を任意に差し替えた config（期限判定を小さな値で回す）。
@@ -220,13 +220,13 @@ mod tests {
         c
     }
 
-    /// ClosePending 状態を任意の last_now / next_id で構築する。`OnClose` を送った後の状態なので、
-    /// 応答の元のイベントの控え（`reply_source`）も `OnClose` にしておく（台詞の応答は翻訳を経る）。
-    fn close_pending(last_now: Option<MonotonicMs>, next_id: u64) -> State {
+    /// ClosePending 状態を任意の last_now で構築する（次のトークは 5 番）。`OnClose` を送った後の状態
+    /// なので、応答の元のイベントの控え（`reply_source`）も `OnClose` にしておく（台詞の応答は翻訳を経る）。
+    fn close_pending(last_now: Option<MonotonicMs>) -> State {
         State {
             phase: Phase::ClosePending,
             last_now,
-            next_talk_id: next_id,
+            next_talk_id: 5,
             reply_source: Some(SourceEvent {
                 id: EventId::Static("OnClose"),
                 references: vec!["user".to_string()],
@@ -252,17 +252,10 @@ mod tests {
         pass_translate(replied, &config())
     }
 
-    /// CloseTalkWait 状態を任意の talk_id / deadline / last_now で構築する。
-    fn close_talk_wait(
-        talk_id: TalkId,
-        deadline: Option<MonotonicMs>,
-        last_now: Option<MonotonicMs>,
-        next_id: u64,
-    ) -> State {
+    /// CloseTalkWait 状態を任意の talk_id / deadline で構築する。
+    fn close_talk_wait(talk_id: TalkId, deadline: Option<MonotonicMs>) -> State {
         State {
             phase: Phase::CloseTalkWait { talk_id, deadline },
-            last_now,
-            next_talk_id: next_id,
             ..State::initial()
         }
     }
@@ -274,7 +267,7 @@ mod tests {
     #[test]
     fn value_starts_close_talk_then_quit_unloads() {
         let d = 30_000; // 既定。
-        let (s1, actions1) = close_value(close_pending(Some(MonotonicMs(1_000)), 5), "bye");
+        let (s1, actions1) = close_value(close_pending(Some(MonotonicMs(1_000))), "bye");
         // StartTalk(5, "bye") + CloseTalkWait{5, deadline=Some(1000+D)}。
         match s1.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
@@ -325,7 +318,7 @@ mod tests {
     #[test]
     fn value_then_ended_or_interrupted_proceeds_to_quit() {
         for reason in [TalkEndReason::Ended, TalkEndReason::Interrupted] {
-            let (s1, _a1) = close_value(close_pending(Some(MonotonicMs(1_000)), 5), "stay");
+            let (s1, _a1) = close_value(close_pending(Some(MonotonicMs(1_000))), "stay");
             let talk_id = match s1.phase {
                 Phase::CloseTalkWait { talk_id, .. } => talk_id,
                 _ => panic!("expected CloseTalkWait"),
@@ -378,7 +371,7 @@ mod tests {
     #[test]
     fn no_content_causes_silent_close() {
         let (next, actions) = step(
-            close_pending(Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000))),
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
                 origin: "test",
@@ -410,13 +403,8 @@ mod tests {
     #[test]
     fn deadline_exceeded_continues_termination() {
         let d = 30_000;
-        // CloseTalkWait に deadline=Some(1000+D) で入る（入口 last_now Some(1000)）。
-        let s = close_talk_wait(
-            TalkId(7),
-            Some(MonotonicMs(1_000 + d)),
-            Some(MonotonicMs(1_000)),
-            8,
-        );
+        // CloseTalkWait に deadline=Some(1000+D) で入る。
+        let s = close_talk_wait(TalkId(7), Some(MonotonicMs(1_000 + d)));
         // now = 1000 + D（>= deadline）→ 超過。
         let (next, actions) = step(
             s,
@@ -443,7 +431,7 @@ mod tests {
     fn deadline_armed_on_first_tick_when_entered_without_now() {
         let small = 100;
         // 入口 last_now None → deadline None で CloseTalkWait に入る。
-        let s = close_talk_wait(TalkId(2), None, None, 3);
+        let s = close_talk_wait(TalkId(2), None);
         // 最初の Tick{now=500} → deadline = Some(500+100)・未超過・維持。
         let (s1, a1) = step(
             s,
@@ -488,12 +476,7 @@ mod tests {
     #[test]
     fn tick_before_deadline_stays_and_updates_last_now() {
         let d = 30_000;
-        let s = close_talk_wait(
-            TalkId(4),
-            Some(MonotonicMs(1_000 + d)),
-            Some(MonotonicMs(1_000)),
-            5,
-        );
+        let s = close_talk_wait(TalkId(4), Some(MonotonicMs(1_000 + d)));
         let now = MonotonicMs(1_000 + d - 1); // deadline 未満。
         let (next, actions) = step(s, Input::Tick { now }, &config());
         match next.phase {
@@ -512,7 +495,7 @@ mod tests {
     #[test]
     fn close_pending_tick_updates_last_now_and_stays() {
         let (next, actions) = step(
-            close_pending(Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000))),
             Input::Tick {
                 now: MonotonicMs(2_000),
             },
@@ -534,7 +517,7 @@ mod tests {
 
     #[test]
     fn value_with_no_prior_tick_enters_wait_with_none_deadline() {
-        let (next, actions) = close_value(close_pending(None, 5), "hi");
+        let (next, actions) = close_value(close_pending(None), "hi");
         match next.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
                 assert_eq!(talk_id, TalkId(5));
@@ -550,7 +533,7 @@ mod tests {
     #[test]
     fn close_pending_notified_is_defensive_and_stays() {
         let (next, actions) = step(
-            close_pending(Some(MonotonicMs(1_000)), 5),
+            close_pending(Some(MonotonicMs(1_000))),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
                 origin: "test",
@@ -565,12 +548,7 @@ mod tests {
 
     #[test]
     fn close_talk_wait_unexpected_reply_is_defensive() {
-        let s = close_talk_wait(
-            TalkId(2),
-            Some(MonotonicMs(5_000)),
-            Some(MonotonicMs(1_000)),
-            3,
-        );
+        let s = close_talk_wait(TalkId(2), Some(MonotonicMs(5_000)));
         // CloseTalkWait は応答待ちではない（awaits_reply に含まれない）ため、mod.rs の
         // unexpected_reply アームで握り潰される想定だが、直接 close::step に渡した場合の
         // 防御も確認する（発行なし・維持）。

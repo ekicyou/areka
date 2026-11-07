@@ -79,10 +79,7 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
                 matches!(s.phase, Phase::Steady { talk: None }),
                 "{label}: 元の定常へ戻る"
             );
-            assert!(
-                s.change.is_none() && s.pending_change.is_none(),
-                "{label}: 切替の帳簿は消える"
-            );
+            assert!(s.change.is_none(), "{label}: 切替の帳簿は消える");
             assert!(s.user_break_talk.is_none(), "{label}: 中断の帳簿も空");
 
             // 中止のあとの終了要求は今日どおり OnClose を出す（要件 5.6）。
@@ -126,10 +123,7 @@ fn yield_to_close(s: State) -> State {
         ),
         "取りやめの通知だけ（その場で OnClose は送らない）"
     );
-    assert!(
-        s.change.is_none() && s.pending_change.is_none(),
-        "切替の帳簿は消える"
-    );
+    assert!(s.change.is_none(), "切替の帳簿は消える");
     s
 }
 

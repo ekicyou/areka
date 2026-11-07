@@ -1,9 +1,23 @@
-use super::test_support::{assert_no_second_change, config, steady_none, steady_some};
+use super::test_support::{config, steady_none, steady_some};
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkEndReason};
+
+/// Action 列に OnSecondChange の ShioriRequest が一切ないことを検証する（ゲート閉）。
+fn assert_no_second_change(actions: &[Action]) {
+    for a in actions {
+        if let Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. }) = a
+        {
+            assert_ne!(
+                id.as_str(),
+                "OnSecondChange",
+                "ゲートが閉じておらず OnSecondChange を発行した"
+            );
+        }
+    }
+}
 
 /// 単一 Action が期待 ShioriCall（GET/NOTIFY・id・references）と一致することを検証する。
 fn assert_shiori(action: &Action, expected: &ShioriCall) {
@@ -63,14 +77,7 @@ fn steady_none_tick_emits_get_and_updates_last_now() {
     // GET（Ref3=1）——events:: の出力と厳密一致。
     assert_shiori(
         &actions[0],
-        &events::on_second_change(
-            now,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        &events::on_second_change(now, &ExecutionSnapshot::INACTIVE),
     );
 }
 
@@ -95,7 +102,6 @@ fn steady_some_tick_emits_notify() {
             now,
             &ExecutionSnapshot {
                 talk_active: true,
-                choice_active: false,
                 ..ExecutionSnapshot::INACTIVE
             },
         ),
@@ -125,8 +131,6 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
         &actions[0],
         &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
-    // OnSecondChange は発行しない。
-    assert_no_second_change(&actions);
 }
 
 // --- boot 中（BootMain）+ Tick → OnSecondChange なし（ゲート閉・boot は pump しない） ---
@@ -445,26 +449,6 @@ fn talk_ids_never_reused_across_mixed_origins() {
     assert_eq!(s3.next_talk_id, 7);
 }
 
-// --- 204: マウス origin の NoContent（Steady{None}）→ StartTalk なし（4.2） ---
-
-#[test]
-fn steady_none_mouse_no_content_starts_no_talk() {
-    let (next, actions) = step(
-        steady_none(5),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "OnMouseDoubleClick",
-        },
-        &config(),
-    );
-    assert!(matches!(next.phase, Phase::Steady { talk: None }));
-    assert_eq!(next.next_talk_id, 5, "204 は採番しない");
-    assert!(
-        actions.is_empty(),
-        "マウス origin の 204 も talk 起動しない（Req 4.2）"
-    );
-}
-
 // === TalkDone{reason: Ended | Interrupted}（非 quit の 2 値ルーティング網羅） ===
 
 // --- Steady{Some(id)} + TalkDone{id, Ended}, pending None → Steady{None}・次 Tick で pump 再開 ---
@@ -493,14 +477,7 @@ fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
     assert_eq!(tick_actions.len(), 1);
     assert_shiori(
         &tick_actions[0],
-        &events::on_second_change(
-            now,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        &events::on_second_change(now, &ExecutionSnapshot::INACTIVE),
     );
 }
 
@@ -642,17 +619,7 @@ fn steady_none_mouse_move_emits_get_and_keeps_phase() {
     // Reference 完全一致は構築子と共有（talk 非アクティブ→INACTIVE・Status 行なし）。
     assert_shiori(
         &actions[0],
-        &events::on_mouse_move(
-            10,
-            20,
-            0,
-            Some("Head"),
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        &events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot::INACTIVE),
     );
 }
 
@@ -675,11 +642,7 @@ fn steady_none_mouse_double_click_left_emits_get_ref5_zero() {
             0,
             Some("Bust"),
             MouseButton::Left,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
+            &ExecutionSnapshot::INACTIVE,
         ),
     );
 }
@@ -700,11 +663,7 @@ fn steady_none_mouse_double_click_right_emits_get_ref5_one() {
             0,
             Some("Bust"),
             MouseButton::Right,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
+            &ExecutionSnapshot::INACTIVE,
         ),
     );
 }
@@ -739,16 +698,10 @@ fn steady_some_mouse_move_emits_get_with_talking_status() {
         Some("Head"),
         &ExecutionSnapshot {
             talk_active: true,
-            choice_active: false,
             ..ExecutionSnapshot::INACTIVE
         },
     );
     assert_shiori(&actions[0], &expected);
-    // GET のまま（NOTIFY 化しない）ことも明示。
-    assert!(
-        matches!(&actions[0], Action::ShioriRequest(ShioriCall::Get { .. })),
-        "マウス系は常に GET（NOTIFY 化しない・DD-IE-1）"
-    );
 }
 
 // --- pending_close 中は Steady でもマウス GET を発行しない（close 優先・DD-IE-8） ---

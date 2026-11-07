@@ -60,23 +60,21 @@ mod smoke;
 // ============================================================================
 
 pub use bounded::{DEFAULT_TIMEOUT, drive_ticks_until_disconnect, join_bounded};
-pub use fixture::{
-    FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Response,
-};
+pub use fixture::{FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture};
 pub use harness::{
-    Driven, Harness, SinklessHarness, spawn_harness, spawn_harness_blocking, spawn_harness_failing,
-    spawn_harness_failing_with_stop_sink, spawn_harness_gated, spawn_harness_gated_failing,
-    spawn_harness_no_sink, spawn_harness_with_stop_sink,
+    Driven, Harness, SinklessHarness, single_stop_cause, spawn_harness, spawn_harness_blocking,
+    spawn_harness_failing, spawn_harness_failing_with_stop_sink, spawn_harness_gated,
+    spawn_harness_gated_failing, spawn_harness_no_sink, spawn_harness_with_stop_sink,
 };
 pub use mock_sakura::{
     MockSakura, QuitPolicy, SakuraGate, spawn_mock_sakura, spawn_mock_sakura_gated,
 };
 pub use mock_shiori::{
-    BlockOn, FailKind, FailOn, MockShiori, ShioriGate, spawn_mock_shiori,
-    spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
+    FailKind, FailOn, MockShiori, ShioriGate, spawn_mock_shiori, spawn_mock_shiori_blocking,
+    spawn_mock_shiori_failing,
 };
 pub use recording::{
     CallMethod, RecordedCall, binding, command_tag, expected_call, expected_translate,
-    expected_unload, pumps, resumed_get_after_active_window, send, tick,
+    expected_unload, position_of, pumps, resumed_get_after_active_window, send, tick,
 };
 pub use window_actor::{WINDOW_CREATE_SERIAL, spawn_window_actor};

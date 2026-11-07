@@ -13,7 +13,7 @@ use super::test_support::mouse_input;
 use super::{
     CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture, Harness,
     KanadeConfig, KanadeMsg, MouseEventKind, QuitPolicy, RecordedCall, events, expected_call,
-    expected_unload, spawn_harness, spawn_harness_gated,
+    expected_unload, send, spawn_harness, spawn_harness_gated,
 };
 
 /// 記録列からドラッグの 2 つの GET だけを処理順に抜き出す。
@@ -61,20 +61,14 @@ fn drag_start_then_end_in_steady_records_both_gets_in_order() {
         QuitPolicy::PerTalk(vec![true]),
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     for m in [
         mouse_input(MouseEventKind::DragStart, 10, 20, 1, Some("Head")),
         mouse_input(MouseEventKind::DragEnd, 70, 90, 1, None),
     ] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(m))
-            .expect("send drag Mouse");
+        send(&harness, KanadeMsg::Mouse(m));
     }
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
+    send(&harness, close_request());
 
     let (recorded, started) = finish(harness, "kanade drag steady join");
 
@@ -127,20 +121,14 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     for m in [
         mouse_input(MouseEventKind::DragStart, 3, 4, 0, Some("Bust")),
         mouse_input(MouseEventKind::DragEnd, 5, 6, 0, Some("Bust")),
     ] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(m))
-            .expect("send drag Mouse during greeting");
+        send(&harness, KanadeMsg::Mouse(m));
     }
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
+    send(&harness, close_request());
     gate.release_all();
 
     let (recorded, started) = finish(harness, "kanade drag talking join");
@@ -196,31 +184,28 @@ fn drag_end_after_close_request_is_not_sent() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragStart,
             30,
             40,
             0,
             Some("Head"),
-        )))
-        .expect("send DragStart in steady");
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(mouse_input(
+        )),
+    );
+    send(&harness, close_request());
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragEnd,
             50,
             60,
             0,
             Some("Head"),
-        )))
-        .expect("send DragEnd after CloseRequest");
+        )),
+    );
     gate.release_all();
 
     let (recorded, started) = finish(harness, "kanade drag end-after-close join");

@@ -29,7 +29,7 @@ fn talk() -> Option<ActiveTalk> {
 }
 
 /// 運行の相のすべての種類。トークの有無で分かれる相（`BootVersion`・`Steady`）は両方作るので
-/// 17 通り（相を問わないことと、相ごとの「再生中か」を見る）。2 番目はトーク中の定常のまま動かさない。
+/// 17 通り（相を問わないことと、相ごとの「再生中か」を見る）。
 fn phases() -> Vec<(&'static str, Phase)> {
     let (talk_id, deadline) = (TalkId(3), None);
     vec![
@@ -134,9 +134,8 @@ fn snapshot_gates_nouserbreak_by_talk_and_copies_online_and_balloons() {
         online: true,
         balloons: vec![binding(0, 2)],
     };
-    let (_, talking) = phases().swap_remove(1);
     let with_talk = State {
-        phase: talking,
+        phase: Phase::Steady { talk: talk() },
         external: external.clone(),
         ..State::initial()
     }
@@ -170,34 +169,28 @@ fn full_copy() -> ExternalStates {
 /// 会話なしの作り方が残す `Status` の値（online とバルーンだけ）。
 const WITHOUT_TALK: &str = "online,balloon(0=2/1=0)";
 
-/// リクエスト 1 件の (イベント名, `Status` 行の値)。
-fn request_of(action: &super::Action) -> (String, Option<String>) {
-    match action {
-        super::Action::ShioriRequest(
+/// 行動列の最後のリクエストの (イベント名, `Status` 行の値)。
+fn last_request(actions: &[Action]) -> (String, Option<String>) {
+    match actions
+        .iter()
+        .rev()
+        .find(|a| matches!(a, Action::ShioriRequest(_)))
+        .expect("リクエストが 1 件はあるはず")
+    {
+        Action::ShioriRequest(
             crate::msg::ShioriCall::Get { id, status, .. }
             | crate::msg::ShioriCall::Notify { id, status, .. },
         ) => (id.as_str().to_string(), status.render()),
-        _ => panic!("リクエストのはず"),
+        _ => unreachable!("リクエストだけを選んだ"),
     }
-}
-
-/// 行動列の最後のリクエストの (イベント名, `Status` 行の値)。
-fn last_request(actions: &[super::Action]) -> (String, Option<String>) {
-    let action = actions
-        .iter()
-        .rev()
-        .find(|a| matches!(a, super::Action::ShioriRequest(_)))
-        .expect("リクエストが 1 件はあるはず");
-    request_of(action)
 }
 
 /// 要件 3.3・5.1: 会話なしの作り方は、トーク中の相から作っても talk・choice・
 /// nouserbreak を落とし、online とバルーンだけを写しから残す。
 #[test]
 fn snapshot_without_talk_keeps_only_online_and_balloons() {
-    let (_, talking) = phases().swap_remove(1);
     let state = State {
-        phase: talking,
+        phase: Phase::Steady { talk: talk() },
         external: full_copy(),
         ..State::initial()
     };
@@ -405,10 +398,9 @@ fn close_handshake_request_carries_online_and_balloons_from_the_copy() {
 /// バルーンだけを載せる。
 #[test]
 fn force_quit_request_carries_online_and_balloons_from_the_copy() {
-    let (_, talking) = phases().swap_remove(1);
     let seen = walk(
         State {
-            phase: talking,
+            phase: Phase::Steady { talk: talk() },
             ..State::initial()
         },
         vec![Input::ForceQuit {
@@ -671,9 +663,8 @@ fn farewell_talk_drops_talking_after_every_ending() {
 /// 流す `switching_requests_carry_online_and_balloons_from_the_copy` が固定している）。
 #[test]
 fn close_request_held_through_a_talk_sends_on_close_without_talk() {
-    let (_, talking) = phases().swap_remove(1);
     let state = State {
-        phase: talking,
+        phase: Phase::Steady { talk: talk() },
         external: full_copy(),
         ..State::initial()
     };

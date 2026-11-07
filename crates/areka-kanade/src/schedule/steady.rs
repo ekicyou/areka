@@ -709,6 +709,13 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
     if let Some(actions) = fire_choice_timeout_if_due(&mut state, now) {
         return (state, actions);
     }
+    // 話していなければ保留の終了を先に消化して握手を始める。再生中は保留があってもここでは
+    // 握手を開始しない——当該 talk の TalkDone を待つ（DD-6・補足遷移）。
+    if matches!(state.phase, Phase::Steady { talk: None })
+        && let Some(reason) = state.pending_close.take()
+    {
+        return begin_close(state, reason);
+    }
     // GET/NOTIFY・Ref3・Status を単一スナップショットから導出する（DD-IT-3）。State::snapshot は
     // Steady{None}→talk 非アクティブ（GET・Ref3=1・status 空）、Steady{Some}→talk アクティブ
     // （NOTIFY・Ref3=0・status talking）を与える——既存の wire 挙動を保存する。選択待ち中は
@@ -717,29 +724,14 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
     // （応答スクリプトを運べない型＝自発トーク抑止が構造で成立する・Req6.5）。
     let snapshot = state.snapshot();
     match state.phase {
-        Phase::Steady { talk: None } => {
-            if let Some(reason) = state.pending_close.take() {
-                begin_close(state, reason)
-            } else {
-                // pump 問い合わせ（GET・Ref3=1）。応答待ちのまま Steady{None} を維持する。
-                (
-                    state,
-                    vec![Action::ShioriRequest(events::on_second_change(
-                        now, &snapshot,
-                    ))],
-                )
-            }
-        }
-        Phase::Steady { talk: Some(_) } => {
-            // active talk 中は NOTIFY（Ref3=0・応答は構造的に破棄）。pending_close があっても
-            // ここでは握手を開始しない——当該 talk の TalkDone を待つ（DD-6・補足遷移）。
-            (
-                state,
-                vec![Action::ShioriRequest(events::on_second_change(
-                    now, &snapshot,
-                ))],
-            )
-        }
+        // pump: 話していなければ GET（Ref3=1・応答待ちのまま Steady{None}）、再生中は NOTIFY
+        // （Ref3=0・応答は構造的に破棄）。別は snapshot が決める。
+        Phase::Steady { .. } => (
+            state,
+            vec![Action::ShioriRequest(events::on_second_change(
+                now, &snapshot,
+            ))],
+        ),
         // Steady 以外はルーティング上到達しない（防御アーム）。
         _ => steady_phase_unexpected(state, "Tick"),
     }
@@ -863,10 +855,10 @@ fn on_reply(
 /// 完了のみを受ける:
 /// - `pending_close` あり → close 握手開始（OnClose GET・ClosePending へ・補足遷移）。
 /// - `pending_close` なし → `Steady{None}` へ復帰（次 Tick で pump 再開・Req 3.4）。
-fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>) {
+fn on_talk_done(mut state: State, _done: TalkDone) -> (State, Vec<Action>) {
     match state.phase {
         Phase::Steady { talk: Some(_) } => {
-            let _ = done; // talk_id 突合は mod.rs 済み（既知 talk の非 quit のみ到達）。
+            // talk_id 突合は mod.rs 済み（既知 talk の非 quit のみ到達）。
             // 対象トークの完了＝帳簿の掃除点（C4 規則 7・Req1.3／6.2）。以降 slot は空くか
             // close 握手へ進むため、当該トークに紐づく選択待ちは構造上もう存在しない。
             super::clear_choice_ledger(&mut state, "steady_talk_done");

@@ -157,9 +157,8 @@ mod tests {
     use super::*;
 
     /// リソース許可集合は厳密にこの 15 名（語彙の凍結檻・Req4.1／要件 3.2・
-    /// areka-P0-network-update 要件 9.13・areka-P0-move-canon 要件 8.2 で 12→13・
-    /// areka-P0-window-link-directives 要件 7.6 で 13→14・
-    /// popup-menu-extra-resources 要件 5.3 で 14→15）。
+    /// areka-P0-network-update 要件 9.13・areka-P0-move-canon 要件 8.2・
+    /// areka-P0-window-link-directives 要件 7.6・popup-menu-extra-resources 要件 5.3）。
     #[test]
     fn allowed_resource_ids_are_exactly_the_fifteen_names() {
         assert_eq!(
@@ -288,7 +287,6 @@ mod tests {
             "username",
             &ExecutionSnapshot {
                 talk_active: true,
-                choice_active: false,
                 ..ExecutionSnapshot::INACTIVE
             },
         );

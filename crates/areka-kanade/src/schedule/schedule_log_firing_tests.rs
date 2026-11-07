@@ -25,10 +25,10 @@ fn steady_with_talk(talk_id: TalkId) -> Phase {
 }
 
 /// `step()` を捕捉付きで駆動し、発行イベント列を返す（state は move）。
-fn run_step(phase: Phase, input: Input) -> Vec<CapturedEvent> {
+fn run_step(state: State, input: Input) -> Vec<CapturedEvent> {
     let cfg = config();
     capture(|| {
-        let _ = step(state_in(phase), input, &cfg);
+        let _ = step(state, input, &cfg);
     })
 }
 
@@ -39,7 +39,7 @@ fn run_step(phase: Phase, input: Input) -> Vec<CapturedEvent> {
 #[test]
 fn error_shiori_down_logs() {
     let ev = run_step(
-        steady_with_talk(TalkId(5)),
+        state_in(steady_with_talk(TalkId(5))),
         Input::ShioriDown {
             kind: crate::msg::ShioriDownKind::HelperExited,
             reason: "helper crashed".to_string(),
@@ -52,7 +52,7 @@ fn error_shiori_down_logs() {
 fn error_shiori_failed_logs() {
     // 応答待ちフェーズ（BootType）+ Failed → 横断アーム shiori_failed。
     let ev = run_step(
-        Phase::BootType,
+        state_in(Phase::BootType),
         Input::ShioriReply {
             outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
             origin: "test",
@@ -65,7 +65,7 @@ fn error_shiori_failed_logs() {
 fn error_unknown_talk_done_logs() {
     // 突合対象 talk (5) と異なる talk_id (999) の TalkDone → unknown_talk_done。
     let ev = run_step(
-        steady_with_talk(TalkId(5)),
+        state_in(steady_with_talk(TalkId(5))),
         Input::TalkDone(TalkDone {
             talk_id: TalkId(999),
             reason: TalkEndReason::Ended,
@@ -79,9 +79,9 @@ fn error_unknown_talk_done_logs() {
 fn error_unload_failed_logs() {
     // Unloading 中の Failed 応答 → unload_failed（終了系列は継続）。
     let ev = run_step(
-        Phase::Unloading {
+        state_in(Phase::Unloading {
             cause: TermCause::Quit,
-        },
+        }),
         Input::ShioriReply {
             outcome: ShioriOutcome::Failed(ShioriFailure::Ipc("pipe closed".to_string())),
             origin: "test",
@@ -93,25 +93,15 @@ fn error_unload_failed_logs() {
 #[test]
 fn error_close_deadline_exceeded_logs() {
     // CloseTalkWait で deadline 超過 Tick → close_deadline_exceeded。
-    let cfg = config();
-    let s = State {
-        phase: Phase::CloseTalkWait {
+    let ev = run_step(
+        state_in(Phase::CloseTalkWait {
             talk_id: TalkId(7),
             deadline: Some(MonotonicMs(1_000)),
+        }),
+        Input::Tick {
+            now: MonotonicMs(2_000),
         },
-        last_now: Some(MonotonicMs(900)),
-        next_talk_id: 8,
-        ..State::initial()
-    };
-    let ev = capture(|| {
-        let _ = step(
-            s,
-            Input::Tick {
-                now: MonotonicMs(2_000),
-            },
-            &cfg,
-        );
-    });
+    );
     assert_logged(&ev, Level::ERROR, "close_deadline_exceeded");
 }
 
@@ -122,7 +112,7 @@ fn error_close_deadline_exceeded_logs() {
 #[test]
 fn warn_force_quit_logs() {
     let ev = run_step(
-        Phase::BootMain,
+        state_in(Phase::BootMain),
         Input::ForceQuit {
             reason: CloseReason::System,
         },
@@ -133,7 +123,7 @@ fn warn_force_quit_logs() {
 #[test]
 fn warn_boot_ignored_logs() {
     // 非 Idle での Boot → mod.rs boot_ignored。
-    let ev = run_step(Phase::BootMain, Input::Boot);
+    let ev = run_step(state_in(Phase::BootMain), Input::Boot);
     assert_logged(&ev, Level::WARN, "boot_ignored");
 }
 
@@ -141,7 +131,7 @@ fn warn_boot_ignored_logs() {
 fn warn_unexpected_reply_logs() {
     // 応答待ちでない Phase（Idle）への ShioriReply → mod.rs unexpected_reply。
     let ev = run_step(
-        Phase::Idle,
+        state_in(Phase::Idle),
         Input::ShioriReply {
             outcome: ShioriOutcome::Notified,
             origin: "test",
@@ -154,7 +144,7 @@ fn warn_unexpected_reply_logs() {
 fn warn_input_after_terminate_logs() {
     // 終了系列（Stopped）で受領した非横断入力（Tick）→ dispatch_phase input_after_terminate。
     let ev = run_step(
-        Phase::Stopped,
+        state_in(Phase::Stopped),
         Input::Tick {
             now: MonotonicMs(1_000),
         },
@@ -170,7 +160,7 @@ fn warn_input_after_terminate_logs() {
 fn warn_boot_input_ignored_logs() {
     // boot フェーズ（BootInit）+ boot 無関係入力（Tick）→ dispatch_phase→boot::step _ アーム。
     let ev = run_step(
-        Phase::BootInit,
+        state_in(Phase::BootInit),
         Input::Tick {
             now: MonotonicMs(1_000),
         },
@@ -183,13 +173,13 @@ fn warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk() {
     // 挨拶追跡中の応答待ち（BootVersion{Some}）でも、TalkDone 以外（Tick）は従来どおり無視の警告。
     // 受理の info（boot_talk_done）が Tick で出れば受理条件の広げすぎ（較正の実体は WARN の存在側）。
     let ev = run_step(
-        Phase::BootVersion {
+        state_in(Phase::BootVersion {
             talk: Some(ActiveTalk {
                 talk_id: TalkId(1),
                 origin: "boot",
                 script: String::new(),
             }),
-        },
+        }),
         Input::Tick {
             now: MonotonicMs(1_000),
         },
@@ -202,7 +192,7 @@ fn warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk() {
 fn warn_boot_unexpected_reply_logs() {
     // BootInit（Notified 待ち）に Value → boot::on_reply unexpected_reply。
     let ev = run_step(
-        Phase::BootInit,
+        state_in(Phase::BootInit),
         Input::ShioriReply {
             outcome: ShioriOutcome::Value(
                 "unexpected".to_string(),
@@ -246,7 +236,7 @@ fn warn_boot_reply_ignored_logs() {
 fn warn_steady_unexpected_reply_logs() {
     // Steady{None} + Unloaded（想定外の応答）→ steady_reply_unexpected。
     let ev = run_step(
-        Phase::Steady { talk: None },
+        state_in(Phase::Steady { talk: None }),
         Input::ShioriReply {
             outcome: ShioriOutcome::Unloaded,
             origin: "test",
@@ -289,7 +279,7 @@ fn warn_steady_phase_unexpected_logs() {
 fn warn_close_notified_unexpected_logs() {
     // ClosePending + Notified（OnClose は GET ゆえ構造上あり得ない）→ close_notified_unexpected。
     let ev = run_step(
-        Phase::ClosePending,
+        state_in(Phase::ClosePending),
         Input::ShioriReply {
             outcome: ShioriOutcome::Notified,
             origin: "test",
@@ -302,7 +292,7 @@ fn warn_close_notified_unexpected_logs() {
 fn warn_close_reply_unexpected_logs() {
     // ClosePending + Unloaded（Value/NoContent/Notified 以外）→ close_reply_unexpected。
     let ev = run_step(
-        Phase::ClosePending,
+        state_in(Phase::ClosePending),
         Input::ShioriReply {
             outcome: ShioriOutcome::Unloaded,
             origin: "test",
@@ -315,7 +305,7 @@ fn warn_close_reply_unexpected_logs() {
 fn warn_close_pending_input_ignored_logs() {
     // ClosePending + 無関係入力（CloseRequest）→ close_pending_input_ignored。
     let ev = run_step(
-        Phase::ClosePending,
+        state_in(Phase::ClosePending),
         Input::CloseRequest {
             reason: CloseReason::User { scope: 0 },
         },
@@ -327,10 +317,10 @@ fn warn_close_pending_input_ignored_logs() {
 fn warn_close_talk_wait_input_ignored_logs() {
     // CloseTalkWait + 無関係入力（CloseRequest）→ close_talk_wait_input_ignored。
     let ev = run_step(
-        Phase::CloseTalkWait {
+        state_in(Phase::CloseTalkWait {
             talk_id: TalkId(2),
             deadline: None,
-        },
+        }),
         Input::CloseRequest {
             reason: CloseReason::User { scope: 0 },
         },
@@ -455,14 +445,6 @@ fn warn_mouse_extended_unexpected_kind_logs() {
 // 選択確定の受領検証とカスケード駆動（設計ログ語彙表）
 // ============================================================
 
-/// 任意の `State` を捕捉付きで駆動する（帳簿を直接構成する檻用）。
-fn run_step_state(state: State, input: Input) -> Vec<CapturedEvent> {
-    let cfg = config();
-    capture(|| {
-        let _ = step(state, input, &cfg);
-    })
-}
-
 /// 檻用の選択確定入力。
 fn choice_input_of(id: &str) -> Input {
     Input::Choice(crate::msg::ChoiceInput {
@@ -489,29 +471,29 @@ fn state_with_ledger(candidates: &[&str], phase: ChoicePhase) -> State {
 #[test]
 fn warn_choice_rejected_no_wait_logs() {
     // 選択待ち帳簿が無い（解決済み・未成立）。
-    let ev = run_step(steady_with_talk(TalkId(5)), choice_input_of("OnMenu"));
+    let ev = run_step(
+        state_in(steady_with_talk(TalkId(5))),
+        choice_input_of("OnMenu"),
+    );
     assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
 
     // 帳簿の対象 talk が現行 talk と食い違う。
-    let mut s = state_in(steady_with_talk(TalkId(5)));
-    s.choice = Some(ChoiceState {
-        talk_id: TalkId(999),
-        candidates: vec!["OnMenu".to_string()],
-        deadline: None,
-        phase: ChoicePhase::Waiting,
-    });
-    let ev = run_step_state(s, choice_input_of("OnMenu"));
+    let mut s = state_with_ledger(&["OnMenu"], ChoicePhase::Waiting);
+    if let Some(ledger) = s.choice.as_mut() {
+        ledger.talk_id = TalkId(999);
+    }
+    let ev = run_step(s, choice_input_of("OnMenu"));
     assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
 
     // 非 Steady フェーズ（横断アーム側）。
-    let ev = run_step(Phase::BootMain, choice_input_of("OnMenu"));
+    let ev = run_step(state_in(Phase::BootMain), choice_input_of("OnMenu"));
     assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
 }
 
 /// Req1.4: 候補集合に無い ID の棄却は warn で記録する。
 #[test]
 fn warn_choice_rejected_unknown_id_logs() {
-    let ev = run_step_state(
+    let ev = run_step(
         state_with_ledger(&["OnMenu"], ChoicePhase::Waiting),
         choice_input_of("choice9"),
     );
@@ -528,7 +510,7 @@ fn warn_choice_rejected_busy_logs() {
         },
         ChoicePhase::TimeoutInFlight,
     ] {
-        let ev = run_step_state(
+        let ev = run_step(
             state_with_ledger(&["OnMenu"], phase),
             choice_input_of("OnMenu"),
         );
@@ -539,7 +521,7 @@ fn warn_choice_rejected_busy_logs() {
 /// Req1.6: 受理は info で記録し、判定した段列をフィールドに載せる。
 #[test]
 fn info_choice_accepted_logs_plan() {
-    let ev = run_step_state(
+    let ev = run_step(
         state_with_ledger(&["OnMenu"], ChoicePhase::Waiting),
         choice_input_of("OnMenu"),
     );
@@ -559,7 +541,7 @@ fn info_choice_accepted_logs_plan() {
 /// 各段の GET 送出は trace で記録する（設計ログ語彙表）。
 #[test]
 fn trace_choice_cascade_stage_logs() {
-    let ev = run_step_state(
+    let ev = run_step(
         state_with_ledger(&["choice1"], ChoicePhase::Waiting),
         choice_input_of("choice1"),
     );
@@ -569,7 +551,7 @@ fn trace_choice_cascade_stage_logs() {
 /// Req5.1: `ResolveChoice` 発行は info で記録する。
 #[test]
 fn info_choice_resolved_logs() {
-    let ev = run_step_state(
+    let ev = run_step(
         state_with_ledger(
             &["choice1"],
             ChoicePhase::Cascading {
@@ -622,7 +604,7 @@ fn error_choice_shiori_failed_as_204_logs() {
 #[test]
 fn info_choice_waiting_established_logs_candidate_count_and_deadline() {
     let ev = run_step(
-        steady_with_talk(TalkId(5)),
+        state_in(steady_with_talk(TalkId(5))),
         Input::ChoiceWaiting {
             talk_id: TalkId(5),
             choice_ids: vec!["OnMenu".to_string(), "choice1".to_string()],
@@ -647,7 +629,7 @@ fn info_choice_waiting_established_logs_candidate_count_and_deadline() {
 #[test]
 fn info_choice_waiting_established_logs_indefinite_deadline() {
     let ev = run_step(
-        steady_with_talk(TalkId(5)),
+        state_in(steady_with_talk(TalkId(5))),
         Input::ChoiceWaiting {
             talk_id: TalkId(5),
             choice_ids: vec!["OnMenu".to_string()],
@@ -676,7 +658,7 @@ fn warn_choice_waiting_stale_logs() {
     ];
     for (phase, talk_id) in cases {
         let ev = run_step(
-            phase,
+            state_in(phase),
             Input::ChoiceWaiting {
                 talk_id,
                 choice_ids: vec!["OnMenu".to_string()],
@@ -697,7 +679,7 @@ fn info_talk_done_interrupted_as_non_quit_logs() {
     // 既知 talk の reason=Interrupted → 非 quit 扱い（Ended と同一経路）へ委譲。
     // 選択タイムアウトの解除経路の正規の到達点（DD-11）で、どの reason だったかを info で観測できることを検証する。
     let ev = run_step(
-        steady_with_talk(TalkId(5)),
+        state_in(steady_with_talk(TalkId(5))),
         Input::TalkDone(TalkDone {
             talk_id: TalkId(5),
             reason: TalkEndReason::Interrupted,
@@ -732,7 +714,7 @@ fn trace_mouse_input_ignored_logs_dropped_drag_input() {
         (MouseEventKind::DragEnd, "DragEnd"),
     ] {
         for phase in [Phase::BootMain, Phase::ClosePending, Phase::Stopped] {
-            let ev = run_step(phase, drag_input(kind));
+            let ev = run_step(state_in(phase), drag_input(kind));
             let ignored = logged_once(&ev, Level::TRACE, "mouse_input_ignored");
             let input = ignored.fields.get("input").map(String::as_str);
             assert!(

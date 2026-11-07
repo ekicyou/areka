@@ -30,7 +30,7 @@ use crate::schedule::{Phase, State};
 /// 会話できる状態（`Steady`・会話の有無を問わない）だけが真。起動系（`Idle`〜`BootVersion`）・
 /// 終了握手（`ClosePending`／`CloseTalkWait`）・切替の 4 相（`ChangePending`／`ChangeTalkWait`／
 /// `ChangeClosePending`／`ChangeCloseTalkWait`）・`Unloading`・`Stopped` は偽（要件 3.10）。
-pub(crate) fn queryable(phase: &Phase) -> bool {
+fn queryable(phase: &Phase) -> bool {
     matches!(phase, Phase::Steady { .. })
 }
 

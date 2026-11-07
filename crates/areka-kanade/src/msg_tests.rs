@@ -105,4 +105,6 @@ fn kanade_config_new_supplies_documented_defaults() {
     assert_eq!(config.ghost_name, "");
     assert_eq!(config.boot_origin, crate::change::BootOrigin::Plain);
     assert_eq!(config.shell_folder, "master");
+    assert!(config.choice_wake.is_none());
+    assert!(std::ptr::eq(config.online, &crate::online::PROCESS));
 }

@@ -55,14 +55,6 @@ impl MockSakura {
         starts_of(&self.commands.lock().expect("mock sakura mutex"))
     }
 
-    /// sink スレッドの終了を待つ（`TalkCommand` 送信端が全て drop された後に完了する）。
-    pub fn join_bounded(self, what: &str, timeout: Duration) {
-        let MockSakura { join, .. } = self;
-        run_join_bounded(what, timeout, move || {
-            let _ = join.join();
-        });
-    }
-
     /// sink スレッドの終了を待ってから、記録スナップショットを**到着順**で返す。
     ///
     /// # なぜ [`commands`](Self::commands) と別に要るのか（読み出しの happens-before）
@@ -215,8 +207,9 @@ impl SakuraGate {
 /// 記録・即応・park を行う。park の**送出**は別の releaser スレッドが担う——recv ループは
 /// `recv` で恒常的にブロックし得るため、release_all を実行中の recv ループ内で拾えないからで
 /// ある。releaser は「解放フラグ成立」または「recv ループ終了」で起床し、park を送って自然終了
-/// する。テストは Sender drop の前に `release_all` を呼ぶ契約（それにより `Steady{None}` 復帰→
-/// close 握手が駆動される）。
+/// する。`release_all` は任意である——呼べば park した TalkDone が届いて `Steady{None}` 復帰→
+/// close 握手が駆動される。呼ばずに kanade が止まれば、recv ループ終了（`recv_closed`）で起きた
+/// releaser が届かない送り先へ投げて捨てる（多くの檻はこの終わり方に頼る）。
 pub fn spawn_mock_sakura_gated(
     talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,
@@ -240,8 +233,8 @@ pub fn spawn_mock_sakura_gated(
     let shared_releaser = Arc::clone(&shared);
 
     // releaser: 「解放済み かつ 保留 talk が全て park された」まで待ち、park された TalkDone を
-    // 送出して終了する。recv ループ終了（recv_closed）でも起床する（安全弁: 保留が揃わないまま
-    // kanade が停止した誤用時に宙吊りしないため）。
+    // 送出して終了する。recv ループ終了（recv_closed）でも起床し、未解放の park は届かない送り先へ
+    // 投げて捨てる（`release_all` を呼ばずに kanade が止まる檻の正規の終わり方）。
     let releaser_kanade_tx = kanade_tx.clone();
     let releaser = thread::Builder::new()
         .name("mock-sakura-releaser".to_string())
@@ -249,7 +242,7 @@ pub fn spawn_mock_sakura_gated(
             let mut inner = shared_releaser.inner.lock().expect("sakura gate mutex");
             // 起床条件:
             //   (a) 解放済み かつ 全保留 talk が park された（＝正規の解放点）、または
-            //   (b) recv ループ終了（安全弁・kanade 停止で二度と park は増えない）。
+            //   (b) recv ループ終了（kanade 停止で二度と park は増えない・未解放の park は捨てる）。
             while !(inner.released && inner.parked.len() >= inner.expected_holds)
                 && !inner.recv_closed
             {

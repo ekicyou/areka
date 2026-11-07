@@ -57,16 +57,14 @@ pub use msg::{
     ShioriCall, ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, ShioriMsg,
     ShioriOutcome,
 };
-pub use online::{OnlineCounter, OnlineGuard};
+pub use online::OnlineCounter;
 pub use shiori::{
-    CutGuard, ShioriBackend, ShioriBusy, ShioriConnection, ShioriCut, ShioriProbe, ShioriUnblock,
-    WaitBudget, spawn_shiori_actor,
+    ShioriBackend, ShioriBusy, ShioriConnection, ShioriCut, ShioriProbe, ShioriUnblock, WaitBudget,
+    spawn_shiori_actor,
 };
-pub use status::{
-    BalloonBinding, ExecutionSnapshot, ExecutionState, ExecutionStateUpdate, ExecutionStatus,
-};
-pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
-pub use translate::{MakotoChain, ScriptExpander, TranslateSeams};
+pub use status::{BalloonBinding, ExecutionSnapshot, ExecutionStateUpdate, ExecutionStatus};
+pub use talk::{StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
+pub use translate::{ScriptExpander, TranslateSeams};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///

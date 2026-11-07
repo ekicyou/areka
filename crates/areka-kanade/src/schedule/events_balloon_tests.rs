@@ -8,14 +8,9 @@ use super::*;
 
 const SCRIPT: &str = "\\0\\s[0]長い台詞\\w9\\w9\\e";
 
-/// 送る時点のトークを持たない状態（定常で再生中のトークが無い）。
-fn idle() -> ExecutionSnapshot {
-    ExecutionSnapshot::INACTIVE
-}
-
 #[test]
 fn on_balloon_break_is_get_with_script_scope_and_empty_position() {
-    let (id, refs, status) = expect_get(on_balloon_break(SCRIPT, 1, &idle()));
+    let (id, refs, status) = expect_get(on_balloon_break(SCRIPT, 1, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnBalloonBreak");
     assert_eq!(
         refs.len(),
@@ -33,7 +28,7 @@ fn on_balloon_break_is_get_with_script_scope_and_empty_position() {
 
 #[test]
 fn on_balloon_break_writes_scope_in_decimal_for_any_number() {
-    let (_, refs, _) = expect_get(on_balloon_break(SCRIPT, 12, &idle()));
+    let (_, refs, _) = expect_get(on_balloon_break(SCRIPT, 12, &ExecutionSnapshot::INACTIVE));
     assert_eq!(
         refs,
         vec![SCRIPT.to_string(), "12".to_string(), String::new()]
@@ -42,7 +37,7 @@ fn on_balloon_break_writes_scope_in_decimal_for_any_number() {
 
 #[test]
 fn on_balloon_close_is_get_with_script_only() {
-    let (id, refs, status) = expect_get(on_balloon_close(SCRIPT, &idle()));
+    let (id, refs, status) = expect_get(on_balloon_close(SCRIPT, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnBalloonClose");
     assert_eq!(
         refs,
@@ -54,7 +49,7 @@ fn on_balloon_close_is_get_with_script_only() {
 
 #[test]
 fn on_balloon_timeout_is_get_with_script_and_zero() {
-    let (id, refs, status) = expect_get(on_balloon_timeout(SCRIPT, &idle()));
+    let (id, refs, status) = expect_get(on_balloon_timeout(SCRIPT, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnBalloonTimeout");
     assert_eq!(
         refs,

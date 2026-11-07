@@ -6,15 +6,15 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use areka_actor::ActorHandle;
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, KanadeNotice, StartTalk, TalkCommand, spawn_kanade,
-    spawn_kanade_with_stop_sink,
+    KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped, StartTalk, TalkCommand,
+    spawn_kanade, spawn_kanade_with_stop_sink,
 };
 
 use super::mock_sakura::starts_of;
 use super::{
-    BlockOn, DEFAULT_TIMEOUT, FailOn, Fixture, MockSakura, MockShiori, QuitPolicy, RecordedCall,
-    SakuraGate, ShioriGate, join_bounded, spawn_mock_sakura, spawn_mock_sakura_gated,
-    spawn_mock_shiori, spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
+    DEFAULT_TIMEOUT, FailOn, Fixture, MockSakura, MockShiori, QuitPolicy, RecordedCall, SakuraGate,
+    ShioriGate, join_bounded, spawn_mock_sakura, spawn_mock_sakura_gated, spawn_mock_shiori,
+    spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
 };
 
 // ============================================================================
@@ -245,7 +245,7 @@ pub fn spawn_harness_gated_failing(
 /// ブロッキング mock shiori 付き駆動ハーネスを組み立てる（[`spawn_harness`] の派生）。
 ///
 /// [`spawn_harness`] と同一の結線だが、mock shiori を [`spawn_mock_shiori_blocking`] で起動し、
-/// `block_on` が指す最初の呼出を明示解放まで握る。返す [`ShioriGate`] の
+/// id が `block_get_id` の最初の GET を明示解放まで握る。返す [`ShioriGate`] の
 /// [`wait_until_blocked`](ShioriGate::wait_until_blocked) で「kanade が round-trip でブロック中」を
 /// 確認し、[`release`](ShioriGate::release) で catch-up を解禁できる。これにより「呼出ブロック中に
 /// 溜まった Tick が解除後に順次処理される（catch-up・in-flight ≤ 1）」を統合層で観測できる
@@ -254,9 +254,9 @@ pub fn spawn_harness_blocking(
     config: KanadeConfig,
     fixture: Fixture,
     quit_policy: QuitPolicy,
-    block_on: BlockOn,
+    block_get_id: &'static str,
 ) -> (Harness, ShioriGate) {
-    let (shiori, gate) = spawn_mock_shiori_blocking(fixture, block_on);
+    let (shiori, gate) = spawn_mock_shiori_blocking(fixture, block_get_id);
     let (harness, ()) = assemble(config, shiori, None, immediate_sakura(quit_policy));
     (harness, gate)
 }
@@ -308,5 +308,31 @@ pub fn spawn_harness_no_sink(config: KanadeConfig, fixture: Fixture) -> Sinkless
         kanade: kanade_handle,
         shiori,
         talk_rx,
+    }
+}
+
+/// 停止通知が 1 件だけ届いたことを確かめ、その原因を返す（停止の通知を受ける檻が共有する）。
+///
+/// 呼び手は kanade を join してから読む——join の成功は終了系列の完了（停止通知の投函）の後なので、
+/// 通知は既に届いている。定常に入っていれば、その通知（定常到達）が停止の通知より先に 1 件だけ届く。
+pub fn single_stop_cause(rx: &Receiver<KanadeNotice>) -> KanadeStopCause {
+    let mut first = rx
+        .try_recv()
+        .expect("終了系列の完了で停止通知が 1 件届くはず（R15.3）");
+    if first == KanadeNotice::Steady {
+        first = rx
+            .try_recv()
+            .expect("終了系列の完了で停止通知が 1 件届くはず（R15.3）");
+    }
+    assert!(
+        rx.try_recv().is_err(),
+        "停止通知は 1 度だけ（`StopSelf` は 1 回しか実行されない）"
+    );
+    match first {
+        KanadeNotice::Stopped(KanadeStopped {
+            cause,
+            handoff: None,
+        }) => cause,
+        other => panic!("停止の通知（切替の中身は無し）のはず: {other:?}"),
     }
 }

@@ -9,8 +9,8 @@ use crate::schedule::events::{on_translate_sstp, sstp_notify};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::translate_test_support::{
-    active, boot_until_greeting_playing, change_request, config, fingerprint, non_steady_states,
-    steady, strings, warn_or_above,
+    CHOICE_ID, active, boot_until_greeting_playing, change_request, choice_event_count, config,
+    fingerprint, non_steady_states, steady, strings, warn_or_above,
 };
 use crate::schedule::{
     Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, step,
@@ -312,25 +312,6 @@ fn send_during_playback_replaces_with_the_next_id_even_with_no_user_break() {
         );
         assert_deferred(&state, &actions, 10, "\\h割り込み\\e");
     }
-}
-
-/// 選択肢の ID（`On` で始まらない正典の形＝選択はカスケードで `OnChoiceSelectEx`／`OnChoiceSelect` を送る）。
-const CHOICE_ID: &str = "選択1";
-
-/// 選択の 3 つのイベントと選択肢の ID そのものの名前の往復を数える。
-fn choice_event_count(actions: &[Action]) -> usize {
-    actions
-        .iter()
-        .filter(|action| match action {
-            Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. }) => {
-                matches!(
-                    id.as_str(),
-                    "OnChoiceSelectEx" | "OnChoiceSelect" | "OnChoiceTimeout"
-                ) || id.as_str() == CHOICE_ID
-            }
-            _ => false,
-        })
-        .count()
 }
 
 /// ⑶ 選択肢の最中は帳簿が消え、その後の時間切れ・選択のイベントは 0 回（要件 3.3）。

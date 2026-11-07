@@ -2,10 +2,18 @@
 //!
 //! 本物の殻と偽の shiori（`actor_raise_reply_tests` の組）で、返信端へ値がちょうど 1 回返ることを見る。
 
-use super::raise_reply_tests::{LIMIT, boot_to_steady, close};
+use super::raise_reply_tests::{LIMIT, Respond, Rig, boot_to_steady, close, spawn_with};
 use super::*;
+use crate::change::ShioriMethod;
+use crate::msg::KanadeStopped;
+use crate::schedule::Phase;
+use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate_test_support::config;
 use crate::sstp::{SstpNotifyOutcome, SstpSendOutcome};
+use crate::talk::{TalkDone, TalkEndReason};
+use areka_actor::ReplyReceiver;
+use std::sync::mpsc::{self, Receiver};
+use tracing::Level;
 
 // ---------------------------------------------------------------------------
 // 本物の殻と偽の shiori で 2 つの入口を固定する（要件 1.3・1.7・2.1・2.3・2.4・2.5・2.7・2.8・
@@ -15,16 +23,6 @@ use crate::sstp::{SstpNotifyOutcome, SstpSendOutcome};
 // その依頼の一括の処理を実行し終えた後に送られるので、返事を受けた時点で偽の shiori の記録と再生の
 // 起動は出そろっている（待たずに読める）。期限はハングを失敗に変えるための上限にすぎない。
 // ---------------------------------------------------------------------------
-
-use super::raise_reply_tests::{Respond, Rig, spawn_with};
-use crate::change::ShioriMethod;
-use crate::msg::KanadeStopped;
-use crate::schedule::Phase;
-use crate::schedule::log_capture::{capture, logged_once};
-use crate::talk::{TalkDone, TalkEndReason};
-use areka_actor::ReplyReceiver;
-use std::sync::mpsc::{self, Receiver};
-use tracing::Level;
 
 /// 外から頼む名前（許可の表に無い・`On` で始まらない）。
 const OUTSIDE: &str = "UserDefinedX";

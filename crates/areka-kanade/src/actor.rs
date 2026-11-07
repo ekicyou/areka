@@ -232,6 +232,8 @@ pub fn spawn_kanade_translating(
                     Input::PropertyEvent { id, references }
                 }
             };
+            // 最初の往復の写し（台本の複製）は返事を待つ入口が在るときだけ作る。
+            let wants_first = raise_reply.is_some() || sstp_reply.is_some();
             let (flow, first_reply) = drive_translating(
                 &mut state,
                 input,
@@ -241,6 +243,7 @@ pub fn spawn_kanade_translating(
                 &resource_sink,
                 stop_sink.as_ref(),
                 &seams,
+                wants_first,
             );
             // 返事はこの依頼の処理（応答を入れ直して動作を実行し終えるまで）が済んだ後に 1 回だけ送る。
             // 往復が無かったのは、許可表に無い名前か定常以外での依頼（どちらも運行表が捨てた）。
@@ -294,6 +297,7 @@ fn drive(
         resource_sink,
         stop_sink,
         &seams,
+        true,
     );
     (flow, first.map(|f| f.raise_outcome()))
 }
@@ -302,8 +306,8 @@ fn drive(
 /// Actions が尽きるまで反復する（execute-batch/reinject-last）。入れ直すものが SHIORI の応答なら
 /// `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。
 ///
-/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`FirstReply`] へ写したもの（往復が無ければ
-/// `None`）。汎用の通知の入口と SSTP の入口の返事の材料で、他の入力では呼び手が読み捨てる。
+/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`FirstReply`] へ写したもの（往復が無いか
+/// `wants_first` が偽なら `None`）。汎用の通知の入口と SSTP の入口の返事の材料。
 #[allow(clippy::too_many_arguments)]
 fn drive_translating(
     state: &mut State,
@@ -314,6 +318,7 @@ fn drive_translating(
     resource_sink: &ResourceSink,
     stop_sink: Option<&Sender<KanadeNotice>>,
     seams: &TranslateSeams,
+    wants_first: bool,
 ) -> (Drive, Option<FirstReply>) {
     // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
@@ -341,7 +346,7 @@ fn drive_translating(
             config.choice_wake.as_ref(),
         );
         // `ShioriOutcome` は複製できないので、入れ直す前に参照から写す。
-        if std::mem::take(&mut first_batch) {
+        if std::mem::take(&mut first_batch) && wants_first {
             first_reply = last_reply
                 .as_ref()
                 .map(|(outcome, _)| first_reply_of(outcome));

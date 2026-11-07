@@ -106,14 +106,6 @@ pub(super) fn choice_get_ids(recorded: &[RecordedCall]) -> Vec<&str> {
         .collect()
 }
 
-/// 記録列における最初の一致位置（処理順の前後関係を突合するための索引）。
-pub(super) fn position_of(recorded: &[RecordedCall], method: CallMethod, id: &str) -> usize {
-    recorded
-        .iter()
-        .position(|c| c.method == method && c.id == id)
-        .unwrap_or_else(|| panic!("{method:?} {id} が記録されているはず: {recorded:?}"))
-}
-
 /// [`TalkCommand`] 到着順を可読なタグ列へ写す（`Start`／`Resolve`／`Cancel` の順序観測面）。
 ///
 /// `TalkCommand` は `PartialEq` を持たないため、順序の突合は本タグ列で行う（DD-4 の FIFO 契約は

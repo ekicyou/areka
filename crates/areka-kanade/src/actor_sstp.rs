@@ -11,7 +11,7 @@ use crate::msg::ShioriOutcome;
 use crate::sstp::{SstpNotifyOutcome, SstpSendOutcome};
 
 /// 最初の一括の往復の結果（`ShioriOutcome` は複製できないので殻が写す）。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub(crate) enum FirstReply {
     Script(String),
     NoReply,

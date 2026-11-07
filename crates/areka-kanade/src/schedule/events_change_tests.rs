@@ -191,7 +191,7 @@ fn raise_passes_references_verbatim_as_get_or_notify() {
 }
 
 #[test]
-fn value_replaces_active_talk_except_second_change() {
+fn value_replaces_active_talk_except_second_change_and_scaling() {
     for origin in ["OnMouseMove", "OnMouseDoubleClick", "OnGhostChanging"] {
         assert!(value_replaces_active_talk(origin), "{origin} は置き換える");
     }

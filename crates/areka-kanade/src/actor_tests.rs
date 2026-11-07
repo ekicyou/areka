@@ -278,8 +278,8 @@ pub(super) fn get(id: EventId, references: &[&str]) -> ShioriCall {
     }
 }
 
-/// `round_trip_request` の入力（内容は本テストで load-bearing でない）。
-fn probe_get_call() -> ShioriCall {
+/// `round_trip_request` の入力（`OnBoot`・許可表にある固定 ID・受領の照合が ID を見る）。兄弟の檻もこれを使う。
+pub(super) fn probe_get_call() -> ShioriCall {
     get(EventId::Static("OnBoot"), &["master"])
 }
 
