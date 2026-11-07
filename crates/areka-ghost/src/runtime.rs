@@ -867,3 +867,7 @@ mod shell_tests;
 #[cfg(test)]
 #[path = "runtime_names_tests.rs"]
 mod names_tests;
+
+#[cfg(test)]
+#[path = "runtime_choice_wake_tests.rs"]
+mod choice_wake_tests;
