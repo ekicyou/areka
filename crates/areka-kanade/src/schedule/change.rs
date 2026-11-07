@@ -222,8 +222,11 @@ pub(super) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
     }
     match state.phase {
         Phase::ChangePending | Phase::ChangeClosePending => on_reply_wait(state, input, config),
-        Phase::ChangeTalkWait { .. } | Phase::ChangeCloseTalkWait { .. } => {
-            on_talk_wait(state, input, config)
+        Phase::ChangeTalkWait { talk_id, deadline } => {
+            on_talk_wait(state, input, config, (talk_id, deadline, false))
+        }
+        Phase::ChangeCloseTalkWait { talk_id, deadline } => {
+            on_talk_wait(state, input, config, (talk_id, deadline, true))
         }
         _ => {
             tracing::warn!(target: "kanade", event = "change_phase_unexpected", phase = phase_label(&state.phase), "切替の相以外への切替の入力——現 Phase 維持で継続");
@@ -294,15 +297,14 @@ fn on_reply_wait(mut state: State, input: Input, config: &KanadeConfig) -> (Stat
 /// - `TalkDone{Ended}` → 降ろす（`Unloading{Quit}`）。`\-` の完了は横断の腕が同じ終端へ送る。
 /// - `TalkDone{Interrupted}` → 利用者の中断＝切替の中止（`\-` の予約を見ない）。
 /// - `Tick` → 期限の判定（`close.rs` の別れの台詞と同じ上限・入口で時刻が無ければ最初の Tick で決める）。
-fn on_talk_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
-    let (talk_id, deadline, closing) = match state.phase {
-        Phase::ChangeTalkWait { talk_id, deadline } => (talk_id, deadline, false),
-        Phase::ChangeCloseTalkWait { talk_id, deadline } => (talk_id, deadline, true),
-        _ => {
-            tracing::warn!(target: "kanade", event = "change_phase_unexpected", phase = phase_label(&state.phase), "台詞の待ち以外への切替の入力——現 Phase 維持で継続");
-            return (state, Vec::new());
-        }
-    };
+///
+/// 最後の引数は相から取り出した `(talk_id, deadline, closing)`（`closing` は `ChangeCloseTalkWait` のとき真）。
+fn on_talk_wait(
+    mut state: State,
+    input: Input,
+    config: &KanadeConfig,
+    (talk_id, deadline, closing): (TalkId, Option<MonotonicMs>, bool),
+) -> (State, Vec<Action>) {
     match input {
         Input::TalkDone(done) if done.reason == TalkEndReason::Interrupted => {
             cancel_by_user_break(state, talk_id)
@@ -343,7 +345,6 @@ fn on_talk_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State
 fn cancel_by_user_break(mut state: State, talk_id: TalkId) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "change_cancelled", reason = "user_break", talk_id = talk_id.0, phase = phase_label(&state.phase), "送り出しの台詞を利用者が中断した——切替を中止して定常へ戻る");
     state.change = None;
-    state.pending_change = None;
     state.phase = Phase::Steady { talk: None };
     let notice = KanadeNotice::ChangeCancelled {
         reason: CancelReason::UserBreak,
@@ -366,7 +367,6 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
         return (state, Vec::new());
     };
     tracing::info!(target: "kanade", event = "change_yield_to_close", reason = reason.as_ref_str(), phase = phase_label(&state.phase), to = %change.req.target.name, "切替の相に終了要求——切替を取りやめ終了の握手へ合流する");
-    state.pending_change = None;
     state.phase = match state.phase {
         Phase::ChangeTalkWait { talk_id, .. } => {
             state.pending_close = Some(reason);

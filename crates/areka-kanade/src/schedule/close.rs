@@ -27,7 +27,7 @@
 
 use super::{Action, Input, Phase, State, TermCause, to_unloading_quit};
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriOutcome};
-use crate::talk::StartTalk;
+use crate::talk::{StartTalk, TalkId};
 
 /// close 握手（ClosePending / CloseTalkWait）のフェーズ分岐。
 ///
@@ -40,7 +40,9 @@ use crate::talk::StartTalk;
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
         Phase::ClosePending => on_close_pending(state, input, config),
-        Phase::CloseTalkWait { .. } => on_close_talk_wait(state, input, config),
+        Phase::CloseTalkWait { talk_id, deadline } => {
+            on_close_talk_wait(state, input, config, talk_id, deadline)
+        }
         // ルーティング上ここには ClosePending / CloseTalkWait 以外は届かない（防御アーム）。
         _ => {
             tracing::warn!(target: "kanade", event = "close_phase_unexpected", "close 以外の Phase への close 入力——現 Phase 維持で継続");
@@ -116,16 +118,9 @@ fn on_close_talk_wait(
     mut state: State,
     input: Input,
     config: &KanadeConfig,
+    talk_id: TalkId,
+    deadline: Option<MonotonicMs>,
 ) -> (State, Vec<Action>) {
-    // 現 Phase から talk_id / deadline を取り出す（呼び出し契約上 CloseTalkWait 確定）。
-    let (talk_id, deadline) = match state.phase {
-        Phase::CloseTalkWait { talk_id, deadline } => (talk_id, deadline),
-        _ => {
-            tracing::warn!(target: "kanade", event = "close_phase_unexpected", "CloseTalkWait 以外——現 Phase 維持で継続");
-            return (state, Vec::new());
-        }
-    };
-
     match input {
         Input::TalkDone(done) => {
             // mod.rs は既知 talk の Ended／Interrupted のみを委譲する（Quit と「利用者の中断＋
@@ -210,30 +205,51 @@ pub(super) fn talk_wait_tick(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::msg::EventId;
+    use crate::schedule::events::SourceEvent;
     use crate::schedule::log_capture::{capture, logged_once};
     use crate::schedule::step;
+    use crate::schedule::translate_test_support::{config, pass_translate};
     use crate::talk::{TalkDone, TalkEndReason, TalkId};
     use tracing::Level;
 
-    fn config() -> KanadeConfig {
-        KanadeConfig::new("master", "1.0.0")
-    }
-
     /// `close_talk_deadline_ms` を任意に差し替えた config（期限判定を小さな値で回す）。
     fn config_with_deadline(deadline_ms: u64) -> KanadeConfig {
-        let mut c = KanadeConfig::new("master", "1.0.0");
+        let mut c = config();
         c.close_talk_deadline_ms = deadline_ms;
         c
     }
 
-    /// ClosePending 状態を任意の last_now / next_id で構築する。
+    /// ClosePending 状態を任意の last_now / next_id で構築する。`OnClose` を送った後の状態なので、
+    /// 応答の元のイベントの控え（`reply_source`）も `OnClose` にしておく（台詞の応答は翻訳を経る）。
     fn close_pending(last_now: Option<MonotonicMs>, next_id: u64) -> State {
         State {
             phase: Phase::ClosePending,
             last_now,
             next_talk_id: next_id,
+            reply_source: Some(SourceEvent {
+                id: EventId::Static("OnClose"),
+                references: vec!["user".to_string()],
+            }),
             ..State::initial()
         }
+    }
+
+    /// ClosePending に台詞の応答を入れ、翻訳（`Translate` → `TranslateDone`）を経た続きを返す。
+    fn close_value(state: State, script: &str) -> (State, Vec<Action>) {
+        let replied = step(
+            state,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(script.to_string(), areka_talk::SecurityLevel::Local),
+                origin: "test",
+            },
+            &config(),
+        );
+        assert!(
+            matches!(replied.1.as_slice(), [Action::Translate(_)]),
+            "OnClose の台詞は翻訳を経る（元のイベントが分かる）"
+        );
+        pass_translate(replied, &config())
     }
 
     /// CloseTalkWait 状態を任意の talk_id / deadline / last_now で構築する。
@@ -258,14 +274,7 @@ mod tests {
     #[test]
     fn value_starts_close_talk_then_quit_unloads() {
         let d = 30_000; // 既定。
-        let (s1, actions1) = step(
-            close_pending(Some(MonotonicMs(1_000)), 5),
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value("bye".to_string(), areka_talk::SecurityLevel::Local),
-                origin: "test",
-            },
-            &config(),
-        );
+        let (s1, actions1) = close_value(close_pending(Some(MonotonicMs(1_000)), 5), "bye");
         // StartTalk(5, "bye") + CloseTalkWait{5, deadline=Some(1000+D)}。
         match s1.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
@@ -309,107 +318,59 @@ mod tests {
         assert!(matches!(actions2.as_slice(), [Action::ShioriUnload]));
     }
 
-    // === 分岐2: 応答スクリプトあり（reason=Ended）→ 終了へ進む（要件 3.6） ===
-    // 別れの台詞は末尾に `\-` が在るのと同じ結果として扱う。台本が最後まで再生されても
-    // 終了へ進み、終了の握手から定常運転へ戻る経路は 1 本も無い。
+    // === 分岐2: 応答スクリプトあり（reason=Ended／Interrupted）→ 終了へ進む（要件 3.6・3.7） ===
+    // 別れの台詞は末尾に `\-` が在るのと同じ結果として扱う。台本が最後まで再生されても、
+    // 中断で終わっても終了へ進み（終わり方で振り分けない）、終了の握手から定常運転へ戻る経路は 1 本も無い。
 
     #[test]
-    fn value_then_ended_proceeds_to_quit() {
-        let (s1, _a1) = step(
-            close_pending(Some(MonotonicMs(1_000)), 5),
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value("stay".to_string(), areka_talk::SecurityLevel::Local),
-                origin: "test",
-            },
-            &config(),
-        );
-        let talk_id = match s1.phase {
-            Phase::CloseTalkWait { talk_id, .. } => talk_id,
-            _ => panic!("expected CloseTalkWait"),
-        };
+    fn value_then_ended_or_interrupted_proceeds_to_quit() {
+        for reason in [TalkEndReason::Ended, TalkEndReason::Interrupted] {
+            let (s1, _a1) = close_value(close_pending(Some(MonotonicMs(1_000)), 5), "stay");
+            let talk_id = match s1.phase {
+                Phase::CloseTalkWait { talk_id, .. } => talk_id,
+                _ => panic!("expected CloseTalkWait"),
+            };
 
-        // TalkDone{reason:Ended}（既知 talk）→ 終了へ進む（Unloading{Quit}＋解放要求）。
-        let mut out = None;
-        let ev = capture(|| {
-            out = Some(step(
-                s1,
-                Input::TalkDone(TalkDone {
-                    talk_id,
-                    reason: TalkEndReason::Ended,
-                    quit_reserved: false,
-                }),
-                &config(),
-            ));
-        });
-        let (s2, actions2) = out.expect("step は必ず結果を返す");
-        assert!(
-            matches!(
-                s2.phase,
-                Phase::Unloading {
-                    cause: TermCause::Quit
-                }
-            ),
-            "別れの台詞が最後まで終わっても終了へ進む（要件 3.6）"
-        );
-        assert!(
-            matches!(actions2.as_slice(), [Action::ShioriUnload]),
-            "終了の要求が出る"
-        );
+            let mut out = None;
+            let ev = capture(|| {
+                out = Some(step(
+                    s1,
+                    Input::TalkDone(TalkDone {
+                        talk_id,
+                        reason,
+                        quit_reserved: false,
+                    }),
+                    &config(),
+                ));
+            });
+            let (s2, actions2) = out.expect("step は必ず結果を返す");
+            assert!(
+                matches!(
+                    s2.phase,
+                    Phase::Unloading {
+                        cause: TermCause::Quit
+                    }
+                ),
+                "{reason:?} で終わっても終了へ進む（要件 3.6・3.7）"
+            );
+            assert!(
+                matches!(actions2.as_slice(), [Action::ShioriUnload]),
+                "終了の要求が出る"
+            );
 
-        // 終了へ進んだことを相手の talk_id と終わり方つきで 1 行記録する。
-        let logged = logged_once(&ev, Level::INFO, "close_talk_done_quit");
-        assert_eq!(
-            logged.fields.get("talk_id").map(String::as_str),
-            Some("5"),
-            "記録は別れの台詞の talk_id を持つ。\n捕捉={ev:#?}"
-        );
-        assert_eq!(
-            logged.fields.get("reason").map(String::as_str),
-            Some("Ended"),
-            "記録はどの終わり方で来たかを持つ。\n捕捉={ev:#?}"
-        );
-    }
-
-    // === 分岐2b: 応答スクリプトあり（reason=Interrupted）→ Ended と同じ腕で終了へ ===
-    // 中断で終わっても結論は変わらない（要件 3.6・3.7）。終わり方で振り分けない。
-
-    #[test]
-    fn value_then_interrupted_proceeds_to_quit_same_as_ended() {
-        let (s1, _a1) = step(
-            close_pending(Some(MonotonicMs(1_000)), 5),
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value("stay".to_string(), areka_talk::SecurityLevel::Local),
-                origin: "test",
-            },
-            &config(),
-        );
-        let talk_id = match s1.phase {
-            Phase::CloseTalkWait { talk_id, .. } => talk_id,
-            _ => panic!("expected CloseTalkWait"),
-        };
-
-        let (s2, actions2) = step(
-            s1,
-            Input::TalkDone(TalkDone {
-                talk_id,
-                reason: TalkEndReason::Interrupted,
-                quit_reserved: false,
-            }),
-            &config(),
-        );
-        assert!(
-            matches!(
-                s2.phase,
-                Phase::Unloading {
-                    cause: TermCause::Quit
-                }
-            ),
-            "Interrupted も Ended と同じ腕で終了へ進む（要件 3.6・3.7）"
-        );
-        assert!(
-            matches!(actions2.as_slice(), [Action::ShioriUnload]),
-            "終了の要求が出る"
-        );
+            // 終了へ進んだことを相手の talk_id と終わり方つきで 1 行記録する。
+            let logged = logged_once(&ev, Level::INFO, "close_talk_done_quit");
+            assert_eq!(
+                logged.fields.get("talk_id").map(String::as_str),
+                Some("5"),
+                "記録は別れの台詞の talk_id を持つ。\n捕捉={ev:#?}"
+            );
+            assert_eq!(
+                logged.fields.get("reason").map(String::as_str),
+                Some(format!("{reason:?}").as_str()),
+                "記録はどの終わり方で来たかを持つ。\n捕捉={ev:#?}"
+            );
+        }
     }
 
     // === 分岐3: 応答なし（204）→ 無言終了 ===
@@ -438,12 +399,8 @@ mod tests {
             "無言終了は talk 起動しない・採番しない"
         );
         // ShioriUnload のみ・追加イベント（ShioriRequest = OnCloseAll 等）は発行しない（Req 4.6）。
-        assert_eq!(actions.len(), 1);
-        assert!(matches!(actions[0], Action::ShioriUnload));
         assert!(
-            !actions
-                .iter()
-                .any(|a| matches!(a, Action::ShioriRequest(_))),
+            matches!(actions.as_slice(), [Action::ShioriUnload]),
             "無言終了は追加イベントを発行しない（OnCloseAll 非発行・DD-11）"
         );
     }
@@ -577,14 +534,7 @@ mod tests {
 
     #[test]
     fn value_with_no_prior_tick_enters_wait_with_none_deadline() {
-        let (next, actions) = step(
-            close_pending(None, 5),
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
-                origin: "test",
-            },
-            &config(),
-        );
+        let (next, actions) = close_value(close_pending(None, 5), "hi");
         match next.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
                 assert_eq!(talk_id, TalkId(5));
@@ -624,7 +574,7 @@ mod tests {
         // CloseTalkWait は応答待ちではない（awaits_reply に含まれない）ため、mod.rs の
         // unexpected_reply アームで握り潰される想定だが、直接 close::step に渡した場合の
         // 防御も確認する（発行なし・維持）。
-        let (next, actions) = on_close_talk_wait(
+        let (next, actions) = super::step(
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,

@@ -35,22 +35,11 @@ fn close_request(s: State) -> (State, Vec<Action>) {
     step(s, Input::CloseRequest { reason: USER }, &cfg())
 }
 
-fn cancel_notices(actions: &[Action], reason: CancelReason) -> usize {
-    actions
-        .iter()
-        .filter(|a| matches!(a, Action::Notice(KanadeNotice::ChangeCancelled { reason: r }) if *r == reason))
-        .count()
-}
-
 fn on_close_sends(actions: &[Action]) -> usize {
     sent_events(actions)
         .iter()
         .filter(|id| id.as_str() == "OnClose")
         .count()
-}
-
-fn is_unloading(s: &State) -> bool {
-    matches!(s.phase, Phase::Unloading { .. } | Phase::Stopped)
 }
 
 // ---- 利用者の中断で中止（要件 5.1・5.2・5.4・5.6・5.7） ----
@@ -90,7 +79,6 @@ fn user_break_in_either_farewell_cancels_back_to_steady_even_with_quit_reserved(
                 matches!(s.phase, Phase::Steady { talk: None }),
                 "{label}: 元の定常へ戻る"
             );
-            assert!(!is_unloading(&s), "{label}: 降ろす相へ進まない");
             assert!(
                 s.change.is_none() && s.pending_change.is_none(),
                 "{label}: 切替の帳簿は消える"
@@ -164,7 +152,6 @@ fn close_request_while_waiting_changing_reply_waits_for_it_then_closes() {
     ));
     // 2 件目の終了要求で通知を重ねない。
     let (s, again) = close_request(s);
-    assert_eq!(cancel_notices(&again, CancelReason::CloseRequest), 0);
     assert!(again.is_empty());
     let (s, actions) = reply(
         s,

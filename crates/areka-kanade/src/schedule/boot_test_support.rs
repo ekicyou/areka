@@ -1,9 +1,10 @@
 use super::*;
+use crate::schedule::step;
+use crate::schedule::translate_test_support::pass_translate;
+use crate::status::ExecutionSnapshot;
 use crate::talk::TalkId;
 
-pub(super) fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
+pub(super) use crate::schedule::translate_test_support::config;
 
 /// 起動記録の有無（`first_boot`）と起動の由来（`boot_origin`）を差し替えた config。
 pub(super) fn cfg(first_boot: bool, boot_origin: crate::change::BootOrigin) -> KanadeConfig {
@@ -62,6 +63,55 @@ pub(super) fn assert_notify(action: &Action, expected: &crate::msg::ShioriCall) 
     }
 }
 
+/// SHIORI の応答を入れる（翻訳の行動が出たら、`OnTranslate` が台詞をそのまま返したときの続きを返す）。
+///
+/// 実の `step` で進めた状態なら、台詞の応答は元のイベントの控えがあるので必ず翻訳を経る。翻訳を
+/// 経ずに台詞の再生が出たら、控えの無い状態を手で組んだ誤りとして落とす。
+pub(super) fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (State, Vec<Action>) {
+    let input = Input::ShioriReply {
+        outcome,
+        origin: "test",
+    };
+    let out = step(s, input, c);
+    assert!(
+        !out.1
+            .iter()
+            .any(|a| matches!(a, Action::StartTalk(st) if !st.script.is_empty())),
+        "台詞の再生は翻訳（OnTranslate）を経るはず"
+    );
+    pass_translate(out, c)
+}
+
+/// Idle→Boot→（OnInitialize 完了）まで進め、`BootPrefetch`（username GET 発行済み）へ着かせる。
+pub(super) fn drive_to_prefetch(c: &KanadeConfig) -> State {
+    let (s, _) = step(State::initial(), Input::Boot, c); // Idle→BootInit（OnInitialize NOTIFY）
+    let (s, actions) = reply(s, ShioriOutcome::Notified, c); // BootInit→BootPrefetch（username GET）
+    assert!(
+        matches!(s.phase, Phase::BootPrefetch),
+        "OnInitialize 完了後は BootPrefetch（username 照会待ち）であるべき"
+    );
+    // BootInit の応答は username GET を 1 件だけ発行する（OnFirstBoot ではない）。
+    assert_eq!(actions.len(), 1, "prefetch は GET を 1 件だけ発行する");
+    assert_get(
+        &actions[0],
+        &resources::resource_get("username", &ExecutionSnapshot::INACTIVE),
+    );
+    s
+}
+
+/// `BootMain`（OnBoot GET の応答待ち）まで実の `step` で進める（初回起動なら OnFirstBoot に 204 を返して通る）。
+pub(super) fn drive_to_main(c: &KanadeConfig) -> State {
+    let mut s = reply(drive_to_prefetch(c), ShioriOutcome::NoContent, c).0;
+    if matches!(s.phase, Phase::BootType) {
+        s = reply(s, ShioriOutcome::NoContent, c).0;
+    }
+    assert!(
+        matches!(s.phase, Phase::BootMain),
+        "OnBoot の応答待ちのはず"
+    );
+    s
+}
+
 /// 起動挨拶（talk_id=1）を追跡したまま基盤バージョン通知の応答待ち（`BootVersion{talk: Some(id=1)}`）
 /// まで boot を進める（`pending` があれば `Boot` 直後に close 指示を挟んで保留させる）。
 ///
@@ -71,29 +121,18 @@ pub(super) fn boot_until_version_with_greeting(
     cfg: &KanadeConfig,
     pending: Option<CloseReason>,
 ) -> State {
-    use crate::schedule::step;
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            cfg,
-        )
-        .0
-    };
-
     let (mut s, _) = step(State::initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
     if let Some(reason) = pending {
         s = step(s, Input::CloseRequest { reason }, cfg).0; // BootInit のまま close を保留記録
     }
-    let s = reply(s, ShioriOutcome::Notified); // BootInit→BootPrefetch（username GET）
-    let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch→BootType（初回起動＝OnFirstBoot GET）
+    let s = reply(s, ShioriOutcome::Notified, cfg).0; // BootInit→BootPrefetch（username GET）
+    let s = reply(s, ShioriOutcome::NoContent, cfg).0; // BootPrefetch→BootType（初回起動＝OnFirstBoot GET）
     let s = reply(
         s,
         ShioriOutcome::Value("greeting".to_string(), areka_talk::SecurityLevel::Local),
-    ); // BootType(Value)→BootVersion{talk: Some(id=1)}（OnBoot を飛ばす）
+        cfg,
+    )
+    .0; // BootType(Value)→翻訳→BootVersion{talk: Some(id=1)}（OnBoot を飛ばす）
 
     assert!(
         matches!(

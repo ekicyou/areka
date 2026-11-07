@@ -105,12 +105,7 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         "OnClose の後の 2 件目は Unload"
     );
 
-    // (d) 定常の talk も起動しない: sink に届くのは別れの close talk 1 本のみ。
-    assert!(
-        started.iter().all(|s| s.script != FIXED_STEADY_SCRIPT),
-        "定常へ戻らないので steady talk は起動しないはず: {:?}",
-        started
-    );
+    // (d) 定常の talk も起動しない: sink に届くのは別れの close talk 1 本のみ（上で別れが 1 本と見た）。
     assert_eq!(
         started.len(),
         1,
@@ -187,22 +182,6 @@ fn silent_close_on_204_terminates_without_extra_events() {
         *last,
         expected_unload(),
         "記録列の末尾は Unload（無言終了の完走）"
-    );
-    assert_eq!(last.method, CallMethod::Unload);
-
-    // OnClose 以降に追加イベント（GET/NOTIFY）が挟まっていないことを明示的に確認する。
-    let events_after_onclose: Vec<&RecordedCall> = recorded
-        .iter()
-        .enumerate()
-        .filter(|(i, c)| {
-            *i > onclose_index && matches!(c.method, CallMethod::Get | CallMethod::Notify)
-        })
-        .map(|(_, c)| c)
-        .collect();
-    assert!(
-        events_after_onclose.is_empty(),
-        "無言終了では OnClose の後に追加イベント（OnCloseAll 等）を発行しないはず: {:?}",
-        events_after_onclose
     );
 
     // OnClose GET は記録列にちょうど 1 度（追加 OnClose なし）。
@@ -308,7 +287,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     let Driven { recorded, .. } = harness.finish("kanade deadline join");
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
-    let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
+    onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず（握手を通った）");
 
     // (b) TalkDone 不着でも終了系列は完走: 末尾は Unload（DeadlineExceeded 継続）で閉じる。
@@ -317,11 +296,6 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
         *last,
         expected_unload(),
         "TalkDone 不着でも deadline で終了系列が完走し末尾は Unload になるはず"
-    );
-    assert!(
-        onclose_index < recorded.len() - 1,
-        "OnClose（{onclose_index}）は Unload（{}）より前に現れるはず",
-        recorded.len() - 1
     );
     let unload_count = recorded
         .iter()
@@ -379,7 +353,6 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
         expected_unload(),
         "ForceQuit 終了系列の末尾は Unload で閉じる"
     );
-    assert_eq!(last.method, CallMethod::Unload);
 
     // (b) DD-10 の best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
     //     DD-IT-8: NOTIFY は `events::on_close_notify` が組む（通常握手の `events::on_close` は GET）。

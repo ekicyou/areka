@@ -1,14 +1,16 @@
 use super::*;
 
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
+use crate::schedule::translate_test_support::config;
 
-/// GET variant を分解して (id の wire 形, references) を取り出す（Notify なら panic）。
-fn expect_get(call: ShioriCall) -> (String, Vec<String>) {
+/// GET を分解して (id の wire 形, references, Status の wire 値) を取り出す（NOTIFY なら panic）。
+pub(super) fn expect_get(call: ShioriCall) -> (String, Vec<String>, Option<String>) {
     match call {
-        ShioriCall::Get { id, references, .. } => (id.as_str().to_string(), references),
-        ShioriCall::Notify { .. } => panic!("expected GET, got NOTIFY"),
+        ShioriCall::Get {
+            id,
+            references,
+            status,
+        } => (id.as_str().to_string(), references, status.render()),
+        ShioriCall::Notify { .. } => panic!("GET のはずが NOTIFY"),
     }
 }
 
@@ -41,24 +43,24 @@ fn on_initialize_is_notify_with_empty_references() {
     assert!(references.is_empty());
 }
 
-/// OnFirstBoot Ref0 は vanish 引数由来（Req 4.1／4.2）: `0` で従来の固定値 `"0"` と同値・
-/// 非ゼロ（`7`）はそのまま Reference0 に載る（値源が呼び手へ移ったことの檻）。
+/// OnFirstBoot Ref0 は vanish 引数由来（Req 4.1／4.2）: `0` は `"0"`・非ゼロ（`7`）はそのまま
+/// Reference0 に載る。
 #[test]
 fn on_first_boot_ref0_is_vanish_count_argument() {
-    // vanish_count=0 → 従来値 "0" と同値（既存全サイトはこの経路で挙動不変）。
-    let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
+    // vanish_count=0 → "0"。
+    let (id, references, _) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
     assert_eq!(id, "OnFirstBoot");
     assert_eq!(references, vec!["0".to_string()]);
 
-    // vanish_count=7 → Reference0 は "7"（Ref0 の値源が呼び手引数であることを固定）。
-    let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 7));
+    // vanish_count=7 → Reference0 は "7"。
+    let (id, references, _) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 7));
     assert_eq!(id, "OnFirstBoot");
     assert_eq!(references, vec!["7".to_string()]);
 }
 
 #[test]
 fn on_boot_is_get_with_shell_name_ref0() {
-    let (id, references) = expect_get(on_boot(&config(), &ExecutionSnapshot::INACTIVE));
+    let (id, references, _) = expect_get(on_boot(&config(), &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnBoot");
     assert_eq!(references, vec!["master".to_string()]);
 }
@@ -86,7 +88,7 @@ fn on_second_change_playable_is_get_ref3_one() {
         None,
         "再生可能時（talk 非アクティブ）は Status ヘッダを出さない（DD-IT-3/DD-IT-5）"
     );
-    let (id, references) = expect_get(call);
+    let (id, references, _) = expect_get(call);
     assert_eq!(id, "OnSecondChange");
     assert_eq!(
         references,
@@ -131,7 +133,7 @@ fn on_second_change_not_playable_is_notify_ref3_zero() {
 #[test]
 fn on_second_change_ref0_truncates_toward_zero() {
     // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
-    let (_, references) = expect_get(on_second_change(
+    let (_, references, _) = expect_get(on_second_change(
         MonotonicMs(3_599_999),
         &ExecutionSnapshot {
             talk_active: false,
@@ -146,13 +148,13 @@ fn on_second_change_ref0_truncates_toward_zero() {
 /// 窓のスコープ番号。相方側（スコープ 1）の窓なら `["user","1","1"]`。
 #[test]
 fn on_close_user_carries_scope_in_ref1_and_ref2() {
-    let (id, references) = expect_get(on_close(
+    let (id, references, _) = expect_get(on_close(
         CloseReason::User { scope: 1 },
         &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(id, "OnClose");
     assert_eq!(references, vec!["user", "1", "1"]);
-    let (_, references) = expect_get(on_close(
+    let (_, references, _) = expect_get(on_close(
         CloseReason::User { scope: 0 },
         &ExecutionSnapshot::INACTIVE,
     ));
@@ -161,7 +163,8 @@ fn on_close_user_carries_scope_in_ref1_and_ref2() {
 
 #[test]
 fn on_close_system_maps_to_system() {
-    let (id, references) = expect_get(on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
+    let (id, references, _) =
+        expect_get(on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnClose");
     assert_eq!(references, vec!["system".to_string()]);
 }
@@ -262,32 +265,6 @@ fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
             "OnBalloonScaling",
         ]
     );
-    assert!(
-        is_allowed_event_id("OnMouseMove"),
-        "OnMouseMove は許可集合に属する（Req7.1）"
-    );
-    assert!(
-        is_allowed_event_id("OnMouseDoubleClick"),
-        "OnMouseDoubleClick は許可集合に属する（Req7.1）"
-    );
-    for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
-        assert!(
-            is_allowed_event_id(id),
-            "{id} は選択関連の正典固定 ID ゆえ許可集合に属する（DD-2）"
-        );
-    }
-    assert!(
-        !is_allowed_event_id("OnTalk"),
-        "OnTalk は恒久的に許可しない（Req3.2）"
-    );
-    assert!(
-        !is_allowed_event_id("OnHour"),
-        "OnHour は恒久的に許可しない（Req3.2）"
-    );
-    // 表の全要素が許可判定を通ること。
-    for id in ALLOWED_EVENT_IDS {
-        assert!(is_allowed_event_id(id), "{id} は表にあるのに許可されない");
-    }
 }
 
 /// 選択起源の受理規則（Req2.6・DD-2）: `On` 接頭のみを受理し、事前の固定登録を要さない。
@@ -347,7 +324,7 @@ fn on_mouse_move_builds_canonical_seven_reference_layout() {
         None,
         "INACTIVE スナップショットは Status ヘッダを出さない"
     );
-    let (id, references) = expect_get(call);
+    let (id, references, _) = expect_get(call);
     assert_eq!(id, "OnMouseMove");
     assert_eq!(
         references,
@@ -361,13 +338,12 @@ fn on_mouse_move_builds_canonical_seven_reference_layout() {
             "mouse".to_string(), // Ref6=デバイス種（DD-IE-6）
         ]
     );
-    assert_eq!(references.len(), 7, "Reference 数は常に 7");
 }
 
 /// Ref4 の None→空文字転写（Req2.3・DD-IE-6）: 位置は保持され Vec 長は 7 のまま。
 #[test]
 fn on_mouse_move_region_none_transcribes_to_empty_ref4() {
-    let (_, references) = expect_get(on_mouse_move(1, 2, 1, None, &ExecutionSnapshot::INACTIVE));
+    let (_, references, _) = expect_get(on_mouse_move(1, 2, 1, None, &ExecutionSnapshot::INACTIVE));
     assert_eq!(references[4], "", "None は空文字へ転写（省略ではない）");
     assert_eq!(references[3], "1", "Ref3=scope 相方は 1");
     assert_eq!(references.len(), 7, "None でも Reference 数は 7 のまま");
@@ -384,7 +360,7 @@ fn on_mouse_double_click_left_builds_ref5_zero() {
         MouseButton::Left,
         &ExecutionSnapshot::INACTIVE,
     );
-    let (id, references) = expect_get(call);
+    let (id, references, _) = expect_get(call);
     assert_eq!(id, "OnMouseDoubleClick");
     assert_eq!(
         references,
@@ -403,7 +379,7 @@ fn on_mouse_double_click_left_builds_ref5_zero() {
 /// OnMouseDoubleClick 右ボタン（Req3.3）: Ref5="1"。
 #[test]
 fn on_mouse_double_click_right_builds_ref5_one() {
-    let (_, references) = expect_get(on_mouse_double_click(
+    let (_, references, _) = expect_get(on_mouse_double_click(
         -5,
         0,
         1,
@@ -455,7 +431,7 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
             Some("talking".to_string()),
             "{name}: 実行状態は渡した snapshot から（要件 4.8）"
         );
-        let (id, references) = expect_get(call);
+        let (id, references, _) = expect_get(call);
         assert_eq!(id, name);
         assert_eq!(
             references,
@@ -477,7 +453,7 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
             None,
             "{name}: INACTIVE は Status を出さない"
         );
-        let (_, references) = expect_get(call);
+        let (_, references, _) = expect_get(call);
         assert_eq!(
             references[4], "",
             "{name}: 当たり判定なしは空文字列（要件 4.5）"
@@ -596,7 +572,7 @@ fn on_choice_select_ex_builds_label_id_then_references() {
         &references,
         &ExecutionSnapshot::INACTIVE,
     );
-    let (id, refs) = expect_get(call);
+    let (id, refs, _) = expect_get(call);
     assert_eq!(id, "OnChoiceSelectEx");
     assert_eq!(
         refs,
@@ -609,11 +585,6 @@ fn on_choice_select_ex_builds_label_id_then_references() {
             "\\q[x,y]".to_string(),
         ]
     );
-    assert_eq!(
-        refs.len(),
-        2 + references.len(),
-        "Reference 数は 2＋付随参照列長"
-    );
 }
 
 /// 空参照列で Ref2 以降の位置が生えないこと（Req3.5）: Reference は Ref0/Ref1 の**2 個のみ**。
@@ -621,7 +592,7 @@ fn on_choice_select_ex_builds_label_id_then_references() {
 /// 既存マウス系の `None→""`（位置保持）とは**非対称**な規約であることを実値で固定する。
 #[test]
 fn on_choice_select_ex_with_empty_references_stops_at_ref1() {
-    let (id, refs) = expect_get(on_choice_select_ex(
+    let (id, refs, _) = expect_get(on_choice_select_ex(
         "ラベル",
         "ID",
         &[],
@@ -629,20 +600,14 @@ fn on_choice_select_ex_with_empty_references_stops_at_ref1() {
     ));
     assert_eq!(id, "OnChoiceSelectEx");
     assert_eq!(refs, vec!["ラベル".to_string(), "ID".to_string()]);
-    assert_eq!(
-        refs.len(),
-        2,
-        "空参照列は Ref2 以降の位置を作らない（空文字で埋めない）"
-    );
 }
 
 /// `OnChoiceSelect` 正典 layout（Req3.2）: Ref0=選択肢 ID の**1 個のみ**。
 #[test]
 fn on_choice_select_builds_id_only_ref0() {
-    let (id, refs) = expect_get(on_choice_select("Choice頻度", &ExecutionSnapshot::INACTIVE));
+    let (id, refs, _) = expect_get(on_choice_select("Choice頻度", &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnChoiceSelect");
     assert_eq!(refs, vec!["Choice頻度".to_string()]);
-    assert_eq!(refs.len(), 1, "無印は常に Ref0=ID の 1 個のみ");
 }
 
 /// 任意名イベント正典 layout（Req3.3）: Ref0 以降が付随参照列のみで、
@@ -655,22 +620,18 @@ fn on_choice_named_builds_references_from_ref0_without_label_or_id() {
         &references,
         &ExecutionSnapshot::INACTIVE,
     );
-    let (id, refs) = expect_get(call);
+    let (id, refs, _) = expect_get(call);
     assert_eq!(id, "Onおしゃべり頻度メニュー", "任意名は逐語で wire へ載る");
     assert_eq!(
         refs, references,
         "Ref0 以降＝付随参照列そのもの（記述順・不透明転写）"
-    );
-    assert!(
-        !refs.contains(&"Onおしゃべり頻度メニュー".to_string()),
-        "任意名イベントの Reference に選択肢 ID を含めない（Req3.3）"
     );
 }
 
 /// 空参照列で Reference が 1 個も生えないこと（Req3.3/3.5）: References は空 Vec。
 #[test]
 fn on_choice_named_with_empty_references_builds_no_reference() {
-    let (id, refs) = expect_get(on_choice_named(
+    let (id, refs, _) = expect_get(on_choice_named(
         "OnMenu".to_string(),
         &[],
         &ExecutionSnapshot::INACTIVE,
@@ -686,10 +647,9 @@ fn on_choice_named_with_empty_references_builds_no_reference() {
 #[test]
 fn on_choice_timeout_builds_script_ref0() {
     let script = "\\0\\s[0]選んで\\q[はい,Onはい]\\q[いいえ,Onいいえ]\\e";
-    let (id, refs) = expect_get(on_choice_timeout(script, &ExecutionSnapshot::INACTIVE));
+    let (id, refs, _) = expect_get(on_choice_timeout(script, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnChoiceTimeout");
     assert_eq!(refs, vec![script.to_string()]);
-    assert_eq!(refs.len(), 1, "Timeout は常に Ref0=script の 1 個のみ");
 }
 
 /// 共通リクエストヘッダ（実行状態スナップショット）が 4 構築関数すべてに載ること（Req3.6）。

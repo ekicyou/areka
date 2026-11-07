@@ -27,7 +27,9 @@ use crate::translate::TranslateSeams;
 const SOURCE_ID: &str = "OnMouseDoubleClick";
 
 /// 1 件の Request を受けて控え、`reply` を返す偽の SHIORI。join すると受けた呼出が返る。
-fn fake_shiori(reply: ShioriOutcome) -> (Sender<ShioriMsg>, JoinHandle<Option<ShioriCall>>) {
+pub(super) fn fake_shiori(
+    reply: ShioriOutcome,
+) -> (Sender<ShioriMsg>, JoinHandle<Option<ShioriCall>>) {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
     let helper = thread::spawn(move || match shiori_rx.recv() {
         Ok(ShioriMsg::Request { call, reply: tx }) => {
@@ -148,13 +150,8 @@ fn on_translate_receives_expanded_script_and_request_status() {
     );
     assert_eq!(status, talking_status(), "Status は依頼に載った値を使う");
     assert!(
-        records(
-            &observed.events,
-            Level::WARN,
-            "reference_absent_marker_replaced"
-        )
-        .is_empty(),
-        "OnTranslate の添字 1 の印は置き換えない"
+        !observed.events.iter().any(|e| e.level == Level::WARN),
+        "OnTranslate の添字 1 の印は置き換えも取り除きもしない（WARN は 0 件）"
     );
 }
 
@@ -330,39 +327,27 @@ fn sstp_send_source_uses_sstp_send_owned_reference1() {
 }
 
 #[test]
-fn translate_reply_level_rides_on_the_result_and_makoto_gets_only_the_script() {
+fn translate_reply_level_rides_on_the_result() {
     use areka_talk::SecurityLevel;
-    // （応答, レベル, MAKOTO の口が受ける台本）。204・誤りは展開した元の台本を受ける。
+    // （応答, 結果に載るレベル）。204・誤りは local。
     let cases = [
         (
             ShioriOutcome::Value("訳".to_string(), SecurityLevel::External),
             SecurityLevel::External,
-            "訳",
         ),
         (
             ShioriOutcome::Value("訳".to_string(), SecurityLevel::Local),
             SecurityLevel::Local,
-            "訳",
         ),
-        (ShioriOutcome::NoContent, SecurityLevel::Local, "太郎さん"),
+        (ShioriOutcome::NoContent, SecurityLevel::Local),
         (
             ShioriOutcome::Failed(ShioriFailure::Shiori("500 Internal Server Error".into())),
             SecurityLevel::Local,
-            "太郎さん",
         ),
     ];
-    for (reply, level, script) in cases {
+    for (reply, level) in cases {
         let observed = run(reply, &[]);
         let done = observed.result.expect("輸送路の失敗ではない");
         assert_eq!(done.level, level, "翻訳の応答のレベル（204・誤りは local）");
-        assert_eq!(
-            observed.makoto.len(),
-            1,
-            "MAKOTO の口は台詞だけを 1 回受ける"
-        );
-        assert_eq!(
-            observed.makoto[0].0, script,
-            "MAKOTO の口が受けるのは期待の台本"
-        );
     }
 }

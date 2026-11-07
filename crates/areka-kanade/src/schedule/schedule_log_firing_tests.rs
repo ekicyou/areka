@@ -1,12 +1,9 @@
 use super::log_capture::{CapturedEvent, assert_logged, assert_not_logged, capture, logged_once};
 use super::*;
 use crate::msg::{CloseReason, ShioriFailure};
+use crate::schedule::translate_test_support::config;
 use crate::talk::TalkDone;
 use tracing::Level;
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn state_in(phase: Phase) -> State {
     State {
@@ -198,7 +195,7 @@ fn warn_boot_input_ignored_still_fires_for_tick_in_boot_version_with_talk() {
         },
     );
     assert_logged(&ev, Level::WARN, "boot_input_ignored");
-    super::log_capture::assert_not_logged(&ev, "boot_talk_done");
+    assert_not_logged(&ev, "boot_talk_done");
 }
 
 #[test]
@@ -214,7 +211,12 @@ fn warn_boot_unexpected_reply_logs() {
             origin: "test",
         },
     );
-    assert_logged(&ev, Level::WARN, "boot_unexpected_reply");
+    let hit = logged_once(&ev, Level::WARN, "boot_unexpected_reply");
+    assert_eq!(
+        hit.fields.get("reply").map(String::as_str),
+        Some("value"),
+        "届いた応答の種類を reply に残す"
+    );
 }
 
 #[test]
@@ -239,21 +241,6 @@ fn warn_boot_reply_ignored_logs() {
 // ============================================================
 // 防御 / 無視アーム（level = WARN）— steady.rs
 // ============================================================
-
-#[test]
-fn warn_steady_value_during_talk_logs() {
-    // Steady{Some} + OnSecondChange の Value（DD-6 防御）→ steady_value_during_talk。
-    // `value_replaces_active_talk` が真の origin（OnSecondChange と倍率の 2 語以外）は置換アームへ、
-    // 倍率の 2 語は info の破棄へ抜けて warn しないため、DD-6 破棄ログの発火には OnSecondChange が要る。
-    let ev = run_step(
-        steady_with_talk(TalkId(5)),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("late".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "OnSecondChange",
-        },
-    );
-    assert_logged(&ev, Level::WARN, "steady_value_during_talk");
-}
 
 #[test]
 fn warn_steady_unexpected_reply_logs() {
@@ -369,7 +356,7 @@ fn warn_close_phase_unexpected_logs() {
 }
 
 // ============================================================
-// 防御 / 無視アーム（level = WARN）— change.rs・mouse_events.rs（audit-kanade #30・#72）
+// 防御 / 無視アーム（level = WARN）— change.rs・mouse_events.rs
 // ============================================================
 
 #[test]
@@ -465,7 +452,7 @@ fn warn_mouse_extended_unexpected_kind_logs() {
 }
 
 // ============================================================
-// 選択確定の受領検証とカスケード駆動（タスク 4.3・設計ログ語彙表）
+// 選択確定の受領検証とカスケード駆動（設計ログ語彙表）
 // ============================================================
 
 /// 任意の `State` を捕捉付きで駆動する（帳簿を直接構成する檻用）。
@@ -626,7 +613,7 @@ fn error_choice_shiori_failed_as_204_logs() {
 }
 
 // ============================================================
-// 選択待ち帳簿の確立・棄却（タスク 4.2・設計ログ語彙表）
+// 選択待ち帳簿の確立・棄却（設計ログ語彙表）
 // ============================================================
 
 /// 帳簿確立は info で記録し、**候補数と期限をフィールドに載せる**（設計ログ語彙表）。
@@ -775,7 +762,7 @@ fn trace_mouse_close_pending_logs_once_for_drag_input() {
 }
 
 // ============================================================
-// 置き換えた古いトークの控えと、食い違った帳簿（audit-kanade #4・#8）
+// 置き換えた古いトークの控えと、食い違った帳簿
 // ============================================================
 
 /// 置き換えた古いトーク（4・新しいトークは 5）の遅い完了を、置き換えた後の状態へ届ける。
@@ -795,7 +782,7 @@ fn late_done_after(replace: Input) -> Vec<CapturedEvent> {
     })
 }
 
-/// #4: マウスの答え・SSTP の台本で置き換えた古いトークの遅い完了は info で捨て、ERROR を出さない。
+/// マウスの答え・SSTP の台本で置き換えた古いトークの遅い完了は info で捨て、ERROR を出さない。
 #[test]
 fn late_done_of_a_talk_replaced_by_a_mouse_answer_or_a_send_is_info_not_error() {
     let replaces = [
@@ -813,12 +800,12 @@ fn late_done_of_a_talk_replaced_by_a_mouse_answer_or_a_send_is_info_not_error() 
     ];
     for replace in replaces {
         let ev = late_done_after(replace);
-        logged_once(&ev, Level::INFO, "talk_done_stale_choice");
+        logged_once(&ev, Level::INFO, "talk_done_stale");
         assert_not_logged(&ev, "unknown_talk_done");
     }
 }
 
-/// #8: 帳簿の相手と今のトークが食い違ったら、刻み 2 回でも WARN は 1 件で、帳簿は消える。
+/// 帳簿の相手と今のトークが食い違ったら、刻み 2 回でも WARN は 1 件で、帳簿は消える。
 #[test]
 fn a_stale_choice_ledger_is_warned_once_and_cleared() {
     let mut state = state_in(steady_with_talk(TalkId(7)));

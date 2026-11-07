@@ -1,4 +1,4 @@
-//! 翻訳の経路のテスト（areka-P0-translate-pipeline タスク 3.5・要件 1.2〜1.5・3.1・4.6・5.5・6.1・6.2・8.1）。
+//! 翻訳の経路のテスト（areka-P0-translate-pipeline 要件 1.2〜1.5・3.1・4.6・5.5・6.1・6.2・8.1）。
 //!
 //! SHIORI の台詞で再生を始める 8 か所の腕（design「Existing Architecture Analysis」の表）を 1 本ずつ、
 //! 前提の状態まで実際の入力で `step` を進めてから、元のイベントの台詞の応答を最上位の [`step`] に入れる。
@@ -17,13 +17,13 @@
 
 use super::events::SourceEvent;
 use super::log_capture::{assert_not_logged, capture, logged_once};
-use super::steady::test_support::base_state;
 use super::talk_gap::Marked;
 use super::translate::ScriptSource;
-use super::translate_test_support::change_request;
+use super::translate_test_support::{change_request, steady_none};
 use super::*;
 use crate::change::{GapRaise, ShioriMethod};
 use crate::msg::{ChoiceInput, MouseButton, MouseEventKind, ShioriFailure, ShioriFaultKind};
+use crate::schedule::translate_test_support::config as cfg;
 use crate::status::ExecutionStatus;
 use crate::talk::EpilogueCommand;
 use tracing::Level;
@@ -37,26 +37,12 @@ const SHOWN: &str = "\\0表示した選択肢の台詞\\e";
 /// 選択肢の任意名（`On` 始まり＝任意名 1 段）。
 const CHOICE_ID: &str = "OnおやつSelect";
 
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
 /// 初回起動の記録（areka が台詞の後ろに足す部分）。
 fn epilogue() -> Vec<EpilogueCommand> {
     vec![EpilogueCommand {
         name: "boot".to_string(),
         tokens: vec!["記録".to_string()],
     }]
-}
-
-/// `Steady{talk: None}`（終了の保留なし・控えなし）。ここから実際の入力で前提へ進める。
-fn steady_none() -> State {
-    State {
-        phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
-        next_talk_id: 5,
-        ..base_state()
-    }
 }
 
 // ============================================================

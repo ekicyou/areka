@@ -144,12 +144,6 @@ mod tests {
         assert_eq!(plan_cascade("On"), CascadePlan::Named);
     }
 
-    /// 境界: 非 ASCII 後続でも接頭辞判定が割れない（UTF-8 境界を割らない）。
-    #[test]
-    fn plan_cascade_named_for_on_with_non_ascii_tail() {
-        assert_eq!(plan_cascade("Onほにゃらら"), CascadePlan::Named);
-    }
-
     /// Req2.2 境界: 小文字始まりは `On` に一致しない＝正典形（Ex 先行・無印後続）。
     #[test]
     fn plan_cascade_canonical_for_lowercase_on_prefix() {

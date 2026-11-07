@@ -11,6 +11,7 @@
 use super::*;
 use crate::change::{RaiseOutcome, ShioriMethod};
 use crate::schedule::log_capture::{capture, logged_once};
+use crate::schedule::translate_test_support::config;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 use tracing::Level;
@@ -34,16 +35,31 @@ pub(super) struct Rig {
     pub(super) notices: Receiver<KanadeNotice>,
 }
 
-/// 偽の shiori を立てて kanade を起こす。`RAISED` 以外は良性の既定応答（NOTIFY→完了・GET→204・
-/// Unload→完了）を返す。
+/// 名前ごとの偽の shiori の答え（`None` なら良性の既定: NOTIFY→完了・GET→204・Unload→完了）。
+pub(super) type Respond = Box<dyn Fn(&str) -> Option<ShioriOutcome> + Send>;
+
+/// 偽の shiori を立てて kanade を起こす。`RAISED` へ `answer` を返し、終了の相で再生を待たせるため
+/// `OnClose` には台本を返す。ほかは良性の既定応答。
 pub(super) fn spawn_rig(answer: Answer) -> Rig {
+    spawn_with(Box::new(move |id| match id {
+        RAISED => Some(answer()),
+        "OnClose" => Some(ShioriOutcome::Value(
+            r"\h\s[0]またね\e".into(),
+            areka_talk::SecurityLevel::Local,
+        )),
+        _ => None,
+    }))
+}
+
+/// 名前ごとに答えを選べる偽の shiori で本物の殻を起こす。
+pub(super) fn spawn_with(respond: Respond) -> Rig {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
     let (calls_tx, calls) = mpsc::channel::<String>();
     std::thread::spawn(move || {
         while let Ok(msg) = shiori_rx.recv() {
             match msg {
                 ShioriMsg::Request { call, reply } => {
-                    let (label, id, outcome) = match &call {
+                    let (label, id, fallback) = match &call {
                         ShioriCall::Get { id, .. } => {
                             ("GET", id.as_str(), ShioriOutcome::NoContent)
                         }
@@ -52,16 +68,7 @@ pub(super) fn spawn_rig(answer: Answer) -> Rig {
                         }
                     };
                     let _ = calls_tx.send(format!("{label} {id}"));
-                    let outcome = match id {
-                        RAISED => answer(),
-                        // 終了の相で再生を待たせるため、`OnClose` には台本を返す。
-                        "OnClose" => ShioriOutcome::Value(
-                            r"\h\s[0]またね\e".into(),
-                            areka_talk::SecurityLevel::Local,
-                        ),
-                        _ => outcome,
-                    };
-                    let _ = reply.send(outcome);
+                    let _ = reply.send(respond(id).unwrap_or(fallback));
                 }
                 ShioriMsg::Unload { reply } => {
                     let _ = calls_tx.send("Unload".to_string());
@@ -77,7 +84,7 @@ pub(super) fn spawn_rig(answer: Answer) -> Rig {
     let (talk_tx, talks) = mpsc::channel::<TalkCommand>();
     let (notice_tx, notices) = mpsc::channel::<KanadeNotice>();
     let (kanade, handle) = spawn_kanade_with_stop_sink(
-        KanadeConfig::new("master", "1.0.0"),
+        config(),
         shiori_tx,
         talk_tx,
         Box::new(|_, _| {}),

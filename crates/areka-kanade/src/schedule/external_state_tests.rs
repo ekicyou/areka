@@ -8,12 +8,9 @@
 use super::translate_test_support::pass_translate;
 use super::{Action, ActiveTalk, Input, Phase, State, TermCause, step};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs};
+use crate::schedule::translate_test_support::config;
 use crate::status::{BalloonBinding, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
     BalloonBinding {
@@ -226,7 +223,7 @@ fn walk(state: State, inputs: Vec<Input>, config: &KanadeConfig) -> Vec<(String,
     let mut seen = Vec::new();
     for input in inputs {
         let next = step(state, input, config);
-        let (next, actions) = crate::schedule::translate_test_support::pass_translate(next, config);
+        let (next, actions) = pass_translate(next, config);
         seen.push(last_request(&actions));
         state = next;
     }
@@ -443,8 +440,8 @@ fn plays_a_talk(phase: &Phase) -> bool {
     }
 }
 
-/// 要件 4.1・4.6（1.4・1.5・1.7・3.2）: 運行の相のすべての種類で、判定・再生中のトークの番号が
-/// 引けるか・実行の状態の素の 3 つが、手書きの表と一致する。食い違う相はまとめて挙げる。
+/// 要件 4.1・4.6（1.4・1.5・1.7・3.2）: 運行の相のすべての種類で、判定（再生中のトークの番号が
+/// 引けるか）・実行の状態の素の 2 つが、手書きの表と一致する。食い違う相はまとめて挙げる。
 #[test]
 fn talk_judgment_matches_the_table_in_every_phase() {
     let kinds: std::collections::BTreeSet<_> = phases()
@@ -461,15 +458,14 @@ fn talk_judgment_matches_the_table_in_every_phase() {
     for (label, phase) in phases() {
         let expected = plays_a_talk(&phase);
         let judged = super::talk_active_of(&phase);
-        let numbered = super::current_talk_id(&phase).is_some();
         let state = State {
             phase,
             ..State::initial()
         };
         let snapshot = state.snapshot().talk_active;
-        if (judged, numbered, snapshot) != (expected, expected, expected) {
+        if (judged, snapshot) != (expected, expected) {
             wrong.push(format!(
-                "{label}: 表={expected} 判定={judged} 番号が引ける={numbered} 状態の素={snapshot}"
+                "{label}: 表={expected} 判定={judged} 状態の素={snapshot}"
             ));
         }
     }

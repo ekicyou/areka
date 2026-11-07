@@ -1,7 +1,6 @@
 //! 駆動ハーネスの組み立て（mock shiori・mock sakura sink・`spawn_kanade` の結線）。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -19,14 +18,16 @@ use super::{
 };
 
 // ============================================================================
-// 駆動ハーネス（4.2〜4.6 が再利用）
+// 駆動ハーネス
 // ============================================================================
 
 /// {mock shiori・mock sakura sink・spawn_kanade} を組み立てた駆動ハーネス。
 ///
 /// テストは [`sender`](Harness::sender) 経由で kanade inbox へ [`KanadeMsg`] を注入し、
 /// [`shiori`](Harness::shiori)/[`sakura`](Harness::sakura) の記録アクセサで観測する。
-/// 停止は kanade へ [`KanadeMsg::Close`] を送るか、全 Sender を drop すればよい。
+/// 停止は kanade へ終了を駆動して [`Harness::finish`] で後始末する。sink が inbox の送信端の
+/// クローンを持つため `sender` を drop しても kanade は止まらない（全 Sender drop の経路は
+/// [`SinklessHarness`] で踏む）。
 pub struct Harness {
     /// kanade inbox の送信端（Boot/Tick/CloseRequest 等を注入）。
     pub sender: Sender<KanadeMsg>,
@@ -38,7 +39,7 @@ pub struct Harness {
     pub sakura: MockSakura,
 }
 
-/// [`Harness::finish`] が確定させた走行の結果（#46・後始末の結果の型はこれ 1 つ）。
+/// [`Harness::finish`] が確定させた走行の結果（後始末の結果の型はこれ 1 つ）。
 pub struct Driven {
     /// shiori が受けた呼出の記録列。
     pub recorded: Vec<RecordedCall>,
@@ -49,7 +50,7 @@ pub struct Driven {
 }
 
 impl Harness {
-    /// 終了を駆動した後の後始末（#46・手順はここ 1 か所）。
+    /// 終了を駆動した後の後始末（手順はここ 1 か所）。
     ///
     /// kanade を期限付きで join し、送り端を捨て、sakura を join してから記録を読む。sakura の記録は
     /// いつも [`MockSakura::join_bounded_then_commands`] で読む——`ForceQuit`／`Close` で終わる檻でも
@@ -74,7 +75,7 @@ impl Harness {
     }
 }
 
-/// 7 つの `spawn_harness*` が共有する組み立て（#44・配線はここ 1 か所）。
+/// 7 つの `spawn_harness*` が共有する組み立て（配線はここ 1 か所）。
 ///
 /// kanade→sakura の [`TalkCommand`] チャンネルを 1 本張り（DD-5・起動と選択解決が同一チャンネル）、
 /// kanade を [`spawn_kanade_with_stop_sink`] で起動する（`stop_sink` が `None` なら
@@ -160,7 +161,7 @@ pub fn spawn_harness_with_stop_sink(
     .0
 }
 
-/// 保留機能付き駆動ハーネスを組み立てる（4.4 pattern 3 専用・[`spawn_harness`] の派生）。
+/// 保留機能付き駆動ハーネスを組み立てる（[`spawn_harness`] の派生）。
 ///
 /// [`spawn_harness`] と同一の結線だが、mock sakura sink を [`spawn_mock_sakura_gated`] で
 /// 起動し、`hold_indices` に含まれる受領インデックスの talk の [`TalkDone`] を保留する。
@@ -183,7 +184,7 @@ pub fn spawn_harness_gated(
     )
 }
 
-/// 失敗注入付き駆動ハーネスを組み立てる（4.6 case 1 専用・[`spawn_harness`] の派生）。
+/// 失敗注入付き駆動ハーネスを組み立てる（[`spawn_harness`] の派生）。
 ///
 /// [`spawn_harness`] と同一の結線だが、mock shiori を [`spawn_mock_shiori_failing`] で起動し、
 /// `fail_on` が指す最初の呼出を指定語彙で失敗させる。これにより「区別語彙ごとの呼出失敗 →
@@ -214,7 +215,7 @@ pub fn spawn_harness_failing_with_stop_sink(
     assemble(config, shiori, stop_sink, immediate_sakura(quit_policy)).0
 }
 
-/// 保留 sakura ＋失敗注入 shiori の駆動ハーネスを組み立てる（6.1 専用・両派生の合成）。
+/// 保留 sakura ＋失敗注入 shiori の駆動ハーネスを組み立てる（両派生の合成）。
 ///
 /// [`spawn_harness_gated`]（保留機能付き sink）と [`spawn_harness_failing`]（失敗注入 shiori）を
 /// 同時に効かせる。選択系の失敗経路（DD-12）を統合層で踏むには**両方**が要る:
@@ -241,7 +242,7 @@ pub fn spawn_harness_gated_failing(
     )
 }
 
-/// ブロッキング mock shiori 付き駆動ハーネスを組み立てる（6.3 専用・[`spawn_harness`] の派生）。
+/// ブロッキング mock shiori 付き駆動ハーネスを組み立てる（[`spawn_harness`] の派生）。
 ///
 /// [`spawn_harness`] と同一の結線だが、mock shiori を [`spawn_mock_shiori_blocking`] で起動し、
 /// `block_on` が指す最初の呼出を明示解放まで握る。返す [`ShioriGate`] の
@@ -260,7 +261,7 @@ pub fn spawn_harness_blocking(
     (harness, gate)
 }
 
-/// sakura sink を持たない駆動ハーネス（4.6 case 4 専用・全 Sender drop 経路の観測用）。
+/// sakura sink を持たない駆動ハーネス（全 Sender drop 経路の観測用）。
 ///
 /// [`spawn_harness`] の sink は TalkDone 返送のため kanade inbox 送信端のクローンを**恒久的に
 /// 保持する**。その結果、通常ハーネスでは `Harness.sender` を drop しても kanade inbox は
@@ -284,7 +285,7 @@ pub struct SinklessHarness {
     pub talk_rx: Receiver<TalkCommand>,
 }
 
-/// sakura sink を持たない駆動ハーネスを組み立てる（4.6 case 4 専用）。
+/// sakura sink を持たない駆動ハーネスを組み立てる。
 ///
 /// mock sakura を起動しないため kanade inbox 送信端のクローンは生じない。返す
 /// [`SinklessHarness::sender`] が唯一の inbox 送信端であり、これを drop すれば inbox が完全に

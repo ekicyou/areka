@@ -1,5 +1,6 @@
 //! ドラッグの開始・終了（`OnMouseDragStart`／`OnMouseDragEnd`）の決定論の檻
-//! （areka-P0-mouse-drag-events 設計 Testing Strategy「kanade」K3〜K7・要件 9.1 ⑴⑸⑹⑼・9.2）。
+//! （areka-P0-mouse-drag-events 設計 Testing Strategy「kanade」K3・K4・K7・要件 9.1 ⑴⑸⑹⑼・9.2。
+//! K5・K6 は `mouse_test_phase_guard_tests.rs` の cage 5a・5b・6 の中）。
 //!
 //! mock の SHIORI を結線したハーネスへ `KanadeMsg::Mouse`（種類 `DragStart`／`DragEnd`）を入れ、
 //! 送ってよい表との照合まで通った GET が記録に現れるか・現れないかを見る。期待する要求は必ず
@@ -160,11 +161,6 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
         "再生中もドラッグの GET は出て、talk_active の snapshot から組んだ期待と一致するはず: {:?}",
         recorded
     );
-    assert!(
-        gets.iter().all(|c| c.status.as_deref() == Some("talking")),
-        "再生中のドラッグの GET は Status: talking を併送する: {:?}",
-        gets
-    );
     // 握手は完走: 挨拶の後に close talk が 1 本起動し、末尾は Unload。
     assert_eq!(
         started
@@ -241,6 +237,11 @@ fn drag_end_after_close_request_is_not_sent() {
         vec![&expected_start],
         "開始だけが送られ、終了の要求の後の終了は送られないはず: {:?}",
         recorded
+    );
+    // drag_gets は GET だけを拾うので、NOTIFY に化けて出ていないことも見る。
+    assert!(
+        !recorded.iter().any(|c| c.id == "OnMouseDragEnd"),
+        "終了の要求の後の OnMouseDragEnd は GET でも NOTIFY でも送られないはず: {recorded:?}"
     );
     assert_eq!(started, vec![FIXED_FAREWELL_SCRIPT.to_string()]);
     assert_eq!(recorded.last(), Some(&expected_unload()));

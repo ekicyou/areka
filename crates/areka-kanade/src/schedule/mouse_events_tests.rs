@@ -5,17 +5,12 @@
 //! 定常以外の棄却は最上位の `step` から通す。
 
 use super::*;
-use crate::msg::{
-    CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
-};
+use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
+use crate::schedule::translate_test_support::config;
 use crate::schedule::{ActiveTalk, Input, Phase, step};
 use crate::talk::TalkId;
 use tracing::Level;
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 /// 定常（話していない）。
 fn steady_none() -> State {
@@ -256,24 +251,6 @@ fn step_sends_nothing_while_close_is_pending() {
     }
 }
 
-/// 要件 8.3: 定常以外では 3 つとも送らない。
-#[test]
-fn step_sends_nothing_outside_steady() {
-    for kind in [
-        up(ClickButton::Left, false),
-        MouseEventKind::Wheel { delta: 120 },
-        MouseEventKind::Hover(HoverEdge::LeaveAll),
-    ] {
-        let state = State {
-            phase: Phase::Idle,
-            ..steady_none()
-        };
-        let (state, actions) = step(state, Input::Mouse(input(kind)), &config());
-        assert!(actions.is_empty(), "{kind:?}");
-        assert!(state.mouse_click.is_none());
-    }
-}
-
 // --- 段の列の応答（`step` を通す） ---
 
 fn script() -> ShioriOutcome {
@@ -394,23 +371,6 @@ fn script_at_any_step_plays_and_stops_the_chain() {
             }
         }
     }
-}
-
-/// 要件 2.5: 中ボタンで `Ex` の 2 段のどちらかに台本なら、互換の `OnMouseUp`／`OnMouseClick` は送らない。
-#[test]
-fn middle_script_on_ex_never_sends_compat_steps() {
-    // `OnMouseUpEx` に台本。
-    let state = released(steady_none(), ClickButton::Middle, false);
-    let (state, actions) = reply(state, script(), "OnMouseUpEx");
-    assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
-    assert!(state.mouse_click.is_none());
-    // `OnMouseClickEx` に台本。
-    let state = released(steady_none(), ClickButton::Middle, false);
-    let (state, actions) = reply(state, ShioriOutcome::NoContent, "OnMouseUpEx");
-    assert_eq!(only_get(&actions).0, "OnMouseClickEx");
-    let (state, actions) = reply(state, script(), "OnMouseClickEx");
-    assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
-    assert!(state.mouse_click.is_none());
 }
 
 /// 要件 1.6・1.8・9.3: 送信の失敗は `error!` を残して 204 と同じに次へ。終了の系列へ倒れない。

@@ -1,21 +1,18 @@
-//! 運行表の翻訳のテスト（タスク 3.1・3.3）: `OnTranslate` の応答の読み（[`read_reply`] の表の全行と
+//! 運行表の翻訳のテスト: `OnTranslate` の応答の読み（[`read_reply`] の表の全行と
 //! 記録の語彙・レベル）と、応答を待っている GET の元のイベントの控え（[`before`]・[`after`]）と、
 //! 帳簿を直接置いた状態からの翻訳の結果の入力（[`on_done`]）。
 
 use super::*;
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget, ShioriMethod};
-use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriFaultKind};
+use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriFaultKind};
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
+use crate::schedule::translate_test_support::config as cfg;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
 use tracing::Level;
-
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn choice_source() -> EventId {
     EventId::Choice("OnおやつSelect".to_string())

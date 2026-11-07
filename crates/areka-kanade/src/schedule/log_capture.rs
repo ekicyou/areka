@@ -1,4 +1,4 @@
-//! テスト専用ログ捕捉ヘルパ（タスク 6.1・Req 6.1／6.3）。
+//! テスト専用ログ捕捉ヘルパ（Req 6.1／6.3）。
 //!
 //! 純粋関数 [`crate::schedule::step`]（および各サブモジュール `step`）は、失敗・防御
 //! アームごとに `tracing::{error,warn}!` を発行する（steering:
@@ -17,7 +17,7 @@
 //!
 //! 捕捉されるのは**呼出スレッド**で同期的に発火したイベントだけである。`step()` は
 //! テストスレッド上で同期的に走る純粋関数ゆえ確実に捕えられる（spawn したアクター
-//! スレッドのログは捕えない——それはタスク 6.2 の担当）。
+//! スレッドのログは捕えない）。
 //!
 //! # 機序（「スレッドローカルゆえ安全」は誤り）
 //! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
@@ -166,7 +166,7 @@ pub(crate) fn assert_not_logged(events: &[CapturedEvent], event_name: &str) {
 /// 捕捉列に ERROR レベルのイベントが 1 件も無いことを表明する。
 ///
 /// 「正常系のユーザー操作で error レベルのログが出ない」ことが完了状態そのものである檻
-/// （選択の happy path・タスク 4.6）で使う。target は限定しない——正常系で error を出す層は
+/// （選択の happy path など）で使う。target は限定しない——正常系で error を出す層は
 /// 存在してはならないためである。
 pub(crate) fn assert_no_error_logs(events: &[CapturedEvent]) {
     let errors: Vec<_> = events.iter().filter(|e| e.level == Level::ERROR).collect();

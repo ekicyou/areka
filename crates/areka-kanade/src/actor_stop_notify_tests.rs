@@ -1,4 +1,4 @@
-//! 停止通知（[`KanadeStopped`]）の発行点の檻（areka-P0-emo2-conformance-e2e タスク 6.9・R15.3）。
+//! 停止通知（[`KanadeStopped`]）の発行点の檻（areka-P0-emo2-conformance-e2e R15.3）。
 //!
 //! 検証するのは 3 つである:
 //!
@@ -21,11 +21,12 @@ use crate::change::{
     CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, KanadeNotice,
 };
 use crate::msg::{
-    KanadeConfig, KanadeStopCause, KanadeStopped, MonotonicMs, ShioriFault, ShioriFaultKind,
-    ShioriMsg, ShioriOutcome,
+    KanadeStopCause, KanadeStopped, MonotonicMs, ShioriFault, ShioriFaultKind, ShioriMsg,
+    ShioriOutcome,
 };
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
+use crate::schedule::translate_test_support::config;
 use crate::schedule::{Action, Input, Phase, State, TermCause};
 use crate::talk::TalkCommand;
 
@@ -250,7 +251,7 @@ fn stop_notice_carries_the_change_handoff_taken_from_the_state() {
             outcome: ShioriOutcome::Unloaded,
             origin: "Unload",
         },
-        &KanadeConfig::new("master", "1.0.0"),
+        &config(),
         &shiori_tx,
         &sakura_tx,
         &(Box::new(|_, _| {}) as crate::schedule::resources::ResourceSink),

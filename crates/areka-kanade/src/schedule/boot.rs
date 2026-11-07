@@ -10,7 +10,7 @@ use crate::msg::{CloseReason, KanadeConfig, ShioriCall, ShioriOutcome};
 use crate::talk::{ScriptOrigin, StartTalk, TalkDone};
 use resources::ResourceOutcome;
 
-/// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
+/// boot 系列（Idle / BootInit / BootPrefetch / BootType / BootMain / BootVersion）のフェーズ分岐。
 ///
 /// 起動指示受領から基盤バージョン通知完了までの正典順序を状態機械として実装する
 /// （Req 1.1–1.4・1.6）。各段階でスクリプト（Value）が返った場合は一意な talk_id を
@@ -337,8 +337,8 @@ fn record_pending_close(mut state: State, reason: CloseReason) -> (State, Vec<Ac
 }
 
 /// boot 進行で想定外の応答（GET 待ちに Notified 等）を受けた場合の防御アーム（warn!＋維持）。
-fn unexpected_reply(state: State, phase: &str, _outcome: ShioriOutcome) -> (State, Vec<Action>) {
-    tracing::warn!(target: "kanade", event = "boot_unexpected_reply", phase = phase, "boot 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続");
+fn unexpected_reply(state: State, phase: &str, outcome: ShioriOutcome) -> (State, Vec<Action>) {
+    tracing::warn!(target: "kanade", event = "boot_unexpected_reply", phase = phase, reply = outcome.kind(), "boot 待ち点で想定外の SHIORI 応答——現 Phase 維持で継続");
     (state, Vec::new())
 }
 

@@ -1,7 +1,6 @@
 //! mock sakura sink 2 種（即応・保留付き）と quit フラグのシナリオ指示。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -26,8 +25,10 @@ use super::bounded::run_join_bounded;
 /// - [`commands`](Self::commands): 3 形（`Start`/`ResolveChoice`/`CancelChoice`）の**到着順**の
 ///   記録列。`TalkCommand` が単一チャンネルを流れることによる FIFO 順序保存（DD-4 の前提）を
 ///   観測する面である。
-/// - [`started`](Self::started): 記録列のうち `TalkCommand::Start` の射影。既存の起動系檻は
-///   本アクセサを従来どおり使い続け、意味は不変である。
+/// - [`started`](Self::started): 記録列のうち `TalkCommand::Start` の射影。
+///
+/// 走行中に読む [`commands`](Self::commands)／[`started`](Self::started) を使うのは `common_smoke`
+/// の檻だけで、駆動ハーネスの檻は `Harness::finish` 越しに join 後の記録を読む。
 pub struct MockSakura {
     join: thread::JoinHandle<()>,
     commands: Arc<Mutex<Vec<TalkCommand>>>,
@@ -130,30 +131,28 @@ impl QuitPolicy {
 /// クローンでよい。
 ///
 /// `ResolveChoice`/`CancelChoice` は**記録のみ**行う——本 mock は再生層を持たないため解決も
-/// 中断も起こせず、`quit_policy` の index（＝何本目の talk か）も前進させない。到着順の記録は
-/// [`MockSakura::commands`] で観測でき、起動系檻が使う [`MockSakura::started`] の意味は不変。
+/// 中断も起こせず、`quit_policy` の index（＝何本目の talk か）も前進させない。
 pub fn spawn_mock_sakura(
     talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,
     quit_policy: QuitPolicy,
 ) -> MockSakura {
-    // 保留なしの保留つき sink と同じ（#45・受信の輪は 1 本）。
+    // 保留なしの保留つき sink と同じ（受信の輪は 1 本）。
     spawn_mock_sakura_gated(talk_rx, kanade_tx, quit_policy, Vec::new()).0
 }
 
 // ============================================================================
-// 保留付き mock sakura sink（active talk 窓を決定的に作る・4.4 pattern 3）
+// 保留付き mock sakura sink（active talk 窓を決定的に作る）
 // ============================================================================
 
 /// park した [`TalkDone`] の共有状態（保留分の待ち行列＋解放フラグ・Condvar）。
 ///
 /// sakura の recv ループスレッドが park を積み、[`SakuraGate::release_all`] が flag を立て、
-/// 専用の releaser スレッドが flag 成立を待って一斉送出する。この 3 者を繋ぐ共有点。
+/// releaser スレッドが「解放済み かつ 全保留の park 到着」を待って一斉送出する。この 3 者を繋ぐ共有点。
 struct GateShared {
-    /// (解放フラグ＋park 待ち行列, 起床用 Condvar)。
-    ///
-    /// bool=解放許可・`Vec<TalkDone>`=まだ送っていない保留 talk（recv ループが積む）。
+    /// 解放フラグ・park 待ち行列・終了印（[`GateInner`]）。
     inner: Mutex<GateInner>,
+    /// `inner` が変わるたびに releaser を起こす。
     cvar: std::sync::Condvar,
 }
 
@@ -175,7 +174,7 @@ struct GateInner {
     expected_holds: usize,
 }
 
-/// 保留 talk の解放を sakura の releaser スレッドへ通知するゲート（4.4 pattern 3 専用）。
+/// 保留 talk の解放を sakura の releaser スレッドへ通知するゲート。
 ///
 /// [`spawn_mock_sakura_gated`] / [`spawn_harness_gated`] が返す。テストは
 /// [`release_all`](SakuraGate::release_all) を呼んで、保留していた全 [`TalkDone`] を
@@ -185,7 +184,7 @@ struct GateInner {
 /// 「保留」は、当該 talk の [`TalkDone`] を kanade inbox へ**送らない**ことで実現する。
 /// TalkDone は「二つの Tick の間に割り込み得る唯一のメッセージ」であり、これを送らない限り
 /// active talk 窓（`Steady{Some}`）は次 Tick まで確実に維持される（interleaving が起きない）。
-/// 解放シグナルは `Mutex<bool>`＋`Condvar` で伝える——flag を Mutex 下で立ててから notify する
+/// 解放シグナルは `Mutex<GateInner>`＋`Condvar` で伝える——flag を Mutex 下で立ててから notify する
 /// ため lost wakeup は起きない。
 pub struct SakuraGate {
     shared: Arc<GateShared>,
@@ -195,8 +194,8 @@ impl SakuraGate {
     /// 保留中の全 [`TalkDone`] の解放を releaser スレッドへ通知する（sleep なし・確実に起床）。
     ///
     /// flag を Mutex 下で `true` にしてから `notify_all` するため、releaser がまだ wait に
-    /// 入る前に呼ばれても取りこぼさない（lost wakeup 対策）。解放後に積まれる park は無い
-    /// （テストは全保留 talk 起動後に本メソッドを呼ぶ契約）。
+    /// 入る前に呼ばれても取りこぼさない（lost wakeup 対策）。保留 talk の park より先に呼ばれても
+    /// よい——releaser は `expected_holds` 件の park が揃うまで送出を待つ。
     pub fn release_all(&self) {
         let mut inner = self.shared.inner.lock().expect("sakura gate mutex");
         inner.released = true;
@@ -204,7 +203,7 @@ impl SakuraGate {
     }
 }
 
-/// 保留機能付き mock sakura sink を起動する（4.4 pattern 3・[`spawn_mock_sakura`] もこの輪を使う）。
+/// 保留機能付き mock sakura sink を起動する（[`spawn_mock_sakura`] もこの輪を使う）。
 ///
 /// `hold_indices` に含まれる受領インデックス（0 始まり）の [`StartTalk`] は、記録はするが
 /// その [`TalkDone`] を**即座には返さない**（park する）。[`SakuraGate::release_all`] が
@@ -216,8 +215,8 @@ impl SakuraGate {
 /// 記録・即応・park を行う。park の**送出**は別の releaser スレッドが担う——recv ループは
 /// `recv` で恒常的にブロックし得るため、release_all を実行中の recv ループ内で拾えないからで
 /// ある。releaser は「解放フラグ成立」または「recv ループ終了」で起床し、park を送って自然終了
-/// する。テストは Sender drop の前に `release_all` を呼ぶ契約（それにより pattern 3 の
-/// `Steady{None}` 復帰→close 握手が駆動される）。
+/// する。テストは Sender drop の前に `release_all` を呼ぶ契約（それにより `Steady{None}` 復帰→
+/// close 握手が駆動される）。
 pub fn spawn_mock_sakura_gated(
     talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,

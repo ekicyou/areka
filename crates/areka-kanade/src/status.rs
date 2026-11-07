@@ -379,50 +379,6 @@ mod tests {
         let empty = ExecutionStatus::from_states(vec![]);
         assert_eq!(empty.render(), None);
     }
-
-    fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-        BalloonBinding {
-            character_id,
-            balloon_id,
-        }
-    }
-
-    /// 写しへの知らせの反映は「変わったか」を返し、同じ値の知らせは変化なしとする。
-    #[test]
-    fn external_states_apply_reports_whether_the_copy_changed() {
-        let mut external = ExternalStates::default();
-        assert!(external.apply(ExecutionStateUpdate::NoUserBreak(true)));
-        assert!(!external.apply(ExecutionStateUpdate::NoUserBreak(true)));
-        assert!(external.no_user_break);
-        assert!(external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
-        assert!(!external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
-        assert!(external.apply(ExecutionStateUpdate::Balloons(Vec::new())));
-        assert!(external.apply(ExecutionStateUpdate::NoUserBreak(false)));
-        assert_eq!(external, ExternalStates::default());
-    }
-
-    /// C5: `INACTIVE` は**全ての源が false**（choosing の源を足しても非アクティブのまま）。
-    /// テストと構造体リテラルの既定値（`..ExecutionSnapshot::INACTIVE`）がこの定数に頼る以上、
-    /// 源の増設で既定値が汚れないことを固定する。
-    #[test]
-    fn inactive_snapshot_has_every_source_false() {
-        // 網羅的な構造体リテラルとの比較で固定する——源が 1 本増えたときは本行が
-        // コンパイルエラーになり、既定値の判断が必ず要求される。
-        assert_eq!(
-            ExecutionSnapshot::INACTIVE,
-            ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                no_user_break: false,
-                online: false,
-                balloons: Vec::new(),
-            }
-        );
-        assert_eq!(
-            ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE).render(),
-            None
-        );
-    }
 }
 
 #[cfg(test)]

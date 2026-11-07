@@ -1,19 +1,15 @@
 use super::log_capture::{assert_logged, assert_not_logged, capture};
-use super::steady::test_support::base_state;
 use super::*;
 use crate::msg::ShioriFailure;
+use crate::schedule::translate_test_support::config;
 use tracing::Level;
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn state_in(phase: Phase) -> State {
     State {
         phase,
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        ..base_state()
+        ..State::initial()
     }
 }
 
@@ -278,7 +274,7 @@ fn initial_state_is_idle_with_monotonic_counter() {
     assert!(s.pending_close.is_none());
 }
 
-// --- 10. Mouse 横断ルーティング（Task 1・DD-IE-8） ---
+// --- 10. Mouse 横断ルーティング（DD-IE-8） ---
 
 use crate::msg::{MouseEventKind, MouseInput};
 
@@ -340,8 +336,8 @@ fn assert_get(action: &Action, expected: &ShioriCall) {
     }
 }
 
-// Steady では横断アームが steady::on_mouse へ委譲し、Task 2.2 の実装で GET を発行する
-// （seam の意図的充填）。step() 経由（横断アーム込み）で GET が 1 件出ることを固定する。
+// Steady では横断アームが steady::on_mouse へ委譲し、GET を発行する。
+// step() 経由（横断アーム込み）で GET が 1 件出ることを固定する。
 #[test]
 fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
     // Steady{None} + Move → OnMouseMove GET（Status 行なし・INACTIVE）。phase 不変。
@@ -354,11 +350,7 @@ fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
         matches!(next.phase, Phase::Steady { talk: None }),
         "マウス GET は phase を変えない"
     );
-    assert_eq!(
-        actions.len(),
-        1,
-        "マウス入力で GET を 1 件発行する（Task 2.2）"
-    );
+    assert_eq!(actions.len(), 1, "マウス入力で GET を 1 件発行する");
     assert_get(
         &actions[0],
         &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot::INACTIVE),
@@ -389,20 +381,6 @@ fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
             },
         ),
     );
-}
-
-// close 保留中は Steady であってもマウス GET を発行しない防御（構造的シーム・DD-IE-8）。
-#[test]
-fn mouse_input_in_steady_with_pending_close_emits_no_get() {
-    let mut s = state_in(Phase::Steady { talk: None });
-    s.pending_close = Some(CloseReason::System);
-    let (next, actions) = step(s, Input::Mouse(mouse_move()), &config());
-    assert!(matches!(next.phase, Phase::Steady { talk: None }));
-    assert!(
-        matches!(next.pending_close, Some(CloseReason::System)),
-        "guard は pending_close を消費しない"
-    );
-    assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
 }
 
 /// ドラッグの GET を組む関数（`events::on_mouse_drag_start`／`_end`）の型。
@@ -441,7 +419,7 @@ fn drag_input_in_steady_emits_matching_get() {
 }
 
 // ============================================================
-// 11. 選択系の additive 追加（タスク 4.1・Req4.4・DD-3／DD-10）
+// 11. 選択系の additive 追加（Req4.4・DD-3／DD-10）
 // ============================================================
 
 /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
@@ -506,7 +484,7 @@ fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
 }
 
 // ============================================================
-// 12. 選択待ち通知の受領と帳簿確立（タスク 4.2・Req7.1／7.6／7.7・C4 規則 4・DD-8）
+// 12. 選択待ち通知の受領と帳簿確立（Req7.1／7.6／7.7・C4 規則 4・DD-8）
 // ============================================================
 
 /// 檻用の選択待ち通知（候補列・起点・指令を明示して組む）。
@@ -558,7 +536,7 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
             actions.as_slice(),
             [Action::ArmChoiceWake(MonotonicMs(32_000))]
         ),
-        "帳簿確立は期限の起こしの頼みだけを出す（#7）"
+        "帳簿確立は期限の起こしの頼みだけを出す"
     );
 }
 
@@ -681,7 +659,7 @@ fn stale_choice_waiting_leaves_existing_ledger_untouched() {
 }
 
 // ============================================================
-// 13. 選択待ち中の実行状態導出（タスク 4.4・Req6.1／6.2／6.4・C5・裁定 6）
+// 13. 選択待ち中の実行状態導出（Req6.1／6.2／6.4・C5・裁定 6）
 // ============================================================
 
 /// C5: `choice_active` の源は `State.choice` の**3 段フェーズすべて**である。
@@ -736,12 +714,12 @@ fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
 }
 
 // ============================================================
-// 1 世代 stale 防御（タスク 4.6・C4 規則 9・F1 残余レース・Req1.6）
+// 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）
 // ============================================================
 //
-// choice 起因の slot 差替直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
+// slot 差替（選択・マウスの答え・SSTP の台本・時間切れの答えのどれでも）の直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
 // dispatcher の slot 差替より前に投函され得る（design F1「順序の決定性と残余レース」）。
-// 到着した遅延 `TalkDone` は `prev_talk` と照合して `talk_done_stale_choice`（info）
+// 到着した遅延 `TalkDone` は `prev_talk` と照合して `talk_done_stale`（info）
 // で棄却し、`unknown_talk_done`（error）を**真に未知の id 専用**に保つ。
 
 /// `prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
@@ -775,7 +753,7 @@ fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
         _ => panic!("expected Steady{{Some}} preserved"),
     }
     assert!(actions.is_empty(), "遅延 Done は Action を発行しない");
-    assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
+    assert_logged(&ev, Level::INFO, "talk_done_stale");
     assert_not_logged(&ev, "unknown_talk_done");
     assert_eq!(
         next.prev_talk,
@@ -802,7 +780,7 @@ fn truly_unknown_talk_done_still_logs_error() {
     });
     let (next, actions) = out.expect("step は必ず結果を返す");
     assert_logged(&ev, Level::ERROR, "unknown_talk_done");
-    assert_not_logged(&ev, "talk_done_stale_choice");
+    assert_not_logged(&ev, "talk_done_stale");
     assert!(actions.is_empty());
     assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
 }

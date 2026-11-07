@@ -3,19 +3,8 @@
 //!
 //! どれも GET で、Reference の個数と値を列ごと突き合わせる。
 
+use super::tests::expect_get;
 use super::*;
-
-/// GET を分解して (id の綴り, references, Status の wire 値) を取り出す（NOTIFY なら panic）。
-fn expect_get(call: ShioriCall) -> (String, Vec<String>, Option<String>) {
-    match call {
-        ShioriCall::Get {
-            id,
-            references,
-            status,
-        } => (id.as_str().to_string(), references, status.render()),
-        ShioriCall::Notify { .. } => panic!("GET のはずが NOTIFY"),
-    }
-}
 
 const SCRIPT: &str = "\\0\\s[0]長い台詞\\w9\\w9\\e";
 
@@ -92,12 +81,9 @@ fn balloon_builders_derive_status_from_the_snapshot() {
     }
 }
 
-/// 表に正典の 3 語が載り、組み立ての綴りと一致する（要件 3.5・6.4）。
+/// 正典に無い独自のイベントは表に足さない（要件 3.5。正典の 3 語が載ることは許可表の完全一致の
+/// テストが固定する・要件 6.4）。
 #[test]
-fn the_three_balloon_events_are_in_the_allowed_table() {
-    for id in ["OnBalloonBreak", "OnBalloonClose", "OnBalloonTimeout"] {
-        assert_eq!(allowed_static(id), Some(id), "{id} が表に無い");
-    }
-    // 正典に無い独自のイベントは足さない（要件 3.5）。
+fn no_invented_balloon_event_is_in_the_allowed_table() {
     assert!(!is_allowed_event_id("OnBalloonClick"));
 }

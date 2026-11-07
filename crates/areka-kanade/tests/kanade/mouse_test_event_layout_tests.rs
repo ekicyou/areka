@@ -1,26 +1,23 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
-    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy, events,
-    expected_call, expected_unload, spawn_harness,
+    CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture, KanadeConfig,
+    KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy, events, expected_call,
+    expected_unload, spawn_harness,
 };
 
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ 各 Mouse を FIFO 注入 → CloseRequest → 終了完走まで駆動し
 /// 記録を確定する（cage 1〜3 の共通ドライバ）。
 ///
-/// `fixture` は `Fixture::quitting().without_boot_greeting()` 由来（挨拶なし・quit close）である前提。
-/// 挨拶なし boot は StartTalk を生まないため、Boot は同期完走後 `Steady{None}` にあり、続く各 Mouse は
+/// 応答表は `Fixture::quitting().without_boot_greeting()`（挨拶なし・quit close）。挨拶なし boot は
+/// StartTalk を生まないため、Boot は同期完走後 `Steady{None}` にあり、続く各 Mouse は
 /// `Steady{None}` で処理される（同期往復ゆえ mouse GET は reply まで畳んでから次メッセージへ進む）。
-/// close talk を末尾 talk（quit:true）にして終了系列を駆動する。
-fn drive_mouse_steady_none(
-    fixture: Fixture,
-    mouse: Vec<MouseInput>,
-    quit_flags: Vec<bool>,
-) -> Driven {
+/// close talk が唯一の StartTalk（挨拶なし・204 マウス）なので、index 0 を quit:true にして終了系列を
+/// 駆動する。
+fn drive_mouse_steady_none(mouse: Vec<MouseInput>) -> Driven {
     let harness = spawn_harness(
         KanadeConfig::new("master", "1.0.0"),
-        fixture,
-        QuitPolicy::PerTalk(quit_flags),
+        Fixture::quitting().without_boot_greeting(),
+        QuitPolicy::PerTalk(vec![true]),
     );
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
@@ -57,12 +54,13 @@ fn drive_mouse_steady_none(
 #[test]
 fn onmousemove_layout_matches_events_table() {
     let (x, y, scope) = (10_i64, 20_i64, 0_u32);
-    let driven = drive_mouse_steady_none(
-        Fixture::quitting().without_boot_greeting(),
-        vec![mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))],
-        // close talk が唯一の StartTalk（挨拶なし・204 マウス）＝index 0 を quit:true で終了駆動。
-        vec![true],
-    );
+    let driven = drive_mouse_steady_none(vec![mouse_input(
+        MouseEventKind::Move,
+        x,
+        y,
+        scope,
+        Some("Head"),
+    )]);
 
     // events 表から期待 GET を導出（Steady{None}＝INACTIVE・Status 行なし・ハードコードしない）。
     let expected = expected_call(events::on_mouse_move(
@@ -88,13 +86,7 @@ fn onmousemove_layout_matches_events_table() {
         driven.recorded
     );
 
-    // layout の要所を明示確認（設計 #1・退行の直接検出）。
-    assert_eq!(
-        recorded_mouse.method,
-        CallMethod::Get,
-        "マウスは常に GET（NOTIFY 化しない）"
-    );
-    assert_eq!(recorded_mouse.id, "OnMouseMove");
+    // layout の要所を明示確認（設計 #1・退行の直接検出）。mouse_gets が GET だけを拾うので Method は見ない。
     assert_eq!(
         recorded_mouse.references.len(),
         7,
@@ -159,11 +151,8 @@ fn onmousemove_layout_matches_events_table() {
 #[test]
 fn onmousemove_region_none_ref4_empty() {
     let (x, y, scope) = (1_i64, 2_i64, 1_u32);
-    let driven = drive_mouse_steady_none(
-        Fixture::quitting().without_boot_greeting(),
-        vec![mouse_input(MouseEventKind::Move, x, y, scope, None)],
-        vec![true],
-    );
+    let driven =
+        drive_mouse_steady_none(vec![mouse_input(MouseEventKind::Move, x, y, scope, None)]);
 
     let expected = expected_call(events::on_mouse_move(
         x,
@@ -209,30 +198,26 @@ fn onmousemove_region_none_ref4_empty() {
 #[test]
 fn double_click_ref5_left_right() {
     let (x, y, scope) = (33_i64, 44_i64, 0_u32);
-    let driven = drive_mouse_steady_none(
-        Fixture::quitting().without_boot_greeting(),
-        vec![
-            mouse_input(
-                MouseEventKind::DoubleClick {
-                    button: MouseButton::Left,
-                },
-                x,
-                y,
-                scope,
-                Some("Face"),
-            ),
-            mouse_input(
-                MouseEventKind::DoubleClick {
-                    button: MouseButton::Right,
-                },
-                x,
-                y,
-                scope,
-                Some("Face"),
-            ),
-        ],
-        vec![true],
-    );
+    let driven = drive_mouse_steady_none(vec![
+        mouse_input(
+            MouseEventKind::DoubleClick {
+                button: MouseButton::Left,
+            },
+            x,
+            y,
+            scope,
+            Some("Face"),
+        ),
+        mouse_input(
+            MouseEventKind::DoubleClick {
+                button: MouseButton::Right,
+            },
+            x,
+            y,
+            scope,
+            Some("Face"),
+        ),
+    ]);
 
     let expected_left = expected_call(events::on_mouse_double_click(
         x,

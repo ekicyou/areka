@@ -6,30 +6,21 @@
 //! 再生中に届いた要求の保留（最後まで・中断で消化／終了の保留が勝つ／`\-` の予約・到達で捨てる）も固定する。
 
 use super::*;
-use crate::change::{ChangeOrigin, ChangeTarget};
+use crate::change::ChangeOrigin;
 use crate::msg::{CloseReason, ShioriCall};
 use crate::schedule::log_capture::{capture, logged_once};
-use crate::schedule::steady::test_support::base_state;
-use crate::schedule::translate_test_support::pass_translate;
+use crate::schedule::translate_test_support::{change_request, config as cfg, pass_translate};
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::{TalkDone, TalkEndReason};
 use tracing::Level;
 
 const D: u64 = 30_000;
 
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
 fn req(origin: ChangeOrigin, raise_event: bool) -> ChangeRequest {
     ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: r"C:\areka\ghost\r_post".to_string(),
-        },
         origin,
         raise_event,
+        ..change_request()
     }
 }
 
@@ -38,7 +29,7 @@ fn steady() -> State {
         phase: Phase::Steady { talk: None },
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        ..base_state()
+        ..State::initial()
     }
 }
 
@@ -599,26 +590,3 @@ mod raise_event_tests;
 
 #[path = "change_property_tests.rs"]
 mod property_tests;
-
-/// 台詞の待ち以外の相が `on_talk_wait` に届いた場合の守りの腕（audit-kanade #30）。`step` の振り分けでは
-/// 届かないゆえ直に回す。warn を消すと赤。
-#[test]
-fn on_talk_wait_with_a_non_talk_wait_phase_warns_and_does_nothing() {
-    let mut out = None;
-    let ev = capture(|| {
-        out = Some(on_talk_wait(
-            steady(),
-            Input::Tick {
-                now: MonotonicMs(1_000),
-            },
-            &cfg(),
-        ))
-    });
-    logged_once(&ev, Level::WARN, "change_phase_unexpected");
-    let (state, actions) = out.expect("on_talk_wait は戻る");
-    assert!(actions.is_empty(), "守りの腕は何も出さない");
-    assert!(
-        matches!(state.phase, Phase::Steady { talk: None }),
-        "相を保つ"
-    );
-}

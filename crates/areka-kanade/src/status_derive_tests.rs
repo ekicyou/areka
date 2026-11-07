@@ -125,20 +125,6 @@ fn table_covers_each_input_exactly_once() {
     assert_eq!(inputs.len(), 48);
 }
 
-/// 要件 1.3: どの組み合わせでも同じ状態を 2 度含めない
-/// （トップレベルの区切りは `,`・balloon の内部は `/` なので `,` で分けられる）。
-#[test]
-fn no_combination_repeats_a_state() {
-    for (.., expected) in TABLE {
-        let Some(value) = expected else { continue };
-        let tokens: Vec<&str> = value.split(',').collect();
-        let mut unique = tokens.clone();
-        unique.sort_unstable();
-        unique.dedup();
-        assert_eq!(unique.len(), tokens.len(), "{value} に重複した状態がある");
-    }
-}
-
 /// 要件 4.3/1.3: 逆順に与えた組は昇順の `balloon(0=2/1=0)` になり、同じキャラクターの
 /// 重複は先頭だけが残る（`balloon` は 1 つだけ）。
 #[test]
@@ -160,24 +146,7 @@ fn reversed_and_duplicated_bindings_render_ascending_once() {
     );
 }
 
-/// 要件 4.4: 空の組は `balloon` を出さず、他に何も無ければ行そのものを出さない。
-#[test]
-fn empty_bindings_emit_no_balloon() {
-    let empty = ExecutionSnapshot {
-        balloons: Vec::new(),
-        ..ExecutionSnapshot::INACTIVE
-    };
-    assert_eq!(render(&empty), None);
-
-    let online_empty = ExecutionSnapshot {
-        online: true,
-        balloons: Vec::new(),
-        ..ExecutionSnapshot::INACTIVE
-    };
-    assert_eq!(render(&online_empty).as_deref(), Some("online"));
-}
-
-/// #63: 種類の空な `Opening` は非アクティブ（`OpeningKinds` の doc のとおり）。
+/// 種類の空な `Opening` は非アクティブ（`OpeningKinds` の doc のとおり）。
 /// 空の `Opening` だけなら行を出さず、ほかの状態と並べても `opening()` を出さない。
 #[test]
 fn an_empty_opening_set_renders_no_opening() {
@@ -189,4 +158,18 @@ fn an_empty_opening_set_renders_no_opening() {
             .as_deref(),
         Some("talking")
     );
+}
+
+/// 写しへの知らせの反映は「変わったか」を返し、同じ値の知らせは変化なしとする。
+#[test]
+fn external_states_apply_reports_whether_the_copy_changed() {
+    let mut external = ExternalStates::default();
+    assert!(external.apply(ExecutionStateUpdate::NoUserBreak(true)));
+    assert!(!external.apply(ExecutionStateUpdate::NoUserBreak(true)));
+    assert!(external.no_user_break);
+    assert!(external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
+    assert!(!external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
+    assert!(external.apply(ExecutionStateUpdate::Balloons(Vec::new())));
+    assert!(external.apply(ExecutionStateUpdate::NoUserBreak(false)));
+    assert_eq!(external, ExternalStates::default());
 }

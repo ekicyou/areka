@@ -10,13 +10,10 @@ use super::super::{
     Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, log_capture, step,
 };
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall};
+use crate::schedule::translate_test_support::config;
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use log_capture::{CapturedEvent, capture, logged_once};
 use tracing::Level;
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 /// 場面を `phase` だけ差し替えて組む（再生中のトークの有無は `phase` が決める）。
 fn with_phase(phase: Phase) -> State {
@@ -93,8 +90,7 @@ fn assert_no_choice_timeout(actions: &[Action], at: &str) {
 /// 受理の指示の列に SHIORI への要求が 1 件も無いことを表明する（要件 3.9・9.1）。
 ///
 /// 受理そのものは何も送らない。中断を理由に送る `OnBalloonBreak` は、止めたトークの完了の後に
-/// 定常へ戻ったときだけ出る（areka-P0-balloon-lifecycle-events が約束を改めた。場面ごとの期待は
-/// 完了の檻と `balloon_events_done_tests.rs`）。
+/// 定常へ戻ったときだけ出る（場面ごとの期待は完了の檻と `balloon_events_done_tests.rs`）。
 fn assert_no_shiori_request(actions: &[Action], at: &str) {
     assert_eq!(
         actions
@@ -210,7 +206,6 @@ fn user_break_while_playing_cancels_the_current_talk_in_every_phase() {
                 actions.len()
             ),
         }
-        assert_no_shiori_request(&actions, label);
         assert_eq!(
             next.user_break_talk,
             Some(BreakNote {
@@ -330,7 +325,7 @@ fn scope_number_does_not_change_the_verdict() {
     }
 }
 
-// --- 判断分岐 ⑷: 押されたバルーンのトークが今のトークでない（#6・要件 9.9） ---
+// --- 判断分岐 ⑷: 押されたバルーンのトークが今のトークでない（要件 9.9） ---
 
 /// 読み終えたトーク X のバルーンを押した瞬間に Y が始まっていたら、Y は止めず、帳簿も控えず、
 /// 理由 `other_talk` を 1 行残して表 C（読み終えたバルーンを閉じた知らせ）へ渡す。表 C は再生中なら

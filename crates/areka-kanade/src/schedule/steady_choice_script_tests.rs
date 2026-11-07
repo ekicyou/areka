@@ -363,7 +363,6 @@ fn script_choice_without_matching_shown_talk_falls_to_external() {
             vec![Input::Choice(choice_input_of("script:\\e", "閉じる", &[]))],
         );
         assert_eq!(started, external(ScriptOrigin::GHOST), "外部扱いへ倒す");
-        assert!(started.is_external_treated());
         let hit = logged_once(&ev, Level::ERROR, "choice_script_origin_missing");
         assert_eq!(
             hit.fields.get("prev_talk_id").map(String::as_str),

@@ -1,7 +1,6 @@
 //! 期限付き待機ヘルパ（どのテストもハングしない・Req 7.3）。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -52,7 +51,7 @@ pub fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Resul
 /// kanade が終了しない（欠陥）場合は DEFAULT_TIMEOUT の壁時計 deadline で
 /// ハングでなく panic（失敗）として検出する。
 ///
-/// 復帰駆動の完了バリア（R7' 新構造・7.1/7.3/8.5）。`first_tick_second` から 1 秒刻みで
+/// 復帰駆動の完了バリア（7.1/7.3/8.5）。`first_tick_second` から 1 秒刻みで
 /// 単調増加する `now`（＝`MonotonicMs(second * 1_000)`）を持つ [`KanadeMsg::Tick`] を、
 /// `sender.send` が `Err`（Receiver drop＝kanade スレッド終了＝inbox 切断）を返すまで
 /// 反復送出する（反復回数の上限は持たない・上限非依存の完了バリア）。

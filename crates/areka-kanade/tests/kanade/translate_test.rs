@@ -1,4 +1,4 @@
-//! 翻訳（`OnTranslate`）の殻の結合テスト（areka-P0-translate-pipeline タスク 3.6・要件 3.6・4.5・
+//! 翻訳（`OnTranslate`）の殻の結合テスト（areka-P0-translate-pipeline 要件 3.6・4.5・
 //! 5.3・5.4・5.6・8.1 ⑺）。
 //!
 //! 本物の殻（`spawn_kanade_translating`）に、SHIORI と再生側の両方の受け口を 1 本のスレッドで
@@ -33,8 +33,8 @@ use areka_kanade::{
 use shiori_host32_host::{Charset, Method, RequestHeaders, ShioriRequest, build_request};
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, RecordedCall, expected_call, expected_translate, expected_unload,
-    join_bounded,
+    CallMethod, DEFAULT_TIMEOUT, RecordedCall, command_tag, expected_call, expected_translate,
+    expected_unload, join_bounded,
 };
 
 /// ダブルクリックが返す台詞。
@@ -47,7 +47,7 @@ const FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e";
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Seen {
     Call(RecordedCall),
-    /// 再生側への指示（`start:<talk_id>:<台詞>` など）。
+    /// 再生側への指示（[`command_tag`] の形）。
     Talk(String),
 }
 
@@ -93,14 +93,6 @@ struct Rig {
     notices: Receiver<KanadeNotice>,
 }
 
-fn describe(command: TalkCommand) -> String {
-    match command {
-        TalkCommand::Start(start) => format!("start:{}:{}", start.talk_id.0, start.script),
-        TalkCommand::ResolveChoice { talk_id, id } => format!("resolve:{}:{id}", talk_id.0),
-        TalkCommand::CancelChoice { talk_id } => format!("cancel:{}", talk_id.0),
-    }
-}
-
 /// 偽物を起こし、素通しの口つきの kanade（停止通知の受け口あり）をつなぐ。
 fn spawn_rig(spec: WireSpec) -> Rig {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
@@ -120,7 +112,7 @@ fn spawn_rig(spec: WireSpec) -> Rig {
         while let Ok(msg) = shiori_rx.recv() {
             // この要求より前に kanade が送った再生の指示を先に記録する。
             while let Ok(command) = talk_rx.try_recv() {
-                seen.push(Seen::Talk(describe(command)));
+                seen.push(Seen::Talk(command_tag(&command)));
             }
             match msg {
                 ShioriMsg::Request { call, reply } => {
@@ -160,7 +152,7 @@ fn spawn_rig(spec: WireSpec) -> Rig {
             }
         }
         // kanade が止まって送り手を落とすまでの指示を拾う。
-        seen.extend(talk_rx.iter().map(|c| Seen::Talk(describe(c))));
+        seen.extend(talk_rx.iter().map(|c| Seen::Talk(command_tag(&c))));
         let _ = done_tx.send(WireLog {
             seen,
             sent_while_held,
@@ -280,7 +272,7 @@ fn talk_done(id: u64) -> KanadeMsg {
 }
 
 fn start(id: u64, script: &str) -> Seen {
-    Seen::Talk(format!("start:{id}:{script}"))
+    Seen::Talk(format!("Start({id},{script})"))
 }
 
 fn call(call: ShioriCall) -> Seen {
@@ -521,7 +513,6 @@ fn on_translate_status_is_the_playback_start_state_and_headers_match_other_gets(
         expected_translate(MOUSE_SCRIPT, &first_source, &talking()),
         "Status は再生を始める時点の状態（talking）"
     );
-    assert_eq!(translates[0].status.as_deref(), Some("talking"));
 
     // 再生中に送った 2 つ目の元の GET と、その台詞の OnTranslate の見出しを比べる。
     assert_eq!(*sources[1], expected_call(double_click_call(&talking())));
@@ -584,7 +575,7 @@ fn transport_failure_on_translate_stops_like_todays_fault() {
     );
 }
 
-/// 3.5 の申し送り（要件 6.2・4.5）: 停止通知の切替の中身は、`OnGhostChanging` の台詞なら翻訳の
+/// 停止通知の切替の中身（要件 6.2・4.5）は、`OnGhostChanging` の台詞なら翻訳の
 /// 後の台詞を運ぶ。切替の送り出しの翻訳で輸送路が失敗したら、中身は空（`None`）で、原因は
 /// `OnGhostChanging` そのものが同じ失敗をした今日の故障と同じ。
 #[test]
@@ -666,27 +657,9 @@ fn assert_farewell_scene(
         "{name}: OnTranslate は 1 件: {:#?}",
         log.seen
     );
-    assert_eq!(
-        translates[0].status, during,
-        "{name}: OnTranslate の Status は同じ時点の問い合わせの答えと同じ値"
-    );
 
-    let handshake_statuses: Vec<Option<String>> = log
-        .seen
-        .iter()
-        .filter_map(|s| match s {
-            Seen::Call(c) if c.id == "OnClose" || c.id == "OnGhostChanging" => {
-                Some(c.status.clone())
-            }
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        handshake_statuses,
-        vec![None; handshakes.len()],
-        "{name}: 握手の要求（OnClose・OnGhostChanging）に Status の行は無い"
-    );
-
+    // OnTranslate の Status（talking＝`during` と同じ値）と、握手の要求に Status の行が無いことは、
+    // 下の並びの比較が events 表導出の期待で見る。
     let first_id = RecordedCall::from_call(&handshakes[0]).id;
     let source = handshakes.last().expect("握手の要求は 1 件以上");
     let translate = expected_translate(FAREWELL_SCRIPT, source, &talking());

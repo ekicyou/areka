@@ -1,5 +1,5 @@
 //! 殻が実行の状態の問い合わせ（`KanadeMsg::StatusQuery`）にその場で答えることの統合檻
-//! （areka-P0-mcp-get-status タスク 1.2・要件 1.2／1.4／1.5／2.1／2.2／2.3／2.5／3.2／4.1／4.2／5.1／5.3）。
+//! （areka-P0-mcp-get-status 要件 1.2／1.4／1.5／2.1／2.2／2.3／2.5／3.2／4.1／4.2／5.1／5.3）。
 //!
 //! 共通の土台（`super::common`）の保留できる偽の sakura（`spawn_harness_gated`）と、呼出を
 //! `Status` つきで記録する偽の shiori を使う。問い合わせは同じ送出端から送るので受信箱で順に並び、
@@ -12,12 +12,13 @@
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::{
     ChoiceInput, CloseReason, ExecutionSnapshot, ExecutionStateUpdate, ExecutionStatus,
-    KanadeConfig, KanadeMsg, MonotonicMs, TalkCommand, TalkId, events,
+    KanadeConfig, KanadeMsg, MonotonicMs, TalkId, events,
 };
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, Driven, Fixture, Harness, QuitPolicy, RecordedCall, binding,
-    expected_call, expected_unload, pumps, send, spawn_harness, spawn_harness_gated, tick,
+    command_tag, expected_call, expected_unload, pumps, send, spawn_harness, spawn_harness_gated,
+    tick,
 };
 
 /// 選択待ちの候補（正典形＝`On` で始まらない）。
@@ -48,18 +49,6 @@ fn ask_here(harness: &Harness, ask: bool, answers: &mut Vec<Option<String>>) {
     answers.push(first);
 }
 
-/// 偽の sakura が受けた指示の列を比べられる形へ写す（`TalkCommand` は `PartialEq` を持たない）。
-fn command_tags(commands: &[TalkCommand]) -> Vec<String> {
-    commands
-        .iter()
-        .map(|c| match c {
-            TalkCommand::Start(s) => format!("Start({},{})", s.talk_id.0, s.script),
-            TalkCommand::ResolveChoice { talk_id, id } => format!("Resolve({},{})", talk_id.0, id),
-            TalkCommand::CancelChoice { talk_id } => format!("Cancel({})", talk_id.0),
-        })
-        .collect()
-}
-
 /// 1 回の走行の結果（問い合わせの答え・shiori の記録列・sakura の指示の列）。
 struct Run {
     answers: Vec<Option<String>>,
@@ -75,7 +64,7 @@ fn finish(harness: Harness, answers: Vec<Option<String>>, what: &str) -> Run {
     Run {
         answers,
         recorded,
-        commands: command_tags(&commands),
+        commands: commands.iter().map(command_tag).collect(),
     }
 }
 

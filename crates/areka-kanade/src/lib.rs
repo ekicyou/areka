@@ -14,7 +14,7 @@
 //! - **talk 契約**: talk 起動契約型（[`TalkId`] / [`StartTalk`] / [`TalkDone`] /
 //!   [`TalkEndReason`]）の物理正本は `areka-talk` クレートである。[`talk`] モジュールは
 //!   `areka_kanade::talk::*` という既存の参照パスを保つための再エクスポートに徹し、
-//!   二重定義は行わない。消費側（sakura-engine）も同じく `areka-talk` を直接参照する。
+//!   二重定義は行わない。消費側（areka-sakura）も同じく `areka-talk` を直接参照する。
 //!
 //! ## 依存規律
 //!
@@ -64,7 +64,6 @@ pub use shiori::{
 };
 pub use status::{
     BalloonBinding, ExecutionSnapshot, ExecutionState, ExecutionStateUpdate, ExecutionStatus,
-    ExternalStates,
 };
 pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 pub use translate::{MakotoChain, ScriptExpander, TranslateSeams};
@@ -90,7 +89,7 @@ pub mod events {
 /// SHIORI Resource 照会増分の公開ファサード（DD-9 例外・[`events`] と同じ露出規律）。
 ///
 /// boot 系列の username prefetch（`schedule/boot.rs`・OnInitialize 後・OnFirstBoot 前）で使う
-/// リソース照会構築関数・結果語彙・注入シームを、クレート公開面へ露出する。ghost（タスク 8.2）が
+/// リソース照会構築関数・結果語彙・注入シームを、クレート公開面へ露出する。ghost が
 /// [`spawn_kanade`] へ [`resources::ResourceSink`] を注入し、`tests/` がハーネスの期待値導出
 /// （`expected_call(resources::resource_get("username", ..))`）に用いる唯一の経路（Req 7.1・DD-9）。
 /// 運行状態機械の内部（Phase／State／Action／step 本体）は `pub(crate)` のまま非公開に保つ。

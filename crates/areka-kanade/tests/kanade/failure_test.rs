@@ -48,7 +48,7 @@ use super::common::{
 /// 設計「Error Categories」: ShioriFailure／ShioriDown いずれも Unloading{Fault} を経て
 /// best-effort Unload を発行してから Stopped へ進む。ゆえに Fault 経路の終了では Unload が
 /// 記録列に必ず 1 度現れる（宙吊りせず正規終了経路を通った直接証拠）。
-fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
+fn assert_unload_recorded_once(recorded: &[RecordedCall]) {
     let unload_count = recorded
         .iter()
         .filter(|c| c.method == CallMethod::Unload)
@@ -350,7 +350,7 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
     // OnClose の別れ Value を受けて close talk を 1 本起動する（＝運行が確かに継続していた証拠）。
     let farewell_started = started
         .iter()
-        .filter(|s| s.script == super::common::FIXED_FAREWELL_SCRIPT)
+        .filter(|s| s.script == FIXED_FAREWELL_SCRIPT)
         .count();
     assert_eq!(
         farewell_started, 1,
@@ -360,6 +360,11 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
 
     // 終了系列を確かに通った証拠: 記録列末尾は Unload（close→quit talk→Unload→StopSelf）。
     assert_unload_recorded_once(&recorded);
+    assert_eq!(
+        recorded.last().map(|c| &c.method),
+        Some(&CallMethod::Unload),
+        "記録列の末尾は Unload のはず: {recorded:?}"
+    );
 }
 
 // ============================================================================

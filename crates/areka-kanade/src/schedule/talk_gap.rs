@@ -228,7 +228,7 @@ fn decide(state: &State, marked: &Marked) -> Option<TalkGap> {
         Marked::None => None,
         Marked::Ended(end) => Some(*end),
         // 印の台詞の完了が届かないまま切れ目に来た＝印の番号と今の番号が食い違い、置き換えた台詞が
-        // 終わった（置き換えられた印の台詞の完了は dispatcher か選択の 1 世代の控えが捨てる）。
+        // 終わった（置き換えられた印の台詞の完了は dispatcher か 1 世代の控え（`prev_talk`）が捨てる）。
         Marked::Talk(_) => Some(MarkedEnd::Replaced),
         // 上の腕で返している。
         Marked::AwaitingReply(_) | Marked::BrokenByUser => return None,

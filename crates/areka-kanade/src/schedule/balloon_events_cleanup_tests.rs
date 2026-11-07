@@ -1,4 +1,4 @@
-//! 完了を通らずに相が変わる経路での控えの後始末の檻（areka-P0-balloon-lifecycle-events タスク 2.6）。
+//! 完了を通らずに相が変わる経路での控えの後始末の檻（areka-P0-balloon-lifecycle-events）。
 //!
 //! 中断の控え（`State.user_break_talk`）・預かった時間切れの知らせ（`ShownTalk.timeout_pending`）を
 //! 持ったまま、完了の知らせより先に強制の終了・SHIORI の故障・切替の送り出しの台詞の期限切れ・翻訳の
@@ -14,8 +14,10 @@ use super::super::log_capture::{CapturedEvent, capture};
 use super::super::{Input, Phase, TermCause};
 use super::BreakNote;
 use super::done_tests::{done, field};
-use super::tests::{FINAL, ORIGINAL, feed, reply_value, start_translated, started, steady_none};
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
+use super::tests::{
+    FINAL, ORIGINAL, accept_change, feed, reply_and_start, reply_value, start_translated, started,
+    steady_none,
+};
 use crate::msg::{
     CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
     ShioriFailure, ShioriOutcome,
@@ -227,18 +229,7 @@ fn force_quit_and_shiori_down_drop_held_notes_with_one_talk_gone_line_each() {
 /// 再生している状態。
 fn change_talking(closing: bool) -> (State, TalkId) {
     let mut s = steady_none();
-    feed(
-        &mut s,
-        Input::ChangeGhost(ChangeRequest {
-            target: ChangeTarget {
-                sakura_name: "ポスト".to_string(),
-                name: "R_POST_and_KOMAINU".to_string(),
-                dir: r"C:\areka\ghost\r_post".to_string(),
-            },
-            origin: ChangeOrigin::Manual,
-            raise_event: true,
-        }),
-    );
+    accept_change(&mut s);
     let origin = if closing {
         feed(
             &mut s,
@@ -251,13 +242,7 @@ fn change_talking(closing: bool) -> (State, TalkId) {
     } else {
         "OnGhostChanging"
     };
-    let actions = reply_value(&mut s, ORIGINAL, origin);
-    assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(
-        &mut s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
-    );
-    let (talk, _) = started(&actions);
+    let talk = reply_and_start(&mut s, origin, FINAL);
     assert!(
         matches!(
             s.phase,

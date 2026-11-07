@@ -7,6 +7,7 @@
 //!
 //! 往復は呼出スレッドで同期に走るので、記録はスレッドローカルの捕捉窓で拾える。
 
+use super::tests::get;
 use super::*;
 use crate::schedule::log_capture::{CapturedEvent, capture};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
@@ -16,11 +17,7 @@ use tracing::Level;
 
 /// テスト用 GET 呼出（`OnBoot`・許可表にある固定 ID）。
 fn probe_get_call() -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Static("OnBoot"),
-        references: vec!["master".to_string()],
-        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-    }
+    get(EventId::Static("OnBoot"), &["master"])
 }
 
 /// テスト用 NOTIFY 呼出（`OnInitialize`・許可表にある固定 ID）。
@@ -136,11 +133,7 @@ pub(super) fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Ve
 
 /// 外から頼まれた名前（`EventId::Sstp`）の GET。
 fn probe_sstp_call(event: &str, references: &[&str]) -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Sstp(event.to_string()),
-        references: references.iter().map(|r| r.to_string()).collect(),
-        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-    }
+    get(EventId::Sstp(event.to_string()), references)
 }
 
 /// 送出の檻の `EventId::Sstp` の受理（mcp-kanade-tools 要件 2.1・2.7・6.1）: 検査を満たす名前は
@@ -200,6 +193,10 @@ fn sstp_origin_invalid_name_or_reference_is_not_sent_and_logs_error() {
                 && e.level == Level::ERROR
                 && e.event.as_deref() == Some("event_id_not_allowed")),
             "{event:?}／{references:?} は event_id_not_allowed の error! を残すはず"
+        );
+        assert!(
+            !events.iter().any(|e| e.level == Level::WARN),
+            "{event:?}／{references:?} は取り除く前の生の値で断る（取り除きの WARN を出さない）"
         );
     }
 }

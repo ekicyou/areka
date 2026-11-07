@@ -12,32 +12,19 @@
 use super::*;
 use crate::change::{GapLeft, RaiseOutcome, ShioriMethod};
 use crate::msg::{
-    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseButton, MouseEventKind, MouseInput,
-    ShioriCall, ShioriFailure, ShioriOutcome,
+    ChoiceInput, CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall,
+    ShioriFailure, ShioriOutcome,
 };
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
-use crate::schedule::steady::test_support::base_state;
-use crate::schedule::translate_test_support::change_request;
+use crate::schedule::steady::test_support::expect_get_call;
+use crate::schedule::translate_test_support::config as cfg;
+use crate::schedule::translate_test_support::{change_request, steady_none};
 use crate::schedule::{ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, TermCause, step};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
 
 /// 再生中のトークの番号（`steady_some` に渡す）。
 const TALK: TalkId = TalkId(4);
-
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
-/// `Steady{talk: None}`（終了の保留なし）。
-fn steady_none() -> State {
-    State {
-        phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
-        next_talk_id: 5,
-        ..base_state()
-    }
-}
 
 /// `Steady{talk: Some(TALK)}`（終了の保留なし）。
 fn steady_some() -> State {
@@ -436,16 +423,6 @@ fn is_playing(s: &State, id: TalkId) -> bool {
     matches!(&s.phase, Phase::Steady { talk: Some(active) } if active.talk_id == id)
 }
 
-/// GET の Action から (イベント名, Reference 列) を取り出す。
-fn get_call(action: &Action) -> (String, Vec<String>) {
-    match action {
-        Action::ShioriRequest(ShioriCall::Get { id, references, .. }) => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET の ShioriRequest のはず"),
-    }
-}
-
 /// 印の依頼を送り、その応答の台本で印の台詞（[`MARKED`]）を始めた状態。
 fn marked_talk_playing() -> State {
     let (s, _) = await_marked(steady_none());
@@ -463,7 +440,7 @@ fn marked_request_sends_the_event_by_get_with_the_references_as_given() {
     let (s, actions) = out.expect("step は必ず結果を返す");
     assert_eq!(actions.len(), 1, "印のイベントをちょうど 1 件送る");
     assert_eq!(
-        get_call(&actions[0]),
+        expect_get_call(&actions[0]),
         (SHELL_CHANGING.to_string(), shell_changing().references),
         "Reference は渡したまま"
     );
@@ -507,7 +484,7 @@ fn marked_request_outside_steady_or_with_pending_close_sends_nothing() {
 
 #[test]
 fn marked_request_with_pending_change_sends_nothing_and_leaves_for_ghost_change() {
-    // 再生中に切替が保留になった後の印の依頼: ゴーストへ `OnShellChanging` を送らない（#2）。
+    // 再生中に切替が保留になった後の印の依頼: ゴーストへ `OnShellChanging` を送らない。
     let s = State {
         pending_change: Some(change_request()),
         ..steady_some()
@@ -594,7 +571,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
         &cfg(),
     );
     assert_eq!(actions.len(), 1, "選択はカスケードの GET を 1 件送る");
-    get_call(&actions[0]);
+    expect_get_call(&actions[0]);
     let (s, _) = reply(
         s,
         ShioriOutcome::Value("CHOSEN".to_string(), areka_talk::SecurityLevel::Local),
@@ -612,7 +589,7 @@ fn replacement_by_a_choice_is_detected_apart_from_the_one_generation_stale_slot(
     let mut out = None;
     let ev = capture(|| out = Some(done_of(s, MARKED, TalkEndReason::Ended, false)));
     let (s, _) = out.expect("step は必ず結果を返す");
-    logged_once(&ev, Level::INFO, "talk_done_stale_choice");
+    logged_once(&ev, Level::INFO, "talk_done_stale");
     assert_waiting(&s, "遅れた旧トークの完了の後");
 
     let (mut s, _) = done_of(s, replacing, TalkEndReason::Ended, false);
@@ -640,7 +617,7 @@ fn choice_timeout_release_of_the_marked_talk_is_completed() {
         },
         &cfg(),
     );
-    assert_eq!(get_call(&actions[0]).0, "OnChoiceTimeout");
+    assert_eq!(expect_get_call(&actions[0]).0, "OnChoiceTimeout");
     let (s, actions) = reply(s, ShioriOutcome::NoContent, "OnChoiceTimeout");
     assert!(
         matches!(actions.as_slice(), [Action::CancelChoice { talk_id }] if *talk_id == MARKED),

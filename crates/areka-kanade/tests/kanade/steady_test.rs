@@ -36,7 +36,7 @@
 //! # active talk 中 Tick の NOTIFY（Ref3=0）——統合層で被覆する
 //! 「再生中の Tick が OnSecondChange を NOTIFY（Ref3=0・応答無視）で発行する」（DD-6・Req 3.3）は
 //! 純粋状態機械のユニットテスト（`src/schedule/steady_flow_tests.rs` の `steady_some_tick_emits_notify`／
-//! `steady_some_non_mouse_value_is_discarded_dd6`）でも被覆されるが、本ファイルは**統合層でも**
+//! `steady_some_second_change_value_is_discarded_dd6`）でも被覆されるが、本ファイルは**統合層でも**
 //! これを決定的に検証する（`active_talk_tick_emits_notify_ref3_zero`）。
 //!
 //! 決定的な active-talk 窓は、保留機能付きハーネス（`spawn_harness_gated`＋`SakuraGate`）で作る:
@@ -155,26 +155,15 @@ fn steady_no_content_produces_no_start_talk() {
 
     // (2) 204 の間も pump の問い合わせ（OnSecondChange GET・Ref3=1）は現に発行されている
     //     （＝ゲートが Steady{None} で開き、GET を出し、204 で talk を起こさなかった経路の証拠）。
-    //     GET の Reference 構成が events 表の正典（Ref3="1"）と一致することを 1 件抽出して確認する
-    //     （時刻依存の Ref0 はここでは問わず、Ref3=1＝pump 問い合わせであることを検証する）。
-    let a_get = driven
-        .recorded
-        .iter()
-        .find(|c| c.method == CallMethod::Get && c.id == "OnSecondChange")
-        .expect("OnSecondChange GET が記録列に存在するはず");
-    assert_eq!(
-        a_get.references.len(),
-        4,
-        "OnSecondChange の References は 4 要素（Ref0..Ref3）"
-    );
-    assert_eq!(
-        a_get.references[3], "1",
-        "GET pump の Ref3 は \"1\"（talk 再生可能・問い合わせ）"
-    );
-    // pump GET は talk 非アクティブゆえ Status ヘッダを持たない（DD-IT-3/DD-IT-5・5.1）。
-    assert_eq!(
-        a_get.status, None,
-        "Steady{{None}} の pump GET は Status 行を出さない（talk 非アクティブ）"
+    //     最初の Tick の GET が events 表導出（Ref3="1"・talk 非アクティブゆえ Status なし）と一致する。
+    let first_get = expected_call(events::on_second_change(
+        MonotonicMs(1_000),
+        &ExecutionSnapshot::INACTIVE,
+    ));
+    assert!(
+        driven.recorded.contains(&first_get),
+        "events 表導出の OnSecondChange GET（Ref3=1・Status なし）が記録列に現れるはず: {:?}",
+        driven.recorded
     );
 }
 
@@ -260,21 +249,11 @@ fn sporadic_value_starts_unique_talk() {
         driven.recorded
     );
 
-    // (5) 送出 ID の egress スイープ（Testing Strategy #13・Req 3.2）: 自発トークが確実に発火したこの run の
-    //     記録列のどの呼出も OnTalk／OnHour でない（kanade は恒久的に送出しない。自発トークは pasta が
-    //     OnSecondChange 内部で生成する＝areka は OnTalk/OnHour イベントを足さない）。
-    assert!(
-        driven
-            .recorded
-            .iter()
-            .all(|c| c.id != "OnTalk" && c.id != "OnHour"),
-        "記録列に OnTalk／OnHour が現れてはならない（Req 3.2）: {:?}",
-        driven.recorded
-    );
-
-    // (6) Unload を除く全 GET/NOTIFY の id が許可集合の要素（ホワイトリストが end-to-end で成立・Req 3.1）。
+    // (5) Unload を除く全 GET/NOTIFY の id が許可集合の要素（ホワイトリストが end-to-end で成立・Req 3.1）。
     //     submit ガードと同じく「イベント許可 ∨ リソース許可」で判定する——boot prefetch の `username`
     //     はイベント檻とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・R4.1）を通る。
+    //     `OnTalk`／`OnHour` はどちらの許可集合にも無いので、自発トークが確実に発火したこの run で
+    //     それらが送られていないこと（Testing Strategy #13・Req 3.2）もこの掃引が見る。
     for call in &driven.recorded {
         if call.method == CallMethod::Unload {
             // Unload（id="Unload"）は events 表対象外の正規終了経路ゆえ許可集合の被覆から除外する。
@@ -508,17 +487,9 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
         .filter(|c| c.method == CallMethod::Get && c.id == "OnSecondChange")
         .collect();
 
-    // (core) 注入 Tick 3 本につき OnSecondChange GET はちょうど 3 件——欠落なし・重複なし。
-    //   < 3 なら tick 欠落（catch-up 破綻）、> 3 なら二重発火（in-flight ≤ 1 破綻）。
-    assert_eq!(
-        second_change_gets.len(),
-        3,
-        "注入 Tick 3 本に対し OnSecondChange GET はちょうど 3 件（catch-up・in-flight ≤ 1）: {:?}",
-        recorded
-    );
-
-    // (order) 3 件は now 昇順（inbox/処理順）で現れ、各々 events 表導出の GET（Ref3=1・Status なし）と
-    //   一致する。Ref0 は now/3_600_000（時）で 1→2→3 と異なる＝処理順が now 昇順であることを構造的に
+    // (core・order) 注入 Tick 3 本につき OnSecondChange GET はちょうど 3 件——欠落なし・重複なし
+    //   （< 3 なら tick 欠落＝catch-up 破綻、> 3 なら二重発火＝in-flight ≤ 1 破綻）。3 件は now 昇順
+    //   （inbox/処理順）で現れ、各々 events 表導出の GET（Ref3=1・Status なし）と一致する。Ref0 は now/3_600_000（時）で 1→2→3 と異なる＝処理順が now 昇順であることを構造的に
     //   証明する（ハードコードしない・Ref0 の値そのものは `events_tests.rs` の `on_second_change_*` が見る）。
     let expected_sequence: Vec<RecordedCall> = [now1, now2, now3]
         .into_iter()

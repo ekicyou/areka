@@ -6,7 +6,9 @@
 
 use super::log_capture::CapturedEvent;
 use super::sstp::BOOT_GREETING_ORIGIN;
-use super::{Action, ActiveTalk, Input, Phase, State, current_talk_id, phase_label, step};
+use super::{
+    Action, ActiveTalk, Input, Phase, State, TermCause, current_talk_id, phase_label, step,
+};
 use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
 use crate::msg::{KanadeConfig, MonotonicMs, ShioriOutcome};
 use crate::talk::TalkId;
@@ -58,6 +60,67 @@ pub(crate) fn steady(talk: Option<ActiveTalk>) -> State {
         next_talk_id: 10,
         ..State::initial()
     }
+}
+
+/// `Steady{talk: None}`（時刻 1,000・次の番号 5・保留と控えなし）。ここから実際の入力で前提へ進める。
+pub(crate) fn steady_none() -> State {
+    State {
+        phase: Phase::Steady { talk: None },
+        last_now: Some(MonotonicMs(1_000)),
+        next_talk_id: 5,
+        ..State::initial()
+    }
+}
+
+/// 定常でない相の状態を 1 つずつ（次の番号 10・ほかは初期値）。外からの入口が受け付けない表の行。
+pub(crate) fn non_steady_states() -> Vec<(&'static str, State)> {
+    let deadline = Some(MonotonicMs(9_000));
+    let talk_id = TalkId(9);
+    [
+        ("Idle", Phase::Idle),
+        ("BootInit", Phase::BootInit),
+        ("BootPrefetch", Phase::BootPrefetch),
+        ("BootType", Phase::BootType),
+        ("BootMain", Phase::BootMain),
+        ("BootVersion{None}", Phase::BootVersion { talk: None }),
+        (
+            "BootVersion{Some}",
+            Phase::BootVersion {
+                talk: active(1, BOOT_GREETING_ORIGIN),
+            },
+        ),
+        ("ClosePending", Phase::ClosePending),
+        ("CloseTalkWait", Phase::CloseTalkWait { talk_id, deadline }),
+        ("ChangePending", Phase::ChangePending),
+        (
+            "ChangeTalkWait",
+            Phase::ChangeTalkWait { talk_id, deadline },
+        ),
+        ("ChangeClosePending", Phase::ChangeClosePending),
+        (
+            "ChangeCloseTalkWait",
+            Phase::ChangeCloseTalkWait { talk_id, deadline },
+        ),
+        (
+            "Unloading",
+            Phase::Unloading {
+                cause: TermCause::Quit,
+            },
+        ),
+        ("Stopped", Phase::Stopped),
+    ]
+    .into_iter()
+    .map(|(label, phase)| {
+        (
+            label,
+            State {
+                phase,
+                next_talk_id: 10,
+                ..State::initial()
+            },
+        )
+    })
+    .collect()
 }
 
 pub(crate) fn change_request() -> ChangeRequest {

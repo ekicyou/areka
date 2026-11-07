@@ -102,12 +102,12 @@ const REF2_OVERLAP_M1: &str = "0";
 /// OnMouseMove Ref2（ホイール回転量）の値（Req2.4）。
 ///
 /// 移動の Ref2 は常に "0"（ホイールの量は `OnMouseWheel` が運ぶ）。
-pub(crate) const REF2_WHEEL_M1: &str = "0";
+const REF2_WHEEL_M1: &str = "0";
 /// マウス系イベント Ref6（入力デバイス種）の M1 固定値（DD-IE-6）。
 ///
 /// M1 は物理マウスのみを対象とするため常に "mouse"。touch/pen/eraser の区別は
 /// α 後のシーム（呼び手がデバイス種を渡す形へ）として残す。
-pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
+const REF6_DEVICE_MOUSE: &str = "mouse";
 
 /// **スケジューラ起源**（[`crate::msg::EventId::Static`]）で送出し得るイベント ID の
 /// 確定ホワイトリスト（Req3.1）。
@@ -116,9 +116,8 @@ pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 /// 実行時に生成される任意名は 1 つも載らない（この性質は表への追加が起きても不変）。
 /// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
 ///
-/// 選択関連の固定 3 ID（`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）は
-/// choice-select-events（DD-2）で additive 追加した——いずれも正典固定 ID であり、マウス系 2 種の
-/// 追加と同じ前例に従う。一方 `\q[タイトル,OnID]` 由来の**任意名イベント**（emo2 唯一の依存形・
+/// 選択関連の固定 3 ID（`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）も
+/// 正典固定 ID である（DD-2）。一方 `\q[タイトル,OnID]` 由来の**任意名イベント**（emo2 唯一の依存形・
 /// menu.pasta:15 実物）は固定 const 表には載らず、[`is_allowed_choice_event`] という
 /// **出所別の受理規則**で検証する（DD-1／DD-2・id 型は [`crate::msg::EventId::Choice`] が
 /// 任意名を逐語で運ぶ）。ゆえに本表の恒久禁止（`OnTalk`／`OnHour`）は選択起源へ波及しない
@@ -417,7 +416,7 @@ pub fn on_ghost_changed(
 /// 欠番は呼び手が空文字で埋める（本関数は詰めも補いもしない）。`id` は、汎用の入口では
 /// [`allowed_static`] を通した許可表の綴り（要件 7.2・7.3）、ネットワーク更新の起動の根
 /// （[`BootOrigin::Updated`]）では呼び手の定数のまま（本関数は検査しない）。許可表の最終の
-/// 検査は送出点（`actor::round_trip_request`）が行う。
+/// 検査は送出点（`actor::round_trip_raw`）が行う。
 pub fn raise(
     id: &'static str,
     references: Vec<String>,
@@ -640,7 +639,7 @@ pub fn on_mouse_drag_end(
 }
 
 /// マウスの GET の共通の組み立て（Ref0..6 の固定の並び `[x, y, ref2, scope, region, ref5, "mouse"]`・
-/// Ref4 の `None` は空文字）。移動・ダブルクリック・ドラッグの 2 つがこれを呼ぶ。
+/// Ref4 の `None` は空文字）。マウスの GET の組み立てはすべてこれを呼ぶ。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn mouse_get(
     id: &'static str,

@@ -1,4 +1,4 @@
-//! トークの完了の後の判断（表 B）の檻（areka-P0-balloon-lifecycle-events タスク 2.3）。
+//! トークの完了の後の判断（表 B）の檻（areka-P0-balloon-lifecycle-events）。
 //!
 //! 表 B の全行と、表 A の各腕（完了の振り分け）から表 B への到達を、最上位の `step` を直接駆動して
 //! 固定する。時刻は `Tick` で注入する。B2 の「終了の要求を保留している」は完了の振り分けからは
@@ -6,11 +6,12 @@
 
 use super::super::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use super::super::{ActiveTalk, Input, Phase};
-use super::tests::{FINAL, ORIGINAL, feed, reply_value, start_translated, started, steady_none};
-use super::{ShownTalk, after_talk_done};
-use crate::change::{
-    CancelReason, ChangeOrigin, ChangeRequest, ChangeTarget, GapRaise, KanadeNotice, ShioriMethod,
+use super::tests::{
+    FINAL, ORIGINAL, accept_change, feed, reply_and_start, reply_value, start_translated, started,
+    steady_none,
 };
+use super::{ShownTalk, after_talk_done};
+use crate::change::{CancelReason, GapRaise, KanadeNotice, ShioriMethod};
 use crate::msg::{CloseReason, MonotonicMs, ShioriCall, ShioriOutcome};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::{Action, State};
@@ -301,33 +302,6 @@ fn b1_choice_timeout_release_sends_no_balloon_break() {
 
 // --- 表 A の各腕から: 送る（切替の中止の知らせが GET より先） ---
 
-/// 定常からゴーストの切替を受理する（`OnGhostChanging` の応答待ちへ）。
-fn accept_change(s: &mut State) {
-    feed(
-        s,
-        Input::ChangeGhost(ChangeRequest {
-            target: ChangeTarget {
-                sakura_name: "ポスト".to_string(),
-                name: "R_POST_and_KOMAINU".to_string(),
-                dir: r"C:\areka\ghost\r_post".to_string(),
-            },
-            origin: ChangeOrigin::Manual,
-            raise_event: true,
-        }),
-    );
-}
-
-/// 台本の応答を翻訳して再生を始める。
-fn reply_and_start(s: &mut State, origin: &'static str) -> TalkId {
-    let actions = reply_value(s, ORIGINAL, origin);
-    assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(
-        s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
-    );
-    started(&actions).0
-}
-
 /// 中断して止まり終えた結果が「切替の中止の知らせ → OnBalloonBreak」の順であることを確かめる。
 fn assert_cancelled_then_break(s: &mut State, talk: TalkId, scope: u32) {
     feed(
@@ -365,7 +339,7 @@ fn assert_cancelled_then_break(s: &mut State, talk: TalkId, scope: u32) {
 fn a4_ghost_changing_talk_break_sends_after_cancel_notice() {
     let mut s = steady_none();
     accept_change(&mut s);
-    let talk = reply_and_start(&mut s, "OnGhostChanging");
+    let talk = reply_and_start(&mut s, "OnGhostChanging", FINAL);
     assert!(matches!(s.phase, Phase::ChangeTalkWait { .. }));
     assert_cancelled_then_break(&mut s, talk, 0);
 }
@@ -382,7 +356,7 @@ fn a4_change_farewell_talk_break_sends_after_cancel_notice() {
             origin: "OnGhostChanging",
         },
     );
-    let talk = reply_and_start(&mut s, "OnClose");
+    let talk = reply_and_start(&mut s, "OnClose", FINAL);
     assert!(matches!(s.phase, Phase::ChangeCloseTalkWait { .. }));
     assert_cancelled_then_break(&mut s, talk, 1);
 }
@@ -402,7 +376,7 @@ fn a4_shell_changing_talk_break_sends() {
             }),
         },
     );
-    let talk = reply_and_start(&mut s, "OnShellChanging");
+    let talk = reply_and_start(&mut s, "OnShellChanging", FINAL);
     feed(
         &mut s,
         Input::UserBreak {
@@ -442,7 +416,7 @@ fn a4_close_farewell_break_sends_nothing() {
             reason: CloseReason::System,
         },
     );
-    let talk = reply_and_start(&mut s, "OnClose");
+    let talk = reply_and_start(&mut s, "OnClose", FINAL);
     assert!(matches!(s.phase, Phase::CloseTalkWait { .. }));
     feed(
         &mut s,

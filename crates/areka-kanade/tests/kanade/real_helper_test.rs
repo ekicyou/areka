@@ -15,13 +15,12 @@
 //! spawn→HELLO pump→LOAD（`send_request(MsgTag::Load, ..)`）の接続確立手順は kanade の責務外で、
 //! テスト側の connect クロージャが自前結線する。これも上記既存 E2E の手順
 //! （`ParentMessageWindow::create` → `spawn` → `pump_until_hello_or` → `send_request(Load)`）を
-//! 忠実に写している。connect が成功すれば `Box<dyn ShioriBackend>`（実体は
-//! `ShioriConnection { window, helper: HelperLifecycle::new(helper) }`）を返し、失敗は
-//! `Err(String)`（→ `ShioriDown`）で返す。
+//! 忠実に写している。connect が成功すれば `Box<dyn ShioriBackend>`（実体は `ShioriConnection`）を
+//! 返し、失敗は `Err(String)`（→ `ShioriDown`）で返す。
 //!
-//! # 親窓 1 枚制約
-//! 親 message-only 窓は同一プロセスで 2 組独立生成すると 2 組目が失敗する既知制約ゆえ、本追験は
-//! 単一の `#[test]` に集約する（既存 host32 E2E と同じ前提）。
+//! # 親窓の生成は直列化する
+//! 親 message-only 窓は同じ瞬間に 2 つ生成すると 2 つ目が失敗するため、生成の瞬間だけを
+//! [`WINDOW_CREATE_SERIAL`] で直列化する（生成後の共存は問題ない）。
 
 use std::path::PathBuf;
 use std::time::Duration;

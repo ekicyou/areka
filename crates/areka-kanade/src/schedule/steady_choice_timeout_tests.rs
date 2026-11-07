@@ -1,6 +1,6 @@
 use super::test_support::{
-    assert_no_second_change, choice_input_of, config, expect_get_call, expect_ledger, status_wire,
-    steady_some, steady_with_ledger,
+    choice_input_of, config, expect_get_call, expect_ledger, status_wire, steady_some,
+    steady_with_ledger,
 };
 use super::*;
 use crate::msg::ShioriCall;
@@ -9,7 +9,7 @@ use crate::schedule::{ActiveTalk, step};
 use crate::talk::{StartTalk, TalkEndReason};
 
 // ============================================================
-// 選択肢タイムアウト（タスク 4.5・C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
+// 選択肢タイムアウト（C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
 // ============================================================
 //
 // 完了状態の要求は「**注入時刻のみ**で期限到達・イベント発行・空応答時の解除までが再現し、
@@ -73,7 +73,11 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
         },
         &config(),
     );
-    assert_eq!(actions.len(), 1, "期限到達 Tick は GET を 1 件だけ発行する");
+    assert_eq!(
+        actions.len(),
+        1,
+        "期限到達 Tick は GET を 1 件だけ発行する（当該周期では通常の周期送出を行わない・規則 5）"
+    );
     let (id, refs) = expect_get_call(&actions[0]);
     assert_eq!(
         id, "OnChoiceTimeout",
@@ -84,8 +88,6 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
         vec![script.to_string()],
         "Ref0＝タイムアウトした選択肢を含むトークの起動スクリプト（Req3.4・DD-10）"
     );
-    // 当該周期では通常の周期送出を行わない（規則 5）。
-    assert_no_second_change(&actions);
     assert!(
         matches!(expect_ledger(&next).phase, ChoicePhase::TimeoutInFlight),
         "期限到達で帳簿は TimeoutInFlight へ進む"
@@ -99,7 +101,7 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
         Some(MonotonicMs(32_000)),
         "発行有無に依らず last_now は進む（既存規律）"
     );
-    // 4.4 申し送り: 5 番目の呼出点にも choosing が載る（TimeoutInFlight も選択待ち継続中）。
+    // OnChoiceTimeout の GET にも choosing が載る（TimeoutInFlight も選択待ち継続中）。
     assert_eq!(
         status_wire(&actions[0]),
         Some("talking,choosing".to_string()),
@@ -212,7 +214,11 @@ fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
         },
         &cfg,
     );
-    assert_eq!(resumed.len(), 1, "次 Tick から周期送出が再開する（規則 5）");
+    assert_eq!(
+        resumed.len(),
+        1,
+        "次 Tick から周期送出が再開する（OnChoiceTimeout を二重発行しない・規則 5）"
+    );
     match &resumed[0] {
         Action::ShioriRequest(ShioriCall::Notify { id, status, .. }) => {
             assert_eq!(id.as_str(), "OnSecondChange");
@@ -227,14 +233,6 @@ fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
     assert!(
         matches!(expect_ledger(&next).phase, ChoicePhase::TimeoutInFlight),
         "再開した pump は帳簿を触らない（二重発行もしない）"
-    );
-    assert_eq!(
-        resumed
-            .iter()
-            .filter(|a| matches!(a, Action::ShioriRequest(ShioriCall::Get { .. })))
-            .count(),
-        0,
-        "OnChoiceTimeout を二重発行しない"
     );
 }
 
@@ -309,14 +307,8 @@ fn choice_timeout_no_content_cancels_choice() {
         [Action::CancelChoice { talk_id }] => {
             assert_eq!(*talk_id, TalkId(3), "解除対象は選択待ちの talk（Req7.5）")
         }
-        _ => panic!("204 は CancelChoice のみを発行する（DD-11・F3）"),
+        _ => panic!("204 は CancelChoice のみを発行し、起動も解決も行わない（DD-11・F3・Req7.5）"),
     }
-    assert!(
-        !actions
-            .iter()
-            .any(|a| matches!(a, Action::StartTalk(_) | Action::ResolveChoice { .. })),
-        "204 は起動も解決も行わない（解除して終了させる・Req7.5）"
-    );
     assert!(next.choice.is_none(), "解除で帳簿は消える（Req6.2／7.5）");
     assert_eq!(next.next_talk_id, 6, "204 は採番しない");
     match next.phase {
@@ -423,7 +415,7 @@ fn tick_after_timeout_cancel_drops_choosing() {
 }
 
 // ============================================================
-// 帳簿の掃除・選択起因の失敗例外（タスク 4.6・C4 規則 7／8・DD-12・Req1.3／4.5／6.2）
+// 帳簿の掃除・選択起因の失敗例外（C4 規則 7／8・DD-12・Req1.3／4.5／6.2）
 // ============================================================
 
 use crate::msg::ShioriFailure;
@@ -835,6 +827,6 @@ fn choice_happy_path_emits_no_error_level_logs() {
         } => assert_eq!(talk_id, TalkId(6), "遅延 Done は新 talk を殺さない"),
         _ => panic!("expected Steady{{Some(new)}} preserved"),
     }
-    assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
+    assert_logged(&ev, Level::INFO, "talk_done_stale");
     assert_no_error_logs(&ev);
 }

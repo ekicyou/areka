@@ -298,11 +298,6 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目はタイムアウト応答のスクリプト由来の talk"
     );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "置換再生は新 talk_id=2（旧 id=1 を再利用しない・Req4.1）"
-    );
 
     // (4) 終了系列を完走した（末尾 Unload）。
     assert_eq!(

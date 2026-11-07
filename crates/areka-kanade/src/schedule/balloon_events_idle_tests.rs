@@ -1,35 +1,15 @@
-//! 再生中のトークが無いときのダブルクリック（表 C）の檻（areka-P0-balloon-lifecycle-events タスク 2.4）。
+//! 再生中のトークが無いときのダブルクリック（表 C）の檻（areka-P0-balloon-lifecycle-events）。
 //!
 //! 最上位の `step` に中断の合図（`Input::UserBreak`）を入れて駆動する。定常でない相・終了の保留は
 //! 本番の流れで作ると長くなるので、トークを 1 つ再生し終えた控えを持つ状態の相だけを差し替える。
 
 use super::super::log_capture::{assert_not_logged, logged_once};
 use super::super::{Input, Phase, TermCause};
-use super::done_tests::{
-    assert_no_balloon_event, assert_not_sent, done, feed_capturing, field, gets,
-};
-use super::tests::{FINAL, start_translated, steady_none};
+use super::done_tests::{assert_no_balloon_event, assert_not_sent, feed_capturing, field, gets};
+use super::tests::{FINAL, steady_after_talk, steady_none};
 use crate::msg::CloseReason;
-use crate::schedule::{Action, State};
-use crate::talk::{TalkEndReason, TalkId};
+use crate::schedule::Action;
 use tracing::Level;
-
-/// 定常でトークを再生し終え、読み終えたバルーンが出ている状態（控えはそのトーク）。
-fn steady_after_talk() -> (State, TalkId) {
-    let mut s = steady_none();
-    let talk = start_translated(&mut s, 2_000, FINAL);
-    finish(&mut s, talk);
-    (s, talk)
-}
-
-/// 再生中のトークを自分で最後まで流れて終わらせる。
-fn finish(s: &mut State, talk: TalkId) {
-    super::tests::feed(s, done(talk, TalkEndReason::Ended, false));
-    assert!(
-        matches!(s.phase, Phase::Steady { talk: None }),
-        "前提: 再生中のトークの無い定常"
-    );
-}
 
 /// C4: 再生中のトークが無い定常のダブルクリックで、`OnBalloonClose`（Reference0＝直前に終えた
 /// トークの台本）を 1 本送る。何も止めず、中断の控えも立てない（要件 3.1・3.2・7.1）。

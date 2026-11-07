@@ -5,7 +5,7 @@
 //! 直後にどの根が出るか・根の応答の既存の腕（204 → `OnBoot`・台本 → `OnBoot` を飛ばす）が
 //! 変わらず効くか・定常に入った時点で通知がちょうど 1 件出るかを `step` 経由で固定する。
 
-use super::test_support::{assert_get, assert_notify, cfg, get_ids};
+use super::test_support::{assert_get, assert_notify, cfg, drive_to_prefetch, get_ids, reply};
 use super::*;
 use crate::change::{BootOrigin, ChangedFrom, KanadeNotice};
 use crate::msg::ShioriCall;
@@ -41,20 +41,9 @@ fn updated() -> BootOrigin {
     }
 }
 
-/// SHIORI の応答を入れる（翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きを返す）。
-fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (State, Vec<Action>) {
-    let input = Input::ShioriReply {
-        outcome,
-        origin: "test",
-    };
-    crate::schedule::translate_test_support::pass_translate(step(s, input, c), c)
-}
-
 /// Boot → OnInitialize 完了 → username 照会 204 まで進め、照会の応答が返した Action 列を返す。
 fn drive_past_prefetch(c: &KanadeConfig) -> (State, Vec<Action>) {
-    let (s, _) = step(State::initial(), Input::Boot, c);
-    let (s, _) = reply(s, ShioriOutcome::Notified, c);
-    reply(s, ShioriOutcome::NoContent, c)
+    reply(drive_to_prefetch(c), ShioriOutcome::NoContent, c)
 }
 
 /// 根（GET）を ID と Reference の組へ写す（`ShioriCall` は `PartialEq` を持たない）。

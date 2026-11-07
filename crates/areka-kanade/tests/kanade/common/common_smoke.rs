@@ -1,8 +1,6 @@
 //! 疎通テスト（観測可能な完了条件）。
 //!
-//! `common/mod.rs`（1,657 行）の `#[cfg(test)] mod smoke` をそのまま 1 ファイルへ出した
-//! もの（タスク 8.2・設計判断 #2「1 テストモジュール＝1 テストファイル」）。モジュール名
-//! `smoke` は保存しているのでテスト完全修飾名は変わらない。
+//! 1 テストモジュール＝1 テストファイル（設計判断 #2）。モジュール名は `smoke`。
 
 use areka_actor::reply_channel;
 use areka_kanade::{
@@ -109,13 +107,13 @@ fn mock_sakura_records_and_returns_talkdone() {
     sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
 }
 
-/// task 1.4（design Testing Strategy 冒頭・C7 Ordering / delivery）: mock sakura sink が
+/// design Testing Strategy 冒頭・C7 Ordering / delivery: mock sakura sink が
 /// [`TalkCommand`] 3 形の**到着順**を記録する。
 ///
 /// `TalkCommand` は単一チャンネルを流れることで FIFO 順序保存が契約（DD-4 の前提）であり、
 /// その観測面が本記録列である。ここでは Start→Resolve→Cancel→Start を投函し、記録列が
 /// **投函順そのまま**であること（＝解決系と起動系が別扱いされず 1 本の順序に載ること）を固定する。
-/// `started()` は `TalkCommand::Start` の射影であり、既存檻の意味は不変であることも併せて確認する。
+/// `started()` が `TalkCommand::Start` の射影であることも併せて確認する。
 #[test]
 fn mock_sakura_records_talk_command_arrival_order() {
     use areka_kanade::talk::TalkCommand;
@@ -190,7 +188,7 @@ fn mock_sakura_records_talk_command_arrival_order() {
         other => panic!("commands[3] は Start(2) のはず: {other:?}"),
     }
 
-    // `started()` は Start の射影（既存檻の意味不変・Resolve/Cancel は現れない）。
+    // `started()` は Start の射影（Resolve/Cancel は現れない）。
     let started = sakura.started();
     assert_eq!(started.len(), 2);
     assert_eq!(started[0].talk_id, TalkId(1));
@@ -200,11 +198,11 @@ fn mock_sakura_records_talk_command_arrival_order() {
     sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
 }
 
-/// 4.1 配管の疎通: マウス GET へ script Value と 204 を任意注入でき、mock がそれを返す。
+/// 配管の疎通: マウス GET へ script Value と 204 を任意注入でき、mock がそれを返す。
 ///
 /// `Fixture::with_response` で `OnMouseMove` に script を注入・`OnMouseDoubleClick` は
 /// 未注入（既定 204）とし、events 表から導出した両 GET を送って注入どおりの [`ShioriOutcome`]
-/// が返ることを確認する（4.2／4.3 の (c)/(d) 檻の土台＝注入点が実在することの証明）。
+/// が返ることを確認する（マウスの檻の土台＝注入点が実在することの証明）。
 #[test]
 fn mock_shiori_injects_mouse_response() {
     const MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
@@ -256,7 +254,7 @@ fn mock_shiori_injects_mouse_response() {
         _ => panic!("expected 204 (NoContent) for un-injected OnMouseDoubleClick"),
     }
 
-    // 両 GET が events 導出の期待値どおり記録される（Ref layout 込みの突合は 4.2／4.3 が担う）。
+    // 両 GET が events 導出の期待値どおり記録される（Ref layout 込みの突合は `mouse_test_event_layout_tests` が担う）。
     let recorded = shiori.recorded();
     assert_eq!(recorded.len(), 2);
     assert_eq!(recorded[0].id, "OnMouseMove");

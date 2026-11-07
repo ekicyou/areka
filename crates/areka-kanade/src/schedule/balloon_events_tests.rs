@@ -7,25 +7,21 @@
 //! 2.2・3.2・7.2）。表 B の檻は `balloon_events_done_tests.rs` に置き、ここの補助を使う。
 
 use super::super::log_capture::{capture, logged_once};
-use super::super::steady::test_support::base_state;
 use super::super::{Input, Phase, step};
+use super::done_tests::done;
 use super::{BreakNote, ShownTalk};
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
-use crate::msg::{
-    KanadeConfig, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriOutcome,
-};
+use crate::msg::{MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriOutcome};
+use crate::schedule::translate_test_support::change_request;
 use crate::schedule::{Action, State};
-use crate::talk::{ScriptOrigin, TalkId};
+use crate::talk::{ScriptOrigin, TalkEndReason, TalkId};
 use tracing::Level;
+
+pub(super) use crate::schedule::translate_test_support::config as cfg;
 
 /// SHIORI が返す元の台本。
 pub(super) const ORIGINAL: &str = "\\0元の台本\\e";
 /// 翻訳の結果（最終の台本）。
 pub(super) const FINAL: &str = "\\0最終の台本\\e";
-
-pub(super) fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 /// `Steady{talk: None}`（終了の保留なし・控えなし・次の番号 5）。
 pub(super) fn steady_none() -> State {
@@ -33,7 +29,7 @@ pub(super) fn steady_none() -> State {
         phase: Phase::Steady { talk: None },
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        ..base_state()
+        ..State::initial()
     }
 }
 
@@ -66,15 +62,9 @@ pub(super) fn started(actions: &[Action]) -> (TalkId, &str) {
         .expect("再生の開始があるはず")
 }
 
-/// 毎秒のポンプの応答で `ORIGINAL` を返し、翻訳の結果 `final_script` で再生を始める。
-pub(super) fn start_translated(s: &mut State, now: u64, final_script: &str) -> TalkId {
-    feed(
-        s,
-        Input::Tick {
-            now: MonotonicMs(now),
-        },
-    );
-    let actions = reply_value(s, ORIGINAL, "OnSecondChange");
+/// `origin` の応答で `ORIGINAL` を返し、翻訳の結果 `final_script` で再生を始める。
+pub(super) fn reply_and_start(s: &mut State, origin: &'static str, final_script: &str) -> TalkId {
+    let actions = reply_value(s, ORIGINAL, origin);
     assert!(
         matches!(actions.as_slice(), [Action::Translate(_)]),
         "台本の応答は翻訳へ預けられる"
@@ -86,6 +76,39 @@ pub(super) fn start_translated(s: &mut State, now: u64, final_script: &str) -> T
         ))),
     );
     started(&actions).0
+}
+
+/// 毎秒のポンプの応答で `ORIGINAL` を返し、翻訳の結果 `final_script` で再生を始める。
+pub(super) fn start_translated(s: &mut State, now: u64, final_script: &str) -> TalkId {
+    feed(
+        s,
+        Input::Tick {
+            now: MonotonicMs(now),
+        },
+    );
+    reply_and_start(s, "OnSecondChange", final_script)
+}
+
+/// 定常からゴーストの切替を受理する（`OnGhostChanging` の応答待ちへ）。
+pub(super) fn accept_change(s: &mut State) {
+    feed(s, Input::ChangeGhost(change_request()));
+}
+
+/// 再生中のトークを自分で最後まで流れて終わらせる。
+pub(super) fn finish(s: &mut State, talk: TalkId) {
+    feed(s, done(talk, TalkEndReason::Ended, false));
+    assert!(
+        matches!(s.phase, Phase::Steady { talk: None }),
+        "前提: 再生中のトークの無い定常"
+    );
+}
+
+/// 定常でトークを再生し終え、読み終えたバルーンが出ている状態（控えはそのトーク）。
+pub(super) fn steady_after_talk() -> (State, TalkId) {
+    let mut s = steady_none();
+    let talk = start_translated(&mut s, 2_000, FINAL);
+    finish(&mut s, talk);
+    (s, talk)
 }
 
 /// 翻訳の後の最終の台本が控えに入り、送り済み・預かりの印は新しいトークで下りる（要件 1.2・2.2・3.2）。
@@ -139,18 +162,7 @@ fn shown_talk_keeps_the_final_script_after_translation() {
 #[test]
 fn shown_talk_keeps_the_change_farewell_script() {
     let mut s = steady_none();
-    feed(
-        &mut s,
-        Input::ChangeGhost(ChangeRequest {
-            target: ChangeTarget {
-                sakura_name: "ポスト".to_string(),
-                name: "R_POST_and_KOMAINU".to_string(),
-                dir: r"C:\areka\ghost\r_post".to_string(),
-            },
-            origin: ChangeOrigin::Manual,
-            raise_event: true,
-        }),
-    );
+    accept_change(&mut s);
     feed(
         &mut s,
         Input::ShioriReply {
@@ -159,13 +171,7 @@ fn shown_talk_keeps_the_change_farewell_script() {
         },
     );
     assert!(matches!(s.phase, Phase::ChangeClosePending));
-    let actions = reply_value(&mut s, ORIGINAL, "OnClose");
-    assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(
-        &mut s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
-    );
-    let (talk_id, _) = started(&actions);
+    let talk_id = reply_and_start(&mut s, "OnClose", FINAL);
     assert!(
         matches!(s.phase, Phase::ChangeCloseTalkWait { talk_id: t, .. } if t == talk_id),
         "別れの台詞の完了待ちへ進む"

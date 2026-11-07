@@ -3,11 +3,9 @@
 //! ゴースト自身・`raise_event` の応答の台本と外からの台本の 3 つで、偽の SHIORI が受けた要求の
 //! カテゴリから導く 4 つのヘッダが要件どおりになり、`Reference*` の並びが今のままであることを確かめる。
 
-use std::sync::mpsc;
-use std::thread;
-
+use super::tests::fake_shiori;
 use super::*;
-use crate::msg::{EventId, ShioriCall, ShioriMsg, ShioriOutcome};
+use crate::msg::{EventId, ShioriCall, ShioriOutcome};
 use crate::request_origin::{OriginWire, RequestOrigin};
 use crate::schedule::events::SourceEvent;
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
@@ -17,18 +15,8 @@ use crate::translate::TranslateSeams;
 
 /// 依頼を 204 を返す偽の SHIORI へ向けて実行し、受けた GET の ID と Reference を返す。
 fn sent(source: ScriptSource) -> (EventId, Vec<String>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || match shiori_rx.recv() {
-        Ok(ShioriMsg::Request { call, reply }) => {
-            let _ = reply.send(ShioriOutcome::NoContent);
-            Some(call)
-        }
-        _ => None,
-    });
-    let seams = TranslateSeams {
-        expand: Box::new(|script| script.to_owned()),
-        makoto: Box::new(|script, _| script.to_owned()),
-    };
+    let (shiori_tx, helper) = fake_shiori(ShioriOutcome::NoContent);
+    let seams = TranslateSeams::passthrough();
     let request = TranslateRequest {
         script: "\\e".to_string(),
         source,

@@ -76,7 +76,7 @@ pub use mock_shiori::{
     spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
 };
 pub use recording::{
-    CallMethod, RecordedCall, binding, expected_call, expected_translate, expected_unload, pumps,
-    resumed_get_after_active_window, send, tick,
+    CallMethod, RecordedCall, binding, command_tag, expected_call, expected_translate,
+    expected_unload, pumps, resumed_get_after_active_window, send, tick,
 };
 pub use window_actor::{WINDOW_CREATE_SERIAL, spawn_window_actor};

@@ -1,8 +1,8 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
-    CallMethod, Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg,
-    MonotonicMs, MouseEventKind, QuitPolicy, Response, TalkId, events, expected_call,
-    expected_unload, spawn_harness, spawn_harness_gated,
+    Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MonotonicMs,
+    MouseEventKind, QuitPolicy, Response, TalkId, events, expected_call, expected_unload,
+    spawn_harness, spawn_harness_gated,
 };
 
 /// マウス GET へ注入する撫で talk スクリプト（cage 7・`Steady{None}` からの起動）。
@@ -34,10 +34,11 @@ const FIXED_MOUSE_REPLACE_SCRIPT: &str = r"\0\s[0]なにかな？\e";
 // talk を起こさない）は、同じ駆動の `steady_test.rs` の `active_talk_tick_emits_notify_ref3_zero` が見る。
 // **この統合ハーネスでは非マウス Value が active talk 中に届く経路は構造的に存在しない**——`Steady{Some}`
 // の OnSecondChange pump は NOTIFY（Ref3=0）で発行され、mock shiori は NOTIFY へ常に `Notified` を返す
-// （Value を運ばない・common `respond` の NOTIFY アーム）。ゆえに DD-6 の**リテラルな Value 破棄分岐**（`Steady{Some}`+`Value`+非マウス origin→warn＋破棄）は純粋状態機械の単体檻
-// `schedule::steady::flow_tests::steady_some_non_mouse_value_is_discarded_dd6` と
-// `schedule::log_firing_tests::warn_steady_value_during_talk_logs` が唯一の
-// 検証点である。統合層（`active_talk_tick_emits_notify_ref3_zero`）は、その破棄分岐を**防御的 backstop に
+// （Value を運ばない・common `respond` の NOTIFY アーム）。ゆえに DD-6 の**リテラルな Value 破棄分岐**
+// （`Steady{Some}`+`Value`+`OnSecondChange` origin→warn＋破棄）は純粋状態機械の単体檻
+// `schedule::steady::flow_tests::steady_some_second_change_value_is_discarded_dd6` と
+// `schedule::change::tests::raise_event_tests::second_change_reply_during_talk_is_still_discarded` が
+// 唯一の検証点である。統合層（`active_talk_tick_emits_notify_ref3_zero`）は、その破棄分岐を**防御的 backstop に
 // 留める構造的前提**——「非マウス出所は active talk 中に GET でなく NOTIFY で発行され Value を運べない＝置換を
 // 起こさない」——を決定的に固定し、cage 8（マウス出所→置換）と対で origin 別の政策を固定する。
 
@@ -103,10 +104,6 @@ fn mouse_value_from_steady_none_starts_talk() {
         *gets[0], expected,
         "記録 GET は events 表導出（INACTIVE）と一致するはず"
     );
-    assert_eq!(
-        gets[0].status, None,
-        "Steady{{None}} のマウス GET は Status 行を出さない"
-    );
 
     // (2) マウス GET Value → StartTalk 起動: 到達はマウス talk ちょうど 1 本（撫でスクリプト・id=1）。
     assert_eq!(
@@ -147,7 +144,7 @@ fn mouse_value_from_steady_none_starts_talk() {
 /// しない（park 数バリアが race を閉じる）。`release_all` 後、park された 2 本を採番順（TalkDone(1,Ended)→
 /// TalkDone(2,Quit)）で drain 送出する:
 /// - TalkDone(1,Ended): slot は既に Some(2)。置き換えた旧 talk（1 世代保持の `prev_talk`）と一致するので
-///   `talk_done_stale_choice`（info＋現 Phase 維持）で破棄される（＝旧 talk の Done は stale として棄却・
+///   `talk_done_stale`（info＋現 Phase 維持）で破棄される（＝旧 talk の Done は stale として棄却・
 ///   状態整合・DD-IE-2・C4 規則 9）。`unknown_talk_done`（error）は真に未知の id にだけ出る。
 /// - TalkDone(2,Quit): slot Some(2) と一致＝既知 quit → Unloading{Quit}→Unload→StopSelf（終了駆動）。
 ///
@@ -235,16 +232,6 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
     assert_eq!(
         *gets[0], expected_talking,
         "再生中のマウス GET は events 表導出（talk_active=true）と一致し Status: talking を帯びるはず"
-    );
-    assert_eq!(
-        gets[0].method,
-        CallMethod::Get,
-        "マウス系は常に GET（NOTIFY 化しない・DD-IE-1）"
-    );
-    assert_eq!(
-        gets[0].status,
-        Some("talking".to_string()),
-        "active talk 中のマウス GET は Status: talking を併送する（DD-IE-1）"
     );
 
     // (2) 置換: 到達 StartTalk は steady talk（id=1）と置換 talk（id=2）のちょうど 2 本。

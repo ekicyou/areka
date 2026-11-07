@@ -3,19 +3,8 @@
 //!
 //! どちらも GET で、Reference の個数と値を列ごと突き合わせる。
 
+use super::tests::expect_get;
 use super::*;
-
-/// GET を分解して (id の綴り, references, Status の wire 値) を取り出す（NOTIFY なら panic）。
-fn expect_get(call: ShioriCall) -> (String, Vec<String>, Option<String>) {
-    match call {
-        ShioriCall::Get {
-            id,
-            references,
-            status,
-        } => (id.as_str().to_string(), references, status.render()),
-        ShioriCall::Notify { .. } => panic!("GET のはずが NOTIFY"),
-    }
-}
 
 /// 加工されたら壊れる引数の並び（前後の空白・空の要素・カンマ・バックスラッシュ）。
 fn arguments() -> Vec<String> {
@@ -99,12 +88,9 @@ fn anchor_builders_derive_status_from_the_snapshot() {
     }
 }
 
-/// 表に正典の 2 語が載り、組み立ての綴りと一致する。
+/// 組み立ての綴りが表の綴りと一致する（表に載ることは許可表の完全一致のテストが固定する）。
 #[test]
-fn the_two_anchor_events_are_in_the_allowed_table() {
-    for id in ["OnAnchorSelectEx", "OnAnchorSelect"] {
-        assert_eq!(allowed_static(id), Some(id), "{id} が表に無い");
-    }
+fn the_two_anchor_events_are_built_with_the_table_spelling() {
     let snap = ExecutionSnapshot::INACTIVE;
     for call in [
         on_anchor_select_ex("くわしく", "ID", &[], &snap),

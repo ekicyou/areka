@@ -38,7 +38,7 @@ pub(crate) mod close;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
 /// クレート公開面への露出は [`crate::events`] ファサード経由（`lib.rs` 参照）。
 pub mod events;
-/// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
+/// 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
 #[cfg(test)]
 pub(crate) mod log_capture;
 /// マウスの解放・ホイール・出入りの受理と、クリックの段の列。
@@ -106,10 +106,8 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
 
 /// 応答の台本が「台本あり」か（空でなければ真・空白だけも台本）。返事の写し（`first_reply_of`）と
 /// 外から頼まれたイベントの腕がこれ 1 つで決める（SSP は空白だけの台本も再生して今のトークを置き換える）。
-/// 定常の Value の腕からは呼ばない。audit-kanade の design.md 「指摘ごとの直し方」の #5 の行は定常も挙げるが、
-/// 定常は今でもどの Value も再生する（空白だけも台本として扱えている）。ここで判定を挟むと変わるのは空の
-/// 台本 `""` の再生だけで、それは design.md 「変わること」⑸ に無い（空の台本の再生は今日どおり・
-/// `translate_skipped_empty`）。
+/// 定常の Value の腕からは呼ばない。定常はどの Value も再生し（空白だけも台本）、空の台本 `""` は
+/// 翻訳を飛ばして再生する（`translate_skipped_empty`）ので、ここで判定を挟む理由が無い。
 pub(crate) fn has_script(script: &str) -> bool {
     !script.is_empty()
 }
@@ -493,12 +491,10 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
                     change::consume_pending(state, done)
                 }
                 TalkEndReason::Interrupted => {
-                    // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
-                    // あったが、**選択タイムアウトの解除経路により正規の到達点になった**（DD-11）:
+                    // 非 quit 扱い（観測用ログ）。選択タイムアウトの解除経路の正規の到達点（DD-11）:
                     // タイムアウト 204 → [`Action::CancelChoice`] → dispatcher が slot を維持したまま
                     // `Close` を転送 → talk が `TalkDone{Interrupted}` を正規送出 → ここへ到達 →
                     // フェーズ固有遷移（steady）が `Steady{None}` へ復帰させる（Req7.5）。
-                    // 遷移・ログ語彙・レベルはいずれも無改変である（意味づけのみが変わった）。
                     tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——非 quit 扱い・フェーズ固有遷移へ委譲（選択解除の正規到達点・DD-11）");
                     dispatch_phase(state, Input::TalkDone(done), config)
                 }
@@ -521,7 +517,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             if state.prev_talk == Some(done.talk_id) {
                 tracing::info!(
                     target: "kanade",
-                    event = "talk_done_stale_choice",
+                    event = "talk_done_stale",
                     talk_id = done.talk_id.0,
                     "置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
                 );
@@ -537,7 +533,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
 /// ShioriReply の横断判定（Unload 完了・Failed）＋応答待ちフェーズ委譲。
 ///
 /// `origin`（応答の出所イベント ID・DD-IE-3）は横断判定では使わないが、応答待ちフェーズへ
-/// 委譲する際に `Input::ShioriReply` として保持したまま流す（タスク 2.2 のマウス GET origin 別
+/// 委譲する際に `Input::ShioriReply` として保持したまま流す（マウス GET の origin 別の
 /// reply 政策がフェーズ固有遷移側で参照する）。
 fn on_shiori_reply(
     state: State,
@@ -643,9 +639,9 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
 /// その応答をなお `Steady` のまま受ける（in-flight ≤ 1・シェルが直後に `ShioriReply` を
 /// 再投入する）。ここに Steady が無いと Steady の `ShioriReply` が防御アーム
 /// （unexpected_reply）で握り潰され、OnSecondChange の Value/NoContent 処理が壊れる。
-/// これにより Steady の Failed は `on_shiori_reply` 経由で `Unloading{Fault}` へ（Req 6.1・
-/// pump 含む任意の SHIORI 失敗で M1 は放棄）、Value/NoContent/Notified は `dispatch_phase`
-/// → `steady::step` へ正しく委譲される。
+/// これにより Steady の Failed は（アンカー・クリックの段・選択の in-flight の応答待ちの免除を
+/// 除き）`on_shiori_reply` 経由で `Unloading{Fault}` へ倒れ（Req 6.1）、Value/NoContent/Notified は
+/// `dispatch_phase` → `steady::step` へ正しく委譲される。
 fn awaits_reply(phase: &Phase) -> bool {
     matches!(
         phase,
@@ -687,7 +683,7 @@ mod tests;
 #[path = "external_state_tests.rs"]
 mod external_state_tests;
 
-/// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
+/// 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
 ///
 /// Req 6.3（ログ無しの失敗経路を持たない）・Req 6.1（区別語彙ごとにログ）を、コードレビュー
 /// でなく**テスト**で担保する。各 `error!` / `warn!` アームを `step()`（または各サブモジュール

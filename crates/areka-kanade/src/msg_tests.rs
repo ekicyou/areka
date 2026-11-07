@@ -1,6 +1,4 @@
 //! 知らせの型（[`KanadeMsg`]・[`ShioriCall`] ほか）のテスト。
-//!
-//! もとは `msg.rs` のファイルの中にあった塊を中身を変えずに移したもの。
 
 use super::*;
 
@@ -18,13 +16,13 @@ fn kanade_and_shiori_msgs_are_send_static() {
     assert_send_static::<KanadeConfig>();
     assert_send_static::<CloseReason>();
     assert_send_static::<MonotonicMs>();
-    // マウス入力契約型（Task 1・DD-IE 系）も Send + 'static な所有データのみ。
+    // マウス入力契約型（DD-IE 系）も Send + 'static な所有データのみ。
     assert_send_static::<MouseInput>();
     assert_send_static::<MouseEventKind>();
     assert_send_static::<MouseButton>();
     // 送出イベント ID の出所カテゴリ型（DD-1）も同様。
     assert_send_static::<EventId>();
-    // 選択確定入力（Task 1.3・C2 契約増分）も Send + 'static な所有データのみ。
+    // 選択確定入力も Send + 'static な所有データのみ。
     assert_send_static::<ChoiceInput>();
 }
 
@@ -77,7 +75,7 @@ fn close_reason_maps_to_onclose_ref0() {
 ///
 /// 選択肢タイムアウトの既定 30_000 ms は裁定 5（Req 7.8・DD-8）。正典（ukadoc）は数値を
 /// 規定していないため areka 裁量で単一の値を定め、対応表へ記録する。追加の欄の既定
-/// （true / 0 / 空）は既存の起動の檻を意味論無改変で緑に保つ（Task 5.1・design C8）。
+/// （true / 0 / 空）は既存の起動の檻を意味論無改変で緑に保つ（design C8）。
 /// 起動の由来はふつうの起動・シェルのフォルダ名はシェル名の写し
 /// （areka-P0-ghost-shell-balloon-switch 要件 2.1・4.1・11.7）。
 #[test]

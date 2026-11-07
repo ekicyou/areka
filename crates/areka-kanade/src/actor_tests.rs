@@ -1,5 +1,6 @@
 use super::*;
 use crate::msg::CloseReason;
+use crate::schedule::translate_test_support::config;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
@@ -21,10 +22,6 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F
             panic!("'{what}' did not complete within {timeout:?} (possible hang)")
         }
     }
-}
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
 }
 
 /// リソース照会結果を捨てる no-op sink（結果を使わない結線・R4.1 Implementation Notes）。
@@ -112,7 +109,7 @@ fn close_message_terminates_and_join_succeeds() {
     drop(shiori_handle);
 }
 
-// --- 3b. sakura 切断: `TalkCommand::Start` 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
+// --- 2. sakura 切断: `TalkCommand::Start` 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
 
 #[test]
 fn sakura_disconnected_start_talk_failure_continues_run() {
@@ -158,7 +155,7 @@ fn sakura_disconnected_start_talk_failure_continues_run() {
     drop(shiori_handle);
 }
 
-// --- 3c. Mouse 写像（Task 1）: KanadeMsg::Mouse → Input::Mouse・非 Steady（Idle）では ---
+// --- 3. Mouse 写像: KanadeMsg::Mouse → Input::Mouse・非 Steady（Idle）では ---
 //         SHIORI 問い合わせを一切発行せず、その後 Close で正常停止する（DD-IE-8）。
 
 #[test]
@@ -261,7 +258,7 @@ fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
     drop(shiori_handle);
 }
 
-// --- 5. アクターシェルの失敗ログ＋応答写像（タスク 6.2・Req 6.1／6.2） ---
+// --- 5. アクターシェルの失敗ログ＋応答写像（Req 6.1／6.2） ---
 //
 // シェルの往復ヘルパ（round_trip 系）をテストスレッド上で**直接**呼び、二つの失敗
 // サブ経路が (i) いずれも `ShioriOutcome::Failed(ShioriFailure::Ipc)` へ写像され、
@@ -269,17 +266,21 @@ fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
 // 発火することを検証する。ヘルパは同期関数ゆえログはテストスレッドで発行され、
 // `log_capture::capture`（thread-local subscriber）で確実に捕捉される（PITFALL:
 // spawn したアクタースレッドのログは捕えられない——ここでは往復ヘルパを直接呼ぶ）。
-// 6.1 が追加した `crate::schedule::log_capture` を再利用する（capturer 重複なし）。
 use crate::schedule::log_capture::{assert_logged, capture};
 use tracing::Level;
 
-/// テスト用 GET 呼出（round_trip_request の入力・内容は本テストで load-bearing でない）。
-fn probe_get_call() -> ShioriCall {
+/// 往復の檻へ渡す GET 呼出（Status は非アクティブ）。兄弟の檻もこれを使う。
+pub(super) fn get(id: EventId, references: &[&str]) -> ShioriCall {
     ShioriCall::Get {
-        id: EventId::Static("OnBoot"),
-        references: vec!["master".to_string()],
+        id,
+        references: references.iter().map(|r| r.to_string()).collect(),
         status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
     }
+}
+
+/// `round_trip_request` の入力（内容は本テストで load-bearing でない）。
+fn probe_get_call() -> ShioriCall {
+    get(EventId::Static("OnBoot"), &["master"])
 }
 
 // (a) shiori 送出失敗: Receiver を drop した Sender へ往復 → 送出が Err →
@@ -342,7 +343,7 @@ fn shiori_reply_dropped_maps_to_ipc_and_logs() {
     helper.join().expect("reply-drop helper joins cleanly");
 }
 
-// --- 6. talk 指示送出の失敗ログ＋運行継続（タスク 1.4・Req 4.4／5.6・design C6） ---
+// --- 6. talk 指示送出の失敗ログ＋運行継続（Req 4.4／5.6・design C6） ---
 //
 // talk 再生系へ出る唯一の実行点 `send_talk_command` を**直接**呼び、受信端が切断された
 // 状態で (i) 規約の `error!`（event=talk_command_send_failed）を発火し、(ii) 返り値も
@@ -385,7 +386,7 @@ fn talk_command_send_failure_logs_error_and_continues() {
     );
 }
 
-// --- 7. egress チョークポイント判断分岐檻（タスク 2.5・Req 3.1／3.2／6.2・DD-IT-7／DD-IT-11） ---
+// --- 7. egress チョークポイント判断分岐檻（Req 3.1／3.2／6.2・DD-IT-7／DD-IT-11） ---
 //
 // SHIORI へ出る唯一の実行点 `round_trip_request` を**直接**呼び、送出 ID の許可判定という
 // 入力依存の判断分岐を両側から檻に入れる（test-only-decision-branches-not-proven-wiring）。
@@ -440,11 +441,7 @@ fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
         let events = capture(|| {
             outcome = Some(round_trip_request(
                 &shiori_tx,
-                ShioriCall::Get {
-                    id: EventId::Static(forbidden),
-                    references: vec!["master".to_string()],
-                    status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-                },
+                get(EventId::Static(forbidden), &["master"]),
             ));
         });
 
@@ -469,72 +466,7 @@ fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
     }
 }
 
-// --- 8. submit ガードのリソース許可拡張（タスク 6.1・Req 4.1・design 論点1／別族許可集合） ---
-//
-// egress チョークポイント `round_trip_request` の submit ガードが
-// 「`is_allowed_event_id(id)` ∨ `is_allowed_resource_id(id)`」へ拡張されたことを、
-// リソース ID の実送出パスから両側で檻に入れる。イベント檻・許可外拒否の既存挙動は
-// 無改変であること（回帰檻）を並せて確認する。
-
-/// テスト用のリソース GET 呼出（M1 リソース ID `username`）。
-fn probe_resource_call(id: &'static str) -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Static(id),
-        references: vec!["master".to_string()],
-        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-    }
-}
-
-// (a) 許可リソース ID（username）→ ガードを通過してチャネルへ送出され良性応答が返る。
-//     従来（OR 拡張前）は非イベント ID として Failed(Internal) 拒否されていた分岐が、
-//     リソース許可アームの追加により送出側へ倒れることを檻に入れる（Req4.1）。
-#[test]
-fn allowed_resource_id_passes_guard_and_is_sent() {
-    let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-
-    let outcome = round_trip_request(&shiori_tx, probe_resource_call("username"));
-
-    // 許可リソース ID の GET は送出され mock の良性応答（NoContent）が返る。
-    assert!(
-        matches!(outcome, ShioriOutcome::NoContent),
-        "許可リソース ID の GET は送出され mock の良性応答が返るべき（Req4.1）"
-    );
-    // mock が当該 Request を受領した＝ガードを通過しチャネルへ送出された。
-    assert_eq!(
-        rec_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("許可リソース ID はチャネルへ送出され mock が受領するはず"),
-        Recorded::Get("username".to_string())
-    );
-
-    drop(shiori_tx);
-    drop(shiori_handle);
-}
-
-// (b) 許可外 ID（イベントでもリソースでもない）→ 従来どおり送出されず Failed(Internal)
-//     へ写像される（既存不変量の回帰檻・Req3.2 の拒否経路が OR 拡張後も無改変）。
-#[test]
-fn disallowed_id_still_rejected_as_internal_after_resource_extension() {
-    let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-
-    // "notaresource" はイベント許可集合にもリソース許可集合にも属さない。
-    let outcome = round_trip_request(&shiori_tx, probe_resource_call("notaresource"));
-
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Internal(_))),
-        "許可外 ID は OR 拡張後も送出されず Failed(Internal) へ写像されるべき（既存不変量）"
-    );
-    // チャネルへ何も届かない＝許可外 ID は送出前に返る（従来挙動の保存）。
-    assert!(
-        rec_rx.try_recv().is_err(),
-        "許可外 ID はチャネルへ送出されてはならない（既存不変量）"
-    );
-
-    drop(shiori_tx);
-    drop(shiori_handle);
-}
-
-// --- 9. boot prefetch → ResourceSink 同期呼出（タスク 6.2・R4.1・design boot 図） ---
+// --- 8. boot prefetch → ResourceSink 同期呼出（R4.1・design boot 図） ---
 //
 // アクター経路（spawn_kanade）で boot を駆動し、username リソース照会（prefetch）が
 // (i) OnInitialize NOTIFY の後・OnFirstBoot GET の前に mock shiori へ 1 回だけ届き、
@@ -612,20 +544,16 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     drop(shiori_handle);
 }
 
-// --- 10. egress ガードの出所カテゴリ分岐（タスク 2.3・Req 2.6／2.9・design C6／DD-2／裁定 8） ---
+// --- 9. egress ガードの出所カテゴリ分岐（Req 2.6／2.9・design C6／DD-2／裁定 8） ---
 //
-// submit ガードが `EventId` の出所カテゴリ別 match へ変わったことを、両カテゴリの実送出パスから
-// 檻に入れる。スケジューラ起源（`Static`）は固定表 ∨ リソース表で従来どおり——`OnTalk`／`OnHour`
-// の恒久禁止は不変（セクション 7 (b) が保存）——選択起源（`Choice`）は `On` 接頭のみで受理し、
+// submit ガードが `EventId` の出所カテゴリで分かれることを、両カテゴリの実送出パスから
+// 檻に入れる。スケジューラ起源（`Static`）は固定表 ∨ リソース表——`OnTalk`／`OnHour`
+// の恒久禁止はセクション 7 (b) が見る——選択起源（`Choice`）は `On` 接頭のみで受理し、
 // 恒久禁止 ID であっても逐語で送出される（Req2.9・恒久禁止の根拠は選択起源に該当しない）。
 
 /// テスト用の選択起源 GET 呼出（任意名イベント・[`EventId::Choice`]）。
 fn probe_choice_call(id: &str) -> ShioriCall {
-    ShioriCall::Get {
-        id: EventId::Choice(id.to_string()),
-        references: Vec::new(),
-        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-    }
+    get(EventId::Choice(id.to_string()), &[])
 }
 
 // (a) 選択起源の恒久禁止 ID（OnTalk／OnHour）→ ガードを通過して逐語で送出される（Req2.9）。
@@ -713,14 +641,7 @@ fn choice_fixed_ids_pass_the_static_guard_and_are_sent() {
     for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
 
-        let outcome = round_trip_request(
-            &shiori_tx,
-            ShioriCall::Get {
-                id: EventId::Static(id),
-                references: vec!["ID".to_string()],
-                status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-            },
-        );
+        let outcome = round_trip_request(&shiori_tx, get(EventId::Static(id), &["ID"]));
 
         assert!(
             matches!(outcome, ShioriOutcome::NoContent),
@@ -738,12 +659,12 @@ fn choice_fixed_ids_pass_the_static_guard_and_are_sent() {
     }
 }
 
-// --- 11. Action → TalkCommand 写像（タスク 4.1・design C6・Req4.4） ---
+// --- 10. Action → TalkCommand 写像（design C6・Req4.4） ---
 //
 // drive の Action バッチ実行本体（[`execute_actions`]）を**直接**呼び、選択系 2 Action が
 // `TalkCommand::{ResolveChoice, CancelChoice}` へそのまま包まれて単一チャンネルへ出ることを
-// 実行で観測する。発行点は `ResolveChoice`＝選択調停（steady・タスク 4.3）・`CancelChoice`
-// ＝タイムアウト解除（steady・タスク 4.5）と別々の入力に分かれており、`step` 経由では 3 形を
+// 実行で観測する。発行点は `ResolveChoice`＝選択調停（steady）・`CancelChoice`
+// ＝タイムアウト解除（steady）と別々の入力に分かれており、`step` 経由では 3 形を
 // 1 バッチに揃えて駆動できない（順序保存の契約は 1 バッチでしか観測できない）。写像を担う
 // 実コードはここで通る（檻専用の写像を別に作らない）。
 
@@ -869,7 +790,7 @@ fn talk_command_send_failure_does_not_abort_the_action_batch() {
     drop(shiori_handle);
 }
 
-// --- 12. 有界の待ちの報告（#78）: 閉包の panic を時間切れ（possible hang）と取り違えない ---
+// --- 11. 有界の待ちの報告: 閉包の panic を時間切れ（possible hang）と取り違えない ---
 
 #[test]
 #[should_panic(expected = "panicked")]

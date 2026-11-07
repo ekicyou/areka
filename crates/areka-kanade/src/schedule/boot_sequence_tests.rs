@@ -1,4 +1,4 @@
-use super::test_support::{assert_get, assert_notify, config};
+use super::test_support::{assert_get, assert_notify, config, drive_to_main, reply};
 use super::*;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
@@ -217,13 +217,6 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
         &actions[1],
         &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
     );
-
-    // OnBoot GET が一切発行されていないことを確認（フォールスルー打ち切り）。
-    for a in &actions {
-        if let Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) = a {
-            assert_ne!(id.as_str(), "OnBoot", "OnBoot はスキップされるべき");
-        }
-    }
 }
 
 // --- BootMain + NoContent → no StartTalk（Req 2.3） ---
@@ -233,8 +226,6 @@ fn boot_main_no_content_emits_no_talk() {
     let cfg = config();
     let s = State {
         phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
         ..State::initial()
     };
     let (s, actions) = step(
@@ -269,18 +260,9 @@ fn boot_main_no_content_emits_no_talk() {
 fn boot_talk_ids_are_unique_and_monotonic() {
     let cfg = config();
     // BootMain + Value → id=1。
-    let s1 = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        ..State::initial()
-    };
-    let (s1, actions1) = step(
-        s1,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "test",
-        },
+    let (s1, actions1) = reply(
+        drive_to_main(&cfg),
+        ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     let id1 = match &actions1[0] {
@@ -291,18 +273,11 @@ fn boot_talk_ids_are_unique_and_monotonic() {
     assert_eq!(s1.next_talk_id, 2);
 
     // 引き継いだカウンタ（2）から次の Value → id=2（別 run 想定・単調増番）。
-    let s2 = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: s1.next_talk_id,
-        ..State::initial()
-    };
-    let (s2, actions2) = step(
+    let mut s2 = drive_to_main(&cfg);
+    s2.next_talk_id = s1.next_talk_id;
+    let (s2, actions2) = reply(
         s2,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("b".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "test",
-        },
+        ShioriOutcome::Value("b".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     let id2 = match &actions2[0] {
@@ -311,7 +286,6 @@ fn boot_talk_ids_are_unique_and_monotonic() {
     };
     assert_eq!(id2, TalkId(2), "id は単調増番で再利用しない");
     assert_eq!(s2.next_talk_id, 3);
-    assert_ne!(id1, id2);
 }
 
 // --- CloseRequest during boot → pending_close recorded, phase unchanged, no actions ---
@@ -336,8 +310,6 @@ fn close_request_during_boot_records_pending_only() {
     ] {
         let s = State {
             phase,
-            last_now: None,
-            next_talk_id: 1,
             ..State::initial()
         };
         let phase_before = std::mem::discriminant(&s.phase);
@@ -448,18 +420,9 @@ fn baseware_version_status_reflects_greeting_tracking() {
     }
 
     // Value（挨拶）経路: BootMain + Value → Status: talking。
-    let greeting = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        ..State::initial()
-    };
-    let (_, actions) = step(
-        greeting,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "test",
-        },
+    let (_, actions) = reply(
+        drive_to_main(&cfg),
+        ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     assert_eq!(
@@ -471,8 +434,6 @@ fn baseware_version_status_reflects_greeting_tracking() {
     // 204 経路: BootMain + NoContent → Status 行なし。
     let no_greeting = State {
         phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
         ..State::initial()
     };
     let (_, actions) = step(

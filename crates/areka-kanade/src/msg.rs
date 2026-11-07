@@ -6,7 +6,8 @@
 //! 構成される（envelope 規約・Req 3.2）。
 //!
 //! # 依存規律（Allowed Dependencies）
-//! 本ファイルが依存するのは `std`・`areka_actor::ReplySender` と、クレート内の語彙
+//! 本ファイルが依存するのは `std`・`areka_actor::ReplySender`・`areka_talk::SecurityLevel`・
+//! `thiserror`（[`ShioriFailure`] の導出）と、クレート内の語彙
 //! （[`crate::talk`]・[`crate::change`]・[`crate::online`]・[`crate::status`]・
 //! [`crate::sstp`]・[`crate::anchor_input`]・[`crate::request_origin`]・
 //! `schedule::resources::ResourceOutcome`）だけである。`shiori-host32-host`（`RequestError` 等）は一切 import しない
@@ -53,7 +54,7 @@ impl CloseReason {
 
 /// kanade の終了系列がどの起因で走ったか（UI へ渡す公開語彙・R15.3）。
 ///
-/// 運行状態機械が内部に持つ `TermCause`（`schedule/mod.rs` の `Unloading{cause}`）の**公開面への
+/// 運行状態機械が内部に持つ `TermCause`（`schedule/types.rs`・`Unloading{cause}` が運ぶ）の**公開面への
 /// 写し**である。内部型をそのまま公開すると運行状態機械の内部（`Phase`／`Action`／`step`）まで
 /// 公開面へ引きずり出されるため（DD-9 の露出規律）、5 値だけを持つ独立の enum を置く。
 /// 値の対応は 1 対 1 で、写す点は停止通知の投函（`actor_stop.rs`）だけである。
@@ -202,7 +203,7 @@ pub enum KanadeMsg {
     Boot,
     /// 1 秒相当の Tick（時刻同梱・DD-3）。pump 駆動と close 期限判定を兼ねる。
     Tick { now: MonotonicMs },
-    /// 選択待ちの期限の知らせ（#7）。刻み役が選択待ちの期限で 1 回だけ送る。`Tick` と違い
+    /// 選択待ちの期限の知らせ。刻み役が選択待ちの期限で 1 回だけ送る。`Tick` と違い
     /// OnSecondChange を出さない（`last_now` も pump も動かさない）。
     ChoiceTimeoutDue { now: MonotonicMs },
     /// sakura（mock sink 含む）からの再生完了通知。
@@ -353,12 +354,12 @@ pub enum ShioriMsg {
 ///
 /// - [`EventId::Static`]: スケジューラ起源の固定 ID。`schedule/events.rs`／`schedule/resources.rs`
 ///   の構築関数のみが構成し、固定表（`ALLOWED_EVENT_IDS`／`ALLOWED_RESOURCE_IDS`）で検証される。
-/// - [`EventId::Choice`]: 選択起源の任意名イベント（`\q` の `On` 始まり ID）。ゴースト作者が
+/// - [`EventId::Choice`]: 選択起源の任意名イベント（`\q` と `\_a` の `On` 始まり ID）。ゴースト作者が
 ///   書いた名前を逐語で運ぶ（事前の固定登録を要さない・Req2.6）。
 ///
 /// # 不変条件
-/// [`EventId::Choice`] は選択カスケードの planner のみが構成する（`On` 始まり保証の発生源を
-/// 1 点に閉じる）。スケジューラ起源の経路が `Choice` を作ることはない。
+/// [`EventId::Choice`] を構成するのは `schedule::events::on_choice_named` だけである（`On` 始まり
+/// 保証の発生源を 1 点に閉じる）。スケジューラ起源の経路が `Choice` を作ることはない。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventId {
     /// スケジューラ起源の固定 ID（構築関数のみが構成・固定表で検証）。
@@ -571,7 +572,7 @@ pub struct KanadeConfig {
     /// script 種別の記録の名（`get_active_ghost_list` と同じ値）。既定は空文字。結線は
     /// `areka-ghost` の `resolve_kanade_config` が入れる。
     pub ghost_name: String,
-    /// 選択待ちの期限で 1 回だけ起こしてもらう頼みの線（#7・既定 `None`）。`Some` なら殻が期限の
+    /// 選択待ちの期限で 1 回だけ起こしてもらう頼みの線（既定 `None`）。`Some` なら殻が期限の
     /// 時刻を送り、刻み役がその時刻に [`KanadeMsg::ChoiceTimeoutDue`] を返す。`None` なら毎秒の
     /// `Tick` が期限を拾う。結線は `areka-ghost` の runtime が刻み役の本物のときだけ入れる。
     pub choice_wake: Option<std::sync::mpsc::Sender<MonotonicMs>>,

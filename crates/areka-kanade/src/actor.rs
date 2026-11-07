@@ -24,7 +24,7 @@
 //! # 失敗経路のログ規律（steering: areka-log-first-no-silent-failure）
 //! SHIORI 送出失敗・応答 oneshot 切断は `error!` の上で `ShioriOutcome::Failed(Ipc)` へ写像し
 //! 再投入する（→ Unloading{Fault}・宙吊りなし）。talk 指示（[`TalkCommand`]）の送出失敗は
-//! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ないが M1 は許容）。
+//! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ない）。
 //! 沈黙の失敗経路は存在しない。
 
 use std::convert::Infallible;
@@ -85,7 +85,7 @@ pub fn spawn_kanade(
 /// 停止通知の投函端つきで kanade アクターを起動する（R15.3・design D15 の 2）。
 ///
 /// 引数は [`spawn_kanade`] と同一で、末尾に `stop_sink` が 1 つ増えるだけの派生である
-/// （[`spawn_kanade`] は `None` を渡す薄い包み＝既存の呼び手は 1 つも変わらない）。
+/// （[`spawn_kanade`] は `None` を渡す薄い包み）。
 ///
 /// `stop_sink` は運行の通知（[`KanadeNotice`]）の送出端である。`Some` なら、[`Action::StopSelf`]
 /// の実行点で [`KanadeNotice::Stopped`]`(`[`KanadeStopped`](crate::msg::KanadeStopped)`{ cause, handoff })` を**ちょうど 1 度**
@@ -145,7 +145,7 @@ pub fn spawn_kanade_translating(
                     tracing::info!(target: "kanade", event = "close", "停止指示（Close）を受領——即時停止");
                     return Ok(ControlFlow::Break(()));
                 }
-                // リソース照会は step を経ずその場で答える（`drive` の「最後の応答だけ再投入」に
+                // リソース照会は step を経ずその場で答える（`drive_translating` の「最後の応答だけ再投入」に
                 // 乗らない・運行状態は読むだけ）。
                 KanadeMsg::ResourceQuery { ids, reply } => {
                     crate::actor_resources::answer(&state, &shiori, ids, reply);
@@ -458,7 +458,7 @@ struct BatchResult {
 /// Action バッチを**先頭から順に全て実行**する（execute-batch/reinject-last の execute 側）。
 ///
 /// [`drive_translating`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
-/// （タスク 4.3／4.5）の実装を待たずに実行で檻に入れられるようにするためである（design C6）。
+/// （選択調停・タイムアウト解除）と切り離して実行で檻に入れられるようにするためである（design C6）。
 ///
 /// # talk 指示 3 形の写像（design C6・DD-5・Req 5.6）
 /// [`Action::StartTalk`]／[`Action::ResolveChoice`]／[`Action::CancelChoice`] はそれぞれ
@@ -499,7 +499,7 @@ fn execute_batch(
             Action::CancelChoice { talk_id } => {
                 send_talk_command(sakura, TalkCommand::CancelChoice { talk_id });
             }
-            // 起こしの線が無い構成・送れなかったときは毎秒の Tick が期限を拾う（失敗ではない・#7）。
+            // 起こしの線が無い構成・送れなかったときは毎秒の Tick が期限を拾う（失敗ではない）。
             Action::ArmChoiceWake(at) => {
                 if let Some(wake) = choice_wake
                     && wake.send(at).is_err()
@@ -695,7 +695,7 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
 ///
 /// - どの出所でも、ID の綴りに CR・LF・NUL があれば断る（頭書きの行を切らない・名前は変えない）。
 /// - スケジューラ起源（`Static`）: 従来どおり「イベント許可 ∨ リソース許可」の論理和——固定表
-///   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）。
+///   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`）。
 ///   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**（Req3.2）。
 /// - 選択起源（`Choice`）: `is_allowed_choice_event`（`On` 接頭のみ）。作者が `\q` の ID に書いた
 ///   名前を事前登録なしに逐語で発火するため固定表を要求せず、スケジューラ起源の恒久禁止も
@@ -842,7 +842,7 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
 #[path = "actor_tests.rs"]
 mod tests;
 
-// 停止通知の発行点そのものの檻（areka-P0-emo2-conformance-e2e タスク 6.9・R15.3）。
+// 停止通知の発行点そのものの檻（areka-P0-emo2-conformance-e2e R15.3）。
 // 発行は呼出スレッドで同期に走る素の関数ゆえ、スレッドローカルの捕捉窓で観測できる
 // （アクタースレッドを跨がない＝全スレッド捕捉の窓口を要さない）。
 #[cfg(test)]
@@ -854,7 +854,7 @@ mod stop_notify_tests;
 #[path = "actor_error_response_tests.rs"]
 mod error_response_tests;
 
-// 送る点の頭書きの守りの檻（audit-kanade #1 の二段目）。
+// 送る点の頭書きの守りの檻（要件 9.2）。
 #[cfg(test)]
 #[path = "actor_header_guard_tests.rs"]
 mod header_guard_tests;
@@ -879,7 +879,7 @@ mod sstp_tests;
 #[path = "actor_online_tests.rs"]
 mod online_tests;
 
-// バッチ実行の翻訳の腕が入れ直すものを決めることの檻（areka-P0-translate-pipeline タスク 3.3）。
+// バッチ実行の翻訳の腕が入れ直すものを決めることの檻（areka-P0-translate-pipeline）。
 #[cfg(test)]
 #[path = "actor_translate_batch_tests.rs"]
 mod translate_batch_tests;

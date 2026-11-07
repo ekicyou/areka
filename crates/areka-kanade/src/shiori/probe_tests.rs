@@ -164,18 +164,14 @@ fn firing_names_the_stage_calls_the_unblock_once_and_warns_once() {
 }
 
 /// 後始末より前から待っていた OnClose の GET（利用者が閉じ、SHIORI が固まった後に OS の終了が
-/// 来た）は `in_flight_request`。後始末の通知（NOTIFY の OnClose）だけが `on_close_notify`。
+/// 来た）は `in_flight_request`。後始末の通知（NOTIFY の OnClose）だけが `on_close_notify`
+/// （NOTIFY の側は `firing_names_the_stage_calls_the_unblock_once_and_warns_once` が見る）。
 #[test]
 fn an_on_close_get_that_was_waiting_is_not_labelled_on_close_notify() {
-    for (busy, stage) in [
-        (get("OnClose"), "in_flight_request"),
-        (notify("OnClose"), "on_close_notify"),
-    ] {
-        let (unblock, _calls, _rx) = counting_unblock(Ok(()));
-        let probe = busy_probe(busy.clone(), Some(unblock));
-        let cut = try_fire(&probe.0, far_budget());
-        assert_eq!(cut.map(|c| c.stage), Some(stage), "{busy:?}");
-    }
+    let (unblock, _calls, _rx) = counting_unblock(Ok(()));
+    let probe = busy_probe(get("OnClose"), Some(unblock));
+    let cut = try_fire(&probe.0, far_budget());
+    assert_eq!(cut.map(|c| c.stage), Some("in_flight_request"));
 }
 
 /// 手動の口: 張られた見張りが今の呼び出しの段で解き、`finish` がその結果を返す。

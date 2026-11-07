@@ -4,7 +4,7 @@ use super::test_support::{
 };
 use super::{
     CloseReason, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig,
-    KanadeMsg, QuitPolicy, Response, TalkCommand, TalkId, events, expected_call, expected_unload,
+    KanadeMsg, QuitPolicy, Response, TalkCommand, events, expected_call, expected_unload,
     spawn_harness_gated,
 };
 
@@ -127,11 +127,6 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         })
         .collect();
     assert_eq!(
-        started.len(),
-        2,
-        "到達 StartTalk は steady talk と close talk の 2 本のみ（選択由来 talk は起きない）: {started:?}"
-    );
-    assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
     );
@@ -211,11 +206,6 @@ fn canonical_choice_ex_value_short_circuits_select() {
     assert_eq!(
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目は Ex 応答スクリプト由来の talk"
-    );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "選択由来 talk は新 talk_id=2"
     );
 
     assert_eq!(

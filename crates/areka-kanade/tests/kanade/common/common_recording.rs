@@ -1,10 +1,10 @@
 //! 受理された shiori 呼出の記録単位と、`areka_kanade::events::*` からの期待値導出。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use areka_kanade::{
-    BalloonBinding, ExecutionSnapshot, ExecutionStatus, KanadeMsg, MonotonicMs, ShioriCall, events,
+    BalloonBinding, ExecutionSnapshot, ExecutionStatus, KanadeMsg, MonotonicMs, ShioriCall,
+    TalkCommand, events,
 };
 
 use super::Harness;
@@ -164,6 +164,17 @@ pub fn tick(harness: &Harness, now: u64) {
             now: MonotonicMs(now),
         },
     );
+}
+
+/// 偽の sakura が受けた指示 1 件を比べられる形へ写す（`TalkCommand` は `PartialEq` を持たない）。
+///
+/// `Start(<talk_id>,<台詞>)`・`Resolve(<talk_id>,<選択 ID>)`・`Cancel(<talk_id>)` の形。
+pub fn command_tag(command: &TalkCommand) -> String {
+    match command {
+        TalkCommand::Start(s) => format!("Start({},{})", s.talk_id.0, s.script),
+        TalkCommand::ResolveChoice { talk_id, id } => format!("Resolve({},{id})", talk_id.0),
+        TalkCommand::CancelChoice { talk_id } => format!("Cancel({})", talk_id.0),
+    }
 }
 
 /// キャラとバルーンの結びつけを組む。

@@ -1,6 +1,6 @@
 //! 台本の時間の指令（`\![set,choicetimeout,N]` が運ぶ `timeout_directive_secs`）を受けた kanade が、
 //! 指令どおりの期限で `OnChoiceTimeout` を出すことを外側から確かめる檻（areka-P0-choice-timeout-directive
-//! タスク 3.3・要件 1.1／1.2／1.4／2.1／2.2／9.4 後半／9.5）。
+//! 要件 1.1／1.2／1.4／2.1／2.2／9.4 後半／9.5）。
 //!
 //! 選択待ちは共有の補助関数 `establish_choice_wait` に指令を渡して作る（Boot → `Tick(1_000)` で
 //! steady talk id=1 を起こす → `ChoiceWaiting`）。時刻はすべて注入 Tick の論理値であり、

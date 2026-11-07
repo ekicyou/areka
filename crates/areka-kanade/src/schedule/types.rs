@@ -37,7 +37,7 @@ pub(crate) enum Input {
     /// 直前の Action::ShioriRequest／ShioriUnload の結果（シェルが即時再投入）。
     ///
     /// `origin` は再投入元の呼出イベント ID（シェルが送出した call の id を転記・DD-IE-3）。
-    /// 後続処理（マウス GET の origin 別 reply 政策・タスク 2.2）が応答の出所を識別するための
+    /// 後続処理（マウス GET の origin 別 reply 政策）が応答の出所を識別するための
     /// 内部情報。unload の応答には出所イベントが無いため `"Unload"` を転記する。
     ShioriReply {
         outcome: ShioriOutcome,
@@ -173,7 +173,7 @@ pub(crate) struct ActiveTalk {
     /// 当該 talk の起動スクリプト（`OnChoiceTimeout` の Reference0 供給源・DD-10）。
     ///
     /// **kanade が [`StartTalk`] で自ら作った値**の保持であり、新しい情報源ではない
-    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。Ref0 への割付はタスク 4.5。
+    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。
     pub script: String,
 }
 
@@ -207,7 +207,7 @@ pub(crate) enum ChoicePhase {
     TimeoutInFlight,
 }
 
-/// カスケードの残段（M1 は正典形の無印 1 段のみ・裁定 2）。
+/// カスケードの残段（正典形の無印 1 段のみ・裁定 2）。
 pub(crate) enum CascadeNext {
     Select,
 }
@@ -226,7 +226,7 @@ pub(crate) struct State {
     /// slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
     ///
     /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
-    /// `talk_done_stale_choice`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
+    /// `talk_done_stale`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
     ///
     /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点はどの slot 差替でも共通の
     /// [`super::start_talk`]（選択・マウスの答え・SSTP の台本・時間切れの答え）、消去点は現 talk の

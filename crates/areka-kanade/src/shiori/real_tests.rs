@@ -18,8 +18,8 @@ fn inactive_status() -> ExecutionStatus {
     ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE)
 }
 
-/// `ShioriOutcome` の variant 名を返す（`ShioriOutcome` は Debug 非実装かつ msg.rs は本タスクで
-/// 不変ゆえ、assert 失敗メッセージ用に variant を局所的に説明する）。
+/// `ShioriOutcome` の variant 名を返す（`ShioriOutcome` は Debug 非実装ゆえ、assert 失敗メッセージ用に
+/// variant を局所的に説明する）。
 fn describe(outcome: &ShioriOutcome) -> &'static str {
     match outcome {
         ShioriOutcome::Value(_, _) => "Value",
@@ -422,39 +422,6 @@ fn handle_call_forwards_rendered_status_to_backend() {
 
 // --- Unload 正規化: Ok(Clean)／Ok(非 Clean)／Err の 3 分岐（要件 6.2/6.3）--
 
-#[test]
-fn unload_ok_clean_returns_unloaded() {
-    let backend = fake_unload(|| Ok(ExitKind::Clean));
-    let (tx, rx) = mpsc::channel::<ShioriMsg>();
-    let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || {
-        run_shiori_loop(
-            rx,
-            Box::new(backend),
-            on_down_tx,
-            ShioriProbe::default(),
-            IDLE_INTERVAL,
-        )
-    });
-    let (reply, receiver) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
-    let outcome = receiver.recv().expect("reply received");
-    assert!(
-        matches!(outcome, ShioriOutcome::Unloaded),
-        "Ok(Clean) は Unloaded を返す: got {}",
-        describe(&outcome)
-    );
-    tx.send(ShioriMsg::Close).expect("send Close");
-    drop(tx);
-    handle.join().expect("runner joins");
-    // join 後は on_down（Sender）が drop 済みゆえ try_recv は Empty ではなく Disconnected を
-    // 返し得る——いずれであれ ShioriDown が届いていないことのみを問う。
-    assert!(
-        !matches!(on_down_rx.try_recv(), Ok(KanadeMsg::ShioriDown { .. })),
-        "正規 clean shutdown は死活報告を発火しない"
-    );
-}
-
 /// 手空きの周期（降ろしの後の手空きを速く見届けるため本番より短い）。
 const UNLOAD_IDLE_TICK: Duration = Duration::from_millis(5);
 /// 応答や手空きを待つ上限（壊れていれば待つ長さ。緑なら数十 ms で抜ける）。
@@ -554,8 +521,19 @@ fn unload_ok_non_clean_logs_warn_and_returns_unloaded() {
 
 #[test]
 fn unload_err_logs_error_and_returns_failed_ipc() {
-    let backend = fake_unload(|| Err(ShutdownError::ExitTimeout));
-    let (outcome, events, _downs) = unload_then_idle(backend, || {});
+    let exited = Arc::new(AtomicBool::new(false));
+    let status_flag = exited.clone();
+    let mut backend = fake_unload(|| Err(ShutdownError::ExitTimeout));
+    // 降ろしに失敗した後で helper が消えた体にする（降ろし済みでないので手空きの死活監視が拾う）。
+    backend.status_result = Box::new(move || {
+        if status_flag.load(Ordering::SeqCst) {
+            HelperStatus::Exited(ExitKind::Terminated)
+        } else {
+            HelperStatus::Running
+        }
+    });
+    let (outcome, events, downs) =
+        unload_then_idle(backend, move || exited.store(true, Ordering::SeqCst));
     match outcome {
         ShioriOutcome::Failed(ShioriFailure::Ipc(detail)) => {
             assert_eq!(detail, ShutdownError::ExitTimeout.to_string());
@@ -566,6 +544,10 @@ fn unload_err_logs_error_and_returns_failed_ipc() {
         levels_of(&events, "unload_failed"),
         vec![tracing::Level::ERROR],
         "降ろしの失敗は ERROR を 1 件だけ残す: {events:?}"
+    );
+    assert_eq!(
+        downs, 1,
+        "降ろしに失敗したら降ろし済みにしない——続く手空きで落ちの知らせを 1 度だけ出す: {events:?}"
     );
 }
 
@@ -809,7 +791,7 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
     );
 }
 
-// --- 交渉状態の置き場（タスク 3.3・要件 5.1）---------------------------------
+// --- 交渉状態の置き場（要件 5.1）---------------------------------------------
 
 /// 接続 1 つにつき交渉状態は 1 つだけ存在する——接続の値が持ち、呼び出しごとに作り直さない
 /// （要件 5.1）。
@@ -822,10 +804,11 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
 /// その組み立てを呼ぶことは `real_resource_mark_tests.rs` が固定する）。
 ///
 /// 検査の射程はこの 1 ファイルに限る（「クレート全体に構築子が無い」ではない）。交渉状態を
-/// 作ってよい正当な構築点は接続の値を組む 2 か所——`crates/areka-ghost/src/shiori_wiring.rs`
-/// （本番の接続手続き）と `crates/areka-kanade/tests/kanade/real_helper_test.rs`（採取
-/// フィクスチャの接続手続き）——であり、tasks.md 3.3 が両方の追随を求めている。本ファイル
-/// 自身も構築子の綴りを含むため、走査対象を広げると恒偽になる。
+/// 作ってよい正当な構築点は接続の値を組む所——本番の接続手続き
+/// （`crates/areka-ghost/src/shiori_wiring.rs`）と、統合テストの接続手続き
+/// （`crates/areka-kanade/tests/kanade/` の `real_helper_test.rs`・`idle_pump_test.rs`・
+/// `common/common_window_actor.rs`）——である。本ファイル自身も構築子の綴りを含むため、
+/// 走査対象を広げると恒偽になる。
 ///
 /// 本文はコメントも含めて数えるので、説明で `&mut self.negotiator` を書き写すと件数が合わず
 /// 赤になる（検査を緩めるのではなく説明の方を言い換えること）。

@@ -3,9 +3,10 @@ use super::test_support::{
 };
 use super::{
     CallMethod, CloseReason, Driven, FailKind, FailOn, Fixture, KanadeConfig, KanadeMsg,
-    MouseButton, MouseEventKind, MouseInput, QuitPolicy, TalkCommand, expected_unload,
+    MouseButton, MouseEventKind, QuitPolicy, TalkCommand, expected_unload,
     spawn_harness_gated_failing,
 };
+use crate::mouse_test::test_support::mouse_input;
 
 // ============================================================================
 // 群 3: Req4.5・DD-12 — 選択起因の失敗は終了系列へ倒れない
@@ -140,15 +141,15 @@ fn non_choice_failure_during_choice_wait_still_faults() {
     // 選択待ち（帳簿 Waiting）の窓で非 choice GET を発行させ、その応答を失敗させる。
     harness
         .sender
-        .send(KanadeMsg::Mouse(MouseInput {
-            scope: 0,
-            x: 10,
-            y: 20,
-            region: Some("Head".to_string()),
-            kind: MouseEventKind::DoubleClick {
+        .send(KanadeMsg::Mouse(mouse_input(
+            MouseEventKind::DoubleClick {
                 button: MouseButton::Left,
             },
-        }))
+            10,
+            20,
+            0,
+            Some("Head"),
+        )))
         .expect("send Mouse during choice wait");
 
     // 免除が漏れていなければ、非 choice の Failed は終了系列を駆動して join が成功する。

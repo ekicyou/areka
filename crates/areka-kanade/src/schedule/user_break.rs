@@ -10,7 +10,7 @@
 //! 止めるのは既存の単一の閉じ口（[`Action::CancelChoice`]）であり、第 2 の停止経路は作らない
 //! （要件 3.2）。受理そのものは SHIORI への要求を 1 件も積まない（要件 3.9・裁定 1）。止めたトークの
 //! 完了の後に `OnBalloonBreak`（行き違いでは `OnBalloonClose`）を送るかは
-//! [`super::balloon_events::after_talk_done`] が決める（areka-P0-balloon-lifecycle-events が約束を改めた）。
+//! [`super::balloon_events::after_talk_done`] が決める。
 
 use super::balloon_events::{self, BreakNote};
 use super::{Action, State, clear_choice_ledger, current_talk_id, phase_label};

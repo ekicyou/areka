@@ -10,6 +10,7 @@
 use super::*;
 use crate::change::{RaiseOutcome, ShioriMethod};
 use crate::online::OnlineCounter;
+use crate::schedule::translate_test_support::config;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
@@ -51,7 +52,7 @@ fn spawn_with(online: &'static OnlineCounter) -> Spawned {
     });
     let (talk_tx, _talks) = mpsc::channel::<TalkCommand>();
     let (notice_tx, notices) = mpsc::channel::<KanadeNotice>();
-    let mut config = KanadeConfig::new("master", "1.0.0");
+    let mut config = config();
     config.online = online;
     let (kanade, handle) = spawn_kanade_with_stop_sink(
         config,

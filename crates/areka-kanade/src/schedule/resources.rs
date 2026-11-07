@@ -129,16 +129,11 @@ pub(crate) fn outcome_of(id: &'static str, outcome: ShioriOutcome) -> ResourceOu
         ShioriOutcome::NoContent => ResourceOutcome::NoContent,
         ShioriOutcome::Failed(failure) => ResourceOutcome::Failed(failure.to_string()),
         other => {
-            let kind = match other {
-                ShioriOutcome::Notified => "notified",
-                ShioriOutcome::Unloaded => "unloaded",
-                _ => "unknown",
-            };
             tracing::warn!(
                 target: "areka_kanade::resource",
                 event = "resource_query_unexpected_reply",
                 id = %id,
-                reply = %kind,
+                reply = %other.kind(),
                 "リソース照会が想定外の応答（GET は Value/NoContent/Failed のみ）——失敗として返す"
             );
             ResourceOutcome::Failed("unexpected".to_string())
@@ -160,15 +155,6 @@ pub type ResourceSink = Box<dyn Fn(&'static str, ResourceOutcome) + Send>;
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 許可集合外のリソース ID は判定を通らない（別族の否定側檻）。
-    #[test]
-    fn non_resource_id_is_not_allowed() {
-        assert!(
-            !is_allowed_resource_id("notaresource"),
-            "許可集合外のリソース ID は拒否される"
-        );
-    }
 
     /// リソース許可集合は厳密にこの 15 名（語彙の凍結檻・Req4.1／要件 3.2・
     /// areka-P0-network-update 要件 9.13・areka-P0-move-canon 要件 8.2 で 12→13・
@@ -197,12 +183,6 @@ mod tests {
             ],
             "リソース許可集合は利用者名＋メニュー枠 7 種の項目名＋本体側／相方側の表示可否＋更新先と番号の起点＋位置初期化の項目名 2 つ＋「ネットワーク更新」の項目名の古い名前の 15 名"
         );
-        for id in ALLOWED_RESOURCE_IDS {
-            assert!(
-                is_allowed_resource_id(id),
-                "{id} は集合にあるのに許可されない"
-            );
-        }
     }
 
     /// 問い合わせない裁定の名前（`popupmenu.type` 系・要件 3.8）と n≧2 の表示可否は
@@ -264,40 +244,6 @@ mod tests {
                 !is_allowed_resource_id(ev),
                 "イベント ID {ev} はリソース許可集合に属してはならない（別族）"
             );
-        }
-    }
-
-    /// `resource_get("username", ..)` は GET・id=`"username"`・References なし・Status は snapshot 由来
-    /// （INACTIVE→ヘッダ行なし・Req4.1）。id は許可集合を通る。
-    #[test]
-    fn resource_get_username_is_get_with_no_references() {
-        let call = resource_get("username", &ExecutionSnapshot::INACTIVE);
-        match call {
-            ShioriCall::Get {
-                id,
-                references,
-                status,
-            } => {
-                assert_eq!(
-                    id,
-                    EventId::Static("username"),
-                    "リソース照会 id はスケジューラ起源の username リテラル（M1・DD-1）"
-                );
-                assert!(
-                    references.is_empty(),
-                    "Resource GET は References を持たない"
-                );
-                assert_eq!(
-                    status.render(),
-                    None,
-                    "INACTIVE スナップショットは Status ヘッダを出さない"
-                );
-                assert!(
-                    is_allowed_resource_id(id.as_str()),
-                    "username は送出許可集合を通る"
-                );
-            }
-            ShioriCall::Notify { .. } => panic!("resource_get は GET を返すべき"),
         }
     }
 

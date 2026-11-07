@@ -1,13 +1,11 @@
-use super::test_support::{
-    assert_no_second_change, choice_input_of, config, expect_get_call, expect_ledger, steady_some,
-};
+use super::test_support::{choice_input_of, config, expect_get_call, expect_ledger, steady_some};
 use super::*;
 use crate::schedule::log_capture::{assert_logged, capture};
 use crate::schedule::step;
 use tracing::Level;
 
 // ============================================================
-// 選択待ちの期限の知らせ（#7・要件 9.5）
+// 選択待ちの期限の知らせ（要件 9.5）
 // ============================================================
 //
 // 期限が決まった時に起こしの頼みを 1 つ返し、期限の知らせ（`Input::ChoiceTimeoutDue`）で
@@ -103,7 +101,6 @@ fn a_late_notice_after_the_choice_is_resolved_does_nothing() {
     let ev = capture(|| out = Some(step(s, due(10_501), &config())));
     let (_, actions) = out.expect("step は結果を返す");
     assert!(actions.is_empty(), "確定の後の知らせは何も出さない");
-    assert_no_second_change(&actions);
     assert_logged(&ev, Level::TRACE, "choice_timeout_due_not_fired");
 
     let idle = State::initial();

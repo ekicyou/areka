@@ -19,8 +19,7 @@
 //! - `Steady{talk: None}` の次 Tick（Steady 遷移直後の握手開始）
 //! - active talk の `TalkDone{reason: Ended | Interrupted}` 受領時
 //!
-//! 握手開始＝`OnClose` GET 発行＋`ClosePending` への遷移（ClosePending 以降は close.rs＝
-//! タスク 2.5 の責務）。
+//! 握手開始＝`OnClose` GET 発行＋`ClosePending` への遷移（ClosePending 以降は close.rs の責務）。
 
 use super::choice::{CascadePlan, choice_deadline, plan_cascade};
 use super::{Action, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State, events};
@@ -42,7 +41,7 @@ mod choice_script;
 pub(crate) fn step(state: State, input: Input) -> (State, Vec<Action>) {
     match input {
         Input::Tick { now } => on_tick(state, now),
-        // origin（DD-IE-3）はマウス GET origin 別 reply 政策（本タスク 2.3）で消費する:
+        // origin（DD-IE-3）はマウス GET origin 別 reply 政策で消費する:
         // 応答の出所を ActiveTalk.origin へ転記し、talk 再生中の置換／防御破棄の分岐に用いる。
         Input::ShioriReply { outcome, origin } => on_reply(state, outcome, origin),
         Input::TalkDone(done) => on_talk_done(state, done),
@@ -61,12 +60,13 @@ pub(crate) fn step(state: State, input: Input) -> (State, Vec<Action>) {
 /// [`MouseInput`] から正典イベント（`OnMouseMove` / `OnMouseDoubleClick` /
 /// `OnMouseDragStart` / `OnMouseDragEnd`）の GET を 1 件構築し
 /// 発行する。GET の応答（204／Value）に対する reply／置換政策は本関数の責務ではなく後続の
-/// `on_reply` アーム（タスク 2.3）が担う——本関数は**GET 発行まで**である。
+/// `on_reply` アームが担う——本関数は**GET 発行まで**である。
 ///
 /// # close 保留中の防御（close 優先・DD-IE-8）
 /// close 保留中（`pending_close.is_some()`）はマウス GET を発行しない。close 握手はマウス入力に
 /// 割り込まれてはならないため、guard を最初に置き GET 発行より優先する（`pending_close` は
-/// 消費しない・trace で観測）。
+/// 消費しない・trace で観測）。切替の保留中（`pending_change.is_some()`）も同じく発行しない
+/// （答えの台詞が今の台詞を置き換え、切替がその終わりまで遅れる・要件 9.3）。
 ///
 /// # Status の併送（DD-IE-1）
 /// talk 再生中の Steady（`Steady{Some}`）でもマウス GET は**抑止せず常に発行**し、`Status: talking`
@@ -82,6 +82,15 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
             event = "mouse_close_pending",
             ?input,
             "close 保留中——マウス GET を発行しない（close 優先・DD-IE-8）"
+        );
+        return (state, Vec::new());
+    }
+    if state.pending_change.is_some() {
+        tracing::trace!(
+            target: "kanade",
+            event = "mouse_change_pending",
+            ?input,
+            "切替の保留中——マウス GET を発行しない（答えの台詞が切替を遅らせる・要件 9.3）"
         );
         return (state, Vec::new());
     }
@@ -153,8 +162,8 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
 ///
 /// # 確立後の状態
 /// 帳簿は [`ChoicePhase::Waiting`]（入力待ち）で確立し、候補 ID 列を通知どおりの表示順で保持する
-/// （DD-7）。これがタスク 4.3 の受領検証（候補集合照合・talk_id 突合）と、タスク 4.5 の deadline
-/// 到達判定が読む前提になる。[`Phase`] は一切触らない（DD-3）。期限つきなら
+/// （DD-7）。これが選択確定の受領検証（候補集合照合・talk_id 突合）と、期限の到達判定が読む
+/// 前提になる。[`Phase`] は一切触らない（DD-3）。期限つきなら
 /// [`Action::ArmChoiceWake`]`(deadline)` を 1 つだけ返し、無期限なら Action を返さない。
 pub(super) fn on_choice_waiting(
     mut state: State,
@@ -206,7 +215,7 @@ pub(super) fn on_choice_waiting(
         deadline,
         phase: ChoicePhase::Waiting,
     });
-    // 期限が決まった時点で刻み役に 1 回だけ起こしてもらう（期限ちょうどに判定するため・#7）。
+    // 期限が決まった時点で刻み役に 1 回だけ起こしてもらう（期限ちょうどに判定するため）。
     let actions = deadline.map(Action::ArmChoiceWake).into_iter().collect();
     (state, actions)
 }
@@ -668,7 +677,7 @@ fn on_timeout_reply(
     (state, vec![Action::CancelChoice { talk_id }])
 }
 
-/// Steady での選択待ちの期限の知らせ（[`Input::ChoiceTimeoutDue`]・#7）。
+/// Steady での選択待ちの期限の知らせ（[`Input::ChoiceTimeoutDue`]）。
 ///
 /// 判定は [`fire_choice_timeout_if_due`] をその時刻でそのまま呼ぶ（`on_tick` と同じ判定・二重には
 /// 出ない）。出なければ（帳簿が無い・選択が先に済んだ・期限の前）trace だけで空。`last_now` も pump も触らない。
@@ -746,7 +755,7 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
 /// - `talk: None` + `Value(script)` → 一意 talk_id 採番＋StartTalk・`Steady{Some(origin)}` へ（origin ラベルは
 ///   応答の実イベント名・OnSecondChange 起動／マウス起動を同一経路で扱う・Req 4.1）。
 /// - `talk: None` + `NoContent`（204）→ StartTalk なし・`Steady{None}` 維持（Req 2.3／4.2）。
-/// - `talk: Some` + `Value` + `value_replaces_active_talk(origin)`（マウス 2 語・汎用の入口）→ **置換**: 採番＋slot
+/// - `talk: Some` + `Value` + `value_replaces_active_talk(origin)`（`OnSecondChange`・倍率の 2 語以外の出所）→ **置換**: 採番＋slot
 ///   上書き＋StartTalk（dispatcher の既存 Close-then-spawn が旧 talk を閉じ、旧 Done を stale 破棄する・
 ///   kanade 側は slot 上書きと採番のみ＝新調停なし・Req 4.3・DD-IE-2）。
 /// - `talk: Some` + `Value` + origin が `OnSecondChange` → 既存 DD-6 防御破棄・warn!＋破棄・維持。
@@ -773,8 +782,8 @@ fn on_reply(
     }
     // === choice 先行アーム（C4 規則 3・origin 非依存）===
     // カスケード段の応答は既存の origin 政策 match より**先に**捌く。これを落とすと選択応答が
-    // 下の DD-6 防御アーム（`steady_value_during_talk`）で warn 破棄され、選択が沈黙する
-    // （design Risks の既知の罠）。判定は origin 文字列でなく in-flight 帳簿の照合で行う（DD-1）。
+    // 下の置換の腕で台詞として再生され、帳簿の解決（`ResolveChoice`）が送られない。
+    // 判定は origin 文字列でなく in-flight 帳簿の照合で行う（DD-1）。
     if let Some(ledger) = state.choice.take() {
         match ledger.phase {
             ChoicePhase::Cascading { .. } => {
@@ -813,7 +822,7 @@ fn on_reply(
             // `events::value_replaces_active_talk` の 1 か所に置く（`OnSecondChange` と倍率の 2 語以外は置き換える）。
             ShioriOutcome::Value(script, _) => match origin {
                 origin if events::value_replaces_active_talk(origin) => {
-                    // 置換（Req 4.3・DD-IE-2）: マウス 2 語・汎用の入口の Value は active talk を差し替える。
+                    // 置換（Req 4.3・DD-IE-2）: `OnSecondChange`・倍率の 2 語以外の出所の Value は active talk を差し替える。
                     // kanade 側は新 talk_id 採番＋slot 上書き＋StartTalk のみ。旧 talk の後始末
                     // （Close-then-spawn・旧 Done の stale 破棄）は dispatcher 既存実装へ完全委譲する。
                     let (talk_id, start) =
@@ -895,9 +904,8 @@ fn on_close_request(mut state: State, reason: CloseReason) -> (State, Vec<Action
 
 /// close 握手開始: `OnClose` GET を発行し `ClosePending` へ遷移する。
 ///
-/// この Steady→ClosePending 遷移は本タスク（2.4）の責務である。ClosePending 以降の握手
-/// （応答処理・CloseTalkWait・期限・別れの台詞の完了→終了・204→無言終了）は close.rs（タスク
-/// 2.5）が実装する。
+/// この Steady→ClosePending 遷移は本層の責務である。ClosePending 以降の握手
+/// （応答処理・CloseTalkWait・期限・別れの台詞の完了→終了・204→無言終了）は close.rs が実装する。
 fn begin_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "close_handshake_begin", reason = reason.as_ref_str(), "OnClose GET を発行し握手を開始");
     state.phase = Phase::ClosePending;

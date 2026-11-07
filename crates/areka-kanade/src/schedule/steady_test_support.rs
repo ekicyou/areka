@@ -1,22 +1,14 @@
 use super::*;
 use crate::schedule::ActiveTalk;
-pub(super) fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
+pub(super) use crate::schedule::translate_test_support::config;
 
-/// 構造体更新（`..base_state()`）の基準の状態（[`State::initial`]＝Idle・Tick 未受領・採番 1・
-/// 保留と帳簿なし）。欄が増えても、これを使うテストのリテラルは追随を要さない。
-pub(crate) fn base_state() -> State {
-    State::initial()
-}
-
-/// Steady{talk: None}（pending_close なし）を任意時刻・任意採番で構築する。
+/// Steady{talk: None}（pending_close なし）を時刻 500・任意採番で構築する。
 pub(super) fn steady_none(next_id: u64) -> State {
     State {
         phase: Phase::Steady { talk: None },
         last_now: Some(MonotonicMs(500)),
         next_talk_id: next_id,
-        ..base_state()
+        ..State::initial()
     }
 }
 
@@ -32,7 +24,7 @@ pub(super) fn steady_some(talk_id: TalkId, next_id: u64) -> State {
         },
         last_now: Some(MonotonicMs(500)),
         next_talk_id: next_id,
-        ..base_state()
+        ..State::initial()
     }
 }
 
@@ -51,7 +43,7 @@ pub(super) fn assert_no_second_change(actions: &[Action]) {
 }
 
 // ============================================================
-// 選択確定の受領検証とカスケード駆動（タスク 4.3・C4 規則 1／2／3・DD-4）
+// 選択確定の受領検証とカスケード駆動（C4 規則 1／2／3・DD-4）
 // ============================================================
 
 /// 檻用の選択確定入力（id／label／付随参照列を明示して組む・scope は 0 固定）。
@@ -82,7 +74,7 @@ pub(super) fn steady_with_ledger(
 }
 
 /// GET Action から (イベント ID の wire 形, Reference 列) を取り出す（GET 以外は panic）。
-pub(super) fn expect_get_call(action: &Action) -> (String, Vec<String>) {
+pub(crate) fn expect_get_call(action: &Action) -> (String, Vec<String>) {
     match action {
         Action::ShioriRequest(ShioriCall::Get { id, references, .. }) => {
             (id.as_str().to_string(), references.clone())
@@ -97,7 +89,7 @@ pub(super) fn expect_ledger(state: &State) -> &ChoiceState {
 }
 
 // ============================================================
-// 選択待ち中の実行状態導出（タスク 4.4・Req6.1〜6.5・C5・裁定 6）
+// 選択待ち中の実行状態導出（Req6.1〜6.5・C5・裁定 6）
 // ============================================================
 
 /// ShioriRequest（GET/NOTIFY 問わず）の共通ヘッダ `Status` の wire 値を取り出す。

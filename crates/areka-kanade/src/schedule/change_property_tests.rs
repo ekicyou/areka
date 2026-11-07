@@ -89,22 +89,14 @@ fn boot_and_shutdown_phases_drop_with_one_warn() {
 
 #[test]
 fn raise_and_property_events_are_dropped_while_close_or_change_is_pending() {
-    // 終了・切替の保留中は、汎用の通知の入口も返しの入口も送らずに捨てる（#3・要件 9.3）。
+    // 終了・切替の保留中は、汎用の通知の入口も返しの入口も送らずに捨てる（要件 9.3）。
     let pending = |reason: &str| match reason {
         "close_pending" => State {
             pending_close: Some(CloseReason::System),
             ..steady_talking()
         },
         _ => State {
-            pending_change: Some(ChangeRequest {
-                target: ChangeTarget {
-                    sakura_name: "ポスト".to_string(),
-                    name: "R_POST_and_KOMAINU".to_string(),
-                    dir: "R_POST_DIR".to_string(),
-                },
-                origin: ChangeOrigin::Manual,
-                raise_event: true,
-            }),
+            pending_change: Some(change_request()),
             ..steady_talking()
         },
     };

@@ -1,4 +1,4 @@
-//! 殻で答えるリソース照会（`KanadeMsg::ResourceQuery`）の統合檻（要件 9.2・タスク 2.3）。
+//! 殻で答えるリソース照会（`KanadeMsg::ResourceQuery`）の統合檻（要件 9.2）。
 //!
 //! 偽 SHIORI（既存ハーネス）を相手に、項目名リソースの応答 4 通り——値を返す／空を返す／
 //! 値なしを返す／失敗する——が結果語彙 [`ResourceOutcome`] の 4 通りへ 1 対 1 で写ることを
@@ -53,18 +53,20 @@ enum QueryAt {
     Steady,
 }
 
-/// 照会を 1 件送って終了まで走らせ、`(応答, shiori 記録列)` を確定して返す。
+/// [`MENU_IDS`] の照会を 1 件送って終了まで走らせ、`(応答, shiori 記録列)` を確定して返す。
 ///
 /// `Boot`／照会／`CloseRequest` を `at` の指す順序で投函し、close talk（quit:true）で終了系列を
 /// 駆動する。kanade の期限付き join 成功が「照会の処理も記録も確定した」ことの完了バリアであり、
 /// 応答の受領も期限付きで行う（殻が答えない後退は待ち続けずに赤になる）。
 fn run_query(
     harness: Harness,
-    ids: Vec<&'static str>,
     at: QueryAt,
 ) -> (Vec<(&'static str, ResourceOutcome)>, Vec<RecordedCall>) {
     let (reply, receiver) = reply_channel::<Vec<(&'static str, ResourceOutcome)>>();
-    let query = KanadeMsg::ResourceQuery { ids, reply };
+    let query = KanadeMsg::ResourceQuery {
+        ids: MENU_IDS.to_vec(),
+        reply,
+    };
 
     match at {
         QueryAt::BeforeBoot => {
@@ -118,7 +120,7 @@ fn outcome_for<'a>(
         .unwrap_or_else(|| panic!("応答に {id} が含まれていない: {answers:?}"))
 }
 
-/// 応答が入力の id と同じ順・同じ長さであることを確かめる（4 檻すべてが通る共通契約）。
+/// 応答が入力の id と同じ順・同じ長さであることを確かめる（全部の檻が通る共通契約）。
 fn assert_same_order_and_length(answers: &[(&'static str, ResourceOutcome)]) {
     let answered: Vec<&str> = answers.iter().map(|(id, _)| *id).collect();
     assert_eq!(
@@ -158,7 +160,7 @@ fn caption_value_is_returned_verbatim() {
         QuitPolicy::PerTalk(vec![true]),
     );
 
-    let (answers, recorded) = run_query(harness, MENU_IDS.to_vec(), QueryAt::Steady);
+    let (answers, recorded) = run_query(harness, QueryAt::Steady);
 
     assert_same_order_and_length(&answers);
     assert_eq!(
@@ -191,7 +193,7 @@ fn empty_caption_is_returned_as_empty_value_not_no_content() {
         QuitPolicy::PerTalk(vec![true]),
     );
 
-    let (answers, recorded) = run_query(harness, MENU_IDS.to_vec(), QueryAt::Steady);
+    let (answers, recorded) = run_query(harness, QueryAt::Steady);
 
     assert_same_order_and_length(&answers);
     let outcome = outcome_for(&answers, README_CAPTION);
@@ -200,11 +202,6 @@ fn empty_caption_is_returned_as_empty_value_not_no_content() {
         &ResourceOutcome::Value(String::new()),
         "空を返す応答は空文字を載せた Value になるはず（要件 3.3）: {answers:?}"
     );
-    assert_ne!(
-        outcome,
-        &ResourceOutcome::NoContent,
-        "空を返す応答と値なしの応答は別の語彙であるはず（要件 3.3／3.4）: {answers:?}"
-    );
     assert!(
         menu_gets(&recorded).contains(&README_CAPTION),
         "空を返す場合も GET は出るはず: {recorded:?}"
@@ -212,41 +209,7 @@ fn empty_caption_is_returned_as_empty_value_not_no_content() {
 }
 
 // ============================================================================
-// ⑶ 値なしを返す → `ResourceOutcome::NoContent`
-// ============================================================================
-
-/// 項目名リソースが値なし（204）を返したら `NoContent` として返る（要件 3.4）。
-///
-/// # 非空虚性
-/// 未注入の 2 名も同じ 204 経路を通るため、3 名すべてが `NoContent` で揃うことを見る。
-/// GET が記録に現れることで「送らずに既定へ倒した」のではないことを区別する。
-#[test]
-fn absent_caption_is_returned_as_no_content() {
-    let harness = spawn_harness(
-        config(),
-        menu_fixture().with_response(README_CAPTION, Response::NoContent),
-        QuitPolicy::PerTalk(vec![true]),
-    );
-
-    let (answers, recorded) = run_query(harness, MENU_IDS.to_vec(), QueryAt::Steady);
-
-    assert_same_order_and_length(&answers);
-    for (id, outcome) in &answers {
-        assert_eq!(
-            outcome,
-            &ResourceOutcome::NoContent,
-            "値なしの応答は NoContent になるはず（要件 3.4）: {id} → {outcome:?}"
-        );
-    }
-    assert_eq!(
-        menu_gets(&recorded),
-        MENU_IDS.to_vec(),
-        "値なしでも GET そのものは 3 名に出るはず（送らずに倒したのではない）: {recorded:?}"
-    );
-}
-
-// ============================================================================
-// ⑷ 失敗する → `ResourceOutcome::Failed(理由)`・残りの id は答える
+// ⑶ 失敗する → `ResourceOutcome::Failed(理由)`・残りの id は答える（値なし → `NoContent` もここで見る）
 // ============================================================================
 
 /// 項目名リソースの照会が失敗したら、その id だけが理由付きの `Failed` になり、
@@ -254,7 +217,8 @@ fn absent_caption_is_returned_as_no_content() {
 ///
 /// # 非空虚性
 /// 失敗を `NoContent` へ潰す後退（失敗と値なしの取り違え）はここで落ちる。1 件の失敗が
-/// 照会全体を巻き込まないこと（残り 2 名が答える）も同時に見る。
+/// 照会全体を巻き込まないこと（残り 2 名が答える）も同時に見る。残り 2 名は未注入＝204 なので、
+/// 値なしが `NoContent` で返り GET そのものは出ること（要件 3.4）もこの檻が見る。
 #[test]
 fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
     let harness = spawn_harness_failing(
@@ -264,7 +228,7 @@ fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
         FailOn::new(README_CAPTION, FailKind::Ipc),
     );
 
-    let (answers, recorded) = run_query(harness, MENU_IDS.to_vec(), QueryAt::Steady);
+    let (answers, recorded) = run_query(harness, QueryAt::Steady);
 
     assert_same_order_and_length(&answers);
     match outcome_for(&answers, README_CAPTION) {
@@ -278,7 +242,7 @@ fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
         assert_eq!(
             outcome_for(&answers, id),
             &ResourceOutcome::NoContent,
-            "1 件の失敗は残りの id を巻き込まないはず: {answers:?}"
+            "1 件の失敗は残りの id を巻き込まず、値なしは NoContent になるはず（要件 3.4）: {answers:?}"
         );
     }
     assert_eq!(
@@ -289,7 +253,7 @@ fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
 }
 
 // ============================================================================
-// ⑸ 会話できる状態になる前の照会 → SHIORI へ送らず全件「値なし」
+// ⑷ 会話できる状態になる前の照会 → SHIORI へ送らず全件「値なし」
 // ============================================================================
 
 /// `Boot` より前（`Phase::Idle`）に届いた照会は、SHIORI へ 1 通も送らずに全件 `NoContent` で
@@ -312,7 +276,7 @@ fn query_before_boot_returns_no_content_for_every_id() {
         QuitPolicy::PerTalk(vec![true]),
     );
 
-    let (answers, recorded) = run_query(harness, MENU_IDS.to_vec(), QueryAt::BeforeBoot);
+    let (answers, recorded) = run_query(harness, QueryAt::BeforeBoot);
 
     assert_same_order_and_length(&answers);
     for (id, outcome) in &answers {

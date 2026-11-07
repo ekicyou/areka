@@ -1,7 +1,6 @@
 //! mock shiori アクター 3 種（即応・失敗注入・ブロッキング）。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -44,7 +43,7 @@ pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
     spawn_mock_shiori_loop(fixture, None, None)
 }
 
-/// 3 つの mock shiori が共有する受信の輪（#45・呼出の記録と Unload／Close の扱いはここ 1 か所）。
+/// 3 つの mock shiori が共有する受信の輪（呼出の記録と Unload／Close の扱いはここ 1 か所）。
 ///
 /// - `fail_on`: 一致する**最初の**呼出に [`ShioriOutcome::Failed`] を返す（応答表は前進させない）。
 /// - `block`: 一致する**最初の**呼出を記録し、応答を決めてから [`ShioriGate::release`] まで握る。
@@ -109,14 +108,14 @@ fn spawn_mock_shiori_loop(
 }
 
 // ============================================================================
-// 失敗注入付き mock shiori（4.6 専用・区別語彙ごとの呼出失敗を観測する）
+// 失敗注入付き mock shiori（区別語彙ごとの呼出失敗を観測する）
 // ============================================================================
 
 /// 失敗注入の区別語彙（[`ShioriFailure`] の 5 種に 1:1 対応する COPYABLE 記述子）。
 ///
 /// [`ShioriFailure`] 自体は `Clone` を実装しないため（かつ `Fixture` は `Clone` 派生ゆえ
 /// 中に持てない）、fixture 側にはこの Copy な種別のみを持たせ、実 `ShioriFailure` は mock の
-/// `respond` 内でその都度 fresh に構築する（設計「Error Categories」の 5 語彙）。
+/// 受信の輪の中でその都度 fresh に構築する（設計「Error Categories」の 5 語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailKind {
     /// [`ShioriFailure::Handshake`]（接続確立失敗）。
@@ -128,7 +127,6 @@ pub enum FailKind {
     /// [`ShioriFailure::Shiori`]（SHIORI エラー応答）。
     Shiori,
     /// [`ShioriFailure::Internal`]（kanade 内部規律違反・境界写像では生成されない・DD-IT-11）。
-    /// 5.1 は記述子のみ追加し語彙を完全化する（実掃引は 5.2 の担当）。
     Internal,
 }
 
@@ -198,7 +196,7 @@ impl FailOn {
     }
 }
 
-/// 失敗注入付き mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生・4.6 専用）。
+/// 失敗注入付き mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生）。
 ///
 /// `fixture` の良性応答表に加え、`fail_on.id` に一致する最初の呼出で
 /// [`ShioriOutcome::Failed`]（`fail_on.kind` に対応する fresh な [`ShioriFailure`]）を返す。
@@ -217,7 +215,7 @@ fn call_id(call: &ShioriCall) -> &str {
 }
 
 // ============================================================================
-// ブロッキング mock shiori（6.3 専用・呼出ブロック中の Tick catch-up を観測する）
+// ブロッキング mock shiori（呼出ブロック中の Tick catch-up を観測する）
 // ============================================================================
 
 /// ブロック対象の記述子（どの呼出を握り続けるか・COPYABLE）。
@@ -258,7 +256,7 @@ struct ShioriGateInner {
     released: bool,
 }
 
-/// ブロッキング mock shiori のゲート（6.3 専用）。
+/// ブロッキング mock shiori のゲート。
 ///
 /// [`wait_until_blocked`](ShioriGate::wait_until_blocked) で「kanade が対象呼出の往復で
 /// ブロック中」であることを有界に確認し、[`release`](ShioriGate::release) でその往復に
@@ -281,15 +279,12 @@ impl ShioriGate {
             if now >= deadline {
                 return false;
             }
-            let (guard, res) = self
+            inner = self
                 .shared
                 .cvar
                 .wait_timeout(inner, deadline - now)
-                .expect("shiori gate condvar wait_timeout");
-            inner = guard;
-            if res.timed_out() && !inner.blocked_arrived {
-                return false;
-            }
+                .expect("shiori gate condvar wait_timeout")
+                .0;
         }
         true
     }
@@ -305,7 +300,7 @@ impl ShioriGate {
     }
 }
 
-/// ブロッキング mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生・6.3 専用）。
+/// ブロッキング mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生）。
 ///
 /// `block_on` が指す**最初の**呼出を受領したとき、記録した上で応答を送らず、受信ループ内で
 /// [`ShioriGate::release`] まで Condvar で待つ（＝kanade の drive ループが `ReplyReceiver::recv`

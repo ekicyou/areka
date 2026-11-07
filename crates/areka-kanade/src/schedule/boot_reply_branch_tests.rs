@@ -1,39 +1,17 @@
-use super::test_support::{assert_get, assert_notify, config};
+use super::test_support::{
+    assert_get, assert_notify, config, drive_to_main, drive_to_prefetch, reply,
+};
 use super::*;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
 use crate::talk::TalkId;
 
 // ========================================================================
-// タスク 6.2: username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）
+// username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）
 // ========================================================================
 
 use crate::msg::ShioriFailure;
 use resources::ResourceOutcome;
-
-/// Idle→Boot→(OnInitialize Notified) まで駆動し `BootPrefetch`（username GET 発行済み）へ到達させる。
-fn drive_to_prefetch(cfg: &KanadeConfig) -> State {
-    let (s, _) = step(State::initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
-    let (s, actions) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Notified,
-            origin: "test",
-        },
-        cfg,
-    ); // BootInit→BootPrefetch（username GET 発行）
-    assert!(
-        matches!(s.phase, Phase::BootPrefetch),
-        "OnInitialize 完了後は BootPrefetch（username 照会待ち）であるべき"
-    );
-    // BootInit の応答は username GET を 1 件だけ発行する（OnFirstBoot ではない）。
-    assert_eq!(actions.len(), 1, "prefetch は GET を 1 件だけ発行する");
-    assert_get(
-        &actions[0],
-        &resources::resource_get("username", &ExecutionSnapshot::INACTIVE),
-    );
-    s
-}
 
 /// Action 列から `Action::ResourceOutcome` の outcome を取り出す（無ければ panic）。
 fn resource_outcome_of(actions: &[Action]) -> &ResourceOutcome {
@@ -279,18 +257,10 @@ fn is_onboot_get(action: &Action) -> bool {
 }
 
 // ========================================================================
-// タスク 5.3: 初回ゲート分岐（3.1-3.4）＋ epilogue 添付（design C9）
+// 初回ゲート分岐（3.1-3.4）＋ epilogue 添付（design C9）
 // ========================================================================
 
 use crate::talk::EpilogueCommand;
-
-/// テスト用の SHIORI 応答入力（origin は boot では未使用）。
-fn reply(outcome: ShioriOutcome) -> Input {
-    Input::ShioriReply {
-        outcome,
-        origin: "test",
-    }
-}
 
 /// 2 回目以降起動（起動記録あり）を表す config（first_boot=false）。
 fn config_not_first_boot() -> KanadeConfig {
@@ -334,7 +304,7 @@ fn prefetch_first_boot_false_skips_onfirstboot_and_starts_from_onboot() {
     let mut phase_is_main = false;
     let mut actions_out: Vec<Action> = Vec::new();
     let events = capture(|| {
-        let (next, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+        let (next, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
         phase_is_main = matches!(next.phase, Phase::BootMain);
         actions_out = actions;
     });
@@ -360,7 +330,7 @@ fn prefetch_first_boot_false_skips_onfirstboot_and_starts_from_onboot() {
         1,
         "first_boot=false は OnBoot GET を発行して BootMain から始める（3.3）"
     );
-    // grep 証跡: boot_gate skip_first_boot（task 8.6/8.7）。
+    // grep 証跡: boot_gate skip_first_boot。
     assert_logged(&events, Level::INFO, "boot_gate");
 }
 
@@ -370,7 +340,7 @@ fn first_boot_true_204_falls_through_to_onboot() {
     let cfg = config(); // 既定 first_boot=true
     let s = drive_to_prefetch(&cfg);
     // BootPrefetch 204 → OnFirstBoot GET / BootType（従来どおり）。
-    let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+    let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     assert!(
         matches!(s.phase, Phase::BootType),
         "first_boot=true は BootType（OnFirstBoot 待ち）へ"
@@ -380,7 +350,7 @@ fn first_boot_true_204_falls_through_to_onboot() {
         "first_boot=true は OnFirstBoot GET を発行する（3.1）"
     );
     // BootType 204 → OnBoot GET / BootMain（204 フォールスルー・3.2）。
-    let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+    let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     assert!(
         matches!(s.phase, Phase::BootMain),
         "OnFirstBoot 204 は OnBoot へフォールスルー（3.2）"
@@ -398,7 +368,7 @@ fn onfirstboot_ref0_reflects_config_vanish_count() {
     let mut cfg = config();
     cfg.vanish_count = 7;
     let s = drive_to_prefetch(&cfg);
-    let (_, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+    let (_, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     // 発行された OnFirstBoot GET は events::on_first_boot(_, 7) と一致する（Ref0="7"）。
     let onfirstboot = actions
         .iter()
@@ -411,21 +381,13 @@ fn onfirstboot_ref0_reflects_config_vanish_count() {
 }
 
 /// design C9 Some アーム: 挨拶 talk は `config.first_boot_epilogue` を添付して起動する。
+/// 追跡の枠（`ActiveTalk.script`）も自ら作った script を保持する（DD-10・`OnChoiceTimeout` Ref0 の供給源）。
 #[test]
 fn boot_greeting_talk_carries_epilogue() {
     let cfg = config_with_epilogue();
-    let s = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        ..State::initial()
-    };
-    let (_, actions) = step(
-        s,
-        reply(ShioriOutcome::Value(
-            "greeting".to_string(),
-            areka_talk::SecurityLevel::Local,
-        )),
+    let (s, actions) = reply(
+        drive_to_main(&cfg),
+        ShioriOutcome::Value("greeting".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     let st = start_talk_of(&actions);
@@ -433,6 +395,13 @@ fn boot_greeting_talk_carries_epilogue() {
     assert_eq!(
         st.epilogue, cfg.first_boot_epilogue,
         "Value 経路の StartTalk は first_boot_epilogue を添付する（design C9 Some アーム）"
+    );
+    assert!(
+        matches!(
+            &s.phase,
+            Phase::BootVersion { talk: Some(active) } if active.script == "greeting"
+        ),
+        "挨拶 talk の script が ActiveTalk へ保持される（DD-10）"
     );
 }
 
@@ -442,14 +411,10 @@ fn boot_greeting_talk_carries_epilogue() {
 fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
     let cfg = config_with_epilogue(); // first_boot=true・epilogue 非空
     // Idle→…→BootMain（prefetch 204 → OnFirstBoot 204）。
-    let s = drive_to_prefetch(&cfg);
-    let (s, _) = step(s, reply(ShioriOutcome::NoContent), &cfg); // BootPrefetch→BootType
-    assert!(matches!(s.phase, Phase::BootType));
-    let (s, _) = step(s, reply(ShioriOutcome::NoContent), &cfg); // BootType 204→BootMain
-    assert!(matches!(s.phase, Phase::BootMain));
+    let s = drive_to_main(&cfg);
 
     // BootMain 204（トーク皆無）＋epilogue 非空 → epilogue-only StartTalk。
-    let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+    let (s, actions) = reply(s, ShioriOutcome::NoContent, &cfg);
     let st = start_talk_of(&actions);
     assert_eq!(st.script, "", "epilogue-only talk の script は空");
     assert_eq!(
@@ -469,11 +434,11 @@ fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
                 talk: Some(ActiveTalk {
                     talk_id: TalkId(1),
                     origin: "boot",
-                    ..
+                    ref script,
                 })
-            }
+            } if script.is_empty()
         ),
-        "epilogue-only talk は BootVersion{{talk: Some(origin=boot)}} で正規追跡される"
+        "epilogue-only talk は BootVersion{{talk: Some(origin=boot)}} で正規追跡され、空 script も同じ規律で保持される"
     );
     assert_eq!(
         s.next_talk_id, 2,
@@ -485,13 +450,7 @@ fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
 #[test]
 fn normal_204_with_empty_epilogue_emits_no_talk() {
     let cfg = config(); // 既定 epilogue 空
-    let s = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        ..State::initial()
-    };
-    let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+    let (s, actions) = reply(drive_to_main(&cfg), ShioriOutcome::NoContent, &cfg);
     assert!(
         matches!(s.phase, Phase::BootVersion { talk: None }),
         "epilogue 空の 204 は従来どおり talk なし（BootVersion{{talk: None}}）"
@@ -503,61 +462,5 @@ fn normal_204_with_empty_epilogue_emits_no_talk() {
     assert_eq!(
         s.next_talk_id, 1,
         "epilogue 空の 204 は採番カウンタを進めない"
-    );
-}
-
-/// タスク 4.1・DD-10: boot 起動 talk も `ActiveTalk.script` に自ら作った script を保持する。
-///
-/// `ActiveTalk` は boot／steady の双方が構成する単一の追跡 slot であり、`OnChoiceTimeout`
-/// Ref0 の供給源（DD-10）は起動経路に依らず同一でなければならない。挨拶（Value）経路と
-/// epilogue-only（204＋epilogue 非空）経路の双方で、`StartTalk.script` と一致することを固定する。
-#[test]
-fn boot_active_talk_records_started_script() {
-    /// `BootVersion{Some}` の `ActiveTalk.script` を取り出す。
-    fn tracked_script(phase: &Phase) -> &str {
-        match phase {
-            Phase::BootVersion {
-                talk: Some(active), ..
-            } => &active.script,
-            _ => panic!("expected BootVersion{{Some}}"),
-        }
-    }
-
-    // 挨拶（Value）経路: StartTalk.script と ActiveTalk.script が一致する。
-    let cfg = config_with_epilogue();
-    let s = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        ..State::initial()
-    };
-    let (s, actions) = step(
-        s,
-        reply(ShioriOutcome::Value(
-            "greeting".to_string(),
-            areka_talk::SecurityLevel::Local,
-        )),
-        &cfg,
-    );
-    assert_eq!(start_talk_of(&actions).script, "greeting");
-    assert_eq!(
-        tracked_script(&s.phase),
-        "greeting",
-        "挨拶 talk の script が ActiveTalk へ保持される（DD-10）"
-    );
-
-    // epilogue-only（204）経路: script は空文字列であり、それがそのまま保持される。
-    let s = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        ..State::initial()
-    };
-    let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
-    assert_eq!(start_talk_of(&actions).script, "");
-    assert_eq!(
-        tracked_script(&s.phase),
-        "",
-        "epilogue-only talk の空 script も同じ規律で保持される"
     );
 }

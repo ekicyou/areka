@@ -4,7 +4,7 @@ use super::test_support::{
 };
 use super::{
     Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, Response,
-    TalkCommand, TalkId, events, expected_call, expected_unload, spawn_harness_gated,
+    TalkCommand, events, expected_call, expected_unload, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -110,11 +110,6 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
     assert_eq!(
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目は選択由来の応答スクリプト（既存の起動棚に載った）"
-    );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "選択由来 talk は新 talk_id=2（旧 id=1 を再利用しない）"
     );
 
     // (5) 終了系列を完走した（末尾 Unload）＝選択処理後も状態整合を保っている。

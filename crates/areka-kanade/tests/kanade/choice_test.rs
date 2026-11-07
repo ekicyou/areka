@@ -72,7 +72,7 @@ use std::sync::mpsc::Sender;
 
 use areka_kanade::{
     ChoiceInput, CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
-    MouseEventKind, MouseInput, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
+    MouseEventKind, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
 };
 
 use super::common::{
@@ -81,7 +81,7 @@ use super::common::{
     spawn_harness_gated_failing,
 };
 
-// テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.3・要件 1.7 / 3.1 / 3.2）。
+// テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming 要件 1.7 / 3.1 / 3.2）。
 // 本ファイルは檻全体の module doc と共通 import のみを保持し、共有ヘルパは `choice_test_test_support.rs`
 // へ、観測ケースは群ごとの兄弟ファイル `choice_test_<テーマ>_tests.rs` へ置く（子は `super::…` で本ファイルの
 // import 束縛と共有ヘルパを引く）。

@@ -153,15 +153,10 @@ fn drive_full_run() {
         CloseReason::User { scope: 0 },
         &ExecutionSnapshot::INACTIVE,
     ));
-    let onclose_index = recorded
-        .iter()
-        .position(|c| *c == onclose)
-        .expect("OnClose GET（Ref0=user）が記録列に現れるはず");
-
-    // OnClose は起動系列の後（＝pump フェーズより後）に現れる。
+    // 起動系列は先頭で一致済み（OnClose を含まない）なので、現れれば起動系列の後にある。
     assert!(
-        onclose_index >= expected_boot_prefix.len(),
-        "OnClose は起動系列の後に現れるはず（index={onclose_index}）"
+        recorded.contains(&onclose),
+        "OnClose GET（Ref0=user）が記録列に現れるはず"
     );
 
     // 終了系列: 記録列の末尾は Unload（正規終了経路）で閉じる。

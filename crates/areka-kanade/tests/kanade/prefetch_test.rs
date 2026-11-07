@@ -1,7 +1,7 @@
-//! kanade prefetch 統合テスト群（mock shiori・R4.1/4.2/9.1/9.2/9.3・タスク 6.3）。
+//! kanade prefetch 統合テスト群（mock shiori・R4.1/4.2/9.1/9.2/9.3）。
 //!
 //! 本ファイルは「kanade リソース照会増分（username prefetch）」の**統合検証を第一級の群として
-//! 一箇所へ集約する**（test-consolidation）。個々の判断分岐は 6.1／6.2 が既に檻へ入れており
+//! 一箇所へ集約する**（test-consolidation）。個々の判断分岐は純粋 step と actor の檻が既に持っており
 //! （下記「基準→既存檻の対応表」）、本群が新たに埋めるのは、実アクター（`spawn_kanade`・別スレッド）
 //! ＋実 `round_trip_request` 経路を通した **[`ResourceSink`] 境界での結果配送**——とりわけ
 //! 204→sink `NoContent` と タイムアウト→sink `Failed`＋boot 続行——である。これは
@@ -17,7 +17,7 @@
 //! （`Fixture::quitting()`＋close talk quit:true）で駆動し、`join_bounded` の期限内 join 成功が
 //! 「boot が prefetch を越えて完走し正規終了した」ことの完了バリアになる（ハングは panic 化・Req 7.3）。
 //!
-//! # 基準→既存檻の対応表（6.1／6.2 で既に caged・本群は統合シームのみ追加）
+//! # 基準→既存檻の対応表（判断分岐は既存の檻・本群は統合シームのみ追加）
 //! - **prefetch 順序（R9.3）**: `boot_reply_branch_tests.rs::prefetch_username_get_is_issued_once_between_initialize_and_firstboot`
 //!   （純粋 step）／`actor_tests.rs::boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink`
 //!   （アクター経路）／`full_run_test.rs::full_run_boot_pump_close_terminates_deterministically`（統合・正典記録列）。
@@ -25,8 +25,8 @@
 //! - **結果写像＋boot 続行（R4.1/4.2）**: `boot_reply_branch_tests.rs::prefetch_maps_outcomes_to_resource_outcome`
 //!   （200→Value／204→NoContent／timeout→Failed）／`boot_reply_branch_tests.rs::prefetch_failure_continues_boot_not_fault`
 //!   （Failed は Unloading{Fault} へ倒れず OnFirstBoot へ続行）。本群は sink 到達＋実スレッド続行を追加する。
-//! - **許可外リソース ID 拒否＋egress 許可語彙（R4.1/3.2）**: `actor_tests.rs::disallowed_id_still_rejected_as_internal_after_resource_extension`
-//!   （Failed(Internal)）／`steady_test.rs::sporadic_value_starts_unique_talk`
+//! - **許可外リソース ID 拒否＋egress 許可語彙（R4.1/3.2）**: `actor_resources_tests.rs::steady_round_trips_each_id_and_rejects_only_the_disallowed_one`
+//!   （許可外の id は失敗し送られない）／`steady_test.rs::sporadic_value_starts_unique_talk`
 //!   （egress スイープが「イベント許可 ∨ リソース許可」へ更新・username を許可語彙へ追加）。
 //! - **完了固定ログ 1 回（R9.3）**: `boot_reply_branch_tests.rs::prefetch_emits_fixed_completion_log_exactly_once`
 //!   （3 経路とも `log_capture::assert_resource_prefetch_logged_once` で target/level/outcome/message 一致・1 回）。
@@ -188,22 +188,10 @@ fn prefetch_timeout_delivers_failed_to_sink_and_boot_continues_not_fault() {
         firstboot_pos > uname_pos,
         "OnFirstBoot は失敗した username prefetch の後に続くはず（boot 続行）: {recorded:?}"
     );
-    assert!(
-        id_seq.contains(&"OnBoot"),
-        "boot は OnBoot まで前進するはず（prefetch 失敗で殺されない・R4.1）: {recorded:?}"
-    );
+    // 起動系列の最後（basewareversion）まで届けば、途中で Unloading{Fault} へ倒れていない。
     assert!(
         id_seq.contains(&"basewareversion"),
-        "boot は basewareversion（起動系列完了）まで到達するはず: {recorded:?}"
-    );
-    // Unload が prefetch 直後（OnFirstBoot より前）に現れない＝Unloading{Fault} へ即倒れしていない。
-    let unload_before_firstboot = recorded
-        .iter()
-        .take(firstboot_pos)
-        .any(|c| c.method == CallMethod::Unload);
-    assert!(
-        !unload_before_firstboot,
-        "prefetch 失敗で Unloading{{Fault}}（即 Unload）へ倒れてはならない・OnFirstBoot へ続行する: {recorded:?}"
+        "boot は basewareversion（起動系列完了）まで到達するはず（prefetch 失敗で殺されない・R4.1）: {recorded:?}"
     );
     // 期限内 join 成功（drive_prefetch 内）自体が「boot 完走→正規終了」を保証する（ハングなし・Req 7.3）。
 }

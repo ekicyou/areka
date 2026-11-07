@@ -7,15 +7,8 @@ use super::*;
 use crate::change::{
     BootOrigin, ChangeOrigin, ChangeRequest, ChangeTarget, ChangedFrom, ShioriMethod,
 };
+use crate::schedule::translate_test_support::{change_request, config, strings as s};
 use crate::status::ExecutionStatus;
-
-fn target() -> ChangeTarget {
-    ChangeTarget {
-        sakura_name: "かなで".to_string(),
-        name: "Kanade Ghost".to_string(),
-        dir: r"C:\areka\ghost\kanade".to_string(),
-    }
-}
 
 fn get_parts(call: ShioriCall) -> (EventId, Vec<String>) {
     match call {
@@ -24,54 +17,10 @@ fn get_parts(call: ShioriCall) -> (EventId, Vec<String>) {
     }
 }
 
-fn s(v: &[&str]) -> Vec<String> {
-    v.iter().map(|x| x.to_string()).collect()
-}
-
 #[test]
-fn allowed_static_returns_the_table_spelling_for_the_two_change_events() {
-    for id in [
-        "OnGhostChanging",
-        "OnGhostChanged",
-        "OnBoot",
-        "OnMouseMove",
-        "OnInstallBegin",
-        "OnInstallComplete",
-        "OnInstallCompleteEx",
-        "OnInstallCompleteAll",
-        "OnInstallFailure",
-        "OnInstallRefuse",
-        "OnGhostTermsAccept",
-        "OnGhostTermsDecline",
-        "OnFileDrop2",
-        "OnDirectoryDrop",
-        "OnUpdateProcessExec",
-        "OnUpdateBegin",
-        "OnUpdateReady",
-        "OnUpdate.OnDownloadBegin",
-        "OnUpdate.OnMD5CompareBegin",
-        "OnUpdate.OnMD5CompareComplete",
-        "OnUpdate.OnMD5CompareFailure",
-        "OnUpdateComplete",
-        "OnUpdateFailure",
-        "OnUpdateOtherBegin",
-        "OnUpdateOtherReady",
-        "OnUpdateOther.OnDownloadBegin",
-        "OnUpdateOther.OnMD5CompareBegin",
-        "OnUpdateOther.OnMD5CompareComplete",
-        "OnUpdateOther.OnMD5CompareFailure",
-        "OnUpdateOtherComplete",
-        "OnUpdateOtherFailure",
-        "OnUpdateResult",
-        "OnUpdateResultEx",
-        "OnShellChanging",
-        "OnShellChanged",
-        "OnBalloonChange",
-        "OnResetWindowPos",
-    ] {
-        assert_eq!(allowed_static(id), Some(id));
-        assert!(is_allowed_event_id(id));
-    }
+fn allowed_static_returns_the_table_spelling_and_none_off_the_table() {
+    // 表に載る語の全体は許可表の完全一致のテストが固定する。ここは綴りを返す形だけを 1 語で見る。
+    assert_eq!(allowed_static("OnGhostChanging"), Some("OnGhostChanging"));
     for id in [
         "OnTalk",
         "OnHour",
@@ -100,15 +49,19 @@ fn on_ghost_changing_is_get_with_target_and_origin_in_ref0_to_ref3() {
         (ChangeOrigin::Automatic, "automatic"),
     ] {
         let req = ChangeRequest {
-            target: target(),
             origin,
-            raise_event: true,
+            ..change_request()
         };
         let (id, refs) = get_parts(on_ghost_changing(&req, &ExecutionSnapshot::INACTIVE));
         assert_eq!(id, EventId::Static("OnGhostChanging"));
         assert_eq!(
             refs,
-            s(&["かなで", word, "Kanade Ghost", r"C:\areka\ghost\kanade"])
+            s(&[
+                "ポスト",
+                word,
+                "R_POST_and_KOMAINU",
+                r"C:\areka\ghost\r_post"
+            ])
         );
     }
 }
@@ -118,15 +71,14 @@ fn on_ghost_changing_keeps_empty_sakura_name_in_place() {
     let req = ChangeRequest {
         target: ChangeTarget {
             sakura_name: String::new(),
-            ..target()
+            ..change_request().target
         },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
+        ..change_request()
     };
     let (_, refs) = get_parts(on_ghost_changing(&req, &ExecutionSnapshot::INACTIVE));
     assert_eq!(
         refs,
-        s(&["", "manual", "Kanade Ghost", r"C:\areka\ghost\kanade"])
+        s(&["", "manual", "R_POST_and_KOMAINU", r"C:\areka\ghost\r_post"])
     );
 }
 
@@ -176,7 +128,7 @@ fn on_ghost_changed_keeps_empty_script_in_ref1() {
 
 #[test]
 fn on_boot_after_halt_carries_halt_in_ref6_and_fallen_ghost_in_ref7() {
-    let mut config = KanadeConfig::new("master", "1.0.0");
+    let mut config = config();
     config.boot_origin = BootOrigin::Halted {
         ghost_name: "Kanade Ghost".to_string(),
     };
@@ -190,8 +142,8 @@ fn on_boot_after_halt_carries_halt_in_ref6_and_fallen_ghost_in_ref7() {
 
 #[test]
 fn on_boot_without_halt_is_ref0_only() {
-    let plain = KanadeConfig::new("master", "1.0.0");
-    let mut changed = KanadeConfig::new("master", "1.0.0");
+    let plain = config();
+    let mut changed = config();
     changed.boot_origin = BootOrigin::ChangedFrom(ChangedFrom {
         sakura_name: "えも".to_string(),
         script: String::new(),

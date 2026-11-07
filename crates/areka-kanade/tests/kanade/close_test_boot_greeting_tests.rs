@@ -7,123 +7,16 @@ use super::{
 };
 
 // ============================================================================
-// シナリオ 5: 挨拶 active 中の Tick → NOTIFY（Ref3=0・Status: talking）（Req 1.5・2.4・DD-IT-12）
-// ============================================================================
-
-/// boot 起動挨拶（default fixture）を保留ハーネスで active に保ち、その最中の Tick が
-/// `OnSecondChange` NOTIFY（Ref3=0・Status: talking）を発行することを統合層で観測する。
-///
-/// DD-IT-12 で boot は起動挨拶 talk を**正規追跡**するようになり、挨拶 Value 経路は
-/// `Steady{talk: Some(挨拶)}` へ完了する。その `Steady{Some}` 由来で発行される pump は「再生中」
-/// 意味論＝NOTIFY（Ref3=0・応答無視）・`Status: talking` を運ぶ。本 cage は default（挨拶あり）
-/// fixture の挨拶 talk（受領 index 0）を保留（park）して active 窓を作り、この playing-semantics
-/// Tick が **BOOT 挨拶に由来する**ことを決定的に固定する（steady talk 由来を観測する
-/// steady_test の `active_talk_tick_emits_notify_ref3_zero` の boot 版）。
-///
-/// # 決定性（sleep なし・race-free）
-/// 挨拶 talk の TalkDone を保留する限り `Steady{Some(挨拶)}` は次 Tick まで確実に維持される
-/// （TalkDone は二つの Tick の間に割り込み得る唯一のメッセージ）。ゆえに Boot の後に処理される
-/// Tick は必ず `Steady{Some}` から NOTIFY を発行する。Tick は `release_all` より先に入口へ送るので、
-/// 解放した TalkDone より先に処理される（待ちは要らない）。挨拶 talk を quit:true で解放して
-/// 終了系列（Unloading{Quit}→Unload→StopSelf）を駆動し、join の後の記録で NOTIFY を確かめる。
-///
-/// # 非空虚性
-/// - 挨拶が `Steady{None}` へ丸められていたら（DD-IT-12 未実装）Tick は GET（Ref3=1）になり
-///   events 導出の NOTIFY と一致せず、join の後の確かめが落ちる。
-#[test]
-fn boot_greeting_active_tick_emits_notify_talking() {
-    // 挨拶あり（default）fixture。挨拶 talk（受領 index 0）を保留し active 窓を作る。
-    // quit_flags: 挨拶 talk（index 0）=quit:true → 解放で Unloading{Quit}→終了系列を駆動。
-    let (harness, gate) = spawn_harness_gated(
-        KanadeConfig::new("master", "1.0.0"),
-        Fixture::default(),
-        QuitPolicy::PerTalk(vec![true]),
-        vec![0],
-    );
-
-    // 起動指示 → boot 系列は Boot 処理内で同期完走し `Steady{Some(挨拶 id=1)}` へ（挨拶 talk 保留）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-
-    // 挨拶 active 中の Tick（now=1h）→ OnSecondChange NOTIFY（Ref3=0・Status: talking）。
-    let notify_now = MonotonicMs(3_600_000); // 1h → Ref0="1"。
-    harness
-        .sender
-        .send(KanadeMsg::Tick { now: notify_now })
-        .expect("send held-greeting Tick");
-
-    // events 表から NOTIFY 期待値を導出（talk_active=true・DD-IT-3／DD-IT-12・ハードコードしない）。
-    let expected_notify = expected_call(events::on_second_change(
-        notify_now,
-        &ExecutionSnapshot {
-            talk_active: true,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
-    ));
-
-    // NOTIFY の構成を明示確認（BOOT 挨拶由来の playing-semantics）。
-    assert_eq!(
-        expected_notify.method,
-        CallMethod::Notify,
-        "active 窓の pump は NOTIFY"
-    );
-    assert_eq!(
-        expected_notify.references.len(),
-        4,
-        "OnSecondChange の References は 4 要素"
-    );
-    assert_eq!(
-        expected_notify.references[3], "0",
-        "NOTIFY pump の Ref3 は \"0\"（active talk 中・応答無視）"
-    );
-    assert_eq!(
-        expected_notify.status,
-        Some("talking".to_string()),
-        "挨拶 active の Tick は Status: talking を運ぶ（DD-IT-12・DD-IT-3）"
-    );
-
-    // 挨拶 talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf で終了系列を駆動する。
-    gate.release_all();
-
-    // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
-    let Driven {
-        recorded, started, ..
-    } = harness.finish("kanade boot-greeting notify join");
-
-    // (a) active な talk が現に boot 由来だった（先頭 StartTalk＝boot 挨拶スクリプト・先頭採番 id=1）。
-    assert!(!started.is_empty(), "挨拶 talk が sink に配送されるはず");
-    assert_eq!(
-        started[0].script, FIXED_BOOT_SCRIPT,
-        "先頭 StartTalk は boot 挨拶スクリプト（active 窓の talk は boot 由来）"
-    );
-    assert_eq!(started[0].talk_id, TalkId(1), "挨拶 talk は先頭採番 id=1");
-
-    // (b) 確定記録に挨拶 active の OnSecondChange NOTIFY（Ref3=0・talking）が含まれる（Req 1.5/2.4）。
-    assert!(
-        recorded.contains(&expected_notify),
-        "確定記録に挨拶 active の OnSecondChange NOTIFY（Ref3=0・talking）が含まれるはず: {:?}",
-        recorded
-    );
-
-    // (c) 終了系列完走: 末尾は Unload（挨拶 talk quit:true→Unloading{Quit}→Unload）。
-    assert_eq!(
-        recorded.last().expect("記録列は空でない"),
-        &expected_unload(),
-        "末尾は Unload（挨拶 talk quit:true の終了系列完走）で閉じるはず"
-    );
-    let unload_count = recorded
-        .iter()
-        .filter(|c| c.method == CallMethod::Unload)
-        .count();
-    assert_eq!(unload_count, 1, "Unload は終了系列で 1 度だけ発行される");
-}
-
-// ============================================================================
-// シナリオ 6: 挨拶 TalkDone → GET pump 再開（Req 4.4・DD-IT-12 相関成立の統合証左）
+// シナリオ 5・6: 挨拶 active 中の Tick → NOTIFY（Req 1.5・2.4）と、挨拶 TalkDone → GET pump 再開
+// （Req 4.4・DD-IT-12 相関成立の統合証左）
 // ============================================================================
 
 /// boot 挨拶を保留（active 窓）→ 解放で挨拶 TalkDone{Ended} を着弾させ、次 Tick で
 /// `OnSecondChange` GET pump（Ref3=1・Status なし）が再開することを統合層で観測する。
+///
+/// 保留中の Tick が BOOT 挨拶由来の `OnSecondChange` NOTIFY（Ref3=0・Status: talking）を出すこと
+/// （＝boot が `Steady{Some(挨拶)}` へ完了し、その slot 由来で pump を発行している証左・シナリオ 5）も
+/// ここで見る。挨拶が `Steady{None}` へ丸められていたら Tick は GET になり NOTIFY の確かめが落ちる。
 ///
 /// これは DD-IT-12 の「挨拶 TalkDone が slot と照合される（`unknown_talk_done` ERROR が出ない）」
 /// の**統合層の証左**である: 挨拶 talk（id=1）の TalkDone が `Steady{Some(挨拶)}` の slot と照合されて
@@ -176,15 +69,6 @@ fn boot_greeting_talkdone_resumes_get_pump() {
             ..ExecutionSnapshot::INACTIVE
         },
     ));
-    assert_eq!(
-        expected_notify.references[3], "0",
-        "active 窓の pump は Ref3=\"0\"（NOTIFY）"
-    );
-    assert_eq!(
-        expected_notify.status,
-        Some("talking".to_string()),
-        "active 窓は Status: talking"
-    );
 
     // 保留した挨拶 talk の TalkDone{Ended}（quit:false）を解放 → slot と照合され `Steady{None}` へ復帰。
     gate.release_all();
@@ -194,10 +78,12 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     // `drive_ticks_until_disconnect`（inbox 切断バリア＋壁時計 deadline）へ一本化し、kanade が復帰後 pump
     // talk で終了して inbox を切断するまで 1 秒刻みの Tick を供給する（切断で戻る＝復帰→終了の完了バリア）。
     //
-    // 既存の開始秒を保存（開始秒 2・時刻後退は既存構造の踏襲）: 直前の NOTIFY 用 Tick は now=3,600,000
-    // （1h）だが、この drive Tick は now=2,000 から始まり時刻が後退する。これは意図的な既存挙動であり
-    // （挙動不変が目的）、開始秒を変えずそのまま保存する。
-    drive_ticks_until_disconnect(&harness.sender, 2, "boot_greeting_talkdone resume drive");
+    // 直前の NOTIFY 用 Tick（now=1h）の次の秒から刻む。
+    drive_ticks_until_disconnect(
+        &harness.sender,
+        3_601,
+        "boot_greeting_talkdone resume drive",
+    );
 
     // 終了系列完走（復帰後 pump→steady talk quit:true→Unloading{Quit}→Unload→StopSelf）まで期限付き join。
     // join 成功それ自体が「挨拶が slot と照合され復帰し、pump が再開して talk を起こした」ことの保証である。
@@ -206,7 +92,6 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     } = harness.finish("kanade boot-greeting resume join");
 
     // (a) active だった talk は boot 挨拶（先頭 StartTalk・boot script・先頭採番 id=1）。
-    assert!(!started.is_empty(), "少なくとも挨拶 talk が配送されるはず");
     assert_eq!(
         started[0].script, FIXED_BOOT_SCRIPT,
         "先頭 StartTalk は boot 挨拶スクリプト（保留した active talk は boot 由来）"
@@ -328,15 +213,6 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
             ..ExecutionSnapshot::INACTIVE
         },
     ));
-    assert_eq!(
-        expected_notify.references[3], "0",
-        "active 窓の pump は Ref3=\"0\"（NOTIFY）"
-    );
-    assert_eq!(
-        expected_notify.status,
-        Some("talking".to_string()),
-        "active 窓は Status: talking"
-    );
 
     // 挨拶 talk（Ended）を解放 → `pending_close` を消化して初めて握手開始（OnClose GET→別れの Value→close talk）。
     gate.release_all();
@@ -347,7 +223,6 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     } = harness.finish("kanade boot-greeting close join");
 
     // (a) 挨拶 talk が boot 由来で起動した（先頭 StartTalk・boot script・先頭採番 id=1）。
-    assert!(!started.is_empty(), "挨拶 talk が sink に配送されるはず");
     assert_eq!(
         started[0].script, FIXED_BOOT_SCRIPT,
         "先頭 StartTalk は boot 挨拶スクリプト（close は挨拶中に受領された）"
@@ -388,11 +263,6 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
         *last,
         expected_unload(),
         "末尾は Unload（close talk quit:true の終了系列完走）"
-    );
-    assert!(
-        onclose_index < recorded.len() - 1,
-        "OnClose（{onclose_index}）は Unload（{}）より前に現れるはず",
-        recorded.len() - 1
     );
     let unload_count = recorded
         .iter()

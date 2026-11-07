@@ -89,9 +89,8 @@ fn is_choice_get(c: &RecordedCall) -> bool {
     c.method == CallMethod::Get
         && matches!(
             c.id.as_str(),
-            "OnChoiceSelectEx" | "OnChoiceSelect" | "OnChoiceTimeout"
+            "OnChoiceSelectEx" | "OnChoiceSelect" | "OnChoiceTimeout" | NAMED_CHOICE_ID
         )
-        || (c.method == CallMethod::Get && c.id == NAMED_CHOICE_ID)
 }
 
 /// 記録列から選択由来 GET のみを処理順に抽出する。

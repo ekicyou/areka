@@ -12,12 +12,11 @@ use crate::schedule::events::{SourceEvent, on_translate};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
 use crate::schedule::translate_test_support::{
-    active, boot_until_greeting_playing, change_request, config, fingerprint, steady, strings,
-    warn_or_above,
+    active, boot_until_greeting_playing, change_request, config, fingerprint, non_steady_states,
+    steady, strings, warn_or_above,
 };
 use crate::schedule::{
-    Action, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id, phase_label,
-    step,
+    Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, phase_label, step,
 };
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
@@ -301,47 +300,7 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
 /// SHIORI へ送らない（空の一括・状態不変・warn 以上 0 件・要件 3.6・3.9）。
 #[test]
 fn notify_is_not_accepted_outside_the_steady_state() {
-    let deadline = Some(MonotonicMs(9_000));
-    let talk_id = TalkId(9);
-    let mut states: Vec<(&str, State)> = [
-        ("Idle", Phase::Idle),
-        ("BootInit", Phase::BootInit),
-        ("BootPrefetch", Phase::BootPrefetch),
-        ("BootType", Phase::BootType),
-        ("BootMain", Phase::BootMain),
-        ("BootVersion{None}", Phase::BootVersion { talk: None }),
-        ("ClosePending", Phase::ClosePending),
-        ("CloseTalkWait", Phase::CloseTalkWait { talk_id, deadline }),
-        ("ChangePending", Phase::ChangePending),
-        (
-            "ChangeTalkWait",
-            Phase::ChangeTalkWait { talk_id, deadline },
-        ),
-        ("ChangeClosePending", Phase::ChangeClosePending),
-        (
-            "ChangeCloseTalkWait",
-            Phase::ChangeCloseTalkWait { talk_id, deadline },
-        ),
-        (
-            "Unloading",
-            Phase::Unloading {
-                cause: TermCause::Quit,
-            },
-        ),
-        ("Stopped", Phase::Stopped),
-    ]
-    .into_iter()
-    .map(|(label, phase)| {
-        (
-            label,
-            State {
-                phase,
-                next_talk_id: 10,
-                ..State::initial()
-            },
-        )
-    })
-    .collect();
+    let mut states = non_steady_states();
     states.push((
         "起動の挨拶の最中",
         steady(active(1, super::BOOT_GREETING_ORIGIN)),
@@ -437,11 +396,7 @@ fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
         "今日どおり終了系列へ: {}",
         phase_label(&state.phase)
     );
-    assert!(
-        actions
-            .iter()
-            .any(|a| matches!(a, Action::ShioriUnload | Action::ShioriRequest(_)))
-    );
+    assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
 /// ⑼ 返った台本の翻訳の Reference（要件 4.5）。殻の組み立てを依頼の出どころに当てて、送る

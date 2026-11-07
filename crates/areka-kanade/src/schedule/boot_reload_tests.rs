@@ -4,7 +4,7 @@
 //! 台詞を求める GET を 1 つも送らず（username 照会だけ）・basewareversion を送って定常へ入ること、
 //! `OnInitialize` の References が対象で分かれることを `step` 経由で固定する。
 
-use super::test_support::{assert_notify, cfg, get_ids};
+use super::test_support::{assert_notify, cfg, get_ids, reply};
 use super::*;
 use crate::change::{BootOrigin, KanadeNotice, ReloadScope};
 use crate::msg::ShioriCall;
@@ -15,14 +15,6 @@ use crate::talk::EpilogueCommand;
 /// 読み直しの起動の config（起動記録の有無と読み直しの対象を差し替える）。
 fn reload_cfg(first_boot: bool, scope: ReloadScope) -> KanadeConfig {
     cfg(first_boot, BootOrigin::Reloaded { scope })
-}
-
-fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (State, Vec<Action>) {
-    let input = Input::ShioriReply {
-        outcome,
-        origin: "test",
-    };
-    step(s, input, c)
 }
 
 /// Boot から定常まで（どの GET にも 204 で答える）進め、各段の Action 列を順に返す。

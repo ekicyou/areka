@@ -1,7 +1,6 @@
 //! mock shiori の応答表（fixture）と、その適用状態。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::collections::HashMap;
 
@@ -22,21 +21,19 @@ pub const FIXED_FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e-";
 
 /// 表に載せた GET（マウス・選択由来・リソース）へ返す応答。
 ///
-/// `Script(String::new())` は **200 の空文字**であり 204 とは別物である（リソースの要件 3.3／3.4 の
-/// 「空を返す」と「値なしを返す」の区別はここで作る）。
+/// 表に載せない id は 204（NoContent）。`Script(String::new())` は **200 の空文字**であり 204 とは
+/// 別物である（リソースの要件 3.3／3.4 の「空を返す」と「値なしを返す」の区別はここで作る）。
 #[derive(Debug, Clone)]
 pub enum Response {
     /// 200 の Value を返す（talk の台本なら StartTalk を起こす）。
     Script(String),
-    /// 204 / NoContent を返す。
-    NoContent,
 }
 
 /// mock shiori の応答表（Req 7.1）。シナリオごとに構成する。
 ///
 /// 基調は fixture 表どおり（OnInitialize→Notified／OnFirstBoot→204／OnBoot→固定 Value／
-/// basewareversion→Notified／OnSecondChange→204 基調／Unload→Unloaded）。可変部は
-/// 次の 2 点:
+/// basewareversion→Notified／OnSecondChange→204 基調／Unload→Unloaded）。可変部は 4 欄で、
+/// `boot_greets` と `responses` は欄の注のとおり。残る 2 欄:
 ///
 /// - `steady_value_indices`: `OnSecondChange`（GET・talk 再生可能）呼出のうち Value を
 ///   返す 0 始まりの出現インデックス集合。含まれない出現は 204（`NoContent`）。
@@ -173,7 +170,7 @@ impl FixtureState {
                         ShioriOutcome::Value(value.clone(), areka_talk::SecurityLevel::Local)
                     }
                     // 未設定の id・未知 GET はいずれも 204（保守的既定）。
-                    Some(Response::NoContent) | None => ShioriOutcome::NoContent,
+                    None => ShioriOutcome::NoContent,
                 },
             },
         }

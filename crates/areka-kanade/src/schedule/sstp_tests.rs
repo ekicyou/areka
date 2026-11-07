@@ -3,17 +3,17 @@
 //! `events.rs` の 2 つの組み立て（`sstp_notify`・`on_translate_sstp`）と、受け付けの判定・
 //! 外からの台本の腕（`accepts`・`on_send`）を固定する。
 
-use super::{BOOT_GREETING_ORIGIN, SEND_ORIGIN, accepts};
+use super::{SEND_ORIGIN, accepts};
 use crate::msg::{ChoiceInput, CloseReason, EventId, MonotonicMs, ShioriCall, ShioriOutcome};
-use crate::schedule::events::{REF1_SSTP_SEND_OWNED, on_translate_sstp, sstp_notify};
+use crate::schedule::events::{on_translate_sstp, sstp_notify};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
 use crate::schedule::translate::ScriptSource;
 use crate::schedule::translate_test_support::{
-    active, boot_until_greeting_playing, change_request, config, fingerprint, steady, strings,
-    warn_or_above,
+    active, boot_until_greeting_playing, change_request, config, fingerprint, non_steady_states,
+    steady, strings, warn_or_above,
 };
 use crate::schedule::{
-    Action, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id, step,
+    Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, step,
 };
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
@@ -68,7 +68,6 @@ fn sstp_notify_does_not_pad_references_for_listed_names() {
 /// SSTP SEND の台本の `OnTranslate`: Ref0＝展開済み・Ref1＝`sstp-send,owned`・Ref2 以降なし（要件 4.4）。
 #[test]
 fn on_translate_sstp_has_reference0_and_reference1_only() {
-    assert_eq!(REF1_SSTP_SEND_OWNED, "sstp-send,owned");
     let status = ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE);
     match on_translate_sstp("\\h外からの台本\\e", status.clone()) {
         ShioriCall::Get {
@@ -202,7 +201,7 @@ fn empty_send_is_not_deferred_to_translate() {
 }
 
 /// 外からの台本の CR・LF・NUL は受け付けた直後に取り除かれ、再生の開始と翻訳の依頼のどちらにも
-/// 残らない。取り除いたら `info!`（`sstp_send_line_breaks_removed`・取り除いた字数）が 1 件（#1 一段目）。
+/// 残らない。取り除いたら `info!`（`sstp_send_line_breaks_removed`・取り除いた字数）が 1 件。
 /// 3 字だけの台本は空の台本になり、翻訳へ預けずに再生の開始を返す。
 #[test]
 fn send_strips_line_breaks_before_playing_and_translating() {
@@ -396,50 +395,8 @@ fn send_during_choice_clears_the_ledger_and_no_choice_events_follow() {
 /// ⑷ 起動前・起動の手順・終了と切替の手順・保留の終了と切替では受け付けない（要件 3.6・3.9）。
 #[test]
 fn send_is_not_accepted_outside_the_steady_state() {
-    let deadline = Some(MonotonicMs(9_000));
-    let talk_id = TalkId(9);
-    let phases: Vec<(&str, Phase)> = vec![
-        ("Idle", Phase::Idle),
-        ("BootInit", Phase::BootInit),
-        ("BootPrefetch", Phase::BootPrefetch),
-        ("BootType", Phase::BootType),
-        ("BootMain", Phase::BootMain),
-        ("BootVersion{None}", Phase::BootVersion { talk: None }),
-        (
-            "BootVersion{Some}",
-            Phase::BootVersion {
-                talk: active(1, BOOT_GREETING_ORIGIN),
-            },
-        ),
-        ("ClosePending", Phase::ClosePending),
-        ("CloseTalkWait", Phase::CloseTalkWait { talk_id, deadline }),
-        ("ChangePending", Phase::ChangePending),
-        (
-            "ChangeTalkWait",
-            Phase::ChangeTalkWait { talk_id, deadline },
-        ),
-        ("ChangeClosePending", Phase::ChangeClosePending),
-        (
-            "ChangeCloseTalkWait",
-            Phase::ChangeCloseTalkWait { talk_id, deadline },
-        ),
-        (
-            "Unloading",
-            Phase::Unloading {
-                cause: TermCause::Quit,
-            },
-        ),
-        ("Stopped", Phase::Stopped),
-    ];
-    for (label, phase) in phases {
-        assert_rejected(
-            label,
-            State {
-                phase,
-                next_talk_id: 10,
-                ..State::initial()
-            },
-        );
+    for (label, state) in non_steady_states() {
+        assert_rejected(label, state);
     }
     let mut pending_close = steady(active(9, "OnMouseDoubleClick"));
     pending_close.pending_close = Some(CloseReason::System);

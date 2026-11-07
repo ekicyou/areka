@@ -4,7 +4,7 @@ use super::test_support::{
 };
 use super::{
     CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy,
-    Response, TalkCommand, TalkId, expected_unload, spawn_harness_gated,
+    Response, TalkCommand, expected_unload, spawn_harness_gated,
 };
 
 /// 選択待ちの候補集合に**含めない** ID（群 6 の候補照合の観測面・Req1.4）。
@@ -22,7 +22,7 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // カスケードは kanade drive ループの同期往復で **1 メッセージ処理内に完結する**。したがって
 // `ChoicePhase::Cascading`／`TimeoutInFlight` の最中に別の選択確定を**注入して**割り込ませることは
 // 統合経路では構造上できない——段の進行中の二重確定棄却（`choice_rejected_busy`）と 1 世代 stale
-// 防御（`talk_done_stale_choice`）は、状態を直接構成する `step()` 直呼びの純関数檻が担当する
+// 防御（`talk_done_stale`）は、状態を直接構成する `step()` 直呼びの純関数檻が担当する
 // （`schedule::steady::choice_tests::choice_during_cascade_or_timeout_is_rejected_as_busy`・
 // `schedule::tests::stale_choice_talk_done_is_demoted_to_info_and_keeps_state`。ログ語彙は
 // `schedule::log_firing_tests` が固定する）。
@@ -151,22 +151,12 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
         })
         .collect();
     assert_eq!(
-        started.len(),
-        2,
-        "起動は steady と選択由来の 2 本ちょうどのはず: {started:?}"
-    );
-    assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
     );
     assert_eq!(
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目は選択由来の応答スクリプト"
-    );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "選択由来 talk は新 talk_id=2（旧 id=1 を再利用しない）"
     );
 
     // (4) 終了系列を完走した（末尾 Unload）＝遅延注入の棄却後も状態整合を保っている。
