@@ -1,16 +1,9 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy,
-    RecordedCall, Response, StartTalk, events, expected_call, expected_unload, join_bounded,
-    spawn_harness,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
+    KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy, Response, events,
+    expected_call, expected_unload, spawn_harness,
 };
-
-/// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
-struct Driven {
-    recorded: Vec<RecordedCall>,
-    started: Vec<StartTalk>,
-}
 
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ 各 Mouse を FIFO 注入 → CloseRequest → 終了完走まで駆動し
 /// 記録を確定する（cage 1〜4 の共通ドライバ）。
@@ -44,24 +37,7 @@ fn drive_mouse_steady_none(
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse steady join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura mouse join", DEFAULT_TIMEOUT);
-
-    Driven {
-        recorded: shiori.recorded(),
-        started,
-    }
+    harness.finish("kanade mouse steady join")
 }
 
 // ============================================================================

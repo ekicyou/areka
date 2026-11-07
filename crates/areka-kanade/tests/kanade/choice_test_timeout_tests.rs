@@ -3,10 +3,9 @@ use super::test_support::{
     choice_get_ids, choice_gets, choice_input, command_tags, establish_choice_wait, position_of,
 };
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, Response, TalkCommand, TalkDone,
-    TalkEndReason, TalkId, events, expected_call, expected_unload, join_bounded, pumps,
-    spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig,
+    KanadeMsg, MonotonicMs, QuitPolicy, Response, TalkCommand, TalkDone, TalkEndReason, TalkId,
+    events, expected_call, expected_unload, pumps, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -121,19 +120,9 @@ fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade choice-timeout join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close after the interrupted recovery");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura choice-timeout join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade choice-timeout join");
 
     // (1) 選択由来 GET は OnChoiceTimeout ただ 1 件（期限手前で非発火・解除後の Choice は棄却）。
     assert_eq!(
@@ -275,19 +264,9 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
         })
         .expect("send Tick at the deadline");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade timeout-value join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the timeout-derived talk (quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura timeout-value join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade timeout-value join");
 
     // (1) 段列はタイムアウト 1 件のみ（Value が更なる段を撃たない）。
     assert_eq!(

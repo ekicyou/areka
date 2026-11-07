@@ -11,9 +11,9 @@ use super::test_support::{
     CANONICAL_CHOICE_ID, cascading_snapshot, choice_get_ids, command_tags, position_of,
 };
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig,
-    KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, TalkCommand, TalkDone, TalkEndReason, TalkId,
-    events, expected_call, join_bounded, pumps, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg,
+    MonotonicMs, QuitPolicy, RecordedCall, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
+    expected_call, pumps, spawn_harness_gated,
 };
 
 /// 注入 `ChoiceWaiting` の表示の終わり（期限の起点）。
@@ -73,18 +73,10 @@ fn run_choice_wait(directive: Option<f64>, ticks: &[u64]) -> (Vec<RecordedCall>,
     })
     .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded("kanade timeout-directive join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura timeout-directive join", DEFAULT_TIMEOUT);
-    (shiori.recorded(), commands)
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade timeout-directive join");
+    (recorded, commands)
 }
 
 /// **指令 `Some(1.234)` の期限の両側（要件 1.1・1.2・1.4・9.4 後半）**: 表示の終わり `1_000` から

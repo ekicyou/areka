@@ -16,9 +16,8 @@ use areka_kanade::{
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, binding,
-    expected_call, expected_unload, join_bounded, pumps, send, spawn_harness, spawn_harness_gated,
-    tick,
+    CallMethod, DEFAULT_TIMEOUT, Driven, Fixture, Harness, QuitPolicy, RecordedCall, binding,
+    expected_call, expected_unload, pumps, send, spawn_harness, spawn_harness_gated, tick,
 };
 
 /// 選択待ちの候補（正典形＝`On` で始まらない）。
@@ -70,19 +69,13 @@ struct Run {
 
 /// close（別れ talk quit:true）で終わらせ、記録を確定する。
 fn finish(harness: Harness, answers: Vec<Option<String>>, what: &str) -> Run {
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded(what, DEFAULT_TIMEOUT, kanade).expect("kanade terminates via the driven close");
-    drop(sender);
-    let commands = command_tags(&sakura.join_bounded_then_commands(what, DEFAULT_TIMEOUT));
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish(what);
     Run {
         answers,
-        recorded: shiori.recorded(),
-        commands,
+        recorded,
+        commands: command_tags(&commands),
     }
 }
 
@@ -329,14 +322,5 @@ fn k4_query_after_close_ends_with_reply_dropped() {
         "終了の知らせの後の問い合わせは受信箱ごと落ちて「返信端が落ちた」で終わるはず"
     );
 
-    let Harness {
-        sender,
-        kanade,
-        sakura,
-        ..
-    } = harness;
-    join_bounded("kanade status-query K4 join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade stops on Close");
-    drop(sender);
-    sakura.join_bounded("mock-sakura status-query K4 join", DEFAULT_TIMEOUT);
+    harness.finish("kanade status-query K4 join");
 }

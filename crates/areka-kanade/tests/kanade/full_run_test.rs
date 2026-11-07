@@ -19,8 +19,8 @@ use areka_kanade::{
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, Harness,
-    QuitPolicy, expected_call, expected_translate, expected_unload, join_bounded, spawn_harness,
+    CallMethod, Driven, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, Fixture, QuitPolicy,
+    expected_call, expected_translate, expected_unload, spawn_harness,
 };
 
 /// 主観測の駆動と検証を 1 回分実行する（反復同一性のため単一関数に閉じる）。
@@ -70,22 +70,9 @@ fn drive_full_run() {
     //
     // (c) 終了完走の観測: StopSelf まで到達しないと kanade スレッドは join できない。
     // 期限付き join が成功すれば、それまでの全 shiori 呼出は記録済みである。
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade full-run join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-
-    // kanade 停止後に送信端を drop → sakura sink スレッドも自然終了（期限付き join）。
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura full-run join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade full-run join");
 
     // ========================================================================
     // (a) 起動系列が正典順序で発火（NOTIFY／GET の別・Reference 構成込み）

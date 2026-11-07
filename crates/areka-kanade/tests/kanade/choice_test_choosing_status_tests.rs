@@ -3,9 +3,9 @@ use super::test_support::{
     position_of,
 };
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, Fixture, Harness, KanadeConfig,
-    KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, events, expected_call, expected_unload,
-    join_bounded, pumps, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, Fixture, KanadeConfig, KanadeMsg,
+    MonotonicMs, QuitPolicy, RecordedCall, events, expected_call, expected_unload, pumps,
+    spawn_harness_gated,
 };
 
 /// active talk のみ（選択待ちは終了済み）の運行状態＝`talking` 単独。
@@ -89,18 +89,7 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
     // 保留解放は全注入の後——保留 TalkDone は CloseRequest の後ろに並ぶ（FIFO・決定的）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade choosing-status join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close (farewell talk quit:true)");
-    drop(sender);
-    sakura.join_bounded("mock-sakura choosing-status join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade choosing-status join");
 
     // (1) 周期リクエストのうち NOTIFY はちょうど 2 件（Tick2／Tick3）——active talk 窓が両 Tick で
     //     維持されている（GET へ落ちていない）ことの直接確認。

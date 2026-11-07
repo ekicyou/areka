@@ -68,17 +68,11 @@ use areka_kanade::{
 };
 
 use super::common::{
-    BlockOn, CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
-    expected_unload, join_bounded, resumed_get_after_active_window, spawn_harness,
-    spawn_harness_blocking, spawn_harness_gated,
+    BlockOn, CallMethod, DEFAULT_TIMEOUT, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
+    Fixture, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
+    expected_unload, resumed_get_after_active_window, spawn_harness, spawn_harness_blocking,
+    spawn_harness_gated,
 };
-
-/// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
-struct Driven {
-    recorded: Vec<RecordedCall>,
-    started: Vec<StartTalk>,
-}
 
 /// Boot→（steady Tick を tick_count 回）→CloseRequest を駆動し、終了完走まで待って記録を確定する。
 ///
@@ -118,26 +112,8 @@ fn drive_steady(fixture: Fixture, tick_count: u64, quit_flags: Vec<bool>) -> Dri
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
-    join_bounded("kanade steady join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-
-    // kanade 停止後に送信端 drop → sakura sink スレッドも自然終了（期限付き join）。
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura steady join", DEFAULT_TIMEOUT);
-
-    Driven {
-        recorded: shiori.recorded(),
-        started,
-    }
+    harness.finish("kanade steady join")
 }
 
 /// 記録列中の `OnSecondChange` GET（Ref3=1・pump 問い合わせ）の出現数を数える。
@@ -408,22 +384,10 @@ fn active_talk_tick_emits_notify_ref3_zero() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
-    join_bounded("kanade steady notify join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-
-    // kanade 停止後に送信端 drop → sakura sink スレッドも自然終了（保留は解放済み）。
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura gated steady join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade steady notify join");
 
     // (1) steady スクリプトの StartTalk はちょうど 1 本（Value tick 由来のみ・NOTIFY tick は起こさない）。
     let steady_starts = started
@@ -560,21 +524,8 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
-    join_bounded("kanade blocking catch-up join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-
-    // kanade 停止後に送信端 drop → sakura sink スレッドも自然終了（期限付き join）。
-    drop(sender);
-    sakura.join_bounded("mock-sakura blocking join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade blocking catch-up join");
 
     // 記録列から OnSecondChange GET のみを処理順に抽出する。
     let second_change_gets: Vec<&RecordedCall> = recorded
@@ -831,22 +782,11 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
     // 表明はこのループでは行わず、join 後の最終記録列 (1)(2)(3) に対してのみ評価する（Req 7.1/7.2/7.3）。
     drive_ticks_until_disconnect(&harness.sender, 3, "talk_completion resume drive");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（復帰後 pump→steady talk quit:true→Unloading{Quit}→Unload→StopSelf）まで期限付き join。
     // join 成功それ自体が「完了点で停止せず pump が再開し talk を起こした」ことの保証である。
-    join_bounded("kanade resume join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the resumed pump talk (quit:true)");
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura resume join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade resume join");
 
     // (1) sakura へ配送された talk は保留 steady talk（id=1）と復帰後 steady talk（id=2）のちょうど 2 本
     //     （いずれも steady スクリプト・close talk は無い＝終了は steady quit:true で駆動）。

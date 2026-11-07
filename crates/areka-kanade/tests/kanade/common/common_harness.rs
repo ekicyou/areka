@@ -7,13 +7,15 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use areka_actor::ActorHandle;
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, KanadeNotice, TalkCommand, spawn_kanade, spawn_kanade_with_stop_sink,
+    KanadeConfig, KanadeMsg, KanadeNotice, StartTalk, TalkCommand, spawn_kanade,
+    spawn_kanade_with_stop_sink,
 };
 
+use super::mock_sakura::starts_of;
 use super::{
-    BlockOn, FailOn, Fixture, MockSakura, MockShiori, QuitPolicy, SakuraGate, ShioriGate,
-    spawn_mock_sakura, spawn_mock_sakura_gated, spawn_mock_shiori, spawn_mock_shiori_blocking,
-    spawn_mock_shiori_failing,
+    BlockOn, DEFAULT_TIMEOUT, FailOn, Fixture, MockSakura, MockShiori, QuitPolicy, RecordedCall,
+    SakuraGate, ShioriGate, join_bounded, spawn_mock_sakura, spawn_mock_sakura_gated,
+    spawn_mock_shiori, spawn_mock_shiori_blocking, spawn_mock_shiori_failing,
 };
 
 // ============================================================================
@@ -34,6 +36,42 @@ pub struct Harness {
     pub shiori: MockShiori,
     /// mock sakura sink（受領 talk アクセサ）。
     pub sakura: MockSakura,
+}
+
+/// [`Harness::finish`] が確定させた走行の結果（#46・後始末の結果の型はこれ 1 つ）。
+pub struct Driven {
+    /// shiori が受けた呼出の記録列。
+    pub recorded: Vec<RecordedCall>,
+    /// sakura が受けた指示の列（到着順）。
+    pub commands: Vec<TalkCommand>,
+    /// `commands` のうち `Start` の射影。
+    pub started: Vec<StartTalk>,
+}
+
+impl Harness {
+    /// 終了を駆動した後の後始末（#46・手順はここ 1 か所）。
+    ///
+    /// kanade を期限付きで join し、送り端を捨て、sakura を join してから記録を読む。sakura の記録は
+    /// いつも [`MockSakura::join_bounded_then_commands`] で読む——`ForceQuit`／`Close` で終わる檻でも
+    /// join の完了が全記録に happens-before を張るので、檻ごとに「`commands()` でよいか」を選ばない。
+    pub fn finish(self, label: &str) -> Driven {
+        let Harness {
+            sender,
+            kanade,
+            shiori,
+            sakura,
+        } = self;
+        join_bounded(label, DEFAULT_TIMEOUT, kanade).unwrap_or_else(|e| {
+            panic!("'{label}': kanade は終了の系列を完走して止まるはず: {e:?}")
+        });
+        drop(sender);
+        let commands = sakura.join_bounded_then_commands(label, DEFAULT_TIMEOUT);
+        Driven {
+            recorded: shiori.recorded(),
+            started: starts_of(&commands),
+            commands,
+        }
+    }
 }
 
 /// 7 つの `spawn_harness*` が共有する組み立て（#44・配線はここ 1 か所）。

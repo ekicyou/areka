@@ -1,8 +1,8 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MonotonicMs, MouseEventKind, QuitPolicy, Response, TalkId,
-    events, expected_call, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig,
+    KanadeMsg, MonotonicMs, MouseEventKind, QuitPolicy, Response, TalkId, events, expected_call,
+    expected_unload, spawn_harness, spawn_harness_gated,
 };
 
 /// マウス GET へ注入する撫で talk スクリプト（cage 7／10・`Steady{None}` からの起動と
@@ -79,20 +79,10 @@ fn mouse_value_from_steady_none_starts_talk() {
         )))
         .expect("send Mouse");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // マウス talk の quit:true が終了系列を駆動する（CloseRequest 不要）。期限付き join。
-    join_bounded("kanade mouse-start join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the mouse-started talk (quit:true)");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura mouse-start join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse-start join");
 
     // (1) マウス GET は現に発行・記録され、events 表導出（Steady{None}＝INACTIVE・Status なし）と一致する。
     let gets = mouse_gets(&recorded);
@@ -211,19 +201,9 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
     // 両保留を解放 → TalkDone(1,Ended)（stale 破棄）→ TalkDone(2,Quit)（終了駆動）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse-replace join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the replacement talk (quit:true) after stale Done discard");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura mouse-replace join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse-replace join");
 
     // (1) 再生中でもマウス GET は GET のまま発行され Status: talking を帯びる（DD-IE-1）。
     let gets = mouse_gets(&recorded);
@@ -367,19 +347,9 @@ fn active_talk_non_mouse_pump_is_notify_no_replacement_dd6_preserved() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade dd6-preserve join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura dd6-preserve join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade dd6-preserve join");
 
     // (1) active talk 中の Tick は OnSecondChange NOTIFY（Ref3=0・Status: talking）を発行する
     //     （非マウス pump は再生中に GET でなく NOTIFY＝Value を運べない＝置換不能・DD-6 保存の構造前提）。
@@ -508,20 +478,10 @@ fn mixed_mouse_and_second_change_talk_ids_are_monotonic() {
     // マウス talk（id=2・quit:true）の TalkDone(2,Quit) が終了系列を駆動する（因果順で後続・retry ループ不要）。
     // 保留した id=1 の TalkDone は kanade 停止後に releaser が recv_closed 経由で drain する（release_all 不要）。
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // マウス置換 talk（id=2・quit:true）の Quit が終了系列を完走させるまで期限付き join（バリア）。
-    join_bounded("kanade mixed-monotonic join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the mouse replacement talk (quit:true)");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura mixed-monotonic join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mixed-monotonic join");
 
     // (1) 混在: 到達 StartTalk は OnSecondChange talk とマウス talk のちょうど 2 本（別出所・別 talk）。
     assert_eq!(

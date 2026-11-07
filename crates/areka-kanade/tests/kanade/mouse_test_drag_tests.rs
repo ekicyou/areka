@@ -10,9 +10,9 @@
 
 use super::test_support::mouse_input;
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MouseEventKind, QuitPolicy, RecordedCall, events,
-    expected_call, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture, Harness,
+    KanadeConfig, KanadeMsg, MouseEventKind, QuitPolicy, RecordedCall, events, expected_call,
+    expected_unload, spawn_harness, spawn_harness_gated,
 };
 
 /// 記録列からドラッグの 2 つの GET だけを処理順に抜き出す。
@@ -32,22 +32,12 @@ fn close_request() -> KanadeMsg {
     }
 }
 
-/// 期限付き join で kanade と mock sakura を畳み、確定した記録と到達した StartTalk の台本を返す。
+/// 後始末をして、確定した記録と到達した StartTalk の台本を返す。
 fn finish(harness: Harness, label: &str) -> (Vec<RecordedCall>, Vec<String>) {
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded(label, DEFAULT_TIMEOUT, kanade).expect("kanade は終了の系列を完走して止まる");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded(label, DEFAULT_TIMEOUT);
-    (
-        shiori.recorded(),
-        started.into_iter().map(|s| s.script).collect(),
-    )
+    let Driven {
+        recorded, started, ..
+    } = harness.finish(label);
+    (recorded, started.into_iter().map(|s| s.script).collect())
 }
 
 // ============================================================================

@@ -28,13 +28,12 @@
 
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
-    MouseEventKind, MouseInput, StartTalk, TalkId, events,
+    MouseEventKind, MouseInput, TalkId, events,
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
-    QuitPolicy, RecordedCall, Response, expected_call, expected_unload, join_bounded,
-    spawn_harness, spawn_harness_gated,
+    CallMethod, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness, QuitPolicy,
+    RecordedCall, Response, expected_call, expected_unload, spawn_harness, spawn_harness_gated,
 };
 
 // テーマ単位のテストモジュール接続宣言（areka-P0-file-slimming タスク 8.4・要件 1.7 / 3.1 / 3.2）。

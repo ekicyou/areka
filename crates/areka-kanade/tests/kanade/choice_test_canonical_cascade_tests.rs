@@ -3,9 +3,9 @@ use super::test_support::{
     choice_gets, choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
-    KanadeConfig, KanadeMsg, QuitPolicy, Response, TalkCommand, TalkId, events, expected_call,
-    expected_unload, join_bounded, spawn_harness_gated,
+    CloseReason, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig,
+    KanadeMsg, QuitPolicy, Response, TalkCommand, TalkId, events, expected_call, expected_unload,
+    spawn_harness_gated,
 };
 
 // ============================================================================
@@ -58,19 +58,9 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
     // 保留解放は全注入の後——保留 TalkDone は CloseRequest の後ろに並ぶ（FIFO・決定的）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade canonical-choice join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close (farewell talk quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura canonical-choice join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade canonical-choice join");
 
     // (1) 段列は Ex 先行 → 無印後続（Req2.2／2.3・裁定 2）。
     assert_eq!(
@@ -190,19 +180,9 @@ fn canonical_choice_ex_value_short_circuits_select() {
         .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
         .expect("send Choice");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade ex-value join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the choice-derived talk (quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura ex-value join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade ex-value join");
 
     // (1) Value 短絡: 段列は Ex 1 段のみ（無印は発行されない・Req2.4）。
     assert_eq!(

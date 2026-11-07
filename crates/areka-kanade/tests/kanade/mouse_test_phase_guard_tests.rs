@@ -1,8 +1,7 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
-    CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg,
-    MouseEventKind, QuitPolicy, TalkId, expected_unload, join_bounded, spawn_harness,
-    spawn_harness_gated,
+    CloseReason, Driven, FIXED_FAREWELL_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MouseEventKind,
+    QuitPolicy, TalkId, expected_unload, spawn_harness, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -46,18 +45,7 @@ fn phase_ignore_before_boot_no_mouse_get() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse idle-ignore join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence");
-    drop(sender);
-    sakura.join_bounded("mock-sakura idle-ignore join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade mouse idle-ignore join");
 
     // Idle のマウスは GET を発行しない（記録に現れない）。
     assert!(
@@ -123,19 +111,9 @@ fn phase_ignore_during_close_series_no_mouse_get() {
     // close talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse close-ignore join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after the close talk is released as quit:true");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura close-ignore join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse close-ignore join");
 
     // CloseTalkWait のマウスは GET を発行しない（記録に現れない）。
     assert!(
@@ -212,19 +190,9 @@ fn pending_close_guard_suppresses_mouse_get() {
     // 挨拶 talk（Ended）を解放 → pending_close を消化して begin_close（OnClose→別れ→close talk quit:true）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade mouse pending-close join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade completes the deferred close handshake and terminates");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura pending-close join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade mouse pending-close join");
 
     // (1) pending_close 中のマウスは GET を発行しない（記録に現れない）。
     assert!(

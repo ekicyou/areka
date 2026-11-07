@@ -38,7 +38,7 @@ use areka_kanade::{
 use log_capture_kit::install_global_capture_all;
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FailKind, FailOn, Fixture, Harness,
+    CallMethod, DEFAULT_TIMEOUT, Driven, FIXED_FAREWELL_SCRIPT, FailKind, FailOn, Fixture, Harness,
     QuitPolicy, RecordedCall, SinklessHarness, join_bounded, spawn_harness, spawn_harness_failing,
     spawn_harness_failing_with_stop_sink, spawn_harness_no_sink, spawn_harness_with_stop_sink,
 };
@@ -172,20 +172,11 @@ fn each_failure_vocabulary_drives_observable_termination() {
         // Boot を駆動 → OnInitialize 失敗 → Unloading{Fault} → Unload → Stopped → StopSelf。
         harness.sender.send(KanadeMsg::Boot).expect("send Boot");
 
-        let Harness {
-            sender,
-            kanade,
-            shiori,
-            sakura,
-        } = harness;
-
         // 呼出失敗が観測可能な終了（停止）へ写像された証拠: kanade が期限内に join できる。
-        join_bounded("kanade failing-boot join", DEFAULT_TIMEOUT, kanade).unwrap_or_else(|_| {
-            panic!("kanade should terminate on injected OnInitialize failure ({kind:?})")
-        });
+        let Driven { recorded, .. } =
+            harness.finish(&format!("kanade failing-boot join ({kind:?})"));
 
         // Fault 経路の best-effort Unload が記録列に 1 度現れる（正規終了経路の直接証拠）。
-        let recorded = shiori.recorded();
         assert_unload_recorded_once(&recorded);
 
         // 停止通知は Fault の種類と理由つきで 1 件届く。
@@ -203,10 +194,6 @@ fn each_failure_vocabulary_drives_observable_termination() {
             "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
             fault.reason
         );
-
-        // 後片付け: kanade 停止後に全 Sender を drop → sakura sink スレッドも自然終了。
-        drop(sender);
-        sakura.join_bounded("mock-sakura failing-boot join", DEFAULT_TIMEOUT);
     }
 }
 
@@ -278,19 +265,10 @@ fn shiori_down_case(
         })
         .expect("send ShioriDown");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 死活報告が観測可能な停止へ写像された証拠: kanade が期限内に join できる。
-    join_bounded("kanade shiori-down join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates on ShioriDown (Req 5.4)");
+    let Driven { recorded, .. } = harness.finish("kanade shiori-down join");
 
     // Fault 経路の best-effort Unload が記録列に 1 度現れる。
-    let recorded = shiori.recorded();
     assert_unload_recorded_once(&recorded);
 
     // 停止通知は Fault の種類と理由つきで 1 件届く。
@@ -308,9 +286,6 @@ fn shiori_down_case(
         "停止通知の理由は記録 shiori_down の reason と同じ文言のはず: {:?}",
         fault.reason
     );
-
-    drop(sender);
-    sakura.join_bounded("mock-sakura shiori-down join", DEFAULT_TIMEOUT);
 }
 
 // ============================================================================
@@ -369,20 +344,10 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 未知 TalkDone で終了・破綻していなければ、close→quit talk で終了系列が完走し join が成功する。
-    join_bounded("kanade unknown-talkdone join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade keeps running past unknown TalkDone, then terminates on driven close");
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura unknown-talkdone join", DEFAULT_TIMEOUT);
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade unknown-talkdone join");
 
     // 非空虚性の補強: 未知 TalkDone が Steady を離脱させていなければ、その後の close 握手が
     // OnClose の別れ Value を受けて close talk を 1 本起動する（＝運行が確かに継続していた証拠）。
@@ -397,7 +362,6 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
     );
 
     // 終了系列を確かに通った証拠: 記録列末尾は Unload（close→quit talk→Unload→StopSelf）。
-    let recorded = shiori.recorded();
     assert_unload_recorded_once(&recorded);
 }
 
@@ -555,19 +519,9 @@ fn error_response_at_boot_notify_continues_as_notified() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade boot-error-response join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close, not via the error response");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura boot-error-response join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade boot-error-response join");
 
     // (1) エラー応答のあとも起動が進んだ: OnInitialize の後に OnBoot GET が記録される。
     let init = position_of(&recorded, CallMethod::Notify, "OnInitialize")
@@ -628,19 +582,9 @@ fn error_response_at_conversation_get_continues_as_no_content() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade steady-error-response join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close, not via the error response");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura steady-error-response join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade steady-error-response join");
 
     // (1) エラー応答のあとも会話が続いた: 次の Tick の OnSecondChange GET も記録される（計 2 件）。
     assert_eq!(
@@ -692,19 +636,9 @@ fn error_response_at_close_get_closes_silently() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade close-error-response join", DEFAULT_TIMEOUT, kanade)
-        .expect("OnClose のエラー応答は返事なしとして無言で閉じ、kanade は期限内に終わるはず");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura close-error-response join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade close-error-response join");
 
     // (1) OnClose GET は発行され、別れの talk は起きない（返事なし＝無言の終了）。
     assert!(

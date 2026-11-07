@@ -66,7 +66,7 @@ pub use fixture::{
     FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Response,
 };
 pub use harness::{
-    Harness, SinklessHarness, spawn_harness, spawn_harness_blocking, spawn_harness_failing,
+    Driven, Harness, SinklessHarness, spawn_harness, spawn_harness_blocking, spawn_harness_failing,
     spawn_harness_failing_with_stop_sink, spawn_harness_gated, spawn_harness_gated_failing,
     spawn_harness_no_sink, spawn_harness_with_stop_sink,
 };

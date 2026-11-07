@@ -1,9 +1,9 @@
 use super::test_support::onclose_get_index;
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_BOOT_SCRIPT,
-    FIXED_FAREWELL_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
-    RecordedCall, TalkId, drive_ticks_until_disconnect, events, expected_call, expected_unload,
-    join_bounded, resumed_get_after_active_window, spawn_harness_gated,
+    CallMethod, CloseReason, DEFAULT_TIMEOUT, Driven, ExecutionSnapshot, FIXED_BOOT_SCRIPT,
+    FIXED_FAREWELL_SCRIPT, Fixture, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall,
+    TalkId, drive_ticks_until_disconnect, events, expected_call, expected_unload,
+    resumed_get_after_active_window, spawn_harness_gated,
 };
 
 /// `fetch` が返す記録列が `pred` を満たすまで壁時計 deadline（[`DEFAULT_TIMEOUT`]）まで yield して
@@ -122,21 +122,10 @@ fn boot_greeting_active_tick_emits_notify_talking() {
     // 挨拶 talk（quit:true）を解放 → Unloading{Quit}→Unload→StopSelf で終了系列を駆動する。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
-    join_bounded("kanade boot-greeting notify join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after releasing the boot greeting as quit:true");
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura boot-greeting notify join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade boot-greeting notify join");
 
     // (a) active な talk が現に boot 由来だった（先頭 StartTalk＝boot 挨拶スクリプト・先頭採番 id=1）。
     assert!(!started.is_empty(), "挨拶 talk が sink に配送されるはず");
@@ -254,22 +243,11 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     // （挙動不変が目的）、開始秒を変えずそのまま保存する。
     drive_ticks_until_disconnect(&harness.sender, 2, "boot_greeting_talkdone resume drive");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（復帰後 pump→steady talk quit:true→Unloading{Quit}→Unload→StopSelf）まで期限付き join。
     // join 成功それ自体が「挨拶が slot と照合され復帰し、pump が再開して talk を起こした」ことの保証である。
-    join_bounded("kanade boot-greeting resume join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the resumed pump talk after the boot greeting completes");
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura boot-greeting resume join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade boot-greeting resume join");
 
     // (a) active だった talk は boot 挨拶（先頭 StartTalk・boot script・先頭採番 id=1）。
     assert!(!started.is_empty(), "少なくとも挨拶 talk が配送されるはず");
@@ -419,22 +397,10 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     // 挨拶 talk（Ended）を解放 → `pending_close` を消化して初めて握手開始（OnClose GET→別れの Value→close talk）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // close talk（quit:true）で終了系列完走まで期限付き join。
-    join_bounded("kanade boot-greeting close join", DEFAULT_TIMEOUT, kanade).expect(
-        "kanade completes the deferred close handshake after the boot greeting and terminates",
-    );
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura boot-greeting close join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade boot-greeting close join");
 
     // (a) 挨拶 talk が boot 由来で起動した（先頭 StartTalk・boot script・先頭採番 id=1）。
     assert!(!started.is_empty(), "挨拶 talk が sink に配送されるはず");

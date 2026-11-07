@@ -31,7 +31,7 @@ use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg};
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, Harness, QuitPolicy, RecordedCall,
-    Response, join_bounded, spawn_harness, spawn_harness_failing,
+    Response, spawn_harness, spawn_harness_failing,
 };
 
 /// 1 度に問う項目名（表示可否・説明書・終了）。順序・長さの突合に使う正本でもある。
@@ -89,22 +89,12 @@ fn run_query(
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade resource-query join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after boot -> query -> close -> quit");
-    drop(sender);
-    sakura.join_bounded("mock-sakura resource-query join", DEFAULT_TIMEOUT);
+    let recorded = harness.finish("kanade resource-query join").recorded;
 
     let answers = receiver
         .recv_timeout(DEFAULT_TIMEOUT)
         .expect("照会の応答は期限内にちょうど 1 度返るはず（殻が答えないと UI は待たされ続ける）");
-    (answers, shiori.recorded())
+    (answers, recorded)
 }
 
 /// 記録列から [`MENU_IDS`] の GET だけを到着順で取り出す（boot の username 照会等は除く）。

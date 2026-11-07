@@ -3,9 +3,8 @@ use super::test_support::{
     choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, QuitPolicy,
-    Response, TalkCommand, TalkId, events, expected_call, expected_unload, join_bounded,
-    spawn_harness_gated,
+    Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, Response,
+    TalkCommand, TalkId, events, expected_call, expected_unload, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -52,19 +51,9 @@ fn on_id_choice_fires_named_event_only_then_resolves_and_starts() {
         .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
         .expect("send Choice");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade named-choice join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the choice-derived talk (quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura named-choice join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade named-choice join");
 
     // (1) 段列は任意名 1 段のみ（Ex／無印は一切発行されない・裁定 1）。
     assert_eq!(

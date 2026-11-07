@@ -20,8 +20,8 @@ use std::sync::mpsc;
 use areka_kanade::{KanadeNotice, KanadeStopCause, KanadeStopped};
 
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, Fixture, Harness, KanadeConfig, KanadeMsg,
-    MonotonicMs, QuitPolicy, expected_unload, join_bounded, spawn_harness_with_stop_sink,
+    CallMethod, CloseReason, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
+    expected_unload, spawn_harness_with_stop_sink,
 };
 
 /// 通知端つきハーネスを組み、`ForceQuit`／`CloseRequest` のいずれかで終了系列へ入れる。
@@ -86,21 +86,9 @@ fn force_quit_delivers_exactly_one_stop_notification_with_the_forced_cause() {
         })
         .expect("send ForceQuit");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded(
-        "kanade stop-notify force-quit join",
-        DEFAULT_TIMEOUT,
-        kanade,
-    )
-    .expect("ForceQuit で終了系列が完走する（Req 4.4）");
-    drop(sender);
-    sakura.join_bounded("mock-sakura stop-notify force-quit join", DEFAULT_TIMEOUT);
+    let recorded = harness
+        .finish("kanade stop-notify force-quit join")
+        .recorded;
 
     assert_eq!(
         single_notification(&stop_rx),
@@ -108,7 +96,7 @@ fn force_quit_delivers_exactly_one_stop_notification_with_the_forced_cause() {
         "強制終了の停止通知は原因 Forced を運ぶ"
     );
     assert_eq!(
-        *shiori.recorded().last().expect("記録列は空でない"),
+        *recorded.last().expect("記録列は空でない"),
         expected_unload(),
         "終了系列は Unload で閉じている（通知は完了後に出ている）"
     );
@@ -131,28 +119,15 @@ fn silent_close_delivers_the_close_silent_cause() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded(
-        "kanade stop-notify silent-close join",
-        DEFAULT_TIMEOUT,
-        kanade,
-    )
-    .expect("OnClose 204 で終了系列が完走する（Req 4.6）");
-    drop(sender);
-    sakura.join_bounded("mock-sakura stop-notify silent-close join", DEFAULT_TIMEOUT);
+    let recorded = harness
+        .finish("kanade stop-notify silent-close join")
+        .recorded;
 
     assert_eq!(
         single_notification(&stop_rx),
         KanadeStopCause::CloseSilent,
         "無言終了の停止通知は原因 CloseSilent を運ぶ"
     );
-    let recorded = shiori.recorded();
     assert_eq!(
         recorded.last().expect("記録列は空でない").method,
         CallMethod::Unload,
@@ -186,20 +161,10 @@ fn a_dropped_receiver_does_not_stop_the_termination_sequence() {
         })
         .expect("send ForceQuit");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade stop-notify orphan join", DEFAULT_TIMEOUT, kanade)
-        .expect("受信端が落ちていても終了系列は完走する（panic しない）");
-    drop(sender);
-    sakura.join_bounded("mock-sakura stop-notify orphan join", DEFAULT_TIMEOUT);
+    let recorded = harness.finish("kanade stop-notify orphan join").recorded;
 
     assert_eq!(
-        *shiori.recorded().last().expect("記録列は空でない"),
+        *recorded.last().expect("記録列は空でない"),
         expected_unload(),
         "通知の送出失敗は終了系列を止めない（末尾は Unload）"
     );

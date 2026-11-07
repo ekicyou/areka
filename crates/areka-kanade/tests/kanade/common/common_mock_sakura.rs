@@ -43,23 +43,15 @@ impl MockSakura {
     /// mock を経由せず終了でき、**記録前のスナップショットを掴む**。実測で檻バイナリ 100 回中
     /// 7〜11 回失敗し、しかも**全檻並行実行時にしか露見しない**（`--exact` 単独実行では出ない）。
     ///
-    /// そういう檻では [`MockSakura::join_bounded_then_commands`] を使うこと——join 完了が
-    /// 全記録に happens-before を張る。
+    /// 駆動ハーネスの後始末は `Harness::finish` 1 つで、そこはいつも
+    /// [`MockSakura::join_bounded_then_commands`] で読む——join 完了が全記録に happens-before を張る。
     pub fn commands(&self) -> Vec<TalkCommand> {
         self.commands.lock().expect("mock sakura mutex").clone()
     }
 
     /// 受領した [`StartTalk`] の記録スナップショットを返す（記録列の `Start` 射影）。
     pub fn started(&self) -> Vec<StartTalk> {
-        self.commands
-            .lock()
-            .expect("mock sakura mutex")
-            .iter()
-            .filter_map(|command| match command {
-                TalkCommand::Start(start) => Some(start.clone()),
-                TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
-            })
-            .collect()
+        starts_of(&self.commands.lock().expect("mock sakura mutex"))
     }
 
     /// sink スレッドの終了を待つ（`TalkCommand` 送信端が全て drop された後に完了する）。
@@ -78,10 +70,6 @@ impl MockSakura {
     /// kanade の終了が `TalkDone` の往復を介さない檻——`ForceQuit` で終了系列へ直行する形——では
     /// この差が実際に露見し、記録列が**空のまま**読まれ得る（実測: 100 回中 11 回）。
     ///
-    /// quit フラグ付き `TalkDone` の往復で終わる檻（既存の群 1〜5）は、その往復自体が mock の
-    /// 消費を強制するため `commands()` で足りる——本変種は既存檻の意味を変えないよう**追加**であり、
-    /// `commands()` は従来どおり使い続けてよい。
-    ///
     /// 本変種は recv ループスレッドの `join` 完了後にロックするため、記録の全書き込みに対して
     /// happens-before が張られる（スレッド終了 → join のメモリ順序）。
     pub fn join_bounded_then_commands(self, what: &str, timeout: Duration) -> Vec<TalkCommand> {
@@ -91,6 +79,17 @@ impl MockSakura {
         });
         commands.lock().expect("mock sakura mutex").clone()
     }
+}
+
+/// 指示の列のうち `TalkCommand::Start` の射影（[`MockSakura::started`] と `Harness::finish` が共有）。
+pub(super) fn starts_of(commands: &[TalkCommand]) -> Vec<StartTalk> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            TalkCommand::Start(start) => Some(start.clone()),
+            TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
+        })
+        .collect()
 }
 
 /// quit フラグの決定方式（シナリオ指示）。

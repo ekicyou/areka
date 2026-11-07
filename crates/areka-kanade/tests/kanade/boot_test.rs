@@ -15,8 +15,8 @@
 use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, events, resources};
 
 use super::common::{
-    DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call,
-    expected_translate, join_bounded, spawn_harness,
+    FIXED_BOOT_SCRIPT, Fixture, QuitPolicy, RecordedCall, expected_call, expected_translate,
+    spawn_harness,
 };
 
 /// 起動系列を駆動し、記録が確定した shiori 記録列を返す（同期は kanade 終了 join で担保）。
@@ -46,22 +46,8 @@ fn drive_boot_and_collect() -> Vec<RecordedCall> {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で起動系列は記録済み。
-    join_bounded("kanade boot join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
-
-    // kanade 停止後に送信端 drop → sakura sink スレッドも自然終了（期限付き join）。
-    drop(sender);
-    sakura.join_bounded("mock-sakura boot join", DEFAULT_TIMEOUT);
-
-    shiori.recorded()
+    harness.finish("kanade boot join").recorded
 }
 
 /// 起動系列の記録列が正典と完全一致する（順序・NOTIFY／GET の別・Reference 構成・Req 1.5）。

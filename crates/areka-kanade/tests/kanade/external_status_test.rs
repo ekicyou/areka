@@ -19,24 +19,9 @@ use areka_kanade::{
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, binding,
-    expected_call, expected_unload, join_bounded, pumps, send, spawn_harness, spawn_harness_gated,
-    tick,
+    CallMethod, DEFAULT_TIMEOUT, Fixture, QuitPolicy, binding, expected_call, expected_unload,
+    pumps, send, spawn_harness, spawn_harness_gated, tick,
 };
-
-/// 期限付き join の後に記録列を確定する（終了は駆動した close の別れ talk quit:true）。
-fn finish(harness: Harness, what: &str) -> Vec<RecordedCall> {
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded(what, DEFAULT_TIMEOUT, kanade).expect("kanade terminates via the driven close");
-    drop(sender);
-    sakura.join_bounded(what, DEFAULT_TIMEOUT);
-    shiori.recorded()
-}
 
 /// バルーンの組と中断の旗の知らせが、送り口を通って次の周期リクエストの `Status` に載る
 /// （要件 3.1／3.2／4.1／5.1／8.2）。
@@ -96,7 +81,9 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
     );
     gate.release_all();
 
-    let recorded = finish(harness, "kanade external-status (balloon/nouserbreak) join");
+    let recorded = harness
+        .finish("kanade external-status (balloon/nouserbreak) join")
+        .recorded;
     let pumps = pumps(&recorded);
     let statuses: Vec<Option<&str>> = pumps.iter().map(|c| c.status.as_deref()).collect();
     assert_eq!(
@@ -195,7 +182,9 @@ fn online_rides_from_on_initialize_while_held_and_clears_from_the_next_tick_afte
         },
     );
 
-    let recorded = finish(harness, "kanade external-status (online) join");
+    let recorded = harness
+        .finish("kanade external-status (online) join")
+        .recorded;
 
     // (1) 最初のリクエストは OnInitialize で、online を帯びる。
     let online = ExecutionSnapshot {

@@ -1,9 +1,8 @@
 use super::test_support::onclose_get_index;
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT,
-    FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
-    RecordedCall, events, expected_call, expected_translate, expected_unload, join_bounded,
-    spawn_harness, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
+    Fixture, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, events, expected_call,
+    expected_translate, expected_unload, spawn_harness, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -53,23 +52,10 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // close talk の TalkDone{Ended} だけで終了系列が完走する（Tick は 1 本も送っていない）。
-    join_bounded("kanade farewell-quit join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates when the farewell talk ends without a quit tag (Req 3.6)");
-
-    drop(sender);
-    // mock sakura は起動要求を記録してから TalkDone を返すので、join 成功時点で記録は確定している。
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura farewell-quit join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade farewell-quit join");
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
@@ -179,36 +165,10 @@ fn silent_close_on_204_terminates_without_extra_events() {
         })
         .expect("send CloseRequest");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 204 無言終了で終了系列完走（Unload→StopSelf）まで到達する。
-    join_bounded("kanade silent-close join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates directly on OnClose 204 (silent close・Req 4.6)");
-
-    drop(sender);
-    // boot talk（唯一の StartTalk）が sakura sink に届くのを待つ。kanade は 204 で即終了するため、
-    // sink スレッドが boot StartTalk を recv・記録するのは非同期であり、drop 直後に started() を読むと
-    // 未記録（空）を掴む race がある。sink スレッド終了（全 StartTalk Sender drop で recv 終了）を
-    // join_bounded で見届けてから記録を確定させる。ただし join_bounded は sakura を消費するため、
-    // 記録スナップショットは boot talk 到達を有界回数の yield で待って確定してから join する（sleep なし）。
-    let mut started = sakura.started();
-    for _ in 0..10_000 {
-        if !started.is_empty() {
-            break;
-        }
-        std::thread::yield_now();
-        started = sakura.started();
-    }
-    sakura.join_bounded("mock-sakura silent-close join", DEFAULT_TIMEOUT);
-    // join 後に最終スナップショットを取り直せないため（消費済み）、上の待機で確定した started を使う。
-    // sink スレッドは boot StartTalk を 1 本受けて記録した後、他に送られる talk はない（204・Tick なし）。
-
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade silent-close join");
 
     // (a) OnClose GET（Ref0=user）が現れる。
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
@@ -309,7 +269,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     // `Steady{None}` の即握手にする（DD-IT-12 の挨拶 talk race を断つ）。close talk（受領 index 0・挨拶
     // なし boot ゆえ先頭 StartTalk）の TalkDone を保留し、CloseTalkWait を維持したまま Tick を注入する。
     // quit_policy は使われない（保留 talk は解放されない・deadline で終了する）が、契約上与える。
-    let (harness, gate) = spawn_harness_gated(
+    let (harness, _gate) = spawn_harness_gated(
         config,
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![false]),
@@ -343,25 +303,9 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
         })
         .expect("send deadline-exceeding Tick");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    // TalkDone が一度も来ないにもかかわらず、deadline 判定で終了系列が完走し join が成功する。
-    join_bounded("kanade deadline join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates on close-talk deadline even without TalkDone (Req 4.7)");
-
-    // kanade 停止（StartTalk 全 Sender drop）で保留ハーネスの recv ループが閉じ、releaser の
-    // recv_closed 安全弁で releaser→本体スレッドが自然終了する。念のため release_all も呼ぶ
-    // （解放は無害・保留は kanade 停止済みで送っても捨てられる）。
-    gate.release_all();
-    drop(sender);
-    sakura.join_bounded("mock-sakura deadline join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    // TalkDone が一度も来ないにもかかわらず、deadline 判定で終了系列が完走し join が成功する
+    // （保留は解放しない＝kanade 停止後は releaser の recv_closed 安全弁が片づける）。
+    let Driven { recorded, .. } = harness.finish("kanade deadline join");
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
@@ -425,21 +369,8 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
         })
         .expect("send ForceQuit");
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
     // 直行終了で join 成功（＝終了へ直行した証拠）。
-    join_bounded("kanade force-quit join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates directly on ForceQuit (Req 4.4)");
-
-    drop(sender);
-    sakura.join_bounded("mock-sakura force-quit join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade force-quit join");
 
     // (a) 末尾は Unload（終了系列完走）で閉じる。
     let last = recorded.last().expect("記録列は空でない");
