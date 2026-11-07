@@ -42,7 +42,7 @@ use wintf::ecs::{FrameTime, WindowDragging};
 use crate::ghost_session::GhostSlot;
 use crate::input_events::balloon::BalloonWiring;
 use crate::input_events::shell_box::{ShellBoxHover, settle_box_hover};
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::super::frame::{Emo2Wiring, resolve_talk_time};
 use super::super::target_map::{balloon_target, shell_target};

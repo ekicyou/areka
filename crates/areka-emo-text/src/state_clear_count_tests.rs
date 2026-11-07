@@ -1,5 +1,7 @@
 //! scope ごとの消去の回数（`TextLayerState::clear_count`）の数え方を確かめる
-//! （要件 1.1・1.5・3.4・3.5）。
+//! （`areka-P0-balloon-reappear-short-talk` 要件 1.1・1.5・3.4・3.5）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! `Clear` は名指しの scope だけを 1 進め、`ClearAll` は既にある全 scope を 1 ずつ進める。
 //! 他の cue では動かない。時刻は cue に焼き込んだ値だけで、実時間を待たない。
@@ -91,9 +93,9 @@ fn other_cues_do_not_move_the_count() {
     }
 }
 
-/// 同じ cue の列からは同じ回数になる（決定論）。
+/// 消去と全消しの混じった cue の列は、スコープごとの回数をこの値にする。
 #[test]
-fn same_cue_sequence_yields_same_counts() {
+fn mixed_clear_sequence_yields_these_counts() {
     let sequence = vec![
         cue("0", 0.0, CueCommand::Text("あ".into())),
         cue("1", 0.1, CueCommand::Text("い".into())),
@@ -104,15 +106,8 @@ fn same_cue_sequence_yields_same_counts() {
         cue("0", 0.6, CueCommand::ClearAll),
     ];
     let mut a = TextLayerState::default();
-    let mut b = TextLayerState::default();
     for c in &sequence {
         a.apply_cue(c);
-    }
-    for c in &sequence {
-        b.apply_cue(c);
-    }
-    for actor in ["0", "1", "2", "3"] {
-        assert_eq!(count(&a, actor), count(&b, actor), "scope {actor}");
     }
     assert_eq!(
         [

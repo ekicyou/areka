@@ -1,5 +1,7 @@
 //! # actor_region_warn_tests — 折返し警告は「装着ごとに 1 件」（結線層・兄弟テスト）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `areka-P0-emo2-conformance-e2e`（要件 **14.1**〜**14.4**・design **D14**）。
 //!
 //! ## なぜ登録口が持つのか
@@ -8,7 +10,7 @@
 //! [`TextRegion::resolve`](crate::region::TextRegion::resolve) の中にあった。しかし
 //! 再追従シーム（[`TextLayerRuntime::refresh_actor_binding`]）は churn ガードの判定キーを
 //! 得るために解決を**毎フレーム**通すため、実機の一周走行では生ログ 30,837 行のうち
-//! **27,908 行**が同じ警告になった（走行 A・2026-09-06 の実測）。件数が意味を持たなくなり、
+//! **27,908 行**が同じ警告になった（`areka-P0-emo2-conformance-e2e` の実機走行の実測）。件数が意味を持たなくなり、
 //! 生ログが読めなくなる。
 //!
 //! 「読み込み（装着）1 回につき 1 件」という意味を持つのは、解決する側ではなく **actor の
@@ -32,7 +34,7 @@
 //! 件数を見るテストは捕捉窓の内側で対照の `error!` を 1 件発行し、その 1 件が数えられて
 //! いることを件数の主張と同時に確かめる（`region_inline_limit_tests.rs` と同じ流儀）。
 //!
-//! ## `origin` の警告も同じ登録口が書く（本 spec 要件 3.1〜3.4／5.6）
+//! ## `origin` の警告も同じ登録口が書く（`areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.4／5.6）
 //!
 //! 範囲外ゆえ無視した `origin` 宣言の警告も、同じ理由で同じ登録口が書く——件数の規律も
 //! 同じである（装着で成分 1 つにつき 1 件・値の変わらない再追従で 0 件）。同じ捕捉窓に
@@ -49,9 +51,11 @@ use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
-use log_capture_kit::{CapturedEvent, capture};
+use log_capture_kit::CapturedEvent;
 
-use super::test_support::spawn_reserved_slot;
+use super::test_support::{
+    COARSE_WRAP_MESSAGE, IGNORED_ORIGIN_MESSAGE, capture_checked, number_field, spawn_reserved_slot,
+};
 use super::{TextLayerRuntime, TextSlotBinding};
 use crate::place::PlaceKey;
 use crate::region::TextRegion;
@@ -78,10 +82,6 @@ const WIDER_IMAGE: (u32, u32) = (300, 203);
 const WIDER_RIGHT: f32 = 252.0;
 /// 別原寸での折返し基準。
 const WIDER_WRAP_X: f32 = 266.0;
-
-/// 警告の文言（`actor.rs` の発行点と 1 文字も違わないこと自体を固定する——手順書 §5.7 の
-/// grep 語であり、変えると実機走行の判定が静かに壊れる・要件 14.3）。
-const WARN_MESSAGE: &str = "折返し基準が描画範囲の外に解決された——実効の折返し位置は描画範囲の辺になる（バルーン定義側の粗さ）";
 
 /// 出荷 fixture `emo2-kakukaku` の共通 `descript.txt` から関連キーだけを写した基層。
 ///
@@ -135,51 +135,32 @@ fn single_layer(source: &str) -> BalloonModel {
     parse_str(source, None)
 }
 
-/// 捕捉窓の中で `f` を走らせ、`(戻り値, WARN イベント一覧, ERROR 件数)` を返す。
-///
-/// 対照の `error!` を窓の内側で 1 件発行するのは、「WARN が 0 件」という主張が捕捉窓の
-/// 死によって恒真になるのを防ぐためである（呼出側は ERROR 件数 1 を必ず併せて確認する）。
-fn capturing<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>, usize) {
-    let (value, events) = capture(|| {
-        tracing::error!("捕捉窓が生きていることの対照イベント");
-        f()
-    });
-    let warns: Vec<CapturedEvent> = events
-        .iter()
+/// 捕捉窓の中で `f` を走らせ、`(戻り値, WARN イベント一覧)` を返す。対照の `error!` が 1 件だけ
+/// ERROR に数えられていることは [`capture_checked`] が確かめる（「WARN が 0 件」を恒真にしない）。
+fn capturing<R>(f: impl FnOnce() -> R) -> (R, Vec<CapturedEvent>) {
+    let (value, events) = capture_checked(f);
+    let warns = events
+        .into_iter()
         .filter(|e| e.level == tracing::Level::WARN)
-        .cloned()
         .collect();
-    let errors = events
-        .iter()
-        .filter(|e| e.level == tracing::Level::ERROR)
-        .count();
-    (value, warns, errors)
-}
-
-/// 数値欄を f32 として読む（`{:?}` 表現の細部に依存しないよう、解析してから比べる）。
-fn number_field(event: &CapturedEvent, name: &str) -> f32 {
-    let raw = event
-        .field(name)
-        .unwrap_or_else(|| panic!("欄 {name} が警告に載っていない"));
-    raw.parse::<f32>()
-        .unwrap_or_else(|_| panic!("欄 {name} の値 {raw} を数値として読めない"))
+    (value, warns)
 }
 
 /// 4 欄と文言を丸ごと確かめる（軸・折返し基準・遠辺は呼出側が期待値を渡す）。
 fn assert_coarse_warning(warn: &CapturedEvent, axis: &str, wrap_threshold: f32, inline_limit: f32) {
     assert_eq!(
         warn.message(),
-        WARN_MESSAGE,
+        COARSE_WRAP_MESSAGE,
         "文言は上流と 1 文字も違ってはならない（手順書 §5.7 の grep 語・要件 14.3）"
     );
     assert_eq!(warn.field_str("axis"), Some(axis), "行内軸の欄");
     assert_eq!(number_field(warn, "wrap_threshold"), wrap_threshold);
     assert_eq!(number_field(warn, "inline_limit"), inline_limit);
-    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（要件 3.12）。
+    // 折返しの警告を見る呼出側はどれも相方（スコープ 1）で、名前を入れていない（`areka-P0-shell-balloon` 要件 3.12）。
     assert_eq!(
         warn.field_str("balloon"),
         Some("スコープ1のバルーン"),
-        "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）"
+        "名前を入れていないバルーンの名前の欄はスコープから導く（`areka-P0-shell-balloon` 要件 3.12）"
     );
 }
 
@@ -208,7 +189,7 @@ fn attaching_a_coarse_balloon_warns_once_with_balloon_axis_and_both_values() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("1");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -216,10 +197,6 @@ fn attaching_a_coarse_balloon_warns_once_with_balloon_axis_and_both_values() {
         );
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の件数の主張は証拠にならない"
-    );
     assert_eq!(
         warns.len(),
         1,
@@ -235,7 +212,7 @@ fn attaching_a_vertical_coarse_balloon_warns_with_the_inline_axis_of_the_block_d
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("1");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -243,7 +220,6 @@ fn attaching_a_vertical_coarse_balloon_warns_with_the_inline_axis_of_the_block_d
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert_eq!(
         warns.len(),
         1,
@@ -260,7 +236,7 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -268,10 +244,6 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
         );
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert_eq!(
         warns.len(),
         0,
@@ -282,7 +254,7 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
 // ── 要件 14.2／14.4: 再追従は「値が変わったときだけ」 ──
 
 /// 値の変わらない再追従を 3 回繰り返しても追加の警告は 0 件——毎フレーム走る経路で
-/// 警告が積み上がらないことの本体（走行 A の 27,908 行はここで消える）。
+/// 警告が積み上がらないことの本体（上の 27,908 行はここで消える）。
 #[test]
 fn repeated_refresh_with_unchanged_values_adds_no_warning() {
     let mut world = World::new();
@@ -295,7 +267,7 @@ fn repeated_refresh_with_unchanged_values_adds_no_warning() {
         &merged(KERO_OVERLAY),
     );
 
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         let mut changed = Vec::new();
         for _ in 0..3 {
             changed.push(rt.refresh_actor_binding(
@@ -307,10 +279,6 @@ fn repeated_refresh_with_unchanged_values_adds_no_warning() {
         changed
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert_eq!(
         changed,
         vec![false, false, false],
@@ -338,10 +306,9 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn() {
 
     // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
     let scaled = TextSlotBinding::new(slot, window, 2.0, (576, 406), KERO_IMAGE);
-    let (changed, warns, errors) =
+    let (changed, warns) =
         capturing(|| rt.refresh_actor_binding(&actor, scaled, &merged(KERO_OVERLAY)));
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(
         changed,
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
@@ -373,7 +340,7 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
     );
 
     // 面が別寸へ切り替わる（`\b` 相当）——粗さは残るが値が変わる。
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             binding(slot, window, WIDER_IMAGE),
@@ -381,7 +348,6 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
         )
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(changed, "面実寸が変われば再追従は起きる（前提の確認）");
     assert_eq!(
         warns.len(),
@@ -391,15 +357,11 @@ fn refresh_with_a_changed_region_warns_once_with_the_new_values() {
     assert_coarse_warning(&warns[0], "x", WIDER_WRAP_X, WIDER_RIGHT);
 }
 
-// ── 本 spec 要件 3.1〜3.4／5.6: 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
+// ── `areka-P0-balloon-origin-outside-validrect` 要件 3.1〜3.4／5.6: 無視した `origin` 宣言は成分 1 つにつき 1 件 ──
 //
 // 上の 6 本は `origin` を宣言しない入力なので、下の追加分とは別の警告を見ている。
 // 同じ捕捉窓に 2 種類の警告が混ざりうるため、下の群は**文言で選り分けてから**数える
 // （総数 0 件を主張するときだけは選り分けない——選り分けない 0 のほうが強い主張である）。
-
-/// 無視した `origin` 宣言の警告の文言（`actor_decoration.rs` の発行点と 1 文字も違わないこと
-/// 自体を固定する——折返しの警告と同じ捕捉窓で選り分ける鍵がこの文字列だからである・要件 3.3）。
-const IGNORED_ORIGIN_MESSAGE: &str = "origin に指定した文字の書き始めの位置が、文字を描いてよい範囲（validrect）の外にある——指定は使わず、範囲の書き始めの角から書いた";
 
 /// 基層へ足す `origin` 宣言——両成分とも範囲の外（本体側の 36..356／46..168 に対し 0）。
 const ORIGIN_BOTH_OUTSIDE: &str = concat!("origin.x,0\n", "origin.y,0\n");
@@ -452,6 +414,7 @@ fn ignored_origin_warns(warns: &[CapturedEvent]) -> Vec<&CapturedEvent> {
 /// 「上流が空文字へ変わっても両辺が揃って通る」ので、空でないことを何も確かめられない。
 fn assert_ignored_origin_warning(
     warn: &CapturedEvent,
+    balloon: &str,
     key: &str,
     resolved: f32,
     range_min: f32,
@@ -461,7 +424,7 @@ fn assert_ignored_origin_warning(
     assert_eq!(
         warn.message(),
         IGNORED_ORIGIN_MESSAGE,
-        "文言は上流と 1 文字も違ってはならない（要件 3.3）"
+        "文言は上流と 1 文字も違ってはならない（`areka-P0-balloon-origin-outside-validrect` 要件 3.3）"
     );
     assert_eq!(warn.field_str("key"), Some(key), "無視した成分の名前の欄");
     assert_eq!(
@@ -484,13 +447,11 @@ fn assert_ignored_origin_warning(
         corner,
         "実際に用いた書き始めの角の欄"
     );
-    // 呼出側は本体（スコープ 0）か相方（スコープ 1）で、名前を入れていない（要件 3.12）。
-    assert!(
-        matches!(
-            warn.field_str("balloon"),
-            Some("スコープ0のバルーン" | "スコープ1のバルーン")
-        ),
-        "名前を入れていないバルーンの名前の欄はスコープから導く（要件 3.12）: {warn:?}"
+    // 呼出側は名前を入れていない（`areka-P0-shell-balloon` 要件 3.12）。
+    assert_eq!(
+        warn.field_str("balloon"),
+        Some(balloon),
+        "名前を入れていないバルーンの名前の欄はスコープから導く（`areka-P0-shell-balloon` 要件 3.12）: {warn:?}"
     );
 }
 
@@ -501,7 +462,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -509,15 +470,15 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     let ignored = ignored_origin_warns(&warns);
     assert_eq!(
         ignored.len(),
         2,
-        "両成分が範囲の外なら装着で 2 件（要件 3.1／3.2）: {warns:?}"
+        "両成分が範囲の外なら装着で 2 件（`areka-P0-balloon-origin-outside-validrect` 要件 3.1／3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         0.0,
         SAKURA_LEFT,
@@ -526,6 +487,7 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     );
     assert_ignored_origin_warning(
         ignored[1],
+        "スコープ0のバルーン",
         "origin.y",
         0.0,
         SAKURA_TOP,
@@ -534,14 +496,14 @@ fn attaching_a_balloon_with_both_origin_components_outside_warns_once_per_compon
     );
 }
 
-/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない（要件 3.4）。
+/// 片方の成分だけが範囲の外なら 1 件だけ——範囲の内の成分は警告を生まない（`areka-P0-balloon-origin-outside-validrect` 要件 3.4）。
 #[test]
 fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
     let mut world = World::new();
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -549,15 +511,15 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     let ignored = ignored_origin_warns(&warns);
     assert_eq!(
         ignored.len(),
         1,
-        "範囲の外の成分は 1 つだけなので 1 件（要件 3.1／3.2）: {warns:?}"
+        "範囲の外の成分は 1 つだけなので 1 件（`areka-P0-balloon-origin-outside-validrect` 要件 3.1／3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         0.0,
         SAKURA_LEFT,
@@ -567,14 +529,14 @@ fn attaching_a_balloon_with_only_one_origin_component_outside_warns_once() {
 }
 
 /// 範囲の内に宣言したバルーンの装着は WARN を 1 件も出さない——ここだけは文言で選り分けず
-/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である・要件 3.4／5.6）。
+/// **総数**を 0 と主張する（選り分けない 0 のほうが強い主張である・`areka-P0-balloon-origin-outside-validrect` 要件 3.4／5.6）。
 #[test]
 fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
     let mut world = World::new();
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("0");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, SAKURA_IMAGE),
@@ -583,18 +545,14 @@ fn attaching_a_balloon_with_origin_inside_the_range_does_not_warn_at_all() {
     });
 
     assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
-    assert_eq!(
         warns.len(),
         0,
-        "範囲の内の宣言は警告を生まない（総数で 0 件・要件 3.4）: {warns:?}"
+        "範囲の内の宣言は警告を生まない（総数で 0 件・`areka-P0-balloon-origin-outside-validrect` 要件 3.4）: {warns:?}"
     );
 }
 
 /// 値の変わらない再追従を 3 回繰り返しても、無視した `origin` の警告は 1 件も増えない
-/// （毎フレーム走る経路で警告が積み上がらない・要件 3.2）。
+/// （毎フレーム走る経路で警告が積み上がらない・`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
 #[test]
 fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
     let mut world = World::new();
@@ -607,7 +565,7 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
         &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
     );
 
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         let mut changed = Vec::new();
         for _ in 0..3 {
             changed.push(rt.refresh_actor_binding(
@@ -620,10 +578,6 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
     });
 
     assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
-    assert_eq!(
         changed,
         vec![false, false, false],
         "判定キー全同値の再追従は no-op（前提の確認）"
@@ -631,12 +585,12 @@ fn repeated_refresh_with_unchanged_values_adds_no_ignored_origin_warning() {
     assert_eq!(
         ignored_origin_warns(&warns).len(),
         0,
-        "値の変わらない再追従では警告を追加しない（要件 3.2）: {warns:?}"
+        "値の変わらない再追従では警告を追加しない（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
 }
 
 /// binding だけが変わって領域が同値の再追従は、**再構築は起きる**のに警告は 0 件
-/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す・要件 3.2）。
+/// （判定が「登録口に達したか」ではなく「領域の値が変わったか」であることを示す・`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
 #[test]
 fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() {
     let mut world = World::new();
@@ -651,7 +605,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
 
     // image 原寸は据え置き（＝領域は同値）で k と物理寸だけを変える。
     let scaled = TextSlotBinding::new(slot, window, 2.0, (800, 448), SAKURA_IMAGE);
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             scaled,
@@ -659,10 +613,6 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
         )
     });
 
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
     assert!(
         changed,
         "k と物理寸が変われば再追従は起きる（前提の確認——登録口には達している）"
@@ -675,7 +625,7 @@ fn refresh_that_rebuilds_but_keeps_the_same_region_does_not_warn_about_origin() 
     assert_eq!(
         ignored_origin_warns(&warns).len(),
         0,
-        "領域の値が同じなら、登録口に達しても警告は出ない（要件 3.2）: {warns:?}"
+        "領域の値が同じなら、登録口に達しても警告は出ない（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
 }
 
@@ -691,7 +641,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
         &merged_with_origin(ORIGIN_BOTH_OUTSIDE, SAKURA_OVERLAY),
     );
 
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             binding(slot, window, SAKURA_WIDER_IMAGE),
@@ -699,16 +649,16 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
         )
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(changed, "面実寸が変われば再追従は起きる（前提の確認）");
     let ignored = ignored_origin_warns(&warns);
     assert_eq!(
         ignored.len(),
         2,
-        "領域の値が変われば成分 1 つにつき 1 件を出し直す（要件 3.2）: {warns:?}"
+        "領域の値が変われば成分 1 つにつき 1 件を出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         0.0,
         SAKURA_LEFT,
@@ -717,6 +667,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     );
     assert_ignored_origin_warning(
         ignored[1],
+        "スコープ0のバルーン",
         "origin.y",
         0.0,
         SAKURA_TOP,
@@ -725,7 +676,7 @@ fn refresh_with_a_changed_region_warns_again_with_the_new_values() {
     );
 }
 
-/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す（要件 3.2）。
+/// 領域の差が**無視した宣言の値だけ**でも、警告は新しい値で出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）。
 ///
 /// 直前の 1 本は面の原寸を変えて値を動かすので、遠辺・折返し基準・原寸も一緒に動く。
 /// それらのどれか 1 つでも判定に効いていれば通ってしまうので、「無視した値が変われば
@@ -777,7 +728,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     );
 
     // binding は装着時と同値のまま——動かすのはバルーン定義の origin.x だけ。
-    let (changed, warns, errors) = capturing(|| {
+    let (changed, warns) = capturing(|| {
         rt.refresh_actor_binding(
             &actor,
             binding(slot, window, SAKURA_IMAGE),
@@ -785,7 +736,6 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
         )
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert!(
         changed,
         "無視した宣言の値が変われば領域は別物であり、再追従は起きる（前提の確認）"
@@ -794,10 +744,11 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     assert_eq!(
         ignored.len(),
         1,
-        "無視した値が変われば、その成分について 1 件を出し直す（要件 3.2）: {warns:?}"
+        "無視した値が変われば、その成分について 1 件を出し直す（`areka-P0-balloon-origin-outside-validrect` 要件 3.2）: {warns:?}"
     );
     assert_ignored_origin_warning(
         ignored[0],
+        "スコープ0のバルーン",
         "origin.x",
         5.0,
         SAKURA_LEFT,
@@ -806,7 +757,7 @@ fn refresh_that_only_changes_the_ignored_origin_value_warns_again_with_the_new_v
     );
 }
 
-/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない（要件 3.3）。
+/// 2 種類の警告が同じ装着で同時に出ても、互いの件数・欄・文言を乱さない（`areka-P0-balloon-origin-outside-validrect` 要件 3.3）。
 /// 粗い相方側バルーンに範囲外の `origin` を足すと、折返しの 1 件と `origin` の 2 件で総数 3 件。
 #[test]
 fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
@@ -814,7 +765,7 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
     let (mut rt, window, slot) = runtime_with_slot(&mut world);
     let actor = ActorKey::from("1");
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             actor.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -822,7 +773,6 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     assert_eq!(
         warns.len(),
         3,
@@ -835,13 +785,27 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
         "選り分けた origin の警告は 2 件: {warns:?}"
     );
     assert_ignored_origin_warning(
-        ignored[0], "origin.x", 0.0, KERO_LEFT, KERO_RIGHT, KERO_LEFT,
+        ignored[0],
+        "スコープ1のバルーン",
+        "origin.x",
+        0.0,
+        KERO_LEFT,
+        KERO_RIGHT,
+        KERO_LEFT,
     );
-    assert_ignored_origin_warning(ignored[1], "origin.y", 0.0, KERO_TOP, KERO_BOTTOM, KERO_TOP);
+    assert_ignored_origin_warning(
+        ignored[1],
+        "スコープ1のバルーン",
+        "origin.y",
+        0.0,
+        KERO_TOP,
+        KERO_BOTTOM,
+        KERO_TOP,
+    );
 
     let coarse: Vec<&CapturedEvent> = warns
         .iter()
-        .filter(|e| e.message() == WARN_MESSAGE)
+        .filter(|e| e.message() == COARSE_WRAP_MESSAGE)
         .collect();
     assert_eq!(
         coarse.len(),
@@ -851,7 +815,7 @@ fn ignored_origin_warnings_share_the_window_with_the_coarse_wrap_warning() {
     assert_coarse_warning(coarse[0], "x", KERO_WRAP_X, KERO_RIGHT);
 }
 
-// ── shell-balloon 要件 3.12: 名前の欄は結線が入れた名前・未設定はスコープから導く ──
+// ── `areka-P0-shell-balloon` 要件 3.12: 名前の欄は結線が入れた名前・未設定はスコープから導く ──
 
 /// 結線が名前（バルーンのフォルダ名）を入れたスコープは、2 つの警告の名前の欄にその名前を出す。
 /// 入れていないスコープは `スコープ{番号}のバルーン` のまま（名前はスコープごと）。
@@ -863,7 +827,7 @@ fn warnings_carry_the_balloon_label_set_by_the_wiring() {
     let unlabelled = ActorKey::from("0");
     rt.set_balloon_label(&labelled, "kakukaku".to_owned());
 
-    let (_, warns, errors) = capturing(|| {
+    let (_, warns) = capturing(|| {
         rt.register_actor_binding(
             labelled.clone(),
             binding(slot, window, KERO_IMAGE),
@@ -876,7 +840,6 @@ fn warnings_carry_the_balloon_label_set_by_the_wiring() {
         );
     });
 
-    assert_eq!(errors, 1, "捕捉窓の対照イベントが数えられていない");
     let names: Vec<(&str, Option<&str>)> = warns
         .iter()
         .map(|w| (w.message(), w.field_str("balloon")))
@@ -884,10 +847,10 @@ fn warnings_carry_the_balloon_label_set_by_the_wiring() {
     assert_eq!(
         names,
         vec![
-            (WARN_MESSAGE, Some("kakukaku")),
+            (COARSE_WRAP_MESSAGE, Some("kakukaku")),
             (IGNORED_ORIGIN_MESSAGE, Some("kakukaku")),
             (IGNORED_ORIGIN_MESSAGE, Some("kakukaku")),
-            (WARN_MESSAGE, Some("スコープ0のバルーン")),
+            (COARSE_WRAP_MESSAGE, Some("スコープ0のバルーン")),
         ],
         "名前を入れたスコープは入れた名前・入れていないスコープはスコープから導く"
     );

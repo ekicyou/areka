@@ -39,7 +39,7 @@ use super::shell_box::{
 };
 use super::user_break::on_box_press;
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::placement::spawn::CharWindowMarker;
+use areka_placement::spawn::CharWindowMarker;
 
 /// 届いた座標の写し（文字の層の借用を解いた後に判断と送り出しへ渡す）。
 #[derive(Debug, Clone, Default)]

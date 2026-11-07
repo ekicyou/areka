@@ -27,8 +27,8 @@ use wintf::ecs::SizeI;
 use areka_emo_compose::ScaleRatio;
 
 use super::{Axis, AxisSpec, MoveDirective, RefPoint, RefX, RefY};
-use crate::placement::resolver::{PointPx, RectPx};
-use crate::placement::scale_signed;
+use areka_placement::resolver::{PointPx, RectPx};
+use areka_placement::scale_signed;
 
 // =============================================================================
 // basepos 型シーム（task 7.2・R5.2・全て物理 px・R-6 対策）

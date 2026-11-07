@@ -34,7 +34,7 @@ use wintf::ecs::{FrameFinalize, Update, update_typewriters};
 
 use super::frame::{KanadeNoticeRx, emo2_frame_system, ghost_quit_system};
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::placement::spawn::wire_zorder_pair;
+use areka_placement::spawn::wire_zorder_pair;
 
 // ---------------------------------------------------------------- 道具立て
 

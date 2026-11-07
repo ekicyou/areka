@@ -1,7 +1,7 @@
 // =============================================================================
 // 初期配置の確定（finalize_chain_once）の結線檻（scg 要件 7.1/7.3/7.4・design C6）
 //
-// 判定そのものは placement::chain_finalize の純関数檻が全網羅する。ここで固定するのは
+// 判定そのものは areka_placement::chain_finalize の純関数檻が全網羅する。ここで固定するのは
 // **結線の振る舞い**——いつ駆動し、いつ見送り、二度目に駆動しないこと。
 //
 // 偽装境界: resnap 檻と同じ headless World（`resnap_world`＝実 spawn_ghost_windows で
@@ -15,12 +15,12 @@ use super::test_support::{
 use super::*;
 
 use crate::emo2_boot::move_cue::{apply_move_directive, parse_move_directive};
-use crate::placement::chain_finalize::{
+use areka_placement::chain_finalize::{
     CHAIN_FINALIZE_STALL_FRAMES, ChainFinalizeStall, ChainFinalized,
 };
-use crate::placement::follow::Anchored;
-use crate::placement::resolver::Anchor;
-use crate::placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
+use areka_placement::follow::Anchored;
+use areka_placement::resolver::Anchor;
+use areka_placement::sticky_group_ledger::{apply_set_sticky, seed_sticky_descript};
 
 use areka_emo_compose::ScaleRatio;
 use log_capture_kit::{LineFormat, capture_lines};
@@ -117,11 +117,7 @@ fn finalize_runs_only_once_even_if_sizes_change_again() {
     // 確定後に scope0 の窓を別寸へ変えても連鎖は解き直されない（7.4）。
     resnap_from_sizes(
         &mut world,
-        [(
-            0usize,
-            crate::placement::resolver::SizePx { w: 500, h: 687 },
-        )]
-        .into_iter(),
+        [(0usize, areka_placement::resolver::SizePx { w: 500, h: 687 })].into_iter(),
     );
     let moved_origin_x = pos_of(&world, gw.char_window(0).unwrap()).map(|p| p.x);
     finalize_chain_once_with(
@@ -201,7 +197,7 @@ fn finalize_does_not_pull_back_an_explicitly_moved_scope() {
     let char1 = gw.char_window(1).unwrap();
 
     // 明示的な再配置（唯一の位置ライター経由）。以後 current_x != default_x になる。
-    crate::placement::follow::move_window_to(&mut world, char1, 800, 1087);
+    areka_placement::follow::move_window_to(&mut world, char1, 800, 1087);
     assert_eq!(pos_of(&world, char1), Some(Point { x: 800, y: 1087 }));
 
     finalize_chain_once_with(&settled_sizes(), &mut world);

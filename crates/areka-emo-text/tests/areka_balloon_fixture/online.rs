@@ -1,12 +1,15 @@
 //! 取り出した `online0.webp` を areka の動く絵の読み手で読み戻し、コマと灯る点の α を固定する。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `default-balloon-selfmade` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 出典 spec: `default-balloon-selfmade`（要件 **8.9**・**3.2**・**3.3**）。
 //!
 //! 期待値は設計「絵柄の値」の表から手で書く: 77×36・中心 (26,18)・(38.5,18)・(51,18)・半径 4 の
 //! 点 3 つ・コマ k で点 k が α 1、ほかが α 0.25・3 コマ・各 300 ミリ秒・繰り返し無限。
 
 use areka_emo_atlas::{ElementDecoder, LoopCount, WicDecoderArm};
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+
+use crate::support::fixture::init_com_for_this_thread;
 
 use super::test_support::{EXPECTED_ONLINE_SIZE, balloon_root};
 
@@ -28,17 +31,22 @@ const UNLIT_ALPHA: u8 = 64;
 const FRAME_COUNT: u32 = 3;
 const FRAME_DELAY_MS: u32 = 300;
 
-/// `online0.webp` が 77×36・3 コマ・各 300 ミリ秒・無限・α ありで、コマ k で点 k だけが灯る
-/// （要件 8.9・3.2・3.3）。
+/// `online0.webp` が WebP の 77×36・3 コマ・各 300 ミリ秒・無限・α ありで、コマ k で点 k だけが灯る
+/// （要件 8.9・3.2・3.3・4.1）。
 #[test]
 fn online_marker_frames_light_dots_in_turn() {
-    // SAFETY: COM の MTA 初期化。並列のテストで既に張られていても使えるので戻り値は見ない。
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    init_com_for_this_thread();
     let decoder = WicDecoderArm::new().expect("WIC の読み手を作れない（COM の初期化が前提）");
     let (name, width, height) = EXPECTED_ONLINE_SIZE;
     let path = balloon_root().join(name);
+    let bytes = std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("オンラインの印 {} を読めない: {e}", path.display()));
+    assert!(
+        bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "{}: WebP の見出し（RIFF・WEBP）が無い（{} バイト）",
+        path.display(),
+        bytes.len()
+    );
 
     let info = decoder
         .probe_animation(&path)

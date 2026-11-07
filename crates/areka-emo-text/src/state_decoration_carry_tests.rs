@@ -1,5 +1,7 @@
-//! 装飾の持ち運び（design.md「装飾の持ち運び」・Testing Strategy の
+//! 装飾の持ち運び（spec `areka-P0-shell-balloon` の design.md「装飾の持ち運び」・Testing Strategy の
 //! `state_decoration_carry_tests.rs` の場面・要件 3.13〜3.17・3.19・5.4・10.5）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 箱の構成はテストの中の surfaces.txt の文面を `parse_boxes` → `fold_boxes` で畳んで作る
 //! （検体は読まない）。`font.follow` も同じ畳み込みから引く:
@@ -15,16 +17,17 @@
 //! 写しのときに生まれるので、場所の状態を直に覗くより、利用者に見えるものを確かめる方が確かである。
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use areka_emo_compose::{BoxName, EmoWorld, FontFollow, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
-use areka_sakura::contract::{CueCommand, FONT_TAG_CARRIER};
+use areka_emo_compose::{BoxName, FontFollow};
+use areka_sakura::contract::CueCommand;
 
 use super::super::route_tests::{key, select, show};
-use super::super::test_support::cue;
+use super::super::test_support::{at, cue, write};
 use super::super::{BoxTraits, SurfaceKeyOutcome, TextLayerState};
+use crate::actor::test_support::{box_in, box_index, box_layout};
 use crate::look::{LookLayers, StyleId, TextLook};
-use crate::place::{PlaceKey, TextPlace};
+use crate::place::TextPlace;
 
 const SHELL: &str = "\
 balloon.a
@@ -65,34 +68,26 @@ element2,balloon,a,0,40
 const RED: (u8, u8, u8) = (255, 0, 0);
 const BLUE: (u8, u8, u8) = (0, 0, 255);
 
-/// 文面を畳んだ箱の表と、箱の名前ごとの `font.follow`。
-fn folded() -> (BTreeMap<u32, Vec<BoxName>>, BTreeMap<BoxName, FontFollow>) {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
-    let mut follow = BTreeMap::new();
-    let index = (0..=4)
-        .map(|id| {
-            let names: Vec<BoxName> = layout
-                .placements(id)
-                .iter()
-                .map(|p| p.name.clone())
-                .collect();
-            for name in &names {
-                follow.insert(name.clone(), layout.def(name).expect("箱の定義").follow);
-            }
-            (id, names)
-        })
+/// 文面を畳んだ箱の表と、箱の名前ごとの `font.follow`（1 度だけ組む）。
+type Folded = (BTreeMap<u32, Vec<BoxName>>, BTreeMap<BoxName, FontFollow>);
+
+static FOLDED: LazyLock<Folded> = LazyLock::new(|| {
+    let layout = box_layout(SHELL);
+    let index = box_index(&layout, 0..=4);
+    let follow = index
+        .values()
+        .flatten()
+        .map(|name| (name.clone(), layout.def(name).expect("箱の定義").follow))
         .collect();
     (index, follow)
+});
+
+fn folded() -> &'static Folded {
+    &FOLDED
 }
 
 fn name(n: &str) -> BoxName {
-    folded()
-        .1
-        .into_keys()
-        .find(|b| b.as_str() == n)
-        .expect("文面にある箱の名前")
+    box_in(&folded().0, n)
 }
 
 fn bx(n: &str) -> TextPlace {
@@ -128,6 +123,7 @@ fn default_of(place: &TextPlace) -> TextLook {
 fn traits() -> BTreeMap<BoxName, BoxTraits> {
     folded()
         .1
+        .clone()
         .into_iter()
         .map(|(n, follow)| {
             let looks = layers_of(&TextPlace::Box(n.clone()));
@@ -136,11 +132,11 @@ fn traits() -> BTreeMap<BoxName, BoxTraits> {
         .collect()
 }
 
-/// 箱の種類を箱の表より先に入れ（Implementation Notes 5.4）、スコープ 0・1 に普通のバルーンの 2 層を差す。
+/// 箱の種類を箱の表より先に入れ（`set_box_index` が今ある種類で持ち運びを判定するため）、スコープ 0・1 に普通のバルーンの 2 層を差す。
 fn state() -> TextLayerState {
     let mut state = TextLayerState::default();
     state.set_box_traits(traits());
-    state.set_box_index(folded().0);
+    state.set_box_index(folded().0.clone());
     for actor in ["0", "1"] {
         state.set_look_layers(&key(actor), layers_of(&TextPlace::Balloon));
     }
@@ -148,14 +144,7 @@ fn state() -> TextLayerState {
 }
 
 fn font(state: &mut TextLayerState, actor: &str, tokens: &[&str]) {
-    state.apply_cue(&cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    ));
+    state.apply_cue(&super::super::test_support::font(actor, tokens));
 }
 
 fn red(state: &mut TextLayerState, actor: &str) {
@@ -164,17 +153,6 @@ fn red(state: &mut TextLayerState, actor: &str) {
 
 fn blue(state: &mut TextLayerState, actor: &str) {
     font(state, actor, &["color", "0", "0", "255"]);
-}
-
-fn text(state: &mut TextLayerState, actor: &str, s: &str) {
-    state.apply_cue(&cue(actor, 0.0, CueCommand::Text(s.into())));
-}
-
-fn at(actor: &str, place: TextPlace) -> PlaceKey {
-    PlaceKey {
-        actor: key(actor),
-        place,
-    }
 }
 
 /// 書いた文字の見た目（番号列を表で引き直したもの・配置層と同じ引き方）。
@@ -187,7 +165,7 @@ fn glyph(state: &TextLayerState, actor: &str, place: TextPlace, ordinal: usize) 
 
 /// 今の行き先へ 1 文字書き、その文字の見た目を返す（続きの文字が受け取る見た目）。
 fn now(state: &mut TextLayerState, actor: &str) -> TextLook {
-    text(state, actor, "・");
+    write(state, actor, "・");
     let place = state.destination(&key(actor));
     let last = state
         .place_state(&at(actor, place.clone()))
@@ -206,7 +184,7 @@ fn shared(state: &TextLayerState, actor: &str) -> TextPlace {
 
 #[test]
 fn follow_kind_comes_from_font_follow_and_unwritten_means_scope() {
-    let follow = folded().1;
+    let follow = &folded().1;
     assert_eq!(follow[&name("a")], FontFollow::Scope, "書かない＝スコープ");
     assert_eq!(follow[&name("c")], FontFollow::Scope);
     assert_eq!(follow[&name("x")], FontFollow::Balloon);
@@ -359,6 +337,19 @@ fn owner_moves_a_a_b_through_closed_box_and_return_keeps_its_spec() {
     assert_eq!(now(&mut state, "0"), default_of(&bx("x")));
     show(&mut state, "0", 2);
     assert_eq!(now(&mut state, "0").color, RED);
+
+    // 箱の行き先での戻す操作（`reset_decoration`）も x だけを戻し、スコープの赤は残る。
+    show(&mut state, "0", 0);
+    state.apply_cue(&select("0", "x"));
+    blue(&mut state, "0");
+    state.reset_decoration(Some(&key("0")));
+    assert_eq!(
+        now(&mut state, "0"),
+        default_of(&bx("x")),
+        "戻す操作は行き先を戻す"
+    );
+    show(&mut state, "0", 2);
+    assert_eq!(now(&mut state, "0").color, RED);
 }
 
 #[test]
@@ -439,7 +430,7 @@ fn shell_switch_points_owner_at_the_new_default_with_the_spec() {
 
     // 同じ表: 既定 a（スコープに従う）。
     state.set_box_traits(traits());
-    state.set_box_index(folded().0);
+    state.set_box_index(folded().0.clone());
     assert_eq!(shared(&state, "0"), bx("a"));
     assert_eq!(now(&mut state, "0").color, RED);
 
@@ -465,10 +456,10 @@ fn written_glyph_styles_never_change() {
     let mut state = state();
     show(&mut state, "0", 3);
     red(&mut state, "0");
-    text(&mut state, "0", "ふ");
+    write(&mut state, "0", "ふ");
     show(&mut state, "0", 0);
     font(&mut state, "0", &["bold", "1"]);
-    text(&mut state, "0", "あ");
+    write(&mut state, "0", "あ");
     let balloon_ids = state
         .actor_state(&key("0"))
         .unwrap()
@@ -508,7 +499,7 @@ fn written_glyph_styles_never_change() {
     );
 
     // シェルの切替の後も、普通のバルーンの文字は書いたときの見た目。
-    state.set_box_index(folded().0);
+    state.set_box_index(folded().0.clone());
     assert_eq!(glyph(&state, "0", TextPlace::Balloon, 0).color, RED);
 }
 
@@ -518,7 +509,7 @@ fn box_place_has_its_defaults_before_any_text() {
     show(&mut state, "0", 1); // x（写しが走らないので場所はまだ無い）
     assert!(state.place_state(&at("0", bx("x"))).is_none());
     font(&mut state, "0", &["bold", "1"]);
-    text(&mut state, "0", "x");
+    write(&mut state, "0", "x");
     let s = state.place_state(&at("0", bx("x"))).unwrap();
     assert_ne!(s.glyph_styles()[0], StyleId::DEFAULT);
     let g = glyph(&state, "0", bx("x"), 0);

@@ -92,7 +92,7 @@ const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
 /// # 門が閉じたまま呼ばれたら緑にしない
 ///
 /// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実窓で測った」という
-/// 記録に化ける。既存の手本（`crates/areka/src/placement/transition_signoff_tests.rs`
+/// 記録に化ける。既存の手本（`crates/areka/src/placement_tests/transition_signoff_tests.rs`
 /// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
 fn require_explicit_real_window_run() {
     assert!(

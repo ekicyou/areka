@@ -46,9 +46,9 @@ use crate::emo2_boot::spine::{
 };
 use crate::emo2_boot::target_map::shell_target;
 use crate::input_events::user_break::UserBreakWiring;
-use crate::placement::follow::MonitorSnapshot;
-use crate::placement::resolver::RectPx;
-use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
+use areka_placement::follow::MonitorSnapshot;
+use areka_placement::resolver::RectPx;
+use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};
 
 /// 2 つ目のシェルのフォルダ名（`descript.txt` の `name` も同じ）。
 pub(super) const SECOND: &str = "second";
@@ -244,7 +244,7 @@ pub(super) fn copy_tree(from: &Path, to: &Path) {
 /// A の起動の配置（作業領域だけ合成・作者 DPI 96）で 2 スコープの窓を生やし、偽 HWND と DPI 96 を
 /// 持たせる（`WindowPos` への書込の口が通る・実窓には触れない）。
 fn spawn_windows(rig: &mut SwitchRig) -> GhostWindows {
-    let prepared = crate::placement::prepare_ghost_windows_with_work_area(
+    let prepared = areka_placement::prepare_ghost_windows_with_work_area(
         &rig.root.ghost_dir("A"),
         &rig.root.balloon_dir(BALLOON),
         WORK_AREA,

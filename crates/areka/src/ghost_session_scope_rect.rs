@@ -12,7 +12,7 @@ use areka_sylphya::{PropPath, PullShape, PullSource, Selector, SylphyaReader};
 use bevy_ecs::prelude::*;
 use wintf::ecs::{FrameFinalize, WindowHandle};
 
-use crate::placement::spawn::GhostWindows;
+use areka_placement::spawn::GhostWindows;
 
 /// 窓の印（HWND の生の値）。HWND はスレッドをまたいで送れないので値で持つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

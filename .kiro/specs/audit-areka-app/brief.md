@@ -78,3 +78,8 @@
 `audit-sylphya-actor` の #1（使えない記憶のファイルを上書きしない）の直しで、`sylphya.toml` の置き場は書けるのに中身が使えない（TOML として壊れている・`format-version` が違う・読めない）とき、保存が `Degraded` になり、書けなかった知らせが出るようになる。ところが知らせの決まった一文 `MEMORY_WRITE_FIX`（`crates/areka/src/alert.rs`・「直し方: この置き場を書ける状態にしてください。…」）はこの場面に合わない。ウェーブ C18 では `crates/areka` に触れないので、この spec へ回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の設計の討議 議題 1）。
 
 - **件**: 理由（`PersistFailureCause::Io` の文）が「中身を消さないように書くのをやめました」の場面では、直し方の一文を「ファイルを直すか、別の名前に変えてください」の向きに出し分ける（理由の文の出どころは `areka-sylphya` の `persist/format.rs`・`persist/mod.rs`）。
+
+## placement-crate-split からの申し送り（2026-11-06）
+
+- **件 1: ワークスペース全体を歩く見張り 3 本の置き場**。`crates/areka/src/session_end_sync_send_tests.rs`・`crates/areka/src/emo2_boot/frame_attach_tests.rs`・`crates/areka/src/readonly_tests.rs` は、本体のテストなのにワークスペースの全部の crate（依存の向きの外の crate も含む）を歩く。placement-crate-split の読み方の規則（「自分の crate は相対・別の crate は読み口 `crate_source!`／`crate_path`」）の、名前を付けた例外にしてある（設計の「使ってよい依存」）。ワークスペース全体の見張りの置き場 `crates/log-capture-kit/tests/` へ移す（走査は `workspace_scan/mod.rs` を使う）。`emo2_boot/frame_attach_tests.rs` の受け持ちは `audit-emo2-boot-*` の範囲なので、移すときはその spec と申し合わせる。
+

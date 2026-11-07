@@ -1,19 +1,23 @@
-//! 文字の行き先の決まり方（design.md「文字の行き先の決まり方」の表の 11 行・要件 4.1〜4.4・
+//! 文字の行き先の決まり方（spec `areka-P0-shell-balloon` の design.md「文字の行き先の決まり方」の表の 11 行・要件 4.1〜4.4・
 //! 4.7〜4.10・5.4・6.1・6.2・6.4・6.6・6.9・10.1）。
+//!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-shell-balloon` のもの（別の spec のものはその場で名を書く）。
 //!
 //! 箱の名前は公開の構築口を持たないので、テストの中に持つ surfaces.txt の文面を
 //! `parse_boxes` → `fold_boxes` で畳んで取り出す（検体は読まない）。
-//! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs` も使う。
+//! 組み立ての支援（`pub(super)` のもの）は `state_place_tests.rs`・`state_anchor_tests.rs`・
+//! `state_decoration_carry_tests.rs` も使う。
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-use areka_emo_compose::{BoxName, EmoWorld, fold_boxes};
-use areka_parsers::shell::{parse, parse_boxes};
+use areka_emo_compose::BoxName;
 use areka_sakura::contract::{FONT_TAG_CARRIER, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{cue, items_of};
 use super::*;
+use crate::actor::test_support::{box_in, box_index, box_layout, capture_checked};
 
 /// 箱の構成:
 /// - 0: element1=a・element2=b（既定は a）
@@ -49,31 +53,16 @@ element1,balloon,c,0,0
 }
 ";
 
-/// 文面を畳んだ箱の表（サーフェス番号 → element番号の昇順の名前）。
+/// 文面を畳んだ箱の表（サーフェス番号 → element番号の昇順の名前・1 度だけ組む）。
+static INDEX: LazyLock<BTreeMap<u32, Vec<BoxName>>> =
+    LazyLock::new(|| box_index(&box_layout(SHELL), 0..=3));
+
 pub(super) fn index() -> BTreeMap<u32, Vec<BoxName>> {
-    let world = EmoWorld::build(&parse(SHELL));
-    let (layout, report) = fold_boxes(&parse_boxes(SHELL), &BTreeMap::new(), &world);
-    assert_eq!(report.issues, vec![], "検体の文面は誤りを持たない");
-    (0..=3)
-        .map(|id| {
-            let names = layout
-                .placements(id)
-                .iter()
-                .map(|p| p.name.clone())
-                .collect();
-            (id, names)
-        })
-        .collect()
+    INDEX.clone()
 }
 
 pub(super) fn boxed(name: &str) -> TextPlace {
-    let index = index();
-    let found = index
-        .values()
-        .flatten()
-        .find(|n| n.as_str() == name)
-        .expect("文面にある箱の名前");
-    TextPlace::Box(found.clone())
+    TextPlace::Box(box_in(&INDEX, name))
 }
 
 pub(super) fn key(actor: &str) -> ActorKey {
@@ -191,9 +180,9 @@ fn row5_unresolved_changes_nothing() {
 }
 
 #[test]
-fn row6_surface_missing_in_shell_is_unresolved_and_changes_nothing() {
-    // 番号は読めるが今のシェルに無いサーフェスは、閉包が Unresolved を返す（状態は同じ扱い）。
-    // 記録の無いスコープでも何も作らない。
+fn row6_unresolved_on_an_unseen_scope_creates_nothing() {
+    // 番号は読めるが今のシェルに無いサーフェスでは、閉包が Unresolved を返す（閉包の答えは
+    // ここでは直に渡す）。記録の無いスコープでも何も作らない。
     let mut state = state_with_boxes();
     let before = state.clone();
     state.route_surface(&key("1"), SurfaceKeyOutcome::Unresolved);
@@ -238,7 +227,7 @@ fn row8_named_box_on_current_surface_switches_without_warning() {
     // 要件 4.3・4.9.
     let mut state = state_with_boxes();
     show(&mut state, "0", 0);
-    let (_, events) = capture(|| state.apply_cue(&select("0", "b")));
+    let (_, events) = capture_checked(|| state.apply_cue(&select("0", "b")));
     assert_eq!(state.destination(&key("0")), boxed("b"));
     assert!(
         warns(&events).is_empty(),
@@ -275,7 +264,7 @@ fn row10_integer_balloon_surface_does_nothing() {
     show(&mut state, "0", 0);
     state.apply_cue(&select("0", "b"));
     let before = state.clone();
-    let ((), events) = capture(|| {
+    let ((), events) = capture_checked(|| {
         state.apply_cue(&select("0", "2"));
         state.apply_cue(&select("0", "-1"));
     });
@@ -399,29 +388,7 @@ fn empty_box_index_never_leaves_balloon() {
     );
 }
 
-// ---- 装飾の持ち運び（要件 3.13〜3.17・3.19。場面の網羅は state_decoration_carry_tests.rs）
-
-fn font(actor: &str, tokens: &[&str]) -> TalkCue {
-    cue(
-        actor,
-        0.0,
-        CueCommand::command_carrier(
-            FONT_TAG_CARRIER,
-            tokens.iter().map(|t| (*t).to_owned()).collect(),
-        ),
-    )
-}
-
-fn look_at(state: &TextLayerState, actor: &str, place: TextPlace) -> crate::look::TextLook {
-    state
-        .place_state(&PlaceKey {
-            actor: key(actor),
-            place,
-        })
-        .expect("場所の状態")
-        .current_look()
-        .clone()
-}
+// ---- 空回しの写し（装飾の持ち運びの場面は state_decoration_carry_tests.rs）
 
 /// 箱 a は大きさ 20・スコープに従う、箱 b は大きさ 30・箱に閉じる、箱 c は大きさ 40・スコープに従う。
 fn state_with_traits() -> TextLayerState {
@@ -436,88 +403,14 @@ fn state_with_traits() -> TextLayerState {
         let mut looks = crate::look::LookLayers::default();
         looks.default.height = height;
         looks.disable.height = height;
-        let TextPlace::Box(name) = boxed(name) else {
-            unreachable!()
-        };
-        (name, BoxTraits { looks, follow })
+        (box_in(&INDEX, name), BoxTraits { looks, follow })
     })
     .collect();
     state.set_box_traits(traits);
     state
 }
 
-#[test]
-fn script_decor_follows_scope_and_unset_items_take_new_defaults() {
-    let mut state = state_with_traits();
-    show(&mut state, "0", 0); // 行き先は a
-    state.apply_cue(&font("0", &["color", "255", "0", "0"]));
-    show(&mut state, "0", 2); // 行き先は c（スコープに従う）
-    let at_c = look_at(&state, "0", boxed("c"));
-    assert_eq!(at_c.color, (255, 0, 0), "指定した色は残る");
-    assert_eq!(at_c.height, 40.0, "指定していない大きさは c の既定");
-    show(&mut state, "0", 3); // 普通のバルーンへ
-    assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (255, 0, 0));
-    assert_eq!(state.routes[&key("0")].shared, TextPlace::Balloon);
-}
-
-#[test]
-fn closed_box_neither_takes_nor_leaks_script_decor() {
-    let mut state = state_with_traits();
-    show(&mut state, "0", 0);
-    state.apply_cue(&font("0", &["color", "255", "0", "0"]));
-    state.apply_cue(&select("0", "b")); // 箱に閉じる箱へ
-    state.apply_cue(&font("0", &["bold", "1"])); // 色に触れない指定で場所を生ませる
-    let at_b = look_at(&state, "0", boxed("b"));
-    assert_eq!(at_b.color, (0, 0, 0), "外の指定は入らない");
-    assert_eq!(at_b.height, 30.0, "文字の届く前から b の既定を持つ");
-    assert_eq!(
-        state.routes[&key("0")].shared,
-        boxed("a"),
-        "持ち主は動かない"
-    );
-    state.apply_cue(&font("0", &["color", "0", "0", "255"]));
-    show(&mut state, "0", 2);
-    assert_eq!(
-        look_at(&state, "0", boxed("c")).color,
-        (255, 0, 0),
-        "中の指定は出ない"
-    );
-    show(&mut state, "0", 0);
-    state.apply_cue(&select("0", "b"));
-    assert_eq!(
-        look_at(&state, "0", boxed("b")).color,
-        (0, 0, 255),
-        "戻れば前の指定のまま"
-    );
-    state.reset_decoration(Some(&key("0")));
-    assert_eq!(
-        look_at(&state, "0", boxed("b")).color,
-        (0, 0, 0),
-        "戻す操作は行き先を戻す"
-    );
-    assert_eq!(look_at(&state, "0", boxed("a")).color, (255, 0, 0));
-}
-
-#[test]
-fn shell_switch_moves_shared_box_spec_to_balloon() {
-    let mut state = state_with_traits();
-    show(&mut state, "0", 0);
-    state.apply_cue(&font("0", &["color", "255", "0", "0"]));
-    state.set_box_index(index());
-    assert_eq!(
-        state.routes[&key("0")].shared,
-        boxed("a"),
-        "新しい既定 a へ写し直す"
-    );
-    assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (255, 0, 0));
-    assert_eq!(look_at(&state, "0", boxed("a")).color, (255, 0, 0));
-    state.apply_cue(&cue("0", 0.0, CueCommand::ClearAll));
-    assert_eq!(look_at(&state, "0", boxed("a")).color, (0, 0, 0));
-    show(&mut state, "0", 3);
-    assert_eq!(look_at(&state, "0", TextPlace::Balloon).color, (0, 0, 0));
-}
-
-/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・要件 2.8）。
+/// 空回しの写しだけが印を持ち、元の状態の印は偽のまま（本番の状態で印は立たない・`areka-P0-budoux-reveal-reflow` 要件 2.8）。
 /// 無言であることの判定は `lookahead_tests.rs` の検査 5 が受け持つ。
 #[test]
 fn rehearsal_copy_marks_only_the_copy() {

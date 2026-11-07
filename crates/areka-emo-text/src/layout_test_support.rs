@@ -7,7 +7,7 @@ use areka_parsers::balloon::{
 };
 
 /// テスト画像原寸（image px・region.rs の檻と同一値）。
-pub(super) const IMAGE: (u32, u32) = (400, 224);
+pub(crate) const IMAGE: (u32, u32) = (400, 224);
 
 /// テスト用 BalloonModel 生成ヘルパ（幾何成分だけ指定）。
 pub(super) fn model(
@@ -44,7 +44,7 @@ pub(super) fn inline_positions(line: &PositionedLine) -> Vec<f32> {
 // vertical_rl=最新列の左端 < validrect.left・vertical_lr=最新列の右端 > validrect.right）。
 
 /// テスト用 BalloonModel 生成ヘルパ（validrect 込み・順序は top,bottom,left,right）。
-pub(super) fn model_rect(
+pub(crate) fn model_rect(
     origin: (Option<i32>, Option<i32>),
     validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
 ) -> BalloonModel {
@@ -60,7 +60,7 @@ pub(super) fn model_rect(
 }
 
 /// n 行（各行 全角 1 グリフ・明示改行 ratio 1.0 区切り）の item 列。
-pub(super) fn broken_lines(n: usize) -> Vec<TextItem> {
+pub(crate) fn broken_lines(n: usize) -> Vec<TextItem> {
     let mut items = Vec::new();
     for i in 0..n {
         if i > 0 {

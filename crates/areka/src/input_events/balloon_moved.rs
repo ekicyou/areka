@@ -9,7 +9,7 @@ use bevy_ecs::world::World;
 use wintf::ecs::pointer::{Phase, PointerState};
 
 use crate::emo2_boot::frame::Emo2Wiring;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 use super::{BalloonWiring, HoverAction, hit_choice_row, hover_action};
 

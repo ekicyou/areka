@@ -8,19 +8,18 @@ use std::sync::Arc;
 use areka_emo_present::balloon_marker::MarkerImage;
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::hierarchy::{ChildOf, Children};
+use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows_numerics::Matrix3x2;
 use wintf::ecs::pointer::build_bubble_path;
 use wintf::ecs::widget::bitmap_source::AlphaMask;
-use wintf::ecs::{
-    AlphaMaskResource, GlobalArrangement, HitTest, Point, PointF, Rect, SizeI, WindowPos,
-    WucGraphicsResource, hit_test_in_window,
-};
+use wintf::ecs::{AlphaMaskResource, HitTest, PointF, WucGraphicsResource, hit_test_in_window};
 
-use super::super::box_sync_tests::{emote, layout, resolver, select, text};
-use super::super::test_support::{com_world, geo_model};
+use super::super::box_sync_tests::{layout, select};
+use super::super::test_support::{
+    arranged, com_world, emote, fake_resolver, geo_model, spawn_hit_window, spawn_picture, text,
+    window_children,
+};
 use super::super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use super::*;
 use crate::draw::DEFAULT_BALLOON_BACKGROUND;
@@ -39,19 +38,12 @@ fn solid(w: u32, h: u32, alpha: u8) -> Arc<MarkerImage> {
     })
 }
 
-fn placed(kind: MarkerKind, at: (i32, i32), image: &Arc<MarkerImage>) -> PlacedMarker {
+fn placed(kind: MarkerKind, at: (i64, i64), image: &Arc<MarkerImage>) -> PlacedMarker {
     PlacedMarker {
         kind,
         at,
         image: Arc::clone(image),
     }
-}
-
-fn children_of(world: &World, window: Entity) -> Vec<Entity> {
-    world
-        .get::<Children>(window)
-        .map(|c| c.iter().copied().collect())
-        .unwrap_or_default()
 }
 
 /// World の資源（GraphicsCore・Compositor）で印の面を挿す（`present_frame` と同じ取り出し方・
@@ -75,7 +67,7 @@ fn attach(
 }
 
 fn mask_of(world: &World, surface: &MarkerSurface) -> AlphaMask {
-    let entity = surface.window_child().expect("窓の子");
+    let entity = surface.surface().window_child().expect("窓の子");
     world
         .get::<AlphaMaskResource>(entity)
         .and_then(AlphaMaskResource::mask)
@@ -107,14 +99,14 @@ fn balloon_marker_is_inserted_right_before_the_slot_with_an_empty_mask() {
     );
     let place = PlaceKey::balloon(&actor);
     let index = rt
-        .marker_child_index(&children_of(&world, window), &place)
+        .marker_child_index(&window_children(&world, window), &place)
         .expect("差し込み口の位置");
     assert_eq!(index, 0);
 
     let markers = attach(&mut world, window, index, (200, 100), (0.0, 0.0));
-    let child = markers.window_child().expect("窓の子");
+    let child = markers.surface().window_child().expect("窓の子");
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![child, slot, picture],
         "印の面 → 文字の面 → 絵（先頭ほど手前）"
     );
@@ -133,10 +125,10 @@ fn balloon_marker_is_inserted_right_before_the_slot_with_an_empty_mask() {
     let mask = mask_of(&world, &markers);
     assert_eq!((mask.width(), mask.height()), (200, 100));
     assert!((0..100).all(|y| (0..200).all(|x| !mask.is_hit(x, y))));
-    assert_eq!(markers.size(), (200, 100));
+    assert_eq!(markers.surface().size(), (200, 100));
 
     markers.despawn(&mut world);
-    assert_eq!(children_of(&world, window), vec![slot, picture]);
+    assert_eq!(window_children(&world, window), vec![slot, picture]);
     assert!(world.get_entity(child).is_err());
 }
 
@@ -147,7 +139,7 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
     let (mut world, window, slot) = com_world();
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let layout = layout();
-    rt.set_box_layout(&mut world, layout.clone(), resolver(), vec![]);
+    rt.set_box_layout(&mut world, layout.clone(), fake_resolver(), vec![]);
     rt.apply_cue(&emote("0", "0"));
     rt.apply_cue(&text("0", "あ"));
     rt.apply_cue(&select("0", "b"));
@@ -173,20 +165,20 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
         rt.surfaces[k].surface.window_child().expect("箱の文字の面")
     };
     let (a_text, b_text) = (text_of(&rt, &a), text_of(&rt, &b));
-    assert_eq!(children_of(&world, window), vec![slot, b_text, a_text]);
+    assert_eq!(window_children(&world, window), vec![slot, b_text, a_text]);
 
     let mut markers = Vec::new();
     for k in [&b, &a] {
         let index = rt
-            .marker_child_index(&children_of(&world, window), k)
+            .marker_child_index(&window_children(&world, window), k)
             .expect("箱の文字の面の位置");
         let m = attach(&mut world, window, index, (10, 10), (0.0, 0.0));
-        markers.push(m.window_child().expect("窓の子"));
+        markers.push(m.surface().window_child().expect("窓の子"));
         rt.surfaces.get_mut(k).expect("箱の面").markers = Some(m);
     }
     let (b_mark, a_mark) = (markers[0], markers[1]);
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, b_mark, b_text, a_mark, a_text],
         "箱ごとに印の面 → 文字の面、element番号の大きい順"
     );
@@ -195,13 +187,13 @@ fn box_markers_keep_the_element_order_and_box_child_index_counts_them() {
     let render = rt.surfaces.remove(&a).expect("a の面");
     render.markers.expect("a の印").despawn(&mut world);
     render.surface.despawn_window_child(&mut world);
-    let children = children_of(&world, window);
+    let children = window_children(&world, window);
     assert_eq!(children, vec![slot, b_mark, b_text]);
     assert_eq!(rt.box_child_index(&children, &a), Some(3));
     present_frame(&mut rt, &mut world, LATE).expect("作り直しの提示");
     let a_text = text_of(&rt, &a);
     assert_eq!(
-        children_of(&world, window),
+        window_children(&world, window),
         vec![slot, b_mark, b_text, a_text]
     );
 }
@@ -227,7 +219,7 @@ fn drawn_arrow_shows_in_read_back_and_mask_holds_only_shown_opaque_pixels() {
         .draw(&mut world, &[placed(MarkerKind::Up, (2, 5), &up)], &scale)
         .expect("描く");
 
-    let bytes = markers.read_back().expect("読み戻し");
+    let bytes = markers.surface().read_back().expect("読み戻し");
     assert_eq!(alpha_at(&bytes, 40, 3, 6), 200, "矢印の画素が出る");
     assert_eq!(alpha_at(&bytes, 40, 2, 5), 100);
     assert_eq!(alpha_at(&bytes, 40, 1, 5), 0, "矢印の外は透明");
@@ -250,6 +242,7 @@ fn drawn_arrow_shows_in_read_back_and_mask_holds_only_shown_opaque_pixels() {
     markers.draw(&mut world, &[], &scale).expect("空で描く");
     assert!(
         markers
+            .surface()
             .read_back()
             .expect("読み戻し")
             .iter()
@@ -261,6 +254,39 @@ fn drawn_arrow_shows_in_read_back_and_mask_holds_only_shown_opaque_pixels() {
     let mask = mask_of(&world, &markers);
     assert_eq!((mask.width(), mask.height()), (40, 30));
     assert!((0..30).all(|y| (0..40).all(|x| !mask.is_hit(x, y))));
+}
+
+/// 寸とバイト列が合わない絵（4×4 に 4 バイト）は `Err`・面の画素も当たりも描いた記録も前のまま。
+#[test]
+fn image_whose_size_and_bytes_disagree_is_err_and_leaves_the_surface_unchanged() {
+    let (mut world, window, _slot) = com_world();
+    let mut markers = attach(&mut world, window, 0, (40, 30), (0.0, 0.0));
+    let scale = ScaleContract::new(1.0, None);
+    let good = [placed(MarkerKind::Up, (2, 5), &solid(4, 3, 255))];
+    markers.draw(&mut world, &good, &scale).expect("描く");
+    let before = markers.surface().read_back().expect("読み戻し");
+
+    let short = Arc::new(MarkerImage {
+        width: 4,
+        height: 4,
+        bgra: vec![255; 4],
+    });
+    let bad = [placed(MarkerKind::Down, (20, 20), &short)];
+    markers
+        .draw(&mut world, &bad, &scale)
+        .expect_err("寸とバイト列が合わない絵は描かない");
+
+    assert_eq!(
+        markers.surface().read_back().expect("読み戻し"),
+        before,
+        "画素は前のまま"
+    );
+    assert!(markers.is_drawn(&good, 1.0), "描いた記録は前のまま");
+    let mask = mask_of(&world, &markers);
+    assert!(
+        mask.is_hit(3, 6) && !mask.is_hit(21, 21),
+        "当たりは前のまま"
+    );
 }
 
 /// 拡大率 1.5: 左上 (10, 6)・4×4 の矢印は物理 px の [15, 21) × [9, 15) に描かれ、当たりも同じ所。
@@ -282,7 +308,7 @@ fn scale_one_and_a_half_places_and_sizes_the_arrows() {
         )
         .expect("描く");
 
-    let bytes = markers.read_back().expect("読み戻し");
+    let bytes = markers.surface().read_back().expect("読み戻し");
     for (x, y) in [(15, 9), (20, 14), (17, 12)] {
         assert_eq!(alpha_at(&bytes, 60, x, y), 255, "({x},{y}) は矢印の内");
     }
@@ -308,7 +334,7 @@ fn scale_one_and_a_half_places_and_sizes_the_arrows() {
     assert_eq!(hits, expected, "当たりは描いた所と同じ（面の端で切れる）");
 }
 
-/// 押下の届き方（6.2・6.3 の受け口の前提）: 印の面は窓の直接の子なので、泡立ちの道は「送り手 → 窓」で、
+/// 押下の届き方（押下の受け口の前提）: 印の面は窓の直接の子なので、泡立ちの道は「送り手 → 窓」で、
 /// 押下は窓の `OnPointerPressed`（普通のバルーンはバルーンの窓・箱はシェルの窓）が受ける。wintf は
 /// 子を末尾から当てるので、矢印の下の絵が不透明ならその絵が送り手になり、絵が透けていれば印の面が
 /// 送り手になる。矢印の透けた画素は（絵も透けていれば）何も受けない。
@@ -316,57 +342,16 @@ fn scale_one_and_a_half_places_and_sizes_the_arrows() {
 fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
     let (mut world, _w, _slot) = com_world();
     const WINDOW: (u32, u32) = (100, 50);
-    let arranged = |left: f32, top: f32, size: (u32, u32)| GlobalArrangement {
-        transform: Matrix3x2::translation(left, top),
-        bounds: Rect {
-            left,
-            top,
-            right: left + size.0 as f32,
-            bottom: top + size.1 as f32,
-        },
-    };
-    let window = world
-        .spawn((
-            arranged(0.0, 0.0, WINDOW),
-            HitTest::none(),
-            WindowPos {
-                position: Some(Point { x: 0, y: 0 }),
-                size: Some(SizeI {
-                    width: WINDOW.0 as i32,
-                    height: WINDOW.1 as i32,
-                }),
-                ..Default::default()
-            },
-        ))
-        .id();
+    let window = spawn_hit_window(&mut world, WINDOW);
     // 絵: x ≥ 50 が不透明。製品と同じく文字の面と印の面より後ろ（末尾）に並ぶ。
-    let mut px = vec![0u8; (WINDOW.0 * WINDOW.1 * 4) as usize];
-    for y in 0..WINDOW.1 {
-        for x in 50..WINDOW.0 {
-            px[((y * WINDOW.0 + x) * 4 + 3) as usize] = 255;
-        }
-    }
-    let mut picture_mask = AlphaMaskResource::new();
-    picture_mask.set(AlphaMask::from_pbgra32(
-        &px,
-        WINDOW.0,
-        WINDOW.1,
-        WINDOW.0 * 4,
-    ));
-    let picture = world
-        .spawn((
-            arranged(0.0, 0.0, WINDOW),
-            HitTest::alpha_mask(),
-            picture_mask,
-            ChildOf(window),
-        ))
-        .id();
+    let picture = spawn_picture(&mut world, WINDOW, 50);
+    world.entity_mut(picture).insert(ChildOf(window));
     world.flush();
 
     let mut markers = attach(&mut world, window, 0, WINDOW, (0.0, 0.0));
-    let marker = markers.window_child().expect("窓の子");
+    let marker = markers.surface().window_child().expect("窓の子");
     world.entity_mut(marker).insert(arranged(0.0, 0.0, WINDOW));
-    assert_eq!(children_of(&world, window), vec![marker, picture]);
+    assert_eq!(window_children(&world, window), vec![marker, picture]);
     // 左の矢印は透けた絵の上、右の矢印は不透明な絵の上。左の矢印の 1 列目は透明（α 0）。
     let mut bgra = [255u8; 4].repeat(4 * 4);
     for y in 0..4 {
@@ -406,4 +391,58 @@ fn press_on_the_marker_mask_bubbles_to_the_owning_window() {
         "印の面の押下は持ち主の窓へ泡立つ"
     );
     assert_eq!(build_bubble_path(&world, picture), vec![picture, window]);
+}
+
+/// audit-emo-text-state-actor 指摘 2: `i32` の上限の近くの矢印でも、描く矩形の右端・下端があふれず、当たりとマスクの矩形
+/// （`marker_span` の始まりの床〜終わりの天井）と一致する。右端・下端を別々に見る。
+#[test]
+fn draw_rect_near_i32_max_matches_the_hit_and_mask_rect() {
+    let k = 1.0;
+    let scale = ScaleContract::new(k, None);
+    // f32 の刻みは上限の近くで 128〜256 なので、右端が左端と別の値になる寸にする。
+    let image = solid(300, 300, 255);
+    let span = |at: i64, len: u32| {
+        let (lo, hi) = marker_span(at, len, k);
+        (lo.floor(), hi.ceil())
+    };
+    let near = i64::from(i32::MAX) - 200;
+    // 右端だけが上限をまたぐ印と、下端だけが上限をまたぐ印。
+    for at in [(near, 0), (0, near)] {
+        let rect = marker_draw_rect(&placed(MarkerKind::Up, at, &image), &scale);
+        let (x, y) = (span(at.0, 300), span(at.1, 300));
+        assert!(rect.right > rect.left, "右端が左端より大きい: {at:?}");
+        assert!(rect.bottom > rect.top, "下端が上端より大きい: {at:?}");
+        assert_eq!(
+            (rect.left, rect.right),
+            x,
+            "横は当たり・マスクと同じ: {at:?}"
+        );
+        assert_eq!(
+            (rect.top, rect.bottom),
+            y,
+            "縦は当たり・マスクと同じ: {at:?}"
+        );
+    }
+}
+
+/// 一辺が上限を越える絵の矢印は描かないので当たりにも入らない: その矩形の点は当たらず、矩形が重なる
+/// 描けた矢印の画素は、先に並ぶ大きすぎる矢印でなく描けた矢印に当たる。
+#[test]
+fn over_limit_arrow_is_not_hit_even_where_it_overlaps_a_drawn_arrow() {
+    let (mut world, window, _slot) = com_world();
+    let mut markers = attach(&mut world, window, 0, (40, 30), (0.0, 0.0));
+    let big = solid(super::super::present::MAX_SURFACE_SIDE + 1, 4, 255);
+    let small = solid(4, 4, 255);
+    let scale = ScaleContract::new(1.0, None);
+    let shown = [
+        placed(MarkerKind::Up, (0, 0), &big),
+        placed(MarkerKind::Down, (2, 0), &small),
+    ];
+    markers.draw(&mut world, &shown, &scale).expect("描く");
+    assert_eq!(markers.hit((0.5, 1.5)), None, "大きすぎる矢印だけの点");
+    assert_eq!(
+        markers.hit((3.5, 1.5)),
+        Some(MarkerKind::Down),
+        "重なる点は描けた矢印"
+    );
 }

@@ -30,12 +30,12 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninit
 
 use super::BootWiringError;
 use super::assets::{BalloonAssets, ShellAssets, build_balloon_assets, build_shell_assets};
-use crate::placement::PlacementError;
-use crate::placement::descript_window_keys::read_default_surfaces;
-use crate::placement::load_scope_windowpositions;
-use crate::placement::persist::load_restored_state;
-use crate::placement::reseed::BalloonPlacementInputs;
-use crate::placement::source::{
+use areka_placement::PlacementError;
+use areka_placement::descript_window_keys::read_default_surfaces;
+use areka_placement::load_scope_windowpositions;
+use areka_placement::persist::load_restored_state;
+use areka_placement::reseed::BalloonPlacementInputs;
+use areka_placement::source::{
     DescriptSource, load_balloon_author_dpi, load_descript_source_for_shell,
 };
 

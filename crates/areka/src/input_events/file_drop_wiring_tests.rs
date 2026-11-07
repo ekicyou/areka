@@ -18,7 +18,7 @@ use wintf::ecs::window::OnFilesDropped;
 use super::{ON_DIRECTORY_DROP, ON_FILE_DROP2, attach_file_drop_receivers, on_ghost_files_dropped};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::install::{self, InstallOrder, InstallOrigin};
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindowMarker};
 
 type Receiver = fn(&mut World, bevy_ecs::entity::Entity, Vec<std::path::PathBuf>);
 
@@ -443,7 +443,10 @@ fn missing_archive_is_recorded_and_goes_to_file_drop2() {
 fn production_sources_name_only_the_two_sent_events() {
     let sources = [
         include_str!("file_drop.rs"),
-        include_str!("../../../wintf/src/ecs/window_proc/drop_files.rs"),
+        crate::crate_source_test_support::crate_source!(
+            "wintf",
+            "src/ecs/window_proc/drop_files.rs"
+        ),
     ];
     let count = |word: &str| {
         let lit = format!("\"{word}\"");

@@ -31,8 +31,8 @@ use super::BootWiringError;
 use super::balloon_background;
 use super::shell_box_assets::{ShellBoxAssets, box_font_search_dirs, resolve_box_markers};
 use super::shell_cursor_assets::{ShellCursorAssets, build_shell_cursors};
-use crate::placement::DefaultSurfaces;
-use crate::placement::source::read_kv_lenient;
+use areka_placement::DefaultSurfaces;
+use areka_placement::source::read_kv_lenient;
 
 /// descript 定義ファイル名（読めないシェルを起動の失敗にするために読む）。
 const DESCRIPT_TXT: &str = "descript.txt";
@@ -188,11 +188,11 @@ pub struct BootAssets {
 /// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling task 4.1）は
 /// **呼び手が読んだ値をそのまま搬送する**（本関数は解釈も再読取もしない）。設計 Flow 3 手順1 が
 /// 定めるとおり、boot シームが `DescriptSource::shell_author_dpi()`／`load_balloon_author_dpi()`
-/// （placement::source・task 2.1）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
+/// （areka_placement::source・task 2.1）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
 /// attach（`attach_target`）の双方へ配ることで、両者が同一の分母に載ることを保証する。
 /// ここで descript を読み直すと (a) 既に読んだファイルの二重 I/O になり、(b) 採寸と attach が
 /// 別々の読取結果に載る隙（読取間の差し替え）を作るため、内部読取は採らない。縮退梯子
-/// （無宣言=96／不正・0=warn+96）は単一権威 `placement::source::parse_author_dpi` が既に適用済みで、
+/// （無宣言=96／不正・0=warn+96）は単一権威 `areka_placement::source::parse_author_dpi` が既に適用済みで、
 /// 本関数へ届く時点で常に有効な非ゼロ DPI である。
 ///
 /// # 事前条件
@@ -338,7 +338,7 @@ pub fn build_shell_assets(
 
     // シェル: 読み込みの権威を **1 回**呼ぶ（一覧 → surfaces.txt の読取と解析 → 面の表 →
     // 使う画像 → 焼く）。文字コードの扱い・記録・失敗の種類はすべて権威が持つ
-    // （`areka_emo_present::shell_target`）。採寸（`placement::measure`）も同じ入口を通るので、
+    // （`areka_emo_present::shell_target`）。採寸（`areka_placement::measure`）も同じ入口を通るので、
     // 「番号 → 面の画像」の対応・土台の絵・透過の扱いが表示と採寸で食い違わない（要件 3.6）。
     let mut target = load_shell_target(&shell_dir, decoder)?;
     let atlas = target.atlas().clone();

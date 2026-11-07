@@ -1,7 +1,15 @@
+// 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo-text-layer` のもの（別の spec のものはその場で名を書く）。
+
 use super::{
     ActorKey, AtlasTable, BalloonModel, DWriteMetrics, EmoPresenter, EmoTextSink, EmoWorld, Entity,
-    Observations, Rc, RefCell, ResolvedBalloonText, TextLayerRuntime,
+    Observations, Rc, RefCell, ResolvedBalloonText, TextLayerConfig, TextLayerRuntime, World,
+    balloon_assets, balloon_model, balloon_size, create_balloon_window, decoder, info,
 };
+
+/// \0（sakura）バルーン窓の初期位置（物理 px・スクリーン座標）。
+const SAKURA_POS: (i32, i32) = (320, 160);
+/// \1（kero）バルーン窓の縦間隔（sakura 窓の直下に置く・物理 px）。
+const KERO_GAP_Y: i32 = 32;
 
 // ---------------------------------------------------------------------------
 // Demo（NonSend・EmoPresenter/TextLayerRuntime を内包する集約ルート）
@@ -21,6 +29,8 @@ pub(super) struct Demo {
     pub(super) model: BalloonModel,
     /// 装着＋結線完了フラグ。
     pub(super) attached: bool,
+    /// GPU 資源を待ち始めた時刻（届かないまま上限を過ぎたら準備の失敗）。
+    pub(super) gpu_wait_start: Option<std::time::Instant>,
     /// UI スレッド所有の集約ルート（sink ドレインと present_frame が共有）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// cue 受信口（UI ドレインへ配送）。
@@ -48,6 +58,10 @@ pub(super) struct Demo {
     pub(super) prev_lbutton: bool,
     /// ダブルクリック検出用: 直近クリック（rising edge）のフレーム時刻（連続 2 クリックの間隔判定）。
     pub(super) last_click_time: f64,
+    /// 提示フレームの失敗を `error!` で残し終えたか（最初の 1 回だけ `error!`・以後は `warn!`）。
+    pub(super) present_err_logged: bool,
+    /// `--hold` の watchdog 超過を `error!` で残し終えたか（hold は窓を閉じないので 1 回だけ）。
+    pub(super) watchdog_logged: bool,
 }
 
 /// sakura/kero の ActorKey（結線側が所有する actor→target 対応の鍵・R9.5）。
@@ -56,4 +70,59 @@ pub(super) fn actor0() -> ActorKey {
 }
 pub(super) fn actor1() -> ActorKey {
     ActorKey::from("1")
+}
+
+/// アセット構築・窓生成・`Demo` 挿入を一括で行う（UI スレッド・emo-present example と同型）。
+///
+/// `--vertical` は balloon descript の parse 入力だけを変種へ差し替える。
+/// 枠アセットは \0/\1 target の 2 つを共有 fixture から作る。
+pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
+    let decoder = decoder();
+    let model = balloon_model(vertical);
+    let assets0 = balloon_assets(&decoder);
+    let assets1 = balloon_assets(&decoder);
+    let (w, h) = balloon_size(&assets0);
+
+    let win0 = create_balloon_window(world, "sakura", SAKURA_POS.0, SAKURA_POS.1, w, h);
+    let win1 = create_balloon_window(
+        world,
+        "kero",
+        SAKURA_POS.0,
+        SAKURA_POS.1 + h as i32 + KERO_GAP_Y,
+        w,
+        h,
+    );
+
+    world.insert_non_send(Demo {
+        presenter: EmoPresenter::new(),
+        win0,
+        win1,
+        assets0: Some(assets0),
+        assets1: Some(assets1),
+        model,
+        attached: false,
+        gpu_wait_start: None,
+        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
+        sink: None,
+        _drain: None,
+        resolved: None,
+        metrics: None,
+        dims: (0, 0),
+        talk_start: 0.0,
+        stage: 0,
+        fed: false,
+        obs: Observations::default(),
+        finished: false,
+        hold,
+        prev_lbutton: false,
+        last_click_time: -10.0,
+        present_err_logged: false,
+        watchdog_logged: false,
+    });
+    info!(
+        w,
+        h, vertical, hold, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）"
+    );
 }

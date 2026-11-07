@@ -1,5 +1,7 @@
 //! # 行送りの後も収まる行は全部見える（症状 F・再生の相の追試・R17.1〜17.4）
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-emo2-conformance-e2e` のもの（別の spec のものはその場で名を書く）。
+//!
 //! [`crate::viewbox_draw`] の兄弟檻（`viewbox_draw_scroll_retain_tests.rs`）が純粋レイアウト
 //! （`FixedMetrics`）で組んだ入力を扱うのに対し、本檻は**本番の提示経路**
 //! （[`present_frame`] → `present_actor` → 実フォントの `DWriteMetrics` → `ViewboxExecutor`）を
@@ -12,11 +14,11 @@
 //! 再描画と同値ゆえ、1 字ずつ積み上げた面（差分描画）とバイト等価でなければ、積み上げの
 //! どこかで画素を失っている（症状 F）。
 //!
-//! **冒頭の改行を含まない台本（`boot_cues`）の 3 本は HEAD で緑である**——描画対象の非回帰の
+//! **冒頭の改行を含まない台本（`boot_cues`）の 3 本**は描画対象の非回帰の
 //! 檻であり、症状 F は描画側では再現しない。較正は viewbox 側と同じで、描画対象から先頭可視行を
 //! 1 つ落とす欠陥を注入すると本檻も赤になる。
 //!
-//! **症状 F を再現するのは `leading_gap_cues` の 2 本**である（2026-09-10 の根因の確定・R17.3）。
+//! **症状 F を再現するのは `leading_gap_cues` の 2 本**である（R17.3）。
 //! 実機の相方側 scope は、pasta が話者切替の前に前の scope へ出す `\n[150]` を**空のまま**
 //! 受け取るため、台本の先頭に `NewLine { ratio: 1.5 }` が立つ。この空き 45 は、送り量の原点が
 //! 最初の行の開始側だと永久に送られず、最新の 1 行だけが描画範囲の上から 1.5 行ぶん下に残る。
@@ -32,7 +34,10 @@ use areka_parsers::balloon::{
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::prelude::World;
 
-use super::test_support::{com_world, cue, opaque_count, spawn_reserved_slot};
+use super::test_support::{
+    REVEAL_INTERVAL, com_world, count_px, cue, inked, opaque_count, physical, read_back,
+    spawn_reserved_slot,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
 
@@ -42,16 +47,6 @@ const IMAGE: (u32, u32) = (288, 203);
 const REGION_SIZE: (u32, u32) = (216, 93);
 /// 実機と同じ字の丈（`font.height,28` → 行送り 30＝28 ＋ 行間 2）。
 const FONT_HEIGHT: u32 = 28;
-/// reveal 間隔（秒/グリフ・`test_support::cue` が焼く duration と対）。
-const REVEAL_INTERVAL: f64 = 0.05;
-
-/// バルーン面の物理寸（`ceil(image × k)`）。
-fn physical(k: f32) -> (u32, u32) {
-    (
-        (IMAGE.0 as f32 * k).ceil() as u32,
-        (IMAGE.1 as f32 * k).ceil() as u32,
-    )
-}
 
 /// 実物の相方側バルーン記述（`descript.txt` ＋ `balloonk0s.txt` の 2 層マージ相当）。
 ///
@@ -97,19 +92,6 @@ fn leading_gap_cues(actor: &str) -> (Vec<TalkCue>, f64) {
     (cues, t_end)
 }
 
-/// 行送り軸の帯 `[y0, y1)` の非透明ピクセル数（BGRA 密配列・物理 px）。
-fn ink_in_band(bytes: &[u8], w: u32, y0: u32, y1: u32) -> usize {
-    let mut count = 0;
-    for y in y0..y1 {
-        for x in 0..w {
-            if bytes[((y * w + x) * 4 + 3) as usize] != 0 {
-                count += 1;
-            }
-        }
-    }
-    count
-}
-
 /// まっさらな runtime に同じ cue 列を積み、**その 1 フレームだけ**提示した面を返す（オラクル）。
 fn oracle_frame(world: &mut World, cues: &[TalkCue], actor: &ActorKey, t: f64, k: f32) -> Vec<u8> {
     let (window, slot) = spawn_reserved_slot(world);
@@ -119,14 +101,11 @@ fn oracle_frame(world: &mut World, cues: &[TalkCue], actor: &ActorKey, t: f64, k
     }
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, k, physical(k), IMAGE),
+        TextSlotBinding::new(slot, window, k, physical(IMAGE, k), IMAGE),
         ResolvedBalloonText::resolve(&kero_model(), IMAGE),
     );
     present_frame(&mut rt, world, t).expect("オラクル提示フレーム");
-    rt.surface(actor)
-        .expect("オラクル供給面")
-        .read_back()
-        .expect("オラクル read_back")
+    read_back(&rt, actor)
 }
 
 /// 台本を 1 字ずつ通しで駆動し、各フレームを積み上げ側とオラクル側で突き合わせる。
@@ -146,25 +125,20 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
     }
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, k, physical(k), IMAGE),
+        TextSlotBinding::new(slot, window, k, physical(IMAGE, k), IMAGE),
         ResolvedBalloonText::resolve(&kero_model(), IMAGE),
     );
 
     // 供給面の寸＝ceil(文字描画範囲 × k)。先頭可視行の帯は上端 0 から字の丈 × k ぶん
     // （送りの式より先頭可視行は常に描画面の上端 0 に来る）。
-    let w = (REGION_SIZE.0 as f32 * k).ceil() as u32;
-    let h = (REGION_SIZE.1 as f32 * k).ceil() as u32;
+    let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
     let steps = ((t_end / frame_period).ceil() as usize) + 2;
     let mut checked = 0usize;
     for step in 1..=steps {
         let t = step as f64 * frame_period;
         present_frame(&mut rt, &mut world, t).expect("提示フレーム");
-        let live = rt
-            .surface(&actor)
-            .expect("供給面")
-            .read_back()
-            .expect("read_back");
+        let live = read_back(&rt, &actor);
         assert_eq!(
             live.len(),
             (w * h * 4) as usize,
@@ -176,8 +150,8 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
             opaque_count(&oracle) > 0,
             "k={k} t={t}: オラクル面にインクが在る（空面同士の一致を排除）"
         );
-        let head_oracle = ink_in_band(&oracle, w, 0, head_band);
-        let head_live = ink_in_band(&live, w, 0, head_band);
+        let head_oracle = count_px(&oracle, w, (0, 0, w, head_band), inked);
+        let head_live = count_px(&live, w, (0, 0, w, head_band), inked);
         assert_eq!(
             head_oracle > 0,
             head_live > 0,
@@ -197,13 +171,9 @@ fn drive_lap(k: f32, frame_period: f64, cues: &[TalkCue], t_end: f64) -> Vec<u8>
         "k={k}: 台本を通しで駆動した（実際 {checked} フレーム）"
     );
 
-    let last = rt
-        .surface(&actor)
-        .expect("供給面")
-        .read_back()
-        .expect("read_back");
+    let last = read_back(&rt, &actor);
     assert!(
-        ink_in_band(&last, w, 0, head_band) > 0,
+        count_px(&last, w, (0, 0, w, head_band), inked) > 0,
         "k={k}: 最終フレームの先頭可視行の帯 [0,{head_band}) にインクが在る\
          （症状 F: 最新の 1 行しか見えない）"
     );
@@ -235,9 +205,10 @@ fn present_actor_scroll_keeps_first_visible_line_ink_coarse_cadence() {
 /// 冒頭に `\n[150]` が立つ台本を拡大率 1.0 で駆動する（症状 F の再現・R17.3）。
 ///
 /// 送りが起きた後の最終フレームで ⑴ 先頭可視行の帯（面の上端 0 から字の丈 × k）にインクが
-/// 在ること ⑵ その下にもインクが在ること＝見えている行が 2 つ以上あること、を主張する。
+/// 在ること（[`drive_lap`] の最後の確かめ）⑵ その下にもインクが在ること＝見えている行が 2 つ以上
+/// あること、を主張する。
 /// 最新行は縮退規則（最新行への飽和）で常に可視ゆえ、⑵ が成り立つのは「最新行より前の行も
-/// 見えている」ときだけである。直す前の HEAD では最新の 1 行だけが面の上から 1.5 行ぶん下に
+/// 見えている」ときだけである。送り量の原点を最初の行の開始側に置くと最新の 1 行だけが面の上から 1.5 行ぶん下に
 /// 残るため ⑴ が 0 画素で赤になる。全域再描画のオラクルとのバイト等価は [`drive_lap`] が持つ。
 #[test]
 fn present_actor_leading_gap_keeps_earlier_lines_visible_k1() {
@@ -254,16 +225,9 @@ fn present_actor_leading_gap_keeps_earlier_lines_visible_k2() {
 fn assert_leading_gap_lap(k: f32) {
     let (cues, t_end) = leading_gap_cues("1");
     let last = drive_lap(k, REVEAL_INTERVAL, &cues, t_end);
-    let w = (REGION_SIZE.0 as f32 * k).ceil() as u32;
-    let h = (REGION_SIZE.1 as f32 * k).ceil() as u32;
+    let (w, h) = physical(REGION_SIZE, k);
     let head_band = (FONT_HEIGHT as f32 * k).round() as u32;
-    let head = ink_in_band(&last, w, 0, head_band);
-    let below = ink_in_band(&last, w, head_band, h);
-    assert!(
-        head > 0,
-        "k={k}: 冒頭に空きが在る台本でも、送りの後の先頭可視行の帯 [0,{head_band}) に\
-         インクが在る（症状 F: 冒頭の空きが送られず最新の 1 行だけが残る）"
-    );
+    let below = count_px(&last, w, (0, head_band, w, h), inked);
     assert!(
         below > 0,
         "k={k}: 先頭可視行より下の帯 [{head_band},{h}) にもインクが在る＝収まる行が\

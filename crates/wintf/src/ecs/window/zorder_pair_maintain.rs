@@ -381,7 +381,7 @@ pub fn apply_zorder_pair_maintenance(
     //
     // 見ているのは**この巡の頭**の状態である。同じ巡でこの system より後に挿入された
     // 要求はここには映らず、次に回る画面更新——最悪でも心拍（30 フレーム）——まで待つ。
-    // 現状の確立系は本 system の前に走る（areka `placement/spawn.rs:642` の
+    // 現状の確立系は本 system の前に走る（areka `crates/areka-placement/src/spawn.rs:721-728` の
     // `(establish_owner_links, apply_zorder_pair_maintenance).chain()`）ので、その巡の
     // うちに拾われる。後ろに置く生産者を足すときは、その側で旗を立てること。
     if !requests.is_empty() || !orphans.is_empty() {

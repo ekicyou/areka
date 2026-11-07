@@ -9,7 +9,7 @@ use areka_nar::InstallRoots;
 use temp_path_kit::TempPath;
 
 use super::*;
-use crate::placement::test_support::capture_logs;
+use log_capture_kit::capture;
 
 fn put_ghost(root: &Path, folder: &str) {
     let master = root.join("ghost").join(folder).join("ghost").join("master");
@@ -42,7 +42,7 @@ fn new_items_go_to_head_root_and_existing_ones_to_their_root() {
     put_ghost(&two, "Below");
     put_balloon(&two, "bln");
     let dest = CatalogDestinations::new(list(&[one.clone(), two.clone()])).expect("作れる");
-    let (answers, events) = capture_logs(|| {
+    let (answers, events) = capture(|| {
         [
             dest.ghost_root("Fresh"),
             dest.ghost_root("below"),
@@ -65,7 +65,7 @@ fn missing_head_root_answers_topmost_found_and_warns() {
     std::fs::create_dir_all(&two).expect("根 2");
     std::fs::create_dir_all(&three).expect("根 3");
     let dest = CatalogDestinations::new(list(&[gone.clone(), two.clone(), three])).expect("作れる");
-    let (answer, events) = capture_logs(|| dest.ghost_root("Fresh"));
+    let (answer, events) = capture(|| dest.ghost_root("Fresh"));
     assert_eq!(answer, two, "見つかるいちばん上");
     let warn = events
         .iter()
@@ -108,7 +108,7 @@ fn running_ghost_folder_answers_its_own_root_even_off_the_list() {
     let dest = CatalogDestinations::new(list(std::slice::from_ref(&seen)))
         .expect("作れる")
         .with_running(Some(gone.join("ghost").join("Emo")));
-    let (answers, events) = capture_logs(|| [dest.ghost_root("EMO"), dest.ghost_root("Fresh")]);
+    let (answers, events) = capture(|| [dest.ghost_root("EMO"), dest.ghost_root("Fresh")]);
     assert_eq!(
         answers,
         [gone, seen],
@@ -186,7 +186,7 @@ fn new_ghost_goes_to_head_and_companion_balloon_inside_it() {
     let archive = ghost_nar(&tmp, "fresh", true);
 
     let (result, events) =
-        capture_logs(|| install_into(&list(&[one.clone(), two.clone()]), &archive, None, None));
+        capture(|| install_into(&list(&[one.clone(), two.clone()]), &archive, None, None));
     result.expect("入る");
     assert!(
         one.join("ghost/fresh/ghost/master/descript.txt").is_file(),
@@ -280,7 +280,7 @@ fn a_held_root_balloon_of_the_same_name_does_not_block_the_companion() {
 fn no_found_root_fails_before_writing_with_an_error() {
     let tmp = TempPath::under_target("install-into-no-root");
     let archive = ghost_nar(&tmp, "fresh", false);
-    let (result, events) = capture_logs(|| {
+    let (result, events) = capture(|| {
         install_into(
             &list(&[tmp.child("a"), tmp.child("b")]),
             &archive,

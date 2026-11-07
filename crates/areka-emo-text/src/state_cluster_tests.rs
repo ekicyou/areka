@@ -1,5 +1,7 @@
 //! 文字の単位がクラスタであることを cue の適用で確かめる（要件 2.2・2.4・2.5・2.7・6.2）。
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `areka-P0-balloon-color-emoji` のもの（別の spec のものはその場で名を書く）。
+//!
 //! 複数の符号でできた 6 形が、それぞれ 1 アイテム・1 段で積まれ、途中の段に部品が
 //! 見えないことを判定する。形はソース上で紛れないよう符号の値で書く。
 
@@ -111,7 +113,6 @@ fn choice_cue_range_counts_clusters() {
         .choices();
     assert_eq!(spans.len(), 1);
     assert_eq!(spans[0].glyph_range, 0..3);
-    assert_eq!(spans[0].glyph_range.len(), 3);
     assert_eq!(
         items_of(&state, "0"),
         &[
@@ -120,4 +121,33 @@ fn choice_cue_range_counts_clusters() {
             TextItem::glyph("B"),
         ]
     );
+}
+
+/// 選択肢とアンカーの始まりは、前の字のクラスタの数（改行は数えない・audit-emo-text-state-actor 指摘 23⑷）。
+/// 「か゚」（2 符号で 1 字）・改行・選択肢「B」の後に開いたアンカーは 2 から始まる。
+#[test]
+fn choice_and_anchor_start_counts_clusters_before_them() {
+    let mut state = TextLayerState::default();
+    for command in [
+        CueCommand::Text(KA_HANDAKUTEN.into()),
+        CueCommand::NewLine { ratio: 1.0 },
+        CueCommand::Choice {
+            id: "OnB".into(),
+            text: "B".into(),
+            references: vec![],
+        },
+        CueCommand::AnchorBegin {
+            id: "x".into(),
+            references: vec![],
+        },
+    ] {
+        state.apply_cue(&cue_dur("0", 0.0, 0.0, command));
+    }
+
+    let spans = state
+        .actor_state(&ActorKey::from("0"))
+        .expect("actor state should exist")
+        .choices();
+    assert_eq!(spans[0].glyph_range, 1..2);
+    assert_eq!(spans[1].glyph_range, 2..2);
 }

@@ -17,7 +17,7 @@ tracing = { workspace = true }
 # cue 契約の正本（TalkCue/ActorKey/CueCommand/CueSink 再輸出——design.md Dependencies・再定義しない）。
 areka-sakura = { path = "../areka-sakura" }
 # cue 再生の単一出力契約トレイト（dola::cue::CueSink）。演者は各自 1 実装を持つ
-# （broadcast＋演者側 relevance の単一権威・R11.3/R11.6）。EmoTextSink が実装する。
+# （broadcast＋演者側 relevance の単一権威・`areka-P0-cue-playback-duration` R11.3/R11.6）。EmoTextSink が実装する。
 dola = { path = "../dola" }
 # 結線層（sink.rs/actor.rs）の UI スレッド配送ブリッジ（spawn_ui/UiSender——design.md
 # Key Dependencies「areka-actor spawn_ui (P0)」。EmoTextSink の配送口そのもの）。
@@ -31,13 +31,13 @@ areka-parsers = { path = "../areka-parsers" }
 wintf = { path = "../wintf" }
 # slot entity への装着（&mut World insert）・TextSlotBinding の Entity（design.md Allowed Dependencies）。
 bevy_ecs = { workspace = true }
-# 分かち書き境界の決定論計算（segment.rs 消費の唯一の場所・design.md Technology Stack・8.1）。
+# 分かち書き境界の決定論計算（segment.rs 消費の唯一の場所・`areka-P0-budoux-newline` の design.md Technology Stack・8.1）。
 # `default-features = false` で CLI 依存（cli → seahorse）を落とし、`std`＋`vendored-models`
-# のみを引く（design.md の `features=["vendored-models"]` を CLI 非取込へ精緻化・task 1 spike 確認済み）。
-# vendored-models＝既定日本語モデル同梱でネットワーク/ファイル I/O 不要（オフライン CI 整合・8.1）。
+# のみを引く（同じ design.md の `features=["vendored-models"]` を CLI 非取込へ精緻化・`lib.rs` の budouy spike で確認済み）。
+# vendored-models＝既定日本語モデル同梱でネットワーク/ファイル I/O 不要（オフライン CI 整合・同じ spec の 8.1）。
 budouy = { version = "0.2.2", default-features = false, features = ["std", "vendored-models"] }
 # COM 層（surface.rs）は D3D11/DXGI 直呼び（CopyResource/Map/Present・IDXGISwapChain1 等）を要する。
-# workspace 既定へ `Win32_Graphics_Dxgi` を上乗せする（emo-present chain.rs と同型・swap chain 本体型）。
+# workspace 既定へ `Win32_Graphics_Dxgi`（swap chain 本体の型）を上乗せする。
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
 # 下線を集める受け手（IDWriteTextRenderer）の `#[implement]`（spec: areka-P0-balloon-text-bugs 要件 3.2）。
 # 版は書かない＝ワークスペースのピン（`windows` と同じ 0.62 の系列）。0.100 系は互換が無いので取らない。
@@ -57,11 +57,11 @@ areka-emo-present = { path = "../areka-emo-present" }
 areka-emo-compose = { path = "../areka-emo-compose" }
 
 [dev-dependencies]
-# 統合テスト（tests/attach_wiring_test.rs）: 2 target 結線シナリオで EmoPresenter へ渡す
+# 統合テストと例（tests/ の実 GPU の結線・検体のテストと examples/）: EmoPresenter へ渡す
 # 合成入力（EmoWorld/AtlasTable）を上流公開 API（bake→EmoWorld）で組む
-# （emo-present presenter.rs テストと同技法・テスト専用）。
+# （emo-present presenter.rs テストと同技法・テストと例の専用）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
-# 観測 example（examples/emo-text-layer.rs・task 9.2）のログ初期化
+# 観測 example（examples/emo-text-layer.rs）のログ初期化
 # （RUST_LOG 対応・emo-present example と同型。example 専用＝dev-deps）。
 tracing-subscriber = { workspace = true }
 # ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。

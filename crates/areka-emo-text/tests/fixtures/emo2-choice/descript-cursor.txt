@@ -1,11 +1,12 @@
 charset,UTF-8
-// emo2-choice fixture（task 11.1・R7.6）: cursor.* 指定バルーン descript
+// emo2-choice fixture（R7.6）: cursor.* 指定バルーン descript
+// 断りの無い要件の番号は spec `areka-P0-choice-render` のもの。
 //
 // choice ハイライトが SquareFill 実導出（塗り=cursor.brush.color・hover 文字=cursor.font.color）へ
-// 解決される最小適合バルーン。値は 9.2/9.3 の in-code `cursor_model()` と同一
+// 解決される最小適合バルーン。値は `src/actor_test_support.rs` の in-code `cursor_model()` と同一
 // （square 塗り(105,25,25)＋白文字(255,255,255)）を「実 parse される descript」として自前用意する。
 //
-// 実フォント指定（既定 ＭＳ ゴシック盲点の回避・記憶 emo-text-byte-equiv-default-font-blindspot）:
+// 実フォント指定（既定 ＭＳ ゴシック盲点の回避）:
 // pixel 檻は既定テストフォントで通っても、実フォントの字送り/descent では別の見え方をし得るため、
 // 7.6 は実フォント出力の目視確認を要求する。ゆえに fixture は font.name に実フォントを与える。
 font.name,Yu Gothic UI
@@ -20,7 +21,7 @@ validrect.left,5
 validrect.right,-5
 validrect.bottom,-5
 
-// cursor.* スタイルモデル（SquareFill 実導出・要件 4.2/6.2）。
+// cursor.* スタイルモデル（SquareFill 実導出・要件 4.2/6.1）。
 // style,square＝矩形塗りマーカー・brush.color＝矩形内塗り色・font.color＝hover 白文字。
 cursor.style,square
 cursor.brush.color.r,105

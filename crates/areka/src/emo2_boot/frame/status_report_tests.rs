@@ -19,7 +19,7 @@ use areka_emo_text::state::TextLayerConfig;
 
 use super::*;
 use crate::ghost_session::GhostSession;
-use crate::placement::test_support::{LogEvent, capture_logs};
+use log_capture_kit::{CapturedEvent, capture};
 
 fn obs(scope: u32, visible: Option<bool>, surface_id: Option<u32>) -> BalloonObservation {
     BalloonObservation {
@@ -45,7 +45,7 @@ fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
     }
 }
 
-fn named<'a>(events: &'a [LogEvent], name: &str) -> Vec<&'a LogEvent> {
+fn named<'a>(events: &'a [CapturedEvent], name: &str) -> Vec<&'a CapturedEvent> {
     events
         .iter()
         .filter(|e| e.field_str("event") == Some(name))
@@ -200,7 +200,7 @@ fn empty_slot_skips_with_debug_and_keeps_the_ledger() {
     world.insert_non_send(GhostSlot(None));
     let mut ledger = BalloonStatusLedger::default();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         report_observed(&world, &mut ledger, &[obs(1, Some(true), Some(0))]);
     });
     let skipped = named(&events, "balloon_status_no_ghost");
@@ -233,7 +233,7 @@ fn dropped_receiver_records_exactly_one_error() {
     drop(rx);
     let mut ledger = BalloonStatusLedger::default();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         report_observed(&world, &mut ledger, &[obs(0, Some(true), Some(2))]);
         report_observed(&world, &mut ledger, &[obs(0, Some(true), Some(2))]);
     });
@@ -251,7 +251,7 @@ fn surface_unknown_warns_once_per_scope_and_rearms_when_the_number_returns() {
     let unknown = [obs(0, Some(true), None), obs(1, Some(true), None)];
     let known = [obs(0, Some(true), Some(1)), obs(1, Some(true), None)];
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         report_observed(&world, &mut ledger, &unknown);
         report_observed(&world, &mut ledger, &unknown);
         report_observed(&world, &mut ledger, &known); // scope 0 だけ再武装
@@ -272,7 +272,7 @@ fn box_only_without_number_reports_the_number_remembered_from_an_earlier_frame()
     let (world, rx) = world_with_ghost();
     let mut ledger = BalloonStatusLedger::default();
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         // 普通のバルーンは面 4 で不可視（装着しただけ・出して隠した後）→ 送らず、番号だけ覚える
         report_observed(&world, &mut ledger, &[obs(0, Some(false), Some(4))]);
         assert!(sent(&rx).is_empty());
@@ -323,7 +323,7 @@ fn status_report_phase_defers_while_the_runtime_is_busy_and_logs_once_per_outage
     wiring.balloon_status.last_sent = vec![binding(0, 2)];
     let runtime = std::rc::Rc::clone(wiring.runtime());
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         let held = runtime.borrow_mut();
         run_status_report_phase(&mut wiring, &world);
         run_status_report_phase(&mut wiring, &world);
@@ -339,7 +339,7 @@ fn status_report_phase_defers_while_the_runtime_is_busy_and_logs_once_per_outage
     assert_eq!(sent(&rx), vec![Vec::new()], "借りられたフレームで届く");
     assert!(!wiring.balloon_status.runtime_busy_logged);
 
-    let (_, events) = capture_logs(|| {
+    let (_, events) = capture(|| {
         let held = runtime.borrow_mut();
         run_status_report_phase(&mut wiring, &world);
         drop(held);

@@ -11,13 +11,13 @@ use wintf::ecs::drag::DraggingState;
 use wintf::ecs::pointer::PhysicalPoint;
 use wintf::ecs::{DPI, SizeI, WindowPos};
 
-use crate::placement::chain_finalize::ChainRect;
-use crate::placement::chain_realign;
-use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-use crate::placement::dpi_sync::{self, DpiSyncHold};
-use crate::placement::follow::{resize_window_keep_position, resize_window_to};
-use crate::placement::resolver::SizePx;
-use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+use areka_placement::chain_finalize::ChainRect;
+use areka_placement::chain_realign;
+use areka_placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use areka_placement::dpi_sync::{self, DpiSyncHold};
+use areka_placement::follow::{resize_window_keep_position, resize_window_to};
+use areka_placement::resolver::SizePx;
+use areka_placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 use super::balloon_offset_follow::{
     OffsetFollowOutcome, converge_balloon_after_skipped_write, rescale_balloon_follow_offset,

@@ -22,10 +22,10 @@ use bevy_ecs::change_detection::DetectChangesMut;
 use wintf::ecs::window::SetWindowPosCommand;
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
-use crate::placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
-use crate::placement::chain_realign::ChainRealignPending;
-use crate::placement::dpi_sync::DpiSyncHold;
-use crate::placement::spawn::GhostWindows;
+use areka_placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
+use areka_placement::chain_realign::ChainRealignPending;
+use areka_placement::dpi_sync::DpiSyncHold;
+use areka_placement::spawn::GhostWindows;
 
 use super::shell_target;
 use super::test_support::{
@@ -183,7 +183,7 @@ fn gap(harness: &FrameHarness) -> i32 {
 
 /// 当該スコープのキャラ窓を横へ `dx` だけずらす（利用者のドラッグが landing した後の状態）。
 ///
-/// ドラッグ経路そのもの（`on_char_drag`）は `placement/follow_drag_tests.rs` が所有するので、
+/// ドラッグ経路そのもの（`on_char_drag`）は `crates/areka-placement/src/follow_drag_tests.rs` が所有するので、
 /// ここでは**結果の位置**だけを置く。既定位置は動かさない——ドラッグは route を持たない書込で
 /// あり、既定位置の追跡（D9）の対象から構造的に外れているからである。
 fn drag_char_window_by(harness: &mut FrameHarness, scope: usize, dx: i32) {

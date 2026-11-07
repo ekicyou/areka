@@ -109,7 +109,7 @@ SELFTEST_REQUIRED_RED_EXITS = (EXIT_FAIL, EXIT_INCONCLUSIVE)
 #   MSG_WINDOWPOSCHANGED / MSG_DPICHANGED
 #                    crates/wintf/src/ecs/window/transition_diag.rs:104,102
 #   DESIRED_*        crates/wintf/src/ecs/clickthrough/registry.rs:18-23（DesiredState）
-#   WIN_KIND_*       crates/areka/src/placement/diag.rs:338-343（WindowKind::as_str）
+#   WIN_KIND_*       crates/areka-placement/src/diag.rs:351-356（WindowKind::as_str）
 
 MSG_TOGGLE = "clickthrough: ex-style トグル適用"
 MSG_SHOW = "apply(ShowSurface): 表示・マスクを更新"

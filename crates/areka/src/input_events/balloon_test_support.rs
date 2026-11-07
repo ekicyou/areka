@@ -24,7 +24,7 @@ use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::move_cue::PositionCue;
 use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
-use crate::placement::spawn::BalloonWindowMarker;
+use areka_placement::spawn::BalloonWindowMarker;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
 /// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。

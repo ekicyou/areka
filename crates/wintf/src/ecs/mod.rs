@@ -11,7 +11,6 @@ pub mod pointer;
 pub(crate) mod test_support;
 pub mod tooltip;
 pub mod types;
-pub mod visual;
 pub mod widget;
 pub mod window;
 mod window_proc;

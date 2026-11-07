@@ -32,8 +32,8 @@ use tracing::{info, warn};
 use super::frame::Emo2Wiring;
 use super::target_map::shell_target;
 use crate::ghost_session::GhostSlot;
-use crate::placement::descript_window_keys::{fallback_candidates, first_existing};
-use crate::placement::spawn::GhostWindows;
+use areka_placement::descript_window_keys::{fallback_candidates, first_existing};
+use areka_placement::spawn::GhostWindows;
 
 /// 控えたシェルの状態（スコープ → 表示中の面・最後に表示したときの着せ替えの集合）。
 /// 非表示・未表示のスコープは面が載らない。一度も表示していないスコープは着せ替えも載らない。
@@ -107,7 +107,7 @@ pub(crate) struct CarriedBinds {
 }
 
 /// 控えた面 `carried` を読み直したシェルで出せるか決める（純粋）。在ればそのまま、無ければ戻り先の
-/// 候補の並び `candidates`（`placement::descript_window_keys::fallback_candidates`）の最初に在る面、
+/// 候補の並び `candidates`（`areka_placement::descript_window_keys::fallback_candidates`）の最初に在る面、
 /// どれも無ければ出さない（descript-window-keys 要件 3.1・3.3・3.4）。
 pub(crate) fn decide(
     carried: u32,

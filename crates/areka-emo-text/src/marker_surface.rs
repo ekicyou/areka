@@ -1,5 +1,7 @@
 //! # marker_surface — 印の面（スクロールの矢印）の装着・描画・当たりのマスク・読み戻し・片付け
 //!
+//! 断りの無い要件の番号と design.md の参照は spec `balloon-scroll-arrows` のもの（別の spec のものはその場で名を書く）。
+//!
 //! `actor.rs` の子（`#[path]`・balloon-scroll-arrows の MarkerSurface）。場所ごとに 1 枚、窓の直接の子
 //! として文字の面の**直前**（wintf の `Children` は先頭ほど手前＝文字より手前・バルーンの絵より手前）に挿す。
 //! 供給面は文字の面（[`TextSurface::attach_window_child`]）と同じ作りを共有し、矢印の絵を拡大率どおりの
@@ -8,7 +10,7 @@
 //! 当たりは出ている矢印の絵の α ≥ 0.5 の画素だけ（[`marker_hit_mask`]）。マスクは面と同じ物理寸で、
 //! 矢印が無くても面の大きさの空のマスクを入れる（空のままだと wintf は矩形全体の判定へ縮退する）。
 //!
-//! 押下の届き方（6.2・6.3 の受け口が読む事実）: wintf の当たり判定は窓の `Children` を**末尾から**
+//! 押下の届き方（押下の受け口が読む事実）: wintf の当たり判定は窓の `Children` を**末尾から**
 //! 走査する（`DepthFirstReversePostOrder`）。印の面は文字の面と絵より前に並ぶので、矢印の下の絵が
 //! α ≥ 0.5 ならその絵の entity が、透けていれば印の面の entity が押下の送り手になる。どちらでも
 //! 泡立ちの道は「送り手 → 窓」で、押下は窓（普通のバルーンは**バルーンの窓**、箱は**シェル（キャラクター）
@@ -36,17 +38,18 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 use wintf::ecs::{AlphaMaskResource, GraphicsCore};
 
+use super::present::{MAX_SURFACE_AREA, MAX_SURFACE_SIDE, over_surface_limit};
 use crate::TextLayerError;
 use crate::draw::create_d2d_target_bitmap;
-use crate::region::{ImagePx, ScaleContract};
+use crate::region::ScaleContract;
 use crate::scroll_marker::MarkerKind;
-use crate::surface::TextSurface;
+use crate::surface::{TextSurface, device_err};
 
 /// 面に描く 1 つの矢印: 種類・左上（面の左上を原点とする image px）・絵（原寸・乗算済み BGRA）。
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacedMarker {
     pub kind: MarkerKind,
-    pub at: (i32, i32),
+    pub at: (i64, i64),
     pub image: Arc<MarkerImage>,
 }
 
@@ -77,6 +80,29 @@ impl MarkerSurface {
         physical_size: (u32, u32),
         physical_offset: (f32, f32),
     ) -> Result<MarkerSurface, TextLayerError> {
+        let place = (window, child_index);
+        Self::attach_noting(
+            world,
+            place,
+            compositor,
+            core,
+            physical_size,
+            physical_offset,
+            &mut false,
+        )
+    }
+
+    /// [`Self::attach`] の内側。その寸で窓の子の面を作れなかった（入力で答えが決まる失敗）ときだけ
+    /// `surface_failed` を立てる。装置の文脈の作成の失敗（一時の失敗）では立てない。
+    pub(crate) fn attach_noting(
+        world: &mut World,
+        (window, child_index): (Entity, usize),
+        compositor: &Compositor,
+        core: &GraphicsCore,
+        physical_size: (u32, u32),
+        physical_offset: (f32, f32),
+        surface_failed: &mut bool,
+    ) -> Result<MarkerSurface, TextLayerError> {
         let Some(d2d) = core.d2d_device() else {
             tracing::error!("印の面: GraphicsCore::d2d_device が無い（矢印を描けない）");
             return Err(TextLayerError::Device {
@@ -95,7 +121,8 @@ impl MarkerSurface {
             core,
             physical_size,
             physical_offset,
-        )?;
+        )
+        .inspect_err(|_| *surface_failed = true)?;
         if let Some(entity) = surface.window_child() {
             world
                 .entity_mut(entity)
@@ -113,6 +140,8 @@ impl MarkerSurface {
 
     /// 全面を透明にして `shown` の矢印を `(at × k, 大きさ × k)` へ描き、提示し、当たりのマスクを
     /// 出ている矢印の α ≥ 0.5 の画素へ差し替える。失敗は `error!` を残して `Err`（面と当たりは前のまま）。
+    /// 文字の面と同じ上限（一辺・面積）を越える絵（入力で決まる失敗）は `error!` を残して描かず当たりにも入れず、
+    /// 描けたことにする（同じ `shown` では描き直さない＝記録は 1 回）。
     pub fn draw(
         &mut self,
         world: &mut World,
@@ -120,8 +149,19 @@ impl MarkerSurface {
         scale: &ScaleContract,
     ) -> Result<(), TextLayerError> {
         let k = scale.scale;
+        let fits: Vec<PlacedMarker> = shown.iter().filter(|m| image_fits(m)).cloned().collect();
+        for m in shown.iter().filter(|m| !image_fits(m)) {
+            tracing::error!(
+                kind = ?m.kind,
+                w = m.image.width,
+                h = m.image.height,
+                max_side = MAX_SURFACE_SIDE,
+                max_area = MAX_SURFACE_AREA,
+                "{ARROW_LIMIT_MESSAGE}"
+            );
+        }
         // 可謬な準備（絵の GPU への転送）は BeginDraw の前に済ませる。
-        let bitmaps = shown
+        let bitmaps = fits
             .iter()
             .map(|m| marker_bitmap(&self.dc, &m.image).map(|b| (m, b)))
             .collect::<Result<Vec<_>, _>>()?;
@@ -130,13 +170,7 @@ impl MarkerSurface {
         unsafe { self.dc.BeginDraw() };
         self.dc.clear(None);
         for (m, bitmap) in &bitmaps {
-            let px = |v: i32| scale.to_physical(ImagePx(v as f32)).0;
-            let dest = D2D_RECT_F {
-                left: px(m.at.0),
-                top: px(m.at.1),
-                right: px(m.at.0 + m.image.width as i32),
-                bottom: px(m.at.1 + m.image.height as i32),
-            };
+            let dest = marker_draw_rect(m, scale);
             self.dc.draw_bitmap(
                 bitmap,
                 Some(&dest),
@@ -152,7 +186,7 @@ impl MarkerSurface {
         self.surface.flip();
         self.surface.present()?;
 
-        let mask = marker_hit_mask(self.surface.size(), k, shown);
+        let mask = marker_hit_mask(self.surface.size(), k, &fits);
         let entity = self.surface.window_child();
         match entity.and_then(|e| world.get_mut::<AlphaMaskResource>(e)) {
             Some(mut res) => res.set(mask.clone()),
@@ -185,13 +219,14 @@ impl MarkerSurface {
             return None;
         }
         let k = self.scale;
-        // 当たった画素を描いた矢印（マスクと同じ矩形の取り方）。重なりは先の矢印を採る。
+        // 当たった画素を描いた矢印（マスクと同じ矩形の取り方・描かなかった絵は除く）。重なりは先の矢印を採る。
         self.drawn
             .iter()
+            .filter(|m| image_fits(m))
             .find(|m| {
-                let inside = |p: u32, at: i32, len: u32| {
-                    (at as f32 * k).floor() <= p as f32
-                        && (p as f32) < ((at as i64 + len as i64) as f32 * k).ceil()
+                let inside = |p: u32, at: i64, len: u32| {
+                    let (lo, hi) = marker_span(at, len, k);
+                    lo.floor() <= p as f32 && (p as f32) < hi.ceil()
                 };
                 inside(px, m.at.0, m.image.width) && inside(py, m.at.1, m.image.height)
             })
@@ -203,24 +238,38 @@ impl MarkerSurface {
         &self.surface
     }
 
-    /// 最後に描いた面の読み戻し（乗算済み BGRA・物理寸・`stride = width × 4`）。
-    pub fn read_back(&self) -> Result<Vec<u8>, TextLayerError> {
-        self.surface.read_back()
-    }
-
-    /// 面の物理寸。
-    pub fn size(&self) -> (u32, u32) {
-        self.surface.size()
-    }
-
-    /// 窓の子の entity。
-    pub fn window_child(&self) -> Option<Entity> {
-        self.surface.window_child()
-    }
-
     /// 片付け: 窓の子の entity を消す（窓の `Children` からも外れる）。
     pub fn despawn(self, world: &mut World) {
         self.surface.despawn_window_child(world);
+    }
+}
+
+/// 上限を越える矢印の絵を描かなかったときの記録の文。
+pub(crate) const ARROW_LIMIT_MESSAGE: &str =
+    "矢印の絵の寸が上限を越える——描かず、出す矢印が変わるまで描き直さない";
+
+/// 矢印の絵の寸が文字の面と同じ上限（一辺・面積）に収まるか（越える絵は描かない）。
+fn image_fits(m: &PlacedMarker) -> bool {
+    !over_surface_limit((m.image.width, m.image.height))
+}
+
+/// 矢印 1 つの 1 軸の物理 px の範囲（始まり, 終わり）＝`(at × k, (at + 寸) × k)`。描く矩形はそのまま、
+/// 当たりとマスクは始まりを床・終わりを天井で画素へ取る（3 つが同じ式を通る）。`at` は `i32` の範囲
+/// か広がり（`u32`）からの値なので、`i64` の足し算はあふれない。
+fn marker_span(at: i64, len: u32, k: f32) -> (f32, f32) {
+    (at as f32 * k, (at + i64::from(len)) as f32 * k)
+}
+
+/// 矢印を描く矩形（物理 px）。
+fn marker_draw_rect(m: &PlacedMarker, scale: &ScaleContract) -> D2D_RECT_F {
+    let k = scale.scale;
+    let (left, right) = marker_span(m.at.0, m.image.width, k);
+    let (top, bottom) = marker_span(m.at.1, m.image.height, k);
+    D2D_RECT_F {
+        left,
+        top,
+        right,
+        bottom,
     }
 }
 
@@ -231,20 +280,17 @@ pub(crate) fn marker_hit_mask(size: (u32, u32), k: f32, shown: &[PlacedMarker]) 
     let mut px = vec![0u8; w as usize * h as usize * 4];
     for m in shown {
         let (iw, ih) = (m.image.width as i64, m.image.height as i64);
-        let span = |at: i32, len: i64, limit: u32| {
-            let lo = (at as f32 * k).floor().clamp(0.0, limit as f32) as u32;
-            let hi = ((at as i64 + len) as f32 * k)
-                .ceil()
-                .clamp(0.0, limit as f32) as u32;
-            lo..hi
+        let span = |at: i64, len: u32, limit: u32| {
+            let (lo, hi) = marker_span(at, len, k);
+            lo.floor().clamp(0.0, limit as f32) as u32..hi.ceil().clamp(0.0, limit as f32) as u32
         };
-        for y in span(m.at.1, ih, h) {
-            let iy = ((y as f32 + 0.5) / k).floor() as i64 - m.at.1 as i64;
+        for y in span(m.at.1, m.image.height, h) {
+            let iy = ((y as f32 + 0.5) / k).floor() as i64 - m.at.1;
             if !(0..ih).contains(&iy) {
                 continue;
             }
-            for x in span(m.at.0, iw, w) {
-                let ix = ((x as f32 + 0.5) / k).floor() as i64 - m.at.0 as i64;
+            for x in span(m.at.0, m.image.width, w) {
+                let ix = ((x as f32 + 0.5) / k).floor() as i64 - m.at.0;
                 if !(0..iw).contains(&ix) {
                     continue;
                 }
@@ -303,15 +349,6 @@ pub(crate) fn marker_bitmap(
         )
     }
     .map_err(device_err("CreateBitmap(marker)"))
-}
-
-/// `windows_core::Error` を [`TextLayerError::Device`] へ写す（log-first・surface.rs と同型）。
-fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
-    move |e| {
-        let hresult = e.code().0;
-        tracing::error!(hresult, context, "印の面の D2D 呼び出しが失敗");
-        TextLayerError::Device { hresult, context }
-    }
 }
 
 #[cfg(test)]

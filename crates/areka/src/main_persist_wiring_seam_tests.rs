@@ -1,10 +1,10 @@
 use super::*;
+use areka_placement::persist::{PersistWiring, char_pos_entries, persist_entries};
+use areka_placement::resolver::PointPx;
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
 use areka_sylphya::{
     Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
 };
-use placement::persist::{PersistWiring, char_pos_entries, persist_entries};
-use placement::resolver::PointPx;
 use std::path::Path;
 use std::sync::Arc;
 

@@ -18,14 +18,14 @@ use areka_emo_compose::ScaleRatio;
 
 use super::geometry::{BaseFrame, FrameNote, compute_move_target};
 use super::{AxisSpec, BaseposResolver, CanonDefaultBasepos, MoveBase, MoveDirective};
-use crate::placement::chain_finalize::ScriptPlaced;
-use crate::placement::follow::{
+use areka_placement::chain_finalize::ScriptPlaced;
+use areka_placement::follow::{
     Anchored, MonitorSnapshot, follow_sticky_move, log_sticky_ignored, move_window_to,
     project_anchor, rebase_shift_axes, work_area_for_window,
 };
-use crate::placement::primary_monitor;
-use crate::placement::resolver::{PointPx, RectPx, SizePx};
-use crate::placement::spawn::GhostWindows;
+use areka_placement::primary_monitor;
+use areka_placement::resolver::{PointPx, RectPx, SizePx};
+use areka_placement::spawn::GhostWindows;
 
 /// 窓の今の矩形（位置と正の大きさが揃うときだけ）。
 fn window_rect(world: &World, scope: u32) -> Option<RectPx> {

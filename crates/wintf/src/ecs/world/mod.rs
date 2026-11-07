@@ -325,12 +325,18 @@ impl EcsWorld {
             schedules.add_systems(
                 PreRenderSurface,
                 (
-                    // 後から窓へつないだ部品に見た目の部品を入れる（4 番）。同じ回に作られるよう先頭。
-                    crate::ecs::graphics::insert_graphics_parts_on_window_join.before(
+                    // 窓の下の Visual に持ち主か節かの規則どおり描画面の部品を入れる・外す。同じ回に作られるよう先頭。
+                    crate::ecs::graphics::sync_surface_owner_parts.before(
                         crate::ecs::graphics::visual_manager::visual_resource_management_system,
                     ),
                     crate::ecs::graphics::visual_manager::visual_resource_management_system
                         .run_if(crate::ecs::graphics::wuc_ready),
+                    // 根ごとに節の木を埋めて組み、根の部品を入れる・外す（描画面の作成が同じ回に拾う）。
+                    crate::ecs::graphics::update_draw_trees
+                        .after(
+                            crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                        )
+                        .before(crate::ecs::graphics::deferred_surface_creation_system),
                     crate::ecs::graphics::deferred_surface_creation_system
                         .run_if(crate::ecs::graphics::wuc_ready)
                         .after(

@@ -6,8 +6,8 @@ use super::{
     on_char_pointer_released,
 };
 use crate::emo2_boot::hit_region::HitRegion;
-use crate::placement::spawn::CharWindowMarker;
 use areka_kanade::{ClickButton, KanadeMsg, MouseButton, MouseEventKind, MouseInput};
+use areka_placement::spawn::CharWindowMarker;
 use bevy_ecs::prelude::*;
 use std::sync::mpsc;
 use windows::Win32::Foundation::HWND;
