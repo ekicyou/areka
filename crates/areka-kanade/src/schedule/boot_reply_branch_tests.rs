@@ -1,4 +1,4 @@
-use super::test_support::{assert_get, assert_notify, config, initial};
+use super::test_support::{assert_get, assert_notify, config};
 use super::*;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
@@ -13,7 +13,7 @@ use resources::ResourceOutcome;
 
 /// Idle→Boot→(OnInitialize Notified) まで駆動し `BootPrefetch`（username GET 発行済み）へ到達させる。
 fn drive_to_prefetch(cfg: &KanadeConfig) -> State {
-    let (s, _) = step(initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
+    let (s, _) = step(State::initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
     let (s, actions) = step(
         s,
         Input::ShioriReply {
@@ -55,7 +55,7 @@ fn resource_outcome_of(actions: &[Action]) -> &ResourceOutcome {
 fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
     let cfg = config();
     // Idle+Boot → OnInitialize NOTIFY（username GET はまだ出ない）。
-    let (s, actions) = step(initial(), Input::Boot, &cfg);
+    let (s, actions) = step(State::initial(), Input::Boot, &cfg);
     assert_notify(
         &actions[0],
         &events::on_initialize(&ExecutionSnapshot::INACTIVE),
@@ -418,18 +418,6 @@ fn boot_greeting_talk_carries_epilogue() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (_, actions) = step(
@@ -501,18 +489,6 @@ fn normal_204_with_empty_epilogue_emits_no_talk() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
@@ -553,18 +529,6 @@ fn boot_active_talk_records_started_script() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s, actions) = step(
@@ -587,18 +551,6 @@ fn boot_active_talk_records_started_script() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);

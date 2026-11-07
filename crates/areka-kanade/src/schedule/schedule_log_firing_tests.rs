@@ -13,18 +13,6 @@ fn state_in(phase: Phase) -> State {
         phase,
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     }
 }
@@ -116,18 +104,6 @@ fn error_close_deadline_exceeded_logs() {
         },
         last_now: Some(MonotonicMs(900)),
         next_talk_id: 8,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let ev = capture(|| {

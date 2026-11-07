@@ -5,9 +5,25 @@ pub(super) fn config() -> KanadeConfig {
     KanadeConfig::new("master", "1.0.0")
 }
 
-/// boot 進行は `State::initial()` を起点に `step()` 経由で駆動する（統合貫通テスト）。
-pub(super) fn initial() -> State {
-    State::initial()
+/// 起動記録の有無（`first_boot`）と起動の由来（`boot_origin`）を差し替えた config。
+pub(super) fn cfg(first_boot: bool, boot_origin: crate::change::BootOrigin) -> KanadeConfig {
+    let mut c = config();
+    c.first_boot = first_boot;
+    c.boot_origin = boot_origin;
+    c
+}
+
+/// Action 列に含まれる GET の ID を順に並べる。
+pub(super) fn get_ids<'a>(actions: impl IntoIterator<Item = &'a Action>) -> Vec<String> {
+    actions
+        .into_iter()
+        .filter_map(|a| match a {
+            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) => {
+                Some(id.as_str().to_string())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// Action が期待の GET（id・references が events:: と一致）であることを検証する。
@@ -68,7 +84,7 @@ pub(super) fn boot_until_version_with_greeting(
         .0
     };
 
-    let (mut s, _) = step(initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
+    let (mut s, _) = step(State::initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
     if let Some(reason) = pending {
         s = step(s, Input::CloseRequest { reason }, cfg).0; // BootInit のまま close を保留記録
     }

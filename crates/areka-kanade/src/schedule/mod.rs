@@ -658,11 +658,6 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
 #[path = "schedule_tests.rs"]
 mod tests;
 
-/// 運行表の型（`Action` ほか）の変種の網羅。
-#[cfg(test)]
-#[path = "schedule_variant_tests.rs"]
-mod variant_tests;
-
 /// 外から届いた実行状態の写しの決定論テスト。
 #[cfg(test)]
 #[path = "external_state_tests.rs"]

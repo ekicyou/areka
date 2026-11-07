@@ -1,4 +1,4 @@
-use super::test_support::{assert_get, assert_notify, config, initial};
+use super::test_support::{assert_get, assert_notify, config};
 use super::*;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
@@ -12,7 +12,7 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     let cfg = config();
 
     // 1. Idle + Boot → OnInitialize NOTIFY / BootInit（Req 1.1）。
-    let (s, actions) = step(initial(), Input::Boot, &cfg);
+    let (s, actions) = step(State::initial(), Input::Boot, &cfg);
     assert!(matches!(s.phase, Phase::BootInit));
     assert_eq!(actions.len(), 1);
     assert_notify(
@@ -157,7 +157,7 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
     let cfg = config();
     // BootType へ進める（Boot→Notified→prefetch 204）。prefetch 段が OnInitialize と OnFirstBoot の
     // 間に挟まるため、username 照会応答（204）を 1 段挟んでから BootType へ到達する。
-    let (s, _) = step(initial(), Input::Boot, &cfg);
+    let (s, _) = step(State::initial(), Input::Boot, &cfg);
     let (s, _) = step(
         s,
         Input::ShioriReply {
@@ -235,18 +235,6 @@ fn boot_main_no_content_emits_no_talk() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s, actions) = step(
@@ -285,18 +273,6 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s1, actions1) = step(
@@ -319,18 +295,6 @@ fn boot_talk_ids_are_unique_and_monotonic() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: s1.next_talk_id,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s2, actions2) = step(
@@ -358,26 +322,22 @@ fn close_request_during_boot_records_pending_only() {
     // 各 boot Phase で保留記録のみ・Phase 不変・Action なしを確認。
     for phase in [
         Phase::BootInit,
+        Phase::BootPrefetch,
         Phase::BootType,
         Phase::BootMain,
         Phase::BootVersion { talk: None },
+        Phase::BootVersion {
+            talk: Some(ActiveTalk {
+                talk_id: TalkId(1),
+                origin: "boot",
+                script: String::new(),
+            }),
+        },
     ] {
         let s = State {
             phase,
             last_now: None,
             next_talk_id: 1,
-            pending_close: None,
-            choice: None,
-            prev_talk: None,
-            anchor: None,
-            user_break_talk: None,
-            shown: None,
-            change: None,
-            pending_change: None,
-            talk_gap: None,
-            external: Default::default(),
-            translate: None,
-            reply_source: None,
             ..State::initial()
         };
         let phase_before = std::mem::discriminant(&s.phase);
@@ -407,7 +367,7 @@ fn close_request_during_boot_records_pending_only() {
 fn pending_close_survives_boot_completion() {
     let cfg = config();
     // Boot 開始→BootInit で close 保留→そのまま boot 完走。
-    let (s, _) = step(initial(), Input::Boot, &cfg);
+    let (s, _) = step(State::initial(), Input::Boot, &cfg);
     let (s, _) = step(
         s,
         Input::CloseRequest {
@@ -492,18 +452,6 @@ fn baseware_version_status_reflects_greeting_tracking() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (_, actions) = step(
@@ -525,18 +473,6 @@ fn baseware_version_status_reflects_greeting_tracking() {
         phase: Phase::BootMain,
         last_now: None,
         next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (_, actions) = step(
@@ -582,7 +518,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
     let cfg = config();
 
     // boot を Idle→…→`Steady{talk: Some(挨拶, id=1)}` まで駆動する（挨拶 Value 経路・DD-IT-12）。
-    let (s, _) = step(initial(), Input::Boot, &cfg); // Idle→BootInit（OnInitialize NOTIFY）
+    let (s, _) = step(State::initial(), Input::Boot, &cfg); // Idle→BootInit（OnInitialize NOTIFY）
     let (s, _) = step(
         s,
         Input::ShioriReply {

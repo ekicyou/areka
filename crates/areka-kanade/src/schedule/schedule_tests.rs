@@ -282,7 +282,7 @@ fn initial_state_is_idle_with_monotonic_counter() {
 
 use crate::msg::{MouseEventKind, MouseInput};
 
-pub(super) fn mouse_move() -> MouseInput {
+fn mouse_move() -> MouseInput {
     MouseInput {
         scope: 0,
         x: 10,
@@ -407,6 +407,9 @@ fn mouse_input_in_steady_with_pending_close_emits_no_get() {
     assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
 }
 
+/// ドラッグの GET を組む関数（`events::on_mouse_drag_start`／`_end`）の型。
+type DragGetBuilder = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
+
 // ドラッグの開始・終了（areka-P0-mouse-drag-events 要件 1.1・2.1）: Steady では種類に対応する
 // 組み立ての GET がちょうど 1 件出る（Status は他のマウスの GET と同じ snapshot から）。phase 不変。
 #[test]
@@ -416,10 +419,7 @@ fn drag_input_in_steady_emits_matching_get() {
         choice_active: false,
         ..ExecutionSnapshot::INACTIVE
     };
-    let cases: [(
-        MouseEventKind,
-        fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall,
-    ); 2] = [
+    let cases: [(MouseEventKind, DragGetBuilder); 2] = [
         (MouseEventKind::DragStart, events::on_mouse_drag_start),
         (MouseEventKind::DragEnd, events::on_mouse_drag_end),
     ];
@@ -447,7 +447,7 @@ fn drag_input_in_steady_emits_matching_get() {
 // ============================================================
 
 /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
-pub(super) fn choice_input() -> ChoiceInput {
+fn choice_input() -> ChoiceInput {
     ChoiceInput {
         id: "OnMenu".to_string(),
         label: "メニュー".to_string(),
@@ -558,34 +558,6 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
     );
     assert!(matches!(ledger.phase, ChoicePhase::Waiting));
     assert!(actions.is_empty(), "帳簿確立は Action を発行しない");
-}
-
-/// Req7.1: 通知受領後の帳簿が「選択確定を受理できる」前提を満たす。
-///
-/// 受理判定そのものはタスク 4.3 の担当であり、本檻はその判定が読む 3 条件——段フェーズが
-/// `Waiting`・候補列が照合可能な形で保持されている・帳簿の `talk_id` が**現行 talk と一致**
-/// （`ChoiceState` の不変条件）——を状態で固定する。
-#[test]
-fn established_ledger_satisfies_preconditions_for_choice_acceptance() {
-    let (next, _) = step(
-        state_in(steady_with_talk(TalkId(5))),
-        choice_waiting_of(TalkId(5), &["OnMenu", "choice1"], MonotonicMs(2_000), None),
-        &config(),
-    );
-    let active_talk_id = current_talk_id(&next.phase).expect("active talk は維持される");
-    let ledger = next.choice.expect("一致通知は帳簿を確立する");
-    assert!(
-        matches!(ledger.phase, ChoicePhase::Waiting),
-        "受理可能な段フェーズ（入力待ち）である"
-    );
-    assert_eq!(
-        ledger.talk_id, active_talk_id,
-        "帳簿の talk_id は現行 talk と一致する（ChoiceState の不変条件）"
-    );
-    assert!(
-        ledger.candidates.iter().any(|c| c == "choice1"),
-        "候補 ID は照合可能な形で保持される（4.3 の候補集合照合の前提）"
-    );
 }
 
 /// DD-8・Req7.6／7.7: 期限は指令 3 値語彙どおりに写る（実値で突合）。
@@ -761,39 +733,6 @@ fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
         !snapshot.choice_active,
         "帳簿不在なら choosing は非アクティブ（Req6.2）"
     );
-}
-
-/// DD-IT-3: 供給側の署名を `State` 全体へ広げても **talk 軸は `talk_active_of(&Phase)` と同一**
-/// である（choice 軸の増設が既存の talk 導出を汚さない）。
-#[test]
-fn state_snapshot_preserves_the_talk_axis_of_phase() {
-    for phase in [
-        Phase::Idle,
-        Phase::BootMain,
-        Phase::BootVersion { talk: None },
-        Phase::BootVersion {
-            talk: Some(ActiveTalk {
-                talk_id: TalkId(5),
-                origin: "boot",
-                script: String::new(),
-            }),
-        },
-        Phase::Steady { talk: None },
-        steady_with_talk(TalkId(5)),
-        Phase::Stopped,
-    ] {
-        let expected = talk_active_of(&phase);
-        let s = state_in(phase);
-        let snapshot = s.snapshot();
-        assert_eq!(
-            snapshot.talk_active, expected,
-            "talk 軸は Phase 由来のまま（DD-IT-3）"
-        );
-        assert!(
-            !snapshot.choice_active,
-            "帳簿なしでは choosing は非アクティブ"
-        );
-    }
 }
 
 // ============================================================

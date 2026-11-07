@@ -207,18 +207,6 @@ mod tests {
             phase: Phase::ClosePending { reason },
             last_now,
             next_talk_id: next_id,
-            pending_close: None,
-            choice: None,
-            prev_talk: None,
-            anchor: None,
-            user_break_talk: None,
-            shown: None,
-            change: None,
-            pending_change: None,
-            talk_gap: None,
-            external: Default::default(),
-            translate: None,
-            reply_source: None,
             ..State::initial()
         }
     }
@@ -234,18 +222,6 @@ mod tests {
             phase: Phase::CloseTalkWait { talk_id, deadline },
             last_now,
             next_talk_id: next_id,
-            pending_close: None,
-            choice: None,
-            prev_talk: None,
-            anchor: None,
-            user_break_talk: None,
-            shown: None,
-            change: None,
-            pending_change: None,
-            talk_gap: None,
-            external: Default::default(),
-            translate: None,
-            reply_source: None,
             ..State::initial()
         }
     }
