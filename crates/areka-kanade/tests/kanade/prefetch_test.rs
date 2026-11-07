@@ -155,10 +155,7 @@ fn prefetch_timeout_delivers_failed_to_sink_and_boot_continues_not_fault() {
     // username GET の最初の呼出へタイムアウトを注入（他呼出は良性表・quit シナリオで終了駆動）。
     let shiori = spawn_mock_shiori_failing(
         Fixture::quitting(),
-        FailOn {
-            id: "username",
-            kind: FailKind::Timeout,
-        },
+        FailOn::new("username", FailKind::Timeout),
     );
     let (recorded, outcomes) = drive_prefetch(shiori, vec![false, true]);
 

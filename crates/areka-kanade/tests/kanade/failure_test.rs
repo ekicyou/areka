@@ -86,6 +86,9 @@ fn single_fault_notification(rx: &mpsc::Receiver<KanadeNotice>) -> ShioriFault {
     }
 }
 
+/// このファイルだけが注入する失敗の文言（記録の捕まえ口はバイナリで 1 つなので、他のテストの記録と混ざらない）。
+const INJECTED: &str = "failure_test だけが注入する失敗";
+
 /// 記録 `event`（`kanade` の error）のうち、欄 `field` が `text` と同じ文言のものが残っているか。
 ///
 /// 停止通知の理由が、対応する `error!` と同じ文言であることを確かめるのに使う。
@@ -144,20 +147,14 @@ fn each_failure_vocabulary_drives_observable_termination() {
         (FailKind::Ipc, ShioriFaultKind::Disconnected),
         (FailKind::Internal, ShioriFaultKind::Internal),
     ] {
-        // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure のバリアントに 1:1 対応する
-        // （`Shiori` の腕はケース 5 が受け持つ）。mock が注入するのと同じ文言で組み、停止通知の
-        // 理由の期待値にする（注入の文言が変われば理由が合わず赤になる）。
+        // mock と同じ `FailKind::make` と、このファイルだけの文言で組み、停止通知の理由の期待値にする
+        // （`Shiori` はケース 5 が受け持つ）。記録 `shiori_failed` も同じ文言で絞るので、起動の道が
+        // `shiori_failed` を出さなくなれば、他のテストの順に依らず赤になる。
         // `FailKind::Internal`（DD-IT-11・kanade 内部規律違反＝ホワイトリスト違反で choke が返す語彙）
         // も本ループで掃引し、`Failed(Internal)` が外部4語彙と同じく既存 fault 終端（Unloading{Fault}
         // →Unload→Stopped）へ合流することを統合層で確認する（設計 Testing Strategy #7・DD-IT-11:
         // choke の ID 検証自体は actor.rs in-source 檻が担い、本檻は Internal→fault の routing を担う）。
-        let witness: ShioriFailure = match kind {
-            FailKind::Handshake => ShioriFailure::Handshake("injected handshake failure".into()),
-            FailKind::Timeout => ShioriFailure::Timeout("injected timeout".into()),
-            FailKind::Ipc => ShioriFailure::Ipc("injected ipc failure".into()),
-            FailKind::Shiori => unreachable!("エラー応答はケース 5 で見る"),
-            FailKind::Internal => ShioriFailure::Internal("injected internal violation".into()),
-        };
+        let witness = kind.make(INJECTED);
 
         // boot 最初の呼出（OnInitialize NOTIFY）を当該語彙で失敗させる（停止通知の投函端つき）。
         let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
@@ -165,7 +162,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
             KanadeConfig::new("master", "1.0.0"),
             Fixture::default(),
             QuitPolicy::PerTalk(vec![false]),
-            FailOn::on_initialize(kind),
+            FailOn::on_initialize(kind).with_text(INJECTED),
             Some(stop_tx),
         );
 
@@ -435,8 +432,7 @@ fn all_command_senders_dropped_terminates_normally_without_hang() {
 /// 記録 `shiori_error_response`（`kanade` の warn）のうち、`id` の往復で注入したエラー応答のものを数える。
 ///
 /// 記録は kanade のアクタースレッドで出るので、全スレッド捕捉の蓄積先から拾う。同じテスト
-/// バイナリの他のテストの記録も混ざるので、注入の文言（`FailKind::Shiori` が作る
-/// `"injected shiori error"`）と `id` で絞る（このケース以外にエラー応答を注入するテストは無い）。
+/// バイナリの他のテストの記録も混ざるので、このファイルだけが注入する文言（[`INJECTED`]）と `id` で絞る。
 fn count_error_response_records(
     buffer: &std::sync::Mutex<Vec<log_capture_kit::CapturedEvent>>,
     id: &str,
@@ -450,9 +446,7 @@ fn count_error_response_records(
                 && ev.target == "kanade"
                 && ev.field_str("event") == Some("shiori_error_response")
                 && ev.field("id") == Some(id)
-                && ev
-                    .field("error")
-                    .is_some_and(|e| e.contains("injected shiori error"))
+                && ev.field("error").is_some_and(|e| e.contains(INJECTED))
         })
         .count()
 }
@@ -508,7 +502,7 @@ fn error_response_at_boot_notify_continues_as_notified() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn::on_initialize(FailKind::Shiori),
+        FailOn::on_initialize(FailKind::Shiori).with_text(INJECTED),
     );
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
@@ -560,10 +554,7 @@ fn error_response_at_conversation_get_continues_as_no_content() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn {
-            id: "OnSecondChange",
-            kind: FailKind::Shiori,
-        },
+        FailOn::new("OnSecondChange", FailKind::Shiori).with_text(INJECTED),
     );
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
@@ -622,10 +613,7 @@ fn error_response_at_close_get_closes_silently() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn {
-            id: "OnClose",
-            kind: FailKind::Shiori,
-        },
+        FailOn::new("OnClose", FailKind::Shiori).with_text(INJECTED),
     );
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");

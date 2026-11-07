@@ -71,7 +71,7 @@ fn spawn_mock_shiori_loop(
                     // 対象イベントの最初の呼出のみ失敗させる（以降は良性表へ戻す）。
                     if let Some(f) = fail_on.filter(|f| call_id(&call) == f.id) {
                         fail_on = None;
-                        let _ = reply.send(ShioriOutcome::Failed(f.kind.make()));
+                        let _ = reply.send(ShioriOutcome::Failed(f.kind.make(f.text)));
                         continue;
                     }
                     // 応答は握る前に決める（respond の出現カウンタは呼出順に前進させる＝1 呼出＝1 応答）。
@@ -133,21 +133,33 @@ pub enum FailKind {
 }
 
 impl FailKind {
-    /// この種別に対応する fresh な [`ShioriFailure`] を構築する（`Clone` 不要ゆえ都度生成）。
-    fn make(self) -> ShioriFailure {
+    /// この種別に対応する fresh な [`ShioriFailure`] を、文言 `text` で構築する（`Clone` 不要ゆえ都度生成）。
+    pub fn make(self, text: &str) -> ShioriFailure {
+        let text = text.to_owned();
         match self {
-            FailKind::Handshake => ShioriFailure::Handshake("injected handshake failure".into()),
-            FailKind::Timeout => ShioriFailure::Timeout("injected timeout".into()),
-            FailKind::Ipc => ShioriFailure::Ipc("injected ipc failure".into()),
-            FailKind::Shiori => ShioriFailure::Shiori("injected shiori error".into()),
-            FailKind::Internal => ShioriFailure::Internal("injected internal violation".into()),
+            FailKind::Handshake => ShioriFailure::Handshake(text),
+            FailKind::Timeout => ShioriFailure::Timeout(text),
+            FailKind::Ipc => ShioriFailure::Ipc(text),
+            FailKind::Shiori => ShioriFailure::Shiori(text),
+            FailKind::Internal => ShioriFailure::Internal(text),
+        }
+    }
+
+    /// 種別ごとの既定の注入の文言（[`FailOn::with_text`] で差し替えない檻が使う）。
+    fn default_text(self) -> &'static str {
+        match self {
+            FailKind::Handshake => "injected handshake failure",
+            FailKind::Timeout => "injected timeout",
+            FailKind::Ipc => "injected ipc failure",
+            FailKind::Shiori => "injected shiori error",
+            FailKind::Internal => "injected internal violation",
         }
     }
 }
 
-/// 失敗注入 mock shiori の記述子（どのイベント id の呼出をどの語彙で落とすか）。
+/// 失敗注入 mock shiori の記述子（どのイベント id の呼出をどの語彙・どの文言で落とすか）。
 ///
-/// `fail_on_id` に一致する **最初の** GET／NOTIFY 呼出で [`ShioriOutcome::Failed`] を返し、
+/// `id` に一致する **最初の** GET／NOTIFY 呼出で [`ShioriOutcome::Failed`] を返し、
 /// それ以外の呼出は良性応答（[`FixtureState::respond`] と同一の既定表）を返す。全て Copy／
 /// `&'static str` で構成され `ShioriFailure`（非 Clone）を保持しないため、`Fixture` 同様に
 /// 気軽に複製できる。
@@ -157,19 +169,32 @@ pub struct FailOn {
     pub id: &'static str,
     /// 返す失敗の区別語彙。
     pub kind: FailKind,
+    /// 注入する失敗の文言（記録の捕まえ口はバイナリで 1 つなので、記録で絞る檻は自分だけの文言を持たせる）。
+    pub text: &'static str,
 }
 
 impl FailOn {
+    /// `id` の最初の呼出を `kind` の既定の文言で落とす記述子を返す。
+    pub fn new(id: &'static str, kind: FailKind) -> Self {
+        FailOn {
+            id,
+            kind,
+            text: kind.default_text(),
+        }
+    }
+
     /// `OnInitialize`（boot 最初の NOTIFY）を指定語彙で落とす記述子を返す。
     ///
     /// boot 系列の最初の呼出（`OnInitialize` NOTIFY・Req 1.1）を対象にすることで、Boot 駆動が
     /// 確実にこの呼出へ到達し、失敗が boot 応答待ち（`awaits_reply`）で受領され Unloading{Fault}
     /// へ倒れる経路を確実に踏む（設計「Error Categories」ShioriFailure 行）。
     pub fn on_initialize(kind: FailKind) -> Self {
-        FailOn {
-            id: "OnInitialize",
-            kind,
-        }
+        Self::new("OnInitialize", kind)
+    }
+
+    /// 注入の文言を `text` に差し替える。
+    pub fn with_text(self, text: &'static str) -> Self {
+        FailOn { text, ..self }
     }
 }
 

@@ -261,10 +261,7 @@ fn failing_caption_is_returned_as_failed_and_the_rest_still_answer() {
         config(),
         menu_fixture(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn {
-            id: README_CAPTION,
-            kind: FailKind::Ipc,
-        },
+        FailOn::new(README_CAPTION, FailKind::Ipc),
     );
 
     let (answers, recorded) = run_query(harness, MENU_IDS.to_vec(), QueryAt::Steady);

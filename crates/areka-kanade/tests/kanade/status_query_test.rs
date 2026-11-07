@@ -312,7 +312,8 @@ fn k4_query_after_close_ends_with_reply_dropped() {
     send(&harness, KanadeMsg::Boot);
     send(&harness, KanadeMsg::Close);
     let (reply, receiver) = reply_channel::<ExecutionStatus>();
-    send(&harness, KanadeMsg::StatusQuery { reply });
+    // 送れなくても（kanade が先に受信箱を捨てても）返信端は捨てられ、受け手には `Dropped` が届く。
+    let _ = harness.sender.send(KanadeMsg::StatusQuery { reply });
 
     assert!(
         matches!(

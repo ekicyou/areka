@@ -37,10 +37,7 @@ fn choice_stage_failure_continues_as_204_without_fault_termination() {
         fixture,
         QuitPolicy::PerTalk(vec![false, true]),
         vec![0],
-        FailOn {
-            id: "OnChoiceSelectEx",
-            kind: FailKind::Ipc,
-        },
+        FailOn::new("OnChoiceSelectEx", FailKind::Ipc),
     );
 
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
@@ -136,10 +133,7 @@ fn non_choice_failure_during_choice_wait_still_faults() {
         fixture,
         QuitPolicy::PerTalk(vec![false]),
         vec![0],
-        FailOn {
-            id: "OnMouseDoubleClick",
-            kind: FailKind::Ipc,
-        },
+        FailOn::new("OnMouseDoubleClick", FailKind::Ipc),
     );
 
     establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
