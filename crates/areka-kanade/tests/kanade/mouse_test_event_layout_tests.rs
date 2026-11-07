@@ -1,12 +1,12 @@
 use super::test_support::{mouse_gets, mouse_input};
 use super::{
     CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy, Response, events,
+    KanadeConfig, KanadeMsg, MouseButton, MouseEventKind, MouseInput, QuitPolicy, events,
     expected_call, expected_unload, spawn_harness,
 };
 
 /// Boot（挨拶なし＝`Steady{None}` 直行）→ 各 Mouse を FIFO 注入 → CloseRequest → 終了完走まで駆動し
-/// 記録を確定する（cage 1〜4 の共通ドライバ）。
+/// 記録を確定する（cage 1〜3 の共通ドライバ）。
 ///
 /// `fixture` は `Fixture::quitting().without_boot_greeting()` 由来（挨拶なし・quit close）である前提。
 /// 挨拶なし boot は StartTalk を生まないため、Boot は同期完走後 `Steady{None}` にあり、続く各 Mouse は
@@ -41,15 +41,18 @@ fn drive_mouse_steady_none(
 }
 
 // ============================================================================
-// Cage 1: (a) OnMouseMove layout（Ref0..6 正典・Status 行なし）
+// Cage 1: (a) OnMouseMove layout（Ref0..6 正典・Status 行なし）＋ (d) 204 → StartTalk 不発
 // ============================================================================
 
 /// `Steady{None}` の Move 注入が正典 Reference layout の `OnMouseMove` GET を発行し、記録が
 /// events 表導出の期待値と Ref0..6・Status まで完全一致する（Req8.1(a)・2.1〜2.5）。
 ///
+/// 設計 #4（Req8.1(d)・2.3）も本 cage が見る: マウス GET は 204（未注入の既定＝明示の NoContent と同値）
+/// ゆえ StartTalk を生まず、`Steady{None}` は維持され、以降の close 握手が正常完走する（末尾 Unload）。
+///
 /// # 非空虚性
-/// マウス GET は 204（未注入既定）ゆえ StartTalk を生まない。到達 StartTalk は close talk のみ（1 本）で
-/// あり、記録には events 導出の OnMouseMove GET がちょうど 1 件現れる。Ref2/Ref5/Ref6/Status を明示確認
+/// 到達 StartTalk は close talk のみ（1 本）であり、記録には events 導出の OnMouseMove GET がちょうど 1 件
+/// 現れる。もし 204 で talk が起きれば started が 2 本になり落ちる。Ref2/Ref5/Ref6/Status を明示確認
 /// することで layout の退行（例: Ref6 欠落・Status 誤付与）を捕捉する。
 #[test]
 fn onmousemove_layout_matches_events_table() {
@@ -135,6 +138,13 @@ fn onmousemove_layout_matches_events_table() {
     assert_eq!(
         driven.started[0].script, FIXED_FAREWELL_SCRIPT,
         "唯一到達する StartTalk は close talk（別れのスクリプト）"
+    );
+
+    // 終了系列は正常完走（末尾 Unload）＝マウス 204 が運行を乱していない（設計 #4）。
+    assert_eq!(
+        driven.recorded.last().expect("記録列は空でない"),
+        &expected_unload(),
+        "末尾は Unload（204 マウス後も close→quit で正常完走）"
     );
 }
 
@@ -268,70 +278,5 @@ fn double_click_ref5_left_right() {
         1,
         "204 マウスは StartTalk を生まない＝close talk 1 本のみ: {:?}",
         driven.started
-    );
-}
-
-// ============================================================================
-// Cage 4: (d) 204 → StartTalk 不発・Steady{None} 維持
-// ============================================================================
-
-/// マウス GET へ mock fixture が NoContent（204）を返すと、GET は記録されるが StartTalk は生じない
-/// （Req8.1(d)・2.3）。`Steady{None}` は維持され、以降の close 握手が正常完走する。
-///
-/// # 非空虚性
-/// マウス GET が記録に現れる（＝GET は現に発行された）ことと、到達 StartTalk が close talk のみ（1 本）で
-/// あること（＝マウス由来 talk ゼロ）を対で確認する。もし 204 で talk が起きれば started が 2 本になり
-/// 落ちる。`Steady{None}` 維持は「マウス処理後も close talk が唯一の追加 talk」であることで観測する。
-#[test]
-fn no_content_produces_no_start_talk() {
-    let (x, y, scope) = (7_i64, 8_i64, 0_u32);
-    // OnMouseMove へ明示的に 204 を注入（未注入既定と同値だが、設計 #4 の意図を明示する）。
-    let fixture = Fixture::quitting()
-        .without_boot_greeting()
-        .with_response("OnMouseMove", Response::NoContent);
-
-    let driven = drive_mouse_steady_none(
-        fixture,
-        vec![mouse_input(MouseEventKind::Move, x, y, scope, Some("Head"))],
-        vec![true],
-    );
-
-    // (1) マウス GET は現に記録された（発行はされている）。
-    let gets = mouse_gets(&driven.recorded);
-    assert_eq!(
-        gets.len(),
-        1,
-        "204 でも OnMouseMove GET は 1 件発行・記録されるはず: {:?}",
-        driven.recorded
-    );
-    let expected = expected_call(events::on_mouse_move(
-        x,
-        y,
-        scope,
-        Some("Head"),
-        &ExecutionSnapshot::INACTIVE,
-    ));
-    assert_eq!(
-        *gets[0], expected,
-        "記録 GET は events 表導出と一致（204 でも layout 同一）"
-    );
-
-    // (2) 204 は StartTalk を生まない: 到達は close talk のみ（マウス由来 talk ゼロ＝Steady{None} 維持）。
-    assert_eq!(
-        driven.started.len(),
-        1,
-        "204 マウスは StartTalk を起こさない＝到達は close talk 1 本のみ: {:?}",
-        driven.started
-    );
-    assert_eq!(
-        driven.started[0].script, FIXED_FAREWELL_SCRIPT,
-        "唯一到達する StartTalk は close talk（マウス由来 talk は生じない）"
-    );
-
-    // (3) 終了系列は正常完走（末尾 Unload）＝マウス 204 が運行を乱していない。
-    assert_eq!(
-        driven.recorded.last().expect("記録列は空でない"),
-        &expected_unload(),
-        "末尾は Unload（204 マウス後も close→quit で正常完走）"
     );
 }

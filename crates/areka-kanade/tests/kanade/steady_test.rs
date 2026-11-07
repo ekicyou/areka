@@ -47,20 +47,17 @@
 //! し、以降は 2 パターンと同じ quit 経路（OnClose→別れの talk→終了）で記録列を確定できる。
 //!
 //! # 追加: 送出 ID egress スイープと完了後の GET 再開（Testing Strategy #13／#12）
-//! さらに 2 つの定常統合檻を追加する（いずれも additive・既存 4 テストは無改変）:
-//! - `spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour`（#13・Req 3.2／3.3）: 自発トーク
-//!   （`OnSecondChange` Value→StartTalk）が**確実に発火する** run 全域の `recorded()` を走査し、`OnTalk`／
-//!   `OnHour` が 1 件も現れず・Unload を除く全 SHIORI イベント id が `ALLOWED_EVENT_IDS` に属することを
-//!   検証する。自発トークは pasta が `OnSecondChange` 内部で生成する＝kanade は OnTalk/OnHour を新規に
-//!   足さず、StartTalk として下流へ配送する（新規 SHIORI イベント id を増やさない）。
+//! - 送出 ID の egress スイープ（#13・Req 3.2／3.3）: 自発トーク（`OnSecondChange` Value→StartTalk）が
+//!   **確実に発火する** `sporadic_value_starts_unique_talk` の run 全域の記録を同じテストの末尾で走査し、
+//!   `OnTalk`／`OnHour` が 1 件も現れず・Unload を除く全 SHIORI id が許可集合に属することを検証する
+//!   （同じ駆動を 2 回回さない）。自発トークは pasta が `OnSecondChange` 内部で生成する＝kanade は
+//!   OnTalk/OnHour を新規に足さず、StartTalk として下流へ配送する（新規 SHIORI イベント id を増やさない）。
 //! - `talk_completion_resumes_get_pump_ref3_one_status_none`（#12・Req 4.4）: steady talk 完了（TalkDone
 //!   着弾）後の次 Tick で `OnSecondChange` GET pump（Ref3=1・Status なし）が再開することを統合層で検証する。
 //!   `active_talk_tick_emits_notify_ref3_zero` は NOTIFY 窓までしか観測せず、close_test の別れの台詞は
 //!   `CloseTalkWait` から終了へ進んで定常へ戻らないゆえ、`Steady{Some}`→TalkDone→`Steady{None}` の
 //!   復帰は本 cage が埋める（純粋状態
 //!   機械では `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
-
-use std::collections::HashSet;
 
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId,
@@ -156,27 +153,10 @@ fn steady_no_content_produces_no_start_talk() {
         "唯一到達する StartTalk は close talk（別れの fixture スクリプト）"
     );
 
-    // steady talk スクリプトを持つ StartTalk は 1 本も到達しない（Req 2.3 の直接検証）。
-    assert!(
-        driven
-            .started
-            .iter()
-            .all(|s| s.script != FIXED_STEADY_SCRIPT),
-        "204 基調では steady fixture スクリプトの StartTalk は到達しないはず: {:?}",
-        driven.started
-    );
-
     // (2) 204 の間も pump の問い合わせ（OnSecondChange GET・Ref3=1）は現に発行されている
     //     （＝ゲートが Steady{None} で開き、GET を出し、204 で talk を起こさなかった経路の証拠）。
-    let get_count = count_second_change_get(&driven.recorded);
-    assert!(
-        get_count >= 1,
-        "204 経路でも OnSecondChange GET（Ref3=1）が少なくとも 1 度は発行されるはず: {:?}",
-        driven.recorded
-    );
-
-    // GET の Reference 構成が events 表の正典（Ref3="1"）と一致することを 1 件抽出して確認する
-    //   （時刻依存の Ref0 はここでは問わず、Ref3=1＝pump 問い合わせであることを検証する）。
+    //     GET の Reference 構成が events 表の正典（Ref3="1"）と一致することを 1 件抽出して確認する
+    //     （時刻依存の Ref0 はここでは問わず、Ref3=1＝pump 問い合わせであることを検証する）。
     let a_get = driven
         .recorded
         .iter()
@@ -260,10 +240,6 @@ fn sporadic_value_starts_unique_talk() {
         driven.started
     );
     let close_talk = close_talks[0];
-    assert_ne!(
-        steady_talk.talk_id, close_talk.talk_id,
-        "steady talk の talk_id は close talk と別（一意）"
-    );
     assert!(
         close_talk.talk_id.0 > steady_talk.talk_id.0,
         "talk_id は単調増番（steady {:?} < close {:?}）",
@@ -271,47 +247,48 @@ fn sporadic_value_starts_unique_talk() {
         close_talk.talk_id
     );
 
-    // (4) 到達した全 talk_id が互いに一意（steady・close が id を共有しない・Req 2.1）。
-    let ids: HashSet<u64> = driven.started.iter().map(|s| s.talk_id.0).collect();
-    assert_eq!(
-        ids.len(),
-        driven.started.len(),
-        "全 StartTalk の talk_id は一意（再利用しない）: {:?}",
-        driven.started
-    );
-
-    // (5) steady talk は OnSecondChange GET（Ref3=1）から起きた＝GET pump が現に発行されている。
-    //     Value を返す構成でも、まず GET（Ref3=1）で問い合わせる経路を通る（Req 3.3・同一 talk 経路）。
-    let get_count = count_second_change_get(&driven.recorded);
-    assert!(
-        get_count >= 1,
-        "Value を起こすには OnSecondChange GET（Ref3=1）が少なくとも 1 度発行されるはず: {:?}",
-        driven.recorded
-    );
-
-    // events 表から導出した GET（Ref3=1・talk 非アクティブ＝Status 行なし）の Reference 構成が記録列に
-    //   現れる（now=1s は sub-hour ゆえ Ref0="0"・ドレイン中の任意 sub-hour GET と一致する）。
-    let expected_get = RecordedCall {
-        method: CallMethod::Get,
-        id: "OnSecondChange".to_string(),
-        references: match events::on_second_change(
-            MonotonicMs(1_000),
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ) {
-            areka_kanade::ShioriCall::Get { references, .. } => references,
-            _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
-        },
-        status: None,
-    };
+    // (4) steady talk は OnSecondChange GET（Ref3=1）から起きた: events 表から導出した GET（talk 非
+    //     アクティブ＝Status 行なし）が記録列に現れる（Req 3.3・同一 talk 経路。now=1s は sub-hour ゆえ
+    //     Ref0="0"・ドレイン中の任意 sub-hour GET と一致する）。
+    let expected_get = expected_call(events::on_second_change(
+        MonotonicMs(1_000),
+        &ExecutionSnapshot::INACTIVE,
+    ));
     assert!(
         driven.recorded.iter().any(|c| *c == expected_get),
         "events 表導出の GET（Ref3=1・Status なし）と一致する OnSecondChange GET が記録列に現れるはず: {:?}",
         driven.recorded
     );
+
+    // (5) 送出 ID の egress スイープ（Testing Strategy #13・Req 3.2）: 自発トークが確実に発火したこの run の
+    //     記録列のどの呼出も OnTalk／OnHour でない（kanade は恒久的に送出しない。自発トークは pasta が
+    //     OnSecondChange 内部で生成する＝areka は OnTalk/OnHour イベントを足さない）。
+    assert!(
+        driven
+            .recorded
+            .iter()
+            .all(|c| c.id != "OnTalk" && c.id != "OnHour"),
+        "記録列に OnTalk／OnHour が現れてはならない（Req 3.2）: {:?}",
+        driven.recorded
+    );
+
+    // (6) Unload を除く全 GET/NOTIFY の id が許可集合の要素（ホワイトリストが end-to-end で成立・Req 3.1）。
+    //     submit ガードと同じく「イベント許可 ∨ リソース許可」で判定する——boot prefetch の `username`
+    //     はイベント檻とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・R4.1）を通る。
+    for call in &driven.recorded {
+        if call.method == CallMethod::Unload {
+            // Unload（id="Unload"）は events 表対象外の正規終了経路ゆえ許可集合の被覆から除外する。
+            continue;
+        }
+        assert!(
+            events::is_allowed_event_id(&call.id) || resources::is_allowed_resource_id(&call.id),
+            "記録された SHIORI id={} がイベント許可 {:?} にもリソース許可 {:?} にも属さない: {:?}",
+            call.id,
+            events::ALLOWED_EVENT_IDS,
+            resources::ALLOWED_RESOURCE_IDS,
+            driven.recorded
+        );
+    }
 }
 
 /// 再生中 Tick → NOTIFY（Ref3=0）・応答無視で StartTalk なし（Req 3.3・DD-6）。
@@ -402,23 +379,14 @@ fn active_talk_tick_emits_notify_ref3_zero() {
 
     // (2) active talk 中の Tick が OnSecondChange NOTIFY（Ref3=0・Status: talking）を発行した——
     //     events 導出の NOTIFY（now=2s・talk_active=true）と一致する記録が現れる（ハードコードしない）。
-    let expected_notify = RecordedCall {
-        method: CallMethod::Notify,
-        id: "OnSecondChange".to_string(),
-        references: match events::on_second_change(
-            MonotonicMs(2_000),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ) {
-            areka_kanade::ShioriCall::Notify { references, .. } => references,
-            _ => panic!("on_second_change（talk アクティブ）は NOTIFY を返すはず"),
+    //     DD-IT-3: Ref3=0 と Status: talking は同一スナップショットから出る（不整合は構造的に不可能）。
+    let expected_notify = expected_call(events::on_second_change(
+        MonotonicMs(2_000),
+        &ExecutionSnapshot {
+            talk_active: true,
+            ..ExecutionSnapshot::INACTIVE
         },
-        // DD-IT-3: Ref3=0 と Status: talking は同一スナップショットから出る（不整合は構造的に不可能）。
-        status: Some("talking".to_string()),
-    };
+    ));
     // Ref3="0"（talk 再生不能＝応答無視）であることを明示的に確認する。
     assert_eq!(
         expected_notify.references[3], "0",
@@ -438,6 +406,13 @@ fn active_talk_tick_emits_notify_ref3_zero() {
         get_count, 1,
         "OnSecondChange GET は Value を起こした Tick 1 の 1 回のみ（NOTIFY tick は GET を出さない）: {:?}",
         recorded
+    );
+
+    // (4) close 握手は完走: 末尾は Unload（NOTIFY 窓の後も close talk quit:true→Unloading{Quit}→Unload）。
+    assert_eq!(
+        recorded.last().expect("記録列は空でない"),
+        &expected_unload(),
+        "末尾は Unload（NOTIFY 窓の後も close→quit で正常完走）"
     );
 }
 
@@ -542,57 +517,12 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
         recorded
     );
 
-    // (order) 3 件は now 昇順（inbox/処理順）で現れ、各々 events 表導出の GET（Ref3=1）と一致する。
-    //   Ref0 が 1→2→3 と異なる＝処理順が now 昇順であることを構造的に証明する（ハードコードしない）。
-    for (tick_now, expected_ref0) in [(now1, "1"), (now2, "2"), (now3, "3")] {
-        let expected_get = RecordedCall {
-            method: CallMethod::Get,
-            id: "OnSecondChange".to_string(),
-            references: match events::on_second_change(
-                tick_now,
-                &ExecutionSnapshot {
-                    talk_active: false,
-                    choice_active: false,
-                    ..ExecutionSnapshot::INACTIVE
-                },
-            ) {
-                areka_kanade::ShioriCall::Get { references, .. } => references,
-                _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
-            },
-            // catch-up pump は talk 非アクティブ（Steady{None}）＝Status 行なし。
-            status: None,
-        };
-        // events 導出の Ref0 が期待どおり時境界の hour（1/2/3）であることを明示確認。
-        assert_eq!(
-            expected_get.references[0], expected_ref0,
-            "OnSecondChange GET の Ref0（時）は now/3_600_000＝{}",
-            expected_ref0
-        );
-        assert_eq!(
-            expected_get.references[3], "1",
-            "GET pump の Ref3 は \"1\"（talk 再生可能・問い合わせ）"
-        );
-    }
-
-    // 3 件が処理順（now 昇順・Ref0=1,2,3）で並ぶことを構造照合する。
+    // (order) 3 件は now 昇順（inbox/処理順）で現れ、各々 events 表導出の GET（Ref3=1・Status なし）と
+    //   一致する。Ref0 は now/3_600_000（時）で 1→2→3 と異なる＝処理順が now 昇順であることを構造的に
+    //   証明する（ハードコードしない・Ref0 の値そのものは `events_tests.rs` の `on_second_change_*` が見る）。
     let expected_sequence: Vec<RecordedCall> = [now1, now2, now3]
         .into_iter()
-        .map(|n| RecordedCall {
-            method: CallMethod::Get,
-            id: "OnSecondChange".to_string(),
-            references: match events::on_second_change(
-                n,
-                &ExecutionSnapshot {
-                    talk_active: false,
-                    choice_active: false,
-                    ..ExecutionSnapshot::INACTIVE
-                },
-            ) {
-                areka_kanade::ShioriCall::Get { references, .. } => references,
-                _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
-            },
-            status: None,
-        })
+        .map(|n| expected_call(events::on_second_change(n, &ExecutionSnapshot::INACTIVE)))
         .collect();
     let actual_sequence: Vec<RecordedCall> =
         second_change_gets.iter().map(|c| (*c).clone()).collect();
@@ -612,99 +542,6 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
         notify_count, 0,
         "active talk が無い catch-up では OnSecondChange NOTIFY は 1 件も現れないはず: {:?}",
         recorded
-    );
-}
-
-/// 送出 ID egress スイープ: 自発トーク発火 run 全域で禁止 ID（OnTalk／OnHour）が現れず、記録された
-/// SHIORI イベント ID は全て許可集合に属する（Req 3.2・3.3・Testing Strategy #13）。
-///
-/// 挨拶なし boot（`without_boot_greeting`）＋ `with_steady_value_indices([0])` で、最初の
-/// `OnSecondChange` GET 出現（index 0）に Value を仕込む。boot→`Steady{None}` 直行ゆえ最初の steady
-/// Tick は確実に GET（index 0）で Value を返し、**自発トーク（spontaneous talk）が 1 本発火する**。
-/// close talk（quit:true）で終了系列を駆動し、`recorded()` を確定してから全域を走査する（決定的）。
-///
-/// # なぜ自発トークを確実に発火させるのか（Testing Strategy #13 の核）
-/// 「自発トーク（Value→StartTalk）発火時も新規 ID が増えない」節は、Value が実際に talk を起こす run で
-/// なければ空振りする。emo2/pasta は `OnSecondChange` 内部で自発会話を生成する（＝areka は OnTalk/OnHour
-/// イベントを新規に足さない）。本 cage はその自発トークを StartTalk として下流へ配送し、SHIORI 側には
-/// 新規イベント ID が一切増えないことを end-to-end で固定する。
-///
-/// # 検証
-/// - 自発トークが 1 本、StartTalk として sakura へ配送される（＝新規 SHIORI イベントでなく StartTalk・Req 3.3）。
-/// - 記録列のどの呼出も id が `"OnTalk"`／`"OnHour"` でない（Req 3.2・kanade は恒久的に送出しない）。
-/// - Unload（正規終了経路・events 表対象外）を除く全 GET/NOTIFY の id が `ALLOWED_EVENT_IDS` の要素。
-/// - 自発トークの trigger（`OnSecondChange`）が現に記録にある（スイープの非空虚性）。
-#[test]
-fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
-    // 自発トークを確実に発火させる: index 0 の OnSecondChange GET が Value を返す（挨拶なし boot ゆえ
-    // 最初の steady Tick は必ず GET index 0）。quit_flags=[steady=false, close=true] で終了駆動。
-    let fixture = Fixture::quitting()
-        .with_steady_value_indices([0])
-        .without_boot_greeting();
-    let driven = drive_steady(fixture, 8, vec![false, true]);
-
-    // (1) 自発トークが現に発火し StartTalk として sakura へ配送された（＝新規 SHIORI イベントでなく
-    //     StartTalk として下流へ流れた・Req 3.3）。
-    let spontaneous = driven
-        .started
-        .iter()
-        .filter(|s| s.script == FIXED_STEADY_SCRIPT)
-        .count();
-    assert_eq!(
-        spontaneous, 1,
-        "OnSecondChange Value で自発トークが 1 本発火し StartTalk として配送されるはず: {:?}",
-        driven.started
-    );
-
-    // (2) 記録列のどの呼出も OnTalk／OnHour でない（Req 3.2・kanade は恒久的に送出しない。自発トークは
-    //     pasta が OnSecondChange 内部で生成する＝areka は OnTalk/OnHour イベントを足さない）。
-    assert!(
-        driven
-            .recorded
-            .iter()
-            .all(|c| c.id != "OnTalk" && c.id != "OnHour"),
-        "記録列に OnTalk／OnHour が現れてはならない（Req 3.2）: {:?}",
-        driven.recorded
-    );
-
-    // (3) Unload を除く全 GET/NOTIFY の id が許可集合の要素（ホワイトリストが end-to-end で成立・Req 3.1）。
-    //     submit ガードと同じく「イベント許可 ∨ リソース許可」で判定する——boot prefetch の `username`
-    //     はイベント檻とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・R4.1）を通る。
-    for call in &driven.recorded {
-        if call.method == CallMethod::Unload {
-            // Unload（id="Unload"）は events 表対象外の正規終了経路ゆえ許可集合の被覆から除外する。
-            continue;
-        }
-        assert!(
-            events::is_allowed_event_id(&call.id) || resources::is_allowed_resource_id(&call.id),
-            "記録された SHIORI id={} がイベント許可 {:?} にもリソース許可 {:?} にも属さない: {:?}",
-            call.id,
-            events::ALLOWED_EVENT_IDS,
-            resources::ALLOWED_RESOURCE_IDS,
-            driven.recorded
-        );
-    }
-
-    // (4) 非空虚性: 自発トークの trigger（OnSecondChange）が現に記録にある＝(2)(3) が空振りしていない。
-    //     記録の distinct な（Unload を除く）SHIORI id は全て許可集合の部分集合であり、自発トークの発火は
-    //     SHIORI イベント列を kind として変えていない（新規 ID を増やさない）。
-    let distinct_shiori_ids: HashSet<&str> = driven
-        .recorded
-        .iter()
-        .filter(|c| c.method != CallMethod::Unload)
-        .map(|c| c.id.as_str())
-        .collect();
-    assert!(
-        distinct_shiori_ids.contains(&"OnSecondChange"),
-        "自発トークを起こす OnSecondChange が記録に現れているはず（スイープの非空虚性）: {:?}",
-        driven.recorded
-    );
-    assert!(
-        distinct_shiori_ids
-            .iter()
-            .all(|&id| events::is_allowed_event_id(id) || resources::is_allowed_resource_id(id)),
-        "記録の distinct SHIORI id は全てイベント許可∨リソース許可の部分集合であるはず（新規 ID を増やさない）: {:?}",
-        distinct_shiori_ids
     );
 }
 
@@ -799,13 +636,6 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
     assert!(
         started.iter().all(|s| s.script == FIXED_STEADY_SCRIPT),
         "2 本とも steady スクリプト（close talk は起きない）: {:?}",
-        started
-    );
-    let ids: HashSet<u64> = started.iter().map(|s| s.talk_id.0).collect();
-    assert_eq!(
-        ids.len(),
-        2,
-        "talk_id は一意（再利用しない）: {:?}",
         started
     );
     assert_eq!(started[0].talk_id, TalkId(1), "保留 talk は先頭採番 id=1");

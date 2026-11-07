@@ -27,7 +27,7 @@
 //!   （200→Value／204→NoContent／timeout→Failed）／`boot.rs::prefetch_failure_continues_boot_not_fault`
 //!   （Failed は Unloading{Fault} へ倒れず OnFirstBoot へ続行）。本群は sink 到達＋実スレッド続行を追加する。
 //! - **許可外リソース ID 拒否＋egress 許可語彙（R4.1/3.2）**: `actor.rs §8::disallowed_id_still_rejected_as_internal_after_resource_extension`
-//!   （Failed(Internal)）／`steady_test.rs::spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour`
+//!   （Failed(Internal)）／`steady_test.rs::sporadic_value_starts_unique_talk`
 //!   （egress スイープが「イベント許可 ∨ リソース許可」へ更新・username を許可語彙へ追加）。
 //! - **完了固定ログ 1 回（R9.3）**: `boot.rs::prefetch_emits_fixed_completion_log_exactly_once`
 //!   （3 経路とも `log_capture::assert_resource_prefetch_logged_once` で target/level/outcome/message 一致・1 回）。
