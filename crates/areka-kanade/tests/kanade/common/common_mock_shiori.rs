@@ -41,12 +41,26 @@ impl MockShiori {
 /// 応答を `reply.send` で返す。[`ShioriMsg::Unload`] は記録の上 `Unloaded` を返す。
 /// [`ShioriMsg::Close`] で受信ループを終了する。
 pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
+    spawn_mock_shiori_loop(fixture, None, None)
+}
+
+/// 3 つの mock shiori が共有する受信の輪（#45・呼出の記録と Unload／Close の扱いはここ 1 か所）。
+///
+/// - `fail_on`: 一致する**最初の**呼出に [`ShioriOutcome::Failed`] を返す（応答表は前進させない）。
+/// - `block`: 一致する**最初の**呼出を記録し、応答を決めてから [`ShioriGate::release`] まで握る。
+fn spawn_mock_shiori_loop(
+    fixture: Fixture,
+    fail_on: Option<FailOn>,
+    block: Option<(BlockOn, Arc<ShioriGateShared>)>,
+) -> MockShiori {
     let calls: Arc<Mutex<Vec<RecordedCall>>> = Arc::new(Mutex::new(Vec::new()));
     let calls_body = Arc::clone(&calls);
 
     let (sender, handle) = spawn_actor::<ShioriMsg, _>("mock-shiori", move |rx| {
         let mut state = FixtureState::new(fixture);
-        // 受信ループ: 即時応答（sleep なし・決定的）。
+        let mut fail_on = fail_on;
+        let mut block = block;
+        // 受信ループ: 握る 1 呼出を除き即時応答（sleep なし・決定的）。
         while let Ok(msg) = rx.recv() {
             match msg {
                 ShioriMsg::Request { call, reply } => {
@@ -54,7 +68,25 @@ pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
                         .lock()
                         .expect("mock shiori calls mutex")
                         .push(RecordedCall::from_call(&call));
+                    // 対象イベントの最初の呼出のみ失敗させる（以降は良性表へ戻す）。
+                    if let Some(f) = fail_on.filter(|f| call_id(&call) == f.id) {
+                        fail_on = None;
+                        let _ = reply.send(ShioriOutcome::Failed(f.kind.make()));
+                        continue;
+                    }
+                    // 応答は握る前に決める（respond の出現カウンタは呼出順に前進させる＝1 呼出＝1 応答）。
                     let outcome = state.respond(&call);
+                    if block.as_ref().is_some_and(|(on, _)| on.matches(&call))
+                        && let Some((_, shared)) = block.take()
+                    {
+                        // 受領を通知（wait_until_blocked を起こす）→ release まで待つ。
+                        let mut inner = shared.inner.lock().expect("shiori gate mutex");
+                        inner.blocked_arrived = true;
+                        shared.cvar.notify_all();
+                        while !inner.released {
+                            inner = shared.cvar.wait(inner).expect("shiori gate condvar wait");
+                        }
+                    }
                     let _ = reply.send(outcome);
                 }
                 ShioriMsg::Unload { reply } => {
@@ -149,45 +181,7 @@ impl FailOn {
 /// （Unload は best-effort で `Unloaded` を返し記録する）。これにより「区別語彙ごとの呼出失敗
 /// → 観測可能な終了（Unloading{Fault}→Unload→Stopped）」を統合層で観測できる（Req 6.1）。
 pub fn spawn_mock_shiori_failing(fixture: Fixture, fail_on: FailOn) -> MockShiori {
-    let calls: Arc<Mutex<Vec<RecordedCall>>> = Arc::new(Mutex::new(Vec::new()));
-    let calls_body = Arc::clone(&calls);
-
-    let (sender, handle) = spawn_actor::<ShioriMsg, _>("mock-shiori-failing", move |rx| {
-        let mut state = FixtureState::new(fixture);
-        let mut failed_once = false;
-        while let Ok(msg) = rx.recv() {
-            match msg {
-                ShioriMsg::Request { call, reply } => {
-                    calls_body
-                        .lock()
-                        .expect("mock shiori calls mutex")
-                        .push(RecordedCall::from_call(&call));
-                    // 対象イベントの最初の呼出のみ失敗させる（以降は良性表へ戻す）。
-                    let outcome = if !failed_once && call_id(&call) == fail_on.id {
-                        failed_once = true;
-                        ShioriOutcome::Failed(fail_on.kind.make())
-                    } else {
-                        state.respond(&call)
-                    };
-                    let _ = reply.send(outcome);
-                }
-                ShioriMsg::Unload { reply } => {
-                    calls_body
-                        .lock()
-                        .expect("mock shiori calls mutex")
-                        .push(expected_unload());
-                    let _ = reply.send(ShioriOutcome::Unloaded);
-                }
-                ShioriMsg::Close => break,
-            }
-        }
-    });
-
-    MockShiori {
-        sender,
-        handle,
-        calls,
-    }
+    spawn_mock_shiori_loop(fixture, Some(fail_on), None)
 }
 
 /// [`ShioriCall`] のイベント id の wire 形を取り出す（GET／NOTIFY 共通・失敗注入の突合用）。
@@ -300,9 +294,6 @@ impl ShioriGate {
 /// StartTalk 送信端 drop 等で kanade 側 round-trip が畳まれるだけでは本スレッドは解けないが、
 /// テストは必ず `release()` を呼ぶ契約であり、全 join はテストの [`DEFAULT_TIMEOUT`] で有界。
 pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockShiori, ShioriGate) {
-    let calls: Arc<Mutex<Vec<RecordedCall>>> = Arc::new(Mutex::new(Vec::new()));
-    let calls_body = Arc::clone(&calls);
-
     let shared = Arc::new(ShioriGateShared {
         inner: Mutex::new(ShioriGateInner {
             blocked_arrived: false,
@@ -310,60 +301,6 @@ pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockS
         }),
         cvar: std::sync::Condvar::new(),
     });
-    let shared_body = Arc::clone(&shared);
-
-    let (sender, handle) = spawn_actor::<ShioriMsg, _>("mock-shiori-blocking", move |rx| {
-        let mut state = FixtureState::new(fixture);
-        let mut blocked_once = false;
-        while let Ok(msg) = rx.recv() {
-            match msg {
-                ShioriMsg::Request { call, reply } => {
-                    calls_body
-                        .lock()
-                        .expect("mock shiori calls mutex")
-                        .push(RecordedCall::from_call(&call));
-                    // 対象の最初の呼出のみ握る（応答は release まで送らない）。
-                    if !blocked_once && block_on.matches(&call) {
-                        blocked_once = true;
-                        // fixture 既定の応答を今のうちに決めておく（respond の出現カウンタは
-                        // 呼出順に前進させたいので、ここで消費する＝実経路の 1 呼出＝1 応答）。
-                        let outcome = state.respond(&call);
-                        // 受領を通知（wait_until_blocked を起こす）→ release まで待つ。
-                        {
-                            let mut inner = shared_body.inner.lock().expect("shiori gate mutex");
-                            inner.blocked_arrived = true;
-                            shared_body.cvar.notify_all();
-                            while !inner.released {
-                                inner = shared_body
-                                    .cvar
-                                    .wait(inner)
-                                    .expect("shiori gate condvar wait");
-                            }
-                        }
-                        let _ = reply.send(outcome);
-                    } else {
-                        let outcome = state.respond(&call);
-                        let _ = reply.send(outcome);
-                    }
-                }
-                ShioriMsg::Unload { reply } => {
-                    calls_body
-                        .lock()
-                        .expect("mock shiori calls mutex")
-                        .push(expected_unload());
-                    let _ = reply.send(ShioriOutcome::Unloaded);
-                }
-                ShioriMsg::Close => break,
-            }
-        }
-    });
-
-    (
-        MockShiori {
-            sender,
-            handle,
-            calls,
-        },
-        ShioriGate { shared },
-    )
+    let shiori = spawn_mock_shiori_loop(fixture, None, Some((block_on, Arc::clone(&shared))));
+    (shiori, ShioriGate { shared })
 }

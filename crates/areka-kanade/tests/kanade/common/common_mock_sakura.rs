@@ -138,41 +138,8 @@ pub fn spawn_mock_sakura(
     kanade_tx: Sender<KanadeMsg>,
     quit_policy: QuitPolicy,
 ) -> MockSakura {
-    let commands: Arc<Mutex<Vec<TalkCommand>>> = Arc::new(Mutex::new(Vec::new()));
-    let commands_body = Arc::clone(&commands);
-
-    let join = thread::Builder::new()
-        .name("mock-sakura".to_string())
-        .spawn(move || {
-            let mut index = 0usize;
-            // 全 TalkCommand Sender drop（kanade 停止）で recv が Err→ループ終了。
-            while let Ok(command) = talk_rx.recv() {
-                // 到着順の記録は 3 形共通（記録より先に副作用を起こさない）。
-                let start_talk_id = match &command {
-                    TalkCommand::Start(start) => Some(start.talk_id),
-                    TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
-                };
-                commands_body
-                    .lock()
-                    .expect("mock sakura mutex")
-                    .push(command);
-                let Some(talk_id) = start_talk_id else {
-                    // 選択解決／解除は記録のみ（再生層を持たない mock は TalkDone を作れない）。
-                    continue;
-                };
-                let reason = quit_policy.reason_for(index);
-                index += 1;
-                // TalkDone 返送。kanade 停止済みで送れなくても無害（続行）。
-                let _ = kanade_tx.send(KanadeMsg::TalkDone(TalkDone {
-                    talk_id,
-                    reason,
-                    quit_reserved: false,
-                }));
-            }
-        })
-        .expect("spawn mock-sakura thread");
-
-    MockSakura { join, commands }
+    // 保留なしの保留つき sink と同じ（#45・受信の輪は 1 本）。
+    spawn_mock_sakura_gated(talk_rx, kanade_tx, quit_policy, Vec::new()).0
 }
 
 // ============================================================================
@@ -238,7 +205,7 @@ impl SakuraGate {
     }
 }
 
-/// 保留機能付き mock sakura sink を起動する（4.4 pattern 3 専用・[`spawn_mock_sakura`] の派生）。
+/// 保留機能付き mock sakura sink を起動する（4.4 pattern 3・[`spawn_mock_sakura`] もこの輪を使う）。
 ///
 /// `hold_indices` に含まれる受領インデックス（0 始まり）の [`StartTalk`] は、記録はするが
 /// その [`TalkDone`] を**即座には返さない**（park する）。[`SakuraGate::release_all`] が
