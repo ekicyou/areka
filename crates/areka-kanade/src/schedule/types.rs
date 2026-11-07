@@ -65,13 +65,6 @@ pub(crate) enum Input {
     /// 選択待ちの期限の知らせ（刻み役 → kanade・[`Action::ArmChoiceWake`] の頼みに 1 回だけ応える）。
     ///
     /// 判断は [`steady::on_choice_timeout_due`] が持つ。`Tick` と違い `last_now` を進めず、pump も出さない。
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "殻の写し（KanadeMsg::ChoiceTimeoutDue）は 16.2 で足す"
-        )
-    )]
     ChoiceTimeoutDue {
         now: MonotonicMs,
     },

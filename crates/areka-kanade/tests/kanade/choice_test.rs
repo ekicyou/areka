@@ -107,3 +107,6 @@ mod timeout_directive_tests;
 #[cfg(test)]
 #[path = "choice_test_timeout_tests.rs"]
 mod timeout_tests;
+#[cfg(test)]
+#[path = "choice_test_wake_tests.rs"]
+mod wake_tests;

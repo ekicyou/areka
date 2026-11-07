@@ -200,6 +200,9 @@ pub enum KanadeMsg {
     Boot,
     /// 1 秒相当の Tick（時刻同梱・DD-3）。pump 駆動と close 期限判定を兼ねる。
     Tick { now: MonotonicMs },
+    /// 選択待ちの期限の知らせ（#7）。刻み役が選択待ちの期限で 1 回だけ送る。`Tick` と違い
+    /// OnSecondChange を出さない（`last_now` も pump も動かさない）。
+    ChoiceTimeoutDue { now: MonotonicMs },
     /// sakura（mock sink 含む）からの再生完了通知。
     TalkDone(crate::talk::TalkDone),
     /// 通常 close 指示（OnClose 握手を開始・終了権限は SHIORI 側）。
@@ -563,6 +566,10 @@ pub struct KanadeConfig {
     /// script 種別の記録の名（`get_active_ghost_list` と同じ値）。既定は空文字。結線は
     /// `areka-ghost` の `resolve_kanade_config` が入れる。
     pub ghost_name: String,
+    /// 選択待ちの期限で 1 回だけ起こしてもらう頼みの線（#7・既定 `None`）。`Some` なら殻が期限の
+    /// 時刻を送り、刻み役がその時刻に [`KanadeMsg::ChoiceTimeoutDue`] を返す。`None` なら毎秒の
+    /// `Tick` が期限を拾う。結線は `areka-ghost` の runtime が刻み役の本物のときだけ入れる。
+    pub choice_wake: Option<std::sync::mpsc::Sender<MonotonicMs>>,
 }
 
 impl KanadeConfig {
@@ -586,6 +593,7 @@ impl KanadeConfig {
             boot_origin: BootOrigin::Plain,
             online: &online::PROCESS,
             ghost_name: String::new(),
+            choice_wake: None,
         }
     }
 }

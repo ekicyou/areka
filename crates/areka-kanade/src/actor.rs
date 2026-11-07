@@ -37,8 +37,8 @@ use crate::actor_sstp::{FirstReply, SstpReply, first_reply_of};
 use crate::actor_stop::{handoff_of, notify_stop, send_notice, stop_cause_of};
 use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome, TalkGap};
 use crate::msg::{
-    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, ShioriCall, ShioriFailure, ShioriMsg,
-    ShioriOutcome,
+    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, MonotonicMs, ShioriCall, ShioriFailure,
+    ShioriMsg, ShioriOutcome,
 };
 use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
@@ -158,6 +158,7 @@ pub fn spawn_kanade_translating(
                 }
                 KanadeMsg::Boot => Input::Boot,
                 KanadeMsg::Tick { now } => Input::Tick { now },
+                KanadeMsg::ChoiceTimeoutDue { now } => Input::ChoiceTimeoutDue { now },
                 KanadeMsg::TalkDone(td) => Input::TalkDone(td),
                 KanadeMsg::CloseRequest { reason } => Input::CloseRequest { reason },
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
@@ -337,6 +338,7 @@ fn drive_translating(
             stop_sink,
             term,
             seams,
+            config.choice_wake.as_ref(),
         );
         // `ShioriOutcome` は複製できないので、入れ直す前に参照から写す。
         if std::mem::take(&mut first_batch) {
@@ -473,6 +475,7 @@ struct BatchResult {
 ///
 /// [`Action::Translate`] は `actor_translate::run_translate` で実行し、その結果をこのバッチの
 /// 「入れ直すもの」にする。
+#[allow(clippy::too_many_arguments)]
 fn execute_batch(
     actions: Vec<Action>,
     shiori: &Sender<ShioriMsg>,
@@ -481,6 +484,7 @@ fn execute_batch(
     stop_sink: Option<&Sender<KanadeNotice>>,
     term: (Option<KanadeStopCause>, Option<ChangeHandoff>),
     seams: &TranslateSeams,
+    choice_wake: Option<&Sender<MonotonicMs>>,
 ) -> BatchResult {
     let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
     let mut translated: Option<TranslateResult> = None;
@@ -495,9 +499,13 @@ fn execute_batch(
             Action::CancelChoice { talk_id } => {
                 send_talk_command(sakura, TalkCommand::CancelChoice { talk_id });
             }
-            // 起こしの線をまだ持たない構成＝毎秒の Tick が期限を拾うので、頼みは送らない。
+            // 起こしの線が無い構成・送れなかったときは毎秒の Tick が期限を拾う（失敗ではない・#7）。
             Action::ArmChoiceWake(at) => {
-                tracing::trace!(target: "kanade", event = "choice_wake_unwired", at_ms = at.0, "起こしの線が無い——期限は毎秒の Tick が拾う");
+                if let Some(wake) = choice_wake
+                    && wake.send(at).is_err()
+                {
+                    tracing::warn!(target: "kanade", event = "choice_wake_send_failed", at = at.0, "起こしの頼みを送れない——期限は毎秒の Tick が拾う");
+                }
             }
             Action::ShioriRequest(call) => {
                 // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
@@ -575,6 +583,7 @@ fn execute_actions(
         stop_sink,
         term,
         &seams,
+        None,
     )
 }
 
