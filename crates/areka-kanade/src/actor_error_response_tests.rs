@@ -109,11 +109,11 @@ fn other_failures_stay_failed_without_error_response_record() {
 }
 
 /// 偽の shiori が受けた名前と Reference（送られなければ None）。
-type Sent = Option<(String, Vec<String>)>;
+pub(super) type Sent = Option<(String, Vec<String>)>;
 
 /// 1 件の Request を受け、送られた名前と Reference を控えて `NoContent` を返す偽の shiori を立てて
 /// `call` を往復させる。戻り値は応答・偽の shiori が受けた中身（送られなければ None）・捕えた記録。
-fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Vec<CapturedEvent>) {
+pub(super) fn round_trip_recording(call: ShioriCall) -> (ShioriOutcome, Sent, Vec<CapturedEvent>) {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
     let helper = thread::spawn(move || {
         if let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {

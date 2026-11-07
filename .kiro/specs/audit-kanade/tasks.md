@@ -90,14 +90,14 @@
   - _Depends: 2.1_
   - _Requirements: 3.1, 3.3, 9.1_
 
-- [ ] 6. 外から来た台本の守り（#1・#54・#55・#56）
+- [x] 6. 外から来た台本の守り（#1・#54・#55・#56）
 - [x] 6.1 SEND の入口で CR・LF・NUL を取り除く（#1 一段目）
   - 3 字の定数を 1 つ置き、NOTIFY の検査の閉包もそれで書く
   - 受け付けの直後に 3 字を取り除いて info を 1 件残す。返事の語は変えない
   - `send_strips_line_breaks_before_playing_and_translating` が緑で、取り除きを外すと赤になる
   - _Depends: 5.2, 5.3_
   - _Requirements: 3.1, 4.1, 4.2, 9.1, 9.2_
-- [ ] 6.2 SHIORI へ送る点で ID を断り Reference から 3 字を取り除く（#1 二段目・#54・#55・#56）
+- [x] 6.2 SHIORI へ送る点で ID を断り Reference から 3 字を取り除く（#1 二段目・#54・#55・#56）
   - 送ってよいかの判定と ID の検査を、取り除く前の生の Reference で先に行うように順を入れ替える
   - ID に 3 字があれば今の `event_id_not_allowed`、Reference は取り除いて warn。翻訳の欠番の印は残す
   - 返事の時間切れの腕をまとめ、送るだけの包みを消し、SSTP と property の腕を 1 つに
@@ -313,3 +313,4 @@
 - 4.2: design #30 の行は「ChangePending に Notified」を `change_phase_unexpected` と組むが、コードは `change_input_ignored` を出す。テストはコードに合わせた。私的な関数のテストは子のモジュール `change_tests.rs` に置ける。
 - 5.2: design #5 の行（定常の Value の腕からも `has_script` を呼ぶ）からずらした。定常はもとからどの Value も再生するので、空白だけの扱いは 3 か所とも同じになった。定常で判定を挟むと変わるのは空の台本 `""` だけで、それは「変わること」⑸ に無い（audit 系は推奨案で決めてよいとのお許し・11-04）。残る食い違い: RaiseEvent の道では `""` が NoReply、定常では空のトークで置き換える（前からある・COMPAT_ARCHITECTURE:308 の裁定どおり）。
 - 5.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:308` が空白だけを「無かった」と読み、旧名のテスト `empty_blank_and_no_content_are_no_reply` を名指す。`crates/areka/src/mcp/raise_event_tests.rs:389` の注も同じ。振る舞いの変化: `OnInstallCompleteEx` の答えが空白だけなら、続く `OnInstallComplete` を送らなくなる。
+- 6.2 範囲の外（完了の棚卸へ）: `doc/COMPAT_ARCHITECTURE.md:354` が消した関数名 `replace_absent_markers` を名指す（今は `clean_references`・`reference_line_break_removed` の warn も足された）。

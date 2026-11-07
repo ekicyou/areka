@@ -282,7 +282,7 @@ fn probe_get_call() -> ShioriCall {
     }
 }
 
-// (a) shiori 送出失敗: Receiver を drop した Sender へ往復 → send_shiori が Err →
+// (a) shiori 送出失敗: Receiver を drop した Sender へ往復 → 送出が Err →
 //     `shiori_send_failed` を error! し `Failed(Ipc)` を返す。別スレッド不要。
 #[test]
 fn shiori_send_failure_maps_to_ipc_and_logs() {
