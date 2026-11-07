@@ -197,7 +197,7 @@
   - _Requirements: 3.3, 4.1, 4.4, 8.1, 8.2_
 
 - [ ] 11.4 範囲の外の決めのテストの 1 語を ukadoc のキーに替える
-  - `audit-emo-text-state-actor` の了承を得てから、`state_decoration_tests.rs` の `"cursorbrush"`（2 か所）を `"cursorbrushcolor"` に替える。触るのはこの 1 語だけ。あちらが先に `main` へ着いていたら取り込んでから触る。あちらが自分で直すと答えたら、その着地を取り込んでから 11.3 を着地させる
+  - `audit-emo-text-state-actor` の了承を得てから、`state_decoration_tests.rs:410,424` の `"cursorbrush"`（2 か所・2026-11-07 の main の取り込みで行が動いた）を `"cursorbrushcolor"` に替える。触るのはこの 1 語だけ。あちらが先に `main` へ着いていたら取り込んでから触る。あちらが自分で直すと答えたら、その着地を取り込んでから 11.3 を着地させる
   - 範囲の外の差分がこの 1 語の 2 か所だけで、11.3 と同じコミットに入り、範囲の外の決めのテストが緑であること
   - _Depends: 1.1, 11.3_
   - _Requirements: 7.1, 7.2, 7.7, 7.9_
