@@ -14,7 +14,13 @@ use tracing::debug;
 /// ```ignore
 /// commands.spawn((
 ///     BitmapSource::new("assets/logo.png"),
-///     BoxSize::fixed(200.0, 100.0),
+///     BoxStyle {
+///         size: Some(BoxSize {
+///             width: Some(Dimension::Px(200.0)),
+///             height: Some(Dimension::Px(100.0)),
+///         }),
+///         ..Default::default()
+///     },
 /// ));
 /// ```
 #[derive(Component, Debug, Clone)]

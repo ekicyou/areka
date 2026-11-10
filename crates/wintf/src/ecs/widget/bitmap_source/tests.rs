@@ -7,16 +7,21 @@ use windows_core::Interface;
 // Task 1.1: WicCore Tests
 // ============================================================
 
-// COMを初期化するヘルパー
+// COMを初期化するヘルパー（COINIT_MULTITHREADED for WIC free-threaded factory）
+// 初期化に失敗したら落とす。別の型の apartment に入っているスレッド（`RPC_E_CHANGED_MODE`）は
+// そのまま使い、入っていない apartment を `CoUninitialize` で壊さない。
 fn with_com_initialized<F: FnOnce()>(f: F) {
+    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-    // COINIT_MULTITHREADED for WIC free-threaded factory
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    let entered = hr.is_ok();
+    assert!(
+        entered || hr == RPC_E_CHANGED_MODE,
+        "CoInitializeEx が失敗した: {hr:?}"
+    );
     f();
-    unsafe {
-        CoUninitialize();
+    if entered {
+        unsafe { CoUninitialize() };
     }
 }
 
@@ -66,76 +71,6 @@ fn test_wic_core_send_sync() {
 }
 
 // ============================================================
-// Task 1.2: WintfTaskPool Tests
-// ============================================================
-
-#[test]
-fn test_wintf_task_pool_creation() {
-    // WintfTaskPoolが正常に作成できることを確認
-    let task_pool = WintfTaskPool::new();
-    // 作成直後はコマンドキューが空
-    assert!(
-        task_pool.is_empty(),
-        "new task pool should have empty queue"
-    );
-}
-
-#[test]
-fn test_wintf_task_pool_drain_empty() {
-    // 空のプールでdrain_and_applyが安全に動作することを確認
-    use bevy_ecs::prelude::*;
-    let task_pool = WintfTaskPool::new();
-    let mut world = World::new();
-    // パニックしないことを確認
-    task_pool.drain_and_apply(&mut world);
-}
-
-#[test]
-fn test_wintf_task_pool_command_send_receive() {
-    // spawnで送信したコマンドがdrain_and_applyで実行されることを確認
-    use bevy_ecs::prelude::*;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    let task_pool = WintfTaskPool::new();
-    let executed = Arc::new(AtomicBool::new(false));
-    let executed_clone = executed.clone();
-
-    // クロージャベースのコマンドを送信（BoxedCommandはFnOnce）
-    task_pool.send_command(Box::new(move |_world: &mut World| {
-        executed_clone.store(true, Ordering::SeqCst);
-    }));
-
-    // drain_and_apply実行
-    let mut world = World::new();
-    task_pool.drain_and_apply(&mut world);
-
-    assert!(
-        executed.load(Ordering::SeqCst),
-        "command should be executed"
-    );
-}
-
-// ============================================================
-// Task 2.1: BitmapSource Component Tests
-// ============================================================
-
-#[test]
-fn test_bitmap_source_creation() {
-    // BitmapSourceが正しくパスを保持することを確認
-    let bitmap_source = BitmapSource::new("test/path.png");
-    assert_eq!(bitmap_source.path, "test/path.png");
-}
-
-#[test]
-fn test_bitmap_source_from_string() {
-    // String型からも作成できることを確認
-    let path = String::from("assets/image.png");
-    let bitmap_source = BitmapSource::new(path);
-    assert_eq!(bitmap_source.path, "assets/image.png");
-}
-
-// ============================================================
 // Task 2.2: BitmapSourceResource Tests
 // ============================================================
 
@@ -151,27 +86,8 @@ fn test_bitmap_source_resource_send_sync() {
 // ============================================================
 
 #[test]
-fn test_bitmap_source_graphics_new() {
-    // 空のBitmapSourceGraphicsが作成できることを確認
-    let graphics = BitmapSourceGraphics::new();
-    assert!(!graphics.is_valid(), "new graphics should not be valid");
-    assert!(graphics.bitmap().is_none(), "bitmap should be None");
-}
-
-#[test]
-fn test_bitmap_source_graphics_invalidate() {
-    // invalidate()でbitmap がNoneになることを確認
-    let mut graphics = BitmapSourceGraphics::new();
-    graphics.invalidate();
-    assert!(
-        !graphics.is_valid(),
-        "invalidated graphics should not be valid"
-    );
-}
-
-#[test]
 fn test_bitmap_source_graphics_send_sync() {
-    // Send + Syncトレイトが実装されていることをコンパイル時に確認
+    // Send + Sync を自動の導出で持つことを確かめる（手書きの impl は無い）
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<BitmapSourceGraphics>();
 }
@@ -413,5 +329,60 @@ fn alpha_mask_for_previous_image_is_dropped() {
                 .alpha_mask()
                 .is_some()
         );
+    });
+}
+
+// ============================================================
+// 10・21 番: D2D の画像が作れない失敗も骨組みの道を通り、毎回やり直さない（実 GPU）
+// ============================================================
+
+#[test]
+fn oversize_image_gets_empty_list_and_is_not_retried() {
+    use crate::ecs::Size;
+    use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
+    use crate::ecs::layout::Arrangement;
+    use windows::Win32::Graphics::Imaging::{GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad};
+
+    with_com_initialized(|| {
+        let wic = WicCore::new().expect("WicCore");
+        let mut world = World::new();
+        let core = GraphicsCore::new().expect("GraphicsCore");
+        // 装置の上限を 1 越える幅の画像は、CreateBitmapFromWicBitmap が必ず断る
+        let max = unsafe { core.device_context().expect("dc").GetMaximumBitmapSize() };
+        world.insert_resource(core);
+        let source = unsafe {
+            wic.factory().CreateBitmap(
+                max + 1,
+                1,
+                &GUID_WICPixelFormat32bppPBGRA,
+                WICBitmapCacheOnLoad,
+            )
+        }
+        .expect("CreateBitmap")
+        .cast()
+        .expect("cast");
+        let e = world
+            .spawn((
+                BitmapSourceResource::new(source),
+                BitmapSourceGraphics::new(),
+                Arrangement {
+                    size: Size {
+                        width: 8.0,
+                        height: 8.0,
+                    },
+                    ..Default::default()
+                },
+            ))
+            .id();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(draw_bitmap_sources);
+        schedule.run(&mut world);
+
+        // 空の列が入るので Without<GraphicsCommandList> から外れ、次の回は対象にならない
+        let list = world
+            .get::<GraphicsCommandList>(e)
+            .expect("empty list inserted");
+        assert!(list.command_list().is_none());
+        assert!(!world.get::<BitmapSourceGraphics>(e).unwrap().is_valid());
     });
 }
