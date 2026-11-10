@@ -5,7 +5,7 @@ use super::{D2DRect, LayoutScale, Offset, Size};
 use crate::ecs::types::Rect;
 
 /// ローカルレイアウト配置（親からの相対位置とサイズ）
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Default)]
 #[component(on_add = on_arrangement_add)]
 pub struct Arrangement {
     pub offset: Offset,
@@ -26,24 +26,15 @@ impl Arrangement {
     }
 }
 
-impl Default for Arrangement {
-    fn default() -> Self {
-        Self {
-            offset: Offset::default(),
-            scale: LayoutScale::default(),
-            size: Size::default(),
-        }
-    }
-}
-
 fn on_arrangement_add(
     mut world: bevy_ecs::world::DeferredWorld,
     hook: bevy_ecs::lifecycle::HookContext,
 ) {
+    // 束で一緒に渡された値は残す（LayoutRoot のフックと同じ「無ければ入れる」）
     world
         .commands()
         .entity(hook.entity)
-        .insert((GlobalArrangement::default(), ArrangementTreeChanged));
+        .insert_if_new((GlobalArrangement::default(), ArrangementTreeChanged));
 }
 
 /// グローバルレイアウト変換（親からの累積変換とバウンディングボックス）

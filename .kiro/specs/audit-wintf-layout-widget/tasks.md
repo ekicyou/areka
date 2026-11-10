@@ -23,7 +23,7 @@
   - 完了の状態: 逆引きの名前と `validate` の参照がツリーに 0 件で、書き換えた 3 ファイルを含む wintf のテストが緑
   - _Requirements: 3.1, 3.3, 3.4, 3.5_
 
-- [ ] 1.3 `Arrangement` を足したときに、一緒に渡した `GlobalArrangement` を上書きしない
+- [x] 1.3 `Arrangement` を足したときに、一緒に渡した `GlobalArrangement` を上書きしない
   - 直す前に `crates/wintf/src/ecs/window_proc/mouse_dblclick_wheel_tests.rs` を回して答えを控える（`audit-wintf-window` の持ち物・書き換えない）
   - 付けたときのフックを「無ければ入れる」にする。`GlobalArrangement` が無い部品には今と同じく入る（`Visual` のフックがこの連鎖に頼る）
   - `Arrangement` の手書きの `Default` を derive にする（31 番）。配置の伝播の前の `trace!` を消す（30 番）

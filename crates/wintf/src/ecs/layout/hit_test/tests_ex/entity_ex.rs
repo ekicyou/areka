@@ -16,15 +16,23 @@ fn test_hit_test_entity_ex_named_regions_rect_hit() {
         .build()
         .unwrap();
 
-    // Arrangement の on_add hookが GlobalArrangement を上書きするため、
-    // GlobalArrangement のみをセットし、Arrangement.size は bounds からフォールバック
+    // Arrangement と値を入れた GlobalArrangement を束で入れても、渡した値が残る
+    let global = make_global_arrangement(0.0, 0.0, 100.0, 100.0);
     let entity = world
         .spawn((
-            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+            Arrangement {
+                size: crate::ecs::layout::Size {
+                    width: 100.0,
+                    height: 100.0,
+                },
+                ..Default::default()
+            },
+            global,
             HitTest::named_regions(),
             region_map,
         ))
         .id();
+    assert_eq!(world.get::<GlobalArrangement>(entity), Some(&global));
 
     // local (50, 20) → screen (50, 20) — "head" 領域内
     let point = PhysicalPoint::new(50.0, 20.0);

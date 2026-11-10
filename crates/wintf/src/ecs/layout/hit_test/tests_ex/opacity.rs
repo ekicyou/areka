@@ -16,6 +16,7 @@ fn test_hit_test_entity_bounds_alpha_boundary_above() {
     let mut world = World::new();
     let entity = world
         .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
             HitTest::bounds(),
             Visual {
                 opacity: 0.502,
@@ -29,12 +30,6 @@ fn test_hit_test_entity_bounds_alpha_boundary_above() {
             }),
         ))
         .id();
-    // Visual.on_add → Arrangement.on_add が GlobalArrangement::default() を挿入するため、
-    // flush 後にテスト用の値で上書きする
-    world.flush();
-    world
-        .entity_mut(entity)
-        .insert(make_global_arrangement(0.0, 0.0, 100.0, 100.0));
 
     // 合成α = 0.502 * 1.0 = 0.502 ≥ 128/255 ≈ 0.50196 → ヒット
     assert!(hit_test_entity(
@@ -53,6 +48,7 @@ fn test_hit_test_entity_bounds_alpha_boundary_below() {
     let mut world = World::new();
     let entity = world
         .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
             HitTest::bounds(),
             Visual {
                 opacity: 0.501,
@@ -66,10 +62,6 @@ fn test_hit_test_entity_bounds_alpha_boundary_below() {
             }),
         ))
         .id();
-    world.flush();
-    world
-        .entity_mut(entity)
-        .insert(make_global_arrangement(0.0, 0.0, 100.0, 100.0));
 
     // 合成α = 0.501 * 1.0 = 0.501 < 128/255 ≈ 0.50196 → 透明
     assert!(!hit_test_entity(
@@ -88,6 +80,7 @@ fn test_hit_test_entity_bounds_low_opacity() {
     let mut world = World::new();
     let entity = world
         .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
             HitTest::bounds(),
             Visual {
                 opacity: 0.4,
@@ -101,10 +94,6 @@ fn test_hit_test_entity_bounds_low_opacity() {
             }),
         ))
         .id();
-    world.flush();
-    world
-        .entity_mut(entity)
-        .insert(make_global_arrangement(0.0, 0.0, 100.0, 100.0));
 
     // 合成α = 0.4 * 1.0 = 0.4 < 128/255 → 透明
     assert!(!hit_test_entity(
@@ -123,6 +112,7 @@ fn test_hit_test_entity_bounds_low_foreground_alpha() {
     let mut world = World::new();
     let entity = world
         .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
             HitTest::bounds(),
             Visual {
                 opacity: 1.0,
@@ -136,10 +126,6 @@ fn test_hit_test_entity_bounds_low_foreground_alpha() {
             }),
         ))
         .id();
-    world.flush();
-    world
-        .entity_mut(entity)
-        .insert(make_global_arrangement(0.0, 0.0, 100.0, 100.0));
 
     // 合成α = 1.0 * 0.4 = 0.4 < 128/255 → 透明
     assert!(!hit_test_entity(
@@ -177,6 +163,7 @@ fn test_hit_test_entity_bounds_inherit_foreground() {
     let mut world = World::new();
     let entity = world
         .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
             HitTest::bounds(),
             Visual {
                 opacity: 0.502,
@@ -185,10 +172,6 @@ fn test_hit_test_entity_bounds_inherit_foreground() {
             Brushes::default(), // foreground = Inherit
         ))
         .id();
-    world.flush();
-    world
-        .entity_mut(entity)
-        .insert(make_global_arrangement(0.0, 0.0, 100.0, 100.0));
 
     // Inherit → DEFAULT_FOREGROUND (BLACK, a=1.0)
     // 合成α = 0.502 * 1.0 ≥ 128/255 → ヒット

@@ -5,7 +5,6 @@ use crate::ecs::common::tree_system::{
 };
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
-use tracing::trace;
 
 use super::super::{Arrangement, ArrangementTreeChanged, GlobalArrangement};
 
@@ -57,30 +56,6 @@ pub fn propagate_global_arrangements(
     >,
     nodes: NodeQuery<Arrangement, GlobalArrangement, ArrangementTreeChanged>,
 ) {
-    // デバッグログ: ルートエンティティの情報
-    for (entity, arr, global, _) in roots.iter() {
-        trace!(
-            entity = ?entity,
-            offset_x = arr.offset.x,
-            offset_y = arr.offset.y,
-            scale_x = arr.scale.x,
-            scale_y = arr.scale.y,
-            "[propagate_global_arrangements] Root Entity Arrangement"
-        );
-        trace!(
-            entity = ?entity,
-            m11 = global.transform.M11,
-            m12 = global.transform.M12,
-            m31 = global.transform.M31,
-            m32 = global.transform.M32,
-            bounds_left = global.bounds.left,
-            bounds_top = global.bounds.top,
-            bounds_right = global.bounds.right,
-            bounds_bottom = global.bounds.bottom,
-            "[propagate_global_arrangements] Root Entity GlobalArrangement"
-        );
-    }
-
     propagate_parent_transforms::<Arrangement, GlobalArrangement, ArrangementTreeChanged>(
         queue, roots, nodes,
     );
