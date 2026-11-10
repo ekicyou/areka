@@ -158,7 +158,7 @@ struct RedriveCount(usize);
 fn apply_injected_with_stamp(
     mut commands: Commands,
     layout_root: Query<Entity, With<LayoutRoot>>,
-    mut existing_monitors: Query<(Entity, &mut Monitor), With<Monitor>>,
+    mut existing_monitors: Query<(Entity, &mut Monitor)>,
     mut windows: Query<(Entity, &WindowPos, &mut DPI)>,
     mut taffy_res: ResMut<TaffyLayoutResource>,
     injected: Res<InjectedMonitorTable>,
@@ -431,7 +431,7 @@ fn observe_monitor_stamp(
     frame: Res<FrameCount>,
     tick_start: Res<TickStart>,
     layout_root: Query<Entity, With<LayoutRoot>>,
-    mut existing_monitors: Query<(Entity, &mut Monitor), With<Monitor>>,
+    mut existing_monitors: Query<(Entity, &mut Monitor)>,
     mut windows: Query<(Entity, &WindowPos, &mut DPI)>,
     mut taffy_res: ResMut<TaffyLayoutResource>,
     injected: Res<InjectedMonitorTable>,

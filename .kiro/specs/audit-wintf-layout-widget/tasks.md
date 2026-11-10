@@ -2,7 +2,7 @@
 
 > 指摘の番号は audit の番号（requirements.md「指摘の扱い」・design.md「指摘ごとの直し方」）。直し方の細部・テストの置き場・元に戻すと落ちるテストの中身は design.md が正本。どのタスクも `crates/wintf/src/ecs/mod.rs`・`ecs/world/mod.rs`・`ecs/visual/`・`ecs/graphics/`・`Cargo.toml`・`Cargo.lock` に触らない。`crates/areka/` に触るのは 6.1 だけ（前提つき）。範囲の外で触ってよいのは、各タスクに名指した `crates/wintf/tests/`・`crates/wintf/examples/` のファイルだけ（持ち主の `audit-wintf-runtime` は完了しているので申し合わせは要らない）。
 
-- [ ] 1. 配置の係と配置の部品
+- [x] 1. 配置の係と配置の部品
 - [x] 1.1 後から付けた・外した `BoxStyle` と消えた子を、その回の配置に正しく映す
   - 木をつなぐ係が、新しく `TaffyStyle` を持った部品の親と自分を「影響を受けた親」に足す（節が前から在る部品も同じ）
   - スタイルを作る係が外れた `BoxStyle` を読み、根なら既定のスタイルへ戻し、根でなければ `TaffyStyle` と計算の結果を外す。`Arrangement` は最後の値のまま残す
@@ -33,7 +33,7 @@
   - 完了の状態: 束で渡した `GlobalArrangement` の値が残ることをテストが示し、`Visual` だけを付けた部品にも `GlobalArrangement` が入る今のテスト（`crates/wintf/tests/layout/component_hooks_test.rs` など）と `mouse_dblclick_wheel_tests.rs` が前後とも緑
   - _Requirements: 2.6, 3.1, 3.2, 3.4, 3.5_
 
-- [ ] 1.4 (P) モニタの `BoxStyle` の組み立てを 1 か所にまとめる
+- [x] 1.4 (P) モニタの `BoxStyle` の組み立てを 1 か所にまとめる
   - モニタの物理の大きさと左上から絶対配置の `BoxStyle` を作る関数を置き、起動と新しいモニタの 2 か所はそのまま使い、値の更新は大きさと左上だけを写す（20 番）
   - モニタの更新の係の重なる `With<Monitor>` を消す（31 番）
   - 記録の行は動かすだけで文を変えない。「Redriving window DPI from updated Monitor (no WM_DPICHANGED required)」は 1 字も変えない

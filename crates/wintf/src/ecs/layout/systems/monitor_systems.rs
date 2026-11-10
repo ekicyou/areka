@@ -122,32 +122,11 @@ pub fn initialize_layout_root(world: &mut World) {
 
     // 各Monitorエンティティを生成
     for monitor in monitors {
-        let (width, height) = monitor.physical_size();
-        let (left, top) = monitor.top_left();
-
         log_enumerated_monitor(&monitor);
 
         // Note: Arrangement/GlobalArrangementはMonitor::on_addフックで自動挿入される
-        let monitor_entity = world
-            .spawn((
-                monitor,
-                ChildOf(layout_root),
-                BoxStyle {
-                    size: Some(BoxSize {
-                        width: Some(Dimension::Px(width)),
-                        height: Some(Dimension::Px(height)),
-                    }),
-                    position: Some(BoxPosition::Absolute),
-                    inset: Some(BoxInset(Rect {
-                        left: LengthPercentageAuto::Px(left),
-                        top: LengthPercentageAuto::Px(top),
-                        right: LengthPercentageAuto::Auto,
-                        bottom: LengthPercentageAuto::Auto,
-                    })),
-                    ..Default::default()
-                },
-            ))
-            .id();
+        let box_style = monitor_box_style(&monitor);
+        let monitor_entity = world.spawn((monitor, ChildOf(layout_root), box_style)).id();
 
         // Monitor用のTaffyノード作成
         let mut taffy_res = world.resource_mut::<TaffyLayoutResource>();
@@ -176,16 +155,29 @@ pub fn update_monitor_layout_system(
             "[update_monitor_layout_system] Updating Monitor layout"
         );
 
-        box_style.size = Some(BoxSize {
+        let fresh = monitor_box_style(monitor);
+        box_style.size = fresh.size;
+        box_style.inset = fresh.inset;
+    }
+}
+
+/// モニタの物理の大きさと左上から、絶対配置の BoxStyle を作る。
+fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
+    let (width, height) = monitor.physical_size();
+    let (left, top) = monitor.top_left();
+    BoxStyle {
+        size: Some(BoxSize {
             width: Some(Dimension::Px(width)),
             height: Some(Dimension::Px(height)),
-        });
-        box_style.inset = Some(BoxInset(Rect {
+        }),
+        position: Some(BoxPosition::Absolute),
+        inset: Some(BoxInset(Rect {
             left: LengthPercentageAuto::Px(left),
             top: LengthPercentageAuto::Px(top),
             right: LengthPercentageAuto::Auto,
             bottom: LengthPercentageAuto::Auto,
-        }));
+        })),
+        ..Default::default()
     }
 }
 
@@ -209,7 +201,7 @@ pub fn detect_display_change_system(
     mut commands: Commands,
     mut app: ResMut<crate::ecs::App>,
     layout_root: Query<Entity, With<LayoutRoot>>,
-    mut existing_monitors: Query<(Entity, &mut crate::ecs::Monitor), With<crate::ecs::Monitor>>,
+    mut existing_monitors: Query<(Entity, &mut crate::ecs::Monitor)>,
     mut windows: Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     mut taffy_res: ResMut<TaffyLayoutResource>,
     frame: Res<FrameCount>,
@@ -274,7 +266,7 @@ pub fn detect_display_change_system(
 pub(crate) fn apply_monitor_snapshot(
     commands: &mut Commands,
     root_entity: Entity,
-    existing_monitors: &mut Query<(Entity, &mut crate::ecs::Monitor), With<crate::ecs::Monitor>>,
+    existing_monitors: &mut Query<(Entity, &mut crate::ecs::Monitor)>,
     windows: &mut Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     taffy_res: &mut TaffyLayoutResource,
     new_monitors: Vec<crate::ecs::Monitor>,
@@ -364,29 +356,10 @@ pub(crate) fn apply_monitor_snapshot(
                 "[detect_display_change_system] Adding new Monitor"
             );
 
-            let (width, height) = new_monitor.physical_size();
-            let (left, top) = new_monitor.top_left();
-
             // Note: Arrangement/GlobalArrangementはMonitor::on_addフックで自動挿入される
+            let box_style = monitor_box_style(&new_monitor);
             let monitor_entity = commands
-                .spawn((
-                    new_monitor,
-                    ChildOf(root_entity),
-                    BoxStyle {
-                        size: Some(BoxSize {
-                            width: Some(Dimension::Px(width)),
-                            height: Some(Dimension::Px(height)),
-                        }),
-                        position: Some(BoxPosition::Absolute),
-                        inset: Some(BoxInset(Rect {
-                            left: LengthPercentageAuto::Px(left),
-                            top: LengthPercentageAuto::Px(top),
-                            right: LengthPercentageAuto::Auto,
-                            bottom: LengthPercentageAuto::Auto,
-                        })),
-                        ..Default::default()
-                    },
-                ))
+                .spawn((new_monitor, ChildOf(root_entity), box_style))
                 .id();
 
             if let Err(e) = taffy_res.create_node(monitor_entity) {
