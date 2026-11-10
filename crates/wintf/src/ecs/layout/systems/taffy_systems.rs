@@ -22,6 +22,8 @@ use taffy::prelude::*;
 /// 1. BoxStyleまたはLayoutRootを持ち、TaffyStyleがないエンティティにTaffyStyleを自動挿入
 /// 2. BoxStyleが変更されたエンティティのTaffyStyleを更新
 /// 3. LayoutRootのみでBoxStyleがないエンティティにはBoxStyle::default()相当のスタイルを適用
+/// 4. BoxStyleが外れたエンティティは、LayoutRootなら既定のスタイルへ戻し、
+///    そうでなければTaffyStyleと計算結果を外す（Arrangementは最後の値のまま残す）
 pub fn build_taffy_styles_system(
     mut commands: Commands,
     // LayoutRootまたはBoxStyleがあるがTaffyStyleがないエンティティ
@@ -32,7 +34,25 @@ pub fn build_taffy_styles_system(
     >,
     // BoxStyleが変更されたエンティティ
     mut changed: Query<(&BoxStyle, &mut TaffyStyle), Changed<BoxStyle>>,
+    // BoxStyleが外れたエンティティ（同じ回に付け直したものは除く）
+    mut removed_box_styles: RemovedComponents<BoxStyle>,
+    mut unstyled: Query<(Has<LayoutRoot>, Option<&mut TaffyStyle>), Without<BoxStyle>>,
 ) {
+    for entity in removed_box_styles.read() {
+        let Ok((is_root, taffy_style)) = unstyled.get_mut(entity) else {
+            continue; // 消えた部品か、もうBoxStyleを付け直した部品
+        };
+        if is_root {
+            if let Some(mut taffy_style) = taffy_style {
+                taffy_style.0 = taffy::Style::default();
+            }
+        } else {
+            commands
+                .entity(entity)
+                .try_remove::<(TaffyStyle, TaffyComputedLayout)>();
+        }
+    }
+
     // TaffyStyle自動挿入
     for (entity, box_style) in without_style.iter() {
         // BoxStyleがない場合（LayoutRootのみ）はデフォルトスタイル
@@ -53,34 +73,48 @@ pub fn build_taffy_styles_system(
 /// TaffyツリーをECS階層と同期
 pub fn sync_taffy_tree_system(
     mut taffy_res: ResMut<TaffyLayoutResource>,
-    // 新規エンティティ（TaffyStyleが追加されたがノードがまだ作成されていない）
-    new_entities: Query<Entity, Added<TaffyStyle>>,
+    // TaffyStyleが付いたばかりのエンティティ（ノードが無ければ作る・親子をつなぎ直す）
+    new_entities: Query<(Entity, Option<&ChildOf>, Has<Children>), Added<TaffyStyle>>,
     // TaffyStyleが変更されたエンティティ
     changed_styles: Query<(Entity, &TaffyStyle), Changed<TaffyStyle>>,
     // 階層が変更されたエンティティ
     changed_hierarchy: Query<&ChildOf, Changed<ChildOf>>,
     // ChildOfが削除されたエンティティ
     mut removed_hierarchy: RemovedComponents<ChildOf>,
+    // TaffyStyleが外れたエンティティ（節を消すのは計算の後の掃除の係）
+    mut removed_styles: RemovedComponents<TaffyStyle>,
     // Children コンポーネント（兄弟順序の権威的ソース）
     children_query: Query<&Children>,
 ) {
-    // 新規エンティティにtaffyノードを作成
-    for entity in new_entities.iter() {
-        if taffy_res.get_node(entity).is_none() {
-            let _ = taffy_res.create_node(entity);
+    // 係には Err を返す先が無いので、taffy の失敗は記録だけにする（以下同じ）。
+    // 新規エンティティにtaffyノードを作成し、その親と自分（子を持つなら）を影響親に足す
+    // （節が前から在る部品も、後から BoxStyle を付けた部品も、ここで親子がつながる）
+    let mut affected_parents = std::collections::HashSet::new();
+    for (entity, child_of, has_children) in new_entities.iter() {
+        if taffy_res.get_node(entity).is_none()
+            && let Err(e) = taffy_res.create_node(entity)
+        {
+            error!(?entity, error = ?e, "[sync_taffy_tree] Taffy node creation failed");
+        }
+        if let Some(child_of) = child_of {
+            affected_parents.insert(child_of.parent());
+        }
+        if has_children {
+            affected_parents.insert(entity);
         }
     }
 
     // TaffyStyleの変更をtaffyツリーに反映
     for (entity, style) in changed_styles.iter() {
         if let Some(node_id) = taffy_res.get_node(entity) {
-            let _ = taffy_res.taffy_mut().set_style(node_id, style.0.clone());
+            if let Err(e) = taffy_res.taffy_mut().set_style(node_id, style.0.clone()) {
+                error!(?entity, error = ?e, "[sync_taffy_tree] Taffy set_style failed");
+            }
         }
     }
 
     // 階層変更を処理: Children コンポーネントの順序を権威的ソースとして使用
     // Step 1: changed_hierarchy から影響を受けた親エンティティを収集（重複排除）
-    let mut affected_parents = std::collections::HashSet::new();
     for child_of in changed_hierarchy.iter() {
         affected_parents.insert(child_of.parent());
     }
@@ -95,19 +129,24 @@ pub fn sync_taffy_tree_system(
                     .iter()
                     .filter_map(|child_entity| taffy_res.get_node(child_entity))
                     .collect();
-                let _ = taffy_res
+                if let Err(e) = taffy_res
                     .taffy_mut()
-                    .set_children(parent_node, &ordered_node_ids);
+                    .set_children(parent_node, &ordered_node_ids)
+                {
+                    error!(entity = ?parent_entity, error = ?e, "[sync_taffy_tree] Taffy set_children failed");
+                }
             }
         }
     }
 
-    // ChildOfが削除された場合の処理
-    for entity in removed_hierarchy.read() {
-        if let Some(node_id) = taffy_res.get_node(entity) {
-            if let Some(parent_node) = taffy_res.taffy().parent(node_id) {
-                let _ = taffy_res.taffy_mut().remove_child(parent_node, node_id);
-            }
+    // ChildOfかTaffyStyleが削除された場合の処理: taffy の親から外す
+    // （掃除の係は計算の後に並ぶので、ここで外さないとその回の計算が消える前の節を含む）
+    for entity in removed_hierarchy.read().chain(removed_styles.read()) {
+        if let Some(node_id) = taffy_res.get_node(entity)
+            && let Some(parent_node) = taffy_res.taffy().parent(node_id)
+            && let Err(e) = taffy_res.taffy_mut().remove_child(parent_node, node_id)
+        {
+            error!(?entity, error = ?e, "[sync_taffy_tree] Taffy remove_child failed");
         }
     }
 }
@@ -121,11 +160,17 @@ pub fn compute_taffy_layout_system(
     changed_styles: Query<(), Changed<TaffyStyle>>,
     changed_box_styles: Query<(), Changed<BoxStyle>>,
     changed_hierarchy: Query<(), Changed<ChildOf>>,
+    // 削除検知用（係ごとに読み位置を持つので、掃除の係と同じ記録を読める）
+    mut removed_hierarchy: RemovedComponents<ChildOf>,
+    mut removed_styles: RemovedComponents<TaffyStyle>,
     // TaffyComputedLayoutを書き込むクエリ
     mut all_taffy_entities: Query<(Entity, &mut TaffyComputedLayout), With<TaffyStyle>>,
 ) {
-    // BoxStyleまたはTaffyStyleの変更、階層変更のいずれかで再計算
-    let has_changes = !changed_styles.is_empty()
+    // 消えた記録は毎回 2 つとも読み切る（is_empty は読み位置を進めず、次の回もまた計算してしまう）
+    let removed = removed_hierarchy.read().count() + removed_styles.read().count();
+    // BoxStyleまたはTaffyStyleの変更、階層の変更・削除のいずれかで再計算
+    let has_changes = removed > 0
+        || !changed_styles.is_empty()
         || !changed_box_styles.is_empty()
         || !changed_hierarchy.is_empty();
 
@@ -145,27 +190,33 @@ pub fn compute_taffy_layout_system(
                     height: to_available(root_size.and_then(|s| s.height)),
                 };
 
-                let result = taffy_res
+                if let Err(e) = taffy_res
                     .taffy_mut()
-                    .compute_layout(root_node, available_space);
-
-                // 計算成功時、全エンティティにTaffyComputedLayoutを書き込む
-                if result.is_ok() {
+                    .compute_layout(root_node, available_space)
+                {
+                    error!(entity = ?root_entity, error = ?e, "[compute_taffy_layout] Taffy compute_layout failed");
+                } else {
+                    // 計算成功時、全エンティティにTaffyComputedLayoutを書き込む
                     for (entity, mut computed) in all_taffy_entities.iter_mut() {
                         if let Some(node_id) = taffy_res.get_node(entity) {
-                            if let Ok(layout) = taffy_res.taffy().layout(node_id) {
-                                let new_layout = TaffyComputedLayout(*layout);
-                                // 値比較で変更検知を抑制
-                                if *computed != new_layout {
-                                    tracing::debug!(
-                                        entity = ?entity,
-                                        old_width = computed.0.size.width,
-                                        old_height = computed.0.size.height,
-                                        new_width = new_layout.0.size.width,
-                                        new_height = new_layout.0.size.height,
-                                        "[compute_taffy_layout] Layout changed"
-                                    );
-                                    *computed = new_layout;
+                            match taffy_res.taffy().layout(node_id) {
+                                Err(e) => {
+                                    error!(?entity, error = ?e, "[compute_taffy_layout] Taffy layout read failed");
+                                }
+                                Ok(layout) => {
+                                    let new_layout = TaffyComputedLayout(*layout);
+                                    // 値比較で変更検知を抑制
+                                    if *computed != new_layout {
+                                        tracing::debug!(
+                                            entity = ?entity,
+                                            old_width = computed.0.size.width,
+                                            old_height = computed.0.size.height,
+                                            new_width = new_layout.0.size.width,
+                                            new_height = new_layout.0.size.height,
+                                            "[compute_taffy_layout] Layout changed"
+                                        );
+                                        *computed = new_layout;
+                                    }
                                 }
                             }
                         }
@@ -264,9 +315,10 @@ pub fn update_arrangements_system(
             },
         };
 
-        let entity_name = format_entity_name(entity, name);
+        // 名前はその記録が点いているときだけ作る（配置が変わるたびに通る道）
+        let entity_name = || format_entity_name(entity, name);
         trace!(
-            entity = %entity_name,
+            entity = %entity_name(),
             location_x = layout.location.x,
             location_y = layout.location.y,
             size_width = layout.size.width,
@@ -274,7 +326,7 @@ pub fn update_arrangements_system(
             "[update_arrangements] TaffyLayout"
         );
         trace!(
-            entity = %entity_name,
+            entity = %entity_name(),
             offset_x = new_arrangement.offset.x,
             offset_y = new_arrangement.offset.y,
             scale_x = new_arrangement.scale.x,
@@ -303,3 +355,7 @@ pub fn cleanup_removed_entities_system(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "taffy_systems_tests.rs"]
+mod tests;

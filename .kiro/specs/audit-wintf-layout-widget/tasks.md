@@ -3,7 +3,7 @@
 > 指摘の番号は audit の番号（requirements.md「指摘の扱い」・design.md「指摘ごとの直し方」）。直し方の細部・テストの置き場・元に戻すと落ちるテストの中身は design.md が正本。どのタスクも `crates/wintf/src/ecs/mod.rs`・`ecs/world/mod.rs`・`ecs/visual/`・`ecs/graphics/`・`Cargo.toml`・`Cargo.lock` に触らない。`crates/areka/` に触るのは 6.1 だけ（前提つき）。範囲の外で触ってよいのは、各タスクに名指した `crates/wintf/tests/`・`crates/wintf/examples/` のファイルだけ（持ち主の `audit-wintf-runtime` は完了しているので申し合わせは要らない）。
 
 - [ ] 1. 配置の係と配置の部品
-- [ ] 1.1 後から付けた・外した `BoxStyle` と消えた子を、その回の配置に正しく映す
+- [x] 1.1 後から付けた・外した `BoxStyle` と消えた子を、その回の配置に正しく映す
   - 木をつなぐ係が、新しく `TaffyStyle` を持った部品の親と自分を「影響を受けた親」に足す（節が前から在る部品も同じ）
   - スタイルを作る係が外れた `BoxStyle` を読み、根なら既定のスタイルへ戻し、根でなければ `TaffyStyle` と計算の結果を外す。`Arrangement` は最後の値のまま残す
   - 木をつなぐ係が外れた `TaffyStyle` の節を taffy の親から外し、計算の係が 2 つの消えた記録を毎回読み切ってから、どちらかが在れば計算する
@@ -195,3 +195,7 @@
   - 文字化けが出てもコンソールの文字コードで逃げない。依存は足さない
   - 完了の状態: 全体テストが緑
   - _Requirements: 5.2, 5.6, 5.7, 5.8, 6.6_
+
+## Implementation Notes
+- 1.1: 係のテストは `Schedule` を回をまたいで使い回す。回ごとに新しく作ると全部が Added/Changed に見え、直す前でも緑になる（実装係が 3 本で踏んだ）。
+- 1.1: `BoxStyle` を外した部品の下に `TaffyStyle` を持つ子が居ると、その子の節は taffy の木から離れ、`TaffyComputedLayout` は古い値のまま残る。要件・設計に決めが無い（レビュー係の FYI）。7.1 の 2 度目の audit で見る。
