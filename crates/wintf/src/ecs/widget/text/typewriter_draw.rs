@@ -21,6 +21,20 @@ use windows::Win32::Graphics::Direct2D::D2D1_DRAW_TEXT_OPTIONS_NONE;
 use windows::Win32::Graphics::DirectWrite::*;
 use windows_numerics::{Matrix3x2, Vector2};
 
+/// 見せるクラスタ数から、透明にする範囲（UTF-16 の開始と長さ）を返す。隠す所が無ければ None。
+pub(crate) fn hidden_text_range(
+    cluster_lengths: &[u16],
+    visible_clusters: u32,
+) -> Option<(u32, u32)> {
+    let visible: u32 = cluster_lengths
+        .iter()
+        .take(visible_clusters as usize)
+        .map(|&l| l as u32)
+        .sum();
+    let total: u32 = cluster_lengths.iter().map(|&l| l as u32).sum();
+    (visible < total).then(|| (visible, total - visible))
+}
+
 /// 透明色定数（内部使用）
 const TRANSPARENT_COLOR: D2D1_COLOR_F = D2D1_COLOR_F {
     r: 0.0,
@@ -98,7 +112,6 @@ pub fn draw_typewriters(
 
     for (entity, typewriter, talk, layout_cache, arrangement, brushes) in query.iter() {
         let text_layout = layout_cache.text_layout();
-        let timeline = layout_cache.timeline();
         let visible_count = talk.visible_cluster_count();
 
         // Brushes から色を取得
@@ -125,12 +138,9 @@ pub fn draw_typewriters(
             }
         };
 
-        // visible_count までのテキスト位置を計算
-        let visible_text_length: u32 = cluster_metrics
-            .iter()
-            .take(visible_count as usize)
-            .map(|m| m.length as u32)
-            .sum();
+        // visible_count より後ろのクラスタを隠す範囲（UTF-16）
+        let cluster_lengths: Vec<u16> = cluster_metrics.iter().map(|m| m.length).collect();
+        let hidden = hidden_text_range(&cluster_lengths, visible_count);
 
         // テキストメトリクス取得
         let mut text_metrics = DWRITE_TEXT_METRICS::default();
@@ -193,7 +203,7 @@ pub fn draw_typewriters(
         };
 
         // visible_count > 0 の場合のみ描画
-        if visible_count > 0 && visible_text_length > 0 {
+        if visible_count > 0 {
             // 描画位置の調整
             // DirectWriteはレイアウトボックス(layoutWidth x layoutHeight)を基準に描画する
             //
@@ -224,10 +234,8 @@ pub fn draw_typewriters(
                 }
             };
 
-            // 非表示部分を透明にするため、visible_text_length以降に透明ブラシを設定
-            let total_text_length = timeline.full_text.chars().count() as u32;
-
-            if visible_text_length < total_text_length {
+            // 非表示部分を透明にするため、隠す範囲に透明ブラシを設定
+            if let Some((start, length)) = hidden {
                 // 透明ブラシ作成
                 let transparent_brush = match dc.create_solid_color_brush(&TRANSPARENT_COLOR, None)
                 {
@@ -249,8 +257,8 @@ pub fn draw_typewriters(
 
                 // 非表示範囲に透明ブラシを設定
                 let hidden_range = DWRITE_TEXT_RANGE {
-                    startPosition: visible_text_length,
-                    length: total_text_length - visible_text_length,
+                    startPosition: start,
+                    length,
                 };
                 unsafe {
                     let _ = text_layout.SetDrawingEffect(&transparent_brush, hidden_range);
@@ -261,10 +269,10 @@ pub fn draw_typewriters(
             dc.draw_text_layout(origin, text_layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
 
             // 設定をリセット（次回描画のため）
-            if visible_text_length < total_text_length {
+            if let Some((start, length)) = hidden {
                 let hidden_range = DWRITE_TEXT_RANGE {
-                    startPosition: visible_text_length,
-                    length: total_text_length - visible_text_length,
+                    startPosition: start,
+                    length,
                 };
                 unsafe {
                     let _ = text_layout.SetDrawingEffect(None, hidden_range);

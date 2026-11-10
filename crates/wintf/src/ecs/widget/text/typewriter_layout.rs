@@ -173,7 +173,6 @@ pub fn init_typewriter_layout(
         trace!(
             entity = ?entity,
             total_cluster_count = timeline.total_cluster_count,
-            total_duration = timeline.total_duration,
             "[init_typewriter_layout] LayoutCache created"
         );
 
@@ -184,35 +183,34 @@ pub fn init_typewriter_layout(
     }
 }
 
-/// Stage 1 → Stage 2 IR 変換
-fn convert_to_timeline(
+/// トークン列とクラスタの長さ（UTF-16）から時間表の項目を作る。
+///
+/// 文のトークンは、その UTF-16 の終わりに届くまでクラスタを 1 つずつ `Glyph` にする
+/// （サロゲート対や結合文字の 2 文字以上が 1 クラスタでも数がずれない）。
+pub(crate) fn timeline_items(
     tokens: &[TypewriterToken],
-    typewriter: &Typewriter,
-    text_layout: &IDWriteTextLayout,
-) -> windows::core::Result<TypewriterTimeline> {
-    let cluster_metrics = text_layout.get_cluster_metrics()?;
-    let total_cluster_count = cluster_metrics.len() as u32;
-
-    let mut full_text = String::new();
+    cluster_lengths: &[u16],
+    default_char_wait: f64,
+) -> Vec<TimelineItem> {
     let mut items = Vec::new();
     let mut current_time = 0.0;
-    let mut cluster_index = 0u32;
+    let mut cluster_index = 0usize;
+    // 出したクラスタの UTF-16 の長さの和と、ここまでの文の UTF-16 の長さの和
+    let mut shown_end = 0usize;
+    let mut text_end = 0usize;
 
     for token in tokens {
         match token {
             TypewriterToken::Text(text) => {
-                full_text.push_str(text);
-
-                let char_count = text.chars().count();
-                for _ in 0..char_count {
-                    if cluster_index < total_cluster_count {
-                        current_time += typewriter.default_char_wait;
-                        items.push(TimelineItem::Glyph {
-                            cluster_index,
-                            show_at: current_time,
-                        });
-                        cluster_index += 1;
-                    }
+                text_end += text.encode_utf16().count();
+                while shown_end < text_end && cluster_index < cluster_lengths.len() {
+                    current_time += default_char_wait;
+                    items.push(TimelineItem::Glyph {
+                        cluster_index: cluster_index as u32,
+                        show_at: current_time,
+                    });
+                    shown_end += cluster_lengths[cluster_index] as usize;
+                    cluster_index += 1;
                 }
             }
             TypewriterToken::Wait(duration) => {
@@ -231,11 +229,31 @@ fn convert_to_timeline(
             }
         }
     }
+    items
+}
+
+/// Stage 1 → Stage 2 IR 変換
+fn convert_to_timeline(
+    tokens: &[TypewriterToken],
+    typewriter: &Typewriter,
+    text_layout: &IDWriteTextLayout,
+) -> windows::core::Result<TypewriterTimeline> {
+    let cluster_lengths: Vec<u16> = text_layout
+        .get_cluster_metrics()?
+        .iter()
+        .map(|m| m.length)
+        .collect();
+    let full_text: String = tokens
+        .iter()
+        .filter_map(|t| match t {
+            TypewriterToken::Text(s) => Some(s.as_str()),
+            _ => None,
+        })
+        .collect();
 
     Ok(TypewriterTimeline {
         full_text,
-        items,
-        total_duration: current_time,
-        total_cluster_count,
+        items: timeline_items(tokens, &cluster_lengths, typewriter.default_char_wait),
+        total_cluster_count: cluster_lengths.len() as u32,
     })
 }

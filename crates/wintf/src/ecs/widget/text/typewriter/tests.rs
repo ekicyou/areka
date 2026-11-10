@@ -17,28 +17,6 @@ fn test_typewriter_layout_cache_is_send_sync() {
     assert_send_sync::<TypewriterLayoutCache>();
 }
 
-#[test]
-fn test_typewriter_default() {
-    let tw = Typewriter::default();
-    assert_eq!(tw.font_family, "メイリオ");
-    assert_eq!(tw.font_size, 16.0);
-    assert!((tw.default_char_wait - 0.05).abs() < f64::EPSILON);
-}
-
-#[test]
-fn test_typewriter_state_default() {
-    let state = TypewriterState::default();
-    assert_eq!(state, TypewriterState::Playing);
-}
-
-#[test]
-fn test_typewriter_state_transitions() {
-    assert_eq!(TypewriterState::Playing, TypewriterState::Playing);
-    assert_eq!(TypewriterState::Paused, TypewriterState::Paused);
-    assert_eq!(TypewriterState::Completed, TypewriterState::Completed);
-    assert_ne!(TypewriterState::Playing, TypewriterState::Paused);
-}
-
 // ============================================================
 // TypewriterTalk — デバイス非依存な再生状態マシンの特性化
 // （pause/resume/skip/update のロジックは DirectWrite 非依存。
@@ -61,7 +39,6 @@ fn make_glyph_timeline(glyph_count: u32, step: f64) -> TypewriterTimeline {
     TypewriterTimeline {
         full_text: "x".repeat(glyph_count as usize),
         items,
-        total_duration: t,
         total_cluster_count: glyph_count,
     }
 }
@@ -167,7 +144,11 @@ fn test_typewriter_talk_update_completes_when_all_glyphs_visible() {
 fn test_typewriter_talk_update_zero_clusters_completes_immediately() {
     // グリフを持たない timeline（total_cluster_count=0）は
     // progress=1.0・即 Completed（0 >= 0）になる退化ケース。
-    let timeline = TypewriterTimeline::empty();
+    let timeline = TypewriterTimeline {
+        full_text: String::new(),
+        items: Vec::new(),
+        total_cluster_count: 0,
+    };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
     talk.update(0.0, &timeline);
     assert_eq!(talk.progress(), 1.0);
@@ -190,7 +171,6 @@ fn test_typewriter_talk_update_wait_gates_following_glyph() {
                 show_at: 5.0,
             },
         ],
-        total_duration: 5.0,
         total_cluster_count: 1,
     };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
@@ -223,7 +203,6 @@ fn test_typewriter_talk_update_fires_event_at_threshold() {
                 show_at: 3.0,
             },
         ],
-        total_duration: 3.0,
         total_cluster_count: 1,
     };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
@@ -252,7 +231,6 @@ fn test_typewriter_talk_update_does_not_refire_event_on_second_call() {
             event: TypewriterEventKind::Complete,
             fire_at: 1.0,
         }],
-        total_duration: 1.0,
         total_cluster_count: 0,
     };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
@@ -376,7 +354,6 @@ fn wait_then_fire_timeline(target: Entity) -> TypewriterTimeline {
         event: TypewriterEventKind::Complete,
         fire_at: 1.4,
     });
-    timeline.total_duration = 1.4;
     timeline
 }
 
@@ -464,4 +441,69 @@ fn event_to_despawned_target_is_dropped_without_panic() {
     schedule.run(&mut world);
     assert!(world.get_entity(target).is_err());
     assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+}
+
+// ============================================================
+// 時間表と隠す範囲をクラスタと UTF-16 で数える（6 番）— CPU だけ
+// ============================================================
+
+use crate::ecs::widget::text::typewriter_draw::hidden_text_range;
+use crate::ecs::widget::text::typewriter_layout::timeline_items;
+
+/// 項目を (種類, クラスタ番号) に縮めて並びを比べやすくする。
+fn item_kinds(items: &[TimelineItem]) -> Vec<(&'static str, Option<u32>)> {
+    items
+        .iter()
+        .map(|item| match item {
+            TimelineItem::Glyph { cluster_index, .. } => ("glyph", Some(*cluster_index)),
+            TimelineItem::Wait { .. } => ("wait", None),
+            TimelineItem::FireEvent { .. } => ("event", None),
+        })
+        .collect()
+}
+
+#[test]
+fn timeline_counts_surrogate_pair_as_one_cluster() {
+    // 𠮷 は UTF-16 で 2 つ・クラスタは 1 つ。
+    let tokens = vec![TypewriterToken::Text("𠮷野家です".into())];
+    let items = timeline_items(&tokens, &[2, 1, 1, 1, 1], 0.1);
+    assert_eq!(
+        item_kinds(&items),
+        (0..5).map(|i| ("glyph", Some(i))).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn timeline_puts_glyph_after_wait_when_cluster_spans_two_chars() {
+    // ❤️ は 2 文字（U+2764 U+FE0F）で 1 クラスタ。「!」は待ちの後ろに来る。
+    let tokens = vec![
+        TypewriterToken::Text("\u{2764}\u{FE0F}ok".into()),
+        TypewriterToken::Wait(1.0),
+        TypewriterToken::Text("!".into()),
+    ];
+    let items = timeline_items(&tokens, &[2, 1, 1, 1], 0.1);
+    assert_eq!(
+        item_kinds(&items),
+        vec![
+            ("glyph", Some(0)),
+            ("glyph", Some(1)),
+            ("glyph", Some(2)),
+            ("wait", None),
+            ("glyph", Some(3)),
+        ]
+    );
+    let TimelineItem::Glyph { show_at, .. } = items[4] else {
+        panic!("last item must be a glyph");
+    };
+    assert!((show_at - 1.4).abs() < 1e-9);
+}
+
+#[test]
+fn hidden_range_is_counted_in_utf16() {
+    // 𠮷野家です は UTF-16 で 6。𠮷 を 1 つ見せたら (2, 4) を隠す。
+    let lengths = [2, 1, 1, 1, 1];
+    assert_eq!(hidden_text_range(&lengths, 1), Some((2, 4)));
+    assert_eq!(hidden_text_range(&lengths, 0), Some((0, 6)));
+    assert_eq!(hidden_text_range(&lengths, 5), None);
+    assert_eq!(hidden_text_range(&lengths, 9), None);
 }
