@@ -16,8 +16,9 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, ID2D1DeviceContext,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
-use windows::Win32::Graphics::Imaging::IWICBitmapSource;
-use windows::core::Result;
+use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
+use windows::Win32::Graphics::Imaging::{IWICBitmapSource, WICBitmapCacheOnLoad};
+use windows::core::{Interface, Result};
 use windows_numerics::Matrix3x2;
 
 // ============================================================
@@ -62,6 +63,20 @@ pub fn test_asset_path(name: &str) -> PathBuf {
 // （design Decision D2 / Critical Issue 1）。パス互換のため re-export する。
 // 戻り値は `(IWICBitmapSource, has_alpha)` の tuple に拡張されている。
 pub use crate::com::wic::load_bitmap_source;
+
+/// 画像を読み、裏の作業の中で 1 回だけ解読してメモリの画像にする。
+///
+/// `load_bitmap_source` が返す形式の変換器は読むたびに解読するので、
+/// `WICBitmapCacheOnLoad` でメモリへ写す。UI スレッドの `copy_pixels`（αのマスク）と
+/// `CreateBitmapFromWicBitmap`（描画）はこの写しを読むだけになる。
+pub(crate) fn load_decoded_bitmap(
+    factory: &IWICImagingFactory2,
+    path: &Path,
+) -> Result<IWICBitmapSource> {
+    let (converter, _has_alpha) = load_bitmap_source(factory, path)?;
+    let bitmap = unsafe { factory.CreateBitmapFromSource(&converter, WICBitmapCacheOnLoad)? };
+    bitmap.cast()
+}
 
 // ============================================================
 // ECSコマンド
@@ -330,7 +345,7 @@ impl Command for SetAlphaMaskCommand {
 /// - `HitTestMode::AlphaMask` の場合のみ実行
 ///
 /// # Flow
-/// 1. WIC BitmapSource からピクセルデータを取得（同期）
+/// 1. 解読済みのメモリの画像からピクセルデータを写す（UI スレッド・解読はしない）
 /// 2. 非同期タスクでAlphaMask::from_pbgra32() でマスク生成
 /// 3. Command 経由で BitmapSourceResource.alpha_mask に設定
 pub fn generate_alpha_mask_system(
@@ -352,7 +367,7 @@ pub fn generate_alpha_mask_system(
             continue;
         }
 
-        // 同期でピクセルデータを取得（IWICBitmapSourceはSendでないため）
+        // UI スレッドで写す。資源は解読済みのメモリの画像なので、ここでは読むだけ
         let source = resource.source();
 
         // 画像サイズを取得

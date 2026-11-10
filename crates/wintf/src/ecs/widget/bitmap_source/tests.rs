@@ -225,3 +225,25 @@ fn test_resolve_path_relative_preserves_subdirectories() {
     let exe_dir = exe.parent().expect("exe has a parent dir");
     assert_eq!(resolved, exe_dir.join("a/b/c.png"));
 }
+
+// ============================================================
+// 11 番: 解読は裏の作業の 1 回だけ
+// ============================================================
+
+#[test]
+fn load_decoded_bitmap_returns_in_memory_bitmap() {
+    use super::systems::load_decoded_bitmap;
+    use windows::Win32::Graphics::Imaging::IWICBitmap;
+
+    with_com_initialized(|| {
+        let wic_core = WicCore::new().expect("WicCore creation failed");
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/assets/test_8x8_rgba.png");
+        let source = load_decoded_bitmap(wic_core.factory(), &path).expect("load_decoded_bitmap");
+        // 変換器は IWICBitmap を持たない。メモリの画像だけが cast できる
+        assert!(
+            source.cast::<IWICBitmap>().is_ok(),
+            "decoded source must be an in-memory IWICBitmap, not the format converter"
+        );
+    });
+}
