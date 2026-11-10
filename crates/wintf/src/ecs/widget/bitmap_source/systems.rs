@@ -10,7 +10,7 @@ use crate::ecs::layout::Arrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_PIXEL_FORMAT;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, ID2D1DeviceContext,
@@ -111,14 +111,14 @@ impl Command for InsertBitmapSourceResource {
 
 /// BitmapSourceResourceからD2D Bitmapを生成し、GraphicsCommandListに描画コマンドを出力
 ///
-/// - BitmapSourceGraphics.is_valid() == falseの場合、D2D Bitmapを生成
+/// - BitmapSourceGraphics.is_valid() == false か画像の資源が変わった場合、D2D Bitmapを生成
 /// - GraphicsCommandListに描画コマンドを出力（OFFSET(0,0)から描画）
 pub fn draw_bitmap_sources(
     mut commands: Commands,
     mut query: Query<
         (
             Entity,
-            &BitmapSourceResource,
+            Ref<BitmapSourceResource>,
             &mut BitmapSourceGraphics,
             &Arrangement,
             Option<&GraphicsCommandList>,
@@ -155,8 +155,8 @@ pub fn draw_bitmap_sources(
             "Drawing bitmap source"
         );
 
-        // D2D Bitmap生成（未生成または無効化されている場合）
-        if !graphics.is_valid() {
+        // D2D Bitmap生成（未生成・無効化・画像の入れ替えの場合）
+        if !graphics.is_valid() || resource.is_changed() {
             match create_d2d_bitmap(dc, resource.source()) {
                 Ok(bitmap) => {
                     graphics.set_bitmap(bitmap);
@@ -317,31 +317,38 @@ use crate::ecs::layout::{HitTest, HitTestMode};
 use tracing::error;
 
 /// αマスク生成完了時にBitmapSourceResourceにαマスクを設定するCommand
-struct SetAlphaMaskCommand {
-    entity: Entity,
-    mask: AlphaMask,
+pub(super) struct SetAlphaMaskCommand {
+    pub(super) entity: Entity,
+    /// マスクを作った画像の COM の番地
+    pub(super) source: usize,
+    pub(super) mask: AlphaMask,
 }
 
 impl Command for SetAlphaMaskCommand {
     type Out = ();
 
     fn apply(self, world: &mut World) {
-        // エンティティが存在し、BitmapSourceResourceを持っているか確認
-        if let Ok(mut entity_ref) = world.get_entity_mut(self.entity) {
-            if let Some(mut resource) = entity_ref.get_mut::<BitmapSourceResource>() {
-                resource.set_alpha_mask(self.mask);
-            }
+        // 今の資源の画像が、マスクを作った画像と同じときだけ入れる
+        let resource = world
+            .get_entity_mut(self.entity)
+            .ok()
+            .and_then(|e| e.into_mut::<BitmapSourceResource>())
+            .filter(|r| r.source().as_raw() as usize == self.source);
+        match resource {
+            // 変化の印は立てない（描く係が D2D の画像をもう一度作らないため）
+            Some(mut resource) => resource.bypass_change_detection().set_alpha_mask(self.mask),
+            None => debug!(entity = ?self.entity, "Image changed or gone, dropping alpha mask"),
         }
     }
 }
 
 /// αマスク生成システム
 ///
-/// BitmapSourceResourceが追加された時、HitTestMode::AlphaMaskの場合のみ
+/// BitmapSourceResourceが追加・入れ替えされた時、HitTestMode::AlphaMaskの場合のみ
 /// 非同期でαマスクを生成する。
 ///
 /// # Trigger
-/// - `Added<BitmapSourceResource>` + `With<HitTest>`
+/// - `Changed<BitmapSourceResource>` + `With<HitTest>`（マスクがまだ無いものだけ）
 /// - `HitTestMode::AlphaMask` の場合のみ実行
 ///
 /// # Flow
@@ -349,7 +356,7 @@ impl Command for SetAlphaMaskCommand {
 /// 2. 非同期タスクでAlphaMask::from_pbgra32() でマスク生成
 /// 3. Command 経由で BitmapSourceResource.alpha_mask に設定
 pub fn generate_alpha_mask_system(
-    query: Query<(Entity, &BitmapSourceResource, &HitTest), Added<BitmapSourceResource>>,
+    query: Query<(Entity, &BitmapSourceResource, &HitTest), Changed<BitmapSourceResource>>,
     task_pool: Option<Res<WintfTaskPool>>,
 ) {
     let Some(task_pool) = task_pool else {
@@ -369,6 +376,8 @@ pub fn generate_alpha_mask_system(
 
         // UI スレッドで写す。資源は解読済みのメモリの画像なので、ここでは読むだけ
         let source = resource.source();
+
+        let source_addr = source.as_raw() as usize;
 
         // 画像サイズを取得
         let (width, height) = match source.get_size() {
@@ -396,7 +405,12 @@ pub fn generate_alpha_mask_system(
 
             // Commandを送信してBitmapSourceResourceにαマスクを設定
             let cmd: super::task_pool::BoxedCommand = Box::new(move |world: &mut World| {
-                SetAlphaMaskCommand { entity, mask }.apply(world);
+                SetAlphaMaskCommand {
+                    entity,
+                    source: source_addr,
+                    mask,
+                }
+                .apply(world);
             });
             let _ = tx.send(cmd);
         });

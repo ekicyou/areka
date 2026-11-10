@@ -6,6 +6,7 @@
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;
+use tracing::debug;
 
 /// 画像表示ウィジェット（WIC BitmapSourceベース）
 ///
@@ -32,7 +33,7 @@ impl BitmapSource {
 
 /// BitmapSource追加時のフック
 ///
-/// - Visual + BitmapSourceGraphics + HitTest::alpha_mask()を自動挿入
+/// - Visual + BitmapSourceGraphics + HitTest::alpha_mask()を、それぞれ無ければ入れる
 /// - 非同期読み込みタスクを起動
 fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
     use super::WintfTaskPool;
@@ -45,38 +46,20 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
 
     let entity = hook.entity;
 
-    // Visual + BitmapSourceGraphics + HitTest::alpha_mask()を自動挿入（Rectangle/Labelパターン踏襲）
-    // HitTestが未設定の場合のみデフォルトでαマスクモードを設定
+    // 無ければ入れる（Rectangle/Labelパターン踏襲）。HitTest は利用者が先に入れていればそれを使う
     let has_visual = world.get::<Visual>(entity).is_some();
     let has_graphics = world.get::<BitmapSourceGraphics>(entity).is_some();
     let has_hit_test = world.get::<HitTest>(entity).is_some();
-
-    if !has_visual && !has_graphics && !has_hit_test {
-        world.commands().entity(entity).insert((
-            Visual::default(),
-            BitmapSourceGraphics::new(),
-            HitTest::alpha_mask(),
-        ));
-    } else if !has_visual && !has_graphics {
-        world
-            .commands()
-            .entity(entity)
-            .insert((Visual::default(), BitmapSourceGraphics::new()));
-    } else if !has_visual {
-        world.commands().entity(entity).insert(Visual::default());
-    } else if !has_graphics {
-        world
-            .commands()
-            .entity(entity)
-            .insert(BitmapSourceGraphics::new());
+    let mut commands = world.commands();
+    let mut entity_commands = commands.entity(entity);
+    if !has_visual {
+        entity_commands.insert(Visual::default());
     }
-
-    // HitTestが未設定の場合のみデフォルトでαマスクモードを追加
+    if !has_graphics {
+        entity_commands.insert(BitmapSourceGraphics::new());
+    }
     if !has_hit_test {
-        world
-            .commands()
-            .entity(entity)
-            .insert(HitTest::alpha_mask());
+        entity_commands.insert(HitTest::alpha_mask());
     }
 
     // WicCoreをcloneして取得
@@ -114,10 +97,7 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
                     // (BitmapSourceResourceはSend実装済み、IWICBitmapSourceは未実装)
                     let resource = BitmapSourceResource::new(source);
                     let cmd: BoxedCommand = Box::new(move |world: &mut bevy_ecs::world::World| {
-                        // エンティティが存在するか確認
-                        if let Ok(mut entity_ref) = world.get_entity_mut(entity) {
-                            entity_ref.insert(resource);
-                        }
+                        insert_loaded_resource(world, entity, &path, resource);
                     });
                     let _ = tx.send(cmd);
                 }
@@ -133,8 +113,36 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
     }
 }
 
+/// 裏の作業で読んだ画像を部品へ入れる
+///
+/// 部品がまだ同じ `path` の `BitmapSource` を持つときだけ入れる。外した直後や
+/// 別の画像に付け直した後に前の読み込みが遅れて着いた場合は捨てる。
+pub(super) fn insert_loaded_resource(
+    world: &mut bevy_ecs::world::World,
+    entity: bevy_ecs::entity::Entity,
+    path: &str,
+    resource: super::resource::BitmapSourceResource,
+) {
+    let Ok(mut entity_ref) = world.get_entity_mut(entity) else {
+        debug!(entity = ?entity, path, "[BitmapSource] Entity gone, dropping loaded image");
+        return;
+    };
+    if entity_ref
+        .get::<BitmapSource>()
+        .is_some_and(|bs| bs.path == path)
+    {
+        entity_ref.insert(resource);
+    } else {
+        debug!(entity = ?entity, path, "[BitmapSource] Image no longer attached, dropping loaded image");
+    }
+}
+
 /// BitmapSource削除時のフック
+///
+/// 命令の列を空にし、D2D の画像を無効にし、画像の資源を外す。
+/// `HitTest` は残す（利用者が入れたものかもしれない・マスクが無ければ当たりは矩形に戻る）。
 fn on_bitmap_source_remove(mut world: DeferredWorld, hook: HookContext) {
+    use super::resource::{BitmapSourceGraphics, BitmapSourceResource};
     use crate::ecs::GraphicsCommandList;
     use bevy_ecs::change_detection::DetectChangesMut;
 
@@ -144,4 +152,11 @@ fn on_bitmap_source_remove(mut world: DeferredWorld, hook: HookContext) {
     if let Some(mut cmd_list) = world.get_mut::<GraphicsCommandList>(entity) {
         cmd_list.set_if_neq(GraphicsCommandList::empty());
     }
+    if let Some(mut graphics) = world.get_mut::<BitmapSourceGraphics>(entity) {
+        graphics.invalidate();
+    }
+    world
+        .commands()
+        .entity(entity)
+        .try_remove::<BitmapSourceResource>();
 }

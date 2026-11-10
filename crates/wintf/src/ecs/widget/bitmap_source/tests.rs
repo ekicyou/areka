@@ -247,3 +247,171 @@ fn load_decoded_bitmap_returns_in_memory_bitmap() {
         );
     });
 }
+
+// ============================================================
+// 7 番: 外す・付け直すと、新しい絵と当たりになる（実 GPU）
+// ============================================================
+
+use bevy_ecs::prelude::*;
+
+fn asset(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/assets")
+        .join(name)
+}
+
+/// 裏の作業の代わりに読み、着いた命令と同じ道で入れる
+fn arrive(world: &mut World, entity: Entity, wic: &WicCore, name: &str) {
+    let path = asset(name);
+    let source = super::systems::load_decoded_bitmap(wic.factory(), &path).expect("load");
+    super::bitmap_source::insert_loaded_resource(
+        world,
+        entity,
+        path.to_str().unwrap(),
+        BitmapSourceResource::new(source),
+    );
+}
+
+fn d2d_bitmap(world: &World, entity: Entity) -> windows::Win32::Graphics::Direct2D::ID2D1Bitmap1 {
+    world
+        .get::<BitmapSourceGraphics>(entity)
+        .and_then(|g| g.bitmap().cloned())
+        .expect("D2D bitmap")
+}
+
+/// αのマスクの裏の作業が着くまで命令を流す（上限つき）
+fn wait_mask(world: &mut World, entity: Entity) {
+    for _ in 0..500 {
+        super::systems::drain_task_pool_commands(world);
+        if world
+            .get::<BitmapSourceResource>(entity)
+            .is_some_and(|r| r.alpha_mask().is_some())
+        {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("alpha mask did not arrive");
+}
+
+#[test]
+fn reattach_rebuilds_bitmap_and_remove_keeps_hit_test() {
+    use crate::ecs::Size;
+    use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
+    use crate::ecs::layout::{Arrangement, HitTest};
+
+    with_com_initialized(|| {
+        let wic = WicCore::new().expect("WicCore");
+        let mut world = World::new();
+        world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+        // WicCore は World に入れない（フックの読み込みは起こさず、着く順をテストが決める）
+        world.insert_resource(WintfTaskPool::with_threads(1));
+        let mut schedule = Schedule::default();
+        schedule.add_systems((draw_bitmap_sources, generate_alpha_mask_system).chain());
+
+        let path_a = asset("test_8x8_rgba.png");
+        let arrangement = Arrangement {
+            size: Size {
+                width: 8.0,
+                height: 8.0,
+            },
+            ..Default::default()
+        };
+        let e = world
+            .spawn((BitmapSource::new(path_a.to_str().unwrap()), arrangement))
+            .id();
+        arrive(&mut world, e, &wic, "test_8x8_rgba.png");
+        schedule.run(&mut world);
+        let first = d2d_bitmap(&world, e);
+        wait_mask(&mut world, e);
+
+        // マスクを入れても変化の印は立たず、D2D の画像は作り直されない
+        schedule.run(&mut world);
+        assert_eq!(d2d_bitmap(&world, e).as_raw(), first.as_raw());
+
+        // 外す: 資源が消え、命令の列が空になり、HitTest は残る
+        world.entity_mut(e).remove::<BitmapSource>();
+        world.flush();
+        assert!(world.get::<BitmapSourceResource>(e).is_none());
+        assert!(world.get::<HitTest>(e).is_some());
+        assert!(!world.get::<BitmapSourceGraphics>(e).unwrap().is_valid());
+        assert!(
+            world
+                .get::<GraphicsCommandList>(e)
+                .unwrap()
+                .command_list()
+                .is_none()
+        );
+
+        // 外した部品へ前の読み込みが遅れて着いても入らない
+        arrive(&mut world, e, &wic, "test_8x8_rgba.png");
+        assert!(world.get::<BitmapSourceResource>(e).is_none());
+
+        // 別の画像に付け直すと、前の読み込みは入らず、新しい読み込みだけが入る
+        world.entity_mut(e).insert(BitmapSource::new(
+            asset("test_16x16_rgba.png").to_str().unwrap(),
+        ));
+        world.flush();
+        arrive(&mut world, e, &wic, "test_8x8_rgba.png");
+        assert!(world.get::<BitmapSourceResource>(e).is_none());
+        arrive(&mut world, e, &wic, "test_16x16_rgba.png");
+        schedule.run(&mut world);
+        let second = d2d_bitmap(&world, e);
+        assert_ne!(second.as_raw(), first.as_raw());
+        wait_mask(&mut world, e);
+
+        // 同じ部品の資源が入れ替わる（Added でなく Changed）と、絵もマスクも作り直される
+        arrive(&mut world, e, &wic, "test_16x16_rgba.png");
+        schedule.run(&mut world);
+        assert_ne!(d2d_bitmap(&world, e).as_raw(), second.as_raw());
+        wait_mask(&mut world, e);
+    });
+}
+
+/// マスクは、作った画像が今の資源の画像と同じときだけ入る
+#[test]
+fn alpha_mask_for_previous_image_is_dropped() {
+    use super::systems::SetAlphaMaskCommand;
+
+    with_com_initialized(|| {
+        let wic = WicCore::new().expect("WicCore");
+        let mut world = World::new();
+        let path = asset("test_8x8_rgba.png");
+        let e = world.spawn(BitmapSource::new(path.to_str().unwrap())).id();
+        arrive(&mut world, e, &wic, "test_8x8_rgba.png");
+        let addr = world
+            .get::<BitmapSourceResource>(e)
+            .unwrap()
+            .source()
+            .as_raw() as usize;
+        let mask = || AlphaMask::from_pbgra32(&[0xff; 4], 1, 1, 4);
+
+        SetAlphaMaskCommand {
+            entity: e,
+            source: addr + 1,
+            mask: mask(),
+        }
+        .apply(&mut world);
+        assert!(
+            world
+                .get::<BitmapSourceResource>(e)
+                .unwrap()
+                .alpha_mask()
+                .is_none()
+        );
+
+        SetAlphaMaskCommand {
+            entity: e,
+            source: addr,
+            mask: mask(),
+        }
+        .apply(&mut world);
+        assert!(
+            world
+                .get::<BitmapSourceResource>(e)
+                .unwrap()
+                .alpha_mask()
+                .is_some()
+        );
+    });
+}
