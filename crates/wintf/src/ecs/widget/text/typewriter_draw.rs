@@ -50,9 +50,15 @@ pub fn update_typewriters(
 
         // FireEvent 処理: 対象エンティティの TypewriterEvent を設定
         for (target, event_kind) in events {
-            commands
-                .entity(target)
-                .insert(TypewriterEvent::from(event_kind));
+            // 宛先が消えているのは普通の流れ（トークの途中で閉じた等）。捨てたことだけ残す。
+            match commands.get_entity(target) {
+                Ok(mut target_cmds) => {
+                    target_cmds.try_insert(TypewriterEvent::from(event_kind));
+                }
+                Err(_) => {
+                    debug!(entity = ?entity, target = ?target, event = ?event_kind, "Typewriter event target is gone; dropped");
+                }
+            }
         }
 
         // 完了した場合のログ

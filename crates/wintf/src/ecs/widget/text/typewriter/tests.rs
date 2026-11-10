@@ -358,3 +358,110 @@ fn despawning_typewriter_with_talk_does_not_panic() {
     world.flush();
     assert!(world.get_entity(entity).is_err());
 }
+
+// ============================================================
+// 最後の待ちと知らせ（4 番）・消えた宛先（5 番）— CPU だけ
+// ============================================================
+
+/// 「おしまい」の 4 文字（0.1 秒おき）→ 1 秒の待ち → 宛先への完了の知らせ。
+fn wait_then_fire_timeline(target: Entity) -> TypewriterTimeline {
+    let mut timeline = make_glyph_timeline(4, 0.1);
+    timeline.full_text = "おしまい".into();
+    timeline.items.push(TimelineItem::Wait {
+        duration: 1.0,
+        start_at: 0.4,
+    });
+    timeline.items.push(TimelineItem::FireEvent {
+        target,
+        event: TypewriterEventKind::Complete,
+        fire_at: 1.4,
+    });
+    timeline.total_duration = 1.4;
+    timeline
+}
+
+#[test]
+fn trailing_wait_and_event_run_before_completion() {
+    let target = Entity::from_raw_u32(3).unwrap();
+    let timeline = wait_then_fire_timeline(target);
+    let mut talk = TypewriterTalk::new(vec![], 0.0);
+
+    // 全部の文字が出た時刻でも、後ろの待ちが残るので再生中のまま。
+    let events = talk.update(0.4, &timeline);
+    assert!(events.is_empty());
+    assert_eq!(talk.visible_cluster_count(), 4);
+    assert_eq!(talk.progress(), 1.0);
+    assert_eq!(talk.state(), TypewriterState::Playing);
+
+    // 1 秒後に知らせが返り、完了する。
+    let events = talk.update(1.4, &timeline);
+    assert_eq!(events, vec![(target, TypewriterEventKind::Complete)]);
+    assert_eq!(talk.state(), TypewriterState::Completed);
+}
+
+/// 知らせの係を回す世界。控えの配置は DirectWrite の工場だけで作る（GPU は使わない）。
+fn spawn_firing_typewriter(world: &mut World, target: Entity) -> Entity {
+    use crate::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
+    use windows::Win32::Graphics::DirectWrite::*;
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("dwrite factory");
+    let format = factory
+        .create_text_format(
+            &windows::core::HSTRING::from("メイリオ"),
+            None::<&IDWriteFontCollection>,
+            DWRITE_FONT_WEIGHT_NORMAL,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            16.0,
+            &windows::core::HSTRING::from("ja-JP"),
+        )
+        .expect("text format");
+    let layout = factory
+        .create_text_layout(
+            &windows::core::HSTRING::from("おしまい"),
+            &format,
+            200.0,
+            100.0,
+        )
+        .expect("text layout");
+    // トークを入れたときのフックが控えを外すので、控えはトークの後に入れる。
+    let entity = world.spawn(TypewriterTalk::new(vec![], 0.0)).id();
+    world.flush();
+    world.entity_mut(entity).insert(TypewriterLayoutCache::new(
+        layout,
+        wait_then_fire_timeline(target),
+    ));
+    entity
+}
+
+fn new_update_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(crate::ecs::graphics::FrameTime(10.0));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(crate::ecs::widget::text::typewriter_draw::update_typewriters);
+    (world, schedule)
+}
+
+#[test]
+fn event_reaches_live_target() {
+    use crate::ecs::widget::text::typewriter_ir::TypewriterEvent;
+    let (mut world, mut schedule) = new_update_world();
+    let target = world.spawn_empty().id();
+    let entity = spawn_firing_typewriter(&mut world, target);
+    schedule.run(&mut world);
+    assert_eq!(
+        world.get::<TypewriterEvent>(target),
+        Some(&TypewriterEvent::Complete)
+    );
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+}
+
+#[test]
+fn event_to_despawned_target_is_dropped_without_panic() {
+    let (mut world, mut schedule) = new_update_world();
+    let target = world.spawn_empty().id();
+    let entity = spawn_firing_typewriter(&mut world, target);
+    world.despawn(target);
+    schedule.run(&mut world);
+    assert!(world.get_entity(target).is_err());
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+}

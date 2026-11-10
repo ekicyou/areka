@@ -260,8 +260,8 @@ impl TypewriterTalk {
             self.progress = 1.0;
         }
 
-        // 全クラスタ表示完了で Completed に遷移
-        if self.visible_cluster_count >= timeline.total_cluster_count {
+        // 時間表の項目を最後まで進めたら Completed（最後の文字の後ろの待ち・知らせも済ませてから）
+        if self.next_item_index >= timeline.items.len() {
             self.state = TypewriterState::Completed;
         }
 
