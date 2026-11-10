@@ -42,7 +42,7 @@
   - _Requirements: 3.1, 5.9_
 
 - [ ] 2. 描く骨組みと、四角・文字
-- [ ] 2.1 命令の列を記録する骨組みを 1 つ置く
+- [x] 2.1 命令の列を記録する骨組みを 1 つ置く
   - 透明の色の定数と、命令の列を記録する関数（`BeginDraw` の後は失敗しても必ず `EndDraw`・返す失敗は描く所 → `EndDraw` → 閉じるの順・変換は恒等へ戻す）を新しいファイルに置き、`widget/mod.rs` に crate の中だけの `mod` 宣言を足す
   - 結果を部品へ入れる関数を置く。成功なら命令の列を入れ、失敗なら `warn!`（部品の名前は失敗のときだけ作る）を 1 行残し、命令の列が無い部品にだけ空の列を入れる
   - 骨組みのテストのファイルに、design の Testing Strategy の 10 番の 2 行（空の列が入って次の回に対象にならない・前から列を持つ部品は絵を残す・空の列の部品も立ち直りの後に描き直される）を実 GPU で置く。この時点で骨組みに載った本番の係は無いので、テストの中に `Without<GraphicsCommandList>` で回して骨組みを呼ぶ係を置いて試す
@@ -199,3 +199,5 @@
 ## Implementation Notes
 - 1.1: 係のテストは `Schedule` を回をまたいで使い回す。回ごとに新しく作ると全部が Added/Changed に見え、直す前でも緑になる（実装係が 3 本で踏んだ）。
 - 1.1: `BoxStyle` を外した部品の下に `TaffyStyle` を持つ子が居ると、その子の節は taffy の木から離れ、`TaffyComputedLayout` は古い値のまま残る。要件・設計に決めが無い（レビュー係の FYI）。7.1 の 2 度目の audit で見る。
+- 2.1: 描く流れの直しの前の基準（4.3 で比べる）: `--test widget bitmap_source_integration_test` 7/7 緑・`--test graphics device_lost_recovery_test` 5/5 緑・`#[ignore]` 0 本。
+- 2.1: `widget/mod.rs` の `mod record;` に付けた `expect(dead_code)` は 2.2 で四角が骨組みに載ったら消す。`cargo fmt` が CRLF を LF に変えることがあるので、fmt の後は `git diff --stat` で確かめる。
