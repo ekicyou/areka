@@ -305,20 +305,6 @@ pub struct TypewriterLayoutCache {
     timeline: TypewriterTimeline,
 }
 
-// SAFETY: 内包する 2 フィールドはいずれも Send + Sync である:
-// - `text_layout: IDWriteTextLayout` … windows-rs（0.62）が当該 COM 型に対し
-//   `unsafe impl Send/Sync` を生成済み（DirectWrite のレイアウト系オブジェクトは
-//   読み取り中心の利用に対しスレッドアジャイルとして扱われる）。
-// - `timeline: TypewriterTimeline` … String/Vec/f64/u32 のみのプレーンデータ。
-// したがって本構造体は自動で Send + Sync を導出でき、下記の手動 impl は健全（かつ
-// 上記により冗長）である。実利用上も TextLayout への変更系呼び出し（SetDrawingEffect 等、
-// typewriter_draw.rs）は Bevy の Draw スケジュール内で当該エンティティを排他参照する
-// システムからのみ行われ、跨スレッドの同時アクセスは発生しない。手動 impl は crate 全域の
-// COM 保持コンポーネント（GraphicsCommandList 等）と表記を揃えるため明示で残す（撤去は
-// S 観点の churn 判断事項）。
-unsafe impl Send for TypewriterLayoutCache {}
-unsafe impl Sync for TypewriterLayoutCache {}
-
 impl TypewriterLayoutCache {
     /// 新規作成
     pub fn new(text_layout: IDWriteTextLayout, timeline: TypewriterTimeline) -> Self {

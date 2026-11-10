@@ -4,22 +4,24 @@
 //! - draw_typewriters: 描画コマンド生成（Draw スケジュール）
 //! - draw_typewriter_backgrounds: 空トークの背景のみ描画（Draw スケジュール）
 
-use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
+use crate::com::d2d::D2D1DeviceContextExt;
 use crate::com::dwrite::DWriteTextLayoutExt;
-use crate::ecs::graphics::{FrameTime, GraphicsCommandList, GraphicsCore};
+use crate::ecs::graphics::{FrameTime, GraphicsCommandList, GraphicsCore, format_entity_name};
 use crate::ecs::layout::Arrangement;
-use crate::ecs::widget::brushes::{Brushes, DEFAULT_FOREGROUND};
+use crate::ecs::widget::brushes::Brushes;
+use crate::ecs::widget::record::{TRANSPARENT, record_command_list, store_command_list};
 use crate::ecs::widget::text::label::TextDirection;
 use crate::ecs::widget::text::typewriter::{
     Typewriter, TypewriterLayoutCache, TypewriterState, TypewriterTalk,
 };
 use crate::ecs::widget::text::typewriter_ir::{TypewriterEvent, TypewriterToken};
+use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
-use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
-use windows::Win32::Graphics::Direct2D::D2D1_DRAW_TEXT_OPTIONS_NONE;
+use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
+use windows::Win32::Graphics::Direct2D::{D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1DeviceContext};
 use windows::Win32::Graphics::DirectWrite::*;
-use windows_numerics::{Matrix3x2, Vector2};
+use windows_numerics::Vector2;
 
 /// 見せるクラスタ数から、透明にする範囲（UTF-16 の開始と長さ）を返す。隠す所が無ければ None。
 pub(crate) fn hidden_text_range(
@@ -35,18 +37,30 @@ pub(crate) fn hidden_text_range(
     (visible < total).then(|| (visible, total - visible))
 }
 
-/// 透明色定数（内部使用）
-const TRANSPARENT_COLOR: D2D1_COLOR_F = D2D1_COLOR_F {
-    r: 0.0,
-    g: 0.0,
-    b: 0.0,
-    a: 0.0,
-};
+/// 部品の大きさいっぱいに背景を塗る（文の係と背景の係が使う）。
+fn fill_background(
+    dc: &ID2D1DeviceContext,
+    color: &D2D1_COLOR_F,
+    arrangement: &Arrangement,
+) -> windows::core::Result<()> {
+    let brush = dc.create_solid_color_brush(color, None)?;
+    dc.fill_rectangle(
+        &D2D_RECT_F {
+            left: 0.0,
+            top: 0.0,
+            right: arrangement.size.width,
+            bottom: arrangement.size.height,
+        },
+        &brush,
+    );
+    Ok(())
+}
 
 /// Typewriter 更新システム（Update スケジュール）
 ///
 /// FrameTime リソースから現在フレームの時刻を取得し、TypewriterTalk の状態を更新する。
 /// FireEvent トークンを処理して対象エンティティの TypewriterEvent を設定する。
+/// 見せる数か状態が変わったときだけ変化の印を立てる（止まった表示を描き直させない）。
 pub fn update_typewriters(
     mut commands: Commands,
     frame_time: Option<Res<FrameTime>>,
@@ -59,8 +73,17 @@ pub fn update_typewriters(
     let current_time = frame_time.0;
 
     for (entity, mut talk, layout_cache) in query.iter_mut() {
+        let before = (talk.visible_cluster_count(), talk.state());
         // 状態を更新し、発火すべきイベントを取得
-        let events = talk.update(current_time, layout_cache.timeline());
+        let events = talk
+            .bypass_change_detection()
+            .update(current_time, layout_cache.timeline());
+        if (talk.visible_cluster_count(), talk.state()) != before {
+            talk.set_changed();
+            if talk.state() == TypewriterState::Completed {
+                debug!(entity = ?entity, "Typewriter talk completed");
+            }
+        }
 
         // FireEvent 処理: 対象エンティティの TypewriterEvent を設定
         for (target, event_kind) in events {
@@ -74,12 +97,6 @@ pub fn update_typewriters(
                 }
             }
         }
-
-        // 完了した場合のログ
-        if talk.state() == TypewriterState::Completed {
-            #[cfg(debug_assertions)]
-            debug!(entity = ?entity, "Typewriter talk completed");
-        }
     }
 }
 
@@ -88,16 +105,29 @@ pub fn update_typewriters(
 /// TypewriterLayoutCache から TextLayout を取得し、
 /// visible_cluster_count までのグリフを描画する。
 /// 色は`Brushes`コンポーネントから取得される。
+/// トーク・控え・大きさ・筆が変わったか、命令の列が無い部品だけを描く。
+#[allow(clippy::type_complexity)]
 pub fn draw_typewriters(
     mut commands: Commands,
-    query: Query<(
-        Entity,
-        &Typewriter,
-        &TypewriterTalk,
-        &TypewriterLayoutCache,
-        &Arrangement,
-        &Brushes,
-    )>,
+    query: Query<
+        (
+            Entity,
+            &Typewriter,
+            &TypewriterTalk,
+            &TypewriterLayoutCache,
+            &Arrangement,
+            &Brushes,
+            Option<&GraphicsCommandList>,
+            Option<&Name>,
+        ),
+        Or<(
+            Changed<TypewriterTalk>,
+            Changed<TypewriterLayoutCache>,
+            Changed<Arrangement>,
+            Changed<Brushes>,
+            Without<GraphicsCommandList>,
+        )>,
+    >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
     let Some(graphics_core) = graphics_core else {
@@ -110,15 +140,13 @@ pub fn draw_typewriters(
         return;
     };
 
-    for (entity, typewriter, talk, layout_cache, arrangement, brushes) in query.iter() {
+    // 係には返す先が無いので、失敗は記録してその部品を飛ばす（名前の文字列は失敗のときだけ作る）
+    for (entity, typewriter, talk, layout_cache, arrangement, brushes, cmd_list_opt, name) in
+        query.iter()
+    {
         let text_layout = layout_cache.text_layout();
         let visible_count = talk.visible_cluster_count();
-
-        // Brushes から色を取得
-        let fg_color = brushes
-            .foreground
-            .as_color()
-            .unwrap_or_else(|| DEFAULT_FOREGROUND.as_color().unwrap());
+        let fg_color = brushes.foreground_color();
         let bg_color_opt = brushes.background.as_color();
 
         #[cfg(debug_assertions)]
@@ -132,183 +160,110 @@ pub fn draw_typewriters(
         // クラスタメトリクス取得（描画範囲決定用）
         let cluster_metrics = match text_layout.get_cluster_metrics() {
             Ok(m) => m,
-            Err(e) => {
-                warn!(entity = ?entity, error = ?e, "Failed to get cluster metrics");
+            Err(err) => {
+                warn!(
+                    entity = %format_entity_name(entity, name),
+                    error = ?err,
+                    "Failed to get cluster metrics"
+                );
                 continue;
             }
         };
 
         // visible_count より後ろのクラスタを隠す範囲（UTF-16）
         let cluster_lengths: Vec<u16> = cluster_metrics.iter().map(|m| m.length).collect();
-        let hidden = hidden_text_range(&cluster_lengths, visible_count);
+        let whole_text = DWRITE_TEXT_RANGE {
+            startPosition: 0,
+            length: cluster_lengths.iter().map(|&l| l as u32).sum(),
+        };
+        let hidden = hidden_text_range(&cluster_lengths, visible_count).map(|(start, length)| {
+            DWRITE_TEXT_RANGE {
+                startPosition: start,
+                length,
+            }
+        });
 
-        // テキストメトリクス取得
+        // テキストメトリクス取得。取れなければ原点 0 のまま描かない
         let mut text_metrics = DWRITE_TEXT_METRICS::default();
-        unsafe {
-            let _ = text_layout.GetMetrics(&mut text_metrics);
+        if let Err(err) = unsafe { text_layout.GetMetrics(&mut text_metrics) } {
+            warn!(
+                entity = %format_entity_name(entity, name),
+                error = ?err,
+                "Failed to get text metrics"
+            );
+            continue;
         }
 
-        // CommandList生成
-        let command_list = match unsafe { dc.CreateCommandList() } {
-            Ok(cl) => cl,
-            Err(err) => {
-                warn!(entity = ?entity, error = ?err, "Failed to create CommandList");
-                continue;
+        // 描画位置: 横書きは配置のはみ出し（left・top）を戻して左上へ合わせる。
+        // 縦書きは原点 (0,0) のまま、1 行目の位置は DirectWrite が行の向き（右から・左から）で決める。
+        let origin = match typewriter.direction {
+            TextDirection::VerticalRightToLeft | TextDirection::VerticalLeftToRight => {
+                Vector2 { X: 0.0, Y: 0.0 }
             }
+            _ => Vector2 {
+                X: -text_metrics.left,
+                Y: -text_metrics.top,
+            },
         };
 
-        // CommandListをターゲットに設定
-        unsafe {
-            dc.SetTarget(&command_list);
-        }
-
-        // 描画開始
-        unsafe {
-            // 共有DCのワールド変換をリセット（前フレームの描画処理の残留変換を防止）
-            dc.SetTransform(&Matrix3x2::identity());
-            dc.BeginDraw();
-        }
-
-        // 透明でクリア
-        dc.clear(Some(&TRANSPARENT_COLOR));
-
-        // バックグラウンド描画（指定されている場合）
-        // Rectangleと同様にarrangement.sizeを使用
-        if let Some(bg_color) = bg_color_opt {
-            if let Ok(bg_brush) = dc.create_solid_color_brush(&bg_color, None) {
-                let bg_rect: windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F =
-                    crate::ecs::Rect {
-                        left: 0.0,
-                        top: 0.0,
-                        right: arrangement.size.width,
-                        bottom: arrangement.size.height,
-                    }
-                    .into();
-                unsafe {
-                    dc.FillRectangle(&bg_rect, &bg_brush);
-                }
+        // 透明の筆や描く効果が設定できないときは全文を描かず失敗にする（前の絵を残す・設計の決め 4）
+        let recorded = record_command_list(dc, |dc| {
+            if let Some(bg_color) = bg_color_opt {
+                fill_background(dc, &bg_color, arrangement)?;
             }
-        }
-
-        // フォアグラウンドブラシ作成
-        let brush = match dc.create_solid_color_brush(&fg_color, None) {
-            Ok(b) => b,
-            Err(err) => {
-                warn!(entity = ?entity, error = ?err, "Failed to create brush");
-                unsafe {
-                    let _ = dc.EndDraw(None, None);
-                }
-                continue;
+            let brush = dc.create_solid_color_brush(&fg_color, None)?;
+            if visible_count == 0 {
+                return Ok(());
             }
-        };
-
-        // visible_count > 0 の場合のみ描画
-        if visible_count > 0 {
-            // 描画位置の調整
-            // DirectWriteはレイアウトボックス(layoutWidth x layoutHeight)を基準に描画する
-            //
-            // 横書きLTR: 原点はレイアウトボックス左上、テキストは右へ流れる
-            //   → left >= 0, origin.X = -left で左端を合わせる
-            //
-            // 縦書きRTL: 原点はレイアウトボックス左上、1行目はレイアウトボックスの右端から始まり左へ流れる
-            //   → テキストがはみ出すとleft < 0になる
-            //   → Surfaceはtext_metrics.width幅で作成される
-            //   → レイアウトボックスの右端をSurfaceの右端に合わせるには:
-            //     origin.X = text_metrics.width - layoutWidth
-            let origin = match typewriter.direction {
-                TextDirection::VerticalRightToLeft => {
-                    // 縦書きRTL: テキストはlayoutWidthの右端から始まり左へ流れる
-                    // originは(0,0)で、DirectWriteが自動的に右端から配置
-                    Vector2 { X: 0.0, Y: 0.0 }
-                }
-                TextDirection::VerticalLeftToRight => {
-                    // 縦書きLTR: 1行目は左端から始まる
-                    Vector2 { X: 0.0, Y: 0.0 }
-                }
-                _ => {
-                    // 横書き: 従来通り
-                    Vector2 {
-                        X: -text_metrics.left,
-                        Y: -text_metrics.top,
-                    }
-                }
-            };
-
-            // 非表示部分を透明にするため、隠す範囲に透明ブラシを設定
-            if let Some((start, length)) = hidden {
-                // 透明ブラシ作成
-                let transparent_brush = match dc.create_solid_color_brush(&TRANSPARENT_COLOR, None)
-                {
-                    Ok(b) => b,
-                    Err(_) => {
-                        // フォールバック: 全文描画
-                        dc.draw_text_layout(
-                            origin,
-                            text_layout,
-                            &brush,
-                            D2D1_DRAW_TEXT_OPTIONS_NONE,
-                        );
-                        unsafe {
-                            let _ = dc.EndDraw(None, None);
-                        }
-                        continue;
-                    }
-                };
-
-                // 非表示範囲に透明ブラシを設定
-                let hidden_range = DWRITE_TEXT_RANGE {
-                    startPosition: start,
-                    length,
-                };
-                unsafe {
-                    let _ = text_layout.SetDrawingEffect(&transparent_brush, hidden_range);
-                }
+            // 前の描画の効果を全文から消してから、隠す範囲だけを透明の筆にする
+            // （控えに効果が残っても次の描画で直る）
+            unsafe { text_layout.SetDrawingEffect(None, whole_text) }?;
+            if let Some(range) = hidden {
+                let transparent = dc.create_solid_color_brush(&TRANSPARENT, None)?;
+                unsafe { text_layout.SetDrawingEffect(&transparent, range) }?;
             }
-
-            // 全文を描画（非表示部分は透明ブラシで描画される）
             dc.draw_text_layout(origin, text_layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
-
-            // 設定をリセット（次回描画のため）
-            if let Some((start, length)) = hidden {
-                let hidden_range = DWRITE_TEXT_RANGE {
-                    startPosition: start,
-                    length,
-                };
-                unsafe {
-                    let _ = text_layout.SetDrawingEffect(None, hidden_range);
-                }
-            }
-        }
-
-        // 描画終了
-        if let Err(err) = unsafe { dc.EndDraw(None, None) } {
-            warn!(entity = ?entity, error = ?err, "EndDraw failed");
-            continue;
-        }
-
-        // CommandListを閉じる
-        if let Err(err) = command_list.close() {
-            warn!(entity = ?entity, error = ?err, "Failed to close CommandList");
-            continue;
-        }
-
-        // GraphicsCommandListをエンティティに挿入
-        // Surfaceサイズは GlobalArrangement.bounds から計算される（Rectangleと同じ）
-        commands
-            .entity(entity)
-            .insert(GraphicsCommandList::new(command_list));
+            Ok(())
+        });
+        store_command_list(
+            &mut commands,
+            entity,
+            name,
+            cmd_list_opt.is_some(),
+            recorded,
+            "typewriter",
+        );
     }
 }
 
 /// 空トークのTypewriter背景描画システム（Draw スケジュール）
 ///
-/// TypewriterTalkはあるがTyperwriterLayoutCacheがない（空トーク）の場合、
+/// TypewriterTalkはあるがTypewriterLayoutCacheがない（空トーク）の場合、
 /// 背景色のみを描画する。色は`Brushes`コンポーネントから取得される。
+/// 大きさ・筆・トークが変わったか、命令の列が無い部品だけを描く。
+/// 背景の色が無いか大きさが足りないときは命令の列を空にする（前の文の絵を残さない）。
+#[allow(clippy::type_complexity)]
 pub fn draw_typewriter_backgrounds(
     mut commands: Commands,
-    query: Query<
-        (Entity, &Typewriter, &TypewriterTalk, &Arrangement, &Brushes),
-        (Without<TypewriterLayoutCache>, Without<GraphicsCommandList>),
+    mut query: Query<
+        (
+            Entity,
+            &TypewriterTalk,
+            &Arrangement,
+            &Brushes,
+            Option<&mut GraphicsCommandList>,
+            Option<&Name>,
+        ),
+        (
+            With<Typewriter>,
+            Without<TypewriterLayoutCache>,
+            Or<(
+                Changed<Arrangement>,
+                Changed<Brushes>,
+                Changed<TypewriterTalk>,
+                Without<GraphicsCommandList>,
+            )>,
+        ),
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
@@ -320,7 +275,7 @@ pub fn draw_typewriter_backgrounds(
         return;
     };
 
-    for (entity, _typewriter, talk, arrangement, brushes) in query.iter() {
+    for (entity, talk, arrangement, brushes, cmd_list_opt, name) in query.iter_mut() {
         // テキストがある場合はdraw_typewritersが処理するのでスキップ
         let has_text = talk
             .tokens()
@@ -330,62 +285,25 @@ pub fn draw_typewriter_backgrounds(
             continue;
         }
 
-        // 背景色がない場合はスキップ（Brushes.backgroundから取得）
-        let Some(bg_color) = brushes.background.as_color() else {
-            continue;
-        };
-
-        // Arrangementがまだ計算されていない場合はスキップ
+        // 背景の色が無いか、Arrangementがまだ計算されていない（極小）なら描けない
         const MIN_LAYOUT_SIZE: f32 = 10.0;
-        if arrangement.size.width < MIN_LAYOUT_SIZE || arrangement.size.height < MIN_LAYOUT_SIZE {
+        let big_enough =
+            arrangement.size.width >= MIN_LAYOUT_SIZE && arrangement.size.height >= MIN_LAYOUT_SIZE;
+        let Some(bg_color) = brushes.background.as_color().filter(|_| big_enough) else {
+            if let Some(mut cmd_list) = cmd_list_opt {
+                cmd_list.set_if_neq(GraphicsCommandList::empty());
+            }
             continue;
-        }
-
-        // CommandList生成
-        let command_list = match unsafe { dc.CreateCommandList() } {
-            Ok(cl) => cl,
-            Err(_) => continue,
         };
 
-        unsafe {
-            dc.SetTarget(&command_list);
-            // 共有DCのワールド変換をリセット（前フレームの描画処理の残留変換を防止）
-            dc.SetTransform(&Matrix3x2::identity());
-            dc.BeginDraw();
-        }
-
-        // 透明でクリア
-        dc.clear(Some(&TRANSPARENT_COLOR));
-
-        // 背景描画
-        if let Ok(bg_brush) = dc.create_solid_color_brush(&bg_color, None) {
-            let bg_rect: windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F =
-                crate::ecs::Rect {
-                    left: 0.0,
-                    top: 0.0,
-                    right: arrangement.size.width,
-                    bottom: arrangement.size.height,
-                }
-                .into();
-            unsafe {
-                dc.FillRectangle(&bg_rect, &bg_brush);
-            }
-        }
-
-        // 描画終了
-        if unsafe { dc.EndDraw(None, None) }.is_err() {
-            continue;
-        }
-
-        // CommandListを閉じる
-        if command_list.close().is_err() {
-            continue;
-        }
-
-        // GraphicsCommandListをエンティティに挿入
-        // Surfaceサイズは GlobalArrangement.bounds から計算される（Rectangleと同じ）
-        commands
-            .entity(entity)
-            .insert(GraphicsCommandList::new(command_list));
+        let recorded = record_command_list(dc, |dc| fill_background(dc, &bg_color, arrangement));
+        store_command_list(
+            &mut commands,
+            entity,
+            name,
+            cmd_list_opt.is_some(),
+            recorded,
+            "typewriter background",
+        );
     }
 }

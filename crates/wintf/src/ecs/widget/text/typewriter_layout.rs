@@ -7,7 +7,7 @@
 use crate::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
 use crate::ecs::graphics::GraphicsCore;
 use crate::ecs::layout::Arrangement;
-use crate::ecs::widget::text::label::TextDirection;
+use crate::ecs::widget::text::label::{TextDirection, apply_direction};
 use crate::ecs::widget::text::typewriter::{Typewriter, TypewriterLayoutCache, TypewriterTalk};
 use crate::ecs::widget::text::typewriter_ir::{TimelineItem, TypewriterTimeline, TypewriterToken};
 use bevy_ecs::prelude::*;
@@ -39,11 +39,6 @@ pub fn init_typewriter_layout(
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
-    debug!(
-        "[init_typewriter_layout] Running, query count: {}",
-        query.iter().count()
-    );
-
     let Some(graphics_core) = graphics_core else {
         debug!("[init_typewriter_layout] No GraphicsCore");
         return;
@@ -112,38 +107,23 @@ pub fn init_typewriter_layout(
             }
         };
 
-        // 縦書き・横書きの設定
-        unsafe {
-            match typewriter.direction {
-                TextDirection::HorizontalLeftToRight => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM);
-                    // 横書きLTR: 左寄せ（デフォルト）、上寄せ
-                    let _ = text_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-                    let _ = text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-                }
-                TextDirection::HorizontalRightToLeft => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM);
-                    // 横書きRTL: 右寄せ、上寄せ
-                    let _ = text_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
-                    let _ = text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-                }
-                TextDirection::VerticalRightToLeft => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT);
-                    // 縦書きRTL: 上寄せ、右寄せ（1行目を右端に）
-                    let _ = text_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-                    let _ = text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-                }
-                TextDirection::VerticalLeftToRight => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT);
-                    // 縦書きLTR: 上寄せ、左寄せ
-                    let _ = text_format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-                    let _ = text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-                }
-            }
+        // 縦書き・横書きの設定（係には返す先が無いので、失敗は記録してその部品を飛ばす）
+        if let Err(e) = apply_direction(&text_format, typewriter.direction) {
+            warn!(entity = ?entity, direction = ?typewriter.direction, error = ?e, "Failed to set text direction");
+            continue;
+        }
+        // 揃え: 右から左の横書きだけ右寄せ、ほかは行の頭へ。段落はどれも上（行の流れの頭）へ
+        let text_alignment = match typewriter.direction {
+            TextDirection::HorizontalRightToLeft => DWRITE_TEXT_ALIGNMENT_TRAILING,
+            _ => DWRITE_TEXT_ALIGNMENT_LEADING,
+        };
+        if let Err(e) = unsafe {
+            text_format
+                .SetTextAlignment(text_alignment)
+                .and_then(|()| text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR))
+        } {
+            warn!(entity = ?entity, direction = ?typewriter.direction, error = ?e, "Failed to set text alignment");
+            continue;
         }
 
         // TextLayout 作成（Arrangementのサイズを使用）

@@ -5,12 +5,9 @@ use crate::ecs::layout::metrics::Size;
 use crate::ecs::widget::text::typewriter_layout::init_typewriter_layout;
 use bevy_ecs::prelude::*;
 
-/// `TypewriterLayoutCache` の手動 `unsafe impl Send/Sync`（typewriter.rs）の
-/// 健全性を固定する特性化テスト。内包フィールド（IDWriteTextLayout は windows-rs が
-/// Send+Sync 付与済み・TypewriterTimeline はプレーンデータ）により本構造体は本来
-/// 自動で Send+Sync を導出できる＝手動 impl は冗長だが健全、という不変条件をコンパイル時に
-/// 検証する。将来 !Send なフィールドが追加された場合は（手動 impl があっても）型として
-/// 不健全な状態をここで検出できないため、この境界の更新時は手動 impl の妥当性を再点検すること。
+/// `TypewriterLayoutCache` が自動の導出で `Send + Sync` になることを固定する
+/// （`IDWriteTextLayout` は windows-rs が `Send`/`Sync` を付け、時間表はただの値）。
+/// 後で `Send` でない欄を足すと、ここが組み立たなくなる。
 #[test]
 fn test_typewriter_layout_cache_is_send_sync() {
     fn assert_send_sync<T: Send + Sync>() {}
@@ -506,4 +503,183 @@ fn hidden_range_is_counted_in_utf16() {
     assert_eq!(hidden_text_range(&lengths, 0), Some((0, 6)));
     assert_eq!(hidden_text_range(&lengths, 5), None);
     assert_eq!(hidden_text_range(&lengths, 9), None);
+}
+
+// ============================================================
+// 背景の描き直しと空にする所（8 番）・止まった表示（12 番）— 実 GPU
+// ============================================================
+
+use crate::ecs::graphics::FrameTime;
+use crate::ecs::widget::brushes::Brushes;
+use crate::ecs::widget::text::typewriter_draw::{
+    draw_typewriter_backgrounds, draw_typewriters, update_typewriters,
+};
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+use windows::Win32::Graphics::Direct2D::ID2D1CommandList;
+
+/// 控えを作る → 進める → 文を描く → 背景を描く、を 1 回で回す世界（本番の Update → Draw の順）。
+fn new_draw_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    world.insert_resource(FrameTime(100.0));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(
+        (
+            init_typewriter_layout,
+            update_typewriters,
+            draw_typewriters,
+            draw_typewriter_backgrounds,
+        )
+            .chain(),
+    );
+    (world, schedule)
+}
+
+fn sized(width: f32, height: f32) -> Arrangement {
+    Arrangement {
+        size: Size { width, height },
+        ..Default::default()
+    }
+}
+
+fn list_of(world: &World, entity: Entity) -> Option<Option<ID2D1CommandList>> {
+    world
+        .get::<GraphicsCommandList>(entity)
+        .map(|l| l.command_list().cloned())
+}
+
+const BG: D2D1_COLOR_F = D2D1_COLOR_F {
+    r: 0.2,
+    g: 0.4,
+    b: 0.6,
+    a: 1.0,
+};
+
+#[test]
+fn resizing_empty_talk_background_replaces_command_list() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(100.0, 50.0),
+            Brushes::with_background(BG),
+        ))
+        .id();
+    schedule.run(&mut world);
+    let first = list_of(&world, entity).flatten().expect("background drawn");
+
+    world.entity_mut(entity).insert(sized(200.0, 80.0));
+    schedule.run(&mut world);
+    let second = list_of(&world, entity)
+        .flatten()
+        .expect("background redrawn");
+    assert_ne!(first, second, "大きさを変えたら命令の列が入れ替わる");
+}
+
+#[test]
+fn replacing_text_talk_with_empty_talk_without_background_clears_list() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::default(),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(list_of(&world, entity).flatten().is_some(), "文が描かれる");
+
+    world
+        .entity_mut(entity)
+        .insert(TypewriterTalk::new(vec![], 0.0));
+    schedule.run(&mut world);
+    assert_eq!(
+        list_of(&world, entity),
+        Some(None),
+        "描けない空のトークでは前の文の絵を残さない"
+    );
+}
+
+#[test]
+fn stopped_display_is_not_redrawn_on_second_update() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::default(),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+    let first = list_of(&world, entity).flatten().expect("text drawn");
+    let first_tick = world
+        .entity(entity)
+        .get_ref::<TypewriterTalk>()
+        .unwrap()
+        .last_changed();
+
+    world.insert_resource(FrameTime(101.0));
+    schedule.run(&mut world);
+    let second_tick = world
+        .entity(entity)
+        .get_ref::<TypewriterTalk>()
+        .unwrap()
+        .last_changed();
+    assert_eq!(first_tick, second_tick, "止まった表示に変化の印を立てない");
+    assert_eq!(
+        list_of(&world, entity).flatten(),
+        Some(first),
+        "止まった表示の命令の列を入れ替えない"
+    );
+}
+
+#[test]
+fn leftover_transparent_effect_is_cleared_on_next_draw() {
+    use crate::com::d2d::D2D1DeviceContextExt;
+    use windows::Win32::Graphics::DirectWrite::DWRITE_TEXT_RANGE;
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::default(),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+
+    // 描いた後の戻しに失敗した形: 控えの配置に透明の効果が残っている
+    let layout = world
+        .get::<TypewriterLayoutCache>(entity)
+        .unwrap()
+        .text_layout()
+        .clone();
+    let brush = {
+        let core = world.resource::<GraphicsCore>();
+        let dc = core.device_context().expect("device context");
+        dc.create_solid_color_brush(&crate::ecs::widget::record::TRANSPARENT, None)
+            .expect("brush")
+    };
+    unsafe {
+        layout
+            .SetDrawingEffect(
+                &brush,
+                DWRITE_TEXT_RANGE {
+                    startPosition: 1,
+                    length: 2,
+                },
+            )
+            .expect("set effect");
+    }
+
+    // 隠す範囲の無い次の描画で、残った効果が消える
+    world.entity_mut(entity).insert(sized(200.0, 100.0));
+    schedule.run(&mut world);
+    let mut effect = None;
+    unsafe { layout.GetDrawingEffect(1, &mut effect, None) }.expect("get effect");
+    assert!(effect.is_none(), "前の描画の透明の効果を残さない");
 }
