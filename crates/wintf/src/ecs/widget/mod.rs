@@ -1,10 +1,5 @@
 pub mod bitmap_source;
 pub mod brushes;
-// 骨組みに載る描く係は 2.2 以降に来る（載ったらこの expect が外れを知らせる）
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "描く係がまだ骨組みに載っていない")
-)]
 pub(crate) mod record;
 pub mod shapes;
 pub mod text;
