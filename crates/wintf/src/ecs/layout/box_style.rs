@@ -173,14 +173,7 @@ impl From<&BoxStyle> for taffy::Style {
             taffy_style.inset = inset.0.into();
         }
 
-        // Flex系プロパティ変換
-        // コンテナープロパティ設定時にdisplay: Flexを自動設定
-        if style.flex_direction.is_some()
-            || style.justify_content.is_some()
-            || style.align_items.is_some()
-        {
-            taffy_style.display = taffy::Display::Flex;
-        }
+        // Flex系プロパティ変換（display は taffy の既定の Flex のまま）
         if let Some(dir) = style.flex_direction {
             taffy_style.flex_direction = dir;
         }
@@ -191,10 +184,12 @@ impl From<&BoxStyle> for taffy::Style {
             taffy_style.align_items = Some(ai);
         }
 
-        // flex_grow/flex_shrinkはNone時にtaffyデフォルト値を適用
-        taffy_style.flex_grow = style.flex_grow.unwrap_or(0.0);
-        taffy_style.flex_shrink = style.flex_shrink.unwrap_or(1.0);
-
+        if let Some(grow) = style.flex_grow {
+            taffy_style.flex_grow = grow;
+        }
+        if let Some(shrink) = style.flex_shrink {
+            taffy_style.flex_shrink = shrink;
+        }
         if let Some(basis) = style.flex_basis {
             taffy_style.flex_basis = basis.into();
         }

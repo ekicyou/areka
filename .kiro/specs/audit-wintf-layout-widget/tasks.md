@@ -13,7 +13,7 @@
   - 完了の状態: 後から `BoxStyle` を付けた子が付けた大きさで並び、外した部品の兄弟と消した真ん中の子の後ろの子がその回のうちに詰まり、消えた次の回は計算しないことを、新しいテストが緑で示す
   - _Requirements: 3.1, 3.2, 5.2, 5.3, 5.9_
 
-- [ ] 1.2 taffy の逆引きと、配置の値の型の使われない所を消す
+- [x] 1.2 taffy の逆引きと、配置の値の型の使われない所を消す
   - taffy の部品の逆引きの表と、それを使う 2 つの関数を消す（26 番）。範囲の外のテスト 3 ファイル（`crates/wintf/tests/layout/taffy_advanced_test/mapping_management.rs`・`tree_sync.rs`・`crates/wintf/tests/layout/taffy_child_order_test.rs`）を、表を引く形から部品の節と taffy の子の並びで確かめる形へ書き換える
   - `taffy.rs` の手書きの `unsafe impl` の根拠と版の説明を今の中身に合わせる（29 番の taffy の分）
   - `BoxStyle` の変換で taffy の既定値を入れ直している 2 か所を消す（31 番）

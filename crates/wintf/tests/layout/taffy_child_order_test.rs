@@ -76,23 +76,23 @@ fn test_different_archetype_siblings_maintain_children_order_in_taffy() {
         .children(parent_node)
         .expect("Should get children");
 
-    // taffy 子ノード順序を Entity に変換
-    let taffy_child_entities: Vec<Entity> = taffy_children
+    // Children の順に、各部品の節を並べる
+    let expected_nodes: Vec<NodeId> = children_order
         .iter()
-        .map(|node_id| {
+        .map(|e| {
             taffy_res
-                .get_entity(*node_id)
-                .expect("Should have entity mapping")
+                .get_node(*e)
+                .expect("Child should have taffy node")
         })
         .collect();
 
     // taffy ツリーの子順序が Children の順序と一致することを検証
     assert_eq!(
-        taffy_child_entities, children_order,
+        taffy_children, expected_nodes,
         "Taffy tree child order should match Children component order, \
          regardless of archetype differences. \
          Expected: {:?}, Got: {:?}",
-        children_order, taffy_child_entities
+        expected_nodes, taffy_children
     );
 }
 
@@ -223,15 +223,14 @@ fn test_children_without_taffy_node_are_skipped() {
     let taffy_res = world.resource::<TaffyLayoutResource>();
     let parent_node = taffy_res.get_node(parent).unwrap();
     let taffy_children = taffy_res.taffy().children(parent_node).unwrap();
-    let taffy_entities: Vec<Entity> = taffy_children
-        .iter()
-        .map(|n| taffy_res.get_entity(*n).unwrap())
-        .collect();
+    let expected_nodes = vec![
+        taffy_res.get_node(child_a).unwrap(),
+        taffy_res.get_node(child_c).unwrap(),
+    ];
 
     // taffy ノードを持つ child_a と child_c のみが、Children 順で含まれる
     assert_eq!(
-        taffy_entities,
-        vec![child_a, child_c],
+        taffy_children, expected_nodes,
         "Only entities with TaffyStyle should appear in taffy children, in Children order"
     );
 }
