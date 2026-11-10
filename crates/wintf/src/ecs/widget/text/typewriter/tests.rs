@@ -1,4 +1,9 @@
 use super::*;
+use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
+use crate::ecs::layout::Arrangement;
+use crate::ecs::layout::metrics::Size;
+use crate::ecs::widget::text::typewriter_layout::init_typewriter_layout;
+use bevy_ecs::prelude::*;
 
 /// `TypewriterLayoutCache` の手動 `unsafe impl Send/Sync`（typewriter.rs）の
 /// 健全性を固定する特性化テスト。内包フィールド（IDWriteTextLayout は windows-rs が
@@ -260,4 +265,96 @@ fn test_typewriter_talk_update_does_not_refire_event_on_second_call() {
     // 2回目: 既に Completed なので update は早期 return し、再発火しない。
     let second = talk.update(6.0, &timeline);
     assert!(second.is_empty());
+}
+
+// ============================================================
+// トークの入れ替えと外し（3 番・実 GPU）
+// ============================================================
+
+/// 控えを作る係を 1 回回す世界。控えは `GraphicsCore` の DirectWrite で作る。
+fn new_layout_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(init_typewriter_layout);
+    (world, schedule)
+}
+
+fn text_talk(text: &str) -> TypewriterTalk {
+    TypewriterTalk::new(vec![TypewriterToken::Text(text.into())], 0.0)
+}
+
+fn cached_text(world: &World, entity: Entity) -> Option<String> {
+    world
+        .get::<TypewriterLayoutCache>(entity)
+        .map(|c| c.timeline().full_text.clone())
+}
+
+#[test]
+fn replacing_talk_rebuilds_cache_with_new_text_and_removing_clears_list() {
+    let (mut world, mut schedule) = new_layout_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            Arrangement {
+                size: Size {
+                    width: 200.0,
+                    height: 100.0,
+                },
+                ..Default::default()
+            },
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert_eq!(cached_text(&world, entity).as_deref(), Some("あいう"));
+
+    // 入れ替えると控えが外れ、作り直した控えは新しい文になる。
+    world.entity_mut(entity).insert(text_talk("かきくけこ"));
+    world.flush();
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_none());
+    schedule.run(&mut world);
+    assert_eq!(cached_text(&world, entity).as_deref(), Some("かきくけこ"));
+
+    // 外すと命令の列が空になり、控えも外れる。
+    let list = {
+        let core = world.resource::<GraphicsCore>();
+        let dc = core.device_context().expect("device context");
+        crate::ecs::widget::record::record_command_list(dc, |_| Ok(())).expect("record")
+    };
+    world
+        .entity_mut(entity)
+        .insert(GraphicsCommandList::new(list));
+    world.entity_mut(entity).remove::<TypewriterTalk>();
+    world.flush();
+    assert!(
+        world
+            .get::<GraphicsCommandList>(entity)
+            .expect("list")
+            .command_list()
+            .is_none()
+    );
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_none());
+}
+
+#[test]
+fn despawning_typewriter_with_talk_does_not_panic() {
+    let (mut world, mut schedule) = new_layout_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            Arrangement {
+                size: Size {
+                    width: 200.0,
+                    height: 100.0,
+                },
+                ..Default::default()
+            },
+            text_talk("あ"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    world.despawn(entity);
+    world.flush();
+    assert!(world.get_entity(entity).is_err());
 }

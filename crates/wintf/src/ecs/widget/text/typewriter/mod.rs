@@ -1,17 +1,18 @@
 //! Typewriter コンポーネント定義
 //!
 //! - Typewriter: ウィジェット論理コンポーネント（永続、スタイル設定）
-//! - TypewriterTalk: 1回のトーク論理情報（再生中のみ存在）
+//! - TypewriterTalk: 1回のトーク論理情報（入れ替えると次のトーク・外すと絵を消す）
 //! - TypewriterLayoutCache: 描画リソース（システムが自動生成）
 
 use crate::ecs::Visual;
+use crate::ecs::graphics::GraphicsCommandList;
 use crate::ecs::widget::text::typewriter_ir::{
     TimelineItem, TypewriterEventKind, TypewriterTimeline, TypewriterToken,
 };
+use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;
-use tracing::trace;
 use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
 
 // re-export TextDirection from label
@@ -37,7 +38,7 @@ pub use crate::ecs::widget::text::label::TextDirection;
 /// ));
 /// ```
 #[derive(Component)]
-#[component(storage = "SparseSet", on_add = on_typewriter_add, on_remove = on_typewriter_remove)]
+#[component(storage = "SparseSet", on_add = on_typewriter_add)]
 pub struct Typewriter {
     // === スタイル設定（Label互換） ===
     pub font_family: String,
@@ -80,13 +81,8 @@ fn on_typewriter_add(mut world: DeferredWorld, hook: HookContext) {
     }
 }
 
-/// Typewriter削除時のフック
-fn on_typewriter_remove(_world: DeferredWorld, hook: HookContext) {
-    trace!(entity = ?hook.entity, "[Typewriter] Removed");
-}
-
 // ============================================================
-// TypewriterTalk - 1回のトーク論理情報（再生中のみ存在）
+// TypewriterTalk - 1回のトーク論理情報
 // ============================================================
 
 /// 再生状態
@@ -98,14 +94,20 @@ pub enum TypewriterState {
     Completed,
 }
 
-/// 1回のトーク論理情報（再生中のみ存在）
-/// トーク完了・クリア時に remove される
+/// 1回のトーク論理情報
+/// 完了しても残る（`Completed` の状態で最後の表示を保つ）。`Typewriter` を付けると空のトークが入る。
+/// 入れ直すと次のトークになり、`TypewriterLayoutCache` を外して作り直させる。
+/// 外すと命令の列を空にして絵を消し、`TypewriterLayoutCache` も外す。
 /// メモリ戦略: SparseSet（動的追加/削除）
 ///
 /// COMリソース（TextLayout）は TypewriterLayoutCache が保持。
 /// このコンポーネントは論理情報のみを保持する。
 #[derive(Component, Clone)]
-#[component(storage = "SparseSet", on_remove = on_typewriter_talk_remove)]
+#[component(
+    storage = "SparseSet",
+    on_insert = on_typewriter_talk_insert,
+    on_remove = on_typewriter_talk_remove
+)]
 pub struct TypewriterTalk {
     /// Stage 1 IR トークン列
     tokens: Vec<TypewriterToken>,
@@ -267,8 +269,23 @@ impl TypewriterTalk {
     }
 }
 
-fn on_typewriter_talk_remove(_world: DeferredWorld, hook: HookContext) {
-    trace!(entity = ?hook.entity, "[TypewriterTalk] Removed");
+/// トークを入れるたびに控えを外し、次の `Draw` で新しいトークの控えを作らせる（初めてなら外す物が無い）。
+fn on_typewriter_talk_insert(mut world: DeferredWorld, hook: HookContext) {
+    world
+        .commands()
+        .entity(hook.entity)
+        .try_remove::<TypewriterLayoutCache>();
+}
+
+/// トークを外したら絵を消す（`Changed` で描き直させる）。控えは `try_remove` なので消すときも安全。
+fn on_typewriter_talk_remove(mut world: DeferredWorld, hook: HookContext) {
+    if let Some(mut cmd_list) = world.get_mut::<GraphicsCommandList>(hook.entity) {
+        cmd_list.set_if_neq(GraphicsCommandList::empty());
+    }
+    world
+        .commands()
+        .entity(hook.entity)
+        .try_remove::<TypewriterLayoutCache>();
 }
 
 // ============================================================
@@ -277,10 +294,10 @@ fn on_typewriter_talk_remove(_world: DeferredWorld, hook: HookContext) {
 
 /// Typewriter 描画リソースキャッシュ
 ///
-/// TypewriterTalk 追加時に描画システムが自動生成する。
+/// 控えの無いトークに対して描画システムが自動生成する（トークを入れ直す・外す・`Arrangement` が変わると外れる）。
 /// COMリソース（IDWriteTextLayout）と Stage 2 IR を保持。
 #[derive(Component)]
-#[component(storage = "SparseSet", on_remove = on_layout_cache_remove)]
+#[component(storage = "SparseSet")]
 pub struct TypewriterLayoutCache {
     /// TextLayout（描画に使用）
     text_layout: IDWriteTextLayout,
@@ -328,10 +345,6 @@ impl std::fmt::Debug for TypewriterLayoutCache {
             .field("timeline", &self.timeline)
             .finish_non_exhaustive()
     }
-}
-
-fn on_layout_cache_remove(_world: DeferredWorld, hook: HookContext) {
-    trace!(entity = ?hook.entity, "[TypewriterLayoutCache] Removed - COM resources released");
 }
 
 #[cfg(test)]
