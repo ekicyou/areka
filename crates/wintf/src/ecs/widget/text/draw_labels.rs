@@ -1,35 +1,34 @@
-use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
+use crate::com::d2d::D2D1DeviceContextExt;
 use crate::com::dwrite::DWriteFactoryExt;
-use crate::ecs::TextLayoutMetrics;
-use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
-use crate::ecs::widget::brushes::{Brushes, DEFAULT_FOREGROUND};
-use crate::ecs::widget::text::label::TextDirection;
-use crate::ecs::widget::text::{Label, TextLayoutResource};
+use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, format_entity_name};
+use crate::ecs::widget::brushes::Brushes;
+use crate::ecs::widget::record::{record_command_list, store_command_list};
+use crate::ecs::widget::text::Label;
+use crate::ecs::widget::text::label::apply_direction;
+use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
-use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::D2D1_DRAW_TEXT_OPTIONS_NONE;
 use windows::Win32::Graphics::DirectWrite::*;
-use windows_numerics::{Matrix3x2, Vector2};
-
-/// 透明色定数（内部使用）
-const TRANSPARENT_COLOR: D2D1_COLOR_F = D2D1_COLOR_F {
-    r: 0.0,
-    g: 0.0,
-    b: 0.0,
-    a: 0.0,
-};
+use windows_numerics::Vector2;
 
 /// Labelコンポーネントから GraphicsCommandList を生成
 ///
 /// Changed<Label>、Changed<Brushes> または GraphicsCommandList がないエンティティを対象に、
 /// DirectWrite を使用してテキストレイアウトを生成し、
 /// Direct2D の CommandList に描画命令を記録する。
-/// 色は`Brushes`コンポーネントのforegroundから取得されます。
+/// 色は`Brushes::foreground_color`から取得されます。
 pub fn draw_labels(
     mut commands: Commands,
     query: Query<
-        (Entity, &Label, &Brushes),
+        (
+            Entity,
+            &Label,
+            &Brushes,
+            Option<&GraphicsCommandList>,
+            Option<&Name>,
+        ),
+        // 命令の列が無い（立ち直りで外された）ときも描き直す
         Or<(
             Changed<Label>,
             Changed<Brushes>,
@@ -54,7 +53,8 @@ pub fn draw_labels(
         return;
     };
 
-    for (entity, label, brushes) in query.iter() {
+    // 係には返す先が無いので、失敗は記録してその部品を飛ばす（名前の文字列は失敗のときだけ作る）
+    for (entity, label, brushes, cmd_list_opt, name) in query.iter() {
         #[cfg(debug_assertions)]
         debug!(
             entity = ?entity,
@@ -64,18 +64,14 @@ pub fn draw_labels(
             "Drawing label"
         );
 
-        // Brushes.foregroundから色を取得
-        let color = brushes
-            .foreground
-            .as_color()
-            .unwrap_or_else(|| DEFAULT_FOREGROUND.as_color().unwrap());
+        let color = brushes.foreground_color();
 
         // TextFormat作成
         let font_family_hstring = windows::core::HSTRING::from(&label.font_family);
         let locale_hstring = windows::core::HSTRING::from("ja-JP");
         let text_format = match dwrite_factory.create_text_format(
             &font_family_hstring,
-            None::<&windows::Win32::Graphics::DirectWrite::IDWriteFontCollection>,
+            None::<&IDWriteFontCollection>,
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
@@ -85,7 +81,7 @@ pub fn draw_labels(
             Ok(fmt) => fmt,
             Err(err) => {
                 warn!(
-                    entity = ?entity,
+                    entity = %format_entity_name(entity, name),
                     error = ?err,
                     "Failed to create TextFormat"
                 );
@@ -94,25 +90,14 @@ pub fn draw_labels(
         };
 
         // 縦書き・横書きの設定
-        unsafe {
-            match label.direction {
-                TextDirection::HorizontalLeftToRight => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM);
-                }
-                TextDirection::HorizontalRightToLeft => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM);
-                }
-                TextDirection::VerticalRightToLeft => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT);
-                }
-                TextDirection::VerticalLeftToRight => {
-                    let _ = text_format.SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
-                    let _ = text_format.SetFlowDirection(DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT);
-                }
-            }
+        if let Err(err) = apply_direction(&text_format, label.direction) {
+            warn!(
+                entity = %format_entity_name(entity, name),
+                direction = ?label.direction,
+                error = ?err,
+                "Failed to set text direction"
+            );
+            continue;
         }
 
         // TextLayout作成
@@ -125,66 +110,33 @@ pub fn draw_labels(
                 Ok(layout) => layout,
                 Err(err) => {
                     warn!(
-                        entity = ?entity,
+                        entity = %format_entity_name(entity, name),
                         error = ?err,
                         "Failed to create TextLayout"
                     );
                     continue;
                 }
-            }; // 折り返しなしに設定
-        unsafe {
-            let _ = text_layout.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+            };
+        // 折り返しなしに設定
+        if let Err(err) = unsafe { text_layout.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP) } {
+            warn!(
+                entity = %format_entity_name(entity, name),
+                error = ?err,
+                "Failed to set word wrapping"
+            );
+            continue;
         }
 
-        // メトリクス取得（描画位置調整のために先に取得）
+        // メトリクス取得（描画位置調整のために先に取得）。取れなければ原点 0 のまま描かない
         let mut metrics = DWRITE_TEXT_METRICS::default();
-        unsafe {
-            let _ = text_layout.GetMetrics(&mut metrics);
+        if let Err(err) = unsafe { text_layout.GetMetrics(&mut metrics) } {
+            warn!(
+                entity = %format_entity_name(entity, name),
+                error = ?err,
+                "Failed to get text metrics"
+            );
+            continue;
         }
-
-        // CommandList生成
-        let command_list = match unsafe { dc.CreateCommandList() } {
-            Ok(cl) => cl,
-            Err(err) => {
-                warn!(
-                    entity = ?entity,
-                    error = ?err,
-                    "Failed to create CommandList"
-                );
-                continue;
-            }
-        };
-
-        // CommandListをターゲットに設定
-        unsafe {
-            dc.SetTarget(&command_list);
-        }
-
-        // 描画開始
-        unsafe {
-            // 共有DCのワールド変換をリセット（前フレームの描画処理の残留変換を防止）
-            dc.SetTransform(&Matrix3x2::identity());
-            dc.BeginDraw();
-        }
-
-        // 透明でクリア
-        dc.clear(Some(&TRANSPARENT_COLOR));
-
-        // ブラシ作成
-        let brush = match dc.create_solid_color_brush(&color, None) {
-            Ok(b) => b,
-            Err(err) => {
-                warn!(
-                    entity = ?entity,
-                    error = ?err,
-                    "Failed to create brush"
-                );
-                unsafe {
-                    let _ = dc.EndDraw(None, None);
-                }
-                continue;
-            }
-        };
 
         // テキスト描画
         // RTL（縦書き含む）の場合、レイアウト幅0でNO_WRAPにすると、
@@ -195,38 +147,18 @@ pub fn draw_labels(
             X: -metrics.left,
             Y: -metrics.top, // topも念のため補正
         };
-
-        dc.draw_text_layout(origin, &text_layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
-
-        // 描画終了
-        if let Err(err) = unsafe { dc.EndDraw(None, None) } {
-            warn!(
-                entity = ?entity,
-                error = ?err,
-                "EndDraw failed"
-            );
-            continue;
-        }
-
-        // CommandListを閉じる
-        if let Err(err) = command_list.close() {
-            warn!(
-                entity = ?entity,
-                error = ?err,
-                "Failed to close CommandList"
-            );
-            continue;
-        }
-
-        // GraphicsCommandListとTextLayoutResource、TextLayoutMetricsをエンティティに挿入
-        // metrics.width/heightは物理サイズ（スクリーン座標系）として扱われるため、そのまま使用する。
-        commands.entity(entity).insert((
-            GraphicsCommandList::new(command_list),
-            TextLayoutResource::new(text_layout),
-            TextLayoutMetrics {
-                width: metrics.width,
-                height: metrics.height,
-            },
-        ));
+        let recorded = record_command_list(dc, |dc| {
+            let brush = dc.create_solid_color_brush(&color, None)?;
+            dc.draw_text_layout(origin, &text_layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+            Ok(())
+        });
+        store_command_list(
+            &mut commands,
+            entity,
+            name,
+            cmd_list_opt.is_some(),
+            recorded,
+            "label",
+        );
     }
 }

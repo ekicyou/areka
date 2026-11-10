@@ -41,7 +41,7 @@
   - _Boundary: layout/systems/monitor_systems.rs_
   - _Requirements: 3.1, 5.9_
 
-- [ ] 2. 描く骨組みと、四角・文字
+- [x] 2. 描く骨組みと、四角・文字
 - [x] 2.1 命令の列を記録する骨組みを 1 つ置く
   - 透明の色の定数と、命令の列を記録する関数（`BeginDraw` の後は失敗しても必ず `EndDraw`・返す失敗は描く所 → `EndDraw` → 閉じるの順・変換は恒等へ戻す）を新しいファイルに置き、`widget/mod.rs` に crate の中だけの `mod` 宣言を足す
   - 結果を部品へ入れる関数を置く。成功なら命令の列を入れ、失敗なら `warn!`（部品の名前は失敗のときだけ作る）を 1 行残し、命令の列が無い部品にだけ空の列を入れる
@@ -62,7 +62,7 @@
   - _Depends: 2.1_
   - _Requirements: 2.7, 3.1, 3.3, 5.3_
 
-- [ ] 2.3 文字を骨組みへ載せ、向きの設定を 1 つの関数にし、使われない文の配置の部品を消す
+- [x] 2.3 文字を骨組みへ載せ、向きの設定を 1 つの関数にし、使われない文の配置の部品を消す
   - 読む向きと行の向きを書式へ設定する関数を置き、文字の描く係から呼ぶ。失敗と、折り返しの設定・寸法の取り出しの失敗は `warn!` を残してその部品を飛ばす（19・9 番）
   - 文字の描く係を骨組みに載せる（21・10 番）。前景色の写しを 2.2 の関数に替える（32 番の文字の分）
   - 使われない文の配置の部品 2 つ・それを入れる行・外すときのフック・再公開を消し、`layout/mod.rs` の説明の行も直す（24・34 番）。範囲の外のテスト 2 ファイル（`crates/wintf/tests/widget/label_defaults_test.rs`・`crates/wintf/tests/layout/metrics_test.rs`）からその確かめを消す
@@ -201,3 +201,5 @@
 - 1.1: `BoxStyle` を外した部品の下に `TaffyStyle` を持つ子が居ると、その子の節は taffy の木から離れ、`TaffyComputedLayout` は古い値のまま残る。要件・設計に決めが無い（レビュー係の FYI）。7.1 の 2 度目の audit で見る。
 - 2.1: 描く流れの直しの前の基準（4.3 で比べる）: `--test widget bitmap_source_integration_test` 7/7 緑・`--test graphics device_lost_recovery_test` 5/5 緑・`#[ignore]` 0 本。
 - 2.1: `widget/mod.rs` の `mod record;` に付けた `expect(dead_code)` は 2.2 で四角が骨組みに載ったら消す。`cargo fmt` が CRLF を LF に変えることがあるので、fmt の後は `git diff --stat` で確かめる。
+- 2.3: `.kiro/steering/structure.md` の 209・214・226 行に消した `TextLayoutResource` の記述が残る（範囲の外）。`/kiro-complete` の steering 同期で直す。
+- 2.3: 文字の描く係で記録の前（書式・配置・向き・折り返し・寸法）に失敗して `continue` した部品は、命令の列を持たないので毎回対象になり `warn!` を出し直す（前からの形・design に決め無し）。7.1 で見る。

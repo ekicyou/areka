@@ -5,7 +5,7 @@
 //! ## サブモジュール構成
 //!
 //! - **`taffy`**: taffyエンジン連携 (`TaffyStyle`, `TaffyComputedLayout`)
-//! - **`metrics`**: レイアウトメトリクス (`Size`, `Offset`, `LayoutScale`, `TextLayoutMetrics`)
+//! - **`metrics`**: レイアウトメトリクス (`Size`, `Offset`, `LayoutScale`)
 //! - **`arrangement`**: 配置情報コンポーネント (`Arrangement`, `GlobalArrangement`, `ArrangementTreeChanged`)
 //! - **`rect`**: 矩形操作ユーティリティ (`Rect`, `D2DRectExt`, `transform_rect_axis_aligned`)
 //! - **`systems`**: 配置伝播システム関数 (`sync_simple_arrangements`, `propagate_global_arrangements`)

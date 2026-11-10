@@ -4,8 +4,7 @@ use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;
-use tracing::trace;
-use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
+use windows::Win32::Graphics::DirectWrite::*;
 
 /// テキストの方向
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -35,11 +34,9 @@ pub enum TextDirection {
 /// # フィールド
 /// - `text`: 表示するテキスト (UTF-8)
 /// - `font_family`: フォントファミリー名 (例: "メイリオ", "Arial")
-/// - `font_size`: フォントサイズ (pt単位, 範囲: 8.0～72.0)
+/// - `font_size`: フォントサイズ（DirectWrite の DIP。範囲は確かめない）
 /// - `direction`: テキストの方向
 #[derive(Component)]
-// NOTE: on_add フックは既存の描画フロー（draw_recursive方式）と競合する
-// Phase 4（自己描画方式への移行）完了後に正常表示される
 #[component(storage = "SparseSet", on_add = on_label_add, on_remove = on_label_remove)]
 pub struct Label {
     pub text: String,
@@ -81,38 +78,36 @@ fn on_label_remove(mut world: DeferredWorld, hook: HookContext) {
     }
 }
 
-/// TextLayoutコンポーネント: IDWriteTextLayoutのキャッシュ
-///
-/// Labelコンポーネントから生成されたTextLayoutを保持。
-/// Labelが変更されない限り、再生成せず再利用される。
-#[derive(Component)]
-#[component(storage = "SparseSet", on_remove = on_text_layout_remove)]
-pub struct TextLayoutResource {
-    layout: Option<IDWriteTextLayout>,
+/// 読む向きと行の向きを書式へ設定する。DirectWrite は組み合わせを配置を使う所で確かめる
+/// （research.md 8.3）ので、設定の順はこのままでよい。
+pub(crate) fn apply_direction(
+    format: &IDWriteTextFormat,
+    direction: TextDirection,
+) -> windows::core::Result<()> {
+    let (reading, flow) = match direction {
+        TextDirection::HorizontalLeftToRight => (
+            DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
+            DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
+        ),
+        TextDirection::HorizontalRightToLeft => (
+            DWRITE_READING_DIRECTION_RIGHT_TO_LEFT,
+            DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
+        ),
+        TextDirection::VerticalRightToLeft => (
+            DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
+            DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT,
+        ),
+        TextDirection::VerticalLeftToRight => (
+            DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
+            DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
+        ),
+    };
+    unsafe {
+        format.SetReadingDirection(reading)?;
+        format.SetFlowDirection(flow)
+    }
 }
 
-impl TextLayoutResource {
-    /// 新しいTextLayoutコンポーネントを作成
-    pub fn new(layout: IDWriteTextLayout) -> Self {
-        Self {
-            layout: Some(layout),
-        }
-    }
-
-    /// TextLayoutを取得
-    pub fn get(&self) -> Option<&IDWriteTextLayout> {
-        self.layout.as_ref()
-    }
-
-    /// 空のTextLayoutを作成
-    pub fn empty() -> Self {
-        Self { layout: None }
-    }
-}
-
-/// TextLayoutコンポーネント削除時のフック
-/// COMオブジェクトはDropで自動解放されるため、ログ出力のみ
-fn on_text_layout_remove(_world: DeferredWorld, hook: HookContext) {
-    #[cfg(debug_assertions)]
-    trace!(entity = ?hook.entity, "[TextLayoutResource] Removed");
-}
+#[cfg(test)]
+#[path = "label_tests.rs"]
+mod label_tests;

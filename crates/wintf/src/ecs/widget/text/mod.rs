@@ -6,7 +6,7 @@ pub mod typewriter_ir;
 pub mod typewriter_layout;
 
 pub use draw_labels::draw_labels;
-pub use label::{Label, TextDirection, TextLayoutResource};
+pub use label::{Label, TextDirection};
 pub use typewriter::{Typewriter, TypewriterLayoutCache, TypewriterState, TypewriterTalk};
 pub use typewriter_draw::{draw_typewriter_backgrounds, draw_typewriters, update_typewriters};
 pub use typewriter_ir::{

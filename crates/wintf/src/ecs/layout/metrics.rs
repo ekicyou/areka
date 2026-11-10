@@ -1,14 +1,5 @@
-use bevy_ecs::prelude::*;
-
 // 共通型モジュールから re-export
 pub use crate::ecs::types::{Offset, Size};
-
-/// テキストレイアウトの物理サイズ
-#[derive(Component, Debug, Clone, Copy, PartialEq, Default)]
-pub struct TextLayoutMetrics {
-    pub width: f32,  // Physical width (pixels)
-    pub height: f32, // Physical height (pixels)
-}
 
 /// レイアウトスケール（DPIスケール、ViewBox等）
 #[derive(Debug, Clone, Copy, PartialEq)]
