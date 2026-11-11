@@ -272,6 +272,14 @@ pub fn load_scope(
     doc_to_entries(scope, &doc)
 }
 
+/// プロセスに 1 つの保存の門（すべての [`PersistIo`]・控える走り・試験の偽の IO に効く）。
+static SAVE_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn save_gate() -> std::sync::MutexGuard<'static, ()> {
+    // 門は中身を持たない＝途中で落ちても壊れた中身は残らない。毒は越える。
+    SAVE_GATE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// 当該スコープへ entries を原子的に保存する（write-through・R6.1/R6.2/R6.6）。
 ///
 /// **read-modify-write マージ**: 既存 `<root>/sylphya.toml` を読んで [`FormatDoc`] へ寛容パース
@@ -279,6 +287,8 @@ pub fn load_scope(
 /// `window.*` 等の無関係な key が消えない（マージ檻で保証）。
 ///
 /// - root 不在 → warn! ＋ [`PersistOutcome::Degraded`]（保存先が無い・panic なし・R6.7）。
+/// - 読む前にプロセスの中の門と [`PersistIo::lock_for_update`] の錠を取り、書いた後に放す。錠が
+///   取れない → 書かずに error! `persist_lock_failed` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。
 /// - 既存が無い・空 → 空の土台に重ねる。既存が読めない・壊れている・版が違う → 書かずに
 ///   error! `persist_existing_unusable` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。
 /// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
@@ -305,6 +315,30 @@ pub fn save_scope(
             keys,
             cause: PersistFailureCause::NoRoot,
         });
+    };
+
+    // 読む前に錠を取り、書いた後に放す（プロセスの中は門・ほかのプロセスとは錠のファイル）。
+    let _gate = save_gate();
+    let _lock = match io.lock_for_update(&path) {
+        Ok(lock) => lock,
+        Err(e) => {
+            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "persist_lock_failed",
+                ?scope,
+                path = %path.display(),
+                error = %e,
+                keys = ?key_names,
+                "persist update lock not acquired; reporting Degraded"
+            );
+            return PersistOutcome::Degraded(PersistFailure {
+                scope,
+                dir: roots.root_of(scope).cloned(),
+                keys,
+                cause: PersistFailureCause::Io(e.to_string()),
+            });
+        }
     };
 
     // read-modify-write: 既存 doc を土台にマージ（無関係 key を温存）。使えない既存は上書きしない。
@@ -525,3 +559,7 @@ mod window_adjacent_tests;
 #[cfg(test)]
 #[path = "persist_unreadable_tests.rs"]
 mod unreadable_tests;
+
+#[cfg(test)]
+#[path = "persist_lock_tests.rs"]
+mod lock_tests;
