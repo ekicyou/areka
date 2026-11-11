@@ -320,7 +320,6 @@ fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
         (WritingMode::VerticalRl, (190.0, 112.0, 200.0, 132.0)),
         (WritingMode::VerticalLr, (200.0, 112.0, 210.0, 132.0)),
     ];
-    let mut landings = Vec::new();
     for (mode, expected) in expected_rects {
         let region = region_undeclared(mode);
         let lines = layout_in(&items, 2, &region, mode);
@@ -330,28 +329,12 @@ fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
             expected,
             "{mode:?}: 画像中央 (200, 112) から 2 グリフぶん伸びた行矩形"
         );
-        landings.push((mode, landing_of(&lines[0], mode)));
-    }
-
-    for (mode, landing) in &landings {
         assert_eq!(
-            *landing, IMAGE_CENTER,
+            landing_of(&lines[0], mode),
+            IMAGE_CENTER,
             "{mode:?}: 着地は画像の幅／高さの半分（validrect の辺・寸法・中央のどれでもない）"
         );
     }
-    assert!(
-        landings.windows(2).all(|w| w[0].1 == w[1].1),
-        "3 方向の着地が同一であること＝`centerx` / `centery` は書字方向に依らない（R4.4）"
-    );
-    assert_eq!(
-        expected_rects
-            .iter()
-            .map(|(_, r)| (r.0.to_bits(), r.1.to_bits(), r.2.to_bits(), r.3.to_bits()))
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        3,
-        "同じ着地点でも行矩形は 3 方向で相異なる（方向の取り違えが行矩形に現れる）"
-    );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -438,7 +421,6 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
         },
         glyph(),
     ];
-    let mut b_landings = Vec::new();
     for (mode, expected_rect, expected_landing) in [
         (
             WritingMode::HorizontalTb,
@@ -465,21 +447,7 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
             expected_landing,
             "{mode:?}: ⒝ Y は画像中央 112・X は実効位置（方向で意味が変わる軸）"
         );
-        b_landings.push(expected_landing);
     }
-    assert!(
-        b_landings.iter().all(|l| l.1 == IMAGE_CENTER.1),
-        "⒝ の Y は 3 方向とも画像中央 112（centery は方向に依らない）"
-    );
-    assert_eq!(
-        b_landings
-            .iter()
-            .map(|l| l.0.to_bits())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        3,
-        "⒝ の X は 3 方向ですべて相異なる（40 / 350 / 30）——方向を取り違えた実装が赤になる"
-    );
 
     // ⒞ centerx（画像）× 3lh（文字描画開始点からの絶対）＝1 つのタグで基点が 2 つ。
     let c_items = [

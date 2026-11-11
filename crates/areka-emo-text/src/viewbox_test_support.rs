@@ -36,14 +36,15 @@ pub(crate) fn layout_canvas(
     (lines, canvas)
 }
 
-/// items→canvas の通し（origin (0,0)・validrect-local・visible は全量）。
+/// items→canvas の通し（origin は書字方向の既定の開始角・validrect-local・visible は全量）。
+/// 縦書きの右から左を origin (0,0) で組むと最初の列が面の外（x∈[-10,0]）に出るため空の組を使う。
 pub(super) fn canvas_for(
     items: &[TextItem],
     mode: WritingMode,
     validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
     font_height: f32,
 ) -> ContentCanvas {
-    let region = TextRegion::resolve(&model_rect((Some(0), Some(0)), validrect), IMAGE, mode);
+    let region = TextRegion::resolve(&model_rect((None, None), validrect), IMAGE, mode);
     layout_canvas(items, &region, mode, font_height).1
 }
 

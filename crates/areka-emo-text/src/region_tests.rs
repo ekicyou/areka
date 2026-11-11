@@ -307,30 +307,6 @@ fn invalid_scale_falls_back_to_one_with_warn() {
     }
 }
 
-/// TextRegion の全値は image px（k 非依存）——resolve は ScaleContract を受けない
-/// シグネチャで構造的に担保されるが、値レベルでも fixture 座標がスケール概念と
-/// 無関係に一致することを固定する（レイアウト決定のスケール非依存・R4.6 前半）。
-#[test]
-fn text_region_values_are_image_px_independent_of_scale() {
-    let region = TextRegion::resolve(
-        &fixture_model(),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    // image_size が同じである限り、どの k を仮定しても TextRegion は同一。
-    // （物理への写像は ScaleContract 経由の一点のみ）
-    assert_eq!(
-        (region.left(), region.top(), region.right(), region.bottom()),
-        (36.0, 46.0, 356.0, 168.0)
-    );
-    let contract = ScaleContract::new(2.0, None);
-    // 物理寸への写像は消費側の一点適用（例: validrect 幅 320 → 物理 640）。
-    assert_eq!(
-        contract.physical_extent(ImagePx(region.right() - region.left())),
-        640
-    );
-}
-
 // ── areka-P0-cursor-tag-canon R4.3: バルーン画像原寸の保持（`\_l` の centerx／centery の基準） ──
 
 /// 檻の独立入力に使う原寸。`IMAGE` とは**別の値**であり、幅 ≠ 高さで、

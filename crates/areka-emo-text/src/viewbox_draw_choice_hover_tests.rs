@@ -359,9 +359,10 @@ fn vertical_band_offset_shifts_paint_on_block_axis() {
     let shifted = paint_with_offset(&mut rig, BAND_OFFSET);
     let flat_span = bgra_x_span(&flat, w, h, fill_bgra).expect("寄せ 0 でも塗りは在る");
     let shifted_span = bgra_x_span(&shifted, w, h, fill_bgra).expect("寄せ 3 でも塗りは在る");
+    // 逆向きにずれたときに桁あふれで落ちず、下のメッセージで赤になるよう checked_sub で比べる。
     assert_eq!(
-        shifted_span.0 - flat_span.0,
-        BAND_OFFSET as u32,
+        shifted_span.0.checked_sub(flat_span.0),
+        Some(BAND_OFFSET as u32),
         "縦書きの帯はブロック軸（x）へ寄せのぶんだけずれる: 寄せ 0 で x{}..{} ／ 寄せ {BAND_OFFSET} で x{}..{}",
         flat_span.0,
         flat_span.1,

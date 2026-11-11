@@ -101,17 +101,7 @@ fn nonunit_scale_keeps_committed_within_half_pixel() {
     assert!((boundary.committed as f32 - boundary.pos).abs() <= 0.5);
 }
 
-// ── R7.5 系: 純関数（同一入力→同一出力）・契約点の初期状態・blit 軸写像委譲 ──
-
-/// 同一 `block_offset` の反復算出は同一 `ScrollState` を返す（決定論・純関数）。
-#[test]
-fn resolve_position_is_deterministic() {
-    let contract = ScaleContract::new(1.25, None);
-    let planner = ScrollPlanner::new();
-    let first = planner.resolve_position(-27.0, &contract);
-    let second = planner.resolve_position(-27.0, &contract);
-    assert_eq!(first, second);
-}
+// ── R7.5 系: 契約点の初期状態・blit 軸写像委譲 ──
 
 /// 初期計画者の契約点は真位置 0・確定位置 0（commit 前・後続 3.2 の状態遷移なし）。
 #[test]

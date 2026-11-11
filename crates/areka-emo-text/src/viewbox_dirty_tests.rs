@@ -278,8 +278,10 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         "描画対象は現在行のみ（overhang は幾何を変えるだけ）"
     );
 
-    // 縦書き（vertical_rl）: overhang は right（X 正方向）へ効く——横書きの top/bottom（Y）は
-    // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。
+    // 縦書き（vertical_rl）: overhang は left（X 負方向）へ効く——横書きの top/bottom（Y）は
+    // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。最初の列は面の
+    // 右端 x∈[390,400]（ダーティは 1 画素の余白込みで 389..400）に立つので、面の内側へ向く
+    // left で広がりを見る（right は面で切られる）。
     let vprev = canvas_for(&[TextItem::glyph("あ")], WritingMode::VerticalRl, vr, 10.0);
     let vprev_lines = ScrollPlanner::committed_lines(&vprev, WritingMode::VerticalRl);
     let vcanvas = canvas_for(
@@ -297,12 +299,12 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (400, 224),
         &vprev_lines,
     );
-    // 縦書きで X 方向へ right=4 拡張すると em 丈より横幅が広がる（top/bottom は Y ゆえ無視される）。
+    // 縦書きで X 方向へ left=4 拡張すると em 丈より横幅が広がる（top/bottom は Y ゆえ無視される）。
     let vover = vec![LineOverhang {
         top: 9.0, // Y 方向（縦書きの行内軸）は無視される検証用のダミー大値。
         bottom: 9.0,
-        left: 0.0,
-        right: 4.0,
+        left: 4.0,
+        right: 0.0,
     }];
     let (v_over, _) = ScrollPlanner::derive_dirty_with_overhangs(
         &vcanvas,
@@ -321,8 +323,62 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         "縦書きは top/bottom（Y）を無視——高さ（行内軸）は overhang で変わらない"
     );
     assert_eq!(
-        v_over[0].rect.w,
-        v_em[0].rect.w + 4,
+        (v_em[0].rect.x, v_em[0].rect.w),
+        (389, 11),
+        "縦書きの右から左の最初の列は面の右端に立つ（面の外へ出ない）"
+    );
+    assert_eq!(
+        (v_over[0].rect.x, v_over[0].rect.w),
+        (385, 15),
+        "縦書きは left（X）でブロック軸（列幅）が実測はみ出し分だけ広がる"
+    );
+
+    // 縦書き（vertical_lr）: 最初の列は面の左端 x∈[0,10] に立つので、面の内側へ向く right で
+    // 広がりを見る（left は面で切られる）。
+    let lprev = canvas_for(&[TextItem::glyph("あ")], WritingMode::VerticalLr, vr, 10.0);
+    let lprev_lines = ScrollPlanner::committed_lines(&lprev, WritingMode::VerticalLr);
+    let lcanvas = canvas_for(
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
+        WritingMode::VerticalLr,
+        vr,
+        10.0,
+    );
+    let (l_em, _) = ScrollPlanner::derive_dirty(
+        &lcanvas,
+        &window(0, 0.0),
+        WritingMode::VerticalLr,
+        &contract,
+        (0, 0),
+        (400, 224),
+        &lprev_lines,
+    );
+    let lover = vec![LineOverhang {
+        top: 9.0, // Y 方向（縦書きの行内軸）は無視される検証用のダミー大値。
+        bottom: 9.0,
+        left: 0.0,
+        right: 4.0,
+    }];
+    let (l_over, _) = ScrollPlanner::derive_dirty_with_overhangs(
+        &lcanvas,
+        &window(0, 0.0),
+        WritingMode::VerticalLr,
+        &contract,
+        (0, 0),
+        (400, 224),
+        &lprev_lines,
+        &lover,
+    );
+    assert_eq!(l_em.len(), 1);
+    assert_eq!(l_over.len(), 1);
+    assert_eq!(l_over[0].rect.h, l_em[0].rect.h);
+    assert_eq!(
+        (l_em[0].rect.x, l_em[0].rect.w),
+        (0, 11),
+        "縦書きの左から右の最初の列は面の左端に立つ"
+    );
+    assert_eq!(
+        (l_over[0].rect.x, l_over[0].rect.w),
+        (0, 15),
         "縦書きは right（X）でブロック軸（列幅）が実測はみ出し分だけ広がる"
     );
 }
@@ -509,20 +565,6 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
             .all(|r| r.rect.x + r.rect.w <= surface.0 && r.rect.y + r.rect.h <= surface.1),
         "露出帯も面寸を越えない"
     );
-}
-
-/// 行指紋は canvas-local（スクロール非依存）——同一 canvas は block_offset に依らず一致。
-#[test]
-fn committed_lines_are_scroll_independent() {
-    let canvas = canvas_for(
-        &broken_lines(3),
-        WritingMode::HorizontalTb,
-        (Some(0), Some(100), Some(0), Some(400)),
-        10.0,
-    );
-    let a = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    let b = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    assert_eq!(a, b, "同一 canvas の指紋は決定論的に一致");
 }
 
 /// スクロールアウトした行の残滓（要件 7.4・R-2 の回帰檻）: 行送りが「字の丈 ＋ 行間 2px」に

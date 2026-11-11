@@ -48,7 +48,7 @@
   - _Requirements: 4.1, 4.3_
 
 - [ ] 3. 失敗しえないテストを直す
-- [ ] 3.1 配置・領域・canvas・書字方向・折り返しの失敗しえないテストを直す
+- [x] 3.1 配置・領域・canvas・書字方向・折り返しの失敗しえないテストを直す
   - 指摘 24 の場所のうち純粋層の分で、確かめの無いテストは消し、確かめが弱いものは直す（原点の空の組・u32 の引き算は `checked_sub` で確かめる・内側のテストの失敗しえない半分を消す）
   - 消す・直す前に、直したテストがわざと壊した実装で落ちることを一度確かめる
   - 直したテストが壊した実装で赤・元の実装で緑になり、消したテストの代わりの檻が要らないことを記録に残すこと
@@ -275,3 +275,6 @@
 - 2.2: `plan_dirty_derivation_suite_covers_five_cases` を丸ごと消したので、9.2 の直し場所のうち `viewbox_plan_commit_tests.rs` の旧 509-519 は無くなった（`plan_returns_three_variants` の写しだった）。9.2 は残る 2 か所（`plan_returns_three_variants` の FullClear と `request_clear_then_commit_full_clear_returns_to_normal`）で直す。
 - 2.3: 記録だけの `#[ignore]` のテスト 3 本と、それだけが使う部品を消した（choice_hover の `vertical_big_glyph_column_ink_overlap_record`・`M_FONTS`・`vertical_em_box_from_column_baseline_record`、line_gap の `horizontal_line_gap_band_record`・`record_case`・`band_record`・`big_line_overlap_record`・`plan2_offset`）。消す前に `grep -rn -w <名前> .`（target・vendors を除く）で呼び手を数え、残るテストが使う `GAP_FONTS`・`GAP_WORDS`・`char_box` と支えの部品は残した。範囲に残る `#[ignore]` は PNG ダンプ 2 本だけ（指摘 30 の一覧の外）。
 - 2.3 の申し送り（13.2 へ）: `viewbox_draw_line_gap_band_tests.rs` の `char_box` の説明の末尾「記録の行も出す」が、記録のテストを消した後も事実に合うかを確かめる。
+- 3.1: 指摘 24 の純粋層の分を直した。同じ値の比べ・いつも真の確かめだけの 9 本を消し（各名を `git grep -n -F <名> -- . ':!.kiro/specs/completed'` で数え自分の fn 行だけ→消した後 0 件）、内側の 3 本の失敗しえない半分を消した。消した確かめは赤になりようがなく、値は残るテストが持つので代わりの檻は要らない。
+- 3.1: 直した 4 つ（styled の入口が番号列を読む・私有の fn を行頭で見る・`canvas_for` の原点を (None,None) にし縦書きのはみ出しを右から左は left・左から右は right で見る・choice_hover の引き算を `checked_sub` に）は、本番をわざと壊して赤、戻して緑を確かめた（`viewbox_diff.rs:342` は left と right の項をそれぞれ外して両方赤・戻した本番の git diff は空）。
+- 3.1 の申し送り（3.2 へ）: 指摘 24 の描画の分は全部 3.2 が持つ＝oracle_regression・frame_render 394-450 と 40-43・live_diff 289-297 と 550-604・draw_catalog_tests 268-284・draw_metrics_styled_tests 281-288・draw_format_metrics_tests 325-347・line_gap_band_tests 726-732（行は 41d3d5af の番号）。

@@ -423,8 +423,11 @@ fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
         "`finish_pending_line` は定義 1・呼び出し 2——同上"
     );
     // 門が同一ファイル内の私有関数に閉じていること（外から別経路で行を開かれない）。
+    // 行頭の `fn` だけを数える（`pub(super) fn` などの可視性つきは通さない）。
     assert!(
-        LAYOUT_SRC.contains("fn finish_pending_line("),
-        "`finish_pending_line` は `layout.rs` の私有関数（呼び出し元は同ファイルに閉じている）"
+        LAYOUT_SRC
+            .lines()
+            .any(|l| l.starts_with("fn finish_pending_line(")),
+        "`finish_pending_line` は `layout_scan.rs` の私有関数（呼び出し元は同ファイルに閉じている）"
     );
 }

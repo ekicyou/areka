@@ -625,11 +625,10 @@ fn the_line_pitch_formula_is_reached_through_a_single_call_site() {
 /// 自動折返しは起きない——折返し位置は
 /// `styled_advance_moves_the_wrap_point` が持つ）。
 ///
-/// 判定しないこと（doc と述語を一致させるための明示）: 既定でない番号の扱いは
+/// 同じ入口へ先頭の 1 字だけ大きさ 20 の番号を渡すと 1 行目の丈が 20 になる——番号列を
+/// 丸ごと無視する入口はここで赤になる（既定でない番号の細かい扱いは
 /// `styled_glyphs_advance_at_their_own_height_and_carry_their_style_id` 以下が持ち、
-/// `\_l` の縮退警告の配線は `layout_cursor_*_tests.rs` が持つ。本述語は**番号列を
-/// 丸ごと無視する実装でも緑**である——それが非回帰の檻の役目だからで、装飾が効いている
-/// ことの証拠には使えない。
+/// `\_l` の縮退警告の配線は `layout_cursor_*_tests.rs` が持つ）。
 #[test]
 fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     let region = region_h(45);
@@ -637,7 +636,8 @@ fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     items.push(TextItem::LineBreak { ratio: 1.0 });
     items.extend(glyph_items("おか"));
     let default = look_with_height(10.0);
-    let table = StyleTable::default();
+    let mut table = StyleTable::default();
+    let big = table.intern(&look_with_height(20.0), &default);
     let ids = [StyleId::DEFAULT; 7];
 
     let via_styled = layout_styled_h(
@@ -657,6 +657,20 @@ fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     );
 
     assert_eq!(via_styled, via_plain, "既定だけの番号列は従来の出力と同一");
+
+    let mut big_first = ids;
+    big_first[0] = big;
+    let via_big = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &big_first, &default),
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(
+        rects(&via_big)[0].3,
+        20.0,
+        "先頭の字の番号（大きさ 20）が 1 行目の丈になる＝入口は番号列を読む"
+    );
 }
 
 // ── 要件 3.1／7.9: `\_l` の実効位置の先読みも同じ行送り規則に従う ──

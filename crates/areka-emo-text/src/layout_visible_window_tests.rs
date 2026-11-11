@@ -1,5 +1,5 @@
-use super::test_support::{IMAGE, broken_lines, model, model_rect, window_for};
-use super::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use super::test_support::{IMAGE, broken_lines, model_rect, window_for};
+use super::{LayoutEngine, VisibleWindow};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
@@ -208,65 +208,6 @@ fn trailing_pending_newline_does_not_trigger_overflow() {
         },
         "保留改行はあふれ判定に不参加（スクロール不発火）"
     );
-}
-
-/// 同一入力に対する visible_window 出力は完全一致する（純関数・決定論檻・R7.5）。
-#[test]
-fn visible_window_same_input_yields_identical_output() {
-    let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    let lines = LayoutEngine::layout(
-        &broken_lines(5),
-        5,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    let first = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
-    let second = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
-    assert_eq!(first, second);
-}
-
-/// 同一入力に対する layout 出力は完全一致する（純関数・決定論檻）。
-#[test]
-fn same_input_yields_identical_output() {
-    let model = model((Some(0), Some(0)), (Some(50), None));
-    for mode in [
-        WritingMode::HorizontalTb,
-        WritingMode::VerticalRl,
-        WritingMode::VerticalLr,
-    ] {
-        let region = TextRegion::resolve(&model, IMAGE, mode);
-        let items = [
-            TextItem::glyph("あ"),
-            TextItem::LineBreak { ratio: 0.5 },
-            TextItem::glyph("a"),
-        ];
-        let first = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        let second = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
-    }
 }
 
 /// 送り量の原点は**描画範囲の開始側**であり、最初の行の開始側ではない（R17.1/17.2・症状 F）。

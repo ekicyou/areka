@@ -159,9 +159,9 @@ mod tests {
         assert_eq!(WrapMode::default(), WrapMode::CharByChar);
     }
 
-    /// 決定論: 全入力パターン（ON・OFF・欠落・未知値）で同一入力→同一出力（Invariants）。
+    /// 全入力パターン（ON・OFF・欠落・未知値）の解決結果と warn の件数。
     #[test]
-    fn resolution_is_deterministic_across_all_patterns() {
+    fn resolution_matches_expected_across_all_patterns() {
         let cases: &[(Option<&str>, WrapMode, usize)] = &[
             (Some("1"), WrapMode::BudouxWordWrap, 0),
             (Some("true"), WrapMode::BudouxWordWrap, 0),
@@ -171,11 +171,7 @@ mod tests {
             (Some("on"), WrapMode::CharByChar, 1),
         ];
         for (input, expected_mode, expected_warns) in cases {
-            // 同一入力を繰り返し評価しても結果が一致する（非決定論の排除）。
             let (m1, w1) = resolve_counting_warns(*input);
-            let (m2, w2) = resolve_counting_warns(*input);
-            assert_eq!(m1, m2, "input {input:?} の解決結果が非決定論的（mode）");
-            assert_eq!(w1, w2, "input {input:?} の warn 件数が非決定論的");
             assert_eq!(
                 m1, *expected_mode,
                 "input {input:?} の解決結果が期待と不一致"

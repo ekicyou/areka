@@ -666,51 +666,6 @@ fn deferred_rules_hold_in_vertical_modes() {
     }
 }
 
-/// 3.6: 決定論（同一入力→同一出力）に、連続改行・末尾改行を含む新しい入力パターンを
-/// 追加し、遅延意味論の全分岐が 3 方向で同一入力→同一出力を返すことを確認する（7.1）。
-#[test]
-fn deferred_semantics_same_input_yields_identical_output() {
-    let model = model((Some(0), Some(0)), (Some(50), None));
-    for mode in [
-        WritingMode::HorizontalTb,
-        WritingMode::VerticalRl,
-        WritingMode::VerticalLr,
-    ] {
-        let region = TextRegion::resolve(&model, IMAGE, mode);
-        // 連続改行＋末尾改行を含む列（遅延・累算・実体化・蒸発の全分岐を通す）。
-        let items = [
-            TextItem::LineBreak { ratio: 1.0 },
-            TextItem::glyph("あ"),
-            TextItem::LineBreak { ratio: 1.0 },
-            TextItem::LineBreak { ratio: 0.5 },
-            TextItem::glyph("a"),
-            TextItem::LineBreak { ratio: 1.0 },
-        ];
-        let first = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        let second = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        assert_eq!(
-            first, second,
-            "mode {mode:?} で遅延意味論の決定論が崩れている"
-        );
-    }
-}
-
 /// 折返し・改行後の行は描画開始点の行内成分へ戻る（origin が validrect 内部の場合も
 /// 同一規則・行送り軸だけが進む）。
 #[test]

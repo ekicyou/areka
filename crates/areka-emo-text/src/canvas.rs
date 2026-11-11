@@ -425,7 +425,6 @@ mod tests {
         assert_eq!(RESERVED_EFFECT_MULTICOLOR, "multicolor");
         assert_eq!(RESERVED_EFFECT_SHADOW, "shadow");
         assert_eq!(RESERVED_EFFECT_ROTATION, "rotation");
-        assert_eq!(TextEffects::default(), TextEffects::default());
     }
 
     // ── R8.4/8.1: レイアウト結果→グリフ住人（1 行=1 住人・行 index 1:1・変換行列付き） ──
@@ -455,7 +454,6 @@ mod tests {
 
         // 行 0: 変換 = validrect-local の行矩形原点 (0,0)・グリフはローカル 0,10,…,40。
         let r0 = &canvas.residents[0];
-        assert!(r0.transform.is_translation_only(), "M1 は恒等/平行移動のみ");
         assert_eq!(r0.transform.offset(), (0.0, 0.0));
         assert_eq!(r0.effects, TextEffects::default());
         let run0 = glyph_run(r0);
@@ -635,11 +633,10 @@ mod tests {
 
     // ── R8.4/R8.5: 画像・サーフェス住人は型シームのみ（同格 enum・実挙動なし） ──
 
-    /// M1 の from_layout はグリフ住人のみを生成する（Image/Surface は現れない）。
-    /// Image/Surface は同格の enum variant として存在する（型シーム・実挙動なし・
+    /// M1 の from_layout はグリフ住人のみを生成する（Image/Surface は現れない・
     /// 描画実行時の warn!＋skip は COM 層 draw の領分）。
     #[test]
-    fn from_layout_yields_only_glyph_residents_and_seams_stay_inert() {
+    fn from_layout_yields_only_glyph_residents() {
         let region = TextRegion::resolve(
             &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
@@ -653,54 +650,5 @@ mod tests {
                 .all(|r| matches!(r.content, ResidentContent::GlyphRun(_))),
             "M1 の実装住人はグリフのみ（R8.5）"
         );
-        // 型シームは crate 内でのみ構成可能（enum 上でグリフと同格・R8.4）。
-        let image = Resident {
-            content: ResidentContent::Image(super::ImageSeam::default()),
-            transform: RegionTransform::identity(),
-            effects: TextEffects::default(),
-        };
-        let surface = Resident {
-            content: ResidentContent::Surface(super::SurfaceSeam::default()),
-            transform: RegionTransform::identity(),
-            effects: TextEffects::default(),
-        };
-        assert!(matches!(image.content, ResidentContent::Image(_)));
-        assert!(matches!(surface.content, ResidentContent::Surface(_)));
-    }
-
-    // ── R8.2 総括＋決定論: 恒等/平行移動のみで構成された canvas・同一入力→同一出力 ──
-
-    /// 生成された canvas の全住人変換が恒等/平行移動のみで構成される（M1 檻・R8.2）。
-    /// 3 方向すべてで成立し、同一入力からの再生成は完全一致する（純関数・決定論檻）。
-    #[test]
-    fn canvas_is_translation_only_and_deterministic_across_modes() {
-        let m = model_full(
-            (Some(0), Some(0)),
-            (Some(50), Some(30)),
-            (None, None, None, None),
-        );
-        let items = [
-            TextItem::glyph("あ"),
-            TextItem::LineBreak { ratio: 0.5 },
-            TextItem::glyph("a"),
-            TextItem::glyph("漢"),
-        ];
-        for mode in [
-            WritingMode::HorizontalTb,
-            WritingMode::VerticalRl,
-            WritingMode::VerticalLr,
-        ] {
-            let region = TextRegion::resolve(&m, IMAGE, mode);
-            let (_, first) = canvas_for(&items, &region, mode, 10.0);
-            let (_, second) = canvas_for(&items, &region, mode, 10.0);
-            assert!(
-                first
-                    .residents
-                    .iter()
-                    .all(|r| r.transform.is_translation_only()),
-                "mode {mode:?}: M1 の変換は恒等/平行移動のみ（R8.2）"
-            );
-            assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
-        }
     }
 }
