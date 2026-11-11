@@ -14,7 +14,9 @@ use crate::ecs::widget::text::label::TextDirection;
 use crate::ecs::widget::text::typewriter::{
     Typewriter, TypewriterLayoutCache, TypewriterState, TypewriterTalk,
 };
-use crate::ecs::widget::text::typewriter_ir::{TypewriterEvent, TypewriterToken};
+use crate::ecs::widget::text::typewriter_ir::{
+    TypewriterEvent, TypewriterEventKind, TypewriterToken,
+};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
@@ -85,16 +87,26 @@ pub fn update_typewriters(
             }
         }
 
-        // FireEvent 処理: 対象エンティティの TypewriterEvent を設定
-        for (target, event_kind) in events {
-            // 宛先が消えているのは普通の流れ（トークの途中で閉じた等）。捨てたことだけ残す。
-            match commands.get_entity(target) {
-                Ok(mut target_cmds) => {
-                    target_cmds.try_insert(TypewriterEvent::from(event_kind));
-                }
-                Err(_) => {
-                    debug!(entity = ?entity, target = ?target, event = ?event_kind, "Typewriter event target is gone; dropped");
-                }
+        deliver_typewriter_events(&mut commands, entity, events);
+    }
+}
+
+/// `TypewriterTalk::update`・`skip` が返した知らせを宛先へ `TypewriterEvent` として届ける
+///
+/// `entity` は知らせを出したトークの部品（ログ用）。
+pub fn deliver_typewriter_events(
+    commands: &mut Commands,
+    entity: Entity,
+    events: Vec<(Entity, TypewriterEventKind)>,
+) {
+    for (target, event_kind) in events {
+        // 宛先が消えているのは普通の流れ（トークの途中で閉じた等）。捨てたことだけ残す。
+        match commands.get_entity(target) {
+            Ok(mut target_cmds) => {
+                target_cmds.try_insert(TypewriterEvent::from(event_kind));
+            }
+            Err(_) => {
+                debug!(entity = ?entity, target = ?target, event = ?event_kind, "Typewriter event target is gone; dropped");
             }
         }
     }

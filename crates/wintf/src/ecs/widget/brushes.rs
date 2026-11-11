@@ -91,22 +91,13 @@ impl Brush {
 ///
 /// foreground/backgroundブラシを保持するECSコンポーネント。
 /// デフォルト値は両方ともBrush::Inherit。
-#[derive(Component, Clone, Debug, PartialEq)]
+#[derive(Component, Clone, Debug, PartialEq, Default)]
 #[component(storage = "SparseSet")]
 pub struct Brushes {
     /// 前景色（テキスト、図形塗りつぶし）
     pub foreground: Brush,
     /// 背景色
     pub background: Brush,
-}
-
-impl Default for Brushes {
-    fn default() -> Self {
-        Self {
-            foreground: Brush::Inherit,
-            background: Brush::Inherit,
-        }
-    }
 }
 
 impl Brushes {

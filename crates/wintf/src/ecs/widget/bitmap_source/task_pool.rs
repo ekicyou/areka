@@ -19,14 +19,16 @@ pub type CommandSender = mpsc::Sender<BoxedCommand>;
 ///
 /// # Design
 /// - TaskPoolでバックグラウンド実行
-/// - mpsc channelでBox<dyn Command>をECSへ送信
+/// - mpsc channelで`BoxedCommand`（`Box<dyn FnOnce(&mut World) + Send>`）をECSへ送信
 /// - Input scheduleの`drain_task_pool_commands`で適用
 ///
 /// # Example
 /// ```ignore
 /// task_pool.spawn(|tx| async move {
 ///     let result = some_async_work().await;
-///     let cmd: BoxedCommand = Box::new(MyCommand { result });
+///     let cmd: BoxedCommand = Box::new(move |world: &mut World| {
+///         world.insert_resource(MyResult(result));
+///     });
 ///     let _ = tx.send(cmd);
 /// });
 /// ```

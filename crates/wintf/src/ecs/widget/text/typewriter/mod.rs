@@ -163,11 +163,21 @@ impl TypewriterTalk {
         }
     }
 
-    /// 全文即時表示（LayoutCache がある場合のみ有効）
-    pub fn skip(&mut self, total_cluster_count: u32) {
-        self.visible_cluster_count = total_cluster_count;
-        self.progress = 1.0;
-        self.state = TypewriterState::Completed;
+    /// 全文即時表示（一時停止中でも完了へ進める）
+    ///
+    /// 時間表の残り（文字・待ち・知らせ）をその場で全部進めて `Completed` にし、
+    /// 残っていた知らせ（末尾の `Complete` など）を返す。返した知らせは
+    /// [`deliver_typewriter_events`](crate::ecs::widget::text::deliver_typewriter_events) で届ける。
+    /// 完了済みなら何もせず空を返す。
+    pub fn skip(
+        &mut self,
+        timeline: &TypewriterTimeline,
+    ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
+        if self.state == TypewriterState::Completed {
+            return Vec::new();
+        }
+        self.state = TypewriterState::Playing;
+        self.advance(f64::INFINITY, timeline)
     }
 
     // === 状態取得 ===
@@ -220,8 +230,15 @@ impl TypewriterTalk {
         if self.state != TypewriterState::Playing {
             return Vec::new();
         }
+        self.advance(current_time - self.start_time, timeline)
+    }
 
-        let elapsed = current_time - self.start_time;
+    /// 経過時間 `elapsed` まで時間表を進め、発火すべきイベントを返す
+    fn advance(
+        &mut self,
+        elapsed: f64,
+        timeline: &TypewriterTimeline,
+    ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
         let mut events_to_fire = Vec::new();
 
         // タイムラインを走査して表示状態を更新

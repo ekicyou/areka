@@ -311,7 +311,7 @@ fn test_hit_test_in_window_position_none() {
 }
 
 // ========================================================================
-// 2 つの判定の一致（14 番）
+// αのマスクと HitTest の型（14 番）
 // ========================================================================
 
 /// 2x2 PBGRA32 の全透明・全不透明のマスク（`tests_ex` からも使う）
@@ -338,14 +338,12 @@ fn window_with_masked_child(mode: HitTest, alpha: u8) -> (World, Entity, Entity)
     (world, window, surface)
 }
 
-/// `NamedRegions` は αのマスクを見ない: 透明なマスクを付けても、
-/// `hit_test_in_window`（クリックの素通し）と `hit_test_in_window_ex`（領域）が揃って当たる。
+/// `NamedRegions` は αのマスクを見ない: 透明なマスクを付けても `hit_test_in_window_ex` は当たる。
 #[test]
-fn test_named_regions_ignores_alpha_mask_both_paths_agree() {
+fn test_named_regions_ignores_alpha_mask() {
     let (world, window, surface) = window_with_masked_child(HitTest::named_regions(), 0);
     let point = PointF::new(0.5, 0.5);
 
-    assert_eq!(hit_test_in_window(&world, window, point), Some(surface));
     let ex = hit_test_in_window_ex(&world, window, point).expect("_ex も当たる");
     assert_eq!(ex.entity, surface);
 }

@@ -2,7 +2,7 @@
 //!
 //! - `AlphaMaskResource` あり → 最優先で使用（`BitmapSourceResource`・矩形フォールバックより優先）
 //! - `AlphaMaskResource` なし → 従来 `BitmapSourceResource` → 矩形フォールバック（後方互換）
-//! - 両エントリポイントを檻に含める: `hit_test_entity`（直接）／`hit_test_in_window`（`hit_test` → `hit_test_entity` 経由）
+//! - 両エントリポイントを檻に含める: `hit_test_entity`（直接）／`hit_test_in_window`（`hit_test_in_window_ex` → `hit_test_ex` → `hit_test_entity_ex` 経由）
 
 use super::super::*;
 use super::make_global_arrangement;
@@ -109,8 +109,8 @@ fn test_alpha_mask_resource_outside_bounds_miss() {
 }
 
 // ========================================================================
-// hit_test_in_window（hit_test → hit_test_entity 経由）経路
-//   clickthrough evaluate_targets → hit_test_in_window → hit_test → hit_test_entity
+// hit_test_in_window（hit_test_in_window_ex → hit_test_ex → hit_test_entity_ex 経由）経路
+//   clickthrough evaluate_targets → hit_test_in_window → hit_test_in_window_ex → hit_test_ex → hit_test_entity_ex
 //   と同一経路を檻に含める（design Validation 明示要求）
 // ========================================================================
 
@@ -250,7 +250,7 @@ fn test_alpha_mask_resource_priority_over_bitmap_source_direct() {
     );
 }
 
-/// 同じ不一致を `hit_test_in_window`（`hit_test` → `hit_test_entity` 経由）でも証明する。
+/// 同じ不一致を `hit_test_in_window`（`hit_test_in_window_ex` → `hit_test_ex` → `hit_test_entity_ex` 経由）でも証明する。
 #[test]
 fn test_alpha_mask_resource_priority_over_bitmap_source_via_window() {
     use crate::ecs::widget::bitmap_source::BitmapSourceResource;

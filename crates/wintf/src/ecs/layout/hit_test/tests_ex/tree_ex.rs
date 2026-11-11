@@ -66,25 +66,6 @@ fn test_hit_test_ex_bounds_mode() {
     assert_eq!(result.region, None);
 }
 
-/// hit_test_ex: 重なりでは最前面を返す（hit_test も同じ走査を使う）
-#[test]
-fn test_hit_test_ex_front_priority() {
-    let mut world = World::new();
-
-    let back = world
-        .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
-        .id();
-    let front = world
-        .spawn(make_global_arrangement(20.0, 20.0, 80.0, 80.0))
-        .id();
-
-    let root = world.spawn_empty().id();
-    world.entity_mut(root).add_children(&[back, front]);
-
-    let result = hit_test_ex(&world, root, PointF::new(50.0, 50.0));
-    assert_eq!(result.map(|r| r.entity), Some(front));
-}
-
 // ========================================================================
 // hit_test_in_window_ex テスト
 // ========================================================================
@@ -129,37 +110,4 @@ fn test_hit_test_in_window_ex_with_region() {
     let result = result.unwrap();
     assert_eq!(result.entity, widget);
     assert_eq!(result.region.as_deref(), Some("button"));
-}
-
-/// hit_test_in_window_ex: WindowPos なし → None
-#[test]
-fn test_hit_test_in_window_ex_no_window_pos() {
-    let mut world = World::new();
-    let window = world
-        .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
-        .id();
-
-    let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 50.0));
-    assert!(result.is_none());
-}
-
-/// hit_test_in_window_ex: WindowPos.position が None → None
-///
-/// 既存 ex テストは WindowPos コンポーネント不在のみ固定していた。
-/// position フィールドが None（`window_pos.position?` で early return）の経路を特性化する。
-#[test]
-fn test_hit_test_in_window_ex_position_none() {
-    let mut world = World::new();
-    let window = world
-        .spawn((
-            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
-            WindowPos {
-                position: None,
-                ..Default::default()
-            },
-        ))
-        .id();
-
-    let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 50.0));
-    assert!(result.is_none());
 }

@@ -66,12 +66,57 @@ fn test_typewriter_talk_resume_is_noop_when_not_paused() {
 
 #[test]
 fn test_typewriter_talk_skip_forces_complete() {
+    // skip した時点で完了・全文表示・進行度 1.0（次の update を待たない）。
+    let timeline = make_glyph_timeline(42, 1.0);
     let mut talk = TypewriterTalk::new(vec![], 0.0);
-    talk.skip(42);
+    let events = talk.skip(&timeline);
+    assert!(events.is_empty());
     assert_eq!(talk.state(), TypewriterState::Completed);
     assert_eq!(talk.visible_cluster_count(), 42);
     assert_eq!(talk.progress(), 1.0);
     assert!(talk.is_completed());
+}
+
+/// skip は残りの知らせ（末尾の Complete）をその場で返し、その場で完了する。
+#[test]
+fn test_typewriter_talk_skip_returns_remaining_events_immediately() {
+    let target = bevy_ecs::entity::Entity::from_raw_u32(3).unwrap();
+    let timeline = TypewriterTimeline {
+        full_text: "a".into(),
+        items: vec![
+            TimelineItem::Glyph {
+                cluster_index: 0,
+                show_at: 10.0,
+            },
+            TimelineItem::FireEvent {
+                target,
+                event: TypewriterEventKind::Complete,
+                fire_at: 10.0,
+            },
+        ],
+        total_cluster_count: 1,
+    };
+    let mut talk = TypewriterTalk::new(vec![], 0.0);
+    let events = talk.skip(&timeline);
+    assert_eq!(events, vec![(target, TypewriterEventKind::Complete)]);
+    assert_eq!(talk.visible_cluster_count(), 1);
+    assert_eq!(talk.state(), TypewriterState::Completed);
+    // 完了後の skip・update は何も出さない
+    assert!(talk.skip(&timeline).is_empty());
+    assert!(talk.update(100.0, &timeline).is_empty());
+}
+
+/// 一時停止中の skip もその場で完了する。
+#[test]
+fn test_typewriter_talk_skip_while_paused_completes() {
+    let timeline = make_glyph_timeline(3, 1.0);
+    let mut talk = TypewriterTalk::new(vec![], 0.0);
+    talk.update(1.5, &timeline);
+    talk.pause(1.5);
+    talk.skip(&timeline);
+    assert_eq!(talk.visible_cluster_count(), 3);
+    assert_eq!(talk.progress(), 1.0);
+    assert_eq!(talk.state(), TypewriterState::Completed);
 }
 
 #[test]

@@ -51,7 +51,7 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///
 /// # 設計意図
 ///
-/// - Box系5種（size, margin, padding, position, inset）をOption型でネスト構造として含める
+/// - Box系7種（size, min_size, max_size, margin, padding, position, inset）をOption型でネスト構造として含める
 /// - Flex系7種（flex_direction, justify_content, align_items, flex_grow, flex_shrink, flex_basis, align_self）
 ///   をフラットなOption型フィールドとして含める（taffyのStyle構造体と同様のフラット設計）
 /// - `None`フィールドはtaffyデフォルト値にマッピング

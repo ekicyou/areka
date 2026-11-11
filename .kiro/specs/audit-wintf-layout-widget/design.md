@@ -409,7 +409,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 | 11 | `load_decoded_bitmap`（上の節）・`systems.rs:355`・`mod.rs:3-4` の説明 | `com/wic.rs` は変えない |
 | 12 | `update` の変化の印と描く係の絞り（上の流れ） | なし |
 | 13 | `on_arrangement_add` を `insert_if_new((GlobalArrangement::default(), ArrangementTreeChanged))` に（`LayoutRoot` のフックと同じ考え方）。`GlobalArrangement` が無いときは今と同じく入れる（`ecs/graphics/visual.rs:19`・`:135` の `Visual` のフックがこの連鎖に頼る・research.md 8.10）。変わるのは束で渡した値を上書きしなくなる所だけ。`tests_ex/entity_ex.rs:19-20`・`tests_ex/opacity.rs:32-37` の回り道を素直な形に戻す | 範囲の外のテスト 2 ファイルの説明（上の「範囲の外で直すファイル」） |
-| 14 | 当たり判定の正本（上の節）。`tests_ex/alpha_mask_resource.rs:5`・`:127-131`・`:263-264` の説明を、実際の道（`hit_test` → `hit_test_entity`）に合わせる | 呼び手の形は変わらない |
+| 14 | 当たり判定の正本（上の節）。`tests_ex/alpha_mask_resource.rs:5`・`:127-131`・`:263-264` の説明を、実際の道（`hit_test` → `hit_test_entity`）に合わせる。2026-11-12 の 2 度目の audit（57 番）で `hit_test`・`hit_test_in_window` を `_ex` 版へ任せたので、今の道は `hit_test_in_window` → `hit_test_in_window_ex` → `hit_test_ex` → `hit_test_entity_ex`（58 番で説明を合わせた） | 呼び手の形は変わらない |
 | 15 | `from_image` で対応が 255 個を越えたら `error!` を残し、`Error::new(E_INVALIDARG, …)` を返す（戻りの型は今のまま）。説明に「255 色まで」と書く | なし |
 | 17 | `HSTRING::from(image_path)`（`com/wic.rs:35` と同じ） | なし |
 | 18 | 読み込みのテストを足す（Testing Strategy） | なし |
