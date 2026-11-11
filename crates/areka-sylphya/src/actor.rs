@@ -86,14 +86,12 @@ pub enum SylphyaMsg {
         /// 書込値。
         value: String,
     },
-    /// 永続 put（typed 4 key 族・write-through・reply は任意で結果観測可）。
+    /// 永続 put（typed 4 key 族・write-through・fire-and-forget。失敗は受け口へ届く）。
     PersistPut {
         /// 永続スコープ（層別）。
         scope: PersistScope,
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
-        /// 保存結果の返信端（任意・`None` は fire-and-forget）。
-        reply: Option<areka_actor::ReplySender<crate::persist::PersistOutcome>>,
     },
     /// 反映フェンス（投函済みメッセージの処理完了を同期観測。テスト決定論と boot prefetch の
     /// 順序保証に使用・epoch フェンス読みの予約シームの M1 形）。
@@ -386,7 +384,7 @@ impl SylphyaCore {
                     }]
                 }
             },
-            SylphyaMsg::PersistPut { scope, entries, .. } => {
+            SylphyaMsg::PersistPut { scope, entries } => {
                 // write-through: 各 entry を大域点付き区画へ areka.* 正準 key で投影し・スコープ保存。
                 let mut effects = Vec::with_capacity(entries.len() + 1);
                 for (key, value) in entries {
@@ -431,7 +429,7 @@ fn canonicalize_or_raw(key: &str) -> String {
 // （5.1・判断分岐の純関数中核）が返す効果列 [`Effect`] を、単一のアクタースレッドが
 // 直列に実行する: copy-on-write で後継 [`MirrorImage`] を組み立て・[`SharedMirror::publish`]
 // で swap し（single-writer）・[`PersistSave`](Effect::PersistSave) を注入 [`PersistIo`] で
-// write-through 保存し・[`Barrier`](Effect::Barrier)/[`PersistPut`](SylphyaMsg::PersistPut) の
+// write-through 保存し・[`Barrier`](Effect::Barrier) の
 // reply を返し・[`Stop`](Effect::Stop) で受信ループを畳む。
 //
 // ## areka-actor 5 規約（design「Responsibilities & Constraints」）
@@ -521,13 +519,9 @@ impl SylphyaPublisher {
         self.send(SylphyaMsg::Set { asker, key, value });
     }
 
-    /// 永続 put を投函する（write-through・reply なし版＝fire-and-forget）。
+    /// 永続 put を投函する（write-through・fire-and-forget）。
     pub fn persist_put(&self, scope: PersistScope, entries: Vec<(PersistKey, String)>) {
-        self.send(SylphyaMsg::PersistPut {
-            scope,
-            entries,
-            reply: None,
-        });
+        self.send(SylphyaMsg::PersistPut { scope, entries });
     }
 
     /// 反映フェンス: 投函→処理完了を待つ（期限なし。期限が要るなら [`barrier_within`](Self::barrier_within)）。
@@ -666,7 +660,7 @@ fn build_initial_image(roots: &ScopeRoots, io: &dyn PersistIo) -> MirrorImage {
 ///
 /// 各メッセージにつき: [`SylphyaCore::apply`] で効果列を算出 → copy-on-write 後継像へ変異効果を
 /// 適用 → 実変異があれば [`SharedMirror::publish`]（single-writer）→ [`Effect::PersistSave`] を
-/// write-through 保存 → reply（barrier／persist put）を返す → [`Effect::Stop`] で `return`。
+/// write-through 保存 → barrier の reply を返す → [`Effect::Stop`] で `return`。
 /// 全 `Sender` drop（Disconnected）でも正常 `return`（areka-actor 停止規約）。
 fn run_actor(
     rx: std::sync::mpsc::Receiver<SylphyaMsg>,
@@ -690,7 +684,6 @@ fn run_actor(
         // copy-on-write 後継像を組み立て（変異効果のみ適用）。
         let mut next = shared.load().successor();
         let mut mutated = false;
-        let mut persist_outcome: Option<PersistOutcome> = None;
         let mut stop = false;
 
         for effect in effects {
@@ -725,7 +718,7 @@ fn run_actor(
                 }
                 Effect::PersistSave { scope, entries } => {
                     // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
-                    // error!＋Degraded で縮退（panic しない・R6.7）——ここは結果を reply へ中継。
+                    // error!＋Degraded で縮退（panic しない・R6.7）——ここは失敗を受け口へ中継。
                     let outcome = save_scope(scope, &roots, io.as_ref(), entries);
                     if let (PersistOutcome::Degraded(failure), Some(failures)) =
                         (&outcome, failures.as_ref())
@@ -738,7 +731,6 @@ fn run_actor(
                             "persist failure receiver closed; failure not forwarded (continuing)"
                         );
                     }
-                    persist_outcome = Some(outcome);
                 }
                 Effect::RuntimeCommandReserved { asker, key, value } => {
                     // SET 運行コマンド。M1 は sink 未登録（apply 側 warn 済み）→ 配送なし。
@@ -765,31 +757,9 @@ fn run_actor(
         }
 
         // reply 送信（reply 端は msg が所有・効果適用＝反映完了の後に返す）。
-        match msg {
-            SylphyaMsg::Barrier { reply } => {
-                // 反映済みをフェンスとして通知（受信端 drop 済みなら未達値を破棄・非 panic）。
-                let _ = reply.send(());
-            }
-            SylphyaMsg::PersistPut {
-                scope,
-                reply: Some(reply),
-                ..
-            } => match persist_outcome {
-                Some(outcome) => {
-                    let _ = reply.send(outcome);
-                }
-                None => {
-                    // PersistPut は必ず PersistSave を出すので起きない。中身を作らず返信端を落とす
-                    // （受け手は ReplyError::Dropped を見る）。panic しない。
-                    tracing::error!(
-                        target: LOG_TARGET,
-                        scope = ?scope,
-                        "persist put produced no save outcome; dropping reply"
-                    );
-                    drop(reply);
-                }
-            },
-            _ => {}
+        if let SylphyaMsg::Barrier { reply } = msg {
+            // 反映済みをフェンスとして通知（受信端 drop 済みなら未達値を破棄・非 panic）。
+            let _ = reply.send(());
         }
 
         if stop {

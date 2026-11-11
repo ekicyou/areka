@@ -231,7 +231,6 @@ fn apply_persist_put_projects_to_dotted_global_and_saves() {
     let msg = SylphyaMsg::PersistPut {
         scope: PersistScope::Ghost,
         entries: entries.clone(),
-        reply: None,
     };
     let effects = core().apply(&msg);
     assert_eq!(
