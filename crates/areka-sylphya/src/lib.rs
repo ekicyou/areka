@@ -50,9 +50,8 @@ pub mod vocab;
 #[cfg(test)]
 mod ledger_key_determinism_tests;
 
-// Task 4.1 flaky 根治: テスト専用ログ捕捉ヘルパ（捕捉窓は共有 crate `log-capture-kit` へ委譲し、
-// 並列負荷下の Interest::never 焼き付きを根絶・決定論檻・R9.1／R8.1）。persist/format.rs・
-// persist/mod.rs・後続 4.4 が `crate::test_log_capture::capture` から利用する。
+// テスト専用ログ捕捉ヘルパ: 共有 crate `log-capture-kit` の捕捉窓と型の上の薄い 2 つの関数
+// （`capture`・`assert_logged`）。使い手は persist と actor のテスト。
 #[cfg(test)]
 mod test_log_capture;
 

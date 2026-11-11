@@ -588,7 +588,7 @@ mod tests {
             "key 欠落で warn が出た。捕捉={:?}",
             events
                 .iter()
-                .map(|e| (e.level, e.message.clone()))
+                .map(|e| (e.level, e.message()))
                 .collect::<Vec<_>>()
         );
     }
