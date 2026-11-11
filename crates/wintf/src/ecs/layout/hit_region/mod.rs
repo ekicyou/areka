@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use bevy_ecs::prelude::*;
-use tracing::debug;
+use tracing::{debug, error};
 use windows::core::Interface;
 
 use super::metrics::Size;
@@ -132,6 +132,8 @@ impl ColorMapData {
     ///
     /// PNG画像を読み込み、各ピクセルの色値からリージョンIDへのインデックスマップを構築する。
     /// マッピング外の色はID 0（無名）として扱う。
+    ///
+    /// 対応は 255 色まで（リージョンIDを 1 バイトに詰めるため）。越えると `E_INVALIDARG` を返す。
     pub fn from_image(
         image_path: &std::path::Path,
         mapping: &HashMap<(u8, u8, u8), String>,
@@ -139,6 +141,17 @@ impl ColorMapData {
         use windows::Win32::Foundation::GENERIC_READ;
         use windows::Win32::Graphics::Imaging::*;
         use windows::core::HSTRING;
+
+        if mapping.len() > u8::MAX as usize {
+            error!(
+                colors = mapping.len(),
+                "カラーマップの対応は 255 色までです"
+            );
+            return Err(windows::core::Error::new(
+                windows::Win32::Foundation::E_INVALIDARG,
+                "カラーマップの対応は 255 色までです",
+            ));
+        }
 
         // リージョン名リストとカラー→ID マッピングを構築
         let mut region_names = Vec::new();
@@ -152,10 +165,8 @@ impl ColorMapData {
 
         // WIC で PNG を読み込む
         let factory = wic_factory()?;
-        let path_str = image_path.to_string_lossy();
-        let path_hstring = HSTRING::from(path_str.as_ref());
         let decoder = factory.create_decoder_from_filename(
-            &path_hstring,
+            &HSTRING::from(image_path),
             None,
             GENERIC_READ,
             WICDecodeMetadataCacheOnDemand,
@@ -250,30 +261,6 @@ impl ColorMapData {
     pub fn height(&self) -> u32 {
         self.height
     }
-}
-
-// ============================================================================
-// ColorMapDef / ColorMapping - シリアライズ対象の定義構造
-// ============================================================================
-
-/// カラーマップ定義（シリアライズ対象）
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ColorMapDef {
-    /// 画像ファイルパス
-    pub image_path: String,
-    /// RGB → 領域名マッピング
-    pub mapping: Vec<ColorMapping>,
-}
-
-/// 色→領域名マッピングエントリ
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ColorMapping {
-    /// RGB値 [R, G, B]
-    pub color: [u8; 3],
-    /// 領域名
-    pub name: String,
 }
 
 // ============================================================================
