@@ -170,8 +170,8 @@
   - _Boundary: layout/mod.rs, layout/rect.rs, layout/systems/window_pos_systems.rs_
   - _Requirements: 2.7, 3.1_
 
-- [ ] 6. 前提つきの 28 番
-- [ ] 6.1 `placement-crate-split` の着地の後に、画像の `path` の欄を読み取り専用にする
+- [x] 6. 前提つきの 28 番
+- [x] 6.1 `placement-crate-split` の着地の後に、画像の `path` の欄を読み取り専用にする
   - 前提: `placement-crate-split` が main に着地し、この枝が main を取り込んでいること。始めに確かめ、満たされていなければ手を付けずに止まり、開発者へ尋ねる（`crates/areka/` には触らない）
   - 2026-11-07: `placement-crate-split` は PR#433（`ff31386f`）で main に着地し、この枝は同じ日に main を取り込んだ（`266cccbb`）。前提は満たされている。始めには、`mock-shell.rs:609` の `bitmap.path` がまだ在ることだけを確かめ直す
   - 満たされていれば欄を非公開にし、`crates/areka/examples/mock-shell.rs:609` を 4.4 の関数に替え、`crates/areka/examples/clickthrough_two_rects.rs:192` の説明を 4.2 の後の条件に合わせる

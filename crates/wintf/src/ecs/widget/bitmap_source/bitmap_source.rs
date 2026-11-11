@@ -27,7 +27,7 @@ use tracing::debug;
 #[component(on_add = on_bitmap_source_add, on_remove = on_bitmap_source_remove)]
 pub struct BitmapSource {
     /// 画像ファイルパス（相対または絶対）
-    pub path: String,
+    path: String,
 }
 
 impl BitmapSource {
