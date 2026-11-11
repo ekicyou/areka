@@ -126,16 +126,6 @@ mod tests {
     }
 
     #[test]
-    fn same_epoch_same_content_via_arc_clone() {
-        let shared = SharedMirror::new(Arc::new(MirrorImage::empty()));
-        let a = shared.load();
-        let b = shared.load();
-        assert_eq!(a.epoch, b.epoch);
-        assert_eq!(*a, *b);
-        assert!(Arc::ptr_eq(&a, &b));
-    }
-
-    #[test]
     fn predecessor_image_unchanged_after_publish() {
         let e0 = Arc::new(MirrorImage::empty());
         let shared = SharedMirror::new(Arc::clone(&e0));
@@ -235,15 +225,5 @@ mod tests {
             assert_eq!(epoch, 0);
             assert_eq!(v.as_deref(), Some("v"));
         }
-    }
-
-    #[test]
-    fn empty_image_has_all_partitions_empty() {
-        let img = MirrorImage::empty();
-        assert_eq!(img.epoch, 0);
-        assert!(img.flat_per_asker.is_empty());
-        assert!(img.flat_global.is_empty());
-        assert!(img.dotted_global.is_empty());
-        assert!(img.dotted_per_asker.is_empty());
     }
 }

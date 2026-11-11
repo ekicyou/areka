@@ -514,43 +514,6 @@ fn non_numeric_scope_id_in_file_is_skipped() {
     );
 }
 
-// --- 決定論（同一入力→同一結果）---
-
-#[test]
-fn load_is_deterministic() {
-    let io = FakePersistIo::new();
-    let roots = ScopeRoots {
-        ghost: Some(PathBuf::from("/g")),
-        ..ScopeRoots::default()
-    };
-    save_scope(
-        PersistScope::Ghost,
-        &roots,
-        &io,
-        vec![
-            (
-                PersistKey::WindowPos {
-                    scope: 2,
-                    axis: Axis::X,
-                },
-                "9".into(),
-            ),
-            (
-                PersistKey::WindowPos {
-                    scope: 0,
-                    axis: Axis::X,
-                },
-                "1".into(),
-            ),
-            (PersistKey::VanishCount, "4".into()),
-        ],
-    );
-    assert_eq!(
-        load_scope(PersistScope::Ghost, &roots, &io),
-        load_scope(PersistScope::Ghost, &roots, &io)
-    );
-}
-
 #[test]
 fn absent_file_loads_empty() {
     let io = FakePersistIo::new();

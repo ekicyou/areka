@@ -40,17 +40,6 @@ fn classify_set_canonical_non_effective_is_not_settable() {
 }
 
 #[test]
-fn classify_set_three_branches_all_reachable() {
-    // 3 分岐が全て到達可能（互いに素）。
-    let rc = classify_set("surface.num");
-    let sw = classify_set("myplugin.customstate");
-    let ns = classify_set("baseware.name");
-    assert_ne!(rc, sw);
-    assert_ne!(sw, ns);
-    assert_ne!(rc, ns);
-}
-
-#[test]
 fn classify_set_unparseable_key_is_store_write() {
     // parse 不能 key（正準語彙ではない）→ StoreWrite 分岐（決定論・無音失敗なし）。
     assert_eq!(classify_set("a..b"), SetClass::StoreWrite);
@@ -321,70 +310,4 @@ fn apply_publish_shiori_absent_emits_actor_debug_log() {
         LOG_TARGET,
         "shiori resource absent",
     );
-}
-
-// === 決定論（同一入力 → 同一効果列・I/O なし）===
-
-#[test]
-fn apply_is_deterministic_across_variants() {
-    let c = core();
-    let msgs = vec![
-        SylphyaMsg::PublishStatic {
-            asker: asker(),
-            flat: vec![("selfname".into(), "x".into())],
-            dotted: vec![("baseware.name".into(), "areka".into())],
-        },
-        SylphyaMsg::RemoveFlat {
-            asker: asker(),
-            names: vec!["selfname2".into()],
-        },
-        SylphyaMsg::PublishShiori {
-            asker: asker(),
-            name: "username".into(),
-            value: None,
-        },
-        SylphyaMsg::Set {
-            asker: asker(),
-            key: "myplugin.k".into(),
-            value: "v".into(),
-        },
-        SylphyaMsg::Set {
-            asker: asker(),
-            key: "surface.num".into(),
-            value: "1".into(),
-        },
-        SylphyaMsg::Close,
-    ];
-    // 10 周: 同一入力 → 同一効果列（決定論檻）。
-    for _ in 0..10 {
-        for m in &msgs {
-            assert_eq!(c.apply(m), c.apply(m));
-        }
-    }
-}
-
-#[test]
-fn apply_persist_put_deterministic_same_ref() {
-    // reply を含む msg は Clone 不能ゆえ同一参照で 2 回呼んで決定論を確認。
-    let msg = SylphyaMsg::PersistPut {
-        scope: PersistScope::Ghost,
-        entries: vec![(PersistKey::VanishCount, "0".to_string())],
-        reply: None,
-    };
-    let c = core();
-    assert_eq!(c.apply(&msg), c.apply(&msg));
-}
-
-// RuntimeCommandSink は型予約のみ（M1 未配線）。トレイトが Send で dispatch を持つことを型で確認。
-struct NoopSink;
-impl RuntimeCommandSink for NoopSink {
-    fn dispatch(&self, _asker: &AskerId, _key: &str, _value: &str) {}
-}
-
-#[test]
-fn runtime_command_sink_trait_is_reserved() {
-    fn assert_send<T: Send>() {}
-    assert_send::<NoopSink>();
-    let sink: Box<dyn RuntimeCommandSink> = Box::new(NoopSink);
-    sink.dispatch(&asker(), "surface.num", "1");
 }

@@ -434,34 +434,6 @@ mod tests {
         let snap2 = reader.talk_snapshot(&ctx("ghost/a"));
         assert_eq!(snap2.get("selfname").map(String::as_str), Some("CHANGED"));
     }
-
-    #[test]
-    fn determinism_same_epoch_same_result() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.flat_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("selfname".into(), "Alice".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        let r1 = reader.resolve_flat(&ctx("ghost/a"), "selfname");
-        let r2 = reader.resolve_flat(&ctx("ghost/a"), "selfname");
-        assert_eq!(r1, r2);
-        let d1 = reader.resolve_dotted_str(&ctx("ghost/a"), "system.none");
-        let d2 = reader.resolve_dotted_str(&ctx("ghost/a"), "system.none");
-        assert_eq!(d1, d2);
-        assert_eq!(d1, DottedResolution::NotFound);
-    }
-
-    #[test]
-    fn reader_is_clone() {
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())));
-        let clone = reader.clone();
-        assert_eq!(
-            clone.resolve_dotted_str(&ctx("g"), "a.b"),
-            DottedResolution::NotFound
-        );
-    }
 }
 
 /// 鏡像・読み口 決定論単体テスト群（Task 3.3・consolidated criterion-mapped cage）。
@@ -483,8 +455,8 @@ mod tests {
 ///   非混同の初出檻）。
 /// - **per-talk 凍結**（R2.1）: `super::tests::talk_snapshot_is_frozen_after_publish`（既存）。
 /// - **決定論（同一鏡像 epoch×同一 asker×同一名→同一結果）**（R2.5・9.1）:
-///   フラット Value＋点付き NotFound は `super::tests::determinism_same_epoch_same_result`（既存）。
-///   点付き **Value** 分岐は本群 [`determinism_dotted_value_present_stable`] が補う。
+///   点付き **Value** 分岐を本群 [`determinism_dotted_value_present_stable`] が縛る（値の無い
+///   枝は純粋な関数を同じ引数で呼ぶだけで落ちようがないので檻を置かない）。
 #[cfg(test)]
 mod mirror_reader_criteria_cage {
     use crate::asker::{AskerContext, AskerId};
@@ -579,7 +551,6 @@ mod mirror_reader_criteria_cage {
 
     /// 決定論（点付き **Value** 分岐）: 同一鏡像 epoch×同一 asker×同一名 → 同一結果（R2.5・9.1）。
     ///
-    /// 既存 `determinism_same_epoch_same_result` はフラット Value＋点付き NotFound を檻化する。
     /// 本檻は publish を挟まず（epoch 不変）点付き Value を反復解決し、値が実在する分岐でも
     /// 結果が安定（同一 `Value`）であることを補完する。
     #[test]

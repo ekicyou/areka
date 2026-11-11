@@ -822,7 +822,7 @@ mod actor_integration_tests;
 ///
 /// - **SET 分類 3 パターン**（R3.4）: `super::tests::{classify_set_effective_key_is_runtime_command,
 ///   classify_set_free_dotted_key_is_store_write, classify_set_canonical_non_effective_is_not_settable,
-///   classify_set_three_branches_all_reachable, classify_set_unparseable_key_is_store_write}` ＋
+///   classify_set_unparseable_key_is_store_write}` ＋
 ///   apply 面 `super::tests::{apply_set_effective_emits_runtime_command_reserved,
 ///   apply_set_free_emits_host_store_write, apply_set_not_settable_emits_no_write}`（既存 5.1）。
 /// - **epoch 単調増加（アクター publish 経路）**（R3.3/2.5）: 本群

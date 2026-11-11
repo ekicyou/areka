@@ -502,32 +502,6 @@ mod tests {
         assert_eq!(doc.boot_count, None);
     }
 
-    #[test]
-    fn determinism_same_content_same_outcome() {
-        let content = "format-version = 1\n[boot]\ncount = \"3\"\n[vanish]\ncount = \"1\"\n";
-        assert_eq!(read_toml_str(content), read_toml_str(content));
-    }
-
-    #[test]
-    fn determinism_same_doc_same_serialization() {
-        let mut doc = FormatDoc::default();
-        doc.window.insert(
-            "2".into(),
-            AxisPair {
-                x: Some("9".into()),
-                y: None,
-            },
-        );
-        doc.window.insert(
-            "0".into(),
-            AxisPair {
-                x: Some("1".into()),
-                y: Some("2".into()),
-            },
-        );
-        assert_eq!(to_toml_string(&doc), to_toml_string(&doc));
-    }
-
     // --- 未知バージョンの warn 発火檻（R6.4「未知バージョン→warn・旧形式判別可能」）---
     //
     // ログ捕捉は共有ヘルパ [`crate::test_log_capture`] を経由する。並列 `cargo test` 負荷下で

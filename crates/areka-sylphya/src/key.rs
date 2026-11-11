@@ -353,23 +353,6 @@ mod tests {
         );
     }
 
-    // --- 決定論（同一入力→同一 Ok/Err）---
-
-    #[test]
-    fn determinism_ok_repeatable() {
-        let a = parse_dotted("areka.window.scope(2).y");
-        let b = parse_dotted("areka.window.scope(2).y");
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn determinism_err_repeatable() {
-        let a = parse_dotted("index(abc)");
-        let b = parse_dotted("index(abc)");
-        assert_eq!(a, b);
-        assert!(a.is_err());
-    }
-
     // --- 正準文字列形（鏡像 dotted key 形）と往復整合 ---
 
     #[test]

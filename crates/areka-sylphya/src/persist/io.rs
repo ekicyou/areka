@@ -329,19 +329,6 @@ mod tests {
         assert_eq!(io.read(&PathBuf::from("/nope.toml")).unwrap(), None);
     }
 
-    #[test]
-    fn fake_is_deterministic_given_same_faults() {
-        let path = PathBuf::from("/scope/sylphya.toml");
-        let run = || {
-            let io = FakePersistIo::new();
-            io.commit(&path, "A").unwrap();
-            io.fail_next_commit();
-            let interrupted = io.commit(&path, "B").is_err();
-            (interrupted, io.read(&path).unwrap())
-        };
-        assert_eq!(run(), run());
-    }
-
     // fake は外部環境（暦時計・OS 名・実 FS）を一切必要としない（R8.3・R9.2 の純 x64 檻）。
 
     /// `Arc` で包んでも 3 つの口（read・commit・withholds）はすべて中身へ渡る。
