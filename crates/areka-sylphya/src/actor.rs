@@ -34,6 +34,7 @@ use crate::reader::SylphyaReader;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 /// ログ target（steering: areka-log-first-no-silent-failure・design Monitoring 固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
@@ -529,13 +530,28 @@ impl SylphyaPublisher {
         });
     }
 
-    /// 反映フェンス: 投函→処理完了を待つ（有界: 呼び側がタイムアウトを課す・design）。
+    /// 反映フェンス: 投函→処理完了を待つ（期限なし。期限が要るなら [`barrier_within`](Self::barrier_within)）。
     ///
     /// 復帰時、それ以前に同一送信端から投函した全メッセージは鏡像へ反映済み（mpsc FIFO＋
     /// 直列処理）。アクター死亡（`Close`／panic 後）で投函できない、または reply 端が応答せず
     /// drop された場合は [`ReplyError`](areka_actor::ReplyError) を返す（送信端で死亡観測可能・
     /// R6.7）。
     pub fn barrier(&self) -> Result<(), areka_actor::ReplyError> {
+        self.post_barrier()?.recv()
+    }
+
+    /// 反映フェンス（期限つき）。期限を越えたら [`ReplyError::Timeout`](areka_actor::ReplyError)
+    /// （error! を 1 件）。死亡の扱いは [`barrier`](Self::barrier) と同じ。
+    pub fn barrier_within(&self, timeout: Duration) -> Result<(), areka_actor::ReplyError> {
+        let result = self.post_barrier()?.recv_timeout(timeout);
+        if matches!(result, Err(areka_actor::ReplyError::Timeout)) {
+            tracing::error!(target: LOG_TARGET, ?timeout, "sylphya barrier timed out; writer still busy");
+        }
+        result
+    }
+
+    /// 反映フェンスの投函（期限なし／期限つきの共通部分）。
+    fn post_barrier(&self) -> Result<areka_actor::ReplyReceiver<()>, areka_actor::ReplyError> {
         let (reply, rx) = areka_actor::reply_channel::<()>();
         if self.tx.send(SylphyaMsg::Barrier { reply }).is_err() {
             // アクター死亡 → 投函不能。warn＋Dropped（reader は最終鏡像で継続・表示系を殺さない）。
@@ -545,7 +561,7 @@ impl SylphyaPublisher {
             );
             return Err(areka_actor::ReplyError::Dropped);
         }
-        rx.recv()
+        Ok(rx)
     }
 
     /// 停止規約: `Close` を投函する（正典終了経路・design「shutdown: Close＋join」）。
@@ -786,6 +802,11 @@ mod case_fold_tests;
 #[cfg(test)]
 #[path = "actor_failure_sink_tests.rs"]
 mod failure_sink_tests;
+
+/// 期限つきの反映待ちの檻（audit-sylphya-actor #4）。
+#[cfg(test)]
+#[path = "actor_barrier_within_tests.rs"]
+mod barrier_within_tests;
 
 /// Task 5.2 アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
 /// アクター死亡観測（SendError／ReplyError／join panic）・reader 無ブロック・write-through 投影。
