@@ -758,3 +758,68 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
         "各矩形の行は draw_lines の部分集合"
     );
 }
+
+// ── 指摘 4: 描き直しの範囲を面へ切る足し引きはあふれない ──
+
+/// 位置が ±1e30・±inf の行（f32→i64 の `as` は i64::MIN/MAX へ飽和する）でも、ガード余白の
+/// 足し引きが panic せず、範囲は面の中へ切られる（面に届かなければ無い）。
+#[test]
+fn huge_and_infinite_line_positions_clip_into_surface_without_panic() {
+    let contract = ScaleContract::new(1.0, None);
+    let vr = (Some(0), Some(224), Some(0), Some(400));
+    let prev_canvas = canvas_for(
+        &[TextItem::glyph("あ")],
+        WritingMode::HorizontalTb,
+        vr,
+        10.0,
+    );
+    let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
+    let canvas = canvas_for(
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
+        WritingMode::HorizontalTb,
+        vr,
+        10.0,
+    );
+    // 行全体が面の外（±1e30・±inf）→ 範囲は無い。
+    for offset in [1e30_f32, -1e30, f32::INFINITY, f32::NEG_INFINITY] {
+        let (dirty, draw) = ScrollPlanner::derive_dirty(
+            &canvas,
+            &window(0, offset),
+            WritingMode::HorizontalTb,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &prev,
+        );
+        assert!(
+            dirty.is_empty(),
+            "offset {offset}: 面に届かない行は範囲が無い"
+        );
+        assert!(draw.is_empty(), "offset {offset}: 描く行も無い");
+    }
+    // 上へのはみ出しが 1e30・inf（上端が -1e30・-inf）、下端が面の中 → 面の中へ切られる {0,0,21,11}。
+    for top in [1e30_f32, f32::INFINITY] {
+        let over = vec![LineOverhang {
+            top,
+            bottom: 0.0,
+            left: 0.0,
+            right: 0.0,
+        }];
+        let (dirty, _) = ScrollPlanner::derive_dirty_with_overhangs(
+            &canvas,
+            &window(0, 0.0),
+            WritingMode::HorizontalTb,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &prev,
+            &over,
+        );
+        assert_eq!(dirty.len(), 1, "top {top}: 1 枚");
+        assert_eq!(
+            dirty[0].rect,
+            phys(0, 0, 21, 11),
+            "top {top}: 面の中へ切られる"
+        );
+    }
+}

@@ -422,11 +422,12 @@ fn expand_guard_clamp(
 ) -> Option<PhysicalRect> {
     let (w, h) = (surface_size.0 as i64, surface_size.1 as i64);
     // ガード余白（物理 px・全辺）。負や面外は i64 で扱ってから 0..面寸へクランプする。
+    // ±inf・巨大値は `as` で i64::MIN/MAX へ飽和するので、余白の足し引きも飽和させる（指摘 4）。
     let guard = (DIRTY_GUARD_IMG_PX * contract.scale).ceil() as i64;
-    let x0 = (min_x.floor() as i64 - guard).clamp(0, w);
-    let y0 = (min_y.floor() as i64 - guard).clamp(0, h);
-    let x1 = (max_x.ceil() as i64 + guard).clamp(0, w);
-    let y1 = (max_y.ceil() as i64 + guard).clamp(0, h);
+    let x0 = (min_x.floor() as i64).saturating_sub(guard).clamp(0, w);
+    let y0 = (min_y.floor() as i64).saturating_sub(guard).clamp(0, h);
+    let x1 = (max_x.ceil() as i64).saturating_add(guard).clamp(0, w);
+    let y1 = (max_y.ceil() as i64).saturating_add(guard).clamp(0, h);
     if x1 <= x0 || y1 <= y0 {
         return None;
     }
