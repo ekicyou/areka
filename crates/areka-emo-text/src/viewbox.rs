@@ -29,7 +29,7 @@
 //!   ——k を独自に `× scale` せず契約点を通す）。
 //! - 量子化: `committed = round(pos)`——**真位置からの直接丸め**（増分丸めの累積をしない＝
 //!   構造的にドリフトなし）。丸めは `f32::round`（round half away from zero）→ `as i32`。
-//! - 不変条件 `|committed − pos| ≤ 0.5`（k≠1.0 の R6.4 檻）。k=1.0 では行 pitch が整数
+//! - 不変条件 `|committed − pos| ≤ 0.5`（`|pos| ≤ i32::MAX` の間・越えると `as i32` が飽和する・k≠1.0 の R6.4 檻）。k=1.0 では行 pitch が整数
 //!   （`ceil` 由来）ゆえ行単位 `block_offset` が整数＝`pos` が整数＝`committed == pos`
 //!   （byte 一致の構造前提）。
 //!
@@ -50,14 +50,14 @@ use crate::writing::WritingMode;
 ///
 /// スクロール位置を**真位置**（f32 連続量）と**確定位置**（whole-pixel 整数）へ分離して
 /// 保持する値オブジェクト。不変条件 `|committed − pos| ≤ 0.5`（`committed = round(pos)`
-/// ゆえ恒真）。α 後の補間は `pos` の生成器（補間過程）だけを差し替える——`committed`／写像
+/// ゆえ `|pos| ≤ i32::MAX` の間は恒真・越えると飽和する）。α 後の補間は `pos` の生成器（補間過程）だけを差し替える——`committed`／写像
 /// 規約は不変（R8.3）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollState {
     /// 真位置（物理 px・f32 連続量）＝ `block_offset × k`（ブロック軸スカラ・符号は素通し）。
     /// α 後の補間はこの値の生成を差し替える。
     pub pos: f32,
-    /// 面に反映済みの whole-pixel 位置（真位置格子吸着・`round(pos)`・`|committed − pos| ≤ 0.5`）。
+    /// 面に反映済みの whole-pixel 位置（真位置格子吸着・`round(pos)`・`|pos| ≤ i32::MAX` の間 `|committed − pos| ≤ 0.5`・越えると飽和）。
     pub committed: i32,
 }
 
@@ -185,7 +185,15 @@ impl ScrollPlanner {
     /// 状態遷移（`commit`）は後続 3.2 の領分——本メソッドは軸写像の純粋補助のみ
     /// （初期状態では `committed = 0` ゆえ blit ＝ `target.committed` の軸写像）。
     pub fn blit_vector(&self, target: &ScrollState, mode: WritingMode) -> (i32, i32) {
-        block_axis_vector(mode, target.committed - self.committed)
+        block_axis_vector(mode, target.committed.saturating_sub(self.committed))
+    }
+
+    /// ずらし量の各成分を ±面の寸（x は幅・y は高さ）で頭打ちにする（向きは保つ）。
+    /// |ずらし| ≥ 面の寸は「全部送り出された」と同じ意味で、露出の帯と写しの結果は変わらない。
+    fn clamp_blit_to_surface(blit: (i32, i32), surface_size: (u32, u32)) -> (i32, i32) {
+        let lim = |n: u32| i32::try_from(n).unwrap_or(i32::MAX);
+        let (w, h) = (lim(surface_size.0), lim(surface_size.1));
+        (blit.0.clamp(-w, w), blit.1.clamp(-h, h))
     }
 
     /// 1 フレームの描画計画を返す（**状態不変・純粋**・`&self`・R2.3/4.3）——実測はみ出し無し
@@ -240,7 +248,7 @@ impl ScrollPlanner {
         // マスクされていた行内縮小欠陥が露出したため、判定を行数減少から被覆不能変化へ拡張した。
         let new_lines = Self::committed_lines(canvas, mode);
         let target = self.resolve_position(window.block_offset, contract);
-        let blit = self.blit_vector(&target, mode);
+        let blit = Self::clamp_blit_to_surface(self.blit_vector(&target, mode), surface_size);
         if Self::is_backward_shrink(&self.prev_lines, &new_lines)
             || Self::is_scroll_toward_older(blit, mode)
         {

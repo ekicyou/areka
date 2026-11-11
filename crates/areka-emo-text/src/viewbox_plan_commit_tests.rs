@@ -581,3 +581,36 @@ fn scroll_back_toward_older_degrades_to_full_domain_across_modes() {
         );
     }
 }
+
+// ── 指摘 3: 飽和した確定位置でも plan → commit → plan があふれない ──
+
+/// ±3e9 の位置（`i32` に収まらない＝確定位置が飽和する）で plan → commit → plan が panic せず、
+/// どちらのフレームも面全域を描き直す（1 つ目は面の寸で頭打ちにした送りの露出帯、2 つ目は古い側への
+/// 送りの全域の縮退）。
+#[test]
+fn saturated_position_plan_commit_plan_redraws_full_surface() {
+    let contract = ScaleContract::new(1.0, None);
+    let canvas = plan_canvas();
+    let mode = WritingMode::HorizontalTb;
+    let surface = (400u32, 100u32);
+    let full = phys(0, 0, surface.0, surface.1);
+    let mut planner = ScrollPlanner::new();
+    commit_initial(&mut planner, &canvas, mode, &contract, surface);
+
+    let far = window(0, -3e9);
+    let first = planner.plan(&canvas, &far, mode, &contract, surface);
+    let (blit, dirty) = expect_update(&first);
+    assert_eq!(blit, (0, -100), "送りは面の高さで頭打ち・向きは保つ");
+    assert!(
+        dirty.contains(&full),
+        "全部送り出された＝面全域を描き直す: {dirty:?}"
+    );
+    planner.commit(&canvas, &far, mode, &contract, &first);
+    assert_eq!(planner.scroll_state().committed, i32::MIN, "確定位置は飽和");
+
+    let back = window(0, 3e9);
+    let second = planner.plan(&canvas, &back, mode, &contract, surface);
+    let (blit, dirty) = expect_update(&second);
+    assert_eq!(blit, (0, 0), "古い側への送りは全域の縮退");
+    assert!(dirty.contains(&full), "面全域を描き直す: {dirty:?}");
+}

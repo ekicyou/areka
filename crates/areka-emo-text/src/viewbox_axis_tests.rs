@@ -135,3 +135,38 @@ fn blit_vector_maps_target_committed_to_block_axis() {
         block_axis_vector(WritingMode::VerticalLr, target.committed)
     );
 }
+
+// ── 指摘 3: 飽和した確定位置からのずらしはあふれず ±面の寸に収まる ──
+
+/// 確定位置が両端に飽和していても、ずらしは飽和の引き算で求まり（あふれの panic なし）、
+/// 面の寸で頭打ちにした結果は ±面の寸に収まって向きを保つ。
+#[test]
+fn saturated_committed_blit_stays_within_surface() {
+    let contract = ScaleContract::new(1.0, None);
+    let surface = (40u32, 30u32);
+    for (from, to) in [(3e9f32, -3e9f32), (-3e9, 3e9)] {
+        let mut planner = ScrollPlanner::new();
+        planner.committed = planner.resolve_position(from, &contract).committed;
+        let target = planner.resolve_position(to, &contract);
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let raw = planner.blit_vector(&target, mode);
+            let (bx, by) = ScrollPlanner::clamp_blit_to_surface(raw, surface);
+            assert!(bx.unsigned_abs() <= surface.0 && by.unsigned_abs() <= surface.1);
+            assert_eq!((bx.signum(), by.signum()), (raw.0.signum(), raw.1.signum()));
+            let block_dim = if mode == WritingMode::HorizontalTb {
+                30
+            } else {
+                40
+            };
+            assert_eq!(
+                bx.abs() + by.abs(),
+                block_dim,
+                "{mode:?}: 全部送り出された＝面の寸ちょうど"
+            );
+        }
+    }
+}
