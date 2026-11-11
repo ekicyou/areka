@@ -54,20 +54,18 @@ impl SylphyaReader {
 
     /// フラット窓の逐次解決（`%` 抜きの名を与える・R3.1）。
     ///
-    /// 解決順は **per-asker → global**: 当該 asker の per-asker 区画→大域区画の順に
-    /// 名前を引き、値が実在すれば [`FlatResolution::Value`]。不在なら台帳
+    /// 当該 asker の per-asker 区画で名前を引き、値が実在すれば [`FlatResolution::Value`]。
+    /// 不在なら台帳
     /// （[`FLAT_VOCAB`]）の縮退政策を返す（[`FlatResolution::Degraded`]）。台帳外の名は
     /// `Degraded(PassThroughRaw)`（design「台帳外の名は Degraded(PassThroughRaw)」）。
     ///
     /// 由来非露出（R2.4）: 返す型に backing 層情報は載らない。無待機（R2.7）。
     pub fn resolve_flat(&self, asker: &AskerContext, name: &str) -> FlatResolution {
         let img = self.shared.load();
-        // per-asker → global の順で値を引く。
         let hit = img
             .flat_per_asker
             .get(&asker.asker)
-            .and_then(|m| m.get(name))
-            .or_else(|| img.flat_global.get(name));
+            .and_then(|m| m.get(name));
         if let Some(v) = hit {
             return FlatResolution::Value(v.clone());
         }
@@ -119,21 +117,17 @@ impl SylphyaReader {
     /// talk 凍結スナップショット素材（R2.1）。
     ///
     /// 鏡像に **値が実在するフラット名のみ** を `BTreeMap<String, String>` として返す。
-    /// per-asker → global のマージ（per-asker が global を隠す）で、縮退・不在の名や
-    /// 既定値は含めない（値実在分のみ）。戻り値は所有コピー——取得後に新しい鏡像が
+    /// 当該 asker の per-asker 区画の写しで、縮退・不在の名や既定値は含めない（値実在分のみ）。
+    /// 戻り値は所有コピー——取得後に新しい鏡像が
     /// publish されても、返した写像は不変（per-talk 凍結）。
     ///
     /// 無待機（R2.7）。ghost がこれを `SystemVarSnapshot` へ写像する（sylphya は sakura 非依存）。
     pub fn talk_snapshot(&self, asker: &AskerContext) -> BTreeMap<String, String> {
         let img = self.shared.load();
-        // global を土台に per-asker を上書きマージ（per-asker → global 優先順に対応）。
-        let mut out: BTreeMap<String, String> = img.flat_global.clone();
-        if let Some(per) = img.flat_per_asker.get(&asker.asker) {
-            for (k, v) in per {
-                out.insert(k.clone(), v.clone());
-            }
-        }
-        out
+        img.flat_per_asker
+            .get(&asker.asker)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// 正準文字列 key で点付き区画を引く（per-asker → global → 登録の表）。内部共通経路。
@@ -234,33 +228,6 @@ mod tests {
         assert_eq!(
             reader.resolve_flat(&ctx("ghost/a"), "not_a_real_token"),
             FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
-        );
-    }
-
-    #[test]
-    fn flat_per_asker_shadows_global() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.flat_global.insert("selfname".into(), "GLOBAL".into());
-        img.flat_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("selfname".into(), "PERASKER".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        assert_eq!(
-            reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-            FlatResolution::Value("PERASKER".into())
-        );
-    }
-
-    #[test]
-    fn flat_global_found_when_per_asker_lacks() {
-        let mut img = MirrorImage::empty();
-        img.flat_global.insert("selfname".into(), "GLOBAL".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        assert_eq!(
-            reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-            FlatResolution::Value("GLOBAL".into())
         );
     }
 
@@ -382,7 +349,6 @@ mod tests {
     fn talk_snapshot_contains_only_real_values() {
         let a = AskerId::new("ghost/a");
         let mut img = MirrorImage::empty();
-        img.flat_global.insert("gkey".into(), "gval".into());
         img.flat_per_asker
             .entry(a.clone())
             .or_default()
@@ -390,24 +356,9 @@ mod tests {
         let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
         let snap = reader.talk_snapshot(&ctx("ghost/a"));
         assert_eq!(snap.get("selfname").map(String::as_str), Some("Alice"));
-        assert_eq!(snap.get("gkey").map(String::as_str), Some("gval"));
         // degraded/absent names are NOT present
         assert!(!snap.contains_key("username"));
         assert!(!snap.contains_key("month"));
-    }
-
-    #[test]
-    fn talk_snapshot_per_asker_shadows_global() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.flat_global.insert("selfname".into(), "GLOBAL".into());
-        img.flat_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("selfname".into(), "PERASKER".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        let snap = reader.talk_snapshot(&ctx("ghost/a"));
-        assert_eq!(snap.get("selfname").map(String::as_str), Some("PERASKER"));
     }
 
     #[test]
