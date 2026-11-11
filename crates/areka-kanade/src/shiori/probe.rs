@@ -33,8 +33,8 @@ pub enum ShioriBusy {
     /// 呼び出しの外（待っていない）。
     #[default]
     Idle,
-    /// GET／NOTIFY の往復の最中（id はイベント名）。
-    Request(String),
+    /// GET／NOTIFY の往復の最中（id はイベント名・`notify` は NOTIFY なら真）。
+    Request { id: String, notify: bool },
     /// SHIORI を降ろしている最中（UNLOAD の応答と補助プロセスの終了の観測）。
     Unload,
     /// 降ろす処理が戻った後（成否を問わない）。SHIORI の待ちは終わっているので見張りは切らない。
@@ -249,8 +249,11 @@ fn try_fire(inner: &ProbeInner, budget: WaitBudget) -> Option<ShioriCut> {
             );
             return None;
         }
-        ShioriBusy::Request(id) if id == "OnClose" => ("on_close_notify", Some(id)),
-        ShioriBusy::Request(id) => ("in_flight_request", Some(id)),
+        // 後始末の通知は NOTIFY の OnClose だけ（前から待っていた OnClose の GET は在来の往復）。
+        ShioriBusy::Request { id, notify: true } if id == "OnClose" => {
+            ("on_close_notify", Some(id))
+        }
+        ShioriBusy::Request { id, .. } => ("in_flight_request", Some(id)),
         ShioriBusy::Unload => ("unload", None),
         ShioriBusy::Idle => ("idle", None),
     };
@@ -273,7 +276,7 @@ fn try_fire(inner: &ProbeInner, budget: WaitBudget) -> Option<ShioriCut> {
                 target: "shiori-actor",
                 event = "shiori_unblock_unavailable",
                 stage,
-                "外から解く手が無い（接続前か InProc）——待ちは今日どおり続く"
+                "外から解く手が無い（接続前か InProc）——待ちはそのまま続く"
             );
             false
         }
@@ -286,7 +289,7 @@ fn try_fire(inner: &ProbeInner, budget: WaitBudget) -> Option<ShioriCut> {
         limit_ms,
         elapsed_ms,
         unblocked,
-        "SHIORI の待ちを上限で打ち切った——補助プロセスを終わらせて待ちを解く"
+        "SHIORI の待ちが上限に達した——補助プロセスを終わらせて待ちを解こうとした（解けたかは unblocked）"
     );
     Some(ShioriCut { stage, unblocked })
 }

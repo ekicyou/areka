@@ -1,7 +1,6 @@
 //! mock sakura sink 2 種（即応・保留付き）と quit フラグのシナリオ指示。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -26,8 +25,10 @@ use super::bounded::run_join_bounded;
 /// - [`commands`](Self::commands): 3 形（`Start`/`ResolveChoice`/`CancelChoice`）の**到着順**の
 ///   記録列。`TalkCommand` が単一チャンネルを流れることによる FIFO 順序保存（DD-4 の前提）を
 ///   観測する面である。
-/// - [`started`](Self::started): 記録列のうち `TalkCommand::Start` の射影。既存の起動系檻は
-///   本アクセサを従来どおり使い続け、意味は不変である。
+/// - [`started`](Self::started): 記録列のうち `TalkCommand::Start` の射影。
+///
+/// 走行中に読む [`commands`](Self::commands)／[`started`](Self::started) を使うのは `common_smoke`
+/// の檻だけで、駆動ハーネスの檻は `Harness::finish` 越しに join 後の記録を読む。
 pub struct MockSakura {
     join: thread::JoinHandle<()>,
     commands: Arc<Mutex<Vec<TalkCommand>>>,
@@ -43,31 +44,15 @@ impl MockSakura {
     /// mock を経由せず終了でき、**記録前のスナップショットを掴む**。実測で檻バイナリ 100 回中
     /// 7〜11 回失敗し、しかも**全檻並行実行時にしか露見しない**（`--exact` 単独実行では出ない）。
     ///
-    /// そういう檻では [`MockSakura::join_bounded_then_commands`] を使うこと——join 完了が
-    /// 全記録に happens-before を張る。
+    /// 駆動ハーネスの後始末は `Harness::finish` 1 つで、そこはいつも
+    /// [`MockSakura::join_bounded_then_commands`] で読む——join 完了が全記録に happens-before を張る。
     pub fn commands(&self) -> Vec<TalkCommand> {
         self.commands.lock().expect("mock sakura mutex").clone()
     }
 
     /// 受領した [`StartTalk`] の記録スナップショットを返す（記録列の `Start` 射影）。
     pub fn started(&self) -> Vec<StartTalk> {
-        self.commands
-            .lock()
-            .expect("mock sakura mutex")
-            .iter()
-            .filter_map(|command| match command {
-                TalkCommand::Start(start) => Some(start.clone()),
-                TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
-            })
-            .collect()
-    }
-
-    /// sink スレッドの終了を待つ（`TalkCommand` 送信端が全て drop された後に完了する）。
-    pub fn join_bounded(self, what: &str, timeout: Duration) {
-        let MockSakura { join, .. } = self;
-        run_join_bounded(what, timeout, move || {
-            let _ = join.join();
-        });
+        starts_of(&self.commands.lock().expect("mock sakura mutex"))
     }
 
     /// sink スレッドの終了を待ってから、記録スナップショットを**到着順**で返す。
@@ -78,10 +63,6 @@ impl MockSakura {
     /// kanade の終了が `TalkDone` の往復を介さない檻——`ForceQuit` で終了系列へ直行する形——では
     /// この差が実際に露見し、記録列が**空のまま**読まれ得る（実測: 100 回中 11 回）。
     ///
-    /// quit フラグ付き `TalkDone` の往復で終わる檻（既存の群 1〜5）は、その往復自体が mock の
-    /// 消費を強制するため `commands()` で足りる——本変種は既存檻の意味を変えないよう**追加**であり、
-    /// `commands()` は従来どおり使い続けてよい。
-    ///
     /// 本変種は recv ループスレッドの `join` 完了後にロックするため、記録の全書き込みに対して
     /// happens-before が張られる（スレッド終了 → join のメモリ順序）。
     pub fn join_bounded_then_commands(self, what: &str, timeout: Duration) -> Vec<TalkCommand> {
@@ -91,6 +72,17 @@ impl MockSakura {
         });
         commands.lock().expect("mock sakura mutex").clone()
     }
+}
+
+/// 指示の列のうち `TalkCommand::Start` の射影（[`MockSakura::started`] と `Harness::finish` が共有）。
+pub(super) fn starts_of(commands: &[TalkCommand]) -> Vec<StartTalk> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            TalkCommand::Start(start) => Some(start.clone()),
+            TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
+        })
+        .collect()
 }
 
 /// quit フラグの決定方式（シナリオ指示）。
@@ -131,63 +123,28 @@ impl QuitPolicy {
 /// クローンでよい。
 ///
 /// `ResolveChoice`/`CancelChoice` は**記録のみ**行う——本 mock は再生層を持たないため解決も
-/// 中断も起こせず、`quit_policy` の index（＝何本目の talk か）も前進させない。到着順の記録は
-/// [`MockSakura::commands`] で観測でき、起動系檻が使う [`MockSakura::started`] の意味は不変。
+/// 中断も起こせず、`quit_policy` の index（＝何本目の talk か）も前進させない。
 pub fn spawn_mock_sakura(
     talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,
     quit_policy: QuitPolicy,
 ) -> MockSakura {
-    let commands: Arc<Mutex<Vec<TalkCommand>>> = Arc::new(Mutex::new(Vec::new()));
-    let commands_body = Arc::clone(&commands);
-
-    let join = thread::Builder::new()
-        .name("mock-sakura".to_string())
-        .spawn(move || {
-            let mut index = 0usize;
-            // 全 TalkCommand Sender drop（kanade 停止）で recv が Err→ループ終了。
-            while let Ok(command) = talk_rx.recv() {
-                // 到着順の記録は 3 形共通（記録より先に副作用を起こさない）。
-                let start_talk_id = match &command {
-                    TalkCommand::Start(start) => Some(start.talk_id),
-                    TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
-                };
-                commands_body
-                    .lock()
-                    .expect("mock sakura mutex")
-                    .push(command);
-                let Some(talk_id) = start_talk_id else {
-                    // 選択解決／解除は記録のみ（再生層を持たない mock は TalkDone を作れない）。
-                    continue;
-                };
-                let reason = quit_policy.reason_for(index);
-                index += 1;
-                // TalkDone 返送。kanade 停止済みで送れなくても無害（続行）。
-                let _ = kanade_tx.send(KanadeMsg::TalkDone(TalkDone {
-                    talk_id,
-                    reason,
-                    quit_reserved: false,
-                }));
-            }
-        })
-        .expect("spawn mock-sakura thread");
-
-    MockSakura { join, commands }
+    // 保留なしの保留つき sink と同じ（受信の輪は 1 本）。
+    spawn_mock_sakura_gated(talk_rx, kanade_tx, quit_policy, Vec::new()).0
 }
 
 // ============================================================================
-// 保留付き mock sakura sink（active talk 窓を決定的に作る・4.4 pattern 3）
+// 保留付き mock sakura sink（active talk 窓を決定的に作る）
 // ============================================================================
 
 /// park した [`TalkDone`] の共有状態（保留分の待ち行列＋解放フラグ・Condvar）。
 ///
 /// sakura の recv ループスレッドが park を積み、[`SakuraGate::release_all`] が flag を立て、
-/// 専用の releaser スレッドが flag 成立を待って一斉送出する。この 3 者を繋ぐ共有点。
+/// releaser スレッドが「解放済み かつ 全保留の park 到着」を待って一斉送出する。この 3 者を繋ぐ共有点。
 struct GateShared {
-    /// (解放フラグ＋park 待ち行列, 起床用 Condvar)。
-    ///
-    /// bool=解放許可・`Vec<TalkDone>`=まだ送っていない保留 talk（recv ループが積む）。
+    /// 解放フラグ・park 待ち行列・終了印（[`GateInner`]）。
     inner: Mutex<GateInner>,
+    /// `inner` が変わるたびに releaser を起こす。
     cvar: std::sync::Condvar,
 }
 
@@ -209,7 +166,7 @@ struct GateInner {
     expected_holds: usize,
 }
 
-/// 保留 talk の解放を sakura の releaser スレッドへ通知するゲート（4.4 pattern 3 専用）。
+/// 保留 talk の解放を sakura の releaser スレッドへ通知するゲート。
 ///
 /// [`spawn_mock_sakura_gated`] / [`spawn_harness_gated`] が返す。テストは
 /// [`release_all`](SakuraGate::release_all) を呼んで、保留していた全 [`TalkDone`] を
@@ -219,7 +176,7 @@ struct GateInner {
 /// 「保留」は、当該 talk の [`TalkDone`] を kanade inbox へ**送らない**ことで実現する。
 /// TalkDone は「二つの Tick の間に割り込み得る唯一のメッセージ」であり、これを送らない限り
 /// active talk 窓（`Steady{Some}`）は次 Tick まで確実に維持される（interleaving が起きない）。
-/// 解放シグナルは `Mutex<bool>`＋`Condvar` で伝える——flag を Mutex 下で立ててから notify する
+/// 解放シグナルは `Mutex<GateInner>`＋`Condvar` で伝える——flag を Mutex 下で立ててから notify する
 /// ため lost wakeup は起きない。
 pub struct SakuraGate {
     shared: Arc<GateShared>,
@@ -229,8 +186,8 @@ impl SakuraGate {
     /// 保留中の全 [`TalkDone`] の解放を releaser スレッドへ通知する（sleep なし・確実に起床）。
     ///
     /// flag を Mutex 下で `true` にしてから `notify_all` するため、releaser がまだ wait に
-    /// 入る前に呼ばれても取りこぼさない（lost wakeup 対策）。解放後に積まれる park は無い
-    /// （テストは全保留 talk 起動後に本メソッドを呼ぶ契約）。
+    /// 入る前に呼ばれても取りこぼさない（lost wakeup 対策）。保留 talk の park より先に呼ばれても
+    /// よい——releaser は `expected_holds` 件の park が揃うまで送出を待つ。
     pub fn release_all(&self) {
         let mut inner = self.shared.inner.lock().expect("sakura gate mutex");
         inner.released = true;
@@ -238,7 +195,7 @@ impl SakuraGate {
     }
 }
 
-/// 保留機能付き mock sakura sink を起動する（4.4 pattern 3 専用・[`spawn_mock_sakura`] の派生）。
+/// 保留機能付き mock sakura sink を起動する（[`spawn_mock_sakura`] もこの輪を使う）。
 ///
 /// `hold_indices` に含まれる受領インデックス（0 始まり）の [`StartTalk`] は、記録はするが
 /// その [`TalkDone`] を**即座には返さない**（park する）。[`SakuraGate::release_all`] が
@@ -250,8 +207,9 @@ impl SakuraGate {
 /// 記録・即応・park を行う。park の**送出**は別の releaser スレッドが担う——recv ループは
 /// `recv` で恒常的にブロックし得るため、release_all を実行中の recv ループ内で拾えないからで
 /// ある。releaser は「解放フラグ成立」または「recv ループ終了」で起床し、park を送って自然終了
-/// する。テストは Sender drop の前に `release_all` を呼ぶ契約（それにより pattern 3 の
-/// `Steady{None}` 復帰→close 握手が駆動される）。
+/// する。`release_all` は任意である——呼べば park した TalkDone が届いて `Steady{None}` 復帰→
+/// close 握手が駆動される。呼ばずに kanade が止まれば、recv ループ終了（`recv_closed`）で起きた
+/// releaser が届かない送り先へ投げて捨てる（多くの檻はこの終わり方に頼る）。
 pub fn spawn_mock_sakura_gated(
     talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,
@@ -275,8 +233,8 @@ pub fn spawn_mock_sakura_gated(
     let shared_releaser = Arc::clone(&shared);
 
     // releaser: 「解放済み かつ 保留 talk が全て park された」まで待ち、park された TalkDone を
-    // 送出して終了する。recv ループ終了（recv_closed）でも起床する（安全弁: 保留が揃わないまま
-    // kanade が停止した誤用時に宙吊りしないため）。
+    // 送出して終了する。recv ループ終了（recv_closed）でも起床し、未解放の park は届かない送り先へ
+    // 投げて捨てる（`release_all` を呼ばずに kanade が止まる檻の正規の終わり方）。
     let releaser_kanade_tx = kanade_tx.clone();
     let releaser = thread::Builder::new()
         .name("mock-sakura-releaser".to_string())
@@ -284,7 +242,7 @@ pub fn spawn_mock_sakura_gated(
             let mut inner = shared_releaser.inner.lock().expect("sakura gate mutex");
             // 起床条件:
             //   (a) 解放済み かつ 全保留 talk が park された（＝正規の解放点）、または
-            //   (b) recv ループ終了（安全弁・kanade 停止で二度と park は増えない）。
+            //   (b) recv ループ終了（kanade 停止で二度と park は増えない・未解放の park は捨てる）。
             while !(inner.released && inner.parked.len() >= inner.expected_holds)
                 && !inner.recv_closed
             {
@@ -293,7 +251,7 @@ pub fn spawn_mock_sakura_gated(
                     .wait(inner)
                     .expect("sakura gate condvar wait");
             }
-            let to_send: Vec<TalkDone> = inner.parked.drain(..).collect();
+            let to_send: Vec<TalkDone> = std::mem::take(&mut inner.parked);
             drop(inner);
             for done in to_send {
                 // kanade 停止済みで送れなくても無害（続行）。

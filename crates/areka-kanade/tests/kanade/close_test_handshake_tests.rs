@@ -1,9 +1,8 @@
 use super::test_support::onclose_get_index;
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT,
-    FIXED_STEADY_SCRIPT, Fixture, Harness, KanadeConfig, KanadeMsg, MonotonicMs, QuitPolicy,
-    RecordedCall, events, expected_call, expected_translate, expected_unload, join_bounded,
-    spawn_harness, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT,
+    Fixture, KanadeConfig, KanadeMsg, QuitPolicy, RecordedCall, events, expected_call,
+    expected_translate, expected_unload, send, spawn_harness, spawn_harness_gated, tick,
 };
 
 // ============================================================================
@@ -43,33 +42,20 @@ fn farewell_talk_without_quit_tag_still_terminates() {
     // ＝台本が `\-` に辿り着かなかった場合そのものである。
     let harness = spawn_harness(config, fixture, QuitPolicy::PerTalk(vec![false]));
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk→quit:false）。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
+        },
+    );
 
     // close talk の TalkDone{Ended} だけで終了系列が完走する（Tick は 1 本も送っていない）。
-    join_bounded("kanade farewell-quit join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates when the farewell talk ends without a quit tag (Req 3.6)");
-
-    drop(sender);
-    // mock sakura は起動要求を記録してから TalkDone を返すので、join 成功時点で記録は確定している。
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura farewell-quit join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade farewell-quit join");
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
@@ -119,12 +105,7 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         "OnClose の後の 2 件目は Unload"
     );
 
-    // (d) 定常の talk も起動しない: sink に届くのは別れの close talk 1 本のみ。
-    assert!(
-        started.iter().all(|s| s.script != FIXED_STEADY_SCRIPT),
-        "定常へ戻らないので steady talk は起動しないはず: {:?}",
-        started
-    );
+    // (d) 定常の talk も起動しない: sink に届くのは別れの close talk 1 本のみ（上で別れが 1 本と見た）。
     assert_eq!(
         started.len(),
         1,
@@ -132,13 +113,7 @@ fn farewell_talk_without_quit_tag_still_terminates() {
         started
     );
 
-    // 終了系列: 末尾は Unload（正規終了経路）で 1 度だけ。
-    let last = recorded.last().expect("記録列は空でない");
-    assert_eq!(
-        *last,
-        expected_unload(),
-        "末尾は Unload（別れの台詞の完了で駆動された終了系列の完走）で閉じるはず"
-    );
+    // 終了系列: Unload は 1 度だけ（末尾が Unload であることは (c) の 2 件目で見た）。
     let unload_count = recorded
         .iter()
         .filter(|c| c.method == CallMethod::Unload)
@@ -154,7 +129,8 @@ fn farewell_talk_without_quit_tag_still_terminates() {
 /// （OnCloseAll 非発行・close talk 非起動＝DD-11）。
 ///
 /// # 駆動
-/// Boot → CloseRequest{User}（active talk なし＝即握手）→ OnClose GET(204) →
+/// Boot → CloseRequest{User}（active talk なしなら即握手・挨拶の再生中なら TalkDone の後に握手）→
+/// OnClose GET(204) →
 /// `Unloading{CloseSilent}` → Unload → StopSelf。
 ///
 /// # 非空虚性
@@ -171,51 +147,25 @@ fn silent_close_on_204_terminates_without_extra_events() {
         QuitPolicy::PerTalk(vec![false]),
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
+        },
+    );
 
     // 204 無言終了で終了系列完走（Unload→StopSelf）まで到達する。
-    join_bounded("kanade silent-close join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates directly on OnClose 204 (silent close・Req 4.6)");
-
-    drop(sender);
-    // boot talk（唯一の StartTalk）が sakura sink に届くのを待つ。kanade は 204 で即終了するため、
-    // sink スレッドが boot StartTalk を recv・記録するのは非同期であり、drop 直後に started() を読むと
-    // 未記録（空）を掴む race がある。sink スレッド終了（全 StartTalk Sender drop で recv 終了）を
-    // join_bounded で見届けてから記録を確定させる。ただし join_bounded は sakura を消費するため、
-    // 記録スナップショットは boot talk 到達を有界回数の yield で待って確定してから join する（sleep なし）。
-    let mut started = sakura.started();
-    for _ in 0..10_000 {
-        if !started.is_empty() {
-            break;
-        }
-        std::thread::yield_now();
-        started = sakura.started();
-    }
-    sakura.join_bounded("mock-sakura silent-close join", DEFAULT_TIMEOUT);
-    // join 後に最終スナップショットを取り直せないため（消費済み）、上の待機で確定した started を使う。
-    // sink スレッドは boot StartTalk を 1 本受けて記録した後、他に送られる talk はない（204・Tick なし）。
-
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade silent-close join");
 
     // (a) OnClose GET（Ref0=user）が現れる。
     let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず");
 
-    // (b) OnClose GET の直後は Unload（末尾）で、間に追加の GET/NOTIFY は一切ない
-    //     （OnCloseAll 非発行・追加 OnClose なし＝DD-11・Req 4.6）。
+    // (b) 最初の OnClose GET の直後は Unload（末尾）で、間に追加の GET/NOTIFY は一切ない
+    //     （OnCloseAll 非発行・追加 OnClose なし＝OnClose はちょうど 1 度・DD-11・Req 4.6）。
     assert_eq!(
         onclose_index,
         recorded.len() - 2,
@@ -228,53 +178,11 @@ fn silent_close_on_204_terminates_without_extra_events() {
         expected_unload(),
         "記録列の末尾は Unload（無言終了の完走）"
     );
-    assert_eq!(last.method, CallMethod::Unload);
 
-    // OnClose 以降に追加イベント（GET/NOTIFY）が挟まっていないことを明示的に確認する。
-    let events_after_onclose: Vec<&RecordedCall> = recorded
-        .iter()
-        .enumerate()
-        .filter(|(i, c)| {
-            *i > onclose_index && matches!(c.method, CallMethod::Get | CallMethod::Notify)
-        })
-        .map(|(_, c)| c)
-        .collect();
+    // (c) close は StartTalk を一切生まない: sink に届くのは boot talk 1 本だけ（close talk も
+    //     steady talk も起動しない）。
     assert!(
-        events_after_onclose.is_empty(),
-        "無言終了では OnClose の後に追加イベント（OnCloseAll 等）を発行しないはず: {:?}",
-        events_after_onclose
-    );
-
-    // OnClose GET は記録列にちょうど 1 度（追加 OnClose なし）。
-    let onclose_count = recorded
-        .iter()
-        .filter(|c| {
-            **c == expected_call(events::on_close(
-                CloseReason::User { scope: 0 },
-                &ExecutionSnapshot::INACTIVE,
-            ))
-        })
-        .count();
-    assert_eq!(
-        onclose_count, 1,
-        "OnClose GET はちょうど 1 度（再発行なし）"
-    );
-
-    // (c) close は StartTalk を一切生まない: sink には boot talk のみが届く（close talk 非起動）。
-    assert!(
-        started.iter().all(|s| s.script != FIXED_FAREWELL_SCRIPT),
-        "204 無言終了では別れの close talk は起動しないはず: {:?}",
-        started
-    );
-    // steady script も出ない（Tick を送っていない・boot talk のみ）。
-    assert!(
-        started.iter().all(|s| s.script != FIXED_STEADY_SCRIPT),
-        "本シナリオで steady talk は起動しないはず: {:?}",
-        started
-    );
-    assert_eq!(
-        started.len(),
-        1,
+        started.len() == 1 && started[0].script == FIXED_BOOT_SCRIPT,
         "sink に届くのは boot talk 1 本のみ（close は talk を起こさない）: {:?}",
         started
     );
@@ -309,62 +217,36 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     // `Steady{None}` の即握手にする（DD-IT-12 の挨拶 talk race を断つ）。close talk（受領 index 0・挨拶
     // なし boot ゆえ先頭 StartTalk）の TalkDone を保留し、CloseTalkWait を維持したまま Tick を注入する。
     // quit_policy は使われない（保留 talk は解放されない・deadline で終了する）が、契約上与える。
-    let (harness, gate) = spawn_harness_gated(
+    let (harness, _gate) = spawn_harness_gated(
         config,
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![false]),
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
 
     // Tick(now=1s): last_now=Some(1s) を確定（握手入口 deadline 基準を Some にする）。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send arming Tick");
+    tick(&harness, 1_000);
 
     // close 指示（active talk なし＝即握手・OnClose GET→別れの Value→close talk・保留）。
     // CloseTalkWait 進入時に deadline=1s+5s=6s が確定する。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
     // Tick(now=100s): deadline(6s)を大きく超過 → DeadlineExceeded → Unload → StopSelf。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(100_000),
-        })
-        .expect("send deadline-exceeding Tick");
+    tick(&harness, 100_000);
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    // TalkDone が一度も来ないにもかかわらず、deadline 判定で終了系列が完走し join が成功する。
-    join_bounded("kanade deadline join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates on close-talk deadline even without TalkDone (Req 4.7)");
-
-    // kanade 停止（StartTalk 全 Sender drop）で保留ハーネスの recv ループが閉じ、releaser の
-    // recv_closed 安全弁で releaser→本体スレッドが自然終了する。念のため release_all も呼ぶ
-    // （解放は無害・保留は kanade 停止済みで送っても捨てられる）。
-    gate.release_all();
-    drop(sender);
-    sakura.join_bounded("mock-sakura deadline join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    // TalkDone が一度も来ないにもかかわらず、deadline 判定で終了系列が完走し join が成功する
+    // （保留は解放しない＝kanade 停止後は releaser の recv_closed 安全弁が片づける）。
+    let Driven { recorded, .. } = harness.finish("kanade deadline join");
 
     // (a) close 握手を通った証拠: OnClose GET（Ref0=user）が現れる。
-    let onclose_index = onclose_get_index(&recorded, CloseReason::User { scope: 0 })
+    onclose_get_index(&recorded, CloseReason::User { scope: 0 })
         .expect("OnClose GET（Ref0=user）が記録列に現れるはず（握手を通った）");
 
     // (b) TalkDone 不着でも終了系列は完走: 末尾は Unload（DeadlineExceeded 継続）で閉じる。
@@ -373,11 +255,6 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
         *last,
         expected_unload(),
         "TalkDone 不着でも deadline で終了系列が完走し末尾は Unload になるはず"
-    );
-    assert!(
-        onclose_index < recorded.len() - 1,
-        "OnClose（{onclose_index}）は Unload（{}）より前に現れるはず",
-        recorded.len() - 1
     );
     let unload_count = recorded
         .iter()
@@ -398,7 +275,7 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
 ///
 /// # 非空虚性
 /// - ForceQuit が終了へ直行しなければ join が期限超過して panic する。
-/// - DD-10 の best-effort NOTIFY は force_quit がインラインで組む OnClose（Ref0=reason）であり、
+/// - DD-10 の best-effort NOTIFY は force_quit が `events::on_close_notify` で組む OnClose（Ref0=reason）であり、
 ///   events 表の OnClose **GET** とは Method が異なる。GET と NOTIFY を取り違えると (b) が落ちる。
 #[test]
 fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
@@ -409,37 +286,19 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
     );
 
     // 起動して定常運転へ落ち着かせる（boot 系列は Boot 処理内で同期完走する）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send settle Tick");
+    send(&harness, KanadeMsg::Boot);
+    tick(&harness, 1_000);
 
     // 強制終了指示 → 終了系列へ直行（DD-10）。
-    harness
-        .sender
-        .send(KanadeMsg::ForceQuit {
+    send(
+        &harness,
+        KanadeMsg::ForceQuit {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send ForceQuit");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
+        },
+    );
 
     // 直行終了で join 成功（＝終了へ直行した証拠）。
-    join_bounded("kanade force-quit join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates directly on ForceQuit (Req 4.4)");
-
-    drop(sender);
-    sakura.join_bounded("mock-sakura force-quit join", DEFAULT_TIMEOUT);
-
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade force-quit join");
 
     // (a) 末尾は Unload（終了系列完走）で閉じる。
     let last = recorded.last().expect("記録列は空でない");
@@ -448,19 +307,23 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
         expected_unload(),
         "ForceQuit 終了系列の末尾は Unload で閉じる"
     );
-    assert_eq!(last.method, CallMethod::Unload);
 
     // (b) DD-10 の best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
-    //     force_quit がインラインで組む退化 NOTIFY（events 表由来ではない）に一致させる。
-    let force_notify = force_quit_onclose_notify(CloseReason::User { scope: 0 });
+    //     DD-IT-8: NOTIFY は `events::on_close_notify` が組む（通常握手の `events::on_close` は GET）。
+    //     snapshot は Unloading{Forced} 遷移後の INACTIVE（Status 行なし・DD-IT-4）。
+    let force_notify = expected_call(events::on_close_notify(
+        CloseReason::User { scope: 0 },
+        &ExecutionSnapshot::INACTIVE,
+    ));
     let notify_index = recorded
         .iter()
         .position(|c| *c == force_notify)
         .expect("ForceQuit の best-effort OnClose NOTIFY（Ref0=user）が現れるはず（DD-10）");
     let unload_index = recorded.len() - 1;
-    assert!(
-        notify_index < unload_index,
-        "OnClose NOTIFY（{notify_index}）は Unload（{unload_index}）より前に現れるはず（DD-10 順序）"
+    assert_eq!(
+        notify_index + 1,
+        unload_index,
+        "OnClose NOTIFY は Unload の直前に現れるはず（DD-10 順序）: {recorded:?}"
     );
 
     // (c) close 握手（OnClose GET）は通っていない: ForceQuit は握手を経ず直行する。
@@ -476,22 +339,4 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
         .filter(|c| c.method == CallMethod::Unload)
         .count();
     assert_eq!(unload_count, 1, "Unload は終了系列で 1 度だけ発行される");
-}
-
-// ============================================================================
-// 期待値導出ヘルパ（ForceQuit の best-effort OnClose NOTIFY）
-// ============================================================================
-
-/// ForceQuit（DD-10）が Action 先頭に積む best-effort OnClose **NOTIFY** の期待記録。
-///
-/// DD-IT-8: この NOTIFY は `events::on_close_notify` が単一列挙点として構成する（`force_quit` は
-/// もはや inline 構築しない）。通常握手の [`events::on_close`] は **GET** を返すため force_quit には
-/// 流用できず、NOTIFY 版を別に用いる。snapshot は Unloading{Forced} 遷移後の
-/// [`ExecutionSnapshot::INACTIVE`]（Status 行なし・DD-IT-4）。events 表から導出することで、ハーネスに
-/// References/Status 文字列をハードコードしない。
-fn force_quit_onclose_notify(reason: CloseReason) -> RecordedCall {
-    expected_call(events::on_close_notify(
-        reason,
-        &ExecutionSnapshot::INACTIVE,
-    ))
 }

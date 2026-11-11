@@ -1,5 +1,5 @@
 //! 外から届く実行状態（balloon・nouserbreak・online）が送り口の `Status` に載ることの統合檻
-//! （areka-P0-status-execution-states タスク 2.5・要件 2.3／2.6／3.1／3.2／4.1／5.1／7.2／8.2）。
+//! （areka-P0-status-execution-states 要件 2.3／2.6／3.1／3.2／4.1／5.1／7.2／8.2）。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、
 //! `KanadeMsg::ExecutionState` の知らせと、構成で差し替えた通信中の数だけで観測する。
@@ -14,55 +14,14 @@
 
 use areka_actor::reply_channel;
 use areka_kanade::{
-    BalloonBinding, CloseReason, ExecutionSnapshot, ExecutionStateUpdate, KanadeConfig, KanadeMsg,
-    MonotonicMs, OnlineCounter, events, resources::ResourceOutcome,
+    CloseReason, ExecutionSnapshot, ExecutionStateUpdate, KanadeConfig, KanadeMsg, MonotonicMs,
+    OnlineCounter, events, resources::ResourceOutcome,
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call,
-    expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    DEFAULT_TIMEOUT, Fixture, QuitPolicy, binding, expected_call, expected_unload, pumps, send,
+    spawn_harness, spawn_harness_gated, tick,
 };
-
-fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-    BalloonBinding {
-        character_id,
-        balloon_id,
-    }
-}
-
-fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
-    recorded
-        .iter()
-        .filter(|c| c.id == "OnSecondChange")
-        .collect()
-}
-
-fn send(harness: &Harness, msg: KanadeMsg) {
-    harness.sender.send(msg).expect("send to kanade inbox");
-}
-
-fn tick(harness: &Harness, now: u64) {
-    send(
-        harness,
-        KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        },
-    );
-}
-
-/// 期限付き join の後に記録列を確定する（終了は駆動した close の別れ talk quit:true）。
-fn finish(harness: Harness, what: &str) -> Vec<RecordedCall> {
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded(what, DEFAULT_TIMEOUT, kanade).expect("kanade terminates via the driven close");
-    drop(sender);
-    sakura.join_bounded(what, DEFAULT_TIMEOUT);
-    shiori.recorded()
-}
 
 /// バルーンの組と中断の旗の知らせが、送り口を通って次の周期リクエストの `Status` に載る
 /// （要件 3.1／3.2／4.1／5.1／8.2）。
@@ -122,20 +81,9 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
     );
     gate.release_all();
 
-    let recorded = finish(harness, "kanade external-status (balloon/nouserbreak) join");
-    let pumps = pumps(&recorded);
-    let statuses: Vec<Option<&str>> = pumps.iter().map(|c| c.status.as_deref()).collect();
-    assert_eq!(
-        statuses,
-        vec![
-            Some("balloon(0=2/1=0)"),
-            Some("talking,balloon(0=0)"),
-            Some("talking,nouserbreak"),
-            Some("talking"),
-        ],
-        "周期リクエストの Status は知らせの写しを順に帯びるはず: {recorded:?}"
-    );
-
+    let recorded = harness
+        .finish("kanade external-status (balloon/nouserbreak) join")
+        .recorded;
     let talking = ExecutionSnapshot {
         talk_active: true,
         ..ExecutionSnapshot::INACTIVE
@@ -164,14 +112,11 @@ fn balloon_and_no_user_break_updates_ride_the_next_pump_status() {
         ),
         events::on_second_change(MonotonicMs(4_000), &talking),
     ];
-    for (i, (actual, call)) in pumps.iter().zip(expected).enumerate() {
-        assert_eq!(
-            **actual,
-            expected_call(call),
-            "pump {i} は events 表導出（GET/NOTIFY・Ref3・Status）と一致するはず: {recorded:?}"
-        );
-    }
-    assert_eq!(pumps[0].method, CallMethod::Get, "Tick1 はトーク無し＝GET");
+    assert_eq!(
+        pumps(&recorded).into_iter().cloned().collect::<Vec<_>>(),
+        expected.map(expected_call).to_vec(),
+        "周期リクエストは知らせの写しを順に帯び、events 表導出（GET/NOTIFY・Ref3・Status）と一致するはず: {recorded:?}"
+    );
     assert_eq!(
         recorded.last().expect("記録列は空でない"),
         &expected_unload(),
@@ -221,7 +166,9 @@ fn online_rides_from_on_initialize_while_held_and_clears_from_the_next_tick_afte
         },
     );
 
-    let recorded = finish(harness, "kanade external-status (online) join");
+    let recorded = harness
+        .finish("kanade external-status (online) join")
+        .recorded;
 
     // (1) 最初のリクエストは OnInitialize で、online を帯びる。
     let online = ExecutionSnapshot {
@@ -233,7 +180,6 @@ fn online_rides_from_on_initialize_while_held_and_clears_from_the_next_tick_afte
         &expected_call(events::on_initialize(&online)),
         "数を立てたまま起こすと OnInitialize から online が載るはず: {recorded:?}"
     );
-    assert_eq!(recorded[0].status.as_deref(), Some("online"));
 
     // (2) 守り手を持っていた間（最初の Tick より前）の起動のリクエストはすべて online を帯びる。
     let first_pump = recorded

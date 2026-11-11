@@ -13,7 +13,7 @@ use super::translate::{Replied, ScriptSource};
 use super::{Action, Input, State};
 use crate::msg::KanadeConfig;
 
-/// 取り決めの target（`crates/areka/src/log_history.rs` の `TARGET_SCRIPT` と同じ字・areka のテストで一致を固定）。
+/// 取り決めの target（`crates/areka/src/log_history.rs` の `TARGET_SCRIPT` はこの定数を使う）。
 pub const TARGET: &str = "areka::log::script";
 /// 外からの台本（MCP の `sakurascript`）の表示の語。
 pub const SSTP_SEND_LABEL: &str = "SSTP(Local,Auth)";
@@ -45,16 +45,18 @@ pub(super) fn source_of(state: &State, input: &Input, replied: &Replied) -> Opti
 
 /// 出口で呼ぶ。返す一括の [`Action::StartTalk`] のうち台本が 0 文字でないものごとに 1 件出す。
 pub(super) fn record(config: &KanadeConfig, actions: &[Action], source: Option<&ScriptSource>) {
-    let label = match source {
-        Some(ScriptSource::Event(event)) => event_label(event.id.as_str()),
-        Some(ScriptSource::SstpSend) => SSTP_SEND_LABEL.to_string(),
-        None => PLAIN_LABEL.to_string(),
-    };
+    // 表示の語は空でない台本を見つけたときだけ作る（毎秒の刻みなど大半の一歩は確保しない）。
+    let mut label = None;
     for action in actions {
         if let Action::StartTalk(start) = action
             && !start.script.is_empty()
         {
-            emit(&config.ghost_name, &label, &start.script);
+            let label = label.get_or_insert_with(|| match source {
+                Some(ScriptSource::Event(event)) => event_label(event.id.as_str()),
+                Some(ScriptSource::SstpSend) => SSTP_SEND_LABEL.to_string(),
+                None => PLAIN_LABEL.to_string(),
+            });
+            emit(&config.ghost_name, label, &start.script);
         }
     }
 }

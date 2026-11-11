@@ -7,18 +7,18 @@
 //! - [`Phase::ChangeClosePending`]（切替の `OnClose` の応答待ち）
 //! - [`Phase::ChangeCloseTalkWait`]（その別れの台詞の完了待ち／期限判定）
 //!
-//! 降ろすときの停止原因は今日の値（`Quit`・`CloseSilent`・`DeadlineExceeded`・`Fault`）のまま使い、
+//! 降ろすときの停止原因は終了の握手と同じ値（`Quit`・`CloseSilent`・`DeadlineExceeded`・`Fault`）のまま使い、
 //! 「切替で止まった」ことは [`State::change`] が停止通知の切替の中身として表す。終了の握手
-//! （`close.rs`）とは期限の計算（[`deadline_from`]）だけを共有する。
+//! （`close.rs`）とは期限の計算（[`deadline_from`]）と台詞の待ちの Tick の判定（[`talk_wait_tick`]）を共有する。
 //!
 //! 送り出しの台詞を利用者が中断したら切替を中止して定常へ戻る（[`cancel_by_user_break`]）。
 //! 定常へ戻る経路はここにだけ置き、終了の握手には足さない。終了要求が届いたら切替を取りやめ、
-//! 相ごとに今日の終了の握手へ合流する（[`yield_to_close`]）。
+//! 相ごとに終了の握手へ合流する（[`yield_to_close`]）。
 //!
 //! 汎用の通知の入口（外から頼まれた許可表のイベントを定常でだけ送る）の判断
 //! [`on_raise_event`] と、`\![get,property]` の返しのイベントの判断 [`on_property_event`] もここに置く。
 
-use super::close::deadline_from;
+use super::close::{TalkWaitTick, deadline_from, talk_wait_tick};
 use super::{
     Action, ActiveTalk, Input, Phase, State, TermCause, clear_choice_ledger, events, phase_label,
     steady, to_unloading_quit,
@@ -47,7 +47,7 @@ pub(crate) struct ChangeState {
 /// （受理しなかった要求は必ず UI へ返し、UI の目印を残さない）。
 pub(super) fn on_change_ghost(mut state: State, req: ChangeRequest) -> (State, Vec<Action>) {
     let rejected = match (&state.phase, &state.pending_close) {
-        (_, Some(_)) => Some("pending_close"),
+        (_, Some(_)) => Some("close_pending"),
         (Phase::Steady { talk: None }, None) => None,
         (Phase::Steady { talk: Some(_) }, None) if state.pending_change.is_some() => {
             Some("change_pending")
@@ -78,7 +78,7 @@ pub(super) fn on_change_ghost(mut state: State, req: ChangeRequest) -> (State, V
 
 /// 横断の腕 `Input::RaiseEvent`（汎用の通知の入口）の判断。
 ///
-/// 許可表に無いイベントと定常以外での依頼は `warn!` の上で捨てる（待ち行列に積まない）。
+/// 許可表に無いイベントと、定常以外か終了・切替の保留中の依頼は `warn!` の上で捨てる（待ち行列に積まない）。
 /// 定常なら渡された Reference 列のまま GET／NOTIFY を送る。応答は定常の応答の腕へ流れ、
 /// 再生中なら [`events::value_replaces_active_talk`] に従って今のトークを置き換える。
 pub(super) fn on_raise_event(
@@ -91,17 +91,31 @@ pub(super) fn on_raise_event(
         tracing::warn!(target: "kanade", event = "raise_event_not_allowed", id = %id, "許可表に無いイベントの依頼——送らずに捨てる");
         return (state, Vec::new());
     };
-    if !matches!(state.phase, Phase::Steady { .. }) {
-        tracing::warn!(target: "kanade", event = "raise_event_not_steady", id, phase = phase_label(&state.phase), "定常以外でのイベントの依頼——送らずに捨てる（積まない）");
+    if let Some(reason) = drop_reason(&state) {
+        tracing::warn!(target: "kanade", event = "raise_event_not_steady", id, reason, phase = phase_label(&state.phase), "定常以外か終了・切替の保留中のイベントの依頼——送らずに捨てる（積まない）");
         return (state, Vec::new());
     }
     let call = events::raise(id, references, method, &state.snapshot());
     (state, vec![Action::ShioriRequest(call)])
 }
 
+/// 通知の依頼を送らずに捨てる理由（`None` は送ってよい）。保留中に送ると答えの台詞が今の台詞を
+/// 置き換え、終了・切替がその台詞の終わりまで遅れる（マウス・外からの台本・台詞の切れ目と同じ決まり）。
+fn drop_reason(state: &State) -> Option<&'static str> {
+    if !matches!(state.phase, Phase::Steady { .. }) {
+        Some("not_steady")
+    } else if state.pending_close.is_some() {
+        Some("close_pending")
+    } else if state.pending_change.is_some() {
+        Some("change_pending")
+    } else {
+        None
+    }
+}
+
 /// 横断の腕 `Input::PropertyEvent`（`\![get,property]` の返しのイベント）の判断。
 ///
-/// 定常以外での依頼と、名前か Reference が [`crate::sstp::validate_notify`] を破るものは `warn!` の上で
+/// 定常以外か終了・切替の保留中の依頼と、名前か Reference が [`crate::sstp::validate_notify`] を破るものは `warn!` の上で
 /// 捨てる（積まない）。それ以外は逐語の名前の GET を 1 つ送る。応答は定常の応答の腕へ流れ、
 /// 再生中なら [`events::value_replaces_active_talk`] に従って今のトークを置き換える。
 pub(super) fn on_property_event(
@@ -109,8 +123,8 @@ pub(super) fn on_property_event(
     id: String,
     references: Vec<String>,
 ) -> (State, Vec<Action>) {
-    if !matches!(state.phase, Phase::Steady { .. }) {
-        tracing::warn!(target: "kanade", event = "property_event_not_steady", id = ?id, phase = phase_label(&state.phase), "定常以外での返しのイベント——送らずに捨てる（積まない）");
+    if let Some(reason) = drop_reason(&state) {
+        tracing::warn!(target: "kanade", event = "property_event_not_steady", id = ?id, reason, phase = phase_label(&state.phase), "定常以外か終了・切替の保留中の返しのイベント——送らずに捨てる（積まない）");
         return (state, Vec::new());
     }
     if let Err(error) = crate::sstp::validate_notify(&id, &references) {
@@ -131,17 +145,13 @@ pub(super) fn has_pending(state: &State) -> bool {
 /// 終了の保留が在れば終了が勝つ: 保留の切替を捨てて「切替の中止（終了要求）」を通知し、
 /// 残り（保留の終了の握手）は定常の完了の処理へ任せる。無ければ保留を取り出して切替を始める
 /// （`raise_event` 無しなら黙って降ろす）。
-pub(super) fn consume_pending(
-    mut state: State,
-    done: TalkDone,
-    config: &KanadeConfig,
-) -> (State, Vec<Action>) {
+pub(super) fn consume_pending(mut state: State, done: TalkDone) -> (State, Vec<Action>) {
     let Some(req) = state.pending_change.take() else {
-        return steady::step(state, Input::TalkDone(done), config);
+        return steady::step(state, Input::TalkDone(done));
     };
     if state.pending_close.is_some() {
         tracing::info!(target: "kanade", event = "change_yield_to_close", phase = phase_label(&state.phase), to = %req.target.name, "保留の切替より終了の保留が勝つ——切替を取りやめる");
-        let (state, mut actions) = steady::step(state, Input::TalkDone(done), config);
+        let (state, mut actions) = steady::step(state, Input::TalkDone(done));
         let notice = KanadeNotice::ChangeCancelled {
             reason: CancelReason::CloseRequest,
         };
@@ -155,7 +165,7 @@ pub(super) fn consume_pending(
 /// 終了系列（Quit）へ進む。トークに保留の切替が掛かっていたら捨てる（`\-` の予約・到達が勝つ）。
 ///
 /// 捨てたときは切替の中止（終了要求＝台本の `\-`）を先頭で通知する。受け手は同じ順の通路で
-/// 後に届く停止通知より先に切替の予約を解き、その停止を今日の終了として扱える。
+/// 後に届く停止通知より先に切替の予約を解き、その停止を通常の終了として扱える。
 pub(super) fn quit_dropping_pending(mut state: State, at: &'static str) -> (State, Vec<Action>) {
     let dropped = state.pending_change.take();
     let (state, mut actions) = to_unloading_quit(state, at);
@@ -212,8 +222,11 @@ pub(super) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
     }
     match state.phase {
         Phase::ChangePending | Phase::ChangeClosePending => on_reply_wait(state, input, config),
-        Phase::ChangeTalkWait { .. } | Phase::ChangeCloseTalkWait { .. } => {
-            on_talk_wait(state, input, config)
+        Phase::ChangeTalkWait { talk_id, deadline } => {
+            on_talk_wait(state, input, config, (talk_id, deadline, false))
+        }
+        Phase::ChangeCloseTalkWait { talk_id, deadline } => {
+            on_talk_wait(state, input, config, (talk_id, deadline, true))
         }
         _ => {
             tracing::warn!(target: "kanade", event = "change_phase_unexpected", phase = phase_label(&state.phase), "切替の相以外への切替の入力——現 Phase 維持で継続");
@@ -230,15 +243,14 @@ pub(super) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 fn on_reply_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     let closing = matches!(state.phase, Phase::ChangeClosePending);
     if !closing && let Some(reason) = state.pending_close {
-        return on_yielded_reply(state, input, reason, config);
+        return on_yielded_reply(state, input, reason);
     }
     match input {
         Input::ShioriReply {
             outcome: ShioriOutcome::Value(script, _),
             ..
         } => {
-            let talk_id = TalkId(state.next_talk_id);
-            state.next_talk_id += 1;
+            let talk_id = super::take_talk_id(&mut state);
             let deadline = deadline_from(state.last_now, config);
             if !closing && let Some(change) = state.change.as_mut() {
                 change.script = Some(script.clone());
@@ -285,15 +297,14 @@ fn on_reply_wait(mut state: State, input: Input, config: &KanadeConfig) -> (Stat
 /// - `TalkDone{Ended}` → 降ろす（`Unloading{Quit}`）。`\-` の完了は横断の腕が同じ終端へ送る。
 /// - `TalkDone{Interrupted}` → 利用者の中断＝切替の中止（`\-` の予約を見ない）。
 /// - `Tick` → 期限の判定（`close.rs` の別れの台詞と同じ上限・入口で時刻が無ければ最初の Tick で決める）。
-fn on_talk_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
-    let (talk_id, deadline, closing) = match state.phase {
-        Phase::ChangeTalkWait { talk_id, deadline } => (talk_id, deadline, false),
-        Phase::ChangeCloseTalkWait { talk_id, deadline } => (talk_id, deadline, true),
-        _ => {
-            tracing::warn!(target: "kanade", event = "change_phase_unexpected", phase = phase_label(&state.phase), "台詞の待ち以外への切替の入力——現 Phase 維持で継続");
-            return (state, Vec::new());
-        }
-    };
+///
+/// 最後の引数は相から取り出した `(talk_id, deadline, closing)`（`closing` は `ChangeCloseTalkWait` のとき真）。
+fn on_talk_wait(
+    mut state: State,
+    input: Input,
+    config: &KanadeConfig,
+    (talk_id, deadline, closing): (TalkId, Option<MonotonicMs>, bool),
+) -> (State, Vec<Action>) {
     match input {
         Input::TalkDone(done) if done.reason == TalkEndReason::Interrupted => {
             cancel_by_user_break(state, talk_id)
@@ -304,22 +315,20 @@ fn on_talk_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State
         }
         Input::Tick { now } => {
             state.last_now = Some(now);
-            match deadline {
-                None => {
-                    let d = MonotonicMs(now.0.saturating_add(config.close_talk_deadline_ms));
+            match talk_wait_tick(deadline, now, config) {
+                TalkWaitTick::Armed(d) => {
                     tracing::info!(target: "kanade", event = "change_deadline_armed", talk_id = talk_id.0, deadline_ms = d.0, "送り出しの台詞の最初の Tick——再生完了待ちの上限を設定");
                     state.phase = talk_wait(closing, talk_id, Some(d));
                     (state, Vec::new())
                 }
-                Some(d) if now >= d => {
-                    tracing::error!(target: "kanade", event = "change_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = now.0.saturating_sub(d.0), "送り出しの台詞の再生完了待ちが上限超過——打ち切って降ろす");
+                TalkWaitTick::Exceeded { overshoot_ms } => {
+                    tracing::error!(target: "kanade", event = "change_deadline_exceeded", talk_id = talk_id.0, overshoot_ms = overshoot_ms, "送り出しの台詞の再生完了待ちが上限超過——打ち切って降ろす");
                     state.phase = Phase::Unloading {
                         cause: TermCause::DeadlineExceeded,
                     };
-                    clear_choice_ledger(&mut state, "change_deadline_exceeded");
                     (state, vec![Action::ShioriUnload])
                 }
-                Some(_) => (state, Vec::new()),
+                TalkWaitTick::Waiting => (state, Vec::new()),
             }
         }
         _ => {
@@ -332,11 +341,10 @@ fn on_talk_wait(mut state: State, input: Input, config: &KanadeConfig) -> (State
 /// 送り出しの台詞の利用者の中断: 切替を中止し、ゴーストを降ろさず元の定常へ戻す。
 ///
 /// 切替の相に届く `Interrupted` は利用者の中断だけ（選択の帳簿は受理で消してある）。バルーンを
-/// 隠すのは中断の受理の側（今日の規則のまま）で、ここは運行と通知だけを扱う。
+/// 隠すのは中断の受理の側（定常と同じ規則）で、ここは運行と通知だけを扱う。
 fn cancel_by_user_break(mut state: State, talk_id: TalkId) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "change_cancelled", reason = "user_break", talk_id = talk_id.0, phase = phase_label(&state.phase), "送り出しの台詞を利用者が中断した——切替を中止して定常へ戻る");
     state.change = None;
-    state.pending_change = None;
     state.phase = Phase::Steady { talk: None };
     let notice = KanadeNotice::ChangeCancelled {
         reason: CancelReason::UserBreak,
@@ -344,7 +352,7 @@ fn cancel_by_user_break(mut state: State, talk_id: TalkId) -> (State, Vec<Action
     (state, vec![Action::Notice(notice)])
 }
 
-/// 切替の相への終了要求: 切替を取りやめ（中止を通知し）、相ごとに今日の終了の握手へ合流する。
+/// 切替の相への終了要求: 切替を取りやめ（中止を通知し）、相ごとに終了の握手へ合流する。
 ///
 /// - `ChangePending` → 終了を保留して応答を待つ（[`on_yielded_reply`]）。
 /// - `ChangeTalkWait` → その台詞を定常のトークとして最後まで流し、完了で `OnClose`（定常の保留の終了）。
@@ -359,7 +367,6 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
         return (state, Vec::new());
     };
     tracing::info!(target: "kanade", event = "change_yield_to_close", reason = reason.as_ref_str(), phase = phase_label(&state.phase), to = %change.req.target.name, "切替の相に終了要求——切替を取りやめ終了の握手へ合流する");
-    state.pending_change = None;
     state.phase = match state.phase {
         Phase::ChangeTalkWait { talk_id, .. } => {
             state.pending_close = Some(reason);
@@ -371,7 +378,7 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
                 }),
             }
         }
-        Phase::ChangeClosePending => Phase::ClosePending { reason },
+        Phase::ChangeClosePending => Phase::ClosePending,
         Phase::ChangeCloseTalkWait { talk_id, deadline } => {
             Phase::CloseTalkWait { talk_id, deadline }
         }
@@ -387,20 +394,14 @@ fn yield_to_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>)
 }
 
 /// 終了要求で取りやめた `ChangePending` の応答: 台本は定常のトークとして流し（完了で保留の終了を
-/// 消化）、204 は保留の終了を今日の握手（`OnClose` GET）で始める。
-fn on_yielded_reply(
-    mut state: State,
-    input: Input,
-    reason: CloseReason,
-    config: &KanadeConfig,
-) -> (State, Vec<Action>) {
+/// 消化）、204 は保留の終了を終了の握手（`OnClose` GET）で始める。
+fn on_yielded_reply(mut state: State, input: Input, reason: CloseReason) -> (State, Vec<Action>) {
     match input {
         Input::ShioriReply {
             outcome: ShioriOutcome::Value(script, _),
             ..
         } => {
-            let talk_id = TalkId(state.next_talk_id);
-            state.next_talk_id += 1;
+            let talk_id = super::take_talk_id(&mut state);
             tracing::info!(target: "kanade", event = "change_yielded_talk_start", talk_id = talk_id.0, "取りやめた切替の台本——定常のトークとして流し完了で終了の握手へ");
             state.phase = Phase::Steady {
                 talk: Some(ActiveTalk {
@@ -420,7 +421,7 @@ fn on_yielded_reply(
         } => {
             state.pending_close = None;
             state.phase = Phase::Steady { talk: None };
-            steady::step(state, Input::CloseRequest { reason }, config)
+            steady::step(state, Input::CloseRequest { reason })
         }
         Input::Tick { now } => {
             state.last_now = Some(now);

@@ -2,91 +2,27 @@
 //!
 //! 本物の殻と偽の shiori（`actor_raise_reply_tests` の組）で、返信端へ値がちょうど 1 回返ることを見る。
 
-use super::raise_reply_tests::{LIMIT, RAISED, boot_to_steady, close, spawn_rig};
+use super::raise_reply_tests::{LIMIT, Respond, Rig, boot_to_steady, close, drain, spawn_with};
 use super::*;
+use crate::change::ShioriMethod;
+use crate::msg::KanadeStopped;
+use crate::schedule::Phase;
+use crate::schedule::log_capture::{capture, logged_once};
+use crate::schedule::translate_test_support::config;
 use crate::sstp::{SstpNotifyOutcome, SstpSendOutcome};
-
-/// 普段の状態の外からの台本は `Accepted`。
-#[test]
-fn send_in_steady_is_accepted() {
-    let rig = spawn_rig(Box::new(|| ShioriOutcome::NoContent));
-    boot_to_steady(&rig);
-    let (reply, rx) = areka_actor::reply_channel::<SstpSendOutcome>();
-    rig.kanade
-        .send(KanadeMsg::SstpSend {
-            script: r"\h\s[0]やあ\e".into(),
-            strict: None,
-            reply,
-        })
-        .expect("kanade に届く");
-    assert_eq!(
-        rx.recv_timeout(LIMIT).expect("返事が届く"),
-        SstpSendOutcome::Accepted
-    );
-    close(rig);
-}
-
-/// 普段の状態で台本が返る外からのイベントは、SHIORI が返したままの `Script`。
-#[test]
-fn notify_in_steady_with_script_is_script_as_returned() {
-    let rig = spawn_rig(Box::new(|| {
-        ShioriOutcome::Value(r"\h\s[0]はい\e".into(), areka_talk::SecurityLevel::Local)
-    }));
-    boot_to_steady(&rig);
-    let (reply, rx) = areka_actor::reply_channel::<SstpNotifyOutcome>();
-    rig.kanade
-        .send(KanadeMsg::SstpNotify {
-            event: RAISED.into(),
-            references: vec![],
-            strict: None,
-            reply,
-        })
-        .expect("kanade に届く");
-    assert_eq!(
-        rx.recv_timeout(LIMIT).expect("返事が届く"),
-        SstpNotifyOutcome::Script(r"\h\s[0]はい\e".into())
-    );
-    close(rig);
-}
-
-/// 起動の前（普段の状態でない）の外からの台本は `NotAccepted`。
-#[test]
-fn send_before_steady_is_not_accepted() {
-    let rig = spawn_rig(Box::new(|| ShioriOutcome::NoContent));
-    let (reply, rx) = areka_actor::reply_channel::<SstpSendOutcome>();
-    rig.kanade
-        .send(KanadeMsg::SstpSend {
-            script: r"\h\s[0]やあ\e".into(),
-            strict: None,
-            reply,
-        })
-        .expect("kanade に届く");
-    assert_eq!(
-        rx.recv_timeout(LIMIT).expect("返事が届く"),
-        SstpSendOutcome::NotAccepted
-    );
-    close(rig);
-}
+use crate::talk::{TalkDone, TalkEndReason};
+use areka_actor::ReplyReceiver;
+use std::sync::mpsc::{self, Receiver};
+use tracing::Level;
 
 // ---------------------------------------------------------------------------
-// 4.2: 本物の殻と偽の shiori で 2 つの入口を固定する（要件 1.3・1.7・2.1・2.3・2.4・2.5・2.7・2.8・
+// 本物の殻と偽の shiori で 2 つの入口を固定する（要件 1.3・1.7・2.1・2.3・2.4・2.5・2.7・2.8・
 // 3.6・3.7・3.8・6.1・6.2・6.5・7.1）。
 //
 // 待ちはすべて受信端の受け取り（返事・運行の通知・偽の shiori の記録・再生の起動）で揃える。返事は
 // その依頼の一括の処理を実行し終えた後に送られるので、返事を受けた時点で偽の shiori の記録と再生の
 // 起動は出そろっている（待たずに読める）。期限はハングを失敗に変えるための上限にすぎない。
 // ---------------------------------------------------------------------------
-
-use super::raise_reply_tests::Rig;
-use crate::change::ShioriMethod;
-use crate::msg::KanadeStopped;
-use crate::schedule::Phase;
-use crate::schedule::log_capture::{capture, logged_once};
-use crate::status::ExecutionSnapshot;
-use crate::talk::{TalkDone, TalkEndReason};
-use areka_actor::ReplyReceiver;
-use std::sync::mpsc::{self, Receiver};
-use tracing::Level;
 
 /// 外から頼む名前（許可の表に無い・`On` で始まらない）。
 const OUTSIDE: &str = "UserDefinedX";
@@ -97,58 +33,8 @@ const TRANSLATED: &str = r"\h\s[0]翻訳した台本\e";
 /// 起動の挨拶の台本（`OnBoot` の答え）。
 const GREETING: &str = r"\h\s[0]おはよう\e";
 
-/// 名前ごとの偽の shiori の答え（`None` なら良性の既定: GET→204・NOTIFY→完了）。
-type Respond = Box<dyn Fn(&str) -> Option<ShioriOutcome> + Send>;
 /// 偽の shiori の答えを毎回作る手（`ShioriOutcome` は複製できない）。
 type MakeOutcome = fn() -> ShioriOutcome;
-
-/// 名前ごとに答えを選べる偽の shiori で本物の殻を起こす（記録の形は `raise_reply_tests` の組と同じ）。
-fn spawn_with(respond: Respond) -> Rig {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let (calls_tx, calls) = mpsc::channel::<String>();
-    std::thread::spawn(move || {
-        while let Ok(msg) = shiori_rx.recv() {
-            match msg {
-                ShioriMsg::Request { call, reply } => {
-                    let (label, id, fallback) = match &call {
-                        ShioriCall::Get { id, .. } => {
-                            ("GET", id.as_str(), ShioriOutcome::NoContent)
-                        }
-                        ShioriCall::Notify { id, .. } => {
-                            ("NOTIFY", id.as_str(), ShioriOutcome::Notified)
-                        }
-                    };
-                    let _ = calls_tx.send(format!("{label} {id}"));
-                    let _ = reply.send(respond(id).unwrap_or(fallback));
-                }
-                ShioriMsg::Unload { reply } => {
-                    let _ = calls_tx.send("Unload".to_string());
-                    let _ = reply.send(ShioriOutcome::Unloaded);
-                }
-                ShioriMsg::Close => {
-                    let _ = calls_tx.send("Close".to_string());
-                    break;
-                }
-            }
-        }
-    });
-    let (talk_tx, talks) = mpsc::channel::<TalkCommand>();
-    let (notice_tx, notices) = mpsc::channel::<KanadeNotice>();
-    let (kanade, handle) = spawn_kanade_with_stop_sink(
-        KanadeConfig::new("master", "1.0.0"),
-        shiori_tx,
-        talk_tx,
-        Box::new(|_, _| {}),
-        Some(notice_tx),
-    );
-    Rig {
-        kanade,
-        handle,
-        calls,
-        talks,
-        notices,
-    }
-}
 
 /// `OUTSIDE` へ `answer` を、`OnTranslate` へ `TRANSLATED` を返す偽の shiori。
 fn outside_answers(answer: MakeOutcome) -> Respond {
@@ -185,11 +71,6 @@ fn send_notify(rig: &Rig, event: &str) -> ReplyReceiver<SstpNotifyOutcome> {
         })
         .expect("kanade に届く");
     rx
-}
-
-/// 今までに偽の shiori が受けた呼び出し（待たない）。
-fn drain(calls: &Receiver<String>) -> Vec<String> {
-    calls.try_iter().collect()
 }
 
 /// 今までに再生の側へ届いた再生の開始の台本（待たない）。
@@ -270,13 +151,14 @@ fn notify_reaches_shiori_and_answers_the_script_before_translation() {
     close(rig);
 }
 
-/// ⑵ 204・空白だけ・エラー応答は `NoScript` で、何も再生しない（`OnTranslate` も送らない）。
+/// ⑵ 204・空の台本・エラー応答は `NoScript` で、何も再生しない（`OnTranslate` も送らない）。
+/// 空白だけの台本は台本（`raise_reply_tests::whitespace_only_answer_is_a_script_on_every_path`）。
 #[test]
 fn notify_without_script_is_no_script_and_starts_nothing() {
     let answers: [(&str, MakeOutcome); 3] = [
         ("204", || ShioriOutcome::NoContent),
-        ("空白だけ", || {
-            ShioriOutcome::Value(" \t\r\n\u{3000}".into(), areka_talk::SecurityLevel::Local)
+        ("空の台本", || {
+            ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local)
         }),
         ("エラー応答", || {
             ShioriOutcome::Failed(ShioriFailure::Shiori("500 Internal Server Error".into()))
@@ -418,15 +300,7 @@ fn drive_here(
     sakura: &Sender<TalkCommand>,
 ) -> (Drive, Option<RaiseOutcome>) {
     let sink: ResourceSink = Box::new(|_, _| {});
-    drive(
-        state,
-        input,
-        &KanadeConfig::new("master", "1.0.0"),
-        shiori,
-        sakura,
-        &sink,
-        None,
-    )
+    drive(state, input, &config(), shiori, sakura, &sink, None)
 }
 
 /// ⑶b の warn 1 件。記録は kanade のスレッドで出て呼出スレッドの捕捉窓に入らないので、殻の 2 つの
@@ -571,7 +445,7 @@ fn raise_outside(rig: &Rig) -> RaiseOutcome {
     rx.recv_timeout(LIMIT).expect("返事が届く")
 }
 
-/// ⑻ 同じ許可の表に無い名前を汎用の通知で送ると今日どおり `NotAllowed`（送られない）。外から頼むと
+/// ⑻ 同じ許可の表に無い名前を汎用の通知で送ると `NotAllowed`（送られない）。外から頼むと
 /// 偽の shiori へ届き、その後も汎用の通知では断られたまま（外からの依頼が許可の表を開かない）。
 #[test]
 fn outside_name_is_refused_by_raise_event_but_reaches_shiori_by_notify() {
@@ -635,49 +509,6 @@ fn outside_name_reaches_shiori_verbatim_without_warning() {
         !events.iter().any(|e| e.level <= Level::WARN),
         "警告もエラーも出さない（要件 2.1）: {events:#?}"
     );
-}
-
-/// ⑻ 送出の檻の既存の規則は今日どおり: 同じ名前でも、スケジューラ起源（許可の表）と選択起源
-/// （`On` 接頭）では送らず `event_id_not_allowed` の error、外から頼まれた起源だけが送られる。
-#[test]
-fn egress_rules_for_static_and_choice_origins_are_unchanged() {
-    for (id, sent) in [
-        (EventId::Static(OUTSIDE), false),
-        (EventId::Choice(OUTSIDE.to_string()), false),
-        (EventId::Sstp(OUTSIDE.to_string()), true),
-    ] {
-        let label = format!("{id:?}");
-        let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-        let helper = std::thread::spawn(move || match shiori_rx.recv() {
-            Ok(ShioriMsg::Request { reply, .. }) => {
-                let _ = reply.send(ShioriOutcome::NoContent);
-                true
-            }
-            _ => false,
-        });
-        let call = ShioriCall::Get {
-            id,
-            references: Vec::new(),
-            status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
-        };
-        let mut outcome = None;
-        let events = capture(|| outcome = Some(round_trip_request(&shiori_tx, call)));
-        drop(shiori_tx);
-        assert_eq!(helper.join().expect("偽の shiori"), sent, "{label}");
-        if sent {
-            assert!(matches!(outcome, Some(ShioriOutcome::NoContent)), "{label}");
-            assert!(!events.iter().any(|e| e.level <= Level::WARN), "{label}");
-        } else {
-            assert!(
-                matches!(
-                    outcome,
-                    Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
-                ),
-                "{label}"
-            );
-            logged_once(&events, Level::ERROR, "event_id_not_allowed");
-        }
-    }
 }
 
 /// 殻の「受け付けた」の控え（[`crate::actor_sstp::notify_accepted`]）: 普段の状態で検査を満たすときだけ真。

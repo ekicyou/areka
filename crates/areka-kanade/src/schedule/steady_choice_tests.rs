@@ -4,8 +4,9 @@ use super::test_support::{
 };
 use super::*;
 use crate::msg::ShioriCall;
-use crate::schedule::step;
 use crate::schedule::translate_test_support::pass_translate;
+use crate::schedule::{ActiveTalk, step};
+use crate::talk::StartTalk;
 
 // --- A. 棄却分岐（規則 1）: すべて状態不変・Action なし ---
 
@@ -140,9 +141,10 @@ fn named_choice_emits_only_the_named_event() {
     );
     assert_eq!(actions.len(), 1, "第 1 段の GET を 1 件だけ発行する");
     let (id, refs) = expect_get_call(&actions[0]);
-    assert_eq!(id, "Onおしゃべり頻度メニュー", "任意名イベントを逐語発火");
-    assert_ne!(id, "OnChoiceSelectEx", "Ex を先行発火しない（裁定 1）");
-    assert_ne!(id, "OnChoiceSelect", "無印を先行発火しない（裁定 1）");
+    assert_eq!(
+        id, "Onおしゃべり頻度メニュー",
+        "任意名イベントを逐語発火（Ex・無印を先行発火しない・裁定 1）"
+    );
     assert_eq!(
         refs,
         vec!["a0".to_string(), "a1".to_string()],
@@ -254,7 +256,7 @@ fn cascade_value_emits_resolve_then_start_in_this_order() {
     assert_eq!(next.next_talk_id, 7);
     assert!(next.choice.is_none(), "解決で帳簿は消える");
     assert_eq!(
-        next.choice_prev_talk,
+        next.prev_talk,
         Some(TalkId(3)),
         "choice 起因の slot 差替で旧 talk_id を 1 世代保持する（遷移規則 9）"
     );
@@ -319,12 +321,8 @@ fn cascade_no_content_at_last_stage_resolves_without_start() {
             assert_eq!(*talk_id, TalkId(3));
             assert_eq!(id, "choice1");
         }
-        _ => panic!("最終段 204 は ResolveChoice のみ（DD-4・Req5.3）"),
+        _ => panic!("最終段 204 は ResolveChoice のみで talk を起動しない（DD-4・Req4.2・Req5.3）"),
     }
-    assert!(
-        !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
-        "最終段 204 で talk を起動しない（Req4.2）"
-    );
     assert!(next.choice.is_none(), "解決で帳簿は消える");
     match next.phase {
         Phase::Steady {
@@ -335,68 +333,52 @@ fn cascade_no_content_at_last_stage_resolves_without_start() {
     assert_eq!(next.next_talk_id, 6);
 }
 
-/// Req4.5・規則 3: 段の失敗は error 記録の上で 204 と同一遷移（残段ありなら次段）。
-///
-/// 本檻は steady 側の 204 相当処理そのものを `steady::step` の直接駆動で固定する（層を分けた
-/// 単体檻）。`step()` 経由の end-to-end——横断 `Failed`→`Unloading{Fault}` アームの免除
-/// （DD-12）が効いて終了系列へ倒れないこと——は
-/// [`cascade_failed_via_step_does_not_fall_into_unloading_fault`] が固定する。
+/// GET では起きない答え（`Notified`・`Unloaded`）も 204 と同じに進む: 残段なしなら
+/// `ResolveChoice`、時間切れなら `CancelChoice` が 1 つずつ出て、選択待ちのトークを止めない。
 #[test]
-fn cascade_failed_is_treated_as_no_content_stage_advance() {
-    let s = steady_with_ledger(
-        TalkId(3),
-        6,
-        &["choice1"],
-        ChoicePhase::Cascading {
-            choice_id: "choice1".to_string(),
-            next: Some(CascadeNext::Select),
-        },
-    );
-    let (next, actions) = super::step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout("30s".to_string())),
-            origin: "OnChoiceSelectEx",
-        },
-        &config(),
-    );
-    assert!(
-        !matches!(next.phase, Phase::Unloading { .. }),
-        "選択由来の失敗で終了系列へ倒れない（Req4.5）"
-    );
-    assert_eq!(actions.len(), 1);
-    let (id, _) = expect_get_call(&actions[0]);
-    assert_eq!(id, "OnChoiceSelect", "失敗は 204 と同一遷移＝次段へ前進");
-}
-
-/// Req4.5／5.3: 最終段の失敗も 204 と同一＝選択解決のみで会話を止めない。
-#[test]
-fn cascade_failed_at_last_stage_resolves_without_start() {
-    let s = steady_with_ledger(
-        TalkId(3),
-        6,
-        &["choice1"],
-        ChoicePhase::Cascading {
-            choice_id: "choice1".to_string(),
-            next: None,
-        },
-    );
-    let (next, actions) = super::step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Ipc(
-                "pipe closed".to_string(),
-            )),
+fn unexpected_reply_resolves_last_stage_and_cancels_timeout_like_no_content() {
+    for (kind, outcome) in [
+        (
+            "notified",
+            (|| ShioriOutcome::Notified) as fn() -> ShioriOutcome,
+        ),
+        ("unloaded", || ShioriOutcome::Unloaded),
+    ] {
+        let last_stage = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: None,
+            },
+        );
+        let input = Input::ShioriReply {
+            outcome: outcome(),
             origin: "OnChoiceSelect",
-        },
-        &config(),
-    );
-    assert!(!matches!(next.phase, Phase::Unloading { .. }));
-    match actions.as_slice() {
-        [Action::ResolveChoice { id, .. }] => assert_eq!(id, "choice1"),
-        _ => panic!("最終段の失敗は ResolveChoice のみ（Req5.3）"),
+        };
+        let (next, actions) = step(last_stage, input, &config());
+        assert!(
+            matches!(actions.as_slice(), [Action::ResolveChoice { talk_id: TalkId(3), id }] if id == "choice1"),
+            "{kind}: 残段なしは ResolveChoice だけ"
+        );
+        assert!(next.choice.is_none());
+
+        let timeout = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
+        let input = Input::ShioriReply {
+            outcome: outcome(),
+            origin: "OnChoiceTimeout",
+        };
+        let (next, actions) = step(timeout, input, &config());
+        assert!(
+            matches!(
+                actions.as_slice(),
+                [Action::CancelChoice { talk_id: TalkId(3) }]
+            ),
+            "{kind}: 時間切れは CancelChoice だけ"
+        );
+        assert!(next.choice.is_none());
     }
-    assert!(next.choice.is_none());
 }
 
 // --- D. 完了状態（一回性・Req1.1／4.6／5.4） ---
@@ -537,56 +519,13 @@ fn canonical_value_at_first_stage_skips_the_remaining_stage() {
         &config(),
     );
     assert!(
-        !a2.iter().any(|a| matches!(a, Action::ShioriRequest(_))),
+        matches!(
+            a2.as_slice(),
+            [Action::ResolveChoice { .. }, Action::StartTalk(_)]
+        ),
         "Value を返した段の後に無印段を発行しない（Req2.4）"
     );
-    assert!(matches!(
-        a2.as_slice(),
-        [Action::ResolveChoice { .. }, Action::StartTalk(_)]
-    ));
     assert!(s2.choice.is_none());
-}
-
-// --- E. 既存挙動の保存（DD-6 防御アームへ choice 応答が到達しないこと） ---
-
-/// C4 Implementation Notes: choice 応答は先行アームで捌かれ `steady_value_during_talk`
-/// （DD-6 防御）へ**到達しない**。到達すると選択応答が warn 破棄で沈黙する（既知の罠）。
-#[test]
-fn cascade_reply_does_not_reach_the_dd6_defense_arm() {
-    let cfg = config();
-    let s = steady_with_ledger(
-        TalkId(3),
-        6,
-        &["OnMenu"],
-        ChoicePhase::Cascading {
-            choice_id: "OnMenu".to_string(),
-            next: None,
-        },
-    );
-    let mut actions = Vec::new();
-    let ev = crate::schedule::log_capture::capture(|| {
-        let (_next, a) = step(
-            s,
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value(
-                    "script".to_string(),
-                    areka_talk::SecurityLevel::Local,
-                ),
-                origin: "OnChoiceEvent",
-            },
-            &cfg,
-        );
-        actions = a;
-    });
-    assert!(
-        !ev.iter()
-            .any(|e| e.event.as_deref() == Some("steady_value_during_talk")),
-        "choice 応答が DD-6 防御アームへ落ちてはならない。\n捕捉={ev:#?}"
-    );
-    assert!(
-        actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
-        "choice 応答は先行アームで置換起動される"
-    );
 }
 
 /// Req6.1／6.3／6.4・裁定 6: 選択待ち中の周期リクエストは **NOTIFY**（Ref3=`"0"`）で送出され、

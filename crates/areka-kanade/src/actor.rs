@@ -24,21 +24,21 @@
 //! # 失敗経路のログ規律（steering: areka-log-first-no-silent-failure）
 //! SHIORI 送出失敗・応答 oneshot 切断は `error!` の上で `ShioriOutcome::Failed(Ipc)` へ写像し
 //! 再投入する（→ Unloading{Fault}・宙吊りなし）。talk 指示（[`TalkCommand`]）の送出失敗は
-//! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ないが M1 は許容）。
+//! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ない）。
 //! 沈黙の失敗経路は存在しない。
 
 use std::convert::Infallible;
 use std::ops::ControlFlow;
 use std::sync::mpsc::Sender;
 
-use areka_actor::{ActorHandle, ReplyError, ReplySender, reply_channel, run_inbox, spawn_actor};
+use areka_actor::{ActorHandle, ReplySender, reply_channel, run_inbox, spawn_actor};
 
 use crate::actor_sstp::{FirstReply, SstpReply, first_reply_of};
 use crate::actor_stop::{handoff_of, notify_stop, send_notice, stop_cause_of};
 use crate::change::{ChangeHandoff, KanadeNotice, RaiseOutcome, TalkGap};
 use crate::msg::{
-    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, ShioriCall, ShioriFailure, ShioriMsg,
-    ShioriOutcome,
+    EventId, KanadeConfig, KanadeMsg, KanadeStopCause, MonotonicMs, ShioriCall, ShioriFailure,
+    ShioriMsg, ShioriOutcome,
 };
 use crate::online::OnlineCounter;
 use crate::schedule::resources::ResourceSink;
@@ -85,7 +85,7 @@ pub fn spawn_kanade(
 /// 停止通知の投函端つきで kanade アクターを起動する（R15.3・design D15 の 2）。
 ///
 /// 引数は [`spawn_kanade`] と同一で、末尾に `stop_sink` が 1 つ増えるだけの派生である
-/// （[`spawn_kanade`] は `None` を渡す薄い包み＝既存の呼び手は 1 つも変わらない）。
+/// （[`spawn_kanade`] は `None` を渡す薄い包み）。
 ///
 /// `stop_sink` は運行の通知（[`KanadeNotice`]）の送出端である。`Some` なら、[`Action::StopSelf`]
 /// の実行点で [`KanadeNotice::Stopped`]`(`[`KanadeStopped`](crate::msg::KanadeStopped)`{ cause, handoff })` を**ちょうど 1 度**
@@ -145,7 +145,7 @@ pub fn spawn_kanade_translating(
                     tracing::info!(target: "kanade", event = "close", "停止指示（Close）を受領——即時停止");
                     return Ok(ControlFlow::Break(()));
                 }
-                // リソース照会は step を経ずその場で答える（`drive` の「最後の応答だけ再投入」に
+                // リソース照会は step を経ずその場で答える（`drive_translating` の「最後の応答だけ再投入」に
                 // 乗らない・運行状態は読むだけ）。
                 KanadeMsg::ResourceQuery { ids, reply } => {
                     crate::actor_resources::answer(&state, &shiori, ids, reply);
@@ -158,6 +158,7 @@ pub fn spawn_kanade_translating(
                 }
                 KanadeMsg::Boot => Input::Boot,
                 KanadeMsg::Tick { now } => Input::Tick { now },
+                KanadeMsg::ChoiceTimeoutDue { now } => Input::ChoiceTimeoutDue { now },
                 KanadeMsg::TalkDone(td) => Input::TalkDone(td),
                 KanadeMsg::CloseRequest { reason } => Input::CloseRequest { reason },
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
@@ -178,7 +179,7 @@ pub fn spawn_kanade_translating(
                     display_end,
                     timeout_directive_secs,
                 },
-                KanadeMsg::UserBreak { scope } => Input::UserBreak { scope },
+                KanadeMsg::UserBreak { scope, talk_id } => Input::UserBreak { scope, talk_id },
                 KanadeMsg::ChangeGhost(req) => Input::ChangeGhost(req),
                 KanadeMsg::RaiseEvent {
                     id,
@@ -231,6 +232,8 @@ pub fn spawn_kanade_translating(
                     Input::PropertyEvent { id, references }
                 }
             };
+            // 最初の往復の写し（台本の複製）は返事を待つ入口が在るときだけ作る。
+            let wants_first = raise_reply.is_some() || sstp_reply.is_some();
             let (flow, first_reply) = drive_translating(
                 &mut state,
                 input,
@@ -240,9 +243,10 @@ pub fn spawn_kanade_translating(
                 &resource_sink,
                 stop_sink.as_ref(),
                 &seams,
+                wants_first,
             );
             // 返事はこの依頼の処理（応答を入れ直して動作を実行し終えるまで）が済んだ後に 1 回だけ送る。
-            // 往復が無かったのは、許可表に無い名前か定常以外での依頼（どちらも運行表が捨てた）。
+            // 往復が無かったのは、許可表に無い名前か、定常以外・終了や切替の保留中の依頼（どれも運行表が捨てた）。
             if let Some((tx, id, allowed)) = raise_reply {
                 let outcome = match (allowed, &first_reply) {
                     (false, _) => RaiseOutcome::NotAllowed,
@@ -252,11 +256,7 @@ pub fn spawn_kanade_translating(
                 send_raise_reply(tx, &id, outcome);
             }
             if let Some(pending) = sstp_reply {
-                crate::actor_sstp::answer(
-                    pending,
-                    matches!(flow, Drive::Stop),
-                    first_reply.as_ref(),
-                );
+                crate::actor_sstp::answer(pending, matches!(flow, Drive::Stop), first_reply);
             }
             // 台詞の切れ目の結果は、決まった依頼の処理の後に 1 回だけ送る（停止の直前でも送る）。
             if let Some(outcome) = crate::schedule::talk_gap::take_outcome(&mut state) {
@@ -297,6 +297,7 @@ fn drive(
         resource_sink,
         stop_sink,
         &seams,
+        true,
     );
     (flow, first.map(|f| f.raise_outcome()))
 }
@@ -305,8 +306,8 @@ fn drive(
 /// Actions が尽きるまで反復する（execute-batch/reinject-last）。入れ直すものが SHIORI の応答なら
 /// `Input::ShioriReply`、翻訳の結果なら `Input::TranslateDone` を入れる。
 ///
-/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`FirstReply`] へ写したもの（往復が無ければ
-/// `None`）。汎用の通知の入口と SSTP の入口の返事の材料で、他の入力では呼び手が読み捨てる。
+/// 戻り値の 2 つ目は、最初の一括の往復の結果を [`FirstReply`] へ写したもの（往復が無いか
+/// `wants_first` が偽なら `None`）。汎用の通知の入口と SSTP の入口の返事の材料。
 #[allow(clippy::too_many_arguments)]
 fn drive_translating(
     state: &mut State,
@@ -317,6 +318,7 @@ fn drive_translating(
     resource_sink: &ResourceSink,
     stop_sink: Option<&Sender<KanadeNotice>>,
     seams: &TranslateSeams,
+    wants_first: bool,
 ) -> (Drive, Option<FirstReply>) {
     // 終了原因の受け渡し（R15.3）: [`Action::StopSelf`] は必ず `Unloading{cause}` からの遷移で
     // 生まれる（発行点は `schedule::unloading_reply` の 1 箇所だけで、そこへ入れるのは
@@ -341,9 +343,10 @@ fn drive_translating(
             stop_sink,
             term,
             seams,
+            config.choice_wake.as_ref(),
         );
         // `ShioriOutcome` は複製できないので、入れ直す前に参照から写す。
-        if std::mem::take(&mut first_batch) {
+        if std::mem::take(&mut first_batch) && wants_first {
             first_reply = last_reply
                 .as_ref()
                 .map(|(outcome, _)| first_reply_of(outcome));
@@ -460,7 +463,7 @@ struct BatchResult {
 /// Action バッチを**先頭から順に全て実行**する（execute-batch/reinject-last の execute 側）。
 ///
 /// [`drive_translating`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
-/// （タスク 4.3／4.5）の実装を待たずに実行で檻に入れられるようにするためである（design C6）。
+/// （選択調停・タイムアウト解除）と切り離して実行で檻に入れられるようにするためである（design C6）。
 ///
 /// # talk 指示 3 形の写像（design C6・DD-5・Req 5.6）
 /// [`Action::StartTalk`]／[`Action::ResolveChoice`]／[`Action::CancelChoice`] はそれぞれ
@@ -477,6 +480,7 @@ struct BatchResult {
 ///
 /// [`Action::Translate`] は `actor_translate::run_translate` で実行し、その結果をこのバッチの
 /// 「入れ直すもの」にする。
+#[allow(clippy::too_many_arguments)]
 fn execute_batch(
     actions: Vec<Action>,
     shiori: &Sender<ShioriMsg>,
@@ -485,6 +489,7 @@ fn execute_batch(
     stop_sink: Option<&Sender<KanadeNotice>>,
     term: (Option<KanadeStopCause>, Option<ChangeHandoff>),
     seams: &TranslateSeams,
+    choice_wake: Option<&Sender<MonotonicMs>>,
 ) -> BatchResult {
     let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
     let mut translated: Option<TranslateResult> = None;
@@ -498,6 +503,14 @@ fn execute_batch(
             }
             Action::CancelChoice { talk_id } => {
                 send_talk_command(sakura, TalkCommand::CancelChoice { talk_id });
+            }
+            // 起こしの線が無い構成・送れなかったときは毎秒の Tick が期限を拾う（失敗ではない）。
+            Action::ArmChoiceWake(at) => {
+                if let Some(wake) = choice_wake
+                    && wake.send(at).is_err()
+                {
+                    tracing::warn!(target: "kanade", event = "choice_wake_send_failed", at = at.0, "起こしの頼みを送れない——期限は毎秒の Tick が拾う");
+                }
             }
             Action::ShioriRequest(call) => {
                 // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
@@ -575,6 +588,7 @@ fn execute_actions(
         stop_sink,
         term,
         &seams,
+        None,
     )
 }
 
@@ -626,15 +640,17 @@ pub(crate) fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -
 
 /// 送出の檻を通して送り、SHIORI の結果を写さずに返す（エラー応答も `Failed` のまま）。
 ///
-/// 許可表の検査・欠番の印の置き換え・`shiori_request` の記録・往復をここで行う。今日の呼び手は
+/// 許可表の検査・Reference の掃除・`shiori_request` の記録・往復をここで行う。ほかの呼び手は
 /// [`round_trip_request`] を通し、翻訳の往復（`actor_translate`）はエラー応答を自分で読むので
 /// これを直接呼ぶ（`shiori_error_response` を重ねて出さない）。
 ///
-/// Reference の値が欠番の印（`ABSENT_REFERENCE`）と同じ位置は、`OnTranslate` の添字 1 を除き
-/// 空文字に置き換えて `warn!`（event=`reference_absent_marker_replaced`）を 1 件ずつ残す。外から
-/// 入った値が線の上で行ごと消えるのを止めるためで、送る 1 か所のここで全イベントに効かせる。
+/// 送ってよいかの判定は掃除の前の生の Reference で行い、通った呼び出しだけを掃除して送る
+/// （先に掃除すると、外から頼まれた名前の Reference の改行を断る検査が黙って効かなくなる）。
 pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -> ShioriOutcome {
-    replace_absent_markers(&mut call);
+    if let Some(refused) = refuse_unless_allowed(&call) {
+        return refused;
+    }
+    clean_references(&mut call);
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
     let (method, event_id, references, status_wire) = match &call {
@@ -651,41 +667,6 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
     };
     // ログ証跡は wire 形（[`EventId::as_str`]）で残す——出所カテゴリは表現を変えない（DD-1）。
     let id = event_id.as_str();
-
-    // ID 受理檻（Req2.6/2.9/3.1/3.2/4.1・design C6・DD-2・DD-IT-7/DD-IT-11）: 受理されない ID は
-    // 送出せず内部規律違反として失敗させる。送出可否は**出所カテゴリ別**に判定する。
-    //
-    // - スケジューラ起源（`Static`）: 従来どおり「イベント許可 ∨ リソース許可」の論理和——固定表
-    //   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）。
-    //   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**（Req3.2）。
-    // - 選択起源（`Choice`）: `is_allowed_choice_event`（`On` 接頭のみ）。作者が `\q` の ID に書いた
-    //   名前を事前登録なしに逐語で発火するため固定表を要求せず、スケジューラ起源の恒久禁止も
-    //   適用しない（Req2.9・裁定 8＝両禁止規則は非交差）。
-    let allowed = match event_id {
-        EventId::Static(s) => {
-            crate::schedule::events::is_allowed_event_id(s)
-                || crate::schedule::resources::is_allowed_resource_id(s)
-        }
-        EventId::Choice(name) => crate::schedule::events::is_allowed_choice_event(name),
-        // 外から頼まれた名前（`EventId::Sstp`）: 入口と同じ検査を満たすかだけで決める。許可の表と
-        // スケジューラ起源の恒久禁止は効かせない（呼び手が 1 回ずつ頼むもの＝選択起源と同じ理屈）。
-        EventId::Sstp(name) => crate::sstp::validate_notify(name, references).is_ok(),
-        // 翻訳の要求: 今の `Static("OnTranslate")` と同じ（許可表の `OnTranslate`）。
-        EventId::Translate(_) => crate::schedule::events::is_allowed_event_id("OnTranslate"),
-        // `\![get,property]` の返しのイベント: 運行表の腕と同じ検査を満たすかだけで決める（許可の表は通さない）。
-        EventId::Property(name) => crate::sstp::validate_notify(name, references).is_ok(),
-    };
-    if !allowed {
-        tracing::error!(
-            target: "kanade",
-            event = "event_id_not_allowed",
-            id = %id,
-            "送出禁止イベント ID——ホワイトリスト違反ゆえ送出せず内部規律違反として失敗させる"
-        );
-        return ShioriOutcome::Failed(ShioriFailure::Internal(format!(
-            "event_id_not_allowed: {id}"
-        )));
-    }
 
     // 送出前の wire 証跡（Req6.2）。status=None は Status ヘッダ欠落として観測可能（DD-IT-5）。
     // 出どころの 3 項目は SHIORI の回り役が入れ物を作るのと同じ規則から導く（要件 2.1〜2.6）。
@@ -714,24 +695,90 @@ pub(crate) fn round_trip_raw(shiori: &Sender<ShioriMsg>, mut call: ShioriCall) -
     )
 }
 
-/// Reference のうち欠番の印と同じ値を空文字に置き換え、位置ごとに `warn!` を 1 件残す。
+/// ID 受理檻（Req2.6/2.9/3.1/3.2/4.1・design C6・DD-2・DD-IT-7/DD-IT-11）: 受理されない ID は
+/// 送出せず内部規律違反として `Some(Failed(Internal))` を返す。送出可否は**出所カテゴリ別**に判定する。
 ///
-/// 印を正当に載せるのは `OnTranslate` の添字 1（[`crate::events::on_translate`] が置く欠番）だけ。
-fn replace_absent_markers(call: &mut ShioriCall) {
+/// - どの出所でも、ID の綴りに CR・LF・NUL があれば断る（頭書きの行を切らない・名前は変えない）。
+/// - スケジューラ起源（`Static`）: 従来どおり「イベント許可 ∨ リソース許可」の論理和——固定表
+///   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`）。
+///   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**（Req3.2）。
+/// - 選択起源（`Choice`）: `is_allowed_choice_event`（`On` 接頭のみ）。作者が `\q` の ID に書いた
+///   名前を事前登録なしに逐語で発火するため固定表を要求せず、スケジューラ起源の恒久禁止も
+///   適用しない（Req2.9・裁定 8＝両禁止規則は非交差）。
+fn refuse_unless_allowed(call: &ShioriCall) -> Option<ShioriOutcome> {
+    let (ShioriCall::Get {
+        id: event_id,
+        references,
+        ..
+    }
+    | ShioriCall::Notify {
+        id: event_id,
+        references,
+        ..
+    }) = call;
+    let id = event_id.as_str();
+    let allowed = !id.contains(crate::sstp::LINE_BREAKERS)
+        && match event_id {
+            EventId::Static(s) => {
+                crate::schedule::events::is_allowed_event_id(s)
+                    || crate::schedule::resources::is_allowed_resource_id(s)
+            }
+            EventId::Choice(name) => crate::schedule::events::is_allowed_choice_event(name),
+            // 外から頼まれた名前（`Sstp`）と `\![get,property]` の返し（`Property`）: 入口・運行表の
+            // 腕と同じ検査を満たすかだけで決める。許可の表とスケジューラ起源の恒久禁止は効かせない
+            // （呼び手が 1 回ずつ頼むもの＝選択起源と同じ理屈）。
+            EventId::Sstp(name) | EventId::Property(name) => {
+                crate::sstp::validate_notify(name, references).is_ok()
+            }
+            // 翻訳の要求: 今の `Static("OnTranslate")` と同じ（許可表の `OnTranslate`）。
+            EventId::Translate(_) => crate::schedule::events::is_allowed_event_id("OnTranslate"),
+        };
+    if allowed {
+        return None;
+    }
+    tracing::error!(
+        target: "kanade",
+        event = "event_id_not_allowed",
+        id = %id,
+        "送出禁止イベント ID——ホワイトリスト違反ゆえ送出せず内部規律違反として失敗させる"
+    );
+    Some(ShioriOutcome::Failed(ShioriFailure::Internal(format!(
+        "event_id_not_allowed: {id}"
+    ))))
+}
+
+/// Reference を線に載せられる形にし、直した位置ごとに `warn!` を 1 件残す。
+///
+/// - 欠番の印（`ABSENT_REFERENCE`）と同じ値は空文字に置き換える（event=`reference_absent_marker_replaced`）。
+///   印を正当に載せるのは `OnTranslate` の添字 1（[`crate::events::on_translate`] が置く欠番）だけで、そこは残す。
+/// - CR・LF・NUL を含む値はそれを取り除いて送る（event=`reference_line_break_removed`）。SHIORI の答え
+///   由来の値 1 つでゴーストを降ろさないため、断らずに取り除く（SSP の見え方と同じ）。
+fn clean_references(call: &mut ShioriCall) {
     let (ShioriCall::Get { id, references, .. } | ShioriCall::Notify { id, references, .. }) = call;
+    let translate = matches!(id, EventId::Translate(_));
     for (index, value) in references.iter_mut().enumerate() {
-        let translate = matches!(id, EventId::Translate(_));
-        if value != ABSENT_REFERENCE || (index == 1 && translate) {
-            continue;
+        if value == ABSENT_REFERENCE {
+            if index == 1 && translate {
+                continue;
+            }
+            tracing::warn!(
+                target: "kanade",
+                event = "reference_absent_marker_replaced",
+                id = %id.as_str(),
+                index,
+                "Reference が欠番の印と同じ値——行が消えないよう空文字に置き換えて送る"
+            );
+            value.clear();
+        } else if value.contains(crate::sstp::LINE_BREAKERS) {
+            tracing::warn!(
+                target: "kanade",
+                event = "reference_line_break_removed",
+                id = %id.as_str(),
+                index,
+                "Reference に CR・LF・NUL——頭書きの行を切らないよう取り除いて送る"
+            );
+            *value = value.replace(crate::sstp::LINE_BREAKERS, "");
         }
-        tracing::warn!(
-            target: "kanade",
-            event = "reference_absent_marker_replaced",
-            id = %id.as_str(),
-            index,
-            "Reference が欠番の印と同じ値——行が消えないよう空文字に置き換えて送る"
-        );
-        value.clear();
     }
 }
 
@@ -750,7 +797,7 @@ fn round_trip(
     msg: ShioriMsg,
     reply_rx: areka_actor::ReplyReceiver<ShioriOutcome>,
 ) -> ShioriOutcome {
-    if let Err(_undelivered) = send_shiori(shiori, msg) {
+    if shiori.send(msg).is_err() {
         tracing::error!(
             target: "kanade",
             event = "shiori_send_failed",
@@ -760,7 +807,7 @@ fn round_trip(
     }
     match reply_rx.recv() {
         Ok(outcome) => outcome,
-        Err(ReplyError::Dropped) => {
+        Err(_) => {
             tracing::error!(
                 target: "kanade",
                 event = "shiori_reply_dropped",
@@ -768,21 +815,7 @@ fn round_trip(
             );
             ShioriOutcome::Failed(ShioriFailure::Ipc("shiori reply dropped".into()))
         }
-        Err(ReplyError::Timeout) => {
-            // recv（無限待ち）は Timeout を返さない。防御的に Ipc 写像する（宙吊りなし）。
-            tracing::error!(
-                target: "kanade",
-                event = "shiori_reply_timeout",
-                "SHIORI の答えが期限内に届かなかった——失敗として呼び手へ返す"
-            );
-            ShioriOutcome::Failed(ShioriFailure::Ipc("shiori reply timeout".into()))
-        }
     }
-}
-
-/// `ShioriMsg` を送出する。切断時は未達メッセージを `Err` で返す（呼び手が error! 写像）。
-fn send_shiori(shiori: &Sender<ShioriMsg>, msg: ShioriMsg) -> Result<(), ShioriMsg> {
-    shiori.send(msg).map_err(|e| e.0)
 }
 
 /// talk 再生系へ [`TalkCommand`] を送出する**唯一の実行点**（design C6・Req 5.6）。
@@ -812,9 +845,9 @@ fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
 
 #[cfg(test)]
 #[path = "actor_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
-// 停止通知の発行点そのものの檻（areka-P0-emo2-conformance-e2e タスク 6.9・R15.3）。
+// 停止通知の発行点そのものの檻（areka-P0-emo2-conformance-e2e R15.3）。
 // 発行は呼出スレッドで同期に走る素の関数ゆえ、スレッドローカルの捕捉窓で観測できる
 // （アクタースレッドを跨がない＝全スレッド捕捉の窓口を要さない）。
 #[cfg(test)]
@@ -825,6 +858,11 @@ mod stop_notify_tests;
 #[cfg(test)]
 #[path = "actor_error_response_tests.rs"]
 mod error_response_tests;
+
+// 送る点の頭書きの守りの檻（要件 9.2）。
+#[cfg(test)]
+#[path = "actor_header_guard_tests.rs"]
+mod header_guard_tests;
 
 // 汎用の通知の入口の返事の檻（areka-P0-ghost-install 要件 2.6・2.7・11.5・12.6）。
 #[cfg(test)]
@@ -846,7 +884,7 @@ mod sstp_tests;
 #[path = "actor_online_tests.rs"]
 mod online_tests;
 
-// バッチ実行の翻訳の腕が入れ直すものを決めることの檻（areka-P0-translate-pipeline タスク 3.3）。
+// バッチ実行の翻訳の腕が入れ直すものを決めることの檻（areka-P0-translate-pipeline）。
 #[cfg(test)]
 #[path = "actor_translate_batch_tests.rs"]
 mod translate_batch_tests;

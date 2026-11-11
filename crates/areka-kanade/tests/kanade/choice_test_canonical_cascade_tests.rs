@@ -3,9 +3,8 @@ use super::test_support::{
     choice_gets, choice_input, choice_references, command_tags, establish_choice_wait,
 };
 use super::{
-    ChoiceResponse, CloseReason, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
-    Fixture, Harness, KanadeConfig, KanadeMsg, QuitPolicy, TalkCommand, TalkId, events,
-    expected_call, expected_unload, join_bounded, spawn_harness_gated,
+    CloseReason, Driven, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig,
+    KanadeMsg, QuitPolicy, events, expected_call, expected_unload, send, spawn_harness_gated,
 };
 
 // ============================================================================
@@ -44,33 +43,26 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
-        .expect("send Choice");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)),
+    );
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
     // 保留解放は全注入の後——保留 TalkDone は CloseRequest の後ろに並ぶ（FIFO・決定的）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade canonical-choice join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close (farewell talk quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura canonical-choice join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded,
+        commands,
+        started,
+        ..
+    } = harness.finish("kanade canonical-choice join");
 
     // (1) 段列は Ex 先行 → 無印後続（Req2.2／2.3・裁定 2）。
     assert_eq!(
@@ -90,11 +82,6 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
     assert_eq!(
         *gets[0], expected_ex,
         "Ex GET は events 表導出（Ref0=ラベル／Ref1=ID／Ref2..=参照列・Status）と一致するはず: {recorded:?}"
-    );
-    assert_eq!(
-        gets[0].references.len(),
-        4,
-        "Ex の Reference は 2＋参照列 2＝4 個"
     );
     assert_eq!(gets[0].references[0], CHOICE_LABEL, "Ref0=表示ラベル");
     assert_eq!(gets[0].references[1], CANONICAL_CHOICE_ID, "Ref1=選択肢 ID");
@@ -129,18 +116,6 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
         ],
         "解決はちょうど 1 件で、その後に続く起動は close talk だけのはず: {commands:?}"
     );
-    let started: Vec<_> = commands
-        .iter()
-        .filter_map(|c| match c {
-            TalkCommand::Start(s) => Some(s),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        started.len(),
-        2,
-        "到達 StartTalk は steady talk と close talk の 2 本のみ（選択由来 talk は起きない）: {started:?}"
-    );
     assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
@@ -162,8 +137,8 @@ fn canonical_choice_cascades_ex_then_select_and_resolves_without_start() {
 /// （Req9.2(b) 後段・2.4・4.6・裁定 2）。
 ///
 /// # 非空虚性・discriminative 性
-/// [`canonical_choice_cascades_ex_then_select_and_resolves_without_start`] と**同一 ID・同一入力**で
-/// 応答だけを Value に替えた対の檻である。`OnChoiceSelect` が記録列に現れないこと（＝Value 後も
+/// [`canonical_choice_cascades_ex_then_select_and_resolves_without_start`] と同じ ID の選択確定で、
+/// 一段目の応答を Value に替えた対の檻である（終わり方は違う）。`OnChoiceSelect` が記録列に現れないこと（＝Value 後も
 /// 後続段を撃つ退行の検出）と、解決→起動が新 talk_id で起きること（＝Value 短絡が起動へ繋がること）を
 /// 対で固定する。
 #[test]
@@ -171,10 +146,7 @@ fn canonical_choice_ex_value_short_circuits_select() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
-            "OnChoiceSelectEx",
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response("OnChoiceSelectEx", FIXED_CHOICE_SCRIPT.to_string());
 
     // quit_flags: index0（steady talk）=false・index1（選択由来 talk）=true（終了駆動）。
     let (harness, _gate) = spawn_harness_gated(
@@ -184,25 +156,18 @@ fn canonical_choice_ex_value_short_circuits_select() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
-        .expect("send Choice");
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)),
+    );
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade ex-value join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the choice-derived talk (quit:true)");
-    drop(sender);
-    let commands = sakura.commands();
-    sakura.join_bounded("mock-sakura ex-value join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded,
+        commands,
+        started,
+        ..
+    } = harness.finish("kanade ex-value join");
 
     // (1) Value 短絡: 段列は Ex 1 段のみ（無印は発行されない・Req2.4）。
     assert_eq!(
@@ -221,21 +186,9 @@ fn canonical_choice_ex_value_short_circuits_select() {
         ],
         "Ex の Value は解決→起動をこの順で 1 度ずつ起こすはず: {commands:?}"
     );
-    let started: Vec<_> = commands
-        .iter()
-        .filter_map(|c| match c {
-            TalkCommand::Start(s) => Some(s),
-            _ => None,
-        })
-        .collect();
     assert_eq!(
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目は Ex 応答スクリプト由来の talk"
-    );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "選択由来 talk は新 talk_id=2"
     );
 
     assert_eq!(

@@ -286,7 +286,13 @@ fn accepted_break_sends_exactly_one_to_each_line() {
     let to_kanade = lines.kanade();
     assert_eq!(to_kanade.len(), 1, "運行への要求はちょうど 1 件");
     assert!(
-        matches!(to_kanade[0], KanadeMsg::UserBreak { scope: 1 }),
+        matches!(
+            to_kanade[0],
+            KanadeMsg::UserBreak {
+                scope: 1,
+                talk_id: None
+            }
+        ),
         "押されたバルーンのスコープ番号を運ぶ"
     );
 
@@ -808,8 +814,14 @@ fn box_break_dispatches_the_same_as_the_balloon_double_click() {
         matches!(
             (&to_kanade[..], &balloon_kanade[..]),
             (
-                [KanadeMsg::UserBreak { scope: 1 }],
-                [KanadeMsg::UserBreak { scope: 1 }]
+                [KanadeMsg::UserBreak {
+                    scope: 1,
+                    talk_id: None
+                }],
+                [KanadeMsg::UserBreak {
+                    scope: 1,
+                    talk_id: None
+                }]
             )
         ),
         "どちらも押されたスコープの止める要求がちょうど 1 件"

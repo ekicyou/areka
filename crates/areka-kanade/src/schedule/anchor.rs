@@ -28,7 +28,7 @@ pub(crate) enum AnchorPlan {
 /// アンカーの ID からイベントの列を決める。判定は逐語の前方一致で、大文字小文字を区別する
 /// （選択肢の `On` 始まりと同じ規則。`"On"` だけでも [`AnchorPlan::Named`]・空は [`AnchorPlan::Canonical`]）。
 pub(crate) fn plan_anchor(id: &str) -> AnchorPlan {
-    if id.starts_with("On") {
+    if events::is_allowed_choice_event(id) {
         AnchorPlan::Named
     } else {
         AnchorPlan::Canonical

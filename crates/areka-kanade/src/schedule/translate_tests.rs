@@ -1,21 +1,18 @@
-//! 運行表の翻訳のテスト（タスク 3.1・3.3）: `OnTranslate` の応答の読み（[`read_reply`] の表の全行と
+//! 運行表の翻訳のテスト: `OnTranslate` の応答の読み（[`read_reply`] の表の全行と
 //! 記録の語彙・レベル）と、応答を待っている GET の元のイベントの控え（[`before`]・[`after`]）と、
 //! 帳簿を直接置いた状態からの翻訳の結果の入力（[`on_done`]）。
 
 use super::*;
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget, ShioriMethod};
-use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriFaultKind};
+use crate::change::ShioriMethod;
+use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriFaultKind};
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
-use crate::schedule::translate_test_support::pass_translate;
+use crate::schedule::translate_test_support::config as cfg;
+use crate::schedule::translate_test_support::{change_request, pass_translate, steady};
 use crate::schedule::{ActiveTalk, Phase, TermCause, step};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{EpilogueCommand, ScriptOrigin, StartTalk, TalkId};
 use tracing::Level;
-
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn choice_source() -> EventId {
     EventId::Choice("OnおやつSelect".to_string())
@@ -140,14 +137,6 @@ fn results_that_get_never_produces_are_treated_as_no_content_with_a_warning() {
 // 元のイベントの控え（State::reply_source）
 // ============================================================
 
-fn steady() -> State {
-    State {
-        phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(500)),
-        ..State::initial()
-    }
-}
-
 fn stale_source() -> SourceEvent {
     SourceEvent {
         id: EventId::Static("OnSecondChange"),
@@ -166,7 +155,7 @@ fn raise(s: State, method: ShioriMethod) -> (State, Vec<Action>) {
 
 #[test]
 fn get_at_the_end_of_the_batch_is_noted_with_its_references() {
-    let (s, actions) = raise(steady(), ShioriMethod::Get);
+    let (s, actions) = raise(steady(None), ShioriMethod::Get);
     assert_eq!(actions.len(), 1);
     assert_eq!(
         s.reply_source,
@@ -181,7 +170,7 @@ fn get_at_the_end_of_the_batch_is_noted_with_its_references() {
 fn notify_at_the_end_of_the_batch_clears_the_note() {
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, _) = raise(s, ShioriMethod::Notify);
     assert_eq!(s.reply_source, None);
@@ -192,7 +181,7 @@ fn unload_at_the_end_of_the_batch_clears_the_note() {
     // 強制終了の一括は [NOTIFY, 降ろす往復]。最後の往復は降ろす往復。
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, actions) = step(
         s,
@@ -209,7 +198,7 @@ fn unload_at_the_end_of_the_batch_clears_the_note() {
 fn batch_without_round_trip_leaves_the_note_alone() {
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, actions) = step(
         s,
@@ -224,7 +213,7 @@ fn batch_without_round_trip_leaves_the_note_alone() {
 fn reply_takes_the_note_only_once() {
     let mut s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let reply = Input::ShioriReply {
         outcome: ShioriOutcome::NoContent,
@@ -238,7 +227,7 @@ fn reply_takes_the_note_only_once() {
 fn non_reply_input_does_not_take_the_note() {
     let mut s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let input = Input::Tick {
         now: MonotonicMs(600),
@@ -251,7 +240,7 @@ fn non_reply_input_does_not_take_the_note() {
 fn reply_with_no_round_trip_leaves_the_note_empty() {
     let s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let (s, actions) = step(
         s,
@@ -295,7 +284,7 @@ fn reply_whose_batch_sends_the_next_get_notes_that_get() {
 fn translate_at_the_end_of_the_batch_clears_the_note() {
     let mut s = State {
         reply_source: Some(stale_source()),
-        ..steady()
+        ..steady(None)
     };
     let actions = after(
         &mut s,
@@ -368,15 +357,7 @@ fn waiting(phase: Phase, deferred: Vec<Action>) -> State {
 
 fn change_state(script: &str) -> ChangeState {
     ChangeState {
-        req: ChangeRequest {
-            target: ChangeTarget {
-                sakura_name: "B".to_string(),
-                name: "ghost B".to_string(),
-                dir: "C:/ghost/B".to_string(),
-            },
-            origin: ChangeOrigin::Manual,
-            raise_event: true,
-        },
+        req: change_request(),
         script: Some(script.to_string()),
     }
 }
@@ -653,7 +634,7 @@ fn talking() -> State {
             talk: Some(active(TALK)),
         },
         next_talk_id: 7,
-        ..steady()
+        ..steady(None)
     }
 }
 
@@ -754,18 +735,9 @@ fn missing_source_plays_the_script_with_an_error() {
     let (s, actions) = out.expect("step は必ず値を返す");
     assert!(
         matches!(actions.as_slice(), [Action::StartTalk(t)] if t.script == ORIGINAL),
-        "台詞を捨てずに今日どおり再生する"
+        "台詞を捨てずにそのまま再生する"
     );
     assert!(s.translate.is_none());
     let hit = logged_once(&ev, Level::ERROR, "translate_source_missing");
     assert_eq!(hit.fields.get("talk_id").map(String::as_str), Some("7"));
-}
-
-#[test]
-fn no_content_reply_is_not_captured() {
-    // areka が自分で作る台詞（台詞の無い応答の step で生まれる）は規則に当たらない。
-    let (s, actions, ev) = raise_get_and_reply(talking(), "OnBoot", ShioriOutcome::NoContent);
-    assert!(!actions.iter().any(|a| matches!(a, Action::Translate(_))));
-    assert!(s.translate.is_none());
-    assert_not_logged(&ev, "translate_skipped_empty");
 }

@@ -12,8 +12,8 @@
 //! 書き下した `["user","1","1"]` が Reference1＝Reference2 も檻に入れる（要件 7.4）。
 
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, Fixture, Harness, KanadeConfig, KanadeMsg,
-    QuitPolicy, join_bounded, spawn_harness,
+    CallMethod, CloseReason, Driven, Fixture, KanadeConfig, KanadeMsg, QuitPolicy, send,
+    spawn_harness,
 };
 
 #[test]
@@ -26,26 +26,15 @@ fn a_user_close_carries_the_window_scope_into_onclose_references() {
             Fixture::default().without_boot_greeting(),
             QuitPolicy::PerTalk(vec![]),
         );
-        harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-        harness
-            .sender
-            .send(KanadeMsg::CloseRequest {
+        send(&harness, KanadeMsg::Boot);
+        send(
+            &harness,
+            KanadeMsg::CloseRequest {
                 reason: CloseReason::User { scope },
-            })
-            .expect("send CloseRequest");
+            },
+        );
 
-        let Harness {
-            sender,
-            kanade,
-            shiori,
-            sakura,
-        } = harness;
-        join_bounded("kanade scope-close join", DEFAULT_TIMEOUT, kanade)
-            .expect("kanade terminates on OnClose 204");
-        drop(sender);
-        sakura.join_bounded("mock-sakura scope-close join", DEFAULT_TIMEOUT);
-
-        let recorded = shiori.recorded();
+        let Driven { recorded, .. } = harness.finish("kanade scope-close join");
         let onclose: Vec<&Vec<String>> = recorded
             .iter()
             .filter(|c| c.method == CallMethod::Get && c.id == "OnClose")

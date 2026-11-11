@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use areka_kanade::resources::ResourceOutcome;
+use areka_kanade::resources::{ResourceOutcome, is_allowed_resource_id};
 use areka_kanade::{KanadeMsg, RaiseOutcome, ShioriMethod, WaitBudget};
 use areka_update::{Fetch, FetchError};
 use bevy_ecs::world::World;
@@ -132,6 +132,16 @@ fn raise_answered(answer: Option<RaiseOutcome>) -> (Raised, Vec<CapturedEvent>) 
         "送るのは 1 件だけ"
     );
     (raised, events)
+}
+
+// ---------------------------------------------------------------- 照会の名前
+
+/// 照会するリソースの名前（窓口の `homeurl` も同じ定数）は、kanade の許可表に入っている（外れると照会が断られる）。
+#[test]
+fn queried_resource_ids_are_allowed_by_kanade() {
+    for id in [super::HOMEURL, super::USEORIGIN1] {
+        assert!(is_allowed_resource_id(id), "{id} を引けない");
+    }
 }
 
 // ---------------------------------------------------------------- イベントの写し

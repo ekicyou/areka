@@ -65,7 +65,7 @@ pub enum CancelReason {
 pub enum KanadeNotice {
     /// 定常に入った。
     Steady,
-    /// 切替を中止した（定常へ戻る。ただし終了要求・`\-` の予約が勝った場合は、このあと今日どおり停止へ進む）。
+    /// 切替を中止した（定常へ戻る。ただし終了要求・`\-` の予約が勝った場合は、このあと停止へ進む）。
     ChangeCancelled { reason: CancelReason },
     /// kanade が止まった。
     Stopped(KanadeStopped),
@@ -124,17 +124,17 @@ pub enum ShioriMethod {
 pub enum RaiseOutcome {
     /// 許可表に無い名前（送っていない）。
     NotAllowed,
-    /// 定常でない（送っていない・積んでもいない）。
+    /// 定常でないか、終了・切替の保留中（送っていない・積んでもいない）。
     NotSteady,
-    /// 空でない台本が返った。
+    /// 空でない台本が返った（空白だけも台本）。
     Script,
-    /// 返事なし（204・空か空白だけの台本・エラー応答・NOTIFY の完了）。
+    /// 返事なし（204・空の台本・エラー応答・NOTIFY の完了）。
     NoReply,
-    /// 往復が失敗した（kanade は今日どおり終了系列へ進む）。
+    /// 往復が失敗した（kanade は終了系列へ進む）。
     Failed,
 }
 
-/// 台詞の切れ目の口に添える印のイベント（本仕様では `OnShellChanging` だけ）。
+/// 台詞の切れ目の口に添える印のイベント（シェルの切替の `OnShellChanging` と shiori の読み直しの `OnDestroy`）。
 ///
 /// 口（`KanadeMsg::AwaitTalkGap`）は印の有無で振る舞いを分ける。印が無ければ切れ目を待つだけで、
 /// 印があれば先にこのイベントを送り、その応答の台詞を追う（areka-P0-shell-balloon-switch 要件 8.11）。

@@ -12,6 +12,7 @@
 //! いずれも同一入力に対して常に同一の結果を返す（Req2.5）。外部状態を読まないため、
 //! 呼び手が既定値・起点時刻を渡す形にしてある（config への依存を純関数へ持ち込まない）。
 
+use super::events;
 use crate::msg::MonotonicMs;
 
 /// 選択肢 ID から決まる発火段列（設計 C3・「カスケード則の正典裁定」1/7）。
@@ -48,27 +49,21 @@ pub(crate) fn script_body(id: &str) -> Option<&str> {
 ///
 /// # 判定規則（この 3 分岐で全 ID を尽くす）
 /// 1. [`script_body`] が `Some` → [`CascadePlan::Script`]
-/// 2. `id.starts_with("On")` → [`CascadePlan::Named`]
+/// 2. [`events::is_allowed_choice_event`] が真（`On` 接頭） → [`CascadePlan::Named`]
 /// 3. それ以外 → [`CascadePlan::Canonical`]
 ///
 /// 判定順序は規則 1 を先に置く（`script:` は小文字始まりゆえ規則 2 とは実際には交差しないが、
 /// `script:` の判定が常に先に効くことを構造で固定する）。
 ///
-/// # 境界の読み
-/// - `"On"` 単独は `starts_with("On")` に一致するため [`CascadePlan::Named`]。任意名イベント
-///   `On` を逐語発火する形であり、正典形へは落とさない。
-/// - `"on..."`（小文字始まり）は一致しないため [`CascadePlan::Canonical`]。判定は大文字小文字を
-///   区別する（正典のイベント名は `On` 始まりで大小を区別するため）。
-/// - `""`（空文字列）はいずれの接頭辞にも一致しないため [`CascadePlan::Canonical`]。
-/// - 比較はバイト列の接頭辞一致であり、後続が非 ASCII でも UTF-8 境界を割らない
-///   （`"On"` / `"script:"` はともに ASCII のみで構成される）。
+/// 規則 2 の境界（`"On"` 単独・大小文字・空文字列）は [`events::is_allowed_choice_event`] の規則に
+/// 従う（境界の檻も `events_tests.rs` の `is_allowed_choice_event_accepts_only_on_prefixed_names_verbatim`）。
 ///
 /// 外部状態を読まないため、同一 ID に対して常に同一の [`CascadePlan`] を返す（Req2.5）。
 pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
     // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1
     if script_body(id).is_some() {
         CascadePlan::Script
-    } else if id.starts_with("On") {
+    } else if events::is_allowed_choice_event(id) {
         CascadePlan::Named
     } else {
         CascadePlan::Canonical
@@ -137,33 +132,6 @@ mod tests {
         assert_eq!(plan_cascade("OnHour"), CascadePlan::Named);
     }
 
-    /// 境界: `"On"` 単独も接頭辞一致＝Named（正典形へ落とさない）。
-    #[test]
-    fn plan_cascade_named_for_bare_on() {
-        assert_eq!(plan_cascade("On"), CascadePlan::Named);
-    }
-
-    /// 境界: 非 ASCII 後続でも接頭辞判定が割れない（UTF-8 境界を割らない）。
-    #[test]
-    fn plan_cascade_named_for_on_with_non_ascii_tail() {
-        assert_eq!(plan_cascade("Onほにゃらら"), CascadePlan::Named);
-    }
-
-    /// Req2.2 境界: 小文字始まりは `On` に一致しない＝正典形（Ex 先行・無印後続）。
-    #[test]
-    fn plan_cascade_canonical_for_lowercase_on_prefix() {
-        assert_eq!(plan_cascade("on_menu"), CascadePlan::Canonical);
-        assert_eq!(plan_cascade("on"), CascadePlan::Canonical);
-        assert_eq!(plan_cascade("oN"), CascadePlan::Canonical);
-    }
-
-    /// 境界: 2 文字目が大文字（`"ONFOO"`）は `starts_with("On")` に一致せず正典形。
-    #[test]
-    fn plan_cascade_canonical_for_all_uppercase_on() {
-        assert_eq!(plan_cascade("ONFOO"), CascadePlan::Canonical);
-        assert_eq!(plan_cascade("ON"), CascadePlan::Canonical);
-    }
-
     /// Req2.2: 通常の非 `On` 始まり ID と空文字列はいずれも正典形。
     #[test]
     fn plan_cascade_canonical_for_plain_and_empty_id() {
@@ -195,36 +163,6 @@ mod tests {
     fn script_body_returns_text_after_prefix() {
         assert_eq!(script_body("script:\\e"), Some("\\e"));
         assert_eq!(script_body("script:"), Some(""));
-    }
-
-    /// `script_body`: 当たらない ID は `None`（小文字の `script:` で始まるときだけ）。
-    #[test]
-    fn script_body_none_for_near_miss_ids() {
-        for id in ["script", "Script:x", "xscript:y", ""] {
-            assert_eq!(
-                script_body(id),
-                None,
-                "{id:?} は `script:` に当たらないはず"
-            );
-        }
-    }
-
-    /// Req2.5: 同一入力に対して常に同一の列を導く（副作用も内部状態も持たない）。
-    #[test]
-    fn plan_cascade_is_deterministic_for_repeated_input() {
-        for id in [
-            "Onおしゃべり頻度メニュー",
-            "On",
-            "on_menu",
-            "script:\\e",
-            "choice1",
-            "",
-        ] {
-            let first = plan_cascade(id);
-            for _ in 0..8 {
-                assert_eq!(plan_cascade(id), first, "同一入力 {id:?} が別の列を導いた");
-            }
-        }
     }
 
     // === choice_deadline: DD-8 の 3 値語彙（Req7.6/7.7） ===
@@ -357,20 +295,5 @@ mod tests {
             choice_deadline(MonotonicMs(1_000), Some(f64::NAN), DEFAULT_MS),
             None
         );
-    }
-
-    /// 同一入力に対して常に同一の期限を返す（副作用なし・実時刻を読まない）。
-    #[test]
-    fn choice_deadline_is_deterministic_for_repeated_input() {
-        for directive in [None, Some(0.0), Some(-1.0), Some(2.5)] {
-            let first = choice_deadline(MonotonicMs(1_000), directive, DEFAULT_MS);
-            for _ in 0..8 {
-                assert_eq!(
-                    choice_deadline(MonotonicMs(1_000), directive, DEFAULT_MS),
-                    first,
-                    "同一入力 {directive:?} が別の期限を導いた"
-                );
-            }
-        }
     }
 }

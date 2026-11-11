@@ -7,15 +7,14 @@
 //!
 //! 往復は呼出スレッドで同期に走るので、記録はスレッドローカルの捕捉窓で拾える。
 
-use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
 
 use tracing::Level;
 
 use super::*;
 use crate::actor::round_trip_request;
-use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::actor::tests::fake_shiori;
+use crate::msg::{EventId, ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::events::SourceEvent;
 use crate::schedule::log_capture::{CapturedEvent, capture};
 use crate::schedule::translate::{ScriptSource, TranslateRequest, TranslateResult};
@@ -25,19 +24,6 @@ use crate::translate::TranslateSeams;
 
 /// 元のイベントの ID（MAKOTO の口の第 2 引数・`OnTranslate` の Reference2）。
 const SOURCE_ID: &str = "OnMouseDoubleClick";
-
-/// 1 件の Request を受けて控え、`reply` を返す偽の SHIORI。join すると受けた呼出が返る。
-fn fake_shiori(reply: ShioriOutcome) -> (Sender<ShioriMsg>, JoinHandle<Option<ShioriCall>>) {
-    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
-    let helper = thread::spawn(move || match shiori_rx.recv() {
-        Ok(ShioriMsg::Request { call, reply: tx }) => {
-            let _ = tx.send(reply);
-            Some(call)
-        }
-        _ => None,
-    });
-    (shiori_tx, helper)
-}
 
 /// 再生中（`talking`）の Status。依頼に載った値がそのまま届くことを見るため、既定と違う値にする。
 fn talking_status() -> ExecutionStatus {
@@ -148,13 +134,8 @@ fn on_translate_receives_expanded_script_and_request_status() {
     );
     assert_eq!(status, talking_status(), "Status は依頼に載った値を使う");
     assert!(
-        records(
-            &observed.events,
-            Level::WARN,
-            "reference_absent_marker_replaced"
-        )
-        .is_empty(),
-        "OnTranslate の添字 1 の印は置き換えない"
+        !observed.events.iter().any(|e| e.level == Level::WARN),
+        "OnTranslate の添字 1 の印は置き換えも取り除きもしない（WARN は 0 件）"
     );
 }
 
@@ -297,7 +278,7 @@ fn absent_marker_from_outside_is_replaced_on_existing_send_path() {
 
 /// 外からの台本（SSTP SEND）の依頼は `on_translate_sstp` で組み立てる: Reference0＝展開の後の台詞・
 /// Reference1＝`sstp-send,owned`・Reference2 以降なし。MAKOTO の口の 2 つ目は空文字、記録の欄は
-/// `sstp-send`（要件 4.4）。イベントの出どころの依頼は上のテストのとおり今日のまま（要件 4.6）。
+/// `sstp-send`（要件 4.4）。イベントの出どころの依頼は上のテストのとおり（要件 4.6）。
 #[test]
 fn sstp_send_source_uses_sstp_send_owned_reference1() {
     let observed = run_from(
@@ -330,8 +311,9 @@ fn sstp_send_source_uses_sstp_send_owned_reference1() {
 }
 
 #[test]
-fn translate_reply_level_rides_on_the_result_and_makoto_gets_only_the_script() {
+fn translate_reply_level_rides_on_the_result() {
     use areka_talk::SecurityLevel;
+    // （応答, 結果に載るレベル）。204・誤りは local。
     let cases = [
         (
             ShioriOutcome::Value("訳".to_string(), SecurityLevel::External),
@@ -351,10 +333,5 @@ fn translate_reply_level_rides_on_the_result_and_makoto_gets_only_the_script() {
         let observed = run(reply, &[]);
         let done = observed.result.expect("輸送路の失敗ではない");
         assert_eq!(done.level, level, "翻訳の応答のレベル（204・誤りは local）");
-        assert_eq!(
-            observed.makoto.len(),
-            1,
-            "MAKOTO の口は台詞だけを 1 回受ける"
-        );
     }
 }

@@ -304,6 +304,12 @@ impl Emo2Wiring {
         &self.presenter
     }
 
+    /// 最後に描いた時点でバルーンに出ていた台詞のトークの番号（読み口だけ・利用者の中断が
+    /// 押されたバルーンのトークを kanade へ運ぶ・audit-kanade #6）。
+    pub(crate) fn shown_talk_id(&self) -> Option<areka_sakura::TalkId> {
+        self.balloon_visibility.talk_id()
+    }
+
     /// 装着の相（`run_attach_phase`）が済んだか。済む前は表示の層に target が 1 つも無い
     /// （MCP の `dump_surface`／`dump_balloon` が、済むまで答えを後回しにするのに読む）。
     pub(crate) fn attached(&self) -> bool {

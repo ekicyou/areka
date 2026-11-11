@@ -1,4 +1,4 @@
-//! テスト専用ログ捕捉ヘルパ（タスク 6.1・Req 6.1／6.3）。
+//! テスト専用ログ捕捉ヘルパ（Req 6.1／6.3）。
 //!
 //! 純粋関数 [`crate::schedule::step`]（および各サブモジュール `step`）は、失敗・防御
 //! アームごとに `tracing::{error,warn}!` を発行する（steering:
@@ -10,14 +10,11 @@
 //! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する（spec:
 //! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは
 //! 「この crate の檻が照合する形（[`CapturedEvent`]）への変換」と表明ヘルパだけで、
-//! subscriber の設置も interest の管理も自前では行わない。以前ここにあった
-//! interest-keeper（プロセス全体の既定 subscriber を常駐させる方式）は、同じ機構が
-//! crate ごとに写し取られて写し損ねた側だけが静かに嘘をつく形だったため、共有 crate へ
-//! 一本化して撤去した。
+//! subscriber の設置も interest の管理も自前では行わない。
 //!
 //! 捕捉されるのは**呼出スレッド**で同期的に発火したイベントだけである。`step()` は
 //! テストスレッド上で同期的に走る純粋関数ゆえ確実に捕えられる（spawn したアクター
-//! スレッドのログは捕えない——それはタスク 6.2 の担当）。
+//! スレッドのログは捕えない）。
 //!
 //! # 機序（「スレッドローカルゆえ安全」は誤り）
 //! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
@@ -137,6 +134,18 @@ pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
     events.iter().map(CapturedEvent::from_canonical).collect()
 }
 
+/// `step` を捕捉つきで駆動する（遷移結果と捕捉ログを同時に取る）。
+pub(crate) fn step_capturing(
+    state: super::State,
+    input: super::Input,
+    config: &crate::msg::KanadeConfig,
+) -> (super::State, Vec<super::Action>, Vec<CapturedEvent>) {
+    let mut out = None;
+    let ev = capture(|| out = Some(super::step(state, input, config)));
+    let (next, actions) = out.expect("step は必ず結果を返す");
+    (next, actions, ev)
+}
+
 /// 捕捉列に `target="kanade"`・`event=event_name`・`level` のイベントが存在することを表明する。
 ///
 /// アームのログが削除・語彙変更・レベル変更されると本表明は失敗する（Req 6.1／6.3 の回帰檻）。
@@ -166,7 +175,7 @@ pub(crate) fn assert_not_logged(events: &[CapturedEvent], event_name: &str) {
 /// 捕捉列に ERROR レベルのイベントが 1 件も無いことを表明する。
 ///
 /// 「正常系のユーザー操作で error レベルのログが出ない」ことが完了状態そのものである檻
-/// （選択の happy path・タスク 4.6）で使う。target は限定しない——正常系で error を出す層は
+/// （選択の happy path など）で使う。target は限定しない——正常系で error を出す層は
 /// 存在してはならないためである。
 pub(crate) fn assert_no_error_logs(events: &[CapturedEvent]) {
     let errors: Vec<_> = events.iter().filter(|e| e.level == Level::ERROR).collect();

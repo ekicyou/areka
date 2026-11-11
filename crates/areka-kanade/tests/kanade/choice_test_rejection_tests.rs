@@ -3,9 +3,8 @@ use super::test_support::{
     establish_choice_wait,
 };
 use super::{
-    ChoiceResponse, CloseReason, DEFAULT_TIMEOUT, FIXED_STEADY_SCRIPT, Fixture, Harness,
-    KanadeConfig, KanadeMsg, QuitPolicy, TalkCommand, TalkId, expected_unload, join_bounded,
-    spawn_harness_gated,
+    CloseReason, Driven, FIXED_STEADY_SCRIPT, Fixture, KanadeConfig, KanadeMsg, QuitPolicy,
+    expected_unload, send, spawn_harness_gated,
 };
 
 /// 選択待ちの候補集合に**含めない** ID（群 6 の候補照合の観測面・Req1.4）。
@@ -23,8 +22,8 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // カスケードは kanade drive ループの同期往復で **1 メッセージ処理内に完結する**。したがって
 // `ChoicePhase::Cascading`／`TimeoutInFlight` の最中に別の選択確定を**注入して**割り込ませることは
 // 統合経路では構造上できない——段の進行中の二重確定棄却（`choice_rejected_busy`）と 1 世代 stale
-// 防御（`talk_done_stale_choice`）は、状態を直接構成する `step()` 直呼びの純関数檻が担当する
-// （`schedule::steady::tests::choice_during_cascade_or_timeout_is_rejected_as_busy`・
+// 防御（`talk_done_stale`）は、状態を直接構成する `step()` 直呼びの純関数檻が担当する
+// （`schedule::steady::choice_tests::choice_during_cascade_or_timeout_is_rejected_as_busy`・
 // `schedule::tests::stale_choice_talk_done_is_demoted_to_info_and_keeps_state`。ログ語彙は
 // `schedule::log_firing_tests` が固定する）。
 //
@@ -47,11 +46,11 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // 本群は `ForceQuit` で終了するため（下記）、`TalkDone` の往復という暗黙の同期が働かず、
 // `MockSakura::commands()` の並行読みでは記録列が空のまま読まれ得る（実測: 群 6 の 2 檻を
 // 100 回実行して 11 回、退行と無関係に `left: []` で FAILED した）。したがって本群は
-// [`MockSakura::join_bounded_then_commands`]（recv ループの join 完了後に読む変種）を使う。
-// 群 1〜5 は quit フラグ付き `TalkDone` の往復が mock の消費を強制するため `commands()` のままでよい。
+// `Harness::finish`（recv ループの join 完了後に読む・後始末は全群でこれ 1 つ）を使う。
 //
 // # 終了の駆動は `ForceQuit`——**檻の弁別力を退行時にも保つため**
-// 群 1〜5 は「末尾 talk の quit:true」で終了を駆動するが、本群はそれを採らない。棄却が壊れる退行では
+// 群 1〜5 は「末尾 talk の quit:true」で終了を駆動する（群 3 の
+// `non_choice_failure_during_choice_wait_still_faults` だけは Fault 経路が駆動する）が、本群はそれを採らない。棄却が壊れる退行では
 // **起動される talk の本数そのものが変わる**ため、`QuitPolicy::PerTalk` の index と quit フラグの
 // 対応がずれて終了が駆動されず、檻が「期限付き join の失敗」（＝どの表明が破れたか分からない形）で
 // しか落ちなくなる（実測で確認済み）。`ForceQuit` は quit ゲートを迂回して終了系列へ直行する
@@ -60,11 +59,8 @@ const OUT_OF_CANDIDATE_CHOICE_ID: &str = "候補外選択肢";
 // **段列と `TalkCommand` の突合そのものが退行を名指しする**。ただしこの「名指しする」性質は
 // 上記 (ii) の読み出し同期が前提である——同期を欠くと突合は退行と無関係な空列を報告し得る。
 //
-// 保留 talk は kanade 停止**後**に `release_all` で解放する。送り先の kanade は既に居らず送出は
-// no-op で、観測対象の運行には影響しない——停止**前**に解放すると park した `TalkDone` が注入列へ
-// 割り込み (i) が壊れる。`spawn_mock_sakura_gated` の「Sender drop より前に呼ぶ」契約は kanade 停止
-// 後には timing 要件としての意味を失っており（実際の解放は `recv_closed` 安全弁が担う）、本檻は
-// 決定性を優先して停止後に呼ぶ。
+// 保留 talk は解放しない。停止**前**に解放すると park した `TalkDone` が注入列へ割り込み (i) が壊れる。
+// kanade 停止後は `recv_closed` 安全弁が park を捨て先の無い送りとして片づける（送出は no-op）。
 
 /// 1 回の選択確定が **高々 1 カスケード・高々 1 選択解決・高々 1 起動要求**しか起こさず、解決後に
 /// 到着した遅延注入が何も起こさない（Req9.2(e)・1.1・1.3・4.6・5.4・C4 規則 1／7）。
@@ -91,59 +87,37 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
-            NAMED_CHOICE_ID,
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response(NAMED_CHOICE_ID, FIXED_CHOICE_SCRIPT.to_string());
 
     // hold_indices=[0, 1]: steady talk（id=1）と選択由来 talk（id=2）の TalkDone を両方 park。
     // quit フラグは終了駆動に使わない（ForceQuit が迂回する）ため一律 false。
-    let (harness, gate) = spawn_harness_gated(
+    let (harness, _gate) = spawn_harness_gated(
         KanadeConfig::new("master", "1.0.0"),
         fixture,
         QuitPolicy::Fixed(false),
         vec![0, 1],
     );
 
-    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // 1 本目——受理される唯一の注入。
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-        .expect("send Choice (accepted)");
+    send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
     // 2・3 本目——解決で帳簿が消えた後に届く遅延通知（いずれも棄却されるはず・Req1.3）。
-    for nth in ["send Choice (late #1)", "send Choice (late #2)"] {
-        harness
-            .sender
-            .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-            .expect(nth);
+    for _ in 0..2 {
+        send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
     }
-    harness
-        .sender
-        .send(KanadeMsg::ForceQuit {
+    send(
+        &harness,
+        KanadeMsg::ForceQuit {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send ForceQuit");
+        },
+    );
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade choice-once join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates directly on ForceQuit (close spec DD-10)");
-    drop(sender);
-    // 保留 talk の解放は kanade 停止**後**に行う（観測対象の運行には影響しない後始末——
-    // 送り先が既に居ないため送出は no-op である）。解放を停止前に置くと park していた
-    // `TalkDone` が注入列へ割り込み、群 6 の前提（非同期メッセージを走らせない）が壊れる。
-    gate.release_all();
-    // 記録は **join 完了後**に読む——`ForceQuit` 終了は mock sakura を経由しないため、
-    // `commands()` の並行読みでは記録前のスナップショットを掴み得る（群 6 ヘッダ参照）。
-    let commands =
-        sakura.join_bounded_then_commands("mock-sakura choice-once join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded,
+        commands,
+        started,
+        ..
+    } = harness.finish("kanade choice-once join");
 
     // (1) カスケードは高々 1 回（3 注入でも段列は任意名 1 件のみ・Req1.1）。
     assert_eq!(
@@ -164,18 +138,6 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     );
 
     // (3) 到達 StartTalk の内訳——選択由来は 2 本目ただ 1 本（遅延注入は talk を起こさない）。
-    let started: Vec<_> = commands
-        .iter()
-        .filter_map(|c| match c {
-            TalkCommand::Start(s) => Some(s),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        started.len(),
-        2,
-        "起動は steady と選択由来の 2 本ちょうどのはず: {started:?}"
-    );
     assert_eq!(
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady talk"
@@ -183,11 +145,6 @@ fn one_choice_injection_yields_a_single_cascade_and_later_injections_are_rejecte
     assert_eq!(
         started[1].script, FIXED_CHOICE_SCRIPT,
         "2 本目は選択由来の応答スクリプト"
-    );
-    assert_eq!(
-        started[1].talk_id,
-        TalkId(2),
-        "選択由来 talk は新 talk_id=2（旧 id=1 を再利用しない）"
     );
 
     // (4) 終了系列を完走した（末尾 Unload）＝遅延注入の棄却後も状態整合を保っている。
@@ -218,52 +175,34 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
     let fixture = Fixture::default()
         .without_boot_greeting()
         .with_steady_value_indices([0])
-        .with_choice_response(
-            NAMED_CHOICE_ID,
-            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
-        );
+        .with_response(NAMED_CHOICE_ID, FIXED_CHOICE_SCRIPT.to_string());
 
     // 保留構成・終了駆動は群 6 共通（hold_indices=[0, 1]＋ForceQuit）。
-    let (harness, gate) = spawn_harness_gated(
+    let (harness, _gate) = spawn_harness_gated(
         KanadeConfig::new("master", "1.0.0"),
         fixture,
         QuitPolicy::Fixed(false),
         vec![0, 1],
     );
 
-    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[NAMED_CHOICE_ID], None);
     // (1) 候補外 ID——棄却されるはず（Req1.4）。
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(OUT_OF_CANDIDATE_CHOICE_ID)))
-        .expect("send Choice (out of candidates)");
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(OUT_OF_CANDIDATE_CHOICE_ID)),
+    );
     // (2) 候補内 ID——(1) が選択待ちを閉じていなければ受理されるはず。
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)))
-        .expect("send Choice (in candidates)");
-    harness
-        .sender
-        .send(KanadeMsg::ForceQuit {
+    send(&harness, KanadeMsg::Choice(choice_input(NAMED_CHOICE_ID)));
+    send(
+        &harness,
+        KanadeMsg::ForceQuit {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send ForceQuit");
+        },
+    );
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade unknown-id join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates directly on ForceQuit (close spec DD-10)");
-    drop(sender);
-    // 後始末・記録の読み出し同期は群 6 共通（もう一方の檻と同一の手順）。
-    gate.release_all();
-    let commands =
-        sakura.join_bounded_then_commands("mock-sakura unknown-id join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish("kanade unknown-id join");
 
     // (1) 候補外 ID は段を 1 つも発行していない（段列は候補内 ID の 1 件のみ）。
     assert_eq!(

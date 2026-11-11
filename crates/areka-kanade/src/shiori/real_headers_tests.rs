@@ -124,7 +124,7 @@ fn default_notify_with_headers_calls_notify() {
     assert_eq!(backend.calls, vec!["notify:OnNotify:x:Some(\"online\")"]);
 }
 
-// ---- handle_call が要求の出どころから入れ物を作り、応答のレベルを結果へ載せる（タスク 3.4） ----
+// ---- handle_call が要求の出どころから入れ物を作り、応答のレベルを結果へ載せる ----
 
 use crate::msg::EventId;
 use crate::request_origin::{RequestOrigin, SenderName};

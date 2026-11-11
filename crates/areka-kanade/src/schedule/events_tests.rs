@@ -1,14 +1,16 @@
 use super::*;
 
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
+use crate::schedule::translate_test_support::config;
 
-/// GET variant を分解して (id の wire 形, references) を取り出す（Notify なら panic）。
-fn expect_get(call: ShioriCall) -> (String, Vec<String>) {
+/// GET を分解して (id の wire 形, references, Status の wire 値) を取り出す（NOTIFY なら panic）。
+pub(super) fn expect_get(call: ShioriCall) -> (String, Vec<String>, Option<String>) {
     match call {
-        ShioriCall::Get { id, references, .. } => (id.as_str().to_string(), references),
-        ShioriCall::Notify { .. } => panic!("expected GET, got NOTIFY"),
+        ShioriCall::Get {
+            id,
+            references,
+            status,
+        } => (id.as_str().to_string(), references, status.render()),
+        ShioriCall::Notify { .. } => panic!("GET のはずが NOTIFY"),
     }
 }
 
@@ -34,6 +36,14 @@ fn call_status(call: &ShioriCall) -> Option<String> {
     }
 }
 
+/// 再生中のトークがある実行状態（`Status: talking` が出る）。
+fn talking() -> ExecutionSnapshot {
+    ExecutionSnapshot {
+        talk_active: true,
+        ..ExecutionSnapshot::INACTIVE
+    }
+}
+
 #[test]
 fn on_initialize_is_notify_with_empty_references() {
     let (id, references) = expect_notify(on_initialize(&ExecutionSnapshot::INACTIVE));
@@ -41,24 +51,24 @@ fn on_initialize_is_notify_with_empty_references() {
     assert!(references.is_empty());
 }
 
-/// OnFirstBoot Ref0 は vanish 引数由来（Req 4.1／4.2）: `0` で従来の固定値 `"0"` と同値・
-/// 非ゼロ（`7`）はそのまま Reference0 に載る（値源が呼び手へ移ったことの檻）。
+/// OnFirstBoot Ref0 は vanish 引数由来（Req 4.1／4.2）: `0` は `"0"`・非ゼロ（`7`）はそのまま
+/// Reference0 に載る。
 #[test]
 fn on_first_boot_ref0_is_vanish_count_argument() {
-    // vanish_count=0 → 従来値 "0" と同値（既存全サイトはこの経路で挙動不変）。
-    let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
+    // vanish_count=0 → "0"。
+    let (id, references, _) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
     assert_eq!(id, "OnFirstBoot");
     assert_eq!(references, vec!["0".to_string()]);
 
-    // vanish_count=7 → Reference0 は "7"（Ref0 の値源が呼び手引数であることを固定）。
-    let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 7));
+    // vanish_count=7 → Reference0 は "7"。
+    let (id, references, _) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 7));
     assert_eq!(id, "OnFirstBoot");
     assert_eq!(references, vec!["7".to_string()]);
 }
 
 #[test]
 fn on_boot_is_get_with_shell_name_ref0() {
-    let (id, references) = expect_get(on_boot(&config(), &ExecutionSnapshot::INACTIVE));
+    let (id, references, _) = expect_get(on_boot(&config(), &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnBoot");
     assert_eq!(references, vec!["master".to_string()]);
 }
@@ -73,20 +83,13 @@ fn baseware_version_is_notify_with_version_and_name() {
 #[test]
 fn on_second_change_playable_is_get_ref3_one() {
     // 7_200_000 ms = 2 hours。talk_active=false（再生可能）→ GET・Ref3=1・status 空（DD-IT-3）。
-    let call = on_second_change(
-        MonotonicMs(7_200_000),
-        &ExecutionSnapshot {
-            talk_active: false,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
-    );
+    let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot::INACTIVE);
     assert_eq!(
         call_status(&call),
         None,
         "再生可能時（talk 非アクティブ）は Status ヘッダを出さない（DD-IT-3/DD-IT-5）"
     );
-    let (id, references) = expect_get(call);
+    let (id, references, _) = expect_get(call);
     assert_eq!(id, "OnSecondChange");
     assert_eq!(
         references,
@@ -102,14 +105,7 @@ fn on_second_change_playable_is_get_ref3_one() {
 #[test]
 fn on_second_change_not_playable_is_notify_ref3_zero() {
     // 3_600_000 ms = 1 hour。talk_active=true（再生中）→ NOTIFY・Ref3=0・status talking（DD-IT-3）。
-    let call = on_second_change(
-        MonotonicMs(3_600_000),
-        &ExecutionSnapshot {
-            talk_active: true,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
-    );
+    let call = on_second_change(MonotonicMs(3_600_000), &talking());
     assert_eq!(
         call_status(&call),
         Some("talking".to_string()),
@@ -131,13 +127,9 @@ fn on_second_change_not_playable_is_notify_ref3_zero() {
 #[test]
 fn on_second_change_ref0_truncates_toward_zero() {
     // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
-    let (_, references) = expect_get(on_second_change(
+    let (_, references, _) = expect_get(on_second_change(
         MonotonicMs(3_599_999),
-        &ExecutionSnapshot {
-            talk_active: false,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        },
+        &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(references[0], "0");
 }
@@ -146,13 +138,13 @@ fn on_second_change_ref0_truncates_toward_zero() {
 /// 窓のスコープ番号。相方側（スコープ 1）の窓なら `["user","1","1"]`。
 #[test]
 fn on_close_user_carries_scope_in_ref1_and_ref2() {
-    let (id, references) = expect_get(on_close(
+    let (id, references, _) = expect_get(on_close(
         CloseReason::User { scope: 1 },
         &ExecutionSnapshot::INACTIVE,
     ));
     assert_eq!(id, "OnClose");
     assert_eq!(references, vec!["user", "1", "1"]);
-    let (_, references) = expect_get(on_close(
+    let (_, references, _) = expect_get(on_close(
         CloseReason::User { scope: 0 },
         &ExecutionSnapshot::INACTIVE,
     ));
@@ -161,7 +153,8 @@ fn on_close_user_carries_scope_in_ref1_and_ref2() {
 
 #[test]
 fn on_close_system_maps_to_system() {
-    let (id, references) = expect_get(on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
+    let (id, references, _) =
+        expect_get(on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnClose");
     assert_eq!(references, vec!["system".to_string()]);
 }
@@ -186,35 +179,9 @@ fn on_close_notify_is_notify_with_reason_and_derived_status() {
     assert_eq!(references, vec!["user"]);
 }
 
-/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待23集合と完全一致し
-/// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
-/// Task 2.1 で additive 追加され、選択関連の固定 3 ID（OnChoiceSelectEx/OnChoiceSelect/
-/// OnChoiceTimeout）は choice-select-events 2.3 で同じ前例に倣い additive 追加された
-/// （whitelist が意図的に 6→8→11 へ増えたための更新）。3 ID はいずれも正典（ukadoc）の
-/// 固定イベント ID であり、「表＝正典固定 ID の部分集合」の性質は保たれる。
-/// 切替の 2 語（OnGhostChanging/OnGhostChanged）は ghost-shell-balloon-switch 2.1 で
-/// 同じ前例に倣い足した（11→13・いずれも正典固定 ID）。
-/// インストール系の 8 語は ghost-install 2.1 で同じ前例に倣い足した（13→21・いずれも正典固定 ID・
-/// `OnInstallReroute` は載せない）。
-/// 投げ込みの 2 語（OnFileDrop2/OnDirectoryDrop）は file-drop 2.2 で同じ前例に倣い足した
-/// （21→23・いずれも正典固定 ID）。
-/// ネットワーク更新の 19 語は network-update 2.15 で同じ前例に倣い足した（23→42・いずれも
-/// 正典固定 ID・`OnUpdateCheck*`／`OnUpdateResultExplorer`／`OnUpdatedata*` は載せない）。
-/// シェル・バルーン切替の 3 語（OnShellChanging/OnShellChanged/OnBalloonChange）は
-/// shell-balloon-switch 1.1 で同じ前例に倣い足した（42→45・いずれも正典固定 ID）。
-/// 翻訳の `OnTranslate` は translate-pipeline 2.1 で同じ前例に倣い足した（45→46・正典固定 ID）。
-/// ドラッグの 2 語（OnMouseDragStart/OnMouseDragEnd）は mouse-drag-events 7.1 で同じ前例に倣い
-/// 足した（46→48・いずれも正典固定 ID）。
-/// バルーンの寿命の 3 語（OnBalloonBreak/OnBalloonClose/OnBalloonTimeout）は balloon-lifecycle-events 2.1 で
-/// 同じ前例に倣い足した（48→51・いずれも正典固定 ID・正典に無い `OnBalloonClick` は載せない）。
-/// アンカーの 2 語（OnAnchorSelectEx/OnAnchorSelect）は anchor-tag-canon 4.1 で同じ前例に倣い
-/// 足した（51→53・いずれも正典固定 ID）。
-/// シェル位置初期化の `OnResetWindowPos` は move-canon 4.1 で同じ前例に倣い足した（53→54・
-/// 正典固定 ID）。
-/// shiori の読み直しの `OnDestroy` は mcp-reload 2.2 で同じ前例に倣い `OnClose` の直後へ足した
-/// （54→55・正典固定 ID・語を足すたびに名前が競合しないようテスト名から件数を外した）。
-/// マウスの解放・クリック・ホイール・出入りの 9 語は mouse-click-wheel-events 2.2 で同じ前例に倣い
-/// 末尾へ足した（55→64・いずれも正典固定 ID）。
+/// 許可 ID の固定（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待の集合と完全一致し
+/// `OnTalk`/`OnHour` を含まない。載る語はすべて正典（ukadoc）の固定イベント ID で、語を足す
+/// spec は本表と期待の集合の両方へ足す。
 #[test]
 fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
     assert_eq!(
@@ -288,32 +255,6 @@ fn allowed_event_ids_are_exactly_the_listed_set_and_exclude_ontalk_onhour() {
             "OnBalloonScaling",
         ]
     );
-    assert!(
-        is_allowed_event_id("OnMouseMove"),
-        "OnMouseMove は許可集合に属する（Req7.1）"
-    );
-    assert!(
-        is_allowed_event_id("OnMouseDoubleClick"),
-        "OnMouseDoubleClick は許可集合に属する（Req7.1）"
-    );
-    for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
-        assert!(
-            is_allowed_event_id(id),
-            "{id} は選択関連の正典固定 ID ゆえ許可集合に属する（DD-2）"
-        );
-    }
-    assert!(
-        !is_allowed_event_id("OnTalk"),
-        "OnTalk は恒久的に許可しない（Req3.2）"
-    );
-    assert!(
-        !is_allowed_event_id("OnHour"),
-        "OnHour は恒久的に許可しない（Req3.2）"
-    );
-    // 表の全要素が許可判定を通ること。
-    for id in ALLOWED_EVENT_IDS {
-        assert!(is_allowed_event_id(id), "{id} は表にあるのに許可されない");
-    }
 }
 
 /// 選択起源の受理規則（Req2.6・DD-2）: `On` 接頭のみを受理し、事前の固定登録を要さない。
@@ -373,7 +314,7 @@ fn on_mouse_move_builds_canonical_seven_reference_layout() {
         None,
         "INACTIVE スナップショットは Status ヘッダを出さない"
     );
-    let (id, references) = expect_get(call);
+    let (id, references, _) = expect_get(call);
     assert_eq!(id, "OnMouseMove");
     assert_eq!(
         references,
@@ -387,13 +328,12 @@ fn on_mouse_move_builds_canonical_seven_reference_layout() {
             "mouse".to_string(), // Ref6=デバイス種（DD-IE-6）
         ]
     );
-    assert_eq!(references.len(), 7, "Reference 数は常に 7");
 }
 
 /// Ref4 の None→空文字転写（Req2.3・DD-IE-6）: 位置は保持され Vec 長は 7 のまま。
 #[test]
 fn on_mouse_move_region_none_transcribes_to_empty_ref4() {
-    let (_, references) = expect_get(on_mouse_move(1, 2, 1, None, &ExecutionSnapshot::INACTIVE));
+    let (_, references, _) = expect_get(on_mouse_move(1, 2, 1, None, &ExecutionSnapshot::INACTIVE));
     assert_eq!(references[4], "", "None は空文字へ転写（省略ではない）");
     assert_eq!(references[3], "1", "Ref3=scope 相方は 1");
     assert_eq!(references.len(), 7, "None でも Reference 数は 7 のまま");
@@ -410,7 +350,7 @@ fn on_mouse_double_click_left_builds_ref5_zero() {
         MouseButton::Left,
         &ExecutionSnapshot::INACTIVE,
     );
-    let (id, references) = expect_get(call);
+    let (id, references, _) = expect_get(call);
     assert_eq!(id, "OnMouseDoubleClick");
     assert_eq!(
         references,
@@ -429,7 +369,7 @@ fn on_mouse_double_click_left_builds_ref5_zero() {
 /// OnMouseDoubleClick 右ボタン（Req3.3）: Ref5="1"。
 #[test]
 fn on_mouse_double_click_right_builds_ref5_one() {
-    let (_, references) = expect_get(on_mouse_double_click(
+    let (_, references, _) = expect_get(on_mouse_double_click(
         -5,
         0,
         1,
@@ -447,11 +387,7 @@ fn on_mouse_double_click_right_builds_ref5_one() {
 /// talk_active=true では両構築子が `Status: talking` を snapshot から導出する（DD-IT-3）。
 #[test]
 fn mouse_constructors_carry_talking_status_when_active() {
-    let active = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
+    let active = talking();
     let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
     assert_eq!(call_status(&mv), Some("talking".to_string()));
     let dbl = on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &active);
@@ -464,11 +400,7 @@ fn mouse_constructors_carry_talking_status_when_active() {
 /// 並びは全欄の一致で見るので、どの欄を変えても赤になる。
 #[test]
 fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
-    let active = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
+    let active = talking();
     type Build = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
     let builders: [(&str, Build); 2] = [
         ("OnMouseDragStart", on_mouse_drag_start),
@@ -481,7 +413,7 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
             Some("talking".to_string()),
             "{name}: 実行状態は渡した snapshot から（要件 4.8）"
         );
-        let (id, references) = expect_get(call);
+        let (id, references, _) = expect_get(call);
         assert_eq!(id, name);
         assert_eq!(
             references,
@@ -503,7 +435,7 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
             None,
             "{name}: INACTIVE は Status を出さない"
         );
-        let (_, references) = expect_get(call);
+        let (_, references, _) = expect_get(call);
         assert_eq!(
             references[4], "",
             "{name}: 当たり判定なしは空文字列（要件 4.5）"
@@ -512,71 +444,36 @@ fn on_mouse_drag_start_and_end_build_the_double_click_left_layout() {
     }
 }
 
-/// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）であること（DD-1）。
+/// 下に並べた構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）で、かつ許可集合の要素で
+/// あること（DD-1・Service Interface Postcondition）。
 ///
 /// 選択起源（[`EventId::Choice`]）はカスケード planner のみが構成する不変条件を、構築関数側から
-/// 固定する檻——events.rs の構築関数が任意名を作り得ないことを型の実値で観測する。
-///
-/// 対象は**スケジューラ起源**の構築関数のみ。選択起源の [`on_choice_named`] は設計どおり
-/// [`EventId::Choice`] を返すため本檻の被覆対象ではなく、
-/// `choice_constructors_split_event_id_category_by_origin` が別途カテゴリを固定する。
+/// 固定する檻——events.rs の構築関数が任意名を作り得ないことを型の実値で観測する。選択起源の
+/// [`on_choice_named`] は設計どおり [`EventId::Choice`] を返し、固定表ではなく出所別の受理規則
+/// （`is_allowed_choice_event`）で検証されるため対象外（カテゴリは
+/// `choice_constructors_split_event_id_category_by_origin` が固定する）。
 #[test]
-fn every_construction_function_returns_static_event_id() {
+fn every_construction_function_returns_an_allowed_static_id() {
     let cfg = config();
     let snap = ExecutionSnapshot::INACTIVE;
+    let from = ChangedFrom {
+        sakura_name: String::new(),
+        script: String::new(),
+        name: String::new(),
+        dir: String::new(),
+    };
     let calls = [
         on_initialize(&snap),
         on_first_boot(&snap, 0),
         on_boot(&cfg, &snap),
+        on_ghost_changing(
+            &crate::schedule::translate_test_support::change_request(),
+            &snap,
+        ),
+        on_ghost_changed(&from, "master", &snap),
         baseware_version(&cfg, &snap),
         on_second_change(MonotonicMs(0), &snap),
-        on_second_change(
-            MonotonicMs(0),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
-        on_close(CloseReason::User { scope: 0 }, &snap),
-        on_close_notify(CloseReason::System, &snap),
-        on_mouse_move(0, 0, 0, Some("Head"), &snap),
-        on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
-    ];
-    for call in &calls {
-        let id = event_id(call);
-        assert!(
-            matches!(id, EventId::Static(_)),
-            "構築関数がスケジューラ起源でない id={} を返した",
-            id.as_str()
-        );
-    }
-}
-
-/// 全構築関数の返す `id` が許可集合の要素であること（Service Interface Postcondition）。
-///
-/// 対象は [`EventId::Static`] を返す構築関数——固定 3 ID を許可表へ載せた（DD-2）ことにより
-/// `on_choice_select_ex`／`on_choice_select`／`on_choice_timeout` も本檻の被覆対象に入る。
-/// 選択起源の任意名 `on_choice_named`（[`EventId::Choice`]）だけは固定表ではなく出所別の
-/// 受理規則（`is_allowed_choice_event`）で検証されるため、本檻の被覆対象外である。
-#[test]
-fn every_construction_function_returns_an_allowed_id() {
-    let cfg = config();
-    let snap = ExecutionSnapshot::INACTIVE;
-    let calls = [
-        on_initialize(&snap),
-        on_first_boot(&snap, 0),
-        on_boot(&cfg, &snap),
-        baseware_version(&cfg, &snap),
-        on_second_change(MonotonicMs(0), &snap),
-        on_second_change(
-            MonotonicMs(0),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        on_second_change(MonotonicMs(0), &talking()),
         on_close(CloseReason::User { scope: 0 }, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
@@ -588,12 +485,16 @@ fn every_construction_function_returns_an_allowed_id() {
         on_choice_timeout("\\e", &snap),
         on_anchor_select_ex("文字", "ID", &[], &snap),
         on_anchor_select("ID", &snap),
+        on_balloon_break("\\e", 0, &snap),
+        on_balloon_close("\\e", &snap),
+        on_balloon_timeout("\\e", &snap),
     ];
     for call in &calls {
-        let id = event_id(call).as_str();
+        let id = event_id(call);
         assert!(
-            is_allowed_event_id(id),
-            "構築関数が許可集合外の id={id} を返した"
+            matches!(id, EventId::Static(name) if is_allowed_event_id(name)),
+            "構築関数がスケジューラ起源の許可集合外の id={} を返した",
+            id.as_str()
         );
     }
 }
@@ -622,7 +523,7 @@ fn on_choice_select_ex_builds_label_id_then_references() {
         &references,
         &ExecutionSnapshot::INACTIVE,
     );
-    let (id, refs) = expect_get(call);
+    let (id, refs, _) = expect_get(call);
     assert_eq!(id, "OnChoiceSelectEx");
     assert_eq!(
         refs,
@@ -635,11 +536,6 @@ fn on_choice_select_ex_builds_label_id_then_references() {
             "\\q[x,y]".to_string(),
         ]
     );
-    assert_eq!(
-        refs.len(),
-        2 + references.len(),
-        "Reference 数は 2＋付随参照列長"
-    );
 }
 
 /// 空参照列で Ref2 以降の位置が生えないこと（Req3.5）: Reference は Ref0/Ref1 の**2 個のみ**。
@@ -647,7 +543,7 @@ fn on_choice_select_ex_builds_label_id_then_references() {
 /// 既存マウス系の `None→""`（位置保持）とは**非対称**な規約であることを実値で固定する。
 #[test]
 fn on_choice_select_ex_with_empty_references_stops_at_ref1() {
-    let (id, refs) = expect_get(on_choice_select_ex(
+    let (id, refs, _) = expect_get(on_choice_select_ex(
         "ラベル",
         "ID",
         &[],
@@ -655,20 +551,14 @@ fn on_choice_select_ex_with_empty_references_stops_at_ref1() {
     ));
     assert_eq!(id, "OnChoiceSelectEx");
     assert_eq!(refs, vec!["ラベル".to_string(), "ID".to_string()]);
-    assert_eq!(
-        refs.len(),
-        2,
-        "空参照列は Ref2 以降の位置を作らない（空文字で埋めない）"
-    );
 }
 
 /// `OnChoiceSelect` 正典 layout（Req3.2）: Ref0=選択肢 ID の**1 個のみ**。
 #[test]
 fn on_choice_select_builds_id_only_ref0() {
-    let (id, refs) = expect_get(on_choice_select("Choice頻度", &ExecutionSnapshot::INACTIVE));
+    let (id, refs, _) = expect_get(on_choice_select("Choice頻度", &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnChoiceSelect");
     assert_eq!(refs, vec!["Choice頻度".to_string()]);
-    assert_eq!(refs.len(), 1, "無印は常に Ref0=ID の 1 個のみ");
 }
 
 /// 任意名イベント正典 layout（Req3.3）: Ref0 以降が付随参照列のみで、
@@ -681,22 +571,18 @@ fn on_choice_named_builds_references_from_ref0_without_label_or_id() {
         &references,
         &ExecutionSnapshot::INACTIVE,
     );
-    let (id, refs) = expect_get(call);
+    let (id, refs, _) = expect_get(call);
     assert_eq!(id, "Onおしゃべり頻度メニュー", "任意名は逐語で wire へ載る");
     assert_eq!(
         refs, references,
         "Ref0 以降＝付随参照列そのもの（記述順・不透明転写）"
-    );
-    assert!(
-        !refs.contains(&"Onおしゃべり頻度メニュー".to_string()),
-        "任意名イベントの Reference に選択肢 ID を含めない（Req3.3）"
     );
 }
 
 /// 空参照列で Reference が 1 個も生えないこと（Req3.3/3.5）: References は空 Vec。
 #[test]
 fn on_choice_named_with_empty_references_builds_no_reference() {
-    let (id, refs) = expect_get(on_choice_named(
+    let (id, refs, _) = expect_get(on_choice_named(
         "OnMenu".to_string(),
         &[],
         &ExecutionSnapshot::INACTIVE,
@@ -712,10 +598,9 @@ fn on_choice_named_with_empty_references_builds_no_reference() {
 #[test]
 fn on_choice_timeout_builds_script_ref0() {
     let script = "\\0\\s[0]選んで\\q[はい,Onはい]\\q[いいえ,Onいいえ]\\e";
-    let (id, refs) = expect_get(on_choice_timeout(script, &ExecutionSnapshot::INACTIVE));
+    let (id, refs, _) = expect_get(on_choice_timeout(script, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnChoiceTimeout");
     assert_eq!(refs, vec![script.to_string()]);
-    assert_eq!(refs.len(), 1, "Timeout は常に Ref0=script の 1 個のみ");
 }
 
 /// 共通リクエストヘッダ（実行状態スナップショット）が 4 構築関数すべてに載ること（Req3.6）。
@@ -725,11 +610,7 @@ fn on_choice_timeout_builds_script_ref0() {
 #[test]
 fn choice_constructors_carry_the_common_request_header() {
     let refs = opaque_references();
-    let active = ExecutionSnapshot {
-        talk_active: true,
-        choice_active: false,
-        ..ExecutionSnapshot::INACTIVE
-    };
+    let active = talking();
     let idle = ExecutionSnapshot::INACTIVE;
 
     let active_calls = [
@@ -763,8 +644,8 @@ fn choice_constructors_carry_the_common_request_header() {
     }
 }
 
-/// 出所カテゴリの型分離（DD-1）: 任意名イベントのみ [`EventId::Choice`]、
-/// 固定 ID 3 種は [`EventId::Static`]。
+/// 出所カテゴリの型分離（DD-1）: 任意名イベントは [`EventId::Choice`]（固定 ID の選択関連 3 種が
+/// [`EventId::Static`] であることは `every_construction_function_returns_an_allowed_static_id` が固定する）。
 #[test]
 fn choice_constructors_split_event_id_category_by_origin() {
     let snap = ExecutionSnapshot::INACTIVE;
@@ -773,20 +654,6 @@ fn choice_constructors_split_event_id_category_by_origin() {
         matches!(event_id(&named), EventId::Choice(_)),
         "任意名イベントは選択起源（EventId::Choice）"
     );
-
-    let statics = [
-        on_choice_select_ex("ラベル", "ID", &[], &snap),
-        on_choice_select("ID", &snap),
-        on_choice_timeout("\\e", &snap),
-    ];
-    for call in &statics {
-        let id = event_id(call);
-        assert!(
-            matches!(id, EventId::Static(_)),
-            "固定 ID の選択関連イベントはスケジューラ起源の型を保つ id={}",
-            id.as_str()
-        );
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -800,7 +667,7 @@ fn source(id: EventId, references: &[&str]) -> SourceEvent {
     }
 }
 
-/// `on_translate` の (id, references, status) を取り出す（NOTIFY なら panic）。
+/// `on_translate` の (id, references) を取り出す（NOTIFY なら panic）。
 fn translate(expanded: &str, src: &SourceEvent) -> (EventId, Vec<String>) {
     match on_translate(
         expanded,
@@ -844,14 +711,6 @@ fn on_translate_builds_the_four_canonical_references() {
     }
 }
 
-/// Ref1 は線の層の欠番の印そのもの（行が出ず番号だけ進む・要件 3.3）。
-#[test]
-fn on_translate_reference1_is_the_wire_absent_marker() {
-    let (_, references) = translate("\\e", &source(EventId::Static("OnClose"), &["user"]));
-    assert_eq!(references.len(), 4);
-    assert_eq!(references[1], shiori_host32_host::shiori3::ABSENT_REFERENCE);
-}
-
 /// 選択肢の任意名は Ref2 に逐語で載る（大小文字も綴りも変えない）。
 #[test]
 fn on_translate_carries_a_choice_name_verbatim_in_reference2() {
@@ -872,8 +731,12 @@ fn on_translate_carries_a_choice_name_verbatim_in_reference2() {
 /// Status は渡された値をそのまま載せ（他の GET と同じ見出し）、許可表を通る。
 #[test]
 fn on_translate_keeps_the_given_status_and_is_allowed() {
-    let snap = ExecutionSnapshot::INACTIVE;
-    let status = ExecutionStatus::derive(&snap);
+    let status = ExecutionStatus::derive(&talking());
+    assert_eq!(
+        status.render(),
+        Some("talking".to_string()),
+        "前提: 見出しが出る状態"
+    );
     let call = on_translate(
         "\\e",
         &source(EventId::Static("OnBoot"), &[]),

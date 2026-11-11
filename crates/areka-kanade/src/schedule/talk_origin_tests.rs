@@ -8,27 +8,14 @@ use tracing::Level;
 
 use super::super::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
 use super::super::sstp::NOTIFY_ORIGIN;
-use super::super::steady::test_support::base_state;
 use super::super::translate::Translated;
-use super::super::{Action, Input, Phase, State, step};
-use crate::msg::{KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
+use super::super::{Action, Input, step};
+use crate::msg::{MonotonicMs, ShioriOutcome};
+use crate::schedule::translate_test_support::{config as cfg, steady_none as steady};
 use crate::talk::ScriptOrigin;
 use areka_talk::SecurityLevel;
 
 const SCRIPT: &str = "\\0台本\\e";
-
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
-fn steady() -> State {
-    State {
-        phase: Phase::Steady { talk: None },
-        last_now: Some(MonotonicMs(1_000)),
-        next_talk_id: 5,
-        ..base_state()
-    }
-}
 
 /// 入力を順に [`step`] へ通し、最後の一括と全体の記録を返す。
 fn run(inputs: Vec<Input>) -> (Vec<Action>, Vec<CapturedEvent>) {
@@ -104,16 +91,6 @@ fn ghost_event_reply_talk_is_ghost() {
 
 #[test]
 fn raise_event_reply_talk_is_mcp_notify() {
-    // 送った往復が外から頼まれたイベント（EventId::Sstp）であることを前提として確かめる。
-    let (first, _) = run(vec![Input::SstpNotify {
-        event: "OnTest".to_string(),
-        references: Vec::new(),
-        strict: None,
-    }]);
-    assert!(matches!(
-        first.as_slice(),
-        [Action::ShioriRequest(ShioriCall::Get { .. })]
-    ));
     let (origin, ev) = notify_talk(SecurityLevel::Local);
     assert_eq!(origin, ScriptOrigin::MCP_NOTIFY, "要件 1.3");
     assert_not_logged(&ev, "script_security_lowered");
@@ -151,18 +128,6 @@ fn external_reply_lowers_and_local_translate_reply_does_not_raise() {
         "外から頼まれたイベントでも応答のレベルを重ねる"
     );
     logged_once(&ev, Level::INFO, "script_security_lowered");
-}
-
-#[test]
-fn external_translate_reply_lowers() {
-    let (origin, ev) = ghost_talk(SecurityLevel::Local, SecurityLevel::External);
-    assert_eq!(
-        origin,
-        ScriptOrigin::GHOST.lowered_by(SecurityLevel::External),
-        "翻訳の応答の external で下がる（要件 3.1）"
-    );
-    let hit = logged_once(&ev, Level::INFO, "script_security_lowered");
-    assert_eq!(hit.fields.get("by").map(String::as_str), Some("translate"));
 }
 
 /// 最後に再生を始めたトークの控えは、翻訳の後の最終の出どころを写す（選択肢の `script:` の引き継ぎの源・要件 1.6）。

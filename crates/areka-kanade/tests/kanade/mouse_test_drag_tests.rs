@@ -1,5 +1,6 @@
 //! ドラッグの開始・終了（`OnMouseDragStart`／`OnMouseDragEnd`）の決定論の檻
-//! （areka-P0-mouse-drag-events 設計 Testing Strategy「kanade」K3〜K7・要件 9.1 ⑴⑸⑹⑼・9.2）。
+//! （areka-P0-mouse-drag-events 設計 Testing Strategy「kanade」K3・K4・K7・要件 9.1 ⑴⑸⑹⑼・9.2。
+//! K5・K6 は `mouse_test_phase_guard_tests.rs` の cage 5a・5b・6 の中）。
 //!
 //! mock の SHIORI を結線したハーネスへ `KanadeMsg::Mouse`（種類 `DragStart`／`DragEnd`）を入れ、
 //! 送ってよい表との照合まで通った GET が記録に現れるか・現れないかを見る。期待する要求は必ず
@@ -8,28 +9,12 @@
 //! 同じ: 末尾の talk を quit:true にして終了の系列を走らせ、kanade の期限付き join が成功した時点で
 //! 記録を確定する（実時間の待ちなし）。
 
+use super::test_support::mouse_input;
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture,
-    Harness, KanadeConfig, KanadeMsg, MouseEventKind, MouseInput, QuitPolicy, RecordedCall, events,
-    expected_call, expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, FIXED_FAREWELL_SCRIPT, Fixture, Harness,
+    KanadeConfig, KanadeMsg, MouseEventKind, QuitPolicy, RecordedCall, events, expected_call,
+    expected_unload, send, spawn_harness, spawn_harness_gated,
 };
-
-/// ドラッグの知らせを組む（`region` は不透明転写・`None`＝判定外）。
-fn drag_input(
-    kind: MouseEventKind,
-    x: i64,
-    y: i64,
-    scope: u32,
-    region: Option<&str>,
-) -> MouseInput {
-    MouseInput {
-        scope,
-        x,
-        y,
-        region: region.map(str::to_string),
-        kind,
-    }
-}
 
 /// 記録列からドラッグの 2 つの GET だけを処理順に抜き出す。
 fn drag_gets(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
@@ -48,22 +33,12 @@ fn close_request() -> KanadeMsg {
     }
 }
 
-/// 期限付き join で kanade と mock sakura を畳み、確定した記録と到達した StartTalk の台本を返す。
+/// 後始末をして、確定した記録と到達した StartTalk の台本を返す。
 fn finish(harness: Harness, label: &str) -> (Vec<RecordedCall>, Vec<String>) {
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded(label, DEFAULT_TIMEOUT, kanade).expect("kanade は終了の系列を完走して止まる");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded(label, DEFAULT_TIMEOUT);
-    (
-        shiori.recorded(),
-        started.into_iter().map(|s| s.script).collect(),
-    )
+    let Driven {
+        recorded, started, ..
+    } = harness.finish(label);
+    (recorded, started.into_iter().map(|s| s.script).collect())
 }
 
 // ============================================================================
@@ -86,20 +61,14 @@ fn drag_start_then_end_in_steady_records_both_gets_in_order() {
         QuitPolicy::PerTalk(vec![true]),
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     for m in [
-        drag_input(MouseEventKind::DragStart, 10, 20, 1, Some("Head")),
-        drag_input(MouseEventKind::DragEnd, 70, 90, 1, None),
+        mouse_input(MouseEventKind::DragStart, 10, 20, 1, Some("Head")),
+        mouse_input(MouseEventKind::DragEnd, 70, 90, 1, None),
     ] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(m))
-            .expect("send drag Mouse");
+        send(&harness, KanadeMsg::Mouse(m));
     }
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
+    send(&harness, close_request());
 
     let (recorded, started) = finish(harness, "kanade drag steady join");
 
@@ -152,20 +121,14 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+    send(&harness, KanadeMsg::Boot);
     for m in [
-        drag_input(MouseEventKind::DragStart, 3, 4, 0, Some("Bust")),
-        drag_input(MouseEventKind::DragEnd, 5, 6, 0, Some("Bust")),
+        mouse_input(MouseEventKind::DragStart, 3, 4, 0, Some("Bust")),
+        mouse_input(MouseEventKind::DragEnd, 5, 6, 0, Some("Bust")),
     ] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(m))
-            .expect("send drag Mouse during greeting");
+        send(&harness, KanadeMsg::Mouse(m));
     }
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
+    send(&harness, close_request());
     gate.release_all();
 
     let (recorded, started) = finish(harness, "kanade drag talking join");
@@ -186,11 +149,6 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
         "再生中もドラッグの GET は出て、talk_active の snapshot から組んだ期待と一致するはず: {:?}",
         recorded
     );
-    assert!(
-        gets.iter().all(|c| c.status.as_deref() == Some("talking")),
-        "再生中のドラッグの GET は Status: talking を併送する: {:?}",
-        gets
-    );
     // 握手は完走: 挨拶の後に close talk が 1 本起動し、末尾は Unload。
     assert_eq!(
         started
@@ -199,136 +157,6 @@ fn drag_during_active_talk_is_sent_with_talking_status() {
             .count(),
         1,
         "{:?}",
-        started
-    );
-    assert_eq!(recorded.last(), Some(&expected_unload()));
-}
-
-// ============================================================================
-// K5: 起動の前・終了の系列の途中では送らない（要件 5.3・9.1 ⑹）
-// ============================================================================
-
-/// Boot より前（`Phase::Idle`＝起動が済む前）に入れた開始 → 終了は、記録に現れない。
-/// Boot は 1 通の知らせで起動の系列を同期で走り切るため、受信箱から起動の段の途中へ知らせを
-/// 差し込める窓は Boot の前だけである（兄弟の cage 5a と同じ窓）。
-///
-/// # 外すと赤
-/// 「定常だけ」の横断の腕を外して `on_mouse` へ流すと、`Idle` でも GET が出て `drag_gets` が空でなくなる。
-#[test]
-fn drag_before_boot_is_not_sent_and_boot_completes() {
-    let harness = spawn_harness(
-        KanadeConfig::new("master", "1.0.0"),
-        Fixture::quitting().without_boot_greeting(),
-        QuitPolicy::PerTalk(vec![true]),
-    );
-
-    for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(drag_input(kind, 1, 2, 0, Some("Head"))))
-            .expect("send drag Mouse before Boot");
-    }
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
-
-    let (recorded, started) = finish(harness, "kanade drag before-boot join");
-
-    assert!(
-        drag_gets(&recorded).is_empty(),
-        "起動が済む前のドラッグは GET を出さないはず: {:?}",
-        recorded
-    );
-    // 起動の系列と終了の系列は今どおり完走（close talk 1 本・末尾 Unload）。
-    assert_eq!(started, vec![FIXED_FAREWELL_SCRIPT.to_string()]);
-    assert_eq!(recorded.last(), Some(&expected_unload()));
-}
-
-/// close talk を保留して `CloseTalkWait`（終了の系列の途中）に入れた開始 → 終了は、記録に現れない。
-///
-/// # 決定性
-/// 挨拶なしで `Steady{None}` へ直行 → CloseRequest は即握手（OnClose → close talk・保留）。
-/// `release_all` は 2 つの知らせを送った後なので、知らせは必ず `CloseTalkWait` で処理される。
-#[test]
-fn drag_during_close_series_is_not_sent_and_close_completes() {
-    let (harness, gate) = spawn_harness_gated(
-        KanadeConfig::new("master", "1.0.0"),
-        Fixture::quitting().without_boot_greeting(),
-        QuitPolicy::PerTalk(vec![true]),
-        vec![0],
-    );
-
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
-    for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(drag_input(kind, 7, 8, 0, None)))
-            .expect("send drag Mouse during close series");
-    }
-    gate.release_all();
-
-    let (recorded, started) = finish(harness, "kanade drag close-series join");
-
-    assert!(
-        drag_gets(&recorded).is_empty(),
-        "終了の系列の途中（CloseTalkWait）のドラッグは GET を出さないはず: {:?}",
-        recorded
-    );
-    assert_eq!(started, vec![FIXED_FAREWELL_SCRIPT.to_string()]);
-    assert_eq!(recorded.last(), Some(&expected_unload()));
-}
-
-// ============================================================================
-// K6: 終了の握手の待ちでは送らない（要件 5.2・9.1 ⑹）
-// ============================================================================
-
-/// 挨拶の再生中に CloseRequest（→ `pending_close`）を受けた後の開始 → 終了は、`Steady` にありながら
-/// 記録に現れない（`on_mouse` の先頭の防御）。握手は挨拶の TalkDone で進み、今どおり完走する。
-///
-/// # 外すと赤
-/// `Steady{Some}` のドラッグは本来 GET を出す（K4）ので、GET が現れないのは先頭の防御だけが理由になる。
-#[test]
-fn drag_while_close_pending_is_not_sent_and_handshake_completes() {
-    let (harness, gate) = spawn_harness_gated(
-        KanadeConfig::new("master", "1.0.0"),
-        Fixture::quitting(),
-        QuitPolicy::PerTalk(vec![false, true]),
-        vec![0],
-    );
-
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest during greeting");
-    for kind in [MouseEventKind::DragStart, MouseEventKind::DragEnd] {
-        harness
-            .sender
-            .send(KanadeMsg::Mouse(drag_input(kind, 11, 22, 0, Some("Head"))))
-            .expect("send drag Mouse while close pending");
-    }
-    gate.release_all();
-
-    let (recorded, started) = finish(harness, "kanade drag close-pending join");
-
-    assert!(
-        drag_gets(&recorded).is_empty(),
-        "終了の握手の待ちのドラッグは GET を出さないはず: {:?}",
-        recorded
-    );
-    assert_eq!(
-        started
-            .iter()
-            .filter(|s| s.as_str() == FIXED_FAREWELL_SCRIPT)
-            .count(),
-        1,
-        "pending_close を消化した後に close talk が 1 本起動するはず: {:?}",
         started
     );
     assert_eq!(recorded.last(), Some(&expected_unload()));
@@ -356,31 +184,28 @@ fn drag_end_after_close_request_is_not_sent() {
         vec![0],
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(drag_input(
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragStart,
             30,
             40,
             0,
             Some("Head"),
-        )))
-        .expect("send DragStart in steady");
-    harness
-        .sender
-        .send(close_request())
-        .expect("send CloseRequest");
-    harness
-        .sender
-        .send(KanadeMsg::Mouse(drag_input(
+        )),
+    );
+    send(&harness, close_request());
+    send(
+        &harness,
+        KanadeMsg::Mouse(mouse_input(
             MouseEventKind::DragEnd,
             50,
             60,
             0,
             Some("Head"),
-        )))
-        .expect("send DragEnd after CloseRequest");
+        )),
+    );
     gate.release_all();
 
     let (recorded, started) = finish(harness, "kanade drag end-after-close join");
@@ -397,6 +222,11 @@ fn drag_end_after_close_request_is_not_sent() {
         vec![&expected_start],
         "開始だけが送られ、終了の要求の後の終了は送られないはず: {:?}",
         recorded
+    );
+    // drag_gets は GET だけを拾うので、NOTIFY に化けて出ていないことも見る。
+    assert!(
+        !recorded.iter().any(|c| c.id == "OnMouseDragEnd"),
+        "終了の要求の後の OnMouseDragEnd は GET でも NOTIFY でも送られないはず: {recorded:?}"
     );
     assert_eq!(started, vec![FIXED_FAREWELL_SCRIPT.to_string()]);
     assert_eq!(recorded.last(), Some(&expected_unload()));
