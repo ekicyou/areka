@@ -92,11 +92,14 @@ impl Scan<'_, '_> {
                     false
                 } else if let Some(seg) = plan.segment_starting_at(self.placed) {
                     // 塊先頭: 塊全体の advance 合計を渡された items の plan から左畳み込みで先決
-                    // （visible_count 非依存＝INV-1/7.1）。
+                    // （visible_count 非依存＝INV-1/7.1）。今の字（番号 `placed`）の位置からの列を
+                    // 渡すので、列の先頭からの番号は 0（全文の頭から数え直さない・指摘 9）。見た目は通し番号
+                    // `placed` から引く。
                     let seg_sum = segment_advance_sum(
-                        self.items,
-                        self.placed,
+                        &self.items[self.item_cursor..],
+                        0,
                         seg.len,
+                        self.placed,
                         self.font_height,
                         self.metrics,
                         self.styles.as_ref(),

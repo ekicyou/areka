@@ -41,6 +41,8 @@ struct Scan<'a, 'w> {
     pending: Option<f32>,
     pending_cursor: Option<(Option<f32>, Option<f32>)>,
     seg_remaining: usize,
+    /// 今の項目の `items` での位置（塊の字幅の合計に `&items[item_cursor..]` を渡す・指摘 9）。
+    item_cursor: usize,
 }
 
 impl LayoutEngine {
@@ -133,8 +135,10 @@ impl LayoutEngine {
             pending,
             pending_cursor,
             seg_remaining,
+            item_cursor: 0,
         };
-        for item in items {
+        for (i, item) in items.iter().enumerate() {
+            scan.item_cursor = i;
             match *item {
                 TextItem::Glyph { ref text } => {
                     if scan.glyph(text).is_break() {

@@ -1,5 +1,6 @@
 use super::test_support::{IMAGE, cursor_px, glyphs, inline_positions, model};
-use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use crate::look::{GlyphStyles, StyleId, StyleTable, TextLook};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
 use crate::state::TextItem;
@@ -766,4 +767,85 @@ fn segmented_after_cursor_move_emits_no_blank_line() {
         "`\\_l` の x＝50 が残る"
     );
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
+}
+
+/// 指摘 9（塊の字幅の合計を今の位置からにする）: 塊 3,000 の大きな全文で、配置の結果が直す前と
+/// 同じ。字幅は半角 5・全角 10 を混ぜ、改行と `\_l` を挟み（列の位置と字の番号がずれる）、見た目
+/// （大きさ 10／14）を字の番号で変える（見た目を通し番号で引くことも確かめる）。
+/// 期待値は直す前のコード（`segment_advance_sum` が全文の先頭から数えていたとき）で測って固定した。
+#[test]
+fn segmented_large_text_layout_unchanged_by_linear_sum() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (Some(100), None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let mut items = Vec::new();
+    let mut segs = Vec::new();
+    let mut serial = 0usize;
+    for k in 0..3000usize {
+        if k % 37 == 36 {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        if k % 53 == 52 {
+            items.push(cursor_px(15.0, 0.0));
+        }
+        let len = 1 + (k * 7) % 5;
+        segs.push((serial, len));
+        for _ in 0..len {
+            let wide = (serial * 31) % 3 != 0;
+            items.push(TextItem::glyph(if wide { "あ" } else { "a" }));
+            serial += 1;
+        }
+    }
+    let p = plan(&segs);
+    let default = TextLook {
+        height: 10.0,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let big = table.intern(
+        &TextLook {
+            height: 14.0,
+            ..TextLook::ukadoc_default()
+        },
+        &default,
+    );
+    let ids: Vec<StyleId> = (0..serial)
+        .map(|i| if i % 7 < 3 { big } else { StyleId::DEFAULT })
+        .collect();
+    let styles = GlyphStyles {
+        table: &table,
+        ids: &ids,
+        default: &default,
+        current: &default,
+    };
+    let lines = LayoutEngine::layout_styled(
+        &items,
+        serial,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::Segmented(&p),
+        styles,
+        &areka_sakura::contract::ActorKey::from("0"),
+        &mut CursorWarnGuard::default(),
+    );
+    let mut digest = 0xcbf2_9ce4_8422_2325u64;
+    let mut mix = |v: u64| digest = (digest ^ v).wrapping_mul(0x0100_0000_01b3);
+    for l in &lines {
+        mix(l.glyphs.len() as u64);
+        mix(u64::from(l.rect.left.to_bits()));
+        mix(u64::from(l.rect.top.to_bits()));
+        for g in &l.glyphs {
+            mix(u64::from(g.inline_pos.to_bits()));
+        }
+    }
+    assert_eq!(serial, 9000);
+    assert_eq!(
+        (lines.len(), digest),
+        (1210, 3_540_694_257_211_298_979),
+        "直す前の配置と違う"
+    );
 }

@@ -571,6 +571,40 @@ fn segment_advance_sum_is_measured_with_the_glyph_looks() {
     );
 }
 
+/// 指摘 9（今の位置からの列を渡す直し）: 塊の合計は、列の頭からでなく**字の通し番号**で見た目を
+/// 引く。番号 `[既定 10, 20, 20, 20]`・塊 `{0,1}` と `{1,3}`・折返し基準 50 で、2 つ目の塊の合計は
+/// 60（行頭幅 50 も超える）＝文字単位規則で 0/10/30 の後に折れて 2 行目は 0。列の頭（番号 0..3）で
+/// 引くと合計 50 となり、塊の前で送って 1 行目 0・2 行目 0/20/40 になる。
+#[test]
+fn segment_advance_sum_looks_up_styles_by_the_absolute_glyph_number() {
+    let region = region_h(50);
+    let items = glyph_items("あいうえ");
+    let default = look_with_height(10.0);
+    let mut table = StyleTable::default();
+    let big = table.intern(&look_with_height(20.0), &default);
+    let ids = [StyleId::DEFAULT, big, big, big];
+    let plan = SegmentPlan::from_segments(vec![
+        Segment { start: 0, len: 1 },
+        Segment { start: 1, len: 3 },
+    ]);
+
+    let lines = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &ids, &default),
+        WrapPlan::Segmented(&plan),
+    );
+
+    assert_eq!(
+        lines
+            .iter()
+            .map(|l| l.glyphs.iter().map(|g| g.inline_pos).collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        vec![vec![0.0, 10.0, 30.0], vec![0.0]],
+        "塊の合計は字の通し番号の見た目で測る"
+    );
+}
+
 // ── 要件 7.8: 行送りの式は 1 点だけを通る（字面で固定する） ──
 
 /// 行送りの式へ届く点が配置層に **1 つしかない**ことを字面で固定する。
