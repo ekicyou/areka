@@ -46,10 +46,6 @@ pub mod reader;
 pub mod value;
 pub mod vocab;
 
-// Task 2.5: 語彙台帳・key パーサ 決定論単体テスト群（criterion → assertion 集約・test-only）。
-#[cfg(test)]
-mod ledger_key_determinism_tests;
-
 // テスト専用ログ捕捉ヘルパ: 共有 crate `log-capture-kit` の捕捉窓と型の上の薄い 2 つの関数
 // （`capture`・`assert_logged`）。使い手は persist と actor のテスト。
 #[cfg(test)]

@@ -393,11 +393,27 @@ mod tests {
         }
     }
 
-    /// ext 亜枝イベント名は予約定数として厳密一致（R3.5・発火しない）。
+    /// ext 亜枝イベント名は予約定数として厳密一致し、どの解決の表にも入らない（R3.5・発火しない）。
     #[test]
     fn ext_event_names_reserved_exact() {
         assert_eq!(EXT_EVENT_GET, "property.get");
         assert_eq!(EXT_EVENT_SET, "property.set");
+        for reserved in [EXT_EVENT_GET, EXT_EVENT_SET] {
+            assert!(
+                crate::vocab::flat::FLAT_VOCAB
+                    .iter()
+                    .all(|e| e.token != reserved),
+                "{reserved} はフラット解決語彙に混入しない"
+            );
+            assert!(
+                !DOTTED_ROOTS.contains(&reserved),
+                "{reserved} はルート枝でない"
+            );
+            assert!(
+                !GENERIC_PROP_NAMES.contains(&reserved),
+                "{reserved} は汎用名でない"
+            );
+        }
     }
 }
 
