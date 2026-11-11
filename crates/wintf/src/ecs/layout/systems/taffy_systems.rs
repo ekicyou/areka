@@ -3,7 +3,7 @@
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, warn};
 
 use super::super::metrics::{LayoutScale, Offset, Size};
 use super::super::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyStyle};
@@ -37,6 +37,9 @@ pub fn build_taffy_styles_system(
     // BoxStyleが外れたエンティティ（同じ回に付け直したものは除く）
     mut removed_box_styles: RemovedComponents<BoxStyle>,
     mut unstyled: Query<(Has<LayoutRoot>, Option<&mut TaffyStyle>), Without<BoxStyle>>,
+    // 外した部品の子と名前（子が配置から外れる warn に使う）
+    parts: Query<(Option<&Children>, Option<&Name>)>,
+    styled: Query<(), With<TaffyStyle>>,
 ) {
     for entity in removed_box_styles.read() {
         let Ok((is_root, taffy_style)) = unstyled.get_mut(entity) else {
@@ -47,6 +50,15 @@ pub fn build_taffy_styles_system(
                 taffy_style.0 = taffy::Style::default();
             }
         } else {
+            // 子の節は taffy の木から切れ、以後その子の BoxStyle を変えても配置されない
+            if let Ok((Some(children), name)) = parts.get(entity)
+                && children.iter().any(|child| styled.contains(child))
+            {
+                warn!(
+                    entity = %format_entity_name(entity, name),
+                    "[build_taffy_styles] BoxStyle removed while children still have TaffyStyle; they are no longer laid out"
+                );
+            }
             commands
                 .entity(entity)
                 .try_remove::<(TaffyStyle, TaffyComputedLayout)>();
@@ -83,8 +95,8 @@ pub fn sync_taffy_tree_system(
     mut removed_hierarchy: RemovedComponents<ChildOf>,
     // TaffyStyleが外れたエンティティ（節を消すのは計算の後の掃除の係）
     mut removed_styles: RemovedComponents<TaffyStyle>,
-    // Children コンポーネント（兄弟順序の権威的ソース）
-    children_query: Query<&Children>,
+    // Children コンポーネント（兄弟順序の権威的ソース）と、記録に出す名前（warn のときだけ引く）
+    hierarchy: Query<(Option<&Children>, Option<&Name>)>,
 ) {
     // 係には Err を返す先が無いので、taffy の失敗は記録だけにする（以下同じ）。
     // 新規エンティティにtaffyノードを作成し、その親と自分（子を持つなら）を影響親に足す
@@ -101,6 +113,19 @@ pub fn sync_taffy_tree_system(
         }
         if has_children {
             affected_parents.insert(entity);
+        }
+    }
+    // 親に節が無い部品は木につながらず配置されない（同じ回に親の節ができたなら出さない）
+    for (entity, child_of, _) in new_entities.iter() {
+        if let Some(child_of) = child_of
+            && taffy_res.get_node(child_of.parent()).is_none()
+        {
+            let parent = child_of.parent();
+            warn!(
+                entity = %format_entity_name(entity, hierarchy.get(entity).ok().and_then(|h| h.1)),
+                parent = %format_entity_name(parent, hierarchy.get(parent).ok().and_then(|h| h.1)),
+                "[sync_taffy_tree] Parent has no taffy node; this node is not laid out"
+            );
         }
     }
 
@@ -122,7 +147,7 @@ pub fn sync_taffy_tree_system(
     // Step 2: 各影響親について Children の順序で taffy 子ノードを一括設定
     for parent_entity in affected_parents {
         if let Some(parent_node) = taffy_res.get_node(parent_entity) {
-            if let Ok(children) = children_query.get(parent_entity) {
+            if let Ok((Some(children), _)) = hierarchy.get(parent_entity) {
                 // Children.iter() の順序で NodeId リストを構築
                 // taffy ノード未作成のエンティティはスキップ
                 let ordered_node_ids: Vec<taffy::NodeId> = children

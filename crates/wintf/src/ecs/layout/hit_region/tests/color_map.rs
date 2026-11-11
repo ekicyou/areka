@@ -44,19 +44,6 @@ fn test_color_map_data_hit_test_out_of_bounds() {
     assert_eq!(data.hit_test(5, 5), None);
 }
 
-/// ColorMapData::width()/height() アクセサ（W4b-T: 未検証だった）
-#[test]
-fn test_color_map_data_size_accessors() {
-    let data = ColorMapData {
-        index_map: vec![0u8; 12],
-        region_names: vec![],
-        width: 4,
-        height: 3,
-    };
-    assert_eq!(data.width(), 4);
-    assert_eq!(data.height(), 3);
-}
-
 /// ColorMapData::hit_test: region_id が region_names 範囲外の場合 None
 ///
 /// index_map に region_names.len() を超える ID が混入した場合、

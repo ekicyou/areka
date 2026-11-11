@@ -36,17 +36,11 @@ fn test_hit_test_entity_ex_named_regions_rect_hit() {
 
     // local (50, 20) → screen (50, 20) — "head" 領域内
     let point = PointF::new(50.0, 20.0);
-    match hit_test_entity_ex(&world, entity, point) {
-        RegionHit::Hit(Some(name)) => assert_eq!(name, "head"),
-        other => panic!(
-            "Expected Hit(Some('head')), got {:?}",
-            match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(_)) => "Hit(Some(...))",
-            }
-        ),
-    }
+    let r = hit_test_entity_ex(&world, entity, point);
+    assert!(
+        matches!(r, RegionHit::Hit(Some(ref name)) if name == "head"),
+        "{r:?}"
+    );
 }
 
 /// NamedRegions + HitRegionMap 領域外（bounds内、領域外 → 無名ヒット）
@@ -69,17 +63,8 @@ fn test_hit_test_entity_ex_named_regions_no_region() {
 
     // local (5, 80) — bounds内だが領域外
     let point = PointF::new(5.0, 80.0);
-    match hit_test_entity_ex(&world, entity, point) {
-        RegionHit::Hit(None) => {} // 期待通り: 無名ヒット
-        other => panic!(
-            "Expected Hit(None), got {:?}",
-            match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(ref s)) => s.as_str(),
-            }
-        ),
-    }
+    let r = hit_test_entity_ex(&world, entity, point);
+    assert!(matches!(r, RegionHit::Hit(None)), "{r:?}");
 }
 
 /// NamedRegions + HitRegionMap 不在 → Bounds フォールバック (1.3)
@@ -96,17 +81,8 @@ fn test_hit_test_entity_ex_named_regions_no_region_map_fallback() {
         .id();
 
     let point = PointF::new(50.0, 50.0);
-    match hit_test_entity_ex(&world, entity, point) {
-        RegionHit::Hit(None) => {} // Bounds フォールバック
-        other => panic!(
-            "Expected Hit(None) (fallback), got {:?}",
-            match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(ref s)) => s.as_str(),
-            }
-        ),
-    }
+    let r = hit_test_entity_ex(&world, entity, point);
+    assert!(matches!(r, RegionHit::Hit(None)), "{r:?}");
 }
 
 /// hit_test_entity_ex: Bounds モードでは region: None
@@ -122,10 +98,8 @@ fn test_hit_test_entity_ex_bounds_mode_region_none() {
         .id();
 
     let point = PointF::new(50.0, 50.0);
-    match hit_test_entity_ex(&world, entity, point) {
-        RegionHit::Hit(None) => {}
-        _ => panic!("Expected Hit(None) for Bounds mode"),
-    }
+    let r = hit_test_entity_ex(&world, entity, point);
+    assert!(matches!(r, RegionHit::Hit(None)), "{r:?}");
 }
 
 /// NamedRegions + 退化 bounds（幅0）→ Hit(None) フォールバック
@@ -151,17 +125,8 @@ fn test_hit_test_entity_ex_named_regions_degenerate_bounds_width() {
         .id();
 
     // x==50 は contains を通過し、bounds_width<=0 分岐で Hit(None) フォールバック
-    match hit_test_entity_ex(&world, entity, PointF::new(50.0, 50.0)) {
-        RegionHit::Hit(None) => {}
-        other => panic!(
-            "Expected Hit(None) for degenerate bounds, got {:?}",
-            match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(ref s)) => s.as_str(),
-            }
-        ),
-    }
+    let r = hit_test_entity_ex(&world, entity, PointF::new(50.0, 50.0));
+    assert!(matches!(r, RegionHit::Hit(None)), "{r:?}");
 }
 
 /// NamedRegions + 退化 bounds（高さ0）→ Hit(None) フォールバック
@@ -183,17 +148,8 @@ fn test_hit_test_entity_ex_named_regions_degenerate_bounds_height() {
         .id();
 
     // y==50 は contains を通過し、bounds_height<=0 分岐で Hit(None) フォールバック
-    match hit_test_entity_ex(&world, entity, PointF::new(50.0, 50.0)) {
-        RegionHit::Hit(None) => {}
-        other => panic!(
-            "Expected Hit(None) for degenerate bounds, got {:?}",
-            match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(ref s)) => s.as_str(),
-            }
-        ),
-    }
+    let r = hit_test_entity_ex(&world, entity, PointF::new(50.0, 50.0));
+    assert!(matches!(r, RegionHit::Hit(None)), "{r:?}");
 }
 
 /// hit_test_entity_ex: bounds外は Miss
@@ -209,8 +165,6 @@ fn test_hit_test_entity_ex_outside_bounds() {
         .id();
 
     let point = PointF::new(200.0, 200.0);
-    match hit_test_entity_ex(&world, entity, point) {
-        RegionHit::Miss => {}
-        _ => panic!("Expected Miss for outside bounds"),
-    }
+    let r = hit_test_entity_ex(&world, entity, point);
+    assert!(matches!(r, RegionHit::Miss), "{r:?}");
 }

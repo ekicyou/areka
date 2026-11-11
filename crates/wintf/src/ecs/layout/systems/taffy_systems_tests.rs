@@ -4,12 +4,15 @@
 
 use super::*;
 use crate::ecs::layout::BoxSize;
+use crate::ecs::test_support::capture_under_filter;
 
 /// 本番の `Layout` と同じ順に配置の係を並べる。
 /// 変化の検知は係ごとの前回の実行が基準なので、同じスケジュールを回し続ける
 /// （毎回作り直すと、どの部品も「付いたばかり」に見える）。
 fn layout_schedule() -> Schedule {
     let mut schedule = Schedule::default();
+    // 記録の捕捉はスレッド局所なので、係を呼んだスレッドで回す
+    schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
     schedule.add_systems(
         (
             build_taffy_styles_system,
@@ -204,4 +207,65 @@ fn despawned_middle_child_closes_up_once_then_no_recompute() {
         50.0,
         "何も変わっていない回に計算し直している（消えた記録を読み切っていない）"
     );
+}
+
+const ORPHAN_PARENT_WARN: &str = "Parent has no taffy node";
+const ORPHAN_CHILDREN_WARN: &str = "BoxStyle removed while children still have TaffyStyle";
+
+/// 38 番: 中ほどの部品から `BoxStyle` を外すと、`TaffyStyle` を持つ子が配置から外れる。
+/// 配置の振る舞いは変えず、外した回に一度だけ実体名つきで warn を出す。
+#[test]
+fn box_style_removed_from_container_with_styled_children_warns_once() {
+    let mut world = new_world();
+    let mut layout = layout_schedule();
+    let root = spawn_row_root(&mut world);
+    let container = world
+        .spawn((
+            Name::new("orphan-container"),
+            px_box(100.0, 50.0),
+            ChildOf(root),
+        ))
+        .id();
+    world.spawn((px_box(30.0, 10.0), ChildOf(container)));
+    layout.run(&mut world);
+
+    world.entity_mut(container).remove::<BoxStyle>();
+    let log = capture_under_filter("warn", || {
+        layout.run(&mut world);
+        layout.run(&mut world);
+    });
+    assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 1, "{log}");
+    assert!(log.contains("orphan-container"), "実体名が要る: {log}");
+}
+
+/// 38 番: 子の居ない部品から `BoxStyle` を外しても warn は出ない。
+#[test]
+fn box_style_removed_from_leaf_does_not_warn() {
+    let mut world = new_world();
+    let mut layout = layout_schedule();
+    let root = spawn_row_root(&mut world);
+    let leaf = world.spawn((px_box(30.0, 10.0), ChildOf(root))).id();
+    layout.run(&mut world);
+
+    world.entity_mut(leaf).remove::<BoxStyle>();
+    let log = capture_under_filter("warn", || layout.run(&mut world));
+    assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 0, "{log}");
+}
+
+/// 38 番: `BoxStyle` の無い親の下に置いた部品は配置されない。節を作った回に一度だけ warn を出す。
+/// 親も同じ回に節を作るなら（根と子を一度に作る）出さない。
+#[test]
+fn node_under_parent_without_taffy_node_warns_once() {
+    let mut world = new_world();
+    let mut layout = layout_schedule();
+    let root = spawn_row_root(&mut world);
+    let plain = world.spawn((Name::new("plain-parent"), ChildOf(root))).id();
+    world.spawn((px_box(30.0, 10.0), ChildOf(root)));
+    world.spawn((px_box(30.0, 10.0), ChildOf(plain)));
+    let log = capture_under_filter("warn", || {
+        layout.run(&mut world);
+        layout.run(&mut world);
+    });
+    assert_eq!(log.matches(ORPHAN_PARENT_WARN).count(), 1, "{log}");
+    assert!(log.contains("plain-parent"), "親の実体名が要る: {log}");
 }

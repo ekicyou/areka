@@ -56,6 +56,12 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///   をフラットなOption型フィールドとして含める（taffyのStyle構造体と同様のフラット設計）
 /// - `None`フィールドはtaffyデフォルト値にマッピング
 ///
+/// # 配置される部品
+///
+/// 配置されるのは、`LayoutRoot` から `ChildOf` をたどって途切れずに `BoxStyle`（根は `LayoutRoot`）が
+/// 付いている部品だけ。途中に `BoxStyle` の無い親が居ると、その下は taffy の木につながらず、
+/// 子の `BoxStyle` を変えても配置されない（節を作った回と、子を持つ部品から外した回に warn を出す）。
+///
 /// # 使用例
 ///
 /// ```rust,ignore

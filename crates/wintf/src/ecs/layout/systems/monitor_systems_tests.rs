@@ -78,6 +78,9 @@ fn enumerated_monitor_work_area_reconstructs_all_four_edges() {
 // ======================================================================
 // S4（診断レポート §2.7・Req 7.1/7.2/7.3/7.5）
 //   「識別子が不変で値だけが変わる」表示構成変更でモニタ表が更新されること
+//
+// 以下の檻の足場（注入表・探針のモニタ・窓・実行）は
+// `monitor_systems_transition_tests.rs` も同じものを使う。
 // ======================================================================
 
 use crate::ecs::types::{Point, SizeI};
@@ -85,7 +88,14 @@ use crate::ecs::{DPI, WindowPos};
 
 /// 檻へ注入する「新しいモニタ列挙結果」。実 OS 列挙（`enumerate_monitors`）の代役。
 #[derive(Resource, Clone)]
-struct InjectedMonitors(Vec<Monitor>);
+pub(super) struct InjectedMonitors(pub(super) Vec<Monitor>);
+
+/// 檻が渡す刻印（本番は `Res<FrameCount>`＋`Res<TickStart>` から組む）。
+/// 記録を組む純関数は時刻を読まないので任意の値でよく、逐語比較に使う。
+pub(super) const PROBE_STAMP: Stamp = Stamp {
+    frame: 7,
+    t_us: 1234,
+};
 
 /// [`apply_monitor_snapshot`] の戻り値（再導出を駆動した窓の数）を檻へ持ち出す受け皿。
 #[derive(Resource, Default)]
@@ -100,7 +110,6 @@ fn apply_injected_monitors(
     layout_root: Query<Entity, With<LayoutRoot>>,
     mut existing_monitors: Query<(Entity, &mut Monitor)>,
     mut windows: Query<(Entity, &WindowPos, &mut DPI)>,
-    mut taffy_res: ResMut<TaffyLayoutResource>,
     injected: Res<InjectedMonitors>,
     mut redriven: ResMut<RedriveCount>,
 ) {
@@ -112,11 +121,8 @@ fn apply_injected_monitors(
         root_entity,
         &mut existing_monitors,
         &mut windows,
-        &mut taffy_res,
         injected.0.clone(),
-        // 本ファイルの檻は表の更新そのものを見る（遷移観測の刻印は
-        // `monitor_systems_transition_tests.rs` が担当）ため、固定値で足りる。
-        crate::ecs::window::transition_diag::Stamp { frame: 0, t_us: 0 },
+        PROBE_STAMP,
     );
 }
 
@@ -131,7 +137,7 @@ fn redrive_count(world: &World) -> usize {
 /// - `handle` は不変（拡大率変更でモニタ識別子は変わらない）
 /// - `bounds` も不変（物理解像度は変わらない）
 /// - `work_area` と `dpi` だけが変わる（タスクバーが物理的に太る）
-fn probe_monitor_before() -> Monitor {
+pub(super) fn probe_monitor_before() -> Monitor {
     Monitor {
         handle: 0x0000_ABCD,
         bounds: RECT {
@@ -151,7 +157,7 @@ fn probe_monitor_before() -> Monitor {
     }
 }
 
-fn probe_monitor_after() -> Monitor {
+pub(super) fn probe_monitor_after() -> Monitor {
     Monitor {
         work_area: RECT {
             left: 0,
@@ -189,9 +195,8 @@ fn assert_probe_is_not_a_fixed_point(before: &Monitor, after: &Monitor) {
 }
 
 /// 檻用 World。LayoutRoot 1 個・`probe_monitor_before()` の Monitor 1 個を持つ。
-fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
+pub(super) fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
     let mut world = World::new();
-    world.insert_resource(TaffyLayoutResource::default());
     world.insert_resource(InjectedMonitors(injected));
     world.insert_resource(RedriveCount::default());
     world.spawn(LayoutRoot);
@@ -202,7 +207,7 @@ fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
 /// 檻の実行。**シングルスレッド実行器を明示**する——既定の多スレッド実行器では
 /// システムが別スレッドで走り、`capture_under_filter`（スレッドローカルの dispatcher
 /// 差し替え）が 1 行も捕捉できずログ檻が空虚に緑になる。
-fn run_apply(world: &mut World) {
+pub(super) fn run_apply(world: &mut World) {
     let mut schedule = Schedule::default();
     schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
     schedule.add_systems(apply_injected_monitors);
@@ -210,7 +215,7 @@ fn run_apply(world: &mut World) {
 }
 
 /// 檻用の窓（枠なしゴースト窓相当）: 中心が primary モニタ上に載る位置・寸。
-fn spawn_probe_window(world: &mut World, x: i32, y: i32, dpi: u32) -> Entity {
+pub(super) fn spawn_probe_window(world: &mut World, x: i32, y: i32, dpi: u32) -> Entity {
     world
         .spawn((
             WindowPos {

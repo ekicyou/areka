@@ -66,9 +66,9 @@ fn test_hit_test_ex_bounds_mode() {
     assert_eq!(result.region, None);
 }
 
-/// hit_test_ex: 後方互換 — 既存 hit_test と同じエンティティを返す
+/// hit_test_ex: 重なりでは最前面を返す（hit_test とは別の走査なので、ここで確かめる）
 #[test]
-fn test_hit_test_ex_backward_compat_same_entity() {
+fn test_hit_test_ex_front_priority() {
     let mut world = World::new();
 
     let back = world
@@ -81,12 +81,8 @@ fn test_hit_test_ex_backward_compat_same_entity() {
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[back, front]);
 
-    let point = PointF::new(50.0, 50.0);
-
-    let old_result = hit_test(&world, root, point);
-    let new_result = hit_test_ex(&world, root, point);
-
-    assert_eq!(old_result.unwrap(), new_result.unwrap().entity);
+    let result = hit_test_ex(&world, root, PointF::new(50.0, 50.0));
+    assert_eq!(result.map(|r| r.entity), Some(front));
 }
 
 // ========================================================================
@@ -166,28 +162,4 @@ fn test_hit_test_in_window_ex_position_none() {
 
     let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 50.0));
     assert!(result.is_none());
-}
-
-/// 既存 hit_test / hit_test_in_window の後方互換性（NamedRegions以外の動作不変）
-#[test]
-fn test_existing_api_backward_compat() {
-    let mut world = World::new();
-
-    let entity = world
-        .spawn((
-            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
-            HitTest::bounds(),
-        ))
-        .id();
-
-    let root = world.spawn_empty().id();
-    world.entity_mut(root).add_children(&[entity]);
-
-    // 既存 API は変更なく動作
-    let result = hit_test(&world, root, PointF::new(50.0, 50.0));
-    assert_eq!(result, Some(entity));
-
-    // bounds外
-    let result = hit_test(&world, root, PointF::new(200.0, 200.0));
-    assert_eq!(result, None);
 }

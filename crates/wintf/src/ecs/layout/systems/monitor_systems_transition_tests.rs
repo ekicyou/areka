@@ -25,16 +25,17 @@
 use std::sync::{Arc, Mutex};
 use std::thread::ThreadId;
 
-use bevy_ecs::schedule::SingleThreadedExecutor;
-
 /// 本番の `World` 構築の逐語。`Update` が既定の実行器のまま挿入されていることを字面で
 /// 見張るために読む（bevy 0.19 で `Schedule::get_executor_kind` が撤去されたため）。
 const WORLD_CONSTRUCTION_SRC: &str = include_str!("../../world/mod.rs");
 use windows::Win32::Foundation::RECT;
 
+use super::tests::{
+    InjectedMonitors, probe_monitor_after, probe_monitor_before, probe_world, run_apply,
+    spawn_probe_window,
+};
 use super::*;
 use crate::ecs::test_support::capture_under_filter;
-use crate::ecs::types::{Point, SizeI};
 use crate::ecs::window::transition_diag::{
     KIND_MONITOR, KIND_WINDPI, RECORD_PREFIX_TAG, TRANSITION_TARGET,
 };
@@ -54,12 +55,6 @@ const DEFAULT_DIRECTIVES: &str = "info";
 
 /// 捕捉が生きている証拠として同じ窓の中で必ず出す対照行。
 const CONTROL_LINE: &str = "[transition-probe] alive";
-
-/// 逐語比較に使う固定の刻印（純関数は時刻を読まないので任意の値で組める）。
-const PROBE_STAMP: Stamp = Stamp {
-    frame: 7,
-    t_us: 1234,
-};
 
 fn emit_control() {
     tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
@@ -81,28 +76,8 @@ fn lines_of_kind<'a>(captured: &'a str, kind: &str) -> Vec<&'a str> {
 }
 
 // ---------------------------------------------------------------------------
-// 探針のモニタ（識別子は不変・値だけが変わる＝S4 と同型）
+// 探針のモニタ（識別子は不変・値だけが変わる＝S4 と同型・足場は `monitor_systems_tests.rs`）
 // ---------------------------------------------------------------------------
-
-fn monitor_before() -> Monitor {
-    Monitor {
-        handle: 0x0000_ABCD,
-        bounds: RECT {
-            left: 0,
-            top: 0,
-            right: 3840,
-            bottom: 2160,
-        },
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3840,
-            bottom: 2100,
-        },
-        dpi: 120,
-        is_primary: true,
-    }
-}
 
 /// 作業領域**だけ**が変わったモニタ（DPI は据え置き）。
 ///
@@ -117,20 +92,7 @@ fn monitor_after_work_area_only() -> Monitor {
             right: 3840,
             bottom: 2064,
         },
-        ..monitor_before()
-    }
-}
-
-fn monitor_after() -> Monitor {
-    Monitor {
-        work_area: RECT {
-            left: 0,
-            top: 0,
-            right: 3840,
-            bottom: 2064,
-        },
-        dpi: 192,
-        ..monitor_before()
+        ..probe_monitor_before()
     }
 }
 
@@ -138,89 +100,9 @@ fn monitor_after() -> Monitor {
 // シングルスレッドの相（行の字面を見る）
 // ---------------------------------------------------------------------------
 
-/// 檻へ注入する「新しいモニタ列挙結果」。
-#[derive(Resource, Clone)]
-struct InjectedMonitorTable(Vec<Monitor>);
-
-/// 檻が渡す刻印（本番は `Res<FrameCount>`＋`Res<TickStart>` から組む）。
-#[derive(Resource, Clone, Copy)]
-struct ProbeStamp(Stamp);
-
-/// [`apply_monitor_snapshot`] の戻り値（再導出を駆動した窓の数）の受け皿。
-#[derive(Resource, Default)]
-struct RedriveCount(usize);
-
-/// 注入されたモニタ表を [`apply_monitor_snapshot`] へ流す檻専用システム。
-///
-/// 本番の `detect_display_change_system` と**同一の query 構成**であることが重要
-/// ——ここだけ別配線にすると檻が本番経路を見ていないことになる。
-#[allow(clippy::too_many_arguments)]
-fn apply_injected_with_stamp(
-    mut commands: Commands,
-    layout_root: Query<Entity, With<LayoutRoot>>,
-    mut existing_monitors: Query<(Entity, &mut Monitor)>,
-    mut windows: Query<(Entity, &WindowPos, &mut DPI)>,
-    mut taffy_res: ResMut<TaffyLayoutResource>,
-    injected: Res<InjectedMonitorTable>,
-    stamp: Res<ProbeStamp>,
-    mut redriven: ResMut<RedriveCount>,
-) {
-    let root_entity = layout_root
-        .single()
-        .expect("檻の LayoutRoot が単一で存在する");
-    redriven.0 = apply_monitor_snapshot(
-        &mut commands,
-        root_entity,
-        &mut existing_monitors,
-        &mut windows,
-        &mut taffy_res,
-        injected.0.clone(),
-        stamp.0,
-    );
-}
-
-/// 檻用 World。LayoutRoot 1 個・`monitor_before()` の Monitor 1 個を持つ。
-fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
-    let mut world = World::new();
-    world.insert_resource(TaffyLayoutResource::default());
-    world.insert_resource(InjectedMonitorTable(injected));
-    world.insert_resource(ProbeStamp(PROBE_STAMP));
-    world.insert_resource(RedriveCount::default());
-    world.spawn(LayoutRoot);
-    let monitor_entity = world.spawn(monitor_before()).id();
-    (world, monitor_entity)
-}
-
-/// 更新対象モニタの内側に中心を持つ窓を 1 つ置く（再導出の対象になる形）。
-fn spawn_probe_window(world: &mut World, dpi: u16) -> Entity {
-    world
-        .spawn((
-            WindowPos {
-                position: Some(Point { x: 100, y: 100 }),
-                size: Some(SizeI {
-                    width: 400,
-                    height: 600,
-                }),
-                ..Default::default()
-            },
-            DPI::from_dpi(dpi, dpi),
-        ))
-        .id()
-}
-
-/// 檻の実行。**シングルスレッド実行器を明示**する——既定の多スレッド実行器では
-/// システムが別スレッドで走り、`capture_under_filter`（スレッドローカルの dispatcher
-/// 差し替え）が 1 行も捕捉できずログ檻が空虚に緑になる（要件 7.6）。
-fn run_apply(world: &mut World) {
-    let mut schedule = Schedule::default();
-    schedule.set_executor(SingleThreadedExecutor::new());
-    schedule.add_systems(apply_injected_with_stamp);
-    schedule.run(world);
-}
-
 #[test]
 fn a_value_change_update_is_recorded_with_the_supplied_stamp() {
-    let (mut world, monitor_entity) = probe_world(vec![monitor_after()]);
+    let (mut world, monitor_entity) = probe_world(vec![probe_monitor_after()]);
 
     let captured = capture_under_filter(SIGNOFF_WITH_EXISTING_DIRECTIVES, || {
         emit_control();
@@ -273,7 +155,7 @@ fn a_value_change_update_is_recorded_with_the_supplied_stamp() {
 #[test]
 fn an_unchanged_table_records_nothing() {
     // 同じ値を注入する（`differs_in_value` が偽＝更新分岐へ入らない）。
-    let (mut world, _monitor_entity) = probe_world(vec![monitor_before()]);
+    let (mut world, _monitor_entity) = probe_world(vec![probe_monitor_before()]);
 
     let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         emit_control();
@@ -289,7 +171,7 @@ fn an_unchanged_table_records_nothing() {
 
 #[test]
 fn the_monitor_record_is_silent_under_the_default_directives() {
-    let (mut world, _monitor_entity) = probe_world(vec![monitor_after()]);
+    let (mut world, _monitor_entity) = probe_world(vec![probe_monitor_after()]);
 
     let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {
         emit_control();
@@ -312,8 +194,8 @@ fn the_monitor_record_is_silent_under_the_default_directives() {
 
 #[test]
 fn redriving_a_window_dpi_records_the_window_origin() {
-    let (mut world, _monitor_entity) = probe_world(vec![monitor_after()]);
-    let window = spawn_probe_window(&mut world, 120);
+    let (mut world, _monitor_entity) = probe_world(vec![probe_monitor_after()]);
+    let window = spawn_probe_window(&mut world, 100, 100, 120);
 
     let captured = capture_under_filter(SIGNOFF_WITH_EXISTING_DIRECTIVES, || {
         emit_control();
@@ -360,7 +242,7 @@ fn redriving_a_window_dpi_records_the_window_origin() {
 #[test]
 fn a_window_whose_dpi_does_not_change_records_nothing() {
     let (mut world, _monitor_entity) = probe_world(vec![monitor_after_work_area_only()]);
-    let window = spawn_probe_window(&mut world, 120);
+    let window = spawn_probe_window(&mut world, 100, 100, 120);
 
     let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         emit_control();
@@ -386,8 +268,8 @@ fn a_window_whose_dpi_does_not_change_records_nothing() {
 
 #[test]
 fn the_window_origin_is_silent_under_the_default_directives() {
-    let (mut world, _monitor_entity) = probe_world(vec![monitor_after()]);
-    let _window = spawn_probe_window(&mut world, 120);
+    let (mut world, _monitor_entity) = probe_world(vec![probe_monitor_after()]);
+    let _window = spawn_probe_window(&mut world, 100, 100, 120);
 
     let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {
         emit_control();
@@ -433,8 +315,7 @@ fn observe_monitor_stamp(
     layout_root: Query<Entity, With<LayoutRoot>>,
     mut existing_monitors: Query<(Entity, &mut Monitor)>,
     mut windows: Query<(Entity, &WindowPos, &mut DPI)>,
-    mut taffy_res: ResMut<TaffyLayoutResource>,
-    injected: Res<InjectedMonitorTable>,
+    injected: Res<InjectedMonitors>,
     out: Res<ObservedMonitorStamps>,
 ) {
     // D1: World を借りられる観測点は資源から組む（`transition_diag::stamp()` は退行）。
@@ -456,7 +337,6 @@ fn observe_monitor_stamp(
         root_entity,
         &mut existing_monitors,
         &mut windows,
-        &mut taffy_res,
         injected.0.clone(),
         stamp,
     );
@@ -485,13 +365,12 @@ fn monitor_stamps_match_frame_count_under_the_default_multi_threaded_executor() 
     let mut injected: Vec<Monitor> = query.iter(ecs.world()).cloned().collect();
 
     // 探針を 1 台足し、注入表にはその「変化後」を入れる。
-    let probe_entity = ecs.world_mut().spawn(monitor_before()).id();
-    injected.push(monitor_after());
+    let probe_entity = ecs.world_mut().spawn(probe_monitor_before()).id();
+    injected.push(probe_monitor_after());
 
     let sink = ObservedMonitorStamps::default();
     ecs.world_mut().insert_resource(sink.clone());
-    ecs.world_mut()
-        .insert_resource(InjectedMonitorTable(injected));
+    ecs.world_mut().insert_resource(InjectedMonitors(injected));
     ecs.add_systems(Update, observe_monitor_stamp);
 
     // 検証が空振りしていないこと——`Update` は既定の実行器（多スレッド）のままである。

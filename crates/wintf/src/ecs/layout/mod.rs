@@ -34,19 +34,22 @@
 //!
 //! ## taffyレイアウトエンジン統合
 //!
-//! `TaffyStyle`でflexboxレイアウトを宣言的に記述できます：
+//! `BoxStyle`でflexboxレイアウトを宣言的に記述できます（`TaffyStyle`と
+//! `TaffyComputedLayout`は`build_taffy_styles_system`が付けるので、直接は付けません）：
 //!
 //! ```rust,ignore
-//! use wintf::ecs::*;
-//! use taffy::prelude::*;
+//! use wintf::ecs::layout::*;
 //!
 //! commands.spawn((
-//!     TaffyStyle::new(Style {
-//!         size: Size { width: length(200.0), height: length(100.0) },
-//!         padding: Rect { left: length(10.0), right: length(10.0), top: length(5.0), bottom: length(5.0) },
+//!     BoxStyle {
+//!         size: Some(BoxSize {
+//!             width: Some(Dimension::Px(200.0)),
+//!             height: Some(Dimension::Px(100.0)),
+//!         }),
+//!         flex_direction: Some(FlexDirection::Row),
 //!         ..Default::default()
-//!     }),
-//!     TaffyComputedLayout::default(), // taffyが自動計算
+//!     },
+//!     ChildOf(parent), // 親も BoxStyle（根は LayoutRoot）を持つこと
 //! ));
 //! ```
 //!
@@ -85,13 +88,14 @@ use bevy_ecs::prelude::*;
 /// レイアウト計算のルートを示すマーカーコンポーネント
 ///
 /// このコンポーネントが付与されたエンティティは、Taffyレイアウト計算のルートとして扱われます。
-/// 通常、仮想デスクトップ（VirtualDesktop）またはテスト用のルートエンティティに付与されます。
+/// 本番では仮想デスクトップ全体を表すエンティティ（`initialize_layout_root`が作る）に、
+/// テストではテスト用のルートエンティティに付与されます。
 ///
 /// # 設計意図
 ///
 /// - `Window`コンポーネントはレイアウトの対象であり、ルートではありません
-/// - 真のルート階層: `VirtualDesktop → Monitor → Window → Widget`
-/// - 現在の実装では仮想デスクトップ未実装のため、暫定的にルートマーカーを使用
+/// - 階層: `LayoutRoot（仮想デスクトップ）` の子に `Monitor` と `Window` が兄弟で並び、
+///   `Window` の下に `Widget` が続く
 ///
 /// # ストレージ戦略
 ///

@@ -290,6 +290,7 @@ pub struct HitTestResult {
 // ============================================================================
 
 /// hit_test_entity_ex の内部返値
+#[derive(Debug)]
 pub(crate) enum RegionHit {
     /// エンティティにヒットしなかった
     Miss,
