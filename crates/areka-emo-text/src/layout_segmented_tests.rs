@@ -1,5 +1,5 @@
 use super::test_support::{IMAGE, glyphs, inline_positions, model};
-use super::{FixedMetrics, LayoutEngine, LineRect, PositionedLine, WrapPlan};
+use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
 use crate::state::TextItem;
@@ -298,55 +298,6 @@ fn segmented_same_rule_in_vertical_modes() {
     assert_eq!(
         inline_by_mode[0], inline_by_mode[1],
         "縦書き 2 方向で行内軸の塊先決（割れ点・行内位置）が不一致"
-    );
-}
-
-/// 4.1/4.3/8.3: OFF 経路（`WrapPlan::CharByChar`）の非回帰アンカー。既定の折返し
-/// モード（文字単位）は本機能導入前の layout と byte 等価であり、`SegmentPlan` を
-/// 一切参照しない（境界値の算出自体が起きない・R4.2）。閾値 50・font 10 の 6 グリフは
-/// char 割り（5+1）で、行内位置・行矩形まで確定値へ pin する（この確定出力は
-/// `horizontal_wraps_before_glyph_exceeding_threshold` と一致——OFF 出力が全 layout
-/// 呼出で不変であることの明示アンカー）。
-#[test]
-fn char_by_char_is_off_path_non_regression_anchor() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (Some(50), None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    let items = glyphs(6);
-    let lines = LayoutEngine::layout(
-        &items,
-        6,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert_eq!(lines.len(), 2, "char 割り（5+1）どおり");
-    assert_eq!(
-        inline_positions(&lines[0]),
-        vec![0.0, 10.0, 20.0, 30.0, 40.0]
-    );
-    assert_eq!(inline_positions(&lines[1]), vec![0.0]);
-    assert_eq!(
-        lines[0].rect,
-        LineRect {
-            left: 0.0,
-            top: 0.0,
-            right: 50.0,
-            bottom: 10.0
-        }
-    );
-    assert_eq!(
-        lines[1].rect,
-        LineRect {
-            left: 0.0,
-            top: 12.0,
-            right: 10.0,
-            bottom: 22.0
-        }
     );
 }
 

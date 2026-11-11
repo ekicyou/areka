@@ -1,11 +1,13 @@
 //! 縦書き 2 方向（`vertical_rl`／`vertical_lr`）における `\_l` の**正典の着地**を、
 //! 「同じ結果を出す別経路」との一致として固定するテスト（タスク 5.1・検証表 V1〜V5）。
 //!
-//! # 兄弟ファイルとの分担（重複させない）
+//! # 兄弟ファイルとの分担
 //!
 //! - `layout_cursor_vertical_tests.rs` — 縦書き `\_l` の**着地値そのもの**（タスク 1.1 が現行値
-//!   として置き、1.2 の原点切替と 4.1 の語彙解禁が正典値へ書き換えた 15 本）。値が「どちらの
-//!   是正で動いたか」を行ごとに読み分けるための台帳であり、本ファイルはそれを重複させない。
+//!   として置き、1.2 の原点切替と 4.1 の語彙解禁が正典値へ書き換えた台帳）。値が「どちらの
+//!   是正で動いたか」を行ごとに読み分けるためのもの。着地が本ファイルの V1・V2・V4・V5 と同じ
+//!   5 本は本ファイルに値ごと含まれていたので、あちらから消した（`audit-emo-text-layout-draw`
+//!   指摘 28）。
 //! - 本ファイル — 値の逐語ではなく**正典が述べている性質**を固定する。すなわち
 //!   ⑴ `\_l[0,0]` の着地が文字描画範囲の**内側**であること（境界上＝範囲内・V1 の残り半分）、
 //!   ⑵ 列指定が**自動列送りと同値**であること（V2・V5）、
@@ -433,6 +435,11 @@ fn canon_example_relative_inline_step_advances_one_character_in_vertical_rl() {
         "字送り軸の移動が成立するので `\\_l` は列の分割点になる"
     );
     assert_eq!(
+        rect_of(&lines[0]),
+        (390.0, 0.0, 400.0, 10.0),
+        "1 文字目は 1 列目"
+    );
+    assert_eq!(
         column_of(&lines[1]),
         column_of(&reference[0]),
         "X 省略＝列は動かない"
@@ -493,6 +500,11 @@ fn canon_example_relative_inline_step_advances_one_character_in_vertical_lr() {
 
     let lines = layout_in(&[glyph(), cursor_inline_step(), glyph()], 2, mode);
     assert_eq!(lines.len(), 2);
+    assert_eq!(
+        rect_of(&lines[0]),
+        (0.0, 0.0, 10.0, 10.0),
+        "1 文字目は 1 列目"
+    );
     assert_eq!(column_of(&lines[1]), column_of(&reference[0]));
     assert_eq!(
         inline_positions(&lines[1]),

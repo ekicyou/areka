@@ -5,8 +5,9 @@ use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
 use log_capture_kit::count_levels;
 
-// ── 配線層の検証（`\_l` の行区切り・軸上書き・末尾蒸発・両軸 no-op） ──
+// ── 配線層の検証（`\_l` の行区切り・軸上書き・末尾蒸発） ──
 //
+// 両軸省略の完全 no-op（行を分けない）は `layout_cursor_wiring_tests.rs` の H6 が持つ。
 // 解決そのもの（基点＋値×係数・縮退の分類）の純関数テストは解決層の兄弟ファイル
 // （`cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs`）が持つ。本ファイルが見るのは
 // **配線**だけである——到着時の解決をどう保留し、いつ実体化し、行をどう分割するか。
@@ -131,36 +132,6 @@ fn trailing_cursor_move_evaporates() {
     assert_eq!(lines[0].rect.top, 0.0);
 }
 
-/// 両軸 None（`\_l[,]`＝両軸省略）は完全 no-op——行区切りもしない
-/// （正典「両方省略で無効果」・R1.6/5.4/6.2）。`[あ, \_l[,], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
-#[test]
-fn both_axes_omitted_cursor_move_is_complete_noop() {
-    let region = zero_origin_region();
-    let items = [
-        TextItem::glyph("あ"),
-        TextItem::CursorMove {
-            x: CursorCoord::Omitted,
-            y: CursorCoord::Omitted,
-        },
-        TextItem::glyph("あ"),
-    ];
-    let lines = LayoutEngine::layout(
-        &items,
-        2,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert_eq!(
-        lines.len(),
-        1,
-        "両軸省略の \\_l は行区切りしない（完全 no-op）"
-    );
-    assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
-}
-
 // ── 単位の係数が実配置を駆動すること＋フラッシュ順序の per-axis 合成 ──
 //
 // 係数そのものの正しさは解決層のテストが見る。ここで見るのは「解決値が本当に次グリフの
@@ -212,43 +183,12 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
 }
 
 /// 保留改行なしの単軸 `\_l` は指定軸のみ上書きし、省略軸は走査中の実行位置のまま据え置く
-/// （軸別に独立・R1.2/1.6）。x のみ `\_l[10px,]` → inline=10・block は改行がないため 0 のまま。
-/// y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)のまま（リセットされない）。
+/// （軸別に独立・R1.2/1.6）。y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)の
+/// まま（リセットされない）。x のみ `\_l[10px,]` の側は `layout_cursor_wiring_tests.rs` の
+/// `line_count_splits_only_when_a_move_succeeds` が同じ値で見る。
 #[test]
 fn cursor_move_single_axis_leaves_other_axis_unchanged() {
     let region = zero_origin_region();
-    // x 軸のみ上書き（y Omitted）: block は改行がないため据え置き（0）、inline のみ 10 へ。
-    let x_only = [
-        TextItem::glyph("あ"),
-        TextItem::CursorMove {
-            x: CursorCoord::Absolute {
-                value: 10.0,
-                unit: CursorUnit::Px,
-            },
-            y: CursorCoord::Omitted,
-        },
-        TextItem::glyph("あ"),
-    ];
-    let lines = LayoutEngine::layout(
-        &x_only,
-        2,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert_eq!(lines.len(), 2, "\\_l は単軸でも行区切りする");
-    assert_eq!(
-        inline_positions(&lines[1]),
-        vec![10.0],
-        "inline のみ上書き（origin+10）"
-    );
-    assert_eq!(
-        lines[1].rect.top, 0.0,
-        "block 軸は指定なし＝据え置き（改行なしゆえ 0 のまま）"
-    );
-
     // y 軸のみ上書き（x Omitted）: inline は直前送り終端(10)のまま・block のみ 50 へ。
     let y_only = [
         TextItem::glyph("あ"),

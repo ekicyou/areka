@@ -42,7 +42,8 @@ fn fixed_metrics_line_pitch_adds_default_gap() {
 // ── R6.1: 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
 
 /// 横書きの折返し: 行内位置＋次グリフ幅 > 閾値で折返し、
-/// ちょうど閾値で終わるグリフは折返さない（> 判定・境界檻）。
+/// ちょうど閾値で終わるグリフは折返さない（> 判定・境界檻）。既定の折返し
+/// （`WrapPlan::CharByChar`＝塊先決の OFF 経路）の確定出力の非回帰の檻を兼ねる。
 #[test]
 fn horizontal_wraps_before_glyph_exceeding_threshold() {
     let region = TextRegion::resolve(

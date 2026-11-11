@@ -11,10 +11,10 @@ use log_capture_kit::capture;
 // ── 横書きの配線（検証表 H1・H4・H5・H6 と範囲外記録の肯定側） ──
 //
 // 兄弟ファイルとの分担（重複させない）:
-// - `layout_cursor_tests.rs` — 行区切り・軸上書き・末尾蒸発・両軸 no-op・縮退 warn-once、
+// - `layout_cursor_tests.rs` — 行区切り・軸上書き・末尾蒸発・縮退 warn-once、
 //   および軸ごと合成（H2）と実効位置（H3）。
 // - `layout_cursor_order_tests.rs` — 書かれた順（H3b・H3c）。
-// - `layout_cursor_vertical_tests.rs` — 縦書き 2 方向。
+// - `layout_cursor_vertical_tests.rs`／`layout_cursor_vertical_canon_tests.rs` — 縦書き 2 方向。
 // - `cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs` — 解決そのもの（純関数）。
 //
 // 本ファイルが見るのは、上のどれにも属さない**配線の残り**である——絶対座標の基点が

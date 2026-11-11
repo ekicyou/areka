@@ -18,6 +18,11 @@
 //! **正典値（4.1 の語彙解禁による）**（いずれも書き換え前の現行値を根拠として併記）／
 //! **現行値（正典と一致・是正後も不変）**（一度も書き換わっていない）。
 //!
+//! 着地が兄弟 `layout_cursor_vertical_canon_tests.rs` に値ごと含まれる 5 本（`vertical_rl` の
+//! `\_l[0,0]`・`\_l[-12,0]`・`\_l[,@1em]`、`vertical_lr` の `\_l[12,0]`・`\_l[,@1em]`）は
+//! 2026-11-12 にここから消した（`audit-emo-text-layout-draw` 指摘 28）。上の「3 本」の 1 本
+//! （`vertical_rl` の `\_l[0,0]`）もあちらにある。本ファイルは残る 10 本の値を持つ。
+//!
 //! # 共通前提（design.md Integration Tests）
 //!
 //! `FixedMetrics`・`font_height = 10`（全角 'あ' の advance 10・`line_pitch = 10 + 行間 2 = 12`）・
@@ -55,36 +60,6 @@ fn layout_for(items: &[TextItem], visible: usize, mode: WritingMode) -> Vec<Posi
 // ─────────────────────────────────────────────────────────────────────
 // vertical_rl: 1.1 の時点で既に実導出されていた形（非負の数値・em・lh）
 // ─────────────────────────────────────────────────────────────────────
-
-/// **正典値（1.2 の原点切替による）**: `vertical_rl` の `\_l[0,0]` は 1 列目に着地する。
-///
-/// 書き換え前の現行値は列矩形 `[-10, 0]`＝**文字描画範囲（0〜400）の外側左方**だった。
-/// 絶対座標の原点が validrect の辺（X は `left = 0`）だったため X = 0 が画像左端を指し、
-/// `vertical_rl` の列矩形は「列の右端＝行送り位置」から font_height ぶん左へ伸びるので、
-/// 範囲外へ落ちていた。
-///
-/// タスク 1.2 で原点を解決済みの文字描画開始点（`TextRegion::start()`。`origin` 未宣言ゆえ
-/// 書字開始角 `(right, top) = (400, 0)` へ縮退）へ切り替えたので、X = 0 は 400 を指し、
-/// 列矩形は 1 列目 `[390, 400]` になる——正典（SSP 2.8.83・Requirement 2.3）の着地そのもの。
-/// Y は原点の Y 成分が `top = 0` のままで切替の前後が同値ゆえ書き換えていない。
-#[test]
-fn vertical_rl_zero_zero_lands_on_the_first_column() {
-    let items = [cursor_px(0.0, 0.0), glyph()];
-    let lines = layout_for(&items, 1, WritingMode::VerticalRl);
-
-    assert_eq!(lines.len(), 1);
-    assert_eq!(
-        rect_of(&lines[0]),
-        (390.0, 0.0, 400.0, 10.0),
-        "正典値（1.2 の原点切替による）: X = 書字開始角(400) + 0 → 1 列目 [390, 400]。\
-         書き換え前の現行値は [-10, 0]（原点が validrect 左辺 0 だったため）"
-    );
-    assert_eq!(
-        inline_positions(&lines[0]),
-        vec![0.0],
-        "現行値（正典と一致）: Y = 0 は字送り軸の先頭＝列の上端"
-    );
-}
 
 /// **正典値（1.2 の原点切替による）**: `vertical_rl` の `\_l[10,10]`。
 ///
@@ -153,34 +128,6 @@ fn vertical_rl_em_and_lh_units_resolve_from_text_start() {
 // ─────────────────────────────────────────────────────────────────────
 // vertical_rl: 4.1 で解禁された形（負値絶対・百分率・`@` 相対）
 // ─────────────────────────────────────────────────────────────────────
-
-/// **正典値（4.1 の語彙解禁による）**: `vertical_rl` の負の X は次の列へ進む。
-///
-/// 正典では `vertical_rl` の負の X が「次の列」＝自動列送りと同値であり、
-/// `\_l[-12,0]` は 2 列目 `[378, 388]` を指す（1 列ぶん＝新しい行送り 12）。
-///
-/// 書き換え前の現行値は 1 列目 `[390, 400]` だった——旧換算が絶対座標の**非負値のみ**を
-/// 実導出し、負の X を当該軸不動として読み捨てていたため、列は書字開始位置
-/// （`right = 400`）に留まっていた（「`\_l[-12,0]`（2 列目のつもり）」と「X を書かない」が
-/// 同じ結果になっていた）。
-///
-/// タスク 4.1 で非負ゲートを撤去し、解決層の式 1 本（`位置 = 基点 + 値 × 係数`）へ委譲した
-/// ので、X = 書字開始角(400) + (−12) = 388＝列の右端になる。**原点の切替（1.2）に由来する
-/// 差分ではない**——原点はこのテストでは切替の前後とも 400 である。
-#[test]
-fn vertical_rl_negative_x_steps_to_the_next_column() {
-    let items = [cursor_px(-12.0, 0.0), glyph()];
-    let lines = layout_for(&items, 1, WritingMode::VerticalRl);
-
-    assert_eq!(lines.len(), 1);
-    assert_eq!(
-        rect_of(&lines[0]),
-        (378.0, 0.0, 388.0, 10.0),
-        "正典値（4.1 の語彙解禁による）: X = 書字開始角(400) + (−12) = 388 → 2 列目 [378, 388]。\
-         書き換え前の現行値は [390, 400]（負値が読み捨てられ 1 列目に留まっていた）"
-    );
-    assert_eq!(inline_positions(&lines[0]), vec![0.0]);
-}
 
 /// **正典値（4.1 の語彙解禁による）**: `vertical_rl` の百分率は両軸とも文字高さの割合で動く。
 ///
@@ -270,47 +217,6 @@ fn vertical_rl_relative_column_step_moves_one_column_left() {
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
 }
 
-/// **正典値（4.1 の語彙解禁による）**: 正典の縦書き記述例 `\_l[,@1em]`（字送りを 1 文字ぶん
-/// 進める）が字送り軸を 1 文字ぶん進める。
-///
-/// X は省略＝不動（正典の正常形）。Y は `@` 相対で、基点は現在の字送り位置＝1 文字目の
-/// 送り終端 10。そこから `1em = 10` 進んで 20＝1 文字目の直後になる。
-///
-/// 書き換え前の現行値は「両軸とも不動＝完全無効果」で、`\_l` が列の分割点にもならず
-/// 2 文字が隙間なく連続していた。**見た目のグリフ位置は書き換えの前後とも 20 だが、
-/// 列が分割される点が異なる**（移動が 1 軸でも成立すれば `\_l` は行の分割点になる）。
-/// **原点の切替（1.2）に由来する差分ではない**。
-#[test]
-fn vertical_rl_relative_inline_step_advances_one_character() {
-    let items = [
-        glyph(),
-        TextItem::CursorMove {
-            x: CursorCoord::Omitted,
-            y: CursorCoord::Relative {
-                value: 1.0,
-                unit: CursorUnit::Em,
-            },
-        },
-        glyph(),
-    ];
-    let lines = layout_for(&items, 2, WritingMode::VerticalRl);
-
-    assert_eq!(
-        lines.len(),
-        2,
-        "正典値（4.1 の語彙解禁による）: Y 軸の移動が成立するので `\\_l` は列の分割点になる\
-         （書き換え前は完全無効果ゆえ 1 列だった）"
-    );
-    assert_eq!(rect_of(&lines[0]), (390.0, 0.0, 400.0, 10.0));
-    assert_eq!(
-        rect_of(&lines[1]),
-        (390.0, 20.0, 400.0, 30.0),
-        "正典値（4.1 の語彙解禁による）: Y = 現在の字送り位置(10) + 1×10 = 20（列は不動 [390, 400]）。\
-         書き換え前の現行値は 1 列目 [390, 400] に 2 文字連続（字送り 0・10）だった"
-    );
-    assert_eq!(inline_positions(&lines[1]), vec![20.0]);
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // vertical_lr: 1.1 の時点で既に実導出されていた形（非負の数値・em・lh）
 // ─────────────────────────────────────────────────────────────────────
@@ -374,25 +280,6 @@ fn vertical_lr_em_and_lh_units_today() {
         "現行値（正典と一致）: X = 5×10 = 50（列矩形 [50, 60]）／Y = 2×12 = 24"
     );
     assert_eq!(inline_positions(&lines[0]), vec![24.0]);
-}
-
-/// **現行値（正典と一致・是正後も不変）**: `vertical_lr` の正の X による列送り。
-///
-/// `vertical_lr` では列が左から右へ進むので、次の列は正の X（`\_l[12,0]`＝ 1lh ぶん右）で
-/// 指せる。これは非負の絶対値ゆえ旧換算でも実導出され、2 列目 `[12, 22]` に着地していた。
-/// 同じ位置を相対で書いた `\_l[@1lh,0]`（下のテスト）が 4.1 で同じ `[12, 22]` へ着地するように
-/// なったことと対をなす（絶対と相対が同じ列を指せる）。
-#[test]
-fn vertical_lr_positive_x_steps_to_the_next_column_today() {
-    let items = [cursor_px(12.0, 0.0), glyph()];
-    let lines = layout_for(&items, 1, WritingMode::VerticalLr);
-
-    assert_eq!(lines.len(), 1);
-    assert_eq!(
-        rect_of(&lines[0]),
-        (12.0, 0.0, 22.0, 10.0),
-        "現行値（正典と一致）: 2 列目 [12, 22]（line_pitch = 12）"
-    );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -465,7 +352,8 @@ fn vertical_lr_percent_resolves_from_the_font_height() {
 /// **正典値（4.1 の語彙解禁による）**: `vertical_lr` の正典記述例の鏡像 `\_l[@1lh,0]`
 /// （次の列へ）が 2 列目へ進む。
 ///
-/// 同じ位置を絶対値で書いた `\_l[12,0]`（上のテスト）と同じ 2 列目 `[12, 22]` に着地する
+/// 同じ位置を絶対値で書いた `\_l[12,0]`（`layout_cursor_vertical_canon_tests.rs` の
+/// `vertical_lr_positive_x_matches_the_automatic_column_feed`）と同じ 2 列目 `[12, 22]` に着地する
 /// ——絶対と相対が同じ位置を指せることが、`@` 相対の解禁の意味そのものである。
 /// 書き換え前の現行値は 1 列目 `[0, 10]` で、受理はされるのに動かない形の典型だった。
 /// **原点の切替（1.2）に由来する差分ではない**。
@@ -500,38 +388,4 @@ fn vertical_lr_relative_column_step_moves_to_the_next_column() {
          書き換え前の現行値は [0, 10]（`@1lh` が読み捨てられ 2 文字目が 1 文字目に重なっていた）"
     );
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
-}
-
-/// **正典値（4.1 の語彙解禁による）**: `vertical_lr` の `\_l[,@1em]`（字送りを 1 文字ぶん
-/// 進める）が字送り軸を 1 文字ぶん進める（`vertical_rl` の鏡像）。
-/// 書き換え前は両軸とも不動＝完全な無効果だった。
-#[test]
-fn vertical_lr_relative_inline_step_advances_one_character() {
-    let items = [
-        glyph(),
-        TextItem::CursorMove {
-            x: CursorCoord::Omitted,
-            y: CursorCoord::Relative {
-                value: 1.0,
-                unit: CursorUnit::Em,
-            },
-        },
-        glyph(),
-    ];
-    let lines = layout_for(&items, 2, WritingMode::VerticalLr);
-
-    assert_eq!(
-        lines.len(),
-        2,
-        "正典値（4.1 の語彙解禁による）: Y 軸の移動が成立するので `\\_l` は列の分割点になる\
-         （書き換え前は完全無効果ゆえ 1 列だった）"
-    );
-    assert_eq!(rect_of(&lines[0]), (0.0, 0.0, 10.0, 10.0));
-    assert_eq!(
-        rect_of(&lines[1]),
-        (0.0, 20.0, 10.0, 30.0),
-        "正典値（4.1 の語彙解禁による）: Y = 現在の字送り位置(10) + 1×10 = 20（列は不動 [0, 10]）。\
-         書き換え前の現行値は 1 列目 [0, 10] に 2 文字連続（字送り 0・10）だった"
-    );
-    assert_eq!(inline_positions(&lines[1]), vec![20.0]);
 }

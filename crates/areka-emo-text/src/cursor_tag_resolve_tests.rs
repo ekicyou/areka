@@ -7,8 +7,8 @@
 //! | §1 | 表駆動の全行 × 両軸（[`CASES`]・[`Row`]） | 解決表 10 行すべて |
 //! | §2 | 被覆の機械的主張（行・軸・単位の取りこぼしを赤にする） | 同上（主張そのもの） |
 //! | §3 | 単位が軸に依らない（`@` 相対側） | `@N`（R1.4） |
-//! | §4 | 境界値（`0`・`-0`・小数・`@0`・`@-0`・大きな負値） | `N` / `@N`（R9.4） |
-//! | §5 | 正典の記述例 3 つ＋縦書きの記述例 2 つ | 付録 A 逐語（R9.3） |
+//! | §4 | 境界値（`0`・`-0`・`@0`・`@-0`・大きな負値。小数は §1 の `12.5`・`-1.5em` 等） | `N` / `@N`（R9.4） |
+//! | §5 | 正典の記述例 3 つ（縦書きの記述例 2 つ `@-1lh`・`@1em` は §1 の行。列への割り当ては `layout_cursor_vertical_canon_tests.rs` の V3・V4） | 付録 A 逐語（R9.3） |
 //! | §6 | ログ件数（解決は無言・警告は分岐とキャラクターの組ごとに 1 件） | 縮退表 全行（R5.2/5.3/5.5） |
 //!
 //! 縮退表（design.md「Error Handling ／ 縮退表」）の行との対応は §6 の doc に置く。
@@ -281,6 +281,7 @@ const CASES: &[Case] = &[
         1.0,
         CursorUnit::Em,
         CursorAxis::Y,
+        // 正典の縦書きの記述例 `\_l[,@1em]`「字送りを 1 文字ぶん進める」の Y。
         |b| Ok(Some(b.current.1 + 1.0 * b.font_height))
     ),
     relative_case!(
@@ -532,34 +533,6 @@ fn zero_and_negative_zero_land_exactly_on_the_basepoint() {
     }
 }
 
-/// 小数は丸めずそのまま効く（`0.5` px と `-0.5em`）。
-#[test]
-fn fractional_values_are_not_rounded() {
-    let b = basis();
-    assert_eq!(
-        resolve_cursor_axis(
-            CursorCoord::Absolute {
-                value: 0.5,
-                unit: CursorUnit::Px,
-            },
-            CursorAxis::Y,
-            &b
-        ),
-        Ok(Some(b.origin.1 + 0.5))
-    );
-    assert_eq!(
-        resolve_cursor_axis(
-            CursorCoord::Absolute {
-                value: -0.5,
-                unit: CursorUnit::Em,
-            },
-            CursorAxis::X,
-            &b
-        ),
-        Ok(Some(b.origin.0 + -0.5 * b.font_height))
-    );
-}
-
 /// 大きな負値は**字義どおり**返り（内側へ寄せない・R2.6）、範囲外として `debug` 1 件が残る。
 ///
 /// 「値を返すこと」と「記録すること」は別の口である——解決は値を歪めず、記録は位置を動かさない。
@@ -674,53 +647,6 @@ fn canonical_examples_resolve_to_the_documented_numbers() {
             &b
         ),
         Ok(Some(CURRENT.1 - 100.0))
-    );
-}
-
-/// 縦書きの記述例 2 つ（`\_l[@-1lh,0]`／`\_l[,@1em]`・R9.3/3.6）を解決層の単位で固定する。
-///
-/// 「1 列ぶん左の列の先頭へ」「字送りを 1 文字ぶん進める」という**意味**は配線層（列の
-/// 割り当て）で成立する（design.md 検証表 V3／V4）。解決層が負うのは、X が現在位置から
-/// 行送り 1 つぶん減り、Y が現在位置から文字高さ 1 つぶん増える、という数値だけである。
-#[test]
-fn canonical_vertical_examples_resolve_to_one_pitch_and_one_em() {
-    let b = canon_basis();
-    assert_eq!(
-        resolve_cursor_axis(
-            CursorCoord::Relative {
-                value: -1.0,
-                unit: CursorUnit::Lh,
-            },
-            CursorAxis::X,
-            &b
-        ),
-        Ok(Some(CURRENT.0 - LINE_PITCH)),
-        "`@-1lh`＝現在位置から行送り 1 つぶん左"
-    );
-    assert_eq!(
-        resolve_cursor_axis(
-            CursorCoord::Relative {
-                value: 1.0,
-                unit: CursorUnit::Em,
-            },
-            CursorAxis::Y,
-            &b
-        ),
-        Ok(Some(CURRENT.1 + FONT_HEIGHT)),
-        "`@1em`＝現在位置から文字高さ 1 つぶん下"
-    );
-    // `\_l[@-1lh,0]` の Y 側（絶対 0）は文字描画開始点＝列の先頭。
-    assert_eq!(
-        resolve_cursor_axis(
-            CursorCoord::Absolute {
-                value: 0.0,
-                unit: CursorUnit::Px,
-            },
-            CursorAxis::Y,
-            &b
-        ),
-        Ok(Some(b.origin.1)),
-        "`0`＝文字描画開始点そのもの（列の先頭）"
     );
 }
 
@@ -842,12 +768,10 @@ fn shared_premises_match_the_design_document() {
 /// 共通前提は `image_size.0 / 2 == current.0`（＝200）という偶然の一致を持つので、その値の
 /// ままでは「画像中央」と「現在の文字描画位置」を取り違えた実装が X 軸で素通りする。
 /// `discriminating_basis` はこの一致を外すためだけに在るのだが、その**性質そのもの**を
-/// 主張しないと、画像原寸を共通前提と同値へ戻すだけで、これに依る 5 本の檻
+/// 主張しないと、画像原寸を共通前提と同値へ戻すだけで、これに依る 3 本の檻
 /// （`resolution_table_holds_on_every_row_and_axis`・
 /// `relative_line_pitch_moves_the_same_amount_on_both_axes`・
-/// `zero_and_negative_zero_land_exactly_on_the_basepoint`・姉妹モジュールの
-/// `centerx_on_x_resolves_to_half_the_image_width`／`centery_on_y_resolves_to_half_the_image_height`）
-/// が黙って弁別力を失う。
+/// `zero_and_negative_zero_land_exactly_on_the_basepoint`）が黙って弁別力を失う。
 ///
 /// 値の逐語固定ではなく**性質**を書くのは、「なぜその値なのか」を檻に残すためである。
 #[test]

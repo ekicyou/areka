@@ -543,8 +543,11 @@ fn declared_origin_is_the_absolute_basis_in_all_three_writing_modes() {
     let items = [cursor_px(0.0, 0.0), glyph()];
 
     for (mode, expected_rect) in [
+        // 横書きは旧正典（ukadoc 2.8.80「文字描画範囲左上」）の (30, 8) から動いた＝正典追随（R9.6）。
         (WritingMode::HorizontalTb, (50.0, 20.0, 60.0, 30.0)),
+        // 列の**右端** right = 50 が宣言 origin.x（V7 の逐語「vertical_rl は列右端 50」）。
         (WritingMode::VerticalRl, (40.0, 20.0, 50.0, 30.0)),
+        // 列の**左端** left = 50 が宣言 origin.x（同「vertical_lr は列左端 50」）。
         (WritingMode::VerticalLr, (50.0, 20.0, 60.0, 30.0)),
     ] {
         let region = region_declared(mode);
@@ -561,72 +564,4 @@ fn declared_origin_is_the_absolute_basis_in_all_three_writing_modes() {
             "{mode:?}: 着地は宣言値そのもの（書字開始角でも validrect の辺でも画像中央でもない）"
         );
     }
-
-    // 列の辺としての読み（design.md V7 の逐語「vertical_rl は列右端 50・vertical_lr は列左端 50」）。
-    let rl = layout_in(
-        &items,
-        1,
-        &region_declared(WritingMode::VerticalRl),
-        WritingMode::VerticalRl,
-    );
-    assert_eq!(
-        rl[0].rect.right, DECLARED_ORIGIN.0,
-        "vertical_rl: 列の**右端**が宣言 origin.x = 50（列矩形は [block − font, block]）"
-    );
-    let lr = layout_in(
-        &items,
-        1,
-        &region_declared(WritingMode::VerticalLr),
-        WritingMode::VerticalLr,
-    );
-    assert_eq!(
-        lr[0].rect.left, DECLARED_ORIGIN.0,
-        "vertical_lr: 列の**左端**が宣言 origin.x = 50（列矩形は [block, block + font]）"
-    );
-}
-
-/// **V7 の根拠（Requirement 9.6・2.9）**: 宣言バルーンでは**横書きの着地も変わる**。これは
-/// 退行ではなく正典追随である。
-///
-/// - **本仕様より前の着地（現行値）**: `(30, 8)`＝validrect の左上。旧実装は
-///   `cursor_to_image_px(x, region.left(), …)` / `region.top()` を基点にしており
-///   （タスク 1.2 以前の `layout.rs`）、ukadoc **2.8.80** の「文字描画範囲左上」に従っていた。
-///   宣言された `origin` は基点に一切効かなかった。
-/// - **本仕様の着地（正典値）**: `(50, 20)`＝宣言された文字描画開始点。ukadoc **2.8.83** が
-///   数値座標の原点を「文字描画開始点（`origin` の位置）」へ改めたためである
-///   （requirements.md Requirement 2.1／2.9・開発者裁定 2026-09-02 議題 1）。
-/// - **なぜ受け入れるか**: 差分が出るのは `origin` を角と異なる位置に**宣言した**バルーンだけで、
-///   未宣言バルーンでは `TextRegion::start()` が書字開始角と一致するため着地は 1 ビットも
-///   変わらない（Requirement 2.7・`layout_cursor_wiring_tests.rs` の H1 が固定）。emo2 の
-///   実バルーンは `origin` 未宣言なので適合結果は不変である（requirements.md の実測）。
-///
-/// 本檻は「新しい値である」ことと「古い値**ではない**こと」を両方主張する——後者が無いと、
-/// 正典追随という主張が「たまたま今の値」と区別できない。
-#[test]
-fn declared_origin_changes_the_horizontal_landing_as_canon_following() {
-    let mode = WritingMode::HorizontalTb;
-    let region = region_declared(mode);
-    let lines = layout_in(&[cursor_px(0.0, 0.0), glyph()], 1, &region, mode);
-    let landing = landing_of(&lines[0], mode);
-
-    assert_eq!(
-        landing, DECLARED_ORIGIN,
-        "正典値（ukadoc 2.8.83「文字描画開始点」）＝宣言された origin (50, 20)"
-    );
-    assert_ne!(
-        landing,
-        (region.left(), region.top()),
-        "旧正典（ukadoc 2.8.80「文字描画範囲左上」）の着地 (30, 8) にはならない——\
-         この差分が Requirement 9.6 の「正典追随であって退行ではない」の観測点である"
-    );
-
-    // 未宣言バルーンでは同じ入力の着地が書字開始角と一致し、本仕様の前後で変わらない
-    // （R2.7。差分が出るのは宣言バルーンだけであることの対照）。
-    let undeclared = region_undeclared(mode);
-    let lines = layout_in(&[cursor_px(0.0, 0.0), glyph()], 1, &undeclared, mode);
-    assert_eq!(
-        landing_of(&lines[0], mode),
-        (undeclared.left(), undeclared.top()),
-        "未宣言バルーンの着地は書字開始角＝validrect の左上のままで、新旧の正典で一致する"
-    );
 }
