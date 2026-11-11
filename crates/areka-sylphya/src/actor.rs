@@ -606,6 +606,15 @@ pub fn spawn_sylphya_with_failures(
     init: SylphyaInit,
     failures: Option<Sender<PersistFailure>>,
 ) -> SylphyaParts {
+    spawn_parts(init, failures).0
+}
+
+/// 起動の組み立ての本体（本番の [`spawn_sylphya_with_failures`] と epoch の檻が共に通る）。
+/// 檻が epoch を直接見られるよう、部品と共に鏡像の共有の写しも返す。
+pub(crate) fn spawn_parts(
+    init: SylphyaInit,
+    failures: Option<Sender<PersistFailure>>,
+) -> (SylphyaParts, SharedMirror) {
     let SylphyaInit {
         roots,
         io,
@@ -623,11 +632,12 @@ pub fn spawn_sylphya_with_failures(
     });
 
     // 3. 読み口・送信端・ハンドルを返す（reader は初期像を保持する shared を共有）。
-    SylphyaParts {
-        reader: SylphyaReader::new(shared),
+    let parts = SylphyaParts {
+        reader: SylphyaReader::new(shared.clone()),
         publisher: SylphyaPublisher { tx },
         handle,
-    }
+    };
+    (parts, shared)
 }
 
 /// 全永続スコープを寛容ロードし、初期鏡像（epoch 0）の大域点付き区画へ `areka.*` 正準 key で
@@ -831,7 +841,7 @@ mod actor_integration_tests;
 ///   （`mirror::tests::predecessor_image_unchanged_after_publish`）は既存だが、**アクターが
 ///   `apply` の効果列を実行して行う publish swap** で epoch が単調増加することを突く檻は無い。
 ///   reader は epoch を露出しない（設計: epoch はフェンス予約シームで読み API に非露出）ため、
-///   本檻は spawn 経路を忠実に再現しつつ [`SharedMirror`] の clone を保持し
+///   本檻は本番と同じ組み立て（[`spawn_parts`]）を通り [`SharedMirror`] の clone を保持し
 ///   `SharedMirror::load().epoch` で直接観測する。
 /// - **(B) アクター死亡後 send の WARN 記録**（R6.7/8.1・無音失敗禁止）: 死亡後投函が panic せず
 ///   縮退することは既存檻（[`actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`]）
