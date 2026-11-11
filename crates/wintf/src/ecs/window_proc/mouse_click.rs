@@ -30,8 +30,8 @@ fn handle_button_message(
     button: crate::ecs::pointer::PointerButton,
     is_down: bool,
 ) -> HandlerResult {
-    use crate::ecs::layout::hit_test::{PhysicalPoint as HitTestPoint, hit_test_in_window};
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
+    use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
 
     // クリック位置を取得
     let x = (lparam.0 & 0xFFFF) as i16 as i32;

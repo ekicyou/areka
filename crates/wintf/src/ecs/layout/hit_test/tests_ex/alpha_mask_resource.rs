@@ -2,7 +2,7 @@
 //!
 //! - `AlphaMaskResource` あり → 最優先で使用（`BitmapSourceResource`・矩形フォールバックより優先）
 //! - `AlphaMaskResource` なし → 従来 `BitmapSourceResource` → 矩形フォールバック（後方互換）
-//! - 両エントリポイントを檻に含める: `hit_test_entity`（直接）／`hit_test_in_window`（`hit_test_entity_ex` 経由）
+//! - 両エントリポイントを檻に含める: `hit_test_entity`（直接）／`hit_test_in_window`（`hit_test` → `hit_test_entity` 経由）
 
 use super::super::*;
 use super::make_global_arrangement;
@@ -64,7 +64,7 @@ fn test_alpha_mask_resource_present_hit() {
         .id();
 
     // point (0.5,0.5) → rel(0.25,0.25) → mask(0,0)＝不透明 → ヒット
-    let point = PhysicalPoint::new(0.5, 0.5);
+    let point = PointF::new(0.5, 0.5);
     assert!(hit_test_entity(&world, entity, point));
 }
 
@@ -85,7 +85,7 @@ fn test_alpha_mask_resource_present_miss_overrides_rect_fallback() {
         .id();
 
     // bounds 内（矩形なら hit）だが全透明マスク → ミス
-    let point = PhysicalPoint::new(0.5, 0.5);
+    let point = PointF::new(0.5, 0.5);
     assert!(!hit_test_entity(&world, entity, point));
 }
 
@@ -101,7 +101,7 @@ fn test_alpha_mask_resource_absent_falls_back_to_rect() {
         ))
         .id();
 
-    let point = PhysicalPoint::new(0.5, 0.5);
+    let point = PointF::new(0.5, 0.5);
     // 供給者不在 → 矩形フォールバックでヒット（従来挙動不変）
     assert!(hit_test_entity(&world, entity, point));
 }
@@ -119,13 +119,13 @@ fn test_alpha_mask_resource_outside_bounds_miss() {
         .id();
 
     // bounds 外
-    let point = PhysicalPoint::new(100.0, 100.0);
+    let point = PointF::new(100.0, 100.0);
     assert!(!hit_test_entity(&world, entity, point));
 }
 
 // ========================================================================
-// hit_test_in_window（hit_test_entity_ex 経由）経路
-//   clickthrough evaluate_targets → hit_test_in_window → hit_test_entity_ex
+// hit_test_in_window（hit_test → hit_test_entity 経由）経路
+//   clickthrough evaluate_targets → hit_test_in_window → hit_test → hit_test_entity
 //   と同一経路を檻に含める（design Validation 明示要求）
 // ========================================================================
 
@@ -152,14 +152,14 @@ fn test_alpha_mask_resource_via_window_hit() {
     world.entity_mut(window).add_children(&[surface]);
 
     // client (0.5,0.5) → screen (0.5,0.5) → mask(0,0)＝不透明
-    let client = PhysicalPoint::new(0.5, 0.5);
+    let client = PointF::new(0.5, 0.5);
     assert_eq!(hit_test_in_window(&world, window, client), Some(surface));
 }
 
 /// window 経由でも `AlphaMaskResource` が優先される（全透明 → None）。
 ///
 /// `AlphaMaskResource` が無ければ矩形フォールバックで surface がヒットし `Some(surface)` に
-/// なるはず。全透明マスクで `None` になることで `hit_test_entity_ex` 側でも優先読みが
+/// なるはず。全透明マスクで `None` になることで窓の経路でも優先読みが
 /// 効いていることを証明する。
 #[test]
 fn test_alpha_mask_resource_via_window_miss_overrides_rect_fallback() {
@@ -181,7 +181,7 @@ fn test_alpha_mask_resource_via_window_miss_overrides_rect_fallback() {
         .id();
     world.entity_mut(window).add_children(&[surface]);
 
-    let client = PhysicalPoint::new(0.5, 0.5);
+    let client = PointF::new(0.5, 0.5);
     // 全透明 → surface はミス、他にヒット対象なし → None
     assert_eq!(hit_test_in_window(&world, window, client), None);
 }
@@ -193,17 +193,22 @@ fn test_alpha_mask_resource_via_window_miss_overrides_rect_fallback() {
 //   BitmapSourceResource は実 IWICBitmapSource を要するため COM 初期化下で構築。
 // ========================================================================
 
-/// COM を初期化して closure を実行するヘルパ（integration テストと同一パターン）
+/// COM を初期化して closure を実行するヘルパ。入れたときだけ後始末し、
+/// 別の形で入っている（`RPC_E_CHANGED_MODE`）ほかの失敗は落とす。
 fn with_com_initialized<T, F: FnOnce() -> T>(f: F) -> T {
+    use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
+    let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+    let entered = hr.is_ok();
+    assert!(
+        entered || hr == RPC_E_CHANGED_MODE,
+        "CoInitializeEx が失敗した: {hr:?}"
+    );
     // World（BitmapSourceResource が保持する IWICBitmapSource を含む）は
     // closure 内で drop され、CoUninitialize より前に解放される。
     let result = f();
-    unsafe {
-        CoUninitialize();
+    if entered {
+        unsafe { CoUninitialize() };
     }
     result
 }
@@ -249,7 +254,7 @@ fn test_alpha_mask_resource_priority_over_bitmap_source_direct() {
             ))
             .id();
 
-        let point = PhysicalPoint::new(0.5, 0.5);
+        let point = PointF::new(0.5, 0.5);
         hit_test_entity(&world, entity, point)
     });
 
@@ -260,7 +265,7 @@ fn test_alpha_mask_resource_priority_over_bitmap_source_direct() {
     );
 }
 
-/// 同じ不一致を `hit_test_in_window`（`hit_test_entity_ex` 経由）でも証明する。
+/// 同じ不一致を `hit_test_in_window`（`hit_test` → `hit_test_entity` 経由）でも証明する。
 #[test]
 fn test_alpha_mask_resource_priority_over_bitmap_source_via_window() {
     use crate::ecs::widget::bitmap_source::BitmapSourceResource;
@@ -288,13 +293,13 @@ fn test_alpha_mask_resource_priority_over_bitmap_source_via_window() {
             .id();
         world.entity_mut(window).add_children(&[surface]);
 
-        let client = PhysicalPoint::new(0.5, 0.5);
+        let client = PointF::new(0.5, 0.5);
         hit_test_in_window(&world, window, client)
     });
 
     // AlphaMaskResource(miss) 優先 → surface はヒットせず None
     assert_eq!(
         result, None,
-        "AlphaMaskResource(miss) must take priority over BitmapSourceResource(hit) via _ex path"
+        "AlphaMaskResource(miss) must take priority over BitmapSourceResource(hit) via window path"
     );
 }

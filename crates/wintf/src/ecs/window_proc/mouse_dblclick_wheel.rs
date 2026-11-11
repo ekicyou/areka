@@ -38,8 +38,8 @@ fn handle_double_click_message(
     lparam: LPARAM,
     double_click: crate::ecs::pointer::DoubleClick,
 ) -> HandlerResult {
-    use crate::ecs::layout::hit_test::{PhysicalPoint as HitTestPoint, hit_test_in_window};
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
+    use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
 
     // クリック位置を取得
     let x = (lparam.0 & 0xFFFF) as i16 as i32;

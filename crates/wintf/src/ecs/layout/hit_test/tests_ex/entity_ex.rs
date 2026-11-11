@@ -35,7 +35,7 @@ fn test_hit_test_entity_ex_named_regions_rect_hit() {
     assert_eq!(world.get::<GlobalArrangement>(entity), Some(&global));
 
     // local (50, 20) → screen (50, 20) — "head" 領域内
-    let point = PhysicalPoint::new(50.0, 20.0);
+    let point = PointF::new(50.0, 20.0);
     match hit_test_entity_ex(&world, entity, point) {
         RegionHit::Hit(Some(name)) => assert_eq!(name, "head"),
         other => panic!(
@@ -68,7 +68,7 @@ fn test_hit_test_entity_ex_named_regions_no_region() {
         .id();
 
     // local (5, 80) — bounds内だが領域外
-    let point = PhysicalPoint::new(5.0, 80.0);
+    let point = PointF::new(5.0, 80.0);
     match hit_test_entity_ex(&world, entity, point) {
         RegionHit::Hit(None) => {} // 期待通り: 無名ヒット
         other => panic!(
@@ -95,7 +95,7 @@ fn test_hit_test_entity_ex_named_regions_no_region_map_fallback() {
         ))
         .id();
 
-    let point = PhysicalPoint::new(50.0, 50.0);
+    let point = PointF::new(50.0, 50.0);
     match hit_test_entity_ex(&world, entity, point) {
         RegionHit::Hit(None) => {} // Bounds フォールバック
         other => panic!(
@@ -121,7 +121,7 @@ fn test_hit_test_entity_ex_bounds_mode_region_none() {
         ))
         .id();
 
-    let point = PhysicalPoint::new(50.0, 50.0);
+    let point = PointF::new(50.0, 50.0);
     match hit_test_entity_ex(&world, entity, point) {
         RegionHit::Hit(None) => {}
         _ => panic!("Expected Hit(None) for Bounds mode"),
@@ -151,7 +151,7 @@ fn test_hit_test_entity_ex_named_regions_degenerate_bounds_width() {
         .id();
 
     // x==50 は contains を通過し、bounds_width<=0 分岐で Hit(None) フォールバック
-    match hit_test_entity_ex(&world, entity, PhysicalPoint::new(50.0, 50.0)) {
+    match hit_test_entity_ex(&world, entity, PointF::new(50.0, 50.0)) {
         RegionHit::Hit(None) => {}
         other => panic!(
             "Expected Hit(None) for degenerate bounds, got {:?}",
@@ -183,7 +183,7 @@ fn test_hit_test_entity_ex_named_regions_degenerate_bounds_height() {
         .id();
 
     // y==50 は contains を通過し、bounds_height<=0 分岐で Hit(None) フォールバック
-    match hit_test_entity_ex(&world, entity, PhysicalPoint::new(50.0, 50.0)) {
+    match hit_test_entity_ex(&world, entity, PointF::new(50.0, 50.0)) {
         RegionHit::Hit(None) => {}
         other => panic!(
             "Expected Hit(None) for degenerate bounds, got {:?}",
@@ -208,7 +208,7 @@ fn test_hit_test_entity_ex_outside_bounds() {
         ))
         .id();
 
-    let point = PhysicalPoint::new(200.0, 200.0);
+    let point = PointF::new(200.0, 200.0);
     match hit_test_entity_ex(&world, entity, point) {
         RegionHit::Miss => {}
         _ => panic!("Expected Miss for outside bounds"),

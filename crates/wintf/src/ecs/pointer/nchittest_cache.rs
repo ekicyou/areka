@@ -16,8 +16,8 @@ use tracing::trace;
 use windows::Win32::Foundation::{HWND, LRESULT, POINT};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
 
-use crate::ecs::layout::hit_test::{PhysicalPoint, hit_test_in_window};
 use crate::ecs::world::EcsWorld;
+use crate::ecs::{PointF, hit_test_in_window};
 
 // HTCLIENT = 1, HTTRANSPARENT = -1
 const HTCLIENT: i32 = 1;
@@ -128,7 +128,7 @@ pub fn cached_nchittest(
         Ok(world_ref) => hit_test_in_window(
             world_ref.world(),
             entity,
-            PhysicalPoint::new(pt.x as f32, pt.y as f32),
+            PointF::new(pt.x as f32, pt.y as f32),
         ),
         Err(_) => {
             return None; // 借用失敗時は DefWindowProcW に委譲

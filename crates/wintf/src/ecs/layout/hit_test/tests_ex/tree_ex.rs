@@ -30,14 +30,14 @@ fn test_hit_test_ex_returns_region_name() {
     world.entity_mut(root).add_children(&[entity]);
 
     // head 領域
-    let result = hit_test_ex(&world, root, PhysicalPoint::new(50.0, 25.0));
+    let result = hit_test_ex(&world, root, PointF::new(50.0, 25.0));
     assert!(result.is_some());
     let result = result.unwrap();
     assert_eq!(result.entity, entity);
     assert_eq!(result.region.as_deref(), Some("head"));
 
     // body 領域
-    let result = hit_test_ex(&world, root, PhysicalPoint::new(50.0, 75.0));
+    let result = hit_test_ex(&world, root, PointF::new(50.0, 75.0));
     assert!(result.is_some());
     let result = result.unwrap();
     assert_eq!(result.entity, entity);
@@ -59,7 +59,7 @@ fn test_hit_test_ex_bounds_mode() {
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[entity]);
 
-    let result = hit_test_ex(&world, root, PhysicalPoint::new(50.0, 50.0));
+    let result = hit_test_ex(&world, root, PointF::new(50.0, 50.0));
     assert!(result.is_some());
     let result = result.unwrap();
     assert_eq!(result.entity, entity);
@@ -81,7 +81,7 @@ fn test_hit_test_ex_backward_compat_same_entity() {
     let root = world.spawn_empty().id();
     world.entity_mut(root).add_children(&[back, front]);
 
-    let point = PhysicalPoint::new(50.0, 50.0);
+    let point = PointF::new(50.0, 50.0);
 
     let old_result = hit_test(&world, root, point);
     let new_result = hit_test_ex(&world, root, point);
@@ -128,7 +128,7 @@ fn test_hit_test_in_window_ex_with_region() {
     world.entity_mut(window).add_children(&[widget]);
 
     // クライアント (50, 50) → スクリーン (150, 250)
-    let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+    let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 50.0));
     assert!(result.is_some());
     let result = result.unwrap();
     assert_eq!(result.entity, widget);
@@ -143,7 +143,7 @@ fn test_hit_test_in_window_ex_no_window_pos() {
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
         .id();
 
-    let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+    let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 50.0));
     assert!(result.is_none());
 }
 
@@ -164,7 +164,7 @@ fn test_hit_test_in_window_ex_position_none() {
         ))
         .id();
 
-    let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+    let result = hit_test_in_window_ex(&world, window, PointF::new(50.0, 50.0));
     assert!(result.is_none());
 }
 
@@ -184,10 +184,10 @@ fn test_existing_api_backward_compat() {
     world.entity_mut(root).add_children(&[entity]);
 
     // 既存 API は変更なく動作
-    let result = hit_test(&world, root, PhysicalPoint::new(50.0, 50.0));
+    let result = hit_test(&world, root, PointF::new(50.0, 50.0));
     assert_eq!(result, Some(entity));
 
     // bounds外
-    let result = hit_test(&world, root, PhysicalPoint::new(200.0, 200.0));
+    let result = hit_test(&world, root, PointF::new(200.0, 200.0));
     assert_eq!(result, None);
 }

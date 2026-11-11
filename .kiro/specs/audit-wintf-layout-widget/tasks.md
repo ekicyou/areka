@@ -143,7 +143,7 @@
   - _Requirements: 3.1, 3.6, 5.11, 5.12_
 
 - [ ] 5. 当たり判定・色分け画像・残りの小物
-- [ ] 5.1 当たり判定の規則を 1 本にする
+- [x] 5.1 当たり判定の規則を 1 本にする
   - 本番の当たり判定を、領域つきの当たり判定が「外れ」でないかの 1 行にし、写しを消す。`NamedRegions` はαのマスクを見ない（14 番）
   - 前景の α を 2.2 の前景色の関数から取る（32 番の当たり判定の分）
   - 点の別名を消して `PointF` と書き、範囲の中のテストと例（`crates/wintf/examples/taffy_flex_demo/main.rs:88`・`region.rs:15`）を直す（25 番）
@@ -209,3 +209,4 @@
 - 4.2: `crates/wintf/src/ecs/world/mod.rs:317` の説明「BitmapSourceResource追加検出時に実行」が Changed へ変わって古くなった（触らないファイル）。`/kiro-complete` の棚卸で扱う。`BitmapSource` を `insert` で別の `path` に置き換えても読み込みは始まらない（前から・要件 3.6 で「読み直す形」は足さない）。
 - 4.3: 描く流れの後の確かめ: `bitmap_source_integration_test` 7/7・`device_lost_recovery_test` 5/5 緑（2.1 の控えと同じ）。35 番で `bitmap_source/tests.rs:123-136` を消したので、4.4 で範囲の中に残る `path` の読み手は `bitmap_source.rs` の 1 か所だけ。
 - 4.3: 有効な `BitmapSourceGraphics` を持つ部品へ `BitmapSourceResource` を直に入れ直して D2D の画像が作れないと、前の画像が残る（前からの形・本番の道では起きない）。直すなら Err の枝で `invalidate()` の 1 行。7.1 で見る。
+- 5.1: 点の別名 `PhysicalPoint`（layout::hit_test）を消すため、範囲の外の 5 ファイル（`ecs/cursor/answer.rs`・`ecs/pointer/nchittest_cache.rs`・`ecs/window_proc/mouse_click.rs`・`mouse_dblclick_wheel.rs`・`mouse_move.rs`）の `use` を 1 行ずつ `PointF` に替えた（持ち主の `audit-wintf-input`・`audit-wintf-window` は brief だけで並走なし・design の 25 番の行に追記）。`crates/areka-emo-present/src/mount_tests.rs:22-24` の説明が古くなった（範囲の外）。`/kiro-complete` の棚卸で扱う。

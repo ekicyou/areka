@@ -149,7 +149,7 @@ crates/wintf/src/ecs/
 - 13 番: `crates/wintf/tests/drag/window_dragging_filter_test.rs`（上書きを前提にした説明 2 か所）・`crates/wintf/tests/ecs/tree_propagation_test.rs:35-37`（説明）。どちらも既定値を渡しているので答えは変わらない。
 - 14 番: 範囲の外の呼び手（`clickthrough`・`cursor`・`tooltip`・`window_proc`・emo-present・emo-text）は関数の形が変わらないので触らない。
 - 24 番: `crates/wintf/tests/widget/label_defaults_test.rs`（`TextLayoutResource` の確かめを消す）・`crates/wintf/tests/layout/metrics_test.rs`（`TextLayoutMetrics` の確かめを消す）。
-- 25 番: `crates/wintf/examples/taffy_flex_demo/main.rs:88` と `region.rs:15`（`PhysicalPoint` を `PointF` に）。
+- 25 番: `crates/wintf/examples/taffy_flex_demo/main.rs:88` と `region.rs:15`（`PhysicalPoint` を `PointF` に）。実装（5.1）で、`crates/wintf/src/ecs/cursor/answer.rs:8`・`ecs/pointer/nchittest_cache.rs:19`・`ecs/window_proc/mouse_click.rs:33`・`mouse_dblclick_wheel.rs:41`・`mouse_move.rs:130` も `layout::hit_test` の別名を `use` していると分かった（design-validation の「名指すのは `taffy_flex_demo` だけ」は誤り）。別名を消すと組み立たないので、この 5 か所の `use` を `crate::ecs::PointF` に替える（各 1 行・型は同じで答えは変わらない）。
 - 26 番: `crates/wintf/tests/layout/taffy_advanced_test/mapping_management.rs`・`tree_sync.rs`・`crates/wintf/tests/layout/taffy_child_order_test.rs`（逆引きの代わりに `get_node` と taffy の `children` で確かめる）。
 - 28 番（前提つき・`placement-crate-split` が main に着地し、この枝が main を取り込んだ後だけ）: `crates/areka/examples/mock-shell.rs:609`（`bitmap.path()` へ 1 行）・`crates/areka/examples/clickthrough_two_rects.rs:192`（説明）。
 - 33 番: 値の型を部品として使う所は木の全体で 0 件（research.md 8.8）。組み立てが通らない所が出たら、その呼び手だけを直す。
