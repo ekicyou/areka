@@ -35,17 +35,6 @@ fn test_wic_core_creation() {
 }
 
 // ============================================================
-// Task 2.3: BitmapSourceGraphics Tests
-// ============================================================
-
-#[test]
-fn test_bitmap_source_graphics_send_sync() {
-    // Send + Sync を自動の導出で持つことを確かめる（手書きの impl は無い）
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<BitmapSourceGraphics>();
-}
-
-// ============================================================
 // W5b-T 追加: resolve_path のデバイス非依存パス解決ロジック
 //
 // resolve_path は WIC/D2D に一切依存しない純粋なパス変換

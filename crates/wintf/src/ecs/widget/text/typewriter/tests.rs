@@ -5,15 +5,6 @@ use crate::ecs::layout::metrics::Size;
 use crate::ecs::widget::text::typewriter_layout::init_typewriter_layout;
 use bevy_ecs::prelude::*;
 
-/// `TypewriterLayoutCache` が自動の導出で `Send + Sync` になることを固定する
-/// （`IDWriteTextLayout` は windows-rs が `Send`/`Sync` を付け、時間表はただの値）。
-/// 後で `Send` でない欄を足すと、ここが組み立たなくなる。
-#[test]
-fn test_typewriter_layout_cache_is_send_sync() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<TypewriterLayoutCache>();
-}
-
 // ============================================================
 // TypewriterTalk — デバイス非依存な再生状態マシンの特性化
 // （pause/resume/skip/update のロジックは DirectWrite 非依存。

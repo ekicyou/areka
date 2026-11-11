@@ -39,7 +39,8 @@ pub fn build_taffy_styles_system(
     mut unstyled: Query<(Has<LayoutRoot>, Option<&mut TaffyStyle>), Without<BoxStyle>>,
     // 外した部品の子と名前（子が配置から外れる warn に使う）
     parts: Query<(Option<&Children>, Option<&Name>)>,
-    styled: Query<(), With<TaffyStyle>>,
+    // 子が配置されるかは BoxStyle で見る（TaffyStyle は commands で付け外しするので同じ回の変化が映らない）
+    boxed: Query<(), With<BoxStyle>>,
 ) {
     for entity in removed_box_styles.read() {
         let Ok((is_root, taffy_style)) = unstyled.get_mut(entity) else {
@@ -52,11 +53,11 @@ pub fn build_taffy_styles_system(
         } else {
             // 子の節は taffy の木から切れ、この節が BoxStyle を持ち直すまでその子は配置されない
             if let Ok((Some(children), name)) = parts.get(entity)
-                && children.iter().any(|child| styled.contains(child))
+                && children.iter().any(|child| boxed.contains(child))
             {
                 warn!(
                     entity = %format_entity_name(entity, name),
-                    "[build_taffy_styles] BoxStyle removed while children still have TaffyStyle; they are not laid out until it gets a BoxStyle again"
+                    "[build_taffy_styles] BoxStyle removed while children still have BoxStyle; they are not laid out until it gets a BoxStyle again"
                 );
             }
             commands

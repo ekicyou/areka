@@ -210,9 +210,9 @@ fn despawned_middle_child_closes_up_once_then_no_recompute() {
 }
 
 const ORPHAN_PARENT_WARN: &str = "Parent has no taffy node";
-const ORPHAN_CHILDREN_WARN: &str = "BoxStyle removed while children still have TaffyStyle";
+const ORPHAN_CHILDREN_WARN: &str = "BoxStyle removed while children still have BoxStyle";
 
-/// 38 番: 中ほどの部品から `BoxStyle` を外すと、`TaffyStyle` を持つ子が配置から外れる。
+/// 38 番: 中ほどの部品から `BoxStyle` を外すと、`BoxStyle` を持つ子が配置から外れる。
 /// 配置の振る舞いは変えず、外した回に一度だけ実体名つきで warn を出す。
 #[test]
 fn box_style_removed_from_container_with_styled_children_warns_once() {
@@ -236,6 +236,48 @@ fn box_style_removed_from_container_with_styled_children_warns_once() {
     });
     assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 1, "{log}");
     assert!(log.contains("orphan-container"), "実体名が要る: {log}");
+}
+
+/// 55 番: `BoxStyle` を外した回に `BoxStyle` 付きの子を足すと、その子もまだ `TaffyStyle` が無いが
+/// 配置から外れるので warn を一度出す。
+#[test]
+fn box_style_removed_while_new_styled_child_spawned_warns_once() {
+    let mut world = new_world();
+    let mut layout = layout_schedule();
+    let root = spawn_row_root(&mut world);
+    let container = world
+        .spawn((
+            Name::new("orphan-container"),
+            px_box(100.0, 50.0),
+            ChildOf(root),
+        ))
+        .id();
+    layout.run(&mut world);
+
+    world.entity_mut(container).remove::<BoxStyle>();
+    world.spawn((px_box(30.0, 10.0), ChildOf(container)));
+    let log = capture_under_filter("warn", || {
+        layout.run(&mut world);
+        layout.run(&mut world);
+    });
+    assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 1, "{log}");
+    assert!(log.contains("orphan-container"), "実体名が要る: {log}");
+}
+
+/// 55 番: 部品と子の両方から同じ回に `BoxStyle` を外したら、配置から外れる子は居ないので warn は出ない。
+#[test]
+fn box_style_removed_from_container_and_child_together_does_not_warn() {
+    let mut world = new_world();
+    let mut layout = layout_schedule();
+    let root = spawn_row_root(&mut world);
+    let container = world.spawn((px_box(100.0, 50.0), ChildOf(root))).id();
+    let child = world.spawn((px_box(30.0, 10.0), ChildOf(container))).id();
+    layout.run(&mut world);
+
+    world.entity_mut(container).remove::<BoxStyle>();
+    world.entity_mut(child).remove::<BoxStyle>();
+    let log = capture_under_filter("warn", || layout.run(&mut world));
+    assert_eq!(log.matches(ORPHAN_CHILDREN_WARN).count(), 0, "{log}");
 }
 
 /// 38 番: 子の居ない部品から `BoxStyle` を外しても warn は出ない。

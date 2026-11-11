@@ -416,7 +416,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 | 19 | `apply_direction`（上の節） | なし |
 | 20 | `monitor_box_style`（上の節）。記録の行（`debug!` の文と欄）には触らない。特に「Redriving window DPI from updated Monitor (no WM_DPICHANGED required)」の文は 1 字も変えない | `crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs:74` が逐語で使う（触らない） |
 | 21 | 描く骨組み（上の節）。透明の色の定数 3 つを `record::TRANSPARENT` 1 つに | なし |
-| 22 | `TypewriterLayoutCache`・`BitmapSourceGraphics` の `unsafe impl Send/Sync` と説明を消す。`test_typewriter_layout_cache_is_send_sync` は残す（自動の導出を試す意味を持つ） | `GraphicsCommandList` などの慣習は `ecs/graphics/` の持ち物で変えない |
+| 22 | `TypewriterLayoutCache`・`BitmapSourceGraphics` の `unsafe impl Send/Sync` と説明を消す。`test_typewriter_layout_cache_is_send_sync` は残す（自動の導出を試す意味を持つ）。2026-11-12 の 2 度目の audit（U1）で、`Component` の derive が `Send + Sync` を求めるのでこのテストは単独では落ちないと分かり、消した | `GraphicsCommandList` などの慣習は `ecs/graphics/` の持ち物で変えない |
 | 23 | 消す: `InsertBitmapSourceResource`（`unsafe impl Send` ごと）・`test_asset_path`・`rectangle.rs` の `Color` 別名と `colors`（`#[deprecated]` ごと）とそのテスト・`LayoutScale::validate`・`task_pool.rs` の `drain_and_apply`・`send_command`・`is_empty` とそれを試すテスト（`bitmap_source/tests.rs:72-81`）・`ColorMapDef`・`ColorMapping`・`TypewriterTimeline::empty`・欄 `total_duration`。wintf の `serde` 機能は残す（`Shape`・`ShapeRegion` が使う） | 参照 0（research.md 2 節・8.8）。`Cargo.toml`・`Cargo.lock` は変えない |
 | 24 | `TextLayoutResource`・`TextLayoutMetrics`・入れる行・`on_text_layout_remove`・`text/mod.rs` の再公開を消す。`layout/mod.rs` の説明の行も直す | `crates/wintf/tests/widget/label_defaults_test.rs`・`crates/wintf/tests/layout/metrics_test.rs` |
 | 25 | `layout` の別名を消す（上の節） | `crates/wintf/examples/taffy_flex_demo/main.rs`・`region.rs`・範囲の中のテスト |
@@ -484,7 +484,7 @@ fn monitor_box_style(monitor: &Monitor) -> BoxStyle;
 | 17 | 対のないサロゲートを含む名の PNG を読める | 同上（`target/hit_region_color_map_test/`） | 名が化けて開けない |
 | 18 | 2×2 の不透明な PNG（赤・緑・青・白）を `image` で書いて読み、各画素の名前（白は名前なし）と寸法を確かめる。透明な画素は使わない（16 番の答えを固定しない） | 同上 | B と R の入れ替えなどで答えが変わる |
 | 19 | 4 つの向きで `apply_direction` の後に読む向き・行の向きを読み返すと決めた組み合わせになり、その書式で作った配置の `GetMetrics` が通る | `widget/text/label_tests.rs`（DirectWrite だけ） | 組み合わせが崩れる・配置が断られる |
-| 22 | 手書きの `unsafe impl` を消した後も `test_typewriter_layout_cache_is_send_sync` が通る（自動の導出を試す） | `widget/text/typewriter/tests.rs`（今のテスト） | 後で `Send` でない欄を足すと組み立たない |
+| 22 | 手書きの `unsafe impl` を消した後も組み立つ（`Component` の derive が `Send + Sync` を求めるので、組み立つこと自体が確かめ。専用のテストは 2 度目の audit の U1 で消した） | 組み立て | 後で `Send` でない欄を足すと derive の所で組み立たない |
 
 - 20・21・23〜37 番は振る舞いを変えない直し（まとめる・消す・説明）で、今のテストが緑のままであることで確かめる。21 番は骨組みのテスト（10 番の行）も通す。
 - 記録の文を守る確かめ: 20・30 番の後も `monitor_systems_tests.rs:350`（「Redriving window DPI from updated Monitor」が出る）が緑で、`crates/areka/src/placement_tests/transition_judge_reobservation_tests.rs` が全体テストで緑であること。13 番の後も、`Visual` だけを付けた部品に `GlobalArrangement` が入ること（`crates/wintf/tests/layout/component_hooks_test.rs` など今のテストで見る）。

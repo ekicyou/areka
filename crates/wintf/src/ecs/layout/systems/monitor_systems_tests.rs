@@ -214,7 +214,7 @@ pub(super) fn run_apply(world: &mut World) {
     schedule.run(world);
 }
 
-/// 檻用の窓（枠なしゴースト窓相当）: 中心が primary モニタ上に載る位置・寸。
+/// 檻用の窓（枠なしゴースト窓相当）: 位置 (x, y)・寸 400×600・DPI dpi の窓（WindowPos＋DPI）を置く。
 pub(super) fn spawn_probe_window(world: &mut World, x: i32, y: i32, dpi: u32) -> Entity {
     world
         .spawn((

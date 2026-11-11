@@ -66,7 +66,7 @@ fn test_hit_test_ex_bounds_mode() {
     assert_eq!(result.region, None);
 }
 
-/// hit_test_ex: 重なりでは最前面を返す（hit_test とは別の走査なので、ここで確かめる）
+/// hit_test_ex: 重なりでは最前面を返す（hit_test も同じ走査を使う）
 #[test]
 fn test_hit_test_ex_front_priority() {
     let mut world = World::new();

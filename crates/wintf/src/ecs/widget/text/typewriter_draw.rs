@@ -276,7 +276,7 @@ pub fn draw_typewriter_backgrounds(
     };
 
     for (entity, talk, arrangement, brushes, cmd_list_opt, name) in query.iter_mut() {
-        // テキストがある場合はdraw_typewritersが処理するのでスキップ
+        // 文のあるトークは控えができてから draw_typewriters が描く（控えが無い間は前の絵を残す）
         let has_text = talk
             .tokens()
             .iter()

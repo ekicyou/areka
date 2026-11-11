@@ -431,16 +431,7 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -
 /// # Algorithm
 /// 深さ優先・逆順・後順走査で最前面エンティティを優先
 pub fn hit_test(world: &World, root: Entity, screen_point: PointF) -> Option<Entity> {
-    let mut traversal = DepthFirstReversePostOrder::new(root);
-
-    while let Some(entity) = traversal.next(world) {
-        let hit = hit_test_entity(world, entity, screen_point);
-        if hit {
-            return Some(entity);
-        }
-    }
-
-    None
+    hit_test_ex(world, root, screen_point).map(|r| r.entity)
 }
 
 // ============================================================================
@@ -458,20 +449,7 @@ pub fn hit_test(world: &World, root: Entity, screen_point: PointF) -> Option<Ent
 /// - `Some(Entity)`: ヒットした最前面エンティティ
 /// - `None`: ヒットなしまたは WindowPos が存在しない
 pub fn hit_test_in_window(world: &World, window: Entity, client_point: PointF) -> Option<Entity> {
-    // WindowPos を取得（なければ None）
-    let window_pos = world.get::<WindowPos>(window)?;
-
-    // position が None の場合も None を返す
-    let position = window_pos.position?;
-
-    // クライアント座標 + ウィンドウ位置 = スクリーン座標
-    let screen_point = PointF::new(
-        client_point.x + position.x as f32,
-        client_point.y + position.y as f32,
-    );
-
-    // hit_test に委譲
-    hit_test(world, window, screen_point)
+    hit_test_in_window_ex(world, window, client_point).map(|r| r.entity)
 }
 
 // ============================================================================
@@ -480,7 +458,7 @@ pub fn hit_test_in_window(world: &World, window: Entity, client_point: PointF) -
 
 /// 指定ルートエンティティ配下でスクリーン座標による拡張ヒットテストを実行
 ///
-/// 既存 `hit_test` と同じ走査だが、`HitTestResult`（エンティティ＋リージョン名）を返す。
+/// 走査の正本。`hit_test` はこの結果のエンティティだけを返す。
 ///
 /// # Arguments
 /// - `world`: ECS World 参照
@@ -524,9 +502,11 @@ pub fn hit_test_in_window_ex(
     window: Entity,
     client_point: PointF,
 ) -> Option<HitTestResult> {
+    // WindowPos か position が無ければ None
     let window_pos = world.get::<WindowPos>(window)?;
     let position = window_pos.position?;
 
+    // クライアント座標 + ウィンドウ位置 = スクリーン座標
     let screen_point = PointF::new(
         client_point.x + position.x as f32,
         client_point.y + position.y as f32,
