@@ -78,7 +78,7 @@ fn commit_failed_log_carries_keys_field() {
     };
     let io = FakePersistIo::new();
     io.fail_next_commit();
-    let (_, events) = log_capture_kit::capture(|| {
+    let events = crate::test_log_capture::capture(|| {
         save_scope(PersistScope::App, &roots, &io, entries());
     });
     let ev = events

@@ -157,3 +157,17 @@ fn a_missing_file_is_still_created() {
         vec![(PersistKey::BootCount, "7".into())]
     );
 }
+
+/// 版が 1 のままの知らない表・知っている表の知らない key・型の違う値は、保存で消えない。
+#[test]
+fn unknown_tables_and_values_survive_a_save() {
+    let io = FakePersistIo::new();
+    let content = "format-version = 1\n[foo]\nbar = \"x\"\n[last]\nghost = \"emo2\"\nnote = \"n\"\n[vanish]\ncount = 7\n";
+    io.commit(&ghost_file(), content).unwrap();
+    assert_eq!(save_boot_count(&io), PersistOutcome::Saved);
+    let saved: toml::Table = io.read(&ghost_file()).unwrap().unwrap().parse().unwrap();
+    let expected: toml::Table = "format-version = 1\n[foo]\nbar = \"x\"\n[last]\nghost = \"emo2\"\nnote = \"n\"\n[vanish]\ncount = 7\n[boot]\ncount = \"7\"\n"
+        .parse()
+        .unwrap();
+    assert_eq!(saved, expected);
+}

@@ -59,6 +59,19 @@ pub(crate) fn is_transient(e: &std::io::Error) -> bool {
     matches!(e.raw_os_error(), Some(32) | Some(5))
 }
 
+/// `op` を一時の掴み（[`is_transient`]）の間だけ [`LOCK_RETRY`] ごとに最大 [`LOCK_WAIT`] 取り直す。
+pub(crate) fn retry_transient<T>(mut op: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    loop {
+        match op() {
+            Err(e) if is_transient(&e) && std::time::Instant::now() < deadline => {
+                std::thread::sleep(LOCK_RETRY);
+            }
+            result => return result,
+        }
+    }
+}
+
 /// `FILE_FLAG_DELETE_ON_CLOSE`。`areka-sylphya` は `windows` に依存しないので値で書く。
 const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
 
@@ -87,9 +100,8 @@ pub struct FsPersistIo;
 impl FsPersistIo {
     /// `path` と同一ディレクトリに置く一時ファイル名を組む（同一ボリューム＝rename 原子性の前提）。
     ///
-    /// 非決定源（時刻・乱数・PID）を混ぜない（R8.3）。M1 は単一プロセス前提（design「Risks:
-    /// 複数プロセス同時 open の write 競合は M1 想定外」）ゆえ、宛先ファイル名から決定論的に
-    /// 導いた固定サフィックスで十分。競合が必要になれば PersistIo 拡張でロックを導入する。
+    /// 非決定源（時刻・乱数・PID）を混ぜない（R8.3）。ほかのプロセスの書き手とは更新の間の錠
+    /// （[`PersistIo::lock_for_update`]）で並ぶので、宛先ファイル名から導いた固定サフィックスで足りる。
     fn temp_path_for(path: &Path) -> std::path::PathBuf {
         let file_name = path
             .file_name()
@@ -206,9 +218,9 @@ impl PersistIo for FsPersistIo {
             return Err(e);
         }
 
-        // 原子的置換。Windows の rename は既存宛先を置換する（研究 §11-2）。失敗時も
-        // 本体（既存ファイル）は無傷——temp を掃除して Err を返す。
-        if let Err(e) = std::fs::rename(&temp, path) {
+        // 原子的置換。Windows の rename は既存宛先を置換する（研究 §11-2）。一時の掴みは取り直す。
+        // 失敗時も本体（既存ファイル）は無傷——temp を掃除して Err を返す。
+        if let Err(e) = retry_transient(|| std::fs::rename(&temp, path)) {
             let _ = std::fs::remove_file(&temp);
             return Err(e);
         }

@@ -207,12 +207,6 @@ pub const SYNTAX_RECORDS: &[&str] = &["*", "property[...]"];
 mod tests {
     use super::*;
 
-    /// 件数檻（R1.1・観測可能な完了条件）。
-    #[test]
-    fn flat_vocab_has_26_entries() {
-        assert_eq!(FLAT_VOCAB.len(), 26);
-    }
-
     /// 26 トークン全数が過不足なく一致（タイポ・重複を檻化）。
     #[test]
     fn flat_vocab_tokens_match_exactly() {

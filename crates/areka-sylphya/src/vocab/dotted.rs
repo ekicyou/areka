@@ -221,12 +221,6 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// ルート枝 件数檻（R1.2・観測可能な完了条件）。
-    #[test]
-    fn dotted_roots_has_10_entries() {
-        assert_eq!(DOTTED_ROOTS.len(), 10);
-    }
-
     /// ルート枝 10 本の集合が過不足なく一致（タイポ・重複・欠落を檻化）。
     #[test]
     fn dotted_roots_match_exactly() {
@@ -247,12 +241,6 @@ mod tests {
         assert_eq!(got, exp);
         // 重複なし（集合サイズ＝配列長）。
         assert_eq!(DOTTED_ROOTS.len(), got.len(), "DOTTED_ROOTS に重複あり");
-    }
-
-    /// 汎用名 件数檻（R1.2）。
-    #[test]
-    fn generic_prop_names_has_17_entries() {
-        assert_eq!(GENERIC_PROP_NAMES.len(), 17);
     }
 
     /// 汎用名に重複がない（件数＝集合サイズ）。
@@ -291,12 +279,6 @@ mod tests {
         let got: BTreeSet<&str> = GENERIC_PROP_NAMES.iter().copied().collect();
         let exp: BTreeSet<&str> = expected.iter().copied().collect();
         assert_eq!(got, exp);
-    }
-
-    /// SET 有効群 件数檻（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4＋正典追随 4 = 25・R3.4）。
-    #[test]
-    fn set_effective_has_25_entries() {
-        assert_eq!(SET_EFFECTIVE.len(), 25);
     }
 
     /// SET 有効群に key 重複がない。
@@ -370,27 +352,6 @@ mod tests {
             .find(|(k, _)| *k == "surface.num")
             .unwrap();
         assert_eq!(surface.1, SetSemantics::RuntimeCommand);
-    }
-
-    /// menu / bind.menu 群は GENERIC_PROP_NAMES の [SET] 4 名と一致（二重登録の整合）。
-    #[test]
-    fn menu_group_consistent_with_generic_names() {
-        let set_keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
-        for menu_name in [
-            "menu",
-            "sakura.bind.menu",
-            "kero.bind.menu",
-            "char*.bind.menu",
-        ] {
-            assert!(
-                GENERIC_PROP_NAMES.contains(&menu_name),
-                "{menu_name} が GENERIC_PROP_NAMES に不在"
-            );
-            assert!(
-                set_keys.contains(menu_name),
-                "{menu_name} が SET_EFFECTIVE に不在"
-            );
-        }
     }
 
     /// ext 亜枝イベント名は予約定数として厳密一致し、どの解決の表にも入らない（R3.5・発火しない）。

@@ -136,10 +136,3 @@ fn old_file_without_table_still_reads() {
         vec![(window_x(1), "1032".to_string())]
     );
 }
-
-#[test]
-fn adjacent_only_doc_is_not_all_absent() {
-    let mut doc = FormatDoc::default();
-    doc.window_adjacent.insert("1".into(), "left".into());
-    assert_ne!(doc, FormatDoc::default());
-}

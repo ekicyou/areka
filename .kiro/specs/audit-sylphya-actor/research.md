@@ -188,3 +188,19 @@
 2. #2 の縛るテストのため、`crates/log-capture-kit/tests/with_default_guard_test.rs` の例外の表に 1 行足し、件数を 6 にする。表に placement の 3 行があるので、`placement-crate-split` と申し合わせてから触る。
 3. #3 の錠の待ちは 1 秒。
 4. 空か空白だけの記憶のファイルは上書きする。
+
+## 12. かけ直しの結果
+
+### 1 回目（数える指摘 7 件・全部直した）
+
+1. （Must fix）読み取りだけの走りが、使えない記憶のファイル（新しい版・壊れた TOML）で起動を止めるようになった → `save_scope` で控える道かを先に見て、控える道なら `read_existing` の失敗で止めず、warn! を 1 件出して空の土台で続ける（この spec の前と同じ寛容な読み・何も書かない）。縛るテスト `withhold_tests.rs` の `save_scope_inside_does_not_stop_on_an_unusable_existing_file`（`format-version = 2` のファイルで `Withheld`・バイトで同じ）。design.md の「控えに入った中身は areka が書いた物」の誤りも直した。
+2. （Should fix）書き込みの最後の `rename` が一時の掴み（os error 32・5）で待たずに失敗する → 取り直しを小さな関数 `io::retry_transient` に出し、`commit` の `rename` と `read_existing` の読みの両方がそれを使う（決まりは同じ・`LOCK_RETRY` ごとに `LOCK_WAIT` まで）。縛るテスト `io_lock_tests.rs` の `retry_transient_retries_a_sharing_violation_only`。
+3. （Should fix）版が 1 のままの知らない表・型の違う値を保存のたびに消す → 保存の土台を読んだファイルの表（`toml::Table`）のまま持ち、`FormatDoc` の値だけを重ねて書く（`format::to_toml_string_over`）。消す道はもともと無い（起動中の印は空文字を書いて「無し」にするので、上書きで足りる）。縛るテスト `persist_unreadable_tests.rs` の `unknown_tables_and_values_survive_a_save`（`[foo]`・`[last]` の知らない key・整数の `count` が残る）。
+4. （Should fix）落ちようのないテスト 2 本 → `format.rs` の `last_only_is_not_all_absent` と `persist_window_adjacent_tests.rs` の `adjacent_only_doc_is_not_all_absent` を消した。
+5. （Nice to have）数だけを見るテスト 5 本 → `flat_vocab_has_26_entries`・`dotted_roots_has_10_entries`・`generic_prop_names_has_17_entries`・`set_effective_has_25_entries`・`menu_group_consistent_with_generic_names` を消した（中身の一致のテストが数も決める）。
+6. （Nice to have）`ui.rs` の async-channel だけを見るテスト → `dropping_all_senders_closes_the_channel` を消した（本物の `spawn_ui` は `tests/toy_ui_pump_test.rs` が縛る）。
+7. （Nice to have）記録の捕捉の書き方が 2 つ → `persist_failure_tests.rs` と `withhold_tests.rs` の 2 か所を `crate::test_log_capture::capture` に替えた。
+
+ついでに古くなった注 2 つを直した: `io.rs` の「M1 は単一プロセス前提・錠は要るとき足す」（錠はもう在る）と、`persist/mod.rs` の冒頭の保存の結果の並び（錠が取れない・既存が使えない・`Withheld` を足した）。
+
+数えない再出（design.md「直さない・回した指摘」の件・直さない）: #18 の本番が読まない語彙（`FlatEntry::layer`・`m1`・`BackingLayer`・`M1Status`・`DegradePolicy::NotFound`・`SetSemantics`・`SET_EFFECTIVE` の 2 番目の要素）・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（`crates/areka/src/alert.rs`・範囲の外）。

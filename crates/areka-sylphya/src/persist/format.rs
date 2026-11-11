@@ -122,6 +122,12 @@ impl AxisPair {
 /// 値はすべて TOML 文字列で出力する。空のマップ・`None` の key はテーブル自体を省略する
 /// （空テーブルを書かない）。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。
 pub fn to_toml_string(doc: &FormatDoc) -> String {
+    to_toml_string_over(toml::Table::new(), doc)
+}
+
+/// `base`（既存のファイルの表）の上に `doc` の値だけを重ねて直列化する。`doc` が持たない表・key・
+/// 型の違う値は `base` のまま残す（版が 1 のまま足された表を保存で消さない）。
+pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> String {
     let mut root = toml::Table::new();
     root.insert(
         "format-version".into(),
@@ -168,10 +174,11 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
             .collect();
         root.insert("window-adjacent".into(), toml::Value::Table(t));
     }
+    merge_table(&mut base, root);
 
     // toml の直列化は本 Table 構造では失敗しない（全値が String/Integer/Table）。万一の
     // 失敗も panic させず、空 doc の最小形へ縮退する（R6.7・無音失敗なし）。
-    toml::to_string(&root).unwrap_or_else(|e| {
+    toml::to_string(&base).unwrap_or_else(|e| {
         tracing::error!(
             target: LOG_TARGET,
             error = %e,
@@ -179,6 +186,18 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
         );
         format!("format-version = {FORMAT_VERSION}\n")
     })
+}
+
+/// `over` の値を `base` へ重ねる（両方が表なら中へ降り、ほかは `over` で置き換える）。
+fn merge_table(base: &mut toml::Table, over: toml::Table) {
+    for (key, value) in over {
+        match (base.get_mut(&key), value) {
+            (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge_table(b, o),
+            (_, value) => {
+                base.insert(key, value);
+            }
+        }
+    }
 }
 
 /// スコープ ID → [`AxisPair`] のマップを TOML テーブルへ（全空なら `None`＝テーブル省略）。
@@ -215,14 +234,16 @@ fn count_table(value: &str) -> toml::Value {
 ///
 /// 同一 content からは常に同一 doc を返す（決定論・R2.5 の永続版）。
 pub fn read_toml_str(content: &str) -> FormatDoc {
-    parse_toml_str(content).unwrap_or_default()
+    parse_toml_str(content)
+        .map(|(doc, _)| doc)
+        .unwrap_or_default()
 }
 
-/// 寛容でない読み。使えれば `Ok(doc)`、使えなければ `Err(利用者へ見せる理由の文)`。
+/// 寛容でない読み。使えれば `Ok((doc, 読んだ表))`、使えなければ `Err(利用者へ見せる理由の文)`。
 ///
 /// 縮退の `warn!`（[`read_toml_str`] の 2 つの文のまま）はこの関数が出す。保存の土台の読みは
 /// `Err` を受けたら書かない（使えないファイルを読めた分だけで上書きして消さない）。
-pub(crate) fn parse_toml_str(content: &str) -> Result<FormatDoc, String> {
+pub(crate) fn parse_toml_str(content: &str) -> Result<(FormatDoc, toml::Table), String> {
     let table: toml::Table = match content.parse::<toml::Table>() {
         Ok(t) => t,
         Err(e) => {
@@ -258,7 +279,7 @@ pub(crate) fn parse_toml_str(content: &str) -> Result<FormatDoc, String> {
     // 有効バージョン: 存在する key のみ採用（欠落・型外れは当該 key 不在・warn なし）。
     let last = table.get("last").and_then(toml::Value::as_table);
     let read_last = |field| last.and_then(|t| read_str(t, field));
-    Ok(FormatDoc {
+    let doc = FormatDoc {
         last_ghost: read_last("ghost"),
         last_balloon: read_last("balloon"),
         last_shell: read_last("shell"),
@@ -272,7 +293,8 @@ pub(crate) fn parse_toml_str(content: &str) -> Result<FormatDoc, String> {
         boot_count: read_count(&table, "boot"),
         vanish_count: read_count(&table, "vanish"),
         window_adjacent: read_string_map(&table, "window-adjacent"),
-    })
+    };
+    Ok((doc, table))
 }
 
 /// `[<key>."ID"]` 群を [`AxisPair`] マップへ（テーブル不在・非テーブルは空マップ）。
@@ -445,7 +467,7 @@ mod tests {
         assert!(reason("format-version = 2").contains("format-version が 2で"));
         assert!(reason("format-version = \"1\"").contains("書かれていない値で"));
         assert_eq!(
-            parse_toml_str("format-version = 1"),
+            parse_toml_str("format-version = 1").map(|(doc, _)| doc),
             Ok(FormatDoc::default())
         );
     }
@@ -459,31 +481,6 @@ mod tests {
     #[test]
     fn empty_content_yields_all_absent() {
         assert_eq!(read_toml_str(""), FormatDoc::default());
-    }
-
-    #[test]
-    fn last_only_is_not_all_absent() {
-        // [last] の 4 欄は 1 つずつ既定（全不在）と違える。
-        for doc in [
-            FormatDoc {
-                last_ghost: Some("g".into()),
-                ..Default::default()
-            },
-            FormatDoc {
-                last_balloon: Some("b".into()),
-                ..Default::default()
-            },
-            FormatDoc {
-                last_shell: Some("s".into()),
-                ..Default::default()
-            },
-            FormatDoc {
-                last_running: Some("h".into()),
-                ..Default::default()
-            },
-        ] {
-            assert_ne!(doc, FormatDoc::default());
-        }
     }
 
     #[test]

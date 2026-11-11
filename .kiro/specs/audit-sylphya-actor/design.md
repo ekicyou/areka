@@ -171,12 +171,15 @@ flowchart TD
 **`format.rs` の形**（crate の内側だけ）
 
 ```rust
-/// 寛容でない読み。使えれば Ok(doc)、使えなければ Err(利用者へ見せる理由の文)。
+/// 寛容でない読み。使えれば Ok((doc, 読んだ表))、使えなければ Err(利用者へ見せる理由の文)。
 /// 縮退の warn!（今の 2 つの文のまま）はこの関数が出す。
-pub(crate) fn parse_toml_str(content: &str) -> Result<FormatDoc, String>;
+pub(crate) fn parse_toml_str(content: &str) -> Result<(FormatDoc, toml::Table), String>;
 
-/// 今までの入口（署名は変えない）＝ parse_toml_str(content).unwrap_or_default()。
+/// 今までの入口（署名は変えない）＝ parse_toml_str(content) の doc か、使えなければ既定。
 pub fn read_toml_str(content: &str) -> FormatDoc;
+
+/// 読んだ表 base の上に doc の値だけを重ねて書く（知らない表・値を残す・かけ直し 1 回目の 3）。
+pub(crate) fn to_toml_string_over(base: toml::Table, doc: &FormatDoc) -> String;
 ```
 
 - `parse_toml_str` の中身は今の `read_toml_str` の本文そのまま。`return FormatDoc::default()` の 2 か所が `return Err(理由)` になるだけ。warn! の target・文（`"persist TOML parse failed; degrading to all-absent (file preserved)"`・`"... unknown/absent format-version; ..."`）は変えない（読む側の記録は今と同じ。「file preserved」は直しの後に本当になる）。
@@ -189,7 +192,7 @@ pub fn read_toml_str(content: &str) -> FormatDoc;
 
 ```rust
 /// save のマージ土台。Ok(doc) なら重ねてよい・Err(理由) なら書かずに Degraded。
-fn read_existing(scope: PersistScope, io: &dyn PersistIo, path: &Path) -> Result<FormatDoc, String>;
+fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<(FormatDoc, toml::Table), String>;
 ```
 
 - `Ok(None)`（無い）→ `Ok(FormatDoc::default())`。
@@ -197,7 +200,8 @@ fn read_existing(scope: PersistScope, io: &dyn PersistIo, path: &Path) -> Result
 - `Ok(Some(c))` → `format::parse_toml_str(&c)`。
 - `Err(e)` → 共有違反（`raw_os_error() == Some(32)`）と拒み（`Some(5)`）の間だけ、錠と同じく `LOCK_RETRY` ごとに最大 `LOCK_WAIT`（1 秒）読み直す（ウイルス対策などの一時の掴みで起動を止めない・設計の討議 議題 1）。それでも読めなければ、またはほかの失敗なら `Err(読めない理由の文)`。今の warn!「`persist read-before-write failed; merging onto empty base (tolerant)`」は消す（その道が無くなる）。
 - `save_scope` は `Err(reason)` のとき `commit` を呼ばず、`error!(target: "areka_sylphya::persist", event = "persist_existing_unusable", ?scope, path, reason, keys, "persist existing file unusable; not overwriting, reporting Degraded")` を 1 回出し、`PersistOutcome::Degraded(PersistFailure { scope, dir: roots.root_of(scope).cloned(), keys, cause: PersistFailureCause::Io(reason) })` を返す。新しい variant は足さない（`PersistFailureCause` を網羅する `crates/areka` の match を壊さない）。
-- 控える走り（読み取りだけ）でも同じ判定を通す（控えに入った中身は areka が書いた物なので、使えないことは無い）。
+- 控える走り（読み取りだけ）は、使えない既存のファイルでも止めない（何も書かないので守る物が無い）。`Err(reason)` を受けたら warn! を 1 件出し、空の土台で続けて `Withheld` を返す（この spec の前と同じ寛容な読み）。走りの最初の読みは控えでなく本物のファイルを読むので、新しい版や壊れた TOML に当たることはある（かけ直し 1 回目の 1）。
+- 重ねる土台は、読んだファイルの表そのもの（`toml::Table`）。`FormatDoc` が持つ値だけをその上に置き、この版の知らない表・知っている表の知らない key・型の違う値はそのまま残す（版が 1 のまま足された表を保存で消さない・かけ直し 1 回目の 3）。
 
 **縛るテスト**（`persist/persist_unreadable_tests.rs`・`FakePersistIo` の上・決定論）
 - `a_newer_format_version_is_kept_and_the_save_degrades`: `format-version = 2` の中身を直に `commit` で置き → `save_scope(BootCount)` が `Degraded(Io(理由に "format-version"))`・中身はバイトで同じ・ERROR `persist_existing_unusable` が 1 件。**直しを外すと赤**（`Saved` になり中身が 1 件だけのファイルに替わる）。

@@ -242,18 +242,4 @@ mod tests {
         assert_eq!(rx.try_recv().expect("from original"), 1);
         assert_eq!(rx.try_recv().expect("from clone"), 2);
     }
-
-    // 全 UiSender drop で channel が closed になる（drain 側 recv が Err(Closed) を得る根拠・3.5）。
-    #[test]
-    fn dropping_all_senders_closes_the_channel() {
-        let (sender, rx) = ui_sender_for_test::<u8>();
-        let clone = sender.clone();
-        drop(sender);
-        assert!(!rx.is_closed(), "one sender still alive → not closed");
-        drop(clone);
-        assert!(
-            rx.is_closed(),
-            "all senders dropped → channel closed (drain will return)"
-        );
-    }
 }

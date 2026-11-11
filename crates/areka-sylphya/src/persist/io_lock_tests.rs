@@ -38,3 +38,26 @@ fn a_withheld_path_takes_no_lock_file() {
     assert!(!dir.exists(), "控える道ではフォルダを作らない");
     assert!(!dir.join("sylphya.toml.lock").exists());
 }
+
+/// 一時の掴み（共有違反）は取り直して通り、ほかの失敗は待たずに返す。
+#[test]
+fn retry_transient_retries_a_sharing_violation_only() {
+    let mut calls = 0;
+    let got = retry_transient(|| {
+        calls += 1;
+        if calls == 1 {
+            Err(std::io::Error::from_raw_os_error(32))
+        } else {
+            Ok(calls)
+        }
+    });
+    assert_eq!(got.unwrap(), 2);
+
+    let mut calls = 0;
+    let got: std::io::Result<()> = retry_transient(|| {
+        calls += 1;
+        Err(std::io::Error::other("not transient"))
+    });
+    assert!(got.is_err());
+    assert_eq!(calls, 1, "一時でない失敗は 1 回で返す");
+}
