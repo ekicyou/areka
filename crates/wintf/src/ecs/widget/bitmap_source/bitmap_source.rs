@@ -21,6 +21,7 @@ use tracing::debug;
 ///         }),
 ///         ..Default::default()
 ///     },
+///     ChildOf(parent), // 親も BoxStyle（根は LayoutRoot）を持つこと
 /// ));
 /// ```
 #[derive(Component, Debug, Clone)]

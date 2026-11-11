@@ -368,6 +368,36 @@ fn from_image_accepts_255_colors() {
     assert_eq!(data.hit_test(0, 0), Some("red"));
 }
 
+/// 画素のバイト数が u32 に収まらない画像は panic せず失敗を返す。
+/// 2×2 の PNG の IHDR の寸法だけを 32768×32768 に書き換える（画素は読む前に断るので小さいまま）。
+#[test]
+fn from_image_returns_err_for_oversize_image() {
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = !0u32;
+        for &b in bytes {
+            crc ^= b as u32;
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xEDB8_8320 & (crc & 1).wrapping_neg());
+            }
+        }
+        !crc
+    }
+    let path = write_rgbw_png("oversize.png".as_ref());
+    let mut png = std::fs::read(&path).unwrap();
+    // 署名 8 バイトの後が IHDR: 長さ 4・型 4・幅 4・高さ 4・…・CRC（型からデータの終わりまで）
+    assert_eq!(&png[12..16], b"IHDR");
+    png[16..20].copy_from_slice(&32768u32.to_be_bytes());
+    png[20..24].copy_from_slice(&32768u32.to_be_bytes());
+    let crc = crc32(&png[12..29]);
+    png[29..33].copy_from_slice(&crc.to_be_bytes());
+    std::fs::write(&path, &png).unwrap();
+    let result = with_sta(|| ColorMapData::from_image(&path, &rgb_mapping()));
+    assert_eq!(
+        result.map(|_| ()).map_err(|e| e.code()),
+        Err(windows::Win32::Foundation::E_INVALIDARG)
+    );
+}
+
 /// 17 番: 対のないサロゲートを含む名の PNG を読める（名を UTF-8 に化かさない）。
 #[test]
 fn from_image_opens_name_with_lone_surrogate() {

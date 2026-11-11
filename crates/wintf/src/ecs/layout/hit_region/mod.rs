@@ -134,6 +134,7 @@ impl ColorMapData {
     /// マッピング外の色はID 0（無名）として扱う。
     ///
     /// 対応は 255 色まで（リージョンIDを 1 バイトに詰めるため）。越えると `E_INVALIDARG` を返す。
+    /// 画素のバイト数が u32 に収まらない大きな画像も `E_INVALIDARG` を返す。
     pub fn from_image(
         image_path: &std::path::Path,
         mapping: &HashMap<(u8, u8, u8), String>,
@@ -187,15 +188,22 @@ impl ColorMapData {
 
         // サイズ取得
         let (width, height) = converted.get_size()?;
-        let stride = width * 4; // PBGRA32: 4 bytes per pixel
-        let buffer_size = (stride * height) as usize;
+        let Some((stride, buffer_size)) =
+            crate::ecs::widget::bitmap_source::systems::pbgra32_layout(width, height)
+        else {
+            error!(width, height, "カラーマップの画像が大きすぎます");
+            return Err(windows::core::Error::new(
+                windows::Win32::Foundation::E_INVALIDARG,
+                "カラーマップの画像が大きすぎます",
+            ));
+        };
         let mut buffer = vec![0u8; buffer_size];
 
         // ピクセルデータをコピー
         converted.copy_pixels(None, stride, &mut buffer)?;
 
         // インデックスマップ構築（RGB→リージョンID変換）
-        let pixel_count = (width * height) as usize;
+        let pixel_count = buffer_size / 4;
         let mut index_map = vec![0u8; pixel_count];
 
         for i in 0..pixel_count {

@@ -97,13 +97,13 @@ pub fn draw_bitmap_sources(
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
+    if query.is_empty() {
+        return;
+    }
     let Some(graphics_core) = graphics_core else {
         warn!("GraphicsCore not available, skipping draw_bitmap_sources");
         return;
     };
-    if query.is_empty() {
-        return;
-    }
     // グローバル共有DeviceContextを取得（無ければ部品ごとでなく 1 回だけ記録）
     let Some(dc) = graphics_core.device_context() else {
         warn!("DeviceContext not available, skipping draw_bitmap_sources");
@@ -229,12 +229,12 @@ use crate::com::wic::WICBitmapSourceExt;
 use crate::ecs::layout::{HitTest, HitTestMode};
 use tracing::error;
 
-/// PBGRA32（1 画素 4 バイト）の行の幅と全体のバイト数。溢れるなら `None`（u32 で掛けると巨大な画像で溢れる）。
-pub(super) fn pbgra32_layout(width: u32, height: u32) -> Option<(u32, usize)> {
+/// PBGRA32（1 画素 4 バイト）の行の幅と全体のバイト数。全体が u32 に収まらなければ `None`
+/// （`IWICBitmapSource::CopyPixels` は全体のバイト数を u32 へ変換し、溢れると panic する）。
+pub(crate) fn pbgra32_layout(width: u32, height: u32) -> Option<(u32, usize)> {
     let stride = width.checked_mul(4)?;
-    (stride as usize)
-        .checked_mul(height as usize)
-        .map(|size| (stride, size))
+    let size = stride.checked_mul(height)?;
+    Some((stride, size as usize))
 }
 
 /// αマスク生成完了時にBitmapSourceResourceにαマスクを設定するCommand

@@ -545,7 +545,7 @@ mod tests;
 #[cfg(test)]
 mod tests_ex;
 
-/// `AlphaMaskResource` の内部 `Arc` 化と `set_shared` の檻（structure.md のテスト分離規約）
+/// `AlphaMaskResource::set_shared` の檻（structure.md のテスト分離規約）
 #[cfg(test)]
 #[path = "hit_test_shared_mask_tests.rs"]
 mod shared_mask_tests;

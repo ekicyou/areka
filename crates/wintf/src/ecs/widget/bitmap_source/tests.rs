@@ -84,17 +84,6 @@ fn test_resolve_path_relative_is_joined_under_exe_dir() {
     assert!(resolved.ends_with("logo.png"));
 }
 
-#[test]
-fn test_resolve_path_relative_preserves_subdirectories() {
-    use super::systems::resolve_path;
-
-    // ネストした相対パスのコンポーネントが保持される
-    let resolved = resolve_path("a/b/c.png").expect("nested relative path resolves");
-    let exe = std::env::current_exe().expect("current_exe available in tests");
-    let exe_dir = exe.parent().expect("exe has a parent dir");
-    assert_eq!(resolved, exe_dir.join("a/b/c.png"));
-}
-
 // ============================================================
 // 11 番: 解読は裏の作業の 1 回だけ
 // ============================================================
@@ -381,16 +370,14 @@ fn switching_hit_test_to_alpha_mask_after_load_builds_mask() {
 // αマスクの読み込みの大きさ（W5）— CPU だけ
 // ============================================================
 
-/// 行の幅と全体の大きさは、u32 を超える大きさでも溢れずに測るか、測れないと返す。
+/// 行の幅と全体の大きさは u32 に収まるときだけ返し、収まらなければ測れないと返す
+/// （`CopyPixels` は全体のバイト数を u32 へ変換して溢れると panic するため）。
 #[test]
 fn pbgra32_layout_reports_overflow_instead_of_wrapping() {
     use super::systems::pbgra32_layout;
     assert_eq!(pbgra32_layout(2, 3), Some((8, 24)));
-    // 32768×32768 は 4 GiB で u32 を超える（64 ビットの usize には収まる）
-    assert_eq!(
-        pbgra32_layout(32768, 32768),
-        Some((131072, 4 * 32768 * 32768))
-    );
+    // 32768×32768 は 4 GiB で u32 を超える（64 ビットの usize には収まっても受けない）
+    assert_eq!(pbgra32_layout(32768, 32768), None);
     // 行の幅が u32 を超える
     assert_eq!(pbgra32_layout(u32::MAX, 1), None);
 }

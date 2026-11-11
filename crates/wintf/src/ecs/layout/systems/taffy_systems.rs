@@ -50,13 +50,13 @@ pub fn build_taffy_styles_system(
                 taffy_style.0 = taffy::Style::default();
             }
         } else {
-            // 子の節は taffy の木から切れ、以後その子の BoxStyle を変えても配置されない
+            // 子の節は taffy の木から切れ、この節が BoxStyle を持ち直すまでその子は配置されない
             if let Ok((Some(children), name)) = parts.get(entity)
                 && children.iter().any(|child| styled.contains(child))
             {
                 warn!(
                     entity = %format_entity_name(entity, name),
-                    "[build_taffy_styles] BoxStyle removed while children still have TaffyStyle; they are no longer laid out"
+                    "[build_taffy_styles] BoxStyle removed while children still have TaffyStyle; they are not laid out until it gets a BoxStyle again"
                 );
             }
             commands

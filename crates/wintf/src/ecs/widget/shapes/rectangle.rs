@@ -81,13 +81,13 @@ pub fn draw_rectangles(
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
+    if query.is_empty() {
+        return;
+    }
     let Some(graphics_core) = graphics_core else {
         warn!("GraphicsCore not available, skipping draw_rectangles");
         return;
     };
-    if query.is_empty() {
-        return;
-    }
     // グローバル共有DeviceContextを取得（無ければ部品ごとでなく 1 回だけ記録）
     let Some(dc) = graphics_core.device_context() else {
         warn!("DeviceContext not available, skipping draw_rectangles");

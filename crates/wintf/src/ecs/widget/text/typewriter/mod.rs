@@ -300,7 +300,7 @@ fn on_typewriter_talk_remove(mut world: DeferredWorld, hook: HookContext) {
 
 /// Typewriter 描画リソースキャッシュ
 ///
-/// 控えの無いトークに対して描画システムが自動生成する（トークを入れ直す・外す・`Arrangement` が変わると外れる）。
+/// 控えの無いトークに対して描画システムが自動生成する（トークを入れ直す・外す・`Typewriter` が変わる・外す・`Arrangement` が変わると外れる）。
 /// COMリソース（IDWriteTextLayout）と Stage 2 IR を保持。
 #[derive(Component)]
 #[component(storage = "SparseSet")]

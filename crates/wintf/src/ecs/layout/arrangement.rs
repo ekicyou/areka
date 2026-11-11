@@ -54,7 +54,7 @@ fn on_arrangement_add(
 ///
 /// # Surface生成との関連
 /// `bounds`はDirect2D Surfaceの必要サイズを決定する際に使用されます。
-/// Surface生成最適化では、子孫の`bounds`を集約して最小限のSurfaceサイズを計算します。
+/// Surface の大きさはこのエンティティ自身の`bounds`から計算します（子孫の`bounds`は集約しません）。
 ///
 /// # 使用例
 /// ```
