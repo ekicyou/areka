@@ -2,6 +2,7 @@ use super::test_support::{
     IMAGE, cursor_px, glyph, glyphs, inline_positions, model_rect, zero_origin_region,
 };
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use crate::look::{GlyphStyles, StyleTable, TextLook};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
@@ -522,4 +523,82 @@ fn out_of_range_cursor_lands_literally_and_records_one_debug() {
         0,
         "範囲内（境界含む）は記録しない"
     );
+}
+
+/// `\_l` の解決が有限でない台本 3 本は、その軸を動かさず（行の位置はどれも有限）、
+/// guard つきの配置で `warn!`（`degrade = NonFinite`）を 1 件だけ残す（指摘 2）。
+///
+/// 台本: `\_l[3e38em,]あ`・`\_l[3e38em,]\_l[@-3e38em,]あ`（直す前は inf + (−inf) で NaN）・
+/// `\_l[,3e38lh]あ`。どれも両軸不動なので `あ` は書き始め (0, 0) に置かれる。
+#[test]
+fn non_finite_cursor_resolution_keeps_lines_finite_with_one_warn() {
+    let region = zero_origin_region();
+    let actor = ActorKey::from("0");
+    let abs = |value, unit| CursorCoord::Absolute { value, unit };
+    let mv = |x, y| TextItem::CursorMove { x, y };
+    let scripts = [
+        vec![mv(abs(3e38, CursorUnit::Em), CursorCoord::Omitted), glyph()],
+        vec![
+            mv(abs(3e38, CursorUnit::Em), CursorCoord::Omitted),
+            mv(
+                CursorCoord::Relative {
+                    value: -3e38,
+                    unit: CursorUnit::Em,
+                },
+                CursorCoord::Omitted,
+            ),
+            glyph(),
+        ],
+        vec![mv(CursorCoord::Omitted, abs(3e38, CursorUnit::Lh)), glyph()],
+    ];
+    let default = TextLook {
+        height: 10.0,
+        ..TextLook::ukadoc_default()
+    };
+    let table = StyleTable::default();
+    for items in &scripts {
+        let (lines, events) = capture(|| {
+            let mut guard = CursorWarnGuard::default();
+            LayoutEngine::layout_styled(
+                items,
+                1,
+                &region,
+                WritingMode::HorizontalTb,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+                GlyphStyles {
+                    table: &table,
+                    ids: &[],
+                    default: &default,
+                    current: &default,
+                },
+                &actor,
+                &mut guard,
+            )
+        });
+        assert_eq!(lines.len(), 1, "{items:?}");
+        let r = &lines[0].rect;
+        assert_eq!(
+            (r.left, r.top),
+            (0.0, 0.0),
+            "両軸不動＝書き始めのまま: {items:?}"
+        );
+        assert!(
+            lines.iter().all(|l| {
+                let r = &l.rect;
+                [r.left, r.top, r.right, r.bottom]
+                    .iter()
+                    .all(|v| v.is_finite())
+                    && l.glyphs.iter().all(|g| g.inline_pos.is_finite())
+            }),
+            "行の位置に非有限が無い: {items:?}"
+        );
+        let warns: Vec<_> = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .collect();
+        assert_eq!(warns.len(), 1, "warn! は 1 件: {items:?}");
+        assert_eq!(warns[0].field("degrade"), Some("NonFinite"));
+    }
 }

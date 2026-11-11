@@ -352,3 +352,48 @@ fn warn_cursor_degrade_records_actor_axis_coord_and_degrade() {
     assert_eq!(fields.get("coord").copied(), Some("CenterX"));
     assert_eq!(fields.get("degrade").copied(), Some("CenterAxisMismatch"));
 }
+
+/// 読んだ数が有限でも「基点＋値×係数」が f32 を越えれば `Err(NonFinite)`（その軸は動かさない）。
+/// 有限の結果は今と同じ値（`audit-emo-text-layout-draw` 指摘 2）。
+#[test]
+fn resolve_cursor_axis_degrades_non_finite_results_and_keeps_finite_ones() {
+    let b = basis();
+    let em = |value| CursorCoord::Absolute {
+        value,
+        unit: CursorUnit::Em,
+    };
+    assert_eq!(
+        resolve_cursor_axis(em(3e38), CursorAxis::X, &b),
+        Err(CursorDegrade::NonFinite),
+        "3e38 × 10 は +inf"
+    );
+    assert_eq!(
+        resolve_cursor_axis(
+            CursorCoord::Relative {
+                value: -3e38,
+                unit: CursorUnit::Em,
+            },
+            CursorAxis::X,
+            &b,
+        ),
+        Err(CursorDegrade::NonFinite),
+        "相対も -inf なら縮退"
+    );
+    assert_eq!(
+        resolve_cursor_axis(
+            CursorCoord::Absolute {
+                value: 3e38,
+                unit: CursorUnit::Lh,
+            },
+            CursorAxis::Y,
+            &b,
+        ),
+        Err(CursorDegrade::NonFinite),
+        "行送りの係数でも同じ"
+    );
+    assert_eq!(
+        resolve_cursor_axis(em(2.0), CursorAxis::X, &b),
+        Ok(Some(ORIGIN.0 + 2.0 * FONT_HEIGHT)),
+        "有限の結果は今と同じ"
+    );
+}
