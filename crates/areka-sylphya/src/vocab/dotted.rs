@@ -10,7 +10,7 @@
 
 use crate::vocab::SetSemantics;
 
-/// 点付き語彙のルート枝 10 本（並びはテスト `dotted_roots_match_exactly` が縛る・R1.2）。
+/// 点付き語彙のルート枝 10 本（顔ぶれと重複の無さはテスト `dotted_roots_match_exactly` が縛る・並びは縛らない・R1.2）。
 ///
 /// ukadoc 一次 HTML 全文検証でルート枝はちょうど 10 本（`calendarlist` 等は存在しない）。
 /// M1 実導出は `baseware` のみ・他は NOT_FOUND 縮退（key モデル上は第一級で保持）。
@@ -27,7 +27,7 @@ pub const DOTTED_ROOTS: &[&str] = &[
     "rateofuselist",
 ];
 
-/// 汎用プロパティ名 17 種（並びはテスト `generic_prop_names_match_exactly` が縛る・R1.2）。
+/// 汎用プロパティ名 17 種（顔ぶれはテスト `generic_prop_names_match_exactly` が縛る・並びは縛らない・R1.2）。
 ///
 /// リスト系ルート枝（ghostlist / currentghost 等）配下で共通に現れる名前族。
 /// `shiori.変数名`・`char*.bind.menu` はテンプレート形（変数名/キャラクタ番号を含む名の型）

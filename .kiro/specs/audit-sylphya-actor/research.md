@@ -229,3 +229,18 @@ design.md の古い行も直した: `read_existing` の注と戻り値（2 つ�
 数えない再出（1・2 回目と同じ・直さない）: #18 の本番が読まない語彙・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。
 
 確かめて数えなかったもの: 錠を持つ時間とほかのプロセスの錠の待ち。1 回目の 2 の直しから、書き手は錠を持ったまま最大 1 秒（読み）＋1 秒（rename）眠りうる。ほかのプロセスの錠の待ちは 1 秒なので、2 つの areka が同じ App の記憶をほぼ同時に保存し、そこへウイルス対策の 1 秒近い掴みが重なると、後の方が `TimedOut` で `Degraded` になる。ただ普段の一時の掴みはミリ秒で、3 つが重なることは実際にはまず起きないので数えない（直すなら錠の待ちを `2 * LOCK_WAIT` 以上にするだけ）。ほかに `retry_transient` の待ちの引数・`lock_within` の `map_err`・`load_scope` の取り直し・`to_toml_string` の削除も確かめて、誤りは無かった。
+
+### 4 回目（数える指摘 2 件・全部直した）
+
+3 回目の 2 件の直しに誤りは見つからなかった。2 件とも前から在って 1〜3 回目が拾わなかった、落ちようのない／ほかに丸ごと含まれるテスト。不具合・危険・遅い道は見つからなかった。
+
+1. （Nice to have）写しのテストに、標準の表（`BTreeMap`）へ手で入れて同じ表から読み戻すだけの、落ちようのないテストが 2 本 → `mirror.rs` の `per_asker_partitions_are_independent`・`dotted_partitions_hold_canonical_string_keys` を消した。消す前に、本物の読み口を通るテストが同じことを見ているのを確かめた: per-asker の区画が混ざらないことは `reader.rs` の `flat_other_asker_does_not_leak` と `per_asker_non_mixing_flat_and_dotted`（フラット・点付きとも両方向）が、点付きの区画を正準の文字で引けることは `dotted_value_present_per_asker`・`dotted_value_present_global`・`dotted_str_roundtrips_with_canonical_stored_key` が縛る。
+2. （Nice to have）出どころの語の組の並べ方のテスト 2 本が、同じファイルの定数のテストに丸ごと含まれる → `origin_tests.rs` の `render_head_only`・`render_external_sstp` を消した。消す前に確かめた: `constants_render_and_level` は `GHOST`（`{ head: Internal, rest: &[] }`）で `"internal"`、`MCP_NOTIFY`（`{ head: External, rest: &[Sstp] }`）で `"external,sstp"` を見ており、組も文字も同じ。
+
+ついでに注 3 つを直した（数えなかったもの・下の「確かめて数えなかったもの」の件）: `vocab/flat.rs` の `FLAT_VOCAB`、`vocab/dotted.rs` の `DOTTED_ROOTS`・`GENERIC_PROP_NAMES` の「並びはテスト … が縛る」は、テストが集合か並べ替えた列にしてから比べるので並びは縛っていない。「顔ぶれは（`DOTTED_ROOTS` は顔ぶれと重複の無さは）テスト … が縛る・並びは縛らない」に替えた。
+
+消した 4 つの名は、ツリー全体（`.kiro` を除く）で残りが 0 なのを grep で確かめた。
+
+数えない再出（1〜3 回目と同じ・直さない）: #18 の本番が読まない語彙（それを見る `set_effective_all_runtime_command`・`only_four_tokens_are_m1_derived` も含む）・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。
+
+確かめて数えなかったもの: 3 回目の直し（消した 3 本の主張は残るテストが今も全部持つ・`reader.rs` の注の 1 行）。`mirror.rs` の残りの 4 本（#17 で残すと決めた物）。`pull_tests.rs` の登録し直しの 2 本（層が違い、複製の側から登録し直す向きは片方だけが持つ）。`shiori_resource_ids_has_159_entries`（この表には中身の一致のテストが無く、159 を決めるのはこの 1 本だけ）。上の注 3 つ（コードの振る舞いは変わらない）。記憶のファイルの読み書きの道・錠を持つ時間・`run_actor`・`parse_seg`・`spawn_actor`・`run_inbox`・`ui.rs`・`origin.rs`（誤った結果になる入力は無かった）。スレッドの配線の揺れを見る 20 回の繰り返しのテスト 2 本。

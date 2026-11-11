@@ -139,53 +139,6 @@ mod tests {
     }
 
     #[test]
-    fn per_asker_partitions_are_independent() {
-        let a1 = AskerId::new("ghost/a");
-        let a2 = AskerId::new("ghost/b");
-        let mut img = MirrorImage::empty();
-        img.flat_per_asker
-            .entry(a1.clone())
-            .or_default()
-            .insert("selfname".into(), "Alice".into());
-        img.flat_per_asker
-            .entry(a2.clone())
-            .or_default()
-            .insert("selfname".into(), "Bob".into());
-        assert_eq!(
-            img.flat_per_asker[&a1].get("selfname").map(String::as_str),
-            Some("Alice")
-        );
-        assert_eq!(
-            img.flat_per_asker[&a2].get("selfname").map(String::as_str),
-            Some("Bob")
-        );
-        // a1 に無い名前は a2 の値へ漏れない
-        assert!(!img.flat_per_asker[&a1].contains_key("nope"));
-    }
-
-    #[test]
-    fn dotted_partitions_hold_canonical_string_keys() {
-        let asker = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.dotted_global
-            .insert("system.baseware".into(), "areka".into());
-        img.dotted_per_asker
-            .entry(asker.clone())
-            .or_default()
-            .insert("areka.window.scope(0).x".into(), "10".into());
-        assert_eq!(
-            img.dotted_global.get("system.baseware").map(String::as_str),
-            Some("areka")
-        );
-        assert_eq!(
-            img.dotted_per_asker[&asker]
-                .get("areka.window.scope(0).x")
-                .map(String::as_str),
-            Some("10")
-        );
-    }
-
-    #[test]
     fn shared_mirror_clone_shares_same_lock() {
         let shared = SharedMirror::new(Arc::new(MirrorImage::empty()));
         let clone = shared.clone();

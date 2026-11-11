@@ -21,7 +21,7 @@ pub struct FlatEntry {
     pub degrade: DegradePolicy,
 }
 
-/// フラット 26 トークン全数（並びはテスト `flat_vocab_tokens_match_exactly` が縛る・R1.1）。
+/// フラット 26 トークン全数（顔ぶれはテスト `flat_vocab_tokens_match_exactly` が縛る・並びは縛らない・R1.1）。
 ///
 /// 層割当（brief.md Scope typology）:
 /// - `username` = ShioriQuery（SHIORI Resource 照会）。
