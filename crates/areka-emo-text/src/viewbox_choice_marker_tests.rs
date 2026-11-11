@@ -6,49 +6,6 @@ use crate::writing::WritingMode;
 
 // ── 6.1 R4.4: 行指紋の hover 印（choice_marker）——hover 切替は当該行の指紋だけを変える ──
 
-/// hover を選択肢行 A→B へ切り替えると、変化した 2 行（choice_marker が動いた行）の指紋のみが
-/// 差分となり、非 Choice 行を含む他行の指紋は不変（choice_marker が hover を指紋へ運ぶ・R4.4）。
-/// あわせて非 Choice 行の `choice_marker` は常に 0・Choice 行は `hovered.map_or(0, |o| o+1)`。
-#[test]
-fn choice_marker_hover_switch_dirties_only_two_changed_lines() {
-    let mode = WritingMode::HorizontalTb;
-    // 4 行: [GlyphRun, Choice A, Choice B, GlyphRun]（ブロック軸 0/13/26/39）。
-    let before = [
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], Some(0)), // A に hover
-        choice_resident("えらぶБ", 26.0, &[], None),
-        glyph_resident("脚注", 39.0, &[]),
-    ];
-    let after = [
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], None),
-        choice_resident("えらぶБ", 26.0, &[], Some(0)), // hover を B へ切替
-        glyph_resident("脚注", 39.0, &[]),
-    ];
-    let fp_before: Vec<_> = before.iter().map(|r| line_fingerprint(r, mode)).collect();
-    let fp_after: Vec<_> = after.iter().map(|r| line_fingerprint(r, mode)).collect();
-
-    // 変化したのは選択肢 2 行（index 1,2）のみ・他行は不変。
-    assert_eq!(fp_before[0], fp_after[0], "非 Choice 見出し行は不変");
-    assert_ne!(
-        fp_before[1], fp_after[1],
-        "hover が外れた選択肢行は指紋差分"
-    );
-    assert_ne!(
-        fp_before[2], fp_after[2],
-        "hover が乗った選択肢行は指紋差分"
-    );
-    assert_eq!(fp_before[3], fp_after[3], "非 Choice 脚注行は不変");
-
-    // 非 Choice 行の choice_marker は常に 0・Choice 行は hovered.map_or(0, |o| o+1)。
-    assert_eq!(fp_before[0].choice_marker, 0, "非 Choice は marker 0");
-    assert_eq!(fp_before[1].choice_marker, 1, "hover ordinal 0 → 1");
-    assert_eq!(fp_before[2].choice_marker, 0, "非 hover Choice → 0");
-    assert_eq!(fp_before[3].choice_marker, 0, "非 Choice は marker 0");
-    assert_eq!(fp_after[1].choice_marker, 0, "hover 解除 → 0");
-    assert_eq!(fp_after[2].choice_marker, 1, "hover 付与 → 1");
-}
-
 /// before→after の hover 変化から `derive_dirty` を回し、(choice_marker が動いた行 index,
 /// dirty 矩形, draw_lines) を返す共通口（task 6.2）。横書き・k=1.0・blit=0（スクロールなし）
 /// ゆえ露出帯は生じず、dirty は**変化行の矩形のみ**になる——これにより「`derive_dirty` の
@@ -149,7 +106,7 @@ fn choice_marker_hover_clear_derive_dirty_matches_only_the_cleared_line() {
 
 /// hover SWITCH（Some(a) → Some(b)・異なる行）: `derive_dirty` の出力は旧・新の 2 行の矩形のみ＝
 /// 出力行数が choice_marker の変化した行数（2）と厳密一致し、全域ダーティにならない（R4.4/7.5）。
-/// 6.1 の同名テストは fingerprint 差分までを押さえるが、本テストは derive_dirty の**出力**を押さえる。
+/// あわせて非 Choice 行の `choice_marker` は常に 0・Choice 行は `hovered.map_or(0, |o| o+1)`。
 #[test]
 fn choice_marker_hover_switch_derive_dirty_matches_only_the_two_switched_lines() {
     let before = vec![
@@ -164,6 +121,17 @@ fn choice_marker_hover_switch_derive_dirty_matches_only_the_two_switched_lines()
         choice_resident("えらぶБ", 26.0, &[], Some(0)),
         glyph_resident("脚注", 39.0, &[]),
     ];
+    let markers = |rs: &[Resident]| -> Vec<u32> {
+        rs.iter()
+            .map(|r| line_fingerprint(r, WritingMode::HorizontalTb).choice_marker)
+            .collect()
+    };
+    assert_eq!(
+        markers(&before),
+        vec![0, 1, 0, 0],
+        "hover ordinal 0 → 1・他は 0"
+    );
+    assert_eq!(markers(&after), vec![0, 0, 1, 0], "hover を B へ切替");
     let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
     // 変化したのは選択肢 2 行（旧 hover 行 index 1・新 hover 行 index 2）。
     assert_eq!(

@@ -16,8 +16,8 @@
 //! `look_tests.rs` が 433 行で、本タスクの分を足すと 1 ファイル 1,000 行の見張り（要件 1.3・
 //! `crates/log-capture-kit/tests/file_length_guard_test.rs`）の射程に入るため。
 //!
-//! **6 語は小文字の完全一致のみ**（design §A 項目 12）。大文字の語を受理する実装は §11 の
-//! 較正で赤になる。
+//! **6 語は小文字の完全一致のみ**（design §A 項目 12）。大文字の語を受理する実装は §7 の
+//! 「6 語以外」のテストで赤になる。
 //!
 //! **母数を先に固定する**——真偽 5 キーの並び（§7 の先頭）・6 語以外として試す値・所有外の
 //! キーの一覧は、いずれも件数を断言してから回す（表が痩せても緑にならないようにする）。
@@ -192,9 +192,9 @@ fn default_and_disable_take_only_that_item_from_the_matching_layer() {
 fn a_word_outside_the_six_leaves_the_item_unchanged() {
     let layers = split_layers();
     let outside = [
-        "TRUE", "True", "FALSE", "Default", "DISABLE", "yes", "on", "2", "-1", "",
+        "TRUE", "True", "FALSE", "Default", "Disable", "DISABLE", "yes", "on", "2", "-1", "",
     ];
-    assert_eq!(outside.len(), 10, "6 語の外として試す値の母数");
+    assert_eq!(outside.len(), 11, "6 語の外として試す値の母数");
     for (key, _) in switch_keys() {
         for word in outside {
             let before = styled_look();
@@ -604,23 +604,6 @@ fn calibration_item_default_must_not_restore_the_other_items() {
         styled_look().script,
         "上下付きまで既定へ戻っている"
     );
-}
-
-/// 較正: 「大文字の語を畳み込んで受理する」誤り（値を小文字化してから 6 語と比べる形・
-/// design §A 項目 12 の「小文字の完全一致のみ」・R15.3）。
-#[test]
-fn calibration_the_six_words_must_not_be_case_folded() {
-    let layers = split_layers();
-    for word in ["TRUE", "True", "FALSE", "Default", "Disable", "DISABLE"] {
-        let before = styled_look();
-        let mut look = before.clone();
-        let result = apply_font_tag(&mut look, &layers, &["bold", word]);
-        assert!(
-            result.is_err(),
-            "\\f[bold,{word}] を受理している（値を小文字へ畳み込んでいる）"
-        );
-        assert_eq!(look, before);
-    }
 }
 
 /// 較正: 「上下付きが排他でなく両立してしまう」誤り（`sub`・`sup` を独立した真偽値で

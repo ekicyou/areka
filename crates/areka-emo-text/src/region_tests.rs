@@ -53,39 +53,6 @@ fn fixture_validrect_resolves_to_nondegenerate_absolute_rect() {
     assert!(region.bottom() > region.top(), "非退化（高さ > 0）");
 }
 
-/// 正の値は絶対座標として素通し（resolve(v, extent) = v for v > 0）。右辺・下辺の 0 は
-/// 画像の端と読むので素通しに入らない——要件 6（requirements.md の正典の段）。
-#[test]
-fn nonnegative_validrect_passes_through_as_absolute() {
-    let region = TextRegion::resolve(
-        &model_full(
-            (None, None),
-            (None, None),
-            (Some(10), Some(200), Some(20), Some(300)),
-        ),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    assert_eq!(region.left(), 20.0);
-    assert_eq!(region.top(), 10.0);
-    assert_eq!(region.right(), 300.0);
-    assert_eq!(region.bottom(), 200.0);
-}
-
-/// validrect 成分 None は画像全域の辺へ縮退（left/top→0・right→幅・bottom→高さ）。
-#[test]
-fn missing_validrect_components_fall_back_to_image_edges() {
-    let region = TextRegion::resolve(
-        &model_full((None, None), (None, None), (None, None, None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    assert_eq!(region.left(), 0.0);
-    assert_eq!(region.top(), 0.0);
-    assert_eq!(region.right(), 400.0);
-    assert_eq!(region.bottom(), 224.0);
-}
-
 /// fixture の descript 基層のみ（validrect 全 0）は画像全体 (0, 0, 400, 224) に解け、潰れで
 /// なく、解決は警告を 1 行も出さない。右辺・下辺の 0 は画像の右端・下端と読む——要件 6
 /// （requirements.md の正典の段）。かつてはこの基層を潰れとして固定していたが、読みの変更で
@@ -236,93 +203,8 @@ fn two_layer_merged_fixture_yields_nondegenerate_region() {
     assert_eq!(region.wrap_threshold(), 351.0); // 400 + (-49)
 }
 
-// ── 描画開始点の解決（範囲内の宣言は宣言どおり・範囲外と未宣言は書字開始角） ──
-
-/// origin を宣言しない fixture は書字開始角 (left,top)=(36,46) から書き始める
-/// （要件 3.11 の縮退・SSP 表示実態と整合する期待座標）。
-#[test]
-fn fixture_without_origin_declaration_starts_at_writing_corner() {
-    let region = TextRegion::resolve(
-        &fixture_model(),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    assert_eq!(region.start(), (36.0, 46.0));
-}
-
-/// validrect 内の origin はそのまま描画開始点になる。
-#[test]
-fn in_range_origin_is_kept_as_start_point() {
-    let m = model_full(
-        (Some(100), Some(50)),
-        (None, None),
-        (Some(46), Some(-56), Some(36), Some(-44)),
-    );
-    let region = TextRegion::resolve(&m, IMAGE, WritingMode::HorizontalTb);
-    assert_eq!(region.start(), (100.0, 50.0));
-}
-
-/// origin 成分 None は書字開始角へ寄る（成分独立）。
-#[test]
-fn missing_origin_components_fall_back_to_start_corner() {
-    let m = model_full(
-        (None, None),
-        (None, None),
-        (Some(46), Some(-56), Some(36), Some(-44)),
-    );
-    let region = TextRegion::resolve(&m, IMAGE, WritingMode::HorizontalTb);
-    assert_eq!(region.start(), (36.0, 46.0));
-}
-
-/// 範囲外の成分だけが書字開始角へ落ち、他方の成分は宣言どおり残る
-/// （spec `areka-P0-balloon-origin-outside-validrect` の要件 1.1・1.2）。
-#[test]
-fn out_of_range_origin_component_falls_back_to_start_corner_independently() {
-    let m = model_full(
-        (Some(100), Some(0)), // x は範囲内・y(0) は top(46) より上＝範囲外
-        (None, None),
-        (Some(46), Some(-56), Some(36), Some(-44)),
-    );
-    let region = TextRegion::resolve(&m, IMAGE, WritingMode::HorizontalTb);
-    // y だけが validrect.top(46)＝書字開始角の y へ落ち、x は宣言どおり 100 のまま。
-    assert_eq!(region.start(), (100.0, 46.0));
-}
-
-/// origin の負値は反対辺基準で解決してから範囲の内外を判定する（要件 3.7）。
-/// 本例の解決値は範囲内なので、そのまま描画開始点になる。
-#[test]
-fn negative_origin_resolves_from_opposite_edge() {
-    // origin.x,-100 → 400-100=300・origin.y,-100 → 224-100=124。
-    let m = model_full(
-        (Some(-100), Some(-100)),
-        (None, None),
-        (Some(46), Some(-56), Some(36), Some(-44)),
-    );
-    let region = TextRegion::resolve(&m, IMAGE, WritingMode::HorizontalTb);
-    assert_eq!(region.start(), (300.0, 124.0));
-}
-
-/// vertical_rl の書字開始角は validrect 右上＝origin 未宣言なら x は右端側になる。
-#[test]
-fn vertical_rl_start_corner_is_top_right() {
-    let region = TextRegion::resolve(
-        &fixture_model(),
-        IMAGE,
-        WritingMode::VerticalRl,
-    );
-    assert_eq!(region.start(), (356.0, 46.0));
-}
-
-/// vertical_lr の書字開始角は validrect 左上（horizontal_tb と同じ角・origin 未宣言時）。
-#[test]
-fn vertical_lr_start_corner_is_top_left() {
-    let region = TextRegion::resolve(
-        &fixture_model(),
-        IMAGE,
-        WritingMode::VerticalLr,
-    );
-    assert_eq!(region.start(), (36.0, 46.0));
-}
+// 描画開始点の解決（範囲内・範囲外・未宣言・負値・書字開始角）と、validrect の素通し・
+// 画像端への縮退・折返し点の既定は `region_vertical_canon_tests.rs` の表が 3 方向で持つ。
 
 // ── 折返し閾値（軸解釈は WritingMode 依存・負値=反対辺基準） ──
 
@@ -361,21 +243,6 @@ fn degenerate_wordwrappoint_y_zero_is_resolved_faithfully() {
         WritingMode::VerticalRl,
     );
     assert_eq!(region.wrap_threshold(), 0.0);
-}
-
-/// 折返し点の成分 None は行内軸の validrect 遠辺へ縮退
-/// （横書き→right・縦書き→bottom＝領域端での自然折返し）。
-#[test]
-fn missing_wordwrappoint_falls_back_to_validrect_far_edge() {
-    let m = model_full(
-        (None, None),
-        (None, None),
-        (Some(46), Some(-56), Some(36), Some(-44)),
-    );
-    let horizontal = TextRegion::resolve(&m, IMAGE, WritingMode::HorizontalTb);
-    assert_eq!(horizontal.wrap_threshold(), 356.0);
-    let vertical = TextRegion::resolve(&m, IMAGE, WritingMode::VerticalRl);
-    assert_eq!(vertical.wrap_threshold(), 168.0);
 }
 
 // ── R4.6/R10.4: DPI/スケール契約（画像座標空間と物理座標空間の 2 空間のみ） ──

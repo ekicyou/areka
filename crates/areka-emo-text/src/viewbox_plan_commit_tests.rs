@@ -2,7 +2,6 @@ use super::test_support::{broken_lines, canvas_for, commit_initial, expect_updat
 use super::{FramePlan, PhysicalRect, ScrollPlanner, ScrollState};
 use crate::canvas::ContentCanvas;
 use crate::region::ScaleContract;
-use crate::state::TextItem;
 use crate::writing::WritingMode;
 
 // ── 3.3 R2.3/4.3: plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行） ──
@@ -17,85 +16,6 @@ fn plan_canvas() -> ContentCanvas {
         (Some(0), Some(100), Some(0), Some(400)),
         10.0,
     )
-}
-
-/// plan は状態不変・純粋——未 commit の反復 plan は同一計画を返し `scroll_state` も動かない
-/// （デバイス失敗フレームの再試行安全＝現行の「skip して次フレーム再計画」規律）。
-#[test]
-fn plan_is_pure_and_repeatable_without_commit() {
-    let contract = ScaleContract::new(1.0, None);
-    let canvas = plan_canvas();
-    let mut planner = ScrollPlanner::new();
-    // 初回フレームを確定して prev_lines を張る（以後のスクロールは Update）。
-    let w0 = window(0, 0.0);
-    let first = planner.plan(
-        &canvas,
-        &w0,
-        WritingMode::HorizontalTb,
-        &contract,
-        (400, 100),
-    );
-    planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
-
-    // スクロールを未 commit で 2 回 plan → 同一計画・scroll_state 不変。
-    let w1 = window(1, -12.0);
-    let before = planner.scroll_state();
-    let a = planner.plan(
-        &canvas,
-        &w1,
-        WritingMode::HorizontalTb,
-        &contract,
-        (400, 100),
-    );
-    let b = planner.plan(
-        &canvas,
-        &w1,
-        WritingMode::HorizontalTb,
-        &contract,
-        (400, 100),
-    );
-    assert_eq!(a, b, "未 commit の反復 plan は同一計画（再試行安全）");
-    assert_eq!(
-        planner.scroll_state(),
-        before,
-        "plan は self を一切変えない（純粋）"
-    );
-    assert!(matches!(a, FramePlan::Update { .. }), "スクロールは Update");
-}
-
-/// commit を挟むと確定が次回計画へ反映される——同一 window の初回全域 Update を commit
-/// すると、指紋一致・blit 0 で次の同一 plan は NoChange になる。
-#[test]
-fn commit_makes_next_identical_plan_no_change() {
-    let contract = ScaleContract::new(1.0, None);
-    let canvas = plan_canvas();
-    let mut planner = ScrollPlanner::new();
-    let w = window(0, 0.0);
-    // 初回 plan は全域 Update（prev 空）。
-    let first = planner.plan(
-        &canvas,
-        &w,
-        WritingMode::HorizontalTb,
-        &contract,
-        (400, 100),
-    );
-    assert!(
-        matches!(first, FramePlan::Update { .. }),
-        "初回は全域 Update"
-    );
-    planner.commit(&canvas, &w, WritingMode::HorizontalTb, &contract, &first);
-    // 同一 window の次 plan は NoChange（指紋一致・blit 0）。
-    assert_eq!(
-        planner.plan(
-            &canvas,
-            &w,
-            WritingMode::HorizontalTb,
-            &contract,
-            (400, 100)
-        ),
-        FramePlan::NoChange,
-        "commit 後の同一 window は変化なし"
-    );
 }
 
 /// スクロール（block_offset 変化）→ plan が露出帯付き Update → commit で
@@ -445,92 +365,6 @@ fn long_scroll_vertical_rl_nonunit_scale_is_drift_free() {
     assert_long_scroll_is_drift_free(WritingMode::VerticalRl, 1.25, 1.0, 400);
 }
 
-// ── (c) ダーティ導出 5 ケースの一式化（plan/commit 二相の分類を束ねて総括） ──
-
-/// plan/commit 二相の分類が 5 ケースを一式で満たす: 可視窓のみ移動＝露出帯のみ／
-/// typewriter 1 グリフ＝現在行のみ／catch-up 複数行＝変化行の和／Clear＝FullClear／
-/// 変化なし＝NoChange。3.2/3.3 の derive_dirty 単体檻とは別に、plan の variant 選択
-/// （commit で張った prev_lines を根拠にした end-to-end 分類）を束ねて確認する。
-#[test]
-fn plan_dirty_derivation_suite_covers_five_cases() {
-    let contract = ScaleContract::new(1.0, None);
-    let mode = WritingMode::HorizontalTb;
-    let vr = (Some(0), Some(100), Some(0), Some(400));
-    let surface = (400u32, 100u32);
-    let glyph = TextItem::glyph;
-
-    // (1) 可視窓のみ移動（content 不変）→ dirty＝露出帯のみ（変化行ゼロ・下端の帯）。
-    {
-        let canvas = canvas_for(&broken_lines(4), mode, vr, 10.0);
-        let mut planner = ScrollPlanner::new();
-        commit_initial(&mut planner, &canvas, mode, &contract, surface);
-        let plan = planner.plan(&canvas, &window(1, -12.0), mode, &contract, surface);
-        let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (0, -12), "(1) スクロールの blit は y 軸・符号素通し");
-        assert_eq!(dirty.len(), 1, "(1) 露出帯 1 枚のみ（変化行ゼロ）");
-        assert_eq!(
-            dirty[0].y + dirty[0].h,
-            surface.1,
-            "(1) 露出帯は下端に接する"
-        );
-    }
-
-    // (2) typewriter 1 グリフ進行（現在行が伸長）→ dirty＝現在行のみ・draw＝[0]。
-    {
-        let prev_canvas = canvas_for(&[glyph("あ")], mode, vr, 10.0);
-        let curr_canvas = canvas_for(&[glyph("あ"), glyph("あ")], mode, vr, 10.0);
-        let mut planner = ScrollPlanner::new();
-        commit_initial(&mut planner, &prev_canvas, mode, &contract, surface);
-        let plan = planner.plan(&curr_canvas, &window(0, 0.0), mode, &contract, surface);
-        let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (0, 0), "(2) 非スクロール＝blit 0");
-        assert_eq!(dirty.len(), 1, "(2) 現在行のみがダーティ");
-        if let FramePlan::Update { draw_lines, .. } = &plan {
-            assert_eq!(draw_lines, &vec![0], "(2) 描画対象は現在行のみ");
-        }
-    }
-
-    // (3) catch-up 複数行（2→4 行へ一挙）→ dirty＝新規 2 行の和・draw＝[2,3]。
-    {
-        let prev_canvas = canvas_for(&broken_lines(2), mode, vr, 10.0);
-        let curr_canvas = canvas_for(&broken_lines(4), mode, vr, 10.0);
-        let mut planner = ScrollPlanner::new();
-        commit_initial(&mut planner, &prev_canvas, mode, &contract, surface);
-        let plan = planner.plan(&curr_canvas, &window(0, 0.0), mode, &contract, surface);
-        let (blit, dirty) = expect_update(&plan);
-        assert_eq!(blit, (0, 0), "(3) 非スクロール＝blit 0");
-        assert_eq!(dirty.len(), 2, "(3) 変化行 2 行の和");
-        if let FramePlan::Update { draw_lines, .. } = &plan {
-            assert_eq!(draw_lines, &vec![2, 3], "(3) 新規 2 行のみ描画対象");
-        }
-    }
-
-    // (4) Clear cue → FullClear（描画 0 件の全域リセット）。
-    {
-        let canvas = canvas_for(&broken_lines(3), mode, vr, 10.0);
-        let mut planner = ScrollPlanner::new();
-        commit_initial(&mut planner, &canvas, mode, &contract, surface);
-        planner.request_clear();
-        assert_eq!(
-            planner.plan(&canvas, &window(0, 0.0), mode, &contract, surface),
-            FramePlan::FullClear,
-            "(4) Clear 要求後は FullClear"
-        );
-    }
-
-    // (5) 変化なし（同一 canvas・同一 window）→ NoChange（blit 0・dirty 空）。
-    {
-        let canvas = canvas_for(&broken_lines(3), mode, vr, 10.0);
-        let mut planner = ScrollPlanner::new();
-        commit_initial(&mut planner, &canvas, mode, &contract, surface);
-        assert_eq!(
-            planner.plan(&canvas, &window(0, 0.0), mode, &contract, surface),
-            FramePlan::NoChange,
-            "(5) 変化なしは NoChange"
-        );
-    }
-}
-
 // ── (d) back 全被覆（3 方向・複数シナリオ・2D ピクセル格子で未被覆 0 を総当り） ──
 
 /// 面全域の各物理ピクセルが「blit の写域」または「いずれかの dirty 矩形」で被覆される
@@ -640,8 +474,9 @@ fn back_is_fully_covered_across_modes_and_scenarios() {
 // ── (e) plan/commit 二相の反復同一性（commit 境界を跨ぐ補強） ──
 
 /// 未 commit の反復 plan は同一計画を返し scroll_state を動かさない（再試行安全）。commit を
-/// 挟むと同一スクロール window の再計画が NoChange へ変わる（確定が効いた差分）——3.3 の初回
-/// window 檻とは別に、スクロール window での二相を commit 境界を跨いで確認する。
+/// 挟むと同一スクロール window の再計画が NoChange へ変わる（確定が効いた差分）——初回
+/// window の二相（`plan_returns_three_variants`）とは別に、スクロール window での二相を commit
+/// 境界を跨いで確認する。
 #[test]
 fn plan_commit_two_phase_idempotent_across_commit_boundary() {
     let contract = ScaleContract::new(1.0, None);

@@ -185,24 +185,12 @@ fn inline_limit_is_the_validrect_far_edge_in_every_writing_mode() {
     );
 }
 
-/// 遠辺は折返し基準へ丸め込まれない——粗いバルーンでは 2 つの値が食い違ったまま
-/// 独立に読める（design §4.3 の「丸め込み案は採らない」・要件 6.3）。
-#[test]
-fn inline_limit_is_not_rounded_toward_the_wrap_threshold() {
-    let region = TextRegion::resolve(&merged(KERO_OVERLAY), KERO_IMAGE, WritingMode::HorizontalTb);
-    assert_eq!(region.wrap_threshold(), KERO_WRAP_X);
-    assert_eq!(region.inline_limit(), KERO_RIGHT);
-    assert!(
-        region.wrap_threshold() > region.inline_limit(),
-        "本 fixture は折返し基準（254）が遠辺（240）の外にあるという前提で書かれている"
-    );
-}
-
 // ── 要件 14.1（2026-09-06 第 2 回改訂）: 解決はログを書かない ──
 
 /// 相方側 fixture 相当（折返し基準 254 > 遠辺 240）を解決しても警告は 1 件も出ない——
 /// 粗さを知らせる警告は actor の登録口が持つ（`actor_region_warn_tests.rs`）。値そのものは
-/// 従来どおり 2 つとも保持される。
+/// 従来どおり 2 つとも保持され、遠辺は折返し基準へ丸め込まれない（design §4.3 の「丸め込み案は
+/// 採らない」・要件 6.3）。
 #[test]
 fn resolving_a_coarse_balloon_writes_no_warning() {
     let (region, warns, errors) =

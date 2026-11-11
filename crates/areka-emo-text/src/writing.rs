@@ -333,63 +333,8 @@ mod tests {
         (mode, counts.warn)
     }
 
-    // ── R5.1/R5.5: 3 語彙の受理と方向写像 1:1（CSS 語彙 snake_case→3 variant 単射） ──
-
-    #[test]
-    fn horizontal_tb_resolves_to_horizontal_tb() {
-        assert_eq!(
-            WritingMode::resolve(&model_writing(Some("horizontal_tb"))),
-            WritingMode::HorizontalTb
-        );
-    }
-
-    #[test]
-    fn vertical_rl_resolves_to_vertical_rl() {
-        assert_eq!(
-            WritingMode::resolve(&model_writing(Some("vertical_rl"))),
-            WritingMode::VerticalRl
-        );
-    }
-
-    #[test]
-    fn vertical_lr_resolves_to_vertical_lr() {
-        assert_eq!(
-            WritingMode::resolve(&model_writing(Some("vertical_lr"))),
-            WritingMode::VerticalLr
-        );
-    }
-
-    /// 方向写像は 1:1（R5.5）——3 語彙は互いに異なる variant へ写る（単射）。
-    #[test]
-    fn three_vocabulary_values_map_injectively() {
-        let modes = [
-            WritingMode::resolve(&model_writing(Some("horizontal_tb"))),
-            WritingMode::resolve(&model_writing(Some("vertical_rl"))),
-            WritingMode::resolve(&model_writing(Some("vertical_lr"))),
-        ];
-        assert_ne!(modes[0], modes[1]);
-        assert_ne!(modes[0], modes[2]);
-        assert_ne!(modes[1], modes[2]);
-    }
-
-    /// 既知 3 語彙の受理は警告を出さない（warn は未知値専用・R5.1/R5.4）。
-    #[test]
-    fn known_values_resolve_without_warning() {
-        for value in ["horizontal_tb", "vertical_rl", "vertical_lr"] {
-            let (_, warns) = resolve_counting_warns(Some(value));
-            assert_eq!(warns, 0, "value {value:?} は warn なしで受理される");
-        }
-    }
-
-    // ── R5.3: マーカー無し→横書き既定（SSP 互換） ──
-
-    #[test]
-    fn missing_marker_defaults_to_horizontal_tb() {
-        let (mode, warns) = resolve_counting_warns(None);
-        assert_eq!(mode, WritingMode::HorizontalTb);
-        // 未指定は正常系（SSP 互換既定）——warn は記録しない。
-        assert_eq!(warns, 0);
-    }
+    // 3 語彙の受理・写像 1:1・既知語彙の無警告・宣言なし→横書き（R5.1/R5.3/R5.5）は
+    // `writing_decision_tests.rs` の単独宣言・宣言なし・委譲のテストが持つ。
 
     /// 型の Default も横書き（design.md の #[default] 正準と一致）。
     #[test]

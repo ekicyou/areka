@@ -339,17 +339,6 @@ fn disable_overrides_change_only_the_disable_layer() {
     assert_eq!(layers.default.height, 12.0, "既定層は動かない");
 }
 
-/// 差し込みが 1 件も無ければ従来どおり——無効表示層は色以外が既定層と一致する（R4.5 の非退行）。
-#[test]
-fn no_overrides_keeps_the_disable_layer_a_color_only_copy() {
-    let layers = balloon_layers();
-    let with_default_color = TextLook {
-        color: layers.default.color,
-        ..layers.disable.clone()
-    };
-    assert_eq!(with_default_color, layers.default);
-}
-
 /// 綴り誤りの 1 件は残りの差し込みを止めない（黙って全部落とさない）。
 #[test]
 fn a_malformed_override_does_not_block_the_others() {

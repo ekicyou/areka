@@ -511,58 +511,6 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
     );
 }
 
-// ── back 全被覆の素朴檻: blit 写域 ∪ dirty ＝ 面全域（ブロック軸） ──
-
-/// 横書きスクロール（by=-12＝行送り 1 行分）で blit 写域（保持ピクセルの移動先）と dirty（露出帯）の
-/// 和がブロック軸（y）全域を隙間なく覆う（残像漏れの構造檻・簡易ケース）。
-#[test]
-fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
-    let contract = ScaleContract::new(1.0, None);
-    let surface = (400u32, 100u32);
-    let canvas = canvas_for(
-        &broken_lines(4),
-        WritingMode::HorizontalTb,
-        (Some(0), Some(100), Some(0), Some(400)),
-        10.0,
-    );
-    let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    let blit = (0i32, -12i32);
-    let (dirty, _) = ScrollPlanner::derive_dirty(
-        &canvas,
-        &window(1, -12.0),
-        WritingMode::HorizontalTb,
-        &contract,
-        blit,
-        surface,
-        &prev,
-    );
-    // blit 写域（by<0＝内容上へ）: front 行 [|by|,H) を back 行 [0,H-|by|) へ写す。
-    let by = blit.1.unsigned_abs();
-    let mut spans = vec![(0u32, surface.1 - by)];
-    for r in &dirty {
-        spans.push((r.rect.y, r.rect.y + r.rect.h)); // 横書きのブロック軸＝y
-    }
-    assert!(
-        covers_block_axis_fully(spans, surface.1),
-        "blit 写域 ∪ dirty が y 軸全域を覆う"
-    );
-}
-
-/// [start,end) 区間列がブロック軸 `[0,dim)` を隙間なく覆うか（先頭 0・末尾 dim 到達）。
-fn covers_block_axis_fully(mut spans: Vec<(u32, u32)>, dim: u32) -> bool {
-    spans.sort_unstable();
-    let mut cursor = 0u32;
-    for (s, e) in spans {
-        if s > cursor {
-            return false; // 隙間
-        }
-        if e > cursor {
-            cursor = e;
-        }
-    }
-    cursor >= dim
-}
-
 /// 行指紋は canvas-local（スクロール非依存）——同一 canvas は block_offset に依らず一致。
 #[test]
 fn committed_lines_are_scroll_independent() {
