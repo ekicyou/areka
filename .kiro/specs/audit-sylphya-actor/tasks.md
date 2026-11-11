@@ -96,7 +96,7 @@
   - _Depends: 1.3_
   - _Requirements: 3.1, 4.1, 4.2, 6.1_
 
-- [ ] 8. UI アクターを直す（T8・#9・#5・#2）
+- [x] 8. UI アクターを直す（T8・#9・#5・#2）
 - [x] 8.1 (P) 実走のポンプの道具を共有の支えへ出し、スパイクを消して、UI アクターの 2 つの枝を縛る（#9・#5）
   - 今の toy(b) の心拍のスレッド・メッセージのループ・filter を、期限つきでポンプを回す 1 つの関数（`done` が立つか期限でポンプが止まって戻る）としてテストの支えのモジュールへ出し、toy(b) はそれを使う。8.2 はこの関数を変えずに使う
   - スパイクのテストのファイルを消し、toy(b) の注のスパイクを名指す 2 か所を今の形へ直す
@@ -111,7 +111,7 @@
   - このテストは素の `set_default` を使うので、8.3 を済ませるまで `with_default_guard_test` の 1 本だけが赤になる。8.2 のレビューはこの 1 本の赤を想定どおりとして受け、ほかが緑であることで判定する。8.2 と 8.3 は同じ着地に入れる（8.2 だけを着地させない）
   - _Depends: 8.1_
   - _Requirements: 3.1, 4.1, 4.2_
-- [ ] 8.3 素の `set_default` の例外の表に 8.2 のテストの 1 行を足す（範囲の外の唯一の変更）
+- [x] 8.3 素の `set_default` の例外の表に 8.2 のテストの 1 行を足す（範囲の外の唯一の変更）
   - `placement-crate-split` の着地の知らせを受けてから `main` を取り込み、その後で `crates/log-capture-kit/tests/with_default_guard_test.rs` の例外の表に design.md の 1 行を足し、件数を 5 → 6 にする。こちらが先に着地することになったら、足す前に向こうへ一言知らせる
   - 2026-11-06 に着地の知らせを受けた（PR#433・squash `ff31386f`・`origin/main` に在ることを確かめた）。main の表は placement の 3 行が `crates/areka-placement/…` に替わり、件数は 5 のまま。残っている待ちは 8.2 だけ。8.2 を済ませたら、この時点の `main` を取り込んで 1 行を足す
   - そのファイルの差分が 1 行と件数だけで、`with_default_guard_test` が緑
@@ -153,3 +153,4 @@
 - 3.1: 実のファイルの錠のテスト 2 本は design の io.rs の `mod tests` でなく兄弟の `persist/io_lock_tests.rs`（io.rs から `#[cfg(test)] #[path] mod lock_tests;`）に置いた。io.rs に `TempPath` の行を増やさない（仕上げの確かめ 4・要件 6.3）ため。11.2 の確かめはこの形で数える
 - 3.2: 偽の IO の中で止めるときは、`if let Some(x) = m.lock().unwrap().take()` の形にしない（then 節の終わりまで錠が残り、偽の IO の錠が門の代わりをして赤が決まらない）。取り出しを別の文にしてから止まる
 - 3.2: 書けない置き場では本物の `FsPersistIo` が錠の `create_dir_all` で先に落ちるので、出る ERROR は `persist_lock_failed`（縮退の中身は同じ）
+- 8.3: 範囲の外の差分に `.kiro/specs/{audit-areka-app,audit-areka-install-update,audit-emo2-boot-spine,sylphya-sqlite-kvs}/brief.md` が出るのは、要件の討議で #10・#16・#21・#4 の呼び手を回し先の brief へ書き足したコミット（4176d4ea・dfeaacec）のもの。11.2 の確かめではこの 4 つを意図した変更として数える
