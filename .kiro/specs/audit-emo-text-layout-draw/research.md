@@ -547,3 +547,67 @@
 
 - **指摘 36（直したほうがよい）**: `viewbox_draw_render.rs:607-616` の `marker_bitmap_for` は `marker_bitmap(..).ok()?` で失敗を覚えない。一辺 16,384 を越える行の中の印の絵があると、毎フレーム作り直しと `error!` が出る（記録のあふれ・指摘 12 と同じ種類）。出どころ: `audit-emo-text-state-actor` のかけ直しの audit（同 spec の `MarkerSurface::draw` にも同じ穴があり、あちらで直した）。直しはタスク 10.5。残す 3 種類のどれにも当たらないので直す（要件 3.6）。
 - **指摘 37（できれば）**: 説明の根拠にリポジトリの外の AI の記憶の名（「記憶 areka-log-first-no-silent-failure」など）や `[[…]]` を挙げている所が範囲に 7 か所ある（`draw.rs:27`・`draw_metrics.rs:372-373`・`region.rs:167`・`viewbox_draw.rs:11,278-279`・`viewbox_draw_plan.rs:24`・`viewbox_draw_png_dump_tests.rs:377`、ほかに `viewbox_draw_decoration.rs:312` は要確認）。読み手がたどれない。出どころ: `audit-emo-text-state-actor` のかけ直しの audit（2026-11-07・あちらの持ち物は直し済み）。直しはタスク 13.1・13.2。
+
+## 14. 着手のときの測り直し（2026-11-12・タスク 1.1）
+
+- 測った時点: 枝 `claude/kiro-start-audit-emo-text-layout-draw-68feba` の `6783d9fc`（`main` `becb50ef`＝`audit-emo-text-state-actor` の着地 PR #435 を取り込んだ後）。測り方は 2 節と同じ（`git ls-files crates/areka-emo-text/src` のうち 14 の頭で始まるもの・行は `wc -l`＝空行を含む・名前が `_tests.rs` か `_test_support.rs` で終わるものをテストに数えた）。
+
+### 14.1 範囲の数（要件 1.1・1.3）
+
+| 測った時点 | ファイル | コード | テスト |
+|---|---|---|---|
+| ギャップ分析のとき（`main` `73c5b25d`） | 81（コード 27・テスト 54） | 10,820 行 | 27,643 行 |
+| 着手のとき（`6783d9fc`） | 81（コード 27・テスト 54） | 10,781 行 | 27,643 行 |
+
+- ファイルの一覧は `73c5b25d` と同じ（`git ls-files` の一覧と `git ls-tree -r 73c5b25d` の一覧を `diff` して差 0）。増えたファイル・減ったファイルは 0＝足す対象は無い（要件 1.3）。兄弟が足した 3 ファイル（`actor_frame_memo_tests.rs`・`actor_surface_limit_tests.rs`・`choice_test_support.rs`）は兄弟の持ち物の頭で、範囲に入らない（要件 1.2）。
+- コードが 39 行減った（−33−23＋17）のは、兄弟（`audit-emo-text-state-actor`・PR #435）が範囲の中の 5 ファイルに触ったため。申し合わせ（`design.md` の「設計の段で確定した事項」の 5）どおりの直しで、こちらのタスクの前提は崩れていない。
+  - `draw.rs`（848→815 行）・`viewbox_draw.rs`（391→368 行）: `device_err`・`none_err` の写しを消し `crate::surface` から引く形にした（指摘 26 のうち兄弟が持つ分）。`draw.rs` は `balloon_overrides::overrides` の引数が 1 つになったのに合わせた呼び手の直しと、説明の関数名の直し。
+  - `look.rs`（830→847 行）: `apply_overrides` が綴り誤りを `warn!` で記録するようになった（キーの頭 `font.`／`disable.font.` を引数で受ける）。
+  - `layout.rs`・`layout_test_support.rs`: `test_support` と `IMAGE`・`model_rect`・`broken_lines` を `pub(crate)` にした（兄弟のテストが引くため）。行数は変わらない。
+- テストのファイルは 54 本とも `73c5b25d` から行数が変わっていない（下の表は 9 節の数と同じ）。
+- 兄弟が `tests/viewbox_blit_spike.rs` を消した。範囲の中で `blit_spike` の字面を含む行は今も `73c5b25d` も 0 件（`git grep -n blit_spike`）。タスク 13.2 の「それを名指す説明 2 か所」は、ファイル名でなく「spike」の語で名指す `viewbox.rs:333` と `viewbox_draw_live_diff_tests.rs:455` を指すと読む。
+
+### 14.2 檻を足す予定のファイルの行の余白（要件 6.1・7.4・7.5）
+
+`design.md` の Testing Strategy の表が名指すファイル。余白＝1,000 − 行数。
+
+| ファイル | 行 | 余白 | 足す指摘（Testing Strategy） |
+|---|---|---|---|
+| `draw_format_metrics_tests.rs` | 922 | **78** | 22・35 |
+| `lookahead_tests.rs` | 878 | **122** | 13 |
+| `viewbox_draw_decoration_tests.rs` | 859 | **141** | 6（打ち消し線） |
+| `draw_oracle_tests.rs` | 837 | 163 | 34 |
+| `layout_segmented_tests.rs` | 783 | 217 | 5・9 |
+| `viewbox_dirty_tests.rs` | 770 | 230 | 4・18 |
+| `viewbox_plan_commit_tests.rs` | 748 | 252 | 3・16・17 |
+| `layout_wrap_tests.rs` | 736 | 264 | 1 |
+| `viewbox_draw_frame_render_tests.rs` | 648 | 352 | 8・11・17 |
+| `look_font_tag_tests.rs` | 650 | 350 | 21 |
+| `draw_metrics_styled_tests.rs` | 617 | 383 | 11・12・22 |
+| `draw_catalog_tests.rs` | 615 | 385 | 11 |
+| `color_tests.rs` | 413 | 587 | 32 |
+| `cursor_tag_tests.rs` | 574 | 426 | 2 |
+| `layout_cursor_wiring_tests.rs` | 549 | 451 | 2 |
+| `look_tests.rs` | 539 | 461 | 10 |
+| `region_tests.rs` | 567 | 433 | 7（兄弟が直したので足さない・14.3） |
+| `segment.rs`（中のテスト） | 534 | 466 | 9・23 |
+| `viewbox_draw_underline_tests.rs` | 497 | 503 | 6・15 |
+| `viewbox_draw_png_dump_tests.rs` | 499 | 501 | 27 |
+| `layout_visible_window_tests.rs` | 366 | 634 | 1 |
+| `underline_tests.rs` | 209 | 791 | 14 |
+| `viewbox_axis_tests.rs` | 147 | 853 | 3 |
+
+- 表に無いが 23 を足す `layout_cursor_tests.rs` は 842 行（余白 **158**・28 で約 60 行空けてから足す）。範囲でいちばん大きいファイルは今も `draw_format_metrics_tests.rs` の 922 行。
+- 狭い 3 本（余白 160 未満）に足すのは 22・35・13・6 の打ち消し線だけで、見込みの行数（9 節）は余白に収まる。越えそうなら止まり、置き場を申し合わせる（要件 7.5）。
+
+### 14.3 直す件と残す件の照合（要件 3.1・3.6）
+
+- `requirements.md` の「確定した指摘の一覧」と `tasks.md` を照らした。直す件 1〜18・21〜35 は、どれも `tasks.md` のどこかの細かいタスクが番号で名指す（1＝4.2・7＝14.1 の確かめ）。19 は説明だけ（13.1）、20 は残す（4.3 が前提を成り立たせる）。取り違えは無い。
+- 残す件（19 の振る舞い・20・28 の calibration の組・30 の `RegionTransform` の口と `ScaleContract::author_dpi`・31 の毎フレームの `debug!`・7 の近い辺）は、`tasks.md` 14.1 の「0 件の数から外す」と同じ。
+- 36・37 は `requirements.md` の確定の表に無く、`research.md` 13 節と `tasks.md` 10.5・13.1・13.2 にある。残す 3 種類のどれにも当たらない新しい指摘は直す（要件 3.6・9.2）ので、表に無くても直す対象で、食い違いではない。
+- 指摘 7 は兄弟のタスク 2.4 が着地済み（`actor_present.rs:234-235` の `region.right().min(lim.0)`・`region.bottom().min(lim.1)`）。こちらは `region_tests.rs` に檻を足さず、`tasks.md` 14.1 で直ったことを確かめる。
+
+### 14.4 共有の記録（要件 7.2・7.7）
+
+- `side-session-notes` の本 spec のメモは、申し合わせの中身（7＝兄弟のタスク 2.4・`author_dpi` は申し送り・`"cursorbrush"` の 1 語は了承済みでこちらのタスク 11.4・伝えるだけの件は兄弟が拾う）で `design.md` の「設計の段で確定した事項」の 5 と食い違わない。
+- 古びていた所は 3 つ: 行番号 `state_decoration_tests.rs:424,438`（今は `:410,424`）・`viewbox_blit_spike.rs` の説明を直すタスクの番号「14.2」（今は 13.2）・兄弟が走っている前提（PR #435 で着地済み）。メモの末尾に日付つきの 1 行を足した（前の行は書き換えていない）。
