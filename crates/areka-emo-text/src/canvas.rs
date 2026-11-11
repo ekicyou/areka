@@ -363,37 +363,12 @@ mod tests {
         ResidentContent, TextEffects,
     };
     use crate::layout::test_support::{IMAGE, glyphs, model_full};
-    use crate::layout::{
-        FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine, WrapPlan,
-    };
+    use crate::layout::{LineRect, PositionedGlyph, PositionedLine};
     use crate::look::StyleId;
     use crate::region::TextRegion;
     use crate::state::TextItem;
+    use crate::viewbox::test_support::layout_canvas as canvas_for;
     use crate::writing::WritingMode;
-
-    /// layout→canvas の通し（テスト用最短経路・visible は全量）。
-    fn canvas_for(
-        items: &[TextItem],
-        region: &TextRegion,
-        mode: WritingMode,
-        font_height: f32,
-    ) -> (Vec<PositionedLine>, ContentCanvas) {
-        let visible = items
-            .iter()
-            .filter(|i| matches!(i, TextItem::Glyph { .. }))
-            .count();
-        let lines = LayoutEngine::layout(
-            items,
-            visible,
-            region,
-            mode,
-            font_height,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        let canvas = ContentCanvas::from_layout(&lines, region, mode);
-        (lines, canvas)
-    }
 
     /// 住人からグリフ住人の中身を取り出す（M1 の唯一の実装住人）。
     fn glyph_run(resident: &Resident) -> &GlyphRunContent {

@@ -1,75 +1,111 @@
 use super::{FramePlan, PhysicalRect, ScrollPlanner};
-use crate::canvas::ContentCanvas;
-use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use crate::canvas::{
+    ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, RegionTransform, Resident,
+    ResidentContent, TextEffects,
+};
+use crate::layout::test_support::{layout_all, model_rect};
+use crate::layout::{PositionedGlyph, PositionedLine, VisibleWindow};
+use crate::look::StyleId;
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_sakura::cluster::{cluster_count, clusters};
 
 // ── 3.2 R2.2/3.2/3.3/4.2: ダーティ導出（露出帯 ∪ 変化行 ∪ 全域）の檻 ──
 //
 // 幾何の共通前提: FixedMetrics・font 10 → pitch 12（10 + 行間 2）・全角 1 グリフ/行。
 // 露出帯の辺は写像正準表（横書き＝下端・vertical_rl＝左端・vertical_lr＝右端）。
 
-/// テスト画像原寸（image px・他モジュール檻と同一値）。
-pub(super) const IMAGE: (u32, u32) = (400, 224);
+/// テスト画像原寸と `broken_lines` は配置の支えのものを使う（写しを持たない）。
+pub(super) use crate::layout::test_support::{IMAGE, broken_lines};
 
 /// PhysicalRect 短縮構築。
 pub(super) fn phys(x: u32, y: u32, w: u32, h: u32) -> PhysicalRect {
     PhysicalRect { x, y, w, h }
 }
 
-/// テスト用 BalloonModel（origin (0,0)・折返し既定・validrect 指定）。
-pub(super) fn model_rect(
-    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
+/// items→(行, canvas) の通し（visible は全量）。canvas・描き直しの計画・描画のテストが共用する。
+pub(crate) fn layout_canvas(
+    items: &[TextItem],
+    region: &TextRegion,
+    mode: WritingMode,
+    font_height: f32,
+) -> (Vec<PositionedLine>, ContentCanvas) {
+    let lines = layout_all(items, region, mode, font_height);
+    let canvas = ContentCanvas::from_layout(&lines, region, mode);
+    (lines, canvas)
 }
 
-/// n 行（各行 全角 1 グリフ・明示改行 ratio 1.0 区切り）の item 列。
-pub(super) fn broken_lines(n: usize) -> Vec<TextItem> {
-    let mut items = Vec::new();
-    for i in 0..n {
-        if i > 0 {
-            items.push(TextItem::LineBreak { ratio: 1.0 });
-        }
-        items.push(TextItem::glyph("あ"));
-    }
-    items
-}
-
-/// items→canvas の通し（validrect-local・visible は全量）。
+/// items→canvas の通し（origin (0,0)・validrect-local・visible は全量）。
 pub(super) fn canvas_for(
     items: &[TextItem],
     mode: WritingMode,
     validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
     font_height: f32,
 ) -> ContentCanvas {
-    let region = TextRegion::resolve(&model_rect(validrect), IMAGE, mode);
-    let visible = items
-        .iter()
-        .filter(|i| matches!(i, TextItem::Glyph { .. }))
-        .count();
-    let lines = LayoutEngine::layout(
-        items,
-        visible,
-        &region,
-        mode,
-        font_height,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
+    let region = TextRegion::resolve(&model_rect((Some(0), Some(0)), validrect), IMAGE, mode);
+    layout_canvas(items, &region, mode, font_height).1
+}
+
+/// 行内のグリフ住人の中身（inline_pos 連番・全角 advance 10・丈 10）。
+/// `ids` は字ごとの装飾番号の列で、空なら全部 [`StyleId::DEFAULT`]。空でなければ長さは文字数と
+/// 一致させる（配置が `glyph_styles[ordinal]` を写す不変条件と同じ形）。
+pub(super) fn run_content(text: &str, ids: &[u32]) -> GlyphRunContent {
+    let count = cluster_count(text);
+    assert!(
+        ids.is_empty() || count == ids.len(),
+        "番号列の長さは文字数と一致させる"
     );
-    ContentCanvas::from_layout(&lines, &region, mode)
+    let glyphs = clusters(text)
+        .enumerate()
+        .map(|(i, ch)| PositionedGlyph {
+            text: ch.into(),
+            inline_pos: i as f32 * 10.0,
+            advance: 10.0,
+            style: ids.get(i).map_or(StyleId::DEFAULT, |&id| StyleId(id)),
+        })
+        .collect();
+    GlyphRunContent {
+        glyphs,
+        size: (count as f32 * 10.0, 10.0),
+    }
+}
+
+/// GlyphRun 住人（非 Choice・ブロック軸位置 dy・装飾番号の列は [`run_content`] と同じ）。
+pub(super) fn glyph_resident(text: &str, dy: f32, ids: &[u32]) -> Resident {
+    Resident {
+        content: ResidentContent::GlyphRun(run_content(text, ids)),
+        transform: RegionTransform::translation(0.0, dy),
+        effects: TextEffects::default(),
+    }
+}
+
+/// Choice 住人（hover の ordinal を注入・ブロック軸位置 dy・素描画は GlyphRun と同一）。
+pub(super) fn choice_resident(
+    text: &str,
+    dy: f32,
+    ids: &[u32],
+    hovered: Option<usize>,
+) -> Resident {
+    let run = run_content(text, ids);
+    let w = run.size.0;
+    Resident {
+        content: ResidentContent::Choice(ChoiceLineContent {
+            run,
+            segments: vec![ChoiceRowSegment {
+                ordinal: 0,
+                inline_range: (0.0, w),
+            }],
+            hovered,
+            highlight: None,
+            // 帯は指紋／ダーティ導出の入力ではない（ダーティ帯の拡張は COM 層
+            // `expand_overhang_for_band` の領分）——ここでは em ボックス丈で足りる。
+            band_extent: 10.0,
+            band_offset: 0.0,
+        }),
+        transform: RegionTransform::translation(0.0, dy),
+        effects: TextEffects::default(),
+    }
 }
 
 /// 可視窓のみ移動（content 不変・block_offset だけ変化・blit≠0）。

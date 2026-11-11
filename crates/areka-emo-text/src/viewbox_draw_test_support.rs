@@ -1,10 +1,11 @@
 use crate::actor::TextSlotBinding;
 use crate::canvas::ContentCanvas;
 use crate::draw::FontCatalog;
-use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use crate::layout::{LayoutEngine, VisibleWindow};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::surface::TextSurface;
+use crate::viewbox::test_support::layout_canvas;
 use crate::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -146,21 +147,8 @@ pub(super) fn build(
     mode: WritingMode,
     font_height: f32,
 ) -> (ContentCanvas, VisibleWindow) {
-    let visible = items
-        .iter()
-        .filter(|i| matches!(i, TextItem::Glyph { .. }))
-        .count();
-    let lines = LayoutEngine::layout(
-        items,
-        visible,
-        &region,
-        mode,
-        font_height,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    let canvas = ContentCanvas::from_layout(&lines, &region, mode);
-    let window = LayoutEngine::visible_window(&lines, &region, mode);
+    let (lines, canvas) = layout_canvas(items, region, mode, font_height);
+    let window = LayoutEngine::visible_window(&lines, region, mode);
     (canvas, window)
 }
 

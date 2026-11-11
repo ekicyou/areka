@@ -131,18 +131,20 @@ pub(crate) fn broken_lines(n: usize) -> Vec<TextItem> {
     items
 }
 
-/// layout→visible_window の通し（テスト用最短経路・visible は全量）。
-pub(super) fn window_for(
+/// items→行の通し（テスト用最短経路・FixedMetrics・1 字ずつ折る・visible は全量）。
+///
+/// 配置・canvas・描き直しの計画の各テストが同じ通しを使う（写しを持たない）。
+pub(crate) fn layout_all(
     items: &[TextItem],
     region: &TextRegion,
     mode: WritingMode,
     font_height: f32,
-) -> VisibleWindow {
+) -> Vec<PositionedLine> {
     let visible = items
         .iter()
         .filter(|i| matches!(i, TextItem::Glyph { .. }))
         .count();
-    let lines = LayoutEngine::layout(
+    LayoutEngine::layout(
         items,
         visible,
         region,
@@ -150,6 +152,16 @@ pub(super) fn window_for(
         font_height,
         &FixedMetrics,
         WrapPlan::CharByChar,
-    );
+    )
+}
+
+/// layout→visible_window の通し（テスト用最短経路・visible は全量）。
+pub(super) fn window_for(
+    items: &[TextItem],
+    region: &TextRegion,
+    mode: WritingMode,
+    font_height: f32,
+) -> VisibleWindow {
+    let lines = layout_all(items, region, mode, font_height);
     LayoutEngine::visible_window(&lines, region, mode)
 }

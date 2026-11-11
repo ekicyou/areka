@@ -1,65 +1,10 @@
-use super::test_support::{phys, window};
+use super::test_support::{choice_resident, glyph_resident, phys, window};
 use super::{DirtyRect, ScrollPlanner, line_fingerprint};
-use crate::canvas::{
-    ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, RegionTransform, Resident,
-    ResidentContent, TextEffects,
-};
-use crate::layout::PositionedGlyph;
-use crate::look::StyleId;
+use crate::canvas::{ContentCanvas, Resident};
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
-use areka_sakura::cluster::{cluster_count, clusters};
 
 // ── 6.1 R4.4: 行指紋の hover 印（choice_marker）——hover 切替は当該行の指紋だけを変える ──
-
-/// 行内 n グリフの GlyphRunContent（inline_pos 連番・全角 advance 10）。
-fn run_content(text: &str) -> GlyphRunContent {
-    let glyphs = clusters(text)
-        .enumerate()
-        .map(|(i, ch)| PositionedGlyph {
-            text: ch.into(),
-            inline_pos: i as f32 * 10.0,
-            advance: 10.0,
-            style: StyleId::DEFAULT,
-        })
-        .collect();
-    GlyphRunContent {
-        glyphs,
-        size: (cluster_count(text) as f32 * 10.0, 10.0),
-    }
-}
-
-/// GlyphRun 住人（非 Choice・ブロック軸位置 dy）。
-fn glyph_resident(text: &str, dy: f32) -> Resident {
-    Resident {
-        content: ResidentContent::GlyphRun(run_content(text)),
-        transform: RegionTransform::translation(0.0, dy),
-        effects: TextEffects::default(),
-    }
-}
-
-/// Choice 住人（hover ordinal 注入・ブロック軸位置 dy・素描画は GlyphRun と同一）。
-fn choice_resident(text: &str, dy: f32, hovered: Option<usize>) -> Resident {
-    let run = run_content(text);
-    let w = run.size.0;
-    Resident {
-        content: ResidentContent::Choice(ChoiceLineContent {
-            run,
-            segments: vec![ChoiceRowSegment {
-                ordinal: 0,
-                inline_range: (0.0, w),
-            }],
-            hovered,
-            highlight: None,
-            // 帯は指紋／ダーティ導出の入力ではない（ダーティ帯の拡張は COM 層
-            // `expand_overhang_for_band` の領分）——ここでは em ボックス丈で足りる。
-            band_extent: 10.0,
-            band_offset: 0.0,
-        }),
-        transform: RegionTransform::translation(0.0, dy),
-        effects: TextEffects::default(),
-    }
-}
 
 /// hover を選択肢行 A→B へ切り替えると、変化した 2 行（choice_marker が動いた行）の指紋のみが
 /// 差分となり、非 Choice 行を含む他行の指紋は不変（choice_marker が hover を指紋へ運ぶ・R4.4）。
@@ -69,16 +14,16 @@ fn choice_marker_hover_switch_dirties_only_two_changed_lines() {
     let mode = WritingMode::HorizontalTb;
     // 4 行: [GlyphRun, Choice A, Choice B, GlyphRun]（ブロック軸 0/13/26/39）。
     let before = [
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, Some(0)), // A に hover
-        choice_resident("えらぶБ", 26.0, None),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], Some(0)), // A に hover
+        choice_resident("えらぶБ", 26.0, &[], None),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let after = [
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, None),
-        choice_resident("えらぶБ", 26.0, Some(0)), // hover を B へ切替
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], None),
+        choice_resident("えらぶБ", 26.0, &[], Some(0)), // hover を B へ切替
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let fp_before: Vec<_> = before.iter().map(|r| line_fingerprint(r, mode)).collect();
     let fp_after: Vec<_> = after.iter().map(|r| line_fingerprint(r, mode)).collect();
@@ -150,16 +95,16 @@ fn derive_dirty_for_hover(
 #[test]
 fn choice_marker_hover_set_derive_dirty_matches_only_the_set_line() {
     let before = vec![
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, None), // hover なし
-        choice_resident("えらぶБ", 26.0, None),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], None), // hover なし
+        choice_resident("えらぶБ", 26.0, &[], None),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let after = vec![
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, Some(0)), // hover 付与（None → Some(0)）
-        choice_resident("えらぶБ", 26.0, None),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], Some(0)), // hover 付与（None → Some(0)）
+        choice_resident("えらぶБ", 26.0, &[], None),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
     // 変化した choice_marker は index 1 の 1 行のみ。
@@ -180,16 +125,16 @@ fn choice_marker_hover_set_derive_dirty_matches_only_the_set_line() {
 #[test]
 fn choice_marker_hover_clear_derive_dirty_matches_only_the_cleared_line() {
     let before = vec![
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, Some(0)), // hover あり
-        choice_resident("えらぶБ", 26.0, None),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], Some(0)), // hover あり
+        choice_resident("えらぶБ", 26.0, &[], None),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let after = vec![
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, None), // hover 解除（Some(0) → None）
-        choice_resident("えらぶБ", 26.0, None),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], None), // hover 解除（Some(0) → None）
+        choice_resident("えらぶБ", 26.0, &[], None),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
     assert_eq!(changed, vec![1], "変化した choice_marker 行は index 1 のみ");
@@ -208,16 +153,16 @@ fn choice_marker_hover_clear_derive_dirty_matches_only_the_cleared_line() {
 #[test]
 fn choice_marker_hover_switch_derive_dirty_matches_only_the_two_switched_lines() {
     let before = vec![
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, Some(0)), // A に hover
-        choice_resident("えらぶБ", 26.0, None),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], Some(0)), // A に hover
+        choice_resident("えらぶБ", 26.0, &[], None),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let after = vec![
-        glyph_resident("見出し", 0.0),
-        choice_resident("えらぶА", 13.0, None), // hover を A→B へ切替
-        choice_resident("えらぶБ", 26.0, Some(0)),
-        glyph_resident("脚注", 39.0),
+        glyph_resident("見出し", 0.0, &[]),
+        choice_resident("えらぶА", 13.0, &[], None), // hover を A→B へ切替
+        choice_resident("えらぶБ", 26.0, &[], Some(0)),
+        glyph_resident("脚注", 39.0, &[]),
     ];
     let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
     // 変化したのは選択肢 2 行（旧 hover 行 index 1・新 hover 行 index 2）。

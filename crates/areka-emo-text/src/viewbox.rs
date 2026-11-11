@@ -460,4 +460,4 @@ mod plan_commit_tests;
 mod style_fingerprint_tests;
 #[cfg(test)]
 #[path = "viewbox_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
