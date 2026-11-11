@@ -93,3 +93,27 @@ fn test_draw_labels_records_command_list_for_all_directions() {
         assert!(list.command_list().is_some(), "{entity:?} は描けている");
     }
 }
+
+/// 配置が作れない文字（大きさ 0）は、骨組みの道で空の列が入り、毎回やり直さない（7.1 二度目の見直し N2・実 GPU）
+#[test]
+fn label_whose_layout_cannot_be_built_gets_empty_list() {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let entity = world
+        .spawn((
+            Label {
+                text: "あいう".to_string(),
+                font_size: 0.0,
+                ..Default::default()
+            },
+            Brushes::default(),
+        ))
+        .id();
+    let mut schedule = Schedule::default();
+    schedule.add_systems(draw_labels);
+    schedule.run(&mut world);
+    let list = world
+        .get::<GraphicsCommandList>(entity)
+        .expect("空の列が入る（Without<GraphicsCommandList> から外れる）");
+    assert!(list.command_list().is_none());
+}

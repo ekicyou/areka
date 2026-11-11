@@ -683,3 +683,129 @@ fn leftover_transparent_effect_is_cleared_on_next_draw() {
     unsafe { layout.GetDrawingEffect(1, &mut effect, None) }.expect("get effect");
     assert!(effect.is_none(), "前の描画の透明の効果を残さない");
 }
+
+// ============================================================
+// 7.1 二度目の見直し: Typewriter の外し（N1）・控えの作り直し（N3・N4）— 実 GPU
+// ============================================================
+
+use crate::ecs::widget::text::typewriter_layout::invalidate_typewriter_layout_on_arrangement_change;
+
+/// 本番の Draw と同じ順（控えを外す → 控えを作る）で回す世界。
+fn new_cache_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(
+        (
+            invalidate_typewriter_layout_on_arrangement_change,
+            init_typewriter_layout,
+        )
+            .chain(),
+    );
+    (world, schedule)
+}
+
+/// `Typewriter` を外すと、命令の列が空になり（絵を消す）、控えも外れる。
+#[test]
+fn removing_typewriter_clears_list_and_cache() {
+    let (mut world, mut schedule) = new_layout_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_some());
+    let list = {
+        let core = world.resource::<GraphicsCore>();
+        let dc = core.device_context().expect("device context");
+        crate::ecs::widget::record::record_command_list(dc, |_| Ok(())).expect("record")
+    };
+    world
+        .entity_mut(entity)
+        .insert(GraphicsCommandList::new(list));
+
+    world.entity_mut(entity).remove::<Typewriter>();
+    world.flush();
+    assert_eq!(list_of(&world, entity), Some(None), "絵を残さない");
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_none());
+}
+
+/// 控えが作れない部品は、次の変化まで作り直さない（毎回の warn! を止める）。変われば作り直す。
+#[test]
+fn failed_cache_build_is_not_retried_until_typewriter_changes() {
+    let (mut world, mut schedule) = new_cache_world();
+    let entity = world
+        .spawn((
+            Typewriter {
+                font_size: 0.0,
+                ..Default::default()
+            },
+            sized(200.0, 100.0),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(
+        world.get::<TypewriterLayoutCache>(entity).is_none(),
+        "大きさ 0 では作れない"
+    );
+
+    // 原因を直しても変化の印を立てなければ、作り直さない
+    world
+        .get_mut::<Typewriter>(entity)
+        .unwrap()
+        .bypass_change_detection()
+        .font_size = 16.0;
+    schedule.run(&mut world);
+    assert!(
+        world.get::<TypewriterLayoutCache>(entity).is_none(),
+        "やり直さない"
+    );
+
+    world.get_mut::<Typewriter>(entity).unwrap().set_changed();
+    schedule.run(&mut world);
+    assert!(
+        world.get::<TypewriterLayoutCache>(entity).is_some(),
+        "変われば作る"
+    );
+}
+
+/// `Typewriter`（文字の大きさなど）を変えると控えが作り直される。
+#[test]
+fn changing_typewriter_rebuilds_cache() {
+    let (mut world, mut schedule) = new_cache_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert_eq!(font_size_of(&world, entity), 16.0, "既定の大きさの控え");
+
+    world.get_mut::<Typewriter>(entity).unwrap().font_size = 24.0;
+    schedule.run(&mut world);
+    assert_eq!(
+        font_size_of(&world, entity),
+        24.0,
+        "新しい大きさの控えになる"
+    );
+}
+
+/// 控えの配置の文字の大きさ。
+fn font_size_of(world: &World, entity: Entity) -> f32 {
+    let mut size = 0.0;
+    unsafe {
+        world
+            .get::<TypewriterLayoutCache>(entity)
+            .expect("cache")
+            .text_layout()
+            .GetFontSize(0, &mut size, None)
+    }
+    .expect("font size");
+    size
+}

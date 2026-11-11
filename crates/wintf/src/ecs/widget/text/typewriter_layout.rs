@@ -1,6 +1,6 @@
 //! Typewriter レイアウト系システム
 //!
-//! - invalidate_typewriter_layout_on_arrangement_change: Arrangement変更時のLayoutCache無効化
+//! - invalidate_typewriter_layout_on_arrangement_change: Arrangement・Typewriter変更時のLayoutCache無効化
 //! - init_typewriter_layout: TypewriterTalk追加時にLayoutCache生成
 //! - convert_to_timeline: Stage1→Stage2 IR変換
 
@@ -10,19 +10,28 @@ use crate::ecs::layout::Arrangement;
 use crate::ecs::widget::text::label::{TextDirection, apply_direction};
 use crate::ecs::widget::text::typewriter::{Typewriter, TypewriterLayoutCache, TypewriterTalk};
 use crate::ecs::widget::text::typewriter_ir::{TimelineItem, TypewriterTimeline, TypewriterToken};
+use bevy_ecs::entity::EntityHashSet;
 use bevy_ecs::prelude::*;
 use tracing::{debug, trace, warn};
 use windows::Win32::Graphics::DirectWrite::*;
 
 /// TypewriterLayoutCache 無効化システム（Draw スケジュール）
 ///
-/// Arrangementが変更されたらLayoutCacheを削除し、再生成をトリガーする。
+/// Arrangement か Typewriter（文字の大きさ・向き・既定の待ちなど）が変わったら LayoutCache を削除し、
+/// 再生成をトリガーする。
+#[allow(clippy::type_complexity)]
 pub fn invalidate_typewriter_layout_on_arrangement_change(
     mut commands: Commands,
-    query: Query<Entity, (With<TypewriterLayoutCache>, Changed<Arrangement>)>,
+    query: Query<
+        Entity,
+        (
+            With<TypewriterLayoutCache>,
+            Or<(Changed<Arrangement>, Changed<Typewriter>)>,
+        ),
+    >,
 ) {
     for entity in query.iter() {
-        debug!(entity = ?entity, "[invalidate_typewriter_layout] Arrangement changed, removing LayoutCache");
+        debug!(entity = ?entity, "[invalidate_typewriter_layout] Arrangement or Typewriter changed, removing LayoutCache");
         commands.entity(entity).remove::<TypewriterLayoutCache>();
     }
 }
@@ -31,14 +40,33 @@ pub fn invalidate_typewriter_layout_on_arrangement_change(
 ///
 /// TypewriterTalk が追加されたが TypewriterLayoutCache がないエンティティに対して、
 /// TextLayout を作成し、Stage 2 IR に変換して LayoutCache を生成する。
+/// 作れなかった部品は、`Typewriter`・`TypewriterTalk`・`Arrangement` のどれかが変わるまで作り直さない
+/// （毎回の `warn!` を止める）。
+#[allow(clippy::type_complexity)]
 pub fn init_typewriter_layout(
     mut commands: Commands,
     query: Query<
-        (Entity, &Typewriter, &TypewriterTalk, &Arrangement),
+        (
+            Entity,
+            Ref<Typewriter>,
+            Ref<TypewriterTalk>,
+            Ref<Arrangement>,
+        ),
         Without<TypewriterLayoutCache>,
     >,
     graphics_core: Option<Res<GraphicsCore>>,
+    mut failed: Local<EntityHashSet>,
 ) {
+    // 変化の印は係が回るたびに読めなくなるので、GraphicsCore が無くて戻る前に読んで外す
+    // （控えができた部品・消えた部品もここで外れる）
+    failed.retain(|&entity| {
+        query
+            .get(entity)
+            .is_ok_and(|(_, typewriter, talk, arrangement)| {
+                !(typewriter.is_changed() || talk.is_changed() || arrangement.is_changed())
+            })
+    });
+
     let Some(graphics_core) = graphics_core else {
         debug!("[init_typewriter_layout] No GraphicsCore");
         return;
@@ -50,6 +78,10 @@ pub fn init_typewriter_layout(
     };
 
     for (entity, typewriter, talk, arrangement) in query.iter() {
+        if failed.contains(&entity) {
+            continue;
+        }
+
         // トークン列から全文テキストを結合
         let full_text: String = talk
             .tokens()
@@ -88,79 +120,77 @@ pub fn init_typewriter_layout(
             "[init_typewriter_layout] Arrangement size"
         );
 
-        // TextFormat 作成
-        let font_family_hstring = windows::core::HSTRING::from(&typewriter.font_family);
-        let locale_hstring = windows::core::HSTRING::from("ja-JP");
-        let text_format = match dwrite_factory.create_text_format(
-            &font_family_hstring,
-            None::<&IDWriteFontCollection>,
-            DWRITE_FONT_WEIGHT_NORMAL,
-            DWRITE_FONT_STYLE_NORMAL,
-            DWRITE_FONT_STRETCH_NORMAL,
-            typewriter.font_size,
-            &locale_hstring,
-        ) {
-            Ok(fmt) => fmt,
-            Err(e) => {
-                warn!(entity = ?entity, error = ?e, "Failed to create TextFormat");
-                continue;
-            }
-        };
-
-        // 縦書き・横書きの設定（係には返す先が無いので、失敗は記録してその部品を飛ばす）
-        if let Err(e) = apply_direction(&text_format, typewriter.direction) {
-            warn!(entity = ?entity, direction = ?typewriter.direction, error = ?e, "Failed to set text direction");
-            continue;
-        }
-        // 揃え: 右から左の横書きだけ右寄せ、ほかは行の頭へ。段落はどれも上（行の流れの頭）へ
-        let text_alignment = match typewriter.direction {
-            TextDirection::HorizontalRightToLeft => DWRITE_TEXT_ALIGNMENT_TRAILING,
-            _ => DWRITE_TEXT_ALIGNMENT_LEADING,
-        };
-        if let Err(e) = unsafe {
-            text_format
-                .SetTextAlignment(text_alignment)
-                .and_then(|()| text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR))
-        } {
-            warn!(entity = ?entity, direction = ?typewriter.direction, error = ?e, "Failed to set text alignment");
-            continue;
-        }
-
-        // TextLayout 作成（Arrangementのサイズを使用）
-        let text_hstring = windows::core::HSTRING::from(&full_text);
-        let text_layout = match dwrite_factory.create_text_layout(
-            &text_hstring,
-            &text_format,
+        // 係には返す先が無いので、失敗は記録して次の変化まで飛ばす
+        match build_layout_cache(
+            dwrite_factory,
+            &typewriter,
+            talk.tokens(),
+            full_text,
             layout_width,
             layout_height,
         ) {
-            Ok(layout) => layout,
-            Err(e) => {
-                warn!(entity = ?entity, error = ?e, "Failed to create TextLayout");
-                continue;
+            Ok(cache) => {
+                trace!(
+                    entity = ?entity,
+                    total_cluster_count = cache.timeline().total_cluster_count,
+                    "[init_typewriter_layout] LayoutCache created"
+                );
+                commands.entity(entity).insert(cache);
             }
-        };
-
-        // Stage 1 → Stage 2 IR 変換
-        let timeline = match convert_to_timeline(talk.tokens(), typewriter, &text_layout) {
-            Ok(tl) => tl,
             Err(e) => {
-                warn!(entity = ?entity, error = ?e, "Failed to convert timeline");
-                continue;
+                warn!(entity = ?entity, direction = ?typewriter.direction, error = ?e, "Failed to build typewriter layout");
+                failed.insert(entity);
             }
-        };
-
-        trace!(
-            entity = ?entity,
-            total_cluster_count = timeline.total_cluster_count,
-            "[init_typewriter_layout] LayoutCache created"
-        );
-
-        // TypewriterLayoutCache を挿入
-        commands
-            .entity(entity)
-            .insert(TypewriterLayoutCache::new(text_layout, timeline));
+        }
     }
+}
+
+/// 書式 → 向き → 揃え → 配置 → 時間表の順に控えを作る。
+fn build_layout_cache(
+    dwrite_factory: &IDWriteFactory2,
+    typewriter: &Typewriter,
+    tokens: &[TypewriterToken],
+    full_text: String,
+    layout_width: f32,
+    layout_height: f32,
+) -> windows::core::Result<TypewriterLayoutCache> {
+    // TextFormat 作成
+    let font_family_hstring = windows::core::HSTRING::from(&typewriter.font_family);
+    let locale_hstring = windows::core::HSTRING::from("ja-JP");
+    let text_format = dwrite_factory.create_text_format(
+        &font_family_hstring,
+        None::<&IDWriteFontCollection>,
+        DWRITE_FONT_WEIGHT_NORMAL,
+        DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL,
+        typewriter.font_size,
+        &locale_hstring,
+    )?;
+
+    // 縦書き・横書きの設定
+    apply_direction(&text_format, typewriter.direction)?;
+    // 揃え: 右から左の横書きだけ右寄せ、ほかは行の頭へ。段落はどれも上（行の流れの頭）へ
+    let text_alignment = match typewriter.direction {
+        TextDirection::HorizontalRightToLeft => DWRITE_TEXT_ALIGNMENT_TRAILING,
+        _ => DWRITE_TEXT_ALIGNMENT_LEADING,
+    };
+    unsafe {
+        text_format.SetTextAlignment(text_alignment)?;
+        text_format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR)?;
+    }
+
+    // TextLayout 作成（Arrangementのサイズを使用）
+    let text_hstring = windows::core::HSTRING::from(&full_text);
+    let text_layout = dwrite_factory.create_text_layout(
+        &text_hstring,
+        &text_format,
+        layout_width,
+        layout_height,
+    )?;
+
+    // Stage 1 → Stage 2 IR 変換
+    let timeline = convert_to_timeline(tokens, typewriter, &text_layout, full_text)?;
+    Ok(TypewriterLayoutCache::new(text_layout, timeline))
 }
 
 /// トークン列とクラスタの長さ（UTF-16）から時間表の項目を作る。
@@ -217,18 +247,12 @@ fn convert_to_timeline(
     tokens: &[TypewriterToken],
     typewriter: &Typewriter,
     text_layout: &IDWriteTextLayout,
+    full_text: String,
 ) -> windows::core::Result<TypewriterTimeline> {
     let cluster_lengths: Vec<u16> = text_layout
         .get_cluster_metrics()?
         .iter()
         .map(|m| m.length)
-        .collect();
-    let full_text: String = tokens
-        .iter()
-        .filter_map(|t| match t {
-            TypewriterToken::Text(s) => Some(s.as_str()),
-            _ => None,
-        })
         .collect();
 
     Ok(TypewriterTimeline {

@@ -257,11 +257,11 @@ impl Command for SetAlphaMaskCommand {
 
 /// αマスク生成システム
 ///
-/// BitmapSourceResourceが追加・入れ替えされた時、HitTestMode::AlphaMaskの場合のみ
+/// BitmapSourceResourceが追加・入れ替えされた時か HitTest が変わった時、HitTestMode::AlphaMaskの場合のみ
 /// 非同期でαマスクを生成する。
 ///
 /// # Trigger
-/// - `Changed<BitmapSourceResource>` + `With<HitTest>`（マスクがまだ無いものだけ）
+/// - `Changed<BitmapSourceResource>` か `Changed<HitTest>`（マスクがまだ無いものだけ）
 /// - `HitTestMode::AlphaMask` の場合のみ実行
 ///
 /// # Flow
@@ -269,7 +269,11 @@ impl Command for SetAlphaMaskCommand {
 /// 2. 非同期タスクでAlphaMask::from_pbgra32() でマスク生成
 /// 3. Command 経由で BitmapSourceResource.alpha_mask に設定
 pub fn generate_alpha_mask_system(
-    query: Query<(Entity, &BitmapSourceResource, &HitTest), Changed<BitmapSourceResource>>,
+    // 読み込んだ後に当たりを AlphaMask へ替えたときも作る
+    query: Query<
+        (Entity, &BitmapSourceResource, &HitTest),
+        Or<(Changed<BitmapSourceResource>, Changed<HitTest>)>,
+    >,
     task_pool: Option<Res<WintfTaskPool>>,
 ) {
     let Some(task_pool) = task_pool else {

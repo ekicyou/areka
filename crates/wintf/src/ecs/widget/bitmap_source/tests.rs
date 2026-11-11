@@ -386,3 +386,40 @@ fn oversize_image_gets_empty_list_and_is_not_retried() {
         assert!(!world.get::<BitmapSourceGraphics>(e).unwrap().is_valid());
     });
 }
+
+// ============================================================
+// 7.1 二度目の見直し N5: 読み込んだ後に当たりを AlphaMask へ替えてもマスクを作る（実 GPU なし）
+// ============================================================
+
+#[test]
+fn switching_hit_test_to_alpha_mask_after_load_builds_mask() {
+    use crate::ecs::layout::HitTest;
+
+    with_com_initialized(|| {
+        let wic = WicCore::new().expect("WicCore");
+        let mut world = World::new();
+        world.insert_resource(WintfTaskPool::with_threads(1));
+        let mut schedule = Schedule::default();
+        schedule.add_systems(generate_alpha_mask_system);
+
+        let path = asset("test_8x8_rgba.png");
+        let e = world
+            .spawn((BitmapSource::new(path.to_str().unwrap()), HitTest::bounds()))
+            .id();
+        arrive(&mut world, e, &wic, "test_8x8_rgba.png");
+        schedule.run(&mut world);
+        super::systems::drain_task_pool_commands(&mut world);
+        assert!(
+            world
+                .get::<BitmapSourceResource>(e)
+                .unwrap()
+                .alpha_mask()
+                .is_none(),
+            "矩形の当たりではマスクを作らない"
+        );
+
+        world.entity_mut(e).insert(HitTest::alpha_mask());
+        schedule.run(&mut world);
+        wait_mask(&mut world, e);
+    });
+}

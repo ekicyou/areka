@@ -6,7 +6,7 @@
 
 use crate::com::d2d::D2D1DeviceContextExt;
 use crate::com::dwrite::DWriteTextLayoutExt;
-use crate::ecs::graphics::{FrameTime, GraphicsCommandList, GraphicsCore, format_entity_name};
+use crate::ecs::graphics::{FrameTime, GraphicsCommandList, GraphicsCore};
 use crate::ecs::layout::Arrangement;
 use crate::ecs::widget::brushes::Brushes;
 use crate::ecs::widget::record::{TRANSPARENT, record_command_list, store_command_list};
@@ -130,6 +130,10 @@ pub fn draw_typewriters(
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
+    if query.is_empty() {
+        return;
+    }
+
     let Some(graphics_core) = graphics_core else {
         warn!("GraphicsCore not available, skipping draw_typewriters");
         return;
@@ -140,7 +144,6 @@ pub fn draw_typewriters(
         return;
     };
 
-    // 係には返す先が無いので、失敗は記録してその部品を飛ばす（名前の文字列は失敗のときだけ作る）
     for (entity, typewriter, talk, layout_cache, arrangement, brushes, cmd_list_opt, name) in
         query.iter()
     {
@@ -157,74 +160,29 @@ pub fn draw_typewriters(
             "Drawing typewriter"
         );
 
-        // クラスタメトリクス取得（描画範囲決定用）
-        let cluster_metrics = match text_layout.get_cluster_metrics() {
-            Ok(m) => m,
-            Err(err) => {
-                warn!(
-                    entity = %format_entity_name(entity, name),
-                    error = ?err,
-                    "Failed to get cluster metrics"
-                );
-                continue;
-            }
-        };
-
-        // visible_count より後ろのクラスタを隠す範囲（UTF-16）
-        let cluster_lengths: Vec<u16> = cluster_metrics.iter().map(|m| m.length).collect();
-        let whole_text = DWRITE_TEXT_RANGE {
-            startPosition: 0,
-            length: cluster_lengths.iter().map(|&l| l as u32).sum(),
-        };
-        let hidden = hidden_text_range(&cluster_lengths, visible_count).map(|(start, length)| {
-            DWRITE_TEXT_RANGE {
-                startPosition: start,
-                length,
-            }
-        });
-
-        // テキストメトリクス取得。取れなければ原点 0 のまま描かない
-        let mut text_metrics = DWRITE_TEXT_METRICS::default();
-        if let Err(err) = unsafe { text_layout.GetMetrics(&mut text_metrics) } {
-            warn!(
-                entity = %format_entity_name(entity, name),
-                error = ?err,
-                "Failed to get text metrics"
-            );
-            continue;
-        }
-
-        // 描画位置: 横書きは配置のはみ出し（left・top）を戻して左上へ合わせる。
-        // 縦書きは原点 (0,0) のまま、1 行目の位置は DirectWrite が行の向き（右から・左から）で決める。
-        let origin = match typewriter.direction {
-            TextDirection::VerticalRightToLeft | TextDirection::VerticalLeftToRight => {
-                Vector2 { X: 0.0, Y: 0.0 }
-            }
-            _ => Vector2 {
-                X: -text_metrics.left,
-                Y: -text_metrics.top,
-            },
-        };
-
+        // 寸法を読む所の失敗も記録の失敗と同じ道へ渡す（列の無い部品に空の列を入れ、毎回やり直さない）。
         // 透明の筆や描く効果が設定できないときは全文を描かず失敗にする（前の絵を残す・設計の決め 4）
-        let recorded = record_command_list(dc, |dc| {
-            if let Some(bg_color) = bg_color_opt {
-                fill_background(dc, &bg_color, arrangement)?;
-            }
-            let brush = dc.create_solid_color_brush(&fg_color, None)?;
-            if visible_count == 0 {
-                return Ok(());
-            }
-            // 前の描画の効果を全文から消してから、隠す範囲だけを透明の筆にする
-            // （控えに効果が残っても次の描画で直る）
-            unsafe { text_layout.SetDrawingEffect(None, whole_text) }?;
-            if let Some(range) = hidden {
-                let transparent = dc.create_solid_color_brush(&TRANSPARENT, None)?;
-                unsafe { text_layout.SetDrawingEffect(&transparent, range) }?;
-            }
-            dc.draw_text_layout(origin, text_layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
-            Ok(())
-        });
+        let recorded = text_ranges_and_origin(text_layout, typewriter.direction, visible_count)
+            .and_then(|(whole_text, hidden, origin)| {
+                record_command_list(dc, |dc| {
+                    if let Some(bg_color) = bg_color_opt {
+                        fill_background(dc, &bg_color, arrangement)?;
+                    }
+                    let brush = dc.create_solid_color_brush(&fg_color, None)?;
+                    if visible_count == 0 {
+                        return Ok(());
+                    }
+                    // 前の描画の効果を全文から消してから、隠す範囲だけを透明の筆にする
+                    // （控えに効果が残っても次の描画で直る）
+                    unsafe { text_layout.SetDrawingEffect(None, whole_text) }?;
+                    if let Some(range) = hidden {
+                        let transparent = dc.create_solid_color_brush(&TRANSPARENT, None)?;
+                        unsafe { text_layout.SetDrawingEffect(&transparent, range) }?;
+                    }
+                    dc.draw_text_layout(origin, text_layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+                    Ok(())
+                })
+            });
         store_command_list(
             &mut commands,
             entity,
@@ -234,6 +192,47 @@ pub fn draw_typewriters(
             "typewriter",
         );
     }
+}
+
+/// 全文の範囲・隠す範囲（UTF-16）と描く原点を、控えの配置から読む。
+fn text_ranges_and_origin(
+    text_layout: &IDWriteTextLayout,
+    direction: TextDirection,
+    visible_count: u32,
+) -> windows::core::Result<(DWRITE_TEXT_RANGE, Option<DWRITE_TEXT_RANGE>, Vector2)> {
+    // visible_count より後ろのクラスタを隠す範囲（UTF-16）
+    let cluster_lengths: Vec<u16> = text_layout
+        .get_cluster_metrics()?
+        .iter()
+        .map(|m| m.length)
+        .collect();
+    let whole_text = DWRITE_TEXT_RANGE {
+        startPosition: 0,
+        length: cluster_lengths.iter().map(|&l| l as u32).sum(),
+    };
+    let hidden = hidden_text_range(&cluster_lengths, visible_count).map(|(start, length)| {
+        DWRITE_TEXT_RANGE {
+            startPosition: start,
+            length,
+        }
+    });
+
+    // テキストメトリクス取得。取れなければ原点 0 のまま描かない
+    let mut text_metrics = DWRITE_TEXT_METRICS::default();
+    unsafe { text_layout.GetMetrics(&mut text_metrics) }?;
+
+    // 描画位置: 横書きは配置のはみ出し（left・top）を戻して左上へ合わせる。
+    // 縦書きは原点 (0,0) のまま、1 行目の位置は DirectWrite が行の向き（右から・左から）で決める。
+    let origin = match direction {
+        TextDirection::VerticalRightToLeft | TextDirection::VerticalLeftToRight => {
+            Vector2 { X: 0.0, Y: 0.0 }
+        }
+        _ => Vector2 {
+            X: -text_metrics.left,
+            Y: -text_metrics.top,
+        },
+    };
+    Ok((whole_text, hidden, origin))
 }
 
 /// 空トークのTypewriter背景描画システム（Draw スケジュール）

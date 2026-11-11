@@ -23,6 +23,7 @@ pub use crate::ecs::widget::text::label::TextDirection;
 // ============================================================
 
 /// ウィジェット論理コンポーネント（永続）
+/// 外すと命令の列を空にして絵を消し、`TypewriterLayoutCache` も外す。
 /// メモリ戦略: SparseSet（動的追加/削除）
 ///
 /// 色は`Brushes`コンポーネントで指定します。
@@ -38,7 +39,11 @@ pub use crate::ecs::widget::text::label::TextDirection;
 /// ));
 /// ```
 #[derive(Component)]
-#[component(storage = "SparseSet", on_add = on_typewriter_add)]
+#[component(
+    storage = "SparseSet",
+    on_add = on_typewriter_add,
+    on_remove = on_typewriter_talk_remove
+)]
 pub struct Typewriter {
     // === スタイル設定（Label互換） ===
     pub font_family: String,
@@ -277,7 +282,8 @@ fn on_typewriter_talk_insert(mut world: DeferredWorld, hook: HookContext) {
         .try_remove::<TypewriterLayoutCache>();
 }
 
-/// トークを外したら絵を消す（`Changed` で描き直させる）。控えは `try_remove` なので消すときも安全。
+/// `TypewriterTalk` か `Typewriter` を外したら絵を消す（`Changed` で描き直させる）。
+/// 控えは `try_remove` なので消すときも安全。
 fn on_typewriter_talk_remove(mut world: DeferredWorld, hook: HookContext) {
     if let Some(mut cmd_list) = world.get_mut::<GraphicsCommandList>(hook.entity) {
         cmd_list.set_if_neq(GraphicsCommandList::empty());
