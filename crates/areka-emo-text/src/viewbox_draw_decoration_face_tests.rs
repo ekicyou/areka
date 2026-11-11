@@ -4,9 +4,9 @@
 //! `viewbox_draw_decoration_tests.rs` が 1,000 行を超えるので兄弟のファイルへ分けた（中身は移しただけ）。
 
 use super::decoration::{RANGE_CALLS, style_runs};
-use super::decoration_tests::{glyph, table_with};
-use super::test_support::geo_model;
+use super::test_support::{geo_model, glyph, table_with};
 use crate::draw::ResolvedFont;
+use crate::draw::test_support::require_yu_gothic;
 use crate::layout::PositionedGlyph;
 use crate::look::{StyleId, StyleTable, TextLook};
 use crate::writing::WritingMode;
@@ -274,19 +274,6 @@ fn assert_line_matches_measurement(
     }
 }
 
-/// 游ゴシックがこの機械に無ければ赤で止める（中太の期待値が代替フォントで緑にならないように）。
-fn require_yu_gothic() {
-    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
-    assert!(
-        FontCatalog::new(&factory)
-            .expect("FontCatalog::new")
-            .family_for(&["Yu Gothic".to_owned()])
-            .is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
-}
-
 /// F3（4.1）: 束縛が ＭＳ ゴシック の行で、GDI の名前（「Yu Gothic Medium」＝中太）の区間の英字の
 /// cluster の幅が、同じ見た目の 1 字の計測と一致する。中太の英字は Regular と送り幅が違うので、
 /// 太さが計測か描画の片方だけに効くと赤（実測: 片方 400 だと "i" が 3.146 と 3.193 で割れる）。
@@ -294,9 +281,9 @@ fn require_yu_gothic() {
 fn f3_gdi_named_run_measures_the_same_latin_advances_as_the_line() {
     use areka_parsers::balloon::parse_str;
 
-    require_yu_gothic();
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let fonts = std::rc::Rc::new(FontCatalog::new(&factory).expect("FontCatalog::new"));
+    require_yu_gothic(&fonts);
     let font = ResolvedFont::resolve(&parse_str("font.height,12\r\n", None));
     let default = &font.looks.default;
     let medium = TextLook {
@@ -323,7 +310,8 @@ fn f3_gdi_named_run_measures_the_same_latin_advances_as_the_line() {
 fn f4_all_missing_runs_measure_the_same_advances_as_the_line() {
     use areka_parsers::balloon::parse_str;
 
-    require_yu_gothic();
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
+    require_yu_gothic(&FontCatalog::new(&factory).expect("FontCatalog::new"));
     let fonts = std::rc::Rc::new(FontCatalog::with_faces(
         &[],
         &[("Yu Gothic Medium", yu_gothic_medium())],

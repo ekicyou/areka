@@ -804,7 +804,7 @@ fn create_target_bitmap(
 
 #[cfg(test)]
 #[path = "draw_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "draw_format_metrics_tests.rs"]

@@ -3,11 +3,13 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
     DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
     DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
-    DWRITE_READING_DIRECTION_TOP_TO_BOTTOM, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteTextFormat,
+    DWRITE_READING_DIRECTION_TOP_TO_BOTTOM, DWRITE_TEXT_ALIGNMENT_LEADING,
 };
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
+use super::test_support::{
+    default_metrics, empty_font, family_name, model_with_font, with_log_cage,
+};
 use super::{
     DEFAULT_BALLOON_BACKGROUND, DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics,
     DirectionRecipe, PROBE_MAX_EXTENT, ResolvedFont, create_text_format,
@@ -233,18 +235,6 @@ fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
 
 // ── COM 検証（headless DWrite・デバイス非依存・窓不要） ──
 
-/// TextFormat の実設定を読み戻す（family 名・fontsize・4 方向設定）。
-fn read_family_name(format: &IDWriteTextFormat) -> String {
-    unsafe {
-        let len = format.GetFontFamilyNameLength() as usize;
-        let mut buf = vec![0u16; len + 1];
-        format
-            .GetFontFamilyName(&mut buf)
-            .expect("GetFontFamilyName");
-        String::from_utf16_lossy(&buf[..len])
-    }
-}
-
 /// 観測可能な完了状態（COM 側）: 欠落 balloon 定義→既定値一式で実 TextFormat が
 /// 生成でき、3 方向それぞれでレシピどおりの設定が焼き込まれている。
 #[test]
@@ -260,7 +250,7 @@ fn text_format_from_missing_definition_carries_defaults_and_recipe() {
         let recipe = DirectionRecipe::for_mode(mode);
         let format = create_text_format(&factory, &resolved, mode)
             .expect("既定値一式で TextFormat 生成が成立する");
-        assert_eq!(read_family_name(&format), "ＭＳ ゴシック");
+        assert_eq!(family_name(&format), "ＭＳ ゴシック");
         unsafe {
             assert_eq!(format.GetFontSize(), 12.0);
             assert_eq!(format.GetReadingDirection(), recipe.reading, "{mode:?}");
@@ -283,7 +273,7 @@ fn text_format_honors_explicit_name_and_height() {
     let resolved = ResolvedFont::resolve(&model_with_font(font));
     let format = create_text_format(&factory, &resolved, WritingMode::HorizontalTb)
         .expect("明示定義で TextFormat 生成が成立する");
-    assert_eq!(read_family_name(&format), "ＭＳ Ｐゴシック");
+    assert_eq!(family_name(&format), "ＭＳ Ｐゴシック");
     unsafe {
         assert_eq!(format.GetFontSize(), 20.0);
     }
@@ -909,7 +899,7 @@ fn explicit_font_name_is_carried_into_vertical_modes_unchanged() {
     ] {
         let format =
             create_text_format(&factory, &resolved, mode).expect("明示定義で TextFormat 生成");
-        let family = read_family_name(&format);
+        let family = family_name(&format);
         assert_eq!(
             family, "ＭＳ Ｐゴシック",
             "{mode:?}: 作者指定のフォント名が差し替わっている"

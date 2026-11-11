@@ -34,7 +34,9 @@ use windows::Win32::Graphics::DirectWrite::{
 use windows::core::HSTRING;
 use wintf::com::dwrite::{DWriteTextLayoutExt, dwrite_create_factory};
 
-use super::super::test_support::{default_metrics, empty_font, model_with_font};
+use super::super::test_support::{
+    PASTA_FONT_NAMES, default_metrics, empty_font, face_of, model_with_font, require_yu_gothic,
+};
 use super::super::{LineLayoutStore, ResolvedFont, create_text_format};
 use super::DWriteMetrics;
 use crate::layout::GlyphMetrics;
@@ -337,8 +339,7 @@ fn vertical_em_box_left_is_measured_from_the_column_baseline() {
 
     use crate::layout::column_centred_em_box_left;
 
-    const PASTA: &str =
-        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+    const PASTA: &str = PASTA_FONT_NAMES;
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let bound = |name: &str, size: u32, mode: WritingMode| {
         let font = ResolvedFont::resolve(&model_with_font(Font::new(
@@ -349,7 +350,7 @@ fn vertical_em_box_left_is_measured_from_the_column_baseline() {
         DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics 生成")
     };
-    require_yu_gothic(&bound(PASTA, 20, WritingMode::VerticalRl));
+    require_yu_gothic(bound(PASTA, 20, WritingMode::VerticalRl).fonts());
     for name in ["Yu Gothic UI", "ＭＳ ゴシック", PASTA] {
         for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
             for size in [20u32, 28] {
@@ -403,10 +404,12 @@ fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
     use areka_parsers::balloon::parse_str;
     use windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE_NORMAL;
 
-    const PASTA: &str = "font.name,游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ\r\n";
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let bound = |extra: &str| {
-        let font = ResolvedFont::resolve(&parse_str(&format!("{PASTA}{extra}"), None));
+        let font = ResolvedFont::resolve(&parse_str(
+            &format!("font.name,{PASTA_FONT_NAMES}\r\n{extra}"),
+            None,
+        ));
         DWriteMetrics::new(
             &factory,
             &font,
@@ -416,14 +419,7 @@ fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
         .expect("DWriteMetrics 生成")
     };
     let plain = bound("");
-    assert!(
-        plain
-            .fonts()
-            .family_for(&["Yu Gothic".to_owned()])
-            .is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
+    require_yu_gothic(plain.fonts());
     let weight_style =
         |m: &DWriteMetrics| unsafe { (m.format.GetFontWeight().0, m.format.GetFontStyle()) };
 
@@ -446,37 +442,6 @@ fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
 
 // ────────────────────────── §8 計測鍵の試験用書式の顔（spec emo-text-dwrite-fidelity 檻 F2〜F4・要件 4.1／4.2／4.4／4.10）
 
-/// 書式の家族名・太さ・斜体。
-fn face_of(
-    format: &windows::Win32::Graphics::DirectWrite::IDWriteTextFormat,
-) -> (
-    String,
-    u32,
-    windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE,
-) {
-    unsafe {
-        let len = format.GetFontFamilyNameLength() as usize;
-        let mut buf = vec![0u16; len + 1];
-        format
-            .GetFontFamilyName(&mut buf)
-            .expect("GetFontFamilyName");
-        (
-            String::from_utf16_lossy(&buf[..len]),
-            format.GetFontWeight().0 as u32,
-            format.GetFontStyle(),
-        )
-    }
-}
-
-/// 游ゴシックがこの機械に無ければ赤で止める（中太の期待値が代替フォントで緑にならないように）。
-fn require_yu_gothic(m: &DWriteMetrics) {
-    assert!(
-        m.fonts().family_for(&["Yu Gothic".to_owned()]).is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
-}
-
 /// F2（4.2・4.4）: 候補列「Yu Gothic Medium」の計測鍵の試験用書式は 500、同じ鍵の太字は 700、
 /// 斜体は ITALIC。
 ///
@@ -486,7 +451,7 @@ fn f2_probe_format_carries_the_weight_of_the_gdi_named_face() {
     use windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE_NORMAL;
 
     let m = metrics();
-    require_yu_gothic(&m);
+    require_yu_gothic(m.fonts());
     let medium = look_with(|l| l.name = vec!["Yu Gothic Medium".into()]);
     let probe =
         |look: &TextLook| face_of(&m.probe_format_for(&look.font_key()).expect("試験用書式"));
@@ -532,7 +497,7 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
     use super::super::{FontCatalog, FontFace};
 
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
-    require_yu_gothic(&metrics());
+    require_yu_gothic(metrics().fonts());
     let fonts = Rc::new(FontCatalog::with_faces(
         &[],
         &[(
@@ -581,8 +546,7 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
 fn horizontal_char_box_top_is_measured_from_the_line_baseline() {
     use areka_parsers::balloon::{Font, FontColor};
 
-    const PASTA: &str =
-        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+    const PASTA: &str = PASTA_FONT_NAMES;
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let bound = |name: &str, size: u32, mode: WritingMode| {
         let font = ResolvedFont::resolve(&model_with_font(Font::new(
@@ -593,7 +557,7 @@ fn horizontal_char_box_top_is_measured_from_the_line_baseline() {
         DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics 生成")
     };
-    require_yu_gothic(&bound(PASTA, 20, WritingMode::HorizontalTb));
+    require_yu_gothic(bound(PASTA, 20, WritingMode::HorizontalTb).fonts());
     for (name, size, expected) in [
         (PASTA, 20u32, 6.2988f32),
         (PASTA, 28, 8.8184),

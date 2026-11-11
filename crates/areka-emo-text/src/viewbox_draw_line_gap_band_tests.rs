@@ -8,9 +8,10 @@
 //! `t` 字の箱の上端（基線 − ascent）・`E` 帯の厚み・案 2 の寄せ `round(max(0, t) + max(0, B − E) / 2)`。
 
 use super::ViewboxExecutor;
-use super::choice_hover_tests::bgra_x_span;
-use super::test_support::{Rig, block_axis_ink_span, glyph_items, live_diff_model_font};
-use super::vertical_band_readback_tests::{R_FILL_BGRA, R_FONTS, bgra_y_span};
+use super::test_support::{
+    FILL_BGRA, R_FONTS, Rig, bgra_x_span, bgra_y_span, block_axis_ink_span, glyph_items,
+    live_diff_model_font,
+};
 use crate::canvas::{ContentCanvas, ResidentContent};
 use crate::choice::{
     LineBand, ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows,
@@ -579,8 +580,8 @@ fn readback_case(
         let off = surface.read_back().expect("read_back(外した) 失敗");
 
         let (Some(fx), Some(fy)) = (
-            bgra_x_span(&px, w, h, R_FILL_BGRA),
-            bgra_y_span(&px, w, h, R_FILL_BGRA),
+            bgra_x_span(&px, w, h, FILL_BGRA),
+            bgra_y_span(&px, w, h, FILL_BGRA),
         ) else {
             red.push(format!("{tag} {word}: 乗せたのに塗りが 1 画素も無い"));
             continue;
@@ -631,7 +632,7 @@ fn readback_case(
             ));
         }
         // (f) hover を外したフレームに塗りが残らない（ダーティ帯が遠端まで広がる）。
-        if let Some(rest) = bgra_y_span(&off, w, h, R_FILL_BGRA) {
+        if let Some(rest) = bgra_y_span(&off, w, h, FILL_BGRA) {
             red.push(format!(
                 "{tag} {word} (f): hover を外したフレームに塗りが y{}..{} に残る",
                 rest.0, rest.1

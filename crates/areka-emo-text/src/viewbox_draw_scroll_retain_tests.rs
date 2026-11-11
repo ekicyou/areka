@@ -35,14 +35,13 @@
 //! （[`AtLeastRealAdvance`]）。既存の本文の字は実フォントの送り幅がどれも 28 以下なので、
 //! 配置は `FixedMetrics` だけのときと 1 画素も変わらない。
 
-use super::ViewboxExecutor;
-use super::test_support::{Rig, colored_count, glyph_items, live_diff_model_font, opaque_count};
-use crate::canvas::ContentCanvas;
-use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
-use crate::layout::{FixedMetrics, GlyphMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use super::test_support::{
+    RenderPair, Rig, colored_count, glyph_items, layout_frame, live_diff_model_font, opaque_count,
+};
+use crate::draw::{DWriteMetrics, ResolvedFont};
+use crate::layout::{FixedMetrics, GlyphMetrics, VisibleWindow, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextItem, TextLayerConfig};
-use crate::surface::TextSurface;
 use crate::writing::WritingMode;
 use areka_sakura::cluster::cluster_count;
 
@@ -124,10 +123,7 @@ struct Frames {
 
 /// 二面リグ: 同一 core／compositor／font／region で、オラクルと viewbox を同一入力で回す。
 struct ScrollRig {
-    oracle_surface: TextSurface,
-    viewbox_surface: TextSurface,
-    oracle: DrawExecutor,
-    viewbox: ViewboxExecutor,
+    pair: RenderPair,
     region: TextRegion,
     font: ResolvedFont,
     /// 実フォントの送り幅（絵文字の配置にだけ効く・冒頭の但し書き）。
@@ -146,22 +142,16 @@ impl ScrollRig {
     /// ラスタライズ（インクの形・はみ出し量）にだけ効く。
     fn new() -> ScrollRig {
         let mut rig = Rig::new();
-        let oracle_surface = rig.attach(IMAGE, 1.0);
-        let viewbox_surface = rig.attach(IMAGE, 1.0);
+        let pair = RenderPair::attach(&mut rig, IMAGE, 1.0);
         let model = live_diff_model_font(Some("Yu Gothic UI"), Some(FONT_HEIGHT as u32));
         let mode = WritingMode::HorizontalTb;
         let font = ResolvedFont::resolve(&model);
         let region = TextRegion::resolve(&model, IMAGE, mode);
-        let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
-        let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
         let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
         let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics::new 失敗");
         ScrollRig {
-            oracle_surface,
-            viewbox_surface,
-            oracle,
-            viewbox,
+            pair,
             region,
             font,
             metrics,
@@ -173,7 +163,7 @@ impl ScrollRig {
 
     /// `visible` 字ぶんを見せた 1 フレームを両方式へ流し、読み戻しと可視窓を返す。
     fn frame(&mut self, label: &str, items: &[TextItem], visible: usize) -> Frames {
-        let lines = LayoutEngine::layout(
+        let (lines, canvas, window) = layout_frame(
             items,
             visible,
             &self.region,
@@ -182,43 +172,20 @@ impl ScrollRig {
             &AtLeastRealAdvance(&self.metrics),
             WrapPlan::CharByChar,
         );
-        let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
-        let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
         // 最新行の描画面上の上端（validrect-local 上端＋可視窓オフセット・k=1.0）。
         let latest_top = lines
             .last()
             .map(|line| line.rect.top - self.region.top() + window.block_offset)
             .unwrap_or(0.0);
 
-        self.oracle
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.oracle_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
-        self.viewbox
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.viewbox_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
-
-        let oracle = self
-            .oracle_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
-        let viewbox = self
-            .viewbox_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
+        let (oracle, viewbox) = self.pair.render(
+            label,
+            &canvas,
+            &window,
+            &self.font,
+            self.mode,
+            &self.contract,
+        );
         Frames {
             oracle,
             viewbox,
@@ -241,7 +208,7 @@ impl ScrollRig {
 fn scroll_frames_keep_first_visible_line_ink() {
     let mut rig = ScrollRig::new();
     let (items, total_glyphs) = boot_items();
-    let (w, _h) = rig.oracle_surface.size();
+    let (w, _h) = rig.pair.oracle_surface.size();
     let mut scrolled_frames = 0usize;
 
     for visible in 1..=total_glyphs {
@@ -343,7 +310,7 @@ fn scroll_frame_sweep_matches_full_redraw_oracle() {
                 total += cluster_count(body);
             }
             let mut rig = ScrollRig::new();
-            let (w, _h) = rig.oracle_surface.size();
+            let (w, _h) = rig.pair.oracle_surface.size();
             let mut visible = 0usize;
             while visible < total {
                 visible = (visible + stride).min(total);

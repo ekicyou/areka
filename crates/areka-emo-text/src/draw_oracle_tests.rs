@@ -1,12 +1,10 @@
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use areka_parsers::balloon::{Font, FontColor};
 use areka_sakura::cluster::{cluster_count, clusters};
 use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
 use wintf::com::dwrite::DWriteTextLayoutExt;
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
+use super::test_support::{default_metrics, model_with_font, with_log_cage};
 use super::{DEFAULT_FONT_HEIGHT, DWriteMetrics, ResolvedFont};
 use crate::canvas::TextEffects;
 use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
@@ -21,100 +19,15 @@ use crate::writing::WritingMode;
 // 差分描画でなく全域再描画（残渣なし）・確定行 TextLayout キャッシュは Clear のみ
 // 全破棄・合成スケールは描画ターゲットへの一点適用（二重適用/未適用の排除）。
 
-use bevy_ecs::hierarchy::ChildOf;
-use bevy_ecs::name::Name;
-use bevy_ecs::prelude::World;
-use windows::UI::Composition::Compositor;
-use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
-use wintf::com::wuc::create_dispatcher_queue_controller;
-use wintf::ecs::{GraphicsCore, Visual};
-
 use super::DrawExecutor;
-use crate::actor::TextSlotBinding;
 use crate::canvas::{
     ContentCanvas, ImageSeam, RegionTransform, Resident, ResidentContent, SurfaceSeam,
 };
 use crate::layout::VisibleWindow;
+use crate::layout::test_support::model_full;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-
-/// テスト用 WUC apartment / dispatcher（surface.rs テストと同一方針:
-/// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。
-fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {
-    let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
-        .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-    let compositor = Compositor::new().expect("Compositor::new 失敗");
-    (dq, compositor)
-}
-
-/// 描画テスト一式（dispatcher/compositor/core/World の寿命を束ねる・headless）。
-struct DrawRig {
-    _dq: windows::System::DispatcherQueueController,
-    compositor: Compositor,
-    core: GraphicsCore,
-    world: World,
-}
-
-impl DrawRig {
-    fn new() -> DrawRig {
-        let (_dq, compositor) = make_dispatcher_and_compositor();
-        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
-        DrawRig {
-            _dq,
-            compositor,
-            core,
-            world: World::new(),
-        }
-    }
-
-    /// 予約スロット（emo-present VisualMount 同型）を組み、image px 原寸と k から
-    /// TextSurface を装着する（物理寸＝ceil(image × k)・offset (0,0)）。
-    fn attach(&mut self, image_size: (u32, u32), k: f32) -> TextSurface {
-        let window = self.world.spawn_empty().id();
-        let slot = self
-            .world
-            .spawn((
-                Name::new("emo-text-layer-slot"),
-                Visual::default(),
-                ChildOf(window),
-            ))
-            .id();
-        self.world.flush();
-        let physical = (
-            (image_size.0 as f32 * k).ceil() as u32,
-            (image_size.1 as f32 * k).ceil() as u32,
-        );
-        let binding = TextSlotBinding::new(slot, window, k, physical, image_size);
-        TextSurface::attach(
-            &mut self.world,
-            &binding,
-            &self.compositor,
-            &self.core,
-            physical,
-            (0.0, 0.0),
-        )
-        .expect("TextSurface::attach 失敗")
-    }
-}
-
-/// テスト用 BalloonModel（幾何のみ・font 未指定＝既定 ＭＳ ゴシック）。
-fn geo_model(origin: (Option<i32>, Option<i32>), font_height: Option<u32>) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(origin.0, origin.1),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, font_height, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
-}
-
-/// 文字列→グリフ item 列（クラスタの定義点で切る）。
-fn glyph_items(s: &str) -> Vec<TextItem> {
-    clusters(s).map(TextItem::glyph).collect()
-}
+use crate::viewbox_draw::test_support::{Rig, geo_model, glyph_items, layout_frame, opaque_count};
 
 /// layout→canvas→visible_window→render→read_back の通し（テスト用最短経路）。
 #[allow(clippy::too_many_arguments)]
@@ -129,7 +42,7 @@ fn render_items(
     metrics: &DWriteMetrics,
     contract: &ScaleContract,
 ) -> Vec<u8> {
-    let lines = LayoutEngine::layout(
+    let (_, canvas, window) = layout_frame(
         items,
         visible,
         region,
@@ -138,17 +51,10 @@ fn render_items(
         metrics,
         WrapPlan::CharByChar,
     );
-    let canvas = crate::canvas::ContentCanvas::from_layout(&lines, region, mode);
-    let window = LayoutEngine::visible_window(&lines, region, mode);
     executor
         .render(&canvas, &window, font, mode, contract, surface)
         .expect("DrawExecutor::render 失敗");
     surface.read_back().expect("read_back 失敗")
-}
-
-/// 非透明ピクセル数（BGRA 密配列の α ≠ 0）。
-fn opaque_count(bytes: &[u8]) -> usize {
-    bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
 }
 
 /// 非透明ピクセルの外接範囲 (min_x, min_y)（インクなしは None）。
@@ -171,15 +77,15 @@ fn ink_min(bytes: &[u8], width: u32) -> Option<(u32, u32)> {
 /// 確定行キャッシュ全破棄）後は全域が透明に戻る。
 #[test]
 fn render_grows_opaque_pixels_monotonically_and_clear_restores_transparency() {
-    let mut rig = DrawRig::new();
+    let mut rig = Rig::new();
     let image = (120u32, 60u32);
     let mut surface = rig.attach(image, 1.0);
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
-    let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+    let font = ResolvedFont::resolve(&geo_model(None));
     let mode = WritingMode::HorizontalTb;
     let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
         .expect("DWriteMetrics 生成失敗");
-    let region = TextRegion::resolve(&geo_model((Some(0), Some(0)), None), image, mode);
+    let region = TextRegion::resolve(&geo_model(None), image, mode);
     let contract = ScaleContract::new(1.0, None);
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
 
@@ -230,15 +136,15 @@ fn render_grows_opaque_pixels_monotonically_and_clear_restores_transparency() {
 /// （差分描画なら 5 グリフ分の残渣が出る）。同一入力の再描画はバイト一致（決定論）。
 #[test]
 fn render_is_full_redraw_without_residue() {
-    let mut rig = DrawRig::new();
+    let mut rig = Rig::new();
     let image = (120u32, 60u32);
     let mut surface = rig.attach(image, 1.0);
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
-    let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+    let font = ResolvedFont::resolve(&geo_model(None));
     let mode = WritingMode::HorizontalTb;
     let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
         .expect("DWriteMetrics 生成失敗");
-    let region = TextRegion::resolve(&geo_model((Some(0), Some(0)), None), image, mode);
+    let region = TextRegion::resolve(&geo_model(None), image, mode);
     let contract = ScaleContract::new(1.0, None);
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
 
@@ -288,15 +194,15 @@ fn render_is_full_redraw_without_residue() {
 /// clear_cache（Clear 適用点）だけが全破棄する。
 #[test]
 fn confirmed_line_layouts_regenerate_only_on_clear() {
-    let mut rig = DrawRig::new();
+    let mut rig = Rig::new();
     let image = (120u32, 60u32);
     let mut surface = rig.attach(image, 1.0);
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
-    let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+    let font = ResolvedFont::resolve(&geo_model(None));
     let mode = WritingMode::HorizontalTb;
     let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
         .expect("DWriteMetrics 生成失敗");
-    let region = TextRegion::resolve(&geo_model((Some(0), Some(0)), None), image, mode);
+    let region = TextRegion::resolve(&geo_model(None), image, mode);
     let contract = ScaleContract::new(1.0, None);
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
 
@@ -379,13 +285,13 @@ fn confirmed_line_layouts_regenerate_only_on_clear() {
 /// 範囲判定で排除する（origin (20,20)・正解 ≈40〜・二重 80〜・未適用 ≈20）。
 #[test]
 fn scale_applies_exactly_once_at_draw_target() {
-    let mut rig = DrawRig::new();
+    let mut rig = Rig::new();
     let image = (120u32, 60u32);
     let k = 2.0f32;
     let mut surface = rig.attach(image, k);
     assert_eq!(surface.size(), (240, 120), "物理寸 = ceil(image × k)");
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
-    let model = geo_model((Some(20), Some(20)), None);
+    let model = model_full((Some(20), Some(20)), (None, None), (None, None, None, None));
     let font = ResolvedFont::resolve(&model);
     let mode = WritingMode::HorizontalTb;
     let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
@@ -424,7 +330,7 @@ fn scale_applies_exactly_once_at_draw_target() {
 /// 可視窓の行が領域先頭へ詰めて描かれる（同一入力の再描画はバイト一致・決定論）。
 #[test]
 fn scroll_overflow_drops_oldest_line_via_full_redraw() {
-    let mut rig = DrawRig::new();
+    let mut rig = Rig::new();
     let image = (60u32, 40u32);
     let mut surface = rig.attach(image, 1.0);
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
@@ -432,7 +338,7 @@ fn scroll_overflow_drops_oldest_line_via_full_redraw() {
     // 3 行目 34 ≤ 40 は収まり 4 行目 46 > 40 であふれる（あふれ後の行送り量は −12）。
     // 旧 pitch 13（行下端 10/23/36/49）でも「3 行収まる・4 行目であふれる」で、**結論は偶然
     // 一致する**——等差が 13 から 12 へ変わっても 3 行目 34 と 4 行目 46 が 40 を跨ぐため。
-    let model = geo_model((Some(0), Some(0)), Some(10));
+    let model = geo_model(Some(10));
     let font = ResolvedFont::resolve(&model);
     let mode = WritingMode::HorizontalTb;
     let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
@@ -504,10 +410,10 @@ fn scroll_overflow_drops_oldest_line_via_full_redraw() {
 /// warn は executor ごと初回のみ（ログスパム抑制）。
 #[test]
 fn image_and_surface_seam_residents_warn_and_skip() {
-    let mut rig = DrawRig::new();
+    let mut rig = Rig::new();
     let image = (120u32, 60u32);
     let mut surface = rig.attach(image, 1.0);
-    let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+    let font = ResolvedFont::resolve(&geo_model(None));
     let mode = WritingMode::HorizontalTb;
     let contract = ScaleContract::new(1.0, None);
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
@@ -562,14 +468,10 @@ fn layout_engine_wraps_using_measured_advances() {
     let full = metrics.advance("あ", DEFAULT_FONT_HEIGHT);
     // 折返し閾値＝実測全角 1.5 個分: 2 文字目で「行内位置＋次グリフ幅 > 閾値」が成立。
     let threshold = (full * 1.5).round() as i32;
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(Some(threshold), None),
-        ValidRect::new(None, None, None, None),
-        empty_font(),
-        None,
-        None,
+    let model = model_full(
+        (Some(0), Some(0)),
+        (Some(threshold), None),
+        (None, None, None, None),
     );
     let region = TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb);
     let items = [TextItem::glyph("あ"), TextItem::glyph("あ")];
@@ -700,7 +602,7 @@ fn widths_per_cluster<'a>(text: &'a str, drawn: &[(u16, f32)]) -> Vec<(&'a str, 
 /// （6.2 申し送りの検出責務・クリップでは隠れない metrics 述語）。
 #[test]
 fn probe_advances_match_drawn_line_advances_per_cluster() {
-    let rig = DrawRig::new();
+    let rig = Rig::new();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
     for (name, text) in INVARIANT_CASES.into_iter().chain([CLUSTER_CASE]) {
@@ -746,7 +648,7 @@ fn probe_advances_match_drawn_line_advances_per_cluster() {
 /// metrics 述語——ピクセル述語は 9.2/10.2 の領分）。
 #[test]
 fn advance_divergence_would_surface_as_wrap_position_drift() {
-    let rig = DrawRig::new();
+    let rig = Rig::new();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
     let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
     for (name, text) in INVARIANT_CASES {
@@ -769,24 +671,12 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
             // 幾何モデル: 横書き＝origin(0,0)＋wordwrappoint.x・縦書き＝origin 既定
             // （書字開始角）＋wordwrappoint.y（軸読み替え正準表）。
             let (origin, wordwrap) = match mode {
-                WritingMode::HorizontalTb => (
-                    Origin::new(Some(0), Some(0)),
-                    WordWrapPoint::new(Some(threshold), None),
-                ),
-                WritingMode::VerticalRl | WritingMode::VerticalLr => (
-                    Origin::new(None, None),
-                    WordWrapPoint::new(None, Some(threshold)),
-                ),
+                WritingMode::HorizontalTb => ((Some(0), Some(0)), (Some(threshold), None)),
+                WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                    ((None, None), (None, Some(threshold)))
+                }
             };
-            let model = BalloonModel::new(
-                WindowPosition::new(None, None),
-                origin,
-                wordwrap,
-                ValidRect::new(None, None, None, None),
-                empty_font(),
-                None,
-                None,
-            );
+            let model = model_full(origin, wordwrap, (None, None, None, None));
             let region = TextRegion::resolve(&model, (400, 224), mode);
             let items = glyph_items(text);
             let lines = LayoutEngine::layout(

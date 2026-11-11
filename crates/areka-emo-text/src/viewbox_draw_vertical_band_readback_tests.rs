@@ -6,8 +6,10 @@
 //! 1,000 行に届くので兄弟のファイルへ分けた（2.2 の `viewbox_draw_vertical_band_scroll_tests.rs` と同じ扱い）。
 
 use super::ViewboxExecutor;
-use super::choice_hover_tests::bgra_x_span;
-use super::test_support::{Rig, block_axis_ink_span, glyph_items, live_diff_model_font};
+use super::test_support::{
+    FILL_BGRA, R_CHOICES, R_FONTS, R_LATIN, Rig, bgra_x_span, bgra_y_span, block_axis_ink_span,
+    glyph_items, live_diff_model_font,
+};
 use crate::canvas::ContentCanvas;
 use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, line_bands,
@@ -23,36 +25,6 @@ use windows::Win32::Graphics::DirectWrite::{
 };
 use windows::core::HSTRING;
 use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
-
-/// R の書体（本番と同じ解決に通す）と、引けるはずの書体の名前（違えば赤）。ぱすたの
-/// `pasta_tategaki` の `font.name` は候補列のまま書き、`FontCatalog::pick` で先頭の「游ゴシック Medium」が
-/// GDI の名前として引け、その家族名「Yu Gothic」になる（emo-text-dwrite-fidelity 要件 3.1・タスク 1.2）。
-pub(super) const R_FONTS: [(&str, &str); 2] = [
-    ("Yu Gothic UI", "Yu Gothic UI"),
-    (
-        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ",
-        "Yu Gothic",
-    ),
-];
-/// ぱすたの測りと同じ 4 つの選択肢（列ごと）。
-pub(super) const R_CHOICES: [&str; 4] = ["晴れてる", "雨だよ", "曇ってる", "ないしょ"];
-/// 記録だけの横倒しの欧文の列（選択肢にしない・合否に入れない）。
-pub(super) const R_LATIN: &str = "Ag";
-/// 塗りの色（premultiplied BGRA・α=255）＝ `SquareFill { fill: (105, 25, 25) }`。
-pub(super) const R_FILL_BGRA: [u8; 4] = [25, 25, 105, 255];
-
-/// premultiplied BGRA 密配列の全域から、指定 BGRA を持つ画素の y 範囲（上端, 下端）を返す。
-pub(super) fn bgra_y_span(bytes: &[u8], w: u32, h: u32, target: [u8; 4]) -> Option<(u32, u32)> {
-    let rows: Vec<u32> = (0..h)
-        .filter(|&y| {
-            (0..w).any(|x| {
-                let o = ((y * w + x) * 4) as usize;
-                bytes[o..o + 4] == target
-            })
-        })
-        .collect();
-    Some((*rows.first()?, *rows.last()?))
-}
 
 /// 1 つの組（書体 × 大きさ × 向き × 拡大率）を本番と同じ道（配置 → 帯の決め → 塗りの住人へ
 /// 焼く → 描く）で読み戻し、赤になった確かめを返す。測った数は標準出力へ出す（`research.md` の材料）。
@@ -210,8 +182,8 @@ fn vertical_band_case(
         );
         let (px, w, h, committed) = draw(rig, &canvas);
         let (Some(fx), Some(fy)) = (
-            bgra_x_span(&px, w, h, R_FILL_BGRA),
-            bgra_y_span(&px, w, h, R_FILL_BGRA),
+            bgra_x_span(&px, w, h, FILL_BGRA),
+            bgra_y_span(&px, w, h, FILL_BGRA),
         ) else {
             red.push(format!("{tag} {word}: 乗せたのに塗りが 1 画素も無い"));
             continue;

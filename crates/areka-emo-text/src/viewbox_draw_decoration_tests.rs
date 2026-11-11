@@ -21,7 +21,10 @@
 //! [`decorated_run_paints_only_its_own_glyphs`] が担う——装飾の色が自分の区間の外へ出れば赤。
 
 use super::decoration::{RANGE_CALLS, RESET_CALLS, block_extent, line_styles, style_runs};
-use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
+use super::test_support::{
+    Rig, build, choice_canvas_from, count_in_x_band, geo_model, glyph, glyph_items, opaque_count,
+    table_with,
+};
 use super::{DrawStats, ViewboxExecutor};
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, HighlightPaint, Resident,
@@ -33,16 +36,6 @@ use crate::look::{StyleId, StyleTable, TextLook};
 use crate::region::{ScaleContract, TextRegion};
 use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
-
-/// 番号だけを与えたグリフ（位置と送りは区間の切り出しに効かないので 0）。
-pub(super) fn glyph(text: &str, style: StyleId) -> PositionedGlyph {
-    PositionedGlyph {
-        text: text.into(),
-        inline_pos: 0.0,
-        advance: 0.0,
-        style,
-    }
-}
 
 /// 区間を `(startPosition, length, 番号)` の組へ落とす（比較用）。
 fn triples(glyphs: &[PositionedGlyph]) -> Vec<(u32, u32, u32)> {
@@ -181,18 +174,6 @@ fn default_only_line_keeps_font_height_and_empty_style_ids() {
     );
 }
 
-/// 番号 1 に `look` を積んだ表を返す（`intern` 経由＝本番と同じ畳み込み規則）。
-pub(super) fn table_with(look: &TextLook, default: &TextLook) -> (StyleTable, StyleId) {
-    let mut table = StyleTable::default();
-    let id = table.intern(look, default);
-    assert_ne!(
-        id,
-        StyleId::DEFAULT,
-        "検査用の見た目は既定と異なる（番号 0 に畳み込まれると檻が空振りする）"
-    );
-    (table, id)
-}
-
 /// canvas の GlyphRun 住人の先頭グリフだけへ番号を与える（1 行の混在を作る）。
 fn decorate_first_glyph(canvas: &ContentCanvas, id: StyleId) -> ContentCanvas {
     let residents = canvas
@@ -221,33 +202,15 @@ fn decorate_first_glyph(canvas: &ContentCanvas, id: StyleId) -> ContentCanvas {
 
 /// 赤インク（premultiplied BGRA: 青と緑が 0・赤が 0 より大きい）の画素数を列帯 `x0..x1` で数える。
 /// アンチエイリアスの縁も拾えるよう完全一致ではなく成分の符号で判定する。
-fn count_red(bytes: &[u8], w: u32, h: u32, x0: u32, x1: u32) -> usize {
-    let mut n = 0usize;
-    for y in 0..h {
-        for x in x0..x1.min(w) {
-            let o = ((y * w + x) * 4) as usize;
-            let (b, g, r, a) = (bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
-            if a != 0 && r > 0 && b == 0 && g == 0 {
-                n += 1;
-            }
-        }
-    }
-    n
+fn count_red(bytes: &[u8], w: u32, x0: u32, x1: u32) -> usize {
+    count_in_x_band(bytes, w, x0, x1, |px| {
+        px[3] != 0 && px[2] > 0 && px[0] == 0 && px[1] == 0
+    })
 }
 
 /// 白インク（3 成分とも 0 より大きい）の画素数を列帯 `x0..x1` で数える。
-fn count_white(bytes: &[u8], w: u32, h: u32, x0: u32, x1: u32) -> usize {
-    let mut n = 0usize;
-    for y in 0..h {
-        for x in x0..x1.min(w) {
-            let o = ((y * w + x) * 4) as usize;
-            let (b, g, r) = (bytes[o], bytes[o + 1], bytes[o + 2]);
-            if b > 0 && g > 0 && r > 0 {
-                n += 1;
-            }
-        }
-    }
-    n
+fn count_white(bytes: &[u8], w: u32, x0: u32, x1: u32) -> usize {
+    count_in_x_band(bytes, w, x0, x1, |px| px[0] > 0 && px[1] > 0 && px[2] > 0)
 }
 
 /// 較正の本体（要件 3.6）: 1 行の中で番号の付いた**先頭グリフだけ**が装飾の色で描かれ、
@@ -258,7 +221,7 @@ fn decorated_run_paints_only_its_own_glyphs() {
     let mut rig = Rig::new();
     let image = (40u32, 20u32);
     let mut surface = rig.attach(image, 1.0);
-    let (w, h) = surface.size();
+    let (w, _h) = surface.size();
     let mode = WritingMode::HorizontalTb;
     let font = ResolvedFont::resolve(&geo_model(Some(10)));
     let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
@@ -287,11 +250,11 @@ fn decorated_run_paints_only_its_own_glyphs() {
     let px = surface.read_back().expect("read_back 失敗");
 
     assert!(
-        count_red(&px, w, h, 0, 10) > 0,
+        count_red(&px, w, 0, 10) > 0,
         "番号の付いた区間は装飾の色（赤）で描かれる（要件 3.6）"
     );
     assert_eq!(
-        count_red(&px, w, h, 10, 20),
+        count_red(&px, w, 10, 20),
         0,
         "番号 0 の区間へ装飾の色が漏れない（行全体へ焼く誤りはここで赤になる）"
     );
@@ -414,32 +377,17 @@ fn choice_canvas(
     highlight: Option<HighlightPaint>,
     hovered: Option<usize>,
 ) -> ContentCanvas {
-    let residents = base
-        .residents
-        .iter()
-        .map(|r| match &r.content {
-            ResidentContent::GlyphRun(run) => Resident {
-                content: ResidentContent::Choice(ChoiceLineContent {
-                    run: run.clone(),
-                    segments: vec![ChoiceRowSegment {
-                        ordinal: 0,
-                        inline_range: (0.0, 10.0),
-                    }],
-                    hovered,
-                    highlight,
-                    band_extent: 12.0,
-                    band_offset: 0.0,
-                }),
-                transform: r.transform,
-                effects: r.effects,
-            },
-            _ => r.clone(),
-        })
-        .collect();
-    ContentCanvas {
-        residents,
-        size: base.size,
-    }
+    choice_canvas_from(base, |run| ChoiceLineContent {
+        run: run.clone(),
+        segments: vec![ChoiceRowSegment {
+            ordinal: 0,
+            inline_range: (0.0, 10.0),
+        }],
+        hovered,
+        highlight,
+        band_extent: 12.0,
+        band_offset: 0.0,
+    })
 }
 
 /// 要件 3.5: 選択肢の文字にも装飾が効くが、hover の文字色は装飾の色より**後に**焼かれて勝つ。
@@ -450,7 +398,7 @@ fn hover_color_wins_over_decoration_color() {
     let mut rig = Rig::new();
     let image = (40u32, 20u32);
     let mut surface = rig.attach(image, 1.0);
-    let (w, h) = surface.size();
+    let (w, _h) = surface.size();
     let mode = WritingMode::HorizontalTb;
     let font = ResolvedFont::resolve(&geo_model(Some(10)));
     let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
@@ -494,16 +442,16 @@ fn hover_color_wins_over_decoration_color() {
     let px = surface.read_back().expect("read_back 失敗");
 
     assert!(
-        count_white(&px, w, h, 0, 10) > 0,
+        count_white(&px, w, 0, 10) > 0,
         "hover セグメントの文字は重ね表示の色（白）で描かれる（装飾の色より後に焼く）"
     );
     assert_eq!(
-        count_red(&px, w, h, 0, 10),
+        count_red(&px, w, 0, 10),
         0,
         "hover セグメントに装飾の色が残らない（順序を逆転させるとここが赤になる）"
     );
     assert!(
-        count_red(&px, w, h, 10, 20) > 0,
+        count_red(&px, w, 10, 20) > 0,
         "hover していないグリフには装飾の色が残る（装飾の色の経路を実際に踏んでいる対照）"
     );
 }

@@ -107,14 +107,7 @@ fn visible_window_move_blits_and_redraws_only_exposure_band() {
     // 6 行（font 10 → pitch 10+2=12・canvas-local y=0,12,…,60）。各行を相異なるグリフにし、
     // 12px の縦スクロールで供給面の内容が実際に移動する（同一グリフだと行が同型で readback
     // 不変になる）ことを観測可能にする。canvas は validrect-local に全行保持。
-    let line_chars = ["あ", "い", "う", "え", "お", "か"];
-    let mut items = Vec::new();
-    for (i, &ch) in line_chars.iter().enumerate() {
-        if i > 0 {
-            items.push(TextItem::LineBreak { ratio: 1.0 });
-        }
-        items.push(TextItem::glyph(ch));
-    }
+    let items = multiline_items(&["あ", "い", "う", "え", "お", "か"]);
     let (canvas, _auto_window) = build(&items, &region, mode, 10.0);
     let total_glyph_lines = canvas.residents.len();
 
