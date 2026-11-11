@@ -521,3 +521,7 @@ mod failure_tests;
 #[cfg(test)]
 #[path = "persist_window_adjacent_tests.rs"]
 mod window_adjacent_tests;
+
+#[cfg(test)]
+#[path = "persist_unreadable_tests.rs"]
+mod unreadable_tests;
