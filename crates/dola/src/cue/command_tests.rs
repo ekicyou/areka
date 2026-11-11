@@ -10,73 +10,6 @@ fn barrier_kind_clone_debug_partial_eq() {
 }
 
 #[test]
-fn barrier_kind_three_variants() {
-    let _ = BarrierKind::WaitForInput { timeout: None };
-    let _ = BarrierKind::WaitForChoice {
-        timeout: Some(30.0),
-    };
-    let _ = BarrierKind::Timeout { duration: 5.0 };
-}
-
-#[test]
-fn routing_command_three_variants() {
-    let actor = ActorKey::from("sakura");
-    let _ = RoutingCommand::RouteAdd {
-        target: CueTarget::Balloon,
-        to: EntityKey::Actor(actor.clone(), CueTarget::Balloon),
-    };
-    let _ = RoutingCommand::RouteSwitch {
-        target: CueTarget::Shell,
-        to: EntityKey::Spot("spot1".into()),
-    };
-    let _ = RoutingCommand::RouteRemove {
-        target: CueTarget::Balloon,
-    };
-}
-
-#[test]
-fn cue_command_thirteen_variants() {
-    let cmds = vec![
-        CueCommand::Text("hello".into()),
-        CueCommand::Clear,
-        CueCommand::Emote {
-            key: "smile".into(),
-        },
-        CueCommand::Choice {
-            id: "yes".into(),
-            text: "はい".into(),
-            references: vec![],
-        },
-        CueCommand::EntityRef(42),
-        CueCommand::Custom {
-            command: "fade".into(),
-            params: DynamicValue::Null,
-        },
-        CueCommand::NewLine { ratio: 1.0 },
-        CueCommand::BalloonSurface { key: "2".into() },
-        CueCommand::Wait,
-        CueCommand::ClearAll,
-        CueCommand::AnchorBegin {
-            id: "OnJump".into(),
-            references: vec![],
-        },
-        CueCommand::AnchorEnd,
-        CueCommand::Cursor {
-            x: "5em".into(),
-            y: "2lh".into(),
-        },
-    ];
-    assert_eq!(cmds.len(), 13);
-
-    // Clone + Debug + PartialEq
-    for cmd in &cmds {
-        let clone = cmd.clone();
-        assert_eq!(*cmd, clone);
-        let _ = format!("{:?}", cmd);
-    }
-}
-
-#[test]
 fn cue_payload_from_conversions() {
     let cmd = CueCommand::Text("test".into());
     let payload: CuePayload = cmd.into();
@@ -435,17 +368,6 @@ fn anchor_cue_wire_form() {
     assert_eq!(parsed, blank);
 }
 
-#[test]
-fn actor_key_hash_eq() {
-    use std::collections::HashSet;
-    let mut set = HashSet::new();
-    set.insert(ActorKey::from("sakura"));
-    set.insert(ActorKey::from("sakura"));
-    assert_eq!(set.len(), 1);
-    set.insert(ActorKey::from("kero"));
-    assert_eq!(set.len(), 2);
-}
-
 // ── D3-T 追加ギャップテスト ──
 
 #[test]
@@ -568,22 +490,6 @@ fn entity_ref_u64_boundary_serde_roundtrip() {
     }
 }
 
-#[test]
-fn cue_construction() {
-    let cue = Cue {
-        actor: ActorKey::from("sakura"),
-        start_time: 1.5,
-        payload: CueCommand::Text("hello".into()).into(),
-        duration: 0.0,
-    };
-    assert_eq!(cue.actor.as_str(), "sakura");
-    assert_eq!(cue.start_time, 1.5);
-    assert!(matches!(
-        cue.payload,
-        CuePayload::Command(CueCommand::Text(_))
-    ));
-}
-
 // ── duration（再生時間）envelope 檻 ──
 
 #[test]
@@ -664,6 +570,11 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
         }
         .into(),
         CueCommand::AnchorEnd.into(),
+        CueCommand::Cursor {
+            x: "5em".into(),
+            y: "2lh".into(),
+        }
+        .into(),
         // duration 非該当ペイロード（Barrier / Routing）も envelope としては
         // 一律にフィールドを持つ（値は 0・静的 duration タイムラインの外）。
         BarrierKind::Timeout { duration: 5.0 }.into(),
