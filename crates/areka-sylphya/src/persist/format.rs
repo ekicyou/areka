@@ -215,6 +215,14 @@ fn count_table(value: &str) -> toml::Value {
 ///
 /// 同一 content からは常に同一 doc を返す（決定論・R2.5 の永続版）。
 pub fn read_toml_str(content: &str) -> FormatDoc {
+    parse_toml_str(content).unwrap_or_default()
+}
+
+/// 寛容でない読み。使えれば `Ok(doc)`、使えなければ `Err(利用者へ見せる理由の文)`。
+///
+/// 縮退の `warn!`（[`read_toml_str`] の 2 つの文のまま）はこの関数が出す。保存の土台の読みは
+/// `Err` を受けたら書かない（使えないファイルを読めた分だけで上書きして消さない）。
+pub(crate) fn parse_toml_str(content: &str) -> Result<FormatDoc, String> {
     let table: toml::Table = match content.parse::<toml::Table>() {
         Ok(t) => t,
         Err(e) => {
@@ -223,7 +231,7 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
                 error = %e,
                 "persist TOML parse failed; degrading to all-absent (file preserved)"
             );
-            return FormatDoc::default();
+            return Err("記憶のファイル sylphya.toml が TOML として読めないので、中身を消さないように書くのをやめました（手で直したときの書き誤りなど）".to_string());
         }
     };
 
@@ -240,14 +248,17 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
                 expected_version = FORMAT_VERSION,
                 "persist TOML has unknown/absent format-version; degrading to all-absent (file preserved)"
             );
-            return FormatDoc::default();
+            let found = version.map_or_else(|| "書かれていない値".to_string(), |v| v.to_string());
+            return Err(format!(
+                "記憶のファイル sylphya.toml の format-version が {found}で、この areka が読める {FORMAT_VERSION} と違うので、中身を消さないように書くのをやめました（新しい areka で書いたファイルなど）"
+            ));
         }
     }
 
     // 有効バージョン: 存在する key のみ採用（欠落・型外れは当該 key 不在・warn なし）。
     let last = table.get("last").and_then(toml::Value::as_table);
     let read_last = |field| last.and_then(|t| read_str(t, field));
-    FormatDoc {
+    Ok(FormatDoc {
         last_ghost: read_last("ghost"),
         last_balloon: read_last("balloon"),
         last_shell: read_last("shell"),
@@ -261,7 +272,7 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
         boot_count: read_count(&table, "boot"),
         vanish_count: read_count(&table, "vanish"),
         window_adjacent: read_string_map(&table, "window-adjacent"),
-    }
+    })
 }
 
 /// `[<key>."ID"]` 群を [`AxisPair`] マップへ（テーブル不在・非テーブルは空マップ）。
@@ -425,6 +436,18 @@ mod tests {
         // 有効 TOML だが format-version = 2（未知）→ 本文があっても全不在へ縮退。
         let doc = read_toml_str("format-version = 2\n[boot]\ncount = \"7\"\n");
         assert_eq!(doc, FormatDoc::default());
+    }
+
+    #[test]
+    fn strict_parse_gives_the_reason_for_each_unusable_content() {
+        let reason = |content| parse_toml_str(content).unwrap_err();
+        assert!(reason("[[[ broken").contains("TOML として読めない"));
+        assert!(reason("format-version = 2").contains("format-version が 2で"));
+        assert!(reason("format-version = \"1\"").contains("書かれていない値で"));
+        assert_eq!(
+            parse_toml_str("format-version = 1"),
+            Ok(FormatDoc::default())
+        );
     }
 
     #[test]

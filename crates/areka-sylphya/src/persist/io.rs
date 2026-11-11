@@ -44,6 +44,16 @@ pub trait PersistIo: Send {
     }
 }
 
+/// 一時の掴み（共有違反・拒み）を取り直す待ちの上限（保存の土台の読みと、更新の間の錠）。
+pub(crate) const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+/// 一時の掴みを取り直す間隔。
+pub(crate) const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(10);
+
+/// 待てば通るかもしれない失敗か（共有違反＝os error 32・拒み＝5。ウイルス対策などの一時の掴み）。
+pub(crate) fn is_transient(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(32) | Some(5))
+}
+
 /// 同じ IO を複数の持ち手で分ける包み（3 つの口をすべて中身へ渡す）。
 impl<T: PersistIo + Sync + ?Sized> PersistIo for std::sync::Arc<T> {
     fn read(&self, path: &Path) -> std::io::Result<Option<String>> {

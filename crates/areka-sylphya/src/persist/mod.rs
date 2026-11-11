@@ -279,7 +279,8 @@ pub fn load_scope(
 /// `window.*` 等の無関係な key が消えない（マージ檻で保証）。
 ///
 /// - root 不在 → warn! ＋ [`PersistOutcome::Degraded`]（保存先が無い・panic なし・R6.7）。
-/// - 既存読取が `Err` → warn! ＋ 既存を空とみなして続行（tolerant・design「read 失敗→不在」）。
+/// - 既存が無い・空 → 空の土台に重ねる。既存が読めない・壊れている・版が違う → 書かずに
+///   error! `persist_existing_unusable` ＋ [`PersistOutcome::Degraded`]（`Io(理由)`）。
 /// - [`PersistIo::commit`] 失敗 → error! ＋ [`PersistOutcome::Degraded`]（既存ファイルは temp→rename
 ///   ゆえ無傷・R6.2。鏡像更新はアクターの領分——ここは結果のみ報告）。
 /// - 控える範囲の中（[`PersistIo::withholds`]）→ 控えへ入れて debug `persist_withheld` ＋
@@ -306,8 +307,28 @@ pub fn save_scope(
         });
     };
 
-    // read-modify-write: 既存 doc を土台にマージ（無関係 key を温存）。
-    let mut doc = read_existing(scope, io, &path);
+    // read-modify-write: 既存 doc を土台にマージ（無関係 key を温存）。使えない既存は上書きしない。
+    let mut doc = match read_existing(io, &path) {
+        Ok(doc) => doc,
+        Err(reason) => {
+            let key_names: Vec<String> = keys.iter().map(|key| key.to_canonical_key()).collect();
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "persist_existing_unusable",
+                ?scope,
+                path = %path.display(),
+                reason = %reason,
+                keys = ?key_names,
+                "persist existing file unusable; not overwriting, reporting Degraded"
+            );
+            return PersistOutcome::Degraded(PersistFailure {
+                scope,
+                dir: roots.root_of(scope).cloned(),
+                keys,
+                cause: PersistFailureCause::Io(reason),
+            });
+        }
+    };
     for (key, value) in entries {
         apply_entry(&mut doc, key, value);
     }
@@ -348,20 +369,26 @@ pub fn save_scope(
     }
 }
 
-/// save のマージ土台となる既存 doc を読む（read 障害・不在は空 doc へ寛容縮退）。
-fn read_existing(scope: PersistScope, io: &dyn PersistIo, path: &Path) -> FormatDoc {
-    match io.read(path) {
-        Ok(Some(content)) => format::read_toml_str(&content),
-        Ok(None) => FormatDoc::default(),
-        Err(e) => {
-            tracing::warn!(
-                target: LOG_TARGET,
-                ?scope,
-                path = %path.display(),
-                error = %e,
-                "persist read-before-write failed; merging onto empty base (tolerant)"
-            );
-            FormatDoc::default()
+/// save のマージ土台を読む。`Ok(doc)` なら重ねてよい・`Err(理由)` なら書かずに Degraded。
+///
+/// 無いファイルと空（空白だけ）のファイルは守る中身が無いので空の土台。中身があれば寛容でない
+/// 読み（[`format::parse_toml_str`]）を通す。一時の掴み（[`io::is_transient`]）は
+/// [`io::LOCK_RETRY`] ごとに最大 [`io::LOCK_WAIT`] 読み直す。
+fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<FormatDoc, String> {
+    let deadline = std::time::Instant::now() + io::LOCK_WAIT;
+    loop {
+        match io.read(path) {
+            Ok(None) => return Ok(FormatDoc::default()),
+            Ok(Some(content)) if content.trim().is_empty() => return Ok(FormatDoc::default()),
+            Ok(Some(content)) => return format::parse_toml_str(&content),
+            Err(e) if io::is_transient(&e) && std::time::Instant::now() < deadline => {
+                std::thread::sleep(io::LOCK_RETRY);
+            }
+            Err(e) => {
+                return Err(format!(
+                    "記憶のファイル sylphya.toml を読めないので、中身を消さないように書くのをやめました（{e}）"
+                ));
+            }
         }
     }
 }
