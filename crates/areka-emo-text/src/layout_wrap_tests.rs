@@ -1,11 +1,15 @@
 use super::test_support::{
     IMAGE, broken_lines, glyphs, inline_positions, model, model_rect, window_for,
 };
-use super::{FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, VisibleWindow, WrapPlan};
+use super::{
+    CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, VisibleWindow, WrapPlan,
+};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
+use areka_sakura::contract::ActorKey;
+use log_capture_kit::capture;
 
 // ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=height+行間 2） ──
 
@@ -689,4 +693,94 @@ fn wrapped_lines_return_to_start_inline_component() {
     assert_eq!(lines.len(), 2);
     assert_eq!(inline_positions(&lines[1]), vec![100.0]);
     assert_eq!(lines[1].rect.top, 62.0); // 50 + pitch 12
+}
+
+/// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）は送りを捨てて
+/// 位置を保ち、guard つきの配置では `warn!`（`degrade = NonFinite`）を 1 件だけ残す。
+/// guard の無い配置では毎回（2 件）。ふつうの割合（1.0・0.5・1.5）は今と同じ位置
+/// （`audit-emo-text-layout-draw` 指摘 1・申し送り R17）。
+#[test]
+fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let actor = ActorKey::from("0");
+    let layout_guarded = |items: &[TextItem]| {
+        let mut guard = CursorWarnGuard::default();
+        LayoutEngine::layout_with_cursor_warn(
+            items,
+            items.len(),
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+            &actor,
+            &mut guard,
+        )
+    };
+    let warns_of = |events: &[log_capture_kit::CapturedEvent]| {
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .map(|e| e.field("degrade").map(str::to_owned))
+            .collect::<Vec<_>>()
+    };
+    let mut items = vec![TextItem::glyph("あ")];
+    items.extend(std::iter::repeat_n(TextItem::LineBreak { ratio: 3e38 }, 10));
+    items.push(TextItem::glyph("あ"));
+    items.extend(std::iter::repeat_n(
+        TextItem::LineBreak { ratio: -3e38 },
+        20,
+    ));
+    items.push(TextItem::glyph("あ"));
+
+    let (lines, events) = capture(|| layout_guarded(&items));
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, vec![0.0, 0.0, 0.0], "送れない改行は位置を保つ");
+    assert!(
+        lines.iter().all(|l| {
+            let r = &l.rect;
+            [r.left, r.top, r.right, r.bottom]
+                .iter()
+                .all(|v| v.is_finite())
+                && l.glyphs.iter().all(|g| g.inline_pos.is_finite())
+        }),
+        "行の位置に非有限が無い: {lines:?}"
+    );
+    assert_eq!(
+        warns_of(&events),
+        vec![Some("NonFinite".to_owned())],
+        "guard つきは 1 件"
+    );
+
+    let (_, events) = capture(|| {
+        LayoutEngine::layout(
+            &items,
+            items.len(),
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        )
+    });
+    assert_eq!(warns_of(&events).len(), 2, "guard の無い配置は毎回");
+
+    // ふつうの割合: font 12 → pitch 14。0 → 14 → 21 → 42。
+    let normal = [
+        TextItem::glyph("あ"),
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::glyph("あ"),
+        TextItem::LineBreak { ratio: 0.5 },
+        TextItem::glyph("あ"),
+        TextItem::LineBreak { ratio: 1.5 },
+        TextItem::glyph("あ"),
+    ];
+    let (lines, events) = capture(|| layout_guarded(&normal));
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, vec![0.0, 14.0, 21.0, 42.0]);
+    assert!(warns_of(&events).is_empty(), "ふつうの割合は記録しない");
 }

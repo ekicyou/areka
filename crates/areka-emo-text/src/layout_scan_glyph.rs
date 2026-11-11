@@ -57,14 +57,16 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             );
-            apply_pending_newline(
+            if !apply_pending_newline(
                 &mut self.pending,
                 &mut self.inline_pos,
                 &mut self.block_pos,
                 self.inline_start,
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
-            );
+            ) {
+                self.warn_non_finite_advance();
+            }
             apply_pending_cursor(
                 &mut self.pending_cursor,
                 &mut self.inline_pos,

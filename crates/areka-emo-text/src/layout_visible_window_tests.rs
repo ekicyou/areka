@@ -305,3 +305,28 @@ fn vertical_rl_leading_gap_scrolls_from_region_start() {
         "縦書きでも冒頭の空きが最初に送られる（オフセットの符号は行送り方向の逆＝右へ）"
     );
 }
+
+/// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）でも、
+/// 見える窓の `block_offset` は有限（指摘 1・送りを捨てた行は書き始めの位置に残る）。
+#[test]
+fn non_finite_pending_newline_keeps_block_offset_finite() {
+    let region = TextRegion::resolve(
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let mut items = vec![TextItem::glyph("あ")];
+    items.extend(std::iter::repeat_n(TextItem::LineBreak { ratio: 3e38 }, 10));
+    items.push(TextItem::glyph("あ"));
+    items.extend(std::iter::repeat_n(
+        TextItem::LineBreak { ratio: -3e38 },
+        20,
+    ));
+    items.push(TextItem::glyph("あ"));
+    let window = window_for(&items, &region, WritingMode::HorizontalTb, 10.0);
+    assert!(window.block_offset.is_finite(), "{window:?}");
+    assert_eq!(
+        window.block_offset, 0.0,
+        "3 行とも書き始めの位置＝あふれない"
+    );
+}

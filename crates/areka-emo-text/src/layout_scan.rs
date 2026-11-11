@@ -6,6 +6,7 @@ use super::{
     LineHeights, LineRect, PositionedGlyph, PositionedLine, TextItem, TextRegion, WrapPlan,
     WritingMode, line_pitch_of, resolve_cursor_component,
 };
+use crate::cursor_tag::CursorDegrade;
 use crate::state::CursorCoord;
 
 #[path = "layout_scan_glyph.rs"]
@@ -184,14 +185,16 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             );
-            apply_pending_newline(
+            if !apply_pending_newline(
                 &mut self.pending,
                 &mut self.inline_pos,
                 &mut self.block_pos,
                 self.inline_start,
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
-            );
+            ) {
+                self.warn_non_finite_advance();
+            }
             apply_pending_cursor(
                 &mut self.pending_cursor,
                 &mut self.inline_pos,
@@ -220,29 +223,22 @@ impl Scan<'_, '_> {
         // ここで渡すのは走査ローカルの現在位置ではなく**実効位置**——
         // 「もし今フラッシュしたら次の文字が置かれる位置」である（R3.1「直前までに
         // 置かれた文字の次に文字が置かれる位置」）。保留中の改行と保留中のカーソルを
-        // **保留フラッシュ（ゲート②）と同じ順**で仮適用して求める:
-        //   (1) 行の確定は inline_pos／block_pos を動かさない＝実効位置に寄与しない。
-        //   (2) 保留改行 Σratio を行送り軸へ適用し、行内軸を先頭へ戻す。
-        //   (3) 保留カーソルの指定軸で上書きする（不動軸は据え置き）。
-        // これは**フラッシュの複製ではなく、同じ規則に従う読み取り専用の計算**である
-        // ——`pending`／`pending_cursor` は `take()` せず、`inline_pos`／`block_pos`
-        // も書き換えない（走査ローカルは無変更・R3.5「基点は `\_l` 実行時点に固定」）。
-        let mut eff_inline = self.inline_pos;
-        let mut eff_block = self.block_pos;
-        if let Some(sum) = self.pending {
-            // 行送りはフラッシュ側と同じ規則——閉じる行の丈から引く
-            // （[`LineHeights::peek`] の doc に理由・要件 7.9）。
-            eff_block += self.block_dir * line_pitch_of(self.metrics, self.heights.peek()) * sum;
-            eff_inline = self.inline_start;
-        }
-        if let Some((inline_val, block_val)) = self.pending_cursor {
-            if let Some(iv) = inline_val {
-                eff_inline = iv;
-            }
-            if let Some(bv) = block_val {
-                eff_block = bv;
-            }
-        }
+        // **保留フラッシュ（ゲート②）と同じ 2 つの適用の関数**へ写しの局所変数で通して求める
+        // （(1) 行の確定は位置を動かさないので要らない）。`pending`／`pending_cursor`／
+        // `inline_pos`／`block_pos` は書き換えない（R3.5「基点は `\_l` 実行時点に固定」）。
+        // 行送りはフラッシュ側と同じく閉じる行の丈から引く（[`LineHeights::peek`] の doc・要件 7.9）。
+        // 下見は記録しない——送れなかった改行は後の本当の適用で 1 度だけ記録される。
+        let (mut eff_inline, mut eff_block) = (self.inline_pos, self.block_pos);
+        let (mut pending, mut pending_cursor) = (self.pending, self.pending_cursor);
+        apply_pending_newline(
+            &mut pending,
+            &mut eff_inline,
+            &mut eff_block,
+            self.inline_start,
+            self.block_dir,
+            line_pitch_of(self.metrics, self.heights.peek()),
+        );
+        apply_pending_cursor(&mut pending_cursor, &mut eff_inline, &mut eff_block);
         // 実効位置を image 軸へ逆写像する（変数名 `eff` は、同ファイルで 200 行に
         // わたり「現在行のグリフ列」を意味する `current` との衝突を避けるため）。
         let eff = match self.mode {
@@ -293,6 +289,26 @@ impl Scan<'_, '_> {
                 "[layout_inner] 両軸縮退の \\_l を完全 no-op として素通しする（行区切りせず）"
             );
         }
+    }
+
+    /// 送りの結果が有限でなかったことを `warn!` で残す（その送りは捨てた・致命ではない）。
+    /// guard がある配置では（キャラクター, [`CursorDegrade::NonFinite`]）の初回だけ、無い配置では毎回。
+    fn warn_non_finite_advance(&mut self) {
+        let actor = match self.cursor_warn.as_mut() {
+            Some((actor, guard)) => {
+                if !guard.should_warn(actor, CursorDegrade::NonFinite) {
+                    return;
+                }
+                actor.to_string()
+            }
+            None => "-".to_owned(),
+        };
+        tracing::warn!(
+            actor = %actor,
+            degrade = ?CursorDegrade::NonFinite,
+            block_pos = self.block_pos,
+            "[layout_inner] 送りの結果が有限の数でない——位置を保つ（この送りは捨てる・致命ではない）"
+        );
     }
 
     /// 最終行の確定（旧 走査の後の `if !current.is_empty()` と `lines` の返却）。
@@ -347,6 +363,9 @@ fn finish_pending_line(
 ///
 /// [`finish_pending_line`]／[`apply_pending_cursor`] と同じく、フラッシュ本体と
 /// `LineBreak` 到着時の先行実体化（DD-11）が共有する唯一の実装である。
+///
+/// 送った位置が有限でなければ行送りの位置を保ち（行内は行頭へ戻す）、`false` を返す
+/// （記録は呼び手の [`Scan::warn_non_finite_advance`]・下見の写しは記録しない）。
 fn apply_pending_newline(
     pending: &mut Option<f32>,
     inline_pos: &mut f32,
@@ -354,10 +373,23 @@ fn apply_pending_newline(
     inline_start: f32,
     block_dir: f32,
     pitch: f32,
-) {
-    if let Some(sum) = pending.take() {
-        *block_pos += block_dir * pitch * sum;
-        *inline_pos = inline_start;
+) -> bool {
+    let Some(sum) = pending.take() else {
+        return true;
+    };
+    *inline_pos = inline_start;
+    try_advance(block_pos, block_dir * pitch * sum)
+}
+
+/// 送り: 足した結果が有限なら足して `true`、有限でなければ位置を保って `false`。
+/// 割合の和や送り幅そのものが有限でなくても、足した結果の確かめで同じく拾う。
+fn try_advance(pos: &mut f32, delta: f32) -> bool {
+    let next = *pos + delta;
+    if next.is_finite() {
+        *pos = next;
+        true
+    } else {
+        false
     }
 }
 
