@@ -7,6 +7,23 @@ use std::fmt::Debug;
 
 use super::command::{BarrierKind, RoutingCommand};
 
+/// 2 つの秒を足す。どちらも有限で ms の格子に載るなら ms の整数で足してから秒に直し、
+/// 載らなければ f64 の和そのもの（時刻を丸めない）。
+///
+/// 格子に載る値どうしの結果は Tick の式 `n as f64 / 1000.0` と同じ値になる（例 0.15＋0.8＝0.95。
+/// 素の和は 0.9500000000000001 で、ちょうどの刻みで届かない）。
+// shortcut: f64 の秒のあいだだけの継ぎ。dola-interrupt-ticks で時刻が整数になったら消す
+pub(crate) fn sum_on_ms_grid(a: f64, b: f64) -> f64 {
+    let on_grid = |x: f64| x.is_finite() && (x * 1000.0).round() / 1000.0 == x;
+    if on_grid(a) && on_grid(b) {
+        let (a_ms, b_ms) = ((a * 1000.0).round(), (b * 1000.0).round());
+        // ms どうしは 2^53 未満の整数の和で丸めが無い
+        (a_ms + b_ms) / 1000.0
+    } else {
+        a + b
+    }
+}
+
 // ============================================================================
 // Entry<T> — エントリの型レベル 3 種分離
 // ============================================================================
@@ -221,7 +238,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         // entries は降順ソート → 末尾からpopして時刻到達を消費
         while let Some(entry) = self.entries.last() {
             let entry_offset = entry.offset();
-            if self.start_time + entry_offset > current_time {
+            if sum_on_ms_grid(self.start_time, entry_offset) > current_time {
                 break; // まだ到達していない
             }
 
@@ -329,14 +346,14 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// `[start, start+duration)` と見て**占有終了 horizon**（`max(start+duration)`）到達まで
     /// 完了扱いしない（末尾 Wait・最終 Text の duration を終端で落とさない・D6/R2.5）。
     ///
-    /// 閾値は [`occupancy_horizon`](Self::occupancy_horizon) と同じ `start_time + horizon`。
+    /// 閾値は [`occupancy_horizon`](Self::occupancy_horizon) と同じ `start_time` と `horizon` の和。
     ///
     /// horizon=0.0（[`new`](Self::new) 既定）では `current_time >= start_time` が常に真ゆえ
     /// 「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
     pub fn is_completed(&self) -> bool {
         self.entries.is_empty()
             && self.current_barrier.is_none()
-            && self.current_time >= self.start_time + self.horizon
+            && self.current_time >= sum_on_ms_grid(self.start_time, self.horizon)
     }
 
     /// 全エントリとバッファをクリア（horizon も 0.0 へリセット＝clear 済みは完了状態）。
@@ -353,15 +370,14 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 
 /// ペイロード型 T に依存しない照会（エントリを触らないため `Clone + Debug` 境界を要さない）。
 impl<T> TimedSchedule<T> {
-    /// 占有終了 horizon の**絶対時刻** = アンカー `start_time` ＋ 相対 horizon。
+    /// 占有終了 horizon の**絶対時刻** = アンカー `start_time` と相対 horizon の和（`sum_on_ms_grid`）。
     ///
     /// [`is_completed`](Self::is_completed) が閾値として見ている占有区間の終端を、
     /// 上位層が絶対時刻として照会するための口（R7.2）。値は [`tick`](Self::tick) の
-    /// 進行では変化せず、台本 1 枚から復元される
-    /// [`CueSheet::absolute_end_time`](crate::cue::CueSheet::absolute_end_time) と一致する
-    /// （duration 権威は canonical 変換 [`crate::cue::to_talk_schedule`] が焼き込んだ
-    /// この horizon のみ——照会側で別の時間基準を組み立てない）。
+    /// 進行では変化しない。[`crate::cue::to_talk_schedule`] で組んだ予定では、台本の
+    /// [`CueSheet::absolute_end_time`](crate::cue::CueSheet::absolute_end_time) と同じ値になる
+    /// （両方が同じ相対の終わりの関数と同じ和を使う。非有限・負の長さも同じ clamp を通る）。
     pub fn occupancy_horizon(&self) -> f64 {
-        self.start_time + self.horizon
+        sum_on_ms_grid(self.start_time, self.horizon)
     }
 }

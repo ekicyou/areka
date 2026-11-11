@@ -781,3 +781,88 @@ fn to_talk_schedule_of_empty_sheet_is_immediately_completed() {
     assert!(schedule.is_completed(), "空台本は占有 horizon 0.0 で即完了");
     assert_eq!(schedule.remaining(), 0);
 }
+
+// ============================================================================
+// 件 1: 時刻の和を ms の格子に載せる（要件 7.1〜7.7）・#9 の終わりの 1 本化
+// ============================================================================
+
+/// 150 ms に始まる 800 ms の合図 1 つの台本（件 1 の檻の共通の形）。
+fn ms_grid_sheet() -> CueSheet {
+    CueSheet::new(vec![Cue {
+        actor: ActorKey::from("0"),
+        start_time: 150.0 / 1000.0,
+        payload: CueCommand::Wait.into(),
+        duration: 800.0 / 1000.0,
+    }])
+}
+
+/// 7.1: 格子に載る始まりと長さの終わりは 950 ms を秒にした値そのもの（0.9500000000000001 でない）。
+#[test]
+fn end_time_of_ms_grid_cues_is_exact() {
+    assert_eq!(
+        ms_grid_sheet().absolute_end_time().to_bits(),
+        (950.0_f64 / 1000.0).to_bits()
+    );
+}
+
+/// 7.2: 予定へ焼き込む占有の終わりも同じ値。
+#[test]
+fn occupancy_horizon_matches_ms_grid_end() {
+    let horizon = to_talk_schedule(&ms_grid_sheet()).occupancy_horizon();
+    assert_eq!(horizon.to_bits(), (950.0_f64 / 1000.0).to_bits());
+}
+
+/// 7.3・7.7: アンカー 1.0 の台本は、Tick の式の値（n / 1000）でちょうど届き、ちょうど完了する。
+#[test]
+fn completes_exactly_at_ms_grid_end() {
+    let sheet = ms_grid_sheet().with_absolute_start_time(1.0);
+    let mut schedule = to_talk_schedule(&sheet);
+    schedule.tick(1150.0 / 1000.0);
+    assert_eq!(schedule.remaining(), 0, "合図はその ms の刻みで届く");
+    schedule.tick(1949.0 / 1000.0);
+    assert!(!schedule.is_completed(), "終わりの 1 ms 前は未完了");
+    schedule.tick(1950.0 / 1000.0);
+    assert!(schedule.is_completed(), "終わりの ms の刻みで完了");
+
+    let fire = sheet.absolute_fire_time(&sheet.cues()[0]);
+    assert_eq!(fire.to_bits(), (1150.0_f64 / 1000.0).to_bits());
+    assert_eq!(
+        sheet.absolute_end_time().to_bits(),
+        (1950.0_f64 / 1000.0).to_bits()
+    );
+}
+
+/// 7.4: 格子に載らない値は丸めず、f64 の和そのもの。
+#[test]
+fn off_grid_values_keep_plain_sum() {
+    let sheet = CueSheet::new(vec![Cue {
+        actor: ActorKey::from("0"),
+        start_time: 0.1234567,
+        payload: CueCommand::Wait.into(),
+        duration: 0.3,
+    }]);
+    assert_eq!(
+        sheet.absolute_end_time().to_bits(),
+        (0.1234567_f64 + 0.3).to_bits()
+    );
+}
+
+/// #9: 非有限や負の長さでも、台本の終わりと予定の占有の終わりは同じ clamp を通って等しい。
+#[test]
+fn end_time_equals_occupancy_horizon_for_non_finite_durations() {
+    for duration in [f64::NAN, f64::INFINITY, -3.0] {
+        let sheet = CueSheet::new(vec![Cue {
+            actor: ActorKey::from("0"),
+            start_time: 0.5,
+            payload: CueCommand::Wait.into(),
+            duration,
+        }])
+        .with_absolute_start_time(2.0);
+        let horizon = to_talk_schedule(&sheet).occupancy_horizon();
+        assert_eq!(
+            sheet.absolute_end_time().to_bits(),
+            horizon.to_bits(),
+            "duration {duration}"
+        );
+    }
+}

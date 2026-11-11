@@ -11,7 +11,7 @@
 ## 前の段（C18 のあいだ）
 
 - [ ] 1. 件 1: トークの終わりの時刻を ms の格子に載せる
-- [ ] 1.1 時刻の和の決まりを 1 つの関数にまとめ、cue の層の 7 か所で使う（#8・#9）
+- [x] 1.1 時刻の和の決まりを 1 つの関数にまとめ、cue の層の 7 か所で使う（#8・#9）
   - 2 つの秒を、どちらも有限で ms の格子に載るなら ms の整数で足してから秒へ直し、載らなければ f64 の和そのものを返す関数を cue の層の中（crate の中だけで見える）に置き、`shortcut:` の注（要件 7.8 の文言）を付ける
   - 合図ごとの相対の終わり（始まり＋丸めた長さ）を、台本の終わりと予定の占有の終わりが共有する私的な関数 1 本にする（#9・長さは今の clamp を通す）。予定の説明（#9 の行）を事実に合わせる
   - 台本の終わり・発火の時刻・予定の到達・完了・占有の終わりの和（design の ⑴〜⑺）をこの関数へ寄せる。時間切れの期限の和は後の段で消えるので替えない
@@ -359,3 +359,8 @@
 - 要件 3.4（新しい機能を足さない）: 足す口は `InvalidNumber`（6.2）・生きたインスタンスの有無の口（11.1）・和の関数の公開（19）だけで、どれも指摘の直し。
 - 要件 5.7 に当たる直し（新しい依存が要るもの）は無い。依存を足さないこと（5.6）は 12.3 と 20.1 が守る。
 - 要件 6.6（`vendors/` に触らない）: どのタスクも触らない。16 の diff の確かめで見る。
+
+## Implementation Notes
+
+- 1.1: 和の関数は `crates/dola/src/cue/schedule.rs` の `pub(crate) fn sum_on_ms_grid`。1.1 の後でも dola の放送のテスト（`runtime_test_broadcast_tests.rs` の 210〜250 行）は緑のまま。1.2 で直しが要るかを確かめ直す。赤になるのは `areka-sakura` の 2 本（`trailing_explicit_wait_remains_in_sheet_and_extends_extent`・`append_epilogue_appends_carrier_at_tail_horizon_without_extending`）。
+- 1.1→2: `schedule.rs` の約 201 行の NOTE(D3-V) は、まだ素の比べ（`start_time + entry_offset > current_time`）を書いている。2 の `pop_if` の書き直しで一緒に直す。

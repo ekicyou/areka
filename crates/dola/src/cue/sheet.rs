@@ -2,7 +2,7 @@
 //! canonical 変換 `to_talk_schedule`（dola ingress の単一権威・duration clamp・占有 horizon）。
 
 use super::command::{ActorKey, Cue, CuePayload, TalkCue};
-use super::schedule::{Entry, TimedSchedule};
+use super::schedule::{Entry, TimedSchedule, sum_on_ms_grid};
 use serde::{Deserialize, Serialize};
 
 /// 自己完結した絶対時刻の演出台本。
@@ -64,12 +64,12 @@ impl CueSheet {
         self.absolute_start_time
     }
 
-    /// 指定 Cue の絶対発火時刻 = `absolute_start_time + start_time`。
+    /// 指定 Cue の絶対発火時刻 = `absolute_start_time` と `start_time` の和（`sum_on_ms_grid`）。
     ///
     /// dola は時刻を導出・変換せず、この和のみが絶対時刻の定義（配送時に別の時刻を
     /// 算出すると表現者ごとに独立計算となり desync するため）。
     pub fn absolute_fire_time(&self, cue: &Cue) -> f64 {
-        self.absolute_start_time + cue.start_time
+        sum_on_ms_grid(self.absolute_start_time, cue.start_time)
     }
 
     /// talk の絶対終了時刻 = `absolute_start_time + max(start_time + duration)`。
@@ -79,16 +79,10 @@ impl CueSheet {
     /// duration もここに含まれる（配り終えた ≠ 再生し終えた）。空台本は時間を占有せず
     /// アンカーそのものを返す（相対 horizon の下限は台本先頭 0.0）。
     ///
-    /// NOTE: duration の非有限（NaN/±inf）・負値の clamp は台本→スケジュールの
-    /// canonical 変換（dola ingress の単一権威）が担う。本メソッドは検証済みの値を
-    /// 前提に和と max を取るのみ（`f64::max` は NaN を読み飛ばす）。
+    /// 相対の終わりは [`to_talk_schedule`] の占有 horizon と同じ関数で出す（duration の
+    /// clamp も同じ）ので、変換した予定の [`TimedSchedule::occupancy_horizon`] と常に等しい。
     pub fn absolute_end_time(&self) -> f64 {
-        let relative_horizon = self
-            .cues
-            .iter()
-            .map(|cue| cue.start_time + cue.duration)
-            .fold(0.0_f64, f64::max);
-        self.absolute_start_time + relative_horizon
+        sum_on_ms_grid(self.absolute_start_time, relative_end(&self.cues))
     }
 
     /// 全 Cue のスライスを取得
@@ -138,6 +132,14 @@ fn clamp_duration(duration: f64) -> f64 {
     }
 }
 
+/// 相対の終わり = 全 cue の `max(start_time + clamp(duration))`（和は [`sum_on_ms_grid`]・空台本は 0.0）。
+/// fold の種を 0.0 とするため、NaN の start_time を持つ cue は `f64::max` が読み飛ばす。
+fn relative_end(cues: &[Cue]) -> f64 {
+    cues.iter()
+        .map(|cue| sum_on_ms_grid(cue.start_time, clamp_duration(cue.duration)))
+        .fold(0.0_f64, f64::max)
+}
+
 /// 台本 [`CueSheet`] を時刻駆動可能な [`TimedSchedule`]`<`[`TalkCue`]`>` へ変換する
 /// **唯一の canonical 変換**（R11.1・dola ingress の単一権威）。
 ///
@@ -160,15 +162,8 @@ fn clamp_duration(duration: f64) -> f64 {
 /// Barrier/Routing は presentation でなく（R1.6）envelope duration を持たないが、その
 /// `start_time` は horizon の fold に一律に寄与する（duration 相当は 0）。
 pub fn to_talk_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
-    // 相対占有 horizon = max(start_time + clamp(duration))・空台本は 0.0。
-    // fold の種を 0.0 とするため、NaN の start_time を持つ cue は f64::max が読み飛ばす。
-    let horizon = sheet
-        .cues()
-        .iter()
-        .map(|cue| cue.start_time + clamp_duration(cue.duration))
-        .fold(0.0_f64, f64::max);
-
-    let mut schedule = TimedSchedule::with_horizon(sheet.absolute_start_time(), horizon);
+    let mut schedule =
+        TimedSchedule::with_horizon(sheet.absolute_start_time(), relative_end(sheet.cues()));
 
     // per-cue insert と同じ並び（extend 禁止）: 同一 at 群を記述順（FIFO）で保つ。まとめて入れて
     // 台本の長さに比例する手間にする（1 件ずつの insert は長い台本で 2 乗になる）。
