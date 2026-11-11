@@ -139,7 +139,7 @@
   - `research.md` に「かけ直しの結果」として回ごとの指摘と結果を残し、最後の回の新しい指摘が 0 件と書かれている
   - _Depends: 1.4, 2.2, 3.2, 4, 5.3, 6, 7, 8.3, 9, 10_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 3.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 6.4, 6.5, 7.1, 7.2, 7.3_
-- [ ] 11.2 既定の枝との差分で約束を確かめて記録に残す
+- [x] 11.2 既定の枝との差分で約束を確かめて記録に残す
   - design.md「仕上げの確かめ」4 の 6 つの確かめ（触らないファイルの差分が空〔`crates/areka-placement/` を含む〕・差分の名が範囲と spec と例外の表のファイルだけ・保存の口のファイルの一時のパスの入口と `TempPath` の行の増減が無い・公開の形の消した 3 つが外で 0 か所で足した 3 つが揃う・ドット名の語彙のファイルの 2 行の増減が無い・語彙の台帳が引く 2 つの記録の文と target が残る）を回す
   - 6 つの結果が `research.md` に記録されている
   - _Requirements: 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.7, 6.8, 7.5_
@@ -155,3 +155,4 @@
 - 3.2: 書けない置き場では本物の `FsPersistIo` が錠の `create_dir_all` で先に落ちるので、出る ERROR は `persist_lock_failed`（縮退の中身は同じ）
 - 8.3: 範囲の外の差分に `.kiro/specs/{audit-areka-app,audit-areka-install-update,audit-emo2-boot-spine,sylphya-sqlite-kvs}/brief.md` が出るのは、要件の討議で #10・#16・#21・#4 の呼び手を回し先の brief へ書き足したコミット（4176d4ea・dfeaacec）のもの。11.2 の確かめではこの 4 つを意図した変更として数える
 - 9（範囲の外・完了の棚卸へ）: `crates/areka-kanade/src/actor_tests.rs` 10 行目の注「areka-actor の run_bounded と同旨」は、9 で消した道具を名指したまま残る。範囲の外のファイルは例外の表の 1 行のほかは変えない約束（design「Goals」）なので触っていない。`/kiro-complete` の棚卸で扱う
+- 11.2（範囲の外・完了の棚卸へ）: `doc/ukadoc-coverage/ledger/property.toml` が引く行番号（`reader.rs:158-164`・`actor.rs:345-350`）が今の行（157・378）とずれている。約束は文と target なので直していない（research.md §13 の 6）

@@ -258,3 +258,40 @@ design.md の古い行も直した: `read_existing` の注と戻り値（2 つ�
 数えない再出（1〜4 回目と同じ・直さない）: #18 の本番が読まない語彙（それを見る `set_effective_all_runtime_command`・`only_four_tokens_are_m1_derived` も含む）・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。
 
 5 回目は「必ず直す」0 件・本番の振る舞いに関わる指摘 0 件だったので、その回の指摘を直したところで打ち切った（audit-seriko・audit-kanade と同じ区切り方）。回ごとの数える指摘は 7→3→2→2→3 で、残りは全部直し済み。数えない再出は design.md「直さない・回した指摘」の 6 件だけ。
+
+## 13. 既定の枝との差分の確かめ（要件 7.5・2026-11-12）
+
+比べた相手: `git fetch origin main` の後の `origin/main`（`96bd5b12`）。枝との分かれ目（merge-base）も `96bd5b12` で、差分は `git diff origin/main...HEAD`（HEAD は `aa606ebe`）。6 つとも約束どおりだった。
+
+1. 触らないファイルの差分が空（要件 6.2・6.8・5.5）
+   - 回したもの: `git diff --stat origin/main...HEAD -- crates/areka/ crates/areka-placement/ crates/log-capture-kit/tests/file_length_guard_test.rs crates/log-capture-kit/tests/temp_path_guard_test.rs crates/wintf/src/ecs/window_proc/ tools/perf/fixtures/ tools/perf/fixtures-loop/ vendors/ Cargo.lock`
+   - 結果: 出力は 0 行（空）。`crates/areka-placement/` も含めて差分は無い。
+2. 差分のファイルの名が範囲と spec と例外の表のファイルだけ（要件 6.7）
+   - 回したもの: `git diff --name-only origin/main...HEAD` から `crates/areka-sylphya/`・`crates/areka-actor/`・`crates/areka-talk/`・`.kiro/specs/audit-sylphya-actor/` の下を除いた残り。
+   - 結果: 変わったファイルは全部で 48。残りは 5 つ。
+     - `crates/log-capture-kit/tests/with_default_guard_test.rs`: 差分は例外の表への 1 件（`crates/areka-actor/tests/ui_span_test.rs` と理由の文・4 行の組）と、件数 `ALLOWED_DIRECT_CALLS_COUNT` の 5 → 6 だけ。
+     - `.kiro/specs/audit-areka-app/brief.md`・`.kiro/specs/audit-areka-install-update/brief.md`・`.kiro/specs/audit-emo2-boot-spine/brief.md`・`.kiro/specs/sylphya-sqlite-kvs/brief.md`: 要件の討議で、直さずに回した指摘（#1 の決まった一文・#4 の呼び手・#16・#10 と #21）を回し先の brief へ書き足したコミット（`4176d4ea`・`dfeaacec`）の変更。意図した変更として数える（tasks.md の Implementation Notes 8.3）。
+   - ほかに思いがけないファイルは無かった。
+3. 保存の口のファイルに、一時のパスの入口と `TempPath` の行の増減が無い（要件 6.3）
+   - 回したもの: `git diff origin/main...HEAD -- crates/areka-sylphya/src/persist/io.rs` の増えた行と消えた行から `temp_dir(`・`process::id(`・`TempPath` を探す。あわせて既定の枝と今のファイルで同じ綴りの数を比べる。
+   - 結果: 増減した行に当たりは 0 件。数は既定の枝・今とも `temp_dir(` 0・`process::id(` 0・`TempPath` 5 で同じ（今の 321・323・332・349・363 行目）。`io.rs` 自体は錠（3.1）と取り直しの `retry_transient`（かけ直し 1・2 回目）で 105 行増えて 22 行減ったが、この確かめが見るのは上の綴りの行だけ。錠の実のファイルのテスト 2 本は兄弟の `persist/io_lock_tests.rs` に置いたので（Implementation Notes 3.1）、`TempPath` の行はそちらにだけ在る。
+4. 公開の形（要件 6.1）
+   - 回したもの: 3 つのクレートの `src` の差分から、消えた行と増えた行のうち `pub` で始まる物・列挙の値・トレイトの関数を拾った。消した名は `git grep -F <名> -- '*.rs' ':!crates/areka-sylphya' ':!crates/areka-actor' ':!crates/areka-talk'` で 3 つのクレートの外の Rust のファイルを数えた。
+   - 消した公開の物は 4 つ。どれも 3 つのクレートの外の Rust のファイルで 0 か所:
+     - `MirrorImage::flat_global`（欄）: 0 ファイル。
+     - `FormatDoc::is_all_absent`: 0 ファイル。
+     - `SylphyaMsg::PersistPut` の `reply` の欄: `PersistPut` の綴りが 0 ファイル（外で `SylphyaMsg` を使うのは `crates/areka-placement/src/zorder_property_deferral_tests.rs` の `SylphyaMsg::Set` だけ）。
+     - `persist::format::to_toml_string`: 設計の表の 3 つに無い 4 つ目。かけ直しの 2 回目の 2 で消した（`persist` も `format` も `pub mod` なので、外から `areka_sylphya::persist::format::to_toml_string` で呼べた公開の関数だった）。外の Rust のファイルで 0 ファイル。消したときにも `crates`・`tools` 全体で呼び手がこのファイルのテストだけなのを確かめている。代わりの `to_toml_string_over` は `pub(crate)` で、公開の形には足していない。
+     - 当たりが在るのは `.kiro/specs/completed/` の下の古い記録だけ（設計の文・テストの一覧）。コードではないので数えない。
+   - 足した公開の物は 3 つで、設計のとおり:
+     - `PersistIo::lock_for_update`: 既定の本体（`Ok(None)`）つき。外で `PersistIo` を実装している所は `git grep -n "impl.*PersistIo for" -- crates ':!crates/areka-sylphya'` で 19 か所（`crates/areka-placement` 11・`crates/areka` 8・どれもテストかテストの道具）。どれも `lock_for_update` を書かずに既定の本体を使うので書き換えは要らず、確かめ 1 のとおり 2 つのクレートの差分は空。
+     - `SylphyaPublisher::barrier_within`。
+     - `KeyParseError::TextAfterParen { at: usize }`: 外で `KeyParseError::` の値を書く所は 0 か所。
+   - そのほか: `read_toml_str` は名も形も前のまま。増えた `pub(crate)` の物（`spawn_parts`・`to_toml_string_over`・`parse_toml_str`・`LOCK_WAIT`・`LOCK_RETRY`・`is_transient`・`retry_transient`）はクレートの外から見えない。消えた `pub(crate)` の `CapturedEvent` とその欄（#12）、`areka-actor` の `run_bounded`（#11・テストの中の非公開の関数）も公開の形ではない。
+5. ドット名の語彙のファイルの 2 行（要件 5.7）
+   - 回したもの: `git diff origin/main...HEAD -- crates/areka-sylphya/src/vocab/dotted.rs` の増えた行と消えた行から `COMPAT_ARCHITECTURE` を数える。あわせて既定の枝と今のファイルで `COMPAT_ARCHITECTURE` の在る行を見る。
+   - 結果: 増減した行の当たりは 0 件。既定の枝・今とも 64 行目と 80 行目で、文は同じ（差分の塊は 10・27・221・249・293・372 行目あたりで、2 行に掛からない）。
+6. 語彙の台帳が引く 2 つの記録の文と target が残る
+   - 回したもの: `git grep -F -e 'SET on non-settable canonical vocab: warn and drop (call still Ok, no write)' -e 'dotted resolution not found' -- crates/areka-sylphya/src` と、それぞれの `target:`。
+   - 結果: `crates/areka-sylphya/src/actor.rs` 378 行目の `warn!` が同じ文で、target は `LOG_TARGET`＝`"areka_sylphya::actor"`（40 行目・前と同じ値）。`crates/areka-sylphya/src/reader.rs` 157 行目の `debug!` が同じ文で、target は `"areka_sylphya::reader"`。
+   - 気づいたこと（直していない・範囲の外・`/kiro-complete` の棚卸へ）: `doc/ukadoc-coverage/ledger/property.toml` は場所を `reader.rs:158-164`・`actor.rs:345-350` と行番号でも書く。`actor.rs` の方は既定の枝でも 379 行目で、この spec の前から合っていない。`reader.rs` の方は既定の枝の 163 行目から 157 行目へ動いたので、書いてある範囲（158-164）から少し外れた（`debug!` の始まりは 153 行目）。台帳は範囲の外で、約束は文と target なので、ここでは直さない。行番号を見る番人はツリーに無い。
