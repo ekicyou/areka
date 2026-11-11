@@ -170,6 +170,17 @@ pub(super) fn block_axis_ink_span(
     h: u32,
     mode: WritingMode,
 ) -> Option<(u32, u32)> {
+    block_axis_ink_span_in(bytes, w, h, mode, 0..u32::MAX)
+}
+
+/// [`block_axis_ink_span`] をブロック軸の帯 `band`（物理 px・半開区間）の中の墨だけで測る。
+pub(super) fn block_axis_ink_span_in(
+    bytes: &[u8],
+    w: u32,
+    h: u32,
+    mode: WritingMode,
+    band: std::ops::Range<u32>,
+) -> Option<(u32, u32)> {
     let mut lo: Option<u32> = None;
     let mut hi: u32 = 0;
     for y in 0..h {
@@ -179,6 +190,9 @@ pub(super) fn block_axis_ink_span(
                     WritingMode::HorizontalTb => y,
                     WritingMode::VerticalRl | WritingMode::VerticalLr => x,
                 };
+                if !band.contains(&b) {
+                    continue;
+                }
                 lo = Some(lo.map_or(b, |v| v.min(b)));
                 hi = hi.max(b);
             }

@@ -37,9 +37,9 @@ fn initial_frame_renders_content() {
     );
 
     let stats: DrawStats = exec.stats();
-    assert!(
-        stats.draw_text_layout_calls >= 1,
-        "初回は少なくとも 1 行描画する"
+    assert_eq!(
+        stats.draw_text_layout_calls, 1,
+        "初回は 1 行の住人をちょうど 1 度描く"
     );
     assert_eq!(
         stats.blits, 0,
@@ -384,6 +384,9 @@ fn request_clear_triggers_full_clear_then_content_returns() {
 ///（`draw_text_layout_calls` 増分＝全 GlyphRun 住人数・`line_layout_creations` 増分＝全住人数
 /// ＝キャッシュ破棄で全再生成・`full_clears` 不変＝透明フラッシュを起こす FullClear と区別・
 /// read_back は font B の content で非透明）。
+///
+/// canvas と可視窓は font A のまま変えない＝ふつうの差分なら何も描かない入力（対照で 0 を確かめる）
+/// なので、全住人の再描画は縮退だけから来る。
 #[test]
 fn font_change_degrades_to_full_domain_redraw() {
     let mut rig = Rig::new();
@@ -405,18 +408,22 @@ fn font_change_degrades_to_full_domain_redraw() {
     assert_eq!(total, 3, "3 行の GlyphRun 住人（全住人再描画を数える台）");
     exec.render(&canvas_a, &window_a, &font_a, mode, &contract, &mut surface)
         .expect("font A render 失敗");
+    // 対照: 同じ canvas・窓・font A をもう一度描くと、ふつうの差分は何も描かない。
+    let before_control = exec.stats().draw_text_layout_calls;
+    exec.render(&canvas_a, &window_a, &font_a, mode, &contract, &mut surface)
+        .expect("font A 再 render 失敗");
     let stats_a = exec.stats();
+    assert_eq!(
+        stats_a.draw_text_layout_calls, before_control,
+        "前提: 同じ入力のふつうの差分は 0 行を描く"
+    );
     let full_before = stats_a.full_clears;
 
     // font B（高さ 14）へ変更（FormatKey の高さビットが変わり format/行キャッシュ組み直し）。
     let font_b = ResolvedFont::resolve(&geo_model(Some(14)));
-    let region_b = TextRegion::resolve(&geo_model(Some(14)), image, mode);
-    let (canvas_b, window_b) = build(&items, &region_b, mode, 14.0);
-    let total_b = canvas_b.residents.len();
-    assert_eq!(total_b, 3, "font B でも 3 行（全住人が縮退で再描画される）");
-
+    let total_b = total;
     let changed = exec
-        .render(&canvas_b, &window_b, &font_b, mode, &contract, &mut surface)
+        .render(&canvas_a, &window_a, &font_b, mode, &contract, &mut surface)
         .expect("font B render 失敗");
     assert!(changed, "font 変更フレームは変化あり（全域ダーティ縮退）");
     let stats_b = exec.stats();

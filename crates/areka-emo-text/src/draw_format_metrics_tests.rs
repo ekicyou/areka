@@ -12,7 +12,7 @@ use super::test_support::{
 };
 use super::{
     DEFAULT_BALLOON_BACKGROUND, DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics,
-    DirectionRecipe, PROBE_MAX_EXTENT, ResolvedFont, create_text_format,
+    DirectionRecipe, ResolvedFont, create_line_layout, create_text_format,
 };
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
@@ -312,7 +312,9 @@ fn unusable_format_surfaces_device_error_after_default_retry() {
 
 use wintf::com::dwrite::DWriteTextLayoutExt;
 
-/// テスト側の手組み probe（実装と独立に同一規約で測る参照値）。
+/// テスト側の参照値: 描く行と同じ規則（書式は [`create_text_format`]・行は描く行と同じ生成口
+/// [`create_line_layout`]＝縦書きは列の組み立て込み・行送り軸の箱は書式の大きさ）で
+/// 1 文字の行を組み、cluster metrics の width を足す。計測器の probe の写しは持たない。
 fn manual_probe_advance(
     factory: &windows::Win32::Graphics::DirectWrite::IDWriteFactory2,
     font: &ResolvedFont,
@@ -320,14 +322,8 @@ fn manual_probe_advance(
     text: &str,
 ) -> f32 {
     let format = create_text_format(factory, font, mode).expect("参照 format");
-    let layout = wintf::com::dwrite::DWriteFactoryExt::create_text_layout(
-        factory,
-        &windows::core::HSTRING::from(text),
-        &format,
-        PROBE_MAX_EXTENT,
-        PROBE_MAX_EXTENT,
-    )
-    .expect("参照 probe layout");
+    let layout =
+        create_line_layout(factory, text, &format, font.height, mode).expect("参照の行の layout");
     layout
         .get_cluster_metrics()
         .expect("参照 cluster metrics")

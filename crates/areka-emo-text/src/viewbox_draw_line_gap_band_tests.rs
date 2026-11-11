@@ -492,13 +492,10 @@ fn line_gap_metrics_band_follows_the_big_glyph_of_the_line() {
     );
     let (t, b) = (m.horizontal_char_box_top(em), m.line_box_height(em));
     let band = line_bands(&lines, mode, &m)[0];
-    let extent = b.max(em).min(em.max(em + 2.0));
-    assert_eq!(band.extent, extent, "厚みは em 40 から: {band:?}");
-    assert_eq!(
-        band.offset,
-        (t + (b - extent).max(0.0) / 2.0).round(),
-        "寄せは em 40 の t・B から: {band:?}"
-    );
+    // 偽の計測器の em 40 の値（t 12.6・B 51.48・行送り 42）から手で求めた数。em 20 から
+    // 決めると厚み 22・寄せ 8 になる。厚み＝B を行送りで頭打ち＝42。寄せ＝t ＋ (B − 42)/2 の丸め＝17。
+    assert_eq!(band.extent, 42.0, "厚みは em 40 から: {band:?}");
+    assert_eq!(band.offset, 17.0, "寄せは em 40 の t・B から: {band:?}");
     let diff = band.offset + band.extent / 2.0 - (t + b / 2.0);
     assert!(
         diff.abs() <= 1.0,

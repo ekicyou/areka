@@ -1,6 +1,7 @@
 use super::test_support::{
-    RenderPair, Rig, apply_fixture_script, block_axis_ink_span, build, colored_count, diff_rows,
-    emo2_balloon_text, glyph_items, live_diff_model_font, opaque_count, region_extent, state_frame,
+    RenderPair, Rig, apply_fixture_script, block_axis_ink_span, block_axis_ink_span_in,
+    colored_count, diff_rows, emo2_balloon_text, live_diff_model_font, opaque_count, region_extent,
+    state_frame,
 };
 use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::{FixedMetrics, VisibleWindow};
@@ -182,7 +183,7 @@ impl LiveDiffRig {
     /// k≠1.0 の実 GPU 描画経路（小数アキュムレータ→whole-pixel blit→実描画→readback）を実際に
     /// 走らせて検証する（従来 k=1.0 でしか走っていなかった経路）。返り値は VisibleWindow。
     fn checkpoint_block_tol(&mut self, label: &str, t: f64, tol: u32) -> VisibleWindow {
-        let (_, _, canvas, window) = state_frame(
+        let (_, lines, canvas, window) = state_frame(
             &self.state,
             &self.actor,
             t,
@@ -221,6 +222,44 @@ impl LiveDiffRig {
             "{label}: k≠1.0 でブロック軸インク範囲の差が ≤{tol}px（確定 content の量子化位置差 ≤0.5px）\
              ——oracle {os:?} vs viewbox {vs:?}（差 near={d0} far={d1}）"
         );
+        // 外側の 2 辺だけでは中の行の描き残しが映らない。面に掛かる行ごとに、その行の帯の中の
+        // 墨の範囲を見本と比べる（帯＝行矩形のブロック軸 ＋ 可視窓のずれ、× k の物理 px）。
+        let k = self.contract.scale;
+        let block_len = match self.mode {
+            WritingMode::HorizontalTb => h,
+            WritingMode::VerticalRl | WritingMode::VerticalLr => w,
+        };
+        let mut bands = 0;
+        for (i, line) in lines.iter().enumerate() {
+            let (near, far) = match self.mode {
+                WritingMode::HorizontalTb => (line.rect.top, line.rect.bottom),
+                WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                    (line.rect.left, line.rect.right)
+                }
+            };
+            let (lo, hi) = (
+                (near + window.block_offset) * k,
+                (far + window.block_offset) * k,
+            );
+            // 面の中に丸ごと在る行だけを比べる（切れ端は墨の範囲が面の端で決まる）。
+            if lo < 0.0 || hi > block_len as f32 {
+                continue;
+            }
+            let (lo, hi) = (lo.round() as u32, hi.round() as u32);
+            bands += 1;
+            let os = block_axis_ink_span_in(&ob, w, h, self.mode, lo..hi);
+            let vs = block_axis_ink_span_in(&vb, w, h, self.mode, lo..hi);
+            let (Some(os), Some(vs)) = (os, vs) else {
+                panic!(
+                    "{label}: 行 {i} の帯 {lo}..{hi} に墨が無い——oracle {os:?} vs viewbox {vs:?}"
+                );
+            };
+            assert!(
+                os.0.abs_diff(vs.0) <= tol && os.1.abs_diff(vs.1) <= tol,
+                "{label}: 行 {i} の帯 {lo}..{hi} の墨の範囲の差が {tol}px を超える——oracle {os:?} vs viewbox {vs:?}"
+            );
+        }
+        assert!(bands > 0, "{label}: 面の中に丸ごと在る行が無い");
         window
     }
 }
@@ -468,67 +507,6 @@ fn live_diff_emoji_matches_oracle_byte_for_byte() {
     run_live_diff_emoji_scenario(WritingMode::HorizontalTb, (80, 40));
     run_live_diff_emoji_scenario(WritingMode::VerticalRl, (40, 80));
     run_live_diff_emoji_scenario(WritingMode::VerticalLr, (40, 80));
-}
-
-/// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
-/// 1 グリフ多い content を描く）を入れると read_back の byte 比較が差を検出する——比較器は
-/// ゼロでない差を捕捉できる（＝live-diff はトートロジーでない）。本物のバグ注入ではなく、
-/// 比較器の識別能力を示す最小の細工。
-#[test]
-fn live_diff_detects_injected_divergence() {
-    let mut ld = LiveDiffRig::new(WritingMode::HorizontalTb, (60, 40));
-
-    // オラクルは 1 グリフ・viewbox は 2 グリフ（1 グリフぶん確実に異なる pixel）を同一窓で描く。
-    let items_oracle = glyph_items("■");
-    let (canvas_oracle, window) = build(&items_oracle, &ld.region, ld.mode, ld.font_height);
-    let items_viewbox = glyph_items("■■");
-    let (canvas_viewbox, _) = build(&items_viewbox, &ld.region, ld.mode, ld.font_height);
-
-    let pair = &mut ld.pair;
-    pair.oracle
-        .render(
-            &canvas_oracle,
-            &window,
-            &ld.font,
-            ld.mode,
-            &ld.contract,
-            &mut pair.oracle_surface,
-        )
-        .expect("オラクル render 失敗");
-    pair.viewbox
-        .render(
-            &canvas_viewbox,
-            &window,
-            &ld.font,
-            ld.mode,
-            &ld.contract,
-            &mut pair.viewbox_surface,
-        )
-        .expect("viewbox render 失敗");
-
-    let ob = pair
-        .oracle_surface
-        .read_back()
-        .expect("オラクル read_back 失敗");
-    let vb = pair
-        .viewbox_surface
-        .read_back()
-        .expect("viewbox read_back 失敗");
-
-    // 双方とも非退化（空面同士の vacuous な不一致でない）。
-    assert!(
-        opaque_count(&ob) > 0,
-        "オラクル面は非透明（content が描かれている）"
-    );
-    assert!(
-        opaque_count(&vb) > 0,
-        "viewbox 面は非透明（content が描かれている）"
-    );
-    // 比較器は差を検出する（＝live-diff の有効性・トートロジーでない）。
-    assert_ne!(
-        ob, vb,
-        "異なる content（1 グリフ差）は byte 比較で差として検出される——live-diff は有効"
-    );
 }
 
 /// 回帰檻（実機の行下端欠け・D2）: **実 fixture の実フォント Yu Gothic UI** を使い、typewriter

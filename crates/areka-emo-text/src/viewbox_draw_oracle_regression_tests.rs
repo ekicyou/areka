@@ -1,6 +1,6 @@
 use super::test_support::{
     RenderPair, Rig, apply_fixture_script, diff_rows, geo_model, glyph_items, layout_frame,
-    state_frame,
+    opaque_count, state_frame,
 };
 use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::WrapPlan;
@@ -58,11 +58,20 @@ fn diag_line_boundary_dropout_vs_oracle() {
     apply_fixture_script(&mut state, &actor, [0.0; 4], REVEAL_INTERVAL);
 
     let total_glyphs = 6 + 10 + 8 + 9 * 2;
+    let mut scrolled_frames = 0;
     for step in 0..=(total_glyphs + 2) {
         let t = step as f64 * REVEAL_INTERVAL + 0.001;
         let (visible, _, canvas, window) =
             state_frame(&state, &actor, t, &region, mode, font.height, &metrics);
         let (ob, vb) = pair.render("前方", &canvas, &window, &font, mode, &contract);
+        // 空の面どうしの一致で緑にしない（字の見えるフレームは墨がある）。
+        assert!(
+            visible == 0 || opaque_count(&ob) > 0,
+            "前方 step={step} visible={visible}: 見本の面に墨が無い"
+        );
+        if window.first_visible_line > 0 {
+            scrolled_frames += 1;
+        }
         if ob != vb {
             let (w, h) = pair.oracle_surface.size();
             let diff_rows = diff_rows(&ob, &vb, w, h);
@@ -72,6 +81,10 @@ fn diag_line_boundary_dropout_vs_oracle() {
             );
         }
     }
+    assert!(
+        scrolled_frames > 0,
+        "前方の進行でスクロールが 1 度も起きていない（名前のスクロールを確かめていない）"
+    );
     // 前方進行では全フレーム byte 一致。次に**後方時刻ジャンプ**（example の C8 検分が
     // present_at(earlier t_mid) で行うパターン）を検証する: 大 t（スクロール済み）から
     // 小 t（未スクロール）へ戻したとき、viewbox が un-scroll を正しく扱い oracle と一致するか。
@@ -81,6 +94,16 @@ fn diag_line_boundary_dropout_vs_oracle() {
         let (visible, _, canvas, window) =
             state_frame(&state, &actor, back_t, &region, mode, font.height, &metrics);
         let (ob, vb) = pair.render("後方", &canvas, &window, &font, mode, &contract);
+        assert!(
+            opaque_count(&ob) > 0,
+            "後方 back_t={back_t:.3} visible={visible}: 見本の面に墨が無い"
+        );
+        // 最初の大きい時刻だけがスクロール済み、戻した小さい時刻は先頭の行から見える。
+        assert_eq!(
+            window.first_visible_line > 0,
+            back_t == big_t,
+            "後方 back_t={back_t:.3}: スクロールの有無が想定と違う {window:?}"
+        );
         if ob != vb {
             let (w, h) = pair.oracle_surface.size();
             let diff_rows = diff_rows(&ob, &vb, w, h);
@@ -114,6 +137,7 @@ fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
     let metrics = DWriteMetrics::new(&factory, &font, mode, &config).expect("DWriteMetrics");
     // 単一行・改行なし。visible を 6→2 と縮める 2 フレーム（後方時刻ジャンプの un-reveal 相当）。
     let items = glyph_items("おっはよー！");
+    let mut inks = Vec::new();
     for &visible in &[6usize, 2usize] {
         let (_, canvas, window) = layout_frame(
             &items,
@@ -129,5 +153,11 @@ fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
             ob, vb,
             "行内縮小 visible={visible} で viewbox が oracle と byte 一致（DD-9・退避インク一掃）"
         );
+        inks.push(opaque_count(&ob));
     }
+    // 空の面どうしの一致で緑にしない・縮んだフレームは墨が減る（消えた 4 字の墨が残っていない）。
+    assert!(
+        inks[1] > 0 && inks[1] < inks[0],
+        "墨の画素の数 visible 6 → 2 が {inks:?}（2 字の墨が在り、6 字より少ないはず）"
+    );
 }
