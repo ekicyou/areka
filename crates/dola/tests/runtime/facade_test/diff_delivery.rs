@@ -129,3 +129,40 @@ mod subscription_via_facade {
         assert!(rt.last_result().triggered.is_empty());
     }
 }
+
+// =========================================================================
+// tick が last_result を書き換える
+// =========================================================================
+mod tick_last_result {
+    use super::super::*;
+
+    #[test]
+    fn tick_updates_last_result() {
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("opacity");
+        rt.load_document(simple_float_doc("fade")).unwrap();
+        rt.start("fade", 0.0).unwrap();
+
+        rt.tick(0.0);
+        let r0 = rt.last_result().clone();
+
+        rt.tick(0.5);
+        let r1 = rt.last_result().clone();
+
+        assert!(!r0.changes.is_empty());
+        assert!(!r1.changes.is_empty());
+
+        let val0 = match &r0.changes[0].1 {
+            EvaluatedValue::Float(v) => *v,
+            _ => panic!("expected Float"),
+        };
+        let val1 = match &r1.changes[0].1 {
+            EvaluatedValue::Float(v) => *v,
+            _ => panic!("expected Float"),
+        };
+        assert!(
+            (val1 - val0).abs() > 0.1,
+            "values should differ: {val0} vs {val1}"
+        );
+    }
+}

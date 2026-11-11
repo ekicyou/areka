@@ -225,6 +225,34 @@ fn resolve_on_non_waiting_state_is_noop() {
     );
 }
 
+/// 選択待ちのあいだのクリックの解決は no-op（選択待ちは選択肢の id でしか解けない）。
+/// 状態も先積みの選択肢も変えない。
+#[test]
+fn resolve_click_is_noop_while_waiting_for_choice() {
+    let sheet = CueSheet::new(vec![
+        choice(0.0, "a", "選択A"),
+        barrier(0.1, BarrierKind::WaitForChoice { timeout: None }),
+        text(0.2, "picked", 0.0),
+    ]);
+    let mut player = CuePlayer::from_sheet(&sheet);
+    player.tick(10.0);
+    assert_eq!(player.state(), &CuePlayerState::WaitingForChoice);
+    let before = player.pending_choices().to_vec();
+
+    player.resolve_click();
+
+    assert_eq!(
+        player.state(),
+        &CuePlayerState::WaitingForChoice,
+        "クリックでは選択待ちが解けない"
+    );
+    assert_eq!(
+        player.pending_choices(),
+        before.as_slice(),
+        "先積みの選択肢は変わらない"
+    );
+}
+
 // ============================================================================
 // Timeout バリア: Playing を維持しつつ継続 tick で自動解除される
 // ============================================================================

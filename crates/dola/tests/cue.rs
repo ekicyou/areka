@@ -11,5 +11,3 @@ mod sheet_test;
 mod sink_test;
 #[path = "cue/test_support.rs"]
 mod test_support;
-#[path = "cue/tick_last_result_test.rs"]
-mod tick_last_result_test;
