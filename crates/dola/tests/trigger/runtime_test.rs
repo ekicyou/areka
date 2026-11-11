@@ -60,10 +60,61 @@ mod trigger_execution_tests {
         }
     }
 
-    /// 同じトリガーは1周回で1回のみ発火
+    /// 同じトリガーは1周回で1回のみ発火（親は発火の後も走り続ける）
     #[test]
     fn trigger_fires_only_once_per_loop() {
-        let doc = timed_trigger_doc("parent", "child", None);
+        let opacity_var = AnimationVariableDef::Float {
+            initial: 0.0,
+            min: Some(0.0),
+            max: Some(1.0),
+        };
+        // 親は 2 秒: 0→1（1 秒・kf1）の後に 1→0（1 秒）。トリガーは kf1（1.0）
+        let parent_sb = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(1.0)),
+                    duration: Some(1.0),
+                    ..Default::default()
+                })),
+                keyframe: Some("kf1".to_string()),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(1.0)),
+                    to: Some(TransitionValue::Scalar(0.0)),
+                    duration: Some(1.0),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some("child".to_string()),
+                at: Some(dola::KeyframeRef::Single("kf1".to_string())),
+                ..Default::default()
+            })
+            .build();
+        let child_sb = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(1.0)),
+                    to: Some(TransitionValue::Scalar(0.0)),
+                    duration: Some(0.5),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })
+            .build();
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("opacity", opacity_var)
+            .storyboard("parent", parent_sb)
+            .storyboard("child", child_sb)
+            .build()
+            .expect("doc should be valid");
 
         let mut rt = DolaRuntime::new();
         let _opacity_id = rt.subscribe("opacity");
@@ -74,12 +125,43 @@ mod trigger_execution_tests {
         let result = rt.update(1.0);
         assert_eq!(result.triggered.len(), 1);
 
-        // t=1.5: 2回目の update — 再発火しない
-        let result = rt.update(1.5);
+        // t=1.016（次のフレーム）: 親はまだ走っているが再発火しない
+        let result = rt.update(1.016);
         assert!(
             result.triggered.is_empty(),
             "trigger should not re-fire in same loop"
         );
+    }
+
+    /// 親の始まりが 0 でなくても、発火は始まり＋キーフレームの時刻
+    #[test]
+    fn trigger_fires_at_parent_start_plus_keyframe() {
+        let doc = timed_trigger_doc("parent", "child", None);
+
+        let mut rt = DolaRuntime::new();
+        let _opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+        rt.start("parent", 10.0).unwrap();
+
+        assert!(rt.update(10.9).triggered.is_empty(), "not yet at t=10.9");
+        assert_eq!(rt.update(11.0).triggered.len(), 1, "fires at t=11.0");
+    }
+
+    /// 一時停止の間は発火の時刻も後ろへずれる
+    #[test]
+    fn trigger_fire_time_counts_pause() {
+        let doc = timed_trigger_doc("parent", "child", None);
+
+        let mut rt = DolaRuntime::new();
+        let _opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+        let gid = rt.start("parent", 0.0).unwrap().group_id;
+
+        rt.pause(gid, 0.5).unwrap();
+        rt.resume(gid, 5.0).unwrap();
+
+        assert!(rt.update(5.4).triggered.is_empty(), "not yet at t=5.4");
+        assert_eq!(rt.update(5.5).triggered.len(), 1, "fires at t=5.5");
     }
 
     /// trigger_start_offset の検証

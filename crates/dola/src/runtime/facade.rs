@@ -427,14 +427,14 @@ impl DolaRuntime {
                         triggers.len()
                     );
                     let trigger = &triggers[ts.trigger_index];
-                    // fire_time は compile 時の絶対時刻（start_time 基準）。
-                    // ループ内での壁時計発火時刻:
-                    //   loop_start_time + (fire_time - original_start_time) / time_scale
+                    // fire_time は 0.0 起点で compile した周回内の相対時刻。
+                    // 壁時計の発火時刻は評価の式 calculate_effective_time の逆:
+                    //   loop_start_time + pause_accumulated + fire_time / time_scale
                     // NOTE(D1a-V): time_scale == 0.0 では wall_fire_time が inf/NaN となり
                     // トリガーは発火しない（compile_and_validate の NOTE / P8 参照）。
-                    let relative_base_time = trigger.fire_time - inst.start_time;
-                    let wall_fire_time =
-                        inst.loop_start_time + relative_base_time / inst.time_scale;
+                    let wall_fire_time = inst.loop_start_time
+                        + inst.pause_accumulated
+                        + trigger.fire_time / inst.time_scale;
 
                     if current_time >= wall_fire_time {
                         let child_start = wall_fire_time + trigger.start_offset.unwrap_or(0.0);
