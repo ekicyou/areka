@@ -405,9 +405,7 @@ mod tests {
 ///   両窓・両方向の集約檻は本群 [`per_asker_non_mixing_flat_and_dotted`]（点付き per-asker
 ///   非混同の初出檻）。
 /// - **per-talk 凍結**（R2.1）: `super::tests::talk_snapshot_is_frozen_after_publish`（既存）。
-/// - **決定論（同一鏡像 epoch×同一 asker×同一名→同一結果）**（R2.5・9.1）:
-///   点付き **Value** 分岐を本群 [`determinism_dotted_value_present_stable`] が縛る（値の無い
-///   枝は純粋な関数を同じ引数で呼ぶだけで落ちようがないので檻を置かない）。
+/// - **決定論**（R2.5・9.1）: 純粋な関数を同じ引数で呼ぶだけなので檻を置かない。
 #[cfg(test)]
 mod mirror_reader_criteria_cage {
     use crate::asker::{AskerContext, AskerId};
@@ -498,31 +496,5 @@ mod mirror_reader_criteria_cage {
             reader.resolve_dotted(&ctx("ghost/a"), &only_b),
             DottedResolution::NotFound
         );
-    }
-
-    /// 決定論（点付き **Value** 分岐）: 同一鏡像 epoch×同一 asker×同一名 → 同一結果（R2.5・9.1）。
-    ///
-    /// 本檻は publish を挟まず（epoch 不変）点付き Value を反復解決し、値が実在する分岐でも
-    /// 結果が安定（同一 `Value`）であることを補完する。
-    #[test]
-    fn determinism_dotted_value_present_stable() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.dotted_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("areka.window.scope(1).y".into(), "256".into());
-        let shared = SharedMirror::new(Arc::new(img));
-        let reader = SylphyaReader::new(shared.clone());
-        // epoch は publish を挟まないので不変（同一鏡像世代）。
-        let epoch_before = shared.load().epoch;
-        let path = parse_dotted("areka.window.scope(1).y").unwrap();
-        let r1 = reader.resolve_dotted(&ctx("ghost/a"), &path);
-        let r2 = reader.resolve_dotted(&ctx("ghost/a"), &path);
-        let r3 = reader.resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(1).y");
-        assert_eq!(r1, DottedResolution::Value("256".into()));
-        assert_eq!(r1, r2);
-        assert_eq!(r2, r3);
-        assert_eq!(shared.load().epoch, epoch_before);
     }
 }

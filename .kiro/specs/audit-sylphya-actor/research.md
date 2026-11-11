@@ -216,3 +216,16 @@
 design.md の古い行も直した: `read_existing` の注と戻り値（2 つ組の既定 `Ok(Default::default())`）、取り直しの説明（`io::retry_transient` の名と、使う 4 か所 `read_existing`・`commit` の `rename`・`load_scope`・`lock_within`）、`lock_within` の説明、流れの図（控える走りでは使えない既存でも warn! を出して空の土台に重ね、`io.commit` で控えの中身に置いて `Withheld`。同じ走りの後の `load_scope` はその控えを読む）、#19 の行（`persist_window_adjacent_tests.rs` の `adjacent_only_doc_is_not_all_absent` と `format.rs` の `last_only_is_not_all_absent` は 1 回目の 4 で消した）。
 
 数えない再出（1 回目と同じ・直さない）: #18 の本番が読まない語彙・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。確かめて指摘にしなかったもの: `merge_table` の重ね方・`parse_toml_str` の 2 つ組の呼び手・控える道の寛容な読み・`retry_transient` の待ち方・`to_toml_string_over` の直列化の失敗の道（起きる入力が無い）・数のテストを消した後も中身の一致のテストが数を決めていること・記録の捕捉の書き方・手で書いた 0 で始まる窓の ID（この spec の前からの振る舞い）。
+
+### 3 回目（数える指摘 2 件・全部直した）
+
+2 回目の 3 件の直しに誤りは見つからなかった。2 件とも前から在って 1・2 回目が拾わなかった、ほかのテストに丸ごと含まれるテスト。
+
+1. （Nice to have）記憶の保存のテストに、後から足した上位のテストに含まれる古いテストが 3 本 → `persist_tests.rs` の `load_tolerates_read_failure`・`save_commit_failure_is_degraded_and_leaves_prior_intact`・`none_root_save_is_degraded_no_panic` を消した。消す前に、残るテストが同じことを全部見ているのを確かめた: `load_read_failure_emits_warn_and_degrades` は準備が同じで「読みの失敗で空」を見る（ほかに warn! も）。`save_commit_failure_emits_error_log` は準備が同じで `Degraded` と「前の中身は 1 のまま」を見る（ほかに error! も）。`persist_failure_tests.rs` の `scope_without_root_returns_no_root` は置き場の無い保存の結果を `Degraded(PersistFailure { NoRoot, dir: None, keys })` まで丸ごと比べる（スコープは Ghost でなく Shell だが、置き場が全部無いときの道はスコープで分かれない）。panic しないことは、どのテストも走り切ることで見ている。中身の見出し「IO 障害の寛容縮退」はその下が空になったので一緒に消した。
+2. （Nice to have）読み口の「決定論」のテストが、同じ純粋な関数を同じ引数で呼び比べるだけ → `reader.rs` の `determinism_dotted_value_present_stable` を消し、それを指す注を「決定論は純粋な関数を同じ引数で呼ぶだけなので檻を置かない」の 1 行にした。タスク 1.3 では「値の在る枝を見る読み口のテストは残す」としたが、消した後も値の在る枝は `dotted_value_present_per_asker`・`dotted_value_present_global`・`dotted_per_asker_precedes_global`・`dotted_str_roundtrips_with_canonical_stored_key`・`per_asker_non_mixing_flat_and_dotted` が縛る。読みが写しを書き替えないことは `pull_tests.rs` の `reentrant_read_does_not_stall_and_does_not_store` が縛る。
+
+消した 4 つの名は、ツリー全体（`.kiro` を除く）で残りが 0 なのを grep で確かめた。
+
+数えない再出（1・2 回目と同じ・直さない）: #18 の本番が読まない語彙・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。
+
+確かめて数えなかったもの: 錠を持つ時間とほかのプロセスの錠の待ち。1 回目の 2 の直しから、書き手は錠を持ったまま最大 1 秒（読み）＋1 秒（rename）眠りうる。ほかのプロセスの錠の待ちは 1 秒なので、2 つの areka が同じ App の記憶をほぼ同時に保存し、そこへウイルス対策の 1 秒近い掴みが重なると、後の方が `TimedOut` で `Degraded` になる。ただ普段の一時の掴みはミリ秒で、3 つが重なることは実際にはまず起きないので数えない（直すなら錠の待ちを `2 * LOCK_WAIT` 以上にするだけ）。ほかに `retry_transient` の待ちの引数・`lock_within` の `map_err`・`load_scope` の取り直し・`to_toml_string` の削除も確かめて、誤りは無かった。
