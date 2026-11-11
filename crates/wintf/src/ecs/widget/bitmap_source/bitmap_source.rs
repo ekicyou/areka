@@ -35,6 +35,11 @@ impl BitmapSource {
     pub fn new<S: Into<String>>(path: S) -> Self {
         Self { path: path.into() }
     }
+
+    /// 画像ファイルパス
+    pub fn path(&self) -> &str {
+        &self.path
+    }
 }
 
 /// BitmapSource追加時のフック
@@ -79,7 +84,7 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
 
     // パスを取得
     let path = match world.get::<BitmapSource>(entity) {
-        Some(bs) => bs.path.clone(),
+        Some(bs) => bs.path().to_owned(),
         None => return,
     };
 
@@ -135,7 +140,7 @@ pub(super) fn insert_loaded_resource(
     };
     if entity_ref
         .get::<BitmapSource>()
-        .is_some_and(|bs| bs.path == path)
+        .is_some_and(|bs| bs.path() == path)
     {
         entity_ref.insert(resource);
     } else {
