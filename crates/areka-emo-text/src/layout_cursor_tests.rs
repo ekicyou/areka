@@ -1,6 +1,5 @@
-use super::test_support::{IMAGE, inline_positions, model};
+use super::test_support::{inline_positions, zero_origin_region};
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan};
-use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
@@ -20,11 +19,7 @@ use log_capture_kit::count_levels;
 /// 3 個目が (inline 100, block 50) の行 1 頭へ載る。
 #[test]
 fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::glyph("あ"),
@@ -64,11 +59,7 @@ fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
 /// 経てカーソル上書きが後勝ちで (inline 10, block 5) が最終値になる（順序 (2)→(3) の証左）。
 #[test]
 fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
@@ -112,11 +103,7 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
 /// `[あ, \_l[100,50]]` → 1 行 [あ@0]（`\_l` は行を開かず・位置も動かさない）。
 #[test]
 fn trailing_cursor_move_evaporates() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::CursorMove {
@@ -148,11 +135,7 @@ fn trailing_cursor_move_evaporates() {
 /// （正典「両方省略で無効果」・R1.6/5.4/6.2）。`[あ, \_l[,], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
 #[test]
 fn both_axes_omitted_cursor_move_is_complete_noop() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::CursorMove {
@@ -190,11 +173,7 @@ fn both_axes_omitted_cursor_move_is_complete_noop() {
 /// 現れることを固定する（配線が軸ごとの解決値を取り違えず載せていることの証跡）。
 #[test]
 fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::glyph("あ"),
@@ -237,11 +216,7 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
 /// y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)のまま（リセットされない）。
 #[test]
 fn cursor_move_single_axis_leaves_other_axis_unchanged() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // x 軸のみ上書き（y Omitted）: block は改行がないため据え置き（0）、inline のみ 10 へ。
     let x_only = [
         TextItem::glyph("あ"),
@@ -310,11 +285,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
 /// - y のみ `\_l[,5px]`＋`\n(1.0)`: block=カーソル 5・inline=改行リセット 0。
 #[test]
 fn cursor_and_pending_newline_compose_per_axis() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // inline 上書き・block は改行進行値を取る。
     let x_over = [
         TextItem::glyph("あ"),
@@ -394,11 +365,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
 /// **原点の切替（1.2）に由来する差分ではない**——横書きの原点は切替の前後とも (0, 0) である。
 #[test]
 fn cursor_negative_and_percent_axes_now_resolve_literally() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::CursorMove {
@@ -452,11 +419,7 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
 /// （design.md 縮退表・R5.2）。
 #[test]
 fn cursor_degrade_warns_once_per_actor_per_branch() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // 2 縮退分岐（各 x 軸・y は Omitted）。
     let branches = [
         // 解釈不能（CursorDegrade::Unparsable）。
@@ -530,11 +493,7 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
 /// `\_l[5px, ]`（x 実導出・y 省略）と `\_l[,]`（両省略）はいずれも警告 0。
 #[test]
 fn cursor_omitted_and_valid_axes_do_not_warn() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let a0 = ActorKey::from("0");
     let ((), counts) = count_levels(|| {
         let mut guard = CursorWarnGuard::default();
@@ -587,11 +546,7 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
 /// （R5.4/6.2・縮退表「両軸省略／両軸縮退＝完全無効果」は「保留を変えない」を含む）。
 #[test]
 fn consecutive_cursor_moves_compose_pending_per_axis() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // H2: `\\_l[10,]\\_l[,20]あ` → (10, 20)。
     let items = [
         TextItem::CursorMove {
@@ -692,11 +647,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
 ///   行内リセットが後勝ちして `inline` が 0 へ落ちる＝この 1 本だけが赤になる。
 #[test]
 fn relative_cursor_basis_is_the_effective_position() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let relative_zero = || TextItem::CursorMove {
         x: CursorCoord::Relative {
             value: 0.0,

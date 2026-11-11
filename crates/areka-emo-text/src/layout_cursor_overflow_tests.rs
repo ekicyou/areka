@@ -1,4 +1,4 @@
-use super::test_support::{IMAGE, broken_lines, model_rect};
+use super::test_support::{IMAGE, broken_lines, glyph, model_rect, rects};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -61,11 +61,6 @@ fn layout_h(items: &[TextItem], region: &TextRegion) -> Vec<PositionedLine> {
     )
 }
 
-/// 全角グリフ 1 個（'あ'・advance 10）。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
 /// `\_l[,@<value>lh]`（X 省略・Y は `@` 相対の行送り単位＝**後戻りさせるための書式**）。
 fn cursor_back_lh(value: f32) -> TextItem {
     TextItem::CursorMove {
@@ -75,14 +70,6 @@ fn cursor_back_lh(value: f32) -> TextItem {
             unit: CursorUnit::Lh,
         },
     }
-}
-
-/// 行矩形を `(left, top, right, bottom)` の組へ落とす（期待値を逐語で並べるため）。
-fn rects(lines: &[PositionedLine]) -> Vec<(f32, f32, f32, f32)> {
-    lines
-        .iter()
-        .map(|l| (l.rect.left, l.rect.top, l.rect.right, l.rect.bottom))
-        .collect()
 }
 
 // ── V8: 後戻り行があるときの可視窓（Requirement 2.8） ──

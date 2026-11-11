@@ -69,19 +69,14 @@
 //! （本ファイル自身が `lib.rs` の構造檻 `pure_layer_modules_have_no_windows_imports` の
 //! 走査対象に列挙されている）。
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use log_capture_kit::{LevelCounts, count_levels};
 
 use super::TextRegion;
+// `IMAGE` は fixture 実測のバルーン画像原寸（400×224）で、負値解決の基準寸＝下の `-56 → 168`
+// などの期待値の根拠。`model_full` の引数は validrect が **top／bottom／left／right**・
+// wordwrap が **x／y** の順なので、呼出側では実値をコメントで添える。
+use crate::layout::test_support::{IMAGE, model_full};
 use crate::writing::WritingMode;
-
-/// fixture 実測のバルーン画像原寸（balloons0.png・image px）。
-///
-/// `region.rs` のインラインテストの `FIXTURE_IMAGE_SIZE` と同値。負値解決の基準寸が
-/// この値であることが、下の `-56 → 168` などの期待値の根拠になる。
-const IMAGE: (u32, u32) = (400, 224);
 
 /// 本檻の基準 validrect（`top,46`／`bottom,-56`／`left,36`／`right,-44`）。
 ///
@@ -104,28 +99,6 @@ const ALL_MODES: [WritingMode; 3] = [
     WritingMode::VerticalRl,
     WritingMode::VerticalLr,
 ];
-
-/// テスト用 `BalloonModel` 生成ヘルパ（幾何成分だけ指定・font/windowposition は未指定）。
-///
-/// 引数の並びは `region.rs` の既存インラインテストの `model` と同一にそろえてある
-/// （`validrect` は `ValidRect::new` に合わせて **top／bottom／left／right** の順・
-/// `wordwrap` は **x／y** の順）。取り違えを避けるため、呼出側では実値をコメントで
-/// 添えること。
-fn model(
-    origin: (Option<i32>, Option<i32>),
-    wordwrap: (Option<i32>, Option<i32>),
-    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(origin.0, origin.1),
-        WordWrapPoint::new(wordwrap.0, wordwrap.1),
-        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
-}
 
 /// `TextRegion` の全 6 成分を組にして取り出す（逐語比較用・差分の所在を読める形にする）。
 fn components(region: &TextRegion) -> (f32, f32, f32, f32, (f32, f32), f32) {
@@ -159,7 +132,8 @@ fn vertical_wordwrap_y_defaults_to_validrect_bottom() {
     ];
     for (label, wordwrap) in cases {
         for mode in VERTICAL_MODES {
-            let region = TextRegion::resolve(&model((None, None), wordwrap, RECT), IMAGE, mode);
+            let region =
+                TextRegion::resolve(&model_full((None, None), wordwrap, RECT), IMAGE, mode);
             // 前提の確認: 基準 validrect が想定どおり解決されている。
             assert_eq!(
                 edges(&region),
@@ -185,7 +159,7 @@ fn vertical_wordwrap_y_defaults_to_validrect_bottom() {
 #[test]
 fn horizontal_wordwrap_default_is_validrect_right_not_bottom() {
     let region = TextRegion::resolve(
-        &model((None, None), (None, None), RECT),
+        &model_full((None, None), (None, None), RECT),
         IMAGE,
         WritingMode::HorizontalTb,
     );
@@ -209,7 +183,7 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
         for mode in VERTICAL_MODES {
             let region = TextRegion::resolve(
                 // wordwrappoint (x=None, y=declared)
-                &model((None, None), (None, Some(declared)), RECT),
+                &model_full((None, None), (None, Some(declared)), RECT),
                 IMAGE,
                 mode,
             );
@@ -223,14 +197,17 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
     }
     // 非負値は絶対座標として素通し（負値規約が非負まで巻き込んでいないことの境界檻）。
     for mode in VERTICAL_MODES {
-        let region =
-            TextRegion::resolve(&model((None, None), (None, Some(120)), RECT), IMAGE, mode);
+        let region = TextRegion::resolve(
+            &model_full((None, None), (None, Some(120)), RECT),
+            IMAGE,
+            mode,
+        );
         assert_eq!(region.wrap_threshold(), 120.0, "{mode:?}: 非負値は素通し");
     }
     // 横書きの wordwrappoint.x も同一の規約（画像幅 400 基準）——負値解決は
     // 書字方向で分岐しない（要件 3.7）。
     let horizontal = TextRegion::resolve(
-        &model((None, None), (Some(-44), None), RECT),
+        &model_full((None, None), (Some(-44), None), RECT),
         IMAGE,
         WritingMode::HorizontalTb,
     );
@@ -262,9 +239,10 @@ fn vertical_region_is_invariant_to_wordwrappoint_x() {
         for y in y_variants {
             for mode in VERTICAL_MODES {
                 let baseline =
-                    TextRegion::resolve(&model(origin, (x_variants[0], y), RECT), IMAGE, mode);
+                    TextRegion::resolve(&model_full(origin, (x_variants[0], y), RECT), IMAGE, mode);
                 for x in &x_variants[1..] {
-                    let varied = TextRegion::resolve(&model(origin, (*x, y), RECT), IMAGE, mode);
+                    let varied =
+                        TextRegion::resolve(&model_full(origin, (*x, y), RECT), IMAGE, mode);
                     assert_eq!(
                         components(&varied),
                         components(&baseline),
@@ -288,7 +266,7 @@ fn horizontal_region_does_depend_on_wordwrappoint_x() {
     let mut seen = Vec::new();
     for x in [None, Some(0), Some(100), Some(-49), Some(390)] {
         let region = TextRegion::resolve(
-            &model((None, None), (x, None), RECT),
+            &model_full((None, None), (x, None), RECT),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -338,7 +316,7 @@ fn validrect_edges_resolve_identically_across_writing_modes() {
                 // origin は未宣言（範囲外に宣言された origin の扱いに非依存・要件 3.11 の
                 // 縮退のみに触れる）。
                 edges(&TextRegion::resolve(
-                    &model((None, None), (None, None), rect),
+                    &model_full((None, None), (None, None), rect),
                     IMAGE,
                     *mode,
                 ))
@@ -362,7 +340,8 @@ fn validrect_edges_resolve_identically_across_writing_modes() {
 /// `VerticalRl`＝validrect 右上へ分かれる（未宣言時の縮退・要件 3.11）。
 #[test]
 fn writing_mode_still_separates_start_corner_while_edges_agree() {
-    let resolve = |mode| TextRegion::resolve(&model((None, None), (None, None), RECT), IMAGE, mode);
+    let resolve =
+        |mode| TextRegion::resolve(&model_full((None, None), (None, None), RECT), IMAGE, mode);
     let horizontal = resolve(WritingMode::HorizontalTb);
     let vertical_rl = resolve(WritingMode::VerticalRl);
     let vertical_lr = resolve(WritingMode::VerticalLr);
@@ -404,7 +383,7 @@ fn resolve_counting(
         );
         TextRegion::resolve(
             // wordwrappoint は x,-49／y,-56 を宣言（未宣言由来の debug を封じる）。
-            &model(origin, (Some(-49), Some(-56)), validrect),
+            &model_full(origin, (Some(-49), Some(-56)), validrect),
             IMAGE,
             mode,
         )

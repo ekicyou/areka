@@ -1,6 +1,6 @@
 use super::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
-use crate::state::TextItem;
+use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -9,24 +9,92 @@ use areka_parsers::balloon::{
 /// テスト画像原寸（image px・region.rs の檻と同一値）。
 pub(crate) const IMAGE: (u32, u32) = (400, 224);
 
-/// テスト用 BalloonModel 生成ヘルパ（幾何成分だけ指定）。
-pub(super) fn model(
+/// テスト用 BalloonModel 生成ヘルパ（幾何成分を全部指定・validrect の順序は top,bottom,left,right）。
+///
+/// 配置・領域・描画の各テストが同じ組み立てを使う（写しを持たない）。
+pub(crate) fn model_full(
     origin: (Option<i32>, Option<i32>),
     wordwrap: (Option<i32>, Option<i32>),
+    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
 ) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
         Origin::new(origin.0, origin.1),
         WordWrapPoint::new(wordwrap.0, wordwrap.1),
-        ValidRect::new(None, None, None, None),
+        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
         None,
     )
 }
 
+/// テスト用 BalloonModel 生成ヘルパ（幾何成分だけ指定）。
+pub(super) fn model(
+    origin: (Option<i32>, Option<i32>),
+    wordwrap: (Option<i32>, Option<i32>),
+) -> BalloonModel {
+    model_full(origin, wordwrap, (None, None, None, None))
+}
+
+/// テスト用 BalloonModel 生成ヘルパ（`writing_mode` 以外は全成分未指定）。
+pub(crate) fn model_writing(writing_mode: Option<&str>) -> BalloonModel {
+    BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        writing_mode.map(str::to_owned),
+        None,
+    )
+}
+
+/// 横書き・`origin (0, 0)`・wordwrappoint 未指定の領域（文字描画開始点 (0, 0)・折返し閾値＝画像右辺 400）。
+pub(super) fn zero_origin_region() -> TextRegion {
+    TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    )
+}
+
+/// 全角グリフ 1 個（'あ'・`FixedMetrics` で advance 10）。
+pub(super) fn glyph() -> TextItem {
+    TextItem::glyph("あ")
+}
+
+/// 明示改行（ratio 1.0）。
+pub(super) fn newline() -> TextItem {
+    TextItem::LineBreak { ratio: 1.0 }
+}
+
+/// `\_l[x,y]`（両軸とも絶対 px）。
+pub(super) fn cursor_px(x: f32, y: f32) -> TextItem {
+    TextItem::CursorMove {
+        x: CursorCoord::Absolute {
+            value: x,
+            unit: CursorUnit::Px,
+        },
+        y: CursorCoord::Absolute {
+            value: y,
+            unit: CursorUnit::Px,
+        },
+    }
+}
+
+/// 行矩形を `(left, top, right, bottom)` で取り出す。
+pub(super) fn rect_of(line: &PositionedLine) -> (f32, f32, f32, f32) {
+    let r = &line.rect;
+    (r.left, r.top, r.right, r.bottom)
+}
+
+/// 全行の行矩形を `(left, top, right, bottom)` の列で取り出す。
+pub(super) fn rects(lines: &[PositionedLine]) -> Vec<(f32, f32, f32, f32)> {
+    lines.iter().map(rect_of).collect()
+}
+
 /// n 個の全角グリフ（'あ'）item 列。
-pub(super) fn glyphs(n: usize) -> Vec<TextItem> {
+pub(crate) fn glyphs(n: usize) -> Vec<TextItem> {
     std::iter::repeat_n(TextItem::glyph("あ"), n).collect()
 }
 
@@ -48,15 +116,7 @@ pub(crate) fn model_rect(
     origin: (Option<i32>, Option<i32>),
     validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
 ) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(origin.0, origin.1),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
+    model_full(origin, (None, None), validrect)
 }
 
 /// n 行（各行 全角 1 グリフ・明示改行 ratio 1.0 区切り）の item 列。

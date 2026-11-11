@@ -318,32 +318,18 @@ fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
 #[cfg(test)]
 mod tests {
 
-    use areka_parsers::balloon::{
-        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-    };
     use log_capture_kit::count_levels;
 
-    use super::{RESERVED_KEY_TEXT_COMBINE_UPRIGHT, RESERVED_KEY_TEXT_ORIENTATION, WritingMode};
+    use crate::layout::test_support::model_writing;
 
-    /// テスト用 BalloonModel 生成ヘルパ（writing_mode 以外は全成分未指定）。
-    fn model(writing_mode: Option<&str>) -> BalloonModel {
-        BalloonModel::new(
-            WindowPosition::new(None, None),
-            Origin::new(None, None),
-            WordWrapPoint::new(None, None),
-            ValidRect::new(None, None, None, None),
-            Font::new(None, None, FontColor::new(None, None, None)),
-            writing_mode.map(str::to_owned),
-            None,
-        )
-    }
+    use super::{RESERVED_KEY_TEXT_COMBINE_UPRIGHT, RESERVED_KEY_TEXT_ORIENTATION, WritingMode};
 
     /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
     ///
     /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
     /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
     fn resolve_counting_warns(writing_mode: Option<&str>) -> (WritingMode, usize) {
-        let (mode, counts) = count_levels(|| WritingMode::resolve(&model(writing_mode)));
+        let (mode, counts) = count_levels(|| WritingMode::resolve(&model_writing(writing_mode)));
         (mode, counts.warn)
     }
 
@@ -352,7 +338,7 @@ mod tests {
     #[test]
     fn horizontal_tb_resolves_to_horizontal_tb() {
         assert_eq!(
-            WritingMode::resolve(&model(Some("horizontal_tb"))),
+            WritingMode::resolve(&model_writing(Some("horizontal_tb"))),
             WritingMode::HorizontalTb
         );
     }
@@ -360,7 +346,7 @@ mod tests {
     #[test]
     fn vertical_rl_resolves_to_vertical_rl() {
         assert_eq!(
-            WritingMode::resolve(&model(Some("vertical_rl"))),
+            WritingMode::resolve(&model_writing(Some("vertical_rl"))),
             WritingMode::VerticalRl
         );
     }
@@ -368,7 +354,7 @@ mod tests {
     #[test]
     fn vertical_lr_resolves_to_vertical_lr() {
         assert_eq!(
-            WritingMode::resolve(&model(Some("vertical_lr"))),
+            WritingMode::resolve(&model_writing(Some("vertical_lr"))),
             WritingMode::VerticalLr
         );
     }
@@ -377,9 +363,9 @@ mod tests {
     #[test]
     fn three_vocabulary_values_map_injectively() {
         let modes = [
-            WritingMode::resolve(&model(Some("horizontal_tb"))),
-            WritingMode::resolve(&model(Some("vertical_rl"))),
-            WritingMode::resolve(&model(Some("vertical_lr"))),
+            WritingMode::resolve(&model_writing(Some("horizontal_tb"))),
+            WritingMode::resolve(&model_writing(Some("vertical_rl"))),
+            WritingMode::resolve(&model_writing(Some("vertical_lr"))),
         ];
         assert_ne!(modes[0], modes[1]);
         assert_ne!(modes[0], modes[2]);
@@ -426,7 +412,7 @@ mod tests {
     #[test]
     fn unknown_value_warn_says_treated_as_undeclared() {
         let (_, events) =
-            log_capture_kit::capture(|| WritingMode::resolve(&model(Some("diagonal_bt"))));
+            log_capture_kit::capture(|| WritingMode::resolve(&model_writing(Some("diagonal_bt"))));
         let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
         assert_eq!(messages.len(), 1, "warn はちょうど 1 件: {messages:?}");
         assert!(

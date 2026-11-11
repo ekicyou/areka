@@ -1,6 +1,5 @@
-use super::test_support::{IMAGE, inline_positions, model};
+use super::test_support::{inline_positions, newline, zero_origin_region};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
-use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 
@@ -17,11 +16,7 @@ use crate::writing::WritingMode;
 
 /// 横書き・文字描画開始点 (0, 0) の共通前提で layout を回す。
 fn layout_h(items: &[TextItem], visible: usize) -> Vec<PositionedLine> {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     LayoutEngine::layout(
         items,
         visible,
@@ -31,11 +26,6 @@ fn layout_h(items: &[TextItem], visible: usize) -> Vec<PositionedLine> {
         &FixedMetrics,
         WrapPlan::CharByChar,
     )
-}
-
-/// `\n`（ratio 1.0＝1 行ぶんの送り）。
-fn newline() -> TextItem {
-    TextItem::LineBreak { ratio: 1.0 }
 }
 
 /// `\_l[@10,]`（X だけ現在位置から +10px・Y は省略＝動かさない）。

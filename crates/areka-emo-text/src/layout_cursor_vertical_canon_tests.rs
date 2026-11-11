@@ -33,7 +33,9 @@
 //! 互いに相異なること）自体を、最初の 1 本で檻に入れてある——前提が劣化すると、以降の
 //! すべての「取り違えを検知する」主張が黙って無力化されるためである。
 
-use super::test_support::{IMAGE, glyphs, inline_positions, model};
+use super::test_support::{
+    IMAGE, cursor_px, glyph, glyphs, inline_positions, model, newline, rect_of,
+};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -78,39 +80,9 @@ fn layout_in(items: &[TextItem], visible: usize, mode: WritingMode) -> Vec<Posit
     layout_with(items, visible, &region_for(mode), mode)
 }
 
-/// 行矩形を `(left, top, right, bottom)` で取り出す。
-fn rect_of(line: &PositionedLine) -> (f32, f32, f32, f32) {
-    let r = &line.rect;
-    (r.left, r.top, r.right, r.bottom)
-}
-
 /// 列の位置（行送り軸の 2 辺）だけを取り出す。
 fn column_of(line: &PositionedLine) -> (f32, f32) {
     (line.rect.left, line.rect.right)
-}
-
-/// 全角グリフ 1 個。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
-/// 素の改行 1 個（`ratio = 1.0`）。
-fn newline() -> TextItem {
-    TextItem::LineBreak { ratio: 1.0 }
-}
-
-/// 絶対 px の `\_l[x,y]`。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
-    }
 }
 
 /// `\_l[,N]`（X 省略・Y は絶対 px）。

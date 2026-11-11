@@ -1,4 +1,6 @@
-use super::test_support::{IMAGE, glyphs, inline_positions, model, model_rect};
+use super::test_support::{
+    IMAGE, cursor_px, glyph, glyphs, inline_positions, model_rect, zero_origin_region,
+};
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -22,16 +24,9 @@ use log_capture_kit::capture;
 //
 // 期待値はすべて design.md の検証表と正典逐語（requirements.md 付録 A）から**式で**導く。
 // 実装の戻り値を書き写さない。
-
-/// 共通前提 A（既存の横書き檻と同一）: 文字描画開始点 (0, 0)・validrect＝画像全域
-/// `0/0/400/224`・折返し閾値 400。font 10（全角 'あ' の advance 10・pitch 12＝10 + 行間 2）。
-fn region_a() -> TextRegion {
-    TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    )
-}
+//
+// 共通前提 A（既存の横書き檻と同一）は支えの `zero_origin_region`: 文字描画開始点 (0, 0)・
+// validrect＝画像全域 `0/0/400/224`・折返し閾値 400。
 
 /// 共通前提 B（**弁別用**）: `origin` 未宣言・validrect を画像の**部分矩形**
 /// `left 40 / top 20 / right 360 / bottom 200` にしたバルーン。
@@ -89,25 +84,6 @@ fn layout_h(items: &[TextItem], visible: usize, region: &TextRegion) -> Vec<Posi
         &FixedMetrics,
         WrapPlan::CharByChar,
     )
-}
-
-/// 全角グリフ 1 個（'あ'・advance 10）。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
-/// `\_l[x,y]`（両軸とも絶対 px）。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
-    }
 }
 
 // ── H1: 未宣言バルーンでの既存表示結果の不変（Requirement 2.7・9.6） ──
@@ -213,7 +189,7 @@ fn declared_origin_moves_the_absolute_basis_off_the_write_start_corner() {
 /// 手計算（前提 A・`start = (0, 0)`・font 10）: `(0 + 30, 0 + 5×10) = (30, 50)`。
 #[test]
 fn canon_example_absolute_px_and_em() {
-    let region = region_a();
+    let region = zero_origin_region();
     let items = [
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
@@ -246,7 +222,7 @@ fn canon_example_absolute_px_and_em() {
 /// 専用の檻が見る）。
 #[test]
 fn canon_example_relative_percent_and_absolute_px() {
-    let region = region_a();
+    let region = zero_origin_region();
     let mut items = glyphs(20);
     items.push(TextItem::CursorMove {
         x: CursorCoord::Relative {
@@ -280,7 +256,7 @@ fn canon_example_relative_percent_and_absolute_px() {
 /// 改行のような行内リセットとは別物である（Requirement 1.2・1.5・3.1）。
 #[test]
 fn canon_example_relative_negative_y_keeps_x_unchanged() {
-    let region = region_a();
+    let region = zero_origin_region();
     let items = [
         glyph(),
         TextItem::CursorMove {
@@ -334,7 +310,7 @@ fn canon_example_relative_negative_y_keeps_x_unchanged() {
 /// `debug!` を出すので、窓の中で組むと件数に混ざる。
 #[test]
 fn center_axis_mismatch_on_both_axes_is_a_complete_noop_with_one_warn_and_one_debug() {
-    let region = region_a();
+    let region = zero_origin_region();
     let actor = ActorKey::from("0");
     let items = [
         glyph(),
@@ -422,7 +398,7 @@ fn center_axis_mismatch_on_both_axes_is_a_complete_noop_with_one_warn_and_one_de
 /// - `[あ, \_l[,], あ]`: 両軸省略＝完全無効果。行は閉じない → 1 行 `[あ@0, あ@10]`。
 #[test]
 fn line_count_splits_only_when_a_move_succeeds() {
-    let region = region_a();
+    let region = zero_origin_region();
 
     let moved = [
         glyph(),

@@ -29,7 +29,7 @@
 //! 行矩形は `(left, top, right, bottom)` の 4 つ組で読む。縦書きでは行＝列であり、
 //! `left`／`right` が列の位置（行送り軸）、`top`／`bottom` が列内の字送り範囲（行内軸）になる。
 
-use super::test_support::{IMAGE, inline_positions, model};
+use super::test_support::{IMAGE, cursor_px, glyph, inline_positions, model, rect_of};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -37,12 +37,6 @@ use crate::writing::WritingMode;
 
 /// 共通前提の文字高さ（`line_pitch = 10 + 行間 2 = 12`）。
 const FONT: f32 = 10.0;
-
-/// 行矩形を `(left, top, right, bottom)` の 4 つ組で取り出す。
-fn rect_of(line: &PositionedLine) -> (f32, f32, f32, f32) {
-    let r = &line.rect;
-    (r.left, r.top, r.right, r.bottom)
-}
 
 /// `origin` 未宣言・validrect 全域・`FixedMetrics`・font 10 でレイアウトを通す。
 fn layout_for(items: &[TextItem], visible: usize, mode: WritingMode) -> Vec<PositionedLine> {
@@ -56,25 +50,6 @@ fn layout_for(items: &[TextItem], visible: usize, mode: WritingMode) -> Vec<Posi
         &FixedMetrics,
         WrapPlan::CharByChar,
     )
-}
-
-/// 絶対 px の `\_l[x,y]`。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
-    }
-}
-
-/// 全角グリフ 1 個。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
 }
 
 // ─────────────────────────────────────────────────────────────────────

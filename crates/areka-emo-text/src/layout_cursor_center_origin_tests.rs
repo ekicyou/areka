@@ -49,7 +49,7 @@
 //! 行矩形は `(left, top, right, bottom)`。縦書きでは行＝列であり、`left`／`right` が列の位置
 //! （行送り軸）、`top`／`bottom` が列内の字送り範囲（行内軸）になる。
 
-use super::test_support::{IMAGE, inline_positions, model_rect};
+use super::test_support::{IMAGE, cursor_px, glyph, inline_positions, model_rect, rect_of};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -147,12 +147,6 @@ fn layout_in(
     )
 }
 
-/// 行矩形を `(left, top, right, bottom)` で取り出す。
-fn rect_of(line: &PositionedLine) -> (f32, f32, f32, f32) {
-    let r = &line.rect;
-    (r.left, r.top, r.right, r.bottom)
-}
-
 /// 行の**着地点を画像座標 (x, y) へ戻す**（書字方向ごとの逆写像）。
 ///
 /// 行内軸の座標は先頭グリフの `inline_pos`、行送り軸の座標は行矩形の「書字開始側の辺」から
@@ -172,30 +166,11 @@ fn landing_of(line: &PositionedLine, mode: WritingMode) -> (f32, f32) {
     }
 }
 
-/// 全角グリフ 1 個（'あ'・advance 10）。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
 /// `\_l[centerx,centery]`。
 fn cursor_center_both() -> TextItem {
     TextItem::CursorMove {
         x: CursorCoord::CenterX,
         y: CursorCoord::CenterY,
-    }
-}
-
-/// `\_l[x,y]`（両軸とも絶対 px）。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
     }
 }
 

@@ -30,9 +30,8 @@
 //! import しない（本ファイル自身が `lib.rs` の構造檻
 //! `pure_layer_modules_have_no_windows_imports` の走査対象に列挙されている）。
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use crate::layout::test_support::model_writing;
+use areka_parsers::balloon::BalloonModel;
 use log_capture_kit::{LevelCounts, count_levels};
 
 use super::{
@@ -44,21 +43,12 @@ const CONTROL_TARGET: &str = "areka_emo_text::writing_decision_tests::control";
 
 /// テスト用 `BalloonModel` 生成ヘルパ（`vertical` と `writing_mode` 以外は全成分未指定）。
 ///
-/// `writing.rs` の既存インラインテストの `model` を、正典キー `vertical` の生値も
-/// 取れる形へ広げたもの。`BalloonModel::new` は `vertical_raw` を持たないため、
-/// 転記層と同じ additive ビルダ `with_vertical_raw` で相乗りさせる（2 層マージは
-/// `balloon::parse` が既に確定させている前提＝本層はキー間の優劣だけを見る）。
+/// 支えの `model_writing` を、正典キー `vertical` の生値も取れる形へ広げたもの。
+/// `BalloonModel::new` は `vertical_raw` を持たないため、転記層と同じ additive ビルダ
+/// `with_vertical_raw` で相乗りさせる（2 層マージは `balloon::parse` が既に確定させている
+/// 前提＝本層はキー間の優劣だけを見る）。
 fn model(vertical: Option<&str>, writing_mode: Option<&str>) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        writing_mode.map(str::to_owned),
-        None,
-    )
-    .with_vertical_raw(vertical.map(str::to_owned))
+    model_writing(writing_mode).with_vertical_raw(vertical.map(str::to_owned))
 }
 
 /// 共有のログ捕捉窓の中で決定を行い、（決定, レベル別件数）を返す。

@@ -357,15 +357,12 @@ impl ContentCanvas {
 
 #[cfg(test)]
 mod tests {
-    use areka_parsers::balloon::{
-        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-    };
-
     use super::{
         ContentCanvas, GlyphRunContent, RESERVED_EFFECT_MULTICOLOR, RESERVED_EFFECT_OUTLINE,
         RESERVED_EFFECT_ROTATION, RESERVED_EFFECT_SHADOW, RegionTransform, Resident,
         ResidentContent, TextEffects,
     };
+    use crate::layout::test_support::{IMAGE, glyphs, model_full};
     use crate::layout::{
         FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine, WrapPlan,
     };
@@ -373,31 +370,6 @@ mod tests {
     use crate::region::TextRegion;
     use crate::state::TextItem;
     use crate::writing::WritingMode;
-
-    /// テスト画像原寸（image px・layout.rs の檻と同一値）。
-    const IMAGE: (u32, u32) = (400, 224);
-
-    /// テスト用 BalloonModel 生成ヘルパ（幾何成分だけ指定・validrect 順序は top,bottom,left,right）。
-    fn model(
-        origin: (Option<i32>, Option<i32>),
-        wordwrap: (Option<i32>, Option<i32>),
-        validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-    ) -> BalloonModel {
-        BalloonModel::new(
-            WindowPosition::new(None, None),
-            Origin::new(origin.0, origin.1),
-            WordWrapPoint::new(wordwrap.0, wordwrap.1),
-            ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-            Font::new(None, None, FontColor::new(None, None, None)),
-            None,
-            None,
-        )
-    }
-
-    /// n 個の全角グリフ（'あ'）item 列。
-    fn glyphs(n: usize) -> Vec<TextItem> {
-        std::iter::repeat_n(TextItem::glyph("あ"), n).collect()
-    }
 
     /// layout→canvas の通し（テスト用最短経路・visible は全量）。
     fn canvas_for(
@@ -488,7 +460,7 @@ mod tests {
     #[test]
     fn from_layout_generates_one_glyph_resident_per_line() {
         let region = TextRegion::resolve(
-            &model(
+            &model_full(
                 (Some(0), Some(0)),
                 (Some(50), None),
                 (None, None, None, None),
@@ -534,7 +506,7 @@ mod tests {
     #[test]
     fn from_layout_translation_carries_line_origin() {
         let region = TextRegion::resolve(
-            &model(
+            &model_full(
                 (Some(100), Some(50)),
                 (Some(150), None),
                 (None, None, None, None),
@@ -559,7 +531,7 @@ mod tests {
     fn from_layout_rebases_to_validrect_local_space() {
         // vertical_rl・validrect top20/bottom224/left360/right400・書字開始角 (400, 20)。
         let region = TextRegion::resolve(
-            &model(
+            &model_full(
                 (None, None),
                 (None, None),
                 (Some(20), Some(224), Some(360), Some(400)),
@@ -592,7 +564,7 @@ mod tests {
     #[test]
     fn trailing_newline_yields_single_resident_under_deferred_semantics() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -609,7 +581,7 @@ mod tests {
     #[test]
     fn from_layout_maps_empty_line_to_empty_resident() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -666,7 +638,7 @@ mod tests {
     #[test]
     fn fractional_line_feed_survives_in_translation() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -694,7 +666,7 @@ mod tests {
     #[test]
     fn from_layout_yields_only_glyph_residents_and_seams_stay_inert() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -727,7 +699,7 @@ mod tests {
     /// 3 方向すべてで成立し、同一入力からの再生成は完全一致する（純関数・決定論檻）。
     #[test]
     fn canvas_is_translation_only_and_deterministic_across_modes() {
-        let m = model(
+        let m = model_full(
             (Some(0), Some(0)),
             (Some(50), Some(30)),
             (None, None, None, None),

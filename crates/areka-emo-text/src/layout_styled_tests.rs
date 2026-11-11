@@ -15,7 +15,7 @@
 use areka_sakura::cluster::clusters;
 use areka_sakura::contract::ActorKey;
 
-use super::test_support::{IMAGE, model};
+use super::test_support::{IMAGE, model, rects};
 use super::{
     CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, WrapPlan,
 };
@@ -371,14 +371,6 @@ fn layout_styled_h(
         &ActorKey::from("0"),
         &mut guard,
     )
-}
-
-/// 行矩形を `(left, top, right, bottom)` の組へ落とす。
-fn rects(lines: &[PositionedLine]) -> Vec<(f32, f32, f32, f32)> {
-    lines
-        .iter()
-        .map(|l| (l.rect.left, l.rect.top, l.rect.right, l.rect.bottom))
-        .collect()
 }
 
 // ── 要件 7.9: 行の丈は「その行に置かれた文字のうち最も大きい em」 ──
