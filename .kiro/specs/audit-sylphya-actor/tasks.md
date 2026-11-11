@@ -118,7 +118,7 @@
   - _Depends: 8.2_
   - _Requirements: 6.6, 6.7_
 
-- [ ] 9. (P) 役者の土台の写しのテストを消す（T9・#11）
+- [x] 9. (P) 役者の土台の写しのテストを消す（T9・#11）
   - toy(a) の panic のテストの panic の受け手の付け外しを消す
   - toy(a) と重なる起動の単体テスト 4 本と、それだけが使う道具を消す。スレッドの名のテストは残す
   - toy(a) と残る単体テストが緑で、消した名を名指す物がツリーに無い
@@ -154,3 +154,4 @@
 - 3.2: 偽の IO の中で止めるときは、`if let Some(x) = m.lock().unwrap().take()` の形にしない（then 節の終わりまで錠が残り、偽の IO の錠が門の代わりをして赤が決まらない）。取り出しを別の文にしてから止まる
 - 3.2: 書けない置き場では本物の `FsPersistIo` が錠の `create_dir_all` で先に落ちるので、出る ERROR は `persist_lock_failed`（縮退の中身は同じ）
 - 8.3: 範囲の外の差分に `.kiro/specs/{audit-areka-app,audit-areka-install-update,audit-emo2-boot-spine,sylphya-sqlite-kvs}/brief.md` が出るのは、要件の討議で #10・#16・#21・#4 の呼び手を回し先の brief へ書き足したコミット（4176d4ea・dfeaacec）のもの。11.2 の確かめではこの 4 つを意図した変更として数える
+- 9（範囲の外・完了の棚卸へ）: `crates/areka-kanade/src/actor_tests.rs` 10 行目の注「areka-actor の run_bounded と同旨」は、9 で消した道具を名指したまま残る。範囲の外のファイルは例外の表の 1 行のほかは変えない約束（design「Goals」）なので触っていない。`/kiro-complete` の棚卸で扱う

@@ -157,16 +157,11 @@ fn all_senders_dropped_joins_ok() {
 /// アクター名と panic payload（メッセージ）が観測可能であること。
 #[test]
 fn panicking_body_join_is_panicked() {
-    // panic の stderr 出力を静める（テスト失敗ではなく想定挙動）。復元は不要。
-    let prev_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-
     let (_tx, handle) = spawn_actor::<EchoMsg, _>("panicky-echo", |_rx| {
         panic!("boom in echo worker");
     });
 
     let joined = join_within(DEADLINE, handle);
-    std::panic::set_hook(prev_hook);
 
     match joined {
         Some(Err(ActorError::Panicked { actor, message })) => {
