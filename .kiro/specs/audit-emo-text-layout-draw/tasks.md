@@ -28,7 +28,7 @@
   - 範囲の中の該当の写しとテストどうしの取り込みが grep で 0 件になり、触った GPU のテストが実 GPU で緑であること
   - _Requirements: 4.1, 4.2, 6.1, 6.5, 7.4, 7.8_
 
-- [ ] 2. 重複するテストと記録だけのテストを削る
+- [x] 2. 重複するテストと記録だけのテストを削る
 - [x] 2.1 配置とカーソルの重複するテストを削る
   - 指摘 28 の場所のうち配置・カーソルの分で、弱い方を消し、固有の 1〜2 行だけを強い方へ移す。カーソルの解決のテストの一覧と、縦書きのカーソルのテストの頭の「重複させない」の文を事実に直す
   - 消す前にツリー全体の grep（テスト・支え・文字列を含む）で他から使われていないことを確かめ、命令と結果をタスクの記録に残す
@@ -41,7 +41,7 @@
   - calibration の組が残り、ほかの重複が消え、触ったテストが全部緑であること
   - _Requirements: 3.5, 4.1, 4.3, 4.4, 6.1_
 
-- [ ] 2.3 記録だけの `#[ignore]` のテストとその部品を消す
+- [x] 2.3 記録だけの `#[ignore]` のテストとその部品を消す
   - 選択肢の hover のテストの記録だけの 2 本とその書体の表、線の隙間の帯のテストの記録だけの 1 本とその部品を消す（指摘 30 の一部）
   - 消す前の grep の命令と結果をタスクの記録に残す
   - 範囲の中に記録だけの `#[ignore]` のテストが無くなり、残りのテストが緑であること
@@ -273,3 +273,5 @@
 - clippy は関門にしない（`tools/test-all.ps1` は clippy を回さない・この crate には今の道具で前からの赤が約 50 件ある）。
 - 2.2: 消す前の確かめ＝`git grep -n -F <名>`（消した 25 本と補助 1 本の名を 1 つずつ・`.kiro/specs/completed` を除く）。どの名も自分の `fn` の行だけに当たり（`covers_block_axis_fully` は消したテストの中の呼び出しにも当たった）、消した後は 0 件。`look_tests.rs`・`color_tests.rs` の calibration の組は残した。`look_font_tag_tests.rs` の較正 1 本は指摘 28 の一覧にあり裁定の名指しの外なので、`"Disable"` を「6 語以外」のテストへ移して消した。
 - 2.2: `plan_dirty_derivation_suite_covers_five_cases` を丸ごと消したので、9.2 の直し場所のうち `viewbox_plan_commit_tests.rs` の旧 509-519 は無くなった（`plan_returns_three_variants` の写しだった）。9.2 は残る 2 か所（`plan_returns_three_variants` の FullClear と `request_clear_then_commit_full_clear_returns_to_normal`）で直す。
+- 2.3: 記録だけの `#[ignore]` のテスト 3 本と、それだけが使う部品を消した（choice_hover の `vertical_big_glyph_column_ink_overlap_record`・`M_FONTS`・`vertical_em_box_from_column_baseline_record`、line_gap の `horizontal_line_gap_band_record`・`record_case`・`band_record`・`big_line_overlap_record`・`plan2_offset`）。消す前に `grep -rn -w <名前> .`（target・vendors を除く）で呼び手を数え、残るテストが使う `GAP_FONTS`・`GAP_WORDS`・`char_box` と支えの部品は残した。範囲に残る `#[ignore]` は PNG ダンプ 2 本だけ（指摘 30 の一覧の外）。
+- 2.3 の申し送り（13.2 へ）: `viewbox_draw_line_gap_band_tests.rs` の `char_box` の説明の末尾「記録の行も出す」が、記録のテストを消した後も事実に合うかを確かめる。
