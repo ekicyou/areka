@@ -128,7 +128,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// release ビルドでは素通りし、`partition_point` の前提（述語が前半 true /
     /// 後半 false に分割されていること）を破るため、以後の挿入位置が不定となり
     /// 配信順が黙って崩れ得る（panic はしない）。CueSheet 経路には DolaDocument の
-    /// validate() に相当する数値検証層がない（P25 参照）。
+    /// validate() に相当する数値検証層がない。
     pub fn insert(&mut self, entry: Entry<T>) {
         debug_assert!(
             entry.offset() >= 0.0,
@@ -156,19 +156,15 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         }
         all.reverse();
         all.append(&mut self.entries);
-        all.sort_by(|a, b| {
-            b.offset()
-                .partial_cmp(&a.offset())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        // −0.0 を +0.0 にそろえた全順序の降順（同じ瞬間を FIFO に保つ）
+        all.sort_by(|a, b| (b.offset() + 0.0).total_cmp(&(a.offset() + 0.0)));
         self.entries = all;
     }
 
     /// 複数エントリを一括挿入（内部で再ソート）。
     ///
     /// NOTE(D3-V): NaN オフセットの扱いは insert() と同様（debug_assert 発火 /
-    /// release 素通り）。ソート比較は NaN を Equal 扱い（`unwrap_or`）するため
-    /// panic はしないが、NaN を含む場合の順序は規定されない（P25 参照）。
+    /// release 素通り）。ソートは −0.0 を +0.0 にそろえた全順序の降順。
     pub fn extend(&mut self, entries: impl IntoIterator<Item = Entry<T>>) {
         for entry in entries {
             debug_assert!(
@@ -178,12 +174,9 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             );
             self.entries.push(entry);
         }
-        // 降順ソート
-        self.entries.sort_by(|a, b| {
-            b.offset()
-                .partial_cmp(&a.offset())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        // 降順ソート（−0.0 を +0.0 にそろえた全順序）
+        self.entries
+            .sort_by(|a, b| (b.offset() + 0.0).total_cmp(&(a.offset() + 0.0)));
     }
 
     // ── 2 フェーズ API（DolaRuntime の tick/last_result と対称） ──
@@ -198,11 +191,13 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// Routing は通過（停止しない）。冪等（同一時刻の再呼び出し安全）。
     ///
     /// NOTE(D3-V): `current_time`（または start_time）が NaN の場合、下の全ガード
-    /// （手前チェック・冪等性チェック）と本体の `start_time + entry_offset > current_time`
-    /// 比較がすべて false になるため、最初のバリアまでの
-    /// 全エントリが即時配信される（時刻入力の有限性は検証されない — P25 参照。
-    /// tests/cue/schedule_test.rs::tick_with_nan_time_delivers_all_pending_payloads
+    /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
+    /// （`sum_on_ms_grid(start_time, entry_offset) > current_time`）がすべて false になるため、
+    /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない。
+    /// tests/cue/schedule_test.rs の `tick_with_nan_time_delivers_all_pending_payloads`
     /// で特性化済み）。
+    // 到達の比べは NaN を「届いた」に倒すため、わざと `>` の否定で書く
+    #[allow(clippy::neg_cmp_op_on_partial_ord)]
     pub fn tick(&mut self, current_time: f64) {
         if current_time < self.start_time {
             return;
@@ -235,16 +230,12 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.ready_buffer.clear();
         self.routing_buffer.clear();
 
-        // entries は降順ソート → 末尾からpopして時刻到達を消費
-        while let Some(entry) = self.entries.last() {
-            let entry_offset = entry.offset();
-            if sum_on_ms_grid(self.start_time, entry_offset) > current_time {
-                break; // まだ到達していない
-            }
-
-            // SAFETY: 直前の while let Some(..) = self.entries.last() ガードにより
-            // entries は非空であるため、pop() の unwrap は panic 不能。
-            let entry = self.entries.pop().unwrap();
+        // entries は降順ソート → 末尾から時刻到達を消費
+        let start_time = self.start_time;
+        while let Some(entry) = self
+            .entries
+            .pop_if(|e| !(sum_on_ms_grid(start_time, e.offset()) > current_time))
+        {
             match entry {
                 Entry::Payload(_, payload) => {
                     self.ready_buffer.push(payload);

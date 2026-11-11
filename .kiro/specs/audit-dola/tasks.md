@@ -24,7 +24,7 @@
   - 終わった姿: `cargo test -p dola` と `cargo test -p areka-sakura` が緑で、直しの的を外して緑にした期待（今の誤りの値）が無い
   - _Requirements: 3.2, 4.5, 6.2, 6.3, 7.5_
 
-- [ ] 2. cue の層の本番の小さな直し: 並べ替えの比べ方・到達の取り出し・説明の数（#10・#80・#84・#53 の cue の分）
+- [x] 2. cue の層の本番の小さな直し: 並べ替えの比べ方・到達の取り出し・説明の数（#10・#80・#84・#53 の cue の分）
   - 並べ替え 5 か所（台本・予定 2 か所・コンパイル 2 か所）を、両方に `+ 0.0` を足して −0.0 を +0.0 にそろえたうえでの全順序の比べにし、「panic しない」の注を直す
   - 予定の到達の取り出しを `pop_if` で書き、NaN の扱いを今と同じにするため「届いていない」の否定で比べる。`unwrap` と SAFETY の注を消す
   - cue のモジュールの説明の数を 13 に直し、cue の層の P 番号と古いテストの道を引く注を消すか今の道へ直す
@@ -365,3 +365,4 @@
 - 1.1: 和の関数は `crates/dola/src/cue/schedule.rs` の `pub(crate) fn sum_on_ms_grid`。1.1 の後でも dola の放送のテスト（`runtime_test_broadcast_tests.rs` の 210〜250 行）は緑のまま。1.2 で直しが要るかを確かめ直す。赤になるのは `areka-sakura` の 2 本（`trailing_explicit_wait_remains_in_sheet_and_extends_extent`・`append_epilogue_appends_carrier_at_tail_horizon_without_extending`）。
 - 1.1→2: `schedule.rs` の約 201 行の NOTE(D3-V) は、まだ素の比べ（`start_time + entry_offset > current_time`）を書いている。2 の `pop_if` の書き直しで一緒に直す。
 - 1.2: 古い形の期待 `tick(d + wait_dur)` が `runtime_test_occupancy_horizon_tests.rs:39,47` と `sheet_test.rs:735,738` に残る（0.95 以上なので緑）。前者は 3.1（#24）で消える。後者はかけ直し（21）で拾う。
+- 2: 予定の NaN の並べ替えの檻（`tests/cue/sheet_sort_test.rs`）は debug_assert のため release でだけ走る（`cargo test -p dola --release --test cue sheet_sort`）。`compile/mod.rs` の NOTE(D2-V) の「P14」は 6.2／15.2 で直す。tests/cue の P22・P25・「原本」の注は 3・15.2 で直す。

@@ -36,14 +36,10 @@ impl CueSheet {
     /// 絶対開始時刻は未刻印（0.0）。dispatch 時に
     /// [`with_absolute_start_time`](Self::with_absolute_start_time) で刻印する。
     ///
-    /// NOTE(D3-V): NaN の start_time は比較が Equal 扱い（`unwrap_or`）となるため
-    /// panic はしないが、NaN を含む場合のソート結果の位置は規定されない（P25 参照）。
+    /// 比べは −0.0 を +0.0 にそろえた全順序（同じ瞬間の合図は台本の順のまま・NaN は符号で
+    /// 両端に分かれる）。
     pub fn new(mut cues: Vec<Cue>) -> Self {
-        cues.sort_by(|a, b| {
-            a.start_time
-                .partial_cmp(&b.start_time)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        cues.sort_by(|a, b| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
         Self {
             absolute_start_time: 0.0,
             cues,

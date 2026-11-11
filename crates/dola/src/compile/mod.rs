@@ -222,15 +222,11 @@ pub fn compile_storyboard(
 
     for (var_name, mut segments) in var_segments {
         // Sort by start_time (Task 6.1)
-        // NOTE(D2-V): NaN 時刻は partial_cmp が None → Equal 扱いとなり panic しないが、
-        // ソート順は不定となる。後続の重複検査も NaN 比較（常に false）で素通りするため、
+        // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
+        // NOTE(D2-V): 後続の重複検査は NaN 比較（常に false）で素通りするため、
         // NaN 時刻のセグメントは重複検出されずに出力へ伝播する（有限性検証は P14 参照。
         // tests/compile/boundary_test.rs で特性化済み）。
-        segments.sort_by(|a, b| {
-            a.start_time
-                .partial_cmp(&b.start_time)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        segments.sort_by(|a, b| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
 
         // Overlap check (Task 6.2)
         // NOTE(D2-V): 負の duration による反転セグメント（end < start）は、単独または
@@ -288,9 +284,8 @@ pub fn compile_storyboard(
 
     // Sort triggers by fire_time (stable sort preserves entry index order for same fire_time)
     triggers.sort_by(|a, b| {
-        a.fire_time
-            .partial_cmp(&b.fire_time)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        (a.fire_time + 0.0)
+            .total_cmp(&(b.fire_time + 0.0))
             .then(a.source_entry_index.cmp(&b.source_entry_index))
     });
 

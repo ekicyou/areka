@@ -231,6 +231,38 @@ mod numeric_boundary_tests {
         assert!(result.triggers[0].start_offset.unwrap().is_nan());
     }
 
+    #[test]
+    fn segment_sort_with_many_nan_follows_total_order() {
+        // 並べ替えは −0.0 を +0.0 にそろえた全順序（#10）。NaN を 24 件含んでも全順序どおりに並ぶ
+        //（NaN どうしの重なりの比べは偽なので、コンパイルは通る）。
+        let computed_nan = std::hint::black_box(f64::INFINITY) - f64::INFINITY;
+        let mut builder = StoryboardBuilder::new();
+        for i in 0..24 {
+            let nan = if i % 2 == 0 { f64::NAN } else { computed_nan };
+            for delay in [nan, f64::from(2 * (24 - i))] {
+                let mut entry = transition_entry("x", delay, Some(1.0));
+                entry.at = Some(KeyframeRef::Single("start".to_string()));
+                builder = builder.entry(entry);
+            }
+        }
+        let doc = make_doc_with_storyboard(float_var("x"), vec![], "test", builder.build());
+
+        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        let starts: Vec<f64> = result.timelines["x"]
+            .segments
+            .iter()
+            .map(|s| s.start_time)
+            .collect();
+        assert_eq!(starts.iter().filter(|t| t.is_nan()).count(), 24);
+        for w in starts.windows(2) {
+            assert_ne!(
+                (w[0] + 0.0).total_cmp(&(w[1] + 0.0)),
+                std::cmp::Ordering::Greater,
+                "{starts:?}"
+            );
+        }
+    }
+
     // ---------------------------------------------------------------
     // デシリアライズ境界（JSON は NaN を拒否する）
     // ---------------------------------------------------------------
