@@ -681,36 +681,48 @@ fn run_actor(
         // 判断分岐は純関数中核が算出（借用）。配線はその効果列を実行するのみ。
         let effects = core.apply(&msg);
 
-        // copy-on-write 後継像を組み立て（変異効果のみ適用）。
-        let mut next = shared.load().successor();
-        let mut mutated = false;
+        // copy-on-write 後継像は書き換える 4 つの枝が初めて要るときだけ作る（反映待ち・停止・
+        // 書けない名前・204 の記録・保存だけの知らせでは複製しない・#20）。
+        // 書き手はこのアクター 1 つなので、遅らせて作っても元の像は同じ（epoch も同じ）。
+        let mut next: Option<MirrorImage> = None;
         let mut stop = false;
 
         for effect in effects {
             match effect {
                 Effect::SetFlatPerAsker { asker, name, value } => {
-                    next.flat_per_asker
+                    next.get_or_insert_with(|| shared.load().successor())
+                        .flat_per_asker
                         .entry(asker)
                         .or_default()
                         .insert(name, value);
-                    mutated = true;
                 }
                 Effect::RemoveFlatPerAsker { asker, name } => {
-                    // 実際に消えたときだけ後継像を出す（epoch は実変化に対応する）。
-                    if let Some(flat) = next.flat_per_asker.get_mut(&asker) {
-                        mutated |= flat.remove(&name).is_some();
+                    // 実際に消えるときだけ後継像を出す（epoch は実変化に対応する）。
+                    let has = |img: &MirrorImage| {
+                        img.flat_per_asker
+                            .get(&asker)
+                            .is_some_and(|flat| flat.contains_key(&name))
+                    };
+                    if next.as_ref().map_or_else(|| has(&shared.load()), has)
+                        && let Some(flat) = next
+                            .get_or_insert_with(|| shared.load().successor())
+                            .flat_per_asker
+                            .get_mut(&asker)
+                    {
+                        flat.remove(&name);
                     }
                 }
                 Effect::SetDottedGlobal { key, value } => {
-                    next.dotted_global.insert(key, value);
-                    mutated = true;
+                    next.get_or_insert_with(|| shared.load().successor())
+                        .dotted_global
+                        .insert(key, value);
                 }
                 Effect::SetDottedPerAsker { asker, key, value } => {
-                    next.dotted_per_asker
+                    next.get_or_insert_with(|| shared.load().successor())
+                        .dotted_per_asker
                         .entry(asker)
                         .or_default()
                         .insert(key, value);
-                    mutated = true;
                 }
                 Effect::RecordAbsentFlat { .. } => {
                     // 204/失敗の不在記録: 鏡像へは書かない（既定値は sakura 所有・R4.2）。
@@ -752,7 +764,7 @@ fn run_actor(
         }
 
         // 実変異があった時のみ publish（epoch は実変化に対応・barrier reply より前に確定）。
-        if mutated {
+        if let Some(next) = next {
             shared.publish(Arc::new(next));
         }
 
