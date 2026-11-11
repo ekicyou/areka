@@ -185,6 +185,7 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             );
+            let ratio_sum = self.pending;
             if !apply_pending_newline(
                 &mut self.pending,
                 &mut self.inline_pos,
@@ -193,7 +194,7 @@ impl Scan<'_, '_> {
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
             ) {
-                self.warn_non_finite_advance();
+                self.warn_non_finite_advance(ratio_sum);
             }
             apply_pending_cursor(
                 &mut self.pending_cursor,
@@ -293,7 +294,9 @@ impl Scan<'_, '_> {
 
     /// 送りの結果が有限でなかったことを `warn!` で残す（その送りは捨てた・致命ではない）。
     /// guard がある配置では（キャラクター, [`CursorDegrade::NonFinite`]）の初回だけ、無い配置では毎回。
-    fn warn_non_finite_advance(&mut self) {
+    /// 改行・折り返し・字の送りが同じ鍵を共有する。`ratio_sum` は保留の改行の割合の和
+    /// （折り返しと字の送りでは `None`＝欄を出さない）。
+    fn warn_non_finite_advance(&mut self, ratio_sum: Option<f32>) {
         let actor = match self.cursor_warn.as_mut() {
             Some((actor, guard)) => {
                 if !guard.should_warn(actor, CursorDegrade::NonFinite) {
@@ -305,8 +308,8 @@ impl Scan<'_, '_> {
         };
         tracing::warn!(
             actor = %actor,
-            degrade = ?CursorDegrade::NonFinite,
             block_pos = self.block_pos,
+            ratio_sum,
             "[layout_inner] 送りの結果が有限の数でない——位置を保つ（この送りは捨てる・致命ではない）"
         );
     }
@@ -441,10 +444,10 @@ fn finish_line(
             left: inline_lo,
             top: block_pos,
             right: inline_end,
-            bottom: block_pos + line_height,
+            bottom: saturating_add(block_pos, line_height),
         },
         WritingMode::VerticalRl => LineRect {
-            left: block_pos - line_height,
+            left: saturating_add(block_pos, -line_height),
             top: inline_lo,
             right: block_pos,
             bottom: inline_end,
@@ -452,9 +455,15 @@ fn finish_line(
         WritingMode::VerticalLr => LineRect {
             left: block_pos,
             top: inline_lo,
-            right: block_pos + line_height,
+            right: saturating_add(block_pos, line_height),
             bottom: inline_end,
         },
     };
     PositionedLine { rect, glyphs }
+}
+
+/// 行の遠辺は有限の範囲で頭打ちにする（位置が 3e38 で丈が 1e38 の行でも矩形を有限に保つ・
+/// その大きな位置を生んだ送りは既に記録済みなので、ここでは記録しない）。
+fn saturating_add(a: f32, b: f32) -> f32 {
+    (a + b).clamp(-f32::MAX, f32::MAX)
 }

@@ -2,10 +2,12 @@ use super::test_support::{
     IMAGE, broken_lines, glyphs, inline_positions, model, model_rect, window_for,
 };
 use super::{
-    CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, VisibleWindow, WrapPlan,
+    CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine,
+    VisibleWindow, WrapPlan,
 };
+use crate::look::{GlyphStyles, StyleTable, TextLook};
 use crate::region::TextRegion;
-use crate::state::TextItem;
+use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
 use areka_sakura::contract::ActorKey;
@@ -696,7 +698,7 @@ fn wrapped_lines_return_to_start_inline_component() {
 }
 
 /// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）は送りを捨てて
-/// 位置を保ち、guard つきの配置では `warn!`（`degrade = NonFinite`）を 1 件だけ残す。
+/// 位置を保ち、guard つきの配置では `warn!`（欄は `actor`・`block_pos`・`ratio_sum`）を 1 件だけ残す。
 /// guard の無い配置では毎回（2 件）。ふつうの割合（1.0・0.5・1.5）は今と同じ位置
 /// （`audit-emo-text-layout-draw` 指摘 1・申し送り R17）。
 #[test]
@@ -725,7 +727,7 @@ fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
         events
             .iter()
             .filter(|e| e.level == tracing::Level::WARN)
-            .map(|e| e.field("degrade").map(str::to_owned))
+            .map(|e| ["actor", "block_pos", "ratio_sum"].map(|f| e.field(f).is_some()))
             .collect::<Vec<_>>()
     };
     let mut items = vec![TextItem::glyph("あ")];
@@ -752,8 +754,8 @@ fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
     );
     assert_eq!(
         warns_of(&events),
-        vec![Some("NonFinite".to_owned())],
-        "guard つきは 1 件"
+        vec![[true; 3]],
+        "guard つきは 1 件（欄は actor・block_pos・ratio_sum）"
     );
 
     let (_, events) = capture(|| {
@@ -783,4 +785,107 @@ fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
     let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
     assert_eq!(tops, vec![0.0, 14.0, 21.0, 42.0]);
     assert!(warns_of(&events).is_empty(), "ふつうの割合は記録しない");
+}
+
+/// `\f[height,1e38]` の字（行送り・字幅とも 1e38）でも、折り返しの送りと字の送りは
+/// 有限でない結果を捨てて位置を保ち、guard つきの配置では `warn!` を 1 件だけ残す
+/// （`audit-emo-text-layout-draw` 指摘 1・指摘 20 で上限を置かない前提）。
+/// 折り返し: 幅 400 に 6 字＝6 行・4 行目（3e38）から先へは送れない。
+/// 字の送り: `\_l[3e38,]` の後の 1 字は 3e38 + 1e38 へ送れない。
+#[test]
+fn huge_font_height_wrap_and_glyph_advance_stay_finite_with_one_warn() {
+    let default = TextLook::ukadoc_default();
+    let huge = TextLook {
+        height: 1e38,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let id = table.intern(&huge, &default);
+    let actor = ActorKey::from("0");
+    let layout = |items: &[TextItem], region: &TextRegion, mode: WritingMode| {
+        let ids = vec![id; items.len()];
+        let mut guard = CursorWarnGuard::default();
+        let visible = items
+            .iter()
+            .filter(|i| matches!(i, TextItem::Glyph { .. }))
+            .count();
+        capture(|| {
+            LayoutEngine::layout_styled(
+                items,
+                visible,
+                region,
+                mode,
+                12.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+                GlyphStyles {
+                    table: &table,
+                    ids: &ids,
+                    default: &default,
+                    current: &huge,
+                },
+                &actor,
+                &mut guard,
+            )
+        })
+    };
+    let finite = |lines: &[PositionedLine]| {
+        lines.iter().all(|l| {
+            [l.rect.left, l.rect.top, l.rect.right, l.rect.bottom]
+                .iter()
+                .all(|v| v.is_finite())
+                && l.glyphs.iter().all(|g| g.inline_pos.is_finite())
+        })
+    };
+    let warns = |events: &[log_capture_kit::CapturedEvent]| {
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .count()
+    };
+
+    let wrap_region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (Some(400), None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let items: Vec<TextItem> = clusters("あいうえおか").map(TextItem::glyph).collect();
+    let (lines, events) = layout(&items, &wrap_region, WritingMode::HorizontalTb);
+    assert_eq!(lines.len(), 6, "1 字ずつ折れる: {lines:?}");
+    assert!(finite(&lines), "折り返しの送りが有限: {lines:?}");
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, vec![0.0, 1e38, 2e38, 3e38, 3e38, 3e38]);
+    assert_eq!(warns(&events), 1, "guard つきは 1 件");
+    assert_eq!(lines[5].rect.bottom, f32::MAX, "遠辺は有限の範囲で頭打ち");
+
+    // 縦書き（行送りは負の向き）でも遠辺 `block_pos - line_height` は有限。
+    let v_region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, Some(400))),
+        IMAGE,
+        WritingMode::VerticalRl,
+    );
+    let (lines, events) = layout(&items, &v_region, WritingMode::VerticalRl);
+    assert_eq!(lines.len(), 6, "1 字ずつ折れる: {lines:?}");
+    assert!(finite(&lines), "縦書きの行の矩形が有限: {lines:?}");
+    assert_eq!(warns(&events), 1, "guard つきは 1 件");
+
+    let free_region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let items = [
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: 3e38,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::glyph("あ"),
+    ];
+    let (lines, events) = layout(&items, &free_region, WritingMode::HorizontalTb);
+    assert!(finite(&lines), "字の送りが有限: {lines:?}");
+    assert_eq!(lines[0].rect.right, 3e38, "送れない字の送りは位置を保つ");
+    assert_eq!(warns(&events), 1, "guard つきは 1 件");
 }

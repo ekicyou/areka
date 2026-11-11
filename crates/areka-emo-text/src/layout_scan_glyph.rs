@@ -7,7 +7,7 @@ use std::sync::Arc;
 use super::super::{glyph_style_advance, segment_advance_sum};
 use super::{
     PositionedGlyph, Scan, WrapPlan, apply_pending_cursor, apply_pending_newline, finish_line,
-    finish_pending_line, line_pitch_of,
+    finish_pending_line, line_pitch_of, try_advance,
 };
 
 impl Scan<'_, '_> {
@@ -57,6 +57,7 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             );
+            let ratio_sum = self.pending;
             if !apply_pending_newline(
                 &mut self.pending,
                 &mut self.inline_pos,
@@ -65,7 +66,7 @@ impl Scan<'_, '_> {
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
             ) {
-                self.warn_non_finite_advance();
+                self.warn_non_finite_advance(ratio_sum);
             }
             apply_pending_cursor(
                 &mut self.pending_cursor,
@@ -158,7 +159,13 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             ));
-            self.block_pos += self.block_dir * line_pitch_of(self.metrics, closing);
+            // 行送りが 1e38 にもなりうる（`\f[height,N]` に上限を置かない・指摘 20）。
+            if !try_advance(
+                &mut self.block_pos,
+                self.block_dir * line_pitch_of(self.metrics, closing),
+            ) {
+                self.warn_non_finite_advance(None);
+            }
             self.inline_pos = self.inline_start;
         }
         // ④ 配置。
@@ -168,7 +175,9 @@ impl Scan<'_, '_> {
             advance,
             style,
         });
-        self.inline_pos += advance;
+        if !try_advance(&mut self.inline_pos, advance) {
+            self.warn_non_finite_advance(None);
+        }
         self.heights.place(glyph_height);
         self.placed += 1;
         ControlFlow::Continue(())
