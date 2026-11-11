@@ -111,10 +111,11 @@ impl Scan<'_, '_> {
                         // 現在行に収まる → 分割せず継続配置（2.1/2.3）。
                         self.seg_remaining = seg.len - 1;
                         false
-                    } else if seg_sum <= cap_full {
+                    } else if seg_sum <= cap_full && !self.current.is_empty() {
                         // 収まらないが行頭からなら収まる → 塊の前で行送り（2.2）。
-                        // 行頭では cap_rem == cap_full ゆえ本分岐は構造的に不発火
-                        // ＝ワードラップは空行を作らない（INV-3）。
+                        // 行が空なら送らない（INV-3＝空行を作らない）: `\_l` の直後は行が空でも
+                        // inline_pos が行頭でないため cap_rem < cap_full になりうる。その場合は
+                        // 下の長大塊の枝（char 規則）へ落ち、`\_l` の位置から 1 字ずつ折れる。
                         self.seg_remaining = seg.len - 1;
                         true
                     } else {

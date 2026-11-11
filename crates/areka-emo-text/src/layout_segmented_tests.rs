@@ -1,4 +1,4 @@
-use super::test_support::{IMAGE, glyphs, inline_positions, model};
+use super::test_support::{IMAGE, cursor_px, glyphs, inline_positions, model};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
@@ -731,4 +731,39 @@ fn segmented_prefix_stable_in_vertical_mode() {
             "vertical_rl visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び）"
         );
     }
+}
+
+/// 指摘 5（空行を出さない裁定）: `\_l[50,]` の直後の塊は、行が空なので「塊の前で行送り」の枝に
+/// 入らず、字の無い行を出さない。塊 {0,6}（seg_sum 60）は残り 50 に入らず行頭からの 100 には
+/// 入るが、行が空なので長い塊の枝（文字の規則）へ落ちる＝最初の字は x＝50 のまま・6 字目で折れる。
+#[test]
+fn segmented_after_cursor_move_emits_no_blank_line() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (Some(100), None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let mut items = vec![cursor_px(50.0, 0.0)];
+    items.extend(glyphs(6));
+    let p = plan(&[(0, 6)]);
+    let lines = LayoutEngine::layout(
+        &items,
+        6,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::Segmented(&p),
+    );
+    assert!(
+        lines.iter().all(|l| !l.glyphs.is_empty()),
+        "字の無い行は出ない: {lines:?}"
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(
+        inline_positions(&lines[0]),
+        vec![50.0, 60.0, 70.0, 80.0, 90.0],
+        "`\\_l` の x＝50 が残る"
+    );
+    assert_eq!(inline_positions(&lines[1]), vec![0.0]);
 }
