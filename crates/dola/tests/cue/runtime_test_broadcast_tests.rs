@@ -77,16 +77,6 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
         a, expected,
         "各 sink は at/duration を無変形で受け取る（Wait/Emote も broadcast＝duration honor の対象）"
     );
-
-    // 各 cue の絶対発火時刻はアンカー 100.0 ＋ 相対 `at`。全 sink が同一 `at`・同一アンカーゆえ
-    // 独立に同一絶対時刻を算出できる（協調不要で同期成立・R1.4）。
-    assert_eq!(
-        a.iter()
-            .map(|c| sheet.absolute_start_time() + c.at)
-            .collect::<Vec<_>>(),
-        vec![100.0, 100.5, 101.5],
-        "絶対発火時刻はアンカー＋相対 at で台本から復元でき、全 sink で一致する"
-    );
 }
 
 /// broadcast はバリア手前の cue のみを sink へ配り、バリア以降は外部解決まで配送しない

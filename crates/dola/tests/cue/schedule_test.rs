@@ -258,8 +258,10 @@ fn notify_barrier_resolved_noop_when_no_barrier() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(1.0, "x".into()));
 
-    // バリアなし状態で notify → パニックしない
+    // バリアなしで届いた後に解決しても、取り出しは変わらない
+    sched.tick(1.0);
     sched.notify_barrier_resolved(None);
+    assert_eq!(sched.ready(), &["x".to_string()]);
     assert!(sched.current_barrier().is_none());
 }
 
@@ -288,6 +290,27 @@ fn wait_for_choice_barrier_resolved_with_choice_id() {
 
     sched.tick(1.0);
     assert_eq!(sched.ready(), &["after_choice".to_string()]);
+}
+
+/// 解決の直後に同じ時刻で tick しても（本番の drive は解決の後すぐ同じ時刻で回す）、
+/// 冪等の守りに止められず区切りの後ろだけを集める。
+#[test]
+fn resolve_then_same_time_tick_collects_after() {
+    let mut sched = TimedSchedule::<String>::new(0.0);
+    sched.insert(Entry::Payload(1.0, "payload".into()));
+    sched.insert(Entry::Barrier(
+        1.0,
+        BarrierKind::WaitForChoice { timeout: None },
+    ));
+    sched.insert(Entry::Payload(1.0, "after".into()));
+
+    sched.tick(1.0);
+    assert_eq!(sched.ready(), &["payload".to_string()]);
+    assert!(sched.current_barrier().is_some());
+
+    sched.notify_barrier_resolved(Some("yes".to_string()));
+    sched.tick(1.0);
+    assert_eq!(sched.ready(), &["after".to_string()]);
 }
 
 // ============================================================================
@@ -749,7 +772,7 @@ const ROUNDS_DOWN: f64 = 2.5999999999999996;
 /// 前提: この値は引き算で相対へ戻すと元の値より手前に落ちる（検査が丸めを踏んでいる）。
 #[test]
 fn rounds_down_value_really_rounds_down_when_subtracted() {
-    assert!((100.0 + ROUNDS_DOWN) - 100.0 < ROUNDS_DOWN);
+    const { assert!((100.0 + ROUNDS_DOWN) - 100.0 < ROUNDS_DOWN) };
 }
 
 /// 中身の合図は「アンカー＋相対」の絶対時刻ちょうどの tick で配られる。

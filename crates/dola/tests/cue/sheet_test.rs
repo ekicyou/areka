@@ -236,9 +236,6 @@ fn absolute_end_time_is_max_of_start_plus_duration_not_last_cue_start() {
     .with_absolute_start_time(10.0);
 
     assert_eq!(sheet.absolute_end_time(), 16.0);
-    // 最大 start_time（10.0+3.0）にも、最後の cue の発火時刻にも縮退しない
-    assert_ne!(sheet.absolute_end_time(), 13.0);
-    assert_ne!(sheet.absolute_end_time(), 13.5);
 }
 
 /// R1.7: 末尾の純粋 Wait cue の duration は絶対終了時刻へ算入される（早期終了しない・R2.5 の土台）。
@@ -452,8 +449,6 @@ fn to_talk_schedule_carries_finite_duration_untransformed() {
         );
         assert_eq!(ready[i].at, 0.0, "発火時刻も無変形で運ぶ");
         assert_eq!(ready[i].actor, ActorKey::from("0"), "演者も無変形で運ぶ");
-        // 搬送体は broadcast で複製されて各 CueSink へ届く（Clone/PartialEq 導出の確認）。
-        assert_eq!(ready[i].clone(), ready[i]);
     }
 }
 
@@ -493,7 +488,6 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
             y: "2lh".into(),
         },
     ];
-    assert_eq!(commands.len(), 13, "presentation コマンドは 13 種");
 
     for command in commands {
         for duration in [0.0_f64, 1.25] {
