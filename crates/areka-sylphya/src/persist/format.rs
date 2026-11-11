@@ -102,24 +102,6 @@ pub struct FormatDoc {
     pub window_adjacent: BTreeMap<String, String>,
 }
 
-impl FormatDoc {
-    /// 全 key 族が不在か（寛容読取の「全不在」縮退＝空 doc の判定）。
-    ///
-    /// parse 失敗・未知/欠落バージョンの縮退結果（[`FormatDoc::default`]）はこれが `true`。
-    pub fn is_all_absent(&self) -> bool {
-        self.window.is_empty()
-            && self.balloon_offset.is_empty()
-            && self.boot_count.is_none()
-            && self.vanish_count.is_none()
-            && self.last_ghost.is_none()
-            && self.last_balloon.is_none()
-            && self.last_shell.is_none()
-            && self.last_running.is_none()
-            && self.baseware_roots.is_none()
-            && self.window_adjacent.is_empty()
-    }
-}
-
 /// 窓位置・バルーンオフセットの 1 スコープ分の (x, y)（各軸は文字列・欠落は `None`）。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AxisPair {
@@ -435,30 +417,30 @@ mod tests {
     #[test]
     fn parse_failure_yields_all_absent_no_panic() {
         let doc = read_toml_str("this is = = not valid toml [[[");
-        assert!(doc.is_all_absent());
+        assert_eq!(doc, FormatDoc::default());
     }
 
     #[test]
     fn unknown_version_yields_all_absent() {
         // 有効 TOML だが format-version = 2（未知）→ 本文があっても全不在へ縮退。
         let doc = read_toml_str("format-version = 2\n[boot]\ncount = \"7\"\n");
-        assert!(doc.is_all_absent());
+        assert_eq!(doc, FormatDoc::default());
     }
 
     #[test]
     fn missing_version_yields_all_absent() {
         let doc = read_toml_str("[boot]\ncount = \"7\"\n");
-        assert!(doc.is_all_absent());
+        assert_eq!(doc, FormatDoc::default());
     }
 
     #[test]
     fn empty_content_yields_all_absent() {
-        assert!(read_toml_str("").is_all_absent());
+        assert_eq!(read_toml_str(""), FormatDoc::default());
     }
 
     #[test]
     fn last_only_is_not_all_absent() {
-        // [last] の 4 欄は 1 つずつ is_all_absent に効く。
+        // [last] の 4 欄は 1 つずつ既定（全不在）と違える。
         for doc in [
             FormatDoc {
                 last_ghost: Some("g".into()),
@@ -477,7 +459,7 @@ mod tests {
                 ..Default::default()
             },
         ] {
-            assert!(!doc.is_all_absent());
+            assert_ne!(doc, FormatDoc::default());
         }
     }
 
