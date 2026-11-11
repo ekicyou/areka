@@ -1,76 +1,7 @@
-//! 占有 horizon の檻——完了判定の閾値（原本の区画 `:515`）と、絶対時刻としての照会
-//! （原本の区画 `:1005`）。いずれも同一の horizon 権威を観測する。
+//! 占有 horizon の絶対時刻としての照会の檻（完了判定の閾値と同じ horizon 権威を観測する）。
 
-use super::test_support::{barrier, choice, text};
-use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet};
-
-// ============================================================================
-// 完了は占有 horizon 到達で（entry 枯渇だけでは完了しない）
-// ============================================================================
-
-/// 末尾に待ちを持つ台本では、全 cue の**配送完了**時点ではまだ Playing のままで、
-/// 占有 horizon（最終 Wait の duration 端）到達で初めて `Completed` へ遷移する
-/// （早期終了しない・D6/R2.5 の CuePlayer レベル固定）。
-#[test]
-fn player_reaches_completed_only_at_occupancy_horizon() {
-    let d = 0.15_f64;
-    let wait_dur = 0.8_f64;
-    let sheet = CueSheet::new(vec![
-        text(0.0, "bye", d),
-        Cue {
-            actor: ActorKey::from("0"),
-            start_time: d,
-            payload: CueCommand::Wait.into(),
-            duration: wait_dur,
-        },
-    ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
-
-    // 全 entry を配り終える時刻（末尾 Wait の発火時刻＝d）まで進める。
-    player.tick(d);
-    assert_eq!(player.remaining(), 0, "全 entry を配り終えた");
-    assert_eq!(
-        player.state(),
-        &CuePlayerState::Playing,
-        "配送完了時点では占有 horizon 未到達ゆえまだ Playing（早期終了しない）"
-    );
-
-    // 占有 horizon 直前も未完了。
-    player.tick(d + wait_dur - 0.01);
-    assert_eq!(
-        player.state(),
-        &CuePlayerState::Playing,
-        "horizon 直前は未完了"
-    );
-
-    // 占有 horizon 到達で Completed。
-    player.tick(d + wait_dur);
-    assert_eq!(
-        player.state(),
-        &CuePlayerState::Completed,
-        "占有 horizon 到達で初めて Completed"
-    );
-}
-
-/// バリアの無い台本は占有 horizon（全 cue が瞬時なら最終 at）到達で完了する。
-#[test]
-fn barrier_free_sheet_completes_at_last_cue() {
-    let sheet = CueSheet::new(vec![text(0.0, "a", 0.0), text(0.5, "b", 0.0)]);
-    let mut player = CuePlayer::from_sheet(&sheet);
-
-    player.tick(0.0);
-    assert_eq!(
-        player.state(),
-        &CuePlayerState::Playing,
-        "b 未到達ゆえ Playing"
-    );
-    player.tick(0.5);
-    assert_eq!(
-        player.state(),
-        &CuePlayerState::Completed,
-        "最終 cue（horizon）到達で完了"
-    );
-}
+use super::{BarrierKind, CuePlayer, CuePlayerState, CueSheet};
+use crate::test_support::{barrier, choice, text};
 
 // ============================================================================
 // 占有 horizon の絶対時刻照会（Task 3.1・R7.2）
@@ -97,15 +28,6 @@ fn occupancy_horizon_returns_anchor_plus_relative_horizon() {
         sheet.absolute_end_time(),
         "台本の絶対終了時刻（duration 権威）と一致する"
     );
-}
-
-/// アンカー未刻印（0.0）の台本では相対 horizon がそのまま絶対値になる。
-#[test]
-fn occupancy_horizon_without_anchor_is_the_relative_horizon() {
-    let sheet = CueSheet::new(vec![text(0.0, "a", 0.25), text(1.0, "b", 2.0)]);
-    let player = CuePlayer::from_sheet(&sheet);
-
-    assert_eq!(player.occupancy_horizon(), 3.0, "max(0.25, 3.0) = 3.0");
 }
 
 /// 選択肢バリアで停止中（`WaitingForChoice`）でも占有 horizon は照会でき、値は不変。

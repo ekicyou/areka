@@ -2,8 +2,8 @@
 //!
 //! `newline`・`cursor` は本テーマからしか参照されないのでここに残した。
 
-use super::test_support::{barrier, choice, logged_commands, recording_sink};
 use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet};
+use crate::test_support::{barrier, choice, logged_commands, recording_sink};
 
 /// 改行 cue を作る補助（`\n` 相当・配送列で選択肢と交互配置される非選択肢 cue）。
 fn newline(start_time: f64, ratio: f32) -> Cue {

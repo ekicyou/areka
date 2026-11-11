@@ -9,5 +9,7 @@ mod sheet_sort_test;
 mod sheet_test;
 #[path = "cue/sink_test.rs"]
 mod sink_test;
+#[path = "cue/test_support.rs"]
+mod test_support;
 #[path = "cue/tick_last_result_test.rs"]
 mod tick_last_result_test;

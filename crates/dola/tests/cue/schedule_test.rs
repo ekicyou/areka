@@ -1,9 +1,9 @@
-//! TimedSchedule<T> ユニットテスト
-//!
-//! Task 6.2: tick/ready 2 フェーズ API、バリア管理、ルーティング収集の検証。
+//! TimedSchedule<T> の tick/ready 2 フェーズ API、バリア管理、ルーティング収集の検証。
 
+use crate::test_support::{recording_sink, text};
 use dola::cue::{
-    ActorKey, BarrierKind, CueCommand, CueTarget, EntityKey, Entry, RoutingCommand, TimedSchedule,
+    ActorKey, BarrierKind, CueCommand, CuePlayer, CueSheet, CueTarget, EntityKey, Entry,
+    RoutingCommand, TimedSchedule,
 };
 
 // ============================================================================
@@ -25,19 +25,6 @@ fn tick_collects_payloads_at_reached_time() {
 
     sched.tick(2.0);
     assert_eq!(sched.ready(), &["c".to_string()]);
-}
-
-#[test]
-fn tick_collects_multiple_payloads_at_same_time() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Payload(1.0, "first".into()));
-    sched.insert(Entry::Payload(1.0, "second".into()));
-
-    sched.tick(1.0);
-    let ready = sched.ready();
-    assert_eq!(ready.len(), 2);
-    assert!(ready.contains(&"first".to_string()));
-    assert!(ready.contains(&"second".to_string()));
 }
 
 #[test]
@@ -108,10 +95,12 @@ fn remaining_and_is_completed() {
 fn clear_resets_all_state() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(1.0, "a".into()));
+    sched.insert(Entry::Barrier(1.0, BarrierKind::Timeout { duration: 5.0 }));
     sched.tick(1.0);
     assert!(!sched.ready().is_empty());
-
+    assert!(sched.current_barrier().is_some());
     sched.clear();
+    assert!(sched.current_barrier().is_none());
     assert!(sched.ready().is_empty());
     assert_eq!(sched.remaining(), 0);
     assert!(sched.is_completed());
@@ -119,24 +108,8 @@ fn clear_resets_all_state() {
 
 // ============================================================================
 // 占有 horizon と is_completed（占有終了判定・D6 / R2.5）
-//
 // is_completed は「entries 枯渇かつ barrier なしかつ current_time >= start_time + horizon」。
-// new(start) は horizon=0.0 を既定とし、current_time は常に >= start_time ゆえ horizon=0 は
-// 素通り＝「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
 // ============================================================================
-
-/// `new(start)` の既定 horizon は 0.0 ゆえ、is_completed は entry 枯渇で即真（旧挙動保存）。
-#[test]
-fn new_defaults_horizon_to_zero_preserving_legacy_is_completed() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Payload(1.0, "a".into()));
-    assert!(!sched.is_completed());
-    sched.tick(1.0);
-    assert!(
-        sched.is_completed(),
-        "horizon=0.0（既定）では entry 枯渇で即完了（旧挙動）"
-    );
-}
 
 /// horizon > 最終 entry offset のとき、entry を配り終えても開始からの経過が horizon に
 /// 達するまで完了しない（占有終了判定）。
@@ -176,21 +149,6 @@ fn with_horizon_not_completed_while_barrier_active_even_past_horizon() {
     assert!(
         sched.is_completed(),
         "解除後 entries 空・開始からの経過>=horizon で完了"
-    );
-}
-
-/// `clear()` は horizon も 0.0 へリセットするため、clear 済みスケジュールは完了状態になる。
-#[test]
-fn clear_resets_horizon_so_cleared_schedule_is_completed() {
-    let mut sched = TimedSchedule::<String>::with_horizon(0.0, 5.0);
-    sched.insert(Entry::Payload(1.0, "a".into()));
-    sched.tick(1.0);
-    assert!(!sched.is_completed(), "horizon 5.0 未到達ゆえ未完了");
-
-    sched.clear();
-    assert!(
-        sched.is_completed(),
-        "clear は horizon をリセットし完了状態にする"
     );
 }
 
@@ -293,23 +251,6 @@ fn timeout_barrier_skipped_when_already_past() {
     sched.tick(2.0);
     assert!(sched.current_barrier().is_none());
     assert_eq!(sched.ready(), &["target".to_string()]);
-}
-
-#[test]
-fn barrier_not_completed_while_active() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(
-        0.0,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
-
-    sched.tick(0.0);
-    assert!(sched.current_barrier().is_some());
-    // entries は空だが barrier 中なので completed ではない
-    assert!(!sched.is_completed());
-
-    sched.notify_barrier_resolved(None);
-    assert!(sched.is_completed());
 }
 
 #[test]
@@ -463,22 +404,6 @@ fn barrier_resolved_externally_before_timeout() {
 
     sched.tick(2.0); // タイムアウト時刻 11.0 を待たずに進行
     assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
-#[test]
-fn clear_resets_active_barrier() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(
-        0.0,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
-    sched.tick(0.0);
-    assert!(sched.current_barrier().is_some());
-
-    sched.clear();
-    assert!(sched.current_barrier().is_none());
-    assert!(sched.is_completed());
-    assert!(sched.ready().is_empty());
 }
 
 #[test]
@@ -840,30 +765,15 @@ fn payload_is_delivered_at_exact_absolute_fire_time() {
 /// 刻印した台本の `absolute_fire_time` ちょうどの tick で、再生機がその合図を配る。
 #[test]
 fn player_emits_cue_at_sheet_absolute_fire_time() {
-    use dola::cue::{Cue, CuePlayer, CueSheet, CueSink, TalkCue};
-    use std::sync::{Arc, Mutex};
-
-    struct Times(Arc<Mutex<Vec<f64>>>);
-    impl CueSink for Times {
-        fn emit(&mut self, cue: TalkCue) {
-            self.0.lock().unwrap().push(cue.at);
-        }
-    }
-
-    let sheet = CueSheet::new(vec![Cue {
-        actor: ActorKey::from("0"),
-        start_time: ROUNDS_DOWN,
-        payload: CueCommand::Text("x".into()).into(),
-        duration: 0.0,
-    }])
-    .with_absolute_start_time(100.0);
+    let sheet = CueSheet::new(vec![text(ROUNDS_DOWN, "x", 0.0)]).with_absolute_start_time(100.0);
     let fire = sheet.absolute_fire_time(&sheet.cues()[0]);
-    let received = Arc::new(Mutex::new(Vec::new()));
     let mut player = CuePlayer::from_sheet(&sheet);
-    player.register_sink(Box::new(Times(Arc::clone(&received))));
+    let (log, sink) = recording_sink();
+    player.register_sink(sink);
 
     player.tick(fire);
-    assert_eq!(*received.lock().unwrap(), vec![ROUNDS_DOWN]);
+    let received: Vec<f64> = log.borrow().iter().map(|c| c.at).collect();
+    assert_eq!(received, vec![ROUNDS_DOWN]);
 }
 
 /// 占有の終わりは `occupancy_horizon()` の絶対時刻ちょうどの tick で完了になる。

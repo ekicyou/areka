@@ -1,8 +1,8 @@
 //! 先渡し（`CueSink::preview`）の檻: 中身・時点・途中登録・既定の実装の受け手の `emit` 列
 //! （areka-P0-budoux-reveal-reflow 要件 2.1・2.8）。
 
-use super::test_support::{barrier, choice, logged_commands, recording_sink, text};
 use super::{BarrierKind, Cue, CueCommand, CuePlayer, CueSheet, CueSink, Rc, RefCell, TalkCue};
+use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
 use dola::cue::{ActorKey, CueTarget, RoutingCommand};
 
 /// 受け手が受け取ったものを届いた順に残す記録。

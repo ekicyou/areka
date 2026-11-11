@@ -1,16 +1,11 @@
-//! `runtime_test` のテーマ別テストファイルが共有するヘルパ（要件 1.7 のテーマ分割・design.md:151）。
-//!
-//! 収録は 2 テーマ以上から参照される項目と、その内部被呼出だけである（§40.5／§42.5）。単一テーマ
-//! からしか参照されないヘルパ（`newline`・`cursor`・`ready_has_text`）は各テーマファイルに残した。
-//!
-//! 注: `RecordingSink` の直前にある区画バナー（原本 `:656-658`＝Task 4.3 の broadcast 区画）は、
-//! 本文一致検証が先行コメント塊を次の項目へ束ねるため、共有ヘルパ `RecordingSink` に同伴して
-//! ここへ移っている（§46.3 と同型・切り離すと `ITEM-MISSING` になる）。
+//! cue のテストが共有する道具（合図を作る補助と、配られた合図を記録する受け手）。
 
-use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSink, Rc, RefCell, TalkCue};
+use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSink, TalkCue};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// バリア cue を作る補助（Barrier ペイロードは presentation でなく duration 0）。
-pub(super) fn barrier(start_time: f64, kind: BarrierKind) -> Cue {
+pub(crate) fn barrier(start_time: f64, kind: BarrierKind) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
@@ -20,7 +15,7 @@ pub(super) fn barrier(start_time: f64, kind: BarrierKind) -> Cue {
 }
 
 /// テキスト cue を作る補助。
-pub(super) fn text(start_time: f64, s: &str, duration: f64) -> Cue {
+pub(crate) fn text(start_time: f64, s: &str, duration: f64) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
@@ -30,7 +25,7 @@ pub(super) fn text(start_time: f64, s: &str, duration: f64) -> Cue {
 }
 
 /// 選択肢 cue を作る補助（WaitForChoice の前に先積みされる）。
-pub(super) fn choice(start_time: f64, id: &str, s: &str) -> Cue {
+pub(crate) fn choice(start_time: f64, id: &str, s: &str) -> Cue {
     Cue {
         actor: ActorKey::from("0"),
         start_time,
@@ -43,10 +38,6 @@ pub(super) fn choice(start_time: f64, id: &str, s: &str) -> Cue {
         duration: 0.0,
     }
 }
-
-// ============================================================================
-// Task 4.3: broadcast 配送・占有終了検知（is_completed）・中断（stop）・sink 登録
-// ============================================================================
 
 /// broadcast の記録用テストダブル sink。受け取った全 `TalkCue` を共有ログへ push する。
 ///
@@ -63,14 +54,24 @@ impl CueSink for RecordingSink {
     }
 }
 
+/// 待ちの cue を作る補助。
+pub(crate) fn wait(start_time: f64, duration: f64) -> Cue {
+    Cue {
+        actor: ActorKey::from("0"),
+        start_time,
+        payload: CueCommand::Wait.into(),
+        duration,
+    }
+}
+
 /// 記録用 sink を作り、（外から中身を覗くための共有ログ, `CuePlayer` へ渡す trait object）を返す。
-pub(super) fn recording_sink() -> (Rc<RefCell<Vec<TalkCue>>>, Box<dyn CueSink>) {
+pub(crate) fn recording_sink() -> (Rc<RefCell<Vec<TalkCue>>>, Box<dyn CueSink>) {
     let log = Rc::new(RefCell::new(Vec::new()));
     let sink = Box::new(RecordingSink { log: log.clone() });
     (log, sink)
 }
 
 /// ログに記録された cue の command 列だけを取り出す補助。
-pub(super) fn logged_commands(log: &Rc<RefCell<Vec<TalkCue>>>) -> Vec<CueCommand> {
+pub(crate) fn logged_commands(log: &Rc<RefCell<Vec<TalkCue>>>) -> Vec<CueCommand> {
     log.borrow().iter().map(|c| c.command.clone()).collect()
 }

@@ -9,29 +9,21 @@
 //! cue は配送されるが、バリア以降の cue は解決通知が来るまで配送されない）。
 
 use dola::cue::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CuePlayer, CuePlayerState, CueSheet,
-    CueSink, TalkCue, TimedSchedule, to_talk_schedule,
+    ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, CueSink, TalkCue,
+    TimedSchedule, to_talk_schedule,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
 
 // テーマ分割（タスク 8.7・要件 1.7）: 本ファイルは module doc・共有 use・接続宣言のみを持ち、
 // テスト本体はテーマ別の兄弟ファイルに在る（接続規約は design 設計判断 #1／#13）。
-#[cfg(test)]
 #[path = "runtime_test_barrier_tests.rs"]
 mod barrier_tests;
-#[cfg(test)]
 #[path = "runtime_test_broadcast_tests.rs"]
 mod broadcast_tests;
-#[cfg(test)]
 #[path = "runtime_test_choice_delivery_tests.rs"]
 mod choice_delivery_tests;
-#[cfg(test)]
 #[path = "runtime_test_occupancy_horizon_tests.rs"]
 mod occupancy_horizon_tests;
-#[cfg(test)]
 #[path = "runtime_test_preview_tests.rs"]
 mod preview_tests;
-#[cfg(test)]
-#[path = "runtime_test_test_support.rs"]
-mod test_support;

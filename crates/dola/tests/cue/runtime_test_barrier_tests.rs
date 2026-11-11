@@ -5,10 +5,10 @@
 //! Timeout バリアの自動解除、そして同じバリア停止を通して観測する構築経路（`from_schedule`）の
 //! 等価性を収める。`ready_has_text` は本テーマからしか参照されないのでここに残した。
 
-use super::test_support::{barrier, choice, text};
 use super::{
     BarrierKind, CueCommand, CuePlayer, CuePlayerState, CueSheet, TimedSchedule, to_talk_schedule,
 };
+use crate::test_support::{barrier, choice, text};
 
 /// ready() の中に指定テキストが含まれるか。
 fn ready_has_text(player: &CuePlayer, s: &str) -> bool {

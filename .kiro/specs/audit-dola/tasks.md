@@ -34,7 +34,7 @@
   - _Requirements: 3.1, 4.1, 4.2_
 
 - [ ] 3. cue の層のテストを減らす（#86・#88・#24・#85・#87・#20・件 3 の一部）
-- [ ] 3.1 cue のテストの道具を 1 か所へ上げ、写しと効かない行を消す（#86・#88・#24）
+- [x] 3.1 cue のテストの道具を 1 か所へ上げ、写しと効かない行を消す（#86・#88・#24）
   - 再生のテストの道具を cue のテストの直下のモジュールへ上げ、待ちの合図を作る道具を足して台本と予定のテストでも使う。予定のテストの中の手書きの写し（`Times`）を消す
   - 再生のテストの効かない `#[cfg(test)]` 6 行を消す
   - 予定のテストの research の組の後ろの方（約 −110 行）を消す
@@ -366,3 +366,4 @@
 - 1.1→2: `schedule.rs` の約 201 行の NOTE(D3-V) は、まだ素の比べ（`start_time + entry_offset > current_time`）を書いている。2 の `pop_if` の書き直しで一緒に直す。
 - 1.2: 古い形の期待 `tick(d + wait_dur)` が `runtime_test_occupancy_horizon_tests.rs:39,47` と `sheet_test.rs:735,738` に残る（0.95 以上なので緑）。前者は 3.1（#24）で消える。後者はかけ直し（21）で拾う。
 - 2: 予定の NaN の並べ替えの檻（`tests/cue/sheet_sort_test.rs`）は debug_assert のため release でだけ走る（`cargo test -p dola --release --test cue sheet_sort`）。`compile/mod.rs` の NOTE(D2-V) の「P14」は 6.2／15.2 で直す。tests/cue の P22・P25・「原本」の注は 3・15.2 で直す。
+- 3.1: cue のテストの道具は `tests/cue/test_support.rs`（旧 `runtime_test_test_support.rs`・research の #13・#53 の道は古い）。research #24 の「clear の 3 本は重複」はずれていた（`clear_resets_active_barrier` は唯一の檻）。`clear_resets_all_state` にバリアを足して守った。

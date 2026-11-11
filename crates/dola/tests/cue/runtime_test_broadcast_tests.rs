@@ -1,11 +1,7 @@
-//! broadcast 配送・占有終了検知（`is_completed`）・中断（`stop`）・sink 登録の檻
-//! （原本の区画 `:656`＝Task 4.3）。
-//!
-//! 当該区画のバナーは、共有ヘルパ `RecordingSink` に同伴して `test_support` へ移っている
-//! （§46.3 と同型・本文一致検証の先行コメント塊規則による強制）。
+//! broadcast 配送・占有終了検知（`is_completed`）・中断（`stop`）・sink 登録の檻。
 
-use super::test_support::{barrier, logged_commands, recording_sink, text};
 use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
+use crate::test_support::{barrier, logged_commands, recording_sink, text, wait};
 
 /// **観測可能な完了条件（Task 4.3・前段）**: 1 つの台本を複数の登録済み sink へ流すと、
 /// 全 sink が**同一の cue 列を同一絶対時刻で**受信する（broadcast fan-out・R2.1/R1.4）。
@@ -28,12 +24,7 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
             duration: 0.5,
         },
         text(0.5, "hello", 1.0),
-        Cue {
-            actor: actor.clone(),
-            start_time: 1.5,
-            payload: CueCommand::Wait.into(),
-            duration: 0.25,
-        },
+        wait(1.5, 0.25),
     ])
     .with_absolute_start_time(100.0);
 
@@ -211,15 +202,7 @@ fn broadcast_does_not_redeliver_across_timeout_barrier_continuation() {
 fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
     let d = 0.15_f64;
     let wait_dur = 0.8_f64;
-    let sheet = CueSheet::new(vec![
-        text(0.0, "bye", d),
-        Cue {
-            actor: ActorKey::from("0"),
-            start_time: d,
-            payload: CueCommand::Wait.into(),
-            duration: wait_dur,
-        },
-    ]);
+    let sheet = CueSheet::new(vec![text(0.0, "bye", d), wait(d, wait_dur)]);
     let mut player = CuePlayer::from_sheet(&sheet);
     let (log, sink) = recording_sink();
     player.register_sink(sink);
