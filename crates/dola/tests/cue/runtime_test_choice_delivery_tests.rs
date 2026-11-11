@@ -40,7 +40,7 @@ fn cursor(start_time: f64, x: &str, y: &str) -> Cue {
 
 /// **配送列の交互配置檻（R1.8/R8.6/R9.7）**: `\q \n \q \_l \q` に相当する
 /// Choice/NewLine/Choice/Cursor/Choice を台本記述順に並べた schedule を tick すると、配送列
-/// （`ready()`＝表示の単一真実源）と broadcast 記録 sink の双方に、3 つの Choice が
+/// （＝表示の単一真実源・broadcast 記録 sink で見る）に、3 つの Choice が
 /// NewLine/Cursor と**交互のまま同一相対順序で**現れる（Choice を配送列から隠さない）。
 ///
 /// この檻は旧「先積み一択」挙動（Choice を配送列から分離し pending_choices のみへ積む）では
@@ -86,21 +86,11 @@ fn choice_interleaves_with_newline_and_cursor_in_delivery_stream() {
         },
     ];
 
-    // 配送列（ready＝表示の単一真実源）に交互配置がそのまま現れる（Choice を隠さない・案C）。
-    assert_eq!(
-        player
-            .ready()
-            .iter()
-            .map(|c| c.command.clone())
-            .collect::<Vec<_>>(),
-        expected,
-        "配送列に \\q \\n \\q \\_l \\q の交互配置が順序保存で現れる（配送列＝表示の単一真実源・R1.8/R8.6）"
-    );
-    // broadcast 記録 sink も同一順序で観測する（記録 sink での観測順一致・R9.7）。
+    // 配送列（＝表示の単一真実源）を記録 sink で見る。交互配置がそのまま現れる（Choice を隠さない・案C・R9.7）。
     assert_eq!(
         logged_commands(&log),
         expected,
-        "broadcast 記録 sink の観測順も交互配置を保存する（R9.7）"
+        "配送列に \\q \\n \\q \\_l \\q の交互配置が順序保存で現れる（配送列＝表示の単一真実源・R1.8/R8.6/R9.7）"
     );
 }
 

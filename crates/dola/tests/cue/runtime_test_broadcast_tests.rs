@@ -199,7 +199,6 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
 
     // 全 entry を配り終える時刻（末尾 Wait の発火時刻＝d）まで進める。
     player.tick(d);
-    assert_eq!(player.remaining(), 0, "全 entry を配り終えた");
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("bye".into()), CueCommand::Wait],
@@ -229,10 +228,16 @@ fn is_completed_is_gated_by_final_text_duration() {
     let d = 0.5_f64;
     let sheet = CueSheet::new(vec![text(0.0, "bye", d)]);
     let mut player = CuePlayer::from_sheet(&sheet);
+    let (log, sink) = recording_sink();
+    player.register_sink(sink);
 
     // 最終 Text の配送時刻（0.0）到達 — 配り終えたが再生（duration）は未完。
     player.tick(0.0);
-    assert_eq!(player.remaining(), 0, "全 entry 配送済み");
+    assert_eq!(
+        logged_commands(&log),
+        vec![CueCommand::Text("bye".into())],
+        "全 entry 配送済み"
+    );
     assert!(
         !player.is_completed(),
         "最終 Text の配送時点では duration 端未到達ゆえ未完了"
@@ -264,7 +269,6 @@ fn stop_discards_remaining_and_halts_further_delivery() {
 
     // 中断: 残 entry（b）を破棄する。
     player.stop();
-    assert_eq!(player.remaining(), 0, "stop で残 entry を破棄する");
     assert!(
         player.is_completed(),
         "stop 後はプレイヤーが終端（以降の配送はない）"

@@ -10,7 +10,6 @@
 
 use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, CueSink, TalkCue,
-    TimedSchedule, to_talk_schedule,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
