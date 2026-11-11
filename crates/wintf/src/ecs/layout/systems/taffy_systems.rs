@@ -115,7 +115,7 @@ pub fn sync_taffy_tree_system(
             affected_parents.insert(entity);
         }
     }
-    // 親に節が無い部品は木につながらず配置されない（同じ回に親の節ができたなら出さない）
+    // 親に節が無い部品は、親が BoxStyle を持つまで木につながらず配置されない（同じ回に親の節ができたなら出さない）
     for (entity, child_of, _) in new_entities.iter() {
         if let Some(child_of) = child_of
             && taffy_res.get_node(child_of.parent()).is_none()
@@ -124,7 +124,7 @@ pub fn sync_taffy_tree_system(
             warn!(
                 entity = %format_entity_name(entity, hierarchy.get(entity).ok().and_then(|h| h.1)),
                 parent = %format_entity_name(parent, hierarchy.get(parent).ok().and_then(|h| h.1)),
-                "[sync_taffy_tree] Parent has no taffy node; this node is not laid out"
+                "[sync_taffy_tree] Parent has no taffy node; this node is not laid out until the parent gets a BoxStyle"
             );
         }
     }

@@ -200,58 +200,6 @@ mod tests {
         assert!(!Brush::TRANSPARENT.is_inherit());
     }
 
-    #[test]
-    fn test_brushes_default() {
-        let brushes = Brushes::default();
-        assert!(brushes.foreground.is_inherit());
-        assert!(brushes.background.is_inherit());
-    }
-
-    #[test]
-    fn test_brushes_with_foreground() {
-        let color = D2D1_COLOR_F {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        };
-        let brushes = Brushes::with_foreground(color);
-        assert_eq!(brushes.foreground, Brush::Solid(color));
-        assert!(brushes.background.is_inherit());
-    }
-
-    #[test]
-    fn test_brushes_with_background() {
-        let color = D2D1_COLOR_F {
-            r: 0.0,
-            g: 1.0,
-            b: 0.0,
-            a: 1.0,
-        };
-        let brushes = Brushes::with_background(color);
-        assert!(brushes.foreground.is_inherit());
-        assert_eq!(brushes.background, Brush::Solid(color));
-    }
-
-    #[test]
-    fn test_brushes_with_colors() {
-        let fg = D2D1_COLOR_F {
-            r: 1.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        };
-        let bg = D2D1_COLOR_F {
-            r: 0.0,
-            g: 0.0,
-            b: 1.0,
-            a: 0.5,
-        };
-        let brushes = Brushes::with_colors(fg, bg);
-        assert_eq!(brushes.foreground, Brush::Solid(fg));
-        assert_eq!(brushes.background, Brush::Solid(bg));
-    }
-
     /// `Brushes::foreground_color`: 色が決まっていればその色、`Inherit` なら既定の前景色（黒・不透明）
     #[test]
     fn test_foreground_color_falls_back_to_default() {

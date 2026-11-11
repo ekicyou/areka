@@ -237,9 +237,9 @@ fn text_ranges_and_origin(
 
 /// 空トークのTypewriter背景描画システム（Draw スケジュール）
 ///
-/// TypewriterTalkはあるがTypewriterLayoutCacheがない（空トーク）の場合、
-/// 背景色のみを描画する。色は`Brushes`コンポーネントから取得される。
-/// 大きさ・筆・トークが変わったか、命令の列が無い部品だけを描く。
+/// 文が無く控えも無い部品（空のトーク・控えが作れなかった・大きさが足りない）を受け持ち、
+/// 背景色のみを描画する（控えができた部品は `draw_typewriters` が同じ回に背景ごと描く）。色は`Brushes`コンポーネントから取得される。
+/// 大きさ・筆・トーク・`Typewriter` が変わったか、命令の列が無い部品だけを描く。
 /// 背景の色が無いか大きさが足りないときは命令の列を空にする（前の文の絵を残さない）。
 #[allow(clippy::type_complexity)]
 pub fn draw_typewriter_backgrounds(
@@ -260,6 +260,7 @@ pub fn draw_typewriter_backgrounds(
                 Changed<Arrangement>,
                 Changed<Brushes>,
                 Changed<TypewriterTalk>,
+                Changed<Typewriter>,
                 Without<GraphicsCommandList>,
             )>,
         ),

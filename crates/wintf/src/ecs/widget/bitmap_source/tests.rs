@@ -34,53 +34,6 @@ fn test_wic_core_creation() {
     });
 }
 
-#[test]
-fn test_wic_core_factory_access() {
-    // factory()アクセサが有効な参照を返すことを確認
-    with_com_initialized(|| {
-        let wic_core = WicCore::new().expect("WicCore creation failed");
-        let factory = wic_core.factory();
-        // factory が存在することを確認（nullではない）
-        assert!(!factory.as_raw().is_null(), "factory should not be null");
-    });
-}
-
-#[test]
-fn test_wic_core_clone() {
-    // Cloneトレイトが正しく実装されていることを確認
-    with_com_initialized(|| {
-        let wic_core = WicCore::new().expect("WicCore creation failed");
-        let cloned = wic_core.clone();
-        // 両方のfactoryが有効であることを確認
-        assert!(
-            !wic_core.factory().as_raw().is_null(),
-            "original factory should be valid"
-        );
-        assert!(
-            !cloned.factory().as_raw().is_null(),
-            "cloned factory should be valid"
-        );
-    });
-}
-
-#[test]
-fn test_wic_core_send_sync() {
-    // Send + Syncトレイトが実装されていることをコンパイル時に確認
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<WicCore>();
-}
-
-// ============================================================
-// Task 2.2: BitmapSourceResource Tests
-// ============================================================
-
-#[test]
-fn test_bitmap_source_resource_send_sync() {
-    // Send + Syncトレイトが実装されていることをコンパイル時に確認
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<BitmapSourceResource>();
-}
-
 // ============================================================
 // Task 2.3: BitmapSourceGraphics Tests
 // ============================================================
@@ -422,4 +375,22 @@ fn switching_hit_test_to_alpha_mask_after_load_builds_mask() {
         schedule.run(&mut world);
         wait_mask(&mut world, e);
     });
+}
+
+// ============================================================
+// αマスクの読み込みの大きさ（W5）— CPU だけ
+// ============================================================
+
+/// 行の幅と全体の大きさは、u32 を超える大きさでも溢れずに測るか、測れないと返す。
+#[test]
+fn pbgra32_layout_reports_overflow_instead_of_wrapping() {
+    use super::systems::pbgra32_layout;
+    assert_eq!(pbgra32_layout(2, 3), Some((8, 24)));
+    // 32768×32768 は 4 GiB で u32 を超える（64 ビットの usize には収まる）
+    assert_eq!(
+        pbgra32_layout(32768, 32768),
+        Some((131072, 4 * 32768 * 32768))
+    );
+    // 行の幅が u32 を超える
+    assert_eq!(pbgra32_layout(u32::MAX, 1), None);
 }

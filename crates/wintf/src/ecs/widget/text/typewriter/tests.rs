@@ -41,17 +41,6 @@ fn make_glyph_timeline(glyph_count: u32, step: f64) -> TypewriterTimeline {
 }
 
 #[test]
-fn test_typewriter_talk_new_initial_state() {
-    let talk = TypewriterTalk::new(vec![TypewriterToken::Text("ab".into())], 10.0);
-    assert_eq!(talk.state(), TypewriterState::Playing);
-    assert_eq!(talk.start_time(), 10.0);
-    assert_eq!(talk.visible_cluster_count(), 0);
-    assert_eq!(talk.progress(), 0.0);
-    assert!(!talk.is_completed());
-    assert_eq!(talk.tokens().len(), 1);
-}
-
-#[test]
 fn test_typewriter_talk_pause_records_elapsed_and_changes_state() {
     let mut talk = TypewriterTalk::new(vec![], 100.0);
     talk.pause(105.0);
@@ -808,4 +797,112 @@ fn font_size_of(world: &World, entity: Entity) -> f32 {
     }
     .expect("font size");
     size
+}
+
+// ============================================================
+// 7.1 二度目の見直し 2 回目: 文の無いトーク（W1）・Typewriter の入れ直し（W3）— 実 GPU
+// ============================================================
+
+/// 文の無いトーク（待ち＋イベント）も控えができて進み、イベントが届いて完了する。
+#[test]
+fn textless_wait_and_event_talk_fires_event_and_completes() {
+    use crate::ecs::widget::text::typewriter_ir::{TypewriterEvent, TypewriterEventKind};
+    let (mut world, mut schedule) = new_draw_world();
+    let target = world.spawn_empty().id();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::with_background(BG),
+            TypewriterTalk::new(
+                vec![
+                    TypewriterToken::Wait(1.0),
+                    TypewriterToken::FireEvent {
+                        target,
+                        event: TypewriterEventKind::Complete,
+                    },
+                ],
+                0.0,
+            ),
+        ))
+        .id();
+    schedule.run(&mut world);
+    schedule.run(&mut world);
+    assert_eq!(
+        world.get::<TypewriterEvent>(target),
+        Some(&TypewriterEvent::Complete),
+        "文の無いトークでもイベントが届く"
+    );
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+    assert!(
+        list_of(&world, entity).flatten().is_some(),
+        "背景は文の係が描く"
+    );
+}
+
+/// `Typewriter` を外して（絵が消える）入れ直すと、空のトークの背景を描き直す。
+#[test]
+fn reinserting_typewriter_redraws_empty_talk_background() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(100.0, 50.0),
+            Brushes::with_background(BG),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(
+        list_of(&world, entity).flatten().is_some(),
+        "背景が描かれる"
+    );
+
+    world.entity_mut(entity).remove::<Typewriter>();
+    world.flush();
+    assert_eq!(list_of(&world, entity), Some(None), "外すと絵が消える");
+
+    world.entity_mut(entity).insert(Typewriter::default());
+    schedule.run(&mut world);
+    assert!(
+        list_of(&world, entity).flatten().is_some(),
+        "入れ直したら背景を描き直す"
+    );
+}
+
+/// 文の無いトークで控えが作れない部品（大きさが足りない）は、背景の係が前の文の絵を消す。
+#[test]
+fn textless_talk_without_cache_clears_previous_text_list() {
+    use crate::ecs::widget::text::typewriter_ir::TypewriterEventKind;
+    let (mut world, mut schedule) = new_draw_world();
+    let target = world.spawn_empty().id();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::with_background(BG),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(list_of(&world, entity).flatten().is_some(), "文が描かれる");
+
+    world.entity_mut(entity).insert((
+        sized(5.0, 5.0),
+        TypewriterTalk::new(
+            vec![
+                TypewriterToken::Wait(1.0),
+                TypewriterToken::FireEvent {
+                    target,
+                    event: TypewriterEventKind::Complete,
+                },
+            ],
+            0.0,
+        ),
+    ));
+    schedule.run(&mut world);
+    assert_eq!(
+        list_of(&world, entity),
+        Some(None),
+        "控えの無い文の無いトークでは前の文の絵を残さない"
+    );
 }

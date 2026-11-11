@@ -6,7 +6,12 @@ use windows_numerics::Matrix3x2;
 use crate::ecs::types::Rect;
 
 /// テスト用ヘルパー: 指定した bounds を持つ GlobalArrangement を作成
-fn make_global_arrangement(left: f32, top: f32, right: f32, bottom: f32) -> GlobalArrangement {
+pub(super) fn make_global_arrangement(
+    left: f32,
+    top: f32,
+    right: f32,
+    bottom: f32,
+) -> GlobalArrangement {
     GlobalArrangement {
         transform: Matrix3x2::translation(left, top),
         bounds: Rect {
@@ -309,8 +314,8 @@ fn test_hit_test_in_window_position_none() {
 // 2 つの判定の一致（14 番）
 // ========================================================================
 
-/// 2x2 PBGRA32 の全透明・全不透明のマスク
-fn mask_2x2(alpha: u8) -> crate::ecs::widget::bitmap_source::AlphaMask {
+/// 2x2 PBGRA32 の全透明・全不透明のマスク（`tests_ex` からも使う）
+pub(super) fn mask_2x2(alpha: u8) -> crate::ecs::widget::bitmap_source::AlphaMask {
     let pixels = [0, 0, 0, alpha].repeat(4);
     crate::ecs::widget::bitmap_source::AlphaMask::from_pbgra32(&pixels, 2, 2, 8)
 }

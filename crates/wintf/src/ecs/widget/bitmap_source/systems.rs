@@ -229,6 +229,14 @@ use crate::com::wic::WICBitmapSourceExt;
 use crate::ecs::layout::{HitTest, HitTestMode};
 use tracing::error;
 
+/// PBGRA32（1 画素 4 バイト）の行の幅と全体のバイト数。溢れるなら `None`（u32 で掛けると巨大な画像で溢れる）。
+pub(super) fn pbgra32_layout(width: u32, height: u32) -> Option<(u32, usize)> {
+    let stride = width.checked_mul(4)?;
+    (stride as usize)
+        .checked_mul(height as usize)
+        .map(|size| (stride, size))
+}
+
 /// αマスク生成完了時にBitmapSourceResourceにαマスクを設定するCommand
 pub(super) struct SetAlphaMaskCommand {
     pub(super) entity: Entity,
@@ -306,8 +314,10 @@ pub fn generate_alpha_mask_system(
         };
 
         // ピクセルデータを取得
-        let stride = width * 4; // PBGRA32 = 4 bytes/pixel
-        let buffer_size = (stride * height) as usize;
+        let Some((stride, buffer_size)) = pbgra32_layout(width, height) else {
+            error!(entity = ?entity, width, height, "Bitmap is too large for alpha mask");
+            continue;
+        };
         let mut buffer = vec![0u8; buffer_size];
 
         if let Err(e) = source.copy_pixels(None, stride, &mut buffer) {

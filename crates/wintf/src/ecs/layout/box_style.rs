@@ -59,8 +59,9 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 /// # 配置される部品
 ///
 /// 配置されるのは、`LayoutRoot` から `ChildOf` をたどって途切れずに `BoxStyle`（根は `LayoutRoot`）が
-/// 付いている部品だけ。途中に `BoxStyle` の無い親が居ると、その下は taffy の木につながらず、
-/// 子の `BoxStyle` を変えても配置されない（節を作った回と、子を持つ部品から外した回に warn を出す）。
+/// 付いている部品だけ。途中に `BoxStyle` の無い親が居ると、その親が `BoxStyle` を持つまで、その下は
+/// taffy の木につながらず、子の `BoxStyle` を変えても配置されない（節を作った回と、子を持つ部品から外した回に warn を出す）。
+/// 親が後から `BoxStyle` を持てば、その回に親子がつながる。
 ///
 /// # 使用例
 ///
@@ -68,7 +69,7 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 /// use wintf::ecs::layout::*;
 ///
 /// // Flexコンテナーとして使用
-/// commands.spawn((
+/// let container = commands.spawn((
 ///     BoxStyle {
 ///         size: Some(BoxSize {
 ///             width: Some(Dimension::Percent(100.0)),
@@ -79,7 +80,8 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///         align_items: Some(AlignItems::CENTER),
 ///         ..Default::default()
 ///     },
-/// ));
+///     ChildOf(parent), // 親も BoxStyle（根は LayoutRoot）を持つこと
+/// )).id();
 ///
 /// // Flexアイテムとして使用
 /// commands.spawn((
@@ -92,6 +94,7 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///         flex_shrink: Some(1.0),
 ///         ..Default::default()
 ///     },
+///     ChildOf(container), // 上のコンテナーの子として配置する
 /// ));
 /// ```
 #[derive(Component, Debug, Clone, Copy, PartialEq, Default)]

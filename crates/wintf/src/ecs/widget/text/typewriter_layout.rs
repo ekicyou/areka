@@ -66,6 +66,9 @@ pub fn init_typewriter_layout(
                 !(typewriter.is_changed() || talk.is_changed() || arrangement.is_changed())
             })
     });
+    if query.is_empty() {
+        return;
+    }
 
     let Some(graphics_core) = graphics_core else {
         debug!("[init_typewriter_layout] No GraphicsCore");
@@ -92,7 +95,8 @@ pub fn init_typewriter_layout(
             })
             .collect();
 
-        if full_text.is_empty() {
+        // 文が無くても待ちやイベントがあれば控えを作って進める（空の文も DirectWrite は配置でき、クラスタは 0）
+        if talk.tokens().is_empty() {
             continue;
         }
 

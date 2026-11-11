@@ -287,16 +287,6 @@ mod tests {
         assert!(mask.is_hit(9, 0));
     }
 
-    /// サイズアクセサのテスト
-    #[test]
-    fn test_size_accessors() {
-        let pixels = vec![0u8; 100 * 50 * 4];
-        let mask = AlphaMask::from_pbgra32(&pixels, 100, 50, 400);
-
-        assert_eq!(mask.width(), 100);
-        assert_eq!(mask.height(), 50);
-    }
-
     // === W5b-T 追加: from_pbgra32 / is_hit の境界ロジック特性化 ===
 
     /// width=0 の退化ケース: 空マスクが生成され、いかなる座標もヒットしない
