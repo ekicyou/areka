@@ -131,7 +131,7 @@
   - _Boundary: areka-talk_
   - _Requirements: 3.1, 3.3, 4.5_
 
-- [ ] 11. 仕上げの確かめ（T11）
+- [x] 11. 仕上げの確かめ（T11）
 - [x] 11.1 `main` を取り込んで範囲へ audit をかけ直し、新しい指摘が 0 件になるまで直す
   - `main` を取り込み、3 つのクレートのファイルの数と行数を測り直してから、3 つのクレートだけへ `/ponytail:ponytail-audit` を上限なし・全部のファイルを読む作法でかける
   - 出た指摘は直しが生んだ物も含めて直し、0 件になるまで繰り返す。数えないのは design.md「直さない・回した指摘」の表の物（#18・#10・#16・#21・#4 の呼び手・#1 の決まった一文）だけ
@@ -144,7 +144,7 @@
   - 6 つの結果が `research.md` に記録されている
   - _Requirements: 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.7, 6.8, 7.5_
 
-- [ ] 11.3 全体テストを緑で通す
+- [x] 11.3 全体テストを緑で通す
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回、裏で回し、緑で終わる（範囲に GPU を使うテストは無い）。一時のパスの番人と 1,000 行の番人も緑
   - 11.1・11.2 の直しをすべて入れた後に回す。この後にコードを直したら回し直す
   - _Requirements: 4.2, 4.4, 5.1, 7.4_
@@ -156,3 +156,4 @@
 - 8.3: 範囲の外の差分に `.kiro/specs/{audit-areka-app,audit-areka-install-update,audit-emo2-boot-spine,sylphya-sqlite-kvs}/brief.md` が出るのは、要件の討議で #10・#16・#21・#4 の呼び手を回し先の brief へ書き足したコミット（4176d4ea・dfeaacec）のもの。11.2 の確かめではこの 4 つを意図した変更として数える
 - 9（範囲の外・完了の棚卸へ）: `crates/areka-kanade/src/actor_tests.rs` 10 行目の注「areka-actor の run_bounded と同旨」は、9 で消した道具を名指したまま残る。範囲の外のファイルは例外の表の 1 行のほかは変えない約束（design「Goals」）なので触っていない。`/kiro-complete` の棚卸で扱う
 - 11.2（範囲の外・完了の棚卸へ）: `doc/ukadoc-coverage/ledger/property.toml` が引く行番号（`reader.rs:158-164`・`actor.rs:345-350`）が今の行（157・378）とずれている。約束は文と target なので直していない（research.md §13 の 6）
+- 11.3: `tools/test-all.ps1` を 0b126aa2 で 1 回・全段緑（x64 workspace tests 1072 s・i686・fmt・encoding ほか）
