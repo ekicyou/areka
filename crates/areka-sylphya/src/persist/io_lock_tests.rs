@@ -43,7 +43,7 @@ fn a_withheld_path_takes_no_lock_file() {
 #[test]
 fn retry_transient_retries_a_sharing_violation_only() {
     let mut calls = 0;
-    let got = retry_transient(|| {
+    let got = retry_transient(LOCK_WAIT, || {
         calls += 1;
         if calls == 1 {
             Err(std::io::Error::from_raw_os_error(32))
@@ -54,7 +54,7 @@ fn retry_transient_retries_a_sharing_violation_only() {
     assert_eq!(got.unwrap(), 2);
 
     let mut calls = 0;
-    let got: std::io::Result<()> = retry_transient(|| {
+    let got: std::io::Result<()> = retry_transient(LOCK_WAIT, || {
         calls += 1;
         Err(std::io::Error::other("not transient"))
     });

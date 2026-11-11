@@ -250,7 +250,7 @@ pub fn load_scope(
         return Vec::new();
     };
 
-    let content = match io.read(&path) {
+    let content = match io::retry_transient(io::LOCK_WAIT, || io.read(&path)) {
         Ok(Some(content)) => content,
         Ok(None) => {
             tracing::debug!(target: LOG_TARGET, ?scope, path = %path.display(), "persist file absent; loading as empty");
@@ -421,7 +421,7 @@ pub fn save_scope(
 /// 無いファイルと空（空白だけ）のファイルは守る中身が無いので空の土台。中身があれば寛容でない
 /// 読み（[`format::parse_toml_str`]）を通す。一時の掴みは [`io::retry_transient`] で読み直す。
 fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<(FormatDoc, toml::Table), String> {
-    match io::retry_transient(|| io.read(path)) {
+    match io::retry_transient(io::LOCK_WAIT, || io.read(path)) {
         Ok(Some(content)) if !content.trim().is_empty() => format::parse_toml_str(&content),
         Ok(_) => Ok(Default::default()),
         Err(e) => Err(format!(

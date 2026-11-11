@@ -49,7 +49,7 @@ pub trait PersistIo: Send {
     }
 }
 
-/// 一時の掴み（共有違反・拒み）を取り直す待ちの上限（保存の土台の読みと、更新の間の錠）。
+/// 一時の掴み（共有違反・拒み）を取り直す待ちの上限（記憶のファイルの読み・確定の `rename`・更新の間の錠）。
 pub(crate) const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
 /// 一時の掴みを取り直す間隔。
 pub(crate) const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(10);
@@ -59,9 +59,13 @@ pub(crate) fn is_transient(e: &std::io::Error) -> bool {
     matches!(e.raw_os_error(), Some(32) | Some(5))
 }
 
-/// `op` を一時の掴み（[`is_transient`]）の間だけ [`LOCK_RETRY`] ごとに最大 [`LOCK_WAIT`] 取り直す。
-pub(crate) fn retry_transient<T>(mut op: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
-    let deadline = std::time::Instant::now() + LOCK_WAIT;
+/// `op` を一時の掴み（[`is_transient`]）の間だけ [`LOCK_RETRY`] ごとに最大 `wait` 取り直す
+/// （本番の呼び手は [`LOCK_WAIT`]）。
+pub(crate) fn retry_transient<T>(
+    wait: std::time::Duration,
+    mut op: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let deadline = std::time::Instant::now() + wait;
     loop {
         match op() {
             Err(e) if is_transient(&e) && std::time::Instant::now() < deadline => {
@@ -130,32 +134,25 @@ impl FsPersistIo {
             std::fs::create_dir_all(parent)?;
         }
         let lock_path = Self::lock_path_for(path);
-        let deadline = std::time::Instant::now() + wait;
-        loop {
-            let e = match std::fs::OpenOptions::new()
+        retry_transient(wait, || {
+            std::fs::OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(true)
                 .share_mode(0)
                 .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
                 .open(&lock_path)
-            {
-                Ok(file) => return Ok(file),
-                Err(e) if is_transient(&e) => e,
-                Err(e) => return Err(e),
-            };
-            if std::time::Instant::now() >= deadline {
-                // 拒みのままの期限切れは本当に書けないフォルダかもしれない＝「ほかの areka」と言い違えない。
-                if e.raw_os_error() != Some(32) {
-                    return Err(e);
-                }
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::TimedOut,
-                    "記憶のファイル sylphya.toml の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）",
-                ));
+        })
+        .map_err(|e| {
+            // 拒みのままの期限切れは本当に書けないフォルダかもしれない＝「ほかの areka」と言い違えない。
+            if e.raw_os_error() != Some(32) {
+                return e;
             }
-            std::thread::sleep(LOCK_RETRY);
-        }
+            std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "記憶のファイル sylphya.toml の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）",
+            )
+        })
     }
 
     /// ゴーストの記憶のフォルダを先に作る。控える範囲の中なら作らずに `Ok`、外なら
@@ -220,7 +217,7 @@ impl PersistIo for FsPersistIo {
 
         // 原子的置換。Windows の rename は既存宛先を置換する（研究 §11-2）。一時の掴みは取り直す。
         // 失敗時も本体（既存ファイル）は無傷——temp を掃除して Err を返す。
-        if let Err(e) = retry_transient(|| std::fs::rename(&temp, path)) {
+        if let Err(e) = retry_transient(LOCK_WAIT, || std::fs::rename(&temp, path)) {
             let _ = std::fs::remove_file(&temp);
             return Err(e);
         }

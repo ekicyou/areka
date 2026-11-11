@@ -21,7 +21,7 @@ pub struct FlatEntry {
     pub degrade: DegradePolicy,
 }
 
-/// フラット 26 トークン全数（件数檻: `FLAT_VOCAB.len() == 26`・R1.1）。
+/// フラット 26 トークン全数（並びはテスト `flat_vocab_tokens_match_exactly` が縛る・R1.1）。
 ///
 /// 層割当（brief.md Scope typology）:
 /// - `username` = ShioriQuery（SHIORI Resource 照会）。

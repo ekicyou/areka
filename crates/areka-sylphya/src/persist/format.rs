@@ -117,15 +117,9 @@ impl AxisPair {
     }
 }
 
-/// [`FormatDoc`] を `format-version = 1` の TOML 文字列へ直列化する（design スキーマ）。
-///
-/// 値はすべて TOML 文字列で出力する。空のマップ・`None` の key はテーブル自体を省略する
-/// （空テーブルを書かない）。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。
-pub fn to_toml_string(doc: &FormatDoc) -> String {
-    to_toml_string_over(toml::Table::new(), doc)
-}
-
-/// `base`（既存のファイルの表）の上に `doc` の値だけを重ねて直列化する。`doc` が持たない表・key・
+/// `base`（既存のファイルの表）の上に [`FormatDoc`] の値だけを `format-version = 1` の TOML 文字列へ
+/// 重ねて直列化する（design スキーマ）。値はすべて TOML 文字列で出力し、空のマップ・`None` の key は
+/// テーブル自体を省略する。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。`doc` が持たない表・key・
 /// 型の違う値は `base` のまま残す（版が 1 のまま足された表を保存で消さない）。
 pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> String {
     let mut root = toml::Table::new();
@@ -176,7 +170,7 @@ pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> Str
     }
     merge_table(&mut base, root);
 
-    // toml の直列化は本 Table 構造では失敗しない（全値が String/Integer/Table）。万一の
+    // toml の直列化は読んだ TOML の表とこの関数が足す値からは失敗しない。万一の
     // 失敗も panic させず、空 doc の最小形へ縮退する（R6.7・無音失敗なし）。
     toml::to_string(&base).unwrap_or_else(|e| {
         tracing::error!(
@@ -380,7 +374,7 @@ mod tests {
             window_adjacent: BTreeMap::from([("1".into(), "left".into())]),
         };
 
-        let toml = to_toml_string(&doc);
+        let toml = to_toml_string_over(toml::Table::new(), &doc);
         let back = read_toml_str(&toml);
         assert_eq!(doc, back);
     }
@@ -410,7 +404,7 @@ mod tests {
             },
         );
 
-        let back = read_toml_str(&to_toml_string(&doc));
+        let back = read_toml_str(&to_toml_string_over(toml::Table::new(), &doc));
         assert_eq!(doc, back);
     }
 
@@ -421,7 +415,7 @@ mod tests {
             baseware_roots: Some(String::new()),
             ..FormatDoc::default()
         };
-        let toml = to_toml_string(&doc);
+        let toml = to_toml_string_over(toml::Table::new(), &doc);
         assert!(
             toml.contains("[baseware]"),
             "output=
@@ -432,7 +426,7 @@ mod tests {
 
     #[test]
     fn serialized_output_carries_format_version_1() {
-        let toml = to_toml_string(&FormatDoc::default());
+        let toml = to_toml_string_over(toml::Table::new(), &FormatDoc::default());
         assert!(toml.contains("format-version = 1"), "output=\n{toml}");
     }
 
@@ -443,7 +437,7 @@ mod tests {
             boot_count: Some("1024".into()),
             ..FormatDoc::default()
         };
-        let back = read_toml_str(&to_toml_string(&doc));
+        let back = read_toml_str(&to_toml_string_over(toml::Table::new(), &doc));
         assert_eq!(back.boot_count.as_deref(), Some("1024"));
     }
 

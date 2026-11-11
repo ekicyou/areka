@@ -138,6 +138,26 @@ fn a_transient_sharing_violation_is_retried() {
 }
 
 #[test]
+fn a_transient_sharing_violation_on_load_is_retried() {
+    let inner = FakePersistIo::new();
+    save_scope(
+        PersistScope::Ghost,
+        &ghost_roots(),
+        &inner,
+        vec![(PersistKey::LastGhost, "emo2".into())],
+    );
+    let io = SharingViolationOnce {
+        inner,
+        violated: AtomicBool::new(false),
+    };
+    // 起動の読みも一時の掴みで覚えていた値を忘れない。
+    assert_eq!(
+        load_scope(PersistScope::Ghost, &ghost_roots(), &io),
+        vec![(PersistKey::LastGhost, "emo2".into())]
+    );
+}
+
+#[test]
 fn an_empty_file_is_overwritten() {
     let io = FakePersistIo::new();
     io.commit(&ghost_file(), "").unwrap();

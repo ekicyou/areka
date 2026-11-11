@@ -107,7 +107,7 @@ crates/areka-actor/tests/ui_span_test.rs                      # #2 の縛るテ�
 - `persist/format.rs` — #1（`parse_toml_str` を足し、`read_toml_str` はそれを包む）・#19（`is_all_absent` を消す）・#8（`determinism_*` 2 本を消す）・#12（`e.message` を `e.message()` へ）。
 - `persist/io.rs` — #3（`PersistIo::lock_for_update`・`FsPersistIo` の錠・`Arc` の委譲）・#8（`fake_is_deterministic_given_same_faults` を消す）・錠のテスト。
 - `persist/persist_tests.rs` — #8（`load_is_deterministic` を消す）。
-- `persist/persist_window_adjacent_tests.rs` — #19（`is_all_absent` を `FormatDoc::default()` との比べへ）。
+- `persist/persist_window_adjacent_tests.rs` — #19（`is_all_absent` を見ていたテスト `adjacent_only_doc_is_not_all_absent` はかけ直し 1 回目の 4 で消した）。
 - `actor.rs` — #4（`barrier_within`・`barrier` の説明）・#14（起動の組み立てを 1 つの関数へ）・#15（`PersistPut::reply` を消す）・#20（書き換えの無い知らせで写しを作らない）・新しいテストのファイルの `mod` の行。
 - `actor_tests.rs` — #8（`classify_set_three_branches_all_reachable`・`apply_is_deterministic_across_variants`・`apply_persist_put_deterministic_same_ref`・`runtime_command_sink_trait_is_reserved` と道具の `NoopSink` を消す）・#15（`reply: None` の欄を消す）。
 - `actor_failure_sink_tests.rs` — #15（返信つきの投函を、読み口の値で結果を見る形へ）。
@@ -148,12 +148,14 @@ flowchart TD
     L -- 取れた --> E[read_existing]
     E -- 無い または 空の中身 --> M[空の doc に重ねる]
     E -- 読めた かつ 使える --> M2[既存の doc に重ねる]
-    E -- 読めない 壊れている 版が違う --> D3[error と Degraded Io 使えない理由 書かない]
-    M --> C[io.commit]
+    E -- 読めない 壊れている 版が違う かつ 控えない --> D3[error と Degraded Io 使えない理由 書かない]
+    E -- 読めない 壊れている 版が違う かつ 控える走り --> W[warn と 空の土台に重ねる]
+    M --> C[io.commit 控える走りは控えの中身に置いて Withheld]
     M2 --> C
     C --> X[錠を両方とも放す]
     D2 --> X
     D3 --> X
+    W --> C
 ```
 
 - 錠は「読む」の前に取り、「書く」の後に放す。2 つの書き手の読みと書きが交互に混ざらない（#3 の ⑴ 更新が消える ⑵ 一時のファイルを切り詰め合う、の両方が止まる）。
@@ -191,14 +193,14 @@ pub(crate) fn to_toml_string_over(base: toml::Table, doc: &FormatDoc) -> String;
 **`mod.rs` の形**
 
 ```rust
-/// save のマージ土台。Ok(doc) なら重ねてよい・Err(理由) なら書かずに Degraded。
+/// save のマージ土台。Ok((doc, 読んだ表)) なら重ねてよい・Err(理由) なら書かずに Degraded。
 fn read_existing(io: &dyn PersistIo, path: &Path) -> Result<(FormatDoc, toml::Table), String>;
 ```
 
-- `Ok(None)`（無い）→ `Ok(FormatDoc::default())`。
-- `Ok(Some(c))` で `c.trim().is_empty()`（空のファイル）→ `Ok(FormatDoc::default())`。守る中身が無いので上書きしてよい（読む側は今どおり warn して不在）。
+- `Ok(None)`（無い）→ `Ok(Default::default())`（空の doc と空の表）。
+- `Ok(Some(c))` で `c.trim().is_empty()`（空のファイル）→ `Ok(Default::default())`。守る中身が無いので上書きしてよい（読む側は今どおり warn して不在）。
 - `Ok(Some(c))` → `format::parse_toml_str(&c)`。
-- `Err(e)` → 共有違反（`raw_os_error() == Some(32)`）と拒み（`Some(5)`）の間だけ、錠と同じく `LOCK_RETRY` ごとに最大 `LOCK_WAIT`（1 秒）読み直す（ウイルス対策などの一時の掴みで起動を止めない・設計の討議 議題 1）。それでも読めなければ、またはほかの失敗なら `Err(読めない理由の文)`。今の warn!「`persist read-before-write failed; merging onto empty base (tolerant)`」は消す（その道が無くなる）。
+- 読みは `io::retry_transient(LOCK_WAIT, || io.read(path))` を通す。共有違反（`raw_os_error() == Some(32)`）と拒み（`Some(5)`）の間だけ `LOCK_RETRY` ごとに最大 `LOCK_WAIT`（1 秒）読み直す（`retry_transient` は `read_existing`・`commit` の `rename`・起動の読み `load_scope`・錠の `lock_within` が同じものを使う。ウイルス対策などの一時の掴みで起動を止めない・設計の討議 議題 1・かけ直し 1 回目の 2 と 2 回目の 1・3）。`Err(e)` で、それでも読めなければ、またはほかの失敗なら `Err(読めない理由の文)`。今の warn!「`persist read-before-write failed; merging onto empty base (tolerant)`」は消す（その道が無くなる）。
 - `save_scope` は `Err(reason)` のとき `commit` を呼ばず、`error!(target: "areka_sylphya::persist", event = "persist_existing_unusable", ?scope, path, reason, keys, "persist existing file unusable; not overwriting, reporting Degraded")` を 1 回出し、`PersistOutcome::Degraded(PersistFailure { scope, dir: roots.root_of(scope).cloned(), keys, cause: PersistFailureCause::Io(reason) })` を返す。新しい variant は足さない（`PersistFailureCause` を網羅する `crates/areka` の match を壊さない）。
 - 控える走り（読み取りだけ）は、使えない既存のファイルでも止めない（何も書かないので守る物が無い）。`Err(reason)` を受けたら warn! を 1 件出し、空の土台で続けて `Withheld` を返す（この spec の前と同じ寛容な読み）。走りの最初の読みは控えでなく本物のファイルを読むので、新しい版や壊れた TOML に当たることはある（かけ直し 1 回目の 1）。
 - 重ねる土台は、読んだファイルの表そのもの（`toml::Table`）。`FormatDoc` が持つ値だけをその上に置き、この版の知らない表・知っている表の知らない key・型の違う値はそのまま残す（版が 1 のまま足された表を保存で消さない・かけ直し 1 回目の 3）。
@@ -235,7 +237,7 @@ pub trait PersistIo: Send {
 - `FsPersistIo::lock_for_update(path)`: `self.withholds(path)` なら `Ok(None)`（読み取りだけの走りはファイルに触れない）。ほかは `Self::lock_within(path, LOCK_WAIT).map(Some)`。
 - `const LOCK_WAIT: Duration = Duration::from_secs(1);`・`const LOCK_RETRY: Duration = Duration::from_millis(10);`・`const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;`（`areka-sylphya` は `windows` に依存しないので値で書く）。
 - `fn lock_path_for(path: &Path) -> PathBuf`: 宛先の名前に `.lock` を足す（`sylphya.toml.lock`・宛先と同じフォルダ）。`temp_path_for` と同じ組み方で、時刻・乱数・プロセス番号を混ぜない（完了した `areka-P0-sylphya` の要件 8.3）。
-- `fn lock_within(path: &Path, wait: Duration) -> std::io::Result<File>`（非公開）: 親のフォルダを `create_dir_all`（`commit` と同じ）→ `OpenOptions::new().read(true).write(true).create(true).share_mode(0).custom_flags(FILE_FLAG_DELETE_ON_CLOSE).open(lock_path)` を、共有違反（`raw_os_error() == Some(32)`）と消える途中の拒み（`Some(5)`）の間だけ `LOCK_RETRY` ごとに `wait` まで繰り返す。期限を越えたとき、最後の失敗が共有違反なら `io::Error::new(ErrorKind::TimedOut, "記憶のファイル sylphya.toml の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）")`、拒み（5）なら最後の OS の失敗をそのまま返す（本当に書けないフォルダを「ほかの areka」と言い違えない）。ほかの失敗は待たずにそのまま返す。
+- `fn lock_within(path: &Path, wait: Duration) -> std::io::Result<File>`（非公開）: 親のフォルダを `create_dir_all`（`commit` と同じ）→ `OpenOptions::new().read(true).write(true).create(true).share_mode(0).custom_flags(FILE_FLAG_DELETE_ON_CLOSE).open(lock_path)` を `retry_transient(wait, ..)` に渡し、共有違反（`raw_os_error() == Some(32)`）と消える途中の拒み（`Some(5)`）の間だけ `LOCK_RETRY` ごとに `wait` まで繰り返す（`pub(crate) fn retry_transient<T>(wait: Duration, op: impl FnMut() -> io::Result<T>) -> io::Result<T>`）。期限を越えたとき、最後の失敗が共有違反なら `io::Error::new(ErrorKind::TimedOut, "記憶のファイル sylphya.toml の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）")`、拒み（5）なら最後の OS の失敗をそのまま返す（本当に書けないフォルダを「ほかの areka」と言い違えない）。ほかの失敗は待たずにそのまま返す。
 - 一時のパスの入口には触れない: 錠のパスは宛先から組み、`temp_dir` の呼び出しも `TempPath` も使わない。`crates/log-capture-kit/tests/temp_path_guard_test.rs` の走査語（入口の 2 つの綴り）は `io.rs` に現れないまま（要件 6.3）。`temp_path_for` と一時の名前 `sylphya.toml.tmp` も変えない。テストの `TempPath` の 3 か所も変えない。
 
 **`mod.rs` の形**
@@ -332,7 +334,7 @@ impl SylphyaPublisher {
 | 14 | `spawn_sylphya_with_failures` の中身を `pub(crate) fn spawn_parts(init: SylphyaInit, failures: Option<Sender<PersistFailure>>) -> (SylphyaParts, SharedMirror)` へ移し、`spawn_sylphya_with_failures` は `spawn_parts(..).0` を返す。檻の `spawn_with_mirror_observer` は `spawn_parts(SylphyaInit { roots: ScopeRoots::default(), io: Box::new(FakePersistIo::new()), runtime_sink: None }, None)` を呼んで `(shared, parts.publisher, parts.handle)` を返す（アクターの名は本番と同じ `sylphya` になる。名を見るテストは無い） | —（本番と檻が同じ組み立てを通る） | T5 |
 | 15 | `SylphyaMsg::PersistPut` の `reply` 欄と、`run_actor` の返信の枝（`None` の `error!` を含む）と `persist_outcome` を消す。`apply` の `PersistPut { scope, entries, .. }` は `{ scope, entries }` に。`actor_tests.rs` の `reply: None` を消す。`actor_failure_sink_tests.rs` の `spawn_without_receiver_behaves_as_today` は、返信つきの投函の代わりに `persist_put(Ghost, BootCount "2")` → `barrier` → 読み口の `areka.boot.count` が `"2"`、失敗の投函（App）の後もアクターが生きている、で見る | —（`SylphyaMsg::PersistPut` は範囲の外で 0 か所） | T5 |
 | 17 | `MirrorImage::flat_global` の欄・説明（`mirror.rs` 15 行目）・`successor` の複製を消し、`reader.rs` の `resolve_flat` の `.or_else(|| img.flat_global.get(name))` と `talk_snapshot` の土台（per-asker の写しだけを返す）を直す。`flat_global` を使うテスト（`mirror.rs` 3 本・`reader.rs` 4 か所・`pull_tests.rs` 1 か所）は、守る中身（差し替えの前の像が変わらない・複製が同じ錠を持つ・per-asker が大域を隠す）に合わせて `dotted_global` か per-asker の区画へ置き換え、大域のフラットの区画そのものを見るだけのテスト（`flat_global_found_when_per_asker_lacks` ほか）は消す | —（範囲の外で `flat_global` は 0 か所） | T6 |
-| 19 | `FormatDoc::is_all_absent` を消す。`format.rs` のテストは `assert_eq!(doc, FormatDoc::default())`、`persist_window_adjacent_tests.rs` は `assert_ne!(doc, FormatDoc::default())` へ | —（範囲の外で 0 か所） | T1 |
+| 19 | `FormatDoc::is_all_absent` を消す。`format.rs` のテストは `assert_eq!(doc, FormatDoc::default())` へ（`is_all_absent` だけを見ていた `last_only_is_not_all_absent` と `persist_window_adjacent_tests.rs` の `adjacent_only_doc_is_not_all_absent` はかけ直し 1 回目の 4 で消した） | —（範囲の外で 0 か所） | T1 |
 | 20 | `run_actor` の後継の像を必要になるまで作らない: `let mut next: Option<MirrorImage> = None;`。書き換える 4 つの枝（`SetFlatPerAsker`・`RemoveFlatPerAsker`・`SetDottedGlobal`・`SetDottedPerAsker`）だけが `next.get_or_insert_with(\|\| shared.load().successor())` を通る。`if mutated && let Some(next) = next { shared.publish(Arc::new(next)) }`。反映の待ち・停止・書けない名前の SET・204 の記録・保存だけの知らせでは複製しない | —（epoch の檻 `epoch_increments_monotonically_through_actor_publishes` と統合の檻が同じ結果で通る） | T5 |
 | 22 | `KeyParseError` に `TextAfterParen { at: usize }`（`#[error("text after closing paren at segment {at}")]`）を足す。`parse_seg` は末尾が `)` でないとき、`(` の後ろに `)` が在れば `TextAfterParen`、無ければ今どおり `UnclosedParen` | `key.rs` の `mod tests` `text_after_a_closed_paren_is_reported_as_such`（`scope(0)x` → `TextAfterParen { at: 0 }`・`a.scope(0` → `UnclosedParen { at: 1 }` のまま） | T7 |
 

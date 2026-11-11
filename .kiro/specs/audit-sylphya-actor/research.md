@@ -204,3 +204,15 @@
 ついでに古くなった注 2 つを直した: `io.rs` の「M1 は単一プロセス前提・錠は要るとき足す」（錠はもう在る）と、`persist/mod.rs` の冒頭の保存の結果の並び（錠が取れない・既存が使えない・`Withheld` を足した）。
 
 数えない再出（design.md「直さない・回した指摘」の件・直さない）: #18 の本番が読まない語彙（`FlatEntry::layer`・`m1`・`BackingLayer`・`M1Status`・`DegradePolicy::NotFound`・`SetSemantics`・`SET_EFFECTIVE` の 2 番目の要素）・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（`crates/areka/src/alert.rs`・範囲の外）。
+
+### 2 回目（数える指摘 3 件・全部直した）
+
+1. （Should fix）起動の読み（`load_scope`）だけが一時の掴み（os error 32・5）で待たず、覚えていたゴーストを忘れて既定のゴーストで書き替える → `load_scope` の読みも `io::retry_transient(LOCK_WAIT, ..)` を通す（1 行）。取り直した後も読めなければ、今と同じく warn! を出して「何も覚えていない」として返す（読む側の寛容な不在はそのまま）。縛るテスト `persist_unreadable_tests.rs` の `a_transient_sharing_violation_on_load_is_retried`（1 回目の読みだけ 32 を返す偽の IO で、保存した `LastGhost` が読める。取り直しを外すと空になって赤）。
+2. （Nice to have）`format::to_toml_string` が本番で使われず、テストのためだけの公開の関数になった → ツリー全体（`crates`・`tools`）で呼び手がこのファイルのテストだけなのを確かめて消し、テスト 5 か所は `to_toml_string_over(toml::Table::new(), &doc)` にした。説明の注は `to_toml_string_over` へ移した。
+3. （Nice to have）錠の取り直しの輪（`lock_within`）が `retry_transient` と同じ決まりをもう 1 つ持っていた → `retry_transient` に待ちの上限を引数で渡す形にし（本番の呼び手は `LOCK_WAIT`）、`lock_within` はそれを使って、期限切れの最後の失敗が共有違反（32）のときだけ今と同じ `TimedOut` の文（「ほかの areka…」）に替える。拒み（5）とほかの失敗はそのまま返す。振る舞いと文は変わらない（`io_lock_tests.rs` の錠のテストが緑のまま）。
+
+古くなった注も直した: `vocab/flat.rs`・`vocab/dotted.rs` の「件数檻: `….len() == N`」3 か所（1 回目の 5 で消したテストを指していた）は、今も並びを縛るテストの名（`flat_vocab_tokens_match_exactly`・`dotted_roots_match_exactly`・`generic_prop_names_match_exactly`）へ。`persist/format.rs` の「全値が String/Integer/Table なので直列化は失敗しない」は、土台が読んだファイルの表になったので「読んだ TOML の表とこの関数が足す値からは失敗しない」へ。`persist/io.rs` の `LOCK_WAIT` の注は、使う所（記憶のファイルの読み・確定の `rename`・更新の間の錠）へ。
+
+design.md の古い行も直した: `read_existing` の注と戻り値（2 つ組の既定 `Ok(Default::default())`）、取り直しの説明（`io::retry_transient` の名と、使う 4 か所 `read_existing`・`commit` の `rename`・`load_scope`・`lock_within`）、`lock_within` の説明、流れの図（控える走りでは使えない既存でも warn! を出して空の土台に重ね、`io.commit` で控えの中身に置いて `Withheld`。同じ走りの後の `load_scope` はその控えを読む）、#19 の行（`persist_window_adjacent_tests.rs` の `adjacent_only_doc_is_not_all_absent` と `format.rs` の `last_only_is_not_all_absent` は 1 回目の 4 で消した）。
+
+数えない再出（1 回目と同じ・直さない）: #18 の本番が読まない語彙・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。確かめて指摘にしなかったもの: `merge_table` の重ね方・`parse_toml_str` の 2 つ組の呼び手・控える道の寛容な読み・`retry_transient` の待ち方・`to_toml_string_over` の直列化の失敗の道（起きる入力が無い）・数のテストを消した後も中身の一致のテストが数を決めていること・記録の捕捉の書き方・手で書いた 0 で始まる窓の ID（この spec の前からの振る舞い）。
