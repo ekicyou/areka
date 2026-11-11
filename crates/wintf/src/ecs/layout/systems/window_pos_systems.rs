@@ -32,13 +32,14 @@ pub fn window_pos_sync_system(
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
     for (entity, global_arr, mut window_pos, name, is_dragging) in query.iter_mut() {
-        let entity_name = format_entity_name(entity, name);
+        // 名前はその記録が点いているときだけ作る（配置が変わるたびに通る道）
+        let entity_name = || format_entity_name(entity, name);
         let width = global_arr.bounds.right - global_arr.bounds.left;
         let height = global_arr.bounds.bottom - global_arr.bounds.top;
 
         debug!(
             frame = frame_count.0,
-            entity = %entity_name,
+            entity = %entity_name(),
             bounds_left = global_arr.bounds.left,
             bounds_top = global_arr.bounds.top,
             bounds_right = global_arr.bounds.right,
@@ -52,7 +53,7 @@ pub fn window_pos_sync_system(
         if width <= 0.0 || height <= 0.0 {
             debug!(
                 frame = frame_count.0,
-                entity = %entity_name,
+                entity = %entity_name(),
                 "[window_pos_sync_system] Skipping: invalid bounds"
             );
             continue;
@@ -70,7 +71,7 @@ pub fn window_pos_sync_system(
             if size_changed {
                 debug!(
                     frame = frame_count.0,
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     old_size = ?window_pos.size,
                     new_size = format_args!("{}x{}", new_size.width, new_size.height),
                     "[window_pos_sync] Dragging: size-only update"
@@ -88,7 +89,7 @@ pub fn window_pos_sync_system(
             if position_changed || size_changed {
                 debug!(
                     frame = frame_count.0,
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     old_pos = ?window_pos.position,
                     old_size = ?window_pos.size,
                     new_xy = format_args!("({},{})", new_position.x, new_position.y),
@@ -101,7 +102,7 @@ pub fn window_pos_sync_system(
             } else {
                 trace!(
                     frame = frame_count.0,
-                    entity = %entity_name,
+                    entity = %entity_name(),
                     "[window_pos_sync_system] No change needed"
                 );
             }
@@ -137,8 +138,6 @@ pub fn sync_window_arrangement_from_window_pos(
         (With<Window>, Changed<WindowPos>, Without<WindowDragging>),
     >,
 ) {
-    use crate::ecs::graphics::format_entity_name;
-
     for (entity, window_pos, mut arrangement, name) in query.iter_mut() {
         let Some(position) = window_pos.position else {
             continue;
@@ -158,9 +157,8 @@ pub fn sync_window_arrangement_from_window_pos(
 
         // 変更があった場合のみ更新
         if arrangement.offset != new_offset {
-            let entity_name = format_entity_name(entity, name);
             debug!(
-                entity = %entity_name,
+                entity = %format_entity_name(entity, name),
                 old = format_args!("({:.0},{:.0})", arrangement.offset.x, arrangement.offset.y),
                 new = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
                 "[sync_window_arr] offset changed"

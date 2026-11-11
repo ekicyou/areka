@@ -7,7 +7,7 @@
 //! - **`taffy`**: taffyエンジン連携 (`TaffyStyle`, `TaffyComputedLayout`)
 //! - **`metrics`**: レイアウトメトリクス (`Size`, `Offset`, `LayoutScale`)
 //! - **`arrangement`**: 配置情報コンポーネント (`Arrangement`, `GlobalArrangement`, `ArrangementTreeChanged`)
-//! - **`rect`**: 矩形操作ユーティリティ (`Rect`, `D2DRectExt`, `transform_rect_axis_aligned`)
+//! - **`rect`**: 矩形操作ユーティリティ (`D2DRect`, `D2DRectExt`, `transform_rect_axis_aligned`)
 //! - **`systems`**: 配置伝播システム関数 (`sync_simple_arrangements`, `propagate_global_arrangements`)
 //!
 //! ## 主要コンポーネント
@@ -54,8 +54,7 @@
 //! The transform_rect_axis_aligned function transforms only the top-left and bottom-right points
 //! instead of all four points, achieving O(2) fast rectangle transformation.
 //!
-//! Constraint: Rotation and skew transformations are not supported. They will be handled by the
-//! DirectComposition Visual layer in the future.
+//! Constraint: Rotation and skew transformations are not supported.
 //!
 //! The arrangement propagation systems in the systems module leverage generic functions from
 //! ecs::common::tree_system: sync_simple_transforms, mark_dirty_trees, and propagate_parent_transforms.
@@ -102,12 +101,18 @@ use bevy_ecs::prelude::*;
 /// # 使用例
 ///
 /// ```rust,ignore
-/// use wintf::ecs::layout::LayoutRoot;
+/// use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension, LayoutRoot};
 ///
 /// // テスト用のルートエンティティ
 /// commands.spawn((
 ///     LayoutRoot,
-///     BoxSize { width: Some(Dimension::Px(800.0)), height: Some(Dimension::Px(600.0)) },
+///     BoxStyle {
+///         size: Some(BoxSize {
+///             width: Some(Dimension::Px(800.0)),
+///             height: Some(Dimension::Px(600.0)),
+///         }),
+///         ..Default::default()
+///     },
 /// ));
 /// ```
 ///
