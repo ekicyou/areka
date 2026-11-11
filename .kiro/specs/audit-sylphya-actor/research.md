@@ -244,3 +244,17 @@ design.md の古い行も直した: `read_existing` の注と戻り値（2 つ�
 数えない再出（1〜3 回目と同じ・直さない）: #18 の本番が読まない語彙（それを見る `set_effective_all_runtime_command`・`only_four_tokens_are_m1_derived` も含む）・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。
 
 確かめて数えなかったもの: 3 回目の直し（消した 3 本の主張は残るテストが今も全部持つ・`reader.rs` の注の 1 行）。`mirror.rs` の残りの 4 本（#17 で残すと決めた物）。`pull_tests.rs` の登録し直しの 2 本（層が違い、複製の側から登録し直す向きは片方だけが持つ）。`shiori_resource_ids_has_159_entries`（この表には中身の一致のテストが無く、159 を決めるのはこの 1 本だけ）。上の注 3 つ（コードの振る舞いは変わらない）。記憶のファイルの読み書きの道・錠を持つ時間・`run_actor`・`parse_seg`・`spawn_actor`・`run_inbox`・`ui.rs`・`origin.rs`（誤った結果になる入力は無かった）。スレッドの配線の揺れを見る 20 回の繰り返しのテスト 2 本。
+
+### 5 回目（数える指摘 3 件・全部直した・ここで打ち切り）
+
+4 回目の 2 件の直しに誤りは見つからなかった（消した 4 本の名を指す所はツリーに残っていない）。不具合・危険・遅い道は見つからなかった。3 件とも前から在って 1〜4 回目が拾わなかった、ほかのテストに丸ごと含まれるテスト。
+
+1. （Nice to have）働き手のアクターの結線テストのうち 2 本が、同じファイルの別の 2 本に丸ごと含まれる → `areka-actor/tests/toy_worker_test.rs` の `echo_round_trip_matches_payload`・`close_then_join_completes_deterministically` と、それを並べる冒頭の注の (i)・(ii) の 2 行を消した。消す前に確かめた: `backlog_after_close_is_discarded_and_reply_dropped` は同じ `spawn_echo_worker` に `Close` を送り、期限つきの join が `Ok` になるのを見る（ほかに積み残しの返事が `Dropped` になることも）。`handler_err_does_not_stop_receive_loop` は `spawn_actor`・`run_inbox` の続ける枝・`reply_channel` の往復を通り、返った文字 `"after-error"` を比べる。
+2. （Nice to have）UI アクターの往復のテスト 1 本が、手前に `Fail` を 1 件足しただけの隣のテストに丸ごと含まれる → `areka-actor/tests/toy_ui_pump_test.rs` の `toy_b_worker_to_ui_pump_echo_round_trip` を消した。隣の `a_handler_error_does_not_stop_the_ui_actor` は同じ `echo_round_trip_after` を `vec![UiMsg::Fail]` で呼ぶだけで、その後の往復・`"ping"` の比べ・`Close`・期限は同じ。
+3. （Nice to have）出どころの語の組の並べ方のテストが 1 本、4 回目と同じ理由で丸ごと含まれる → `areka-talk/src/origin_tests.rs` の `render_internal_raise` を消した。頭が `internal` で 1 語つなぐ組は `property_constant_renders_internal_property` が `"internal,property"` で、`raise` の綴りは `render_all_rest_words_in_order` が 7 語の並びの中で見ている。
+
+消した 4 つの名は、ツリー全体（`.kiro` を除く）で残りが 0 なのを grep で確かめた。足したテストは無い。
+
+数えない再出（1〜4 回目と同じ・直さない）: #18 の本番が読まない語彙（それを見る `set_effective_all_runtime_command`・`only_four_tokens_are_m1_derived` も含む）・#10 の `RuntimeCommandSink`／`SylphyaInit::runtime_sink`・#16 の `UiSpawnError::NotUiThread`・#21 の `SylphyaCore`・#4 の `barrier_within` の本番の呼び手 0・#1 の決まった一文（範囲の外）。
+
+5 回目は「必ず直す」0 件・本番の振る舞いに関わる指摘 0 件だったので、その回の指摘を直したところで打ち切った（audit-seriko・audit-kanade と同じ区切り方）。回ごとの数える指摘は 7→3→2→2→3 で、残りは全部直し済み。数えない再出は design.md「直さない・回した指摘」の 6 件だけ。

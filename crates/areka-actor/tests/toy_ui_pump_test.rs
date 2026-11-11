@@ -120,16 +120,6 @@ fn echo_round_trip_after(before: Vec<UiMsg>) -> bool {
     done.load(Ordering::Acquire)
 }
 
-/// 実走 pump 上での worker→UI echo 往復（公開 API 経由）。
-#[test]
-fn toy_b_worker_to_ui_pump_echo_round_trip() {
-    assert!(
-        echo_round_trip_after(Vec::new()),
-        "worker→UI pump echo round-trip did not complete before the deadline \
-         (echo undelivered / mismatched / drain not driven on MessageLoop::run)"
-    );
-}
-
 /// handler が `Err` を返した後も受信のループは続き、2 件目の Echo の返信が届く（#5）。
 /// `Err` で止める直し間違いは返信が `Dropped`（または送信が Closed）になって worker が panic する。
 #[test]
