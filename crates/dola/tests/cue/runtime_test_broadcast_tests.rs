@@ -238,11 +238,11 @@ fn is_completed_is_gated_by_occupancy_horizon_for_trailing_wait() {
     );
 
     // 占有 horizon 直前も未完了。
-    player.tick(d + wait_dur - 0.01);
+    player.tick(sheet.absolute_end_time() - 0.01);
     assert!(!player.is_completed(), "horizon 直前は未完了");
 
-    // 占有 horizon 到達で初めて完了通知が出る。
-    player.tick(d + wait_dur);
+    // 占有 horizon（150 ms＋800 ms）到達で初めて完了通知が出る。Tick の式 `n as f64 / 1000.0` の値で見る。
+    player.tick(950.0 / 1000.0);
     assert!(
         player.is_completed(),
         "占有 horizon（末尾 Wait の duration 端）到達で初めて is_completed() が true"
@@ -266,7 +266,7 @@ fn is_completed_is_gated_by_final_text_duration() {
     );
 
     // duration 端（占有 horizon）到達で完了。
-    player.tick(d);
+    player.tick(sheet.absolute_end_time());
     assert!(
         player.is_completed(),
         "最終 Text の duration 端到達で is_completed() が true"
@@ -318,7 +318,7 @@ fn tick_with_no_registered_sinks_still_advances_and_completes() {
         &CuePlayerState::Playing,
         "b 未到達ゆえ Playing"
     );
-    player.tick(0.5);
+    player.tick(sheet.absolute_end_time());
     assert!(
         player.is_completed(),
         "sink 未登録でも占有 horizon 到達で完了する（配送先 0 個でも破綻しない）"
