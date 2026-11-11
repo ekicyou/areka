@@ -23,6 +23,8 @@
 
 use std::ops::ControlFlow;
 
+use tracing::Instrument;
+
 /// UI スレッド上で UI アクター（pump 内 drain ループ）を起動する。
 ///
 /// # 呼び出しスレッドの前提（重要）
@@ -91,36 +93,38 @@ where
     tracing::debug!(actor = %name, "spawn_ui: submitting UI drain task (must be the pump thread)");
 
     let (tx, rx) = async_channel::unbounded::<M>();
-    let actor: String = name.to_owned();
+    // 区間は poll の間だけ入る（待ちの間に UI スレッドのほかの記録へ漏らさない）。
+    let span = tracing::info_span!("actor", actor = %name);
 
     // drain タスク: recv().await ループ。queue に残があるかぎり await は即 Ready で連続処理し、
     // 空のときのみ Pending で pump へ制御を返す（Req 4.3）。受信ループの耐障害規約（Req 3.7）は
     // run_inbox を呼ばず本タスク内で独立に同一実装する（spawn モジュール非依存）。
-    let handle = wintf_winmsg_executor::spawn_local(async move {
-        let span = tracing::info_span!("actor", actor = %actor);
-        let _enter = span.enter();
-        // 終了経路はちょうど 2 つ: handler の Ok(Break) と、recv() の Err(Closed)（全 Sender drop）。
-        loop {
-            match rx.recv().await {
-                // 全 UiSender drop（channel closed）→ 正常終了（Req 3.5）。
-                Err(async_channel::RecvError) => return,
-                Ok(msg) => match handler(msg) {
-                    // 次の受信へ。
-                    Ok(ControlFlow::Continue(())) => continue,
-                    // Close 受領＝即時終了。rx は drop され積み残しは破棄（Req 3.2/3.3）。
-                    Ok(ControlFlow::Break(())) => return,
-                    // 個別処理失敗はループを殺さない（Req 3.7）。error! 記録して drain 継続。
-                    Err(e) => {
-                        tracing::error!(
-                            error = %e,
-                            "UI actor message handler returned error; continuing"
-                        );
-                        continue;
-                    }
-                },
+    let handle = wintf_winmsg_executor::spawn_local(
+        async move {
+            // 終了経路はちょうど 2 つ: handler の Ok(Break) と、recv() の Err(Closed)（全 Sender drop）。
+            loop {
+                match rx.recv().await {
+                    // 全 UiSender drop（channel closed）→ 正常終了（Req 3.5）。
+                    Err(async_channel::RecvError) => return,
+                    Ok(msg) => match handler(msg) {
+                        // 次の受信へ。
+                        Ok(ControlFlow::Continue(())) => continue,
+                        // Close 受領＝即時終了。rx は drop され積み残しは破棄（Req 3.2/3.3）。
+                        Ok(ControlFlow::Break(())) => return,
+                        // 個別処理失敗はループを殺さない（Req 3.7）。error! 記録して drain 継続。
+                        Err(e) => {
+                            tracing::error!(
+                                error = %e,
+                                "UI actor message handler returned error; continuing"
+                            );
+                            continue;
+                        }
+                    },
+                }
             }
         }
-    });
+        .instrument(span),
+    );
 
     Ok((UiSender { tx }, handle))
 }
