@@ -611,3 +611,22 @@
 
 - `side-session-notes` の本 spec のメモは、申し合わせの中身（7＝兄弟のタスク 2.4・`author_dpi` は申し送り・`"cursorbrush"` の 1 語は了承済みでこちらのタスク 11.4・伝えるだけの件は兄弟が拾う）で `design.md` の「設計の段で確定した事項」の 5 と食い違わない。
 - 古びていた所は 3 つ: 行番号 `state_decoration_tests.rs:424,438`（今は `:410,424`）・`viewbox_blit_spike.rs` の説明を直すタスクの番号「14.2」（今は 13.2）・兄弟が走っている前提（PR #435 で着地済み）。メモの末尾に日付つきの 1 行を足した（前の行は書き換えていない）。
+
+## 15. かけ直しの記録（2026-11-12・タスク 14.1・要件 9）
+
+- 作法は最初の audit と同じ（`/ponytail:ponytail-audit` の手順・全件を出す・全部読む・プラグインはリポジトリに写さない）。範囲は 14.1 節と同じ 14 の頭のファイル（毎回 `git ls-files` の一覧と読み手の割り当てを照らし、増減 0）。読み手は回ごとに新しい 4 人（組 A＝配置とカーソル 24・組 B＝区切り・領域・先渡し・書字方向・canvas・色・見た目・下線 19・組 C＝draw と viewbox の計画 21・組 D＝viewbox の描画とその試験 17）。
+- 0 件の数から外した番号（裁定で残したもの）: 19 の振る舞い・20・28 の calibration の組（`look_tests.rs`・`color_tests.rs`）・30 の `RegionTransform` の行列の口と `ScaleContract::author_dpi`／`new` の第 2 引数・31 の毎フレームの `debug!`・7 の近い辺（兄弟が持つ）。かけ直しの中で残すと決めたもの: 先渡しの `reinstall` が前の区間の全文を持つ（設計の手順 2）・はみ出しを集めるときの行ごとの文字列の確保と `commit` の指紋の作り直しと行の TextLayout を台詞のあいだ持つこと（どれも行の数に比例する仕事で、設計が受け入れている）・`FontCatalog.warned`（裁定）・`WritingDirectionDecision::resolve` の `warn!`（直す場所が範囲の外）・`look.rs` がちょうど 1,000 行であること（分けるには新しい src ファイルが要り、この spec では作れない）・`writing.rs`／`canvas.rs` の設計で置いた予約の口・`GlyphStyles.current` の欄（書き手が範囲の外）。
+
+| 回 | 読んだファイル | 読んだ行 | 必ず直す | 直したほうがよい | できれば | 直したコミット |
+|---|---|---|---|---|---|---|
+| 1 | 81 | 38,098 | 1 | 9 | 16 | `9d79b6a6`・`17e88096`・`fc52f2b8` |
+| 2 | 81 | 38,216 | 1 | 4 | 17 | `e991e39b`・`754a18d6` |
+| 3 | 81 | 38,240 | 1 | 4 | 12 | `d8128ec9`・`09e22e62`・`537dd454` |
+| 4 | 81 | 38,403 | 0 | 0 | 10 | `39fbd30e` |
+| 5 | 81 | 38,399 | 0 | 1 | 8 | `9d0cb71c` |
+
+- **区切った回と理由**: 5 回目で区切った。5 回目の指摘は 9 件（直したほうがよい 1＝呼び手 0 の関数・できれば 8＝説明・試験の見張り・局所変数の書き方）で、必ず直すも本番の振る舞いに関わる指摘も 0 件だった。記憶「audit のかけ直しは 5 回目で区切ってよい（必ず直す・本番の振る舞いが 0 なら）」に当たるので、5 回目の 9 件を全部直したところで区切った（6 回目はかけない）。開発者にはこの節と最終報告で知らせる。
+- 各回の必ず直す: 1 回目＝既定の鍵の字幅の表が書記素クラスタの鍵で台詞をまたいで育つ（`sync_talk` で 1 スカラーの字だけ残す）。2 回目＝重なった行が一度に大量に出ると 1 フレームの描画が 2 乗（矩形をまとめて各行は高々 1 枚）。3 回目＝先渡しの照合が字が 1 つ見えるたびに 見た目の数×候補の数 を比べる（参照の組ごとに 1 度）。どれも直す前に赤・直した後に緑のテストを置いた。
+- 申し送り 2 件（設計の段の決め）: ⑴ `ScaleContract::author_dpi` と `new` の第 2 引数は、`crates/areka` に触れてよいウェーブで消す（直すのは `crates/areka/src/input_events/balloon_pure_core_tests.rs:156` と emo-text の呼び手）。⑵ validrect の近い辺が画像の外に負に解けるときの面の寸（面の位置の持ち主＝`audit-emo-text-state-actor` の持ち物）。
+- 伝えるだけ（範囲の外・かけ直しで見つけたもの）: `actor_region_warn_tests.rs` に折返し基準＝遠辺の同値の檻が無い・`actor_choice_contract_tests.rs:611` に帯の超過の古い式（− font_height）・`GlyphStyles.current` を配管する `actor_decoration.rs:97` と、字の無い行の丈に効くと書く `actor_present.rs:735-737`・BreakMemo の道で字が届くたびに全文を区切り直す（`actor_present.rs:740-746,775-789`）・`Decoration::rebase` が切り替えのたびに当てた `\f` を読み直す（切り替え S 回 × 候補 N）・`WritingDirectionDecision::resolve` の警告を登録口（`actor_attach.rs`）へ移す・既定の線の守り（R1-D1）が `actor_attach.rs:380-416` と `actor_present.rs:213-216` の描き手の作り直しに頼る・`look.rs` は 1,000 行ちょうどなので次に足す spec が先に分ける。
+- 実機で測ったこと（読み手 C・4 回目）: DirectWrite の `CreateTextFormat`・`SetFontSize`・`SetLineSpacing`・`GetOverhangMetrics` は大きさ 1e5〜1e38 で成功する（指摘 20 を残した前提は成り立つ）。
