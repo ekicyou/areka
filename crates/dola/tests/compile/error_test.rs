@@ -345,4 +345,42 @@ mod error_tests {
                 if reason.contains("Cannot resolve 'at' keyframe reference time")
         )));
     }
+
+    /// relative_to で出した終わりの値も値域と比べて拒む（#33・要件 11.11）
+    #[test]
+    fn relative_to_out_of_range_is_rejected() {
+        let doc = make_doc_with_storyboard(
+            vec![(
+                "opacity",
+                AnimationVariableDef::Float {
+                    initial: 0.5,
+                    min: Some(0.0),
+                    max: Some(1.0),
+                },
+            )],
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("opacity".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        relative_to: Some(0.8),
+                        duration: Some(1.0),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                })
+                .build(),
+        );
+
+        let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                DolaError::ValueOutOfRange { variable, field, value, .. }
+                    if variable == "opacity" && field == "relative_to" && (*value - 1.3).abs() < 1e-9
+            )),
+            "{errs:?}"
+        );
+    }
 }

@@ -196,6 +196,29 @@ pub fn compile_storyboard(
         // Resolve to value (Task 5.8)
         let to_value = resolve_to_value(&trans_def, &from_value);
 
+        // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる（要件 11.11）
+        if let TransitionValue::Scalar(v) = to_value {
+            let (min, max) = extract_min_max(Some(var_def));
+            let (min, max) = (
+                min.unwrap_or(f64::NEG_INFINITY),
+                max.unwrap_or(f64::INFINITY),
+            );
+            if v < min || v > max {
+                errors.push(DolaError::ValueOutOfRange {
+                    variable: var_name.clone(),
+                    field: if trans_def.relative_to.is_some() {
+                        "relative_to"
+                    } else {
+                        "to"
+                    }
+                    .to_string(),
+                    value: v,
+                    min,
+                    max,
+                });
+            }
+        }
+
         // Build segment (Task 5.9)
         let is_object = matches!(var_def, AnimationVariableDef::Object { .. });
         let easing = if is_object {

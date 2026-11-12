@@ -185,6 +185,17 @@ pub(super) fn resolve_pure_keyframe_time(
                 None
             }
         }
+    } else if let Some(ref between) = entry.between {
+        // between の純粋KF・トリガーは between の始まりの時刻に置く（要件 11.10）
+        let time = keyframe_times.get(&between.from).copied();
+        if time.is_none() {
+            errors.push(DolaError::CompileError {
+                storyboard: storyboard_name.to_string(),
+                entry_index: entry_idx,
+                reason: "Cannot resolve between keyframe times".to_string(),
+            });
+        }
+        time
     } else {
         // at なし: 配列直前エントリ（元配列 index - 1）の keyframe_time を継承
         match entry_idx.checked_sub(1) {

@@ -279,4 +279,32 @@ mod compile_trigger_tests {
         assert_eq!(compiled.triggers[0].fire_time, 1.0);
         assert_eq!(compiled.triggers[1].fire_time, 1.0);
     }
+
+    /// between のトリガーは between の始まり（from）の時刻で発火する（#31・要件 11.10）
+    #[test]
+    fn trigger_between_fires_at_from_keyframe() {
+        let kf = |name: &str, offset: f64| StoryboardEntry {
+            keyframe: Some(name.to_string()),
+            at: start_plus(offset),
+            ..Default::default()
+        };
+        let parent_sb = StoryboardBuilder::new()
+            .entry(kf("a", 1.0))
+            .entry(kf("b", 3.0))
+            .entry(kf("c", 10.0))
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some("child_a".to_string()),
+                between: Some(dola::BetweenKeyframes {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                }),
+                ..Default::default()
+            })
+            .build();
+
+        let compiled = compile_storyboard(&doc_with_children(parent_sb), "parent", 0.0).unwrap();
+
+        assert_eq!(compiled.triggers.len(), 1);
+        assert_eq!(compiled.triggers[0].fire_time, 1.0);
+    }
 }
