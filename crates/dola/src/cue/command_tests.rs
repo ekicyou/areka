@@ -182,40 +182,39 @@ fn wait_carries_no_action_and_time_lives_in_envelope_duration() {
 // ── R8.1 ワイヤ互換回帰 カバレッジマトリクス（Task 10.5）──
 //
 // R8.1「既存 cue の外部表現（シリアライズ形）を変えずに additive 拡張し、既存台本データの
-// 読み込み互換を保つ」の回帰は、本 spec の 4 つの additive デルタ
-// （references skip_serializing・Cursor variant・`\!` キャリア形・CueTarget::Window）が
+// 読み込み互換を保つ」の回帰は、本 spec の 3 つの additive デルタ
+// （references skip_serializing・Cursor variant・`\!` キャリア形）が
 // 既存ワイヤ形のバイト列を一切変えないことを、以下の既存檻が**期待 JSON リテラル**で
 // 網羅固定している（設計 Data Models「ワイヤ形」表・Testing Strategy Integration#5 の
-// 「ワイヤ檻〔既存 8 variant 無改変緑＋Cursor/references/キャリア形の追加檻〕」に一致）。
+// 「ワイヤ檻〔既存 7 variant 無改変緑＋Cursor/references/キャリア形の追加檻〕」に一致）。
 // Task 10.5 監査結論: 下記で完全網羅ゆえ、同一リテラルを再主張する檻の新設は
 // 重複（[[test-only-decision-branches-not-proven-wiring]]）——追加せず、この対応表を正典とする。
 //
 //   R8.1 デルタ／義務                     | 固定する檻（本モジュール）
 //   ------------------------------------ | ------------------------------------------------
-//   既存 8 variant がバイト同一（現行spec）| existing_eight_variants_wire_forms_are_unchanged_by_additive_extension
-//     └ Choice(references:vec![]) 込み    |   （8th variant の期待 JSON に references キー無し＝skip 後を固定）
+//   既存 7 variant がバイト同一（現行spec）| existing_seven_variants_wire_forms_are_unchanged_by_additive_extension
+//     └ Choice(references:vec![]) 込み    |   （Choice の期待 JSON に references キー無し＝skip 後を固定）
 //   references 空＝現行とバイト同一        | choice_references_additive_wire_form (a)
 //   references あり＝キー付き記述順        | choice_references_additive_wire_form (b)
 //   references 欠落の旧 Choice を default 読 | choice_references_additive_wire_form (c)
 //   Cursor（additive・空/単位/相対/裸/%）  | cue_command_cursor_serde_roundtrip
 //   `\!` キャリア（Custom params 正準形）   | command_carrier_wire_form_is_canonical
 //   キャリア非正準は None（良性スキップ）    | as_command_carrier_returns_none_for_non_canonical
-//   CueTarget::Window（additive unit・既存不変）| cue_target_window_is_additive_unit_variant
 //   Cue.duration 欠落の旧資産を 0 で読む     | cue_duration_defaults_to_zero_for_legacy_serialized_data
 //   Wait/ClearAll unit variant のワイヤ形    | cue_command_wait_and_clear_all_serde_roundtrip
 //
-// 注記: Cursor/キャリア(Custom)/Window は externally-tagged enum への variant 追加ゆえ、
-// 既存 variant のバイト列は構造的に不変（新タグは既存タグの表現へ干渉しない）。上記 8-variant
+// 注記: Cursor/キャリア(Custom) は externally-tagged enum への variant 追加ゆえ、
+// 既存 variant のバイト列は構造的に不変（新タグは既存タグの表現へ干渉しない）。上記 7-variant
 // 檻はその不変を期待リテラルで固定し、万一の破壊を回帰として捕捉する load-bearing な檻である。
 
-/// 既存 8 variant のワイヤ形が Wait/ClearAll の additive 追加後も**完全に不変**である
+/// 既存 7 variant のワイヤ形が Wait/ClearAll の additive 追加後も**完全に不変**である
 /// ことを、期待 JSON リテラルで固定する（5.2・6.3・9.3）。
 ///
 /// Task 10.5 監査: Choice の期待 JSON は `references` キーを持たない（`references: vec![]`
 /// が `skip_serializing_if = "Vec::is_empty"` で消える形）ため、本檻は references 追加**後**の
-/// 8-variant バイト同一を固定する consolidated 回帰檻でもある（R8.1・上の対応表参照）。
+/// 7-variant バイト同一を固定する consolidated 回帰檻でもある（R8.1・上の対応表参照）。
 #[test]
-fn existing_eight_variants_wire_forms_are_unchanged_by_additive_extension() {
+fn existing_seven_variants_wire_forms_are_unchanged_by_additive_extension() {
     let expected: Vec<(CueCommand, &str)> = vec![
         (CueCommand::Text("hello".into()), r#"{"Text":"hello"}"#),
         (CueCommand::Clear, r#""Clear""#),
@@ -233,7 +232,6 @@ fn existing_eight_variants_wire_forms_are_unchanged_by_additive_extension() {
             },
             r#"{"Choice":{"id":"yes","text":"はい"}}"#,
         ),
-        (CueCommand::EntityRef(42), r#"{"EntityRef":42}"#),
         (
             CueCommand::Custom {
                 command: "fade".into(),
@@ -250,7 +248,7 @@ fn existing_eight_variants_wire_forms_are_unchanged_by_additive_extension() {
             r#"{"BalloonSurface":{"key":"2"}}"#,
         ),
     ];
-    assert_eq!(expected.len(), 8, "既存 variant は 8 種");
+    assert_eq!(expected.len(), 7, "既存 variant は 7 種");
 
     for (cmd, wire) in expected {
         let json = serde_json::to_string(&cmd).unwrap();
@@ -405,23 +403,6 @@ fn cue_payload_and_cue_serde_roundtrip() {
     assert_eq!(parsed.duration, cue.duration);
 }
 
-// ── D3-V 境界特性化テスト ──
-
-#[test]
-fn entity_ref_u64_boundary_serde_roundtrip() {
-    // EntityRef は u64 全域（Entity::to_bits() 変換値）を保持する。
-    // i64::MAX 超の値（上位ビットが立つ Entity generation 等）も JSON 経由で
-    // 欠損なくラウンドトリップすることを固定する（serde_json は u64 を直接扱う。
-    // なお TOML の整数は i64 のため、TOML 直列化では i64::MAX 超は表現できない —
-    // 現行ワークスペースに CueCommand の TOML 直列化経路はない）。
-    for bits in [0u64, i64::MAX as u64, i64::MAX as u64 + 1, u64::MAX] {
-        let cmd = CueCommand::EntityRef(bits);
-        let json = serde_json::to_string(&cmd).unwrap();
-        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
-        assert_eq!(cmd, parsed, "EntityRef({bits}) must roundtrip losslessly");
-    }
-}
-
 // ── duration（再生時間）envelope 檻 ──
 
 #[test]
@@ -485,7 +466,6 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
             references: vec![],
         }
         .into(),
-        CueCommand::EntityRef(42).into(),
         CueCommand::Custom {
             command: "fade".into(),
             params: DynamicValue::Null,
@@ -624,26 +604,6 @@ fn as_command_carrier_returns_none_for_non_canonical() {
     assert_eq!(
         CueCommand::command_carrier("raise", vec![]).as_command_carrier(),
         Some(("raise", Vec::<&str>::new()))
-    );
-}
-
-/// `CueTarget::Window` は additive unit variant（8.1）。既存 variant のワイヤ形は不変。
-#[test]
-fn cue_target_window_is_additive_unit_variant() {
-    let target = CueTarget::Window;
-    let json = serde_json::to_string(&target).unwrap();
-    assert_eq!(json, r#""Window""#);
-    let parsed: CueTarget = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed, target);
-
-    // 既存 variant のワイヤ形は additive 追加後も不変。
-    assert_eq!(
-        serde_json::to_string(&CueTarget::Shell).unwrap(),
-        r#""Shell""#
-    );
-    assert_eq!(
-        serde_json::to_string(&CueTarget::Balloon).unwrap(),
-        r#""Balloon""#
     );
 }
 

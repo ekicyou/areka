@@ -117,7 +117,6 @@ fn command_kind(command: &CueCommand) -> &'static str {
         CueCommand::Clear => "Clear",
         CueCommand::Emote { .. } => "Emote",
         CueCommand::Choice { .. } => "Choice",
-        CueCommand::EntityRef(_) => "EntityRef",
         CueCommand::Custom { .. } => "Custom",
         CueCommand::NewLine { .. } => "NewLine",
         CueCommand::BalloonSurface { .. } => "BalloonSurface",
@@ -249,7 +248,6 @@ mod tests {
             }),
             "Choice"
         );
-        assert_eq!(command_kind(&CueCommand::EntityRef(42)), "EntityRef");
         assert_eq!(
             command_kind(&CueCommand::Custom {
                 command: "fade".into(),

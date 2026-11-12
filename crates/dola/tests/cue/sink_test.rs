@@ -24,10 +24,6 @@ fn cue_target_of_classifies_every_variant() {
         }),
         Some(CueTarget::Shell)
     );
-    assert_eq!(
-        cue_target_of(&CueCommand::EntityRef(42)),
-        Some(CueTarget::Shell)
-    );
     // バルーン面切替＝サーフェス消費系ゆえ表示系（Shell）へ。文字状態機械（Balloon）へ
     // 流すのは誤配線・配送不能 None には落ちない。
     assert_eq!(

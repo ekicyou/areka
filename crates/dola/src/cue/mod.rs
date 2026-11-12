@@ -8,7 +8,7 @@
 //! | 型 | 役割 |
 //! |---|---|
 //! | `TimedSchedule<T>` | 0 ベース相対オフセットの汎用配信エンジン |
-//! | `CueCommand` | データ系 13 バリアント演出コマンド |
+//! | `CueCommand` | データ系 12 バリアント演出コマンド |
 //! | `CuePayload` | CueSheet 記述時の統一型 |
 //! | `CueSheet` | 相対時刻コマンド列（演出台本） |
 //! | `ActorKey` / `CueTarget` / `Cue` | 演出ドメイン型 |

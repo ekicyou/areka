@@ -273,7 +273,7 @@
 
 ## 後の段（C18 のほかの 7 本の着地の後）
 
-- [ ] 17. 後の段の門と、cue の値と区切りの口を消す（#11・#12・#14・#16・#17・#78・#84）
+- [x] 17. 後の段の門と、cue の値と区切りの口を消す（#11・#12・#14・#16・#17・#78・#84）
 - [x] 17.1 後の段に入る条件を確かめ、`main` を取り込む
   - C18 のほかの 7 本（`wintf-visual-tree`・`placement-crate-split`・`audit-wintf-layout-widget`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-kanade`・`audit-sylphya-actor`）が `main` に着地したことを `git log origin/main` で確かめる。まだなら止めて報告する
   - `main` を枝へ取り込み、前の段のテストが緑のままであることを確かめる
@@ -289,7 +289,7 @@
   - 終わった姿: 消した名前の参照がツリーに 0 件（grep）で、`cargo test -p dola` と `cargo test -p areka-sakura` が緑
   - _Depends: 17.1_
   - _Requirements: 2.3, 3.2, 3.3, 11.3, 11.4, 11.5_
-- [ ] 17.3 窓の宛先と実体の参照の合図を、範囲の外の受け手ごと消す（#16・#17・#84）
+- [x] 17.3 窓の宛先と実体の参照の合図を、範囲の外の受け手ごと消す（#16・#17・#84）
   - 合図の宛先の窓と、そのテストと対応表の行を消す
   - 実体の参照の合図と受け手の既定の腕を消し、範囲の外の受け手（`areka-seriko` の守りの枝とその記録の檻・`areka-emo-text` の腕とテスト・`areka-ghost` の種類の腕とテスト）から同じ腕を消す
   - cue のモジュールの説明の数を 12 に直す

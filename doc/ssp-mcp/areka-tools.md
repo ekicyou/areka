@@ -301,6 +301,6 @@ SSP の欄は [survey.md](survey.md) 8 節の実測（2026-10-29）。
 | 文字の層 `apply_font_args` の `warn!` | 同じ分類で `FontIgnored`・`FontUnknownKey` が記録済み |
 | `compile` の除外の腕（`Raw` の `debug!`） | 読みの印で `ReadUnknownTag`・`ReadUnclosed` が記録済み |
 | seriko の `log_shell_fallback`（切替で今の面が無い） | 台本の誤りでない（切替の戻り先） |
-| seriko の `EntityRef`・知らないシェル系の合図 | 到来しない守りの枝 |
+| seriko の知らないシェル系の合図 | 到来しない守りの枝 |
 | 表示の層の装着前の宛先（`presenter/show.rs`） | 台本の誤りでない |
 | `\f` の値の誤り（`BadValue`） | `check_script` と同じく診ない |

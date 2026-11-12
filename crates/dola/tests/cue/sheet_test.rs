@@ -466,7 +466,6 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
             text: "はい".into(),
             references: vec![],
         },
-        CueCommand::EntityRef(42),
         CueCommand::Custom {
             command: "fade".into(),
             params: DynamicValue::Null,

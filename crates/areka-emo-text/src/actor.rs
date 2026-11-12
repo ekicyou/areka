@@ -466,7 +466,6 @@ impl TextLayerRuntime {
             CueCommand::Emote { .. }
             | CueCommand::Text(_)
             | CueCommand::Choice { .. }
-            | CueCommand::EntityRef(_)
             | CueCommand::Custom { .. }
             | CueCommand::NewLine { .. }
             | CueCommand::Cursor { .. }

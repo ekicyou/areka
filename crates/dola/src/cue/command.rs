@@ -56,15 +56,11 @@ impl std::fmt::Display for ActorKey {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CueTarget {
     /// 表示系（サーフェス消費・seriko が消費: シェル面＋バルーン面）。
-    /// Emote, EntityRef, BalloonSurface を主に消費する。
+    /// Emote, BalloonSurface を主に消費する。
     /// 注: 名前は「シェル」だが分類上バルーン面切替もここへ経路付けられる（名前負債）。
     Shell,
     /// バルーン（テキスト表示）— Text, Clear, Choice, AnchorBegin, AnchorEnd, WaitForChoice を主に消費
     Balloon,
-    /// 窓/placement 系（窓移動等）— `\!` 汎用キャリアのうち、消費側が名前で自己選別して
-    /// ここへ割り当てるコマンド名（M1: `"move"`）を消費する演者スロット。
-    /// additive unit variant（既存 variant のワイヤ形不変）。
-    Window,
 }
 
 // ============================================================================
@@ -93,7 +89,7 @@ pub enum BarrierKind {
 // 演出コマンド
 // ============================================================================
 
-/// 演出コマンド（13 バリアント、データ系のみ）。
+/// 演出コマンド（12 バリアント、データ系のみ）。
 ///
 /// バリアは `BarrierKind` として `Entry` レベルで分離済み。
 ///
@@ -119,8 +115,6 @@ pub enum CueCommand {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         references: Vec<String>,
     },
-    /// ECS エンティティ参照渡し（u64 = Entity::to_bits() 変換済み）
-    EntityRef(u64),
     /// `\!` ベースウェアコマンド名前空間全体の汎用キャリア（正典 183 コマンドの全転写）。
     ///
     /// コマンドごとの typed cue 語彙は**新設しない**——`move` も `bind` も同一の本キャリアに
