@@ -16,17 +16,17 @@
 
 1. **機能 `yaml` を外し、機能 `toml` を入れる**。開発者「残すならtoml、yamlを外してtomlを入れよ」。YAML を替えて残す案（`serde-saphyr` など）は採らない。`audit-dola` が機能 `toml` を外したのは開発者が決めたことではない（開発者「tomlを外せなどという判断はした覚えがない」）＝この spec で戻す。機能 `json` は `audit-dola` のまま（任意の機能に戻さない・開発専用の依存のまま）。
 2. 「替える案のとき YAML の往復のテストを全体テストで常に回すか」は、YAML を外すので消えた。TOML の往復のテストは議題 4 で決める。
-3. **（未決・議題 3）機能 `toml` で `dola` が何を持つか**（要件 2.2）。
-4. **（未決・議題 4）TOML のテストを全体テストで常に回すか**（要件 2.5）。
+3. **機能 `toml` の下で `dola` が TOML の読み書きの入口を持つ**（議題 3・要件 2.2・開発者「承認」）。v0.1.0 までの機能 `toml` は依存を引くだけで `dola` に何も足さず、利用者は自分でも `toml` を依存に書く必要があった。入口があれば `features = ["toml"]` だけで TOML が使え、`toml` の版の食い違いでも迷わない。足すだけで既存の形は変えない（名前と誤りの型は設計で決める）。
+4. **TOML のテストは全体テストで常に回す**（議題 4・要件 2.5・開発者「承認」）。全体テストは任意の機能を有効にしないので、前の TOML と YAML の往復のテストは一度も回っていなかった＝壊れても赤にならない。回し方（全体テストの手順に `-p dola --features toml` を足すか、ほかの道か）は設計で決める。
 
 ## Boundary Context
 
 - **In scope**:
   - `crates/dola/Cargo.toml` の任意の依存 `serde_yaml` と機能 `yaml` の削除、任意の依存 `toml` と機能 `toml` の追加。
-  - 機能 `toml` の下で `dola` が持つ物（議題 3 で決める）。
+  - 機能 `toml` の下で `dola` が持つ TOML の読み書きの入口（議題 3）。
   - 往復のテスト（`crates/dola/tests/general/integration_test/serialization_round_trip.rs`）の YAML の分の削除と TOML の分の追加、同じテストの束の先頭の説明（`crates/dola/tests/general/integration_test/mod.rs` 1 行目の「JSON/TOML/YAML」）。
   - `crates/dola/tests/compile/boundary_test.rs` の 3 行目の先頭の説明（「外部入力（JSON/TOML/YAML）」）と 260〜262 行目の注記（NaN／inf の入り口）、TOML の `nan`／`inf` の扱いを確かめる境界のテスト。
-  - TOML のテストを全体テストで回すための道（議題 4 の結論しだいで `tools/test-all.ps1` などの全体テストの手順）。
+  - TOML のテストを全体テストで常に回すための道（議題 4・`tools/test-all.ps1` などの全体テストの手順）。
   - `crates/dola/README.md` の書式の記述（13・17 行目）。
   - `deny.toml` の `[advisories] ignore` の `RUSTSEC-2024-0449` の 1 件（43〜46 行目のコメントを含む）の削除。
   - 根の `Cargo.lock` と `THIRD-PARTY-NOTICES.md` の追随。
@@ -65,12 +65,13 @@
 #### Acceptance Criteria
 
 1. The `dola` クレート shall 機能 `yaml` と任意の YAML の依存を持たず、任意の機能は `toml` の 1 つだけを持つ（既定の機能は無いまま）
-2. Where 機能 `toml` を有効にしたとき, the `dola` クレート shall 議題 3 で決めた形で TOML の読み書きを提供する（任意の依存 `toml` はワークスペースの版の指定に従う）
-3. When 機能 `toml` を有効にして `DolaDocument` 全部を TOML に書き出して読み戻すとき, the 読み戻した文書 shall 元の文書と等しい
-4. When 同じ `DolaDocument` を 2 回 TOML に書き出すとき, the 2 つの文字列 shall 1 バイトも違わない（`BTreeMap` の鍵の順が決まっている）
-5. The TOML の往復のテスト shall 議題 4 で決めた形で回り、その結果が完了の証跡に残る
-6. The `dola` のテスト shall YAML の往復のテストとその見出しのコメントを含まない
-7. The `dola` のテストの先頭の説明（`serialization_round_trip.rs` の 1 行目・`integration_test/mod.rs` 1 行目・`boundary_test.rs` 3 行目） shall 消えた YAML を挙げず、直しの後に `dola` が持つ書式の扱い（JSON は開発専用・TOML は機能 `toml`）だけを書く
+2. Where 機能 `toml` を有効にしたとき, the `dola` クレート shall `DolaDocument` を TOML の文字列から読む入口と TOML の文字列へ書く入口を、利用者が自分で `toml` を依存に書かずに使える形で提供する（名前と誤りの型は設計で決める・任意の依存 `toml` はワークスペースの版の指定に従う）
+3. If TOML の読み書きの入口が失敗したとき, then the `dola` クレート shall panic せず、失敗の理由を持つ誤りを返す
+4. When 機能 `toml` を有効にして `DolaDocument` 全部を 2 の入口で TOML に書き出して読み戻すとき, the 読み戻した文書 shall 元の文書と等しい
+5. When 同じ `DolaDocument` を 2 回 TOML に書き出すとき, the 2 つの文字列 shall 1 バイトも違わない（`BTreeMap` の鍵の順が決まっている）
+6. When 全体テスト（`tools/test-all.ps1`）を回すとき, the 機能 `toml` のテスト（往復のテストと要件 4 の境界のテスト） shall 毎回回り、その結果が全体テストの結果に入る
+7. The `dola` のテスト shall YAML の往復のテストとその見出しのコメントを含まない
+8. The `dola` のテストの先頭の説明（`serialization_round_trip.rs` の 1 行目・`integration_test/mod.rs` 1 行目・`boundary_test.rs` 3 行目） shall 消えた YAML を挙げず、直しの後に `dola` が持つ書式の扱い（JSON は開発専用・TOML は機能 `toml`）だけを書く
 
 ### Requirement 3: JSON の振る舞いと `dola` の型の形を変えない
 
@@ -78,9 +79,9 @@
 
 #### Acceptance Criteria
 
-1. The この spec の直し shall `dola` の公開の型・関数・トレイトの既存の形を変えない（機能 `toml` の下で足す物は議題 3 の結論に従い、足すだけにする）
+1. The この spec の直し shall `dola` の公開の型・関数・トレイトの既存の形を変えない（機能 `toml` の下の入口〔要件 2.2〕は足すだけにする）
 2. When この spec の直しの後に `dola` のテストを回すとき, the JSON の往復のテスト shall 直しの前と同じ本数が緑になる
-3. The この spec の直し shall `crates/dola/` の外のソースファイル（根の `Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・steering・roadmap・議題 4 で決めた全体テストの手順を除く）を変えない
+3. The この spec の直し shall `crates/dola/` の外のソースファイル（根の `Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・steering・roadmap・要件 2.6 のための全体テストの手順を除く）を変えない
 
 ### Requirement 4: NaN と無限大の入り口の説明と確かめを合わせる
 
@@ -113,7 +114,7 @@
 1. The roadmap の「次のリリースへの申し送り」 shall `dola` の公開の機能の変わる点を、公開済みの最新の版と比べた正味の差として 1 項目にまとめて持つ（2026-11-13 の棚卸㊱が足した `audit-dola` の項目を書き直す形でよい。同じ話の項目を 2 つ並べない）
 2. The その項目 shall 機能 `json`（既定で有効だった）と既定の機能が無くなったことを、壊れる変更として書く
 3. The その項目 shall 機能 `yaml` と任意の依存 `serde_yaml` が消えたこと（壊れる変更・`Cargo.toml` の機能の指定を消せば直る）を書く
-4. The その項目 shall 機能 `toml` は続けて指定できること、引く `toml` の版が 0.8 から 1 に上がったこと、議題 3 で機能 `toml` に足した物があればそれを書く
+4. The その項目 shall 機能 `toml` は続けて指定できること、引く `toml` の版が 0.8 から 1 に上がったこと、機能 `toml` の下で `dola` が TOML の読み書きの入口を持つようになったこと（利用者が自分で `toml` を依存に書かなくてよい）を書く
 5. The その項目 shall 「次のリリースへの申し送り」の頭の決まり（書いたときの最新の版を「`v{その版}` の後」の形で頭に書く）に従う
 6. The その項目 shall 「機能 `yaml` の行き先は `dola-yaml-backend` が決める」のような未決の書き方を含まず、決まった結果だけを書く
 

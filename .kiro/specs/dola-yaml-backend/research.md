@@ -100,7 +100,7 @@
 
 ## 6. 設計の段への申し送り
 
-> **2026-11-13 要件の討議の結論（改め）**: 機能 `yaml` を外し、機能 `toml` を入れる（開発者「残すならtoml、yamlを外してtomlを入れよ」「tomlを外せなどという判断はした覚えがない」）。下の「Research Needed（案 A を採る場合だけ）」は不要。代わりに設計で確かめること: ⑴ `toml` 1（ワークスペースの版・既定の機能）で `complete_document_toml_roundtrip` が往復するか（`audit-dola` の前にあった TOML の往復のテストは一度も回っていない＝`#[serde(untagged)]`・`Option`・表の入れ子が TOML で書けるかは未確認）⑵ TOML の `nan`・`inf` を型の決まった `f64` の欄と untagged の欄に入れたときの振る舞い ⑶ 機能 `toml` のテストを全体テストで回す道（議題 4）⑷ `cargo tree -p dola --features toml` で新しく引くクレートが無いこと（`toml` 1 は既に `Cargo.lock` にある）。
+> **2026-11-13 要件の討議の結論（改め）**: 機能 `yaml` を外し、機能 `toml` を入れる（開発者「残すならtoml、yamlを外してtomlを入れよ」「tomlを外せなどという判断はした覚えがない」）。下の「Research Needed（案 A を採る場合だけ）」は不要。代わりに設計で確かめること: ⑴ `toml` 1（ワークスペースの版・既定の機能）で `complete_document_toml_roundtrip` が往復するか（`audit-dola` の前にあった TOML の往復のテストは一度も回っていない＝`#[serde(untagged)]`・`Option`・表の入れ子が TOML で書けるかは未確認）⑵ TOML の `nan`・`inf` を型の決まった `f64` の欄と untagged の欄に入れたときの振る舞い ⑶ 機能 `toml` のテストを全体テストで常に回す道（議題 4＝常に回すと決まった）⑸ 機能 `toml` の下の読み書きの入口の名前と誤りの型（議題 3＝入口を持つと決まった）⑷ `cargo tree -p dola --features toml` で新しく引くクレートが無いこと（`toml` 1 は既に `Cargo.lock` にある）。
 
 - **推す形の材料**（決めるのは要件の討議）: 要件の推奨は案 B。測った事実はそれを支える（使い手 0・テストが回ったことが無い・謝辞が動かない・先例あり）。案 A を採る理由になりうるのは「crates.io の利用者の `features = ["yaml"]` を壊さない」1 点。
 - **Research Needed（案 A を採る場合だけ）**:
