@@ -62,8 +62,8 @@
 //!   [`VisibleWindow`] の `first_visible_line`＋`block_offset` を消費するだけで、
 //!   スクロール判定は持たない。
 //! - **行 TextLayout キャッシュ**: 行内容が不変（確定行＝リビール完了行）なら再利用し、
-//!   リビール中の行のみ都度更新する。[`DrawExecutor::clear_cache`]（Clear cue の適用点）
-//!   のみが全破棄する。
+//!   リビール中の行のみ都度更新する。全破棄は [`DrawExecutor::clear_cache`]（Clear cue の
+//!   適用点）と、フォント/方向の変更で書式を組み直す `ensure_format` の 2 か所。
 //! - **スケール一点適用**: 描画ターゲットへの `SetTransform(scale(k))` 一点のみ
 //!   （k＝`ScaleContract::scale`）。レイアウト・行 TextLayout は image px（96 DPI 名目
 //!   ＝DIP と同一視）のままで、DPI API との二重適用は構造的に存在しない。
@@ -549,7 +549,8 @@ type FormatKey = (crate::look::FontKey, WritingMode);
 /// [`VisibleWindow`] が済ませている——R7.4 分離シームの描画実行側）。
 ///
 /// - **行 TextLayout キャッシュ**: 確定行（内容不変）は再生成しない・リビール中の行のみ
-///   都度更新・[`clear_cache`](Self::clear_cache)（Clear cue 適用点）のみ全破棄。
+///   都度更新・全破棄は [`clear_cache`](Self::clear_cache)（Clear cue 適用点）と書式の組み直し
+///   （`ensure_format`）の 2 か所。
 /// - **スケール一点適用**: `SetTransform(scale(k))` を描画ターゲットへ一度だけ適用
 ///   （k＝[`ScaleContract::scale`]・フォントサイズ/レイアウトは image px のまま）。
 /// - 失敗は log-first（`error!`＋`Err`・当該フレーム skip・次フレーム再試行）・panic 禁止。

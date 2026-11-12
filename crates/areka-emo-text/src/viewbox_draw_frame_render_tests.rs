@@ -463,7 +463,7 @@ fn font_change_degrades_to_full_domain_redraw() {
     );
     let full_before = stats_a.full_clears;
 
-    // font B（高さ 14）へ変更（FormatKey の高さビットが変わり format/行キャッシュ組み直し）。
+    // font B（高さ 14）へ変更（既定の見た目の大きさが変わり format/行キャッシュ組み直し）。
     let font_b = ResolvedFont::resolve(&geo_model(Some(14)));
     let total_b = total;
     let changed = exec

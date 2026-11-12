@@ -32,7 +32,8 @@
 //! 配置は `FixedMetrics` だけのときと 1 画素も変わらない。
 
 use super::test_support::{
-    RenderPair, Rig, colored_count, glyph_items, layout_frame, live_diff_model_font, opaque_count,
+    RenderPair, Rig, colored_count, count_in_x_band, glyph_items, layout_frame,
+    live_diff_model_font, opaque_count,
 };
 use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::{FixedMetrics, GlyphMetrics, VisibleWindow, WrapPlan};
@@ -94,15 +95,8 @@ impl GlyphMetrics for AtLeastRealAdvance<'_> {
 
 /// 行送り軸の帯 `[y0, y1)` に非透明ピクセルがいくつ在るか（BGRA 密配列・物理 px）。
 fn ink_in_band(bytes: &[u8], w: u32, y0: u32, y1: u32) -> usize {
-    let mut count = 0;
-    for y in y0..y1 {
-        for x in 0..w {
-            if bytes[((y * w + x) * 4 + 3) as usize] != 0 {
-                count += 1;
-            }
-        }
-    }
-    count
+    let rows = &bytes[(y0 * w * 4) as usize..(y1 * w * 4) as usize];
+    count_in_x_band(rows, w, 0, w, |px| px[3] != 0)
 }
 
 /// オラクル（全域再描画）と viewbox（差分描画）へ同一入力を流した 1 フレームの読み戻し。

@@ -325,7 +325,8 @@ fn a_failed_collection_skips_the_frame_and_the_next_frame_retries() {
 
 /// 再監査 R2-D4: Phase 1 で保持庫の行に下線を立てて集めた後、戻すのに失敗したフレームは、その行を
 /// 保持庫から外す（下線が立ったままの行を次のフレームで引き当てて DirectWrite の下線と areka の
-/// 線を二重に描かない）。次のフレームは行を作り直し、新しい描き手の絵とバイトで一致する。
+/// 線を二重に描かない）。次のフレームは行を作り直す。見るのは外したことと作り直した回数——絵の
+/// 比較は、DirectWrite の下線と areka の線が同じ所に重なり二重に描いても変わらないので檻にならない。
 #[test]
 fn a_failed_restore_forgets_the_line_and_the_next_frame_rebuilds_it() {
     use super::super::ViewboxExecutor;
@@ -382,13 +383,6 @@ fn a_failed_restore_forgets_the_line_and_the_next_frame_rebuilds_it() {
         exec.stats().line_layout_creations - creations,
         1,
         "外した行を作り直す"
-    );
-    let mut fresh_surface = rig.attach(image, 1.0);
-    let mut fresh = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
-    render(&mut fresh, &mut fresh_surface).expect("新しい描き手");
-    assert!(
-        surface.read_back().expect("read_back") == fresh_surface.read_back().expect("read_back"),
-        "作り直した行の絵は新しい描き手の絵と一致する"
     );
 }
 

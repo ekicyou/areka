@@ -8,7 +8,7 @@
 //! | § | 内容 | 要件 |
 //! |---|---|---|
 //! | §1 | 既定の見た目の計測値が装飾導入前と同一 | 11.1, 11.3 |
-//! | §2 | 大きさ・太字が計測値に効く | 7.10, 11.1 |
+//! | §2 | 大きさが計測値に効く（太字は §3 が鍵の違いを・§4 が送り量を見る） | 7.10, 11.1 |
 //! | §3 | 試験用書式は計測鍵ごとに 1 度だけ生成 | 11.3 |
 //! | §4 | 計測値＝装飾入りで組んだ行の実際の文字送り量 | 11.3, 15.5 |
 //! | §5 | 共有の台帳の構築口（束縛書式が候補列の解決を通ることは §7 が太さで見る） | 9.8, 11.3 |
@@ -96,7 +96,7 @@ fn the_default_look_measures_exactly_what_it_measured_before_decorations_existed
     assert_eq!(m.advance_styled("あ", &look), m.advance("あ", look.height));
 }
 
-// ────────────────────────── §2 大きさ・太字が計測値に効く（R7.10／R11.1）
+// ────────────────────────── §2 大きさが計測値に効く（R7.10／R11.1）
 
 /// 大きさを 2 倍にすると送り幅が増える。**既定を先に測ってから** styled を測る——
 /// 記憶の鍵が文字だけへ戻ると、ここで既定の値が返ってきて赤くなる。
@@ -119,15 +119,6 @@ fn doubling_the_size_widens_the_advance_even_after_the_default_was_measured_firs
         ADVANCE_FULLWIDTH_AT_12 * 2.0,
         "等幅の全角は大きさに正比例する"
     );
-}
-
-/// 太字は送り幅を縮めない（同じ鍵の別項目が計測へ届いていることの対照）。
-#[test]
-fn bold_does_not_shrink_the_advance() {
-    let m = metrics();
-    let base = m.advance_styled("あ", &default_look());
-    let bold = m.advance_styled("あ", &look_with(|l| l.bold = true));
-    assert!(bold >= base, "太字の送り幅 {bold} が既定 {base} より狭い");
 }
 
 // ────────────────────────── §3 試験用書式は鍵ごとに 1 度だけ（R11.3）

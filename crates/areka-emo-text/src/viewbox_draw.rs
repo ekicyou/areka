@@ -14,8 +14,8 @@
 //!
 //! `render` は「書式の確保 → 全住人の行 TextLayout の確保と実測インクはみ出しの収集 → 計画取得
 //! （[`ScrollPlanner::plan_with_overhangs`]）→ 縮退の判定（書式の組み直し・想定外不整合なら全域）→
-//! 保持ピクセルの面内 blit（[`TextSurface::copy_front_to_back_shifted`]）→ ダーティ矩形ごとの
-//! 限定描画 → 面の役割交換（[`TextSurface::flip`]）→ 計画の確定（[`ScrollPlanner::commit`]）」の
+//! 保持ピクセルの面内 blit（[`TextSurface::copy_front_to_back_shifted`](crate::surface::TextSurface::copy_front_to_back_shifted)）→ ダーティ矩形ごとの
+//! 限定描画 → 面の役割交換（[`TextSurface::flip`](crate::surface::TextSurface::flip)）→ 計画の確定（[`ScrollPlanner::commit`]）」の
 //! 順で行い、変化有無（present 要否）を返す。[`FramePlan::NoChange`] は blit も描画も present も行わない
 //! （`Ok(false)`・全カウンタ増分 0）。
 //!
@@ -59,14 +59,17 @@ use wintf::com::d2d::D2D1DeviceExt;
 use wintf::ecs::GraphicsCore;
 
 use crate::TextLayerError;
-use crate::canvas::ContentCanvas;
-use crate::draw::{FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS};
-use crate::layout::VisibleWindow;
-use crate::look::{StyleTable, TextLook};
-use crate::region::ScaleContract;
-use crate::surface::{TextSurface, device_err, none_err};
+use crate::draw::{FontCatalog, LineLayoutStore, TEXT_DRAW_OPTIONS};
+use crate::look::TextLook;
+use crate::surface::{device_err, none_err};
 use crate::viewbox::{ScrollPlanner, ScrollState};
 use crate::writing::WritingMode;
+// `render`（テストだけの入口）の引数の型。
+#[cfg(test)]
+use crate::{
+    canvas::ContentCanvas, draw::ResolvedFont, layout::VisibleWindow, look::StyleTable,
+    region::ScaleContract, surface::TextSurface,
+};
 
 #[path = "viewbox_draw_decoration.rs"]
 mod decoration;
@@ -166,7 +169,8 @@ impl ViewboxExecutor {
     ///
     /// **本番は [`new_shared`](Self::new_shared) を使う**（`actor_decoration.rs::build_actor_render`
     /// が台帳を 1 つだけ作って計測器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
-    /// 自前の台帳で足りる決定論テストが呼ぶ委譲の入口である。
+    /// 自前の台帳で足りる決定論テストが呼ぶ委譲の入口なので `#[cfg(test)]` で塞いである。
+    #[cfg(test)]
     pub fn new(core: &GraphicsCore) -> Result<ViewboxExecutor, TextLayerError> {
         let dwrite = core
             .dwrite_factory()
@@ -262,11 +266,13 @@ impl ViewboxExecutor {
         self.planner.scroll_state()
     }
 
-    /// Clear cue の適用点（planner 初期化＋行 TextLayout キャッシュ全破棄——破棄はこの口だけ・
-    /// R4.3）。
+    /// Clear cue の適用点（planner 初期化＋行 TextLayout キャッシュ全破棄・R4.3）。ほかに行
+    /// TextLayout を捨てるのは、既定の見た目/方向の変更で書式を組み直すとき（`ensure_format`・全破棄）と、
+    /// 下線を集め損ねた 1 行（`collect_underlines` が記録でも戻しでも `Err` を返した行・
+    /// `LineLayoutStore::forget`・再監査 R2-D4）だけ。
     ///
     /// [`ScrollPlanner::request_clear`]（`clear_requested`＋committed/pos/prev_lines 初期化）と
-    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render`] は、見える行が無ければ
+    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render_styled`] は、見える行が無ければ
     /// [`FramePlan::FullClear`]（back を全域透明 Clear）、あれば全域の [`FramePlan::Update`]
     /// （全面を消してから見える行を描く）で、消去と同じフレームで見える字も描く（透明のフラッシュを
     /// 挟まない・指摘 17）。どちらも `full_clears` を 1 増やし、commit が要求を下ろす。actor 結線
@@ -314,6 +320,8 @@ impl ViewboxExecutor {
     /// `render_styled` へ流すだけなので、装飾なしの呼出列の照合面にもなっている（要件 14.2）。
     /// crate 外の呼び手は無い（`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つ
     /// オラクル `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
+    /// 本番の入口ではないことを構造で示すため `#[cfg(test)]` で塞いである。
+    #[cfg(test)]
     pub fn render(
         &mut self,
         canvas: &ContentCanvas,

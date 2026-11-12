@@ -458,7 +458,7 @@ fn catchup_and_new_lines_union_of_changed_lines() {
 
 /// 全域の道（前の行が分からない・縮退）→ dirty＝面全域 1 枚・draw＝全住人。
 #[test]
-fn empty_prev_is_full_domain() {
+fn unknown_prev_is_full_domain() {
     let contract = ScaleContract::new(1.0, None);
     let canvas = canvas_for(
         &broken_lines(3),

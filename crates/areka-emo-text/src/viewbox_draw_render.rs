@@ -43,7 +43,7 @@ use crate::viewbox::{FramePlan, LineOverhang};
 use crate::writing::WritingMode;
 
 impl ViewboxExecutor {
-    /// 装飾入りの 1 フレームの実行（[`Self::render`] の本体・要件 3.5／3.6／14.2）。
+    /// 装飾入りの 1 フレームの実行（テストだけの入口 `render` の本体・要件 3.5／3.6／14.2）。
     ///
     /// `styles` は当該 actor の装飾の表で、既定の見た目は `font.looks.default`。番号 0 しか
     /// 使われていない行は区間が 1 つになり、既定の見た目が下線も打ち消し線も持たなければ
@@ -317,8 +317,8 @@ impl ViewboxExecutor {
                             right: origin.X + run.size.0,
                             bottom: origin.Y + run.size.1,
                         };
-                        // 集めた後に下線を戻せなかった行は保持庫に残さない（次のフレームで下線の
-                        // 立った行を引き当てて二重に描かない・再監査 R2-D4）。
+                        // 下線を集め損ねた行（記録の失敗でも戻しの失敗でも）は保持庫に残さない（次の
+                        // フレームで下線の立った行を引き当てて二重に描かない・再監査 R2-D4）。
                         collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))
                             .inspect_err(|_| self.line_store.forget(index))?
                             .into_iter()
@@ -484,9 +484,9 @@ impl ViewboxExecutor {
     /// 呼ぶための 1 点・引数が食い違うと保持庫の鍵が変わって同じ行を 1 フレームに 2 度生成する）。
     ///
     /// 既定だけの行（既定の見た目が下線も打ち消し線も持たないとき）は
-    /// [`LineLayoutStore::line_layout`] をそのまま通る（空の番号列・
+    /// [`LineLayoutStore::line_layout`](crate::draw::LineLayoutStore::line_layout) をそのまま通る（空の番号列・
     /// 行の箱寸は `font.height`・焼き処理なし・要件 14.2）。
-    /// それ以外の行は [`LineLayoutStore::line_layout_with_strokes`] を通り、生成時に 1 度だけ
+    /// それ以外の行は [`LineLayoutStore::line_layout_with_strokes`](crate::draw::LineLayoutStore::line_layout_with_strokes) を通り、生成時に 1 度だけ
     /// フォント系の範囲指定（[`apply_font_ranges`]）を焼く。下線の区間がある行は、続けて
     /// 下線の幾何を 1 回集め（[`collect_underlines`]・拡大率 `scale`）、線の行の箱からのはみ出し
     /// （[`stroke_overhang`]）を保持庫へ返す——下線は行に焼かないので実測のはみ出しに入らない
@@ -662,10 +662,10 @@ impl ViewboxExecutor {
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
     /// 既定の見た目（`FormatKey`）/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
-    /// ピクセル（旧 format で描いた面）を崩すため、組み直すときは [`LineLayoutStore`] を捨て、計画者に
+    /// ピクセル（旧 format で描いた面）を崩すため、組み直すときは [`LineLayoutStore`](crate::draw::LineLayoutStore) を捨て、計画者に
     /// 前の行を忘れさせる（[`crate::viewbox::ScrollPlanner::forget_prev`]）——次の計画は commit が成功するまで全域の道を
     /// 通るので、組み直したフレームが失敗しても次のフレームで全域を描き直す（再監査 R2-D1・
-    /// `DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定のため通常発火しない・`debug!` 記録）。
+    /// `DrawExecutor::ensure_format` はここと違い鍵が `(FontKey, mode)` で行キャッシュを捨てるだけ・前の行を忘れさせる口を持たない・実運用は actor ごと固定のため通常発火しない・`debug!` 記録）。
     /// **初回生成**（`self.format` が `None`）は前の行が元から「分からない」ので何も忘れさせない。
     fn ensure_format(
         &mut self,
@@ -698,7 +698,7 @@ impl ViewboxExecutor {
 struct LineDraw {
     /// 描画原点（DrawExecutor と同一式・validrect-local 平行移動＋可視窓オフセット）。
     origin: Vector2,
-    /// 行 TextLayout（[`LineLayoutStore`] 由来・効果は Phase 1 で焼込済み）。
+    /// 行 TextLayout（[`LineLayoutStore`](crate::draw::LineLayoutStore) 由来・効果は Phase 1 で焼込済み）。
     layout: IDWriteTextLayout,
     /// Choice 住人の hover 行のときのみ Some（GlyphRun・非 hover・NoMarker は None＝素描画）。
     hover: Option<ChoiceHover>,
@@ -728,9 +728,9 @@ struct ChoiceHover {
 /// hover セグメント矩形を描画空間（image px・住人 transform＋block_offset 反映）で組む。
 ///
 /// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_offset` だけ内側へ寄せた
-/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`]＝実 font metrics の `ascent + descent`
+/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`](crate::canvas::ChoiceLineContent::band_extent)＝実 font metrics の `ascent + descent`
 /// 由来。em ボックス丈 `font_height` ではない——em で切ると和文フォントの descent インクが帯から
-/// はみ出す。[`ChoiceLineContent::band_offset`]＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
+/// はみ出す。[`ChoiceLineContent::band_offset`](crate::canvas::ChoiceLineContent::band_offset)＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
 /// 帯が上に余りながら下でインクを切る・R13.1）。住人平行移動 `(dx, dy)` と可視窓オフセット
 /// `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ揃える（ヒット矩形／指紋と
 /// 同座標系・R3.3）。座標は合成スケール `k` 適用前の image px

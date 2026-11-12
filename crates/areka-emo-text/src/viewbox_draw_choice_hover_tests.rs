@@ -209,14 +209,8 @@ fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
 
 /// premultiplied BGRA 密配列で、列帯 `x0..x1` の行 `y` に指定 BGRA と完全一致する画素数を数える。
 fn count_bgra_in_row(bytes: &[u8], w: u32, y: u32, x0: u32, x1: u32, target: [u8; 4]) -> usize {
-    let mut n = 0usize;
-    for x in x0..x1.min(w) {
-        let o = ((y * w + x) * 4) as usize;
-        if bytes[o..o + 4] == target {
-            n += 1;
-        }
-    }
-    n
+    let row = &bytes[(y * w * 4) as usize..((y + 1) * w * 4) as usize];
+    count_in_x_band(row, w, x0, x1, |px| px == target)
 }
 
 /// 観測可能な完了状態（R13.1/13.2/13.5）: `band_offset` を持つ Choice 行を描画すると、
