@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeMap;
 
 fn make_segment(from: f64, to: f64, easing: Option<EasingFunction>) -> CompiledSegment {
     CompiledSegment {
@@ -208,6 +209,28 @@ fn interpolate_with_pool_shares_rc_across_calls() {
         }
         _ => panic!("expected Object variants"),
     }
+}
+
+#[test]
+fn nan_object_value_is_interned_once() {
+    // NaN 入りの Object を 2 回評価しても表は 1 件（#28: 等しさとハッシュが同じ鍵）
+    let nan_obj = DynamicValue::Map(BTreeMap::from([(
+        "v".to_string(),
+        DynamicValue::Float(f64::NAN),
+    )]));
+    let seg = CompiledSegment {
+        start_time: 0.0,
+        end_time: 1.0,
+        from_value: TransitionValue::Dynamic(nan_obj.clone()),
+        to_value: TransitionValue::Dynamic(nan_obj),
+        easing: None,
+    };
+    let mut pool = ObjectInternPool::new();
+    let _r1 =
+        Interpolator::interpolate_with_pool(&seg, &VariableTypeHint::Object, 0.0, Some(&mut pool));
+    let _r2 =
+        Interpolator::interpolate_with_pool(&seg, &VariableTypeHint::Object, 0.0, Some(&mut pool));
+    assert_eq!(pool.pool.len(), 1);
 }
 
 #[test]

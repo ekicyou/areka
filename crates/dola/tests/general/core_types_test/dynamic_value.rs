@@ -108,10 +108,10 @@ mod dynamic_value_tests {
         assert_eq!(hash_of(&a), hash_of(&b), "equal values must hash equally");
     }
 
-    /// D1b-T 追加（特性化）: Float は to_bits() でハッシュされるため、
-    /// 0.0 と -0.0 は PartialEq では等しいがハッシュは異なる（Hash/Eq 契約違反の縁、P10 参照）。
+    /// 等しい値は同じハッシュ（#28）。0.0 と -0.0、どの NaN どうしも等しく、ハッシュも同じ
+    /// （runtime の ObjectInternPool は HashMap を等しさで引く）。
     #[test]
-    fn float_negative_zero_eq_but_hash_differs() {
+    fn float_equal_values_hash_equally() {
         use std::hash::{DefaultHasher, Hash, Hasher};
 
         fn hash_of(v: &DynamicValue) -> u64 {
@@ -120,21 +120,18 @@ mod dynamic_value_tests {
             h.finish()
         }
 
-        let pos = DynamicValue::Float(0.0);
-        let neg = DynamicValue::Float(-0.0);
-        assert_eq!(pos, neg, "f64 PartialEq: 0.0 == -0.0");
-        assert_ne!(
-            hash_of(&pos),
-            hash_of(&neg),
-            "to_bits() hashing distinguishes 0.0 from -0.0 (current behavior)"
-        );
-    }
-
-    /// D1b-T 追加（特性化）: NaN は自分自身と等しくない（Eq 実装のドキュメント済み前提）
-    #[test]
-    fn float_nan_not_equal_to_itself() {
-        let nan = DynamicValue::Float(f64::NAN);
-        assert_ne!(nan, nan.clone());
+        let pairs = [
+            (0.0, -0.0),
+            (f64::NAN, f64::NAN),
+            (f64::NAN, -f64::NAN),
+            (f64::NAN, f64::from_bits(0x7ff8_0000_0000_0001)),
+        ];
+        for (a, b) in pairs {
+            let (a, b) = (DynamicValue::Float(a), DynamicValue::Float(b));
+            assert_eq!(a, b, "{a:?} と {b:?} は等しい");
+            assert_eq!(hash_of(&a), hash_of(&b), "{a:?} と {b:?} は同じハッシュ");
+        }
+        assert_ne!(DynamicValue::Float(1.0), DynamicValue::Float(f64::NAN));
     }
 
     #[test]
