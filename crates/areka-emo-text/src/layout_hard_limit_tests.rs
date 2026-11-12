@@ -51,12 +51,9 @@
 //! 全角 'あ' の送り 10・行送り 12）と純粋層の解決だけで完結する。`windows` 系 crate を
 //! import しない（純粋層の規律）。
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{IMAGE, glyphs, inline_positions};
+use super::test_support::{IMAGE, glyphs, inline_positions, model_full};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
@@ -92,26 +89,6 @@ const MODES: [WritingMode; 3] = [
     WritingMode::VerticalLr,
 ];
 
-/// 幾何成分だけを指定する `BalloonModel`（描画開始点は 3 方向とも `(0, 0)` を字義で宣言する）。
-///
-/// 兄弟の `layout_test_support.rs` の `model`／`model_rect` は折返し基準と描画範囲の
-/// **どちらか一方**しか渡せない。本ファイルは 2 つの値を食い違わせることが主題なので、
-/// 両方を同時に指定できる形をここに置く。
-fn model_of(
-    wordwrap: (Option<i32>, Option<i32>),
-    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
-        WordWrapPoint::new(wordwrap.0, wordwrap.1),
-        ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    )
-}
-
 /// 領域の行内軸の開始位置（横書き＝x・縦書き 2 方向＝y——軸読み替え正準表）。
 fn inline_start_of(region: &TextRegion, mode: WritingMode) -> f32 {
     match mode {
@@ -129,12 +106,16 @@ fn inline_start_of(region: &TextRegion, mode: WritingMode) -> f32 {
 fn region_of(mode: WritingMode, soft: f32, hard: f32) -> TextRegion {
     let (s, h) = (soft as i32, hard as i32);
     let model = match mode {
-        WritingMode::HorizontalTb => {
-            model_of((Some(s), None), (Some(0), Some(200), Some(0), Some(h)))
-        }
-        WritingMode::VerticalRl | WritingMode::VerticalLr => {
-            model_of((None, Some(s)), (Some(0), Some(h), Some(0), Some(300)))
-        }
+        WritingMode::HorizontalTb => model_full(
+            (Some(0), Some(0)),
+            (Some(s), None),
+            (Some(0), Some(200), Some(0), Some(h)),
+        ),
+        WritingMode::VerticalRl | WritingMode::VerticalLr => model_full(
+            (Some(0), Some(0)),
+            (None, Some(s)),
+            (Some(0), Some(h), Some(0), Some(300)),
+        ),
     };
     let region = TextRegion::resolve(&model, IMAGE, mode);
     assert_eq!(

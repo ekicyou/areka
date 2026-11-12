@@ -3,7 +3,6 @@ use super::test_support::{
     zero_origin_region,
 };
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
-use crate::look::{GlyphStyles, StyleTable, TextLook};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
@@ -167,7 +166,7 @@ fn undeclared_balloon_measures_absolute_cursor_from_the_write_start_corner() {
 /// 手計算: `start = (100, 60)` なので `\_l[0,0]` → `(100, 60)`。
 ///
 /// **本檻は横書き 1 方向の対照にとどめる**——検証項目 V7（3 書字方向 × 宣言 `origin`）は
-/// タスク 5.2 の所管である。
+/// `layout_cursor_center_origin_tests.rs` が持つ。
 #[test]
 fn declared_origin_moves_the_absolute_basis_off_the_write_start_corner() {
     let region = region_c_declared_origin();
@@ -542,31 +541,10 @@ fn non_finite_cursor_resolution_keeps_lines_finite_with_one_warn() {
         ],
         vec![mv(CursorCoord::Omitted, abs(3e38, CursorUnit::Lh)), glyph()],
     ];
-    let default = TextLook {
-        height: 10.0,
-        ..TextLook::ukadoc_default()
-    };
-    let table = StyleTable::default();
     for items in &scripts {
         let (lines, events) = capture(|| {
             let mut guard = CursorWarnGuard::default();
-            LayoutEngine::layout_styled(
-                items,
-                1,
-                &region,
-                WritingMode::HorizontalTb,
-                10.0,
-                &FixedMetrics,
-                WrapPlan::CharByChar,
-                GlyphStyles {
-                    table: &table,
-                    ids: &[],
-                    default: &default,
-                    current: &default,
-                },
-                &actor,
-                &mut guard,
-            )
+            layout_guarded(items, 1, &region, 10.0, &actor, &mut guard)
         });
         assert_eq!(lines.len(), 1, "{items:?}");
         let r = &lines[0].rect;

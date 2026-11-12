@@ -327,14 +327,13 @@ mod tests {
     /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
     ///
     /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-    /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
     fn resolve_counting_warns(writing_mode: Option<&str>) -> (WritingMode, usize) {
         let (mode, counts) = count_levels(|| WritingMode::resolve(&model_writing(writing_mode)));
         (mode, counts.warn)
     }
 
     // 3 語彙の受理・写像 1:1・既知語彙の無警告・宣言なし→横書き（R5.1/R5.3/R5.5）は
-    // `writing_decision_tests.rs` の単独宣言・宣言なし・委譲のテストが持つ。
+    // `writing_decision_tests.rs` の単独宣言・宣言なしのテストが持つ。
 
     /// 型の Default も横書き（design.md の #[default] 正準と一致）。
     #[test]

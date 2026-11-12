@@ -30,7 +30,6 @@ pub(super) fn empty_font() -> Font {
 /// クロージャを共有のログ捕捉窓の中で実行し、（結果, WARN 件数, ERROR 件数）を返す。
 ///
 /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-/// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
 pub(super) fn with_log_cage<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
     let (out, counts) = count_levels(f);
     (out, counts.warn, counts.error)

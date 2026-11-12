@@ -274,10 +274,9 @@ fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
 /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
 /// byte 完全一致で檻化する（font/サイズを変えたリグで再利用——G4 の AA ガード実効性検証）。
 ///
-/// 【newline-defer】本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み
-/// content が完全リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを
-/// 伴って実体化し、あふれ発火のタイミングは遅延化の影響を受けない（幽霊空行由来の発火が無く
-/// checkpoint 前提は不変）。発火時刻の後退は部分リビール（at 分散）を伴う診断ダンプ側の論点。
+/// 本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み content が完全
+/// リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを伴って実体化し、
+/// あふれは改行の後ろのグリフを追記した checkpoint で発火する。
 fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     // ① あふれ前（3 行・可視窓は不動）。
     ld.apply_text(0.0, "あ");
@@ -514,8 +513,8 @@ fn live_diff_emoji_matches_oracle_byte_for_byte() {
 ///
 /// このバグ（各行 em ボックス下端の 2〜3px はみ出しインクをダーティが切り落とす）は既定 ＭＳ
 /// ゴシック（はみ出さない字）では出ず、`diag_line_boundary_dropout_vs_oracle`（ＭＳゴシック）が
-/// 見逃していた。Yu Gothic UI は descent 側へインクがこぼれるため、[`crate::viewbox::BLOCK_INK_BLEED_FRACTION`]
-/// による行スロット拡張が無いと diverge する（＝この檻が修正前に落ちる）。fixture が読めない環境
+/// 見逃していた。Yu Gothic UI は descent 側へインクがこぼれるため、行ごとに実測したインクのはみ出し
+/// （[`crate::viewbox::LineOverhang`]・`GetOverhangMetrics`）でダーティを広げないと diverge する。fixture が読めない環境
 /// （font 不在等）でも oracle↔viewbox は font に依らず一致するため頑健。実 example の cue `at`
 /// スケジュール（LINE1 0.0／LINE2 0.5／LINE3 1.2／あふれ 2.0）を忠実再現する。
 #[test]

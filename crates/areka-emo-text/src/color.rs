@@ -141,6 +141,10 @@ fn parse_single(token: &str) -> Result<ColorSpec, ColorParseError> {
 
 /// `#` の後ろ——3 桁は各桁を 2 倍、6 桁は 2 桁ずつ 1 成分。
 fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
+    // 長さを先に見る——台本の長い字列を桁の列へ集めてから捨てない。
+    if !matches!(body.chars().count(), 3 | 6) {
+        return Err(err(REASON_BAD_HEX));
+    }
     let digits: Vec<u8> = body
         .chars()
         .map(|c| c.to_digit(16).map(|d| d as u8))
@@ -150,6 +154,7 @@ fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
         // 3 桁形: 各桁を 2 倍（`#f0a` → `ff 00 aa`＝`d * 17`）。
         [r, g, b] => Ok(ColorSpec::Rgb(r * 17, g * 17, b * 17)),
         [r0, r1, g0, g1, b0, b1] => Ok(ColorSpec::Rgb(r0 * 16 + r1, g0 * 16 + g1, b0 * 16 + b1)),
+        // 長さは上で 3 か 6 に絞ってあるのでここへは来ない。
         _ => Err(err(REASON_BAD_HEX)),
     }
 }

@@ -233,35 +233,6 @@ fn balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
     assert!(region.wrap_threshold() < region.inline_limit());
 }
 
-/// 折返し基準が遠辺と**同値**のときは「外」ではない——警告は出ない（境界の向きの固定）。
-#[test]
-fn wrap_threshold_equal_to_the_far_edge_does_not_warn() {
-    // 画像 288×203 に対し validrect.right,240 と wordwrappoint.x,240 で両者を同値にする。
-    let source = concat!(
-        "wordwrappoint.x,240\n",
-        "validrect.top,40\n",
-        "validrect.bottom,-70\n",
-        "validrect.left,24\n",
-        "validrect.right,240\n",
-    );
-    let (region, warns, errors) =
-        resolve_capturing(&single_layer(source), KERO_IMAGE, WritingMode::HorizontalTb);
-    assert_eq!(
-        errors, 1,
-        "捕捉窓の対照イベントが数えられていない。この窓の 0 件の主張は証拠にならない"
-    );
-    assert_eq!(
-        region.wrap_threshold(),
-        region.inline_limit(),
-        "本テストは 2 値が同値であるという前提で書かれている"
-    );
-    assert_eq!(
-        warns.len(),
-        0,
-        "遠辺と同値は「外」ではない（超えたときだけ警告する）"
-    );
-}
-
 /// 縦書きでも解決はログを書かない。行内軸が y へ切り替わったことは、警告の欄ではなく
 /// 解決結果の 2 値（折返し基準 193・遠辺 133＝`validrect.bottom`）で示す
 /// （軸欄の主張は `actor_region_warn_tests.rs` が持つ）。

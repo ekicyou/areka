@@ -4,7 +4,7 @@
 //!
 //! | § | 内容 | 対応する表の行 |
 //! |---|---|---|
-//! | §1 | 表駆動の全行 × 両軸（[`CASES`]・[`Row`]） | 解決表 10 行すべて |
+//! | §1 | 表駆動の全行 × 両軸（[`CASES`]・[`Row`]） | 解決表 11 行すべて |
 //! | §2 | 被覆の機械的主張（行・軸・単位の取りこぼしを赤にする） | 同上（主張そのもの） |
 //! | §3 | 単位が軸に依らない（`@` 相対側） | `@N`（R1.4） |
 //! | §4 | 境界値（`0`・`-0`・`@0`・`@-0`・大きな負値。小数は §1 の `12.5`・`-1.5em` 等） | `N` / `@N`（R9.4） |
@@ -36,7 +36,7 @@ use log_capture_kit::count_levels;
 
 /// design.md 解決表の**行 ID**（本ファイルの被覆主張の鍵）。
 ///
-/// 表の 10 行と 1 対 1 に対応する。行を増やしたら [`ALL_ROWS`] にも足さない限り §2 が赤になる。
+/// 表の 11 行と 1 対 1 に対応する。行を増やしたら [`ALL_ROWS`] にも足さない限り §2 が赤になる。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Row {
     /// `""`（省略）→ `Ok(None)`＝動かさない・無音。
@@ -57,8 +57,10 @@ enum Row {
     CenterYOnY,
     /// `centerx` on Y・`centery` on X → `Err(CenterAxisMismatch)`。
     CenterAxisMismatch,
-    /// 解釈不能・非有限 → `Err(Unparsable)`。
+    /// 解釈不能 → `Err(Unparsable)`（非有限の書き方は語彙層で既に `Invalid` へ落ちている）。
     Unparsable,
+    /// 絶対・相対の結果が有限でない（有限の値 × 係数のあふれ）→ `Err(NonFinite)`。
+    NonFinite,
 }
 
 /// 解決表の全行（§2 の被覆主張の母集合）。
@@ -73,6 +75,7 @@ const ALL_ROWS: &[Row] = &[
     Row::CenterYOnY,
     Row::CenterAxisMismatch,
     Row::Unparsable,
+    Row::NonFinite,
 ];
 
 /// 両軸に書ける行（`centerx` on X・`centery` on Y は定義から片軸のみで、逆側は
@@ -86,6 +89,7 @@ const AXIS_SYMMETRIC_ROWS: &[Row] = &[
     Row::Relative,
     Row::CenterAxisMismatch,
     Row::Unparsable,
+    Row::NonFinite,
 ];
 
 /// 全単位（§2 が絶対・相対の双方 × 両軸で存在を要求する）。
@@ -142,7 +146,7 @@ macro_rules! relative_case {
     };
 }
 
-/// 解決表の全行 × 両軸（26 ケース）。
+/// 解決表の全行 × 両軸（28 ケース）。
 ///
 /// 単位の係数（1 / 10 / 12 / 0.1）が互いに異なり、係数を掛ける値も行ごとに変えてあるので、
 /// 単位を取り違えた実装は当該行で赤になる。
@@ -365,6 +369,23 @@ const CASES: &[Case] = &[
         axis: CursorAxis::Y,
         expect: |_| Err(CursorDegrade::Unparsable),
     },
+    // 結果が有限でない（両軸・絶対と相対）。値は有限でも係数を掛けると f32 を越える。
+    absolute_case!(
+        Row::NonFinite,
+        "3e38em",
+        3e38,
+        CursorUnit::Em,
+        CursorAxis::X,
+        |_| Err(CursorDegrade::NonFinite)
+    ),
+    relative_case!(
+        Row::NonFinite,
+        "@3e38lh",
+        3e38,
+        CursorUnit::Lh,
+        CursorAxis::Y,
+        |_| Err(CursorDegrade::NonFinite)
+    ),
 ];
 
 /// 解決表の全行 × 両軸を、**2 つの基点束**で通す（R9.1/9.3/9.4）。
@@ -406,6 +427,7 @@ fn row_index(row: Row) -> usize {
         Row::CenterYOnY => 7,
         Row::CenterAxisMismatch => 8,
         Row::Unparsable => 9,
+        Row::NonFinite => 10,
     }
 }
 
@@ -415,7 +437,7 @@ fn row_index(row: Row) -> usize {
 #[test]
 fn every_resolution_table_row_is_covered_on_both_axes() {
     // 被覆主張の母集合そのものが縮んでいないこと（`Row` の全 variant が過不足なく並ぶ）。
-    assert_eq!(ALL_ROWS.len(), 10, "解決表は 10 行");
+    assert_eq!(ALL_ROWS.len(), 11, "解決表は 11 行");
     for (i, row) in ALL_ROWS.iter().enumerate() {
         assert_eq!(
             row_index(*row),
@@ -663,6 +685,7 @@ fn canonical_examples_resolve_to_the_documented_numbers() {
 // | `centerx`／`centery`（正しい軸）＝実導出・ログなし | `CASES` の 2 行 ＋ `resolution_is_silent` |
 // | 軸取り違え＝当該軸不動・`warn`（初回のみ） | `degrade_warns_once_per_branch_and_actor` |
 // | 解釈不能＝当該軸不動・`warn`（初回のみ） | 同上 |
+// | 結果が有限でない＝当該軸不動・`warn`（初回のみ） | 同上 |
 // | 範囲外＝`debug`（一回化しない） | `large_negative_value_is_returned_literally_and_noted_as_out_of_range`＋姉妹モジュール |
 
 /// **解決そのものは 1 件もログを出さない**（省略・実導出・縮退のいずれでも）。
@@ -694,9 +717,9 @@ fn warn_if_degraded(case: &Case, b: &CursorBasis, actor: &ActorKey, guard: &mut 
 
 /// 配線の契約を表の全ケースで通したときの件数（R5.2/5.3/5.5）。
 ///
-/// 表の 26 ケースのうち縮退は 4 件（軸取り違え 2・解釈不能 2）だが、一回化の鍵が
-/// `(キャラクター, 分岐)` なので同一キャラクターでは **2 件**にまとまる。別キャラクターでは
-/// 再び 2 件。省略と実導出（22 ケース）は 1 件も出さない。
+/// 表の 28 ケースのうち縮退は 6 件（軸取り違え 2・解釈不能 2・有限でない 2）だが、一回化の鍵が
+/// `(キャラクター, 分岐)` なので同一キャラクターでは **3 件**にまとまる。別キャラクターでは
+/// 再び 3 件。省略と実導出（22 ケース）は 1 件も出さない。
 ///
 /// ケースの仕分けは**期待値の表**（`case.expect`）で行う——実装の戻り値で仕分けると
 /// 「実装が縮退と呼んだものだけを縮退と数える」同義反復になる。
@@ -712,8 +735,8 @@ fn degrade_warns_once_per_branch_and_actor() {
     assert_eq!(derived.len(), 22, "省略と実導出のケース数（表の仕分け）");
     assert_eq!(
         degraded.len(),
-        4,
-        "縮退のケース数（軸取り違え 2・解釈不能 2）"
+        6,
+        "縮退のケース数（軸取り違え 2・解釈不能 2・有限でない 2）"
     );
 
     // 省略と実導出だけを通す＝0 件（R5.2/5.5）。
@@ -724,15 +747,15 @@ fn degrade_warns_once_per_branch_and_actor() {
     });
     assert_eq!(counts.warn, 0, "省略と実導出は警告しない");
 
-    // 縮退 4 ケースを通す＝分岐 2 つぶんの 2 件（軸違い・重複は沈黙）。
+    // 縮退 6 ケースを通す＝分岐 3 つぶんの 3 件（軸違い・重複は沈黙）。
     let ((), counts) = count_levels(|| {
         for case in &degraded {
             warn_if_degraded(case, &b, &a0, &mut guard);
         }
     });
     assert_eq!(
-        counts.warn, 2,
-        "同一キャラクターでは分岐（解釈不能・軸取り違え）ごとに 1 件"
+        counts.warn, 3,
+        "同一キャラクターでは分岐（解釈不能・軸取り違え・有限でない）ごとに 1 件"
     );
 
     // 同じキャラクターで表を丸ごと再走査＝沈黙（走査を跨いで持続する）。
@@ -749,7 +772,7 @@ fn degrade_warns_once_per_branch_and_actor() {
             warn_if_degraded(case, &b, &a1, &mut guard);
         }
     });
-    assert_eq!(counts.warn, 2, "別キャラクターでは再び分岐ごとに 1 件");
+    assert_eq!(counts.warn, 3, "別キャラクターでは再び分岐ごとに 1 件");
 }
 
 /// 共通前提の定数が design.md「Unit Tests」の逐語どおりであること（檻の前提を檻にする）。

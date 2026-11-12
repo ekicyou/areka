@@ -12,6 +12,10 @@
 //! | §3 | 試験用書式は計測鍵ごとに 1 度だけ生成 | 11.3 |
 //! | §4 | 計測値＝装飾入りで組んだ行の実際の文字送り量 | 11.3, 15.5 |
 //! | §5 | 共有の台帳の構築口（束縛書式が候補列の解決を通ることは §7 が太さで見る） | 9.8, 11.3 |
+//! | §6 | 縦書きの em の箱の置き場の実測 | spec vertical-choice-hover-band 4.2, 6.3 |
+//! | §7 | 束縛書式の太さ・斜体（檻 F1） | spec emo-text-dwrite-fidelity 3.10, 4.8, 4.9 |
+//! | §8 | 計測鍵の試験用書式の顔（檻 F2〜F4） | spec emo-text-dwrite-fidelity 4.1, 4.2, 4.4, 4.10 |
+//! | §9 | 横書きの字の箱の上端の実測 | spec emo-text-line-gap 2.1, 4.1, 4.2 |
 //!
 //! **較正**（要件 15.5・実測 2026-09-12・摂動はいずれも取り消し済み）——実装を次の
 //! 4 通りに壊すと、それぞれ本ファイルの述語が赤になることを確かめてある。
@@ -88,7 +92,7 @@ fn the_default_look_measures_exactly_what_it_measured_before_decorations_existed
         ADVANCE_ASCII_AT_12,
         "既定の見た目の半角の送り幅が装飾導入前の実測値から動いた"
     );
-    // 束縛書式の経路（従来の入口）とも同値——2 つの入口が割れていない。
+    // 束縛書式の経路（`advance` の入口）とも同値——2 つの入口が割れていない。
     assert_eq!(m.advance_styled("あ", &look), m.advance("あ", look.height));
 }
 

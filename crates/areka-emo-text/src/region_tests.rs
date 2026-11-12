@@ -28,7 +28,6 @@ fn fixture_model() -> BalloonModel {
 /// クロージャを共有のログ捕捉窓の中で実行し（戻り値, WARN 件数）を返す。
 ///
 /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-/// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
 fn count_warns<T>(f: impl FnOnce() -> T) -> (T, usize) {
     let (value, counts) = count_levels(f);
     (value, counts.warn)

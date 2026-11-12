@@ -120,8 +120,9 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
             }
             let chunk_byte_lens: Vec<usize> =
                 parser.parse(run_text).iter().map(String::len).collect();
-            // 前提（塊の連結＝run の文字列）は試験の作りでだけ確かめる。本番は届いた字の腕で
-            // 毎フレーム走るので記録は出さず、崩れたら最後の塊へまとめる（指摘 33）。
+            // 前提（塊の連結＝run の文字列）は試験の作りでだけ確かめる。本番は届いた字が増える
+            // たびに走る（`actor_present.rs` の `BreakMemo` が消した回数と項目の数で覚える）ので
+            // 記録は出さず、崩れたら最後の塊へまとめる（指摘 33）。
             debug_assert_eq!(chunk_byte_lens.iter().sum::<usize>(), run_text.len());
             segments.extend(assign_items_to_chunks(
                 &chunk_byte_lens,
@@ -418,19 +419,6 @@ mod tests {
             expected_start += seg.len;
         }
         assert_eq!(expected_start, n, "混在 run でも全グリフ被覆");
-    }
-
-    // ── R8.1: 決定論（同一 items → 同一 plan） ──
-
-    #[test]
-    fn same_items_yield_identical_plan() {
-        let mut items = glyphs("今日はいい天気ですね");
-        items.push(br());
-        items.extend(glyphs("明日も晴れるといいな"));
-
-        let a = segment_plan(&items);
-        let b = segment_plan(&items);
-        assert_eq!(a, b, "同一 items に対し境界が非決定論的");
     }
 
     // ── R8.1: 代表和文の実境界ピン（vendored モデルの回帰檻） ──

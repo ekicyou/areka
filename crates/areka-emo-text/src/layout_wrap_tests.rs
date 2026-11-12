@@ -27,16 +27,10 @@ fn fixed_metrics_advance_full_width_for_nonascii_half_for_ascii() {
 
 /// 行送りピッチは `font_height + 行間 2`（丸めなし・2026-09-05 の裁定）。
 ///
-/// 退役の記録（要件 7.2）: 本テストは
-/// `fixed_metrics_line_pitch_ceils_fractional_values`（旧式 `ceil(font_height × 1.25)` の
-/// 「切り上げの端数」を検証していた 1 本）の代替である。裁定で式から係数の乗算と `ceil` が
-/// 消え、検証対象だった端数処理そのものが仕様上存在しなくなったため、名前と本文ごと
-/// 差し替えた（退役 1 ↔ 代替 1・テストの総本数は不変）。
-///
-/// 判別力（新しい式以外の値では赤になる）:
-/// - `12 → 14`・`10 → 12` は旧式の 15・13 と食い違うので、旧式が残っていれば赤。
-/// - `10.5 → 12.5` は端数を残す font_height で、新式に `ceil` を足し戻すと 13 になり赤。
-///   （旧式なら `ceil(13.125) = 14` でやはり赤＝丸めの有無と係数の両方を同時に締める。）
+/// 判別力（この式以外の値では赤になる）:
+/// - `12 → 14`・`10 → 12` は係数を掛ける式（`ceil(font_height × 1.25)` なら 15・13）と食い違う。
+/// - `10.5 → 12.5` は端数を残す font_height で、`ceil` を足すと 13 になり赤
+///   （`ceil(13.125) = 14` でも赤＝丸めの有無と係数の両方を同時に締める）。
 #[test]
 fn fixed_metrics_line_pitch_adds_default_gap() {
     let m = FixedMetrics;
@@ -594,10 +588,10 @@ fn reveal_progression_materializes_only_when_next_glyph_appears() {
     }
 }
 
-/// 3.4: 満杯付近で保留改行が実体化された直後にあふれ判定が従来どおり発火する（3.2/7.3 後段）。
+/// 3.4: 満杯付近で保留改行が実体化された直後にあふれ判定が発火する（3.2/7.3 後段）。
 /// 満杯 3 行＋`\n`＋**次の可視グリフ**（実体化トリガあり）→ 4 行目が実体化しあふれ発火。
 /// 保留のみ（次グリフなし）で不発火である対の片側は `trailing_pending_newline_does_not_
-/// trigger_overflow`（既存更新檻）が担保する。
+/// trigger_overflow`（`layout_visible_window_tests.rs`）が担保する。
 #[test]
 fn materialized_newline_near_full_triggers_overflow() {
     let region = TextRegion::resolve(
@@ -606,8 +600,7 @@ fn materialized_newline_near_full_triggers_overflow() {
         WritingMode::HorizontalTb,
     );
     // 満杯 3 行（下端 10/22/34）＋改行＋次グリフ → 改行が実体化し 4 行目（下端 46 > 34）。
-    // validrect.bottom は「3 行ちょうどが収まる」という境界の意図を保つため 36 → 34 へ導き直した
-    //（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
+    // validrect.bottom 34 は 3 行ちょうどが収まる境界。
     let mut items = broken_lines(3);
     items.push(TextItem::LineBreak { ratio: 1.0 });
     items.push(TextItem::glyph("あ"));

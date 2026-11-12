@@ -213,13 +213,10 @@ fn diag_dump_horizontal_pngs() {
     let mut state = TextLayerState::default();
     // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
     // あふれ短行 at 2.0）。reveal は配送 duration 由来（interval = duration / N）。Text へ
-    // N×0.05 を焼き込むと各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する
-    // （chunk 境界は at で gate）。
-    // 【newline-defer】かつて（即時意味論では）at を分散させると未リビール NewLine が即座に
-    // 「幽霊空行」を出し人工的なスクロールを誘発した——遅延化（deferred newline）で保留改行は
-    // 次の可視グリフが reveal されるまで行を開かないため、幽霊空行はもはや生じず、あふれ発火は
-    // 実体化時刻（改行より後ろのグリフの reveal 時）へ後退する。at 分散は実機の reveal タイミングを
-    // 模す診断ダンプの時間対応としてのみ残す（幽霊空行の再現目的ではない）。
+    // N×0.05 を焼き込むと各 chunk 内が 1 字 0.05 秒のペースで per-glyph 進行する
+    // （chunk 境界は at で gate）。at の分散は実機の reveal タイミングを模す診断ダンプの時間対応。
+    // 保留改行は次の可視グリフが reveal されるまで行を開かないので、あふれ発火は改行より後ろの
+    // グリフの reveal 時になる。
     apply_fixture_script(&mut state, &actor, [0.0, 0.5, 1.2, 2.0], 0.05);
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム回す）。dump は目標時刻通過時。

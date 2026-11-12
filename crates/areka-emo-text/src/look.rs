@@ -586,9 +586,9 @@ fn script_of_key(key: &str) -> Option<Script> {
 /// 本仕様が意味を与えないキー（要件 2.5 の列挙——寄せ 2・影 2・`cursor…` 12・`anchor…` 19）。
 /// 一覧に無いキーは前方一致で拾わず不明のキーにする（書き損じを `warn!` で残す・要件 2.6）。
 ///
-/// `cursor…`・`anchor…` は ukadoc の「選択肢マーカー変更コマンド」の各項目の見出しのキー
-/// （`cursorcolor` と `cursorbrushcolor` のように 1 項目に 2 つ並ぶものは両方）と、
-/// 「文字変更コマンド」の `anchor.font.color`。
+/// `cursor…` 12 と `anchor…` のうち 18 は ukadoc の「選択肢マーカー変更コマンド」の各項目の
+/// 見出しのキー（`cursorcolor` と `cursorbrushcolor` のように 1 項目に 2 つ並ぶものは両方）。
+/// `anchor…` の残り 1 は「文字変更コマンド」の `anchor.font.color`（18＋1＝19）。
 /// 所有仕様は `text-align-shadow-canon`（寄せ・影）・
 /// `choice-marker-styling`（`cursor…`）・`anchor-style-canon`（`anchor…`）。
 const UNOWNED_KEYS: [&str; 35] = [

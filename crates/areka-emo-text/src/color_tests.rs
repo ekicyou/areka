@@ -399,7 +399,7 @@ fn calibration_components_must_not_be_read_independently() {
     assert!(parse_color(&["50%", "100", "20%"]).is_err());
 }
 
-/// 較正: 先頭の `+` を数の一部として黙って吸収してしまう誤り（`u32` の解析は `+` を受ける）。
+/// 較正: 先頭の `+` を数の一部として黙って吸収してしまう誤り（`u64` の解析は `+` を受ける）。
 #[test]
 fn calibration_leading_plus_must_not_be_absorbed() {
     assert_ne!(

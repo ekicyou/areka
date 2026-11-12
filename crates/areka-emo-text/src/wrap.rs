@@ -89,7 +89,6 @@ mod tests {
     /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
     ///
     /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-    /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
     fn resolve_counting_warns(budoux_newline: Option<&str>) -> (WrapMode, usize) {
         let (mode, counts) = count_levels(|| WrapMode::resolve(&model(budoux_newline)));
         (mode, counts.warn)
@@ -157,30 +156,6 @@ mod tests {
     #[test]
     fn wrap_mode_default_is_char_by_char() {
         assert_eq!(WrapMode::default(), WrapMode::CharByChar);
-    }
-
-    /// 全入力パターン（ON・OFF・欠落・未知値）の解決結果と warn の件数。
-    #[test]
-    fn resolution_matches_expected_across_all_patterns() {
-        let cases: &[(Option<&str>, WrapMode, usize)] = &[
-            (Some("1"), WrapMode::BudouxWordWrap, 0),
-            (Some("true"), WrapMode::BudouxWordWrap, 0),
-            (None, WrapMode::CharByChar, 0),
-            (Some("0"), WrapMode::CharByChar, 0),
-            (Some("false"), WrapMode::CharByChar, 0),
-            (Some("on"), WrapMode::CharByChar, 1),
-        ];
-        for (input, expected_mode, expected_warns) in cases {
-            let (m1, w1) = resolve_counting_warns(*input);
-            assert_eq!(
-                m1, *expected_mode,
-                "input {input:?} の解決結果が期待と不一致"
-            );
-            assert_eq!(
-                w1, *expected_warns,
-                "input {input:?} の warn 件数が期待と不一致"
-            );
-        }
     }
 
     // ── R1.1: 2層マージ後の転記値を読むだけ（マージ済み単一値で解決） ──

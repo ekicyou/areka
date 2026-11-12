@@ -1,12 +1,9 @@
 //! # layout_line_ops — 行配置の自己完結した補助 2 つ（純粋層・`layout.rs` の子）
 //!
 //! [`segment_advance_sum`]（塊の advance 合計）と [`resolve_cursor_component`]
-//! （`\_l` の 1 軸ぶんの解決と記録への配線）を担う。親 `layout.rs` からの**純移動**——
-//! 合計の畳み込み順・縮退の分類・記録の一回化はいずれも移動前と同一である。
+//! （`\_l` の 1 軸ぶんの解決と記録への配線）を担う。親 `layout.rs` が `use` で引き直して呼ぶ。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
-//!
-//! 親が `use` で引き直すため、`layout.rs` 内から見た呼び出し方は分割前と変わらない。
 
 use areka_sakura::contract::ActorKey;
 

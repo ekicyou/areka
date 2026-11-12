@@ -34,8 +34,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
     // 参照描画（oracle）と実描画（viewbox）は同一寸の面へ描き、read_back を byte 比較する。
     // 面寸 320×122 は本体側バルーンの描画範囲そのもの（`balloons0s.txt` の validrect
     // (36,46)-(356,168)）で、行送り 30px では行 i の下端 = 30i + 28 ゆえ
-    // 4 行目が 90..118 ≤ 122 まで収まり、5 行目 120..148 が 122 を超えてあふれる
-    // （旧 35px では 3 行目 70..98 までで 4 行目 105..133 があふれていた）。
+    // 4 行目が 90..118 ≤ 122 まで収まり、5 行目 120..148 が 122 を超えてあふれる。
     assert_eq!(
         pair.oracle_surface.size(),
         pair.viewbox_surface.size(),
@@ -120,7 +119,7 @@ fn diag_line_boundary_dropout_vs_oracle() {
 /// DD-9: 改行を一切含まない行内縮小（visible=6「おっはよー！」→ visible=2「おっ」）で
 /// oracle（全域再描画）と viewbox（ダーティスクロール）の read_back が byte 一致する。
 /// `diag_line_boundary_dropout_vs_oracle` の後方ジャンプ検分が捕えた退避インク未クリア欠陥が
-/// **改行非依存**（本 spec の遅延化と直交・後方時刻ジャンプ/un-reveal で単一行が縮む任意
+/// **改行非依存**（改行の遅延と直交・後方時刻ジャンプ/un-reveal で単一行が縮む任意
 /// アクセスで再現）であることを恒久固定する。guard 拡張（viewbox.rs DD-9）で緑になる。
 #[test]
 fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {

@@ -460,7 +460,8 @@ fn the_keys_owned_by_later_specs_do_not_change_the_look() {
     ];
     assert_eq!(unowned.len(), 4, "寄せ・影として試すキーの母数");
     // ukadoc の「選択肢マーカー変更コマンド」の各項目の見出しのキー（`cursor…` 12・`anchor…` 18）と、
-    // 「文字変更コマンド」の `anchor.font.color`。前方一致ではなく数え上げで「他の持ち物」になる。
+    // 「文字変更コマンド」の `anchor.font.color`（`anchor…` は 18＋1＝19）。前方一致ではなく
+    // 数え上げで「他の持ち物」になる。
     let marker_keys = [
         "cursorstyle",
         "cursorcolor",

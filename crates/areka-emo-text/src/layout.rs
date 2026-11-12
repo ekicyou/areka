@@ -105,8 +105,7 @@ use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
 // 本ファイルは行配置の本体で、自己完結した補助 2 つ（塊の advance 合計・`\_l` の 1 軸
-// 解決の配線）は子モジュール `layout_line_ops.rs` が持つ。純移動ゆえ本体からの
-// 呼び出し方は分割前と同一。
+// 解決の配線）は子モジュール `layout_line_ops.rs` が持つ。
 #[path = "layout_line_ops.rs"]
 mod line_ops;
 

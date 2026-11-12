@@ -13,8 +13,9 @@
 //! 4. **`.vertical` の導出 3 値**——横書き `0`／`vertical_rl` `1`／`vertical_lr` `1`
 //!    （本仕様 7.1）。
 //!
-//! さらに、既存 API [`WritingMode::resolve`] が本決定点への薄い委譲であること
-//! （戻り値が `mode()` と一致すること・本仕様 2.3）を代表入力集合で固定する。
+//! 既存 API [`WritingMode::resolve`] は本決定点の `mode()` をそのまま返す 1 行の委譲
+//! （本仕様 2.3）であり、同じ式を 2 度呼んで比べても赤にならないので檻を置かない。
+//! 純関数を 2 度呼んで比べる決定論の檻も同じ理由で置かない。
 //!
 //! ## 0 件主張の規律（恒真の禁止）
 //!
@@ -81,16 +82,6 @@ fn assert_capture_alive(counts: &LevelCounts) {
 
 // ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7） ──
 
-/// 未宣言は `Undeclared`——`0` の宣言へ潰さない（共存規則の判定に宣言の有無が要る）。
-#[test]
-fn vertical_undeclared_is_classified_as_undeclared_without_records() {
-    let (decision, counts) = decide(None, None);
-    assert_eq!(decision.vertical_declaration(), VerticalDecl::Undeclared);
-    assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 0, "未宣言は正常系につき warn を出さない");
-    assert_eq!(counts.debug, 0, "未宣言は正常系につき debug を出さない");
-}
-
 /// `0` は「横書きの宣言」——未宣言とは別の分類として保つ。
 #[test]
 fn vertical_zero_is_classified_as_horizontal_without_records() {
@@ -145,10 +136,12 @@ fn vertical_invalid_values_warn_exactly_once_and_fall_back_to_canon_default() {
 
 // ── ⑵ 2 キーの共存規則（本仕様 2.2〜2.5・2.7・10.3） ──
 
-/// 両キーとも宣言なし——正典既定の横書き・記録 0 件（本仕様 1.3）。
+/// 両キーとも宣言なし——正典既定の横書き・記録 0 件（本仕様 1.3）。`vertical` の未宣言は
+/// `Undeclared` のまま保つ——`0` の宣言へ潰さない（共存規則の判定に宣言の有無が要る）。
 #[test]
 fn no_declaration_uses_canon_default_without_records() {
     let (decision, counts) = decide(None, None);
+    assert_eq!(decision.vertical_declaration(), VerticalDecl::Undeclared);
     assert_eq!(decision.mode(), WritingMode::HorizontalTb);
     assert_eq!(decision.source(), DirectionSource::CanonDefault);
     assert_eq!(
@@ -377,69 +370,6 @@ fn vertical_property_value_round_trips_declared_canon_key() {
             decision.vertical_property_value(),
             expected_value,
             "vertical,{declared:?} の .vertical 導出値"
-        );
-    }
-}
-
-// ── ⑷ 既存 API の委譲同値（本仕様 2.3） ──
-
-/// [`WritingMode::resolve`] は決定点への薄い委譲であり、戻り値は常に `mode()` と一致する。
-///
-/// 代表入力集合は共存規則の全腕（単独・一致併記・不一致併記・未知値／不正値の合流・
-/// 両キー未宣言）を含む。ここが崩れると、本番の唯一の呼出（`actor_decoration.rs` の
-/// `ResolvedBalloonText::resolve_with_background` 内）が決定点と別の答えを返すことになる。
-#[test]
-fn writing_mode_resolve_delegates_to_decision_mode() {
-    const CASES: &[(Option<&str>, Option<&str>)] = &[
-        (None, None),
-        (Some("0"), None),
-        (Some("1"), None),
-        (Some("2"), None),
-        (Some(""), None),
-        (None, Some("horizontal_tb")),
-        (None, Some("vertical_rl")),
-        (None, Some("vertical_lr")),
-        (None, Some("diagonal_bt")),
-        (Some("0"), Some("horizontal_tb")),
-        (Some("1"), Some("vertical_rl")),
-        (Some("0"), Some("vertical_rl")),
-        (Some("1"), Some("horizontal_tb")),
-        (Some("1"), Some("vertical_lr")),
-        (Some("1"), Some("diagonal_bt")),
-        (Some("2"), Some("vertical_rl")),
-        (Some("2"), Some("diagonal_bt")),
-    ];
-
-    for (vertical, writing_mode) in CASES {
-        let via_api = WritingMode::resolve(&model(*vertical, *writing_mode));
-        let via_decision =
-            WritingDirectionDecision::resolve(&model(*vertical, *writing_mode)).mode();
-        assert_eq!(
-            via_api, via_decision,
-            "vertical={vertical:?} writing_mode={writing_mode:?} で委譲が一致しない"
-        );
-    }
-}
-
-/// 決定論——同一入力に対し、戻り値もログ件数も同一である（本仕様 10.6）。
-#[test]
-fn decision_is_deterministic_in_value_and_record_counts() {
-    for (vertical, writing_mode) in [
-        (None, None),
-        (Some("1"), None),
-        (Some("2"), None),
-        (Some("1"), Some("vertical_lr")),
-        (Some("1"), Some("diagonal_bt")),
-    ] {
-        let (first_decision, first_counts) = decide(vertical, writing_mode);
-        let (second_decision, second_counts) = decide(vertical, writing_mode);
-        assert_eq!(
-            first_decision, second_decision,
-            "vertical={vertical:?} writing_mode={writing_mode:?} の決定が 2 回で異なる"
-        );
-        assert_eq!(
-            first_counts, second_counts,
-            "vertical={vertical:?} writing_mode={writing_mode:?} のログ件数が 2 回で異なる"
         );
     }
 }

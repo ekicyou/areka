@@ -1,5 +1,5 @@
 use super::test_support::{broken_lines, canvas_for, commit_initial, expect_update, phys, window};
-use super::{DIRTY_GUARD_IMG_PX, FramePlan, LineOverhang, ScrollPlanner};
+use super::{FramePlan, LineOverhang, ScrollPlanner};
 use crate::region::ScaleContract;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
@@ -536,12 +536,6 @@ fn backward_shrink_detects_moved_row_and_shorter_extent() {
 }
 
 // ── 整数格子拡張＋ガード＋クランプ（k=1.0／k=1.25 で面寸を越えない） ──
-
-/// ガード定数は 1 image px（保守既定・AA こぼれ吸収）。
-#[test]
-fn dirty_guard_is_one_image_px() {
-    assert_eq!(DIRTY_GUARD_IMG_PX, 1.0);
-}
 
 /// k=1.25: 全域は面寸ちょうど・端の変化行/露出帯はクランプされ面寸を越えない。
 /// ガード余白は物理 px `ceil(1.0 × 1.25)=2`。

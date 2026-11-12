@@ -25,8 +25,7 @@ use crate::writing::WritingMode;
 /// 共通前提: 文字描画開始点 `(0, 0)` 宣言・validrect `top 0 / bottom 34 / left 0 / right 400`。
 ///
 /// あふれ境界（横書き＝`validrect.bottom`）が **34** ＝ちょうど 3 行ぶん（行下端 10／22／34）に
-/// なるので、4 行目以降が超過する。境界は「3 行ちょうど」という意図を保つため新しい格子へ
-/// 導き直した（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
+/// なるので、4 行目以降が超過する。
 /// `layout_visible_window_tests.rs` の既存檻と同一の矩形を
 /// 使うのは、**`\_l` の有無だけが差分になる**ようにするためである。
 fn region_overflow() -> TextRegion {
@@ -165,7 +164,7 @@ fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
 ///
 /// あふれ判定:
 /// - `last_far` ＝ 7 行目の bottom ＝ **58** > 34 → 発火。
-/// - `origin` ＝先頭行の近端 ＝ **0**。条件は `58 − (top_i − 0) <= 34` すなわち `top_i >= 24`。
+/// - `origin` ＝描画範囲の開始側（`block_origin`＝文字描画開始点の y）＝ **0**。条件は `58 − (top_i − 0) <= 34` すなわち `top_i >= 24`。
 /// - 先頭から最初に満たすのは 3 行目（top 24）＝ index **2**。
 /// - `block_offset = −block_dir × (24 − 0) = −24.0`（横書きの `block_dir` は +1）。
 ///

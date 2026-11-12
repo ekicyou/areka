@@ -9,16 +9,12 @@
 //! `font_height = 10`・`line_pitch = 12`・`image_size = (400, 224)`・
 //! `origin`＝宣言例 `(50, 20)`・`current = (200, 30)`。
 //!
-//! 行送りだけは `areka-P0-emo-text-line-height-canon` の裁定で 13 から 12 へ改まった
-//! （`1lh` は 1em＋行間で、行間の既定が 2 になった）。カーソルタグ側の座標語彙・原点・
-//! 書字方向ごとの解決規則は変わらず、`1lh` が指す値だけが追随する。
+//! 行送り 12 は `1lh`＝1em＋行間の既定 2（`areka-P0-emo-text-line-height-canon` の裁定）。
 
 use super::CursorBasis;
+use crate::layout::test_support::model_rect;
 use crate::region::TextRegion;
 use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 
 /// design.md「Unit Tests」共通前提の文字高さ（正典 `1em`＝タグ時点の文字高さ）。
 pub(super) const FONT_HEIGHT: f32 = 10.0;
@@ -82,19 +78,14 @@ pub(super) const VALID_BOTTOM: f32 = 200.0;
 /// **捕捉窓の外で組むこと**——`TextRegion::resolve` は未宣言の `origin` 成分について
 /// `debug!` を出すので、窓の中で組むと範囲外記録の件数に混ざる。
 pub(super) fn out_of_range_region() -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(
+    let model = model_rect(
+        (None, None),
+        (
             Some(VALID_TOP as i32),
             Some(VALID_BOTTOM as i32),
             Some(VALID_LEFT as i32),
             Some(VALID_RIGHT as i32),
         ),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
     );
     let region = TextRegion::resolve(
         &model,

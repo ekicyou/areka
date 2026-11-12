@@ -36,9 +36,8 @@
 //! 既存の横書き檻・縦書き檻の共通前提は validrect ＝画像全域（`0/0/400/224`）で、そこでは
 //! `image_size.0 / 2` と `right / 2` が同値（どちらも 200）・`image_size.1 / 2` と `bottom / 2` も
 //! 同値（どちらも 112）になる。**その fixture で V6 を書くと、`centerx`／`centery` の基準を
-//! validrect の辺と取り違えた実装が素通りする。** 実際、本タスク着手時点で配線の
-//! `image_size: region.image_size()` を `(region.right(), region.bottom())` に差し替えても
-//! ワークスペースのテストは 1 本も赤にならなかった（タスク 4.1／4.4 のレビューが摂動で実証）。
+//! validrect の辺と取り違えた実装（配線の `image_size: region.image_size()` を
+//! `(region.right(), region.bottom())` にした実装）が素通りする。**
 //!
 //! 画像原寸は既定と同じ `(400, 224)` に保ち、validrect だけをずらしてあるので、design.md の
 //! V6 が定める literal（X = 200・Y = 112）はそのまま使える。**ただし validrect の中央
@@ -485,12 +484,11 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
 /// 3 書字方向とも**宣言値から**測られる（Requirement 2.9・design.md 原点表「宣言された
 /// `origin` 成分はそのまま原点になる」）。
 ///
-/// 引用元は完了済みの仕様 `.kiro/specs/completed/areka-P0-cursor-tag-canon/design.md` であり、
-/// **引用したその一文は本仕様 `areka-P0-balloon-origin-outside-validrect` が上書きしている**
-/// ——いまは validrect の範囲内（両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ
-/// 解決された宣言は未宣言の成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は
-/// validrect（x は 30〜350・y は 8〜210）の範囲内なので、引用の結論はこの条件のもとでは
-/// 変わらない。完了済みの仕様は改訂しない決まりなので、注記は引用する側に置く。
+/// 引用元は完了済みの仕様 `.kiro/specs/completed/areka-P0-cursor-tag-canon/design.md` で、
+/// その一文は `areka-P0-balloon-origin-outside-validrect` が上書きしている——validrect の範囲内
+/// （両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ解決された宣言は未宣言の
+/// 成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は validrect（x は 30〜350・
+/// y は 8〜210）の範囲内なので、宣言値から測られる。
 ///
 /// 手計算（宣言 `origin (50, 20)`・validrect `left 30 / top 8 / right 350 / bottom 210`・font 10）:
 /// - `horizontal_tb`: 着地 `(50 + 0, 20 + 0) = (50, 20)` → 行矩形 `(50, 20, 60, 30)`

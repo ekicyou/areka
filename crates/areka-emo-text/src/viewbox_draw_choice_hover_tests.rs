@@ -222,7 +222,7 @@ fn count_bgra_in_row(bytes: &[u8], w: u32, y: u32, x0: u32, x1: u32, target: [u8
 /// 観測可能な完了状態（R13.1/13.2/13.5）: `band_offset` を持つ Choice 行を描画すると、
 /// ハイライトの塗りは行矩形の block 近端から**寄せの分だけ下がって**始まり、寄せの上の行には
 /// 1 画素も載らない。さらに hover 解除フレームで塗りが**消し残らない**——ダーティ帯の超過分は
-/// `band_offset + band_extent − font_height` で組まれるので、寄せを数えないと帯の下端側が
+/// `band_offset + band_extent − 行の丈` で組まれるので、寄せを数えないと帯の下端側が
 /// クリップの外へ落ちて塗りが残る（`expand_overhang_for_band` の回帰檻）。
 #[test]
 fn hover_band_offset_shifts_paint_and_leaves_no_residue_on_hover_off() {

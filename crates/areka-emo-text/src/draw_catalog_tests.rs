@@ -30,7 +30,7 @@ use windows::Win32::Graphics::DirectWrite::{
 };
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::super::test_support::model_with_font;
+use super::super::test_support::{model_with_font, require_yu_gothic};
 use super::super::{DEFAULT_FONT_NAME, ResolvedFont};
 use super::{FontCatalog, FontFace};
 
@@ -365,8 +365,6 @@ fn bold_takes_the_heavier_of_the_named_weight_and_bold() {
             named.0
         );
     }
-    assert_eq!(DWRITE_FONT_WEIGHT_BOLD.0, 700, "中太＋太字は 700");
-    assert_eq!(DWRITE_FONT_WEIGHT_BLACK.0, 900, "Black＋太字は 900");
 }
 
 /// 斜体の指定は ITALIC、指定が無ければ名前の斜体（要件 4.4・4.5）。
@@ -568,12 +566,7 @@ fn r1_real_collection_resolves_gdi_names_to_the_medium_face() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
         .expect("DWriteCreateFactory（デバイス非依存・headless 可）");
     let cat = FontCatalog::new(&factory).expect("システムのフォント集合を取得できる");
-    assert!(
-        cat.family_for(&v(&["Yu Gothic"])).is_some()
-            && cat.family_for(&v(&["游ゴシック"])).is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
+    require_yu_gothic(&cat);
 
     let (_, events) = capture(|| {
         for name in ["Yu Gothic Medium", "游ゴシック Medium", "yu gothic medium"] {
