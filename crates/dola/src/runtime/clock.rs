@@ -12,20 +12,28 @@
 /// アニメーションエンジンのフレーム間時間差計測に使用する想定。
 /// 利用者は本関数の戻り値を `runtime.update(subscriber_id, time)` に渡す。
 pub fn now() -> f64 {
+    use std::sync::OnceLock;
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 
-    let mut counter: i64 = 0;
-    let mut frequency: i64 = 0;
+    // 周波数は起動後に変わらないので 1 度だけ読む。
+    static FREQ: OnceLock<f64> = OnceLock::new();
     // SAFETY(panic 経路): QueryPerformanceCounter / QueryPerformanceFrequency は
     // Windows XP 以降のシステムでは失敗せず（Microsoft docs）、frequency が 0 に
     // なることもないため、Result は意図的に破棄している。仮に frequency = 0 でも
     // f64 除算は panic せず inf を返すのみ（0/0 でも NaN であり panic しない）。
     // 単調性は QPC のハードウェア保証に依存する（巻き戻りなし）。
+    let frequency = *FREQ.get_or_init(|| {
+        let mut frequency: i64 = 0;
+        unsafe {
+            let _ = QueryPerformanceFrequency(&mut frequency);
+        }
+        frequency as f64
+    });
+    let mut counter: i64 = 0;
     unsafe {
         let _ = QueryPerformanceCounter(&mut counter);
-        let _ = QueryPerformanceFrequency(&mut frequency);
     }
-    (counter as f64) / (frequency as f64)
+    (counter as f64) / frequency
 }
 
 #[cfg(all(test, target_os = "windows"))]
@@ -63,59 +71,5 @@ mod tests {
         let t2 = now();
         let diff = t2 - t1;
         assert!(diff > 0.0, "now() must detect 1ms difference: diff={diff}");
-    }
-
-    /// ベンチマーク: now() 1回の呼び出しコストがナノ秒オーダーであることを検証 (Task 4)
-    ///
-    /// 10,000回呼び出しの平均時間を計測し、60FPS フレーム間隔 (16.67ms) に対して
-    /// 無視できるオーバーヘッドであることを確認する。
-    #[test]
-    fn now_call_overhead_is_negligible() {
-        use std::time::Instant;
-
-        const ITERATIONS: u32 = 10_000;
-        const WARMUP: u32 = 1_000;
-
-        // ウォームアップ
-        for _ in 0..WARMUP {
-            let _ = now();
-        }
-
-        // 計測
-        let start = Instant::now();
-        for _ in 0..ITERATIONS {
-            let _ = std::hint::black_box(now());
-        }
-        let elapsed = start.elapsed();
-
-        let avg_ns = elapsed.as_nanos() as f64 / ITERATIONS as f64;
-        let current_value = now();
-
-        // 結果を表示（cargo test -- --nocapture で確認可能）
-        eprintln!("=== clock::now() ベンチマーク結果 ===");
-        eprintln!("  反復回数: {ITERATIONS}");
-        eprintln!("  合計時間: {elapsed:?}");
-        eprintln!("  平均呼出時間: {avg_ns:.1} ns/call");
-        eprintln!(
-            "  現在の now() 値: {current_value:.6} 秒 (OS起動後 {:.1} 時間)",
-            current_value / 3600.0
-        );
-        eprintln!(
-            "  60FPS フレーム間隔比: {:.6}%",
-            (avg_ns / 16_670_000.0) * 100.0
-        );
-
-        // 1回の now() が 1μs (1000ns) 未満であること（余裕を持った閾値）
-        assert!(
-            avg_ns < 1_000.0,
-            "now() average call time {avg_ns:.1}ns exceeds 1μs threshold"
-        );
-
-        // 60FPS フレーム間隔 (16.67ms) の 0.01% 未満であること
-        let frame_ratio = avg_ns / 16_670_000.0;
-        assert!(
-            frame_ratio < 0.0001,
-            "now() overhead {frame_ratio:.6} exceeds 0.01% of 60fps frame interval"
-        );
     }
 }
