@@ -27,6 +27,6 @@ mod sink;
 
 pub use command::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, TalkCue};
 pub use runtime::{CuePlayer, CuePlayerState, PendingChoice};
-pub use schedule::{Entry, TimedSchedule};
+pub use schedule::{Entry, TimedSchedule, sum_on_ms_grid};
 pub use sheet::{CueSheet, to_talk_schedule};
 pub use sink::{CueFinding, CueProbe, CueSink, cue_target_of};

@@ -6,7 +6,7 @@
 //!
 //! バルーンのタイムアウト計測は「スクリプトの表示が終わってから」を起点とする（Requirement 4.1）。
 //! ここでいう表示終了は**待機（`\w` 等）を含む台本の占有区間の終端**であって、最後の文字が
-//! 現れた時刻ではない。dola の占有 horizon は `max(cue.at + cue.duration)` で定義されるため、
+//! 現れた時刻ではない。dola の占有 horizon は `max(sum_on_ms_grid(cue.at, cue.duration))` で定義されるため、
 //! [`BalloonLifecycleSink`] は broadcast される全 cue を観測して同じ式で最大値を集約し、
 //! その**既知最大が更新されたときだけ** UI へ送る。
 //!
@@ -134,7 +134,7 @@ pub(crate) fn parse_balloon_timeout(value: Option<&str>) -> ParsedTimeout {
 /// 会話の表示終了時刻を UI へ届ける broadcast sink（`GhostBootOptions.sinks` の 4 本目・D4＝α）。
 ///
 /// broadcast 下では担当外の cue も全て届くが、占有終端の集約は**コマンド名で選別しない**——占有区間の
-/// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `at + duration` の最大値
+/// 終端は台本上の全 cue（`Text` / `Wait` / `ClearAll` / キャリア……）の `sum_on_ms_grid(at, duration)` の最大値
 /// として定義されるため、種別に依らず全件を集約対象にするのが正しい（名前で拾うのは
 /// `\![set,balloontimeout,…]` の待ち時間の指定だけ）。cue を**観測するのみ**で
 /// `duration` にも会話進行にも触れないため、duration honor 契約へ影響しない。
@@ -285,9 +285,9 @@ impl dola::cue::CueSink for BalloonLifecycleSink {
             self.send(TalkLifecycleSignal::ChoiceShown);
         }
 
-        // ⑵ 占有終端 = at + duration（dola の `to_talk_schedule` と同一式）。待機 cue も
-        //    duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される（Requirement 4.1）。
-        let end = cue.at + cue.duration;
+        // ⑵ 占有終端 = dola の和の関数 `sum_on_ms_grid(at, duration)`（`to_talk_schedule` と同じ足し方）。
+        //    待機 cue も duration を運ぶ第一級 cue ゆえ、この式のまま horizon へ算入される（Requirement 4.1）。
+        let end = dola::cue::sum_on_ms_grid(cue.at, cue.duration);
 
         // 非有限（NaN / ±inf）は horizon に採らない。NaN は `>` 比較で自然に落ちるが、`+inf` は
         // 「既知最大を超える」判定を通ってしまい、受信側の `deadline = display_end + timeout` を

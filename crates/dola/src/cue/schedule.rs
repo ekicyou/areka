@@ -13,7 +13,7 @@ use super::command::BarrierKind;
 /// 格子に載る値どうしの結果は Tick の式 `n as f64 / 1000.0` と同じ値になる（例 0.15＋0.8＝0.95。
 /// 素の和は 0.9500000000000001 で、ちょうどの刻みで届かない）。
 // shortcut: f64 の秒のあいだだけの継ぎ。dola-interrupt-ticks で時刻が整数になったら消す
-pub(crate) fn sum_on_ms_grid(a: f64, b: f64) -> f64 {
+pub fn sum_on_ms_grid(a: f64, b: f64) -> f64 {
     let on_grid = |x: f64| x.is_finite() && (x * 1000.0).round() / 1000.0 == x;
     if on_grid(a) && on_grid(b) {
         let (a_ms, b_ms) = ((a * 1000.0).round(), (b * 1000.0).round());

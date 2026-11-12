@@ -313,7 +313,7 @@
   - _Depends: 17.1_
   - _Requirements: 3.2, 3.3_
 
-- [ ] 19. 時刻の和の関数を公開し、本体の写しを寄せる（要件 7.9）
+- [x] 19. 時刻の和の関数を公開し、本体の写しを寄せる（要件 7.9）
   - 1.1 の関数を公開にして cue のモジュールから再公開する
   - 本体のトークの後始末で自前に足していた終わりの式を、その関数の呼び出しに替え、直前の注も直す（直後の非有限の守りはそのまま）
   - 終わった姿: 本体の中で合図の始まりと長さを素で足す所が 0 件（grep）で、本体のトークの後始末のテストと dola のテストが緑
@@ -389,3 +389,4 @@
 - 17.1（2026-11-13）: C18 のほかの 7 本は `origin/main` に着地済み（#433 placement-crate-split・#434 wintf-visual-tree・#435 audit-emo-text-state-actor・#436 audit-kanade・#437 audit-sylphya-actor・#438 audit-emo-text-layout-draw・#439 audit-wintf-layout-widget）。`main` を枝へ取り込み（ぶつかり無し）、16 と同じテスト 40 組と `-A` なしの clippy が緑。`emo2_boot` → `runtime` の改名はまだ `main` に無く、範囲の外の 2 ファイルは `crates/areka/src/emo2_boot/frame/window_state_tests.rs:496`（`player.stop()`）と `crates/areka/src/emo2_boot/talk_lifecycle.rs:290` のまま。動いている C19 のセッション（`runtime-module-untangle` など）は無く、本体と `Cargo.lock` の申し合わせの相手はいない（`Cargo.lock` に触るのは 20.1 の #25 だけ）。grep の洗い直しでわかった design とのずれ: 18.2 の `PendingChoice.text` は `areka-sakura/src/drive_delivery_tests.rs:643`（`c.text.clone()`）も直す。19 の「本体に生の和 0 件」は `talk_lifecycle_tests.rs:202`（`c.at + c.duration`）と注 `talk_lifecycle.rs:9,137`・`talk_lifecycle_tests.rs:6,138` にも当たる。20.1 の `#[cfg(feature = "json")]` はどこにも無い（`serde_json` を dev-deps へ移すだけ）。17.3 の `CueCommand::EntityRef` の外の受け手は `areka-emo-text/src/actor.rs:469`・`state.rs:692`・`state_cue_apply_tests.rs:503`・`areka-ghost/src/sink.rs:120,252`・`areka-seriko/src/actor.rs:745-752`・`actor_dispatch_tests.rs:178,212`。dola の中の行番号は design より前へずれている（名前で探す）。
 - 17.2: `BarrierKind::WaitForInput` は単位 variant になり JSON が `"WaitForInput"` に変わった（dola の外で BarrierKind・CueSheet を serde で読み書きする所は無い）。`doc/choice-cascade-compat.md` の 1 文を事実に合わせた。`doc/archive/ARCHITECTURE.md` の `RoutingCommand`・`EntityKey` は過去の写しなので残す。
 - 18.1: `areka-ghost/src/prop_sink.rs` の `stop()` を引く注 4 か所と assert の文 1 つを「上流が player を捨てる」に直した（進行役の判断・並走のセッション無し）。`TimedSchedule::clear` の呼び手はテスト 1 か所だけになった（design は消すと言っていない）。
+- 19: 本体は長さを 0 へ切り上げない（dola の `to_talk_schedule` は切り上げる）。違うのは負の長さだけで、本番の台本は `Duration` から作るので届かない（範囲の外・振る舞いの差 0）。
