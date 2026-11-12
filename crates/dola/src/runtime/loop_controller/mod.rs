@@ -105,28 +105,28 @@ pub(crate) fn generate_delay(
     min + eased * (max - min)
 }
 
-/// 周回進行: 1周回分のオフセット調整 + 遅延生成を実行する。
+/// 周回進行: 待ちを先に求め、次の周回を待ちの後に置く。
 ///
 /// - `loops_completed += 1`
-/// - `loop_start_time += loop_duration`
-/// - `end_time += loop_duration`
-/// - `loop_offset_min.is_some()` の場合: `end_time += generate_delay(...)`
+/// - `delay` = `loop_offset_min.is_some()` なら `generate_delay(...)`・無ければ 0
+/// - `loop_start_time = 前の end_time + delay - pause_accumulated`
+///   （評価で一時停止の累計を足し戻すと壁時計の起点になる）
+/// - `end_time = 前の end_time + loop_duration + delay`
 /// - 全 `trigger_states` の `fired = false` にリセット
 pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng) {
     instance.loops_completed += 1;
-    instance.loop_start_time += instance.loop_duration;
-    instance.end_time += instance.loop_duration;
 
-    // ループオフセット遅延の適用
-    if let Some(min) = instance.loop_offset_min {
-        let delay = generate_delay(
+    let delay = match instance.loop_offset_min {
+        Some(min) => generate_delay(
             min,
             instance.loop_offset_max,
             &instance.loop_offset_easing,
             rng,
-        );
-        instance.end_time += delay;
-    }
+        ),
+        None => 0.0,
+    };
+    instance.loop_start_time = instance.end_time + delay - instance.pause_accumulated;
+    instance.end_time += instance.loop_duration + delay;
 
     // トリガー状態リセット（周回ごとに再発火可能にする）
     for ts in &mut instance.trigger_states {

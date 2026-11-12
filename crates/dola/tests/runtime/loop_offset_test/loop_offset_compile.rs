@@ -98,7 +98,7 @@ mod compile_integration_tests {
 // =============================================================
 
 mod e2e_tests {
-    use dola::runtime::DolaRuntime;
+    use dola::runtime::{DolaRuntime, EvaluatedValue};
     use dola::*;
     use std::collections::BTreeMap;
 
@@ -152,6 +152,19 @@ mod e2e_tests {
         (rt, opacity_id)
     }
 
+    /// t まで進め、その回に出た opacity の値を返す（変わらなければ None）
+    fn opacity_at(rt: &mut DolaRuntime, opacity_id: i64, t: f64) -> Option<f64> {
+        rt.tick(t);
+        rt.last_result()
+            .changes
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .map(|(_, v)| match v {
+                EvaluatedValue::Float(f) => *f,
+                other => panic!("expected Float, got {other:?}"),
+            })
+    }
+
     #[test]
     fn e2e_no_offset_natural_end() {
         // loop_count=2, no offset → ends at t=2.0
@@ -174,24 +187,35 @@ mod e2e_tests {
 
     #[test]
     fn e2e_with_fixed_delay_extends_playback() {
-        // loop_count=2, fixed delay 5.0s → 1st loop ends at t=1.0
-        // after loop 1 advance: end_time = 1.0 + 1.0(loop) + 5.0(delay) = 7.0
-        let doc = loop_offset_doc("blink", 2, Some(LoopOffset::Scalar(5.0)));
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        // loop_count=2・待ち 2 秒固定 → 1 周目 [0,1]・待ち [1,3]・2 周目 [3,4]
+        let doc = loop_offset_doc(
+            "blink",
+            2,
+            Some(LoopOffset::Range(LoopOffsetRange {
+                min: 2.0,
+                max: 2.0,
+                easing: EasingFunction::Named(EasingName::Linear),
+            })),
+        );
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
 
-        // At t=1.5: past first loop end (1.0), advance happens
-        // end_time should be 1.0 + 1.0 + delay(0..5) ≥ 2.0
-        let _changes = rt.update(1.5).changes;
-        // Animation should still be active (within delay period)
-        // Value should be at end of first loop (1.0) since we're in delay
-        // or at beginning of second loop depending on timing
+        let v = opacity_at(&mut rt, opacity_id, 0.5).expect("opacity at t=0.5");
+        assert!((v - 0.5).abs() < 1e-9, "t=0.5: {v}");
 
-        // At t=3.0: still within delay period (end_time ≥ 2.0 + delay)
-        let _changes = rt.update(3.0).changes;
+        // 周回の終わりを越えて待ちに入る（待ちの間の値は 5.3 の値の保持の後に縛る）
+        rt.tick(1.5);
 
-        // 遅延中は最終値を維持（Req 2.4）
-        // (具体的な値の検証は遅延のランダム性により、ここでは存在確認のみ)
+        // 起点が待ちの後（3.0）にあれば 2 周目の中ほど
+        let v = opacity_at(&mut rt, opacity_id, 3.5).expect("opacity at t=3.5");
+        assert!((v - 0.5).abs() < 1e-9, "t=3.5: {v}");
+
+        // 2 周目の終わり 4.0 を越えて終わる → 最終値
+        let v = opacity_at(&mut rt, opacity_id, 4.5).expect("opacity at t=4.5");
+        assert!((v - 1.0).abs() < 1e-9, "t=4.5: {v}");
+
+        rt.tick(5.0);
+        assert!(rt.last_result().changes.is_empty());
     }
 
     #[test]
@@ -221,25 +245,22 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
-
-        // t=1.5: past first loop end (1.0)
-        // advance → end_time = 1.0 + 1.0 + 2.0 = 4.0
-        let _changes = rt.update(1.5).changes;
-
-        // t=3.0: still in delay (end_time=4.0)
-        let _changes = rt.update(3.0).changes;
-        // Should still be active (not concluded)
-        // Values should be present (frozen at loop end or interpolating)
-
-        // t=4.5: past second end_time (4.0)
-        // advance → end_time = 4.0 + 1.0 + 2.0 = 7.0
-        let _changes = rt.update(4.5).changes;
-
-        // t=6.0: still in delay period of 2nd loop
-        let _changes = rt.update(6.0).changes;
-        // Still active (infinite loop never concludes)
+        // 周回は [0,1]・[3,4]・[6,7]…（待ちの間の値は 5.3 で縛る）
+        for (t, want) in [
+            (0.5, Some(0.5)),
+            (1.5, None),
+            (3.5, Some(0.5)),
+            (4.5, None),
+            (6.5, Some(0.5)),
+        ] {
+            let got = opacity_at(&mut rt, opacity_id, t);
+            if let Some(want) = want {
+                let v = got.unwrap_or_else(|| panic!("opacity at t={t}"));
+                assert!((v - want).abs() < 1e-9, "t={t}: {v}");
+            }
+        }
     }
 
     #[test]
@@ -316,15 +337,28 @@ mod e2e_tests {
 
     #[test]
     fn e2e_extreme_small_delay() {
-        // Task 6.2: Very small delay (0.001s)
-        let doc = loop_offset_doc("fast", 3, Some(LoopOffset::Scalar(0.001)));
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        // 待ち 0.001 秒固定・3 周 → 周回は [0,1]・[1.001,2.001]・[2.002,3.002]
+        let doc = loop_offset_doc(
+            "fast",
+            3,
+            Some(LoopOffset::Range(LoopOffsetRange {
+                min: 0.001,
+                max: 0.001,
+                easing: EasingFunction::Named(EasingName::Linear),
+            })),
+        );
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("fast", 0.0).unwrap();
 
-        // Should complete all loops fairly quickly
-        let _changes = rt.update(5.0).changes;
-        let changes = rt.update(6.0).changes;
-        assert!(changes.is_empty()); // concluded
+        // 終わり 3.002 の直前は 3 周目の中で生きている
+        let v = opacity_at(&mut rt, opacity_id, 3.0).expect("opacity at t=3.0");
+        assert!((v - 0.998).abs() < 1e-9, "t=3.0: {v}");
+
+        // 直後に終わって最終値、その後は差分なし
+        let v = opacity_at(&mut rt, opacity_id, 3.003).expect("opacity at t=3.003");
+        assert!((v - 1.0).abs() < 1e-9, "t=3.003: {v}");
+        rt.tick(3.01);
+        assert!(rt.last_result().changes.is_empty());
     }
 
     #[test]

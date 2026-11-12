@@ -72,7 +72,7 @@
   - 1 周に 1 度だけ発火するテストを、2 秒の親・1.0 で発火する文書で t=1.0 に 1 件・t=1.016 に 0 件を見る形に改める
   - 終わった姿: 3 本が緑で、式を元に戻すと 2 本の檻が落ちる
   - _Requirements: 3.1, 4.1, 4.5_
-- [ ] 5.2 周回の起点を待ちの後に置く（#2・#44）
+- [x] 5.2 周回の起点を待ちの後に置く（#2・#44）
   - 周回の終わりで待ちを先に求め、新しい起点＝前の終わり＋待ち−一時停止の累計・新しい終わり＝前の終わり＋1 周＋待ちにする。待ち 0 なら今と同じ値
   - 周回の待ちの e2e を、乱数に頼らない min==max の範囲（2,2）にし、各時刻の値を `expect` で見る形に改める
   - 終わった姿: その e2e が緑で、起点の式を元に戻すと落ちる。待ち 0 の既存の周回のテストが緑のまま
@@ -368,3 +368,4 @@
 - 2: 予定の NaN の並べ替えの檻（`tests/cue/sheet_sort_test.rs`）は debug_assert のため release でだけ走る（`cargo test -p dola --release --test cue sheet_sort`）。`compile/mod.rs` の NOTE(D2-V) の「P14」は 6.2／15.2 で直す。tests/cue の P22・P25・「原本」の注は 3・15.2 で直す。
 - 3.1: cue のテストの道具は `tests/cue/test_support.rs`（旧 `runtime_test_test_support.rs`・research の #13・#53 の道は古い）。research #24 の「clear の 3 本は重複」はずれていた（`clear_resets_active_barrier` は唯一の檻）。`clear_resets_all_state` にバリアを足して守った。
 - 4.3: cue のテストは `CuePlayer` の `ready()`・`remaining()`・`from_schedule` を呼ばない（再生は記録する受け手で見る）。18.1・18.2 で口を消すときにテストの差分は出ない見込み。broadcast のテストの説明（約 122・148 行）に `ready()` の語が残る（15.2 か 18 で直す）。
+- 5.2→5.3: 新しい起点では待ちの間の実効時刻が負になり、`evaluate_segments` が最初のセグメントの始めの値（例 0.0）を返す。完了 spec dola-storyboard-random-loop-offset の要件 2.4（待ちの間は最後の値を保つ）に合わせ、5.3 で「周回を 1 回以上終えて実効時刻が負なら最後の値を保つ」まで含めて直し、`loop_offset_compile.rs` の e2e 3 本で待ちの中の時刻（1.5・3.0・4.5・6.0 など）の値を縛る。

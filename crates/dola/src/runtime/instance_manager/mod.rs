@@ -39,7 +39,7 @@ pub(crate) struct StoryboardInstance {
     /// end_time (loop_start_time + loop_duration + pause_accumulated)
     pub end_time: f64,
     /// 現在の周回の開始時刻（wall clock ベース）。
-    /// 初期値は `start_time` と同一。周回終了ごとに `+= loop_duration` で更新。
+    /// 初期値は `start_time` と同一。周回終了ごとに「前の end_time＋待ち−pause_accumulated」で更新。
     /// Pause/Resume では変更されない（独立性: Req 4.3）。
     pub loop_start_time: f64,
     /// 1周分の再生時間（wall clock ベース）。
