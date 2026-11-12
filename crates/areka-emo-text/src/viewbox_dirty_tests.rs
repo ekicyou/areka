@@ -726,7 +726,7 @@ fn lines_with_widths(widths: &[usize]) -> Vec<TextItem> {
 /// - 変化行 4（y 35..50）・変化行 5（y 47..62）: それぞれ両隣を巻き込み、行 4 と行 5 は
 ///   **2 枚の矩形の双方**に現れる（重複しても和集合は昇順・重複なし）。
 /// - 送りの前に面の下端を越えていた最下行 8（送りの前 y 96..109・指摘 15）: 今の位置の矩形
-///   （y 83..98）で、上の隣の行 7 も巻き込む。
+///   （y 83..98）と、寄せた線の写り先の帯（y 74..89・再監査 R1-C2）で、どちらも上の隣の行 7 を巻き込む。
 ///
 /// 各行の物理矩形は「canvas-local 位置 + block_offset −12」「em ボックス丈 10」「下端はみ出し
 /// 実測 3」「ガード 1」で決まる——行 i の y は `12i − 13 .. 12i + 2`（面寸でクランプ）。
@@ -769,11 +769,12 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
         &over,
     );
 
-    // 矩形は (a) 露出帯 → (b)(c)(d) 住人 index 昇順（行 0 の残滓・変化行 4・変化行 5・行 8）の順。
+    // 矩形は (a) 露出帯 → (b)(c)(d) 住人 index 昇順（行 0 の残滓・変化行 4・変化行 5・行 8・
+    // 行 8 の線の写り先）の順。
     assert_eq!(
         dirty.len(),
-        5,
-        "露出帯 1 ＋ 残滓 1 ＋ 変化行 2 ＋ 送りの前の最下行 1"
+        6,
+        "露出帯 1 ＋ 残滓 1 ＋ 変化行 2 ＋ 送りの前の最下行 1 ＋ その線の写り先 1"
     );
     assert_eq!(dirty[0].rect, phys(0, 87, 400, 13), "(a) 下端の露出帯");
     assert_eq!(dirty[0].lines, vec![8], "露出帯に交差するのは最下行だけ");
@@ -793,6 +794,12 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
     assert_eq!(dirty[3].lines, vec![4, 5, 6], "変化行 5 の矩形も同様");
     assert_eq!(dirty[4].rect, phys(0, 83, 11, 15), "(d) 送りの前の最下行 8");
     assert_eq!(dirty[4].lines, vec![7, 8], "行 8 の矩形は上の隣も巻き込む");
+    assert_eq!(dirty[5].rect, phys(0, 74, 11, 15), "(d) 行 8 の線の写り先");
+    assert_eq!(
+        dirty[5].lines,
+        vec![7, 8],
+        "写り先の帯も行 7 と行 8 に交差する"
+    );
 
     // 和集合＝描画対象行（昇順・重複なし）。行 4・行 5 は 2 枚の矩形の双方に現れる。
     assert_eq!(
@@ -811,7 +818,7 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
 
     // 描画呼び出しは矩形ごとの交差行数の**和**であって、枚数 × 描画対象行数の積ではない。
     let sum: usize = dirty.iter().map(|d| d.lines.len()).sum();
-    assert_eq!(sum, 10, "和＝1 + 1 + 3 + 3 + 2");
+    assert_eq!(sum, 12, "和＝1 + 1 + 3 + 3 + 2 + 2");
     assert!(
         sum < dirty.len() * draw_lines.len(),
         "和 {sum} は積 {} より小さい（削減が観測できる入力）",
@@ -897,8 +904,8 @@ fn huge_and_infinite_line_positions_clip_into_surface_without_panic() {
 /// 列は幅 10・送り 12（vertical_rl の 0 列は x 90〜100・vertical_lr の 0 列は x 0〜10）。
 /// 送りの前の位置は今の位置 − blit。遠い端は vertical_rl＝左（x 0）・vertical_lr＝右（x 100）。
 #[test]
-fn reached_far_edge_before_shift_vertical_branches() {
-    use super::diff::reached_far_edge_before_shift as reached;
+fn shifted_far_edge_band_vertical_branches() {
+    use super::diff::shifted_far_edge_band as band;
     let contract = ScaleContract::new(1.0, None);
     // (書字方向, 遠い端をまたぐ blit, 逆向きの blit)
     for (mode, across, opposite) in [
@@ -913,7 +920,7 @@ fn reached_far_edge_before_shift_vertical_branches() {
         );
         let hit = |i: usize, blit| {
             let none = LineOverhang::default();
-            reached(
+            band(
                 &canvas.residents[i],
                 0.0,
                 mode,
@@ -922,6 +929,7 @@ fn reached_far_edge_before_shift_vertical_branches() {
                 (100, 200),
                 none,
             )
+            .is_some()
         };
         assert!(
             hit(0, across),
@@ -933,5 +941,20 @@ fn reached_far_edge_before_shift_vertical_branches() {
             !hit(0, opposite),
             "{mode:?}: 逆の端をまたいでも遠い端ではない"
         );
+        // 寄せた線の写り先の帯（再監査 R1-C2）: 送った後の遠い端から列の幅 10 ぶん内側まで。
+        let near = match mode {
+            WritingMode::VerticalRl => (95.0, 105.0),
+            _ => (-5.0, 5.0),
+        };
+        let at = band(
+            &canvas.residents[0],
+            0.0,
+            mode,
+            &contract,
+            across,
+            (100, 200),
+            LineOverhang::default(),
+        );
+        assert_eq!(at.map(|(x0, _, x1, _)| (x0, x1)), Some(near), "{mode:?}");
     }
 }

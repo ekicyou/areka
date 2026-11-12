@@ -1,9 +1,9 @@
 //! `ViewboxExecutor::render` の**フレーム計画の判定群**（`viewbox_draw.rs` の子モジュール）。
 //!
-//! [`viewbox_draw`](crate::viewbox_draw) の巨大化を避けるため、計画そのものを組み替える 3 つの純粋
-//! 関数——エラー縮退規律（[`degrade_if_needed`]）・全域ダーティ Update の唯一の生成口
-//! （[`full_domain_update`]）・想定外不整合の検知（[`plan_inconsistency`]）——をここへ集めた。
-//! 3 つとも `pub(super)` で親（`viewbox_draw`）とその子からだけ見える。描画の子（`render`）と
+//! [`viewbox_draw`](crate::viewbox_draw) の巨大化を避けるため、計画そのものを組み替える 2 つの純粋
+//! 関数——エラー縮退規律（[`degrade_if_needed`]・縮退先は計画者の全域の道
+//! [`ScrollPlanner::full_domain_plan`]）・想定外不整合の検知（[`plan_inconsistency`]）——をここへ集めた。
+//! 2 つとも `pub(super)` で親（`viewbox_draw`）とその子からだけ見える。描画の子（`render`）と
 //! 兄弟檻（`viewbox_draw_frame_render_tests.rs`）は `super::plan::..` で引く。
 
 use crate::canvas::ContentCanvas;
@@ -15,8 +15,9 @@ use crate::writing::WritingMode;
 /// エラー縮退規律の適用（Error Handling）——`plan` を必要なら**全域ダーティ Update** へ縮退する。
 ///
 /// 2 トリガ（正しさ優先・いずれも透明フラッシュを起こす FullClear ではなく全域ダーティ Update）:
-/// - **フォント/方向変更**（`rebuilt`＝`ensure_format` が format/行キャッシュを組み直した）: committed
-///   ピクセルは旧 format で描かれ前提が崩れるため `debug!`＋全域ダーティへ縮退。
+/// - **既定の見た目/方向の変更**（`rebuilt`＝`ensure_format` が format/行キャッシュを組み直した・
+///   書式のほか既定の線と色の変更も含む）: committed ピクセルは古い見た目で描かれ前提が崩れるため
+///   `debug!`＋全域ダーティへ縮退。
 /// - **想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と矛盾
 ///   （draw_lines 範囲外・dirty 面寸超過・矩形の行が draw_lines の部分集合でない、の 3 つ）する場合
 ///   `warn!`＋全域ダーティへ縮退（記録の無い縮退を作らない）。
@@ -39,9 +40,16 @@ pub(super) fn degrade_if_needed(
         FramePlan::NoChange => {
             if rebuilt {
                 tracing::debug!(
-                    "フォント/方向変更を検知——committed ピクセル前提消失のため全域ダーティへ縮退"
+                    "既定の見た目/方向の変更を検知——committed ピクセル前提消失のため全域ダーティへ縮退"
                 );
-                full_domain_update(canvas, window, mode, contract, surface_size, overhangs)
+                ScrollPlanner::full_domain_plan(
+                    canvas,
+                    window,
+                    mode,
+                    contract,
+                    surface_size,
+                    overhangs,
+                )
             } else {
                 FramePlan::NoChange
             }
@@ -53,9 +61,16 @@ pub(super) fn degrade_if_needed(
         } => {
             if rebuilt {
                 tracing::debug!(
-                    "フォント/方向変更を検知——format/行キャッシュ組み直し・全域ダーティへ縮退（committed ピクセル前提消失）"
+                    "既定の見た目/方向の変更を検知——format/行キャッシュ組み直し・全域ダーティへ縮退（committed ピクセル前提消失）"
                 );
-                full_domain_update(canvas, window, mode, contract, surface_size, overhangs)
+                ScrollPlanner::full_domain_plan(
+                    canvas,
+                    window,
+                    mode,
+                    contract,
+                    surface_size,
+                    overhangs,
+                )
             } else if let Some(reason) =
                 plan_inconsistency(&dirty, &draw_lines, canvas.residents.len(), surface_size)
             {
@@ -63,7 +78,14 @@ pub(super) fn degrade_if_needed(
                     reason,
                     "plan と canvas/面寸の想定外不整合——全域ダーティ再描画へ縮退（正しさ優先・最悪でもレガシー全域再描画と等価）"
                 );
-                full_domain_update(canvas, window, mode, contract, surface_size, overhangs)
+                ScrollPlanner::full_domain_plan(
+                    canvas,
+                    window,
+                    mode,
+                    contract,
+                    surface_size,
+                    overhangs,
+                )
             } else {
                 FramePlan::Update {
                     blit,
@@ -73,25 +95,6 @@ pub(super) fn degrade_if_needed(
             }
         }
     }
-}
-
-/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun／Choice 住人）を組む。
-///
-/// [`ScrollPlanner::full_domain`]（計画者の全域の道）を呼び、面全域 1 枚のダーティと
-/// **可視窓（`first_visible_line` 以降）の** GlyphRun／Choice 住人のうち、`overhangs` のはみ出し込みで面と
-/// 重なる行の描画対象を得る（初回フレームと同一経路・指摘 18）。
-/// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
-/// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる。
-/// 縮退の唯一の生成口。
-pub(super) fn full_domain_update(
-    canvas: &ContentCanvas,
-    window: &VisibleWindow,
-    mode: WritingMode,
-    contract: &ScaleContract,
-    surface_size: (u32, u32),
-    overhangs: &[LineOverhang],
-) -> FramePlan {
-    ScrollPlanner::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs)
 }
 
 /// `plan` の `Update` が canvas/面寸と矛盾していないか検査する（防御的・render の縮退経路が呼ぶ）。

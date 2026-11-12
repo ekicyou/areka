@@ -25,7 +25,7 @@ use super::decoration::{LineStyles, apply_color_ranges, apply_font_ranges, line_
 use super::none_err;
 use super::plan::degrade_if_needed;
 use super::underline::collect_underlines;
-use super::{FormatKey, ViewboxExecutor, color_f, device_err};
+use super::{ViewboxExecutor, color_f, device_err};
 use crate::TextLayerError;
 use crate::actor::marker_bitmap;
 use crate::canvas::GlyphRunContent;
@@ -408,10 +408,12 @@ impl ViewboxExecutor {
                     // （空グリフ列・シーム住人＝そこで skip 済み）は引けないので飛ばす。
                     // Choice hover 行は (a) セグメント矩形を塗り色で `FillRectangle` してから
                     // (b) `DrawTextLayout`（効果範囲の文字だけが Phase 1 で焼いた切替色で描かれる）。
+                    // `draws` は draw_lines の順（昇順）に積んだので二分探索で引く。
                     for line in &dirty_rect.lines {
-                        let Some((_, d)) = draws.iter().find(|(i, _)| i == line) else {
+                        let Ok(at) = draws.binary_search_by_key(line, |(i, _)| *i) else {
                             continue;
                         };
+                        let d = &draws[at].1;
                         if let Some(hover) = &d.hover {
                             for rect in &hover.rects {
                                 self.dc.fill_rectangle(rect, &hover.fill);
@@ -658,7 +660,7 @@ impl ViewboxExecutor {
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
     /// 戻り値の `bool` は**format と [`LineLayoutStore`] を組み直したか**（`true`＝組み直し）。
-    /// フォント/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
+    /// 既定の見た目（`FormatKey`）/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
     /// ピクセル（旧 format で描いた面）を崩すため、`render` はこのフラグを見て当該フレームを
     /// 全域ダーティへ縮退する（`DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定の
     /// ため通常発火しない・`debug!` 記録）。**初回生成**（`self.format` が `None`・組み直す前提が
@@ -668,23 +670,23 @@ impl ViewboxExecutor {
         font: &ResolvedFont,
         mode: WritingMode,
     ) -> Result<(IDWriteTextFormat, bool), TextLayerError> {
-        let key: FormatKey = (font.looks.default.font_key(), mode);
-        if let Some((cached_key, format)) = &self.format {
-            if *cached_key == key {
+        if let Some(((look, cached_mode), format)) = &self.format {
+            if *look == font.looks.default && *cached_mode == mode {
                 return Ok((format.clone(), false));
             }
             tracing::debug!(
-                ?key,
-                "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
+                ?mode,
+                look = ?font.looks.default,
+                "既定の見た目/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
             self.line_store.clear();
             let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
-            self.format = Some((key, format.clone()));
+            self.format = Some(((font.looks.default.clone(), mode), format.clone()));
             return Ok((format, true));
         }
         // 初回生成（committed ピクセルが無いため縮退トリガにしない）。
         let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
-        self.format = Some((key, format.clone()));
+        self.format = Some(((font.looks.default.clone(), mode), format.clone()));
         Ok((format, false))
     }
 }

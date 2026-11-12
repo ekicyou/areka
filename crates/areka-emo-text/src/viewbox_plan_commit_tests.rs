@@ -745,3 +745,44 @@ fn committing_empty_canvas_makes_next_plan_no_change() {
         "FullClear の確定の後も空なら NoChange"
     );
 }
+
+/// 再監査 R1-C2: 送りの前に上端が面の下端のすぐ内側（ε＝4）にあった最下行は、線を面の内側へ
+/// 寄せて `[h − t, h]` に描いていた。1 行ぶん送ると、その線は `[h − t + by, h + by]` へ写り、
+/// 線の太さ t が ε とガードより大きいと今の行の矩形より上へ出る。描き直しの範囲は、太さが行の
+/// 丈（em 10）までの線の写り先を覆う（場面は font 10・pitch 12・面 400×100・9 行・by −12）。
+#[test]
+fn pulled_bottom_row_dirty_covers_where_its_stroke_was_shifted() {
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let canvas = canvas_for(
+        &broken_lines(9),
+        mode,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let lines = ScrollPlanner::committed_lines(&canvas, mode);
+    let (dirty, _) = ScrollPlanner::derive_dirty_with_overhangs(
+        &canvas,
+        &window(1, -12.0),
+        mode,
+        &contract,
+        (0, -12),
+        (400, 100),
+        &lines,
+        &lines,
+        &[],
+    );
+    // 写り先は y 78..88（h + by − em .. h + by）・行内は字の幅 0..10。
+    let uncovered: Vec<u32> = (78..88)
+        .filter(|&y| {
+            !dirty.iter().any(|d| {
+                let r = &d.rect;
+                r.y <= y && y < r.y + r.h && r.x == 0 && r.w >= 10
+            })
+        })
+        .collect();
+    assert!(
+        uncovered.is_empty(),
+        "寄せた線の写り先のうち描き直さない行がある: {uncovered:?}"
+    );
+}

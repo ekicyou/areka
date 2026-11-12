@@ -531,7 +531,8 @@ pub(crate) fn create_line_layout(
 
 /// 行 TextLayout の format 前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
 /// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため
-/// format と行キャッシュを組み直す（本番 `ViewboxExecutor` の `FormatKey` と同じ形・viewbox_draw.rs）。
+/// format と行キャッシュを組み直す（本番 `ViewboxExecutor` の `FormatKey` は既定の見た目の全項目を
+/// 持つ——こちらは毎フレーム全域を描き、線を行に焼かないので書式を決める値だけでよい）。
 ///
 /// 比較専用オラクル [`DrawExecutor`] 専用——ゆえにオラクルと同じ `#[cfg(test)]` で保全する。
 #[cfg(test)]

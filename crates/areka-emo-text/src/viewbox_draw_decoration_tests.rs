@@ -910,3 +910,60 @@ fn a_default_strikethrough_is_drawn_on_plain_glyphs() {
         "既定の打ち消し線は飾りの無い字にも、積んだ打ち消し線と同じ線で出る"
     );
 }
+
+/// 再監査 R1-D1: 同じ描き手で、既定の見た目の線や色だけが変わったバルーンへ描き直すと、新しく
+/// 作った描き手で描いた絵とバイトで一致する（字の並びは同じでも、古い見た目の行を引き回さない）。
+#[test]
+fn changing_only_the_default_strokes_or_color_redraws_like_a_fresh_executor() {
+    let mut rig = Rig::new();
+    let image = (60u32, 20u32);
+    let mode = WritingMode::HorizontalTb;
+    let plain = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let (canvas, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+    let table = StyleTable::default();
+    let changes: [(&str, fn(&mut TextLook)); 3] = [
+        ("strike", |l| l.strike = true),
+        ("underline", |l| l.underline = true),
+        ("color", |l| l.color = (255, 0, 0)),
+    ];
+    for (name, change) in changes {
+        let mut changed = plain.clone();
+        change(&mut changed.looks.default);
+        let mut surface = rig.attach(image, 1.0);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        for font in [&plain, &changed] {
+            exec.render_styled(
+                &canvas,
+                &window,
+                font,
+                mode,
+                &contract,
+                &mut surface,
+                &table,
+            )
+            .expect("render_styled 失敗");
+        }
+        let reused = surface.read_back().expect("read_back 失敗");
+
+        let mut fresh_surface = rig.attach(image, 1.0);
+        let mut fresh = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        fresh
+            .render_styled(
+                &canvas,
+                &window,
+                &changed,
+                mode,
+                &contract,
+                &mut fresh_surface,
+                &table,
+            )
+            .expect("render_styled 失敗");
+        let expected = fresh_surface.read_back().expect("read_back 失敗");
+        assert!(
+            reused == expected,
+            "{name}: 既定の見た目だけを変えた 2 フレーム目が、新しい描き手の絵と違う"
+        );
+    }
+}

@@ -250,10 +250,12 @@ impl DWriteMetrics {
 
     /// 台帳の台詞の番号が進んでいたら、表の寿命を「1 つの台詞のあいだ」に揃える（指摘 11）。
     ///
-    /// 試験用書式を全部と、既定の鍵以外の字幅と、既定の鍵の測れなかった字（`None`）を捨てる
-    /// （覚えた失敗はここで試し直しになる）。既定の鍵の成功した字幅は残す（字の種類＝
-    /// Unicode の数が元からある頭打ちで、台詞ごとに測り直すと台詞の頭のフレームが重くなる）。
-    /// 上限の数は置かない——台詞が使う見た目の数が頭打ち。
+    /// 試験用書式を全部と、既定の鍵以外の字幅と、既定の鍵の測れなかった字（`None`）と、既定の鍵の
+    /// 複数のスカラーの字（結合文字・ZWJ で繋いだクラスタ）を捨てる（覚えた失敗はここで試し直しに
+    /// なる）。既定の鍵の 1 つのスカラーの成功した字幅は残す（Unicode のスカラーの数が元からある
+    /// 頭打ちで、台詞ごとに測り直すと台詞の頭のフレームが重くなる）。クラスタは組み合わせに
+    /// 頭打ちが無いので台詞をまたいで残さない（再監査 R1-C1）。台詞のあいだの上限の数は置かない——
+    /// 台詞が使う見た目と字の数が頭打ち。
     fn sync_talk(&self) {
         let epoch = self.fonts.talk_epoch();
         if epoch == self.seen_epoch.get() {
@@ -263,7 +265,7 @@ impl DWriteMetrics {
         let mut cache = self.cache.borrow_mut();
         cache.retain(|key, _| *key == self.default_key);
         for by_text in cache.values_mut() {
-            by_text.retain(|_, advance| advance.is_some());
+            by_text.retain(|text, advance| advance.is_some() && text.chars().nth(1).is_none());
         }
         self.seen_epoch.set(epoch);
     }

@@ -62,7 +62,7 @@ use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::draw::{FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS};
 use crate::layout::VisibleWindow;
-use crate::look::{FontKey, StyleTable};
+use crate::look::{StyleTable, TextLook};
 use crate::region::ScaleContract;
 use crate::surface::{TextSurface, device_err, none_err};
 use crate::viewbox::{ScrollPlanner, ScrollState};
@@ -79,10 +79,11 @@ mod underline;
 
 use decoration::BrushCache;
 
-/// 行 TextLayout format の前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
-/// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため
-/// format と行キャッシュを組み直す。float はビット表現で同値比較する（[`FontKey`] の規律）。
-type FormatKey = (FontKey, WritingMode);
+/// 行 TextLayout format と行キャッシュの前提（既定の見た目の全項目と writing_mode）。書式を決める
+/// 値（候補列・高さ・太字・斜体）に加え、行に焼く既定の打ち消し線・行の線のはみ出しを決める既定の
+/// 下線・既定の文字色も入れる（再監査 R1-D1）。どれかが変わると、キャッシュ済み行レイアウトと
+/// 描いた面の前提が崩れるため format と行キャッシュを組み直し、そのフレームを全域で描き直す。
+type FormatKey = (TextLook, WritingMode);
 
 /// 決定論観測用の描画統計（常時コンパイル・u64 加算のみ・R3.5/R10.3）。
 ///

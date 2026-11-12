@@ -209,6 +209,25 @@ fn a_new_talk_rebuilds_non_default_formats_and_keeps_default_advances() {
     );
 }
 
+/// 台詞の切れ目で残す既定の鍵の字幅は、1 つのスカラーの字だけ（再監査 R1-C1）。結合文字や
+/// ZWJ で繋いだ字（クラスタ）は組み合わせに頭打ちが無いので、台詞をまたいで覚えない。
+#[test]
+fn a_new_talk_keeps_only_single_scalar_default_advances() {
+    let m = metrics();
+    for text in ["あ", "か\u{3099}", "\u{1F44D}\u{1F3FD}"] {
+        m.advance_styled(text, &default_look());
+    }
+    assert_eq!(m.cached_probe_count(), 3);
+
+    m.fonts().forget_talk();
+    m.advance_styled("い", &default_look());
+    assert_eq!(
+        m.cached_probe_count(),
+        2,
+        "「あ」と新しい「い」だけが残り、複数のスカラーの字は捨てた"
+    );
+}
+
 /// 作れない鍵（高さ 0＝DirectWrite が断る）は失敗を覚え、2 回測っても `error!` は 1 件で縮退の
 /// 字幅を返す。次の台詞の切れ目で 1 度だけ試し直す（指摘 12・記録は台詞ごとに高々 1 回）。
 #[test]

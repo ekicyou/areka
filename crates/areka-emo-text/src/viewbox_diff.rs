@@ -181,7 +181,8 @@ impl ScrollPlanner {
     ///
     /// **送りの前に面の遠い端へ届いていた行**（(d)・指摘 15）: 線を面の内側へ寄せた最下行は、
     /// 寄せた線ごと送られる。`blit ≠ 0` のフレームでは、送りの前の位置で矩形（はみ出し込み）が
-    /// 面にかかり行送りの向きの遠い端を越えていた行も、変わった行と同じくダーティへ入れる。
+    /// 面にかかり行送りの向きの遠い端を越えていた行も、変わった行と同じくダーティへ入れ、寄せた線の
+    /// 写り先の帯（[`shifted_far_edge_band`]・行の矩形より近い側へ出うる）も入れる（再監査 R1-C2）。
     ///
     /// `new_lines` は `canvas` の [`Self::committed_lines`]（住人 index と 1:1）——計画が 1 度だけ
     /// 求めた指紋をそのまま受け、ここでは求め直さない（指摘 31）。
@@ -232,8 +233,10 @@ impl ScrollPlanner {
                 && block_axis_overhang(overhang_of(i), mode) > 0.0;
             // (d) 送りの前に面の遠い端へ届いていた行（指摘 15）: 線を面の内側へ寄せて描いた最下行は、
             //     寄せた線ごと送られて字の下に残るので描き直す（最下行だけを寄せる裁定はそのまま）。
-            let pulled_before_shift = blit != (0, 0)
-                && reached_far_edge_before_shift(
+            //     寄せた線の写り先は行の矩形より近い側へ出うるので、その帯も描き直す（再監査 R1-C2）。
+            //     送りの前に無かった新規行は面に何も描いていないので、帯は要らない。
+            let pulled_band = if blit != (0, 0) && i < prev_lines.len() {
+                shifted_far_edge_band(
                     resident,
                     block_offset,
                     mode,
@@ -241,8 +244,11 @@ impl ScrollPlanner {
                     blit,
                     surface_size,
                     overhang_of(i),
-                );
-            if changed || scrolled_out_residue || pulled_before_shift {
+                )
+            } else {
+                None
+            };
+            if changed || scrolled_out_residue || pulled_band.is_some() {
                 if let Some(rect) = resident_rect(
                     resident,
                     block_offset,
@@ -253,6 +259,11 @@ impl ScrollPlanner {
                 ) {
                     rects.push(rect);
                 }
+            }
+            if let Some((x0, y0, x1, y1)) = pulled_band
+                && let Some(rect) = expand_guard_clamp(x0, y0, x1, y1, contract, surface_size)
+            {
+                rects.push(rect);
             }
         }
 
@@ -384,9 +395,13 @@ fn resident_rect(
 }
 
 /// 送りの前の位置（今の位置 − `blit`）で、住人の矩形（はみ出し込み）が面にかかり、かつ行送りの
-/// 向きの遠い端（横書き＝下・vertical_lr＝右・vertical_rl＝左）を越えていたか（純粋・指摘 15）。
-/// 越えていた行は線を面の内側へ寄せて描いた最下行でありうる。
-pub(super) fn reached_far_edge_before_shift(
+/// 向きの遠い端（横書き＝下・vertical_lr＝右・vertical_rl＝左）を越えていた行なら、その行が面の
+/// 内側へ寄せて描いた線の送った後の写り先を含む帯を返す（純粋・指摘 15・再監査 R1-C2）。
+///
+/// 寄せた線は送りの前に遠い端から内側へ線の太さ t の帯 `[端 − t, 端]` にあり、送ると `blit` だけ
+/// 動く。t は行の矩形の丈を越えないので、帯は「送った後の遠い端から行の矩形の丈ぶん内側まで」
+/// （物理 px・float・行内の軸は行の矩形のまま・ガードとクランプの前）。越えていない行は `None`。
+pub(super) fn shifted_far_edge_band(
     resident: &Resident,
     block_offset: f32,
     mode: WritingMode,
@@ -394,18 +409,20 @@ pub(super) fn reached_far_edge_before_shift(
     blit: (i32, i32),
     surface_size: (u32, u32),
     overhang: LineOverhang,
-) -> bool {
-    let Some((x0, y0, x1, y1)) =
-        resident_ink_rect(resident, block_offset, mode, contract, overhang)
-    else {
-        return false;
-    };
+) -> Option<(f32, f32, f32, f32)> {
+    let (x0, y0, x1, y1) = resident_ink_rect(resident, block_offset, mode, contract, overhang)?;
     let (bx, by) = (blit.0 as f32, blit.1 as f32);
     let (w, h) = (surface_size.0 as f32, surface_size.1 as f32);
     match mode {
-        WritingMode::HorizontalTb => y0 - by < h && y1 - by > h,
-        WritingMode::VerticalLr => x0 - bx < w && x1 - bx > w,
-        WritingMode::VerticalRl => x1 - bx > 0.0 && x0 - bx < 0.0,
+        WritingMode::HorizontalTb => {
+            (y0 - by < h && y1 - by > h).then(|| (x0, h + by - (y1 - y0), x1, h + by))
+        }
+        WritingMode::VerticalLr => {
+            (x0 - bx < w && x1 - bx > w).then(|| (w + bx - (x1 - x0), y0, w + bx, y1))
+        }
+        WritingMode::VerticalRl => {
+            (x1 - bx > 0.0 && x0 - bx < 0.0).then(|| (bx, y0, bx + (x1 - x0), y1))
+        }
     }
 }
 

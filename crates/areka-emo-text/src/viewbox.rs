@@ -198,9 +198,11 @@ impl ScrollPlanner {
     }
 
     /// 1 フレームの描画計画を返す（**状態不変・純粋**・`&self`・R2.3/4.3）——実測はみ出し無し
-    /// （em ボックス丈）の従来経路。測定値（[`LineOverhang`]）を持たない呼び手（pure 層 unit・
-    /// mirror planner 等）向けの薄いラッパで、[`Self::plan_with_overhangs`] に空スライスを渡す。
-    /// COM 層 `ViewboxExecutor::render` は実測はみ出しを渡す [`Self::plan_with_overhangs`] を使う。
+    /// （em ボックス丈）。測定値（[`LineOverhang`]）を持たないテストの呼び手向けの薄いラッパで、
+    /// [`Self::plan_with_overhangs`] に空スライスを渡す。本番の呼び手（COM 層
+    /// `ViewboxExecutor::render`）は実測はみ出しを渡す [`Self::plan_with_overhangs`] を使うので、
+    /// 本番の入口ではないことを構造で示すため `#[cfg(test)]` で塞いである。
+    #[cfg(test)]
     pub fn plan(
         &self,
         canvas: &ContentCanvas,
@@ -363,8 +365,9 @@ pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 ///
 /// 値は各行の `IDWriteTextLayout` を [`GetOverhangMetrics`] で**実測**したもの（COM 層
 /// `LineLayoutStore` が測定・キャッシュし、pure 層へ数値として手渡す＝pure 層は windows 非依存の
-/// まま）。行ボックスのブロック軸寸が `font_height`（`max_height`／縦は `max_width`）に設定済み
-/// ゆえ、その軸の overhang（横書き＝`top`/`bottom`・縦書き＝`left`/`right`）が em ボックスからの
+/// まま）。行ボックスのブロック軸寸（`max_height`／縦は `max_width`）がその行の丈——既定だけの行は
+/// `font_height`・装飾のある行は行内最大の em（`viewbox_draw_decoration.rs` の `block_extent`）——に設定済み
+/// ゆえ、その軸の overhang（横書き＝`top`/`bottom`・縦書き＝`left`/`right`）がその丈の箱からの
 /// はみ出しを直接与える（行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ overhang 無意味＝0 に丸める）。
 /// **経験則の推定でなく実測**である。行送りは「字の丈 ＋ 行間 2px」なので
 /// 「はみ出し < 行と行の隙間」は成り立たない——隙間は 2px しかなく、Yu Gothic UI 28px の
@@ -433,7 +436,7 @@ impl PhysicalRect {
 /// 新 canvas の同 index 行と比較して差分（typewriter の現在行・catch-up の複数行・新規行）を
 /// 一様に検出する。位置/寸は **canvas-local**（validrect-local image px・スクロール非依存）
 /// ゆえ、可視窓のみ移動（内容不変）では全行の指紋が一致＝変化行ゼロになる。float は
-/// ビット表現で同値比較する（既存 `FormatKey` の `to_bits()` 規律に同じ——全順序比較を避け
+/// ビット表現で同値比較する（`FontKey` の `to_bits()` 規律に同じ——全順序比較を避け
 /// 同値判定のみ）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CommittedLine {
