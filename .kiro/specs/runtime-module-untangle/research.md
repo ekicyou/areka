@@ -290,6 +290,8 @@
 
 ### 8. 議題の候補（要件の討議へ）
 
+> 要件の討議（2026-11-13）での分け: 1 は開発者に諮る議題。2〜5 と 7 章の R1〜R7 は切り方（how）なので設計の段（`/kiro-design`）で決める（要件 2.5・3.8 が枠を持つ）。6 は自明な修正として要件の Out of scope と要件 6.2・5.9 に足した。7 は議題にしない（記憶の決めごと「一度切り出した spec を、上限 20 を少しまたぐ理由でさらに削らない」）。
+
 1. **外を引かない移すファイルを `runtime` に残すか**（要件 2.1 の改め）。対象は `reload_args.rs`（外 0・使い手は `reload_cue.rs`〔残る〕・`reload.rs`・`runtime_boot.rs`・`mcp/reload.rs`）・`shell_balloon_resolve.rs`（外 0・使い手は `frame/switch.rs`〔残る〕と `offline_dump`）・`shell_carry.rs`（外は `GhostSlot` の 1 回・主な使い手は `frame/attach.rs`〔残る〕）。
    - **推奨**: 3 本とも `runtime` に残し、`shell_carry.rs` の `capture_for_reload`・`hand_over` だけを session へ移す（5 章の案 C）。理由: 切る所が 5 回減り、`offline_dump` が session を引かずに済み（steering の決まりと合う）、git の移動の履歴も分かれない。
 2. **終わる相（`quit_app`）の切り方**: 知らせで向きを逆にする（brief の書き）か、相ごと session へ移すか。
