@@ -208,6 +208,40 @@ fn process_loops_exact_boundary() {
     assert_eq!(inst.loops_completed, 1);
 }
 
+#[test]
+fn process_loops_zero_duration_concludes_after_one_advance() {
+    // 長さ 0・待ちなしの周回は時刻が進まない → 残りの周回もこの瞬間に終わる（loop_count 回まわさない）
+    let mut inst = make_instance(1_000_000, 0.0);
+    let mut rng = dummy_rng();
+    let action = process_loops(&mut inst, 0.0, &mut rng);
+    assert_eq!(action, LoopAction::Conclude);
+    assert_eq!(inst.loops_completed, 1);
+}
+
+#[test]
+fn process_loops_zero_duration_with_zero_delay_draw_continues() {
+    // 長さ 0 でも乱数の待ちがあれば、待ちがたまたま 0 を引いた周回で残りを切らない
+    let mut inst =
+        make_instance_with_offset(5, 0.0, 0.0, 1.0, EasingFunction::Named(EasingName::BackIn));
+    let mut rng = test_rng();
+    let action = process_loops(&mut inst, 100.0, &mut rng);
+    assert_eq!(action, LoopAction::Conclude);
+    assert_eq!(inst.loops_completed, 5);
+}
+
+#[test]
+fn process_loops_huge_end_time_concludes() {
+    // 足しても丸めで消える end_time では、無限のループも回り続けず終わる
+    let mut inst = make_instance(-1, 0.1);
+    inst.end_time = 1e17;
+    let mut rng = dummy_rng();
+    assert_eq!(
+        process_loops(&mut inst, 1e17, &mut rng),
+        LoopAction::Conclude
+    );
+    assert_eq!(inst.loops_completed, 1);
+}
+
 // =======================================================================
 // generate_delay (Task 3.5)
 // =======================================================================

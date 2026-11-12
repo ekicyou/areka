@@ -211,7 +211,8 @@ impl DolaRuntime {
             return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
         }
 
-        // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）
+        // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）。
+        // 割った結果が有限であることはコンパイルが確かめる
         let loop_duration = compiled.total_base_duration / compiled.time_scale;
 
         if loop_duration == 0.0 && compiled.loop_count == -1 {
@@ -388,12 +389,27 @@ impl DolaRuntime {
     // 内部ヘルパー
     // =========================================================================
 
-    /// トリガー収集・実行。
+    /// トリガー収集・実行。発火するものが無くなるまで繰り返す。
     ///
+    /// 起こした子のトリガーも、子が自然の終わり（Step 2）で消える前に同じ tick で発火させる。
+    /// 1 回の発火で印が立ち、印を戻すのは Step 2 の周回だけなので、2 回目からは新しく起きた子の
+    /// トリガーしか集まらない。トリガーの循環は検証が拒む（V15t）ので、繰り返しは
+    /// ストーリーボードの数 + 1 回で止まる。
+    fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+        let mut results = Vec::new();
+        loop {
+            let fired = self.fire_due_triggers(current_time);
+            if fired.is_empty() {
+                return results;
+            }
+            results.extend(fired);
+        }
+    }
+
     /// Playing 状態のインスタンスに紐づくトリガーを走査し、
     /// 発火条件（current_time >= 発火時刻 かつ 未発火）を満たすものを
-    /// fire-and-forget で子ストーリーボードとして開始する。
-    fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+    /// fire-and-forget で子ストーリーボードとして開始する（1 回分）。
+    fn fire_due_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
         // Step 1: 発火対象を収集（借用を分離するため先に Vec へ集約）
         struct PendingTrigger {
             parent_group_id: u64,

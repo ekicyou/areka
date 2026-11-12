@@ -125,9 +125,18 @@ pub(crate) fn process_loops(
     // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない
     // （周回は最短 0.1s なので、8 時間の休止の後でも約 29 万回の軽い反復で済む）。
     while current_time >= instance.end_time {
+        let before = instance.end_time;
         advance_loop(instance, rng);
 
-        if !should_continue_loop(instance) {
+        // どの待ちを引いても時刻が進まない周回は、残りの周回もこの瞬間に終わる:
+        // 長さ 0・待ちなしの有限のループと、足しても丸めで消えるほど end_time が大きいとき
+        // （呼び出し側が巨大な start_time を渡したとき）。乱数の待ちが 0 を引いただけなら続ける
+        let max_delay = instance
+            .loop_offset_min
+            .map_or(0.0, |_| instance.loop_offset_max);
+        if !should_continue_loop(instance)
+            || before + (instance.loop_duration + max_delay) <= before
+        {
             return LoopAction::Conclude;
         }
     }

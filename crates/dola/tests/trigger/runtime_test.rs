@@ -410,9 +410,8 @@ fn infinite_loop_trigger_fires_each_cycle() {
 // 5.6: E2E テスト
 // ============================================================
 
-/// トリガーチェーン A→B→C の3段連鎖起動
-#[test]
-fn trigger_chain_a_b_c() {
+/// A（トリガーだけ）→ B（0.5 秒・終わりで C）→ C（0.5 秒）の文書
+fn chain_abc_doc() -> dola::DolaDocument {
     let opacity_var = AnimationVariableDef::Float {
         initial: 0.0,
         min: Some(0.0),
@@ -461,17 +460,21 @@ fn trigger_chain_a_b_c() {
         })
         .build();
 
-    let doc = DolaDocumentBuilder::new("1.0")
+    DolaDocumentBuilder::new("1.0")
         .variable("opacity", opacity_var)
         .storyboard("sb_a", sb_a)
         .storyboard("sb_b", sb_b)
         .storyboard("sb_c", sb_c)
         .build()
-        .expect("chain doc should be valid");
+        .expect("chain doc should be valid")
+}
 
+/// トリガーチェーン A→B→C の3段連鎖起動
+#[test]
+fn trigger_chain_a_b_c() {
     let mut rt = DolaRuntime::new();
     let opacity_id = rt.subscribe("opacity");
-    rt.load_document(doc).unwrap();
+    rt.load_document(chain_abc_doc()).unwrap();
 
     // start A
     let a_result = rt.start("sb_a", 0.0).unwrap();
@@ -520,6 +523,107 @@ fn trigger_chain_a_b_c() {
         .find(|(id, _)| *id == opacity_id)
         .expect("C delivers opacity at t=1.0");
     assert_eq!(*val, EvaluatedValue::Float(1.0), "opacity at t=1.0");
+}
+
+/// 起こした子がその tick で終わっても、子のトリガーは同じ tick で発火する（初めの tick がコマ落ちで 0.6）
+#[test]
+fn trigger_chain_a_b_c_first_tick_late() {
+    let mut rt = DolaRuntime::new();
+    let opacity_id = rt.subscribe("opacity");
+    rt.load_document(chain_abc_doc()).unwrap();
+    rt.start("sb_a", 0.0).unwrap();
+
+    // B は 0.0〜0.5 でこの tick に終わる。C は B の終わりの 0.5 に始まる
+    rt.tick(0.6);
+    let result = rt.last_result().clone();
+    let targets: Vec<&str> = result
+        .triggered
+        .iter()
+        .map(|r| match r {
+            TriggerResult::Started {
+                target_storyboard, ..
+            } => target_storyboard.as_str(),
+            other => panic!("expected Started, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(targets, ["sb_b", "sb_c"]);
+    let (_, val) = result
+        .changes
+        .iter()
+        .find(|(id, _)| *id == opacity_id)
+        .expect("C delivers opacity at t=0.6");
+    match val {
+        EvaluatedValue::Float(v) => assert!((v - 0.6).abs() < 1e-9, "opacity at t=0.6: {v}"),
+        other => panic!("expected Float, got {other:?}"),
+    }
+}
+
+/// 長さ 0 の B を挟んだ A→B→C が 1 回の tick で C まで起きる
+#[test]
+fn trigger_chain_through_zero_length_child() {
+    let trigger_only = |target: &str| {
+        StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some(target.to_string()),
+                ..Default::default()
+            })
+            .build()
+    };
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable(
+            "opacity",
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        )
+        .storyboard("sb_a", trigger_only("sb_b"))
+        .storyboard("sb_b", trigger_only("sb_c"))
+        .storyboard(
+            "sb_c",
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("opacity".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        to: Some(TransitionValue::Scalar(1.0)),
+                        duration: Some(1.0),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                })
+                .build(),
+        )
+        .build()
+        .expect("chain doc should be valid");
+
+    let mut rt = DolaRuntime::new();
+    let opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
+    rt.start("sb_a", 0.0).unwrap();
+
+    rt.tick(0.0);
+    let started: Vec<&str> = rt
+        .last_result()
+        .triggered
+        .iter()
+        .filter_map(|r| match r {
+            TriggerResult::Started {
+                target_storyboard, ..
+            } => Some(target_storyboard.as_str()),
+            TriggerResult::Error { .. } => None,
+        })
+        .collect();
+    assert_eq!(started, ["sb_b", "sb_c"]);
+
+    rt.tick(0.5);
+    let (_, val) = rt
+        .last_result()
+        .changes
+        .iter()
+        .find(|(id, _)| *id == opacity_id)
+        .expect("C moves opacity at t=0.5");
+    assert_eq!(*val, EvaluatedValue::Float(0.5));
 }
 
 /// 親を cancel しても、親が起こした子は止まらず自分の変数を動かし続ける（ライフサイクル独立性）

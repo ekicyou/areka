@@ -161,6 +161,18 @@ fn overflowing_sums_of_finite_numbers_are_rejected() {
     );
     assert_eq!(rejected_fields(&doc, "test"), ["relative_to"]);
 
+    // 有限の長さも小さい time_scale で割ると 1 周の実時間が inf になり、インスタンスが終わらなかった
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            .time_scale(1e-10)
+            .entry(transition_entry("x", 0.0, Some(1e300)))
+            .build(),
+    );
+    assert_eq!(rejected_fields(&doc, "test"), ["loop_duration"]);
+
     // 純粋なキーフレームとトリガーの時刻（k の 1e308 にさらに 1e308 を足す）
     let at_k_plus = || {
         Some(KeyframeRef::WithOffset {

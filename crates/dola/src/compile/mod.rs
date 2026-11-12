@@ -359,6 +359,16 @@ pub(crate) fn compile_validated(
         .values()
         .map(|tl| tl.base_duration)
         .fold(0.0_f64, f64::max);
+    // 有限の長さも小さい time_scale で割ると inf になり、インスタンスが終わらない
+    // （ランタイムは同じ割り算で 1 周の実時間を出す。読み込みの compile_all でここを通る）
+    let loop_duration = total_base_duration / sb.time_scale;
+    if !loop_duration.is_finite() {
+        return Err(vec![DolaError::InvalidNumber {
+            location: format!("storyboard '{storyboard_name}'"),
+            field: "loop_duration".to_string(),
+            value: loop_duration,
+        }]);
+    }
 
     // Sort triggers by fire_time (stable sort preserves entry index order for same fire_time)
     triggers.sort_by(|a, b| {
