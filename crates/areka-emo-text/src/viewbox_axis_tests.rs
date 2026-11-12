@@ -80,7 +80,7 @@ fn scale_one_integer_offset_yields_committed_equal_to_pos() {
 }
 
 /// k≠1.0（1.25）でも真位置からの直接丸めで `|committed − pos| ≤ 0.5` を保つ
-/// （小数アキュムレータの単発檻・長スクロール列の累積檻は後続 3.4 の担当）。
+/// （小数アキュムレータの単発檻）。
 #[test]
 fn nonunit_scale_keeps_committed_within_half_pixel() {
     let contract = ScaleContract::new(1.25, None);
@@ -103,7 +103,7 @@ fn nonunit_scale_keeps_committed_within_half_pixel() {
 
 // ── R7.5 系: 契約点の初期状態・blit 軸写像委譲 ──
 
-/// 初期計画者の契約点は真位置 0・確定位置 0（commit 前・後続 3.2 の状態遷移なし）。
+/// 初期計画者の契約点は真位置 0・確定位置 0（commit 前）。
 #[test]
 fn new_planner_scroll_state_is_zero() {
     assert_eq!(

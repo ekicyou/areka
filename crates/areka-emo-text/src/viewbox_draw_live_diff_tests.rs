@@ -416,7 +416,7 @@ fn live_diff_nonunit_scale_vertical_lr_within_tolerance() {
 
 /// G4: 大サイズフォント（20px・既定 ＭＳ ゴシック）でも全シナリオで oracle↔viewbox byte
 /// 完全一致する——AA こぼれが `DIRTY_GUARD_IMG_PX`(=1 image px) を超えず、ダーティ矩形が
-/// AA を取りこぼさないことを実描画 byte 等価で確認（spike/live-diff は従来 10px のみ）。
+/// AA を取りこぼさないことを実描画 byte 等価で確認（ほかの live-diff の場面は既定の 10px）。
 /// image 寸は `2P+F ≤ block ≤ 3P+F`（P=20+2=22・F=20 ゆえ 64 ≤ 80 ≤ 86）を満たし
 /// ①3行収容／②あふれ。行送りが 25 から 22 へ縮んでも 80 は範囲内ゆえ面寸は据え置き。
 #[test]

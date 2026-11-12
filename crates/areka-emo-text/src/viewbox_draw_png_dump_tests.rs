@@ -327,7 +327,8 @@ fn diag_dump_horizontal_pngs() {
 ///
 /// byte 等価檻（`diag_line_boundary_dropout_vs_oracle` 等）は「viewbox==oracle」を保証するが、
 /// 「分かち書き折返しが読みやすく見えるか・長大塊がはみ出さないか」は人（AI vision）が画像を
-/// 見るしかない（記憶 emo-text-byte-equiv-default-font-blindspot）。全域再描画オラクル
+/// 見るしかない（既定フォントの byte 等価が緑でも実フォントの欠けを見逃した例は完了 spec
+/// `areka-P0-emo-text-viewbox` の tasks.md「横書きで各行の下端インクが描画されない」）。全域再描画オラクル
 /// [`DrawExecutor`] を使い fully-revealed の完成画像を 1 フレームで得る。
 /// `cargo test -p areka-emo-text --lib -- --ignored --nocapture diag_dump_budoux_wordwrap_pngs`
 /// （出力先は env `AREKA_DIAG_OUT`・無指定はワークツリーの `target/areka-diag`）。

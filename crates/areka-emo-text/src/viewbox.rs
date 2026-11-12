@@ -1,27 +1,27 @@
 //! # viewbox — スクロール位置の内部表現・軸写像・量子化（純粋層）
 //!
 //! 可視窓（[`crate::layout::VisibleWindow`]）の `block_offset` を「真位置（f32 連続量・
-//! 物理 px）」と「確定位置（whole-pixel 整数）」へ分離して保持し（α 後の補間シームの土台・
+//! 物理 px）」と「確定位置（whole-pixel 整数）」へ分離して保持し（後で足す補間の土台・
 //! R8.2）、ブロック軸のスカラを writing_mode 追随の 2D ベクトルへ写す [`ScrollState`]／
 //! [`ScrollPlanner`]／[`block_axis_vector`] を担い、ダーティ導出（[`ScrollPlanner::derive_dirty_with_overhangs`]）
-//! と状態遷移（[`ScrollPlanner::plan`]／[`ScrollPlanner::commit`]・[`FramePlan`]）を提供する
+//! と状態遷移（[`ScrollPlanner::plan_with_overhangs`]／[`ScrollPlanner::commit`]・[`FramePlan`]）を提供する
 //! （plan は状態不変・純粋／commit は COM 実行成功後にのみ確定を反映＝失敗フレーム再試行安全）。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。失敗経路の
 //! ない純関数中心ゆえログ/panic を用いない。
 //!
-//! ## 軸割当の正準（draw.rs `render`・layout.rs `VisibleWindow` と 1:1）
+//! ## 軸割当の正準（draw.rs の `DrawExecutor::render`・layout.rs `VisibleWindow` と 1:1）
 //!
 //! ブロック軸（行送り軸）の 2D 割当は既存描画実行と一致させ、独自規則を発明しない（R5.3）:
 //!
-//! | writing_mode | ブロック軸 | `block_offset` の符号（layout.rs:130–137） |
+//! | writing_mode | ブロック軸 | `block_offset` の符号（[`VisibleWindow::block_offset`](crate::layout::VisibleWindow::block_offset)） |
 //! |---|---|---|
 //! | horizontal_tb | y（横書き＝縦スクロール） | 負（内容が上へ） |
 //! | vertical_rl | x（縦書き＝横スクロール） | 正（内容が右へ） |
 //! | vertical_lr | x | 負（内容が左へ） |
 //!
 //! 符号は可視窓決定側が確定した `block_offset` を**素通し**する（独自の軸規則を作らない）。
-//! draw.rs の `render`（横書き＝`origin.Y` に加算・縦書き＝`origin.X` に加算）と同一の軸割当。
+//! draw.rs の `DrawExecutor::render`（横書き＝`origin.Y` に加算・縦書き＝`origin.X` に加算）と同一の軸割当。
 //!
 //! ## 真位置と量子化（DD11・小数アキュムレータ）
 //!
@@ -33,12 +33,12 @@
 //!   （`ceil` 由来）ゆえ行単位 `block_offset` が整数＝`pos` が整数＝`committed == pos`
 //!   （byte 一致の構造前提）。
 //!
-//! ## choice-render 座標契約点（R9.3）／補間シーム（α 後）（R8）
+//! ## choice-render 座標契約点（R9.3）／補間シーム（R8）
 //!
 //! canvas（image px・validrect-local）→描画面（物理 px）の写像は
 //! `p_surface_block = (p_canvas_block + block_offset) × k`（行内軸は `× k` のみ）。量子化状態
 //! （committed）は [`ScrollPlanner::scroll_state`] で読める（クリック範囲の実導出は
-//! choice-render の責務）。α 後の補間は `pos` の生成器（補間過程）だけを差し替える——`plan`/`commit`・
+//! choice-render の責務）。後で補間を足すときは `pos` の生成器（補間過程）だけを差し替える——`plan`/`commit`・
 //! 量子化・ダーティ導出は再設計不要（R8.3）。
 
 use crate::canvas::ContentCanvas;
@@ -46,16 +46,16 @@ use crate::layout::VisibleWindow;
 use crate::region::{ImagePx, ScaleContract};
 use crate::writing::WritingMode;
 
-/// スクロール位置の内部表現（R8.2/9.3 の契約点・choice-render と α 後の補間が読む）。
+/// スクロール位置の内部表現（R8.2/9.3 の契約点・choice-render と後で足す補間が読む）。
 ///
 /// スクロール位置を**真位置**（f32 連続量）と**確定位置**（whole-pixel 整数）へ分離して
 /// 保持する値オブジェクト。不変条件 `|committed − pos| ≤ 0.5`（`committed = round(pos)`
-/// ゆえ `|pos| ≤ i32::MAX` の間は恒真・越えると飽和する）。α 後の補間は `pos` の生成器（補間過程）だけを差し替える——`committed`／写像
+/// ゆえ `|pos| ≤ i32::MAX` の間は恒真・越えると飽和する）。補間を足すときは `pos` の生成器（補間過程）だけを差し替える——`committed`／写像
 /// 規約は不変（R8.3）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScrollState {
     /// 真位置（物理 px・f32 連続量）＝ `block_offset × k`（ブロック軸スカラ・符号は素通し）。
-    /// α 後の補間はこの値の生成を差し替える。
+    /// 補間を足すときはこの値の生成を差し替える。
     pub pos: f32,
     /// 面に反映済みの whole-pixel 位置（真位置格子吸着・`round(pos)`・`|pos| ≤ i32::MAX` の間 `|committed − pos| ≤ 0.5`・越えると飽和）。
     pub committed: i32,
@@ -63,7 +63,7 @@ pub struct ScrollState {
 
 /// 1 フレームの描画計画（純粋・決定論の値オブジェクト・DD1/DD4）。
 ///
-/// [`ScrollPlanner::plan`] が状態を変えずに返す 3 種の計画結果。COM 層はこの enum を受けて
+/// [`ScrollPlanner::plan_with_overhangs`] が状態を変えずに返す 3 種の計画結果。COM 層はこの enum を受けて
 /// blit 指示・ダーティ D2D 描画・FullClear を実行し、成功時にだけ [`ScrollPlanner::commit`] で
 /// 確定を反映する（失敗フレームは未 commit のまま次フレームで再計画＝再試行安全）。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,9 +114,9 @@ impl PartialEq<PhysicalRect> for DirtyRect {
 /// ブロック軸（行送り軸）スカラ `v` を writing_mode 追随の 2D ベクトル `(x, y)` へ写す
 /// （R5.1–5.3）。
 ///
-/// 軸割当は draw.rs `render`（横書き＝`origin.Y`／縦書き＝`origin.X` に加算）と 1:1:
+/// 軸割当は draw.rs の `DrawExecutor::render`（横書き＝`origin.Y`／縦書き＝`origin.X` に加算）と 1:1:
 /// 横書き＝`(0, v)`（y 軸）・縦書き（vertical_rl／vertical_lr）＝`(v, 0)`（x 軸）。符号は
-/// `v` を**素通し**する——可視窓 `block_offset` の符号規約（layout.rs:130–137）をそのまま
+/// `v` を**素通し**する——可視窓 [`VisibleWindow::block_offset`] の符号規約をそのまま
 /// 使い、独自の軸規則を発明しない（R5.3）。blit ベクトル・ダーティ帯の軸切替の共通口。
 pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
     match mode {
@@ -127,8 +127,8 @@ pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
 
 /// スクロール位置の計画者（純粋・決定論）。
 ///
-/// 真位置／確定位置の**表現**・軸写像・量子化（3.1）、ダーティ導出（3.2）、`plan`/`commit`
-/// 二相と `FramePlan`（3.3）を担う。確定位置 `committed`・直近真位置 `pos`・前回確定時の
+/// 真位置／確定位置の**表現**・軸写像・量子化、ダーティ導出、`plan`/`commit`
+/// 二相と `FramePlan` を担う。確定位置 `committed`・直近真位置 `pos`・前回確定時の
 /// 行指紋 `prev_lines`・Clear 要求フラグ `clear_requested` を内部状態として保持する
 /// （初期: committed=0・pos=0・prev_lines は「分からない」・clear_requested=false）。`plan` は状態不変
 /// （`&self`）で、確定は `commit`（`&mut self`）でのみ反映する（失敗フレーム再試行安全）。
@@ -138,7 +138,7 @@ pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
 pub struct ScrollPlanner {
     /// 面に反映済みの whole-pixel 位置（`commit` で更新・初期 0）。
     committed: i32,
-    /// 直近の真位置（f32 連続量・α 後に補間過程が更新元になる・初期 0）。
+    /// 直近の真位置（f32 連続量・補間を足せば補間過程が更新元になる・初期 0）。
     pos: f32,
     /// 前回 `commit` 時の canvas 行指紋（変化行検出の唯一の根拠）。`None`＝前に描いた中身が
     /// 分からない（初め・消去の要求の後）＝全域を描き直す。`Some(空)`＝何も描いていないと分かっている。
@@ -155,7 +155,7 @@ impl ScrollPlanner {
         ScrollPlanner::default()
     }
 
-    /// スクロール位置契約点（R9.3/R8.3——choice-render／α 後の補間が読む）。
+    /// スクロール位置契約点（R9.3/R8.3——choice-render／後で足す補間が読む）。
     ///
     /// canvas（image px・validrect-local）→描画面（物理 px）の写像は
     /// `p_surface_block = (p_canvas_block + block_offset) × k`（行内軸は `× k` のみ）で、
@@ -183,10 +183,8 @@ impl ScrollPlanner {
     }
 
     /// 現在の確定位置から目標確定位置 `target` への面内 blit ベクトルを軸写像して返す
-    /// （blit ＝ `target.committed − committed` をブロック軸へ・[`block_axis_vector`] 委譲）。
-    ///
-    /// 状態遷移（`commit`）は後続 3.2 の領分——本メソッドは軸写像の純粋補助のみ
-    /// （初期状態では `committed = 0` ゆえ blit ＝ `target.committed` の軸写像）。
+    /// （blit ＝ `target.committed − committed` をブロック軸へ・[`block_axis_vector`] 委譲・
+    /// 引き算は飽和）。状態は変えない（確定は [`Self::commit`]）。
     pub fn blit_vector(&self, target: &ScrollState, mode: WritingMode) -> (i32, i32) {
         block_axis_vector(mode, target.committed.saturating_sub(self.committed))
     }
@@ -260,8 +258,7 @@ impl ScrollPlanner {
         // 前方 typewriter（住人単調増加・prefix 伸長で extent 増加・block 不動）では不発ゆえ
         // 増分ホットパスは維持——注入時刻の後方ジャンプ・un-reveal 等（確定 content を縮める
         // 任意アクセスパターン）に対する防御で byte 等価（oracle 全域再描画）を保つ。
-        // 遅延化（newline-defer）で trailing 空行が消え、旧・即時意味論では行数減少で偶然
-        // マスクされていた行内縮小欠陥が露出したため、判定を行数減少から被覆不能変化へ拡張した。
+        // 判定は行数の減少だけでなく、覆えない変化（block 位置の移動・extent の縮小）も見る。
         let new_lines = Self::committed_lines(canvas, mode);
         let target = self.resolve_position(window.block_offset, contract);
         let blit = Self::clamp_blit_to_surface(self.blit_vector(&target, mode), surface_size);
@@ -349,8 +346,9 @@ impl ScrollPlanner {
 
 /// ダーティ矩形へ加えるガード余白（**image px**・DD4）。
 ///
-/// spike 実測では 0（透明背景への premultiplied 描画ゆえ AA こぼれは blit 位相不変）だが、
-/// 保守既定として 1 image px を全辺に加え、フォント差による AA こぼれを吸収する。物理 px 換算は
+/// 透明背景への premultiplied 描画では AA こぼれは blit の位相で変わらないので 0 でも足りる見込みだが、
+/// 保守既定として 1 image px を全辺に加え、フォント差による AA こぼれを吸収する（大きい字・
+/// 既定でない書体でも byte 等価が保たれることは `viewbox_draw_live_diff_tests.rs` が確かめる）。物理 px 換算は
 /// `ceil(DIRTY_GUARD_IMG_PX × k)`（[`ScaleContract::scale`] 適用）。
 pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 
@@ -368,7 +366,7 @@ pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 /// まま）。行ボックスのブロック軸寸が `font_height`（`max_height`／縦は `max_width`）に設定済み
 /// ゆえ、その軸の overhang（横書き＝`top`/`bottom`・縦書き＝`left`/`right`）が em ボックスからの
 /// はみ出しを直接与える（行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ overhang 無意味＝0 に丸める）。
-/// **経験則の推定でなく実測**である。ただし行送りが「字の丈 ＋ 行間 2px」に確定した後は
+/// **経験則の推定でなく実測**である。行送りは「字の丈 ＋ 行間 2px」なので
 /// 「はみ出し < 行と行の隙間」は成り立たない——隙間は 2px しかなく、Yu Gothic UI 28px の
 /// 下端はみ出しは実測 3px で隣の行の em ボックスへ届く。届いた先が変化行なら
 /// [`ScrollPlanner::derive_dirty_with_overhangs`] の交差判定が隣の行も描画対象に含めるため

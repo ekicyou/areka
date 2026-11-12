@@ -11,7 +11,8 @@
 //! **既定（家族名・幅・太さ・斜体は束縛の顔）と値が違うときだけ**発行する（既定と同じ項目への範囲指定は意味が無く COM 呼出が
 //! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」
 //! （既定の見た目が打ち消し線つきの行は行の全体への 1 回だけ）を
-//! 実際に担っているのは、呼び手 `line_layout_for` の `line.default_only` 短絡と、下の
+//! 実際に担っているのは、呼び手 `line_layout_for` の短絡（`line.default_only` かつ既定の見た目が
+//! 下線も打ち消し線も持たない）と、下の
 //! `apply_font_ranges` が外側で行う `if run.style == StyleId::DEFAULT { continue; }` の 2 点で、
 //! この項目ごとのガードを全撤去しても crate は緑のまま——実測 2026-09-12）。白抜き（`outline`）と
 //! 上下付き（`script`）は語彙のみで読まない。打ち消し線の**位置**は DirectWrite の既定に委ね
@@ -62,7 +63,7 @@ pub(crate) struct StyleRun {
 
 /// 行のグリフ列を「連続する同じ装飾番号」の区間へ切る（要件 3.6）。
 ///
-/// 文字範囲の数え方は選択肢の範囲算出（`super::segment_text_range`）と同じ——行 TextLayout の
+/// 文字範囲の数え方は選択肢の範囲算出（`viewbox_draw_render.rs` の `segment_text_range`）と同じ——行 TextLayout の
 /// text は各グリフの文字列（クラスタ）の連結なので、UTF-16 長の累積がそのまま文字位置になる
 /// （`𠮷` のようなサロゲートペアは 2 単位・ZWJ 列は部品の単位の合計）。グリフの無い行は区間 0 個。
 pub(crate) fn style_runs(glyphs: &[PositionedGlyph]) -> Vec<StyleRun> {
@@ -155,7 +156,7 @@ pub(crate) fn line_styles(
 /// 3.2／4.1／4.3／4.6／4.10）。下線は焼かない（[`LineStyles::underlines`] の区間を areka が塗る・
 /// areka-P0-balloon-text-bugs 件 3）。
 ///
-/// 行 TextLayout の**生成時に 1 度だけ**呼ばれる（[`crate::draw::LineLayoutStore::line_layout_decorated`]
+/// 行 TextLayout の**生成時に 1 度だけ**呼ばれる（[`crate::draw::LineLayoutStore::line_layout_with_strokes`]
 /// の `decorate` 口）。顔で考える: 束縛の顔は `pick` と同じ規則（[`FontCatalog::face_or_default`]）で
 /// 引き、区間の名前が既定と違えば区間の候補列の顔（GDI の名前を含む・全滅なら束縛の顔＝要件 4.10）を
 /// 使う。家族名・幅は束縛の顔と違えば焼き、太さ・斜体は「区間の顔＋区間の太字・斜体」と
@@ -327,7 +328,8 @@ thread_local! {
     /// 範囲指定・色の解除・ブラシ生成を**実際に発行した回数**（テスト観測用）。
     ///
     /// 保持庫の要素数で数えると同じ鍵で作り直しても増えず「N 回だけ」が恒真になるので、
-    /// 発行のたびに 1 増やす素の勘定にしてある（記憶 6.4 の申し送り）。
+    /// 発行のたびに 1 増やす素の勘定にしてある（完了 spec `areka-P0-text-decoration-canon` の
+    /// tasks.md の 6.4 の記録）。
     pub(super) static RANGE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// 全範囲の解除（`SetDrawingEffect(None, 全域)`）を発行した回数（解除の二重化の見張り）。
     pub(super) static RESET_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

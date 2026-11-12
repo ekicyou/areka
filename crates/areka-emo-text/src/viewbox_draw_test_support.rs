@@ -92,17 +92,16 @@ pub(crate) fn geo_model(font_height: Option<u32>) -> BalloonModel {
     )
 }
 
-/// live-diff 用 BalloonModel（**origin 未指定**＝mode ごとの書字開始角へ寄せる・font 高さ
-/// 指定可・validrect 全域）。このモデルは validrect を面の全域（左上 (0,0) から右下まで）に
+/// フォント名＋高さを明示した live-diff 用 BalloonModel（**origin 未指定**＝mode ごとの書字開始角へ
+/// 寄せる・validrect 全域）。このモデルは validrect を面の全域（左上 (0,0) から右下まで）に
 /// するので、(0,0) は範囲の手前端そのもの＝範囲内である（両端を含む）。そのため origin (0,0)
 /// を明示すれば宣言がそのまま用いられて面の左上から書き始まり、vertical_rl は列送りが −x
 /// ゆえ列が面外（負の x）へ描かれてしまう。
 /// そのため origin は None にして、未宣言時の縮退＝書字開始角
 /// （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ委ねる
-/// （spec `areka-P0-balloon-vertical-canon` の要件 3.10／3.11）。
-/// フォント名＋高さを明示した live-diff 用モデル（既定フォントは `name=None`＝ＭＳ ゴシック・
-/// G4——非 default フォント/大サイズで AA こぼれガード `DIRTY_GUARD_IMG_PX` の実効性を byte
-/// 等価で検証するため）。
+/// （spec `areka-P0-balloon-vertical-canon` の要件 3.10／3.11）。既定フォントは `name=None`＝
+/// ＭＳ ゴシック（G4——非 default フォント/大サイズで AA こぼれガード `DIRTY_GUARD_IMG_PX` の
+/// 実効性を byte 等価で検証するため）。
 pub(super) fn live_diff_model_font(name: Option<&str>, font_height: Option<u32>) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),

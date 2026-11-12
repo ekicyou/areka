@@ -1,19 +1,17 @@
 //! # draw_metrics — 計測専用 probe layout（COM 層・draw ファサードの子）
 //!
 //! [`DWriteMetrics`]（測定専用 probe TextLayout 由来の [`GlyphMetrics`] 実装）と、
-//! 実 font face metrics からの行ボックス比の実測を担う。親ファサード `draw.rs` からの
-//! **純移動**——生成規則・キャッシュ規律・縮退の意図はいずれも移動前と同一。
+//! 実 font face metrics からの行ボックス比の実測を担う。
 //!
-//! タスク 6.4 で計測は**見た目込み**になった。送り幅に効く見た目（候補列・大きさ・
-//! 太字・斜体＝[`FontKey`]）ごとに試験用書式（probe format）を**鍵ごとに 1 度だけ**
-//! 焼き、記憶の鍵も「計測鍵と文字」へ広げた。既定の見た目は従来どおり束縛書式の
-//! 経路をそのまま通るので、装飾を使わない台本の計測値は 1 ビットも変わらない。
+//! 計測は**見た目込み**。送り幅に効く見た目（候補列・大きさ・太字・斜体＝[`FontKey`]）ごとに
+//! 試験用書式（probe format）を**鍵ごとに 1 度だけ**焼き、計測値は「計測鍵と文字」の組で覚える。
+//! 既定の見た目は束縛書式の経路をそのまま通る（既定の鍵では試験用書式を作らない）ので、装飾を
+//! 使わない台本の計測値は束縛書式で測った値（測れなければ同じ縮退値）そのもの。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`tracing::error!`＋`Err`）で
 //! 扱い panic しない。probe 規約の本文は親ファサードのモジュール doc が正本。
 //!
-//! 親から `pub use` で再輸出されるため、crate 内から見た入口は
-//! `crate::draw::DWriteMetrics` のまま変わらない。
+//! 親から `pub use` で再輸出されるため、crate 内から見た入口は `crate::draw::DWriteMetrics`。
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -38,7 +36,7 @@ use crate::look::{FontKey, TextLook};
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
 
-/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（task 6.2・R4.5・probe 規約）。
+/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（R4.5・probe 規約）。
 ///
 /// 純粋層 `LayoutEngine` の外部注入点（`&dyn GlyphMetrics`）へ、DirectWrite の実測
 /// 送り幅を提供する。probe 規約（モジュール doc）:
@@ -57,7 +55,7 @@ use crate::writing::WritingMode;
 ///   同じ組は同じ送り幅の決定論・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」・
 ///   R11.1）。引くときは `&str` のまま引いて割り当てない。
 ///
-/// UI スレッド専有（COM 層規律）。`line_pitch` は M1 正準式
+/// UI スレッド専有（COM 層規律）。`line_pitch` は正典式
 /// `font_height + 行間`（正本 [`TextLayerConfig::line_pitch`]・`FixedMetrics` と同一式）
 /// に従う——足し算は自分で持たず config へ委譲する。
 pub struct DWriteMetrics {
@@ -109,23 +107,16 @@ impl DWriteMetrics {
     /// 解決済みフォント＋writing_mode から計測用 metrics を生成する。
     ///
     /// format は描画と同一の [`create_text_format`] 経路——probe 規約「描画に使うのと同一のフォント設定・writing_mode 設定」の
-    /// 構造的保証。生成失敗は当該経路の log-first（`warn!`/`error!`＋`Err`）に従う。
+    /// 構造的保証。生成失敗は当該経路の log-first（`error!`＋`Err`）に従う。
     ///
-    /// **硬い経路が 1 つ増えている**（タスク 9.4 の記録・6.2 由来）——候補列の解決台帳を
-    /// 作るために `GetSystemFontCollection` を通すので、同 API の失敗が
-    /// **計測の縮退ではなく装着そのものの失敗**（`Err(TextLayerError::Device)`）になる。
-    /// 以前は書式生成の失敗が行ボックス比の縮退で済んでいた。失敗は
+    /// 候補列の解決台帳を作るために `GetSystemFontCollection` を通すので、同 API の失敗は
+    /// **計測の縮退ではなく装着そのものの失敗**（`Err(TextLayerError::Device)`）になる。失敗は
     /// `FontCatalog::new` が `error!` で記録するので記録なしの失敗経路ではない。
     ///
-    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// **本番は [`new_shared`](Self::new_shared) を使う**（`actor_decoration.rs::build_actor_render`
     /// が台帳を 1 つだけ作って描画器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
-    /// 残しているのは自前の台帳で足りる決定論テストが呼ぶ委譲の入口としてである
-    /// （`draw_test_support.rs`／`draw_oracle_tests.rs`／`draw_format_metrics_tests.rs`／
-    /// `actor_choice_contract_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
-    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`、および
-    /// 統合試験 `tests/kero_menu_capacity_test.rs`／`tests/line_pitch_readback_test.rs`）。
-    /// crate 外では
-    /// `crates/areka-emo-text/examples/emo-text-layer/drive.rs` が 1 か所で呼ぶ（本番ではない）。
+    /// 自前の台帳で足りる決定論テスト（`src/` の `*_tests.rs` と `tests/` の統合試験）と
+    /// example `examples/emo-text-layer/drive.rs` が呼ぶ委譲の入口である。
     pub fn new(
         factory: &IDWriteFactory2,
         font: &ResolvedFont,
@@ -422,8 +413,8 @@ impl GlyphMetrics for DWriteMetrics {
     /// 実測例: Yu Gothic UI ＝ upem 2048・ascent 2210・descent 514 → 比 1.3301
     /// （28px で 37.24px＝em ボックス 28px より 9.24px 高い）／ＭＳ ゴシック ＝ upem 256・
     /// ascent 220・descent 36 → 比ちょうど 1.0（既定フォントでは em ボックスと一致するため
-    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——記憶
-    /// emo-text-byte-equiv-default-font-blindspot の系）。
+    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——完了 spec
+    /// `areka-P0-emo-text-viewbox` の tasks.md「横書きで各行の下端インクが描画されない」の記録）。
     fn line_box_height(&self, font_height: f32) -> f32 {
         font_height * self.line_box_ratio
     }
@@ -466,7 +457,7 @@ fn degraded_advance(text: &str, height: f32) -> f32 {
 /// 行ボックス比 `(ascent + descent) ÷ upem` などの比は呼び手が作る。
 ///
 /// format 自身が持つ family 名・フォント コレクション・weight/style/stretch を辿るため、
-/// [`create_text_format`] の既定フォント再試行（R4.2）後でも**実際に描画されるフォント**を測る。
+/// 書式に焼いた**実際に描画されるフォント**を測る。
 /// 取得経路のいずれかが失敗・不在（family 未発見・upem 0 等）なら `None`（呼び手が縮退）。
 pub(crate) fn measure_font_metrics(
     factory: &IDWriteFactory2,

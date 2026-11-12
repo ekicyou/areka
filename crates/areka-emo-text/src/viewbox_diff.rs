@@ -30,8 +30,10 @@ impl ScrollPlanner {
     /// アウト/消滅）、(b) 共通 prefix の同一 index 行で **block 軸位置が動いた**（旧位置のインクを
     /// 新変化行矩形が覆えない）、(c) 同一 index 行で **extent が縮んだ**（旧インクの外側＝退避分を
     /// 新矩形が覆えない）。前方 typewriter（prefix 伸長で extent 増加・block 不動）では false ゆえ
-    /// 増分描画のホットパスを維持する。行内開始位置は layout の不変則（全行同一の行内開始）ゆえ、
-    /// block 位置＋extent の指紋だけで被覆可否は健全に判定できる（text 内容は覆えれば無関係）。
+    /// 増分描画のホットパスを維持する。行内開始位置は指紋に入れない——同じ index の行の行内開始は
+    /// その行の最初の字の位置で決まり（`\_l` で行ごとに違ってよい）、字送りで後ろへ伸びるときも
+    /// 末尾から縮むときも動かないので、block 位置＋extent の指紋だけで被覆可否を判定できる
+    /// （text 内容は覆えれば無関係）。
     pub(super) fn is_backward_shrink(
         prev_lines: &[CommittedLine],
         new_lines: &[CommittedLine],
@@ -77,7 +79,7 @@ impl ScrollPlanner {
     ///
     /// `prev_lines` が空なら「何も描いていない」の意味で、住人は全部新しい行として差分に入る
     /// （面全域の描き直しは [`Self::full_domain`] の役目）。各 [`DirtyRect`] はその矩形とブロック軸で交差
-    /// する GlyphRun 住人 index だけを持ち（クリップにより描画結果は当該矩形内へ限定される）、
+    /// する GlyphRun／Choice 住人 index だけを持ち（クリップにより描画結果は当該矩形内へ限定される）、
     /// 返り値 `draw_lines` はその**和集合**（昇順・重複なし）。ただし**可視窓より前の行
     /// （`first_visible_line` 未満）は含めない**——全域再描画のオラクル（`DrawExecutor`）が
     /// `skip(first_visible_line)` で描かないため、含めると
@@ -110,7 +112,7 @@ impl ScrollPlanner {
         )
     }
 
-    /// 全域の道（前の行が分からない・縮退）: dirty＝面全域 1 枚・描画対象＝可視窓の GlyphRun 住人
+    /// 全域の道（前の行が分からない・縮退）: dirty＝面全域 1 枚・描画対象＝可視窓の GlyphRun／Choice 住人
     /// （`first_visible_line` 以降・理由は `derive_dirty` の doc）のうち、はみ出し込みの矩形が面と
     /// 重なる行だけ（指摘 18・面の外の行はクリップで捨てるだけなので描かない。面のすぐ下の行でも
     /// 上のはみ出しが面へ入るなら残す）。矩形が 1 枚ゆえ「矩形ごとの交差行」＝描画対象＝和集合。
@@ -319,7 +321,7 @@ pub(super) fn line_fingerprint(resident: &Resident, mode: WritingMode) -> Commit
             run.size,
         ),
         // Choice 住人は内包 run から GlyphRun と同一の指紋を作る（非 hover の素描画が
-        // GlyphRun と同一ゆえ指紋も同一・R9.5。hover セグメントの指紋反映は task 6.1）。
+        // GlyphRun と同一ゆえ指紋も同一・R9.5。hover は下の `choice_marker` の欄が表す）。
         ResidentContent::Choice(choice) => (
             choice
                 .run
@@ -429,7 +431,7 @@ fn resident_ink_rect(
     // em ボックス（image px・validrect-local + block_offset）をブロック軸の**実測はみ出し**
     // （[`LineOverhang`]・`GetOverhangMetrics` 由来）だけ外側へ広げ、はみ出しインクをダーティに
     // 含める（byte 等価の前提・D2）。行内軸は em 寸（run.size）のまま——行内はみ出し（イタリック
-    // 右張り出し等）は tight box が要るため後続（現状 overhang.left/right は縦書きのブロック軸用）。
+    // 右張り出し等）は tight box が要るため測らない（overhang.left/right は縦書きのブロック軸用）。
     // ブロック軸: horizontal＝Y（上へ top・下へ bottom）／vertical＝X（左へ left・右へ right）。
     let (ix0, iy0, ix1, iy1) = match mode {
         WritingMode::HorizontalTb => {

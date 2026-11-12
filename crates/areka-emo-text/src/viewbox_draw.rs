@@ -2,20 +2,21 @@
 //!
 //! [`ScrollPlanner`](crate::viewbox::ScrollPlanner)（純粋・計画）が返す
 //! [`FramePlan`](crate::viewbox::FramePlan) を 1 フレームの COM 実行へ落とす
-//! [`ViewboxExecutor`]。旧 [`DrawExecutor`](crate::draw::DrawExecutor)（全域再描画）を
-//! 「保持ピクセルの面内 blit ＋ ダーティ矩形限定の D2D 描画」へ差し替える実行部である
+//! [`ViewboxExecutor`]。比較専用オラクル [`DrawExecutor`](crate::draw::DrawExecutor)（全域再描画）と
+//! 同じ画素を「保持ピクセルの面内 blit ＋ ダーティ矩形限定の D2D 描画」で出す本番の実行部である
 //! （viewbox 方式＝ダーティ矩形スクロール・`WM_PAINT` 規律の写し）。
 //!
 //! **層規律**: COM 層——UI スレッド専有。`windows`（DirectWrite/D2D）を触ってよい層。
 //! 失敗は log-first（`tracing::error!`＋`Err`・当該フレーム skip＝**plan 未 commit**）で扱い
-//! panic しない（記憶 areka-log-first-no-silent-failure）。
+//! panic しない（記録の無い失敗の道を作らないため）。
 //!
 //! ## 1 フレームの実行（design System Flows）
 //!
-//! `render` は「計画取得（[`ScrollPlanner::plan`]）→ 保持ピクセルの面内 blit
-//! （[`TextSurface::copy_front_to_back_shifted`]）→ ダーティ矩形ごとの限定描画 → 面の役割交換
-//! （[`TextSurface::flip`]）→ 計画の確定（[`ScrollPlanner::commit`]）」の順で行い、変化有無
-//! （present 要否）を返す。[`FramePlan::NoChange`] は blit も描画も present も行わない
+//! `render` は「書式の確保 → 全住人の行 TextLayout の確保と実測インクはみ出しの収集 → 計画取得
+//! （[`ScrollPlanner::plan_with_overhangs`]）→ 縮退の判定（書式の組み直し・想定外不整合なら全域）→
+//! 保持ピクセルの面内 blit（[`TextSurface::copy_front_to_back_shifted`]）→ ダーティ矩形ごとの
+//! 限定描画 → 面の役割交換（[`TextSurface::flip`]）→ 計画の確定（[`ScrollPlanner::commit`]）」の
+//! 順で行い、変化有無（present 要否）を返す。[`FramePlan::NoChange`] は blit も描画も present も行わない
 //! （`Ok(false)`・全カウンタ増分 0）。
 //!
 //! ## ダーティ描画の正準列（byte 等価の要・design①〜⑥）
@@ -103,11 +104,11 @@ pub struct DrawStats {
 }
 
 /// [`FramePlan`] の COM 実行——blit 指示・ダーティ矩形限定の D2D 描画・FullClear・統計
-/// （task 6・R1.1/R1.4/R2.2/R3.1–3.4/R9.4）。
+/// （R1.1/R1.4/R2.2/R3.1–3.4/R9.4）。
 ///
 /// `render` が 1 フレーム（plan→blit→ダーティ描画→flip→commit）を実行し present 要否を返す。
 /// plan/commit の二相により、デバイス失敗フレームは**未 commit**のまま次フレームで再計画＝再試行
-/// 安全（現行の「当該フレーム skip・次フレーム再試行」規律を保つ）。UI スレッド専有（COM 層規律）。
+/// 安全（「当該フレーム skip・次フレーム再試行」）。UI スレッド専有（COM 層規律）。
 pub struct ViewboxExecutor {
     /// スクロール計画者（純粋・計画/commit 二相・committed 位置と行指紋を内部保持）。
     planner: ScrollPlanner,
@@ -142,7 +143,7 @@ pub struct ViewboxExecutor {
     /// 決定論観測統計（常時コンパイル・[`Self::stats`] で読む）。
     stats: DrawStats,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の
-    /// `draw_lines` は GlyphRun のみを返すため通常不発の防御的経路）。
+    /// `draw_lines` は GlyphRun と Choice だけを返すため通常不発の防御的経路）。
     seam_warned: bool,
     /// テスト専用 fault-injection: true の間、次の Update フレームの EndDraw 後に
     /// デバイス失敗を注入する（実 COM 失敗を決定論的に再現できないため・G5）。flip/commit の
@@ -162,10 +163,9 @@ impl ViewboxExecutor {
     /// デバイス未初期化（`GraphicsCore` 無効化後）は log-first で `Device` エラー
     /// （`DrawExecutor::new` と同一経路）。
     ///
-    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// **本番は [`new_shared`](Self::new_shared) を使う**（`actor_decoration.rs::build_actor_render`
     /// が台帳を 1 つだけ作って計測器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
-    /// 残しているのは自前の台帳で足りる決定論テスト（`viewbox_draw_*_tests.rs`）が呼ぶ
-    /// 委譲の入口としてである。crate 外の呼び手も無い。
+    /// 自前の台帳で足りる決定論テストが呼ぶ委譲の入口である。
     pub fn new(core: &GraphicsCore) -> Result<ViewboxExecutor, TextLayerError> {
         let dwrite = core
             .dwrite_factory()
@@ -253,9 +253,9 @@ impl ViewboxExecutor {
     /// スクロール量子化状態の読み口（内部 [`ScrollPlanner`] へ委譲・additive）。
     ///
     /// 面に反映済みの whole-pixel スクロール（[`ScrollState::committed`]）を提示フレーム同期で
-    /// 読むための口。結線層（task 8）の照会スナップショット写像が
+    /// 読むための口。結線層（`actor_present.rs`）の照会スナップショット写像が
     /// `scroll_state().committed` を [`to_window_physical`](crate::choice::to_window_physical) の
-    /// committed 引数へ渡す（design.md「RuntimeContract」Implementation Notes・R9.3 契約点）。
+    /// committed 引数へ渡す（R9.3 契約点）。
     /// UI スレッド専有（COM 層規律）。
     pub fn scroll_state(&self) -> ScrollState {
         self.planner.scroll_state()
@@ -269,7 +269,7 @@ impl ViewboxExecutor {
     /// [`FramePlan::FullClear`]（back を全域透明 Clear）、あれば全域の [`FramePlan::Update`]
     /// （全面を消してから見える行を描く）で、消去と同じフレームで見える字も描く（透明のフラッシュを
     /// 挟まない・指摘 17）。どちらも `full_clears` を 1 増やし、commit が要求を下ろす。actor 結線
-    /// （task 8）がこの口を Clear cue へ写像する。
+    /// （`actor.rs`）がこの口を Clear cue へ写像する。
     ///
     /// ここが台詞の切れ目（`\c` と台詞の頭の `ClearAll`）でもあるので、書体の台帳の台詞を進め
     /// （[`FontCatalog::forget_talk`]・台帳を共有する計測器も表を空にする）、ブラシの記憶を空にする
@@ -285,7 +285,8 @@ impl ViewboxExecutor {
     /// 1 フレームの実行。戻り値＝変化有無（`true` なら呼び手が present する・R1.1/R3.1）。
     ///
     /// - format 確保（`ensure_format`——フォント/方向不変なら再利用）。
-    /// - `plan`（[`ScrollPlanner::plan`]・状態不変・純粋）。
+    /// - 全住人の行 TextLayout を確保して実測インクはみ出しを集め、`plan`
+    ///   （[`ScrollPlanner::plan_with_overhangs`]・状態不変・純粋）。
     /// - [`FramePlan::NoChange`]: blit も描画も present も行わない（`Ok(false)`・stats 増分なし・
     ///   commit 不要）。
     /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`
@@ -296,25 +297,21 @@ impl ViewboxExecutor {
     /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
     /// 組み直したフレーム）または `plan` の想定外不整合（[`plan::plan_inconsistency`]）を検知した場合、当該
     /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
-    /// GlyphRun 住人）へ差し替えて描画する（正しさ優先・1 フレームで全域再描画のオラクル
-    /// `DrawExecutor::render` と同じ結果になる・透明フラッシュを起こす
-    /// FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は `warn!` を残す（記憶
-    /// areka-log-first-no-silent-failure）。縮退後の commit が prev_lines を張り直すため次フレームは
-    /// 正常導出へ復帰する。
+    /// GlyphRun／Choice 住人のうち、はみ出し込みで面と重なる行・指摘 18）へ差し替えて描画する
+    /// （正しさ優先・1 フレームで全域再描画のオラクル `DrawExecutor::render` と同じ結果になる・
+    /// 透明フラッシュを起こす FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は
+    /// `warn!` を残す（記録の無い縮退を作らない）。縮退後の commit が prev_lines を張り直すため
+    /// 次フレームは正常導出へ復帰する。
     ///
     /// 失敗は log-first（`error!`＋`Err`・当該フレーム skip＝**plan 未 commit**・front 不変ゆえ
     /// 表示は前フレームを保持・次フレーム再計画）。
     ///
-    /// **本番の呼び手は [`render_styled`](Self::render_styled) へ移った**（`actor.rs` の
-    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
-    /// 装飾の表を持たない決定論テスト（`viewbox_draw_choice_hover_tests.rs`／
-    /// `viewbox_draw_frame_render_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
-    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`／
-    /// `viewbox_draw_scroll_retain_tests.rs`）が呼ぶ委譲の入口としてである——空の
-    /// [`StyleTable`] を添えて `render_styled` へ流すだけなので、装飾なしの呼出列が
-    /// 装飾導入前と同一であることの照合面にもなっている（要件 14.2）。crate 外の呼び手は無い
-    /// （`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つオラクル
-    /// `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
+    /// **本番は [`render_styled`](Self::render_styled) を使う**（`actor_present.rs` が唯一の本番
+    /// 呼出点）。本関数の本番の呼び手は 0 で、装飾の表を持たない決定論テスト
+    /// （`viewbox_draw_*_tests.rs`）が呼ぶ委譲の入口である——空の [`StyleTable`] を添えて
+    /// `render_styled` へ流すだけなので、装飾なしの呼出列の照合面にもなっている（要件 14.2）。
+    /// crate 外の呼び手は無い（`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つ
+    /// オラクル `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
     pub fn render(
         &mut self,
         canvas: &ContentCanvas,

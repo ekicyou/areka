@@ -63,20 +63,26 @@ fn full_font_definition_passes_through() {
     assert_eq!(warns, 0);
 }
 
-/// カンマ区切り複数指定（SSP 拡張）は M1 では先頭のみ採用・残余は型シームに保持。
+/// カンマ区切り複数指定（SSP 拡張）は先頭名を `name`、残余を `fallback_chain` に分け、
+/// 全体を記述順の候補列（`looks.default.name`・`FontCatalog::pick` が試す）にする。
 #[test]
-fn comma_separated_names_adopt_first_and_keep_rest_as_seam() {
+fn comma_separated_names_split_into_first_and_rest_and_form_the_candidate_list() {
     let font = Font::new(
         Some("Meiryo, ＭＳ Ｐゴシック ,ＭＳ ゴシック".to_owned()),
         None,
         FontColor::new(None, None, None),
     );
     let resolved = ResolvedFont::resolve(&model_with_font(font));
-    assert_eq!(resolved.name, "Meiryo", "先頭名のみ採用（M1）");
+    assert_eq!(resolved.name, "Meiryo", "先頭名");
     assert_eq!(
         resolved.fallback_chain,
         vec!["ＭＳ Ｐゴシック".to_owned(), "ＭＳ ゴシック".to_owned()],
-        "残余は trim 済みでフォールバック連鎖シームに保持（M1 未消費）"
+        "残余は trim 済み"
+    );
+    assert_eq!(
+        resolved.looks.default.name,
+        ["Meiryo", "ＭＳ Ｐゴシック", "ＭＳ ゴシック"],
+        "候補列は先頭名＋残余の記述順"
     );
 }
 

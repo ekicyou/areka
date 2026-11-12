@@ -2,8 +2,8 @@
 //!
 //! 帯が乗せた列の字のインクを全幅で覆い、厚みが em × k、塗りの中心が書体から測った em の箱の
 //! 中心に在ることを、Yu Gothic UI とぱすたの縦書きのバルーンの `font.name` の候補列（本番と同じ
-//! 解決で「游ゴシック」に引ける）で読み戻して見る。`viewbox_draw_choice_hover_tests.rs` が
-//! 1,000 行に届くので兄弟のファイルへ分けた（2.2 の `viewbox_draw_vertical_band_scroll_tests.rs` と同じ扱い）。
+//! 解決で「游ゴシック」に引ける）で読み戻して見る。スクロールと乗せ替えは
+//! `viewbox_draw_vertical_band_scroll_tests.rs`、選択肢の帯の描画そのものは `viewbox_draw_choice_hover_tests.rs` が見る。
 
 use std::rc::Rc;
 

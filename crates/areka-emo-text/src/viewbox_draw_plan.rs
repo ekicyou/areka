@@ -18,8 +18,8 @@ use crate::writing::WritingMode;
 /// - **フォント/方向変更**（`rebuilt`＝`ensure_format` が format/行キャッシュを組み直した）: committed
 ///   ピクセルは旧 format で描かれ前提が崩れるため `debug!`＋全域ダーティへ縮退。
 /// - **想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と矛盾
-///   （draw_lines 範囲外・dirty 面寸超過）する場合 `warn!`＋全域ダーティへ縮退（ログ無し失敗経路を
-///   作らない・記憶 areka-log-first-no-silent-failure）。
+///   （draw_lines 範囲外・dirty 面寸超過・矩形の行が draw_lines の部分集合でない、の 3 つ）する場合
+///   `warn!`＋全域ダーティへ縮退（記録の無い縮退を作らない）。
 ///
 /// [`FramePlan::FullClear`] は縮退対象外（Clear は既に全域リセット）。[`FramePlan::NoChange`] は
 /// `rebuilt` のときのみ縮退（format 組み直し後の committed ピクセル前提消失を全域再描画で回復）。
@@ -75,14 +75,14 @@ pub(super) fn degrade_if_needed(
     }
 }
 
-/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun 住人）を組む。
+/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun／Choice 住人）を組む。
 ///
 /// [`ScrollPlanner::full_domain`]（計画者の全域の道）を呼び、面全域 1 枚のダーティと
-/// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人のうち、`overhangs` のはみ出し込みで面と
+/// **可視窓（`first_visible_line` 以降）の** GlyphRun／Choice 住人のうち、`overhangs` のはみ出し込みで面と
 /// 重なる行の描画対象を得る（初回フレームと同一経路・指摘 18）。
 /// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
-/// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる
-/// （タスク 3.4 でこの規律を揃えた——derivation-ledger.md「3.5.1 R-2 の決着」）。縮退の唯一の生成口。
+/// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる。
+/// 縮退の唯一の生成口。
 pub(super) fn full_domain_update(
     canvas: &ContentCanvas,
     window: &VisibleWindow,
