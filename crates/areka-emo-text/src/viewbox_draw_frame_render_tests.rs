@@ -1,9 +1,11 @@
 use super::test_support::{
-    RenderPair, Rig, build, diff_rows, geo_model, glyph_items, opaque_count,
+    RenderPair, Rig, build, diff_rows, geo_model, glyph_items, opaque_count, table_with,
 };
 use super::{DrawStats, ViewboxExecutor};
+use crate::canvas::ResidentContent;
 use crate::draw::{ResolvedFont, create_text_format};
 use crate::layout::VisibleWindow;
+use crate::look::TextLook;
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextItem;
 use crate::viewbox::{FramePlan, ScrollPlanner};
@@ -378,6 +380,46 @@ fn request_clear_draws_same_frame_glyphs_and_counts_one_clear() {
         full_before + 2,
         "FullClear も 1 と数える"
     );
+}
+
+/// 台詞の切れ目（指摘 11）: `request_clear` がブラシの記憶を空にし、書体の台帳の台詞を進める。
+#[test]
+fn request_clear_forgets_brushes_and_advances_the_talk() {
+    let mut rig = Rig::new();
+    let image = (40u32, 20u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let red = TextLook {
+        color: (255, 0, 0),
+        ..font.looks.default.clone()
+    };
+    let (styles, id) = table_with(&red, &font.looks.default);
+    let (mut canvas, window) = build(&glyph_items("あ"), &region, mode, 10.0);
+    for r in &mut canvas.residents {
+        if let ResidentContent::GlyphRun(run) = &mut r.content {
+            run.glyphs.iter_mut().for_each(|g| g.style = id);
+        }
+    }
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    exec.render_styled(
+        &canvas,
+        &window,
+        &font,
+        mode,
+        &contract,
+        &mut surface,
+        &styles,
+    )
+    .expect("render_styled 失敗");
+    assert_eq!(exec.brushes.len(), 1, "赤のブラシを 1 本覚える");
+    let epoch = exec.fonts.talk_epoch();
+
+    exec.request_clear();
+    assert_eq!(exec.brushes.len(), 0, "消去の要求でブラシの記憶が空になる");
+    assert_eq!(exec.fonts.talk_epoch(), epoch + 1, "台帳の台詞が 1 進む");
 }
 
 /// 観測可能な完了状態（縮退の主檻・R3.5/Error Handling）: フォント（高さ）変更を注入すると

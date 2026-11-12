@@ -81,6 +81,7 @@ pub struct DWriteMetrics {
     /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（probe 成功値のみ・
     /// 失敗は縮退値を返しキャッシュしない）。既定の見た目は [`default_key`](Self::default_key)
     /// の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く（引くときに割り当てない）。
+    /// 既定の鍵以外は台詞の切れ目で捨てる（[`sync_talk`](Self::sync_talk)）。
     cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, f32>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,
@@ -91,12 +92,15 @@ pub struct DWriteMetrics {
     default_key: FontKey,
     /// 書字方向（鍵ごとの試験用書式へ束縛書式と同じ方向レシピを焼くため）。
     mode: WritingMode,
-    /// 計測鍵ごとの試験用書式（鍵ごとに 1 度だけ生成して持ち回す）。
+    /// 計測鍵ごとの試験用書式（台詞のあいだ鍵ごとに 1 度だけ生成して持ち回す・[`sync_talk`](Self::sync_talk) で空になる）。
     probe_formats: RefCell<HashMap<FontKey, IDWriteTextFormat>>,
     /// 試験用書式を実際に**生成した回数**（記憶に無くて作った回数）。保持庫の要素数ではなく
     /// 生成回数を数える——同じ鍵で作り直しても要素数は増えないので、要素数では
     /// 「鍵ごとに 1 度だけ」を見張れない（実測 2026-09-12）。
     probe_format_creations: Cell<usize>,
+    /// 表を最後に揃えた台詞の番号（[`FontCatalog::talk_epoch`]）。違えば台詞の寿命の表を空にする
+    /// （[`sync_talk`](Self::sync_talk)・指摘 11）。
+    seen_epoch: Cell<u64>,
 }
 
 impl DWriteMetrics {
@@ -144,6 +148,7 @@ impl DWriteMetrics {
         fonts: Rc<FontCatalog>,
     ) -> Result<DWriteMetrics, TextLayerError> {
         let picked = fonts.pick(font);
+        let fonts_epoch = fonts.talk_epoch();
         let format = create_text_format(factory, &picked, mode)?;
         // 行ボックス比は **format が実際に束縛したフォント**の face metrics から実測する
         // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
@@ -217,6 +222,7 @@ impl DWriteMetrics {
             mode,
             probe_formats: RefCell::new(HashMap::new()),
             probe_format_creations: Cell::new(0),
+            seen_epoch: Cell::new(fonts_epoch),
         })
     }
 
@@ -233,6 +239,23 @@ impl DWriteMetrics {
     #[cfg(test)]
     pub(super) fn fonts(&self) -> &FontCatalog {
         &self.fonts
+    }
+
+    /// 台帳の台詞の番号が進んでいたら、表の寿命を「1 つの台詞のあいだ」に揃える（指摘 11）。
+    ///
+    /// 試験用書式を全部と、既定の鍵以外の字幅を捨てる。既定の鍵の字幅は残す（字の種類＝
+    /// Unicode の数が元からある頭打ちで、台詞ごとに測り直すと台詞の頭のフレームが重くなる）。
+    /// 上限の数は置かない——台詞が使う見た目の数が頭打ち。
+    fn sync_talk(&self) {
+        let epoch = self.fonts.talk_epoch();
+        if epoch == self.seen_epoch.get() {
+            return;
+        }
+        self.probe_formats.borrow_mut().clear();
+        self.cache
+            .borrow_mut()
+            .retain(|key, _| *key == self.default_key);
+        self.seen_epoch.set(epoch);
     }
 
     /// 計測鍵ごとの試験用書式（**鍵ごとに 1 度だけ**生成して持ち回す）。
@@ -334,6 +357,7 @@ impl GlyphMetrics for DWriteMetrics {
                 "advance へ束縛フォントと異なる font_height が渡された——束縛 format の実測を返す"
             );
         }
+        self.sync_talk();
         // 失敗は probe_advance 内で error! 済み。縮退値はキャッシュしない（次回再試行）。
         self.measure(text, &self.default_key, &self.format)
             .unwrap_or_else(|| degraded_advance(text, self.font_height))
@@ -347,6 +371,7 @@ impl GlyphMetrics for DWriteMetrics {
     /// 書式の生成に失敗したときは `error!` 済みの縮退値（`FixedMetrics` と同式・
     /// 基準は**その見た目の**大きさ）を返して継続する。
     fn advance_styled(&self, text: &str, look: &TextLook) -> f32 {
+        self.sync_talk();
         let key = look.font_key();
         if key == self.default_key {
             return self.advance(text, look.height);

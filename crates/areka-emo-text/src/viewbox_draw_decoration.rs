@@ -285,12 +285,8 @@ pub(crate) fn apply_color_ranges(
 
 /// 色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。
 ///
-/// executor が持ち、`ViewboxExecutor` の寿命＝専用 D2D DC の寿命と一致する。
-///
-/// **色は台詞をまたいで累積する**：[`StyleTable`] は台詞ごとに既定へ戻るのに、この保持庫だけは
-/// executor の寿命いっぱい残るという非対称がある。上限を設けないのは、鍵が RGB 3 バイトで
-/// 実際に現れる色数はゴーストの辞書が使う色数に押さえられるため（ブラシ 1 本は数十バイト）で、
-/// LRU を入れる方が実態より高いと判断したから。
+/// executor が持ち、台詞の切れ目（`ViewboxExecutor::request_clear`）で空になる——[`StyleTable`] と
+/// 同じく寿命は 1 つの台詞のあいだ（指摘 11）。上限の数は置かない（台詞が使う色の数が頭打ち）。
 #[derive(Default)]
 pub(crate) struct BrushCache {
     brushes: HashMap<(u8, u8, u8), ID2D1SolidColorBrush>,
@@ -312,6 +308,17 @@ impl BrushCache {
             .map_err(device_err("CreateSolidColorBrush(装飾の色)"))?;
         self.brushes.insert(rgb, brush.clone());
         Ok(brush)
+    }
+
+    /// 覚えたブラシを全部捨てる（台詞の切れ目）。
+    pub(super) fn clear(&mut self) {
+        self.brushes.clear();
+    }
+
+    /// 覚えているブラシの数（テスト観測用）。
+    #[cfg(test)]
+    pub(super) fn len(&self) -> usize {
+        self.brushes.len()
     }
 }
 

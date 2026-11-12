@@ -216,6 +216,26 @@ fn an_all_missing_list_records_only_once_per_list() {
     assert_eq!(cat.lookup_count(), 1);
 }
 
+/// 台詞の切れ目（`forget_talk`）は台詞の番号を進め、候補列の記憶を空にする（次の台詞は引き直す）。
+/// 記録済みの鍵は残す——同じ全滅を次の台詞で引き直しても記録は増えない（指摘 11）。
+#[test]
+fn forget_talk_advances_the_talk_and_forgets_resolutions_but_not_records() {
+    let cat = catalog(&[]);
+    let ((), events) = capture(|| {
+        cat.family_for(&v(&["無いフォント"]));
+        assert_eq!(cat.talk_epoch(), 0);
+        cat.forget_talk();
+        assert_eq!(cat.talk_epoch(), 1, "台詞の切れ目で台詞の番号が 1 進む");
+        cat.family_for(&v(&["無いフォント"]));
+    });
+    assert_eq!(cat.lookup_count(), 2, "次の台詞では候補列を引き直す");
+    assert_eq!(
+        warns(&events, ALL_MISSING),
+        1,
+        "記録は台帳の寿命のあいだ 1 度のまま"
+    );
+}
+
 // ────────────────────────── §5 バルーン定義の候補列／本番経路（R9.8）
 
 /// バルーン定義のカンマ区切りにも同じ「記述順に最初の実在」規則が効く。

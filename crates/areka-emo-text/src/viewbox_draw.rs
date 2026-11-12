@@ -257,9 +257,15 @@ impl ViewboxExecutor {
     /// （全面を消してから見える行を描く）で、消去と同じフレームで見える字も描く（透明のフラッシュを
     /// 挟まない・指摘 17）。どちらも `full_clears` を 1 増やし、commit が要求を下ろす。actor 結線
     /// （task 8）がこの口を Clear cue へ写像する。
+    ///
+    /// ここが台詞の切れ目（`\c` と台詞の頭の `ClearAll`）でもあるので、書体の台帳の台詞を進め
+    /// （[`FontCatalog::forget_talk`]・台帳を共有する計測器も表を空にする）、ブラシの記憶を空にする
+    /// （表の寿命を 1 つの台詞のあいだに揃える・指摘 11）。
     pub fn request_clear(&mut self) {
         self.planner.request_clear();
         self.line_store.clear();
+        self.fonts.forget_talk();
+        self.brushes.clear();
     }
 
     /// 1 フレームの実行。戻り値＝変化有無（`true` なら呼び手が present する・R1.1/R3.1）。

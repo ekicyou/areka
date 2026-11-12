@@ -180,6 +180,34 @@ fn the_measurement_cache_is_keyed_by_character_and_measurement_key() {
     assert_eq!(m.cached_probe_count(), 2, "同じ組は測り直さない");
 }
 
+/// 台帳の台詞の番号が進むと、既定の鍵以外の試験用書式と字幅を捨てて作り直す（作り直しの数が
+/// 増え、測った値は同じ）。既定の鍵の字幅は残す（指摘 11・表の寿命は 1 つの台詞のあいだ）。
+#[test]
+fn a_new_talk_rebuilds_non_default_formats_and_keeps_default_advances() {
+    let m = metrics();
+    let big = look_with(|l| l.height = 24.0);
+    m.advance_styled("あ", &default_look());
+    let before = m.advance_styled("あ", &big);
+    assert_eq!((m.probe_format_creations(), m.cached_probe_count()), (1, 2));
+
+    m.fonts().forget_talk();
+    assert_eq!(
+        m.advance_styled("い", &default_look()),
+        ADVANCE_FULLWIDTH_AT_12
+    );
+    assert_eq!(
+        m.cached_probe_count(),
+        2,
+        "既定の鍵の「あ」は残り、既定でない鍵の「あ」は捨てた（残った 1＋新しい「い」1）"
+    );
+    assert_eq!(m.advance_styled("あ", &big), before, "測った値は同じ");
+    assert_eq!(
+        m.probe_format_creations(),
+        2,
+        "次の台詞では既定でない鍵の試験用書式を作り直す"
+    );
+}
+
 // ────────────────────────── §4 計測値＝装飾入りで組んだ行の送り量（R11.3／R15.5）
 
 /// 後半 3 文字（UTF-16 で 1 文字 1 単位）へ焼く範囲。
