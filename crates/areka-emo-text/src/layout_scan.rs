@@ -47,8 +47,7 @@ struct Scan<'a, 'w> {
 
 impl LayoutEngine {
     /// 配置の本体。`styles` は「グリフ序数→装飾番号／見た目」の読み口で、
-    /// `None`（[`layout`](Self::layout)・[`layout_with_cursor_warn`](Self::layout_with_cursor_warn)）
-    /// の経路は装飾を入れる前と 1 ビットも変わらない——送り幅は `metrics.advance` のまま、
+    /// `None`（[`layout`](Self::layout)）の経路は装飾を入れる前と 1 ビットも変わらない——送り幅は `metrics.advance` のまま、
     /// [`PositionedGlyph::style`] は全グリフ [`StyleId::DEFAULT`]（`layout_styled_tests.rs`
     /// が装飾導入前の実測値で固定している）。`Some` のときだけ、既定でない番号の文字を
     /// [`GlyphMetrics::advance_styled`] で測り、番号を配置済みグリフへ写す（R3.3／R7.10／R11.2）。

@@ -339,12 +339,8 @@ fn diag_dump_budoux_wordwrap_pngs() {
 
     // 1 ケース（sentence を fully-revealed で描画）を PNG 保存するヘルパ。ON（use_budoux=true）は
     // actor.rs と同型の遅延初期化で segment_plan を計算し WrapPlan::Segmented を供給する（OFF は
-    // segment_plan を呼ばず CharByChar）。戻り値＝(行数, 最右インク列 x)。
-    let dump_case = |rig: &mut Rig,
-                     tag: &str,
-                     sentence: &str,
-                     use_budoux: bool|
-     -> (usize, Option<u32>) {
+    // segment_plan を呼ばず CharByChar）。行数と最右インク列 x は記録へ出す。
+    let dump_case = |rig: &mut Rig, tag: &str, sentence: &str, use_budoux: bool| {
         let items = glyph_items(sentence);
         // glyph_items はグリフだけを返すので、全部を見せる。
         let visible = items.len();
@@ -388,7 +384,6 @@ fn diag_dump_budoux_wordwrap_pngs() {
                  visible={visible} lines={} rightmost_ink_x={rightmost:?} (surface_w={w} pitch={pitch})",
             lines.len()
         );
-        (lines.len(), rightmost)
     };
 
     // ── 通常ケース: 狭いバルーンで char-by-char が文節を途中分割する和文（OFF/ON 並置）。 ──

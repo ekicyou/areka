@@ -1,5 +1,6 @@
 use super::test_support::{
-    IMAGE, cursor_px, glyph, glyphs, inline_positions, model_rect, zero_origin_region,
+    IMAGE, cursor_px, glyph, glyphs, inline_positions, layout_guarded, model_rect,
+    zero_origin_region,
 };
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::look::{GlyphStyles, StyleTable, TextLook};
@@ -324,17 +325,7 @@ fn center_axis_mismatch_on_both_axes_is_a_complete_noop_with_one_warn_and_one_de
 
     let (lines, events) = capture(|| {
         let mut guard = CursorWarnGuard::default();
-        LayoutEngine::layout_with_cursor_warn(
-            &items,
-            2,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            &actor,
-            &mut guard,
-        )
+        layout_guarded(&items, 2, &region, 10.0, &actor, &mut guard)
     });
 
     // 挙動: 両軸不動＝行を分割せず、`\_l` を書かなかった場合と同じ配置。

@@ -131,8 +131,7 @@ struct ScrollRig {
     contract: ScaleContract,
     mode: WritingMode,
     /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
-    #[allow(dead_code)]
-    rig: Rig,
+    _rig: Rig,
 }
 
 impl ScrollRig {
@@ -157,7 +156,7 @@ impl ScrollRig {
             metrics,
             contract: ScaleContract::new(1.0, None),
             mode,
-            rig,
+            _rig: rig,
         }
     }
 

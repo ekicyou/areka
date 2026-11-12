@@ -41,8 +41,7 @@ struct LiveDiffRig {
     /// cue 駆動の純粋状態機械（両方式へ同一入力を供給する単一の正本）。
     state: TextLayerState,
     /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
-    #[allow(dead_code)]
-    rig: Rig,
+    _rig: Rig,
 }
 
 impl LiveDiffRig {
@@ -84,7 +83,7 @@ impl LiveDiffRig {
             font_height: font_height as f32,
             actor: ActorKey::from("0"),
             state: TextLayerState::default(),
-            rig,
+            _rig: rig,
         }
     }
 

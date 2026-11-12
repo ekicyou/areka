@@ -74,11 +74,6 @@ mod render;
 mod underline;
 
 use decoration::BrushCache;
-// 兄弟檻（`viewbox_draw_frame_render_tests.rs`）が `super::plan_inconsistency` で私有項目へ届くための
-// 再束縛（design.md の File Structure Plan が要求するファサードの取り込み）。`full_domain_update` は
-// 子モジュールの内部からしか呼ばれないため親へは束ねない（束ねると unused_imports が鳴る）。
-#[cfg(test)]
-use plan::plan_inconsistency;
 
 /// 行 TextLayout format の前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
 /// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため

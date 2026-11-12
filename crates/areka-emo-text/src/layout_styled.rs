@@ -26,7 +26,7 @@ use crate::writing::WritingMode;
 use super::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 
 impl LayoutEngine {
-    /// [`LayoutEngine::layout_with_cursor_warn`] の全挙動＋文字ごとの見た目
+    /// [`LayoutEngine::layout`] の全挙動＋`\_l` の縮退のキャラクターごとの初回の `warn!`＋文字ごとの見た目
     /// （送り幅・行内最大 em・装飾番号の転写）。
     ///
     /// 装飾を持つ台本の唯一の入口である。番号列が既定だけなら出力は装飾導入前と一致する

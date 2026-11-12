@@ -502,7 +502,7 @@ fn layout_engine_wraps_using_measured_advances() {
 //
 // design Testing Strategy Integration #5（正典）: 同一 TextFormat・同一テキストで
 // probe layout（DWriteMetrics＝クラスタごとの計測）と描画行 TextLayout
-// （DrawExecutor::line_layout＝render が DrawTextLayout へ渡す実物）の cluster
+// （DrawExecutor の行の保持庫の line_layout＝render が DrawTextLayout へ渡す実物）の cluster
 // advance が**同値**であることを、等幅（ＭＳ ゴシック）＋プロポーショナル欧文混在
 // （ＭＳ Ｐゴシック）の両方で檻化する。
 //
@@ -559,6 +559,7 @@ fn drawn_line_cluster_widths(
         .ensure_format(font, mode)
         .expect("ensure_format 失敗");
     let layout = executor
+        .line_store
         .line_layout(0, text, &format, font.height, mode)
         .expect("line_layout 失敗");
     layout

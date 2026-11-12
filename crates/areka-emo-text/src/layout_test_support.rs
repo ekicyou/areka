@@ -1,10 +1,13 @@
 use super::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
+use crate::cursor_tag::CursorWarnGuard;
+use crate::look::{GlyphStyles, StyleTable, TextLook};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
+use areka_sakura::contract::ActorKey;
 
 /// テスト画像原寸（image px・region.rs の檻と同一値）。
 pub(crate) const IMAGE: (u32, u32) = (400, 224);
@@ -152,6 +155,42 @@ pub(crate) fn layout_all(
         font_height,
         &FixedMetrics,
         WrapPlan::CharByChar,
+    )
+}
+
+/// guard つきの配置（本番の入口 `layout_styled`・既定の見た目だけ・FixedMetrics・1 字ずつ折る）。
+///
+/// 既定の見た目の高さを `font_height` にそろえるので、番号列を渡さない配置と同じ行を返す
+/// （`glyph_style_advance`・`LineHeights::new`）。`\_l` の縮退の記録を guard で見るテストが使う。
+pub(super) fn layout_guarded(
+    items: &[TextItem],
+    visible_count: usize,
+    region: &TextRegion,
+    font_height: f32,
+    actor: &ActorKey,
+    guard: &mut CursorWarnGuard,
+) -> Vec<PositionedLine> {
+    let table = StyleTable::default();
+    let look = TextLook {
+        height: font_height,
+        ..TextLook::ukadoc_default()
+    };
+    LayoutEngine::layout_styled(
+        items,
+        visible_count,
+        region,
+        WritingMode::HorizontalTb,
+        font_height,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+        GlyphStyles {
+            table: &table,
+            ids: &[],
+            default: &look,
+            current: &look,
+        },
+        actor,
+        guard,
     )
 }
 

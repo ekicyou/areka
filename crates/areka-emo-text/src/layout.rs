@@ -254,8 +254,7 @@ pub struct PositionedGlyph {
     /// この文字に効く装飾の番号（[`StyleId::DEFAULT`]＝そのスコープの既定の見た目・R3.3）。
     ///
     /// 番号の意味を与えるのは装飾の表（[`crate::look::StyleTable`]）で、本型は写しを運ぶだけ。
-    /// 番号列を渡さない配置（[`LayoutEngine::layout`]・[`LayoutEngine::layout_with_cursor_warn`]）
-    /// では全グリフが [`StyleId::DEFAULT`] になる。
+    /// 番号列を渡さない配置（[`LayoutEngine::layout`]）では全グリフが [`StyleId::DEFAULT`] になる。
     pub style: StyleId,
 }
 
@@ -367,7 +366,7 @@ impl LayoutEngine {
         // pending-cursor の縮退 warn-once はキャラクター識別＋走査を跨いで持続する guard を要する
         // （per-frame 呼出でのスパム抑止＝ランタイム所有）。キャラクター文脈を持たない既存呼び口は
         // カーソルの解決・遅延実体化（2.1/2.3/2.5）を完全に行いつつ縮退 warn（R5.3）だけを抑止する
-        // （`None` 経路）。純挙動は [`layout_with_cursor_warn`] と完全同一。
+        // （`None` 経路）。純挙動は [`layout_styled`](Self::layout_styled) の既定の見た目だけの配置と同一。
         Self::layout_inner(
             items,
             visible_count,
@@ -377,48 +376,6 @@ impl LayoutEngine {
             metrics,
             wrap,
             None,
-            None,
-        )
-    }
-
-    /// [`layout`](Self::layout) の全挙動に加え、`\_l` の 2 縮退分岐（解釈不能／中央指定の
-    /// 軸取り違え）を **キャラクターごと初回のみ** `warn!` する（R5.3・design 縮退表）。
-    ///
-    /// 負値絶対・`%`・`@` 相対は縮退ではなく**実導出**なので警告の対象ではない（R5.2）。
-    ///
-    /// warn guard は走査を跨いで持続する必要がある（per-frame layout 呼出での重複警告抑止）
-    /// ため、ランタイム（`actor.rs` の `TextLayerRuntime::cursor_warn`・既存 `unresolved_warned` と
-    /// 同型の持続 guard）が所有し `&mut` で渡す。型の住処は解決層
-    /// [`crate::cursor_tag::CursorWarnGuard`] で、本 API の署名は変わらない。行レイアウトの
-    /// 純挙動は [`layout`](Self::layout) と完全同一——差は縮退ログの有無のみ（guard は決定的な
-    /// 行出力に一切影響しない）。
-    ///
-    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**。ランタイムが持つ
-    /// guard は `present_actor` から `arrange_lines` を経て `layout_styled` の引数として渡っており、本関数を経由
-    /// **しない**（guard の所有者は変わらないが、受け取る関数は 1 段先である）。本関数の
-    /// 本番の呼び手は 0 で、残しているのは非回帰の檻（`layout_cursor_tests.rs`／
-    /// `layout_cursor_wiring_tests.rs`）が呼ぶ委譲の入口としてである。
-    #[allow(clippy::too_many_arguments)]
-    pub fn layout_with_cursor_warn(
-        items: &[TextItem],
-        visible_count: usize,
-        region: &TextRegion,
-        mode: WritingMode,
-        font_height: f32,
-        metrics: &dyn GlyphMetrics,
-        wrap: WrapPlan<'_>,
-        actor: &ActorKey,
-        warn: &mut CursorWarnGuard,
-    ) -> Vec<PositionedLine> {
-        Self::layout_inner(
-            items,
-            visible_count,
-            region,
-            mode,
-            font_height,
-            metrics,
-            wrap,
-            Some((actor, warn)),
             None,
         )
     }

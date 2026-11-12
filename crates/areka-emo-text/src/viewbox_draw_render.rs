@@ -261,52 +261,47 @@ impl ViewboxExecutor {
                         )?;
                     }
 
-                    let choice_draw = if let Some(choice) = choice {
-                        // highlight=Some（hover 行）: hover セグメント（ordinal==hovered）へ矩形塗り
-                        // ブラシ＋文字色効果を組む。NoMarker/非 hover は highlight=None＝素描画。
-                        let hover = if let Some(paint) = choice.highlight {
-                            let fill = self
-                                .dc
-                                .create_solid_color_brush(&color_f(paint.fill), None)
-                                .map_err(device_err("CreateSolidColorBrush(fill)"))?;
-                            let text_brush = self
-                                .dc
-                                .create_solid_color_brush(&color_f(paint.text), None)
-                                .map_err(device_err("CreateSolidColorBrush(text)"))?;
-                            let mut rects: Vec<D2D_RECT_F> = Vec::new();
-                            for seg in &choice.segments {
-                                if Some(seg.ordinal) != choice.hovered {
-                                    continue;
-                                }
-                                // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
-                                // 住人 transform ＋block_offset ＋band_offset 反映＝ヒット矩形／
-                                // 指紋と同座標系・R3.3/R13.2）。帯は em ボックス丈（font.height）
-                                // ではなく choice.band_extent（横書きは descent 込みの丈・縦書きは
-                                // em）を、行矩形の左辺（横書きは上辺）から符号つきの寄せ
-                                // choice.band_offset だけずらした位置に置く（縦書きの右から左は負＝
-                                // 帯は行矩形の左へ出る）——`derive_hit_rows` へ渡る 2 値と同一。
-                                rects.push(highlight_rect(
-                                    seg.inline_range,
-                                    (dx, dy),
-                                    block_offset,
-                                    choice.band_extent,
-                                    choice.band_offset,
-                                    mode,
-                                ));
-                                // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
-                                // UTF-16 文字範囲を導く）。
-                                if let Some(range) =
-                                    segment_text_range(&run.glyphs, seg.inline_range)
-                                {
-                                    unsafe { layout.SetDrawingEffect(&text_brush, range) }
-                                        .map_err(device_err("SetDrawingEffect(text)"))?;
-                                }
+                    // highlight=Some（hover 行）: hover セグメント（ordinal==hovered）へ矩形塗り
+                    // ブラシ＋文字色効果を組む。NoMarker/非 hover は highlight=None＝素描画。
+                    let hover = if let Some(choice) = choice
+                        && let Some(paint) = choice.highlight
+                    {
+                        let fill = self
+                            .dc
+                            .create_solid_color_brush(&color_f(paint.fill), None)
+                            .map_err(device_err("CreateSolidColorBrush(fill)"))?;
+                        let text_brush = self
+                            .dc
+                            .create_solid_color_brush(&color_f(paint.text), None)
+                            .map_err(device_err("CreateSolidColorBrush(text)"))?;
+                        let mut rects: Vec<D2D_RECT_F> = Vec::new();
+                        for seg in &choice.segments {
+                            if Some(seg.ordinal) != choice.hovered {
+                                continue;
                             }
-                            Some(ChoiceHover { fill, rects })
-                        } else {
-                            None
-                        };
-                        Some(ChoiceDraw { hover })
+                            // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
+                            // 住人 transform ＋block_offset ＋band_offset 反映＝ヒット矩形／
+                            // 指紋と同座標系・R3.3/R13.2）。帯は em ボックス丈（font.height）
+                            // ではなく choice.band_extent（横書きは descent 込みの丈・縦書きは
+                            // em）を、行矩形の左辺（横書きは上辺）から符号つきの寄せ
+                            // choice.band_offset だけずらした位置に置く（縦書きの右から左は負＝
+                            // 帯は行矩形の左へ出る）——`derive_hit_rows` へ渡る 2 値と同一。
+                            rects.push(highlight_rect(
+                                seg.inline_range,
+                                (dx, dy),
+                                block_offset,
+                                choice.band_extent,
+                                choice.band_offset,
+                                mode,
+                            ));
+                            // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
+                            // UTF-16 文字範囲を導く）。
+                            if let Some(range) = segment_text_range(&run.glyphs, seg.inline_range) {
+                                unsafe { layout.SetDrawingEffect(&text_brush, range) }
+                                    .map_err(device_err("SetDrawingEffect(text)"))?;
+                            }
+                        }
+                        Some(ChoiceHover { fill, rects })
                     } else {
                         None
                     };
@@ -363,7 +358,7 @@ impl ViewboxExecutor {
                         LineDraw {
                             origin,
                             layout,
-                            choice: choice_draw,
+                            hover,
                             strokes,
                             markers,
                         },
@@ -424,10 +419,7 @@ impl ViewboxExecutor {
                         let Some((_, d)) = draws.iter().find(|(i, _)| i == line) else {
                             continue;
                         };
-                        if let Some(ChoiceDraw {
-                            hover: Some(hover), ..
-                        }) = &d.choice
-                        {
+                        if let Some(hover) = &d.hover {
                             for rect in &hover.rects {
                                 self.dc.fill_rectangle(rect, &hover.fill);
                             }
@@ -672,8 +664,8 @@ struct LineDraw {
     origin: Vector2,
     /// 行 TextLayout（[`LineLayoutStore`] 由来・効果は Phase 1 で焼込済み）。
     layout: IDWriteTextLayout,
-    /// Choice 住人のときのみ Some（GlyphRun は None＝素描画）。
-    choice: Option<ChoiceDraw>,
+    /// Choice 住人の hover 行のときのみ Some（GlyphRun・非 hover・NoMarker は None＝素描画）。
+    hover: Option<ChoiceHover>,
     /// 塗る下線（画像の画素・寄せ済み）と、その区間の効果のブラシ（`None`＝既定の文字色）。
     /// 下線の区間の無い行は空。
     strokes: Vec<(D2D_RECT_F, Option<ID2D1Brush>)>,
@@ -687,12 +679,6 @@ enum MarkerPaint {
     Dot(D2D1_ELLIPSE, ID2D1SolidColorBrush),
     /// 印の絵（置く矩形と D2D の絵）。
     Image(D2D_RECT_F, ID2D1Bitmap1),
-}
-
-/// Choice 行のハイライト描画資源（hover 時のみ塗り資源を持つ・非 hover は全範囲 None リセットのみ）。
-struct ChoiceDraw {
-    /// hover 時の矩形塗り資源（`highlight=None`／NoMarker は None＝素描画）。
-    hover: Option<ChoiceHover>,
 }
 
 /// hover セグメントの矩形塗り資源（文字色効果は Phase 1 で layout へ焼込済みゆえ持たない）。

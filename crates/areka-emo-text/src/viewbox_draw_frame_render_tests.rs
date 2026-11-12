@@ -546,7 +546,7 @@ fn bold_or_italic_only_change_rebuilds_the_bound_format() {
 /// render からの結線は `font_change_degrades_to_full_domain_redraw`（縮退の実発火）が担保する。
 #[test]
 fn plan_inconsistency_detects_out_of_range_and_oversize() {
-    use super::plan_inconsistency;
+    use super::plan::plan_inconsistency;
     use crate::viewbox::{DirtyRect, PhysicalRect};
 
     let size = (100u32, 50u32);

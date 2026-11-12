@@ -1,5 +1,5 @@
 use super::test_support::{
-    IMAGE, broken_lines, glyphs, inline_positions, model, model_rect, window_for,
+    IMAGE, broken_lines, glyphs, inline_positions, layout_guarded, model, model_rect, window_for,
 };
 use super::{
     CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine,
@@ -711,17 +711,7 @@ fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
     let actor = ActorKey::from("0");
     let layout_guarded = |items: &[TextItem]| {
         let mut guard = CursorWarnGuard::default();
-        LayoutEngine::layout_with_cursor_warn(
-            items,
-            items.len(),
-            &region,
-            WritingMode::HorizontalTb,
-            12.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            &actor,
-            &mut guard,
-        )
+        layout_guarded(items, items.len(), &region, 12.0, &actor, &mut guard)
     };
     let warns_of = |events: &[log_capture_kit::CapturedEvent]| {
         events

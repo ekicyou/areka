@@ -231,8 +231,8 @@ pub(crate) fn apply_font_ranges(
 
 /// 既定と異なる色の区間にブラシを差す（要件 3.5／8.x の描画側の着地点）。
 ///
-/// 既定と異なる色の区間が 1 つも無ければ何も発行せず `Ok(false)`。1 つでもあれば
-/// 「（`reset` が真なら）全範囲の解除 → 区間ごとのブラシ」の順で焼き、戻り値は**解除を行ったか**。
+/// 既定と異なる色の区間が 1 つも無ければ何も発行しない。1 つでもあれば
+/// 「（`reset` が真なら）全範囲の解除 → 区間ごとのブラシ」の順で焼く。
 /// 選択肢の行は呼び手が既に全範囲を解除しているので `reset = false` で呼ぶ（二重化を避ける）。
 /// 重ね表示（hover）の色は呼び手がこの後に焼くので、同じ範囲では後勝ちで hover が勝つ。
 pub(crate) fn apply_color_ranges(
@@ -243,7 +243,7 @@ pub(crate) fn apply_color_ranges(
     brushes: &mut BrushCache,
     dc: &ID2D1DeviceContext,
     reset: bool,
-) -> Result<bool, TextLayerError> {
+) -> Result<(), TextLayerError> {
     let colored: Vec<(DWRITE_TEXT_RANGE, (u8, u8, u8))> = runs
         .iter()
         .filter(|r| r.style != StyleId::DEFAULT)
@@ -254,7 +254,7 @@ pub(crate) fn apply_color_ranges(
         .collect();
 
     if colored.is_empty() {
-        return Ok(false);
+        return Ok(());
     }
 
     if reset {
@@ -280,7 +280,7 @@ pub(crate) fn apply_color_ranges(
         unsafe { layout.SetDrawingEffect(&brush, range) }
             .map_err(device_err("SetDrawingEffect(装飾の色)"))?;
     }
-    Ok(reset)
+    Ok(())
 }
 
 /// 色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。

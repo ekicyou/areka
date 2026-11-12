@@ -1,4 +1,4 @@
-use super::test_support::{inline_positions, zero_origin_region};
+use super::test_support::{inline_positions, layout_guarded, zero_origin_region};
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan};
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
@@ -347,7 +347,7 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
     );
 }
 
-// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（layout_with_cursor_warn・R5.3） ──
+// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（guard つきの配置・R5.3） ──
 
 /// `\_l` の 2 縮退分岐（解釈不能／中央指定の軸取り違え）はキャラクターごと・分岐ごとに
 /// 厳密 1 回だけ `warn!` する（R5.3）。同一キャラクターの再訪では追加警告なし、別キャラクターでは
@@ -381,17 +381,7 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
             },
             TextItem::glyph("あ"),
         ];
-        LayoutEngine::layout_with_cursor_warn(
-            &items,
-            1,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            actor,
-            guard,
-        );
+        layout_guarded(&items, 1, &region, 10.0, actor, guard);
     };
     let mut warns = 0usize;
 
@@ -451,17 +441,7 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
             },
             TextItem::glyph("あ"),
         ];
-        LayoutEngine::layout_with_cursor_warn(
-            &items,
-            1,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            &a0,
-            &mut guard,
-        );
+        layout_guarded(&items, 1, &region, 10.0, &a0, &mut guard);
     });
     assert_eq!(
         counts.warn, 0,

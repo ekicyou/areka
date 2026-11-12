@@ -171,7 +171,7 @@ fn styled_advance_moves_the_wrap_point() {
 
 /// 番号列を**渡さない**出力を、装飾を入れる前（2026-09-12 の実測）に採った値へ字義で固定する。
 ///
-/// 従来の入口（[`LayoutEngine::layout`]・[`LayoutEngine::layout_with_cursor_warn`]）が
+/// 従来の入口（[`LayoutEngine::layout`]）が
 /// `styles: None` を渡す実装である以上、両者の突き合わせだけでは「引数を足したことで
 /// 挙動が動いていない」の証明にならない（同じ経路を 2 度通るだけで恒真）。ここでは
 /// **装飾を入れる前の実測値**を期待値として置き、`None` の経路がそこから 1 ビットでも

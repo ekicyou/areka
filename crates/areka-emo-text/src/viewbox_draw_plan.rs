@@ -3,10 +3,8 @@
 //! [`viewbox_draw`](crate::viewbox_draw) の巨大化を避けるため、計画そのものを組み替える 3 つの純粋
 //! 関数——エラー縮退規律（[`degrade_if_needed`]）・全域ダーティ Update の唯一の生成口
 //! （[`full_domain_update`]）・想定外不整合の検知（[`plan_inconsistency`]）——をここへ集めた。
-//! 3 つとも `pub(super)` で親のファサードからのみ見える。親が `degrade_if_needed` を素の `use` で
-//! 再束縛し、`plan_inconsistency` は兄弟檻（`viewbox_draw_frame_render_tests.rs`）が
-//! `super::plan_inconsistency` で届くよう `#[cfg(test)]` で再束縛するため、crate 内から見た
-//! 呼び出し方は分割前と同じ。
+//! 3 つとも `pub(super)` で親（`viewbox_draw`）とその子からだけ見える。描画の子（`render`）と
+//! 兄弟檻（`viewbox_draw_frame_render_tests.rs`）は `super::plan::..` で引く。
 
 use crate::canvas::ContentCanvas;
 use crate::layout::VisibleWindow;

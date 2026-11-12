@@ -657,7 +657,10 @@ impl DrawExecutor {
                 continue;
             }
             let text = crate::inline_marker::line_text(&run.glyphs);
-            let layout = self.line_layout(index, &text, &format, font.height, mode)?;
+            // 内容不変なら再利用・変化時のみ生成（規則は共有ストアに一元化・両描画実行の byte 等価前提・RN5）。
+            let layout = self
+                .line_store
+                .line_layout(index, &text, &format, font.height, mode)?;
             let (dx, dy) = resident.transform.offset();
             let origin = match mode {
                 WritingMode::HorizontalTb => Vector2 {
@@ -738,25 +741,8 @@ impl DrawExecutor {
         Ok(format)
     }
 
-    /// 行 TextLayout の取得（共有ストア [`LineLayoutStore::line_layout`] へ委譲）。
-    ///
-    /// 内容不変なら再利用・変化時のみ生成して置換——生成規則・キー・再利用規律は
-    /// すべて共有ストア側に一元化されている（両描画実行の byte 等価前提・RN5）。
-    fn line_layout(
-        &mut self,
-        index: usize,
-        text: &str,
-        format: &IDWriteTextFormat,
-        font_height: f32,
-        mode: WritingMode,
-    ) -> Result<IDWriteTextLayout, TextLayerError> {
-        self.line_store
-            .line_layout(index, text, format, font_height, mode)
-    }
-
     /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻・共有ストアの
     /// 常時コンパイルカウンタを既存テストの usize 比較へ写す）。
-    #[cfg(test)]
     fn line_layout_creations(&self) -> usize {
         self.line_store.creations() as usize
     }

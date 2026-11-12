@@ -214,7 +214,7 @@
   - 範囲の中に該当の写しが grep で無く、今あるテストが全部緑であること
   - _Requirements: 4.1, 4.2_
 
-- [ ] 12.3 使われない口を消す
+- [x] 12.3 使われない口を消す
   - 配置の「カーソルの警告つき」の入口を消し、テスト 3 か所を `layout_styled` に、説明のリンクを直す。描き手の `#[cfg(test)]` の再公開・`ChoiceDraw`・色の区間の適用の `bool` の戻り値・見本の行の配置の入口と重ねた `#[cfg(test)]`・PNG のテストの使わない部品と捨てられる戻り値を消し、`rig` を `_rig` にして `#[allow(dead_code)]` を外す（指摘 30 の残り）
   - `RegionTransform` の行列の口と `ScaleContract::author_dpi`・`new` の第 2 引数は残す（裁定）
   - 消す前にツリー全体（`crates/areka` と `tests/` を含む）の grep で使われていないことを確かめ、命令と結果をタスクの記録に残す。範囲の外の説明が消した関数を名指す所（`actor_decoration_frame_tests.rs:115`）は直さず伝えるだけ
@@ -309,3 +309,4 @@
 - 11.3 の申し送り（14.1 へ）: `crates/areka` の `check_script_judge` が `cursor*`/`anchor*` を自分の規則で分けていないか（範囲の外・読むだけ）。
 - 12.1: `for_mode` の檻は draw.rs と draw_metrics.rs を数え、`create_text_format` と `probe_format_for` の中の 1 つずつだけを許す（`direction_recipe_factory_is_called_only_by_the_two_format_makers`）。`@` の檻は `DECORATION_SOURCES` で viewbox_draw_decoration.rs も読み、説明は入口 3 つ。3 つ目の呼び出しや `@` を植えた写しで赤になる陽性の相棒を置いた。draw.rs の既定の書体の名と高さは look の正典の別名にし、揃えのテストを消した。
 - 12.2: `degraded_advance` は `FixedMetrics.advance` を呼ぶ形にして式を 1 か所に、軸の名と割り当ては私有の `pick_inline_axis` の 1 つの `match` に通した（`debug!` の数は変わらない）。`device_err`／`none_err` は `surface.rs` だけにあり、範囲の中に写しは無い（兄弟が寄せた）。
+- 12.3: 消す前に `git grep -n <名> -- crates tests tools` で確かめた。`layout_with_cursor_warn` の呼び手はテスト 4 か所（4.2 で足した `layout_wrap_tests.rs:714` を含む）で、支えに足した `layout_guarded`（既定の見た目だけの `layout_styled`・旧来と同じ行）へ移した。`#[cfg(test)]` の再公開・`ChoiceDraw`（`LineDraw.hover` へ畳む）・`apply_color_ranges` の `bool`・`DrawExecutor::line_layout` と重ねた `#[cfg(test)]`・`dump_case` の捨てる戻り値を消し、`rig` は `_rig` にした（`mk` は 1.4 で消えていた）。消した名前はツリー全体で 0 件・`cargo check --workspace --all-targets` は警告 0。`actor_decoration_frame_tests.rs:115` の名指しは兄弟の PR #435 で消えていた。`RegionTransform` の行列の口と `ScaleContract::author_dpi`・`new` の第 2 引数は残した。
