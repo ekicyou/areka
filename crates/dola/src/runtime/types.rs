@@ -51,72 +51,35 @@ impl fmt::Display for EvaluatedValue {
 }
 
 /// ランタイムエラー。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum RuntimeError {
     /// 指定ストーリーボード名が未定義
+    #[error("storyboard not found: '{0}'")]
     StoryboardNotFound(String),
     /// 指定 group_id が存在しない（終了済みインスタンスへの操作を含む）
+    #[error("invalid group_id: {0}")]
     InvalidGroupId(u64),
     /// duration=0 かつ loop_count 設定 (Req 2.9)
+    #[error("storyboard '{storyboard}' has zero duration with loop_count")]
     ZeroDurationWithLoop { storyboard: String },
     /// 無効な loop_count 値（0 以下で -1 を除く）
+    #[error("invalid loop_count: {0}")]
     InvalidLoopCount(i32),
     /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
+    #[error(
+        "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
+    )]
     TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
     /// コンパイルエラー（既存 DolaError のラップ）
+    #[error("compile error: {0:?}")]
     CompileError(Vec<DolaError>),
     /// Never 戦略を持つインスタンスとの競合により start() が拒否された
+    #[error("conflict with never-interrupt instances: {conflicting_group_ids:?}")]
     Conflict { conflicting_group_ids: Vec<u64> },
     /// 無効な variable_id（存在しない or 購読解除済み）
+    #[error("invalid variable_id: {0}")]
     InvalidVariableId(i64),
 }
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::StoryboardNotFound(name) => {
-                write!(f, "storyboard not found: '{name}'")
-            }
-            Self::InvalidGroupId(id) => {
-                write!(f, "invalid group_id: {id}")
-            }
-            Self::ZeroDurationWithLoop { storyboard } => {
-                write!(
-                    f,
-                    "storyboard '{storyboard}' has zero duration with loop_count"
-                )
-            }
-            Self::InvalidLoopCount(count) => {
-                write!(f, "invalid loop_count: {count}")
-            }
-            Self::TooShortDurationWithInfiniteLoop {
-                storyboard,
-                duration,
-            } => {
-                write!(
-                    f,
-                    "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
-                )
-            }
-            Self::CompileError(errors) => {
-                write!(f, "compile error: {errors:?}")
-            }
-            Self::Conflict {
-                conflicting_group_ids,
-            } => {
-                write!(
-                    f,
-                    "conflict with never-interrupt instances: {conflicting_group_ids:?}"
-                )
-            }
-            Self::InvalidVariableId(id) => {
-                write!(f, "invalid variable_id: {id}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for RuntimeError {}
 
 impl From<Vec<DolaError>> for RuntimeError {
     fn from(errors: Vec<DolaError>) -> Self {
