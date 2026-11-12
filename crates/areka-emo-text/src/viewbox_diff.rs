@@ -117,6 +117,10 @@ impl ScrollPlanner {
     /// 実測 3px）では、可視窓の外へ出た行の下端インクが blit 後も面内へ 1px 残る。可視窓の外の行は
     /// 描かれないので、この残滓は消す側（ダーティ）で拾う——`blit ≠ 0` のフレームに限り、
     /// `first_visible_line` より前の行の矩形もダーティへ入れる（面内へ届かない行は退化して落ちる）。
+    ///
+    /// **送りの前に面の遠い端へ届いていた行**（(d)・指摘 15）: 線を面の内側へ寄せた最下行は、
+    /// 寄せた線ごと送られる。`blit ≠ 0` のフレームでは、送りの前の位置で矩形（はみ出し込み）が
+    /// 面にかかり行送りの向きの遠い端を越えていた行も、変わった行と同じくダーティへ入れる。
     pub(crate) fn derive_dirty_with_overhangs(
         canvas: &ContentCanvas,
         window: &VisibleWindow,
@@ -180,7 +184,19 @@ impl ScrollPlanner {
             let scrolled_out_residue = blit != (0, 0)
                 && i < window.first_visible_line
                 && block_axis_overhang(overhang_of(i), mode) > 0.0;
-            if changed || scrolled_out_residue {
+            // (d) 送りの前に面の遠い端へ届いていた行（指摘 15）: 線を面の内側へ寄せて描いた最下行は、
+            //     寄せた線ごと送られて字の下に残るので描き直す（最下行だけを寄せる裁定はそのまま）。
+            let pulled_before_shift = blit != (0, 0)
+                && reached_far_edge_before_shift(
+                    resident,
+                    block_offset,
+                    mode,
+                    contract,
+                    blit,
+                    surface_size,
+                    overhang_of(i),
+                );
+            if changed || scrolled_out_residue || pulled_before_shift {
                 if let Some(rect) = resident_rect(
                     resident,
                     block_offset,
@@ -317,6 +333,45 @@ fn resident_rect(
     surface_size: (u32, u32),
     overhang: LineOverhang,
 ) -> Option<PhysicalRect> {
+    let (x0, y0, x1, y1) = resident_ink_rect(resident, block_offset, mode, contract, overhang)?;
+    expand_guard_clamp(x0, y0, x1, y1, contract, surface_size)
+}
+
+/// 送りの前の位置（今の位置 − `blit`）で、住人の矩形（はみ出し込み）が面にかかり、かつ行送りの
+/// 向きの遠い端（横書き＝下・vertical_lr＝右・vertical_rl＝左）を越えていたか（純粋・指摘 15）。
+/// 越えていた行は線を面の内側へ寄せて描いた最下行でありうる。
+fn reached_far_edge_before_shift(
+    resident: &Resident,
+    block_offset: f32,
+    mode: WritingMode,
+    contract: &ScaleContract,
+    blit: (i32, i32),
+    surface_size: (u32, u32),
+    overhang: LineOverhang,
+) -> bool {
+    let Some((x0, y0, x1, y1)) =
+        resident_ink_rect(resident, block_offset, mode, contract, overhang)
+    else {
+        return false;
+    };
+    let (bx, by) = (blit.0 as f32, blit.1 as f32);
+    let (w, h) = (surface_size.0 as f32, surface_size.1 as f32);
+    match mode {
+        WritingMode::HorizontalTb => y0 - by < h && y1 - by > h,
+        WritingMode::VerticalLr => x0 - bx < w && x1 - bx > w,
+        WritingMode::VerticalRl => x1 - bx > 0.0 && x0 - bx < 0.0,
+    }
+}
+
+/// 住人のはみ出し込みの矩形（物理 px・float・新スクロール位置・ガードとクランプの前）。
+/// 非グリフ住人は `None`。
+fn resident_ink_rect(
+    resident: &Resident,
+    block_offset: f32,
+    mode: WritingMode,
+    contract: &ScaleContract,
+    overhang: LineOverhang,
+) -> Option<(f32, f32, f32, f32)> {
     let run = match &resident.content {
         ResidentContent::GlyphRun(run) => run,
         // Choice 住人は内包 run から GlyphRun と同一のインク矩形を導く（R9.5）。
@@ -342,7 +397,7 @@ fn resident_rect(
             (x0 - overhang.left, y0, x0 + w + overhang.right, y0 + h)
         }
     };
-    expand_guard_clamp(ix0 * k, iy0 * k, ix1 * k, iy1 * k, contract, surface_size)
+    Some((ix0 * k, iy0 * k, ix1 * k, iy1 * k))
 }
 
 /// ブロック軸のインクはみ出し量（両端の大きい方・image px）を返す（純粋）。

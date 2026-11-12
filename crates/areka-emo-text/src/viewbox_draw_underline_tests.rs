@@ -10,6 +10,7 @@
 //! | §5 | `render_styled` の中で集めるのに失敗したフレームは提示を見送り（面は前のまま）、次のフレームで再試行して塗る。変化の無いフレームは集めない（2.5）。失敗を仕込むのは行の生成のときの集め（可謬・plan より前）で、Phase 1 の `collect_underlines(...)?` は `apply_color_ranges` と同じ BeginDraw 前の `?` の結線を使う（Phase 1 だけの檻は持たない） | 3.1, 4.3 |
 //! | §6 | 縦書き（2 方向・3 書体・拡大率 1.0／1.25／1.5・整数でない原点）の areka の塗り方（集める → `stroke_rect` → 字の後に `FillRectangle`）が、D2D 自身の下線（`SetUnderline` を焼いた `DrawTextLayout`）と、覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下で一致する（2.6） | 3.4, 4.3 |
 //! | §7 | 既定の見た目が下線つきのバルーンでは、飾りの無い行にも線が出る＝全部の字に下線を積んだ行とバイトで一致し、線の無い行とは違う（指摘 6・balloon-font-descript-keys の要件 5.5） | 3.1 |
+//! | §8 | 線を面の内側へ寄せた最下行の後に 1 行送ったフレームが、同じ中身を 1 フレームで全部描いた面とバイトで一致する（寄せた線が送られて字の下に残らない・指摘 15・実 GPU） | 3.11, 4.1 |
 
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{D2D1_DEVICE_CONTEXT_OPTIONS_NONE, ID2D1Brush};
@@ -510,5 +511,94 @@ fn a_default_underline_is_drawn_on_plain_glyphs() {
     assert!(
         by_default == by_decoration,
         "既定の下線は飾りの無い字にも、積んだ下線と同じ線で出る"
+    );
+}
+
+// ────────────────────────── §8 寄せた最下行の後の送り（実 GPU）
+
+/// §8（指摘 15）: 既定の見た目が下線つきの大きな字（Yu Gothic UI 48）で、2 行目（最下行）の線が
+/// 面の下に落ちて内側へ寄せられた面に 3 行目を足して 1 行送る。送ったフレームの面は、同じ中身を
+/// 新しい実行部で 1 フレームに描いた面とバイトで一致する（寄せた線が送られて残らない）。
+#[test]
+fn a_scroll_after_a_pulled_bottom_row_matches_one_frame_drawing() {
+    use super::super::ViewboxExecutor;
+    use super::super::test_support::{build, opaque_count};
+    use crate::look::StyleTable;
+    use crate::region::{ScaleContract, TextRegion};
+    use crate::state::TextItem;
+
+    let mut rig = Rig::new();
+    // 行送り 50（48＋2）。2 行の em の箱は 0〜48・50〜98 で面（高さ 99）に収まり、2 行目の
+    // ベースライン（50＋約 51）の線は面の下に落ちて寄せられる。
+    let image = (200u32, 99u32);
+    let mode = WritingMode::HorizontalTb;
+    let model = live_diff_model_font(Some("Yu Gothic UI"), Some(48));
+    let mut font = ResolvedFont::resolve(&model);
+    font.looks.default.underline = true;
+    let region = TextRegion::resolve(&model, image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let styles = StyleTable::default();
+    let rows = |n: usize| {
+        let mut items: Vec<TextItem> = Vec::new();
+        for (i, text) in ["あい", "うえ", "おか"].iter().take(n).enumerate() {
+            if i > 0 {
+                items.push(TextItem::LineBreak { ratio: 1.0 });
+            }
+            items.extend(super::super::test_support::glyph_items(text));
+        }
+        build(&items, &region, mode, 48.0)
+    };
+    let (two, two_window) = rows(2);
+    let (three, three_window) = rows(3);
+    assert!(
+        three_window.block_offset != two_window.block_offset,
+        "前提: 3 行目で送りが起きる"
+    );
+
+    let mut surface = rig.attach(image, 1.0);
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    exec.render_styled(
+        &two,
+        &two_window,
+        &font,
+        mode,
+        &contract,
+        &mut surface,
+        &styles,
+    )
+    .expect("2 行のフレーム");
+    exec.render_styled(
+        &three,
+        &three_window,
+        &font,
+        mode,
+        &contract,
+        &mut surface,
+        &styles,
+    )
+    .expect("送ったフレーム");
+    let scrolled = surface.read_back().expect("read_back");
+
+    let mut fresh_surface = rig.attach(image, 1.0);
+    let mut fresh = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    fresh
+        .render_styled(
+            &three,
+            &three_window,
+            &font,
+            mode,
+            &contract,
+            &mut fresh_surface,
+            &styles,
+        )
+        .expect("1 フレームで全部描く");
+    let one_frame = fresh_surface.read_back().expect("read_back");
+
+    assert!(opaque_count(&one_frame) > 0, "前提: 字と線が描かれた");
+    let rows_differ =
+        super::super::test_support::diff_rows(&scrolled, &one_frame, image.0, image.1);
+    assert!(
+        rows_differ.is_empty(),
+        "送ったフレームは 1 フレームで全部描いた面と一致する（食い違う行の y: {rows_differ:?}）"
     );
 }

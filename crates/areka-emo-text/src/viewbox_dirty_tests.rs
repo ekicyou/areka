@@ -666,6 +666,8 @@ fn lines_with_widths(widths: &[usize]) -> Vec<TextItem> {
 /// - スクロールアウトした行 0 の残滓（上端 y 0..2）: 交差するのは可視窓の先頭行（行 1・y 0..14）だけ。
 /// - 変化行 4（y 35..50）・変化行 5（y 47..62）: それぞれ両隣を巻き込み、行 4 と行 5 は
 ///   **2 枚の矩形の双方**に現れる（重複しても和集合は昇順・重複なし）。
+/// - 送りの前に面の下端を越えていた最下行 8（送りの前 y 96..109・指摘 15）: 今の位置の矩形
+///   （y 83..98）で、上の隣の行 7 も巻き込む。
 ///
 /// 各行の物理矩形は「canvas-local 位置 + block_offset −12」「em ボックス丈 10」「下端はみ出し
 /// 実測 3」「ガード 1」で決まる——行 i の y は `12i − 13 .. 12i + 2`（面寸でクランプ）。
@@ -707,8 +709,12 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
         &over,
     );
 
-    // 矩形は (a) 露出帯 → (b)(c) 住人 index 昇順（行 0 の残滓・変化行 4・変化行 5）の順。
-    assert_eq!(dirty.len(), 4, "露出帯 1 ＋ 残滓 1 ＋ 変化行 2");
+    // 矩形は (a) 露出帯 → (b)(c)(d) 住人 index 昇順（行 0 の残滓・変化行 4・変化行 5・行 8）の順。
+    assert_eq!(
+        dirty.len(),
+        5,
+        "露出帯 1 ＋ 残滓 1 ＋ 変化行 2 ＋ 送りの前の最下行 1"
+    );
     assert_eq!(dirty[0].rect, phys(0, 87, 400, 13), "(a) 下端の露出帯");
     assert_eq!(dirty[0].lines, vec![8], "露出帯に交差するのは最下行だけ");
     assert_eq!(dirty[1].rect, phys(0, 0, 11, 2), "(c) 行 0 の残滓");
@@ -725,11 +731,13 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
     );
     assert_eq!(dirty[3].rect, phys(0, 47, 21, 15), "(b) 変化行 5");
     assert_eq!(dirty[3].lines, vec![4, 5, 6], "変化行 5 の矩形も同様");
+    assert_eq!(dirty[4].rect, phys(0, 83, 11, 15), "(d) 送りの前の最下行 8");
+    assert_eq!(dirty[4].lines, vec![7, 8], "行 8 の矩形は上の隣も巻き込む");
 
     // 和集合＝描画対象行（昇順・重複なし）。行 4・行 5 は 2 枚の矩形の双方に現れる。
     assert_eq!(
         draw_lines,
-        vec![1, 3, 4, 5, 6, 8],
+        vec![1, 3, 4, 5, 6, 7, 8],
         "draw_lines は矩形ごとの交差行の和集合"
     );
     let mut union: Vec<usize> = dirty.iter().flat_map(|d| d.lines.clone()).collect();
@@ -743,7 +751,7 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
 
     // 描画呼び出しは矩形ごとの交差行数の**和**であって、枚数 × 描画対象行数の積ではない。
     let sum: usize = dirty.iter().map(|d| d.lines.len()).sum();
-    assert_eq!(sum, 8, "和＝1 + 1 + 3 + 3");
+    assert_eq!(sum, 10, "和＝1 + 1 + 3 + 3 + 2");
     assert!(
         sum < dirty.len() * draw_lines.len(),
         "和 {sum} は積 {} より小さい（削減が観測できる入力）",
