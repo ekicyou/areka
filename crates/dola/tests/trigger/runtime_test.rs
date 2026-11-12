@@ -773,7 +773,7 @@ fn simultaneous_triggers_resolve_in_group_order() {
 }
 
 /// 3 周（1 周 1 秒）の親。`at` は start からの秒で、x を 0→1 で動かす子 "child"（0.2 秒）を起こす
-fn three_loop_trigger_doc(at: f64) -> dola::DolaDocument {
+pub(super) fn three_loop_trigger_doc(at: f64) -> dola::DolaDocument {
     let float_var = || AnimationVariableDef::Float {
         initial: 0.0,
         min: None,

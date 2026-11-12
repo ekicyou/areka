@@ -6,7 +6,8 @@ use crate::DolaError;
 use crate::value::DynamicValue;
 
 /// 無限ループ許可の最小周期（秒）。
-/// システムスリープ復帰時の極端な周回数処理を防止する。
+/// 時刻が飛んだ tick で進める周回の数に上限を作る（トリガーを持つループの重さは
+/// `loop_controller::process_loops` の注）。
 pub(crate) const MIN_LOOP_DURATION: f64 = 0.1; // 100ms
 
 /// 評価済み変数値（補間計算の出力）。

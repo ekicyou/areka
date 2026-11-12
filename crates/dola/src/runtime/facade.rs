@@ -318,50 +318,31 @@ impl DolaRuntime {
     /// 差分更新の内部実装。
     ///
     /// 内部フロー:
+    /// 1〜2 を、current_time までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
+    /// 同じ時刻では 1 → 1.5 → 2 の順（トリガーどうしは親の group_id の順）
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
     ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
-    /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）。
-    ///    進めた周回が無くなるまで 1.5 と 2 を繰り返す
+    /// 2. 自然終了検知（その時刻 >= end_time の Playing インスタンス）
+    ///
+    /// 最後に、出来事に入れない無限のループ（トリガーなし）を current_time まで進める
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
     fn update_internal(&mut self, current_time: f64) -> UpdateResult {
-        // Step 1: Finish Deadline チェック
-        let expired = self.instance_manager.check_finish_deadlines(current_time);
-        for gid in expired {
-            self.conclude_internal(gid);
-        }
-
-        // Step 1.5 と Step 2 を、終わった周回が無くなるまで交互に回す。トリガーを持つ
-        // インスタンスは Step 2 で 1 周ずつ進むので、飛ばした周回のトリガーもその周回の時刻で起きる
+        // 時刻の順に回すのは、子を起こす順がぶつかる子の勝ち負けを決めるから。
+        // 1 コマずつ回したときと同じ順になる
         let mut trigger_results = Vec::new();
         let mut rng = rand::rng();
-        loop {
+        while let Some(t) = self.next_event_time().filter(|&t| t <= current_time) {
+            // Step 1: Finish Deadline チェック
+            for gid in self.instance_manager.check_finish_deadlines(t) {
+                self.conclude_internal(gid);
+            }
             // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
-            trigger_results.extend(self.process_triggers(current_time));
-
+            trigger_results.extend(self.process_triggers(t));
             // Step 2: ループ処理 + 自然終了検知
-            let loop_results: Vec<(u64, LoopAction)> = self
-                .instance_manager
-                .instances_mut()
-                .iter_mut()
-                .filter(|(_, inst)| {
-                    inst.state == InstanceState::Playing && current_time >= inst.end_time
-                })
-                .map(|(gid, inst)| {
-                    let action = loop_controller::process_loops(inst, current_time, &mut rng);
-                    (*gid, action)
-                })
-                .collect();
-            if loop_results.is_empty() {
-                break;
-            }
-
-            for (gid, action) in loop_results {
-                if action == LoopAction::Conclude {
-                    self.conclude_internal(gid);
-                }
-            }
+            self.process_loop_ends(t, &mut rng);
         }
+        self.process_loop_ends(current_time, &mut rng);
 
         // Step 3: 購読変数の評価（残存インスタンス対象）
         // Step 4: 差分検出（評価と同じ周回で行う）
@@ -380,6 +361,52 @@ impl DolaRuntime {
     // =========================================================================
     // 内部ヘルパー
     // =========================================================================
+
+    /// 次の出来事の時刻: finish の期限・Playing のまだ起きていないトリガー（周回の長さの内）・
+    /// 周回の終わりの最小。トリガーなしの無限のループの周回の終わりは入れない: 自然には終わらず、
+    /// 出来事の時刻ごとに `process_loop_ends` がその時刻まで進めるので、1 周ずつ回さなくてよい。
+    /// NaN の時刻は `f64::min` が捨てる（NaN の期限は起きない）
+    fn next_event_time(&self) -> Option<f64> {
+        let mut next: Option<f64> = None;
+        let mut take = |t: f64| next = Some(next.map_or(t, |n| n.min(t)));
+        for (gid, inst) in self.instance_manager.instances() {
+            if let Some(deadline) = inst.finish_deadline {
+                take(deadline);
+            }
+            if inst.state != InstanceState::Playing {
+                continue;
+            }
+            if inst.loop_count != -1 || !inst.trigger_states.is_empty() {
+                take(inst.end_time);
+            }
+            if let Some(triggers) = self.trigger_store.get(gid) {
+                for ts in inst.trigger_states.iter().filter(|ts| !ts.fired) {
+                    if let Some(wall) =
+                        trigger_wall_time(inst, triggers[ts.trigger_index].fire_time)
+                    {
+                        take(wall);
+                    }
+                }
+            }
+        }
+        next.filter(|t| !t.is_nan())
+    }
+
+    /// Step 2: `time` までに周回の終わった Playing のインスタンスを進め、終わったものを Conclude する
+    fn process_loop_ends(&mut self, time: f64, rng: &mut impl rand::Rng) {
+        let loop_results: Vec<(u64, LoopAction)> = self
+            .instance_manager
+            .instances_mut()
+            .iter_mut()
+            .filter(|(_, inst)| inst.state == InstanceState::Playing && time >= inst.end_time)
+            .map(|(gid, inst)| (*gid, loop_controller::process_loops(inst, time, rng)))
+            .collect();
+        for (gid, action) in loop_results {
+            if action == LoopAction::Conclude {
+                self.conclude_internal(gid);
+            }
+        }
+    }
 
     /// トリガー収集・実行。発火するものが無くなるまで繰り返す。
     ///
@@ -435,17 +462,9 @@ impl DolaRuntime {
                         triggers.len()
                     );
                     let trigger = &triggers[ts.trigger_index];
-                    // fire_time は 0.0 起点で compile した周回内の相対時刻。
-                    // 壁時計の発火時刻は評価の式 calculate_effective_time の逆:
-                    //   loop_start_time + pause_accumulated + fire_time / time_scale
-                    let wall_fire_time = inst.loop_start_time
-                        + inst.pause_accumulated
-                        + trigger.fire_time / inst.time_scale;
-
-                    // 周回の長さより後ろのトリガーは、親の周回が先に終わるので起きない（要件 11.3）。
-                    // 周回を飛ばした tick でも 1 コマずつ回したときと同じにするため、時刻でなく長さで比べる
-                    let within_loop = trigger.fire_time / inst.time_scale <= inst.loop_duration;
-                    if within_loop && current_time >= wall_fire_time {
+                    if let Some(wall_fire_time) = trigger_wall_time(inst, trigger.fire_time)
+                        && current_time >= wall_fire_time
+                    {
                         let child_start = wall_fire_time + trigger.start_offset.unwrap_or(0.0);
                         pending.push(PendingTrigger {
                             parent_group_id: *gid,
@@ -522,6 +541,19 @@ impl DolaRuntime {
         // 5. トリガーストア削除
         self.trigger_store.remove(&group_id);
     }
+}
+
+/// トリガーの壁時計の発火時刻。周回の長さより後ろのトリガーは None（親の周回が先に終わる・要件 11.3）。
+///
+/// fire_time は 0.0 起点で compile した周回内の相対時刻で、壁時計の時刻は評価の式
+/// calculate_effective_time の逆: loop_start_time + pause_accumulated + fire_time / time_scale。
+/// 周回を飛ばした tick でも 1 コマずつ回したときと同じにするため、内か外かは時刻でなく長さで比べる。
+/// end_time は別の式（一時停止・待ちを足し込む）なので、丸めで 1 ulp 後ろへずれた周回の終わりちょうどの
+/// トリガーが Step 2 で消えないよう end_time で抑える
+fn trigger_wall_time(inst: &StoryboardInstance, fire_time: f64) -> Option<f64> {
+    let offset = fire_time / inst.time_scale;
+    (offset <= inst.loop_duration)
+        .then(|| (inst.loop_start_time + inst.pause_accumulated + offset).min(inst.end_time))
 }
 
 impl Default for DolaRuntime {

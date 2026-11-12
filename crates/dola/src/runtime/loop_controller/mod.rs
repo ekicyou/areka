@@ -124,7 +124,10 @@ pub(crate) fn process_loops(
     // 停止性は保証されるが、巨大な時刻ジャンプ（壁時計補正等）では反復が膨大になり得る。
     // 反復上限キャップや剰余スキップの導入は外部観測可能な挙動
     // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない
-    // （周回は最短 0.1s なので、8 時間の休止の後でも約 29 万回の軽い反復で済む）。
+    // トリガーなしなら 1 周は数を足すだけで、0.1s の周回で 8 時間飛んでも約 29 万回の軽い反復。
+    // shortcut: トリガーを持つループは 1 周ずつ戻り、飛ばした周回ごとに子を 1 つ起こす
+    // （コンパイル・競合の解決・Conclude と TriggerResult 1 件）。0.1s の周回で 8 時間飛ぶと
+    // 1 回の tick に約 0.67 秒・28.8 万件。トリガーを使う文書が本番に入ったら飛ばす周回の子の扱いを決め直す。
     while current_time >= instance.end_time {
         let before = instance.end_time;
         advance_loop(instance, rng);
