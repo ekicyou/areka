@@ -66,7 +66,7 @@ impl Scan<'_, '_> {
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
             ) {
-                self.warn_non_finite_advance(ratio_sum);
+                self.warn_non_finite_advance(ratio_sum, None);
             }
             apply_pending_cursor(
                 &mut self.pending_cursor,
@@ -170,7 +170,7 @@ impl Scan<'_, '_> {
                 &mut self.block_pos,
                 self.block_dir * line_pitch_of(self.metrics, closing),
             ) {
-                self.warn_non_finite_advance(None);
+                self.warn_non_finite_advance(None, None);
             }
             self.inline_pos = self.inline_start;
         }
@@ -181,16 +181,17 @@ impl Scan<'_, '_> {
             text: text.clone(),
             inline_pos,
             // 進めなかった字は遠端（位置＋送り幅）が有限に収まる幅で持つ（受け手は遠端を確かめずに
-            // 使う）。1 つ下げるのは、差が偶数丸めで切り上がり足すと無限へ丸まる位置があるため。
+            // 使う）。1 つ下げるのは、差が偶数丸めで切り上がり足すと無限へ丸まる位置があるため
+            // （位置が最大値ちょうどだと下げると負になるので 0 で止める）。
             advance: if moved {
                 advance
             } else {
-                (f32::MAX - inline_pos).next_down()
+                (f32::MAX - inline_pos).next_down().max(0.0)
             },
             style,
         });
         if !moved {
-            self.warn_non_finite_advance(None);
+            self.warn_non_finite_advance(None, Some(inline_pos));
         }
         self.heights.place(glyph_height);
         self.placed += 1;

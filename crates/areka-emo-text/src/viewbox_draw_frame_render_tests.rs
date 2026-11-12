@@ -423,16 +423,17 @@ fn request_clear_forgets_brushes_and_advances_the_talk() {
     assert_eq!(exec.fonts.talk_epoch(), epoch + 1, "台帳の台詞が 1 進む");
 }
 
-/// 観測可能な完了状態（縮退の主檻・R3.5/Error Handling）: フォント（高さ）変更を注入すると
-/// format と行キャッシュが組み直され、当該フレームが全域ダーティへ縮退して全住人が再描画される
+/// 観測可能な完了状態（R3.5/Error Handling）: フォント（高さ）変更を注入すると format と行キャッシュが
+/// 組み直され、組み直しで前の行を忘れ、全域の道で描き直して全住人が再描画される
 ///（`draw_text_layout_calls` 増分＝全 GlyphRun 住人数・`line_layout_creations` 増分＝全住人数
 /// ＝キャッシュ破棄で全再生成・`full_clears` 不変＝透明フラッシュを起こす FullClear と区別・
 /// read_back は font B の content で非透明）。
 ///
 /// canvas と可視窓は font A のまま変えない＝ふつうの差分なら何も描かない入力（対照で 0 を確かめる）
-/// なので、全住人の再描画は縮退だけから来る。
+/// なので、全住人の再描画は組み直しだけから来る（縮退の枝は
+/// `degrade_full_domain_draws_only_rows_overlapping_surface` が見る）。
 #[test]
-fn font_change_degrades_to_full_domain_redraw() {
+fn font_change_forgets_prev_and_redraws_full_domain() {
     let mut rig = Rig::new();
     let image = (120u32, 120u32);
     let mut surface = rig.attach(image, 1.0);
@@ -465,26 +466,28 @@ fn font_change_degrades_to_full_domain_redraw() {
 
     // font B（高さ 14）へ変更（既定の見た目の大きさが変わり format/行キャッシュ組み直し）。
     let font_b = ResolvedFont::resolve(&geo_model(Some(14)));
-    let total_b = total;
     let changed = exec
         .render(&canvas_a, &window_a, &font_b, mode, &contract, &mut surface)
         .expect("font B render 失敗");
-    assert!(changed, "font 変更フレームは変化あり（全域ダーティ縮退）");
+    assert!(
+        changed,
+        "font 変更フレームは変化あり（組み直しで前の行を忘れ、全域の道で描き直す）"
+    );
     let stats_b = exec.stats();
 
     let draw_delta = stats_b.draw_text_layout_calls - stats_a.draw_text_layout_calls;
     assert_eq!(
-        draw_delta, total_b as u64,
-        "縮退フレームは全 GlyphRun 住人を再描画する（全域ダーティは矩形 1 枚に全住人が交差＝和と積が一致する唯一の形）"
+        draw_delta, total as u64,
+        "組み直しのフレームは全 GlyphRun 住人を再描画する（全域ダーティは矩形 1 枚に全住人が交差＝和と積が一致する唯一の形）"
     );
     let create_delta = stats_b.line_layout_creations - stats_a.line_layout_creations;
     assert_eq!(
-        create_delta, total_b as u64,
+        create_delta, total as u64,
         "行キャッシュ破棄ゆえ全住人ぶん行レイアウトを再生成する"
     );
     assert_eq!(
         stats_b.full_clears, full_before,
-        "縮退は全域ダーティ Update（透明フラッシュを起こす FullClear ではない）"
+        "組み直しは全域の Update（透明フラッシュを起こす FullClear ではない）"
     );
     let bytes = surface.read_back().expect("read_back(font B) 失敗");
     assert!(
@@ -757,14 +760,16 @@ fn a_failed_frame_after_a_format_rebuild_redraws_the_whole_surface_next() {
 }
 
 /// 指摘 8: 選択肢の帯の超過分は既定の字の高さでなく、その行の丈（`run.size` の行送りの軸＝
-/// `resident_rect` と同じ）と比べる。既定 28・行の em 14・帯 17（寄せ −1）なら超過は 2。
+/// `resident_rect` と同じ）と比べる。既定 28・行の em 14・横書きの帯 15（寄せ 1）なら超過は 2
+/// （横書きの寄せは 0 以上・縦書きは帯 17（寄せ −1））。
 #[test]
 fn choice_band_overflow_uses_row_extent_not_default_height() {
     use super::render::expand_overhang_for_band;
     use crate::viewbox::LineOverhang;
     let none = LineOverhang::default();
-    let h = expand_overhang_for_band(none, 17.0, -1.0, (40.0, 14.0), WritingMode::HorizontalTb);
+    let h = expand_overhang_for_band(none, 15.0, 1.0, (40.0, 14.0), WritingMode::HorizontalTb);
     assert_eq!(h.bottom, 2.0, "横書き: 帯の下端 16 − 行の丈 14");
+    assert_eq!(h.top, 0.0, "横書き: 寄せは 0 以上ゆえ上へは広げない");
     let v = expand_overhang_for_band(none, 17.0, -1.0, (14.0, 40.0), WritingMode::VerticalRl);
     assert_eq!(v.right, 2.0, "縦書き: 帯の右端 16 − 列の丈 14");
     assert_eq!(v.left, 1.0, "縦書き: 負の寄せの分だけ左へ");

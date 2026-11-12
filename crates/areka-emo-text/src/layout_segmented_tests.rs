@@ -1,8 +1,7 @@
-use super::test_support::{IMAGE, cursor_px, glyphs, inline_positions, model};
+use super::test_support::{IMAGE, cursor_px, glyphs, inline_positions, model, plan};
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::look::{GlyphStyles, StyleId, StyleTable, TextLook};
 use crate::region::TextRegion;
-use crate::segment::{Segment, SegmentPlan};
 use crate::state::TextItem;
 use crate::writing::WritingMode;
 
@@ -11,15 +10,6 @@ use crate::writing::WritingMode;
 // budouy 非依存でゲート③の判断分岐を全網羅するため、plan は手組み（from_segments）で
 // 注入する（design「テスト形: 手組み SegmentPlan」）。共通前提: FixedMetrics・font 10 →
 // 全角 'あ' の advance 10・pitch 12。閾値は wordwrappoint x（横書き）／y（縦書き）。
-
-/// (start, len) 列から手組み SegmentPlan を作る。
-fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
-    SegmentPlan::from_segments(
-        segs.iter()
-            .map(|&(start, len)| Segment { start, len })
-            .collect(),
-    )
-}
 
 /// 各グリフの (行 index, 行内位置, 文字) を配置順に平坦化する（prefix 一致比較用）。
 fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, &str)> {

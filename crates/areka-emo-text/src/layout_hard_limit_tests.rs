@@ -53,10 +53,10 @@
 
 use log_capture_kit::{CapturedEvent, capture};
 
-use super::test_support::{IMAGE, glyphs, inline_positions, model_full};
+use super::test_support::{IMAGE, glyphs, inline_positions, model_full, plan};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
-use crate::segment::{Segment, SegmentPlan};
+use crate::segment::SegmentPlan;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 
@@ -129,15 +129,6 @@ fn region_of(mode: WritingMode, soft: f32, hard: f32) -> TextRegion {
         "{mode:?}: 行内開始が 0 でないと 3 方向の期待値を共有できない"
     );
     region
-}
-
-/// `(start, len)` 列から手組みの [`SegmentPlan`] を作る（budoux 非依存で塊境界を注入する）。
-fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
-    SegmentPlan::from_segments(
-        segs.iter()
-            .map(|&(start, len)| Segment { start, len })
-            .collect(),
-    )
 }
 
 /// テスト用の最短経路（可視は全グリフ）。

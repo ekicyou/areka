@@ -728,9 +728,8 @@ struct ChoiceHover {
 /// hover セグメント矩形を描画空間（image px・住人 transform＋block_offset 反映）で組む。
 ///
 /// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_offset` だけ内側へ寄せた
-/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`](crate::canvas::ChoiceLineContent::band_extent)＝実 font metrics の `ascent + descent`
-/// 由来。em ボックス丈 `font_height` ではない——em で切ると和文フォントの descent インクが帯から
-/// はみ出す。[`ChoiceLineContent::band_offset`](crate::canvas::ChoiceLineContent::band_offset)＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
+/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`](crate::canvas::ChoiceLineContent::band_extent)＝横書きは字の箱の丈（行送りで頭打ち）・
+/// 縦書きは em。横書きを em で切ると和文フォントの descent インクが帯からはみ出す。[`ChoiceLineContent::band_offset`](crate::canvas::ChoiceLineContent::band_offset)＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
 /// 帯が上に余りながら下でインクを切る・R13.1）。住人平行移動 `(dx, dy)` と可視窓オフセット
 /// `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ揃える（ヒット矩形／指紋と
 /// 同座標系・R3.3）。座標は合成スケール `k` 適用前の image px
@@ -767,7 +766,7 @@ fn highlight_rect(
 ///
 /// ダーティ矩形はその行の em ボックス（`run_size` の行送りの軸＝行の中で最も大きい字の em・
 /// `resident_rect` と同じ丈）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
-/// （`band_extent`＝`ascent + descent` 由来）は行矩形の block 近端から `band_offset` だけ寄せた
+/// （`band_extent`＝横書きは字の箱の丈（行送りで頭打ち）・縦書きは em）は行矩形の block 近端から `band_offset` だけ寄せた
 /// 位置に置かれるので、遠端側の超過分は `band_offset + band_extent − 行の丈` になる
 /// （既定の字の高さと比べると、行の em が既定より小さい行で帯の下が切れる・指摘 8）
 /// （寄せを数えないと、寄せた分だけ帯の下（縦書きは右）がダーティ矩形の外へ落ち、hover 解除の

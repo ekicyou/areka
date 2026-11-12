@@ -11,11 +11,6 @@ use crate::state::TextItem;
 use crate::writing::WritingMode;
 use areka_sakura::cluster::{cluster_count, clusters};
 
-// ── R2.2/3.2/3.3/4.2: ダーティ導出（露出帯 ∪ 変化行 ∪ 全域）の檻 ──
-//
-// 幾何の共通前提: FixedMetrics・font 10 → pitch 12（10 + 行間 2）・全角 1 グリフ/行。
-// 露出帯の辺は写像正準表（横書き＝下端・vertical_rl＝左端・vertical_lr＝右端）。
-
 /// テスト画像原寸と `broken_lines` は配置の支えのものを使う（写しを持たない）。
 pub(super) use crate::layout::test_support::{IMAGE, broken_lines};
 
@@ -38,6 +33,8 @@ pub(crate) fn layout_canvas(
 
 /// items→canvas の通し（origin は書字方向の既定の開始角・validrect-local・visible は全量）。
 /// 縦書きの右から左を origin (0,0) で組むと最初の列が面の外（x∈[-10,0]）に出るため空の組を使う。
+/// 幾何の共通前提: FixedMetrics・font 10 → pitch 12（10 + 行間 2）・全角 1 グリフ/行。
+/// 露出帯の辺は写像正準表（横書き＝下端・vertical_rl＝左端・vertical_lr＝右端）。
 pub(super) fn canvas_for(
     items: &[TextItem],
     mode: WritingMode,
@@ -116,11 +113,6 @@ pub(super) fn window(first_visible_line: usize, block_offset: f32) -> VisibleWin
         block_offset,
     }
 }
-
-// ══════════════════════════════════════════════════════════════════════
-// 3.4 ScrollPlanner 純粋層ユニットテスト一式（design Testing Strategy →
-//     Unit Tests の 5 項目を檻化）。純粋層規律: windows 非依存・テストのみ追加。
-// ══════════════════════════════════════════════════════════════════════
 
 /// 初回フレーム（window 0）を plan→commit して prev_lines を張る共通前処理。
 /// 以後の plan は Update（初回全域を確定済みゆえスクロール/伸長を弁別できる）。

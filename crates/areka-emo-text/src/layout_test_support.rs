@@ -2,6 +2,7 @@ use super::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan}
 use crate::cursor_tag::CursorWarnGuard;
 use crate::look::{GlyphStyles, StyleTable, TextLook};
 use crate::region::TextRegion;
+use crate::segment::{Segment, SegmentPlan};
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_parsers::balloon::{
@@ -201,4 +202,13 @@ pub(super) fn window_for(
 ) -> VisibleWindow {
     let lines = layout_all(items, region, mode, font_height);
     LayoutEngine::visible_window(&lines, region, mode)
+}
+
+/// `(start, len)` 列から手組みの [`SegmentPlan`] を作る（budoux 非依存で塊境界を注入する）。
+pub(super) fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
+    SegmentPlan::from_segments(
+        segs.iter()
+            .map(|&(start, len)| Segment { start, len })
+            .collect(),
+    )
 }

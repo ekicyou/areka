@@ -273,7 +273,7 @@ pub struct PositionedGlyph {
 pub struct PositionedLine {
     /// 行の画像空間矩形（規約はモジュール doc「行矩形の規約」）。
     pub rect: LineRect,
-    /// 行内のグリフ列（行内軸位置の昇順・空行は空列）。
+    /// 行内のグリフ列（行内軸位置の昇順・配置は空の行を出さないので空でない）。
     pub glyphs: Vec<PositionedGlyph>,
 }
 
@@ -359,9 +359,7 @@ impl LayoutEngine {
     ///
     /// 本番の呼び手は 0 で、本番は [`layout_styled`](Self::layout_styled) を呼ぶ（`actor_present.rs`
     /// の `arrange_lines` が唯一の本番の呼び出し点）。本関数は、非回帰の檻（`layout_styled_tests.rs`
-    /// が装飾なしの出力を本関数の出力と突き合わせる）をはじめとする決定論テスト（`layout_*_tests.rs`・
-    /// `choice_*_tests.rs`・`viewbox_draw_*_tests.rs`・`draw_oracle_tests.rs`・`tests/` の統合試験）と、
-    /// `examples/emo-text-layer/drive.rs`（本番ではない）が呼ぶ入口である。
+    /// が装飾なしの出力を本関数の出力と突き合わせる）をはじめとする決定論テストと examples が呼ぶ入口である。
     #[allow(clippy::too_many_arguments)]
     pub fn layout(
         items: &[TextItem],

@@ -208,7 +208,7 @@ impl Scan<'_, '_> {
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
             ) {
-                self.warn_non_finite_advance(ratio_sum);
+                self.warn_non_finite_advance(ratio_sum, None);
             }
             apply_pending_cursor(
                 &mut self.pending_cursor,
@@ -351,8 +351,9 @@ impl Scan<'_, '_> {
     /// 送りの結果が有限でなかったことを `warn!` で残す（その送りは捨てた・致命ではない）。
     /// guard がある配置では（キャラクター, [`CursorDegrade::NonFinite`]）の初回だけ、無い配置では毎回。
     /// 改行・折り返し・字の送りが同じ鍵を共有する。`ratio_sum` は保留の改行の割合の和
-    /// （折り返しと字の送りでは `None`＝欄を出さない）。
-    fn warn_non_finite_advance(&mut self, ratio_sum: Option<f32>) {
+    /// （折り返しと字の送りでは `None`＝欄を出さない）。`inline_pos` は送れなかった字の位置
+    /// （字の送りだけ・ほかは `None`）。
+    fn warn_non_finite_advance(&mut self, ratio_sum: Option<f32>, inline_pos: Option<f32>) {
         let actor = match self.cursor_warn.as_mut() {
             Some((actor, guard)) => {
                 if !guard.should_warn(actor, CursorDegrade::NonFinite) {
@@ -366,6 +367,7 @@ impl Scan<'_, '_> {
             actor = %actor,
             block_pos = self.block_pos,
             ratio_sum,
+            inline_pos,
             "[layout_inner] 送りの結果が有限の数でない——位置を保つ（この送りは捨てる・致命ではない）"
         );
     }
