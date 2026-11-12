@@ -31,7 +31,7 @@
 - 3 つのクレートの全ファイル（本番・テスト・テストの道具・`Cargo.toml`）の直し。
 - 記憶のファイルの保存の 2 つの守り（#1 の「使えないファイルを上書きしない」と #3 の「書き手の錠」）。どちらも `areka-sylphya` の `persist` の中に閉じる。
 - `areka-sylphya` の公開の形への足し算 3 つ（`PersistIo::lock_for_update`・`SylphyaPublisher::barrier_within`・`KeyParseError::TextAfterParen`）。
-- 範囲の外から使われていない公開の物の削除 3 つ（`MirrorImage::flat_global`・`FormatDoc::is_all_absent`・`SylphyaMsg::PersistPut` の `reply` 欄）。
+- 範囲の外から使われていない公開の物の削除 4 つ（`MirrorImage::flat_global`・`FormatDoc::is_all_absent`・`SylphyaMsg::PersistPut` の `reply` 欄に加え、かけ直しの 2 回目で `persist::format::to_toml_string`。`research.md` §13）。
 
 ### 範囲の外（持たないもの）
 
@@ -78,13 +78,14 @@
 
 ## ファイルの構成
 
-範囲の外で変えるファイルは 1 つ（例外の表の 1 行）。新しいファイルは 5 つ（どれもテスト）。消すファイルは 2 つ。
+範囲の外で変えるファイルは 1 つ（例外の表の 1 行）。新しいファイルは 6 つ（どれもテスト。`io_lock_tests.rs` はかけ直しの 1 回目で足した）。消すファイルは 2 つ。
 
 ### 新しいファイル
 
 ```
 crates/areka-sylphya/src/persist/persist_unreadable_tests.rs  # #1 の縛るテスト（使えない既存のファイルを上書きしない）
 crates/areka-sylphya/src/persist/persist_lock_tests.rs        # #3 の縛るテスト（同じプロセスの 2 つの書き手・錠が取れないときの Degraded）
+crates/areka-sylphya/src/persist/io_lock_tests.rs            # #3 の実のファイルの錠のテスト（`FsPersistIo::lock_within`・かけ直しの 1 回目で足した）
 crates/areka-sylphya/src/actor_barrier_within_tests.rs        # #4 の縛るテスト（期限切れ・停止の後）
 crates/areka-actor/tests/ui_pump_support/mod.rs               # 実走のポンプを回す道具 1 つ（toy_ui_pump_test と ui_span_test が使う）
 crates/areka-actor/tests/ui_span_test.rs                      # #2 の縛るテスト（独り立ちのテストのバイナリ・テストは 1 本だけ）
@@ -406,7 +407,7 @@ impl SylphyaPublisher {
 | 5.4 | 文字化け | 端末へ出す文を足さない。理由の文は書けなかった知らせ（窓）と記録の欄にだけ載る |
 | 5.5・5.6 | 依存を足さない | 「使ってよい依存」。`Cargo.toml`・`Cargo.lock` は変えない |
 | 5.7 | `doc/COMPAT_ARCHITECTURE.md` の行 | 「範囲の外」（`vocab/dotted.rs` の 64・80 行目は触らない） |
-| 6.1 | 公開の形を変えない | 「この spec が持つもの」の足し算 3 つと、範囲の外で使われていない物の削除 3 つだけ。T11 で確かめる |
+| 6.1 | 公開の形を変えない | 「この spec が持つもの」の足し算 3 つと、範囲の外で使われていない物の削除 4 つ（かけ直しの 2 回目の `to_toml_string` を含む）だけ。T11 で確かめる |
 | 6.2 | `crates/areka/` ほかに触らない | 「範囲の外」。T11 で差分 0 を確かめる |
 | 6.3 | `io.rs` の一時のパスの入口 | #3 の節（錠のパスは宛先から組む・入口の綴りを足さない・`TempPath` の 3 か所を変えない） |
 | 6.4・6.5 | 約束を破らないと直せない指摘 | 「直さない・回した指摘」の表（回し先は要件の討議で実在を確かめ、brief に書き足し済み） |
