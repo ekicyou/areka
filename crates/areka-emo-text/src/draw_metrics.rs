@@ -33,7 +33,7 @@ use super::{
     device_err, try_create_format,
 };
 use crate::TextLayerError;
-use crate::layout::{GlyphMetrics, column_centred_em_box_left};
+use crate::layout::{FixedMetrics, GlyphMetrics, column_centred_em_box_left};
 use crate::look::{FontKey, TextLook};
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -456,14 +456,10 @@ impl GlyphMetrics for DWriteMetrics {
     }
 }
 
-/// 実測できないときの決定論の縮退送り幅（`FixedMetrics` と同式: ASCII だけのクラスタ＝
-/// 高さ半分・それ以外＝高さ 1 つ分）。
+/// 実測できないときの決定論の縮退送り幅（式は [`FixedMetrics`] の送り幅の 1 か所: ASCII だけの
+/// クラスタ＝高さ半分・それ以外＝高さ 1 つ分）。
 fn degraded_advance(text: &str, height: f32) -> f32 {
-    if text.is_ascii() {
-        height / 2.0
-    } else {
-        height
-    }
+    FixedMetrics.advance(text, height)
 }
 
 /// format が束縛したフォントの face metrics（`DWRITE_FONT_METRICS`・upem ＞ 0 を確かめた物）を返す。

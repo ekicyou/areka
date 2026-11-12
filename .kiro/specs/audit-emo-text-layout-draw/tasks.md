@@ -209,7 +209,7 @@
   - 3 つ目の呼び出し・`@` の入口を足すと赤になる陽性の相棒のテストがあり、書式のテストが緑・ファイルが 1,000 行以下であること
   - _Requirements: 4.1, 4.3, 6.1, 8.1_
 
-- [ ] 12.2 同じ規則の写しを 1 か所にする
+- [x] 12.2 同じ規則の写しを 1 か所にする
   - デバイスの失敗と空の失敗を作る関数の写し（描画と描き手の側）は、申し合わせ（2026-11-06）で `audit-emo-text-state-actor` が `crate::surface` の側へ寄せる。こちらでは触らない。縮退の字幅を固定の計測器の式から求める。領域の軸の名を割り当てと同じ `match` から返す（指摘 26 の残り）
   - 範囲の中に該当の写しが grep で無く、今あるテストが全部緑であること
   - _Requirements: 4.1, 4.2_
@@ -308,3 +308,4 @@
 - 11.3・11.4（同じコミット）: `look.rs` の前方一致を消し、`UNOWNED_KEYS` を 35（寄せ・影 4＋ukadoc の `cursor…` 12・`anchor…` 19・`anchor.font.color` は「文字変更コマンド」）の数え上げにした。一覧は areka-parsers の CANON_FORMS（ukadoc で確かめた表）と機械で突き合わせて一致。リポジトリの台本・検体に一覧の外の綴りは無い。範囲の外は `state_decoration_tests.rs:410,424` の `"cursorbrush"`→`"cursorbrushcolor"` の 2 行だけ（`audit-emo-text-state-actor` の了承済み）。
 - 11.3 の申し送り（14.1 へ）: `crates/areka` の `check_script_judge` が `cursor*`/`anchor*` を自分の規則で分けていないか（範囲の外・読むだけ）。
 - 12.1: `for_mode` の檻は draw.rs と draw_metrics.rs を数え、`create_text_format` と `probe_format_for` の中の 1 つずつだけを許す（`direction_recipe_factory_is_called_only_by_the_two_format_makers`）。`@` の檻は `DECORATION_SOURCES` で viewbox_draw_decoration.rs も読み、説明は入口 3 つ。3 つ目の呼び出しや `@` を植えた写しで赤になる陽性の相棒を置いた。draw.rs の既定の書体の名と高さは look の正典の別名にし、揃えのテストを消した。
+- 12.2: `degraded_advance` は `FixedMetrics.advance` を呼ぶ形にして式を 1 か所に、軸の名と割り当ては私有の `pick_inline_axis` の 1 つの `match` に通した（`debug!` の数は変わらない）。`device_err`／`none_err` は `surface.rs` だけにあり、範囲の中に写しは無い（兄弟が寄せた）。

@@ -217,16 +217,20 @@ pub struct TextRegion {
     ignored_origin: (Option<f32>, Option<f32>),
 }
 
-/// 行内軸の名前（横書き＝`"x"`・縦書き 2 方向＝`"y"`）——折返し警告の `axis` 欄の値。
-///
-/// 軸の割り当ては [`TextRegion::resolve`] の折返し基準・遠辺の解決（正準表）と同じであり、
-/// **両者は必ず一致していなければならない**（片方だけを直すと、警告の軸欄が実際に解決した
-/// 軸と食い違う）。檻は `actor_region_warn_tests.rs` の横書き・縦書き 2 本が持つ。
-pub(crate) fn inline_axis_name(mode: WritingMode) -> &'static str {
+/// 行内軸の正準表（横書き＝`"x"`・縦書き 2 方向＝`"y"`）: 軸の名と、その軸に割り当てる値を
+/// 1 つの `match` から返す。[`TextRegion::resolve`] の折返し基準・遠辺の割り当てと
+/// [`inline_axis_name`] はどちらもここを通るので、警告の軸欄と実際に解決した軸は食い違わない。
+fn pick_inline_axis<T>(mode: WritingMode, x: T, y: T) -> (&'static str, T) {
     match mode {
-        WritingMode::HorizontalTb => "x",
-        WritingMode::VerticalRl | WritingMode::VerticalLr => "y",
+        WritingMode::HorizontalTb => ("x", x),
+        WritingMode::VerticalRl | WritingMode::VerticalLr => ("y", y),
     }
+}
+
+/// 行内軸の名前（横書き＝`"x"`・縦書き 2 方向＝`"y"`）——折返し警告の `axis` 欄の値。
+/// 表は [`pick_inline_axis`] の 1 つ。檻は `actor_region_warn_tests.rs` の横書き・縦書き 2 本が持つ。
+pub(crate) fn inline_axis_name(mode: WritingMode) -> &'static str {
+    pick_inline_axis(mode, (), ()).0
 }
 
 impl TextRegion {
@@ -312,19 +316,16 @@ impl TextRegion {
         // ── 折返し基準（soft）と描画範囲の遠辺（hard）: 行内軸は WritingMode 依存（正準表） ──
         // 遠辺は上で解決済みの right／bottom をそのまま採る（モデルから引き直さない——
         // 引き直すと未指定成分の縮退や負値解決が 2 か所に増える）。
-        // 軸の割り当ては [`inline_axis_name`] と同じ表であり、両者は一致していなければならない。
+        // 軸の割り当ては [`inline_axis_name`] と同じ表（[`pick_inline_axis`]）を通る。選ぶのは
+        // 解決の入力だけで、解決（未指定の `debug!` を含む）は選んだ軸の 1 回だけ。
         // 折返し基準が遠辺の外でも**ここでは記録しない**——装着と入力の変わり目に呼ばれる
         // 本関数に粗さの記録を持たせず、actor の登録口が装着 1 回につき 1 件書く（要件 14.1）。
-        let (wrap_threshold, inline_limit) = match mode {
-            WritingMode::HorizontalTb => (
-                resolve_or(model.wordwrappoint().x(), width, right, "wordwrappoint.x"),
-                right,
-            ),
-            WritingMode::VerticalRl | WritingMode::VerticalLr => (
-                resolve_or(model.wordwrappoint().y(), height, bottom, "wordwrappoint.y"),
-                bottom,
-            ),
-        };
+        let (_, (wrap_v, extent, inline_limit, key)) = pick_inline_axis(
+            mode,
+            (model.wordwrappoint().x(), width, right, "wordwrappoint.x"),
+            (model.wordwrappoint().y(), height, bottom, "wordwrappoint.y"),
+        );
+        let wrap_threshold = resolve_or(wrap_v, extent, inline_limit, key);
 
         TextRegion {
             left,
