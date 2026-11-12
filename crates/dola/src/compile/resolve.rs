@@ -16,12 +16,7 @@ use super::types::VariableTypeHint;
 
 /// エントリのキーフレーム名を返す（未指定時は内部用の暗黙名 `__implicit_{idx}`）
 ///
-/// NOTE(D2-V): バリデーションは `start` のみ予約し（V3）、`__implicit_` プレフィックスを
-/// 予約していないため、ユーザーが明示的に `keyframe = "__implicit_{n}"` を指定すると
-/// 別エントリの暗黙名と衝突し得る。衝突時は `kf_to_entry` / `keyframe_times` の
-/// HashMap 上書き（後勝ち）により明示名が黙ってシャドウされ、誤った時刻解決となる
-/// （panic はしない。tests/compile/boundary_test.rs で特性化、プレフィックス予約は
-/// バリデーション追加＝挙動変更のため P21 提案を参照）。
+/// 明示名が暗黙名とぶつからないよう、検証（V3）が `__implicit_` で始まる名を拒む。
 pub(super) fn entry_keyframe_name(entry: &StoryboardEntry, idx: usize) -> String {
     entry
         .keyframe

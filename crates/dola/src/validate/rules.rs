@@ -235,7 +235,7 @@ pub(super) fn validate_duplicate_keyframes(
     }
 }
 
-/// V3: 予約キーフレーム名検証（"start" 使用禁止）
+/// V3: 予約キーフレーム名検証（"start" と暗黙名の接頭辞 `__implicit_` は使用禁止）
 pub(super) fn validate_reserved_keyframe_names(
     _sb_name: &str,
     sb: &crate::storyboard::Storyboard,
@@ -243,7 +243,7 @@ pub(super) fn validate_reserved_keyframe_names(
 ) {
     for entry in &sb.entry {
         if let Some(ref kf_name) = entry.keyframe {
-            if kf_name == "start" {
+            if kf_name == "start" || kf_name.starts_with("__implicit_") {
                 errors.push(DolaError::ReservedKeyframeName {
                     name: kf_name.clone(),
                 });

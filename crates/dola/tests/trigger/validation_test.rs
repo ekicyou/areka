@@ -517,4 +517,26 @@ mod validation_tests {
                 .any(|e| matches!(e, DolaError::TriggerTargetNotFound { .. }))
         );
     }
+
+    /// #31: トリガー以外のエントリの trigger_start_offset は黙って捨てられるので拒む
+    #[test]
+    fn trigger_start_offset_on_non_trigger_is_rejected() {
+        let sb = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                keyframe: Some("kf".to_string()),
+                trigger_start_offset: Some(1.0),
+                ..Default::default()
+            })
+            .build();
+
+        let errors = DolaDocumentBuilder::new("1.0")
+            .storyboard("parent", sb)
+            .build()
+            .unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::InvalidEntry { entry_index: 0, reason, .. }
+            if reason.contains("trigger_start_offset")
+        )));
+    }
 }

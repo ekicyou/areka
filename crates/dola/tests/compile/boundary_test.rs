@@ -218,12 +218,9 @@ mod keyframe_name_collision_tests {
     use super::*;
 
     #[test]
-    fn explicit_implicit_name_collision_silently_shadows_user_keyframe() {
-        // ユーザーが明示的に "__implicit_1" を指定すると、エントリ1（keyframe 省略の
-        // 遷移エントリ）の暗黙名と衝突する。バリデーション（V2: 明示名同士の重複、
-        // V3: "start" 予約）はこれを検出せず、keyframe_times の後勝ち上書きにより
-        // 明示名の時刻（1.0）が暗黙名の時刻（5.0）でシャドウされる（黙った誤解決。
-        // P21 で特性化）。
+    fn keyframe_name_with_implicit_prefix_is_rejected() {
+        // 明示の "__implicit_1" はエントリ 1（keyframe 省略）の暗黙名とぶつかり、
+        // 後勝ちで時刻が黙って取り違えられる。暗黙名の接頭辞は予約として拒む
         let mut vars = float_var("x");
         vars.extend(float_var("y"));
         let doc = make_doc_with_storyboard(
@@ -272,11 +269,11 @@ mod keyframe_name_collision_tests {
                 .build(),
         );
 
-        // バリデーションは通過し（panic なし）、明示名 1.0 ではなく
-        // 暗黙名 5.0 が参照解決される（後勝ち上書き）
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert_eq!(tl.segments[0].start_time, 5.0);
+        let errors = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::ReservedKeyframeName { name } if name == "__implicit_1"
+        )));
     }
 }
 

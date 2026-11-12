@@ -68,12 +68,26 @@ impl Validate for DolaDocument {
                     }
                 }
 
-                // V7: transition あり → variable 必須
-                if entry.transition.is_some() && entry.variable.is_none() {
+                // V7: variable と transition は両方あるか両方無いか
+                let v7 = match (entry.variable.is_some(), entry.transition.is_some()) {
+                    (false, true) => Some("transition requires variable"),
+                    (true, false) => Some("variable requires transition"),
+                    _ => None,
+                };
+                if let Some(reason) = v7 {
                     errors.push(DolaError::InvalidEntry {
                         storyboard: sb_name.clone(),
                         entry_index: entry_idx,
-                        reason: "transition requires variable".to_string(),
+                        reason: reason.to_string(),
+                    });
+                }
+
+                // トリガー以外の trigger_start_offset は compile が黙って捨てる
+                if entry.trigger_start_offset.is_some() && entry.trigger_storyboard.is_none() {
+                    errors.push(DolaError::InvalidEntry {
+                        storyboard: sb_name.clone(),
+                        entry_index: entry_idx,
+                        reason: "trigger_start_offset requires trigger_storyboard".to_string(),
                     });
                 }
 

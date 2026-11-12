@@ -1,5 +1,5 @@
 // =============================================================
-// V7: transition あり → variable 必須
+// V7: variable と transition は両方あるか両方無いか
 // =============================================================
 
 mod v7_tests {
@@ -36,6 +36,28 @@ mod v7_tests {
             e,
             DolaError::InvalidEntry { reason, .. }
             if reason.contains("transition requires variable")
+        )));
+    }
+
+    #[test]
+    fn variable_without_transition_error() {
+        // 片方だけの variable は compile で「transition が無い」と落ちる。検証で先に拒む
+        let mut doc = doc_with_float_var("x", 0.0, None, None);
+        doc.storyboard.insert(
+            "sb1".to_string(),
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("x".to_string()),
+                    ..Default::default()
+                })
+                .build(),
+        );
+
+        let errors = doc.validate().unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::InvalidEntry { entry_index: 0, reason, .. }
+            if reason.contains("variable requires transition")
         )));
     }
 }
