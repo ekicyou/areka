@@ -348,59 +348,61 @@ pub(super) fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaE
     let mut in_stack: HashSet<&str> = HashSet::new();
     let mut path: Vec<&str> = Vec::new();
 
-    for sb_name in graph.keys() {
+    // 根は名前の順（BTreeMap）で回し、報告を決定的にする
+    for sb_name in doc.storyboard.keys() {
+        let sb_name = sb_name.as_str();
         if !visited.contains(sb_name) {
             if let Some(cycle) =
                 dfs_detect_cycle(sb_name, &graph, &mut visited, &mut in_stack, &mut path)
             {
                 errors.push(DolaError::TriggerCycle { cycle });
             }
+            // 循環を見つけて途中で抜けた根の道と印を、次の根へ持ち越さない
+            path.clear();
+            in_stack.clear();
         }
     }
 }
 
 /// DFS ヘルパー: 循環検出時にパスを返す
 ///
-/// NOTE(D3-V): 本関数はトリガー連鎖の深さに比例してコールスタックを消費する
-/// 再帰実装であり、極端に深い trigger_storyboard 連鎖（数万 SB 規模）を持つ
-/// 細工文書でスタック枯渇（abort）の可能性がある（D2-V 申し送りの確認結果）。
-/// 明示スタックによる反復化は循環報告のメンバー・パス順序の同一性証明を要する
-/// 構造的ロジック変更のため本ループでは実施せず、P23 として提案記録済み
-/// （現実的な指示書規模では問題にならない。200 段チェーンは
-/// tests/trigger/validation_test.rs::v15t_long_chain_200_storyboards_validates_ok
-/// で動作をピン留め済み）。
+/// 細工した深い鎖でコールスタックを使い切らないよう、再帰でなく明示のスタックで回す。
+/// `path` が節のスタックで、`next_idx` は同じ深さの節が次に見る隣の位置。
 fn dfs_detect_cycle<'a>(
-    node: &'a str,
+    root: &'a str,
     graph: &std::collections::HashMap<&'a str, Vec<&'a str>>,
     visited: &mut std::collections::HashSet<&'a str>,
     in_stack: &mut std::collections::HashSet<&'a str>,
     path: &mut Vec<&'a str>,
 ) -> Option<Vec<String>> {
-    visited.insert(node);
-    in_stack.insert(node);
-    path.push(node);
+    let mut next_idx: Vec<usize> = vec![0];
+    visited.insert(root);
+    in_stack.insert(root);
+    path.push(root);
 
-    if let Some(neighbors) = graph.get(node) {
-        for &next in neighbors {
-            if !visited.contains(next) {
-                if let Some(cycle) = dfs_detect_cycle(next, graph, visited, in_stack, path) {
-                    return Some(cycle);
-                }
-            } else if in_stack.contains(next) {
-                // 循環検出: path から next の位置以降を抽出
-                // SAFETY: in_stack への挿入/除去は path への push/pop と常に対で
-                // 行われるため両者は同一の要素集合を保持する。in_stack に含まれる
-                // next は必ず path 内に存在し、position(..).unwrap() は panic 不能。
-                let start_pos = path.iter().position(|&n| n == next).unwrap();
-                let mut cycle: Vec<String> =
-                    path[start_pos..].iter().map(|s| s.to_string()).collect();
-                cycle.push(next.to_string()); // 循環を閉じる
-                return Some(cycle);
-            }
+    while let (Some(&node), Some(idx)) = (path.last(), next_idx.last_mut()) {
+        let Some(&next) = graph.get(node).and_then(|neighbors| neighbors.get(*idx)) else {
+            path.pop();
+            next_idx.pop();
+            in_stack.remove(node);
+            continue;
+        };
+        *idx += 1;
+        if !visited.contains(next) {
+            visited.insert(next);
+            in_stack.insert(next);
+            path.push(next);
+            next_idx.push(0);
+        } else if in_stack.contains(next) {
+            // 循環検出: path から next の位置以降を抽出
+            // SAFETY: in_stack への挿入/除去は path への push/pop と常に対で
+            // 行われるため両者は同一の要素集合を保持する。in_stack に含まれる
+            // next は必ず path 内に存在し、position(..).unwrap() は panic 不能。
+            let start_pos = path.iter().position(|&n| n == next).unwrap();
+            let mut cycle: Vec<String> = path[start_pos..].iter().map(|s| s.to_string()).collect();
+            cycle.push(next.to_string()); // 循環を閉じる
+            return Some(cycle);
         }
     }
-
-    path.pop();
-    in_stack.remove(node);
     None
 }

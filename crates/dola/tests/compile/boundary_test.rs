@@ -350,11 +350,10 @@ mod stack_and_capacity_tests {
 
     #[test]
     fn long_dependency_chain_compiles_without_stack_exhaustion() {
-        // 1000 エントリの at 依存連鎖（kf0 ← kf1 ← ... ← kf999）。
-        // トポロジカルソート・時刻解決は反復実装のため、連鎖長に比例した
-        // スタックを消費しない（再帰なしの実証）。割り当てはエントリ数に
-        // 線形比例し、入力サイズを超える増幅（capacity DoS）はない。
-        const N: usize = 1000;
+        // 10,000 エントリの at 依存連鎖（kf0 ← kf1 ← ... ← kf9999）を 64 KiB の
+        // スタックのスレッドでコンパイルする。トポロジカルソート・時刻解決が
+        // 連鎖長に比例したスタックを使う再帰なら、このスレッドは落ちる。
+        const N: usize = 10_000;
         let mut builder = StoryboardBuilder::new();
         for i in 0..N {
             let at_ref = if i == 0 {
@@ -373,7 +372,12 @@ mod stack_and_capacity_tests {
         }
         let doc = make_doc_with_storyboard(vec![], vec![], "chain", builder.build());
 
-        let result = compile_storyboard(&doc, "chain", 0.0).unwrap();
+        let result = std::thread::Builder::new()
+            .stack_size(64 * 1024)
+            .spawn(move || compile_storyboard(&doc, "chain", 0.0).unwrap())
+            .unwrap()
+            .join()
+            .expect("compile must not exhaust a 64 KiB stack");
         assert_eq!(result.timelines.len(), 0); // 純粋KFのみ → タイムラインなし
         assert_eq!(result.total_base_duration, 0.0);
     }
