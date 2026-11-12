@@ -348,7 +348,7 @@
   - 終わった姿: かけ直しの最後の結果が新しい指摘 0 件（または 5 回目の打ち切り）として記録にあり、clippy の警告 0 の出力がある
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.5, 2.6, 3.1, 10.1, 10.2, 10.3, 10.5, 10.6, 11.1_
 
-- [ ] 22. 全体テスト
+- [x] 22. 全体テスト
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（高負荷のテストを何度も回さない。赤が出たら赤のテストだけに絞って回し直す）
   - 終わった姿: 全体テストが緑で終わった結果が記録にある
   - _Requirements: 4.2, 4.3, 4.4, 10.4_
@@ -396,3 +396,4 @@
 - 21（かけ直し 1 回目・R1-06）: 7.1 の注で残した `at`・`between` の from は「時刻の上で直前の同じ変数のセグメントの to」（無ければ初期値）に決めた（完了 dola-compiled-transition 要件 4.2 の読み）。連結のエントリは値も時刻も配列上の直前のエントリから（要件 11.7）。Step 5 の並べ替えの鍵は `(start, entry_idx)`。
 - 21（かけ直し 1 回目・R1-09・R1-12・R1-14）: `RuntimeError::InvalidLoopCount`・`typewriter` の欄（両方）・`Validate` trait（`DolaDocument::validate` の固有の関数に）・`InstanceState` の再公開・`calculate_end_time`・`unsubscribe_all`・`TimedSchedule::clear` を消し、`TimedSchedule::new`・`insert` を `#[cfg(test)] pub(crate)` にした（予定のテストは `src/cue/schedule/tests.rs` へ移した）。design.md 312 行の `calculate_end_time` と #62 の行の `unsubscribe_all` は前のタスクの記録で、この直しで消えた。
 - 21（かけ直しの結果・2026-11-13）: ponytail-audit を crates/dola に 5 回かけた（報告は `audit-rerun-1.md`〜`-5.md`）。指摘は 17 → 5 → 3 → 3 → 2 件で、2〜5 回目は必ず直すものが 0 件。5 回目も 0 件に収まらなかったが、5 回目に必ず直すものと本番の振る舞いに関わるもの（今の本番は cue の側だけで、`DolaRuntime` は wintf の `tick_dola_animators` が組まれておらず `start` を呼ぶのはテストだけ）が無いので、要件 10.6 のとおり 5 回目の指摘（R5-01・R5-02）を直したところで打ち切った。全部の指摘を直した後の `cargo clippy -p dola --all-targets --no-deps -- -D warnings`（`-A` なし）は警告 0 で Finished（    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.24s）。開発者の決めとして残したもの: (a) ベジェの制御点を「有限」より狭く縛るか（R1-05 (c)）・(b) 未来の時刻の `start()` が競合する古いインスタンスを今すぐ終わらせるか（R1-08）・(c) `MIN_LOOP_DURATION` を有限のループにも当てるか（R1-07）。費用の `shortcut:` の注は R3-03・R4-02・R5-02 の 3 つ。
+- 22（全体テスト・2026-11-13）: 排他テストの机を取って `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回し、commit 449285ac・回す前の未コミットの変更 0 で「all steps green」（sample fetch・i686 の組み立て・fmt --check・x64 workspace tests 771 秒・i686 tests・crates.io の事前確認・encoding・release notes・roadmap・i686 helper の同期と配置がすべて exit 0）。
