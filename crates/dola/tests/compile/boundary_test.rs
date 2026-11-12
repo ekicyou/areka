@@ -258,8 +258,8 @@ fn segment_sort_with_many_nan_follows_total_order() {
 #[test]
 fn json_rejects_nan_literal_at_deserialization_boundary() {
     // 標準 JSON 経由では NaN/inf リテラルを注入できない（serde_json がパース時に
-    // 拒否する）。NaN/inf の流入経路は TOML（nan/inf）・YAML（.nan/.inf）のみ
-    // （feature ゲートにより既定ビルド外。そこから来た値は validate の数値の規則が拒む）。
+    // 拒否する）。NaN/inf の流入経路は YAML（.nan/.inf）のみ
+    // （機能 `yaml` により既定ビルド外。そこから来た値は validate の数値の規則が拒む）。
     assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": NaN }"#).is_err());
     assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": Infinity }"#).is_err());
 }

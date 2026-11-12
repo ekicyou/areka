@@ -80,3 +80,15 @@
 - **15（WIC の α の写し）**: `src/decode/wic_arm.rs` の `pixel_format_has_alpha` を wintf と同じ `SupportsTransparency` の判定へ替えた（テストは `src/decode/wic_arm_tests.rs`）。完了した `emo-atlas-palette-alpha` の要件 2.3・3.3 を「α を持つ形式は有り」の向きにだけ狭く改めた（その文書は触っていない）。wintf を import しない境界の決まりで写しが 2 つ残ることは変えていない。
 - **125（名の渡し方）**: `src/decode/wic_arm.rs` の `decode_inner` が名を `to_string_lossy` で UTF-8 にしてから渡していたのを、`HSTRING::from(path)`（UTF-16 のまま）にした（テストは `wic_arm_tests.rs` の `decode_opens_name_with_lone_surrogate`）。
 - **130（`with_arm`）**: `src/decode/wic_arm_test_support.rs` の `with_arm` が `CoInitializeEx` の失敗を捨てていたのを、入れたときだけ `CoUninitialize` を呼び、`RPC_E_CHANGED_MODE` のほかの失敗は落とす形にした。
+
+## 2026-11-13 棚卸㊱の再測定（main 069f1a48）
+
+- 前提の変化: 範囲の `crates/areka-emo-atlas/` は前の棚卸（main `18e4cb30`）から変わっていない（`wintf-visual-tree`・`placement-crate-split` も触っていない）。起票の後に範囲の中を直したのは `audit-parsers-sakura`（#428）・`audit-wintf-runtime`（#429・上の申し送りの 3 件）・`audit-emo-compose`（#430）。`placement-crate-split` で atlas の使い手の一部が新しいクレート `crates/areka-placement/`（`measure.rs`・`measure_first_frame.rs` と測りのテスト）へ移った。
+- 触るファイル: `crates/areka-emo-atlas/` の .rs 41 本・11,036 行（起票の 46 ファイル・8,635 行から増えた）。1,000 行に近いのは `src/lib.rs` 873 行・`src/animated_tests.rs` 838 行＝足すなら新しいファイルへ。
+- `crates/areka/` の約束（C19「見直しは `crates/areka/` に触らない」）: 範囲の中だけの直しなら触らない。atlas の公開の形を変える直しは本体の使い手に及ぶ＝本番は `crates/areka/src/emo2_boot/{assets,balloon_background,shell_box_assets,switch_assets}.rs`・`emo2_boot/frame/switch.rs`・`offline_dump/{mod,render}.rs`、ほかにテスト約 20 本（`placement_tests/measure_bake_*_tests.rs` を含む）。`emo2_boot/` は同じ C19 の `runtime-module-untangle` が移す所、`crates/areka-placement/` は同じ C19 の `audit-placement-core` の範囲＝公開の形は変えない直し方を設計で選ぶ。変えるしかない指摘が出たら、その指摘だけ C20 へ回すか、相手のセッションと申し合わせる。
+- 規模: 指摘の数で決まる（20 を越えたら要件の討議で同じ範囲の 2 本目へ）。
+- 先に要るもの: 無い。C19 の見込みのほかの 7 本とは、公開の形を変えない限り重なり 0（`wintf-d2d-composite-rules` の `areka-emo-present` の `budget.rs`・`cache.rs` は atlas を使わない）。
+- 優先度の区分: A（開発者 10-19「とにかく指摘事項は全部直す方針です」）。
+- 要件定義のモデル: Opus（見直しの型が決まっている・新しい境界も順序の約束も作らない）。
+- 分割の案: 無し（要るなら指摘の組で 2 本目）。
+- 見つけた穴・古くなった記述: Current State の大きさ（46 ファイル・8,635 行）は古い＝上の数。

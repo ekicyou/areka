@@ -72,3 +72,7 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 2026-11-13 棚卸㊱で拾った申し送り（placement-crate-split から）
+- **件（記録の捕まえの手助けの写し）**: `crates/log-capture-kit/src/expect.rs` の `expect_one`・`ExpectField` と同じものを、`crates/areka-emo-present/src/scale_tests.rs` と `crates/areka-emo-text/tests/attach_wiring_test.rs` が自前で持っている。どちらのクレートも `log-capture-kit` を開発用の依存に持つ＝写しを消して道具の側を使う。完了した `placement-crate-split` の設計（design.md 807 行目）が「完了の棚卸で扱う」と書いたが、その完了の棚卸で拾われなかった。区分 A（見直しの範囲の重複）。
+- **待つ相手の改め**: 本体の crate 分けの各段（`runtime-crate-split` ほか）が `crates/log-capture-kit/tests/file_length_guard_test.rs` と `workspace_scan_test.rs` の名指しを書き換える＝「いつでも取ってよい」ではなく、その段と同じウェーブに置かない（2026-11-13 棚卸㊱で見込みを C21 へ動かした）。

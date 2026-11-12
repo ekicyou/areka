@@ -101,3 +101,17 @@
 - 再公開の裏の定義: `follow/drag_follow.rs` `on_char_drag_end`・`BalloonFollowTrigger`・`follow_balloon`、`follow/move_shift.rs` の 4 関数、`follow/sticky_follow.rs` `CharDragSession`・`begin_char_drag`、`follow/work_area_clamp.rs` `ClampScene`・`place_chain_in_work_area`。
 - 公開の項目が名指すためだけに開けた型（要件 2.5 の注つき）: `follow/work_area_clamp.rs` `ChainPlacement`・`ChainClampOutcome`。
 - 段 2 で素の `pub` にした本番の項目（本体のテストが使う）: `follow/work_area_clamp.rs` `WORK_AREA_CLAMP_TAG`・`follow/drag_follow.rs` `on_balloon_drag`・`follow/sticky_follow.rs` `sync_drag_writer`（`follow.rs` の再公開も組から分けた）。
+
+## 2026-11-13 棚卸㊱の再測定（main `069f1a48`）
+
+- **前提の変化**: 待つ相手の `placement-crate-split` は 11-06 に着地した（PR#433）。その後に `crates/areka-placement/` と `crates/areka/src/placement_tests/` を触った spec は無いので、受け持つファイルと申し送り ⑴〜⑶ の行の番号は今も合う（`follow.rs` 83〜171・108・123、`follow/work_area.rs` 278、`follow/window_move.rs` 449、`transition_diag.rs` 94・115・770、`transition_judge.rs` 47 ほかを確かめた）。同 spec は振る舞いを変えていない。ここの指摘を先に直したものも無い。
+- **触るファイル**: 56 ファイル（`crates/areka-placement/src/` の 41 と `placement_tests/` の `transition_*` 15）。1,000 行を越えるものが 3 つある: `follow/window_move.rs` 1,231・`transition_judge_tests.rs` 1,039・`transition_judge_verdict_tests.rs` 1,037。どれも上限の例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs` 67・71・75 行目）に載っている。分けて上限の下に入れたら、表から外さないと表の古さの検査が赤になる（表の持ち物は `audit-test-kits`・C20）。近いもの: `transition_judge.rs` 999・`follow/drag_follow.rs` 978・`follow_visibility_balloon_wiring_tests.rs` 962・`follow_resize_tests.rs` 950。
+- **C19 の約束とのずれ**: roadmap の C19 には「見直しの 5 本は `crates/areka/` に触らない」という約束がある。ところが、この spec の受け持ちには `crates/areka/src/placement_tests/` の `transition_*` 15 ファイルが入っていて、ぶつかる。そのうち `transition_judge.rs`（68 行目）と `transition_judge_tests.rs`（29 行目）は、同じウェーブの `runtime-module-untangle` が `crate::emo2_boot::` の改名で書き換える。次の `runtime-crate-split` は `transition_judge*` を `areka-runtime` へ移す。判定器を引く側もある。`emo2_boot` のテスト 2 つ（`frame_transition_atomicity_tests.rs`・`frame_transition_branch_tests.rs`）なので、判定器の署名を変えると `emo2_boot` に響く。案: `audit-placement-core` と同じく、C19 ではこのフォルダの指摘は洗い出すだけにする。直すのは `runtime-crate-split` の着地の後へ回す。
+- **公開の形**: 申し送り ⑶ の再公開（`on_char_drag_end`・`place_chain_in_work_area`・move_shift の 4 関数ほか）は、本体の `emo2_boot`・`input_events`・`menu` が使っている。閉じたり署名を変えたりすると `crates/areka/` に触ってしまうので、C19 のあいだは足すだけにする。
+- **`audit-placement-core` との境目**: 受け持つファイルは重ならない。ただ、参照は両向きに多い。こちらの 36 ファイルが相手のモジュール（`balloon_limit`・`balloon_lock`・`dpi_sync`・`persist`・`chain_finalize`・`sticky_group_ledger`・`windowposition`・`test_support` ほか）を引く。相手の 32 ファイルは `follow`・`transition_diag` を引く。`placement_tests/mod.rs`（相手の持ち物）は、こちらの `transition_judge`・`transition_judge_offset` を宣言している。同じウェーブに置くなら、相手のファイルが使う項目の署名を相談なしに変えない（足すだけ）。
+- **規模**: 指摘の数で決まる（コード 5,778 行・テスト 24,099 行）。20 を越えたら、要件の討議で 2 本目を切る（Constraints のとおり）。
+- **先に要るもの**: なし。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（今ある crate の中の直しで、新しい境目は作らない）。
+- **分割の案**: 今は無し（指摘を見てから決める）。
+- **古くなった記述**: なし。

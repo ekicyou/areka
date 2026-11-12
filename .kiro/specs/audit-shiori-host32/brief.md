@@ -82,3 +82,15 @@
 - **件 1: i686 の helper が素の `LoadLibraryW` で SHIORI の DLL を読む**。`crates/shiori-host32-helper/src/shiori_proxy.rs` は依存の探し先を絞っていない。`audit-ghost-catalog` は同じプロセス内の読み込み（`crates/areka-ghost/src/shiori_inproc.rs`）を `LoadLibraryExW` と `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` へ直した（同 spec の #28）。helper の側も同じ形へそろえる。
 - **件 2: helper が親の環境変数をそのまま受け継ぎ、`PASTA_DEBUG` が立っていると pasta が 127.0.0.1:9276 を取り合う**。`crates/shiori-host32-host/src/process_host.rs`（262〜272 行目あたり）は環境を消さずに helper を起こす。`crates/real-run-kit/src/launch.rs`（213〜214 行目）は子へ `PASTA_DEBUG=0` を渡して避けている。`audit-ghost-catalog` は実物の pasta のテストを錠で 1 本ずつにして当座をしのいだ（`crates/areka-ghost/tests/ghost/common.rs` の `real_pasta_turn`）。helper を起こす所で `PASTA_DEBUG=0` を渡すか、渡す口を設けるかを決める。
 - 起票の訳（2 件とも）: 持ち主のこの spec の受け持ちの範囲と重なる。
+
+## 2026-11-13 棚卸㊱の再測定（main 069f1a48）
+
+- 前提の変化: 範囲の 7 クレートは前の棚卸（main `18e4cb30`）から変わっていない（`placement-crate-split`・`wintf-visual-tree` も触っていない）。`shiori4-api`（COM の面 `shiori-abi` と `shiori4-testdll` を消す）はまだ着手していない＝2 つは残っている。上の申し送りどおり受け持ちから外してよく、外せば COM の面の使い手 `crates/areka/src/{reference_brain,shiori_demo,shiori_host,shiori_session}.rs` に及ぶ直しも出ない。`audit-ghost-catalog` の申し送り 2 件は今も当たる＝helper の `crates/shiori-host32-helper/src/shiori_proxy.rs` 97 行目は素の `LoadLibraryW`、host の `crates/shiori-host32-host/src/process_host.rs` 270〜272 行目は環境を消さずに足すだけで `PASTA_DEBUG` を渡していない。
+- 触るファイル: 7 クレートの .rs 46 本・15,736 行（起票の 51 ファイル・14,505 行）。`shiori-abi`・`shiori4-testdll` を外すと 37 本・12,836 行。1,000 行に近いのは `shiori-host32-host/src/client.rs` 957 行・`shiori3.rs` 879 行・`shiori-host32-helper/src/shiori_proxy.rs` 819 行＝足すなら新しいファイルへ。
+- `crates/areka/` の約束（C19「見直しは `crates/areka/` に触らない」）: 範囲の中だけの直しなら触らない。`shiori-host32-host` の公開の型（`ExitKind`・`HelperStatus`・`RequestError`・`ShutdownError`）を変えると `crates/areka/src/emo2_boot/spine.rs` 75 行目・`spine_hold_support.rs` 25 行目とそのテストに及ぶ＝同じ C19 の `runtime-module-untangle` が移す所。公開の型は変えない直し方を設計で選ぶ（件 2 の `PASTA_DEBUG=0` も `process_host.rs` の `spawn` の中で閉じられる）。本体の外の使い手（`areka-ghost`・`areka-kanade`・`pilot`）は C19 のほかの spec と重ならない。
+- 規模: 指摘の数で決まる（20 を越えたら要件の討議で同じ範囲の 2 本目へ）。
+- 先に要るもの: 無い。C19 の見込みのほかの 7 本とは、公開の型を変えない限り重なり 0。
+- 優先度の区分: A（開発者 10-19「とにかく指摘事項は全部直す方針です」）。
+- 要件定義のモデル: Opus（見直しの型が決まっている・新しい境界も順序の約束も作らない）。
+- 分割の案: 無し（要るなら指摘の組で 2 本目）。
+- 見つけた穴・古くなった記述: Current State の大きさ（51 ファイル・14,505 行）は古い＝上の数。

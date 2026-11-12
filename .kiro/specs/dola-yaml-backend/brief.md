@@ -57,12 +57,14 @@
 - 依存の監査の見逃しは、この spec が片づくまでの仮の物。片づいたら `deny.toml` の `ignore` からこの 1 件を消す（理由の文にこの spec の名前を書いてある）。
 - 規模の見立て: XS〜S（3〜6 タスク）。替えるなら新しい依存を足す＝`tech.md` の依存の表も直す。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
-- **前提の変化**: コードは起票のときのまま（`crates/dola/Cargo.toml` の YAML の依存と機能 `yaml`・`deny.toml` の見逃しの 1 件・YAML の往復のテスト・README の 2 か所・`.kiro/steering/tech.md` の依存の表の `serde_yaml` の行）。v0.1.0 の公開で `dola` の版は 0.1.0 になった（版の数を上げただけ）。機能を外す形を選ぶと 0.1 系の利用者にとって壊れる変更になる＝次の版の見どころに載せる（本文どおり）。
-- **触るファイル**: 本文どおり（`crates/dola/Cargo.toml` 39 行・往復のテスト 80 行・README 29 行・`deny.toml`・根の `Cargo.lock` と `THIRD-PARTY-NOTICES.md`・`tech.md`）。替える形は新しい依存を足し、外す形でも `Cargo.lock` と `THIRD-PARTY-NOTICES.md` が動く＝どちらも依存の席（1 ウェーブに 1 本）を使う。
-- **規模**: XS〜S（3〜6）のまま。
-- **先に要るもの（見直しと crate 分けを含む）**: 本文の「Upstream: なし」は古い。2026-10-22 の並びで、`crates/dola/` 全部を受け持つ見直し `audit-dola` の後に置いた（`audit-dola` 自身は先に要るものが無い）。crate 分けは関わらない。同じ `crates/dola/Cargo.toml` を触る `dola-interrupt-ticks` とは同じウェーブに置かない。
-- **優先度の区分**: C（`release-cycle` の完了の全体テストの赤から起票した dola の手入れ）。
-- **要件定義のモデル**: Opus。
-- **分割の案**: なし。
-- **見つけた穴・古くなった記述**: 上の「Upstream: なし」だけ。
+## 2026-11-13 棚卸㊱の再測定（main 069f1a48）
+
+- 前提の変化: `audit-dola`（11-13 #440）が機能 `json`・`toml` と任意の `serde_json`・`toml` を消し、`serde_json` を `[dev-dependencies]` へ移し、既定の機能を無くした（あちらの #25）。機能 `yaml` と任意の `serde_yaml` はこの spec の持ち物として残した＝Current State の「既定の機能は `json` だけ」は古い。YAML の往復のテストは `crates/dola/tests/general/integration_test/serialization_round_trip.rs` 41〜55 行目（TOML の往復は消えた）、README は 13・17 行目で「YAML via the `yaml` feature flag」。`deny.toml` 43〜46 行目の見逃しの 1 件はそのまま。機能を外す形には同じ crate の先例ができた（json・toml）。
+- 触るファイル: `crates/dola/Cargo.toml`（31 行）・往復のテスト（55）・`crates/dola/README.md`（28）・`deny.toml`（61）・`crates/dola/tests/compile/boundary_test.rs` 261〜262 行目の注記（NaN の流入の道）・根の `Cargo.lock` と `THIRD-PARTY-NOTICES.md`・`.kiro/steering/tech.md` 54 行目。
+- 依存の席: 替える形は依存を足す（`serde-saphyr` などは今の `Cargo.lock` に無い）。外す形は依存を足さないが `Cargo.lock`・`THIRD-PARTY-NOTICES.md` から `serde_yaml`・`unsafe-libyaml` が消える＝どちらでも C19 の `Cargo.lock` の席を使う。
+- 規模: XS〜S（3〜6）のまま。
+- 先に要るもの: 無い（`audit-dola` が着地＝本文の「Upstream: なし」がまた正しくなった）。同じ `crates/dola/Cargo.toml` を触る `dola-interrupt-ticks` とは同じウェーブに置かない。C19 の見込みのほかの 7 本とは重なり 0（`crates/dola/` と `deny.toml` に触る相手が居ない・`tech.md` は許す重なり）。
+- 優先度の区分: C（`release-cycle` の完了の全体テストの赤から起票した dola の手入れ）。
+- 要件定義のモデル: Opus。
+- 分割の案: 無し。
+- 見つけた穴・古くなった記述: ⑴ `tech.md` の「dola クレート依存」の 52・53 行目（`serde_json` の機能 `json`・既定で有効／`toml` の機能 `toml`）と 32 行目の「`dola` の `toml` 機能は別に 0.8 のまま」は `audit-dola` の後で古い。⑵ `audit-dola` が消した機能 `json`・`toml` は crates.io の利用者にとって壊れる変更なのに、roadmap の「次のリリースへの申し送り」に項目が無い＝この spec が足す 1 項目に `audit-dola` の分もまとめて載せる。機能 `yaml` を外す形を選べば、それも同じ項目へ。

@@ -92,3 +92,7 @@
 - 要件定義のモデル: Opus（ロードマップの欄のとおり）。起点を配る時に押す決まりは dola の設計の約束としてすでに在り、この spec はそれを守らせる付け替え。議題は開発者の裁定で、骨組みの分かれ目ではない。本文の「Fable」はこれに読み替える。
 - 分割の案: 無し。
 - 見つけた穴: sakura の `crates/areka-sakura/src/contract.rs` の 29〜30 行目の説明「本番は `dola::runtime::clock::now()` から elapsed を算出して送る」は古い。本番の中継は ghost の `dispatcher.rs` が `GetTickCount64` のミリ秒から出している。
+
+## 2026-11-13 棚卸㊱で拾った申し送り（audit-kanade から）
+- kanade のテストの手助け `tests/kanade/choice_test_test_support.rs` 73 行目の `MonotonicMs(1_000)` は、選択肢の表示の終わりの定数 `CHOICE_DISPLAY_END_MS` と同じ値を数字で書いている（`audit-kanade` の 15.3 の残り）。kanade の時計を割り込み時刻へ移すこの spec で、定数の名前に置き換える。
+- 待つ相手の改め: 台帳の「先に要るもの」に `seriko-talk-clock-fidelity` があるが、版の段と `seriko-talk-clock-fidelity` の brief は逆（あちらがこの spec の後）＝輪になっていた。2026-11-13 棚卸㊱で台帳から外した。
