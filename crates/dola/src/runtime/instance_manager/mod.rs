@@ -97,7 +97,7 @@ impl InstanceManager {
             // NOTE(エラー表現): 不正な状態遷移も InvalidGroupId として報告される
             // （遷移エラー専用バリアントが存在しない現行仕様。
             // tests.rs::invalid_transition_on_existing_instance_reports_invalid_group_id で
-            // 特性化済み。エラー種別の分離は挙動変更を伴うため proposals.md P16 参照）。
+            // 特性化済み）。
             Err(_current) => Err(RuntimeError::InvalidGroupId(group_id)),
         }
     }
@@ -119,8 +119,7 @@ impl InstanceManager {
                 // NOTE(数値境界): current_time < pause_start（非単調な時刻入力）の場合、
                 // pause_duration が負となり pause_accumulated / end_time が過去方向へ
                 // 補正される（早期終了の誘発）。現行 API は呼び出し側の時刻単調性を
-                // 検証しない（検証追加は挙動変更を伴うため proposals.md P15 参照。
-                // tests.rs::resume_with_time_before_pause_start_shrinks_end_time で特性化済み）。
+                // 検証しない（tests.rs::resume_with_time_before_pause_start_shrinks_end_time で特性化済み）。
                 let pause_start = instance.pause_start.take().unwrap_or(current_time);
                 let pause_duration = current_time - pause_start;
                 instance.pause_accumulated += pause_duration;

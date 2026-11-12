@@ -250,13 +250,13 @@
   - 終わった姿: 効かない `#[cfg(test)] mod` が統合テストに 0 件（grep）で、コンパイルのテストが緑
   - _Requirements: 3.1, 4.5_
 
-- [ ] 15. 件 3 の残りと注の掃除
+- [x] 15. 件 3 の残りと注の掃除
 - [x] 15.1 dola の clippy の残りを振る舞いを変えずに消す（件 3）
   - `collapsible_if` 18 か所を畳む・コンパイルの解決の 1 か所に理由を書いた `#[expect(clippy::too_many_arguments, reason = ...)]` を付ける（要件 11.12）・周回のテストの `manual_range_contains` 2 か所・ランタイムの説明の字下げ（`doc_lazy_continuation`）・競合のテストの入れ子の mod（`module_inception`）
   - 公開の関数の引数の数は変えない
   - 終わった姿: `cargo clippy -p dola --all-targets --no-deps -- -D warnings` が警告 0 で通り、`cargo test -p dola` が緑
   - _Requirements: 9.1, 9.2, 9.3, 11.12_
-- [ ] 15.2 P 番号と古いテストの道を引く注を片づけ、clippy の受け持ちに済んだ記録を足す（#53・要件 9.4）
+- [x] 15.2 P 番号と古いテストの道を引く注を片づけ、clippy の受け持ちに済んだ記録を足す（#53・要件 9.4）
   - 前の段で残った P 番号と古い道の注（全 35 か所のうち後の段の分を除く）を消すか今の道へ直す
   - `clippy-199-lints` の brief に「dola の段 1 の 21 件と統合テストの 3 件・lib test の 2 件は audit-dola が直した」の節を足す
   - 終わった姿: dola の範囲で `proposals` と `P[0-9]` の grep が後の段の分を除いて 0 件で、brief に節がある

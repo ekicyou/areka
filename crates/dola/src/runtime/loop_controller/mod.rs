@@ -121,8 +121,8 @@ pub(crate) fn process_loops(
     // 無限ループ（loop_count == -1）は MIN_LOOP_DURATION（0.1s）が周回長の下限のため
     // 停止性は保証されるが、巨大な時刻ジャンプ（壁時計補正等）では反復が膨大になり得る。
     // 反復上限キャップや剰余スキップの導入は外部観測可能な挙動
-    // （loops_completed / loop_start_time / 乱数消費）を変えるため
-    // report/proposals.md P9 に記録。
+    // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない
+    // （周回は最短 0.1s なので、8 時間の休止の後でも約 29 万回の軽い反復で済む）。
     while current_time >= instance.end_time {
         advance_loop(instance, rng);
 

@@ -26,7 +26,7 @@ fn sequential_after_at_placement_continues_from_segment_end() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: sequential → 6.0..7.0（var_last_end_time から継続）
+            // entry 1: sequential → 6.0..7.0（配列の直前のエントリの終わりから継続）
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {

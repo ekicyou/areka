@@ -475,7 +475,7 @@ fn insert_same_offset_payloads_delivered_fifo() {
 fn extend_same_offset_payloads_delivered_lifo() {
     // 特性化: extend() は安定降順ソート + 末尾 pop のため、同一オフセットでは
     // 挿入順と逆（LIFO）配信となる。insert() の FIFO と不整合がある点は
-    // 既知の挙動として固定する（改善は挙動変更を伴うため提案記録 P22 を参照）。
+    // 既知の挙動として固定する。
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.extend(vec![
         Entry::Payload(1.0, "a".into()),
@@ -498,7 +498,7 @@ fn extend_same_offset_payloads_delivered_lifo() {
 fn tick_with_nan_time_delivers_all_pending_payloads() {
     // 特性化: tick(NaN) は offset=NaN となり、負値ガード・冪等性ガード・
     // `entry_offset > offset` 比較がすべて false になるため、最初のバリアまでの
-    // 全ペイロードが即時配信される（時刻入力の有限性検証の欠如は P25 を参照）。
+    // 全ペイロードが即時配信される（時刻入力の有限性は検証しない）。
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(1.0, "a".into()));
     sched.insert(Entry::Payload(100.0, "b".into()));
@@ -543,7 +543,7 @@ fn tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers() {
 fn insert_nan_offset_fires_debug_assert_in_debug_builds() {
     // 特性化: NaN オフセットは `offset >= 0.0` が false となるため、debug ビルド
     // では insert() の debug_assert が発火する（release では素通りし partition_point
-    // の前提を破る — src/cue/schedule.rs の NOTE および P25 を参照）。
+    // の前提を破る — src/cue/schedule.rs の NOTE を参照）。
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(f64::NAN, "x".into()));
 }

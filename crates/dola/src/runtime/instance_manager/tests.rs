@@ -232,7 +232,7 @@ fn check_finish_deadlines_ignores_instances_without_deadline() {
 // =========================================================================
 
 /// 特性化: current_time < pause_start の resume は pause_duration が負となり
-/// pause_accumulated / end_time が過去方向へ補正される（時刻単調性の未検証: proposals.md P15）
+/// pause_accumulated / end_time が過去方向へ補正される（時刻の単調性は検証しない）
 #[test]
 fn resume_with_time_before_pause_start_shrinks_end_time() {
     let mut mgr = InstanceManager::new();
@@ -248,7 +248,7 @@ fn resume_with_time_before_pause_start_shrinks_end_time() {
 }
 
 /// 特性化: NaN deadline は `current_time >= deadline` が常に false となり発火しない
-/// （NaN 流入経路の有限性検証は未実装: proposals.md P8/P14）
+/// （deadline の有限性は検証しない）
 #[test]
 fn nan_finish_deadline_never_fires() {
     let mut mgr = InstanceManager::new();

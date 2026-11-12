@@ -150,7 +150,7 @@ mod evaluated_value_tests {
     }
 
     /// D1b-V 追加: Float(NaN) は自分自身と不等（IEEE 754）。NaN 混入時は差分検出が
-    /// 毎フレーム「変化あり」と判定し続ける現行挙動の特性化（proposals.md P8/P14 参照）
+    /// 毎フレーム「変化あり」と判定し続ける現行挙動の特性化
     #[test]
     fn float_nan_is_never_equal_to_itself() {
         let v = EvaluatedValue::Float(f64::NAN);
