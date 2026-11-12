@@ -111,7 +111,7 @@
   - _Requirements: 4.1, 4.5, 11.10_
 
 - [ ] 7. storyboard の層のコンパイル（#5・#31 のコンパイルの半分・#33 のコンパイル・#48・#68・#69・#71・#72）
-- [ ] 7.1 依存のグラフに配列順の辺を足す（#5・#48）
+- [x] 7.1 依存のグラフに配列順の辺を足す（#5・#48）
   - at も between も無いエントリに辺を足す: 変数を持つ遷移は同じ変数の配列上の直前のエントリへ、変数を持たないエントリは配列の 1 つ前へ（要件 11.7）。古い注を直す
   - 檻 2 本: 前方参照のある連結で [5,6]・[6,7] と順に並ぶ。at の無いキーフレームを挟む正しい文書が通る
   - 遅く発火するトリガーを配列の前に置く文書と、同時刻の 1 本のテストを足す
@@ -374,3 +374,4 @@
 - 6.1: `compile/mod.rs:49-51` の NOTE(D2-V) が「dfs_detect_cycle は再帰 DFS」と言うのは 6.1 で古びた。P14 の注と一緒に 6.2／15.2 で消す。compile の深い鎖のテストは compile の道筋の再帰（今は無い）を守る檻で、トリガーの DFS ではない。
 - 6.2: 数値の規則が入ったので、公開の口から NaN と有限の値の混ざったセグメントは作れない。task 2 の compile の並べ替えの檻は「並べ替えを消すと落ちる」と「NaN で panic しない」だけを見る（全順序と partial_cmp の差は見えない）。ベジェの制御点の有限の規則は要件 11.9 に合わせて足し、design の「数値の検証」の表にも行を足した（表の欠け）。facade の `InvalidLoopCount` の検査は届かない死んだコードで、後の段（#57・#58）で消す。P8/P14 の注は `runtime/types.rs:33`・`instance_manager/tests.rs:366`・`tests/runtime/core_types_test.rs:326` に残る（15.2）。
 - 6.3: 暗黙のキーフレームの接頭辞 `"__implicit_"` が `compile/resolve.rs:24`・`validate/rules.rs:246`・`:270` の 3 か所に字で書いてある（定数 1 つにまとめるのは 15.1 で拾う）。トリガーのエントリに変数だけ・遷移だけがあると V16t と V7 の 2 件が積まれる（前からの形・件数を縛るテストは無い）。
+- 7.1: 辺を足すだけでは要件 11.7 を満たせない（処理の順が配列の順とずれ、連結が処理の順で最後のセグメントに続く）ので、`compile/mod.rs` で連結の終わりの時刻と始めの値を配列上の直前のエントリ（`DependencyGraph.prev_same_var`・`entry_segment_end`）から取る形にした（design の「辺を足す」の先・`var_last_end_time` は消えた）。`at`・`between` のエントリの from は今も処理の順（`var_last_value`）で、完了 dola-compiled-transition 要件 4.2 の「直前」の読みに決めが無い（research に無い指摘・21 のかけ直しで拾う）。古い `multiple_triggers_sorted_by_fire_time` は並べ替えを外しても落ちない（14.3 で拾う）。`tests/compile/time_resolution_test/interaction.rs:36` の注「var_last_end_time から継続」が古びた（15.2）。

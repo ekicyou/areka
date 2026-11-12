@@ -31,6 +31,8 @@ pub(super) struct DependencyGraph {
     pub(super) deps: HashMap<usize, HashSet<usize>>,
     /// keyframe name → entry index that defines it
     pub(super) kf_to_entry: HashMap<String, usize>,
+    /// 連結の遷移の entry index → 同じ変数の配列上の直前のエントリの index
+    pub(super) prev_same_var: HashMap<usize, usize>,
 }
 
 /// Build dependency graph from storyboard entries (Task 4.1)
@@ -43,6 +45,7 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
     }
 
     let mut deps: HashMap<usize, HashSet<usize>> = HashMap::new();
+    let mut prev_same_var: HashMap<usize, usize> = HashMap::new();
 
     // Second pass: build dependency edges
     for (idx, entry) in sb.entry.iter().enumerate() {
@@ -69,12 +72,26 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
                     entry_deps.insert(dep_idx);
                 }
             }
+        } else if let Some(ref var) = entry.variable {
+            // 連結の遷移: 同じ変数の配列上の直前のエントリに続く（要件 11.7）
+            if let Some(prev) = (0..idx)
+                .rev()
+                .find(|&i| sb.entry[i].variable.as_ref() == Some(var))
+            {
+                entry_deps.insert(prev);
+                prev_same_var.insert(idx, prev);
+            }
+        } else if let Some(prev) = idx.checked_sub(1) {
+            // at の無い純粋なキーフレーム・トリガー: 配列の 1 つ前のエントリに続く（要件 11.7）
+            entry_deps.insert(prev);
         }
-        // Sequential entries: no explicit dependency in graph
-        // (handled by variable-specific last_end_time tracking)
     }
 
-    DependencyGraph { deps, kf_to_entry }
+    DependencyGraph {
+        deps,
+        kf_to_entry,
+        prev_same_var,
+    }
 }
 
 /// Topological sort using Kahn's algorithm (Task 4.2, 4.3)
@@ -276,7 +293,7 @@ pub(super) fn resolve_entry_timing(
     trans_def: &crate::transition::TransitionDef,
     start_time: f64,
     keyframe_times: &HashMap<String, f64>,
-    var_last_end_time: Option<f64>,
+    prev_end_time: Option<f64>,
     errors: &mut Vec<DolaError>,
 ) -> Option<(f64, f64, f64)> {
     let delay = trans_def.delay;
@@ -336,7 +353,7 @@ pub(super) fn resolve_entry_timing(
         }
     } else {
         // Sequential placement (Task 5.1)
-        let base_time = var_last_end_time.unwrap_or(start_time);
+        let base_time = prev_end_time.unwrap_or(start_time);
         let segment_start = base_time + delay;
         let segment_end = segment_start + duration;
         let kf_time = segment_end;

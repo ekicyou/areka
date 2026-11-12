@@ -76,12 +76,12 @@ pub fn compile_storyboard(
     let mut keyframe_times: HashMap<String, f64> = HashMap::new();
     keyframe_times.insert("start".to_string(), start_time);
 
-    // variable_name → last segment end_time
-    let mut var_last_end_time: HashMap<String, f64> = HashMap::new();
     // variable_name → last segment to_value
     let mut var_last_value: HashMap<String, TransitionValue> = HashMap::new();
     // variable_name → Vec<CompiledSegment>
     let mut var_segments: HashMap<String, Vec<CompiledSegment>> = HashMap::new();
+    // entry_index → (segment end_time, to_value)（連結の遷移が配列上の直前のエントリに続くため）
+    let mut entry_segment_end: HashMap<usize, (f64, TransitionValue)> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
     let mut entry_keyframe_time: HashMap<usize, f64> = HashMap::new();
     // compiled triggers
@@ -157,6 +157,18 @@ pub fn compile_storyboard(
             None => continue, // already caught by validation
         };
 
+        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）
+        let (last_end_time, last_value) = if entry.at.is_none() && entry.between.is_none() {
+            let prev = graph
+                .prev_same_var
+                .get(&entry_idx)
+                .and_then(|p| entry_segment_end.get(p));
+            (prev.map(|(t, _)| *t), prev.map(|(_, v)| v))
+        } else {
+            // at・between は終わりの時刻を使わない
+            (None, var_last_value.get(&var_name))
+        };
+
         // Resolve timing (Task 5.1-5.3)
         let timing = resolve_entry_timing(
             storyboard_name,
@@ -165,7 +177,7 @@ pub fn compile_storyboard(
             &trans_def,
             start_time,
             &keyframe_times,
-            var_last_end_time.get(&var_name).copied(),
+            last_end_time,
             &mut errors,
         );
 
@@ -179,7 +191,7 @@ pub fn compile_storyboard(
         entry_keyframe_time.insert(entry_idx, kf_time);
 
         // Resolve from value (Task 5.7)
-        let from_value = resolve_from_value(&trans_def, var_last_value.get(&var_name), var_def);
+        let from_value = resolve_from_value(&trans_def, last_value, var_def);
 
         // Resolve to value (Task 5.8)
         let to_value = resolve_to_value(&trans_def, &from_value);
@@ -204,7 +216,7 @@ pub fn compile_storyboard(
             .entry(var_name.clone())
             .or_default()
             .push(segment);
-        var_last_end_time.insert(var_name.clone(), segment_end);
+        entry_segment_end.insert(entry_idx, (segment_end, to_value.clone()));
         var_last_value.insert(var_name, to_value);
     }
 
