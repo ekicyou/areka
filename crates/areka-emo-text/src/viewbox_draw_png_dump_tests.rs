@@ -15,8 +15,36 @@ use areka_sakura::contract::ActorKey;
 // viewbox/oracle 双方へ描き、指定フレームで read_back を白背景へ合成して PNG 保存する。
 // byte 等価檻（`diag_line_boundary_dropout_vs_oracle`）は「viewbox==oracle」を保証するが、
 // 「その全域再描画自体が正しく見えるか（下端欠け等）」は人（AI vision）が画像を見るしかない。
-// 出力先は env `AREKA_DIAG_OUT`（無指定なら CARGO_TARGET_TMPDIR 相当のカレント）。
+// 出力先は env `AREKA_DIAG_OUT`（無指定ならワークツリーの `target/areka-diag`・どのカレントからでも同じ）。
 // 依存を足さないため PNG は自前エンコード（無圧縮 deflate・RGBA8）。
+
+/// 既定の出力先（ワークツリーの `target` の下・決まり「実機の一時フォルダは `target` の下だけ」）。
+const DIAG_DEFAULT_OUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/areka-diag");
+
+/// 出力先を決めてフォルダを作る（env `AREKA_DIAG_OUT` が優先）。
+fn diag_out_dir() -> String {
+    let out_dir =
+        std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| DIAG_DEFAULT_OUT_DIR.to_string());
+    std::fs::create_dir_all(&out_dir).expect("PNG の出力先を作る");
+    out_dir
+}
+
+/// 既定の出力先がワークツリーの `target` の下（指摘 27）。
+#[test]
+fn diag_default_out_dir_is_under_worktree_target() {
+    let dir = std::path::Path::new(DIAG_DEFAULT_OUT_DIR);
+    assert!(
+        dir.is_absolute(),
+        "既定の出力先が絶対パスでない: {DIAG_DEFAULT_OUT_DIR}"
+    );
+    let target = dir.parent().expect("target の階層");
+    assert_eq!(target.file_name(), Some(std::ffi::OsStr::new("target")));
+    let root = target.parent().expect("ワークツリーの根");
+    assert!(
+        root.join("Cargo.toml").is_file() && root.join("crates").is_dir(),
+        "{root:?} がワークツリーの根でない"
+    );
+}
 
 /// CRC-32（PNG チャンク用・多項式 0xEDB88320）。
 fn diag_crc32(data: &[u8]) -> u32 {
@@ -150,7 +178,7 @@ fn diag_bottom_ink_row(bgra: &[u8], w: u32, h: u32) -> Option<u32> {
 #[test]
 #[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]
 fn diag_dump_horizontal_pngs() {
-    let out_dir = std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| ".".to_string());
+    let out_dir = diag_out_dir();
     let mut rig = Rig::new();
     // 実 fixture（emo2-kakukaku）の balloon model を実ファイルからロードする（Yu Gothic UI・
     // validrect [36,356]×[46,168]＝320×122・wordwrappoint.x=-49）——example の load_balloon_model
@@ -302,11 +330,11 @@ fn diag_dump_horizontal_pngs() {
 /// 見るしかない（記憶 emo-text-byte-equiv-default-font-blindspot）。全域再描画オラクル
 /// [`DrawExecutor`] を使い fully-revealed の完成画像を 1 フレームで得る。
 /// `cargo test -p areka-emo-text --lib -- --ignored --nocapture diag_dump_budoux_wordwrap_pngs`
-/// （出力先は env `AREKA_DIAG_OUT`・無指定はカレント）。
+/// （出力先は env `AREKA_DIAG_OUT`・無指定はワークツリーの `target/areka-diag`）。
 #[test]
 #[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]
 fn diag_dump_budoux_wordwrap_pngs() {
-    let out_dir = std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| ".".to_string());
+    let out_dir = diag_out_dir();
     let mut rig = Rig::new();
     // 実 fixture（emo2-kakukaku）を実ファイルからロード（Yu Gothic UI・validrect 320×122・
     // wordwrappoint.x=-49）——diag_dump_horizontal_pngs と同一経路。狭いバルーンが char-by-char

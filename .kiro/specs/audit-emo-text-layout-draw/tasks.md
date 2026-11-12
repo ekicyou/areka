@@ -221,7 +221,7 @@
   - 消した口がツリー全体で grep 0 件、ワークスペースが組めて今あるテストが全部緑であること
   - _Requirements: 3.4, 4.1, 4.3, 7.1, 7.6, 7.9_
 
-- [ ] 12.4 PNG の既定の出力先を `target` の下にする
+- [x] 12.4 PNG の既定の出力先を `target` の下にする
   - PNG の既定の出力先を、どのカレントからでもワークツリーの `target` の下になる形にして、フォルダを作る。説明を直す（指摘 27）
   - 既定の出力先が `target` の下、のテストが PNG のテストの中にあり緑であること
   - _Requirements: 4.1, 6.4, 8.1_
@@ -310,3 +310,4 @@
 - 12.1: `for_mode` の檻は draw.rs と draw_metrics.rs を数え、`create_text_format` と `probe_format_for` の中の 1 つずつだけを許す（`direction_recipe_factory_is_called_only_by_the_two_format_makers`）。`@` の檻は `DECORATION_SOURCES` で viewbox_draw_decoration.rs も読み、説明は入口 3 つ。3 つ目の呼び出しや `@` を植えた写しで赤になる陽性の相棒を置いた。draw.rs の既定の書体の名と高さは look の正典の別名にし、揃えのテストを消した。
 - 12.2: `degraded_advance` は `FixedMetrics.advance` を呼ぶ形にして式を 1 か所に、軸の名と割り当ては私有の `pick_inline_axis` の 1 つの `match` に通した（`debug!` の数は変わらない）。`device_err`／`none_err` は `surface.rs` だけにあり、範囲の中に写しは無い（兄弟が寄せた）。
 - 12.3: 消す前に `git grep -n <名> -- crates tests tools` で確かめた。`layout_with_cursor_warn` の呼び手はテスト 4 か所（4.2 で足した `layout_wrap_tests.rs:714` を含む）で、支えに足した `layout_guarded`（既定の見た目だけの `layout_styled`・旧来と同じ行）へ移した。`#[cfg(test)]` の再公開・`ChoiceDraw`（`LineDraw.hover` へ畳む）・`apply_color_ranges` の `bool`・`DrawExecutor::line_layout` と重ねた `#[cfg(test)]`・`dump_case` の捨てる戻り値を消し、`rig` は `_rig` にした（`mk` は 1.4 で消えていた）。消した名前はツリー全体で 0 件・`cargo check --workspace --all-targets` は警告 0。`actor_decoration_frame_tests.rs:115` の名指しは兄弟の PR #435 で消えていた。`RegionTransform` の行列の口と `ScaleContract::author_dpi`・`new` の第 2 引数は残した。
+- 12.4: PNG の書き出しの既定の出力先を `concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/areka-diag")` にし、`diag_out_dir()` で `create_dir_all` する（`AREKA_DIAG_OUT` が優先）。檻は普通のテスト `diag_default_out_dir_is_under_worktree_target`。#[ignore] の書き出しそのものは回していない。
