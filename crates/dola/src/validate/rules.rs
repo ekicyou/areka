@@ -240,15 +240,17 @@ pub(super) fn validate_duplicate_keyframes(
 
 /// V3: 予約キーフレーム名検証（"start" と暗黙名の接頭辞 `__implicit_` は使用禁止）
 pub(super) fn validate_reserved_keyframe_names(
-    _sb_name: &str,
+    sb_name: &str,
     sb: &crate::storyboard::Storyboard,
     errors: &mut Vec<DolaError>,
 ) {
-    for entry in &sb.entry {
+    for (entry_index, entry) in sb.entry.iter().enumerate() {
         if let Some(ref kf_name) = entry.keyframe
             && (kf_name == "start" || kf_name.starts_with(IMPLICIT_KEYFRAME_PREFIX))
         {
             errors.push(DolaError::ReservedKeyframeName {
+                storyboard: sb_name.to_string(),
+                entry_index,
                 name: kf_name.clone(),
             });
         }
@@ -393,7 +395,9 @@ pub(super) fn validate_transition_type_constraints(
                 if let Some(TransitionValue::Scalar(val)) = value
                     && (*val < min_f || *val > max_f)
                 {
-                    errors.push(DolaError::ValueOutOfRange {
+                    errors.push(DolaError::TransitionValueOutOfRange {
+                        storyboard: sb_name.to_string(),
+                        entry_index: entry_idx,
                         variable: var_name.to_string(),
                         field: field.to_string(),
                         value: *val,
@@ -438,8 +442,8 @@ pub(super) fn validate_loop_offset(
         });
     }
 
-    // V16: min > max
-    if min > max {
+    // V16: min > max（Scalar は min が 0 なので、逆転は負の max として V15 が報告済み）
+    if matches!(lo, LoopOffset::Range(_)) && min > max {
         errors.push(DolaError::LoopOffsetRangeInverted {
             storyboard: sb_name.to_string(),
             min,

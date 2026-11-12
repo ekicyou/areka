@@ -601,7 +601,7 @@ fn simultaneous_triggers_resolve_in_group_order() {
         keyframe: keyframe.map(str::to_string),
         ..Default::default()
     };
-    // 親 P1・P2 は別の変数を触り（互いに競合しない）、t=1 でそれぞれ C1・C2 を起こす
+    // 親 p1・p2 は別の変数を触り（互いに競合しない）、t=1 でそれぞれ c1・c2 を起こす
     let parent = |var: &str, child: &str| {
         StoryboardBuilder::new()
             .entry(fade(var, Some("kf1")))

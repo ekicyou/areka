@@ -43,7 +43,7 @@ impl ObjectInternPool {
 }
 
 /// イージング適用と値の補間計算を行う。
-pub struct Interpolator;
+pub(crate) struct Interpolator;
 
 impl Interpolator {
     /// セグメントの進捗率 `progress_t` で補間値を計算する。
@@ -52,6 +52,7 @@ impl Interpolator {
     /// - `VariableTypeHint::Float`: f64 直接値
     /// - `VariableTypeHint::Integer`: f64 補間 → `round()` → i64
     /// - `VariableTypeHint::Object`: `progress_t >= 1.0` なら `to_value`、それ以外は `from_value`
+    #[cfg(test)]
     pub fn interpolate(
         segment: &CompiledSegment,
         variable_type: &VariableTypeHint,

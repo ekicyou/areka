@@ -10,7 +10,7 @@
 /// ハードウェアレベルの高精度タイマーを使用し、マイクロ秒級の精度を提供。
 ///
 /// アニメーションエンジンのフレーム間時間差計測に使用する想定。
-/// 利用者は本関数の戻り値を `runtime.update(subscriber_id, time)` に渡す。
+/// 利用者は本関数の戻り値を `DolaRuntime::tick(time)` に渡す。
 pub fn now() -> f64 {
     use std::sync::OnceLock;
     use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};

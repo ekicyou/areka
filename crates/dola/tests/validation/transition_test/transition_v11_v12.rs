@@ -48,13 +48,20 @@ mod v12_tests {
         doc
     }
 
+    /// 初期値の違反は変数だけ、遷移の違反は台本 "sb1" の entry 0 の場所つき（#70）
     fn out_of_range(doc: &DolaDocument, var: &str, fld: &str) -> bool {
-        doc.validate().unwrap_err().iter().any(|e| {
-            matches!(
-                e,
-                DolaError::ValueOutOfRange { variable, field, .. }
-                if variable == var && field == fld
-            )
+        doc.validate().unwrap_err().iter().any(|e| match e {
+            DolaError::ValueOutOfRange {
+                variable, field, ..
+            } => fld == "initial" && variable == var && field == fld,
+            DolaError::TransitionValueOutOfRange {
+                storyboard,
+                entry_index: 0,
+                variable,
+                field,
+                ..
+            } => storyboard == "sb1" && variable == var && field == fld,
+            _ => false,
         })
     }
 

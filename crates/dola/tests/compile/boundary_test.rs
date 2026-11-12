@@ -230,7 +230,8 @@ fn keyframe_name_with_implicit_prefix_is_rejected() {
     let errors = compile_storyboard(&doc, "test", 0.0).unwrap_err();
     assert!(errors.iter().any(|e| matches!(
         e,
-        DolaError::ReservedKeyframeName { name } if name == "__implicit_1"
+        DolaError::ReservedKeyframeName { storyboard, entry_index: 0, name }
+            if storyboard == "test" && name == "__implicit_1"
     )));
 }
 

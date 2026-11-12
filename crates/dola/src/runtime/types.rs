@@ -1,6 +1,5 @@
 //! ランタイムの公開型定義（EvaluatedValue, RuntimeError, StartResult）。
 
-use std::fmt;
 use std::rc::Rc;
 
 use crate::DolaError;
@@ -36,16 +35,6 @@ impl PartialEq for EvaluatedValue {
             (Self::Integer(a), Self::Integer(b)) => a == b,
             (Self::Object(a), Self::Object(b)) => Rc::ptr_eq(a, b),
             _ => false,
-        }
-    }
-}
-
-impl fmt::Display for EvaluatedValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Float(v) => write!(f, "{v:.6}"),
-            Self::Integer(v) => write!(f, "{v}"),
-            Self::Object(v) => write!(f, "{v:?}"),
         }
     }
 }

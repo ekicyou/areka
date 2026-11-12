@@ -10,8 +10,14 @@ pub enum DolaError {
     #[error("Duplicate keyframe '{name}' in storyboard '{storyboard}'")]
     DuplicateKeyframe { storyboard: String, name: String },
     /// 予約キーフレーム名使用 (V3)
-    #[error("Reserved keyframe name '{name}' cannot be user-defined")]
-    ReservedKeyframeName { name: String },
+    #[error(
+        "Reserved keyframe name '{name}' cannot be user-defined in storyboard '{storyboard}' entry {entry_index}"
+    )]
+    ReservedKeyframeName {
+        storyboard: String,
+        entry_index: usize,
+        name: String,
+    },
     /// 未定義変数参照 (V4)
     #[error("Undefined variable '{name}' in storyboard '{storyboard}' entry {entry_index}")]
     UndefinedVariable {
@@ -53,11 +59,24 @@ pub enum DolaError {
         storyboard: String,
         entry_index: usize,
     },
-    /// 値域超過 (V12)
+    /// 変数の初期値の値域超過 (V12)
     #[error(
         "Value out of range for variable '{variable}': {field} = {value}, valid range [{min}, {max}]"
     )]
     ValueOutOfRange {
+        variable: String,
+        field: String,
+        value: f64,
+        min: f64,
+        max: f64,
+    },
+    /// 遷移の from/to/relative_to の値域超過 (V12)
+    #[error(
+        "Value out of range for variable '{variable}' in storyboard '{storyboard}' entry {entry_index}: {field} = {value}, valid range [{min}, {max}]"
+    )]
+    TransitionValueOutOfRange {
+        storyboard: String,
+        entry_index: usize,
         variable: String,
         field: String,
         value: f64,
@@ -171,8 +190,13 @@ mod tests {
             "Duplicate keyframe 'kf' in storyboard 'sb'"
         );
         assert_eq!(
-            DolaError::ReservedKeyframeName { name: s("start") }.to_string(),
-            "Reserved keyframe name 'start' cannot be user-defined"
+            DolaError::ReservedKeyframeName {
+                storyboard: s("sb"),
+                entry_index: 1,
+                name: s("start"),
+            }
+            .to_string(),
+            "Reserved keyframe name 'start' cannot be user-defined in storyboard 'sb' entry 1"
         );
         assert_eq!(
             DolaError::UndefinedKeyframe {
@@ -271,6 +295,19 @@ mod tests {
             .to_string(),
             "Value out of range for variable 'x': initial = 5, valid range [0, 1]"
         );
+        assert_eq!(
+            DolaError::TransitionValueOutOfRange {
+                storyboard: s("sb"),
+                entry_index: 2,
+                variable: s("x"),
+                field: s("to"),
+                value: 5.0,
+                min: 0.0,
+                max: 1.0,
+            }
+            .to_string(),
+            "Value out of range for variable 'x' in storyboard 'sb' entry 2: to = 5, valid range [0, 1]"
+        );
     }
 
     #[test]
@@ -354,11 +391,14 @@ mod tests {
 
     #[test]
     fn error_trait_object_usable() {
-        let e: Box<dyn std::error::Error> =
-            Box::new(DolaError::ReservedKeyframeName { name: s("start") });
+        let e: Box<dyn std::error::Error> = Box::new(DolaError::ReservedKeyframeName {
+            storyboard: s("sb"),
+            entry_index: 0,
+            name: s("start"),
+        });
         assert_eq!(
             e.to_string(),
-            "Reserved keyframe name 'start' cannot be user-defined"
+            "Reserved keyframe name 'start' cannot be user-defined in storyboard 'sb' entry 0"
         );
         assert!(e.source().is_none());
     }

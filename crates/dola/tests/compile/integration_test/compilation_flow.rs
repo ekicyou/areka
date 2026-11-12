@@ -261,41 +261,6 @@ fn builder_to_compile_flow() {
 }
 
 #[test]
-fn compile_result_serializable() {
-    let doc = make_doc(
-        vec![(
-            "opacity",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: Some(0.0),
-                max: Some(1.0),
-            },
-        )],
-        vec![],
-        "fade",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                    duration: Some(1.0),
-                    ..Default::default()
-                })),
-                keyframe: Some("visible".to_string()),
-                ..Default::default()
-            })
-            .build(),
-    );
-
-    let compiled = compile_storyboard(&doc, "fade", 0.0).unwrap();
-    let json = serde_json::to_string_pretty(&compiled).unwrap();
-    let deserialized: CompiledStoryboard = serde_json::from_str(&json).unwrap();
-    assert_eq!(compiled, deserialized);
-}
-
-#[test]
 fn empty_storyboard_compiles() {
     let doc = make_doc(vec![], vec![], "empty", StoryboardBuilder::new().build());
 

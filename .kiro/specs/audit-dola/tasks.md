@@ -320,7 +320,7 @@
   - _Depends: 1.1, 17.1_
   - _Requirements: 6.1, 7.9_
 
-- [ ] 20. storyboard の層の公開の口を消す（#25・#26・#52・#56・#66・#70・#73）
+- [x] 20. storyboard の層の公開の口を消す（#25・#26・#52・#56・#66・#70・#73）
 - [x] 20.1 使われない書式の機能と再生の状態の型を消す（#25・#26）
   - 機能 `json`・`toml` と任意の `toml` を消し、`serde_json` を dev-dependencies へ移す。`#[cfg(feature = "json")]` を外し、toml の往復と json の既定のテストを消す。機能 `yaml` と任意の `serde_yaml` は残す（要件 11.3）
   - 再生の状態のファイルと再公開・そのテストを消す（要件 11.5）。README の書式の機能と再生の状態の行を直す
@@ -328,7 +328,7 @@
   - 終わった姿: 消した名前と機能の参照がツリーに 0 件（grep）で、`cargo test -p dola` と dola を使うクレートのビルドが通る
   - _Depends: 17.1_
   - _Requirements: 3.3, 5.6, 5.7, 6.1, 11.3, 11.5_
-- [ ] 20.2 非推奨の update・補間の再公開・値の表示・コンパイル結果の serde を消し、エラーに場所を足し、後の段の注を片づける（#52・#56・#66・#70・#73・#53 の後の段の分）
+- [x] 20.2 非推奨の update・補間の再公開・値の表示・コンパイル結果の serde を消し、エラーに場所を足し、後の段の注を片づける（#52・#56・#66・#70・#73・#53 の後の段の分）
   - update を消し、時計とランタイムの説明を直す（テストの読み替えは 13.3 で済み）
   - 補間の再公開を消して crate の中だけにする
   - 評価値の表示を消し、テストの使い手を直す
@@ -391,3 +391,4 @@
 - 18.1: `areka-ghost/src/prop_sink.rs` の `stop()` を引く注 4 か所と assert の文 1 つを「上流が player を捨てる」に直した（進行役の判断・並走のセッション無し）。`TimedSchedule::clear` の呼び手はテスト 1 か所だけになった（design は消すと言っていない）。
 - 19: 本体は長さを 0 へ切り上げない（dola の `to_talk_schedule` は切り上げる）。違うのは負の長さだけで、本番の台本は `Duration` から作るので届かない（範囲の外・振る舞いの差 0）。
 - 20.1: 機能 `yaml` は `serde_yaml` を引くだけで、src に使う所が無い（`dola-yaml-backend` 待ち）。Cargo.lock は toml 0.8 系の 6 package が抜けただけ。THIRD-PARTY-NOTICES は変わらない見込み（22 の全体テストの -License で確かめる）。
+- 20.2: #70 は `ValueOutOfRange` に欄を足さず、遷移の分に新しい種類 `TransitionValueOutOfRange { storyboard, entry_index, .. }` を足した（`ValueOutOfRange` は場所を持たない変数の初期値にも使うため・Option や番兵より遷移の分で場所を必ず持てる）。`Interpolator::interpolate` は単体テストの入口として `#[cfg(test)]` で残した。`\bP[0-9]+\b` の grep に残る 5 件は完了 spec の名前（`areka-P0-…`）で P 番号の注ではない。

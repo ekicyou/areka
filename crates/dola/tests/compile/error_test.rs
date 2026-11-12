@@ -354,8 +354,8 @@ fn relative_to_out_of_range_is_rejected() {
     assert!(
         errs.iter().any(|e| matches!(
             e,
-            DolaError::ValueOutOfRange { variable, field, value, .. }
-                if variable == "opacity" && field == "relative_to" && (*value - 1.3).abs() < 1e-9
+            DolaError::TransitionValueOutOfRange { storyboard, entry_index: 0, variable, field, value, .. }
+                if storyboard == "test" && variable == "opacity" && field == "relative_to" && (*value - 1.3).abs() < 1e-9
         )),
         "{errs:?}"
     );

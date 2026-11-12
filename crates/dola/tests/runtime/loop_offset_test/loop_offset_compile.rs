@@ -65,21 +65,6 @@ mod compile_integration_tests {
         let compiled = compile_storyboard(&doc, "blink", 0.0).unwrap();
         assert_eq!(compiled.loop_offset, None);
     }
-
-    #[test]
-    fn compile_loop_offset_preserved_across_serialization() {
-        let lo = LoopOffset::Range(LoopOffsetRange {
-            min: 2.0,
-            max: 8.0,
-            easing: EasingFunction::Named(EasingName::SineOut),
-        });
-        let doc = doc_with_fade_and_offset(Some(lo.clone()));
-        let compiled = compile_storyboard(&doc, "blink", 0.0).unwrap();
-
-        let json = serde_json::to_string_pretty(&compiled).unwrap();
-        let deserialized: CompiledStoryboard = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.loop_offset, Some(lo));
-    }
 }
 
 // =============================================================

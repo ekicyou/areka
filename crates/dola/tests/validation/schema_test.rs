@@ -422,10 +422,41 @@ mod v3_tests {
         doc.storyboard = storyboard;
 
         let errors = doc.validate().unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::ReservedKeyframeName { storyboard, entry_index: 0, name }
+                if storyboard == "sb1" && name == "start"
+        )));
+        // 場所がエラーの文に載る（#70）
         assert!(
             errors
                 .iter()
-                .any(|e| matches!(e, DolaError::ReservedKeyframeName { name } if name == "start"))
+                .any(|e| e.to_string().contains("storyboard 'sb1' entry 0")),
+            "{errors:?}"
+        );
+    }
+
+    /// Scalar の周回の待ちは min が 0 なので、負なら V15 の 1 件だけ（V16 の逆転は重ねない・#70）
+    #[test]
+    fn negative_scalar_loop_offset_reports_one_error() {
+        let mut doc = minimal_valid_doc();
+        doc.storyboard = BTreeMap::from([(
+            "sb1".to_string(),
+            Storyboard {
+                time_scale: 1.0,
+                loop_count: 1,
+                interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: Some(LoopOffset::Scalar(-1.0)),
+                entry: vec![],
+            },
+        )]);
+        let errors = doc.validate().unwrap_err();
+        assert_eq!(
+            errors,
+            vec![DolaError::LoopOffsetNegativeMax {
+                storyboard: "sb1".to_string(),
+                value: -1.0,
+            }]
         );
     }
 }

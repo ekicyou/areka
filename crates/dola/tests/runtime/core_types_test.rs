@@ -160,29 +160,6 @@ mod evaluated_value_tests {
             EvaluatedValue::Float(f64::NAN)
         );
     }
-
-    #[test]
-    fn display_float() {
-        // 小数 5 桁 → 6 桁への 0 埋めを検証する意図。円周率の意図はないため、
-        // 桁数を保ったまま clippy::approx_constant が反応しない値を使う。
-        let v = EvaluatedValue::Float(1.23456);
-        let s = format!("{v}");
-        assert_eq!(s, "1.234560");
-    }
-
-    #[test]
-    fn display_integer() {
-        let v = EvaluatedValue::Integer(-42);
-        let s = format!("{v}");
-        assert_eq!(s, "-42");
-    }
-
-    #[test]
-    fn display_object() {
-        let v = EvaluatedValue::Object(Rc::new(DynamicValue::String("test".to_string())));
-        let s = format!("{v}");
-        assert!(s.contains("test"));
-    }
 }
 
 mod runtime_error_tests {
@@ -252,6 +229,8 @@ mod runtime_error_tests {
     fn compile_error_display() {
         use dola::DolaError;
         let err = RuntimeError::CompileError(vec![DolaError::ReservedKeyframeName {
+            storyboard: "sb".to_string(),
+            entry_index: 0,
             name: "begin".to_string(),
         }]);
         let msg = format!("{err}");
@@ -290,6 +269,8 @@ mod runtime_error_tests {
 
         fn fallible() -> Result<(), RuntimeError> {
             let errors: Vec<DolaError> = vec![DolaError::ReservedKeyframeName {
+                storyboard: "sb".to_string(),
+                entry_index: 0,
                 name: "test".to_string(),
             }];
             // `?` 演算子で Vec<DolaError> → RuntimeError::CompileError に自動変換

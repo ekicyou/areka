@@ -228,7 +228,9 @@ pub(crate) fn compile_validated(
                 max.unwrap_or(f64::INFINITY),
             );
             if v < min || v > max {
-                errors.push(DolaError::ValueOutOfRange {
+                errors.push(DolaError::TransitionValueOutOfRange {
+                    storyboard: storyboard_name.to_string(),
+                    entry_index: entry_idx,
                     variable: var_name.to_string(),
                     field: if trans_def.relative_to.is_some() {
                         "relative_to"

@@ -25,7 +25,8 @@ use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, 
 /// let opacity_id = rt.subscribe("opacity");
 /// rt.load_document(doc)?;
 /// let result = rt.start("fade_in", 0.0)?;
-/// let changes = rt.update(0.5);
+/// rt.tick(0.5);
+/// let changes = rt.last_result();
 /// ```
 pub struct DolaRuntime {
     /// 検証とコンパイルを全部通った文書だけを持つ（`load_document`）
@@ -251,7 +252,7 @@ impl DolaRuntime {
 
     /// 現在値凍結破棄（Cancel）。
     ///
-    /// エントリ削除のみ（last_values は前回 update の値が自然に残る）。
+    /// エントリ削除のみ（last_values は前回 tick の値が自然に残る）。
     pub fn cancel(&mut self, group_id: u64) -> Result<(), RuntimeError> {
         // group_id の存在確認 + terminal check
         let instance = self.instance_manager.get(group_id)?;
@@ -272,7 +273,7 @@ impl DolaRuntime {
     /// 遅延 Conclude。
     ///
     /// `deadline` は呼び出し側が `clock::now() + offset_secs` として計算した
-    /// 絶対時刻。`update()` 内で `current_time >= deadline` の
+    /// 絶対時刻。`tick()` 内で `current_time >= deadline` の
     /// タイミングで Conclude 相当の処理を実行する。
     pub fn finish(&mut self, group_id: u64, deadline: f64) -> Result<(), RuntimeError> {
         let instance = self.instance_manager.get(group_id)?;
@@ -330,7 +331,7 @@ impl DolaRuntime {
         !self.instance_manager.instances().is_empty()
     }
 
-    /// 差分更新取得（後方互換）。
+    /// 差分更新の内部実装。
     ///
     /// 内部フロー:
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
@@ -338,13 +339,6 @@ impl DolaRuntime {
     /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
-    #[deprecated(note = "use tick() + last_result() instead")]
-    pub fn update(&mut self, current_time: f64) -> UpdateResult {
-        self.tick(current_time);
-        self.last_update_result.clone()
-    }
-
-    /// 差分更新の内部実装。
     fn update_internal(&mut self, current_time: f64) -> UpdateResult {
         // Step 1: Finish Deadline チェック
         let expired = self.instance_manager.check_finish_deadlines(current_time);
