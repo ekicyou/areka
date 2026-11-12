@@ -38,7 +38,7 @@
   - `GhostSlot` と止まる流れを複数のゴースト向けに作り直すこと（`multi-ghost-runtime`）。
   - 既定のゴースト名 `"emo2"`（`boot_resolve.rs` の `DEFAULT_GHOST_FOLDER`）を変えること。実在のゴースト emo2 を指す名前（`emo2_root`・`acquire_emo2`・`Emo2Absent`・`EMO2_ADJUST`・`AREKA_EMO2_REAL_RUN`・`tests/emo2_real_run*`・`emo2_first_load_repeat` ほか）を変えること。emo2 を含まない名前（`BootWiringError` ほか）を変えること。
   - `runtime` のテストのコードが本体の外を参照する所を 0 にすること（数えるだけ・決めるのは `runtime-crate-split`）。
-  - 本体の外の crate の説明の文の中の `emo2_boot` の名指し（`crates/areka-placement` の 26 ファイル〔`src/test_crash_report.rs` 1 行目を含む〕・emo-text・emo-present・kanade・wintf の説明・parsers・seriko・ghost・shiori-host32-host・ukadoc-survey・`log-capture-kit` の `src/event.rs` の説明と `src/event_tests.rs` の出所の見本の値）の書き換え（パスがもう一度変わる `runtime-crate-split` で直す）。ただし要件 5.3 に挙げる、パスが切れると働きが変わる所は直す。
+  - 本体の外の crate の説明の文の中の `emo2_boot` の名指し（`crates/areka-placement` の 26 ファイル〔`src/test_crash_report.rs` 1 行目を含む〕・emo-text・emo-present・kanade・wintf の説明・parsers・seriko・ghost・shiori-host32-host・ukadoc-survey・`log-capture-kit` の `src/event.rs` の説明と `src/event_tests.rs` の出所の見本の値）の書き換えと、本体の外の crate のテストの名前の中の `emo2_boot` の語（`crates/areka-emo-text/src/actor_lookahead_tests.rs` の `emo2_boot_talk_reveals_without_moving_glyphs`）の改め（パスがもう一度変わる `runtime-crate-split` で直す）。ただし要件 5.3 に挙げる、パスが切れると働きが変わる所は直す。
   - `emo2_boot` に触ると書いているほかの約 70 本の brief の書き換え（`roadmap.md` の新旧のパスの対応表で読み替える）。
   - 歴史の文書（`.kiro/steering/roadmap-history.md`・`.kiro/specs/completed/`・日付を名に持つ写し `doc/roadmap-overview-2026-10-16.html`）の中の古い名前とパス。
 - **Adjacent expectations**:
@@ -82,7 +82,7 @@
 1. The 本仕様の作業 shall `ghost_switch`・`reload`（+`reload_args`）・`shell_balloon_switch`（+`shell_balloon_resolve`）・`runtime_boot`・`switch_copy`・`same_folder_pin`・`shell_carry` の本番のファイルと各テストを、本体の新しいモジュール `crates/areka/src/session/` へ移す。
 2. The 本仕様の作業 shall `install_cue`・`update_cue`・`readme_cue` の本番のファイルと各テストを、それぞれの持ち主のモジュール `crates/areka/src/install/`・`update/`・`readme/` へ移す。
 3. The 本仕様の作業 shall 移すファイルを、git が移動として追える形（履歴を残す移動）で移す。
-4. The 本仕様の作業 shall cue の受け口の型（`*_cue.rs` の同型の形）と、`consumer_ledger.rs` の表の行（どの名前をどの受け口が受けるか）を変えない。
+4. The 本仕様の作業 shall cue の受け口の型（`*_cue.rs` の同型の形）と、`consumer_ledger.rs` の表の行（どの名前をどの受け口が受けるか）を変えない。`consumer_ledger.rs` の説明の文の中の、移した受け口へのリンク（`super::install_cue::InstallCueSink` ほか 6 か所）は、移した先のパスへ書き換える。
 5. Where 移すファイルの中に、`runtime` に残るファイルが引く型や関数がある場合, the 本仕様の作業 shall その型や関数を `runtime` 側に置くか、引く向きを逆にするかして、要件 3.1 を満たす（どちらにするかは設計で決める）。
 6. The 本仕様の作業 shall `crash_report_test_support.rs`（テストの実行ファイルの落ちの報告）を `src/runtime/` へ一緒に移すだけにし、中身を変えない。
 
@@ -111,7 +111,7 @@
 1. The areka shall `runtime` のモジュールのパスから付くログの出所を `areka::runtime::…` で出し、`session`・`install`・`update`・`readme` へ移したファイルのログの出所を、移した先のモジュールのパスで出す。
 2. The 本仕様の作業 shall 出所を名前で読む決まり（`log_history.rs` の `rule("areka::emo2_boot::ghost_switch", …)` ほか）を、移した先の出所の名前へ直し、その決まりのテスト（`log_history_tests`）と `doc/ssp-mcp/log-convention.md` を一緒に直す。
 3. When ログの出所の名前が変わった後に areka が記録を書くとき, the areka shall 前と同じ行を、前と同じ記録の分け方（`log_history` の種類と扱い）で書く。
-4. The 本仕様の作業 shall 出所を名前で読むほかの所（`RUST_LOG` の文字列・テストのフィルタ・`tools/load-flake.ps1` の例 `-Filter emo2_boot::frame`・実機の手順書）を、新しい名前へ直す。
+4. The 本仕様の作業 shall 出所を名前で読むほかの所（`RUST_LOG` の文字列〔`crates/areka/tests/stay_on_top_real_run.rs` の `areka::emo2_boot::…` 6 つほか〕・テストのフィルタ・`tools/load-flake.ps1` の例 `-Filter emo2_boot::frame`・実機の手順書）を、新しい名前へ直す。
 5. The 本仕様の作業 shall 語彙として付けた直書きの出所（`"areka::persist::*"`・`"areka::log::*"`・`"areka::perf"` ほか、モジュールのパスに頼らないもの）を変えない。
 6. When 書き換えを終えたとき, the 本仕様の作業 shall 古い出所の名前 `areka::emo2_boot` を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep し、残りが Boundary Context の Out of scope に挙げた所（`log-capture-kit` の `src/event_tests.rs` の出所の見本の値ほか）と歴史の文書だけであることを示す。
 
@@ -122,14 +122,14 @@
 #### Acceptance Criteria
 
 1. The 本仕様の作業 shall 本体の中で `emo2_boot` と改める名前を引く所（`ghost_session.rs`・`main.rs`・`mcp/`・`input_events/`・`install/`・`update/`・`readme/`・`menu/`・`offline_dump/`・`session_end.rs`・`app_exit.rs`・`boot_config.rs`・`log_history.rs`・`placement_tests/` の 9 ファイル〔`measure_bake_count_tests`・`measure_bake_log_tests`・`measure_template_tests`・`reset_balloon_pos_tests`・`spawn_zorder_pair_deferred_tests`・`zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests`・`transition_judge`・`transition_judge_tests`〕ほか）を、改めた後のパスと名前へ書き換える。
-2. The 本仕様の作業 shall ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR` を使うもの・`crate_source_test_support.rs` の読み口を通るもの・`frame_schedule_tests` の `pub fn wire_emo2_boot(` の照合ほか）を、改めた後のパスと名前を読むようにする。
+2. The 本仕様の作業 shall ソースを文字列で読むテスト（`include_str!`・`CARGO_MANIFEST_DIR` を使うもの・`crate_source_test_support.rs` の読み口を通るもの・`frame_schedule_tests` の `pub fn wire_emo2_boot(` の照合・`tick_gate_config_producers_tests.rs` の `"emo2_boot/…"` のパス 8 本・`zorder_wiring_tests.rs` の `include_str!("runtime_boot.rs")` ほか）と、ソースのパスを `#[path]` で指す例（`crates/areka/examples/collision-probe.rs` の `target_map.rs`・`hit_region.rs`）を、改めた後のパスと名前を読むようにする。
 3. The 本仕様の作業 shall 本体の外で、パスが切れると働きが変わる所を直す: 1,000 行の番人の例外表 `crates/log-capture-kit/tests/file_length_guard_test.rs`（63・89 行目）・`crates/log-capture-kit/tests/workspace_scan_test.rs`（320 行目）・`crates/wintf/src/test_crash_report.rs` 1 行目の写しの相手のパス・`tools/load-flake.ps1` 47 行目。
 4. If ソースを文字列で読むテストや番人の表が、書き換えた後のパスのファイルを見つけられない場合, then the そのテストや番人 shall 黙って通らず赤になる。
 5. The 本仕様の作業 shall 文書（`doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`・`doc/ssp-mcp/`・`doc/ukadoc-coverage/` の `briefing-*.md` と網羅台帳 `ledger/*.toml` の根拠の場所・`doc/ideas/`）と steering（`.kiro/steering/structure.md`・`.kiro/steering/tech.md`）にある古いパスと名前を、移した先のパスと改めた後の名前へ書き換える。
 6. The 本仕様の作業 shall 網羅台帳 `doc/ukadoc-coverage/ledger/*.toml` の根拠の場所を、根拠のファイルが実際に移った先（`src/runtime/`・`src/session/`・`src/install/`・`src/update/`・`src/readme/`）へ書き換え、台帳から作る生成物は手で直さず作り直す。
 7. The 本仕様の作業 shall `.kiro/steering/roadmap.md` に、`emo2_boot` の新旧のパスの対応表（古いパス → 移した先のパス）を置き、`emo2_boot` に触ると書いているほかの brief がその表で読み替えられるようにする。
 8. The 本仕様の作業 shall `audit-emo2-boot-frame`・`audit-emo2-boot-spine`・`audit-emo2-boot-switch` の brief の「受け持つファイル」を、移した先のパス（`src/runtime/`・`src/session/` ほか）へ書き換える。
-9. When 書き換えを終えたとき, the 本仕様の作業 shall 古いパス `emo2_boot`（`crates/areka/src/emo2_boot/`・`emo2_boot/`・`emo2_boot::`）と改める前の名前（要件 1.1 の表の左の列）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep し、残りが Boundary Context の Out of scope に挙げた本体の外の crate の説明の文と歴史の文書だけであることを示す（新旧のパスの対応表を持つ `roadmap.md` も除く）。
+9. When 書き換えを終えたとき, the 本仕様の作業 shall 古いパス `emo2_boot`（`crates/areka/src/emo2_boot/`・`emo2_boot/`・`emo2_boot::`）と改める前の名前（要件 1.1 の表の左の列）を `crates/`・`tools/`・`doc/`・`.kiro/steering/structure.md`・`.kiro/steering/tech.md` で grep し、残りが Boundary Context の Out of scope に挙げた本体の外の crate の説明の文とテストの名前と歴史の文書だけであることを示す（新旧のパスの対応表を持つ `roadmap.md` も除く）。
 
 ### Requirement 6: emo2 の残りの一覧
 
@@ -138,7 +138,7 @@
 #### Acceptance Criteria
 
 1. When 改名を終えたとき, the 本仕様の作業 shall `crates/`・`tools/`・`doc/` の中で `emo2`（大文字小文字を問わない）を含む識別子・ログの文言・イベントの値・パスを grep し、残る所を一覧にして記録に残す。
-2. The 本仕様の作業 shall 一覧の各行を、「既定のゴースト名とその使い手」「実在のゴースト emo2 を指す検体」「本体の外の crate の説明だけ（`runtime-crate-split` で直す）」「歴史の文書」のどれかに分ける。
+2. The 本仕様の作業 shall 一覧の各行を、「既定のゴースト名とその使い手」「実在のゴースト emo2 を指す検体」「本体の外の crate の説明とテストの名前だけ（`runtime-crate-split` で直す）」「歴史の文書」のどれかに分ける。
 3. If 一覧の中に、4 つのどれにも当たらない行（結線や実行基盤を指して emo2 の語を使う所）が残る場合, then the 本仕様の作業 shall その名前を要件 1 の規則で改める。
 4. The areka の本番のコード shall emo2 だけに向けた動きを、既定のゴーストかどうかの判定（`DEFAULT_GHOST_FOLDER` の使い手）だけに保つ。
 
