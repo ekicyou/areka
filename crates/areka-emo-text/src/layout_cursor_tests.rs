@@ -419,8 +419,9 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
     );
 }
 
-/// `Omitted`（軸省略）・実導出成功（Px/Em/Lh）は縮退でなく無音（warn しない・R5.5/5.2）。
-/// `\_l[5px, ]`（x 実導出・y 省略）と `\_l[,]`（両省略）はいずれも警告 0。
+/// `Omitted`（軸省略）・実導出成功（Px・`%`・`@` 相対・正しい軸の centerx/centery）は縮退でなく
+/// 無音（warn しない・R5.5/5.2）。`\_l[5px, ]`・`\_l[50%,@5]`・`\_l[centerx,centery]`・
+/// `\_l[,]`（両省略）はいずれも警告 0。
 #[test]
 fn cursor_omitted_and_valid_axes_do_not_warn() {
     let region = zero_origin_region();
@@ -434,6 +435,20 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
                     unit: CursorUnit::Px,
                 },
                 y: CursorCoord::Omitted,
+            },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 50.0,
+                    unit: CursorUnit::Percent,
+                },
+                y: CursorCoord::Relative {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+            TextItem::CursorMove {
+                x: CursorCoord::CenterX,
+                y: CursorCoord::CenterY,
             },
             TextItem::CursorMove {
                 x: CursorCoord::Omitted,

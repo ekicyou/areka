@@ -384,7 +384,7 @@ fn resident_rect(
 /// 送りの前の位置（今の位置 − `blit`）で、住人の矩形（はみ出し込み）が面にかかり、かつ行送りの
 /// 向きの遠い端（横書き＝下・vertical_lr＝右・vertical_rl＝左）を越えていたか（純粋・指摘 15）。
 /// 越えていた行は線を面の内側へ寄せて描いた最下行でありうる。
-fn reached_far_edge_before_shift(
+pub(super) fn reached_far_edge_before_shift(
     resident: &Resident,
     block_offset: f32,
     mode: WritingMode,

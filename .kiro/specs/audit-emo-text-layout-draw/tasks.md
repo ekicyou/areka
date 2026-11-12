@@ -202,7 +202,7 @@
   - _Depends: 1.1, 11.3_
   - _Requirements: 7.1, 7.2, 7.7, 7.9_
 
-- [ ] 12. 写しと要らないコードを片づける（直したほうがよい・できれば）
+- [x] 12. 写しと要らないコードを片づける（直したほうがよい・できれば）
 - [x] 12.1 字面の檻を事実に合わせ、既定の書体の定数を 1 か所にする
   - 「書式の作りの呼び出しはここだけ」の檻が計測器のファイルも数えて 1 つを許すようにし、名前と説明を事実に。飾りのファイルを `@` の檻に入れる小さな表を足し、説明を「入口 3 つ」に（指摘 22）
   - 描画の既定の書体の名と高さを見た目の側の ukadoc の定数の別名にし（名前は残す）、揃えのテストを消し、字面の檻を直す（指摘 26 の一部）
@@ -231,7 +231,7 @@
   - 振る舞いは変えない: 範囲の呼び出しの数の檻と今ある GPU の画素の比べのテストが実 GPU で全部緑であること
   - _Requirements: 4.1, 6.5, 8.2_
 
-- [ ] 12.6 檻の無い分岐に確かめを足す
+- [x] 12.6 檻の無い分岐に確かめを足す
   - 指摘 23 の残り: 太字・斜体だけの変化で戻り値と描画の回数、字の列に `%` と `@` を入れた確かめを足し、書体のタグのテストとフレームの描画のテストの古い説明を直す
   - 足した確かめが、その分岐を壊した実装で赤になることを一度確かめ、緑・ファイルが 1,000 行以下であること
   - _Requirements: 4.1, 6.1, 8.1, 8.2_
@@ -312,3 +312,4 @@
 - 12.3: 消す前に `git grep -n <名> -- crates tests tools` で確かめた。`layout_with_cursor_warn` の呼び手はテスト 4 か所（4.2 で足した `layout_wrap_tests.rs:714` を含む）で、支えに足した `layout_guarded`（既定の見た目だけの `layout_styled`・旧来と同じ行）へ移した。`#[cfg(test)]` の再公開・`ChoiceDraw`（`LineDraw.hover` へ畳む）・`apply_color_ranges` の `bool`・`DrawExecutor::line_layout` と重ねた `#[cfg(test)]`・`dump_case` の捨てる戻り値を消し、`rig` は `_rig` にした（`mk` は 1.4 で消えていた）。消した名前はツリー全体で 0 件・`cargo check --workspace --all-targets` は警告 0。`actor_decoration_frame_tests.rs:115` の名指しは兄弟の PR #435 で消えていた。`RegionTransform` の行列の口と `ScaleContract::author_dpi`・`new` の第 2 引数は残した。
 - 12.4: PNG の書き出しの既定の出力先を `concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/areka-diag")` にし、`diag_out_dir()` で `create_dir_all` する（`AREKA_DIAG_OUT` が優先）。檻は普通のテスト `diag_default_out_dir_is_under_worktree_target`。#[ignore] の書き出しそのものは回していない。
 - 12.5: 描き先の bitmap は面のテクスチャごと（テクスチャを握って鍵にする・2 枚まで）、塗りブラシ（既定の文字色・帯と字の色・印の丸）は色の 4 成分のビットを鍵に `ViewboxExecutor.solid_brushes` で覚え、`request_clear` で `BrushCache` と一緒に空にする（範囲の呼び出しの勘定には入れない・ブラシの色を変える呼び出しは無い）。字送り 5 フレームで作る数は前が（5・5）、後が（1・2）。送りの掃き出しは器を 1 つに、縦書きの帯の読み戻しは書体の台帳 1 つを使い回す。
+- 12.6: 指摘 23 の残りを足した＝太字・斜体だけの変化で戻り値と描いた回数、`\_l[50%,@5]`・`\_l[centerx,centery]` が guard つきの配置で警告 0（research の「item の列に % と @」）、GPU 無しの `degrade_if_needed` の rebuilt = false の段（食い違う計画は全域）、古い説明 2 か所。7.3 の申し送り ⑴（`reached_far_edge_before_shift` の縦書き 2 枝の純粋なテスト）もここで済ませた（そのために `pub(super)`）。指摘 23 の各項は 6.2・7.3・9.3・11.3・12.6 のどれかが持つ（`state_decoration.rs` は兄弟の持ち物）。

@@ -521,10 +521,19 @@ fn bold_or_italic_only_change_rebuilds_the_bound_format() {
         .expect("font A render 失敗");
     let first = bound(&exec);
     let creations_a = exec.stats().line_layout_creations;
+    let draws_a = exec.stats().draw_text_layout_calls;
 
-    exec.render(&canvas, &window, &font_b, mode, &contract, &mut surface)
+    let changed = exec
+        .render(&canvas, &window, &font_b, mode, &contract, &mut surface)
         .expect("font B render 失敗");
     let second = bound(&exec);
+    // 配置は同じなので計画は NoChange——rebuilt の腕が全域へ縮退して初めて描き直す。
+    assert!(changed, "太字・斜体だけの変更フレームは変化あり");
+    assert_eq!(
+        exec.stats().draw_text_layout_calls - draws_a,
+        canvas.residents.len() as u64,
+        "太字・斜体だけの変更でも全住人を描き直す（古い画素を残さない）"
+    );
 
     let expected =
         create_text_format(&exec.dwrite, &exec.fonts.pick(&font_b), mode).expect("期待値の書式");
@@ -543,7 +552,8 @@ fn bold_or_italic_only_change_rebuilds_the_bound_format() {
 /// 想定外不整合の検査関数（render の縮退経路が呼ぶ述語）が矛盾入力で理由を返し、整合入力で
 /// `None` を返す（範囲外 draw_lines・面寸超過 dirty・矩形の行が描画対象行の部分集合でない、の
 /// 3 トリガ・R Error Handling／R11.1）。
-/// render からの結線は `font_change_degrades_to_full_domain_redraw`（縮退の実発火）が担保する。
+/// 縮退の判定（`degrade_if_needed`）からこの述語への結線は
+/// `degrade_full_domain_draws_only_rows_overlapping_surface` の rebuilt = false の段が確かめる。
 #[test]
 fn plan_inconsistency_detects_out_of_range_and_oversize() {
     use super::plan::plan_inconsistency;
@@ -714,10 +724,10 @@ fn degrade_full_domain_draws_only_rows_overlapping_surface() {
     let contract = ScaleContract::new(1.0, None);
     let region = TextRegion::resolve(&geo_model(Some(10)), (120, 120), mode);
     let (canvas, window) = build(&multiline_items(&["あ", "い", "う"]), &region, mode, 10.0);
-    let degrade = |plan, over: &[LineOverhang]| {
+    let degrade_with = |plan, rebuilt, over: &[LineOverhang]| {
         degrade_if_needed(
             plan,
-            true,
+            rebuilt,
             &canvas,
             &window,
             mode,
@@ -726,6 +736,7 @@ fn degrade_full_domain_draws_only_rows_overlapping_surface() {
             over,
         )
     };
+    let degrade = |plan, over: &[LineOverhang]| degrade_with(plan, true, over);
     let draw_of = |plan| match plan {
         FramePlan::Update {
             blit, draw_lines, ..
@@ -740,4 +751,34 @@ fn degrade_full_domain_draws_only_rows_overlapping_surface() {
     over[2].top = 5.0;
     assert_eq!(draw_of(degrade(FramePlan::NoChange, &over)), vec![0, 1, 2]);
     assert_eq!(degrade(FramePlan::FullClear, &over), FramePlan::FullClear);
+
+    // 組み直し無し（rebuilt = false）: 食い違う計画だけが全域へ縮退し、整合した計画はそのまま。
+    use crate::viewbox::{DirtyRect, PhysicalRect};
+    let update = |draw_lines: Vec<usize>| FramePlan::Update {
+        blit: (0, 0),
+        dirty: vec![DirtyRect {
+            rect: PhysicalRect {
+                x: 0,
+                y: 0,
+                w: 10,
+                h: 10,
+            },
+            lines: draw_lines.clone(),
+        }],
+        draw_lines,
+    };
+    assert_eq!(
+        draw_of(degrade_with(update(vec![99]), false, &[])),
+        vec![0, 1],
+        "範囲外の行を描く計画は全域へ縮退する"
+    );
+    assert_eq!(
+        degrade_with(update(vec![0]), false, &[]),
+        update(vec![0]),
+        "整合した計画はそのまま"
+    );
+    assert_eq!(
+        degrade_with(FramePlan::NoChange, false, &[]),
+        FramePlan::NoChange
+    );
 }

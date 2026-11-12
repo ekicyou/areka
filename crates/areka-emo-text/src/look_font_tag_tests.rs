@@ -410,13 +410,12 @@ fn the_bulk_disable_replaces_the_whole_look_with_the_disable_layer() {
 /// 戻しから漏れないのは「丸ごと置き換え」だからで、値の比較では今日の 9 項目しか見張れない。
 /// 置き換えの 1 行そのものを字面で固定する（`layout_cursor_overflow_tests.rs` と同じ作法）。
 ///
-/// **本検査が見張るのは本番未到達の 2 腕である**——`\f[default]`／`\f[disable]` は
-/// `state_decoration.rs::apply_font_args` が先に掴んで戻す操作へ回すので、ここで走査する
-/// `apply_font_tag` の該当 2 腕は本番経路から到達しない（タスク 4.2 の裁定）。本番の実体
-/// （`state_decoration.rs::reset_look_to`）を見張るのは
+/// 本検査が見張る `apply_font_tag` の 2 腕は本番から届く——`crates/areka` の `check_script` と
+/// strict の再生が [`classify_font_tag`] を通してこの 2 腕を引く（腕を消すと正典の
+/// `\f[default]`／`\f[disable]` が知らないキーと報告される＝`classify_font_tag` の表が赤）。
+/// 台本の再生の戻しの実体（`state_decoration.rs::reset_look_to`）を見張るのは
 /// `state_decoration_reset_tests.rs::the_production_bulk_reset_replaces_the_look_as_a_whole`
-/// で、本検査だけでは本番を列挙形へ書き換えても緑のままになる。本検査を残すのは、テスト
-/// からのみ到達するこの 2 腕が本番と同じ意味であり続けること（対称性）の固定のためである。
+/// で、本検査はこの 2 腕の置き換えが丸ごとであり続けることを固定する。
 #[test]
 fn the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items() {
     const LOOK_SRC: &str = include_str!("look.rs");

@@ -892,3 +892,46 @@ fn huge_and_infinite_line_positions_clip_into_surface_without_panic() {
         );
     }
 }
+
+/// 7.3 の申し送り: 送りの前に行送りの遠い端を越えていた行の判定の縦書き 2 枝（純粋）。
+/// 列は幅 10・送り 12（vertical_rl の 0 列は x 90〜100・vertical_lr の 0 列は x 0〜10）。
+/// 送りの前の位置は今の位置 − blit。遠い端は vertical_rl＝左（x 0）・vertical_lr＝右（x 100）。
+#[test]
+fn reached_far_edge_before_shift_vertical_branches() {
+    use super::diff::reached_far_edge_before_shift as reached;
+    let contract = ScaleContract::new(1.0, None);
+    // (書字方向, 遠い端をまたぐ blit, 逆向きの blit)
+    for (mode, across, opposite) in [
+        (WritingMode::VerticalRl, (95, 0), (-95, 0)),
+        (WritingMode::VerticalLr, (-95, 0), (95, 0)),
+    ] {
+        let canvas = canvas_for(
+            &broken_lines(2),
+            mode,
+            (Some(0), Some(200), Some(0), Some(100)),
+            10.0,
+        );
+        let hit = |i: usize, blit| {
+            let none = LineOverhang::default();
+            reached(
+                &canvas.residents[i],
+                0.0,
+                mode,
+                &contract,
+                blit,
+                (100, 200),
+                none,
+            )
+        };
+        assert!(
+            hit(0, across),
+            "{mode:?}: 0 列は送りの前に遠い端をまたいでいた"
+        );
+        assert!(!hit(1, across), "{mode:?}: 1 列は送りの前に面の外");
+        assert!(!hit(0, (0, 0)), "{mode:?}: 送り無しでは面の中");
+        assert!(
+            !hit(0, opposite),
+            "{mode:?}: 逆の端をまたいでも遠い端ではない"
+        );
+    }
+}
