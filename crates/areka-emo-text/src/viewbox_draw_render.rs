@@ -117,7 +117,7 @@ impl ViewboxExecutor {
                         measured,
                         choice.band_extent,
                         choice.band_offset,
-                        font.height,
+                        choice.run.size,
                         mode,
                     )
                 }
@@ -737,23 +737,29 @@ fn highlight_rect(
 
 /// Choice 住人のダーティ帯を **ハイライト帯の超過分**まで広げた [`LineOverhang`] を返す（純粋）。
 ///
-/// ダーティ矩形は em ボックス（`font_height`）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
+/// ダーティ矩形はその行の em ボックス（`run_size` の行送りの軸＝行の中で最も大きい字の em・
+/// `resident_rect` と同じ丈）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
 /// （`band_extent`＝`ascent + descent` 由来）は行矩形の block 近端から `band_offset` だけ寄せた
-/// 位置に置かれるので、遠端側の超過分は `band_offset + band_extent − font_height` になる
+/// 位置に置かれるので、遠端側の超過分は `band_offset + band_extent − 行の丈` になる
+/// （既定の字の高さと比べると、行の em が既定より小さい行で帯の下が切れる・指摘 8）
 /// （寄せを数えないと、寄せた分だけ帯の下（縦書きは右）がダーティ矩形の外へ落ち、hover 解除の
 /// フレームで塗りが消し残る・R13.5）。この超過分をブロック軸**遠端**（横書き＝`bottom`・
 /// 縦書き＝`right`——[`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの
 /// 方が大きい場合は実測値を保つ（`max`）。縦書きの寄せは符号つきで、右から左は負（帯が行矩形の
 /// 左へ出る）——その分 `−band_offset` を**近端**（`left`）の下限として与える。これにより hover
 /// フレームの塗りが欠けず、hover 解除フレームで塗りが消し残らない（同一帯が両フレームでダーティになる）。
-fn expand_overhang_for_band(
+pub(super) fn expand_overhang_for_band(
     measured: LineOverhang,
     band_extent: f32,
     band_offset: f32,
-    font_height: f32,
+    run_size: (f32, f32),
     mode: WritingMode,
 ) -> LineOverhang {
-    let excess = (band_offset + band_extent - font_height).max(0.0);
+    let row_extent = match mode {
+        WritingMode::HorizontalTb => run_size.1,
+        WritingMode::VerticalRl | WritingMode::VerticalLr => run_size.0,
+    };
+    let excess = (band_offset + band_extent - row_extent).max(0.0);
     match mode {
         WritingMode::HorizontalTb => LineOverhang {
             bottom: measured.bottom.max(excess),

@@ -646,3 +646,17 @@ fn device_failure_mid_render_is_retry_safe_front_unchanged_no_commit() {
         opaque_count(&r3)
     );
 }
+
+/// 指摘 8: 選択肢の帯の超過分は既定の字の高さでなく、その行の丈（`run.size` の行送りの軸＝
+/// `resident_rect` と同じ）と比べる。既定 28・行の em 14・帯 17（寄せ −1）なら超過は 2。
+#[test]
+fn choice_band_overflow_uses_row_extent_not_default_height() {
+    use super::render::expand_overhang_for_band;
+    use crate::viewbox::LineOverhang;
+    let none = LineOverhang::default();
+    let h = expand_overhang_for_band(none, 17.0, -1.0, (40.0, 14.0), WritingMode::HorizontalTb);
+    assert_eq!(h.bottom, 2.0, "横書き: 帯の下端 16 − 行の丈 14");
+    let v = expand_overhang_for_band(none, 17.0, -1.0, (14.0, 40.0), WritingMode::VerticalRl);
+    assert_eq!(v.right, 2.0, "縦書き: 帯の右端 16 − 列の丈 14");
+    assert_eq!(v.left, 1.0, "縦書き: 負の寄せの分だけ左へ");
+}
