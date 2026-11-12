@@ -346,6 +346,41 @@ mod error_tests {
         )));
     }
 
+    /// 前のエントリが解けないと、at の無い次の純粋なキーフレームも連鎖して解けない（#32）
+    #[test]
+    fn unresolved_previous_entry_cascades_to_next_pure_keyframe() {
+        let doc = make_doc_with_storyboard(
+            vec![],
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    at: Some(KeyframeRef::Multiple(vec![])),
+                    keyframe: Some("a".to_string()),
+                    ..Default::default()
+                })
+                .entry(StoryboardEntry {
+                    keyframe: Some("b".to_string()),
+                    ..Default::default()
+                })
+                .build(),
+        );
+
+        let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+        let indices: Vec<usize> = errs
+            .iter()
+            .map(|e| match e {
+                DolaError::CompileError { entry_index, .. } => *entry_index,
+                other => panic!("unexpected error: {other:?}"),
+            })
+            .collect();
+        assert_eq!(indices, vec![0, 1], "{errs:?}");
+        assert!(matches!(
+            &errs[1],
+            DolaError::CompileError { reason, .. } if reason.contains("no previous entry keyframe time")
+        ));
+    }
+
     /// relative_to で出した終わりの値も値域と比べて拒む（#33・要件 11.11）
     #[test]
     fn relative_to_out_of_range_is_rejected() {

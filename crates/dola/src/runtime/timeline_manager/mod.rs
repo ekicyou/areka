@@ -35,6 +35,11 @@ impl TimelineManager {
         }
     }
 
+    /// Object の値の intern の表から使われていない値を手放す（文書の差し替え）。
+    pub fn release_unused_intern_values(&mut self) {
+        self.intern_pool.release_unused();
+    }
+
     /// コンパイル結果をタイムテーブルに追加。
     pub fn insert_entries(&mut self, group_id: u64, compiled: &CompiledStoryboard) {
         for (var_name, timeline) in &compiled.timelines {

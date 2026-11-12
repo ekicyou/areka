@@ -119,6 +119,50 @@ mod full_playback_cycle {
             other => panic!("expected Float, got {other:?}"),
         }
     }
+
+    /// 検証は通ってもコンパイルで落ちる文書は読み込みで拒み、前の文書で start が通る（#32）
+    #[test]
+    fn load_rejects_compile_failing_document_and_keeps_previous() {
+        use dola::KeyframeRef;
+        let kf = |name: &str, at: KeyframeRef| StoryboardEntry {
+            at: Some(at),
+            keyframe: Some(name.to_string()),
+            ..Default::default()
+        };
+        let single = |name: &str| KeyframeRef::Single(name.to_string());
+        let cases: [(&str, Vec<StoryboardEntry>); 3] = [
+            (
+                "variable without transition",
+                vec![StoryboardEntry {
+                    variable: Some("opacity".to_string()),
+                    ..Default::default()
+                }],
+            ),
+            ("empty at", vec![kf("a", KeyframeRef::Multiple(vec![]))]),
+            (
+                "keyframe cycle",
+                vec![kf("a", single("b")), kf("b", single("a"))],
+            ),
+        ];
+
+        for (label, entry) in cases {
+            let mut rt = DolaRuntime::new();
+            rt.load_document(simple_float_doc("fade_in")).unwrap();
+
+            let mut bad = simple_float_doc("fade_in");
+            bad.storyboard.get_mut("fade_in").unwrap().entry = entry;
+            let err = rt.load_document(bad).unwrap_err();
+            assert!(
+                matches!(err, RuntimeError::CompileError(_)),
+                "{label}: {err:?}"
+            );
+
+            let StartResult { end_time, .. } = rt
+                .start("fade_in", 0.0)
+                .unwrap_or_else(|e| panic!("{label}: previous document must start: {e:?}"));
+            assert_eq!(end_time, 1.0, "{label}");
+        }
+    }
 }
 
 // =========================================================================

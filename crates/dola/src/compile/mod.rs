@@ -40,12 +40,37 @@ pub fn compile_storyboard(
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 1: バリデーション (Task 3.1)
-    // doc は外部入力（JSON/TOML/YAML）か Builder の由来だが、どの経路でもここで必ず
-    // validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
+    // doc は外部入力（JSON/TOML/YAML）か Builder の由来だが、どの経路でも compile_validated の前に
+    // ここか compile_all で必ず validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
     // ネスト深度の制限は各フォーマットのパーサの責務。本モジュールも validate() の
     // トリガー循環の検出も再帰を持たない（どちらも明示のスタックか反復）。
     doc.validate()?;
+    compile_validated(doc, storyboard_name, start_time)
+}
 
+/// 検証の後に全ストーリーボードをコンパイルにかける（読み込みと `DolaDocumentBuilder::build`）。
+pub(crate) fn compile_all(doc: &DolaDocument) -> Result<(), Vec<DolaError>> {
+    doc.validate()?;
+    let errors: Vec<DolaError> = doc
+        .storyboard
+        .keys()
+        .filter_map(|name| compile_validated(doc, name, 0.0).err())
+        .flatten()
+        .collect();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// 検査を省いてコンパイルする。`doc` は必ず `validate()` を通ったものだけを渡す
+/// （下の `let Some(..) = resolved else { continue; }` が検査の欠けを release で黙って飛ばすため）。
+pub(crate) fn compile_validated(
+    doc: &DolaDocument,
+    storyboard_name: &str,
+    start_time: f64,
+) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 2: ストーリーボード検索
     let sb = doc.storyboard.get(storyboard_name).ok_or_else(|| {
         vec![DolaError::CompileError {

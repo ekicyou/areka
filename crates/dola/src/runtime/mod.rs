@@ -4,7 +4,6 @@
 //! リアクティブ・アニメーション・ランタイム。
 
 mod conflict_resolver;
-mod document_store;
 mod facade;
 mod instance_manager;
 mod instance_state;

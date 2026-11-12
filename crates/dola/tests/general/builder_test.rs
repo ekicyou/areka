@@ -10,6 +10,31 @@ use dola::*;
 mod document_builder_tests {
     use super::*;
 
+    /// 検証は通ってもコンパイルで落ちる文書（キーフレームの循環）は build で拒む（#32）
+    #[test]
+    fn build_rejects_compile_failing_document() {
+        let kf = |name: &str, at: &str| StoryboardEntry {
+            at: Some(KeyframeRef::Single(at.to_string())),
+            keyframe: Some(name.to_string()),
+            ..Default::default()
+        };
+        let errs = DolaDocumentBuilder::new("1.0")
+            .storyboard(
+                "sb",
+                StoryboardBuilder::new()
+                    .entry(kf("a", "b"))
+                    .entry(kf("b", "a"))
+                    .build(),
+            )
+            .build()
+            .unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DolaError::KeyframeCycle { .. })),
+            "{errs:?}"
+        );
+    }
+
     #[test]
     fn minimal_build_ok() {
         let doc = DolaDocumentBuilder::new("1.0").build().unwrap();

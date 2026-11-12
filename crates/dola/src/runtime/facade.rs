@@ -2,13 +2,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_storyboard};
+use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_all, compile_validated};
 use crate::document::DolaDocument;
 use crate::easing::{EasingFunction, EasingName};
 use crate::storyboard::LoopOffset;
 
 use super::conflict_resolver;
-use super::document_store::DocumentStore;
 use super::instance_manager::InstanceManager;
 use super::instance_state::InstanceState;
 use super::loop_controller::{self, LoopAction};
@@ -29,7 +28,8 @@ use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, 
 /// let changes = rt.update(0.5);
 /// ```
 pub struct DolaRuntime {
-    document_store: DocumentStore,
+    /// 検証とコンパイルを全部通った文書だけを持つ（`load_document`）
+    document: Option<DolaDocument>,
     instance_manager: InstanceManager,
     timeline_manager: TimelineManager,
     subscription_manager: SubscriptionManager,
@@ -44,7 +44,7 @@ impl DolaRuntime {
     /// 新しい DolaRuntime を生成する。
     pub fn new() -> Self {
         Self {
-            document_store: DocumentStore::new(),
+            document: None,
             instance_manager: InstanceManager::new(),
             timeline_manager: TimelineManager::new(),
             subscription_manager: SubscriptionManager::new(),
@@ -63,13 +63,15 @@ impl DolaRuntime {
 
     /// 指示書読み込み。
     ///
-    /// バリデーション成功時のみ内部に保持し、失敗時は既存定義を維持する。
+    /// 検証の後に全ストーリーボードをコンパイルにかけ、全部通ったときだけ差し替える。
+    /// 失敗時は既存定義を維持する（読み込みで通った文書は start で落ちない）。
     /// 新定義への差し替え時、同名変数は SubscriptionManager の `last_values` で
     /// 自動的に値が引き継がれる。
     pub fn load_document(&mut self, doc: DolaDocument) -> Result<(), RuntimeError> {
-        self.document_store
-            .store(doc)
-            .map_err(RuntimeError::CompileError)
+        compile_all(&doc).map_err(RuntimeError::CompileError)?;
+        self.document = Some(doc);
+        self.timeline_manager.release_unused_intern_values();
+        Ok(())
     }
 
     /// ストーリーボード開始。
@@ -176,8 +178,8 @@ impl DolaRuntime {
         base_time: f64,
     ) -> Result<(CompiledStoryboard, f64), RuntimeError> {
         let doc = self
-            .document_store
-            .document()
+            .document
+            .as_ref()
             .ok_or_else(|| RuntimeError::StoryboardNotFound(name.to_string()))?;
 
         // ストーリーボード存在確認
@@ -185,8 +187,9 @@ impl DolaRuntime {
             return Err(RuntimeError::StoryboardNotFound(name.to_string()));
         }
 
+        // 文書は load_document で検証済み
         let compiled =
-            compile_storyboard(doc, name, base_time).map_err(RuntimeError::CompileError)?;
+            compile_validated(doc, name, base_time).map_err(RuntimeError::CompileError)?;
 
         // loop_count バリデーション
         if compiled.loop_count <= 0 && compiled.loop_count != -1 {
@@ -511,3 +514,7 @@ impl Default for DolaRuntime {
         Self::new()
     }
 }
+
+#[cfg(test)]
+#[path = "facade_tests.rs"]
+mod tests;

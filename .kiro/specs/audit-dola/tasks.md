@@ -132,7 +132,7 @@
   - 終わった姿: 2 本が緑で、コンパイルのテストが全部緑
   - _Requirements: 4.1, 4.2_
 
-- [ ] 8. 読み込みで通った文書は start で落ちない（#32・#57・#58・#43 の 1・2 本目）
+- [x] 8. 読み込みで通った文書は start で落ちない（#32・#57・#58・#43 の 1・2 本目）
   - 文書の置き場の型を消し、ランタイムが文書を直に持つ。その型のファイルの意味のあるテストはランタイムの中の欄を見る新しいテストのファイルへ移す
   - 検査済みの文書を検査を省いてコンパイルする crate の中の関数を足し、start と子の start と終わりの計算はそれを使う。公開のコンパイルの口は今のまま検証してから呼ぶ
   - 読み込みは検証の後に全ストーリーボードをコンパイルにかけ、1 つでも失敗すれば前の文書を残して `CompileError` を返す。通れば差し替え、Object の値の intern の表を空にする。文書の組み立ての build も同じく全部をコンパイルにかける
@@ -376,3 +376,4 @@
 - 6.3: 暗黙のキーフレームの接頭辞 `"__implicit_"` が `compile/resolve.rs:24`・`validate/rules.rs:246`・`:270` の 3 か所に字で書いてある（定数 1 つにまとめるのは 15.1 で拾う）。トリガーのエントリに変数だけ・遷移だけがあると V16t と V7 の 2 件が積まれる（前からの形・件数を縛るテストは無い）。
 - 7.1: 辺を足すだけでは要件 11.7 を満たせない（処理の順が配列の順とずれ、連結が処理の順で最後のセグメントに続く）ので、`compile/mod.rs` で連結の終わりの時刻と始めの値を配列上の直前のエントリ（`DependencyGraph.prev_same_var`・`entry_segment_end`）から取る形にした（design の「辺を足す」の先・`var_last_end_time` は消えた）。`at`・`between` のエントリの from は今も処理の順（`var_last_value`）で、完了 dola-compiled-transition 要件 4.2 の「直前」の読みに決めが無い（research に無い指摘・21 のかけ直しで拾う）。古い `multiple_triggers_sorted_by_fire_time` は並べ替えを外しても落ちない（14.3 で拾う）。`tests/compile/time_resolution_test/interaction.rs:36` の注「var_last_end_time から継続」が古びた（15.2）。
 - 7.3: compile の通らない枝を消したのは「公開の口は `compile_storyboard` 1 つで、冒頭で必ず validate を通る」前提による。8 で足す crate 内の `compile_validated` も検証済みの文書だけから呼ぶこと（そうでないと `let Some(..) = resolved else { continue; }` が release で黙って飛ばす）。`resolve_pure_keyframe_time` の引数は 7 で too_many_arguments の境目（15.1）。
+- 8: design 309 行の「読み込みで Object の intern の表を空にする」は、丸ごと空にすると動いている途中の Object の値が新しい Rc になり、`Rc::ptr_eq` の差分の比べで空振りの差分が 1 回出るので、「使われていない値だけ手放す」（`ObjectInternPool::release_unused`＝`strong_count > 1` を残す）にした（#62 の「表が増え続けない」は保つ・檻 `reload_keeps_animating_object_value_without_spurious_diff`）。`DolaDocumentBuilder::build` は検証の後に全部をコンパイルにかける（dola と wintf の呼び手だけ・緑）。`compile_validated` を呼ぶのは `compile_storyboard`・`compile_all`・facade の 3 か所で、どれも検証済みの文書。

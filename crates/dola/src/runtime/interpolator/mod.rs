@@ -34,6 +34,12 @@ impl ObjectInternPool {
             .or_insert_with(|| Rc::new(value))
             .clone()
     }
+
+    /// 使われていない値を手放す（表が増え続けないように）。配信中の値は同じ Rc を保つ
+    /// （差分は `Rc::ptr_eq` で比べるので、作り直すと偽の差分が出る）。
+    pub fn release_unused(&mut self) {
+        self.pool.retain(|_, rc| Rc::strong_count(rc) > 1);
+    }
 }
 
 /// イージング適用と値の補間計算を行う。

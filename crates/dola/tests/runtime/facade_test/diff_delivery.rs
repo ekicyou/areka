@@ -9,59 +9,79 @@
 mod document_replacement {
     use super::super::*;
 
+    /// 差し替えは配信の記録を消さない: 2 枚目を読んだ後、start せずに tick しても差分 0（#43）
     #[test]
     fn same_variable_carries_over_value() {
         let mut rt = DolaRuntime::new();
         let _opacity_id = rt.subscribe("opacity");
 
-        // 第1指示書: opacity 0→1
-        let doc1 = simple_float_doc("fade_in");
-        rt.load_document(doc1).unwrap();
+        rt.load_document(simple_float_doc("fade_in")).unwrap();
         rt.start("fade_in", 0.0).unwrap();
+        rt.tick(0.5);
+        assert!(!rt.last_result().changes.is_empty());
+        // 自然終了で最終値 1.0 が配信される
+        rt.tick(1.5);
 
-        // t=0.5: opacity ≈ 0.5
-        let diff = rt.update(0.5).changes;
-        assert!(!diff.is_empty());
-
-        // t=1.5: 自然終了後
-        let _ = rt.update(1.5);
-
-        // 第2指示書: opacity 0→1 (同じ名前)
-        let doc2 = simple_float_doc("fade_in");
-        rt.load_document(doc2).unwrap();
-        rt.start("fade_in", 2.0).unwrap();
-
-        // t=2.0: 新しいストーリーボードで opacity=0.0
-        let diff = rt.update(2.0).changes;
+        rt.load_document(simple_float_doc("fade_in")).unwrap();
+        rt.tick(2.0);
         assert!(
-            !diff.is_empty(),
-            "expected value delivery from new storyboard"
+            rt.last_result().changes.is_empty(),
+            "reload must keep delivered values: {:?}",
+            rt.last_result().changes
         );
     }
 
+    /// 差し替えの後も動いている Object の値は同じ Rc のまま: 偽の差分を出さない（#62）
+    #[test]
+    fn reload_keeps_animating_object_value_without_spurious_diff() {
+        use dola::DynamicValue;
+        let mut doc = simple_float_doc("swap");
+        doc.variable.insert(
+            "o".to_string(),
+            AnimationVariableDef::Object {
+                initial: DynamicValue::String("a".to_string()),
+            },
+        );
+        doc.storyboard.get_mut("swap").unwrap().entry[0] = StoryboardEntry {
+            variable: Some("o".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                to: Some(TransitionValue::Dynamic(DynamicValue::String(
+                    "b".to_string(),
+                ))),
+                duration: Some(1.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("o");
+        rt.load_document(doc.clone()).unwrap();
+        rt.start("swap", 0.0).unwrap();
+        rt.tick(0.25);
+        rt.tick(0.5);
+        assert!(rt.last_result().changes.is_empty());
+
+        rt.load_document(doc).unwrap();
+        rt.tick(0.75);
+        assert!(
+            rt.last_result().changes.is_empty(),
+            "{:?}",
+            rt.last_result().changes
+        );
+    }
+
+    /// 検証で拒んだ文書は前の文書を消さない（#43）
     #[test]
     fn invalid_document_preserves_existing() {
         let mut rt = DolaRuntime::new();
+        rt.load_document(simple_float_doc("fade_in")).unwrap();
 
-        let doc = simple_float_doc("fade_in");
-        rt.load_document(doc).unwrap();
+        let mut bad_doc = simple_float_doc("fade_in");
+        bad_doc.schema_version = "99.0".to_string();
+        assert!(rt.load_document(bad_doc).is_err());
 
-        // 不正なドキュメント（空の storyboard 名）— バリデーションエラー
-        let bad_doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable: BTreeMap::new(),
-            transition: BTreeMap::new(),
-            storyboard: BTreeMap::new(),
-        };
-
-        // 空ドキュメントは有効（storyboard なしでもOK）
-        // → バリデーション通過するので既存を上書きしてしまうが、
-        //   start("fade_in", ..) は StoryboardNotFound になるだけ。
-        // 不正書式は CompileError でブロックされる。
-        // ここでは store 可能であることだけ確認。
-        let result = rt.load_document(bad_doc);
-        // バリデーション通過（空ドキュメントは valid）
-        assert!(result.is_ok());
+        rt.start("fade_in", 0.0).unwrap();
     }
 }
 

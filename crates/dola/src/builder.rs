@@ -1,10 +1,10 @@
 //! DolaDocument / Storyboard をコードから構築するビルダー API
 
+use crate::compile::compile_all;
 use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::storyboard::{InterruptionPolicy, LoopOffset, Storyboard, StoryboardEntry};
 use crate::transition::TransitionDef;
-use crate::validate::Validate;
 use crate::variable::AnimationVariableDef;
 use std::collections::BTreeMap;
 
@@ -45,7 +45,7 @@ impl DolaDocumentBuilder {
         self
     }
 
-    /// ドキュメントを構築し、自動的にバリデーションを実行
+    /// ドキュメントを構築し、検証の後に全ストーリーボードをコンパイルにかける
     pub fn build(self) -> Result<DolaDocument, Vec<DolaError>> {
         let doc = DolaDocument {
             schema_version: self.schema_version,
@@ -53,7 +53,7 @@ impl DolaDocumentBuilder {
             transition: self.transition,
             storyboard: self.storyboard,
         };
-        doc.validate()?;
+        compile_all(&doc)?;
         Ok(doc)
     }
 }
