@@ -194,3 +194,73 @@
 - 件 2 の世代: 「場所をまたいで一意」の数えを `TextLayerState` に持つと `state.rs`（789 行）に触る。空回しの写しの中で世代が進んでも本番と食い違わないか。
 - 件 1 の伸ばしで `assign_items_to_chunks` を再利用できるか（区切り直す窓の頭がグリフの途中に落ちるとき・結合文字が別の cue で届いたとき）。`parse_boundaries`（字の番号）を使う方が写しが単純かもしれない。
 - 範囲の外の覚え書き（決めではない）: 字が届くたびの配置（`layout_styled`）と、全文の道の `begins_with`（`lookahead.rs` 91〜95 行・届いた項目と全文の頭の比べ）は、今も 1 フレームあたり届いた量に比例する。この spec が消すのは区切りと当て直しの 2 乗だけで、要件の Objective の「1 フレームが重くならない」は区切りの項についての言い方になる。
+
+## 7. 設計の段の調べと決め（2026-11-13・`/kiro-spec-design -y`）
+
+### 7.1 調べの種類と使った決まり
+
+- **種類**: 今ある仕組みの拡張（light discovery）。外の新しい依存は無い。`budouy` 0.2.2 の公開の口（`Parser::parse`・`Parser::parse_boundaries`）を登録簿の写し（`budouy-0.2.2/src/parser.rs` 29〜95 行）で読み直した。外の資料（ウェブ）は引いていない（新しいライブラリが無いため）。
+- **使った決まり**: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。画面・使い勝手の技能は当たらない（文字の層の中の作りの直しだけ）。小さな完全な直しを選ぶ方針（ponytail）で、各件とも「今ある型の持ち方を変える」案から取った。
+
+### 7.2 確かめたこと（設計で頼る事実）
+
+| 事実 | 確かめた所 | 設計への効き |
+|---|---|---|
+| `parse_boundaries` は字の番号（`char`）で境目を返す公開の口。`parse` と同じ `parse_boundaries_from_chars` を通る | `parser.rs` 29〜45 行 | 件 1 の伸ばしはこの口だけで足りる（フォーク不要） |
+| 境目 `i` の 13 の特徴は `chars[i−3..i+3)` と端の切り詰めだけを読む | `parser.rs` 54〜92 行 | 決め直す頭 `p = max(1, L−2)`・左の文脈 `s = p−3` |
+| グリフ → 塊の写し（`assign_items_to_chunks`）は「グリフの頭のバイトが属する塊が前と違えば新しい塊」＝「（前のグリフの頭, このグリフの頭］に境目があれば新しい塊」 | `segment.rs` 167〜203 行 | 件 1 は字の番号で同じ規則を言い直す。動きうるのは頭の字が `p` 以上のグリフだけ |
+| 項目は後ろへ足されるだけ・消すのは `clear_content` だけで必ず `clears` が進む。普通のバルーンの `clears` は消えない（`forget_pristine_places` も残す）。箱の `clears` を消す `set_box_index` と同じ `set_box_layout` が箱の `ActorRender` を捨てる | `state.rs` 488〜496・557〜657 行・`state_route.rs` 70〜79 行・`actor_box.rs` 52〜62 行 | 件 1 の「消した回数が同じなら後ろへ足されるだけ」は今の `BreakMemo` の鍵と同じ前提で成り立つ |
+| `BreakMemo` は `ActorRender` の欄で `Clone` を持たない。`runs` は `actor_frame_memo_tests.rs` の 4 本が見る | `actor.rs` 206〜207 行・`actor_frame_memo_tests.rs` 267〜336 行 | 件 1 は型を `segment.rs` へ移しても名前と `runs` の意味を保てる |
+| `Note::Unowned` はキーだけで決まる（`is_unowned(key)`）。`unowned` へ入れるのは `applied` へ足す同じ腕だけ・空にするのも同じ戻しだけ | `look.rs` 756〜793 行・`state_decoration.rs` 343〜390 行 | 件 2 は `unowned` を写さず、当てるときに作れる |
+| `warned` を読むのは今の行き先（`warn_once`・`warn_script_once`）だけ。スコープに従う今の行き先はいつも持ち主（`carry_script_decor` が `shared` を行き先にする） | `state_decoration.rs` 432〜470・536〜549 行 | 件 2 は `warned` を複製せず持ち主から持ち主へ動かせる |
+| `set_box_traits` の呼び手は `set_box_layout` の 1 か所で、直後の `set_box_index` が箱の場所を全部捨てる | `actor_box.rs` 124〜125 行 | 「箱の種類が生きている箱の場所の上で替わる」場面は無い＝1 つの系列への書き手は 1 つ |
+| `ActorTextState` の比べ（`PartialEq`）は `forget_pristine_places` が作りたてとの比べに使う。台本の先頭の後の戻しで印を振るので、印を比べに入れると作りたてと同じにならない | `state.rs` 488〜496 行 | 件 2 の印は比べに入れない |
+| 生の値で前と比べる記録の先例 `warn_cursor_fallback` は `remember_inputs`（装着・中の段・下の段の全部が通る）から呼ばれ、前の値は記憶の入力から `register_actor` の前に取り出す | `actor_attach.rs` 233〜282 行 | 件 3 は同じ置き場と同じ順を取る |
+| 箱の定義の 3 つの警告は `register_box`（表示のときに名前ごと 1 度）が書くが、書字方向の警告は今 `set_box_layout` の解決（表の受け取りで名前ごと 1 度）で出る | `actor_box.rs` 99〜118・436〜443 行 | 件 3 の箱は要件 3.4 どおり `set_box_layout` に置く（`register_box` へ寄せると、出る時と出ない箱が変わる） |
+
+### 7.3 決め（議題 1・3・4・6 と研究の要る点）
+
+#### 件 1 の伸ばし方 → 案 1-B（開いている run の状態を持つ）・置き場は `segment.rs`
+
+- **選んだ形**: `BreakMemo` を `segment.rs` へ移し、開いている run の字（`Vec<char>`）・グリフの頭の字の位置・境目・前に決めた長さを持たせる。項目が増えたら新しい項目を run に足し、run を決めるとき（改行・`\_l` で閉じるときと最後）に `p = max(1, L−2)` から後ろの境目だけを決め直し、頭の字が `p` 以上のグリフだけ塊を付け直す。作り直しは「覚えを空にして同じ道で伸ばす」。
+- **案 1-A を取らない訳**: 旧の末尾の近くを `items` から後ろ向きに読み直す形は、新しい状態は要らないが、グリフ `J−1`（頭の字が `p` より前で、境目 `p` を中に含みうるグリフ）の中の境目が要る。結合文字の長いグリフでは読み直す字の数がそのグリフの長さに比例し、「新しい字＋定数」（要件 1.1）を字の数で言えなくなる。1-B は境目を持つので、決め直すのはいつも `p` 以上だけで済む。
+- **置き場**: `segment.rs`（`budouy` を使う唯一の所という決まりを保つ・`SegmentPlan` の欄を直に足し引きできる）。新しいソースファイル（`segment_grow.rs`）は作らない（テストの兄弟ファイル `segment_grow_tests.rs` だけ）。`actor_present.rs` は定義を消して `pub(super) use` で今の名前を保つ（896 → 約 875 行）。
+
+#### 件 1 の檻の位置 → 純粋なテストで `BreakMemo::plan` を直に呼ぶ・`runs` の 3 本は期待値を保つ
+
+- 数え `SEGMENTED_CHARS` は `budouy` に渡す字の数で、伸ばしの `parse_boundaries` と `segment_plan` の `parse` の**両方**で足す。片方だけだと、`BreakMemo::plan` を「届くたびに `segment_plan`」へ戻しても数えが増えず檻が赤にならない。
+- 檻は `segment_grow_tests.rs`（`PURE_SOURCES`）に置き、GPU の World を使わない。`BreakMemo` が `arrange_lines` から外されたら、`actor_frame_memo_tests.rs` の `runs` の期待値（1・2）が赤になる。
+- `runs` は「鍵が変わった呼び出しの数（伸ばしも 1 回）」で、今の 3 本の期待値と読み戻しの 1 本の期待値（2）を変えない。
+
+#### 件 2 の持ち方 → 案 2-A の変形（場所ごとの列を保ち、系列の印と当てた数で差分を写す・列は分け合わない）
+
+- **選んだ形**: `Decoration` に系列の印 `Lineage`（一括の戻しのたびに `static AtomicU64` から一意の番号）を足す。写しは先の（印, 当てた数）を見て、印が同じで数が元以下なら元の `applied` の後ろだけを複製して当て、そうでなければ元の土台から全部を当てる。`unowned` は当てるときの `Note::Unowned` から作る。`warned` は持ち主から持ち主へ動かす（`mem::take`）。2 層の差し込みは値を比べて同じなら何もしない。
+- **`Rc`／`Arc` で分け合う形を取らない訳**: `rehearsal_copy` が `TextLayerState` を丸ごと複製するので、分け合う列に空回しの中で足すと本番の列が書き換わる（深い複製の手書きが要る）。`Rc<RefCell<…>>` は `TextLayerState` の `Send` を壊しうる。`Rc<Vec>` を `make_mut` で伸ばすと、ほかの場所が持っている間は複製になり 2 乗が残る。場所ごとに持つ列の総量は「当てた指定の数 × 行き先になった場所の数」で、要件 2.7 の上の数そのものなので、分け合う得が無い。
+- **案 2-B（スコープに 1 つだけ持つ）を取らない訳**: 写しそのものは消えるが、公開の読み口 `ActorTextState::unowned_vocab`（場所ごと）の意味が変わり（要件 4.3 の「足すだけ」に触れる）、`apply_font_args`・`push_current_style`・`reset_look*` がスコープの状態を引数に取るよう `state.rs` の `apply_cue` の腕を全部書き換えることになる。持ち主（`shared`）の考え方も変わる。結果は 2-A の変形と同じで、手間の上の数も同じ。
+- **印を比べに入れない**: `Lineage` の `PartialEq` は手書きでいつも真（§7.2 の `forget_pristine_places`）。写しの判定は中の番号を直に比べる。
+- **前提「1 つの系列への書き手は 1 つ」**: 系列の指定を足すのは今の行き先だけで、スコープに従う今の行き先は持ち主で、箱に閉じる箱は写しの元にも先にもならない（§7.2）。写しの差分の道で `debug_assert`（先の最後の指定＝元の同じ位置の指定）を置く。
+
+#### 件 2 の数えと前と後の比べ → 数え 2 つと切り替え 1 つ（どれも `#[cfg(test)]`）
+
+- `COPIED_SPECS`（写しで当てた数）・`REBASED_SPECS`（当て直しで当てた数）。
+- 要件 2.8 の「全部当て直す形の結果」は、試験だけの切り替え `REPLAY_ALL`（写しをいつも全部の道・差し込みをいつも当て直し）で同じ台本をもう 1 度流して作る。この spec の前の動き（`take_script` の丸ごとの写し＋`rebase`）と同じ見た目になる。前の作りをテストの側へ写し書きするより小さく、写し書きが本番とずれる危うさも無い。
+
+#### 件 3 の記録の口 → 案 3-A（`remember_inputs`・生の値でキーごとに比べる）・箱は `set_box_layout`
+
+- 普通のバルーンは `remember_inputs`（装着・中の段・下の段の全部が通る）に `previous_direction: Option<DirectionDecl>` を足す。装着は `None`（要件 3.2・前に依らず 1 回目）、再追従は記憶の入力から取り出した宣言（下の段は `finish_registration` の前に取り出す）。
+- 比べはキーごとの生の値（要件 3.3・討議の結論）。片方のキーだけが変わった再追従で、変わらなかったキーの警告は繰り返さない。矛盾併記の `debug!` は、どちらかの生の値が変わったか前が無いとき。
+- 案 3-B（`register_actor`）を取らない訳: 中の段（`vertical` が `0` から `2` に変わっても書字方向は横書き）が `register_actor` に届かず記録が漏れる（要件 3.7）。漏らさないために分類を `ResolvedBalloonText` に載せると、中の段が下の段（描画資源の作り直し）に変わり、公開の欄が増える。
+- 記録の文言と欄（`value`・`vertical`・`writing_mode`）は 1 文字も変えない。`balloon` の欄を足すのは要件 3.2 の「今と同じ欄」に触れるので足さない。
+
+### 7.4 まとめの 3 つの見方（design-synthesis）
+
+- **まとめられるもの**: 3 件は「全部やり直す」を「変わった所だけ」にする同じ考えだが、持つもの（字の境目・指定の列・宣言の生の値）も層も違う。共通の型や口は作らない（作っても実装が 1 つずつしかない）。件 3 は既にある `warn_cursor_fallback` の型（前の値を記憶の入力から取り出して比べる）に揃えた。
+- **作るか借りるか**: BudouX の差分の区切りは `budouy` に口が無い（公開は `parse`・`parse_boundaries` だけ）。フォークも `[patch]` もしない決まり（要件 4.6）なので、公開の `parse_boundaries` に窓の分だけの字を渡す形で借りる。数えの形は `layout_scan.rs` の `FOLLOWING_SCAN_VISITS` を借りる。
+- **削ったもの**: 新しい本番のソースファイル（`segment_grow.rs`）・分け合う列（`Rc`）・スコープへの持ち替え（2-B）・`ResolvedBalloonText` の新しい欄・書字方向の解決の「黙る版」（3-C）・前の作りのテスト側への写し書き。
+
+### 7.5 危うさと手当て
+
+- **`budouy` の版上げで窓が変わる** — `segment_grow_tests.rs` の前と後の比べ（`segment_plan` が正）が見張る。design.md の Revalidation Triggers に挙げた。
+- **件 2 の「1 つの系列への書き手は 1 つ」が将来の変更で崩れる** — `debug_assert` と `REPLAY_ALL` の比べ。Revalidation Triggers に挙げた。
+- **件 2 の `warned` を動かすことで、持ち主でない場所の `warned` が空になる** — 読む所が無い（§7.2）。比べ（`PartialEq`）には入るが、比べるのは台本の先頭の後（全部の場所の `warned` が空）の `forget_pristine_places` と、同じ状態の前後を比べるテストだけ。
+- **シェルの切替で生まれ直した箱の場所は、次に行き先になると持ち主の指定を全部当てる** — 生まれ直しは別の場所として要件 2.7 の上の数に入れる（design.md に書いた）。
