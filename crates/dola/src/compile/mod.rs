@@ -76,10 +76,11 @@ pub fn compile_storyboard(
     let mut keyframe_times: HashMap<String, f64> = HashMap::new();
     keyframe_times.insert("start".to_string(), start_time);
 
-    // variable_name → last segment to_value
-    let mut var_last_value: HashMap<String, TransitionValue> = HashMap::new();
-    // variable_name → Vec<CompiledSegment>
-    let mut var_segments: HashMap<String, Vec<CompiledSegment>> = HashMap::new();
+    // variable_name → 処理の順で最後に解いたエントリの index
+    let mut var_last_entry: HashMap<&str, usize> = HashMap::new();
+    // variable_name → (定義, (元のエントリの index, セグメント))。名前の順で重なりを報告する
+    type VarSegments<'d> = (&'d AnimationVariableDef, Vec<(usize, CompiledSegment)>);
+    let mut var_segments: BTreeMap<&str, VarSegments> = BTreeMap::new();
     // entry_index → (segment end_time, to_value)（連結の遷移が配列上の直前のエントリに続くため）
     let mut entry_segment_end: HashMap<usize, (f64, TransitionValue)> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
@@ -102,6 +103,7 @@ pub fn compile_storyboard(
                 storyboard_name,
                 entry_idx,
                 entry,
+                start_time,
                 &keyframe_times,
                 &entry_keyframe_time,
                 &mut errors,
@@ -129,6 +131,7 @@ pub fn compile_storyboard(
                 storyboard_name,
                 entry_idx,
                 entry,
+                start_time,
                 &keyframe_times,
                 &entry_keyframe_time,
                 &mut errors,
@@ -140,41 +143,37 @@ pub fn compile_storyboard(
             continue;
         }
 
-        // Transition entry: resolve transition def
-        let var_name = match &entry.variable {
-            Some(v) => v.clone(),
-            None => continue, // validated already: transition requires variable
+        // 遷移のエントリは変数・その定義・遷移の定義を持つ（V4・V5・V7 が先に落とす）
+        let resolved = entry
+            .variable
+            .as_deref()
+            .and_then(|v| Some((v, doc.variable.get(v)?, resolve_transition(entry, doc)?)));
+        debug_assert!(
+            resolved.is_some(),
+            "validate() を通らない entry {entry_idx}"
+        );
+        let Some((var_name, var_def, trans_def)) = resolved else {
+            continue;
         };
 
-        let trans_def =
-            match resolve_transition(storyboard_name, entry_idx, entry, doc, &mut errors) {
-                Some(td) => td,
-                None => continue,
-            };
-
-        let var_def = match doc.variable.get(&var_name) {
-            Some(vd) => vd,
-            None => continue, // already caught by validation
-        };
-
-        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）
-        let (last_end_time, last_value) = if entry.at.is_none() && entry.between.is_none() {
-            let prev = graph
-                .prev_same_var
-                .get(&entry_idx)
-                .and_then(|p| entry_segment_end.get(p));
-            (prev.map(|(t, _)| *t), prev.map(|(_, v)| v))
+        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）。
+        // at・between は終わりの時刻を使わず、値だけを処理の順で最後に解いた分から取る
+        let sequential = entry.at.is_none() && entry.between.is_none();
+        let prev = if sequential {
+            graph.prev_same_var.get(&entry_idx)
         } else {
-            // at・between は終わりの時刻を使わない
-            (None, var_last_value.get(&var_name))
-        };
+            var_last_entry.get(var_name)
+        }
+        .and_then(|p| entry_segment_end.get(p));
+        let last_end_time = prev.filter(|_| sequential).map(|(t, _)| *t);
+        let last_value = prev.map(|(_, v)| v);
 
         // Resolve timing (Task 5.1-5.3)
         let timing = resolve_entry_timing(
             storyboard_name,
             entry_idx,
             entry,
-            &trans_def,
+            trans_def,
             start_time,
             &keyframe_times,
             last_end_time,
@@ -191,21 +190,21 @@ pub fn compile_storyboard(
         entry_keyframe_time.insert(entry_idx, kf_time);
 
         // Resolve from value (Task 5.7)
-        let from_value = resolve_from_value(&trans_def, last_value, var_def);
+        let from_value = resolve_from_value(trans_def, last_value, var_def);
 
         // Resolve to value (Task 5.8)
-        let to_value = resolve_to_value(&trans_def, &from_value);
+        let to_value = resolve_to_value(trans_def, &from_value);
 
         // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる（要件 11.11）
         if let TransitionValue::Scalar(v) = to_value {
-            let (min, max) = extract_min_max(Some(var_def));
+            let (min, max) = extract_min_max(var_def);
             let (min, max) = (
                 min.unwrap_or(f64::NEG_INFINITY),
                 max.unwrap_or(f64::INFINITY),
             );
             if v < min || v > max {
                 errors.push(DolaError::ValueOutOfRange {
-                    variable: var_name.clone(),
+                    variable: var_name.to_string(),
                     field: if trans_def.relative_to.is_some() {
                         "relative_to"
                     } else {
@@ -230,17 +229,18 @@ pub fn compile_storyboard(
         let segment = CompiledSegment {
             start_time: segment_start,
             end_time: segment_end,
-            from_value: from_value.clone(),
+            from_value,
             to_value: to_value.clone(),
             easing,
         };
 
         var_segments
-            .entry(var_name.clone())
-            .or_default()
-            .push(segment);
-        entry_segment_end.insert(entry_idx, (segment_end, to_value.clone()));
-        var_last_value.insert(var_name, to_value);
+            .entry(var_name)
+            .or_insert_with(|| (var_def, Vec::new()))
+            .1
+            .push((entry_idx, segment));
+        entry_segment_end.insert(entry_idx, (segment_end, to_value));
+        var_last_entry.insert(var_name, entry_idx);
     }
 
     if !errors.is_empty() {
@@ -250,26 +250,26 @@ pub fn compile_storyboard(
     // Step 5: Finalization (Task 6)
     let mut timelines: BTreeMap<String, CompiledVariableTimeline> = BTreeMap::new();
 
-    for (var_name, mut segments) in var_segments {
+    for (var_name, (var_def, mut segments)) in var_segments {
         // Sort by start_time (Task 6.1)
         // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
-        segments.sort_by(|a, b| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
+        segments.sort_by(|(_, a), (_, b)| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
 
-        // Overlap check (Task 6.2)
-        for i in 1..segments.len() {
-            if segments[i - 1].end_time > segments[i].start_time {
+        // Overlap check (Task 6.2)。重なった後ろのセグメントのエントリを指す
+        for pair in segments.windows(2) {
+            let ((_, prev), (entry_index, next)) = (&pair[0], &pair[1]);
+            if prev.end_time > next.start_time {
                 errors.push(DolaError::CompileError {
                     storyboard: storyboard_name.to_string(),
-                    entry_index: 0, // approximate
+                    entry_index: *entry_index,
                     reason: format!(
                         "Segment overlap for variable '{}': previous end_time {} > next start_time {}",
-                        var_name, segments[i - 1].end_time, segments[i].start_time
+                        var_name, prev.end_time, next.start_time
                     ),
                 });
             }
         }
-
-        let var_def = doc.variable.get(&var_name);
+        let segments: Vec<CompiledSegment> = segments.into_iter().map(|(_, s)| s).collect();
 
         // Build CompiledVariableTimeline (Task 6.3)
         // 長さはコンパイルの起点から数える（先頭の遅れを含む）。
@@ -282,7 +282,7 @@ pub fn compile_storyboard(
         let (min_value, max_value) = extract_min_max(var_def);
 
         timelines.insert(
-            var_name,
+            var_name.to_string(),
             CompiledVariableTimeline {
                 variable_type,
                 segments,

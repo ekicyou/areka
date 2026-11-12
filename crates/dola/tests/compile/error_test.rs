@@ -383,4 +383,80 @@ mod error_tests {
             "{errs:?}"
         );
     }
+
+    /// 閉路の先にあるだけの節（c at a）は閉路の報告に入らない（#68）
+    #[test]
+    fn keyframe_cycle_lists_only_cycle_members() {
+        let kf = |name: &str, at: &str| StoryboardEntry {
+            at: Some(KeyframeRef::Single(at.to_string())),
+            keyframe: Some(name.to_string()),
+            ..Default::default()
+        };
+        let doc = make_doc_with_storyboard(
+            vec![],
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .entry(kf("c", "a"))
+                .entry(kf("a", "b"))
+                .entry(kf("b", "a"))
+                .build(),
+        );
+
+        let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+        assert_eq!(
+            errs,
+            vec![DolaError::KeyframeCycle {
+                storyboard: "test".to_string(),
+                cycle: vec!["a".to_string(), "b".to_string()],
+            }]
+        );
+    }
+
+    /// 重なりのエラーは変数の名前の順に並び、後から重なったエントリを指す（#69）
+    #[test]
+    fn overlap_error_points_to_offending_entry_in_name_order() {
+        let float = AnimationVariableDef::Float {
+            initial: 0.0,
+            min: None,
+            max: None,
+        };
+        let seg = |var: &str, delay: f64, duration: f64| StoryboardEntry {
+            variable: Some(var.to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                to: Some(TransitionValue::Scalar(1.0)),
+                delay,
+                duration: Some(duration),
+                ..Default::default()
+            })),
+            at: Some(KeyframeRef::Single("start".to_string())),
+            ..Default::default()
+        };
+        // 配列は b が先・a が後。重なるのは b の 1 番目と a の 3 番目
+        let doc = make_doc_with_storyboard(
+            vec![("a", float.clone()), ("b", float)],
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .entry(seg("b", 0.0, 2.0))
+                .entry(seg("b", 0.0, 1.0))
+                .entry(seg("a", 0.0, 2.0))
+                .entry(seg("a", 1.0, 1.0))
+                .build(),
+        );
+
+        let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+        let got: Vec<(usize, bool)> = errs
+            .iter()
+            .map(|e| match e {
+                DolaError::CompileError {
+                    entry_index,
+                    reason,
+                    ..
+                } => (*entry_index, reason.contains("variable 'a'")),
+                other => panic!("unexpected error {other:?}"),
+            })
+            .collect();
+        assert_eq!(got, vec![(3, true), (1, false)], "{errs:?}");
+    }
 }
