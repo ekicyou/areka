@@ -251,7 +251,7 @@
   - _Requirements: 3.1, 4.5_
 
 - [ ] 15. 件 3 の残りと注の掃除
-- [ ] 15.1 dola の clippy の残りを振る舞いを変えずに消す（件 3）
+- [x] 15.1 dola の clippy の残りを振る舞いを変えずに消す（件 3）
   - `collapsible_if` 18 か所を畳む・コンパイルの解決の 1 か所に理由を書いた `#[expect(clippy::too_many_arguments, reason = ...)]` を付ける（要件 11.12）・周回のテストの `manual_range_contains` 2 か所・ランタイムの説明の字下げ（`doc_lazy_continuation`）・競合のテストの入れ子の mod（`module_inception`）
   - 公開の関数の引数の数は変えない
   - 終わった姿: `cargo clippy -p dola --all-targets --no-deps -- -D warnings` が警告 0 で通り、`cargo test -p dola` が緑

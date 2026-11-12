@@ -12,6 +12,9 @@ use crate::storyboard::{KeyframeNames, KeyframeRef, LoopOffset};
 use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
+/// 暗黙のキーフレーム名の接頭辞（名の無いエントリは `__implicit_{idx}`・明示名では使えない）
+pub(crate) const IMPLICIT_KEYFRAME_PREFIX: &str = "__implicit_";
+
 /// 期待されるスキーマバージョン
 pub(super) const EXPECTED_SCHEMA_VERSION: &str = "1.0";
 
@@ -160,53 +163,53 @@ pub(super) fn validate_variable_ranges(doc: &DolaDocument, errors: &mut Vec<Dola
     for (var_name, var_def) in &doc.variable {
         match var_def {
             AnimationVariableDef::Float { initial, min, max } => {
-                if let Some(min_val) = min {
-                    if *initial < *min_val {
-                        errors.push(DolaError::ValueOutOfRange {
-                            variable: var_name.clone(),
-                            field: "initial".to_string(),
-                            value: *initial,
-                            min: *min_val,
-                            max: max.unwrap_or(f64::INFINITY),
-                        });
-                    }
+                if let Some(min_val) = min
+                    && *initial < *min_val
+                {
+                    errors.push(DolaError::ValueOutOfRange {
+                        variable: var_name.clone(),
+                        field: "initial".to_string(),
+                        value: *initial,
+                        min: *min_val,
+                        max: max.unwrap_or(f64::INFINITY),
+                    });
                 }
-                if let Some(max_val) = max {
-                    if *initial > *max_val {
-                        errors.push(DolaError::ValueOutOfRange {
-                            variable: var_name.clone(),
-                            field: "initial".to_string(),
-                            value: *initial,
-                            min: min.unwrap_or(f64::NEG_INFINITY),
-                            max: *max_val,
-                        });
-                    }
+                if let Some(max_val) = max
+                    && *initial > *max_val
+                {
+                    errors.push(DolaError::ValueOutOfRange {
+                        variable: var_name.clone(),
+                        field: "initial".to_string(),
+                        value: *initial,
+                        min: min.unwrap_or(f64::NEG_INFINITY),
+                        max: *max_val,
+                    });
                 }
             }
             AnimationVariableDef::Integer {
                 initial, min, max, ..
             } => {
-                if let Some(min_val) = min {
-                    if *initial < *min_val {
-                        errors.push(DolaError::ValueOutOfRange {
-                            variable: var_name.clone(),
-                            field: "initial".to_string(),
-                            value: *initial as f64,
-                            min: *min_val as f64,
-                            max: max.unwrap_or(i64::MAX) as f64,
-                        });
-                    }
+                if let Some(min_val) = min
+                    && *initial < *min_val
+                {
+                    errors.push(DolaError::ValueOutOfRange {
+                        variable: var_name.clone(),
+                        field: "initial".to_string(),
+                        value: *initial as f64,
+                        min: *min_val as f64,
+                        max: max.unwrap_or(i64::MAX) as f64,
+                    });
                 }
-                if let Some(max_val) = max {
-                    if *initial > *max_val {
-                        errors.push(DolaError::ValueOutOfRange {
-                            variable: var_name.clone(),
-                            field: "initial".to_string(),
-                            value: *initial as f64,
-                            min: min.unwrap_or(i64::MIN) as f64,
-                            max: *max_val as f64,
-                        });
-                    }
+                if let Some(max_val) = max
+                    && *initial > *max_val
+                {
+                    errors.push(DolaError::ValueOutOfRange {
+                        variable: var_name.clone(),
+                        field: "initial".to_string(),
+                        value: *initial as f64,
+                        min: min.unwrap_or(i64::MIN) as f64,
+                        max: *max_val as f64,
+                    });
                 }
             }
             AnimationVariableDef::Object { .. } => {
@@ -224,13 +227,13 @@ pub(super) fn validate_duplicate_keyframes(
 ) {
     let mut seen = BTreeSet::new();
     for entry in &sb.entry {
-        if let Some(ref kf_name) = entry.keyframe {
-            if !seen.insert(kf_name.clone()) {
-                errors.push(DolaError::DuplicateKeyframe {
-                    storyboard: sb_name.to_string(),
-                    name: kf_name.clone(),
-                });
-            }
+        if let Some(ref kf_name) = entry.keyframe
+            && !seen.insert(kf_name.clone())
+        {
+            errors.push(DolaError::DuplicateKeyframe {
+                storyboard: sb_name.to_string(),
+                name: kf_name.clone(),
+            });
         }
     }
 }
@@ -242,12 +245,12 @@ pub(super) fn validate_reserved_keyframe_names(
     errors: &mut Vec<DolaError>,
 ) {
     for entry in &sb.entry {
-        if let Some(ref kf_name) = entry.keyframe {
-            if kf_name == "start" || kf_name.starts_with("__implicit_") {
-                errors.push(DolaError::ReservedKeyframeName {
-                    name: kf_name.clone(),
-                });
-            }
+        if let Some(ref kf_name) = entry.keyframe
+            && (kf_name == "start" || kf_name.starts_with(IMPLICIT_KEYFRAME_PREFIX))
+        {
+            errors.push(DolaError::ReservedKeyframeName {
+                name: kf_name.clone(),
+            });
         }
     }
 }
@@ -267,7 +270,7 @@ pub(super) fn validate_keyframe_references(
             known_keyframes.insert(kf_name.clone());
         } else {
             // 暗黙的KF: __implicit_{index}
-            known_keyframes.insert(format!("__implicit_{}", idx));
+            known_keyframes.insert(format!("{IMPLICIT_KEYFRAME_PREFIX}{idx}"));
         }
     }
 
@@ -338,37 +341,37 @@ pub(super) fn validate_transition_type_constraints(
                     });
                 }
             }
-            if let Some(ref to) = trans_def.to {
-                if matches!(to, TransitionValue::Scalar(_)) {
-                    errors.push(DolaError::TypeMismatch {
-                        storyboard: sb_name.to_string(),
-                        entry_index: entry_idx,
-                        reason: "Object variable requires Dynamic transition value".to_string(),
-                    });
-                }
+            if let Some(ref to) = trans_def.to
+                && matches!(to, TransitionValue::Scalar(_))
+            {
+                errors.push(DolaError::TypeMismatch {
+                    storyboard: sb_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: "Object variable requires Dynamic transition value".to_string(),
+                });
             }
         }
         AnimationVariableDef::Float { .. } | AnimationVariableDef::Integer { .. } => {
             // V13: f64/i64 変数 → from/to は Scalar のみ
-            if let Some(ref from) = trans_def.from {
-                if matches!(from, TransitionValue::Dynamic(_)) {
-                    errors.push(DolaError::TypeMismatch {
-                        storyboard: sb_name.to_string(),
-                        entry_index: entry_idx,
-                        reason: "Numeric variable requires Scalar transition value for 'from'"
-                            .to_string(),
-                    });
-                }
+            if let Some(ref from) = trans_def.from
+                && matches!(from, TransitionValue::Dynamic(_))
+            {
+                errors.push(DolaError::TypeMismatch {
+                    storyboard: sb_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: "Numeric variable requires Scalar transition value for 'from'"
+                        .to_string(),
+                });
             }
-            if let Some(ref to) = trans_def.to {
-                if matches!(to, TransitionValue::Dynamic(_)) {
-                    errors.push(DolaError::TypeMismatch {
-                        storyboard: sb_name.to_string(),
-                        entry_index: entry_idx,
-                        reason: "Numeric variable requires Scalar transition value for 'to'"
-                            .to_string(),
-                    });
-                }
+            if let Some(ref to) = trans_def.to
+                && matches!(to, TransitionValue::Dynamic(_))
+            {
+                errors.push(DolaError::TypeMismatch {
+                    storyboard: sb_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: "Numeric variable requires Scalar transition value for 'to'"
+                        .to_string(),
+                });
             }
 
             // V12: トランジション from/to の値域検証
@@ -387,16 +390,16 @@ pub(super) fn validate_transition_type_constraints(
             };
 
             for (field, value) in [("from", &trans_def.from), ("to", &trans_def.to)] {
-                if let Some(TransitionValue::Scalar(val)) = value {
-                    if *val < min_f || *val > max_f {
-                        errors.push(DolaError::ValueOutOfRange {
-                            variable: var_name.to_string(),
-                            field: field.to_string(),
-                            value: *val,
-                            min: min_f,
-                            max: max_f,
-                        });
-                    }
+                if let Some(TransitionValue::Scalar(val)) = value
+                    && (*val < min_f || *val > max_f)
+                {
+                    errors.push(DolaError::ValueOutOfRange {
+                        variable: var_name.to_string(),
+                        field: field.to_string(),
+                        value: *val,
+                        min: min_f,
+                        max: max_f,
+                    });
                 }
             }
         }

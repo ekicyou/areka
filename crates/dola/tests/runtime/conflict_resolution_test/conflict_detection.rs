@@ -3,85 +3,83 @@
 // =========================================================================
 // 6.1 競合検出ロジックのテスト
 // =========================================================================
-mod conflict_detection {
-    use super::super::*;
+use super::*;
 
-    #[test]
-    fn no_conflict_when_different_variables() {
-        // 異なる変数の SB は競合しない
-        let doc = DolaDocumentBuilder::new("1.0")
-            .variable("x", float())
-            .variable("y", float())
-            .storyboard(
-                "sb_x",
-                StoryboardBuilder::new()
-                    .entry(linear("x", 0.0, 100.0, 2.0))
-                    .build(),
-            )
-            .storyboard(
-                "sb_y",
-                StoryboardBuilder::new()
-                    .entry(linear("y", 0.0, 100.0, 2.0))
-                    .build(),
-            )
-            .build()
-            .unwrap();
+#[test]
+fn no_conflict_when_different_variables() {
+    // 異なる変数の SB は競合しない
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("x", float())
+        .variable("y", float())
+        .storyboard(
+            "sb_x",
+            StoryboardBuilder::new()
+                .entry(linear("x", 0.0, 100.0, 2.0))
+                .build(),
+        )
+        .storyboard(
+            "sb_y",
+            StoryboardBuilder::new()
+                .entry(linear("y", 0.0, 100.0, 2.0))
+                .build(),
+        )
+        .build()
+        .unwrap();
 
-        let mut rt = DolaRuntime::new();
-        let _x_id = rt.subscribe("x");
-        let _y_id = rt.subscribe("y");
-        rt.load_document(doc).unwrap();
+    let mut rt = DolaRuntime::new();
+    let _x_id = rt.subscribe("x");
+    let _y_id = rt.subscribe("y");
+    rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("sb_x", 0.0).unwrap();
-        assert!(r1.affected_group_ids.is_empty());
+    let r1 = rt.start("sb_x", 0.0).unwrap();
+    assert!(r1.affected_group_ids.is_empty());
 
-        // sb_y は変数 y のみ → 変数 x と競合しない
-        let r2 = rt.start("sb_y", 0.5).unwrap();
-        assert!(r2.affected_group_ids.is_empty());
-    }
+    // sb_y は変数 y のみ → 変数 x と競合しない
+    let r2 = rt.start("sb_y", 0.5).unwrap();
+    assert!(r2.affected_group_ids.is_empty());
+}
 
-    #[test]
-    fn no_conflict_when_no_existing_instances() {
-        let doc = make_doc_with_policy("fade", InterruptionPolicy::Conclude);
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
+#[test]
+fn no_conflict_when_no_existing_instances() {
+    let doc = make_doc_with_policy("fade", InterruptionPolicy::Conclude);
+    let mut rt = DolaRuntime::new();
+    let _opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
 
-        let result = rt.start("fade", 0.0).unwrap();
-        assert!(result.affected_group_ids.is_empty());
-    }
+    let result = rt.start("fade", 0.0).unwrap();
+    assert!(result.affected_group_ids.is_empty());
+}
 
-    #[test]
-    fn conflict_detected_on_same_variable() {
-        let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
+#[test]
+fn conflict_detected_on_same_variable() {
+    let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
+    let mut rt = DolaRuntime::new();
+    let _opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
 
-        // 1st start
-        let r1 = rt.start("fade", 0.0).unwrap();
-        assert!(r1.affected_group_ids.is_empty());
+    // 1st start
+    let r1 = rt.start("fade", 0.0).unwrap();
+    assert!(r1.affected_group_ids.is_empty());
 
-        // 2nd start on same variable → conflict with group_id 1
-        let r2 = rt.start("fade", 0.5).unwrap();
-        assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
-    }
+    // 2nd start on same variable → conflict with group_id 1
+    let r2 = rt.start("fade", 0.5).unwrap();
+    assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
+}
 
-    #[test]
-    fn no_conflict_after_natural_end() {
-        let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
+#[test]
+fn no_conflict_after_natural_end() {
+    let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
+    let mut rt = DolaRuntime::new();
+    let _opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
 
-        let _r1 = rt.start("fade", 0.0).unwrap();
-        // 自然終了を発生させる
-        rt.tick(3.0);
+    let _r1 = rt.start("fade", 0.0).unwrap();
+    // 自然終了を発生させる
+    rt.tick(3.0);
 
-        // 新規 start → 競合なし（前のインスタンスは終了済み）
-        let r2 = rt.start("fade", 3.0).unwrap();
-        assert!(r2.affected_group_ids.is_empty());
-    }
+    // 新規 start → 競合なし（前のインスタンスは終了済み）
+    let r2 = rt.start("fade", 3.0).unwrap();
+    assert!(r2.affected_group_ids.is_empty());
 }
 
 // =========================================================================

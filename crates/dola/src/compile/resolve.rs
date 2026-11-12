@@ -9,7 +9,7 @@ use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::storyboard::{KeyframeNames, KeyframeRef, StoryboardEntry};
 use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
-use crate::validate::collect_keyframe_names_from_ref;
+use crate::validate::{IMPLICIT_KEYFRAME_PREFIX, collect_keyframe_names_from_ref};
 use crate::variable::AnimationVariableDef;
 
 use super::types::VariableTypeHint;
@@ -21,7 +21,7 @@ pub(super) fn entry_keyframe_name(entry: &StoryboardEntry, idx: usize) -> String
     entry
         .keyframe
         .clone()
-        .unwrap_or_else(|| format!("__implicit_{}", idx))
+        .unwrap_or_else(|| format!("{IMPLICIT_KEYFRAME_PREFIX}{idx}"))
 }
 
 /// キーフレーム依存グラフ
@@ -274,6 +274,10 @@ pub(super) fn resolve_transition<'a>(
 /// Returns (segment_start, segment_end, keyframe_time)
 ///
 /// delay / duration / offset の有限・符号は validate() の数値の規則が先に見ている。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "解決の途中の表を 1 か所で受ける私的な関数で、束の型を作ると同じ欄の写しが増える"
+)]
 pub(super) fn resolve_entry_timing(
     storyboard_name: &str,
     entry_idx: usize,

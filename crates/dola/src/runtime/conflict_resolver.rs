@@ -39,14 +39,14 @@ pub(crate) fn resolve_conflicts_excluding(
 
     // Never チェック: 1つでも Never があれば全体を拒否
     for &gid in &conflicting {
-        if let Ok(inst) = instance_manager.get(gid) {
-            if inst.interruption_policy == InterruptionPolicy::Never {
-                // 新規インスタンスを削除してエラーを返す
-                instance_manager.remove(new_group_id);
-                return Err(RuntimeError::Conflict {
-                    conflicting_group_ids: conflicting.into_iter().collect(),
-                });
-            }
+        if let Ok(inst) = instance_manager.get(gid)
+            && inst.interruption_policy == InterruptionPolicy::Never
+        {
+            // 新規インスタンスを削除してエラーを返す
+            instance_manager.remove(new_group_id);
+            return Err(RuntimeError::Conflict {
+                conflicting_group_ids: conflicting.into_iter().collect(),
+            });
         }
     }
 

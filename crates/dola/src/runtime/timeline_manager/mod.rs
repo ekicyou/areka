@@ -147,12 +147,12 @@ impl TimelineManager {
 
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
-                if entry.group_id == group_id {
-                    if let Some(last_seg) = entry.segments.last() {
-                        // 最終セグメントの to_value を最終値とする
-                        let val = entry.value_at(last_seg, 1.0, &mut self.intern_pool);
-                        result.insert(var_name.clone(), val);
-                    }
+                if entry.group_id == group_id
+                    && let Some(last_seg) = entry.segments.last()
+                {
+                    // 最終セグメントの to_value を最終値とする
+                    let val = entry.value_at(last_seg, 1.0, &mut self.intern_pool);
+                    result.insert(var_name.clone(), val);
                 }
             }
         }
@@ -199,12 +199,11 @@ impl TimelineManager {
 
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
-                if entry.group_id == group_id {
-                    if let Some(val) =
+                if entry.group_id == group_id
+                    && let Some(val) =
                         evaluate_segments(entry, effective_time, &mut self.intern_pool)
-                    {
-                        result.insert(var_name.clone(), val);
-                    }
+                {
+                    result.insert(var_name.clone(), val);
                 }
             }
         }

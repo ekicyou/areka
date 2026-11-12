@@ -336,7 +336,7 @@ fn advance_loop_with_offset_adds_delay() {
     // delay should be in [1.0, 5.0] → end_time in [5.0, 9.0]
     let delay = inst.end_time - (end_before + inst.loop_duration);
     assert!(
-        delay >= 1.0 && delay <= 5.0,
+        (1.0..=5.0).contains(&delay),
         "delay {delay} out of [1.0, 5.0]"
     );
 }

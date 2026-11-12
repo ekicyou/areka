@@ -4,7 +4,7 @@
 
 mod rules;
 
-pub(crate) use rules::collect_keyframe_names_from_ref;
+pub(crate) use rules::{IMPLICIT_KEYFRAME_PREFIX, collect_keyframe_names_from_ref};
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
@@ -47,25 +47,25 @@ impl Validate for DolaDocument {
 
             for (entry_idx, entry) in sb.entry.iter().enumerate() {
                 // V4: 変数参照存在確認
-                if let Some(ref var_name) = entry.variable {
-                    if !self.variable.contains_key(var_name) {
-                        errors.push(DolaError::UndefinedVariable {
-                            storyboard: sb_name.clone(),
-                            entry_index: entry_idx,
-                            name: var_name.clone(),
-                        });
-                    }
+                if let Some(ref var_name) = entry.variable
+                    && !self.variable.contains_key(var_name)
+                {
+                    errors.push(DolaError::UndefinedVariable {
+                        storyboard: sb_name.clone(),
+                        entry_index: entry_idx,
+                        name: var_name.clone(),
+                    });
                 }
 
                 // V5: トランジション名前参照存在確認
-                if let Some(TransitionRef::Named(ref trans_name)) = entry.transition {
-                    if !self.transition.contains_key(trans_name) {
-                        errors.push(DolaError::UndefinedTransition {
-                            storyboard: sb_name.clone(),
-                            entry_index: entry_idx,
-                            name: trans_name.clone(),
-                        });
-                    }
+                if let Some(TransitionRef::Named(ref trans_name)) = entry.transition
+                    && !self.transition.contains_key(trans_name)
+                {
+                    errors.push(DolaError::UndefinedTransition {
+                        storyboard: sb_name.clone(),
+                        entry_index: entry_idx,
+                        name: trans_name.clone(),
+                    });
                 }
 
                 // V7: variable と transition は両方あるか両方無いか
@@ -167,17 +167,17 @@ impl Validate for DolaDocument {
                     }
 
                     // V10, V13: 変数型に基づくトランジション制約
-                    if let Some(ref var_name) = entry.variable {
-                        if let Some(var_def) = self.variable.get(var_name) {
-                            validate_transition_type_constraints(
-                                sb_name,
-                                entry_idx,
-                                var_name,
-                                var_def,
-                                trans_def,
-                                &mut errors,
-                            );
-                        }
+                    if let Some(ref var_name) = entry.variable
+                        && let Some(var_def) = self.variable.get(var_name)
+                    {
+                        validate_transition_type_constraints(
+                            sb_name,
+                            entry_idx,
+                            var_name,
+                            var_def,
+                            trans_def,
+                            &mut errors,
+                        );
                     }
                 }
             }

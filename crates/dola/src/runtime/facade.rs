@@ -334,7 +334,7 @@ impl DolaRuntime {
     ///
     /// 内部フロー:
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
-    /// 1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
+    ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
     /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
