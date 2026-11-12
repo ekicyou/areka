@@ -876,3 +876,26 @@ fn stray_cue_drops_upcoming_and_reinstall_becomes_noop() {
         "列に無い合図で列を捨て、やり直しは何も変えない"
     );
 }
+
+/// 7. 印の字も「内容を足した」合図に数える（指摘 13）: `\0\![*]\1かき` で、本体側の場所が
+/// 足した側に入り、印の字を持つ全文が控えられる。
+#[test]
+fn marker_cue_counts_as_added_content() {
+    let sakura = PlaceKey::balloon(&ActorKey::from("0"));
+    let kero = place("1", TextPlace::Balloon);
+    let talk = [
+        cue("0", 0.0, CueCommand::command_carrier("*", vec![])),
+        text("1", 0.1, "かき"),
+    ];
+    let mut state = TextLayerState::default();
+    let mut look = TalkLookahead::default();
+    look.install(&state, None, &talk);
+    deliver(&mut look, &mut state, None, &talk);
+    assert_eq!(
+        contents(&look),
+        BTreeMap::from([
+            ((sakura.clone(), 0), content(&state, &sakura)),
+            ((kero.clone(), 0), content(&state, &kero)),
+        ])
+    );
+}
