@@ -1,4 +1,4 @@
-//! 1 回の tick の中の出来事（トリガー・周回の終わり・finish の期限）を時刻の順に処理する（R3-01・R3-02）。
+//! 1 回の tick の中の出来事（トリガー・周回の終わり・finish の期限）を時刻の順に処理する。
 //! 60fps で回しても、tick を大きく飛ばしても同じ結果になる
 
 use super::runtime_test::three_loop_trigger_doc;
@@ -171,4 +171,54 @@ fn loop_end_trigger_survives_pause_rounding() {
     // 周回の終わりは約 1.217・2.217・3.217 秒
     assert_eq!(fired(&frames_60fps(3.5)), 3, "60fps");
     assert_eq!(fired(&[0.2, 3.5]), 3, "one tick");
+}
+
+/// トリガーを持たない 1 回きりの Never の X（1.2 秒）は、同じ tick の 2.5 秒のトリガーより先に終わる。
+/// なので、x を動かす子 C はぶつからずに起きる
+#[test]
+fn finite_loop_end_precedes_later_trigger_in_one_tick() {
+    let float = || AnimationVariableDef::Float {
+        initial: 0.0,
+        min: None,
+        max: None,
+    };
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("a", float())
+        .variable("x", float())
+        .storyboard(
+            "X",
+            StoryboardBuilder::new()
+                .interruption_policy(InterruptionPolicy::Never)
+                .entry(ramp("x", 0.0, 1.0, 1.2))
+                .build(),
+        )
+        .storyboard("P", parent("a", 3.0, 1, 2.5, "C"))
+        .storyboard(
+            "C",
+            StoryboardBuilder::new()
+                .entry(ramp("x", 5.0, 6.0, 1.0))
+                .build(),
+        )
+        .build()
+        .expect("doc should be valid");
+    let triggered = |times: &[f64]| {
+        let mut rt = DolaRuntime::new();
+        rt.load_document(doc.clone()).unwrap();
+        rt.start("X", 0.0).unwrap();
+        rt.start("P", 0.0).unwrap();
+        let mut all = Vec::new();
+        for &t in times {
+            rt.tick(t);
+            all.extend(rt.last_result().triggered.iter().cloned());
+        }
+        all
+    };
+    for (what, times) in [("60fps", frames_60fps(3.0)), ("one tick", vec![0.0, 3.0])] {
+        let r = triggered(&times);
+        assert_eq!(r.len(), 1, "{what}: {r:?}");
+        assert!(
+            matches!(r[0], TriggerResult::Started { .. }),
+            "{what}: {r:?}"
+        );
+    }
 }
