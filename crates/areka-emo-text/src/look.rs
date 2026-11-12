@@ -48,10 +48,13 @@
 //! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という
 //! 状態を `look_tests.rs` §3 が明示的に固定している。
 
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+
 use crate::color::{ColorSpec, mix_disabled, parse_color};
 
 /// 上下付き（語彙のみ・表示は変えない・後勝ちの排他なので enum で同時に 1 値）。
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Script {
     /// 上下付きなし（正典の既定）。
     #[default]
@@ -98,6 +101,31 @@ pub struct TextLook {
     /// 上下付き——語彙のみ（表示に効かない・要件 6.1）。
     pub script: Script,
 }
+
+/// `==` と同じ同値の鍵——大きさは `0.0` と `-0.0` を同じビットへ寄せる（`==` が等しいとみなす
+/// 2 値が別の鍵へ割れないため）。NaN は `==` が自分とも等しくないので、索引でも決して当たらず
+/// 旧来の線形走査と同じく毎回新しい番号になる（大きさは常に正の有限値なので本番には現れない）。
+impl Hash for TextLook {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        (if self.height == 0.0 {
+            0.0f32
+        } else {
+            self.height
+        })
+        .to_bits()
+        .hash(state);
+        self.color.hash(state);
+        self.bold.hash(state);
+        self.italic.hash(state);
+        self.underline.hash(state);
+        self.strike.hash(state);
+        self.outline.hash(state);
+        self.script.hash(state);
+    }
+}
+
+impl Eq for TextLook {}
 
 impl TextLook {
     /// 正典の既定——ＭＳ ゴシック・12・黒・装飾はすべて無効（要件 4.1）。
@@ -295,23 +323,27 @@ impl StyleId {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StyleTable {
     looks: Vec<TextLook>,
+    /// `looks` の索引（見た目→番号）。[`StyleTable::clear`] で一緒に空にする。
+    index: HashMap<TextLook, StyleId>,
 }
 
 impl StyleTable {
     /// 見た目を番号へ——既定と同値なら [`StyleId::DEFAULT`]、既存と同値ならその番号、
     /// どちらでもなければ末尾へ追記してその番号。
     ///
-    /// 引き当ては先頭からの線形走査。1 スコープの表は「1 台詞の中で既定と異なる見た目」の
-    /// 種類数（実際には数個）なので、これで足りる。
+    /// 引き当ては索引の表引き。字ごとに色を変える台本（虹色の文字）では見た目の種類が字の数まで
+    /// 増えるので、線形走査では 2 乗になる。
     pub fn intern(&mut self, look: &TextLook, default: &TextLook) -> StyleId {
         if look == default {
             return StyleId::DEFAULT;
         }
-        if let Some(index) = self.looks.iter().position(|known| known == look) {
-            return StyleId(index as u32 + 1);
+        if let Some(&id) = self.index.get(look) {
+            return id;
         }
         self.looks.push(look.clone());
-        StyleId(self.looks.len() as u32)
+        let id = StyleId(self.looks.len() as u32);
+        self.index.insert(look.clone(), id);
+        id
     }
 
     /// 番号を見た目へ——[`StyleId::DEFAULT`] と範囲外の番号は `default` に落ちる
@@ -341,6 +373,7 @@ impl StyleTable {
     /// 表を空にする（スコープの消去点で呼ぶ）。
     pub fn clear(&mut self) {
         self.looks.clear();
+        self.index.clear();
     }
 }
 
