@@ -43,6 +43,12 @@ mod compile_trigger_tests {
             "fire_time should be 1.0, got {}",
             compiled.triggers[0].fire_time
         );
+        // トリガーは total_base_duration に寄与しない（親の opacity 0→1 の 1 秒だけ）
+        assert!(
+            (compiled.total_base_duration - 1.0).abs() < 1e-9,
+            "total_base_duration should be 1.0, got {}",
+            compiled.total_base_duration
+        );
     }
 
     /// trigger_start_offset あり
@@ -53,20 +59,6 @@ mod compile_trigger_tests {
 
         assert_eq!(compiled.triggers.len(), 1);
         assert_eq!(compiled.triggers[0].start_offset, Some(0.5));
-    }
-
-    /// total_base_duration にトリガーが寄与しない
-    #[test]
-    fn trigger_does_not_affect_total_base_duration() {
-        let doc = timed_trigger_doc("parent", "child", None);
-        let compiled = compile_storyboard(&doc, "parent", 0.0).unwrap();
-
-        // 親の opacity トランジション 0→1 は 1秒
-        assert!(
-            (compiled.total_base_duration - 1.0).abs() < 1e-9,
-            "total_base_duration should be 1.0, got {}",
-            compiled.total_base_duration
-        );
     }
 
     /// start_time オフセット付きコンパイル

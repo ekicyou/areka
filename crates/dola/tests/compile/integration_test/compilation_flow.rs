@@ -139,7 +139,7 @@ fn all_variable_types_mixed() {
                 "frame",
                 AnimationVariableDef::Integer {
                     initial: 0,
-                    min: Some(0),
+                    min: Some(-10),
                     max: Some(10),
                     typewriter: None,
                 },
@@ -228,7 +228,7 @@ fn all_variable_types_mixed() {
 
     // Integer min/max
     let frame_tl = result.timelines.get("frame").unwrap();
-    assert_eq!(frame_tl.min_value, Some(0.0));
+    assert_eq!(frame_tl.min_value, Some(-10.0));
     assert_eq!(frame_tl.max_value, Some(10.0));
 }
 

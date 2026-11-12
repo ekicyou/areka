@@ -121,12 +121,12 @@ mod numeric_rule_tests {
         doc
     }
 
-    fn sb(doc: &mut DolaDocument) -> &mut Storyboard {
+    fn sb_mut(doc: &mut DolaDocument) -> &mut Storyboard {
         doc.storyboard.get_mut("sb").unwrap()
     }
 
     fn trans(doc: &mut DolaDocument) -> &mut TransitionDef {
-        match sb(doc).entry[0].transition.as_mut() {
+        match sb_mut(doc).entry[0].transition.as_mut() {
             Some(TransitionRef::Inline(def)) => def,
             _ => unreachable!(),
         }
@@ -137,19 +137,19 @@ mod numeric_rule_tests {
         type Mutate = fn(&mut DolaDocument);
         let cases: [(Mutate, &str, &str, f64); 12] = [
             (
-                |d| sb(d).time_scale = 0.0,
+                |d| sb_mut(d).time_scale = 0.0,
                 "storyboard 'sb'",
                 "time_scale",
                 0.0,
             ),
             (
-                |d| sb(d).time_scale = -1.0,
+                |d| sb_mut(d).time_scale = -1.0,
                 "storyboard 'sb'",
                 "time_scale",
                 -1.0,
             ),
             (
-                |d| sb(d).time_scale = f64::NAN,
+                |d| sb_mut(d).time_scale = f64::NAN,
                 "storyboard 'sb'",
                 "time_scale",
                 f64::NAN,
@@ -173,13 +173,13 @@ mod numeric_rule_tests {
                 -1.0,
             ),
             (
-                |d| sb(d).loop_count = 0,
+                |d| sb_mut(d).loop_count = 0,
                 "storyboard 'sb'",
                 "loop_count",
                 0.0,
             ),
             (
-                |d| sb(d).loop_offset = Some(LoopOffset::Scalar(f64::NAN)),
+                |d| sb_mut(d).loop_offset = Some(LoopOffset::Scalar(f64::NAN)),
                 "storyboard 'sb'",
                 "loop_offset",
                 f64::NAN,
@@ -221,7 +221,7 @@ mod numeric_rule_tests {
             ),
             (
                 |d| {
-                    sb(d).loop_offset = Some(LoopOffset::Range(LoopOffsetRange {
+                    sb_mut(d).loop_offset = Some(LoopOffset::Range(LoopOffsetRange {
                         min: 0.0,
                         max: 1.0,
                         easing: EasingFunction::Parametric(ParametricEasing::QuadraticBezier {
@@ -275,8 +275,8 @@ mod numeric_rule_tests {
     #[test]
     fn all_violations_are_collected() {
         let mut doc = base_doc();
-        sb(&mut doc).time_scale = 0.0;
-        sb(&mut doc).loop_count = -2;
+        sb_mut(&mut doc).time_scale = 0.0;
+        sb_mut(&mut doc).loop_count = -2;
         trans(&mut doc).duration = Some(-1.0);
         let errors = doc.validate().unwrap_err();
         let fields: Vec<&str> = errors
@@ -294,12 +294,12 @@ mod numeric_rule_tests {
         // storyboard.rs の説明どおり 0 と −2 以下は拒み、−1（無限）と正の値は通す
         for loop_count in [0, -2] {
             let mut doc = base_doc();
-            sb(&mut doc).loop_count = loop_count;
+            sb_mut(&mut doc).loop_count = loop_count;
             assert!(doc.validate().is_err(), "loop_count = {loop_count}");
         }
         for loop_count in [-1, 1, 3] {
             let mut doc = base_doc();
-            sb(&mut doc).loop_count = loop_count;
+            sb_mut(&mut doc).loop_count = loop_count;
             assert!(doc.validate().is_ok(), "loop_count = {loop_count}");
         }
     }
