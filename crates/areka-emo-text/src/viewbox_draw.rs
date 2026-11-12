@@ -12,7 +12,7 @@
 //!
 //! ## 1 フレームの実行（design System Flows）
 //!
-//! `render` は「書式の確保 → 全住人の行 TextLayout の確保と実測インクはみ出しの収集 → 計画取得
+//! `render_styled`（`viewbox_draw_render.rs`）は「書式の確保 → 全住人の行 TextLayout の確保と実測インクはみ出しの収集 → 計画取得
 //! （[`ScrollPlanner::plan_with_overhangs`]）→ 縮退の判定（書式の組み直し・想定外不整合なら全域）→
 //! 保持ピクセルの面内 blit（[`TextSurface::copy_front_to_back_shifted`](crate::surface::TextSurface::copy_front_to_back_shifted)）→ ダーティ矩形ごとの
 //! 限定描画 → 面の役割交換（[`TextSurface::flip`](crate::surface::TextSurface::flip)）→ 計画の確定（[`ScrollPlanner::commit`]）」の
@@ -110,7 +110,7 @@ pub struct DrawStats {
 /// [`FramePlan`] の COM 実行——blit 指示・ダーティ矩形限定の D2D 描画・FullClear・統計
 /// （R1.1/R1.4/R2.2/R3.1–3.4/R9.4）。
 ///
-/// `render` が 1 フレーム（plan→blit→ダーティ描画→flip→commit）を実行し present 要否を返す。
+/// `render_styled` が 1 フレーム（plan→blit→ダーティ描画→flip→commit）を実行し present 要否を返す。
 /// plan/commit の二相により、デバイス失敗フレームは**未 commit**のまま次フレームで再計画＝再試行
 /// 安全（「当該フレーム skip・次フレーム再試行」）。UI スレッド専有（COM 層規律）。
 pub struct ViewboxExecutor {

@@ -50,7 +50,8 @@
 //! - probe layout は折返し無効寸（[`PROBE_MAX_EXTENT`]）で組む＝未折返し。
 //! - 計測結果はキャッシュ可（追記単調ゆえ確定内容の metrics は不変）——本実装は
 //!   「計測鍵（[`FontKey`](crate::look::FontKey)）と文字」の組で覚える（同じ組なら同じ送り幅の決定論）。
-//!   既定の鍵以外の表は台詞の切れ目で空になる（[`DWriteMetrics`] の `sync_talk`）。
+//!   既定の鍵以外の表と、既定の鍵の測れなかった字・複数のスカラーの字（クラスタ）は台詞の切れ目で
+//!   捨てる（[`DWriteMetrics`] の `sync_talk`）。
 //!
 //! ## 全域再描画オラクル（R3.1/R7.3・`#[cfg(test)]`）
 //!
@@ -181,9 +182,11 @@ pub(crate) const TEXT_DRAW_OPTIONS: D2D1_DRAW_TEXT_OPTIONS =
 /// TextFormat のロケール（wintf typewriter レシピからの lift・日本語正準）。
 const LOCALE_JA_JP: &str = "ja-JP";
 
-/// probe layout の折返し無効寸（image px）。行内軸・行送り軸の双方へ与え、
-/// probe を**未折返し**にする（probe 規約——バルーン寸は image px で高々数百・
-/// font.height も高々数十のため 1e6 は実用上無限）。
+/// probe layout と行 TextLayout の折返し無効寸（image px）。行内軸へ与え（行送り軸は
+/// `block_extent`・[`create_line_layout`]）、DirectWrite に**折り返させない**（probe 規約）。
+/// 字の大きさに上限は無い（`\f[height,N]`・指摘 20）ので 1e6 より長い行もありうるが、それでも
+/// 折り返らない: 描画範囲（image px で高々数百）より長い行は純粋層の折返し（`layout_scan_glyph.rs`
+/// の ③'）で字が 1 つだけになり、DirectWrite は 1 つのクラスタの中では折り返さない。
 pub const PROBE_MAX_EXTENT: f32 = 1.0e6;
 
 /// バルーン背景色の既定（白）——無効表示の混色の相手がまだ分からないときに使う

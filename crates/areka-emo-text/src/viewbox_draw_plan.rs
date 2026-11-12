@@ -1,4 +1,4 @@
-//! `ViewboxExecutor::render` の**フレーム計画の判定群**（`viewbox_draw.rs` の子モジュール）。
+//! `ViewboxExecutor::render_styled` の**フレーム計画の判定群**（`viewbox_draw.rs` の子モジュール）。
 //!
 //! [`viewbox_draw`](crate::viewbox_draw) の巨大化を避けるため、計画そのものを組み替える 2 つの純粋
 //! 関数——エラー縮退規律（[`degrade_if_needed`]・縮退先は計画者の全域の道

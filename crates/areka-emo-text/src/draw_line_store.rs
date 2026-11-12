@@ -199,7 +199,7 @@ impl LineLayoutStore {
     }
 
     /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。
-    /// `ViewboxExecutor::render`（viewbox_draw.rs）が本フレームの生成増分を `DrawStats`
+    /// `ViewboxExecutor::render_styled`（viewbox_draw_render.rs）が本フレームの生成増分を `DrawStats`
     /// （`line_layout_creations`）へ集計するために非テストビルドでも読む。
     pub(crate) fn creations(&self) -> u64 {
         self.creations

@@ -617,6 +617,14 @@ fn a_scroll_after_a_pulled_bottom_row_matches_one_frame_drawing() {
         three_window.block_offset != two_window.block_offset,
         "前提: 3 行目で送りが起きる"
     );
+    // 前提: 2 行目（原点 y＝50）の寄せる前の線は面（高さ 99）の下へはみ出す＝寄せられる。
+    let (_, row2) = layout(&factory(), "Yu Gothic UI", 48, "うえ");
+    let raw = collect_underlines(&row2, &[range(0, 2)], 1.0, (0.0, 50.0)).expect("集められる");
+    assert!(
+        raw.iter()
+            .any(|r| stroke_rect(&r.raw, (0.0, 0.0)).bottom > image.1 as f32),
+        "前提: 2 行目の線が面の下に落ちる"
+    );
 
     let mut surface = rig.attach(image, 1.0);
     let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");

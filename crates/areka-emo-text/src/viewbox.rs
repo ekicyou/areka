@@ -201,7 +201,7 @@ impl ScrollPlanner {
     /// 1 フレームの描画計画を返す（**状態不変・純粋**・`&self`・R2.3/4.3）——実測はみ出し無し
     /// （em ボックス丈）。測定値（[`LineOverhang`]）を持たないテストの呼び手向けの薄いラッパで、
     /// [`Self::plan_with_overhangs`] に空スライスを渡す。本番の呼び手（COM 層
-    /// `ViewboxExecutor::render`）は実測はみ出しを渡す [`Self::plan_with_overhangs`] を使うので、
+    /// `ViewboxExecutor::render_styled`）は実測はみ出しを渡す [`Self::plan_with_overhangs`] を使うので、
     /// 本番の入口ではないことを構造で示すため `#[cfg(test)]` で塞いである。
     #[cfg(test)]
     pub fn plan(
@@ -399,7 +399,8 @@ pub struct LineOverhang {
 /// 物理 px 整数矩形（DD1——ダーティ矩形・露出帯・クリップの共通型）。
 ///
 /// 原点＝左上・単位＝物理 px。全成分 `u32`（負や面外はクランプ済みが前提）。ブロック軸
-/// （行送り軸）の交差判定は [`intersects_block_axis`](Self::intersects_block_axis) が担う
+/// （行送り軸）の区間は [`block_span`](Self::block_span) が返し、描画対象行の割り当て
+/// （`viewbox_diff.rs` の `merge_and_assign`）はこの区間で重なりを判定する
 /// （horizontal_tb＝y・vertical_rl/lr＝x——写像正準表と 1:1）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhysicalRect {
@@ -425,16 +426,6 @@ impl PhysicalRect {
             WritingMode::HorizontalTb => (self.y, self.y + self.h),
             WritingMode::VerticalRl | WritingMode::VerticalLr => (self.x, self.x + self.w),
         }
-    }
-
-    /// ブロック軸で `other` と重なるか（半開区間の重なり・接辺は非交差）。
-    ///
-    /// 描画対象行の判定に用いる——行はブロック軸で分離するため、行送り軸の区間が
-    /// ダーティ矩形と重なる住人だけを（クリップ下で）再描画すれば足りる（DD4）。
-    pub fn intersects_block_axis(&self, other: &PhysicalRect, mode: WritingMode) -> bool {
-        let (a0, a1) = self.block_span(mode);
-        let (b0, b1) = other.block_span(mode);
-        a0 < b1 && b0 < a1
     }
 }
 

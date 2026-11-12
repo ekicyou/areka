@@ -99,25 +99,6 @@ impl LayoutEngine {
             WritingMode::VerticalLr => (start.1, start.0, 1.0f32),
         };
 
-        let lines: Vec<PositionedLine> = Vec::new();
-        let current: Vec<PositionedGlyph> = Vec::new();
-        let inline_pos = inline_start;
-        let block_pos = block_start;
-        let placed = 0usize;
-        // 改行の保留（deferred newline）: None＝保留なし・Some(Σratio)＝累算済み予約。
-        // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
-        // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
-        let pending: Option<f32> = None;
-        // pending-cursor（`\_l` 遅延実体化）: None＝保留なし・Some((inline, block))＝
-        // 解決層（[`crate::cursor_tag::resolve_cursor_axis`]）が返した絶対 image px
-        // （移動が成立しなかった軸は含めない＝当該軸不動・R1.6/5.5）。
-        // 走査ローカル＝フレームを跨がない（newline-defer の `pending` と同型・同一フラッシュで合成）。
-        let pending_cursor: Option<(Option<f32>, Option<f32>)> = None;
-        // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
-        // 0 かつ塊先頭でない＝plan 非被覆（既存 CharByChar 式で判定）——この 2 状態の区別が
-        // 「塊は途中分割されない」の型保証（design System Flows「塊内は追加判定なし」）。
-        let seg_remaining: usize = 0;
-
         let mut scan = Scan {
             items,
             visible_count,
@@ -135,14 +116,24 @@ impl LayoutEngine {
             inline_start,
             block_dir,
             heights,
-            lines,
-            current,
-            inline_pos,
-            block_pos,
-            placed,
-            pending,
-            pending_cursor,
-            seg_remaining,
+            lines: Vec::new(),
+            current: Vec::new(),
+            inline_pos: inline_start,
+            block_pos: block_start,
+            placed: 0,
+            // 改行の保留（deferred newline）: None＝保留なし・Some(Σratio)＝累算済み予約。
+            // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
+            // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
+            pending: None,
+            // pending-cursor（`\_l` 遅延実体化）: None＝保留なし・Some((inline, block))＝
+            // 解決層（[`crate::cursor_tag::resolve_cursor_axis`]）が返した絶対 image px
+            // （移動が成立しなかった軸は含めない＝当該軸不動・R1.6/5.5）。
+            // 走査ローカル＝フレームを跨がない（newline-defer の `pending` と同型・同一フラッシュで合成）。
+            pending_cursor: None,
+            // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
+            // 0 かつ塊先頭でない＝plan 非被覆（既存 CharByChar 式で判定）——この 2 状態の区別が
+            // 「塊は途中分割されない」の型保証（design System Flows「塊内は追加判定なし」）。
+            seg_remaining: 0,
             item_cursor: 0,
             next_glyph: None,
         };

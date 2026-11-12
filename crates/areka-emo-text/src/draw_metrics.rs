@@ -79,8 +79,8 @@ pub struct DWriteMetrics {
     /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（`None`＝測れなかった・
     /// `error!` は 1 回で、台詞の切れ目まで試し直さない＝指摘 12）。既定の見た目は
     /// [`default_key`](Self::default_key) の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く
-    /// （引くときに割り当てない）。既定の鍵以外と既定の鍵の `None` は台詞の切れ目で捨てる
-    /// （[`sync_talk`](Self::sync_talk)）。
+    /// （引くときに割り当てない）。既定の鍵以外と、既定の鍵の `None`・複数のスカラーの字（クラスタ）は
+    /// 台詞の切れ目で捨てる（[`sync_talk`](Self::sync_talk)）。
     cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,

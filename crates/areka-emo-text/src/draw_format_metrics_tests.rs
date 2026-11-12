@@ -408,8 +408,9 @@ fn dwrite_metrics_measures_fixed_pitch_and_proportional_distinctly() {
     );
 }
 
-/// 決定論: 同一フォント・同一文字→同一送り幅（同一インスタンスの再計測も
-/// 別インスタンスも完全一致・R2.5 系/R11.6 の COM 側檻）。
+/// 決定論: 同一フォント・同一文字→同一送り幅（別インスタンスも完全一致・R2.5 系/R11.6 の
+/// COM 側檻）。同一インスタンスの再計測は記憶から返るので比べない（必ず同値で檻にならない・
+/// 記憶の経路は `dwrite_metrics_caches_probed_advances` が見る）。
 #[test]
 fn dwrite_metrics_is_deterministic_across_calls_and_instances() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
@@ -417,9 +418,7 @@ fn dwrite_metrics_is_deterministic_across_calls_and_instances() {
     let second = default_metrics(&factory, WritingMode::VerticalRl);
     for ch in ["あ", "x", "！"] {
         let a = first.advance(ch, DEFAULT_FONT_HEIGHT);
-        let b = first.advance(ch, DEFAULT_FONT_HEIGHT);
         let c = second.advance(ch, DEFAULT_FONT_HEIGHT);
-        assert_eq!(a, b, "{ch:?}: 再計測（キャッシュ経路）も同値");
         assert_eq!(a, c, "{ch:?}: 別インスタンスも同値");
     }
 }

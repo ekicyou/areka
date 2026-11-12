@@ -763,6 +763,7 @@ fn segmented_after_cursor_move_emits_no_blank_line() {
 /// 同じ。字幅は半角 5・全角 10 を混ぜ、改行と `\_l` を挟み（列の位置と字の番号がずれる）、見た目
 /// （大きさ 10／14）を字の番号で変える（見た目を通し番号で引くことも確かめる）。
 /// 期待値は直す前のコード（`segment_advance_sum` が全文の先頭から数えていたとき）で測って固定した。
+/// 値は数え方に依らないので、合計が見た項目の数（`SEGMENT_SUM_VISITS`）が項目数に比例することも見る。
 #[test]
 fn segmented_large_text_layout_unchanged_by_linear_sum() {
     let region = TextRegion::resolve(
@@ -810,6 +811,7 @@ fn segmented_large_text_layout_unchanged_by_linear_sum() {
         default: &default,
         current: &default,
     };
+    super::line_ops::SEGMENT_SUM_VISITS.with(|c| c.set(0));
     let lines = LayoutEngine::layout_styled(
         &items,
         serial,
@@ -822,6 +824,7 @@ fn segmented_large_text_layout_unchanged_by_linear_sum() {
         &areka_sakura::contract::ActorKey::from("0"),
         &mut CursorWarnGuard::default(),
     );
+    let visits = super::line_ops::SEGMENT_SUM_VISITS.with(|c| c.get());
     let mut digest = 0xcbf2_9ce4_8422_2325u64;
     let mut mix = |v: u64| digest = (digest ^ v).wrapping_mul(0x0100_0000_01b3);
     for l in &lines {
@@ -837,5 +840,11 @@ fn segmented_large_text_layout_unchanged_by_linear_sum() {
         (lines.len(), digest),
         (1210, 3_540_694_257_211_298_979),
         "直す前の配置と違う"
+    );
+    // 塊ごとの合計は高々 2 回・各回は塊の項目だけを見る（全文の頭から足すと項目数の 2 乗）。
+    assert!(
+        visits <= 3 * items.len(),
+        "塊の合計が見た項目 {visits} が項目数 {} の 3 倍を超える",
+        items.len()
     );
 }

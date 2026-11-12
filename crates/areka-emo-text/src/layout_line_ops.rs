@@ -18,6 +18,13 @@ use crate::state::{CursorCoord, TextItem};
 use super::GlyphMetrics;
 use super::styled::glyph_style_advance;
 
+#[cfg(test)]
+thread_local! {
+    /// [`segment_advance_sum`] が見た項目の数（合計が全文の頭から数え直さないことの檻・指摘 9）。
+    pub(super) static SEGMENT_SUM_VISITS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 /// 塊の遠端（塊先決の判定式の左辺）＝ `start` に塊の送り幅を 1 字ずつ足した値。
 ///
 /// **渡された列の先頭から** `Glyph` のみを数えた先頭 `len` 個（配置は今の字の位置からの列を
@@ -44,6 +51,8 @@ pub(super) fn segment_advance_sum(
     let mut sum = start;
     let mut serial = 0usize;
     for item in items {
+        #[cfg(test)]
+        SEGMENT_SUM_VISITS.with(|c| c.set(c.get() + 1));
         if let TextItem::Glyph { text } = item {
             if serial >= len {
                 break;
