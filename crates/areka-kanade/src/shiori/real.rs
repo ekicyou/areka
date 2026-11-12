@@ -34,8 +34,8 @@ use crate::msg::{KanadeMsg, ShioriCall, ShioriDownKind, ShioriFailure, ShioriMsg
 use crate::request_origin::{OriginWire, RequestOrigin, read_response_level};
 use crate::schedule::resources::is_allowed_resource_id;
 
-/// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表が
-/// 直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
+/// Reference の欠番の印（線の層の定義をそのまま再輸出する）。host32 の名前を運行表（`schedule/events.rs`）と
+/// kanade の殻（`actor.rs`）が直接 import しないよう、境界の内側の名前として出す（`OnTranslate` の Reference1）。
 pub use shiori_host32_host::shiori3::ABSENT_REFERENCE;
 
 /// 接続済み SHIORI 一式（`!Send` 資材はスレッド内で connect が生成する）。
@@ -140,6 +140,24 @@ pub trait ShioriBackend {
 /// 増えない。
 pub const IDLE_INTERVAL: Duration = Duration::from_millis(500);
 
+impl ShioriConnection {
+    /// 4 つの手が共通に使う client の組み立て: 接続の版を渡し、`resource`（GET の手）のときに
+    /// 限り資源の印を付ける。版と印をここ 1 か所で決めるので、手ごとに食い違わない。
+    fn client(&mut self, id: &str, resource: bool) -> Shiori3Client<'_> {
+        // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
+        // GET と NOTIFY に同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
+        // 文字コードの規則は結線側が持ち、本層には書かない。
+        let client =
+            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
+        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない・要件 3.7）。
+        if resource && is_allowed_resource_id(id) {
+            client.for_resource()
+        } else {
+            client
+        }
+    }
+}
+
 impl ShioriBackend for ShioriConnection {
     fn get(
         &mut self,
@@ -147,15 +165,7 @@ impl ShioriBackend for ShioriConnection {
         references: &[String],
         status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
-        // フィールド別借用（窓は共有・交渉状態は可変で、別フィールドゆえ同時に借りられる）。
-        // 文字コードの規則は結線側が持ち、本層には書かない。
-        let mut client =
-            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
-        // 資源かどうかは送出の関門と同じ正本の一覧で決める（名前の形では決めない・要件 3.7）。
-        if is_allowed_resource_id(id) {
-            client = client.for_resource();
-        }
-        client.get(id, references, status)
+        self.client(id, true).get(id, references, status)
     }
 
     fn notify(
@@ -164,11 +174,8 @@ impl ShioriBackend for ShioriConnection {
         references: &[String],
         status: Option<&str>,
     ) -> Result<(), RequestError> {
-        // GET と同じ交渉状態を渡す——双方のイベントが同じ文字コードで送る（要件 5.1）。
         // NOTIFY は資源の問い合わせではないので印を付けない。
-        Shiori3Client::new(&self.window, &mut self.negotiator)
-            .with_version(self.version)
-            .notify(id, references, status)
+        self.client(id, false).notify(id, references, status)
     }
 
     fn get_with_headers(
@@ -179,12 +186,8 @@ impl ShioriBackend for ShioriConnection {
         headers: &RequestHeaders<'_>,
     ) -> Result<Option<ValueReply>, RequestError> {
         // ヘッダを線へ渡し、応答のレベルは解釈せず生のまま返す（判定は kanade・要件 3.5）。
-        let mut client =
-            Shiori3Client::new(&self.window, &mut self.negotiator).with_version(self.version);
-        if is_allowed_resource_id(id) {
-            client = client.for_resource();
-        }
-        client.get_with_headers(id, references, status, headers)
+        self.client(id, true)
+            .get_with_headers(id, references, status, headers)
     }
 
     fn notify_with_headers(
@@ -194,8 +197,7 @@ impl ShioriBackend for ShioriConnection {
         status: Option<&str>,
         headers: &RequestHeaders<'_>,
     ) -> Result<(), RequestError> {
-        Shiori3Client::new(&self.window, &mut self.negotiator)
-            .with_version(self.version)
+        self.client(id, false)
             .notify_with_headers(id, references, status, headers)
     }
 
@@ -328,32 +330,33 @@ fn report_exit_once(
     down_reported: &mut bool,
     on_down: &Sender<KanadeMsg>,
 ) {
-    if !unloaded && !*down_reported {
-        if let HelperStatus::Exited(kind) = backend.status() {
-            *down_reported = true;
-            tracing::error!(
-                target: "shiori-actor",
-                event = "helper_exited",
-                exit = ?kind,
-                "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
-            );
-            let _ = on_down.send(KanadeMsg::ShioriDown {
-                kind: ShioriDownKind::HelperExited,
-                reason: format!("helper exited unexpectedly: {kind:?}"),
-            });
-        }
+    if !unloaded
+        && !*down_reported
+        && let HelperStatus::Exited(kind) = backend.status()
+    {
+        *down_reported = true;
+        tracing::error!(
+            target: "shiori-actor",
+            event = "helper_exited",
+            exit = ?kind,
+            "helper の異常終了を検出——死活報告（ShioriDown）を送出（以後は再報告しない）"
+        );
+        let _ = on_down.send(KanadeMsg::ShioriDown {
+            kind: ShioriDownKind::HelperExited,
+            reason: format!("helper exited unexpectedly: {kind:?}"),
+        });
     }
 }
 
 /// shiori アクターの受信ループ（本番・テスト共通の唯一の dispatch 経路）。
 ///
-/// `ShioriMsg` を [`IDLE_INTERVAL`] を上限とする有限待ち（`recv_timeout`）で受け、
+/// `ShioriMsg` を `idle_interval`（本番は [`IDLE_INTERVAL`]）を上限とする有限待ち（`recv_timeout`）で受け、
 /// [`handle_call`] の結果を同梱 `reply` へちょうど 1 回送る。`Unload` は `backend.unload()`
 /// （正規 clean shutdown）へ委譲し、成功／異常終了／失敗をそれぞれログ区分した上で応答する。
 /// `Close` は即時停止する。全 `Sender<ShioriMsg>` drop（`Disconnected`）でも正常終了する。
 ///
 /// # 手空き
-/// 待ちが [`IDLE_INTERVAL`] の間メッセージなしで明けるたび（`Timeout`）、
+/// 待ちが `idle_interval` の間メッセージなしで明けるたび（`Timeout`）、
 /// [`ShioriBackend::on_idle`] を呼び、続けて死活監視を行ってから待ち直す。ログは出さない。
 /// 手空きの処理は待ちの腕の中だけで行い、往復（`get`／`notify`／`unload`）の内側からは呼ばない。
 ///
@@ -365,7 +368,7 @@ fn report_exit_once(
 /// する）際に自然に drop される。
 ///
 /// # 今の呼び出しの記録
-/// 往復の直前に [`ShioriBusy::Request`]（イベント名）、直後（応答を送る前）に
+/// 往復の直前に [`ShioriBusy::Request`]（イベント名と GET か NOTIFY か）、直後（応答を送る前）に
 /// [`ShioriBusy::Idle`] を `probe` へ書く。`Unload` の直前に [`ShioriBusy::Unload`]、`unload` が
 /// 戻ったら成否を問わず [`ShioriBusy::Unloaded`] を書く。読むのは上限の見張りだけ。
 fn run_shiori_loop(
@@ -373,11 +376,12 @@ fn run_shiori_loop(
     mut backend: Box<dyn ShioriBackend>,
     on_down: Sender<KanadeMsg>,
     probe: ShioriProbe,
+    idle_interval: Duration,
 ) {
     let mut unloaded = false;
     let mut down_reported = false;
     loop {
-        let msg = match rx.recv_timeout(IDLE_INTERVAL) {
+        let msg = match rx.recv_timeout(idle_interval) {
             Ok(msg) => msg,
             Err(RecvTimeoutError::Timeout) => {
                 // 手空き: 保守の機会 → 死活監視 → 待ち直す（ログは出さない・往復の外でだけ呼ぶ）。
@@ -392,10 +396,14 @@ fn run_shiori_loop(
         report_exit_once(backend.as_mut(), unloaded, &mut down_reported, &on_down);
         match msg {
             ShioriMsg::Request { call, reply } => {
-                let id = match &call {
-                    ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id.as_str(),
+                let (id, notify) = match &call {
+                    ShioriCall::Get { id, .. } => (id, false),
+                    ShioriCall::Notify { id, .. } => (id, true),
                 };
-                probe.set_busy(ShioriBusy::Request(id.to_string()));
+                probe.set_busy(ShioriBusy::Request {
+                    id: id.to_string(),
+                    notify,
+                });
                 let outcome = handle_call(backend.as_mut(), call);
                 // 応答より先に書く（応答を受け取った側が見る値を往復の後の値に揃える）。
                 probe.set_busy(ShioriBusy::Idle);
@@ -510,7 +518,7 @@ pub fn spawn_shiori_actor(
                 // 外から待ちを解く手は接続の成功後に一度だけ据える（受信ループより前）。
                 actor_probe.install_unblock(backend.unblock_handle());
                 // on_down は受信ループの生存期間中保持する（死活報告の届け先・Req 3.4）。
-                run_shiori_loop(rx, backend, on_down, actor_probe);
+                run_shiori_loop(rx, backend, on_down, actor_probe, IDLE_INTERVAL);
             }
             Err(reason) => {
                 // 接続が無いので解く手も無い（死活報告より前に据える）。

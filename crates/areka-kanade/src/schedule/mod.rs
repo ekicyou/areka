@@ -6,11 +6,11 @@
 //! によるログ発行以外の副作用を持たない（可観測性の側効果であり状態・出力の決定性に
 //! 影響しない・DD-3）。DD-9 により本モジュールは `pub(crate)` に閉じる。
 //!
-//! # 責務分割（本タスク 2.1 の担当範囲）
+//! # 責務分割
 //! 本 `mod.rs` は**由来・状態を問わない横断遷移**（[`Input::TalkDone`] の理由が
 //! [`TalkEndReason::Quit`] の場合／[`Input::ForceQuit`]／[`Input::ShioriDown`]／[`Input::ShioriReply`] の
 //! 失敗）と、Unload 完了・防御アーム（未知 talk_id・Idle 以外の Boot・応答待ちでない
-//! ShioriReply）を実装する。フェーズ固有の遷移は [`boot`]／[`steady`]／[`close`] の
+//! ShioriReply）を実装する。フェーズ固有の遷移は [`boot`]／[`steady`]／[`close`]／[`change`] の
 //! 各サブモジュールへ委譲する。
 //!
 //! # ログ規律（steering: areka-log-first-no-silent-failure）
@@ -21,7 +21,7 @@
 use crate::msg::{CloseReason, KanadeConfig, ShioriFault, ShioriOutcome};
 use crate::status::ExecutionStateUpdate;
 use crate::talk::{ScriptOrigin, StartTalk, TalkDone, TalkEndReason, TalkId};
-// テストの `use super::*` が引く名前（型の塊を `types.rs` へ出す前と同じ顔ぶれを保つ）。
+// テストの `use super::*` が引くテスト専用の名前。
 #[cfg(test)]
 use crate::msg::{ChoiceInput, MonotonicMs, ShioriCall};
 #[cfg(test)]
@@ -36,9 +36,9 @@ pub(crate) mod change;
 pub(crate) mod choice;
 pub(crate) mod close;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
-/// クレート公開面への露出は [`crate::events`] ファサード経由（[`crate::lib`] 参照）。
+/// クレート公開面への露出は [`crate::events`] ファサード経由（`lib.rs` 参照）。
 pub mod events;
-/// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
+/// テスト専用のログ捕捉ヘルパ（捕捉窓と表明）。
 #[cfg(test)]
 pub(crate) mod log_capture;
 /// マウスの解放・ホイール・出入りの受理と、クリックの段の列。
@@ -56,7 +56,7 @@ pub(crate) mod talk_gap;
 mod talk_origin;
 /// 運行表の翻訳（`OnTranslate`）——帳簿の型・元のイベントの控え・応答の読み。
 pub(crate) mod translate;
-/// 既存テスト用の「翻訳を台詞そのままで通す」補助（テスト専用）。
+/// 既存テスト用の「翻訳を台詞そのままで通す」補助と、SSTP・切れ目・翻訳の経路のテストの下ごしらえ（テスト専用）。
 #[cfg(test)]
 pub(crate) mod translate_test_support;
 /// 運行表の型の塊（同じ名前で見せる）。
@@ -104,9 +104,25 @@ pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
     }
 }
 
+/// 応答の台本が「台本あり」か（空でなければ真・空白だけも台本）。返事の写し（`first_reply_of`）と
+/// 外から頼まれたイベントの腕がこれ 1 つで決める（SSP は空白だけの台本も再生して今のトークを置き換える）。
+/// 定常の Value の腕からは呼ばない。定常はどの Value も再生し（空白だけも台本）、空の台本 `""` は
+/// 翻訳を飛ばして再生する（`translate_skipped_empty`）ので、ここで判定を挟む理由が無い。
+pub(crate) fn has_script(script: &str) -> bool {
+    !script.is_empty()
+}
+
+/// トークの番号を 1 つ取り、次の番号へ進める（採番はここだけ・同じ番号を 2 回使わない）。
+pub(in crate::schedule) fn take_talk_id(state: &mut State) -> TalkId {
+    let talk_id = TalkId(state.next_talk_id);
+    state.next_talk_id += 1;
+    talk_id
+}
+
 /// 台本 1 つを新しいトークとして始める（採番・枠の差し替え・再生開始の行動を返す）。
 ///
-/// 選択肢の帳簿・`choice_prev_talk`・解決・記録は呼び手の仕事で、ここでは触らない。
+/// 置き換えた古いトークの番号は、置き換えの種類を問わずここで `prev_talk` に控える（古いトークが
+/// 無ければ控えは空になる＝1 世代だけ）。選択肢の帳簿・解決・記録は呼び手の仕事で、ここでは触らない。
 /// `label` は `ActiveTalk::origin`（記録用の綴り）、`origin` は再生の開始に付ける出どころ。
 pub(in crate::schedule) fn start_talk(
     state: &mut State,
@@ -114,8 +130,8 @@ pub(in crate::schedule) fn start_talk(
     script: String,
     origin: ScriptOrigin,
 ) -> (TalkId, Action) {
-    let talk_id = TalkId(state.next_talk_id);
-    state.next_talk_id += 1;
+    let talk_id = take_talk_id(state);
+    state.prev_talk = current_talk_id(&state.phase);
     state.phase = Phase::Steady {
         talk: Some(ActiveTalk {
             talk_id,
@@ -131,8 +147,8 @@ pub(in crate::schedule) fn start_talk(
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
 /// [`Action`] の列を返す純粋関数（`tracing` ログ発行のみ側効果として許容）。
 ///
-/// 本タスク 2.1 は**横断遷移**（由来・状態を問わず終了系列へ進む共通ロジック）と
-/// 防御アームを実装し、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
+/// 本関数は**横断遷移**（由来・状態を問わず終了系列へ進む共通ロジック）と
+/// 防御アームを受け持ち、フェーズ固有の遷移は各サブモジュールへ委譲する。処理順は
 /// 「横断遷移を先に判定 → 該当しなければフェーズ分岐」である。
 ///
 /// どの入力でも、遷移の前後で元のイベントの控えと翻訳の出口の規則（[`translate::before`]・
@@ -258,7 +274,7 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
         Input::Anchor(a) => anchor::on_anchor(state, a),
 
         // UserBreak: 場面で振り分けず、受理の規則ごと user_break::on_user_break へ渡す。
-        Input::UserBreak { scope } => user_break::on_user_break(state, scope),
+        Input::UserBreak { scope, talk_id } => user_break::on_user_break(state, scope, talk_id),
 
         // ChangeGhost: 受理の規則ごと change::on_change_ghost へ渡す。
         Input::ChangeGhost(req) => change::on_change_ghost(state, req),
@@ -278,6 +294,21 @@ fn route(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Actio
 
         // TranslateDone: 預けた一括の再開・故障・帳簿なしの判断ごと translate::on_done へ渡す。
         Input::TranslateDone(result) => translate::on_done(state, result),
+
+        // ChoiceTimeoutDue: Steady だけが選択待ちの帳簿を持つ。ほかの相は観測だけ（`last_now` は動かさない）。
+        Input::ChoiceTimeoutDue { now } => match state.phase {
+            Phase::Steady { .. } => steady::on_choice_timeout_due(state, now),
+            _ => {
+                tracing::trace!(
+                    target: "kanade",
+                    event = "choice_timeout_due_ignored",
+                    now_ms = now.0,
+                    phase = phase_label(&state.phase),
+                    "非 Steady の相に届いた選択待ちの期限の知らせ——何もしない"
+                );
+                (state, Vec::new())
+            }
+        },
 
         // BalloonTimeout: 番号の照合と送るかどうかごと balloon_events::on_timeout_notice へ渡す（表 D）。
         Input::BalloonTimeout { talk_id } => balloon_events::on_timeout_notice(state, talk_id),
@@ -357,7 +388,7 @@ fn phase_label(phase: &Phase) -> &'static str {
         Phase::BootMain => "BootMain",
         Phase::BootVersion { .. } => "BootVersion",
         Phase::Steady { .. } => "Steady",
-        Phase::ClosePending { .. } => "ClosePending",
+        Phase::ClosePending => "ClosePending",
         Phase::CloseTalkWait { .. } => "CloseTalkWait",
         Phase::ChangePending => "ChangePending",
         Phase::ChangeTalkWait { .. } => "ChangeTalkWait",
@@ -390,9 +421,10 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
 
 /// 終了系列（Quit）の共通終端: Unloading{Quit}＋ShioriUnload。
 ///
-/// 到達点は 3 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）、利用者の中断で
-/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）、そして別れの台詞の完了
-/// （[`close`] の `close_talk_done_quit`・終わり方を問わない）である。いずれも同じ遷移を採る
+/// 到達点は 4 つある——台本が `\-` に辿り着いた完了（`talk_done_quit`）、利用者の中断で
+/// 止めた台本が終了を予約していた完了（`talk_done_break_quit`）、別れの台詞の完了
+/// （[`close`] の `close_talk_done_quit`・終わり方を問わない）、そして切替の送り出しの台詞の完了
+/// （[`change`] の `change_talk_done_unload`）である。いずれも同じ遷移を採る
 /// （設計「終了の予約」「close の規則改訂」）。`at` は対象トークの完了かつ close 系遷移の
 /// 掃除点（C4 規則 7）の識別子。
 fn to_unloading_quit(mut state: State, at: &'static str) -> (State, Vec<Action>) {
@@ -428,7 +460,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
         Some(active) if active == done.talk_id => {
             // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
             // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
-            state.choice_prev_talk = None;
+            state.prev_talk = None;
             // 印の台詞（`OnShellChanging`）の利用者の中断かは、中断の帳簿を空にする前に見る。
             let marked_break = talk_gap::is_marked_break(&state, &done);
             talk_gap::note_marked_done(&mut state, &done, marked_break);
@@ -456,15 +488,13 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
                 TalkEndReason::Interrupted | TalkEndReason::Ended
                     if change::has_pending(&state) =>
                 {
-                    change::consume_pending(state, done, config)
+                    change::consume_pending(state, done)
                 }
                 TalkEndReason::Interrupted => {
-                    // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
-                    // あったが、**選択タイムアウトの解除経路により正規の到達点になった**（DD-11）:
+                    // 非 quit 扱い（観測用ログ）。選択タイムアウトの解除経路の正規の到達点（DD-11）:
                     // タイムアウト 204 → [`Action::CancelChoice`] → dispatcher が slot を維持したまま
                     // `Close` を転送 → talk が `TalkDone{Interrupted}` を正規送出 → ここへ到達 →
                     // フェーズ固有遷移（steady）が `Steady{None}` へ復帰させる（Req7.5）。
-                    // 遷移・ログ語彙・レベルはいずれも無改変である（意味づけのみが変わった）。
                     tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——非 quit 扱い・フェーズ固有遷移へ委譲（選択解除の正規到達点・DD-11）");
                     dispatch_phase(state, Input::TalkDone(done), config)
                 }
@@ -477,18 +507,19 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
             balloon_events::after_talk_done(state, actions, &done, broke)
         }
         Some(_) | None => {
-            // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: choice 起因の slot 差替直後は、
+            // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: slot 差替（選択・マウスの答え・
+            // SSTP の台本・時間切れの答えのどれでも）の直後は、
             // 旧 talk の即時 `Done{Ended}`（再生層の即 settle）が dispatcher の slot 差替より前に
             // 投函され得る——この遅延 `Done` は**欠陥ではなく既知の順序レース**である。よって
             // 1 世代保持した旧 talk_id と照合し、一致するものは info で棄却して
             // `unknown_talk_done`（error）を真に未知の id 専用に保つ（正常系で error を出さない）。
             // 保持は消さない——消去点は現 talk の `TalkDone` 到達と次の slot 差替である（規則 9）。
-            if state.choice_prev_talk == Some(done.talk_id) {
+            if state.prev_talk == Some(done.talk_id) {
                 tracing::info!(
                     target: "kanade",
-                    event = "talk_done_stale_choice",
+                    event = "talk_done_stale",
                     talk_id = done.talk_id.0,
-                    "選択差替で置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
+                    "置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
                 );
                 return (state, Vec::new());
             }
@@ -502,7 +533,7 @@ fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (Sta
 /// ShioriReply の横断判定（Unload 完了・Failed）＋応答待ちフェーズ委譲。
 ///
 /// `origin`（応答の出所イベント ID・DD-IE-3）は横断判定では使わないが、応答待ちフェーズへ
-/// 委譲する際に `Input::ShioriReply` として保持したまま流す（タスク 2.2 のマウス GET origin 別
+/// 委譲する際に `Input::ShioriReply` として保持したまま流す（マウス GET の origin 別の
 /// reply 政策がフェーズ固有遷移側で参照する）。
 fn on_shiori_reply(
     state: State,
@@ -543,7 +574,7 @@ fn on_shiori_reply(
                 .as_ref()
                 .is_some_and(|ledger| choice_in_flight(&ledger.phase)))
     {
-        return steady::step(state, Input::ShioriReply { outcome, origin }, config);
+        return steady::step(state, Input::ShioriReply { outcome, origin });
     }
 
     // 応答待ちフェーズでの Failed は横断的に Unloading{Fault} へ（Req 6.1）。
@@ -579,7 +610,7 @@ fn unloading_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Acti
     (state, vec![Action::StopSelf])
 }
 
-/// フェーズ固有遷移への委譲（boot／steady／close）。
+/// フェーズ固有遷移への委譲（boot／steady／close／change）。
 fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
         Phase::Idle
@@ -588,10 +619,8 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
         | Phase::BootType
         | Phase::BootMain
         | Phase::BootVersion { .. } => boot::step(state, input, config),
-        Phase::Steady { .. } => steady::step(state, input, config),
-        Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
-            close::step(state, input, config)
-        }
+        Phase::Steady { .. } => steady::step(state, input),
+        Phase::ClosePending | Phase::CloseTalkWait { .. } => close::step(state, input, config),
         Phase::ChangePending
         | Phase::ChangeTalkWait { .. }
         | Phase::ChangeClosePending
@@ -610,9 +639,9 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
 /// その応答をなお `Steady` のまま受ける（in-flight ≤ 1・シェルが直後に `ShioriReply` を
 /// 再投入する）。ここに Steady が無いと Steady の `ShioriReply` が防御アーム
 /// （unexpected_reply）で握り潰され、OnSecondChange の Value/NoContent 処理が壊れる。
-/// これにより Steady の Failed は `on_shiori_reply` 経由で `Unloading{Fault}` へ（Req 6.1・
-/// pump 含む任意の SHIORI 失敗で M1 は放棄）、Value/NoContent/Notified は `dispatch_phase`
-/// → `steady::step` へ正しく委譲される。
+/// これにより Steady の Failed は（アンカー・クリックの段・選択の in-flight の応答待ちの免除を
+/// 除き）`on_shiori_reply` 経由で `Unloading{Fault}` へ倒れ（Req 6.1）、Value/NoContent/Notified は
+/// `dispatch_phase` → `steady::step` へ正しく委譲される。
 fn awaits_reply(phase: &Phase) -> bool {
     matches!(
         phase,
@@ -621,7 +650,7 @@ fn awaits_reply(phase: &Phase) -> bool {
             | Phase::BootMain
             | Phase::BootVersion { .. }
             | Phase::Steady { .. }
-            | Phase::ClosePending { .. }
+            | Phase::ClosePending
             | Phase::ChangePending
             | Phase::ChangeClosePending
     )
@@ -649,17 +678,12 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
 #[path = "schedule_tests.rs"]
 mod tests;
 
-/// 運行表の型（`Action` ほか）の変種の網羅。
-#[cfg(test)]
-#[path = "schedule_variant_tests.rs"]
-mod variant_tests;
-
 /// 外から届いた実行状態の写しの決定論テスト。
 #[cfg(test)]
 #[path = "external_state_tests.rs"]
 mod external_state_tests;
 
-/// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
+/// 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
 ///
 /// Req 6.3（ログ無しの失敗経路を持たない）・Req 6.1（区別語彙ごとにログ）を、コードレビュー
 /// でなく**テスト**で担保する。各 `error!` / `warn!` アームを `step()`（または各サブモジュール

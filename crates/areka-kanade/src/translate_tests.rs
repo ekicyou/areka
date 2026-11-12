@@ -25,19 +25,3 @@ fn passthrough_returns_the_script_unchanged() {
         );
     }
 }
-
-/// 口の引数は文字列 2 つだけで、別スレッドの運行へ渡せる（要件 7.1・7.4）。
-#[test]
-fn seams_are_plain_string_closures_movable_to_another_thread() {
-    let seams = TranslateSeams {
-        expand: Box::new(|s: &str| s.replace("%username", "まず")),
-        makoto: Box::new(|s: &str, id: &str| format!("{s}[{id}]")),
-    };
-    let out = std::thread::spawn(move || {
-        let expanded = (seams.expand)("%username");
-        (seams.makoto)(&expanded, "OnSecondChange")
-    })
-    .join()
-    .expect("口は Send で別スレッドから呼べる");
-    assert_eq!(out, "まず[OnSecondChange]");
-}

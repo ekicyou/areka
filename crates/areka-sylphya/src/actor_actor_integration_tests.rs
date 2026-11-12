@@ -207,27 +207,11 @@ fn persist_put_projects_to_mirror_areka_region() {
     );
 }
 
-/// 同一 [`FakePersistIo`] を `Arc` 共有する委譲 IO（テスト専用・安全）。
-///
-/// `FakePersistIo` は内部 `Mutex` で Clone 不可ゆえ、write-through が実 IO シームを通ったことは
-/// 「アクターへ渡した IO と同じ store」を別ハンドルの [`load_scope`] で観測して確認する。
-/// `Arc` 共有で unsafe を用いずに実現する。
-#[derive(Clone)]
-struct SharedFakeIo(std::sync::Arc<FakePersistIo>);
-impl PersistIo for SharedFakeIo {
-    fn read(&self, path: &std::path::Path) -> std::io::Result<Option<String>> {
-        self.0.read(path)
-    }
-    fn commit(&self, path: &std::path::Path, content: &str) -> std::io::Result<()> {
-        self.0.commit(path, content)
-    }
-}
-
 // === write-through persist put が実 IO へ確定・独立ロードで復元（往復・root あり）===
 
 #[test]
 fn persist_put_write_through_commits_to_real_io() {
-    let shared = SharedFakeIo(std::sync::Arc::new(FakePersistIo::new()));
+    let shared = std::sync::Arc::new(FakePersistIo::new());
     let roots = ScopeRoots {
         ghost: Some(PathBuf::from("/g")),
         ..ScopeRoots::default()

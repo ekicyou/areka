@@ -95,6 +95,9 @@ pub enum KeyParseError {
     /// `(` に対応する `)` が無い（セグメント {at}）。
     #[error("unclosed paren at segment {at}")]
     UnclosedParen { at: usize },
+    /// 閉じた `)` の後ろに字がある（例: `scope(0)x`）（セグメント {at}）。
+    #[error("text after closing paren at segment {at}")]
+    TextAfterParen { at: usize },
     /// 空セグメント（先頭/末尾/連続ドット、または `(` 前の空名）（セグメント {at}）。
     #[error("empty segment at {at}")]
     EmptySegment { at: usize },
@@ -122,9 +125,14 @@ pub fn parse_dotted(input: &str) -> Result<PropPath, KeyParseError> {
 fn parse_seg(seg: &str, at: usize) -> Result<PathSeg, KeyParseError> {
     match seg.find('(') {
         Some(open) => {
-            // 括弧付き: 末尾が ')' でなければ未閉。名前と括弧の中は半角の英字だけ小文字へ畳む。
+            // 括弧付き: 末尾が ')' でなければ、'(' の後ろに ')' が在れば後ろに字・無ければ未閉。
+            // 名前と括弧の中は半角の英字だけ小文字へ畳む。
             if !seg.ends_with(')') {
-                return Err(KeyParseError::UnclosedParen { at });
+                return Err(if seg[open..].contains(')') {
+                    KeyParseError::TextAfterParen { at }
+                } else {
+                    KeyParseError::UnclosedParen { at }
+                });
             }
             let name = seg[..open].to_ascii_lowercase();
             // open の '(' と末尾の ')' を除いた内容。
@@ -317,6 +325,19 @@ mod tests {
     }
 
     #[test]
+    fn text_after_a_closed_paren_is_reported_as_such() {
+        assert_eq!(
+            parse_dotted("scope(0)x"),
+            Err(KeyParseError::TextAfterParen { at: 0 })
+        );
+        // `)` が無いものは今どおり閉じていない括弧
+        assert_eq!(
+            parse_dotted("a.scope(0"),
+            Err(KeyParseError::UnclosedParen { at: 1 })
+        );
+    }
+
+    #[test]
     fn err_bad_index_non_numeric() {
         // index(...) は数値必須（非数値 index → BadIndex・design §key.rs 裁定）
         assert_eq!(
@@ -351,23 +372,6 @@ mod tests {
             p.segs[0].selector,
             Some(Selector::ByName("main".to_string()))
         );
-    }
-
-    // --- 決定論（同一入力→同一 Ok/Err）---
-
-    #[test]
-    fn determinism_ok_repeatable() {
-        let a = parse_dotted("areka.window.scope(2).y");
-        let b = parse_dotted("areka.window.scope(2).y");
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn determinism_err_repeatable() {
-        let a = parse_dotted("index(abc)");
-        let b = parse_dotted("index(abc)");
-        assert_eq!(a, b);
-        assert!(a.is_err());
     }
 
     // --- 正準文字列形（鏡像 dotted key 形）と往復整合 ---

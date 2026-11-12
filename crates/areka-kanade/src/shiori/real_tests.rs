@@ -4,6 +4,8 @@ use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use areka_actor::reply_channel;
 use shiori_host32_host::{HandshakeError, ShioriError};
 use shiori_host32_ipc::IpcError;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
@@ -16,8 +18,8 @@ fn inactive_status() -> ExecutionStatus {
     ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE)
 }
 
-/// `ShioriOutcome` の variant 名を返す（`ShioriOutcome` は Debug 非実装かつ msg.rs は本タスクで
-/// 不変ゆえ、assert 失敗メッセージ用に variant を局所的に説明する）。
+/// `ShioriOutcome` の variant 名を返す（`ShioriOutcome` は Debug 非実装ゆえ、assert 失敗メッセージ用に
+/// variant を局所的に説明する）。
 fn describe(outcome: &ShioriOutcome) -> &'static str {
     match outcome {
         ShioriOutcome::Value(_, _) => "Value",
@@ -52,6 +54,8 @@ struct FakeBackend {
     notify_result: NotifyFn,
     unload_result: UnloadFn,
     status_result: StatusFn,
+    /// 手空きの腕が回った回数（降ろしの後の手空きを見届けるのに使う）。
+    idles: Arc<AtomicU32>,
 }
 
 impl ShioriBackend for FakeBackend {
@@ -77,6 +81,9 @@ impl ShioriBackend for FakeBackend {
     fn status(&mut self) -> HelperStatus {
         (self.status_result)()
     }
+    fn on_idle(&mut self) {
+        self.idles.fetch_add(1, Ordering::SeqCst);
+    }
 }
 
 /// GET だけを差し替えた fake（NOTIFY／unload は使われない前提で unreachable・status は常に
@@ -89,6 +96,7 @@ fn fake_get(
         notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
         unload_result: Box::new(|| unreachable!("unload not expected in this test")),
         status_result: Box::new(|| HelperStatus::Running),
+        idles: Arc::default(),
     }
 }
 
@@ -102,6 +110,7 @@ fn fake_notify(
         notify_result: Box::new(f),
         unload_result: Box::new(|| unreachable!("unload not expected in this test")),
         status_result: Box::new(|| HelperStatus::Running),
+        idles: Arc::default(),
     }
 }
 
@@ -113,13 +122,8 @@ fn fake_unload(f: impl FnMut() -> Result<ExitKind, ShutdownError> + Send + 'stat
         notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
         unload_result: Box::new(f),
         status_result: Box::new(|| HelperStatus::Running),
+        idles: Arc::default(),
     }
-}
-
-/// backend を `Box<dyn ShioriBackend>` へ格上げする（`spawn_shiori_actor` の connect closure
-/// と同じ形——純 x64 の偽装注入シームをテストでも同一の型で通す）。
-fn boxed(backend: FakeBackend) -> Box<dyn ShioriBackend> {
-    Box::new(backend)
 }
 
 /// runner を spawn し、Request を 1 往復させて outcome を返す（fake backend・helper 不要）。
@@ -127,7 +131,13 @@ fn round_trip_via_runner(backend: FakeBackend, call: ShioriCall) -> ShioriOutcom
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(
+            rx,
+            Box::new(backend),
+            on_down_tx,
+            ShioriProbe::default(),
+            IDLE_INTERVAL,
+        )
     });
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Request { call, reply })
@@ -239,8 +249,8 @@ fn get_ok_none_maps_to_no_content() {
 }
 
 #[test]
-fn get_err_each_vocabulary_maps_to_failed() {
-    // Timeout
+fn get_err_maps_to_failed() {
+    // 語彙ごとの写像は map_error_* が固定する。ここは Err が Failed へ載ることだけを見る。
     let outcome = round_trip_via_runner(
         fake_get(|_, _, _| Err(RequestError::Timeout)),
         ShioriCall::Get {
@@ -252,57 +262,6 @@ fn get_err_each_vocabulary_maps_to_failed() {
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Timeout(_))),
         "Timeout: got {}",
-        describe(&outcome)
-    );
-
-    // Handshake
-    let outcome = round_trip_via_runner(
-        fake_get(|_, _, _| Err(RequestError::Handshake(HandshakeError::Timeout))),
-        ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-    );
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Handshake(_))),
-        "Handshake: got {}",
-        describe(&outcome)
-    );
-
-    // Ipc
-    let outcome = round_trip_via_runner(
-        fake_get(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed))),
-        ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-    );
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
-        "Ipc: got {}",
-        describe(&outcome)
-    );
-
-    // Shiori
-    let outcome = round_trip_via_runner(
-        fake_get(|_, _, _| {
-            Err(RequestError::Shiori(ShioriError::Status {
-                status: 400,
-                error_level: None,
-                error_description: None,
-            }))
-        }),
-        ShioriCall::Get {
-            id: EventId::Static("OnBoot"),
-            references: Vec::new(),
-            status: inactive_status(),
-        },
-    );
-    assert!(
-        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Shiori(_))),
-        "Shiori: got {}",
         describe(&outcome)
     );
 }
@@ -412,74 +371,133 @@ fn handle_call_forwards_rendered_status_to_backend() {
 
 // --- Unload 正規化: Ok(Clean)／Ok(非 Clean)／Err の 3 分岐（要件 6.2/6.3）--
 
-#[test]
-fn unload_ok_clean_returns_unloaded() {
-    let backend = fake_unload(|| Ok(ExitKind::Clean));
+/// 手空きの周期（降ろしの後の手空きを速く見届けるため本番より短い）。
+const UNLOAD_IDLE_TICK: Duration = Duration::from_millis(5);
+/// 応答や手空きを待つ上限（壊れていれば待つ長さ。緑なら数十 ms で抜ける）。
+const UNLOAD_WAIT: Duration = Duration::from_secs(10);
+
+/// 受信ループをこのスレッドで回して記録を捕まえ、別スレッドから `Unload` を 1 通送る。
+///
+/// 応答を受けたら `after_unload` を呼び、続く手空きが 2 回回るのを見届けてから送信端を閉じる
+/// （ループはそこで抜ける）。戻り値は（応答・`shiori-actor` の記録・届いた `ShioriDown` の数）。
+fn unload_then_idle(
+    backend: FakeBackend,
+    after_unload: impl FnOnce() + Send + 'static,
+) -> (ShioriOutcome, Vec<log_capture_kit::CapturedEvent>, usize) {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    let idles = backend.idles.clone();
+    let sender = std::thread::spawn(move || {
+        let (reply, receiver) = reply_channel::<ShioriOutcome>();
+        tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
+        let outcome = receiver.recv_timeout(UNLOAD_WAIT).expect("reply received");
+        after_unload();
+        let target = idles.load(Ordering::SeqCst) + 2;
+        let deadline = std::time::Instant::now() + UNLOAD_WAIT;
+        while idles.load(Ordering::SeqCst) < target {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "降ろしの後、手空きが 2 回回る証拠を {UNLOAD_WAIT:?} 待ったが得られなかった"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        outcome
     });
-    let (reply, receiver) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
-    let outcome = receiver.recv().expect("reply received");
-    assert!(
-        matches!(outcome, ShioriOutcome::Unloaded),
-        "Ok(Clean) は Unloaded を返す: got {}",
-        describe(&outcome)
-    );
-    tx.send(ShioriMsg::Close).expect("send Close");
-    drop(tx);
-    handle.join().expect("runner joins");
-    // join 後は on_down（Sender）が drop 済みゆえ try_recv は Empty ではなく Disconnected を
-    // 返し得る——いずれであれ ShioriDown が届いていないことのみを問う。
-    assert!(
-        !matches!(on_down_rx.try_recv(), Ok(KanadeMsg::ShioriDown { .. })),
-        "正規 clean shutdown は死活報告を発火しない"
-    );
+    let ((), events) = log_capture_kit::capture(|| {
+        run_shiori_loop(
+            rx,
+            Box::new(backend),
+            on_down_tx,
+            ShioriProbe::default(),
+            UNLOAD_IDLE_TICK,
+        )
+    });
+    let outcome = sender.join().expect("sender joins");
+    let downs = on_down_rx
+        .try_iter()
+        .filter(|m| matches!(m, KanadeMsg::ShioriDown { .. }))
+        .count();
+    let events = events
+        .into_iter()
+        .filter(|e| e.target == "shiori-actor")
+        .collect();
+    (outcome, events, downs)
+}
+
+/// `event` が `name` の記録の水準を並べる。
+fn levels_of(events: &[log_capture_kit::CapturedEvent], name: &str) -> Vec<tracing::Level> {
+    events
+        .iter()
+        .filter(|e| e.field_str("event") == Some(name))
+        .map(|e| e.level)
+        .collect()
 }
 
 #[test]
 fn unload_ok_non_clean_logs_warn_and_returns_unloaded() {
-    let backend = fake_unload(|| Ok(ExitKind::Abnormal(3)));
-    let (tx, rx) = mpsc::channel::<ShioriMsg>();
-    let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    let exited = Arc::new(AtomicBool::new(false));
+    let status_flag = exited.clone();
+    let mut backend = fake_unload(|| Ok(ExitKind::Abnormal(3)));
+    // 降ろした後で helper が消えた体にする（手空きの死活監視が見る）。
+    backend.status_result = Box::new(move || {
+        if status_flag.load(Ordering::SeqCst) {
+            HelperStatus::Exited(ExitKind::Terminated)
+        } else {
+            HelperStatus::Running
+        }
     });
-    let (reply, receiver) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
-    let outcome = receiver.recv().expect("reply received");
+    let (outcome, events, downs) =
+        unload_then_idle(backend, move || exited.store(true, Ordering::SeqCst));
     assert!(
         matches!(outcome, ShioriOutcome::Unloaded),
         "Ok(非 Clean) でも unload 完了として Unloaded を返す: got {}",
         describe(&outcome)
     );
-    tx.send(ShioriMsg::Close).expect("send Close");
-    drop(tx);
-    handle.join().expect("runner joins");
+    assert_eq!(
+        levels_of(&events, "unload_non_clean"),
+        vec![tracing::Level::WARN],
+        "非 Clean の降ろしは WARN を 1 件だけ残す: {events:?}"
+    );
+    assert_eq!(
+        downs, 0,
+        "非 Clean でも降ろしは済んでいる——続く手空きで落ちの知らせを出さない: {events:?}"
+    );
+    assert!(
+        levels_of(&events, "helper_exited").is_empty(),
+        "降ろした後の手空きで helper_exited を記録しない: {events:?}"
+    );
 }
 
 #[test]
 fn unload_err_logs_error_and_returns_failed_ipc() {
-    let backend = fake_unload(|| Err(ShutdownError::ExitTimeout));
-    let (tx, rx) = mpsc::channel::<ShioriMsg>();
-    let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+    let exited = Arc::new(AtomicBool::new(false));
+    let status_flag = exited.clone();
+    let mut backend = fake_unload(|| Err(ShutdownError::ExitTimeout));
+    // 降ろしに失敗した後で helper が消えた体にする（降ろし済みでないので手空きの死活監視が拾う）。
+    backend.status_result = Box::new(move || {
+        if status_flag.load(Ordering::SeqCst) {
+            HelperStatus::Exited(ExitKind::Terminated)
+        } else {
+            HelperStatus::Running
+        }
     });
-    let (reply, receiver) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
-    let outcome = receiver.recv().expect("reply received");
+    let (outcome, events, downs) =
+        unload_then_idle(backend, move || exited.store(true, Ordering::SeqCst));
     match outcome {
         ShioriOutcome::Failed(ShioriFailure::Ipc(detail)) => {
             assert_eq!(detail, ShutdownError::ExitTimeout.to_string());
         }
         other => panic!("Err は Failed(Ipc) を返す: got {}", describe(&other)),
     }
-    tx.send(ShioriMsg::Close).expect("send Close");
-    drop(tx);
-    handle.join().expect("runner joins");
+    assert_eq!(
+        levels_of(&events, "unload_failed"),
+        vec![tracing::Level::ERROR],
+        "降ろしの失敗は ERROR を 1 件だけ残す: {events:?}"
+    );
+    assert_eq!(
+        downs, 1,
+        "降ろしに失敗したら降ろし済みにしない——続く手空きで落ちの知らせを 1 度だけ出す: {events:?}"
+    );
 }
 
 // --- 死活監視: メッセージ到達ごとの sticky 検出（要件 3.2/3.4）------------
@@ -491,11 +509,18 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
         notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
         unload_result: Box::new(|| unreachable!("unload not expected in this test")),
         status_result: Box::new(|| HelperStatus::Exited(ExitKind::Abnormal(1))),
+        idles: Arc::default(),
     };
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(
+            rx,
+            Box::new(backend),
+            on_down_tx,
+            ShioriProbe::default(),
+            IDLE_INTERVAL,
+        )
     });
 
     // 1 通目のメッセージ到達で死活検出される。
@@ -552,9 +577,6 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
 
 #[test]
 fn death_report_suppressed_after_successful_unload() {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
-
     // 実装を模して: unload 成功まで Running・成功後は Exited(Clean) を返す共有フラグ。
     let exited = Arc::new(AtomicBool::new(false));
     let status_flag = exited.clone();
@@ -573,11 +595,18 @@ fn death_report_suppressed_after_successful_unload() {
                 HelperStatus::Running
             }
         }),
+        idles: Arc::default(),
     };
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(
+            rx,
+            Box::new(backend),
+            on_down_tx,
+            ShioriProbe::default(),
+            IDLE_INTERVAL,
+        )
     });
 
     // 1 通目の Unload: 到達時点では status=Running（死活報告なし）→ unload 成功で unloaded=true。
@@ -621,7 +650,13 @@ fn all_senders_dropped_terminates_runner() {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
     let handle = std::thread::spawn(move || {
-        run_shiori_loop(rx, boxed(backend), on_down_tx, ShioriProbe::default())
+        run_shiori_loop(
+            rx,
+            Box::new(backend),
+            on_down_tx,
+            ShioriProbe::default(),
+            IDLE_INTERVAL,
+        )
     });
     // 何も送らず全 Sender を drop → recv が Err → ループ正常終了。
     drop(tx);
@@ -705,7 +740,7 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
     );
 }
 
-// --- 交渉状態の置き場（タスク 3.3・要件 5.1）---------------------------------
+// --- 交渉状態の置き場（要件 5.1）---------------------------------------------
 
 /// 接続 1 つにつき交渉状態は 1 つだけ存在する——接続の値が持ち、呼び出しごとに作り直さない
 /// （要件 5.1）。
@@ -714,13 +749,15 @@ fn connect_failure_reports_shiori_down_and_answers_requests_with_handshake() {
 /// （要件 9.8 の趣旨で実機依存の檻を作らない）。ゆえに「作り直していない」ことは**本番ファイル
 /// `real.rs` 1 本の本文**で機械的に確かめる: そこに交渉状態の構築子が 1 つも無く、応答待ち・
 /// 片道の 2 つの入口とそのヘッダつき版 2 つ（areka-P0-script-security-level 要件 2.1）の計 4 つが
-/// いずれも接続のフィールドを借用して結線へ渡している。
+/// 共通に呼ぶ client の組み立て 1 か所だけが接続のフィールドを借用して結線へ渡している（4 つの手が
+/// その組み立てを呼ぶことは `real_resource_mark_tests.rs` が固定する）。
 ///
 /// 検査の射程はこの 1 ファイルに限る（「クレート全体に構築子が無い」ではない）。交渉状態を
-/// 作ってよい正当な構築点は接続の値を組む 2 か所——`crates/areka-ghost/src/shiori_wiring.rs`
-/// （本番の接続手続き）と `crates/areka-kanade/tests/kanade/real_helper_test.rs`（採取
-/// フィクスチャの接続手続き）——であり、tasks.md 3.3 が両方の追随を求めている。本ファイル
-/// 自身も構築子の綴りを含むため、走査対象を広げると恒偽になる。
+/// 作ってよい正当な構築点は接続の値を組む所——本番の接続手続き
+/// （`crates/areka-ghost/src/shiori_wiring.rs`）と、統合テストの接続手続き
+/// （`crates/areka-kanade/tests/kanade/` の `real_helper_test.rs`・`idle_pump_test.rs`・
+/// `common/common_window_actor.rs`）——である。本ファイル自身も構築子の綴りを含むため、
+/// 走査対象を広げると恒偽になる。
 ///
 /// 本文はコメントも含めて数えるので、説明で `&mut self.negotiator` を書き写すと件数が合わず
 /// 赤になる（検査を緩めるのではなく説明の方を言い換えること）。
@@ -734,7 +771,7 @@ fn the_connection_owns_one_negotiator_and_never_mints_one_per_call() {
     );
     assert_eq!(
         SOURCE.matches("&mut self.negotiator").count(),
-        4,
-        "応答待ち・片道の入口とそのヘッダつき版の計 4 つがともに接続のフィールドを借用して結線へ渡すべき（要件 5.1）"
+        1,
+        "4 つの手が共通に呼ぶ client の組み立て 1 か所だけが接続のフィールドを借用して結線へ渡すべき（要件 5.1）"
     );
 }

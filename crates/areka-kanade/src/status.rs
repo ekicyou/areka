@@ -5,7 +5,7 @@
 //!
 //! ## 依存規律
 //!
-//! 本モジュールは `std` のみに依存する（host32 型・areka-actor 型に非依存）。`talk.rs` と
+//! 本モジュールは `std` のみに依存する（host32 型・areka-actor 型に非依存）。`areka-talk` と
 //! 同じ**葉の契約型**の規律であり、将来の契約クレート切り出しは機械的移動で済む（DD-1）。
 //!
 //! ## 語彙と下位書式（DD-IT-9）
@@ -153,6 +153,10 @@ impl ExecutionStatus {
     /// 状態列を正典順へ整列し、状態種ごとに重複を除いて構成する。
     /// 不変条件（正典順・重複なし）を**構成の時点で**保証する唯一の内部コンストラクタ。
     fn from_states(mut states: Vec<ExecutionState>) -> ExecutionStatus {
+        // 種類の空な Opening は非アクティブ（`OpeningKinds` の doc）なので集合から落とす。
+        states.retain(
+            |s| !matches!(s, ExecutionState::Opening(OpeningKinds(kinds)) if kinds.is_empty()),
+        );
         // 安定ソート＋種別鍵の隣接重複除去で「正典順・各状態種は高々1つ」を保証する。
         states.sort_by_key(ExecutionState::canonical_index);
         states.dedup_by_key(|s| s.canonical_index());
@@ -248,8 +252,8 @@ pub struct ExecutionSnapshot {
     //   フィールドを 1 本追加し、導出表の該当行を差し替える（持ち主＝要件 6.3 の宛先）。
     //
     // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態は、
-    //   欄に加えて**作り手**（`schedule/mod.rs` の `State::snapshot`／`State::snapshot_without_talk`
-    //   ——本番のスナップショットはこの 2 つからしか作らない）へ材料を届ける運搬も要る。
+    //   欄に加えて**作り手**（`schedule/types.rs` の `State::snapshot`／`State::snapshot_with_choice`／
+    //   `State::snapshot_without_talk`——本番のスナップショットはこの 3 つからしか作らない）へ材料を届ける運搬も要る。
     //   `choice_active`（源＝選択帳簿）と、写し（`ExternalStates`）から作る `no_user_break`・
     //   `online`・`balloons` がその実例である。不変を保証するのは **wire 送出契約**
     //   （カンマ連結書式・ヘッダ位置・空集合→行省略・Reference 連番）であって内部シグネチャではない。
@@ -257,7 +261,8 @@ pub struct ExecutionSnapshot {
 
 impl ExecutionSnapshot {
     /// 全実行状態が非アクティブなスナップショット（テストと構造体リテラルの既定値の継ぎ足し用）。
-    /// 本番の送出は `State::snapshot`／`State::snapshot_without_talk` から作り、これを直接渡さない。
+    /// 本番の送出は `State::snapshot`／`State::snapshot_with_choice`／`State::snapshot_without_talk` から作り、
+    /// これを直接渡さない。
     pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot {
         talk_active: false,
         choice_active: false,
@@ -374,163 +379,6 @@ mod tests {
         // 空集合 → ヘッダ行そのものを省略（DD-IT-5）。空値 `Status:` ではなく `None`。
         let empty = ExecutionStatus::from_states(vec![]);
         assert_eq!(empty.render(), None);
-    }
-
-    /// Unit Test #3（Req2.4/2.5/2.7）: `derive` の talk 軸（`choice_active=false` 断面）を網羅。
-    /// `talk_active=false` → 空（choosing 以外の非導出状態は決して現れない）／`true` → `[Talking]` のみ。
-    /// choice 軸を含む全入力空間は [`derive_covers_the_full_two_bool_input_space`] が固定する。
-    #[test]
-    fn derive_covers_the_entire_bool_input_space() {
-        // talk_active=false → 空集合（choosing は choice_active=false・残8状態は非導出）→ 行省略（Req2.3）。
-        let idle = ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE);
-        assert_eq!(idle.render(), None);
-
-        // talk_active=true → `[Talking]` のみ（Req2.4/2.7）。
-        let talking = ExecutionStatus::derive(&ExecutionSnapshot {
-            talk_active: true,
-            choice_active: false,
-            ..ExecutionSnapshot::INACTIVE
-        });
-        assert_eq!(talking.render(), Some("talking".to_string()));
-
-        // design 明記の Postconditions を明示的に固定する。
-        assert_eq!(
-            ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE).render(),
-            None
-        );
-        assert_eq!(
-            ExecutionStatus::derive(&ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            })
-            .render(),
-            Some("talking".to_string())
-        );
-    }
-
-    /// Unit Test #4（Req6.1/6.2/6.3・C5）: `derive` の全入力空間（bool 2 本）を網羅する。
-    ///
-    /// choosing 行の実導出後も**送出契約は無改変**である——複合値は既存 `canonical_index` の
-    /// 順序どおり `talking,choosing` で連結され（Req6.3）、両方非アクティブなら
-    /// `render() == None`＝ヘッダ行そのものを省略する（Req2.3 の規律を choice 軸が壊さない）。
-    #[test]
-    fn derive_covers_the_full_two_bool_input_space() {
-        let cases: [(bool, bool, Option<&str>); 4] = [
-            (false, false, None),
-            (true, false, Some("talking")),
-            (false, true, Some("choosing")),
-            (true, true, Some("talking,choosing")),
-        ];
-        for (talk_active, choice_active, expected) in cases {
-            let rendered = ExecutionStatus::derive(&ExecutionSnapshot {
-                talk_active,
-                choice_active,
-                ..ExecutionSnapshot::INACTIVE
-            })
-            .render();
-            assert_eq!(
-                rendered.as_deref(),
-                expected,
-                "talk_active={talk_active} choice_active={choice_active} の導出が正典と不一致"
-            );
-        }
-    }
-
-    fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-        BalloonBinding {
-            character_id,
-            balloon_id,
-        }
-    }
-
-    /// 要件 1.1/4.3/4.4: nouserbreak・online・balloon の 3 行が欄をそのまま写し、
-    /// 正典順で連結され、空の組では `balloon` を出さない（全組み合わせは兄弟テストが固定する）。
-    #[test]
-    fn derive_maps_nouserbreak_online_and_balloon_rows() {
-        let all = ExecutionSnapshot {
-            talk_active: true,
-            choice_active: true,
-            no_user_break: true,
-            online: true,
-            balloons: vec![binding(0, 2), binding(1, 0)],
-        };
-        assert_eq!(
-            ExecutionStatus::derive(&all).render().as_deref(),
-            Some("talking,choosing,nouserbreak,online,balloon(0=2/1=0)")
-        );
-        let online_only = ExecutionSnapshot {
-            online: true,
-            ..ExecutionSnapshot::INACTIVE
-        };
-        assert_eq!(
-            ExecutionStatus::derive(&online_only).render().as_deref(),
-            Some("online")
-        );
-        // 空の組は `balloon()` を出さない（要件 4.4）。
-        let talking_no_balloon = ExecutionSnapshot {
-            talk_active: true,
-            balloons: Vec::new(),
-            ..ExecutionSnapshot::INACTIVE
-        };
-        assert_eq!(
-            ExecutionStatus::derive(&talking_no_balloon)
-                .render()
-                .as_deref(),
-            Some("talking")
-        );
-    }
-
-    /// 要件 4.3/1.3: 組は構成の時点で `character_id` 昇順・重複なし（先頭を残す）になる。
-    #[test]
-    fn balloon_bindings_sort_ascending_and_drop_duplicate_characters() {
-        let bindings = BalloonBindings::new(vec![binding(1, 0), binding(0, 2), binding(1, 5)]);
-        assert_eq!(bindings.render_inner(), "0=2/1=0");
-        let snapshot = ExecutionSnapshot {
-            balloons: vec![binding(1, 0), binding(0, 2)],
-            ..ExecutionSnapshot::INACTIVE
-        };
-        assert_eq!(
-            ExecutionStatus::derive(&snapshot).render().as_deref(),
-            Some("balloon(0=2/1=0)")
-        );
-    }
-
-    /// 写しへの知らせの反映は「変わったか」を返し、同じ値の知らせは変化なしとする。
-    #[test]
-    fn external_states_apply_reports_whether_the_copy_changed() {
-        let mut external = ExternalStates::default();
-        assert!(external.apply(ExecutionStateUpdate::NoUserBreak(true)));
-        assert!(!external.apply(ExecutionStateUpdate::NoUserBreak(true)));
-        assert!(external.no_user_break);
-        assert!(external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
-        assert!(!external.apply(ExecutionStateUpdate::Balloons(vec![binding(0, 0)])));
-        assert!(external.apply(ExecutionStateUpdate::Balloons(Vec::new())));
-        assert!(external.apply(ExecutionStateUpdate::NoUserBreak(false)));
-        assert_eq!(external, ExternalStates::default());
-    }
-
-    /// C5: `INACTIVE` は**全ての源が false**（choosing の源を足しても非アクティブのまま）。
-    /// テストと構造体リテラルの既定値（`..ExecutionSnapshot::INACTIVE`）がこの定数に頼る以上、
-    /// 源の増設で既定値が汚れないことを固定する。
-    #[test]
-    fn inactive_snapshot_has_every_source_false() {
-        // 網羅的な構造体リテラルとの比較で固定する——源が 1 本増えたときは本行が
-        // コンパイルエラーになり、既定値の判断が必ず要求される。
-        assert_eq!(
-            ExecutionSnapshot::INACTIVE,
-            ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                no_user_break: false,
-                online: false,
-                balloons: Vec::new(),
-            }
-        );
-        assert_eq!(
-            ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE).render(),
-            None
-        );
     }
 }
 

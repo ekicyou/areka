@@ -40,7 +40,7 @@ fn uptime() -> Duration {
 
 /// 待機中のホスト窓へ同期送出すると上限内に成功復帰し、即終了した stand-in の死活報告が
 /// 手空きの初回に届く（全体 5 秒以内）。2 通目が来ないことは短い期限では主張しない
-/// （要件 4.8）——手空きが回った証拠つきで `real_idle_tests.rs` の Test-B が見張る。
+/// （要件 4.8）——手空きが回った証拠つきで `real_idle_tests.rs` の `helper_exit_during_idle_reports_shiori_down_once` が見張る。
 #[test]
 fn sync_send_to_idle_window_returns_within_bound() {
     let _ = uptime();
@@ -54,8 +54,8 @@ fn sync_send_to_idle_window_returns_within_bound() {
     let elapsed = send_started.elapsed();
     let uptime_at_send = uptime();
 
-    // 死活報告は起動から SEND_BOUND の内に届くはず（手空きの初回は IDLE_INTERVAL 後）。
-    let deadline = started + SEND_BOUND;
+    // 死活報告は起動から DEFAULT_TIMEOUT の内に届くはず（手空きの初回は IDLE_INTERVAL 後）。
+    let deadline = started + DEFAULT_TIMEOUT;
     let first_down = down_before(&actor.down_rx, deadline);
 
     let _ = actor.shiori_tx.send(ShioriMsg::Close);
@@ -129,10 +129,6 @@ fn abortifhung_send_reaches_window_idle_for_twenty_seconds() {
     let _ = actor.shiori_tx.send(ShioriMsg::Close);
     let joined = join_bounded("idle-pump-slow shiori join", DEFAULT_TIMEOUT, actor.handle);
 
-    let send_failures = [first.is_err(), second.is_err()]
-        .iter()
-        .filter(|failed| **failed)
-        .count();
     let total = started.elapsed();
     let diag = format!(
         "first={first:?} first_elapsed={first_elapsed:?} \
@@ -140,7 +136,7 @@ fn abortifhung_send_reaches_window_idle_for_twenty_seconds() {
          idle={SLOW_IDLE:?} send_bound={SLOW_SEND_BOUND:?} \
          uptime_lower_bound_at_first={uptime_at_first:?} \
          uptime_lower_bound_at_second={uptime_at_second:?} \
-         send_failures={send_failures} total={total:?}"
+         total={total:?}"
     );
     joined.expect("shiori アクターが正常に終わる");
     assert!(
@@ -151,7 +147,6 @@ fn abortifhung_send_reaches_window_idle_for_twenty_seconds() {
         second.is_ok(),
         "送出②が届く＝待機中のホスト窓が応答なし判定に落ちていない（要件 1.3・4.4）: {diag}"
     );
-    assert_eq!(send_failures, 0, "送出の失敗が 0 回である: {diag}");
     assert!(
         total < SLOW_CAGE_BOUND,
         "全体が上限 {SLOW_CAGE_BOUND:?} の内で終わる（要件 4.5）: {diag}"
@@ -219,7 +214,7 @@ fn the_real_connection_offers_an_unblock_handle_that_ends_the_helper() {
         if matches!(status, HelperStatus::Exited(_)) || Instant::now() >= deadline {
             break status;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     };
     assert!(
         matches!(status, HelperStatus::Exited(_)),

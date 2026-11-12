@@ -23,7 +23,7 @@ use areka_kanade::{ChangeOrigin, KanadeMsg, ShioriMethod};
 use bevy_ecs::world::World;
 
 use super::refs::{ON_UPDATE_FAILURE, executing_refs};
-use super::worker::{DeskAsk, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
+use super::worker::{DeskAsk, HOMEURL, NewFetch, UpdateJob, spawn_worker, winhttp_fetch};
 use super::{RawUpdateRequest, SubmitVerdict, TargetKind, TargetSpec, UpdateReason};
 use crate::boot_config::BootContext;
 use crate::emo2_boot::ghost_switch::{
@@ -451,7 +451,7 @@ pub(crate) fn on_steady(world: &mut World) {
         .get_non_send::<GhostSlot>()
         .and_then(|slot| slot.0.as_ref())
         .and_then(|s| s.kanade())
-        .and_then(|kanade| send_query(kanade, vec!["homeurl"]).ok());
+        .and_then(|kanade| send_query(kanade, vec![HOMEURL]).ok());
     let Some(mut desk) = world.get_non_send_mut::<UpdateDesk>() else {
         return;
     };

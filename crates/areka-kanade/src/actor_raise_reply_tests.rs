@@ -1,8 +1,8 @@
 //! 汎用の通知の入口の返事（[`RaiseOutcome`]）の檻（areka-P0-ghost-install 要件 2.6・2.7・11.5・12.6）。
 //!
 //! 本物の殻（[`spawn_kanade_with_stop_sink`]）を偽の shiori のスレッドにつなぎ、`KanadeMsg::RaiseEvent`
-//! に付けた返信端へ 5 値が 1 つずつ返ることを見る: 台本・空の台本・空白だけ・204・NOTIFY の完了・
-//! 失敗・起動の途中（定常の前）・許可表に無い名前。返信端が無い依頼は今日どおり送られ、受け手が
+//! に付けた返信端へ 5 値が 1 つずつ返ることを見る: 台本・空白だけの台本・空の台本・204・NOTIFY の完了・
+//! 失敗・起動の途中（定常の前）・許可表に無い名前。返信端が無い依頼もそのまま送られ、受け手が
 //! 居なくなった返信端でも運行が続くことも見る。
 //!
 //! 待ちはすべて受信端の受け取りで揃える（返事・運行の通知・偽の shiori の記録）。期限は
@@ -11,6 +11,7 @@
 use super::*;
 use crate::change::{RaiseOutcome, ShioriMethod};
 use crate::schedule::log_capture::{capture, logged_once};
+use crate::schedule::translate_test_support::config;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 use tracing::Level;
@@ -34,16 +35,31 @@ pub(super) struct Rig {
     pub(super) notices: Receiver<KanadeNotice>,
 }
 
-/// 偽の shiori を立てて kanade を起こす。`RAISED` 以外は良性の既定応答（NOTIFY→完了・GET→204・
-/// Unload→完了）を返す。
+/// 名前ごとの偽の shiori の答え（`None` なら良性の既定: NOTIFY→完了・GET→204・Unload→完了）。
+pub(super) type Respond = Box<dyn Fn(&str) -> Option<ShioriOutcome> + Send>;
+
+/// 偽の shiori を立てて kanade を起こす。`RAISED` へ `answer` を返し、終了の相で再生を待たせるため
+/// `OnClose` には台本を返す。ほかは良性の既定応答。
 pub(super) fn spawn_rig(answer: Answer) -> Rig {
+    spawn_with(Box::new(move |id| match id {
+        RAISED => Some(answer()),
+        "OnClose" => Some(ShioriOutcome::Value(
+            r"\h\s[0]またね\e".into(),
+            areka_talk::SecurityLevel::Local,
+        )),
+        _ => None,
+    }))
+}
+
+/// 名前ごとに答えを選べる偽の shiori で本物の殻を起こす。
+pub(super) fn spawn_with(respond: Respond) -> Rig {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
     let (calls_tx, calls) = mpsc::channel::<String>();
     std::thread::spawn(move || {
         while let Ok(msg) = shiori_rx.recv() {
             match msg {
                 ShioriMsg::Request { call, reply } => {
-                    let (label, id, outcome) = match &call {
+                    let (label, id, fallback) = match &call {
                         ShioriCall::Get { id, .. } => {
                             ("GET", id.as_str(), ShioriOutcome::NoContent)
                         }
@@ -52,16 +68,7 @@ pub(super) fn spawn_rig(answer: Answer) -> Rig {
                         }
                     };
                     let _ = calls_tx.send(format!("{label} {id}"));
-                    let outcome = match id {
-                        RAISED => answer(),
-                        // 終了の相で再生を待たせるため、`OnClose` には台本を返す。
-                        "OnClose" => ShioriOutcome::Value(
-                            r"\h\s[0]またね\e".into(),
-                            areka_talk::SecurityLevel::Local,
-                        ),
-                        _ => outcome,
-                    };
-                    let _ = reply.send(outcome);
+                    let _ = reply.send(respond(id).unwrap_or(fallback));
                 }
                 ShioriMsg::Unload { reply } => {
                     let _ = calls_tx.send("Unload".to_string());
@@ -77,7 +84,7 @@ pub(super) fn spawn_rig(answer: Answer) -> Rig {
     let (talk_tx, talks) = mpsc::channel::<TalkCommand>();
     let (notice_tx, notices) = mpsc::channel::<KanadeNotice>();
     let (kanade, handle) = spawn_kanade_with_stop_sink(
-        KanadeConfig::new("master", "1.0.0"),
+        config(),
         shiori_tx,
         talk_tx,
         Box::new(|_, _| {}),
@@ -118,7 +125,7 @@ fn raise(rig: &Rig, id: &str, method: ShioriMethod) -> RaiseOutcome {
 }
 
 /// 今までに偽の shiori が受けた呼び出し（待たない）。
-fn drain(calls: &Receiver<String>) -> Vec<String> {
+pub(super) fn drain(calls: &Receiver<String>) -> Vec<String> {
     calls.try_iter().collect()
 }
 
@@ -152,26 +159,18 @@ fn script_reply_is_script_after_the_talk_is_started() {
     close(rig);
 }
 
-/// 空の台本・空白だけの台本・204 はどれも `NoReply`。依頼のイベントの往復は 1 回で、1 文字以上の
-/// 空白だけの台本にだけ OnTranslate が続く（翻訳は 1 文字以上の台詞にかける）。
+/// 空の台本と 204 は `NoReply`。依頼のイベントの往復は 1 回で、OnTranslate は続かない（空の台本の再生は運行表の
+/// 通常の振る舞い）。
 #[test]
-fn empty_blank_and_no_content_are_no_reply() {
-    let answers: [(&str, Answer, &[&str]); 3] = [
+fn empty_and_no_content_are_no_reply() {
+    let answers: [(&str, Answer); 2] = [
         (
             "空の台本",
             Box::new(|| ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local)),
-            &[],
         ),
-        (
-            "空白だけの台本",
-            Box::new(|| {
-                ShioriOutcome::Value(" \t\r\n\u{3000}".into(), areka_talk::SecurityLevel::Local)
-            }),
-            &["GET OnTranslate"],
-        ),
-        ("204", Box::new(|| ShioriOutcome::NoContent), &[]),
+        ("204", Box::new(|| ShioriOutcome::NoContent)),
     ];
-    for (label, answer, translated) in answers {
+    for (label, answer) in answers {
         let rig = spawn_rig(answer);
         boot_to_steady(&rig);
         assert_eq!(
@@ -179,11 +178,39 @@ fn empty_blank_and_no_content_are_no_reply() {
             RaiseOutcome::NoReply,
             "{label} は返事なし"
         );
-        let mut expected = vec![format!("GET {RAISED}")];
-        expected.extend(translated.iter().map(|call| call.to_string()));
-        assert_eq!(drain(&rig.calls), expected, "{label}");
+        assert_eq!(drain(&rig.calls), vec![format!("GET {RAISED}")], "{label}");
         close(rig);
     }
+}
+
+/// 空白だけの台本は、返事の写し（`has_script`）でも定常の腕（どの Value も再生する）でも台本（SSP と同じ）。
+/// 返事は `Script` で、話し中に届けば今のトークを次の番号のトークで置き換える。
+#[test]
+fn whitespace_only_answer_is_a_script_on_every_path() {
+    let rig = spawn_rig(Box::new(|| {
+        ShioriOutcome::Value(" \t\r\n\u{3000}".into(), areka_talk::SecurityLevel::Local)
+    }));
+    boot_to_steady(&rig);
+    let mut started = Vec::new();
+    // 1 回目は話していない所で始まり、2 回目は 1 回目のトーク（再生系が終わりを返さない）を置き換える。
+    for round in 0..2 {
+        assert_eq!(
+            raise(&rig, RAISED, ShioriMethod::Get),
+            RaiseOutcome::Script,
+            "{round} 回目: 空白だけでも台本あり"
+        );
+        assert_eq!(
+            drain(&rig.calls),
+            vec![format!("GET {RAISED}"), "GET OnTranslate".to_string()],
+            "{round} 回目"
+        );
+        match rig.talks.try_recv() {
+            Ok(TalkCommand::Start(start)) => started.push(start.talk_id),
+            other => panic!("{round} 回目: 再生の起動のはず: {other:?}"),
+        }
+    }
+    assert_ne!(started[0], started[1], "置き換えは次の番号のトーク");
+    close(rig);
 }
 
 /// NOTIFY の完了も `NoReply`。
@@ -199,7 +226,7 @@ fn notify_completion_is_no_reply() {
     close(rig);
 }
 
-/// 往復の失敗は `Failed`。kanade は今日どおり終了系列へ進み、返事はその後（降ろして止まった後）に届く。
+/// 往復の失敗は `Failed`。kanade は終了系列へ進み、返事はその後（降ろして止まった後）に届く。
 #[test]
 fn failed_round_trip_is_failed_after_the_fault_sequence() {
     let rig = spawn_rig(Box::new(|| {
@@ -280,9 +307,9 @@ fn name_outside_the_table_is_not_allowed_and_nothing_is_sent() {
     close(rig);
 }
 
-/// 返信端が無い依頼は今日どおり送られ、次の依頼も受ける。
+/// 返信端が無い依頼もそのまま送られ、次の依頼も受ける。
 #[test]
-fn without_reply_the_event_is_sent_as_today() {
+fn without_reply_the_event_is_still_sent() {
     let rig = spawn_rig(Box::new(|| {
         ShioriOutcome::Value("\\h\\s[0]はい\\e".into(), areka_talk::SecurityLevel::Local)
     }));

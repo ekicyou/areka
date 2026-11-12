@@ -1,4 +1,4 @@
-//! 翻訳（`OnTranslate`）の殻の結合テスト（areka-P0-translate-pipeline タスク 3.6・要件 3.6・4.5・
+//! 翻訳（`OnTranslate`）の殻の結合テスト（areka-P0-translate-pipeline 要件 3.6・4.5・
 //! 5.3・5.4・5.6・8.1 ⑺）。
 //!
 //! 本物の殻（`spawn_kanade_translating`）に、SHIORI と再生側の両方の受け口を 1 本のスレッドで
@@ -10,7 +10,7 @@
 //! 偽物は最初の `OnTranslate` を、テストが放すまで握れる。握っている間は kanade が応答待ちで
 //! 止まっている。放したときに偽物の受け口へ次の要求が積まれていないことを確かめてから応答する
 //! （＝待ちの間に SHIORI へ何も送られていない・要件 5.3）。再生側は TalkDone を返さないので、
-//! 始めた台詞はテストが TalkDone を送るまで再生中のまま（今日の「再生中」の規則で入力が処理される）。
+//! 始めた台詞はテストが TalkDone を送るまで再生中のまま（「再生中」の規則で入力が処理される）。
 //!
 //! 見出し（要件 3.6）は、kanade が SHIORI へ渡す呼出（GET・ID・Reference・Status）までをこの層で
 //! 見て、線の見出しは本物の組み立て（`shiori_host32_host::build_request`）に同じ呼出を通して比べる。
@@ -21,19 +21,20 @@ use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
+use super::mouse_test::test_support::mouse_input;
 use areka_actor::reply_channel;
 use areka_kanade::{
     ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, CloseReason, ExecutionSnapshot,
     ExecutionStatus, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
-    MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriFault,
-    ShioriMethod, ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId,
-    TranslateSeams, events, spawn_kanade_translating,
+    MonotonicMs, MouseButton, MouseEventKind, ShioriCall, ShioriFailure, ShioriFault, ShioriMethod,
+    ShioriMsg, ShioriOutcome, TalkCommand, TalkDone, TalkEndReason, TalkId, TranslateSeams, events,
+    spawn_kanade_translating,
 };
 use shiori_host32_host::{Charset, Method, RequestHeaders, ShioriRequest, build_request};
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, RecordedCall, expected_call, expected_translate, expected_unload,
-    join_bounded,
+    CallMethod, DEFAULT_TIMEOUT, RecordedCall, command_tag, expected_call, expected_translate,
+    expected_unload, join_bounded,
 };
 
 /// ダブルクリックが返す台詞。
@@ -46,7 +47,7 @@ const FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e";
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Seen {
     Call(RecordedCall),
-    /// 再生側への指示（`start:<talk_id>:<台詞>` など）。
+    /// 再生側への指示（[`command_tag`] の形）。
     Talk(String),
 }
 
@@ -92,35 +93,6 @@ struct Rig {
     notices: Receiver<KanadeNotice>,
 }
 
-fn describe(command: TalkCommand) -> String {
-    match command {
-        TalkCommand::Start(start) => format!("start:{}:{}", start.talk_id.0, start.script),
-        TalkCommand::ResolveChoice { talk_id, id } => format!("resolve:{}:{id}", talk_id.0),
-        TalkCommand::CancelChoice { talk_id } => format!("cancel:{}", talk_id.0),
-    }
-}
-
-fn record(call: &ShioriCall) -> RecordedCall {
-    let (method, id, references, status) = match call {
-        ShioriCall::Get {
-            id,
-            references,
-            status,
-        } => (CallMethod::Get, id, references, status),
-        ShioriCall::Notify {
-            id,
-            references,
-            status,
-        } => (CallMethod::Notify, id, references, status),
-    };
-    RecordedCall {
-        method,
-        id: id.as_str().to_string(),
-        references: references.clone(),
-        status: status.render(),
-    }
-}
-
 /// 偽物を起こし、素通しの口つきの kanade（停止通知の受け口あり）をつなぐ。
 fn spawn_rig(spec: WireSpec) -> Rig {
     let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
@@ -140,11 +112,11 @@ fn spawn_rig(spec: WireSpec) -> Rig {
         while let Ok(msg) = shiori_rx.recv() {
             // この要求より前に kanade が送った再生の指示を先に記録する。
             while let Ok(command) = talk_rx.try_recv() {
-                seen.push(Seen::Talk(describe(command)));
+                seen.push(Seen::Talk(command_tag(&command)));
             }
             match msg {
                 ShioriMsg::Request { call, reply } => {
-                    let recorded = record(&call);
+                    let recorded = RecordedCall::from_call(&call);
                     let id = recorded.id.clone();
                     let outcome = if recorded.method == CallMethod::Notify {
                         ShioriOutcome::Notified
@@ -180,7 +152,7 @@ fn spawn_rig(spec: WireSpec) -> Rig {
             }
         }
         // kanade が止まって送り手を落とすまでの指示を拾う。
-        seen.extend(talk_rx.iter().map(|c| Seen::Talk(describe(c))));
+        seen.extend(talk_rx.iter().map(|c| Seen::Talk(command_tag(&c))));
         let _ = done_tx.send(WireLog {
             seen,
             sent_while_held,
@@ -259,15 +231,15 @@ fn talking() -> ExecutionSnapshot {
 }
 
 fn double_click() -> KanadeMsg {
-    KanadeMsg::Mouse(MouseInput {
-        scope: 0,
-        x: 10,
-        y: 20,
-        region: Some("Head".to_string()),
-        kind: MouseEventKind::DoubleClick {
+    KanadeMsg::Mouse(mouse_input(
+        MouseEventKind::DoubleClick {
             button: MouseButton::Left,
         },
-    })
+        10,
+        20,
+        0,
+        Some("Head"),
+    ))
 }
 
 /// [`double_click`] が送る GET（`snapshot` はそのときの状態）。
@@ -276,13 +248,7 @@ fn double_click_call(snapshot: &ExecutionSnapshot) -> ShioriCall {
 }
 
 fn mouse_move() -> KanadeMsg {
-    KanadeMsg::Mouse(MouseInput {
-        scope: 0,
-        x: 11,
-        y: 21,
-        region: None,
-        kind: MouseEventKind::Move,
-    })
+    KanadeMsg::Mouse(mouse_input(MouseEventKind::Move, 11, 21, 0, None))
 }
 
 fn change_request() -> ChangeRequest {
@@ -306,7 +272,7 @@ fn talk_done(id: u64) -> KanadeMsg {
 }
 
 fn start(id: u64, script: &str) -> Seen {
-    Seen::Talk(format!("start:{id}:{script}"))
+    Seen::Talk(format!("Start({id},{script})"))
 }
 
 fn call(call: ShioriCall) -> Seen {
@@ -336,9 +302,9 @@ type WaitCase = (&'static str, fn() -> Vec<KanadeMsg>, fn() -> Vec<Seen>);
 
 /// 要件 5.3・5.4・8.1 ⑺: `OnTranslate` を握っている間にマウス・毎秒の時刻・終了の要求・切替の
 /// 要求・外からの依頼を送る。握っている間は SHIORI へ何も送られず、放した後に再生の開始が先に
-/// 出て、その後で各入力が今日の「再生中」の規則で処理される。
+/// 出て、その後で各入力が「再生中」の規則で処理される。
 ///
-/// 今日の「再生中」の規則: マウスと外からの依頼は `Status: talking` の GET、毎秒の時刻は
+/// 「再生中」の規則: マウスと外からの依頼は `Status: talking` の GET、毎秒の時刻は
 /// Ref3=0 の NOTIFY。終了と切替の要求は台詞が終わるまで保留され、TalkDone の後で握手に入る
 /// （終了は `OnClose`、切替は `OnGhostChanging` → 切替の `OnClose`）。
 #[test]
@@ -438,7 +404,7 @@ fn inputs_during_translate_wait_run_after_start_under_talking_rules() {
         assert_eq!(
             from_first(&log.seen, "OnMouseDoubleClick"),
             expected.as_slice(),
-            "{name}: 再生の開始が先・その後に今日の「再生中」の規則で処理される"
+            "{name}: 再生の開始が先・その後に「再生中」の規則で処理される"
         );
     }
 }
@@ -547,7 +513,6 @@ fn on_translate_status_is_the_playback_start_state_and_headers_match_other_gets(
         expected_translate(MOUSE_SCRIPT, &first_source, &talking()),
         "Status は再生を始める時点の状態（talking）"
     );
-    assert_eq!(translates[0].status.as_deref(), Some("talking"));
 
     // 再生中に送った 2 つ目の元の GET と、その台詞の OnTranslate の見出しを比べる。
     assert_eq!(*sources[1], expected_call(double_click_call(&talking())));
@@ -587,11 +552,11 @@ fn run_failing(fail: &'static str, inputs: Vec<KanadeMsg>) -> (Vec<Seen>, Option
 }
 
 /// 要件 4.5: `OnTranslate` の輸送路の失敗で止まるときの停止の原因と後の運びは、元のイベントの
-/// GET が同じ輸送路の失敗をした今日の故障と同じ（再生は始まらず、降ろして止まる）。
+/// GET が同じ輸送路の失敗をしたときの故障と同じ（再生は始まらず、降ろして止まる）。
 #[test]
-fn transport_failure_on_translate_stops_like_todays_fault() {
+fn transport_failure_on_translate_stops_like_the_source_event_fault() {
     let (after_translate, stopped) = run_failing("OnTranslate", vec![double_click()]);
-    let (after_source, today) = run_failing("OnMouseDoubleClick", vec![double_click()]);
+    let (after_source, source_fault) = run_failing("OnMouseDoubleClick", vec![double_click()]);
 
     let fault = KanadeStopCause::Fault(ShioriFault::from_failure(&ShioriFailure::Ipc(
         "helper gone".into(),
@@ -601,7 +566,7 @@ fn transport_failure_on_translate_stops_like_todays_fault() {
         handoff: None,
     });
     assert_eq!(stopped, expected, "OnTranslate の輸送路の失敗は故障");
-    assert_eq!(stopped, today, "停止の原因は元の GET の故障と同じ");
+    assert_eq!(stopped, source_fault, "停止の原因は元の GET の故障と同じ");
     assert_eq!(after_translate[1..], [Seen::Call(expected_unload())]);
     assert_eq!(
         after_source[1..],
@@ -610,9 +575,9 @@ fn transport_failure_on_translate_stops_like_todays_fault() {
     );
 }
 
-/// 3.5 の申し送り（要件 6.2・4.5）: 停止通知の切替の中身は、`OnGhostChanging` の台詞なら翻訳の
+/// 停止通知の切替の中身（要件 6.2・4.5）は、`OnGhostChanging` の台詞なら翻訳の
 /// 後の台詞を運ぶ。切替の送り出しの翻訳で輸送路が失敗したら、中身は空（`None`）で、原因は
-/// `OnGhostChanging` そのものが同じ失敗をした今日の故障と同じ。
+/// `OnGhostChanging` そのものが同じ失敗をしたときの故障と同じ。
 #[test]
 fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
     let translated = r"\0訳した送り出し\e";
@@ -638,7 +603,7 @@ fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
 
     let change = || vec![KanadeMsg::ChangeGhost(change_request())];
     let (after_translate, stopped) = run_failing("OnTranslate", change());
-    let (_, today) = run_failing("OnGhostChanging", change());
+    let (_, source_fault) = run_failing("OnGhostChanging", change());
     let fault = KanadeStopCause::Fault(ShioriFault::from_failure(&ShioriFailure::Ipc(
         "helper gone".into(),
     )));
@@ -650,7 +615,10 @@ fn change_handoff_carries_translated_script_or_none_on_transport_failure() {
         }),
         "表示しなかった送り出しの台詞は次のゴーストへ渡さない"
     );
-    assert_eq!(stopped, today, "原因と中身は OnGhostChanging の故障と同じ");
+    assert_eq!(
+        stopped, source_fault,
+        "原因と中身は OnGhostChanging の故障と同じ"
+    );
     assert_eq!(after_translate[1..], [Seen::Call(expected_unload())]);
 }
 
@@ -692,28 +660,10 @@ fn assert_farewell_scene(
         "{name}: OnTranslate は 1 件: {:#?}",
         log.seen
     );
-    assert_eq!(
-        translates[0].status, during,
-        "{name}: OnTranslate の Status は同じ時点の問い合わせの答えと同じ値"
-    );
 
-    let handshake_statuses: Vec<Option<String>> = log
-        .seen
-        .iter()
-        .filter_map(|s| match s {
-            Seen::Call(c) if c.id == "OnClose" || c.id == "OnGhostChanging" => {
-                Some(c.status.clone())
-            }
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        handshake_statuses,
-        vec![None; handshakes.len()],
-        "{name}: 握手の要求（OnClose・OnGhostChanging）に Status の行は無い"
-    );
-
-    let first_id = record(&handshakes[0]).id;
+    // OnTranslate の Status（talking＝`during` と同じ値）と、握手の要求に Status の行が無いことは、
+    // 下の並びの比較が events 表導出の期待で見る。
+    let first_id = RecordedCall::from_call(&handshakes[0]).id;
     let source = handshakes.last().expect("握手の要求は 1 件以上");
     let translate = expected_translate(FAREWELL_SCRIPT, source, &talking());
     let mut expected: Vec<Seen> = handshakes.into_iter().map(call).collect();

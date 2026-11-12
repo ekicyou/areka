@@ -1,4 +1,4 @@
-//! 完了を通らずに相が変わる経路での控えの後始末の檻（areka-P0-balloon-lifecycle-events タスク 2.6）。
+//! 完了を通らずに相が変わる経路での控えの後始末の檻（areka-P0-balloon-lifecycle-events）。
 //!
 //! 中断の控え（`State.user_break_talk`）・預かった時間切れの知らせ（`ShownTalk.timeout_pending`）を
 //! 持ったまま、完了の知らせより先に強制の終了・SHIORI の故障・切替の送り出しの台詞の期限切れ・翻訳の
@@ -10,14 +10,14 @@
 //! 預かりを持てない経路（切替の送り出しの台詞の間・翻訳へ預けている間）は、その入口で時間切れの
 //! 知らせが預からずに断られることを同じ檻の中で確かめ、中断の控えだけを持たせて駆動する。
 
-use super::super::log_capture::{CapturedEvent, capture};
+use super::super::log_capture::{CapturedEvent, assert_not_logged, capture};
 use super::super::{Input, Phase, TermCause};
 use super::BreakNote;
 use super::done_tests::{done, field};
 use super::tests::{
-    FINAL, ORIGINAL, cfg, feed, reply_value, start_translated, started, steady_none,
+    FINAL, ORIGINAL, accept_change, feed, reply_and_start, reply_value, start_translated, started,
+    steady_none,
 };
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
 use crate::msg::{
     CloseReason, MonotonicMs, MouseButton, MouseEventKind, MouseInput, ShioriCall, ShioriDownKind,
     ShioriFailure, ShioriOutcome,
@@ -61,7 +61,13 @@ fn holding(held: Held) -> (State, TalkId) {
         );
     }
     if matches!(held, Held::Break | Held::Both) {
-        feed(&mut s, Input::UserBreak { scope: 1 });
+        feed(
+            &mut s,
+            Input::UserBreak {
+                scope: 1,
+                talk_id: Some(talk),
+            },
+        );
         assert_eq!(
             s.user_break_talk,
             Some(BreakNote {
@@ -139,11 +145,7 @@ fn assert_dropped(s: &State, ev: &[CapturedEvent], held: Held, talk: TalkId, pha
         expected,
         "{held:?}: 捨てた控えごとに理由 talk_gone を 1 行（要件 7.2）。\n捕捉={ev:#?}"
     );
-    assert!(
-        !ev.iter()
-            .any(|e| e.event.as_deref() == Some("balloon_event_sent")),
-        "{held:?}: 送った記録は出ない。\n捕捉={ev:#?}"
-    );
+    assert_not_logged(ev, "balloon_event_sent");
     assert!(s.user_break_talk.is_none(), "{held:?}: 中断の控えは下りる");
     assert!(
         s.shown.as_ref().is_none_or(|shown| !shown.timeout_pending),
@@ -155,13 +157,8 @@ fn assert_dropped(s: &State, ev: &[CapturedEvent], held: Held, talk: TalkId, pha
 fn assert_quiet_after(s: &mut State, inputs: Vec<Input>, at: &str) {
     let (actions, ev) = feed_all(s, inputs);
     assert_no_balloon_request(&actions, at);
-    assert!(
-        ev.iter().all(|e| !matches!(
-            e.event.as_deref(),
-            Some("balloon_event_sent" | "balloon_event_not_sent")
-        )),
-        "{at}: 捨てた後は何も記録しない。\n捕捉={ev:#?}"
-    );
+    assert_not_logged(&ev, "balloon_event_sent");
+    assert_not_logged(&ev, "balloon_event_not_sent");
 }
 
 /// 降ろし終えた応答。
@@ -182,11 +179,14 @@ fn finish_unloading(s: &mut State, talk: TalkId, at: &str) {
     assert!(matches!(s.phase, Phase::Stopped), "{at}: 止まる");
 }
 
+/// 経路の名と、その経路へ進める入力を作る関数。
+type Case = (&'static str, fn() -> Input);
+
 /// 強制の終了・SHIORI の故障: 控えを持ったまま終了系列へ直行すると、その `step` の出口で捨てて
 /// 記録し、遅れて届く完了・降ろし終えた応答まで 3 つのイベントを送らない（要件 1.6・4.4・7.2）。
 #[test]
 fn force_quit_and_shiori_down_drop_held_notes_with_one_talk_gone_line_each() {
-    let cases: [(&str, fn() -> Input); 2] = [
+    let cases: [Case; 2] = [
         ("ForceQuit", || Input::ForceQuit {
             reason: CloseReason::System,
         }),
@@ -220,18 +220,7 @@ fn force_quit_and_shiori_down_drop_held_notes_with_one_talk_gone_line_each() {
 /// 再生している状態。
 fn change_talking(closing: bool) -> (State, TalkId) {
     let mut s = steady_none();
-    feed(
-        &mut s,
-        Input::ChangeGhost(ChangeRequest {
-            target: ChangeTarget {
-                sakura_name: "ポスト".to_string(),
-                name: "R_POST_and_KOMAINU".to_string(),
-                dir: r"C:\areka\ghost\r_post".to_string(),
-            },
-            origin: ChangeOrigin::Manual,
-            raise_event: true,
-        }),
-    );
+    accept_change(&mut s);
     let origin = if closing {
         feed(
             &mut s,
@@ -244,13 +233,7 @@ fn change_talking(closing: bool) -> (State, TalkId) {
     } else {
         "OnGhostChanging"
     };
-    let actions = reply_value(&mut s, ORIGINAL, origin);
-    assert!(matches!(actions.as_slice(), [Action::Translate(_)]));
-    let actions = feed(
-        &mut s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(FINAL))),
-    );
-    let (talk, _) = started(&actions);
+    let talk = reply_and_start(&mut s, origin, FINAL);
     assert!(
         matches!(
             s.phase,
@@ -279,27 +262,22 @@ fn change_talk_deadline_drops_the_break_note_with_one_talk_gone_line() {
             s.shown.as_ref().is_some_and(|shown| !shown.timeout_pending),
             "{at}: 送り出しの台詞の間は預からない（D1）"
         );
-        feed(&mut s, Input::UserBreak { scope: 0 });
+        feed(
+            &mut s,
+            Input::UserBreak {
+                scope: 0,
+                talk_id: Some(talk),
+            },
+        );
         assert!(s.user_break_talk.is_some(), "{at}: 前提: 中断の控え");
 
-        let now = 1_000_000;
-        let (mut actions, mut ev) = feed_all(
+        // 期限は送り出しの相に入るときに決まっているので、刻み 1 回で期限切れになる。
+        let (actions, ev) = feed_all(
             &mut s,
             vec![Input::Tick {
-                now: MonotonicMs(now),
+                now: MonotonicMs(1_000_000),
             }],
         );
-        if !matches!(s.phase, Phase::Unloading { .. }) {
-            // 期限が未設定だった（最初の Tick で決まる）なら、もう 1 度だけ期限ちょうどの Tick を入れる。
-            let (more, more_ev) = feed_all(
-                &mut s,
-                vec![Input::Tick {
-                    now: MonotonicMs(now + cfg().close_talk_deadline_ms),
-                }],
-            );
-            actions.extend(more);
-            ev.extend(more_ev);
-        }
         assert!(
             matches!(
                 s.phase,
@@ -341,7 +319,13 @@ fn translate_transport_failure_drops_the_break_note_with_one_talk_gone_line() {
         s.shown.as_ref().is_none_or(|shown| !shown.timeout_pending),
         "翻訳を待つ間は預からない（D2）"
     );
-    feed(&mut s, Input::UserBreak { scope: 1 });
+    feed(
+        &mut s,
+        Input::UserBreak {
+            scope: 1,
+            talk_id: Some(talk),
+        },
+    );
     assert_eq!(
         s.user_break_talk.map(|note| note.talk_id),
         Some(talk),

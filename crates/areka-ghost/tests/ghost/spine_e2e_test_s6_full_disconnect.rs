@@ -92,6 +92,7 @@ fn s6_full_disconnect_staged_teardown_terminates_all_five_actors_within_bound() 
         shiori: shiori_handle,
         start_relay: start_relay_handle,
         down_relay: down_relay_handle,
+        choice_wake_relay: _,
         ticker: _,
         sylphya: _,
     } = handles;

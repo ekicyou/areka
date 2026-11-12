@@ -72,3 +72,9 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## 追記（2026-11-06 `audit-sylphya-actor` の要件の討議で回された件）
+
+`audit-sylphya-actor` の audit の指摘のうち、呼び手の乗り換えがこの spec の範囲に当たる 1 件を回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の要件の討議 議題 4）。
+
+- **件（audit #4）**: `SylphyaPublisher::barrier()` は期限の無い待ち。`crates/areka/src/install/desk.rs`（`runtime.sylphya_publisher().barrier()`）は UI スレッドから呼ぶので、書き手のアクターが遅い書き込みの最中だと UI が止まる。`audit-sylphya-actor` が足す期限つきの `barrier_within(Duration)` へ乗り換え、期限切れは記録を残して続ける。

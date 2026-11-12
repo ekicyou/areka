@@ -1,23 +1,24 @@
 use super::test_support::{
-    assert_no_second_change, choice_input_of, config, expect_get_call, expect_ledger, status_wire,
-    steady_some, steady_with_ledger,
+    choice_input_of, config, expect_get_call, expect_ledger, status_wire, steady_some,
+    steady_with_ledger,
 };
 use super::*;
-use crate::msg::ShioriCall;
-use crate::schedule::step;
+use crate::msg::{ShioriCall, ShioriFailure};
+use crate::schedule::log_capture::{
+    assert_logged, assert_no_error_logs, assert_not_logged, capture, logged_once, step_capturing,
+};
 use crate::schedule::translate_test_support::pass_translate;
-use crate::talk::TalkEndReason;
+use crate::schedule::{ActiveTalk, TermCause, step};
+use crate::talk::{StartTalk, TalkEndReason};
+use tracing::Level;
 
 // ============================================================
-// 選択肢タイムアウト（タスク 4.5・C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
+// 選択肢タイムアウト（C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
 // ============================================================
 //
 // 完了状態の要求は「**注入時刻のみ**で期限到達・イベント発行・空応答時の解除までが再現し、
 // 実時間待機に依存しない」ことである。よって本群は一切スリープせず、`Input::Tick { now }` の
 // 注入値と帳簿の `deadline` の比較だけで全分岐を踏む（`deterministic-test-coverage-mandate`）。
-
-use crate::schedule::log_capture::{assert_logged, capture, logged_once};
-use tracing::Level;
 
 /// 選択待ち（`Waiting`）帳簿つきの `Steady{Some}` を、起動スクリプトと期限を指定して構築する。
 ///
@@ -28,36 +29,16 @@ fn steady_waiting(
     script: &str,
     deadline: Option<MonotonicMs>,
 ) -> State {
-    let mut s = steady_some(talk_id, next_id);
+    let mut s = steady_with_ledger(talk_id, next_id, &["OnMenu"], ChoicePhase::Waiting);
     match &mut s.phase {
         Phase::Steady { talk: Some(active) } => active.script = script.to_string(),
-        _ => unreachable!("steady_some は Steady{{Some}} を返す"),
+        _ => unreachable!("steady_with_ledger は Steady{{Some}} を返す"),
     }
-    s.choice = Some(ChoiceState {
-        talk_id,
-        candidates: vec!["OnMenu".to_string()],
-        deadline,
-        phase: ChoicePhase::Waiting,
-    });
+    s.choice
+        .as_mut()
+        .expect("steady_with_ledger は帳簿を持つ")
+        .deadline = deadline;
     s
-}
-
-/// `step` を捕捉つきで駆動する（遷移結果と捕捉ログを同時に取る）。
-fn step_capturing(
-    state: State,
-    input: Input,
-    config: &KanadeConfig,
-) -> (
-    State,
-    Vec<Action>,
-    Vec<crate::schedule::log_capture::CapturedEvent>,
-) {
-    let mut out = None;
-    let ev = capture(|| {
-        out = Some(step(state, input, config));
-    });
-    let (next, actions) = out.expect("step は必ず結果を返す");
-    (next, actions, ev)
 }
 
 // --- A. 期限到達（規則 5・Req7.3） ---
@@ -75,7 +56,11 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
         },
         &config(),
     );
-    assert_eq!(actions.len(), 1, "期限到達 Tick は GET を 1 件だけ発行する");
+    assert_eq!(
+        actions.len(),
+        1,
+        "期限到達 Tick は GET を 1 件だけ発行する（当該周期では通常の周期送出を行わない・規則 5）"
+    );
     let (id, refs) = expect_get_call(&actions[0]);
     assert_eq!(
         id, "OnChoiceTimeout",
@@ -86,8 +71,6 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
         vec![script.to_string()],
         "Ref0＝タイムアウトした選択肢を含むトークの起動スクリプト（Req3.4・DD-10）"
     );
-    // 当該周期では通常の周期送出を行わない（規則 5）。
-    assert_no_second_change(&actions);
     assert!(
         matches!(expect_ledger(&next).phase, ChoicePhase::TimeoutInFlight),
         "期限到達で帳簿は TimeoutInFlight へ進む"
@@ -101,7 +84,7 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
         Some(MonotonicMs(32_000)),
         "発行有無に依らず last_now は進む（既存規律）"
     );
-    // 4.4 申し送り: 5 番目の呼出点にも choosing が載る（TimeoutInFlight も選択待ち継続中）。
+    // OnChoiceTimeout の GET にも choosing が載る（TimeoutInFlight も選択待ち継続中）。
     assert_eq!(
         status_wire(&actions[0]),
         Some("talking,choosing".to_string()),
@@ -214,7 +197,11 @@ fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
         },
         &cfg,
     );
-    assert_eq!(resumed.len(), 1, "次 Tick から周期送出が再開する（規則 5）");
+    assert_eq!(
+        resumed.len(),
+        1,
+        "次 Tick から周期送出が再開する（OnChoiceTimeout を二重発行しない・規則 5）"
+    );
     match &resumed[0] {
         Action::ShioriRequest(ShioriCall::Notify { id, status, .. }) => {
             assert_eq!(id.as_str(), "OnSecondChange");
@@ -229,14 +216,6 @@ fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
     assert!(
         matches!(expect_ledger(&next).phase, ChoicePhase::TimeoutInFlight),
         "再開した pump は帳簿を触らない（二重発行もしない）"
-    );
-    assert_eq!(
-        resumed
-            .iter()
-            .filter(|a| matches!(a, Action::ShioriRequest(ShioriCall::Get { .. })))
-            .count(),
-        0,
-        "OnChoiceTimeout を二重発行しない"
     );
 }
 
@@ -288,7 +267,7 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     assert_eq!(next.next_talk_id, 7);
     assert!(next.choice.is_none(), "置換起動で帳簿は消える（Req7.4）");
     assert_eq!(
-        next.choice_prev_talk,
+        next.prev_talk,
         Some(TalkId(3)),
         "タイムアウト Value も choice 起因の slot 差替＝旧 talk_id を 1 世代保持（遷移規則 9）"
     );
@@ -311,14 +290,8 @@ fn choice_timeout_no_content_cancels_choice() {
         [Action::CancelChoice { talk_id }] => {
             assert_eq!(*talk_id, TalkId(3), "解除対象は選択待ちの talk（Req7.5）")
         }
-        _ => panic!("204 は CancelChoice のみを発行する（DD-11・F3）"),
+        _ => panic!("204 は CancelChoice のみを発行し、起動も解決も行わない（DD-11・F3・Req7.5）"),
     }
-    assert!(
-        !actions
-            .iter()
-            .any(|a| matches!(a, Action::StartTalk(_) | Action::ResolveChoice { .. })),
-        "204 は起動も解決も行わない（解除して終了させる・Req7.5）"
-    );
     assert!(next.choice.is_none(), "解除で帳簿は消える（Req6.2／7.5）");
     assert_eq!(next.next_talk_id, 6, "204 は採番しない");
     match next.phase {
@@ -331,41 +304,6 @@ fn choice_timeout_no_content_cancels_choice() {
         ),
         _ => panic!("expected Steady{{Some}} preserved"),
     }
-    assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
-}
-
-/// Req4.5／7.5: タイムアウト GET の失敗も 204 と同一＝解除で継続（終了系列へ倒れない）。
-///
-/// カスケード段の檻と同じく `steady::step` の直接駆動で steady 側の処理を固定する（層を分けた
-/// 単体檻）。`step()` 経由の end-to-end（DD-12 の免除アームが効くこと）は
-/// [`timeout_failed_via_step_cancels_without_unloading`] が固定する。
-#[test]
-fn choice_timeout_failed_is_treated_as_no_content_cancel() {
-    let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
-    let mut out = None;
-    let ev = capture(|| {
-        out = Some(super::step(
-            s,
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout(
-                    "30s".to_string(),
-                )),
-                origin: "OnChoiceTimeout",
-            },
-            &config(),
-        ));
-    });
-    let (next, actions) = out.expect("step は必ず結果を返す");
-    assert!(
-        !matches!(next.phase, Phase::Unloading { .. }),
-        "選択由来の失敗で終了系列へ倒れない（Req4.5）"
-    );
-    match actions.as_slice() {
-        [Action::CancelChoice { talk_id }] => assert_eq!(*talk_id, TalkId(3)),
-        _ => panic!("失敗は 204 と同一＝CancelChoice のみ（Req7.5）"),
-    }
-    assert!(next.choice.is_none());
-    assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
     assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
 }
 
@@ -460,17 +398,12 @@ fn tick_after_timeout_cancel_drops_choosing() {
 }
 
 // ============================================================
-// 帳簿の掃除・選択起因の失敗例外（タスク 4.6・C4 規則 7／8・DD-12・Req1.3／4.5／6.2）
+// 帳簿の掃除・選択起因の失敗例外（C4 規則 7／8・DD-12・Req1.3／4.5／6.2）
 // ============================================================
-
-use crate::msg::ShioriFailure;
-use crate::schedule::TermCause;
-use crate::schedule::log_capture::{assert_no_error_logs, assert_not_logged};
 
 /// 規則 7 の不変条件: 帳簿があるなら、その対象 talk は現行 talk と一致する。
 ///
-/// 「帳簿の対象と現行トークが食い違う状態を残さない」ことの直接表明であり、掃除点ごとの
-/// 個別 assert（`choice.is_none()`）と併せて各掃除点で突合する。
+/// 「帳簿の対象と現行トークが食い違う状態を残さない」ことの直接表明。帳簿が残る保留記録の点で突合する。
 fn assert_choice_invariant(state: &State) {
     let active = match &state.phase {
         Phase::Steady { talk: Some(active) } => Some(active.talk_id),
@@ -506,7 +439,6 @@ fn talk_done_of_target_talk_clears_choice_ledger() {
         "対象トークの完了で帳簿は消える（規則 7）"
     );
     assert!(actions.is_empty());
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: 対象トークの `TalkDone{Quit}`（終了系列直行）でも帳簿を消去する。
@@ -533,14 +465,13 @@ fn talk_done_quit_clears_choice_ledger() {
         "終了系列（Quit）へ進む際も帳簿は消える"
     );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
-    assert_choice_invariant(&next);
 }
 
-/// 規則 7: **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持も持ち越さない。
+/// 規則 7: **マウス由来**の slot 置換でも帳簿を消去し、1 世代保持は置き換えた古い番号に変わる。
 #[test]
 fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
     let mut s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
-    s.choice_prev_talk = Some(TalkId(1));
+    s.prev_talk = Some(TalkId(1));
     let (next, actions) = step(
         s,
         Input::ShioriReply {
@@ -563,11 +494,11 @@ fn mouse_slot_replacement_clears_choice_ledger_and_stale_slot() {
         next.choice.is_none(),
         "slot 置換（マウス由来含む）で帳簿は消える（規則 7）"
     );
-    assert!(
-        next.choice_prev_talk.is_none(),
-        "次の slot 差替で 1 世代保持は消える（規則 9）"
+    assert_eq!(
+        next.prev_talk,
+        Some(TalkId(3)),
+        "次の slot 差替で 1 世代保持は置き換えた古い番号に変わる（規則 9）"
     );
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: close 握手の開始（`ClosePending` への遷移）で帳簿を消去する。
@@ -601,13 +532,12 @@ fn close_handshake_transition_clears_choice_ledger() {
         }),
         &cfg,
     );
-    assert!(matches!(next.phase, Phase::ClosePending { .. }));
+    assert!(matches!(next.phase, Phase::ClosePending));
     assert_eq!(close_actions.len(), 1, "握手開始は OnClose GET を発行する");
     assert!(
         next.choice.is_none(),
         "close 系遷移で帳簿は消える（規則 7）"
     );
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: `ForceQuit` の横断遷移で帳簿を消去する。
@@ -637,7 +567,6 @@ fn force_quit_clears_choice_ledger() {
     ));
     assert_eq!(actions.len(), 2, "既存の ForceQuit 発行列は不変");
     assert!(next.choice.is_none(), "終了系遷移で帳簿は消える（規則 7）");
-    assert_choice_invariant(&next);
 }
 
 /// 規則 7: `ShioriDown`（Fault 直行）で帳簿を消去する。
@@ -660,7 +589,6 @@ fn shiori_down_clears_choice_ledger() {
     ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
     assert!(next.choice.is_none(), "終了系遷移で帳簿は消える（規則 7）");
-    assert_choice_invariant(&next);
 }
 
 // --- B. 選択起因の失敗例外（規則 8・DD-12・Req4.5） ---
@@ -733,7 +661,6 @@ fn cascade_failed_at_last_stage_via_step_resolves_and_continues() {
         _ => panic!("最終段の失敗は ResolveChoice のみ（Req5.3）"),
     }
     assert!(next.choice.is_none());
-    assert_choice_invariant(&next);
     assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
 }
 
@@ -871,6 +798,6 @@ fn choice_happy_path_emits_no_error_level_logs() {
         } => assert_eq!(talk_id, TalkId(6), "遅延 Done は新 talk を殺さない"),
         _ => panic!("expected Steady{{Some(new)}} preserved"),
     }
-    assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
+    assert_logged(&ev, Level::INFO, "talk_done_stale");
     assert_no_error_logs(&ev);
 }

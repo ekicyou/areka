@@ -1,28 +1,25 @@
 use super::*;
 use crate::asker::AskerId;
-use crate::mirror::{MirrorImage, SharedMirror};
+use crate::mirror::SharedMirror;
 use crate::persist::{FakePersistIo, ScopeRoots};
 
 fn a(id: &str) -> AskerId {
     AskerId::new(id)
 }
 
-/// 空 roots＋fake IO でアクターを起動しつつ、鏡像ハンドル（[`SharedMirror`]）の clone を保持
-/// して返す。`spawn_sylphya` の内部配線（初期像構築→`SharedMirror::new`→`spawn_actor` で
-/// [`run_actor`] を回す）を忠実に再現するが、epoch を直接観測できるよう `shared` を手元に残す
-/// 点のみが異なる（reader は epoch を露出しないため・設計フェンス予約シーム）。
+/// 空 roots＋fake IO で本番と同じ組み立て（[`spawn_parts`]）を通してアクターを起動し、
+/// 鏡像ハンドル（[`SharedMirror`]）の clone も返す（reader は epoch を露出しないため）。
 ///
 /// 返す `(shared, publisher, handle)` の `shared` は初期像 epoch 0。以降のアクター publish で
 /// epoch は単調増加する。
 fn spawn_with_mirror_observer() -> (SharedMirror, SylphyaPublisher, areka_actor::ActorHandle) {
-    // 空 roots → 初期像は投影なしの epoch 0（build_initial_image 相当）。
-    let shared = SharedMirror::new(Arc::new(MirrorImage::empty()));
-    let actor_shared = shared.clone();
-    let io: Box<dyn PersistIo> = Box::new(FakePersistIo::new());
-    let (tx, handle) = areka_actor::spawn_actor::<SylphyaMsg, _>("sylphya-epoch-cage", move |rx| {
-        run_actor(rx, actor_shared, ScopeRoots::default(), io, None, None);
-    });
-    (shared, SylphyaPublisher { tx }, handle)
+    let init = SylphyaInit {
+        roots: ScopeRoots::default(),
+        io: Box::new(FakePersistIo::new()),
+        runtime_sink: None,
+    };
+    let (parts, shared) = spawn_parts(init, None);
+    (shared, parts.publisher, parts.handle)
 }
 
 // === (A) epoch 単調増加: アクターの publish swap 経路で各変異メッセージ→後継 epoch+1 ===

@@ -1,23 +1,20 @@
 use super::log_capture::{assert_logged, assert_not_logged, capture};
-use super::steady::test_support::base_state;
+use super::steady::test_support::assert_shiori;
 use super::*;
-use crate::msg::ShioriFailure;
+use crate::msg::{MouseEventKind, MouseInput, ShioriFailure};
+use crate::schedule::translate_test_support::config;
 use tracing::Level;
 
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
-fn state_in(phase: Phase) -> State {
+pub(super) fn state_in(phase: Phase) -> State {
     State {
         phase,
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        ..base_state()
+        ..State::initial()
     }
 }
 
-fn steady_with_talk(talk_id: TalkId) -> Phase {
+pub(super) fn steady_with_talk(talk_id: TalkId) -> Phase {
     Phase::Steady {
         talk: Some(ActiveTalk {
             talk_id,
@@ -73,29 +70,6 @@ fn known_quit_from_close_talk_wait_goes_to_unloading_quit() {
         }
     ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
-}
-
-// --- 1b. TalkDone{reason:Interrupted} for a KNOWN talk → 非 quit 扱い（Ended と同一経路） ---
-
-#[test]
-fn known_interrupted_from_steady_is_routed_as_non_quit() {
-    // Interrupted は防御的に非 quit 扱い（Ended と同一経路）へ委譲される。
-    // steady::on_talk_done は pending_close が無ければ Steady{None} へ復帰する。
-    let phase = steady_with_talk(TalkId(5));
-    let (next, actions) = step(
-        state_in(phase),
-        Input::TalkDone(TalkDone {
-            talk_id: TalkId(5),
-            reason: TalkEndReason::Interrupted,
-            quit_reserved: false,
-        }),
-        &config(),
-    );
-    assert!(
-        matches!(next.phase, Phase::Steady { talk: None }),
-        "Interrupted は Quit 系列へ進まず、Ended と同じ定常復帰へ"
-    );
-    assert!(actions.is_empty());
 }
 
 // --- 2. ForceQuit from any phase → [Notify OnClose, ShioriUnload] + Unloading{Forced} ---
@@ -276,13 +250,16 @@ fn initial_state_is_idle_with_monotonic_counter() {
     assert_eq!(s.last_now, None);
     assert_eq!(s.next_talk_id, 1);
     assert!(s.pending_close.is_none());
+    assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
+    assert!(
+        s.prev_talk.is_none(),
+        "初期状態に 1 世代保持の旧 talk_id は無い"
+    );
 }
 
-// --- 10. Mouse 横断ルーティング（Task 1・DD-IE-8） ---
+// --- 10. Mouse 横断ルーティング（DD-IE-8） ---
 
-use crate::msg::{MouseEventKind, MouseInput};
-
-pub(super) fn mouse_move() -> MouseInput {
+fn mouse_move() -> MouseInput {
     MouseInput {
         scope: 0,
         x: 10,
@@ -299,9 +276,7 @@ fn mouse_input_in_non_steady_phases_is_ignored() {
     for phase in [
         Phase::Idle,
         Phase::BootMain,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Phase::Stopped,
     ] {
         let before = std::mem::discriminant(&phase);
@@ -318,94 +293,8 @@ fn mouse_input_in_non_steady_phases_is_ignored() {
     }
 }
 
-/// 単一 Action が期待 GET（id・references・status）と厳密一致することを検証する。
-/// ShioriCall は PartialEq を持たないため field 単位で比較する。
-fn assert_get(action: &Action, expected: &ShioriCall) {
-    match (action, expected) {
-        (
-            Action::ShioriRequest(ShioriCall::Get {
-                id,
-                references,
-                status,
-            }),
-            ShioriCall::Get {
-                id: eid,
-                references: erefs,
-                status: estatus,
-            },
-        ) => {
-            assert_eq!(id, eid, "GET id 不一致");
-            assert_eq!(references, erefs, "GET references 不一致");
-            assert_eq!(status.render(), estatus.render(), "GET status 不一致");
-        }
-        _ => panic!("期待した GET でない Action"),
-    }
-}
-
-// Steady では横断アームが steady::on_mouse へ委譲し、Task 2.2 の実装で GET を発行する
-// （seam の意図的充填）。step() 経由（横断アーム込み）で GET が 1 件出ることを固定する。
-#[test]
-fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
-    // Steady{None} + Move → OnMouseMove GET（Status 行なし・INACTIVE）。phase 不変。
-    let (next, actions) = step(
-        state_in(Phase::Steady { talk: None }),
-        Input::Mouse(mouse_move()),
-        &config(),
-    );
-    assert!(
-        matches!(next.phase, Phase::Steady { talk: None }),
-        "マウス GET は phase を変えない"
-    );
-    assert_eq!(
-        actions.len(),
-        1,
-        "マウス入力で GET を 1 件発行する（Task 2.2）"
-    );
-    assert_get(
-        &actions[0],
-        &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot::INACTIVE),
-    );
-
-    // Steady{Some} + Move → GET のまま発行され Status: talking を帯びる（DD-IE-1）。phase 不変。
-    let (next, actions) = step(
-        state_in(steady_with_talk(TalkId(5))),
-        Input::Mouse(mouse_move()),
-        &config(),
-    );
-    assert!(
-        matches!(next.phase, Phase::Steady { talk: Some(_) }),
-        "active talk は維持される"
-    );
-    assert_eq!(actions.len(), 1);
-    assert_get(
-        &actions[0],
-        &events::on_mouse_move(
-            10,
-            20,
-            0,
-            Some("head"),
-            &ExecutionSnapshot {
-                talk_active: true,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
-    );
-}
-
-// close 保留中は Steady であってもマウス GET を発行しない防御（構造的シーム・DD-IE-8）。
-#[test]
-fn mouse_input_in_steady_with_pending_close_emits_no_get() {
-    let mut s = state_in(Phase::Steady { talk: None });
-    s.pending_close = Some(CloseReason::System);
-    let (next, actions) = step(s, Input::Mouse(mouse_move()), &config());
-    assert!(matches!(next.phase, Phase::Steady { talk: None }));
-    assert!(
-        matches!(next.pending_close, Some(CloseReason::System)),
-        "guard は pending_close を消費しない"
-    );
-    assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
-}
+/// ドラッグの GET を組む関数（`events::on_mouse_drag_start`／`_end`）の型。
+type DragGetBuilder = fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall;
 
 // ドラッグの開始・終了（areka-P0-mouse-drag-events 要件 1.1・2.1）: Steady では種類に対応する
 // 組み立ての GET がちょうど 1 件出る（Status は他のマウスの GET と同じ snapshot から）。phase 不変。
@@ -416,10 +305,7 @@ fn drag_input_in_steady_emits_matching_get() {
         choice_active: false,
         ..ExecutionSnapshot::INACTIVE
     };
-    let cases: [(
-        MouseEventKind,
-        fn(i64, i64, u32, Option<&str>, &ExecutionSnapshot) -> ShioriCall,
-    ); 2] = [
+    let cases: [(MouseEventKind, DragGetBuilder); 2] = [
         (MouseEventKind::DragStart, events::on_mouse_drag_start),
         (MouseEventKind::DragEnd, events::on_mouse_drag_end),
     ];
@@ -438,33 +324,22 @@ fn drag_input_in_steady_emits_matching_get() {
             "ドラッグの GET は phase を変えない"
         );
         assert_eq!(actions.len(), 1, "ドラッグの知らせ 1 件で GET を 1 件出す");
-        assert_get(&actions[0], &build(10, 20, 0, Some("head"), &active));
+        assert_shiori(&actions[0], &build(10, 20, 0, Some("head"), &active));
     }
 }
 
 // ============================================================
-// 11. 選択系の additive 追加（タスク 4.1・Req4.4・DD-3／DD-10）
+// 11. 選択系（Req4.4・DD-3／DD-10）
 // ============================================================
 
 /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
-pub(super) fn choice_input() -> ChoiceInput {
+fn choice_input() -> ChoiceInput {
     ChoiceInput {
         id: "OnMenu".to_string(),
         label: "メニュー".to_string(),
         scope: 0,
         references: vec!["a0".to_string()],
     }
-}
-
-/// DD-3: 選択帳簿は `State`（Phase 外）に置かれ、初期値は両方とも空である。
-#[test]
-fn initial_state_has_empty_choice_ledger() {
-    let s = State::initial();
-    assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
-    assert!(
-        s.choice_prev_talk.is_none(),
-        "初期状態に 1 世代保持の旧 talk_id は無い"
-    );
 }
 
 /// C4 規則 1・Req1.3: 非 Steady フェーズの選択確定は棄却する（状態不変・Action なし）。
@@ -484,9 +359,7 @@ fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
                 script: String::new(),
             }),
         },
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Phase::Stopped,
     ] {
         let before = std::mem::discriminant(&phase);
@@ -510,7 +383,7 @@ fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
 }
 
 // ============================================================
-// 12. 選択待ち通知の受領と帳簿確立（タスク 4.2・Req7.1／7.6／7.7・C4 規則 4・DD-8）
+// 12. 選択待ち通知の受領と帳簿確立（Req7.1／7.6／7.7・C4 規則 4・DD-8）
 // ============================================================
 
 /// 檻用の選択待ち通知（候補列・起点・指令を明示して組む）。
@@ -557,34 +430,12 @@ fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
         "未指定は既定 30_000ms を起点へ加算（DD-8）"
     );
     assert!(matches!(ledger.phase, ChoicePhase::Waiting));
-    assert!(actions.is_empty(), "帳簿確立は Action を発行しない");
-}
-
-/// Req7.1: 通知受領後の帳簿が「選択確定を受理できる」前提を満たす。
-///
-/// 受理判定そのものはタスク 4.3 の担当であり、本檻はその判定が読む 3 条件——段フェーズが
-/// `Waiting`・候補列が照合可能な形で保持されている・帳簿の `talk_id` が**現行 talk と一致**
-/// （`ChoiceState` の不変条件）——を状態で固定する。
-#[test]
-fn established_ledger_satisfies_preconditions_for_choice_acceptance() {
-    let (next, _) = step(
-        state_in(steady_with_talk(TalkId(5))),
-        choice_waiting_of(TalkId(5), &["OnMenu", "choice1"], MonotonicMs(2_000), None),
-        &config(),
-    );
-    let active_talk_id = current_talk_id(&next.phase).expect("active talk は維持される");
-    let ledger = next.choice.expect("一致通知は帳簿を確立する");
     assert!(
-        matches!(ledger.phase, ChoicePhase::Waiting),
-        "受理可能な段フェーズ（入力待ち）である"
-    );
-    assert_eq!(
-        ledger.talk_id, active_talk_id,
-        "帳簿の talk_id は現行 talk と一致する（ChoiceState の不変条件）"
-    );
-    assert!(
-        ledger.candidates.iter().any(|c| c == "choice1"),
-        "候補 ID は照合可能な形で保持される（4.3 の候補集合照合の前提）"
+        matches!(
+            actions.as_slice(),
+            [Action::ArmChoiceWake(MonotonicMs(32_000))]
+        ),
+        "帳簿確立は期限の起こしの頼みだけを出す"
     );
 }
 
@@ -666,9 +517,7 @@ fn choice_waiting_in_non_steady_phase_does_not_establish_ledger() {
                 script: String::new(),
             }),
         },
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
     ] {
         let before = std::mem::discriminant(&phase);
         let (next, actions) = step(
@@ -709,7 +558,7 @@ fn stale_choice_waiting_leaves_existing_ledger_untouched() {
 }
 
 // ============================================================
-// 13. 選択待ち中の実行状態導出（タスク 4.4・Req6.1／6.2／6.4・C5・裁定 6）
+// 13. 選択待ち中の実行状態導出（Req6.1／6.2／6.4・C5・裁定 6）
 // ============================================================
 
 /// C5: `choice_active` の源は `State.choice` の**3 段フェーズすべて**である。
@@ -727,11 +576,7 @@ fn state_snapshot_marks_choice_active_in_every_ledger_phase() {
         },
         ChoicePhase::TimeoutInFlight,
     ] {
-        let label = match &phase {
-            ChoicePhase::Waiting => "Waiting",
-            ChoicePhase::Cascading { .. } => "Cascading",
-            ChoicePhase::TimeoutInFlight => "TimeoutInFlight",
-        };
+        let label = steady::choice_phase_label(&phase);
         let mut s = state_in(steady_with_talk(TalkId(5)));
         s.choice = Some(ChoiceState {
             talk_id: TalkId(5),
@@ -763,52 +608,19 @@ fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
     );
 }
 
-/// DD-IT-3: 供給側の署名を `State` 全体へ広げても **talk 軸は `talk_active_of(&Phase)` と同一**
-/// である（choice 軸の増設が既存の talk 導出を汚さない）。
-#[test]
-fn state_snapshot_preserves_the_talk_axis_of_phase() {
-    for phase in [
-        Phase::Idle,
-        Phase::BootMain,
-        Phase::BootVersion { talk: None },
-        Phase::BootVersion {
-            talk: Some(ActiveTalk {
-                talk_id: TalkId(5),
-                origin: "boot",
-                script: String::new(),
-            }),
-        },
-        Phase::Steady { talk: None },
-        steady_with_talk(TalkId(5)),
-        Phase::Stopped,
-    ] {
-        let expected = talk_active_of(&phase);
-        let s = state_in(phase);
-        let snapshot = s.snapshot();
-        assert_eq!(
-            snapshot.talk_active, expected,
-            "talk 軸は Phase 由来のまま（DD-IT-3）"
-        );
-        assert!(
-            !snapshot.choice_active,
-            "帳簿なしでは choosing は非アクティブ"
-        );
-    }
-}
-
 // ============================================================
-// 1 世代 stale 防御（タスク 4.6・C4 規則 9・F1 残余レース・Req1.6）
+// 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）
 // ============================================================
 //
-// choice 起因の slot 差替直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
+// slot 差替（選択・マウスの答え・SSTP の台本・時間切れの答えのどれでも）の直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
 // dispatcher の slot 差替より前に投函され得る（design F1「順序の決定性と残余レース」）。
-// 到着した遅延 `TalkDone` は `choice_prev_talk` と照合して `talk_done_stale_choice`（info）
+// 到着した遅延 `TalkDone` は `prev_talk` と照合して `talk_done_stale`（info）
 // で棄却し、`unknown_talk_done`（error）を**真に未知の id 専用**に保つ。
 
-/// `choice_prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
+/// `prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
 fn state_with_prev_talk(active: TalkId, prev: TalkId) -> State {
     let mut s = state_in(steady_with_talk(active));
-    s.choice_prev_talk = Some(prev);
+    s.prev_talk = Some(prev);
     s
 }
 
@@ -836,10 +648,10 @@ fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
         _ => panic!("expected Steady{{Some}} preserved"),
     }
     assert!(actions.is_empty(), "遅延 Done は Action を発行しない");
-    assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
+    assert_logged(&ev, Level::INFO, "talk_done_stale");
     assert_not_logged(&ev, "unknown_talk_done");
     assert_eq!(
-        next.choice_prev_talk,
+        next.prev_talk,
         Some(TalkId(3)),
         "stale 帳簿は現 talk の TalkDone 到達まで保持する（1 世代・規則 9）"
     );
@@ -863,7 +675,7 @@ fn truly_unknown_talk_done_still_logs_error() {
     });
     let (next, actions) = out.expect("step は必ず結果を返す");
     assert_logged(&ev, Level::ERROR, "unknown_talk_done");
-    assert_not_logged(&ev, "talk_done_stale_choice");
+    assert_not_logged(&ev, "talk_done_stale");
     assert!(actions.is_empty());
     assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
 }
@@ -882,7 +694,7 @@ fn current_talk_done_clears_the_one_generation_stale_slot() {
         &cfg,
     );
     assert!(
-        after_current.choice_prev_talk.is_none(),
+        after_current.prev_talk.is_none(),
         "現 talk の TalkDone 到達で 1 世代保持を消去する（規則 9）"
     );
     // 消去後に届く旧 id は真に未知＝error へ戻る（保持は 1 世代のみ）。

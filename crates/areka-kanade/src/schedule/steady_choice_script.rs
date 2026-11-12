@@ -17,7 +17,7 @@ use crate::talk::TalkId;
 ///
 /// - 第 3 引数以降（`input.references`）は台本に含めず、どこへも渡さない。あれば数だけを警告
 ///   `choice_script_unused_args` に残す（括り忘れに気付けるように）。
-/// - 新しいトークを始めたら、元のトークの番号を `choice_prev_talk` に 1 世代だけ控える
+/// - 新しいトークを始めたら、元のトークの番号が `prev_talk` に 1 世代だけ控えられる（`start_talk` が入れる）
 ///   （元のトークの遅れた完了の知らせをエラーにしないため。選択肢のイベントが台本を返した
 ///   ときと同じ）。
 pub(in crate::schedule) fn begin(
@@ -50,7 +50,6 @@ pub(in crate::schedule) fn begin(
     // 元のトークの出どころを引き継ぐ（要件 1.6）。
     let origin = of_shown(state, prev_talk_id);
     let (talk_id, action) = start_talk(state, "choice_script", script.to_string(), origin);
-    state.choice_prev_talk = Some(prev_talk_id);
     tracing::info!(
         target: "kanade",
         event = "choice_script_started",

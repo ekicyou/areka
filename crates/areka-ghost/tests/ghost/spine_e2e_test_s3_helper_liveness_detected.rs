@@ -152,6 +152,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
         shiori: shiori_handle,
         start_relay: start_relay_handle,
         down_relay: down_relay_handle,
+        choice_wake_relay: _,
         ticker: _,
         sylphya: _,
     } = handles;

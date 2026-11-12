@@ -1,11 +1,10 @@
 use super::test_support::{
     CANONICAL_CHOICE_ID, cascading_snapshot, choice_get_ids, choice_input, establish_choice_wait,
-    position_of, pumps,
 };
 use super::{
-    CallMethod, CloseReason, DEFAULT_TIMEOUT, ExecutionSnapshot, Fixture, Harness, KanadeConfig,
-    KanadeMsg, MonotonicMs, QuitPolicy, RecordedCall, events, expected_call, expected_unload,
-    join_bounded, spawn_harness_gated,
+    CallMethod, CloseReason, Driven, ExecutionSnapshot, Fixture, KanadeConfig, KanadeMsg,
+    MonotonicMs, QuitPolicy, RecordedCall, events, expected_call, expected_unload, position_of,
+    pumps, send, spawn_harness_gated, tick,
 };
 
 /// active talk のみ（選択待ちは終了済み）の運行状態＝`talking` 単独。
@@ -31,7 +30,7 @@ fn talking_only_snapshot() -> ExecutionSnapshot {
 /// `ChoiceWaiting` を確立してから **Tick2** を注入し（選択待ち中の pump）、`Choice` を注入して
 /// 正典形カスケードを 204／204 で走らせ（＝解決のみ・帳簿消去）、続けて **Tick3** を注入する
 /// （解決後の pump）。終了は `CloseRequest`＋保留解放（`TalkDone{Ended}`→close 握手→別れ talk
-/// quit:true）で駆動する。注入 Tick はいずれも期限 [`CHOICE_DEADLINE_MS`] より手前ゆえ、
+/// quit:true）で駆動する。注入 Tick はいずれも期限 `CHOICE_DEADLINE_MS` より手前ゆえ、
 /// タイムアウト経路は踏まない。
 ///
 /// # 非空虚性・discriminative 性
@@ -61,46 +60,25 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
         vec![0],
     );
 
-    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID], None);
     // Tick2: 選択待ち中の周期リクエスト（期限 CHOICE_DEADLINE_MS より手前）。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(2_000),
-        })
-        .expect("send Tick 2 (choosing)");
-    harness
-        .sender
-        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
-        .expect("send Choice");
+    tick(&harness, 2_000);
+    send(
+        &harness,
+        KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)),
+    );
     // Tick3: 解決後の周期リクエスト（同じ active talk 窓・choosing だけが消えているはず）。
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(3_000),
-        })
-        .expect("send Tick 3 (resolved)");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    tick(&harness, 3_000);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
     // 保留解放は全注入の後——保留 TalkDone は CloseRequest の後ろに並ぶ（FIFO・決定的）。
     gate.release_all();
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade choosing-status join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close (farewell talk quit:true)");
-    drop(sender);
-    sakura.join_bounded("mock-sakura choosing-status join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven { recorded, .. } = harness.finish("kanade choosing-status join");
 
     // (1) 周期リクエストのうち NOTIFY はちょうど 2 件（Tick2／Tick3）——active talk 窓が両 Tick で
     //     維持されている（GET へ落ちていない）ことの直接確認。
@@ -161,8 +139,10 @@ fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
         .iter()
         .position(|c| *c == expected_resolved)
         .expect("解決後の NOTIFY が記録されているはず");
-    let ex_pos = position_of(&recorded, CallMethod::Get, "OnChoiceSelectEx");
-    let select_pos = position_of(&recorded, CallMethod::Get, "OnChoiceSelect");
+    let ex_pos = position_of(&recorded, CallMethod::Get, "OnChoiceSelectEx")
+        .expect("OnChoiceSelectEx が記録されているはず");
+    let select_pos = position_of(&recorded, CallMethod::Get, "OnChoiceSelect")
+        .expect("OnChoiceSelect が記録されているはず");
     assert!(
         first_notify_pos < ex_pos && ex_pos < select_pos && select_pos < last_notify_pos,
         "記録順は [choosing pump] → Ex → 無印 → [解決後 pump] のはず（2 件目が解決後である証拠）: {recorded:?}"

@@ -194,6 +194,8 @@ pub fn request_shape_error(raw: &serde_json::Value) -> Option<JsonRpcError> {
 
 /// rmcp の `jsonrpc_http_status`（非公開）の写しのうち、`request_shape_error` の 2 つの番号の分。
 /// `2026-07-28` 以降（rmcp と同じ文字列の比較）の `-32602` だけ 400、ほかは 200（旧式の版は rmcp も 200）。
+/// rmcp 3.9.0 の `-32602` の 400 は `_meta` が欠けたときだけだが、`params` がオブジェクトでない要求は
+/// `_meta` を持てないので、ここの `-32602` はいつも 400 の側に当たる。
 /// rmcp の版を上げたら、rmcp 自身の `-32602` の状態と突き合わせるテストで確かめる（要件 6.4）。
 fn shape_error_status(protocol_version: Option<&str>, code: ErrorCode) -> StatusCode {
     if protocol_version.is_some_and(|v| v >= ProtocolVersion::V_2026_07_28.as_str())
