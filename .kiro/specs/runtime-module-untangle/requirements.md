@@ -25,10 +25,10 @@
 
 - **In scope**:
   - モジュール・型・関数の改名（要件 1 の表）と、ログの文言・イベントの値・テストの結線を指す名前の改名、それを照合する所の直し。
-  - 外へ移すファイル（`ghost_switch`・`reload`〔+`reload_args`〕・`shell_balloon_switch`〔+`shell_balloon_resolve`〕・`runtime_boot`・`switch_copy`・`same_folder_pin`・`shell_carry` と各テストを `src/session/` へ、`install_cue`・`update_cue`・`readme_cue` を `install/`・`update/`・`readme/` へ）。
+  - 本体に頼る部分の移動（要件 2 の原則による。今の測りでは `ghost_switch`・`reload`・`runtime_boot`・`switch_copy`・`same_folder_pin` と各テスト、`shell_balloon_switch` の要求の入口、`shell_carry` の `capture_for_reload`・`hand_over` を `src/session/` へ、`install_cue`・`update_cue`・`readme_cue` を `install/`・`update/`・`readme/` へ。本体に頼らない `reload_args`・`shell_balloon_resolve`・`shell_carry` の残りの部分・`shell_balloon_switch` の型の部分は `runtime` に残す）。
   - `runtime` に残る本番が本体の外を参照する所の切り離し。brief が挙げた 6 か所（`frame.rs` の `app_exit::quit_app`・`frame/switch.rs` の `BootContext`／`boot_resolve` の記憶を書く関数／`GhostSession`・`frame/status_report.rs` と `balloon_visibility_phase.rs` の `GhostSlot`・`balloon_visibility_phase.rs` の `BalloonWiring` のホバーの集合・`ShellBoxHover`／`settle_box_hover`・`wire_user_break` の呼び出し）に加えて、要件の段の測り（main `4863cb66`）で見つかった次の所も同じ規則で切る。
     - brief の測り（main `d6054e4d`）より後に足された本番の参照 4 ファイル: `frame/attach.rs`（`GhostSession`・`GhostSlot`）・`frame/scale_notice.rs`（`GhostSlot`・`ghost_session_scope_scale::{percent_text, scaling_text}`）・`frame/window_state.rs`（`boot_config::BootContext`）・`frame/wiring.rs`（`ghost_session_scope_scale::SharedScopeScaleTable`）。brief の再測定の「本体の外を引く本番の参照は増えていない」は、この 4 ファイルを数えていない。
-    - 外へ移すファイルを `runtime` に残るファイルが引く所（`frame.rs`・`frame/switch.rs` が `ghost_switch`・`reload`・`shell_balloon_resolve`・`shell_balloon_switch` を、`frame/wiring.rs` が `shell_carry::ShellCarry` を、`mod.rs` と `spine.rs` が `runtime_boot` を、`change_cue.rs`・`switch_cue.rs`・`reload_cue.rs` が `ghost_switch`・`shell_balloon_switch`・`reload_args` の型を引く所ほか）。移した後に `runtime` から `session` を引く所になるので、brief の 6 番目（「runtime から session を参照する所が出たら、それも切る」）として切る。
+    - 外へ移すファイルを `runtime` に残るファイルが引く所（`frame.rs`・`frame/switch.rs` が `ghost_switch`・`reload`・`shell_balloon_resolve`・`shell_balloon_switch` を、`frame/wiring.rs` が `shell_carry::ShellCarry` を、`mod.rs` と `spine.rs` が `runtime_boot` を、`change_cue.rs`・`switch_cue.rs` が `ghost_switch`・`shell_balloon_switch` の型を引く所ほか。要件 2.1 の原則で `runtime` に残す部分を引く所は、切らずに済む）。移した後に `runtime` から `session` を引く所になるので、brief の 6 番目（「runtime から session を参照する所が出たら、それも切る」）として切る。
   - 古い名前とパスの書き換え（`crates/`・`tools/`・`doc/`・`.kiro/steering/{structure,tech}.md`・網羅台帳の根拠の場所・1,000 行の番人の例外表ほか）、`roadmap.md` の新旧のパスの対応表、`audit-emo2-boot-frame`・`audit-emo2-boot-spine`・`audit-emo2-boot-switch` の brief の「受け持つファイル」の書き換え。
   - emo2 の残りの一覧と、次の spec への申し送り（crate の外のテストが使う支えの一覧ほか）。
   - 検証（テストの名前の一覧の比べ・警告 0 件・全体テスト・実機テスト 2 つ・終わる道の記録の順の比べ）。
@@ -79,9 +79,9 @@
 
 #### Acceptance Criteria
 
-1. The 本仕様の作業 shall `ghost_switch`・`reload`（+`reload_args`）・`shell_balloon_switch`（+`shell_balloon_resolve`）・`runtime_boot`・`switch_copy`・`same_folder_pin`・`shell_carry` の本番のファイルと各テストを、本体の新しいモジュール `crates/areka/src/session/` へ移す。
+1. The 本仕様の作業 shall `runtime` から本体の新しいモジュール `crates/areka/src/session/` へ移すものを、本体に頼る部分（本体の `runtime` の外を引く型・関数とそのテスト）だけにし、本体に頼らない部分は `runtime` に残す。今の測り（main `4863cb66`・`research.md`）に当てはめると、`ghost_switch`・`reload`・`runtime_boot`・`switch_copy`・`same_folder_pin` の本番のファイルと各テスト、`shell_balloon_switch` の要求の入口、`shell_carry` の `capture_for_reload`・`hand_over` を移し、`reload_args`・`shell_balloon_resolve`・`shell_carry` の残りの部分・`shell_balloon_switch` の型の部分を `runtime` に残す。どのファイルをどこで分けるかは設計で決め、設計の段の測り直しで頼る・頼らないが変わったものは、この原則で振り分ける。
 2. The 本仕様の作業 shall `install_cue`・`update_cue`・`readme_cue` の本番のファイルと各テストを、それぞれの持ち主のモジュール `crates/areka/src/install/`・`update/`・`readme/` へ移す。
-3. The 本仕様の作業 shall 移すファイルを、git が移動として追える形（履歴を残す移動）で移す。
+3. The 本仕様の作業 shall 移すファイルを、git が移動として追える形（履歴を残す移動）で移す。1 つのファイルを `runtime` と `session` に分けるときは、行の多い側を元のファイルの移動（または残し）とし、分けた先を要件 5.7 の新旧のパスの対応表に並べて書く。
 4. The 本仕様の作業 shall cue の受け口の型（`*_cue.rs` の同型の形）と、`consumer_ledger.rs` の表の行（どの名前をどの受け口が受けるか）を変えない。`consumer_ledger.rs` の説明の文の中の、移した受け口へのリンク（`super::install_cue::InstallCueSink` ほか 6 か所）は、移した先のパスへ書き換える。
 5. Where 移すファイルの中に、`runtime` に残るファイルが引く型や関数がある場合, the 本仕様の作業 shall その型や関数を `runtime` 側に置くか、引く向きを逆にするかして、要件 3.1 を満たす（どちらにするかは設計で決める）。
 6. The 本仕様の作業 shall `crash_report_test_support.rs`（テストの実行ファイルの落ちの報告）を `src/runtime/` へ一緒に移すだけにし、中身を変えない。
