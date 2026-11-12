@@ -100,6 +100,8 @@
 
 ## 6. 設計の段への申し送り
 
+> **2026-11-13 要件の討議で案 B（外す）に決まった**（開発者「yamlってarekaでは使ってないよね」「残すならtoml」＝書式の機能を持つなら TOML・今は使い手が居ないので戻さない）。下の「Research Needed（案 A を採る場合だけ）」は不要になった。設計で使うのは 4.3 と「どちらの案でも確かめること」だけ。
+
 - **推す形の材料**（決めるのは要件の討議）: 要件の推奨は案 B。測った事実はそれを支える（使い手 0・テストが回ったことが無い・謝辞が動かない・先例あり）。案 A を採る理由になりうるのは「crates.io の利用者の `features = ["yaml"]` を壊さない」1 点。
 - **Research Needed（案 A を採る場合だけ）**:
   1. `serde-saphyr` を `default-features = false, features = ["serialize", "deserialize"]` で引いたときの `cargo tree -p dola --features yaml` と `cargo deny check`（licenses・advisories）の実測。
