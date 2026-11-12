@@ -92,7 +92,8 @@ pub enum FramePlan {
 /// 矩形と交差しない行のインクはその矩形の内側に 1 画素も無い（行の物理矩形は実測はみ出し＋ガード
 /// 1 image px を含む整数格子で、交差判定は半開区間）ので、交差行だけを描いても画素は変わらない。
 /// 1 枚ごとに交差行だけを描くことで、1 フレームの描画呼び出しは「矩形の枚数 × 描画対象行数」の
-/// 積ではなく**各矩形の交差行数の和**になる。
+/// 積ではなく**各矩形の交差行数の和**になる。行送りの軸で重なる矩形はまとめてあり、どの行も高々
+/// 1 枚にしか入らないので、その和は可視の行の数を超えない（再監査 R2-C1）。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirtyRect {
     /// 復元する領域（物理 px 整数・面寸クランプ済み・ガード余白込み）。
@@ -344,6 +345,13 @@ impl ScrollPlanner {
         self.pos = 0.0;
         self.prev_lines = None;
     }
+
+    /// 前に描いた中身を「分からない」にする（`prev_lines` = `None`・位置と消去の要求はそのまま）。
+    /// 描き手が書式を組み直したとき（面の画素が古い見た目のまま）に呼ぶ——次の `plan` は commit が
+    /// 成功するまで全域の道を通るので、組み直したフレームが失敗しても古い画素を残さない（再監査 R2-D1）。
+    pub(crate) fn forget_prev(&mut self) {
+        self.prev_lines = None;
+    }
 }
 
 /// ダーティ矩形へ加えるガード余白（**image px**・DD4）。
@@ -454,7 +462,7 @@ pub(crate) struct CommittedLine {
     styles: Vec<u32>,
     /// hover 印（Choice 行のみ非 0・非 Choice 行は常に 0）。非 hover の Choice 行は 0・
     /// hover 中は `ordinal + 1`（0 と衝突させない）。hover の付与/切替/解除で当該 Choice 行の
-    /// 指紋だけが変わり、既存 `derive_dirty` が当該行のみをダーティ化する（R4.4）。
+    /// 指紋だけが変わり、既存 `derive_dirty_with_overhangs` が当該行のみをダーティ化する（R4.4）。
     choice_marker: u32,
 }
 

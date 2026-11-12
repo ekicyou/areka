@@ -14,7 +14,9 @@
 //! 実際に担っているのは、呼び手 `line_layout_for` の短絡（`line.default_only` かつ既定の見た目が
 //! 下線も打ち消し線も持たない）と、下の
 //! `apply_font_ranges` が外側で行う `if run.style == StyleId::DEFAULT { continue; }` の 2 点で、
-//! この項目ごとのガードを全撤去しても crate は緑のまま——実測 2026-09-12）。白抜き（`outline`）と
+//! 項目ごとのガードは別の檻が見張る——全撤去すると
+//! `a_default_strike_line_with_one_strike_off_run_issues_two_range_calls`（範囲指定の回数）と
+//! `a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound`（顔の幅）が赤になる・再監査 R2-D3）。白抜き（`outline`）と
 //! 上下付き（`script`）は語彙のみで読まない。打ち消し線の**位置**は DirectWrite の既定に委ね
 //! （完了 `text-decoration-canon` の要件 5.7）、`SetStrikethrough` の真偽だけを渡す。
 //! 太字・斜体に対応する書体が無いときの合成も DirectWrite に委ねる（要件 5.6・失敗扱いにしない）。

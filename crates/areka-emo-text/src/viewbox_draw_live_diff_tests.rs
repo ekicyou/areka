@@ -514,8 +514,8 @@ fn live_diff_emoji_matches_oracle_byte_for_byte() {
 /// このバグ（各行 em ボックス下端の 2〜3px はみ出しインクをダーティが切り落とす）は既定 ＭＳ
 /// ゴシック（はみ出さない字）では出ず、`diag_line_boundary_dropout_vs_oracle`（ＭＳゴシック）が
 /// 見逃していた。Yu Gothic UI は descent 側へインクがこぼれるため、行ごとに実測したインクのはみ出し
-/// （[`crate::viewbox::LineOverhang`]・`GetOverhangMetrics`）でダーティを広げないと diverge する。fixture が読めない環境
-/// （font 不在等）でも oracle↔viewbox は font に依らず一致するため頑健。実 example の cue `at`
+/// （[`crate::viewbox::LineOverhang`]・`GetOverhangMetrics`）でダーティを広げないと diverge する。Yu Gothic UI が
+/// 無い機械では代替フォントへ縮退して素通りしてしまうので、前提として赤にする（再監査 R2-D5）。実 example の cue `at`
 /// スケジュール（LINE1 0.0／LINE2 0.5／LINE3 1.2／あふれ 2.0）を忠実再現する。
 #[test]
 fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
@@ -535,6 +535,11 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
     let contract = ScaleContract::new(1.0, None);
     let config = TextLayerConfig::default();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+    let fonts = crate::draw::FontCatalog::new(&factory).expect("FontCatalog");
+    assert!(
+        fonts.family_for(&["Yu Gothic UI".to_owned()]).is_some(),
+        "実フォント Yu Gothic UI がこの機械に無い。代替フォントへ縮退したまま緑にしない"
+    );
     let metrics = DWriteMetrics::new(&factory, font, mode, &config).expect("DWriteMetrics");
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();

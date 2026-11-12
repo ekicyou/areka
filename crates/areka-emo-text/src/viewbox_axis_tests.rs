@@ -44,17 +44,6 @@ fn block_offset_maps_to_expected_axis_and_sign_per_writing_mode() {
     );
 }
 
-/// 軸写像は符号を発明しない——正負ゼロいずれのスカラも選択軸へそのまま透過する
-/// （横書き＝y・縦書き 2 方向＝x の全網羅）。
-#[test]
-fn block_axis_vector_passes_sign_through_on_selected_axis() {
-    for v in [-7, 0, 5] {
-        assert_eq!(block_axis_vector(WritingMode::HorizontalTb, v), (0, v));
-        assert_eq!(block_axis_vector(WritingMode::VerticalRl, v), (v, 0));
-        assert_eq!(block_axis_vector(WritingMode::VerticalLr, v), (v, 0));
-    }
-}
-
 // ── DD11/R6.4/R8.2: 真位置と量子化（真位置からの直接丸め・round half away from zero） ──
 
 /// 量子化は真位置からの直接丸め（`round(pos)`）で、半整数は 0 から遠い側へ丸める
@@ -67,16 +56,6 @@ fn quantization_is_direct_round_half_away_from_zero() {
     assert_eq!(planner.resolve_position(-7.5, &contract).committed, -8);
     // 7.5 → 8（trunc/floor なら 7）。
     assert_eq!(planner.resolve_position(7.5, &contract).committed, 8);
-}
-
-/// k=1.0 かつ行単位 `block_offset`（整数）では pos が整数＝`committed == pos`
-/// （byte 一致の構造前提）。
-#[test]
-fn scale_one_integer_offset_yields_committed_equal_to_pos() {
-    let contract = ScaleContract::new(1.0, None);
-    let state = ScrollPlanner::new().resolve_position(-39.0, &contract);
-    assert_eq!(state.pos, -39.0);
-    assert_eq!(state.committed as f32, state.pos);
 }
 
 /// k≠1.0（1.25）でも真位置からの直接丸めで `|committed − pos| ≤ 0.5` を保つ

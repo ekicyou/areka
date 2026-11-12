@@ -786,3 +786,78 @@ fn pulled_bottom_row_dirty_covers_where_its_stroke_was_shifted() {
         "寄せた線の写り先のうち描き直さない行がある: {uncovered:?}"
     );
 }
+
+/// 再監査 R2-C1: 同じ位置に重なる N 行が全部変わったフレーム（`\n[0]` や `\_l[0,0]` の繰り返し）でも、
+/// 矩形ごとの交差行の和は可視の行の数を超えない（N 枚 × N 行＝N² 回の描画にしない）。重なる
+/// 矩形は 1 枚にまとまり、その 1 枚が全行を 1 回ずつ持つ。
+#[test]
+fn overlapping_changed_rows_draw_each_row_once() {
+    use super::test_support::glyph_resident;
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let n = 3000;
+    let canvas = ContentCanvas {
+        residents: (0..n).map(|_| glyph_resident("あ", 0.0, &[])).collect(),
+        size: (400.0, 100.0),
+    };
+    let (dirty, draw_lines) = ScrollPlanner::derive_dirty(
+        &canvas,
+        &window(0, 0.0),
+        mode,
+        &contract,
+        (0, 0),
+        (400, 100),
+        &[],
+    );
+    let drawn: usize = dirty.iter().map(|d| d.lines.len()).sum();
+    assert_eq!(
+        drawn, n,
+        "行ごとに 1 回だけ描く（矩形の枚数 × 行数にしない）"
+    );
+    assert_eq!(dirty.len(), 1, "重なる矩形は 1 枚にまとまる");
+    assert_eq!(
+        dirty[0].rect,
+        phys(0, 0, 11, 11),
+        "まとめた矩形は全行を覆う"
+    );
+    assert_eq!(draw_lines, (0..n).collect::<Vec<_>>());
+}
+
+/// 再監査 R2-C1: 変わっていない背の高い行が、重ならない小さな変化行の矩形を何枚もまたぐときも、
+/// その行は 1 回だけ描く（背の高い行が橋渡しする矩形は 1 枚にまとまる）。背の高い行 3 本・
+/// 小さな変化行 5 本なら描くのは 8 回（まとめないと 5 枚 × 4 行＝20 回）。
+#[test]
+fn a_tall_row_spanning_several_changed_rows_is_drawn_once() {
+    use super::test_support::glyph_resident;
+    use crate::canvas::ResidentContent;
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let tall = || {
+        let mut r = glyph_resident("あ", 0.0, &[]);
+        if let ResidentContent::GlyphRun(run) = &mut r.content {
+            run.size.1 = 100.0;
+        }
+        r
+    };
+    let rows = |text: &str| ContentCanvas {
+        residents: (0..3)
+            .map(|_| tall())
+            .chain((0..5).map(|j| glyph_resident(text, 20.0 * j as f32, &[])))
+            .collect(),
+        size: (400.0, 100.0),
+    };
+    let prev = ScrollPlanner::committed_lines(&rows("あ"), mode);
+    let canvas = rows("い");
+    let (dirty, draw_lines) = ScrollPlanner::derive_dirty(
+        &canvas,
+        &window(0, 0.0),
+        mode,
+        &contract,
+        (0, 0),
+        (400, 100),
+        &prev,
+    );
+    let drawn: usize = dirty.iter().map(|d| d.lines.len()).sum();
+    assert_eq!(drawn, 8, "背の高い行も小さな行も 1 回ずつ: {dirty:?}");
+    assert_eq!(draw_lines, (0..8).collect::<Vec<_>>());
+}

@@ -69,7 +69,7 @@ impl ViewboxExecutor {
         styles: &StyleTable,
     ) -> Result<bool, TextLayerError> {
         let size = surface.size();
-        let (format, rebuilt) = self.ensure_format(font, mode)?;
+        let format = self.ensure_format(font, mode)?;
 
         // ── plan 前に全住人の行レイアウトを確保し**実測インクはみ出し**を集める ──
         // 確定行はキャッシュヒット（安価）・変化行のみ生成（=行レイアウト生成はここで一括発生し、
@@ -134,11 +134,10 @@ impl ViewboxExecutor {
         let plan = self
             .planner
             .plan_with_overhangs(canvas, window, mode, contract, size, &overhangs);
-        // 縮退判定（正しさ優先）: フォント/方向変更 or 想定外不整合なら全域ダーティ Update へ差し替え。
-        // 全域ダーティの描く行は、はみ出し込みで面と重なる行だけ（指摘 18）ゆえ overhangs を渡す。
-        let plan = degrade_if_needed(
-            plan, rebuilt, canvas, window, mode, contract, size, &overhangs,
-        );
+        // 縮退判定（正しさ優先）: 想定外不整合なら全域ダーティ Update へ差し替え（書式の組み直しは
+        // `ensure_format` が前の行を忘れさせるので、計画が元から全域の道を通る）。全域ダーティの
+        // 描く行は、はみ出し込みで面と重なる行だけ（指摘 18）ゆえ overhangs を渡す。
+        let plan = degrade_if_needed(plan, canvas, window, mode, contract, size, &overhangs);
 
         match &plan {
             // 変化なし——blit・描画・present とも 0・commit 不要（no-op）。
@@ -318,7 +317,10 @@ impl ViewboxExecutor {
                             right: origin.X + run.size.0,
                             bottom: origin.Y + run.size.1,
                         };
-                        collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))?
+                        // 集めた後に下線を戻せなかった行は保持庫に残さない（次のフレームで下線の
+                        // 立った行を引き当てて二重に描かない・再監査 R2-D4）。
+                        collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))
+                            .inspect_err(|_| self.line_store.forget(index))?
                             .into_iter()
                             .map(|recorded| {
                                 let rect = stroke_rect(&recorded.raw, (0.0, 0.0));
@@ -659,20 +661,20 @@ impl ViewboxExecutor {
 
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
-    /// 戻り値の `bool` は**format と [`LineLayoutStore`] を組み直したか**（`true`＝組み直し）。
     /// 既定の見た目（`FormatKey`）/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
-    /// ピクセル（旧 format で描いた面）を崩すため、`render` はこのフラグを見て当該フレームを
-    /// 全域ダーティへ縮退する（`DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定の
-    /// ため通常発火しない・`debug!` 記録）。**初回生成**（`self.format` が `None`・組み直す前提が
-    /// 無い＝committed ピクセルも無い）は `false`（初回フレームは prev_lines が「分からない」ゆえ元より全域ダーティ）。
+    /// ピクセル（旧 format で描いた面）を崩すため、組み直すときは [`LineLayoutStore`] を捨て、計画者に
+    /// 前の行を忘れさせる（[`crate::viewbox::ScrollPlanner::forget_prev`]）——次の計画は commit が成功するまで全域の道を
+    /// 通るので、組み直したフレームが失敗しても次のフレームで全域を描き直す（再監査 R2-D1・
+    /// `DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定のため通常発火しない・`debug!` 記録）。
+    /// **初回生成**（`self.format` が `None`）は前の行が元から「分からない」ので何も忘れさせない。
     fn ensure_format(
         &mut self,
         font: &ResolvedFont,
         mode: WritingMode,
-    ) -> Result<(IDWriteTextFormat, bool), TextLayerError> {
+    ) -> Result<IDWriteTextFormat, TextLayerError> {
         if let Some(((look, cached_mode), format)) = &self.format {
             if *look == font.looks.default && *cached_mode == mode {
-                return Ok((format.clone(), false));
+                return Ok(format.clone());
             }
             tracing::debug!(
                 ?mode,
@@ -680,14 +682,15 @@ impl ViewboxExecutor {
                 "既定の見た目/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
             self.line_store.clear();
+            self.planner.forget_prev();
             let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
             self.format = Some(((font.looks.default.clone(), mode), format.clone()));
-            return Ok((format, true));
+            return Ok(format);
         }
-        // 初回生成（committed ピクセルが無いため縮退トリガにしない）。
+        // 初回生成（前の行は元から「分からない」）。
         let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
         self.format = Some(((font.looks.default.clone(), mode), format.clone()));
-        Ok((format, false))
+        Ok(format)
     }
 }
 

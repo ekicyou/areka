@@ -47,104 +47,64 @@ fn derive_dirty_for_hover(
     (changed, dirty, draw)
 }
 
-/// hover SET（None → Some(o)）: `derive_dirty` の出力は付与された当該 Choice 行の矩形のみ＝
-/// 出力行数が choice_marker の変化した行数（1）と厳密一致し、全域ダーティにならない（R4.4/7.5）。
-#[test]
-fn choice_marker_hover_set_derive_dirty_matches_only_the_set_line() {
-    let before = vec![
+/// 4 行（見出し・選択肢 A・選択肢 B・脚注）の選択肢 2 行の hover を `[A, B]` で与えた住人列。
+fn hover_rows(hovered: [Option<usize>; 2]) -> Vec<Resident> {
+    vec![
         glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], None), // hover なし
-        choice_resident("えらぶБ", 26.0, &[], None),
+        choice_resident("えらぶА", 13.0, &[], hovered[0]),
+        choice_resident("えらぶБ", 26.0, &[], hovered[1]),
         glyph_resident("脚注", 39.0, &[]),
-    ];
-    let after = vec![
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], Some(0)), // hover 付与（None → Some(0)）
-        choice_resident("えらぶБ", 26.0, &[], None),
-        glyph_resident("脚注", 39.0, &[]),
-    ];
-    let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
-    // 変化した choice_marker は index 1 の 1 行のみ。
-    assert_eq!(changed, vec![1], "変化した choice_marker 行は index 1 のみ");
-    // Observable: derive_dirty の出力行数 == 変化した choice_marker 行数（1）。
-    assert_eq!(dirty.len(), changed.len(), "dirty 行数 == 変化行数（1）");
-    // 当該行矩形のみ（{0,13,40,10} をガード 1px 拡張）・全域（面全 {0,0,400,224}）でない。
-    assert_eq!(
-        dirty,
-        vec![phys(0, 12, 41, 12)],
-        "付与行 index 1 の矩形のみ・全域ダーティでない"
-    );
-    assert_eq!(draw, vec![1], "描画対象も付与行のみ");
+    ]
 }
 
-/// hover CLEAR（Some(o) → None）: `derive_dirty` の出力は解除された当該 Choice 行の矩形のみ＝
-/// 出力行数が choice_marker の変化した行数（1）と厳密一致し、全域ダーティにならない（R4.4/7.5）。
-#[test]
-fn choice_marker_hover_clear_derive_dirty_matches_only_the_cleared_line() {
-    let before = vec![
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], Some(0)), // hover あり
-        choice_resident("えらぶБ", 26.0, &[], None),
-        glyph_resident("脚注", 39.0, &[]),
-    ];
-    let after = vec![
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], None), // hover 解除（Some(0) → None）
-        choice_resident("えらぶБ", 26.0, &[], None),
-        glyph_resident("脚注", 39.0, &[]),
-    ];
-    let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
-    assert_eq!(changed, vec![1], "変化した choice_marker 行は index 1 のみ");
-    assert_eq!(dirty.len(), changed.len(), "dirty 行数 == 変化行数（1）");
-    assert_eq!(
-        dirty,
-        vec![phys(0, 12, 41, 12)],
-        "解除行 index 1 の矩形のみ・全域ダーティでない"
-    );
-    assert_eq!(draw, vec![1], "描画対象も解除行のみ");
-}
-
-/// hover SWITCH（Some(a) → Some(b)・異なる行）: `derive_dirty` の出力は旧・新の 2 行の矩形のみ＝
-/// 出力行数が choice_marker の変化した行数（2）と厳密一致し、全域ダーティにならない（R4.4/7.5）。
+/// hover の付与（None → Some）・解除（Some → None）・切替（A → B）のどれでも、`derive_dirty` の
+/// 出力は choice_marker が変わった行の矩形だけ＝出力の矩形の数が変わった行の数と厳密一致し、
+/// 全域ダーティにならない（R4.4/7.5）。行 i の矩形は {0, 13i, 40, 10} をガード 1px 広げたもの。
 /// あわせて非 Choice 行の `choice_marker` は常に 0・Choice 行は `hovered.map_or(0, |o| o+1)`。
 #[test]
-fn choice_marker_hover_switch_derive_dirty_matches_only_the_two_switched_lines() {
-    let before = vec![
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], Some(0)), // A に hover
-        choice_resident("えらぶБ", 26.0, &[], None),
-        glyph_resident("脚注", 39.0, &[]),
-    ];
-    let after = vec![
-        glyph_resident("見出し", 0.0, &[]),
-        choice_resident("えらぶА", 13.0, &[], None), // hover を A→B へ切替
-        choice_resident("えらぶБ", 26.0, &[], Some(0)),
-        glyph_resident("脚注", 39.0, &[]),
-    ];
+fn choice_marker_hover_change_derive_dirty_matches_only_the_changed_lines() {
+    let row1 = phys(0, 12, 41, 12);
+    let row2 = phys(0, 25, 41, 12);
     let markers = |rs: &[Resident]| -> Vec<u32> {
         rs.iter()
             .map(|r| line_fingerprint(r, WritingMode::HorizontalTb).choice_marker)
             .collect()
     };
-    assert_eq!(
-        markers(&before),
-        vec![0, 1, 0, 0],
-        "hover ordinal 0 → 1・他は 0"
-    );
-    assert_eq!(markers(&after), vec![0, 0, 1, 0], "hover を B へ切替");
-    let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
-    // 変化したのは選択肢 2 行（旧 hover 行 index 1・新 hover 行 index 2）。
-    assert_eq!(
-        changed,
-        vec![1, 2],
-        "変化した choice_marker 行は index 1,2 の 2 行"
-    );
-    assert_eq!(dirty.len(), changed.len(), "dirty 行数 == 変化行数（2）");
-    // 旧行（{0,13}）・新行（{0,26}）の 2 矩形のみ・全域ダーティでない。
-    assert_eq!(
-        dirty,
-        vec![phys(0, 12, 41, 12), phys(0, 25, 41, 12)],
-        "切替 2 行の矩形のみ・全域ダーティでない"
-    );
-    assert_eq!(draw, vec![1, 2], "描画対象も切替 2 行のみ");
+    // (名前, 前の hover, 後の hover, 後の印, 変わった行, 矩形)。
+    let cases = [
+        (
+            "付与",
+            [None, None],
+            [Some(0), None],
+            [0, 1, 0, 0],
+            vec![1],
+            vec![row1],
+        ),
+        (
+            "解除",
+            [Some(0), None],
+            [None, None],
+            [0, 0, 0, 0],
+            vec![1],
+            vec![row1],
+        ),
+        (
+            "切替",
+            [Some(0), None],
+            [None, Some(0)],
+            [0, 0, 1, 0],
+            vec![1, 2],
+            vec![row1, row2],
+        ),
+    ];
+    for (name, before, after, after_markers, lines, rects) in cases {
+        assert_eq!(markers(&hover_rows(after)), after_markers, "{name}: 後の印");
+        let (changed, dirty, draw) = derive_dirty_for_hover(hover_rows(before), hover_rows(after));
+        assert_eq!(changed, lines, "{name}: choice_marker が変わった行");
+        assert_eq!(
+            dirty, rects,
+            "{name}: 変わった行の矩形だけ・全域ダーティでない"
+        );
+        assert_eq!(draw, lines, "{name}: 描画対象も変わった行だけ");
+    }
 }

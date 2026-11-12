@@ -217,8 +217,9 @@ fn catch_up_scroll_draws_sum_of_per_rect_lines_not_product() {
         .expect("frame A render 失敗");
     let stats_a: DrawStats = exec.stats();
 
-    // frame B: 2 行が一挙に入る（追いつき）＝露出帯 1 枚 ＋ 新規行 2 枚のダーティ。
-    let chars_b = ["あ", "い", "う", "え", "お", "か", "き", "く", "け"];
+    // frame B: 2 行が一挙に入り（追いつき）、途中の行 3 の字も変わる＝下端の組（露出帯と新規行 2 本は
+    // 重なるので 1 枚にまとまる・再監査 R2-C1）＋ 行 3 の 1 枚のダーティ。
+    let chars_b = ["あ", "い", "う", "ゑ", "お", "か", "き", "く", "け"];
     let (canvas_b, window_b) = build(&multiline_items(&chars_b), &region, mode, 10.0);
 
     // mirror planner（純粋層）で期待計画を独立に算出する。
@@ -527,7 +528,7 @@ fn bold_or_italic_only_change_rebuilds_the_bound_format() {
         .render(&canvas, &window, &font_b, mode, &contract, &mut surface)
         .expect("font B render 失敗");
     let second = bound(&exec);
-    // 配置は同じなので計画は NoChange——rebuilt の腕が全域へ縮退して初めて描き直す。
+    // 配置は同じなので、組み直しが前の行を忘れさせて初めて全域の道で描き直す。
     assert!(changed, "太字・斜体だけの変更フレームは変化あり");
     assert_eq!(
         exec.stats().draw_text_layout_calls - draws_a,
@@ -553,7 +554,7 @@ fn bold_or_italic_only_change_rebuilds_the_bound_format() {
 /// `None` を返す（範囲外 draw_lines・面寸超過 dirty・矩形の行が描画対象行の部分集合でない、の
 /// 3 トリガ・R Error Handling／R11.1）。
 /// 縮退の判定（`degrade_if_needed`）からこの述語への結線は
-/// `degrade_full_domain_draws_only_rows_overlapping_surface` の rebuilt = false の段が確かめる。
+/// `degrade_full_domain_draws_only_rows_overlapping_surface` が確かめる。
 #[test]
 fn plan_inconsistency_detects_out_of_range_and_oversize() {
     use super::plan::plan_inconsistency;
@@ -700,6 +701,61 @@ fn device_failure_mid_render_is_retry_safe_front_unchanged_no_commit() {
     );
 }
 
+/// 再監査 R2-D1: 書式を組み直したフレームが失敗しても、次のフレームは全域を描き直す（組み直しは
+/// 済んでいて鍵が一致するので、計画が NoChange になって古い見た目の画素が残る、にしない）。
+/// 再試行の絵は、新しい書式で 1 度だけ描いた新しい描き手の絵とバイトで一致する。
+#[test]
+fn a_failed_frame_after_a_format_rebuild_redraws_the_whole_surface_next() {
+    let mut rig = Rig::new();
+    let image = (80u32, 40u32);
+    let mode = WritingMode::HorizontalTb;
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let (canvas, window) = build(&glyph_items("■■"), &region, mode, 10.0);
+    let font_a = ResolvedFont::resolve(&geo_model(Some(10)));
+    let mut font_b = font_a.clone();
+    font_b.looks.default.bold = true;
+
+    let mut surface = rig.attach(image, 1.0);
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    exec.render(&canvas, &window, &font_a, mode, &contract, &mut surface)
+        .expect("font A render 失敗");
+    exec.inject_render_failure();
+    assert!(
+        exec.render(&canvas, &window, &font_b, mode, &contract, &mut surface)
+            .is_err(),
+        "組み直したフレームに失敗を注入する"
+    );
+    let draws = exec.stats().draw_text_layout_calls;
+    let changed = exec
+        .render(&canvas, &window, &font_b, mode, &contract, &mut surface)
+        .expect("再試行 render 失敗");
+    assert!(changed, "失敗の次のフレームは描き直す");
+    assert_eq!(
+        exec.stats().draw_text_layout_calls - draws,
+        canvas.residents.len() as u64,
+        "全域を描き直す"
+    );
+    let retried = surface.read_back().expect("read_back(再試行)");
+
+    let mut fresh_surface = rig.attach(image, 1.0);
+    let mut fresh = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    fresh
+        .render(
+            &canvas,
+            &window,
+            &font_b,
+            mode,
+            &contract,
+            &mut fresh_surface,
+        )
+        .expect("新しい描き手の render 失敗");
+    assert!(
+        retried == fresh_surface.read_back().expect("read_back(新しい描き手)"),
+        "再試行の絵は新しい描き手の絵と一致する"
+    );
+}
+
 /// 指摘 8: 選択肢の帯の超過分は既定の字の高さでなく、その行の丈（`run.size` の行送りの軸＝
 /// `resident_rect` と同じ）と比べる。既定 28・行の em 14・帯 17（寄せ −1）なら超過は 2。
 #[test]
@@ -715,28 +771,18 @@ fn choice_band_overflow_uses_row_extent_not_default_height() {
 }
 
 /// 指摘 18・23: 描き手の全域の縮退（GPU 無し）。3 行（y 0・12・24・丈 10）を丈 20 の面で縮退させると、
-/// 面の下の行 2 は描かず、上のはみ出し 5 で面へ入れば描く。消去はそのまま。
+/// 面の下の行 2 は描かず、上のはみ出し 5 で面へ入れば描く。整合した計画・消去・変化なしはそのまま。
 #[test]
 fn degrade_full_domain_draws_only_rows_overlapping_surface() {
     use super::plan::degrade_if_needed;
-    use crate::viewbox::LineOverhang;
+    use crate::viewbox::{DirtyRect, LineOverhang, PhysicalRect};
     let mode = WritingMode::HorizontalTb;
     let contract = ScaleContract::new(1.0, None);
     let region = TextRegion::resolve(&geo_model(Some(10)), (120, 120), mode);
     let (canvas, window) = build(&multiline_items(&["あ", "い", "う"]), &region, mode, 10.0);
-    let degrade_with = |plan, rebuilt, over: &[LineOverhang]| {
-        degrade_if_needed(
-            plan,
-            rebuilt,
-            &canvas,
-            &window,
-            mode,
-            &contract,
-            (120, 20),
-            over,
-        )
+    let degrade = |plan, over: &[LineOverhang]| {
+        degrade_if_needed(plan, &canvas, &window, mode, &contract, (120, 20), over)
     };
-    let degrade = |plan, over: &[LineOverhang]| degrade_with(plan, true, over);
     let draw_of = |plan| match plan {
         FramePlan::Update {
             blit, draw_lines, ..
@@ -746,14 +792,6 @@ fn degrade_full_domain_draws_only_rows_overlapping_surface() {
         }
         other => panic!("全域の Update を期待: {other:?}"),
     };
-    assert_eq!(draw_of(degrade(FramePlan::NoChange, &[])), vec![0, 1]);
-    let mut over = vec![LineOverhang::default(); 3];
-    over[2].top = 5.0;
-    assert_eq!(draw_of(degrade(FramePlan::NoChange, &over)), vec![0, 1, 2]);
-    assert_eq!(degrade(FramePlan::FullClear, &over), FramePlan::FullClear);
-
-    // 組み直し無し（rebuilt = false）: 食い違う計画だけが全域へ縮退し、整合した計画はそのまま。
-    use crate::viewbox::{DirtyRect, PhysicalRect};
     let update = |draw_lines: Vec<usize>| FramePlan::Update {
         blit: (0, 0),
         dirty: vec![DirtyRect {
@@ -768,17 +806,18 @@ fn degrade_full_domain_draws_only_rows_overlapping_surface() {
         draw_lines,
     };
     assert_eq!(
-        draw_of(degrade_with(update(vec![99]), false, &[])),
+        draw_of(degrade(update(vec![99]), &[])),
         vec![0, 1],
-        "範囲外の行を描く計画は全域へ縮退する"
+        "範囲外の行を描く計画は全域へ縮退する（面の下の行 2 は描かない）"
     );
+    let mut over = vec![LineOverhang::default(); 3];
+    over[2].top = 5.0;
+    assert_eq!(draw_of(degrade(update(vec![99]), &over)), vec![0, 1, 2]);
     assert_eq!(
-        degrade_with(update(vec![0]), false, &[]),
+        degrade(update(vec![0]), &[]),
         update(vec![0]),
         "整合した計画はそのまま"
     );
-    assert_eq!(
-        degrade_with(FramePlan::NoChange, false, &[]),
-        FramePlan::NoChange
-    );
+    assert_eq!(degrade(FramePlan::FullClear, &over), FramePlan::FullClear);
+    assert_eq!(degrade(FramePlan::NoChange, &[]), FramePlan::NoChange);
 }

@@ -296,9 +296,10 @@ impl ViewboxExecutor {
     ///   限定描画（各矩形は**その矩形と交差する行だけ**を描く・R11.1）→ flip → commit → `Ok(true)`。
     ///
     /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
-    /// 組み直したフレーム）または `plan` の想定外不整合（[`plan::plan_inconsistency`]）を検知した場合、当該
-    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
-    /// GlyphRun／Choice 住人のうち、はみ出し込みで面と重なる行・指摘 18）へ差し替えて描画する
+    /// 組み直したフレーム・計画者に前の行を忘れさせるので commit の成功まで続く）または `plan` の
+    /// 想定外不整合（[`plan::plan_inconsistency`]）を検知した場合、当該フレームを**全域ダーティ
+    /// Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
+    /// GlyphRun／Choice 住人のうち、はみ出し込みで面と重なる行・指摘 18）で描画する
     /// （正しさ優先・1 フレームで全域再描画のオラクル `DrawExecutor::render` と同じ結果になる・
     /// 透明フラッシュを起こす FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は
     /// `warn!` を残す（記録の無い縮退を作らない）。縮退後の commit が prev_lines を張り直すため

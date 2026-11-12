@@ -57,7 +57,7 @@ struct CachedLineLayout {
 /// 生成規則（[`create_line_layout`] で作る＝行内軸＝[`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT)・
 /// 行送り軸＝呼び手が渡す行の箱寸・縦書きは列のレシピ・同一 format・
 /// 生成直後に `decorate` を 1 度）・キー（canvas 行 index）・破棄規律
-/// （[`clear`](Self::clear) のみ全破棄）を両描画実行で共有する——TextLayout 生成経路の完全共有に
+/// （[`clear`](Self::clear) が全破棄・[`forget`](Self::forget) が 1 行）を両描画実行で共有する——TextLayout 生成経路の完全共有に
 /// より **byte 等価**を構造化する（RN5）。装飾を使わない呼び出し
 /// （[`line_layout`](Self::line_layout)・行の箱寸は `font_height`・`decorate` は何もしない）の
 /// 生成物は生成口を直に呼んで組んだ行と同一。再利用の判定は内容文字列と装飾番号列の一致
@@ -187,9 +187,15 @@ impl LineLayoutStore {
         self.cache.get(&index).map(|c| c.overhang)
     }
 
-    /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
+    /// キャッシュを全破棄する（Clear cue の適用点・全部を捨てるのはこの口だけ）。
     pub(crate) fn clear(&mut self) {
         self.cache.clear();
+    }
+
+    /// 1 行だけ捨てる（次に引くとき作り直す）。焼いた後の状態を戻せなかった行を掴ませない口
+    /// （下線を集めた後に戻すのが失敗した行・再監査 R2-D4）。
+    pub(crate) fn forget(&mut self, index: usize) {
+        self.cache.remove(&index);
     }
 
     /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。

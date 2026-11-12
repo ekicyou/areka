@@ -15,7 +15,7 @@ impl ScrollPlanner {
     ///
     /// 住人 index と 1:1（layout 行 index と一致）。M1 の実装住人はグリフのみだが、画像/
     /// サーフェスのシーム住人も一様に扱える（空 text・零寸の指紋）。位置/寸は canvas-local
-    /// ゆえスクロール非依存——`derive_dirty` の `prev_lines` として次フレームへ渡す。
+    /// ゆえスクロール非依存——`derive_dirty_with_overhangs` の `prev_lines` として次フレームへ渡す。
     pub(crate) fn committed_lines(canvas: &ContentCanvas, mode: WritingMode) -> Vec<CommittedLine> {
         canvas
             .residents
@@ -69,26 +69,9 @@ impl ScrollPlanner {
         }
     }
 
-    /// ダーティ矩形と描画対象行を導出する（純粋・状態不変・DD4）。
-    ///
-    /// dirty ＝（a）露出帯（`blit` の逆側に生じる未保持領域・blit≠0 のとき 1 枚）∪（b）変化行
-    /// （`prev_lines` と新 canvas の指紋差分行の物理矩形——**新スクロール位置**）∪（c）スクロール
-    /// で可視窓の外へ出た行の**残滓**（下記）。各矩形は物理 px 整数格子へ拡張（min を floor・max を
-    /// ceil）し、ガード余白 `ceil(DIRTY_GUARD_IMG_PX × k)` を全辺へ加えて面寸 `surface_size` へ
-    /// クランプ（退化矩形は除外）。
-    ///
-    /// `prev_lines` が空なら「何も描いていない」の意味で、住人は全部新しい行として差分に入る
-    /// （面全域の描き直しは [`Self::full_domain`] の役目）。各 [`DirtyRect`] はその矩形とブロック軸で交差
-    /// する GlyphRun／Choice 住人 index だけを持ち（クリップにより描画結果は当該矩形内へ限定される）、
-    /// 返り値 `draw_lines` はその**和集合**（昇順・重複なし）。ただし**可視窓より前の行
-    /// （`first_visible_line` 未満）は含めない**——全域再描画のオラクル（`DrawExecutor`）が
-    /// `skip(first_visible_line)` で描かないため、含めると
-    /// スクロールアウトした行の下端インクが画面上端へ描き込まれ、両者が食い違う。
-    ///
-    /// 本メソッドは「変化なし＝空 dirty・空 draw_lines」の導出結果を返すに留める。
-    ///
-    /// 実測はみ出し無し（em ボックス丈）の従来経路——測定値を持たない pure 層 unit 向けの薄い
-    /// ラッパで、[`Self::derive_dirty_with_overhangs`] に空スライスを渡す。
+    /// 実測はみ出し無し（em ボックス丈）でダーティ矩形と描画対象行を導出する——測定値を持たない
+    /// pure 層 unit 向けの薄いラッパで、[`Self::derive_dirty_with_overhangs`] に空スライスを渡す
+    /// （導出の規則はそちらの doc）。
     #[cfg(test)]
     pub(crate) fn derive_dirty(
         canvas: &ContentCanvas,
@@ -113,7 +96,7 @@ impl ScrollPlanner {
     }
 
     /// 全域の道（前の行が分からない・縮退）: dirty＝面全域 1 枚・描画対象＝可視窓の GlyphRun／Choice 住人
-    /// （`first_visible_line` 以降・理由は `derive_dirty` の doc）のうち、はみ出し込みの矩形が面と
+    /// （`first_visible_line` 以降・理由は [`Self::derive_dirty_with_overhangs`] の doc）のうち、はみ出し込みの矩形が面と
     /// 重なる行だけ（指摘 18・面の外の行はクリップで捨てるだけなので描かない。面のすぐ下の行でも
     /// 上のはみ出しが面へ入るなら残す）。矩形が 1 枚ゆえ「矩形ごとの交差行」＝描画対象＝和集合。
     pub(crate) fn full_domain(
@@ -172,6 +155,22 @@ impl ScrollPlanner {
     /// 実測インクはみ出し（[`LineOverhang`]・住人 index と 1:1）付きでダーティ矩形と描画対象行を
     /// 導出する（純粋・状態不変・DD4／D2）。変化行の em ボックスを `overhangs` の実測分だけ外側へ
     /// 広げてはみ出しインクを含める（`overhangs` が index を欠く／空なら既定 0＝em ボックス丈）。
+    ///
+    /// dirty ＝（a）露出帯（`blit` の逆側に生じる未保持領域・blit≠0 のとき 1 枚）∪（b）変化行
+    /// （`prev_lines` と新 canvas の指紋差分行の物理矩形——**新スクロール位置**）∪（c）スクロール
+    /// で可視窓の外へ出た行の**残滓**∪（d）送りの前に面の遠い端へ届いていた行（どちらも下記）。
+    /// 各矩形は物理 px 整数格子へ拡張（min を floor・max を ceil）し、ガード余白
+    /// `ceil(DIRTY_GUARD_IMG_PX × k)` を全辺へ加えて面寸 `surface_size` へクランプ（退化矩形は除外）。
+    ///
+    /// `prev_lines` が空なら「何も描いていない」の意味で、住人は全部新しい行として差分に入る
+    /// （面全域の描き直しは [`Self::full_domain`] の役目）。行送りの軸で重なる矩形と同じ行がまたぐ
+    /// 矩形は 1 枚にまとめ（[`merge_and_assign`]・再監査 R2-C1）、各 [`DirtyRect`] はその矩形と
+    /// ブロック軸で交差する GlyphRun／Choice 住人 index だけを持つ（クリップにより描画結果は当該
+    /// 矩形内へ限定される・どの行も高々 1 枚にしか入らない）。返り値 `draw_lines` はその**和集合**
+    /// （昇順・重複なし）。ただし**可視窓より前の行（`first_visible_line` 未満）は含めない**——
+    /// 全域再描画のオラクル（`DrawExecutor`）が `skip(first_visible_line)` で描かないため、含めると
+    /// スクロールアウトした行の下端インクが画面上端へ描き込まれ、両者が食い違う。
+    /// 変化なしは空 dirty・空 draw_lines を返すに留める（NoChange にするのは計画の役目）。
     ///
     /// **スクロールアウトした行の残滓**（(c)）: 行送りは「字の丈 ＋ 行間 2px」ゆえ、行と行の
     /// 隙間は 2px しかない。下端のはみ出しインクがそれより大きいフォント（Yu Gothic UI 28px は
@@ -284,25 +283,87 @@ impl ScrollPlanner {
             })
             .collect();
 
-        // 矩形ごとの交差行（昇順・住人 index の順に見るので並びは昇順）と、その和集合。
-        let dirty: Vec<DirtyRect> = rects
-            .into_iter()
-            .map(|rect| {
-                let lines = visible_rects
-                    .iter()
-                    .filter(|(_, r)| rect.intersects_block_axis(r, mode))
-                    .map(|(i, _)| *i)
-                    .collect();
-                DirtyRect { rect, lines }
-            })
-            .collect();
-        let draw_lines: Vec<usize> = visible_rects
-            .iter()
-            .filter(|(_, r)| dirty.iter().any(|d| d.rect.intersects_block_axis(r, mode)))
-            .map(|(i, _)| *i)
-            .collect();
+        // 矩形ごとの交差行（昇順）と、その和集合（昇順・重複なし）。
+        let dirty = merge_and_assign(rects, &visible_rects, mode);
+        let mut draw_lines: Vec<usize> = dirty.iter().flat_map(|d| d.lines.clone()).collect();
+        draw_lines.sort_unstable();
 
         (dirty, draw_lines)
+    }
+}
+
+/// ダーティ矩形を組にまとめ、描く行を組へ割り当てる（純粋・再監査 R2-C1）。
+///
+/// 行送りの軸で重なる矩形と、同じ行がまたぐ矩形は、それらを囲む 1 枚にまとめる（囲んだ分も
+/// そこにかかる行を全部描くので、画素は全域で描き直した絵と変わらない）。まとめた後の組は
+/// 同じ行を共有しないので、矩形ごとの交差行の和は可視の行の数を超えない——同じ位置に重なる
+/// N 行が全部変わっても N 枚 × N 行の描画にならない。並べ替えと二分探索で、手間も N² にしない。
+/// 返す矩形の並びは、組の中で最も早く積まれた矩形の順（まとまらない矩形の並びは元のまま）。
+fn merge_and_assign(
+    rects: Vec<PhysicalRect>,
+    lines: &[(usize, PhysicalRect)],
+    mode: WritingMode,
+) -> Vec<DirtyRect> {
+    let span = |r: &PhysicalRect| r.block_span(mode);
+    // 行の区間を始まりの順に並べ、そこまでの終わりの最大を持つ（`reach` の引き当て用）。
+    let mut by_start: Vec<(u32, u32)> = lines.iter().map(|(_, r)| span(r)).collect();
+    by_start.sort_unstable();
+    let ends_max: Vec<u32> = by_start
+        .iter()
+        .scan(0, |m, &(_, end)| {
+            *m = end.max(*m);
+            Some(*m)
+        })
+        .collect();
+    // 終わりが `end` の組に届く先: `end` より前に始まる行のどれかが `end` を越えれば、その終わりまで。
+    let reach = |end: u32| match by_start.partition_point(|&(start, _)| start < end) {
+        0 => end,
+        n => end.max(ends_max[n - 1]),
+    };
+
+    let mut order: Vec<usize> = (0..rects.len()).collect();
+    order.sort_by_key(|&i| span(&rects[i]).0);
+    // (組の中で最も早く積まれた矩形の番号, 囲む矩形)。始まりの順で、互いに重ならない。
+    let mut groups: Vec<(usize, PhysicalRect)> = Vec::new();
+    for i in order {
+        let rect = rects[i];
+        match groups.last_mut() {
+            Some((first, hull)) if span(&rect).0 < reach(span(hull).1) => {
+                *first = (*first).min(i);
+                *hull = bounding(hull, &rect);
+            }
+            _ => groups.push((i, rect)),
+        }
+    }
+
+    // 行は高々 1 つの組にかかる（次の組は前の組に届く先より後ろで始まる）——終わりより前に
+    // 始まる最後の組だけを見る。行は住人 index の順に見るので、組ごとの行は昇順。
+    let mut assigned: Vec<Vec<usize>> = vec![Vec::new(); groups.len()];
+    for (index, rect) in lines {
+        let (start, end) = span(rect);
+        let n = groups.partition_point(|(_, g)| span(g).0 < end);
+        if n > 0 && span(&groups[n - 1].1).1 > start {
+            assigned[n - 1].push(*index);
+        }
+    }
+    let mut dirty: Vec<(usize, DirtyRect)> = groups
+        .into_iter()
+        .zip(assigned)
+        .map(|((first, rect), lines)| (first, DirtyRect { rect, lines }))
+        .collect();
+    dirty.sort_by_key(|(first, _)| *first);
+    dirty.into_iter().map(|(_, d)| d).collect()
+}
+
+/// 2 枚を囲む矩形（物理 px 整数）。
+fn bounding(a: &PhysicalRect, b: &PhysicalRect) -> PhysicalRect {
+    let (x0, y0) = (a.x.min(b.x), a.y.min(b.y));
+    let (x1, y1) = ((a.x + a.w).max(b.x + b.w), (a.y + a.h).max(b.y + b.h));
+    PhysicalRect {
+        x: x0,
+        y: y0,
+        w: x1 - x0,
+        h: y1 - y0,
     }
 }
 

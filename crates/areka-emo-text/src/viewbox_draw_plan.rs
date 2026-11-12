@@ -14,20 +14,15 @@ use crate::writing::WritingMode;
 
 /// エラー縮退規律の適用（Error Handling）——`plan` を必要なら**全域ダーティ Update** へ縮退する。
 ///
-/// 2 トリガ（正しさ優先・いずれも透明フラッシュを起こす FullClear ではなく全域ダーティ Update）:
-/// - **既定の見た目/方向の変更**（`rebuilt`＝`ensure_format` が format/行キャッシュを組み直した・
-///   書式のほか既定の線と色の変更も含む）: committed ピクセルは古い見た目で描かれ前提が崩れるため
-///   `debug!`＋全域ダーティへ縮退。
-/// - **想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と矛盾
-///   （draw_lines 範囲外・dirty 面寸超過・矩形の行が draw_lines の部分集合でない、の 3 つ）する場合
-///   `warn!`＋全域ダーティへ縮退（記録の無い縮退を作らない）。
+/// トリガは**想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と
+/// 矛盾（draw_lines 範囲外・dirty 面寸超過・矩形の行が draw_lines の部分集合でない、の 3 つ）する場合
+/// `warn!`＋全域ダーティへ縮退（記録の無い縮退を作らない・透明フラッシュを起こす FullClear ではない）。
+/// 既定の見た目/方向の変更（`ensure_format` の組み直し）はここでは見ない——組み直しが計画者に前の行を
+/// 忘れさせるので、計画が commit の成功まで元から全域の道を通る（再監査 R2-D1）。
 ///
-/// [`FramePlan::FullClear`] は縮退対象外（Clear は既に全域リセット）。[`FramePlan::NoChange`] は
-/// `rebuilt` のときのみ縮退（format 組み直し後の committed ピクセル前提消失を全域再描画で回復）。
-#[allow(clippy::too_many_arguments)]
+/// [`FramePlan::FullClear`]・[`FramePlan::NoChange`] はそのまま返す。
 pub(super) fn degrade_if_needed(
     plan: FramePlan,
-    rebuilt: bool,
     canvas: &ContentCanvas,
     window: &VisibleWindow,
     mode: WritingMode,
@@ -35,65 +30,21 @@ pub(super) fn degrade_if_needed(
     surface_size: (u32, u32),
     overhangs: &[LineOverhang],
 ) -> FramePlan {
-    match plan {
-        FramePlan::FullClear => FramePlan::FullClear,
-        FramePlan::NoChange => {
-            if rebuilt {
-                tracing::debug!(
-                    "既定の見た目/方向の変更を検知——committed ピクセル前提消失のため全域ダーティへ縮退"
-                );
-                ScrollPlanner::full_domain_plan(
-                    canvas,
-                    window,
-                    mode,
-                    contract,
-                    surface_size,
-                    overhangs,
-                )
-            } else {
-                FramePlan::NoChange
-            }
+    let FramePlan::Update {
+        dirty, draw_lines, ..
+    } = &plan
+    else {
+        return plan;
+    };
+    match plan_inconsistency(dirty, draw_lines, canvas.residents.len(), surface_size) {
+        Some(reason) => {
+            tracing::warn!(
+                reason,
+                "plan と canvas/面寸の想定外不整合——全域ダーティ再描画へ縮退（正しさ優先・最悪でもレガシー全域再描画と等価）"
+            );
+            ScrollPlanner::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs)
         }
-        FramePlan::Update {
-            blit,
-            dirty,
-            draw_lines,
-        } => {
-            if rebuilt {
-                tracing::debug!(
-                    "既定の見た目/方向の変更を検知——format/行キャッシュ組み直し・全域ダーティへ縮退（committed ピクセル前提消失）"
-                );
-                ScrollPlanner::full_domain_plan(
-                    canvas,
-                    window,
-                    mode,
-                    contract,
-                    surface_size,
-                    overhangs,
-                )
-            } else if let Some(reason) =
-                plan_inconsistency(&dirty, &draw_lines, canvas.residents.len(), surface_size)
-            {
-                tracing::warn!(
-                    reason,
-                    "plan と canvas/面寸の想定外不整合——全域ダーティ再描画へ縮退（正しさ優先・最悪でもレガシー全域再描画と等価）"
-                );
-                ScrollPlanner::full_domain_plan(
-                    canvas,
-                    window,
-                    mode,
-                    contract,
-                    surface_size,
-                    overhangs,
-                )
-            } else {
-                FramePlan::Update {
-                    blit,
-                    dirty,
-                    draw_lines,
-                }
-            }
-        }
+        None => plan,
     }
 }
 

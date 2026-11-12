@@ -224,8 +224,9 @@ impl DWriteMetrics {
     /// [`FontCatalog`] を 1 つだけ作り、[`DWriteMetrics::new_shared`] と
     /// [`ViewboxExecutor::new_shared`](crate::viewbox_draw::ViewboxExecutor::new_shared) の
     /// **両方へ引数で渡す**形で共有が成立する（要件 9.8）。ゆえに本関数の本番の呼び手は 0 で、
-    /// 唯一の呼び手は `draw_metrics_styled_tests.rs::the_shared_catalog_constructor_measures_the_same_as_the_owning_one`
-    /// ——「渡した台帳がそのまま使われている」（`Rc` の同一性）を確かめるための口である。
+    /// テストの観測と操作の口である——「渡した台帳がそのまま使われている」（`Rc` の同一性・
+    /// `the_shared_catalog_constructor_measures_the_same_as_the_owning_one`）、実フォントの前提
+    /// （`require_yu_gothic`）、台詞の境目（`forget_talk`）を確かめる檻が呼ぶ。
     /// 本番の入口ではないことを構造で示すため [`probe_format_creations`](Self::probe_format_creations)
     /// と同じく `#[cfg(test)]` で塞いである。
     #[cfg(test)]

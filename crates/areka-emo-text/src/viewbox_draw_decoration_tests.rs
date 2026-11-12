@@ -1,7 +1,7 @@
 //! `viewbox_draw_decoration.rs` の兄弟檻（task 6.5・要件 3.5／3.6／5.1／5.2／5.6／5.7／5.8／
 //! 9.8／12.1／13.3／14.2）。
 //!
-//! 固定する述語は 5 つ。
+//! 主に固定する述語は次の 5 つ（後ろの節は件 3 の下線の区間とはみ出し・既定の見た目の線と色を固定する）。
 //!
 //! 1. **区間の切り出し**——連続する同じ番号が 1 つの区間にまとまり、UTF-16 で 2 単位の文字が
 //!    2 と数えられる（`segment_text_range` と同じ数え方）。区間に切らず行全体を 1 つにする誤りは
@@ -931,6 +931,8 @@ fn changing_only_the_default_strokes_or_color_redraws_like_a_fresh_executor() {
     for (name, change) in changes {
         let mut changed = plain.clone();
         change(&mut changed.looks.default);
+        // 既定の字のブラシは `color`（`render_styled` が塗る色）——見た目と揃えないと色の段が赤にならない。
+        changed.color = changed.looks.default.color;
         let mut surface = rig.attach(image, 1.0);
         let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
         for font in [&plain, &changed] {

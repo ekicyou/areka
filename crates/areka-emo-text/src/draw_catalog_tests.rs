@@ -18,7 +18,7 @@
 //! | §6 | 較正（鍵を連結する誤り・読み飛ばしと全滅の種別） | 13.5 |
 //! | §7 | 顔に太字・斜体の指定を重ねる規則（檻 U7） | 4.2〜4.5 |
 //! | §8 | GDI の名前での引き直し（偽の台帳・檻 U1〜U6） | 3.1〜3.7, 3.11, 6.2 |
-//! | §9 | 実際の書体の集まりでの中太（檻 R1） | 3.5, 3.10, 6.3 |
+//! | §9 | 実際の書体の集まりでの中太（檻 R1）・空の候補は次へ（再監査 R2） | 3.5, 3.10, 6.3 |
 
 use areka_parsers::balloon::{Font, FontColor};
 use log_capture_kit::{CapturedEvent, capture};
@@ -603,4 +603,30 @@ fn r1_real_collection_resolves_gdi_names_to_the_medium_face() {
         "見つからない名前は想定外の失敗ではない（error! を残さない）: {events:?}"
     );
     assert_eq!(warns(&events, ALL_MISSING), 1, "対照: 全滅の記録は出ている");
+}
+
+/// 再監査 R2-C（調べ）: 本番の台帳で空の候補（`\f[name,,Meiryo]` の 2 番目）は何の顔にも当たらず、
+/// 次の候補が採られる（DirectWrite が空の名前に既定の書体を返して空の候補が勝つ、にならない）。
+#[test]
+fn an_empty_candidate_on_the_real_collection_falls_through_to_the_next() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
+        .expect("DWriteCreateFactory（デバイス非依存・headless 可）");
+    let cat = FontCatalog::new(&factory).expect("システムのフォント集合を取得できる");
+    require_yu_gothic(&cat);
+    let names = |list: &[&str]| list.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    let (alone, events) = capture(|| cat.face_for(&names(&[""])));
+    assert_eq!(alone, None, "空の候補だけなら全滅");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .count(),
+        0,
+        "空の名前は想定外の失敗ではない: {events:?}"
+    );
+    assert_eq!(
+        cat.face_for(&names(&["", "Yu Gothic"])),
+        cat.face_for(&names(&["Yu Gothic"])),
+        "空の候補は飛ばして次の候補を採る"
+    );
 }

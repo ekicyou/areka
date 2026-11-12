@@ -7,7 +7,7 @@
 //! | §2 | 集めた後に区間の下線が立てる前の状態へ戻る（区間の外と、もともと立っていた所を含む） | 3.7 の前提 |
 //! | §3 | 集めるのが失敗しても戻し、`error!` を残して `Err` | log-first |
 //! | §4 | 描画効果のブラシを持ち、無い・写せない効果は既定の文字色の印（`None`） | 3.1 |
-//! | §5 | `render_styled` の中で集めるのに失敗したフレームは提示を見送り（面は前のまま）、次のフレームで再試行して塗る。変化の無いフレームは集めない（2.5）。失敗を仕込むのは行の生成のときの集め（可謬・plan より前）で、Phase 1 の `collect_underlines(...)?` は `apply_color_ranges` と同じ BeginDraw 前の `?` の結線を使う（Phase 1 だけの檻は持たない） | 3.1, 4.3 |
+//! | §5 | `render_styled` の中で集めるのに失敗したフレームは提示を見送り（面は前のまま）、次のフレームで再試行して塗る。変化の無いフレームは集めない（2.5）。失敗を仕込むのは行の生成のときの集め（可謬・plan より前）で、Phase 1 の `collect_underlines(...)?` は `apply_color_ranges` と同じ BeginDraw 前の `?` の結線を使う。Phase 1 で戻すのに失敗した行は保持庫から外し、次のフレームで作り直す（再監査 R2-D4） | 3.1, 4.3 |
 //! | §6 | 縦書き（2 方向・3 書体・拡大率 1.0／1.25／1.5・整数でない原点）の areka の塗り方（集める → `stroke_rect` → 字の後に `FillRectangle`）が、D2D 自身の下線（`SetUnderline` を焼いた `DrawTextLayout`）と、覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下で一致する（2.6） | 3.4, 4.3 |
 //! | §7 | 既定の見た目が下線つきのバルーンでは、飾りの無い行にも線が出る＝全部の字に下線を積んだ行とバイトで一致し、線の無い行とは違う（指摘 6・balloon-font-descript-keys の要件 5.5） | 3.1 |
 //! | §8 | 線を面の内側へ寄せた最下行の後に 1 行送ったフレームが、同じ中身を 1 フレームで全部描いた面とバイトで一致する（寄せた線が送られて字の下に残らない・指摘 15・実 GPU） | 3.11, 4.1 |
@@ -24,7 +24,7 @@ use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
 
 use super::super::test_support::{Rig, default_and_decorated_strokes, live_diff_model_font};
-use super::{FAIL_RECORDING, collect_underlines};
+use super::{FAIL_RECORDING, FAIL_RESTORE, collect_underlines};
 use crate::TextLayerError;
 use crate::draw::{ResolvedFont, create_text_format};
 use crate::underline::{ReadingAxis, stroke_rect};
@@ -252,8 +252,8 @@ fn drawing_effect_becomes_a_brush_or_the_default_color_marker() {
 /// 失敗が当たるのは、最初に集める所＝行の生成のとき（行の保持庫・可謬・plan より前）の集めで
 /// ある（失敗した行は保持庫に入らないので、次のフレームで行の生成からやり直す）。Phase 1 で描く
 /// 行ごとに呼ぶ `collect_underlines(...)?` は、`apply_color_ranges` と同じ BeginDraw 前の `?` の
-/// 結線（失敗＝target 未設定のまま見送り）を使うだけなので、Phase 1 の失敗だけを仕込む檻は
-/// 別に持たない。
+/// 結線（失敗＝target 未設定のまま見送り）を使う。Phase 1 で戻すのに失敗した行の扱いは
+/// `a_failed_restore_forgets_the_line_and_the_next_frame_rebuilds_it` が確かめる。
 #[test]
 fn a_failed_collection_skips_the_frame_and_the_next_frame_retries() {
     use super::super::ViewboxExecutor;
@@ -320,6 +320,75 @@ fn a_failed_collection_skips_the_frame_and_the_next_frame_retries() {
         surface.read_back().expect("read_back"),
         painted,
         "面は変わらない"
+    );
+}
+
+/// 再監査 R2-D4: Phase 1 で保持庫の行に下線を立てて集めた後、戻すのに失敗したフレームは、その行を
+/// 保持庫から外す（下線が立ったままの行を次のフレームで引き当てて DirectWrite の下線と areka の
+/// 線を二重に描かない）。次のフレームは行を作り直し、新しい描き手の絵とバイトで一致する。
+#[test]
+fn a_failed_restore_forgets_the_line_and_the_next_frame_rebuilds_it() {
+    use super::super::ViewboxExecutor;
+    use super::super::test_support::{build, geo_model, glyph_items};
+    use crate::look::{StyleTable, TextLook};
+    use crate::region::{ScaleContract, TextRegion};
+
+    let mut rig = Rig::new();
+    let image = (60u32, 30u32);
+    let mode = WritingMode::HorizontalTb;
+    let font = ResolvedFont::resolve(&geo_model(Some(12)));
+    let region = TextRegion::resolve(&geo_model(Some(12)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let default = &font.looks.default;
+    let mut styles = StyleTable::default();
+    let under = styles.intern(
+        &TextLook {
+            underline: true,
+            ..default.clone()
+        },
+        default,
+    );
+    let (mut canvas, window) = build(&glyph_items("あい"), &region, mode, 12.0);
+    if let crate::canvas::ResidentContent::GlyphRun(run) = &mut canvas.residents[0].content {
+        for glyph in &mut run.glyphs {
+            glyph.style = under;
+        }
+    }
+    let render = |exec: &mut ViewboxExecutor, surface: &mut crate::surface::TextSurface| {
+        exec.render_styled(&canvas, &window, &font, mode, &contract, surface, &styles)
+    };
+    let mut surface = rig.attach(image, 1.0);
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    render(&mut exec, &mut surface).expect("1 フレーム目");
+    assert!(
+        exec.line_store.overhang(0).is_some(),
+        "前提: 行は保持庫にある"
+    );
+
+    // 前の行を忘れさせて、保持庫の行を Phase 1 で引き当てる全域のフレームにする。
+    exec.planner.forget_prev();
+    FAIL_RESTORE.set(true);
+    let failed = render(&mut exec, &mut surface);
+    FAIL_RESTORE.set(false);
+    assert!(failed.is_err(), "戻せなかったフレームは Err");
+    assert!(
+        exec.line_store.overhang(0).is_none(),
+        "戻せなかった行は保持庫から外す"
+    );
+
+    let creations = exec.stats().line_layout_creations;
+    assert!(render(&mut exec, &mut surface).expect("次のフレーム"));
+    assert_eq!(
+        exec.stats().line_layout_creations - creations,
+        1,
+        "外した行を作り直す"
+    );
+    let mut fresh_surface = rig.attach(image, 1.0);
+    let mut fresh = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    render(&mut fresh, &mut fresh_surface).expect("新しい描き手");
+    assert!(
+        surface.read_back().expect("read_back") == fresh_surface.read_back().expect("read_back"),
+        "作り直した行の絵は新しい描き手の絵と一致する"
     );
 }
 
