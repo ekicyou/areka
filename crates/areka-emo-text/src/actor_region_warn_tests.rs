@@ -26,7 +26,7 @@
 //! 3. binding だけが変わって領域が同値の再追従も **0 件**——再構築は起きる（`true`）のに
 //!    警告は出ない、という形で「判定は領域の値である」ことを示す。
 //! 4. 領域の値が**変わる**再追従は **1 件**（新しい値で）。
-//! 5. 折返し基準が遠辺の**内**のバルーンは装着でも **0 件**。
+//! 5. 折返し基準が遠辺の**内**のバルーンは装着でも **0 件**（遠辺と**等しい**ときも 0 件）。
 //! 6. 縦書きの粗いバルーンは軸欄が `y` になる。
 //!
 //! ## 0 件の主張が恒真にならないようにする
@@ -248,6 +248,41 @@ fn attaching_a_balloon_with_wrap_threshold_inside_the_range_does_not_warn() {
         warns.len(),
         0,
         "折返し基準が描画範囲の内にあるバルーンは警告を記録しない: {warns:?}"
+    );
+}
+
+/// 折返し基準がちょうど遠辺の上（`wordwrappoint.x,-48` → 288−48＝240＝右辺 240）の相方側
+/// バルーンは警告を出さない。比べは `wrap_threshold <= inline_limit` で、等しいのは「外」でない
+/// （`wordwrappoint` は「超えたら折り返す」基準・境界の同値の檻）。
+#[test]
+fn attaching_a_balloon_with_wrap_threshold_exactly_on_the_far_edge_does_not_warn() {
+    let mut world = World::new();
+    let (mut rt, window, slot) = runtime_with_slot(&mut world);
+    let actor = ActorKey::from("1");
+    let model = parse_str(
+        DESCRIPT,
+        Some(concat!(
+            "wordwrappoint.x,-48
+",
+            "validrect.right,-48
+"
+        )),
+    );
+    let region = TextRegion::resolve(&model, KERO_IMAGE, WritingMode::HorizontalTb);
+    assert_eq!(
+        (region.wrap_threshold(), region.inline_limit()),
+        (KERO_RIGHT, KERO_RIGHT),
+        "前提: 折返し基準と遠辺が同じ値に解決される"
+    );
+
+    let (_, warns) = capturing(|| {
+        rt.register_actor_binding(actor.clone(), binding(slot, window, KERO_IMAGE), &model);
+    });
+
+    assert_eq!(
+        warns.len(),
+        0,
+        "折返し基準が遠辺と等しいバルーンは警告を記録しない: {warns:?}"
     );
 }
 
