@@ -99,7 +99,8 @@ impl TimelineManager {
 
     /// 指定変数の現在値を評価。
     ///
-    /// - 最新（最大）group_id 優先（Tier 2 暫定動作）
+    /// - 始まった項目（実効時刻が最初のセグメントの始まり以降）のうち最新（最大）group_id を優先する。
+    ///   始まっていない項目（未来の start・start_offset の子）は、全部が始まっていないときだけ from を出す
     /// - 最後のセグメントを過ぎた変数は、インスタンスが生きている間は最後の値を保つ
     ///   （項目を消すのは `remove_entries` だけ）
     /// - Pause 中のインスタンスは pause 開始時点の effective_time で固定
@@ -115,7 +116,8 @@ impl TimelineManager {
             .entries
             .retain(|e| instances.contains_key(&e.group_id));
 
-        let mut best_value: Option<(u64, EvaluatedValue)> = None;
+        // (始まったか, group_id) の大きい項目を取る
+        let mut best_value: Option<((bool, u64), EvaluatedValue)> = None;
 
         for entry in &timeline.entries {
             let Some(instance) = instances.get(&entry.group_id) else {
@@ -123,18 +125,19 @@ impl TimelineManager {
             };
 
             let effective_time = value_time(current_time, instance);
+            // 周回を 1 回でも終えたインスタンスは始まった扱い（2 周目の先頭の遅れの中でも）
+            let started = instance.loops_completed > 0
+                || entry
+                    .segments
+                    .first()
+                    .is_some_and(|s| effective_time >= s.start_time);
+            let key = (started, entry.group_id);
 
-            // アクティブなセグメントを探す
-            let eval = evaluate_segments(entry, effective_time, &mut self.intern_pool);
-
-            if let Some(val) = eval {
-                // 最新（最大）group_id 優先
-                match &best_value {
-                    Some((best_gid, _)) if entry.group_id <= *best_gid => {}
-                    _ => {
-                        best_value = Some((entry.group_id, val));
-                    }
-                }
+            if best_value.as_ref().is_some_and(|(best, _)| key <= *best) {
+                continue;
+            }
+            if let Some(val) = evaluate_segments(entry, effective_time, &mut self.intern_pool) {
+                best_value = Some((key, val));
             }
         }
 
@@ -289,17 +292,12 @@ fn evaluate_segments(
         }
 
         let duration = seg.end_time - seg.start_time;
-        if duration <= 0.0 {
-            // 即時遷移（duration=0）
-            if effective_time >= seg.start_time {
-                return Some(entry.value_at(seg, 1.0, intern_pool));
-            }
-        } else if effective_time < seg.end_time {
+        if duration > 0.0 && effective_time < seg.end_time {
             // このセグメント内
             let progress_t = (effective_time - seg.start_time) / duration;
             return Some(entry.value_at(seg, progress_t, intern_pool));
         }
-        // seg.end_time <= effective_time → 次のセグメントへ
+        // 終わったセグメント（即時のセグメントを含む）→ 次へ。後ろが無ければ下で最後の値を保つ
     }
 
     // 最後のセグメントを過ぎた → 最後の値を保つ

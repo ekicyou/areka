@@ -314,6 +314,89 @@ fn evaluate_multi_segment_progression() {
     assert!(mgr.has_entries(1));
 }
 
+#[test]
+fn instant_segment_does_not_hide_later_segments() {
+    // 即時のセグメントで返して抜けると、後ろのセグメントの値が出ず即時の値で止まっていた
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    for (segments, t, expected) in [
+        (
+            vec![
+                float_segment(0.0, 0.0, 0.0, 5.0),
+                float_segment(0.0, 1.0, 5.0, 10.0),
+            ],
+            0.5,
+            7.5,
+        ),
+        (
+            vec![
+                float_segment(0.0, 1.0, 0.0, 1.0),
+                float_segment(1.0, 1.0, 1.0, 5.0),
+                float_segment(1.0, 2.0, 5.0, 0.0),
+            ],
+            1.5,
+            2.5,
+        ),
+    ] {
+        let mut mgr = TimelineManager::new();
+        mgr.insert_entries(1, &make_compiled_with_segments("x", segments));
+        assert_eq!(
+            mgr.evaluate("x", t, &instances),
+            Some(EvaluatedValue::Float(expected))
+        );
+    }
+}
+
+#[test]
+fn not_yet_started_instance_does_not_override_started_one() {
+    // 親（gid 1）が x を 0→1 に 2 秒・子（gid 2）は 1.5 秒に始まって x を 5→6。
+    // 始まる前の子が group_id の大きさで勝つと、t=1.0 で x が子の from の 5 に跳んでいた
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0.0, 2.0));
+    mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0.0, 1.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    instances.insert(2, make_instance(1.5));
+
+    assert_eq!(
+        mgr.evaluate("x", 1.0, &instances),
+        Some(EvaluatedValue::Float(0.5))
+    );
+    // 子が始まれば子が勝つ
+    assert_eq!(
+        mgr.evaluate("x", 2.0, &instances),
+        Some(EvaluatedValue::Float(5.5))
+    );
+    // 全部が始まる前なら、今までどおり group_id の大きい方の from
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0.0, 2.0));
+    mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0.0, 1.0));
+    instances.insert(1, make_instance(1.2));
+    assert_eq!(
+        mgr.evaluate("x", 1.0, &instances),
+        Some(EvaluatedValue::Float(5.0))
+    );
+}
+
+#[test]
+fn looped_instance_in_leading_delay_counts_as_started() {
+    // 2 周目の先頭の遅れ（0 ≤ t < 最初のセグメントの始まり）でも、周回を終えたインスタンスは始まった扱い
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0.0, 10.0));
+    mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0.5, 1.5));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    let mut looped = make_instance(0.0);
+    looped.loops_completed = 1;
+    looped.loop_start_time = 2.0;
+    instances.insert(2, looped);
+
+    assert_eq!(
+        mgr.evaluate("x", 2.2, &instances),
+        Some(EvaluatedValue::Float(5.0))
+    );
+}
+
 // =====================================================================
 // calculate_effective_time（純粋関数の直接検証）
 // =====================================================================

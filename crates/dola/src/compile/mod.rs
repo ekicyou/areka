@@ -18,6 +18,24 @@ use crate::variable::AnimationVariableDef;
 
 use resolve::*;
 
+/// 有限の数どうしの和があふれて inf になった時刻・値を `InvalidNumber` として積む
+/// （validate の数値の規則は数を 1 つずつしか見ない）。
+fn push_if_overflowed(
+    errors: &mut Vec<DolaError>,
+    storyboard: &str,
+    entry_idx: usize,
+    field: &str,
+    value: f64,
+) {
+    if !value.is_finite() {
+        errors.push(DolaError::InvalidNumber {
+            location: format!("storyboard '{storyboard}' entry {entry_idx}"),
+            field: field.to_string(),
+            value,
+        });
+    }
+}
+
 /// ストーリーボードをコンパイルする
 ///
 /// # Preconditions
@@ -134,6 +152,7 @@ pub(crate) fn compile_validated(
                 &mut errors,
             );
             if let Some(t) = fire_time {
+                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "fire_time", t);
                 // Register keyframe at fire_time (0-second completion)
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
@@ -162,6 +181,7 @@ pub(crate) fn compile_validated(
                 &mut errors,
             );
             if let Some(t) = kf_time {
+                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "keyframe_time", t);
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
             }
@@ -209,6 +229,14 @@ pub(crate) fn compile_validated(
             Some(t) => t,
             None => continue,
         };
+        // 始まりは終わり以下なので、終わりが有限なら始まりも有限
+        push_if_overflowed(
+            &mut errors,
+            storyboard_name,
+            entry_idx,
+            "end_time",
+            segment_end,
+        );
 
         // Register keyframe time
         keyframe_times.insert(kf_name, kf_time);
@@ -227,7 +255,9 @@ pub(crate) fn compile_validated(
                 min.unwrap_or(f64::NEG_INFINITY),
                 max.unwrap_or(f64::INFINITY),
             );
-            if v < min || v > max {
+            if !v.is_finite() {
+                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "relative_to", v);
+            } else if v < min || v > max {
                 errors.push(DolaError::TransitionValueOutOfRange {
                     storyboard: storyboard_name.to_string(),
                     entry_index: entry_idx,

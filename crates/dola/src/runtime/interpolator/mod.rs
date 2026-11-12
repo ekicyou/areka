@@ -1,5 +1,6 @@
 //! イージング関数の適用と補間計算。
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -28,11 +29,14 @@ impl ObjectInternPool {
     }
 
     /// 同一内容の DynamicValue に対して同一の Rc を返す。
-    pub fn intern(&mut self, value: DynamicValue) -> Rc<DynamicValue> {
-        self.pool
-            .entry(value.clone())
-            .or_insert_with(|| Rc::new(value))
-            .clone()
+    /// 当たったときは複製もしない（毎フレーム引くので）。
+    pub fn intern(&mut self, value: &DynamicValue) -> Rc<DynamicValue> {
+        if let Some(rc) = self.pool.get(value) {
+            return rc.clone();
+        }
+        let rc = Rc::new(value.clone());
+        self.pool.insert(value.clone(), rc.clone());
+        rc
     }
 
     /// 使われていない値を手放す（表が増え続けないように）。配信中の値は同じ Rc を保つ
@@ -88,8 +92,8 @@ impl Interpolator {
                 };
                 let dv = transition_value_to_dynamic(value);
                 let rc = match intern_pool {
-                    Some(pool) => pool.intern(dv),
-                    None => Rc::new(dv),
+                    Some(pool) => pool.intern(&dv),
+                    None => Rc::new(dv.into_owned()),
                 };
                 EvaluatedValue::Object(rc)
             }
@@ -97,14 +101,13 @@ impl Interpolator {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
                 let eased_t = apply_easing(t, segment.easing.as_ref());
-                let result = interpolation::lerp(&from, &to, &eased_t);
-                EvaluatedValue::Float(result)
+                EvaluatedValue::Float(lerp(from, to, eased_t))
             }
             VariableTypeHint::Integer { .. } => {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
                 let eased_t = apply_easing(t, segment.easing.as_ref());
-                let result = interpolation::lerp(&from, &to, &eased_t);
+                let result = lerp(from, to, eased_t);
                 // NOTE(数値境界): `as i64` は飽和キャスト（Rust 1.45+）であり panic しない:
                 // NaN → 0、i64::MAX 超 / +inf → i64::MAX、i64::MIN 未満 / -inf → i64::MIN。
                 // round() も全 f64 入力で panic しない。
@@ -112,6 +115,11 @@ impl Interpolator {
             }
         }
     }
+}
+
+/// `from + (to − from)·t` は有限の両端でも差があふれて NaN／inf になり、t=1 で to にならないので、重みの和で出す。
+fn lerp(from: f64, to: f64, t: f64) -> f64 {
+    from * (1.0 - t) + to * t
 }
 
 /// `EasingFunction` を適用して進捗率を変換する。
@@ -199,10 +207,10 @@ fn scalar_value(value: &TransitionValue) -> f64 {
 }
 
 /// `TransitionValue` を `DynamicValue` に変換する。
-fn transition_value_to_dynamic(value: &TransitionValue) -> DynamicValue {
+fn transition_value_to_dynamic(value: &TransitionValue) -> Cow<'_, DynamicValue> {
     match value {
-        TransitionValue::Scalar(v) => DynamicValue::Float(*v),
-        TransitionValue::Dynamic(dv) => dv.clone(),
+        TransitionValue::Scalar(v) => Cow::Owned(DynamicValue::Float(*v)),
+        TransitionValue::Dynamic(dv) => Cow::Borrowed(dv),
     }
 }
 

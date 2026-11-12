@@ -136,12 +136,85 @@ fn nan_trigger_start_offset_is_rejected() {
 }
 
 #[test]
+fn overflowing_sums_of_finite_numbers_are_rejected() {
+    // validate は数を 1 つずつしか見ないので、有限どうしの和が inf になった時刻・値が
+    // そのまま通り、終わらないインスタンスや inf の値を配っていた
+    let doc = single_transition_doc(1e308, Some(1e308));
+    assert_eq!(rejected_fields(&doc, "test"), ["end_time"]);
+
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("x".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(1e308)),
+                    relative_to: Some(1e308),
+                    duration: Some(1.0),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })
+            .build(),
+    );
+    assert_eq!(rejected_fields(&doc, "test"), ["relative_to"]);
+
+    // 純粋なキーフレームとトリガーの時刻（k の 1e308 にさらに 1e308 を足す）
+    let at_k_plus = || {
+        Some(KeyframeRef::WithOffset {
+            keyframes: KeyframeNames::Single("k".to_string()),
+            offset: 1e308,
+        })
+    };
+    let mut doc = make_doc_with_storyboard(
+        vec![],
+        vec![],
+        "parent",
+        StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                keyframe: Some("k".to_string()),
+                at: Some(KeyframeRef::WithOffset {
+                    keyframes: KeyframeNames::Single("start".to_string()),
+                    offset: 1e308,
+                }),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                keyframe: Some("k2".to_string()),
+                at: at_k_plus(),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some("child".to_string()),
+                at: at_k_plus(),
+                ..Default::default()
+            })
+            .build(),
+    );
+    doc.storyboard.insert(
+        "child".to_string(),
+        StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                keyframe: Some("c".to_string()),
+                at: Some(KeyframeRef::Single("start".to_string())),
+                ..Default::default()
+            })
+            .build(),
+    );
+    let mut fields = rejected_fields(&doc, "parent");
+    fields.sort();
+    assert_eq!(fields, ["fire_time", "keyframe_time"]);
+}
+
+#[test]
 fn segment_sort_with_many_nan_follows_total_order() {
     // 並べ替えは −0.0 を +0.0 にそろえた全順序（#10）。delay は 48…2 の降順に並べてあるので、
     // 有限の start_time では並べ替えを外すと昇順の確かめが落ちる。
     // #29 の後、公開の口からは NaN と有限の値が混ざった並びを作れない（文書の NaN は検証が拒み、
-    // start_time の NaN は全部のセグメントを同じ符号の NaN にする）ので、全順序と partial_cmp の
-    // 違いはここでは観測できない。NaN の回は panic しないことだけを見る。
+    // start_time の NaN は全部の終わりの時刻を NaN にし、有限でない時刻としてコンパイルが拒む）ので、
+    // 全順序と partial_cmp の違いはここでは観測できない。NaN の回は panic せずに拒むことだけを見る。
     let mut builder = StoryboardBuilder::new();
     for i in 0..24 {
         let mut entry = transition_entry("x", f64::from(2 * (24 - i)), Some(1.0));
@@ -161,8 +234,8 @@ fn segment_sort_with_many_nan_follows_total_order() {
 
     let computed_nan = std::hint::black_box(f64::INFINITY) - f64::INFINITY;
     for start_time in [f64::NAN, computed_nan] {
-        let result = compile_storyboard(&doc, "test", start_time).unwrap();
-        assert_eq!(result.timelines["x"].segments.len(), 24);
+        let errors = compile_storyboard(&doc, "test", start_time).unwrap_err();
+        assert_eq!(errors.len(), 24);
     }
 }
 

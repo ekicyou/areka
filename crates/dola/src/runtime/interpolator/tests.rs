@@ -39,6 +39,24 @@ fn boundary_t_one() {
     assert_eq!(result, EvaluatedValue::Float(20.0));
 }
 
+/// 極端でも有限の両端で NaN／inf を出さず、両端が正確（`from + (to − from)·t` は差があふれ、端もずれる）
+#[test]
+fn extreme_finite_endpoints_interpolate_exactly() {
+    for (from, to, t, expected) in [
+        (-1.7e308, 1.7e308, 0.0, -1.7e308),
+        (-1.7e308, 1.7e308, 0.5, 0.0),
+        (-1.7e308, 1.7e308, 1.0, 1.7e308),
+        (1e16, 1.0, 1.0, 1.0),
+    ] {
+        let seg = make_segment(from, to, None);
+        assert_eq!(
+            Interpolator::interpolate(&seg, &VariableTypeHint::Float, t),
+            EvaluatedValue::Float(expected),
+            "{from:e}→{to:e} @ {t}"
+        );
+    }
+}
+
 #[test]
 fn clamp_below_zero() {
     let seg = make_segment(0.0, 100.0, None);
@@ -166,8 +184,8 @@ fn quadratic_bezier_easing() {
 #[test]
 fn intern_pool_returns_same_rc_for_equal_values() {
     let mut pool = ObjectInternPool::new();
-    let rc1 = pool.intern(DynamicValue::String("a".to_string()));
-    let rc2 = pool.intern(DynamicValue::String("a".to_string()));
+    let rc1 = pool.intern(&DynamicValue::String("a".to_string()));
+    let rc2 = pool.intern(&DynamicValue::String("a".to_string()));
     assert!(
         Rc::ptr_eq(&rc1, &rc2),
         "equal values must intern to the same Rc"
@@ -177,8 +195,8 @@ fn intern_pool_returns_same_rc_for_equal_values() {
 #[test]
 fn intern_pool_returns_distinct_rc_for_different_values() {
     let mut pool = ObjectInternPool::new();
-    let rc1 = pool.intern(DynamicValue::String("a".to_string()));
-    let rc2 = pool.intern(DynamicValue::String("b".to_string()));
+    let rc1 = pool.intern(&DynamicValue::String("a".to_string()));
+    let rc2 = pool.intern(&DynamicValue::String("b".to_string()));
     assert!(
         !Rc::ptr_eq(&rc1, &rc2),
         "different values must intern to distinct Rc"
