@@ -37,7 +37,7 @@ use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::look::StyleTable;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::underline::{pull_inside, stroke_overhang, stroke_rect};
+use crate::underline::{StrokeRect, pull_inside, stroke_overhang, stroke_rect};
 use crate::viewbox::{FramePlan, LineOverhang};
 use crate::writing::WritingMode;
 
@@ -310,16 +310,24 @@ impl ViewboxExecutor {
                     // 下線（件 3）: 色と重ね表示の効果を焼いた後に、下線の区間がある行だけ集める
                     // （効果はブラシとして線の色になる）。原点は字を描く原点と同じ（DirectWrite の
                     // 画素への寄せが字と同じベースラインを返す）。見える窓の行の線だけを面の
-                    // 物理寸 ÷ k の範囲へ寄せる（送りで面の外へ出た行は今と同じく端で切れる）。
+                    // 物理寸 ÷ k の範囲へ寄せる（送りで面の外へ出た行は今と同じく端で切れる）。行の箱が
+                    // 丸ごと面の外の行の線は寄せない（`pull_inside` が行の箱で決める）。
                     let strokes = if line.underlines.is_empty() {
                         Vec::new()
                     } else {
+                        // 行の em の箱（面の上・`resident_rect` と同じ箱）。
+                        let row = StrokeRect {
+                            left: origin.X,
+                            top: origin.Y,
+                            right: origin.X + run.size.0,
+                            bottom: origin.Y + run.size.1,
+                        };
                         collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))?
                             .into_iter()
                             .map(|recorded| {
                                 let rect = stroke_rect(&recorded.raw, (0.0, 0.0));
                                 let rect = if index >= window.first_visible_line {
-                                    pull_inside(rect, mode, bound)
+                                    pull_inside(rect, row, mode, bound)
                                 } else {
                                     rect
                                 };

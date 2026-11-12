@@ -160,13 +160,13 @@ crates/areka-emo-text/src/（範囲の外・申し合わせの後に触る）
 - `lookahead.rs` — 「内容を足した」合図に印の字（`is_marker_carrier`）を足す（13）。
 - `look.rs` — `StyleTable` に `HashMap` の索引（10）。`TextLook` に `Hash`・`Eq`（10）。`cursor*`・`anchor*` を ukadoc の一覧で数え上げる（21）。
 - `color.rs` — 失敗の理由の文と u64 の読み（32）。
-- `underline.rs` — 丸ごと面の外の線は寄せない（14）。
+- `underline.rs` — 行の箱が丸ごと面の外の行の線は寄せない（14）。
 - `canvas.rs` — 失敗しえない内側のテストを消す（24）。説明（29）。`RegionTransform` の行列の口は残す。
 - `viewbox.rs` — `resolve_position`・`blit_vector` の飽和とずらし量の頭打ち（3）。`prev_lines` を `Option` に（16）。消去の要求中の計画（17）。指紋を 1 度だけ求める（31）。説明（3・29）。
 - `viewbox_diff.rs` — 描き直しの範囲の足し引きを飽和に（4）。全域の道を「前の行が分からない」専用の関数に分け、面と重なる行だけ描く（16・18）。送ったフレームで前の最下行を描き直す（15）。
 - `viewbox_draw.rs` — `request_clear` が台帳の台詞の番号を進め、ブラシの記憶を空にする（11）。消去由来のフレームを数える（17）。`#[cfg(test)]` の再公開を消す（30）。`device_err`／`none_err` は `draw` の側から引く（26）。説明 `:256-257` ほか（17・29）。
 - `viewbox_draw_plan.rs` — 全域の縮退をはみ出し込みで面と重なる行に絞る（18）。`draw_lines.contains` を `binary_search` に（31）。
-- `viewbox_draw_render.rs` — 既定の見た目の行でも線が要れば線を焼く道を通す（6）。帯の超過分を行の丈と比べる（8）。消去と字が同じフレームの描画（17）。`ChoiceDraw` を畳む・`apply_color_ranges` の戻り値（30）。既定の色のブラシを欄で覚える（31）。
+- `viewbox_draw_render.rs` — 既定の見た目の行でも線が要れば線を焼く道を通す（6）。帯の超過分を行の丈と比べる（8）。消去と字が同じフレームの描画（17）。`ChoiceDraw` を畳む・`apply_color_ranges` の戻り値（30）。既定の色のブラシを欄で覚える（31）。線を寄せる関数へ行の em の箱を渡す（14）。
 - `viewbox_draw_decoration.rs` — 下線の区間を `look.underline` だけで選ぶ・打ち消し線は `look.strike` で焼く（6）。`BrushCache::clear`（11）。
 - `draw.rs` — 既定の書体の名と高さの定数を `crate::look::UKADOC_*` の別名に（26）。`device_err`／`none_err` を `pub(crate)` に（26）。既定の書体での作り直しを消す（35）。`DrawExecutor` が台帳で書体を解いてから書式を作る（34・テストだけ）。`DrawExecutor::line_layout` を消す（30）。説明（29）。
 - `draw_catalog.rs` — 台詞の番号と `forget_talk`（11）。
@@ -291,7 +291,7 @@ stateDiagram-v2
 | 塊の折り返し（`layout_scan_glyph.rs`・`segment.rs`） | 純粋 | 空行を出さない・2 乗をやめる | 5・9・23・33 | 振る舞い |
 | 文字の面の寸（`region.rs`＋範囲の外 `actor_present.rs`） | 純粋 | 面を画像の大きさで頭打ち | 7 | Service |
 | 描き直しの計画者（`viewbox.rs`・`viewbox_diff.rs`・`viewbox_draw_plan.rs`） | 純粋 | あふれない・空を描き直さない・消去を 0 フレームで・面の外を描かない | 3・4・15・16・17・18・31 | State |
-| 線（`viewbox_draw_decoration.rs`・`viewbox_draw_render.rs`・`underline.rs`） | COM・純粋 | 既定の線を描く・面の外の線を寄せない | 6・14・15 | 振る舞い |
+| 線（`viewbox_draw_decoration.rs`・`viewbox_draw_render.rs`・`underline.rs`） | COM・純粋 | 既定の線を描く・面の外の行の線を寄せない | 6・14・15 | 振る舞い |
 | 帯（`viewbox_draw_render.rs`） | COM | 帯の超過を行の丈と比べる | 8 | 振る舞い |
 | 書体と見た目の表（`look.rs`・`draw_catalog.rs`・`draw_metrics.rs`・`viewbox_draw.rs`・`viewbox_draw_decoration.rs`・`draw.rs`） | 純粋・COM | 表を台詞の寿命にする・失敗を覚える・線形探索をやめる | 10・11・12・31・34・35 | State |
 | 台本の読み（`lookahead.rs`・`look.rs`・`color.rs`） | 純粋 | 合図の数え・`\f` のキー・記録の文 | 13・21・32 | 振る舞い |
@@ -402,7 +402,7 @@ impl ScrollPlanner {
 ### 線（指摘 6・14・15）
 
 - 指摘 6: 下線は areka が自分で塗るので、区間の選び方を直すだけ＝解決した見た目の `look.underline` だけで選ぶ（`StyleId::DEFAULT` の区間も対象・`!= default.underline` を外す・`viewbox_draw_decoration.rs:129-138`）。打ち消し線は DirectWrite に焼く。`apply_font_ranges` は既定の区間を `continue` で飛ばす（`:174-176`）ので、**既定の見た目が打ち消し線つきなら、ループの前に行の全体へ `SetStrikethrough(true)` を 1 回焼き**、ループの中は今の `look.strike != default.strike` の比べのまま（`\f[strike,0]` で外した区間には `false` を焼く）。範囲の呼び出しの数の檻（`note_range_call`）は、この全体の 1 回も 1 と数える＝既定に打ち消し線の無い行では今どおり 0 件、既定に打ち消し線のある行では既定だけの行で 1 件（檻の期待をこの 2 つに分けて書く）。既定の見た目だけの行でも、既定の見た目が下線か打ち消し線を持つときは、線を焼く道（`line_layout_with_strokes`）を通す（`viewbox_draw_render.rs:503-508` の早い抜けの条件に足す）。`viewbox_draw_decoration_tests.rs:641-669` の「既定と同じ下線の区間は選ばない」は向きを逆に直す。
-- 指摘 14: `underline.rs` の `pull` の頭で、線が丸ごと面の外（`lo > limit || hi < 0`）ならそのまま返す。
+- 指摘 14: `underline.rs` の `pull_inside` に行の em の箱（`row`・面の上の位置・`resident_rect` と同じ箱）を渡し、`pull` の頭で、行の箱が行送りの軸で丸ごと面の外（`row_lo >= limit || row_hi <= 0`）ならそのまま返す。線の矩形だけで決める形（`lo > limit || hi < 0`）は、線だけが面の外に落ちる見えている最下行（要件 3.11 の形：面 119・行の箱 90〜118・線 120〜）まで寄せなくなるので取らない。呼び手（`viewbox_draw_render.rs` の線を集める所）は行の箱を `origin` と `run.size` から作って渡し、今の `index >= window.first_visible_line` の門は残す。
 - 指摘 15: 上の計画者の節。
 
 ### 帯（指摘 8）
@@ -505,7 +505,7 @@ cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,     // None＝
 | 11 | 台詞の番号が進むと、既定の鍵以外の書式を作り直す（作り直しの数が増え、測った値は同じ）。ブラシの記憶が `request_clear` で空になる | `draw_metrics_styled_tests.rs`（383）・`draw_catalog_tests.rs`（385）・`viewbox_draw_frame_render_tests.rs` |
 | 12 | 作れない鍵で 2 回測って `error!` が 1 件 | `draw_metrics_styled_tests.rs` |
 | 13 | `\0\![*]\1かき` で本体側の場所が `added` に入る | `lookahead_tests.rs`（122・約 25 行） |
-| 14 | 丸ごと面の外の線を寄せない（横書きと縦書きの 1 本ずつ） | `underline_tests.rs`（791） |
+| 14 | 丸ごと面の外の行の線を寄せず、線だけが面の外の最下行は寄せる（横書きと縦書きの 1 本ずつ） | `underline_tests.rs`（791） |
 | 15 | 寄せた最下行の後に送り、1 フレームで全部描いた面とバイトで比べる（実 GPU） | `viewbox_draw_underline_tests.rs` |
 | 16 | 空の canvas を commit した次の plan が `NoChange` | `viewbox_plan_commit_tests.rs` |
 | 17 | 消去と字が同じフレームの plan が全域の `Update`・その commit で要求が下りる（純粋）。描いた面が見本と画素で一致・`full_clears` が 1（実 GPU） | `viewbox_plan_commit_tests.rs`・`viewbox_draw_frame_render_tests.rs` |
