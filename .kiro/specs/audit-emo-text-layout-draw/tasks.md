@@ -251,7 +251,7 @@
   - 該当の場所の説明がコードと食い違わず、テストが全部緑であること
   - _Requirements: 4.1_
 
-- [ ] 14. かけ直しと全体テストで確かめる
+- [x] 14. かけ直しと全体テストで確かめる
 - [x] 14.1 audit をかけ直して 0 件を確かめる
   - 範囲を `git ls-files` で測り直し、同じ作法（全件を出す・全部読む・プラグインはリポジトリに写さない）で `/ponytail:ponytail-audit` をかけ直す。新しい指摘は同じ扱いで直し、残すと裁定した指摘（19 の振る舞い・20・28 の calibration・30 の行列の口と `author_dpi`・31 の毎フレームの `debug!`・7 の近い辺）を除いて 0 件までかけ直す。依存が要る指摘・`crates/areka` の口を変える指摘・clippy と重なる所は要件の作法で扱う
   - 5 回目で収まらず、5 回目に「必ず直す」と本番の振る舞いに関わる指摘が無ければ、開発者に知らせて 5 回目の指摘を直したところで区切る
@@ -262,7 +262,7 @@
   - _Depends: 11.4_
   - _Requirements: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.2, 3.4, 3.5, 6.8, 7.10, 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 14.2 全体テストを 1 回回して約束を確かめる
+- [x] 14.2 全体テストを 1 回回して約束を確かめる
   - `pwsh -NoProfile -File tools/test-all.ps1` を裏で 1 回回して緑を確かめる（1,000 行の番人を含む）。赤が触っていないクレートだけなら記憶の手順（その赤だけもう 1 回）に従う
   - `git diff main --stat` で、`crates/areka/`・`lib.rs`・`vendors/`・`Cargo.lock`・`Cargo.toml` に差分が無く、`crates/areka-emo-text/src/` に新しいファイルが無く、範囲の外の差分が 11.4 の 1 語（2 か所）だけ、終了の道に触っていないことを確かめ、文字化けに出会ったら読む側を直す
   - 全体テストが緑で、上の差分の確かめの結果がタスクの記録にあること
@@ -329,3 +329,4 @@
 - 14.1 束 H3（描画とテストの説明・9 件）: 赤になり得ない `bold_does_not_shrink_the_advance` を消した（太字は §3 の生成回数と §4 の送り幅が見る）・捨て口の説明を事実に（`request_clear`・`ensure_format`・`LineLayoutStore::forget`）・`empty_prev_is_full_domain` を `unknown_prev_is_full_domain` へ・本番の呼び手 0 の `ViewboxExecutor::new`／`render` を `#[cfg(test)]`・文書の結び先をフルパスに（cargo doc の警告 71→60）・帯の画素を数える写しを共通の `count_in_x_band` へ・単独では赤にならないバイト比べを外した。
 - 14.1 かけ直し 4 回目（新しい 4 人・81 ファイル・38,403 行）: 必ず直す 0・直したほうがよい 0・できれば 10。束 I1＝R4-A1 位置がちょうど f32::MAX だと送れなかった字の送り幅が -1e-45 になっていたので `.max(0.0)` で 0 以上に（束 H2 の「負の送り幅は出ない」は誤りだったので消した）・R4-A2 字の送りの `warn!` に `inline_pos` の欄・説明と写しの片づけ（`plan()` を支えへ・`font_change_forgets_prev_and_redraws_full_domain` へ改名・帯の丈の説明・横書きの帯の寄せを届く値に）。残す: R4-B1（`WritingDirectionDecision::resolve` が自分で `warn!` を出す・登録口へ移すのは範囲の外＝伝えるだけ）・R4-B2（`look.rs` はちょうど 1,000 行・分けるには新しい src ファイルが要りこの spec では作れない＝次に `look.rs` へ足す spec が先に分ける申し送り）・R4-B3（設計で置いた予約の口）。読み手 C が実機で測った: DirectWrite は大きさ 1e5〜1e38 の書式・行送り・はみ出しを断らない（指摘 20 の前提は成り立つ）。
 - 14.1 かけ直し 5 回目（新しい 4 人・81 ファイル・38,399 行）: 必ず直す 0・直したほうがよい 1・できれば 8・本番の振る舞いに関わる指摘 0 → 記憶「audit のかけ直しは 5 回目で区切ってよい」により、5 回目の指摘を直したところで区切った。束 J1＝呼び手 0 の `PhysicalRect::intersects_block_axis` を消した・本番の入口の名を `render_styled` に・台詞の切れ目で捨てるものの説明・`PROBE_MAX_EXTENT` の理由・赤にならない a==b を外した・`segment_advance_sum` に試験用の見た数の数え（項目数の 3 倍以下・2 乗に戻すと赤）・`Scan` の初期値を直に書く・先に読んだぶんの記録は先に出ると説明・§8 に「寄せる前の線が面の下に落ちる」前提の確かめ。
+- 14.2: 全体テスト `pwsh -NoProfile -File tools/test-all.ps1` を 1 回（commit f7e03af0・始めの未コミット 0）＝all steps green（fmt・x64 workspace 715 s・i686・crates.io の確かめ・文字コード・1,000 行の番人を含む）。`git diff $(git merge-base HEAD origin/main) HEAD` の確かめ: `crates/areka/`・`vendors/`・`Cargo.lock`・`Cargo.toml`・`lib.rs` の差分 0・`crates/areka-emo-text/src/` の新しいファイル 0・範囲の外の差分は 11.4 の `state_decoration_tests.rs` の 2 行だけ・終了の道（OnClose・quit）に触れていない。文字化けには出会わなかった。
