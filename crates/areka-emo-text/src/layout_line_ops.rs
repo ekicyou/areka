@@ -18,12 +18,13 @@ use crate::state::{CursorCoord, TextItem};
 use super::GlyphMetrics;
 use super::styled::glyph_style_advance;
 
-/// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
+/// 塊の遠端（塊先決の判定式の左辺）＝ `start` に塊の送り幅を 1 字ずつ足した値。
 ///
 /// **渡された列の先頭から** `Glyph` のみを数えた先頭 `len` 個（配置は今の字の位置からの列を
 /// 渡す）のグリフ送り幅を、通し番号昇順＝
-/// **左畳み込み順**で合計する（配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design
-/// Service Interface）。見た目は字の**通し番号**（`base_serial`＝列の頭の字の通し番号＋列の中の
+/// **左畳み込み順**で `start` へ足す。配置も行内位置へ同じ順で 1 字ずつ足すので、`start` に
+/// 塊を置く位置を渡せば浮動小数の丸めまで配置の遠端と一致する（0 から合計して残り行幅と
+/// 比べると、丸めの 1 ULP で先決と配置が食い違い塊が割れる・design Service Interface）。見た目は字の**通し番号**（`base_serial`＝列の頭の字の通し番号＋列の中の
 /// 番号）で引く（見た目の番号列は全文の頭から数える・指摘 9）。
 /// 渡された `items` の全部を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
 /// 字は台本のタグとタグの間のひと続きごとに分かれて届くので、届いた字の列だけを渡すと塊の
@@ -35,11 +36,12 @@ pub(super) fn segment_advance_sum(
     items: &[TextItem],
     len: usize,
     base_serial: usize,
+    start: f32,
     font_height: f32,
     metrics: &dyn GlyphMetrics,
     styles: Option<&GlyphStyles<'_>>,
 ) -> f32 {
-    let mut sum = 0.0f32;
+    let mut sum = start;
     let mut serial = 0usize;
     for item in items {
         if let TextItem::Glyph { text } = item {

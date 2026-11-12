@@ -351,7 +351,7 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
 ///
 /// ⑴ **内容の無い行は 1 本も出ない**: `PositionedLine::glyphs` がそれ自体で内容の有無を
 ///    表しており、`Vec<PositionedLine>` に**内容の無い行は 1 本も現れない**（行の確定は
-///    `finish_pending_line` の `if current.is_empty() { return; }` を通るため）。よって
+///    入口のどれもが閉じる前に行が空でないことを確かめるため・⑵）。よって
 ///    Requirement 6.3 が言う「`\_l` 以外で分割された内容の無いものは行と見なさない」は、
 ///    現状の行境界がそのまま満たしている——`\c[line]` 自体は実装しない（開発者裁定
 ///    2026-09-05: SSP はバルーン文字領域をビットマップで保持し areka はグリフを保持する＝
@@ -360,9 +360,11 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
 /// ⑵ **行を閉じる場所は有限で局所である**: `finish_line` は `layout_scan.rs` の私有関数で、
 ///    呼び出しは **3 箇所**（折返しの行送り・最終行の確定・`finish_pending_line` の内側）、
 ///    `finish_pending_line` の呼び出しは **2 箇所**（保留フラッシュ・`LineBreak` 腕の
-///    先行実体化）。⑴ の「内容の無い行は出ない」が成り立つのは、この 5 箇所の入口が
-///    `finish_pending_line` の `if current.is_empty() { return; }` という**一つの門に集まっている**
-///    からである。
+///    先行実体化）。⑴ の「内容の無い行は出ない」が成り立つのは、行が空かを確かめる場所が
+///    **3 つ**あり、どの入口もそのどれかを通るからである——折返しの行送り（`layout_scan_glyph.rs`
+///    の `feed || over_hard`・どちらも `!current.is_empty()` を条件に含む）と最終行の確定
+///    （`layout_scan.rs` の `if !self.current.is_empty()`）は自分で確かめ、残りは
+///    `finish_pending_line` の `if current.is_empty() { return; }` を通る。
 ///
 /// 件数を逐語で持つのは、**行を閉じる入口が黙って増える経路を塞ぐ**ためである。走査する語
 /// `finish_line(`／`finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout_scan.rs`・

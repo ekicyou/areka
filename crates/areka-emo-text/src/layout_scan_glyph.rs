@@ -91,32 +91,35 @@ impl Scan<'_, '_> {
                     self.seg_remaining -= 1;
                     false
                 } else if let Some(seg) = plan.segment_starting_at(self.placed) {
-                    // 塊先頭: 塊全体の advance 合計を渡された items の plan から左畳み込みで先決
+                    // 塊先頭: 塊全体の遠端を渡された items の plan から左畳み込みで先決
                     // （visible_count 非依存＝INV-1/7.1）。今の字（番号 `placed`）の位置からの列を
                     // 渡すので、列の先頭から数える（全文の頭から数え直さない・指摘 9）。見た目は通し番号
                     // `placed` から引く。
-                    let seg_sum = segment_advance_sum(
-                        &self.items[self.item_cursor..],
-                        seg.len,
-                        self.placed,
-                        self.font_height,
-                        self.metrics,
-                        self.styles.as_ref(),
-                    );
                     // 塊の収まり判定の基準は soft と hard の近い方（塊は
                     // どちらも超えられない）。2 つの値は畳まずに持ったまま、
                     // ここでの「行幅」の計算にだけ近い方を使う。
                     let limit = self.soft.min(self.hard);
-                    let cap_rem = limit - self.inline_pos; // 残り行幅
-                    let cap_full = limit - self.inline_start; // 行頭からの行幅
-                    if seg_sum <= cap_rem {
+                    // 塊の遠端は置く位置から配置と同じ順で足して測る（0 から足して残り行幅と
+                    // 比べると丸めの 1 ULP で配置と食い違い、先決した塊が ③' で割れる）。
+                    let far_end_from = |start: f32| {
+                        segment_advance_sum(
+                            &self.items[self.item_cursor..],
+                            seg.len,
+                            self.placed,
+                            start,
+                            self.font_height,
+                            self.metrics,
+                            self.styles.as_ref(),
+                        )
+                    };
+                    if far_end_from(self.inline_pos) <= limit {
                         // 現在行に収まる → 分割せず継続配置（2.1/2.3）。
                         self.seg_remaining = seg.len - 1;
                         false
-                    } else if seg_sum <= cap_full && !self.current.is_empty() {
+                    } else if !self.current.is_empty() && far_end_from(self.inline_start) <= limit {
                         // 収まらないが行頭からなら収まる → 塊の前で行送り（2.2）。
                         // 行が空なら送らない（INV-3＝空行を作らない）: `\_l` の直後は行が空でも
-                        // inline_pos が行頭でないため cap_rem < cap_full になりうる。その場合は
+                        // inline_pos が行頭でないため、行頭からなら収まる塊がありうる。その場合は
                         // 下の長大塊の枝（char 規則）へ落ち、`\_l` の位置から 1 字ずつ折れる。
                         self.seg_remaining = seg.len - 1;
                         true
@@ -139,11 +142,11 @@ impl Scan<'_, '_> {
         // （`current` が空）は soft と同じく例外で、超えても置く（無限折返しの排除）。
         let over_hard = !self.current.is_empty() && self.inline_pos + advance > self.hard;
         if over_hard && in_segment {
-            // 先決済みの塊が途中で割れる＝「塊は分割されない」の例外。塊の容量は
-            // 塊先頭で `limit = soft.min(hard)` を基準に先決してあるので、送りを積む
-            // だけではここへ届かない——`\_l`（[`TextItem::CursorMove`]）が塊の途中で
-            // 行内位置を跳ばしたときにだけ発火する。ゆえに折返し基準が描画範囲の
-            // 内にある通常のバルーン（soft ≤ hard）でも起こりうる縮退である。
+            // 先決済みの塊が途中で割れる＝「塊は分割されない」の例外。塊の遠端は
+            // 塊先頭で `limit = soft.min(hard)` と、ここと同じ順の足し算で比べて先決して
+            // あるので、送りを積むだけではここへ届かない——`\_l`（[`TextItem::CursorMove`]）が
+            // 塊の途中で行内位置を跳ばしたときにだけ発火する。本番の区切り（`segment.rs`）は
+            // `\_l` で塊を切るので、届くのは `\_l` をまたぐ手組みの区切りを渡すときだけである。
             // 判断の理由が読める形で 1 件残す（design.md 縮退表・R6.6）。
             tracing::debug!(
                 inline_pos = self.inline_pos,
@@ -172,13 +175,21 @@ impl Scan<'_, '_> {
             self.inline_pos = self.inline_start;
         }
         // ④ 配置。
+        let inline_pos = self.inline_pos;
+        let moved = try_advance(&mut self.inline_pos, advance);
         self.current.push(PositionedGlyph {
             text: text.clone(),
-            inline_pos: self.inline_pos,
-            advance,
+            inline_pos,
+            // 進めなかった字は遠端（位置＋送り幅）が有限に収まる幅で持つ（受け手は遠端を確かめずに
+            // 使う）。1 つ下げるのは、差が偶数丸めで切り上がり足すと無限へ丸まる位置があるため。
+            advance: if moved {
+                advance
+            } else {
+                (f32::MAX - inline_pos).next_down()
+            },
             style,
         });
-        if !try_advance(&mut self.inline_pos, advance) {
+        if !moved {
             self.warn_non_finite_advance(None);
         }
         self.heights.place(glyph_height);

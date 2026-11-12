@@ -817,7 +817,10 @@ fn huge_font_height_wrap_and_glyph_advance_stay_finite_with_one_warn() {
             [l.rect.left, l.rect.top, l.rect.right, l.rect.bottom]
                 .iter()
                 .all(|v| v.is_finite())
-                && l.glyphs.iter().all(|g| g.inline_pos.is_finite())
+                && l.glyphs.iter().all(|g| {
+                    // 受け手は遠端（位置＋送り幅）を確かめずに当たり判定や描画の升に使う。
+                    g.inline_pos.is_finite() && (g.inline_pos + g.advance).is_finite()
+                })
         })
     };
     let warns = |events: &[log_capture_kit::CapturedEvent]| {
@@ -871,4 +874,51 @@ fn huge_font_height_wrap_and_glyph_advance_stay_finite_with_one_warn() {
     assert!(finite(&lines), "字の送りが有限: {lines:?}");
     assert_eq!(lines[0].rect.right, 3e38, "送れない字の送りは位置を保つ");
     assert_eq!(warns(&events), 1, "guard つきは 1 件");
+}
+
+/// 送れなかった字の遠端（位置＋送り幅）は、位置がどこでも有限に収まる。位置 3·2^103 は
+/// `f32::MAX - 位置` が偶数丸めで切り上がり、そこへ位置を足すと無限へ丸まる境目の値。
+#[test]
+fn unmovable_glyph_far_end_stays_finite_at_the_rounding_tie() {
+    /// どの字も送り幅が f32 の最大値（どこから足しても送れない）。
+    struct MaxAdvance;
+    impl GlyphMetrics for MaxAdvance {
+        fn advance(&self, _text: &str, _font_height: f32) -> f32 {
+            f32::MAX
+        }
+        fn line_pitch(&self, font_height: f32) -> f32 {
+            FixedMetrics.line_pitch(font_height)
+        }
+        fn line_box_height(&self, font_height: f32) -> f32 {
+            FixedMetrics.line_box_height(font_height)
+        }
+    }
+    let tie = 3.0 * 2f32.powi(103);
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let items = [
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: tie,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::glyph("あ"),
+    ];
+    let lines = LayoutEngine::layout(
+        &items,
+        1,
+        &region,
+        WritingMode::HorizontalTb,
+        12.0,
+        &MaxAdvance,
+        WrapPlan::CharByChar,
+    );
+    let g = &lines[0].glyphs[0];
+    assert_eq!(g.inline_pos, tie, "跳躍先に置かれる: {lines:?}");
+    assert!((g.inline_pos + g.advance).is_finite(), "遠端が有限: {g:?}");
 }

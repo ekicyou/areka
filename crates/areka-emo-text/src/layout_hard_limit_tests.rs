@@ -54,7 +54,7 @@
 use log_capture_kit::{CapturedEvent, capture};
 
 use super::test_support::{IMAGE, glyphs, inline_positions, model_full};
-use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -403,8 +403,11 @@ fn output_is_unchanged_when_the_wrap_threshold_is_inside_the_drawing_range() {
 ///
 /// これを固定するのは、塊の途中の発火を「折返し基準が描画範囲の外にある粗いバルーン定義で
 /// だけ起きる」と読み違えないためである。塊の容量は塊先頭で `soft.min(hard)` を基準に
-/// 先決してあるので、送りを積むだけでは塊の途中で遠辺へ届かない。届かせられるのは
-/// `\_l` の跳躍だけで、それは折返し基準が内にある通常のバルーンでも書ける。
+/// 配置と同じ順の足し算で先決してあるので、送りを積むだけでは塊の途中で遠辺へ届かない
+/// （丸めの境目は [`segment_head_fit_uses_the_placement_summation_order`]）。届かせられるのは
+/// `\_l` の跳躍だけで、本番の区切り（`segment.rs`）は `\_l` で塊を切るから、ここへ届くのは
+/// `\_l` をまたぐ手組みの区切りだけである。それでも領域の側の条件（折返し基準が内か外か）には
+/// 依らない。
 ///
 /// 組み方（[`FixedMetrics`]・font 10 → 送り 10・行内開始 0・折返し基準 100・遠辺 120）。
 /// 4 グリフを 1 塊にする。塊先頭で塊の合計送り 40 が残り行幅 100 に収まると先決されるので、
@@ -514,5 +517,70 @@ fn hard_limit_fires_after_cursor_jump_even_when_wrap_threshold_is_inside() {
             .count(),
         1,
         "対照側の対照イベントが数えられていない"
+    );
+}
+
+// ── 要件 6.2／2.1: 塊の先決は配置と同じ足し方で遠端を測る（丸めの 1 ULP で割らない）──
+
+/// 字ごとに送り幅を決めた計測器（それ以外は [`FixedMetrics`] と同じ）。
+struct ByText;
+
+impl GlyphMetrics for ByText {
+    fn advance(&self, text: &str, _font_height: f32) -> f32 {
+        match text {
+            "p" => 4.07,
+            "a" => 63.99,
+            _ => 31.94,
+        }
+    }
+    fn line_pitch(&self, font_height: f32) -> f32 {
+        FixedMetrics.line_pitch(font_height)
+    }
+    fn line_box_height(&self, font_height: f32) -> f32 {
+        FixedMetrics.line_box_height(font_height)
+    }
+}
+
+/// 折返し基準＝遠辺＝100（`wordwrappoint` の無いバルーンの形）で、4.07 の字の後に
+/// 63.99＋31.94 の塊を置く。0 から足した合計（95.93）は残り行幅（100 − 4.07 ＝ 95.93）に
+/// 収まるが、配置の足し方（4.07 ＋ 63.99 ＋ 31.94）では遠端が 100.00001 になり遠辺を超える。
+/// 先決が配置と同じ足し方で測れば、塊は残りに収まらないと判じて塊の前で行を送り、割れない。
+#[test]
+fn segment_head_fit_uses_the_placement_summation_order() {
+    // 前提: f32 の丸めで 2 つの足し方が食い違う値である（直した後も意味を失わないように）。
+    let a = |text| ByText.advance(text, FONT);
+    assert!(a("a") + a("b") <= 100.0 - a("p"));
+    assert!(a("p") + a("a") + a("b") > 100.0);
+
+    let region = region_of(WritingMode::HorizontalTb, 100.0, 100.0);
+    let items = [
+        TextItem::glyph("p"),
+        TextItem::glyph("a"),
+        TextItem::glyph("b"),
+    ];
+    let segments = plan(&[(1, 2)]);
+    let (lines, events) = capture(|| {
+        LayoutEngine::layout(
+            &items,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            FONT,
+            &ByText,
+            WrapPlan::Segmented(&segments),
+        )
+    });
+
+    assert_within(&lines, 100.0, "丸めの境目の塊");
+    assert_eq!(
+        glyph_counts(&lines),
+        vec![1, 2],
+        "塊は割れずに次行へ送られる"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| e.level == tracing::Level::DEBUG && e.field("hard").is_some()),
+        "先決した塊が遠辺で割れている: {events:?}"
     );
 }
