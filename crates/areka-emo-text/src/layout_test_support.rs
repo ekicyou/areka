@@ -186,7 +186,6 @@ pub(super) fn layout_guarded(
             table: &table,
             ids: &[],
             default: &look,
-            current: &look,
         },
         actor,
         guard,

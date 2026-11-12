@@ -809,7 +809,6 @@ fn segmented_large_text_layout_unchanged_by_linear_sum() {
         table: &table,
         ids: &ids,
         default: &default,
-        current: &default,
     };
     super::line_ops::SEGMENT_SUM_VISITS.with(|c| c.set(0));
     let lines = LayoutEngine::layout_styled(

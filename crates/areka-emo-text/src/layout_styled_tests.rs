@@ -47,13 +47,12 @@ fn glyph_tuples(line: &PositionedLine) -> Vec<(&str, f32, f32, u32)> {
         .collect()
 }
 
-/// 番号列の読み口を組む（表・番号列・既定・いま効いている見た目）。
+/// 番号列の読み口を組む（表・番号列・既定）。
 fn styles<'a>(table: &'a StyleTable, ids: &'a [StyleId], default: &'a TextLook) -> GlyphStyles<'a> {
     GlyphStyles {
         table,
         ids,
         default,
-        current: default,
     }
 }
 
@@ -323,21 +322,6 @@ fn canvas_from_layout_transcribes_the_style_id() {
 
 // ── タスク 5.2 の追加ヘルパ ──
 
-/// 番号列の読み口を組む（スコープの現在の見た目を既定と別に置ける形）。
-fn styles_with_current<'a>(
-    table: &'a StyleTable,
-    ids: &'a [StyleId],
-    default: &'a TextLook,
-    current: &'a TextLook,
-) -> GlyphStyles<'a> {
-    GlyphStyles {
-        table,
-        ids,
-        default,
-        current,
-    }
-}
-
 /// 折返し基準 `wordwrappoint.x` だけを与えた横書きの描画範囲。
 fn region_h(wrap_x: i32) -> TextRegion {
     TextRegion::resolve(
@@ -515,13 +499,12 @@ fn closing_a_glyphless_line_early_uses_the_following_glyph_height() {
         TextItem::glyph("あ"),
     ];
     let default = look_with_height(10.0);
-    let current = look_with_height(30.0);
     let table = StyleTable::default();
 
     let lines = layout_styled_h(
         &items,
         &region,
-        styles_with_current(&table, &[StyleId::DEFAULT], &default, &current),
+        styles(&table, &[StyleId::DEFAULT], &default),
         WrapPlan::CharByChar,
     );
 
@@ -563,7 +546,7 @@ fn a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview() {
     let before = layout_styled_h(
         &items,
         &region,
-        styles_with_current(&table, &[StyleId::DEFAULT], &default, &default),
+        styles(&table, &[StyleId::DEFAULT], &default),
         WrapPlan::CharByChar,
     );
     // `\f[height,30]` と `い` が届いた後。
@@ -572,7 +555,7 @@ fn a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview() {
     let after = layout_styled_h(
         &items,
         &region,
-        styles_with_current(&table, &ids, &default, &big_look),
+        styles(&table, &ids, &default),
         WrapPlan::CharByChar,
     );
 

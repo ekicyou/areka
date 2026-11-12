@@ -461,7 +461,7 @@ impl StyleTable {
     }
 }
 
-/// 配置層へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定・いま効いている見た目）。
+/// 配置層へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定）。
 #[derive(Clone, Copy)]
 pub struct GlyphStyles<'a> {
     /// 装飾の表。
@@ -470,8 +470,6 @@ pub struct GlyphStyles<'a> {
     pub ids: &'a [StyleId],
     /// そのスコープの既定の見た目。
     pub default: &'a TextLook,
-    /// いま効いている見た目——配置層は読まない（R2-A1 の後に読み手なし・役者側が埋めるだけ）。
-    pub current: &'a TextLook,
 }
 
 impl<'a> GlyphStyles<'a> {

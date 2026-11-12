@@ -469,7 +469,6 @@ fn line_gap_metrics_band_follows_the_big_glyph_of_the_line() {
         table: &table,
         ids: &ids,
         default: &default,
-        current: &default,
     };
     let lines = LayoutEngine::layout_styled(
         &items,

@@ -655,15 +655,10 @@ fn glyph_styles_read_by_ordinal_and_fall_back_outside_the_range() {
     let bold = bold_look(&default);
     let id = table.intern(&bold, &default);
     let ids = [StyleId::DEFAULT, id];
-    let current = TextLook {
-        height: 30.0,
-        ..default.clone()
-    };
     let styles = GlyphStyles {
         table: &table,
         ids: &ids,
         default: &default,
-        current: &current,
     };
 
     assert_eq!(styles.id_of(0), StyleId::DEFAULT);

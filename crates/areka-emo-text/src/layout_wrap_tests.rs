@@ -805,7 +805,6 @@ fn huge_font_height_wrap_and_glyph_advance_stay_finite_with_one_warn() {
                     table: &table,
                     ids: &ids,
                     default: &default,
-                    current: &huge,
                 },
                 &actor,
                 &mut guard,
