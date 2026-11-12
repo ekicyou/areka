@@ -11,8 +11,8 @@
 //! `balloon::parse` が既に確定させたうえで [`BalloonModel`] に届くため、本層はキー間の
 //! 優劣だけを見る（層の優劣とキーの優劣を混ぜない）。
 //!
-//! 本番の唯一の呼出は `actor.rs:153` の [`WritingMode::resolve`]
-//! （`ResolvedBalloonText::resolve` の内側）である。
+//! 本番の唯一の呼出は `actor_decoration.rs` の [`WritingMode::resolve`]
+//! （`ResolvedBalloonText::resolve_with_background` の内側）である。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない。`lib.rs` の構造檻
 //! `pure_layer_modules_have_no_windows_imports` が本ファイル（`PURE_SOURCES`）を走査して強制する。
@@ -318,92 +318,22 @@ fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
 #[cfg(test)]
 mod tests {
 
-    use areka_parsers::balloon::{
-        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-    };
     use log_capture_kit::count_levels;
 
-    use super::{RESERVED_KEY_TEXT_COMBINE_UPRIGHT, RESERVED_KEY_TEXT_ORIENTATION, WritingMode};
+    use crate::layout::test_support::model_writing;
 
-    /// テスト用 BalloonModel 生成ヘルパ（writing_mode 以外は全成分未指定）。
-    fn model(writing_mode: Option<&str>) -> BalloonModel {
-        BalloonModel::new(
-            WindowPosition::new(None, None),
-            Origin::new(None, None),
-            WordWrapPoint::new(None, None),
-            ValidRect::new(None, None, None, None),
-            Font::new(None, None, FontColor::new(None, None, None)),
-            writing_mode.map(str::to_owned),
-            None,
-        )
-    }
+    use super::WritingMode;
 
     /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
     ///
     /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
-    /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
     fn resolve_counting_warns(writing_mode: Option<&str>) -> (WritingMode, usize) {
-        let (mode, counts) = count_levels(|| WritingMode::resolve(&model(writing_mode)));
+        let (mode, counts) = count_levels(|| WritingMode::resolve(&model_writing(writing_mode)));
         (mode, counts.warn)
     }
 
-    // ── R5.1/R5.5: 3 語彙の受理と方向写像 1:1（CSS 語彙 snake_case→3 variant 単射） ──
-
-    #[test]
-    fn horizontal_tb_resolves_to_horizontal_tb() {
-        assert_eq!(
-            WritingMode::resolve(&model(Some("horizontal_tb"))),
-            WritingMode::HorizontalTb
-        );
-    }
-
-    #[test]
-    fn vertical_rl_resolves_to_vertical_rl() {
-        assert_eq!(
-            WritingMode::resolve(&model(Some("vertical_rl"))),
-            WritingMode::VerticalRl
-        );
-    }
-
-    #[test]
-    fn vertical_lr_resolves_to_vertical_lr() {
-        assert_eq!(
-            WritingMode::resolve(&model(Some("vertical_lr"))),
-            WritingMode::VerticalLr
-        );
-    }
-
-    /// 方向写像は 1:1（R5.5）——3 語彙は互いに異なる variant へ写る（単射）。
-    #[test]
-    fn three_vocabulary_values_map_injectively() {
-        let modes = [
-            WritingMode::resolve(&model(Some("horizontal_tb"))),
-            WritingMode::resolve(&model(Some("vertical_rl"))),
-            WritingMode::resolve(&model(Some("vertical_lr"))),
-        ];
-        assert_ne!(modes[0], modes[1]);
-        assert_ne!(modes[0], modes[2]);
-        assert_ne!(modes[1], modes[2]);
-    }
-
-    /// 既知 3 語彙の受理は警告を出さない（warn は未知値専用・R5.1/R5.4）。
-    #[test]
-    fn known_values_resolve_without_warning() {
-        for value in ["horizontal_tb", "vertical_rl", "vertical_lr"] {
-            let (_, warns) = resolve_counting_warns(Some(value));
-            assert_eq!(warns, 0, "value {value:?} は warn なしで受理される");
-        }
-    }
-
-    // ── R5.3: マーカー無し→横書き既定（SSP 互換） ──
-
-    #[test]
-    fn missing_marker_defaults_to_horizontal_tb() {
-        let (mode, warns) = resolve_counting_warns(None);
-        assert_eq!(mode, WritingMode::HorizontalTb);
-        // 未指定は正常系（SSP 互換既定）——warn は記録しない。
-        assert_eq!(warns, 0);
-    }
+    // 3 語彙の受理・写像 1:1・既知語彙の無警告・宣言なし→横書き（R5.1/R5.3/R5.5）は
+    // `writing_decision_tests.rs` の単独宣言・宣言なしのテストが持つ。
 
     /// 型の Default も横書き（design.md の #[default] 正準と一致）。
     #[test]
@@ -413,20 +343,14 @@ mod tests {
 
     // ── R5.4: 未知値→warn ログ＋横書きフォールバック ──
 
-    #[test]
-    fn unknown_value_falls_back_to_horizontal_tb_with_warn() {
-        // parsers 側の未知値素通しテストと同じ値（diagonal_bt）で連続性を持たせる。
-        let (mode, warns) = resolve_counting_warns(Some("diagonal_bt"));
-        assert_eq!(mode, WritingMode::HorizontalTb);
-        assert_eq!(warns, 1, "未知値はちょうど 1 回 warn を記録する");
-    }
-
-    /// 警告の文言は実挙動（「指定なし」として `vertical` と合流）と一致する——
-    /// 横書きになるのは両キーとも無効なときだけなので「horizontal_tb へ」とは言わない。
+    /// 未知値は横書きになり、警告はちょうど 1 件。文言は実挙動（「指定なし」として
+    /// `vertical` と合流）と一致する——横書きになるのは両キーとも無効なときだけなので
+    /// 「horizontal_tb へ」とは言わない。値は parsers 側の未知値素通しテストと同じ diagonal_bt。
     #[test]
     fn unknown_value_warn_says_treated_as_undeclared() {
-        let (_, events) =
-            log_capture_kit::capture(|| WritingMode::resolve(&model(Some("diagonal_bt"))));
+        let (mode, events) =
+            log_capture_kit::capture(|| WritingMode::resolve(&model_writing(Some("diagonal_bt"))));
+        assert_eq!(mode, WritingMode::HorizontalTb);
         let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
         assert_eq!(messages.len(), 1, "warn はちょうど 1 件: {messages:?}");
         assert!(
@@ -468,14 +392,6 @@ mod tests {
             [("writing_mode".to_owned(), "vertical_rl".to_owned())].into();
         let merged = parse(&descript, Some(&image));
         assert_eq!(WritingMode::resolve(&merged), WritingMode::VerticalRl);
-    }
-
-    // ── R5.7: 予約キーは名前の記録のみ（実挙動なし） ──
-
-    #[test]
-    fn m2_reserved_key_names_are_recorded_as_constants() {
-        assert_eq!(RESERVED_KEY_TEXT_ORIENTATION, "text_orientation");
-        assert_eq!(RESERVED_KEY_TEXT_COMBINE_UPRIGHT, "text_combine_upright");
     }
 }
 

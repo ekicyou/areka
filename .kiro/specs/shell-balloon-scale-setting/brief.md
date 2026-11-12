@@ -85,3 +85,10 @@
 
 - `OnShellScaling`・`OnBalloonScaling` は「あるシェル（バルーン）の最終の描画の倍率が変わったとき」に、理由（画面の DPI の変わり・表示の倍率の変わり）を問わず窓ごとに送り、Reference4 にシェル番号を足す、と決まった（開発者の裁定・`shell-scale-linkage` 要件 5）。本 spec が表示の倍率を変える道を作るときは、同じ規則で送る（表示の倍率の変わりで、全部の窓の倍率が同時に変われば、窓ごとに 1 回ずつ）。
 - ぱすた（ghost_dev の `pasta-in-windows`）は「`baseware.name` が `areka` なら、シェルとバルーンの倍率のずれの台詞を出さない」としてある（areka の表示の倍率が 100% 固定のうちは、ずれが画面の DPI の違いからしか生まれないため）。ぱすたのコードには shortcut の注として書いてある。本 spec で利用者の表示の倍率ができたら、ぱすたの見直しが要る＝「ぱすた開発」セッションへ知らせる（2026-11-01「ぱすた開発」セッションの頼み）。
+
+## 2026-11-12 `audit-emo-text-layout-draw` の完了の棚卸からの申し送り（`ScaleContract::author_dpi`）
+
+- `crates/areka-emo-text/src/region.rs` の `ScaleContract` の欄 `author_dpi` と、`ScaleContract::new(scale, author_dpi: Option<u32>)` の第 2 引数は、本番で読む所が無い（倍率はもう `scale` に掛かって届く）。`audit-emo-text-layout-draw` の見直し（指摘 30）は「消す」としたが、`new` の第 2 引数を消すと同 spec の要件 7.6 に反し、`crates/areka` の呼び手（`crates/areka/src/input_events/balloon_pure_core_tests.rs:156`）にも触る。そこで設計の段の裁定（2026-11-06・案イ）で、`crates/areka` に触れてよい spec へ申し送られた（`completed/audit-emo-text-layout-draw/research.md` の 12.5 節）。
+- 呼び手: `crates/areka` 1・`crates/areka-emo-text/tests/` 4・`src/` の actor 5・`region_tests.rs` の `author_dpi_defaults_to_96`。
+- この spec はゴーストごとの倍率を DPI の倍率に掛けるので、倍率の口（`ScaleContract` に何を持たせるか）を決める所。`author_dpi` を消すか、意味のある使い道（作者の DPI を倍率の計算に使う）を与えるかを要件の段で決める。
+- 起票の訳（`/kiro-complete` の棚卸の条件）: 直し方が複数あり（消す・使い道を与える）、完了 spec の要件 7.6 との食い違いに開発者の裁定が要る。

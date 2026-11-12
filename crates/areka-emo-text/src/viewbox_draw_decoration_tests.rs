@@ -1,13 +1,14 @@
 //! `viewbox_draw_decoration.rs` の兄弟檻（task 6.5・要件 3.5／3.6／5.1／5.2／5.6／5.7／5.8／
 //! 9.8／12.1／13.3／14.2）。
 //!
-//! 固定する述語は 5 つ。
+//! 主に固定する述語は次の 5 つ（後ろの節は件 3 の下線の区間とはみ出し・既定の見た目の線と色を固定する）。
 //!
 //! 1. **区間の切り出し**——連続する同じ番号が 1 つの区間にまとまり、UTF-16 で 2 単位の文字が
 //!    2 と数えられる（`segment_text_range` と同じ数え方）。区間に切らず行全体を 1 つにする誤りは
 //!    区間数と範囲の両方で赤になる。
 //! 2. **既定だけの行**——範囲指定・色の解除・ブラシ生成の**実回数が 0**（保持庫の要素数ではなく
 //!    実際に発行した回数を数える）。描画統計と行レイアウトの生成回数は装飾導入前と同じ字義の値。
+//!    既定の見た目が打ち消し線つきなら、行の全体への 1 件だけ（指摘 6）。
 //! 3. **色の順序**——装飾の色を焼いたあとに重ね表示（hover）の色が勝つ。順序を逆転させると
 //!    hover の範囲に装飾の色が残って赤になる。
 //! 4. **解除の二重化を避ける**——選択肢の行は呼び手が既に全範囲を解除しているので、装飾の色の
@@ -21,7 +22,10 @@
 //! [`decorated_run_paints_only_its_own_glyphs`] が担う——装飾の色が自分の区間の外へ出れば赤。
 
 use super::decoration::{RANGE_CALLS, RESET_CALLS, block_extent, line_styles, style_runs};
-use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
+use super::test_support::{
+    Rig, build, choice_canvas_from, count_in_x_band, default_and_decorated_strokes, geo_model,
+    glyph, glyph_items, opaque_count, table_with,
+};
 use super::{DrawStats, ViewboxExecutor};
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, HighlightPaint, Resident,
@@ -33,16 +37,6 @@ use crate::look::{StyleId, StyleTable, TextLook};
 use crate::region::{ScaleContract, TextRegion};
 use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
-
-/// 番号だけを与えたグリフ（位置と送りは区間の切り出しに効かないので 0）。
-pub(super) fn glyph(text: &str, style: StyleId) -> PositionedGlyph {
-    PositionedGlyph {
-        text: text.into(),
-        inline_pos: 0.0,
-        advance: 0.0,
-        style,
-    }
-}
 
 /// 区間を `(startPosition, length, 番号)` の組へ落とす（比較用）。
 fn triples(glyphs: &[PositionedGlyph]) -> Vec<(u32, u32, u32)> {
@@ -181,18 +175,6 @@ fn default_only_line_keeps_font_height_and_empty_style_ids() {
     );
 }
 
-/// 番号 1 に `look` を積んだ表を返す（`intern` 経由＝本番と同じ畳み込み規則）。
-pub(super) fn table_with(look: &TextLook, default: &TextLook) -> (StyleTable, StyleId) {
-    let mut table = StyleTable::default();
-    let id = table.intern(look, default);
-    assert_ne!(
-        id,
-        StyleId::DEFAULT,
-        "検査用の見た目は既定と異なる（番号 0 に畳み込まれると檻が空振りする）"
-    );
-    (table, id)
-}
-
 /// canvas の GlyphRun 住人の先頭グリフだけへ番号を与える（1 行の混在を作る）。
 fn decorate_first_glyph(canvas: &ContentCanvas, id: StyleId) -> ContentCanvas {
     let residents = canvas
@@ -221,33 +203,15 @@ fn decorate_first_glyph(canvas: &ContentCanvas, id: StyleId) -> ContentCanvas {
 
 /// 赤インク（premultiplied BGRA: 青と緑が 0・赤が 0 より大きい）の画素数を列帯 `x0..x1` で数える。
 /// アンチエイリアスの縁も拾えるよう完全一致ではなく成分の符号で判定する。
-fn count_red(bytes: &[u8], w: u32, h: u32, x0: u32, x1: u32) -> usize {
-    let mut n = 0usize;
-    for y in 0..h {
-        for x in x0..x1.min(w) {
-            let o = ((y * w + x) * 4) as usize;
-            let (b, g, r, a) = (bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
-            if a != 0 && r > 0 && b == 0 && g == 0 {
-                n += 1;
-            }
-        }
-    }
-    n
+fn count_red(bytes: &[u8], w: u32, x0: u32, x1: u32) -> usize {
+    count_in_x_band(bytes, w, x0, x1, |px| {
+        px[3] != 0 && px[2] > 0 && px[0] == 0 && px[1] == 0
+    })
 }
 
 /// 白インク（3 成分とも 0 より大きい）の画素数を列帯 `x0..x1` で数える。
-fn count_white(bytes: &[u8], w: u32, h: u32, x0: u32, x1: u32) -> usize {
-    let mut n = 0usize;
-    for y in 0..h {
-        for x in x0..x1.min(w) {
-            let o = ((y * w + x) * 4) as usize;
-            let (b, g, r) = (bytes[o], bytes[o + 1], bytes[o + 2]);
-            if b > 0 && g > 0 && r > 0 {
-                n += 1;
-            }
-        }
-    }
-    n
+fn count_white(bytes: &[u8], w: u32, x0: u32, x1: u32) -> usize {
+    count_in_x_band(bytes, w, x0, x1, |px| px[0] > 0 && px[1] > 0 && px[2] > 0)
 }
 
 /// 較正の本体（要件 3.6）: 1 行の中で番号の付いた**先頭グリフだけ**が装飾の色で描かれ、
@@ -258,7 +222,7 @@ fn decorated_run_paints_only_its_own_glyphs() {
     let mut rig = Rig::new();
     let image = (40u32, 20u32);
     let mut surface = rig.attach(image, 1.0);
-    let (w, h) = surface.size();
+    let (w, _h) = surface.size();
     let mode = WritingMode::HorizontalTb;
     let font = ResolvedFont::resolve(&geo_model(Some(10)));
     let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
@@ -287,11 +251,11 @@ fn decorated_run_paints_only_its_own_glyphs() {
     let px = surface.read_back().expect("read_back 失敗");
 
     assert!(
-        count_red(&px, w, h, 0, 10) > 0,
+        count_red(&px, w, 0, 10) > 0,
         "番号の付いた区間は装飾の色（赤）で描かれる（要件 3.6）"
     );
     assert_eq!(
-        count_red(&px, w, h, 10, 20),
+        count_red(&px, w, 10, 20),
         0,
         "番号 0 の区間へ装飾の色が漏れない（行全体へ焼く誤りはここで赤になる）"
     );
@@ -365,6 +329,70 @@ fn default_only_lines_issue_no_range_calls_and_keep_legacy_stats() {
         0,
         "既定だけの行は色の解除も発行しない"
     );
+
+    // 既定に打ち消し線のある行（指摘 6）: 行の全体へ打ち消し線を 1 回焼く＝1 行に 1 件。
+    RANGE_CALLS.with(|c| c.set(0));
+    let mut struck = font.clone();
+    struck.looks.default.strike = true;
+    let mut surface = rig.attach(image, 1.0);
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    exec.render_styled(
+        &canvas,
+        &window,
+        &struck,
+        mode,
+        &contract,
+        &mut surface,
+        &StyleTable::default(),
+    )
+    .expect("render_styled 失敗");
+    assert_eq!(
+        RANGE_CALLS.with(|c| c.get()),
+        2,
+        "既定に打ち消し線のある既定だけの行は、行の全体への 1 件だけ（2 行で 2 件）"
+    );
+}
+
+/// 指摘 6: 既定が打ち消し線つきの行で 1 区間だけ打ち消し線を外す（`[strike,0]`）と、範囲指定は
+/// 行の全体への 1 件と、外した区間への `false` の 1 件の計 2 件。
+#[test]
+fn a_default_strike_line_with_one_strike_off_run_issues_two_range_calls() {
+    let mut rig = Rig::new();
+    let image = (40u32, 20u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let mut font = ResolvedFont::resolve(&geo_model(Some(10)));
+    font.looks.default.strike = true;
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let default = &font.looks.default;
+    let (styles, off) = table_with(
+        &TextLook {
+            strike: false,
+            ..default.clone()
+        },
+        default,
+    );
+    let (plain, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+    let canvas = decorate_first_glyph(&plain, off);
+
+    RANGE_CALLS.with(|c| c.set(0));
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    exec.render_styled(
+        &canvas,
+        &window,
+        &font,
+        mode,
+        &contract,
+        &mut surface,
+        &styles,
+    )
+    .expect("render_styled 失敗");
+    assert_eq!(
+        RANGE_CALLS.with(|c| c.get()),
+        2,
+        "行の全体への打ち消し線 1 件＋外した区間への false 1 件"
+    );
 }
 
 /// 装飾のある行では範囲指定が**実際に発行される**（上の 0 件の述語が「そもそも数えていない」
@@ -414,32 +442,17 @@ fn choice_canvas(
     highlight: Option<HighlightPaint>,
     hovered: Option<usize>,
 ) -> ContentCanvas {
-    let residents = base
-        .residents
-        .iter()
-        .map(|r| match &r.content {
-            ResidentContent::GlyphRun(run) => Resident {
-                content: ResidentContent::Choice(ChoiceLineContent {
-                    run: run.clone(),
-                    segments: vec![ChoiceRowSegment {
-                        ordinal: 0,
-                        inline_range: (0.0, 10.0),
-                    }],
-                    hovered,
-                    highlight,
-                    band_extent: 12.0,
-                    band_offset: 0.0,
-                }),
-                transform: r.transform,
-                effects: r.effects,
-            },
-            _ => r.clone(),
-        })
-        .collect();
-    ContentCanvas {
-        residents,
-        size: base.size,
-    }
+    choice_canvas_from(base, |run| ChoiceLineContent {
+        run: run.clone(),
+        segments: vec![ChoiceRowSegment {
+            ordinal: 0,
+            inline_range: (0.0, 10.0),
+        }],
+        hovered,
+        highlight,
+        band_extent: 12.0,
+        band_offset: 0.0,
+    })
 }
 
 /// 要件 3.5: 選択肢の文字にも装飾が効くが、hover の文字色は装飾の色より**後に**焼かれて勝つ。
@@ -450,7 +463,7 @@ fn hover_color_wins_over_decoration_color() {
     let mut rig = Rig::new();
     let image = (40u32, 20u32);
     let mut surface = rig.attach(image, 1.0);
-    let (w, h) = surface.size();
+    let (w, _h) = surface.size();
     let mode = WritingMode::HorizontalTb;
     let font = ResolvedFont::resolve(&geo_model(Some(10)));
     let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
@@ -494,16 +507,16 @@ fn hover_color_wins_over_decoration_color() {
     let px = surface.read_back().expect("read_back 失敗");
 
     assert!(
-        count_white(&px, w, h, 0, 10) > 0,
+        count_white(&px, w, 0, 10) > 0,
         "hover セグメントの文字は重ね表示の色（白）で描かれる（装飾の色より後に焼く）"
     );
     assert_eq!(
-        count_red(&px, w, h, 0, 10),
+        count_red(&px, w, 0, 10),
         0,
         "hover セグメントに装飾の色が残らない（順序を逆転させるとここが赤になる）"
     );
     assert!(
-        count_red(&px, w, h, 10, 20) > 0,
+        count_red(&px, w, 10, 20) > 0,
         "hover していないグリフには装飾の色が残る（装飾の色の経路を実際に踏んでいる対照）"
     );
 }
@@ -577,10 +590,9 @@ fn spans(ranges: &[windows::Win32::Graphics::DirectWrite::DWRITE_TEXT_RANGE]) ->
     ranges.iter().map(|r| (r.startPosition, r.length)).collect()
 }
 
-/// 下線の区間の選びは、今まで `SetUnderline(true)` を焼いていた区間と同じ
-/// （既定と違う装飾の区間で、見た目の下線が真で、既定の下線と違うもの）。作者の下線
-/// （`\f[underline,1]`）とアンカーの既定の下線（色つき＋下線）はどちらも入り、太字だけの区間・
-/// 番号 0 の区間は入らない。UTF-16 で 2 単位の文字（`𠮷`）は 2 と数える。
+/// 下線の区間の選びは、解決した見た目の下線が真の区間（既定の区間も対象・指摘 6）。作者の下線
+/// （`\f[underline,1]`）とアンカーの既定の下線（色つき＋下線）は入り、太字だけの区間・
+/// 既定が下線つきでない番号 0 の区間は入らない。UTF-16 で 2 単位の文字（`𠮷`）は 2 と数える。
 #[test]
 fn underline_ranges_pick_the_runs_that_turned_underline_on() {
     let default = TextLook::ukadoc_default();
@@ -638,7 +650,7 @@ fn underline_ranges_pick_the_runs_that_turned_underline_on() {
         "既定だけの行は下線の区間を持たない"
     );
 
-    // 既定が下線つきなら、下線つきの装飾は既定と同じ下線＝今も焼いていなかった区間（選ばない）。
+    // 既定が下線つきなら、既定と同じ下線の区間も選ぶ（指摘 6・既定の区間も対象）。
     let underlined_default = TextLook {
         underline: true,
         ..default.clone()
@@ -652,20 +664,45 @@ fn underline_ranges_pick_the_runs_that_turned_underline_on() {
         &underlined_default,
     );
     let run2 = GlyphRunContent {
-        glyphs: vec![glyph("あ", bold_underlined)],
-        size: (10.0, 12.0),
+        glyphs: vec![glyph("あ", bold_underlined), glyph("い", StyleId::DEFAULT)],
+        size: (20.0, 12.0),
     };
-    assert!(
-        line_styles(
-            &run2,
-            12.0,
-            WritingMode::HorizontalTb,
-            &table2,
-            &underlined_default
-        )
-        .underlines
-        .is_empty(),
-        "既定と同じ下線の区間は選ばない（今の選び方と同じ）"
+    let line2 = line_styles(
+        &run2,
+        12.0,
+        WritingMode::HorizontalTb,
+        &table2,
+        &underlined_default,
+    );
+    assert_eq!(
+        spans(&line2.underlines),
+        vec![(0, 1), (1, 1)],
+        "既定と同じ下線の区間も、既定の区間も選ぶ"
+    );
+
+    // 既定が下線つきでも、下線を外した区間（`[underline,0]`）は選ばない。
+    let off = table2.intern(
+        &TextLook {
+            underline: false,
+            ..underlined_default.clone()
+        },
+        &underlined_default,
+    );
+    let run3 = GlyphRunContent {
+        glyphs: vec![glyph("あ", off), glyph("い", StyleId::DEFAULT)],
+        size: (20.0, 12.0),
+    };
+    let line3 = line_styles(
+        &run3,
+        12.0,
+        WritingMode::HorizontalTb,
+        &table2,
+        &underlined_default,
+    );
+    assert_eq!(
+        spans(&line3.underlines),
+        vec![(1, 1)],
+        "下線を外した区間は選ばず、既定の区間だけを選ぶ"
     );
 }
 
@@ -856,4 +893,79 @@ fn an_underlined_line_overhang_covers_its_stroke() {
         (without.top, without.left, without.right),
         "線の出ない欄は実測のはみ出しのまま"
     );
+}
+
+/// 指摘 6: `font.strike,1` のバルーンでは飾りの無い字にも打ち消し線が出る（行の全体へ 1 回焼く）。
+/// 比べる相手は既定のままのバルーンで全部の字に打ち消し線を積んだ行と、線の無い行。
+#[test]
+fn a_default_strikethrough_is_drawn_on_plain_glyphs() {
+    let [by_default, by_decoration, without] =
+        default_and_decorated_strokes(|look| look.strike = true);
+    assert_ne!(
+        by_decoration, without,
+        "前提: 積んだ打ち消し線は線の無い行と違う絵になる（非退化）"
+    );
+    assert!(
+        by_default == by_decoration,
+        "既定の打ち消し線は飾りの無い字にも、積んだ打ち消し線と同じ線で出る"
+    );
+}
+
+/// 再監査 R1-D1: 同じ描き手で、既定の見た目の線や色だけが変わったバルーンへ描き直すと、新しく
+/// 作った描き手で描いた絵とバイトで一致する（字の並びは同じでも、古い見た目の行を引き回さない）。
+#[test]
+fn changing_only_the_default_strokes_or_color_redraws_like_a_fresh_executor() {
+    let mut rig = Rig::new();
+    let image = (60u32, 20u32);
+    let mode = WritingMode::HorizontalTb;
+    let plain = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let (canvas, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+    let table = StyleTable::default();
+    let changes: [(&str, fn(&mut TextLook)); 3] = [
+        ("strike", |l| l.strike = true),
+        ("underline", |l| l.underline = true),
+        ("color", |l| l.color = (255, 0, 0)),
+    ];
+    for (name, change) in changes {
+        let mut changed = plain.clone();
+        change(&mut changed.looks.default);
+        // 既定の字のブラシは `color`（`render_styled` が塗る色）——見た目と揃えないと色の段が赤にならない。
+        changed.color = changed.looks.default.color;
+        let mut surface = rig.attach(image, 1.0);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        for font in [&plain, &changed] {
+            exec.render_styled(
+                &canvas,
+                &window,
+                font,
+                mode,
+                &contract,
+                &mut surface,
+                &table,
+            )
+            .expect("render_styled 失敗");
+        }
+        let reused = surface.read_back().expect("read_back 失敗");
+
+        let mut fresh_surface = rig.attach(image, 1.0);
+        let mut fresh = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        fresh
+            .render_styled(
+                &canvas,
+                &window,
+                &changed,
+                mode,
+                &contract,
+                &mut fresh_surface,
+                &table,
+            )
+            .expect("render_styled 失敗");
+        let expected = fresh_surface.read_back().expect("read_back 失敗");
+        assert!(
+            reused == expected,
+            "{name}: 既定の見た目だけを変えた 2 フレーム目が、新しい描き手の絵と違う"
+        );
+    }
 }

@@ -21,17 +21,18 @@
 //! （原点 0,0 の矩形）で保持し、[`RegionTransform`] がキャンバス上の位置を与える——
 //! emo-compose の surface 合成と同じ行列原則（element 配置＝D2D 変換行列・x,y 平行移動は
 //! その特例）の同型＝将来収束可能な統一形（R8.6・emo-compose は改変しない）。
-//! M1 の実装住人はグリフ（[`GlyphRunContent`]・1 行=1 住人）のみ・Image/Surface は
-//! 型シーム（実挙動なし・R8.5——描画実行時の `warn!`＋skip は COM 層 draw の領分）。
+//! 実装のある住人はグリフ行（[`GlyphRunContent`]・1 行=1 住人）と選択肢行
+//! （[`ChoiceLineContent`]）の 2 つ・Image/Surface は型シーム（実挙動なし・R8.5——描画実行時の
+//! `warn!`＋skip は COM 層 draw の領分）。
 //!
 //! ## 予約（記録のみ・実装しない・R8.3/R10.3）
 //!
 //! `\f` 系のうち**寄せ 2 項目（`align`／`valign`）は今も未実装**（語彙の記録のみ）で、
 //! 追跡先は `text-align-shadow-canon`。正典 2 ページで `valign` の写像が逆である
 //! 事実（疑義 SC1）と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が
-//! 正本。**下線は `areka-P0-text-decoration-canon` が実装済み**——線を引く位置は描画基盤の
-//! 既定に委ね、書字方向ごとに描き分けない（実測値と、`areka-P0-balloon-vertical-canon`
-//! の裁定「列の右側」との照合結果も同 §8 の該当行が正本）。
+//! 正本。**下線は実装済み**——DirectWrite が教える下線の値から、areka が書字方向ごとに
+//! 自分で線の矩形を決めて塗る（横書きは線の上端をベースラインに置き、縦書きは DirectWrite の
+//! 位置のまま回す・`underline.rs` が正本・spec `areka-P0-balloon-text-bugs` 件 3）。
 //!
 //! 文字ごとの `\f` 装飾は per-run の見た目（[`TextLook`](crate::look::TextLook)）が担い、
 //! 行単位の [`TextEffects`] とは別の経路である。無効表示の層（`disable.font.*` の戻し先）も
@@ -68,7 +69,7 @@ pub const RESERVED_EFFECT_ROTATION: &str = "rotation";
 /// （点の写像は `(x', y') = (m11·x + m21·y + dx, m12·x + m22·y + dy)`）。
 /// **M1 はコンストラクタが恒等（[`identity`](Self::identity)）と平行移動
 /// （[`translation`](Self::translation)）のみを生成する（R8.2）**——回転・拡縮の
-/// 生成口は α 後に解禁する型シーム（予約名 [`RESERVED_EFFECT_ROTATION`]）。
+/// 生成口は持たない型シーム（予約名 [`RESERVED_EFFECT_ROTATION`]）。
 /// 合成・適用は一般アフィン積で計算する（emo-compose の行列原則と収束可能な統一形・R8.6）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegionTransform {
@@ -135,7 +136,7 @@ impl RegionTransform {
     }
 
     /// M1 不変条件の表明: 回転・拡縮成分ゼロ（コンストラクタが translation のみ生成
-    /// するため恒真——生成口が α 後に増えた時に檻が破れないための `debug_assert`・R8.2）。
+    /// するため恒真——回転・拡縮の生成口を足した時に檻が破れないための `debug_assert`・R8.2）。
     fn debug_assert_m1_translation_only(&self, context: &str) {
         debug_assert!(
             self.is_translation_only(),
@@ -150,7 +151,7 @@ impl RegionTransform {
 /// 予約対象: 白抜き（語彙のみ・上記の裁定）・多色・シャドウ（`text-align-shadow-canon`
 /// が所有）・回転（予約名定数はモジュール doc 参照）。文字ごとの `\f` 装飾は
 /// [`TextLook`](crate::look::TextLook) が担うため本型には載らない。
-/// `#[non_exhaustive]` により α 後のフィールド追加は破壊的変更にならない。
+/// `#[non_exhaustive]` によりフィールドを足しても破壊的変更にならない。
 /// 今日は [`Default`] 生成のみ可能で、描画へ一切影響しない。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -173,9 +174,9 @@ pub struct GlyphRunContent {
 ///
 /// **描画は GlyphRun と同格**: 非 hover（`highlight == None`）時は `run` を等価な
 /// [`GlyphRun`](ResidentContent::GlyphRun) 住人と**まったく同一の素描画経路**で描く
-/// （ピクセル同一・R9.5）。ハイライト矩形塗り（`highlight == Some(..)`）・hover セグメントの
-/// 指紋反映・文字色差し替えは後続タスクの領分（本型はデータを保持するのみで、素描画には
-/// `run` 以外のフィールドは影響しない）。
+/// （ピクセル同一・R9.5）。hover 中（`highlight == Some(..)`）は COM 層
+/// （`viewbox_draw_render.rs`）が hover セグメントへハイライト矩形を塗り、文字色を差し替える
+/// （本型はデータを保持するのみ）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChoiceLineContent {
     /// グリフ行本体（描画は GlyphRun と同一経路・行ローカル座標）。
@@ -201,9 +202,10 @@ pub struct ChoiceLineContent {
     /// （image px・[`LineBand`](crate::choice::LineBand) の写し）。縦書きの右から左は負になり得る
     /// （帯が行矩形の左へ出る）。縦書きの左から右は 0 以上。横書きは以下のとおり 0 以上。
     ///
-    /// [`highlight_band_offset`](crate::choice::highlight_band_offset) が
-    /// `round(max(0, 行ボックス丈 − band_extent) / 2)` で決めた値——帯を行ボックスの**中央**へ
-    /// 置くための寄せである。近端へ揃えたままだと、行ボックス丈より短い帯が上に余りながら
+    /// [`line_bands`](crate::choice::line_bands) が
+    /// `round(max(0, t) + max(0, 行ボックス丈 − band_extent) / 2)`（`t` は字の箱の上端の、行矩形の
+    /// 上端からの量・`t = 0` のときは `highlight_band_offset` の式）で決めた値——帯を字の箱の
+    /// **中央**へ置くための寄せである。近端へ揃えたままだと、行ボックス丈より短い帯が上に余りながら
     /// 下でインクを切る（実機不具合「色反転位置が 2 ドット程上すぎる」の真因・R13.1）。
     /// 行ボックス丈が em ボックス丈に等しいフォント（既定 ＭＳ ゴシック）では 0 ＝ 従来と同一。
     /// COM 層はこの値をハイライト矩形の起点とダーティ帯の超過分の両方に用い、純粋層の
@@ -251,17 +253,17 @@ pub struct SurfaceSeam {}
 
 /// 住人コンテンツ——グリフ・画像・将来の SERIKO サーフェスを**同格**に扱う enum（R8.4）。
 ///
-/// M1 の実装住人は [`GlyphRun`](Self::GlyphRun) のみ。Image/Surface variant の描画実行は
+/// 実装のある住人は [`GlyphRun`](Self::GlyphRun) と [`Choice`](Self::Choice)。Image/Surface variant の描画実行は
 /// COM 層 draw が `warn!`＋skip する（R8.5）。`#[non_exhaustive]` により住人種の追加は
 /// 破壊的変更にならない。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ResidentContent {
-    /// M1 唯一の実装住人: 1 行分のグリフ列（[`PositionedLine`] 由来）。
+    /// 1 行分のグリフ列（[`PositionedLine`] 由来）。
     GlyphRun(GlyphRunContent),
     /// 選択肢行（グリフ行本体＋選択肢セグメント・R1.1）。非 hover（`highlight == None`）時は
     /// [`GlyphRun`](Self::GlyphRun) と**同一の素描画**（R9.5）——指紋・インク矩形・描画とも
-    /// 内包 `run` を GlyphRun と同格に扱う。ハイライト塗り・hover 指紋は後続タスクが実装する。
+    /// 内包 `run` を GlyphRun と同格に扱う。hover 中はハイライトを塗り、指紋に hover を含める。
     Choice(ChoiceLineContent),
     /// `\_b` 画像（型シームのみ・実挙動なし・R8.5）。
     Image(ImageSeam),
@@ -288,7 +290,8 @@ pub struct Resident {
 /// 行 index と 1:1（`first_visible_line` がそのまま適用できる——空行も住人として保持）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContentCanvas {
-    /// 住人列（M1: layout 出力の行順のグリフ住人のみ）。
+    /// 住人列（layout 出力の行順。[`from_layout`](Self::from_layout) はグリフ住人だけを作り、
+    /// 選択肢を含む行は [`decorate_canvas`](crate::choice::decorate_canvas) が選択肢住人へ替える）。
     pub residents: Vec<Resident>,
     /// validrect 寸（image px）。
     pub size: (f32, f32),
@@ -357,73 +360,18 @@ impl ContentCanvas {
 
 #[cfg(test)]
 mod tests {
-    use areka_parsers::balloon::{
-        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-    };
-
     use super::{
-        ContentCanvas, GlyphRunContent, RESERVED_EFFECT_MULTICOLOR, RESERVED_EFFECT_OUTLINE,
-        RESERVED_EFFECT_ROTATION, RESERVED_EFFECT_SHADOW, RegionTransform, Resident,
-        ResidentContent, TextEffects,
+        ContentCanvas, GlyphRunContent, RegionTransform, Resident, ResidentContent, TextEffects,
     };
-    use crate::layout::{
-        FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine, WrapPlan,
-    };
+    use crate::layout::test_support::{IMAGE, glyphs, model_full};
+    use crate::layout::{LineRect, PositionedGlyph, PositionedLine};
     use crate::look::StyleId;
     use crate::region::TextRegion;
     use crate::state::TextItem;
+    use crate::viewbox::test_support::layout_canvas as canvas_for;
     use crate::writing::WritingMode;
 
-    /// テスト画像原寸（image px・layout.rs の檻と同一値）。
-    const IMAGE: (u32, u32) = (400, 224);
-
-    /// テスト用 BalloonModel 生成ヘルパ（幾何成分だけ指定・validrect 順序は top,bottom,left,right）。
-    fn model(
-        origin: (Option<i32>, Option<i32>),
-        wordwrap: (Option<i32>, Option<i32>),
-        validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-    ) -> BalloonModel {
-        BalloonModel::new(
-            WindowPosition::new(None, None),
-            Origin::new(origin.0, origin.1),
-            WordWrapPoint::new(wordwrap.0, wordwrap.1),
-            ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-            Font::new(None, None, FontColor::new(None, None, None)),
-            None,
-            None,
-        )
-    }
-
-    /// n 個の全角グリフ（'あ'）item 列。
-    fn glyphs(n: usize) -> Vec<TextItem> {
-        std::iter::repeat_n(TextItem::glyph("あ"), n).collect()
-    }
-
-    /// layout→canvas の通し（テスト用最短経路・visible は全量）。
-    fn canvas_for(
-        items: &[TextItem],
-        region: &TextRegion,
-        mode: WritingMode,
-        font_height: f32,
-    ) -> (Vec<PositionedLine>, ContentCanvas) {
-        let visible = items
-            .iter()
-            .filter(|i| matches!(i, TextItem::Glyph { .. }))
-            .count();
-        let lines = LayoutEngine::layout(
-            items,
-            visible,
-            region,
-            mode,
-            font_height,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        let canvas = ContentCanvas::from_layout(&lines, region, mode);
-        (lines, canvas)
-    }
-
-    /// 住人からグリフ住人の中身を取り出す（M1 の唯一の実装住人）。
+    /// 住人からグリフ住人の中身を取り出す（`from_layout` が作るのはグリフ住人だけ）。
     fn glyph_run(resident: &Resident) -> &GlyphRunContent {
         match &resident.content {
             ResidentContent::GlyphRun(run) => run,
@@ -467,20 +415,6 @@ mod tests {
         assert_eq!(RegionTransform::identity().then(&a), a);
     }
 
-    // ── R8.3/R10.3: TextEffects——行単位の予約の型シーム（予約名は定数記録のみ） ──
-
-    /// 予約名（outline/multicolor/shadow/rotation）は定数として記録するに留める。
-    /// TextEffects 自体はフィールド未使用の予約型（既定値のみ生成可能）で、文字ごとの
-    /// `\f` 装飾（[`TextLook`](crate::look::TextLook)）はここを通らない。
-    #[test]
-    fn text_effects_is_reserved_seam_with_recorded_names() {
-        assert_eq!(RESERVED_EFFECT_OUTLINE, "outline");
-        assert_eq!(RESERVED_EFFECT_MULTICOLOR, "multicolor");
-        assert_eq!(RESERVED_EFFECT_SHADOW, "shadow");
-        assert_eq!(RESERVED_EFFECT_ROTATION, "rotation");
-        assert_eq!(TextEffects::default(), TextEffects::default());
-    }
-
     // ── R8.4/8.1: レイアウト結果→グリフ住人（1 行=1 住人・行 index 1:1・変換行列付き） ──
 
     /// 横書き 2 行（折返し）: 行ごとに 1 グリフ住人が生成され、変換は行矩形原点への
@@ -488,7 +422,7 @@ mod tests {
     #[test]
     fn from_layout_generates_one_glyph_resident_per_line() {
         let region = TextRegion::resolve(
-            &model(
+            &model_full(
                 (Some(0), Some(0)),
                 (Some(50), None),
                 (None, None, None, None),
@@ -508,7 +442,6 @@ mod tests {
 
         // 行 0: 変換 = validrect-local の行矩形原点 (0,0)・グリフはローカル 0,10,…,40。
         let r0 = &canvas.residents[0];
-        assert!(r0.transform.is_translation_only(), "M1 は恒等/平行移動のみ");
         assert_eq!(r0.transform.offset(), (0.0, 0.0));
         assert_eq!(r0.effects, TextEffects::default());
         let run0 = glyph_run(r0);
@@ -534,7 +467,7 @@ mod tests {
     #[test]
     fn from_layout_translation_carries_line_origin() {
         let region = TextRegion::resolve(
-            &model(
+            &model_full(
                 (Some(100), Some(50)),
                 (Some(150), None),
                 (None, None, None, None),
@@ -559,7 +492,7 @@ mod tests {
     fn from_layout_rebases_to_validrect_local_space() {
         // vertical_rl・validrect top20/bottom224/left360/right400・書字開始角 (400, 20)。
         let region = TextRegion::resolve(
-            &model(
+            &model_full(
                 (None, None),
                 (None, None),
                 (Some(20), Some(224), Some(360), Some(400)),
@@ -592,7 +525,7 @@ mod tests {
     #[test]
     fn trailing_newline_yields_single_resident_under_deferred_semantics() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -609,7 +542,7 @@ mod tests {
     #[test]
     fn from_layout_maps_empty_line_to_empty_resident() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -666,7 +599,7 @@ mod tests {
     #[test]
     fn fractional_line_feed_survives_in_translation() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
@@ -684,76 +617,5 @@ mod tests {
             .map(|r| r.transform.offset())
             .collect();
         assert_eq!(offsets, vec![(0.0, 0.0), (0.0, 15.0), (0.0, 22.5)]);
-    }
-
-    // ── R8.4/R8.5: 画像・サーフェス住人は型シームのみ（同格 enum・実挙動なし） ──
-
-    /// M1 の from_layout はグリフ住人のみを生成する（Image/Surface は現れない）。
-    /// Image/Surface は同格の enum variant として存在する（型シーム・実挙動なし・
-    /// 描画実行時の warn!＋skip は COM 層 draw の領分）。
-    #[test]
-    fn from_layout_yields_only_glyph_residents_and_seams_stay_inert() {
-        let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
-            IMAGE,
-            WritingMode::HorizontalTb,
-        );
-        let (_, canvas) = canvas_for(&glyphs(3), &region, WritingMode::HorizontalTb, 12.0);
-        assert!(
-            canvas
-                .residents
-                .iter()
-                .all(|r| matches!(r.content, ResidentContent::GlyphRun(_))),
-            "M1 の実装住人はグリフのみ（R8.5）"
-        );
-        // 型シームは crate 内でのみ構成可能（enum 上でグリフと同格・R8.4）。
-        let image = Resident {
-            content: ResidentContent::Image(super::ImageSeam::default()),
-            transform: RegionTransform::identity(),
-            effects: TextEffects::default(),
-        };
-        let surface = Resident {
-            content: ResidentContent::Surface(super::SurfaceSeam::default()),
-            transform: RegionTransform::identity(),
-            effects: TextEffects::default(),
-        };
-        assert!(matches!(image.content, ResidentContent::Image(_)));
-        assert!(matches!(surface.content, ResidentContent::Surface(_)));
-    }
-
-    // ── R8.2 総括＋決定論: 恒等/平行移動のみで構成された canvas・同一入力→同一出力 ──
-
-    /// 生成された canvas の全住人変換が恒等/平行移動のみで構成される（M1 檻・R8.2）。
-    /// 3 方向すべてで成立し、同一入力からの再生成は完全一致する（純関数・決定論檻）。
-    #[test]
-    fn canvas_is_translation_only_and_deterministic_across_modes() {
-        let m = model(
-            (Some(0), Some(0)),
-            (Some(50), Some(30)),
-            (None, None, None, None),
-        );
-        let items = [
-            TextItem::glyph("あ"),
-            TextItem::LineBreak { ratio: 0.5 },
-            TextItem::glyph("a"),
-            TextItem::glyph("漢"),
-        ];
-        for mode in [
-            WritingMode::HorizontalTb,
-            WritingMode::VerticalRl,
-            WritingMode::VerticalLr,
-        ] {
-            let region = TextRegion::resolve(&m, IMAGE, mode);
-            let (_, first) = canvas_for(&items, &region, mode, 10.0);
-            let (_, second) = canvas_for(&items, &region, mode, 10.0);
-            assert!(
-                first
-                    .residents
-                    .iter()
-                    .all(|r| r.transform.is_translation_only()),
-                "mode {mode:?}: M1 の変換は恒等/平行移動のみ（R8.2）"
-            );
-            assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
-        }
     }
 }

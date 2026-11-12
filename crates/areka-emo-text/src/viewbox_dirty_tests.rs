@@ -1,5 +1,5 @@
 use super::test_support::{broken_lines, canvas_for, commit_initial, expect_update, phys, window};
-use super::{DIRTY_GUARD_IMG_PX, FramePlan, LineOverhang, ScrollPlanner};
+use super::{FramePlan, LineOverhang, ScrollPlanner};
 use crate::region::ScaleContract;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
@@ -265,6 +265,7 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (0, 0),
         (400, 224),
         &prev,
+        &ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb),
         &over,
     );
     assert_eq!(
@@ -278,8 +279,10 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         "描画対象は現在行のみ（overhang は幾何を変えるだけ）"
     );
 
-    // 縦書き（vertical_rl）: overhang は right（X 正方向）へ効く——横書きの top/bottom（Y）は
-    // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。
+    // 縦書き（vertical_rl）: overhang は left（X 負方向）へ効く——横書きの top/bottom（Y）は
+    // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。最初の列は面の
+    // 右端 x∈[390,400]（ダーティは 1 画素の余白込みで 389..400）に立つので、面の内側へ向く
+    // left で広がりを見る（right は面で切られる）。
     let vprev = canvas_for(&[TextItem::glyph("あ")], WritingMode::VerticalRl, vr, 10.0);
     let vprev_lines = ScrollPlanner::committed_lines(&vprev, WritingMode::VerticalRl);
     let vcanvas = canvas_for(
@@ -297,12 +300,12 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (400, 224),
         &vprev_lines,
     );
-    // 縦書きで X 方向へ right=4 拡張すると em 丈より横幅が広がる（top/bottom は Y ゆえ無視される）。
+    // 縦書きで X 方向へ left=4 拡張すると em 丈より横幅が広がる（top/bottom は Y ゆえ無視される）。
     let vover = vec![LineOverhang {
         top: 9.0, // Y 方向（縦書きの行内軸）は無視される検証用のダミー大値。
         bottom: 9.0,
-        left: 0.0,
-        right: 4.0,
+        left: 4.0,
+        right: 0.0,
     }];
     let (v_over, _) = ScrollPlanner::derive_dirty_with_overhangs(
         &vcanvas,
@@ -312,6 +315,7 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (0, 0),
         (400, 224),
         &vprev_lines,
+        &ScrollPlanner::committed_lines(&vcanvas, WritingMode::VerticalRl),
         &vover,
     );
     assert_eq!(v_em.len(), 1);
@@ -321,8 +325,63 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         "縦書きは top/bottom（Y）を無視——高さ（行内軸）は overhang で変わらない"
     );
     assert_eq!(
-        v_over[0].rect.w,
-        v_em[0].rect.w + 4,
+        (v_em[0].rect.x, v_em[0].rect.w),
+        (389, 11),
+        "縦書きの右から左の最初の列は面の右端に立つ（面の外へ出ない）"
+    );
+    assert_eq!(
+        (v_over[0].rect.x, v_over[0].rect.w),
+        (385, 15),
+        "縦書きは left（X）でブロック軸（列幅）が実測はみ出し分だけ広がる"
+    );
+
+    // 縦書き（vertical_lr）: 最初の列は面の左端 x∈[0,10] に立つので、面の内側へ向く right で
+    // 広がりを見る（left は面で切られる）。
+    let lprev = canvas_for(&[TextItem::glyph("あ")], WritingMode::VerticalLr, vr, 10.0);
+    let lprev_lines = ScrollPlanner::committed_lines(&lprev, WritingMode::VerticalLr);
+    let lcanvas = canvas_for(
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
+        WritingMode::VerticalLr,
+        vr,
+        10.0,
+    );
+    let (l_em, _) = ScrollPlanner::derive_dirty(
+        &lcanvas,
+        &window(0, 0.0),
+        WritingMode::VerticalLr,
+        &contract,
+        (0, 0),
+        (400, 224),
+        &lprev_lines,
+    );
+    let lover = vec![LineOverhang {
+        top: 9.0, // Y 方向（縦書きの行内軸）は無視される検証用のダミー大値。
+        bottom: 9.0,
+        left: 0.0,
+        right: 4.0,
+    }];
+    let (l_over, _) = ScrollPlanner::derive_dirty_with_overhangs(
+        &lcanvas,
+        &window(0, 0.0),
+        WritingMode::VerticalLr,
+        &contract,
+        (0, 0),
+        (400, 224),
+        &lprev_lines,
+        &ScrollPlanner::committed_lines(&lcanvas, WritingMode::VerticalLr),
+        &lover,
+    );
+    assert_eq!(l_em.len(), 1);
+    assert_eq!(l_over.len(), 1);
+    assert_eq!(l_over[0].rect.h, l_em[0].rect.h);
+    assert_eq!(
+        (l_em[0].rect.x, l_em[0].rect.w),
+        (0, 11),
+        "縦書きの左から右の最初の列は面の左端に立つ"
+    );
+    assert_eq!(
+        (l_over[0].rect.x, l_over[0].rect.w),
+        (0, 15),
         "縦書きは right（X）でブロック軸（列幅）が実測はみ出し分だけ広がる"
     );
 }
@@ -397,9 +456,9 @@ fn catchup_and_new_lines_union_of_changed_lines() {
 
 // ── R4.2/3.3: 初回（前回指紋なし）→ 全域ダーティ・全 GlyphRun 住人 ──
 
-/// prev_lines が空（初回・Clear 後・format 再構築）→ dirty＝面全域 1 枚・draw＝全住人。
+/// 全域の道（前の行が分からない・縮退）→ dirty＝面全域 1 枚・draw＝全住人。
 #[test]
-fn empty_prev_is_full_domain() {
+fn unknown_prev_is_full_domain() {
     let contract = ScaleContract::new(1.0, None);
     let canvas = canvas_for(
         &broken_lines(3),
@@ -407,12 +466,11 @@ fn empty_prev_is_full_domain() {
         (Some(0), Some(100), Some(0), Some(400)),
         10.0,
     );
-    let (dirty, draw) = ScrollPlanner::derive_dirty(
+    let (dirty, draw) = ScrollPlanner::full_domain(
         &canvas,
         &window(0, 0.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, 0),
         (400, 100),
         &[],
     );
@@ -420,13 +478,64 @@ fn empty_prev_is_full_domain() {
     assert_eq!(draw, vec![0, 1, 2], "全 GlyphRun 住人");
 }
 
-// ── 整数格子拡張＋ガード＋クランプ（k=1.0／k=1.25 で面寸を越えない） ──
-
-/// ガード定数は 1 image px（保守既定・AA こぼれ吸収）。
+/// 指摘 18: 全域の道でも描く行は面と重なる行だけ。行 0..3 は y 0・12・24・36（丈 10）で面の丈 30。
+/// 行 3 は面の下（ガード込みで 35..）で外れ、上のはみ出し 6 で 29 まで上がると面へ入って残る。
 #[test]
-fn dirty_guard_is_one_image_px() {
-    assert_eq!(DIRTY_GUARD_IMG_PX, 1.0);
+fn full_domain_draws_only_rows_overlapping_surface() {
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let canvas = canvas_for(
+        &broken_lines(4),
+        mode,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let full = |over: &[LineOverhang]| {
+        ScrollPlanner::full_domain(&canvas, &window(0, 0.0), mode, &contract, (400, 30), over)
+    };
+    let (dirty, draw) = full(&[]);
+    assert_eq!(dirty, vec![phys(0, 0, 400, 30)], "全域 1 枚のまま");
+    assert_eq!(draw, vec![0, 1, 2], "面の下の行 3 は描かない");
+    assert_eq!(dirty[0].lines, draw, "矩形の行＝描く行");
+    let mut over = vec![LineOverhang::default(); 4];
+    over[3].top = 6.0;
+    assert_eq!(
+        full(&over).1,
+        vec![0, 1, 2, 3],
+        "上のはみ出しが面へ入る行は残る"
+    );
 }
+
+/// 指摘 23: 後ろ向きの縮みの 2 つの枝——同じ番号の行の位置が動いた・行の丈だけが縮んだ。
+#[test]
+fn backward_shrink_detects_moved_row_and_shorter_extent() {
+    let mode = WritingMode::HorizontalTb;
+    let canvas = canvas_for(
+        &broken_lines(2),
+        mode,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let prev = ScrollPlanner::committed_lines(&canvas, mode);
+    assert!(
+        !ScrollPlanner::is_backward_shrink(&prev, &prev),
+        "対照: 同じ行は縮みでない"
+    );
+    let mut moved = prev.clone();
+    moved[1].block_pos_bits = (f32::from_bits(prev[1].block_pos_bits) + 1.0).to_bits();
+    assert!(
+        ScrollPlanner::is_backward_shrink(&prev, &moved),
+        "行の位置が動いた"
+    );
+    let mut shorter = prev.clone();
+    shorter[0].extent_bits.1 = (f32::from_bits(prev[0].extent_bits.1) / 2.0).to_bits();
+    assert!(
+        ScrollPlanner::is_backward_shrink(&prev, &shorter),
+        "高さだけ縮んだ"
+    );
+}
+
+// ── 整数格子拡張＋ガード＋クランプ（k=1.0／k=1.25 で面寸を越えない） ──
 
 /// k=1.25: 全域は面寸ちょうど・端の変化行/露出帯はクランプされ面寸を越えない。
 /// ガード余白は物理 px `ceil(1.0 × 1.25)=2`。
@@ -438,12 +547,11 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
 
     // (a) 全域＝面寸ちょうど（クランプが面寸を根拠にする）。
     let full_canvas = canvas_for(&broken_lines(4), WritingMode::HorizontalTb, vr, 10.0);
-    let (full_dirty, _) = ScrollPlanner::derive_dirty(
+    let (full_dirty, _) = ScrollPlanner::full_domain(
         &full_canvas,
         &window(0, 0.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, 0),
         surface,
         &[],
     );
@@ -511,72 +619,6 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
     );
 }
 
-// ── back 全被覆の素朴檻: blit 写域 ∪ dirty ＝ 面全域（ブロック軸） ──
-
-/// 横書きスクロール（by=-12＝行送り 1 行分）で blit 写域（保持ピクセルの移動先）と dirty（露出帯）の
-/// 和がブロック軸（y）全域を隙間なく覆う（残像漏れの構造檻・簡易ケース）。
-#[test]
-fn back_is_fully_covered_by_blit_and_dirty_horizontal() {
-    let contract = ScaleContract::new(1.0, None);
-    let surface = (400u32, 100u32);
-    let canvas = canvas_for(
-        &broken_lines(4),
-        WritingMode::HorizontalTb,
-        (Some(0), Some(100), Some(0), Some(400)),
-        10.0,
-    );
-    let prev = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    let blit = (0i32, -12i32);
-    let (dirty, _) = ScrollPlanner::derive_dirty(
-        &canvas,
-        &window(1, -12.0),
-        WritingMode::HorizontalTb,
-        &contract,
-        blit,
-        surface,
-        &prev,
-    );
-    // blit 写域（by<0＝内容上へ）: front 行 [|by|,H) を back 行 [0,H-|by|) へ写す。
-    let by = blit.1.unsigned_abs();
-    let mut spans = vec![(0u32, surface.1 - by)];
-    for r in &dirty {
-        spans.push((r.rect.y, r.rect.y + r.rect.h)); // 横書きのブロック軸＝y
-    }
-    assert!(
-        covers_block_axis_fully(spans, surface.1),
-        "blit 写域 ∪ dirty が y 軸全域を覆う"
-    );
-}
-
-/// [start,end) 区間列がブロック軸 `[0,dim)` を隙間なく覆うか（先頭 0・末尾 dim 到達）。
-fn covers_block_axis_fully(mut spans: Vec<(u32, u32)>, dim: u32) -> bool {
-    spans.sort_unstable();
-    let mut cursor = 0u32;
-    for (s, e) in spans {
-        if s > cursor {
-            return false; // 隙間
-        }
-        if e > cursor {
-            cursor = e;
-        }
-    }
-    cursor >= dim
-}
-
-/// 行指紋は canvas-local（スクロール非依存）——同一 canvas は block_offset に依らず一致。
-#[test]
-fn committed_lines_are_scroll_independent() {
-    let canvas = canvas_for(
-        &broken_lines(3),
-        WritingMode::HorizontalTb,
-        (Some(0), Some(100), Some(0), Some(400)),
-        10.0,
-    );
-    let a = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    let b = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
-    assert_eq!(a, b, "同一 canvas の指紋は決定論的に一致");
-}
-
 /// スクロールアウトした行の残滓（要件 7.4・R-2 の回帰檻）: 行送りが「字の丈 ＋ 行間 2px」に
 /// なったため、行と行の隙間は 2px しかない。下端のはみ出しインクがそれより大きいフォント
 /// （Yu Gothic UI 28px は実測 3px）では、可視窓の外へ出た行の下端インクが blit 後の面内に残る。
@@ -638,6 +680,7 @@ fn scrolled_out_line_ink_overhang_is_dirtied_and_not_drawn() {
         (0, -12),
         (400, 100),
         &prev,
+        &ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb),
         &over,
     );
     assert_eq!(
@@ -671,11 +714,13 @@ fn lines_with_widths(widths: &[usize]) -> Vec<TextItem> {
 /// （`draw_lines`）はその和集合である。矩形の枚数と描画対象行数の積では描かない。
 ///
 /// 場面（font 10・pitch 12・k=1.0・面 400×100・9 行を 1 行ぶん −12 スクロール）:
-/// 3 種のダーティ源が**別々の行**に交差するように組む。
-/// - 露出帯（下端 y 87..100）: 交差するのは最下行（行 8・y 83..98）だけ。
+/// 3 種のダーティ源を積み、行送りの軸で重なる矩形は 1 枚にまとまる（再監査 R2-C1）。
 /// - スクロールアウトした行 0 の残滓（上端 y 0..2）: 交差するのは可視窓の先頭行（行 1・y 0..14）だけ。
-/// - 変化行 4（y 35..50）・変化行 5（y 47..62）: それぞれ両隣を巻き込み、行 4 と行 5 は
-///   **2 枚の矩形の双方**に現れる（重複しても和集合は昇順・重複なし）。
+/// - 変化行 4（y 35..50）・変化行 5（y 47..62）: 重なるので 1 枚（y 35..62）にまとまり、上下の隣
+///   （行 3・行 6）も巻き込む。まとめないと行 4 と行 5 が 2 枚の双方に現れて 2 回ずつ描かれる。
+/// - 露出帯（下端 y 87..100）と、送りの前に面の下端を越えていた最下行 8（送りの前 y 96..109・
+///   指摘 15）の今の位置の矩形（y 83..98）と寄せた線の写り先の帯（y 74..89・再監査 R1-C2）:
+///   重なるので 1 枚（y 74..100・幅は露出帯の 400）にまとまり、行 7 と行 8 を持つ。
 ///
 /// 各行の物理矩形は「canvas-local 位置 + block_offset −12」「em ボックス丈 10」「下端はみ出し
 /// 実測 3」「ガード 1」で決まる——行 i の y は `12i − 13 .. 12i + 2`（面寸でクランプ）。
@@ -714,46 +759,49 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
         (0, -12),
         surface,
         &prev,
+        &ScrollPlanner::committed_lines(&canvas, mode),
         &over,
     );
 
-    // 矩形は (a) 露出帯 → (b)(c) 住人 index 昇順（行 0 の残滓・変化行 4・変化行 5）の順。
-    assert_eq!(dirty.len(), 4, "露出帯 1 ＋ 残滓 1 ＋ 変化行 2");
-    assert_eq!(dirty[0].rect, phys(0, 87, 400, 13), "(a) 下端の露出帯");
-    assert_eq!(dirty[0].lines, vec![8], "露出帯に交差するのは最下行だけ");
+    // 矩形は組の中で最も早く積まれた矩形の順: 露出帯の組 → 行 0 の残滓 → 変化行 4・5 の組。
+    assert_eq!(dirty.len(), 3, "重なる矩形はまとまる: {dirty:?}");
+    assert_eq!(
+        dirty[0].rect,
+        phys(0, 74, 400, 26),
+        "(a) 露出帯と (d) 行 8 とその線の写り先"
+    );
+    assert_eq!(
+        dirty[0].lines,
+        vec![7, 8],
+        "下端の組に交差するのは行 7 と行 8"
+    );
     assert_eq!(dirty[1].rect, phys(0, 0, 11, 2), "(c) 行 0 の残滓");
     assert_eq!(
         dirty[1].lines,
         vec![1],
         "残滓に交差するのは可視窓の先頭行だけ"
     );
-    assert_eq!(dirty[2].rect, phys(0, 35, 21, 15), "(b) 変化行 4");
+    assert_eq!(dirty[2].rect, phys(0, 35, 21, 27), "(b) 変化行 4 と 5");
     assert_eq!(
         dirty[2].lines,
-        vec![3, 4, 5],
-        "変化行 4 の矩形は上下の隣も巻き込む（はみ出し 3 ＋ ガード 1 が隣の行へ届く）"
+        vec![3, 4, 5, 6],
+        "変化行の組は上下の隣も巻き込む（はみ出し 3 ＋ ガード 1 が隣の行へ届く）"
     );
-    assert_eq!(dirty[3].rect, phys(0, 47, 21, 15), "(b) 変化行 5");
-    assert_eq!(dirty[3].lines, vec![4, 5, 6], "変化行 5 の矩形も同様");
 
-    // 和集合＝描画対象行（昇順・重複なし）。行 4・行 5 は 2 枚の矩形の双方に現れる。
+    // 和集合＝描画対象行（昇順・重複なし）。
     assert_eq!(
         draw_lines,
-        vec![1, 3, 4, 5, 6, 8],
+        vec![1, 3, 4, 5, 6, 7, 8],
         "draw_lines は矩形ごとの交差行の和集合"
     );
     let mut union: Vec<usize> = dirty.iter().flat_map(|d| d.lines.clone()).collect();
     union.sort_unstable();
     union.dedup();
     assert_eq!(union, draw_lines, "和集合の定義どおり");
-    assert!(
-        dirty[2].lines.contains(&4) && dirty[3].lines.contains(&4),
-        "2 枚の矩形に交差する行は双方に現れる（行 4）"
-    );
 
-    // 描画呼び出しは矩形ごとの交差行数の**和**であって、枚数 × 描画対象行数の積ではない。
+    // 描画呼び出しは矩形ごとの交差行数の**和**で、どの行も 1 回だけ（枚数 × 描画対象行数の積ではない）。
     let sum: usize = dirty.iter().map(|d| d.lines.len()).sum();
-    assert_eq!(sum, 8, "和＝1 + 1 + 3 + 3");
+    assert_eq!(sum, draw_lines.len(), "和＝2 + 1 + 4（行ごとに 1 回）");
     assert!(
         sum < dirty.len() * draw_lines.len(),
         "和 {sum} は積 {} より小さい（削減が観測できる入力）",
@@ -767,4 +815,129 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
             .all(|d| d.lines.iter().all(|i| draw_lines.contains(i))),
         "各矩形の行は draw_lines の部分集合"
     );
+}
+
+// ── 指摘 4: 描き直しの範囲を面へ切る足し引きはあふれない ──
+
+/// 位置が ±1e30・±inf の行（f32→i64 の `as` は i64::MIN/MAX へ飽和する）でも、ガード余白の
+/// 足し引きが panic せず、範囲は面の中へ切られる（面に届かなければ無い）。
+#[test]
+fn huge_and_infinite_line_positions_clip_into_surface_without_panic() {
+    let contract = ScaleContract::new(1.0, None);
+    let vr = (Some(0), Some(224), Some(0), Some(400));
+    let prev_canvas = canvas_for(
+        &[TextItem::glyph("あ")],
+        WritingMode::HorizontalTb,
+        vr,
+        10.0,
+    );
+    let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
+    let canvas = canvas_for(
+        &[TextItem::glyph("あ"), TextItem::glyph("あ")],
+        WritingMode::HorizontalTb,
+        vr,
+        10.0,
+    );
+    // 行全体が面の外（±1e30・±inf）→ 範囲は無い。
+    for offset in [1e30_f32, -1e30, f32::INFINITY, f32::NEG_INFINITY] {
+        let (dirty, draw) = ScrollPlanner::derive_dirty(
+            &canvas,
+            &window(0, offset),
+            WritingMode::HorizontalTb,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &prev,
+        );
+        assert!(
+            dirty.is_empty(),
+            "offset {offset}: 面に届かない行は範囲が無い"
+        );
+        assert!(draw.is_empty(), "offset {offset}: 描く行も無い");
+    }
+    // 上へのはみ出しが 1e30・inf（上端が -1e30・-inf）、下端が面の中 → 面の中へ切られる {0,0,21,11}。
+    for top in [1e30_f32, f32::INFINITY] {
+        let over = vec![LineOverhang {
+            top,
+            bottom: 0.0,
+            left: 0.0,
+            right: 0.0,
+        }];
+        let (dirty, _) = ScrollPlanner::derive_dirty_with_overhangs(
+            &canvas,
+            &window(0, 0.0),
+            WritingMode::HorizontalTb,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &prev,
+            &ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb),
+            &over,
+        );
+        assert_eq!(dirty.len(), 1, "top {top}: 1 枚");
+        assert_eq!(
+            dirty[0].rect,
+            phys(0, 0, 21, 11),
+            "top {top}: 面の中へ切られる"
+        );
+    }
+}
+
+/// 7.3 の申し送り: 送りの前に行送りの遠い端を越えていた行の判定の縦書き 2 枝（純粋）。
+/// 列は幅 10・送り 12（vertical_rl の 0 列は x 90〜100・vertical_lr の 0 列は x 0〜10）。
+/// 送りの前の位置は今の位置 − blit。遠い端は vertical_rl＝左（x 0）・vertical_lr＝右（x 100）。
+#[test]
+fn shifted_far_edge_band_vertical_branches() {
+    use super::diff::shifted_far_edge_band as band;
+    let contract = ScaleContract::new(1.0, None);
+    // (書字方向, 遠い端をまたぐ blit, 逆向きの blit)
+    for (mode, across, opposite) in [
+        (WritingMode::VerticalRl, (95, 0), (-95, 0)),
+        (WritingMode::VerticalLr, (-95, 0), (95, 0)),
+    ] {
+        let canvas = canvas_for(
+            &broken_lines(2),
+            mode,
+            (Some(0), Some(200), Some(0), Some(100)),
+            10.0,
+        );
+        let hit = |i: usize, blit| {
+            let none = LineOverhang::default();
+            band(
+                &canvas.residents[i],
+                0.0,
+                mode,
+                &contract,
+                blit,
+                (100, 200),
+                none,
+            )
+            .is_some()
+        };
+        assert!(
+            hit(0, across),
+            "{mode:?}: 0 列は送りの前に遠い端をまたいでいた"
+        );
+        assert!(!hit(1, across), "{mode:?}: 1 列は送りの前に面の外");
+        assert!(!hit(0, (0, 0)), "{mode:?}: 送り無しでは面の中");
+        assert!(
+            !hit(0, opposite),
+            "{mode:?}: 逆の端をまたいでも遠い端ではない"
+        );
+        // 寄せた線の写り先の帯（再監査 R1-C2）: 送った後の遠い端から列の幅 10 ぶん内側まで。
+        let near = match mode {
+            WritingMode::VerticalRl => (95.0, 105.0),
+            _ => (-5.0, 5.0),
+        };
+        let at = band(
+            &canvas.residents[0],
+            0.0,
+            mode,
+            &contract,
+            across,
+            (100, 200),
+            LineOverhang::default(),
+        );
+        assert_eq!(at.map(|(x0, _, x1, _)| (x0, x1)), Some(near), "{mode:?}");
+    }
 }

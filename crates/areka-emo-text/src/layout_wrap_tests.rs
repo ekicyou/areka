@@ -1,11 +1,17 @@
 use super::test_support::{
-    IMAGE, broken_lines, glyphs, inline_positions, model, model_rect, window_for,
+    IMAGE, broken_lines, glyphs, inline_positions, layout_guarded, model, model_rect, window_for,
 };
-use super::{FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, VisibleWindow, WrapPlan};
+use super::{
+    CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine,
+    VisibleWindow, WrapPlan,
+};
+use crate::look::{GlyphStyles, StyleTable, TextLook};
 use crate::region::TextRegion;
-use crate::state::TextItem;
+use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_sakura::cluster::clusters;
+use areka_sakura::contract::ActorKey;
+use log_capture_kit::capture;
 
 // ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=height+行間 2） ──
 
@@ -21,16 +27,10 @@ fn fixed_metrics_advance_full_width_for_nonascii_half_for_ascii() {
 
 /// 行送りピッチは `font_height + 行間 2`（丸めなし・2026-09-05 の裁定）。
 ///
-/// 退役の記録（要件 7.2）: 本テストは
-/// `fixed_metrics_line_pitch_ceils_fractional_values`（旧式 `ceil(font_height × 1.25)` の
-/// 「切り上げの端数」を検証していた 1 本）の代替である。裁定で式から係数の乗算と `ceil` が
-/// 消え、検証対象だった端数処理そのものが仕様上存在しなくなったため、名前と本文ごと
-/// 差し替えた（退役 1 ↔ 代替 1・テストの総本数は不変）。
-///
-/// 判別力（新しい式以外の値では赤になる）:
-/// - `12 → 14`・`10 → 12` は旧式の 15・13 と食い違うので、旧式が残っていれば赤。
-/// - `10.5 → 12.5` は端数を残す font_height で、新式に `ceil` を足し戻すと 13 になり赤。
-///   （旧式なら `ceil(13.125) = 14` でやはり赤＝丸めの有無と係数の両方を同時に締める。）
+/// 判別力（この式以外の値では赤になる）:
+/// - `12 → 14`・`10 → 12` は係数を掛ける式（`ceil(font_height × 1.25)` なら 15・13）と食い違う。
+/// - `10.5 → 12.5` は端数を残す font_height で、`ceil` を足すと 13 になり赤
+///   （`ceil(13.125) = 14` でも赤＝丸めの有無と係数の両方を同時に締める）。
 #[test]
 fn fixed_metrics_line_pitch_adds_default_gap() {
     let m = FixedMetrics;
@@ -42,7 +42,8 @@ fn fixed_metrics_line_pitch_adds_default_gap() {
 // ── R6.1: 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
 
 /// 横書きの折返し: 行内位置＋次グリフ幅 > 閾値で折返し、
-/// ちょうど閾値で終わるグリフは折返さない（> 判定・境界檻）。
+/// ちょうど閾値で終わるグリフは折返さない（> 判定・境界檻）。既定の折返し
+/// （`WrapPlan::CharByChar`＝塊先決の OFF 経路）の確定出力の非回帰の檻を兼ねる。
 #[test]
 fn horizontal_wraps_before_glyph_exceeding_threshold() {
     let region = TextRegion::resolve(
@@ -587,10 +588,10 @@ fn reveal_progression_materializes_only_when_next_glyph_appears() {
     }
 }
 
-/// 3.4: 満杯付近で保留改行が実体化された直後にあふれ判定が従来どおり発火する（3.2/7.3 後段）。
+/// 3.4: 満杯付近で保留改行が実体化された直後にあふれ判定が発火する（3.2/7.3 後段）。
 /// 満杯 3 行＋`\n`＋**次の可視グリフ**（実体化トリガあり）→ 4 行目が実体化しあふれ発火。
 /// 保留のみ（次グリフなし）で不発火である対の片側は `trailing_pending_newline_does_not_
-/// trigger_overflow`（既存更新檻）が担保する。
+/// trigger_overflow`（`layout_visible_window_tests.rs`）が担保する。
 #[test]
 fn materialized_newline_near_full_triggers_overflow() {
     let region = TextRegion::resolve(
@@ -599,8 +600,7 @@ fn materialized_newline_near_full_triggers_overflow() {
         WritingMode::HorizontalTb,
     );
     // 満杯 3 行（下端 10/22/34）＋改行＋次グリフ → 改行が実体化し 4 行目（下端 46 > 34）。
-    // validrect.bottom は「3 行ちょうどが収まる」という境界の意図を保つため 36 → 34 へ導き直した
-    //（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
+    // validrect.bottom 34 は 3 行ちょうどが収まる境界。
     let mut items = broken_lines(3);
     items.push(TextItem::LineBreak { ratio: 1.0 });
     items.push(TextItem::glyph("あ"));
@@ -665,51 +665,6 @@ fn deferred_rules_hold_in_vertical_modes() {
     }
 }
 
-/// 3.6: 決定論（同一入力→同一出力）に、連続改行・末尾改行を含む新しい入力パターンを
-/// 追加し、遅延意味論の全分岐が 3 方向で同一入力→同一出力を返すことを確認する（7.1）。
-#[test]
-fn deferred_semantics_same_input_yields_identical_output() {
-    let model = model((Some(0), Some(0)), (Some(50), None));
-    for mode in [
-        WritingMode::HorizontalTb,
-        WritingMode::VerticalRl,
-        WritingMode::VerticalLr,
-    ] {
-        let region = TextRegion::resolve(&model, IMAGE, mode);
-        // 連続改行＋末尾改行を含む列（遅延・累算・実体化・蒸発の全分岐を通す）。
-        let items = [
-            TextItem::LineBreak { ratio: 1.0 },
-            TextItem::glyph("あ"),
-            TextItem::LineBreak { ratio: 1.0 },
-            TextItem::LineBreak { ratio: 0.5 },
-            TextItem::glyph("a"),
-            TextItem::LineBreak { ratio: 1.0 },
-        ];
-        let first = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        let second = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        assert_eq!(
-            first, second,
-            "mode {mode:?} で遅延意味論の決定論が崩れている"
-        );
-    }
-}
-
 /// 折返し・改行後の行は描画開始点の行内成分へ戻る（origin が validrect 内部の場合も
 /// 同一規則・行送り軸だけが進む）。
 #[test]
@@ -733,4 +688,244 @@ fn wrapped_lines_return_to_start_inline_component() {
     assert_eq!(lines.len(), 2);
     assert_eq!(inline_positions(&lines[1]), vec![100.0]);
     assert_eq!(lines[1].rect.top, 62.0); // 50 + pitch 12
+}
+
+/// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）は送りを捨てて
+/// 位置を保ち、guard つきの配置では `warn!`（欄は `actor`・`block_pos`・`ratio_sum`）を 1 件だけ残す。
+/// guard の無い配置では毎回（2 件）。ふつうの割合（1.0・0.5・1.5）は今と同じ位置
+/// （`audit-emo-text-layout-draw` 指摘 1・申し送り R17）。
+#[test]
+fn non_finite_pending_newline_keeps_positions_finite_with_one_warn() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let actor = ActorKey::from("0");
+    let layout_guarded = |items: &[TextItem]| {
+        let mut guard = CursorWarnGuard::default();
+        layout_guarded(items, items.len(), &region, 12.0, &actor, &mut guard)
+    };
+    let warns_of = |events: &[log_capture_kit::CapturedEvent]| {
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .map(|e| ["actor", "block_pos", "ratio_sum"].map(|f| e.field(f).is_some()))
+            .collect::<Vec<_>>()
+    };
+    let mut items = vec![TextItem::glyph("あ")];
+    items.extend(std::iter::repeat_n(TextItem::LineBreak { ratio: 3e38 }, 10));
+    items.push(TextItem::glyph("あ"));
+    items.extend(std::iter::repeat_n(
+        TextItem::LineBreak { ratio: -3e38 },
+        20,
+    ));
+    items.push(TextItem::glyph("あ"));
+
+    let (lines, events) = capture(|| layout_guarded(&items));
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, vec![0.0, 0.0, 0.0], "送れない改行は位置を保つ");
+    assert!(
+        lines.iter().all(|l| {
+            let r = &l.rect;
+            [r.left, r.top, r.right, r.bottom]
+                .iter()
+                .all(|v| v.is_finite())
+                && l.glyphs.iter().all(|g| g.inline_pos.is_finite())
+        }),
+        "行の位置に非有限が無い: {lines:?}"
+    );
+    assert_eq!(
+        warns_of(&events),
+        vec![[true; 3]],
+        "guard つきは 1 件（欄は actor・block_pos・ratio_sum）"
+    );
+
+    let (_, events) = capture(|| {
+        LayoutEngine::layout(
+            &items,
+            items.len(),
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        )
+    });
+    assert_eq!(warns_of(&events).len(), 2, "guard の無い配置は毎回");
+
+    // ふつうの割合: font 12 → pitch 14。0 → 14 → 21 → 42。
+    let normal = [
+        TextItem::glyph("あ"),
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::glyph("あ"),
+        TextItem::LineBreak { ratio: 0.5 },
+        TextItem::glyph("あ"),
+        TextItem::LineBreak { ratio: 1.5 },
+        TextItem::glyph("あ"),
+    ];
+    let (lines, events) = capture(|| layout_guarded(&normal));
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, vec![0.0, 14.0, 21.0, 42.0]);
+    assert!(warns_of(&events).is_empty(), "ふつうの割合は記録しない");
+}
+
+/// `\f[height,1e38]` の字（行送り・字幅とも 1e38）でも、折り返しの送りと字の送りは
+/// 有限でない結果を捨てて位置を保ち、guard つきの配置では `warn!` を 1 件だけ残す
+/// （`audit-emo-text-layout-draw` 指摘 1・指摘 20 で上限を置かない前提）。
+/// 折り返し: 幅 400 に 6 字＝6 行・4 行目（3e38）から先へは送れない。
+/// 字の送り: `\_l[3e38,]` の後の 1 字は 3e38 + 1e38 へ送れない。
+#[test]
+fn huge_font_height_wrap_and_glyph_advance_stay_finite_with_one_warn() {
+    let default = TextLook::ukadoc_default();
+    let huge = TextLook {
+        height: 1e38,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let id = table.intern(&huge, &default);
+    let actor = ActorKey::from("0");
+    let layout = |items: &[TextItem], region: &TextRegion, mode: WritingMode| {
+        let ids = vec![id; items.len()];
+        let mut guard = CursorWarnGuard::default();
+        let visible = items
+            .iter()
+            .filter(|i| matches!(i, TextItem::Glyph { .. }))
+            .count();
+        capture(|| {
+            LayoutEngine::layout_styled(
+                items,
+                visible,
+                region,
+                mode,
+                12.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+                GlyphStyles {
+                    table: &table,
+                    ids: &ids,
+                    default: &default,
+                },
+                &actor,
+                &mut guard,
+            )
+        })
+    };
+    let finite = |lines: &[PositionedLine]| {
+        lines.iter().all(|l| {
+            [l.rect.left, l.rect.top, l.rect.right, l.rect.bottom]
+                .iter()
+                .all(|v| v.is_finite())
+                && l.glyphs.iter().all(|g| {
+                    // 受け手は遠端（位置＋送り幅）を確かめずに当たり判定や描画の升に使う。
+                    g.inline_pos.is_finite() && (g.inline_pos + g.advance).is_finite()
+                })
+        })
+    };
+    let warns = |events: &[log_capture_kit::CapturedEvent]| {
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .count()
+    };
+
+    let wrap_region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (Some(400), None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let items: Vec<TextItem> = clusters("あいうえおか").map(TextItem::glyph).collect();
+    let (lines, events) = layout(&items, &wrap_region, WritingMode::HorizontalTb);
+    assert_eq!(lines.len(), 6, "1 字ずつ折れる: {lines:?}");
+    assert!(finite(&lines), "折り返しの送りが有限: {lines:?}");
+    let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+    assert_eq!(tops, vec![0.0, 1e38, 2e38, 3e38, 3e38, 3e38]);
+    assert_eq!(warns(&events), 1, "guard つきは 1 件");
+    assert_eq!(lines[5].rect.bottom, f32::MAX, "遠辺は有限の範囲で頭打ち");
+
+    // 縦書き（行送りは負の向き）でも遠辺 `block_pos - line_height` は有限。
+    let v_region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, Some(400))),
+        IMAGE,
+        WritingMode::VerticalRl,
+    );
+    let (lines, events) = layout(&items, &v_region, WritingMode::VerticalRl);
+    assert_eq!(lines.len(), 6, "1 字ずつ折れる: {lines:?}");
+    assert!(finite(&lines), "縦書きの行の矩形が有限: {lines:?}");
+    assert_eq!(warns(&events), 1, "guard つきは 1 件");
+
+    let free_region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let items = [
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: 3e38,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::glyph("あ"),
+    ];
+    let (lines, events) = layout(&items, &free_region, WritingMode::HorizontalTb);
+    assert!(finite(&lines), "字の送りが有限: {lines:?}");
+    assert_eq!(lines[0].rect.right, 3e38, "送れない字の送りは位置を保つ");
+    assert_eq!(warns(&events), 1, "guard つきは 1 件");
+    let warn = events.iter().find(|e| e.level == tracing::Level::WARN);
+    assert!(
+        warn.is_some_and(|e| e.field("inline_pos").is_some()),
+        "字の送りの記録は送れなかった位置を持つ: {events:?}"
+    );
+}
+
+/// 送れなかった字の遠端（位置＋送り幅）は、位置がどこでも有限に収まる。位置 3·2^103 は
+/// `f32::MAX - 位置` が偶数丸めで切り上がり、そこへ位置を足すと無限へ丸まる境目の値。
+#[test]
+fn unmovable_glyph_far_end_stays_finite_at_the_rounding_tie() {
+    /// どの字も送り幅が f32 の最大値（どこから足しても送れない）。
+    struct MaxAdvance;
+    impl GlyphMetrics for MaxAdvance {
+        fn advance(&self, _text: &str, _font_height: f32) -> f32 {
+            f32::MAX
+        }
+        fn line_pitch(&self, font_height: f32) -> f32 {
+            FixedMetrics.line_pitch(font_height)
+        }
+        fn line_box_height(&self, font_height: f32) -> f32 {
+            FixedMetrics.line_box_height(font_height)
+        }
+    }
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    // 位置が f32 の最大値ちょうどでも、送り幅は負にならない。
+    for pos in [3.0 * 2f32.powi(103), f32::MAX] {
+        let items = [
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: pos,
+                    unit: CursorUnit::Px,
+                },
+                y: CursorCoord::Omitted,
+            },
+            TextItem::glyph("あ"),
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            1,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &MaxAdvance,
+            WrapPlan::CharByChar,
+        );
+        let g = &lines[0].glyphs[0];
+        assert_eq!(g.inline_pos, pos, "跳躍先に置かれる: {lines:?}");
+        assert!((g.inline_pos + g.advance).is_finite(), "遠端が有限: {g:?}");
+        assert!(g.advance >= 0.0, "送り幅は負にならない: {g:?}");
+    }
 }

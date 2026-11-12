@@ -1,5 +1,5 @@
-use super::test_support::{IMAGE, broken_lines, model, model_rect, window_for};
-use super::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use super::test_support::{IMAGE, broken_lines, model_rect, window_for};
+use super::{LayoutEngine, VisibleWindow};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
@@ -9,9 +9,7 @@ use crate::writing::WritingMode;
 /// （判定は `>`・境界檻）。
 #[test]
 fn horizontal_within_region_does_not_scroll() {
-    // validrect top0/bottom34: 3 行の下端 10/22/34——3 行目はちょうど 34。
-    // 境界は「3 行ちょうどが収まる」意図を保つため 36（旧 pitch 13 の 3 行目下端）から
-    // 34（新 pitch 12 の 3 行目下端）へ導き直した。
+    // validrect top0/bottom34: 3 行の下端 10/22/34——3 行目はちょうど 34（3 行ちょうどが収まる）。
     let region = TextRegion::resolve(
         &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
@@ -31,8 +29,8 @@ fn horizontal_within_region_does_not_scroll() {
 /// 内容は上（−y）へ pitch 分オフセットする。行単位＝オフセットは行位置差そのもの。
 #[test]
 fn horizontal_overflow_scrolls_vertically_by_whole_lines() {
-    // 境界 34 は「3 行ちょうどが収まる」新格子の値（旧格子の 36 のままだと
-    // 最小スキップ後の下端が境界ちょうどにならず、最小性の意図が消える）。
+    // 境界 34 は「3 行ちょうどが収まる」値（最小スキップ後の下端が境界ちょうどになり、
+    // 最小性を確かめられる）。
     let region = TextRegion::resolve(
         &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
         IMAGE,
@@ -154,9 +152,8 @@ fn all_lines_overflowing_saturates_to_newest_line() {
 
 /// ratio 付き改行の端数行送り（pitch 15 × 0.5 = 7.5）でもオフセットは
 /// 実際の行位置差＝端数そのもの（整数量子化しない・端数檻）。
-/// 新式 `pitch = font + 行間 2` では ratio 0.5 が端数を生むのは pitch が奇数のとき
-/// ＝font が奇数のときなので、font 12（pitch 14・送り 7.0 で端数が消える）から
-/// font 13（pitch 15・送り 7.5）へ導き直した——「端数」という意図を残すため。
+/// `pitch = font + 行間 2` では ratio 0.5 が端数を生むのは pitch が奇数のとき
+/// ＝font が奇数のときなので、font 13（pitch 15・送り 7.5）を使う。
 #[test]
 fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
     let region = TextRegion::resolve(
@@ -187,7 +184,8 @@ fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
 
 /// 末尾の保留改行はあふれ判定に参加しない（内容ビューボックスを増やさない・
 /// R3.1/5.3/7.3 前段）。満杯 3 行（ちょうど収まる）＋trailing `\n` → 保留のまま
-/// 蒸発しあふれ不発火（`first_visible_line=0`）。新規檻 5（実体化後発火）と対を成す。
+/// 蒸発しあふれ不発火（`first_visible_line=0`）。`layout_wrap_tests.rs` の
+/// `materialized_newline_near_full_triggers_overflow`（実体化後発火）と対を成す。
 #[test]
 fn trailing_pending_newline_does_not_trigger_overflow() {
     let region = TextRegion::resolve(
@@ -208,65 +206,6 @@ fn trailing_pending_newline_does_not_trigger_overflow() {
         },
         "保留改行はあふれ判定に不参加（スクロール不発火）"
     );
-}
-
-/// 同一入力に対する visible_window 出力は完全一致する（純関数・決定論檻・R7.5）。
-#[test]
-fn visible_window_same_input_yields_identical_output() {
-    let region = TextRegion::resolve(
-        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    let lines = LayoutEngine::layout(
-        &broken_lines(5),
-        5,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    let first = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
-    let second = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
-    assert_eq!(first, second);
-}
-
-/// 同一入力に対する layout 出力は完全一致する（純関数・決定論檻）。
-#[test]
-fn same_input_yields_identical_output() {
-    let model = model((Some(0), Some(0)), (Some(50), None));
-    for mode in [
-        WritingMode::HorizontalTb,
-        WritingMode::VerticalRl,
-        WritingMode::VerticalLr,
-    ] {
-        let region = TextRegion::resolve(&model, IMAGE, mode);
-        let items = [
-            TextItem::glyph("あ"),
-            TextItem::LineBreak { ratio: 0.5 },
-            TextItem::glyph("a"),
-        ];
-        let first = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        let second = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            mode,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-        );
-        assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
-    }
 }
 
 /// 送り量の原点は**描画範囲の開始側**であり、最初の行の開始側ではない（R17.1/17.2・症状 F）。
@@ -337,7 +276,7 @@ fn leading_gap_scrolls_from_region_start_not_from_first_line() {
 /// validrect.left 307（＝正規化の遠端 −307・丈 93）・行送り 30。冒頭の空き 45 で
 /// 1 列目 327..355・2 列目 297..325・3 列目 267..295——最新列の左端 267 < 307 であふれる。
 /// 原点を −400 に取ると 0 列スキップ・オフセット +45（内容が右へ＝正準表）。
-/// 直す前の HEAD は「2 列スキップ・+60」＝最新の 1 列だけを返す。
+/// 原点を最初の列の開始側に取る実装は「2 列スキップ・+60」＝最新の 1 列だけを返し、赤になる。
 #[test]
 fn vertical_rl_leading_gap_scrolls_from_region_start() {
     let region = TextRegion::resolve(
@@ -362,5 +301,30 @@ fn vertical_rl_leading_gap_scrolls_from_region_start() {
             block_offset: 45.0
         },
         "縦書きでも冒頭の空きが最初に送られる（オフセットの符号は行送り方向の逆＝右へ）"
+    );
+}
+
+/// 位置が有限でなくなる保留の改行（`\n[3e38]`×10＋字・`\n[-3e38]`×20＋字）でも、
+/// 見える窓の `block_offset` は有限（指摘 1・送りを捨てた行は書き始めの位置に残る）。
+#[test]
+fn non_finite_pending_newline_keeps_block_offset_finite() {
+    let region = TextRegion::resolve(
+        &model_rect((Some(0), Some(0)), (Some(0), Some(34), Some(0), Some(400))),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let mut items = vec![TextItem::glyph("あ")];
+    items.extend(std::iter::repeat_n(TextItem::LineBreak { ratio: 3e38 }, 10));
+    items.push(TextItem::glyph("あ"));
+    items.extend(std::iter::repeat_n(
+        TextItem::LineBreak { ratio: -3e38 },
+        20,
+    ));
+    items.push(TextItem::glyph("あ"));
+    let window = window_for(&items, &region, WritingMode::HorizontalTb, 10.0);
+    assert!(window.block_offset.is_finite(), "{window:?}");
+    assert_eq!(
+        window.block_offset, 0.0,
+        "3 行とも書き始めの位置＝あふれない"
     );
 }

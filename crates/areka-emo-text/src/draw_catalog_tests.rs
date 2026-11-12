@@ -15,10 +15,10 @@
 //! | §3 | 全滅は既定へ戻して記録 1 件 | 9.4, 13.2 |
 //! | §4 | 同じ候補列は引き直さない・記録も増えない | 9.7 |
 //! | §5 | バルーン定義の候補列にも同じ規則／本番経路の対照 | 9.8 |
-//! | §6 | 較正（先頭候補だけを採る誤り・鍵を連結する誤り） | 9.2, 13.5 |
+//! | §6 | 較正（鍵を連結する誤り・読み飛ばしと全滅の種別） | 13.5 |
 //! | §7 | 顔に太字・斜体の指定を重ねる規則（檻 U7） | 4.2〜4.5 |
 //! | §8 | GDI の名前での引き直し（偽の台帳・檻 U1〜U6） | 3.1〜3.7, 3.11, 6.2 |
-//! | §9 | 実際の書体の集まりでの中太（檻 R1） | 3.5, 3.10, 6.3 |
+//! | §9 | 実際の書体の集まりでの中太（檻 R1）・空の候補は次へ（再監査 R2） | 3.5, 3.10, 6.3 |
 
 use areka_parsers::balloon::{Font, FontColor};
 use log_capture_kit::{CapturedEvent, capture};
@@ -30,7 +30,7 @@ use windows::Win32::Graphics::DirectWrite::{
 };
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::super::test_support::model_with_font;
+use super::super::test_support::{model_with_font, require_yu_gothic};
 use super::super::{DEFAULT_FONT_NAME, ResolvedFont};
 use super::{FontCatalog, FontFace};
 
@@ -216,6 +216,26 @@ fn an_all_missing_list_records_only_once_per_list() {
     assert_eq!(cat.lookup_count(), 1);
 }
 
+/// 台詞の切れ目（`forget_talk`）は台詞の番号を進め、候補列の記憶を空にする（次の台詞は引き直す）。
+/// 記録済みの鍵は残す——同じ全滅を次の台詞で引き直しても記録は増えない（指摘 11）。
+#[test]
+fn forget_talk_advances_the_talk_and_forgets_resolutions_but_not_records() {
+    let cat = catalog(&[]);
+    let ((), events) = capture(|| {
+        cat.family_for(&v(&["無いフォント"]));
+        assert_eq!(cat.talk_epoch(), 0);
+        cat.forget_talk();
+        assert_eq!(cat.talk_epoch(), 1, "台詞の切れ目で台詞の番号が 1 進む");
+        cat.family_for(&v(&["無いフォント"]));
+    });
+    assert_eq!(cat.lookup_count(), 2, "次の台詞では候補列を引き直す");
+    assert_eq!(
+        warns(&events, ALL_MISSING),
+        1,
+        "記録は台帳の寿命のあいだ 1 度のまま"
+    );
+}
+
 // ────────────────────────── §5 バルーン定義の候補列／本番経路（R9.8）
 
 /// バルーン定義のカンマ区切りにも同じ「記述順に最初の実在」規則が効く。
@@ -234,7 +254,7 @@ fn the_balloon_candidate_chain_follows_the_same_rule() {
     assert_eq!(picked.height, 20.0, "名前以外は複製");
     assert_eq!(picked.color, (1, 2, 3));
     assert_eq!(
-        picked.looks.default.name,
+        *picked.looks.default.name,
         v(&["存在しないフォント", "Yu Gothic UI"]),
         "候補列そのものは見た目の側に残る"
     );
@@ -261,29 +281,7 @@ fn the_system_font_collection_is_the_real_source_in_production() {
 
 // ────────────────────────── §6 較正（過去の壊れ方を再現すると赤）
 
-/// 較正 1: 「先頭候補だけを採る」旧い誤りを再現すると赤になる。
-///
-/// 旧 `ResolvedFont::resolve` は候補列の先頭だけを採り、残りを未消費のまま持っていた。
-/// その振る舞いを写した下の関数は第 2 候補へ進めないので、実装と食い違う。
-#[test]
-fn taking_only_the_first_candidate_would_disagree_with_the_catalog() {
-    let cat = catalog(&["Yu Gothic UI"]);
-    let candidates = v(&["存在しないフォント", "Yu Gothic UI"]);
-
-    /// 旧い誤り: 先頭だけを採る。
-    fn first_only(candidates: &[String]) -> Option<String> {
-        candidates.first().cloned()
-    }
-
-    assert_ne!(
-        cat.family_for(&candidates),
-        first_only(&candidates),
-        "先頭候補だけを採る実装ならこの述語は緑にならない"
-    );
-    assert_eq!(cat.family_for(&candidates), Some("Yu Gothic UI".to_owned()));
-}
-
-/// 較正 2: 記録の鍵を「連結した綴り」にする誤りを再現すると赤になる。
+/// 較正 1: 記録の鍵を「連結した綴り」にする誤りを再現すると赤になる。
 ///
 /// 引用符がカンマを守るので、候補 2 つの列と「カンマを含む候補 1 つ」の列はどちらも
 /// 到達する。カンマで連結すると同じ綴りになるので、鍵を連結すると片方の記録が
@@ -311,7 +309,7 @@ fn a_joined_spelling_would_collapse_two_different_failures_into_one_key() {
     );
 }
 
-/// 較正 3: 読み飛ばしの記録と全滅の記録は別の種別として数える。
+/// 較正 2: 読み飛ばしの記録と全滅の記録は別の種別として数える。
 ///
 /// 候補 1 つだけのフォントファイル名は「読み飛ばし」と「全滅」の両方を起こす。
 /// 種別を持たない鍵だと後の 1 件が先の 1 件に食われる。
@@ -367,8 +365,6 @@ fn bold_takes_the_heavier_of_the_named_weight_and_bold() {
             named.0
         );
     }
-    assert_eq!(DWRITE_FONT_WEIGHT_BOLD.0, 700, "中太＋太字は 700");
-    assert_eq!(DWRITE_FONT_WEIGHT_BLACK.0, 900, "Black＋太字は 900");
 }
 
 /// 斜体の指定は ITALIC、指定が無ければ名前の斜体（要件 4.4・4.5）。
@@ -570,12 +566,7 @@ fn r1_real_collection_resolves_gdi_names_to_the_medium_face() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
         .expect("DWriteCreateFactory（デバイス非依存・headless 可）");
     let cat = FontCatalog::new(&factory).expect("システムのフォント集合を取得できる");
-    assert!(
-        cat.family_for(&v(&["Yu Gothic"])).is_some()
-            && cat.family_for(&v(&["游ゴシック"])).is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
+    require_yu_gothic(&cat);
 
     let (_, events) = capture(|| {
         for name in ["Yu Gothic Medium", "游ゴシック Medium", "yu gothic medium"] {
@@ -612,4 +603,30 @@ fn r1_real_collection_resolves_gdi_names_to_the_medium_face() {
         "見つからない名前は想定外の失敗ではない（error! を残さない）: {events:?}"
     );
     assert_eq!(warns(&events, ALL_MISSING), 1, "対照: 全滅の記録は出ている");
+}
+
+/// 再監査 R2-C（調べ）: 本番の台帳で空の候補（`\f[name,,Meiryo]` の 2 番目）は何の顔にも当たらず、
+/// 次の候補が採られる（DirectWrite が空の名前に既定の書体を返して空の候補が勝つ、にならない）。
+#[test]
+fn an_empty_candidate_on_the_real_collection_falls_through_to_the_next() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)
+        .expect("DWriteCreateFactory（デバイス非依存・headless 可）");
+    let cat = FontCatalog::new(&factory).expect("システムのフォント集合を取得できる");
+    require_yu_gothic(&cat);
+    let names = |list: &[&str]| list.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    let (alone, events) = capture(|| cat.face_for(&names(&[""])));
+    assert_eq!(alone, None, "空の候補だけなら全滅");
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .count(),
+        0,
+        "空の名前は想定外の失敗ではない: {events:?}"
+    );
+    assert_eq!(
+        cat.face_for(&names(&["", "Yu Gothic"])),
+        cat.face_for(&names(&["Yu Gothic"])),
+        "空の候補は飛ばして次の候補を採る"
+    );
 }

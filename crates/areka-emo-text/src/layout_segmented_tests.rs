@@ -1,7 +1,7 @@
-use super::test_support::{IMAGE, glyphs, inline_positions, model};
-use super::{FixedMetrics, LayoutEngine, LineRect, PositionedLine, WrapPlan};
+use super::test_support::{IMAGE, cursor_px, glyphs, inline_positions, model, plan};
+use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
+use crate::look::{GlyphStyles, StyleId, StyleTable, TextLook};
 use crate::region::TextRegion;
-use crate::segment::{Segment, SegmentPlan};
 use crate::state::TextItem;
 use crate::writing::WritingMode;
 
@@ -10,15 +10,6 @@ use crate::writing::WritingMode;
 // budouy 非依存でゲート③の判断分岐を全網羅するため、plan は手組み（from_segments）で
 // 注入する（design「テスト形: 手組み SegmentPlan」）。共通前提: FixedMetrics・font 10 →
 // 全角 'あ' の advance 10・pitch 12。閾値は wordwrappoint x（横書き）／y（縦書き）。
-
-/// (start, len) 列から手組み SegmentPlan を作る。
-fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
-    SegmentPlan::from_segments(
-        segs.iter()
-            .map(|&(start, len)| Segment { start, len })
-            .collect(),
-    )
-}
 
 /// 各グリフの (行 index, 行内位置, 文字) を配置順に平坦化する（prefix 一致比較用）。
 fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, &str)> {
@@ -298,55 +289,6 @@ fn segmented_same_rule_in_vertical_modes() {
     assert_eq!(
         inline_by_mode[0], inline_by_mode[1],
         "縦書き 2 方向で行内軸の塊先決（割れ点・行内位置）が不一致"
-    );
-}
-
-/// 4.1/4.3/8.3: OFF 経路（`WrapPlan::CharByChar`）の非回帰アンカー。既定の折返し
-/// モード（文字単位）は本機能導入前の layout と byte 等価であり、`SegmentPlan` を
-/// 一切参照しない（境界値の算出自体が起きない・R4.2）。閾値 50・font 10 の 6 グリフは
-/// char 割り（5+1）で、行内位置・行矩形まで確定値へ pin する（この確定出力は
-/// `horizontal_wraps_before_glyph_exceeding_threshold` と一致——OFF 出力が全 layout
-/// 呼出で不変であることの明示アンカー）。
-#[test]
-fn char_by_char_is_off_path_non_regression_anchor() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (Some(50), None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    let items = glyphs(6);
-    let lines = LayoutEngine::layout(
-        &items,
-        6,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert_eq!(lines.len(), 2, "char 割り（5+1）どおり");
-    assert_eq!(
-        inline_positions(&lines[0]),
-        vec![0.0, 10.0, 20.0, 30.0, 40.0]
-    );
-    assert_eq!(inline_positions(&lines[1]), vec![0.0]);
-    assert_eq!(
-        lines[0].rect,
-        LineRect {
-            left: 0.0,
-            top: 0.0,
-            right: 50.0,
-            bottom: 10.0
-        }
-    );
-    assert_eq!(
-        lines[1].rect,
-        LineRect {
-            left: 0.0,
-            top: 12.0,
-            right: 10.0,
-            bottom: 22.0
-        }
     );
 }
 
@@ -780,4 +722,128 @@ fn segmented_prefix_stable_in_vertical_mode() {
             "vertical_rl visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び）"
         );
     }
+}
+
+/// 指摘 5（空行を出さない裁定）: `\_l[50,]` の直後の塊は、行が空なので「塊の前で行送り」の枝に
+/// 入らず、字の無い行を出さない。塊 {0,6}（seg_sum 60）は残り 50 に入らず行頭からの 100 には
+/// 入るが、行が空なので長い塊の枝（文字の規則）へ落ちる＝最初の字は x＝50 のまま・6 字目で折れる。
+#[test]
+fn segmented_after_cursor_move_emits_no_blank_line() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (Some(100), None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let mut items = vec![cursor_px(50.0, 0.0)];
+    items.extend(glyphs(6));
+    let p = plan(&[(0, 6)]);
+    let lines = LayoutEngine::layout(
+        &items,
+        6,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::Segmented(&p),
+    );
+    assert!(
+        lines.iter().all(|l| !l.glyphs.is_empty()),
+        "字の無い行は出ない: {lines:?}"
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(
+        inline_positions(&lines[0]),
+        vec![50.0, 60.0, 70.0, 80.0, 90.0],
+        "`\\_l` の x＝50 が残る"
+    );
+    assert_eq!(inline_positions(&lines[1]), vec![0.0]);
+}
+
+/// 指摘 9（塊の字幅の合計を今の位置からにする）: 塊 3,000 の大きな全文で、配置の結果が直す前と
+/// 同じ。字幅は半角 5・全角 10 を混ぜ、改行と `\_l` を挟み（列の位置と字の番号がずれる）、見た目
+/// （大きさ 10／14）を字の番号で変える（見た目を通し番号で引くことも確かめる）。
+/// 期待値は直す前のコード（`segment_advance_sum` が全文の先頭から数えていたとき）で測って固定した。
+/// 値は数え方に依らないので、合計が見た項目の数（`SEGMENT_SUM_VISITS`）が項目数に比例することも見る。
+#[test]
+fn segmented_large_text_layout_unchanged_by_linear_sum() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (Some(100), None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let mut items = Vec::new();
+    let mut segs = Vec::new();
+    let mut serial = 0usize;
+    for k in 0..3000usize {
+        if k % 37 == 36 {
+            items.push(TextItem::LineBreak { ratio: 1.0 });
+        }
+        if k % 53 == 52 {
+            items.push(cursor_px(15.0, 0.0));
+        }
+        let len = 1 + (k * 7) % 5;
+        segs.push((serial, len));
+        for _ in 0..len {
+            let wide = (serial * 31) % 3 != 0;
+            items.push(TextItem::glyph(if wide { "あ" } else { "a" }));
+            serial += 1;
+        }
+    }
+    let p = plan(&segs);
+    let default = TextLook {
+        height: 10.0,
+        ..TextLook::ukadoc_default()
+    };
+    let mut table = StyleTable::default();
+    let big = table.intern(
+        &TextLook {
+            height: 14.0,
+            ..TextLook::ukadoc_default()
+        },
+        &default,
+    );
+    let ids: Vec<StyleId> = (0..serial)
+        .map(|i| if i % 7 < 3 { big } else { StyleId::DEFAULT })
+        .collect();
+    let styles = GlyphStyles {
+        table: &table,
+        ids: &ids,
+        default: &default,
+    };
+    super::line_ops::SEGMENT_SUM_VISITS.with(|c| c.set(0));
+    let lines = LayoutEngine::layout_styled(
+        &items,
+        serial,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::Segmented(&p),
+        styles,
+        &areka_sakura::contract::ActorKey::from("0"),
+        &mut CursorWarnGuard::default(),
+    );
+    let visits = super::line_ops::SEGMENT_SUM_VISITS.with(|c| c.get());
+    let mut digest = 0xcbf2_9ce4_8422_2325u64;
+    let mut mix = |v: u64| digest = (digest ^ v).wrapping_mul(0x0100_0000_01b3);
+    for l in &lines {
+        mix(l.glyphs.len() as u64);
+        mix(u64::from(l.rect.left.to_bits()));
+        mix(u64::from(l.rect.top.to_bits()));
+        for g in &l.glyphs {
+            mix(u64::from(g.inline_pos.to_bits()));
+        }
+    }
+    assert_eq!(serial, 9000);
+    assert_eq!(
+        (lines.len(), digest),
+        (1210, 3_540_694_257_211_298_979),
+        "直す前の配置と違う"
+    );
+    // 塊ごとの合計は高々 2 回・各回は塊の項目だけを見る（全文の頭から足すと項目数の 2 乗）。
+    assert!(
+        visits <= 3 * items.len(),
+        "塊の合計が見た項目 {visits} が項目数 {} の 3 倍を超える",
+        items.len()
+    );
 }

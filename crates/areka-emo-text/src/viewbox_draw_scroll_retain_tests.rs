@@ -4,13 +4,9 @@
 //! ＝行送り 30）で観測された症状——「2 行に折り返した台詞 → 改行 150%（段落間隔）→ 次の台詞を
 //! 1 字ずつ」と進めると、あふれて 1 行送った後に**先頭可視行が描かれず**最新の 1 行だけが
 //! 残る——と**同じ形の入力列（冒頭の保留改行を含まない）**を決定論で駆動する。
-//! 2026-09-10 の根因確定（`visible_window` の原点・タスク 6.13）で、症状 F の引き金は台詞冒頭の
-//! `\n[150]` だったと判明した——本檻の台本はそれを含まないので緑は当然で、以後は描画対象の
-//! 非回帰の檻として残す。
-//!
-//! **この檻は 2026-09-07 時点の HEAD で緑である**——すなわち症状 F はこの層（`ViewboxExecutor`
-//! の差分描画）では再現しない。緑であること自体が所見であり、症状の引き当てを別の層へ送る
-//! 根拠になる。檻が症状を捕まえられることは較正で確かめてある——`derive_dirty_with_overhangs`
+//! 症状 F の引き金は台詞冒頭の `\n[150]`（`visible_window` の原点）で、本檻の台本はそれを
+//! 含まない——本檻は描画対象（`ViewboxExecutor` の差分描画）の非回帰の檻である。
+//! 檻が症状を捕まえられることは較正で確かめてある——`derive_dirty_with_overhangs`
 //! の描画対象から先頭可視行を 1 つ落とす欠陥を注入すると、byte 等価の主張が赤になる。
 //!
 //! 期待（正典・R17.1）: 送りの前後で画素が変わってよいのは送られた分だけであり、先頭可視行
@@ -35,14 +31,14 @@
 //! （[`AtLeastRealAdvance`]）。既存の本文の字は実フォントの送り幅がどれも 28 以下なので、
 //! 配置は `FixedMetrics` だけのときと 1 画素も変わらない。
 
-use super::ViewboxExecutor;
-use super::test_support::{Rig, colored_count, glyph_items, live_diff_model_font, opaque_count};
-use crate::canvas::ContentCanvas;
-use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
-use crate::layout::{FixedMetrics, GlyphMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use super::test_support::{
+    RenderPair, Rig, colored_count, count_in_x_band, glyph_items, layout_frame,
+    live_diff_model_font, opaque_count,
+};
+use crate::draw::{DWriteMetrics, ResolvedFont};
+use crate::layout::{FixedMetrics, GlyphMetrics, VisibleWindow, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextItem, TextLayerConfig};
-use crate::surface::TextSurface;
 use crate::writing::WritingMode;
 use areka_sakura::cluster::cluster_count;
 
@@ -99,15 +95,8 @@ impl GlyphMetrics for AtLeastRealAdvance<'_> {
 
 /// 行送り軸の帯 `[y0, y1)` に非透明ピクセルがいくつ在るか（BGRA 密配列・物理 px）。
 fn ink_in_band(bytes: &[u8], w: u32, y0: u32, y1: u32) -> usize {
-    let mut count = 0;
-    for y in y0..y1 {
-        for x in 0..w {
-            if bytes[((y * w + x) * 4 + 3) as usize] != 0 {
-                count += 1;
-            }
-        }
-    }
-    count
+    let rows = &bytes[(y0 * w * 4) as usize..(y1 * w * 4) as usize];
+    count_in_x_band(rows, w, 0, w, |px| px[3] != 0)
 }
 
 /// オラクル（全域再描画）と viewbox（差分描画）へ同一入力を流した 1 フレームの読み戻し。
@@ -124,10 +113,7 @@ struct Frames {
 
 /// 二面リグ: 同一 core／compositor／font／region で、オラクルと viewbox を同一入力で回す。
 struct ScrollRig {
-    oracle_surface: TextSurface,
-    viewbox_surface: TextSurface,
-    oracle: DrawExecutor,
-    viewbox: ViewboxExecutor,
+    pair: RenderPair,
     region: TextRegion,
     font: ResolvedFont,
     /// 実フォントの送り幅（絵文字の配置にだけ効く・冒頭の但し書き）。
@@ -135,7 +121,6 @@ struct ScrollRig {
     contract: ScaleContract,
     mode: WritingMode,
     /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
-    #[allow(dead_code)]
     rig: Rig,
 }
 
@@ -146,22 +131,16 @@ impl ScrollRig {
     /// ラスタライズ（インクの形・はみ出し量）にだけ効く。
     fn new() -> ScrollRig {
         let mut rig = Rig::new();
-        let oracle_surface = rig.attach(IMAGE, 1.0);
-        let viewbox_surface = rig.attach(IMAGE, 1.0);
+        let pair = RenderPair::attach(&mut rig, IMAGE, 1.0);
         let model = live_diff_model_font(Some("Yu Gothic UI"), Some(FONT_HEIGHT as u32));
         let mode = WritingMode::HorizontalTb;
         let font = ResolvedFont::resolve(&model);
         let region = TextRegion::resolve(&model, IMAGE, mode);
-        let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
-        let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
         let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
         let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics::new 失敗");
         ScrollRig {
-            oracle_surface,
-            viewbox_surface,
-            oracle,
-            viewbox,
+            pair,
             region,
             font,
             metrics,
@@ -171,9 +150,14 @@ impl ScrollRig {
         }
     }
 
+    /// 器はそのままに、新しい二面と実行部へ付け替える（組み合わせごとに D3D の器を作り直さない・指摘 31）。
+    fn fresh_pair(&mut self) {
+        self.pair = RenderPair::attach(&mut self.rig, IMAGE, 1.0);
+    }
+
     /// `visible` 字ぶんを見せた 1 フレームを両方式へ流し、読み戻しと可視窓を返す。
     fn frame(&mut self, label: &str, items: &[TextItem], visible: usize) -> Frames {
-        let lines = LayoutEngine::layout(
+        let (lines, canvas, window) = layout_frame(
             items,
             visible,
             &self.region,
@@ -182,43 +166,20 @@ impl ScrollRig {
             &AtLeastRealAdvance(&self.metrics),
             WrapPlan::CharByChar,
         );
-        let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
-        let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
         // 最新行の描画面上の上端（validrect-local 上端＋可視窓オフセット・k=1.0）。
         let latest_top = lines
             .last()
             .map(|line| line.rect.top - self.region.top() + window.block_offset)
             .unwrap_or(0.0);
 
-        self.oracle
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.oracle_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
-        self.viewbox
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.viewbox_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
-
-        let oracle = self
-            .oracle_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
-        let viewbox = self
-            .viewbox_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
+        let (oracle, viewbox) = self.pair.render(
+            label,
+            &canvas,
+            &window,
+            &self.font,
+            self.mode,
+            &self.contract,
+        );
         Frames {
             oracle,
             viewbox,
@@ -241,7 +202,7 @@ impl ScrollRig {
 fn scroll_frames_keep_first_visible_line_ink() {
     let mut rig = ScrollRig::new();
     let (items, total_glyphs) = boot_items();
-    let (w, _h) = rig.oracle_surface.size();
+    let (w, _h) = rig.pair.oracle_surface.size();
     let mut scrolled_frames = 0usize;
 
     for visible in 1..=total_glyphs {
@@ -330,6 +291,7 @@ fn scroll_frame_sweep_matches_full_redraw_oracle() {
     let ratios = [1.0f32, 1.5, 2.0];
     let strides = [1usize, 2, 5];
     let mut scrolled_total = 0usize;
+    let mut rig = ScrollRig::new();
 
     for ratio in ratios {
         for stride in strides {
@@ -342,8 +304,8 @@ fn scroll_frame_sweep_matches_full_redraw_oracle() {
                 items.extend(glyph_items(body));
                 total += cluster_count(body);
             }
-            let mut rig = ScrollRig::new();
-            let (w, _h) = rig.oracle_surface.size();
+            rig.fresh_pair();
+            let (w, _h) = rig.pair.oracle_surface.size();
             let mut visible = 0usize;
             while visible < total {
                 visible = (visible + stride).min(total);

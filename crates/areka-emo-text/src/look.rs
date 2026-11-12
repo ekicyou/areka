@@ -30,28 +30,23 @@
 //!
 //! ## 残りのキーの「口」（要件 4.3／4.7）
 //!
-//! `font.bold`／`font.italic`／`font.underline`／`font.strike`／`font.outline`／
-//! `font.shadowcolor.*`／`font.shadowstyle`／`disable.font.*` の読み取りは
-//! `areka-P0-balloon-font-descript-keys` の所有で、飾り 5 本と `disable.font.*`（影を除く）は
-//! [`crate::balloon_overrides`] が配線済み、影の 4 キーは受け口が所有外のため渡していない。その口は
-//! [`LookLayers::from_balloon`] の `font_overrides`／`disable_overrides` の 2 引数で、
-//! 1 件は `\f` と**同じ形のトークン列**である——`font.bold,1` なら `["bold", "1"]`、
-//! `disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。
-//!
-//! **キーごとに引数を増やさない**のが肝で、読めるキーが 8 個でも 20 個でも `from_balloon`
-//! の形は変わらず、下流の配線は「読んだキーをトークンの組にして渡す」だけで済む。値の綴りの
-//! 解釈（真偽値の別名・色名・相対の大きさ）も台本の `\f` と同じ [`apply_font_tag`] を通るので
-//! 1 か所に揃う。層の組み方（無効表示は色だけ混色・他は既定と同じ・要件 4.5）も、番号の
-//! 畳み込みも変わらない——差し込みは複製の**後**に載るので、`disable.font.*` を 1 つも
-//! 渡さなければ従来どおり「色以外は既定と同じ」が保たれる。
-//!
-//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という
-//! 状態を `look_tests.rs` §3 が明示的に固定している。
+//! 飾り 5 本（`font.bold`〜`font.outline`）・影・`disable.font.*` の読み取りは
+//! `areka-P0-balloon-font-descript-keys` の所有で、影を除いて [`crate::balloon_overrides`] が配線済み
+//! （影の 4 キーは受け口が所有外のため渡さない）。口は [`LookLayers::from_balloon`] の
+//! `font_overrides`／`disable_overrides` の 2 引数で、1 件は `\f` と**同じ形のトークン列**——
+//! `font.bold,1` なら `["bold", "1"]`、`disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。キーごとに引数を増やさない。
+//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という状態を
+//! `look_tests.rs` §3 が明示的に固定している。
+
+use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::ops::Deref;
+use std::sync::Arc;
 
 use crate::color::{ColorSpec, mix_disabled, parse_color};
 
 /// 上下付き（語彙のみ・表示は変えない・後勝ちの排他なので enum で同時に 1 値）。
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Script {
     /// 上下付きなし（正典の既定）。
     #[default]
@@ -64,14 +59,62 @@ pub enum Script {
 
 /// 正典の既定フォント名（**全角表記** ＭＳ ゴシック）。
 ///
-/// COM 層の [`crate::draw::DEFAULT_FONT_NAME`] と同じ正典で、両者が黙って食い違わないことは
-/// `look_tests.rs` §1 が見張る。
+/// COM 層の [`crate::draw::DEFAULT_FONT_NAME`] はこの別名（正典はここ 1 か所）。
 pub const UKADOC_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 
 /// 正典の既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」）。
 ///
-/// COM 層の [`crate::draw::DEFAULT_FONT_HEIGHT`] と同じ正典（`look_tests.rs` §1 が見張る）。
+/// COM 層の [`crate::draw::DEFAULT_FONT_HEIGHT`] はこの別名（正典はここ 1 か所）。
 pub const UKADOC_DEFAULT_FONT_HEIGHT: f32 = 12.0;
+
+/// フォント名の候補列（記述順）——複製は共有の参照を 1 つ増やすだけで、ハッシュは組んだときに
+/// 1 度だけ計算して持つ（再監査 R2-B1・字ごとに候補の数に比例する仕事をすると N² になる）。
+/// 同値は中身の同値のまま、同じ参照どうしは要素を比べない（寄せるのは [`StyleTable::intern`]）。
+#[derive(Clone, Debug)]
+pub struct FontNames {
+    list: Arc<[String]>,
+    hash: u64,
+}
+
+impl From<Vec<String>> for FontNames {
+    fn from(list: Vec<String>) -> FontNames {
+        let mut hasher = DefaultHasher::new();
+        list.hash(&mut hasher);
+        FontNames {
+            list: list.into(),
+            hash: hasher.finish(),
+        }
+    }
+}
+
+impl Deref for FontNames {
+    type Target = [String];
+    fn deref(&self) -> &[String] {
+        &self.list
+    }
+}
+
+impl PartialEq for FontNames {
+    fn eq(&self, other: &FontNames) -> bool {
+        if Arc::ptr_eq(&self.list, &other.list) {
+            return true;
+        }
+        if self.hash != other.hash {
+            return false;
+        }
+        #[cfg(test)]
+        tests::count_name_list_compare();
+        self.list == other.list
+    }
+}
+
+impl Eq for FontNames {}
+
+impl Hash for FontNames {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
 
 /// 1 文字に効く見た目の全項目（値型・等値なら同じ番号へ畳み込まれる）。
 ///
@@ -80,7 +123,7 @@ pub const UKADOC_DEFAULT_FONT_HEIGHT: f32 = 12.0;
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextLook {
     /// フォント名の候補列（記述順＝優先順）。実在の判定と読み飛ばしは COM 層の担当。
-    pub name: Vec<String>,
+    pub name: FontNames,
     /// em の大きさ（image px・常に正の有限値）。
     pub height: f32,
     /// 文字色 r/g/b。
@@ -99,11 +142,36 @@ pub struct TextLook {
     pub script: Script,
 }
 
+/// `==` と同じ同値の鍵——大きさは `0.0` と `-0.0` を同じビットへ寄せる（`==` が等しいとみなす
+/// 2 値が別の鍵へ割れないため）。NaN は `==` が自分とも等しくないので、索引でも決して当たらず
+/// 旧来の線形走査と同じく毎回新しい番号になる（大きさは常に正の有限値なので本番には現れない）。
+impl Hash for TextLook {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        (if self.height == 0.0 {
+            0.0f32
+        } else {
+            self.height
+        })
+        .to_bits()
+        .hash(state);
+        self.color.hash(state);
+        self.bold.hash(state);
+        self.italic.hash(state);
+        self.underline.hash(state);
+        self.strike.hash(state);
+        self.outline.hash(state);
+        self.script.hash(state);
+    }
+}
+
+impl Eq for TextLook {}
+
 impl TextLook {
     /// 正典の既定——ＭＳ ゴシック・12・黒・装飾はすべて無効（要件 4.1）。
     pub fn ukadoc_default() -> TextLook {
         TextLook {
-            name: vec![UKADOC_DEFAULT_FONT_NAME.to_owned()],
+            name: vec![UKADOC_DEFAULT_FONT_NAME.to_owned()].into(),
             height: UKADOC_DEFAULT_FONT_HEIGHT,
             color: (0, 0, 0),
             bold: false,
@@ -136,7 +204,7 @@ impl TextLook {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FontKey {
     /// フォント名の候補列（記述順）。
-    pub name: Vec<String>,
+    pub name: FontNames,
     /// em の大きさのビット表現（`f32::to_bits`）。
     pub height_bits: u32,
     /// 太字。
@@ -192,7 +260,7 @@ impl LookLayers {
             name: if name_candidates.is_empty() {
                 canon.name
             } else {
-                name_candidates
+                name_candidates.into()
             },
             height: if height.is_finite() && height > 0.0 {
                 height
@@ -292,26 +360,63 @@ impl StyleId {
 ///
 /// 番号 `n`（1 以上）は `looks[n - 1]`。既存の番号の意味は追記で変わらない
 /// （配置済みのグリフが持つ番号が後から別の見た目を指すことは無い）。
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct StyleTable {
     looks: Vec<TextLook>,
+    /// `looks` の索引（見た目→番号）。[`StyleTable::clear`] で一緒に空にする。
+    index: HashMap<TextLook, StyleId>,
+    /// 届いた候補列（中身ごとに 1 つ）と、届いた参照の番地 → その 1 つ（参照を握るので番地は
+    /// 使い回されない）。別に組んだ同じ中身の列も、中身を比べるのは参照ごとに 1 度だけ（R2-B1）。
+    names: HashSet<FontNames>,
+    aliases: HashMap<usize, (Arc<[String]>, FontNames)>,
+}
+
+/// 同値は積んだ見た目の列だけで決まる（索引と寄せる先はその写し）。
+impl PartialEq for StyleTable {
+    fn eq(&self, other: &StyleTable) -> bool {
+        self.looks == other.looks
+    }
 }
 
 impl StyleTable {
     /// 見た目を番号へ——既定と同値なら [`StyleId::DEFAULT`]、既存と同値ならその番号、
-    /// どちらでもなければ末尾へ追記してその番号。
-    ///
-    /// 引き当ては先頭からの線形走査。1 スコープの表は「1 台詞の中で既定と異なる見た目」の
-    /// 種類数（実際には数個）なので、これで足りる。
+    /// どちらでもなければ末尾へ追記してその番号。引き当ては索引の表引き（虹色の文字では見た目の
+    /// 種類が字の数まで増え、線形走査では 2 乗になる）。
     pub fn intern(&mut self, look: &TextLook, default: &TextLook) -> StyleId {
-        if look == default {
+        let name = self.canonical(&look.name);
+        // 中身が既定と同じ候補列は同じ参照へ寄るので、既定とは参照で比べられる（要素を比べない）。
+        if Arc::ptr_eq(&name.list, &self.canonical(&default.name).list)
+            && (TextLook {
+                name: default.name.clone(),
+                ..look.clone()
+            }) == *default
+        {
             return StyleId::DEFAULT;
         }
-        if let Some(index) = self.looks.iter().position(|known| known == look) {
-            return StyleId(index as u32 + 1);
+        let look = TextLook {
+            name,
+            ..look.clone()
+        };
+        if let Some(&id) = self.index.get(&look) {
+            return id;
         }
         self.looks.push(look.clone());
-        StyleId(self.looks.len() as u32)
+        let id = StyleId(self.looks.len() as u32);
+        self.index.insert(look, id);
+        id
+    }
+
+    /// 候補列を、中身の同じ届いた列のうち最初の 1 つへ寄せる。
+    fn canonical(&mut self, name: &FontNames) -> FontNames {
+        let key = Arc::as_ptr(&name.list) as *const String as usize;
+        if let Some((_, canonical)) = self.aliases.get(&key) {
+            return canonical.clone();
+        }
+        let canonical = self.names.get(name).unwrap_or(name).clone();
+        self.names.insert(canonical.clone());
+        self.aliases
+            .insert(key, (name.list.clone(), canonical.clone()));
+        canonical
     }
 
     /// 番号を見た目へ——[`StyleId::DEFAULT`] と範囲外の番号は `default` に落ちる
@@ -333,20 +438,30 @@ impl StyleTable {
         self.looks.is_empty()
     }
 
-    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。
+    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。別に組んだ表どうしの候補列は、中身を参照の組ごとに 1 度だけ比べる（R3-B-M1）。
     pub fn starts_with(&self, prefix: &StyleTable) -> bool {
-        self.looks.starts_with(&prefix.looks)
+        let mut same = HashSet::new();
+        prefix.looks.len() <= self.looks.len()
+            && self.looks.iter().zip(&prefix.looks).all(|(a, b)| {
+                let pair = (Arc::as_ptr(&a.name.list), Arc::as_ptr(&b.name.list));
+                (same.contains(&pair) || (a.name == b.name && same.insert(pair)))
+                    && (TextLook {
+                        name: b.name.clone(),
+                        ..a.clone()
+                    }) == *b
+            })
     }
 
     /// 表を空にする（スコープの消去点で呼ぶ）。
     pub fn clear(&mut self) {
         self.looks.clear();
+        self.index.clear();
+        self.names.clear();
+        self.aliases.clear();
     }
 }
 
-/// 配置層へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定・いま効いている見た目）。
-///
-/// `current` は「次に置く文字が無い」末尾の行の高さに使う（そのとき効いている大きさ）。
+/// 配置層へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定）。
 #[derive(Clone, Copy)]
 pub struct GlyphStyles<'a> {
     /// 装飾の表。
@@ -355,8 +470,6 @@ pub struct GlyphStyles<'a> {
     pub ids: &'a [StyleId],
     /// そのスコープの既定の見た目。
     pub default: &'a TextLook,
-    /// いま効いている見た目（まだ文字が置かれていない末尾の行のため）。
-    pub current: &'a TextLook,
 }
 
 impl<'a> GlyphStyles<'a> {
@@ -551,16 +664,55 @@ fn script_of_key(key: &str) -> Option<Script> {
     }
 }
 
-/// 本仕様が意味を与えないキーのうち、接頭辞では拾えないもの（寄せ 2・影 2）。
-const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"];
-
-/// 所有外のキーか（要件 2.5 の列挙——寄せ 2・影 2・`cursor*` 10・`anchor*` 17）。
+/// 本仕様が意味を与えないキー（要件 2.5 の列挙——寄せ 2・影 2・`cursor…` 12・`anchor…` 19）。
+/// 一覧に無いキーは前方一致で拾わず不明のキーにする（書き損じを `warn!` で残す・要件 2.6）。
 ///
+/// `cursor…` 12 と `anchor…` のうち 18 は ukadoc の「選択肢マーカー変更コマンド」の各項目の
+/// 見出しのキー（`cursorcolor` と `cursorbrushcolor` のように 1 項目に 2 つ並ぶものは両方）。
+/// `anchor…` の残り 1 は「文字変更コマンド」の `anchor.font.color`（18＋1＝19）。
 /// 所有仕様は `text-align-shadow-canon`（寄せ・影）・
-/// `choice-marker-styling`（`cursor*`）・`anchor-style-canon`
-/// （`anchor*`・`anchor.font.color` を含む）。
+/// `choice-marker-styling`（`cursor…`）・`anchor-style-canon`（`anchor…`）。
+const UNOWNED_KEYS: [&str; 35] = [
+    "align",
+    "valign",
+    "shadowcolor",
+    "shadowstyle",
+    "cursorstyle",
+    "cursorcolor",
+    "cursorbrushcolor",
+    "cursorpencolor",
+    "cursorfontcolor",
+    "cursormethod",
+    "cursornotselectstyle",
+    "cursornotselectcolor",
+    "cursornotselectbrushcolor",
+    "cursornotselectpencolor",
+    "cursornotselectfontcolor",
+    "cursornotselectmethod",
+    "anchorstyle",
+    "anchorcolor",
+    "anchorbrushcolor",
+    "anchorpencolor",
+    "anchorfontcolor",
+    "anchormethod",
+    "anchornotselectstyle",
+    "anchornotselectcolor",
+    "anchornotselectbrushcolor",
+    "anchornotselectpencolor",
+    "anchornotselectfontcolor",
+    "anchornotselectmethod",
+    "anchorvisitedstyle",
+    "anchorvisitedcolor",
+    "anchorvisitedbrushcolor",
+    "anchorvisitedpencolor",
+    "anchorvisitedfontcolor",
+    "anchorvisitedmethod",
+    "anchor.font.color",
+];
+
+/// 所有外のキーか（[`UNOWNED_KEYS`] の完全一致）。
 fn is_unowned(key: &str) -> bool {
-    UNOWNED_KEYS.contains(&key) || key.starts_with("cursor") || key.starts_with("anchor")
+    UNOWNED_KEYS.contains(&key)
 }
 
 fn issue(key: &str, values: &[&str], reason: &'static str) -> FontTagIssue {
@@ -592,11 +744,9 @@ fn single_value<'a>(key: &str, values: &[&'a str]) -> Result<&'a str, FontTagIss
 /// - 真偽 5 項目 `bold`／`italic`／`underline`／`strike`／`outline`——6 語で当該項目だけを
 ///   動かす（要件 5.1〜5.4・5.8）。`outline` は状態だけ更新して表示は変えない（要件 5.9）。
 /// - 上下付き `sub`／`sup`——同じ 6 語で解釈し、後から指定した方が先を外す（要件 6.1／6.2）。
-/// - 値を持つ 3 キー——`height` は絶対・相対（そのとき効いている大きさが基準）・百分率
-///   （既定の大きさが基準）・層への戻し・スタイルシートの語（語彙のみ）を受ける
-///   （要件 7.1〜7.7）。`color` は書式の解析を [`crate::color::parse_color`] に委ね、
-///   語彙をどの層へ解決するかだけを持つ（要件 8.5〜8.8）。`name` は候補列を記述順のまま
-///   保つ（要件 9.1／9.2／9.5／9.6）。いずれも**当該項目以外は触らない**。
+/// - 値を持つ 3 キー——`height`（相対はそのとき効いている大きさ・百分率は既定の大きさが基準・
+///   要件 7.1〜7.7）・`color`（解析は [`crate::color::parse_color`]・要件 8.5〜8.8）・`name`（候補列は
+///   記述順のまま・要件 9.1／9.2／9.5／9.6）。いずれも**当該項目以外は触らない**。
 /// - 所有外のキー——見た目を変えず [`Note::Unowned`]（要件 2.5）。
 ///
 /// # 事前条件・事後条件
@@ -829,7 +979,8 @@ fn apply_name(
         candidates => candidates
             .iter()
             .map(|candidate| (*candidate).to_owned())
-            .collect(),
+            .collect::<Vec<_>>()
+            .into(),
     };
     Ok(None)
 }

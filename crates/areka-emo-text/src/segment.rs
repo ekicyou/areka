@@ -1,6 +1,6 @@
 //! # segment — 分かち書き境界の計算（純粋層・budouy 消費の唯一の場所）
 //!
-//! `TextItem` 列を **run**（`TextItem::LineBreak` で区切られた極大 `Glyph`
+//! `TextItem` 列を **run**（`TextItem::LineBreak` か `TextItem::CursorMove` で区切られた極大 `Glyph`
 //! 列）単位で budouy によりセグメント化し、glyph 通し番号上の塊境界列 [`SegmentPlan`] へ
 //! 写す。budouy への依存はこのモジュールに封じ込め、layout は [`SegmentPlan`] 値のみを
 //! 消費する（budouy 非依存で判断分岐を全網羅できる・[test-only-decision-branches] 適用）。
@@ -9,11 +9,11 @@
 //!
 //! ## 計算規則（design.md「SegmentPlan（segment.rs・新規）」正本）
 //!
-//! - **run 分割規則（R2.5）**: `TextItem::LineBreak` で区切られた各極大 `Glyph` 列を
-//!   独立に budouy へかけ、run をまたいで塊を結合しない。空 run（連続 LineBreak 間・
-//!   先頭/末尾 LineBreak）は塊を生まない。
+//! - **run 分割規則（R2.5）**: `TextItem::LineBreak` か `TextItem::CursorMove`（`\_l`）で区切られた
+//!   各極大 `Glyph` 列を独立に budouy へかけ、run をまたいで塊を結合しない。空 run（連続する
+//!   区切りの間・先頭/末尾の区切り）は塊を生まない。
 //! - **glyph index 写像（R2.1）**: glyph 通し番号は **全 items 中の `Glyph` のみ**を
-//!   0 起点で数えた値（visible gate と同じ数え方——`LineBreak` は番号を消費しない）。
+//!   0 起点で数えた値（visible gate と同じ数え方——`LineBreak`・`CursorMove` は番号を消費しない）。
 //!   run の文字列は各グリフ（書記素クラスタ）の文字列の連結。budouy `parse(&str) -> Vec<String>`
 //!   の各チャンクのバイト長を `assign_items_to_chunks` へ渡し、各グリフを「先頭バイトが属する
 //!   塊」へ入れて `(start, len)` へ写す。チャンクの境界がクラスタの途中に落ちても（例:
@@ -62,12 +62,13 @@ pub struct SegmentPlan {
 impl SegmentPlan {
     /// `glyph_index` を先頭とする塊（存在すれば）。layout のゲート③が塊先頭検出に使う。
     ///
-    /// segments は昇順・互いに素ゆえ、先頭が `glyph_index` に一致する塊は高々 1 個。
+    /// segments は昇順・互いに素ゆえ、先頭が `glyph_index` に一致する塊は高々 1 個で、
+    /// 先頭で二分探索できる（配置の字ごとに呼ばれる・指摘 9）。
     pub fn segment_starting_at(&self, glyph_index: usize) -> Option<Segment> {
         self.segments
-            .iter()
-            .copied()
-            .find(|seg| seg.start == glyph_index)
+            .binary_search_by_key(&glyph_index, |s| s.start)
+            .ok()
+            .map(|i| self.segments[i])
     }
 
     /// 全塊の昇順列（テスト・診断用）。
@@ -88,21 +89,21 @@ impl SegmentPlan {
 
 /// budouy 既定日本語 parser（初回のみロード・以後再利用）。
 ///
-/// `budouy::Parser: Sync + Send`（task 1 spike でコンパイル証明済み）ゆえ `OnceLock` static で
+/// `budouy::Parser: Sync + Send` ゆえ `OnceLock` static で
 /// よい（`thread_local!` への退避は不要）。`load_default_japanese_parser` は infallible。
 static PARSER: OnceLock<budouy::Parser> = OnceLock::new();
 
 /// 渡された items の全部（区間の全文、または届いた字の列——モジュール doc「何で区切るか」）から
 /// run 別に分かち書き境界を計算する（純関数・決定論・R2.1/2.5/7.1/8.1）。
 ///
-/// run（`TextItem::LineBreak` 区切りの極大 `Glyph` 列）ごとに独立して budouy にかけ、
+/// run（`TextItem::LineBreak` か `TextItem::CursorMove` で区切った極大 `Glyph` 列）ごとに独立して budouy にかけ、
 /// 各チャンクを glyph 通し番号（全 items 中の `Glyph` のみを 0 起点で数えた値）上の塊へ写す。
 /// run をまたいで塊を結合しない。空 run は塊を生まない。
 pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
     let parser = PARSER.get_or_init(budouy::model::load_default_japanese_parser);
 
     let mut segments: Vec<Segment> = Vec::new();
-    // 全 items 中の Glyph のみを 0 起点で数えた通し番号（LineBreak は消費しない）。
+    // 全 items 中の Glyph のみを 0 起点で数えた通し番号（LineBreak・CursorMove は消費しない）。
     let mut glyph_index: usize = 0;
     // 現在の run のグリフ文字列（budouy 入力）。
     let mut run_text = String::new();
@@ -119,6 +120,10 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
             }
             let chunk_byte_lens: Vec<usize> =
                 parser.parse(run_text).iter().map(String::len).collect();
+            // 前提（塊の連結＝run の文字列）は試験の作りでだけ確かめる。本番は届いた字が増える
+            // たびに走る（`actor_present.rs` の `BreakMemo` が消した回数と項目の数で覚える）ので
+            // 記録は出さず、崩れたら最後の塊へまとめる（指摘 33）。
+            debug_assert_eq!(chunk_byte_lens.iter().sum::<usize>(), run_text.len());
             segments.extend(assign_items_to_chunks(
                 &chunk_byte_lens,
                 run_item_lens,
@@ -309,6 +314,46 @@ mod tests {
         assert!(plan.segment_starting_at(3).is_none());
     }
 
+    /// 指摘 23: `CursorMove` も run の区切り——`[字, 字, CursorMove, 字]` の 3 字目（番号 2）から
+    /// 塊が始め直される（`\_l` をまたいで塊を結ばない・番号は消費しない）。
+    #[test]
+    fn cursor_move_restarts_the_run() {
+        let items = vec![
+            TextItem::glyph("a"),
+            TextItem::glyph("b"),
+            TextItem::CursorMove {
+                x: crate::state::CursorCoord::Omitted,
+                y: crate::state::CursorCoord::Omitted,
+            },
+            TextItem::glyph("c"),
+        ];
+        let plan = segment_plan(&items);
+        assert_eq!(
+            plan.segment_starting_at(2),
+            Some(Segment { start: 2, len: 1 })
+        );
+        assert!(plan.segment_starting_at(3).is_none());
+    }
+
+    /// 指摘 9: 塊が数千の全文でも、塊の頭の探し（二分探索）は全部の番号で端から探したのと同じ。
+    #[test]
+    fn segment_starting_at_matches_linear_search_on_thousands_of_segments() {
+        let mut items = Vec::new();
+        for k in 0..400 {
+            items.extend(glyphs("今日はいい天気ですね。明日も晴れるといいな"));
+            if k % 7 == 6 {
+                items.push(br());
+            }
+        }
+        let plan = segment_plan(&items);
+        assert!(plan.segments().len() > 2000, "{}", plan.segments().len());
+        let n = glyph_chars(&items).len();
+        for i in 0..=n {
+            let linear = plan.segments().iter().copied().find(|s| s.start == i);
+            assert_eq!(plan.segment_starting_at(i), linear, "番号 {i}");
+        }
+    }
+
     // ── R2.5 edge: 空入力・LineBreak のみ・先頭/末尾/連続 LineBreak → 空 run は塊を生まない ──
 
     #[test]
@@ -374,19 +419,6 @@ mod tests {
             expected_start += seg.len;
         }
         assert_eq!(expected_start, n, "混在 run でも全グリフ被覆");
-    }
-
-    // ── R8.1: 決定論（同一 items → 同一 plan） ──
-
-    #[test]
-    fn same_items_yield_identical_plan() {
-        let mut items = glyphs("今日はいい天気ですね");
-        items.push(br());
-        items.extend(glyphs("明日も晴れるといいな"));
-
-        let a = segment_plan(&items);
-        let b = segment_plan(&items);
-        assert_eq!(a, b, "同一 items に対し境界が非決定論的");
     }
 
     // ── R8.1: 代表和文の実境界ピン（vendored モデルの回帰檻） ──

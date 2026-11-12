@@ -6,7 +6,7 @@
 //! 列 A に乗せる（1 枚目＝全域）→ 列 B に乗せる → 解除 の 3 フレームを描き、毎フレーム読み戻して見る。
 
 use super::ViewboxExecutor;
-use super::test_support::{Rig, glyph_items, live_diff_model_font, opaque_count};
+use super::test_support::{FILL_BGRA, Rig, glyph_items, live_diff_model_font, opaque_count};
 use crate::canvas::ContentCanvas;
 use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, line_bands,
@@ -38,8 +38,6 @@ const WORDS: [&str; 8] = [
 ];
 /// 乗せる順（列 A → 列 B → 解除）。
 const HOVERS: [usize; 2] = [5, 4];
-/// 塗りの色（premultiplied BGRA・α=255）＝ `SquareFill { fill: (105, 25, 25) }`。
-const FILL_BGRA: [u8; 4] = [25, 25, 105, 255];
 const EM: u32 = 28;
 
 /// 塗りの色の画素の座標を全部返す。

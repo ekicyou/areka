@@ -3,14 +3,16 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
     DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
     DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
-    DWRITE_READING_DIRECTION_TOP_TO_BOTTOM, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteTextFormat,
+    DWRITE_READING_DIRECTION_TOP_TO_BOTTOM, DWRITE_TEXT_ALIGNMENT_LEADING,
 };
 use wintf::com::dwrite::dwrite_create_factory;
 
-use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
+use super::test_support::{
+    default_metrics, empty_font, family_name, model_with_font, with_log_cage,
+};
 use super::{
     DEFAULT_BALLOON_BACKGROUND, DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics,
-    DirectionRecipe, PROBE_MAX_EXTENT, ResolvedFont, create_text_format,
+    DirectionRecipe, ResolvedFont, create_line_layout, create_text_format,
 };
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
@@ -61,20 +63,26 @@ fn full_font_definition_passes_through() {
     assert_eq!(warns, 0);
 }
 
-/// カンマ区切り複数指定（SSP 拡張）は M1 では先頭のみ採用・残余は型シームに保持。
+/// カンマ区切り複数指定（SSP 拡張）は先頭名を `name`、残余を `fallback_chain` に分け、
+/// 全体を記述順の候補列（`looks.default.name`・`FontCatalog::pick` が試す）にする。
 #[test]
-fn comma_separated_names_adopt_first_and_keep_rest_as_seam() {
+fn comma_separated_names_split_into_first_and_rest_and_form_the_candidate_list() {
     let font = Font::new(
         Some("Meiryo, ＭＳ Ｐゴシック ,ＭＳ ゴシック".to_owned()),
         None,
         FontColor::new(None, None, None),
     );
     let resolved = ResolvedFont::resolve(&model_with_font(font));
-    assert_eq!(resolved.name, "Meiryo", "先頭名のみ採用（M1）");
+    assert_eq!(resolved.name, "Meiryo", "先頭名");
     assert_eq!(
         resolved.fallback_chain,
         vec!["ＭＳ Ｐゴシック".to_owned(), "ＭＳ ゴシック".to_owned()],
-        "残余は trim 済みでフォールバック連鎖シームに保持（M1 未消費）"
+        "残余は trim 済み"
+    );
+    assert_eq!(
+        &*resolved.looks.default.name,
+        ["Meiryo", "ＭＳ Ｐゴシック", "ＭＳ ゴシック"],
+        "候補列は先頭名＋残余の記述順"
     );
 }
 
@@ -196,7 +204,7 @@ fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
     )));
     // 不変条件⑲: 2 層の既定と ResolvedFont の 4 項目は一致する。
     assert_eq!(
-        defined.looks.default.name,
+        *defined.looks.default.name,
         std::iter::once(defined.name.clone())
             .chain(defined.fallback_chain.iter().cloned())
             .collect::<Vec<String>>(),
@@ -233,18 +241,6 @@ fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
 
 // ── COM 検証（headless DWrite・デバイス非依存・窓不要） ──
 
-/// TextFormat の実設定を読み戻す（family 名・fontsize・4 方向設定）。
-fn read_family_name(format: &IDWriteTextFormat) -> String {
-    unsafe {
-        let len = format.GetFontFamilyNameLength() as usize;
-        let mut buf = vec![0u16; len + 1];
-        format
-            .GetFontFamilyName(&mut buf)
-            .expect("GetFontFamilyName");
-        String::from_utf16_lossy(&buf[..len])
-    }
-}
-
 /// 観測可能な完了状態（COM 側）: 欠落 balloon 定義→既定値一式で実 TextFormat が
 /// 生成でき、3 方向それぞれでレシピどおりの設定が焼き込まれている。
 #[test]
@@ -260,7 +256,7 @@ fn text_format_from_missing_definition_carries_defaults_and_recipe() {
         let recipe = DirectionRecipe::for_mode(mode);
         let format = create_text_format(&factory, &resolved, mode)
             .expect("既定値一式で TextFormat 生成が成立する");
-        assert_eq!(read_family_name(&format), "ＭＳ ゴシック");
+        assert_eq!(family_name(&format), "ＭＳ ゴシック");
         unsafe {
             assert_eq!(format.GetFontSize(), 12.0);
             assert_eq!(format.GetReadingDirection(), recipe.reading, "{mode:?}");
@@ -283,17 +279,16 @@ fn text_format_honors_explicit_name_and_height() {
     let resolved = ResolvedFont::resolve(&model_with_font(font));
     let format = create_text_format(&factory, &resolved, WritingMode::HorizontalTb)
         .expect("明示定義で TextFormat 生成が成立する");
-    assert_eq!(read_family_name(&format), "ＭＳ Ｐゴシック");
+    assert_eq!(family_name(&format), "ＭＳ Ｐゴシック");
     unsafe {
         assert_eq!(format.GetFontSize(), 20.0);
     }
 }
 
-/// フォント生成失敗経路（R4.2・Error Categories）: 生成失敗→warn＋既定フォント再試行→
-/// なお失敗は error!＋Device Err（panic しない）。fontsize 非正値は DirectWrite が
-/// 決定論的に拒否するため、再試行でも失敗する入力として経路全体を檻化する。
+/// 書式の作り失敗（指摘 35）: 既定の書体で作り直さず、`error!`＋`Device` を 1 件だけ出す
+/// （panic しない）。大きさ 0 は DirectWrite が決定論的に断る（書体の在る無しは確かめない）。
 #[test]
-fn unusable_format_surfaces_device_error_after_default_retry() {
+fn unusable_format_surfaces_one_device_error_without_retry() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     // resolve は正値を保証するため、失敗経路は手組みの縮退値で叩く（crate 内テスト特権）。
     let mut resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
@@ -306,11 +301,7 @@ fn unusable_format_surfaces_device_error_after_default_retry() {
         }
         other => panic!("Device エラーを期待したが {other:?}"),
     }
-    assert_eq!(
-        warns, 1,
-        "初回失敗→既定フォント再試行の warn がちょうど 1 回"
-    );
-    assert_eq!(errors, 1, "再試行失敗→error! がちょうど 1 回");
+    assert_eq!((warns, errors), (0, 1), "記録は error! の 1 件だけ");
 }
 
 // ── task 6.2 R4.5: DWriteMetrics——計測専用 probe TextLayout（probe 規約） ──
@@ -322,7 +313,9 @@ fn unusable_format_surfaces_device_error_after_default_retry() {
 
 use wintf::com::dwrite::DWriteTextLayoutExt;
 
-/// テスト側の手組み probe（実装と独立に同一規約で測る参照値）。
+/// テスト側の参照値: 描く行と同じ規則（書式は [`create_text_format`]・行は描く行と同じ生成口
+/// [`create_line_layout`]＝縦書きは列の組み立て込み・行送り軸の箱は書式の大きさ）で
+/// 1 文字の行を組み、cluster metrics の width を足す。計測器の probe の写しは持たない。
 fn manual_probe_advance(
     factory: &windows::Win32::Graphics::DirectWrite::IDWriteFactory2,
     font: &ResolvedFont,
@@ -330,14 +323,8 @@ fn manual_probe_advance(
     text: &str,
 ) -> f32 {
     let format = create_text_format(factory, font, mode).expect("参照 format");
-    let layout = wintf::com::dwrite::DWriteFactoryExt::create_text_layout(
-        factory,
-        &windows::core::HSTRING::from(text),
-        &format,
-        PROBE_MAX_EXTENT,
-        PROBE_MAX_EXTENT,
-    )
-    .expect("参照 probe layout");
+    let layout =
+        create_line_layout(factory, text, &format, font.height, mode).expect("参照の行の layout");
     layout
         .get_cluster_metrics()
         .expect("参照 cluster metrics")
@@ -421,8 +408,9 @@ fn dwrite_metrics_measures_fixed_pitch_and_proportional_distinctly() {
     );
 }
 
-/// 決定論: 同一フォント・同一文字→同一送り幅（同一インスタンスの再計測も
-/// 別インスタンスも完全一致・R2.5 系/R11.6 の COM 側檻）。
+/// 決定論: 同一フォント・同一文字→同一送り幅（別インスタンスも完全一致・R2.5 系/R11.6 の
+/// COM 側檻）。同一インスタンスの再計測は記憶から返るので比べない（必ず同値で檻にならない・
+/// 記憶の経路は `dwrite_metrics_caches_probed_advances` が見る）。
 #[test]
 fn dwrite_metrics_is_deterministic_across_calls_and_instances() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
@@ -430,9 +418,7 @@ fn dwrite_metrics_is_deterministic_across_calls_and_instances() {
     let second = default_metrics(&factory, WritingMode::VerticalRl);
     for ch in ["あ", "x", "！"] {
         let a = first.advance(ch, DEFAULT_FONT_HEIGHT);
-        let b = first.advance(ch, DEFAULT_FONT_HEIGHT);
         let c = second.advance(ch, DEFAULT_FONT_HEIGHT);
-        assert_eq!(a, b, "{ch:?}: 再計測（キャッシュ経路）も同値");
         assert_eq!(a, c, "{ch:?}: 別インスタンスも同値");
     }
 }
@@ -574,7 +560,7 @@ fn dwrite_metrics_warns_on_font_height_mismatch() {
 // **空振りの危険と更新義務**（design.md C5 Risks の明示要求）: 字面検査はリファクタで
 // 名前や書式が変わると、赤くならないまま守備範囲だけが消える。この檻は `draw.rs` の
 // 次の名前と形に依存している——`create_text_format`／`try_create_format`／
-// `DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`、および `cargo fmt` が保証する
+// `DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`（と `draw_metrics.rs` の `probe_format_for`）、および `cargo fmt` が保証する
 // トップレベル項目の列 0 閉じ括弧。**これらを改名・改形したときは、この檻も同時に
 // 更新すること。** 各檻は自分自身に陽性対照（既知の違反文字列を同じ検査関数へ通して
 // 検出できることの確認）を持たせてあり、検査関数が壊れたときは陽性対照が先に落ちる。
@@ -680,12 +666,28 @@ fn hits<'p>(src: &str, patterns: &'p [&'p str]) -> Vec<&'p str> {
 /// Rust の束縛パターン（`seam @ (..)`）は素の `@` なのでどちらにも当たらない＝誤検出しない。
 const AT_PREFIX_PATTERNS: &[&str] = &["\"@", "'@'"];
 
+/// 家族名の 3 つ目の入口（区間ごとの `SetFontFamilyName`）を持つ本番ファイル（指摘 22）。
+/// ファサードの子ではないので [`DRAW_FACADE_SOURCES`] には足さない（足すと一致の檻が赤）。
+const DECORATION_SOURCES: &[(&str, &str)] = &[(
+    "viewbox_draw_decoration.rs",
+    include_str!("viewbox_draw_decoration.rs"),
+)];
+
+/// `sources` のうち `@` 前置の生成を含むファイルの名を返す（`@` の檻の本体）。
+fn at_prefix_offenders<'a>(sources: &[(&'a str, &str)]) -> Vec<&'a str> {
+    sources
+        .iter()
+        .filter(|(_, raw)| !hits(&raw.replace('\r', ""), AT_PREFIX_PATTERNS).is_empty())
+        .map(|(name, _)| *name)
+        .collect()
+}
+
 /// 要件 6.2: 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
 ///
-/// 走査面は `draw.rs` 単体ではなく**ファサードの本番の子を含む全ファイル**
-/// （[`DRAW_FACADE_SOURCES`]）——家族名が DirectWrite へ渡る入口が `draw.rs` の
-/// `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになったため、
-/// 片方だけを見る檻では違反が素通りする（タスク 1.1 の申し送り）。
+/// 走査面は `draw.rs` 単体ではなく、家族名が DirectWrite へ渡る**入口 3 つ**を持つ全ファイル
+/// ——`draw.rs` の `try_create_format`・`draw_metrics.rs` の `probe_format_for`
+/// （[`DRAW_FACADE_SOURCES`]）と、`viewbox_draw_decoration.rs` の区間ごとの
+/// `SetFontFamilyName`（[`DECORATION_SOURCES`]）。1 つでも見ない檻では違反が素通りする。
 #[test]
 fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     // 空振り防止: draw.rs には素の `@`（束縛パターン）が現に在る。`@` が 1 個も無いから
@@ -694,15 +696,31 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
         draw_rs().contains('@'),
         "draw.rs に `@` が 1 個も無い——この檻は空振りしている可能性がある"
     );
-    for (name, raw) in DRAW_FACADE_SOURCES {
-        let src = raw.replace('\r', "");
-        assert_eq!(
-            hits(&src, AT_PREFIX_PATTERNS),
-            Vec::<&str>::new(),
-            "SSP の `@` フォント機構（縦書き異体名の生成）が {name} に現れた。\
-             areka は裁定 4 によりこれを模倣しない"
-        );
-    }
+    assert!(
+        DECORATION_SOURCES[0].1.contains("SetFontFamilyName("),
+        "3 つ目の入口が飾りのファイルから消えた——入口を数え直して本檻も更新すること"
+    );
+    assert_eq!(
+        at_prefix_offenders(DRAW_FACADE_SOURCES),
+        Vec::<&str>::new(),
+        "SSP の `@` フォント機構（縦書き異体名の生成）が現れた。areka は裁定 4 によりこれを模倣しない"
+    );
+    assert_eq!(
+        at_prefix_offenders(DECORATION_SOURCES),
+        Vec::<&str>::new(),
+        "区間ごとの書体名に `@` 前置が現れた（裁定 4）"
+    );
+    // 陽性の相棒: 飾りのファイルの区間の書体名に `@` を前置した写しを同じ本体へ通すと赤になる。
+    let planted = DECORATION_SOURCES[0].1.replace(
+        "HSTRING::from(face.family.as_str())",
+        "HSTRING::from(format!(\"@{}\", face.family))",
+    );
+    assert_ne!(planted, DECORATION_SOURCES[0].1, "植える箇所が見つからない");
+    assert_eq!(
+        at_prefix_offenders(&[("viewbox_draw_decoration.rs", planted.as_str())]),
+        vec!["viewbox_draw_decoration.rs"],
+        "陽性の相棒（区間の書体名に `@` を前置した写し）を検出できていない"
+    );
     // 陽性対照: 同じ検査関数が既知の違反を確かに検出する。
     for planted in [
         r#"    let name = format!("@{}", font.name);"#,
@@ -725,26 +743,28 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     );
 }
 
-/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前」か
-/// 「既定フォントへの戻し」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前を台帳が
+/// 解いた顔」だけ——縦書き専用の差し替え先も、既定の書体での作り直し（指摘 35 で消した）も無い。
 ///
-/// **家族名の入口は 2 つある**（タスク 6.4）:
+/// **家族名の入口は 3 つある**（タスク 6.4・指摘 22）。書式を作る 2 つをここで見る:
 ///
 /// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
-///    束縛の顔（`FontCatalog::pick` の解決）を渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
+///    束縛の顔（`FontCatalog::pick` の解決）を渡す。
 /// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
 ///    `FontCatalog::face_or` で解決した顔か、全滅時の束縛の顔を共用の `try_create_format` へ。
+/// 3. `viewbox_draw_decoration.rs` の区間ごとの `SetFontFamilyName`——同じ `face_or` の顔
+///    （`@` の不在は [`at_prefixed_font_name_generation_is_absent_from_production_source`]）。
 ///
-/// どちらの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
+/// どの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
 /// 別名生成が入り込む余地が無い。**入口を増やしたらこの檻も広げること。**
 #[test]
-fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
+fn font_family_reaches_directwrite_only_as_the_author_name() {
     let src = draw_rs();
-    // family 名が DirectWrite へ渡る唯一の窓口は try_create_format。定義 1＋呼出 2 で 3。
+    // family 名が DirectWrite へ渡る唯一の窓口は try_create_format。定義 1＋呼出 1 で 2。
     assert_eq!(
         count(&src, "try_create_format"),
-        3,
-        "try_create_format の出現が 1 定義＋2 呼出から動いた——family 名の入口が増減した疑い"
+        2,
+        "try_create_format の出現が 1 定義＋1 呼出から動いた——family 名の入口が増減した疑い"
     );
     let body = top_level_fn_source(&src, "pub fn create_text_format(");
     // 切り出しが本物であることの確認（範囲取得が壊れていたらここで落ちる）。
@@ -754,28 +774,34 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
     );
     assert_eq!(
         count(body, "try_create_format("),
-        2,
-        "呼出 2 箇所はいずれも create_text_format の内側にある"
+        1,
+        "呼出 1 箇所は create_text_format の内側にある"
     );
     assert!(
         body.contains("try_create_format(factory, &font.face, bold, italic, font.height)"),
         "1 回目は台帳が解決した束縛の顔をそのまま渡す（別名へ差し替えない）"
     );
     assert!(
-        body.contains("(DEFAULT_FONT_NAME);\n            try_create_format(factory, &retry,"),
-        "2 回目は生成失敗時の既定フォント再試行のみ（書字方向とは無関係な経路）"
+        !body.contains("DEFAULT_FONT_NAME"),
+        "既定の書体での作り直しが戻った（指摘 35: 同じ大きさで作り直しても断られる）"
     );
-    // 既定フォント名リテラルは宣言 1 箇所だけ——縦書き専用の差し替え先が別に
-    // 埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、
+    // 既定フォント名は見た目の側の正典の別名だけ（指摘 26）——縦書き専用の差し替え先が
+    // 別に埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、
     // doc コメントの Yu Gothic UI 実測例も対象外＝誤検出しない。
     assert!(
-        src.contains("pub const DEFAULT_FONT_NAME: &str = \"ＭＳ ゴシック\";"),
-        "既定フォント名の宣言が見つからない——改名したなら本檻も更新すること"
+        src.contains("pub const DEFAULT_FONT_NAME: &str = crate::look::UKADOC_DEFAULT_FONT_NAME;"),
+        "既定フォント名が見た目の側の正典の別名でない——改名したなら本檻も更新すること"
+    );
+    assert!(
+        src.contains(
+            "pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;"
+        ),
+        "既定フォント高さが見た目の側の正典の別名でない"
     );
     assert_eq!(
         count(&src, "\"ＭＳ ゴシック\""),
-        1,
-        "フォント名リテラルが DEFAULT_FONT_NAME の宣言以外にも現れた"
+        0,
+        "draw.rs にフォント名リテラルが現れた（既定名は look の正典の別名だけ）"
     );
 
     // ── 第 2 の入口: draw_metrics.rs::probe_format_for（計測鍵ごとの試験用書式）
@@ -846,47 +872,49 @@ fn writing_mode_selects_only_the_direction_recipe_not_the_font_name() {
     );
 }
 
-/// 要件 6.4: `DirectionRecipe::for_mode` の本番呼出は `create_text_format` の内側 1 箇所
-/// だけ——計測（`DWriteMetrics`）も描画（`viewbox_draw.rs`）も同じ format 工場を通る構造
-/// の証跡。呼び手が増えたらここが赤くなる。
+/// 方向レシピの工場の呼び手の内訳が「`draw.rs` に定義 1＋`create_text_format` の中の呼出 1、
+/// `draw_metrics.rs` に `probe_format_for` の中の呼出 1」のときだけ真（指摘 22 の檻の本体）。
+fn direction_recipe_sites_are_the_two_format_makers(draw: &str, metrics: &str) -> bool {
+    let create = top_level_fn_source(draw, "pub fn create_text_format(");
+    let probe = &metrics[metrics
+        .find("fn probe_format_for(")
+        .expect("probe_format_for が無い——改名したなら本檻も更新すること")..];
+    let probe = &probe[..probe
+        .find("\n    }\n")
+        .expect("probe_format_for の閉じ括弧が無い")];
+    create.contains("try_create_format(")
+        && probe.contains("try_create_format(")
+        && count(draw, "for_mode") == 2
+        && count(draw, "pub fn for_mode(") == 1
+        && count(create, "for_mode") == 1
+        && count(metrics, "for_mode") == 1
+        && count(probe, "for_mode") == 1
+}
+
+/// 要件 6.4: `DirectionRecipe::for_mode` の本番呼出は書式を作る 2 か所——`draw.rs` の
+/// `create_text_format`（束縛書式）と `draw_metrics.rs` の `probe_format_for`（計測鍵ごとの
+/// 試験用書式）——だけ。計測も描画も同じレシピを焼く構造の証跡で、呼び手が増えたら赤。
 ///
-/// **数え方**: `draw.rs` 本文に現れる識別子 `for_mode` の**全出現**を数える。現状は
-/// 定義（`pub fn for_mode(`）と呼出（`create_text_format` 内）の 2 件のみで、doc
-/// コメント中の言及も無い。`DirectionRecipe::for_mode(` という呼出形だけを数えれば
-/// たまたま 1 になるが、それでは `Self::for_mode(..)` や `use` 経由の裸呼出を見逃す。
-/// 全出現を数えて内訳を突き合わせる形にしてあるので、doc への言及が増えただけでも赤に
-/// なり、人が内訳を読み直すことになる（それが意図した厳しさ）。
+/// **数え方**: 2 ファイルの識別子 `for_mode` の**全出現**を数えて内訳を突き合わせる。
+/// `DirectionRecipe::for_mode(` という呼出形だけでは `Self::for_mode(..)` や `use` 経由の
+/// 裸呼出を見逃す。doc への言及が増えただけでも赤になり、人が内訳を読み直す（意図した厳しさ）。
 #[test]
-fn direction_recipe_factory_has_exactly_one_call_site_inside_create_text_format() {
-    let src = draw_rs();
-    assert_eq!(
-        count(&src, "for_mode"),
-        2,
-        "draw.rs の `for_mode` 出現が 2（定義 1＋呼出 1）から動いた——内訳を読み直すこと"
-    );
-    assert_eq!(
-        count(&src, "pub fn for_mode("),
-        1,
-        "内訳のうち 1 件は定義そのもの"
-    );
-    let body = top_level_fn_source(&src, "pub fn create_text_format(");
+fn direction_recipe_factory_is_called_only_by_the_two_format_makers() {
+    let metrics = include_str!("draw_metrics.rs").replace('\r', "");
+    let draw = draw_rs();
     assert!(
-        body.contains("try_create_format("),
-        "create_text_format の本文切り出しが失敗している: {body}"
+        direction_recipe_sites_are_the_two_format_makers(&draw, &metrics),
+        "`for_mode` の内訳が「定義 1＋create_text_format 1＋probe_format_for 1」から動いた"
     );
-    assert_eq!(
-        count(body, "for_mode"),
-        1,
-        "残る 1 件は create_text_format の内側の呼出でなければならない"
+    // 陽性の相棒: 3 つ目の呼出をどちらのファイルに足した写しでも同じ本体が偽を返す。
+    let extra = "\npub fn elsewhere() {\n    DirectionRecipe::for_mode(other);\n}\n";
+    assert!(
+        !direction_recipe_sites_are_the_two_format_makers(&(draw.clone() + extra), &metrics),
+        "陽性の相棒（draw.rs に 3 つ目の呼出）を検出できていない"
     );
-    // 陽性対照: 工場の外に呼び手が増えた版を同じ数え方に通すと 3 になる。
-    let planted = "pub fn for_mode(mode: WritingMode) {}\n\
-        pub fn create_text_format() {\n    DirectionRecipe::for_mode(mode);\n}\n\
-        pub fn elsewhere() {\n    DirectionRecipe::for_mode(other);\n}\n";
-    assert_eq!(
-        count(planted, "for_mode"),
-        3,
-        "陽性対照（工場の外に呼び手が増えた版）を検出できていない"
+    assert!(
+        !direction_recipe_sites_are_the_two_format_makers(&draw, &(metrics + extra)),
+        "陽性の相棒（draw_metrics.rs に 3 つ目の呼出）を検出できていない"
     );
 }
 
@@ -909,7 +937,7 @@ fn explicit_font_name_is_carried_into_vertical_modes_unchanged() {
     ] {
         let format =
             create_text_format(&factory, &resolved, mode).expect("明示定義で TextFormat 生成");
-        let family = read_family_name(&format);
+        let family = family_name(&format);
         assert_eq!(
             family, "ＭＳ Ｐゴシック",
             "{mode:?}: 作者指定のフォント名が差し替わっている"

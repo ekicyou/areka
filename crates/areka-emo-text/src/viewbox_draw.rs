@@ -2,20 +2,21 @@
 //!
 //! [`ScrollPlanner`](crate::viewbox::ScrollPlanner)（純粋・計画）が返す
 //! [`FramePlan`](crate::viewbox::FramePlan) を 1 フレームの COM 実行へ落とす
-//! [`ViewboxExecutor`]。旧 [`DrawExecutor`](crate::draw::DrawExecutor)（全域再描画）を
-//! 「保持ピクセルの面内 blit ＋ ダーティ矩形限定の D2D 描画」へ差し替える実行部である
+//! [`ViewboxExecutor`]。比較専用オラクル [`DrawExecutor`](crate::draw::DrawExecutor)（全域再描画）と
+//! 同じ画素を「保持ピクセルの面内 blit ＋ ダーティ矩形限定の D2D 描画」で出す本番の実行部である
 //! （viewbox 方式＝ダーティ矩形スクロール・`WM_PAINT` 規律の写し）。
 //!
 //! **層規律**: COM 層——UI スレッド専有。`windows`（DirectWrite/D2D）を触ってよい層。
 //! 失敗は log-first（`tracing::error!`＋`Err`・当該フレーム skip＝**plan 未 commit**）で扱い
-//! panic しない（記憶 areka-log-first-no-silent-failure）。
+//! panic しない（記録の無い失敗の道を作らないため）。
 //!
 //! ## 1 フレームの実行（design System Flows）
 //!
-//! `render` は「計画取得（[`ScrollPlanner::plan`]）→ 保持ピクセルの面内 blit
-//! （[`TextSurface::copy_front_to_back_shifted`]）→ ダーティ矩形ごとの限定描画 → 面の役割交換
-//! （[`TextSurface::flip`]）→ 計画の確定（[`ScrollPlanner::commit`]）」の順で行い、変化有無
-//! （present 要否）を返す。[`FramePlan::NoChange`] は blit も描画も present も行わない
+//! `render_styled`（`viewbox_draw_render.rs`）は「書式の確保 → 全住人の行 TextLayout の確保と実測インクはみ出しの収集 → 計画取得
+//! （[`ScrollPlanner::plan_with_overhangs`]）→ 縮退の判定（書式の組み直し・想定外不整合なら全域）→
+//! 保持ピクセルの面内 blit（[`TextSurface::copy_front_to_back_shifted`](crate::surface::TextSurface::copy_front_to_back_shifted)）→ ダーティ矩形ごとの
+//! 限定描画 → 面の役割交換（[`TextSurface::flip`](crate::surface::TextSurface::flip)）→ 計画の確定（[`ScrollPlanner::commit`]）」の
+//! 順で行い、変化有無（present 要否）を返す。[`FramePlan::NoChange`] は blit も描画も present も行わない
 //! （`Ok(false)`・全カウンタ増分 0）。
 //!
 //! ## ダーティ描画の正準列（byte 等価の要・design①〜⑥）
@@ -41,6 +42,7 @@
 //! スケール一点適用・描画状態は既定のまま両者同一——比較専用オラクル（[`DrawExecutor`]）との
 //! byte 等価はこの構造共有に載る。
 
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -49,20 +51,25 @@ use areka_emo_present::balloon_marker::MarkerImage;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS, ID2D1Bitmap1, ID2D1DeviceContext,
+    ID2D1SolidColorBrush,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{IDWriteFactory2, IDWriteTextFormat};
 use wintf::com::d2d::D2D1DeviceExt;
 use wintf::ecs::GraphicsCore;
 
 use crate::TextLayerError;
-use crate::canvas::ContentCanvas;
-use crate::draw::{FontCatalog, LineLayoutStore, ResolvedFont, TEXT_DRAW_OPTIONS};
-use crate::layout::VisibleWindow;
-use crate::look::{FontKey, StyleTable};
-use crate::region::ScaleContract;
-use crate::surface::{TextSurface, device_err, none_err};
+use crate::draw::{FontCatalog, LineLayoutStore, TEXT_DRAW_OPTIONS};
+use crate::look::TextLook;
+use crate::surface::{device_err, none_err};
 use crate::viewbox::{ScrollPlanner, ScrollState};
 use crate::writing::WritingMode;
+// `render`（テストだけの入口）の引数の型。
+#[cfg(test)]
+use crate::{
+    canvas::ContentCanvas, draw::ResolvedFont, layout::VisibleWindow, look::StyleTable,
+    region::ScaleContract, surface::TextSurface,
+};
 
 #[path = "viewbox_draw_decoration.rs"]
 mod decoration;
@@ -74,16 +81,12 @@ mod render;
 mod underline;
 
 use decoration::BrushCache;
-// 兄弟檻（`viewbox_draw_frame_render_tests.rs`）が `super::plan_inconsistency` で私有項目へ届くための
-// 再束縛（design.md の File Structure Plan が要求するファサードの取り込み）。`full_domain_update` は
-// 子モジュールの内部からしか呼ばれないため親へは束ねない（束ねると unused_imports が鳴る）。
-#[cfg(test)]
-use plan::plan_inconsistency;
 
-/// 行 TextLayout format の前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
-/// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため
-/// format と行キャッシュを組み直す。float はビット表現で同値比較する（[`FontKey`] の規律）。
-type FormatKey = (FontKey, WritingMode);
+/// 行 TextLayout format と行キャッシュの前提（既定の見た目の全項目と writing_mode）。書式を決める
+/// 値（候補列・高さ・太字・斜体）に加え、行に焼く既定の打ち消し線・行の線のはみ出しを決める既定の
+/// 下線・既定の文字色も入れる（再監査 R1-D1）。どれかが変わると、キャッシュ済み行レイアウトと
+/// 描いた面の前提が崩れるため format と行キャッシュを組み直し、そのフレームを全域で描き直す。
+type FormatKey = (TextLook, WritingMode);
 
 /// 決定論観測用の描画統計（常時コンパイル・u64 加算のみ・R3.5/R10.3）。
 ///
@@ -99,16 +102,17 @@ pub struct DrawStats {
     pub draw_text_layout_calls: u64,
     /// 面内 blit（`copy_front_to_back_shifted` の blit≠0）の累計回数。
     pub blits: u64,
-    /// FullClear（back を全域透明 Clear）の累計回数。
+    /// 消去の要求が立っていたフレームの累計回数（FullClear と、消去と同じフレームで字を描く全域の
+    /// Update のどちらも 1 と数える）。
     pub full_clears: u64,
 }
 
 /// [`FramePlan`] の COM 実行——blit 指示・ダーティ矩形限定の D2D 描画・FullClear・統計
-/// （task 6・R1.1/R1.4/R2.2/R3.1–3.4/R9.4）。
+/// （R1.1/R1.4/R2.2/R3.1–3.4/R9.4）。
 ///
-/// `render` が 1 フレーム（plan→blit→ダーティ描画→flip→commit）を実行し present 要否を返す。
+/// `render_styled` が 1 フレーム（plan→blit→ダーティ描画→flip→commit）を実行し present 要否を返す。
 /// plan/commit の二相により、デバイス失敗フレームは**未 commit**のまま次フレームで再計画＝再試行
-/// 安全（現行の「当該フレーム skip・次フレーム再試行」規律を保つ）。UI スレッド専有（COM 層規律）。
+/// 安全（「当該フレーム skip・次フレーム再試行」）。UI スレッド専有（COM 層規律）。
 pub struct ViewboxExecutor {
     /// スクロール計画者（純粋・計画/commit 二相・committed 位置と行指紋を内部保持）。
     planner: ScrollPlanner,
@@ -128,11 +132,22 @@ pub struct ViewboxExecutor {
     /// 装飾の色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。
     brushes: BrushCache,
     /// 行の中の印の絵の D2D の絵（絵の `Arc` の同一性を鍵に 1 枚だけ覚える・毎フレーム作り直さない）。
-    marker_bitmap: Option<(Arc<MarkerImage>, ID2D1Bitmap1)>,
+    /// 作れなかった絵は `None` を覚える（同じ絵で作り直して `error!` を毎フレーム残さない・指摘 36）。
+    marker_bitmap: Option<(Arc<MarkerImage>, Option<ID2D1Bitmap1>)>,
+    /// 既定の文字色・選択肢の帯と字の色・印の丸の塗りブラシ（色の 4 成分のビットが鍵・毎フレーム
+    /// 作り直さない・指摘 31）。[`BrushCache`] と別の欄なのは、それを通すと範囲の呼び出しの勘定に
+    /// 入り、既定だけの行で 0 件の檻（要件 14.2）が鳴るため。台詞の切れ目で空になる。
+    solid_brushes: HashMap<[u32; 4], ID2D1SolidColorBrush>,
+    /// 描き先の bitmap（面のテクスチャごと・front/back の 2 枚まで・毎フレーム作り直さない・指摘 31）。
+    /// テクスチャを握るので同じポインタが別の面に使い回されることは無い。面が作り直されると古い組は押し出される。
+    targets: Vec<(ID3D11Texture2D, ID2D1Bitmap1)>,
+    /// テスト観測用: 塗りブラシと描き先の bitmap を実際に作った回数。
+    #[cfg(test)]
+    created: (usize, usize),
     /// 決定論観測統計（常時コンパイル・[`Self::stats`] で読む）。
     stats: DrawStats,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の
-    /// `draw_lines` は GlyphRun のみを返すため通常不発の防御的経路）。
+    /// `draw_lines` は GlyphRun と Choice だけを返すため通常不発の防御的経路）。
     seam_warned: bool,
     /// テスト専用 fault-injection: true の間、次の Update フレームの EndDraw 後に
     /// デバイス失敗を注入する（実 COM 失敗を決定論的に再現できないため・G5）。flip/commit の
@@ -152,10 +167,10 @@ impl ViewboxExecutor {
     /// デバイス未初期化（`GraphicsCore` 無効化後）は log-first で `Device` エラー
     /// （`DrawExecutor::new` と同一経路）。
     ///
-    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// **本番は [`new_shared`](Self::new_shared) を使う**（`actor_decoration.rs::build_actor_render`
     /// が台帳を 1 つだけ作って計測器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
-    /// 残しているのは自前の台帳で足りる決定論テスト（`viewbox_draw_*_tests.rs`）が呼ぶ
-    /// 委譲の入口としてである。crate 外の呼び手も無い。
+    /// 自前の台帳で足りる決定論テストが呼ぶ委譲の入口なので `#[cfg(test)]` で塞いである。
+    #[cfg(test)]
     pub fn new(core: &GraphicsCore) -> Result<ViewboxExecutor, TextLayerError> {
         let dwrite = core
             .dwrite_factory()
@@ -193,6 +208,10 @@ impl ViewboxExecutor {
             fonts,
             brushes: BrushCache::default(),
             marker_bitmap: None,
+            solid_brushes: HashMap::new(),
+            targets: Vec::new(),
+            #[cfg(test)]
+            created: (0, 0),
             stats: DrawStats::default(),
             seam_warned: false,
             #[cfg(test)]
@@ -239,59 +258,70 @@ impl ViewboxExecutor {
     /// スクロール量子化状態の読み口（内部 [`ScrollPlanner`] へ委譲・additive）。
     ///
     /// 面に反映済みの whole-pixel スクロール（[`ScrollState::committed`]）を提示フレーム同期で
-    /// 読むための口。結線層（task 8）の照会スナップショット写像が
+    /// 読むための口。結線層（`actor_present.rs`）の照会スナップショット写像が
     /// `scroll_state().committed` を [`to_window_physical`](crate::choice::to_window_physical) の
-    /// committed 引数へ渡す（design.md「RuntimeContract」Implementation Notes・R9.3 契約点）。
+    /// committed 引数へ渡す（R9.3 契約点）。
     /// UI スレッド専有（COM 層規律）。
     pub fn scroll_state(&self) -> ScrollState {
         self.planner.scroll_state()
     }
 
-    /// Clear cue の適用点（planner 初期化＋行 TextLayout キャッシュ全破棄——破棄はこの口だけ・
-    /// R4.3）。
+    /// Clear cue の適用点（planner 初期化＋行 TextLayout キャッシュ全破棄・R4.3）。ほかに行
+    /// TextLayout を捨てるのは、既定の見た目/方向の変更で書式を組み直すとき（`ensure_format`・全破棄）と、
+    /// 下線を集め損ねた 1 行（`collect_underlines` が記録でも戻しでも `Err` を返した行・
+    /// `LineLayoutStore::forget`・再監査 R2-D4）だけ。
     ///
     /// [`ScrollPlanner::request_clear`]（`clear_requested`＋committed/pos/prev_lines 初期化）と
-    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render`] は `plan` が
-    /// [`FramePlan::FullClear`] を返し、back を全域透明 Clear（`full_clears` +1）→ flip → commit
-    /// する（その後 prev_lines 空ゆえ次 content フレームは全域ダーティで再描画＝透明フラッシュは
-    /// FullClear の 1 フレームのみ）。actor 結線（task 8）がこの口を Clear cue へ写像する。
+    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render_styled`] は、見える行が無ければ
+    /// [`FramePlan::FullClear`]（back を全域透明 Clear）、あれば全域の [`FramePlan::Update`]
+    /// （全面を消してから見える行を描く）で、消去と同じフレームで見える字も描く（透明のフラッシュを
+    /// 挟まない・指摘 17）。どちらも `full_clears` を 1 増やし、commit が要求を下ろす。actor 結線
+    /// （`actor.rs`）がこの口を Clear cue へ写像する。
+    ///
+    /// ここが台詞の切れ目（`\c` と台詞の頭の `ClearAll`）でもあるので、書体の台帳の台詞を進め
+    /// （[`FontCatalog::forget_talk`]・台帳を共有する計測器も表を空にする）、ブラシの記憶を空にする
+    /// （表の寿命を 1 つの台詞のあいだに揃える・指摘 11）。
     pub fn request_clear(&mut self) {
         self.planner.request_clear();
         self.line_store.clear();
+        self.fonts.forget_talk();
+        self.brushes.clear();
+        self.solid_brushes.clear();
     }
 
     /// 1 フレームの実行。戻り値＝変化有無（`true` なら呼び手が present する・R1.1/R3.1）。
     ///
     /// - format 確保（`ensure_format`——フォント/方向不変なら再利用）。
-    /// - `plan`（[`ScrollPlanner::plan`]・状態不変・純粋）。
+    /// - 全住人の行 TextLayout を確保して実測インクはみ出しを集め、`plan`
+    ///   （[`ScrollPlanner::plan_with_overhangs`]・状態不変・純粋）。
     /// - [`FramePlan::NoChange`]: blit も描画も present も行わない（`Ok(false)`・stats 増分なし・
     ///   commit 不要）。
-    /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`。
+    /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`
+    ///   （消去の要求中に見える行が無いときだけ・あれば全域の `Update` になる）。
     /// - [`FramePlan::Update`]: 保持ピクセルの面内 blit → ダーティ矩形ごとの正準列（①〜⑥）で
     ///   限定描画（各矩形は**その矩形と交差する行だけ**を描く・R11.1）→ flip → commit → `Ok(true)`。
     ///
     /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
-    /// 組み直したフレーム）または `plan` の想定外不整合（[`plan::plan_inconsistency`]）を検知した場合、当該
-    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
-    /// GlyphRun 住人）へ差し替えて描画する（正しさ優先・1 フレームで全域再描画のオラクル
-    /// `DrawExecutor::render` と同じ結果になる・透明フラッシュを起こす
-    /// FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は `warn!` を残す（記憶
-    /// areka-log-first-no-silent-failure）。縮退後の commit が prev_lines を張り直すため次フレームは
-    /// 正常導出へ復帰する。
+    /// 組み直したフレーム・計画者に前の行を忘れさせるので commit の成功まで続く）または `plan` の
+    /// 想定外不整合（[`plan::plan_inconsistency`]）を検知した場合、当該フレームを**全域ダーティ
+    /// Update**（`blit=(0,0)`・dirty=面全域・draw_lines=**可視窓の**
+    /// GlyphRun／Choice 住人のうち、はみ出し込みで面と重なる行・指摘 18）で描画する
+    /// （正しさ優先・1 フレームで全域再描画のオラクル `DrawExecutor::render` と同じ結果になる・
+    /// 透明フラッシュを起こす FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は
+    /// `warn!` を残す（記録の無い縮退を作らない）。縮退後の commit が prev_lines を張り直すため
+    /// 次フレームは正常導出へ復帰する。
     ///
     /// 失敗は log-first（`error!`＋`Err`・当該フレーム skip＝**plan 未 commit**・front 不変ゆえ
     /// 表示は前フレームを保持・次フレーム再計画）。
     ///
-    /// **本番の呼び手は [`render_styled`](Self::render_styled) へ移った**（`actor.rs` の
-    /// `present_actor` が唯一の本番呼出点）。本関数の本番の呼び手は 0 で、残しているのは
-    /// 装飾の表を持たない決定論テスト（`viewbox_draw_choice_hover_tests.rs`／
-    /// `viewbox_draw_frame_render_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
-    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`／
-    /// `viewbox_draw_scroll_retain_tests.rs`）が呼ぶ委譲の入口としてである——空の
-    /// [`StyleTable`] を添えて `render_styled` へ流すだけなので、装飾なしの呼出列が
-    /// 装飾導入前と同一であることの照合面にもなっている（要件 14.2）。crate 外の呼び手は無い
-    /// （`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つオラクル
-    /// `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
+    /// **本番は [`render_styled`](Self::render_styled) を使う**（`actor_present.rs` が唯一の本番
+    /// 呼出点）。本関数の本番の呼び手は 0 で、装飾の表を持たない決定論テスト
+    /// （`viewbox_draw_*_tests.rs`）が呼ぶ委譲の入口である——空の [`StyleTable`] を添えて
+    /// `render_styled` へ流すだけなので、装飾なしの呼出列の照合面にもなっている（要件 14.2）。
+    /// crate 外の呼び手は無い（`draw_oracle_tests.rs` の `.render(...)` は同名メソッドを持つ
+    /// オラクル `draw.rs::DrawExecutor`（`#[cfg(test)]`）のもので、本関数ではない）。
+    /// 本番の入口ではないことを構造で示すため `#[cfg(test)]` で塞いである。
+    #[cfg(test)]
     pub fn render(
         &mut self,
         canvas: &ContentCanvas,
@@ -359,7 +389,7 @@ mod png_dump_tests;
 mod scroll_retain_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 #[path = "viewbox_draw_vertical_band_readback_tests.rs"]
 mod vertical_band_readback_tests;

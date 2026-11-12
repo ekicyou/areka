@@ -1,11 +1,12 @@
-use super::ViewboxExecutor;
-use super::test_support::{Rig, emo2_balloon_root, glyph_items};
-use crate::canvas::ContentCanvas;
+use super::test_support::{
+    RenderPair, Rig, apply_fixture_script, diff_rows, emo2_balloon_text, glyph_items, layout_frame,
+    region_extent, state_frame,
+};
 use crate::draw::{DWriteMetrics, DrawExecutor};
-use crate::layout::{LayoutEngine, WrapPlan};
+use crate::layout::WrapPlan;
 use crate::region::ScaleContract;
-use crate::state::{TextItem, TextLayerConfig, TextLayerState};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+use crate::state::{TextLayerConfig, TextLayerState};
+use areka_sakura::contract::ActorKey;
 
 // ════ 目視診断（PNG ダンプ・#[ignore]・開発者の「出力画像を見せて」要求への回答） ════
 //
@@ -14,8 +15,36 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 // viewbox/oracle 双方へ描き、指定フレームで read_back を白背景へ合成して PNG 保存する。
 // byte 等価檻（`diag_line_boundary_dropout_vs_oracle`）は「viewbox==oracle」を保証するが、
 // 「その全域再描画自体が正しく見えるか（下端欠け等）」は人（AI vision）が画像を見るしかない。
-// 出力先は env `AREKA_DIAG_OUT`（無指定なら CARGO_TARGET_TMPDIR 相当のカレント）。
+// 出力先は env `AREKA_DIAG_OUT`（無指定ならワークツリーの `target/areka-diag`・どのカレントからでも同じ）。
 // 依存を足さないため PNG は自前エンコード（無圧縮 deflate・RGBA8）。
+
+/// 既定の出力先（ワークツリーの `target` の下・決まり「実機の一時フォルダは `target` の下だけ」）。
+const DIAG_DEFAULT_OUT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/areka-diag");
+
+/// 出力先を決めてフォルダを作る（env `AREKA_DIAG_OUT` が優先）。
+fn diag_out_dir() -> String {
+    let out_dir =
+        std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| DIAG_DEFAULT_OUT_DIR.to_string());
+    std::fs::create_dir_all(&out_dir).expect("PNG の出力先を作る");
+    out_dir
+}
+
+/// 既定の出力先がワークツリーの `target` の下（指摘 27）。
+#[test]
+fn diag_default_out_dir_is_under_worktree_target() {
+    let dir = std::path::Path::new(DIAG_DEFAULT_OUT_DIR);
+    assert!(
+        dir.is_absolute(),
+        "既定の出力先が絶対パスでない: {DIAG_DEFAULT_OUT_DIR}"
+    );
+    let target = dir.parent().expect("target の階層");
+    assert_eq!(target.file_name(), Some(std::ffi::OsStr::new("target")));
+    let root = target.parent().expect("ワークツリーの根");
+    assert!(
+        root.join("Cargo.toml").is_file() && root.join("crates").is_dir(),
+        "{root:?} がワークツリーの根でない"
+    );
+}
 
 /// CRC-32（PNG チャンク用・多項式 0xEDB88320）。
 fn diag_crc32(data: &[u8]) -> u32 {
@@ -149,33 +178,19 @@ fn diag_bottom_ink_row(bgra: &[u8], w: u32, h: u32) -> Option<u32> {
 #[test]
 #[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]
 fn diag_dump_horizontal_pngs() {
-    let out_dir = std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| ".".to_string());
+    let out_dir = diag_out_dir();
     let mut rig = Rig::new();
     // 実 fixture（emo2-kakukaku）の balloon model を実ファイルからロードする（Yu Gothic UI・
     // validrect [36,356]×[46,168]＝320×122・wordwrappoint.x=-49）——example の load_balloon_model
     // と同一経路。フォント/折返し/validrect を実機と完全一致させる（既定 ＭＳ ゴシックでない）。
-    let fixture_dir = emo2_balloon_root();
-    let read_dec = |name: &str| -> String {
-        let bytes = std::fs::read(fixture_dir.join(name)).expect("fixture 読取");
-        areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)
-    };
-    let model = areka_parsers::balloon::parse_str(
-        &read_dec("descript.txt"),
-        Some(&read_dec("balloons0s.txt")),
-    );
     // balloon 画像原寸（surface0＝400×224）で region を解決する（validrect は image 相対）。
-    let balloon_image = (400u32, 224u32);
-    let resolved = crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
+    let resolved = emo2_balloon_text();
     let mode = resolved.mode;
     let font = &resolved.font;
     let region = &resolved.region;
     // 供給面＝validrect 物理寸（ceil(validrect × k)・k=1）。
-    let image = (
-        (region.right() - region.left()).ceil() as u32,
-        (region.bottom() - region.top()).ceil() as u32,
-    );
-    let mut oracle_surface = rig.attach(image, 1.0);
-    let mut viewbox_surface = rig.attach(image, 1.0);
+    let image = region_extent(region);
+    let mut pair = RenderPair::attach(&mut rig, image, 1.0);
     let contract = ScaleContract::new(1.0, None);
     let config = TextLayerConfig::default();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
@@ -194,47 +209,15 @@ fn diag_dump_horizontal_pngs() {
         region.bottom(),
         region.wrap_threshold()
     );
-    let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
-    let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
-    let mk = |cmd| TalkCue {
-        at: 0.0,
-        actor: actor.clone(),
-        command: cmd,
-        duration: 0.0,
-    };
     // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
     // あふれ短行 at 2.0）。reveal は配送 duration 由来（interval = duration / N）。Text へ
-    // N×0.05 を焼き込むと各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する
-    // （chunk 境界は at で gate）。
-    // 【newline-defer】かつて（即時意味論では）at を分散させると未リビール NewLine が即座に
-    // 「幽霊空行」を出し人工的なスクロールを誘発した——遅延化（deferred newline）で保留改行は
-    // 次の可視グリフが reveal されるまで行を開かないため、幽霊空行はもはや生じず、あふれ発火は
-    // 実体化時刻（改行より後ろのグリフの reveal 時）へ後退する。at 分散は実機の reveal タイミングを
-    // 模す診断ダンプの時間対応としてのみ残す（幽霊空行の再現目的ではない）。
-    let cue_at = |at: f64, cmd: CueCommand| TalkCue {
-        at,
-        actor: actor.clone(),
-        duration: match &cmd {
-            CueCommand::Text(t) => t.chars().count() as f64 * 0.05,
-            _ => 0.0,
-        },
-        command: cmd,
-    };
-    state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())));
-    state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }));
-    state.apply_cue(&cue_at(
-        0.5,
-        CueCommand::Text("めっちゃええ朝やん！".into()),
-    ));
-    state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }));
-    state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())));
-    for _ in 0..9 {
-        state.apply_cue(&cue_at(2.0, CueCommand::NewLine { ratio: 1.0 }));
-        state.apply_cue(&cue_at(2.0, CueCommand::Text("ほな".into())));
-    }
-    let _ = mk;
+    // N×0.05 を焼き込むと各 chunk 内が 1 字 0.05 秒のペースで per-glyph 進行する
+    // （chunk 境界は at で gate）。at の分散は実機の reveal タイミングを模す診断ダンプの時間対応。
+    // 保留改行は次の可視グリフが reveal されるまで行を開かないので、あふれ発火は改行より後ろの
+    // グリフの reveal 時になる。
+    apply_fixture_script(&mut state, &actor, [0.0, 0.5, 1.2, 2.0], 0.05);
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム回す）。dump は目標時刻通過時。
     let dt = 0.02f64;
@@ -246,47 +229,14 @@ fn diag_dump_horizontal_pngs() {
     );
     let mut t = 0.0f64;
     while t <= 3.05 {
-        let visible = state.visible_glyphs(&actor, t);
-        let items: Vec<TextItem> = state
-            .actor_state(&actor)
-            .map(|s| s.items().to_vec())
-            .unwrap_or_default();
-        let lines = LayoutEngine::layout(
-            &items,
-            visible,
-            &region,
-            mode,
-            font.height,
-            &metrics,
-            WrapPlan::CharByChar,
-        );
-        let window = LayoutEngine::visible_window(&lines, &region, mode);
-        let canvas = ContentCanvas::from_layout(&lines, &region, mode);
-        oracle
-            .render(&canvas, &window, font, mode, &contract, &mut oracle_surface)
-            .expect("oracle render");
-        viewbox
-            .render(
-                &canvas,
-                &window,
-                font,
-                mode,
-                &contract,
-                &mut viewbox_surface,
-            )
-            .expect("viewbox render");
+        let (visible, lines, canvas, window) =
+            state_frame(&state, &actor, t, region, mode, font.height, &metrics);
+        let (ob, vb) = pair.render("diag", &canvas, &window, font, mode, &contract);
 
         if dump_times.first().is_some_and(|&t_target| t >= t_target) {
             let target = dump_times.remove(0);
-            let ob = oracle_surface.read_back().expect("oracle read_back");
-            let vb = viewbox_surface.read_back().expect("viewbox read_back");
-            let (w, h) = viewbox_surface.size();
-            let diff_rows = (0..h)
-                .filter(|&y| {
-                    let r = ((y * w) * 4) as usize..(((y + 1) * w) * 4) as usize;
-                    ob[r.clone()] != vb[r]
-                })
-                .count();
+            let (w, h) = pair.viewbox_surface.size();
+            let diff_rows = diff_rows(&ob, &vb, w, h).len();
             let vb_bottom = diag_bottom_ink_row(&vb, w, h);
             // 差分行の内訳: 各 y で「oracle インク有り・viewbox 空」= 欠け画素数。
             let mut miss_rows: Vec<(u32, u32)> = Vec::new();
@@ -374,38 +324,26 @@ fn diag_dump_horizontal_pngs() {
 ///
 /// byte 等価檻（`diag_line_boundary_dropout_vs_oracle` 等）は「viewbox==oracle」を保証するが、
 /// 「分かち書き折返しが読みやすく見えるか・長大塊がはみ出さないか」は人（AI vision）が画像を
-/// 見るしかない（記憶 emo-text-byte-equiv-default-font-blindspot）。全域再描画オラクル
+/// 見るしかない（既定フォントの byte 等価が緑でも実フォントの欠けを見逃した例は完了 spec
+/// `areka-P0-emo-text-viewbox` の tasks.md「横書きで各行の下端インクが描画されない」）。全域再描画オラクル
 /// [`DrawExecutor`] を使い fully-revealed の完成画像を 1 フレームで得る。
 /// `cargo test -p areka-emo-text --lib -- --ignored --nocapture diag_dump_budoux_wordwrap_pngs`
-/// （出力先は env `AREKA_DIAG_OUT`・無指定はカレント）。
+/// （出力先は env `AREKA_DIAG_OUT`・無指定はワークツリーの `target/areka-diag`）。
 #[test]
 #[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]
 fn diag_dump_budoux_wordwrap_pngs() {
-    let out_dir = std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| ".".to_string());
+    let out_dir = diag_out_dir();
     let mut rig = Rig::new();
     // 実 fixture（emo2-kakukaku）を実ファイルからロード（Yu Gothic UI・validrect 320×122・
     // wordwrappoint.x=-49）——diag_dump_horizontal_pngs と同一経路。狭いバルーンが char-by-char
     // の途中分割を誘発する（＝ON の改善が見える台）。
-    let fixture_dir = emo2_balloon_root();
-    let read_dec = |name: &str| -> String {
-        let bytes = std::fs::read(fixture_dir.join(name)).expect("fixture 読取");
-        areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)
-    };
-    let model = areka_parsers::balloon::parse_str(
-        &read_dec("descript.txt"),
-        Some(&read_dec("balloons0s.txt")),
-    );
     // balloon 画像原寸（surface0＝400×224）で region を解決する（validrect は image 相対）。
-    let balloon_image = (400u32, 224u32);
-    let resolved = crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
+    let resolved = emo2_balloon_text();
     let mode = resolved.mode;
     let font = &resolved.font;
     let region = &resolved.region;
     // 供給面＝validrect 物理寸（ceil(validrect × k)・k=1）＝バルーンの折返し閾/はみ出し境界。
-    let image = (
-        (region.right() - region.left()).ceil() as u32,
-        (region.bottom() - region.top()).ceil() as u32,
-    );
+    let image = region_extent(region);
     let contract = ScaleContract::new(1.0, None);
     let config = TextLayerConfig::default();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
@@ -427,17 +365,11 @@ fn diag_dump_budoux_wordwrap_pngs() {
 
     // 1 ケース（sentence を fully-revealed で描画）を PNG 保存するヘルパ。ON（use_budoux=true）は
     // actor.rs と同型の遅延初期化で segment_plan を計算し WrapPlan::Segmented を供給する（OFF は
-    // segment_plan を呼ばず CharByChar）。戻り値＝(行数, 最右インク列 x)。
-    let dump_case = |rig: &mut Rig,
-                     tag: &str,
-                     sentence: &str,
-                     use_budoux: bool|
-     -> (usize, Option<u32>) {
+    // segment_plan を呼ばず CharByChar）。行数と最右インク列 x は記録へ出す。
+    let dump_case = |rig: &mut Rig, tag: &str, sentence: &str, use_budoux: bool| {
         let items = glyph_items(sentence);
-        let visible = items
-            .iter()
-            .filter(|i| matches!(i, TextItem::Glyph { .. }))
-            .count();
+        // glyph_items はグリフだけを返すので、全部を見せる。
+        let visible = items.len();
         let plan; // ON アームでのみ束縛（借用 &plan が layout 呼出まで生存）。
         let wrap = if use_budoux {
             plan = crate::segment::segment_plan(&items);
@@ -448,10 +380,8 @@ fn diag_dump_budoux_wordwrap_pngs() {
         } else {
             WrapPlan::CharByChar
         };
-        let lines =
-            LayoutEngine::layout(&items, visible, region, mode, font.height, &metrics, wrap);
-        let window = LayoutEngine::visible_window(&lines, region, mode);
-        let canvas = ContentCanvas::from_layout(&lines, region, mode);
+        let (lines, canvas, window) =
+            layout_frame(&items, visible, region, mode, font.height, &metrics, wrap);
         let mut surface = rig.attach(image, 1.0);
         let mut exec = DrawExecutor::new(&rig.core).expect("DrawExecutor");
         exec.render(&canvas, &window, font, mode, &contract, &mut surface)
@@ -480,7 +410,6 @@ fn diag_dump_budoux_wordwrap_pngs() {
                  visible={visible} lines={} rightmost_ink_x={rightmost:?} (surface_w={w} pitch={pitch})",
             lines.len()
         );
-        (lines.len(), rightmost)
     };
 
     // ── 通常ケース: 狭いバルーンで char-by-char が文節を途中分割する和文（OFF/ON 並置）。 ──

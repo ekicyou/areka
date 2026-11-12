@@ -12,6 +12,7 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_ALIASED, D2D1_ELLIPSE, D2D1_INTERPOLATION_MODE_LINEAR, ID2D1Bitmap1,
     ID2D1Brush, ID2D1Image, ID2D1SolidColorBrush,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_RANGE, IDWriteTextFormat, IDWriteTextLayout,
 };
@@ -24,7 +25,7 @@ use super::decoration::{LineStyles, apply_color_ranges, apply_font_ranges, line_
 use super::none_err;
 use super::plan::degrade_if_needed;
 use super::underline::collect_underlines;
-use super::{FormatKey, ViewboxExecutor, color_f, device_err};
+use super::{ViewboxExecutor, color_f, device_err};
 use crate::TextLayerError;
 use crate::actor::marker_bitmap;
 use crate::canvas::GlyphRunContent;
@@ -37,18 +38,18 @@ use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::look::StyleTable;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::underline::{pull_inside, stroke_overhang, stroke_rect};
+use crate::underline::{StrokeRect, pull_inside, stroke_overhang, stroke_rect};
 use crate::viewbox::{FramePlan, LineOverhang};
 use crate::writing::WritingMode;
 
 impl ViewboxExecutor {
-    /// 装飾入りの 1 フレームの実行（[`Self::render`] の本体・要件 3.5／3.6／14.2）。
+    /// 装飾入りの 1 フレームの実行（テストだけの入口 `render` の本体・要件 3.5／3.6／14.2）。
     ///
     /// `styles` は当該 actor の装飾の表で、既定の見た目は `font.looks.default`。番号 0 しか
-    /// 使われていない行は区間が 1 つになるので、範囲指定・色の解除・ブラシ生成のいずれも呼ばず、
-    /// 行の箱寸も従来どおり `font.height` をそのまま渡す——生成物も呼出列も装飾導入前と同一
-    /// （要件 14.2）。装飾のある行だけが `line_layout_decorated`（生成時に 1 度だけフォント系の
-    /// 範囲指定）と `apply_color_ranges`（毎フレーム色を焼き直す）を通る。
+    /// 使われていない行は区間が 1 つになり、既定の見た目が下線も打ち消し線も持たなければ
+    /// 範囲指定・色の解除・ブラシ生成のいずれも呼ばず、行の箱寸は `font.height` をそのまま渡す
+    /// （要件 14.2）。それ以外の行は `line_layout_with_strokes`（生成時に 1 度だけフォント系の
+    /// 範囲指定）を通り、番号 0 以外の区間がある行は `apply_color_ranges`（毎フレーム色を焼き直す）も通る。
     ///
     /// 下線（areka-P0-balloon-text-bugs 件 3）は行の TextLayout に焼かず、Phase 1 で下線の区間が
     /// ある行だけ DirectWrite の幾何と効果を集め（字を描く原点で）、矩形を決めて見える窓の行は面の
@@ -68,7 +69,7 @@ impl ViewboxExecutor {
         styles: &StyleTable,
     ) -> Result<bool, TextLayerError> {
         let size = surface.size();
-        let (format, rebuilt) = self.ensure_format(font, mode)?;
+        let format = self.ensure_format(font, mode)?;
 
         // ── plan 前に全住人の行レイアウトを確保し**実測インクはみ出し**を集める ──
         // 確定行はキャッシュヒット（安価）・変化行のみ生成（=行レイアウト生成はここで一括発生し、
@@ -117,7 +118,7 @@ impl ViewboxExecutor {
                         measured,
                         choice.band_extent,
                         choice.band_offset,
-                        font.height,
+                        choice.run.size,
                         mode,
                     )
                 }
@@ -128,12 +129,15 @@ impl ViewboxExecutor {
         }
         self.stats.line_layout_creations += self.line_store.creations() - creations_before;
 
+        // 消去の要求が立っていたフレームは、FullClear でも字を描く全域の Update でも 1 と数える（指摘 17）。
+        let clearing = u64::from(self.planner.clear_pending());
         let plan = self
             .planner
             .plan_with_overhangs(canvas, window, mode, contract, size, &overhangs);
-        // 縮退判定（正しさ優先）: フォント/方向変更 or 想定外不整合なら全域ダーティ Update へ差し替え。
-        // 全域ダーティは面全域＝resident_rect を通らないため overhangs 不要（em ボックス経路と同一）。
-        let plan = degrade_if_needed(plan, rebuilt, canvas, window, mode, contract, size);
+        // 縮退判定（正しさ優先）: 想定外不整合なら全域ダーティ Update へ差し替え（書式の組み直しは
+        // `ensure_format` が前の行を忘れさせるので、計画が元から全域の道を通る）。全域ダーティの
+        // 描く行は、はみ出し込みで面と重なる行だけ（指摘 18）ゆえ overhangs を渡す。
+        let plan = degrade_if_needed(plan, canvas, window, mode, contract, size, &overhangs);
 
         match &plan {
             // 変化なし——blit・描画・present とも 0・commit 不要（no-op）。
@@ -141,7 +145,7 @@ impl ViewboxExecutor {
 
             // Clear cue 適用——back を全域透明 Clear（描画 0 件）して flip。
             FramePlan::FullClear => {
-                let target = create_d2d_target_bitmap(&self.dc, surface.back_tex())?;
+                let target = self.target_for(surface.back_tex())?;
                 unsafe { self.dc.SetTarget(&target) };
                 unsafe { self.dc.BeginDraw() };
                 self.dc.clear(None);
@@ -151,7 +155,7 @@ impl ViewboxExecutor {
 
                 surface.flip();
                 self.planner.commit(canvas, window, mode, contract, &plan);
-                self.stats.full_clears += 1;
+                self.stats.full_clears += clearing;
                 Ok(true)
             }
 
@@ -257,52 +261,43 @@ impl ViewboxExecutor {
                         )?;
                     }
 
-                    let choice_draw = if let Some(choice) = choice {
-                        // highlight=Some（hover 行）: hover セグメント（ordinal==hovered）へ矩形塗り
-                        // ブラシ＋文字色効果を組む。NoMarker/非 hover は highlight=None＝素描画。
-                        let hover = if let Some(paint) = choice.highlight {
-                            let fill = self
-                                .dc
-                                .create_solid_color_brush(&color_f(paint.fill), None)
-                                .map_err(device_err("CreateSolidColorBrush(fill)"))?;
-                            let text_brush = self
-                                .dc
-                                .create_solid_color_brush(&color_f(paint.text), None)
-                                .map_err(device_err("CreateSolidColorBrush(text)"))?;
-                            let mut rects: Vec<D2D_RECT_F> = Vec::new();
-                            for seg in &choice.segments {
-                                if Some(seg.ordinal) != choice.hovered {
-                                    continue;
-                                }
-                                // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
-                                // 住人 transform ＋block_offset ＋band_offset 反映＝ヒット矩形／
-                                // 指紋と同座標系・R3.3/R13.2）。帯は em ボックス丈（font.height）
-                                // ではなく choice.band_extent（横書きは descent 込みの丈・縦書きは
-                                // em）を、行矩形の左辺（横書きは上辺）から符号つきの寄せ
-                                // choice.band_offset だけずらした位置に置く（縦書きの右から左は負＝
-                                // 帯は行矩形の左へ出る）——`derive_hit_rows` へ渡る 2 値と同一。
-                                rects.push(highlight_rect(
-                                    seg.inline_range,
-                                    (dx, dy),
-                                    block_offset,
-                                    choice.band_extent,
-                                    choice.band_offset,
-                                    mode,
-                                ));
-                                // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
-                                // UTF-16 文字範囲を導く）。
-                                if let Some(range) =
-                                    segment_text_range(&run.glyphs, seg.inline_range)
-                                {
-                                    unsafe { layout.SetDrawingEffect(&text_brush, range) }
-                                        .map_err(device_err("SetDrawingEffect(text)"))?;
-                                }
+                    // highlight=Some（hover 行）: hover セグメント（ordinal==hovered）へ矩形塗り
+                    // ブラシ＋文字色効果を組む。NoMarker/非 hover は highlight=None＝素描画。
+                    let hover = if let Some(choice) = choice
+                        && let Some(paint) = choice.highlight
+                    {
+                        let fill =
+                            self.solid_brush(color_f(paint.fill), "CreateSolidColorBrush(fill)")?;
+                        let text_brush =
+                            self.solid_brush(color_f(paint.text), "CreateSolidColorBrush(text)")?;
+                        let mut rects: Vec<D2D_RECT_F> = Vec::new();
+                        for seg in &choice.segments {
+                            if Some(seg.ordinal) != choice.hovered {
+                                continue;
                             }
-                            Some(ChoiceHover { fill, rects })
-                        } else {
-                            None
-                        };
-                        Some(ChoiceDraw { hover })
+                            // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
+                            // 住人 transform ＋block_offset ＋band_offset 反映＝ヒット矩形／
+                            // 指紋と同座標系・R3.3/R13.2）。帯は em ボックス丈（font.height）
+                            // ではなく choice.band_extent（横書きは descent 込みの丈・縦書きは
+                            // em）を、行矩形の左辺（横書きは上辺）から符号つきの寄せ
+                            // choice.band_offset だけずらした位置に置く（縦書きの右から左は負＝
+                            // 帯は行矩形の左へ出る）——`derive_hit_rows` へ渡る 2 値と同一。
+                            rects.push(highlight_rect(
+                                seg.inline_range,
+                                (dx, dy),
+                                block_offset,
+                                choice.band_extent,
+                                choice.band_offset,
+                                mode,
+                            ));
+                            // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
+                            // UTF-16 文字範囲を導く）。
+                            if let Some(range) = segment_text_range(&run.glyphs, seg.inline_range) {
+                                unsafe { layout.SetDrawingEffect(&text_brush, range) }
+                                    .map_err(device_err("SetDrawingEffect(text)"))?;
+                            }
+                        }
+                        Some(ChoiceHover { fill, rects })
                     } else {
                         None
                     };
@@ -310,16 +305,27 @@ impl ViewboxExecutor {
                     // 下線（件 3）: 色と重ね表示の効果を焼いた後に、下線の区間がある行だけ集める
                     // （効果はブラシとして線の色になる）。原点は字を描く原点と同じ（DirectWrite の
                     // 画素への寄せが字と同じベースラインを返す）。見える窓の行の線だけを面の
-                    // 物理寸 ÷ k の範囲へ寄せる（送りで面の外へ出た行は今と同じく端で切れる）。
+                    // 物理寸 ÷ k の範囲へ寄せる（送りで面の外へ出た行は今と同じく端で切れる）。行の箱が
+                    // 丸ごと面の外の行の線は寄せない（`pull_inside` が行の箱で決める）。
                     let strokes = if line.underlines.is_empty() {
                         Vec::new()
                     } else {
-                        collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))?
+                        // 行の em の箱（面の上・`resident_rect` と同じ箱）。
+                        let row = StrokeRect {
+                            left: origin.X,
+                            top: origin.Y,
+                            right: origin.X + run.size.0,
+                            bottom: origin.Y + run.size.1,
+                        };
+                        // 下線を集め損ねた行（記録の失敗でも戻しの失敗でも）は保持庫に残さない（次の
+                        // フレームで下線の立った行を引き当てて二重に描かない・再監査 R2-D4）。
+                        collect_underlines(&layout, &line.underlines, k, (origin.X, origin.Y))
+                            .inspect_err(|_| self.line_store.forget(index))?
                             .into_iter()
                             .map(|recorded| {
                                 let rect = stroke_rect(&recorded.raw, (0.0, 0.0));
                                 let rect = if index >= window.first_visible_line {
-                                    pull_inside(rect, mode, bound)
+                                    pull_inside(rect, row, mode, bound)
                                 } else {
                                     rect
                                 };
@@ -351,19 +357,15 @@ impl ViewboxExecutor {
                         LineDraw {
                             origin,
                             layout,
-                            choice: choice_draw,
+                            hover,
                             strokes,
                             markers,
                         },
                     ));
                 }
 
-                let (r, g, b) = font.color;
-                let brush = self
-                    .dc
-                    .create_solid_color_brush(&color_f((r, g, b)), None)
-                    .map_err(device_err("CreateSolidColorBrush"))?;
-                let target = create_d2d_target_bitmap(&self.dc, surface.back_tex())?;
+                let brush = self.solid_brush(color_f(font.color), "CreateSolidColorBrush")?;
+                let target = self.target_for(surface.back_tex())?;
 
                 // ── Phase 2（描画・ダーティ矩形限定）: この区間の D2D 呼び出しは不可謬（戻り値
                 // なし）で、失敗は EndDraw に集約される。SetTarget は成否によらず必ず解除する。 ──
@@ -408,14 +410,13 @@ impl ViewboxExecutor {
                     // （空グリフ列・シーム住人＝そこで skip 済み）は引けないので飛ばす。
                     // Choice hover 行は (a) セグメント矩形を塗り色で `FillRectangle` してから
                     // (b) `DrawTextLayout`（効果範囲の文字だけが Phase 1 で焼いた切替色で描かれる）。
+                    // `draws` は draw_lines の順（昇順）に積んだので二分探索で引く。
                     for line in &dirty_rect.lines {
-                        let Some((_, d)) = draws.iter().find(|(i, _)| i == line) else {
+                        let Ok(at) = draws.binary_search_by_key(line, |(i, _)| *i) else {
                             continue;
                         };
-                        if let Some(ChoiceDraw {
-                            hover: Some(hover), ..
-                        }) = &d.choice
-                        {
+                        let d = &draws[at].1;
+                        if let Some(hover) = &d.hover {
                             for rect in &hover.rects {
                                 self.dc.fill_rectangle(rect, &hover.fill);
                             }
@@ -473,6 +474,7 @@ impl ViewboxExecutor {
                 // 行レイアウト生成の集計は plan 前のはみ出し収集ループで済み（ここでは再計上しない）。
                 surface.flip();
                 self.planner.commit(canvas, window, mode, contract, &plan);
+                self.stats.full_clears += clearing;
                 Ok(true)
             }
         }
@@ -481,9 +483,10 @@ impl ViewboxExecutor {
     /// 1 行の行 TextLayout を装飾込みで確保する（はみ出し収集ループと Phase 1 が**同じ引数**で
     /// 呼ぶための 1 点・引数が食い違うと保持庫の鍵が変わって同じ行を 1 フレームに 2 度生成する）。
     ///
-    /// 既定だけの行は従来の [`LineLayoutStore::line_layout`] をそのまま通る（空の番号列・
-    /// 行の箱寸は `font.height`・焼き処理なし＝装飾導入前と 1 ビットも変わらない・要件 14.2）。
-    /// 装飾のある行だけが [`LineLayoutStore::line_layout_decorated`] を通り、生成時に 1 度だけ
+    /// 既定だけの行（既定の見た目が下線も打ち消し線も持たないとき）は
+    /// [`LineLayoutStore::line_layout`](crate::draw::LineLayoutStore::line_layout) をそのまま通る（空の番号列・
+    /// 行の箱寸は `font.height`・焼き処理なし・要件 14.2）。
+    /// それ以外の行は [`LineLayoutStore::line_layout_with_strokes`](crate::draw::LineLayoutStore::line_layout_with_strokes) を通り、生成時に 1 度だけ
     /// フォント系の範囲指定（[`apply_font_ranges`]）を焼く。下線の区間がある行は、続けて
     /// 下線の幾何を 1 回集め（[`collect_underlines`]・拡大率 `scale`）、線の行の箱からのはみ出し
     /// （[`stroke_overhang`]）を保持庫へ返す——下線は行に焼かないので実測のはみ出しに入らない
@@ -501,7 +504,9 @@ impl ViewboxExecutor {
         scale: f32,
     ) -> Result<(IDWriteTextLayout, LineStyles), TextLayerError> {
         let line = line_styles(run, font.height, mode, styles, &font.looks.default);
-        if line.default_only {
+        // 既定の見た目が線を持つなら、既定だけの行も線を焼く道へ（指摘 6）。
+        let default_strokes = font.looks.default.underline || font.looks.default.strike;
+        if line.default_only && !default_strokes {
             let layout = self
                 .line_store
                 .line_layout(index, text, format, font.height, mode)?;
@@ -573,10 +578,7 @@ impl ViewboxExecutor {
                         a: DOT_OPACITY,
                         ..color_f(look.color)
                     };
-                    let fill = self
-                        .dc
-                        .create_solid_color_brush(&color, None)
-                        .map_err(device_err("CreateSolidColorBrush(印の丸)"))?;
+                    let fill = self.solid_brush(color, "CreateSolidColorBrush(印の丸)")?;
                     let ellipse = D2D1_ELLIPSE {
                         point: Vector2 { X: x, Y: y },
                         radiusX: radius,
@@ -602,50 +604,93 @@ impl ViewboxExecutor {
         Ok(paints)
     }
 
-    /// 印の絵の D2D の絵（同じ `Arc` なら覚えた 1 枚を返す）。作れないときは `None`
-    /// （[`marker_bitmap`] が `error!` を残す・その印だけ塗らない）。
+    /// その色の塗りブラシ（覚えていれば同じものを返す・無ければ作って覚える）。生成の失敗は
+    /// log-first（`device_err`）でフレームを見送る。範囲の呼び出しの勘定には入れない（指摘 31）。
+    fn solid_brush(
+        &mut self,
+        color: D2D1_COLOR_F,
+        what: &'static str,
+    ) -> Result<ID2D1SolidColorBrush, TextLayerError> {
+        let key = [color.r, color.g, color.b, color.a].map(f32::to_bits);
+        if let Some(brush) = self.solid_brushes.get(&key) {
+            return Ok(brush.clone());
+        }
+        let brush = self
+            .dc
+            .create_solid_color_brush(&color, None)
+            .map_err(device_err(what))?;
+        #[cfg(test)]
+        {
+            self.created.0 += 1;
+        }
+        self.solid_brushes.insert(key, brush.clone());
+        Ok(brush)
+    }
+
+    /// 面のテクスチャ（back）を巻いた描き先の bitmap（同じテクスチャなら覚えたものを返す）。
+    /// front/back の 2 枚を覚え、3 枚目（面の作り直し）は古い方を押し出す（指摘 31）。
+    fn target_for(&mut self, tex: &ID3D11Texture2D) -> Result<ID2D1Bitmap1, TextLayerError> {
+        if let Some((_, target)) = self.targets.iter().find(|(held, _)| held == tex) {
+            return Ok(target.clone());
+        }
+        let target = create_d2d_target_bitmap(&self.dc, tex)?;
+        #[cfg(test)]
+        {
+            self.created.1 += 1;
+        }
+        if self.targets.len() == 2 {
+            self.targets.remove(0);
+        }
+        self.targets.push((tex.clone(), target.clone()));
+        Ok(target)
+    }
+
+    /// 印の絵の D2D の絵（同じ `Arc` なら覚えた結果を返す）。作れないときは `None`
+    /// （[`marker_bitmap`] が `error!` を残す・その印だけ塗らない）。失敗も成功と同じ欄に覚え、
+    /// 同じ絵では作り直さない（記録は絵ごとに 1 回・指摘 36）。
     fn marker_bitmap_for(&mut self, image: &Arc<MarkerImage>) -> Option<ID2D1Bitmap1> {
         if let Some((held, bitmap)) = &self.marker_bitmap
             && Arc::ptr_eq(held, image)
         {
-            return Some(bitmap.clone());
+            return bitmap.clone();
         }
-        let bitmap = marker_bitmap(&self.dc, image).ok()?;
+        let bitmap = marker_bitmap(&self.dc, image).ok();
         self.marker_bitmap = Some((Arc::clone(image), bitmap.clone()));
-        Some(bitmap)
+        bitmap
     }
 
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
-    /// 戻り値の `bool` は**format と [`LineLayoutStore`] を組み直したか**（`true`＝組み直し）。
-    /// フォント/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
-    /// ピクセル（旧 format で描いた面）を崩すため、`render` はこのフラグを見て当該フレームを
-    /// 全域ダーティへ縮退する（`DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定の
-    /// ため通常発火しない・`debug!` 記録）。**初回生成**（`self.format` が `None`・組み直す前提が
-    /// 無い＝committed ピクセルも無い）は `false`（初回フレームは prev_lines 空ゆえ元より全域ダーティ）。
+    /// 既定の見た目（`FormatKey`）/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
+    /// ピクセル（旧 format で描いた面）を崩すため、組み直すときは [`LineLayoutStore`](crate::draw::LineLayoutStore) を捨て、計画者に
+    /// 前の行を忘れさせる（[`crate::viewbox::ScrollPlanner::forget_prev`]）——次の計画は commit が成功するまで全域の道を
+    /// 通るので、組み直したフレームが失敗しても次のフレームで全域を描き直す（再監査 R2-D1・
+    /// `DrawExecutor::ensure_format` はここと違い鍵が `(FontKey, mode)` で行キャッシュを捨てるだけ・前の行を忘れさせる口を持たない・実運用は actor ごと固定のため通常発火しない・`debug!` 記録）。
+    /// **初回生成**（`self.format` が `None`）は前の行が元から「分からない」ので何も忘れさせない。
     fn ensure_format(
         &mut self,
         font: &ResolvedFont,
         mode: WritingMode,
-    ) -> Result<(IDWriteTextFormat, bool), TextLayerError> {
-        let key: FormatKey = (font.looks.default.font_key(), mode);
-        if let Some((cached_key, format)) = &self.format {
-            if *cached_key == key {
-                return Ok((format.clone(), false));
+    ) -> Result<IDWriteTextFormat, TextLayerError> {
+        if let Some(((look, cached_mode), format)) = &self.format {
+            if *look == font.looks.default && *cached_mode == mode {
+                return Ok(format.clone());
             }
             tracing::debug!(
-                ?key,
-                "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
+                ?mode,
+                look = ?font.looks.default,
+                "既定の見た目/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
             self.line_store.clear();
+            self.planner.forget_prev();
             let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
-            self.format = Some((key, format.clone()));
-            return Ok((format, true));
+            self.format = Some(((font.looks.default.clone(), mode), format.clone()));
+            return Ok(format);
         }
-        // 初回生成（committed ピクセルが無いため縮退トリガにしない）。
+        // 初回生成（前の行は元から「分からない」）。
         let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
-        self.format = Some((key, format.clone()));
-        Ok((format, false))
+        self.format = Some(((font.looks.default.clone(), mode), format.clone()));
+        Ok(format)
     }
 }
 
@@ -653,10 +698,10 @@ impl ViewboxExecutor {
 struct LineDraw {
     /// 描画原点（DrawExecutor と同一式・validrect-local 平行移動＋可視窓オフセット）。
     origin: Vector2,
-    /// 行 TextLayout（[`LineLayoutStore`] 由来・効果は Phase 1 で焼込済み）。
+    /// 行 TextLayout（[`LineLayoutStore`](crate::draw::LineLayoutStore) 由来・効果は Phase 1 で焼込済み）。
     layout: IDWriteTextLayout,
-    /// Choice 住人のときのみ Some（GlyphRun は None＝素描画）。
-    choice: Option<ChoiceDraw>,
+    /// Choice 住人の hover 行のときのみ Some（GlyphRun・非 hover・NoMarker は None＝素描画）。
+    hover: Option<ChoiceHover>,
     /// 塗る下線（画像の画素・寄せ済み）と、その区間の効果のブラシ（`None`＝既定の文字色）。
     /// 下線の区間の無い行は空。
     strokes: Vec<(D2D_RECT_F, Option<ID2D1Brush>)>,
@@ -672,12 +717,6 @@ enum MarkerPaint {
     Image(D2D_RECT_F, ID2D1Bitmap1),
 }
 
-/// Choice 行のハイライト描画資源（hover 時のみ塗り資源を持つ・非 hover は全範囲 None リセットのみ）。
-struct ChoiceDraw {
-    /// hover 時の矩形塗り資源（`highlight=None`／NoMarker は None＝素描画）。
-    hover: Option<ChoiceHover>,
-}
-
 /// hover セグメントの矩形塗り資源（文字色効果は Phase 1 で layout へ焼込済みゆえ持たない）。
 struct ChoiceHover {
     /// 矩形塗りブラシ（`HighlightPaint::fill`）。
@@ -689,9 +728,8 @@ struct ChoiceHover {
 /// hover セグメント矩形を描画空間（image px・住人 transform＋block_offset 反映）で組む。
 ///
 /// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_offset` だけ内側へ寄せた
-/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`]＝実 font metrics の `ascent + descent`
-/// 由来。em ボックス丈 `font_height` ではない——em で切ると和文フォントの descent インクが帯から
-/// はみ出す。[`ChoiceLineContent::band_offset`]＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
+/// 起点から `band_extent`（[`ChoiceLineContent::band_extent`](crate::canvas::ChoiceLineContent::band_extent)＝横書きは字の箱の丈（行送りで頭打ち）・
+/// 縦書きは em。横書きを em で切ると和文フォントの descent インクが帯からはみ出す。[`ChoiceLineContent::band_offset`](crate::canvas::ChoiceLineContent::band_offset)＝帯を行ボックスの中央へ置く寄せ——近端へ揃えると
 /// 帯が上に余りながら下でインクを切る・R13.1）。住人平行移動 `(dx, dy)` と可視窓オフセット
 /// `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ揃える（ヒット矩形／指紋と
 /// 同座標系・R3.3）。座標は合成スケール `k` 適用前の image px
@@ -726,23 +764,29 @@ fn highlight_rect(
 
 /// Choice 住人のダーティ帯を **ハイライト帯の超過分**まで広げた [`LineOverhang`] を返す（純粋）。
 ///
-/// ダーティ矩形は em ボックス（`font_height`）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
-/// （`band_extent`＝`ascent + descent` 由来）は行矩形の block 近端から `band_offset` だけ寄せた
-/// 位置に置かれるので、遠端側の超過分は `band_offset + band_extent − font_height` になる
+/// ダーティ矩形はその行の em ボックス（`run_size` の行送りの軸＝行の中で最も大きい字の em・
+/// `resident_rect` と同じ丈）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
+/// （`band_extent`＝横書きは字の箱の丈（行送りで頭打ち）・縦書きは em）は行矩形の block 近端から `band_offset` だけ寄せた
+/// 位置に置かれるので、遠端側の超過分は `band_offset + band_extent − 行の丈` になる
+/// （既定の字の高さと比べると、行の em が既定より小さい行で帯の下が切れる・指摘 8）
 /// （寄せを数えないと、寄せた分だけ帯の下（縦書きは右）がダーティ矩形の外へ落ち、hover 解除の
 /// フレームで塗りが消し残る・R13.5）。この超過分をブロック軸**遠端**（横書き＝`bottom`・
 /// 縦書き＝`right`——[`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの
 /// 方が大きい場合は実測値を保つ（`max`）。縦書きの寄せは符号つきで、右から左は負（帯が行矩形の
 /// 左へ出る）——その分 `−band_offset` を**近端**（`left`）の下限として与える。これにより hover
 /// フレームの塗りが欠けず、hover 解除フレームで塗りが消し残らない（同一帯が両フレームでダーティになる）。
-fn expand_overhang_for_band(
+pub(super) fn expand_overhang_for_band(
     measured: LineOverhang,
     band_extent: f32,
     band_offset: f32,
-    font_height: f32,
+    run_size: (f32, f32),
     mode: WritingMode,
 ) -> LineOverhang {
-    let excess = (band_offset + band_extent - font_height).max(0.0);
+    let row_extent = match mode {
+        WritingMode::HorizontalTb => run_size.1,
+        WritingMode::VerticalRl | WritingMode::VerticalLr => run_size.0,
+    };
+    let excess = (band_offset + band_extent - row_extent).max(0.0);
     match mode {
         WritingMode::HorizontalTb => LineOverhang {
             bottom: measured.bottom.max(excess),

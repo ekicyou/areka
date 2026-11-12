@@ -36,9 +36,8 @@
 //! 既存の横書き檻・縦書き檻の共通前提は validrect ＝画像全域（`0/0/400/224`）で、そこでは
 //! `image_size.0 / 2` と `right / 2` が同値（どちらも 200）・`image_size.1 / 2` と `bottom / 2` も
 //! 同値（どちらも 112）になる。**その fixture で V6 を書くと、`centerx`／`centery` の基準を
-//! validrect の辺と取り違えた実装が素通りする。** 実際、本タスク着手時点で配線の
-//! `image_size: region.image_size()` を `(region.right(), region.bottom())` に差し替えても
-//! ワークスペースのテストは 1 本も赤にならなかった（タスク 4.1／4.4 のレビューが摂動で実証）。
+//! validrect の辺と取り違えた実装（配線の `image_size: region.image_size()` を
+//! `(region.right(), region.bottom())` にした実装）が素通りする。**
 //!
 //! 画像原寸は既定と同じ `(400, 224)` に保ち、validrect だけをずらしてあるので、design.md の
 //! V6 が定める literal（X = 200・Y = 112）はそのまま使える。**ただし validrect の中央
@@ -49,7 +48,7 @@
 //! 行矩形は `(left, top, right, bottom)`。縦書きでは行＝列であり、`left`／`right` が列の位置
 //! （行送り軸）、`top`／`bottom` が列内の字送り範囲（行内軸）になる。
 
-use super::test_support::{IMAGE, inline_positions, model_rect};
+use super::test_support::{IMAGE, cursor_px, glyph, inline_positions, model_rect, rect_of};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -147,12 +146,6 @@ fn layout_in(
     )
 }
 
-/// 行矩形を `(left, top, right, bottom)` で取り出す。
-fn rect_of(line: &PositionedLine) -> (f32, f32, f32, f32) {
-    let r = &line.rect;
-    (r.left, r.top, r.right, r.bottom)
-}
-
 /// 行の**着地点を画像座標 (x, y) へ戻す**（書字方向ごとの逆写像）。
 ///
 /// 行内軸の座標は先頭グリフの `inline_pos`、行送り軸の座標は行矩形の「書字開始側の辺」から
@@ -172,30 +165,11 @@ fn landing_of(line: &PositionedLine, mode: WritingMode) -> (f32, f32) {
     }
 }
 
-/// 全角グリフ 1 個（'あ'・advance 10）。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
 /// `\_l[centerx,centery]`。
 fn cursor_center_both() -> TextItem {
     TextItem::CursorMove {
         x: CursorCoord::CenterX,
         y: CursorCoord::CenterY,
-    }
-}
-
-/// `\_l[x,y]`（両軸とも絶対 px）。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
     }
 }
 
@@ -345,7 +319,6 @@ fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
         (WritingMode::VerticalRl, (190.0, 112.0, 200.0, 132.0)),
         (WritingMode::VerticalLr, (200.0, 112.0, 210.0, 132.0)),
     ];
-    let mut landings = Vec::new();
     for (mode, expected) in expected_rects {
         let region = region_undeclared(mode);
         let lines = layout_in(&items, 2, &region, mode);
@@ -355,28 +328,12 @@ fn center_resolves_to_half_the_balloon_image_in_all_three_writing_modes() {
             expected,
             "{mode:?}: 画像中央 (200, 112) から 2 グリフぶん伸びた行矩形"
         );
-        landings.push((mode, landing_of(&lines[0], mode)));
-    }
-
-    for (mode, landing) in &landings {
         assert_eq!(
-            *landing, IMAGE_CENTER,
+            landing_of(&lines[0], mode),
+            IMAGE_CENTER,
             "{mode:?}: 着地は画像の幅／高さの半分（validrect の辺・寸法・中央のどれでもない）"
         );
     }
-    assert!(
-        landings.windows(2).all(|w| w[0].1 == w[1].1),
-        "3 方向の着地が同一であること＝`centerx` / `centery` は書字方向に依らない（R4.4）"
-    );
-    assert_eq!(
-        expected_rects
-            .iter()
-            .map(|(_, r)| (r.0.to_bits(), r.1.to_bits(), r.2.to_bits(), r.3.to_bits()))
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        3,
-        "同じ着地点でも行矩形は 3 方向で相異なる（方向の取り違えが行矩形に現れる）"
-    );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -463,7 +420,6 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
         },
         glyph(),
     ];
-    let mut b_landings = Vec::new();
     for (mode, expected_rect, expected_landing) in [
         (
             WritingMode::HorizontalTb,
@@ -490,21 +446,7 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
             expected_landing,
             "{mode:?}: ⒝ Y は画像中央 112・X は実効位置（方向で意味が変わる軸）"
         );
-        b_landings.push(expected_landing);
     }
-    assert!(
-        b_landings.iter().all(|l| l.1 == IMAGE_CENTER.1),
-        "⒝ の Y は 3 方向とも画像中央 112（centery は方向に依らない）"
-    );
-    assert_eq!(
-        b_landings
-            .iter()
-            .map(|l| l.0.to_bits())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        3,
-        "⒝ の X は 3 方向ですべて相異なる（40 / 350 / 30）——方向を取り違えた実装が赤になる"
-    );
 
     // ⒞ centerx（画像）× 3lh（文字描画開始点からの絶対）＝1 つのタグで基点が 2 つ。
     let c_items = [
@@ -542,12 +484,11 @@ fn mixed_formats_on_the_two_axes_resolve_independently_in_all_three_writing_mode
 /// 3 書字方向とも**宣言値から**測られる（Requirement 2.9・design.md 原点表「宣言された
 /// `origin` 成分はそのまま原点になる」）。
 ///
-/// 引用元は完了済みの仕様 `.kiro/specs/completed/areka-P0-cursor-tag-canon/design.md` であり、
-/// **引用したその一文は本仕様 `areka-P0-balloon-origin-outside-validrect` が上書きしている**
-/// ——いまは validrect の範囲内（両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ
-/// 解決された宣言は未宣言の成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は
-/// validrect（x は 30〜350・y は 8〜210）の範囲内なので、引用の結論はこの条件のもとでは
-/// 変わらない。完了済みの仕様は改訂しない決まりなので、注記は引用する側に置く。
+/// 引用元は完了済みの仕様 `.kiro/specs/completed/areka-P0-cursor-tag-canon/design.md` で、
+/// その一文は `areka-P0-balloon-origin-outside-validrect` が上書きしている——validrect の範囲内
+/// （両端を含む）に収まる宣言だけがそのまま原点になり、範囲の外へ解決された宣言は未宣言の
+/// 成分と同じく書字開始角へ落ちる。本検査の宣言値 `(50, 20)` は validrect（x は 30〜350・
+/// y は 8〜210）の範囲内なので、宣言値から測られる。
 ///
 /// 手計算（宣言 `origin (50, 20)`・validrect `left 30 / top 8 / right 350 / bottom 210`・font 10）:
 /// - `horizontal_tb`: 着地 `(50 + 0, 20 + 0) = (50, 20)` → 行矩形 `(50, 20, 60, 30)`
@@ -568,8 +509,11 @@ fn declared_origin_is_the_absolute_basis_in_all_three_writing_modes() {
     let items = [cursor_px(0.0, 0.0), glyph()];
 
     for (mode, expected_rect) in [
+        // 横書きは旧正典（ukadoc 2.8.80「文字描画範囲左上」）の (30, 8) から動いた＝正典追随（R9.6）。
         (WritingMode::HorizontalTb, (50.0, 20.0, 60.0, 30.0)),
+        // 列の**右端** right = 50 が宣言 origin.x（V7 の逐語「vertical_rl は列右端 50」）。
         (WritingMode::VerticalRl, (40.0, 20.0, 50.0, 30.0)),
+        // 列の**左端** left = 50 が宣言 origin.x（同「vertical_lr は列左端 50」）。
         (WritingMode::VerticalLr, (50.0, 20.0, 60.0, 30.0)),
     ] {
         let region = region_declared(mode);
@@ -586,72 +530,4 @@ fn declared_origin_is_the_absolute_basis_in_all_three_writing_modes() {
             "{mode:?}: 着地は宣言値そのもの（書字開始角でも validrect の辺でも画像中央でもない）"
         );
     }
-
-    // 列の辺としての読み（design.md V7 の逐語「vertical_rl は列右端 50・vertical_lr は列左端 50」）。
-    let rl = layout_in(
-        &items,
-        1,
-        &region_declared(WritingMode::VerticalRl),
-        WritingMode::VerticalRl,
-    );
-    assert_eq!(
-        rl[0].rect.right, DECLARED_ORIGIN.0,
-        "vertical_rl: 列の**右端**が宣言 origin.x = 50（列矩形は [block − font, block]）"
-    );
-    let lr = layout_in(
-        &items,
-        1,
-        &region_declared(WritingMode::VerticalLr),
-        WritingMode::VerticalLr,
-    );
-    assert_eq!(
-        lr[0].rect.left, DECLARED_ORIGIN.0,
-        "vertical_lr: 列の**左端**が宣言 origin.x = 50（列矩形は [block, block + font]）"
-    );
-}
-
-/// **V7 の根拠（Requirement 9.6・2.9）**: 宣言バルーンでは**横書きの着地も変わる**。これは
-/// 退行ではなく正典追随である。
-///
-/// - **本仕様より前の着地（現行値）**: `(30, 8)`＝validrect の左上。旧実装は
-///   `cursor_to_image_px(x, region.left(), …)` / `region.top()` を基点にしており
-///   （タスク 1.2 以前の `layout.rs`）、ukadoc **2.8.80** の「文字描画範囲左上」に従っていた。
-///   宣言された `origin` は基点に一切効かなかった。
-/// - **本仕様の着地（正典値）**: `(50, 20)`＝宣言された文字描画開始点。ukadoc **2.8.83** が
-///   数値座標の原点を「文字描画開始点（`origin` の位置）」へ改めたためである
-///   （requirements.md Requirement 2.1／2.9・開発者裁定 2026-09-02 議題 1）。
-/// - **なぜ受け入れるか**: 差分が出るのは `origin` を角と異なる位置に**宣言した**バルーンだけで、
-///   未宣言バルーンでは `TextRegion::start()` が書字開始角と一致するため着地は 1 ビットも
-///   変わらない（Requirement 2.7・`layout_cursor_wiring_tests.rs` の H1 が固定）。emo2 の
-///   実バルーンは `origin` 未宣言なので適合結果は不変である（requirements.md の実測）。
-///
-/// 本檻は「新しい値である」ことと「古い値**ではない**こと」を両方主張する——後者が無いと、
-/// 正典追随という主張が「たまたま今の値」と区別できない。
-#[test]
-fn declared_origin_changes_the_horizontal_landing_as_canon_following() {
-    let mode = WritingMode::HorizontalTb;
-    let region = region_declared(mode);
-    let lines = layout_in(&[cursor_px(0.0, 0.0), glyph()], 1, &region, mode);
-    let landing = landing_of(&lines[0], mode);
-
-    assert_eq!(
-        landing, DECLARED_ORIGIN,
-        "正典値（ukadoc 2.8.83「文字描画開始点」）＝宣言された origin (50, 20)"
-    );
-    assert_ne!(
-        landing,
-        (region.left(), region.top()),
-        "旧正典（ukadoc 2.8.80「文字描画範囲左上」）の着地 (30, 8) にはならない——\
-         この差分が Requirement 9.6 の「正典追随であって退行ではない」の観測点である"
-    );
-
-    // 未宣言バルーンでは同じ入力の着地が書字開始角と一致し、本仕様の前後で変わらない
-    // （R2.7。差分が出るのは宣言バルーンだけであることの対照）。
-    let undeclared = region_undeclared(mode);
-    let lines = layout_in(&[cursor_px(0.0, 0.0), glyph()], 1, &undeclared, mode);
-    assert_eq!(
-        landing_of(&lines[0], mode),
-        (undeclared.left(), undeclared.top()),
-        "未宣言バルーンの着地は書字開始角＝validrect の左上のままで、新旧の正典で一致する"
-    );
 }

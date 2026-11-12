@@ -1,14 +1,12 @@
-use super::ViewboxExecutor;
 use super::test_support::{
-    Rig, block_axis_ink_span, build, colored_count, emo2_balloon_root, glyph_items,
-    live_diff_model_font, opaque_count,
+    RenderPair, Rig, apply_fixture_script, block_axis_ink_span, block_axis_ink_span_in,
+    colored_count, diff_rows, emo2_balloon_text, live_diff_model_font, opaque_count, region_extent,
+    state_frame,
 };
-use crate::canvas::ContentCanvas;
-use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
-use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use crate::draw::{DWriteMetrics, ResolvedFont};
+use crate::layout::{FixedMetrics, VisibleWindow};
 use crate::region::{ScaleContract, TextRegion};
-use crate::state::{TextItem, TextLayerConfig, TextLayerState};
-use crate::surface::TextSurface;
+use crate::state::{TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
@@ -26,14 +24,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 /// live-diff 検証リグ: 2 つの独立 TextSurface（同一物理寸・k=1.0・同一 core/compositor）へ
 /// オラクルと viewbox を装着し、1 本の TextLayerState を両方式へ同一入力で流す。
 struct LiveDiffRig {
-    /// オラクル（全域再描画）の供給面。
-    oracle_surface: TextSurface,
-    /// viewbox（ダーティスクロール）の供給面。
-    viewbox_surface: TextSurface,
-    /// 比較専用オラクル（全域再描画・front へ焼く）。
-    oracle: DrawExecutor,
-    /// 新実行部（保持ピクセル面内 blit ＋ ダーティ描画・back へ焼き flip）。
-    viewbox: ViewboxExecutor,
+    /// オラクル（全域再描画）と viewbox（ダーティスクロール）の対。
+    pair: RenderPair,
     /// 解決済みテキスト領域（両方式共通・image px）。
     region: TextRegion,
     /// 解決済みフォント（既定 ＭＳ ゴシック 10px）。
@@ -49,8 +41,7 @@ struct LiveDiffRig {
     /// cue 駆動の純粋状態機械（両方式へ同一入力を供給する単一の正本）。
     state: TextLayerState,
     /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
-    #[allow(dead_code)]
-    rig: Rig,
+    _rig: Rig,
 }
 
 impl LiveDiffRig {
@@ -78,19 +69,13 @@ impl LiveDiffRig {
         font_height: u32,
     ) -> LiveDiffRig {
         let mut rig = Rig::new();
-        let oracle_surface = rig.attach(image, k);
-        let viewbox_surface = rig.attach(image, k);
+        let pair = RenderPair::attach(&mut rig, image, k);
         let model = live_diff_model_font(font_name, Some(font_height));
         let font = ResolvedFont::resolve(&model);
         let region = TextRegion::resolve(&model, image, mode);
         let contract = ScaleContract::new(k, None);
-        let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
-        let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
         LiveDiffRig {
-            oracle_surface,
-            viewbox_surface,
-            oracle,
-            viewbox,
+            pair,
             region,
             font,
             contract,
@@ -98,15 +83,15 @@ impl LiveDiffRig {
             font_height: font_height as f32,
             actor: ActorKey::from("0"),
             state: TextLayerState::default(),
-            rig,
+            _rig: rig,
         }
     }
 
     /// cue を純粋状態へ適用し、Clear は両方式の Clear 適用点も呼ぶ（actor.rs::apply_cue と同一写像）。
     fn apply(&mut self, cue: &TalkCue) {
         if matches!(cue.command, CueCommand::Clear) {
-            self.oracle.clear_cache();
-            self.viewbox.request_clear();
+            self.pair.oracle.clear_cache();
+            self.pair.viewbox.request_clear();
         }
         self.state.apply_cue(cue);
     }
@@ -149,54 +134,24 @@ impl LiveDiffRig {
     /// フレーム（非透明 > 0）／Clear フレーム（全域透明）を区別し、空面同士の vacuous な一致を排除する。
     fn checkpoint(&mut self, label: &str, t: f64, expect_opaque: bool) -> VisibleWindow {
         // state → 可視 prefix → 純粋レイアウト（FixedMetrics で決定論・両方式は同一 canvas を受ける）。
-        let items: Vec<TextItem> = self
-            .state
-            .actor_state(&self.actor)
-            .map(|s| s.items().to_vec())
-            .unwrap_or_default();
-        let visible = self.state.visible_glyphs(&self.actor, t);
-        let lines = LayoutEngine::layout(
-            &items,
-            visible,
+        // オラクル（全域再描画・front）と viewbox（ダーティ描画・back→flip）を同一入力で描く。
+        let (_, _, canvas, window) = state_frame(
+            &self.state,
+            &self.actor,
+            t,
             &self.region,
             self.mode,
             self.font_height,
             &FixedMetrics,
-            WrapPlan::CharByChar,
         );
-        let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
-        let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
-
-        // オラクル（全域再描画・front）と viewbox（ダーティ描画・back→flip）を同一入力で描く。
-        self.oracle
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.oracle_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
-        self.viewbox
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.viewbox_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
-
-        let ob = self
-            .oracle_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
-        let vb = self
-            .viewbox_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
+        let (ob, vb) = self.pair.render(
+            label,
+            &canvas,
+            &window,
+            &self.font,
+            self.mode,
+            &self.contract,
+        );
 
         // 非退化担保: content フレームはオラクル面に非透明ピクセルがある（空面比較=vacuous を排除）。
         if expect_opaque {
@@ -227,55 +182,26 @@ impl LiveDiffRig {
     /// k≠1.0 の実 GPU 描画経路（小数アキュムレータ→whole-pixel blit→実描画→readback）を実際に
     /// 走らせて検証する（従来 k=1.0 でしか走っていなかった経路）。返り値は VisibleWindow。
     fn checkpoint_block_tol(&mut self, label: &str, t: f64, tol: u32) -> VisibleWindow {
-        let items: Vec<TextItem> = self
-            .state
-            .actor_state(&self.actor)
-            .map(|s| s.items().to_vec())
-            .unwrap_or_default();
-        let visible = self.state.visible_glyphs(&self.actor, t);
-        let lines = LayoutEngine::layout(
-            &items,
-            visible,
+        let (_, lines, canvas, window) = state_frame(
+            &self.state,
+            &self.actor,
+            t,
             &self.region,
             self.mode,
             self.font_height,
             &FixedMetrics,
-            WrapPlan::CharByChar,
         );
-        let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
-        let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
 
-        self.oracle
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.oracle_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
-        self.viewbox
-            .render(
-                &canvas,
-                &window,
-                &self.font,
-                self.mode,
-                &self.contract,
-                &mut self.viewbox_surface,
-            )
-            .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
+        let (ob, vb) = self.pair.render(
+            label,
+            &canvas,
+            &window,
+            &self.font,
+            self.mode,
+            &self.contract,
+        );
 
-        let ob = self
-            .oracle_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
-        let vb = self
-            .viewbox_surface
-            .read_back()
-            .unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
-
-        let (w, h) = self.oracle_surface.size();
+        let (w, h) = self.pair.oracle_surface.size();
         // 非退化担保（空面同士の vacuous な一致を排除）。
         assert!(
             opaque_count(&ob) > 0,
@@ -295,6 +221,44 @@ impl LiveDiffRig {
             "{label}: k≠1.0 でブロック軸インク範囲の差が ≤{tol}px（確定 content の量子化位置差 ≤0.5px）\
              ——oracle {os:?} vs viewbox {vs:?}（差 near={d0} far={d1}）"
         );
+        // 外側の 2 辺だけでは中の行の描き残しが映らない。面に掛かる行ごとに、その行の帯の中の
+        // 墨の範囲を見本と比べる（帯＝行矩形のブロック軸 ＋ 可視窓のずれ、× k の物理 px）。
+        let k = self.contract.scale;
+        let block_len = match self.mode {
+            WritingMode::HorizontalTb => h,
+            WritingMode::VerticalRl | WritingMode::VerticalLr => w,
+        };
+        let mut bands = 0;
+        for (i, line) in lines.iter().enumerate() {
+            let (near, far) = match self.mode {
+                WritingMode::HorizontalTb => (line.rect.top, line.rect.bottom),
+                WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                    (line.rect.left, line.rect.right)
+                }
+            };
+            let (lo, hi) = (
+                (near + window.block_offset) * k,
+                (far + window.block_offset) * k,
+            );
+            // 面の中に丸ごと在る行だけを比べる（切れ端は墨の範囲が面の端で決まる）。
+            if lo < 0.0 || hi > block_len as f32 {
+                continue;
+            }
+            let (lo, hi) = (lo.round() as u32, hi.round() as u32);
+            bands += 1;
+            let os = block_axis_ink_span_in(&ob, w, h, self.mode, lo..hi);
+            let vs = block_axis_ink_span_in(&vb, w, h, self.mode, lo..hi);
+            let (Some(os), Some(vs)) = (os, vs) else {
+                panic!(
+                    "{label}: 行 {i} の帯 {lo}..{hi} に墨が無い——oracle {os:?} vs viewbox {vs:?}"
+                );
+            };
+            assert!(
+                os.0.abs_diff(vs.0) <= tol && os.1.abs_diff(vs.1) <= tol,
+                "{label}: 行 {i} の帯 {lo}..{hi} の墨の範囲の差が {tol}px を超える——oracle {os:?} vs viewbox {vs:?}"
+            );
+        }
+        assert!(bands > 0, "{label}: 面の中に丸ごと在る行が無い");
         window
     }
 }
@@ -310,10 +274,9 @@ fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
 /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
 /// byte 完全一致で檻化する（font/サイズを変えたリグで再利用——G4 の AA ガード実効性検証）。
 ///
-/// 【newline-defer】本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み
-/// content が完全リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを
-/// 伴って実体化し、あふれ発火のタイミングは遅延化の影響を受けない（幽霊空行由来の発火が無く
-/// checkpoint 前提は不変）。発火時刻の後退は部分リビール（at 分散）を伴う診断ダンプ側の論点。
+/// 本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み content が完全
+/// リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを伴って実体化し、
+/// あふれは改行の後ろのグリフを追記した checkpoint で発火する。
 fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
     // ① あふれ前（3 行・可視窓は不動）。
     ld.apply_text(0.0, "あ");
@@ -452,7 +415,7 @@ fn live_diff_nonunit_scale_vertical_lr_within_tolerance() {
 
 /// G4: 大サイズフォント（20px・既定 ＭＳ ゴシック）でも全シナリオで oracle↔viewbox byte
 /// 完全一致する——AA こぼれが `DIRTY_GUARD_IMG_PX`(=1 image px) を超えず、ダーティ矩形が
-/// AA を取りこぼさないことを実描画 byte 等価で確認（spike/live-diff は従来 10px のみ）。
+/// AA を取りこぼさないことを実描画 byte 等価で確認（ほかの live-diff の場面は既定の 10px）。
 /// image 寸は `2P+F ≤ block ≤ 3P+F`（P=20+2=22・F=20 ゆえ 64 ≤ 80 ≤ 86）を満たし
 /// ①3行収容／②あふれ。行送りが 25 から 22 へ縮んでも 80 は範囲内ゆえ面寸は据え置き。
 #[test]
@@ -526,6 +489,7 @@ fn run_live_diff_emoji_scenario(mode: WritingMode, image: (u32, u32)) {
 /// オラクル面に色つきの画素が在る（＝絵文字が色つきの字形で窓の中に描かれている）。
 fn assert_emoji_colored(ld: &LiveDiffRig, label: &str) {
     let ob = ld
+        .pair
         .oracle_surface
         .read_back()
         .expect("オラクル read_back 失敗");
@@ -543,90 +507,19 @@ fn live_diff_emoji_matches_oracle_byte_for_byte() {
     run_live_diff_emoji_scenario(WritingMode::VerticalLr, (40, 80));
 }
 
-/// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
-/// 1 グリフ多い content を描く）を入れると read_back の byte 比較が差を検出する——比較器は
-/// ゼロでない差を捕捉できる（＝live-diff はトートロジーでない）。本物のバグ注入ではなく、
-/// 比較器の識別能力を示す最小の細工。
-#[test]
-fn live_diff_detects_injected_divergence() {
-    let mut ld = LiveDiffRig::new(WritingMode::HorizontalTb, (60, 40));
-
-    // オラクルは 1 グリフ・viewbox は 2 グリフ（1 グリフぶん確実に異なる pixel）を同一窓で描く。
-    let items_oracle = glyph_items("■");
-    let (canvas_oracle, window) = build(&items_oracle, &ld.region, ld.mode, ld.font_height);
-    let items_viewbox = glyph_items("■■");
-    let (canvas_viewbox, _) = build(&items_viewbox, &ld.region, ld.mode, ld.font_height);
-
-    ld.oracle
-        .render(
-            &canvas_oracle,
-            &window,
-            &ld.font,
-            ld.mode,
-            &ld.contract,
-            &mut ld.oracle_surface,
-        )
-        .expect("オラクル render 失敗");
-    ld.viewbox
-        .render(
-            &canvas_viewbox,
-            &window,
-            &ld.font,
-            ld.mode,
-            &ld.contract,
-            &mut ld.viewbox_surface,
-        )
-        .expect("viewbox render 失敗");
-
-    let ob = ld
-        .oracle_surface
-        .read_back()
-        .expect("オラクル read_back 失敗");
-    let vb = ld
-        .viewbox_surface
-        .read_back()
-        .expect("viewbox read_back 失敗");
-
-    // 双方とも非退化（空面同士の vacuous な不一致でない）。
-    assert!(
-        opaque_count(&ob) > 0,
-        "オラクル面は非透明（content が描かれている）"
-    );
-    assert!(
-        opaque_count(&vb) > 0,
-        "viewbox 面は非透明（content が描かれている）"
-    );
-    // 比較器は差を検出する（＝live-diff の有効性・トートロジーでない）。
-    assert_ne!(
-        ob, vb,
-        "異なる content（1 グリフ差）は byte 比較で差として検出される——live-diff は有効"
-    );
-}
-
 /// 回帰檻（実機の行下端欠け・D2）: **実 fixture の実フォント Yu Gothic UI** を使い、typewriter
 /// 前進＋あふれスクロールの全フレームで oracle（全域再描画）と viewbox（ダーティスクロール）の
 /// read_back が byte 完全一致することを檻化する。
 ///
 /// このバグ（各行 em ボックス下端の 2〜3px はみ出しインクをダーティが切り落とす）は既定 ＭＳ
 /// ゴシック（はみ出さない字）では出ず、`diag_line_boundary_dropout_vs_oracle`（ＭＳゴシック）が
-/// 見逃していた。Yu Gothic UI は descent 側へインクがこぼれるため、[`crate::viewbox::BLOCK_INK_BLEED_FRACTION`]
-/// による行スロット拡張が無いと diverge する（＝この檻が修正前に落ちる）。fixture が読めない環境
-/// （font 不在等）でも oracle↔viewbox は font に依らず一致するため頑健。実 example の cue `at`
+/// 見逃していた。Yu Gothic UI は descent 側へインクがこぼれるため、行ごとに実測したインクのはみ出し
+/// （[`crate::viewbox::LineOverhang`]・`GetOverhangMetrics`）でダーティを広げないと diverge する。Yu Gothic UI が
+/// 無い機械では代替フォントへ縮退して素通りしてしまうので、前提として赤にする（再監査 R2-D5）。実 example の cue `at`
 /// スケジュール（LINE1 0.0／LINE2 0.5／LINE3 1.2／あふれ 2.0）を忠実再現する。
 #[test]
 fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
-    let fixture_dir = emo2_balloon_root();
-    let read_dec = |name: &str| -> String {
-        let bytes = std::fs::read(fixture_dir.join(name))
-            .unwrap_or_else(|e| panic!("fixture {name} 読取失敗: {e}"));
-        areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)
-    };
-    let model = areka_parsers::balloon::parse_str(
-        &read_dec("descript.txt"),
-        Some(&read_dec("balloons0s.txt")),
-    );
-    let balloon_image = (400u32, 224u32);
-    let resolved = crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
+    let resolved = emo2_balloon_text();
     let mode = resolved.mode;
     let font = &resolved.font;
     let region = &resolved.region;
@@ -636,88 +529,41 @@ fn yugothic_real_fixture_matches_oracle_byte_for_byte() {
         "fixture は横書き（D2 は横書き不具合）"
     );
 
-    let image = (
-        (region.right() - region.left()).ceil() as u32,
-        (region.bottom() - region.top()).ceil() as u32,
-    );
+    let image = region_extent(region);
     let mut rig = Rig::new();
-    let mut oracle_surface = rig.attach(image, 1.0);
-    let mut viewbox_surface = rig.attach(image, 1.0);
+    let mut pair = RenderPair::attach(&mut rig, image, 1.0);
     let contract = ScaleContract::new(1.0, None);
     let config = TextLayerConfig::default();
     let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+    let fonts = crate::draw::FontCatalog::new(&factory).expect("FontCatalog");
+    assert!(
+        fonts.family_for(&["Yu Gothic UI".to_owned()]).is_some(),
+        "実フォント Yu Gothic UI がこの機械に無い。代替フォントへ縮退したまま緑にしない"
+    );
     let metrics = DWriteMetrics::new(&factory, font, mode, &config).expect("DWriteMetrics");
-    let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
-    let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
     // reveal は配送 duration 由来（interval = duration / N）。Text へ N×0.05 を焼き込むと
     // 各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する（chunk 境界は at で gate）。
-    let cue_at = |at: f64, cmd: CueCommand| TalkCue {
-        at,
-        actor: actor.clone(),
-        duration: match &cmd {
-            CueCommand::Text(t) => areka_sakura::cluster::cluster_count(t) as f64 * 0.05,
-            _ => 0.0,
-        },
-        command: cmd,
-    };
-    state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())));
-    state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }));
-    state.apply_cue(&cue_at(
-        0.5,
-        CueCommand::Text("めっちゃええ朝やん！".into()),
-    ));
-    state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }));
-    state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())));
-    for _ in 0..9 {
-        state.apply_cue(&cue_at(2.0, CueCommand::NewLine { ratio: 1.0 }));
-        state.apply_cue(&cue_at(2.0, CueCommand::Text("ほな".into())));
-    }
+    apply_fixture_script(&mut state, &actor, [0.0, 0.5, 1.2, 2.0], 0.05);
 
     // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム）。各フレームで byte 比較。
     let mut checked_opaque = false;
     let mut t = 0.0f64;
     while t <= 3.05 {
-        let visible = state.visible_glyphs(&actor, t);
-        let items: Vec<TextItem> = state
-            .actor_state(&actor)
-            .map(|s| s.items().to_vec())
-            .unwrap_or_default();
-        let lines = LayoutEngine::layout(
-            &items,
-            visible,
-            region,
+        let (visible, _, canvas, window) =
+            state_frame(&state, &actor, t, region, mode, font.height, &metrics);
+        let (ob, vb) = pair.render(
+            "Yu Gothic UI 実 fixture",
+            &canvas,
+            &window,
+            font,
             mode,
-            font.height,
-            &metrics,
-            WrapPlan::CharByChar,
+            &contract,
         );
-        let window = LayoutEngine::visible_window(&lines, region, mode);
-        let canvas = ContentCanvas::from_layout(&lines, region, mode);
-        oracle
-            .render(&canvas, &window, font, mode, &contract, &mut oracle_surface)
-            .expect("oracle render");
-        viewbox
-            .render(
-                &canvas,
-                &window,
-                font,
-                mode,
-                &contract,
-                &mut viewbox_surface,
-            )
-            .expect("viewbox render");
-        let ob = oracle_surface.read_back().expect("oracle read_back");
-        let vb = viewbox_surface.read_back().expect("viewbox read_back");
         if ob != vb {
-            let (w, h) = oracle_surface.size();
-            let diff_rows: Vec<u32> = (0..h)
-                .filter(|&y| {
-                    let r = ((y * w) * 4) as usize..(((y + 1) * w) * 4) as usize;
-                    ob[r.clone()] != vb[r]
-                })
-                .collect();
+            let (w, h) = pair.oracle_surface.size();
+            let diff_rows = diff_rows(&ob, &vb, w, h);
             panic!(
                 "Yu Gothic UI 実 fixture で viewbox が oracle と diverge（行下端はみ出しインクの切り落とし・D2）: \
                  t={t:.2} visible={visible} 相違行 y={diff_rows:?}"

@@ -1,4 +1,4 @@
-use super::test_support::{IMAGE, broken_lines, model_rect};
+use super::test_support::{IMAGE, broken_lines, glyph, model_rect, rects};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -25,8 +25,7 @@ use crate::writing::WritingMode;
 /// 共通前提: 文字描画開始点 `(0, 0)` 宣言・validrect `top 0 / bottom 34 / left 0 / right 400`。
 ///
 /// あふれ境界（横書き＝`validrect.bottom`）が **34** ＝ちょうど 3 行ぶん（行下端 10／22／34）に
-/// なるので、4 行目以降が超過する。境界は「3 行ちょうど」という意図を保つため新しい格子へ
-/// 導き直した（旧格子は pitch 13 の 3 行目下端 36・新格子は pitch 12 の 3 行目下端 34）。
+/// なるので、4 行目以降が超過する。
 /// `layout_visible_window_tests.rs` の既存檻と同一の矩形を
 /// 使うのは、**`\_l` の有無だけが差分になる**ようにするためである。
 fn region_overflow() -> TextRegion {
@@ -61,11 +60,6 @@ fn layout_h(items: &[TextItem], region: &TextRegion) -> Vec<PositionedLine> {
     )
 }
 
-/// 全角グリフ 1 個（'あ'・advance 10）。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
 /// `\_l[,@<value>lh]`（X 省略・Y は `@` 相対の行送り単位＝**後戻りさせるための書式**）。
 fn cursor_back_lh(value: f32) -> TextItem {
     TextItem::CursorMove {
@@ -75,14 +69,6 @@ fn cursor_back_lh(value: f32) -> TextItem {
             unit: CursorUnit::Lh,
         },
     }
-}
-
-/// 行矩形を `(left, top, right, bottom)` の組へ落とす（期待値を逐語で並べるため）。
-fn rects(lines: &[PositionedLine]) -> Vec<(f32, f32, f32, f32)> {
-    lines
-        .iter()
-        .map(|l| (l.rect.left, l.rect.top, l.rect.right, l.rect.bottom))
-        .collect()
 }
 
 // ── V8: 後戻り行があるときの可視窓（Requirement 2.8） ──
@@ -178,7 +164,7 @@ fn backward_line_after_overflow_stops_the_untouched_overflow_formula() {
 ///
 /// あふれ判定:
 /// - `last_far` ＝ 7 行目の bottom ＝ **58** > 34 → 発火。
-/// - `origin` ＝先頭行の近端 ＝ **0**。条件は `58 − (top_i − 0) <= 34` すなわち `top_i >= 24`。
+/// - `origin` ＝描画範囲の開始側（`block_origin`＝文字描画開始点の y）＝ **0**。条件は `58 − (top_i − 0) <= 34` すなわち `top_i >= 24`。
 /// - 先頭から最初に満たすのは 3 行目（top 24）＝ index **2**。
 /// - `block_offset = −block_dir × (24 − 0) = −24.0`（横書きの `block_dir` は +1）。
 ///
@@ -365,22 +351,24 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
 ///
 /// ⑴ **内容の無い行は 1 本も出ない**: `PositionedLine::glyphs` がそれ自体で内容の有無を
 ///    表しており、`Vec<PositionedLine>` に**内容の無い行は 1 本も現れない**（行の確定は
-///    `finish_pending_line` の `if current.is_empty() { return; }` を通るため）。よって
+///    入口のどれもが閉じる前に行が空でないことを確かめるため・⑵）。よって
 ///    Requirement 6.3 が言う「`\_l` 以外で分割された内容の無いものは行と見なさない」は、
 ///    現状の行境界がそのまま満たしている——`\c[line]` 自体は実装しない（開発者裁定
 ///    2026-09-05: SSP はバルーン文字領域をビットマップで保持し areka はグリフを保持する＝
 ///    哲学が異なり同様にはなりえない）ので、配置層の行境界は**内容のある行だけ**を供給する。後戻りの `\_l` で分割された行も例外ではない。
 ///
-/// ⑵ **行を閉じる場所は有限で局所である**: `finish_line` は `layout.rs` の私有関数で、
+/// ⑵ **行を閉じる場所は有限で局所である**: `finish_line` は `layout_scan.rs` の私有関数で、
 ///    呼び出しは **3 箇所**（折返しの行送り・最終行の確定・`finish_pending_line` の内側）、
 ///    `finish_pending_line` の呼び出しは **2 箇所**（保留フラッシュ・`LineBreak` 腕の
-///    先行実体化）。⑴ の「内容の無い行は出ない」が成り立つのは、この 5 箇所の入口が
-///    `finish_pending_line` の `if current.is_empty() { return; }` という**一つの門に集まっている**
-///    からである。
+///    先行実体化）。⑴ の「内容の無い行は出ない」が成り立つのは、行が空かを確かめる場所が
+///    **3 つ**あり、どの入口もそのどれかを通るからである——折返しの行送り（`layout_scan_glyph.rs`
+///    の `feed || over_hard`・どちらも `!current.is_empty()` を条件に含む）と最終行の確定
+///    （`layout_scan.rs` の `if !self.current.is_empty()`）は自分で確かめ、残りは
+///    `finish_pending_line` の `if current.is_empty() { return; }` を通る。
 ///
 /// 件数を逐語で持つのは、**行を閉じる入口が黙って増える経路を塞ぐ**ためである。走査する語
-/// `finish_line(`／`finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout.rs` の
-/// 説明文は括弧を伴わない `[finish_pending_line]` の形で書かれている）。
+/// `finish_line(`／`finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout_scan.rs`・
+/// `layout_scan_glyph.rs` の説明文は括弧を伴わない `[finish_pending_line]` の形で書かれている）。
 #[test]
 fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
     // ⑴ 内容の無い行は 1 本も出ない（後戻りの `\_l` で分割された行を含む）。
@@ -435,9 +423,13 @@ fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
         3,
         "`finish_pending_line` は定義 1・呼び出し 2——同上"
     );
-    // 門が同一ファイル内の私有関数に閉じていること（外から別経路で行を開かれない）。
+    // 門が走査のモジュール（`layout_scan.rs` とその子 `layout_scan_glyph.rs`）の私有関数に閉じていること
+    // （外から別経路で行を開かれない）。
+    // 行頭の `fn` だけを数える（`pub(super) fn` などの可視性つきは通さない）。
     assert!(
-        LAYOUT_SRC.contains("fn finish_pending_line("),
-        "`finish_pending_line` は `layout.rs` の私有関数（呼び出し元は同ファイルに閉じている）"
+        LAYOUT_SRC
+            .lines()
+            .any(|l| l.starts_with("fn finish_pending_line(")),
+        "`finish_pending_line` は `layout_scan.rs` の私有関数（呼び出し元は走査のモジュールに閉じている）"
     );
 }

@@ -18,7 +18,7 @@
 //!
 //! ## 負値=反対辺基準（ukadoc 脚注 *1 正典）
 //!
-//! `resolve(v, extent) = if v >= 0 { v } else { extent + v }`
+//! `resolve_coord(v, extent) = if v >= 0 { v } else { extent + v }`
 //! （「マイナス座標はベース画像の右下からの相対」）。
 //!
 //! **`validrect` の右辺・下辺だけは 0 も反対辺基準**（要件 6）: `resolve_far_edge(v, extent)
@@ -70,15 +70,15 @@ pub struct PhysicalPx(pub f32);
 ///
 /// **image px 原寸はここでは導出しない**。作者画像空間の原寸は emo-present が native 原寸として
 /// 正確に保持しており（`TextSlotView::surface_size`）、`TextSlotBinding::from_view` がそれを
-/// そのまま透過する。かつて `image_size = round(物理 / k)` と逆写像で復元していたが、順写像の
-/// ±0.5 物理px 誤差が k で割られて ±0.5/k 画像px へ増幅されるため **k<1 で 1px ずれた**
-/// （2026-07-30 撤去）。
+/// そのまま透過する。`image_size = round(物理 / k)` と逆写像で復元すると、順写像の
+/// ±0.5 物理px 誤差が k で割られて ±0.5/k 画像px へ増幅され、**k<1 で 1px ずれる**ためである。
 ///
 /// k の適用は TextSurface 生成寸と D2D `SetTransform(scale(k))` の一点のみ
 /// （k の多重適用・混在を構造排除・design.md 不変条件 (3)）。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScaleContract {
-    /// バルーン surface と同一の合成スケール k（`TextSlotView.scale` 由来・現行 1.0）。
+    /// バルーン surface と同一の合成スケール k（`TextSlotView.scale` 由来・窓の DPI から決まる
+    /// ので 1.0 とは限らない）。
     pub scale: f32,
     /// `descript_balloon.dpi`（省略時 96・参考情報として保持。k の算出は上流責務）。
     pub author_dpi: u32,
@@ -164,8 +164,8 @@ impl ScaleContract {
     /// 裁定の出典は spec **`areka-P0-scale-exact-rational`**（完了後は `.kiro/specs/completed/` 配下へ
     /// 移るため、パスではなく spec 名で辿る）。裁定の前提（差は 0 か 1・−1 は起きない・件数
     /// 81/81/0×21）は決定論テスト `tests/physical_extent_arbitration_test.rs` が固定しており、前提が
-    /// 崩れれば赤になる（[[deferral-requires-verified-owner]]: 担当 spec は本仕様として実在し、裁定は
-    /// 2026-08-14 に下りている——黙って先送りにはしていない）。
+    /// 崩れれば赤になる。担当 spec は実在し、裁定は 2026-08-14 に下りている——黙って先送りにした
+    /// 例外ではない。
     ///
     /// ## 転記用の正典文面（他所へはこの一文をそのまま写す）
     ///
@@ -217,16 +217,20 @@ pub struct TextRegion {
     ignored_origin: (Option<f32>, Option<f32>),
 }
 
-/// 行内軸の名前（横書き＝`"x"`・縦書き 2 方向＝`"y"`）——折返し警告の `axis` 欄の値。
-///
-/// 軸の割り当ては [`TextRegion::resolve`] の折返し基準・遠辺の解決（正準表）と同じであり、
-/// **両者は必ず一致していなければならない**（片方だけを直すと、警告の軸欄が実際に解決した
-/// 軸と食い違う）。檻は `actor_region_warn_tests.rs` の横書き・縦書き 2 本が持つ。
-pub(crate) fn inline_axis_name(mode: WritingMode) -> &'static str {
+/// 行内軸の正準表（横書き＝`"x"`・縦書き 2 方向＝`"y"`）: 軸の名と、その軸に割り当てる値を
+/// 1 つの `match` から返す。[`TextRegion::resolve`] の折返し基準・遠辺の割り当てと
+/// [`inline_axis_name`] はどちらもここを通るので、警告の軸欄と実際に解決した軸は食い違わない。
+fn pick_inline_axis<T>(mode: WritingMode, x: T, y: T) -> (&'static str, T) {
     match mode {
-        WritingMode::HorizontalTb => "x",
-        WritingMode::VerticalRl | WritingMode::VerticalLr => "y",
+        WritingMode::HorizontalTb => ("x", x),
+        WritingMode::VerticalRl | WritingMode::VerticalLr => ("y", y),
     }
+}
+
+/// 行内軸の名前（横書き＝`"x"`・縦書き 2 方向＝`"y"`）——折返し警告の `axis` 欄の値。
+/// 表は [`pick_inline_axis`] の 1 つ。檻は `actor_region_warn_tests.rs` の横書き・縦書き 2 本が持つ。
+pub(crate) fn inline_axis_name(mode: WritingMode) -> &'static str {
+    pick_inline_axis(mode, (), ()).0
 }
 
 impl TextRegion {
@@ -251,28 +255,21 @@ impl TextRegion {
     ///   `right`・縦書き＝解決後の `bottom`。折返し閾値がこの遠辺の**外**に解決されても
     ///   本関数は何も記録しない——粗さを知らせる警告は actor の登録口が書く（下の節）。
     ///
-    /// ## 粗いバルーンの警告は本関数では書かない（2026-09-06・spec `areka-P0-emo2-conformance-e2e`）
+    /// ## 粗いバルーンの警告は本関数では書かない
     ///
-    /// 折返し基準が遠辺の外に解決されたことを知らせる `warn!` は、かつて本関数の中にあった。
-    /// しかし本関数は**毎フレーム**呼ばれる——再追従シーム（`actor.rs` の
-    /// `TextLayerRuntime::refresh_actor_binding`）が churn ガードの判定キーを得るために
-    /// 毎フレーム解き直すためで、実機の一周走行では生ログ 30,837 行のうち **27,908 行**が
-    /// この 1 種類の警告になった（走行 A の実測・要件 14）。
-    /// （以上は当時の経緯。今の再追従は入力が前と同じなら解き直さないので、本関数が走るのは
-    /// 装着と入力の変わり目だけである・spec `real-run-log-noise` 要件 1.1。）
-    ///
-    /// 「読み込み（装着）1 回につき 1 件」という意味を持つ層は、解決する側ではなく **actor の
-    /// 登録口**（`actor.rs` の `TextLayerRuntime::register_actor`）である。ゆえに本関数から
-    /// 粗さの記録を外し、登録口が「解決済み領域の値が新しく決まったとき」だけ 1 件書く。
-    /// 文言と 4 つの欄（`balloon`・`axis`・`wrap_threshold`・`inline_limit`）は移動の前後で
-    /// 1 文字も変えていない。
+    /// 本関数は装着のたびと、再追従（`actor_attach.rs` の
+    /// `TextLayerRuntime::refresh_actor_binding`）の入力が変わったときに走る。どちらも
+    /// 「読み込み（装着）1 回」とは限らないので、折返し基準が遠辺の外に解決されたことを知らせる
+    /// `warn!` は本関数では書かない。書くのは **actor の登録口**（`actor_attach.rs` の
+    /// `TextLayerRuntime::register_actor` が呼ぶ `warn_coarse_wrap_threshold`）で、解決済み領域の
+    /// 値が新しく決まったときだけ 1 件書く。
     ///
     /// 未指定成分の縮退の `debug!` は別の症状の記録であり、そのまま残す。
     ///
-    /// ## 潰れた validrect の警告も本関数では書かない（2026-10-16・spec `areka-P0-balloon-text-bugs` 件 2）
+    /// ## 潰れた validrect の警告も本関数では書かない
     ///
-    /// 潰れた validrect（幅か高さが 0 以下）の `warn!` も、かつて本関数の中にあった。上と同じ
-    /// 理由で毎フレーム出続けたため外した。判定は [`is_collapsed`](Self::is_collapsed) が持ち、
+    /// 潰れた validrect（幅か高さが 0 以下）の `warn!` も、上と同じ理由で本関数では書かない
+    /// （spec `areka-P0-balloon-text-bugs` 件 2）。判定は [`is_collapsed`](Self::is_collapsed) が持ち、
     /// 記録は actor の登録口が「潰れた」「戻った」の状態の変わり目に 1 回ずつ書く。記録の無い
     /// 縮退経路にはならない。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32), mode: WritingMode) -> TextRegion {
@@ -312,19 +309,16 @@ impl TextRegion {
         // ── 折返し基準（soft）と描画範囲の遠辺（hard）: 行内軸は WritingMode 依存（正準表） ──
         // 遠辺は上で解決済みの right／bottom をそのまま採る（モデルから引き直さない——
         // 引き直すと未指定成分の縮退や負値解決が 2 か所に増える）。
-        // 軸の割り当ては [`inline_axis_name`] と同じ表であり、両者は一致していなければならない。
+        // 軸の割り当ては [`inline_axis_name`] と同じ表（[`pick_inline_axis`]）を通る。選ぶのは
+        // 解決の入力だけで、解決（未指定の `debug!` を含む）は選んだ軸の 1 回だけ。
         // 折返し基準が遠辺の外でも**ここでは記録しない**——装着と入力の変わり目に呼ばれる
         // 本関数に粗さの記録を持たせず、actor の登録口が装着 1 回につき 1 件書く（要件 14.1）。
-        let (wrap_threshold, inline_limit) = match mode {
-            WritingMode::HorizontalTb => (
-                resolve_or(model.wordwrappoint().x(), width, right, "wordwrappoint.x"),
-                right,
-            ),
-            WritingMode::VerticalRl | WritingMode::VerticalLr => (
-                resolve_or(model.wordwrappoint().y(), height, bottom, "wordwrappoint.y"),
-                bottom,
-            ),
-        };
+        let (_, (wrap_v, extent, inline_limit, key)) = pick_inline_axis(
+            mode,
+            (model.wordwrappoint().x(), width, right, "wordwrappoint.x"),
+            (model.wordwrappoint().y(), height, bottom, "wordwrappoint.y"),
+        );
+        let wrap_threshold = resolve_or(wrap_v, extent, inline_limit, key);
 
         TextRegion {
             left,
@@ -404,7 +398,7 @@ impl TextRegion {
     /// 2 値は独立に読める。粗いバルーン定義では折返し基準がこの遠辺の外に解決されることが
     /// 実際にあり（出荷 fixture `emo2-kakukaku` の相方側は 254 > 240）、その場合も
     /// [`resolve`](Self::resolve) は両方の値をそのまま保持する（丸め込まない）。粗さを知らせる
-    /// `warn!` は actor の登録口（`actor.rs` の `TextLayerRuntime::register_actor`）が装着
+    /// `warn!` は actor の登録口（`actor_attach.rs` の `TextLayerRuntime::register_actor`）が装着
     /// 1 回につき 1 件書く。唯一の例外は行頭の 1 グリフで、遠辺より広い 1 文字は無限折返しを
     /// 避けるために置かれる——その判断は配置層（`layout`）の領分であり、本層は値を提供する
     /// だけである。
@@ -422,7 +416,7 @@ impl TextRegion {
     /// （spec `areka-P0-cursor-tag-canon` の要件 4.3／4.4）。
     ///
     /// validrect は画像の部分矩形にすぎないので、**この値を validrect の幅・高さや辺と
-    /// 取り違えてはならない**（檻: 本ファイルの
+    /// 取り違えてはならない**（檻: `region_tests.rs` の
     /// `image_size_is_the_balloon_image_not_the_validrect_or_origin`）。
     pub fn image_size(&self) -> (f32, f32) {
         self.image_size

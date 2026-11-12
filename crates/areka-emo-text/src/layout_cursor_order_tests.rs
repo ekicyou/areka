@@ -1,6 +1,5 @@
-use super::test_support::{IMAGE, inline_positions, model};
+use super::test_support::{inline_positions, newline, zero_origin_region};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
-use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 
@@ -17,11 +16,7 @@ use crate::writing::WritingMode;
 
 /// 横書き・文字描画開始点 (0, 0) の共通前提で layout を回す。
 fn layout_h(items: &[TextItem], visible: usize) -> Vec<PositionedLine> {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     LayoutEngine::layout(
         items,
         visible,
@@ -31,11 +26,6 @@ fn layout_h(items: &[TextItem], visible: usize) -> Vec<PositionedLine> {
         &FixedMetrics,
         WrapPlan::CharByChar,
     )
-}
-
-/// `\n`（ratio 1.0＝1 行ぶんの送り）。
-fn newline() -> TextItem {
-    TextItem::LineBreak { ratio: 1.0 }
 }
 
 /// `\_l[@10,]`（X だけ現在位置から +10px・Y は省略＝動かさない）。
@@ -175,7 +165,7 @@ fn written_order_decides_absolute_cursor_against_newline() {
 /// 3. `\_l[,100]`: Y は絶対なので実効位置に依らず 0 + 100 = 100 を保留する。
 ///    **このとき Σ=1 はまだ保留に残っている**（`\_l` の腕は保留改行を消費しない）。
 /// 4. `\n`: 保留カーソルがあるので、この改行を積む前に**保留を完全に実体化する**——
-///    (1) 現在行 [あ\0] を確定 →(2) Σ=1 を消費して行送り 0 + 12 = 12・行内は 0 へ →
+///    (1) 現在行 [あ@0] を確定 →(2) Σ=1 を消費して行送り 0 + 12 = 12・行内は 0 へ →
 ///    (3) カーソルの Y=100 がそれに後勝ちして行送り 100。そのうえで Σ=1 を積み直す。
 /// 5. `あ`: フラッシュで (2) が効き、行送り 100 + 12 = **112**。
 ///
@@ -201,7 +191,7 @@ fn written_order_applies_newlines_before_and_after_the_cursor() {
     assert_eq!(lines[0].rect.top, 0.0);
     assert_eq!(
         lines[1].rect.top, 112.0,
-        "正典値（4.3 の書かれた順による・DD-11）: 前に書かれた `\\n` が (2) で先に効き、         `\\_l` の 100 が (3) で後勝ちし、後に書かれた `\\n` の送り 12 が最後に乗る。         (2) を走らせないと Σ が漏れて 124.0・4.3 前は 100.0 だった"
+        "正典値（4.3 の書かれた順による・DD-11）: 前に書かれた `\\n` が (2) で先に効き、`\\_l` の 100 が (3) で後勝ちし、後に書かれた `\\n` の送り 12 が最後に乗る。(2) を走らせないと Σ が漏れて 124.0・4.3 前は 100.0 だった"
     );
     assert_eq!(
         inline_positions(&lines[1]),

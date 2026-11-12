@@ -8,10 +8,14 @@
 //! | § | 内容 | 要件 |
 //! |---|---|---|
 //! | §1 | 既定の見た目の計測値が装飾導入前と同一 | 11.1, 11.3 |
-//! | §2 | 大きさ・太字が計測値に効く | 7.10, 11.1 |
+//! | §2 | 大きさが計測値に効く（太字は §3 が鍵の違いを・§4 が送り量を見る） | 7.10, 11.1 |
 //! | §3 | 試験用書式は計測鍵ごとに 1 度だけ生成 | 11.3 |
 //! | §4 | 計測値＝装飾入りで組んだ行の実際の文字送り量 | 11.3, 15.5 |
-//! | §5 | 共有の台帳と束縛書式の解決経路 | 9.8, 11.3 |
+//! | §5 | 共有の台帳の構築口（束縛書式が候補列の解決を通ることは §7 が太さで見る） | 9.8, 11.3 |
+//! | §6 | 縦書きの em の箱の置き場の実測 | spec vertical-choice-hover-band 4.2, 6.3 |
+//! | §7 | 束縛書式の太さ・斜体（檻 F1） | spec emo-text-dwrite-fidelity 3.10, 4.8, 4.9 |
+//! | §8 | 計測鍵の試験用書式の顔（檻 F2〜F4） | spec emo-text-dwrite-fidelity 4.1, 4.2, 4.4, 4.10 |
+//! | §9 | 横書きの字の箱の上端の実測 | spec emo-text-line-gap 2.1, 4.1, 4.2 |
 //!
 //! **較正**（要件 15.5・実測 2026-09-12・摂動はいずれも取り消し済み）——実装を次の
 //! 4 通りに壊すと、それぞれ本ファイルの述語が赤になることを確かめてある。
@@ -34,7 +38,10 @@ use windows::Win32::Graphics::DirectWrite::{
 use windows::core::HSTRING;
 use wintf::com::dwrite::{DWriteTextLayoutExt, dwrite_create_factory};
 
-use super::super::test_support::{default_metrics, empty_font, model_with_font};
+use super::super::test_support::{
+    PASTA_FONT_NAMES, default_metrics, empty_font, face_of, model_with_font, require_yu_gothic,
+    with_log_cage,
+};
 use super::super::{LineLayoutStore, ResolvedFont, create_text_format};
 use super::DWriteMetrics;
 use crate::layout::GlyphMetrics;
@@ -85,11 +92,11 @@ fn the_default_look_measures_exactly_what_it_measured_before_decorations_existed
         ADVANCE_ASCII_AT_12,
         "既定の見た目の半角の送り幅が装飾導入前の実測値から動いた"
     );
-    // 束縛書式の経路（従来の入口）とも同値——2 つの入口が割れていない。
+    // 束縛書式の経路（`advance` の入口）とも同値——2 つの入口が割れていない。
     assert_eq!(m.advance_styled("あ", &look), m.advance("あ", look.height));
 }
 
-// ────────────────────────── §2 大きさ・太字が計測値に効く（R7.10／R11.1）
+// ────────────────────────── §2 大きさが計測値に効く（R7.10／R11.1）
 
 /// 大きさを 2 倍にすると送り幅が増える。**既定を先に測ってから** styled を測る——
 /// 記憶の鍵が文字だけへ戻ると、ここで既定の値が返ってきて赤くなる。
@@ -112,15 +119,6 @@ fn doubling_the_size_widens_the_advance_even_after_the_default_was_measured_firs
         ADVANCE_FULLWIDTH_AT_12 * 2.0,
         "等幅の全角は大きさに正比例する"
     );
-}
-
-/// 太字は送り幅を縮めない（同じ鍵の別項目が計測へ届いていることの対照）。
-#[test]
-fn bold_does_not_shrink_the_advance() {
-    let m = metrics();
-    let base = m.advance_styled("あ", &default_look());
-    let bold = m.advance_styled("あ", &look_with(|l| l.bold = true));
-    assert!(bold >= base, "太字の送り幅 {bold} が既定 {base} より狭い");
 }
 
 // ────────────────────────── §3 試験用書式は鍵ごとに 1 度だけ（R11.3）
@@ -176,6 +174,78 @@ fn the_measurement_cache_is_keyed_by_character_and_measurement_key() {
     );
     m.advance_styled("あ", &big);
     assert_eq!(m.cached_probe_count(), 2, "同じ組は測り直さない");
+}
+
+/// 台帳の台詞の番号が進むと、既定の鍵以外の試験用書式と字幅を捨てて作り直す（作り直しの数が
+/// 増え、測った値は同じ）。既定の鍵の字幅は残す（指摘 11・表の寿命は 1 つの台詞のあいだ）。
+#[test]
+fn a_new_talk_rebuilds_non_default_formats_and_keeps_default_advances() {
+    let m = metrics();
+    let big = look_with(|l| l.height = 24.0);
+    m.advance_styled("あ", &default_look());
+    let before = m.advance_styled("あ", &big);
+    assert_eq!((m.probe_format_creations(), m.cached_probe_count()), (1, 2));
+
+    m.fonts().forget_talk();
+    assert_eq!(
+        m.advance_styled("い", &default_look()),
+        ADVANCE_FULLWIDTH_AT_12
+    );
+    assert_eq!(
+        m.cached_probe_count(),
+        2,
+        "既定の鍵の「あ」は残り、既定でない鍵の「あ」は捨てた（残った 1＋新しい「い」1）"
+    );
+    assert_eq!(m.advance_styled("あ", &big), before, "測った値は同じ");
+    assert_eq!(
+        m.probe_format_creations(),
+        2,
+        "次の台詞では既定でない鍵の試験用書式を作り直す"
+    );
+}
+
+/// 台詞の切れ目で残す既定の鍵の字幅は、1 つのスカラーの字だけ（再監査 R1-C1）。結合文字や
+/// ZWJ で繋いだ字（クラスタ）は組み合わせに頭打ちが無いので、台詞をまたいで覚えない。
+#[test]
+fn a_new_talk_keeps_only_single_scalar_default_advances() {
+    let m = metrics();
+    for text in ["あ", "か\u{3099}", "\u{1F44D}\u{1F3FD}"] {
+        m.advance_styled(text, &default_look());
+    }
+    assert_eq!(m.cached_probe_count(), 3);
+
+    m.fonts().forget_talk();
+    m.advance_styled("い", &default_look());
+    assert_eq!(
+        m.cached_probe_count(),
+        2,
+        "「あ」と新しい「い」だけが残り、複数のスカラーの字は捨てた"
+    );
+}
+
+/// 作れない鍵（高さ 0＝DirectWrite が断る）は失敗を覚え、2 回測っても `error!` は 1 件で縮退の
+/// 字幅を返す。次の台詞の切れ目で 1 度だけ試し直す（指摘 12・記録は台詞ごとに高々 1 回）。
+#[test]
+fn an_unbuildable_key_logs_one_error_per_talk() {
+    let m = metrics();
+    let broken = look_with(|l| l.height = 0.0);
+    let (advances, _, errors) = with_log_cage(|| {
+        [
+            m.advance_styled("あ", &broken),
+            m.advance_styled("い", &broken),
+        ]
+    });
+    assert_eq!(
+        advances,
+        [0.0, 0.0],
+        "縮退の字幅（その見た目の大きさ 0）で続ける"
+    );
+    assert_eq!(errors, 1, "覚えた失敗は台詞のあいだ試し直さない");
+    assert_eq!(m.cached_probe_count(), 0, "失敗は成功の数に数えない");
+
+    m.fonts().forget_talk();
+    let (_, _, errors) = with_log_cage(|| m.advance_styled("あ", &broken));
+    assert_eq!(errors, 1, "次の台詞では試し直す");
 }
 
 // ────────────────────────── §4 計測値＝装飾入りで組んだ行の送り量（R11.3／R15.5）
@@ -273,20 +343,6 @@ fn styled_measurements_match_the_cluster_advances_of_a_decorated_line() {
 
 // ────────────────────────── §5 較正の対照（R15.5）
 
-/// 束縛書式の生成が候補列の解決を通る（要件 9.8——バルーン定義の候補列にも効く）。
-///
-/// 振る舞いでは映らない（単一名のバルーン定義では解決しても同じ名前が返る）ので、
-/// 経路そのものを字面で固定する。試験用書式の側の家族名の入口は
-/// `draw_format_metrics_tests.rs` の家族名の檻が持つ。
-#[test]
-fn the_bound_format_is_built_from_the_catalog_resolved_family() {
-    const SRC: &str = include_str!("draw_metrics.rs");
-    assert!(
-        SRC.contains("let picked = fonts.pick(font);"),
-        "束縛書式が候補列の解決（FontCatalog::pick）を通っていない"
-    );
-}
-
 /// 共有の台帳を受け取る構築口が、自前の台帳を作る構築口と同じ計測値を返す。
 #[test]
 fn the_shared_catalog_constructor_measures_the_same_as_the_owning_one() {
@@ -337,8 +393,7 @@ fn vertical_em_box_left_is_measured_from_the_column_baseline() {
 
     use crate::layout::column_centred_em_box_left;
 
-    const PASTA: &str =
-        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+    const PASTA: &str = PASTA_FONT_NAMES;
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let bound = |name: &str, size: u32, mode: WritingMode| {
         let font = ResolvedFont::resolve(&model_with_font(Font::new(
@@ -349,7 +404,7 @@ fn vertical_em_box_left_is_measured_from_the_column_baseline() {
         DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics 生成")
     };
-    require_yu_gothic(&bound(PASTA, 20, WritingMode::VerticalRl));
+    require_yu_gothic(bound(PASTA, 20, WritingMode::VerticalRl).fonts());
     for name in ["Yu Gothic UI", "ＭＳ ゴシック", PASTA] {
         for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
             for size in [20u32, 28] {
@@ -403,10 +458,12 @@ fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
     use areka_parsers::balloon::parse_str;
     use windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE_NORMAL;
 
-    const PASTA: &str = "font.name,游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ\r\n";
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let bound = |extra: &str| {
-        let font = ResolvedFont::resolve(&parse_str(&format!("{PASTA}{extra}"), None));
+        let font = ResolvedFont::resolve(&parse_str(
+            &format!("font.name,{PASTA_FONT_NAMES}\r\n{extra}"),
+            None,
+        ));
         DWriteMetrics::new(
             &factory,
             &font,
@@ -416,14 +473,7 @@ fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
         .expect("DWriteMetrics 生成")
     };
     let plain = bound("");
-    assert!(
-        plain
-            .fonts()
-            .family_for(&["Yu Gothic".to_owned()])
-            .is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
+    require_yu_gothic(plain.fonts());
     let weight_style =
         |m: &DWriteMetrics| unsafe { (m.format.GetFontWeight().0, m.format.GetFontStyle()) };
 
@@ -446,37 +496,6 @@ fn f1_bound_format_carries_the_resolved_weight_and_the_default_bold_italic() {
 
 // ────────────────────────── §8 計測鍵の試験用書式の顔（spec emo-text-dwrite-fidelity 檻 F2〜F4・要件 4.1／4.2／4.4／4.10）
 
-/// 書式の家族名・太さ・斜体。
-fn face_of(
-    format: &windows::Win32::Graphics::DirectWrite::IDWriteTextFormat,
-) -> (
-    String,
-    u32,
-    windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE,
-) {
-    unsafe {
-        let len = format.GetFontFamilyNameLength() as usize;
-        let mut buf = vec![0u16; len + 1];
-        format
-            .GetFontFamilyName(&mut buf)
-            .expect("GetFontFamilyName");
-        (
-            String::from_utf16_lossy(&buf[..len]),
-            format.GetFontWeight().0 as u32,
-            format.GetFontStyle(),
-        )
-    }
-}
-
-/// 游ゴシックがこの機械に無ければ赤で止める（中太の期待値が代替フォントで緑にならないように）。
-fn require_yu_gothic(m: &DWriteMetrics) {
-    assert!(
-        m.fonts().family_for(&["Yu Gothic".to_owned()]).is_some(),
-        "実フォント 游ゴシック（Yu Gothic）がこの機械に無い。本試験の期待値は当該フォントの\
-         中太を前提にしているので、代替フォントへ縮退したまま緑にしない"
-    );
-}
-
 /// F2（4.2・4.4）: 候補列「Yu Gothic Medium」の計測鍵の試験用書式は 500、同じ鍵の太字は 700、
 /// 斜体は ITALIC。
 ///
@@ -486,8 +505,8 @@ fn f2_probe_format_carries_the_weight_of_the_gdi_named_face() {
     use windows::Win32::Graphics::DirectWrite::DWRITE_FONT_STYLE_NORMAL;
 
     let m = metrics();
-    require_yu_gothic(&m);
-    let medium = look_with(|l| l.name = vec!["Yu Gothic Medium".into()]);
+    require_yu_gothic(m.fonts());
+    let medium = look_with(|l| l.name = vec!["Yu Gothic Medium".into()].into());
     let probe =
         |look: &TextLook| face_of(&m.probe_format_for(&look.font_key()).expect("試験用書式"));
 
@@ -532,7 +551,7 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
     use super::super::{FontCatalog, FontFace};
 
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
-    require_yu_gothic(&metrics());
+    require_yu_gothic(metrics().fonts());
     let fonts = Rc::new(FontCatalog::with_faces(
         &[],
         &[(
@@ -553,7 +572,7 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
     )
     .expect("DWriteMetrics 生成");
     let failed = TextLook {
-        name: vec!["NoSuchFontXYZ".into()],
+        name: vec!["NoSuchFontXYZ".into()].into(),
         ..font.looks.default.clone()
     };
     let bold = TextLook {
@@ -581,8 +600,7 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
 fn horizontal_char_box_top_is_measured_from_the_line_baseline() {
     use areka_parsers::balloon::{Font, FontColor};
 
-    const PASTA: &str =
-        "游ゴシック Medium,Yu Gothic Medium,游ゴシック,Yu Gothic,BIZ UDPゴシック,メイリオ";
+    const PASTA: &str = PASTA_FONT_NAMES;
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let bound = |name: &str, size: u32, mode: WritingMode| {
         let font = ResolvedFont::resolve(&model_with_font(Font::new(
@@ -593,7 +611,7 @@ fn horizontal_char_box_top_is_measured_from_the_line_baseline() {
         DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
             .expect("DWriteMetrics 生成")
     };
-    require_yu_gothic(&bound(PASTA, 20, WritingMode::HorizontalTb));
+    require_yu_gothic(bound(PASTA, 20, WritingMode::HorizontalTb).fonts());
     for (name, size, expected) in [
         (PASTA, 20u32, 6.2988f32),
         (PASTA, 28, 8.8184),

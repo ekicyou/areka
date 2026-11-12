@@ -1,13 +1,13 @@
-use super::test_support::{IMAGE, inline_positions, model};
+use super::test_support::{inline_positions, layout_guarded, zero_origin_region};
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan};
-use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
 use log_capture_kit::count_levels;
 
-// ── 配線層の検証（`\_l` の行区切り・軸上書き・末尾蒸発・両軸 no-op） ──
+// ── 配線層の検証（`\_l` の行区切り・軸上書き・末尾蒸発） ──
 //
+// 両軸省略の完全 no-op（行を分けない）は `layout_cursor_wiring_tests.rs` の H6 が持つ。
 // 解決そのもの（基点＋値×係数・縮退の分類）の純関数テストは解決層の兄弟ファイル
 // （`cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs`）が持つ。本ファイルが見るのは
 // **配線**だけである——到着時の解決をどう保留し、いつ実体化し、行をどう分割するか。
@@ -20,11 +20,7 @@ use log_capture_kit::count_levels;
 /// 3 個目が (inline 100, block 50) の行 1 頭へ載る。
 #[test]
 fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::glyph("あ"),
@@ -64,11 +60,7 @@ fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
 /// 経てカーソル上書きが後勝ちで (inline 10, block 5) が最終値になる（順序 (2)→(3) の証左）。
 #[test]
 fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::LineBreak { ratio: 1.0 },
@@ -112,11 +104,7 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
 /// `[あ, \_l[100,50]]` → 1 行 [あ@0]（`\_l` は行を開かず・位置も動かさない）。
 #[test]
 fn trailing_cursor_move_evaporates() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::CursorMove {
@@ -144,40 +132,6 @@ fn trailing_cursor_move_evaporates() {
     assert_eq!(lines[0].rect.top, 0.0);
 }
 
-/// 両軸 None（`\_l[,]`＝両軸省略）は完全 no-op——行区切りもしない
-/// （正典「両方省略で無効果」・R1.6/5.4/6.2）。`[あ, \_l[,], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
-#[test]
-fn both_axes_omitted_cursor_move_is_complete_noop() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    let items = [
-        TextItem::glyph("あ"),
-        TextItem::CursorMove {
-            x: CursorCoord::Omitted,
-            y: CursorCoord::Omitted,
-        },
-        TextItem::glyph("あ"),
-    ];
-    let lines = LayoutEngine::layout(
-        &items,
-        2,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert_eq!(
-        lines.len(),
-        1,
-        "両軸省略の \\_l は行区切りしない（完全 no-op）"
-    );
-    assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
-}
-
 // ── 単位の係数が実配置を駆動すること＋フラッシュ順序の per-axis 合成 ──
 //
 // 係数そのものの正しさは解決層のテストが見る。ここで見るのは「解決値が本当に次グリフの
@@ -190,11 +144,7 @@ fn both_axes_omitted_cursor_move_is_complete_noop() {
 /// 現れることを固定する（配線が軸ごとの解決値を取り違えず載せていることの証跡）。
 #[test]
 fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::glyph("あ"),
@@ -233,47 +183,12 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
 }
 
 /// 保留改行なしの単軸 `\_l` は指定軸のみ上書きし、省略軸は走査中の実行位置のまま据え置く
-/// （軸別に独立・R1.2/1.6）。x のみ `\_l[10px,]` → inline=10・block は改行がないため 0 のまま。
-/// y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)のまま（リセットされない）。
+/// （軸別に独立・R1.2/1.6）。y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)の
+/// まま（リセットされない）。x のみ `\_l[10px,]` の側は `layout_cursor_wiring_tests.rs` の
+/// `line_count_splits_only_when_a_move_succeeds` が同じ値で見る。
 #[test]
 fn cursor_move_single_axis_leaves_other_axis_unchanged() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
-    // x 軸のみ上書き（y Omitted）: block は改行がないため据え置き（0）、inline のみ 10 へ。
-    let x_only = [
-        TextItem::glyph("あ"),
-        TextItem::CursorMove {
-            x: CursorCoord::Absolute {
-                value: 10.0,
-                unit: CursorUnit::Px,
-            },
-            y: CursorCoord::Omitted,
-        },
-        TextItem::glyph("あ"),
-    ];
-    let lines = LayoutEngine::layout(
-        &x_only,
-        2,
-        &region,
-        WritingMode::HorizontalTb,
-        10.0,
-        &FixedMetrics,
-        WrapPlan::CharByChar,
-    );
-    assert_eq!(lines.len(), 2, "\\_l は単軸でも行区切りする");
-    assert_eq!(
-        inline_positions(&lines[1]),
-        vec![10.0],
-        "inline のみ上書き（origin+10）"
-    );
-    assert_eq!(
-        lines[1].rect.top, 0.0,
-        "block 軸は指定なし＝据え置き（改行なしゆえ 0 のまま）"
-    );
-
+    let region = zero_origin_region();
     // y 軸のみ上書き（x Omitted）: inline は直前送り終端(10)のまま・block のみ 50 へ。
     let y_only = [
         TextItem::glyph("あ"),
@@ -310,11 +225,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
 /// - y のみ `\_l[,5px]`＋`\n(1.0)`: block=カーソル 5・inline=改行リセット 0。
 #[test]
 fn cursor_and_pending_newline_compose_per_axis() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // inline 上書き・block は改行進行値を取る。
     let x_over = [
         TextItem::glyph("あ"),
@@ -394,11 +305,7 @@ fn cursor_and_pending_newline_compose_per_axis() {
 /// **原点の切替（1.2）に由来する差分ではない**——横書きの原点は切替の前後とも (0, 0) である。
 #[test]
 fn cursor_negative_and_percent_axes_now_resolve_literally() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let items = [
         TextItem::glyph("あ"),
         TextItem::CursorMove {
@@ -440,23 +347,20 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
     );
 }
 
-// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（layout_with_cursor_warn・R5.3） ──
+// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（guard つきの配置・R5.3） ──
 
 /// `\_l` の 2 縮退分岐（解釈不能／中央指定の軸取り違え）はキャラクターごと・分岐ごとに
 /// 厳密 1 回だけ `warn!` する（R5.3）。同一キャラクターの再訪では追加警告なし、別キャラクターでは
 /// 再び全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
 /// （Omitted は正常形で無音）とし、後続グリフで CursorMove を確実に処理させる。
 ///
-/// **分岐は 4 → 2 へ減った**（タスク 4.1）: 負値絶対・`%`・`@` 相対は縮退ではなく実導出へ
-/// 移ったので、縮退表に残るのは「解釈不能」と「中央指定の軸取り違え」の 2 行だけである
-/// （design.md 縮退表・R5.2）。
+/// **分岐は 4 → 2 へ減り、のちに 3 になった**（タスク 4.1）: 負値絶対・`%`・`@` 相対は縮退
+/// ではなく実導出へ移ったので、ここで見るのは「解釈不能」と「中央指定の軸取り違え」の 2 行
+/// （design.md 縮退表・R5.2）。3 つ目の「有限でない」は
+/// `layout_cursor_wiring_tests.rs` の `non_finite_cursor_resolution_keeps_lines_finite_with_one_warn` が見る。
 #[test]
 fn cursor_degrade_warns_once_per_actor_per_branch() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // 2 縮退分岐（各 x 軸・y は Omitted）。
     let branches = [
         // 解釈不能（CursorDegrade::Unparsable）。
@@ -478,17 +382,7 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
             },
             TextItem::glyph("あ"),
         ];
-        LayoutEngine::layout_with_cursor_warn(
-            &items,
-            1,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            actor,
-            guard,
-        );
+        layout_guarded(&items, 1, &region, 10.0, actor, guard);
     };
     let mut warns = 0usize;
 
@@ -526,15 +420,12 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
     );
 }
 
-/// `Omitted`（軸省略）・実導出成功（Px/Em/Lh）は縮退でなく無音（warn しない・R5.5/5.2）。
-/// `\_l[5px, ]`（x 実導出・y 省略）と `\_l[,]`（両省略）はいずれも警告 0。
+/// `Omitted`（軸省略）・実導出成功（Px・`%`・`@` 相対・正しい軸の centerx/centery）は縮退でなく
+/// 無音（warn しない・R5.5/5.2）。`\_l[5px, ]`・`\_l[50%,@5]`・`\_l[centerx,centery]`・
+/// `\_l[,]`（両省略）はいずれも警告 0。
 #[test]
 fn cursor_omitted_and_valid_axes_do_not_warn() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let a0 = ActorKey::from("0");
     let ((), counts) = count_levels(|| {
         let mut guard = CursorWarnGuard::default();
@@ -547,22 +438,26 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
                 y: CursorCoord::Omitted,
             },
             TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 50.0,
+                    unit: CursorUnit::Percent,
+                },
+                y: CursorCoord::Relative {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+            TextItem::CursorMove {
+                x: CursorCoord::CenterX,
+                y: CursorCoord::CenterY,
+            },
+            TextItem::CursorMove {
                 x: CursorCoord::Omitted,
                 y: CursorCoord::Omitted,
             },
             TextItem::glyph("あ"),
         ];
-        LayoutEngine::layout_with_cursor_warn(
-            &items,
-            1,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            &a0,
-            &mut guard,
-        );
+        layout_guarded(&items, 1, &region, 10.0, &a0, &mut guard);
     });
     assert_eq!(
         counts.warn, 0,
@@ -587,11 +482,7 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
 /// （R5.4/6.2・縮退表「両軸省略／両軸縮退＝完全無効果」は「保留を変えない」を含む）。
 #[test]
 fn consecutive_cursor_moves_compose_pending_per_axis() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     // H2: `\\_l[10,]\\_l[,20]あ` → (10, 20)。
     let items = [
         TextItem::CursorMove {
@@ -688,15 +579,11 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
 ///   交差ケース。仮適用の順序はフラッシュ本体（ゲート②の保留フラッシュ）の (2)→(3) と同順である——
 ///   (2) 保留改行が行内軸を先頭（0）へ戻し、(3) 保留カーソルの X=10 がそれに**後勝ち**する。
 ///   ゆえに実効位置は (10, 12) で、`@0` はそこへ据え置き、最終着地も (10, 12) になる。
-///   仮適用の 2 ブロック（`layout.rs` の `CursorMove` 腕・実効位置の算出）を入れ替えると (3)→(2) の順になり、改行の
+///   仮適用の 2 ブロック（`layout_scan.rs` の `cursor_move`・実効位置の算出）を入れ替えると (3)→(2) の順になり、改行の
 ///   行内リセットが後勝ちして `inline` が 0 へ落ちる＝この 1 本だけが赤になる。
 #[test]
 fn relative_cursor_basis_is_the_effective_position() {
-    let region = TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    );
+    let region = zero_origin_region();
     let relative_zero = || TextItem::CursorMove {
         x: CursorCoord::Relative {
             value: 0.0,
@@ -798,7 +685,7 @@ fn relative_cursor_basis_is_the_effective_position() {
     // 保留改行と保留カーソルが**同時に**保留された状態（実経路で到達可能——`\n` →
     // `\_l[絶対]` → `\_l[@…]`。`\_l` 腕は `pending` を消費しないため）。
     // 仮適用の**順序**そのものを固定する 1 本＝主張は「保留改行が行内軸を先頭へ戻す規則より、
-    // 保留カーソルの上書きが後勝ちである」（フラッシュ本体＝`layout.rs` ゲート②の (2)→(3) と同順）。
+    // 保留カーソルの上書きが後勝ちである」（フラッシュ本体＝`layout_scan_glyph.rs` のゲート②の (2)→(3) と同順）。
     let break_then_cursor = [
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::CursorMove {
@@ -831,7 +718,7 @@ fn relative_cursor_basis_is_the_effective_position() {
         inline_positions(&lines[0]),
         vec![10.0],
         "正典値（4.2 の実効位置による）: 仮適用は (2) 保留改行 → (3) 保留カーソル の順\
-         ＝フラッシュ本体（`layout.rs` ゲート②）と同順なので、改行の行内リセット(0)に\
+         ＝フラッシュ本体（`layout_scan_glyph.rs` のゲート②）と同順なので、改行の行内リセット(0)に\
          保留カーソルの X=10 が後勝ちする。実効位置 (10, 12) から `@0` は据え置き＝10。\
          仮適用の 2 ブロックを入れ替えると (3)→(2) になり 0 へ落ちる"
     );

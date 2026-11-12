@@ -257,7 +257,8 @@ impl TalkLookahead {
                     | CueCommand::Choice { .. }
                     | CueCommand::NewLine { .. }
                     | CueCommand::Cursor { .. }
-            ) {
+            ) || crate::inline_marker::is_marker_carrier(&cue.command)
+            {
                 added.insert(dest);
             }
         }

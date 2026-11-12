@@ -7,15 +7,15 @@
 //! 本タスクの範囲で先に固定する）。
 //!
 //! タスク 5.2 が足すのはさらに 4 点である——(1) 行矩形の丈と行送りが**行内最大の em**で
-//! 決まること（要件 7.9）、(2) 文字の置かれていない行の 2 つの落としどころ（次に置く文字の
-//! 大きさ／スコープの現在の見た目）、(3) 塊先決の折返しでも合計が見た目込みになること
+//! 決まること（要件 7.9）、(2) 文字の置かれていない行が後ろに置かれる文字の
+//! 大きさで送られること（先に閉じる行と先読みも同じ・後の装飾で前の字が動かない）、(3) 塊先決の折返しでも合計が見た目込みになること
 //! （要件 11.2）、(4) 行送りの式が `TextLayerConfig::line_pitch` の 1 点だけを通ること
 //! （要件 7.8——値の比較では見張れないので**字面**で固定する）。
 
 use areka_sakura::cluster::clusters;
 use areka_sakura::contract::ActorKey;
 
-use super::test_support::{IMAGE, model};
+use super::test_support::{IMAGE, model, rects};
 use super::{
     CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, WrapPlan,
 };
@@ -47,13 +47,12 @@ fn glyph_tuples(line: &PositionedLine) -> Vec<(&str, f32, f32, u32)> {
         .collect()
 }
 
-/// 番号列の読み口を組む（表・番号列・既定・いま効いている見た目）。
+/// 番号列の読み口を組む（表・番号列・既定）。
 fn styles<'a>(table: &'a StyleTable, ids: &'a [StyleId], default: &'a TextLook) -> GlyphStyles<'a> {
     GlyphStyles {
         table,
         ids,
         default,
-        current: default,
     }
 }
 
@@ -171,7 +170,7 @@ fn styled_advance_moves_the_wrap_point() {
 
 /// 番号列を**渡さない**出力を、装飾を入れる前（2026-09-12 の実測）に採った値へ字義で固定する。
 ///
-/// 従来の入口（[`LayoutEngine::layout`]・[`LayoutEngine::layout_with_cursor_warn`]）が
+/// 従来の入口（[`LayoutEngine::layout`]）が
 /// `styles: None` を渡す実装である以上、両者の突き合わせだけでは「引数を足したことで
 /// 挙動が動いていない」の証明にならない（同じ経路を 2 度通るだけで恒真）。ここでは
 /// **装飾を入れる前の実測値**を期待値として置き、`None` の経路がそこから 1 ビットでも
@@ -323,21 +322,6 @@ fn canvas_from_layout_transcribes_the_style_id() {
 
 // ── タスク 5.2 の追加ヘルパ ──
 
-/// 番号列の読み口を組む（スコープの現在の見た目を既定と別に置ける形）。
-fn styles_with_current<'a>(
-    table: &'a StyleTable,
-    ids: &'a [StyleId],
-    default: &'a TextLook,
-    current: &'a TextLook,
-) -> GlyphStyles<'a> {
-    GlyphStyles {
-        table,
-        ids,
-        default,
-        current,
-    }
-}
-
 /// 折返し基準 `wordwrappoint.x` だけを与えた横書きの描画範囲。
 fn region_h(wrap_x: i32) -> TextRegion {
     TextRegion::resolve(
@@ -371,14 +355,6 @@ fn layout_styled_h(
         &ActorKey::from("0"),
         &mut guard,
     )
-}
-
-/// 行矩形を `(left, top, right, bottom)` の組へ落とす。
-fn rects(lines: &[PositionedLine]) -> Vec<(f32, f32, f32, f32)> {
-    lines
-        .iter()
-        .map(|l| (l.rect.left, l.rect.top, l.rect.right, l.rect.bottom))
-        .collect()
 }
 
 // ── 要件 7.9: 行の丈は「その行に置かれた文字のうち最も大きい em」 ──
@@ -452,7 +428,7 @@ fn line_pitch_advances_by_the_closing_lines_largest_em() {
     );
 }
 
-// ── 要件 7.9: 文字の置かれていない行の 2 つの落としどころ ──
+// ── 要件 7.9: 文字の置かれていない行は後ろに置かれる文字の大きさで送る ──
 
 /// 断言 ⑴——**文字の無い行はそのとき効いている大きさ**（＝次に置く文字の大きさ）で送る。
 /// 先頭の改行は行を作らないが、送り量はその 1 文字の大きさで決まる。
@@ -492,21 +468,23 @@ fn a_line_with_no_glyph_advances_by_the_height_in_effect() {
     );
 }
 
-/// 断言 ⑵——**次に置く文字が無いまま閉じる行**はスコープの現在の見た目の大きさで送る。
+/// 断言 ⑵——**先に閉じる文字の無い行も、後ろに置かれる文字の大きさ**で送る。
 ///
 /// 到達する本番の経路は `\_l` の先行実体化（`LineBreak` 腕・DD-11）である: 保留カーソルを
-/// 抱えたまま改行が届くと、その場で「行を閉じて保留改行を適用する」——このとき手元に
-/// 次の文字は無い。行内軸だけを指定した `\_l[50,]` を使うのは、行送り軸を指定すると
-/// 直後の 保留カーソルの適用が送り量を上書きして
-/// しまい、この断言が観測できなくなるためである。
+/// 抱えたまま改行が届くと、その場で「行を閉じて保留改行を適用する」。このとき後ろに文字が
+/// あれば、保留フラッシュ（閉じる行の丈に次の字の大きさを渡す経路）と同じくその字の大きさを
+/// 使う——スコープの現在の見た目（＝届いた最後の項目の後の見た目）を使うと、後の
+/// `\f[height]` が届くたびに前の字が動く。行内軸だけを指定した `\_l[50,]` を使うのは、
+/// 行送り軸を指定すると直後の保留カーソルの適用が送り量を上書きして、この断言が観測できなく
+/// なるためである。
 ///
-/// 手計算（現在の見た目 30・既定 10）: `\n` で保留 1.0 →`\_l[50,]` で保留カーソル →2 つ目の
-/// `\n` が先行実体化して `block = pitch(30) = 32`（行内は 50 へ）→ 最後の `あ` の直前で
-/// 保留 1.0 を `pitch(10) = 12` で適用し `block = 44`・行内は行頭へ戻る。
+/// 手計算（現在の見た目 30・既定 10・`あ` は既定）: `\n` で保留 1.0 →`\_l[50,]` で保留カーソル
+/// →2 つ目の `\n` が先行実体化して `block = pitch(10) = 12`（行内は 50 へ）→ `あ` の直前で
+/// 保留 1.0 を `pitch(10) = 12` で適用し `block = 24`・行内は行頭へ戻る。
 ///
-/// 較正（要件 15.5）: 既定の大きさで固定する誤りに戻すと `top` が 44 → 24 になって赤。
+/// 較正（要件 15.5）: 行の丈へスコープの現在の見た目を渡す形（R2-A1 で外した形）へ戻すと `top` が 24 → 44 になって赤。
 #[test]
-fn closing_with_no_following_glyph_uses_the_scope_current_look() {
+fn closing_a_glyphless_line_early_uses_the_following_glyph_height() {
     let region = region_h(200);
     let items = vec![
         TextItem::LineBreak { ratio: 1.0 },
@@ -521,20 +499,123 @@ fn closing_with_no_following_glyph_uses_the_scope_current_look() {
         TextItem::glyph("あ"),
     ];
     let default = look_with_height(10.0);
-    let current = look_with_height(30.0);
     let table = StyleTable::default();
 
     let lines = layout_styled_h(
         &items,
         &region,
-        styles_with_current(&table, &[StyleId::DEFAULT], &default, &current),
+        styles(&table, &[StyleId::DEFAULT], &default),
         WrapPlan::CharByChar,
     );
 
     assert_eq!(
         rects(&lines),
-        vec![(0.0, 44.0, 10.0, 54.0)],
-        "次に置く文字が無い行はスコープの現在の見た目 30 で送る（32 + 12）"
+        vec![(0.0, 24.0, 10.0, 34.0)],
+        "後ろに置かれる字（既定 10）の大きさで送る（12 + 12）——現在の見た目 30 なら 32 + 12"
+    );
+}
+
+/// 1 文字ずつ届く再生でも、`\_l` の先読みが使う行送りは後から届く `\f[height]` で変わらない。
+///
+/// 台本 `\n\_l[,@0]あ\f[height,30]い`（既定 10）: `あ` までが届いた時点（現在の見た目は既定）と、
+/// `\f[height,30]` と `い` が届いた後（現在の見た目は 30）とで、`あ` の位置が同じ。`\_l` の
+/// 行送り軸は「実効位置から 0px」なので、先読みの行送りがそのまま `あ` の `top` に出る。
+/// `\_l` を外した同じ並びでも `あ` は `top = 12`（保留フラッシュは次の字の大きさで送る）。
+///
+/// 較正（要件 15.5）: 先読みへスコープの現在の見た目を渡す形（R2-A1 で外した形）へ戻すと、届いた後の `top` が 12 → 32 になって赤。
+#[test]
+fn a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview() {
+    let region = region_h(200);
+    let mut items = vec![
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::CursorMove {
+            x: CursorCoord::Omitted,
+            y: CursorCoord::Relative {
+                value: 0.0,
+                unit: CursorUnit::Px,
+            },
+        },
+        TextItem::glyph("あ"),
+    ];
+    let default = look_with_height(10.0);
+    let big_look = look_with_height(30.0);
+    let mut table = StyleTable::default();
+    let big = table.intern(&big_look, &default);
+
+    // `あ` までが届いた時点。
+    let before = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &[StyleId::DEFAULT], &default),
+        WrapPlan::CharByChar,
+    );
+    // `\f[height,30]` と `い` が届いた後。
+    items.push(TextItem::glyph("い"));
+    let ids = [StyleId::DEFAULT, big];
+    let after = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &ids, &default),
+        WrapPlan::CharByChar,
+    );
+
+    assert_eq!(
+        rects(&before),
+        vec![(0.0, 12.0, 10.0, 22.0)],
+        "届いた時点の `あ`"
+    );
+    assert_eq!(
+        rects(&after)[0].1,
+        rects(&before)[0].1,
+        r"後から届く `\f[height]` で `あ` の行が動かない"
+    );
+}
+
+/// 後ろの字を探す手間は配置 1 回で項目数に比例する（字の無い `\n\_l` が長く続く台本でも
+/// 項目ごとに探し直さない）。
+///
+/// 手計算（既定 10・`あ` は 20）: `[\n, \_l[,@0]]` の 1 組ごとに後ろの字の大きさ 20 の行送り
+/// `pitch(20) = 22` だけ進み、`N` 組の後の `あ` は `top = 22 × N`。
+///
+/// 較正（要件 15.5）: 探した結果を覚えずに毎回探すと、見た項目の数が約 `N²` になって赤。
+#[test]
+fn finding_the_following_glyph_is_linear_in_the_items() {
+    const N: usize = 20_000;
+    let region = region_h(200);
+    let mut items = Vec::with_capacity(2 * N + 1);
+    for _ in 0..N {
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.push(TextItem::CursorMove {
+            x: CursorCoord::Omitted,
+            y: CursorCoord::Relative {
+                value: 0.0,
+                unit: CursorUnit::Px,
+            },
+        });
+    }
+    items.extend(glyph_items("あ"));
+    let default = look_with_height(10.0);
+    let mut table = StyleTable::default();
+    let big = table.intern(&look_with_height(20.0), &default);
+
+    super::scan::FOLLOWING_SCAN_VISITS.with(|c| c.set(0));
+    let lines = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &[big], &default),
+        WrapPlan::CharByChar,
+    );
+    let visits = super::scan::FOLLOWING_SCAN_VISITS.with(|c| c.get());
+
+    assert_eq!(
+        rects(&lines)[0].1,
+        22.0 * N as f32,
+        "後ろの字の大きさ 20 で送る"
+    );
+    assert!(
+        visits <= items.len(),
+        "後ろの字を探して見た項目 {visits} が項目数 {} を超える",
+        items.len()
     );
 }
 
@@ -579,12 +660,46 @@ fn segment_advance_sum_is_measured_with_the_glyph_looks() {
     );
 }
 
+/// 指摘 9（今の位置からの列を渡す直し）: 塊の合計は、列の頭からでなく**字の通し番号**で見た目を
+/// 引く。番号 `[既定 10, 20, 20, 20]`・塊 `{0,1}` と `{1,3}`・折返し基準 50 で、2 つ目の塊の合計は
+/// 60（行頭幅 50 も超える）＝文字単位規則で 0/10/30 の後に折れて 2 行目は 0。列の頭（番号 0..3）で
+/// 引くと合計 50 となり、塊の前で送って 1 行目 0・2 行目 0/20/40 になる。
+#[test]
+fn segment_advance_sum_looks_up_styles_by_the_absolute_glyph_number() {
+    let region = region_h(50);
+    let items = glyph_items("あいうえ");
+    let default = look_with_height(10.0);
+    let mut table = StyleTable::default();
+    let big = table.intern(&look_with_height(20.0), &default);
+    let ids = [StyleId::DEFAULT, big, big, big];
+    let plan = SegmentPlan::from_segments(vec![
+        Segment { start: 0, len: 1 },
+        Segment { start: 1, len: 3 },
+    ]);
+
+    let lines = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &ids, &default),
+        WrapPlan::Segmented(&plan),
+    );
+
+    assert_eq!(
+        lines
+            .iter()
+            .map(|l| l.glyphs.iter().map(|g| g.inline_pos).collect::<Vec<_>>())
+            .collect::<Vec<_>>(),
+        vec![vec![0.0, 10.0, 30.0], vec![0.0]],
+        "塊の合計は字の通し番号の見た目で測る"
+    );
+}
+
 // ── 要件 7.8: 行送りの式は 1 点だけを通る（字面で固定する） ──
 
 /// 行送りの式へ届く点が配置層に **1 つしかない**ことを字面で固定する。
 ///
 /// 値の比較では「1 点だけ」は見張れない——装飾のために別の式や係数を足しても、今日の
-/// 入力では同じ値が出うるからである。ここでは走査する 3 ファイルの中で
+/// 入力では同じ値が出うるからである。ここでは走査する 5 ファイルの中で
 /// `metrics.line_pitch(` の綴りが **1 回だけ**現れ、それが `layout_styled.rs` の
 /// `line_pitch_of` であることと、行送りの式そのもの
 /// （`line_gap` を足す形）がどこにも写されていないことを判定する。
@@ -633,11 +748,10 @@ fn the_line_pitch_formula_is_reached_through_a_single_call_site() {
 /// 自動折返しは起きない——折返し位置は
 /// `styled_advance_moves_the_wrap_point` が持つ）。
 ///
-/// 判定しないこと（doc と述語を一致させるための明示）: 既定でない番号の扱いは
+/// 同じ入口へ先頭の 1 字だけ大きさ 20 の番号を渡すと 1 行目の丈が 20 になる——番号列を
+/// 丸ごと無視する入口はここで赤になる（既定でない番号の細かい扱いは
 /// `styled_glyphs_advance_at_their_own_height_and_carry_their_style_id` 以下が持ち、
-/// `\_l` の縮退警告の配線は `layout_cursor_*_tests.rs` が持つ。本述語は**番号列を
-/// 丸ごと無視する実装でも緑**である——それが非回帰の檻の役目だからで、装飾が効いている
-/// ことの証拠には使えない。
+/// `\_l` の縮退警告の配線は `layout_cursor_*_tests.rs` が持つ）。
 #[test]
 fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     let region = region_h(45);
@@ -645,7 +759,8 @@ fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     items.push(TextItem::LineBreak { ratio: 1.0 });
     items.extend(glyph_items("おか"));
     let default = look_with_height(10.0);
-    let table = StyleTable::default();
+    let mut table = StyleTable::default();
+    let big = table.intern(&look_with_height(20.0), &default);
     let ids = [StyleId::DEFAULT; 7];
 
     let via_styled = layout_styled_h(
@@ -665,6 +780,20 @@ fn layout_styled_is_the_public_entry_for_decorated_scripts() {
     );
 
     assert_eq!(via_styled, via_plain, "既定だけの番号列は従来の出力と同一");
+
+    let mut big_first = ids;
+    big_first[0] = big;
+    let via_big = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &big_first, &default),
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(
+        rects(&via_big)[0].3,
+        20.0,
+        "先頭の字の番号（大きさ 20）が 1 行目の丈になる＝入口は番号列を読む"
+    );
 }
 
 // ── 要件 3.1／7.9: `\_l` の実効位置の先読みも同じ行送り規則に従う ──
