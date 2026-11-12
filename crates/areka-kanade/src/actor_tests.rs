@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 /// テスト用の有界待機: 別スレッドで `f` を走らせ、期限内に完了しなければ失敗させる
-/// （どのテストもハングしない・areka-actor の run_bounded と同旨）。
+/// （どのテストもハングしない）。
 fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
     let (done_tx, done_rx) = mpsc::sync_channel::<()>(0);
     thread::spawn(move || {

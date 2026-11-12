@@ -157,3 +157,6 @@
 - 9（範囲の外・完了の棚卸へ）: `crates/areka-kanade/src/actor_tests.rs` 10 行目の注「areka-actor の run_bounded と同旨」は、9 で消した道具を名指したまま残る。範囲の外のファイルは例外の表の 1 行のほかは変えない約束（design「Goals」）なので触っていない。`/kiro-complete` の棚卸で扱う
 - 11.2（範囲の外・完了の棚卸へ）: `doc/ukadoc-coverage/ledger/property.toml` が引く行番号（`reader.rs:158-164`・`actor.rs:345-350`）が今の行（157・378）とずれている。約束は文と target なので直していない（research.md §13 の 6）
 - 11.3: `tools/test-all.ps1` を 0b126aa2 で 1 回・全段緑（x64 workspace tests 1072 s・i686・fmt・encoding ほか）
+- 完了時にその場で解決: `crates/areka-kanade/src/actor_tests.rs` の注が消した `run_bounded`（areka-actor）を名指していたのを外した（範囲の外・注だけ）。
+- 完了時にその場で解決: `doc/ukadoc-coverage/ledger/property.toml` のログの行番号を今のコードへ（`reader.rs:153-158`・`actor.rs:374-379`。範囲の外・文書だけ）。
+- 完了時にその場で解決: design.md の新しいファイルに `io_lock_tests.rs`、消した公開の物に `persist::format::to_toml_string` を足した。
