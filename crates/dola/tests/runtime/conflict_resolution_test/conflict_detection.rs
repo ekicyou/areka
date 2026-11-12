@@ -76,7 +76,7 @@ mod conflict_detection {
 
         let _r1 = rt.start("fade", 0.0).unwrap();
         // 自然終了を発生させる
-        rt.update(3.0);
+        rt.tick(3.0);
 
         // 新規 start → 競合なし（前のインスタンスは終了済み）
         let r2 = rt.start("fade", 3.0).unwrap();
@@ -99,7 +99,7 @@ mod conflict_detection_boundaries {
         rt.load_document(doc).unwrap();
 
         let r1 = rt.start("fade", 0.0).unwrap();
-        rt.update(0.5);
+        rt.tick(0.5);
         rt.pause(r1.group_id, 0.5).unwrap();
 
         // Paused 中でも同一変数の新規 start は競合し、終了戦略が適用される

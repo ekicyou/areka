@@ -153,14 +153,17 @@ mod e2e_tests {
         assert_eq!(result.end_time, 1.0); // first loop end
 
         // Mid first loop
-        let changes = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let changes = rt.last_result().changes.clone();
         assert!(!changes.is_empty());
 
         // After 2 loops → conclude
-        let _changes = rt.update(2.5).changes;
+        rt.tick(2.5);
+        let _changes = rt.last_result().changes.clone();
         // Should have final values (opacity=1.0 at end of loop)
         // After conclude, subsequent update returns empty
-        let changes = rt.update(3.0).changes;
+        rt.tick(3.0);
+        let changes = rt.last_result().changes.clone();
         assert!(changes.is_empty());
     }
 
@@ -207,10 +210,12 @@ mod e2e_tests {
         rt.start("blink", 0.0).unwrap();
 
         // At t=1.5: past end_time=1.0, loop_count=1 → conclude
-        let _changes = rt.update(1.5).changes;
+        rt.tick(1.5);
+        let _changes = rt.last_result().changes.clone();
 
         // After conclude, no more updates
-        let changes = rt.update(2.0).changes;
+        rt.tick(2.0);
+        let changes = rt.last_result().changes.clone();
         assert!(changes.is_empty());
     }
 
@@ -253,7 +258,7 @@ mod e2e_tests {
         let group_id = result.group_id;
 
         // t=1.5: past first loop end → advance → end_time = 1.0+1.0+5.0 = 7.0
-        rt.update(1.5);
+        rt.tick(1.5);
 
         // Pause at t=3.0 (in delay period, end_time=7.0)
         rt.pause(group_id, 3.0).unwrap();
@@ -281,13 +286,14 @@ mod e2e_tests {
         let group_id = result.group_id;
 
         // t=1.5: advance → in delay period
-        rt.update(1.5);
+        rt.tick(1.5);
 
         // Cancel → immediate stop
         rt.cancel(group_id).unwrap();
 
         // After cancel, no more updates
-        let changes = rt.update(2.0).changes;
+        rt.tick(2.0);
+        let changes = rt.last_result().changes.clone();
         assert!(changes.is_empty());
     }
 
@@ -299,12 +305,15 @@ mod e2e_tests {
         rt.start("fade", 0.0).unwrap();
 
         // Mid-loop updates should work normally
-        let changes = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let changes = rt.last_result().changes.clone();
         assert!(!changes.is_empty());
 
         // All 3 loops complete at t=3.0+
-        let _changes = rt.update(3.5).changes;
-        let changes = rt.update(4.0).changes;
+        rt.tick(3.5);
+        let _changes = rt.last_result().changes.clone();
+        rt.tick(4.0);
+        let changes = rt.last_result().changes.clone();
         assert!(changes.is_empty()); // concluded
     }
 
@@ -357,15 +366,19 @@ mod e2e_tests {
         rt.start("slow", 0.0).unwrap();
 
         // At t=1.5: past first loop → advance, end_time=1.0+1.0+100.0=102.0
-        let _changes = rt.update(1.5).changes;
+        rt.tick(1.5);
+        let _changes = rt.last_result().changes.clone();
 
         // At t=50.0: still in delay
-        let _changes = rt.update(50.0).changes;
+        rt.tick(50.0);
+        let _changes = rt.last_result().changes.clone();
         // Should still be alive
 
         // At t=105.0: past end_time=102.0, 2nd loop completes → conclude
-        let _changes = rt.update(105.0).changes;
-        let changes = rt.update(106.0).changes;
+        rt.tick(105.0);
+        let _changes = rt.last_result().changes.clone();
+        rt.tick(106.0);
+        let changes = rt.last_result().changes.clone();
         assert!(changes.is_empty()); // concluded
     }
 
@@ -386,7 +399,8 @@ mod e2e_tests {
 
         // Advance through many loops: each loop = 1.0s + 0.1s delay = 1.1s/loop
         // 100 loops ≈ 110s
-        let _changes = rt.update(115.0).changes;
+        rt.tick(115.0);
+        let _changes = rt.last_result().changes.clone();
         // Should still be running (infinite loops), no crash, no infinite loop
     }
 }

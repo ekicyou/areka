@@ -160,12 +160,14 @@ mod subscription_via_facade {
         rt.start("fade_in", 0.0).unwrap();
 
         // 購読中は差分が配信される
-        let diff = rt.update(0.0).changes;
+        rt.tick(0.0);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.iter().any(|(id, _)| *id == opacity_id));
 
         // 購読解除後は配信されない
         rt.unsubscribe(opacity_id).unwrap();
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
             "expected no delivery after unsubscribe, got {diff:?}"
@@ -179,11 +181,13 @@ mod subscription_via_facade {
         rt.load_document(simple_float_doc("fade_in")).unwrap();
         rt.start("fade_in", 0.0).unwrap();
 
-        let diff = rt.update(0.0).changes;
+        rt.tick(0.0);
+        let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty());
 
         rt.unsubscribe_all();
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
             "expected no delivery after unsubscribe_all, got {diff:?}"

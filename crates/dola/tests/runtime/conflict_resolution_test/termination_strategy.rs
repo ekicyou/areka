@@ -45,7 +45,8 @@ mod cancel_strategy {
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
         // sb_a's y values should be frozen at t=0.5 → 12.5 (progress=0.25 of 0→50)
-        let changes = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let changes = rt.last_result().changes.clone();
         // y should show frozen value, x shows new SB value
         let (_, y_val) = changes
             .iter()
@@ -167,7 +168,8 @@ mod edge_cases {
         rt.start("sb_x", 0.0).unwrap();
 
         // Update at t=1.0 → x = 50.0
-        let changes = rt.update(1.0).changes;
+        rt.tick(1.0);
+        let changes = rt.last_result().changes.clone();
         let x_val = changes.iter().find(|(id, _)| *id == x_id);
         assert!(x_val.is_some());
 
@@ -176,7 +178,8 @@ mod edge_cases {
         assert!(r.affected_group_ids.is_empty());
 
         // Both should still work
-        let changes = rt.update(1.5).changes;
+        rt.tick(1.5);
+        let changes = rt.last_result().changes.clone();
         // x should still be updating (from sb_x)
         // y should be updating (from sb_y)
         let x_change = changes.iter().find(|(id, _)| *id == x_id);

@@ -66,7 +66,8 @@ mod never_strategy {
         assert!(result.is_err());
 
         // Update → the Never SB should still be running normally
-        let changes = rt.update(1.0).changes;
+        rt.tick(1.0);
+        let changes = rt.last_result().changes.clone();
         // sb_never: x at t=1.0 → progress=0.5 of 0→100 = 50.0
         let (_, x_val) = changes
             .iter()
@@ -127,21 +128,23 @@ mod conflict_terminated_parent_triggers {
 
         // 親開始（トリガーは t=2.0 で発火予定）
         let r_parent = rt.start("parent", 0.0).unwrap();
-        rt.update(0.5);
+        rt.tick(0.5);
 
         // t=1.0: interrupt 開始 → 親が Cancel 終了（トリガー未発火のまま）
         let r_int = rt.start("interrupt", 1.0).unwrap();
         assert_eq!(r_int.affected_group_ids, vec![r_parent.group_id]);
 
         // 発火予定時刻を過ぎても、終了済みの親のトリガーは発火しない
-        let result = rt.update(2.5);
+        rt.tick(2.5);
+        let result = rt.last_result().clone();
         assert!(
             result.triggered.is_empty(),
             "trigger of conflict-terminated parent must not fire: {:?}",
             result.triggered
         );
         // さらに後続 update でも発火・panic しない
-        let result = rt.update(5.0);
+        rt.tick(5.0);
+        let result = rt.last_result().clone();
         assert!(result.triggered.is_empty());
     }
 
@@ -185,7 +188,8 @@ mod conflict_terminated_parent_triggers {
 
         // t=1.0: トリガー発火 → 子 [1,2] は親の entry2 [1,2] と重複するが、
         // 親は skip_group_ids により競合解決から除外される
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert_eq!(result.triggered.len(), 1, "trigger should fire at t=1.0");
         match &result.triggered[0] {
             dola::runtime::TriggerResult::Started { start_result, .. } => {

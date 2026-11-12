@@ -18,13 +18,14 @@ mod conclude_cancel_finish {
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(0.0);
+        rt.tick(0.0);
 
         // t=0.3 で Conclude
         rt.conclude(group_id).unwrap();
 
         // 次の update で最終値 (1.0) が配信される
-        let diff = rt.update(0.3).changes;
+        rt.tick(0.3);
+        let diff = rt.last_result().changes.clone();
         let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
         match opacity {
             Some((_, EvaluatedValue::Float(v))) => {
@@ -34,7 +35,8 @@ mod conclude_cancel_finish {
         }
 
         // 以降は差分なし
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
             "expected empty diff after conclude, got {diff:?}"
@@ -51,18 +53,20 @@ mod conclude_cancel_finish {
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(0.0);
+        rt.tick(0.0);
         // t=0.5: 中間値取得
-        let _ = rt.update(0.5);
+        rt.tick(0.5);
 
         // Cancel — 現在値凍結
         rt.cancel(group_id).unwrap();
 
         // 以降は差分なし（タイムテーブル削除済み、値は前回 update 値で凍結）
-        let diff = rt.update(0.6).changes;
+        rt.tick(0.6);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected empty diff after cancel");
 
-        let diff = rt.update(1.0).changes;
+        rt.tick(1.0);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected still empty after cancel");
     }
 
@@ -76,13 +80,14 @@ mod conclude_cancel_finish {
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0
-        let _ = rt.update(0.0);
+        rt.tick(0.0);
 
         // finish: deadline = 0.5（t=0.5 で Conclude 相当）
         rt.finish(group_id, 0.5).unwrap();
 
         // t=0.3: deadline 未到達 → まだ再生中
-        let diff = rt.update(0.3).changes;
+        rt.tick(0.3);
+        let diff = rt.last_result().changes.clone();
         let (_, opacity) = diff
             .iter()
             .find(|(id, _)| *id == opacity_id)
@@ -93,7 +98,8 @@ mod conclude_cancel_finish {
         }
 
         // t=0.5: deadline 到達 → Conclude 相当で最終値が飛ぶ
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         let (_, opacity) = diff
             .iter()
             .find(|(id, _)| *id == opacity_id)
@@ -105,7 +111,8 @@ mod conclude_cancel_finish {
         );
 
         // 以降は差分なし
-        let diff = rt.update(0.8).changes;
+        rt.tick(0.8);
+        let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
             "expected empty after finish-conclude, got {diff:?}"

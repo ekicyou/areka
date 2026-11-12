@@ -1,4 +1,3 @@
-#![allow(deprecated)]
 //! LoopOffset serde round-trip tests
 //! Task 1.2: serde ラウンドトリップテスト
 //! Task 5.1-5.3: バリデーションテスト

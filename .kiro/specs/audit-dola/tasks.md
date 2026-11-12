@@ -217,7 +217,7 @@
   - _Depends: 6.2_
   - _Requirements: 3.1, 5.6_
 
-- [ ] 13. storyboard のランタイムのテスト（#40・#41・#42・#46・#52 の前ぶれ）
+- [x] 13. storyboard のランタイムのテスト（#40・#41・#42・#46・#52 の前ぶれ）
 - [x] 13.1 遷移を作る道具を 1 本にし、終わりの戦略のテストを値で見る形にする（#46・#40）
   - ランタイムのテストの共通の所に「変数・始め・終わり・長さ」から遷移を作る道具を 1 本置き、文書は組み立ての道具で作る（約 −400 行）
   - 4 つの終わりの戦略のテストを、新しい台本が触らない変数 y と 2 セグメントの台本で、各戦略の値を `expect` で見る形に改める
@@ -228,7 +228,7 @@
   - 許し幅 0.05 の 25 か所を 1e-9 にする
   - 終わった姿: ランタイムのテストが緑で、黙って通る分岐が 0 件（grep）
   - _Requirements: 4.5, 9.2_
-- [ ] 13.3 非推奨の update の呼び手を tick と最後の結果へ読み替える（#52 の前ぶれ）
+- [x] 13.3 非推奨の update の呼び手を tick と最後の結果へ読み替える（#52 の前ぶれ）
   - テストの約 125 か所の update を tick と最後の結果へ読み替え、6 つの `#![allow(deprecated)]` を外す
   - 終わった姿: dola のテストに update の呼び手と `allow(deprecated)` が 0 件（grep）で、テストが緑
   - _Requirements: 4.5, 6.4_
@@ -383,3 +383,4 @@
 - 10.2（範囲の外・要起票）: 外のクレート `interpolation` 0.3.0 の `src/ease.rs:96` が `PI_2` を 2π と定義し、Sine 系と Elastic 系の式がそれを使うので、SineIn(0.5)=1.0（正しくは約 0.293）など曲線が前から誤っている。外のクレートはそのまま使う決まりなので、直すなら dola の側で式を書く別の spec（`/kiro-discovery` で起票）。既知の値のテストは誤った値を固定しないよう Sine 系を避けた。`InstanceManager::transition(gid, Playing)` で Paused から戻すと `pause_start` が残って時計が止まる（今は呼び手が無い・resume だけが消す）。
 - 11.2: wintf の檻は log-capture-kit が今のスレッドしか捕まえないので `world.run_system_once(tick_dola_animators)`（本番と同じ関数）で回す。Git Bash から wintf を作ると dbghelp.lib の LNK1181 が出ることがある（PowerShell からなら通る・環境の問題）。表記の揺れ: wintf は「トリガ」、dola は「トリガー」。
 - 13.1: ランタイムのテストの遷移の道具は `tests/runtime/support.rs` の `linear(var, from, to, dur)`（と `float()`）。`DolaDocumentBuilder::build` は全部をコンパイルにかけるので、拒まれる文書は手書きの `DolaDocument {..}`＋validate のまま。`loop_offset_compile.rs` の `doc_with_fade_and_offset`・`loop_offset_doc` は通る文書なのに手書き（任意で組み立ての道具へ）。Cancel と Trim は意図して同じ道（`evaluate_all_for_group`）で、値で見分けられない。
+- 13.3: dola のテストに `DolaRuntime::update` の呼び手と `allow(deprecated)` は 0（実数は 106 か所と 5 つ）。wintf にも呼び手は無いので 20.2 で `update` を消しても wintf は触らない。`src/runtime/facade.rs:28`（```ignore の例）と `src/runtime/clock.rs:13` の説明文にまだ `update` が残る（20.2 で直す）。

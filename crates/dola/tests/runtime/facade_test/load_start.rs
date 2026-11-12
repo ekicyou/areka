@@ -24,7 +24,8 @@ mod full_playback_cycle {
         assert!((end_time - 1.0).abs() < 1e-9);
 
         // t=0.0: 初回 update — opacity=0.0
-        let diff = rt.update(0.0).changes;
+        rt.tick(0.0);
+        let diff = rt.last_result().changes.clone();
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0].0, opacity_id);
         match &diff[0].1 {
@@ -33,7 +34,8 @@ mod full_playback_cycle {
         }
 
         // t=0.5: 中間値 — opacity≈0.5
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert_eq!(diff.len(), 1);
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 1e-9, "expected ~0.5, got {v}"),
@@ -41,7 +43,8 @@ mod full_playback_cycle {
         }
 
         // t=1.0: 最終値 — opacity=1.0, 自然終了トリガー
-        let diff = rt.update(1.0).changes;
+        rt.tick(1.0);
+        let diff = rt.last_result().changes.clone();
         // 自然終了により conclude_internal が呼ばれ、最終値が配信される
         assert!(!diff.is_empty(), "expected final value delivery at t=1.0");
         let opacity_val = diff
@@ -54,7 +57,8 @@ mod full_playback_cycle {
         }
 
         // t=1.5: 終了後 — 差分なし
-        let diff = rt.update(1.5).changes;
+        rt.tick(1.5);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty(), "expected empty diff after natural end");
     }
 
@@ -86,7 +90,8 @@ mod full_playback_cycle {
 
         // subscribe して update しても差分なし（インスタンス未生成）
         let _opacity_id = rt.subscribe("opacity");
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.is_empty());
     }
 

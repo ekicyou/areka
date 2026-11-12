@@ -1,4 +1,3 @@
-#![allow(deprecated)]
 //! トリガー機能のテスト — 5.4: update() トリガー実行統合テスト,
 //! 5.5: ループ内トリガー統合テスト, 5.6: E2E テスト
 
@@ -31,14 +30,16 @@ mod trigger_execution_tests {
         assert_eq!(parent_result.group_id, 1);
 
         // t=0.5: 発火前 — トリガーなし
-        let result = rt.update(0.5);
+        rt.tick(0.5);
+        let result = rt.last_result().clone();
         assert!(
             result.triggered.is_empty(),
             "no triggers should fire at t=0.5"
         );
 
         // t=1.0: kf1 到達 → トリガー発火
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert_eq!(
             result.triggered.len(),
             1,
@@ -122,11 +123,13 @@ mod trigger_execution_tests {
         rt.start("parent", 0.0).unwrap();
 
         // t=1.0: 初回発火
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert_eq!(result.triggered.len(), 1);
 
         // t=1.016（次のフレーム）: 親はまだ走っているが再発火しない
-        let result = rt.update(1.016);
+        rt.tick(1.016);
+        let result = rt.last_result().clone();
         assert!(
             result.triggered.is_empty(),
             "trigger should not re-fire in same loop"
@@ -143,8 +146,10 @@ mod trigger_execution_tests {
         rt.load_document(doc).unwrap();
         rt.start("parent", 10.0).unwrap();
 
-        assert!(rt.update(10.9).triggered.is_empty(), "not yet at t=10.9");
-        assert_eq!(rt.update(11.0).triggered.len(), 1, "fires at t=11.0");
+        rt.tick(10.9);
+        assert!(rt.last_result().triggered.is_empty(), "not yet at t=10.9");
+        rt.tick(11.0);
+        assert_eq!(rt.last_result().triggered.len(), 1, "fires at t=11.0");
     }
 
     /// 一時停止の間は発火の時刻も後ろへずれる
@@ -160,8 +165,10 @@ mod trigger_execution_tests {
         rt.pause(gid, 0.5).unwrap();
         rt.resume(gid, 5.0).unwrap();
 
-        assert!(rt.update(5.4).triggered.is_empty(), "not yet at t=5.4");
-        assert_eq!(rt.update(5.5).triggered.len(), 1, "fires at t=5.5");
+        rt.tick(5.4);
+        assert!(rt.last_result().triggered.is_empty(), "not yet at t=5.4");
+        rt.tick(5.5);
+        assert_eq!(rt.last_result().triggered.len(), 1, "fires at t=5.5");
     }
 
     /// trigger_start_offset の検証
@@ -175,7 +182,8 @@ mod trigger_execution_tests {
         rt.start("parent", 0.0).unwrap();
 
         // t=1.0: 発火。子SBの start_time = fire_time(1.0) + offset(0.5) = 1.5
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert_eq!(result.triggered.len(), 1);
         match &result.triggered[0] {
             TriggerResult::Started { start_result, .. } => {
@@ -201,12 +209,14 @@ mod trigger_execution_tests {
         rt.start("parent", 0.0).unwrap();
 
         // t=0.0: 初回 update
-        let result = rt.update(0.0);
+        rt.tick(0.0);
+        let result = rt.last_result().clone();
         assert!(!result.changes.is_empty(), "should have opacity change");
         assert!(result.triggered.is_empty());
 
         // t=1.0: トリガー + 変数更新の両方
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert!(!result.triggered.is_empty(), "should have trigger");
     }
 
@@ -350,11 +360,13 @@ mod loop_trigger_tests {
         rt.start("parent", 0.0).unwrap();
 
         // 周回1: t=1.0 でトリガー発火
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert_eq!(result.triggered.len(), 1, "loop 1: trigger should fire");
 
         // 周回2: t=2.0 でトリガー再発火
-        let result = rt.update(2.0);
+        rt.tick(2.0);
+        let result = rt.last_result().clone();
         assert_eq!(result.triggered.len(), 1, "loop 2: trigger should re-fire");
     }
 
@@ -415,7 +427,8 @@ mod loop_trigger_tests {
         // 3 周回分チェック
         for cycle in 1..=3 {
             let t = cycle as f64;
-            let result = rt.update(t);
+            rt.tick(t);
+            let result = rt.last_result().clone();
             assert!(
                 !result.triggered.is_empty(),
                 "cycle {cycle}: trigger should fire at t={t}"
@@ -500,7 +513,8 @@ mod e2e_tests {
         assert_eq!(a_result.group_id, 1);
 
         // t=0.0: A はトリガーのみ → B が起動される
-        let result = rt.update(0.0);
+        rt.tick(0.0);
+        let result = rt.last_result().clone();
         assert!(!result.triggered.is_empty(), "A should trigger B at t=0.0");
         let b_group_id = match &result.triggered[0] {
             TriggerResult::Started {
@@ -516,7 +530,8 @@ mod e2e_tests {
         assert!(b_group_id > a_result.group_id);
 
         // t=0.5: B の kf1 到達 → C が起動される
-        let result = rt.update(0.5);
+        rt.tick(0.5);
+        let result = rt.last_result().clone();
         assert!(!result.triggered.is_empty(), "B should trigger C at t=0.5");
         let c_target = match &result.triggered[0] {
             TriggerResult::Started {
@@ -532,7 +547,8 @@ mod e2e_tests {
         assert!(c_target > b_group_id);
 
         // t=1.0: C が完了し、opacity の最終値 1.0 が配られる
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         let (_, val) = result
             .changes
             .iter()
@@ -553,7 +569,8 @@ mod e2e_tests {
         rt.start("parent", 0.0).unwrap();
 
         // t=1.0: 親トランジション完了 + トリガー発火 → 子SB開始
-        let result = rt.update(1.0);
+        rt.tick(1.0);
+        let result = rt.last_result().clone();
         assert_eq!(
             result.triggered.len(),
             1,
@@ -561,7 +578,8 @@ mod e2e_tests {
         );
 
         // t=1.5: 親は自然終了済み、子SBはまだ再生中（1.0s→2.0s）
-        let result = rt.update(1.5);
+        rt.tick(1.5);
+        let result = rt.last_result().clone();
         // 子SBが opacity を 1→0 に遷移中 → changes が発生するべき
         assert!(
             !result.changes.is_empty(),
@@ -569,7 +587,8 @@ mod e2e_tests {
         );
 
         // t=2.0: 子SBも完了
-        let result = rt.update(2.0);
+        rt.tick(2.0);
+        let result = rt.last_result().clone();
         // 最終値に到達
         assert!(result.triggered.is_empty(), "no new triggers");
     }
@@ -585,16 +604,18 @@ mod e2e_tests {
         rt.start("parent", 0.0).unwrap();
 
         // 段階的に time を進める
-        let _ = rt.update(0.0);
-        let _ = rt.update(0.5);
-        let result = rt.update(1.0); // trigger fires
+        rt.tick(0.0);
+        rt.tick(0.5);
+        rt.tick(1.0);
+        let result = rt.last_result().clone(); // trigger fires
         assert!(!result.triggered.is_empty());
 
-        let _ = rt.update(1.5);
-        let _ = rt.update(2.0); // child completes (1→0 over 1s, started at 1.0)
+        rt.tick(1.5);
+        rt.tick(2.0); // child completes (1→0 over 1s, started at 1.0)
 
         // 最終状態: 全インスタンス自然終了
-        let result = rt.update(3.0);
+        rt.tick(3.0);
+        let result = rt.last_result().clone();
         // 両方終了後は変化なし
         assert!(
             result.triggered.is_empty(),

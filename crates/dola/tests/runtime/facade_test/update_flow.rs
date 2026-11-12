@@ -19,10 +19,11 @@ mod pause_resume_cycle {
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(0.0);
+        rt.tick(0.0);
 
         // t=0.3: 中間
-        let diff = rt.update(0.3).changes;
+        rt.tick(0.3);
+        let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty());
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "t=0.3: got {v}"),
@@ -34,7 +35,8 @@ mod pause_resume_cycle {
 
         // t=0.5: Pause 中 — 値が凍結される
         // Paused 状態では timeline_manager が pause_start 時点の値を返す
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         // Paused 中は前回値と同じ → diff 空
         assert!(
             diff.is_empty(),
@@ -50,7 +52,8 @@ mod pause_resume_cycle {
         );
 
         // t=0.7: pause 分 0.2s ずれで effective=0.5
-        let diff = rt.update(0.7).changes;
+        rt.tick(0.7);
+        let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => {
@@ -84,7 +87,8 @@ mod concurrent_playback {
         assert!((r2.end_time - 2.0).abs() < 1e-9, "zoom end_time");
 
         // t=0.5: opacity=0.5, scale=1.25
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
 
         let (_, opacity) = diff
@@ -99,7 +103,8 @@ mod concurrent_playback {
         assert_eq!(*scale, EvaluatedValue::Float(1.25), "scale@0.5");
 
         // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
-        let diff = rt.update(1.5).changes;
+        rt.tick(1.5);
+        let diff = rt.last_result().changes.clone();
         // opacity の自然終了 + scale の更新
         let (_, scale) = diff
             .iter()
