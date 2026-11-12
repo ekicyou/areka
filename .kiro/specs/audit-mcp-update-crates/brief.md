@@ -76,3 +76,16 @@
 ## audit-ghost-catalog の申し送り（2026-11-06 同 spec の完了の棚卸で追記）
 
 - **件 1: 空・相対の `AREKA_PROFILE_DIR` で置き場が作業フォルダからの相対になる**。`crates/areka-mcp-bridge/src/config.rs`（105 行目あたり）は環境変数の値をそのまま置き場に使う。`audit-ghost-catalog` は `crates/areka-user-data/src/lib.rs` の `usable_profile_env` で「空か相対なら `error!` を記録して使わない」に直した（同 spec の要件 4・#18）。同じ決まりへそろえる（`areka-user-data` の関数を呼ぶのが小さい）。起票の訳: 持ち主のこの spec の受け持ちの範囲と重なる。
+
+## 2026-11-13 棚卸㊱の再測定（main `069f1a48`）
+
+- **前提の変化**: `audit-sylphya-actor`（11-12 着地）が `rmcp` を 3.5.0 から 3.9.0 へ上げた。そのとき `crates/areka-mcp/` の 6 ファイル（`Cargo.toml`・`dispatch.rs` の説明 2 行・測った値を固めたテスト 4 つ）と `crates/areka-mcp-bridge/Cargo.toml` を直した（無状態版の `-32602` が 400 から 200 に変わり、415 の文言も変わった）。`crates/areka-update/` は変わっていない。ここの指摘を先に直したものは無い。
+- **触るファイル**: 100 ファイル（`areka-mcp` 44・`areka-mcp-bridge` 26・`areka-update` 30）。起票の 95 から 5 つ増えた（`mcp-bridge` の `config_prepare_tests.rs`・`redirect.rs`・`redirect_tests.rs`、`mcp` の `dispatch_shape_tests.rs`・`server_params_shape_tests.rs`）。空行を除くと、コード 5,808 行・テスト 12,390 行。900 行を越えるファイルは無い。
+- **件 1 は今も残る**: `crates/areka-mcp-bridge/src/config.rs` 105 行目は `profile_env.map(PathBuf::from)` で、環境変数の値をそのまま置き場の候補にしている。そろえる先の `usable_profile_env` は `crates/areka-user-data/src/lib.rs` 205 行目にあり、`pub(crate)` になっている。呼ぶなら `pub` に変える（範囲の外の 1 行・持ち主の `audit-ghost-catalog` は完了）か、同じ判定を写す。
+- **本体との重なり**: 本体は `areka_mcp`・`areka_update` を、`crates/areka/src/mcp/` の約 30 ファイル・`update/`（`desk.rs`・`procedure.rs`・`refs.rs`・`worker.rs` とテスト）・`cli/listen.rs`・`install/fetch_url.rs`・`main.rs`・`log_history.rs` から引く。同じウェーブの `runtime-module-untangle` は、`mcp/` の 5 ファイルと `update/` の 2 ファイルを改名で書き換え、`update_cue` を `update/` へ移す。そこで C19 のあいだは、3 つの crate の公開の形を変えず、足すだけにする（本体に触らない）。もう 1 点ある。`crates/areka/src/log_history_convention_tests.rs` 326 行目は `areka-update` の `src` を文字で読んでいるので、ログの出し方を変えるとこのテストに響く。
+- **規模**: 指摘の数で決まる（範囲は見直しの中で中くらい）。
+- **先に要るもの**: なし。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（今ある crate の中の直し）。
+- **分割の案**: なし。
+- **古くなった記述**: Current State の「95 ファイル・コード 6,054 行・テスト 12,599 行」は起票のときの数。今の数は上に書いた。

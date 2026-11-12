@@ -120,13 +120,14 @@
 - **WARP の足場は `wintf-visual-tree` が作る**（Approach 5 の足場はあちらで作り、ここは使う）。議題 4（WARP の答えのずれ）も、先に着手するあちらの要件で決める。
 - **下流が 1 本増えた**: `wintf-visual-damage-redraw`（変わった範囲だけ描き直す）は、WUC の描画面が部分の `BeginDraw` を断るので、この spec の自前の合成の入れ物を描き先に使う。入れ物の形（大きさ・形式・写し方）は、部分の描き直しに使える形にする。
 
-## 2026-11-04 棚卸㉞の再測定（main `932406f9`）
+## 2026-11-13 棚卸㊱の再測定（main 069f1a48）
 
-- 前提の変化: 起票の後に変わったのは 11-02 着地の `areka-test-binary-stability` の 2 点だけで、どちらもテストの中＝WUC の口 `crates/wintf/src/com/wuc.rs` のテスト `begin_draw_roundtrip` の注記（テストのスレッドは暗黙の MTA に居る）と、wintf のライブラリのテストの落ちの報告（`crates/wintf/src/test_crash_report.rs`）。本番の描画の道は変わらない＝`render.rs` の `render_surface` と `com/d2d/mod.rs` の補助 `draw_image`（309 行目）は `SOURCE_OVER` 固定のまま。重ね方・補間・変形・切り抜きは先の `wintf-visual-tree` が描く（10-21 の書き足しのとおり）。
-- 触るファイル: `crates/wintf/src/ecs/graphics/systems/{render,surface}.rs`（156・319 行）・`ecs/visual/draw_content.rs`・`com/d2d/{mod,command_sink,command_types}.rs`（313・470・584 行）・`com/wuc.rs`（422 行）・`com/dxgi.rs`・新しい合成の入れ物と読み戻しのファイル。議題 3 で置き換えを選ぶと wintf の当たり判定（`ecs/widget/bitmap_source/alpha_mask.rs` 448 行・`ecs/layout/hit_region/`）と、emo の α マスクの作り手（`crates/areka-emo-present/src/presenter/budget.rs`・`cache.rs`）まで及ぶ。
-- 規模: 12〜16 タスク（台帳の 10〜14 から上げた＝ブレンドの口・不透明度・自前の入れ物と描画面への写し・同期の 1 ピクセルの読み戻し・WARP のテスト・既存のテスト）。議題 3 で置き換えまで入れると 15〜19。20 以下＝分けない。
-- 先に要るもの: `wintf-visual-tree`。見直しは `audit-wintf-graphics-world`・`audit-wintf-runtime`・`audit-wintf-layout-widget`＝台帳のまま。議題 3 で emo の α マスクまで替えるなら `audit-emo-present` も先に要る（足す候補）。同じウェーブに置けない相手＝`wintf-visual-tree`・`wintf-visual-damage-redraw`（`ecs/visual/`・`render.rs`）・`compose-f16-precision`・`hit-id-pass`（`alpha_mask.rs`・`com/wuc.rs`）。
+- 前提の変化: `wintf-visual-tree`（11-06）が描画の木を本番へ上げた＝木は `crates/wintf/src/ecs/visual/` から `ecs/graphics/visual/` へ移り、節ごとの重ね方（`VisualDrawContent.composite_mode`）・補間・変形・矩形と図形の切り抜きはもう描かれている（`visual/draw/emit.rs`）。WARP の足場（`visual/draw/emit_test_support.rs`）と許容差（1 チャネル ±1・境界から離した画素・見本はコードの中の値）も決まった＝議題 1 と 4 は済み。描画面ごとの根の命令の列は今も `systems/render.rs` 130〜136 行目で `SOURCE_OVER` 固定。不透明度は `Visual.opacity`（`visual/mod.rs`）が在るが、1.0 でなければ `visual/world_visual.rs` 181 行目が「この spec の範囲」と warn して 1.0 で描く。層は `D2D1_LAYER_OPTIONS1_NONE` 固定で、変える権限はこの spec（`emit.rs` 14〜15 行目）。
+- 古くなった記述: Current State の「描画の木は作りかけ・本番の `render_surface` は読まない」、`ecs/visual/draw_content.rs` の場所、`com/d2d/{command_sink,command_types}.rs`（`audit-wintf-runtime` #429 が 2 つとも消した＝`RecCommandSink` も `BlendImage` の写し取りも無い）、`com/d2d/mod.rs` の補助 `draw_image`（もう無い）、`VisualFlags` の予約 `OPACITY_GROUP`（無い）。
+- 触るファイル: `ecs/graphics/systems/render.rs`（153 行）・`systems/surface.rs`（360）・`ecs/graphics/visual/{draw_content,mod,world_visual}.rs`（67・214・231）・`visual/draw/{command,builder,emit,emit_test_support}.rs`（52・265・65・302）と兄弟のテスト・`com/wuc.rs`（253・`BeginDraw` は `ID2D1DeviceContext3` を返す）・`com/dxgi.rs`（102）・`com/d2d/mod.rs`（158）・新しい合成の入れ物と読み戻しのファイル。議題 3 で置き換えるなら `ecs/widget/bitmap_source/alpha_mask.rs`（438）・`ecs/layout/hit_region/` と `crates/areka-emo-present/src/presenter/budget.rs`（566）・`cache.rs`（332）。`crates/areka/` には触らない。
+- 規模: 11〜15 タスク（重ね方と WARP の足場が済んだ分を下げた。残りはブレンドの口・不透明度の層・層の旗・自前の入れ物と描画面への写し・同期の 1 ピクセルの読み戻し・テスト）。議題 3 まで入れると 14〜18。20 以下＝分けない。
+- 先に要るもの: 無い（`wintf-visual-tree`・`audit-wintf-layout-widget`・議題 3 で要る `audit-emo-present` も着地済み）。同じウェーブに置けない相手は `wintf-visual-damage-redraw`・`wintf-surface-auto-promotion`（`render.rs`・`ecs/graphics/visual/`）・`compose-f16-precision`・`hit-id-pass`（`alpha_mask.rs`・`com/wuc.rs`）。C19 の見込みのほかの 7 本とは重なり 0（`audit-emo-atlas` は `crates/areka-emo-atlas/` だけで、`budget.rs`・`cache.rs` は atlas を使わない）。
 - 優先度の区分: A（開発者 10-15「D2D合成ルールを個別に指定できるようにして、高度な合成を実現したい」）。
-- 要件定義のモデル: Fable（時刻と順序の約束を新しく作る＝1 ピクセルをその場で同期して読み戻し、前のフレームの値を使わない。合成の入れ物から WUC の描画面へ写す順と読み戻しの順を決める先例が無い）。
+- 要件定義のモデル: Opus（棚卸㉞の Fable から改めた）。写しの順と読み戻しには先例が在る＝`crates/areka-emo-text/src/surface.rs` が、自前のテクスチャ → `CopyResource` → `Present` の順と、写し先（staging）→ `Map` の同期の読み戻し・待たない読み戻しを持つ。層の中の重ね方の意味論は `wintf-visual-tree` が決めた。残るのは UI スレッドの中で `Map` を待つことだけで、新しいスレッドや順序の約束を作るのではない。
 - 分割の案: 無し。
-- 見つけた穴・古くなった記述: 無し。
+- 見つけた穴: 無し（古い記述は上の 2 つ目）。

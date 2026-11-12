@@ -114,3 +114,17 @@
 
 - この brief の持ち物の `crates/areka-placement/examples/window-placement.rs` には古いパスの説明は残っていない。
 - 本体の `crates/areka/examples/collision-probe.rs:90` の `../pilot/...` の記述は古い（`emo2_root` は今は sample_ghost_kit から来る）。持ち物は `audit-areka-app` で、そちらへも申し送る（`placement-crate-split` の完了の棚卸で起票）。
+
+## 2026-11-13 棚卸㊱の再測定（main `069f1a48`）
+
+- **前提の変化**: 待つ相手の `placement-crate-split` は 11-06 に着地した（PR#433）。その後に `crates/areka-placement/` と `crates/areka/src/placement_tests/` を触った spec は無いので、受け持つファイルと申し送り ⑴〜⑷ の行の番号は今も合う（`lib.rs` 71・123・789・838、`diag.rs` 53〜56・167・248、`spawn.rs` 35・537 ほかを確かめた）。同 spec は振る舞いを変えていない。ここの指摘を先に直したものも無い。
+- **触るファイル**: 114 ファイル（`crates/areka-placement/` の 105〔`Cargo.toml`・`examples/` 込み〕と `placement_tests/` の 9〔`mod.rs` 込み〕）。1,000 行の近く: `measure_tests.rs` 999・`persist_restore_tests.rs` 939・`persist.rs` 928・`lib.rs` 918。
+- **C19 の約束とのずれ**: roadmap の C19 には「見直しの 5 本は `crates/areka/` に触らない」という約束がある。ところが、この spec の受け持ちには `crates/areka/src/placement_tests/` の 9 ファイルが入っていて、ぶつかる。そのうち 7 ファイル（`measure_bake_count_tests`・`measure_bake_log_tests`・`measure_template_tests`・`reset_balloon_pos_tests`・`spawn_zorder_pair_deferred_tests`・`zorder_group_branch_coverage_tests`・`zorder_inversion_branch_coverage_tests`）は、同じウェーブの `runtime-module-untangle` が `crate::emo2_boot::` の改名で必ず書き換える。次の `runtime-crate-split` は、それを `areka-runtime` へ移す。案: C19 では、このフォルダの指摘は洗い出すだけにする。直すのは `runtime-crate-split` の着地の後へ回す。また、`zorder_*_branch_coverage_tests` は `zorder_group_ledger*.rs`・`zorder_chain_compose*.rs` を名前で読む（`crate_source!`）。そのため、この 4 ファイルの名前を変えたり分けたりすると、本体の側にも響く。
+- **公開の形**: この crate を引くのは本体（`emo2_boot` 93 ファイル・`input_events` 31・`menu` 8 ほか）と wintf の 2 か所。wintf の `ecs/window_proc/lifecycle.rs` 34 行目は `diag::DESPAWNED_SKIP_TAG` の綴りを、`window_pos_tests.rs` 14 行目はログの出所 `areka_placement::diag` を名指す。申し送り ⑶ の「要らない公開を閉じる」で本体の呼び出し元を書き換えると、`crates/areka/` に触ってしまう。C19 のあいだは公開の形を変えず、足すだけにする（C18 の約束 ⑴ と同じ形）。
+- **`audit-placement-follow` との境目**: 受け持つファイルは重ならない。ただ、参照は両向きに多い。`follow*`・`transition_*` の 36 ファイルが、こちらのモジュール（`balloon_limit`・`balloon_lock`・`dpi_sync`・`persist`・`chain_finalize`・`sticky_group_ledger`・`windowposition`・`test_support` ほか）を引く。こちらの 32 ファイルは `follow`・`transition_diag` を引く。また、こちらの `placement_tests/mod.rs` は、相手の `transition_judge`・`transition_judge_offset` を宣言している。同じウェーブに置くなら、相手のファイルが使う項目の署名を相談なしに変えない（足すだけ）。⑷ の根の `scale_signed` の形を変えるときも、相手と申し合わせる。
+- **規模**: 指摘の数で決まる。範囲は見直しの中で一番大きい（コード 10,459 行・テスト 27,424 行）ので、20 を越える見込みが高い。越えたら、要件の討議で指摘の組ごとに 2 本目を切る（Constraints のとおり）。
+- **先に要るもの**: なし。
+- **優先度の区分**: A（開発者「とにかく指摘事項は全部直す方針です」）。
+- **要件定義のモデル**: Opus（今ある crate の中の直しで、新しい境目は作らない）。
+- **分割の案**: 今は無し（指摘を見てから決める）。
+- **古くなった記述**: ⑸ の「`crates/areka/examples/collision-probe.rs:90` の `../pilot/...` の記述は古い」は、もう当たらない（`placement-crate-split` が直し、今は `SampleRoot::acquire("emo2")` の説明になっている）。`audit-areka-app` の brief にもこの件は載っていない。

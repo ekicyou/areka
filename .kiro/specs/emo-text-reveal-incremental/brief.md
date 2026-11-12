@@ -43,7 +43,7 @@
 ## Out of Boundary
 
 - 配置・描画の手間（`audit-emo-text-layout-draw` が持っていた範囲）。
-- `\f` の解き方（`look.rs` の `apply_font_tag`）。`look.rs` はちょうど 1,000 行なので、触るなら先に分ける。
+- `\f` の解き方（`look.rs` の `apply_font_tag`）。`look.rs` は 998 行（2026-11-13 棚卸㊱の実測・あと 2 行）なので、触るなら先に分ける。
 
 ## Upstream / Downstream
 
