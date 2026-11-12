@@ -203,8 +203,10 @@ mod e2e_tests {
         let v = opacity_at(&mut rt, opacity_id, 0.5).expect("opacity at t=0.5");
         assert!((v - 0.5).abs() < 1e-9, "t=0.5: {v}");
 
-        // 周回の終わりを越えて待ちに入る（待ちの間の値は 5.3 の値の保持の後に縛る）
-        rt.tick(1.5);
+        // 周回の終わりを越えて待ちに入る → 待ちの間は 1 周目の最後の値を保つ
+        let v = opacity_at(&mut rt, opacity_id, 1.5).expect("opacity at t=1.5");
+        assert!((v - 1.0).abs() < 1e-9, "t=1.5: {v}");
+        assert_eq!(opacity_at(&mut rt, opacity_id, 2.5), None, "t=2.5");
 
         // 起点が待ちの後（3.0）にあれば 2 周目の中ほど
         let v = opacity_at(&mut rt, opacity_id, 3.5).expect("opacity at t=3.5");
@@ -247,19 +249,11 @@ mod e2e_tests {
         );
         let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
-        // 周回は [0,1]・[3,4]・[6,7]…（待ちの間の値は 5.3 で縛る）
-        for (t, want) in [
-            (0.5, Some(0.5)),
-            (1.5, None),
-            (3.5, Some(0.5)),
-            (4.5, None),
-            (6.5, Some(0.5)),
-        ] {
-            let got = opacity_at(&mut rt, opacity_id, t);
-            if let Some(want) = want {
-                let v = got.unwrap_or_else(|| panic!("opacity at t={t}"));
-                assert!((v - want).abs() < 1e-9, "t={t}: {v}");
-            }
+        // 周回は [0,1]・[3,4]・[6,7]…・待ちの間は最後の値 1.0 を保つ
+        for (t, want) in [(0.5, 0.5), (1.5, 1.0), (3.5, 0.5), (4.5, 1.0), (6.5, 0.5)] {
+            let v =
+                opacity_at(&mut rt, opacity_id, t).unwrap_or_else(|| panic!("opacity at t={t}"));
+            assert!((v - want).abs() < 1e-9, "t={t}: {v}");
         }
     }
 
@@ -349,6 +343,13 @@ mod e2e_tests {
         );
         let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("fast", 0.0).unwrap();
+
+        // 待ち [1,1.001]・[2.001,2.002] の中は最後の値 1.0 を保つ
+        for (t, want) in [(0.5, 0.5), (1.0005, 1.0), (1.5, 0.499), (2.0015, 1.0)] {
+            let v =
+                opacity_at(&mut rt, opacity_id, t).unwrap_or_else(|| panic!("opacity at t={t}"));
+            assert!((v - want).abs() < 1e-9, "t={t}: {v}");
+        }
 
         // 終わり 3.002 の直前は 3 周目の中で生きている
         let v = opacity_at(&mut rt, opacity_id, 3.0).expect("opacity at t=3.0");

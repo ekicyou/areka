@@ -77,7 +77,7 @@
   - 周回の待ちの e2e を、乱数に頼らない min==max の範囲（2,2）にし、各時刻の値を `expect` で見る形に改める
   - 終わった姿: その e2e が緑で、起点の式を元に戻すと落ちる。待ち 0 の既存の周回のテストが緑のまま
   - _Requirements: 4.1, 4.2, 4.5_
-- [ ] 5.3 最後のセグメントを過ぎた変数がインスタンスの終わりまで値を保つ（#3）
+- [x] 5.3 最後のセグメントを過ぎた変数がインスタンスの終わりまで値を保つ（#3）
   - 評価の早い戻りと、期限の切れた項目を評価のたびに消す処理を消し、項目を消すのは終わり（Conclude・Cancel・競合の終わり）だけにする。注も直す
   - 檻: x が 1 秒・y が 2 秒の台本で、t=1.008 に x=1.0、t=2.0 の Conclude の後も x=1.0
   - 項目が勝手に消えることを見ていた 2 本を新しい振る舞いに改める
@@ -369,3 +369,4 @@
 - 3.1: cue のテストの道具は `tests/cue/test_support.rs`（旧 `runtime_test_test_support.rs`・research の #13・#53 の道は古い）。research #24 の「clear の 3 本は重複」はずれていた（`clear_resets_active_barrier` は唯一の檻）。`clear_resets_all_state` にバリアを足して守った。
 - 4.3: cue のテストは `CuePlayer` の `ready()`・`remaining()`・`from_schedule` を呼ばない（再生は記録する受け手で見る）。18.1・18.2 で口を消すときにテストの差分は出ない見込み。broadcast のテストの説明（約 122・148 行）に `ready()` の語が残る（15.2 か 18 で直す）。
 - 5.2→5.3: 新しい起点では待ちの間の実効時刻が負になり、`evaluate_segments` が最初のセグメントの始めの値（例 0.0）を返す。完了 spec dola-storyboard-random-loop-offset の要件 2.4（待ちの間は最後の値を保つ）に合わせ、5.3 で「周回を 1 回以上終えて実効時刻が負なら最後の値を保つ」まで含めて直し、`loop_offset_compile.rs` の e2e 3 本で待ちの中の時刻（1.5・3.0・4.5・6.0 など）の値を縛る。
+- 5.3: 値の保持は `timeline_manager/mod.rs` の非公開 `value_time`（周回を終えて実効時刻が負なら INFINITY）で、`evaluate`・`evaluate_all_for_group`・`collect_current_segment_final_values` が使う。待ちの中で競合の Conclude・Cancel をしたときの確定値（最後の値）を縛る檻はまだ無い（9.1 の競合の檻と合わせて足す）。`evaluate` に残る「インスタンスの無い項目を消す」retain は取り残しの掃除で、生きた項目は消さない。

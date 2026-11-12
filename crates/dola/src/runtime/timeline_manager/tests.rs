@@ -139,10 +139,16 @@ fn expired_entry_auto_removal() {
     let mut instances = HashMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
-    // t=2.0 → 全セグメント終了 → None + エントリ破棄
-    let val = mgr.evaluate("x", 2.0, &instances);
-    assert!(val.is_none());
-    assert!(!mgr.has_entries(1));
+    // t=2.0 → 全セグメント終了でもインスタンスが生きている間は最後の値・項目は残る
+    assert_eq!(
+        mgr.evaluate("x", 2.0, &instances),
+        Some(EvaluatedValue::Float(100.0))
+    );
+    assert!(mgr.has_entries(1));
+
+    // 項目を消すのは remove_entries だけ
+    mgr.remove_entries(1);
+    assert!(mgr.evaluate("x", 2.0, &instances).is_none());
 }
 
 #[test]
@@ -304,9 +310,12 @@ fn evaluate_multi_segment_progression() {
         mgr.evaluate("x", 1.5, &instances),
         Some(EvaluatedValue::Float(30.0))
     );
-    // 全セグメント終了 (t=2.5): None + エントリ破棄
-    assert!(mgr.evaluate("x", 2.5, &instances).is_none());
-    assert!(!mgr.has_entries(1));
+    // 全セグメント終了 (t=2.5): 最後の値を保ち、項目は残る
+    assert_eq!(
+        mgr.evaluate("x", 2.5, &instances),
+        Some(EvaluatedValue::Float(50.0))
+    );
+    assert!(mgr.has_entries(1));
 }
 
 // =====================================================================

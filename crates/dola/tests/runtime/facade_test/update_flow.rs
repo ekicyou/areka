@@ -106,3 +106,60 @@ mod concurrent_playback {
         }
     }
 }
+
+// =========================================================================
+// 値の保持（audit-dola #3）
+// =========================================================================
+mod value_hold {
+    use super::super::*;
+    use std::collections::HashMap;
+
+    /// 1 つのストーリーボードに opacity 0→1（1 秒）と scale 1→2（2 秒）。
+    fn short_and_long_doc() -> DolaDocument {
+        let mut doc = dual_variable_doc();
+        let entry = |var: &str, from: f64, to: f64, duration: f64| StoryboardEntry {
+            variable: Some(var.to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(from)),
+                to: Some(TransitionValue::Scalar(to)),
+                relative_to: None,
+                easing: None,
+                delay: 0.0,
+                duration: Some(duration),
+            })),
+            ..Default::default()
+        };
+        let sb = StoryboardBuilder::new()
+            .entry(entry("opacity", 0.0, 1.0, 1.0))
+            .entry(entry("scale", 1.0, 2.0, 2.0))
+            .build();
+        doc.storyboard.clear();
+        doc.storyboard.insert("both".to_string(), sb);
+        doc
+    }
+
+    #[test]
+    fn shorter_variable_holds_final_value_until_instance_ends() {
+        let mut rt = DolaRuntime::new();
+        let opacity_id = rt.subscribe("opacity");
+        rt.load_document(short_and_long_doc()).unwrap();
+        rt.start("both", 0.0).unwrap();
+
+        // 受け手が持つ最後の値
+        let mut seen: HashMap<i64, EvaluatedValue> = HashMap::new();
+        let mut tick = |rt: &mut DolaRuntime, t: f64| {
+            rt.tick(t);
+            for (id, v) in &rt.last_result().changes {
+                seen.insert(*id, v.clone());
+            }
+            seen.get(&opacity_id).cloned()
+        };
+
+        assert_eq!(tick(&mut rt, 0.992), Some(EvaluatedValue::Float(0.992)));
+        // opacity の最後のセグメントを過ぎても、インスタンスは生きている → 最後の値
+        assert_eq!(tick(&mut rt, 1.008), Some(EvaluatedValue::Float(1.0)));
+        // t=2.0 で Conclude した後も 1.0 のまま
+        assert_eq!(tick(&mut rt, 2.0), Some(EvaluatedValue::Float(1.0)));
+        assert_eq!(tick(&mut rt, 2.5), Some(EvaluatedValue::Float(1.0)));
+    }
+}
