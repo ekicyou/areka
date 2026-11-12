@@ -458,16 +458,51 @@ fn the_keys_owned_by_later_specs_do_not_change_the_look() {
         vec!["valign", "bottom"],
         vec!["shadowcolor", "255", "0", "0"],
         vec!["shadowstyle", "1"],
-        vec!["cursorcolor", "red"],
-        vec!["cursorstyle", "1"],
-        vec!["cursorbrushcolor", "red"],
-        vec!["cursornotselectfontcolor", "red"],
-        vec!["anchorstyle", "1"],
-        vec!["anchorfontcolor", "red"],
-        vec!["anchor.font.color", "red"],
-        vec!["anchorvisitedpencolor", "red"],
     ];
-    assert_eq!(unowned.len(), 12, "所有外として試すキーの母数");
+    assert_eq!(unowned.len(), 4, "寄せ・影として試すキーの母数");
+    // ukadoc の「選択肢マーカー変更コマンド」の各項目の見出しのキー（`cursor…` 12・`anchor…` 18）と、
+    // 「文字変更コマンド」の `anchor.font.color`。前方一致ではなく数え上げで「他の持ち物」になる。
+    let marker_keys = [
+        "cursorstyle",
+        "cursorcolor",
+        "cursorbrushcolor",
+        "cursorpencolor",
+        "cursorfontcolor",
+        "cursormethod",
+        "cursornotselectstyle",
+        "cursornotselectcolor",
+        "cursornotselectbrushcolor",
+        "cursornotselectpencolor",
+        "cursornotselectfontcolor",
+        "cursornotselectmethod",
+        "anchorstyle",
+        "anchorcolor",
+        "anchorbrushcolor",
+        "anchorpencolor",
+        "anchorfontcolor",
+        "anchormethod",
+        "anchornotselectstyle",
+        "anchornotselectcolor",
+        "anchornotselectbrushcolor",
+        "anchornotselectpencolor",
+        "anchornotselectfontcolor",
+        "anchornotselectmethod",
+        "anchorvisitedstyle",
+        "anchorvisitedcolor",
+        "anchorvisitedbrushcolor",
+        "anchorvisitedpencolor",
+        "anchorvisitedfontcolor",
+        "anchorvisitedmethod",
+        "anchor.font.color",
+    ];
+    assert_eq!(
+        marker_keys.len(),
+        31,
+        "ukadoc の cursor…・anchor… のキーの母数"
+    );
+    let unowned = unowned
+        .into_iter()
+        .chain(marker_keys.iter().map(|key| vec![*key, "red"]));
     for args in unowned {
         let before = styled_look();
         let mut look = before.clone();
@@ -483,7 +518,17 @@ fn the_keys_owned_by_later_specs_do_not_change_the_look() {
 #[test]
 fn an_unknown_key_leaves_the_look_unchanged() {
     let layers = split_layers();
-    for key in ["Bold", "BOLD", "foo", "fontname", "sub2"] {
+    // `cursorcolour`・`anchorx` は ukadoc の一覧に無い書き損じ（前方一致で「他の持ち物」に
+    // 紛れていた・指摘 21）。
+    for key in [
+        "Bold",
+        "BOLD",
+        "foo",
+        "fontname",
+        "sub2",
+        "cursorcolour",
+        "anchorx",
+    ] {
         let before = styled_look();
         let mut look = before.clone();
         let issue = apply_font_tag(&mut look, &layers, &[key, "1"])
@@ -554,7 +599,7 @@ fn a_failed_font_tag_tells_unknown_key_missing_key_or_bad_value() {
 /// それ以外の受理（`AnchorColorAsDefault` を含む）は診ない（`mcp-strict-errors` 要件 2.7）。
 #[test]
 fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
-    let rows: [(&[&str], Option<FontClass>); 14] = [
+    let rows: [(&[&str], Option<FontClass>); 16] = [
         (&["sub", "1"], Some(FontClass::Ignored)),
         (&["outline", "1"], Some(FontClass::Ignored)),
         (&["align", "center"], Some(FontClass::Ignored)),
@@ -569,6 +614,8 @@ fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
         (&["bold", "abc"], None),
         (&["height", "0"], None),
         (&["name"], None),
+        (&["default"], None),
+        (&["disable"], None),
     ];
     for (args, want) in rows {
         let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();

@@ -584,16 +584,55 @@ fn script_of_key(key: &str) -> Option<Script> {
     }
 }
 
-/// 本仕様が意味を与えないキーのうち、接頭辞では拾えないもの（寄せ 2・影 2）。
-const UNOWNED_KEYS: [&str; 4] = ["align", "valign", "shadowcolor", "shadowstyle"];
-
-/// 所有外のキーか（要件 2.5 の列挙——寄せ 2・影 2・`cursor*` 10・`anchor*` 17）。
+/// 本仕様が意味を与えないキー（要件 2.5 の列挙——寄せ 2・影 2・`cursor…` 12・`anchor…` 19）。
+/// 一覧に無いキーは前方一致で拾わず不明のキーにする（書き損じを `warn!` で残す・要件 2.6）。
 ///
+/// `cursor…`・`anchor…` は ukadoc の「選択肢マーカー変更コマンド」の各項目の見出しのキー
+/// （`cursorcolor` と `cursorbrushcolor` のように 1 項目に 2 つ並ぶものは両方）と、
+/// 「文字変更コマンド」の `anchor.font.color`。
 /// 所有仕様は `text-align-shadow-canon`（寄せ・影）・
-/// `choice-marker-styling`（`cursor*`）・`anchor-style-canon`
-/// （`anchor*`・`anchor.font.color` を含む）。
+/// `choice-marker-styling`（`cursor…`）・`anchor-style-canon`（`anchor…`）。
+const UNOWNED_KEYS: [&str; 35] = [
+    "align",
+    "valign",
+    "shadowcolor",
+    "shadowstyle",
+    "cursorstyle",
+    "cursorcolor",
+    "cursorbrushcolor",
+    "cursorpencolor",
+    "cursorfontcolor",
+    "cursormethod",
+    "cursornotselectstyle",
+    "cursornotselectcolor",
+    "cursornotselectbrushcolor",
+    "cursornotselectpencolor",
+    "cursornotselectfontcolor",
+    "cursornotselectmethod",
+    "anchorstyle",
+    "anchorcolor",
+    "anchorbrushcolor",
+    "anchorpencolor",
+    "anchorfontcolor",
+    "anchormethod",
+    "anchornotselectstyle",
+    "anchornotselectcolor",
+    "anchornotselectbrushcolor",
+    "anchornotselectpencolor",
+    "anchornotselectfontcolor",
+    "anchornotselectmethod",
+    "anchorvisitedstyle",
+    "anchorvisitedcolor",
+    "anchorvisitedbrushcolor",
+    "anchorvisitedpencolor",
+    "anchorvisitedfontcolor",
+    "anchorvisitedmethod",
+    "anchor.font.color",
+];
+
+/// 所有外のキーか（[`UNOWNED_KEYS`] の完全一致）。
 fn is_unowned(key: &str) -> bool {
-    UNOWNED_KEYS.contains(&key) || key.starts_with("cursor") || key.starts_with("anchor")
+    UNOWNED_KEYS.contains(&key)
 }
 
 fn issue(key: &str, values: &[&str], reason: &'static str) -> FontTagIssue {
