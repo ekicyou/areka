@@ -4,7 +4,7 @@
 //! 5 つの版の話し方で送る。旧式の 4 版は `MCP-Protocol-Version` を付け、`2026-07-28` は
 //! `Mcp-Method` も付ける（`params` がオブジェクトでないので `_meta` は入れられない）。
 //! 差の一覧（`doc/ssp-mcp/transport-diff-areka.md`）に写す値は各 assert に具体の値で固定する。
-//! 測った版は rmcp 3.5.0。
+//! 測った版は rmcp 3.9.0。
 
 use std::net::SocketAddr;
 
@@ -16,7 +16,7 @@ use crate::testkit::{Response, post_rpc, serve};
 
 const STATELESS: &str = "2026-07-28";
 /// rmcp が読めない本文に返す 415 の平文（JSON として読めた 1 件の形でないとき）。
-const RMCP_415_SHAPE: &str = "fail to deserialize request body data did not match any variant of untagged enum JsonRpcMessage";
+const RMCP_415_SHAPE: &str = "fail to deserialize request body unrecognized JSON-RPC message";
 const SCALAR_MESSAGE: &str = "Invalid Request: params must be an array or an object";
 const ARRAY_MESSAGE: &str = "Invalid params: params must be an object";
 
