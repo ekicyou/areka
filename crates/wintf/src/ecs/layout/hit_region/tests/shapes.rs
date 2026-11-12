@@ -236,7 +236,7 @@ fn test_shapes_extreme_and_nonfinite_rel_do_not_panic() {
     assert_eq!(map.hit_test_region(f32::NAN, f32::NAN, &entity_size), None);
 }
 
-/// 退化矩形（幅0・高さ0 の Rect 領域）でも build を通過し、境界上の点で
+/// 極小の幅・高さの Rect 領域でも build を通過し、境界上の点で
 /// パニックせず判定されることを固定する。
 /// 注: build() は width<=0/height<=0 を弾くため、退化は x==x+width 等の縮退点で表現する。
 /// ここでは極小幅（境界包含 <= による点ヒット）の安全性を特性化する。

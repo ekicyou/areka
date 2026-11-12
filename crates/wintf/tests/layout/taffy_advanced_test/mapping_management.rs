@@ -19,8 +19,8 @@ fn test_create_node_and_mapping() {
     // 順方向マッピング検証
     assert_eq!(taffy_res.get_node(entity), Some(node_id));
 
-    // 逆方向マッピング検証
-    assert_eq!(taffy_res.get_entity(node_id), Some(entity));
+    // taffy の木に節が 1 つ在る
+    assert_eq!(taffy_res.taffy().total_node_count(), 1);
 }
 
 #[test]
@@ -29,20 +29,20 @@ fn test_remove_node_and_mapping_cleanup() {
     let mut taffy_res = TaffyLayoutResource::default();
 
     let entity = world.spawn_empty().id();
-    let node_id = taffy_res.create_node(entity).unwrap();
+    taffy_res.create_node(entity).unwrap();
 
     // ノード削除
     taffy_res
         .remove_node(entity)
         .expect("Failed to remove node");
 
-    // 両方向マッピングが削除されていることを確認
+    // 対応も taffy の木の節も削除されていることを確認
     assert_eq!(taffy_res.get_node(entity), None);
-    assert_eq!(taffy_res.get_entity(node_id), None);
+    assert_eq!(taffy_res.taffy().total_node_count(), 0);
 }
 
 #[test]
-fn test_bidirectional_mapping_consistency() {
+fn test_mapping_consistency() {
     let mut world = World::new();
     let mut taffy_res = TaffyLayoutResource::default();
 
@@ -58,7 +58,6 @@ fn test_bidirectional_mapping_consistency() {
     // すべてのマッピングが正しいことを確認
     for (i, entity) in entities.iter().enumerate() {
         assert_eq!(taffy_res.get_node(*entity), Some(node_ids[i]));
-        assert_eq!(taffy_res.get_entity(node_ids[i]), Some(*entity));
     }
 
     // 1つ削除してもその他は影響を受けないことを確認
@@ -66,20 +65,6 @@ fn test_bidirectional_mapping_consistency() {
     assert_eq!(taffy_res.get_node(entities[2]), None);
     assert_eq!(taffy_res.get_node(entities[0]), Some(node_ids[0]));
     assert_eq!(taffy_res.get_node(entities[4]), Some(node_ids[4]));
-}
-
-/// 作って消した後も、両向きの対応の数と中身が揃っている（デバッグビルドのみ）
-#[cfg(debug_assertions)]
-#[test]
-fn test_mapping_consistency_verification() {
-    let mut world = World::new();
-    let mut taffy_res = TaffyLayoutResource::default();
-
-    let kept = world.spawn_empty().id();
-    let removed = world.spawn_empty().id();
-    taffy_res.create_node(kept).unwrap();
-    taffy_res.create_node(removed).unwrap();
-    taffy_res.remove_node(removed).unwrap();
-
-    taffy_res.verify_mapping_consistency();
+    // taffy の木の節も 1 つだけ減る
+    assert_eq!(taffy_res.taffy().total_node_count(), 4);
 }

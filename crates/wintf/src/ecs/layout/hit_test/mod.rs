@@ -25,7 +25,7 @@
 //! commands.spawn((Arrangement::default(), HitTest::none()));
 //!
 //! // ルートからヒットテスト実行
-//! if let Some(entity) = hit_test(world, root, PhysicalPoint::new(100.0, 200.0)) {
+//! if let Some(entity) = hit_test(world, root, PointF::new(100.0, 200.0)) {
 //!     println!("Hit: {:?}", entity);
 //! }
 //! ```
@@ -33,7 +33,7 @@
 use std::sync::Arc;
 
 use bevy_ecs::prelude::*;
-use tracing::warn;
+use tracing::debug;
 
 use super::hit_region::HitRegionMap;
 use super::{Arrangement, D2DRect, D2DRectExt, GlobalArrangement};
@@ -41,13 +41,7 @@ use crate::ecs::WindowPos;
 use crate::ecs::common::DepthFirstReversePostOrder;
 use crate::ecs::types::PointF;
 use crate::ecs::widget::bitmap_source::AlphaMask;
-
-// ============================================================================
-// PhysicalPoint — PointF への後方互換エイリアス
-// ============================================================================
-
-/// 後方互換性エイリアス（PhysicalPoint → PointF）
-pub type PhysicalPoint = PointF;
+use crate::ecs::widget::brushes::Brushes;
 
 // ============================================================================
 // HitTestMode - ヒットテストモード
@@ -145,7 +139,7 @@ impl HitTest {
 ///
 /// `BitmapSourceResource` 以外の供給者（例: emo-present の合成表示）が
 /// `HitTestMode::AlphaMask` のヒットテストへ [`AlphaMask`] を渡すための
-/// `Component`。`hit_test_entity` / `hit_test_entity_ex` の `AlphaMask` 分岐で
+/// `Component`。`hit_test_entity_ex` の `AlphaMask` 分岐で
 /// **最優先**に読まれ、不在時は従来どおり `BitmapSourceResource` → 矩形
 /// フォールバックへ委ねる（既存挙動は完全後方互換）。
 ///
@@ -201,7 +195,7 @@ impl AlphaMaskResource {
 // ============================================================================
 
 /// `HitTestMode::AlphaMask` 分岐の αマスク読み取り・座標変換・判定を
-/// `hit_test_entity` と `hit_test_entity_ex` で共有する純粋ヘルパ。
+/// `hit_test_entity_ex` の分岐から読む純粋ヘルパ。
 ///
 /// # 読み取り優先順位
 /// 1. [`AlphaMaskResource`]（最優先・汎用供給口）
@@ -216,7 +210,7 @@ impl AlphaMaskResource {
 /// # Returns
 /// - `true`: 当該座標のマスクピクセルがヒット（α ≧ 128）／フォールバック（供給者不在）
 /// - `false`: 当該座標のマスクピクセルが透明（α < 128）
-fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PhysicalPoint) -> bool {
+fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PointF) -> bool {
     use crate::ecs::widget::bitmap_source::BitmapSourceResource;
 
     // AlphaMaskResource を最優先で読み、無ければ BitmapSourceResource の αマスクへ委ねる。
@@ -262,6 +256,7 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: Physic
 /// 単一エンティティのヒットテスト
 ///
 /// 指定エンティティのみを判定対象とします（子孫は走査しません）。
+/// 判定の規則は `hit_test_entity_ex` が正本で、その答えが「外れ」でなければヒット。
 ///
 /// # Arguments
 /// - `world`: ECS World 参照
@@ -271,72 +266,8 @@ fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: Physic
 /// # Returns
 /// - `true`: ヒット
 /// - `false`: ヒットしない、または GlobalArrangement がない
-///
-/// # Note
-/// `HitTest` コンポーネントがない場合は `HitTestMode::Bounds` として扱います。
-///
-/// # AlphaMask判定
-/// `HitTestMode::AlphaMask` の場合:
-/// 1. まず矩形判定（早期リターン）
-/// 2. BitmapSourceResource.alpha_mask を取得
-/// 3. 座標変換（スクリーン → マスク座標）
-/// 4. AlphaMask.is_hit() 呼び出し
-/// 5. αマスク未生成時は矩形判定にフォールバック
-pub fn hit_test_entity(world: &World, entity: Entity, point: PhysicalPoint) -> bool {
-    // HitTest コンポーネントを取得（なければデフォルト = Bounds）
-    let mode = world
-        .get::<HitTest>(entity)
-        .map(|h| h.mode)
-        .unwrap_or(HitTestMode::Bounds);
-
-    // HitTestMode::None の場合はヒットしない
-    if mode == HitTestMode::None {
-        return false;
-    }
-
-    // GlobalArrangement を取得（なければヒットしない）
-    let Some(global) = world.get::<GlobalArrangement>(entity) else {
-        return false;
-    };
-
-    // まず矩形判定（全モード共通の早期リターン）
-    if !global.bounds.contains(point.x, point.y) {
-        return false;
-    }
-
-    // HitTestMode::Bounds の場合は矩形判定 + α値判定
-    if mode == HitTestMode::Bounds {
-        // Opacity * Brushes.foreground.a の合成α値が ALPHA_THRESHOLD 未満なら透明と判定
-        // AlphaMask の ALPHA_THRESHOLD (128/255 ≈ 0.502) と同一基準
-        const ALPHA_THRESHOLD: f32 = 128.0 / 255.0;
-
-        let opacity = world
-            .get::<crate::ecs::graphics::Visual>(entity)
-            .map(|v| v.clamped_opacity())
-            .unwrap_or(1.0);
-
-        let foreground_a = world
-            .get::<crate::ecs::widget::brushes::Brushes>(entity)
-            .and_then(|b| b.foreground.as_color())
-            .map(|c| c.a)
-            .unwrap_or_else(|| {
-                crate::ecs::widget::brushes::DEFAULT_FOREGROUND
-                    .as_color()
-                    .map(|c| c.a)
-                    .unwrap_or(1.0)
-            });
-
-        let composite_alpha = opacity * foreground_a;
-        if composite_alpha < ALPHA_THRESHOLD {
-            return false;
-        }
-
-        return true;
-    }
-
-    // HitTestMode::AlphaMask の場合
-    // 共有ヘルパで αマスクを読み取り（AlphaMaskResource 最優先 → BitmapSourceResource → 矩形）
-    alpha_mask_hit(world, entity, &global.bounds, point)
+pub fn hit_test_entity(world: &World, entity: Entity, point: PointF) -> bool {
+    !matches!(hit_test_entity_ex(world, entity, point), RegionHit::Miss)
 }
 
 // ============================================================================
@@ -359,6 +290,7 @@ pub struct HitTestResult {
 // ============================================================================
 
 /// hit_test_entity_ex の内部返値
+#[derive(Debug)]
 pub(crate) enum RegionHit {
     /// エンティティにヒットしなかった
     Miss,
@@ -372,7 +304,7 @@ pub(crate) enum RegionHit {
 
 /// 単一エンティティの拡張ヒットテスト
 ///
-/// 既存 `hit_test_entity` と同等だが、`NamedRegions` モード時にリージョン名も返す。
+/// 当たり判定の規則の正本。`NamedRegions` モード時にリージョン名も返す。
 ///
 /// # Arguments
 /// - `world`: ECS World 参照
@@ -383,7 +315,7 @@ pub(crate) enum RegionHit {
 /// - `RegionHit::Hit(Some(name))`: 名前付き領域にヒット
 /// - `RegionHit::Hit(None)`: エンティティにヒット（無名）
 /// - `RegionHit::Miss`: ヒットしない
-pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalPoint) -> RegionHit {
+pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PointF) -> RegionHit {
     // HitTest コンポーネントを取得（なければデフォルト = Bounds）
     let mode = world
         .get::<HitTest>(entity)
@@ -410,6 +342,7 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
         HitTestMode::None => unreachable!(),
         HitTestMode::Bounds => {
             // Opacity * Brushes.foreground.a の合成α値が ALPHA_THRESHOLD 未満なら透明と判定
+            // AlphaMask の ALPHA_THRESHOLD (128/255 ≈ 0.502) と同一基準
             const ALPHA_THRESHOLD: f32 = 128.0 / 255.0;
 
             let opacity = world
@@ -418,15 +351,10 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
                 .unwrap_or(1.0);
 
             let foreground_a = world
-                .get::<crate::ecs::widget::brushes::Brushes>(entity)
-                .and_then(|b| b.foreground.as_color())
-                .map(|c| c.a)
-                .unwrap_or_else(|| {
-                    crate::ecs::widget::brushes::DEFAULT_FOREGROUND
-                        .as_color()
-                        .map(|c| c.a)
-                        .unwrap_or(1.0)
-                });
+                .get::<Brushes>(entity)
+                .map(Brushes::foreground_color)
+                .unwrap_or_else(|| Brushes::default().foreground_color())
+                .a;
 
             let composite_alpha = opacity * foreground_a;
             if composite_alpha < ALPHA_THRESHOLD {
@@ -436,8 +364,7 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
             }
         }
         HitTestMode::AlphaMask => {
-            // 共有ヘルパで αマスクを読み取り（AlphaMaskResource 最優先 → BitmapSourceResource → 矩形）。
-            // hit_test_entity と同一挙動を保証（両エントリポイントの一致）。
+            // αマスクを読み取り（AlphaMaskResource 最優先 → BitmapSourceResource → 矩形）
             if alpha_mask_hit(world, entity, &global.bounds, point) {
                 RegionHit::Hit(None)
             } else {
@@ -445,10 +372,10 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
             }
         }
         HitTestMode::NamedRegions => {
-            // HitRegionMap を取得
+            // αマスクは見ない（矩形の中なら当たり・領域の名前は表から引く）
             let Some(region_map) = world.get::<HitRegionMap>(entity) else {
-                // HitRegionMap 不在時は Bounds フォールバック（1.3）
-                warn!(
+                // HitRegionMap 不在時は Bounds フォールバック（1.3）。&World しか持たず印を書けないので debug!
+                debug!(
                     entity = ?entity,
                     "NamedRegions モードですが HitRegionMap がありません。Bounds にフォールバックします"
                 );
@@ -503,17 +430,8 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
 ///
 /// # Algorithm
 /// 深さ優先・逆順・後順走査で最前面エンティティを優先
-pub fn hit_test(world: &World, root: Entity, screen_point: PhysicalPoint) -> Option<Entity> {
-    let mut traversal = DepthFirstReversePostOrder::new(root);
-
-    while let Some(entity) = traversal.next(world) {
-        let hit = hit_test_entity(world, entity, screen_point);
-        if hit {
-            return Some(entity);
-        }
-    }
-
-    None
+pub fn hit_test(world: &World, root: Entity, screen_point: PointF) -> Option<Entity> {
+    hit_test_ex(world, root, screen_point).map(|r| r.entity)
 }
 
 // ============================================================================
@@ -530,25 +448,8 @@ pub fn hit_test(world: &World, root: Entity, screen_point: PhysicalPoint) -> Opt
 /// # Returns
 /// - `Some(Entity)`: ヒットした最前面エンティティ
 /// - `None`: ヒットなしまたは WindowPos が存在しない
-pub fn hit_test_in_window(
-    world: &World,
-    window: Entity,
-    client_point: PhysicalPoint,
-) -> Option<Entity> {
-    // WindowPos を取得（なければ None）
-    let window_pos = world.get::<WindowPos>(window)?;
-
-    // position が None の場合も None を返す
-    let position = window_pos.position?;
-
-    // クライアント座標 + ウィンドウ位置 = スクリーン座標
-    let screen_point = PhysicalPoint::new(
-        client_point.x + position.x as f32,
-        client_point.y + position.y as f32,
-    );
-
-    // hit_test に委譲
-    hit_test(world, window, screen_point)
+pub fn hit_test_in_window(world: &World, window: Entity, client_point: PointF) -> Option<Entity> {
+    hit_test_in_window_ex(world, window, client_point).map(|r| r.entity)
 }
 
 // ============================================================================
@@ -557,7 +458,7 @@ pub fn hit_test_in_window(
 
 /// 指定ルートエンティティ配下でスクリーン座標による拡張ヒットテストを実行
 ///
-/// 既存 `hit_test` と同じ走査だが、`HitTestResult`（エンティティ＋リージョン名）を返す。
+/// 走査の正本。`hit_test` はこの結果のエンティティだけを返す。
 ///
 /// # Arguments
 /// - `world`: ECS World 参照
@@ -567,11 +468,7 @@ pub fn hit_test_in_window(
 /// # Returns
 /// - `Some(HitTestResult)`: ヒットした最前面エンティティと領域名
 /// - `None`: ヒットなし
-pub fn hit_test_ex(
-    world: &World,
-    root: Entity,
-    screen_point: PhysicalPoint,
-) -> Option<HitTestResult> {
+pub fn hit_test_ex(world: &World, root: Entity, screen_point: PointF) -> Option<HitTestResult> {
     let mut traversal = DepthFirstReversePostOrder::new(root);
 
     while let Some(entity) = traversal.next(world) {
@@ -603,12 +500,14 @@ pub fn hit_test_ex(
 pub fn hit_test_in_window_ex(
     world: &World,
     window: Entity,
-    client_point: PhysicalPoint,
+    client_point: PointF,
 ) -> Option<HitTestResult> {
+    // WindowPos か position が無ければ None
     let window_pos = world.get::<WindowPos>(window)?;
     let position = window_pos.position?;
 
-    let screen_point = PhysicalPoint::new(
+    // クライアント座標 + ウィンドウ位置 = スクリーン座標
+    let screen_point = PointF::new(
         client_point.x + position.x as f32,
         client_point.y + position.y as f32,
     );
@@ -626,7 +525,7 @@ mod tests;
 #[cfg(test)]
 mod tests_ex;
 
-/// `AlphaMaskResource` の内部 `Arc` 化と `set_shared` の檻（structure.md のテスト分離規約）
+/// `AlphaMaskResource::set_shared` の檻（structure.md のテスト分離規約）
 #[cfg(test)]
 #[path = "hit_test_shared_mask_tests.rs"]
 mod shared_mask_tests;

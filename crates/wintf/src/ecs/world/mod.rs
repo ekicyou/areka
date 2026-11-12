@@ -314,7 +314,7 @@ impl EcsWorld {
                         .after(crate::ecs::widget::text::draw_typewriters),
                     crate::ecs::widget::bitmap_source::draw_bitmap_sources
                         .after(crate::ecs::graphics::resolve_inherited_brushes),
-                    // αマスク生成（draw_bitmap_sourcesの後、BitmapSourceResource追加検出時に実行）
+                    // αマスク生成（draw_bitmap_sourcesの後、BitmapSourceResource か HitTest が変わったときに実行）
                     crate::ecs::widget::bitmap_source::generate_alpha_mask_system
                         .after(crate::ecs::widget::bitmap_source::draw_bitmap_sources),
                 )

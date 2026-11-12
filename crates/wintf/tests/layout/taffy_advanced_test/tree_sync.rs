@@ -311,10 +311,9 @@ fn test_entity_removal_cleans_both_mappings() {
     schedule.add_systems(sync_taffy_tree_system);
     schedule.run(&mut world);
 
-    let node_id = world
-        .resource::<TaffyLayoutResource>()
-        .get_node(entity)
-        .unwrap();
+    let taffy_res = world.resource::<TaffyLayoutResource>();
+    assert!(taffy_res.get_node(entity).is_some());
+    assert_eq!(taffy_res.taffy().total_node_count(), 1);
 
     world.despawn(entity);
 
@@ -322,10 +321,10 @@ fn test_entity_removal_cleans_both_mappings() {
     cleanup_schedule.add_systems(cleanup_removed_entities_system);
     cleanup_schedule.run(&mut world);
 
-    // Entity→Node と Node→Entity の両方が消えている
+    // 部品の節の対応も taffy の木の節も消えている
     let taffy_res = world.resource::<TaffyLayoutResource>();
     assert!(taffy_res.get_node(entity).is_none());
-    assert!(taffy_res.get_entity(node_id).is_none());
+    assert_eq!(taffy_res.taffy().total_node_count(), 0);
 }
 
 #[test]
@@ -343,21 +342,22 @@ fn test_mapping_cleanup_prevents_memory_leak() {
     for _ in 0..10 {
         let entity = world.spawn(TaffyStyle::default()).id();
         schedule.run(&mut world);
-        let node_id = world
-            .resource::<TaffyLayoutResource>()
-            .get_node(entity)
-            .unwrap();
+        assert!(
+            world
+                .resource::<TaffyLayoutResource>()
+                .get_node(entity)
+                .is_some()
+        );
 
         world.despawn(entity);
         cleanup_schedule.run(&mut world);
-        removed.push((entity, node_id));
+        removed.push(entity);
     }
 
-    // 10 件それぞれの対応が両向きとも残っていない
+    // 10 件それぞれの対応が残っていない
     let taffy_res = world.resource::<TaffyLayoutResource>();
-    for (entity, node_id) in removed {
+    for entity in removed {
         assert!(taffy_res.get_node(entity).is_none(), "{entity:?}");
-        assert!(taffy_res.get_entity(node_id).is_none(), "{entity:?}");
     }
     // 対応だけでなく taffy の木の節も残っていない
     assert_eq!(taffy_res.taffy().total_node_count(), 0);

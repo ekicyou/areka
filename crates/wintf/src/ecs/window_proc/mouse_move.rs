@@ -127,10 +127,10 @@ pub(super) fn WM_MOUSEMOVE(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    use crate::ecs::layout::hit_test::{PhysicalPoint as HitTestPoint, hit_test_in_window};
     use crate::ecs::pointer::{
         PointerLeave, PointerState, WindowPointerTracking, push_pointer_sample, set_modifier_state,
     };
+    use crate::ecs::{PointF as HitTestPoint, hit_test_in_window};
     use std::time::Instant;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,

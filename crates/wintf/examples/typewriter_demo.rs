@@ -6,7 +6,7 @@
 //! - 文字を一文字ずつ表示
 //! - ウェイト制御
 //! - pause/resume/skip 操作（skip は縦書きだけ）
-//! - FireEvent による完了イベント（横書きが最後まで進むと受け手に届き、ログに出る）
+//! - FireEvent による完了イベント（縦書きは skip した時点、横書きは最後まで進むと受け手に届き、ログに出る）
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
@@ -23,7 +23,7 @@ use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::{
     TextDirection, Typewriter, TypewriterEvent, TypewriterEventKind, TypewriterLayoutCache,
-    TypewriterTalk, TypewriterToken,
+    TypewriterTalk, TypewriterToken, deliver_typewriter_events,
 };
 use wintf::ecs::{FrameTime, Point, Update, Window, WindowPos};
 use wintf::*;
@@ -67,7 +67,7 @@ fn main() -> Result<()> {
     println!("  3. 一文字ずつ表示（タイプライター効果）");
     println!("  4. 3秒後: pause()");
     println!("  5. 5秒後: resume()");
-    println!("  6. 6秒後: 縦書きだけ skip()（全文即時表示）");
+    println!("  6. 6秒後: 縦書きだけ skip()（全文即時表示・完了イベントもその場でログに出る）");
     println!("     横書きは最後まで進み、約9秒で完了イベントがログに出る");
     println!("  7. 10秒後: ウィンドウ終了");
 
@@ -434,17 +434,22 @@ fn resume_typewriter(world: &mut World) {
     }
 }
 
-/// 縦書き Typewriter をスキップ（skip は残りの FireEvent を出さないので、横書きは最後まで進めて完了イベントを見せる）
+/// 縦書き Typewriter をスキップ（残りの FireEvent もその場で受け手へ届ける）
 fn skip_typewriter(world: &mut World) {
-    // LayoutCache から total_cluster_count を取得して skip に渡す
-    let mut query = world
-        .query_filtered::<(&mut TypewriterTalk, &TypewriterLayoutCache), With<VerticalTypewriter>>(
-        );
-    for (mut talk, layout_cache) in query.iter_mut(world) {
-        let total = layout_cache.timeline().total_cluster_count;
-        talk.skip(total);
+    let mut query = world.query_filtered::<
+        (Entity, &mut TypewriterTalk, &TypewriterLayoutCache),
+        With<VerticalTypewriter>,
+    >();
+    let mut fired = Vec::new();
+    for (entity, mut talk, layout_cache) in query.iter_mut(world) {
+        fired.push((entity, talk.skip(layout_cache.timeline())));
         println!("[Test] VerticalTypewriter skipped to end (progress: 100%)");
     }
+    let mut commands = world.commands();
+    for (entity, events) in fired {
+        deliver_typewriter_events(&mut commands, entity, events);
+    }
+    world.flush();
 }
 
 /// 受け手に届いた TypewriterEvent をログに出す

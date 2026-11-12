@@ -51,10 +51,17 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///
 /// # 設計意図
 ///
-/// - Box系5種（size, margin, padding, position, inset）をOption型でネスト構造として含める
+/// - Box系7種（size, min_size, max_size, margin, padding, position, inset）をOption型でネスト構造として含める
 /// - Flex系7種（flex_direction, justify_content, align_items, flex_grow, flex_shrink, flex_basis, align_self）
 ///   をフラットなOption型フィールドとして含める（taffyのStyle構造体と同様のフラット設計）
 /// - `None`フィールドはtaffyデフォルト値にマッピング
+///
+/// # 配置される部品
+///
+/// 配置されるのは、`LayoutRoot` から `ChildOf` をたどって途切れずに `BoxStyle`（根は `LayoutRoot`）が
+/// 付いている部品だけ。途中に `BoxStyle` の無い親が居ると、その親が `BoxStyle` を持つまで、その下は
+/// taffy の木につながらず、子の `BoxStyle` を変えても配置されない（節を作った回と、子を持つ部品から外した回に warn を出す）。
+/// 親が後から `BoxStyle` を持てば、その回に親子がつながる。
 ///
 /// # 使用例
 ///
@@ -62,7 +69,7 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 /// use wintf::ecs::layout::*;
 ///
 /// // Flexコンテナーとして使用
-/// commands.spawn((
+/// let container = commands.spawn((
 ///     BoxStyle {
 ///         size: Some(BoxSize {
 ///             width: Some(Dimension::Percent(100.0)),
@@ -73,7 +80,8 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///         align_items: Some(AlignItems::CENTER),
 ///         ..Default::default()
 ///     },
-/// ));
+///     ChildOf(parent), // 親も BoxStyle（根は LayoutRoot）を持つこと
+/// )).id();
 ///
 /// // Flexアイテムとして使用
 /// commands.spawn((
@@ -86,6 +94,7 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///         flex_shrink: Some(1.0),
 ///         ..Default::default()
 ///     },
+///     ChildOf(container), // 上のコンテナーの子として配置する
 /// ));
 /// ```
 #[derive(Component, Debug, Clone, Copy, PartialEq, Default)]
@@ -173,14 +182,7 @@ impl From<&BoxStyle> for taffy::Style {
             taffy_style.inset = inset.0.into();
         }
 
-        // Flex系プロパティ変換
-        // コンテナープロパティ設定時にdisplay: Flexを自動設定
-        if style.flex_direction.is_some()
-            || style.justify_content.is_some()
-            || style.align_items.is_some()
-        {
-            taffy_style.display = taffy::Display::Flex;
-        }
+        // Flex系プロパティ変換（display は taffy の既定の Flex のまま）
         if let Some(dir) = style.flex_direction {
             taffy_style.flex_direction = dir;
         }
@@ -191,10 +193,12 @@ impl From<&BoxStyle> for taffy::Style {
             taffy_style.align_items = Some(ai);
         }
 
-        // flex_grow/flex_shrinkはNone時にtaffyデフォルト値を適用
-        taffy_style.flex_grow = style.flex_grow.unwrap_or(0.0);
-        taffy_style.flex_shrink = style.flex_shrink.unwrap_or(1.0);
-
+        if let Some(grow) = style.flex_grow {
+            taffy_style.flex_grow = grow;
+        }
+        if let Some(shrink) = style.flex_shrink {
+            taffy_style.flex_shrink = shrink;
+        }
         if let Some(basis) = style.flex_basis {
             taffy_style.flex_basis = basis.into();
         }

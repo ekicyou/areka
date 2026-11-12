@@ -5,9 +5,9 @@
 //! それらを呼び、結果どおりに `SetCursor`・`TrackMouseEvent` を呼ぶだけの薄い層にする。
 
 use super::{CursorAsk, CursorQuery, CursorReply, CursorTrigger};
-use crate::ecs::layout::hit_test::{PhysicalPoint, hit_test_in_window};
 use crate::ecs::window::WindowHandle;
 use crate::ecs::world::EcsWorld;
+use crate::ecs::{PointF, hit_test_in_window};
 use bevy_ecs::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -167,7 +167,7 @@ fn read_ask(
         trace!(?hwnd, "ScreenToClient failed");
         return None;
     }
-    let owner = hit_test_in_window(world, window, PhysicalPoint::new(pt.x as f32, pt.y as f32));
+    let owner = hit_test_in_window(world, window, PointF::new(pt.x as f32, pt.y as f32));
     // SAFETY: HWND を渡すだけ（無効な窓は 0 が返る）。
     let raw_dpi = unsafe { GetDpiForWindow(hwnd) };
     if raw_dpi == 0 {

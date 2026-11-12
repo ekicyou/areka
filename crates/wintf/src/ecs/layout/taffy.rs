@@ -8,9 +8,10 @@ use taffy::prelude::*;
 #[repr(transparent)]
 pub struct TaffyStyle(pub(crate) Style);
 
-// taffy 0.9 の Style は CompactLength（calc 式用の *const () タグ付きポインタ）を含むため
-// 自動では Send/Sync にならない。wintf は calc 値を使用せず（Px/Percent/Auto のみ）、
-// Style は ECS のアクセス制御下でのみ読み書きされるため Send/Sync は安全。
+// taffy 0.13 の Style は CompactLength（calc 式用の *const () タグ付きポインタ）を含むため
+// 自動では Send/Sync にならない。`TaffyStyle::new` は公開なので calc の値も入りうるが、
+// wintf が使う `TaffyTree<()>` は calc のポインタを一度も読まない（`resolve_calc_value` は
+// 0 を返すだけ）。ポインタの先に触れないので、スレッドをまたいでも安全。
 unsafe impl Send for TaffyStyle {}
 unsafe impl Sync for TaffyStyle {}
 
@@ -43,16 +44,12 @@ pub struct TaffyLayoutResource {
     tree: TaffyTree<()>,
     /// Entity → NodeId マッピング
     entity_to_node: HashMap<Entity, NodeId>,
-    /// NodeId → Entity マッピング（逆引き用）
-    node_to_entity: HashMap<NodeId, Entity>,
 }
 
-// SAFETY: TaffyTree は内部のノードに taffy::Style を保持し、taffy 0.9 の Style は
+// SAFETY: TaffyTree は内部のノードに taffy::Style を保持し、taffy 0.13 の Style は
 // CompactLength（calc 式用の *const () タグ付きポインタ）を含むため自動では Send/Sync に
-// ならない。wintf は calc 値を使用せず（Px/Percent/Auto のみ。dimension.rs の変換参照）、
-// TaffyTree とそのエンティティマッピングはこのリソースが排他所有する。アクセスは
-// 常に bevy_ecs のリソース借用機構（`ResMut<TaffyLayoutResource>` / `world.resource_mut`）
-// 経由で行われ、生ポインタが ECS スケジューラの制御外へ漏れることはないため Send/Sync は安全。
+// ならない。`TaffyTree<()>` は calc のポインタを一度も読まない（`resolve_calc_value` は
+// 0 を返すだけ）ので、スレッドをまたいでも安全。
 // （同根の根拠は上記 `unsafe impl ... for TaffyStyle` を参照）
 unsafe impl Send for TaffyLayoutResource {}
 unsafe impl Sync for TaffyLayoutResource {}
@@ -62,7 +59,6 @@ impl Default for TaffyLayoutResource {
         Self {
             tree: TaffyTree::new(),
             entity_to_node: HashMap::new(),
-            node_to_entity: HashMap::new(),
         }
     }
 }
@@ -72,7 +68,6 @@ impl TaffyLayoutResource {
     pub fn create_node(&mut self, entity: Entity) -> Result<NodeId, TaffyError> {
         let node_id = self.tree.new_leaf(Style::default())?;
         self.entity_to_node.insert(entity, node_id);
-        self.node_to_entity.insert(node_id, entity);
         Ok(node_id)
     }
 
@@ -83,7 +78,6 @@ impl TaffyLayoutResource {
         if let Some(&node_id) = self.entity_to_node.get(&entity) {
             self.tree.remove(node_id)?;
             self.entity_to_node.remove(&entity);
-            self.node_to_entity.remove(&node_id);
         }
         Ok(())
     }
@@ -91,11 +85,6 @@ impl TaffyLayoutResource {
     /// エンティティに対応するNodeIdを取得
     pub fn get_node(&self, entity: Entity) -> Option<NodeId> {
         self.entity_to_node.get(&entity).copied()
-    }
-
-    /// NodeIdに対応するエンティティを取得
-    pub fn get_entity(&self, node_id: NodeId) -> Option<Entity> {
-        self.node_to_entity.get(&node_id).copied()
     }
 
     /// Taffyツリーへの参照を取得
@@ -106,24 +95,5 @@ impl TaffyLayoutResource {
     /// Taffyツリーへの可変参照を取得
     pub fn taffy_mut(&mut self) -> &mut TaffyTree<()> {
         &mut self.tree
-    }
-
-    /// マッピングの整合性を検証（デバッグ用）
-    #[cfg(debug_assertions)]
-    pub fn verify_mapping_consistency(&self) {
-        assert_eq!(
-            self.entity_to_node.len(),
-            self.node_to_entity.len(),
-            "Entity→Node と Node→Entity のマッピング数が一致しません"
-        );
-
-        for (entity, node_id) in &self.entity_to_node {
-            assert_eq!(
-                self.node_to_entity.get(node_id),
-                Some(entity),
-                "Entity {:?} のマッピングが不整合です",
-                entity
-            );
-        }
     }
 }

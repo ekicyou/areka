@@ -1,17 +1,18 @@
 //! Typewriter コンポーネント定義
 //!
 //! - Typewriter: ウィジェット論理コンポーネント（永続、スタイル設定）
-//! - TypewriterTalk: 1回のトーク論理情報（再生中のみ存在）
+//! - TypewriterTalk: 1回のトーク論理情報（入れ替えると次のトーク・外すと絵を消す）
 //! - TypewriterLayoutCache: 描画リソース（システムが自動生成）
 
 use crate::ecs::Visual;
+use crate::ecs::graphics::GraphicsCommandList;
 use crate::ecs::widget::text::typewriter_ir::{
     TimelineItem, TypewriterEventKind, TypewriterTimeline, TypewriterToken,
 };
+use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;
-use tracing::trace;
 use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
 
 // re-export TextDirection from label
@@ -22,6 +23,7 @@ pub use crate::ecs::widget::text::label::TextDirection;
 // ============================================================
 
 /// ウィジェット論理コンポーネント（永続）
+/// 外すと命令の列を空にして絵を消し、`TypewriterLayoutCache` も外す。
 /// メモリ戦略: SparseSet（動的追加/削除）
 ///
 /// 色は`Brushes`コンポーネントで指定します。
@@ -37,7 +39,11 @@ pub use crate::ecs::widget::text::label::TextDirection;
 /// ));
 /// ```
 #[derive(Component)]
-#[component(storage = "SparseSet", on_add = on_typewriter_add, on_remove = on_typewriter_remove)]
+#[component(
+    storage = "SparseSet",
+    on_add = on_typewriter_add,
+    on_remove = on_typewriter_talk_remove
+)]
 pub struct Typewriter {
     // === スタイル設定（Label互換） ===
     pub font_family: String,
@@ -80,13 +86,8 @@ fn on_typewriter_add(mut world: DeferredWorld, hook: HookContext) {
     }
 }
 
-/// Typewriter削除時のフック
-fn on_typewriter_remove(_world: DeferredWorld, hook: HookContext) {
-    trace!(entity = ?hook.entity, "[Typewriter] Removed");
-}
-
 // ============================================================
-// TypewriterTalk - 1回のトーク論理情報（再生中のみ存在）
+// TypewriterTalk - 1回のトーク論理情報
 // ============================================================
 
 /// 再生状態
@@ -98,14 +99,20 @@ pub enum TypewriterState {
     Completed,
 }
 
-/// 1回のトーク論理情報（再生中のみ存在）
-/// トーク完了・クリア時に remove される
+/// 1回のトーク論理情報
+/// 完了しても残る（`Completed` の状態で最後の表示を保つ）。`Typewriter` を付けると空のトークが入る。
+/// 入れ直すと次のトークになり、`TypewriterLayoutCache` を外して作り直させる。
+/// 外すと命令の列を空にして絵を消し、`TypewriterLayoutCache` も外す。
 /// メモリ戦略: SparseSet（動的追加/削除）
 ///
 /// COMリソース（TextLayout）は TypewriterLayoutCache が保持。
 /// このコンポーネントは論理情報のみを保持する。
 #[derive(Component, Clone)]
-#[component(storage = "SparseSet", on_remove = on_typewriter_talk_remove)]
+#[component(
+    storage = "SparseSet",
+    on_insert = on_typewriter_talk_insert,
+    on_remove = on_typewriter_talk_remove
+)]
 pub struct TypewriterTalk {
     /// Stage 1 IR トークン列
     tokens: Vec<TypewriterToken>,
@@ -156,11 +163,21 @@ impl TypewriterTalk {
         }
     }
 
-    /// 全文即時表示（LayoutCache がある場合のみ有効）
-    pub fn skip(&mut self, total_cluster_count: u32) {
-        self.visible_cluster_count = total_cluster_count;
-        self.progress = 1.0;
-        self.state = TypewriterState::Completed;
+    /// 全文即時表示（一時停止中でも完了へ進める）
+    ///
+    /// 時間表の残り（文字・待ち・知らせ）をその場で全部進めて `Completed` にし、
+    /// 残っていた知らせ（末尾の `Complete` など）を返す。返した知らせは
+    /// [`deliver_typewriter_events`](crate::ecs::widget::text::deliver_typewriter_events) で届ける。
+    /// 完了済みなら何もせず空を返す。
+    pub fn skip(
+        &mut self,
+        timeline: &TypewriterTimeline,
+    ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
+        if self.state == TypewriterState::Completed {
+            return Vec::new();
+        }
+        self.state = TypewriterState::Playing;
+        self.advance(f64::INFINITY, timeline)
     }
 
     // === 状態取得 ===
@@ -213,8 +230,15 @@ impl TypewriterTalk {
         if self.state != TypewriterState::Playing {
             return Vec::new();
         }
+        self.advance(current_time - self.start_time, timeline)
+    }
 
-        let elapsed = current_time - self.start_time;
+    /// 経過時間 `elapsed` まで時間表を進め、発火すべきイベントを返す
+    fn advance(
+        &mut self,
+        elapsed: f64,
+        timeline: &TypewriterTimeline,
+    ) -> Vec<(bevy_ecs::entity::Entity, TypewriterEventKind)> {
         let mut events_to_fire = Vec::new();
 
         // タイムラインを走査して表示状態を更新
@@ -258,8 +282,8 @@ impl TypewriterTalk {
             self.progress = 1.0;
         }
 
-        // 全クラスタ表示完了で Completed に遷移
-        if self.visible_cluster_count >= timeline.total_cluster_count {
+        // 時間表の項目を最後まで進めたら Completed（最後の文字の後ろの待ち・知らせも済ませてから）
+        if self.next_item_index >= timeline.items.len() {
             self.state = TypewriterState::Completed;
         }
 
@@ -267,8 +291,24 @@ impl TypewriterTalk {
     }
 }
 
-fn on_typewriter_talk_remove(_world: DeferredWorld, hook: HookContext) {
-    trace!(entity = ?hook.entity, "[TypewriterTalk] Removed");
+/// トークを入れるたびに控えを外し、次の `Draw` で新しいトークの控えを作らせる（初めてなら外す物が無い）。
+fn on_typewriter_talk_insert(mut world: DeferredWorld, hook: HookContext) {
+    world
+        .commands()
+        .entity(hook.entity)
+        .try_remove::<TypewriterLayoutCache>();
+}
+
+/// `TypewriterTalk` か `Typewriter` を外したら絵を消す（`Changed` で描き直させる）。
+/// 控えは `try_remove` なので消すときも安全。
+fn on_typewriter_talk_remove(mut world: DeferredWorld, hook: HookContext) {
+    if let Some(mut cmd_list) = world.get_mut::<GraphicsCommandList>(hook.entity) {
+        cmd_list.set_if_neq(GraphicsCommandList::empty());
+    }
+    world
+        .commands()
+        .entity(hook.entity)
+        .try_remove::<TypewriterLayoutCache>();
 }
 
 // ============================================================
@@ -277,30 +317,16 @@ fn on_typewriter_talk_remove(_world: DeferredWorld, hook: HookContext) {
 
 /// Typewriter 描画リソースキャッシュ
 ///
-/// TypewriterTalk 追加時に描画システムが自動生成する。
+/// 控えの無いトークに対して描画システムが自動生成する（トークを入れ直す・外す・`Typewriter` が変わる・外す・`Arrangement` が変わると外れる）。
 /// COMリソース（IDWriteTextLayout）と Stage 2 IR を保持。
 #[derive(Component)]
-#[component(storage = "SparseSet", on_remove = on_layout_cache_remove)]
+#[component(storage = "SparseSet")]
 pub struct TypewriterLayoutCache {
     /// TextLayout（描画に使用）
     text_layout: IDWriteTextLayout,
     /// Stage 2 IR タイムライン
     timeline: TypewriterTimeline,
 }
-
-// SAFETY: 内包する 2 フィールドはいずれも Send + Sync である:
-// - `text_layout: IDWriteTextLayout` … windows-rs（0.62）が当該 COM 型に対し
-//   `unsafe impl Send/Sync` を生成済み（DirectWrite のレイアウト系オブジェクトは
-//   読み取り中心の利用に対しスレッドアジャイルとして扱われる）。
-// - `timeline: TypewriterTimeline` … String/Vec/f64/u32 のみのプレーンデータ。
-// したがって本構造体は自動で Send + Sync を導出でき、下記の手動 impl は健全（かつ
-// 上記により冗長）である。実利用上も TextLayout への変更系呼び出し（SetDrawingEffect 等、
-// typewriter_draw.rs）は Bevy の Draw スケジュール内で当該エンティティを排他参照する
-// システムからのみ行われ、跨スレッドの同時アクセスは発生しない。手動 impl は crate 全域の
-// COM 保持コンポーネント（GraphicsCommandList 等）と表記を揃えるため明示で残す（撤去は
-// S 観点の churn 判断事項）。
-unsafe impl Send for TypewriterLayoutCache {}
-unsafe impl Sync for TypewriterLayoutCache {}
 
 impl TypewriterLayoutCache {
     /// 新規作成
@@ -328,10 +354,6 @@ impl std::fmt::Debug for TypewriterLayoutCache {
             .field("timeline", &self.timeline)
             .finish_non_exhaustive()
     }
-}
-
-fn on_layout_cache_remove(_world: DeferredWorld, hook: HookContext) {
-    trace!(entity = ?hook.entity, "[TypewriterLayoutCache] Removed - COM resources released");
 }
 
 #[cfg(test)]

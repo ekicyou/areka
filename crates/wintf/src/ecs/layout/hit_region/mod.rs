@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use bevy_ecs::prelude::*;
-use tracing::debug;
+use tracing::{debug, error};
 use windows::core::Interface;
 
 use super::metrics::Size;
@@ -132,6 +132,9 @@ impl ColorMapData {
     ///
     /// PNG画像を読み込み、各ピクセルの色値からリージョンIDへのインデックスマップを構築する。
     /// マッピング外の色はID 0（無名）として扱う。
+    ///
+    /// 対応は 255 色まで（リージョンIDを 1 バイトに詰めるため）。越えると `E_INVALIDARG` を返す。
+    /// 画素のバイト数が u32 に収まらない大きな画像も `E_INVALIDARG` を返す。
     pub fn from_image(
         image_path: &std::path::Path,
         mapping: &HashMap<(u8, u8, u8), String>,
@@ -139,6 +142,17 @@ impl ColorMapData {
         use windows::Win32::Foundation::GENERIC_READ;
         use windows::Win32::Graphics::Imaging::*;
         use windows::core::HSTRING;
+
+        if mapping.len() > u8::MAX as usize {
+            error!(
+                colors = mapping.len(),
+                "カラーマップの対応は 255 色までです"
+            );
+            return Err(windows::core::Error::new(
+                windows::Win32::Foundation::E_INVALIDARG,
+                "カラーマップの対応は 255 色までです",
+            ));
+        }
 
         // リージョン名リストとカラー→ID マッピングを構築
         let mut region_names = Vec::new();
@@ -152,10 +166,8 @@ impl ColorMapData {
 
         // WIC で PNG を読み込む
         let factory = wic_factory()?;
-        let path_str = image_path.to_string_lossy();
-        let path_hstring = HSTRING::from(path_str.as_ref());
         let decoder = factory.create_decoder_from_filename(
-            &path_hstring,
+            &HSTRING::from(image_path),
             None,
             GENERIC_READ,
             WICDecodeMetadataCacheOnDemand,
@@ -176,15 +188,22 @@ impl ColorMapData {
 
         // サイズ取得
         let (width, height) = converted.get_size()?;
-        let stride = width * 4; // PBGRA32: 4 bytes per pixel
-        let buffer_size = (stride * height) as usize;
+        let Some((stride, buffer_size)) =
+            crate::ecs::widget::bitmap_source::systems::pbgra32_layout(width, height)
+        else {
+            error!(width, height, "カラーマップの画像が大きすぎます");
+            return Err(windows::core::Error::new(
+                windows::Win32::Foundation::E_INVALIDARG,
+                "カラーマップの画像が大きすぎます",
+            ));
+        };
         let mut buffer = vec![0u8; buffer_size];
 
         // ピクセルデータをコピー
         converted.copy_pixels(None, stride, &mut buffer)?;
 
         // インデックスマップ構築（RGB→リージョンID変換）
-        let pixel_count = (width * height) as usize;
+        let pixel_count = buffer_size / 4;
         let mut index_map = vec![0u8; pixel_count];
 
         for i in 0..pixel_count {
@@ -250,30 +269,6 @@ impl ColorMapData {
     pub fn height(&self) -> u32 {
         self.height
     }
-}
-
-// ============================================================================
-// ColorMapDef / ColorMapping - シリアライズ対象の定義構造
-// ============================================================================
-
-/// カラーマップ定義（シリアライズ対象）
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ColorMapDef {
-    /// 画像ファイルパス
-    pub image_path: String,
-    /// RGB → 領域名マッピング
-    pub mapping: Vec<ColorMapping>,
-}
-
-/// 色→領域名マッピングエントリ
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ColorMapping {
-    /// RGB値 [R, G, B]
-    pub color: [u8; 3],
-    /// 領域名
-    pub name: String,
 }
 
 // ============================================================================

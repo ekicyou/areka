@@ -1,5 +1,6 @@
 pub mod bitmap_source;
 pub mod brushes;
+pub(crate) mod record;
 pub mod shapes;
 pub mod text;
 

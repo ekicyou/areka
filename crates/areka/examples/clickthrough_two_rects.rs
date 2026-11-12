@@ -188,9 +188,10 @@ fn create_test_window(world: &mut World) -> Entity {
 
     // 左下: 透過 PNG（キャラ画像）を αピクセル判定で置く。client (20,180)-(180,390)。
     //
-    // 生成時に `HitTest::alpha_mask()` を付けるのが必須: `generate_alpha_mask_system` は
-    // `Added<BitmapSourceResource>` ＋ `With<HitTest>` ＋ `HitTestMode::AlphaMask` の時だけ
-    // αマスクを生成する（HitTest 無し＝既定 Bounds では全面矩形判定でαが効かない）。
+    // `HitTest` を省いても `BitmapSource` の on_add が `HitTest::alpha_mask()` を入れる。ここでは
+    // αピクセル判定を使うことを読み手に示すため明示している。`generate_alpha_mask_system` は
+    // `Changed<BitmapSourceResource>` ＋ `HitTest` ＋ `HitTestMode::AlphaMask` で、まだαマスクが
+    // 無い時だけαマスクを生成する（`HitTest::bounds()` などを付ければ全面矩形判定でαは効かない）。
     // 表示は `draw_bitmap` が bounds（BoxStyle サイズ）へスケールするため、表示と判定域は一致する。
     // 期待: キャラの不透明ピクセル上だけ十字カーソル ON・透明な周辺はクリック透過（背面へ）。
     world.spawn((

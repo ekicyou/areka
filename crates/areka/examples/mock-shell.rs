@@ -606,7 +606,7 @@ mod tests {
         assert_eq!(children.len(), 1);
 
         let (bitmap, child_of) = children[0];
-        assert_eq!(bitmap.path, SHELL_IMAGE_PATH);
+        assert_eq!(bitmap.path(), SHELL_IMAGE_PATH);
         assert_eq!(child_of.parent(), shell);
     }
 

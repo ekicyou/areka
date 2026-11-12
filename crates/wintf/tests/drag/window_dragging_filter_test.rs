@@ -110,7 +110,7 @@ fn window_pos_sync_resumes_after_dragging_removed() {
     schedule.add_systems(window_pos_sync_system);
 
     // 0回目: Added → Changed として検知されるが bounds がゼロなのでスキップ
-    // （生成時の GlobalArrangement は Arrangement の on_add フックが既定値で上書きする）
+    // （生成時に渡した GlobalArrangement の既定値は Arrangement の on_add フックでもそのまま残る）
     schedule.run(&mut world);
     world.get_mut::<GlobalArrangement>(entity).unwrap().bounds = wintf::ecs::layout::D2DRect {
         left: 500.0,
@@ -191,7 +191,7 @@ fn window_pos_sync_propagates_size_change_during_drag() {
     let mut schedule = Schedule::default();
     schedule.add_systems(window_pos_sync_system);
 
-    // 1回目: Arrangement の on_add が GlobalArrangement を既定（大きさ 0）にするので何もしない
+    // 1回目: 生成時に渡した GlobalArrangement が既定（大きさ 0）なので何もしない
     schedule.run(&mut world);
 
     // DPI 125% に変更 → レイアウト再計算でサイズが小さくなる (250x187)
