@@ -78,19 +78,3 @@ fn occupancy_horizon_matches_completion_threshold() {
         "occupancy_horizon() の絶対時刻到達で占有終了する"
     );
 }
-
-/// `stop()`（中断）後はアンカーそのものを返す（schedule の clear で相対 horizon が 0.0 へ
-/// 落ちる＝中断終端の talk に占有区間は残らない）。
-#[test]
-fn occupancy_horizon_after_stop_is_the_anchor() {
-    let sheet = CueSheet::new(vec![text(0.0, "a", 2.0)]).with_absolute_start_time(10.0);
-    let mut player = CuePlayer::from_sheet(&sheet);
-    assert_eq!(player.occupancy_horizon(), 12.0);
-
-    player.stop();
-    assert_eq!(
-        player.occupancy_horizon(),
-        10.0,
-        "中断後は相対 horizon 0.0 ＝ アンカーそのもの"
-    );
-}

@@ -1,6 +1,6 @@
 //! バリア状態機械の檻——バリアに到達すると再生が停止し、各解決経路で再開する。
 //!
-//! WaitForInput・WaitForChoice の停止と外部解決、`skip_barrier` の強制再開と非待機での no-op を収める。
+//! WaitForInput・WaitForChoice の停止と外部解決、非待機での no-op を収める。
 //! `logged_has_text` は本テーマからしか参照されないのでここに残した。
 
 use super::{BarrierKind, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
@@ -184,43 +184,14 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
     );
 }
 
-// ============================================================================
-// バリア seam: skip_barrier による強制再開
-// ============================================================================
-
-/// `skip_barrier` は待機状態（入力/選択いずれも）を強制的に Playing へ戻す。
-#[test]
-fn skip_barrier_force_resumes_from_waiting() {
-    let sheet = CueSheet::new(vec![
-        text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::WaitForInput),
-        text(0.2, "after", 0.0),
-    ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
-    let (log, sink) = recording_sink();
-    player.register_sink(sink);
-
-    player.tick(10.0);
-    assert_eq!(player.state(), &CuePlayerState::WaitingForInput);
-
-    player.skip_barrier();
-    player.tick(20.0);
-    assert!(
-        logged_has_text(&log, "after"),
-        "skip_barrier で強制再開し after が配送される"
-    );
-    assert_eq!(player.state(), &CuePlayerState::Completed);
-}
-
 /// 非待機状態での解決通知は no-op（Playing のまま何も壊さない）。
 #[test]
 fn resolve_on_non_waiting_state_is_noop() {
     let sheet = CueSheet::new(vec![text(0.0, "only", 0.0)]);
     let mut player = CuePlayer::from_sheet(&sheet);
 
-    // まだ tick 前＝Playing。resolve_click / skip_barrier は no-op。
+    // まだ tick 前＝Playing。resolve_click は no-op。
     player.resolve_click();
-    player.skip_barrier();
     assert_eq!(
         player.state(),
         &CuePlayerState::Playing,

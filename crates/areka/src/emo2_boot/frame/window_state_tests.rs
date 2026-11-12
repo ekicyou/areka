@@ -491,10 +491,10 @@ fn script_stopped_before_the_directive_leaves_the_state() {
 
     let (mut state, tx) = state_with_channel();
     let (mut world, all) = world_with_windows();
-    let (mut player, end) = player_for(SCRIPT, tx.clone());
+    let (mut player, _) = player_for(SCRIPT, tx.clone());
     player.tick(0.0);
-    player.stop();
-    player.tick(end);
+    // 中断は本番（`drive.rs`）と同じく player を捨てる形。
+    drop(player);
     run_window_state_phase(&mut state, &mut world);
     assert!(!state.on, "中断した台本で状態が動いた");
     assert!(queue_in(&world).is_none());

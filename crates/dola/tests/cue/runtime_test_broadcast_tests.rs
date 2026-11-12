@@ -2,6 +2,7 @@
 
 use super::{ActorKey, BarrierKind, Cue, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
 use crate::test_support::{barrier, logged_commands, recording_sink, text, wait};
+use std::rc::Rc;
 
 /// **観測可能な完了条件（Task 4.3・前段）**: 1 つの台本を複数の登録済み sink へ流すと、
 /// 全 sink が**同一の cue 列を同一絶対時刻で**受信する（broadcast fan-out・R2.1/R1.4）。
@@ -119,7 +120,7 @@ fn broadcast_stops_at_barrier_and_resumes_delivery_after_resolve() {
 }
 
 /// broadcast は各 cue を**生涯 1 回のみ**配送する。同一時刻の再 tick（冪等）でも再配送しない
-/// （4.2 の `ready()` は冪等再読取で同一バッファを返すが、配送は schedule 前進時のみ）。
+/// （配送は schedule 前進時のみ）。
 #[test]
 fn broadcast_delivers_each_cue_once_even_when_ticked_repeatedly() {
     let sheet = CueSheet::new(vec![text(0.0, "a", 0.0), text(0.5, "b", 0.0)]);
@@ -210,10 +211,10 @@ fn is_completed_is_gated_by_final_text_duration() {
     );
 }
 
-/// `stop()` は残 entry を破棄して以降の配送を止める（Close/中断の discard プリミティブ）。
-/// 破棄後の tick では cue が届かず、プレイヤーは終端（完了）状態になる。
+/// 中断は上流が player を捨てる形（本番の `drop(player)` と同じ）。捨てた後は残りの cue
+/// （b）が受け手へ届かない。
 #[test]
-fn stop_discards_remaining_and_halts_further_delivery() {
+fn dropping_player_halts_further_delivery() {
     let sheet = CueSheet::new(vec![text(0.0, "a", 0.0), text(0.5, "b", 0.0)]);
     let mut player = CuePlayer::from_sheet(&sheet);
     let (log, sink) = recording_sink();
@@ -226,19 +227,17 @@ fn stop_discards_remaining_and_halts_further_delivery() {
         "a は配送される"
     );
 
-    // 中断: 残 entry（b）を破棄する。
-    player.stop();
-    assert!(
-        player.is_completed(),
-        "stop 後はプレイヤーが終端（以降の配送はない）"
-    );
-
-    // 破棄後の tick では b は配送されない。
-    player.tick(0.5);
+    // 中断: player を捨てる（受け手も一緒に捨てられ、記録の側だけが残る）。
+    drop(player);
     assert_eq!(
         logged_commands(&log),
         vec![CueCommand::Text("a".into())],
-        "stop 後の tick では b は配送されない"
+        "捨てた後に b は配送されない"
+    );
+    assert_eq!(
+        Rc::strong_count(&log),
+        1,
+        "受け手は player と一緒に捨てられた"
     );
 }
 

@@ -321,7 +321,7 @@ mod tests {
     /// - **完走 → 記録あり**: horizon を跨ぐ Tick まで再生 → 末尾 SET cue が発火 → sink が受理 →
     ///   別ハンドル `load_scope` が `BootCount="1"` を観測する。
     /// - **horizon 前 `Close` → 記録なし**: 初回 Tick 後・horizon 到達前に `Close` を送ると
-    ///   `CuePlayer::stop()` が残 cue（末尾 SET）を破棄 → SET は発火せず sink へ届かない → ストア不変
+    ///   上流が player を捨て、残 cue（末尾 SET）も一緒に捨てられる → SET は発火せず sink へ届かない → ストア不変
     ///   （`BootCount` 不在＝次回起動も初回扱いのまま・要件 3.4「初回挨拶が一度は完走することの保証」）。
     ///
     /// broadcast された cue 列を横で観測する記録 sink も併置し、**cue レベル**でも「完走時のみ SET が
@@ -470,10 +470,10 @@ mod tests {
             parts.handle.join().expect("clean close joins");
         }
 
-        /// **horizon 前 `Close` → 記録なし**（要件 3.4・design System Flow「interrupt = CuePlayer::stop
-        /// drops residual」・Testing §4「horizon 前 Close→stop() で SET 不発火・ストア不変」）。
+        /// **horizon 前 `Close` → 記録なし**（要件 3.4・design System Flow の中断・Testing §4「horizon 前
+        /// Close で SET 不発火・ストア不変」。中断は上流が player を捨てる形）。
         /// 初回 Tick(0.0) で Driving 入り（挨拶 cue は発火・末尾 SET(0.1) は保留）した直後に `Close` を
-        /// 送ると `CuePlayer::stop()` が残 cue（SET）を破棄する → SET は発火せず sink へ届かない →
+        /// 送ると上流が player を捨て、残 cue（SET）も一緒に捨てられる → SET は発火せず sink へ届かない →
         /// ストアは不変（`BootCount` 不在）＝次回起動も初回扱いのまま。inbox は FIFO・単一スレッド処理
         /// ゆえ Tick(0.0) は Close より前に処理される（決定的）。
         #[test]
@@ -494,7 +494,7 @@ mod tests {
 
             // 初回 Tick(0.0): Driving 入り・挨拶 cue は due で発火するが末尾 SET(0.1) は未 due で保留。
             handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-            // horizon 到達前に Close: CuePlayer::stop() が残 cue（保留中の SET）を破棄する。
+            // horizon 到達前に Close: 上流が player を捨て、残 cue（保留中の SET）も一緒に捨てられる。
             handle.inbox.send(SakuraMsg::Close).unwrap();
 
             let TalkNotice::Done(done) = done_rx
@@ -524,7 +524,7 @@ mod tests {
             // cue レベルの弁別: 中断再生では SET cue（areka.prop.set キャリア）は一度も broadcast されない。
             assert!(
                 !carrier_names(&observed).contains(&PROP_SET_CUE_NAME.to_string()),
-                "中断では末尾 SET cue は stop() で破棄され発火しない: {:?}",
+                "中断では上流が player を捨て、末尾 SET cue も一緒に捨てられて発火しない: {:?}",
                 carrier_names(&observed)
             );
 
