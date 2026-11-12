@@ -139,12 +139,6 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
         .map(|c| c.id.as_str())
         .collect();
     assert_eq!(ids, vec!["a", "b"], "選択肢が記述順で先積みされる");
-    let texts: Vec<&str> = player
-        .pending_choices()
-        .iter()
-        .map(|c| c.text.as_str())
-        .collect();
-    assert_eq!(texts, vec!["選択A", "選択B"], "選択肢テキストも保持される");
     assert!(
         !logged_has_text(&log, "picked"),
         "バリア以降の picked は未配送"

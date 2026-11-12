@@ -1,7 +1,7 @@
 //! CueSheet — 自己完結した絶対時刻台本（絶対開始時刻＋相対時刻コマンド列）と
 //! canonical 変換 `to_talk_schedule`（dola ingress の単一権威・duration clamp・占有 horizon）。
 
-use super::command::{ActorKey, Cue, CuePayload, TalkCue};
+use super::command::{Cue, CuePayload, TalkCue};
 use super::schedule::{Entry, TimedSchedule, sum_on_ms_grid};
 use serde::{Deserialize, Serialize};
 
@@ -86,30 +86,9 @@ impl CueSheet {
         &self.cues
     }
 
-    /// 特定演者のキューのみをフィルタリング
-    pub fn filter_by_actor(&self, key: &ActorKey) -> Vec<&Cue> {
-        self.cues.iter().filter(|cue| &cue.actor == key).collect()
-    }
-
-    /// CueSheet 内の全演者を重複なしで取得
-    pub fn actors(&self) -> Vec<&ActorKey> {
-        let mut actors: Vec<&ActorKey> = Vec::new();
-        for cue in &self.cues {
-            if !actors.contains(&&cue.actor) {
-                actors.push(&cue.actor);
-            }
-        }
-        actors
-    }
-
     /// CueSheet が空か
     pub fn is_empty(&self) -> bool {
         self.cues.is_empty()
-    }
-
-    /// CueSheet 内の Cue 数
-    pub fn len(&self) -> usize {
-        self.cues.len()
     }
 }
 

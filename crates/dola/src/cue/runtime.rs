@@ -56,8 +56,6 @@ use super::sink::CueSink;
 pub struct PendingChoice {
     /// 選択肢 ID（解決時に [`resolve_choice`](CuePlayer::resolve_choice) へ渡す照合キー）。
     pub id: String,
-    /// 選択肢の表示テキスト。
-    pub text: String,
 }
 
 /// cue 再生ランタイムの状態。
@@ -122,17 +120,8 @@ impl CuePlayer {
     /// スケジュールのアンカーへ流れ、各 cue の相対 `start_time`＋duration がそのまま保存される。
     /// 変換は**この 1 本のみ**——`CueSheet→schedule` の二重実装を作らない（R11.1・D7）。
     pub fn from_sheet(sheet: &CueSheet) -> Self {
-        Self::from_schedule(to_talk_schedule(sheet))
-    }
-
-    /// canonical 変換で得た [`TimedSchedule`]`<`[`TalkCue`]`>` を直接包んで構築する。
-    ///
-    /// [`from_sheet`](Self::from_sheet) は内部でこの構築口を経由する。既に変換済みの
-    /// スケジュールを保持している呼び出し側（後続 Task で talk アクターが刻印後の台本を
-    /// 変換する経路）が合成しやすいよう公開する。
-    pub fn from_schedule(schedule: TimedSchedule<TalkCue>) -> Self {
         Self {
-            schedule,
+            schedule: to_talk_schedule(sheet),
             state: CuePlayerState::Playing,
             pending_choices: Vec::new(),
             sinks: Vec::new(),
@@ -214,11 +203,8 @@ impl CuePlayer {
         // 遷移する場合も、バリア**手前**の cue はここで既に配り・積み済み（barrier match より前）。
         if self.schedule.remaining() < remaining_before {
             for cue in self.schedule.ready() {
-                if let CueCommand::Choice { id, text, .. } = &cue.command {
-                    self.pending_choices.push(PendingChoice {
-                        id: id.clone(),
-                        text: text.clone(),
-                    });
+                if let CueCommand::Choice { id, .. } = &cue.command {
+                    self.pending_choices.push(PendingChoice { id: id.clone() });
                 }
                 for sink in self.sinks.iter_mut() {
                     sink.emit(cue.clone());

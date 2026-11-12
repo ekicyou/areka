@@ -30,7 +30,7 @@ fn cue_sheet_sorts_by_start_time() {
 fn cue_sheet_empty() {
     let sheet = CueSheet::new(vec![]);
     assert!(sheet.is_empty());
-    assert_eq!(sheet.len(), 0);
+    assert_eq!(sheet.cues().len(), 0);
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn cue_sheet_len() {
             duration: 0.0,
         },
     ]);
-    assert_eq!(sheet.len(), 2);
+    assert_eq!(sheet.cues().len(), 2);
     assert!(!sheet.is_empty());
 }
 
@@ -82,75 +82,6 @@ fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
 }
 
 // ============================================================================
-// Actor フィルタリングテスト
-// ============================================================================
-
-#[test]
-fn filter_by_actor() {
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 0.0,
-            payload: CueCommand::Text("hello".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("kero"),
-            start_time: 0.5,
-            payload: CueCommand::Emote {
-                key: "grumble".into(),
-            }
-            .into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 1.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let sakura_cues = sheet.filter_by_actor(&ActorKey::from("sakura"));
-    assert_eq!(sakura_cues.len(), 2);
-
-    let kero_cues = sheet.filter_by_actor(&ActorKey::from("kero"));
-    assert_eq!(kero_cues.len(), 1);
-
-    let none_cues = sheet.filter_by_actor(&ActorKey::from("nobody"));
-    assert!(none_cues.is_empty());
-}
-
-#[test]
-fn actors_unique_list() {
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 0.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("kero"),
-            start_time: 0.5,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 1.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let actors = sheet.actors();
-    assert_eq!(actors.len(), 2);
-    assert!(actors.contains(&&ActorKey::from("sakura")));
-    assert!(actors.contains(&&ActorKey::from("kero")));
-}
-
-// ============================================================================
 // 非有限 start_time の境界（D3-V 特性化）
 // ============================================================================
 
@@ -173,7 +104,7 @@ fn cue_sheet_new_with_nan_start_time_does_not_panic() {
             duration: 0.0,
         },
     ]);
-    assert_eq!(sheet.len(), 3);
+    assert_eq!(sheet.cues().len(), 3);
 }
 
 // ============================================================================
@@ -296,7 +227,7 @@ fn cue_sheet_deserializes_without_absolute_start_time_as_zero() {
     let sheet: CueSheet = serde_json::from_str(json).unwrap();
 
     assert_eq!(sheet.absolute_start_time(), 0.0);
-    assert_eq!(sheet.len(), 1);
+    assert_eq!(sheet.cues().len(), 1);
     assert_eq!(sheet.absolute_end_time(), 0.0);
 }
 
@@ -338,7 +269,7 @@ fn cue_sheet_serde_roundtrip() {
 
     let json = serde_json::to_string(&sheet).unwrap();
     let parsed: CueSheet = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed.cues().len(), 2);
     assert_eq!(parsed.cues()[0].actor.as_str(), "sakura");
     assert_eq!(parsed.cues()[1].actor.as_str(), "kero");
 }

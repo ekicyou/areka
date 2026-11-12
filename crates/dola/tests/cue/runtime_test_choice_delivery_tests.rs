@@ -130,23 +130,12 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
             .map(|c| c.id.clone())
             .collect::<Vec<_>>()
     };
-    let bag_texts = |p: &CuePlayer| {
-        p.pending_choices()
-            .iter()
-            .map(|c| c.text.clone())
-            .collect::<Vec<_>>()
-    };
 
     // バッグは 3 選択肢を記述順で各 1 回だけ保持する（配送列と並存＝責務二分）。
     assert_eq!(
         bag_ids(&player),
         vec!["a", "b", "c"],
         "バッグは 3 選択肢を記述順で保持する（照合の単一真実源）"
-    );
-    assert_eq!(
-        bag_texts(&player),
-        vec!["選択A", "選択B", "選択C"],
-        "バッグはテキストも保持する"
     );
 
     // 冪等再 tick（同一時刻を 2 度）: schedule は前進せずバッグも成長しない
@@ -157,11 +146,6 @@ fn choice_bag_coexists_with_delivery_stream_and_is_invariant_across_reticks() {
         bag_ids(&player),
         vec!["a", "b", "c"],
         "冪等再 tick でバッグは二重積みされない（bag 内容は tick 列に不変）"
-    );
-    assert_eq!(
-        bag_texts(&player),
-        vec!["選択A", "選択B", "選択C"],
-        "再 tick 後もバッグのテキストは不変"
     );
 
     // 責務二分の並存: バッグの選択肢集合は配送列（broadcast 記録 sink）に現れた Choice 集合と
