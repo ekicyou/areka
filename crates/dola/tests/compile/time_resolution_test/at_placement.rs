@@ -5,24 +5,7 @@ use super::*;
 #[test]
 fn at_reference_keyframe() {
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -32,10 +15,8 @@ fn at_reference_keyframe() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -46,10 +27,8 @@ fn at_reference_keyframe() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("kf1".to_string())),
                 keyframe: Some("kf2".to_string()),
@@ -67,24 +46,7 @@ fn at_reference_keyframe() {
 #[test]
 fn at_with_offset() {
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -93,10 +55,8 @@ fn at_with_offset() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -106,10 +66,8 @@ fn at_with_offset() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("kf1".to_string()),
@@ -132,24 +90,7 @@ fn at_with_offset() {
 fn pure_keyframe_without_at_inherits_previous_entry_time() {
     // 純粋KF（at なし）は配列直前エントリの keyframe 時刻を継承する
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -196,14 +137,7 @@ fn pure_keyframe_without_at_inherits_previous_entry_time() {
 fn pure_keyframe_without_at_as_first_entry_falls_back_to_start() {
     // 先頭エントリの純粋KF（at なし）は "start"（= compile start_time）へフォールバック
     let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
+        vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -238,32 +172,7 @@ fn pure_keyframe_without_at_as_first_entry_falls_back_to_start() {
 fn at_with_offset_multiple_keyframes() {
     // WithOffset + Multiple: 全KFの最大時刻 + offset
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "z",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var()), ("z", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -323,24 +232,7 @@ fn at_with_offset_multiple_keyframes() {
 fn at_with_negative_offset() {
     // 負オフセット: base_time + offset で基準より前に配置できる
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()

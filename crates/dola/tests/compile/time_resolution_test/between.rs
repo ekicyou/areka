@@ -5,24 +5,7 @@ use super::*;
 #[test]
 fn between_placement() {
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -31,10 +14,8 @@ fn between_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -44,10 +25,8 @@ fn between_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(100.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(3.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
@@ -58,10 +37,8 @@ fn between_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(999.0), // ignored for between
+                    ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
                     from: "kf1".to_string(),
@@ -83,24 +60,7 @@ fn between_placement() {
 fn between_from_start_pseudo_keyframe() {
     // between の from に疑似KF "start" を使用できる
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -143,24 +103,7 @@ fn between_from_start_pseudo_keyframe() {
 fn between_with_valid_delay() {
     // 区間内に収まる delay: segment_start = from_t + delay
     let doc = make_doc_with_storyboard(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()

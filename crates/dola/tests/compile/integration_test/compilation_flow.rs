@@ -15,22 +15,8 @@ fn complex_multi_variable_mixed_placement() {
                     max: Some(1.0),
                 },
             ),
-            (
-                "x_pos",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y_pos",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
+            ("x_pos", float_var()),
+            ("y_pos", float_var()),
         ],
         vec![],
         "entrance",
@@ -43,10 +29,9 @@ fn complex_multi_variable_mixed_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                    delay: 0.0,
                     duration: Some(0.5),
+                    ..Default::default()
                 })),
                 keyframe: Some("visible".to_string()),
                 ..Default::default()
@@ -57,10 +42,9 @@ fn complex_multi_variable_mixed_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::QuadraticOut)),
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("visible".to_string())),
                 keyframe: Some("moved".to_string()),
@@ -72,10 +56,8 @@ fn complex_multi_variable_mixed_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(999.0), // ignored for between
+                    ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
                     from: "visible".to_string(),
@@ -159,10 +141,9 @@ fn all_variable_types_mixed() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::Linear)),
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -172,10 +153,9 @@ fn all_variable_types_mixed() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(10.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::Linear)),
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
@@ -187,10 +167,8 @@ fn all_variable_types_mixed() {
                     to: Some(TransitionValue::Dynamic(DynamicValue::String(
                         "active".to_string(),
                     ))),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: None,
+                    ..Default::default()
                 })),
                 keyframe: Some("kf3".to_string()),
                 ..Default::default()
@@ -249,10 +227,9 @@ fn builder_to_compile_flow() {
             TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                relative_to: None,
                 easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                delay: 0.0,
                 duration: Some(0.5),
+                ..Default::default()
             },
         )
         .storyboard(
@@ -302,10 +279,9 @@ fn compile_result_serializable() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("visible".to_string()),
                 ..Default::default()

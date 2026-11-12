@@ -6,24 +6,7 @@ use super::*;
 fn pure_keyframe_with_at() {
     // Pure KF + at reference, used as anchor for another entry
     let doc = make_doc(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -33,10 +16,8 @@ fn pure_keyframe_with_at() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -56,10 +37,8 @@ fn pure_keyframe_with_at() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("marker".to_string())),
                 keyframe: Some("kf2".to_string()),
@@ -78,32 +57,7 @@ fn pure_keyframe_with_at() {
 fn multiple_keyframe_wait() {
     // Multiple keyframe reference: waits for all KFs
     let doc = make_doc(
-        vec![
-            (
-                "x",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "z",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-        ],
+        vec![("x", float_var()), ("y", float_var()), ("z", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -113,10 +67,8 @@ fn multiple_keyframe_wait() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf_x".to_string()),
                 ..Default::default()
@@ -127,10 +79,8 @@ fn multiple_keyframe_wait() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(200.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(3.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf_y".to_string()),
                 ..Default::default()
@@ -141,10 +91,8 @@ fn multiple_keyframe_wait() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 at: Some(KeyframeRef::Multiple(vec![
                     "kf_x".to_string(),
@@ -168,15 +116,8 @@ fn multiple_keyframe_wait() {
 
 fn float_x_entry(duration: f64, kf: &str) -> StoryboardEntry {
     StoryboardEntry {
-        variable: Some("x".to_string()),
-        transition: Some(TransitionRef::Inline(TransitionDef {
-            from: Some(TransitionValue::Scalar(0.0)),
-            to: Some(TransitionValue::Scalar(1.0)),
-            duration: Some(duration),
-            ..Default::default()
-        })),
         keyframe: Some(kf.to_string()),
-        ..Default::default()
+        ..transition_entry("x", 0.0, Some(duration))
     }
 }
 
@@ -200,14 +141,7 @@ fn trigger_without_at_inherits_previous_entry_time() {
         .build();
 
     let doc = DolaDocumentBuilder::new("1.0")
-        .variable(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )
+        .variable("x", float_var())
         .storyboard("parent", parent)
         .storyboard("child", simple_child_storyboard())
         .build()
@@ -216,8 +150,8 @@ fn trigger_without_at_inherits_previous_entry_time() {
     let compiled = compile_storyboard(&doc, "parent", 0.0).unwrap();
     assert_eq!(compiled.triggers.len(), 1);
     assert_eq!(compiled.triggers[0].target_storyboard, "child");
-    assert!(
-        (compiled.triggers[0].fire_time - 1.0).abs() < 1e-9,
+    assert_eq!(
+        compiled.triggers[0].fire_time, 1.0,
         "fire_time should inherit previous entry keyframe time 1.0, got {}",
         compiled.triggers[0].fire_time
     );
@@ -254,22 +188,8 @@ fn entry_anchored_at_trigger_keyframe() {
         .build();
 
     let doc = DolaDocumentBuilder::new("1.0")
-        .variable(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )
-        .variable(
-            "y",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )
+        .variable("x", float_var())
+        .variable("y", float_var())
         .storyboard("parent", parent)
         .storyboard("child", simple_child_storyboard())
         .build()
