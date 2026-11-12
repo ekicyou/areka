@@ -50,7 +50,7 @@
 | 4.2・4.3 案 A の境界のテスト | — | **Missing＋Unknown**（下の 4.2：新しいクレートは untagged の腕の `.nan` を既定で断る可能性） |
 | 5.1〜5.4 README・steering・`Cargo.lock` | 2 章の表 | **Missing**（文の直し）。steering の 3 か所は `audit-dola` の分で今も古い |
 | 5.5 謝辞は道具で作り直す | `tools/test-all.ps1 -License` の段が作り直し、差分を知らせる | どちらの案でも差分 0 の見込み（2 章） |
-| 6.1〜6.6 申し送り 1 項目 | roadmap 204 行目の `audit-dola` の項目 | **Missing**（書き直し）。頭は「`v0.1.0` の後」（今の最新の公開版は v0.1.0） |
+| 6.1〜6.6 申し送り 1 項目 | roadmap 207 行目の `audit-dola` の項目 | **Missing**（書き直し）。頭は「`v0.1.0` の後」（今の最新の公開版は v0.1.0） |
 | 7.1・7.2 全体テスト | `tools/test-all.ps1 -License` | 既存の手順どおり |
 
 ## 4. 案の比べ

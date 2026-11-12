@@ -23,8 +23,8 @@ YAML の扱いには 2 つの案がある。**案 A＝替える**（機能 `yaml
 
 - **In scope**:
   - `crates/dola/Cargo.toml` の YAML の依存と機能 `yaml`。
-  - YAML の往復のテスト（`crates/dola/tests/general/integration_test/serialization_round_trip.rs` の 40〜55 行目）。
-  - `crates/dola/tests/compile/boundary_test.rs` の 260〜262 行目の注記（NaN／inf の入り口）。案 A なら YAML の `.nan`／`.inf` の扱いを確かめる境界のテスト。
+  - YAML の往復のテスト（`crates/dola/tests/general/integration_test/serialization_round_trip.rs` の 1・40〜55 行目）と、同じテストの束の先頭の説明（`crates/dola/tests/general/integration_test/mod.rs` 1 行目の「JSON/TOML/YAML」）。
+  - `crates/dola/tests/compile/boundary_test.rs` の 3 行目の先頭の説明（「外部入力（JSON/TOML/YAML）」）と 260〜262 行目の注記（NaN／inf の入り口）。案 A なら YAML の `.nan`／`.inf` の扱いを確かめる境界のテスト。
   - `crates/dola/README.md` の YAML の記述（13・17 行目）。
   - `deny.toml` の `[advisories] ignore` の `RUSTSEC-2024-0449` の 1 件（43〜46 行目のコメントを含む）の削除。
   - 根の `Cargo.lock` と `THIRD-PARTY-NOTICES.md` の追随。
@@ -67,7 +67,8 @@ YAML の扱いには 2 つの案がある。**案 A＝替える**（機能 `yaml
 4. Where 案 A（替える）を採るとき, the 本 spec の作業 shall 選んだ依存（とそれが新しく引くクレート）のライセンスが `deny.toml` の `allow` に入っていることと、保守の状況（最後の公開の日・RustSec の勧告の有無）を、設計の段で確かめて設計の記録に残す
 5. Where 案 A（替える）を採るとき, the YAML の往復のテスト shall 機能 `yaml` を有効にした実行で、`DolaDocument` 全部の書き出しと読み戻しが元と等しいことを確かめて緑になり、その実行の結果が完了の証跡に残る
 6. Where 案 B（外す）を採るとき, the `dola` クレート shall 機能 `yaml` と任意の YAML の依存を持たず、任意の機能を 1 つも持たない
-7. Where 案 B（外す）を採るとき, the `dola` のテスト shall YAML の往復のテストとその見出しのコメントを含まず、ファイルの先頭の説明も JSON だけを指す
+7. Where 案 B（外す）を採るとき, the `dola` のテスト shall YAML の往復のテストとその見出しのコメントを含まず、`serialization_round_trip.rs` と `integration_test/mod.rs` の先頭の説明も JSON だけを指す
+8. The `dola` のテストの先頭の説明（`integration_test/mod.rs` 1 行目・`boundary_test.rs` 3 行目） shall `audit-dola` で消えた TOML を挙げず、直しの後に `dola` が持つ書式の扱いだけを書く
 
 ### Requirement 3: JSON の振る舞いと `dola` の型の形を変えない
 
