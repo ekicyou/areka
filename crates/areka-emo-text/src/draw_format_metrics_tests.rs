@@ -80,7 +80,7 @@ fn comma_separated_names_split_into_first_and_rest_and_form_the_candidate_list()
         "残余は trim 済み"
     );
     assert_eq!(
-        resolved.looks.default.name,
+        &*resolved.looks.default.name,
         ["Meiryo", "ＭＳ Ｐゴシック", "ＭＳ ゴシック"],
         "候補列は先頭名＋残余の記述順"
     );

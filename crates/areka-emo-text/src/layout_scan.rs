@@ -62,7 +62,7 @@ impl LayoutEngine {
     /// [`GlyphMetrics::advance_styled`] で測り、番号を配置済みグリフへ写す（R3.3／R7.10／R11.2）。
     ///
     /// 行の丈と行送りは [`LineHeights`] が供給する——閉じる行に置かれた文字の em の最大値
-    /// （文字が無い行は後ろに置かれる文字の大きさ・それも無ければスコープの現在の見た目）を
+    /// （文字が無い行は後ろに置かれる文字の大きさ・それも無ければ `font_height`）を
     /// [`line_pitch_of`] へ渡すだけで、装飾のための別の式は持ち込まない（R7.8／R7.9）。
     #[allow(clippy::too_many_arguments)]
     pub(super) fn layout_inner(
@@ -83,7 +83,7 @@ impl LayoutEngine {
         let pitch = line_pitch_of(metrics, font_height);
         // 行の丈（行内最大 em・要件 7.9）。番号列が無い経路では常に `font_height` を返すので
         // 従来の出力と 1 ビットも変わらない。
-        let heights = LineHeights::new(styles.as_ref(), font_height);
+        let heights = LineHeights::new(font_height);
         // 行内軸の二段構え（design.md §4.3・R6.2/6.3/6.8）: 折返し基準（soft・「超えたら
         // 折り返す」）と描画範囲の遠辺（hard・「超えてはならない」絶対上限）を**別の値**として
         // 持つ。`min` へ畳み込まない——畳むと絶対上限の意味論も、行末禁則文字が基準を超えて
@@ -187,7 +187,7 @@ impl Scan<'_, '_> {
         // 末尾規則は不変: 実体化は位置の更新と現在行の確定だけで、内容の無い行は作らない。
         if self.pending_cursor.is_some() {
             // 文字の置かれていない行は後ろに置かれる文字の大きさで送る（保留フラッシュと
-            // 同じ規則・要件 7.9）。スコープの現在の見た目は後ろに字が無いときだけ。
+            // 同じ規則・要件 7.9）。`font_height` は後ろに字が無いときだけ。
             let next = self.following_glyph_height();
             let closing = self.heights.close(next);
             finish_pending_line(

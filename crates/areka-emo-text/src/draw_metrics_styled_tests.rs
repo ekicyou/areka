@@ -515,7 +515,7 @@ fn f2_probe_format_carries_the_weight_of_the_gdi_named_face() {
 
     let m = metrics();
     require_yu_gothic(m.fonts());
-    let medium = look_with(|l| l.name = vec!["Yu Gothic Medium".into()]);
+    let medium = look_with(|l| l.name = vec!["Yu Gothic Medium".into()].into());
     let probe =
         |look: &TextLook| face_of(&m.probe_format_for(&look.font_key()).expect("試験用書式"));
 
@@ -581,7 +581,7 @@ fn f4_all_failed_key_is_measured_with_the_bound_face() {
     )
     .expect("DWriteMetrics 生成");
     let failed = TextLook {
-        name: vec!["NoSuchFontXYZ".into()],
+        name: vec!["NoSuchFontXYZ".into()].into(),
         ..font.looks.default.clone()
     };
     let bold = TextLook {

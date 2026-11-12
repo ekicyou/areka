@@ -80,27 +80,7 @@ fn assert_capture_alive(counts: &LevelCounts) {
     );
 }
 
-// ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7） ──
-
-/// `0` は「横書きの宣言」——未宣言とは別の分類として保つ。
-#[test]
-fn vertical_zero_is_classified_as_horizontal_without_records() {
-    let (decision, counts) = decide(Some("0"), None);
-    assert_eq!(decision.vertical_declaration(), VerticalDecl::Horizontal);
-    assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 0);
-    assert_eq!(counts.debug, 0);
-}
-
-/// `1` は「縦書きの宣言」（日本語縦書き＝右から左へ列送り・本仕様 2.2）。
-#[test]
-fn vertical_one_is_classified_as_vertical_without_records() {
-    let (decision, counts) = decide(Some("1"), None);
-    assert_eq!(decision.vertical_declaration(), VerticalDecl::Vertical);
-    assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 0);
-    assert_eq!(counts.debug, 0);
-}
+// ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7・`0`／`1` は ⑵ の `vertical_alone_adopts_canon_key_without_records`・未宣言は ⑵ の `no_declaration_…` が見る） ──
 
 /// `0`／`1` 以外（`2`）と空文字列はいずれも `Invalid`＋`warn!` ちょうど 1 件。
 ///
@@ -154,14 +134,20 @@ fn no_declaration_uses_canon_default_without_records() {
     assert_eq!(counts.debug, 0);
 }
 
-/// `vertical` 単独 2 形——`0`→横書き・`1`→`VerticalRl`（本仕様 2.2）・記録 0 件。
+/// `vertical` 単独 2 形——`0`→横書きの宣言・`1`→縦書きの宣言で `VerticalRl`（本仕様 1.6・2.2）・
+/// 記録 0 件。`0` は未宣言とは別の分類として保つ。
 #[test]
 fn vertical_alone_adopts_canon_key_without_records() {
-    for (value, expected) in [
-        ("0", WritingMode::HorizontalTb),
-        ("1", WritingMode::VerticalRl),
+    for (value, decl, expected) in [
+        ("0", VerticalDecl::Horizontal, WritingMode::HorizontalTb),
+        ("1", VerticalDecl::Vertical, WritingMode::VerticalRl),
     ] {
         let (decision, counts) = decide(Some(value), None);
+        assert_eq!(
+            decision.vertical_declaration(),
+            decl,
+            "vertical,{value} の分類"
+        );
         assert_eq!(decision.mode(), expected, "vertical,{value} の解決結果");
         assert_eq!(
             decision.source(),

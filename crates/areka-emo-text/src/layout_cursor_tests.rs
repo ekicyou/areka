@@ -354,9 +354,10 @@ fn cursor_negative_and_percent_axes_now_resolve_literally() {
 /// 再び全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
 /// （Omitted は正常形で無音）とし、後続グリフで CursorMove を確実に処理させる。
 ///
-/// **分岐は 4 → 2 へ減った**（タスク 4.1）: 負値絶対・`%`・`@` 相対は縮退ではなく実導出へ
-/// 移ったので、縮退表に残るのは「解釈不能」と「中央指定の軸取り違え」の 2 行だけである
-/// （design.md 縮退表・R5.2）。
+/// **分岐は 4 → 2 へ減り、のちに 3 になった**（タスク 4.1）: 負値絶対・`%`・`@` 相対は縮退
+/// ではなく実導出へ移ったので、ここで見るのは「解釈不能」と「中央指定の軸取り違え」の 2 行
+/// （design.md 縮退表・R5.2）。3 つ目の「有限でない」は
+/// `layout_cursor_wiring_tests.rs` の `non_finite_cursor_resolution_keeps_lines_finite_with_one_warn` が見る。
 #[test]
 fn cursor_degrade_warns_once_per_actor_per_branch() {
     let region = zero_origin_region();

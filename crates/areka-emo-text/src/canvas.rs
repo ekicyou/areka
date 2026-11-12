@@ -361,9 +361,7 @@ impl ContentCanvas {
 #[cfg(test)]
 mod tests {
     use super::{
-        ContentCanvas, GlyphRunContent, RESERVED_EFFECT_MULTICOLOR, RESERVED_EFFECT_OUTLINE,
-        RESERVED_EFFECT_ROTATION, RESERVED_EFFECT_SHADOW, RegionTransform, Resident,
-        ResidentContent, TextEffects,
+        ContentCanvas, GlyphRunContent, RegionTransform, Resident, ResidentContent, TextEffects,
     };
     use crate::layout::test_support::{IMAGE, glyphs, model_full};
     use crate::layout::{LineRect, PositionedGlyph, PositionedLine};
@@ -415,19 +413,6 @@ mod tests {
         assert_eq!(c.apply((1.0, 1.0)), (3.0, 7.5));
         assert_eq!(a.then(&RegionTransform::identity()), a);
         assert_eq!(RegionTransform::identity().then(&a), a);
-    }
-
-    // ── R8.3/R10.3: TextEffects——行単位の予約の型シーム（予約名は定数記録のみ） ──
-
-    /// 予約名（outline/multicolor/shadow/rotation）は定数として記録するに留める。
-    /// TextEffects 自体はフィールド未使用の予約型（既定値のみ生成可能）で、文字ごとの
-    /// `\f` 装飾（[`TextLook`](crate::look::TextLook)）はここを通らない。
-    #[test]
-    fn text_effects_is_reserved_seam_with_recorded_names() {
-        assert_eq!(RESERVED_EFFECT_OUTLINE, "outline");
-        assert_eq!(RESERVED_EFFECT_MULTICOLOR, "multicolor");
-        assert_eq!(RESERVED_EFFECT_SHADOW, "shadow");
-        assert_eq!(RESERVED_EFFECT_ROTATION, "rotation");
     }
 
     // ── R8.4/8.1: レイアウト結果→グリフ住人（1 行=1 住人・行 index 1:1・変換行列付き） ──
@@ -632,26 +617,5 @@ mod tests {
             .map(|r| r.transform.offset())
             .collect();
         assert_eq!(offsets, vec![(0.0, 0.0), (0.0, 15.0), (0.0, 22.5)]);
-    }
-
-    // ── R8.4/R8.5: 画像・サーフェス住人は型シームのみ（同格 enum・実挙動なし） ──
-
-    /// M1 の from_layout はグリフ住人のみを生成する（Image/Surface は現れない・
-    /// 描画実行時の warn!＋skip は COM 層 draw の領分）。
-    #[test]
-    fn from_layout_yields_only_glyph_residents() {
-        let region = TextRegion::resolve(
-            &model_full((Some(0), Some(0)), (None, None), (None, None, None, None)),
-            IMAGE,
-            WritingMode::HorizontalTb,
-        );
-        let (_, canvas) = canvas_for(&glyphs(3), &region, WritingMode::HorizontalTb, 12.0);
-        assert!(
-            canvas
-                .residents
-                .iter()
-                .all(|r| matches!(r.content, ResidentContent::GlyphRun(_))),
-            "M1 の実装住人はグリフのみ（R8.5）"
-        );
     }
 }

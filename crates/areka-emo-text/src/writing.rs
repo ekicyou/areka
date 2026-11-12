@@ -322,7 +322,7 @@ mod tests {
 
     use crate::layout::test_support::model_writing;
 
-    use super::{RESERVED_KEY_TEXT_COMBINE_UPRIGHT, RESERVED_KEY_TEXT_ORIENTATION, WritingMode};
+    use super::WritingMode;
 
     /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
     ///
@@ -343,20 +343,14 @@ mod tests {
 
     // ── R5.4: 未知値→warn ログ＋横書きフォールバック ──
 
-    #[test]
-    fn unknown_value_falls_back_to_horizontal_tb_with_warn() {
-        // parsers 側の未知値素通しテストと同じ値（diagonal_bt）で連続性を持たせる。
-        let (mode, warns) = resolve_counting_warns(Some("diagonal_bt"));
-        assert_eq!(mode, WritingMode::HorizontalTb);
-        assert_eq!(warns, 1, "未知値はちょうど 1 回 warn を記録する");
-    }
-
-    /// 警告の文言は実挙動（「指定なし」として `vertical` と合流）と一致する——
-    /// 横書きになるのは両キーとも無効なときだけなので「horizontal_tb へ」とは言わない。
+    /// 未知値は横書きになり、警告はちょうど 1 件。文言は実挙動（「指定なし」として
+    /// `vertical` と合流）と一致する——横書きになるのは両キーとも無効なときだけなので
+    /// 「horizontal_tb へ」とは言わない。値は parsers 側の未知値素通しテストと同じ diagonal_bt。
     #[test]
     fn unknown_value_warn_says_treated_as_undeclared() {
-        let (_, events) =
+        let (mode, events) =
             log_capture_kit::capture(|| WritingMode::resolve(&model_writing(Some("diagonal_bt"))));
+        assert_eq!(mode, WritingMode::HorizontalTb);
         let messages: Vec<&str> = events.iter().map(|e| e.message()).collect();
         assert_eq!(messages.len(), 1, "warn はちょうど 1 件: {messages:?}");
         assert!(
@@ -398,14 +392,6 @@ mod tests {
             [("writing_mode".to_owned(), "vertical_rl".to_owned())].into();
         let merged = parse(&descript, Some(&image));
         assert_eq!(WritingMode::resolve(&merged), WritingMode::VerticalRl);
-    }
-
-    // ── R5.7: 予約キーは名前の記録のみ（実挙動なし） ──
-
-    #[test]
-    fn m2_reserved_key_names_are_recorded_as_constants() {
-        assert_eq!(RESERVED_KEY_TEXT_ORIENTATION, "text_orientation");
-        assert_eq!(RESERVED_KEY_TEXT_COMBINE_UPRIGHT, "text_combine_upright");
     }
 }
 

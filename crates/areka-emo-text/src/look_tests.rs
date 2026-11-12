@@ -24,6 +24,20 @@
 
 use super::*;
 
+thread_local! {
+    static NAME_LIST_COMPARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// 候補列を要素ごとに比べた（`FontNames` の `==` が呼ぶ・このスレッドの観測口）。
+pub(super) fn count_name_list_compare() {
+    NAME_LIST_COMPARES.with(|n| n.set(n.get() + 1));
+}
+
+/// 候補列を要素ごとに比べた回数。
+fn name_list_compares() -> usize {
+    NAME_LIST_COMPARES.with(|n| n.get())
+}
+
 /// バルーン定義を模した 2 層——各項目が既定と異なる値で入っていること自体を試験に使う。
 fn balloon_layers() -> LookLayers {
     LookLayers::from_balloon(
@@ -78,7 +92,7 @@ fn font_key_changes_with_each_item_that_moves_the_advance() {
 
     for changed in [
         TextLook {
-            name: vec!["Meiryo".to_owned()],
+            name: vec!["Meiryo".to_owned()].into(),
             ..base.clone()
         },
         TextLook {
@@ -508,6 +522,82 @@ fn signed_zero_folds_and_nan_never_folds_like_the_old_equality() {
     assert_eq!(table.intern(&sized(-0.0), &default), StyleId(1));
     assert_eq!(table.intern(&sized(f32::NAN), &default), StyleId(2));
     assert_eq!(table.intern(&sized(f32::NAN), &default), StyleId(3));
+}
+
+/// 再監査 R2-B1: 同じ見た目を引き当てるたびに候補列を全部ハッシュし直す・比べ直すと、
+/// `\f[name,…]` の候補が N 個・字が N 個で N² の仕事になる。ハッシュに書く量は候補の数に
+/// よらず一定、同じ見た目の引き当ては候補列を 1 度も要素ごとに比べない、別に組んだ同じ
+/// 候補列は同じ番号——の 3 つを断言する。
+#[test]
+fn interning_the_same_look_is_constant_work_in_the_candidate_count() {
+    struct Bytes(usize);
+    impl Hasher for Bytes {
+        fn finish(&self) -> u64 {
+            0
+        }
+        fn write(&mut self, bytes: &[u8]) {
+            self.0 += bytes.len();
+        }
+    }
+    let hashed_bytes = |look: &TextLook| {
+        let mut hasher = Bytes(0);
+        look.hash(&mut hasher);
+        hasher.0
+    };
+    let names = |n: usize| (0..n).map(|i| format!("Font{i}")).collect::<Vec<String>>();
+    let default = TextLook::ukadoc_default();
+    let with = |n: usize| TextLook {
+        name: names(n).into(),
+        ..default.clone()
+    };
+    let long = with(50_000);
+    assert_eq!(hashed_bytes(&with(1)), hashed_bytes(&long));
+
+    let mut table = StyleTable::default();
+    let id = table.intern(&long, &default);
+    let before = name_list_compares();
+    for _ in 0..50_000 {
+        assert_eq!(table.intern(&long, &default), id);
+    }
+    assert_eq!(
+        name_list_compares(),
+        before,
+        "同じ見た目で候補列を比べ直した"
+    );
+    assert_eq!(table.intern(&with(50_000), &default), id);
+    assert_eq!(table.len(), 1);
+
+    // 別に組んだ同じ中身の列（同じ `\f[name,…]` を書き直した台本・付け直しの再生）も、
+    // 要素ごとに比べるのは最初の 1 度だけ。既定と同じ中身の列も同じ（既定との比べ）。
+    let again = with(50_000);
+    let wide = with(50_000);
+    let bold_wide = TextLook {
+        bold: true,
+        ..with(50_000)
+    };
+    let mut wide_table = StyleTable::default();
+    let before = name_list_compares();
+    for _ in 0..50_000 {
+        assert_eq!(table.intern(&again, &default), id);
+        assert_eq!(
+            wide_table.intern(&with_name_of(&again, &wide), &wide),
+            StyleId::DEFAULT
+        );
+        assert_eq!(wide_table.intern(&bold_wide, &wide), StyleId(1));
+    }
+    assert!(
+        name_list_compares() - before <= 3,
+        "別に組んだ同じ候補列を引き当てのたびに比べ直した: {}",
+        name_list_compares() - before
+    );
+}
+
+/// `look` の候補列（同じ共有の参照）を持ったまま、他の項目を `base` にそろえた見た目。
+fn with_name_of(look: &TextLook, base: &TextLook) -> TextLook {
+    TextLook {
+        name: look.name.clone(),
+        ..base.clone()
+    }
 }
 
 // ------------------------------------------------------------------ §5 グリフ序数の読み口

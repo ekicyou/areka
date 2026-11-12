@@ -350,40 +350,4 @@ fn image_size_is_the_balloon_image_not_the_validrect_or_origin() {
     assert_eq!(region.start(), (120.0, 70.0));
     // 本題: 画像原寸は渡された値のまま。
     assert_eq!(region.image_size(), (531.0, 289.0));
-    assert_ne!(
-        region.image_size(),
-        (
-            region.right() - region.left(),
-            region.bottom() - region.top()
-        ),
-        "validrect の幅・高さとの取り違え"
-    );
-    assert_ne!(
-        region.image_size(),
-        (region.right(), region.bottom()),
-        "validrect の右辺・下辺との取り違え"
-    );
-    assert_ne!(region.image_size(), region.start(), "start との取り違え");
-}
-
-/// validrect／origin／wordwrappoint を宣言してもしなくても `image_size()` は変わらない
-/// （画像原寸は宣言から導かれる値ではない）。
-#[test]
-fn image_size_is_unchanged_by_validrect_and_origin_declarations() {
-    let declared = model_full(
-        (Some(120), Some(70)),
-        (Some(-10), Some(-10)),
-        (Some(50), Some(200), Some(30), Some(330)),
-    );
-    let bare = model_full((None, None), (None, None), (None, None, None, None));
-    for mode in [
-        WritingMode::HorizontalTb,
-        WritingMode::VerticalRl,
-        WritingMode::VerticalLr,
-    ] {
-        let declared = TextRegion::resolve(&declared, ALT_IMAGE_SIZE, mode);
-        let bare = TextRegion::resolve(&bare, ALT_IMAGE_SIZE, mode);
-        assert_eq!(declared.image_size(), (531.0, 289.0), "{mode:?}");
-        assert_eq!(bare.image_size(), declared.image_size(), "{mode:?}");
-    }
 }

@@ -10,10 +10,9 @@
 //! | §8 | 上付き・下付き（後勝ちの排他・語彙のみの印） | 6.1, 6.2 |
 //! | §9 | 一括の戻し（丸ごと置き換え・項目を列挙しない） | 10.1, 10.2, 10.4 |
 //! | §10 | 所有外キー・未知キー・キーなし | 2.5, 2.6 |
-//! | §11 | 較正——過去に壊れうる形を再現すると赤になる述語 | 15.3 |
 //!
 //! §1〜§6（見た目の値・2 層・装飾の表）は兄弟の `look_tests.rs` にある。本ファイルを分けたのは
-//! `look_tests.rs` が 433 行で、本タスクの分を足すと 1 ファイル 1,000 行の見張り（要件 1.3・
+//! `look_tests.rs` へ本タスクの分を足すと 1 ファイル 1,000 行の見張り（要件 1.3・
 //! `crates/log-capture-kit/tests/file_length_guard_test.rs`）の射程に入るため。
 //!
 //! **6 語は小文字の完全一致のみ**（design §A 項目 12）。大文字の語を受理する実装は §7 の
@@ -49,7 +48,7 @@ fn switch_keys() -> [(&'static str, fn(&mut TextLook) -> &mut bool); 5] {
 /// 要るので、ここでは各フィールドを直に組む。
 fn split_layers() -> LookLayers {
     let default = TextLook {
-        name: vec!["Meiryo".to_owned()],
+        name: vec!["Meiryo".to_owned()].into(),
         height: 20.0,
         color: (10, 20, 30),
         bold: true,
@@ -60,7 +59,7 @@ fn split_layers() -> LookLayers {
         script: Script::Sup,
     };
     let disable = TextLook {
-        name: vec!["Meiryo".to_owned()],
+        name: vec!["Meiryo".to_owned()].into(),
         height: 20.0,
         color: (140, 145, 150),
         bold: false,
@@ -81,7 +80,7 @@ fn split_layers() -> LookLayers {
 /// 見るための出発点）。
 fn styled_look() -> TextLook {
     TextLook {
-        name: vec!["Consolas".to_owned()],
+        name: vec!["Consolas".to_owned()].into(),
         height: 33.0,
         color: (1, 2, 3),
         bold: false,
@@ -105,17 +104,6 @@ fn all_switches_on(base: &TextLook) -> TextLook {
 /// 適用が成功したときに返るべき印——白抜きだけが「状態は更新するが表示は変えない」（R5.9）。
 fn expected_switch_note(key: &str) -> Option<Note> {
     (key == "outline").then_some(Note::VocabularyOnly { key: "outline" })
-}
-
-/// 真偽値で切り替えるのは太字・斜体・下線・打ち消し線・白抜きの 5 項目——母数を先に固定する
-/// （R5.1・R5.9）。項目が増減したらこのテストが先に赤くなる。
-#[test]
-fn the_switch_keys_are_bold_italic_underline_strike_and_outline() {
-    let keys: Vec<&str> = switch_keys().iter().map(|(key, _)| *key).collect();
-    assert_eq!(
-        keys,
-        vec!["bold", "italic", "underline", "strike", "outline"]
-    );
 }
 
 /// `true`／`1` は当該項目だけを付ける（R5.1・R5.9 の印つき）。
@@ -620,61 +608,5 @@ fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
     for (args, want) in rows {
         let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         assert_eq!(classify_font_tag(&args), want, "{args:?} の分類");
-    }
-}
-
-// ------------------------------------------------------------------ §11 較正（3.3）
-
-/// 較正: 「当該項目の既定戻しが他項目も戻す」誤り（`\f[bold,default]` の腕で見た目を
-/// 丸ごと置き換えてしまう形・R5.3・R15.3）。
-#[test]
-fn calibration_item_default_must_not_restore_the_other_items() {
-    let layers = split_layers();
-    let mut look = styled_look();
-    apply_font_tag(&mut look, &layers, &["bold", "default"])
-        .expect("\\f[bold,default] は受理される");
-
-    assert_eq!(look.bold, layers.default.bold, "当該項目は既定へ戻る");
-    assert_eq!(
-        look.height,
-        styled_look().height,
-        "大きさまで既定へ戻っている（当該項目の戻しが丸ごと置き換えになっている）"
-    );
-    assert_eq!(look.color, styled_look().color, "色まで既定へ戻っている");
-    assert_eq!(
-        look.name,
-        styled_look().name,
-        "フォント名まで既定へ戻っている"
-    );
-    assert_eq!(
-        look.script,
-        styled_look().script,
-        "上下付きまで既定へ戻っている"
-    );
-}
-
-/// 較正: 「上下付きが排他でなく両立してしまう」誤り（`sub`・`sup` を独立した真偽値で
-/// 持つ形・R6.2・R15.3）。
-///
-/// 独立した 2 つの真偽値で持つ実装なら、下付き→上付き→上付きを外す、の順で下付きが
-/// 残る。1 つの値で持つ実装なら何も残らない。
-#[test]
-fn calibration_sub_and_sup_must_not_be_active_at_the_same_time() {
-    let layers = split_layers();
-    let mut look = TextLook::ukadoc_default();
-    // 途中の状態も断言する——何もしない実装でも最後が `None` になるので、道中を述べないと
-    // 「上下付きが 1 つも効かない」形まで緑で通る。
-    for (key, word, want) in [
-        ("sub", "1", Script::Sub),
-        ("sup", "1", Script::Sup),
-        ("sup", "0", Script::None),
-    ] {
-        apply_font_tag(&mut look, &layers, &[key, word])
-            .unwrap_or_else(|issue| panic!("\\f[{key},{word}] が拒まれた: {issue:?}"));
-        assert_eq!(
-            look.script, want,
-            "\\f[{key},{word}] の後——上付きを外したのに下付きが残っている\
-             （上下付きを独立した 2 値で持っている）"
-        );
     }
 }

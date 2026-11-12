@@ -104,7 +104,11 @@ fn face_at(
 /// 既定の見た目（候補列だけ差し替える）。
 fn default_named(names: &[&str]) -> TextLook {
     TextLook {
-        name: names.iter().map(|n| n.to_string()).collect(),
+        name: names
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .into(),
         ..ResolvedFont::resolve(&geo_model(Some(10))).looks.default
     }
 }
@@ -115,7 +119,7 @@ fn a_gdi_named_run_draws_with_the_family_and_weight_of_its_face() {
     let fonts = FontCatalog::with_faces(&[], &[("Yu Gothic Medium", yu_gothic_medium())]);
     let default = default_named(&[DEFAULT_FONT_NAME]);
     let look = TextLook {
-        name: vec!["Yu Gothic Medium".into()],
+        name: vec!["Yu Gothic Medium".into()].into(),
         ..default.clone()
     };
     let (layout, _) = bake_middle_run(&fonts, &default, &look);
@@ -153,7 +157,7 @@ fn run_weights_follow_the_same_rule_as_the_bound_face() {
 
     let medium_default = default_named(&["Yu Gothic Medium"]);
     let regular = TextLook {
-        name: vec!["Yu Gothic".into()],
+        name: vec!["Yu Gothic".into()].into(),
         ..medium_default.clone()
     };
     let (layout, _) = bake_middle_run(&fonts, &medium_default, &regular);
@@ -177,7 +181,7 @@ fn a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound() {
     let default = default_named(&[DEFAULT_FONT_NAME]);
 
     let narrow = TextLook {
-        name: vec!["Narrow Sans Condensed".into()],
+        name: vec!["Narrow Sans Condensed".into()].into(),
         ..default.clone()
     };
     let (layout, _) = bake_middle_run(&fonts, &default, &narrow);
@@ -193,7 +197,7 @@ fn a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound() {
     );
 
     let missing = TextLook {
-        name: vec!["NoSuchFontXYZ".into()],
+        name: vec!["NoSuchFontXYZ".into()].into(),
         ..default.clone()
     };
     let (layout, calls) = bake_middle_run(&fonts, &default, &missing);
@@ -287,7 +291,7 @@ fn f3_gdi_named_run_measures_the_same_latin_advances_as_the_line() {
     let font = ResolvedFont::resolve(&parse_str("font.height,12\r\n", None));
     let default = &font.looks.default;
     let medium = TextLook {
-        name: vec!["Yu Gothic Medium".into()],
+        name: vec!["Yu Gothic Medium".into()].into(),
         ..default.clone()
     };
     assert_eq!(
@@ -319,7 +323,7 @@ fn f4_all_missing_runs_measure_the_same_advances_as_the_line() {
     let font = ResolvedFont::resolve(&parse_str("font.name,Yu Gothic Medium\r\n", None));
     let default = &font.looks.default;
     let missing = TextLook {
-        name: vec!["NoSuchFontXYZ".into()],
+        name: vec!["NoSuchFontXYZ".into()].into(),
         ..default.clone()
     };
     let bold = TextLook {

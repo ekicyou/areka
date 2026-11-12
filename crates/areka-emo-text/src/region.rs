@@ -18,7 +18,7 @@
 //!
 //! ## 負値=反対辺基準（ukadoc 脚注 *1 正典）
 //!
-//! `resolve(v, extent) = if v >= 0 { v } else { extent + v }`
+//! `resolve_coord(v, extent) = if v >= 0 { v } else { extent + v }`
 //! （「マイナス座標はベース画像の右下からの相対」）。
 //!
 //! **`validrect` の右辺・下辺だけは 0 も反対辺基準**（要件 6）: `resolve_far_edge(v, extent)
@@ -416,7 +416,7 @@ impl TextRegion {
     /// （spec `areka-P0-cursor-tag-canon` の要件 4.3／4.4）。
     ///
     /// validrect は画像の部分矩形にすぎないので、**この値を validrect の幅・高さや辺と
-    /// 取り違えてはならない**（檻: 本ファイルの
+    /// 取り違えてはならない**（檻: `region_tests.rs` の
     /// `image_size_is_the_balloon_image_not_the_validrect_or_origin`）。
     pub fn image_size(&self) -> (f32, f32) {
         self.image_size

@@ -498,7 +498,7 @@ fn a_line_with_no_glyph_advances_by_the_height_in_effect() {
 /// →2 つ目の `\n` が先行実体化して `block = pitch(10) = 12`（行内は 50 へ）→ `あ` の直前で
 /// 保留 1.0 を `pitch(10) = 12` で適用し `block = 24`・行内は行頭へ戻る。
 ///
-/// 較正（要件 15.5）: スコープの現在の見た目へ戻すと `top` が 24 → 44 になって赤。
+/// 較正（要件 15.5）: 行の丈へスコープの現在の見た目を渡す形（R2-A1 で外した形）へ戻すと `top` が 24 → 44 になって赤。
 #[test]
 fn closing_a_glyphless_line_early_uses_the_following_glyph_height() {
     let region = region_h(200);
@@ -539,7 +539,7 @@ fn closing_a_glyphless_line_early_uses_the_following_glyph_height() {
 /// 行送り軸は「実効位置から 0px」なので、先読みの行送りがそのまま `あ` の `top` に出る。
 /// `\_l` を外した同じ並びでも `あ` は `top = 12`（保留フラッシュは次の字の大きさで送る）。
 ///
-/// 較正（要件 15.5）: 先読みをスコープの現在の見た目へ戻すと、届いた後の `top` が 12 → 32 になって赤。
+/// 較正（要件 15.5）: 先読みへスコープの現在の見た目を渡す形（R2-A1 で外した形）へ戻すと、届いた後の `top` が 12 → 32 になって赤。
 #[test]
 fn a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview() {
     let region = region_h(200);

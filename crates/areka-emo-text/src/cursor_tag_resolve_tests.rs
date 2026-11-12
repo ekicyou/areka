@@ -766,7 +766,7 @@ fn degrade_warns_once_per_branch_and_actor() {
     });
     assert_eq!(counts.warn, 0, "再走査では追加の警告を出さない");
 
-    // 別キャラクター＝再び 2 件。
+    // 別キャラクター＝再び 3 件。
     let ((), counts) = count_levels(|| {
         for case in CASES {
             warn_if_degraded(case, &b, &a1, &mut guard);

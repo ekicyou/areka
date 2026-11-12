@@ -11,7 +11,7 @@
 //!    宣言されていないとき、折返し閾値は解決後の `validrect.bottom` と一致する
 //!    （本仕様の要件 3.4）。`wordwrappoint.x` が宣言されていても既定は変わらない。
 //! 2. **`wordwrappoint.y` の負値＝ベース画像の下辺基準**——負値は
-//!    `resolve(v, extent) = extent + v` の既存規約（ukadoc 脚注 *1）で解決され、
+//!    `resolve_coord(v, extent) = extent + v` の既存規約（ukadoc 脚注 *1）で解決され、
 //!    その規約は横書きの `wordwrappoint.x` と同一である（本仕様の要件 3.4・3.7）。
 //! 3. **`wordwrappoint.x` は縦書きで参照されない**（本仕様の要件 3.5・C4 の主眼）——
 //!    縦書きの折返し軸選択は `wordwrappoint.y` のみを読む網羅 match であり、
@@ -164,16 +164,12 @@ fn horizontal_wordwrap_default_is_validrect_right_not_bottom() {
         WritingMode::HorizontalTb,
     );
     assert_eq!(region.wrap_threshold(), RECT_RIGHT);
-    assert_ne!(
-        RECT_RIGHT, RECT_BOTTOM,
-        "基準 validrect の right と bottom が同値では対照にならない"
-    );
 }
 
 // ── 要件 3.4／3.7: `wordwrappoint.y` の負値＝ベース画像の下辺基準 ──
 
 /// 縦書きの `wordwrappoint.y` の負値は、ベース画像の下辺（高さ 224）からの相対として
-/// 解決される（`resolve(v, extent) = extent + v`・ukadoc 脚注 *1 の既存規約）。
+/// 解決される（`resolve_coord(v, extent) = extent + v`・ukadoc 脚注 *1 の既存規約）。
 /// 規約は横書きの `wordwrappoint.x`（幅 400 基準）と同一の形である。
 #[test]
 fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
@@ -407,94 +403,6 @@ fn assert_capture_alive(counts: &LevelCounts) {
     );
 }
 
-/// 分岐 1——**validrect の内側**に宣言された `origin` は字義どおり用いられ、記録は出ない
-/// （要件 3.10 前半・正常系）。書字方向 3 モードで同一（開始角の選択は使われない）。
-#[test]
-fn declared_origin_inside_validrect_is_literal_and_unrecorded() {
-    // (200, 60) は解決後 validrect (36,46)-(356,168) の内側。
-    for mode in ALL_MODES {
-        let (region, counts) = resolve_counting((Some(200), Some(60)), RECT, mode);
-        assert_capture_alive(&counts);
-        assert_eq!(
-            region.start(),
-            (200.0, 60.0),
-            "{mode:?}: 範囲内の宣言は字義どおり用いる"
-        );
-        assert_eq!(counts.debug, 0, "{mode:?}: 範囲内の宣言は記録しない");
-        assert_eq!(counts.warn, 0, "{mode:?}: warn も出さない");
-    }
-}
-
-/// 分岐 2——**validrect の外**に宣言された `origin` は宣言なしと同じ扱いで
-/// **書字開始角**へ落ち、成分ごとに `debug!` ちょうど 1 件を記録する
-/// （spec `areka-P0-balloon-origin-outside-validrect` の要件 1.1・1.7）。
-///
-/// 落ちる先は最寄りの辺ではなく書字開始角（横書きと `vertical_lr` は (36,46)・
-/// `vertical_rl` は (356,46)）であり、宣言値がそのまま返れば本検査は赤くなる。
-#[test]
-fn declared_origin_outside_validrect_falls_back_to_start_corner_with_one_debug_per_component() {
-    // (ラベル, origin, mode, 期待 start, 期待 debug 件数)
-    let cases = [
-        // y(0) だけが top(46) より上＝範囲外。x(200) は範囲内なので宣言どおり残る。
-        (
-            "y のみ範囲外",
-            (Some(200), Some(0)),
-            WritingMode::HorizontalTb,
-            (200.0, 46.0),
-            1,
-        ),
-        // x(400) だけが right(356) より右＝範囲外。左辺 36 へ落ちる（最寄りの右辺ではない）。
-        (
-            "x のみ範囲外",
-            (Some(400), Some(60)),
-            WritingMode::HorizontalTb,
-            (36.0, 60.0),
-            1,
-        ),
-        // 両成分とも範囲外（フィクスチャがかつて宣言していた形）。
-        (
-            "両成分が範囲外・横書き",
-            (Some(0), Some(0)),
-            WritingMode::HorizontalTb,
-            (36.0, 46.0),
-            2,
-        ),
-        // 縦書き右送りの書字開始角は右上＝落ちる先も x が右端側になる。
-        (
-            "両成分が範囲外・vertical_rl",
-            (Some(0), Some(0)),
-            WritingMode::VerticalRl,
-            (356.0, 46.0),
-            2,
-        ),
-        (
-            "両成分が範囲外・vertical_lr",
-            (Some(0), Some(0)),
-            WritingMode::VerticalLr,
-            (36.0, 46.0),
-            2,
-        ),
-    ];
-    for (label, origin, mode, expected_start, expected_debug) in cases {
-        let (region, counts) = resolve_counting(origin, RECT, mode);
-        assert_capture_alive(&counts);
-        assert_eq!(
-            region.start(),
-            expected_start,
-            "{label} / {mode:?}: validrect 外の宣言は使わず書字開始角から書き始める\
-             （宣言値がそのまま返っていたら範囲の判定が効いていない）"
-        );
-        assert_eq!(
-            counts.debug, expected_debug,
-            "{label} / {mode:?}: 範囲外の成分 1 つにつき debug ちょうど 1 件"
-        );
-        assert_eq!(
-            counts.warn, 0,
-            "{label} / {mode:?}: 範囲外宣言は warn ではない（純粋層は warn を書かない）"
-        );
-    }
-}
-
 /// 分岐 3——**未宣言**の成分は書字開始角へ縮退し、成分ごとに `debug!` ちょうど 1 件を
 /// 記録する（要件 3.11・範囲外に宣言された origin の扱いが変わっても完全に同一の挙動）。
 #[test]
@@ -556,51 +464,6 @@ fn undeclared_origin_falls_back_to_writing_corner_with_one_debug_per_component()
             counts.debug, expected_debug,
             "{label} / {mode:?}: 未宣言の成分 1 つにつき debug ちょうど 1 件"
         );
-    }
-}
-
-/// 分岐 4——**負値の宣言**は反対端基準（`extent + v`）で絶対値化してから、その解決後の
-/// 値で範囲の内外を判定する（要件 3.7）。範囲内なら解決後の値がそのまま開始点になり
-/// 記録 0 件・範囲外なら書字開始角へ落ちて成分ごとに debug 1 件。
-#[test]
-fn negative_origin_resolves_from_opposite_edge_then_is_range_checked() {
-    // (ラベル, origin, 期待 start（None＝範囲外につき方向ごとの書字開始角）, 期待 debug 件数)。
-    // 画像は 400×224。
-    let cases = [
-        // 400-100=300 ∈ [36,356]・224-100=124 ∈ [46,168] ＝ 両成分とも範囲内。
-        (
-            "範囲内へ解決",
-            (Some(-100), Some(-100)),
-            Some((300.0, 124.0)),
-            0,
-        ),
-        // 400-380=20 < 36・224-200=24 < 46 ＝ 両成分とも範囲外。
-        ("範囲外へ解決", (Some(-380), Some(-200)), None, 2),
-        // 反対端ちょうど（0）——負値規約の境界。両成分とも範囲外。
-        ("反対端ちょうど", (Some(-400), Some(-224)), None, 2),
-    ];
-    for (label, origin, expected_start, expected_debug) in cases {
-        for mode in ALL_MODES {
-            let (region, counts) = resolve_counting(origin, RECT, mode);
-            assert_capture_alive(&counts);
-            assert_eq!(
-                region.start(),
-                expected_start.unwrap_or_else(|| start_corner(mode)),
-                "{label} / {mode:?}: 負値は反対端基準で解決してから範囲の内外を判定する\
-                 （範囲内なら解決後の値・範囲外なら書字開始角）"
-            );
-            assert_eq!(
-                counts.debug, expected_debug,
-                "{label} / {mode:?}: debug 件数"
-            );
-        }
-    }
-    // 対照——負値解決の結果は、同じ位置を非負で宣言したものと逐語一致する
-    // （負値規約が「別の経路」になっていないことの証拠）。
-    for mode in ALL_MODES {
-        let (negative, _) = resolve_counting((Some(-100), Some(-100)), RECT, mode);
-        let (nonnegative, _) = resolve_counting((Some(300), Some(124)), RECT, mode);
-        assert_eq!(negative, nonnegative, "{mode:?}: 負値解決は非負宣言と同値");
     }
 }
 
@@ -702,8 +565,8 @@ fn undeclared_origin_does_move_when_validrect_changes() {
 
 /// **`origin` 成分の解決を、3 書字方向 × 2 成分 × 11 場合の全数（66 行）で固定する。**
 ///
-/// 上の分岐別の檻（分岐 1〜4）は場合を手で選んでいる。ここでは場合を表に並べ、書字方向と
-/// 成分は繰り返しで掛け合わせて全数を回す——代表を選ばないので、「この組み合わせだけ見て
+/// モジュールの説明の 5.（内側の宣言）・6.（外の宣言）・8.（負値の宣言）は本表が持つ
+/// （7. の未宣言は上の別の檻）。場合を表に並べ、書字方向と成分は繰り返しで掛け合わせて全数を回す——代表を選ばないので、「この組み合わせだけ見て
 /// いなかった」が起こらない（本仕様の要件 5.1）。
 ///
 /// 場合は軸ごとに、近い辺の 1 つ外・近い辺ちょうど・内・遠い辺ちょうど・遠い辺の 1 つ外・
@@ -839,4 +702,25 @@ fn origin_range_table_holds_for_every_mode_and_component() {
         cases.len()
     );
     assert_eq!(rows, 66, "表の行数が 66 行から変わっている");
+
+    // 表は成分を 1 つずつ外す。両成分とも範囲外（検体がかつて宣言していた形）は成分ごとに
+    // 1 件ずつ・計 2 件で、開始点は両成分とも書字開始角。負値の解決は同じ位置を非負で
+    // 宣言したものと全成分で一致する（負値が別の経路になっていない）。
+    for mode in ALL_MODES {
+        let (region, counts) = resolve_counting((Some(0), Some(0)), RECT, mode);
+        assert_capture_alive(&counts);
+        assert_eq!(
+            region.start(),
+            start_corner(mode),
+            "{mode:?}: 両成分とも範囲外"
+        );
+        assert_eq!(counts.debug, 2, "{mode:?}: 範囲外の成分ごとに debug 1 件");
+        assert_eq!(counts.warn, 0, "{mode:?}: 解決は warn を書かない");
+        let (negative, _) = resolve_counting((Some(-100), Some(-100)), RECT, mode);
+        let (nonnegative, _) = resolve_counting((Some(300), Some(124)), RECT, mode);
+        assert_eq!(
+            negative, nonnegative,
+            "{mode:?}: 負値の解決は非負の宣言と同値"
+        );
+    }
 }

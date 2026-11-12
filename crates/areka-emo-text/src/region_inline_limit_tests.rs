@@ -175,11 +175,6 @@ fn inline_limit_is_the_validrect_far_edge_in_every_writing_mode() {
             "{mode:?}: 縦書きの遠辺は解決後の validrect.bottom と同じ値でなければならない"
         );
     }
-
-    assert_ne!(
-        KERO_RIGHT, KERO_BOTTOM,
-        "右辺と下辺が同値では軸の取り違えを見分けられない"
-    );
 }
 
 // ── 要件 14.1（2026-09-06 第 2 回改訂）: 解決はログを書かない ──

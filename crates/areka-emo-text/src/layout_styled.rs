@@ -99,21 +99,21 @@ pub(super) fn glyph_style_advance(
 /// 1. 閉じる行に文字が置かれていれば、その行の最大 em。
 /// 2. 文字の無い行（改行だけの行）は、そのとき効いている大きさ＝**後ろに置かれる文字**の大きさ
 ///    （`\_l` の先行実体化と先読みも、届いた項目の後ろの字を呼び手が引いて渡す）。
-/// 3. 後ろに置かれる文字が無いときだけ、スコープの**現在の見た目**の大きさ
-///    （[`GlyphStyles::current`]）。後ろに字が無ければその後に置かれる字も無いので、この値は
-///    配置の結果に出ない——後の `\f[height]` が届いても前の字は動かない。
+/// 3. 後ろに置かれる文字が無いときだけ `font_height`。後ろに字が無ければその後に置かれる字も
+///    無いので、この値は配置の結果に出ない（再監査 R2-A1: だからスコープの現在の見た目
+///    [`GlyphStyles::current`] はここへ渡さない）。
 pub(super) struct LineHeights {
-    /// スコープの現在の見た目の高さ（番号列が無い経路は `font_height`）。
-    current: f32,
+    /// 後ろに字が無いときの丈（`font_height`）。
+    fallback: f32,
     /// まだ閉じていない行に置かれた文字の最大 em（文字が無ければ `None`）。
     line_max: Option<f32>,
 }
 
 impl LineHeights {
-    /// 追跡を始める（番号列が無い経路は現在の見た目も `font_height`＝従来と同値）。
-    pub(super) fn new(styles: Option<&GlyphStyles<'_>>, font_height: f32) -> LineHeights {
+    /// 追跡を始める。
+    pub(super) fn new(font_height: f32) -> LineHeights {
         LineHeights {
-            current: styles.map_or(font_height, |s| s.current.height),
+            fallback: font_height,
             line_max: None,
         }
     }
@@ -126,7 +126,7 @@ impl LineHeights {
     /// 開いている行を閉じる——丈を返し、行内最大を空へ戻す。
     /// `next` は「後ろに置かれる文字の大きさ」（後ろに文字が無ければ `None`）。
     pub(super) fn close(&mut self, next: Option<f32>) -> f32 {
-        self.line_max.take().or(next).unwrap_or(self.current)
+        self.line_max.take().or(next).unwrap_or(self.fallback)
     }
 
     /// いま閉じたとしたら返る丈を、**閉じずに**覗く（`\_l` の実効位置の先読み用）。
@@ -136,7 +136,7 @@ impl LineHeights {
     /// `the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch`・
     /// `a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview`）。
     pub(super) fn peek(&self, next: Option<f32>) -> f32 {
-        self.line_max.or(next).unwrap_or(self.current)
+        self.line_max.or(next).unwrap_or(self.fallback)
     }
 }
 
