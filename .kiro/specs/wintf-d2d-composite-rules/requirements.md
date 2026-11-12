@@ -35,7 +35,7 @@ wintf の描画は、描画面（WUC の `CompositionDrawingSurface`）1 枚に�
   - 描画面の自動の昇格・降格（`wintf-surface-auto-promotion`）。
   - 文字の層（`areka-emo-text`）。自前のスワップチェーンで描き、本 spec の入れ物と合成の口を通らない。
   - サーフェスの切り替えのクロスフェード（`seriko.force_disable_crossfade` の対象）。
-  - CPU の画素を読んでいる 3 つの読み手（当たり判定の α マスク・MCP の `dump_surface`・バルーンの背景色）の出どころの付け替え。本 spec の後も emo は CPU で合成するので、3 つは今のまま動く（付け替えは議題 2）。
+  - CPU の画素を読んでいる 3 つの読み手（当たり判定の α マスク・MCP の `dump_surface`・バルーンの背景色）の出どころの付け替え。本 spec の後も emo は CPU で合成するので、3 つは今のまま動く（付け替えは CPU の画素が無くなる `draw-methods-canon`。`ecs/widget/bitmap_source/alpha_mask.rs`・`ecs/layout/hit_region/`・emo-present の `presenter/budget.rs`・`cache.rs` には触らない）。
 - **Adjacent expectations**:
   - `wintf-visual-tree` が本番へ上げた描画の木（`VisualDrawContent` の重ね方と補間の欄・`Visual.opacity`・`Visual.clip`・目印 `OwnSurface`・WARP の足場と許容差）をそのまま使う。重ね方・補間・変形・切り抜きの答えは変えない。
   - `wintf-visual-damage-redraw` は、本 spec の入れ物を描き先にして、変わった範囲だけ描き直す。本 spec は入れ物の中身を次の合成まで保つ（要件 4.4）。
@@ -69,10 +69,11 @@ wintf の描画は、描画面（WUC の `CompositionDrawingSurface`）1 枚に�
 1. While 節の不透明度が 0 より大きく 1.0 未満, the wintf shall その節と子孫の節を、まず 1 枚にまとめて描き、その 1 枚に不透明度を掛けて下の画素へ重ねる（重なり合う子孫どうしが互いに透けて見えない）。
 2. While 節の不透明度が 0, the wintf shall その節と子孫の節を描かない（答えの画素は描かないときと同じ）。
 3. While 節の不透明度が 1.0, the wintf shall 今と同じ答えの画素で描く（まとめた 1 枚を作らない描き方と同じ）。
-4. The wintf shall 節の不透明度を、描画面の持ち主と同じく `Visual` の範囲に収めた値（`clamped_opacity` の答え・0〜1 の外と NaN の扱いも同じ）で効かせる。
+4. The wintf shall 節の不透明度を、描画面の持ち主と同じく `Visual` の範囲に収めた値（`clamped_opacity` の答え・0〜1 の外の扱いも同じ）で効かせる。
 5. While 祖先の節も 1.0 未満の不透明度を持つ, the wintf shall 祖先と子孫の不透明度を入れ子の層として順に効かせる。
 6. The wintf shall 節の不透明度が 1.0 でないときに残していた「範囲外なので 1.0 で描く」旨の `warn!` を残さない。
 7. When 節の不透明度が変わる, the wintf shall 同じフレームの描画でその描画面を描き直す。
+8. If 不透明度に NaN が与えられる, then the wintf shall 共通の 1 か所（`set_opacity`・`clamped_opacity`）で NaN を 1.0（不透明）として扱い、その旨を `warn!` に記録する（描画面の持ち主と節の両方に効く・黙って消さない）。
 
 ### Requirement 3: 切り抜きと層の中で重ね方とブレンドが効く先
 
@@ -115,7 +116,8 @@ wintf の描画は、描画面（WUC の `CompositionDrawingSurface`）1 枚に�
 6. If 読み戻しの途中で GPU の呼び出しが失敗する, then the wintf shall 実体名と HRESULT を `error!` に記録し、「読めない」を返す（透明や前の値に化かさない・装置の失いの記録は今の立ち直りの道の 1 度だけ）。
 7. The wintf shall 読み戻しを使い手が求めたときだけ行い、求めが無いフレームでは GPU から読まない。
 8. The wintf shall 読み戻しで画素の値だけを返し、当たったかどうかの閾値（areka の α ≥ 0.5）を持たない（判定は使い手が持つ）。
-9. Where 描画面の全体の読み戻しを本 spec が持つ（議題 2）, the wintf shall 使い手が求めた描画面の、最後に合成し終えた入れ物の全部の画素を、その呼び出しの中で 1 行＝幅×4 バイトの詰めた BGRA で返す（5.2・5.5・5.6 と同じ決まりで）。
+9. When 使い手が描画面の全体の画素を求める, the wintf shall その描画面の、最後に合成し終えた入れ物の全部の画素を、その呼び出しの中で 1 行＝幅×4 バイトの詰めた BGRA で返す（5.2・5.5・5.6 と同じ決まりで）。
+10. The wintf shall 1 画素の読み戻しの待ちの長さを実 GPU で測り、設計か実装の記録に残す（クリックの透過を付け替える `draw-methods-canon` の判断材料）。
 
 ### Requirement 6: 今の描画の道との両立
 
@@ -125,7 +127,7 @@ wintf の描画は、描画面（WUC の `CompositionDrawingSurface`）1 枚に�
 
 1. The wintf shall 規則（ブレンド・1.0 でない不透明度）を指定しない描き手の答えの画素を変えない（本 spec の前後で、既存のウィジェットと emo の画素のテストが同じ答えを返し、全体テストが緑のまま）。
 2. The wintf shall `wintf-visual-tree` が固定した答え（画家の順・重ね方・補間・変形・切り抜き・可視・描画面の持ち主と節の見分け）を変えない。
-3. The wintf shall 描画面の持ち主の不透明度・切り抜き・可視を今のまま WUC の木で実現する（本 spec の不透明度の層は節にだけ効く）。
+3. The wintf shall 描画面の持ち主の不透明度・切り抜き・可視を今のまま WUC の木で実現する（本 spec の不透明度の層は節にだけ効く。ただし NaN の扱い〔2.8〕は持ち主にも効く）。
 4. The wintf shall 公開の型と口の名前を areka の外の使い手にも通じる語で付け、ukadoc と areka の語（`blend-*`・`overlay`・ゴースト・シェル・バルーンなど）を持ち込まない。
 5. The wintf shall 新しい外部の依存を足さず、areka の本体（`crates/areka/`）に触らない。
 6. If ブレンド・不透明度の層・入れ物のどこかで D2D か D3D の呼び出しが失敗する, then the wintf shall 失敗の理由（実体・HRESULT）を `error!` で記録する（記録の無い失敗の道を作らない・panic は致命のときだけ）。
@@ -157,10 +159,19 @@ wintf の描画は、描画面（WUC の `CompositionDrawingSurface`）1 枚に�
 1. The wintf shall `.kiro/steering/tech.md` の Testing の節の WARP の例外を、描画の木の画素の答えから「合成の答えの画素（描画の木・ブレンド・不透明度の層・入れ物・読み戻し）」へ広げて書く。
 2. The wintf shall `.kiro/steering/structure.md` の描画の道の記述に、入れ物を通して描画面へ写す道と 1 ピクセルの読み戻しの口を書く。
 3. The wintf shall ブレンド・不透明度の層・切り抜きの中の効き先・入れ物・読み戻しの決め（とくに 3.1〜3.4・5.2〜5.6）を公開の型と口の文書に書く。
+4. The wintf shall `.kiro/steering/tech.md` に、支える Windows の下限を Windows 10 1903（ブレンドの口が要る版）と書く。
 
-## 要件討議へ送る議題（推奨案で書いた所）
+## 要件討議で確定した議題（2026-11-13・全議題を推奨案で一括承認）
 
-brief の議題 1・4 は `wintf-visual-tree` で済んだ（描画の木を本番へ上げた・WARP の許容差は ±1）。残る brief の議題 2・3 と、本 spec の要件の段で見つけた 2 つを、推奨案で要件に書いた。答えで要件か作業が変わる。
+brief の議題 1・4 は `wintf-visual-tree` で済んだ（描画の木を本番へ上げた・WARP の許容差は ±1）。残る brief の議題 2・3 と、要件の段とギャップ分析で見つけた議題を、開発者が 2026-11-13 に推奨案で一括承認した。
+
+- **議題 1（ブレンドの口と Windows の下限）**: 下限を Windows 10 1903 とし、`ID2D1DeviceContext6::BlendImage` で描く（要件 8.4）。それより古い Windows は 1.7 の道。ブレンドの効果の道は層の中で `Flush` が要り使えないので採らない。
+- **議題 2（要件 3.1〜3.3 が D2D で出来なかったとき）**: 3.1〜3.3 は書き換えない。設計の前に WARP で「背景から始める層＋ `COPY`」を試し（research.md R1）、通らなければ設計の段で別の D2D の道を探す。どれも無いときだけ開発者へ戻す（「図形の切り抜きの中は層の中身に効く」へ先に逃げない）。
+- **議題 3（入れ物を全部の描画面に持つか）**: brief のとおり全部の描画面に持つ（要件 4.1・4.3 のまま）。
+- **議題 4（クリックの透過の付け替え）**: 本 spec では付け替えない。1 画素の読み戻しの待ちを実 GPU で測って記録に残す（要件 5.10）。描画面の全体の読み戻しの口は本 spec が持つ（要件 5.9 を無条件に）。
+- **議題 5（不透明度の NaN）**: 共通の 1 か所で NaN を 1.0 として扱い `warn!`（要件 2.8・6.3 の但し書き）。
+
+以下は要件討議へ出した時点の議題の記録（推奨案はすべて上のとおり確定）。
 
 1. **ブレンドの口と Windows の下限**（brief の議題 2・要件 1.7）: ブレンドを描く口は、描き先を直接読んで混ぜる口（Windows 10 1903 以降）か、ブレンドの効果（それより古い版でも動くが、下の画素を入力の絵として渡す手間が要る）か。areka が支える Windows は `tech.md` で「Windows 10/11（Windows.UI.Composition 対応）」とだけ書かれ、1903 より前を支えるかは書かれていない。**推奨**: 支える下限を Windows 10 1903 とし、直接読んで混ぜる口を使う（1903 より前で動いたときは 1.7 の道）。下限を下げるなら効果で描く（設計の段で決める）。
 2. **クリックの透過と CPU の画素の読み手の付け替え**（brief の議題 3・要件 5.9・Boundary の Out）: 1 ピクセルの読み戻しで今の CPU の α マスクを置き換えるか、併せ持つか。本 spec の後も emo は CPU で合成するので、α マスクの出どころは消えない。**推奨**: 本 spec では置き換えない（口を作り、待ちの長さを測って設計の記録に残す）。付け替えは CPU の画素が無くなる `draw-methods-canon` で行う（brief の再測定の「議題 3 で置き換えるなら」の触るファイル＝`alpha_mask.rs`・`hit_region/`・emo-present の `budget.rs`・`cache.rs` には触らない）。あわせて、`draw-methods-canon` の brief が「両 spec の要件で決める」とした**描画面の全体の読み戻し**（`dump_surface`・バルーンの背景色の新しい出どころ）は、入れ物の持ち主である本 spec が口だけ持つ（要件 5.9）。
