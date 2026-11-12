@@ -3,7 +3,7 @@
 //! 可視窓（[`crate::layout::VisibleWindow`]）の `block_offset` を「真位置（f32 連続量・
 //! 物理 px）」と「確定位置（whole-pixel 整数）」へ分離して保持し（α 後の補間シームの土台・
 //! R8.2）、ブロック軸のスカラを writing_mode 追随の 2D ベクトルへ写す [`ScrollState`]／
-//! [`ScrollPlanner`]／[`block_axis_vector`] を担い、ダーティ導出（[`ScrollPlanner::derive_dirty`]）
+//! [`ScrollPlanner`]／[`block_axis_vector`] を担い、ダーティ導出（[`ScrollPlanner::derive_dirty_with_overhangs`]）
 //! と状態遷移（[`ScrollPlanner::plan`]／[`ScrollPlanner::commit`]・[`FramePlan`]）を提供する
 //! （plan は状態不変・純粋／commit は COM 実行成功後にのみ確定を反映＝失敗フレーム再試行安全）。
 //!
@@ -129,7 +129,7 @@ pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
 /// 真位置／確定位置の**表現**・軸写像・量子化（3.1）、ダーティ導出（3.2）、`plan`/`commit`
 /// 二相と `FramePlan`（3.3）を担う。確定位置 `committed`・直近真位置 `pos`・前回確定時の
 /// 行指紋 `prev_lines`・Clear 要求フラグ `clear_requested` を内部状態として保持する
-/// （初期: committed=0・pos=0・prev_lines 空・clear_requested=false）。`plan` は状態不変
+/// （初期: committed=0・pos=0・prev_lines は「分からない」・clear_requested=false）。`plan` は状態不変
 /// （`&self`）で、確定は `commit`（`&mut self`）でのみ反映する（失敗フレーム再試行安全）。
 ///
 /// 純粋層規律: `windows` 非依存（lib.rs 構造檻へ追加）。同一入力→同一出力。
@@ -139,8 +139,9 @@ pub struct ScrollPlanner {
     committed: i32,
     /// 直近の真位置（f32 連続量・α 後に補間過程が更新元になる・初期 0）。
     pos: f32,
-    /// 前回 `commit` 時の canvas 行指紋（変化行検出の唯一の根拠・初期空＝全域ダーティ）。
-    prev_lines: Vec<CommittedLine>,
+    /// 前回 `commit` 時の canvas 行指紋（変化行検出の唯一の根拠）。`None`＝前に描いた中身が
+    /// 分からない（初め・消去の要求の後）＝全域を描き直す。`Some(空)`＝何も描いていないと分かっている。
+    prev_lines: Option<Vec<CommittedLine>>,
     /// Clear cue 受領フラグ——true の間 `plan` は `FramePlan::FullClear` を返す。
     /// `commit(FullClear)` で false へ戻す（未 commit の失敗フレームは保持＝再試行安全）。
     clear_requested: bool,
@@ -215,8 +216,9 @@ impl ScrollPlanner {
     /// （**状態不変・純粋**・`&self`・R2.3/4.3）。
     ///
     /// - `clear_requested` が立っていれば [`FramePlan::FullClear`]（描画 0 件・back 全域 Clear）。
+    /// - 前の行が分からない（`prev_lines` が `None`）なら全域の道（[`Self::full_domain`]・面全域 1 枚）。
     /// - それ以外は現状 `committed` から目標（`window.block_offset` の量子化）への blit と、
-    ///   前回確定 `prev_lines` に対する [`Self::derive_dirty`] の結果（露出帯 ∪ 変化行）を組む。
+    ///   前回確定 `prev_lines` に対する [`Self::derive_dirty_with_overhangs`] の結果（露出帯 ∪ 変化行）を組む。
     ///   変化行のダーティは `overhangs` の実測分だけ em ボックスを外側へ広げてはみ出しインクを含める
     ///   （byte 等価の前提・D2）。blit が 0 かつ dirty が空なら [`FramePlan::NoChange`]、さもなくば
     ///   [`FramePlan::Update`]。
@@ -235,6 +237,9 @@ impl ScrollPlanner {
         if self.clear_requested {
             return FramePlan::FullClear;
         }
+        let Some(prev_lines) = self.prev_lines.as_deref() else {
+            return Self::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs);
+        };
         // 後方（un-reveal/un-scroll）縮退: 内容は同じまま可視窓だけを古い側へ戻した（手動の送り
         // 戻し・前回の面の原点の上の余白が blit で写る）、内容が前回確定より減った＝スクロール
         // アウトした行の再露出、または確定行の行内縮小（同一 index 行の block 位置移動・extent
@@ -249,24 +254,10 @@ impl ScrollPlanner {
         let new_lines = Self::committed_lines(canvas, mode);
         let target = self.resolve_position(window.block_offset, contract);
         let blit = Self::clamp_blit_to_surface(self.blit_vector(&target, mode), surface_size);
-        if Self::is_backward_shrink(&self.prev_lines, &new_lines)
+        if Self::is_backward_shrink(prev_lines, &new_lines)
             || Self::is_scroll_toward_older(blit, mode)
         {
-            let (dirty, draw_lines) = Self::derive_dirty_with_overhangs(
-                canvas,
-                window,
-                mode,
-                contract,
-                (0, 0),
-                surface_size,
-                &[],
-                overhangs,
-            );
-            return FramePlan::Update {
-                blit: (0, 0),
-                dirty,
-                draw_lines,
-            };
+            return Self::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs);
         }
         let (dirty, draw_lines) = Self::derive_dirty_with_overhangs(
             canvas,
@@ -275,7 +266,7 @@ impl ScrollPlanner {
             contract,
             blit,
             surface_size,
-            &self.prev_lines,
+            prev_lines,
             overhangs,
         );
         if blit == (0, 0) && dirty.is_empty() {
@@ -294,8 +285,8 @@ impl ScrollPlanner {
     /// `plan` と**同一の window/canvas/contract**で呼ばれる前提（呼び手が plan→COM→commit を
     /// 同一入力で回す・design System Flows）:
     /// - [`FramePlan::NoChange`]: no-op（状態を変えない）。
-    /// - [`FramePlan::FullClear`]: 全域リセットの確定（committed=0・pos=0・prev_lines 空・
-    ///   `clear_requested` を落とす）。
+    /// - [`FramePlan::FullClear`]: 全域リセットの確定（committed=0・pos=0・prev_lines は
+    ///   「何も描いていない」＝`Some(空)`・`clear_requested` を落とす）。
     /// - [`FramePlan::Update`]: 目標位置を確定し（`committed`/`pos`）、新 canvas から行指紋
     ///   `prev_lines` を張り直す（次フレームの変化行検出の根拠）。
     pub fn commit(
@@ -311,14 +302,14 @@ impl ScrollPlanner {
             FramePlan::FullClear => {
                 self.committed = 0;
                 self.pos = 0.0;
-                self.prev_lines.clear();
+                self.prev_lines = Some(Vec::new());
                 self.clear_requested = false;
             }
             FramePlan::Update { .. } => {
                 let target = self.resolve_position(window.block_offset, contract);
                 self.committed = target.committed;
                 self.pos = target.pos;
-                self.prev_lines = Self::committed_lines(canvas, mode);
+                self.prev_lines = Some(Self::committed_lines(canvas, mode));
             }
         }
     }
@@ -326,13 +317,13 @@ impl ScrollPlanner {
     /// Clear cue の適用点（破棄・リセットの唯一の口・`&mut self`・R4.3）。
     ///
     /// `clear_requested` を立て、確定位置／行指紋をその場で初期化する（committed=0・pos=0・
-    /// prev_lines 空）。次 `plan` が [`FramePlan::FullClear`] を返し、COM 成功後の
+    /// prev_lines は「分からない」＝`None`）。次 `plan` が [`FramePlan::FullClear`] を返し、COM 成功後の
     /// `commit(FullClear)` がフラグを落とす（未 commit の失敗フレームはフラグ保持＝再試行安全）。
     pub fn request_clear(&mut self) {
         self.clear_requested = true;
         self.committed = 0;
         self.pos = 0.0;
-        self.prev_lines.clear();
+        self.prev_lines = None;
     }
 }
 

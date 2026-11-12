@@ -633,7 +633,7 @@ impl ViewboxExecutor {
     /// ピクセル（旧 format で描いた面）を崩すため、`render` はこのフラグを見て当該フレームを
     /// 全域ダーティへ縮退する（`DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定の
     /// ため通常発火しない・`debug!` 記録）。**初回生成**（`self.format` が `None`・組み直す前提が
-    /// 無い＝committed ピクセルも無い）は `false`（初回フレームは prev_lines 空ゆえ元より全域ダーティ）。
+    /// 無い＝committed ピクセルも無い）は `false`（初回フレームは prev_lines が「分からない」ゆえ元より全域ダーティ）。
     fn ensure_format(
         &mut self,
         font: &ResolvedFont,

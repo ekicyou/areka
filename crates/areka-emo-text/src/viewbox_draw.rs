@@ -253,7 +253,7 @@ impl ViewboxExecutor {
     /// [`ScrollPlanner::request_clear`]（`clear_requested`＋committed/pos/prev_lines 初期化）と
     /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render`] は `plan` が
     /// [`FramePlan::FullClear`] を返し、back を全域透明 Clear（`full_clears` +1）→ flip → commit
-    /// する（その後 prev_lines 空ゆえ次 content フレームは全域ダーティで再描画＝透明フラッシュは
+    /// する（その後 prev_lines は「何も描いていない」ゆえ次 content フレームは全行を新しい行として描く＝透明フラッシュは
     /// FullClear の 1 フレームのみ）。actor 結線（task 8）がこの口を Clear cue へ写像する。
     pub fn request_clear(&mut self) {
         self.planner.request_clear();

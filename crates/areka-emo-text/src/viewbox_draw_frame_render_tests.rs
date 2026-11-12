@@ -361,7 +361,7 @@ fn request_clear_triggers_full_clear_then_content_returns() {
     let cleared = surface.read_back().expect("read_back(cleared) 失敗");
     assert_eq!(opaque_count(&cleared), 0, "Clear 後は全域透明（全 α=0）");
 
-    // frame 3: 同一 content の再フレーム → prev_lines 空ゆえ全域ダーティで content 復帰
+    // frame 3: 同一 content の再フレーム → prev_lines は「何も描いていない」ゆえ全行を新しい行として描いて content 復帰
     //（透明フラッシュは frame 2 の 1 回のみ・FullClear は増えない）。
     let changed3 = exec
         .render(&canvas, &window, &font, mode, &contract, &mut surface)

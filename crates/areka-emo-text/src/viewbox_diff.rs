@@ -2,7 +2,8 @@
 //! 足す予定の spec: text-reveal-fade（`ScrollPlanner` の差分）・balloon-markers。
 
 use super::{
-    CommittedLine, DIRTY_GUARD_IMG_PX, DirtyRect, LineOverhang, PhysicalRect, ScrollPlanner,
+    CommittedLine, DIRTY_GUARD_IMG_PX, DirtyRect, FramePlan, LineOverhang, PhysicalRect,
+    ScrollPlanner,
 };
 use crate::canvas::{ContentCanvas, Resident, ResidentContent};
 use crate::layout::VisibleWindow;
@@ -74,19 +75,19 @@ impl ScrollPlanner {
     /// ceil）し、ガード余白 `ceil(DIRTY_GUARD_IMG_PX × k)` を全辺へ加えて面寸 `surface_size` へ
     /// クランプ（退化矩形は除外）。
     ///
-    /// `prev_lines` が空（初回・Clear 後・format 再構築）のときは**全域ダーティ**（面全域 1 枚・
-    /// 描画対象＝可視窓の GlyphRun 住人）を返す。各 [`DirtyRect`] はその矩形とブロック軸で交差
+    /// `prev_lines` が空なら「何も描いていない」の意味で、住人は全部新しい行として差分に入る
+    /// （面全域の描き直しは [`Self::full_domain`] の役目）。各 [`DirtyRect`] はその矩形とブロック軸で交差
     /// する GlyphRun 住人 index だけを持ち（クリップにより描画結果は当該矩形内へ限定される）、
     /// 返り値 `draw_lines` はその**和集合**（昇順・重複なし）。ただし**可視窓より前の行
     /// （`first_visible_line` 未満）は含めない**——全域再描画のオラクル（`DrawExecutor`）が
     /// `skip(first_visible_line)` で描かないため、含めると
     /// スクロールアウトした行の下端インクが画面上端へ描き込まれ、両者が食い違う。
     ///
-    /// 状態遷移（plan/commit・`FramePlan` の enum 化）は後続タスクの領分——本メソッドは
-    /// 「変化なし＝空 dirty・空 draw_lines」「全域＝面全域」の導出結果を返すに留める。
+    /// 本メソッドは「変化なし＝空 dirty・空 draw_lines」の導出結果を返すに留める。
     ///
     /// 実測はみ出し無し（em ボックス丈）の従来経路——測定値を持たない pure 層 unit 向けの薄い
     /// ラッパで、[`Self::derive_dirty_with_overhangs`] に空スライスを渡す。
+    #[cfg(test)]
     pub(crate) fn derive_dirty(
         canvas: &ContentCanvas,
         window: &VisibleWindow,
@@ -106,6 +107,51 @@ impl ScrollPlanner {
             prev_lines,
             &[],
         )
+    }
+
+    /// 全域の道（前の行が分からない・縮退）: dirty＝面全域 1 枚・描画対象＝可視窓の GlyphRun 住人
+    /// （`first_visible_line` 以降・理由は `derive_dirty` の doc）。矩形が 1 枚ゆえ
+    /// 「矩形ごとの交差行」＝描画対象＝和集合。`overhangs` は面と重なる行の選り分け（指摘 18）の入力。
+    pub(crate) fn full_domain(
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        _mode: WritingMode,
+        _contract: &ScaleContract,
+        surface_size: (u32, u32),
+        _overhangs: &[LineOverhang],
+    ) -> (Vec<DirtyRect>, Vec<usize>) {
+        let (w, h) = surface_size;
+        let full = PhysicalRect { x: 0, y: 0, w, h };
+        let draw_lines: Vec<usize> = glyph_run_indices(canvas)
+            .filter(|&i| i >= window.first_visible_line)
+            .collect();
+        let dirty = if full.is_empty() {
+            Vec::new()
+        } else {
+            vec![DirtyRect {
+                rect: full,
+                lines: draw_lines.clone(),
+            }]
+        };
+        (dirty, draw_lines)
+    }
+
+    /// [`Self::full_domain`] を `blit=(0,0)` の [`FramePlan::Update`] に包む（計画者の全域の道）。
+    pub(crate) fn full_domain_plan(
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        surface_size: (u32, u32),
+        overhangs: &[LineOverhang],
+    ) -> FramePlan {
+        let (dirty, draw_lines) =
+            Self::full_domain(canvas, window, mode, contract, surface_size, overhangs);
+        FramePlan::Update {
+            blit: (0, 0),
+            dirty,
+            draw_lines,
+        }
     }
 
     /// 実測インクはみ出し（[`LineOverhang`]・住人 index と 1:1）付きでダーティ矩形と描画対象行を
@@ -133,25 +179,6 @@ impl ScrollPlanner {
     ) -> (Vec<DirtyRect>, Vec<usize>) {
         // 住人 index の実測はみ出し（無ければ既定 0＝em ボックス丈・テスト等の非測定経路）。
         let overhang_of = |i: usize| overhangs.get(i).copied().unwrap_or_default();
-        // ── 全域ダーティ（初回・Clear 後・format 再構築）: 面全域 1 枚・全 GlyphRun 住人 ──
-        // 矩形が 1 枚ゆえ「矩形ごとの交差行」＝可視窓の全住人＝和集合（和と積が一致する唯一の形）。
-        if prev_lines.is_empty() {
-            let (w, h) = surface_size;
-            let full = PhysicalRect { x: 0, y: 0, w, h };
-            let draw_lines: Vec<usize> = glyph_run_indices(canvas)
-                .filter(|&i| i >= window.first_visible_line)
-                .collect();
-            let dirty = if full.is_empty() {
-                Vec::new()
-            } else {
-                vec![DirtyRect {
-                    rect: full,
-                    lines: draw_lines.clone(),
-                }]
-            };
-            return (dirty, draw_lines);
-        }
-
         let mut rects: Vec<PhysicalRect> = Vec::new();
 
         // (a) 露出帯: blit の逆側の未保持領域（1 枚）。

@@ -173,7 +173,7 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
         "commit するまで FullClear を保持"
     );
 
-    // commit(FullClear) → フラグが落ち・prev 空ゆえ次 plan は通常導出（全域 Update）へ戻る。
+    // commit(FullClear) → フラグが落ち・prev は「何も描いていない」ゆえ次 plan は通常導出（全行が新しい行の Update）へ戻る。
     planner.commit(
         &canvas,
         &w0,
@@ -459,7 +459,7 @@ fn back_is_fully_covered_across_modes_and_scenarios() {
         assert_back_fully_covered(blit, &dirty, surf_h, "content 伸長 blit=0");
     }
 
-    // (5) 初回全域（prev 空＝面全域 1 枚のダーティ）。
+    // (5) 初回全域（prev が分からない＝面全域 1 枚のダーティ）。
     {
         let mode = WritingMode::HorizontalTb;
         let canvas = canvas_for(&broken_lines(3), mode, vr, 10.0);
@@ -613,4 +613,47 @@ fn saturated_position_plan_commit_plan_redraws_full_surface() {
     let (blit, dirty) = expect_update(&second);
     assert_eq!(blit, (0, 0), "古い側への送りは全域の縮退");
     assert!(dirty.contains(&full), "面全域を描き直す: {dirty:?}");
+}
+
+// ── 指摘 16: 「前の行が分からない」と「何も描いていない」を分ける ──
+
+/// 空の canvas を commit した次の plan は `NoChange`（空の列＝何も描いていないと分かっている）。
+/// 分からない（初め・消去の要求の後）ときだけ面全域 1 枚を描き直し、`FullClear` の確定も
+/// 「何も描いていない」と分かっている状態へ移る（設計の状態図）。
+#[test]
+fn committing_empty_canvas_makes_next_plan_no_change() {
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let surface = (400u32, 100u32);
+    let empty = canvas_for(
+        &broken_lines(0),
+        mode,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let w = window(0, 0.0);
+    let mut planner = ScrollPlanner::new();
+
+    let first = planner.plan(&empty, &w, mode, &contract, surface);
+    assert_eq!(
+        expect_update(&first),
+        ((0, 0), vec![phys(0, 0, 400, 100)]),
+        "分からない＝面全域 1 枚"
+    );
+    planner.commit(&empty, &w, mode, &contract, &first);
+    assert_eq!(
+        planner.plan(&empty, &w, mode, &contract, surface),
+        FramePlan::NoChange,
+        "空の canvas を確定した次は NoChange"
+    );
+
+    planner.request_clear();
+    let clear = planner.plan(&empty, &w, mode, &contract, surface);
+    assert_eq!(clear, FramePlan::FullClear);
+    planner.commit(&empty, &w, mode, &contract, &clear);
+    assert_eq!(
+        planner.plan(&empty, &w, mode, &contract, surface),
+        FramePlan::NoChange,
+        "FullClear の確定の後も空なら NoChange"
+    );
 }

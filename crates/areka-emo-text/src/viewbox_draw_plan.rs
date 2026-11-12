@@ -77,7 +77,7 @@ pub(super) fn degrade_if_needed(
 
 /// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun 住人）を組む。
 ///
-/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと
+/// [`ScrollPlanner::full_domain`]（計画者の全域の道）を呼び、面全域 1 枚のダーティと
 /// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人の描画対象を得る（初回フレームと同一経路）。
 /// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
 /// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる
@@ -89,18 +89,12 @@ pub(super) fn full_domain_update(
     contract: &ScaleContract,
     surface_size: (u32, u32),
 ) -> FramePlan {
-    let (dirty, draw_lines) =
-        ScrollPlanner::derive_dirty(canvas, window, mode, contract, (0, 0), surface_size, &[]);
-    FramePlan::Update {
-        blit: (0, 0),
-        dirty,
-        draw_lines,
-    }
+    ScrollPlanner::full_domain_plan(canvas, window, mode, contract, surface_size, &[])
 }
 
 /// `plan` の `Update` が canvas/面寸と矛盾していないか検査する（防御的・render の縮退経路が呼ぶ）。
 ///
-/// 返り値 `Some(reason)` は縮退のログ理由・`None` は整合。通常経路（[`ScrollPlanner::derive_dirty`]）は
+/// 返り値 `Some(reason)` は縮退のログ理由・`None` は整合。通常経路（[`ScrollPlanner::derive_dirty_with_overhangs`]）は
 /// 面寸クランプ済み・住人範囲内の index のみを返すため不発だが、行指紋と内容キャンバスの想定外不整合
 /// （範囲外 index・面寸超過矩形・矩形の行が描画対象行に無い）を検知したら全域ダーティへ縮退させる
 /// （ログ無し失敗経路を作らない）。

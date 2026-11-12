@@ -453,7 +453,7 @@ fn catchup_and_new_lines_union_of_changed_lines() {
 
 // ── R4.2/3.3: 初回（前回指紋なし）→ 全域ダーティ・全 GlyphRun 住人 ──
 
-/// prev_lines が空（初回・Clear 後・format 再構築）→ dirty＝面全域 1 枚・draw＝全住人。
+/// 全域の道（前の行が分からない・縮退）→ dirty＝面全域 1 枚・draw＝全住人。
 #[test]
 fn empty_prev_is_full_domain() {
     let contract = ScaleContract::new(1.0, None);
@@ -463,12 +463,11 @@ fn empty_prev_is_full_domain() {
         (Some(0), Some(100), Some(0), Some(400)),
         10.0,
     );
-    let (dirty, draw) = ScrollPlanner::derive_dirty(
+    let (dirty, draw) = ScrollPlanner::full_domain(
         &canvas,
         &window(0, 0.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, 0),
         (400, 100),
         &[],
     );
@@ -494,12 +493,11 @@ fn nonunit_scale_expands_and_clamps_within_surface() {
 
     // (a) 全域＝面寸ちょうど（クランプが面寸を根拠にする）。
     let full_canvas = canvas_for(&broken_lines(4), WritingMode::HorizontalTb, vr, 10.0);
-    let (full_dirty, _) = ScrollPlanner::derive_dirty(
+    let (full_dirty, _) = ScrollPlanner::full_domain(
         &full_canvas,
         &window(0, 0.0),
         WritingMode::HorizontalTb,
         &contract,
-        (0, 0),
         surface,
         &[],
     );
