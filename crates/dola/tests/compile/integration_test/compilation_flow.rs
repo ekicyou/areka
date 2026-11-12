@@ -117,8 +117,9 @@ fn complex_multi_variable_mixed_placement() {
     assert_eq!(tl_y.segments[0].end_time, 1.5);
 
     // total_base_duration = max of all timelines' base_duration
-    // opacity: 0.5-0.0=0.5, x_pos: 1.5-0.5=1.0, y_pos: 1.5-0.5=1.0
-    assert_eq!(result.total_base_duration, 1.0);
+    // コンパイルの起点 0.0 から数える（先頭の遅れを含む）
+    // opacity: 0.5-0.0=0.5, x_pos: 1.5-0.0=1.5, y_pos: 1.5-0.0=1.5
+    assert_eq!(result.total_base_duration, 1.5);
 }
 
 #[test]

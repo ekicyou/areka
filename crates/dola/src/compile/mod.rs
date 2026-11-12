@@ -247,12 +247,11 @@ pub fn compile_storyboard(
         let var_def = doc.variable.get(&var_name);
 
         // Build CompiledVariableTimeline (Task 6.3)
-        // SAFETY: is_empty() ガードにより last()/first() の unwrap は panic 不能。
-        let base_duration = if segments.is_empty() {
-            0.0
-        } else {
-            segments.last().unwrap().end_time - segments.first().unwrap().start_time
-        };
+        // 長さはコンパイルの起点から数える（先頭の遅れを含む）。
+        // 最後のセグメントより後のトリガーは長さに足さない（dola-nested-storyboard 3.3）。
+        let base_duration = segments
+            .last()
+            .map_or(0.0, |last| last.end_time - start_time);
 
         let variable_type = build_variable_type_hint(var_def);
         let (min_value, max_value) = extract_min_max(var_def);

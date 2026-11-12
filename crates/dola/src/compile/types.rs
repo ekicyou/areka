@@ -45,7 +45,7 @@ pub struct CompiledVariableTimeline {
     pub variable_type: VariableTypeHint,
     /// セグメント配列（時刻順ソート済み、重複なし）
     pub segments: Vec<CompiledSegment>,
-    /// このタイムラインのベース再生時間（最終セグメント end_time - start_time）
+    /// このタイムラインのベース再生時間（最終セグメント end_time - コンパイルの起点 start_time。先頭の遅れを含む）
     pub base_duration: f64,
     /// 値域下限 f64/i64のみ
     #[serde(default, skip_serializing_if = "Option::is_none")]

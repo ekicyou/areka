@@ -89,6 +89,36 @@ mod full_playback_cycle {
         let diff = rt.update(0.5).changes;
         assert!(diff.is_empty());
     }
+
+    /// 先頭の遅れは長さに入る: delay 0.5・duration 1.0 は 1.5 秒で終わり、t=1.0 は途中。
+    #[test]
+    fn leading_delay_counts_in_storyboard_duration() {
+        let mut doc = simple_float_doc("delayed");
+        let sb = doc.storyboard.get_mut("delayed").unwrap();
+        let Some(TransitionRef::Inline(tr)) = sb.entry[0].transition.as_mut() else {
+            panic!("inline transition expected");
+        };
+        tr.delay = 0.5;
+
+        let mut rt = DolaRuntime::new();
+        let opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+
+        let StartResult { end_time, .. } = rt.start("delayed", 0.0).unwrap();
+        assert_eq!(end_time, 1.5);
+
+        rt.tick(1.0);
+        let (_, v) = rt
+            .last_result()
+            .changes
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("opacity at t=1.0");
+        match v {
+            EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 1e-9, "expected 0.5, got {v}"),
+            other => panic!("expected Float, got {other:?}"),
+        }
+    }
 }
 
 // =========================================================================
