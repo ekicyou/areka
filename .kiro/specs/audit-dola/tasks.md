@@ -143,7 +143,7 @@
   - _Requirements: 3.2, 3.3, 4.1, 4.5_
 
 - [ ] 9. 競合とインスタンスの表（#7・#35・#36・#60・#61・#43 の 3 本目・#54 のインスタンスの分）
-- [ ] 9.1 競合を「同じ変数に生きた項目がある」で判定する（#7）
+- [x] 9.1 競合を「同じ変数に生きた項目がある」で判定する（#7）
   - セグメントどうしの重なりを比べる二重ループと古い P 番号の注を消し、新しいインスタンスが触る変数のどれかにほかのインスタンスの生きた項目があれば競合にする（要件 11.8）
   - 檻: A（Never）を t=0 に始め、x は delay 5。B を t=5.0 に始めると B は `Conflict` で拒まれる
   - 終わった姿: 檻が緑で、重なりの比べに戻すと落ちる。既存の競合のテストが緑（変わる期待があれば research §3 #7 に照らして改める）
@@ -377,3 +377,4 @@
 - 7.1: 辺を足すだけでは要件 11.7 を満たせない（処理の順が配列の順とずれ、連結が処理の順で最後のセグメントに続く）ので、`compile/mod.rs` で連結の終わりの時刻と始めの値を配列上の直前のエントリ（`DependencyGraph.prev_same_var`・`entry_segment_end`）から取る形にした（design の「辺を足す」の先・`var_last_end_time` は消えた）。`at`・`between` のエントリの from は今も処理の順（`var_last_value`）で、完了 dola-compiled-transition 要件 4.2 の「直前」の読みに決めが無い（research に無い指摘・21 のかけ直しで拾う）。古い `multiple_triggers_sorted_by_fire_time` は並べ替えを外しても落ちない（14.3 で拾う）。`tests/compile/time_resolution_test/interaction.rs:36` の注「var_last_end_time から継続」が古びた（15.2）。
 - 7.3: compile の通らない枝を消したのは「公開の口は `compile_storyboard` 1 つで、冒頭で必ず validate を通る」前提による。8 で足す crate 内の `compile_validated` も検証済みの文書だけから呼ぶこと（そうでないと `let Some(..) = resolved else { continue; }` が release で黙って飛ばす）。`resolve_pure_keyframe_time` の引数は 7 で too_many_arguments の境目（15.1）。
 - 8: design 309 行の「読み込みで Object の intern の表を空にする」は、丸ごと空にすると動いている途中の Object の値が新しい Rc になり、`Rc::ptr_eq` の差分の比べで空振りの差分が 1 回出るので、「使われていない値だけ手放す」（`ObjectInternPool::release_unused`＝`strong_count > 1` を残す）にした（#62 の「表が増え続けない」は保つ・檻 `reload_keeps_animating_object_value_without_spurious_diff`）。`DolaDocumentBuilder::build` は検証の後に全部をコンパイルにかける（dola と wintf の呼び手だけ・緑）。`compile_validated` を呼ぶのは `compile_storyboard`・`compile_all`・facade の 3 か所で、どれも検証済みの文書。
+- 9.1: 競合は「新しいインスタンスが触る変数に、ほかの Playing／Paused のインスタンスの項目がある」で判定する。終わりの時刻を過ぎてまだ tick していないインスタンスも生きた扱い（前と同じ）。wintf の本番のコードは start を呼ばない。5.3 の待ちの中の値の保持は Conclude（`collect_current_segment_final_values`）と Cancel・Trim（`evaluate_all_for_group`）の 2 経路を檻 2 本で縛った（Trim 専用の檻は無い）。`LoopOffset::Scalar(v)` は [0, v] の乱数なので、決まった待ちのテストは `Range{v,v}` を使う。

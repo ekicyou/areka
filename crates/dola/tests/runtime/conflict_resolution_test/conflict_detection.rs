@@ -130,7 +130,7 @@ mod conflict_detection {
 mod conflict_detection_boundaries {
     use super::super::*;
 
-    /// Paused 状態のインスタンスも競合検出の対象（detect_overlaps は Playing/Paused 両方を見る）
+    /// Paused 状態のインスタンスも競合検出の対象（Playing/Paused の両方を生きた項目と見る）
     #[test]
     fn paused_instance_still_conflicts() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
@@ -152,13 +152,8 @@ mod conflict_detection_boundaries {
         ));
     }
 
-    /// 特性化: 競合判定はストーリーボードローカル座標で行われ、wall-clock の
-    /// start_time を考慮しない。
-    ///
-    /// facade はすべての SB を base_time=0.0 でコンパイルし（`compile_and_validate(name, 0.0)`）、
-    /// `detect_overlaps` は `_start_time` 引数を使用せず compile 時座標どうしを比較する。
-    /// そのため壁時計上は重ならない [0,2] と [2,4] のスケジュールでも、
-    /// 同一変数を操作する Playing/Paused インスタンスがあれば常に競合扱いとなる（P11 参照）。
+    /// 競合は「同じ変数に生きた項目がある」で決まり、時刻の重なりは見ない（要件 11.8）。
+    /// 壁時計で隣り合う [0,2] と [2,4] でも、前のインスタンスが生きていれば競合する。
     #[test]
     fn time_shifted_start_on_same_variable_still_conflicts() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
@@ -168,13 +163,63 @@ mod conflict_detection_boundaries {
 
         // 既存: 壁時計 [0.0, 2.0]
         let r1 = rt.start("fade", 0.0).unwrap();
-        // 新規: 壁時計 [2.0, 4.0] — 壁時計上は隣接（非重複）だが現行実装では競合する
+        // 新規: 壁時計 [2.0, 4.0] — 壁時計では隣り合うだけだが、r1 がまだ生きているので競合する
         let r2 = rt.start("fade", 2.0).unwrap();
         assert_eq!(
             r2.affected_group_ids,
             vec![r1.group_id],
-            "current behavior: overlap detection uses storyboard-local coordinates"
+            "a live entry on the same variable conflicts"
         );
+    }
+
+    /// A（Never）の x は delay 5 で壁時計 [5,6]・B の x は t=5.0 から [5,6]。
+    /// 相対の [5,6] と [0,1] は重ならないが、x に A の生きた項目があるので B は拒まれる。
+    #[test]
+    fn never_blocks_overlap_on_wall_clock() {
+        let x_sb = |policy, delay| {
+            StoryboardBuilder::new()
+                .interruption_policy(policy)
+                .entry(StoryboardEntry {
+                    variable: Some("x".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        from: Some(TransitionValue::Scalar(0.0)),
+                        to: Some(TransitionValue::Scalar(1.0)),
+                        relative_to: None,
+                        easing: None,
+                        delay,
+                        duration: Some(1.0),
+                    })),
+                    ..Default::default()
+                })
+                .build()
+        };
+        let doc = DolaDocument {
+            schema_version: "1.0".to_string(),
+            variable: BTreeMap::from([(
+                "x".to_string(),
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )]),
+            transition: BTreeMap::new(),
+            storyboard: BTreeMap::from([
+                ("a".to_string(), x_sb(InterruptionPolicy::Never, 5.0)),
+                ("b".to_string(), x_sb(InterruptionPolicy::Conclude, 0.0)),
+            ]),
+        };
+        let mut rt = DolaRuntime::new();
+        let _x_id = rt.subscribe("x");
+        rt.load_document(doc).unwrap();
+
+        let a = rt.start("a", 0.0).unwrap();
+        match rt.start("b", 5.0) {
+            Err(RuntimeError::Conflict {
+                conflicting_group_ids,
+            }) => assert_eq!(conflicting_group_ids, vec![a.group_id]),
+            other => panic!("expected RuntimeError::Conflict, got {other:?}"),
+        }
     }
 
     /// 新 SB が複数変数を操作し、各変数を別インスタンスが保持している場合、

@@ -1,10 +1,22 @@
 //! 各終了戦略の統合テスト（research.md §R3: termination_strategy シーム）
 
+use super::*;
+
 // =========================================================================
 // 6.2 各終了戦略の統合テスト
 // =========================================================================
 mod cancel_strategy {
     use super::super::*;
+
+    /// 周回の待ちの中で競合の Cancel を受けると、凍結値は前の周回の最後の値（1.0）。
+    /// 待ちの中は実効時刻が負なので、値の保持（value_time）を外すと凍結値が出ない。
+    #[test]
+    fn cancel_during_loop_delay_keeps_previous_loop_final() {
+        assert_eq!(
+            super::y_after_interrupt_in_loop_delay(InterruptionPolicy::Cancel),
+            Some(EvaluatedValue::Float(1.0))
+        );
+    }
 
     #[test]
     fn cancel_freezes_at_interrupt_time() {
@@ -90,6 +102,16 @@ mod conclude_strategy {
         // Next update should see new SB starting
         let changes = rt.update(1.0).changes;
         assert!(!changes.is_empty());
+    }
+
+    /// 周回の待ちの中で競合の Conclude を受けると、確定値は前の周回の最後の値（1.0）。
+    /// 待ちの中は実効時刻が負なので、値の保持（value_time）を外すと確定値が出ない。
+    #[test]
+    fn conclude_during_loop_delay_keeps_previous_loop_final() {
+        assert_eq!(
+            super::y_after_interrupt_in_loop_delay(InterruptionPolicy::Conclude),
+            Some(EvaluatedValue::Float(1.0))
+        );
     }
 
     #[test]
@@ -296,4 +318,63 @@ mod edge_cases {
         let r3 = rt.start("sb_new", 0.5).unwrap();
         assert_eq!(r3.affected_group_ids, vec![r2.group_id]);
     }
+}
+
+/// a（policy）が x と y を [0,1] で回して周回の間に 2 秒待ち、その待ちの中（t=2.0）で
+/// x だけを触る b に終わらされたとき、t=1.5 から購読した y に届く値。
+fn y_after_interrupt_in_loop_delay(policy: InterruptionPolicy) -> Option<EvaluatedValue> {
+    use dola::{EasingFunction, EasingName, LoopOffset, LoopOffsetRange, Storyboard};
+    let ramp = |var: &str| StoryboardEntry {
+        variable: Some(var.to_string()),
+        transition: Some(TransitionRef::Inline(TransitionDef {
+            from: Some(TransitionValue::Scalar(0.0)),
+            to: Some(TransitionValue::Scalar(1.0)),
+            relative_to: None,
+            easing: None,
+            delay: 0.0,
+            duration: Some(1.0),
+        })),
+        ..Default::default()
+    };
+    let float = || AnimationVariableDef::Float {
+        initial: 0.0,
+        min: None,
+        max: None,
+    };
+    // a: x と y を [0,1] で回し、周回の間に 2 秒待つ（1 周目 [0,1]・待ち [1,3]）
+    let a = Storyboard {
+        time_scale: 1.0,
+        loop_count: -1,
+        interruption_policy: policy,
+        loop_offset: Some(LoopOffset::Range(LoopOffsetRange {
+            min: 2.0,
+            max: 2.0,
+            easing: EasingFunction::Named(EasingName::Linear),
+        })),
+        entry: vec![ramp("x"), ramp("y")],
+    };
+    let b = StoryboardBuilder::new().entry(ramp("x")).build();
+    let doc = DolaDocument {
+        schema_version: "1.0".to_string(),
+        variable: BTreeMap::from([("x".to_string(), float()), ("y".to_string(), float())]),
+        transition: BTreeMap::new(),
+        storyboard: BTreeMap::from([("a".to_string(), a), ("b".to_string(), b)]),
+    };
+    let mut rt = DolaRuntime::new();
+    let _x_id = rt.subscribe("x");
+    rt.load_document(doc).unwrap();
+
+    let ra = rt.start("a", 0.0).unwrap();
+    rt.tick(1.5); // 周回を終えて待ちの中
+    // y の購読はここから: 届く y は a の確定値だけ（b は y を触らない）
+    let y_id = rt.subscribe("y");
+    let rb = rt.start("b", 2.0).unwrap();
+    assert_eq!(rb.affected_group_ids, vec![ra.group_id]);
+
+    rt.tick(2.0);
+    rt.last_result()
+        .changes
+        .iter()
+        .find(|(id, _)| *id == y_id)
+        .map(|(_, v)| v.clone())
 }
