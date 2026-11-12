@@ -21,7 +21,7 @@ mod edge_case_tests {
 
     #[test]
     fn pure_keyframe_only_storyboard() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .storyboard(
                 "kf_only",
                 StoryboardBuilder::new()
@@ -33,12 +33,11 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]
     fn typewriter_variable_with_transition() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "chars",
                 AnimationVariableDef::Integer {
@@ -67,7 +66,6 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]
@@ -116,7 +114,7 @@ mod edge_case_tests {
 
     #[test]
     fn delay_only_instant_transition() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "x",
                 AnimationVariableDef::Float {
@@ -144,12 +142,11 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]
     fn at_start_keyword() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "x",
                 AnimationVariableDef::Float {
@@ -178,12 +175,11 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]
     fn multiple_keyframe_wait() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "x",
                 AnimationVariableDef::Float {
@@ -241,12 +237,11 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]
     fn keyframe_ref_with_offset() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "x",
                 AnimationVariableDef::Float {
@@ -291,12 +286,11 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]
     fn object_transition_dynamic_value() {
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "bg",
                 AnimationVariableDef::Object {
@@ -336,7 +330,6 @@ mod edge_case_tests {
             )
             .build()
             .unwrap();
-        assert!(doc.validate().is_ok());
     }
 
     #[test]

@@ -234,7 +234,7 @@
   - _Requirements: 4.5, 6.4_
 
 - [ ] 14. ほかのテスト（#50・#51・#74・#75・#76・#83）
-- [ ] 14.1 トリガーのテストの的を正し、状態遷移のテストを表にする（#50・#76・#83）
+- [x] 14.1 トリガーのテストの的を正し、状態遷移のテストを表にする（#50・#76・#83）
   - 親を cancel してから子の変化を見る形に改め、意味の無い 2 本を消し、件数を `assert_eq!` で見る
   - 状態遷移の 25 本を期待の表 1 本（49 組）にする（終端の確かめの 1 本は残す）
   - build の後の効かない検証の assert 8 行を消す
@@ -384,3 +384,4 @@
 - 11.2: wintf の檻は log-capture-kit が今のスレッドしか捕まえないので `world.run_system_once(tick_dola_animators)`（本番と同じ関数）で回す。Git Bash から wintf を作ると dbghelp.lib の LNK1181 が出ることがある（PowerShell からなら通る・環境の問題）。表記の揺れ: wintf は「トリガ」、dola は「トリガー」。
 - 13.1: ランタイムのテストの遷移の道具は `tests/runtime/support.rs` の `linear(var, from, to, dur)`（と `float()`）。`DolaDocumentBuilder::build` は全部をコンパイルにかけるので、拒まれる文書は手書きの `DolaDocument {..}`＋validate のまま。`loop_offset_compile.rs` の `doc_with_fade_and_offset`・`loop_offset_doc` は通る文書なのに手書き（任意で組み立ての道具へ）。Cancel と Trim は意図して同じ道（`evaluate_all_for_group`）で、値で見分けられない。
 - 13.3: dola のテストに `DolaRuntime::update` の呼び手と `allow(deprecated)` は 0（実数は 106 か所と 5 つ）。wintf にも呼び手は無いので 20.2 で `update` を消しても wintf は触らない。`src/runtime/facade.rs:28`（```ignore の例）と `src/runtime/clock.rs:13` の説明文にまだ `update` が残る（20.2 で直す）。
+- 14.1: 状態遷移のテストは 25 本でなく 22 本だった（research #76 と tasks.md 14.1 の「25 本」は数え違い）。表のテストは `try_transition_table`（`[[bool; 7]; 7]`）。

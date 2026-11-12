@@ -9,209 +9,36 @@ use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError};
 
 mod instance_state_transitions {
     use super::*;
+    use InstanceState::*;
 
-    // --- 許可される遷移 ---
+    const STATES: [InstanceState; 7] = [
+        Created, Playing, Paused, Concluded, Cancelled, Trimmed, Compressed,
+    ];
 
+    /// 7×7 の 49 組すべての期待（行＝遷移元・列＝遷移先、並びは STATES）。
+    /// 許す組は Ok(遷移先)、ほかは Err(遷移元)。
     #[test]
-    fn created_to_playing() {
-        let state = InstanceState::Created;
-        assert_eq!(
-            state.try_transition(InstanceState::Playing),
-            Ok(InstanceState::Playing)
-        );
-    }
-
-    #[test]
-    fn playing_to_paused() {
-        let state = InstanceState::Playing;
-        assert_eq!(
-            state.try_transition(InstanceState::Paused),
-            Ok(InstanceState::Paused)
-        );
-    }
-
-    #[test]
-    fn paused_to_playing() {
-        let state = InstanceState::Paused;
-        assert_eq!(
-            state.try_transition(InstanceState::Playing),
-            Ok(InstanceState::Playing)
-        );
-    }
-
-    #[test]
-    fn playing_to_concluded() {
-        let state = InstanceState::Playing;
-        assert_eq!(
-            state.try_transition(InstanceState::Concluded),
-            Ok(InstanceState::Concluded)
-        );
-    }
-
-    #[test]
-    fn playing_to_cancelled() {
-        let state = InstanceState::Playing;
-        assert_eq!(
-            state.try_transition(InstanceState::Cancelled),
-            Ok(InstanceState::Cancelled)
-        );
-    }
-
-    #[test]
-    fn playing_to_trimmed() {
-        let state = InstanceState::Playing;
-        assert_eq!(
-            state.try_transition(InstanceState::Trimmed),
-            Ok(InstanceState::Trimmed)
-        );
-    }
-
-    #[test]
-    fn playing_to_compressed() {
-        let state = InstanceState::Playing;
-        assert_eq!(
-            state.try_transition(InstanceState::Compressed),
-            Ok(InstanceState::Compressed)
-        );
-    }
-
-    #[test]
-    fn paused_to_concluded() {
-        let state = InstanceState::Paused;
-        assert_eq!(
-            state.try_transition(InstanceState::Concluded),
-            Ok(InstanceState::Concluded)
-        );
-    }
-
-    #[test]
-    fn paused_to_cancelled() {
-        let state = InstanceState::Paused;
-        assert_eq!(
-            state.try_transition(InstanceState::Cancelled),
-            Ok(InstanceState::Cancelled)
-        );
-    }
-
-    #[test]
-    fn paused_to_trimmed() {
-        let state = InstanceState::Paused;
-        assert_eq!(
-            state.try_transition(InstanceState::Trimmed),
-            Ok(InstanceState::Trimmed)
-        );
-    }
-
-    #[test]
-    fn paused_to_compressed() {
-        let state = InstanceState::Paused;
-        assert_eq!(
-            state.try_transition(InstanceState::Compressed),
-            Ok(InstanceState::Compressed)
-        );
-    }
-
-    // --- 拒否される遷移 ---
-
-    #[test]
-    fn created_to_paused_rejected() {
-        let state = InstanceState::Created;
-        assert_eq!(
-            state.try_transition(InstanceState::Paused),
-            Err(InstanceState::Created)
-        );
-    }
-
-    #[test]
-    fn created_to_concluded_rejected() {
-        let state = InstanceState::Created;
-        assert_eq!(
-            state.try_transition(InstanceState::Concluded),
-            Err(InstanceState::Created)
-        );
-    }
-
-    #[test]
-    fn concluded_to_playing_rejected() {
-        let state = InstanceState::Concluded;
-        assert_eq!(
-            state.try_transition(InstanceState::Playing),
-            Err(InstanceState::Concluded)
-        );
-    }
-
-    #[test]
-    fn cancelled_to_playing_rejected() {
-        let state = InstanceState::Cancelled;
-        assert_eq!(
-            state.try_transition(InstanceState::Playing),
-            Err(InstanceState::Cancelled)
-        );
-    }
-
-    #[test]
-    fn trimmed_to_playing_rejected() {
-        let state = InstanceState::Trimmed;
-        assert_eq!(
-            state.try_transition(InstanceState::Playing),
-            Err(InstanceState::Trimmed)
-        );
-    }
-
-    #[test]
-    fn compressed_to_playing_rejected() {
-        let state = InstanceState::Compressed;
-        assert_eq!(
-            state.try_transition(InstanceState::Playing),
-            Err(InstanceState::Compressed)
-        );
-    }
-
-    #[test]
-    fn concluded_to_concluded_rejected() {
-        let state = InstanceState::Concluded;
-        assert_eq!(
-            state.try_transition(InstanceState::Concluded),
-            Err(InstanceState::Concluded)
-        );
-    }
-
-    #[test]
-    fn playing_to_created_rejected() {
-        let state = InstanceState::Playing;
-        assert_eq!(
-            state.try_transition(InstanceState::Created),
-            Err(InstanceState::Playing)
-        );
-    }
-}
-
-mod instance_state_self_transitions {
-    use super::*;
-
-    /// D1b-T 追加: 自己遷移（同一状態への遷移）はすべて不正
-    #[test]
-    fn playing_to_playing_rejected() {
-        assert_eq!(
-            InstanceState::Playing.try_transition(InstanceState::Playing),
-            Err(InstanceState::Playing)
-        );
-    }
-
-    #[test]
-    fn paused_to_paused_rejected() {
-        assert_eq!(
-            InstanceState::Paused.try_transition(InstanceState::Paused),
-            Err(InstanceState::Paused)
-        );
-    }
-
-    #[test]
-    fn created_to_created_rejected() {
-        assert_eq!(
-            InstanceState::Created.try_transition(InstanceState::Created),
-            Err(InstanceState::Created)
-        );
+    fn try_transition_table() {
+        #[rustfmt::skip]
+        const ALLOWED: [[bool; 7]; 7] = [
+            //       Created Playing Paused Concluded Cancelled Trimmed Compressed
+            /* Created    */ [false, true,  false, false, false, false, false],
+            /* Playing    */ [false, false, true,  true,  true,  true,  true ],
+            /* Paused     */ [false, true,  false, true,  true,  true,  true ],
+            /* Concluded  */ [false, false, false, false, false, false, false],
+            /* Cancelled  */ [false, false, false, false, false, false, false],
+            /* Trimmed    */ [false, false, false, false, false, false, false],
+            /* Compressed */ [false, false, false, false, false, false, false],
+        ];
+        let mut checked = 0;
+        for (from, row) in STATES.iter().zip(ALLOWED) {
+            for (to, allowed) in STATES.iter().zip(row) {
+                let expected = if allowed { Ok(*to) } else { Err(*from) };
+                assert_eq!(from.try_transition(*to), expected, "{from:?} -> {to:?}");
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, 49);
     }
 }
 

@@ -198,28 +198,6 @@ mod trigger_execution_tests {
         }
     }
 
-    /// UpdateResult.changes は通常通り変数差分を含む
-    #[test]
-    fn update_result_contains_changes_and_triggered() {
-        let doc = timed_trigger_doc("parent", "child", None);
-
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
-        rt.start("parent", 0.0).unwrap();
-
-        // t=0.0: 初回 update
-        rt.tick(0.0);
-        let result = rt.last_result().clone();
-        assert!(!result.changes.is_empty(), "should have opacity change");
-        assert!(result.triggered.is_empty());
-
-        // t=1.0: トリガー + 変数更新の両方
-        rt.tick(1.0);
-        let result = rt.last_result().clone();
-        assert!(!result.triggered.is_empty(), "should have trigger");
-    }
-
     /// 子の起動が Never の競合で拒まれると、トリガーは `TriggerResult::Error` を返す
     /// （dola は記録しない・記録は呼び手の境目）。
     #[test]
@@ -429,9 +407,10 @@ mod loop_trigger_tests {
             let t = cycle as f64;
             rt.tick(t);
             let result = rt.last_result().clone();
-            assert!(
-                !result.triggered.is_empty(),
-                "cycle {cycle}: trigger should fire at t={t}"
+            assert_eq!(
+                result.triggered.len(),
+                1,
+                "cycle {cycle}: trigger should fire once at t={t}"
             );
         }
     }
@@ -515,7 +494,7 @@ mod e2e_tests {
         // t=0.0: A はトリガーのみ → B が起動される
         rt.tick(0.0);
         let result = rt.last_result().clone();
-        assert!(!result.triggered.is_empty(), "A should trigger B at t=0.0");
+        assert_eq!(result.triggered.len(), 1, "A should trigger B at t=0.0");
         let b_group_id = match &result.triggered[0] {
             TriggerResult::Started {
                 start_result,
@@ -532,7 +511,7 @@ mod e2e_tests {
         // t=0.5: B の kf1 到達 → C が起動される
         rt.tick(0.5);
         let result = rt.last_result().clone();
-        assert!(!result.triggered.is_empty(), "B should trigger C at t=0.5");
+        assert_eq!(result.triggered.len(), 1, "B should trigger C at t=0.5");
         let c_target = match &result.triggered[0] {
             TriggerResult::Started {
                 target_storyboard,
@@ -557,69 +536,67 @@ mod e2e_tests {
         assert_eq!(*val, EvaluatedValue::Float(1.0), "opacity at t=1.0");
     }
 
-    /// 親終了後も子SBは独立して動作する（ライフサイクル独立性）
+    /// 親を cancel しても、親が起こした子は止まらず自分の変数を動かし続ける（ライフサイクル独立性）
     #[test]
     fn parent_cancel_does_not_affect_child() {
-        // timed_trigger_doc: parent=1.0s(0→1), trigger at kf1(=1.0s), child=1.0s(1→0)
-        let doc = timed_trigger_doc("parent", "child", None);
+        let fade = |var: &str, duration: f64| StoryboardEntry {
+            variable: Some(var.to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(duration),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let float = || AnimationVariableDef::Float {
+            initial: 0.0,
+            min: None,
+            max: None,
+        };
+        // 親は a を 2 秒かけて動かし、始まりで子を起こす。子は b を 1 秒かけて動かす
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("a", float())
+            .variable("b", float())
+            .storyboard(
+                "parent",
+                StoryboardBuilder::new()
+                    .entry(StoryboardEntry {
+                        trigger_storyboard: Some("child".to_string()),
+                        ..Default::default()
+                    })
+                    .entry(fade("a", 2.0))
+                    .build(),
+            )
+            .storyboard(
+                "child",
+                StoryboardBuilder::new().entry(fade("b", 1.0)).build(),
+            )
+            .build()
+            .unwrap();
 
         let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
+        let _a_id = rt.subscribe("a");
+        let b_id = rt.subscribe("b");
         rt.load_document(doc).unwrap();
-        rt.start("parent", 0.0).unwrap();
+        let parent_gid = rt.start("parent", 0.0).unwrap().group_id;
 
-        // t=1.0: 親トランジション完了 + トリガー発火 → 子SB開始
-        rt.tick(1.0);
-        let result = rt.last_result().clone();
-        assert_eq!(
-            result.triggered.len(),
-            1,
-            "trigger should fire at kf1 (1.0s)"
-        );
-
-        // t=1.5: 親は自然終了済み、子SBはまだ再生中（1.0s→2.0s）
-        rt.tick(1.5);
-        let result = rt.last_result().clone();
-        // 子SBが opacity を 1→0 に遷移中 → changes が発生するべき
-        assert!(
-            !result.changes.is_empty(),
-            "child should still produce changes after parent concludes"
-        );
-
-        // t=2.0: 子SBも完了
-        rt.tick(2.0);
-        let result = rt.last_result().clone();
-        // 最終値に到達
-        assert!(result.triggered.is_empty(), "no new triggers");
-    }
-
-    /// load_document → start → 複数 update → 全インスタンス終了の完全シナリオ
-    #[test]
-    fn full_lifecycle_with_triggers() {
-        let doc = timed_trigger_doc("parent", "child", None);
-
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
-        rt.start("parent", 0.0).unwrap();
-
-        // 段階的に time を進める
         rt.tick(0.0);
+        assert_eq!(rt.last_result().triggered.len(), 1, "child starts at t=0");
+
+        // 親がまだ走っているうちに親だけを cancel する
+        rt.cancel(parent_gid).unwrap();
+
+        // 子は b を動かし続け、cancel した親の a はもう配られない
         rt.tick(0.5);
+        assert_eq!(
+            rt.last_result().changes,
+            vec![(b_id, EvaluatedValue::Float(0.5))]
+        );
         rt.tick(1.0);
-        let result = rt.last_result().clone(); // trigger fires
-        assert!(!result.triggered.is_empty());
-
-        rt.tick(1.5);
-        rt.tick(2.0); // child completes (1→0 over 1s, started at 1.0)
-
-        // 最終状態: 全インスタンス自然終了
-        rt.tick(3.0);
-        let result = rt.last_result().clone();
-        // 両方終了後は変化なし
-        assert!(
-            result.triggered.is_empty(),
-            "no new triggers after everything concluded"
+        assert_eq!(
+            rt.last_result().changes,
+            vec![(b_id, EvaluatedValue::Float(1.0))]
         );
     }
 

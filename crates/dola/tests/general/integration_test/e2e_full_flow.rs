@@ -25,7 +25,7 @@ mod e2e_tests {
     #[test]
     fn implicit_keyframe_chain_pattern() {
         // Test that omitting keyframe still allows chain pattern (via implicit KFs)
-        let doc = DolaDocumentBuilder::new("1.0")
+        DolaDocumentBuilder::new("1.0")
             .variable(
                 "x",
                 AnimationVariableDef::Float {
@@ -65,8 +65,6 @@ mod e2e_tests {
             )
             .build()
             .unwrap();
-
-        assert!(doc.validate().is_ok());
     }
 }
 
