@@ -6,7 +6,7 @@
 //!
 //! | § | 内容 | 要件 |
 //! |---|---|---|
-//! | §1 | 正典の既定（全 9 項目を明示・COM 層の既定定数との一致） | 4.1 |
+//! | §1 | 正典の既定（全 9 項目を明示） | 4.1 |
 //! | §2 | 計測鍵——送り幅に効く 4 項目だけを取り出す | 4.1 |
 //! | §3 | 2 層の組み立て（バルーン定義の有無 × 各項目・無効表示は色だけ混色） | 4.1, 4.3, 4.5, 4.7 |
 //! | §4 | 装飾の表（既定は番号 0・同値の畳み込み・範囲外は既定・消去） | 4.1 |
@@ -62,14 +62,6 @@ fn ukadoc_default_is_ms_gothic_twelve_black_without_decoration() {
     assert!(!look.strike, "既定は打ち消し線なし");
     assert!(!look.outline, "既定は白抜きなし");
     assert_eq!(look.script, Script::None, "既定は上下付きでない");
-}
-
-/// 正典の既定値は COM 層の既定定数と同じ値でなければならない（2 か所に書かれた同じ正典が
-/// 黙って食い違わないための見張り。片方だけ直す変更を赤にする）。
-#[test]
-fn ukadoc_defaults_agree_with_the_com_layer_constants() {
-    assert_eq!(UKADOC_DEFAULT_FONT_NAME, crate::draw::DEFAULT_FONT_NAME);
-    assert_eq!(UKADOC_DEFAULT_FONT_HEIGHT, crate::draw::DEFAULT_FONT_HEIGHT);
 }
 
 // ------------------------------------------------------------------ §2 計測鍵

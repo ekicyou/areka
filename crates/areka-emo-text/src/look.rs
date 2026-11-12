@@ -67,13 +67,12 @@ pub enum Script {
 
 /// 正典の既定フォント名（**全角表記** ＭＳ ゴシック）。
 ///
-/// COM 層の [`crate::draw::DEFAULT_FONT_NAME`] と同じ正典で、両者が黙って食い違わないことは
-/// `look_tests.rs` §1 が見張る。
+/// COM 層の [`crate::draw::DEFAULT_FONT_NAME`] はこの別名（正典はここ 1 か所）。
 pub const UKADOC_DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
 
 /// 正典の既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」）。
 ///
-/// COM 層の [`crate::draw::DEFAULT_FONT_HEIGHT`] と同じ正典（`look_tests.rs` §1 が見張る）。
+/// COM 層の [`crate::draw::DEFAULT_FONT_HEIGHT`] はこの別名（正典はここ 1 か所）。
 pub const UKADOC_DEFAULT_FONT_HEIGHT: f32 = 12.0;
 
 /// 1 文字に効く見た目の全項目（値型・等値なら同じ番号へ畳み込まれる）。

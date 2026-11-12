@@ -555,7 +555,7 @@ fn dwrite_metrics_warns_on_font_height_mismatch() {
 // **空振りの危険と更新義務**（design.md C5 Risks の明示要求）: 字面検査はリファクタで
 // 名前や書式が変わると、赤くならないまま守備範囲だけが消える。この檻は `draw.rs` の
 // 次の名前と形に依存している——`create_text_format`／`try_create_format`／
-// `DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`、および `cargo fmt` が保証する
+// `DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`（と `draw_metrics.rs` の `probe_format_for`）、および `cargo fmt` が保証する
 // トップレベル項目の列 0 閉じ括弧。**これらを改名・改形したときは、この檻も同時に
 // 更新すること。** 各檻は自分自身に陽性対照（既知の違反文字列を同じ検査関数へ通して
 // 検出できることの確認）を持たせてあり、検査関数が壊れたときは陽性対照が先に落ちる。
@@ -661,12 +661,28 @@ fn hits<'p>(src: &str, patterns: &'p [&'p str]) -> Vec<&'p str> {
 /// Rust の束縛パターン（`seam @ (..)`）は素の `@` なのでどちらにも当たらない＝誤検出しない。
 const AT_PREFIX_PATTERNS: &[&str] = &["\"@", "'@'"];
 
+/// 家族名の 3 つ目の入口（区間ごとの `SetFontFamilyName`）を持つ本番ファイル（指摘 22）。
+/// ファサードの子ではないので [`DRAW_FACADE_SOURCES`] には足さない（足すと一致の檻が赤）。
+const DECORATION_SOURCES: &[(&str, &str)] = &[(
+    "viewbox_draw_decoration.rs",
+    include_str!("viewbox_draw_decoration.rs"),
+)];
+
+/// `sources` のうち `@` 前置の生成を含むファイルの名を返す（`@` の檻の本体）。
+fn at_prefix_offenders<'a>(sources: &[(&'a str, &str)]) -> Vec<&'a str> {
+    sources
+        .iter()
+        .filter(|(_, raw)| !hits(&raw.replace('\r', ""), AT_PREFIX_PATTERNS).is_empty())
+        .map(|(name, _)| *name)
+        .collect()
+}
+
 /// 要件 6.2: 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
 ///
-/// 走査面は `draw.rs` 単体ではなく**ファサードの本番の子を含む全ファイル**
-/// （[`DRAW_FACADE_SOURCES`]）——家族名が DirectWrite へ渡る入口が `draw.rs` の
-/// `try_create_format` と `draw_metrics.rs` の `probe_format_for` の 2 つになったため、
-/// 片方だけを見る檻では違反が素通りする（タスク 1.1 の申し送り）。
+/// 走査面は `draw.rs` 単体ではなく、家族名が DirectWrite へ渡る**入口 3 つ**を持つ全ファイル
+/// ——`draw.rs` の `try_create_format`・`draw_metrics.rs` の `probe_format_for`
+/// （[`DRAW_FACADE_SOURCES`]）と、`viewbox_draw_decoration.rs` の区間ごとの
+/// `SetFontFamilyName`（[`DECORATION_SOURCES`]）。1 つでも見ない檻では違反が素通りする。
 #[test]
 fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     // 空振り防止: draw.rs には素の `@`（束縛パターン）が現に在る。`@` が 1 個も無いから
@@ -675,15 +691,31 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
         draw_rs().contains('@'),
         "draw.rs に `@` が 1 個も無い——この檻は空振りしている可能性がある"
     );
-    for (name, raw) in DRAW_FACADE_SOURCES {
-        let src = raw.replace('\r', "");
-        assert_eq!(
-            hits(&src, AT_PREFIX_PATTERNS),
-            Vec::<&str>::new(),
-            "SSP の `@` フォント機構（縦書き異体名の生成）が {name} に現れた。\
-             areka は裁定 4 によりこれを模倣しない"
-        );
-    }
+    assert!(
+        DECORATION_SOURCES[0].1.contains("SetFontFamilyName("),
+        "3 つ目の入口が飾りのファイルから消えた——入口を数え直して本檻も更新すること"
+    );
+    assert_eq!(
+        at_prefix_offenders(DRAW_FACADE_SOURCES),
+        Vec::<&str>::new(),
+        "SSP の `@` フォント機構（縦書き異体名の生成）が現れた。areka は裁定 4 によりこれを模倣しない"
+    );
+    assert_eq!(
+        at_prefix_offenders(DECORATION_SOURCES),
+        Vec::<&str>::new(),
+        "区間ごとの書体名に `@` 前置が現れた（裁定 4）"
+    );
+    // 陽性の相棒: 飾りのファイルの区間の書体名に `@` を前置した写しを同じ本体へ通すと赤になる。
+    let planted = DECORATION_SOURCES[0].1.replace(
+        "HSTRING::from(face.family.as_str())",
+        "HSTRING::from(format!(\"@{}\", face.family))",
+    );
+    assert_ne!(planted, DECORATION_SOURCES[0].1, "植える箇所が見つからない");
+    assert_eq!(
+        at_prefix_offenders(&[("viewbox_draw_decoration.rs", planted.as_str())]),
+        vec!["viewbox_draw_decoration.rs"],
+        "陽性の相棒（区間の書体名に `@` を前置した写し）を検出できていない"
+    );
     // 陽性対照: 同じ検査関数が既知の違反を確かに検出する。
     for planted in [
         r#"    let name = format!("@{}", font.name);"#,
@@ -709,14 +741,16 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
 /// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前を台帳が
 /// 解いた顔」だけ——縦書き専用の差し替え先も、既定の書体での作り直し（指摘 35 で消した）も無い。
 ///
-/// **家族名の入口は 2 つある**（タスク 6.4）:
+/// **家族名の入口は 3 つある**（タスク 6.4・指摘 22）。書式を作る 2 つをここで見る:
 ///
 /// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
 ///    束縛の顔（`FontCatalog::pick` の解決）を渡す。
 /// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
 ///    `FontCatalog::face_or` で解決した顔か、全滅時の束縛の顔を共用の `try_create_format` へ。
+/// 3. `viewbox_draw_decoration.rs` の区間ごとの `SetFontFamilyName`——同じ `face_or` の顔
+///    （`@` の不在は [`at_prefixed_font_name_generation_is_absent_from_production_source`]）。
 ///
-/// どちらの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
+/// どの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
 /// 別名生成が入り込む余地が無い。**入口を増やしたらこの檻も広げること。**
 #[test]
 fn font_family_reaches_directwrite_only_as_the_author_name() {
@@ -746,17 +780,23 @@ fn font_family_reaches_directwrite_only_as_the_author_name() {
         !body.contains("DEFAULT_FONT_NAME"),
         "既定の書体での作り直しが戻った（指摘 35: 同じ大きさで作り直しても断られる）"
     );
-    // 既定フォント名リテラルは宣言 1 箇所だけ——縦書き専用の差し替え先が別に
-    // 埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、
+    // 既定フォント名は見た目の側の正典の別名だけ（指摘 26）——縦書き専用の差し替え先が
+    // 別に埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、
     // doc コメントの Yu Gothic UI 実測例も対象外＝誤検出しない。
     assert!(
-        src.contains("pub const DEFAULT_FONT_NAME: &str = \"ＭＳ ゴシック\";"),
-        "既定フォント名の宣言が見つからない——改名したなら本檻も更新すること"
+        src.contains("pub const DEFAULT_FONT_NAME: &str = crate::look::UKADOC_DEFAULT_FONT_NAME;"),
+        "既定フォント名が見た目の側の正典の別名でない——改名したなら本檻も更新すること"
+    );
+    assert!(
+        src.contains(
+            "pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;"
+        ),
+        "既定フォント高さが見た目の側の正典の別名でない"
     );
     assert_eq!(
         count(&src, "\"ＭＳ ゴシック\""),
-        1,
-        "フォント名リテラルが DEFAULT_FONT_NAME の宣言以外にも現れた"
+        0,
+        "draw.rs にフォント名リテラルが現れた（既定名は look の正典の別名だけ）"
     );
 
     // ── 第 2 の入口: draw_metrics.rs::probe_format_for（計測鍵ごとの試験用書式）
@@ -827,47 +867,49 @@ fn writing_mode_selects_only_the_direction_recipe_not_the_font_name() {
     );
 }
 
-/// 要件 6.4: `DirectionRecipe::for_mode` の本番呼出は `create_text_format` の内側 1 箇所
-/// だけ——計測（`DWriteMetrics`）も描画（`viewbox_draw.rs`）も同じ format 工場を通る構造
-/// の証跡。呼び手が増えたらここが赤くなる。
+/// 方向レシピの工場の呼び手の内訳が「`draw.rs` に定義 1＋`create_text_format` の中の呼出 1、
+/// `draw_metrics.rs` に `probe_format_for` の中の呼出 1」のときだけ真（指摘 22 の檻の本体）。
+fn direction_recipe_sites_are_the_two_format_makers(draw: &str, metrics: &str) -> bool {
+    let create = top_level_fn_source(draw, "pub fn create_text_format(");
+    let probe = &metrics[metrics
+        .find("fn probe_format_for(")
+        .expect("probe_format_for が無い——改名したなら本檻も更新すること")..];
+    let probe = &probe[..probe
+        .find("\n    }\n")
+        .expect("probe_format_for の閉じ括弧が無い")];
+    create.contains("try_create_format(")
+        && probe.contains("try_create_format(")
+        && count(draw, "for_mode") == 2
+        && count(draw, "pub fn for_mode(") == 1
+        && count(create, "for_mode") == 1
+        && count(metrics, "for_mode") == 1
+        && count(probe, "for_mode") == 1
+}
+
+/// 要件 6.4: `DirectionRecipe::for_mode` の本番呼出は書式を作る 2 か所——`draw.rs` の
+/// `create_text_format`（束縛書式）と `draw_metrics.rs` の `probe_format_for`（計測鍵ごとの
+/// 試験用書式）——だけ。計測も描画も同じレシピを焼く構造の証跡で、呼び手が増えたら赤。
 ///
-/// **数え方**: `draw.rs` 本文に現れる識別子 `for_mode` の**全出現**を数える。現状は
-/// 定義（`pub fn for_mode(`）と呼出（`create_text_format` 内）の 2 件のみで、doc
-/// コメント中の言及も無い。`DirectionRecipe::for_mode(` という呼出形だけを数えれば
-/// たまたま 1 になるが、それでは `Self::for_mode(..)` や `use` 経由の裸呼出を見逃す。
-/// 全出現を数えて内訳を突き合わせる形にしてあるので、doc への言及が増えただけでも赤に
-/// なり、人が内訳を読み直すことになる（それが意図した厳しさ）。
+/// **数え方**: 2 ファイルの識別子 `for_mode` の**全出現**を数えて内訳を突き合わせる。
+/// `DirectionRecipe::for_mode(` という呼出形だけでは `Self::for_mode(..)` や `use` 経由の
+/// 裸呼出を見逃す。doc への言及が増えただけでも赤になり、人が内訳を読み直す（意図した厳しさ）。
 #[test]
-fn direction_recipe_factory_has_exactly_one_call_site_inside_create_text_format() {
-    let src = draw_rs();
-    assert_eq!(
-        count(&src, "for_mode"),
-        2,
-        "draw.rs の `for_mode` 出現が 2（定義 1＋呼出 1）から動いた——内訳を読み直すこと"
-    );
-    assert_eq!(
-        count(&src, "pub fn for_mode("),
-        1,
-        "内訳のうち 1 件は定義そのもの"
-    );
-    let body = top_level_fn_source(&src, "pub fn create_text_format(");
+fn direction_recipe_factory_is_called_only_by_the_two_format_makers() {
+    let metrics = include_str!("draw_metrics.rs").replace('\r', "");
+    let draw = draw_rs();
     assert!(
-        body.contains("try_create_format("),
-        "create_text_format の本文切り出しが失敗している: {body}"
+        direction_recipe_sites_are_the_two_format_makers(&draw, &metrics),
+        "`for_mode` の内訳が「定義 1＋create_text_format 1＋probe_format_for 1」から動いた"
     );
-    assert_eq!(
-        count(body, "for_mode"),
-        1,
-        "残る 1 件は create_text_format の内側の呼出でなければならない"
+    // 陽性の相棒: 3 つ目の呼出をどちらのファイルに足した写しでも同じ本体が偽を返す。
+    let extra = "\npub fn elsewhere() {\n    DirectionRecipe::for_mode(other);\n}\n";
+    assert!(
+        !direction_recipe_sites_are_the_two_format_makers(&(draw.clone() + extra), &metrics),
+        "陽性の相棒（draw.rs に 3 つ目の呼出）を検出できていない"
     );
-    // 陽性対照: 工場の外に呼び手が増えた版を同じ数え方に通すと 3 になる。
-    let planted = "pub fn for_mode(mode: WritingMode) {}\n\
-        pub fn create_text_format() {\n    DirectionRecipe::for_mode(mode);\n}\n\
-        pub fn elsewhere() {\n    DirectionRecipe::for_mode(other);\n}\n";
-    assert_eq!(
-        count(planted, "for_mode"),
-        3,
-        "陽性対照（工場の外に呼び手が増えた版）を検出できていない"
+    assert!(
+        !direction_recipe_sites_are_the_two_format_makers(&draw, &(metrics + extra)),
+        "陽性の相棒（draw_metrics.rs に 3 つ目の呼出）を検出できていない"
     );
 }
 

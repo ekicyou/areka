@@ -157,11 +157,12 @@ pub use metrics::DWriteMetrics;
 #[cfg(test)]
 pub(crate) use metrics::measure_font_metrics;
 
-/// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
-pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
+/// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。見た目の側の正典の別名（1 か所に書く）。
+pub const DEFAULT_FONT_NAME: &str = crate::look::UKADOC_DEFAULT_FONT_NAME;
 
 /// 既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」・ukadoc 既定・R4.1/R4.2）。
-pub const DEFAULT_FONT_HEIGHT: f32 = 12.0;
+/// 見た目の側の正典の別名。
+pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;
 
 /// 文字を描くときの描画オプションの唯一の定義点（色つきの字形を出す）。
 ///
