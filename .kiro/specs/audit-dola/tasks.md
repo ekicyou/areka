@@ -262,7 +262,7 @@
   - 終わった姿: dola の範囲で `proposals` と `P[0-9]` の grep が後の段の分を除いて 0 件で、brief に節がある
   - _Requirements: 6.2, 9.4_
 
-- [ ] 16. 前の段の確かめ
+- [x] 16. 前の段の確かめ
   - `cargo test -p dola`・`cargo test -p areka-sakura`・`cargo test -p wintf --lib ecs::dola` と、件 1 で結果が変わらない見込みの `areka-emo-text`・`areka-seriko`・`areka-ghost` のテストを 1 度ずつ回す
   - `cargo clippy -p dola --all-targets --no-deps -- -D warnings` を走らせ、警告 0 の出力を記録に残す
   - 前の段で触った範囲の外のファイルが、`areka-sakura` の台本のコンパイルのテスト・wintf の dola のモジュール・clippy の brief の 3 つだけであることを `git diff --stat` で確かめる（要件 6.3）
@@ -385,3 +385,4 @@
 - 13.1: ランタイムのテストの遷移の道具は `tests/runtime/support.rs` の `linear(var, from, to, dur)`（と `float()`）。`DolaDocumentBuilder::build` は全部をコンパイルにかけるので、拒まれる文書は手書きの `DolaDocument {..}`＋validate のまま。`loop_offset_compile.rs` の `doc_with_fade_and_offset`・`loop_offset_doc` は通る文書なのに手書き（任意で組み立ての道具へ）。Cancel と Trim は意図して同じ道（`evaluate_all_for_group`）で、値で見分けられない。
 - 13.3: dola のテストに `DolaRuntime::update` の呼び手と `allow(deprecated)` は 0（実数は 106 か所と 5 つ）。wintf にも呼び手は無いので 20.2 で `update` を消しても wintf は触らない。`src/runtime/facade.rs:28`（```ignore の例）と `src/runtime/clock.rs:13` の説明文にまだ `update` が残る（20.2 で直す）。
 - 14.1: 状態遷移のテストは 25 本でなく 22 本だった（research #76 と tasks.md 14.1 の「25 本」は数え違い）。表のテストは `try_transition_table`（`[[bool; 7]; 7]`）。
+- 16（前の段の確かめ・2026-11-13）: `cargo test -p dola`・`areka-sakura`・`wintf --lib ecs::dola`・`areka-emo-text`・`areka-seriko`・`areka-ghost` を 1 度ずつ回し、test result 40 行がすべて ok・失敗 0。`cargo clippy -p dola --all-targets --no-deps -- -D warnings`（`-A` なし）は警告 0 で Finished。枝の起点 becb50ef からの dola の外の差分は `.kiro/specs/clippy-199-lints/brief.md`・`crates/areka-sakura/src/compile_sheet_tests.rs`・`crates/wintf/src/ecs/dola/mod.rs` の 3 ファイルだけ（要件 6.3）。`CuePlayer::stop` の本体は触っておらず、差分に出るのはテストの `stop_discards_remaining_and_halts_further_delivery` の周りの行だけ（要件 8.1）。`src` の `pub` の行の違いは、私的な mod（instance_manager・timeline_manager・interpolator・document_store）の中のものを除くと、`has_instances` の追加・`finish` の引数名の変更（`offset`→`deadline`・型と数は同じ）・`DolaError::InvalidNumber` の追加だけ（要件 6.4）。
