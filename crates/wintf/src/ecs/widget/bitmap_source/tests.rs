@@ -364,7 +364,9 @@ fn failed_bitmap_for_new_image_drops_previous_bitmap() {
         .expect("CreateBitmap")
         .cast()
         .expect("cast");
-        world.entity_mut(e).insert(BitmapSourceResource::new(source));
+        world
+            .entity_mut(e)
+            .insert(BitmapSourceResource::new(source));
         schedule.run(&mut world);
         assert!(!world.get::<BitmapSourceGraphics>(e).unwrap().is_valid());
     });
