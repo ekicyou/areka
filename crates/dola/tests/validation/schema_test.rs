@@ -135,7 +135,7 @@ mod numeric_rule_tests {
     #[test]
     fn invalid_numbers_are_rejected() {
         type Mutate = fn(&mut DolaDocument);
-        let cases: [(Mutate, &str, &str, f64); 12] = [
+        let cases: [(Mutate, &str, &str, f64); 13] = [
             (
                 |d| sb_mut(d).time_scale = 0.0,
                 "storyboard 'sb'",
@@ -220,6 +220,21 @@ mod numeric_rule_tests {
                 f64::NAN,
             ),
             (
+                // 有限でも大きすぎる制御点は補間を inf／NaN にあふれさせる（裁定 (a)）
+                |d| {
+                    trans(d).easing =
+                        Some(EasingFunction::Parametric(ParametricEasing::CubicBezier {
+                            x0: 0.0,
+                            x1: 0.0,
+                            x2: -1000.5,
+                            x3: 1.0,
+                        }))
+                },
+                "storyboard 'sb' entry 0",
+                "easing.x2",
+                -1000.5,
+            ),
+            (
                 |d| {
                     sb_mut(d).loop_offset = Some(LoopOffset::Range(LoopOffsetRange {
                         min: 0.0,
@@ -252,6 +267,18 @@ mod numeric_rule_tests {
                 "{field} = {value}: {errors:?}"
             );
         }
+    }
+
+    #[test]
+    fn bezier_points_at_the_bound_are_accepted() {
+        let mut doc = base_doc();
+        trans(&mut doc).easing = Some(EasingFunction::Parametric(ParametricEasing::CubicBezier {
+            x0: -1000.0,
+            x1: 1000.0,
+            x2: 0.0,
+            x3: 1.0,
+        }));
+        assert!(doc.validate().is_ok());
     }
 
     #[test]

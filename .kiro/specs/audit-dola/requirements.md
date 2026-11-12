@@ -185,6 +185,8 @@
    - #4 の付随（最後の区切りより後に置いたトリガーは、親が先に終わって発火しない）: ⑴ 開発者の裁定＝完了 `dola-nested-storyboard` 要件 3.3「トリガーを長さに足さない」を守る。#4 の本体（台本の長さに先頭の遅れが入らない）は直す
    - #11 の `CueCommand::WaitForInput` と `CuePlayer::resolve_click`: ⑵ わざと置いた口＝`talk-fast-forward` の `\x` の受け皿。残す理由を説明に書く（11.4）
    - #25 の機能 `yaml`: ⑵ 持ち主の spec＝`dola-yaml-backend` が決まっている
+   - かけ直しの R1-08（未来の時刻の `start()` が、ぶつかる古いインスタンスを呼んだ時点で終わらせる）: ⑴ 開発者の裁定（2026-11-13・推奨案で承認）＝ 11.8 の「同じ変数に生きた項目があれば競合」を守る。`start` の説明に書く
+   - かけ直しの R1-07（有限のループに `MIN_LOOP_DURATION` を当てない）: ⑴ 開発者の裁定（2026-11-13・推奨案で承認）＝ 有限のループは周回の数で止まる。費用は `shortcut:` の注に書いてある
 4. When #11 を直すとき, the 本 spec の直し shall 後の段で、効かない時間切れ（`WaitForInput` の `timeout` の欄・`BarrierKind::Timeout`・その時間切れの枝）を消し、残す `WaitForInput` と `resolve_click` の説明に「`talk-fast-forward` の `\x` の受け皿」という実在の理由を書く。ukadoc の `\x`・`\x[noclear]` には時間切れの引数が無い（`ukadoc:list/sakura-script/wait/x`）＝消しても正典に反しない
 5. When #12・#16・#17・#26 を直すとき, the 本 spec の直し shall 後の段で、配送の制御（Routing）・`CueTarget::Window`・`CueCommand::EntityRef`・`PlaybackState`／`ScheduleRequest` を、それを受ける範囲の外の枝とテストごと消す（完了した spec が置いた理由＝M-dialogue の受け皿・退役した相手の関数は、もう過ぎている）
 6. When #29・#38 の失敗を記録に残すとき, the 本 spec の直し shall dola に記録の依存を足さず、dola は戻り値で失敗を返し、`error!` は呼び手の境目（wintf の `tick_dola_animators`）で出す（`cue/sink.rs` の「記録は呼び手の境目」と同じ作り）
@@ -194,3 +196,5 @@
 10. When #31 を直すとき, the dola のコンパイル shall トリガーと純粋なキーフレームに書いた `between` を、`between` の始まりの時刻で発火・配置するものとして扱う（完了 `dola-nested-storyboard` の「トリガーでも at/between/keyframe を使える」を守る）。トリガー以外のエントリに書いた `trigger_start_offset` は検証で拒む
 11. When #33 を直すとき, the dola shall `relative_to` から出した終わりの値も値域と比べて `ValueOutOfRange` を出し、コンパイル結果の `min_value`／`max_value` を、完了 `dola-compiled-transition` 要件 5.6 の用途どおりランタイムでの値のクランプに使う
 12. When 件 3 の `too_many_arguments` を直すとき, the 本 spec の直し shall `runtime/instance_manager/mod.rs` の分は #60 の直し（`create_instance` を消す）で消し、`compile/resolve.rs` の分は理由を書いた `#[expect(clippy::too_many_arguments, reason = ...)]` で許す（引数の束の型は作らない）
+13. When かけ直しの R1-05 (c) を直すとき, the dola の検証 shall ベジェの制御点を有限かつ |x| ≤ 1e3 に限り、外れたら `InvalidNumber` で拒む（2026-11-13 開発者の裁定・推奨案で承認）
+14. When 無限のループの周回が 0 か `MIN_LOOP_DURATION` 未満のとき, the `DolaRuntime::load_document` shall その文書を `ZeroDurationWithLoop`／`TooShortDurationWithInfiniteLoop` で拒み、読み込めた文書が `start` で落ちないようにする（2026-11-13 開発者の裁定・推奨案で承認）

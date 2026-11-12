@@ -449,12 +449,10 @@ fn end_time_unified_for_single_and_infinite() {
 
 #[test]
 fn short_duration_infinite_loop_error() {
+    // start を待たず読み込みで拒む（裁定 (d)）
     let mut rt = DolaRuntime::new();
 
-    let doc = loop_doc("fade", -1, 0.05);
-    rt.load_document(doc).unwrap();
-
-    let err = rt.start("fade", 0.0).unwrap_err();
+    let err = rt.load_document(loop_doc("fade", -1, 0.05)).unwrap_err();
     assert!(
         matches!(err, RuntimeError::TooShortDurationWithInfiniteLoop { .. }),
         "expected TooShortDurationWithInfiniteLoop, got {err:?}"

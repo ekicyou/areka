@@ -238,15 +238,20 @@ mod start_error_paths {
     }
 
     #[test]
-    fn start_zero_duration_infinite_loop_fails() {
-        // entry 空 → total_base_duration=0、loop_count=-1 → ZeroDurationWithLoop
+    fn load_zero_duration_infinite_loop_is_rejected() {
+        // entry 空 → total_base_duration=0、loop_count=-1 → start を待たず読み込みで拒む（裁定 (d)）
         let mut rt = DolaRuntime::new();
-        rt.load_document(empty_entry_doc("empty_sb", -1)).unwrap();
-        let err = rt.start("empty_sb", 0.0).unwrap_err();
+        let err = rt
+            .load_document(empty_entry_doc("empty_sb", -1))
+            .unwrap_err();
         assert!(
             matches!(err, RuntimeError::ZeroDurationWithLoop { ref storyboard } if storyboard == "empty_sb"),
             "expected ZeroDurationWithLoop, got {err:?}"
         );
+        assert!(matches!(
+            rt.start("empty_sb", 0.0).unwrap_err(),
+            RuntimeError::StoryboardNotFound(_)
+        ));
     }
 
     #[test]

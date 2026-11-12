@@ -70,12 +70,21 @@ impl DolaRuntime {
     /// 自動的に値が引き継がれる。
     pub fn load_document(&mut self, doc: DolaDocument) -> Result<(), RuntimeError> {
         compile_all(&doc).map_err(RuntimeError::CompileError)?;
+        // 周回の長さの規則も読み込みで確かめ、読み込めた文書が start で落ちないようにする
+        for name in doc.storyboard.keys() {
+            let compiled =
+                compile_validated(&doc, name, 0.0).map_err(RuntimeError::CompileError)?;
+            loop_duration(name, &compiled)?;
+        }
         self.document = Some(doc);
         self.timeline_manager.release_unused_intern_values();
         Ok(())
     }
 
     /// ストーリーボード開始。
+    ///
+    /// 同じ変数に生きた項目を持つ古いインスタンスは、`start_time` が未来でも呼んだ時点で
+    /// 競合として扱う（「生きた項目があれば競合」・2026-11-13 開発者の裁定）。
     ///
     /// 指示書からストーリーボード定義を取得し、コンパイル → インスタンス作成 →
     /// タイムテーブル挿入 → Playing 遷移の一連のフローを実行する。
@@ -199,22 +208,8 @@ impl DolaRuntime {
         let compiled =
             compile_validated(doc, name, base_time).map_err(RuntimeError::CompileError)?;
 
-        // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）。
-        // 割った結果が有限であることはコンパイルが確かめる
-        let loop_duration = compiled.total_base_duration / compiled.time_scale;
-
-        if loop_duration == 0.0 && compiled.loop_count == -1 {
-            return Err(RuntimeError::ZeroDurationWithLoop {
-                storyboard: name.to_string(),
-            });
-        }
-        if loop_duration < MIN_LOOP_DURATION && compiled.loop_count == -1 {
-            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
-                storyboard: name.to_string(),
-                duration: loop_duration,
-            });
-        }
-
+        // load_document が同じ規則を通しているので、ここでは落ちない
+        let loop_duration = loop_duration(name, &compiled)?;
         Ok((compiled, loop_duration))
     }
 
@@ -564,6 +559,27 @@ impl Default for DolaRuntime {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// 1 周分の実時間。無限のループの周回が 0 か `MIN_LOOP_DURATION` 未満なら拒む。
+fn loop_duration(name: &str, compiled: &CompiledStoryboard) -> Result<f64, RuntimeError> {
+    // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）。
+    // 割った結果が有限であることはコンパイルが確かめる
+    let duration = compiled.total_base_duration / compiled.time_scale;
+    if compiled.loop_count == -1 {
+        if duration == 0.0 {
+            return Err(RuntimeError::ZeroDurationWithLoop {
+                storyboard: name.to_string(),
+            });
+        }
+        if duration < MIN_LOOP_DURATION {
+            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
+                storyboard: name.to_string(),
+                duration,
+            });
+        }
+    }
+    Ok(duration)
 }
 
 #[cfg(test)]

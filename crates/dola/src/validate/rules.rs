@@ -121,7 +121,11 @@ fn validate_transition_numbers(location: &str, def: &TransitionDef, errors: &mut
     }
 }
 
-/// ベジェの制御点は文書の f64 なので、ほかの数と同じく有限に限る
+/// ベジェの制御点の大きさの上限。有限でもこれを超えると補間が inf／NaN にあふれうる
+/// （CSS の cubic-bezier の y はふつう −1〜2 なので、ゆとりを持たせた値）
+const BEZIER_POINT_LIMIT: f64 = 1e3;
+
+/// ベジェの制御点は有限かつ |x| ≤ `BEZIER_POINT_LIMIT` に限る
 fn validate_easing_numbers(
     location: &str,
     prefix: &str,
@@ -143,7 +147,7 @@ fn validate_easing_numbers(
             location,
             &format!("{prefix}.{name}"),
             *v,
-            v.is_finite(),
+            v.is_finite() && v.abs() <= BEZIER_POINT_LIMIT,
         );
     }
 }
