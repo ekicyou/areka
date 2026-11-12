@@ -9,7 +9,8 @@
 //!
 //! 焼くのはフォント家族名・幅・大きさ・太さ・斜体・打ち消し線の 6 項目だけで、いずれも
 //! **既定（家族名・幅・太さ・斜体は束縛の顔）と値が違うときだけ**発行する（既定と同じ項目への範囲指定は意味が無く COM 呼出が
-//! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」を
+//! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」
+//! （既定の見た目が打ち消し線つきの行は行の全体への 1 回だけ）を
 //! 実際に担っているのは、呼び手 `line_layout_for` の `line.default_only` 短絡と、下の
 //! `apply_font_ranges` が外側で行う `if run.style == StyleId::DEFAULT { continue; }` の 2 点で、
 //! この項目ごとのガードを全撤去しても crate は緑のまま——実測 2026-09-12）。白抜き（`outline`）と
@@ -109,15 +110,16 @@ pub(crate) struct LineStyles {
     pub extent: f32,
     /// 既定の見た目しか使っていない行か（真なら範囲指定・色の解除・ブラシ生成のいずれも行わない）。
     pub default_only: bool,
-    /// 下線を引く区間の列（areka が塗る・行の TextLayout には焼かない）。既定だけの行は空。
+    /// 下線を引く区間の列（areka が塗る・行の TextLayout には焼かない）。既定の見た目が
+    /// 下線つきでなければ、既定だけの行は空。
     pub underlines: Vec<DWRITE_TEXT_RANGE>,
 }
 
 /// 行の装飾を切り出す（既定だけの行は従来の引数——空の番号列と `font_height`——へ落とす）。
 ///
-/// 下線の区間は、既定と違う装飾の区間のうち、見た目の下線が真で既定の下線と違うもの
-/// （下線を行の TextLayout に焼いていたときと同じ選び方）。作者の `[underline,1]` と
-/// アンカーの既定の下線はどちらもここに入る。
+/// 下線の区間は、解決した見た目の下線が真の区間（既定の区間も対象＝バルーンの
+/// `font.underline,1` は飾りの無い字にも出る・指摘 6）。作者の `\f[underline,1]` と
+/// アンカーの既定の下線もここに入り、`\f[underline,0]` で外した区間は入らない。
 pub(crate) fn line_styles(
     run: &GlyphRunContent,
     font_height: f32,
@@ -129,11 +131,7 @@ pub(crate) fn line_styles(
     let default_only = runs.iter().all(|r| r.style == StyleId::DEFAULT);
     let underlines = runs
         .iter()
-        .filter(|r| r.style != StyleId::DEFAULT)
-        .filter(|r| {
-            let look = styles.resolve(r.style, default);
-            look.underline && look.underline != default.underline
-        })
+        .filter(|r| styles.resolve(r.style, default).underline)
         .map(|r| r.range)
         .collect();
     LineStyles {
@@ -171,6 +169,19 @@ pub(crate) fn apply_font_ranges(
     fonts: &FontCatalog,
 ) -> Result<(), TextLayerError> {
     let bound = fonts.face_or_default(&default.name);
+    // 既定の打ち消し線は既定の区間（下のループが飛ばす）にも要るので、行の全体へ 1 回焼く（指摘 6）。
+    if default.strike && !runs.is_empty() {
+        note_range_call();
+        let length = runs
+            .last()
+            .map_or(0, |r| r.range.startPosition + r.range.length);
+        let whole = DWRITE_TEXT_RANGE {
+            startPosition: 0,
+            length,
+        };
+        unsafe { layout.SetStrikethrough(true, whole) }
+            .map_err(device_err("SetStrikethrough(既定の打ち消し線・行の全体)"))?;
+    }
     for run in runs {
         if run.style == StyleId::DEFAULT {
             continue;

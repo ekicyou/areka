@@ -9,6 +9,7 @@
 //! | §4 | 描画効果のブラシを持ち、無い・写せない効果は既定の文字色の印（`None`） | 3.1 |
 //! | §5 | `render_styled` の中で集めるのに失敗したフレームは提示を見送り（面は前のまま）、次のフレームで再試行して塗る。変化の無いフレームは集めない（2.5）。失敗を仕込むのは行の生成のときの集め（可謬・plan より前）で、Phase 1 の `collect_underlines(...)?` は `apply_color_ranges` と同じ BeginDraw 前の `?` の結線を使う（Phase 1 だけの檻は持たない） | 3.1, 4.3 |
 //! | §6 | 縦書き（2 方向・3 書体・拡大率 1.0／1.25／1.5・整数でない原点）の areka の塗り方（集める → `stroke_rect` → 字の後に `FillRectangle`）が、D2D 自身の下線（`SetUnderline` を焼いた `DrawTextLayout`）と、覆う画素の範囲が同じ・各画素の各成分の差 4/255 以下で一致する（2.6） | 3.4, 4.3 |
+//! | §7 | 既定の見た目が下線つきのバルーンでは、飾りの無い行にも線が出る＝全部の字に下線を積んだ行とバイトで一致し、線の無い行とは違う（指摘 6・balloon-font-descript-keys の要件 5.5） | 3.1 |
 
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{D2D1_DEVICE_CONTEXT_OPTIONS_NONE, ID2D1Brush};
@@ -21,7 +22,7 @@ use windows::core::{BOOL, HSTRING, IUnknown, Interface};
 use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
 
-use super::super::test_support::{Rig, live_diff_model_font};
+use super::super::test_support::{Rig, default_and_decorated_strokes, live_diff_model_font};
 use super::{FAIL_RECORDING, collect_underlines};
 use crate::TextLayerError;
 use crate::draw::{ResolvedFont, create_text_format};
@@ -494,4 +495,20 @@ fn vertical_strokes_match_d2d_own_underline_drawing() {
             }
         }
     }
+}
+
+/// §7（指摘 6）: `font.underline,1` のバルーンでは飾りの無い字にも下線が出る。比べる相手は
+/// 既定のままのバルーンで全部の字に下線を積んだ行（同じ線の塗り方）と、線の無い行。
+#[test]
+fn a_default_underline_is_drawn_on_plain_glyphs() {
+    let [by_default, by_decoration, without] =
+        default_and_decorated_strokes(|look| look.underline = true);
+    assert_ne!(
+        by_decoration, without,
+        "前提: 積んだ下線は線の無い行と違う絵になる（非退化）"
+    );
+    assert!(
+        by_default == by_decoration,
+        "既定の下線は飾りの無い字にも、積んだ下線と同じ線で出る"
+    );
 }

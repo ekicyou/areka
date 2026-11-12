@@ -481,3 +481,42 @@ pub(super) fn table_with(look: &TextLook, default: &TextLook) -> (StyleTable, St
     );
     (table, id)
 }
+
+/// 線の読み戻しの 3 枚（指摘 6）: ⑴ 既定の見た目に `stroke` を当てたバルーンの飾りの無い行、
+/// ⑵ 既定のままのバルーンで全部の字に同じ線つきの見た目を積んだ行、⑶ 既定のままの飾りの無い行。
+/// 同じ寸の面へ `render_styled` で 1 フレーム描いて読み戻す（実 GPU）。⑴ と ⑵ は同じ線が出て
+/// バイトで一致し、⑶ とは違う（線が出ている）はず。
+pub(super) fn default_and_decorated_strokes(stroke: fn(&mut TextLook)) -> [Vec<u8>; 3] {
+    let mut rig = Rig::new();
+    let image = (60u32, 20u32);
+    let mode = WritingMode::HorizontalTb;
+    let plain_font = ResolvedFont::resolve(&geo_model(Some(10)));
+    let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let (plain, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+
+    let mut look = plain_font.looks.default.clone();
+    stroke(&mut look);
+    let mut stroked_font = plain_font.clone();
+    stroked_font.looks.default = look.clone();
+    let (styles, id) = table_with(&look, &plain_font.looks.default);
+    let mut decorated = plain.clone();
+    for r in &mut decorated.residents {
+        if let ResidentContent::GlyphRun(run) = &mut r.content {
+            run.glyphs.iter_mut().for_each(|g| g.style = id);
+        }
+    }
+
+    let mut shoot = |canvas: &ContentCanvas, font: &ResolvedFont, styles: &StyleTable| {
+        let mut surface = rig.attach(image, 1.0);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec.render_styled(canvas, &window, font, mode, &contract, &mut surface, styles)
+            .expect("render_styled 失敗");
+        surface.read_back().expect("read_back 失敗")
+    };
+    [
+        shoot(&plain, &stroked_font, &StyleTable::default()),
+        shoot(&decorated, &plain_font, &styles),
+        shoot(&plain, &plain_font, &StyleTable::default()),
+    ]
+}

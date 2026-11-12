@@ -481,7 +481,8 @@ impl ViewboxExecutor {
     /// 1 行の行 TextLayout を装飾込みで確保する（はみ出し収集ループと Phase 1 が**同じ引数**で
     /// 呼ぶための 1 点・引数が食い違うと保持庫の鍵が変わって同じ行を 1 フレームに 2 度生成する）。
     ///
-    /// 既定だけの行は従来の [`LineLayoutStore::line_layout`] をそのまま通る（空の番号列・
+    /// 既定だけの行（既定の見た目が下線も打ち消し線も持たないとき）は従来の
+    /// [`LineLayoutStore::line_layout`] をそのまま通る（空の番号列・
     /// 行の箱寸は `font.height`・焼き処理なし＝装飾導入前と 1 ビットも変わらない・要件 14.2）。
     /// 装飾のある行だけが [`LineLayoutStore::line_layout_decorated`] を通り、生成時に 1 度だけ
     /// フォント系の範囲指定（[`apply_font_ranges`]）を焼く。下線の区間がある行は、続けて
@@ -501,7 +502,9 @@ impl ViewboxExecutor {
         scale: f32,
     ) -> Result<(IDWriteTextLayout, LineStyles), TextLayerError> {
         let line = line_styles(run, font.height, mode, styles, &font.looks.default);
-        if line.default_only {
+        // 既定の見た目が線を持つなら、既定だけの行も線を焼く道へ（指摘 6）。
+        let default_strokes = font.looks.default.underline || font.looks.default.strike;
+        if line.default_only && !default_strokes {
             let layout = self
                 .line_store
                 .line_layout(index, text, format, font.height, mode)?;
