@@ -77,7 +77,7 @@ pub(crate) const REASON_OUT_OF_RANGE: &str = "色指定の成分が範囲外";
 /// 三原色の 3 成分で 10 進数と百分率が混ざっている（正典はどちらかに揃った形だけを定める）。
 pub(crate) const REASON_MIXED_NOTATION: &str = "色指定の 3 成分で 10 進と百分率が混在";
 /// `#` 表記の桁数が 3 でも 6 でもない、または 16 進数字でない字を含む。
-pub(crate) const REASON_BAD_HEX: &str = "16 進の色指定が 3 桁でも 6 桁でもない";
+pub(crate) const REASON_BAD_HEX: &str = "色指定が 3 桁か 6 桁の 16 進でない";
 /// 色名表にも戻し先の語彙にも無い単一トークン（色名は小文字の完全一致のみ）。
 pub(crate) const REASON_UNKNOWN_TOKEN: &str = "未知の色指定（色名は小文字のみ）";
 
@@ -157,7 +157,10 @@ fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
 /// 三原色の 1 成分——書式は呼び手（[`parse_color`]）が 3 成分まとめて決める。
 /// `percent` が真なら `N%` を 0〜100 から 0〜255 へ写し、偽なら `N` を 0〜255 のまま読む。
 ///
-/// 先頭の符号は受けない。`u32` の解析は `+5` を 5 として受けてしまうが、`-1` が落ちるのに
+/// 成分は `u64` で読む——`u32` だと `4294967296` が桁あふれで「数でない」になり、`256` と同じ
+/// 「範囲外」にならない（指摘 32）。u64 も越える桁数は「数でない」のまま。
+///
+/// 先頭の符号は受けない。整数の解析は `+5` を 5 として受けてしまうが、`-1` が落ちるのに
 /// `+1` が通る非対称は正典にも本仕様にも根拠が無い（`+N` は R7.2 で相対指定の意味を持つ）。
 fn parse_component(token: &str, percent: bool) -> Result<u8, ColorParseError> {
     if token.starts_with('+') {
@@ -167,14 +170,14 @@ fn parse_component(token: &str, percent: bool) -> Result<u8, ColorParseError> {
         let body = token
             .strip_suffix('%')
             .ok_or_else(|| err(REASON_MIXED_NOTATION))?;
-        let value: u32 = body.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
+        let value: u64 = body.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
         if value > 100 {
             return Err(err(REASON_OUT_OF_RANGE));
         }
         // round(value * 255 / 100)（四捨五入・50% → 128）。
         Ok(((value * 255 + 50) / 100) as u8)
     } else {
-        let value: u32 = token.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
+        let value: u64 = token.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
         if value > 255 {
             return Err(err(REASON_OUT_OF_RANGE));
         }

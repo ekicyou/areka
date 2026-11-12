@@ -166,6 +166,15 @@ fn hex_with_other_length_or_bad_digit_is_rejected() {
     assert_eq!(reason(&["#gg0"]), REASON_BAD_HEX);
 }
 
+/// 記録の理由の文は実際と合う（指摘 32）——`#gggggg` は 6 字なので「桁数が違う」とは言わず、
+/// u32 を越える 10 進（`4294967296`）は「数でない」でなく「範囲外」と言う。定数でなく字面で固定する。
+#[test]
+fn reason_text_matches_what_actually_failed() {
+    assert_eq!(reason(&["#gggggg"]), "色指定が 3 桁か 6 桁の 16 進でない");
+    assert_eq!(reason(&["4294967296", "0", "0"]), "色指定の成分が範囲外");
+    assert_eq!(reason(&["4294967296%", "0%", "0%"]), "色指定の成分が範囲外");
+}
+
 /// 16 進は 1 成分の書式なので、3 成分に並べても受けない（R8.9）。
 #[test]
 fn hex_in_triple_form_is_rejected() {
