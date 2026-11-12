@@ -168,7 +168,7 @@ impl TimelineManager {
     }
 
     /// group_id に関連するタイムテーブルエントリが存在するか確認。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn has_entries(&self, group_id: u64) -> bool {
         self.timelines
             .values()

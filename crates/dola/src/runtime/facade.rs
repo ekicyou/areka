@@ -370,20 +370,12 @@ impl DolaRuntime {
         }
 
         // Step 3: 購読変数の評価（残存インスタンス対象）
-        let var_names = self.subscription_manager.get_subscribed_variable_names();
-        let mut values = HashMap::new();
-        for name in &var_names {
-            if let Some(val) = self.timeline_manager.evaluate(
-                name,
-                current_time,
-                self.instance_manager.instances(),
-            ) {
-                values.insert(name.clone(), val);
-            }
-        }
-
-        // Step 4: 差分検出
-        let changes = self.subscription_manager.diff_and_update(values);
+        // Step 4: 差分検出（評価と同じ周回で行う）
+        let timeline_manager = &mut self.timeline_manager;
+        let instances = self.instance_manager.instances();
+        let changes = self
+            .subscription_manager
+            .diff_and_update(|name| timeline_manager.evaluate(name, current_time, instances));
 
         UpdateResult {
             changes,

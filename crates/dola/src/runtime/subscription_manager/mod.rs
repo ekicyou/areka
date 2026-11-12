@@ -2,7 +2,7 @@
 //!
 //! variable_id ベースの一元購読管理を提供する。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use super::types::{EvaluatedValue, RuntimeError};
 
@@ -16,12 +16,10 @@ pub(crate) struct SubscriptionManager {
     next_id: i64,
     /// 変数名 → variable_id（購読中のエントリのみ保持。unsubscribe 時に削除）
     name_to_id: HashMap<String, i64>,
-    /// variable_id → 変数名（全割り当て済みIDを含む、逆引き用。削除しない）
-    id_to_name: HashMap<i64, String>,
+    /// 購読中の variable_id → 変数名（unsubscribe 時に削除。id の昇順で回すので差分の並びが決まる）
+    id_to_name: BTreeMap<i64, String>,
 
     // --- 購読状態 ---
-    /// 現在購読中の variable_id セット
-    subscribed_ids: HashSet<i64>,
     /// 凍結値（id ベース）
     last_values: HashMap<i64, EvaluatedValue>,
     /// 前回配信値（id ベース、差分比較用）
@@ -33,8 +31,7 @@ impl SubscriptionManager {
         Self {
             next_id: 0,
             name_to_id: HashMap::new(),
-            id_to_name: HashMap::new(),
-            subscribed_ids: HashSet::new(),
+            id_to_name: BTreeMap::new(),
             last_values: HashMap::new(),
             last_sent_values: HashMap::new(),
         }
@@ -53,27 +50,22 @@ impl SubscriptionManager {
         self.next_id += 1;
         self.name_to_id.insert(variable_name.to_string(), id);
         self.id_to_name.insert(id, variable_name.to_string());
-        self.subscribed_ids.insert(id);
         id
     }
 
     /// 変数購読解除（ID指定）。
     /// 存在しない or 既に解除済みの ID → Err(RuntimeError::InvalidVariableId)。
     pub fn unsubscribe(&mut self, variable_id: i64) -> Result<(), RuntimeError> {
-        if !self.subscribed_ids.remove(&variable_id) {
+        let Some(name) = self.id_to_name.remove(&variable_id) else {
             return Err(RuntimeError::InvalidVariableId(variable_id));
-        }
+        };
 
         // name_to_id から削除（再 subscribe 時に新IDを割り当てるため）
-        if let Some(name) = self.id_to_name.get(&variable_id) {
-            self.name_to_id.remove(name);
-        }
+        self.name_to_id.remove(&name);
 
         // last_values, last_sent_values から削除
         self.last_values.remove(&variable_id);
         self.last_sent_values.remove(&variable_id);
-
-        // id_to_name は維持（逆引き可能性を残す）
 
         Ok(())
     }
@@ -82,20 +74,16 @@ impl SubscriptionManager {
     pub fn unsubscribe_all(&mut self) {
         // name_to_id を全削除
         self.name_to_id.clear();
-        // subscribed_ids を全削除
-        self.subscribed_ids.clear();
+        self.id_to_name.clear();
         // last_values, last_sent_values を全削除
         self.last_values.clear();
         self.last_sent_values.clear();
-        // id_to_name は維持（逆引き用）
     }
 
-    /// 購読中変数名のリストを取得（evaluate 用）。
+    /// 購読中変数名のリストを取得。
+    #[cfg(test)]
     pub fn get_subscribed_variable_names(&self) -> Vec<String> {
-        self.subscribed_ids
-            .iter()
-            .filter_map(|id| self.id_to_name.get(id).cloned())
-            .collect()
+        self.id_to_name.values().cloned().collect()
     }
 
     /// variable_id → variable_name 逆引き。
@@ -108,47 +96,30 @@ impl SubscriptionManager {
             .ok_or(RuntimeError::InvalidVariableId(variable_id))
     }
 
-    /// 値を比較し、変化した変数のみを返す（id ベース）。同時に last_values を更新。
+    /// 購読中の変数を id の昇順に `evaluate` で評価し、変化した変数のみを返す（id ベース）。
+    /// 同時に last_values を更新する。
     ///
-    /// `values` は evaluate 結果（変数名ベース）。
-    /// 内部で name→id 変換を行い、id ベースの差分を返却する。
-    /// タイムテーブルにエントリがない購読変数は凍結値（last_values）を現在値とする。
+    /// `evaluate` が `None` の購読変数は凍結値（last_values）を現在値とする。
     pub fn diff_and_update(
         &mut self,
-        values: HashMap<String, EvaluatedValue>,
+        mut evaluate: impl FnMut(&str) -> Option<EvaluatedValue>,
     ) -> Vec<(i64, EvaluatedValue)> {
         let mut changed = Vec::new();
 
-        let subscribed_ids: Vec<i64> = self.subscribed_ids.iter().copied().collect();
-
-        for id in subscribed_ids {
-            let var_name = match self.id_to_name.get(&id) {
-                Some(name) => name.clone(),
-                None => continue,
+        for (&id, name) in &self.id_to_name {
+            // evaluate 結果があれば凍結値を更新し、現在値 = 凍結値
+            if let Some(v) = evaluate(name) {
+                self.last_values.insert(id, v);
+            }
+            // 値が存在しない（未定義変数の購読）→ 無視
+            let Some(current) = self.last_values.get(&id) else {
+                continue;
             };
 
-            // 現在値 = evaluate 結果 or 凍結値
-            let current = values.get(&var_name).or_else(|| self.last_values.get(&id));
-
-            let current = match current {
-                Some(v) => v.clone(),
-                None => continue, // 値が存在しない（未定義変数の購読 → 無視）
-            };
-
-            // 前回配信値と比較
-            let is_changed = match self.last_sent_values.get(&id) {
-                Some(last_sent) => last_sent != &current,
-                None => true, // 初回は常に変化あり
-            };
-
-            if is_changed {
+            // 前回配信値と比較（初回は常に変化あり）
+            if self.last_sent_values.get(&id) != Some(current) {
                 changed.push((id, current.clone()));
                 self.last_sent_values.insert(id, current.clone());
-            }
-
-            // evaluate 結果があれば凍結値も更新
-            if values.contains_key(&var_name) {
-                self.last_values.insert(id, current);
             }
         }
 
@@ -163,10 +134,9 @@ impl SubscriptionManager {
     ) -> HashMap<i64, EvaluatedValue> {
         let mut result = HashMap::new();
         for (name, val) in name_values {
+            // name_to_id は購読中の名前だけを持つ
             if let Some(&id) = self.name_to_id.get(name) {
-                if self.subscribed_ids.contains(&id) {
-                    result.insert(id, val.clone());
-                }
+                result.insert(id, val.clone());
             }
         }
         result
@@ -179,7 +149,7 @@ impl SubscriptionManager {
     /// 前回配信値を比較し、差分として配信する。
     pub fn force_update_last_values(&mut self, values: &HashMap<i64, EvaluatedValue>) {
         for (id, val) in values {
-            if self.subscribed_ids.contains(id) {
+            if self.id_to_name.contains_key(id) {
                 self.last_values.insert(*id, val.clone());
             }
         }

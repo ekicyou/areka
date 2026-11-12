@@ -256,3 +256,50 @@ mod tick_last_result {
         );
     }
 }
+
+// =========================================================================
+// 差分の並び（9.2→10.3）
+// =========================================================================
+mod change_order {
+    use super::super::*;
+    use dola::DolaDocumentBuilder;
+
+    /// changes は購読の id の昇順で届く。作り直すたびに表の種が変わるので、20 回のどれでも同じ並びを見る
+    #[test]
+    fn changes_come_in_ascending_id_order() {
+        let names = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        let mut builder = DolaDocumentBuilder::new("1.0");
+        let mut sb = StoryboardBuilder::new();
+        for name in names {
+            builder = builder.variable(
+                name,
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            );
+            sb = sb.entry(StoryboardEntry {
+                variable: Some(name.to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(1.0)),
+                    duration: Some(1.0),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            });
+        }
+        let doc = builder.storyboard("all", sb.build()).build().unwrap();
+
+        for _ in 0..20 {
+            let mut rt = DolaRuntime::new();
+            let ids: Vec<i64> = names.iter().map(|n| rt.subscribe(n)).collect();
+            rt.load_document(doc.clone()).unwrap();
+            rt.start("all", 0.0).unwrap();
+            rt.tick(0.5);
+            let got: Vec<i64> = rt.last_result().changes.iter().map(|(id, _)| *id).collect();
+            assert_eq!(got, ids);
+        }
+    }
+}

@@ -2,6 +2,14 @@ use super::*;
 use crate::value::DynamicValue;
 use std::rc::Rc;
 
+/// 名前で引く値の表を evaluate として渡す
+fn diff(
+    mgr: &mut SubscriptionManager,
+    values: HashMap<String, EvaluatedValue>,
+) -> Vec<(i64, EvaluatedValue)> {
+    mgr.diff_and_update(|name| values.get(name).cloned())
+}
+
 // =====================================================================
 // 5.1 購読・採番・冪等性
 // =====================================================================
@@ -42,7 +50,7 @@ fn subscribe_before_document() {
     assert_eq!(vars.len(), 1);
 
     // evaluate 結果なし → 変化なし（値が存在しない）
-    let changed = mgr.diff_and_update(HashMap::new());
+    let changed = diff(&mut mgr, HashMap::new());
     assert!(changed.is_empty());
 }
 
@@ -120,12 +128,15 @@ fn get_variable_name_valid() {
 }
 
 #[test]
-fn get_variable_name_after_unsubscribe_still_works() {
+fn get_variable_name_error_after_unsubscribe() {
     let mut mgr = SubscriptionManager::new();
     let id = mgr.subscribe("opacity");
     mgr.unsubscribe(id).unwrap();
-    // id_to_name は維持されるので逆引き可能
-    assert_eq!(mgr.get_variable_name(id).unwrap(), "opacity");
+    // 解除した id の名前は表から消える（#62）
+    assert!(matches!(
+        mgr.get_variable_name(id),
+        Err(RuntimeError::InvalidVariableId(_))
+    ));
 }
 
 #[test]
@@ -147,7 +158,7 @@ fn diff_detects_change() {
     let mut values = HashMap::new();
     values.insert("x".to_string(), EvaluatedValue::Float(10.0));
 
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
     assert_eq!(changed.len(), 1);
     assert_eq!(changed[0].0, x_id);
     assert_eq!(changed[0].1, EvaluatedValue::Float(10.0));
@@ -162,10 +173,10 @@ fn diff_no_change_returns_empty() {
     values.insert("x".to_string(), EvaluatedValue::Float(10.0));
 
     // 初回: 変化あり
-    mgr.diff_and_update(values.clone());
+    diff(&mut mgr, values.clone());
 
     // 2回目: 同じ値 → 変化なし
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
     assert!(changed.is_empty());
 }
 
@@ -177,7 +188,7 @@ fn force_update_last_values_for_conclude() {
     // 初回配信: x=50.0
     let mut values = HashMap::new();
     values.insert("x".to_string(), EvaluatedValue::Float(50.0));
-    mgr.diff_and_update(values);
+    diff(&mut mgr, values);
 
     // Conclude: 最終値 x=100.0 で force_update
     let mut final_values = HashMap::new();
@@ -185,7 +196,7 @@ fn force_update_last_values_for_conclude() {
     mgr.force_update_last_values(&final_values);
 
     // 次回 update: evaluate 結果なし → 凍結値(100.0) vs 前回配信(50.0) → 差分あり
-    let changed = mgr.diff_and_update(HashMap::new());
+    let changed = diff(&mut mgr, HashMap::new());
     assert_eq!(changed.len(), 1);
     assert_eq!(changed[0].0, x_id);
     assert_eq!(changed[0].1, EvaluatedValue::Float(100.0));
@@ -199,10 +210,10 @@ fn frozen_variable_persists() {
     // 1回目: x=50.0
     let mut values = HashMap::new();
     values.insert("x".to_string(), EvaluatedValue::Float(50.0));
-    mgr.diff_and_update(values);
+    diff(&mut mgr, values);
 
     // 2回目: evaluate 結果なし → 凍結値(50.0) vs 前回配信(50.0) → 変化なし
-    let changed = mgr.diff_and_update(HashMap::new());
+    let changed = diff(&mut mgr, HashMap::new());
     assert!(changed.is_empty());
 }
 
@@ -216,12 +227,12 @@ fn frozen_value_preserved_after_unrelated_update() {
     let mut values = HashMap::new();
     values.insert("x".to_string(), EvaluatedValue::Float(10.0));
     values.insert("y".to_string(), EvaluatedValue::Float(20.0));
-    mgr.diff_and_update(values);
+    diff(&mut mgr, values);
 
     // y のみ変更、x は evaluate 結果なし → x の凍結値が消えないこと
     let mut values = HashMap::new();
     values.insert("y".to_string(), EvaluatedValue::Float(30.0));
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
 
     // y のみ差分
     assert_eq!(changed.len(), 1);
@@ -233,7 +244,7 @@ fn frozen_value_preserved_after_unrelated_update() {
     force_vals.insert(x_id, EvaluatedValue::Float(99.0));
     mgr.force_update_last_values(&force_vals);
 
-    let changed = mgr.diff_and_update(HashMap::new());
+    let changed = diff(&mut mgr, HashMap::new());
     let x_change = changed.iter().find(|(id, _)| *id == x_id);
     assert!(x_change.is_some());
     assert_eq!(x_change.unwrap().1, EvaluatedValue::Float(99.0));
@@ -266,7 +277,7 @@ fn force_update_ignores_unsubscribed_id() {
     mgr.force_update_last_values(&vals);
 
     // 凍結値が存在しないため差分配信も発生しない
-    let changed = mgr.diff_and_update(HashMap::new());
+    let changed = diff(&mut mgr, HashMap::new());
     assert!(changed.is_empty());
 }
 
@@ -299,7 +310,7 @@ fn diff_and_update_ignores_values_for_unsubscribed_names() {
     values.insert("y".to_string(), EvaluatedValue::Float(20.0));
 
     // x は購読解除済み → y のみ差分配信
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
     assert_eq!(changed.len(), 1);
     assert_eq!(changed[0].0, y_id);
 }
@@ -314,20 +325,37 @@ fn object_ptr_eq_comparison() {
     // 1回目: obj=rc1
     let mut values = HashMap::new();
     values.insert("obj".to_string(), EvaluatedValue::Object(rc1.clone()));
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
     assert_eq!(changed.len(), 1);
     assert_eq!(changed[0].0, obj_id);
 
     // 2回目: 同じ Rc → ptr_eq → 変化なし
     let mut values = HashMap::new();
     values.insert("obj".to_string(), EvaluatedValue::Object(rc1.clone()));
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
     assert!(changed.is_empty());
 
     // 3回目: 異なる Rc（内容同一）→ ptr_eq false → 変化あり
     let rc2 = Rc::new(DynamicValue::String("hello".to_string()));
     let mut values = HashMap::new();
     values.insert("obj".to_string(), EvaluatedValue::Object(rc2));
-    let changed = mgr.diff_and_update(values);
+    let changed = diff(&mut mgr, values);
     assert_eq!(changed.len(), 1);
+}
+
+// 解除しても名前の表が増え続けない（#62）
+#[test]
+fn unsubscribe_forgets_name() {
+    let mut mgr = SubscriptionManager::new();
+    mgr.subscribe("keep");
+    for _ in 0..3 {
+        let id = mgr.subscribe("x");
+        mgr.unsubscribe(id).unwrap();
+    }
+    assert_eq!(mgr.id_to_name.len(), 1);
+    for _ in 0..3 {
+        mgr.subscribe("x");
+        mgr.unsubscribe_all();
+    }
+    assert_eq!(mgr.id_to_name.len(), 0);
 }
