@@ -2,51 +2,27 @@ use super::*;
 use crate::easing::EasingName;
 
 fn create_test_instance(mgr: &mut InstanceManager, group_id: u64) {
-    mgr.create_instance(
+    mgr.instances_mut().insert(
         group_id,
-        "test_sb",
-        InterruptionPolicy::Conclude,
-        0.0,  // start_time
-        1.0,  // time_scale
-        2.0,  // base_duration
-        1,    // loop_count
-        2.0,  // end_time
-        0.0,  // loop_start_time
-        2.0,  // loop_duration
-        None, // loop_offset_min
-        0.0,  // loop_offset_max
-        EasingFunction::Named(EasingName::Linear),
-        0, // trigger_count
+        StoryboardInstance {
+            storyboard_name: "test_sb".to_string(),
+            state: InstanceState::Created,
+            interruption_policy: InterruptionPolicy::Conclude,
+            time_scale: 1.0,
+            pause_accumulated: 0.0,
+            pause_start: None,
+            loop_count: 1,
+            loops_completed: 0,
+            finish_deadline: None,
+            end_time: 2.0,
+            loop_start_time: 0.0,
+            loop_duration: 2.0,
+            loop_offset_min: None,
+            loop_offset_max: 0.0,
+            loop_offset_easing: EasingFunction::Named(EasingName::Linear),
+            trigger_states: Vec::new(),
+        },
     );
-}
-
-#[test]
-fn create_instance_initial_state() {
-    let mut mgr = InstanceManager::new();
-    let inst = mgr.create_instance(
-        1,
-        "fade",
-        InterruptionPolicy::Conclude,
-        10.0,
-        1.0,
-        5.0,
-        1,
-        15.0,
-        10.0, // loop_start_time
-        5.0,  // loop_duration
-        None, // loop_offset_min
-        0.0,  // loop_offset_max
-        EasingFunction::Named(EasingName::Linear),
-        0, // trigger_count
-    );
-    assert_eq!(inst.group_id, 1);
-    assert_eq!(inst.storyboard_name, "fade");
-    assert_eq!(inst.state, InstanceState::Created);
-    assert_eq!(inst.start_time, 10.0);
-    assert_eq!(inst.base_duration, 5.0);
-    assert_eq!(inst.pause_accumulated, 0.0);
-    assert!(inst.pause_start.is_none());
-    assert!(inst.finish_deadline.is_none());
 }
 
 #[test]
@@ -248,7 +224,7 @@ fn resume_without_pause_start_keeps_end_time() {
 }
 
 // =========================================================================
-// D1b-T 追加: get_mut / remove / create_instance の境界
+// D1b-T 追加: get_mut / remove の境界
 // =========================================================================
 
 #[test]
@@ -267,61 +243,6 @@ fn remove_deletes_instance_and_is_noop_for_unknown_id() {
     assert!(mgr.get(1).is_err());
     // 不在 ID の remove は panic せず no-op
     mgr.remove(999);
-}
-
-#[test]
-fn create_instance_with_same_group_id_overwrites() {
-    // 特性化: 同一 group_id での再作成は旧インスタンスを上書きする
-    // （facade は group_id を単調増加で採番するため通常は発生しない）
-    let mut mgr = InstanceManager::new();
-    create_test_instance(&mut mgr, 1);
-    mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.create_instance(
-        1,
-        "other_sb",
-        InterruptionPolicy::Cancel,
-        5.0,
-        1.0,
-        3.0,
-        1,
-        8.0,
-        5.0,
-        3.0,
-        None,
-        0.0,
-        EasingFunction::Named(EasingName::Linear),
-        0,
-    );
-    let inst = mgr.get(1).unwrap();
-    assert_eq!(inst.storyboard_name, "other_sb");
-    assert_eq!(inst.state, InstanceState::Created);
-}
-
-#[test]
-fn trigger_states_initialized_sequential_and_unfired() {
-    let mut mgr = InstanceManager::new();
-    mgr.create_instance(
-        1,
-        "sb",
-        InterruptionPolicy::Conclude,
-        0.0,
-        1.0,
-        2.0,
-        1,
-        2.0,
-        0.0,
-        2.0,
-        None,
-        0.0,
-        EasingFunction::Named(EasingName::Linear),
-        3,
-    );
-    let inst = mgr.get(1).unwrap();
-    assert_eq!(inst.trigger_states.len(), 3);
-    for (i, ts) in inst.trigger_states.iter().enumerate() {
-        assert_eq!(ts.trigger_index, i);
-        assert!(!ts.fired);
-    }
 }
 
 // =========================================================================

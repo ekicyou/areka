@@ -7,13 +7,10 @@ use rand::rngs::SmallRng;
 /// テスト用インスタンスヘルパー（loop_offset なし）
 fn make_instance(loop_count: i32, loop_duration: f64) -> StoryboardInstance {
     StoryboardInstance {
-        group_id: 1,
         storyboard_name: "test".to_string(),
         state: InstanceState::Playing,
         interruption_policy: InterruptionPolicy::Conclude,
-        start_time: 0.0,
         time_scale: 1.0,
-        base_duration: loop_duration,
         pause_accumulated: 0.0,
         pause_start: None,
         loop_count,

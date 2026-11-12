@@ -85,15 +85,12 @@ fn float_segment(start: f64, end: f64, from: f64, to: f64) -> CompiledSegment {
     }
 }
 
-fn make_instance(group_id: u64, start_time: f64) -> StoryboardInstance {
+fn make_instance(start_time: f64) -> StoryboardInstance {
     StoryboardInstance {
-        group_id,
         storyboard_name: "test".to_string(),
         state: InstanceState::Playing,
         interruption_policy: InterruptionPolicy::Conclude,
-        start_time,
         time_scale: 1.0,
-        base_duration: 1.0,
         pause_accumulated: 0.0,
         pause_start: None,
         loop_count: 1,
@@ -116,7 +113,7 @@ fn insert_and_evaluate_float() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     // t=0.5 → progress 0.5 → value 50.0
     let val = mgr.evaluate("x", 0.5, &instances);
@@ -137,7 +134,7 @@ fn expired_entry_auto_removal() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     // t=2.0 → 全セグメント終了でもインスタンスが生きている間は最後の値・項目は残る
     assert_eq!(
@@ -161,8 +158,8 @@ fn latest_group_id_priority() {
     mgr.insert_entries(2, &compiled2);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
-    instances.insert(2, make_instance(2, 0.0));
+    instances.insert(1, make_instance(0.0));
+    instances.insert(2, make_instance(0.0));
 
     // group_id=2 が最新 → 100.0 系列が採用
     let val = mgr.evaluate("x", 1.0, &instances);
@@ -176,8 +173,7 @@ fn pause_freezes_value() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    let mut inst = make_instance(1, 0.0);
-    inst.base_duration = 2.0;
+    let mut inst = make_instance(0.0);
     inst.end_time = 2.0;
     inst.state = InstanceState::Paused;
     inst.pause_start = Some(0.5); // t=0.5 で Pause
@@ -216,9 +212,8 @@ fn effective_time_with_time_scale() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    let mut inst = make_instance(1, 0.0);
+    let mut inst = make_instance(0.0);
     inst.time_scale = 2.0; // 2倍速
-    inst.base_duration = 2.0;
     instances.insert(1, inst);
 
     // t=0.5, time_scale=2.0 → effective_time=1.0, progress=0.5
@@ -251,7 +246,7 @@ fn evaluate_before_first_segment_returns_from_value() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     let val = mgr.evaluate("x", 0.5, &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(10.0)));
@@ -265,7 +260,7 @@ fn evaluate_zero_duration_segment_returns_to_value() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     // 到達前: from_value
     assert_eq!(
@@ -298,7 +293,7 @@ fn evaluate_multi_segment_progression() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     // セグメント1内 (t=0.5): progress=0.5 → 5.0
     assert_eq!(
@@ -324,7 +319,7 @@ fn evaluate_multi_segment_progression() {
 
 #[test]
 fn effective_time_playing_basic() {
-    let mut inst = make_instance(1, 0.0);
+    let mut inst = make_instance(0.0);
     inst.loop_start_time = 2.0;
     inst.pause_accumulated = 1.0;
     inst.time_scale = 2.0;
@@ -334,7 +329,7 @@ fn effective_time_playing_basic() {
 
 #[test]
 fn effective_time_paused_frozen_at_pause_start() {
-    let mut inst = make_instance(1, 0.0);
+    let mut inst = make_instance(0.0);
     inst.state = InstanceState::Paused;
     inst.pause_start = Some(3.0);
     // current_time に依らず pause_start 基準: (3.0 - 0.0 - 0.0) * 1.0 = 3.0
@@ -344,7 +339,7 @@ fn effective_time_paused_frozen_at_pause_start() {
 #[test]
 fn effective_time_paused_without_pause_start_falls_back_to_current() {
     // 防御的フォールバック: Paused だが pause_start 未設定 → current_time 基準
-    let mut inst = make_instance(1, 0.0);
+    let mut inst = make_instance(0.0);
     inst.state = InstanceState::Paused;
     inst.pause_start = None;
     assert_eq!(calculate_effective_time(5.0, &inst), 5.0);
@@ -376,7 +371,7 @@ fn evaluate_all_for_group_returns_all_variables() {
     mgr.insert_entries(1, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
     assert_eq!(values.len(), 2);
@@ -407,8 +402,8 @@ fn evaluate_all_for_group_ignores_other_groups() {
     mgr.insert_entries(2, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
-    instances.insert(2, make_instance(2, 0.0));
+    instances.insert(1, make_instance(0.0));
+    instances.insert(2, make_instance(0.0));
 
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
     assert_eq!(values.len(), 1);
@@ -429,7 +424,7 @@ fn collect_current_segment_final_values_returns_active_segment_final() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     // t=0.5: セグメント1がアクティブ → to_value=10.0（50.0 ではない）
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
@@ -448,7 +443,7 @@ fn collect_current_segment_final_values_before_first_segment_is_empty() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
     assert!(vals.is_empty());
@@ -475,7 +470,7 @@ fn collect_current_segment_final_values_after_all_segments_uses_last() {
     mgr.insert_entries(1, &compiled);
 
     let mut instances = BTreeMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    instances.insert(1, make_instance(0.0));
 
     let vals = mgr.collect_current_segment_final_values(1, 5.0, &instances);
     assert_eq!(vals.get("x"), Some(&EvaluatedValue::Float(10.0)));

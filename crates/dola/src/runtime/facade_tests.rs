@@ -149,3 +149,85 @@ fn conflict_termination_drops_trigger_store() {
         rt.trigger_store.keys().collect::<Vec<_>>()
     );
 }
+
+/// Never と競合して拒まれた新しいインスタンスは表に残らない（#43 の 3 本目）
+#[test]
+fn never_conflict_removes_new_instance() {
+    use crate::builder::{DolaDocumentBuilder, StoryboardBuilder};
+
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("x", float(0.0))
+        .storyboard(
+            "never",
+            StoryboardBuilder::new()
+                .interruption_policy(InterruptionPolicy::Never)
+                .entry(fade_x(0.0, 1.0, 2.0))
+                .build(),
+        )
+        .storyboard(
+            "new",
+            StoryboardBuilder::new()
+                .entry(fade_x(1.0, 0.0, 1.0))
+                .build(),
+        )
+        .build()
+        .unwrap();
+
+    let mut rt = DolaRuntime::new();
+    rt.load_document(doc).unwrap();
+    let never_gid = rt.start("never", 0.0).unwrap().group_id;
+
+    assert!(matches!(
+        rt.start("new", 0.5),
+        Err(RuntimeError::Conflict { .. })
+    ));
+    assert_eq!(
+        rt.instance_manager.instances().keys().collect::<Vec<_>>(),
+        vec![&never_gid]
+    );
+}
+
+/// start で作るトリガーの記録は添字 0..n の順で、どれも未発火
+#[test]
+fn start_initializes_trigger_states_in_order() {
+    use crate::builder::{DolaDocumentBuilder, StoryboardBuilder};
+    use crate::storyboard::KeyframeRef;
+
+    let trigger = || StoryboardEntry {
+        trigger_storyboard: Some("child".to_string()),
+        at: Some(KeyframeRef::Single("kf1".to_string())),
+        ..Default::default()
+    };
+    let parent = StoryboardBuilder::new()
+        .entry(StoryboardEntry {
+            keyframe: Some("kf1".to_string()),
+            ..fade_x(0.0, 1.0, 2.0)
+        })
+        .entry(trigger())
+        .entry(trigger())
+        .entry(trigger())
+        .build();
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("x", float(0.0))
+        .variable("y", float(0.0))
+        .storyboard("parent", parent)
+        .storyboard(
+            "child",
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("y".to_string()),
+                    ..fade_x(0.0, 1.0, 1.0)
+                })
+                .build(),
+        )
+        .build()
+        .unwrap();
+
+    let mut rt = DolaRuntime::new();
+    rt.load_document(doc).unwrap();
+    let gid = rt.start("parent", 0.0).unwrap().group_id;
+
+    let states = &rt.instance_manager.get(gid).unwrap().trigger_states;
+    let got: Vec<(usize, bool)> = states.iter().map(|t| (t.trigger_index, t.fired)).collect();
+    assert_eq!(got, vec![(0, false), (1, false), (2, false)]);
+}

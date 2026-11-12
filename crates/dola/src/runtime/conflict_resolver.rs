@@ -57,6 +57,16 @@ pub(crate) fn resolve_conflicts_excluding(
             Err(_) => continue, // 既に削除済み
         };
 
+        // Never は手前で全体を拒んでいるので、ここは終了状態のある方針だけ
+        debug_assert_ne!(
+            policy,
+            InterruptionPolicy::Never,
+            "Never は手前で全体を拒む"
+        );
+        let Some(terminal_state) = InstanceState::from_policy(policy) else {
+            continue;
+        };
+
         // 戦略ごとに購読者へ伝播する確定値を収集する
         let values = match policy {
             // Cancel / Trim: start_time 時点の補間値で凍結・確定
@@ -69,20 +79,11 @@ pub(crate) fn resolve_conflicts_excluding(
                 instance_manager.instances(),
             ),
             // Compress: ストーリーボード全体最終値にジャンプ
-            InterruptionPolicy::Compress => timeline_manager.collect_final_values(gid),
-            InterruptionPolicy::Never => {
-                // SAFETY(panic 経路): 手前の Never チェックループが同一の
-                // `instance_manager.get` で `conflicting` 全件を走査し、Never を
-                // 1つでも検出した時点で早期 return している。チェックと本 match の
-                // 間に instance_manager への変更はない（remove はエラー経路のみ）
-                // ため、ここで Never は観測されない。
-                unreachable!("Never policy should have been handled above");
+            // （Never は上の let-else で除いて来ない。並べるのは方針が増えたら型で気づくため）
+            InterruptionPolicy::Compress | InterruptionPolicy::Never => {
+                timeline_manager.collect_final_values(gid)
             }
         };
-
-        // Never 以外は終了状態に1対1対応する（上の match で Never は除外済み）
-        let terminal_state =
-            InstanceState::from_policy(policy).expect("non-Never policy maps to a terminal state");
 
         terminate_instance(
             gid,

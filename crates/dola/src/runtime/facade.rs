@@ -8,7 +8,7 @@ use crate::easing::{EasingFunction, EasingName};
 use crate::storyboard::LoopOffset;
 
 use super::conflict_resolver;
-use super::instance_manager::InstanceManager;
+use super::instance_manager::{InstanceManager, StoryboardInstance, TriggerState};
 use super::instance_state::InstanceState;
 use super::loop_controller::{self, LoopAction};
 use super::subscription_manager::SubscriptionManager;
@@ -113,22 +113,33 @@ impl DolaRuntime {
             None => (None, 0.0, EasingFunction::Named(EasingName::Linear)),
         };
 
-        // 4. インスタンス作成
-        self.instance_manager.create_instance(
+        // 4. インスタンス作成（Created 状態）。group_id は単調増加の採番で既存の鍵と衝突しない
+        let trigger_states = (0..compiled.triggers.len())
+            .map(|trigger_index| TriggerState {
+                trigger_index,
+                fired: false,
+            })
+            .collect();
+        self.instance_manager.instances_mut().insert(
             group_id,
-            name,
-            compiled.interruption_policy,
-            start_time,
-            compiled.time_scale,
-            compiled.total_base_duration,
-            compiled.loop_count,
-            end_time,
-            start_time, // loop_start_time = start_time（初期値）
-            loop_duration,
-            lo_min,
-            lo_max,
-            lo_easing,
-            compiled.triggers.len(),
+            StoryboardInstance {
+                storyboard_name: name.to_string(),
+                state: InstanceState::Created,
+                interruption_policy: compiled.interruption_policy,
+                time_scale: compiled.time_scale,
+                pause_accumulated: 0.0,
+                pause_start: None,
+                loop_count: compiled.loop_count,
+                loops_completed: 0,
+                finish_deadline: None,
+                end_time,
+                loop_start_time: start_time,
+                loop_duration,
+                loop_offset_min: lo_min,
+                loop_offset_max: lo_max,
+                loop_offset_easing: lo_easing,
+                trigger_states,
+            },
         );
 
         // 5. [Tier 3 Hook] 競合解決（skip_conflict_gids 内のインスタンスは除外）
@@ -413,7 +424,7 @@ impl DolaRuntime {
                     if ts.fired {
                         continue;
                     }
-                    // SAFETY(panic 経路): trigger_states は create_instance で
+                    // SAFETY(panic 経路): trigger_states は start_internal のステップ 4 で
                     // 0..compiled.triggers.len() の添字から構築され、trigger_store には
                     // 同一の compiled.triggers が同じ group_id で格納される
                     // （start_internal ステップ 4 / 6.5）。trigger_store は自然終了・cancel・

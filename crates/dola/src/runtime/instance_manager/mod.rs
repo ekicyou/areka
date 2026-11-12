@@ -19,16 +19,12 @@ pub(crate) struct TriggerState {
 
 /// ストーリーボード実行インスタンス。
 ///
-/// 各 `start()` 呼び出しで 1 つ生成され、`group_id` で一意に識別される。
-#[allow(dead_code)]
+/// 各 `start()` 呼び出しで 1 つ生成され、`InstanceManager` の表の鍵の group_id で識別される。
 pub(crate) struct StoryboardInstance {
-    pub group_id: u64,
     pub storyboard_name: String,
     pub state: InstanceState,
     pub interruption_policy: InterruptionPolicy,
-    pub start_time: f64,
     pub time_scale: f64,
-    pub base_duration: f64,
     pub pause_accumulated: f64,
     pub pause_start: Option<f64>,
     /// 1=1回, n≥2=n回, -1=無限ループ
@@ -39,11 +35,11 @@ pub(crate) struct StoryboardInstance {
     /// end_time (loop_start_time + loop_duration + pause_accumulated)
     pub end_time: f64,
     /// 現在の周回の開始時刻（wall clock ベース）。
-    /// 初期値は `start_time` と同一。周回終了ごとに「前の end_time＋待ち−pause_accumulated」で更新。
+    /// 初期値は `start()` に渡した開始時刻。周回終了ごとに「前の end_time＋待ち−pause_accumulated」で更新。
     /// Pause/Resume では変更されない（独立性: Req 4.3）。
     pub loop_start_time: f64,
     /// 1周分の再生時間（wall clock ベース）。
-    /// `base_duration / time_scale` で算出。インスタンス生存中は定数。
+    /// `total_base_duration / time_scale` で算出。インスタンス生存中は定数。
     pub loop_duration: f64,
     /// ループオフセット最小値（f64秒）。None = オフセットなし。
     pub loop_offset_min: Option<f64>,
@@ -65,59 +61,6 @@ impl InstanceManager {
         Self {
             instances: BTreeMap::new(),
         }
-    }
-
-    /// インスタンス作成（Created 状態）。
-    pub fn create_instance(
-        &mut self,
-        group_id: u64,
-        name: &str,
-        policy: InterruptionPolicy,
-        start_time: f64,
-        time_scale: f64,
-        base_duration: f64,
-        loop_count: i32,
-        end_time: f64,
-        loop_start_time: f64,
-        loop_duration: f64,
-        loop_offset_min: Option<f64>,
-        loop_offset_max: f64,
-        loop_offset_easing: EasingFunction,
-        trigger_count: usize,
-    ) -> &StoryboardInstance {
-        let trigger_states = (0..trigger_count)
-            .map(|i| TriggerState {
-                trigger_index: i,
-                fired: false,
-            })
-            .collect();
-        let instance = StoryboardInstance {
-            group_id,
-            storyboard_name: name.to_string(),
-            state: InstanceState::Created,
-            interruption_policy: policy,
-            start_time,
-            time_scale,
-            base_duration,
-            pause_accumulated: 0.0,
-            pause_start: None,
-            loop_count,
-            loops_completed: 0,
-            finish_deadline: None,
-            end_time,
-            loop_start_time,
-            loop_duration,
-            loop_offset_min,
-            loop_offset_max,
-            loop_offset_easing,
-            trigger_states,
-        };
-        // NOTE(不変条件): group_id は facade の next_group_id 単調増加カウンタで採番され
-        // 再利用されないため、正当な経路で既存キーと衝突しない。衝突時は旧インスタンスを
-        // 黙って上書きする（tests.rs::create_instance_with_same_group_id_overwrites で特性化済み）。
-        self.instances.insert(group_id, instance);
-        // SAFETY(panic 経路): 直前の insert により必ず Some。
-        self.instances.get(&group_id).unwrap()
     }
 
     /// 参照取得（InvalidGroupId エラー対応）。
