@@ -102,17 +102,9 @@ impl InstanceManager {
         }
     }
 
-    /// Pause: Paused 遷移（pause_start は facade が `set_pause_start` で設定する）。
-    pub fn pause(&mut self, group_id: u64) -> Result<(), RuntimeError> {
-        self.transition(group_id, InstanceState::Paused)
-    }
-
-    /// Pause 時の pause_start を設定する（facade から呼ばれる）。
-    pub fn set_pause_start(
-        &mut self,
-        group_id: u64,
-        current_time: f64,
-    ) -> Result<(), RuntimeError> {
+    /// Pause: Paused 遷移と pause_start の記録を 1 段で行う（Paused なら pause_start は必ずある）。
+    pub fn pause(&mut self, group_id: u64, current_time: f64) -> Result<(), RuntimeError> {
+        self.transition(group_id, InstanceState::Paused)?;
         self.get_mut(group_id)?.pause_start = Some(current_time);
         Ok(())
     }
@@ -123,18 +115,17 @@ impl InstanceManager {
 
         match instance.state.try_transition(InstanceState::Playing) {
             Ok(new_state) => {
-                // pause_accumulated 加算
-                if let Some(pause_start) = instance.pause_start.take() {
-                    // NOTE(数値境界): current_time < pause_start（非単調な時刻入力）の場合、
-                    // pause_duration が負となり pause_accumulated / end_time が過去方向へ
-                    // 補正される（早期終了の誘発）。現行 API は呼び出し側の時刻単調性を
-                    // 検証しない（検証追加は挙動変更を伴うため proposals.md P15 参照。
-                    // tests.rs::resume_with_time_before_pause_start_shrinks_end_time で特性化済み）。
-                    let pause_duration = current_time - pause_start;
-                    instance.pause_accumulated += pause_duration;
-                    // end_time 再計算
-                    instance.end_time += pause_duration;
-                }
+                // pause_accumulated 加算（Paused からの遷移なので pause_start は pause が入れてある）
+                // NOTE(数値境界): current_time < pause_start（非単調な時刻入力）の場合、
+                // pause_duration が負となり pause_accumulated / end_time が過去方向へ
+                // 補正される（早期終了の誘発）。現行 API は呼び出し側の時刻単調性を
+                // 検証しない（検証追加は挙動変更を伴うため proposals.md P15 参照。
+                // tests.rs::resume_with_time_before_pause_start_shrinks_end_time で特性化済み）。
+                let pause_start = instance.pause_start.take().unwrap_or(current_time);
+                let pause_duration = current_time - pause_start;
+                instance.pause_accumulated += pause_duration;
+                // end_time 再計算
+                instance.end_time += pause_duration;
                 instance.state = new_state;
                 Ok(instance.end_time)
             }

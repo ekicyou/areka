@@ -95,14 +95,14 @@ impl Interpolator {
             VariableTypeHint::Float => {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
-                let eased_t = apply_easing(t, &segment.easing);
+                let eased_t = apply_easing(t, segment.easing.as_ref());
                 let result = interpolation::lerp(&from, &to, &eased_t);
                 EvaluatedValue::Float(result)
             }
             VariableTypeHint::Integer { .. } => {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
-                let eased_t = apply_easing(t, &segment.easing);
+                let eased_t = apply_easing(t, segment.easing.as_ref());
                 let result = interpolation::lerp(&from, &to, &eased_t);
                 // NOTE(数値境界): `as i64` は飽和キャスト（Rust 1.45+）であり panic しない:
                 // NaN → 0、i64::MAX 超 / +inf → i64::MAX、i64::MIN 未満 / -inf → i64::MIN。
@@ -114,7 +114,7 @@ impl Interpolator {
 }
 
 /// `EasingFunction` を適用して進捗率を変換する。
-fn apply_easing(t: f64, easing: &Option<EasingFunction>) -> f64 {
+pub(super) fn apply_easing(t: f64, easing: Option<&EasingFunction>) -> f64 {
     match easing {
         None => t, // デフォルト: 線形補間
         Some(EasingFunction::Named(name)) => apply_named_easing(t, *name),

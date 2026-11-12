@@ -2,13 +2,13 @@
 //!
 //! 純粋関数群として実装。全状態は `StoryboardInstance` に保持される。
 
-use interpolation::Ease;
 use rand::Rng;
 use rand::RngExt;
 
-use crate::easing::{EasingFunction, EasingName, ParametricEasing};
+use crate::easing::EasingFunction;
 
 use super::instance_manager::StoryboardInstance;
+use super::interpolator::apply_easing;
 
 /// ループ処理の結果を示す判別 enum。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,53 +40,6 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
     instance.loops_completed < instance.loop_count as u64
 }
 
-/// イージング関数を `[0,1]` 入力に適用し `[0,1]` 出力を返す。
-fn apply_easing(easing: &EasingFunction, t: f64) -> f64 {
-    match easing {
-        EasingFunction::Named(name) => match name {
-            EasingName::Linear => t,
-            EasingName::QuadraticIn => t.calc(interpolation::EaseFunction::QuadraticIn),
-            EasingName::QuadraticOut => t.calc(interpolation::EaseFunction::QuadraticOut),
-            EasingName::QuadraticInOut => t.calc(interpolation::EaseFunction::QuadraticInOut),
-            EasingName::CubicIn => t.calc(interpolation::EaseFunction::CubicIn),
-            EasingName::CubicOut => t.calc(interpolation::EaseFunction::CubicOut),
-            EasingName::CubicInOut => t.calc(interpolation::EaseFunction::CubicInOut),
-            EasingName::QuarticIn => t.calc(interpolation::EaseFunction::QuarticIn),
-            EasingName::QuarticOut => t.calc(interpolation::EaseFunction::QuarticOut),
-            EasingName::QuarticInOut => t.calc(interpolation::EaseFunction::QuarticInOut),
-            EasingName::QuinticIn => t.calc(interpolation::EaseFunction::QuinticIn),
-            EasingName::QuinticOut => t.calc(interpolation::EaseFunction::QuinticOut),
-            EasingName::QuinticInOut => t.calc(interpolation::EaseFunction::QuinticInOut),
-            EasingName::SineIn => t.calc(interpolation::EaseFunction::SineIn),
-            EasingName::SineOut => t.calc(interpolation::EaseFunction::SineOut),
-            EasingName::SineInOut => t.calc(interpolation::EaseFunction::SineInOut),
-            EasingName::CircularIn => t.calc(interpolation::EaseFunction::CircularIn),
-            EasingName::CircularOut => t.calc(interpolation::EaseFunction::CircularOut),
-            EasingName::CircularInOut => t.calc(interpolation::EaseFunction::CircularInOut),
-            EasingName::ExponentialIn => t.calc(interpolation::EaseFunction::ExponentialIn),
-            EasingName::ExponentialOut => t.calc(interpolation::EaseFunction::ExponentialOut),
-            EasingName::ExponentialInOut => t.calc(interpolation::EaseFunction::ExponentialInOut),
-            EasingName::ElasticIn => t.calc(interpolation::EaseFunction::ElasticIn),
-            EasingName::ElasticOut => t.calc(interpolation::EaseFunction::ElasticOut),
-            EasingName::ElasticInOut => t.calc(interpolation::EaseFunction::ElasticInOut),
-            EasingName::BackIn => t.calc(interpolation::EaseFunction::BackIn),
-            EasingName::BackOut => t.calc(interpolation::EaseFunction::BackOut),
-            EasingName::BackInOut => t.calc(interpolation::EaseFunction::BackInOut),
-            EasingName::BounceIn => t.calc(interpolation::EaseFunction::BounceIn),
-            EasingName::BounceOut => t.calc(interpolation::EaseFunction::BounceOut),
-            EasingName::BounceInOut => t.calc(interpolation::EaseFunction::BounceInOut),
-        },
-        EasingFunction::Parametric(p) => match p {
-            ParametricEasing::QuadraticBezier { x0, x1, x2 } => {
-                interpolation::quad_bez(x0, x1, x2, &t)
-            }
-            ParametricEasing::CubicBezier { x0, x1, x2, x3 } => {
-                interpolation::cub_bez(x0, x1, x2, x3, &t)
-            }
-        },
-    }
-}
-
 /// ランダム遅延生成。
 ///
 /// uniform `[0,1]` → easing → `[min, max]` mapping。
@@ -101,7 +54,7 @@ pub(crate) fn generate_delay(
         return min;
     }
     let t: f64 = rng.random_range(0.0..1.0);
-    let eased = apply_easing(easing, t);
+    let eased = apply_easing(t, Some(easing));
     min + eased * (max - min)
 }
 

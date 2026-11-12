@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, HashMap};
 use crate::compile::{CompiledSegment, CompiledStoryboard, VariableTypeHint};
 
 use super::instance_manager::StoryboardInstance;
-use super::instance_state::InstanceState;
 use super::interpolator::{Interpolator, ObjectInternPool};
 use super::types::EvaluatedValue;
 
@@ -254,17 +253,9 @@ impl TimelineManager {
 /// Pause 中は pause 開始時点で固定。
 /// `loop_start_time` の初期値は `start_time` と同一のため、ループなし時は既存動作と互換。
 pub(crate) fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
-    let raw_time = if instance.state == InstanceState::Paused {
-        // Pause 中は pause_start 時点で固定
-        match instance.pause_start {
-            Some(pause_start) => {
-                pause_start - instance.loop_start_time - instance.pause_accumulated
-            }
-            None => current_time - instance.loop_start_time - instance.pause_accumulated,
-        }
-    } else {
-        current_time - instance.loop_start_time - instance.pause_accumulated
-    };
+    // pause_start は Paused の間だけある（pause が遷移と同時に入れ、resume が取る）。あればそこで時計を止める
+    let now = instance.pause_start.unwrap_or(current_time);
+    let raw_time = now - instance.loop_start_time - instance.pause_accumulated;
     // time_scale は再生速度倍率（1.0 倍速が標準、2.0 で 2 倍速）
     // time_scale が大きいほどタイムラインが速く進む
     raw_time * instance.time_scale

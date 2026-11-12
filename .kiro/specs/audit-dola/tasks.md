@@ -168,7 +168,7 @@
   - 檻 2 本: イージングの行き過ぎがクランプされる。"a"→"b" を 2 回終えたとき 2 回目の Conclude で変化 0
   - 終わった姿: 2 本が緑で、直しを外すと落ちる
   - _Requirements: 4.1, 11.11_
-- [ ] 10.2 イージングの表と一時停止の段を 1 つにし、重複のテストを消す（#55・#59・#67）
+- [x] 10.2 イージングの表と一時停止の段を 1 つにし、重複のテストを消す（#55・#59・#67）
   - 周回の中のイージングの写しの表を消し、補間のイージングの関数を使う
   - インスタンスの一時停止に時刻を渡して 1 段にし、開始の時刻を後から入れる口と防御の分岐（とそのテスト）を消す
   - 重複したイージングのテスト 2 つの範囲を消し、既知の値を 2〜3 個確かめる形に改める
@@ -380,3 +380,4 @@
 - 9.1: 競合は「新しいインスタンスが触る変数に、ほかの Playing／Paused のインスタンスの項目がある」で判定する。終わりの時刻を過ぎてまだ tick していないインスタンスも生きた扱い（前と同じ）。wintf の本番のコードは start を呼ばない。5.3 の待ちの中の値の保持は Conclude（`collect_current_segment_final_values`）と Cancel・Trim（`evaluate_all_for_group`）の 2 経路を檻 2 本で縛った（Trim 専用の檻は無い）。`LoopOffset::Scalar(v)` は [0, v] の乱数なので、決まった待ちのテストは `Range{v,v}` を使う。
 - 9.2→10.3: research #36 の場所に挙がる `subscription_manager/mod.rs:122` の `subscribed_ids` はまだ HashSet で、`UpdateResult.changes` の並びが走るたびに変わりうる（design の #36 の行の範囲の外）。10.3 の「購読した id を直に回す」直しで BTreeSet にし、並びが決まる檻を足す（進行役の決め）。`trigger_store` は回して読まないので HashMap のまま。
 - 10.1: 値は `TimelineEntry::value_at`（intern を通す補間＋値域へ収める）で配る（evaluate・evaluate_all_for_group・2 つの最終値の取り出し）。Integer は丸めた後に収める。research に無い既存の振る舞い: 有限でも極端に大きい値（from=−1.7e308・to=1.7e308 や巨大なベジェの制御点）で補間が NaN／inf を出し、NaN と値域の無い変数の inf はそのまま配られる（21 のかけ直しで拾う）。
+- 10.2（範囲の外・要起票）: 外のクレート `interpolation` 0.3.0 の `src/ease.rs:96` が `PI_2` を 2π と定義し、Sine 系と Elastic 系の式がそれを使うので、SineIn(0.5)=1.0（正しくは約 0.293）など曲線が前から誤っている。外のクレートはそのまま使う決まりなので、直すなら dola の側で式を書く別の spec（`/kiro-discovery` で起票）。既知の値のテストは誤った値を固定しないよう Sine 系を避けた。`InstanceManager::transition(gid, Playing)` で Paused から戻すと `pause_start` が残って時計が止まる（今は呼び手が無い・resume だけが消す）。

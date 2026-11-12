@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::compile::{CompiledVariableTimeline, VariableTypeHint};
 use crate::easing::{EasingFunction, EasingName};
+use crate::runtime::instance_state::InstanceState;
 use crate::storyboard::InterruptionPolicy;
 use crate::transition::TransitionValue;
 
@@ -334,15 +335,6 @@ fn effective_time_paused_frozen_at_pause_start() {
     inst.pause_start = Some(3.0);
     // current_time に依らず pause_start 基準: (3.0 - 0.0 - 0.0) * 1.0 = 3.0
     assert_eq!(calculate_effective_time(100.0, &inst), 3.0);
-}
-
-#[test]
-fn effective_time_paused_without_pause_start_falls_back_to_current() {
-    // 防御的フォールバック: Paused だが pause_start 未設定 → current_time 基準
-    let mut inst = make_instance(0.0);
-    inst.state = InstanceState::Paused;
-    inst.pause_start = None;
-    assert_eq!(calculate_effective_time(5.0, &inst), 5.0);
 }
 
 // =====================================================================

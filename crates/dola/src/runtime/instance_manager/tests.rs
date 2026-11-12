@@ -83,8 +83,7 @@ fn pause_and_resume() {
     mgr.transition(1, InstanceState::Playing).unwrap();
 
     // Pause at t=1.0
-    mgr.pause(1).unwrap();
-    mgr.set_pause_start(1, 1.0).unwrap();
+    mgr.pause(1, 1.0).unwrap();
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
     assert_eq!(mgr.get(1).unwrap().pause_start, Some(1.0));
 
@@ -113,23 +112,13 @@ fn finish_deadline_check() {
 }
 
 #[test]
-fn finish_deadline_on_terminal_state_rejected() {
-    let mut mgr = InstanceManager::new();
-    create_test_instance(&mut mgr, 1);
-    mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.transition(1, InstanceState::Cancelled).unwrap();
-    // Cancelled は terminal → 自動削除される → deadline 設定不可
-    assert!(mgr.get(1).is_err());
-}
-
-#[test]
 fn multiple_independent_instances() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     create_test_instance(&mut mgr, 2);
     mgr.transition(1, InstanceState::Playing).unwrap();
     mgr.transition(2, InstanceState::Playing).unwrap();
-    mgr.pause(1).unwrap();
+    mgr.pause(1, 0.0).unwrap();
     // Instance 1 is Paused, Instance 2 is still Playing
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
     assert_eq!(mgr.get(2).unwrap().state, InstanceState::Playing);
@@ -151,11 +140,7 @@ fn operations_on_nonexistent_group_id_return_invalid_group_id() {
         Some(RuntimeError::InvalidGroupId(999))
     );
     assert_eq!(
-        mgr.pause(999).err(),
-        Some(RuntimeError::InvalidGroupId(999))
-    );
-    assert_eq!(
-        mgr.set_pause_start(999, 1.0).err(),
+        mgr.pause(999, 1.0).err(),
         Some(RuntimeError::InvalidGroupId(999))
     );
     assert_eq!(
@@ -189,7 +174,7 @@ fn pause_on_created_rejected_keeps_state() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1);
     // Created → Paused は不正（pause() 経由でも拒否）
-    assert!(mgr.pause(1).is_err());
+    assert!(mgr.pause(1, 0.0).is_err());
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Created);
 }
 
@@ -200,26 +185,6 @@ fn resume_on_playing_rejected() {
     mgr.transition(1, InstanceState::Playing).unwrap();
     // Playing → Playing は不正遷移（Paused からのみ Resume 可能）
     assert!(mgr.resume(1, 1.0).is_err());
-    assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
-}
-
-// =========================================================================
-// D1b-T 追加: pause_start 未設定での resume（防御パス）
-// =========================================================================
-
-#[test]
-fn resume_without_pause_start_keeps_end_time() {
-    let mut mgr = InstanceManager::new();
-    create_test_instance(&mut mgr, 1);
-    mgr.transition(1, InstanceState::Playing).unwrap();
-    // pause() のみで set_pause_start を呼ばない（facade 非経由の防御パス）
-    mgr.pause(1).unwrap();
-    assert!(mgr.get(1).unwrap().pause_start.is_none());
-
-    let new_end = mgr.resume(1, 3.0).unwrap();
-    // pause_start 不在なら pause_accumulated と end_time は変化しない
-    assert_eq!(mgr.get(1).unwrap().pause_accumulated, 0.0);
-    assert_eq!(new_end, 2.0);
     assert_eq!(mgr.get(1).unwrap().state, InstanceState::Playing);
 }
 
@@ -273,8 +238,7 @@ fn resume_with_time_before_pause_start_shrinks_end_time() {
     let mut mgr = InstanceManager::new();
     create_test_instance(&mut mgr, 1); // end_time = 2.0
     mgr.transition(1, InstanceState::Playing).unwrap();
-    mgr.pause(1).unwrap();
-    mgr.set_pause_start(1, 5.0).unwrap();
+    mgr.pause(1, 5.0).unwrap();
 
     // pause_start=5.0 より過去の時刻で resume → pause_duration = -2.0
     let new_end = mgr.resume(1, 3.0).unwrap();

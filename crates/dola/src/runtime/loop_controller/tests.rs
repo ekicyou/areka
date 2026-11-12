@@ -1,4 +1,5 @@
 use super::*;
+use crate::easing::EasingName;
 use crate::runtime::instance_state::InstanceState;
 use crate::storyboard::InterruptionPolicy;
 use rand::SeedableRng;
@@ -310,42 +311,6 @@ fn generate_delay_deterministic_with_same_seed() {
         let d2 = generate_delay(1.0, 8.0, &easing, &mut rng2);
         assert_eq!(d1, d2);
     }
-}
-
-#[test]
-fn apply_easing_linear_identity() {
-    let easing = EasingFunction::Named(EasingName::Linear);
-    assert_eq!(apply_easing(&easing, 0.0), 0.0);
-    assert_eq!(apply_easing(&easing, 0.5), 0.5);
-    assert_eq!(apply_easing(&easing, 1.0), 1.0);
-}
-
-#[test]
-fn apply_easing_parametric_quadratic_bezier() {
-    // 対称制御点 (0, 0.5, 1) → 恒等写像に一致
-    let easing = EasingFunction::Parametric(crate::easing::ParametricEasing::QuadraticBezier {
-        x0: 0.0,
-        x1: 0.5,
-        x2: 1.0,
-    });
-    assert_eq!(apply_easing(&easing, 0.0), 0.0);
-    assert!((apply_easing(&easing, 0.5) - 0.5).abs() < 1e-9);
-    assert_eq!(apply_easing(&easing, 1.0), 1.0);
-}
-
-#[test]
-fn apply_easing_parametric_cubic_bezier() {
-    let easing = EasingFunction::Parametric(crate::easing::ParametricEasing::CubicBezier {
-        x0: 0.0,
-        x1: 0.5,
-        x2: 0.5,
-        x3: 1.0,
-    });
-    let result = apply_easing(&easing, 0.5);
-    assert!(
-        result >= 0.0 && result <= 1.0,
-        "result {result} out of range"
-    );
 }
 
 // =======================================================================

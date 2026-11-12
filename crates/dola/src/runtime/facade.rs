@@ -230,10 +230,7 @@ impl DolaRuntime {
 
     /// 一時停止。
     pub fn pause(&mut self, group_id: u64, current_time: f64) -> Result<(), RuntimeError> {
-        self.instance_manager.pause(group_id)?;
-        self.instance_manager
-            .set_pause_start(group_id, current_time)?;
-        Ok(())
+        self.instance_manager.pause(group_id, current_time)
     }
 
     /// 再開 — 再計算した end_time を返却。
