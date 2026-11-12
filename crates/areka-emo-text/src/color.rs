@@ -141,8 +141,9 @@ fn parse_single(token: &str) -> Result<ColorSpec, ColorParseError> {
 
 /// `#` の後ろ——3 桁は各桁を 2 倍、6 桁は 2 桁ずつ 1 成分。
 fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
-    // 長さを先に見る——台本の長い字列を桁の列へ集めてから捨てない。
-    if !matches!(body.chars().count(), 3 | 6) {
+    // 長さを先に見る——台本の長い字列を桁の列へ集めてから捨てない。16 進の字は 1 バイトなので
+    // バイト数で足りる（多バイトの字は長さか桁のどちらで落ちても理由は同じ R3-B-N1）。
+    if !matches!(body.len(), 3 | 6) {
         return Err(err(REASON_BAD_HEX));
     }
     let digits: Vec<u8> = body

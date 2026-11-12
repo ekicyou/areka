@@ -67,7 +67,7 @@ fn bold_look(default: &TextLook) -> TextLook {
 #[test]
 fn ukadoc_default_is_ms_gothic_twelve_black_without_decoration() {
     let look = TextLook::ukadoc_default();
-    assert_eq!(look.name, vec![UKADOC_DEFAULT_FONT_NAME.to_owned()]);
+    assert_eq!(*look.name, [UKADOC_DEFAULT_FONT_NAME.to_owned()]);
     assert_eq!(look.height, 12.0);
     assert_eq!(look.color, (0, 0, 0));
     assert!(!look.bold, "既定は太字でない");
@@ -175,7 +175,7 @@ fn layers_without_a_balloon_definition_are_the_ukadoc_defaults() {
 fn a_balloon_definition_fills_each_readable_item() {
     let layers = balloon_layers();
     assert_eq!(
-        layers.default.name,
+        *layers.default.name,
         vec!["Meiryo".to_owned(), "Arial".to_owned()],
         "候補列は記述順のまま"
     );
@@ -197,7 +197,7 @@ fn an_absent_font_name_falls_back_to_the_ukadoc_default_name() {
         &[],
     );
     assert_eq!(
-        layers.default.name,
+        *layers.default.name,
         vec![UKADOC_DEFAULT_FONT_NAME.to_owned()]
     );
     assert_eq!(layers.disable.name, layers.default.name);
@@ -592,6 +592,50 @@ fn interning_the_same_look_is_constant_work_in_the_candidate_count() {
     );
 }
 
+/// 別に組んだ 2 つの表（先渡しの空回しと本番は同じ `\f[name,…]` を別々に解く）の先頭比べも、
+/// 候補列の中身を比べるのは参照の組ごとに 1 度だけ（再監査 R3-B-M1・字ごとの `basis` で
+/// 見た目の数 × 候補の数にしない）。一致・不一致の答えは変わらない。
+#[test]
+fn starts_with_compares_each_name_list_pair_once() {
+    let default = TextLook::ukadoc_default();
+    let names = || {
+        (0..1_000)
+            .map(|i| format!("Font{i}"))
+            .collect::<Vec<String>>()
+    };
+    let build = |n: u8| {
+        let name: FontNames = names().into();
+        let mut table = StyleTable::default();
+        for c in 0..n {
+            let look = TextLook {
+                name: name.clone(),
+                color: (c, 0, 0),
+                ..default.clone()
+            };
+            table.intern(&look, &default);
+        }
+        table
+    };
+    let (full, arrived) = (build(200), build(150));
+    let before = name_list_compares();
+    assert!(full.starts_with(&arrived));
+    assert!(
+        name_list_compares() - before <= 1,
+        "同じ組の候補列を見た目ごとに比べ直した: {}",
+        name_list_compares() - before
+    );
+    assert!(!arrived.starts_with(&full));
+    let mut other = build(150);
+    other.intern(
+        &TextLook {
+            color: (9, 9, 9),
+            ..default.clone()
+        },
+        &default,
+    );
+    assert!(!full.starts_with(&other));
+}
+
 /// `look` の候補列（同じ共有の参照）を持ったまま、他の項目を `base` にそろえた見た目。
 fn with_name_of(look: &TextLook, base: &TextLook) -> TextLook {
     TextLook {
@@ -637,7 +681,7 @@ fn glyph_styles_read_by_ordinal_and_fall_back_outside_the_range() {
 fn calibration_disable_layer_must_not_change_anything_but_color() {
     let layers = balloon_layers();
     assert_ne!(
-        layers.disable.name,
+        *layers.disable.name,
         vec![UKADOC_DEFAULT_FONT_NAME.to_owned()],
         "無効表示層のフォント名が既定名へ差し替わっている（既定層の候補列を引き継いでいない）"
     );

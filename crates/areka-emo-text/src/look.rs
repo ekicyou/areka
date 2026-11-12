@@ -34,10 +34,9 @@
 //! `areka-P0-balloon-font-descript-keys` の所有で、影を除いて [`crate::balloon_overrides`] が配線済み
 //! （影の 4 キーは受け口が所有外のため渡さない）。口は [`LookLayers::from_balloon`] の
 //! `font_overrides`／`disable_overrides` の 2 引数で、1 件は `\f` と**同じ形のトークン列**——
-//! `font.bold,1` なら `["bold", "1"]`、`disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。
-//! キーごとに引数を増やさない。
-//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という
-//! 状態を `look_tests.rs` §3 が明示的に固定している。
+//! `font.bold,1` なら `["bold", "1"]`、`disable.font.color,255,0,0` なら `["color", "255", "0", "0"]`。キーごとに引数を増やさない。
+//! バルーン定義に宣言が無い項目は正典の既定（すべて無効）のままで、「渡されなければ既定」という状態を
+//! `look_tests.rs` §3 が明示的に固定している。
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -110,12 +109,6 @@ impl PartialEq for FontNames {
 }
 
 impl Eq for FontNames {}
-
-impl PartialEq<Vec<String>> for FontNames {
-    fn eq(&self, other: &Vec<String>) -> bool {
-        *self.list == **other
-    }
-}
 
 impl Hash for FontNames {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -445,9 +438,18 @@ impl StyleTable {
         self.looks.is_empty()
     }
 
-    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。
+    /// この表の先頭が `prefix` と一致するか（追記専用なので、同じ流れの途中の表は先頭が一致する）。別に組んだ表どうしの候補列は、中身を参照の組ごとに 1 度だけ比べる（R3-B-M1）。
     pub fn starts_with(&self, prefix: &StyleTable) -> bool {
-        self.looks.starts_with(&prefix.looks)
+        let mut same = HashSet::new();
+        prefix.looks.len() <= self.looks.len()
+            && self.looks.iter().zip(&prefix.looks).all(|(a, b)| {
+                let pair = (Arc::as_ptr(&a.name.list), Arc::as_ptr(&b.name.list));
+                (same.contains(&pair) || (a.name == b.name && same.insert(pair)))
+                    && (TextLook {
+                        name: b.name.clone(),
+                        ..a.clone()
+                    }) == *b
+            })
     }
 
     /// 表を空にする（スコープの消去点で呼ぶ）。
@@ -460,8 +462,6 @@ impl StyleTable {
 }
 
 /// 配置層へ渡す「グリフ序数→見た目」の読み口（表・番号列・既定・いま効いている見た目）。
-///
-/// `current` は「次に置く文字が無い」末尾の行の高さに使う（そのとき効いている大きさ）。
 #[derive(Clone, Copy)]
 pub struct GlyphStyles<'a> {
     /// 装飾の表。
@@ -470,7 +470,7 @@ pub struct GlyphStyles<'a> {
     pub ids: &'a [StyleId],
     /// そのスコープの既定の見た目。
     pub default: &'a TextLook,
-    /// いま効いている見た目（まだ文字が置かれていない末尾の行のため）。
+    /// いま効いている見た目——配置層は読まない（R2-A1 の後に読み手なし・役者側が埋めるだけ）。
     pub current: &'a TextLook,
 }
 

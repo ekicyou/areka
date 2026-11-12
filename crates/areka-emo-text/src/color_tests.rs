@@ -164,6 +164,8 @@ fn hex_with_other_length_or_bad_digit_is_rejected() {
     assert_eq!(reason(&["#fffffff"]), REASON_BAD_HEX);
     assert_eq!(reason(&["#gggggg"]), REASON_BAD_HEX);
     assert_eq!(reason(&["#gg0"]), REASON_BAD_HEX);
+    assert_eq!(reason(&["#ａａ"]), REASON_BAD_HEX);
+    assert_eq!(reason(&["#ａａａ"]), REASON_BAD_HEX);
 }
 
 /// 記録の理由の文は実際と合う（指摘 32）——`#gggggg` は 6 字なので「桁数が違う」とは言わず、

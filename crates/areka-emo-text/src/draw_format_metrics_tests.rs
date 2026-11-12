@@ -204,7 +204,7 @@ fn disable_layer_is_materialized_and_row_effects_stay_reserved() {
     )));
     // 不変条件⑲: 2 層の既定と ResolvedFont の 4 項目は一致する。
     assert_eq!(
-        defined.looks.default.name,
+        *defined.looks.default.name,
         std::iter::once(defined.name.clone())
             .chain(defined.fallback_chain.iter().cloned())
             .collect::<Vec<String>>(),

@@ -254,7 +254,7 @@ fn the_balloon_candidate_chain_follows_the_same_rule() {
     assert_eq!(picked.height, 20.0, "名前以外は複製");
     assert_eq!(picked.color, (1, 2, 3));
     assert_eq!(
-        picked.looks.default.name,
+        *picked.looks.default.name,
         v(&["存在しないフォント", "Yu Gothic UI"]),
         "候補列そのものは見た目の側に残る"
     );
