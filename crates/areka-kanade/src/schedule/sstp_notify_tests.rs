@@ -2,33 +2,24 @@
 //!
 //! `on_notify`（任意の名前の GET を 1 つ送り、応答待ちの控えを置く）と `on_notify_reply`（控えを
 //! 必ず取り出し、空でない台本なら外からの台本と同じ掃除と採番で新しいトークを始める）を固定する。
-//! 翻訳の Reference（外からの台本・返った台本）と strict の印もここで縛る。
+//! 返った台本の翻訳の Reference と strict の印もここで縛る。
 
 use super::{NOTIFY_ORIGIN, NotifyStage, accepts};
-use crate::change::{ChangeOrigin, ChangeRequest, ChangeTarget};
-use crate::msg::{
-    ChoiceInput, CloseReason, EventId, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure,
-    ShioriOutcome,
-};
-use crate::schedule::events::{SourceEvent, on_translate, on_translate_sstp};
-use crate::schedule::log_capture::{CapturedEvent, assert_not_logged, capture, logged_once};
+use crate::msg::{CloseReason, EventId, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome};
+use crate::schedule::events::{SourceEvent, on_translate};
+use crate::schedule::log_capture::{capture, logged_once};
 use crate::schedule::translate::{ScriptSource, TranslateRequest};
+use crate::schedule::translate_test_support::{
+    CHOICE_ID, active, assert_no_choice_events_follow, boot_until_greeting_playing, change_request,
+    config, fingerprint, non_steady_states, steady, strings, warn_or_above,
+};
 use crate::schedule::{
-    Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State, TermCause, current_talk_id,
-    phase_label, step,
+    Action, ChoicePhase, ChoiceState, Input, Phase, State, current_talk_id, phase_label, step,
 };
 use crate::shiori::real::ABSENT_REFERENCE;
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
 use tracing::Level;
-
-fn strings(refs: &[&str]) -> Vec<String> {
-    refs.iter().map(|r| r.to_string()).collect()
-}
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn notify(event: &str, refs: &[&str], strict: Option<bool>) -> Input {
     Input::SstpNotify {
@@ -43,47 +34,6 @@ fn reply(outcome: ShioriOutcome) -> Input {
         outcome,
         origin: NOTIFY_ORIGIN,
     }
-}
-
-fn active(talk_id: u64, origin: &'static str) -> Option<ActiveTalk> {
-    Some(ActiveTalk {
-        talk_id: TalkId(talk_id),
-        origin,
-        script: "\\h流れている台本\\e".to_string(),
-    })
-}
-
-fn steady(talk: Option<ActiveTalk>) -> State {
-    State {
-        phase: Phase::Steady { talk },
-        last_now: Some(MonotonicMs(500)),
-        next_talk_id: 10,
-        ..State::initial()
-    }
-}
-
-/// 状態の見比べの指紋（`State` は `PartialEq` を持たないので、腕が触り得る欄を綴りにする）。
-fn fingerprint(s: &State) -> String {
-    format!(
-        "phase={} talk={:?} next={} choice={} prev={:?} close={} change={} translate={} notify={:?} reply={}",
-        phase_label(&s.phase),
-        current_talk_id(&s.phase).map(|t| t.0),
-        s.next_talk_id,
-        s.choice.is_some(),
-        s.choice_prev_talk.map(|t| t.0),
-        s.pending_close.is_some(),
-        s.pending_change.is_some(),
-        s.translate.is_some(),
-        s.sstp_notify,
-        s.reply_source.is_some(),
-    )
-}
-
-fn warn_or_above(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
-    events
-        .iter()
-        .filter(|e| e.level == Level::WARN || e.level == Level::ERROR)
-        .collect()
 }
 
 /// 一括が任意の名前の GET 1 つで、名前と Reference が渡されたままであることを確かめる。
@@ -186,7 +136,7 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
     for no_user_break in [false, true] {
         let mut state = steady(active(9, "OnMouseDoubleClick"));
         state.external.no_user_break = no_user_break;
-        state.choice_prev_talk = Some(TalkId(8));
+        state.prev_talk = Some(TalkId(8));
         let (state, actions) = notify_then_reply(
             state,
             "OnAiTalk",
@@ -198,31 +148,31 @@ fn returned_script_during_playback_replaces_with_the_next_id_even_with_no_user_b
             ),
         );
         assert_playing_notify_talk(&state, 10);
-        assert_eq!(state.choice_prev_talk, None);
+        assert_eq!(
+            state.prev_talk,
+            Some(TalkId(9)),
+            "控えは置き換えた古い番号に変わる"
+        );
         assert_eq!(translate_request(&actions).script, "\\h割り込み\\e");
     }
 }
 
-/// ⑹ 返り値なし・空・空白だけ（エラー応答は殻が 204 に写す）は一括が空で、今のトークと
+/// ⑹ 返り値なし・空（エラー応答は殻が 204 に写す）は一括が空で、今のトークと
 /// 選択肢が残り、talk は始まらない（要件 2.4・3.2・3.4）。
 #[test]
-fn no_value_empty_or_blank_keeps_the_current_talk() {
+fn no_value_or_empty_keeps_the_current_talk() {
     let outcomes = [
         ("204", ShioriOutcome::NoContent),
         (
             "空",
             ShioriOutcome::Value(String::new(), areka_talk::SecurityLevel::Local),
         ),
-        (
-            "空白だけ",
-            ShioriOutcome::Value(" \t\r\n　".to_string(), areka_talk::SecurityLevel::Local),
-        ),
     ];
     for (label, outcome) in outcomes {
         let mut state = steady(active(9, "OnMouseDoubleClick"));
         state.choice = Some(ChoiceState {
             talk_id: TalkId(9),
-            candidates: vec!["選択1".to_string()],
+            candidates: vec![CHOICE_ID.to_string()],
             deadline: Some(MonotonicMs(1_000)),
             phase: ChoicePhase::Waiting,
         });
@@ -251,19 +201,23 @@ fn no_value_empty_or_blank_keeps_the_current_talk() {
     }
 }
 
-/// ⑺ 許可の表に在る名前でも Reference を補わない（0 個なら 0 個・要件 2.2）。
+/// ⑹b 空白だけの答えは台本で、今のトークを次の番号のトークで置き換える（SSP と同じ・`has_script`）。
 #[test]
-fn listed_names_get_no_padded_references() {
-    for name in [
-        "OnBalloonTimeout",
-        "OnAnchorSelect",
-        "OnChoiceSelect",
-        "OnBoot",
-    ] {
-        let (state, actions) = step(steady(None), notify(name, &[], None), &config());
-        assert_single_get(&actions, name, &[]);
-        assert_eq!(state.sstp_notify, Some(NotifyStage { strict: None }));
-    }
+fn whitespace_only_answer_starts_a_talk() {
+    let (state, actions) = notify_then_reply(
+        steady(active(9, "OnMouseDoubleClick")),
+        "OnNotListed",
+        &["r0"],
+        None,
+        ShioriOutcome::Value(" \t\r\n　".to_string(), areka_talk::SecurityLevel::Local),
+    );
+    assert_playing_notify_talk(&state, 10);
+    assert_eq!(
+        state.prev_talk,
+        Some(TalkId(9)),
+        "置き換えた古い番号を控える"
+    );
+    assert_eq!(translate_request(&actions).script, " \t\r\n　");
 }
 
 /// ⑶ 選択肢の最中に台本が返ると帳簿が消え、その後の時間切れ・選択のイベントは 0 回（要件 3.3）。
@@ -272,7 +226,7 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
     let mut state = steady(active(9, "OnMouseDoubleClick"));
     state.choice = Some(ChoiceState {
         talk_id: TalkId(9),
-        candidates: vec!["選択1".to_string()],
+        candidates: vec![CHOICE_ID.to_string()],
         deadline: Some(MonotonicMs(1_000)),
         phase: ChoicePhase::Waiting,
     });
@@ -295,105 +249,14 @@ fn returned_script_during_choice_clears_the_ledger_and_no_choice_events_follow()
         ))),
         &cfg,
     );
-    let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Tick {
-                now: MonotonicMs(60_000),
-            },
-            &cfg,
-        ))
-    });
-    let (state, tick) = out.unwrap();
-    assert!(
-        !tick.iter().any(|a| matches!(
-            a,
-            Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. })
-                if matches!(id.as_str(), "OnChoiceSelectEx" | "OnChoiceSelect" | "OnChoiceTimeout" | "選択1")
-        )),
-        "時間切れのイベントを送らない"
-    );
-    assert_not_logged(&events, "choice_timeout_ledger_stale");
-    let mut out = None;
-    let events = capture(|| {
-        out = Some(step(
-            state,
-            Input::Choice(ChoiceInput {
-                id: "選択1".to_string(),
-                label: "選択その1".to_string(),
-                scope: 0,
-                references: Vec::new(),
-            }),
-            &cfg,
-        ))
-    });
-    let (_, choice) = out.unwrap();
-    assert!(
-        !choice.iter().any(|a| matches!(a, Action::ShioriRequest(_))),
-        "選択のイベントを送らない"
-    );
-    let rejected = logged_once(&events, Level::WARN, "choice_rejected_no_wait");
-    assert_eq!(
-        rejected.fields.get("reason").map(String::as_str),
-        Some("no_choice_wait")
-    );
+    assert_no_choice_events_follow(state, &cfg);
 }
 
 /// ⑷ 起動前・起動の手順・起動の挨拶の最中・終了と切替の手順・保留の終了では受け付けず、
 /// SHIORI へ送らない（空の一括・状態不変・warn 以上 0 件・要件 3.6・3.9）。
 #[test]
 fn notify_is_not_accepted_outside_the_steady_state() {
-    let deadline = Some(MonotonicMs(9_000));
-    let talk_id = TalkId(9);
-    let mut states: Vec<(&str, State)> = [
-        ("Idle", Phase::Idle),
-        ("BootInit", Phase::BootInit),
-        ("BootPrefetch", Phase::BootPrefetch),
-        ("BootType", Phase::BootType),
-        ("BootMain", Phase::BootMain),
-        ("BootVersion{None}", Phase::BootVersion { talk: None }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
-        ("CloseTalkWait", Phase::CloseTalkWait { talk_id, deadline }),
-        ("ChangePending", Phase::ChangePending),
-        (
-            "ChangeTalkWait",
-            Phase::ChangeTalkWait { talk_id, deadline },
-        ),
-        ("ChangeClosePending", Phase::ChangeClosePending),
-        (
-            "ChangeCloseTalkWait",
-            Phase::ChangeCloseTalkWait { talk_id, deadline },
-        ),
-        (
-            "Unloading",
-            Phase::Unloading {
-                cause: TermCause::Quit,
-            },
-        ),
-        ("Stopped", Phase::Stopped),
-    ]
-    .into_iter()
-    .map(|(label, phase)| {
-        (
-            label,
-            State {
-                phase,
-                next_talk_id: 10,
-                ..State::initial()
-            },
-        )
-    })
-    .collect();
-    states.push((
-        "起動の挨拶の最中",
-        steady(active(1, super::BOOT_GREETING_ORIGIN)),
-    ));
+    let mut states = non_steady_states();
     let mut pending_close = steady(active(9, "OnMouseDoubleClick"));
     pending_close.pending_close = Some(CloseReason::System);
     states.push(("保留の終了", pending_close));
@@ -417,53 +280,6 @@ fn notify_is_not_accepted_outside_the_steady_state() {
         assert!(warn_or_above(&events).is_empty(), "{label}: {events:#?}");
         logged_once(&events, Level::DEBUG, "sstp_not_accepted");
     }
-}
-
-fn change_request() -> ChangeRequest {
-    ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: "C:/areka/ghost/r_post".to_string(),
-        },
-        origin: ChangeOrigin::Manual,
-        raise_event: true,
-    }
-}
-
-/// 起動の手順を実の `step` でたどり、起動の挨拶が流れている `Steady` まで進める。
-fn boot_until_greeting_playing(cfg: &KanadeConfig) -> State {
-    let reply = |s, outcome| {
-        step(
-            s,
-            Input::ShioriReply {
-                outcome,
-                origin: "test",
-            },
-            cfg,
-        )
-        .0
-    };
-    let (s, _) = step(State::initial(), Input::Boot, cfg);
-    let s = reply(s, ShioriOutcome::Notified); // BootInit → BootPrefetch
-    let s = reply(s, ShioriOutcome::NoContent); // BootPrefetch → BootType
-    let s = reply(
-        s,
-        ShioriOutcome::Value("\\h挨拶\\e".to_string(), areka_talk::SecurityLevel::Local),
-    ); // → BootVersion{挨拶}
-    let (s, _) = step(
-        s,
-        Input::TranslateDone(Ok(crate::schedule::translate::Translated::local(
-            "\\h挨拶\\e",
-        ))),
-        cfg,
-    );
-    let s = reply(s, ShioriOutcome::Notified); // → Steady{挨拶}
-    assert!(
-        matches!(&s.phase, Phase::Steady { talk: Some(t) } if t.origin == super::BOOT_GREETING_ORIGIN),
-        "挨拶が流れている Steady のはず"
-    );
-    s
 }
 
 /// 起動の挨拶の `TalkDone` の後は外から頼まれたイベントを受け付け、GET を 1 つ送る（要件 3.6）。
@@ -511,15 +327,14 @@ fn invalid_arguments_send_nothing_and_warn_once() {
         let (state, actions) = out.unwrap();
         assert!(actions.is_empty(), "{event:?} {refs:?}: 送らない");
         assert_eq!(fingerprint(&state), before, "{event:?} {refs:?}");
-        assert!(matches!(state.phase, Phase::Steady { .. }), "倒れない");
         assert_eq!(warn_or_above(&events).len(), 1, "{events:#?}");
         logged_once(&events, Level::WARN, "sstp_notify_invalid");
     }
 }
 
-/// 往復の失敗は控えを取り出したうえで今日の道（終了系列）へ渡す。
+/// 往復の失敗は控えを取り出したうえで `on_shiori_reply`（終了系列）へ渡す。
 #[test]
-fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
+fn failed_reply_takes_the_note_and_goes_to_on_shiori_reply() {
     let (state, actions) = notify_then_reply(
         steady(active(9, "OnMouseDoubleClick")),
         "OnX",
@@ -529,23 +344,20 @@ fn failed_reply_takes_the_note_and_goes_down_today_s_path() {
     );
     assert!(
         matches!(state.phase, Phase::Unloading { .. }),
-        "今日どおり終了系列へ: {}",
+        "終了系列へ: {}",
         phase_label(&state.phase)
     );
-    assert!(
-        actions
-            .iter()
-            .any(|a| matches!(a, Action::ShioriUnload | Action::ShioriRequest(_)))
-    );
+    assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
-/// ⑼ 外からの台本と返った台本の翻訳の Reference（要件 4.4・4.5）。殻が出どころで選ぶ組み立てを
-/// 依頼の出どころに当てて、送る Reference の列を確かめる。
+/// ⑼ 返った台本の翻訳の Reference（要件 4.5）。殻の組み立てを依頼の出どころに当てて、送る
+/// Reference の列を確かめる（外からの台本の Reference は `sstp_tests.rs` の
+/// `on_translate_sstp_has_reference0_and_reference1_only` で縛る）。
 #[test]
-fn translate_references_for_send_and_returned_script() {
+fn translate_references_for_returned_script() {
     let build = |req: &TranslateRequest| match &req.source {
         ScriptSource::Event(event) => on_translate(&req.script, event, req.status.clone()),
-        ScriptSource::SstpSend => on_translate_sstp(&req.script, req.status.clone()),
+        ScriptSource::SstpSend => panic!("返った台本は元のイベントの出どころで預ける"),
     };
     let refs_of = |call: ShioriCall| match call {
         ShioriCall::Get { id, references, .. } => {
@@ -554,17 +366,6 @@ fn translate_references_for_send_and_returned_script() {
         }
         ShioriCall::Notify { .. } => panic!("OnTranslate は GET"),
     };
-
-    let send = Input::SstpSend {
-        script: "\\h外\\e".to_string(),
-        strict: None,
-    };
-    let (_, actions) = step(steady(None), send, &config());
-    assert_eq!(
-        refs_of(build(translate_request(&actions))),
-        strings(&["\\h外\\e", "sstp-send,owned"]),
-        "外からの台本: Ref1＝sstp-send,owned・Ref2 以降なし"
-    );
 
     let (_, actions) = notify_then_reply(
         steady(None),

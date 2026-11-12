@@ -125,10 +125,14 @@ const ALLOWED_DIRECT_CALLS: &[(&str, &str)] = &[
          差すのは起こした側の受け手が開いている捕捉の窓（目印に答える受け手）のときだけで、\
          本番では差さない（actor-thread-log-capture 要件 3.6）",
     ),
+    (
+        "crates/areka-actor/tests/ui_span_test.rs",
+        "UI アクターの区間が poll の間だけ入ることを、区間の出入りを数える受け手で見る。共有の捕捉の受け手は区間を数えないので素の set_default が要る（audit-sylphya-actor #2）",
+    ),
 ];
 
 /// [`ALLOWED_DIRECT_CALLS`] の件数（逐語）。表を増やすときはここも編集する（要件 8.2）。
-const ALLOWED_DIRECT_CALLS_COUNT: usize = 5;
+const ALLOWED_DIRECT_CALLS_COUNT: usize = 6;
 
 /// ⑵ の別表（相対パス・理由）。
 const ALLOWED_GLOBAL_CAPTURE: &[(&str, &str)] = &[

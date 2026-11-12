@@ -94,7 +94,6 @@ pub(super) fn glyph_styles_of<'a>(
         table: actor_state.styles(),
         ids: actor_state.glyph_styles(),
         default: &resolved.font.looks.default,
-        current: actor_state.current_look(),
     }
 }
 

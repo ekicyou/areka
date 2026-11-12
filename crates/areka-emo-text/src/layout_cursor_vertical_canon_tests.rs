@@ -1,11 +1,13 @@
 //! 縦書き 2 方向（`vertical_rl`／`vertical_lr`）における `\_l` の**正典の着地**を、
 //! 「同じ結果を出す別経路」との一致として固定するテスト（タスク 5.1・検証表 V1〜V5）。
 //!
-//! # 兄弟ファイルとの分担（重複させない）
+//! # 兄弟ファイルとの分担
 //!
 //! - `layout_cursor_vertical_tests.rs` — 縦書き `\_l` の**着地値そのもの**（タスク 1.1 が現行値
-//!   として置き、1.2 の原点切替と 4.1 の語彙解禁が正典値へ書き換えた 15 本）。値が「どちらの
-//!   是正で動いたか」を行ごとに読み分けるための台帳であり、本ファイルはそれを重複させない。
+//!   として置き、1.2 の原点切替と 4.1 の語彙解禁が正典値へ書き換えた台帳）。値が「どちらの
+//!   是正で動いたか」を行ごとに読み分けるためのもの。着地が本ファイルの V1・V2・V4・V5 と同じ
+//!   5 本は本ファイルに値ごと含まれていたので、あちらから消した（`audit-emo-text-layout-draw`
+//!   指摘 28）。
 //! - 本ファイル — 値の逐語ではなく**正典が述べている性質**を固定する。すなわち
 //!   ⑴ `\_l[0,0]` の着地が文字描画範囲の**内側**であること（境界上＝範囲内・V1 の残り半分）、
 //!   ⑵ 列指定が**自動列送りと同値**であること（V2・V5）、
@@ -33,7 +35,9 @@
 //! 互いに相異なること）自体を、最初の 1 本で檻に入れてある——前提が劣化すると、以降の
 //! すべての「取り違えを検知する」主張が黙って無力化されるためである。
 
-use super::test_support::{IMAGE, glyphs, inline_positions, model};
+use super::test_support::{
+    IMAGE, cursor_px, glyph, glyphs, inline_positions, model, newline, rect_of,
+};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -78,39 +82,9 @@ fn layout_in(items: &[TextItem], visible: usize, mode: WritingMode) -> Vec<Posit
     layout_with(items, visible, &region_for(mode), mode)
 }
 
-/// 行矩形を `(left, top, right, bottom)` で取り出す。
-fn rect_of(line: &PositionedLine) -> (f32, f32, f32, f32) {
-    let r = &line.rect;
-    (r.left, r.top, r.right, r.bottom)
-}
-
 /// 列の位置（行送り軸の 2 辺）だけを取り出す。
 fn column_of(line: &PositionedLine) -> (f32, f32) {
     (line.rect.left, line.rect.right)
-}
-
-/// 全角グリフ 1 個。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
-/// 素の改行 1 個（`ratio = 1.0`）。
-fn newline() -> TextItem {
-    TextItem::LineBreak { ratio: 1.0 }
-}
-
-/// 絶対 px の `\_l[x,y]`。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
-    }
 }
 
 /// `\_l[,N]`（X 省略・Y は絶対 px）。
@@ -461,6 +435,11 @@ fn canon_example_relative_inline_step_advances_one_character_in_vertical_rl() {
         "字送り軸の移動が成立するので `\\_l` は列の分割点になる"
     );
     assert_eq!(
+        rect_of(&lines[0]),
+        (390.0, 0.0, 400.0, 10.0),
+        "1 文字目は 1 列目"
+    );
+    assert_eq!(
         column_of(&lines[1]),
         column_of(&reference[0]),
         "X 省略＝列は動かない"
@@ -521,6 +500,11 @@ fn canon_example_relative_inline_step_advances_one_character_in_vertical_lr() {
 
     let lines = layout_in(&[glyph(), cursor_inline_step(), glyph()], 2, mode);
     assert_eq!(lines.len(), 2);
+    assert_eq!(
+        rect_of(&lines[0]),
+        (0.0, 0.0, 10.0, 10.0),
+        "1 文字目は 1 列目"
+    );
     assert_eq!(column_of(&lines[1]), column_of(&reference[0]));
     assert_eq!(
         inline_positions(&lines[1]),
@@ -591,7 +575,7 @@ fn absolute_y_is_the_downward_inline_advance_in_all_three_writing_modes() {
 ///
 /// これを縦書きで守る檻は 5.1 以前に **0 本**だった。`horizontal_tb` と `vertical_lr` は
 /// `block_dir = +1` なので符号を落としても差が出ず、V3 は保留改行を挟まないのでこの経路を
-/// 通らない。実測: `layout.rs` の実効位置の仮適用（保留改行 `pending` を読み取り専用に
+/// 通らない。実測: `layout_scan.rs` の実効位置の仮適用（保留改行 `pending` を読み取り専用に
 /// 足し込む 1 行。行送りは `line_pitch_of` を通す）で `block_dir` を `1.0` に差し替えると
 /// 本テストだけが赤になる（Σ = 1 で 388 が 412 に、Σ = 2 で 376 が 424 に）。綴りでなく
 /// 「何の行か」で指す——係数の掛け合わせ方は装飾の導入で書き換わっている。

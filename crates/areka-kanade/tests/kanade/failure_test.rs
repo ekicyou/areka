@@ -1,28 +1,28 @@
 //! 失敗経路の統合検証（Req 2.5・4.8・4.9・5.4・6.1・6.2）。
 //!
 //! mock 結線（`super::common` のハーネス）で、kanade の失敗・停止・回復各経路を統合層で
-//! 決定的に観測する（実時間 sleep なし・全 join は期限付き・宙吊りしない）。検証する 4 系:
+//! 決定的に観測する（実時間 sleep なし・全 join は期限付き・宙吊りしない）。検証する 6 系:
 //!
 //! 1. **区別語彙ごとの呼出失敗 → 観測可能な終了**（Req 6.1）: [`ShioriFailure`] のうち終了へ
 //!    倒れる 4 語彙（Handshake／Timeout／Ipc／Internal）それぞれについて、boot 最初の呼出
 //!    （`OnInitialize`）をその語彙で失敗させ、kanade が終了系列（Unloading{Fault}→best-effort
 //!    Unload→Stopped）へ倒れて停止すること（kanade の期限付き join 成功＋Unload 記録）を観測する。
 //!    エラー応答（`Shiori`）は終了へ倒れないので 5 で別に見る。停止通知は Fault の種類と理由
-//!    （記録 `shiori_failed` の `error` と同じ文言）で届く（本仕様 要件 2.1・2.2・7.3）。
+//!    （記録 `shiori_failed` の `error` と同じ文言）で届く（`areka-P0-shiori-fault-notice` 要件 2.1・2.2・7.3）。
 //! 2. **死活報告 → 観測可能な停止**（Req 5.4）: boot 定常化後に `KanadeMsg::ShioriDown` を 2 種類
 //!    （接続できなかった・helper の終了）それぞれで注入し、kanade が Unloading{Fault}→Unload→Stopped
 //!    で停止すること（join 成功＋Unload 記録）と、停止通知が Fault の種類と理由（記録 `shiori_down`
-//!    の `reason` と同じ文言）で届くことを観測する（本仕様 要件 2.1・2.2）。
+//!    の `reason` と同じ文言）で届くことを観測する（`areka-P0-shiori-fault-notice` 要件 2.1・2.2）。
 //! 3. **未知 talk_id の再生完了通知 → 運行継続**（Req 2.5・6.2）: 採番されていない talk_id の
 //!    `TalkDone` を注入しても kanade は終了せず、その後 driven な close で初めて正常終了することを
 //!    観測する（未知 TalkDone は現 Phase 維持で無害）。
 //! 4. **全ての指示送信元切断 → 宙吊りにならず正常終了・停止観測**（Req 4.8・4.9・6.2）: kanade
 //!    inbox の全 Sender を drop すると `run_inbox` が切断で正常終了し、kanade の期限付き join が
 //!    成功する（受信待ちのままハングしない・4.9 の構造保証）。
-//! 5. **エラー応答 → 会話を続ける**（本仕様 要件 6.1・7.3）: SHIORI のエラー応答（400・500 など）は
+//! 5. **エラー応答 → 会話を続ける**（`areka-P0-shiori-fault-notice` 要件 6.1・7.3）: SHIORI のエラー応答（400・500 など）は
 //!    起動時（`OnInitialize`＝NOTIFY）でも会話中（`OnSecondChange`＝GET）でも止めず、返事なしと
 //!    同じ扱いで次の呼出へ進む。記録 `shiori_error_response` は 1 往復に 1 件。
-//! 6. **送出失敗・応答の切断 → 通信が切れた**（本仕様 要件 2.2）: SHIORI 側の受け口が先に閉じて
+//! 6. **送出失敗・応答の切断 → 通信が切れた**（`areka-P0-shiori-fault-notice` 要件 2.2）: SHIORI 側の受け口が先に閉じて
 //!    いると呼出の送出が失敗し、SHIORI 側が返事をせずに返信口を捨てると応答が切れる。どちらも終了
 //!    系列へ入り、停止通知は「通信が切れた」の種類で届く。応答の期限切れの腕は、無期限の受信
 //!    （`recv`）が期限切れを返さないので届かず、ここでは固定しない。
@@ -30,17 +30,17 @@
 use std::sync::mpsc;
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, KanadeStopped,
-    MonotonicMs, ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, TalkDone,
-    TalkEndReason, TalkId,
+    CloseReason, KanadeConfig, KanadeMsg, KanadeNotice, KanadeStopCause, MonotonicMs,
+    ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, TalkDone, TalkEndReason, TalkId,
 };
 
 use log_capture_kit::install_global_capture_all;
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FailKind, FailOn, Fixture, Harness,
-    QuitPolicy, RecordedCall, SinklessHarness, join_bounded, spawn_harness, spawn_harness_failing,
-    spawn_harness_failing_with_stop_sink, spawn_harness_no_sink, spawn_harness_with_stop_sink,
+    CallMethod, DEFAULT_TIMEOUT, Driven, FIXED_FAREWELL_SCRIPT, FailKind, FailOn, Fixture, Harness,
+    QuitPolicy, RecordedCall, SinklessHarness, join_bounded, position_of, send, single_stop_cause,
+    spawn_harness, spawn_harness_failing, spawn_harness_failing_with_stop_sink,
+    spawn_harness_no_sink, spawn_harness_with_stop_sink, tick,
 };
 
 /// 記録列に Unload（正規終了経路の best-effort unload）がちょうど 1 度現れることを確認する。
@@ -48,7 +48,7 @@ use super::common::{
 /// 設計「Error Categories」: ShioriFailure／ShioriDown いずれも Unloading{Fault} を経て
 /// best-effort Unload を発行してから Stopped へ進む。ゆえに Fault 経路の終了では Unload が
 /// 記録列に必ず 1 度現れる（宙吊りせず正規終了経路を通った直接証拠）。
-fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
+fn assert_unload_recorded_once(recorded: &[RecordedCall]) {
     let unload_count = recorded
         .iter()
         .filter(|c| c.method == CallMethod::Unload)
@@ -61,43 +61,27 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 }
 
 /// 停止通知が 1 件だけ届き、原因が Fault であることを確かめ、その中身を返す。
-///
-/// 呼び手は kanade を join してから読む——join の成功は終了系列の完了（停止通知の投函）の後なので、
-/// 通知は既に届いている。
 fn single_fault_notification(rx: &mpsc::Receiver<KanadeNotice>) -> ShioriFault {
-    let mut first = rx
-        .try_recv()
-        .expect("終了系列の完了で停止通知が 1 件届くはず");
-    // 定常に入っていれば、その通知（定常到達）が停止の通知より先に 1 件だけ届く。
-    if first == KanadeNotice::Steady {
-        first = rx
-            .try_recv()
-            .expect("終了系列の完了で停止通知が 1 件届くはず");
-    }
-    assert!(rx.try_recv().is_err(), "停止通知は 1 件だけのはず");
-    match first {
-        KanadeNotice::Stopped(KanadeStopped {
-            cause: KanadeStopCause::Fault(fault),
-            handoff: None,
-        }) => fault,
-        other => panic!(
-            "SHIORI の失敗で止まったなら停止の通知で原因は Fault・切替の中身は無しのはず: {other:?}"
-        ),
+    match single_stop_cause(rx) {
+        KanadeStopCause::Fault(fault) => fault,
+        other => panic!("SHIORI の失敗で止まったなら停止の原因は Fault のはず: {other:?}"),
     }
 }
 
-/// 記録 `event`（`kanade` の error）のうち、欄 `field` が `text` と同じ文言のものが残っているか。
+/// このファイルだけが注入する失敗の文言（記録の捕まえ口はバイナリで 1 つなので、他のテストの記録と混ざらない）。
+const INJECTED: &str = "failure_test だけが注入する失敗";
+
+/// `from` 番目以降の記録 `event`（`kanade` の error）のうち、欄 `field` が `text` と同じ文言のものが残っているか。
 ///
 /// 停止通知の理由が、対応する `error!` と同じ文言であることを確かめるのに使う。
 fn error_logged_with(
     buffer: &std::sync::Mutex<Vec<log_capture_kit::CapturedEvent>>,
+    from: usize,
     event: &str,
     field: &str,
     text: &str,
 ) -> bool {
-    buffer
-        .lock()
-        .expect("capture buffer mutex")
+    buffer.lock().expect("capture buffer mutex")[from..]
         .iter()
         .any(|ev| {
             ev.level == tracing::Level::ERROR
@@ -125,9 +109,9 @@ fn error_logged_with(
 ///   panic する（＝失敗が観測可能な終了へ写像されていないことを検出する）。
 /// - Fault 経路が Unload を発行しなければ `assert_unload_recorded_once` が落ちる。
 /// - 4 語彙をループで網羅し、いずれか 1 つでも終了しなければそのイテレーションで panic する。
-///   エラー応答（`Shiori`）は終了へ倒れない（本仕様 要件 6.1）ので、ケース 5 で別に見る。
+///   エラー応答（`Shiori`）は終了へ倒れない（`areka-P0-shiori-fault-notice` 要件 6.1）ので、ケース 5 で別に見る。
 ///
-/// # 停止通知の中身（本仕様 要件 2.1・2.2・7.3）
+/// # 停止通知の中身（`areka-P0-shiori-fault-notice` 要件 2.1・2.2・7.3）
 /// 停止通知は Fault で、種類は語彙ごとに期待した値（接続→接続できなかった・期限切れ→期限切れ・
 /// 通信→通信が切れた・内部→内部の失敗）、理由は注入した失敗の文言であり、記録 `shiori_failed` の
 /// `error` と同じ文言である。種類の写しを取り違えれば種類が、理由の運び方を変えれば理由が合わない。
@@ -144,20 +128,14 @@ fn each_failure_vocabulary_drives_observable_termination() {
         (FailKind::Ipc, ShioriFaultKind::Disconnected),
         (FailKind::Internal, ShioriFaultKind::Internal),
     ] {
-        // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure のバリアントに 1:1 対応する
-        // （`Shiori` の腕はケース 5 が受け持つ）。mock が注入するのと同じ文言で組み、停止通知の
-        // 理由の期待値にする（注入の文言が変われば理由が合わず赤になる）。
+        // mock と同じ `FailKind::make` と、このファイルだけの文言で組み、停止通知の理由の期待値にする
+        // （`Shiori` はケース 5 が受け持つ）。記録 `shiori_failed` も同じ文言で絞るので、起動の道が
+        // `shiori_failed` を出さなくなれば、他のテストの順に依らず赤になる。
         // `FailKind::Internal`（DD-IT-11・kanade 内部規律違反＝ホワイトリスト違反で choke が返す語彙）
         // も本ループで掃引し、`Failed(Internal)` が外部4語彙と同じく既存 fault 終端（Unloading{Fault}
         // →Unload→Stopped）へ合流することを統合層で確認する（設計 Testing Strategy #7・DD-IT-11:
         // choke の ID 検証自体は actor.rs in-source 檻が担い、本檻は Internal→fault の routing を担う）。
-        let witness: ShioriFailure = match kind {
-            FailKind::Handshake => ShioriFailure::Handshake("injected handshake failure".into()),
-            FailKind::Timeout => ShioriFailure::Timeout("injected timeout".into()),
-            FailKind::Ipc => ShioriFailure::Ipc("injected ipc failure".into()),
-            FailKind::Shiori => unreachable!("エラー応答はケース 5 で見る"),
-            FailKind::Internal => ShioriFailure::Internal("injected internal violation".into()),
-        };
+        let witness = kind.make(INJECTED);
 
         // boot 最初の呼出（OnInitialize NOTIFY）を当該語彙で失敗させる（停止通知の投函端つき）。
         let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
@@ -165,27 +143,18 @@ fn each_failure_vocabulary_drives_observable_termination() {
             KanadeConfig::new("master", "1.0.0"),
             Fixture::default(),
             QuitPolicy::PerTalk(vec![false]),
-            FailOn::on_initialize(kind),
-            Some(stop_tx),
+            FailOn::on_initialize(kind).with_text(INJECTED),
+            stop_tx,
         );
 
         // Boot を駆動 → OnInitialize 失敗 → Unloading{Fault} → Unload → Stopped → StopSelf。
-        harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-
-        let Harness {
-            sender,
-            kanade,
-            shiori,
-            sakura,
-        } = harness;
+        send(&harness, KanadeMsg::Boot);
 
         // 呼出失敗が観測可能な終了（停止）へ写像された証拠: kanade が期限内に join できる。
-        join_bounded("kanade failing-boot join", DEFAULT_TIMEOUT, kanade).unwrap_or_else(|_| {
-            panic!("kanade should terminate on injected OnInitialize failure ({kind:?})")
-        });
+        let Driven { recorded, .. } =
+            harness.finish(&format!("kanade failing-boot join ({kind:?})"));
 
         // Fault 経路の best-effort Unload が記録列に 1 度現れる（正規終了経路の直接証拠）。
-        let recorded = shiori.recorded();
         assert_unload_recorded_once(&recorded);
 
         // 停止通知は Fault の種類と理由つきで 1 件届く。
@@ -199,14 +168,10 @@ fn each_failure_vocabulary_drives_observable_termination() {
             "{kind:?} の失敗の停止通知は種類と理由を運ぶはず"
         );
         assert!(
-            error_logged_with(&buffer, "shiori_failed", "error", &fault.reason),
+            error_logged_with(&buffer, 0, "shiori_failed", "error", &fault.reason),
             "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
             fault.reason
         );
-
-        // 後片付け: kanade 停止後に全 Sender を drop → sakura sink スレッドも自然終了。
-        drop(sender);
-        sakura.join_bounded("mock-sakura failing-boot join", DEFAULT_TIMEOUT);
     }
 }
 
@@ -225,7 +190,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
 /// # 非空虚性
 /// - ShioriDown が終了を駆動しなければ kanade は Steady のまま止まらず join が期限超過して panic する。
 ///
-/// # 停止通知の中身（本仕様 要件 2.1・2.2）
+/// # 停止通知の中身（`areka-P0-shiori-fault-notice` 要件 2.1・2.2）
 /// 死活報告の 2 種類それぞれで、停止通知は Fault で、種類は「接続できなかった」→接続できなかった・
 /// 「helper の終了」→通信が切れた、理由は報告の理由そのもの（記録 `shiori_down` の `reason` と同じ
 /// 文言）。両方の理由を同じ綴りにしてあるので、種類を理由の綴りから判別していれば片方が合わない。
@@ -252,45 +217,33 @@ fn shiori_down_case(
     expected_kind: ShioriFaultKind,
 ) {
     let reason = "shiori went down (failure_test)";
+    // 捕まえ口は 2 ケースで共有なので、このケースの記録だけを見る（前のケースの記録で通らない）。
+    let from = buffer.lock().expect("capture buffer mutex").len();
     let (stop_tx, stop_rx) = mpsc::channel::<KanadeNotice>();
     let harness = spawn_harness_with_stop_sink(
         KanadeConfig::new("master", "1.0.0"),
         Fixture::default(),
         QuitPolicy::PerTalk(vec![false]),
-        Some(stop_tx),
+        stop_tx,
     );
 
     // 起動して定常運転へ落ち着かせる（boot 系列は Boot 処理内で同期完走する）。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send settle Tick");
+    send(&harness, KanadeMsg::Boot);
+    tick(&harness, 1_000);
 
     // 死活報告を注入 → 終了系列（Fault）へ。
-    harness
-        .sender
-        .send(KanadeMsg::ShioriDown {
+    send(
+        &harness,
+        KanadeMsg::ShioriDown {
             kind: down_kind,
             reason: reason.to_string(),
-        })
-        .expect("send ShioriDown");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
+        },
+    );
 
     // 死活報告が観測可能な停止へ写像された証拠: kanade が期限内に join できる。
-    join_bounded("kanade shiori-down join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates on ShioriDown (Req 5.4)");
+    let Driven { recorded, .. } = harness.finish("kanade shiori-down join");
 
     // Fault 経路の best-effort Unload が記録列に 1 度現れる。
-    let recorded = shiori.recorded();
     assert_unload_recorded_once(&recorded);
 
     // 停止通知は Fault の種類と理由つきで 1 件届く。
@@ -304,13 +257,10 @@ fn shiori_down_case(
         "{down_kind:?} の死活報告の停止通知は種類と理由を運ぶはず"
     );
     assert!(
-        error_logged_with(buffer, "shiori_down", "reason", &fault.reason),
+        error_logged_with(buffer, from, "shiori_down", "reason", &fault.reason),
         "停止通知の理由は記録 shiori_down の reason と同じ文言のはず: {:?}",
         fault.reason
     );
-
-    drop(sender);
-    sakura.join_bounded("mock-sakura shiori-down join", DEFAULT_TIMEOUT);
 }
 
 // ============================================================================
@@ -343,52 +293,37 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
     );
 
     // 起動して定常運転へ落ち着かせる。
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::Tick {
-            now: MonotonicMs(1_000),
-        })
-        .expect("send settle Tick");
+    send(&harness, KanadeMsg::Boot);
+    tick(&harness, 1_000);
 
     // 未知 talk_id の再生完了通知を注入（採番されていない 9999・reason=Ended）。現 Phase 維持で無害。
-    harness
-        .sender
-        .send(KanadeMsg::TalkDone(TalkDone {
+    send(
+        &harness,
+        KanadeMsg::TalkDone(TalkDone {
             talk_id: TalkId(9_999),
             reason: TalkEndReason::Ended,
             quit_reserved: false,
-        }))
-        .expect("send unknown TalkDone");
+        }),
+    );
 
     // 運行が継続していることを、driven な close で正常終了できることによって観測する。
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
+        },
+    );
 
     // 未知 TalkDone で終了・破綻していなければ、close→quit talk で終了系列が完走し join が成功する。
-    join_bounded("kanade unknown-talkdone join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade keeps running past unknown TalkDone, then terminates on driven close");
-
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura unknown-talkdone join", DEFAULT_TIMEOUT);
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade unknown-talkdone join");
 
     // 非空虚性の補強: 未知 TalkDone が Steady を離脱させていなければ、その後の close 握手が
     // OnClose の別れ Value を受けて close talk を 1 本起動する（＝運行が確かに継続していた証拠）。
     let farewell_started = started
         .iter()
-        .filter(|s| s.script == super::common::FIXED_FAREWELL_SCRIPT)
+        .filter(|s| s.script == FIXED_FAREWELL_SCRIPT)
         .count();
     assert_eq!(
         farewell_started, 1,
@@ -397,8 +332,12 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
     );
 
     // 終了系列を確かに通った証拠: 記録列末尾は Unload（close→quit talk→Unload→StopSelf）。
-    let recorded = shiori.recorded();
     assert_unload_recorded_once(&recorded);
+    assert_eq!(
+        recorded.last().map(|c| &c.method),
+        Some(&CallMethod::Unload),
+        "記録列の末尾は Unload のはず: {recorded:?}"
+    );
 }
 
 // ============================================================================
@@ -465,14 +404,13 @@ fn all_command_senders_dropped_terminates_normally_without_hang() {
 }
 
 // ============================================================================
-// ケース 5: エラー応答 → 返事なしと同じ扱いで会話を続ける（本仕様 要件 6.1・7.3）
+// ケース 5: エラー応答 → 返事なしと同じ扱いで会話を続ける（`areka-P0-shiori-fault-notice` 要件 6.1・7.3）
 // ============================================================================
 
 /// 記録 `shiori_error_response`（`kanade` の warn）のうち、`id` の往復で注入したエラー応答のものを数える。
 ///
 /// 記録は kanade のアクタースレッドで出るので、全スレッド捕捉の蓄積先から拾う。同じテスト
-/// バイナリの他のテストの記録も混ざるので、注入の文言（`FailKind::Shiori` が作る
-/// `"injected shiori error"`）と `id` で絞る（このケース以外にエラー応答を注入するテストは無い）。
+/// バイナリの他のテストの記録も混ざるので、このファイルだけが注入する文言（[`INJECTED`]）と `id` で絞る。
 fn count_error_response_records(
     buffer: &std::sync::Mutex<Vec<log_capture_kit::CapturedEvent>>,
     id: &str,
@@ -486,18 +424,9 @@ fn count_error_response_records(
                 && ev.target == "kanade"
                 && ev.field_str("event") == Some("shiori_error_response")
                 && ev.field("id") == Some(id)
-                && ev
-                    .field("error")
-                    .is_some_and(|e| e.contains("injected shiori error"))
+                && ev.field("error").is_some_and(|e| e.contains(INJECTED))
         })
         .count()
-}
-
-/// 記録列で `method` の `id` の呼出が最初に現れる位置。
-fn position_of(recorded: &[RecordedCall], method: CallMethod, id: &str) -> Option<usize> {
-    recorded
-        .iter()
-        .position(|c| c.method == method && c.id == id)
 }
 
 /// close 指示で終わったこと（Fault で止まっていないこと）を確かめる。
@@ -544,30 +473,20 @@ fn error_response_at_boot_notify_continues_as_notified() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn::on_initialize(FailKind::Shiori),
+        FailOn::on_initialize(FailKind::Shiori).with_text(INJECTED),
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
             reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
+        },
+    );
 
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade boot-error-response join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close, not via the error response");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura boot-error-response join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade boot-error-response join");
 
     // (1) エラー応答のあとも起動が進んだ: OnInitialize の後に OnBoot GET が記録される。
     let init = position_of(&recorded, CallMethod::Notify, "OnInitialize")
@@ -606,41 +525,23 @@ fn error_response_at_conversation_get_continues_as_no_content() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn {
-            id: "OnSecondChange",
-            kind: FailKind::Shiori,
+        FailOn::new("OnSecondChange", FailKind::Shiori).with_text(INJECTED),
+    );
+
+    send(&harness, KanadeMsg::Boot);
+    for i in 1..=2 {
+        tick(&harness, i * 1_000);
+    }
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
+            reason: CloseReason::User { scope: 0 },
         },
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    for i in 1..=2 {
-        harness
-            .sender
-            .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
-            })
-            .expect("send Tick");
-    }
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade steady-error-response join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade terminates via the driven close, not via the error response");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura steady-error-response join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade steady-error-response join");
 
     // (1) エラー応答のあとも会話が続いた: 次の Tick の OnSecondChange GET も記録される（計 2 件）。
     assert_eq!(
@@ -678,33 +579,20 @@ fn error_response_at_close_get_closes_silently() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::quitting().without_boot_greeting(),
         QuitPolicy::PerTalk(vec![true]),
-        FailOn {
-            id: "OnClose",
-            kind: FailKind::Shiori,
+        FailOn::new("OnClose", FailKind::Shiori).with_text(INJECTED),
+    );
+
+    send(&harness, KanadeMsg::Boot);
+    send(
+        &harness,
+        KanadeMsg::CloseRequest {
+            reason: CloseReason::User { scope: 0 },
         },
     );
 
-    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
-    harness
-        .sender
-        .send(KanadeMsg::CloseRequest {
-            reason: CloseReason::User { scope: 0 },
-        })
-        .expect("send CloseRequest");
-
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-
-    join_bounded("kanade close-error-response join", DEFAULT_TIMEOUT, kanade)
-        .expect("OnClose のエラー応答は返事なしとして無言で閉じ、kanade は期限内に終わるはず");
-    drop(sender);
-    let started = sakura.started();
-    sakura.join_bounded("mock-sakura close-error-response join", DEFAULT_TIMEOUT);
-    let recorded = shiori.recorded();
+    let Driven {
+        recorded, started, ..
+    } = harness.finish("kanade close-error-response join");
 
     // (1) OnClose GET は発行され、別れの talk は起きない（返事なし＝無言の終了）。
     assert!(
@@ -733,7 +621,7 @@ fn error_response_at_close_get_closes_silently() {
 }
 
 // ============================================================================
-// ケース 6: 送出失敗 → 通信が切れた（本仕様 要件 2.2）
+// ケース 6: 送出失敗 → 通信が切れた（`areka-P0-shiori-fault-notice` 要件 2.2）
 // ============================================================================
 
 /// SHIORI 側の受け口が先に閉じていると、起動の最初の呼出の送出が失敗して終了系列へ入り、停止通知は
@@ -756,7 +644,7 @@ fn send_failure_delivers_a_disconnected_fault() {
         KanadeConfig::new("master", "1.0.0"),
         Fixture::default(),
         QuitPolicy::PerTalk(vec![false]),
-        Some(stop_tx),
+        stop_tx,
     );
     let Harness {
         sender,
@@ -788,13 +676,13 @@ fn send_failure_delivers_a_disconnected_fault() {
         "送出失敗の停止通知は「通信が切れた」の種類と理由を運ぶはず"
     );
     assert!(
-        error_logged_with(&buffer, "shiori_failed", "error", &fault.reason),
+        error_logged_with(&buffer, 0, "shiori_failed", "error", &fault.reason),
         "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
         fault.reason
     );
 
     drop(sender);
-    sakura.join_bounded("mock-sakura send-failure join", DEFAULT_TIMEOUT);
+    let _ = sakura.join_bounded_then_commands("mock-sakura send-failure join", DEFAULT_TIMEOUT);
 }
 
 /// SHIORI 側が返事をせずに返信口を捨てると（応答の切断）、停止通知は「通信が切れた」の種類と、
@@ -852,7 +740,7 @@ fn reply_dropped_delivers_a_disconnected_fault() {
         "応答の切断の停止通知は「通信が切れた」の種類と理由を運ぶはず"
     );
     assert!(
-        error_logged_with(&buffer, "shiori_failed", "error", &fault.reason),
+        error_logged_with(&buffer, 0, "shiori_failed", "error", &fault.reason),
         "停止通知の理由は記録 shiori_failed の error と同じ文言のはず: {:?}",
         fault.reason
     );

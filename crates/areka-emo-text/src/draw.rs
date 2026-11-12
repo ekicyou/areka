@@ -1,7 +1,7 @@
 //! # draw — DirectWrite/D2D 描画実行（COM 層・ファサード）
 //!
 //! `DrawExecutor`（可視窓の全域再描画・比較専用オラクル）とフォント解決・縦書きレシピの
-//! lift・書式生成を担う。役割ごとに 2 つの子モジュール（兄弟ファイル）へ分かれる:
+//! lift・書式生成を担う。役割ごとに 3 つの子モジュール（兄弟ファイル）へ分かれる:
 //!
 //! | ファイル | 担当 |
 //! |---|---|
@@ -11,12 +11,12 @@
 //! | `draw_catalog.rs` | [`FontCatalog`]（フォント候補列→顔（家族・太さ・幅・斜体）の解決＝家族名、無ければ GDI の名前で引く・記憶・記録の 1 度化） |
 //!
 //! 子は `super::` でファサードの定数・型・ヘルパを辿り、ファサードが再輸出するので
-//! crate 内から見た入口（`crate::draw::DWriteMetrics` 等）は分割前と同一。
+//! crate 内から見た入口は `crate::draw::DWriteMetrics` 等の形になる。
 //!
 //! **層規律**: COM 層——UI スレッド専有。`windows`（DirectWrite/D2D）を触るのは
 //! 本モジュール群と surface のみ。失敗は log-first（`tracing::error!`＋`Err`）で扱い panic しない。
 //!
-//! ## フォント解決＋方向レシピ（task 6.1・R4.1/R4.2/R10.3）
+//! ## フォント解決＋方向レシピ（R4.1/R4.2/R10.3）
 //!
 //! - [`ResolvedFont`]: balloon 定義（[`BalloonModel`] の `Font`）から描画・レイアウト生成に
 //!   必要な設定一式を解決する。欠落は ukadoc 既定へフォールバック
@@ -24,9 +24,10 @@
 //! - [`DirectionRecipe`]: `writing_mode` の解釈結果 [`WritingMode`] から DirectWrite の
 //!   方向設定 4 点（Reading/Flow/Text/Paragraph）を一意に導出する。レシピは
 //!   wintf `typewriter_layout.rs` 実証済みレシピの **lift（複製）**——wintf の
-//!   テキスト widget system へは依存しない（steering 記憶 areka-emo-owns-drawing-wintf-lift）。
+//!   テキスト widget system へは依存しない（決めは完了 spec `areka-P0-emo-text-layer` の
+//!   design.md の依存の節）。
 //! - [`create_text_format`]: 上記 2 つを実 `IDWriteTextFormat` へ焼き込む
-//!   （生成失敗は warn→既定フォント再試行→なお失敗は `Device` エラー・R4.2）。
+//!   （生成失敗は `error!`＋`Device` エラー・既定の書体で作り直さない＝指摘 35）。
 //! - 無効表示の層（`disable.font.*`）は [`ResolvedFont::looks`] で**実体化済み**
 //!   （要件 4.4——`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
 //!   **型シームのみ・実挙動なし**のまま残る（予約）。
@@ -37,7 +38,7 @@
 //!   `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、寄せの追跡先は
 //!   `text-align-shadow-canon`。
 //!
-//! ## 計測専用 probe layout（task 6.2・R4.5・probe 規約）
+//! ## 計測専用 probe layout（R4.5・probe 規約）
 //!
 //! [`DWriteMetrics`]: **未折返しの測定専用 probe TextLayout** の cluster metrics から
 //! [`GlyphMetrics`] を実装し、純粋層 `LayoutEngine` へ実測送り幅を注入する
@@ -48,11 +49,13 @@
 //!   （フォント・サイズ・writing_mode 写像設定込み）で生成する。
 //! - probe layout は折返し無効寸（[`PROBE_MAX_EXTENT`]）で組む＝未折返し。
 //! - 計測結果はキャッシュ可（追記単調ゆえ確定内容の metrics は不変）——本実装は
-//!   文字単位キャッシュ（format 固定につき 同一文字→同一送り幅の決定論）。
+//!   「計測鍵（[`FontKey`](crate::look::FontKey)）と文字」の組で覚える（同じ組なら同じ送り幅の決定論）。
+//!   既定の鍵以外の表と、既定の鍵の測れなかった字・複数のスカラーの字（クラスタ）は台詞の切れ目で
+//!   捨てる（[`DWriteMetrics`] の `sync_talk`）。
 //!
-//! ## 全域再描画オラクル（旧 task 6.3・R3.1/R7.3・task 5 で `#[cfg(test)]` 化）
+//! ## 全域再描画オラクル（R3.1/R7.3・`#[cfg(test)]`）
 //!
-//! [`DrawExecutor`]: **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み）。
+//! [`DrawExecutor`]: **比較専用の独立オラクル**（本番の描き手は `ViewboxExecutor`）。
 //! 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の front＝`front_tex`）へ
 //! 透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
 //!
@@ -60,14 +63,14 @@
 //!   [`VisibleWindow`] の `first_visible_line`＋`block_offset` を消費するだけで、
 //!   スクロール判定は持たない。
 //! - **行 TextLayout キャッシュ**: 行内容が不変（確定行＝リビール完了行）なら再利用し、
-//!   リビール中の行のみ都度更新する。[`DrawExecutor::clear_cache`]（Clear cue の適用点）
-//!   のみが全破棄する。
+//!   リビール中の行のみ都度更新する。全破棄は [`DrawExecutor::clear_cache`]（Clear cue の
+//!   適用点）と、フォント/方向の変更で書式を組み直す `ensure_format` の 2 か所。
 //! - **スケール一点適用**: 描画ターゲットへの `SetTransform(scale(k))` 一点のみ
 //!   （k＝`ScaleContract::scale`）。レイアウト・行 TextLayout は image px（96 DPI 名目
 //!   ＝DIP と同一視）のままで、DPI API との二重適用は構造的に存在しない。
 //! - Image/Surface 住人（M1 型シーム）は `warn!`（executor ごと初回のみ）＋skip（R8.5）。
 //!
-//! ## probe/描画 一致 invariant（task 6.4・R4.5/R6.1–6.3/R7.5）
+//! ## probe/描画 一致 invariant（R4.5/R6.1–6.3/R7.5）
 //!
 //! probe（1 文字＝クラスタ 1 つごとの計測）と描画行 TextLayout の cluster advance の**同値** invariant は
 //! 本モジュールの統合テスト（`probe_advances_match_drawn_line_advances_per_cluster`／
@@ -117,7 +120,7 @@ use crate::writing::WritingMode;
 
 // 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
 // （ViewboxExecutor）は viewbox_draw.rs 側で自前に持つため、非テストビルドの dead import を
-// 避けるべく cfg(test) へ隔離する（オラクル隔離の一部・task 5）。
+// 避けるべく cfg(test) へ隔離する（オラクル隔離の一部）。
 #[cfg(test)]
 use crate::canvas::{ContentCanvas, ResidentContent};
 #[cfg(test)]
@@ -137,10 +140,10 @@ use wintf::ecs::GraphicsCore;
 // 子モジュール（役割ごとの兄弟ファイル）と再輸出
 // ---------------------------------------------------------------------------
 //
-// 本ファイルはファサードで、計測（`draw_metrics.rs`）と行レイアウトの記憶
-// （`draw_line_store.rs`）は子モジュールが持つ。子は `super::` で本ファイルの
-// 定数・型・ヘルパを辿る。再輸出により crate 内から見た入口（`crate::draw::DWriteMetrics`
-// ／`crate::draw::LineLayoutStore`）は分割前と同一のまま。
+// 本ファイルはファサードで、計測（`draw_metrics.rs`）・行レイアウトの記憶
+// （`draw_line_store.rs`）・書体の候補列の解決（`draw_catalog.rs`）は子モジュールが持つ。
+// 子は `super::` で本ファイルの定数・型・ヘルパを辿る。再輸出により crate 内から見た入口は
+// `crate::draw::DWriteMetrics`／`crate::draw::LineLayoutStore`／`crate::draw::FontCatalog` の形になる。
 
 #[path = "draw_metrics.rs"]
 mod metrics;
@@ -157,11 +160,12 @@ pub use metrics::DWriteMetrics;
 #[cfg(test)]
 pub(crate) use metrics::measure_font_metrics;
 
-/// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
-pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
+/// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。見た目の側の正典の別名（1 か所に書く）。
+pub const DEFAULT_FONT_NAME: &str = crate::look::UKADOC_DEFAULT_FONT_NAME;
 
 /// 既定フォント高さ 12（**image px**・「単位はピクセル：ポイントではない」・ukadoc 既定・R4.1/R4.2）。
-pub const DEFAULT_FONT_HEIGHT: f32 = 12.0;
+/// 見た目の側の正典の別名。
+pub const DEFAULT_FONT_HEIGHT: f32 = crate::look::UKADOC_DEFAULT_FONT_HEIGHT;
 
 /// 文字を描くときの描画オプションの唯一の定義点（色つきの字形を出す）。
 ///
@@ -178,9 +182,11 @@ pub(crate) const TEXT_DRAW_OPTIONS: D2D1_DRAW_TEXT_OPTIONS =
 /// TextFormat のロケール（wintf typewriter レシピからの lift・日本語正準）。
 const LOCALE_JA_JP: &str = "ja-JP";
 
-/// probe layout の折返し無効寸（image px）。行内軸・行送り軸の双方へ与え、
-/// probe を**未折返し**にする（probe 規約——バルーン寸は image px で高々数百・
-/// font.height も高々数十のため 1e6 は実用上無限）。
+/// probe layout と行 TextLayout の折返し無効寸（image px）。行内軸へ与え（行送り軸は
+/// `block_extent`・[`create_line_layout`]）、DirectWrite に**折り返させない**（probe 規約）。
+/// 字の大きさに上限は無い（`\f[height,N]`・指摘 20）ので 1e6 より長い行もありうるが、それでも
+/// 折り返らない: 描画範囲（image px で高々数百）より長い行は純粋層の折返し（`layout_scan_glyph.rs`
+/// の ③'）で字が 1 つだけになり、DirectWrite は 1 つのクラスタの中では折り返さない。
 pub const PROBE_MAX_EXTENT: f32 = 1.0e6;
 
 /// バルーン背景色の既定（白）——無効表示の混色の相手がまだ分からないときに使う
@@ -195,10 +201,11 @@ pub const DEFAULT_BALLOON_BACKGROUND: (u8, u8, u8) = (255, 255, 255);
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedFont {
-    /// 採用フォント名（`font.name` 先頭名 or [`DEFAULT_FONT_NAME`]・M1 は先頭のみ消費）。
+    /// `font.name` の先頭名 or [`DEFAULT_FONT_NAME`]。[`FontCatalog::pick`] が解いた後は、候補列の
+    /// うち実在した顔の家族名（全滅なら [`DEFAULT_FONT_NAME`]）に差し替わる。
     pub name: String,
-    /// カンマ区切り複数指定（SSP 拡張）の残余名——フォールバック連鎖の**型シーム**
-    /// （M1 未消費・design.md「フォールバック連鎖は型シーム」）。
+    /// カンマ区切り複数指定（SSP 拡張）の残余名。[`name`](Self::name) に続けて候補列
+    /// （`looks.default.name`）に入り、[`FontCatalog::pick`] が記述順に試す。
     pub fallback_chain: Vec<String>,
     /// フォント高さ（image px・DirectWrite fontsize へ素通し・欠落/0 は [`DEFAULT_FONT_HEIGHT`]）。
     pub height: f32,
@@ -225,8 +232,8 @@ impl ResolvedFont {
     /// balloon 定義からフォント設定一式を解決する（R4.1/R4.2）。
     ///
     /// - `font.name` 欠落 → [`DEFAULT_FONT_NAME`]（ukadoc 既定＝正常系・ログなし）。
-    ///   カンマ区切り複数指定は先頭名を採用し残余を [`fallback_chain`](Self::fallback_chain)
-    ///   に保持（M1 未消費）。宣言はあるが実質空（空文字/空白/カンマのみ）は縮退
+    ///   カンマ区切り複数指定は先頭名を `name`、残余を [`fallback_chain`](Self::fallback_chain)
+    ///   に置き、全体を候補列にする（顔は [`FontCatalog::pick`] が記述順に解く）。宣言はあるが実質空（空文字/空白/カンマのみ）は縮退
     ///   （`warn!`＋既定フォント）。
     /// - `font.height` 欠落 → [`DEFAULT_FONT_HEIGHT`]（正常系・ログなし）。
     ///   `0` は DirectWrite fontsize の正値制約を満たせない縮退値（`warn!`＋既定値）。
@@ -392,9 +399,9 @@ impl DirectionRecipe {
 /// 顔は `font.face`（[`FontCatalog::pick`] が解決した顔）、太字・斜体は既定の見た目
 /// （バルーン定義の `font.bold`／`font.italic`）を [`FontFace`] の規則で重ねる（要件 4.8／4.9）。
 ///
-/// フォント生成失敗（Error Categories・R4.2）: `warn!`→[`DEFAULT_FONT_NAME`] で同じ太字・斜体のまま再試行→
-/// なお失敗は `error!`＋[`TextLayerError::Device`]（panic しない）。
-/// task 6.2 の計測専用 probe layout も**同一のこの format 生成経路**を用いる前提
+/// フォント生成失敗（Error Categories）: `error!`＋[`TextLayerError::Device`] を 1 件（panic しない・
+/// 既定の書体での作り直しはしない＝指摘 35）。
+/// 計測専用 probe layout（[`DWriteMetrics`]）も**同一のこの format 生成経路**を用いる前提
 /// （probe 規約: 描画と同一 TextFormat）。
 pub fn create_text_format(
     factory: &IDWriteFactory2,
@@ -402,29 +409,22 @@ pub fn create_text_format(
     mode: WritingMode,
 ) -> Result<IDWriteTextFormat, TextLayerError> {
     let (bold, italic) = (font.looks.default.bold, font.looks.default.italic);
-    let format = match try_create_format(factory, &font.face, bold, italic, font.height) {
-        Ok(format) => format,
-        Err(e) => {
-            warn!(
+    // 作り直しはしない（指摘 35）: CreateTextFormat は書体の在る無しを確かめず、顔は pick が
+    // 解いてある。断られるのは大きさが不正なときだけで、同じ大きさで作り直しても断られる。
+    let format =
+        try_create_format(factory, &font.face, bold, italic, font.height).map_err(|e| {
+            let hresult = e.code().0;
+            tracing::error!(
+                hresult,
                 font_name = font.name.as_str(),
-                hresult = e.code().0,
-                "TextFormat 生成に失敗——既定フォント ＭＳ ゴシック で再試行する"
+                font_height = font.height,
+                "TextFormat 生成に失敗"
             );
-            let retry = FontFace::regular(DEFAULT_FONT_NAME);
-            try_create_format(factory, &retry, bold, italic, font.height).map_err(|e| {
-                let hresult = e.code().0;
-                tracing::error!(
-                    hresult,
-                    font_height = font.height,
-                    "既定フォントでも TextFormat 生成に失敗"
-                );
-                TextLayerError::Device {
-                    hresult,
-                    context: "CreateTextFormat",
-                }
-            })?
-        }
-    };
+            TextLayerError::Device {
+                hresult,
+                context: "CreateTextFormat",
+            }
+        })?;
     DirectionRecipe::for_mode(mode).apply(&format)?;
     Ok(format)
 }
@@ -534,27 +534,26 @@ pub(crate) fn create_line_layout(
 
 /// 行 TextLayout の format 前提（既定の見た目のフォント鍵＝候補列・高さビット・太字・斜体と
 /// writing_mode）——書式を決める値すべて。変わるとキャッシュ済み行レイアウトの前提が崩れるため
-/// format と行キャッシュを組み直す（本番 `ViewboxExecutor` の `FormatKey` と同じ形・viewbox_draw.rs）。
+/// format と行キャッシュを組み直す（本番 `ViewboxExecutor` の `FormatKey` は既定の見た目の全項目を
+/// 持つ——こちらは毎フレーム全域を描き、線を行に焼かないので書式を決める値だけでよい）。
 ///
 /// 比較専用オラクル [`DrawExecutor`] 専用——ゆえにオラクルと同じ `#[cfg(test)]` で保全する。
 #[cfg(test)]
 type FormatKey = (crate::look::FontKey, WritingMode);
 
-/// **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み・除去は本ユニットの
-/// 範囲外——別決断）。live-diff で viewbox とバイト比較するために全域再描画方式を
-/// `#[cfg(test)]` で保全する（task 5・design.md「draw.rs の再編（LineLayoutStore 抽出＋
-/// オラクル化）」）。render のロジック・origin 式は viewbox 都合で一切変えない——変えれば
-/// 比較の意味を失う（オラクルの独立性）。
+/// **比較専用の独立オラクル**（本番の描き手は `ViewboxExecutor`）。live-diff で viewbox と
+/// バイト比較するために全域再描画方式を `#[cfg(test)]` で持つ。render のロジック・origin 式は
+/// viewbox 都合で一切変えない——変えれば比較の意味を失う（オラクルの独立性）。
 ///
-/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
-/// （旧 task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
+/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部（R3.1/R7.3）。
 ///
 /// 毎更新、TextSurface の front（`front_tex`・オフスクリーン D2D ターゲット）を透明 clear→
 /// 可視窓の行を描画する（差分描画なし）。スクロールも同経路（可視窓決定は純粋層の
 /// [`VisibleWindow`] が済ませている——R7.4 分離シームの描画実行側）。
 ///
 /// - **行 TextLayout キャッシュ**: 確定行（内容不変）は再生成しない・リビール中の行のみ
-///   都度更新・[`clear_cache`](Self::clear_cache)（Clear cue 適用点）のみ全破棄。
+///   都度更新・全破棄は [`clear_cache`](Self::clear_cache)（Clear cue 適用点）と書式の組み直し
+///   （`ensure_format`）の 2 か所。
 /// - **スケール一点適用**: `SetTransform(scale(k))` を描画ターゲットへ一度だけ適用
 ///   （k＝[`ScaleContract::scale`]・フォントサイズ/レイアウトは image px のまま）。
 /// - 失敗は log-first（`error!`＋`Err`・当該フレーム skip・次フレーム再試行）・panic 禁止。
@@ -569,8 +568,10 @@ pub struct DrawExecutor {
     /// 描画/計測共用 format（[`create_text_format`] 経路・FormatKey 不変なら再利用）。
     format: Option<(FormatKey, IDWriteTextFormat)>,
     /// 行 TextLayout の生成・キャッシュストア（[`LineLayoutStore`]・両描画実行が同一経路で
-    /// 行レイアウトを得るための共有資産＝抽出前の内蔵キャッシュと byte 等価・RN5）。
+    /// 行レイアウトを得るための共有資産＝byte 等価の構造前提・RN5）。
     line_store: LineLayoutStore,
+    /// 書体の台帳（本番の `ViewboxExecutor::ensure_format` と同じく `pick` で解いてから作る・指摘 34）。
+    fonts: FontCatalog,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・R8.5）。
     seam_warned: bool,
 }
@@ -591,14 +592,16 @@ impl DrawExecutor {
         let dc = d2d
             .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
             .map_err(device_err("CreateDeviceContext(DrawExecutor)"))?;
-        // 行キャッシュは共有ストアへ抽出済み。store の factory は `dwrite` の別 clone
-        // （`ensure_format` が `dwrite` を使い続けるため本体にも保持する・最小変更）。
+        // 行キャッシュは共有ストアが持つ。store の factory は `dwrite` の別 clone
+        // （`ensure_format` が `dwrite` を使い続けるため本体にも保持する）。
         let line_store = LineLayoutStore::new(&dwrite);
+        let fonts = FontCatalog::new(&dwrite)?;
         Ok(DrawExecutor {
             dwrite,
             dc,
             format: None,
             line_store,
+            fonts,
             seam_warned: false,
         })
     }
@@ -659,7 +662,10 @@ impl DrawExecutor {
                 continue;
             }
             let text = crate::inline_marker::line_text(&run.glyphs);
-            let layout = self.line_layout(index, &text, &format, font.height, mode)?;
+            // 内容不変なら再利用・変化時のみ生成（規則は共有ストアに一元化・両描画実行の byte 等価前提・RN5）。
+            let layout = self
+                .line_store
+                .line_layout(index, &text, &format, font.height, mode)?;
             let (dx, dy) = resident.transform.offset();
             let origin = match mode {
                 WritingMode::HorizontalTb => Vector2 {
@@ -735,30 +741,13 @@ impl DrawExecutor {
             );
             self.line_store.clear();
         }
-        let format = create_text_format(&self.dwrite, font, mode)?;
+        let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
         self.format = Some((key, format.clone()));
         Ok(format)
     }
 
-    /// 行 TextLayout の取得（共有ストア [`LineLayoutStore::line_layout`] へ委譲）。
-    ///
-    /// 内容不変なら再利用・変化時のみ生成して置換——生成規則・キー・再利用規律は
-    /// すべて共有ストア側に一元化されている（両描画実行の byte 等価前提・RN5）。
-    fn line_layout(
-        &mut self,
-        index: usize,
-        text: &str,
-        format: &IDWriteTextFormat,
-        font_height: f32,
-        mode: WritingMode,
-    ) -> Result<IDWriteTextLayout, TextLayerError> {
-        self.line_store
-            .line_layout(index, text, format, font_height, mode)
-    }
-
     /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻・共有ストアの
     /// 常時コンパイルカウンタを既存テストの usize 比較へ写す）。
-    #[cfg(test)]
     fn line_layout_creations(&self) -> usize {
         self.line_store.creations() as usize
     }
@@ -804,7 +793,7 @@ fn create_target_bitmap(
 
 #[cfg(test)]
 #[path = "draw_test_support.rs"]
-mod test_support;
+pub(crate) mod test_support;
 
 #[cfg(test)]
 #[path = "draw_format_metrics_tests.rs"]

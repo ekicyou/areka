@@ -182,7 +182,7 @@ pub(super) fn after(state: &mut State, replied: Replied, actions: Vec<Action>) -
 /// ⑷ 元のイベントが `OnTranslate` でない（外から頼まれた `OnTranslate` の応答を再び翻訳しない）。
 ///
 /// ⑴⑶ を満たして ⑵ か ⑷ を満たさないとき、または元のイベントが分からないとき（構造上は
-/// 起きない）は、記録を 1 件残して今日どおり再生する。相・採番・期限・控えは腕が決めたまま
+/// 起きない）は、記録を 1 件残して翻訳せずに再生する。相・採番・期限・控えは腕が決めたまま
 /// 触らない。Status は捕まえた時点（腕が相を決めた後＝再生を始める時点）の状態から導く。
 fn capture(state: &mut State, replied: Replied, actions: Vec<Action>) -> Vec<Action> {
     let Some(script) = replied.script else {

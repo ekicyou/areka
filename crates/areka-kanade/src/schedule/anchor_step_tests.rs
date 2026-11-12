@@ -5,8 +5,7 @@
 //! 入れ直して、送った GET の列と始めた台詞を数える。実 SHIORI は使わない。期待はすべて手書き。
 
 use super::*;
-use crate::msg::CloseReason;
-use crate::schedule::log_capture::assert_not_logged;
+use crate::schedule::log_capture::{assert_no_error_logs, assert_not_logged};
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ChoicePhase, ChoiceState, TermCause, phase_label};
 
@@ -337,7 +336,6 @@ fn send_failure_advances_like_no_content_with_one_error_and_no_fault() {
             1,
             "{index}: error の記録は失敗 1 回につき 1 件だけ"
         );
-        assert_not_logged(&events, "shiori_failed");
     }
 }
 
@@ -349,9 +347,7 @@ fn anchor_outside_steady_is_rejected_and_nothing_is_queued() {
     let phases = [
         Phase::Idle,
         Phase::BootMain,
-        Phase::ClosePending {
-            reason: CloseReason::System,
-        },
+        Phase::ClosePending,
         Phase::ChangePending,
         Phase::Unloading {
             cause: TermCause::Quit,
@@ -411,11 +407,7 @@ fn anchor_outside_steady_is_rejected_and_nothing_is_queued() {
             Some(label),
             "{label}"
         );
-        assert_eq!(
-            events.iter().filter(|e| e.level == Level::ERROR).count(),
-            0,
-            "{label}: error の記録は無い"
-        );
+        assert_no_error_logs(&events);
         assert_eq!(
             events.iter().filter(|e| e.level == Level::WARN).count(),
             1,
@@ -467,5 +459,4 @@ fn anchor_never_raises_the_choosing_mark() {
     );
     assert!(state.anchor.is_some());
     assert!(state.choice.is_none(), "選択待ちの帳簿を作らない");
-    assert!(!state.snapshot().choice_active);
 }

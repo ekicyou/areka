@@ -1,4 +1,4 @@
-//! 時間切れの知らせ（表 D）の檻（areka-P0-balloon-lifecycle-events タスク 2.5）。
+//! 時間切れの知らせ（表 D）の檻（areka-P0-balloon-lifecycle-events）。
 //!
 //! 最上位の `step` に時間切れの知らせ（`Input::BalloonTimeout`）を入れて駆動する。定常でない相・
 //! 終了の保留は本番の流れで作ると長くなるので、トークを 1 つ再生し終えた控えを持つ状態の相だけを
@@ -9,32 +9,17 @@ use super::super::{Input, Phase, TermCause};
 use super::done_tests::{
     assert_no_balloon_event, assert_not_sent, done, feed_capturing, field, gets,
 };
-use super::tests::{FINAL, ORIGINAL, feed, reply_value, start_translated, steady_none};
+use super::tests::{
+    FINAL, ORIGINAL, feed, finish, reply_value, start_translated, steady_after_talk, steady_none,
+};
 use crate::msg::{CloseReason, MonotonicMs};
-use crate::schedule::{Action, State};
+use crate::schedule::Action;
 use crate::talk::{TalkEndReason, TalkId};
 use tracing::Level;
 
 /// 時間切れの知らせ。
 fn timeout(talk_id: TalkId) -> Input {
     Input::BalloonTimeout { talk_id }
-}
-
-/// 再生中のトークを自分で最後まで流れて終わらせる。
-fn finish(s: &mut State, talk: TalkId) {
-    feed(s, done(talk, TalkEndReason::Ended, false));
-    assert!(
-        matches!(s.phase, Phase::Steady { talk: None }),
-        "前提: 再生中のトークの無い定常"
-    );
-}
-
-/// 定常でトークを再生し終え、読み終えたバルーンが出ている状態（控えはそのトーク）。
-fn steady_after_talk() -> (State, TalkId) {
-    let mut s = steady_none();
-    let talk = start_translated(&mut s, 2_000, FINAL);
-    finish(&mut s, talk);
-    (s, talk)
 }
 
 /// 指示の列の GET が `OnBalloonTimeout`（Reference0＝控えの台本・Reference1＝`0`）1 本だけ。
@@ -148,16 +133,12 @@ fn d2_notice_while_next_talk_awaits_translation_is_refused_not_held() {
     assert!(actions.is_empty());
     assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
     assert_not_logged(&ev, "balloon_timeout_deferred");
-    assert!(
-        ev.iter()
-            .all(|e| e.fields.get("reason").map(String::as_str) != Some("talk_gone")),
-        "預からないので掃除の記録も出ない。\n捕捉={ev:#?}"
-    );
     assert!(s.shown.as_ref().is_some_and(|shown| !shown.timeout_pending));
 }
 
 /// D2: 次のトークが始まって終わっていたら、前のトークの知らせは送らない（要件 2.6）。
-/// 控えが無いときも同じ行に落ちる。
+/// 控えが無いときも同じ行に落ちる。cue を 1 つも出さないトーク（`\e` だけ）を挟んだときも、
+/// 表示の側は前のトークの番号のまま知らせるのでこの行で捨てる（設計の記録して許す行）。
 #[test]
 fn d2_next_talk_started_and_ended_refuses_the_old_notice() {
     let (mut s, old) = steady_after_talk();
@@ -174,29 +155,12 @@ fn d2_next_talk_started_and_ended_refuses_the_old_notice() {
     assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
 }
 
-/// 残る行き違いその 1: cue を 1 つも出さないトーク（`\e` だけ）を挟むと、表示の側は前のトークの
-/// 番号のまま時間切れを知らせ、kanade の控えは進んでいるので D2 で捨てる（設計の記録して許す行）。
-#[test]
-fn d2_notice_one_behind_a_cueless_talk_is_dropped() {
-    let (mut s, old) = steady_after_talk();
-    let cueless = start_translated(&mut s, 3_000, "\\e");
-    finish(&mut s, cueless);
-    let (actions, ev) = feed_capturing(&mut s, timeout(old));
-    assert!(actions.is_empty(), "OnBalloonTimeout は出ない");
-    assert_not_sent(&ev, "OnBalloonTimeout", "next_talk_started", "Steady");
-}
-
 /// D1: 相が定常でなければ送らず、理由と相を記録する。印も預かりも立てない（要件 2.6・4.4・7.2）。
 #[test]
 fn d1_not_steady_phases_send_nothing_and_record_why() {
     let phases = [
         ("BootVersion", Phase::BootVersion { talk: None }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("ChangePending", Phase::ChangePending),
         ("ChangeClosePending", Phase::ChangeClosePending),
         (

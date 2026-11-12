@@ -4,12 +4,20 @@
 use super::{
     ActorKey, CursorAxis, CursorBasis, CursorWarnGuard, GlyphMetrics, GlyphStyles, LayoutEngine,
     LineHeights, LineRect, PositionedGlyph, PositionedLine, TextItem, TextRegion, WrapPlan,
-    WritingMode, line_pitch_of, resolve_cursor_component,
+    WritingMode, glyph_style_advance, line_pitch_of, resolve_cursor_component,
 };
+use crate::cursor_tag::CursorDegrade;
 use crate::state::CursorCoord;
 
 #[path = "layout_scan_glyph.rs"]
 mod glyph;
+
+#[cfg(test)]
+thread_local! {
+    /// 後ろの字を探す走査が見た項目の数（配置 1 回の手間が項目数に比例することの檻）。
+    pub(super) static FOLLOWING_SCAN_VISITS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 
 /// 走査の状態。`layout_inner` の中で作り、`finish` で消える（フレームをまたがない）。
 struct Scan<'a, 'w> {
@@ -23,14 +31,14 @@ struct Scan<'a, 'w> {
     wrap: WrapPlan<'a>,
     cursor_warn: Option<(&'a ActorKey, &'w mut CursorWarnGuard)>,
     styles: Option<GlyphStyles<'a>>,
-    // 走査の前に 1 度だけ決まる値（旧 let 群）
+    // 走査の前に 1 度だけ決まる値
     pitch: f32,
     soft: f32,
     hard: f32,
     start: (f32, f32),
     inline_start: f32,
     block_dir: f32,
-    // 走査で動く変数（旧 layout_inner の可変の局所変数 9 つ・名前はそのまま）
+    // 走査で動く変数
     heights: LineHeights,
     lines: Vec<PositionedLine>,
     current: Vec<PositionedGlyph>,
@@ -40,18 +48,21 @@ struct Scan<'a, 'w> {
     pending: Option<f32>,
     pending_cursor: Option<(Option<f32>, Option<f32>)>,
     seg_remaining: usize,
+    /// 今の項目の `items` での位置（塊の字幅の合計に `&items[item_cursor..]` を渡す・指摘 9）。
+    item_cursor: usize,
+    /// 後ろの字の覚え（`items` での位置・大きさ。字が無ければ `(items.len(), None)`）。
+    next_glyph: Option<(usize, Option<f32>)>,
 }
 
 impl LayoutEngine {
     /// 配置の本体。`styles` は「グリフ序数→装飾番号／見た目」の読み口で、
-    /// `None`（[`layout`](Self::layout)・[`layout_with_cursor_warn`](Self::layout_with_cursor_warn)）
-    /// の経路は装飾を入れる前と 1 ビットも変わらない——送り幅は `metrics.advance` のまま、
+    /// `None`（[`layout`](Self::layout)）の経路は装飾を入れる前と 1 ビットも変わらない——送り幅は `metrics.advance` のまま、
     /// [`PositionedGlyph::style`] は全グリフ [`StyleId::DEFAULT`]（`layout_styled_tests.rs`
     /// が装飾導入前の実測値で固定している）。`Some` のときだけ、既定でない番号の文字を
     /// [`GlyphMetrics::advance_styled`] で測り、番号を配置済みグリフへ写す（R3.3／R7.10／R11.2）。
     ///
     /// 行の丈と行送りは [`LineHeights`] が供給する——閉じる行に置かれた文字の em の最大値
-    /// （文字が無い行は次に置く文字の大きさ・それも無ければスコープの現在の見た目）を
+    /// （文字が無い行は後ろに置かれる文字の大きさ・それも無ければ `font_height`）を
     /// [`line_pitch_of`] へ渡すだけで、装飾のための別の式は持ち込まない（R7.8／R7.9）。
     #[allow(clippy::too_many_arguments)]
     pub(super) fn layout_inner(
@@ -72,7 +83,7 @@ impl LayoutEngine {
         let pitch = line_pitch_of(metrics, font_height);
         // 行の丈（行内最大 em・要件 7.9）。番号列が無い経路では常に `font_height` を返すので
         // 従来の出力と 1 ビットも変わらない。
-        let heights = LineHeights::new(styles.as_ref(), font_height);
+        let heights = LineHeights::new(font_height);
         // 行内軸の二段構え（design.md §4.3・R6.2/6.3/6.8）: 折返し基準（soft・「超えたら
         // 折り返す」）と描画範囲の遠辺（hard・「超えてはならない」絶対上限）を**別の値**として
         // 持つ。`min` へ畳み込まない——畳むと絶対上限の意味論も、行末禁則文字が基準を超えて
@@ -87,25 +98,6 @@ impl LayoutEngine {
             WritingMode::VerticalRl => (start.1, start.0, -1.0f32),
             WritingMode::VerticalLr => (start.1, start.0, 1.0f32),
         };
-
-        let lines: Vec<PositionedLine> = Vec::new();
-        let current: Vec<PositionedGlyph> = Vec::new();
-        let inline_pos = inline_start;
-        let block_pos = block_start;
-        let placed = 0usize;
-        // 改行の保留（deferred newline）: None＝保留なし・Some(Σratio)＝累算済み予約。
-        // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
-        // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
-        let pending: Option<f32> = None;
-        // pending-cursor（`\_l` 遅延実体化）: None＝保留なし・Some((inline, block))＝
-        // 解決層（[`crate::cursor_tag::resolve_cursor_axis`]）が返した絶対 image px
-        // （移動が成立しなかった軸は含めない＝当該軸不動・R1.6/5.5）。
-        // 走査ローカル＝フレームを跨がない（newline-defer の `pending` と同型・同一フラッシュで合成）。
-        let pending_cursor: Option<(Option<f32>, Option<f32>)> = None;
-        // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
-        // 0 かつ塊先頭でない＝plan 非被覆（既存 CharByChar 式で判定）——この 2 状態の区別が
-        // 「塊は途中分割されない」の型保証（design System Flows「塊内は追加判定なし」）。
-        let seg_remaining: usize = 0;
 
         let mut scan = Scan {
             items,
@@ -124,16 +116,29 @@ impl LayoutEngine {
             inline_start,
             block_dir,
             heights,
-            lines,
-            current,
-            inline_pos,
-            block_pos,
-            placed,
-            pending,
-            pending_cursor,
-            seg_remaining,
+            lines: Vec::new(),
+            current: Vec::new(),
+            inline_pos: inline_start,
+            block_pos: block_start,
+            placed: 0,
+            // 改行の保留（deferred newline）: None＝保留なし・Some(Σratio)＝累算済み予約。
+            // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
+            // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
+            pending: None,
+            // pending-cursor（`\_l` 遅延実体化）: None＝保留なし・Some((inline, block))＝
+            // 解決層（[`crate::cursor_tag::resolve_cursor_axis`]）が返した絶対 image px
+            // （移動が成立しなかった軸は含めない＝当該軸不動・R1.6/5.5）。
+            // 走査ローカル＝フレームを跨がない（newline-defer の `pending` と同型・同一フラッシュで合成）。
+            pending_cursor: None,
+            // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
+            // 0 かつ塊先頭でない＝plan 非被覆（既存 CharByChar 式で判定）——この 2 状態の区別が
+            // 「塊は途中分割されない」の型保証（design System Flows「塊内は追加判定なし」）。
+            seg_remaining: 0,
+            item_cursor: 0,
+            next_glyph: None,
         };
-        for item in items {
+        for (i, item) in items.iter().enumerate() {
+            scan.item_cursor = i;
             match *item {
                 TextItem::Glyph { ref text } => {
                     if scan.glyph(text).is_break() {
@@ -149,7 +154,7 @@ impl LayoutEngine {
 }
 
 impl Scan<'_, '_> {
-    /// 改行の腕（旧 `TextItem::LineBreak { ratio }` の本文そのまま）。
+    /// 改行の腕（`TextItem::LineBreak { ratio }`）。
     fn line_break(&mut self, ratio: f32) {
         // 書かれた順の適用（DD-11）: 到着時点でカーソルが保留中なら、**この改行を
         // 保留へ積む前に、それより前に書かれた保留を完全に実体化する**——保留フラッシュ
@@ -159,7 +164,7 @@ impl Scan<'_, '_> {
         //
         // **(2) を省いて (1)(3) の 2 段にしてはならない。** `\_l` より前に書かれた保留改行の
         // Σ が (3) を**追い越して**保留に残り、この直後に積む改行と合流して二重に効くからで
-        // ある——`[あ, \n, \_l[,100], \n, あ]` が 100 + 2×13 = 126 になり、書かれた順の 113
+        // ある——`[あ, \n, \_l[,100], \n, あ]` が 100 + 2×12 = 124 になり、書かれた順の 112
         // にも旧正典の 100 にも一致しない（前に書かれた改行がカーソルの後に効いてしまう）。
         //
         // 分岐の門を `pending_cursor` の有無に置いているのは、カーソルが絡まない純粋な
@@ -172,9 +177,10 @@ impl Scan<'_, '_> {
         // 無いので本分岐は不発火）——順序で結果が分かれるのが正典の振舞いである。
         // 末尾規則は不変: 実体化は位置の更新と現在行の確定だけで、内容の無い行は作らない。
         if self.pending_cursor.is_some() {
-            // 先行実体化の時点では**次に置く文字が無い**——文字の置かれていない
-            // 行はスコープの現在の見た目の大きさで送る（要件 7.9）。
-            let closing = self.heights.close(None);
+            // 文字の置かれていない行は後ろに置かれる文字の大きさで送る（保留フラッシュと
+            // 同じ規則・要件 7.9）。`font_height` は後ろに字が無いときだけ。
+            let next = self.following_glyph_height();
+            let closing = self.heights.close(next);
             finish_pending_line(
                 &mut self.lines,
                 &mut self.current,
@@ -184,14 +190,17 @@ impl Scan<'_, '_> {
                 self.block_pos,
                 closing,
             );
-            apply_pending_newline(
+            let ratio_sum = self.pending;
+            if !apply_pending_newline(
                 &mut self.pending,
                 &mut self.inline_pos,
                 &mut self.block_pos,
                 self.inline_start,
                 self.block_dir,
                 line_pitch_of(self.metrics, closing),
-            );
+            ) {
+                self.warn_non_finite_advance(ratio_sum, None);
+            }
             apply_pending_cursor(
                 &mut self.pending_cursor,
                 &mut self.inline_pos,
@@ -204,7 +213,7 @@ impl Scan<'_, '_> {
         self.pending = Some(self.pending.map_or(ratio, |acc| acc + ratio));
     }
 
-    /// `\_l` の腕（旧 `TextItem::CursorMove { x, y }` の本文そのまま）。
+    /// `\_l` の腕（`TextItem::CursorMove { x, y }`）。
     fn cursor_move(&mut self, x: CursorCoord, y: CursorCoord) {
         // 到着時解決（保留のみ・行は閉じない・R2.1/2.3）。意味論そのもの
         // （基点＋値×係数・縮退の分類・警告の一回化・範囲外の記録）は解決層
@@ -220,31 +229,25 @@ impl Scan<'_, '_> {
         // ここで渡すのは走査ローカルの現在位置ではなく**実効位置**——
         // 「もし今フラッシュしたら次の文字が置かれる位置」である（R3.1「直前までに
         // 置かれた文字の次に文字が置かれる位置」）。保留中の改行と保留中のカーソルを
-        // **保留フラッシュ（ゲート②）と同じ順**で仮適用して求める:
-        //   (1) 行の確定は inline_pos／block_pos を動かさない＝実効位置に寄与しない。
-        //   (2) 保留改行 Σratio を行送り軸へ適用し、行内軸を先頭へ戻す。
-        //   (3) 保留カーソルの指定軸で上書きする（不動軸は据え置き）。
-        // これは**フラッシュの複製ではなく、同じ規則に従う読み取り専用の計算**である
-        // ——`pending`／`pending_cursor` は `take()` せず、`inline_pos`／`block_pos`
-        // も書き換えない（走査ローカルは無変更・R3.5「基点は `\_l` 実行時点に固定」）。
-        let mut eff_inline = self.inline_pos;
-        let mut eff_block = self.block_pos;
-        if let Some(sum) = self.pending {
-            // 行送りはフラッシュ側と同じ規則——閉じる行の丈から引く
-            // （[`LineHeights::peek`] の doc に理由・要件 7.9）。
-            eff_block += self.block_dir * line_pitch_of(self.metrics, self.heights.peek()) * sum;
-            eff_inline = self.inline_start;
-        }
-        if let Some((inline_val, block_val)) = self.pending_cursor {
-            if let Some(iv) = inline_val {
-                eff_inline = iv;
-            }
-            if let Some(bv) = block_val {
-                eff_block = bv;
-            }
-        }
-        // 実効位置を image 軸へ逆写像する（変数名 `eff` は、同ファイルで 200 行に
-        // わたり「現在行のグリフ列」を意味する `current` との衝突を避けるため）。
+        // **保留フラッシュ（ゲート②）と同じ 2 つの適用の関数**へ写しの局所変数で通して求める
+        // （(1) 行の確定は位置を動かさないので要らない）。`pending`／`pending_cursor`／
+        // `inline_pos`／`block_pos` は書き換えない（R3.5「基点は `\_l` 実行時点に固定」）。
+        // 行送りはフラッシュ側と同じく閉じる行の丈から引く（[`LineHeights::peek`] の doc・要件 7.9）。
+        // 下見は記録しない——送れなかった改行は後の本当の適用で 1 度だけ記録される。
+        let next = self.following_glyph_height();
+        let (mut eff_inline, mut eff_block) = (self.inline_pos, self.block_pos);
+        let (mut pending, mut pending_cursor) = (self.pending, self.pending_cursor);
+        apply_pending_newline(
+            &mut pending,
+            &mut eff_inline,
+            &mut eff_block,
+            self.inline_start,
+            self.block_dir,
+            line_pitch_of(self.metrics, self.heights.peek(next)),
+        );
+        apply_pending_cursor(&mut pending_cursor, &mut eff_inline, &mut eff_block);
+        // 実効位置を image 軸へ逆写像する（変数名 `eff` は、[`Scan`] で「現在行のグリフ列」を
+        // 意味する `current` との衝突を避けるため）。
         let eff = match self.mode {
             WritingMode::HorizontalTb => (eff_inline, eff_block),
             WritingMode::VerticalRl | WritingMode::VerticalLr => (eff_block, eff_inline),
@@ -295,10 +298,75 @@ impl Scan<'_, '_> {
         }
     }
 
-    /// 最終行の確定（旧 走査の後の `if !current.is_empty()` と `lines` の返却）。
+    /// 今の項目より後ろで最初に置かれる文字の大きさ（後ろに文字が無ければ `None`・要件 7.9）。
+    /// 見た目は通し番号 `placed`（次に置く字の番号）で引き、字の腕と同じ 1 か所で決める。
+    ///
+    /// 見つけた字の位置と大きさは [`Scan::next_glyph`] に覚え、走査がその字に着くまで使い回す
+    /// （その間に置かれる字は無いので `placed` も変わらない）——字の無い `\n`／`\_l` が長く
+    /// 続いても、配置 1 回の手間は項目数に比例する。
+    fn following_glyph_height(&mut self) -> Option<f32> {
+        if let Some((at, height)) = self.next_glyph
+            && at > self.item_cursor
+        {
+            return height;
+        }
+        let from = self.item_cursor + 1;
+        let found = self.items[from..]
+            .iter()
+            .inspect(|_| {
+                #[cfg(test)]
+                FOLLOWING_SCAN_VISITS.with(|c| c.set(c.get() + 1));
+            })
+            .position(|item| matches!(item, TextItem::Glyph { .. }));
+        let entry = match found.map(|k| (from + k, &self.items[from + k])) {
+            Some((at, TextItem::Glyph { text })) => (
+                at,
+                Some(
+                    glyph_style_advance(
+                        text,
+                        self.placed,
+                        self.font_height,
+                        self.metrics,
+                        self.styles.as_ref(),
+                    )
+                    .2,
+                ),
+            ),
+            // 後ろに字が無い（以後も現れない）——項目の終わりを覚えて探し直さない。
+            _ => (self.items.len(), None),
+        };
+        self.next_glyph = Some(entry);
+        entry.1
+    }
+
+    /// 送りの結果が有限でなかったことを `warn!` で残す（その送りは捨てた・致命ではない）。
+    /// guard がある配置では（キャラクター, [`CursorDegrade::NonFinite`]）の初回だけ、無い配置では毎回。
+    /// 改行・折り返し・字の送りが同じ鍵を共有する。`ratio_sum` は保留の改行の割合の和
+    /// （折り返しと字の送りでは `None`＝欄を出さない）。`inline_pos` は送れなかった字の位置
+    /// （字の送りだけ・ほかは `None`）。
+    fn warn_non_finite_advance(&mut self, ratio_sum: Option<f32>, inline_pos: Option<f32>) {
+        let actor = match self.cursor_warn.as_mut() {
+            Some((actor, guard)) => {
+                if !guard.should_warn(actor, CursorDegrade::NonFinite) {
+                    return;
+                }
+                actor.to_string()
+            }
+            None => "-".to_owned(),
+        };
+        tracing::warn!(
+            actor = %actor,
+            block_pos = self.block_pos,
+            ratio_sum,
+            inline_pos,
+            "[layout_inner] 送りの結果が有限の数でない——位置を保つ（この送りは捨てる・致命ではない）"
+        );
+    }
+
+    /// 最終行の確定と `lines` の返却。
     fn finish(mut self) -> Vec<PositionedLine> {
         // 最終行の確定: グリフを含む現在行のみ確定する（行の確定は常にグリフ配置に
-        // 隣接するため、旧 `opened` フラグは `!current.is_empty()` と等価・DD-4）。
+        // 隣接するため、「行が開いている」は `!current.is_empty()` と等価・DD-4）。
         // 残存する保留（末尾改行）は実体化せず蒸発する（R5.2/5.3）。
         if !self.current.is_empty() {
             let closing = self.heights.close(None);
@@ -347,6 +415,9 @@ fn finish_pending_line(
 ///
 /// [`finish_pending_line`]／[`apply_pending_cursor`] と同じく、フラッシュ本体と
 /// `LineBreak` 到着時の先行実体化（DD-11）が共有する唯一の実装である。
+///
+/// 送った位置が有限でなければ行送りの位置を保ち（行内は行頭へ戻す）、`false` を返す
+/// （記録は呼び手の [`Scan::warn_non_finite_advance`]・下見の写しは記録しない）。
 fn apply_pending_newline(
     pending: &mut Option<f32>,
     inline_pos: &mut f32,
@@ -354,10 +425,23 @@ fn apply_pending_newline(
     inline_start: f32,
     block_dir: f32,
     pitch: f32,
-) {
-    if let Some(sum) = pending.take() {
-        *block_pos += block_dir * pitch * sum;
-        *inline_pos = inline_start;
+) -> bool {
+    let Some(sum) = pending.take() else {
+        return true;
+    };
+    *inline_pos = inline_start;
+    try_advance(block_pos, block_dir * pitch * sum)
+}
+
+/// 送り: 足した結果が有限なら足して `true`、有限でなければ位置を保って `false`。
+/// 割合の和や送り幅そのものが有限でなくても、足した結果の確かめで同じく拾う。
+fn try_advance(pos: &mut f32, delta: f32) -> bool {
+    let next = *pos + delta;
+    if next.is_finite() {
+        *pos = next;
+        true
+    } else {
+        false
     }
 }
 
@@ -409,10 +493,10 @@ fn finish_line(
             left: inline_lo,
             top: block_pos,
             right: inline_end,
-            bottom: block_pos + line_height,
+            bottom: saturating_add(block_pos, line_height),
         },
         WritingMode::VerticalRl => LineRect {
-            left: block_pos - line_height,
+            left: saturating_add(block_pos, -line_height),
             top: inline_lo,
             right: block_pos,
             bottom: inline_end,
@@ -420,9 +504,15 @@ fn finish_line(
         WritingMode::VerticalLr => LineRect {
             left: block_pos,
             top: inline_lo,
-            right: block_pos + line_height,
+            right: saturating_add(block_pos, line_height),
             bottom: inline_end,
         },
     };
     PositionedLine { rect, glyphs }
+}
+
+/// 行の遠辺は有限の範囲で頭打ちにする（位置が 3e38 で丈が 1e38 の行でも矩形を有限に保つ・
+/// その大きな位置を生んだ送りは既に記録済みなので、ここでは記録しない）。
+fn saturating_add(a: f32, b: f32) -> f32 {
+    (a + b).clamp(-f32::MAX, f32::MAX)
 }

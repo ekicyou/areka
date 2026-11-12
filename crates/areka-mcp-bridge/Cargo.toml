@@ -32,7 +32,7 @@ areka-user-data = { path = "../areka-user-data" }
 # MCP の公式 SDK。版は areka-mcp と同じ = で固定し、上げるときは中継のテストも全部通す。
 # 既定機能（macros・base64）は切る。transport-io は使わない（標準入出力の輸送は自前）。
 # reqwest・hyper の client 機能は Cargo.lock に無いクレートを引くので使わない（HTTP の送り手は自前）。
-rmcp = { version = "=3.5.0", default-features = false, features = [
+rmcp = { version = "=3.9.0", default-features = false, features = [
     "server",
     "client",
     "transport-streamable-http-client",

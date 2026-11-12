@@ -14,7 +14,7 @@
 //! - **talk 契約**: talk 起動契約型（[`TalkId`] / [`StartTalk`] / [`TalkDone`] /
 //!   [`TalkEndReason`]）の物理正本は `areka-talk` クレートである。[`talk`] モジュールは
 //!   `areka_kanade::talk::*` という既存の参照パスを保つための再エクスポートに徹し、
-//!   二重定義は行わない。消費側（sakura-engine）も同じく `areka-talk` を直接参照する。
+//!   二重定義は行わない。消費側（areka-sakura）も同じく `areka-talk` を直接参照する。
 //!
 //! ## 依存規律
 //!
@@ -36,9 +36,6 @@ pub mod msg;
 pub mod online;
 pub mod request_origin;
 // schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
-// schedule には書くだけで読まない欄（`ClosePending.reason`・`ActiveTalk.origin`）が残り、
-// 外すと dead_code が鳴るため allow を付けたままにしてある。
-#[allow(dead_code)]
 pub(crate) mod schedule;
 pub mod shiori;
 // SSTP の入口の外向けの型と検査（MCP の側と送出の檻が使う正本・std だけ）。
@@ -60,48 +57,43 @@ pub use msg::{
     ShioriCall, ShioriDownKind, ShioriFailure, ShioriFault, ShioriFaultKind, ShioriMsg,
     ShioriOutcome,
 };
-pub use online::{OnlineCounter, OnlineGuard};
+pub use online::OnlineCounter;
 pub use shiori::{
-    CutGuard, ShioriBackend, ShioriBusy, ShioriConnection, ShioriCut, ShioriProbe, ShioriUnblock,
-    WaitBudget, spawn_shiori_actor,
+    ShioriBackend, ShioriBusy, ShioriConnection, ShioriCut, ShioriProbe, ShioriUnblock, WaitBudget,
+    spawn_shiori_actor,
 };
-pub use status::{
-    BalloonBinding, ExecutionSnapshot, ExecutionState, ExecutionStateUpdate, ExecutionStatus,
-    ExternalStates,
-};
-pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
-pub use translate::{MakotoChain, ScriptExpander, TranslateSeams};
+pub use status::{BalloonBinding, ExecutionSnapshot, ExecutionStateUpdate, ExecutionStatus};
+pub use talk::{StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
+pub use translate::{ScriptExpander, TranslateSeams};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///
 /// `schedule/` は `pub(crate)` に閉じるが、`tests/` 配下の統合テストクレートは
 /// `pub(crate)` を参照できない。Req 7.1（fixture・検証・実装が単一の正本を共有）を
-/// 成立させる唯一の経路として、Reference 表構成関数のみを本ファサード経由で
-/// クレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等で到達可能）。
+/// 成立させる唯一の経路として、外（`tests/`・`areka`・`areka-ghost`）が使う Reference 表構成関数
+/// だけを本ファサード経由でクレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等）。
 /// 運行状態機械の内部（Phase／State／Action／Input／step 本体・遷移ロジック）は
 /// `pub(crate)` のまま非公開に保つ。
 pub mod events {
     pub use crate::schedule::events::{
-        ALLOWED_EVENT_IDS, SourceEvent, allowed_static, baseware_version, is_allowed_choice_event,
-        is_allowed_event_id, on_balloon_break, on_balloon_close, on_balloon_timeout, on_boot,
+        ALLOWED_EVENT_IDS, SourceEvent, baseware_version, is_allowed_event_id, on_boot,
         on_choice_named, on_choice_select, on_choice_select_ex, on_choice_timeout, on_close,
-        on_close_notify, on_first_boot, on_ghost_changed, on_ghost_changing, on_initialize,
-        on_mouse_double_click, on_mouse_drag_end, on_mouse_drag_start, on_mouse_move,
-        on_second_change, on_translate, raise, value_replaces_active_talk,
+        on_close_notify, on_first_boot, on_ghost_changing, on_initialize, on_mouse_double_click,
+        on_mouse_drag_end, on_mouse_drag_start, on_mouse_move, on_second_change, on_translate,
+        raise,
     };
 }
 
 /// SHIORI Resource 照会増分の公開ファサード（DD-9 例外・[`events`] と同じ露出規律）。
 ///
 /// boot 系列の username prefetch（`schedule/boot.rs`・OnInitialize 後・OnFirstBoot 前）で使う
-/// リソース照会構築関数・結果語彙・注入シームを、クレート公開面へ露出する。ghost（タスク 8.2）が
+/// リソース照会構築関数・結果語彙・注入シームを、クレート公開面へ露出する。ghost が
 /// [`spawn_kanade`] へ [`resources::ResourceSink`] を注入し、`tests/` がハーネスの期待値導出
-/// （`expected_call(resources::resource_username(..))`）に用いる唯一の経路（Req 7.1・DD-9）。
+/// （`expected_call(resources::resource_get("username", ..))`）に用いる唯一の経路（Req 7.1・DD-9）。
 /// 運行状態機械の内部（Phase／State／Action／step 本体）は `pub(crate)` のまま非公開に保つ。
 pub mod resources {
     pub use crate::schedule::resources::{
         ALLOWED_RESOURCE_IDS, ResourceOutcome, ResourceSink, is_allowed_resource_id, resource_get,
-        resource_username,
     };
 }
 

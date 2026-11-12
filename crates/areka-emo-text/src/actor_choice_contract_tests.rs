@@ -607,8 +607,8 @@ fn real_font_cursor_model() -> areka_parsers::balloon::BalloonModel {
 /// Observable（`areka-P0-emo2-conformance-e2e` R13.1/13.2/13.5）: 実フォントで帯が行ボックスの中央へ寄った状態で hover を
 /// **移動**させ、さらに**解除**しても、前の行の塗りが 1 画素も残らない。
 ///
-/// ダーティ矩形は em ボックス（`font.height`）＋実測インクはみ出しで組まれるので、帯の遠端側の
-/// 超過分を `band_offset + band_extent − font_height` で数えないと、寄せた分だけ帯の下が
+/// ダーティ矩形は行の em ボックス（`run_size` の行送りの軸＝行の丈）＋実測インクはみ出しで組まれるので、
+/// 帯の遠端側の超過分を `band_offset + band_extent − 行の丈` で数えないと、寄せた分だけ帯の下が
 /// クリップの外へ落ちて塗りが残る（`expand_overhang_for_band`）。寄せを数えないままでは
 /// hover を移した後の面に前の行の帯の下端が残り、この檻が赤くなる。
 ///

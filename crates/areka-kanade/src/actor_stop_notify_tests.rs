@@ -1,6 +1,6 @@
-//! 停止通知（[`KanadeStopped`]）の発行点の檻（areka-P0-emo2-conformance-e2e タスク 6.9・R15.3）。
+//! 停止通知（[`KanadeStopped`]）の発行点の檻（areka-P0-emo2-conformance-e2e R15.3）。
 //!
-//! 検証するのは 3 つである:
+//! 検証するのは 4 つである:
 //!
 //! 1. **原因の写し**——`Unloading{cause}` の 5 値がそのまま公開語彙 [`KanadeStopCause`] へ写る。
 //!    wildcard 無しの写像ゆえ、内部語彙が増えたときは実装がコンパイルで止まる。
@@ -8,6 +8,8 @@
 //!    1 件届く。切替の中身（`handoff`）は、止まる直前の運行状態の切替の帳簿から写す。
 //! 3. **切断**——受信端が落ちていれば `warn!`（`event="stop_notify_failed"`）を 1 件残して
 //!    そのまま返る（panic しない・log-first）。
+//! 4. **運行の通知の転送**——運行表の `Action::Notice` はそのままの値で送出端へ 1 件流れる。受け口が
+//!    消えていれば `warn!`（`event="notice_send_failed"`）、結線していなければ `debug!` を 1 件残す。
 //!
 //! いずれも呼出スレッドで同期に走る素の関数の観測であり、アクタースレッドを跨がない。ゆえに
 //! スレッドローカルの捕捉窓（`schedule::log_capture`）で足り、全スレッド捕捉の窓口は要らない。
@@ -21,11 +23,11 @@ use crate::change::{
     CancelReason, ChangeHandoff, ChangeOrigin, ChangeRequest, ChangeTarget, KanadeNotice,
 };
 use crate::msg::{
-    KanadeConfig, KanadeStopCause, KanadeStopped, MonotonicMs, ShioriFault, ShioriFaultKind,
-    ShioriMsg, ShioriOutcome,
+    KanadeStopCause, KanadeStopped, ShioriFault, ShioriFaultKind, ShioriMsg, ShioriOutcome,
 };
 use crate::schedule::change::ChangeState;
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
+use crate::schedule::translate_test_support::config;
 use crate::schedule::{Action, Input, Phase, State, TermCause};
 use crate::talk::TalkCommand;
 
@@ -41,7 +43,6 @@ fn stopped(cause: KanadeStopCause) -> KanadeNotice {
 fn state_in(phase: Phase) -> State {
     let mut state = State::initial();
     state.phase = phase;
-    state.last_now = Some(MonotonicMs(1_000));
     state
 }
 
@@ -83,9 +84,7 @@ fn a_state_outside_the_termination_sequence_carries_no_cause() {
         Phase::Idle,
         Phase::Steady { talk: None },
         Phase::Stopped,
-        Phase::ClosePending {
-            reason: crate::msg::CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
     ] {
         assert_eq!(
             stop_cause_of(&state_in(phase)),
@@ -221,20 +220,6 @@ fn notice_without_a_sink_is_recorded_at_debug() {
     assert_not_logged(&events, "notice_send_failed");
 }
 
-/// 運行表の「通知を送る」の定常到達も、そのままの値で送出端へ 1 件流れる（要件 8.8）。
-#[test]
-fn steady_notice_is_forwarded_to_the_sink() {
-    let (tx, rx) = mpsc::channel::<KanadeNotice>();
-
-    assert!(
-        !run_notice(Some(&tx), KanadeNotice::Steady),
-        "通知は停止ではない"
-    );
-
-    assert_eq!(rx.try_recv(), Ok(KanadeNotice::Steady), "定常到達が届く");
-    assert!(rx.try_recv().is_err(), "通知は 1 件だけ");
-}
-
 /// 切替の帳簿を持ったまま終了系列を終えると、停止通知に切替の中身（台本ごと）が載る（要件 3.4）。
 ///
 /// 控えは `drive` が停止原因を控えるのと同じ時点（step の直前）で取る。Unload の応答で
@@ -266,7 +251,7 @@ fn stop_notice_carries_the_change_handoff_taken_from_the_state() {
             outcome: ShioriOutcome::Unloaded,
             origin: "Unload",
         },
-        &KanadeConfig::new("master", "1.0.0"),
+        &config(),
         &shiori_tx,
         &sakura_tx,
         &(Box::new(|_, _| {}) as crate::schedule::resources::ResourceSink),

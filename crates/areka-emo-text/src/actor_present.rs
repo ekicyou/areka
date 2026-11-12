@@ -17,7 +17,6 @@ use crate::choice::{
 };
 use crate::cursor_tag::CursorWarnGuard;
 use crate::layout::{GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
-use crate::look::TextLook;
 use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
@@ -423,10 +422,9 @@ fn present_actor(
         hover,
         lookahead_rev: runtime.lookahead_rev,
     };
-    let look = actor_state.current_look();
     // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す（audit-emo-text-state-actor 指摘 8）。
     let mut memo = match render.frame_memo.take() {
-        Some(memo) if memo.matches(&key, look, &resolved) => memo,
+        Some(memo) if memo.matches(&key, &resolved) => memo,
         _ => {
             // 「見える数 → 区切り → 配置」は [`arrange_lines`] の 1 回の呼び出し（検査も同じ関数を呼ぶ）。
             let Some(lines) = arrange_lines(
@@ -481,7 +479,6 @@ fn present_actor(
             }
             FrameMemo {
                 key,
-                look: look.clone(),
                 input: resolved.clone(),
                 lines,
                 segments,
@@ -732,8 +729,9 @@ pub(super) fn arrange_lines(
     let visible = arrived.reveal().visible(talk_time);
     // 配置に使う内容（字の列・装飾）と折返し計画。1 字ずつ（CharByChar）は今の呼び方のまま
     // 区切りを計算せず、区間の全文にも触れない（`areka-P0-budoux-reveal-reflow` R4.2・要件 3.3）。文節（BudouxWordWrap）は
-    // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表・字の無い行の丈に
-    // 使う「今の見た目」も）で、そうでなければ届いた字で区切る（修正前の動き・warn は持ち主が出す）。
+    // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表）で、そうでなければ
+    // 届いた字で区切る（修正前の動き・warn は持ち主が出す）。字の無い行の丈は今の見た目でなく後ろの字
+    // から引く（`Scan::following_glyph_height`・後ろに字が無いときだけ `font_height`）。
     // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う（audit-emo-text-state-actor 指摘 8）。
     let (content, wrap) = match resolved.wrap {
         WrapMode::CharByChar => (arrived, WrapPlan::CharByChar),
@@ -788,7 +786,7 @@ impl BreakMemo {
     }
 }
 
-/// 配置の覚えの鍵のうち数で比べる欄（今の見た目と配置の入力は [`FrameMemo`] が値で持って比べる）。
+/// 配置の覚えの鍵のうち数で比べる欄（配置の入力は [`FrameMemo`] が値で持って比べる）。
 #[derive(Clone, Copy, PartialEq)]
 struct FrameKey {
     /// 見える字の数（時刻で増える）。
@@ -813,16 +811,16 @@ struct FrameKey {
 /// **配置が読む値を足したら鍵にも足す**（足し忘れると古い字を見せる）。
 ///
 /// 鍵が足りる理由: 配置から装飾までが読むのは、届いた項目・見える字の数・選択肢・押した選択肢・
-/// 強調・今の見た目・配置の入力・全文の先読みと、`ActorRender` の寿命の間変わらない字幅だけ。
+/// 強調・配置の入力・全文の先読みと、`ActorRender` の寿命の間変わらない字幅だけ。
 /// 項目と選択肢は消すまで増えるだけなので数で比べ、消して同じ数を書き直したときは消した回数が
-/// 進む。`\f` などで項目を増やさずに変わる今の見た目と、登録し直しで描き手を捨てずに替わる配置の
-/// 入力は値で比べる。全文の先読みは入れ直す 3 か所で `lookahead_rev` が進む。場所ごとの区間の番号は
+/// 進む。登録し直しで描き手を捨てずに替わる配置の入力は値で比べる。今の見た目（`\f` で項目を
+/// 増やさずに変わる）は鍵にしない——配置が読むのは字ごとの番号列と表だけで、今の見た目は字が届いた
+/// ときに番号へ焼かれる（字が届けば項目の数が進む）。全文の先読みは入れ直す 3 か所で `lookahead_rev` が進む。場所ごとの区間の番号は
 /// 鍵にしない——描き手を持つ場所は全消しのとき必ず消した回数が進み、箱の回数・区間・描き手は
 /// `set_box_layout` の中で一緒に捨てられるので、`clears_at` と `lookahead_rev` で足りる。
 /// スクロール・原点・`\_l` の手動の位置は飛ばす所より後で読むので鍵に入れない。
 pub(super) struct FrameMemo {
     key: FrameKey,
-    look: TextLook,
     /// 配置の入力の複製（外れたときだけ複製し直す）。
     input: ResolvedBalloonText,
     lines: Vec<PositionedLine>,
@@ -832,8 +830,8 @@ pub(super) struct FrameMemo {
 }
 
 impl FrameMemo {
-    fn matches(&self, key: &FrameKey, look: &TextLook, input: &ResolvedBalloonText) -> bool {
-        self.key == *key && self.look == *look && self.input == *input
+    fn matches(&self, key: &FrameKey, input: &ResolvedBalloonText) -> bool {
+        self.key == *key && self.input == *input
     }
 
     /// 覚えた行・区切り・帯からクリックを受ける範囲を出す（[`ChoiceRanges::hit_rows`] を通す・

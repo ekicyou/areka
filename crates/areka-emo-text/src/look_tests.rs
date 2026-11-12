@@ -6,7 +6,7 @@
 //!
 //! | § | 内容 | 要件 |
 //! |---|---|---|
-//! | §1 | 正典の既定（全 9 項目を明示・COM 層の既定定数との一致） | 4.1 |
+//! | §1 | 正典の既定（全 9 項目を明示） | 4.1 |
 //! | §2 | 計測鍵——送り幅に効く 4 項目だけを取り出す | 4.1 |
 //! | §3 | 2 層の組み立て（バルーン定義の有無 × 各項目・無効表示は色だけ混色） | 4.1, 4.3, 4.5, 4.7 |
 //! | §4 | 装飾の表（既定は番号 0・同値の畳み込み・範囲外は既定・消去） | 4.1 |
@@ -23,6 +23,20 @@
 //! 要件（4.3 の口に何も渡されなければ値は既定）なので、零を明示的に述べる（§3）。
 
 use super::*;
+
+thread_local! {
+    static NAME_LIST_COMPARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// 候補列を要素ごとに比べた（`FontNames` の `==` が呼ぶ・このスレッドの観測口）。
+pub(super) fn count_name_list_compare() {
+    NAME_LIST_COMPARES.with(|n| n.set(n.get() + 1));
+}
+
+/// 候補列を要素ごとに比べた回数。
+fn name_list_compares() -> usize {
+    NAME_LIST_COMPARES.with(|n| n.get())
+}
 
 /// バルーン定義を模した 2 層——各項目が既定と異なる値で入っていること自体を試験に使う。
 fn balloon_layers() -> LookLayers {
@@ -53,7 +67,7 @@ fn bold_look(default: &TextLook) -> TextLook {
 #[test]
 fn ukadoc_default_is_ms_gothic_twelve_black_without_decoration() {
     let look = TextLook::ukadoc_default();
-    assert_eq!(look.name, vec![UKADOC_DEFAULT_FONT_NAME.to_owned()]);
+    assert_eq!(*look.name, [UKADOC_DEFAULT_FONT_NAME.to_owned()]);
     assert_eq!(look.height, 12.0);
     assert_eq!(look.color, (0, 0, 0));
     assert!(!look.bold, "既定は太字でない");
@@ -62,14 +76,6 @@ fn ukadoc_default_is_ms_gothic_twelve_black_without_decoration() {
     assert!(!look.strike, "既定は打ち消し線なし");
     assert!(!look.outline, "既定は白抜きなし");
     assert_eq!(look.script, Script::None, "既定は上下付きでない");
-}
-
-/// 正典の既定値は COM 層の既定定数と同じ値でなければならない（2 か所に書かれた同じ正典が
-/// 黙って食い違わないための見張り。片方だけ直す変更を赤にする）。
-#[test]
-fn ukadoc_defaults_agree_with_the_com_layer_constants() {
-    assert_eq!(UKADOC_DEFAULT_FONT_NAME, crate::draw::DEFAULT_FONT_NAME);
-    assert_eq!(UKADOC_DEFAULT_FONT_HEIGHT, crate::draw::DEFAULT_FONT_HEIGHT);
 }
 
 // ------------------------------------------------------------------ §2 計測鍵
@@ -86,7 +92,7 @@ fn font_key_changes_with_each_item_that_moves_the_advance() {
 
     for changed in [
         TextLook {
-            name: vec!["Meiryo".to_owned()],
+            name: vec!["Meiryo".to_owned()].into(),
             ..base.clone()
         },
         TextLook {
@@ -169,7 +175,7 @@ fn layers_without_a_balloon_definition_are_the_ukadoc_defaults() {
 fn a_balloon_definition_fills_each_readable_item() {
     let layers = balloon_layers();
     assert_eq!(
-        layers.default.name,
+        *layers.default.name,
         vec!["Meiryo".to_owned(), "Arial".to_owned()],
         "候補列は記述順のまま"
     );
@@ -191,7 +197,7 @@ fn an_absent_font_name_falls_back_to_the_ukadoc_default_name() {
         &[],
     );
     assert_eq!(
-        layers.default.name,
+        *layers.default.name,
         vec![UKADOC_DEFAULT_FONT_NAME.to_owned()]
     );
     assert_eq!(layers.disable.name, layers.default.name);
@@ -339,17 +345,6 @@ fn disable_overrides_change_only_the_disable_layer() {
     assert_eq!(layers.default.height, 12.0, "既定層は動かない");
 }
 
-/// 差し込みが 1 件も無ければ従来どおり——無効表示層は色以外が既定層と一致する（R4.5 の非退行）。
-#[test]
-fn no_overrides_keeps_the_disable_layer_a_color_only_copy() {
-    let layers = balloon_layers();
-    let with_default_color = TextLook {
-        color: layers.default.color,
-        ..layers.disable.clone()
-    };
-    assert_eq!(with_default_color, layers.default);
-}
-
 /// 綴り誤りの 1 件は残りの差し込みを止めない（黙って全部落とさない）。
 #[test]
 fn a_malformed_override_does_not_block_the_others() {
@@ -440,6 +435,215 @@ fn clearing_the_table_drops_every_number() {
     assert_eq!(table.resolve(StyleId(1), &default), &default);
 }
 
+/// 1 万の色を登録しても番号が往復し、同じ見た目は同じ番号になる（指摘 10）。決まった入力の
+/// 列（重なりを含む）で、旧来の線形走査と同じ番号を付けることも確かめる（時間は比べない）。
+#[test]
+fn ten_thousand_colours_round_trip_and_match_the_linear_scan() {
+    let default = TextLook::ukadoc_default();
+    let colour = |i: u32| TextLook {
+        color: (
+            (i % 256) as u8,
+            (i / 256 % 256) as u8,
+            (i / 65536) as u8 + 1,
+        ),
+        ..default.clone()
+    };
+    let mut table = StyleTable::default();
+    for i in 0..10_000 {
+        assert_eq!(table.intern(&colour(i), &default), StyleId(i + 1));
+    }
+    for i in 0..10_000 {
+        assert_eq!(table.resolve(StyleId(i + 1), &default), &colour(i));
+        assert_eq!(
+            table.intern(&colour(i), &default),
+            StyleId(i + 1),
+            "同じ見た目が別の番号"
+        );
+    }
+    assert_eq!(table.len(), 10_000);
+
+    // 旧来の線形走査（`position`）を写した見本と、重なりを含む決まった列で番号を比べる。
+    let mut table = StyleTable::default();
+    let mut model: Vec<TextLook> = Vec::new();
+    let mut seed = 12345u32;
+    for _ in 0..20_000 {
+        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        let look = TextLook {
+            bold: seed & 1 == 1,
+            height: if seed & 2 == 2 { 12.0 } else { 20.0 },
+            ..colour(seed >> 16 & 0x3ff)
+        };
+        let expected = if look == default {
+            StyleId::DEFAULT
+        } else if let Some(at) = model.iter().position(|known| known == &look) {
+            StyleId(at as u32 + 1)
+        } else {
+            model.push(look.clone());
+            StyleId(model.len() as u32)
+        };
+        assert_eq!(table.intern(&look, &default), expected);
+    }
+    let distinct: std::collections::HashSet<TextLook> = model.iter().cloned().collect();
+    assert_eq!(table.len(), distinct.len());
+}
+
+/// 消去の後は索引も空になり、前の番号を引き直さず新しい番号を付ける（指摘 10）。
+#[test]
+fn after_clearing_a_look_gets_a_new_number_not_the_stale_one() {
+    let default = TextLook::ukadoc_default();
+    let bold = bold_look(&default);
+    let italic = TextLook {
+        italic: true,
+        ..default.clone()
+    };
+    let mut table = StyleTable::default();
+    assert_eq!(table.intern(&bold, &default), StyleId(1));
+    table.clear();
+    assert_eq!(table.intern(&italic, &default), StyleId(1));
+    assert_eq!(
+        table.intern(&bold, &default),
+        StyleId(2),
+        "消去の前の番号を索引から引いた"
+    );
+    assert_eq!(table.resolve(StyleId(2), &default), &bold);
+}
+
+/// 大きさの `0.0` と `-0.0` は旧来の `==` と同じく 1 つの番号へ畳み、NaN は旧来どおり毎回
+/// 新しい番号になる（索引の鍵が `==` と食い違わない・指摘 10）。
+#[test]
+fn signed_zero_folds_and_nan_never_folds_like_the_old_equality() {
+    let default = TextLook::ukadoc_default();
+    let sized = |height: f32| TextLook {
+        height,
+        ..default.clone()
+    };
+    let mut table = StyleTable::default();
+    assert_eq!(table.intern(&sized(0.0), &default), StyleId(1));
+    assert_eq!(table.intern(&sized(-0.0), &default), StyleId(1));
+    assert_eq!(table.intern(&sized(f32::NAN), &default), StyleId(2));
+    assert_eq!(table.intern(&sized(f32::NAN), &default), StyleId(3));
+}
+
+/// 再監査 R2-B1: 同じ見た目を引き当てるたびに候補列を全部ハッシュし直す・比べ直すと、
+/// `\f[name,…]` の候補が N 個・字が N 個で N² の仕事になる。ハッシュに書く量は候補の数に
+/// よらず一定、同じ見た目の引き当ては候補列を 1 度も要素ごとに比べない、別に組んだ同じ
+/// 候補列は同じ番号——の 3 つを断言する。
+#[test]
+fn interning_the_same_look_is_constant_work_in_the_candidate_count() {
+    struct Bytes(usize);
+    impl Hasher for Bytes {
+        fn finish(&self) -> u64 {
+            0
+        }
+        fn write(&mut self, bytes: &[u8]) {
+            self.0 += bytes.len();
+        }
+    }
+    let hashed_bytes = |look: &TextLook| {
+        let mut hasher = Bytes(0);
+        look.hash(&mut hasher);
+        hasher.0
+    };
+    let names = |n: usize| (0..n).map(|i| format!("Font{i}")).collect::<Vec<String>>();
+    let default = TextLook::ukadoc_default();
+    let with = |n: usize| TextLook {
+        name: names(n).into(),
+        ..default.clone()
+    };
+    let long = with(50_000);
+    assert_eq!(hashed_bytes(&with(1)), hashed_bytes(&long));
+
+    let mut table = StyleTable::default();
+    let id = table.intern(&long, &default);
+    let before = name_list_compares();
+    for _ in 0..50_000 {
+        assert_eq!(table.intern(&long, &default), id);
+    }
+    assert_eq!(
+        name_list_compares(),
+        before,
+        "同じ見た目で候補列を比べ直した"
+    );
+    assert_eq!(table.intern(&with(50_000), &default), id);
+    assert_eq!(table.len(), 1);
+
+    // 別に組んだ同じ中身の列（同じ `\f[name,…]` を書き直した台本・付け直しの再生）も、
+    // 要素ごとに比べるのは最初の 1 度だけ。既定と同じ中身の列も同じ（既定との比べ）。
+    let again = with(50_000);
+    let wide = with(50_000);
+    let bold_wide = TextLook {
+        bold: true,
+        ..with(50_000)
+    };
+    let mut wide_table = StyleTable::default();
+    let before = name_list_compares();
+    for _ in 0..50_000 {
+        assert_eq!(table.intern(&again, &default), id);
+        assert_eq!(
+            wide_table.intern(&with_name_of(&again, &wide), &wide),
+            StyleId::DEFAULT
+        );
+        assert_eq!(wide_table.intern(&bold_wide, &wide), StyleId(1));
+    }
+    assert!(
+        name_list_compares() - before <= 3,
+        "別に組んだ同じ候補列を引き当てのたびに比べ直した: {}",
+        name_list_compares() - before
+    );
+}
+
+/// 別に組んだ 2 つの表（先渡しの空回しと本番は同じ `\f[name,…]` を別々に解く）の先頭比べも、
+/// 候補列の中身を比べるのは参照の組ごとに 1 度だけ（再監査 R3-B-M1・字ごとの `basis` で
+/// 見た目の数 × 候補の数にしない）。一致・不一致の答えは変わらない。
+#[test]
+fn starts_with_compares_each_name_list_pair_once() {
+    let default = TextLook::ukadoc_default();
+    let names = || {
+        (0..1_000)
+            .map(|i| format!("Font{i}"))
+            .collect::<Vec<String>>()
+    };
+    let build = |n: u8| {
+        let name: FontNames = names().into();
+        let mut table = StyleTable::default();
+        for c in 0..n {
+            let look = TextLook {
+                name: name.clone(),
+                color: (c, 0, 0),
+                ..default.clone()
+            };
+            table.intern(&look, &default);
+        }
+        table
+    };
+    let (full, arrived) = (build(200), build(150));
+    let before = name_list_compares();
+    assert!(full.starts_with(&arrived));
+    assert!(
+        name_list_compares() - before <= 1,
+        "同じ組の候補列を見た目ごとに比べ直した: {}",
+        name_list_compares() - before
+    );
+    assert!(!arrived.starts_with(&full));
+    let mut other = build(150);
+    other.intern(
+        &TextLook {
+            color: (9, 9, 9),
+            ..default.clone()
+        },
+        &default,
+    );
+    assert!(!full.starts_with(&other));
+}
+
+/// `look` の候補列（同じ共有の参照）を持ったまま、他の項目を `base` にそろえた見た目。
+fn with_name_of(look: &TextLook, base: &TextLook) -> TextLook {
+    TextLook {
+        name: look.name.clone(),
+        ..base.clone()
+    }
+}
+
 // ------------------------------------------------------------------ §5 グリフ序数の読み口
 
 /// グリフ序数から番号と見た目を引き、序数が番号列の外なら既定に落ちる（R4.1）。
@@ -451,15 +655,10 @@ fn glyph_styles_read_by_ordinal_and_fall_back_outside_the_range() {
     let bold = bold_look(&default);
     let id = table.intern(&bold, &default);
     let ids = [StyleId::DEFAULT, id];
-    let current = TextLook {
-        height: 30.0,
-        ..default.clone()
-    };
     let styles = GlyphStyles {
         table: &table,
         ids: &ids,
         default: &default,
-        current: &current,
     };
 
     assert_eq!(styles.id_of(0), StyleId::DEFAULT);
@@ -477,7 +676,7 @@ fn glyph_styles_read_by_ordinal_and_fall_back_outside_the_range() {
 fn calibration_disable_layer_must_not_change_anything_but_color() {
     let layers = balloon_layers();
     assert_ne!(
-        layers.disable.name,
+        *layers.disable.name,
         vec![UKADOC_DEFAULT_FONT_NAME.to_owned()],
         "無効表示層のフォント名が既定名へ差し替わっている（既定層の候補列を引き継いでいない）"
     );

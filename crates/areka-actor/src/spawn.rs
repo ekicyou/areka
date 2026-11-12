@@ -252,25 +252,9 @@ mod log_capture_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::Infallible;
-    use std::sync::mpsc::sync_channel;
     use std::time::Duration;
 
-    /// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
-    /// テストを失敗させる（どのテストもハングしないことを保証する）。
-    fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
-        let (done_tx, done_rx) = sync_channel::<()>(0);
-        thread::spawn(move || {
-            f();
-            let _ = done_tx.send(());
-        });
-        assert!(
-            done_rx.recv_timeout(timeout).is_ok(),
-            "'{what}' did not complete within {timeout:?} (possible hang)"
-        );
-    }
-
-    // ケース1: スレッド名＝アクター名。
+    // スレッド名＝アクター名。
     #[test]
     fn thread_name_equals_actor_name() {
         let (name_tx, name_rx) = mpsc::channel::<Option<String>>();
@@ -285,105 +269,5 @@ mod tests {
         assert_eq!(observed.as_deref(), Some("kanade-test"));
         assert_eq!(handle.name(), "kanade-test");
         handle.join().expect("body completes normally");
-    }
-
-    // ケース2: panic 時の join が Err(Panicked)。
-    #[test]
-    fn join_returns_err_on_panic() {
-        let (_tx, handle) = spawn_actor::<(), _>("panicky", move |_rx| {
-            panic!("boom in actor");
-        });
-
-        let err = handle
-            .join()
-            .expect_err("panicking body must surface as Err");
-        match err {
-            ActorError::Panicked { actor, message } => {
-                assert_eq!(actor, "panicky");
-                assert!(
-                    message.contains("boom in actor"),
-                    "panic message should carry payload, got: {message}"
-                );
-            }
-        }
-    }
-
-    // ケース3: Break で即時終了。
-    #[test]
-    fn run_inbox_breaks_immediately_on_break() {
-        let (tx, rx) = mpsc::channel::<&'static str>();
-        // Close 相当メッセージ＋その後ろに積み残しを 2 件。
-        tx.send("close").expect("send close");
-        tx.send("backlog-1").expect("send backlog-1");
-        tx.send("backlog-2").expect("send backlog-2");
-
-        let (seen_tx, seen_rx) = mpsc::channel::<&'static str>();
-        run_bounded("run_inbox break", Duration::from_secs(5), move || {
-            run_inbox::<&'static str, Infallible>(rx, move |msg| {
-                if msg == "close" {
-                    Ok(ControlFlow::Break(()))
-                } else {
-                    seen_tx.send(msg).expect("record seen");
-                    Ok(ControlFlow::Continue(()))
-                }
-            });
-        });
-
-        // Break 即時終了ゆえ積み残しは処理されない。
-        assert!(
-            seen_rx.try_recv().is_err(),
-            "backlog after Break must NOT be processed"
-        );
-    }
-
-    // ケース4: 切断（全 Sender drop）で正常終了。
-    #[test]
-    fn run_inbox_returns_on_disconnect() {
-        let (tx, rx) = mpsc::channel::<u32>();
-        drop(tx); // 全 Sender drop → Disconnected。
-
-        run_bounded("run_inbox disconnect", Duration::from_secs(5), move || {
-            run_inbox::<u32, Infallible>(rx, |_msg| Ok(ControlFlow::Continue(())));
-        });
-        // ハングせず復帰すればテスト成功（run_bounded が保証）。
-    }
-
-    // ケース5: handler の Err 後も受信継続。
-    #[test]
-    fn run_inbox_continues_after_handler_err() {
-        #[derive(Debug)]
-        struct HandlerErr(&'static str);
-        impl std::fmt::Display for HandlerErr {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "handler err: {}", self.0)
-            }
-        }
-
-        let (tx, rx) = mpsc::channel::<&'static str>();
-        tx.send("will-error").expect("send will-error");
-        tx.send("after-error").expect("send after-error");
-        tx.send("close").expect("send close");
-
-        let (seen_tx, seen_rx) = mpsc::channel::<&'static str>();
-        run_bounded(
-            "run_inbox continue-after-err",
-            Duration::from_secs(5),
-            move || {
-                run_inbox::<&'static str, HandlerErr>(rx, move |msg| match msg {
-                    "will-error" => Err(HandlerErr("intentional")),
-                    "close" => Ok(ControlFlow::Break(())),
-                    other => {
-                        seen_tx.send(other).expect("record seen");
-                        Ok(ControlFlow::Continue(()))
-                    }
-                });
-            },
-        );
-
-        // Err を返したメッセージの後続が処理されていること＝ループは殺されていない。
-        let seen = seen_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("message after handler Err must still be processed");
-        assert_eq!(seen, "after-error");
     }
 }

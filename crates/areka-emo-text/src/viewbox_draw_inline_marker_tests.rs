@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use areka_emo_present::balloon_marker::MarkerImage;
+use log_capture_kit::capture;
 
 use super::ViewboxExecutor;
 use super::test_support::{Rig, build, geo_model, glyph_items};
@@ -114,4 +115,64 @@ fn image_marker_is_drawn_at_the_cell_center() {
         (l, t, r, b)
     );
     assert_eq!(pixel(&px, w, (l, t)), [0, 0, 0, 0], "枠の角は地の色");
+}
+
+/// 作れない大きさ（一辺 16,384 を越える）の印の絵は失敗も覚える（指摘 36・要件 4.1）。
+///
+/// 同じ絵を 3 フレーム描いても D2D の絵を作り直さず、`error!` は 1 件だけ。違う絵に替えると
+/// 作り直しを試みる（記録がもう 1 件）。フレームごとに消去の要求を立てて印の行を描き直させる。
+#[test]
+fn uncreatable_marker_image_is_tried_once_per_image() {
+    let mut rig = Rig::new();
+    let image = (80u32, 40u32);
+    let mut surface = rig.attach(image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let model = geo_model(Some(20));
+    let mut font = ResolvedFont::resolve(&model);
+    let region = TextRegion::resolve(&model, image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let styles = StyleTable::default();
+    let (canvas, window) = build(
+        &glyph_items(&format!("{MARKER_GLYPH}あ")),
+        &region,
+        mode,
+        20.0,
+    );
+    let too_wide = || {
+        Arc::new(MarkerImage {
+            width: 16_385,
+            height: 1,
+            bgra: vec![255u8; 16_385 * 4],
+        })
+    };
+    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+    let mut frames = |look: &Arc<MarkerImage>, n: usize| {
+        font.inline_marker = InlineMarkerLook::Image(Arc::clone(look));
+        let ((), events) = capture(|| {
+            for _ in 0..n {
+                exec.request_clear();
+                assert!(
+                    exec.render_styled(
+                        &canvas,
+                        &window,
+                        &font,
+                        mode,
+                        &contract,
+                        &mut surface,
+                        &styles
+                    )
+                    .expect("描画"),
+                    "印の行を描き直した"
+                );
+            }
+        });
+        events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .count()
+    };
+    let a = too_wide();
+    assert_eq!(frames(&a, 3), 1, "同じ絵は 3 フレームで記録 1 件");
+    assert_eq!(frames(&a, 2), 0, "覚えた失敗は作り直さない");
+    assert_eq!(frames(&too_wide(), 2), 1, "違う絵は作り直しを試みる");
 }

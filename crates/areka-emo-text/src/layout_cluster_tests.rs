@@ -10,11 +10,7 @@
 //! `origin` は未宣言（行内の開始は 3 方式とも 0）・validrect は画像全域。折り返しの基準は
 //! 横書き＝wordwrappoint の x・縦書き＝y で与える。
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
-
-use super::test_support::{IMAGE, inline_positions, model};
+use super::test_support::{IMAGE, inline_positions, model, model_full};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::choice::{annotate_lines, derive_hit_rows, line_bands};
 use crate::region::TextRegion;
@@ -253,15 +249,7 @@ fn cluster_wider_than_the_hard_limit_is_placed_whole_on_its_own_line() {
                 ((None, Some(300)), (Some(0), Some(5), Some(0), Some(300)))
             }
         };
-        let model = BalloonModel::new(
-            WindowPosition::new(None, None),
-            Origin::new(Some(0), Some(0)),
-            WordWrapPoint::new(wordwrap.0, wordwrap.1),
-            ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
-            Font::new(None, None, FontColor::new(None, None, None)),
-            None,
-            None,
-        );
+        let model = model_full((Some(0), Some(0)), wordwrap, validrect);
         let region = TextRegion::resolve(&model, IMAGE, mode);
         assert_eq!(
             (region.wrap_threshold(), region.inline_limit()),

@@ -2,8 +2,7 @@
 //!
 //! [`LineLayoutStore`]（行 TextLayout の共有ストア）と、行の実測インクはみ出しを担う。
 //! 比較専用オラクル（親ファサードの `DrawExecutor`）と本番 `ViewboxExecutor` が**同一経路**で
-//! 行レイアウトを得るための抽出型。親ファサード `draw.rs` から純移動したもので、破棄規律は
-//! 移動前と同一。生成規則と再利用の鍵は装飾の導入（タスク 6.3／6.5）で次のように広がった。
+//! 行レイアウトを得るための型（親ファサード `draw.rs` の子）。生成規則と再利用の鍵は次のとおり。
 //!
 //! - 再利用の鍵は**内容文字列＋装飾番号列**（要件 11.4——装飾だけが変わった行を古い見た目の
 //!   まま再利用しない）。
@@ -13,10 +12,10 @@
 //! - 下線は行に焼かず areka が塗る（areka-P0-balloon-text-bugs 件 3）。下線のある行は
 //!   [`line_layout_with_strokes`](LineLayoutStore::line_layout_with_strokes) の `decorate` が
 //!   線の行の箱からのはみ出しを返し、実測のはみ出しと欄ごとの大きい方で合わせて持つ。
-//! - 行送り軸の箱寸は呼び手が渡す `block_extent`。**既定だけの行は従来どおり `font_height`**
+//! - 行送り軸の箱寸は呼び手が渡す `block_extent`。**既定だけの行は `font_height`**
 //!   （`ViewboxExecutor::line_layout_for` が [`line_layout`](LineLayoutStore::line_layout) へ
 //!   落とす）で、装飾のある行だけが行内最大 em（`viewbox_draw_decoration::block_extent`）に
-//!   なる——装飾のない台本の生成物は装飾導入前と 1 ビットも変わらない（要件 14.2）。
+//!   なる——装飾のない台本の生成物は生成口を直に呼んで組んだ行と 1 ビットも違わない（要件 14.2）。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`tracing::error!`＋`Err`）で
 //! 扱い panic しない。
@@ -58,10 +57,10 @@ struct CachedLineLayout {
 /// 生成規則（[`create_line_layout`] で作る＝行内軸＝[`PROBE_MAX_EXTENT`](super::PROBE_MAX_EXTENT)・
 /// 行送り軸＝呼び手が渡す行の箱寸・縦書きは列のレシピ・同一 format・
 /// 生成直後に `decorate` を 1 度）・キー（canvas 行 index）・破棄規律
-/// （[`clear`](Self::clear) のみ全破棄）を両描画実行で共有する——TextLayout 生成経路の完全共有に
+/// （[`clear`](Self::clear) が全破棄・[`forget`](Self::forget) が 1 行）を両描画実行で共有する——TextLayout 生成経路の完全共有に
 /// より **byte 等価**を構造化する（RN5）。装飾を使わない呼び出し
 /// （[`line_layout`](Self::line_layout)・行の箱寸は `font_height`・`decorate` は何もしない）の
-/// 生成物は抽出前の `DrawExecutor` 内実装と同一。再利用の判定は内容文字列と装飾番号列の一致
+/// 生成物は生成口を直に呼んで組んだ行と同一。再利用の判定は内容文字列と装飾番号列の一致
 /// （要件 11.4）。UI スレッド専有（COM 層規律）。
 ///
 /// `pub(crate)`: [`DrawExecutor`]（front へ全域再描画）と `ViewboxExecutor`
@@ -95,8 +94,8 @@ impl LineLayoutStore {
     /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
     ///
     /// 実体は [`line_layout_decorated`](Self::line_layout_decorated) への委譲——空の番号列と
-    /// 何もしない焼き処理を渡すので、生成物は装飾導入前と同一（`draw_line_store_tests.rs` §3 が
-    /// factory 直呼びとの突き合わせで固定）。
+    /// 何もしない焼き処理を渡すので、生成物は生成口を直に呼んで組んだ行と同一
+    /// （`draw_line_store_tests.rs` §3 が突き合わせで固定）。
     pub(crate) fn line_layout(
         &mut self,
         index: usize,
@@ -188,13 +187,19 @@ impl LineLayoutStore {
         self.cache.get(&index).map(|c| c.overhang)
     }
 
-    /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
+    /// キャッシュを全破棄する（Clear cue の適用点・全部を捨てるのはこの口だけ）。
     pub(crate) fn clear(&mut self) {
         self.cache.clear();
     }
 
+    /// 1 行だけ捨てる（次に引くとき作り直す）。焼いた後の状態を戻せなかった行を掴ませない口
+    /// （下線を集めた後に戻すのが失敗した行・再監査 R2-D4）。
+    pub(crate) fn forget(&mut self, index: usize) {
+        self.cache.remove(&index);
+    }
+
     /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。
-    /// `ViewboxExecutor::render`（viewbox_draw.rs）が本フレームの生成増分を `DrawStats`
+    /// `ViewboxExecutor::render_styled`（viewbox_draw_render.rs）が本フレームの生成増分を `DrawStats`
     /// （`line_layout_creations`）へ集計するために非テストビルドでも読む。
     pub(crate) fn creations(&self) -> u64 {
         self.creations

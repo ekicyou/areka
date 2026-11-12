@@ -2,8 +2,8 @@
 //! を送るかどうかの判断を 1 か所に集める（areka-P0-balloon-lifecycle-events）。
 //!
 //! ここが持つのは 2 つの控えと、[`super::step`] の出口の処理 [`settle`]、トークの完了の後の判断
-//! [`after_talk_done`]（設計の表 B）、再生中のトークが無いときのダブルクリックの判断
-//! [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
+//! [`after_talk_done`]（設計の表 B）、再生中のトークが無いとき・押されたバルーンが今のトークでないときの
+//! ダブルクリックの判断 [`on_idle_double_click`]（表 C）、時間切れの知らせの判断 [`on_timeout_notice`]（表 D）である。
 //! - [`ShownTalk`]（`State.shown`）——最後に再生を始めたトークの番号と最終の台本・出どころ。3 つのイベントの
 //!   Reference0 の源で、古い時間切れの知らせを退ける照合の相手。
 //! - [`BreakNote`]（`State.user_break_talk`）——利用者の中断を出した相手のトークと、ダブルクリック
@@ -175,8 +175,10 @@ pub(super) fn after_talk_done(
     (state, actions)
 }
 
-/// 再生中のトークが無いときに届いた中断の合図（設計の表 C。上から最初に当たった行だけを採る）。
-/// 読み終えたバルーンをダブルクリックで閉じた、の知らせで、相手は控えのトーク（直前に終えたトーク）。
+/// 読み終えたバルーンをダブルクリックで閉じた、の知らせ（設計の表 C。上から最初に当たった行だけを採る）。
+/// 相手は控えのトーク（直前に終えたトーク）。呼び手は [`super::user_break::on_user_break`] の 2 か所で、
+/// 再生中のトークが無いとき（`pressed`＝`None`）と、押されたバルーンのトーク `pressed` が再生中の
+/// トークと違うとき（C1 で断る）である。断った記録の番号は `pressed` があればそれ、無ければ控えのトーク。
 ///
 /// - C1・C2: 再生中のトークの無い定常でない・終了の要求を保留している → 送らず理由を記録する
 ///   （要件 3.4・4.4）。
@@ -185,10 +187,13 @@ pub(super) fn after_talk_done(
 ///
 /// 中断の受理の規則（止める・二重に止めない）には触れない。scope は呼び手
 /// [`super::user_break::on_user_break`] の記録に載っているので、ここでは受け取らない。
-pub(super) fn on_idle_double_click(mut state: State) -> (State, Vec<Action>) {
+pub(super) fn on_idle_double_click(
+    mut state: State,
+    pressed: Option<TalkId>,
+) -> (State, Vec<Action>) {
     let talk_id = state.shown.as_ref().map(|shown| shown.talk_id);
     if let Err(reason) = steady_idle(&state) {
-        log_not_sent(&state, Cause::Close.id(), reason, talk_id);
+        log_not_sent(&state, Cause::Close.id(), reason, pressed.or(talk_id));
         return (state, Vec::new());
     }
     let actions = send(&mut state, Cause::Close, talk_id)
@@ -251,7 +256,7 @@ pub(super) fn on_timeout_notice(mut state: State, talk_id: TalkId) -> (State, Ve
     (state, actions)
 }
 
-/// 3 つの入口に共通する門（要件 4.4・設計 D8）: 相が `Steady{talk: None}` で、終了の要求を保留して
+/// 2 つの入口（[`after_talk_done`]・[`on_idle_double_click`]）に共通する門（要件 4.4・設計 D8）: 相が `Steady{talk: None}` で、終了の要求を保留して
 /// いないこと。送れなければ記録に載せる理由を返す。
 fn steady_idle(state: &State) -> Result<(), &'static str> {
     if !matches!(state.phase, Phase::Steady { talk: None }) {
@@ -283,11 +288,11 @@ fn send(state: &mut State, cause: Cause, talk_id: Option<TalkId>) -> Option<Acti
     let snapshot = state.snapshot();
     let (call, scope) = match cause {
         Cause::Break { scope } => (
-            events::on_balloon_break(&script, scope, &snapshot),
+            events::on_balloon_break(script, scope, &snapshot),
             Some(scope),
         ),
-        Cause::Close => (events::on_balloon_close(&script, &snapshot), None),
-        Cause::Timeout => (events::on_balloon_timeout(&script, &snapshot), None),
+        Cause::Close => (events::on_balloon_close(script, &snapshot), None),
+        Cause::Timeout => (events::on_balloon_timeout(script, &snapshot), None),
     };
     tracing::info!(
         target: "kanade",
@@ -303,17 +308,17 @@ fn send(state: &mut State, cause: Cause, talk_id: Option<TalkId>) -> Option<Acti
 
 /// `talk_id` のトークの台本（Reference0 の源）。控えが無い・番号が食い違う（構造上は起きない）
 /// ときは空を返して記録する（出来事そのものは起きているので送る・設計 D9）。
-fn shown_script(state: &State, id: &'static str, talk_id: Option<TalkId>) -> String {
+fn shown_script<'a>(state: &'a State, id: &'static str, talk_id: Option<TalkId>) -> &'a str {
     let talk_id = talk_id.map(|t| t.0);
     match &state.shown {
-        Some(shown) if Some(shown.talk_id.0) == talk_id => shown.script.clone(),
+        Some(shown) if Some(shown.talk_id.0) == talk_id => &shown.script,
         Some(shown) => {
             tracing::error!(target: "kanade", event = "balloon_event_script_missing", id, talk_id, shown_talk_id = shown.talk_id.0, "トークの控えの番号が食い違う——Reference0 を空で送る（設計 D9）");
-            String::new()
+            ""
         }
         None => {
             tracing::warn!(target: "kanade", event = "balloon_event_script_missing", id, talk_id, "トークの控えが無い——Reference0 を空で送る（設計 D9）");
-            String::new()
+            ""
         }
     }
 }

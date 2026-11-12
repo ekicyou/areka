@@ -34,6 +34,7 @@ use crate::reader::SylphyaReader;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 /// ログ target（steering: areka-log-first-no-silent-failure・design Monitoring 固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
@@ -85,14 +86,12 @@ pub enum SylphyaMsg {
         /// 書込値。
         value: String,
     },
-    /// 永続 put（typed 4 key 族・write-through・reply は任意で結果観測可）。
+    /// 永続 put（typed 4 key 族・write-through・fire-and-forget。失敗は受け口へ届く）。
     PersistPut {
         /// 永続スコープ（層別）。
         scope: PersistScope,
         /// typed 4 key 族 `(key, 値)`。
         entries: Vec<(PersistKey, String)>,
-        /// 保存結果の返信端（任意・`None` は fire-and-forget）。
-        reply: Option<areka_actor::ReplySender<crate::persist::PersistOutcome>>,
     },
     /// 反映フェンス（投函済みメッセージの処理完了を同期観測。テスト決定論と boot prefetch の
     /// 順序保証に使用・epoch フェンス読みの予約シームの M1 形）。
@@ -385,7 +384,7 @@ impl SylphyaCore {
                     }]
                 }
             },
-            SylphyaMsg::PersistPut { scope, entries, .. } => {
+            SylphyaMsg::PersistPut { scope, entries } => {
                 // write-through: 各 entry を大域点付き区画へ areka.* 正準 key で投影し・スコープ保存。
                 let mut effects = Vec::with_capacity(entries.len() + 1);
                 for (key, value) in entries {
@@ -430,7 +429,7 @@ fn canonicalize_or_raw(key: &str) -> String {
 // （5.1・判断分岐の純関数中核）が返す効果列 [`Effect`] を、単一のアクタースレッドが
 // 直列に実行する: copy-on-write で後継 [`MirrorImage`] を組み立て・[`SharedMirror::publish`]
 // で swap し（single-writer）・[`PersistSave`](Effect::PersistSave) を注入 [`PersistIo`] で
-// write-through 保存し・[`Barrier`](Effect::Barrier)/[`PersistPut`](SylphyaMsg::PersistPut) の
+// write-through 保存し・[`Barrier`](Effect::Barrier) の
 // reply を返し・[`Stop`](Effect::Stop) で受信ループを畳む。
 //
 // ## areka-actor 5 規約（design「Responsibilities & Constraints」）
@@ -520,22 +519,33 @@ impl SylphyaPublisher {
         self.send(SylphyaMsg::Set { asker, key, value });
     }
 
-    /// 永続 put を投函する（write-through・reply なし版＝fire-and-forget）。
+    /// 永続 put を投函する（write-through・fire-and-forget）。
     pub fn persist_put(&self, scope: PersistScope, entries: Vec<(PersistKey, String)>) {
-        self.send(SylphyaMsg::PersistPut {
-            scope,
-            entries,
-            reply: None,
-        });
+        self.send(SylphyaMsg::PersistPut { scope, entries });
     }
 
-    /// 反映フェンス: 投函→処理完了を待つ（有界: 呼び側がタイムアウトを課す・design）。
+    /// 反映フェンス: 投函→処理完了を待つ（期限なし。期限が要るなら [`barrier_within`](Self::barrier_within)）。
     ///
     /// 復帰時、それ以前に同一送信端から投函した全メッセージは鏡像へ反映済み（mpsc FIFO＋
     /// 直列処理）。アクター死亡（`Close`／panic 後）で投函できない、または reply 端が応答せず
     /// drop された場合は [`ReplyError`](areka_actor::ReplyError) を返す（送信端で死亡観測可能・
     /// R6.7）。
     pub fn barrier(&self) -> Result<(), areka_actor::ReplyError> {
+        self.post_barrier()?.recv()
+    }
+
+    /// 反映フェンス（期限つき）。期限を越えたら [`ReplyError::Timeout`](areka_actor::ReplyError)
+    /// （error! を 1 件）。死亡の扱いは [`barrier`](Self::barrier) と同じ。
+    pub fn barrier_within(&self, timeout: Duration) -> Result<(), areka_actor::ReplyError> {
+        let result = self.post_barrier()?.recv_timeout(timeout);
+        if matches!(result, Err(areka_actor::ReplyError::Timeout)) {
+            tracing::error!(target: LOG_TARGET, ?timeout, "sylphya barrier timed out; writer still busy");
+        }
+        result
+    }
+
+    /// 反映フェンスの投函（期限なし／期限つきの共通部分）。
+    fn post_barrier(&self) -> Result<areka_actor::ReplyReceiver<()>, areka_actor::ReplyError> {
         let (reply, rx) = areka_actor::reply_channel::<()>();
         if self.tx.send(SylphyaMsg::Barrier { reply }).is_err() {
             // アクター死亡 → 投函不能。warn＋Dropped（reader は最終鏡像で継続・表示系を殺さない）。
@@ -545,7 +555,7 @@ impl SylphyaPublisher {
             );
             return Err(areka_actor::ReplyError::Dropped);
         }
-        rx.recv()
+        Ok(rx)
     }
 
     /// 停止規約: `Close` を投函する（正典終了経路・design「shutdown: Close＋join」）。
@@ -590,6 +600,15 @@ pub fn spawn_sylphya_with_failures(
     init: SylphyaInit,
     failures: Option<Sender<PersistFailure>>,
 ) -> SylphyaParts {
+    spawn_parts(init, failures).0
+}
+
+/// 起動の組み立ての本体（本番の [`spawn_sylphya_with_failures`] と epoch の檻が共に通る）。
+/// 檻が epoch を直接見られるよう、部品と共に鏡像の共有の写しも返す。
+pub(crate) fn spawn_parts(
+    init: SylphyaInit,
+    failures: Option<Sender<PersistFailure>>,
+) -> (SylphyaParts, SharedMirror) {
     let SylphyaInit {
         roots,
         io,
@@ -607,11 +626,12 @@ pub fn spawn_sylphya_with_failures(
     });
 
     // 3. 読み口・送信端・ハンドルを返す（reader は初期像を保持する shared を共有）。
-    SylphyaParts {
-        reader: SylphyaReader::new(shared),
+    let parts = SylphyaParts {
+        reader: SylphyaReader::new(shared.clone()),
         publisher: SylphyaPublisher { tx },
         handle,
-    }
+    };
+    (parts, shared)
 }
 
 /// 全永続スコープを寛容ロードし、初期鏡像（epoch 0）の大域点付き区画へ `areka.*` 正準 key で
@@ -640,7 +660,7 @@ fn build_initial_image(roots: &ScopeRoots, io: &dyn PersistIo) -> MirrorImage {
 ///
 /// 各メッセージにつき: [`SylphyaCore::apply`] で効果列を算出 → copy-on-write 後継像へ変異効果を
 /// 適用 → 実変異があれば [`SharedMirror::publish`]（single-writer）→ [`Effect::PersistSave`] を
-/// write-through 保存 → reply（barrier／persist put）を返す → [`Effect::Stop`] で `return`。
+/// write-through 保存 → barrier の reply を返す → [`Effect::Stop`] で `return`。
 /// 全 `Sender` drop（Disconnected）でも正常 `return`（areka-actor 停止規約）。
 fn run_actor(
     rx: std::sync::mpsc::Receiver<SylphyaMsg>,
@@ -661,37 +681,48 @@ fn run_actor(
         // 判断分岐は純関数中核が算出（借用）。配線はその効果列を実行するのみ。
         let effects = core.apply(&msg);
 
-        // copy-on-write 後継像を組み立て（変異効果のみ適用）。
-        let mut next = shared.load().successor();
-        let mut mutated = false;
-        let mut persist_outcome: Option<PersistOutcome> = None;
+        // copy-on-write 後継像は書き換える 4 つの枝が初めて要るときだけ作る（反映待ち・停止・
+        // 書けない名前・204 の記録・保存だけの知らせでは複製しない・#20）。
+        // 書き手はこのアクター 1 つなので、遅らせて作っても元の像は同じ（epoch も同じ）。
+        let mut next: Option<MirrorImage> = None;
         let mut stop = false;
 
         for effect in effects {
             match effect {
                 Effect::SetFlatPerAsker { asker, name, value } => {
-                    next.flat_per_asker
+                    next.get_or_insert_with(|| shared.load().successor())
+                        .flat_per_asker
                         .entry(asker)
                         .or_default()
                         .insert(name, value);
-                    mutated = true;
                 }
                 Effect::RemoveFlatPerAsker { asker, name } => {
-                    // 実際に消えたときだけ後継像を出す（epoch は実変化に対応する）。
-                    if let Some(flat) = next.flat_per_asker.get_mut(&asker) {
-                        mutated |= flat.remove(&name).is_some();
+                    // 実際に消えるときだけ後継像を出す（epoch は実変化に対応する）。
+                    let has = |img: &MirrorImage| {
+                        img.flat_per_asker
+                            .get(&asker)
+                            .is_some_and(|flat| flat.contains_key(&name))
+                    };
+                    if next.as_ref().map_or_else(|| has(&shared.load()), has)
+                        && let Some(flat) = next
+                            .get_or_insert_with(|| shared.load().successor())
+                            .flat_per_asker
+                            .get_mut(&asker)
+                    {
+                        flat.remove(&name);
                     }
                 }
                 Effect::SetDottedGlobal { key, value } => {
-                    next.dotted_global.insert(key, value);
-                    mutated = true;
+                    next.get_or_insert_with(|| shared.load().successor())
+                        .dotted_global
+                        .insert(key, value);
                 }
                 Effect::SetDottedPerAsker { asker, key, value } => {
-                    next.dotted_per_asker
+                    next.get_or_insert_with(|| shared.load().successor())
+                        .dotted_per_asker
                         .entry(asker)
                         .or_default()
                         .insert(key, value);
-                    mutated = true;
                 }
                 Effect::RecordAbsentFlat { .. } => {
                     // 204/失敗の不在記録: 鏡像へは書かない（既定値は sakura 所有・R4.2）。
@@ -699,7 +730,7 @@ fn run_actor(
                 }
                 Effect::PersistSave { scope, entries } => {
                     // write-through: 注入 IO で当該スコープを原子的保存。失敗は save_scope が
-                    // error!＋Degraded で縮退（panic しない・R6.7）——ここは結果を reply へ中継。
+                    // error!＋Degraded で縮退（panic しない・R6.7）——ここは失敗を受け口へ中継。
                     let outcome = save_scope(scope, &roots, io.as_ref(), entries);
                     if let (PersistOutcome::Degraded(failure), Some(failures)) =
                         (&outcome, failures.as_ref())
@@ -712,7 +743,6 @@ fn run_actor(
                             "persist failure receiver closed; failure not forwarded (continuing)"
                         );
                     }
-                    persist_outcome = Some(outcome);
                 }
                 Effect::RuntimeCommandReserved { asker, key, value } => {
                     // SET 運行コマンド。M1 は sink 未登録（apply 側 warn 済み）→ 配送なし。
@@ -734,36 +764,14 @@ fn run_actor(
         }
 
         // 実変異があった時のみ publish（epoch は実変化に対応・barrier reply より前に確定）。
-        if mutated {
+        if let Some(next) = next {
             shared.publish(Arc::new(next));
         }
 
         // reply 送信（reply 端は msg が所有・効果適用＝反映完了の後に返す）。
-        match msg {
-            SylphyaMsg::Barrier { reply } => {
-                // 反映済みをフェンスとして通知（受信端 drop 済みなら未達値を破棄・非 panic）。
-                let _ = reply.send(());
-            }
-            SylphyaMsg::PersistPut {
-                scope,
-                reply: Some(reply),
-                ..
-            } => match persist_outcome {
-                Some(outcome) => {
-                    let _ = reply.send(outcome);
-                }
-                None => {
-                    // PersistPut は必ず PersistSave を出すので起きない。中身を作らず返信端を落とす
-                    // （受け手は ReplyError::Dropped を見る）。panic しない。
-                    tracing::error!(
-                        target: LOG_TARGET,
-                        scope = ?scope,
-                        "persist put produced no save outcome; dropping reply"
-                    );
-                    drop(reply);
-                }
-            },
-            _ => {}
+        if let SylphyaMsg::Barrier { reply } = msg {
+            // 反映済みをフェンスとして通知（受信端 drop 済みなら未達値を破棄・非 panic）。
+            let _ = reply.send(());
         }
 
         if stop {
@@ -786,6 +794,11 @@ mod case_fold_tests;
 #[cfg(test)]
 #[path = "actor_failure_sink_tests.rs"]
 mod failure_sink_tests;
+
+/// 期限つきの反映待ちの檻（audit-sylphya-actor #4）。
+#[cfg(test)]
+#[path = "actor_barrier_within_tests.rs"]
+mod barrier_within_tests;
 
 /// Task 5.2 アクター統合 決定論檻: spawn→publish→barrier→read の配線・barrier フェンス・
 /// アクター死亡観測（SendError／ReplyError／join panic）・reader 無ブロック・write-through 投影。
@@ -810,7 +823,7 @@ mod actor_integration_tests;
 ///   （`mirror::tests::predecessor_image_unchanged_after_publish`）は既存だが、**アクターが
 ///   `apply` の効果列を実行して行う publish swap** で epoch が単調増加することを突く檻は無い。
 ///   reader は epoch を露出しない（設計: epoch はフェンス予約シームで読み API に非露出）ため、
-///   本檻は spawn 経路を忠実に再現しつつ [`SharedMirror`] の clone を保持し
+///   本檻は本番と同じ組み立て（[`spawn_parts`]）を通り [`SharedMirror`] の clone を保持し
 ///   `SharedMirror::load().epoch` で直接観測する。
 /// - **(B) アクター死亡後 send の WARN 記録**（R6.7/8.1・無音失敗禁止）: 死亡後投函が panic せず
 ///   縮退することは既存檻（[`actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`]）
@@ -822,7 +835,7 @@ mod actor_integration_tests;
 ///
 /// - **SET 分類 3 パターン**（R3.4）: `super::tests::{classify_set_effective_key_is_runtime_command,
 ///   classify_set_free_dotted_key_is_store_write, classify_set_canonical_non_effective_is_not_settable,
-///   classify_set_three_branches_all_reachable, classify_set_unparseable_key_is_store_write}` ＋
+///   classify_set_unparseable_key_is_store_write}` ＋
 ///   apply 面 `super::tests::{apply_set_effective_emits_runtime_command_reserved,
 ///   apply_set_free_emits_host_store_write, apply_set_not_settable_emits_no_write}`（既存 5.1）。
 /// - **epoch 単調増加（アクター publish 経路）**（R3.3/2.5）: 本群

@@ -3,10 +3,10 @@
 //! kanade の公開の出し口 [`areka_kanade::script_log::emit`] を 3 つの表示の語で呼び、捕まえた出来事を
 //! ログの履歴の下書き（[`crate::log_history::draft`]）に通して、種別・名・表示の語・本文が取れることを見る。
 
-use areka_kanade::script_log::{PLAIN_LABEL, SSTP_SEND_LABEL, TARGET, emit, event_label};
+use areka_kanade::script_log::{PLAIN_LABEL, SSTP_SEND_LABEL, emit, event_label};
 use log_capture_kit::{CapturedEvent, capture};
 
-use crate::log_history::{Draft, FieldText, Kind, TARGET_SCRIPT, draft};
+use crate::log_history::{Draft, FieldText, Kind, draft};
 
 /// 捕捉した出来事を欄の 2 つの形へ写して下書きに通す。
 fn draft_of(ev: &CapturedEvent) -> Option<Draft> {
@@ -19,11 +19,6 @@ fn draft_of(ev: &CapturedEvent) -> Option<Draft> {
             raw: v.str_raw.as_deref(),
         }),
     )
-}
-
-#[test]
-fn kanade_target_is_the_log_history_script_target() {
-    assert_eq!(TARGET, TARGET_SCRIPT);
 }
 
 #[test]

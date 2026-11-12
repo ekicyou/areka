@@ -1,46 +1,21 @@
-use super::test_support::{assert_no_second_change, base_state, config, steady_none, steady_some};
+use super::test_support::{assert_shiori, config, steady_none, steady_some};
 use super::*;
-use crate::msg::ShioriCall;
-use crate::schedule::step;
+use crate::msg::{MouseButton, MouseEventKind, MouseInput, ShioriCall};
+use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
-use crate::talk::TalkEndReason;
+use crate::talk::{StartTalk, TalkEndReason};
 
-/// 単一 Action が期待 ShioriCall（GET/NOTIFY・id・references）と一致することを検証する。
-fn assert_shiori(action: &Action, expected: &ShioriCall) {
-    match (action, expected) {
-        (
-            Action::ShioriRequest(ShioriCall::Get {
-                id,
-                references,
-                status,
-            }),
-            ShioriCall::Get {
-                id: eid,
-                references: erefs,
-                status: estatus,
-            },
-        ) => {
-            assert_eq!(id, eid, "GET id 不一致");
-            assert_eq!(references, erefs, "GET references 不一致");
-            assert_eq!(status, estatus, "GET status 不一致");
+/// Action 列に OnSecondChange の ShioriRequest が一切ないことを検証する（ゲート閉）。
+fn assert_no_second_change(actions: &[Action]) {
+    for a in actions {
+        if let Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. }) = a
+        {
+            assert_ne!(
+                id.as_str(),
+                "OnSecondChange",
+                "ゲートが閉じておらず OnSecondChange を発行した"
+            );
         }
-        (
-            Action::ShioriRequest(ShioriCall::Notify {
-                id,
-                references,
-                status,
-            }),
-            ShioriCall::Notify {
-                id: eid,
-                references: erefs,
-                status: estatus,
-            },
-        ) => {
-            assert_eq!(id, eid, "NOTIFY id 不一致");
-            assert_eq!(references, erefs, "NOTIFY references 不一致");
-            assert_eq!(status, estatus, "NOTIFY status 不一致");
-        }
-        _ => panic!("ShioriRequest の GET/NOTIFY 種別が期待と不一致"),
     }
 }
 
@@ -63,14 +38,7 @@ fn steady_none_tick_emits_get_and_updates_last_now() {
     // GET（Ref3=1）——events:: の出力と厳密一致。
     assert_shiori(
         &actions[0],
-        &events::on_second_change(
-            now,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        &events::on_second_change(now, &ExecutionSnapshot::INACTIVE),
     );
 }
 
@@ -95,7 +63,6 @@ fn steady_some_tick_emits_notify() {
             now,
             &ExecutionSnapshot {
                 talk_active: true,
-                choice_active: false,
                 ..ExecutionSnapshot::INACTIVE
             },
         ),
@@ -111,12 +78,7 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
     s.pending_close = Some(CloseReason::User { scope: 0 });
     let (next, actions) = step(s, Input::Tick { now }, &config());
     assert!(
-        matches!(
-            next.phase,
-            Phase::ClosePending {
-                reason: CloseReason::User { scope: 0 }
-            }
-        ),
+        matches!(next.phase, Phase::ClosePending),
         "pending_close あり Tick は握手を開始し ClosePending へ"
     );
     assert!(next.pending_close.is_none(), "pending_close は消化される");
@@ -130,8 +92,6 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
         &actions[0],
         &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
-    // OnSecondChange は発行しない。
-    assert_no_second_change(&actions);
 }
 
 // --- boot 中（BootMain）+ Tick → OnSecondChange なし（ゲート閉・boot は pump しない） ---
@@ -140,7 +100,7 @@ fn steady_none_tick_with_pending_close_begins_handshake() {
 fn boot_phase_tick_emits_no_second_change() {
     let s = State {
         phase: Phase::BootMain,
-        ..base_state()
+        ..State::initial()
     };
     let (_next, actions) = step(
         s,
@@ -158,10 +118,8 @@ fn boot_phase_tick_emits_no_second_change() {
 #[test]
 fn close_pending_tick_emits_no_second_change() {
     let s = State {
-        phase: Phase::ClosePending {
-            reason: CloseReason::System,
-        },
-        ..base_state()
+        phase: Phase::ClosePending,
+        ..State::initial()
     };
     let (_next, actions) = step(
         s,
@@ -170,7 +128,7 @@ fn close_pending_tick_emits_no_second_change() {
         },
         &config(),
     );
-    // close::step は現状 stub（pump 非発行）——OnSecondChange が出ないことを検証。
+    // close::step は ClosePending の Tick で last_now を更新するだけ（pump しない）——OnSecondChange が出ないことを検証。
     assert_no_second_change(&actions);
 }
 
@@ -182,7 +140,7 @@ fn close_talk_wait_tick_emits_no_second_change() {
             deadline: None,
         },
         next_talk_id: 3,
-        ..base_state()
+        ..State::initial()
     };
     let (_next, actions) = step(
         s,
@@ -211,14 +169,21 @@ fn steady_none_value_starts_talk_and_ids_are_monotonic() {
     );
     match s1.phase {
         Phase::Steady {
-            talk: Some(ActiveTalk {
-                talk_id, origin, ..
-            }),
+            talk:
+                Some(ActiveTalk {
+                    talk_id,
+                    origin,
+                    script,
+                }),
         } => {
             assert_eq!(talk_id, TalkId(5));
             assert_eq!(
                 origin, "OnSecondChange",
                 "origin は応答の出所を転記（pump 起動）"
+            );
+            assert_eq!(
+                script, "hello",
+                "起動した talk の script が ActiveTalk へ保持される（DD-10）"
             );
         }
         _ => panic!("expected Steady{{Some}}"),
@@ -234,22 +199,6 @@ fn steady_none_value_starts_talk_and_ids_are_monotonic() {
         }
         _ => panic!("expected StartTalk"),
     }
-
-    // 2 本目（引き継いだカウンタ 6 で別 Steady{None} を想定）→ id=6（再利用しない）。
-    let (s2, actions2) = step(
-        steady_none(s1.next_talk_id),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("world".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "OnSecondChange",
-        },
-        &config(),
-    );
-    let id2 = match &actions2[0] {
-        Action::StartTalk(StartTalk { talk_id, .. }) => *talk_id,
-        _ => panic!("expected StartTalk"),
-    };
-    assert_eq!(id2, TalkId(6), "id は単調増番・再利用しない");
-    assert_eq!(s2.next_talk_id, 7);
 }
 
 // --- Steady{None} + NoContent(204) → no StartTalk・Steady{None} 維持 ---
@@ -290,39 +239,11 @@ fn steady_some_notified_stays_and_emits_nothing() {
     assert!(actions.is_empty());
 }
 
-// --- Steady{Some} + 非マウス Value → warn!+破棄・Steady{Some} 維持・StartTalk なし（DD-6 防御） ---
-// origin は非マウス（OnSecondChange）——マウス origin は置換アームへ抜けるため、DD-6 破棄は
-// 非マウス origin 限定に狭まった（origin 別 reply 政策・DD-IE-2）。
-
-#[test]
-fn steady_some_value_is_discarded_without_start_talk() {
-    let (next, actions) = step(
-        steady_some(TalkId(3), 6),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("late".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "OnSecondChange",
-        },
-        &config(),
-    );
-    match next.phase {
-        Phase::Steady {
-            talk: Some(ActiveTalk { talk_id, .. }),
-        } => assert_eq!(talk_id, TalkId(3), "active talk は維持される"),
-        _ => panic!("expected Steady{{Some}} preserved"),
-    }
-    assert_eq!(next.next_talk_id, 6, "破棄ゆえ採番しない");
-    assert!(
-        !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
-        "Value-during-talk は StartTalk しない（DD-6）"
-    );
-    assert!(actions.is_empty(), "キュー・中断も発行しない");
-}
-
 // === origin 別 reply 政策: 置換 vs DD-6 防御破棄（Req 4.1／4.3／4.4・DD-IE-2／DD-IE-3） ===
-// 置換檻（マウス origin→置換）と DD-6 保存檻（非マウス origin→warn＋破棄）は**対**であり
+// 置換檻（置き換える出所→置換）と DD-6 保存檻（OnSecondChange→warn＋破棄）は**対**であり
 // 同一テスト群に配置する。実機では実 pasta の talking 自衛（204 相当）により置換が構造的に
-// 発火しないため mock 檻が唯一の検証手段。origin の match は wildcard にしない（第 3 の origin
-// 追加時にレビューで必ず政策を意識させるため）。
+// 発火しないため mock 檻が唯一の検証手段。置き換えるかは `events::value_replaces_active_talk` が
+// 決め、倍率の 2 語は info!＋破棄、残り（今は OnSecondChange だけ）は `_` の腕で DD-6 破棄。
 
 // --- (c) Steady{None} + Value（マウス origin）→ StartTalk・ActiveTalk.origin=マウス名（4.1・DD-IE-3） ---
 
@@ -377,9 +298,12 @@ fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
     );
     match next.phase {
         Phase::Steady {
-            talk: Some(ActiveTalk {
-                talk_id, origin, ..
-            }),
+            talk:
+                Some(ActiveTalk {
+                    talk_id,
+                    origin,
+                    script,
+                }),
         } => {
             assert_eq!(
                 talk_id,
@@ -389,6 +313,10 @@ fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
             assert_eq!(
                 origin, "OnMouseDoubleClick",
                 "slot の origin も置換 origin へ更新"
+            );
+            assert_eq!(
+                script, "menu",
+                "置換で差し替わった slot の script も新 talk のものへ更新される（DD-10）"
             );
         }
         _ => panic!("expected Steady{{Some}} replaced"),
@@ -410,12 +338,12 @@ fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
     }
 }
 
-// --- DD-6 保存: Steady{Some} + Value + 非マウス origin(OnSecondChange) → warn＋破棄・維持（4.3/4.4） ---
-// 置換檻（上）と対。DD-6 防御の意味は「全 origin 防御」から「非マウス origin 限定の防御」へ
-// 狭まる——マウス origin は上の置換アームへ抜けるため、本檻は非マウス origin でのみ発火する。
+// --- DD-6 保存: Steady{Some} + Value + origin(OnSecondChange) → warn＋破棄・維持（4.3/4.4） ---
+// 置換檻（上）と対。置き換える出どころ（OnSecondChange・倍率の 2 語以外）と倍率の 2 語は別の腕へ抜けるため、
+// DD-6 破棄はそれ以外の出どころでだけ起きる。
 
 #[test]
-fn steady_some_non_mouse_value_is_discarded_dd6() {
+fn steady_some_second_change_value_is_discarded_dd6() {
     let (next, actions) = step(
         steady_some(TalkId(3), 6),
         Input::ShioriReply {
@@ -430,16 +358,15 @@ fn steady_some_non_mouse_value_is_discarded_dd6() {
         } => assert_eq!(
             talk_id,
             TalkId(3),
-            "非マウス origin の Value は置換せず維持（DD-6）"
+            "OnSecondChange の Value は置換せず維持（DD-6）"
         ),
         _ => panic!("expected Steady{{Some}} preserved"),
     }
     assert_eq!(next.next_talk_id, 6, "破棄ゆえ採番しない");
     assert!(
-        !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
-        "非マウス Value-during-talk は StartTalk しない（DD-6）"
+        actions.is_empty(),
+        "OnSecondChange の Value-during-talk は StartTalk もキュー・中断も発行しない（DD-6）"
     );
-    assert!(actions.is_empty(), "キュー・中断も発行しない");
 }
 
 // --- talk_id 単調性: マウス起動と OnSecondChange 起動を混在させても再利用しない ---
@@ -483,26 +410,6 @@ fn talk_ids_never_reused_across_mixed_origins() {
     assert_eq!(s3.next_talk_id, 7);
 }
 
-// --- 204: マウス origin の NoContent（Steady{None}）→ StartTalk なし（4.2） ---
-
-#[test]
-fn steady_none_mouse_no_content_starts_no_talk() {
-    let (next, actions) = step(
-        steady_none(5),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "OnMouseDoubleClick",
-        },
-        &config(),
-    );
-    assert!(matches!(next.phase, Phase::Steady { talk: None }));
-    assert_eq!(next.next_talk_id, 5, "204 は採番しない");
-    assert!(
-        actions.is_empty(),
-        "マウス origin の 204 も talk 起動しない（Req 4.2）"
-    );
-}
-
 // === TalkDone{reason: Ended | Interrupted}（非 quit の 2 値ルーティング網羅） ===
 
 // --- Steady{Some(id)} + TalkDone{id, Ended}, pending None → Steady{None}・次 Tick で pump 再開 ---
@@ -531,19 +438,12 @@ fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
     assert_eq!(tick_actions.len(), 1);
     assert_shiori(
         &tick_actions[0],
-        &events::on_second_change(
-            now,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        &events::on_second_change(now, &ExecutionSnapshot::INACTIVE),
     );
 }
 
 // --- Steady{Some(id)} + TalkDone{id, Interrupted}, pending None → 同じく Steady{None} 復帰 ---
-// kanade の 3 値ルーティング（本タスクの担当）: Interrupted は Ended と同一経路（非 quit）
+// kanade の 3 値ルーティング: Interrupted は Ended と同一経路（非 quit）
 // として steady::on_talk_done に到達する（mod.rs が防御的に非 quit 扱いへ振る）。
 
 #[test]
@@ -580,12 +480,7 @@ fn steady_talk_done_with_pending_close_begins_handshake() {
         &config(),
     );
     assert!(
-        matches!(
-            next.phase,
-            Phase::ClosePending {
-                reason: CloseReason::System
-            }
-        ),
+        matches!(next.phase, Phase::ClosePending),
         "talk 完了時に保留 close を消化して握手開始"
     );
     assert!(next.pending_close.is_none(), "pending_close は消化される");
@@ -609,12 +504,7 @@ fn steady_none_close_request_begins_handshake_now() {
         },
         &config(),
     );
-    assert!(matches!(
-        next.phase,
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 }
-        }
-    ));
+    assert!(matches!(next.phase, Phase::ClosePending));
     assert_eq!(actions.len(), 1);
     assert_shiori(
         &actions[0],
@@ -647,10 +537,8 @@ fn steady_some_close_request_records_pending_only() {
 }
 
 // === マウス GET 発行（Req 1.4／2.1／3.1・DD-IE-1／DD-IE-8） ===
-// seam（on_mouse）の意図的充填。step() 経由（横断アーム込み）で駆動し、期待 GET は
+// step() 経由（横断アーム込み）で駆動し、期待 GET は
 // events:: の構築子と共有する（Reference 手書き重複を作らない）。
-
-use crate::msg::{MouseButton, MouseEventKind, MouseInput};
 
 fn mouse_move_input(region: Option<&str>) -> MouseInput {
     MouseInput {
@@ -690,17 +578,7 @@ fn steady_none_mouse_move_emits_get_and_keeps_phase() {
     // Reference 完全一致は構築子と共有（talk 非アクティブ→INACTIVE・Status 行なし）。
     assert_shiori(
         &actions[0],
-        &events::on_mouse_move(
-            10,
-            20,
-            0,
-            Some("Head"),
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
-        ),
+        &events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot::INACTIVE),
     );
 }
 
@@ -723,11 +601,7 @@ fn steady_none_mouse_double_click_left_emits_get_ref5_zero() {
             0,
             Some("Bust"),
             MouseButton::Left,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
+            &ExecutionSnapshot::INACTIVE,
         ),
     );
 }
@@ -748,11 +622,7 @@ fn steady_none_mouse_double_click_right_emits_get_ref5_one() {
             0,
             Some("Bust"),
             MouseButton::Right,
-            &ExecutionSnapshot {
-                talk_active: false,
-                choice_active: false,
-                ..ExecutionSnapshot::INACTIVE
-            },
+            &ExecutionSnapshot::INACTIVE,
         ),
     );
 }
@@ -787,16 +657,10 @@ fn steady_some_mouse_move_emits_get_with_talking_status() {
         Some("Head"),
         &ExecutionSnapshot {
             talk_active: true,
-            choice_active: false,
             ..ExecutionSnapshot::INACTIVE
         },
     );
     assert_shiori(&actions[0], &expected);
-    // GET のまま（NOTIFY 化しない）ことも明示。
-    assert!(
-        matches!(&actions[0], Action::ShioriRequest(ShioriCall::Get { .. })),
-        "マウス系は常に GET（NOTIFY 化しない・DD-IE-1）"
-    );
 }
 
 // --- pending_close 中は Steady でもマウス GET を発行しない（close 優先・DD-IE-8） ---
@@ -820,94 +684,38 @@ fn steady_mouse_with_pending_close_emits_no_get() {
     );
 }
 
-// === ActiveTalk.script の保持（タスク 4.1・DD-10・Req4.4） ===
-//
-// `OnChoiceTimeout` の Reference0 は「タイムアウトした選択肢を含むトークのスクリプト」
-// （Req3.4）である。その供給源は **kanade が `StartTalk` で自ら作った script** であり
-// （DD-10: 通知同梱でなく kanade 内で完結）、起動時に `ActiveTalk` へ転記して保持する。
-// 本檻は起動 2 経路（新規起動・マウス由来の置換）を実際に `step()` で通し、`ActiveTalk.script`
-// が発行された `StartTalk.script` と一致することを固定する（Ref0 の割付自体はタスク 4.5）。
-
-/// 現 Phase の `ActiveTalk.script` を取り出す（Steady{Some} 以外は panic）。
-fn active_script(phase: &Phase) -> &str {
-    match phase {
-        Phase::Steady {
-            talk: Some(active), ..
-        } => &active.script,
-        _ => panic!("expected Steady{{Some}}"),
-    }
-}
-
-/// 単一 StartTalk Action の script を取り出す（StartTalk 以外は panic）。
-fn started_script(action: &Action) -> &str {
-    match action {
-        Action::StartTalk(StartTalk { script, .. }) => script,
-        _ => panic!("expected StartTalk"),
-    }
-}
+// --- pending_change 中も Steady でマウス GET を発行しない（要件 9.3・切替の保留と同じ決まり） ---
 
 #[test]
-fn steady_none_value_records_started_script_in_active_talk() {
+fn steady_mouse_with_pending_change_emits_no_get() {
+    let mut s = steady_some(TalkId(3), 6);
+    s.pending_change = Some(crate::schedule::translate_test_support::change_request());
     let (next, actions) = step(
-        steady_none(5),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value(
-                r"\0script-a\e".to_string(),
-                areka_talk::SecurityLevel::Local,
-            ),
-            origin: "OnSecondChange",
-        },
+        s,
+        Input::Mouse(mouse_dbl_input(MouseButton::Left)),
         &config(),
     );
-    assert_eq!(actions.len(), 1);
-    assert_eq!(
-        started_script(&actions[0]),
-        r"\0script-a\e",
-        "発行された StartTalk の script（既存挙動）"
+    assert!(
+        next.pending_change.is_some(),
+        "guard は pending_change を消費しない"
     );
-    assert_eq!(
-        active_script(&next.phase),
-        r"\0script-a\e",
-        "起動した talk の script が ActiveTalk へ保持される（DD-10）"
+    assert!(
+        actions.is_empty(),
+        "切替の保留中はマウス GET を発行しない（答えの台詞が今の台詞を置き換え切替が遅れる）"
     );
 }
 
-#[test]
-fn steady_some_mouse_replacement_records_new_script_in_active_talk() {
-    let (next, actions) = step(
-        steady_some(TalkId(3), 6),
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value(
-                r"\0script-b\e".to_string(),
-                areka_talk::SecurityLevel::Local,
-            ),
-            origin: "OnMouseDoubleClick",
-        },
-        &config(),
-    );
-    assert_eq!(actions.len(), 1);
-    assert_eq!(started_script(&actions[0]), r"\0script-b\e");
-    assert_eq!(
-        active_script(&next.phase),
-        r"\0script-b\e",
-        "置換で差し替わった slot の script も新 talk のものへ更新される（DD-10）"
-    );
-}
-
-// === 会話中の 204 は想定外ではない（タスク 6.16・症状 H・Req19.1／19.2） ===
+// === 会話中の 204 は想定外ではない（Req19.1／19.2） ===
 //
 // 会話中（`status="talking"`）の撫でで発行した `OnMouseMove` GET に台本が無いのは普通の
-// 応答である。HEAD ではこの 204 が `Steady{Some}` の `other` 腕へ落ちて
-// `steady_unexpected_reply` の警告になっていた（実機走行 A の生ログに 19 行）。挙動は
-// 変わらないが、生ログの警告の数が異常の数と一致しなくなるため直す。
+// 応答であり、`steady_unexpected_reply` の警告にしない（生ログの警告の数を異常の数と一致させる）。
 
 #[test]
 fn steady_some_mouse_no_content_is_silent_and_keeps_state() {
     use crate::schedule::log_capture::{assert_not_logged, capture};
 
-    let mut captured = Vec::new();
     let mut result = None;
-    captured.extend(capture(|| {
+    let captured = capture(|| {
         result = Some(step(
             steady_some(TalkId(3), 6),
             Input::ShioriReply {
@@ -916,7 +724,7 @@ fn steady_some_mouse_no_content_is_silent_and_keeps_state() {
             },
             &config(),
         ));
-    }));
+    });
     let (next, actions) = result.expect("step が走っていない");
 
     match next.phase {

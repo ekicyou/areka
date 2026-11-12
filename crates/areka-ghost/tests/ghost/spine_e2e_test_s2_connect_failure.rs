@@ -70,6 +70,7 @@ fn s2_connect_failure_drives_autonomous_kanade_termination_and_full_teardown() {
         shiori: shiori_handle,
         start_relay: start_relay_handle,
         down_relay: down_relay_handle,
+        choice_wake_relay: _,
         ticker: _,
         sylphya: _,
     } = handles;

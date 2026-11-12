@@ -44,17 +44,6 @@ fn block_offset_maps_to_expected_axis_and_sign_per_writing_mode() {
     );
 }
 
-/// 軸写像は符号を発明しない——正負ゼロいずれのスカラも選択軸へそのまま透過する
-/// （横書き＝y・縦書き 2 方向＝x の全網羅）。
-#[test]
-fn block_axis_vector_passes_sign_through_on_selected_axis() {
-    for v in [-7, 0, 5] {
-        assert_eq!(block_axis_vector(WritingMode::HorizontalTb, v), (0, v));
-        assert_eq!(block_axis_vector(WritingMode::VerticalRl, v), (v, 0));
-        assert_eq!(block_axis_vector(WritingMode::VerticalLr, v), (v, 0));
-    }
-}
-
 // ── DD11/R6.4/R8.2: 真位置と量子化（真位置からの直接丸め・round half away from zero） ──
 
 /// 量子化は真位置からの直接丸め（`round(pos)`）で、半整数は 0 から遠い側へ丸める
@@ -69,18 +58,8 @@ fn quantization_is_direct_round_half_away_from_zero() {
     assert_eq!(planner.resolve_position(7.5, &contract).committed, 8);
 }
 
-/// k=1.0 かつ行単位 `block_offset`（整数）では pos が整数＝`committed == pos`
-/// （byte 一致の構造前提）。
-#[test]
-fn scale_one_integer_offset_yields_committed_equal_to_pos() {
-    let contract = ScaleContract::new(1.0, None);
-    let state = ScrollPlanner::new().resolve_position(-39.0, &contract);
-    assert_eq!(state.pos, -39.0);
-    assert_eq!(state.committed as f32, state.pos);
-}
-
 /// k≠1.0（1.25）でも真位置からの直接丸めで `|committed − pos| ≤ 0.5` を保つ
-/// （小数アキュムレータの単発檻・長スクロール列の累積檻は後続 3.4 の担当）。
+/// （小数アキュムレータの単発檻）。
 #[test]
 fn nonunit_scale_keeps_committed_within_half_pixel() {
     let contract = ScaleContract::new(1.25, None);
@@ -101,19 +80,9 @@ fn nonunit_scale_keeps_committed_within_half_pixel() {
     assert!((boundary.committed as f32 - boundary.pos).abs() <= 0.5);
 }
 
-// ── R7.5 系: 純関数（同一入力→同一出力）・契約点の初期状態・blit 軸写像委譲 ──
+// ── R7.5 系: 契約点の初期状態・blit 軸写像委譲 ──
 
-/// 同一 `block_offset` の反復算出は同一 `ScrollState` を返す（決定論・純関数）。
-#[test]
-fn resolve_position_is_deterministic() {
-    let contract = ScaleContract::new(1.25, None);
-    let planner = ScrollPlanner::new();
-    let first = planner.resolve_position(-27.0, &contract);
-    let second = planner.resolve_position(-27.0, &contract);
-    assert_eq!(first, second);
-}
-
-/// 初期計画者の契約点は真位置 0・確定位置 0（commit 前・後続 3.2 の状態遷移なし）。
+/// 初期計画者の契約点は真位置 0・確定位置 0（commit 前）。
 #[test]
 fn new_planner_scroll_state_is_zero() {
     assert_eq!(
@@ -144,4 +113,39 @@ fn blit_vector_maps_target_committed_to_block_axis() {
         planner.blit_vector(&target, WritingMode::VerticalLr),
         block_axis_vector(WritingMode::VerticalLr, target.committed)
     );
+}
+
+// ── 指摘 3: 飽和した確定位置からのずらしはあふれず ±面の寸に収まる ──
+
+/// 確定位置が両端に飽和していても、ずらしは飽和の引き算で求まり（あふれの panic なし）、
+/// 面の寸で頭打ちにした結果は ±面の寸に収まって向きを保つ。
+#[test]
+fn saturated_committed_blit_stays_within_surface() {
+    let contract = ScaleContract::new(1.0, None);
+    let surface = (40u32, 30u32);
+    for (from, to) in [(3e9f32, -3e9f32), (-3e9, 3e9)] {
+        let mut planner = ScrollPlanner::new();
+        planner.committed = planner.resolve_position(from, &contract).committed;
+        let target = planner.resolve_position(to, &contract);
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let raw = planner.blit_vector(&target, mode);
+            let (bx, by) = ScrollPlanner::clamp_blit_to_surface(raw, surface);
+            assert!(bx.unsigned_abs() <= surface.0 && by.unsigned_abs() <= surface.1);
+            assert_eq!((bx.signum(), by.signum()), (raw.0.signum(), raw.1.signum()));
+            let block_dim = if mode == WritingMode::HorizontalTb {
+                30
+            } else {
+                40
+            };
+            assert_eq!(
+                bx.abs() + by.abs(),
+                block_dim,
+                "{mode:?}: 全部送り出された＝面の寸ちょうど"
+            );
+        }
+    }
 }

@@ -54,20 +54,18 @@ impl SylphyaReader {
 
     /// フラット窓の逐次解決（`%` 抜きの名を与える・R3.1）。
     ///
-    /// 解決順は **per-asker → global**: 当該 asker の per-asker 区画→大域区画の順に
-    /// 名前を引き、値が実在すれば [`FlatResolution::Value`]。不在なら台帳
+    /// 当該 asker の per-asker 区画で名前を引き、値が実在すれば [`FlatResolution::Value`]。
+    /// 不在なら台帳
     /// （[`FLAT_VOCAB`]）の縮退政策を返す（[`FlatResolution::Degraded`]）。台帳外の名は
     /// `Degraded(PassThroughRaw)`（design「台帳外の名は Degraded(PassThroughRaw)」）。
     ///
     /// 由来非露出（R2.4）: 返す型に backing 層情報は載らない。無待機（R2.7）。
     pub fn resolve_flat(&self, asker: &AskerContext, name: &str) -> FlatResolution {
         let img = self.shared.load();
-        // per-asker → global の順で値を引く。
         let hit = img
             .flat_per_asker
             .get(&asker.asker)
-            .and_then(|m| m.get(name))
-            .or_else(|| img.flat_global.get(name));
+            .and_then(|m| m.get(name));
         if let Some(v) = hit {
             return FlatResolution::Value(v.clone());
         }
@@ -119,21 +117,17 @@ impl SylphyaReader {
     /// talk 凍結スナップショット素材（R2.1）。
     ///
     /// 鏡像に **値が実在するフラット名のみ** を `BTreeMap<String, String>` として返す。
-    /// per-asker → global のマージ（per-asker が global を隠す）で、縮退・不在の名や
-    /// 既定値は含めない（値実在分のみ）。戻り値は所有コピー——取得後に新しい鏡像が
+    /// 当該 asker の per-asker 区画の写しで、縮退・不在の名や既定値は含めない（値実在分のみ）。
+    /// 戻り値は所有コピー——取得後に新しい鏡像が
     /// publish されても、返した写像は不変（per-talk 凍結）。
     ///
     /// 無待機（R2.7）。ghost がこれを `SystemVarSnapshot` へ写像する（sylphya は sakura 非依存）。
     pub fn talk_snapshot(&self, asker: &AskerContext) -> BTreeMap<String, String> {
         let img = self.shared.load();
-        // global を土台に per-asker を上書きマージ（per-asker → global 優先順に対応）。
-        let mut out: BTreeMap<String, String> = img.flat_global.clone();
-        if let Some(per) = img.flat_per_asker.get(&asker.asker) {
-            for (k, v) in per {
-                out.insert(k.clone(), v.clone());
-            }
-        }
-        out
+        img.flat_per_asker
+            .get(&asker.asker)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// 正準文字列 key で点付き区画を引く（per-asker → global → 登録の表）。内部共通経路。
@@ -234,33 +228,6 @@ mod tests {
         assert_eq!(
             reader.resolve_flat(&ctx("ghost/a"), "not_a_real_token"),
             FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
-        );
-    }
-
-    #[test]
-    fn flat_per_asker_shadows_global() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.flat_global.insert("selfname".into(), "GLOBAL".into());
-        img.flat_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("selfname".into(), "PERASKER".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        assert_eq!(
-            reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-            FlatResolution::Value("PERASKER".into())
-        );
-    }
-
-    #[test]
-    fn flat_global_found_when_per_asker_lacks() {
-        let mut img = MirrorImage::empty();
-        img.flat_global.insert("selfname".into(), "GLOBAL".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        assert_eq!(
-            reader.resolve_flat(&ctx("ghost/a"), "selfname"),
-            FlatResolution::Value("GLOBAL".into())
         );
     }
 
@@ -382,7 +349,6 @@ mod tests {
     fn talk_snapshot_contains_only_real_values() {
         let a = AskerId::new("ghost/a");
         let mut img = MirrorImage::empty();
-        img.flat_global.insert("gkey".into(), "gval".into());
         img.flat_per_asker
             .entry(a.clone())
             .or_default()
@@ -390,24 +356,9 @@ mod tests {
         let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
         let snap = reader.talk_snapshot(&ctx("ghost/a"));
         assert_eq!(snap.get("selfname").map(String::as_str), Some("Alice"));
-        assert_eq!(snap.get("gkey").map(String::as_str), Some("gval"));
         // degraded/absent names are NOT present
         assert!(!snap.contains_key("username"));
         assert!(!snap.contains_key("month"));
-    }
-
-    #[test]
-    fn talk_snapshot_per_asker_shadows_global() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.flat_global.insert("selfname".into(), "GLOBAL".into());
-        img.flat_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("selfname".into(), "PERASKER".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        let snap = reader.talk_snapshot(&ctx("ghost/a"));
-        assert_eq!(snap.get("selfname").map(String::as_str), Some("PERASKER"));
     }
 
     #[test]
@@ -434,34 +385,6 @@ mod tests {
         let snap2 = reader.talk_snapshot(&ctx("ghost/a"));
         assert_eq!(snap2.get("selfname").map(String::as_str), Some("CHANGED"));
     }
-
-    #[test]
-    fn determinism_same_epoch_same_result() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.flat_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("selfname".into(), "Alice".into());
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
-        let r1 = reader.resolve_flat(&ctx("ghost/a"), "selfname");
-        let r2 = reader.resolve_flat(&ctx("ghost/a"), "selfname");
-        assert_eq!(r1, r2);
-        let d1 = reader.resolve_dotted_str(&ctx("ghost/a"), "system.none");
-        let d2 = reader.resolve_dotted_str(&ctx("ghost/a"), "system.none");
-        assert_eq!(d1, d2);
-        assert_eq!(d1, DottedResolution::NotFound);
-    }
-
-    #[test]
-    fn reader_is_clone() {
-        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(MirrorImage::empty())));
-        let clone = reader.clone();
-        assert_eq!(
-            clone.resolve_dotted_str(&ctx("g"), "a.b"),
-            DottedResolution::NotFound
-        );
-    }
 }
 
 /// 鏡像・読み口 決定論単体テスト群（Task 3.3・consolidated criterion-mapped cage）。
@@ -482,9 +405,7 @@ mod tests {
 ///   両窓・両方向の集約檻は本群 [`per_asker_non_mixing_flat_and_dotted`]（点付き per-asker
 ///   非混同の初出檻）。
 /// - **per-talk 凍結**（R2.1）: `super::tests::talk_snapshot_is_frozen_after_publish`（既存）。
-/// - **決定論（同一鏡像 epoch×同一 asker×同一名→同一結果）**（R2.5・9.1）:
-///   フラット Value＋点付き NotFound は `super::tests::determinism_same_epoch_same_result`（既存）。
-///   点付き **Value** 分岐は本群 [`determinism_dotted_value_present_stable`] が補う。
+/// - **決定論**（R2.5・9.1）: 純粋な関数を同じ引数で呼ぶだけなので檻を置かない。
 #[cfg(test)]
 mod mirror_reader_criteria_cage {
     use crate::asker::{AskerContext, AskerId};
@@ -575,32 +496,5 @@ mod mirror_reader_criteria_cage {
             reader.resolve_dotted(&ctx("ghost/a"), &only_b),
             DottedResolution::NotFound
         );
-    }
-
-    /// 決定論（点付き **Value** 分岐）: 同一鏡像 epoch×同一 asker×同一名 → 同一結果（R2.5・9.1）。
-    ///
-    /// 既存 `determinism_same_epoch_same_result` はフラット Value＋点付き NotFound を檻化する。
-    /// 本檻は publish を挟まず（epoch 不変）点付き Value を反復解決し、値が実在する分岐でも
-    /// 結果が安定（同一 `Value`）であることを補完する。
-    #[test]
-    fn determinism_dotted_value_present_stable() {
-        let a = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.dotted_per_asker
-            .entry(a.clone())
-            .or_default()
-            .insert("areka.window.scope(1).y".into(), "256".into());
-        let shared = SharedMirror::new(Arc::new(img));
-        let reader = SylphyaReader::new(shared.clone());
-        // epoch は publish を挟まないので不変（同一鏡像世代）。
-        let epoch_before = shared.load().epoch;
-        let path = parse_dotted("areka.window.scope(1).y").unwrap();
-        let r1 = reader.resolve_dotted(&ctx("ghost/a"), &path);
-        let r2 = reader.resolve_dotted(&ctx("ghost/a"), &path);
-        let r3 = reader.resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(1).y");
-        assert_eq!(r1, DottedResolution::Value("256".into()));
-        assert_eq!(r1, r2);
-        assert_eq!(r2, r3);
-        assert_eq!(shared.load().epoch, epoch_before);
     }
 }

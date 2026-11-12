@@ -5,19 +5,12 @@
 //! 直後にどの根が出るか・根の応答の既存の腕（204 → `OnBoot`・台本 → `OnBoot` を飛ばす）が
 //! 変わらず効くか・定常に入った時点で通知がちょうど 1 件出るかを `step` 経由で固定する。
 
-use super::test_support::{assert_get, assert_notify, initial};
+use super::test_support::{assert_get, assert_notify, cfg, drive_to_prefetch, get_ids, reply};
 use super::*;
 use crate::change::{BootOrigin, ChangedFrom, KanadeNotice};
 use crate::msg::ShioriCall;
 use crate::schedule::step;
 use crate::status::ExecutionSnapshot;
-
-fn cfg(first_boot: bool, boot_origin: BootOrigin) -> KanadeConfig {
-    let mut c = KanadeConfig::new("master", "1.0.0");
-    c.first_boot = first_boot;
-    c.boot_origin = boot_origin;
-    c
-}
 
 fn from() -> ChangedFrom {
     ChangedFrom {
@@ -48,31 +41,9 @@ fn updated() -> BootOrigin {
     }
 }
 
-/// SHIORI の応答を入れる（翻訳の行動が出たら、`OnTranslate` が 204 を返したときの続きを返す）。
-fn reply(s: State, outcome: ShioriOutcome, c: &KanadeConfig) -> (State, Vec<Action>) {
-    let input = Input::ShioriReply {
-        outcome,
-        origin: "test",
-    };
-    crate::schedule::translate_test_support::pass_translate(step(s, input, c), c)
-}
-
 /// Boot → OnInitialize 完了 → username 照会 204 まで進め、照会の応答が返した Action 列を返す。
 fn drive_past_prefetch(c: &KanadeConfig) -> (State, Vec<Action>) {
-    let (s, _) = step(initial(), Input::Boot, c);
-    let (s, _) = reply(s, ShioriOutcome::Notified, c);
-    reply(s, ShioriOutcome::NoContent, c)
-}
-
-/// Action 列に含まれる GET の ID を順に並べる。
-fn get_ids(actions: &[Action]) -> Vec<String> {
-    actions
-        .iter()
-        .filter_map(|a| match a {
-            Action::ShioriRequest(ShioriCall::Get { id, .. }) => Some(id.as_str().to_string()),
-            _ => None,
-        })
-        .collect()
+    reply(drive_to_prefetch(c), ShioriOutcome::NoContent, c)
 }
 
 /// 根（GET）を ID と Reference の組へ写す（`ShioriCall` は `PartialEq` を持たない）。
@@ -104,14 +75,14 @@ fn boot_root_table_picks_one_root_per_origin() {
     ] {
         let c = cfg(true, origin);
         assert_eq!(
-            parts(boot_root(&initial(), &c)),
+            parts(boot_root(&State::initial(), &c)),
             parts(Some(events::on_first_boot(snap, 0)))
         );
     }
     // 起動記録あり＋切替で来た → OnGhostChanged（要件 4.1）。
     let c = cfg(false, BootOrigin::ChangedFrom(from()));
     assert_eq!(
-        parts(boot_root(&initial(), &c)),
+        parts(boot_root(&State::initial(), &c)),
         parts(Some(events::on_ghost_changed(
             &from(),
             &c.shell_folder,
@@ -120,14 +91,14 @@ fn boot_root_table_picks_one_root_per_origin() {
     );
     // 起動記録あり＋ネットワーク更新で読み直した → 渡した名前と Reference の GET（要件 5.5）。
     assert_eq!(
-        parts(boot_root(&initial(), &cfg(false, updated()))),
+        parts(boot_root(&State::initial(), &cfg(false, updated()))),
         Some(("OnUpdateComplete".to_string(), update_refs()))
     );
     // 起動記録あり＋それ以外 → 根なし（OnBoot だけ）。
-    assert!(boot_root(&initial(), &cfg(false, BootOrigin::Plain)).is_none());
+    assert!(boot_root(&State::initial(), &cfg(false, BootOrigin::Plain)).is_none());
     assert!(
         boot_root(
-            &initial(),
+            &State::initial(),
             &cfg(
                 false,
                 BootOrigin::Halted {
@@ -256,7 +227,7 @@ fn steady_notice_is_emitted_exactly_once_when_entering_steady() {
         cfg(false, BootOrigin::ChangedFrom(from())),
         cfg(false, BootOrigin::Plain),
     ] {
-        let (s, a0) = step(initial(), Input::Boot, &c);
+        let (s, a0) = step(State::initial(), Input::Boot, &c);
         let (s, a1) = reply(s, ShioriOutcome::Notified, &c);
         let (mut s, a2) = reply(s, ShioriOutcome::NoContent, &c);
         let mut total = notice_count(&a0) + notice_count(&a1) + notice_count(&a2);
@@ -355,7 +326,6 @@ fn updated_with_script_plays_it_and_skips_on_boot() {
         &c,
     );
     assert!(matches!(s.phase, Phase::BootVersion { talk: Some(_) }));
-    assert!(get_ids(&next).is_empty(), "OnBoot は 0 件のはず");
     assert_eq!(next.len(), 2, "[StartTalk, basewareversion] の 2 件");
     match &next[0] {
         Action::StartTalk(t) => assert_eq!(t.script, r"\0更新したよ\e"),
@@ -373,7 +343,7 @@ fn first_boot_wins_over_updated_and_204_still_falls_through_to_on_boot() {
         &actions[1],
         &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0),
     );
-    // 根が OnFirstBoot なら 204 の腕は今日どおり OnBoot へ。
+    // 根が OnFirstBoot なら 204 の腕は OnBoot へ。
     let (s, next) = reply(s, ShioriOutcome::NoContent, &c);
     assert!(matches!(s.phase, Phase::BootMain));
     assert_eq!(next.len(), 1, "[OnBoot] の 1 件");

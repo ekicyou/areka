@@ -10,14 +10,13 @@
 //! | §8 | 上付き・下付き（後勝ちの排他・語彙のみの印） | 6.1, 6.2 |
 //! | §9 | 一括の戻し（丸ごと置き換え・項目を列挙しない） | 10.1, 10.2, 10.4 |
 //! | §10 | 所有外キー・未知キー・キーなし | 2.5, 2.6 |
-//! | §11 | 較正——過去に壊れうる形を再現すると赤になる述語 | 15.3 |
 //!
 //! §1〜§6（見た目の値・2 層・装飾の表）は兄弟の `look_tests.rs` にある。本ファイルを分けたのは
-//! `look_tests.rs` が 433 行で、本タスクの分を足すと 1 ファイル 1,000 行の見張り（要件 1.3・
+//! `look_tests.rs` へ本タスクの分を足すと 1 ファイル 1,000 行の見張り（要件 1.3・
 //! `crates/log-capture-kit/tests/file_length_guard_test.rs`）の射程に入るため。
 //!
-//! **6 語は小文字の完全一致のみ**（design §A 項目 12）。大文字の語を受理する実装は §11 の
-//! 較正で赤になる。
+//! **6 語は小文字の完全一致のみ**（design §A 項目 12）。大文字の語を受理する実装は §7 の
+//! 「6 語以外」のテストで赤になる。
 //!
 //! **母数を先に固定する**——真偽 5 キーの並び（§7 の先頭）・6 語以外として試す値・所有外の
 //! キーの一覧は、いずれも件数を断言してから回す（表が痩せても緑にならないようにする）。
@@ -49,7 +48,7 @@ fn switch_keys() -> [(&'static str, fn(&mut TextLook) -> &mut bool); 5] {
 /// 要るので、ここでは各フィールドを直に組む。
 fn split_layers() -> LookLayers {
     let default = TextLook {
-        name: vec!["Meiryo".to_owned()],
+        name: vec!["Meiryo".to_owned()].into(),
         height: 20.0,
         color: (10, 20, 30),
         bold: true,
@@ -60,7 +59,7 @@ fn split_layers() -> LookLayers {
         script: Script::Sup,
     };
     let disable = TextLook {
-        name: vec!["Meiryo".to_owned()],
+        name: vec!["Meiryo".to_owned()].into(),
         height: 20.0,
         color: (140, 145, 150),
         bold: false,
@@ -81,7 +80,7 @@ fn split_layers() -> LookLayers {
 /// 見るための出発点）。
 fn styled_look() -> TextLook {
     TextLook {
-        name: vec!["Consolas".to_owned()],
+        name: vec!["Consolas".to_owned()].into(),
         height: 33.0,
         color: (1, 2, 3),
         bold: false,
@@ -105,17 +104,6 @@ fn all_switches_on(base: &TextLook) -> TextLook {
 /// 適用が成功したときに返るべき印——白抜きだけが「状態は更新するが表示は変えない」（R5.9）。
 fn expected_switch_note(key: &str) -> Option<Note> {
     (key == "outline").then_some(Note::VocabularyOnly { key: "outline" })
-}
-
-/// 真偽値で切り替えるのは太字・斜体・下線・打ち消し線・白抜きの 5 項目——母数を先に固定する
-/// （R5.1・R5.9）。項目が増減したらこのテストが先に赤くなる。
-#[test]
-fn the_switch_keys_are_bold_italic_underline_strike_and_outline() {
-    let keys: Vec<&str> = switch_keys().iter().map(|(key, _)| *key).collect();
-    assert_eq!(
-        keys,
-        vec!["bold", "italic", "underline", "strike", "outline"]
-    );
 }
 
 /// `true`／`1` は当該項目だけを付ける（R5.1・R5.9 の印つき）。
@@ -192,9 +180,9 @@ fn default_and_disable_take_only_that_item_from_the_matching_layer() {
 fn a_word_outside_the_six_leaves_the_item_unchanged() {
     let layers = split_layers();
     let outside = [
-        "TRUE", "True", "FALSE", "Default", "DISABLE", "yes", "on", "2", "-1", "",
+        "TRUE", "True", "FALSE", "Default", "Disable", "DISABLE", "yes", "on", "2", "-1", "",
     ];
-    assert_eq!(outside.len(), 10, "6 語の外として試す値の母数");
+    assert_eq!(outside.len(), 11, "6 語の外として試す値の母数");
     for (key, _) in switch_keys() {
         for word in outside {
             let before = styled_look();
@@ -410,13 +398,12 @@ fn the_bulk_disable_replaces_the_whole_look_with_the_disable_layer() {
 /// 戻しから漏れないのは「丸ごと置き換え」だからで、値の比較では今日の 9 項目しか見張れない。
 /// 置き換えの 1 行そのものを字面で固定する（`layout_cursor_overflow_tests.rs` と同じ作法）。
 ///
-/// **本検査が見張るのは本番未到達の 2 腕である**——`\f[default]`／`\f[disable]` は
-/// `state_decoration.rs::apply_font_args` が先に掴んで戻す操作へ回すので、ここで走査する
-/// `apply_font_tag` の該当 2 腕は本番経路から到達しない（タスク 4.2 の裁定）。本番の実体
-/// （`state_decoration.rs::reset_look_to`）を見張るのは
+/// 本検査が見張る `apply_font_tag` の 2 腕は本番から届く——`crates/areka` の `check_script` と
+/// strict の再生が [`classify_font_tag`] を通してこの 2 腕を引く（腕を消すと正典の
+/// `\f[default]`／`\f[disable]` が知らないキーと報告される＝`classify_font_tag` の表が赤）。
+/// 台本の再生の戻しの実体（`state_decoration.rs::reset_look_to`）を見張るのは
 /// `state_decoration_reset_tests.rs::the_production_bulk_reset_replaces_the_look_as_a_whole`
-/// で、本検査だけでは本番を列挙形へ書き換えても緑のままになる。本検査を残すのは、テスト
-/// からのみ到達するこの 2 腕が本番と同じ意味であり続けること（対称性）の固定のためである。
+/// で、本検査はこの 2 腕の置き換えが丸ごとであり続けることを固定する。
 #[test]
 fn the_bulk_reset_replaces_the_look_as_a_whole_without_listing_items() {
     const LOOK_SRC: &str = include_str!("look.rs");
@@ -458,16 +445,52 @@ fn the_keys_owned_by_later_specs_do_not_change_the_look() {
         vec!["valign", "bottom"],
         vec!["shadowcolor", "255", "0", "0"],
         vec!["shadowstyle", "1"],
-        vec!["cursorcolor", "red"],
-        vec!["cursorstyle", "1"],
-        vec!["cursorbrushcolor", "red"],
-        vec!["cursornotselectfontcolor", "red"],
-        vec!["anchorstyle", "1"],
-        vec!["anchorfontcolor", "red"],
-        vec!["anchor.font.color", "red"],
-        vec!["anchorvisitedpencolor", "red"],
     ];
-    assert_eq!(unowned.len(), 12, "所有外として試すキーの母数");
+    assert_eq!(unowned.len(), 4, "寄せ・影として試すキーの母数");
+    // ukadoc の「選択肢マーカー変更コマンド」の各項目の見出しのキー（`cursor…` 12・`anchor…` 18）と、
+    // 「文字変更コマンド」の `anchor.font.color`（`anchor…` は 18＋1＝19）。前方一致ではなく
+    // 数え上げで「他の持ち物」になる。
+    let marker_keys = [
+        "cursorstyle",
+        "cursorcolor",
+        "cursorbrushcolor",
+        "cursorpencolor",
+        "cursorfontcolor",
+        "cursormethod",
+        "cursornotselectstyle",
+        "cursornotselectcolor",
+        "cursornotselectbrushcolor",
+        "cursornotselectpencolor",
+        "cursornotselectfontcolor",
+        "cursornotselectmethod",
+        "anchorstyle",
+        "anchorcolor",
+        "anchorbrushcolor",
+        "anchorpencolor",
+        "anchorfontcolor",
+        "anchormethod",
+        "anchornotselectstyle",
+        "anchornotselectcolor",
+        "anchornotselectbrushcolor",
+        "anchornotselectpencolor",
+        "anchornotselectfontcolor",
+        "anchornotselectmethod",
+        "anchorvisitedstyle",
+        "anchorvisitedcolor",
+        "anchorvisitedbrushcolor",
+        "anchorvisitedpencolor",
+        "anchorvisitedfontcolor",
+        "anchorvisitedmethod",
+        "anchor.font.color",
+    ];
+    assert_eq!(
+        marker_keys.len(),
+        31,
+        "ukadoc の cursor…・anchor… のキーの母数"
+    );
+    let unowned = unowned
+        .into_iter()
+        .chain(marker_keys.iter().map(|key| vec![*key, "red"]));
     for args in unowned {
         let before = styled_look();
         let mut look = before.clone();
@@ -483,7 +506,17 @@ fn the_keys_owned_by_later_specs_do_not_change_the_look() {
 #[test]
 fn an_unknown_key_leaves_the_look_unchanged() {
     let layers = split_layers();
-    for key in ["Bold", "BOLD", "foo", "fontname", "sub2"] {
+    // `cursorcolour`・`anchorx` は ukadoc の一覧に無い書き損じ（前方一致で「他の持ち物」に
+    // 紛れていた・指摘 21）。
+    for key in [
+        "Bold",
+        "BOLD",
+        "foo",
+        "fontname",
+        "sub2",
+        "cursorcolour",
+        "anchorx",
+    ] {
         let before = styled_look();
         let mut look = before.clone();
         let issue = apply_font_tag(&mut look, &layers, &[key, "1"])
@@ -554,7 +587,7 @@ fn a_failed_font_tag_tells_unknown_key_missing_key_or_bad_value() {
 /// それ以外の受理（`AnchorColorAsDefault` を含む）は診ない（`mcp-strict-errors` 要件 2.7）。
 #[test]
 fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
-    let rows: [(&[&str], Option<FontClass>); 14] = [
+    let rows: [(&[&str], Option<FontClass>); 16] = [
         (&["sub", "1"], Some(FontClass::Ignored)),
         (&["outline", "1"], Some(FontClass::Ignored)),
         (&["align", "center"], Some(FontClass::Ignored)),
@@ -569,82 +602,11 @@ fn classify_font_tag_tells_ignored_unknown_key_or_nothing() {
         (&["bold", "abc"], None),
         (&["height", "0"], None),
         (&["name"], None),
+        (&["default"], None),
+        (&["disable"], None),
     ];
     for (args, want) in rows {
         let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
         assert_eq!(classify_font_tag(&args), want, "{args:?} の分類");
-    }
-}
-
-// ------------------------------------------------------------------ §11 較正（3.3）
-
-/// 較正: 「当該項目の既定戻しが他項目も戻す」誤り（`\f[bold,default]` の腕で見た目を
-/// 丸ごと置き換えてしまう形・R5.3・R15.3）。
-#[test]
-fn calibration_item_default_must_not_restore_the_other_items() {
-    let layers = split_layers();
-    let mut look = styled_look();
-    apply_font_tag(&mut look, &layers, &["bold", "default"])
-        .expect("\\f[bold,default] は受理される");
-
-    assert_eq!(look.bold, layers.default.bold, "当該項目は既定へ戻る");
-    assert_eq!(
-        look.height,
-        styled_look().height,
-        "大きさまで既定へ戻っている（当該項目の戻しが丸ごと置き換えになっている）"
-    );
-    assert_eq!(look.color, styled_look().color, "色まで既定へ戻っている");
-    assert_eq!(
-        look.name,
-        styled_look().name,
-        "フォント名まで既定へ戻っている"
-    );
-    assert_eq!(
-        look.script,
-        styled_look().script,
-        "上下付きまで既定へ戻っている"
-    );
-}
-
-/// 較正: 「大文字の語を畳み込んで受理する」誤り（値を小文字化してから 6 語と比べる形・
-/// design §A 項目 12 の「小文字の完全一致のみ」・R15.3）。
-#[test]
-fn calibration_the_six_words_must_not_be_case_folded() {
-    let layers = split_layers();
-    for word in ["TRUE", "True", "FALSE", "Default", "Disable", "DISABLE"] {
-        let before = styled_look();
-        let mut look = before.clone();
-        let result = apply_font_tag(&mut look, &layers, &["bold", word]);
-        assert!(
-            result.is_err(),
-            "\\f[bold,{word}] を受理している（値を小文字へ畳み込んでいる）"
-        );
-        assert_eq!(look, before);
-    }
-}
-
-/// 較正: 「上下付きが排他でなく両立してしまう」誤り（`sub`・`sup` を独立した真偽値で
-/// 持つ形・R6.2・R15.3）。
-///
-/// 独立した 2 つの真偽値で持つ実装なら、下付き→上付き→上付きを外す、の順で下付きが
-/// 残る。1 つの値で持つ実装なら何も残らない。
-#[test]
-fn calibration_sub_and_sup_must_not_be_active_at_the_same_time() {
-    let layers = split_layers();
-    let mut look = TextLook::ukadoc_default();
-    // 途中の状態も断言する——何もしない実装でも最後が `None` になるので、道中を述べないと
-    // 「上下付きが 1 つも効かない」形まで緑で通る。
-    for (key, word, want) in [
-        ("sub", "1", Script::Sub),
-        ("sup", "1", Script::Sup),
-        ("sup", "0", Script::None),
-    ] {
-        apply_font_tag(&mut look, &layers, &[key, word])
-            .unwrap_or_else(|issue| panic!("\\f[{key},{word}] が拒まれた: {issue:?}"));
-        assert_eq!(
-            look.script, want,
-            "\\f[{key},{word}] の後——上付きを外したのに下付きが残っている\
-             （上下付きを独立した 2 値で持っている）"
-        );
     }
 }

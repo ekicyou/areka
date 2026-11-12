@@ -33,10 +33,19 @@
 //! 遠辺の判定は折返し方式にも塊の途中かどうかにも依らず**配置の直前に必ず**通る。
 //! 2 つの値は片方へ丸め込まない（絶対上限の意味論と、行末禁則文字が基準を超えて
 //! ぶら下がる余地〔未実装〕を残すため）。折返し基準が遠辺の内にあるバルーン
-//! （通常の定義）では遠辺の判定は決して発火せず、出力は本規則の導入前と一致する——
-//! ただし **`\_l` による行内位置の跳躍を伴わない入力に限る**。跳躍先が描画範囲の遠辺の
-//! 近くなら、折返し基準が内にあっても要件 6.2（描画範囲の外に置かない）が優先して
-//! 折り返す。
+//! （通常の定義）では遠辺の判定は決して発火せず、出力は本規則の導入前と一致する。
+//! 例外は分かち書きの塊の途中で `\_l` が行内位置を跳ばすときで、塊の中の字は折返し基準と
+//! 比べないので、遠辺の判定が塊を割って折り返す（要件 6.2・`layout_scan_glyph.rs` の ③'）。
+//! 塊の先決は配置と同じ順の足し算で塊の遠端を測るので、丸めの差ではこの腕に届かない。
+//! 本番の区切り（`segment.rs`）は `\_l` で塊を切るので、この腕に届くのは手組みの区切りを
+//! 渡すテストだけである。
+//!
+//! `\_l` は行を閉じるので、跳んだ直後の最初の字は行頭の 1 字として折返し基準とも遠辺とも
+//! 比べず、跳躍先にそのまま置く（行頭の 1 字の例外＝無限の折返しを避ける）。跳躍先が
+//! 遠辺の近くなら、この字は描画範囲の外へ出る——`\_l` の座標は字義どおり用い、内側へ
+//! 寄せない（完了 spec `areka-P0-cursor-tag-canon` の要件 2.6）。遠辺の判定が効くのは
+//! 2 字目からである。塊の頭の字でも同じで、`\_l` の直後は行が空なので、塊が残りの行幅に
+//! 収まらなくても塊の前で行を送らず（空行を出さない）、跳躍先から 1 字ずつ折る。
 //!
 //! ## 行内開始位置の規則（design 無言域の実装正準）
 //!
@@ -57,6 +66,8 @@
 //! 分かち書きの塊の幅の合計（見えている字が塊の途中で切れても、塊全体の幅で塊の前の行送りを
 //! 決める）と、見えている最後の字の後ろの改行・カーソル移動を先に読むこと（次の字が置かれる
 //! まで保留されるだけで、行の割り当てには出ない）の 2 つだけである。
+//! ただし先に読んだぶんの記録（カーソル移動の縮退の `warn!`／`debug!`・有限でない改行の `warn!`）は、
+//! その改行・カーソル移動が再生されるより先に出ることがある（`actor_present.rs` の全部を組み直す経路）。
 //!
 //! ## 改行の遅延（deferred newline・SSP 準拠・areka-P0-newline-defer）
 //!
@@ -79,9 +90,11 @@
 //!
 //! ## 行矩形の規約（R9.4 の再利用シーム）
 //!
-//! [`PositionedLine::rect`] は image px の絶対矩形。行内軸範囲＝行内開始〜最終グリフ
-//! 送り終端（空行は零幅）・行送り軸範囲＝行位置から `font_height` 分（horizontal_tb
-//! は下方向・vertical_rl は左方向・vertical_lr は右方向＝行送り方向と同符号）。
+//! [`PositionedLine::rect`] は image px の絶対矩形。行内軸範囲＝行の最初の字の位置
+//! （`\_l` の字下げが載る）〜最終グリフ送り終端（行は字が置かれたときだけ作るので、
+//! 空行は出ない）・行送り軸範囲＝行位置から行の丈（その行に置いた字の em の最大値・
+//! 要件 7.9）分（horizontal_tb は下方向・vertical_rl は左方向・vertical_lr は右方向
+//! ＝行送り方向と同符号）。
 //! グリフ別の行内位置＋送り幅と併せ、choice-render のクリック可能範囲導出が
 //! そのまま再利用できる（導出自体は実装しない・R9.4）。
 
@@ -95,8 +108,7 @@ use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
 // 本ファイルは行配置の本体で、自己完結した補助 2 つ（塊の advance 合計・`\_l` の 1 軸
-// 解決の配線）は子モジュール `layout_line_ops.rs` が持つ。純移動ゆえ本体からの
-// 呼び出し方は分割前と同一。
+// 解決の配線）は子モジュール `layout_line_ops.rs` が持つ。
 #[path = "layout_line_ops.rs"]
 mod line_ops;
 
@@ -254,8 +266,7 @@ pub struct PositionedGlyph {
     /// この文字に効く装飾の番号（[`StyleId::DEFAULT`]＝そのスコープの既定の見た目・R3.3）。
     ///
     /// 番号の意味を与えるのは装飾の表（[`crate::look::StyleTable`]）で、本型は写しを運ぶだけ。
-    /// 番号列を渡さない配置（[`LayoutEngine::layout`]・[`LayoutEngine::layout_with_cursor_warn`]）
-    /// では全グリフが [`StyleId::DEFAULT`] になる。
+    /// 番号列を渡さない配置（[`LayoutEngine::layout`]）では全グリフが [`StyleId::DEFAULT`] になる。
     pub style: StyleId,
 }
 
@@ -264,7 +275,7 @@ pub struct PositionedGlyph {
 pub struct PositionedLine {
     /// 行の画像空間矩形（規約はモジュール doc「行矩形の規約」）。
     pub rect: LineRect,
-    /// 行内のグリフ列（行内軸位置の昇順・空行は空列）。
+    /// 行内のグリフ列（行内軸位置の昇順・配置は空の行を出さないので空でない）。
     pub glyphs: Vec<PositionedGlyph>,
 }
 
@@ -341,19 +352,16 @@ impl LayoutEngine {
     /// 字の列そのものが伸びる呼び方（届いた字の列で区切って渡す）ではこの性質は成り立たないので、
     /// 分かち書きの折返しの呼び手は区間の全文を渡す（モジュール doc「可視 prefix 規則」）。
     /// ゲート①が④より先にあるため、塊途中で可視が切れても配置済み prefix の行は動かない
-    /// （INV-2/7.2/7.3）。塊前行送りは行頭では `cap_rem == cap_full` ゆえ不発火＝空行を
-    /// 作らない（INV-3）。縦書きは行内軸の `inline_pos`/`advance`/折返し基準/遠辺の演算のみゆえ
-    /// 新規 mode 分岐なし（6.1/6.2・遠辺の軸解決は [`TextRegion`] が済ませている）。
+    /// （INV-2/7.2/7.3）。塊前行送りは行が空でないときだけ＝空行を作らない（INV-3・
+    /// `\_l` の直後で行が空のまま行内位置が行頭でない場合も、長大塊と同じ char 規則へ落ちる）。
+    /// 縦書きは行内軸の `inline_pos`/`advance`/折返し基準/遠辺の演算のみゆえ新規 mode 分岐なし
+    /// （6.1/6.2・遠辺の軸解決は [`TextRegion`] が済ませている）。
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
     ///
-    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**（`actor_present.rs` の
-    /// `arrange_lines` が唯一の本番呼出点で、`present_actor` はそれを呼ぶ）。本関数の本番の呼び手は 0 で、残しているのは
-    /// 非回帰の檻（`layout_styled_tests.rs` が「装飾なしの出力が装飾導入前と 1 ビットも
-    /// 変わらない」を本関数の出力と突き合わせる）をはじめとする多数の決定論テスト
-    /// （`canvas.rs`／`layout_*_tests.rs`／`viewbox_draw_*_tests.rs`／`draw_oracle_tests.rs`／
-    /// `tests/` の統合試験）が呼ぶ委譲の入口としてである。crate 外では
-    /// `crates/areka-emo-text/examples/emo-text-layer/drive.rs` が 2 か所で呼ぶ（本番ではない）。
+    /// 本番の呼び手は 0 で、本番は [`layout_styled`](Self::layout_styled) を呼ぶ（`actor_present.rs`
+    /// の `arrange_lines` が唯一の本番の呼び出し点）。本関数は、非回帰の檻（`layout_styled_tests.rs`
+    /// が装飾なしの出力を本関数の出力と突き合わせる）をはじめとする決定論テストと examples が呼ぶ入口である。
     #[allow(clippy::too_many_arguments)]
     pub fn layout(
         items: &[TextItem],
@@ -367,7 +375,7 @@ impl LayoutEngine {
         // pending-cursor の縮退 warn-once はキャラクター識別＋走査を跨いで持続する guard を要する
         // （per-frame 呼出でのスパム抑止＝ランタイム所有）。キャラクター文脈を持たない既存呼び口は
         // カーソルの解決・遅延実体化（2.1/2.3/2.5）を完全に行いつつ縮退 warn（R5.3）だけを抑止する
-        // （`None` 経路）。純挙動は [`layout_with_cursor_warn`] と完全同一。
+        // （`None` 経路）。純挙動は [`layout_styled`](Self::layout_styled) の既定の見た目だけの配置と同一。
         Self::layout_inner(
             items,
             visible_count,
@@ -377,48 +385,6 @@ impl LayoutEngine {
             metrics,
             wrap,
             None,
-            None,
-        )
-    }
-
-    /// [`layout`](Self::layout) の全挙動に加え、`\_l` の 2 縮退分岐（解釈不能／中央指定の
-    /// 軸取り違え）を **キャラクターごと初回のみ** `warn!` する（R5.3・design 縮退表）。
-    ///
-    /// 負値絶対・`%`・`@` 相対は縮退ではなく**実導出**なので警告の対象ではない（R5.2）。
-    ///
-    /// warn guard は走査を跨いで持続する必要がある（per-frame layout 呼出での重複警告抑止）
-    /// ため、ランタイム（`actor.rs` の `TextLayerRuntime::cursor_warn`・既存 `unresolved_warned` と
-    /// 同型の持続 guard）が所有し `&mut` で渡す。型の住処は解決層
-    /// [`crate::cursor_tag::CursorWarnGuard`] で、本 API の署名は変わらない。行レイアウトの
-    /// 純挙動は [`layout`](Self::layout) と完全同一——差は縮退ログの有無のみ（guard は決定的な
-    /// 行出力に一切影響しない）。
-    ///
-    /// **本番の呼び手は [`layout_styled`](Self::layout_styled) へ移った**。ランタイムが持つ
-    /// guard は `present_actor` から `arrange_lines` を経て `layout_styled` の引数として渡っており、本関数を経由
-    /// **しない**（guard の所有者は変わらないが、受け取る関数は 1 段先である）。本関数の
-    /// 本番の呼び手は 0 で、残しているのは非回帰の檻（`layout_cursor_tests.rs`／
-    /// `layout_cursor_wiring_tests.rs`）が呼ぶ委譲の入口としてである。
-    #[allow(clippy::too_many_arguments)]
-    pub fn layout_with_cursor_warn(
-        items: &[TextItem],
-        visible_count: usize,
-        region: &TextRegion,
-        mode: WritingMode,
-        font_height: f32,
-        metrics: &dyn GlyphMetrics,
-        wrap: WrapPlan<'_>,
-        actor: &ActorKey,
-        warn: &mut CursorWarnGuard,
-    ) -> Vec<PositionedLine> {
-        Self::layout_inner(
-            items,
-            visible_count,
-            region,
-            mode,
-            font_height,
-            metrics,
-            wrap,
-            Some((actor, warn)),
             None,
         )
     }

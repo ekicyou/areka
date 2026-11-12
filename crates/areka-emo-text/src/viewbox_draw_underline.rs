@@ -135,6 +135,12 @@ fn restore(
     layout: &IDWriteTextLayout,
     saved: &[(bool, DWRITE_TEXT_RANGE)],
 ) -> Result<(), TextLayerError> {
+    #[cfg(test)]
+    if FAIL_RESTORE.get() {
+        return Err(device_err("SetUnderline(下線を戻す)")(
+            windows::Win32::Foundation::E_FAIL.into(),
+        ));
+    }
     let mut first = Ok(());
     for &(has, range) in saved {
         let result = unsafe { layout.SetUnderline(has, range) }
@@ -387,6 +393,8 @@ impl IDWriteTextRenderer1_Impl for UnderlineRecorder_Impl {
 thread_local! {
     /// 真のとき受け手の `DrawUnderline` が失敗する（失敗しても戻すことの檻だけが使う）。
     static FAIL_RECORDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// 真のとき戻しが区間の下線を戻さずに失敗する（戻せなかった行を保持庫から外す檻だけが使う）。
+    static FAIL_RESTORE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(test)]

@@ -407,7 +407,7 @@ fn unowned_keys_are_retained_without_changing_the_look() {
 
     state.apply_cue(&font("0", &["align", "center"]));
     state.apply_cue(&font("0", &["shadowcolor", "255", "0", "0"]));
-    state.apply_cue(&font("0", &["cursorbrush", "1"]));
+    state.apply_cue(&font("0", &["cursorbrushcolor", "1"]));
     state.apply_cue(&font("0", &["anchor.font.color", "blue"]));
 
     let actor = st(&state, "0");
@@ -421,7 +421,7 @@ fn unowned_keys_are_retained_without_changing_the_look() {
         Some(["255".to_owned(), "0".to_owned(), "0".to_owned()].as_slice()),
         "引数列は記述順のまま保つ"
     );
-    assert!(actor.unowned_vocab().contains_key("cursorbrush"));
+    assert!(actor.unowned_vocab().contains_key("cursorbrushcolor"));
     assert!(actor.unowned_vocab().contains_key("anchor.font.color"));
 }
 
