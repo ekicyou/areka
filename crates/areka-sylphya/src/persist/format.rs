@@ -102,24 +102,6 @@ pub struct FormatDoc {
     pub window_adjacent: BTreeMap<String, String>,
 }
 
-impl FormatDoc {
-    /// 全 key 族が不在か（寛容読取の「全不在」縮退＝空 doc の判定）。
-    ///
-    /// parse 失敗・未知/欠落バージョンの縮退結果（[`FormatDoc::default`]）はこれが `true`。
-    pub fn is_all_absent(&self) -> bool {
-        self.window.is_empty()
-            && self.balloon_offset.is_empty()
-            && self.boot_count.is_none()
-            && self.vanish_count.is_none()
-            && self.last_ghost.is_none()
-            && self.last_balloon.is_none()
-            && self.last_shell.is_none()
-            && self.last_running.is_none()
-            && self.baseware_roots.is_none()
-            && self.window_adjacent.is_empty()
-    }
-}
-
 /// 窓位置・バルーンオフセットの 1 スコープ分の (x, y)（各軸は文字列・欠落は `None`）。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AxisPair {
@@ -135,11 +117,11 @@ impl AxisPair {
     }
 }
 
-/// [`FormatDoc`] を `format-version = 1` の TOML 文字列へ直列化する（design スキーマ）。
-///
-/// 値はすべて TOML 文字列で出力する。空のマップ・`None` の key はテーブル自体を省略する
-/// （空テーブルを書かない）。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。
-pub fn to_toml_string(doc: &FormatDoc) -> String {
+/// `base`（既存のファイルの表）の上に [`FormatDoc`] の値だけを `format-version = 1` の TOML 文字列へ
+/// 重ねて直列化する（design スキーマ）。値はすべて TOML 文字列で出力し、空のマップ・`None` の key は
+/// テーブル自体を省略する。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。`doc` が持たない表・key・
+/// 型の違う値は `base` のまま残す（版が 1 のまま足された表を保存で消さない）。
+pub(crate) fn to_toml_string_over(mut base: toml::Table, doc: &FormatDoc) -> String {
     let mut root = toml::Table::new();
     root.insert(
         "format-version".into(),
@@ -186,10 +168,11 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
             .collect();
         root.insert("window-adjacent".into(), toml::Value::Table(t));
     }
+    merge_table(&mut base, root);
 
-    // toml の直列化は本 Table 構造では失敗しない（全値が String/Integer/Table）。万一の
+    // toml の直列化は読んだ TOML の表とこの関数が足す値からは失敗しない。万一の
     // 失敗も panic させず、空 doc の最小形へ縮退する（R6.7・無音失敗なし）。
-    toml::to_string(&root).unwrap_or_else(|e| {
+    toml::to_string(&base).unwrap_or_else(|e| {
         tracing::error!(
             target: LOG_TARGET,
             error = %e,
@@ -197,6 +180,18 @@ pub fn to_toml_string(doc: &FormatDoc) -> String {
         );
         format!("format-version = {FORMAT_VERSION}\n")
     })
+}
+
+/// `over` の値を `base` へ重ねる（両方が表なら中へ降り、ほかは `over` で置き換える）。
+fn merge_table(base: &mut toml::Table, over: toml::Table) {
+    for (key, value) in over {
+        match (base.get_mut(&key), value) {
+            (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge_table(b, o),
+            (_, value) => {
+                base.insert(key, value);
+            }
+        }
+    }
 }
 
 /// スコープ ID → [`AxisPair`] のマップを TOML テーブルへ（全空なら `None`＝テーブル省略）。
@@ -233,6 +228,16 @@ fn count_table(value: &str) -> toml::Value {
 ///
 /// 同一 content からは常に同一 doc を返す（決定論・R2.5 の永続版）。
 pub fn read_toml_str(content: &str) -> FormatDoc {
+    parse_toml_str(content)
+        .map(|(doc, _)| doc)
+        .unwrap_or_default()
+}
+
+/// 寛容でない読み。使えれば `Ok((doc, 読んだ表))`、使えなければ `Err(利用者へ見せる理由の文)`。
+///
+/// 縮退の `warn!`（[`read_toml_str`] の 2 つの文のまま）はこの関数が出す。保存の土台の読みは
+/// `Err` を受けたら書かない（使えないファイルを読めた分だけで上書きして消さない）。
+pub(crate) fn parse_toml_str(content: &str) -> Result<(FormatDoc, toml::Table), String> {
     let table: toml::Table = match content.parse::<toml::Table>() {
         Ok(t) => t,
         Err(e) => {
@@ -241,7 +246,7 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
                 error = %e,
                 "persist TOML parse failed; degrading to all-absent (file preserved)"
             );
-            return FormatDoc::default();
+            return Err("記憶のファイル sylphya.toml が TOML として読めないので、中身を消さないように書くのをやめました（手で直したときの書き誤りなど）".to_string());
         }
     };
 
@@ -258,14 +263,17 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
                 expected_version = FORMAT_VERSION,
                 "persist TOML has unknown/absent format-version; degrading to all-absent (file preserved)"
             );
-            return FormatDoc::default();
+            let found = version.map_or_else(|| "書かれていない値".to_string(), |v| v.to_string());
+            return Err(format!(
+                "記憶のファイル sylphya.toml の format-version が {found}で、この areka が読める {FORMAT_VERSION} と違うので、中身を消さないように書くのをやめました（新しい areka で書いたファイルなど）"
+            ));
         }
     }
 
     // 有効バージョン: 存在する key のみ採用（欠落・型外れは当該 key 不在・warn なし）。
     let last = table.get("last").and_then(toml::Value::as_table);
     let read_last = |field| last.and_then(|t| read_str(t, field));
-    FormatDoc {
+    let doc = FormatDoc {
         last_ghost: read_last("ghost"),
         last_balloon: read_last("balloon"),
         last_shell: read_last("shell"),
@@ -279,7 +287,8 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
         boot_count: read_count(&table, "boot"),
         vanish_count: read_count(&table, "vanish"),
         window_adjacent: read_string_map(&table, "window-adjacent"),
-    }
+    };
+    Ok((doc, table))
 }
 
 /// `[<key>."ID"]` 群を [`AxisPair`] マップへ（テーブル不在・非テーブルは空マップ）。
@@ -365,7 +374,7 @@ mod tests {
             window_adjacent: BTreeMap::from([("1".into(), "left".into())]),
         };
 
-        let toml = to_toml_string(&doc);
+        let toml = to_toml_string_over(toml::Table::new(), &doc);
         let back = read_toml_str(&toml);
         assert_eq!(doc, back);
     }
@@ -395,7 +404,7 @@ mod tests {
             },
         );
 
-        let back = read_toml_str(&to_toml_string(&doc));
+        let back = read_toml_str(&to_toml_string_over(toml::Table::new(), &doc));
         assert_eq!(doc, back);
     }
 
@@ -406,7 +415,7 @@ mod tests {
             baseware_roots: Some(String::new()),
             ..FormatDoc::default()
         };
-        let toml = to_toml_string(&doc);
+        let toml = to_toml_string_over(toml::Table::new(), &doc);
         assert!(
             toml.contains("[baseware]"),
             "output=
@@ -417,7 +426,7 @@ mod tests {
 
     #[test]
     fn serialized_output_carries_format_version_1() {
-        let toml = to_toml_string(&FormatDoc::default());
+        let toml = to_toml_string_over(toml::Table::new(), &FormatDoc::default());
         assert!(toml.contains("format-version = 1"), "output=\n{toml}");
     }
 
@@ -428,57 +437,44 @@ mod tests {
             boot_count: Some("1024".into()),
             ..FormatDoc::default()
         };
-        let back = read_toml_str(&to_toml_string(&doc));
+        let back = read_toml_str(&to_toml_string_over(toml::Table::new(), &doc));
         assert_eq!(back.boot_count.as_deref(), Some("1024"));
     }
 
     #[test]
     fn parse_failure_yields_all_absent_no_panic() {
         let doc = read_toml_str("this is = = not valid toml [[[");
-        assert!(doc.is_all_absent());
+        assert_eq!(doc, FormatDoc::default());
     }
 
     #[test]
     fn unknown_version_yields_all_absent() {
         // 有効 TOML だが format-version = 2（未知）→ 本文があっても全不在へ縮退。
         let doc = read_toml_str("format-version = 2\n[boot]\ncount = \"7\"\n");
-        assert!(doc.is_all_absent());
+        assert_eq!(doc, FormatDoc::default());
+    }
+
+    #[test]
+    fn strict_parse_gives_the_reason_for_each_unusable_content() {
+        let reason = |content| parse_toml_str(content).unwrap_err();
+        assert!(reason("[[[ broken").contains("TOML として読めない"));
+        assert!(reason("format-version = 2").contains("format-version が 2で"));
+        assert!(reason("format-version = \"1\"").contains("書かれていない値で"));
+        assert_eq!(
+            parse_toml_str("format-version = 1").map(|(doc, _)| doc),
+            Ok(FormatDoc::default())
+        );
     }
 
     #[test]
     fn missing_version_yields_all_absent() {
         let doc = read_toml_str("[boot]\ncount = \"7\"\n");
-        assert!(doc.is_all_absent());
+        assert_eq!(doc, FormatDoc::default());
     }
 
     #[test]
     fn empty_content_yields_all_absent() {
-        assert!(read_toml_str("").is_all_absent());
-    }
-
-    #[test]
-    fn last_only_is_not_all_absent() {
-        // [last] の 4 欄は 1 つずつ is_all_absent に効く。
-        for doc in [
-            FormatDoc {
-                last_ghost: Some("g".into()),
-                ..Default::default()
-            },
-            FormatDoc {
-                last_balloon: Some("b".into()),
-                ..Default::default()
-            },
-            FormatDoc {
-                last_shell: Some("s".into()),
-                ..Default::default()
-            },
-            FormatDoc {
-                last_running: Some("h".into()),
-                ..Default::default()
-            },
-        ] {
-            assert!(!doc.is_all_absent());
-        }
+        assert_eq!(read_toml_str(""), FormatDoc::default());
     }
 
     #[test]
@@ -500,32 +496,6 @@ mod tests {
         // count が整数（型外れ）→ 当該 key 不在（panic しない・寛容）。
         let doc = read_toml_str("format-version = 1\n[boot]\ncount = 7\n");
         assert_eq!(doc.boot_count, None);
-    }
-
-    #[test]
-    fn determinism_same_content_same_outcome() {
-        let content = "format-version = 1\n[boot]\ncount = \"3\"\n[vanish]\ncount = \"1\"\n";
-        assert_eq!(read_toml_str(content), read_toml_str(content));
-    }
-
-    #[test]
-    fn determinism_same_doc_same_serialization() {
-        let mut doc = FormatDoc::default();
-        doc.window.insert(
-            "2".into(),
-            AxisPair {
-                x: Some("9".into()),
-                y: None,
-            },
-        );
-        doc.window.insert(
-            "0".into(),
-            AxisPair {
-                x: Some("1".into()),
-                y: Some("2".into()),
-            },
-        );
-        assert_eq!(to_toml_string(&doc), to_toml_string(&doc));
     }
 
     // --- 未知バージョンの warn 発火檻（R6.4「未知バージョン→warn・旧形式判別可能」）---
@@ -588,7 +558,7 @@ mod tests {
             "key 欠落で warn が出た。捕捉={:?}",
             events
                 .iter()
-                .map(|e| (e.level, e.message.clone()))
+                .map(|e| (e.level, e.message()))
                 .collect::<Vec<_>>()
         );
     }

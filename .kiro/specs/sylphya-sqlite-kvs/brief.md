@@ -114,3 +114,10 @@ areka の値の持ち方が、置き場によってばらばらである。覚�
 - **要件定義のモデル**: Fable（鍵と層で読み書きする新しい口を本体・`areka-ghost`・MCP が使う＝前例の無い公開の契約。複数のプロセスが同じファイルへ書くときの順と消えない保証を新しく組む）。
 - **分割の案**: なし（`mcp-set-property` を一度切り出した）。
 - **見つけた穴・古くなった記述**: Current State の行番号がずれた（中身は同じ）: 共有の写し `mirror.rs:74`・読み口 `reader.rs:63,93,127`・`SylphyaPublisher` は `actor.rs:467`・`apply` は `:264`・`classify_set` は `:141`・`PersistKey` は `persist/mod.rs:124`・`to_canonical_key` は `:173`・`save_scope` は `:288`・`FakePersistIo` は `persist/io.rs:156`・`boot_resolve.rs:369,445`・`placement/persist.rs:326`。
+
+## 追記（2026-11-06 `audit-sylphya-actor` の要件の討議で回された件）
+
+`audit-sylphya-actor` の audit の指摘のうち、ウェーブ C18 の約束（3 つのクレートの公開の形を変えない）のために、その spec では直せない 2 件をこの spec へ回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の要件の討議 議題 3）。作り直しの中で消す。
+
+- **件 1（audit #10）**: `RuntimeCommandSink`・`SylphyaInit::runtime_sink`（`crates/areka-sylphya/src/actor.rs`）は本番で一度も `Some` にならない差し替えの口。範囲の外の 32 か所は全部 `None`。型と欄を消し、`Effect::RuntimeCommandReserved` の枝は `warn!` を出して何もしない枝にする。panic の檻は別の道具で作り直す。
+- **件 2（audit #21）**: `SylphyaCore`（`actor.rs`）は状態を持たない型。`apply` を自由な関数にする。`crates/areka-placement`（元 `crates/areka/src/placement/`）の `zorder_property_deferral_tests.rs` の呼び手も直す。

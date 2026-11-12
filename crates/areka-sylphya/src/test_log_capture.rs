@@ -8,13 +8,10 @@
 //! 実行テスト」）。
 //!
 //! # 硬化機構は 1 箇所にしかない
-//! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する（spec:
-//! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは
-//! 「この crate の檻が照合する形（[`CapturedEvent`]）への変換」と表明ヘルパだけで、
-//! subscriber の設置も interest の管理も自前では行わない。以前ここにあった
-//! interest-keeper（プロセス全体の既定 subscriber を常駐させる方式）は、
-//! 同じ機構が crate ごとに写し取られて写し損ねた側だけが静かに嘘をつく形だったため、
-//! 共有 crate へ一本化して撤去した。
+//! 捕捉窓も捕捉した 1 件の型も共有 crate [`log_capture_kit`] のものをそのまま使う（spec:
+//! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは、その上の薄い
+//! 2 つの関数（[`capture`] と [`assert_logged`]）だけで、subscriber の設置も interest の管理も
+//! 型の写しも自前では持たない。
 //!
 //! # 機序（「スレッドローカルゆえ安全」は誤り）
 //! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
@@ -31,40 +28,15 @@
 //! `tracing-core` の実コード引用は `log_capture_kit` の crate doc および同 crate の
 //! `src/probe.rs` にある。
 
-use log_capture_kit::CapturedEvent as CanonicalEvent;
+use log_capture_kit::CapturedEvent;
 use tracing::Level;
-
-/// 捕捉した 1 イベント（format 層の檻が照合するのは target／level／message）。
-#[derive(Clone, Debug)]
-pub(crate) struct CapturedEvent {
-    pub target: String,
-    pub level: Level,
-    /// 構造化フィールド `message`（マクロ本文）の `Debug` 表現。未設定なら空文字。
-    pub message: String,
-}
-
-impl CapturedEvent {
-    /// 共有機構の正準イベントから、本 crate の檻が照合する形へ変換する。
-    ///
-    /// `message` は `fmt::Arguments` ゆえ `record_debug` 経路で届き、その `{:?}` は整形済みの
-    /// 本文そのもの（引用符なし）になる。欠落時に空文字を返すのも移行前と同じ
-    /// （[`log_capture_kit::CapturedEvent::message`] が `unwrap_or("")`）。
-    fn from_canonical(ev: &CanonicalEvent) -> Self {
-        Self {
-            target: ev.target.clone(),
-            level: ev.level,
-            message: ev.message().to_string(),
-        }
-    }
-}
 
 /// `f` を実行し、その間にテストスレッドで発行された `tracing` イベントを捕捉して返す。
 ///
 /// 捕捉窓は [`log_capture_kit::capture`]（硬化機構の唯一の定義元）。捕捉が働いていなければ
 /// 空の結果を静かに返さず panic する。
 pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
-    let ((), events) = log_capture_kit::capture(f);
-    events.iter().map(CapturedEvent::from_canonical).collect()
+    log_capture_kit::capture(f).1
 }
 
 /// 捕捉列に `target`・`level`・`message ⊇ needle` のイベントが存在することを表明する。
@@ -73,13 +45,13 @@ pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
 pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, target: &str, needle: &str) {
     let hit = events
         .iter()
-        .any(|e| e.target == target && e.level == level && e.message.contains(needle));
+        .any(|e| e.target == target && e.level == level && e.message().contains(needle));
     assert!(
         hit,
         "期待ログ未検出: target={target:?} level={level} message⊇{needle:?}。\n捕捉={:?}",
         events
             .iter()
-            .map(|e| (e.target.clone(), e.level, e.message.clone()))
+            .map(|e| (e.target.as_str(), e.level, e.message()))
             .collect::<Vec<_>>()
     );
 }

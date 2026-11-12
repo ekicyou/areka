@@ -7,9 +7,7 @@
 //! （8.3・設計「無限ブロックする試験を書かない」）。deadline は CI 余裕込み（応答は ms
 //! 到達・deadline は秒単位）。
 //!
-//! ケース対応（design toy(a) の i–vi）:
-//! - (i)   [`echo_round_trip_matches_payload`]         request/reply 応答一致（2.3）
-//! - (ii)  [`close_then_join_completes_deterministically`] Close→join 決定的完走（3.4）
+//! ケース対応（design toy(a) の i–vi・(i)・(ii) は (vi)・(iii) が含む）:
 //! - (iii) [`backlog_after_close_is_discarded_and_reply_dropped`] 積み残し破棄→要求側 Err(Dropped)（3.3/3.6）
 //! - (iv)  [`all_senders_dropped_joins_ok`]            全 Sender drop で join Ok（3.5）
 //! - (v)   [`panicking_body_join_is_panicked`]         panic body の join が Err(Panicked)（1.3）
@@ -54,47 +52,6 @@ fn spawn_echo_worker() -> (Sender<EchoMsg>, areka_actor::ActorHandle) {
             EchoMsg::Close => Ok(ControlFlow::Break(())),
         });
     })
-}
-
-/// (i) request/reply 応答一致（2.3）。
-///
-/// `Echo{payload, reply}` を送ると、要求側は `recv_timeout` で同一 payload を受け取る。
-#[test]
-fn echo_round_trip_matches_payload() {
-    let (tx, handle) = spawn_echo_worker();
-
-    let (reply_tx, reply_rx) = reply_channel::<String>();
-    tx.send(EchoMsg::Echo {
-        payload: "ping".to_owned(),
-        reply: reply_tx,
-    })
-    .expect("worker inbox should accept Echo while alive");
-
-    let got = reply_rx
-        .recv_timeout(DEADLINE)
-        .expect("echo reply should arrive before deadline");
-    assert_eq!(got, "ping", "reply payload must match the request payload");
-
-    // 後始末: Close→join で決定的に回収（ハングさせない）。
-    tx.send(EchoMsg::Close).expect("send Close");
-    handle.join().expect("worker joins cleanly after Close");
-}
-
-/// (ii) Close→join 決定的完走（3.4）。
-///
-/// `Close` 送信後の `join()` が `Ok(())` で速やかに完走する（有界＝ハングしない）。
-#[test]
-fn close_then_join_completes_deterministically() {
-    let (tx, handle) = spawn_echo_worker();
-
-    tx.send(EchoMsg::Close).expect("send Close");
-
-    // join を別スレッドで走らせ、期限内に完了しなければ fail（ハング検出）。
-    let joined = join_within(DEADLINE, handle);
-    assert!(
-        matches!(joined, Some(Ok(()))),
-        "Close must drive a deterministic, bounded join returning Ok, got {joined:?}"
-    );
 }
 
 /// (iii) Close 後続メッセージ破棄→要求側 Err(Dropped)（3.3/3.6）。
@@ -157,16 +114,11 @@ fn all_senders_dropped_joins_ok() {
 /// アクター名と panic payload（メッセージ）が観測可能であること。
 #[test]
 fn panicking_body_join_is_panicked() {
-    // panic の stderr 出力を静める（テスト失敗ではなく想定挙動）。復元は不要。
-    let prev_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-
     let (_tx, handle) = spawn_actor::<EchoMsg, _>("panicky-echo", |_rx| {
         panic!("boom in echo worker");
     });
 
     let joined = join_within(DEADLINE, handle);
-    std::panic::set_hook(prev_hook);
 
     match joined {
         Some(Err(ActorError::Panicked { actor, message })) => {

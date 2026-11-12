@@ -93,14 +93,14 @@ fn assert_no_request(rx: &Receiver<ToolRequest>) {
 }
 
 /// 11 本の登録のサーバへ両方の経路で同じ `tools/call` を送り、`-32602` の `error` を固定する。
-/// 旧式は 200・無状態版は 400（rmcp 3.5.0 で測った値・`tools_socket_tests.rs` と同じ）。受け手への要求は 0 件。
+/// 旧式も無状態版も 200（rmcp 3.9.0 で測った値・`tools_socket_tests.rs` と同じ）。受け手への要求は 0 件。
 fn assert_invalid_params(name: &str, arguments: Value, message: &str) {
     let (registry, rx) = all_entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
     for ((path, response), status) in
         post_both(addr, "tools/call", Some(call_params(name, arguments)))
             .into_iter()
-            .zip([200, 400])
+            .zip([200, 200])
     {
         assert_eq!(response.status, status, "{path}: {response:?}");
         let value = response.json();

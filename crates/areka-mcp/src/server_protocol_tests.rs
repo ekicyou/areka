@@ -1,7 +1,7 @@
 //! 実ソケットのテスト: `initialize`〜`server/discover`・`Accept`・本文の上限（要件 3・5）。
 //!
 //! 差の一覧（`doc/ssp-mcp/transport-diff-areka.md`）に写す値は、各テストの assert に
-//! 具体の値で固定する（別の記録は作らない）。測った版は rmcp 3.5.0。
+//! 具体の値で固定する（別の記録は作らない）。測った版は rmcp 3.9.0。
 
 use serde_json::{Value, json};
 
@@ -180,7 +180,7 @@ fn batch_array_body_is_415() {
     assert_eq!(response.status, 415, "{response:?}");
     assert_eq!(
         String::from_utf8_lossy(&response.body),
-        "fail to deserialize request body data did not match any variant of untagged enum JsonRpcMessage"
+        "fail to deserialize request body unrecognized JSON-RPC message"
     );
 }
 
@@ -476,7 +476,7 @@ pub(super) fn speak(
 
 /// (要件 1.1・1.2・1.4・2.1・2.3) `params` の欠かせない 3 つのメソッドに形の合わない `params` を送ると、
 /// 5 つの版のどれでも `{"code":-32602,"message":"invalid params for <m>"}`（`data`・`result` なし）。
-/// HTTP の状態は未登録の名前の `tools/call` と同じ（旧式 200・`2026-07-28` 400）。
+/// HTTP の状態は未登録の名前の `tools/call` と同じ（どの版も 200。rmcp 3.9.0 は `_meta` の揃った `-32602` を 200 で返す）。
 /// `params` なしは旧式の 4 版だけ（`2026-07-28` は `_meta` を `params` に入れるので送れない）。
 #[test]
 fn malformed_params_of_params_required_methods_are_invalid_params_in_every_version() {
@@ -494,8 +494,7 @@ fn malformed_params_of_params_required_methods_are_invalid_params_in_every_versi
             -32602,
             "{version}: {baseline:?}"
         );
-        let expected_status = if version == "2026-07-28" { 400 } else { 200 };
-        assert_eq!(baseline.status, expected_status, "{version}: {baseline:?}");
+        assert_eq!(baseline.status, 200, "{version}: {baseline:?}");
         let mut cases = vec![
             ("tools/call", Some(json!({ "name": 7 }))),
             ("tools/call", Some(json!({}))),

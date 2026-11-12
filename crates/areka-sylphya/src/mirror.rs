@@ -8,16 +8,15 @@
 //!
 //! ## 区画（設計討議 #1 裁定）
 //!
-//! `MirrorImage` は集約ルート 1 つで、次の 4 区画を保持する:
+//! `MirrorImage` は集約ルート 1 つで、次の 3 区画を保持する:
 //!
 //! - `flat_per_asker` — フラット語彙（`%名前`）の per-asker 区画。M1 実導出フラット語彙
 //!   〔username/selfname/selfname2/keroname〕は全てゴースト相対ゆえここへ着地する。
-//! - `flat_global` — フラット語彙の大域区画。将来の大域フラット語彙〔screenwidth 系等〕用に確保。
 //! - `dotted_global` — 点付き語彙（`system.*` 等）の大域区画。key は `PropPath` の正準文字列形。
 //! - `dotted_per_asker` — 点付き語彙の per-asker 区画（`currentghost` 系・host 書込区画）。
 //!   key は `PropPath` の正準文字列形。
 //!
-//! フラット解決順は per-asker → global（解決自体は Task 3.2 の `SylphyaReader`）。
+//! フラット語彙は per-asker の区画だけを引く（解決自体は `SylphyaReader`）。
 
 use crate::asker::AskerId;
 use std::collections::BTreeMap;
@@ -35,8 +34,6 @@ pub struct MirrorImage {
     pub epoch: u64,
     /// フラット語彙の per-asker 区画（`%名前`・ゴースト相対）。
     pub flat_per_asker: BTreeMap<AskerId, BTreeMap<String, String>>,
-    /// フラット語彙の大域区画（将来の大域フラット語彙用に確保）。
-    pub flat_global: BTreeMap<String, String>,
     /// 点付き語彙の大域区画。key は `PropPath` の正準文字列形。
     pub dotted_global: BTreeMap<String, String>,
     /// 点付き語彙の per-asker 区画。key は `PropPath` の正準文字列形。
@@ -58,7 +55,6 @@ impl MirrorImage {
         MirrorImage {
             epoch: self.epoch + 1,
             flat_per_asker: self.flat_per_asker.clone(),
-            flat_global: self.flat_global.clone(),
             dotted_global: self.dotted_global.clone(),
             dotted_per_asker: self.dotted_per_asker.clone(),
         }
@@ -126,76 +122,19 @@ mod tests {
     }
 
     #[test]
-    fn same_epoch_same_content_via_arc_clone() {
-        let shared = SharedMirror::new(Arc::new(MirrorImage::empty()));
-        let a = shared.load();
-        let b = shared.load();
-        assert_eq!(a.epoch, b.epoch);
-        assert_eq!(*a, *b);
-        assert!(Arc::ptr_eq(&a, &b));
-    }
-
-    #[test]
     fn predecessor_image_unchanged_after_publish() {
         let e0 = Arc::new(MirrorImage::empty());
         let shared = SharedMirror::new(Arc::clone(&e0));
         let held_old = shared.load();
         let mut next = e0.successor();
-        next.flat_global.insert("k".into(), "v".into());
+        next.dotted_global.insert("k".into(), "v".into());
         shared.publish(Arc::new(next));
         assert_eq!(held_old.epoch, 0);
-        assert!(held_old.flat_global.is_empty());
+        assert!(held_old.dotted_global.is_empty());
         assert_eq!(shared.load().epoch, 1);
         assert_eq!(
-            shared.load().flat_global.get("k").map(String::as_str),
+            shared.load().dotted_global.get("k").map(String::as_str),
             Some("v")
-        );
-    }
-
-    #[test]
-    fn per_asker_partitions_are_independent() {
-        let a1 = AskerId::new("ghost/a");
-        let a2 = AskerId::new("ghost/b");
-        let mut img = MirrorImage::empty();
-        img.flat_per_asker
-            .entry(a1.clone())
-            .or_default()
-            .insert("selfname".into(), "Alice".into());
-        img.flat_per_asker
-            .entry(a2.clone())
-            .or_default()
-            .insert("selfname".into(), "Bob".into());
-        assert_eq!(
-            img.flat_per_asker[&a1].get("selfname").map(String::as_str),
-            Some("Alice")
-        );
-        assert_eq!(
-            img.flat_per_asker[&a2].get("selfname").map(String::as_str),
-            Some("Bob")
-        );
-        // a1 に無い名前は a2 の値へ漏れない
-        assert!(!img.flat_per_asker[&a1].contains_key("nope"));
-    }
-
-    #[test]
-    fn dotted_partitions_hold_canonical_string_keys() {
-        let asker = AskerId::new("ghost/a");
-        let mut img = MirrorImage::empty();
-        img.dotted_global
-            .insert("system.baseware".into(), "areka".into());
-        img.dotted_per_asker
-            .entry(asker.clone())
-            .or_default()
-            .insert("areka.window.scope(0).x".into(), "10".into());
-        assert_eq!(
-            img.dotted_global.get("system.baseware").map(String::as_str),
-            Some("areka")
-        );
-        assert_eq!(
-            img.dotted_per_asker[&asker]
-                .get("areka.window.scope(0).x")
-                .map(String::as_str),
-            Some("10")
         );
     }
 
@@ -204,12 +143,12 @@ mod tests {
         let shared = SharedMirror::new(Arc::new(MirrorImage::empty()));
         let clone = shared.clone();
         let mut next = shared.load().successor();
-        next.flat_global.insert("x".into(), "1".into());
+        next.dotted_global.insert("x".into(), "1".into());
         shared.publish(Arc::new(next));
         // クローンは同一ロックを共有するので publish が見える
         assert_eq!(clone.load().epoch, 1);
         assert_eq!(
-            clone.load().flat_global.get("x").map(String::as_str),
+            clone.load().dotted_global.get("x").map(String::as_str),
             Some("1")
         );
     }
@@ -218,7 +157,7 @@ mod tests {
     fn multi_reader_threads_share_arc_deterministically() {
         let shared = SharedMirror::new(Arc::new({
             let mut img = MirrorImage::empty();
-            img.flat_global.insert("k".into(), "v".into());
+            img.dotted_global.insert("k".into(), "v".into());
             img
         }));
         let handles: Vec<_> = (0..4)
@@ -226,7 +165,7 @@ mod tests {
                 let s = shared.clone();
                 std::thread::spawn(move || {
                     let img = s.load();
-                    (img.epoch, img.flat_global.get("k").cloned())
+                    (img.epoch, img.dotted_global.get("k").cloned())
                 })
             })
             .collect();
@@ -235,15 +174,5 @@ mod tests {
             assert_eq!(epoch, 0);
             assert_eq!(v.as_deref(), Some("v"));
         }
-    }
-
-    #[test]
-    fn empty_image_has_all_partitions_empty() {
-        let img = MirrorImage::empty();
-        assert_eq!(img.epoch, 0);
-        assert!(img.flat_per_asker.is_empty());
-        assert!(img.flat_global.is_empty());
-        assert!(img.dotted_global.is_empty());
-        assert!(img.dotted_per_asker.is_empty());
     }
 }

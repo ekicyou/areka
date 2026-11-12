@@ -71,13 +71,15 @@ fn scope_without_root_returns_no_root() {
 
 #[test]
 fn commit_failed_log_carries_keys_field() {
-    let (_tmp, root) = unwritable_root("sylphya-persist-failure-log");
+    // 書けない置き場は錠の段で縮退する（`persist_lock_failed`）ので、書き込みの失敗は偽の IO で起こす。
     let roots = ScopeRoots {
-        app: Some(root),
+        app: Some(PathBuf::from("/a")),
         ..ScopeRoots::default()
     };
-    let (_, events) = log_capture_kit::capture(|| {
-        save_scope(PersistScope::App, &roots, &FsPersistIo, entries());
+    let io = FakePersistIo::new();
+    io.fail_next_commit();
+    let events = crate::test_log_capture::capture(|| {
+        save_scope(PersistScope::App, &roots, &io, entries());
     });
     let ev = events
         .iter()

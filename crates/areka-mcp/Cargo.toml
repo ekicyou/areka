@@ -14,7 +14,7 @@ repository.workspace = true
 [dependencies]
 # MCP の公式 SDK。版は = で固定し、上げるときは server_*tests.rs を全部通す（要件 8.2）。
 # 既定機能（macros・base64）は切る。登録は ToolRoute::new_dyn で足りる（設計 B-5）。
-rmcp = { version = "=3.5.0", default-features = false, features = [
+rmcp = { version = "=3.9.0", default-features = false, features = [
     "server",
     "transport-streamable-http-server",
 ] }
