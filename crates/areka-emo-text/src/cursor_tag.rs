@@ -87,7 +87,9 @@ pub struct CursorBasis {
     /// `centerx`／`centery` の基準＝バルーン画像の原寸（`TextRegion::image_size()`）。
     /// **文字描画開始点でも文字描画範囲でもない**（正典 付録 A・R4.3）。
     pub image_size: (f32, f32),
-    /// `em`（および `%`）の係数の源＝タグを書いた時点での文字高さ（R1.3）。
+    /// `em`（および `%`）の係数の源＝その場所の既定の文字高さ（スコープの既定の見た目の大きさ・
+    /// R1.3）。`\f[height,…]` で変えた大きさは使わない（完了 spec `areka-P0-text-decoration-canon`
+    /// の design.md の決め「`\_l` の単位の係数は既定の見た目の大きさのまま・装飾で変えない」）。
     pub font_height: f32,
     /// `lh` の係数の源＝行送り（1em＋行間）。metrics が返す値をそのまま受け取り、
     /// 本モジュールでは算出しない。

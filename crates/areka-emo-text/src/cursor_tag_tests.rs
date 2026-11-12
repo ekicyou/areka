@@ -68,21 +68,15 @@ fn unit_coefficient_is_a_scalar_that_does_not_depend_on_the_axis() {
     assert_eq!(x - ORIGIN.0, y - ORIGIN.1);
 }
 
-// ── 4.1 で配線層から移設した純関数テスト ──
+// ── 座標換算の純関数テスト ──
 //
-// 旧配線 `layout.rs` は座標換算の純関数（絶対 Px/Em/Lh の**非負値のみ**を実導出し、
-// 負値・`%`・`@` 相対・解釈不能・省略はすべて `None`）を自分で持っていた。タスク 4.1 で
-// それを撤去して意味論を本モジュールへ委譲したので、当時の純関数テスト 3 本もここへ移した。
-//
-// 移設にあたり期待値は**正典の式**（design.md 解決表）から書き直してある。3 本目（旧実装が
-// 一律 `None` を返していた 5 形のいまの行き先）は、5 形とも姉妹モジュールの全表
-// `resolution_table_holds_on_every_row_and_axis` の行に含まれるので消した（指摘 28）。
+// 期待値は**正典の式**（design.md 解決表）から書く。負値・`%`・`@` 相対・解釈不能・省略の
+// 行き先は、姉妹モジュールの全表 `resolution_table_holds_on_every_row_and_axis` が確かめる。
 
-/// 絶対は `origin[axis] + 値 × 係数`（移設元 1 本目）。
+/// 絶対は `origin[axis] + 値 × 係数`。
 ///
 /// 共通前提とは**別の基点束**（原点 `(10, 10)`・文字高さ 20・行送り 25）で通す——共通前提の値に
-/// 焼き付いた実装（原点や係数を定数で持ってしまった実装）をここで赤にする。移設元が
-/// `origin = 10`・`font_height = 20`・`line_pitch = 25` を渡していたのと同じ数値である。
+/// 焼き付いた実装（原点や係数を定数で持ってしまった実装）をここで赤にする。
 #[test]
 fn absolute_units_resolve_from_the_origin_on_an_independent_basis() {
     let b = CursorBasis {
@@ -112,10 +106,9 @@ fn absolute_units_resolve_from_the_origin_on_an_independent_basis() {
     }
 }
 
-/// 値 0 は係数に依らず原点そのものへ着地する（移設元 2 本目）。
+/// 値 0 は係数に依らず原点そのものへ着地する。
 ///
-/// 移設元は Px/Em/Lh の 3 単位だけを見ていた。`%` が実導出へ移った（R5.2）ので **4 単位**に
-/// 広げてある——`0 × 係数 = 0` が単位の別に依らないことが、単位を軸に依らないスカラーとして
+/// `%` も実導出する（R5.2）ので **4 単位**すべてで見る——`0 × 係数 = 0` が単位の別に依らないことが、単位を軸に依らないスカラーとして
 /// 与えている設計（R1.4）の帰結だからである。
 #[test]
 fn zero_value_lands_exactly_on_the_origin_for_every_unit() {

@@ -358,7 +358,7 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
 ///    2026-09-05: SSP はバルーン文字領域をビットマップで保持し areka はグリフを保持する＝
 ///    哲学が異なり同様にはなりえない）ので、配置層の行境界は**内容のある行だけ**を供給する。後戻りの `\_l` で分割された行も例外ではない。
 ///
-/// ⑵ **行を閉じる場所は有限で局所である**: `finish_line` は `layout.rs` の私有関数で、
+/// ⑵ **行を閉じる場所は有限で局所である**: `finish_line` は `layout_scan.rs` の私有関数で、
 ///    呼び出しは **3 箇所**（折返しの行送り・最終行の確定・`finish_pending_line` の内側）、
 ///    `finish_pending_line` の呼び出しは **2 箇所**（保留フラッシュ・`LineBreak` 腕の
 ///    先行実体化）。⑴ の「内容の無い行は出ない」が成り立つのは、この 5 箇所の入口が
@@ -366,8 +366,8 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
 ///    からである。
 ///
 /// 件数を逐語で持つのは、**行を閉じる入口が黙って増える経路を塞ぐ**ためである。走査する語
-/// `finish_line(`／`finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout.rs` の
-/// 説明文は括弧を伴わない `[finish_pending_line]` の形で書かれている）。
+/// `finish_line(`／`finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout_scan.rs`・
+/// `layout_scan_glyph.rs` の説明文は括弧を伴わない `[finish_pending_line]` の形で書かれている）。
 #[test]
 fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
     // ⑴ 内容の無い行は 1 本も出ない（後戻りの `\_l` で分割された行を含む）。
@@ -422,12 +422,13 @@ fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
         3,
         "`finish_pending_line` は定義 1・呼び出し 2——同上"
     );
-    // 門が同一ファイル内の私有関数に閉じていること（外から別経路で行を開かれない）。
+    // 門が走査のモジュール（`layout_scan.rs` とその子 `layout_scan_glyph.rs`）の私有関数に閉じていること
+    // （外から別経路で行を開かれない）。
     // 行頭の `fn` だけを数える（`pub(super) fn` などの可視性つきは通さない）。
     assert!(
         LAYOUT_SRC
             .lines()
             .any(|l| l.starts_with("fn finish_pending_line(")),
-        "`finish_pending_line` は `layout_scan.rs` の私有関数（呼び出し元は同ファイルに閉じている）"
+        "`finish_pending_line` は `layout_scan.rs` の私有関数（呼び出し元は走査のモジュールに閉じている）"
     );
 }

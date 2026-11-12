@@ -578,7 +578,7 @@ fn consecutive_cursor_moves_compose_pending_per_axis() {
 ///   交差ケース。仮適用の順序はフラッシュ本体（ゲート②の保留フラッシュ）の (2)→(3) と同順である——
 ///   (2) 保留改行が行内軸を先頭（0）へ戻し、(3) 保留カーソルの X=10 がそれに**後勝ち**する。
 ///   ゆえに実効位置は (10, 12) で、`@0` はそこへ据え置き、最終着地も (10, 12) になる。
-///   仮適用の 2 ブロック（`layout.rs` の `CursorMove` 腕・実効位置の算出）を入れ替えると (3)→(2) の順になり、改行の
+///   仮適用の 2 ブロック（`layout_scan.rs` の `cursor_move`・実効位置の算出）を入れ替えると (3)→(2) の順になり、改行の
 ///   行内リセットが後勝ちして `inline` が 0 へ落ちる＝この 1 本だけが赤になる。
 #[test]
 fn relative_cursor_basis_is_the_effective_position() {
@@ -684,7 +684,7 @@ fn relative_cursor_basis_is_the_effective_position() {
     // 保留改行と保留カーソルが**同時に**保留された状態（実経路で到達可能——`\n` →
     // `\_l[絶対]` → `\_l[@…]`。`\_l` 腕は `pending` を消費しないため）。
     // 仮適用の**順序**そのものを固定する 1 本＝主張は「保留改行が行内軸を先頭へ戻す規則より、
-    // 保留カーソルの上書きが後勝ちである」（フラッシュ本体＝`layout.rs` ゲート②の (2)→(3) と同順）。
+    // 保留カーソルの上書きが後勝ちである」（フラッシュ本体＝`layout_scan_glyph.rs` のゲート②の (2)→(3) と同順）。
     let break_then_cursor = [
         TextItem::LineBreak { ratio: 1.0 },
         TextItem::CursorMove {
@@ -717,7 +717,7 @@ fn relative_cursor_basis_is_the_effective_position() {
         inline_positions(&lines[0]),
         vec![10.0],
         "正典値（4.2 の実効位置による）: 仮適用は (2) 保留改行 → (3) 保留カーソル の順\
-         ＝フラッシュ本体（`layout.rs` ゲート②）と同順なので、改行の行内リセット(0)に\
+         ＝フラッシュ本体（`layout_scan_glyph.rs` のゲート②）と同順なので、改行の行内リセット(0)に\
          保留カーソルの X=10 が後勝ちする。実効位置 (10, 12) から `@0` は据え置き＝10。\
          仮適用の 2 ブロックを入れ替えると (3)→(2) になり 0 へ落ちる"
     );

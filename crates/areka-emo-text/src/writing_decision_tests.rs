@@ -386,8 +386,8 @@ fn vertical_property_value_round_trips_declared_canon_key() {
 /// [`WritingMode::resolve`] は決定点への薄い委譲であり、戻り値は常に `mode()` と一致する。
 ///
 /// 代表入力集合は共存規則の全腕（単独・一致併記・不一致併記・未知値／不正値の合流・
-/// 両キー未宣言）を含む。ここが崩れると、既存の本番唯一の呼出（`actor.rs` の
-/// `ResolvedBalloonText::resolve` 内）が決定点と別の答えを返すことになる。
+/// 両キー未宣言）を含む。ここが崩れると、本番の唯一の呼出（`actor_decoration.rs` の
+/// `ResolvedBalloonText::resolve_with_background` 内）が決定点と別の答えを返すことになる。
 #[test]
 fn writing_mode_resolve_delegates_to_decision_mode() {
     const CASES: &[(Option<&str>, Option<&str>)] = &[

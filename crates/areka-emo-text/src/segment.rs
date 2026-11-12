@@ -89,7 +89,7 @@ impl SegmentPlan {
 
 /// budouy 既定日本語 parser（初回のみロード・以後再利用）。
 ///
-/// `budouy::Parser: Sync + Send`（task 1 spike でコンパイル証明済み）ゆえ `OnceLock` static で
+/// `budouy::Parser: Sync + Send` ゆえ `OnceLock` static で
 /// よい（`thread_local!` への退避は不要）。`load_default_japanese_parser` は infallible。
 static PARSER: OnceLock<budouy::Parser> = OnceLock::new();
 
@@ -103,7 +103,7 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
     let parser = PARSER.get_or_init(budouy::model::load_default_japanese_parser);
 
     let mut segments: Vec<Segment> = Vec::new();
-    // 全 items 中の Glyph のみを 0 起点で数えた通し番号（LineBreak は消費しない）。
+    // 全 items 中の Glyph のみを 0 起点で数えた通し番号（LineBreak・CursorMove は消費しない）。
     let mut glyph_index: usize = 0;
     // 現在の run のグリフ文字列（budouy 入力）。
     let mut run_text = String::new();

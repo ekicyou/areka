@@ -24,14 +24,14 @@ struct Scan<'a, 'w> {
     wrap: WrapPlan<'a>,
     cursor_warn: Option<(&'a ActorKey, &'w mut CursorWarnGuard)>,
     styles: Option<GlyphStyles<'a>>,
-    // 走査の前に 1 度だけ決まる値（旧 let 群）
+    // 走査の前に 1 度だけ決まる値
     pitch: f32,
     soft: f32,
     hard: f32,
     start: (f32, f32),
     inline_start: f32,
     block_dir: f32,
-    // 走査で動く変数（旧 layout_inner の可変の局所変数 9 つ・名前はそのまま）
+    // 走査で動く変数
     heights: LineHeights,
     lines: Vec<PositionedLine>,
     current: Vec<PositionedGlyph>,
@@ -153,7 +153,7 @@ impl LayoutEngine {
 }
 
 impl Scan<'_, '_> {
-    /// 改行の腕（旧 `TextItem::LineBreak { ratio }` の本文そのまま）。
+    /// 改行の腕（`TextItem::LineBreak { ratio }`）。
     fn line_break(&mut self, ratio: f32) {
         // 書かれた順の適用（DD-11）: 到着時点でカーソルが保留中なら、**この改行を
         // 保留へ積む前に、それより前に書かれた保留を完全に実体化する**——保留フラッシュ
@@ -163,7 +163,7 @@ impl Scan<'_, '_> {
         //
         // **(2) を省いて (1)(3) の 2 段にしてはならない。** `\_l` より前に書かれた保留改行の
         // Σ が (3) を**追い越して**保留に残り、この直後に積む改行と合流して二重に効くからで
-        // ある——`[あ, \n, \_l[,100], \n, あ]` が 100 + 2×13 = 126 になり、書かれた順の 113
+        // ある——`[あ, \n, \_l[,100], \n, あ]` が 100 + 2×12 = 124 になり、書かれた順の 112
         // にも旧正典の 100 にも一致しない（前に書かれた改行がカーソルの後に効いてしまう）。
         //
         // 分岐の門を `pending_cursor` の有無に置いているのは、カーソルが絡まない純粋な
@@ -211,7 +211,7 @@ impl Scan<'_, '_> {
         self.pending = Some(self.pending.map_or(ratio, |acc| acc + ratio));
     }
 
-    /// `\_l` の腕（旧 `TextItem::CursorMove { x, y }` の本文そのまま）。
+    /// `\_l` の腕（`TextItem::CursorMove { x, y }`）。
     fn cursor_move(&mut self, x: CursorCoord, y: CursorCoord) {
         // 到着時解決（保留のみ・行は閉じない・R2.1/2.3）。意味論そのもの
         // （基点＋値×係数・縮退の分類・警告の一回化・範囲外の記録）は解決層
@@ -243,8 +243,8 @@ impl Scan<'_, '_> {
             line_pitch_of(self.metrics, self.heights.peek()),
         );
         apply_pending_cursor(&mut pending_cursor, &mut eff_inline, &mut eff_block);
-        // 実効位置を image 軸へ逆写像する（変数名 `eff` は、同ファイルで 200 行に
-        // わたり「現在行のグリフ列」を意味する `current` との衝突を避けるため）。
+        // 実効位置を image 軸へ逆写像する（変数名 `eff` は、[`Scan`] で「現在行のグリフ列」を
+        // 意味する `current` との衝突を避けるため）。
         let eff = match self.mode {
             WritingMode::HorizontalTb => (eff_inline, eff_block),
             WritingMode::VerticalRl | WritingMode::VerticalLr => (eff_block, eff_inline),
@@ -317,10 +317,10 @@ impl Scan<'_, '_> {
         );
     }
 
-    /// 最終行の確定（旧 走査の後の `if !current.is_empty()` と `lines` の返却）。
+    /// 最終行の確定と `lines` の返却。
     fn finish(mut self) -> Vec<PositionedLine> {
         // 最終行の確定: グリフを含む現在行のみ確定する（行の確定は常にグリフ配置に
-        // 隣接するため、旧 `opened` フラグは `!current.is_empty()` と等価・DD-4）。
+        // 隣接するため、「行が開いている」は `!current.is_empty()` と等価・DD-4）。
         // 残存する保留（末尾改行）は実体化せず蒸発する（R5.2/5.3）。
         if !self.current.is_empty() {
             let closing = self.heights.close(None);

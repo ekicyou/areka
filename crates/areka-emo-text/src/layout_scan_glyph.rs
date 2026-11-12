@@ -11,7 +11,7 @@ use super::{
 };
 
 impl Scan<'_, '_> {
-    /// 文字の腕（旧 `TextItem::Glyph { ref text }` の本文そのまま）。
+    /// 文字の腕（`TextItem::Glyph { text }`）。
     /// 可視の打ち切りで走査を止めるときだけ `ControlFlow::Break(())` を返す。
     /// 呼び手 `layout_inner` は親 `scan` にあるので `pub(super)`（メソッドの私有は
     /// `impl` を書いたモジュールとその子孫にしか見えない）。

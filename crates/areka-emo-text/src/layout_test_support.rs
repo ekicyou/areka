@@ -106,8 +106,6 @@ pub(super) fn inline_positions(line: &PositionedLine) -> Vec<f32> {
     line.glyphs.iter().map(|g| g.inline_pos).collect()
 }
 
-// ── R2.5 系/R11.6: 決定論（同一入力→同一出力・DirectWrite 非依存の構造テスト） ──
-
 // ── 3.2 R7.1/7.2/7.4/7.5（+R6.4）: あふれ判定とスクロール可視窓（visible_window） ──
 //
 // 幾何の共通前提: FixedMetrics・font 10 → pitch 12（10 + 行間 2）・全角 1 グリフ/行。

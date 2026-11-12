@@ -30,9 +30,9 @@
 //!
 //! `vertical_rl` で列が左へ進める限界が `validrect.left` であることは**既存実装であり、
 //! 既に決定論テストで固定されている**。出所は
-//! `crates/areka-emo-text/src/layout_visible_window_tests.rs:57-79` の
+//! `crates/areka-emo-text/src/layout_visible_window_tests.rs` の
 //! `vertical_rl_overflow_scrolls_content_rightward`（validrect `left,360`／`right,400` で
-//! 4 列目の左端 351 が 360 を下回った時点であふれが発火することを逐語固定する）。
+//! 4 列目の左端 354 が 360 を下回った時点であふれが発火することを逐語固定する）。
 //! **本ファイルではこの件について新しい檻を作らない**（設計 C4「新規の檻は作らず、
 //! COMPAT §8 で『既に実装され固定されている挙動』として登記する」）。
 //!

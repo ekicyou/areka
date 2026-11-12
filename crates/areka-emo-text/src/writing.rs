@@ -11,8 +11,8 @@
 //! `balloon::parse` が既に確定させたうえで [`BalloonModel`] に届くため、本層はキー間の
 //! 優劣だけを見る（層の優劣とキーの優劣を混ぜない）。
 //!
-//! 本番の唯一の呼出は `actor.rs:153` の [`WritingMode::resolve`]
-//! （`ResolvedBalloonText::resolve` の内側）である。
+//! 本番の唯一の呼出は `actor_decoration.rs` の [`WritingMode::resolve`]
+//! （`ResolvedBalloonText::resolve_with_background` の内側）である。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない。`lib.rs` の構造檻
 //! `pure_layer_modules_have_no_windows_imports` が本ファイル（`PURE_SOURCES`）を走査して強制する。

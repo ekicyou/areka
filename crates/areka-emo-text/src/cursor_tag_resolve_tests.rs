@@ -684,7 +684,8 @@ fn resolution_is_silent() {
 
 /// 配線層の契約（`Err` のときだけ警告する）を 1 ケースぶん再現する。
 ///
-/// 配線そのもの（`layout.rs`）はタスク 4.1 の担当なので、ここでは契約だけを写して件数を測る。
+/// 配線そのもの（`layout_line_ops.rs` の `resolve_cursor_component`）は配置のテストが確かめるので、
+/// ここでは契約だけを写して件数を測る。
 fn warn_if_degraded(case: &Case, b: &CursorBasis, actor: &ActorKey, guard: &mut CursorWarnGuard) {
     if let Err(degrade) = resolve_cursor_axis(case.coord, case.axis, b) {
         warn_cursor_degrade(actor, case.axis, case.coord, degrade, guard);
@@ -783,7 +784,7 @@ fn the_discriminating_basis_keeps_all_three_basepoints_apart() {
     ] {
         assert!(
             origin != current && current != half && origin != half,
-            "弁別用の基点束は 3 基点が相異なること（{axis} 軸: 文字描画開始点 {origin}・             現在の文字描画位置 {current}・画像中央 {half}）"
+            "弁別用の基点束は 3 基点が相異なること（{axis} 軸: 文字描画開始点 {origin}・現在の文字描画位置 {current}・画像中央 {half}）"
         );
     }
     // 共通前提の側は一致を**持っている**こと（上の主張が空回りしていない対照）。
