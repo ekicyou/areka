@@ -100,6 +100,14 @@ pub enum DolaError {
         entry_index: usize,
         target: String,
     },
+    /// 数値の規則の違反（有限・符号・範囲）
+    InvalidNumber {
+        /// 例 "storyboard 'fade' entry 2"・"variable 'opacity'"・"transition 'slide'"
+        location: String,
+        /// 例 "duration"
+        field: String,
+        value: f64,
+    },
 }
 
 impl fmt::Display for DolaError {
@@ -290,6 +298,13 @@ impl fmt::Display for DolaError {
                     target, storyboard, entry_index
                 )
             }
+            DolaError::InvalidNumber {
+                location,
+                field,
+                value,
+            } => {
+                write!(f, "Invalid number in {}: {} = {}", location, field, value)
+            }
         }
     }
 }
@@ -300,7 +315,7 @@ impl std::error::Error for DolaError {}
 mod tests {
     use super::*;
 
-    // D2-T gap tests: DolaError の Display 文字列（全21バリアント）と Error トレイトの直接検証
+    // D2-T gap tests: DolaError の Display 文字列（全22バリアント）と Error トレイトの直接検証
     // （診断メッセージはユーザー向け挙動の一部であり、フォーマット崩れを回帰検知する）
 
     fn s(v: &str) -> String {
@@ -491,6 +506,19 @@ mod tests {
             }
             .to_string(),
             "Trigger target storyboard 'child' not found in storyboard 'sb' entry 2"
+        );
+    }
+
+    #[test]
+    fn display_invalid_number_variant() {
+        assert_eq!(
+            DolaError::InvalidNumber {
+                location: s("storyboard 'sb' entry 0"),
+                field: s("duration"),
+                value: -3.0,
+            }
+            .to_string(),
+            "Invalid number in storyboard 'sb' entry 0: duration = -3"
         );
     }
 

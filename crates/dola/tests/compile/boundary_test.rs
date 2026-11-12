@@ -1,9 +1,8 @@
-//! D2-V: デシリアライズ境界・数値境界・panic 経路の特性化テスト
+//! デシリアライズ境界・数値境界・panic 経路のテスト
 //!
-//! 外部入力（JSON/TOML/YAML）由来の DolaDocument が compile へ渡される境界における
-//! 現行挙動を固定する。検証（有限性・符号・名前予約）の追加は外部観測可能な
-//! 挙動変更となるため本ループでは行わず（P14/P20/P21 参照）、ここでは
-//! 「panic しないこと」と「静かな縮退の具体的な形」を回帰検知器として固定する。
+//! 外部入力（JSON/TOML/YAML）由来の DolaDocument が compile へ渡される境界で、
+//! 数値の規則（#29）を外れた文書が panic でなくエラーで拒まれることと、
+//! 検証を通った文書が panic しないことを縛る。
 
 use dola::*;
 
@@ -41,81 +40,51 @@ fn transition_entry(var: &str, delay: f64, duration: Option<f64>) -> StoryboardE
 mod numeric_boundary_tests {
     use super::*;
 
-    // ---------------------------------------------------------------
-    // 負値（符号未検証: P20）
-    // ---------------------------------------------------------------
+    /// compile が数値の規則で拒み、違反の欄を返す
+    fn rejected_fields(doc: &DolaDocument, sb_name: &str) -> Vec<String> {
+        compile_storyboard(doc, sb_name, 0.0)
+            .unwrap_err()
+            .into_iter()
+            .map(|e| match e {
+                DolaError::InvalidNumber { field, .. } => field,
+                other => panic!("unexpected error: {other:?}"),
+            })
+            .collect()
+    }
 
-    #[test]
-    fn negative_duration_produces_inverted_segment() {
-        // duration の負値は検証されず、end_time < start_time の反転セグメントが
-        // 生成され base_duration も負となる。total_base_duration は
-        // fold(0.0, f64::max) の初期値 0.0 でマスクされる（P20 で特性化）。
-        let doc = make_doc_with_storyboard(
+    fn single_transition_doc(delay: f64, duration: Option<f64>) -> DolaDocument {
+        make_doc_with_storyboard(
             float_var("x"),
             vec![],
             "test",
             StoryboardBuilder::new()
-                .entry(transition_entry("x", 0.0, Some(-3.0)))
+                .entry(transition_entry("x", delay, duration))
                 .build(),
-        );
-
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert_eq!(tl.segments.len(), 1);
-        assert_eq!(tl.segments[0].start_time, 0.0);
-        assert_eq!(tl.segments[0].end_time, -3.0); // 反転（end < start）
-        assert_eq!(tl.base_duration, -3.0); // 負の base_duration
-        assert_eq!(result.total_base_duration, 0.0); // fold 初期値 0.0 でマスク
+        )
     }
 
     #[test]
-    fn negative_delay_shifts_segment_before_start_time() {
-        // 負の delay は start_time より過去のセグメント開始を生成する（検証なし）
-        let doc = make_doc_with_storyboard(
-            float_var("x"),
-            vec![],
-            "test",
-            StoryboardBuilder::new()
-                .entry(transition_entry("x", -2.0, Some(1.0)))
-                .build(),
-        );
-
-        let result = compile_storyboard(&doc, "test", 10.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert_eq!(tl.segments[0].start_time, 8.0); // 10.0 + (-2.0)
-        assert_eq!(tl.segments[0].end_time, 9.0);
-    }
-
-    // ---------------------------------------------------------------
-    // NaN / inf（有限性未検証: P14）
-    // ---------------------------------------------------------------
-
-    #[test]
-    fn nan_duration_propagates_without_panic() {
-        // NaN duration は panic せずセグメント時刻へ伝播する。
-        // base_duration は NaN、total_base_duration は f64::max の
-        // NaN 無視特性により 0.0 へ黙って脱落する。
-        let doc = make_doc_with_storyboard(
-            float_var("x"),
-            vec![],
-            "test",
-            StoryboardBuilder::new()
-                .entry(transition_entry("x", 0.0, Some(f64::NAN)))
-                .build(),
-        );
-
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert!(tl.segments[0].end_time.is_nan());
-        assert!(tl.base_duration.is_nan());
-        assert_eq!(result.total_base_duration, 0.0); // NaN は max で脱落
+    fn invalid_delay_and_duration_are_rejected_before_compile() {
+        // 拒まないと、負の duration は逆向きのセグメント、負の delay は start より前の
+        // セグメント、NaN／inf は NaN／inf 時刻のセグメントになっていた（#29）
+        for (delay, duration, field) in [
+            (0.0, Some(-3.0), "duration"),
+            (0.0, Some(f64::NAN), "duration"),
+            (-2.0, Some(1.0), "delay"),
+            (f64::INFINITY, Some(1.0), "delay"),
+        ] {
+            let doc = single_transition_doc(delay, duration);
+            assert_eq!(
+                rejected_fields(&doc, "test"),
+                [field],
+                "{delay} {duration:?}"
+            );
+        }
     }
 
     #[test]
-    fn nan_times_bypass_overlap_detection() {
-        // 1 本目のセグメントが NaN 時刻となる場合、重複検査の比較
-        // （prev.end > next.start）は NaN で常に false → 重複は検出されず
-        // コンパイルは成功する（現行挙動の固定。P14）。
+    fn nan_delay_that_bypassed_overlap_check_is_rejected() {
+        // NaN 時刻は重なりの比べ（prev.end > next.start）を素通りしていた
         let doc = make_doc_with_storyboard(
             float_var("x"),
             vec![],
@@ -125,46 +94,22 @@ mod numeric_boundary_tests {
                 .entry(transition_entry("x", 0.0, Some(1.0)))
                 .build(),
         );
-
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert_eq!(tl.segments.len(), 2); // エラーなく 2 セグメント出力
+        assert_eq!(rejected_fields(&doc, "test"), ["delay"]);
     }
 
     #[test]
-    fn infinite_delay_yields_infinite_segment_times() {
-        // +inf delay は inf 時刻として panic せず伝播する
+    fn between_nan_delay_is_rejected() {
+        // between の逆転の検査（segment_start >= segment_end）を NaN が素通りしていた
         let doc = make_doc_with_storyboard(
             float_var("x"),
             vec![],
             "test",
             StoryboardBuilder::new()
-                .entry(transition_entry("x", f64::INFINITY, Some(1.0)))
-                .build(),
-        );
-
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert_eq!(tl.segments[0].start_time, f64::INFINITY);
-        assert_eq!(tl.segments[0].end_time, f64::INFINITY);
-    }
-
-    #[test]
-    fn between_nan_delay_bypasses_inversion_check() {
-        // between 配置の反転検査（segment_start >= segment_end）は NaN 比較が
-        // 常に false となるため素通りし、NaN 開始時刻のセグメントが出力される
-        let doc = make_doc_with_storyboard(
-            float_var("x"),
-            vec![],
-            "test",
-            StoryboardBuilder::new()
-                // kf "a" at start
                 .entry(StoryboardEntry {
                     keyframe: Some("a".to_string()),
                     at: Some(KeyframeRef::Single("start".to_string())),
                     ..Default::default()
                 })
-                // kf "b" at start+5
                 .entry(StoryboardEntry {
                     keyframe: Some("b".to_string()),
                     at: Some(KeyframeRef::WithOffset {
@@ -173,7 +118,6 @@ mod numeric_boundary_tests {
                     }),
                     ..Default::default()
                 })
-                // between a..b, delay = NaN
                 .entry(StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -192,16 +136,12 @@ mod numeric_boundary_tests {
                 })
                 .build(),
         );
-
-        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        let tl = result.timelines.get("x").unwrap();
-        assert!(tl.segments[0].start_time.is_nan()); // 反転検査を素通り
-        assert_eq!(tl.segments[0].end_time, 5.0);
+        assert_eq!(rejected_fields(&doc, "test"), ["delay"]);
     }
 
     #[test]
-    fn nan_trigger_start_offset_passes_through() {
-        // trigger_start_offset は検証なしで CompiledTrigger へそのまま伝播する（P14）
+    fn nan_trigger_start_offset_is_rejected() {
+        // 拒まないと CompiledTrigger へ NaN のまま渡っていた
         let mut doc = make_doc_with_storyboard(
             vec![],
             vec![],
@@ -225,25 +165,21 @@ mod numeric_boundary_tests {
                 })
                 .build(),
         );
-
-        let result = compile_storyboard(&doc, "parent", 0.0).unwrap();
-        assert_eq!(result.triggers.len(), 1);
-        assert!(result.triggers[0].start_offset.unwrap().is_nan());
+        assert_eq!(rejected_fields(&doc, "parent"), ["trigger_start_offset"]);
     }
 
     #[test]
     fn segment_sort_with_many_nan_follows_total_order() {
-        // 並べ替えは −0.0 を +0.0 にそろえた全順序（#10）。NaN を 24 件含んでも全順序どおりに並ぶ
-        //（NaN どうしの重なりの比べは偽なので、コンパイルは通る）。
-        let computed_nan = std::hint::black_box(f64::INFINITY) - f64::INFINITY;
+        // 並べ替えは −0.0 を +0.0 にそろえた全順序（#10）。delay は 48…2 の降順に並べてあるので、
+        // 有限の start_time では並べ替えを外すと昇順の確かめが落ちる。
+        // #29 の後、公開の口からは NaN と有限の値が混ざった並びを作れない（文書の NaN は検証が拒み、
+        // start_time の NaN は全部のセグメントを同じ符号の NaN にする）ので、全順序と partial_cmp の
+        // 違いはここでは観測できない。NaN の回は panic しないことだけを見る。
         let mut builder = StoryboardBuilder::new();
         for i in 0..24 {
-            let nan = if i % 2 == 0 { f64::NAN } else { computed_nan };
-            for delay in [nan, f64::from(2 * (24 - i))] {
-                let mut entry = transition_entry("x", delay, Some(1.0));
-                entry.at = Some(KeyframeRef::Single("start".to_string()));
-                builder = builder.entry(entry);
-            }
+            let mut entry = transition_entry("x", f64::from(2 * (24 - i)), Some(1.0));
+            entry.at = Some(KeyframeRef::Single("start".to_string()));
+            builder = builder.entry(entry);
         }
         let doc = make_doc_with_storyboard(float_var("x"), vec![], "test", builder.build());
 
@@ -253,13 +189,13 @@ mod numeric_boundary_tests {
             .iter()
             .map(|s| s.start_time)
             .collect();
-        assert_eq!(starts.iter().filter(|t| t.is_nan()).count(), 24);
-        for w in starts.windows(2) {
-            assert_ne!(
-                (w[0] + 0.0).total_cmp(&(w[1] + 0.0)),
-                std::cmp::Ordering::Greater,
-                "{starts:?}"
-            );
+        let expected: Vec<f64> = (1..=24).map(|k| f64::from(2 * k)).collect();
+        assert_eq!(starts, expected);
+
+        let computed_nan = std::hint::black_box(f64::INFINITY) - f64::INFINITY;
+        for start_time in [f64::NAN, computed_nan] {
+            let result = compile_storyboard(&doc, "test", start_time).unwrap();
+            assert_eq!(result.timelines["x"].segments.len(), 24);
         }
     }
 
@@ -271,7 +207,7 @@ mod numeric_boundary_tests {
     fn json_rejects_nan_literal_at_deserialization_boundary() {
         // 標準 JSON 経由では NaN/inf リテラルを注入できない（serde_json がパース時に
         // 拒否する）。NaN/inf の流入経路は TOML（nan/inf）・YAML（.nan/.inf）のみ
-        // （feature ゲートにより既定ビルド外。P14 参照）。
+        // （feature ゲートにより既定ビルド外。そこから来た値は validate の数値の規則が拒む）。
         assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": NaN }"#).is_err());
         assert!(serde_json::from_str::<TransitionDef>(r#"{ "delay": Infinity }"#).is_err());
     }

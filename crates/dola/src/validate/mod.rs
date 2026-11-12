@@ -28,6 +28,9 @@ impl Validate for DolaDocument {
         // V12: 変数初期値の値域検証
         validate_variable_ranges(self, &mut errors);
 
+        // 数値の規則（有限・符号・範囲）
+        validate_numbers(self, &mut errors);
+
         // Storyboard ごとの検証
         for (sb_name, sb) in &self.storyboard {
             // V2: キーフレーム名重複検出

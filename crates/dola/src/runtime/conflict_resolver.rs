@@ -172,8 +172,8 @@ fn detect_overlaps(
                         // 時間範囲の重複判定: start < other_end && end > other_start
                         // NOTE(数値境界): セグメント時刻に NaN が含まれる場合は両比較が
                         // false となり、当該セグメントは競合として検出されない（黙って
-                        // 素通り）。NaN の流入は指示書数値の有限性検証の欠如による
-                        // （proposals.md P8/P14 参照）。
+                        // 素通り）。指示書の数値は validate が有限に限るので、NaN が入るのは
+                        // 呼び手の渡す時刻が NaN のときだけ。
                         if new_start < ex_end && new_end > ex_start {
                             conflicting.insert(entry.group_id);
                         }

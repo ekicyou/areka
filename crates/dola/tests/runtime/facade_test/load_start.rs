@@ -184,21 +184,35 @@ mod start_error_paths {
         }
     }
 
-    #[test]
-    fn start_with_zero_loop_count_fails() {
-        let mut rt = DolaRuntime::new();
-        rt.load_document(loop_count_doc("fade", 0, 1.0)).unwrap();
-        let err = rt.start("fade", 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::InvalidLoopCount(0)));
+    /// 読み込みが数値の規則で拒まれ、その欄と値を返す
+    fn rejected_number(rt: &mut DolaRuntime, doc: DolaDocument) -> (String, f64) {
+        match rt.load_document(doc).unwrap_err() {
+            RuntimeError::CompileError(errs) => match &errs[..] {
+                [dola::DolaError::InvalidNumber { field, value, .. }] => (field.clone(), *value),
+                other => panic!("unexpected errors: {other:?}"),
+            },
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]
-    fn start_with_negative_loop_count_fails() {
+    fn load_with_zero_loop_count_is_rejected() {
+        // 0 と −2 以下の loop_count は、start を待たず読み込みの検証で拒まれる（#29）
+        let mut rt = DolaRuntime::new();
+        let rejected = rejected_number(&mut rt, loop_count_doc("fade", 0, 1.0));
+        assert_eq!(rejected, ("loop_count".to_string(), 0.0));
+        assert!(matches!(
+            rt.start("fade", 0.0).unwrap_err(),
+            RuntimeError::StoryboardNotFound(_)
+        ));
+    }
+
+    #[test]
+    fn load_with_negative_loop_count_is_rejected() {
         // -1（無限）以外の負値は無効
         let mut rt = DolaRuntime::new();
-        rt.load_document(loop_count_doc("fade", -2, 1.0)).unwrap();
-        let err = rt.start("fade", 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::InvalidLoopCount(-2)));
+        let rejected = rejected_number(&mut rt, loop_count_doc("fade", -2, 1.0));
+        assert_eq!(rejected, ("loop_count".to_string(), -2.0));
     }
 
     #[test]
@@ -238,14 +252,6 @@ mod start_error_paths {
     }
 
     #[test]
-    fn calculate_end_time_with_zero_loop_count_fails() {
-        let mut rt = DolaRuntime::new();
-        rt.load_document(loop_count_doc("fade", 0, 1.0)).unwrap();
-        let err = rt.calculate_end_time("fade", 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::InvalidLoopCount(0)));
-    }
-
-    #[test]
     fn calculate_end_time_zero_duration_infinite_loop_fails() {
         let mut rt = DolaRuntime::new();
         rt.load_document(empty_entry_doc("empty_sb", -1)).unwrap();
@@ -281,16 +287,12 @@ mod start_error_paths {
 }
 
 // =========================================================================
-// D1a-V: time_scale 境界の特性化テスト（現行挙動の固定）
-//
-// time_scale はスキーマ/コンパイル時に正値検証されていない
-// （facade::compile_and_validate の NOTE / report/proposals.md P8 参照）。
-// 本モジュールは「検証追加（挙動変更）前の現行挙動」を回帰検知器として固定する。
-// P8 実装時はこれらのテストを新しいエラー仕様へ置き換えること。
+// time_scale の境界（#29）: 0・負・NaN は読み込みの検証で拒まれる
+// （拒まないと end_time が +inf／NaN になり終わらない、負なら即 Conclude する）
 // =========================================================================
 mod time_scale_boundary {
     use super::super::*;
-    use dola::{InterruptionPolicy, Storyboard};
+    use dola::{DolaError, InterruptionPolicy, Storyboard};
 
     /// time_scale を任意指定した 1 変数ドキュメント（duration 指定可）。
     fn time_scale_doc(sb_name: &str, time_scale: f64, duration: f64) -> DolaDocument {
@@ -347,72 +349,33 @@ mod time_scale_boundary {
         }
     }
 
-    #[test]
-    fn time_scale_zero_start_succeeds_with_infinite_end_time() {
-        // 現行挙動: time_scale=0 は検証されず start は成功し、
-        // loop_duration = duration / 0 = +inf → end_time = +inf となる
+    fn assert_rejected(doc: DolaDocument, time_scale: f64) {
         let mut rt = DolaRuntime::new();
-        rt.load_document(time_scale_doc("fade", 0.0, 1.0)).unwrap();
-        let result = rt.start("fade", 0.0).unwrap();
+        let err = rt.load_document(doc).unwrap_err();
         assert!(
-            result.end_time.is_infinite() && result.end_time > 0.0,
-            "expected +inf end_time, got {}",
-            result.end_time
+            matches!(
+                &err,
+                RuntimeError::CompileError(errs)
+                if matches!(
+                    &errs[..],
+                    [DolaError::InvalidNumber { field, value, .. }]
+                    if field == "time_scale" && value.to_bits() == time_scale.to_bits()
+                )
+            ),
+            "time_scale = {time_scale}: {err:?}"
         );
     }
 
     #[test]
-    fn time_scale_zero_instance_never_concludes_naturally() {
-        // 現行挙動: end_time = +inf のため自然終了せず、巨大な経過時刻後も
-        // インスタンスは生存し続ける（pause が成功することで観測）
-        let mut rt = DolaRuntime::new();
-        rt.subscribe("opacity");
-        rt.load_document(time_scale_doc("fade", 0.0, 1.0)).unwrap();
-        let result = rt.start("fade", 0.0).unwrap();
-        rt.update(1e9);
-        assert!(
-            rt.pause(result.group_id, 1e9).is_ok(),
-            "instance should still be alive after huge time advance"
-        );
+    fn non_positive_or_nan_time_scale_is_rejected_at_load() {
+        for time_scale in [0.0, -1.0, f64::NAN] {
+            assert_rejected(time_scale_doc("fade", time_scale, 1.0), time_scale);
+        }
     }
 
     #[test]
-    fn calculate_end_time_with_zero_time_scale_is_infinite() {
-        let mut rt = DolaRuntime::new();
-        rt.load_document(time_scale_doc("fade", 0.0, 1.0)).unwrap();
-        let end_time = rt.calculate_end_time("fade", 5.0).unwrap();
-        assert!(
-            end_time.is_infinite() && end_time > 0.0,
-            "expected +inf end_time, got {end_time}"
-        );
-    }
-
-    #[test]
-    fn time_scale_zero_with_zero_duration_yields_nan_end_time() {
-        // 現行挙動: total_base_duration=0 かつ time_scale=0 → 0/0 = NaN。
-        // NaN はバリデーション（== 0.0 / < MIN）を素通りし end_time = NaN となる
-        let mut rt = DolaRuntime::new();
-        rt.load_document(empty_entry_time_scale_doc("empty_sb", 0.0))
-            .unwrap();
-        let result = rt.start("empty_sb", 0.0).unwrap();
-        assert!(
-            result.end_time.is_nan(),
-            "expected NaN end_time, got {}",
-            result.end_time
-        );
-    }
-
-    #[test]
-    fn negative_time_scale_start_succeeds_and_concludes_immediately() {
-        // 現行挙動: time_scale=-1 → loop_duration=-1 → end_time = start_time - 1.0。
-        // 最初の update で current_time >= end_time となり即 Conclude される
-        let mut rt = DolaRuntime::new();
-        rt.load_document(time_scale_doc("fade", -1.0, 1.0)).unwrap();
-        let result = rt.start("fade", 0.0).unwrap();
-        assert!((result.end_time - (-1.0)).abs() < 1e-9);
-        rt.update(0.0);
-        // Conclude 済み → pause は InvalidGroupId
-        let err = rt.pause(result.group_id, 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::InvalidGroupId(_)));
+    fn zero_time_scale_with_empty_entry_is_rejected_at_load() {
+        // 拒まないと 0 / 0 = NaN の end_time になった組
+        assert_rejected(empty_entry_time_scale_doc("empty_sb", 0.0), 0.0);
     }
 }

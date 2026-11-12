@@ -273,14 +273,7 @@ pub(super) fn resolve_transition(
 /// Resolve entry timing (Tasks 5.1-5.3)
 /// Returns (segment_start, segment_end, keyframe_time)
 ///
-/// NOTE(D2-V): delay / duration / offset は指示書由来の任意 f64 で、有限性・符号の
-/// 検証がない（P14/P20 参照）。f64 加算は panic しないが以下の静かな縮退がある:
-/// - 負の duration → segment_end < segment_start の反転セグメントが生成される（P20）
-/// - NaN の delay/duration → between の反転検査 `segment_start >= segment_end` が
-///   NaN 比較 false で素通りし、NaN 時刻のセグメントが出力へ伝播する（P14）
-/// - ±inf は inf 時刻として伝播する
-///
-/// 現行挙動は tests/compile/boundary_test.rs で特性化済み。
+/// delay / duration / offset の有限・符号は validate() の数値の規則が先に見ている。
 pub(super) fn resolve_entry_timing(
     storyboard_name: &str,
     entry_idx: usize,

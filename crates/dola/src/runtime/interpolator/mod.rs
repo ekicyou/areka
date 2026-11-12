@@ -162,9 +162,8 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
 ///
 /// NOTE(数値境界): quad_bez / cub_bez は lerp（乗算・加減算のみ）の合成で
 /// 除算を含まず、全 f64 入力で panic しない。制御点 x0..x3 は指示書由来の
-/// 任意 f64 であり、NaN/inf は結果へそのまま伝播する（指示書数値の有限性
-/// 検証は未実装: proposals.md P14 参照）。出力は [0,1] にクランプされない
-/// ため、制御点次第で from/to を超える外挿（オーバーシュート）が起きる。
+/// f64 で、NaN/inf は validate の数値の規則が拒むので有限に限られる。
+/// 出力は [0,1] にクランプされないため、制御点次第で from/to を超える外挿（オーバーシュート）が起きる。
 /// これは Back/Elastic 系の overshoot と同様に許容された挙動。
 fn apply_parametric_easing(t: f64, param: &ParametricEasing) -> f64 {
     match param {

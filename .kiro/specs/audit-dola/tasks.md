@@ -96,7 +96,7 @@
   - 長い鎖の 2 本のテストを、64 KiB のスタックのスレッドの中で深い鎖を回す形に改める（再帰に戻すと落ちる）
   - 終わった姿: 3 本が緑で、空にする行を消すと循環の檻が落ち、再帰に戻すと深い鎖の 2 本が落ちる
   - _Requirements: 4.1, 4.2, 4.5_
-- [ ] 6.2 数値の規則を検証に足し、`InvalidNumber` を返す（#29）
+- [x] 6.2 数値の規則を検証に足し、`InvalidNumber` を返す（#29）
   - エラーの種類に `InvalidNumber`（場所・欄・値）を足す（足すだけ）
   - 数値の規則（design の表: 遷移の delay・duration は有限で 0 以上・時刻の offset は有限・速さは有限で 0 より大・周回の数は 1 以上か −1・周回の待ちは有限・変数と遷移の数の値は有限）を検証の 1 つの関数にまとめ、違反を全部集めて返す
   - 周回の数の説明を検証の形に合わせ、今の挙動を固定していた NOTE を消す。dola の中では戻り値で返すだけで記録しない
@@ -372,3 +372,4 @@
 - 5.3: 値の保持は `timeline_manager/mod.rs` の非公開 `value_time`（周回を終えて実効時刻が負なら INFINITY）で、`evaluate`・`evaluate_all_for_group`・`collect_current_segment_final_values` が使う。待ちの中で競合の Conclude・Cancel をしたときの確定値（最後の値）を縛る檻はまだ無い（9.1 の競合の檻と合わせて足す）。`evaluate` に残る「インスタンスの無い項目を消す」retain は取り残しの掃除で、生きた項目は消さない。
 - 5.4: 長さに先頭の遅れが入ったので、周回の 1 周（`loop_duration = total_base_duration / time_scale`）も先頭の遅れを毎周くり返す（完了 dola-runtime-5-loop の決めどおり）。これを縛る檻はまだ無く、「最後の区切りより後のトリガーが発火しない」（要件 11.3）を縛るテストも無い。13 か 14 のテストの直しで足せるなら足す。
 - 6.1: `compile/mod.rs:49-51` の NOTE(D2-V) が「dfs_detect_cycle は再帰 DFS」と言うのは 6.1 で古びた。P14 の注と一緒に 6.2／15.2 で消す。compile の深い鎖のテストは compile の道筋の再帰（今は無い）を守る檻で、トリガーの DFS ではない。
+- 6.2: 数値の規則が入ったので、公開の口から NaN と有限の値の混ざったセグメントは作れない。task 2 の compile の並べ替えの檻は「並べ替えを消すと落ちる」と「NaN で panic しない」だけを見る（全順序と partial_cmp の差は見えない）。ベジェの制御点の有限の規則は要件 11.9 に合わせて足し、design の「数値の検証」の表にも行を足した（表の欠け）。facade の `InvalidLoopCount` の検査は届かない死んだコードで、後の段（#57・#58）で消す。P8/P14 の注は `runtime/types.rs:33`・`instance_manager/tests.rs:366`・`tests/runtime/core_types_test.rs:326` に残る（15.2）。

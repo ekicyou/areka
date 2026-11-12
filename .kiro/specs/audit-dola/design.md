@@ -288,6 +288,7 @@ pub(crate) fn sum_on_ms_grid(a: f64, b: f64) -> f64;
 | `loop_count` | 1 以上か −1 |
 | `loop_offset` の値（Scalar・Range の min／max） | 有限（負は今の V14／V15 が拒む） |
 | 変数の `initial`・`min`・`max`、遷移の `from`・`to`・`relative_to`（数の値） | 有限 |
+| ベジェのイージングの制御点 `x0`〜`x3`（遷移の `easing`・`loop_offset` の Range の `easing`） | 有限 |
 
 ```rust
 // src/error.rs に足す（足すだけ）

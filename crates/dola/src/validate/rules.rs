@@ -6,9 +6,10 @@
 use std::collections::BTreeSet;
 
 use crate::document::DolaDocument;
+use crate::easing::{EasingFunction, ParametricEasing};
 use crate::error::DolaError;
 use crate::storyboard::{KeyframeNames, KeyframeRef, LoopOffset};
-use crate::transition::TransitionValue;
+use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
 /// 期待されるスキーマバージョン
@@ -24,11 +25,137 @@ pub(super) fn validate_schema_version(doc: &DolaDocument, errors: &mut Vec<DolaE
     }
 }
 
-/// V12: 変数初期値の値域検証
+/// 数値の規則: 有限・符号・範囲を外れた値を全部 `InvalidNumber` として集める
 ///
-/// NOTE(D3-V): NaN の initial/min/max は全比較（`<` / `>`）が false となるため
-/// 本検査を素通りする（数値フィールドの有限性検証の欠如は P14 参照。
-/// tests/validation/transition_test.rs::v12_nan_tests で現行挙動を特性化済み）。
+/// NaN は比べが全部偽になり、ほかの規則（V12・V14〜V16・重なりの検査）を素通りするので、ここで拒む。
+pub(super) fn validate_numbers(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
+    for (name, var_def) in &doc.variable {
+        if let AnimationVariableDef::Float { initial, min, max } = var_def {
+            let location = format!("variable '{name}'");
+            push_unless(errors, &location, "initial", *initial, initial.is_finite());
+            for (field, v) in [("min", min), ("max", max)] {
+                if let Some(v) = v {
+                    push_unless(errors, &location, field, *v, v.is_finite());
+                }
+            }
+        }
+    }
+    for (name, def) in &doc.transition {
+        validate_transition_numbers(&format!("transition '{name}'"), def, errors);
+    }
+    for (sb_name, sb) in &doc.storyboard {
+        let location = format!("storyboard '{sb_name}'");
+        let ts = sb.time_scale;
+        push_unless(
+            errors,
+            &location,
+            "time_scale",
+            ts,
+            ts.is_finite() && ts > 0.0,
+        );
+        let lc = sb.loop_count;
+        push_unless(
+            errors,
+            &location,
+            "loop_count",
+            lc.into(),
+            lc >= 1 || lc == -1,
+        );
+        match &sb.loop_offset {
+            Some(LoopOffset::Scalar(v)) => {
+                push_unless(errors, &location, "loop_offset", *v, v.is_finite())
+            }
+            Some(LoopOffset::Range(r)) => {
+                push_unless(
+                    errors,
+                    &location,
+                    "loop_offset.min",
+                    r.min,
+                    r.min.is_finite(),
+                );
+                push_unless(
+                    errors,
+                    &location,
+                    "loop_offset.max",
+                    r.max,
+                    r.max.is_finite(),
+                );
+                validate_easing_numbers(&location, "loop_offset.easing", &r.easing, errors);
+            }
+            None => {}
+        }
+        for (idx, entry) in sb.entry.iter().enumerate() {
+            let location = format!("storyboard '{sb_name}' entry {idx}");
+            if let Some(KeyframeRef::WithOffset { offset, .. }) = &entry.at {
+                push_unless(errors, &location, "offset", *offset, offset.is_finite());
+            }
+            if let Some(v) = entry.trigger_start_offset {
+                push_unless(errors, &location, "trigger_start_offset", v, v.is_finite());
+            }
+            if let Some(TransitionRef::Inline(def)) = &entry.transition {
+                validate_transition_numbers(&location, def, errors);
+            }
+        }
+    }
+}
+
+fn validate_transition_numbers(location: &str, def: &TransitionDef, errors: &mut Vec<DolaError>) {
+    let d = def.delay;
+    push_unless(errors, location, "delay", d, d.is_finite() && d >= 0.0);
+    if let Some(d) = def.duration {
+        push_unless(errors, location, "duration", d, d.is_finite() && d >= 0.0);
+    }
+    for (field, value) in [("from", &def.from), ("to", &def.to)] {
+        if let Some(TransitionValue::Scalar(v)) = value {
+            push_unless(errors, location, field, *v, v.is_finite());
+        }
+    }
+    if let Some(v) = def.relative_to {
+        push_unless(errors, location, "relative_to", v, v.is_finite());
+    }
+    if let Some(easing) = &def.easing {
+        validate_easing_numbers(location, "easing", easing, errors);
+    }
+}
+
+/// ベジェの制御点は文書の f64 なので、ほかの数と同じく有限に限る
+fn validate_easing_numbers(
+    location: &str,
+    prefix: &str,
+    easing: &EasingFunction,
+    errors: &mut Vec<DolaError>,
+) {
+    let points: &[(&str, f64)] = match easing {
+        EasingFunction::Named(_) => &[],
+        EasingFunction::Parametric(ParametricEasing::QuadraticBezier { x0, x1, x2 }) => {
+            &[("x0", *x0), ("x1", *x1), ("x2", *x2)]
+        }
+        EasingFunction::Parametric(ParametricEasing::CubicBezier { x0, x1, x2, x3 }) => {
+            &[("x0", *x0), ("x1", *x1), ("x2", *x2), ("x3", *x3)]
+        }
+    };
+    for (name, v) in points {
+        push_unless(
+            errors,
+            location,
+            &format!("{prefix}.{name}"),
+            *v,
+            v.is_finite(),
+        );
+    }
+}
+
+fn push_unless(errors: &mut Vec<DolaError>, location: &str, field: &str, value: f64, ok: bool) {
+    if !ok {
+        errors.push(DolaError::InvalidNumber {
+            location: location.to_string(),
+            field: field.to_string(),
+            value,
+        });
+    }
+}
+
+/// V12: 変数初期値の値域検証
 pub(super) fn validate_variable_ranges(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
     for (var_name, var_def) in &doc.variable {
         match var_def {
@@ -276,12 +403,7 @@ pub(super) fn validate_transition_type_constraints(
     }
 }
 
-/// V14-V17: loop_offset バリデーション
-///
-/// NOTE(D3-V): NaN の min/max（Scalar(NaN) 含む）は V14-V16 の全比較が false と
-/// なるため検出されずに通過し、ランタイムのループ遅延サンプリングへ流入する
-/// （有限性検証の欠如は P14 参照。tests/runtime/loop_offset_test.rs::
-/// nan_boundary_tests で現行挙動を特性化済み）。
+/// V14-V17: loop_offset バリデーション（NaN は `validate_numbers` が拒む）
 pub(super) fn validate_loop_offset(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,

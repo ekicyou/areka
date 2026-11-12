@@ -86,41 +86,222 @@ mod error_accumulation_tests {
 }
 
 // =============================================================
-// D3-V 特性化: loop_count は文書バリデーションの対象外
+// 数値の規則（#29）: 有限・符号・範囲を外れた値は InvalidNumber で拒む
 // =============================================================
 
-mod loop_count_gap_tests {
+mod numeric_rule_tests {
     use super::*;
 
-    fn doc_with_loop_count(loop_count: i32) -> DolaDocument {
+    /// 変数 "x" と、"x" へインラインの遷移を 1 本張るストーリーボード "sb"
+    fn base_doc() -> DolaDocument {
         let mut doc = minimal_valid_doc();
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert(
-            "sb1".to_string(),
-            Storyboard {
-                time_scale: 1.0,
-                loop_count,
-                interruption_policy: InterruptionPolicy::Conclude,
-                loop_offset: None,
-                entry: vec![],
+        doc.variable.insert(
+            "x".to_string(),
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
             },
         );
-        doc.storyboard = storyboard;
+        doc.storyboard.insert(
+            "sb".to_string(),
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("x".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        to: Some(TransitionValue::Scalar(1.0)),
+                        delay: 0.0,
+                        duration: Some(1.0),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                })
+                .build(),
+        );
         doc
     }
 
+    fn sb(doc: &mut DolaDocument) -> &mut Storyboard {
+        doc.storyboard.get_mut("sb").unwrap()
+    }
+
+    fn trans(doc: &mut DolaDocument) -> &mut TransitionDef {
+        match sb(doc).entry[0].transition.as_mut() {
+            Some(TransitionRef::Inline(def)) => def,
+            _ => unreachable!(),
+        }
+    }
+
     #[test]
-    fn invalid_loop_count_passes_document_validation() {
-        // 特性化: スキーマ仕様（storyboard.rs: 「0以下 = エラー、-1 = 無限」）に
-        // 反する loop_count は validate()/compile では検査されず素通りし、
-        // ランタイムの start 時（facade の InvalidLoopCount）で初めて拒否される
-        // （tests/runtime/facade_test.rs::start_with_zero_loop_count_fails 等で
-        // 後置検出を固定済み）。文書レベル検証の追加は P26 を参照。
-        assert!(doc_with_loop_count(0).validate().is_ok());
-        assert!(doc_with_loop_count(-2).validate().is_ok());
-        // -1（無限ループ）と正値は当然合格
-        assert!(doc_with_loop_count(-1).validate().is_ok());
-        assert!(doc_with_loop_count(3).validate().is_ok());
+    fn invalid_numbers_are_rejected() {
+        type Mutate = fn(&mut DolaDocument);
+        let cases: [(Mutate, &str, &str, f64); 12] = [
+            (
+                |d| sb(d).time_scale = 0.0,
+                "storyboard 'sb'",
+                "time_scale",
+                0.0,
+            ),
+            (
+                |d| sb(d).time_scale = -1.0,
+                "storyboard 'sb'",
+                "time_scale",
+                -1.0,
+            ),
+            (
+                |d| sb(d).time_scale = f64::NAN,
+                "storyboard 'sb'",
+                "time_scale",
+                f64::NAN,
+            ),
+            (
+                |d| trans(d).duration = Some(f64::NAN),
+                "storyboard 'sb' entry 0",
+                "duration",
+                f64::NAN,
+            ),
+            (
+                |d| trans(d).duration = Some(-3.0),
+                "storyboard 'sb' entry 0",
+                "duration",
+                -3.0,
+            ),
+            (
+                |d| trans(d).delay = -1.0,
+                "storyboard 'sb' entry 0",
+                "delay",
+                -1.0,
+            ),
+            (
+                |d| sb(d).loop_count = 0,
+                "storyboard 'sb'",
+                "loop_count",
+                0.0,
+            ),
+            (
+                |d| sb(d).loop_offset = Some(LoopOffset::Scalar(f64::NAN)),
+                "storyboard 'sb'",
+                "loop_offset",
+                f64::NAN,
+            ),
+            (
+                |d| {
+                    d.variable.insert(
+                        "x".to_string(),
+                        AnimationVariableDef::Float {
+                            initial: f64::INFINITY,
+                            min: None,
+                            max: None,
+                        },
+                    );
+                },
+                "variable 'x'",
+                "initial",
+                f64::INFINITY,
+            ),
+            (
+                |d| trans(d).to = Some(TransitionValue::Scalar(f64::NEG_INFINITY)),
+                "storyboard 'sb' entry 0",
+                "to",
+                f64::NEG_INFINITY,
+            ),
+            (
+                |d| {
+                    trans(d).easing =
+                        Some(EasingFunction::Parametric(ParametricEasing::CubicBezier {
+                            x0: 0.0,
+                            x1: f64::NAN,
+                            x2: 1.0,
+                            x3: 1.0,
+                        }))
+                },
+                "storyboard 'sb' entry 0",
+                "easing.x1",
+                f64::NAN,
+            ),
+            (
+                |d| {
+                    sb(d).loop_offset = Some(LoopOffset::Range(LoopOffsetRange {
+                        min: 0.0,
+                        max: 1.0,
+                        easing: EasingFunction::Parametric(ParametricEasing::QuadraticBezier {
+                            x0: 0.0,
+                            x1: 0.5,
+                            x2: f64::INFINITY,
+                        }),
+                    }))
+                },
+                "storyboard 'sb'",
+                "loop_offset.easing.x2",
+                f64::INFINITY,
+            ),
+        ];
+
+        assert!(base_doc().validate().is_ok());
+        for (mutate, location, field, value) in cases {
+            let mut doc = base_doc();
+            mutate(&mut doc);
+            let errors = doc.validate().unwrap_err();
+            assert_eq!(errors.len(), 1, "{field} = {value}: {errors:?}");
+            assert!(
+                matches!(
+                    &errors[0],
+                    DolaError::InvalidNumber { location: l, field: f, value: v }
+                    if l == location && f == field && v.to_bits() == value.to_bits()
+                ),
+                "{field} = {value}: {errors:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn named_transition_numbers_are_checked() {
+        let mut doc = minimal_valid_doc();
+        doc.transition.insert(
+            "slide".to_string(),
+            TransitionDef {
+                relative_to: Some(f64::NAN),
+                ..Default::default()
+            },
+        );
+        let errors = doc.validate().unwrap_err();
+        assert!(matches!(
+            &errors[..],
+            [DolaError::InvalidNumber { location, field, .. }]
+            if location == "transition 'slide'" && field == "relative_to"
+        ));
+    }
+
+    #[test]
+    fn all_violations_are_collected() {
+        let mut doc = base_doc();
+        sb(&mut doc).time_scale = 0.0;
+        sb(&mut doc).loop_count = -2;
+        trans(&mut doc).duration = Some(-1.0);
+        let errors = doc.validate().unwrap_err();
+        let fields: Vec<&str> = errors
+            .iter()
+            .filter_map(|e| match e {
+                DolaError::InvalidNumber { field, .. } => Some(field.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(fields, ["time_scale", "loop_count", "duration"]);
+    }
+
+    #[test]
+    fn loop_count_must_be_positive_or_minus_one() {
+        // storyboard.rs の説明どおり 0 と −2 以下は拒み、−1（無限）と正の値は通す
+        for loop_count in [0, -2] {
+            let mut doc = base_doc();
+            sb(&mut doc).loop_count = loop_count;
+            assert!(doc.validate().is_err(), "loop_count = {loop_count}");
+        }
+        for loop_count in [-1, 1, 3] {
+            let mut doc = base_doc();
+            sb(&mut doc).loop_count = loop_count;
+            assert!(doc.validate().is_ok(), "loop_count = {loop_count}");
+        }
     }
 }
 

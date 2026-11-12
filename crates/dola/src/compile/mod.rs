@@ -40,15 +40,10 @@ pub fn compile_storyboard(
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 1: バリデーション (Task 3.1)
-    // NOTE(D2-V): デシリアライズ境界に関する整理 —
-    // doc は外部入力（JSON/TOML/YAML）または Builder API 由来だが、どの取り込み経路でも
-    // 本関数冒頭で必ず validate() を通過する（Builder はバリデーションを迂回できない。
-    // tests/compile/boundary_test.rs で特性化済み）。ネスト深度の制限（再帰的
-    // デシリアライズによるスタック枯渇防御）は各フォーマットパーサ側の責務であり、
-    // 本モジュールは再帰を持たない（トポロジカルソートは反復実装）。
-    // ただし validate() 内のトリガー循環検出（validate/rules.rs::dfs_detect_cycle）は
-    // 再帰 DFS のため、ストーリーボード連鎖長に比例したスタックを消費する（D3 境界、
-    // D3-V への申し送り）。数値フィールドの有限性・符号は検証されない（P8/P14/P20 参照）。
+    // doc は外部入力（JSON/TOML/YAML）か Builder の由来だが、どの経路でもここで必ず
+    // validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
+    // ネスト深度の制限は各フォーマットのパーサの責務。本モジュールも validate() の
+    // トリガー循環の検出も再帰を持たない（どちらも明示のスタックか反復）。
     doc.validate()?;
 
     // Step 2: ストーリーボード検索
@@ -223,14 +218,9 @@ pub fn compile_storyboard(
     for (var_name, mut segments) in var_segments {
         // Sort by start_time (Task 6.1)
         // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
-        // NOTE(D2-V): 後続の重複検査は NaN 比較（常に false）で素通りするため、
-        // NaN 時刻のセグメントは重複検出されずに出力へ伝播する（有限性検証は P14 参照。
-        // tests/compile/boundary_test.rs で特性化済み）。
         segments.sort_by(|a, b| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
 
         // Overlap check (Task 6.2)
-        // NOTE(D2-V): 負の duration による反転セグメント（end < start）は、単独または
-        // 近接しない配置では本検査に掛からず出力へ伝播する（P20 参照）。
         for i in 1..segments.len() {
             if segments[i - 1].end_time > segments[i].start_time {
                 errors.push(DolaError::CompileError {
@@ -273,9 +263,6 @@ pub fn compile_storyboard(
     }
 
     // Build CompiledStoryboard (Task 6.4)
-    // NOTE(D2-V): f64::max は NaN を無視するため、NaN の base_duration（NaN 時刻
-    // セグメント由来）は total_base_duration へ伝播せず黙って脱落する。
-    // 負の base_duration（反転セグメント由来）も初期値 0.0 でマスクされる（P14/P20 参照）。
     let total_base_duration = timelines
         .values()
         .map(|tl| tl.base_duration)

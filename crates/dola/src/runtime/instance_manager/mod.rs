@@ -220,8 +220,8 @@ impl InstanceManager {
     /// Finish deadline が到達した group_id のリストを返却。
     ///
     /// NOTE(数値境界): deadline が NaN の場合 `current_time >= deadline` は常に false と
-    /// なり、当該 deadline は黙って発火しない（NaN 流入は指示書数値の有限性検証の
-    /// 欠如による: proposals.md P8/P14 参照）。is_terminal チェックは transition() の
+    /// なり、当該 deadline は黙って発火しない（指示書の数値は validate が有限に限るので、
+    /// NaN が入るのは呼び手の渡す時刻が NaN のときだけ）。is_terminal チェックは transition() の
     /// 不変条件（終了遷移＝自動削除）により現行では常に false の防御チェック。
     pub fn check_finish_deadlines(&self, current_time: f64) -> Vec<u64> {
         self.instances

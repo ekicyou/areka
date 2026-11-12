@@ -193,14 +193,7 @@ impl DolaRuntime {
             return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
         }
 
-        // NOTE(D1a-V 脆弱性所見): time_scale はスキーマ/コンパイル時に正値検証されて
-        // いないため、time_scale == 0.0 のとき loop_duration は +inf
-        // （total_base_duration > 0）または NaN（total_base_duration == 0）になる。
-        // inf/NaN は下の == / < 比較を素通りし end_time = start_time + loop_duration も
-        // inf/NaN となるため、該当インスタンスは自然終了・ループ・トリガー発火が
-        // 一切起きないまま生存し続ける（負値なら end_time が過去になり即 Conclude）。
-        // 現行挙動は tests/runtime/facade_test.rs::time_scale_boundary で固定済み。
-        // 入力検証の追加は外部観測可能な挙動変更となるため report/proposals.md P8 に記録。
+        // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）
         let loop_duration = compiled.total_base_duration / compiled.time_scale;
 
         if loop_duration == 0.0 && compiled.loop_count == -1 {
@@ -430,8 +423,6 @@ impl DolaRuntime {
                     // fire_time は 0.0 起点で compile した周回内の相対時刻。
                     // 壁時計の発火時刻は評価の式 calculate_effective_time の逆:
                     //   loop_start_time + pause_accumulated + fire_time / time_scale
-                    // NOTE(D1a-V): time_scale == 0.0 では wall_fire_time が inf/NaN となり
-                    // トリガーは発火しない（compile_and_validate の NOTE / P8 参照）。
                     let wall_fire_time = inst.loop_start_time
                         + inst.pause_accumulated
                         + trigger.fire_time / inst.time_scale;

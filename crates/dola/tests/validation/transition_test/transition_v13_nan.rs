@@ -124,7 +124,7 @@ mod v13_tests {
 }
 
 // =============================================================
-// D3-V 特性化: NaN の V12 値域検証素通り
+// #29: NaN は V12 の値域の比べを素通りするので、数値の規則が InvalidNumber で拒む
 // =============================================================
 
 mod v12_nan_tests {
@@ -151,26 +151,31 @@ mod v12_nan_tests {
         doc
     }
 
+    fn invalid_number_fields(doc: &DolaDocument) -> Vec<String> {
+        doc.validate()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| match e {
+                DolaError::InvalidNumber { field, .. } => field,
+                other => panic!("unexpected error: {other:?}"),
+            })
+            .collect()
+    }
+
     #[test]
-    fn nan_initial_passes_range_validation() {
-        // 特性化: initial=NaN は min/max との比較（< / >）が常に false となるため、
-        // 値域 [0.0, 1.0] を持つ変数でも V12 を素通りして合格する（P14 参照）。
+    fn nan_initial_is_rejected() {
         let doc = doc_with_float_var("x", f64::NAN, Some(0.0), Some(1.0));
-        assert!(doc.validate().is_ok());
+        assert_eq!(invalid_number_fields(&doc), ["initial"]);
     }
 
     #[test]
-    fn nan_bounds_pass_range_validation() {
-        // 特性化: min=NaN / max=NaN は initial との比較が常に false となるため、
-        // 退化した値域定義が検出されないまま合格する（P14 参照）。
+    fn nan_bounds_are_rejected() {
         let doc = doc_with_float_var("x", 5.0, Some(f64::NAN), Some(f64::NAN));
-        assert!(doc.validate().is_ok());
+        assert_eq!(invalid_number_fields(&doc), ["min", "max"]);
     }
 
     #[test]
-    fn nan_transition_value_passes_range_validation() {
-        // 特性化: from/to の Scalar(NaN) は値域比較（< min / > max）が常に false と
-        // なるため、V12 のトランジション値域検証を素通りして合格する（P14 参照）。
+    fn nan_transition_value_is_rejected() {
         let doc = with_transition(
             doc_with_float_var("x", 0.5, Some(0.0), Some(1.0)),
             TransitionDef {
@@ -182,6 +187,6 @@ mod v12_nan_tests {
                 duration: Some(1.0),
             },
         );
-        assert!(doc.validate().is_ok());
+        assert_eq!(invalid_number_fields(&doc), ["from", "to"]);
     }
 }
