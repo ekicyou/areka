@@ -1,9 +1,9 @@
 //! 競合検出と終了戦略の適用（Tier 3）。
 //!
-//! 同一変数の時間的重複を検出し、`InterruptionPolicy` に基づく
+//! 同じ変数に生きた項目を持つインスタンスを競合とし、`InterruptionPolicy` に基づく
 //! 5種の終了戦略を group_id 単位で適用する。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::compile::CompiledStoryboard;
 use crate::storyboard::InterruptionPolicy;
@@ -25,7 +25,7 @@ pub(crate) fn resolve_conflicts_excluding(
     timeline_manager: &mut TimelineManager,
     instance_manager: &mut InstanceManager,
     subscription_manager: &mut SubscriptionManager,
-    skip_group_ids: &HashSet<u64>,
+    skip_group_ids: &BTreeSet<u64>,
 ) -> Result<Vec<u64>, RuntimeError> {
     // 1. 競合検出
     let conflicting = detect_overlaps(compiled, timeline_manager, instance_manager, skip_group_ids);
@@ -39,14 +39,14 @@ pub(crate) fn resolve_conflicts_excluding(
 
     // Never チェック: 1つでも Never があれば全体を拒否
     for &gid in &conflicting {
-        if let Ok(inst) = instance_manager.get(gid) {
-            if inst.interruption_policy == InterruptionPolicy::Never {
-                // 新規インスタンスを削除してエラーを返す
-                instance_manager.remove(new_group_id);
-                return Err(RuntimeError::Conflict {
-                    conflicting_group_ids: conflicting.into_iter().collect(),
-                });
-            }
+        if let Ok(inst) = instance_manager.get(gid)
+            && inst.interruption_policy == InterruptionPolicy::Never
+        {
+            // 新規インスタンスを削除してエラーを返す
+            instance_manager.remove(new_group_id);
+            return Err(RuntimeError::Conflict {
+                conflicting_group_ids: conflicting.into_iter().collect(),
+            });
         }
     }
 
@@ -55,6 +55,16 @@ pub(crate) fn resolve_conflicts_excluding(
         let policy = match instance_manager.get(gid) {
             Ok(inst) => inst.interruption_policy,
             Err(_) => continue, // 既に削除済み
+        };
+
+        // Never は手前で全体を拒んでいるので、ここは終了状態のある方針だけ
+        debug_assert_ne!(
+            policy,
+            InterruptionPolicy::Never,
+            "Never は手前で全体を拒む"
+        );
+        let Some(terminal_state) = InstanceState::from_policy(policy) else {
+            continue;
         };
 
         // 戦略ごとに購読者へ伝播する確定値を収集する
@@ -69,20 +79,11 @@ pub(crate) fn resolve_conflicts_excluding(
                 instance_manager.instances(),
             ),
             // Compress: ストーリーボード全体最終値にジャンプ
-            InterruptionPolicy::Compress => timeline_manager.collect_final_values(gid),
-            InterruptionPolicy::Never => {
-                // SAFETY(panic 経路): 手前の Never チェックループが同一の
-                // `instance_manager.get` で `conflicting` 全件を走査し、Never を
-                // 1つでも検出した時点で早期 return している。チェックと本 match の
-                // 間に instance_manager への変更はない（remove はエラー経路のみ）
-                // ため、ここで Never は観測されない。
-                unreachable!("Never policy should have been handled above");
+            // （Never は上の let-else で除いて来ない。並べるのは方針が増えたら型で気づくため）
+            InterruptionPolicy::Compress | InterruptionPolicy::Never => {
+                timeline_manager.collect_final_values(gid)
             }
         };
-
-        // Never 以外は終了状態に1対1対応する（上の match で Never は除外済み）
-        let terminal_state =
-            InstanceState::from_policy(policy).expect("non-Never policy maps to a terminal state");
 
         terminate_instance(
             gid,
@@ -128,60 +129,26 @@ fn terminate_instance(
     timeline_manager.remove_entries(group_id);
 }
 
-/// 新セグメントと既存タイムテーブルの時間重複を検出し、
-/// 競合する group_id のセットを返す。
-/// Playing/Paused 状態のインスタンスのみ対象。
+/// 新しいインスタンスが触る変数のどれかに、ほかの生きた（Playing/Paused）インスタンスの
+/// 項目があれば競合とし、その group_id のセットを返す（要件 11.8）。時刻の重なりは見ない。
 fn detect_overlaps(
     compiled: &CompiledStoryboard,
     timeline_manager: &TimelineManager,
     instance_manager: &InstanceManager,
-    skip_group_ids: &HashSet<u64>,
-) -> HashSet<u64> {
-    let mut conflicting = HashSet::new();
-
-    // Playing/Paused のインスタンスのみ対象（skip_group_ids を除外）
-    let active_instances: HashSet<u64> = instance_manager
-        .instances()
-        .iter()
-        .filter(|(gid, inst)| {
+    skip_group_ids: &BTreeSet<u64>,
+) -> BTreeSet<u64> {
+    let instances = instance_manager.instances();
+    compiled
+        .timelines
+        .keys()
+        .filter_map(|var_name| timeline_manager.get_timeline(var_name))
+        .flat_map(|timeline| &timeline.entries)
+        .map(|entry| entry.group_id)
+        .filter(|gid| {
             !skip_group_ids.contains(gid)
-                && (inst.state == InstanceState::Playing || inst.state == InstanceState::Paused)
+                && instances.get(gid).is_some_and(|inst| {
+                    inst.state == InstanceState::Playing || inst.state == InstanceState::Paused
+                })
         })
-        .map(|(gid, _)| *gid)
-        .collect();
-
-    for (var_name, new_timeline) in &compiled.timelines {
-        // 新セグメントの時間範囲（effective_time ベース）
-        for new_seg in &new_timeline.segments {
-            let new_start = new_seg.start_time;
-            let new_end = new_seg.end_time;
-
-            // 既存タイムテーブルの同名変数をチェック
-            if let Some(existing_timeline) = timeline_manager.get_timeline(var_name) {
-                for entry in &existing_timeline.entries {
-                    // アクティブなインスタンスのみ
-                    if !active_instances.contains(&entry.group_id) {
-                        continue;
-                    }
-
-                    // セグメントレベルの重複チェック
-                    for existing_seg in &entry.segments {
-                        let ex_start = existing_seg.start_time;
-                        let ex_end = existing_seg.end_time;
-
-                        // 時間範囲の重複判定: start < other_end && end > other_start
-                        // NOTE(数値境界): セグメント時刻に NaN が含まれる場合は両比較が
-                        // false となり、当該セグメントは競合として検出されない（黙って
-                        // 素通り）。NaN の流入は指示書数値の有限性検証の欠如による
-                        // （proposals.md P8/P14 参照）。
-                        if new_start < ex_end && new_end > ex_start {
-                            conflicting.insert(entry.group_id);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    conflicting
+        .collect()
 }

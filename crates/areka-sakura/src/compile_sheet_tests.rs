@@ -332,7 +332,7 @@ fn trailing_explicit_wait_remains_in_sheet_and_extends_extent() {
     // 台本のみから talk 全時間範囲が復元可能（absolute_start_time 未刻印は 0.0 起点）。
     assert_eq!(
         compiled.sheet.absolute_end_time(),
-        d + w,
+        (150.0 + 800.0) / 1000.0, // ms の格子の和（0.15＋0.8 の f64 の和 0.9500000000000001 ではない）
         "末尾待ちを含めた全時間範囲が台本のみから復元可能（R5.3）"
     );
 }
@@ -374,17 +374,6 @@ fn empty_content_talk_gets_no_clear_all_prepended() {
 // （design C12・Testing Strategy §5・R3.4）
 
 use areka_talk::EpilogueCommand;
-
-/// 台本末尾の占有 horizon（`max(start_time + duration)`）を素朴に算出するテスト用参照。
-/// `append_epilogue` が返す carrier cue の `start_time` 期待値、および horizon 不延長の
-/// 検証に使う（`CueSheet::absolute_end_time` はアンカー未刻印で同値だが、独立導出で固定する）。
-fn relative_horizon(sheet: &CueSheet) -> f64 {
-    sheet
-        .cues()
-        .iter()
-        .map(|c| c.start_time + c.duration)
-        .fold(0.0_f64, f64::max)
-}
 
 /// 空 epilogue は恒等: 台本を一切変えない（既存経路完全不変・R3.4）。
 /// cue 数・各 cue のフィールド等価を固定し、`epilogue.is_empty()` が perfect no-op であることを保証する。
@@ -441,7 +430,7 @@ fn append_epilogue_appends_carrier_at_tail_horizon_without_extending() {
         Instruction::Text("abc".into()),
         Instruction::Wait(Duration::from_millis(800)),
     ]);
-    let horizon_before = relative_horizon(&compiled.sheet);
+    let horizon_before = compiled.sheet.absolute_end_time();
     assert!(horizon_before > 0.0, "前提: 非空台本の horizon は正");
     let len_before = compiled.sheet.cues().len();
 
@@ -468,7 +457,7 @@ fn append_epilogue_appends_carrier_at_tail_horizon_without_extending() {
 
     // horizon 不延長: zero-duration cue は max(start+duration) を増やさない。
     assert_eq!(
-        relative_horizon(&sheet),
+        sheet.absolute_end_time(),
         horizon_before,
         "zero-duration carrier cue は占有 horizon を延長しない（TalkDone を遅らせない）"
     );
@@ -494,7 +483,7 @@ fn append_epilogue_stable_sorts_after_same_time_barrier() {
         duration: 0.0,
     };
     let sheet = CueSheet::new(vec![text, barrier]);
-    assert_eq!(relative_horizon(&sheet), 1.0, "前提: horizon=1.0");
+    assert_eq!(sheet.absolute_end_time(), 1.0, "前提: horizon=1.0");
 
     let epilogue = [EpilogueCommand {
         name: "areka.prop.set".into(),
@@ -520,7 +509,7 @@ fn append_epilogue_stable_sorts_after_same_time_barrier() {
         "carrier cue は barrier の後ろへ安定ソートされる（barrier 解決後・horizon 到達 tick で発火）"
     );
     // horizon は延長されない。
-    assert_eq!(relative_horizon(&sheet), 1.0);
+    assert_eq!(sheet.absolute_end_time(), 1.0);
 }
 
 /// 複数 epilogue コマンドは各々 1 carrier cue へ写像され、全て同一の末尾 horizon へ付加される
@@ -528,7 +517,7 @@ fn append_epilogue_stable_sorts_after_same_time_barrier() {
 #[test]
 fn append_epilogue_maps_each_command_to_one_carrier_cue() {
     let compiled = compile(&[Instruction::Text("x".into())]);
-    let horizon = relative_horizon(&compiled.sheet);
+    let horizon = compiled.sheet.absolute_end_time();
     let epilogue = [
         EpilogueCommand {
             name: "areka.prop.set".into(),

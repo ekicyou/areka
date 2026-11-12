@@ -19,13 +19,14 @@ mod pause_resume_cycle {
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(0.0);
+        rt.tick(0.0);
 
         // t=0.3: 中間
-        let diff = rt.update(0.3).changes;
+        rt.tick(0.3);
+        let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty());
         match &diff[0].1 {
-            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 0.05, "t=0.3: got {v}"),
+            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "t=0.3: got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
@@ -34,7 +35,8 @@ mod pause_resume_cycle {
 
         // t=0.5: Pause 中 — 値が凍結される
         // Paused 状態では timeline_manager が pause_start 時点の値を返す
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         // Paused 中は前回値と同じ → diff 空
         assert!(
             diff.is_empty(),
@@ -45,16 +47,17 @@ mod pause_resume_cycle {
         let new_end = rt.resume(group_id, 0.5).unwrap();
         // end_time は pause 分（0.2s）延長される: 1.0 + 0.2 = 1.2
         assert!(
-            (new_end - 1.2).abs() < 0.05,
+            (new_end - 1.2).abs() < 1e-9,
             "expected end_time ~1.2, got {new_end}"
         );
 
         // t=0.7: pause 分 0.2s ずれで effective=0.5
-        let diff = rt.update(0.7).changes;
+        rt.tick(0.7);
+        let diff = rt.last_result().changes.clone();
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => {
-                assert!((*v - 0.5).abs() < 0.05, "t=0.7 (eff=0.5): got {v}")
+                assert!((*v - 0.5).abs() < 1e-9, "t=0.7 (eff=0.5): got {v}")
             }
             other => panic!("expected Float, got {other:?}"),
         }
@@ -84,25 +87,111 @@ mod concurrent_playback {
         assert!((r2.end_time - 2.0).abs() < 1e-9, "zoom end_time");
 
         // t=0.5: opacity=0.5, scale=1.25
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
 
-        let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
-        let scale = diff.iter().find(|(id, _)| *id == scale_id);
-
-        if let Some((_, EvaluatedValue::Float(v))) = opacity {
-            assert!((*v - 0.5).abs() < 0.05, "opacity@0.5: {v}");
-        }
-        if let Some((_, EvaluatedValue::Float(v))) = scale {
-            assert!((*v - 1.25).abs() < 0.05, "scale@0.5: {v}");
-        }
+        let (_, opacity) = diff
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("opacity@0.5");
+        let (_, scale) = diff
+            .iter()
+            .find(|(id, _)| *id == scale_id)
+            .expect("scale@0.5");
+        assert_eq!(*opacity, EvaluatedValue::Float(0.5), "opacity@0.5");
+        assert_eq!(*scale, EvaluatedValue::Float(1.25), "scale@0.5");
 
         // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
-        let diff = rt.update(1.5).changes;
+        rt.tick(1.5);
+        let diff = rt.last_result().changes.clone();
         // opacity の自然終了 + scale の更新
-        let scale = diff.iter().find(|(id, _)| *id == scale_id);
-        if let Some((_, EvaluatedValue::Float(v))) = scale {
-            assert!((*v - 1.75).abs() < 0.05, "scale@1.5: {v}");
+        let (_, scale) = diff
+            .iter()
+            .find(|(id, _)| *id == scale_id)
+            .expect("scale@1.5");
+        assert_eq!(*scale, EvaluatedValue::Float(1.75), "scale@1.5");
+    }
+}
+
+// =========================================================================
+// 値の保持（audit-dola #3）
+// =========================================================================
+mod value_hold {
+    use super::super::*;
+    use std::collections::HashMap;
+
+    /// 1 つのストーリーボードに opacity 0→1（1 秒）と scale 1→2（2 秒）。
+    fn short_and_long_doc() -> DolaDocument {
+        let mut doc = dual_variable_doc();
+        let sb = StoryboardBuilder::new()
+            .entry(linear("opacity", 0.0, 1.0, 1.0))
+            .entry(linear("scale", 1.0, 2.0, 2.0))
+            .build();
+        doc.storyboard.clear();
+        doc.storyboard.insert("both".to_string(), sb);
+        doc
+    }
+
+    #[test]
+    fn shorter_variable_holds_final_value_until_instance_ends() {
+        let mut rt = DolaRuntime::new();
+        let opacity_id = rt.subscribe("opacity");
+        rt.load_document(short_and_long_doc()).unwrap();
+        rt.start("both", 0.0).unwrap();
+
+        // 受け手が持つ最後の値
+        let mut seen: HashMap<i64, EvaluatedValue> = HashMap::new();
+        let mut tick = |rt: &mut DolaRuntime, t: f64| {
+            rt.tick(t);
+            for (id, v) in &rt.last_result().changes {
+                seen.insert(*id, v.clone());
+            }
+            seen.get(&opacity_id).cloned()
+        };
+
+        assert_eq!(tick(&mut rt, 0.992), Some(EvaluatedValue::Float(0.992)));
+        // opacity の最後のセグメントを過ぎても、インスタンスは生きている → 最後の値
+        assert_eq!(tick(&mut rt, 1.008), Some(EvaluatedValue::Float(1.0)));
+        // t=2.0 で Conclude した後も 1.0 のまま
+        assert_eq!(tick(&mut rt, 2.0), Some(EvaluatedValue::Float(1.0)));
+        assert_eq!(tick(&mut rt, 2.5), Some(EvaluatedValue::Float(1.0)));
+    }
+}
+
+// =========================================================================
+// #39: 生きたインスタンスの有無
+// =========================================================================
+mod has_instances {
+    use super::super::*;
+
+    /// delay の間は変化が 0 件でもインスタンスは生きている → 真。Conclude の後は偽。
+    #[test]
+    fn has_instances_stays_true_during_delay() {
+        let mut doc = simple_float_doc("delayed");
+        let sb = doc.storyboard.get_mut("delayed").unwrap();
+        let Some(TransitionRef::Inline(tr)) = sb.entry[0].transition.as_mut() else {
+            panic!("inline transition expected");
+        };
+        tr.delay = 1.0;
+
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+        assert!(!rt.has_instances());
+
+        let StartResult { group_id, .. } = rt.start("delayed", 0.0).unwrap();
+        rt.tick(0.0);
+        for t in [0.3, 0.6, 0.9] {
+            rt.tick(t);
+            assert!(
+                rt.last_result().changes.is_empty(),
+                "t={t}: delay 中は変化なし"
+            );
+            assert!(rt.has_instances(), "t={t}: delay 中も生きている");
         }
+
+        rt.conclude(group_id).unwrap();
+        assert!(!rt.has_instances());
     }
 }

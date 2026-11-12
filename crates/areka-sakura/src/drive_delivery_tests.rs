@@ -608,19 +608,16 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
     );
 
     // 責務二分（R8.6/R9.7）: **同一 3 Choice** がバッグ（解決照合の単一真実源）へも**同時に**積まれる。
-    // バッグ内容は id/text で配送列の 3 Choice と一致する（配送列とバッグが乖離しない）。
+    // バッグ内容は id で配送列の 3 Choice と一致する（配送列とバッグが乖離しない）。
     let expected_bag = vec![
         PendingChoice {
             id: "Onおしゃべり頻度メニュー".into(),
-            text: "おしゃべり頻度".into(),
         },
         PendingChoice {
             id: "Onエモの位置調整メニュー".into(),
-            text: "エモの位置調整".into(),
         },
         PendingChoice {
             id: "Onメニュー閉じる".into(),
-            text: "閉じる".into(),
         },
     ];
     assert_eq!(
@@ -629,23 +626,23 @@ fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
         "同一 3 Choice がバッグへも同時に積まれる（責務二分＝配送列とバッグが並存・R8.6）"
     );
 
-    // 配送列側の Choice を抽出し、バッグと (id, text) で完全一致することを固定する
+    // 配送列側の Choice を抽出し、バッグと id で完全一致することを固定する
     // （同一 Choice が配送列とバッグの**両路**に現れる＝責務二分の相互整合）。
-    let stream_choices: Vec<(String, String)> = stream_a
+    let stream_choices: Vec<String> = stream_a
         .iter()
         .filter_map(|cmd| match cmd {
-            CueCommand::Choice { id, text, .. } => Some((id.clone(), text.clone())),
+            CueCommand::Choice { id, .. } => Some(id.clone()),
             _ => None,
         })
         .collect();
-    let bag_choices: Vec<(String, String)> = player
+    let bag_choices: Vec<String> = player
         .pending_choices()
         .iter()
-        .map(|c| (c.id.clone(), c.text.clone()))
+        .map(|c| c.id.clone())
         .collect();
     assert_eq!(
         stream_choices, bag_choices,
-        "配送列に現れる 3 Choice とバッグの 3 Choice が同一（id/text・順序とも一致）"
+        "配送列に現れる 3 Choice とバッグの 3 Choice が同一（id・順序とも一致）"
     );
 }
 

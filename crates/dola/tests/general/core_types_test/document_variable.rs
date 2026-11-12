@@ -40,7 +40,6 @@ mod document_tests {
                 initial: 0,
                 min: Some(0),
                 max: Some(100),
-                typewriter: None,
             },
         );
         variable.insert(
@@ -91,7 +90,6 @@ mod variable_tests {
             initial: 42,
             min: Some(0),
             max: Some(100),
-            typewriter: None,
         };
         let json = serde_json::to_string(&var).unwrap();
         assert!(json.contains(r#""type":"i64""#));
@@ -99,17 +97,19 @@ mod variable_tests {
         assert_eq!(var, deserialized);
     }
 
+    /// 消した `typewriter` の欄を書いた古い文書も読める（serde は知らない欄を捨てる）
     #[test]
-    fn integer_variable_with_typewriter_json_roundtrip() {
-        let var = AnimationVariableDef::Integer {
-            initial: 0,
-            min: Some(0),
-            max: None,
-            typewriter: Some("こんにちは世界".to_string()),
-        };
-        let json = serde_json::to_string(&var).unwrap();
-        let deserialized: AnimationVariableDef = serde_json::from_str(&json).unwrap();
-        assert_eq!(var, deserialized);
+    fn integer_variable_ignores_removed_typewriter_field() {
+        let json = r#"{"type":"i64","initial":0,"min":0,"typewriter":"こんにちは世界"}"#;
+        let var: AnimationVariableDef = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            var,
+            AnimationVariableDef::Integer {
+                initial: 0,
+                min: Some(0),
+                max: None,
+            }
+        );
     }
 
     #[test]

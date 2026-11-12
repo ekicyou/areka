@@ -1,6 +1,8 @@
 //! イージング関数の適用と補間計算。
 
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::f64::consts::FRAC_PI_2;
 use std::rc::Rc;
 
 use interpolation::{Ease, EaseFunction};
@@ -28,16 +30,25 @@ impl ObjectInternPool {
     }
 
     /// 同一内容の DynamicValue に対して同一の Rc を返す。
-    pub fn intern(&mut self, value: DynamicValue) -> Rc<DynamicValue> {
-        self.pool
-            .entry(value.clone())
-            .or_insert_with(|| Rc::new(value))
-            .clone()
+    /// 当たったときは複製もしない（毎フレーム引くので）。
+    pub fn intern(&mut self, value: &DynamicValue) -> Rc<DynamicValue> {
+        if let Some(rc) = self.pool.get(value) {
+            return rc.clone();
+        }
+        let rc = Rc::new(value.clone());
+        self.pool.insert(value.clone(), rc.clone());
+        rc
+    }
+
+    /// 使われていない値を手放す（表が増え続けないように）。配信中の値は同じ Rc を保つ
+    /// （差分は `Rc::ptr_eq` で比べるので、作り直すと偽の差分が出る）。
+    pub fn release_unused(&mut self) {
+        self.pool.retain(|_, rc| Rc::strong_count(rc) > 1);
     }
 }
 
 /// イージング適用と値の補間計算を行う。
-pub struct Interpolator;
+pub(crate) struct Interpolator;
 
 impl Interpolator {
     /// セグメントの進捗率 `progress_t` で補間値を計算する。
@@ -46,6 +57,7 @@ impl Interpolator {
     /// - `VariableTypeHint::Float`: f64 直接値
     /// - `VariableTypeHint::Integer`: f64 補間 → `round()` → i64
     /// - `VariableTypeHint::Object`: `progress_t >= 1.0` なら `to_value`、それ以外は `from_value`
+    #[cfg(test)]
     pub fn interpolate(
         segment: &CompiledSegment,
         variable_type: &VariableTypeHint,
@@ -68,7 +80,7 @@ impl Interpolator {
         // NaN の伝播先: Object は `t >= 1.0` が false → from_value 側、
         // Float は NaN が結果へ伝播、Integer は `NaN.round() as i64` の飽和キャストで 0。
         // +inf / -inf は 1.0 / 0.0 にクランプされる。いずれの経路も panic しない
-        // （tests.rs の D1b-V 数値境界テストで固定）。
+        // （tests.rs の数値境界のテストで固定）。
         let t = progress_t.clamp(0.0, 1.0);
 
         match variable_type {
@@ -81,23 +93,22 @@ impl Interpolator {
                 };
                 let dv = transition_value_to_dynamic(value);
                 let rc = match intern_pool {
-                    Some(pool) => pool.intern(dv),
-                    None => Rc::new(dv),
+                    Some(pool) => pool.intern(&dv),
+                    None => Rc::new(dv.into_owned()),
                 };
                 EvaluatedValue::Object(rc)
             }
             VariableTypeHint::Float => {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
-                let eased_t = apply_easing(t, &segment.easing);
-                let result = interpolation::lerp(&from, &to, &eased_t);
-                EvaluatedValue::Float(result)
+                let eased_t = apply_easing(t, segment.easing.as_ref());
+                EvaluatedValue::Float(lerp(from, to, eased_t))
             }
-            VariableTypeHint::Integer { .. } => {
+            VariableTypeHint::Integer => {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
-                let eased_t = apply_easing(t, &segment.easing);
-                let result = interpolation::lerp(&from, &to, &eased_t);
+                let eased_t = apply_easing(t, segment.easing.as_ref());
+                let result = lerp(from, to, eased_t);
                 // NOTE(数値境界): `as i64` は飽和キャスト（Rust 1.45+）であり panic しない:
                 // NaN → 0、i64::MAX 超 / +inf → i64::MAX、i64::MIN 未満 / -inf → i64::MIN。
                 // round() も全 f64 入力で panic しない。
@@ -107,8 +118,17 @@ impl Interpolator {
     }
 }
 
+/// `from + (to − from)·t` は有限の両端でも差があふれて NaN／inf になり、t=1 で to にならないので、重みの和で出す。
+/// 同じ両端は丸めで 1 ulp ずれるので、そのまま返す。
+fn lerp(from: f64, to: f64, t: f64) -> f64 {
+    if from == to {
+        return from;
+    }
+    from * (1.0 - t) + to * t
+}
+
 /// `EasingFunction` を適用して進捗率を変換する。
-fn apply_easing(t: f64, easing: &Option<EasingFunction>) -> f64 {
+pub(super) fn apply_easing(t: f64, easing: Option<&EasingFunction>) -> f64 {
     match easing {
         None => t, // デフォルト: 線形補間
         Some(EasingFunction::Named(name)) => apply_named_easing(t, *name),
@@ -118,8 +138,11 @@ fn apply_easing(t: f64, easing: &Option<EasingFunction>) -> f64 {
 
 /// `EasingName` を `interpolation::EaseFunction` にマッピングして適用する。
 ///
-/// NOTE(数値境界): interpolation クレートの各 ease 関数は入力を内部で [0,1] に
-/// クランプする（NaN は比較が false となりそのまま素通り）。実装は多項式・
+/// Sine In/Out と Elastic 系だけは自前の式: 外のクレート 0.3.0 は `PI_2` を 2π と定義して
+/// π/2 の所に使うので、SineOut と ElasticIn が終わりに 0 へ戻る（外のクレートはそのまま使う決まり）。
+///
+/// NOTE(数値境界): 呼び手は t を [0,1] に収めて渡す（interpolation クレートの各 ease 関数も
+/// 内部で [0,1] にクランプする。NaN は比較が false となりそのまま素通り）。実装は多項式・
 /// sqrt・sin・powf・定数除算のみで、入力依存の除算を含まず全 f64 入力で
 /// panic しない。NaN 入力は NaN として伝播する。
 fn apply_named_easing(t: f64, name: EasingName) -> f64 {
@@ -137,8 +160,8 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
         EasingName::QuinticIn => t.calc(EaseFunction::QuinticIn),
         EasingName::QuinticOut => t.calc(EaseFunction::QuinticOut),
         EasingName::QuinticInOut => t.calc(EaseFunction::QuinticInOut),
-        EasingName::SineIn => t.calc(EaseFunction::SineIn),
-        EasingName::SineOut => t.calc(EaseFunction::SineOut),
+        EasingName::SineIn => 1.0 - (t * FRAC_PI_2).cos(),
+        EasingName::SineOut => (t * FRAC_PI_2).sin(),
         EasingName::SineInOut => t.calc(EaseFunction::SineInOut),
         EasingName::CircularIn => t.calc(EaseFunction::CircularIn),
         EasingName::CircularOut => t.calc(EaseFunction::CircularOut),
@@ -146,9 +169,10 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
         EasingName::ExponentialIn => t.calc(EaseFunction::ExponentialIn),
         EasingName::ExponentialOut => t.calc(EaseFunction::ExponentialOut),
         EasingName::ExponentialInOut => t.calc(EaseFunction::ExponentialInOut),
-        EasingName::ElasticIn => t.calc(EaseFunction::ElasticIn),
-        EasingName::ElasticOut => t.calc(EaseFunction::ElasticOut),
-        EasingName::ElasticInOut => t.calc(EaseFunction::ElasticInOut),
+        EasingName::ElasticIn => elastic_in(t),
+        EasingName::ElasticOut => 1.0 - elastic_in(1.0 - t),
+        EasingName::ElasticInOut if t < 0.5 => 0.5 * elastic_in(2.0 * t),
+        EasingName::ElasticInOut => 1.0 - 0.5 * elastic_in(2.0 - 2.0 * t),
         EasingName::BackIn => t.calc(EaseFunction::BackIn),
         EasingName::BackOut => t.calc(EaseFunction::BackOut),
         EasingName::BackInOut => t.calc(EaseFunction::BackInOut),
@@ -158,13 +182,17 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
     }
 }
 
+/// AHEasing（Penner 由来）の ElasticIn（`sin(13·π/2·t)·2^(10(t−1))`）。
+fn elastic_in(t: f64) -> f64 {
+    (13.0 * FRAC_PI_2 * t).sin() * 2.0_f64.powf(10.0 * (t - 1.0))
+}
+
 /// パラメトリックイージング（ベジェ曲線）を適用する。
 ///
 /// NOTE(数値境界): quad_bez / cub_bez は lerp（乗算・加減算のみ）の合成で
 /// 除算を含まず、全 f64 入力で panic しない。制御点 x0..x3 は指示書由来の
-/// 任意 f64 であり、NaN/inf は結果へそのまま伝播する（指示書数値の有限性
-/// 検証は未実装: proposals.md P14 参照）。出力は [0,1] にクランプされない
-/// ため、制御点次第で from/to を超える外挿（オーバーシュート）が起きる。
+/// f64 で、NaN/inf は validate の数値の規則が拒むので有限に限られる。
+/// 出力は [0,1] にクランプされないため、制御点次第で from/to を超える外挿（オーバーシュート）が起きる。
 /// これは Back/Elastic 系の overshoot と同様に許容された挙動。
 fn apply_parametric_easing(t: f64, param: &ParametricEasing) -> f64 {
     match param {
@@ -193,10 +221,10 @@ fn scalar_value(value: &TransitionValue) -> f64 {
 }
 
 /// `TransitionValue` を `DynamicValue` に変換する。
-fn transition_value_to_dynamic(value: &TransitionValue) -> DynamicValue {
+fn transition_value_to_dynamic(value: &TransitionValue) -> Cow<'_, DynamicValue> {
     match value {
-        TransitionValue::Scalar(v) => DynamicValue::Float(*v),
-        TransitionValue::Dynamic(dv) => dv.clone(),
+        TransitionValue::Scalar(v) => Cow::Owned(DynamicValue::Float(*v)),
+        TransitionValue::Dynamic(dv) => Cow::Borrowed(dv),
     }
 }
 

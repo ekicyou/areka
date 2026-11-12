@@ -103,7 +103,7 @@ impl std::fmt::Debug for CueProbe {
 /// 全演者（seriko＝`Shell`／emo-text＝`Balloon`）がこの分類器を共有し、各自の action
 /// ゲートをこの分類に一致させる（中央 router に依存しない・演者側 relevance）。
 ///
-/// - `Emote` / `EntityRef` / `BalloonSurface` → [`CueTarget::Shell`]、
+/// - `Emote` / `BalloonSurface` → [`CueTarget::Shell`]、
 /// - `Text` / `NewLine` / `Clear` / `ClearAll` / `Choice` / `Cursor` / `AnchorBegin` /
 ///   `AnchorEnd` → [`CueTarget::Balloon`]、
 /// - `Custom`（`\!` 汎用コマンドキャリア）は**型レベルでは** `None`。ただしこれは
@@ -126,7 +126,6 @@ impl std::fmt::Debug for CueProbe {
 pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {
     match command {
         CueCommand::Emote { .. } => Some(CueTarget::Shell),
-        CueCommand::EntityRef(..) => Some(CueTarget::Shell),
         CueCommand::BalloonSurface { .. } => Some(CueTarget::Shell), // 表示系＝seriko
         CueCommand::Text(..) => Some(CueTarget::Balloon),
         CueCommand::NewLine { .. } => Some(CueTarget::Balloon),

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::compile::{CompiledVariableTimeline, VariableTypeHint};
 use crate::easing::{EasingFunction, EasingName};
+use crate::runtime::instance_state::InstanceState;
 use crate::storyboard::InterruptionPolicy;
 use crate::transition::TransitionValue;
 
@@ -85,15 +86,12 @@ fn float_segment(start: f64, end: f64, from: f64, to: f64) -> CompiledSegment {
     }
 }
 
-fn make_instance(group_id: u64, start_time: f64) -> StoryboardInstance {
+fn make_instance(start_time: f64) -> StoryboardInstance {
     StoryboardInstance {
-        group_id,
         storyboard_name: "test".to_string(),
         state: InstanceState::Playing,
         interruption_policy: InterruptionPolicy::Conclude,
-        start_time,
         time_scale: 1.0,
-        base_duration: 1.0,
         pause_accumulated: 0.0,
         pause_start: None,
         loop_count: 1,
@@ -115,8 +113,8 @@ fn insert_and_evaluate_float() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     // t=0.5 → progress 0.5 → value 50.0
     let val = mgr.evaluate("x", 0.5, &instances);
@@ -126,7 +124,7 @@ fn insert_and_evaluate_float() {
 #[test]
 fn evaluate_nonexistent_variable() {
     let mut mgr = TimelineManager::new();
-    let instances = HashMap::new();
+    let instances = BTreeMap::new();
     assert!(mgr.evaluate("nonexistent", 0.0, &instances).is_none());
 }
 
@@ -136,13 +134,19 @@ fn expired_entry_auto_removal() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
-    // t=2.0 → 全セグメント終了 → None + エントリ破棄
-    let val = mgr.evaluate("x", 2.0, &instances);
-    assert!(val.is_none());
-    assert!(!mgr.has_entries(1));
+    // t=2.0 → 全セグメント終了でもインスタンスが生きている間は最後の値・項目は残る
+    assert_eq!(
+        mgr.evaluate("x", 2.0, &instances),
+        Some(EvaluatedValue::Float(100.0))
+    );
+    assert!(mgr.has_entries(1));
+
+    // 項目を消すのは remove_entries だけ
+    mgr.remove_entries(1);
+    assert!(mgr.evaluate("x", 2.0, &instances).is_none());
 }
 
 #[test]
@@ -154,9 +158,9 @@ fn latest_group_id_priority() {
     mgr.insert_entries(1, &compiled1);
     mgr.insert_entries(2, &compiled2);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
-    instances.insert(2, make_instance(2, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    instances.insert(2, make_instance(0.0));
 
     // group_id=2 が最新 → 100.0 系列が採用
     let val = mgr.evaluate("x", 1.0, &instances);
@@ -169,9 +173,8 @@ fn pause_freezes_value() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 2.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    let mut inst = make_instance(1, 0.0);
-    inst.base_duration = 2.0;
+    let mut instances = BTreeMap::new();
+    let mut inst = make_instance(0.0);
     inst.end_time = 2.0;
     inst.state = InstanceState::Paused;
     inst.pause_start = Some(0.5); // t=0.5 で Pause
@@ -209,10 +212,9 @@ fn effective_time_with_time_scale() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 2.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    let mut inst = make_instance(1, 0.0);
+    let mut instances = BTreeMap::new();
+    let mut inst = make_instance(0.0);
     inst.time_scale = 2.0; // 2倍速
-    inst.base_duration = 2.0;
     instances.insert(1, inst);
 
     // t=0.5, time_scale=2.0 → effective_time=1.0, progress=0.5
@@ -231,7 +233,7 @@ fn evaluate_removes_entry_when_instance_missing() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let instances = HashMap::new(); // インスタンスなし
+    let instances = BTreeMap::new(); // インスタンスなし
     let val = mgr.evaluate("x", 0.5, &instances);
     assert!(val.is_none());
     assert!(!mgr.has_entries(1), "entry should be removed");
@@ -244,8 +246,8 @@ fn evaluate_before_first_segment_returns_from_value() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 2.0, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     let val = mgr.evaluate("x", 0.5, &instances);
     assert_eq!(val, Some(EvaluatedValue::Float(10.0)));
@@ -258,8 +260,8 @@ fn evaluate_zero_duration_segment_returns_to_value() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 1.0, 0.0, 100.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     // 到達前: from_value
     assert_eq!(
@@ -291,8 +293,8 @@ fn evaluate_multi_segment_progression() {
     );
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     // セグメント1内 (t=0.5): progress=0.5 → 5.0
     assert_eq!(
@@ -304,9 +306,121 @@ fn evaluate_multi_segment_progression() {
         mgr.evaluate("x", 1.5, &instances),
         Some(EvaluatedValue::Float(30.0))
     );
-    // 全セグメント終了 (t=2.5): None + エントリ破棄
-    assert!(mgr.evaluate("x", 2.5, &instances).is_none());
-    assert!(!mgr.has_entries(1));
+    // 全セグメント終了 (t=2.5): 最後の値を保ち、項目は残る
+    assert_eq!(
+        mgr.evaluate("x", 2.5, &instances),
+        Some(EvaluatedValue::Float(50.0))
+    );
+    assert!(mgr.has_entries(1));
+}
+
+#[test]
+fn instant_segment_does_not_hide_later_segments() {
+    // 即時のセグメントで返して抜けると、後ろのセグメントの値が出ず即時の値で止まっていた
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    for (segments, t, expected) in [
+        (
+            vec![
+                float_segment(0.0, 0.0, 0.0, 5.0),
+                float_segment(0.0, 1.0, 5.0, 10.0),
+            ],
+            0.5,
+            7.5,
+        ),
+        (
+            vec![
+                float_segment(0.0, 1.0, 0.0, 1.0),
+                float_segment(1.0, 1.0, 1.0, 5.0),
+                float_segment(1.0, 2.0, 5.0, 0.0),
+            ],
+            1.5,
+            2.5,
+        ),
+    ] {
+        let mut mgr = TimelineManager::new();
+        mgr.insert_entries(1, &make_compiled_with_segments("x", segments));
+        assert_eq!(
+            mgr.evaluate("x", t, &instances),
+            Some(EvaluatedValue::Float(expected))
+        );
+    }
+}
+
+#[test]
+fn gap_between_segments_holds_previous_end_value() {
+    // 隙間で次のセグメントの from を出すと、隙間の中の即時のセグメント（5）が一度も出なかった
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(
+        1,
+        &make_compiled_with_segments(
+            "x",
+            vec![
+                float_segment(0.0, 1.0, 0.0, 1.0),
+                float_segment(2.0, 2.0, 1.0, 5.0),
+                float_segment(3.0, 4.0, 7.0, 8.0),
+            ],
+        ),
+    );
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    for (t, expected) in [(1.5, 1.0), (2.5, 5.0)] {
+        assert_eq!(
+            mgr.evaluate("x", t, &instances),
+            Some(EvaluatedValue::Float(expected)),
+            "t={t}"
+        );
+    }
+}
+
+#[test]
+fn not_yet_started_instance_does_not_override_started_one() {
+    // 親（gid 1）が x を 0→1 に 2 秒・子（gid 2）は 1.5 秒に始まって x を 5→6。
+    // 始まる前の子が group_id の大きさで勝つと、t=1.0 で x が子の from の 5 に跳んでいた
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0.0, 2.0));
+    mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0.0, 1.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    instances.insert(2, make_instance(1.5));
+
+    assert_eq!(
+        mgr.evaluate("x", 1.0, &instances),
+        Some(EvaluatedValue::Float(0.5))
+    );
+    // 子が始まれば子が勝つ
+    assert_eq!(
+        mgr.evaluate("x", 2.0, &instances),
+        Some(EvaluatedValue::Float(5.5))
+    );
+    // 全部が始まる前なら、今までどおり group_id の大きい方の from
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0.0, 2.0));
+    mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0.0, 1.0));
+    instances.insert(1, make_instance(1.2));
+    assert_eq!(
+        mgr.evaluate("x", 1.0, &instances),
+        Some(EvaluatedValue::Float(5.0))
+    );
+}
+
+#[test]
+fn looped_instance_in_leading_delay_counts_as_started() {
+    // 2 周目の先頭の遅れ（0 ≤ t < 最初のセグメントの始まり）でも、周回を終えたインスタンスは始まった扱い
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 1.0, 0.0, 10.0));
+    mgr.insert_entries(2, &make_float_compiled_storyboard("x", 5.0, 6.0, 0.5, 1.5));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    let mut looped = make_instance(0.0);
+    looped.loops_completed = 1;
+    looped.loop_start_time = 2.0;
+    instances.insert(2, looped);
+
+    assert_eq!(
+        mgr.evaluate("x", 2.2, &instances),
+        Some(EvaluatedValue::Float(5.0))
+    );
 }
 
 // =====================================================================
@@ -315,7 +429,7 @@ fn evaluate_multi_segment_progression() {
 
 #[test]
 fn effective_time_playing_basic() {
-    let mut inst = make_instance(1, 0.0);
+    let mut inst = make_instance(0.0);
     inst.loop_start_time = 2.0;
     inst.pause_accumulated = 1.0;
     inst.time_scale = 2.0;
@@ -325,20 +439,11 @@ fn effective_time_playing_basic() {
 
 #[test]
 fn effective_time_paused_frozen_at_pause_start() {
-    let mut inst = make_instance(1, 0.0);
+    let mut inst = make_instance(0.0);
     inst.state = InstanceState::Paused;
     inst.pause_start = Some(3.0);
     // current_time に依らず pause_start 基準: (3.0 - 0.0 - 0.0) * 1.0 = 3.0
     assert_eq!(calculate_effective_time(100.0, &inst), 3.0);
-}
-
-#[test]
-fn effective_time_paused_without_pause_start_falls_back_to_current() {
-    // 防御的フォールバック: Paused だが pause_start 未設定 → current_time 基準
-    let mut inst = make_instance(1, 0.0);
-    inst.state = InstanceState::Paused;
-    inst.pause_start = None;
-    assert_eq!(calculate_effective_time(5.0, &inst), 5.0);
 }
 
 // =====================================================================
@@ -366,8 +471,8 @@ fn evaluate_all_for_group_returns_all_variables() {
     );
     mgr.insert_entries(1, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
     assert_eq!(values.len(), 2);
@@ -383,7 +488,7 @@ fn evaluate_all_for_group_missing_instance_returns_empty() {
         &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
     );
 
-    let instances = HashMap::new();
+    let instances = BTreeMap::new();
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
     assert!(values.is_empty());
 }
@@ -397,9 +502,9 @@ fn evaluate_all_for_group_ignores_other_groups() {
     );
     mgr.insert_entries(2, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
-    instances.insert(2, make_instance(2, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    instances.insert(2, make_instance(0.0));
 
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
     assert_eq!(values.len(), 1);
@@ -419,8 +524,8 @@ fn collect_current_segment_final_values_returns_active_segment_final() {
     );
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     // t=0.5: セグメント1がアクティブ → to_value=10.0（50.0 ではない）
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
@@ -438,8 +543,8 @@ fn collect_current_segment_final_values_before_first_segment_is_empty() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 2.0, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
     assert!(vals.is_empty());
@@ -453,7 +558,7 @@ fn collect_current_segment_final_values_missing_instance_returns_empty() {
         &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
     );
 
-    let instances = HashMap::new();
+    let instances = BTreeMap::new();
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
     assert!(vals.is_empty());
 }
@@ -465,8 +570,8 @@ fn collect_current_segment_final_values_after_all_segments_uses_last() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(0.0, 1.0, 0.0, 10.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
-    instances.insert(1, make_instance(1, 0.0));
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
 
     let vals = mgr.collect_current_segment_final_values(1, 5.0, &instances);
     assert_eq!(vals.get("x"), Some(&EvaluatedValue::Float(10.0)));
@@ -483,4 +588,41 @@ fn get_timeline_returns_some_for_known_variable() {
     assert!(mgr.get_timeline("x").is_some());
     assert_eq!(mgr.get_timeline("x").unwrap().entries.len(), 1);
     assert!(mgr.get_timeline("nonexistent").is_none());
+}
+
+/// イージングの行き過ぎは変数の値域へ収める（#33・要件 11.11）
+#[test]
+fn easing_overshoot_is_clamped_to_variable_range() {
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+
+    // Float [0,1]・BackOut は t=0.6 で 1.0 を越える
+    let mut seg = float_segment(0.0, 1.0, 0.0, 1.0);
+    seg.easing = Some(EasingFunction::Named(EasingName::BackOut));
+    let mut compiled = make_compiled_with_segments("x", vec![seg]);
+    let tl = compiled.timelines.get_mut("x").unwrap();
+    tl.min_value = Some(0.0);
+    tl.max_value = Some(1.0);
+
+    // Integer [0,100]・BackIn は t=0.3 で 0 を下回る（丸めると -22）
+    let mut seg = float_segment(0.0, 1.0, 0.0, 100.0);
+    seg.easing = Some(EasingFunction::Named(EasingName::BackIn));
+    let mut int_compiled = make_compiled_with_segments("n", vec![seg]);
+    let tl = int_compiled.timelines.get_mut("n").unwrap();
+    tl.variable_type = VariableTypeHint::Integer;
+    tl.min_value = Some(0.0);
+    tl.max_value = Some(100.0);
+
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &compiled);
+    mgr.insert_entries(1, &int_compiled);
+
+    assert_eq!(
+        mgr.evaluate("x", 0.6, &instances),
+        Some(EvaluatedValue::Float(1.0))
+    );
+    assert_eq!(
+        mgr.evaluate("n", 0.3, &instances),
+        Some(EvaluatedValue::Integer(0))
+    );
 }

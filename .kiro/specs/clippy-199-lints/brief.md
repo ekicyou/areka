@@ -94,3 +94,11 @@ lint ごとに clippy の提案どおりの機械的な直しを当てる（`col
 - **要件定義のモデル**: Opus のまま。
 - **分割の案**: 段 1 を別の 1 本（たとえば `clippy-dola-host32-tests`）に切れば、v0.1.0 のウェーブの空き席に入れられる（棚卸㉛で開発者に尋ねた・答え待ち）。`areka-sakura` の 2 ファイルは `range-choice-tag`（`compile.rs`）・`talk-fast-forward`（`drive.rs`）と同じウェーブでなければ段 1 に入れてよい。残りは v0.1.0 の後。
 - **見つけた穴・古くなった記述**: 本文の「`areka` 約 19」は古い（実数は数倍の見込み・棚卸㉓）。`shiori-abi` は `shiori4-api`（未完了）が消すので受け持たない。v0.1.0 の後の見直し `audit-dola`・`audit-shiori-host32`・`audit-parsers-sakura` が段 1 と `areka-sakura` の分を持つ＝先に済ませれば見直しの差分が小さくなる。
+
+## 2026-11-13 `audit-dola` の記録（要件 9.4）: dola の分は済んだ
+
+- dola の段 1 の 21 件と統合テストの 3 件・lib test の 2 件は `audit-dola` が直した（枝 `claude/kiro-start-audit-dola-58361c`・タスク 15.1 ほか）。この spec は dola を直し直さなくてよい。
+  - 段 1 の 21 件（`validate/rules.rs`・`validate/mod.rs`・`runtime/timeline_manager/mod.rs`・`runtime/{subscription_manager,instance_manager}/mod.rs`・`runtime/{conflict_resolver,facade}.rs`・`compile/resolve.rs`）: `collapsible_if` は振る舞いを変えずに畳んだ（一部は同 spec のほかの直しで消えた）。`instance_manager/mod.rs` の `too_many_arguments` は `create_instance` ごと消した。`compile/resolve.rs` の `too_many_arguments` は `#[expect(clippy::too_many_arguments, reason = "…")]` で理由を書いて残した。`facade.rs` の `doc_lazy_continuation` は字下げを直した。
+  - 統合テストの 3 件: `assertions_on_constants`（`tests/cue/schedule_test.rs`・`const { assert!(..) }` にした）・`module_inception`（`tests/runtime/conflict_resolution_test/conflict_detection.rs` の入れ子の mod を外した）・`single_match`（`tests/runtime/facade_test/termination.rs`・`.expect(..)` と `assert_eq!` にした）。
+  - lib test の 2 件: `runtime/loop_controller/tests.rs` の `manual_range_contains`（1 件は `contains` へ直し、1 件はテストごと消えた）。
+- 着地の後は `cargo clippy -p dola --all-targets --no-deps -- -D warnings` が警告 0。上の 10-07・10-31・11-01 の申し送りの「`dola` の 21 件」もこれで済み。

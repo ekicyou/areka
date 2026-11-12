@@ -12,11 +12,40 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
-use crate::transition::TransitionValue;
-use crate::validate::Validate;
+use crate::transition::{TransitionDef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
 use resolve::*;
+
+/// 有限の数どうしの和があふれて inf になった時刻・値を `InvalidNumber` として積む
+/// （validate の数値の規則は数を 1 つずつしか見ない）。
+fn push_if_overflowed(
+    errors: &mut Vec<DolaError>,
+    storyboard: &str,
+    entry_idx: usize,
+    field: &str,
+    value: f64,
+) {
+    if !value.is_finite() {
+        errors.push(DolaError::InvalidNumber {
+            location: format!("storyboard '{storyboard}' entry {entry_idx}"),
+            field: field.to_string(),
+            value,
+        });
+    }
+}
+
+/// 時刻の決まった、値を埋める前のセグメント
+struct PendingSegment<'d> {
+    entry_idx: usize,
+    start_time: f64,
+    end_time: f64,
+    trans_def: &'d TransitionDef,
+    /// at も between も無い連結の遷移か
+    sequential: bool,
+    /// 同じ変数の配列上の直前のエントリ
+    prev_entry: Option<usize>,
+}
 
 /// ストーリーボードをコンパイルする
 ///
@@ -29,7 +58,7 @@ use resolve::*;
 /// # Postconditions
 /// - 成功時: CompiledStoryboard 内の全セグメントは絶対時刻を持ち、
 ///   各タイムラインのセグメントは時刻順ソート済みで重複なし
-/// - 失敗時: Vec<DolaError> にすべてのエラーを収集して返却
+/// - 失敗時: `Vec<DolaError>` にすべてのエラーを収集して返却
 ///
 /// # Invariants
 /// - time_scale はセグメント時刻に事前適用されない
@@ -40,17 +69,37 @@ pub fn compile_storyboard(
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 1: バリデーション (Task 3.1)
-    // NOTE(D2-V): デシリアライズ境界に関する整理 —
-    // doc は外部入力（JSON/TOML/YAML）または Builder API 由来だが、どの取り込み経路でも
-    // 本関数冒頭で必ず validate() を通過する（Builder はバリデーションを迂回できない。
-    // tests/compile/boundary_test.rs で特性化済み）。ネスト深度の制限（再帰的
-    // デシリアライズによるスタック枯渇防御）は各フォーマットパーサ側の責務であり、
-    // 本モジュールは再帰を持たない（トポロジカルソートは反復実装）。
-    // ただし validate() 内のトリガー循環検出（validate/rules.rs::dfs_detect_cycle）は
-    // 再帰 DFS のため、ストーリーボード連鎖長に比例したスタックを消費する（D3 境界、
-    // D3-V への申し送り）。数値フィールドの有限性・符号は検証されない（P8/P14/P20 参照）。
+    // doc は外部入力（JSON/TOML/YAML）か Builder の由来だが、どの経路でも compile_validated の前に
+    // ここか compile_all で必ず validate() を通る（数値の規則を含む。tests/compile/boundary_test.rs が縛る）。
+    // ネスト深度の制限は各フォーマットのパーサの責務。本モジュールも validate() の
+    // トリガー循環の検出も再帰を持たない（どちらも明示のスタックか反復）。
     doc.validate()?;
+    compile_validated(doc, storyboard_name, start_time)
+}
 
+/// 検証の後に全ストーリーボードをコンパイルにかける（読み込みと `DolaDocumentBuilder::build`）。
+pub(crate) fn compile_all(doc: &DolaDocument) -> Result<(), Vec<DolaError>> {
+    doc.validate()?;
+    let errors: Vec<DolaError> = doc
+        .storyboard
+        .keys()
+        .filter_map(|name| compile_validated(doc, name, 0.0).err())
+        .flatten()
+        .collect();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// 検査を省いてコンパイルする。`doc` は必ず `validate()` を通ったものだけを渡す
+/// （下の `let Some(..) = resolved else { continue; }` が検査の欠けを release で黙って飛ばすため）。
+pub(crate) fn compile_validated(
+    doc: &DolaDocument,
+    storyboard_name: &str,
+    start_time: f64,
+) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 2: ストーリーボード検索
     let sb = doc.storyboard.get(storyboard_name).ok_or_else(|| {
         vec![DolaError::CompileError {
@@ -81,12 +130,12 @@ pub fn compile_storyboard(
     let mut keyframe_times: HashMap<String, f64> = HashMap::new();
     keyframe_times.insert("start".to_string(), start_time);
 
-    // variable_name → last segment end_time
-    let mut var_last_end_time: HashMap<String, f64> = HashMap::new();
-    // variable_name → last segment to_value
-    let mut var_last_value: HashMap<String, TransitionValue> = HashMap::new();
-    // variable_name → Vec<CompiledSegment>
-    let mut var_segments: HashMap<String, Vec<CompiledSegment>> = HashMap::new();
+    // variable_name → (定義, 時刻の決まったセグメント)。名前の順で重なりを報告する。
+    // 値（from/to）は時刻の順に並べた後の Step 5 で埋める
+    type VarSegments<'d> = (&'d AnimationVariableDef, Vec<PendingSegment<'d>>);
+    let mut var_segments: BTreeMap<&str, VarSegments> = BTreeMap::new();
+    // entry_index → segment end_time（連結の遷移が配列上の直前のエントリに続くため）
+    let mut entry_segment_end: HashMap<usize, f64> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
     let mut entry_keyframe_time: HashMap<usize, f64> = HashMap::new();
     // compiled triggers
@@ -107,11 +156,13 @@ pub fn compile_storyboard(
                 storyboard_name,
                 entry_idx,
                 entry,
+                start_time,
                 &keyframe_times,
                 &entry_keyframe_time,
                 &mut errors,
             );
             if let Some(t) = fire_time {
+                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "fire_time", t);
                 // Register keyframe at fire_time (0-second completion)
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
@@ -134,43 +185,46 @@ pub fn compile_storyboard(
                 storyboard_name,
                 entry_idx,
                 entry,
+                start_time,
                 &keyframe_times,
                 &entry_keyframe_time,
                 &mut errors,
             );
             if let Some(t) = kf_time {
+                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "keyframe_time", t);
                 keyframe_times.insert(kf_name, t);
                 entry_keyframe_time.insert(entry_idx, t);
             }
             continue;
         }
 
-        // Transition entry: resolve transition def
-        let var_name = match &entry.variable {
-            Some(v) => v.clone(),
-            None => continue, // validated already: transition requires variable
+        // 遷移のエントリは変数・その定義・遷移の定義を持つ（V4・V5・V7 が先に落とす）
+        let resolved = entry
+            .variable
+            .as_deref()
+            .and_then(|v| Some((v, doc.variable.get(v)?, resolve_transition(entry, doc)?)));
+        debug_assert!(
+            resolved.is_some(),
+            "validate() を通らない entry {entry_idx}"
+        );
+        let Some((var_name, var_def, trans_def)) = resolved else {
+            continue;
         };
 
-        let trans_def =
-            match resolve_transition(storyboard_name, entry_idx, entry, doc, &mut errors) {
-                Some(td) => td,
-                None => continue,
-            };
-
-        let var_def = match doc.variable.get(&var_name) {
-            Some(vd) => vd,
-            None => continue, // already caught by validation
-        };
+        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）
+        let sequential = entry.at.is_none() && entry.between.is_none();
+        let prev_entry = graph.prev_same_var.get(&entry_idx).copied();
+        let last_end_time = prev_entry.and_then(|p| entry_segment_end.get(&p)).copied();
 
         // Resolve timing (Task 5.1-5.3)
         let timing = resolve_entry_timing(
             storyboard_name,
             entry_idx,
             entry,
-            &trans_def,
+            trans_def,
             start_time,
             &keyframe_times,
-            var_last_end_time.get(&var_name).copied(),
+            last_end_time,
             &mut errors,
         );
 
@@ -178,39 +232,32 @@ pub fn compile_storyboard(
             Some(t) => t,
             None => continue,
         };
+        // 始まりは終わり以下なので、終わりが有限なら始まりも有限
+        push_if_overflowed(
+            &mut errors,
+            storyboard_name,
+            entry_idx,
+            "end_time",
+            segment_end,
+        );
 
         // Register keyframe time
         keyframe_times.insert(kf_name, kf_time);
         entry_keyframe_time.insert(entry_idx, kf_time);
 
-        // Resolve from value (Task 5.7)
-        let from_value = resolve_from_value(&trans_def, var_last_value.get(&var_name), var_def);
-
-        // Resolve to value (Task 5.8)
-        let to_value = resolve_to_value(&trans_def, &from_value);
-
-        // Build segment (Task 5.9)
-        let is_object = matches!(var_def, AnimationVariableDef::Object { .. });
-        let easing = if is_object {
-            None
-        } else {
-            trans_def.easing.clone()
-        };
-
-        let segment = CompiledSegment {
-            start_time: segment_start,
-            end_time: segment_end,
-            from_value: from_value.clone(),
-            to_value: to_value.clone(),
-            easing,
-        };
-
         var_segments
-            .entry(var_name.clone())
-            .or_default()
-            .push(segment);
-        var_last_end_time.insert(var_name.clone(), segment_end);
-        var_last_value.insert(var_name, to_value);
+            .entry(var_name)
+            .or_insert_with(|| (var_def, Vec::new()))
+            .1
+            .push(PendingSegment {
+                entry_idx,
+                start_time: segment_start,
+                end_time: segment_end,
+                trans_def,
+                sequential,
+                prev_entry,
+            });
+        entry_segment_end.insert(entry_idx, segment_end);
     }
 
     if !errors.is_empty() {
@@ -220,49 +267,106 @@ pub fn compile_storyboard(
     // Step 5: Finalization (Task 6)
     let mut timelines: BTreeMap<String, CompiledVariableTimeline> = BTreeMap::new();
 
-    for (var_name, mut segments) in var_segments {
+    for (var_name, (var_def, mut segments)) in var_segments {
         // Sort by start_time (Task 6.1)
-        // NOTE(D2-V): NaN 時刻は partial_cmp が None → Equal 扱いとなり panic しないが、
-        // ソート順は不定となる。後続の重複検査も NaN 比較（常に false）で素通りするため、
-        // NaN 時刻のセグメントは重複検出されずに出力へ伝播する（有限性検証は P14 参照。
-        // tests/compile/boundary_test.rs で特性化済み）。
+        // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
+        // 同じ始まりは配列の順（連結の直前のエントリは配列で先）
         segments.sort_by(|a, b| {
-            a.start_time
-                .partial_cmp(&b.start_time)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            (a.start_time + 0.0)
+                .total_cmp(&(b.start_time + 0.0))
+                .then(a.entry_idx.cmp(&b.entry_idx))
         });
 
-        // Overlap check (Task 6.2)
-        // NOTE(D2-V): 負の duration による反転セグメント（end < start）は、単独または
-        // 近接しない配置では本検査に掛からず出力へ伝播する（P20 参照）。
-        for i in 1..segments.len() {
-            if segments[i - 1].end_time > segments[i].start_time {
+        // from/to を時刻の順に埋める（Task 5.7・5.8）。from を省いたとき、連結の遷移は配列上の
+        // 直前のエントリ（要件 11.7）、at・between は時刻の上で直前のセグメント（完了
+        // dola-compiled-transition 要件 4.2）の to を取る。どちらもこの並びで先に埋まっている
+        let mut entry_to: HashMap<usize, TransitionValue> = HashMap::new();
+        let mut compiled: Vec<(usize, CompiledSegment)> = Vec::with_capacity(segments.len());
+        for pending in &segments {
+            let trans_def = pending.trans_def;
+            let last_value = if pending.sequential {
+                pending.prev_entry.and_then(|p| entry_to.get(&p))
+            } else {
+                compiled.last().map(|(_, s)| &s.to_value)
+            };
+            let from_value = resolve_from_value(trans_def, last_value, var_def);
+            let to_value = resolve_to_value(trans_def, &from_value);
+            let entry_idx = pending.entry_idx;
+
+            // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる（要件 11.11）
+            if let TransitionValue::Scalar(v) = to_value {
+                let (min, max) = extract_min_max(var_def);
+                let (min, max) = (
+                    min.unwrap_or(f64::NEG_INFINITY),
+                    max.unwrap_or(f64::INFINITY),
+                );
+                if !v.is_finite() {
+                    push_if_overflowed(&mut errors, storyboard_name, entry_idx, "relative_to", v);
+                } else if v < min || v > max {
+                    errors.push(DolaError::TransitionValueOutOfRange {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        variable: var_name.to_string(),
+                        field: if trans_def.relative_to.is_some() {
+                            "relative_to"
+                        } else {
+                            "to"
+                        }
+                        .to_string(),
+                        value: v,
+                        min,
+                        max,
+                    });
+                }
+            }
+
+            // Build segment (Task 5.9)
+            let easing = if matches!(var_def, AnimationVariableDef::Object { .. }) {
+                None
+            } else {
+                trans_def.easing.clone()
+            };
+            entry_to.insert(entry_idx, to_value.clone());
+            compiled.push((
+                entry_idx,
+                CompiledSegment {
+                    start_time: pending.start_time,
+                    end_time: pending.end_time,
+                    from_value,
+                    to_value,
+                    easing,
+                },
+            ));
+        }
+
+        // Overlap check (Task 6.2)。重なった後ろのセグメントのエントリを指す
+        for pair in compiled.windows(2) {
+            let ((_, prev), (entry_index, next)) = (&pair[0], &pair[1]);
+            if prev.end_time > next.start_time {
                 errors.push(DolaError::CompileError {
                     storyboard: storyboard_name.to_string(),
-                    entry_index: 0, // approximate
+                    entry_index: *entry_index,
                     reason: format!(
                         "Segment overlap for variable '{}': previous end_time {} > next start_time {}",
-                        var_name, segments[i - 1].end_time, segments[i].start_time
+                        var_name, prev.end_time, next.start_time
                     ),
                 });
             }
         }
-
-        let var_def = doc.variable.get(&var_name);
+        let segments: Vec<CompiledSegment> = compiled.into_iter().map(|(_, s)| s).collect();
 
         // Build CompiledVariableTimeline (Task 6.3)
-        // SAFETY: is_empty() ガードにより last()/first() の unwrap は panic 不能。
-        let base_duration = if segments.is_empty() {
-            0.0
-        } else {
-            segments.last().unwrap().end_time - segments.first().unwrap().start_time
-        };
+        // 長さはコンパイルの起点から数える（先頭の遅れを含む）。
+        // 最後のセグメントより後のトリガーは長さに足さない（dola-nested-storyboard 3.3）。
+        let base_duration = segments
+            .last()
+            .map_or(0.0, |last| last.end_time - start_time);
 
         let variable_type = build_variable_type_hint(var_def);
         let (min_value, max_value) = extract_min_max(var_def);
 
         timelines.insert(
-            var_name,
+            var_name.to_string(),
             CompiledVariableTimeline {
                 variable_type,
                 segments,
@@ -278,19 +382,25 @@ pub fn compile_storyboard(
     }
 
     // Build CompiledStoryboard (Task 6.4)
-    // NOTE(D2-V): f64::max は NaN を無視するため、NaN の base_duration（NaN 時刻
-    // セグメント由来）は total_base_duration へ伝播せず黙って脱落する。
-    // 負の base_duration（反転セグメント由来）も初期値 0.0 でマスクされる（P14/P20 参照）。
     let total_base_duration = timelines
         .values()
         .map(|tl| tl.base_duration)
         .fold(0.0_f64, f64::max);
+    // 有限の長さも小さい time_scale で割ると inf になり、インスタンスが終わらない
+    // （ランタイムは同じ割り算で 1 周の実時間を出す。読み込みの compile_all でここを通る）
+    let loop_duration = total_base_duration / sb.time_scale;
+    if !loop_duration.is_finite() {
+        return Err(vec![DolaError::InvalidNumber {
+            location: format!("storyboard '{storyboard_name}'"),
+            field: "loop_duration".to_string(),
+            value: loop_duration,
+        }]);
+    }
 
     // Sort triggers by fire_time (stable sort preserves entry index order for same fire_time)
     triggers.sort_by(|a, b| {
-        a.fire_time
-            .partial_cmp(&b.fire_time)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        (a.fire_time + 0.0)
+            .total_cmp(&(b.fire_time + 0.0))
             .then(a.source_entry_index.cmp(&b.source_entry_index))
     });
 

@@ -19,7 +19,7 @@
 
 use bevy_ecs::component::Component;
 use bevy_ecs::system::{Query, Res};
-use dola::runtime::{DolaRuntime, UpdateResult};
+use dola::runtime::{DolaRuntime, TriggerResult, UpdateResult};
 
 use super::graphics::FrameTime;
 
@@ -175,16 +175,37 @@ impl std::fmt::Debug for DolaAnimator {
 /// # 起床の旗
 ///
 /// この tick で**活性があった**アニメータが 1 つでもあれば `ANIM` を立て、次の画面更新を
-/// 予約する（設計 C16）。活性の見分けは進行の結果——`tick` が置いた
-/// [`UpdateResult`] に変数の変化かトリガの発火が 1 件でも載っていること——で判じる。
-/// `DolaRuntime` に「走っているか」を直に問う口が無いためであり、走り終えたアニメータは
-/// 変化を出さなくなるので旗も自然に止まる。
+/// 予約する（設計 C16）。活性は、終わっていないインスタンス（一時停止中を含む）が残って
+/// いること（[`DolaRuntime::has_instances`]）か、`tick` が置いた [`UpdateResult`] に変数の
+/// 変化かトリガの発火が 1 件でも載っていること。delay の間のように変化が 0 件でも走って
+/// いれば起こし続け、最後の変化を出した tick の後は旗が止まる。
+///
+/// # トリガの失敗
+///
+/// 子の起動に失敗したトリガ（[`TriggerResult::Error`]）は、ここで `error!`（親・子・
+/// エラー）に記録する。dola は結果を返すだけで記録しない（記録は呼び手の境目）。
 pub fn tick_dola_animators(mut query: Query<&mut DolaAnimator>, frame_time: Res<FrameTime>) {
     let mut active = false;
     for mut animator in query.iter_mut() {
         animator.tick(frame_time.0);
         let result = animator.last_result();
+        for triggered in &result.triggered {
+            if let TriggerResult::Error {
+                source_storyboard,
+                target_storyboard,
+                error,
+            } = triggered
+            {
+                tracing::error!(
+                    parent = source_storyboard.as_str(),
+                    child = target_storyboard.as_str(),
+                    error = %error,
+                    "[dola] トリガの子の起動に失敗した"
+                );
+            }
+        }
         active |= !result.changes.is_empty() || !result.triggered.is_empty();
+        active |= animator.runtime().has_instances();
     }
     if active {
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ANIM);
@@ -207,11 +228,12 @@ mod tests {
 
     use super::*;
     use bevy_ecs::schedule::Schedule;
+    use bevy_ecs::system::RunSystemOnce;
     use bevy_ecs::world::World;
     use dola::runtime::{DolaRuntime, EvaluatedValue};
     use dola::{
-        AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry,
-        TransitionDef, TransitionRef, TransitionValue,
+        AnimationVariableDef, DolaDocumentBuilder, InterruptionPolicy, StoryboardBuilder,
+        StoryboardEntry, TransitionDef, TransitionRef, TransitionValue,
     };
 
     /// `opacity` を 0.0→1.0 へ 1 秒でフェードさせる単純なアニメーションをロードした
@@ -499,5 +521,82 @@ mod tests {
             ),
             other => panic!("expected Float opacity value, got {other:?}"),
         }
+    }
+
+    /// 子の起動が Never の競合で拒まれたトリガーを、進め役が `error!` 1 行（親・子・エラー）で
+    /// 記録する（dola は `TriggerResult::Error` を返すだけ・記録は呼び手の境目）。
+    #[test]
+    fn trigger_error_is_logged() {
+        let ramp = |variable: &str, duration: f64| StoryboardEntry {
+            variable: Some(variable.into()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(duration),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let var = || AnimationVariableDef::Float {
+            initial: 0.0,
+            min: None,
+            max: None,
+        };
+        // blocker（Never）が x を握るあいだに、parent の発火で x を触る child を起こす
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", var())
+            .variable("y", var())
+            .storyboard(
+                "blocker",
+                StoryboardBuilder::new()
+                    .interruption_policy(InterruptionPolicy::Never)
+                    .entry(ramp("x", 10.0))
+                    .build(),
+            )
+            .storyboard(
+                "parent",
+                StoryboardBuilder::new()
+                    .entry(StoryboardEntry {
+                        keyframe: Some("kf1".into()),
+                        ..ramp("y", 1.0)
+                    })
+                    .entry(StoryboardEntry {
+                        trigger_storyboard: Some("child".into()),
+                        at: Some(dola::KeyframeRef::Single("kf1".into())),
+                        ..Default::default()
+                    })
+                    .build(),
+            )
+            .storyboard(
+                "child",
+                StoryboardBuilder::new().entry(ramp("x", 1.0)).build(),
+            )
+            .build()
+            .unwrap();
+        let mut rt = DolaRuntime::new();
+        rt.load_document(doc).unwrap();
+        rt.start("blocker", 0.0).unwrap();
+        rt.start("parent", 0.0).unwrap();
+
+        let mut world = World::new();
+        world.insert_resource(FrameTime(1.0));
+        world.spawn(DolaAnimator::with_runtime(rt));
+        // 捕捉は今のスレッドだけを見るので、係を同じスレッドで 1 度回す
+        let (ran, events) = log_capture_kit::capture(|| world.run_system_once(tick_dola_animators));
+        ran.unwrap();
+
+        let errors: Vec<_> = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::ERROR)
+            .collect();
+        assert_eq!(errors.len(), 1, "error! がちょうど 1 件でない: {events:?}");
+        assert_eq!(errors[0].field_str("parent"), Some("parent"), "{events:?}");
+        assert_eq!(errors[0].field_str("child"), Some("child"), "{events:?}");
+        assert!(
+            errors[0]
+                .field("error")
+                .is_some_and(|e| e.contains("conflict")),
+            "{events:?}"
+        );
     }
 }

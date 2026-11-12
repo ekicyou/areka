@@ -142,28 +142,36 @@ mod validation_tests {
 }
 
 // =============================================================
-// D3-V 特性化: NaN loop_offset のバリデーション素通り
+// #29: NaN の loop_offset は V14〜V16 を素通りするので、数値の規則が拒む
 // =============================================================
 
 mod nan_boundary_tests {
     use super::*;
 
+    /// validate の誤りが InvalidNumber だけで、その欄の並びを返す
+    fn invalid_number_fields(doc: &DolaDocument) -> Vec<String> {
+        doc.validate()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| match e {
+                DolaError::InvalidNumber { field, .. } => field,
+                other => panic!("unexpected error: {other:?}"),
+            })
+            .collect()
+    }
+
     #[test]
-    fn nan_scalar_loop_offset_passes_validation() {
-        // 特性化: Scalar(NaN) は V15（max < 0.0 = false）を素通りして validate() に
-        // 合格する（数値フィールドの有限性検証の欠如 — P14 参照）。
+    fn nan_scalar_loop_offset_is_rejected() {
         let sb = Storyboard {
             loop_offset: Some(LoopOffset::Scalar(f64::NAN)),
             ..make_storyboard_with_offset(None)
         };
         let doc = doc_with_storyboard(sb);
-        assert!(doc.validate().is_ok());
+        assert_eq!(invalid_number_fields(&doc), ["loop_offset"]);
     }
 
     #[test]
-    fn nan_range_max_passes_validation_even_with_positive_min() {
-        // 特性化: max=NaN は V15（NaN < 0.0 = false）と V16（min > NaN = false）の
-        // 双方を素通りするため、範囲の逆転・退化が検出されないまま合格する（P14 参照）。
+    fn nan_range_max_is_rejected_even_with_positive_min() {
         let sb = Storyboard {
             loop_offset: Some(LoopOffset::Range(LoopOffsetRange {
                 min: 5.0,
@@ -173,13 +181,11 @@ mod nan_boundary_tests {
             ..make_storyboard_with_offset(None)
         };
         let doc = doc_with_storyboard(sb);
-        assert!(doc.validate().is_ok());
+        assert_eq!(invalid_number_fields(&doc), ["loop_offset.max"]);
     }
 
     #[test]
-    fn nan_range_min_passes_validation() {
-        // 特性化: min=NaN も V14（NaN < 0.0 = false）・V16（NaN > max = false）を
-        // 素通りして合格する（P14 参照）。
+    fn nan_range_min_is_rejected() {
         let sb = Storyboard {
             loop_offset: Some(LoopOffset::Range(LoopOffsetRange {
                 min: f64::NAN,
@@ -189,6 +195,6 @@ mod nan_boundary_tests {
             ..make_storyboard_with_offset(None)
         };
         let doc = doc_with_storyboard(sb);
-        assert!(doc.validate().is_ok());
+        assert_eq!(invalid_number_fields(&doc), ["loop_offset.min"]);
     }
 }

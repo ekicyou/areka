@@ -3,7 +3,7 @@
 //
 // design.md「Testing Strategy → Unit Tests ②」の 4 系統:
 //   ⑴ 初回 emit の `TalkStarted` 先行（Ordering 契約）
-//   ⑵ `max(at + duration)` の単調送出（Idempotency 契約＝max 集約）
+//   ⑵ `max(sum_on_ms_grid(at, duration))` の単調送出（Idempotency 契約＝max 集約）
 //   ⑶ `Wait` cue の duration が占有終端へ算入されること（Requirement 4.1）
 //   ⑷ clone 後の会話境界リセット（per-talk clone による talk 境界の自己検出）
 //
@@ -135,7 +135,7 @@ fn talk_started_is_emitted_once_and_precedes_display_end() {
     );
 }
 
-/// ⑵ Idempotency 契約: `DisplayEndAt` は `max(at + duration)` が**既知最大を超えたときのみ**
+/// ⑵ Idempotency 契約: `DisplayEndAt` は `max(sum_on_ms_grid(at, duration))` が**既知最大を超えたときのみ**
 /// 送出され、受信列は単調増加になる（重複・順不同の入力に対して max 集約が成り立つ）。
 #[test]
 fn display_end_is_monotonic_max_of_at_plus_duration() {
@@ -184,8 +184,9 @@ fn wait_cue_duration_is_included_in_occupancy_horizon() {
     );
 }
 
-/// ⑶-補: dola の占有 horizon 定義（`to_talk_schedule` の `max(start_time + clamp(duration))`）と
-/// 同一値になることを、実 cue 列（Wait 含む）を流して確認する。
+/// ⑶-補: dola の占有 horizon 定義（`to_talk_schedule` の `max(sum_on_ms_grid(start_time, clamp(duration)))`）と
+/// 同一値になることを、実 cue 列（Wait 含む）を流して確認する。期待は式で作らず値で書く
+/// （0.15＋0.8 の素の和は 0.9500000000000001 で、ms の格子の 0.95 とずれる）。
 #[test]
 fn horizon_matches_dola_occupancy_definition() {
     let (tx, rx) = channel::<TalkLifecycleSignal>();
@@ -193,14 +194,11 @@ fn horizon_matches_dola_occupancy_definition() {
 
     let cues = vec![
         cue(0.0, 0.0, CueCommand::ClearAll),
-        text_cue(0.0, 0.25),
-        wait_cue(0.25, 0.1),
-        text_cue(0.35, 0.4),
+        text_cue(0.0, 0.15),
+        wait_cue(0.15, 0.8),
+        text_cue(0.15, 0.25),
     ];
-    let expected = cues
-        .iter()
-        .map(|c| c.at + c.duration)
-        .fold(0.0_f64, f64::max);
+    let expected = 0.95;
 
     for c in cues {
         sink.emit(c);
@@ -211,7 +209,7 @@ fn horizon_matches_dola_occupancy_definition() {
     assert_eq!(
         ends.last().copied(),
         Some(expected),
-        "最終 horizon は dola の占有終端 max(at+duration) と一致する: {ends:?}"
+        "最終 horizon は dola の占有終端 0.95 と一致する: {ends:?}"
     );
 }
 
@@ -479,7 +477,7 @@ fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines
         .cues()
         .iter()
         .filter(|cue| !matches!(&cue.payload, CuePayload::Command(CueCommand::Wait)))
-        .map(|cue| cue.start_time + cue.duration)
+        .map(|cue| dola::cue::sum_on_ms_grid(cue.start_time, cue.duration))
         .fold(0.0_f64, f64::max);
     assert!(
         non_wait_end < expected_end,

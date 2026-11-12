@@ -1,4 +1,5 @@
 use super::*;
+use crate::easing::EasingName;
 use crate::runtime::instance_state::InstanceState;
 use crate::storyboard::InterruptionPolicy;
 use rand::SeedableRng;
@@ -7,13 +8,10 @@ use rand::rngs::SmallRng;
 /// テスト用インスタンスヘルパー（loop_offset なし）
 fn make_instance(loop_count: i32, loop_duration: f64) -> StoryboardInstance {
     StoryboardInstance {
-        group_id: 1,
         storyboard_name: "test".to_string(),
         state: InstanceState::Playing,
         interruption_policy: InterruptionPolicy::Conclude,
-        start_time: 0.0,
         time_scale: 1.0,
-        base_duration: loop_duration,
         pause_accumulated: 0.0,
         pause_start: None,
         loop_count,
@@ -210,6 +208,40 @@ fn process_loops_exact_boundary() {
     assert_eq!(inst.loops_completed, 1);
 }
 
+#[test]
+fn process_loops_zero_duration_concludes_after_one_advance() {
+    // 長さ 0・待ちなしの周回は時刻が進まない → 残りの周回もこの瞬間に終わる（loop_count 回まわさない）
+    let mut inst = make_instance(1_000_000, 0.0);
+    let mut rng = dummy_rng();
+    let action = process_loops(&mut inst, 0.0, &mut rng);
+    assert_eq!(action, LoopAction::Conclude);
+    assert_eq!(inst.loops_completed, 1);
+}
+
+#[test]
+fn process_loops_zero_duration_with_zero_delay_draw_continues() {
+    // 長さ 0 でも乱数の待ちがあれば、待ちがたまたま 0 を引いた周回で残りを切らない
+    let mut inst =
+        make_instance_with_offset(5, 0.0, 0.0, 1.0, EasingFunction::Named(EasingName::BackIn));
+    let mut rng = test_rng();
+    let action = process_loops(&mut inst, 100.0, &mut rng);
+    assert_eq!(action, LoopAction::Conclude);
+    assert_eq!(inst.loops_completed, 5);
+}
+
+#[test]
+fn process_loops_huge_end_time_concludes() {
+    // 足しても丸めで消える end_time では、無限のループも回り続けず終わる
+    let mut inst = make_instance(-1, 0.1);
+    inst.end_time = 1e17;
+    let mut rng = dummy_rng();
+    assert_eq!(
+        process_loops(&mut inst, 1e17, &mut rng),
+        LoopAction::Conclude
+    );
+    assert_eq!(inst.loops_completed, 1);
+}
+
 // =======================================================================
 // generate_delay (Task 3.5)
 // =======================================================================
@@ -315,42 +347,6 @@ fn generate_delay_deterministic_with_same_seed() {
     }
 }
 
-#[test]
-fn apply_easing_linear_identity() {
-    let easing = EasingFunction::Named(EasingName::Linear);
-    assert_eq!(apply_easing(&easing, 0.0), 0.0);
-    assert_eq!(apply_easing(&easing, 0.5), 0.5);
-    assert_eq!(apply_easing(&easing, 1.0), 1.0);
-}
-
-#[test]
-fn apply_easing_parametric_quadratic_bezier() {
-    // 対称制御点 (0, 0.5, 1) → 恒等写像に一致
-    let easing = EasingFunction::Parametric(crate::easing::ParametricEasing::QuadraticBezier {
-        x0: 0.0,
-        x1: 0.5,
-        x2: 1.0,
-    });
-    assert_eq!(apply_easing(&easing, 0.0), 0.0);
-    assert!((apply_easing(&easing, 0.5) - 0.5).abs() < 1e-9);
-    assert_eq!(apply_easing(&easing, 1.0), 1.0);
-}
-
-#[test]
-fn apply_easing_parametric_cubic_bezier() {
-    let easing = EasingFunction::Parametric(crate::easing::ParametricEasing::CubicBezier {
-        x0: 0.0,
-        x1: 0.5,
-        x2: 0.5,
-        x3: 1.0,
-    });
-    let result = apply_easing(&easing, 0.5);
-    assert!(
-        result >= 0.0 && result <= 1.0,
-        "result {result} out of range"
-    );
-}
-
 // =======================================================================
 // advance_loop with delay (Task 3.6)
 // =======================================================================
@@ -374,7 +370,7 @@ fn advance_loop_with_offset_adds_delay() {
     // delay should be in [1.0, 5.0] → end_time in [5.0, 9.0]
     let delay = inst.end_time - (end_before + inst.loop_duration);
     assert!(
-        delay >= 1.0 && delay <= 5.0,
+        (1.0..=5.0).contains(&delay),
         "delay {delay} out of [1.0, 5.0]"
     );
 }
@@ -438,4 +434,26 @@ fn process_loops_infinite_with_offset_applies_each_loop() {
     assert_eq!(action, LoopAction::Continue);
     assert_eq!(inst.loops_completed, 2);
     assert_eq!(inst.end_time, 7.0);
+}
+
+/// [0,1] の外へ出るイージングでも待ちは [min, max] に収まる（負の待ちで tick が戻らない）
+#[test]
+fn generate_delay_clamps_overshooting_easing_into_range() {
+    let wild_bezier = EasingFunction::Parametric(crate::easing::ParametricEasing::CubicBezier {
+        x0: -5.0,
+        x1: -5.0,
+        x2: -5.0,
+        x3: -5.0,
+    });
+    let back_in = EasingFunction::Named(EasingName::BackIn);
+    for easing in [wild_bezier, back_in] {
+        for seed in 0..64 {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let d = generate_delay(0.5, 1.5, &easing, &mut rng);
+            assert!(
+                (0.5..=1.5).contains(&d),
+                "{easing:?} seed {seed}: delay {d}"
+            );
+        }
+    }
 }

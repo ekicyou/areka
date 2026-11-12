@@ -10,7 +10,6 @@ pub mod cue;
 mod document;
 mod easing;
 mod error;
-mod playback;
 pub mod runtime;
 mod storyboard;
 mod transition;
@@ -26,12 +25,10 @@ pub use compile::{
 pub use document::DolaDocument;
 pub use easing::{EasingFunction, EasingName, ParametricEasing};
 pub use error::DolaError;
-pub use playback::{PlaybackState, ScheduleRequest};
 pub use storyboard::{
     BetweenKeyframes, InterruptionPolicy, KeyframeNames, KeyframeRef, LoopOffset, LoopOffsetRange,
     Storyboard, StoryboardEntry,
 };
 pub use transition::{TransitionDef, TransitionRef, TransitionValue};
-pub use validate::Validate;
 pub use value::DynamicValue;
 pub use variable::AnimationVariableDef;

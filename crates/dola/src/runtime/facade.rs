@@ -1,15 +1,14 @@
 //! DolaRuntime — 唯一の公開 API（Facade パターン）。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
-use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_storyboard};
+use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_all, compile_validated};
 use crate::document::DolaDocument;
 use crate::easing::{EasingFunction, EasingName};
 use crate::storyboard::LoopOffset;
 
 use super::conflict_resolver;
-use super::document_store::DocumentStore;
-use super::instance_manager::InstanceManager;
+use super::instance_manager::{InstanceManager, StoryboardInstance, TriggerState};
 use super::instance_state::InstanceState;
 use super::loop_controller::{self, LoopAction};
 use super::subscription_manager::SubscriptionManager;
@@ -26,15 +25,17 @@ use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, 
 /// let opacity_id = rt.subscribe("opacity");
 /// rt.load_document(doc)?;
 /// let result = rt.start("fade_in", 0.0)?;
-/// let changes = rt.update(0.5);
+/// rt.tick(0.5);
+/// let changes = rt.last_result();
 /// ```
 pub struct DolaRuntime {
-    document_store: DocumentStore,
+    /// 検証とコンパイルを全部通った文書だけを持つ（`load_document`）
+    document: Option<DolaDocument>,
     instance_manager: InstanceManager,
     timeline_manager: TimelineManager,
     subscription_manager: SubscriptionManager,
     next_group_id: u64,
-    /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel で削除）
+    /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel/競合の終わりで削除）
     trigger_store: HashMap<u64, Vec<CompiledTrigger>>,
     /// 直前の tick() 結果を保持するフィールド
     last_update_result: UpdateResult,
@@ -44,7 +45,7 @@ impl DolaRuntime {
     /// 新しい DolaRuntime を生成する。
     pub fn new() -> Self {
         Self {
-            document_store: DocumentStore::new(),
+            document: None,
             instance_manager: InstanceManager::new(),
             timeline_manager: TimelineManager::new(),
             subscription_manager: SubscriptionManager::new(),
@@ -63,21 +64,32 @@ impl DolaRuntime {
 
     /// 指示書読み込み。
     ///
-    /// バリデーション成功時のみ内部に保持し、失敗時は既存定義を維持する。
+    /// 検証の後に全ストーリーボードをコンパイルにかけ、全部通ったときだけ差し替える。
+    /// 失敗時は既存定義を維持する（読み込みで通った文書は start で落ちない）。
     /// 新定義への差し替え時、同名変数は SubscriptionManager の `last_values` で
     /// 自動的に値が引き継がれる。
     pub fn load_document(&mut self, doc: DolaDocument) -> Result<(), RuntimeError> {
-        self.document_store
-            .store(doc)
-            .map_err(RuntimeError::CompileError)
+        compile_all(&doc).map_err(RuntimeError::CompileError)?;
+        // 周回の長さの規則も読み込みで確かめ、読み込めた文書が start で落ちないようにする
+        for name in doc.storyboard.keys() {
+            let compiled =
+                compile_validated(&doc, name, 0.0).map_err(RuntimeError::CompileError)?;
+            loop_duration(name, &compiled)?;
+        }
+        self.document = Some(doc);
+        self.timeline_manager.release_unused_intern_values();
+        Ok(())
     }
 
     /// ストーリーボード開始。
     ///
+    /// 同じ変数に生きた項目を持つ古いインスタンスは、`start_time` が未来でも呼んだ時点で
+    /// 競合として扱う（「生きた項目があれば競合」・2026-11-13 開発者の裁定）。
+    ///
     /// 指示書からストーリーボード定義を取得し、コンパイル → インスタンス作成 →
     /// タイムテーブル挿入 → Playing 遷移の一連のフローを実行する。
     pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError> {
-        self.start_internal(name, start_time, &HashSet::new())
+        self.start_internal(name, start_time, &BTreeSet::new())
     }
 
     /// ストーリーボード開始（内部）。
@@ -88,12 +100,12 @@ impl DolaRuntime {
         &mut self,
         name: &str,
         start_time: f64,
-        skip_conflict_gids: &HashSet<u64>,
+        skip_conflict_gids: &BTreeSet<u64>,
     ) -> Result<StartResult, RuntimeError> {
         // 1. ドキュメント取得 → コンパイル → バリデーション
         //    （セグメントは常に相対時間 0.0 起点で構築。
         //    壁時計時刻への変換は loop_start_time で行う）
-        let (compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
+        let (mut compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
 
         // 2. end_time 算出（無限ループでも1周分の end_time を設定）
         let end_time = start_time + loop_duration;
@@ -111,22 +123,33 @@ impl DolaRuntime {
             None => (None, 0.0, EasingFunction::Named(EasingName::Linear)),
         };
 
-        // 4. インスタンス作成
-        self.instance_manager.create_instance(
+        // 4. インスタンス作成（Created 状態）。group_id は単調増加の採番で既存の鍵と衝突しない
+        let trigger_states = (0..compiled.triggers.len())
+            .map(|trigger_index| TriggerState {
+                trigger_index,
+                fired: false,
+            })
+            .collect();
+        self.instance_manager.instances_mut().insert(
             group_id,
-            name,
-            compiled.interruption_policy,
-            start_time,
-            compiled.time_scale,
-            compiled.total_base_duration,
-            compiled.loop_count,
-            end_time,
-            start_time, // loop_start_time = start_time（初期値）
-            loop_duration,
-            lo_min,
-            lo_max,
-            lo_easing,
-            compiled.triggers.len(),
+            StoryboardInstance {
+                storyboard_name: name.to_string(),
+                state: InstanceState::Created,
+                interruption_policy: compiled.interruption_policy,
+                time_scale: compiled.time_scale,
+                pause_accumulated: 0.0,
+                pause_start: None,
+                loop_count: compiled.loop_count,
+                loops_completed: 0,
+                finish_deadline: None,
+                end_time,
+                loop_start_time: start_time,
+                loop_duration,
+                loop_offset_min: lo_min,
+                loop_offset_max: lo_max,
+                loop_offset_easing: lo_easing,
+                trigger_states,
+            },
         );
 
         // 5. [Tier 3 Hook] 競合解決（skip_conflict_gids 内のインスタンスは除外）
@@ -139,6 +162,9 @@ impl DolaRuntime {
             &mut self.subscription_manager,
             skip_conflict_gids,
         )?; // Never 競合時はここで Err(RuntimeError::Conflict) を返す
+        for gid in &affected {
+            self.trigger_store.remove(gid);
+        }
 
         // 6. タイムテーブル挿入
         self.timeline_manager.insert_entries(group_id, &compiled);
@@ -146,7 +172,7 @@ impl DolaRuntime {
         // 6.5 トリガー格納
         if !compiled.triggers.is_empty() {
             self.trigger_store
-                .insert(group_id, compiled.triggers.clone());
+                .insert(group_id, std::mem::take(&mut compiled.triggers));
         }
 
         // 7. 状態遷移 Created → Playing
@@ -160,15 +186,8 @@ impl DolaRuntime {
         })
     }
 
-    /// 終了予定時刻のみ計算（インスタンス非生成）。
-    pub fn calculate_end_time(&self, name: &str, start_time: f64) -> Result<f64, RuntimeError> {
-        let (_, loop_duration) = self.compile_and_validate(name, start_time)?;
-        Ok(start_time + loop_duration)
-    }
-
     /// ドキュメント取得 → ストーリーボード存在確認 → コンパイル → ループ系バリデーション。
     ///
-    /// `start_internal` と `calculate_end_time` で共通の検証フロー。
     /// 成功時は（コンパイル結果, 1周分の実時間 loop_duration）を返す。
     fn compile_and_validate(
         &self,
@@ -176,8 +195,8 @@ impl DolaRuntime {
         base_time: f64,
     ) -> Result<(CompiledStoryboard, f64), RuntimeError> {
         let doc = self
-            .document_store
-            .document()
+            .document
+            .as_ref()
             .ok_or_else(|| RuntimeError::StoryboardNotFound(name.to_string()))?;
 
         // ストーリーボード存在確認
@@ -185,45 +204,18 @@ impl DolaRuntime {
             return Err(RuntimeError::StoryboardNotFound(name.to_string()));
         }
 
+        // 文書は load_document で検証済み
         let compiled =
-            compile_storyboard(doc, name, base_time).map_err(RuntimeError::CompileError)?;
+            compile_validated(doc, name, base_time).map_err(RuntimeError::CompileError)?;
 
-        // loop_count バリデーション
-        if compiled.loop_count <= 0 && compiled.loop_count != -1 {
-            return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
-        }
-
-        // NOTE(D1a-V 脆弱性所見): time_scale はスキーマ/コンパイル時に正値検証されて
-        // いないため、time_scale == 0.0 のとき loop_duration は +inf
-        // （total_base_duration > 0）または NaN（total_base_duration == 0）になる。
-        // inf/NaN は下の == / < 比較を素通りし end_time = start_time + loop_duration も
-        // inf/NaN となるため、該当インスタンスは自然終了・ループ・トリガー発火が
-        // 一切起きないまま生存し続ける（負値なら end_time が過去になり即 Conclude）。
-        // 現行挙動は tests/runtime/facade_test.rs::time_scale_boundary で固定済み。
-        // 入力検証の追加は外部観測可能な挙動変更となるため report/proposals.md P8 に記録。
-        let loop_duration = compiled.total_base_duration / compiled.time_scale;
-
-        if loop_duration == 0.0 && compiled.loop_count == -1 {
-            return Err(RuntimeError::ZeroDurationWithLoop {
-                storyboard: name.to_string(),
-            });
-        }
-        if loop_duration < MIN_LOOP_DURATION && compiled.loop_count == -1 {
-            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
-                storyboard: name.to_string(),
-                duration: loop_duration,
-            });
-        }
-
+        // load_document が同じ規則を通しているので、ここでは落ちない
+        let loop_duration = loop_duration(name, &compiled)?;
         Ok((compiled, loop_duration))
     }
 
     /// 一時停止。
     pub fn pause(&mut self, group_id: u64, current_time: f64) -> Result<(), RuntimeError> {
-        self.instance_manager.pause(group_id)?;
-        self.instance_manager
-            .set_pause_start(group_id, current_time)?;
-        Ok(())
+        self.instance_manager.pause(group_id, current_time)
     }
 
     /// 再開 — 再計算した end_time を返却。
@@ -244,7 +236,7 @@ impl DolaRuntime {
 
     /// 現在値凍結破棄（Cancel）。
     ///
-    /// エントリ削除のみ（last_values は前回 update の値が自然に残る）。
+    /// エントリ削除のみ（last_values は前回 tick の値が自然に残る）。
     pub fn cancel(&mut self, group_id: u64) -> Result<(), RuntimeError> {
         // group_id の存在確認 + terminal check
         let instance = self.instance_manager.get(group_id)?;
@@ -264,16 +256,16 @@ impl DolaRuntime {
 
     /// 遅延 Conclude。
     ///
-    /// `offset` は呼び出し側が `clock::now() + offset_secs` として計算した
-    /// 絶対 deadline 時刻を想定。`update()` 内で `current_time >= deadline` の
+    /// `deadline` は呼び出し側が `clock::now() + offset_secs` として計算した
+    /// 絶対時刻。`tick()` 内で `current_time >= deadline` の
     /// タイミングで Conclude 相当の処理を実行する。
-    pub fn finish(&mut self, group_id: u64, offset: f64) -> Result<(), RuntimeError> {
+    pub fn finish(&mut self, group_id: u64, deadline: f64) -> Result<(), RuntimeError> {
         let instance = self.instance_manager.get(group_id)?;
         if instance.state.is_terminal() {
             return Err(RuntimeError::InvalidGroupId(group_id));
         }
         self.instance_manager
-            .set_finish_deadline(group_id, offset)?;
+            .set_finish_deadline(group_id, deadline)?;
         Ok(())
     }
 
@@ -290,11 +282,6 @@ impl DolaRuntime {
     /// 購読解除（variable_id 指定）。
     pub fn unsubscribe(&mut self, variable_id: i64) -> Result<(), RuntimeError> {
         self.subscription_manager.unsubscribe(variable_id)
-    }
-
-    /// 全購読解除。
-    pub fn unsubscribe_all(&mut self) {
-        self.subscription_manager.unsubscribe_all();
     }
 
     // =========================================================================
@@ -316,67 +303,53 @@ impl DolaRuntime {
         &self.last_update_result
     }
 
-    /// 差分更新取得（後方互換）。
+    /// 終わっていないインスタンス（一時停止中を含む）が 1 つでもあれば true。
     ///
-    /// 内部フロー:
-    /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
-    /// 1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
-    /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
-    /// 3. 購読変数の evaluate ループ
-    /// 4. diff_and_update
-    #[deprecated(note = "use tick() + last_result() instead")]
-    pub fn update(&mut self, current_time: f64) -> UpdateResult {
-        self.tick(current_time);
-        self.last_update_result.clone()
+    /// 終わったインスタンスは表から消える（`InstanceManager::transition`）ので、表が空でないかを見る。
+    pub fn has_instances(&self) -> bool {
+        !self.instance_manager.instances().is_empty()
     }
 
     /// 差分更新の内部実装。
+    ///
+    /// 内部フロー:
+    /// 0〜2 を、current_time までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
+    /// 同じ時刻では 0 → 1 → 1.5 → 2 の順（トリガーどうしは親の group_id の順）
+    /// 0. トリガーなしの無限のループを、その時刻より前に終わる周回まで進める
+    /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
+    ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
+    /// 2. 自然終了検知（その時刻 >= end_time の Playing インスタンス）
+    ///
+    /// 最後に、出来事に入れない無限のループ（トリガーなし）を current_time まで進める
+    /// 3. 購読変数の evaluate ループ
+    /// 4. diff_and_update
     fn update_internal(&mut self, current_time: f64) -> UpdateResult {
-        // Step 1: Finish Deadline チェック
-        let expired = self.instance_manager.check_finish_deadlines(current_time);
-        for gid in expired {
-            self.conclude_internal(gid);
-        }
-
-        // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
-        let trigger_results = self.process_triggers(current_time);
-
-        // Step 2: ループ処理 + 自然終了検知
+        // 時刻の順に回すのは、子を起こす順がぶつかる子の勝ち負けを決めるから。
+        // 1 コマずつ回したときと同じ順になる
+        let mut trigger_results = Vec::new();
         let mut rng = rand::rng();
-        let loop_results: Vec<(u64, LoopAction)> = self
-            .instance_manager
-            .instances_mut()
-            .iter_mut()
-            .filter(|(_, inst)| {
-                inst.state == InstanceState::Playing && current_time >= inst.end_time
-            })
-            .map(|(gid, inst)| {
-                let action = loop_controller::process_loops(inst, current_time, &mut rng);
-                (*gid, action)
-            })
-            .collect();
-
-        for (gid, action) in loop_results {
-            if action == LoopAction::Conclude {
+        while let Some(t) = self.next_event_time().filter(|&t| t <= current_time) {
+            // Step 0: トリガーなしの無限のループを t より前に終わる周回まで進める（60fps の前のコマと同じ周回にする）。
+            // ほかの Playing の end_time は出来事なので t 以上で、ここでは動かない。t ちょうどの周回は Step 2 で
+            self.process_loop_ends(t.next_down(), &mut rng);
+            // Step 1: Finish Deadline チェック
+            for gid in self.instance_manager.check_finish_deadlines(t) {
                 self.conclude_internal(gid);
             }
+            // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
+            trigger_results.extend(self.process_triggers(t));
+            // Step 2: ループ処理 + 自然終了検知
+            self.process_loop_ends(t, &mut rng);
         }
+        self.process_loop_ends(current_time, &mut rng);
 
         // Step 3: 購読変数の評価（残存インスタンス対象）
-        let var_names = self.subscription_manager.get_subscribed_variable_names();
-        let mut values = HashMap::new();
-        for name in &var_names {
-            if let Some(val) = self.timeline_manager.evaluate(
-                name,
-                current_time,
-                self.instance_manager.instances(),
-            ) {
-                values.insert(name.clone(), val);
-            }
-        }
-
-        // Step 4: 差分検出
-        let changes = self.subscription_manager.diff_and_update(values);
+        // Step 4: 差分検出（評価と同じ周回で行う）
+        let timeline_manager = &mut self.timeline_manager;
+        let instances = self.instance_manager.instances();
+        let changes = self
+            .subscription_manager
+            .diff_and_update(|name| timeline_manager.evaluate(name, current_time, instances));
 
         UpdateResult {
             changes,
@@ -388,12 +361,73 @@ impl DolaRuntime {
     // 内部ヘルパー
     // =========================================================================
 
-    /// トリガー収集・実行。
+    /// 次の出来事の時刻: finish の期限・Playing のまだ起きていないトリガー（周回の長さの内）・
+    /// 周回の終わりの最小。トリガーなしの無限のループの周回の終わりは入れない: 自然には終わらず、
+    /// 出来事の時刻ごとに `process_loop_ends` がその時刻まで進めるので、1 周ずつ回さなくてよい。
+    /// NaN の時刻は `f64::min` が捨てる（NaN の期限は起きない）
+    fn next_event_time(&self) -> Option<f64> {
+        let mut next: Option<f64> = None;
+        let mut take = |t: f64| next = Some(next.map_or(t, |n| n.min(t)));
+        for (gid, inst) in self.instance_manager.instances() {
+            if let Some(deadline) = inst.finish_deadline {
+                take(deadline);
+            }
+            if inst.state != InstanceState::Playing {
+                continue;
+            }
+            if inst.loop_count != -1 || !inst.trigger_states.is_empty() {
+                take(inst.end_time);
+            }
+            if let Some(triggers) = self.trigger_store.get(gid) {
+                for ts in inst.trigger_states.iter().filter(|ts| !ts.fired) {
+                    if let Some(wall) =
+                        trigger_wall_time(inst, triggers[ts.trigger_index].fire_time)
+                    {
+                        take(wall);
+                    }
+                }
+            }
+        }
+        next.filter(|t| !t.is_nan())
+    }
+
+    /// Step 2: `time` までに周回の終わった Playing のインスタンスを進め、終わったものを Conclude する
+    fn process_loop_ends(&mut self, time: f64, rng: &mut impl rand::Rng) {
+        let loop_results: Vec<(u64, LoopAction)> = self
+            .instance_manager
+            .instances_mut()
+            .iter_mut()
+            .filter(|(_, inst)| inst.state == InstanceState::Playing && time >= inst.end_time)
+            .map(|(gid, inst)| (*gid, loop_controller::process_loops(inst, time, rng)))
+            .collect();
+        for (gid, action) in loop_results {
+            if action == LoopAction::Conclude {
+                self.conclude_internal(gid);
+            }
+        }
+    }
+
+    /// トリガー収集・実行。発火するものが無くなるまで繰り返す。
     ///
+    /// 起こした子のトリガーも、子が自然の終わり（Step 2）で消える前に同じ tick で発火させる。
+    /// 1 回の発火で印が立ち、印を戻すのは Step 2 の周回だけなので、2 回目からは新しく起きた子の
+    /// トリガーしか集まらない。トリガーの循環は検証が拒む（V15t）ので、繰り返しは
+    /// ストーリーボードの数 + 1 回で止まる。
+    fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+        let mut results = Vec::new();
+        loop {
+            let fired = self.fire_due_triggers(current_time);
+            if fired.is_empty() {
+                return results;
+            }
+            results.extend(fired);
+        }
+    }
+
     /// Playing 状態のインスタンスに紐づくトリガーを走査し、
     /// 発火条件（current_time >= 発火時刻 かつ 未発火）を満たすものを
-    /// fire-and-forget で子ストーリーボードとして開始する。
-    fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+    /// fire-and-forget で子ストーリーボードとして開始する（1 回分）。
+    fn fire_due_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
         // Step 1: 発火対象を収集（借用を分離するため先に Vec へ集約）
         struct PendingTrigger {
             parent_group_id: u64,
@@ -414,11 +448,11 @@ impl DolaRuntime {
                     if ts.fired {
                         continue;
                     }
-                    // SAFETY(panic 経路): trigger_states は create_instance で
+                    // SAFETY(panic 経路): trigger_states は start_internal のステップ 4 で
                     // 0..compiled.triggers.len() の添字から構築され、trigger_store には
                     // 同一の compiled.triggers が同じ group_id で格納される
-                    // （start_internal ステップ 4 / 6.5）。両者は conclude/cancel で
-                    // 同時に削除され group_id は再利用されないため、
+                    // （start_internal ステップ 4 / 6.5）。trigger_store は自然終了・cancel・
+                    // 競合の終わり（ステップ 5 の直後）で消え、group_id は再利用されないため、
                     // ts.trigger_index < triggers.len() が常に成立し添字 panic は発火しない。
                     debug_assert!(
                         ts.trigger_index < triggers.len(),
@@ -427,16 +461,9 @@ impl DolaRuntime {
                         triggers.len()
                     );
                     let trigger = &triggers[ts.trigger_index];
-                    // fire_time は compile 時の絶対時刻（start_time 基準）。
-                    // ループ内での壁時計発火時刻:
-                    //   loop_start_time + (fire_time - original_start_time) / time_scale
-                    // NOTE(D1a-V): time_scale == 0.0 では wall_fire_time が inf/NaN となり
-                    // トリガーは発火しない（compile_and_validate の NOTE / P8 参照）。
-                    let relative_base_time = trigger.fire_time - inst.start_time;
-                    let wall_fire_time =
-                        inst.loop_start_time + relative_base_time / inst.time_scale;
-
-                    if current_time >= wall_fire_time {
+                    if let Some(wall_fire_time) = trigger_wall_time(inst, trigger.fire_time)
+                        && current_time >= wall_fire_time
+                    {
                         let child_start = wall_fire_time + trigger.start_offset.unwrap_or(0.0);
                         pending.push(PendingTrigger {
                             parent_group_id: *gid,
@@ -464,7 +491,7 @@ impl DolaRuntime {
         //         親インスタンスを競合検出から除外する
         let mut results: Vec<TriggerResult> = Vec::new();
         for p in pending {
-            let skip = HashSet::from([p.parent_group_id]);
+            let skip = BTreeSet::from([p.parent_group_id]);
             match self.start_internal(&p.target_storyboard, p.child_start_time, &skip) {
                 Ok(start_result) => {
                     results.push(TriggerResult::Started {
@@ -515,8 +542,46 @@ impl DolaRuntime {
     }
 }
 
+/// トリガーの壁時計の発火時刻。周回の長さより後ろのトリガーは None（親の周回が先に終わる・要件 11.3）。
+///
+/// fire_time は 0.0 起点で compile した周回内の相対時刻で、壁時計の時刻は評価の式
+/// calculate_effective_time の逆: loop_start_time + pause_accumulated + fire_time / time_scale。
+/// 周回を飛ばした tick でも 1 コマずつ回したときと同じにするため、内か外かは時刻でなく長さで比べる。
+/// end_time は別の式（一時停止・待ちを足し込む）なので、丸めで 1 ulp 後ろへずれた周回の終わりちょうどの
+/// トリガーが Step 2 で消えないよう end_time で抑える
+fn trigger_wall_time(inst: &StoryboardInstance, fire_time: f64) -> Option<f64> {
+    let offset = fire_time / inst.time_scale;
+    (offset <= inst.loop_duration)
+        .then(|| (inst.loop_start_time + inst.pause_accumulated + offset).min(inst.end_time))
+}
+
 impl Default for DolaRuntime {
     fn default() -> Self {
         Self::new()
     }
 }
+
+/// 1 周分の実時間。無限のループの周回が 0 か `MIN_LOOP_DURATION` 未満なら拒む。
+fn loop_duration(name: &str, compiled: &CompiledStoryboard) -> Result<f64, RuntimeError> {
+    // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）。
+    // 割った結果が有限であることはコンパイルが確かめる
+    let duration = compiled.total_base_duration / compiled.time_scale;
+    if compiled.loop_count == -1 {
+        if duration == 0.0 {
+            return Err(RuntimeError::ZeroDurationWithLoop {
+                storyboard: name.to_string(),
+            });
+        }
+        if duration < MIN_LOOP_DURATION {
+            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
+                storyboard: name.to_string(),
+                duration,
+            });
+        }
+    }
+    Ok(duration)
+}
+
+#[cfg(test)]
+#[path = "facade_tests.rs"]
+mod tests;

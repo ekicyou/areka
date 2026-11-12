@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeMap;
 
 fn make_segment(from: f64, to: f64, easing: Option<EasingFunction>) -> CompiledSegment {
     CompiledSegment {
@@ -38,6 +39,40 @@ fn boundary_t_one() {
     assert_eq!(result, EvaluatedValue::Float(20.0));
 }
 
+/// 極端でも有限の両端で NaN／inf を出さず、両端が正確（`from + (to − from)·t` は差があふれ、端もずれる）
+#[test]
+fn extreme_finite_endpoints_interpolate_exactly() {
+    for (from, to, t, expected) in [
+        (-1.7e308, 1.7e308, 0.0, -1.7e308),
+        (-1.7e308, 1.7e308, 0.5, 0.0),
+        (-1.7e308, 1.7e308, 1.0, 1.7e308),
+        (1e16, 1.0, 1.0, 1.0),
+    ] {
+        let seg = make_segment(from, to, None);
+        assert_eq!(
+            Interpolator::interpolate(&seg, &VariableTypeHint::Float, t),
+            EvaluatedValue::Float(expected),
+            "{from:e}→{to:e} @ {t}"
+        );
+    }
+}
+
+/// from と to が同じ「保つ」遷移は、途中のどの t でもちょうど from（重みの和は丸めで 1 ulp ずれ、空振りの差分を出す）
+#[test]
+fn hold_segment_stays_exactly_at_value() {
+    for v in [100.0, 0.1, 0.3, 255.0] {
+        let seg = make_segment(v, v, None);
+        for i in 0..=1000 {
+            let t = i as f64 / 1000.0;
+            assert_eq!(
+                Interpolator::interpolate(&seg, &VariableTypeHint::Float, t),
+                EvaluatedValue::Float(v),
+                "{v} @ {t}"
+            );
+        }
+    }
+}
+
 #[test]
 fn clamp_below_zero() {
     let seg = make_segment(0.0, 100.0, None);
@@ -55,7 +90,7 @@ fn clamp_above_one() {
 #[test]
 fn integer_rounding() {
     let seg = make_segment(0.0, 10.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.25);
     // 0.0 + (10.0 - 0.0) * 0.25 = 2.5 → round → 3 (banker's or standard)
     // standard round: 2.5 → 3
@@ -65,7 +100,7 @@ fn integer_rounding() {
 #[test]
 fn integer_exact() {
     let seg = make_segment(0.0, 10.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.5);
     assert_eq!(result, EvaluatedValue::Integer(5));
 }
@@ -159,14 +194,14 @@ fn quadratic_bezier_easing() {
 }
 
 // =========================================================================
-// D1b-T 追加: ObjectInternPool（intern の同一性保証）
+// ObjectInternPool（intern の同一性保証）
 // =========================================================================
 
 #[test]
 fn intern_pool_returns_same_rc_for_equal_values() {
     let mut pool = ObjectInternPool::new();
-    let rc1 = pool.intern(DynamicValue::String("a".to_string()));
-    let rc2 = pool.intern(DynamicValue::String("a".to_string()));
+    let rc1 = pool.intern(&DynamicValue::String("a".to_string()));
+    let rc2 = pool.intern(&DynamicValue::String("a".to_string()));
     assert!(
         Rc::ptr_eq(&rc1, &rc2),
         "equal values must intern to the same Rc"
@@ -176,8 +211,8 @@ fn intern_pool_returns_same_rc_for_equal_values() {
 #[test]
 fn intern_pool_returns_distinct_rc_for_different_values() {
     let mut pool = ObjectInternPool::new();
-    let rc1 = pool.intern(DynamicValue::String("a".to_string()));
-    let rc2 = pool.intern(DynamicValue::String("b".to_string()));
+    let rc1 = pool.intern(&DynamicValue::String("a".to_string()));
+    let rc2 = pool.intern(&DynamicValue::String("b".to_string()));
     assert!(
         !Rc::ptr_eq(&rc1, &rc2),
         "different values must intern to distinct Rc"
@@ -211,6 +246,28 @@ fn interpolate_with_pool_shares_rc_across_calls() {
 }
 
 #[test]
+fn nan_object_value_is_interned_once() {
+    // NaN 入りの Object を 2 回評価しても表は 1 件（#28: 等しさとハッシュが同じ鍵）
+    let nan_obj = DynamicValue::Map(BTreeMap::from([(
+        "v".to_string(),
+        DynamicValue::Float(f64::NAN),
+    )]));
+    let seg = CompiledSegment {
+        start_time: 0.0,
+        end_time: 1.0,
+        from_value: TransitionValue::Dynamic(nan_obj.clone()),
+        to_value: TransitionValue::Dynamic(nan_obj),
+        easing: None,
+    };
+    let mut pool = ObjectInternPool::new();
+    let _r1 =
+        Interpolator::interpolate_with_pool(&seg, &VariableTypeHint::Object, 0.0, Some(&mut pool));
+    let _r2 =
+        Interpolator::interpolate_with_pool(&seg, &VariableTypeHint::Object, 0.0, Some(&mut pool));
+    assert_eq!(pool.pool.len(), 1);
+}
+
+#[test]
 fn interpolate_without_pool_allocates_fresh_rc() {
     let seg = CompiledSegment {
         start_time: 0.0,
@@ -232,7 +289,7 @@ fn interpolate_without_pool_allocates_fresh_rc() {
 }
 
 // =========================================================================
-// D1b-T 追加: scalar_value / transition_value_to_dynamic の変換分岐
+// scalar_value / transition_value_to_dynamic の変換分岐
 // =========================================================================
 
 #[test]
@@ -280,14 +337,14 @@ fn object_with_scalar_values_converts_to_dynamic_float() {
 }
 
 // =========================================================================
-// D1b-T 追加: Integer 補間の境界（負値・丸め方向・イージング併用）
+// Integer 補間の境界（負値・丸め方向・イージング併用）
 // =========================================================================
 
 #[test]
 fn integer_negative_interpolation_rounds_away_from_zero() {
     // 0→-10 の t=0.25 → -2.5 → f64::round は 0 から遠い方向へ丸める → -3
     let seg = make_segment(0.0, -10.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.25);
     assert_eq!(result, EvaluatedValue::Integer(-3));
 }
@@ -300,13 +357,13 @@ fn integer_interpolation_with_easing() {
         100.0,
         Some(EasingFunction::Named(EasingName::QuadraticIn)),
     );
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.5);
     assert_eq!(result, EvaluatedValue::Integer(25));
 }
 
 // =========================================================================
-// D1b-V 追加: 数値境界の特性化（NaN / inf / 飽和キャスト / オーバーシュート）
+// 数値境界の特性化（NaN / inf / 飽和キャスト / オーバーシュート）
 // =========================================================================
 
 /// NaN progress_t: clamp は NaN を素通りさせ、Float 補間結果は NaN になる（panic しない）
@@ -324,7 +381,7 @@ fn nan_progress_propagates_nan_for_float() {
 #[test]
 fn nan_progress_saturates_to_zero_for_integer() {
     let seg = make_segment(0.0, 100.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, f64::NAN);
     assert_eq!(result, EvaluatedValue::Integer(0));
 }
@@ -368,7 +425,7 @@ fn nan_endpoints_propagate_without_panic() {
         EvaluatedValue::Float(v) => assert!(v.is_nan(), "expected NaN, got {v}"),
         _ => panic!("expected Float"),
     }
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     assert_eq!(
         Interpolator::interpolate(&seg, &vt, 0.5),
         EvaluatedValue::Integer(0)
@@ -378,7 +435,7 @@ fn nan_endpoints_propagate_without_panic() {
 /// 極端な振幅の Integer 補間は i64 範囲へ飽和し、オーバーフロー panic しない
 #[test]
 fn integer_interpolation_saturates_at_i64_bounds() {
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
 
     let seg_pos = make_segment(0.0, 1e300, None);
     assert_eq!(
@@ -492,51 +549,91 @@ fn parametric_easing_overshoots_beyond_endpoints() {
     }
 }
 
-/// Req 7 AC3: 全30バリアントのマッピング正確性を検証
+/// 名前の対応を既知の値で確かめる（In と Out の取り違え・次数の取り違えで落ちる）
 #[test]
-fn all_30_easing_names_mapping() {
-    let all_easings = [
-        EasingName::Linear,
-        EasingName::QuadraticIn,
-        EasingName::QuadraticOut,
-        EasingName::QuadraticInOut,
-        EasingName::CubicIn,
-        EasingName::CubicOut,
-        EasingName::CubicInOut,
-        EasingName::QuarticIn,
-        EasingName::QuarticOut,
-        EasingName::QuarticInOut,
-        EasingName::QuinticIn,
-        EasingName::QuinticOut,
-        EasingName::QuinticInOut,
-        EasingName::SineIn,
-        EasingName::SineOut,
-        EasingName::SineInOut,
-        EasingName::CircularIn,
-        EasingName::CircularOut,
-        EasingName::CircularInOut,
-        EasingName::ExponentialIn,
-        EasingName::ExponentialOut,
-        EasingName::ExponentialInOut,
-        EasingName::ElasticIn,
-        EasingName::ElasticOut,
-        EasingName::ElasticInOut,
-        EasingName::BackIn,
-        EasingName::BackOut,
-        EasingName::BackInOut,
-        EasingName::BounceIn,
-        EasingName::BounceOut,
-        EasingName::BounceInOut,
-    ];
-
-    // 全30バリアントがパニックせずに実行できることを検証
-    for easing in all_easings {
+fn named_easings_known_values() {
+    for (easing, expected) in [
+        (EasingName::QuadraticOut, 75.0), // 1 - (1-0.5)^2 = 0.75
+        (EasingName::CubicIn, 12.5),      // 0.5^3 = 0.125
+        (EasingName::CircularIn, 100.0 * (1.0 - 0.75_f64.sqrt())), // 1 - √(1 - 0.5²)
+    ] {
         let seg = make_segment(0.0, 100.0, Some(EasingFunction::Named(easing)));
-        let result = Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5);
-        // 結果がFloat型であることを確認（値は各イージングで異なる）
+        match Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5) {
+            EvaluatedValue::Float(v) => {
+                assert!(
+                    (v - expected).abs() < 1e-9,
+                    "{easing:?}: expected {expected}, got {v}"
+                )
+            }
+            _ => panic!("expected Float"),
+        }
+    }
+}
+
+/// Sine 系と Elastic 系は外のクレートの PI_2（2π）を使わず π/2 の式で出す
+#[test]
+fn sine_and_elastic_easings_known_values() {
+    for (easing, t, expected) in [
+        (EasingName::SineIn, 0.5, 0.292_893_218_813_452_5), // 1 − cos(π/4)
+        (EasingName::SineOut, 0.5, 0.707_106_781_186_547_5), // sin(π/4)
+        (EasingName::SineInOut, 0.5, 0.5),                  // (1 − cos(π/2))/2
+        (EasingName::ElasticIn, 0.5, -0.022_097_086_912_079_6), // sin(13π/4)·2^−5
+        (EasingName::ElasticOut, 0.5, 1.022_097_086_912_079_6), // sin(−39π/4)·2^−5 + 1
+        (EasingName::ElasticInOut, 0.25, -0.011_048_543_456_039_8), // ElasticIn(0.5)/2
+        (EasingName::ElasticInOut, 0.5, 0.5),
+        (EasingName::ElasticInOut, 0.75, 1.011_048_543_456_04), // 1 − ElasticIn(0.5)/2
+    ] {
+        let v = apply_easing(t, Some(&EasingFunction::Named(easing)));
         assert!(
-            matches!(result, EvaluatedValue::Float(_)),
-            "EasingName::{easing:?} failed to produce Float"
+            (v - expected).abs() < 1e-12,
+            "{easing:?}({t}): expected {expected}, got {v}"
         );
+    }
+}
+
+/// どのイージングも 0 で始まり 1 で終わる（終わりの値が from へ戻らない）
+#[test]
+fn named_easings_start_at_zero_and_end_at_one() {
+    use EasingName::*;
+    for easing in [
+        Linear,
+        QuadraticIn,
+        QuadraticOut,
+        QuadraticInOut,
+        CubicIn,
+        CubicOut,
+        CubicInOut,
+        QuarticIn,
+        QuarticOut,
+        QuarticInOut,
+        QuinticIn,
+        QuinticOut,
+        QuinticInOut,
+        SineIn,
+        SineOut,
+        SineInOut,
+        CircularIn,
+        CircularOut,
+        CircularInOut,
+        ExponentialIn,
+        ExponentialOut,
+        ExponentialInOut,
+        ElasticIn,
+        ElasticOut,
+        ElasticInOut,
+        BackIn,
+        BackOut,
+        BackInOut,
+        BounceIn,
+        BounceOut,
+        BounceInOut,
+    ] {
+        for (t, expected) in [(0.0, 0.0), (1.0, 1.0)] {
+            let v = apply_easing(t, Some(&EasingFunction::Named(easing)));
+            assert!(
+                (v - expected).abs() < 1e-9,
+                "{easing:?}({t}): expected {expected}, got {v}"
+            );
+        }
     }
 }

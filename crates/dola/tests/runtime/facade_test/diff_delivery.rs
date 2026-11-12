@@ -1,7 +1,7 @@
 //! 差分配信（research.md §R3: diff_delivery シーム）
 //!
 //! 指示書差し替えによる値の引き継ぎと、購読 API（unsubscribe /
-//! unsubscribe_all / Default）経由の差分配信を束ねる。
+//! Default）経由の差分配信を束ねる。
 
 // =========================================================================
 // 8.3 指示書差し替えテスト
@@ -9,64 +9,145 @@
 mod document_replacement {
     use super::super::*;
 
+    /// 差し替えは配信の記録を消さない: 2 枚目を読んだ後、start せずに tick しても差分 0（#43）
     #[test]
     fn same_variable_carries_over_value() {
         let mut rt = DolaRuntime::new();
         let _opacity_id = rt.subscribe("opacity");
 
-        // 第1指示書: opacity 0→1
-        let doc1 = simple_float_doc("fade_in");
-        rt.load_document(doc1).unwrap();
+        rt.load_document(simple_float_doc("fade_in")).unwrap();
         rt.start("fade_in", 0.0).unwrap();
+        rt.tick(0.5);
+        assert!(!rt.last_result().changes.is_empty());
+        // 自然終了で最終値 1.0 が配信される
+        rt.tick(1.5);
 
-        // t=0.5: opacity ≈ 0.5
-        let diff = rt.update(0.5).changes;
-        assert!(!diff.is_empty());
-
-        // t=1.5: 自然終了後
-        let _ = rt.update(1.5);
-
-        // 第2指示書: opacity 0→1 (同じ名前)
-        let doc2 = simple_float_doc("fade_in");
-        rt.load_document(doc2).unwrap();
-        rt.start("fade_in", 2.0).unwrap();
-
-        // t=2.0: 新しいストーリーボードで opacity=0.0
-        let diff = rt.update(2.0).changes;
+        rt.load_document(simple_float_doc("fade_in")).unwrap();
+        rt.tick(2.0);
         assert!(
-            !diff.is_empty(),
-            "expected value delivery from new storyboard"
+            rt.last_result().changes.is_empty(),
+            "reload must keep delivered values: {:?}",
+            rt.last_result().changes
         );
     }
 
+    /// 差し替えの後も動いている Object の値は同じ Rc のまま: 偽の差分を出さない（#62）
+    #[test]
+    fn reload_keeps_animating_object_value_without_spurious_diff() {
+        use dola::DynamicValue;
+        let mut doc = simple_float_doc("swap");
+        doc.variable.insert(
+            "o".to_string(),
+            AnimationVariableDef::Object {
+                initial: DynamicValue::String("a".to_string()),
+            },
+        );
+        doc.storyboard.get_mut("swap").unwrap().entry[0] = StoryboardEntry {
+            variable: Some("o".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                to: Some(TransitionValue::Dynamic(DynamicValue::String(
+                    "b".to_string(),
+                ))),
+                duration: Some(1.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("o");
+        rt.load_document(doc.clone()).unwrap();
+        rt.start("swap", 0.0).unwrap();
+        rt.tick(0.25);
+        rt.tick(0.5);
+        assert!(rt.last_result().changes.is_empty());
+
+        rt.load_document(doc).unwrap();
+        rt.tick(0.75);
+        assert!(
+            rt.last_result().changes.is_empty(),
+            "{:?}",
+            rt.last_result().changes
+        );
+    }
+
+    /// Object の最終値は intern を通る: "a"→"b" を終えるのが 2 回目以降なら差分 0（#37）
+    ///
+    /// 自然終了（全体の最終値）と競合の Conclude（今のセグメントの最終値）の両方を通す。
+    #[test]
+    fn object_conclude_twice_reports_no_change() {
+        use dola::DynamicValue;
+        let mut doc = simple_float_doc("x_only");
+        doc.variable.insert(
+            "o".to_string(),
+            AnimationVariableDef::Object {
+                initial: DynamicValue::String("a".to_string()),
+            },
+        );
+        let mut swap = doc.storyboard["x_only"].clone();
+        swap.entry = vec![
+            StoryboardEntry {
+                variable: Some("o".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    to: Some(TransitionValue::Dynamic(DynamicValue::String(
+                        "b".to_string(),
+                    ))),
+                    duration: Some(1.0),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+            // o の後に opacity を長く動かす（競合の的）
+            linear("opacity", 0.0, 1.0, 10.0),
+        ];
+        doc.storyboard.insert("swap".to_string(), swap);
+
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("o");
+        rt.load_document(doc).unwrap();
+
+        // 1 回目: 自然終了で "b" を初めて配信
+        rt.start("swap", 0.0).unwrap();
+        rt.tick(20.0);
+        assert_eq!(rt.last_result().changes.len(), 1);
+
+        // 2 回目: 自然終了（collect_final_values）
+        rt.start("swap", 30.0).unwrap();
+        rt.tick(50.0);
+        assert!(
+            rt.last_result().changes.is_empty(),
+            "{:?}",
+            rt.last_result().changes
+        );
+
+        // 3 回目: o を終えた後に opacity の競合で Conclude（collect_current_segment_final_values）
+        rt.start("swap", 60.0).unwrap();
+        rt.tick(65.0);
+        rt.start("x_only", 65.0).unwrap();
+        rt.tick(66.0);
+        assert!(
+            rt.last_result().changes.is_empty(),
+            "{:?}",
+            rt.last_result().changes
+        );
+    }
+
+    /// 検証で拒んだ文書は前の文書を消さない（#43）
     #[test]
     fn invalid_document_preserves_existing() {
         let mut rt = DolaRuntime::new();
+        rt.load_document(simple_float_doc("fade_in")).unwrap();
 
-        let doc = simple_float_doc("fade_in");
-        rt.load_document(doc).unwrap();
+        let mut bad_doc = simple_float_doc("fade_in");
+        bad_doc.schema_version = "99.0".to_string();
+        assert!(rt.load_document(bad_doc).is_err());
 
-        // 不正なドキュメント（空の storyboard 名）— バリデーションエラー
-        let bad_doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable: BTreeMap::new(),
-            transition: BTreeMap::new(),
-            storyboard: BTreeMap::new(),
-        };
-
-        // 空ドキュメントは有効（storyboard なしでもOK）
-        // → バリデーション通過するので既存を上書きしてしまうが、
-        //   start("fade_in", ..) は StoryboardNotFound になるだけ。
-        // 不正書式は CompileError でブロックされる。
-        // ここでは store 可能であることだけ確認。
-        let result = rt.load_document(bad_doc);
-        // バリデーション通過（空ドキュメントは valid）
-        assert!(result.is_ok());
+        rt.start("fade_in", 0.0).unwrap();
     }
 }
 
 // =========================================================================
-// 購読 API のファサード経由検証（unsubscribe / unsubscribe_all / Default）
+// 購読 API のファサード経由検証（unsubscribe / Default）
 // =========================================================================
 mod subscription_via_facade {
     use super::super::*;
@@ -79,33 +160,17 @@ mod subscription_via_facade {
         rt.start("fade_in", 0.0).unwrap();
 
         // 購読中は差分が配信される
-        let diff = rt.update(0.0).changes;
+        rt.tick(0.0);
+        let diff = rt.last_result().changes.clone();
         assert!(diff.iter().any(|(id, _)| *id == opacity_id));
 
         // 購読解除後は配信されない
         rt.unsubscribe(opacity_id).unwrap();
-        let diff = rt.update(0.5).changes;
+        rt.tick(0.5);
+        let diff = rt.last_result().changes.clone();
         assert!(
             diff.is_empty(),
             "expected no delivery after unsubscribe, got {diff:?}"
-        );
-    }
-
-    #[test]
-    fn unsubscribe_all_stops_diff_delivery() {
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(simple_float_doc("fade_in")).unwrap();
-        rt.start("fade_in", 0.0).unwrap();
-
-        let diff = rt.update(0.0).changes;
-        assert!(!diff.is_empty());
-
-        rt.unsubscribe_all();
-        let diff = rt.update(0.5).changes;
-        assert!(
-            diff.is_empty(),
-            "expected no delivery after unsubscribe_all, got {diff:?}"
         );
     }
 
@@ -127,5 +192,73 @@ mod subscription_via_facade {
         // tick() 未呼び出し時の last_result は空
         assert!(rt.last_result().changes.is_empty());
         assert!(rt.last_result().triggered.is_empty());
+    }
+}
+
+// =========================================================================
+// tick が last_result を書き換える
+// =========================================================================
+mod tick_last_result {
+    use super::super::*;
+
+    #[test]
+    fn tick_updates_last_result() {
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("opacity");
+        rt.load_document(simple_float_doc("fade")).unwrap();
+        rt.start("fade", 0.0).unwrap();
+
+        rt.tick(0.0);
+        let r0 = rt.last_result().clone();
+
+        rt.tick(0.5);
+        let r1 = rt.last_result().clone();
+
+        assert!(!r0.changes.is_empty());
+        assert!(!r1.changes.is_empty());
+
+        let val0 = match &r0.changes[0].1 {
+            EvaluatedValue::Float(v) => *v,
+            _ => panic!("expected Float"),
+        };
+        let val1 = match &r1.changes[0].1 {
+            EvaluatedValue::Float(v) => *v,
+            _ => panic!("expected Float"),
+        };
+        assert!(
+            (val1 - val0).abs() > 0.1,
+            "values should differ: {val0} vs {val1}"
+        );
+    }
+}
+
+// =========================================================================
+// 差分の並び（9.2→10.3）
+// =========================================================================
+mod change_order {
+    use super::super::*;
+    use dola::DolaDocumentBuilder;
+
+    /// changes は購読の id の昇順で届く。作り直すたびに表の種が変わるので、20 回のどれでも同じ並びを見る
+    #[test]
+    fn changes_come_in_ascending_id_order() {
+        let names = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        let mut builder = DolaDocumentBuilder::new("1.0");
+        let mut sb = StoryboardBuilder::new();
+        for name in names {
+            builder = builder.variable(name, crate::support::float());
+            sb = sb.entry(linear(name, 0.0, 1.0, 1.0));
+        }
+        let doc = builder.storyboard("all", sb.build()).build().unwrap();
+
+        for _ in 0..20 {
+            let mut rt = DolaRuntime::new();
+            let ids: Vec<i64> = names.iter().map(|n| rt.subscribe(n)).collect();
+            rt.load_document(doc.clone()).unwrap();
+            rt.start("all", 0.0).unwrap();
+            rt.tick(0.5);
+            let got: Vec<i64> = rt.last_result().changes.iter().map(|(id, _)| *id).collect();
+            assert_eq!(got, ids);
+        }
     }
 }

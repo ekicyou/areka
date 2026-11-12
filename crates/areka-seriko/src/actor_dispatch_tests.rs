@@ -91,7 +91,7 @@ fn single_cue_emits_one_display_command() {
 // 停止経路・異常系の網羅テスト（1.4/2.1/2.4/6.2/6.3/6.4/7.4）。
 //
 // 設計要点（cross-thread log の決定論化）:
-// - handler スレッドで発火する log（Unresolved の error!／EntityRef の warn!／非 Shell の debug!）は
+// - handler スレッドで発火する log（Unresolved の error!／非 Shell の debug!）は
 //   `spawn_seriko` の別スレッドで出るため、テストスレッドに張った thread-local
 //   `capture_text` では捕捉できない。よってその種の log 表明は `handle_message` を
 //   **テストスレッド上で同期呼び出し**して `capture_logs_flow` 直下で発火させる。
@@ -149,81 +149,6 @@ fn disconnect_stops_normally() {
     assert!(
         handle.join().is_ok(),
         "全 Sender drop（disconnect）でアクターが正常終了する（1.4）"
-    );
-}
-
-/// ケース3（6.2/6.3/7.4）: 分類不能／防御枝の入力が記録を残して読み飛ばされ、処理が継続する。
-///
-/// (a) 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で EntityRef 防御枝が
-///     `warn!` を残し・発行せず・`Continue`（skip して継続）を決定論的に固定する。
-/// (b) spawn 経由の observable: EntityRef cue を先に、有効 cue を後に emit→close→join し、
-///     mock 記録が有効 Show 1 件のみ＝bad cue は skip され、その後もアクターが処理継続したこと
-///     を発行列で示す（cross-thread log には依存しない observable 檻）。
-#[test]
-fn unclassifiable_input_is_logged_and_skipped_then_continues() {
-    // (a) 同期 handler: warn! 発火＋発行 0 件＋Continue をテストスレッドで捕捉。
-    let resolver = tiny_resolver();
-    let mut states = fresh_states();
-    let mut out = MockSurfaceOutput::new();
-    let mut loop_runtime = inert_runtime();
-    let records = out.records();
-
-    let flow = capture_logs_flow(|| {
-        handle_message(
-            &resolver,
-            &BindResolver::empty(),
-            &mut states,
-            &mut loop_runtime,
-            &mut out,
-            SerikoMsg::Cue(cue(0.0, "0", CueCommand::EntityRef(42), 0.0)),
-        )
-    });
-
-    assert_eq!(
-        flow.1,
-        ControlFlow::Continue(()),
-        "分類不能／防御枝は Continue で処理継続する（6.2）"
-    );
-    assert!(
-        flow.0.contains("level=WARN"),
-        "EntityRef 防御枝が warn! を残すこと（silent failure 禁止・6.3）: {}",
-        flow.0
-    );
-    assert!(
-        flow.0.contains("target=areka_seriko"),
-        "本クレート target で発火すること: {}",
-        flow.0
-    );
-    assert!(
-        records.lock().expect("records mutex poisoned").is_empty(),
-        "分類不能入力では発行しない（skip）"
-    );
-
-    // (b) spawn 経由 observable: 悪 cue→有効 cue→close→join、記録は有効 Show のみ。
-    let out2 = MockSurfaceOutput::new();
-    let records2 = out2.records();
-    let (mut sink, handle) = spawn_seriko(
-        tiny_resolver(),
-        crate::DefaultBinds::uniform(BindSet::from_ids([1100, 1207])),
-        BindResolver::empty(),
-        SerikoLoopConfig::disabled(),
-        out2,
-    );
-    CueSink::emit(&mut sink, cue(0.0, "0", CueCommand::EntityRef(7), 0.0)); // 防御枝＝skip
-    CueSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
-    sink.close().expect("Close を送れること");
-    handle.join().expect("Close で正常終了する");
-
-    let recorded = records2.lock().expect("records mutex poisoned");
-    assert_eq!(
-        &*recorded,
-        &[DisplayCommand::Show {
-            scope: ActorKey::from("0"),
-            surface_id: 2100,
-            binds: BindSet::from_ids([1100, 1207]),
-            pattern: PatternState::default(),
-        }],
-        "悪 cue は skip され、後続有効 cue のみ発行＝ループ継続の observable（6.2）"
     );
 }
 
@@ -643,8 +568,8 @@ fn shell_and_balloon_recorded_independently() {
 // emo-text の担当、Wait はどの演者の担当でもない純粋な待ち。いずれも seriko にとって「異常」でなく
 // 「正常な担当外受信」であり、action を無視しつつ duration を honor（＝新ローカル遅延を生まない・
 // seriko は自前 reveal/timeline を持たないので skip で自明に満たす）。ログは良性 debug! へ格下げ
-// （warn/error を出さない＝実害ない水準）。genuine anomaly（Unresolved=error/Invalid=error/
-// EntityRef=warn）は据え置き——格下げしない（NameForm は shell-balloon で debug! へ）。
+// （warn/error を出さない＝実害ない水準）。genuine anomaly（Unresolved=error/Invalid=error）
+// は据え置き——格下げしない（NameForm は shell-balloon で debug! へ）。
 // ─────────────────────────────────────────────────────────────────────
 
 /// ケース12（6.2/2.3・broadcast honor）: 担当外（非 Shell＝Balloon 担当）の cue を broadcast

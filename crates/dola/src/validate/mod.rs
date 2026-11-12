@@ -1,10 +1,10 @@
 //! # DolaDocument Validation
 //!
-//! ドキュメント構造の整合性を検証するバリデーショントレイト・実装。
+//! ドキュメント構造の整合性を検証する `DolaDocument::validate` の実装。
 
 mod rules;
 
-pub(crate) use rules::collect_keyframe_names_from_ref;
+pub(crate) use rules::{IMPLICIT_KEYFRAME_PREFIX, collect_keyframe_names_from_ref};
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
@@ -12,14 +12,9 @@ use crate::transition::TransitionRef;
 
 use rules::*;
 
-/// DolaDocument のバリデーション
-pub trait Validate {
+impl DolaDocument {
     /// ドキュメント全体を検証し、すべてのエラーを収集して返す
-    fn validate(&self) -> Result<(), Vec<DolaError>>;
-}
-
-impl Validate for DolaDocument {
-    fn validate(&self) -> Result<(), Vec<DolaError>> {
+    pub fn validate(&self) -> Result<(), Vec<DolaError>> {
         let mut errors = Vec::new();
 
         // V1: スキーマバージョン検証
@@ -27,6 +22,9 @@ impl Validate for DolaDocument {
 
         // V12: 変数初期値の値域検証
         validate_variable_ranges(self, &mut errors);
+
+        // 数値の規則（有限・符号・範囲）
+        validate_numbers(self, &mut errors);
 
         // Storyboard ごとの検証
         for (sb_name, sb) in &self.storyboard {
@@ -44,33 +42,47 @@ impl Validate for DolaDocument {
 
             for (entry_idx, entry) in sb.entry.iter().enumerate() {
                 // V4: 変数参照存在確認
-                if let Some(ref var_name) = entry.variable {
-                    if !self.variable.contains_key(var_name) {
-                        errors.push(DolaError::UndefinedVariable {
-                            storyboard: sb_name.clone(),
-                            entry_index: entry_idx,
-                            name: var_name.clone(),
-                        });
-                    }
+                if let Some(ref var_name) = entry.variable
+                    && !self.variable.contains_key(var_name)
+                {
+                    errors.push(DolaError::UndefinedVariable {
+                        storyboard: sb_name.clone(),
+                        entry_index: entry_idx,
+                        name: var_name.clone(),
+                    });
                 }
 
                 // V5: トランジション名前参照存在確認
-                if let Some(TransitionRef::Named(ref trans_name)) = entry.transition {
-                    if !self.transition.contains_key(trans_name) {
-                        errors.push(DolaError::UndefinedTransition {
-                            storyboard: sb_name.clone(),
-                            entry_index: entry_idx,
-                            name: trans_name.clone(),
-                        });
-                    }
+                if let Some(TransitionRef::Named(ref trans_name)) = entry.transition
+                    && !self.transition.contains_key(trans_name)
+                {
+                    errors.push(DolaError::UndefinedTransition {
+                        storyboard: sb_name.clone(),
+                        entry_index: entry_idx,
+                        name: trans_name.clone(),
+                    });
                 }
 
-                // V7: transition あり → variable 必須
-                if entry.transition.is_some() && entry.variable.is_none() {
+                // V7: variable と transition は両方あるか両方無いか
+                let v7 = match (entry.variable.is_some(), entry.transition.is_some()) {
+                    (false, true) => Some("transition requires variable"),
+                    (true, false) => Some("variable requires transition"),
+                    _ => None,
+                };
+                if let Some(reason) = v7 {
                     errors.push(DolaError::InvalidEntry {
                         storyboard: sb_name.clone(),
                         entry_index: entry_idx,
-                        reason: "transition requires variable".to_string(),
+                        reason: reason.to_string(),
+                    });
+                }
+
+                // トリガー以外の trigger_start_offset は compile が黙って捨てる
+                if entry.trigger_start_offset.is_some() && entry.trigger_storyboard.is_none() {
+                    errors.push(DolaError::InvalidEntry {
+                        storyboard: sb_name.clone(),
+                        entry_index: entry_idx,
+                        reason: "trigger_start_offset requires trigger_storyboard".to_string(),
                     });
                 }
 
@@ -150,17 +162,17 @@ impl Validate for DolaDocument {
                     }
 
                     // V10, V13: 変数型に基づくトランジション制約
-                    if let Some(ref var_name) = entry.variable {
-                        if let Some(var_def) = self.variable.get(var_name) {
-                            validate_transition_type_constraints(
-                                sb_name,
-                                entry_idx,
-                                var_name,
-                                var_def,
-                                trans_def,
-                                &mut errors,
-                            );
-                        }
+                    if let Some(ref var_name) = entry.variable
+                        && let Some(var_def) = self.variable.get(var_name)
+                    {
+                        validate_transition_type_constraints(
+                            sb_name,
+                            entry_idx,
+                            var_name,
+                            var_def,
+                            trans_def,
+                            &mut errors,
+                        );
                     }
                 }
             }

@@ -1,10 +1,10 @@
 //! DolaDocument / Storyboard をコードから構築するビルダー API
 
+use crate::compile::compile_all;
 use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::storyboard::{InterruptionPolicy, LoopOffset, Storyboard, StoryboardEntry};
 use crate::transition::TransitionDef;
-use crate::validate::Validate;
 use crate::variable::AnimationVariableDef;
 use std::collections::BTreeMap;
 
@@ -45,7 +45,7 @@ impl DolaDocumentBuilder {
         self
     }
 
-    /// ドキュメントを構築し、自動的にバリデーションを実行
+    /// ドキュメントを構築し、検証の後に全ストーリーボードをコンパイルにかける
     pub fn build(self) -> Result<DolaDocument, Vec<DolaError>> {
         let doc = DolaDocument {
             schema_version: self.schema_version,
@@ -53,7 +53,7 @@ impl DolaDocumentBuilder {
             transition: self.transition,
             storyboard: self.storyboard,
         };
-        doc.validate()?;
+        compile_all(&doc)?;
         Ok(doc)
     }
 }
@@ -111,7 +111,7 @@ impl StoryboardBuilder {
 
     /// ストーリーボードを構築
     ///
-    /// NOTE(D2-V): StoryboardBuilder はバリデーションを行わない（任意の Storyboard を
+    /// NOTE: StoryboardBuilder はバリデーションを行わない（任意の Storyboard を
     /// 構築できる）が、compile_storyboard は冒頭で必ず doc.validate() を実行するため、
     /// 本ビルダー経由でもバリデーションを迂回して不正文書をコンパイルさせることは
     /// できない（tests/compile/boundary_test.rs で特性化済み）。
@@ -137,7 +137,7 @@ mod tests {
     use super::*;
     use crate::storyboard::LoopOffset;
 
-    // D2-T gap tests: tests/general/builder_test.rs が未カバーの Builder API 空白
+    // tests/general/builder_test.rs が見ていない Builder API のテスト
     // （loop_offset 設定・Default 実装・同名上書き・スキーマ検証連動）
 
     #[test]

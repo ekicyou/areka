@@ -1,13 +1,13 @@
 //! ランタイムの公開型定義（EvaluatedValue, RuntimeError, StartResult）。
 
-use std::fmt;
 use std::rc::Rc;
 
 use crate::DolaError;
 use crate::value::DynamicValue;
 
 /// 無限ループ許可の最小周期（秒）。
-/// システムスリープ復帰時の極端な周回数処理を防止する。
+/// 時刻が飛んだ tick で進める周回の数に上限を作る（トリガーを持つループの重さは
+/// `loop_controller::process_loops` の注）。
 pub(crate) const MIN_LOOP_DURATION: f64 = 0.1; // 100ms
 
 /// 評価済み変数値（補間計算の出力）。
@@ -29,8 +29,8 @@ impl PartialEq for EvaluatedValue {
         match (self, other) {
             // NOTE(数値境界): Float(NaN) は IEEE 754 により自分自身と不等。NaN が
             // 補間結果に混入した場合、差分検出は当該変数を毎フレーム「変化あり」と
-            // 判定し続ける（変更通知のスパム化）。NaN の流入は指示書数値の有限性
-            // 検証の欠如による（proposals.md P8/P14 参照。現行挙動は
+            // 判定し続ける（変更通知のスパム化）。文書の数値は validate が有限に
+            // 限るが、極端に大きい値の補間はまだ NaN を出しうる（現行挙動は
             // tests/runtime/core_types_test.rs::float_nan_is_never_equal_to_itself で固定）。
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::Integer(a), Self::Integer(b)) => a == b,
@@ -40,83 +40,33 @@ impl PartialEq for EvaluatedValue {
     }
 }
 
-impl fmt::Display for EvaluatedValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Float(v) => write!(f, "{v:.6}"),
-            Self::Integer(v) => write!(f, "{v}"),
-            Self::Object(v) => write!(f, "{v:?}"),
-        }
-    }
-}
-
 /// ランタイムエラー。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum RuntimeError {
     /// 指定ストーリーボード名が未定義
+    #[error("storyboard not found: '{0}'")]
     StoryboardNotFound(String),
     /// 指定 group_id が存在しない（終了済みインスタンスへの操作を含む）
+    #[error("invalid group_id: {0}")]
     InvalidGroupId(u64),
     /// duration=0 かつ loop_count 設定 (Req 2.9)
+    #[error("storyboard '{storyboard}' has zero duration with loop_count")]
     ZeroDurationWithLoop { storyboard: String },
-    /// 無効な loop_count 値（0 以下で -1 を除く）
-    InvalidLoopCount(i32),
     /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
+    #[error(
+        "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
+    )]
     TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
     /// コンパイルエラー（既存 DolaError のラップ）
+    #[error("compile error: {0:?}")]
     CompileError(Vec<DolaError>),
     /// Never 戦略を持つインスタンスとの競合により start() が拒否された
+    #[error("conflict with never-interrupt instances: {conflicting_group_ids:?}")]
     Conflict { conflicting_group_ids: Vec<u64> },
     /// 無効な variable_id（存在しない or 購読解除済み）
+    #[error("invalid variable_id: {0}")]
     InvalidVariableId(i64),
 }
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::StoryboardNotFound(name) => {
-                write!(f, "storyboard not found: '{name}'")
-            }
-            Self::InvalidGroupId(id) => {
-                write!(f, "invalid group_id: {id}")
-            }
-            Self::ZeroDurationWithLoop { storyboard } => {
-                write!(
-                    f,
-                    "storyboard '{storyboard}' has zero duration with loop_count"
-                )
-            }
-            Self::InvalidLoopCount(count) => {
-                write!(f, "invalid loop_count: {count}")
-            }
-            Self::TooShortDurationWithInfiniteLoop {
-                storyboard,
-                duration,
-            } => {
-                write!(
-                    f,
-                    "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
-                )
-            }
-            Self::CompileError(errors) => {
-                write!(f, "compile error: {errors:?}")
-            }
-            Self::Conflict {
-                conflicting_group_ids,
-            } => {
-                write!(
-                    f,
-                    "conflict with never-interrupt instances: {conflicting_group_ids:?}"
-                )
-            }
-            Self::InvalidVariableId(id) => {
-                write!(f, "invalid variable_id: {id}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for RuntimeError {}
 
 impl From<Vec<DolaError>> for RuntimeError {
     fn from(errors: Vec<DolaError>) -> Self {
@@ -130,14 +80,14 @@ pub struct StartResult {
     /// 実行インスタンスの一意識別子
     pub group_id: u64,
     /// 正常再生した場合の終了予定時刻（f64秒）。
-    /// 無限ループ時は `f64::INFINITY`。
+    /// 無限ループでも 1 周分の終了時刻。
     pub end_time: f64,
     /// 競合解決で影響を受けた既存 group_id のリスト。
     /// 競合がなければ空。
     pub affected_group_ids: Vec<u64>,
 }
 
-/// update() の返却値。
+/// `tick()` の結果（`last_result()` が返す）。
 ///
 /// 変数の差分変化とトリガー実行結果を含む。
 #[derive(Debug, Clone)]

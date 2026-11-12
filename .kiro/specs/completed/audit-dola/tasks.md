@@ -1,0 +1,401 @@
+# 実装計画
+
+各指摘の場所（ファイルと行）は `research.md` §3、直し方の決めは `design.md` の「指摘ごとの直し方」と「Components and Interfaces」が正本。指摘の番号（#1〜#88）は `research.md` §3 の番号、件 1〜3 は申し送りの番号。
+
+- 段: タスク 1〜16 は**前の段**（C18 のあいだ・公開の形は足すことのほか変えない・要件 6.3 の触れない所に入らない）。タスク 17〜20 は**後の段**（C18 のほかの 7 本が `main` に着地した後・17.1 の門を通ってから）。タスク 21〜22 は仕上げ。
+- 各タスクの確かめ: `cargo test -p dola`（触った束）と `cargo clippy -p dola --all-targets --no-deps -- -D warnings` のうち、そのタスクで直した分が新たな警告を出さないこと。clippy の残り（件 3）を全部消すのは 15.1。
+- バグと危ない所を縛るテストは、直しの前に 1 度赤になることを確かめてから直す（design「テストの方針」）。今の誤りの値で期待を書かない。
+- 足すテストの置き場が 900 行を越えるなら兄弟のファイルへ置く（1,000 行の番人）。
+- 消す前には、消すものの名前をツリー全体（テスト・fixture・設定・文字列を含む）で grep し、使い手が設計の表のとおりであることを確かめる。
+
+## 前の段（C18 のあいだ）
+
+- [x] 1. 件 1: トークの終わりの時刻を ms の格子に載せる
+- [x] 1.1 時刻の和の決まりを 1 つの関数にまとめ、cue の層の 7 か所で使う（#8・#9）
+  - 2 つの秒を、どちらも有限で ms の格子に載るなら ms の整数で足してから秒へ直し、載らなければ f64 の和そのものを返す関数を cue の層の中（crate の中だけで見える）に置き、`shortcut:` の注（要件 7.8 の文言）を付ける
+  - 合図ごとの相対の終わり（始まり＋丸めた長さ）を、台本の終わりと予定の占有の終わりが共有する私的な関数 1 本にする（#9・長さは今の clamp を通す）。予定の説明（#9 の行）を事実に合わせる
+  - 台本の終わり・発火の時刻・予定の到達・完了・占有の終わりの和（design の ⑴〜⑺）をこの関数へ寄せる。時間切れの期限の和は後の段で消えるので替えない
+  - 件 1 の檻 4 本（ms の終わり・占有の終わり・ちょうどで完了・格子外は素の和）と #9 の檻（長さ NaN・+inf・−3 で終わりと占有の終わりが等しい）を台本のテストに足す。完了の檻はアンカー 1.0 で組み、直しの前に赤になることを確かめる
+  - 終わった姿: 足した 5 本が緑で、関数を素の和に戻すと完了の檻と ms の終わりの檻が落ちる
+  - _Requirements: 4.1, 5.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8_
+- [x] 1.2 件 1 で古びたテストの期待を直す（dola の中と `areka-sakura` の 2 本）
+  - dola の放送のテストのうち 1 本を Tick の式の値（0.95）で完了を見る形に改め、ほかの終わりの期待は台本の終わりの値から作る形にする
+  - `areka-sakura` の台本のコンパイルのテスト 2 本（末尾の明示の待ちで広がる・エピローグを末尾に置く）の期待を、格子の値か台本の終わりの値から作る形にする（範囲の外で触るのはこの 1 ファイルだけ）
+  - 終わった姿: `cargo test -p dola` と `cargo test -p areka-sakura` が緑で、直しの的を外して緑にした期待（今の誤りの値）が無い
+  - _Requirements: 3.2, 4.5, 6.2, 6.3, 7.5_
+
+- [x] 2. cue の層の本番の小さな直し: 並べ替えの比べ方・到達の取り出し・説明の数（#10・#80・#84・#53 の cue の分）
+  - 並べ替え 5 か所（台本・予定 2 か所・コンパイル 2 か所）を、両方に `+ 0.0` を足して −0.0 を +0.0 にそろえたうえでの全順序の比べにし、「panic しない」の注を直す
+  - 予定の到達の取り出しを `pop_if` で書き、NaN の扱いを今と同じにするため「届いていない」の否定で比べる。`unwrap` と SAFETY の注を消す
+  - cue のモジュールの説明の数を 13 に直し、cue の層の P 番号と古いテストの道を引く注を消すか今の道へ直す
+  - 檻: NaN（符号なしの NaN と、計算で生まれる負の NaN を合わせて 24 件）を含む台本と予定が全順序どおりに並ぶ・−0.0 と +0.0 の合図が台本の順のまま・コンパイルの並べ替えの 1 本
+  - 終わった姿: 足した 3 本が緑で、比べを元に戻すと −0.0 の檻が落ちる。到達の既存のテストと件 1 の檻が緑のまま
+  - コンパイルの並べ替えは 5・7 より前に取る（同じファイルに触る）
+  - _Requirements: 3.1, 4.1, 4.2_
+
+- [x] 3. cue の層のテストを減らす（#86・#88・#24・#85・#87・#20・件 3 の一部）
+- [x] 3.1 cue のテストの道具を 1 か所へ上げ、写しと効かない行を消す（#86・#88・#24）
+  - 再生のテストの道具を cue のテストの直下のモジュールへ上げ、待ちの合図を作る道具を足して台本と予定のテストでも使う。予定のテストの中の手書きの写し（`Times`）を消す
+  - 再生のテストの効かない `#[cfg(test)]` 6 行を消す
+  - 予定のテストの research の組の後ろの方（約 −110 行）を消す
+  - 終わった姿: 予定のテストのファイルが 870 行以下で、cue のテストが全部緑
+  - _Requirements: 3.1, 5.1_
+- [x] 3.2 落ちようのない assert を消し、同じ時刻の解決の檻を足す（#85・#87・#20・件 3 の `assertions_on_constants`）
+  - 落ちようのない assert を消し、解決の後の取り出しを見るテストを「届いた後に解決しても取り出しは変わらない」を見る形に改める
+  - 定数の assert を `const { assert!(..) }` にする
+  - 檻: 合図・選択待ち・後ろの合図が同じ 1.0 にあるとき、届いて解決した後の同じ時刻の tick で後ろの合図だけが取り出される
+  - 終わった姿: 足した檻が緑で、予定のテストのファイルが 1,000 行を越えず、このファイルに clippy の `assertions_on_constants` が出ない
+  - _Requirements: 4.1, 5.1, 9.2_
+
+- [x] 4. cue の層のテストを直し、後の段で消す口のテストを読み替える（#21・#22・#23・#81・#82・#13 と #19 の前ぶれ）
+- [x] 4.1 選択待ちでのクリックの檻を足し、重複したテストのファイルを畳む（#21・#22・#23）
+  - 檻: 選択待ちのあいだのクリックの解決が、状態も選択肢の待ちも変えない
+  - 再生の最後の結果のテストのファイルを消し、意味のある 1 本（tick が最後の結果を書き換える）だけを storyboard の差分配りのテストへ移す（そこの文書の道具を使う）。cue のテストの入口からその行を消す
+  - 受け手のテストの重複した 2 つの範囲を消し、既定の配りのテストを小さな受け手で書き直す
+  - 終わった姿: 足した檻が緑で、消したファイルへの参照が 0 件、cue と runtime のテストが緑
+  - _Requirements: 3.1, 3.3, 4.1_
+- [x] 4.2 合図の値のテストの落ちないものを消し、カーソルの合図を足す（#81・#82）
+  - 合図の値のテストのうち落ちようのない 3 つの範囲を消す
+  - 全部の合図で長さの欄がそろうことを見るテストに、カーソルの合図の 1 行を足す
+  - 終わった姿: そのテストがカーソルを含めて緑で、テストのファイルが約 80 行減る
+  - _Requirements: 3.1, 4.5_
+- [x] 4.3 再生機の取り出しを読むテストを記録する受け手へ読み替え、同値のテストを消す（#13・#19 の前ぶれ）
+  - 再生機の取り出しの口を読む 23 か所を、配られた合図を記録する受け手で見る形へ読み替える（後の段で口を消すときにテストの差分が出ないように）
+  - 予定から作る口と台本から作る口が同じになることだけを見るテストを消す
+  - 終わった姿: cue のテストで再生機の取り出しの口と予定から作る口を呼ぶ所が 0 件（grep）で、cue のテストが緑
+  - _Requirements: 3.1, 4.5, 6.4_
+
+- [x] 5. storyboard の層の必ず直す: トリガーの時刻・周回・値の保持・長さ（#1・#2・#3・#4・#44・#47）
+- [x] 5.1 トリガーの発火時刻を親の始まりと一時停止を数えた式にする（#1・#47）
+  - 発火の壁時計の時刻を「周回の起点＋一時停止の累計＋発火の時刻／速さ」の 1 式にし、古い注を直す
+  - 檻 2 本: 始まり 10.0・キーフレーム 1.0 で 10.9 では未発火・11.0 で発火。0.5 で止めて 5.0 で再開すると 5.4 では未発火・5.5 で発火
+  - 1 周に 1 度だけ発火するテストを、2 秒の親・1.0 で発火する文書で t=1.0 に 1 件・t=1.016 に 0 件を見る形に改める
+  - 終わった姿: 3 本が緑で、式を元に戻すと 2 本の檻が落ちる
+  - _Requirements: 3.1, 4.1, 4.5_
+- [x] 5.2 周回の起点を待ちの後に置く（#2・#44）
+  - 周回の終わりで待ちを先に求め、新しい起点＝前の終わり＋待ち−一時停止の累計・新しい終わり＝前の終わり＋1 周＋待ちにする。待ち 0 なら今と同じ値
+  - 周回の待ちの e2e を、乱数に頼らない min==max の範囲（2,2）にし、各時刻の値を `expect` で見る形に改める
+  - 終わった姿: その e2e が緑で、起点の式を元に戻すと落ちる。待ち 0 の既存の周回のテストが緑のまま
+  - _Requirements: 4.1, 4.2, 4.5_
+- [x] 5.3 最後のセグメントを過ぎた変数がインスタンスの終わりまで値を保つ（#3）
+  - 評価の早い戻りと、期限の切れた項目を評価のたびに消す処理を消し、項目を消すのは終わり（Conclude・Cancel・競合の終わり）だけにする。注も直す
+  - 檻: x が 1 秒・y が 2 秒の台本で、t=1.008 に x=1.0、t=2.0 の Conclude の後も x=1.0
+  - 項目が勝手に消えることを見ていた 2 本を新しい振る舞いに改める
+  - 終わった姿: 檻と改めた 2 本が緑で、早い戻りを戻すと檻が落ちる
+  - _Requirements: 4.1, 4.5_
+- [x] 5.4 ストーリーボードの長さに先頭の遅れを数える（#4）
+  - 長さを「最後のセグメントの終わり−コンパイルの起点」にする。最後の区切りより後のトリガーが発火しない付随は残す（要件 11.3）
+  - 檻: delay 0.5・duration 1.0 で終わりの時刻 1.5・t=1.0 で x=0.5。コンパイルの流れのテストの期待を 1.5 に改める
+  - 終わった姿: 檻が緑で、長さの式を戻すと落ちる。付随を縛るテストがあれば緑のまま
+  - _Requirements: 2.4, 4.1, 4.5, 11.3_
+
+- [x] 6. storyboard の層の検証（#6・#49・#29・#30・#31 の検証の半分・#32 の V7）
+- [x] 6.1 トリガーの循環の検出を根ごとに空にし、明示のスタックの反復にする（#6・#49）
+  - 根ごとの呼び出しの後で道とスタックの印を空にし、根は名前の順で回す。深さ優先の探索を明示のスタックの反復に書き直す
+  - 檻: {a→b, b→a, c→a} で循環の報告がちょうど 1 件・中身 [a,b,a]。集合で比べていたテストを順まで見る形に改める
+  - 長い鎖の 2 本のテストを、64 KiB のスタックのスレッドの中で深い鎖を回す形に改める（再帰に戻すと落ちる）
+  - 終わった姿: 3 本が緑で、空にする行を消すと循環の檻が落ち、再帰に戻すと深い鎖の 2 本が落ちる
+  - _Requirements: 4.1, 4.2, 4.5_
+- [x] 6.2 数値の規則を検証に足し、`InvalidNumber` を返す（#29）
+  - エラーの種類に `InvalidNumber`（場所・欄・値）を足す（足すだけ）
+  - 数値の規則（design の表: 遷移の delay・duration は有限で 0 以上・時刻の offset は有限・速さは有限で 0 より大・周回の数は 1 以上か −1・周回の待ちは有限・変数と遷移の数の値は有限）を検証の 1 つの関数にまとめ、違反を全部集めて返す
+  - 周回の数の説明を検証の形に合わせ、今の挙動を固定していた NOTE を消す。dola の中では戻り値で返すだけで記録しない
+  - 檻: 速さ 0／−1／NaN・長さ NaN／−3・遅れ −1・周回の数 0・周回の待ち NaN・初期値 +inf を 1 つずつ拒む表のテスト。今の挙動を固定していた 5 つのテストを「拒まれる」へ改める
+  - 終わった姿: 表のテストが緑で、規則を外すと落ちる。改めたテストが緑
+  - _Requirements: 4.1, 4.5, 5.2, 6.4, 11.6, 11.9_
+- [x] 6.3 予約名・トリガー以外の始まりの差・V7 の両向きを検証で拒む（#30・#31 の検証の半分・#32 の V7）
+  - 暗黙のキーフレームの接頭辞で始まる名を予約として拒み、受け入れていたテストを「拒まれる」へ改める
+  - トリガー以外のエントリに書いた `trigger_start_offset` を `InvalidEntry` で拒む（檻 1 本）
+  - V7 を「変数と遷移は両方あるか両方無いか」にする（片方だけは `InvalidEntry`）
+  - 終わった姿: 足した檻と改めたテストが緑で、検証のテストが全部緑
+  - _Requirements: 4.1, 4.5, 11.10_
+
+- [x] 7. storyboard の層のコンパイル（#5・#31 のコンパイルの半分・#33 のコンパイル・#48・#68・#69・#71・#72）
+- [x] 7.1 依存のグラフに配列順の辺を足す（#5・#48）
+  - at も between も無いエントリに辺を足す: 変数を持つ遷移は同じ変数の配列上の直前のエントリへ、変数を持たないエントリは配列の 1 つ前へ（要件 11.7）。古い注を直す
+  - 檻 2 本: 前方参照のある連結で [5,6]・[6,7] と順に並ぶ。at の無いキーフレームを挟む正しい文書が通る
+  - 遅く発火するトリガーを配列の前に置く文書と、同時刻の 1 本のテストを足す
+  - 終わった姿: 4 本が緑で、辺を足す処理を外すと檻 2 本が落ちる
+  - _Requirements: 4.1, 11.7_
+- [x] 7.2 between を始まりの時刻で扱い、`relative_to` の値を値域と比べる（#31・#33 のコンパイルの半分）
+  - トリガーと純粋なキーフレームに書いた between を、between の始まりの時刻で発火・配置する（要件 11.10）
+  - 値を解いた後に変数の値域と比べて `ValueOutOfRange` を積む（`relative_to` の結果も）
+  - 檻 2 本: [a at 1・b at 3・c at 10・trigger between{a,b}] が 1 秒で発火する。不透明度 [0,1]・初期値 0.5・relative_to 0.8 が拒まれる
+  - 終わった姿: 2 本が緑で、直しを外すと落ちる
+  - _Requirements: 4.1, 11.10, 11.11_
+- [x] 7.3 閉路と重なりの報告を正し、通らない枝と複製を消す（#68・#69・#71・#72）
+  - キーフレームの閉路の報告は、解けずに残った節から閉路を 1 本たどってその節だけを出す
+  - 変数ごとのセグメントの表を名前の順の表にし、セグメントに元のエントリの番号を持たせて重なりの報告に使う
+  - 先の検証が落とす枝と「始まりは必ず在る」の枝を消し、前提は `debug_assert!` で表す（約 −30 行）
+  - コンパイルの中の複製を move と借用に替える
+  - 檻 2 本: a↔b と c at a で閉路は a と b だけ。重なりのエラーが名前の順で違反したエントリを指す
+  - 終わった姿: 2 本が緑で、コンパイルのテストが全部緑
+  - _Requirements: 4.1, 4.2_
+
+- [x] 8. 読み込みで通った文書は start で落ちない（#32・#57・#58・#43 の 1・2 本目）
+  - 文書の置き場の型を消し、ランタイムが文書を直に持つ。その型のファイルの意味のあるテストはランタイムの中の欄を見る新しいテストのファイルへ移す
+  - 検査済みの文書を検査を省いてコンパイルする crate の中の関数を足し、start と子の start と終わりの計算はそれを使う。公開のコンパイルの口は今のまま検証してから呼ぶ
+  - 読み込みは検証の後に全ストーリーボードをコンパイルにかけ、1 つでも失敗すれば前の文書を残して `CompileError` を返す。通れば差し替え、Object の値の intern の表を空にする。文書の組み立ての build も同じく全部をコンパイルにかける
+  - 檻: 遷移の無い変数・空の at・キーフレームの循環の 3 例で読み込みが拒み、前の文書で start が通る。前のエントリの失敗が連鎖するエラーの 1 本
+  - 読み込みのテスト 2 本を改める: 版 "99.0" で拒んだ後に start が通る・2 枚目の読み込みの後に start せずに tick して差分 0
+  - 文書の組み立ての build の呼び手（dola のテストの約 37 か所・wintf）をツリー全体で grep し、検証は通るがコンパイルで落ちる文書を build で作っていたテストを、検証だけを見る形か公開のコンパイルの口を呼ぶ形へ直す
+  - 終わった姿: 文書の置き場の型への参照がツリーに 0 件で、檻と改めた 2 本と build の呼び手のテストが全部緑。wintf の dola のテストも緑
+  - _Requirements: 3.2, 3.3, 4.1, 4.5_
+
+- [x] 9. 競合とインスタンスの表（#7・#35・#36・#60・#61・#43 の 3 本目・#54 のインスタンスの分）
+- [x] 9.1 競合を「同じ変数に生きた項目がある」で判定する（#7）
+  - セグメントどうしの重なりを比べる二重ループと古い P 番号の注を消し、新しいインスタンスが触る変数のどれかにほかのインスタンスの生きた項目があれば競合にする（要件 11.8）
+  - 檻: A（Never）を t=0 に始め、x は delay 5。B を t=5.0 に始めると B は `Conflict` で拒まれる
+  - 終わった姿: 檻が緑で、重なりの比べに戻すと落ちる。既存の競合のテストが緑（変わる期待があれば research §3 #7 に照らして改める）
+  - _Requirements: 4.1, 4.5, 11.8_
+- [x] 9.2 インスタンスの表を順の決まる表にし、競合で終わったインスタンスのトリガーの記録を消す（#35・#36）
+  - インスタンスの表と集めた集合を順の決まる型にし、補助の関数も合わせる。テストの `sort_unstable` の逃げを外す
+  - 競合の解決の直後に、終わったインスタンスのトリガーの記録を消し、SAFETY の注を事実に合わせる
+  - 檻 2 本: 競合で終わったインスタンスのトリガーの記録が消える（ランタイムの中の欄を見るテスト）。親 P1・P2 が t=1 で同じ x を触る子を起こすと、残る子と影響した group の列が 20 回回して毎回同じ。エラーの扱いのテストを改める
+  - 終わった姿: 2 本と改めたテストが緑で、記録を消す行を外すと 1 本目が落ちる
+  - _Requirements: 4.1, 4.2, 4.5_
+- [x] 9.3 インスタンスを作る口と通らない枝を消す（#60・#61・#43 の 3 本目・#54 の分）
+  - インスタンスを作る多引数の口を消し、ランタイムでインスタンスを組んで入れる（件 3 の `too_many_arguments` の 1 か所が消える・要件 11.12）
+  - 終わりの方針の変換を値の match の前の let-else にし、Never の腕・`unreachable!`・`expect` を消す
+  - インスタンスの件数をランタイムの中の欄で見るテストを足す。理由の無い `#[allow(dead_code)]` を `#[cfg(test)]` にし、読まれない欄を消す（インスタンスの分）
+  - 終わった姿: その口への参照が 0 件で、テストが緑、インスタンスの表のファイルに `too_many_arguments` が出ない
+  - _Requirements: 3.3, 9.2, 11.12_
+
+- [x] 10. 評価・周回・購読（#33 のクランプ・#37・#55・#59・#62・#63・#67・#54 の残り）
+- [x] 10.1 評価値を値域へ収め、Object の最終値を intern に通す（#33 のクランプ・#37）
+  - タイムラインの項目にコンパイル結果の最小と最大を持たせ、Float と Integer の評価値（補間とイージングの行き過ぎを含む）をその範囲へ収める（要件 11.11）
+  - 最終値の取り出し 2 つを intern を通す形にする
+  - 檻 2 本: イージングの行き過ぎがクランプされる。"a"→"b" を 2 回終えたとき 2 回目の Conclude で変化 0
+  - 終わった姿: 2 本が緑で、直しを外すと落ちる
+  - _Requirements: 4.1, 11.11_
+- [x] 10.2 イージングの表と一時停止の段を 1 つにし、重複のテストを消す（#55・#59・#67）
+  - 周回の中のイージングの写しの表を消し、補間のイージングの関数を使う
+  - インスタンスの一時停止に時刻を渡して 1 段にし、開始の時刻を後から入れる口と防御の分岐（とそのテスト）を消す
+  - 重複したイージングのテスト 2 つの範囲を消し、既知の値を 2〜3 個確かめる形に改める
+  - 終わった姿: イージングの表が 1 か所だけで（grep）、周回と補間とインスタンスのテストが緑
+  - _Requirements: 3.1, 4.5_
+- [x] 10.3 購読の表の後始末をし、毎フレームの複製をなくす（#62・#63・#54 の残り）
+  - 購読の解除で名前の表も消す
+  - 購読した id を直に回して名前の借用で評価し、毎フレームの文字列の複製と表の作り直しをやめる
+  - #54 の残りの `#[allow(dead_code)]` と読まれない欄を片づける
+  - 檻: 解除と登録を 3 回繰り返して名前の表の件数が増えない
+  - 終わった姿: 檻が緑で、名前を消す行を外すと落ちる。購読のテストが緑
+  - _Requirements: 4.1_
+
+- [x] 11. ランタイムの小さな直しと wintf の結線（#38・#39・#45・#64・#65）
+- [x] 11.1 生きたインスタンスの有無の口を足し、ランタイムの小さな直しをする（#39・#45・#64・#65）
+  - 終わっていないインスタンス（一時停止中を含む）が 1 つでもあれば真を返す口を足す（足すだけ）
+  - 開始の結果の欄だけを見る 2 本を消し、終わりの時刻の説明を「無限の周回でも 1 周分」に直す
+  - 終わりの関数の引数名を期限の意味の名に直し、トリガーの複製を `std::mem::take` に替える
+  - 檻: delay 1.0 の台本で、変化 0 件の tick のあいだも真・Conclude の後は偽
+  - 終わった姿: 檻が緑で、ランタイムのテストが緑
+  - _Requirements: 3.4, 4.1, 6.4_
+- [x] 11.2 wintf の dola の進め役で、トリガーの失敗を記録し、旗の判断に生きたインスタンスの口を使う（#38・#39 の結線）
+  - dola の側: 子の起動に失敗したトリガーが `TriggerResult::Error` を返す檻（Never の競合）を足す。dola には記録を足さない
+  - wintf の側: 進め役が同じループで `TriggerResult::Error` を `tracing::error!`（親・子・エラー）で記録し、動いている旗に 11.1 の口を加える。旗の説明を直す
+  - wintf の側の檻: `log-capture-kit` で `error!` の 1 行を見る（wintf の既存の dev-dependencies だけを使う）
+  - 範囲の外で触るのは wintf の dola のモジュール 1 ファイルだけ（ecs の mod と world の mod には触れない）
+  - 終わった姿: `cargo test -p dola` と `cargo test -p wintf --lib ecs::dola` が緑で、記録の行を消すと wintf の檻が落ちる
+  - _Depends: 11.1_
+  - _Requirements: 3.2, 4.1, 5.2, 6.2, 6.3, 11.6_
+
+- [x] 12. 時計・値・エラー（#27・#79・#28・#34）
+- [x] 12.1 (P) 時計の周波数を 1 度だけ読み、決定論でないテストを消す（#27・#79）
+  - 周波数を `OnceLock` に入れて 1 度だけ読む
+  - 呼び出しの重さを壁時計で測るテストを消す（ほかの 3 本は残す）
+  - 終わった姿: 時計のテストが残りの 3 本で緑で、標準出力へ書く行が無い
+  - _Boundary: runtime clock_
+  - _Requirements: 4.2, 5.4_
+- [x] 12.2 値の等しさとハッシュを同じ鍵で決める（#28）
+  - Float の鍵（0.0 と −0.0 を同じ・どの NaN も 1 つ・ほかはビット）を作り、ハッシュと手書きの等しさの両方で使う。ほかの腕は今の derive と同じ。「実用上ない前提」の注を消す
+  - 値のテストを「等しければ同じハッシュ」（0.0 と −0.0・NaN どうし）へ改め、同じ NaN 入りの Object を 2 回評価して intern の表の件数が 1 の檻を足す
+  - 終わった姿: 2 本が緑で、derive に戻すと落ちる。dola を使うほかのクレートがビルドできる
+  - _Requirements: 4.1, 4.5, 6.4_
+- [x] 12.3 エラーの型を `thiserror` の derive にする（#34）
+  - 2 つのエラーの型に derive と、今と一字一句同じ文を付け、手書きの表示とエラーの実装を消す（約 −190 行）。6.2 で足した種類の文も同じ作りで書く
+  - 終わった姿: エラーの文字列の既存のテストが変わらずに緑で、手書きの表示の実装が 0 件
+  - _Depends: 6.2_
+  - _Requirements: 3.1, 5.6_
+
+- [x] 13. storyboard のランタイムのテスト（#40・#41・#42・#46・#52 の前ぶれ）
+- [x] 13.1 遷移を作る道具を 1 本にし、終わりの戦略のテストを値で見る形にする（#46・#40）
+  - ランタイムのテストの共通の所に「変数・始め・終わり・長さ」から遷移を作る道具を 1 本置き、文書は組み立ての道具で作る（約 −400 行）
+  - 4 つの終わりの戦略のテストを、新しい台本が触らない変数 y と 2 セグメントの台本で、各戦略の値を `expect` で見る形に改める
+  - 終わった姿: 写しの道具の定義がランタイムのテストに 1 つだけで（grep）、4 本が緑
+  - _Requirements: 4.1, 4.5_
+- [x] 13.2 黙って通る分岐と緩い許し幅を正す（#41・#42）
+  - `if let Some`／`_ => {}` で黙って通っていた 12 か所を `.expect` と `assert_eq!` に替える（件 3 の `single_match` も消える）
+  - 許し幅 0.05 の 25 か所を 1e-9 にする
+  - 終わった姿: ランタイムのテストが緑で、黙って通る分岐が 0 件（grep）
+  - _Requirements: 4.5, 9.2_
+- [x] 13.3 非推奨の update の呼び手を tick と最後の結果へ読み替える（#52 の前ぶれ）
+  - テストの約 125 か所の update を tick と最後の結果へ読み替え、6 つの `#![allow(deprecated)]` を外す
+  - 終わった姿: dola のテストに update の呼び手と `allow(deprecated)` が 0 件（grep）で、テストが緑
+  - _Requirements: 4.5, 6.4_
+
+- [x] 14. ほかのテスト（#50・#51・#74・#75・#76・#83）
+- [x] 14.1 トリガーのテストの的を正し、状態遷移のテストを表にする（#50・#76・#83）
+  - 親を cancel してから子の変化を見る形に改め、意味の無い 2 本を消し、件数を `assert_eq!` で見る
+  - 状態遷移の 25 本を期待の表 1 本（49 組）にする（終端の確かめの 1 本は残す）
+  - build の後の効かない検証の assert 8 行を消す
+  - 終わった姿: トリガーと core の型のテストが緑で、表のテストが 49 組を見る
+  - _Requirements: 4.5_
+- [x] 14.2 遷移のテストの写しを畳む（#51）
+  - 「含まれる」側の重複を消し、遷移と台本を作る道具を遷移のテストのモジュールに 1 つずつ置く（約 −500 行）。コンパイル結果の serde の分は後の段で消すので残す
+  - 終わった姿: 道具の定義が 1 つずつで（grep）、遷移のテストが緑
+  - _Requirements: 3.1_
+- [x] 14.3 コンパイルのテストの道具をまとめ、ちょうどの値は等しさで見る（#74・#75）
+  - コンパイルのテストの共通の所に変数と遷移を作る道具を置き、既定値で埋める。統合テストの中の効かない `#[cfg(test)] mod` 14 か所を消し、値を取り出す写しを 1 つにする（約 −600 行）
+  - ちょうどの値を 1e-9 で比べていた所を `assert_eq!` にする
+  - 終わった姿: 効かない `#[cfg(test)] mod` が統合テストに 0 件（grep）で、コンパイルのテストが緑
+  - _Requirements: 3.1, 4.5_
+
+- [x] 15. 件 3 の残りと注の掃除
+- [x] 15.1 dola の clippy の残りを振る舞いを変えずに消す（件 3）
+  - `collapsible_if` 18 か所を畳む・コンパイルの解決の 1 か所に理由を書いた `#[expect(clippy::too_many_arguments, reason = ...)]` を付ける（要件 11.12）・周回のテストの `manual_range_contains` 2 か所・ランタイムの説明の字下げ（`doc_lazy_continuation`）・競合のテストの入れ子の mod（`module_inception`）
+  - 公開の関数の引数の数は変えない
+  - 終わった姿: `cargo clippy -p dola --all-targets --no-deps -- -D warnings` が警告 0 で通り、`cargo test -p dola` が緑
+  - _Requirements: 9.1, 9.2, 9.3, 11.12_
+- [x] 15.2 P 番号と古いテストの道を引く注を片づけ、clippy の受け持ちに済んだ記録を足す（#53・要件 9.4）
+  - 前の段で残った P 番号と古い道の注（全 35 か所のうち後の段の分を除く）を消すか今の道へ直す
+  - `clippy-199-lints` の brief に「dola の段 1 の 21 件と統合テストの 3 件・lib test の 2 件は audit-dola が直した」の節を足す
+  - 終わった姿: dola の範囲で `proposals` と `P[0-9]` の grep が後の段の分を除いて 0 件で、brief に節がある
+  - _Requirements: 6.2, 9.4_
+
+- [x] 16. 前の段の確かめ
+  - `cargo test -p dola`・`cargo test -p areka-sakura`・`cargo test -p wintf --lib ecs::dola` と、件 1 で結果が変わらない見込みの `areka-emo-text`・`areka-seriko`・`areka-ghost` のテストを 1 度ずつ回す
+  - `cargo clippy -p dola --all-targets --no-deps -- -D warnings` を走らせ、警告 0 の出力を記録に残す
+  - 前の段で触った範囲の外のファイルが、`areka-sakura` の台本のコンパイルのテスト・wintf の dola のモジュール・clippy の brief の 3 つだけであることを `git diff --stat` で確かめる（要件 6.3）
+  - 終わった姿: 上のテストと clippy が全部緑で、その結果と diff の確かめが記録にある
+  - `CuePlayer::stop` に前の段で触れていないことを grep で確かめる（要件 8.1）
+  - dola の `src` の `pub`・`pub use`・`pub fn` の行を枝の起点と比べ、違いが `InvalidNumber` と生きたインスタンスの有無の口の追加だけであることを確かめて記録に残す（要件 6.4）
+  - _Requirements: 3.2, 6.3, 6.4, 6.6, 8.1, 10.5_
+
+## 後の段（C18 のほかの 7 本の着地の後）
+
+- [x] 17. 後の段の門と、cue の値と区切りの口を消す（#11・#12・#14・#16・#17・#78・#84）
+- [x] 17.1 後の段に入る条件を確かめ、`main` を取り込む
+  - C18 のほかの 7 本（`wintf-visual-tree`・`placement-crate-split`・`audit-wintf-layout-widget`・`audit-emo-text-state-actor`・`audit-emo-text-layout-draw`・`audit-kanade`・`audit-sylphya-actor`）が `main` に着地したことを `git log origin/main` で確かめる。まだなら止めて報告する
+  - `main` を枝へ取り込み、前の段のテストが緑のままであることを確かめる
+  - 後の段で消す口と範囲の外の 2 ファイル（本体の窓の状態のテスト・トークの後始末）の呼び手を、ツリー全体で grep し直す（`emo2_boot` → `runtime` の改名・`crate::placement::` の書き換えも拾う）
+  - 本体などに触るそのときのセッション（C19 が始まっていれば `runtime-module-untangle`）と申し合わせ、`Cargo.lock` の席を使う spec と #25 の時期を申し合わせる
+  - 終わった姿: 7 本の着地の確かめ・取り込み・grep の結果・申し合わせの結果が記録にあり、範囲の外の触る道が最新の道で決まっている
+  - _Requirements: 3.2, 3.3, 6.1, 6.5, 11.2_
+- [x] 17.2 効かない時間切れと配送の制御を消す（#11・#12・#14・#78）
+  - 入力待ちの時間切れの欄・区切りの種類・時間切れの期限と枝・到達の種類を消す。残す入力待ちとクリックの解決の説明に「`talk-fast-forward` の `\x` の受け皿」と書く（要件 11.4・ukadoc の `\x` に時間切れの引数が無い）
+  - 配送の制御の合図・実体の鍵・その積み荷と予定の項目と取り出しの口を消し、予定の冒頭の説明「3 種」を直す（要件 11.5）
+  - 予定を後から伸ばす口と、それを使う 3 本と NaN のテストを消し、台本の説明の行を消す
+  - 区切りの解決の通知の引数を消し、呼び手 10 か所を直す
+  - 終わった姿: 消した名前の参照がツリーに 0 件（grep）で、`cargo test -p dola` と `cargo test -p areka-sakura` が緑
+  - _Depends: 17.1_
+  - _Requirements: 2.3, 3.2, 3.3, 11.3, 11.4, 11.5_
+- [x] 17.3 窓の宛先と実体の参照の合図を、範囲の外の受け手ごと消す（#16・#17・#84）
+  - 合図の宛先の窓と、そのテストと対応表の行を消す
+  - 実体の参照の合図と受け手の既定の腕を消し、範囲の外の受け手（`areka-seriko` の守りの枝とその記録の檻・`areka-emo-text` の腕とテスト・`areka-ghost` の種類の腕とテスト）から同じ腕を消す
+  - cue のモジュールの説明の数を 12 に直す
+  - 終わった姿: 消した名前の参照がツリーに 0 件（grep）で、dola・`areka-seriko`・`areka-emo-text`・`areka-ghost` のテストが緑
+  - _Depends: 17.1_
+  - _Requirements: 3.2, 3.3, 6.1, 6.2, 11.5_
+
+- [x] 18. 再生機の口を消す（#13・#15・件 2・#18・#19・#77）
+- [x] 18.1 再生機の取り出し・止める・区切りを飛ばす口を消し、本体のテストを player を捨てる形にする（#13・#15・件 2）
+  - 再生機の取り出しの口と残りの口と絞り込みを消し、配送の門の中で予定から直に配る
+  - 止める口と区切りを飛ばす口を消し、「選択肢 0 件の区切りは飛ばして抜ける」の説明を「上流が player を捨てて抜ける」へ直す（要件 8.3）
+  - dola の中の呼び手 2 か所と本体の窓の状態のテストの呼び手を、player を捨てる形（本番の `drop(player)` と同じ）に直す
+  - 終わった姿: 3 つの口の参照がツリーに 0 件（grep）で、中断した台本で状態が変わらないことを見る本体のテストが player を捨てる形で緑
+  - _Depends: 17.1, 17.2_
+  - _Requirements: 5.3, 8.2, 8.3, 8.4, 8.5_
+- [x] 18.2 台本の使われない口・予定から作る公開の口・選択肢の文の欄を消す（#18・#19・#77）
+  - 台本の役者で絞る口・役者の一覧・件数の口と、そのテスト（64 行）を消し、件数を使うテストを合図の一覧の件数へ直す
+  - 予定から作る口を非公開の中身として台本から作る口へ畳む
+  - 選択肢の待ちの文の欄を消し、`areka-sakura` の配りのテストのその欄を消す
+  - 終わった姿: 消した名前の参照がツリーに 0 件（grep）で、dola と `areka-sakura` のテストが緑
+  - _Depends: 17.1_
+  - _Requirements: 3.2, 3.3_
+
+- [x] 19. 時刻の和の関数を公開し、本体の写しを寄せる（要件 7.9）
+  - 1.1 の関数を公開にして cue のモジュールから再公開する
+  - 本体のトークの後始末で自前に足していた終わりの式を、その関数の呼び出しに替え、直前の注も直す（直後の非有限の守りはそのまま）
+  - 終わった姿: 本体の中で合図の始まりと長さを素で足す所が 0 件（grep）で、本体のトークの後始末のテストと dola のテストが緑
+  - _Depends: 1.1, 17.1_
+  - _Requirements: 6.1, 7.9_
+
+- [x] 20. storyboard の層の公開の口を消す（#25・#26・#52・#56・#66・#70・#73）
+- [x] 20.1 使われない書式の機能と再生の状態の型を消す（#25・#26）
+  - 機能 `json`・`toml` と任意の `toml` を消し、`serde_json` を dev-dependencies へ移す。`#[cfg(feature = "json")]` を外し、toml の往復と json の既定のテストを消す。機能 `yaml` と任意の `serde_yaml` は残す（要件 11.3）
+  - 再生の状態のファイルと再公開・そのテストを消す（要件 11.5）。README の書式の機能と再生の状態の行を直す
+  - `Cargo.lock` は cargo が書く分だけ変わる（17.1 で申し合わせた時期に）
+  - 終わった姿: 消した名前と機能の参照がツリーに 0 件（grep）で、`cargo test -p dola` と dola を使うクレートのビルドが通る
+  - _Depends: 17.1_
+  - _Requirements: 3.3, 5.6, 5.7, 6.1, 11.3, 11.5_
+- [x] 20.2 非推奨の update・補間の再公開・値の表示・コンパイル結果の serde を消し、エラーに場所を足し、後の段の注を片づける（#52・#56・#66・#70・#73・#53 の後の段の分）
+  - update を消し、時計とランタイムの説明を直す（テストの読み替えは 13.3 で済み）
+  - 補間の再公開を消して crate の中だけにする
+  - 評価値の表示を消し、テストの使い手を直す
+  - 値域の違反（遷移の分）と予約のキーフレーム名のエラーにストーリーボードとエントリの番号を足し、Scalar の周回の待ちでは V16 を飛ばす。檻: 場所が載る・周回の待ち −1 で 1 件だけ
+  - コンパイル結果の serde の derive と、その往復のテスト（ファイルごと 1 つと 3 つの範囲）を消す
+  - 後の段の範囲に残した P 番号と古いテストの道を引く注（#53 の後の段の分）を消すか今の道へ直す。`proposals` と `P[0-9]` の grep がクレート全体で 0 件
+  - 終わった姿: 檻が緑で、消した名前の参照と P 番号の注がツリーに 0 件（grep）、dola と wintf の dola のテストが緑
+  - _Depends: 17.1, 17.2, 17.3, 18.1, 18.2_
+  - _Requirements: 3.3, 4.1, 6.1_
+
+## 仕上げ
+
+- [x] 21. audit のかけ直し
+  - `crates/dola/` へ `/ponytail:ponytail-audit` を、要件 1 と同じ作法（上限なし・全部読む・残すと決めた 3 件は数えない）でかけ直す
+  - 新しい指摘を直し（直しが生んだ指摘も含む）、0 件になるまで繰り返す。5 回目で 0 件に収まらず、5 回目に「必ず直す」と本番の振る舞いに関わる指摘が無ければ、開発者に一言知らせて 5 回目の指摘を直したところで打ち切る
+  - 最後に clippy を警告 0 で通した出力を記録に残す
+  - 終わった姿: かけ直しの最後の結果が新しい指摘 0 件（または 5 回目の打ち切り）として記録にあり、clippy の警告 0 の出力がある
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.5, 2.6, 3.1, 10.1, 10.2, 10.3, 10.5, 10.6, 11.1_
+
+- [x] 22. 全体テスト
+  - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（高負荷のテストを何度も回さない。赤が出たら赤のテストだけに絞って回し直す）
+  - 終わった姿: 全体テストが緑で終わった結果が記録にある
+  - _Requirements: 4.2, 4.3, 4.4, 10.4_
+
+## 要件の受け先の補足
+
+- 要件 1.1〜1.7・2.6 は洗い出しと要件の討議の段で済んでいる（`research.md` §1〜§7・要件 11.1）。かけ直し（21）は同じ作法（`main` を取り込んで測り直す・上限なし・全部読む・番号・件との対応・公開の形）で回すので、21 に挙げる。
+- 要件 3.4（新しい機能を足さない）: 足す口は `InvalidNumber`（6.2）・生きたインスタンスの有無の口（11.1）・和の関数の公開（19）だけで、どれも指摘の直し。
+- 要件 5.7 に当たる直し（新しい依存が要るもの）は無い。依存を足さないこと（5.6）は 12.3 と 20.1 が守る。
+- 要件 6.6（`vendors/` に触らない）: どのタスクも触らない。16 の diff の確かめで見る。
+
+## Implementation Notes
+
+- 1.1: 和の関数は `crates/dola/src/cue/schedule.rs` の `pub(crate) fn sum_on_ms_grid`。1.1 の後でも dola の放送のテスト（`runtime_test_broadcast_tests.rs` の 210〜250 行）は緑のまま。1.2 で直しが要るかを確かめ直す。赤になるのは `areka-sakura` の 2 本（`trailing_explicit_wait_remains_in_sheet_and_extends_extent`・`append_epilogue_appends_carrier_at_tail_horizon_without_extending`）。
+- 1.1→2: `schedule.rs` の約 201 行の NOTE(D3-V) は、まだ素の比べ（`start_time + entry_offset > current_time`）を書いている。2 の `pop_if` の書き直しで一緒に直す。
+- 1.2: 古い形の期待 `tick(d + wait_dur)` が `runtime_test_occupancy_horizon_tests.rs:39,47` と `sheet_test.rs:735,738` に残る（0.95 以上なので緑）。前者は 3.1（#24）で消える。後者はかけ直し（21）で拾う。
+- 2: 予定の NaN の並べ替えの檻（`tests/cue/sheet_sort_test.rs`）は debug_assert のため release でだけ走る（`cargo test -p dola --release --test cue sheet_sort`）。`compile/mod.rs` の NOTE(D2-V) の「P14」は 6.2／15.2 で直す。tests/cue の P22・P25・「原本」の注は 3・15.2 で直す。
+- 3.1: cue のテストの道具は `tests/cue/test_support.rs`（旧 `runtime_test_test_support.rs`・research の #13・#53 の道は古い）。research #24 の「clear の 3 本は重複」はずれていた（`clear_resets_active_barrier` は唯一の檻）。`clear_resets_all_state` にバリアを足して守った。
+- 4.3: cue のテストは `CuePlayer` の `ready()`・`remaining()`・`from_schedule` を呼ばない（再生は記録する受け手で見る）。18.1・18.2 で口を消すときにテストの差分は出ない見込み。broadcast のテストの説明（約 122・148 行）に `ready()` の語が残る（15.2 か 18 で直す）。
+- 5.2→5.3: 新しい起点では待ちの間の実効時刻が負になり、`evaluate_segments` が最初のセグメントの始めの値（例 0.0）を返す。完了 spec dola-storyboard-random-loop-offset の要件 2.4（待ちの間は最後の値を保つ）に合わせ、5.3 で「周回を 1 回以上終えて実効時刻が負なら最後の値を保つ」まで含めて直し、`loop_offset_compile.rs` の e2e 3 本で待ちの中の時刻（1.5・3.0・4.5・6.0 など）の値を縛る。
+- 5.3: 値の保持は `timeline_manager/mod.rs` の非公開 `value_time`（周回を終えて実効時刻が負なら INFINITY）で、`evaluate`・`evaluate_all_for_group`・`collect_current_segment_final_values` が使う。待ちの中で競合の Conclude・Cancel をしたときの確定値（最後の値）を縛る檻はまだ無い（9.1 の競合の檻と合わせて足す）。`evaluate` に残る「インスタンスの無い項目を消す」retain は取り残しの掃除で、生きた項目は消さない。
+- 5.4: 長さに先頭の遅れが入ったので、周回の 1 周（`loop_duration = total_base_duration / time_scale`）も先頭の遅れを毎周くり返す（完了 dola-runtime-5-loop の決めどおり）。これを縛る檻はまだ無く、「最後の区切りより後のトリガーが発火しない」（要件 11.3）を縛るテストも無い。13 か 14 のテストの直しで足せるなら足す。
+- 6.1: `compile/mod.rs:49-51` の NOTE(D2-V) が「dfs_detect_cycle は再帰 DFS」と言うのは 6.1 で古びた。P14 の注と一緒に 6.2／15.2 で消す。compile の深い鎖のテストは compile の道筋の再帰（今は無い）を守る檻で、トリガーの DFS ではない。
+- 6.2: 数値の規則が入ったので、公開の口から NaN と有限の値の混ざったセグメントは作れない。task 2 の compile の並べ替えの檻は「並べ替えを消すと落ちる」と「NaN で panic しない」だけを見る（全順序と partial_cmp の差は見えない）。ベジェの制御点の有限の規則は要件 11.9 に合わせて足し、design の「数値の検証」の表にも行を足した（表の欠け）。facade の `InvalidLoopCount` の検査は届かない死んだコードで、後の段（#57・#58）で消す。P8/P14 の注は `runtime/types.rs:33`・`instance_manager/tests.rs:366`・`tests/runtime/core_types_test.rs:326` に残る（15.2）。
+- 6.3: 暗黙のキーフレームの接頭辞 `"__implicit_"` が `compile/resolve.rs:24`・`validate/rules.rs:246`・`:270` の 3 か所に字で書いてある（定数 1 つにまとめるのは 15.1 で拾う）。トリガーのエントリに変数だけ・遷移だけがあると V16t と V7 の 2 件が積まれる（前からの形・件数を縛るテストは無い）。
+- 7.1: 辺を足すだけでは要件 11.7 を満たせない（処理の順が配列の順とずれ、連結が処理の順で最後のセグメントに続く）ので、`compile/mod.rs` で連結の終わりの時刻と始めの値を配列上の直前のエントリ（`DependencyGraph.prev_same_var`・`entry_segment_end`）から取る形にした（design の「辺を足す」の先・`var_last_end_time` は消えた）。`at`・`between` のエントリの from は今も処理の順（`var_last_value`）で、完了 dola-compiled-transition 要件 4.2 の「直前」の読みに決めが無い（research に無い指摘・21 のかけ直しで拾う）。古い `multiple_triggers_sorted_by_fire_time` は並べ替えを外しても落ちない（14.3 で拾う）。`tests/compile/time_resolution_test/interaction.rs:36` の注「var_last_end_time から継続」が古びた（15.2）。
+- 7.3: compile の通らない枝を消したのは「公開の口は `compile_storyboard` 1 つで、冒頭で必ず validate を通る」前提による。8 で足す crate 内の `compile_validated` も検証済みの文書だけから呼ぶこと（そうでないと `let Some(..) = resolved else { continue; }` が release で黙って飛ばす）。`resolve_pure_keyframe_time` の引数は 7 で too_many_arguments の境目（15.1）。
+- 8: design 309 行の「読み込みで Object の intern の表を空にする」は、丸ごと空にすると動いている途中の Object の値が新しい Rc になり、`Rc::ptr_eq` の差分の比べで空振りの差分が 1 回出るので、「使われていない値だけ手放す」（`ObjectInternPool::release_unused`＝`strong_count > 1` を残す）にした（#62 の「表が増え続けない」は保つ・檻 `reload_keeps_animating_object_value_without_spurious_diff`）。`DolaDocumentBuilder::build` は検証の後に全部をコンパイルにかける（dola と wintf の呼び手だけ・緑）。`compile_validated` を呼ぶのは `compile_storyboard`・`compile_all`・facade の 3 か所で、どれも検証済みの文書。
+- 9.1: 競合は「新しいインスタンスが触る変数に、ほかの Playing／Paused のインスタンスの項目がある」で判定する。終わりの時刻を過ぎてまだ tick していないインスタンスも生きた扱い（前と同じ）。wintf の本番のコードは start を呼ばない。5.3 の待ちの中の値の保持は Conclude（`collect_current_segment_final_values`）と Cancel・Trim（`evaluate_all_for_group`）の 2 経路を檻 2 本で縛った（Trim 専用の檻は無い）。`LoopOffset::Scalar(v)` は [0, v] の乱数なので、決まった待ちのテストは `Range{v,v}` を使う。
+- 9.2→10.3: research #36 の場所に挙がる `subscription_manager/mod.rs:122` の `subscribed_ids` はまだ HashSet で、`UpdateResult.changes` の並びが走るたびに変わりうる（design の #36 の行の範囲の外）。10.3 の「購読した id を直に回す」直しで BTreeSet にし、並びが決まる檻を足す（進行役の決め）。`trigger_store` は回して読まないので HashMap のまま。
+- 10.1: 値は `TimelineEntry::value_at`（intern を通す補間＋値域へ収める）で配る（evaluate・evaluate_all_for_group・2 つの最終値の取り出し）。Integer は丸めた後に収める。research に無い既存の振る舞い: 有限でも極端に大きい値（from=−1.7e308・to=1.7e308 や巨大なベジェの制御点）で補間が NaN／inf を出し、NaN と値域の無い変数の inf はそのまま配られる（21 のかけ直しで拾う）。
+- 10.2（範囲の外・要起票）: 外のクレート `interpolation` 0.3.0 の `src/ease.rs:96` が `PI_2` を 2π と定義し、Sine 系と Elastic 系の式がそれを使うので、SineIn(0.5)=1.0（正しくは約 0.293）など曲線が前から誤っている。外のクレートはそのまま使う決まりなので、直すなら dola の側で式を書く別の spec（`/kiro-discovery` で起票）。既知の値のテストは誤った値を固定しないよう Sine 系を避けた。`InstanceManager::transition(gid, Playing)` で Paused から戻すと `pause_start` が残って時計が止まる（今は呼び手が無い・resume だけが消す）。
+- 11.2: wintf の檻は log-capture-kit が今のスレッドしか捕まえないので `world.run_system_once(tick_dola_animators)`（本番と同じ関数）で回す。Git Bash から wintf を作ると dbghelp.lib の LNK1181 が出ることがある（PowerShell からなら通る・環境の問題）。表記の揺れ: wintf は「トリガ」、dola は「トリガー」。
+- 13.1: ランタイムのテストの遷移の道具は `tests/runtime/support.rs` の `linear(var, from, to, dur)`（と `float()`）。`DolaDocumentBuilder::build` は全部をコンパイルにかけるので、拒まれる文書は手書きの `DolaDocument {..}`＋validate のまま。`loop_offset_compile.rs` の `doc_with_fade_and_offset`・`loop_offset_doc` は通る文書なのに手書き（任意で組み立ての道具へ）。Cancel と Trim は意図して同じ道（`evaluate_all_for_group`）で、値で見分けられない。
+- 13.3: dola のテストに `DolaRuntime::update` の呼び手と `allow(deprecated)` は 0（実数は 106 か所と 5 つ）。wintf にも呼び手は無いので 20.2 で `update` を消しても wintf は触らない。`src/runtime/facade.rs:28`（```ignore の例）と `src/runtime/clock.rs:13` の説明文にまだ `update` が残る（20.2 で直す）。
+- 14.1: 状態遷移のテストは 25 本でなく 22 本だった（research #76 と tasks.md 14.1 の「25 本」は数え違い）。表のテストは `try_transition_table`（`[[bool; 7]; 7]`）。
+- 16（前の段の確かめ・2026-11-13）: `cargo test -p dola`・`areka-sakura`・`wintf --lib ecs::dola`・`areka-emo-text`・`areka-seriko`・`areka-ghost` を 1 度ずつ回し、test result 40 行がすべて ok・失敗 0。`cargo clippy -p dola --all-targets --no-deps -- -D warnings`（`-A` なし）は警告 0 で Finished。枝の起点 becb50ef からの dola の外の差分は `.kiro/specs/clippy-199-lints/brief.md`・`crates/areka-sakura/src/compile_sheet_tests.rs`・`crates/wintf/src/ecs/dola/mod.rs` の 3 ファイルだけ（要件 6.3）。`CuePlayer::stop` の本体は触っておらず、差分に出るのはテストの `stop_discards_remaining_and_halts_further_delivery` の周りの行だけ（要件 8.1）。`src` の `pub` の行の違いは、私的な mod（instance_manager・timeline_manager・interpolator・document_store）の中のものを除くと、`has_instances` の追加・`finish` の引数名の変更（`offset`→`deadline`・型と数は同じ）・`DolaError::InvalidNumber` の追加だけ（要件 6.4）。
+- 17.1（2026-11-13）: C18 のほかの 7 本は `origin/main` に着地済み（#433 placement-crate-split・#434 wintf-visual-tree・#435 audit-emo-text-state-actor・#436 audit-kanade・#437 audit-sylphya-actor・#438 audit-emo-text-layout-draw・#439 audit-wintf-layout-widget）。`main` を枝へ取り込み（ぶつかり無し）、16 と同じテスト 40 組と `-A` なしの clippy が緑。`emo2_boot` → `runtime` の改名はまだ `main` に無く、範囲の外の 2 ファイルは `crates/areka/src/emo2_boot/frame/window_state_tests.rs:496`（`player.stop()`）と `crates/areka/src/emo2_boot/talk_lifecycle.rs:290` のまま。動いている C19 のセッション（`runtime-module-untangle` など）は無く、本体と `Cargo.lock` の申し合わせの相手はいない（`Cargo.lock` に触るのは 20.1 の #25 だけ）。grep の洗い直しでわかった design とのずれ: 18.2 の `PendingChoice.text` は `areka-sakura/src/drive_delivery_tests.rs:643`（`c.text.clone()`）も直す。19 の「本体に生の和 0 件」は `talk_lifecycle_tests.rs:202`（`c.at + c.duration`）と注 `talk_lifecycle.rs:9,137`・`talk_lifecycle_tests.rs:6,138` にも当たる。20.1 の `#[cfg(feature = "json")]` はどこにも無い（`serde_json` を dev-deps へ移すだけ）。17.3 の `CueCommand::EntityRef` の外の受け手は `areka-emo-text/src/actor.rs:469`・`state.rs:692`・`state_cue_apply_tests.rs:503`・`areka-ghost/src/sink.rs:120,252`・`areka-seriko/src/actor.rs:745-752`・`actor_dispatch_tests.rs:178,212`。dola の中の行番号は design より前へずれている（名前で探す）。
+- 17.2: `BarrierKind::WaitForInput` は単位 variant になり JSON が `"WaitForInput"` に変わった（dola の外で BarrierKind・CueSheet を serde で読み書きする所は無い）。`doc/choice-cascade-compat.md` の 1 文を事実に合わせた。`doc/archive/ARCHITECTURE.md` の `RoutingCommand`・`EntityKey` は過去の写しなので残す。
+- 18.1: `areka-ghost/src/prop_sink.rs` の `stop()` を引く注 4 か所と assert の文 1 つを「上流が player を捨てる」に直した（進行役の判断・並走のセッション無し）。`TimedSchedule::clear` の呼び手はテスト 1 か所だけになった（design は消すと言っていない）。
+- 19: 本体は長さを 0 へ切り上げない（dola の `to_talk_schedule` は切り上げる）。違うのは負の長さだけで、本番の台本は `Duration` から作るので届かない（範囲の外・振る舞いの差 0）。
+- 20.1: 機能 `yaml` は `serde_yaml` を引くだけで、src に使う所が無い（`dola-yaml-backend` 待ち）。Cargo.lock は toml 0.8 系の 6 package が抜けただけ。THIRD-PARTY-NOTICES は変わらない見込み（22 の全体テストの -License で確かめる）。
+- 20.2: #70 は `ValueOutOfRange` に欄を足さず、遷移の分に新しい種類 `TransitionValueOutOfRange { storyboard, entry_index, .. }` を足した（`ValueOutOfRange` は場所を持たない変数の初期値にも使うため・Option や番兵より遷移の分で場所を必ず持てる）。`Interpolator::interpolate` は単体テストの入口として `#[cfg(test)]` で残した。`\bP[0-9]+\b` の grep に残る 5 件は完了 spec の名前（`areka-P0-…`）で P 番号の注ではない。
+- 21（かけ直し 1 回目・R1-03）: 10.2 の注で「範囲の外・要起票」とした `interpolation` 0.3.0 の PI_2 の誤りは、かけ直しの指摘として dola の側（`interpolator::apply_named_easing`・`elastic_in`）で式を書いて直した（誤っていたのは SineIn・SineOut・ElasticIn・ElasticOut・ElasticInOut の 5 つ・SineInOut は正しい）。起票は要らない。
+- 21（かけ直し 1 回目・R1-06）: 7.1 の注で残した `at`・`between` の from は「時刻の上で直前の同じ変数のセグメントの to」（無ければ初期値）に決めた（完了 dola-compiled-transition 要件 4.2 の読み）。連結のエントリは値も時刻も配列上の直前のエントリから（要件 11.7）。Step 5 の並べ替えの鍵は `(start, entry_idx)`。
+- 21（かけ直し 1 回目・R1-09・R1-12・R1-14）: `RuntimeError::InvalidLoopCount`・`typewriter` の欄（両方）・`Validate` trait（`DolaDocument::validate` の固有の関数に）・`InstanceState` の再公開・`calculate_end_time`・`unsubscribe_all`・`TimedSchedule::clear` を消し、`TimedSchedule::new`・`insert` を `#[cfg(test)] pub(crate)` にした（予定のテストは `src/cue/schedule/tests.rs` へ移した）。design.md 312 行の `calculate_end_time` と #62 の行の `unsubscribe_all` は前のタスクの記録で、この直しで消えた。
+- 21（かけ直しの結果・2026-11-13）: ponytail-audit を crates/dola に 5 回かけた（報告は `audit-rerun-1.md`〜`-5.md`）。指摘は 17 → 5 → 3 → 3 → 2 件で、2〜5 回目は必ず直すものが 0 件。5 回目も 0 件に収まらなかったが、5 回目に必ず直すものと本番の振る舞いに関わるもの（今の本番は cue の側だけで、`DolaRuntime` は wintf の `tick_dola_animators` が組まれておらず `start` を呼ぶのはテストだけ）が無いので、要件 10.6 のとおり 5 回目の指摘（R5-01・R5-02）を直したところで打ち切った。全部の指摘を直した後の `cargo clippy -p dola --all-targets --no-deps -- -D warnings`（`-A` なし）は警告 0 で Finished（    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.24s）。開発者の決めとして残したもの: (a) ベジェの制御点を「有限」より狭く縛るか（R1-05 (c)）・(b) 未来の時刻の `start()` が競合する古いインスタンスを今すぐ終わらせるか（R1-08）・(c) `MIN_LOOP_DURATION` を有限のループにも当てるか（R1-07）。費用の `shortcut:` の注は R3-03・R4-02・R5-02 の 3 つ。
+- 22（全体テスト・2026-11-13）: 排他テストの机を取って `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回し、commit 449285ac・回す前の未コミットの変更 0 で「all steps green」（sample fetch・i686 の組み立て・fmt --check・x64 workspace tests 771 秒・i686 tests・crates.io の事前確認・encoding・release notes・roadmap・i686 helper の同期と配置がすべて exit 0）。
+- 最後の検証（kiro-validate-impl・2026-11-13）: MANUAL_VERIFY_REQUIRED。コードのつなぎ目・境界・依存は GO の水準。残るのは開発者の裁定 (a)(b)(c) とその記録（要件 2.5）・5 回目の打ち切りの知らせ（要件 10.6）・読み込みは通るが start で落ちる道（周回の長さ 0／0.1 秒未満の無限のループ＝`facade.rs:206-216` の `ZeroDurationWithLoop`／`TooShortDurationWithInfiniteLoop`）の扱い。範囲の外で注・文書だけを直した所の記録: `areka/src/emo2_boot/frame_attach_tests.rs:839`（18.2・消した `sheet.actors()` を引く注）・`areka-emo-text/tests/support/fixture.rs:125`（17.2・Routing を引く注）・`doc/ssp-mcp/areka-tools.md:304`（17.3・EntityRef の枝の行）。`cue/schedule.rs:169` の `#[allow(clippy::neg_cmp_op_on_partial_ord)]` は 2 の到達の取り出し（NaN を「到達した」と読む `!(a > b)`）の理由の注つき。THIRD-PARTY-NOTICES は `/kiro-complete` の `-License` で確かめる。
+- 裁定の後の直し（2026-11-13・開発者が 4 つの議題を推奨案で一括承認）: (a) ベジェの制御点は |x| ≤ 1e3（`validate/rules.rs` の `BEZIER_POINT_LIMIT`・要件 11.13）。(b) 未来の時刻の `start()` は今のまま、`start` の説明に書いた（要件 11.3）。(c) 有限のループに `MIN_LOOP_DURATION` は当てない（要件 11.3）。(d) 周回の長さの規則を `load_document` でも確かめる（`facade.rs` の `loop_duration` を読み込みと start で共用・要件 11.14）。檻は `invalid_numbers_are_rejected` の 1 行と `bezier_points_at_the_bound_are_accepted`・`load_zero_duration_infinite_loop_is_rejected`・`short_duration_infinite_loop_error`。どれも直しの前に赤を見た。5 回目の打ち切りは要件 10.6 のとおり開発者へ知らせた。

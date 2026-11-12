@@ -15,22 +15,8 @@ fn complex_multi_variable_mixed_placement() {
                     max: Some(1.0),
                 },
             ),
-            (
-                "x_pos",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
-            (
-                "y_pos",
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            ),
+            ("x_pos", float_var()),
+            ("y_pos", float_var()),
         ],
         vec![],
         "entrance",
@@ -43,10 +29,9 @@ fn complex_multi_variable_mixed_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                    delay: 0.0,
                     duration: Some(0.5),
+                    ..Default::default()
                 })),
                 keyframe: Some("visible".to_string()),
                 ..Default::default()
@@ -57,10 +42,9 @@ fn complex_multi_variable_mixed_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::QuadraticOut)),
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 at: Some(KeyframeRef::Single("visible".to_string())),
                 keyframe: Some("moved".to_string()),
@@ -72,10 +56,8 @@ fn complex_multi_variable_mixed_placement() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(999.0), // ignored for between
+                    ..Default::default()
                 })),
                 between: Some(BetweenKeyframes {
                     from: "visible".to_string(),
@@ -117,8 +99,9 @@ fn complex_multi_variable_mixed_placement() {
     assert_eq!(tl_y.segments[0].end_time, 1.5);
 
     // total_base_duration = max of all timelines' base_duration
-    // opacity: 0.5-0.0=0.5, x_pos: 1.5-0.5=1.0, y_pos: 1.5-0.5=1.0
-    assert_eq!(result.total_base_duration, 1.0);
+    // コンパイルの起点 0.0 から数える（先頭の遅れを含む）
+    // opacity: 0.5-0.0=0.5, x_pos: 1.5-0.0=1.5, y_pos: 1.5-0.0=1.5
+    assert_eq!(result.total_base_duration, 1.5);
 }
 
 #[test]
@@ -138,9 +121,8 @@ fn all_variable_types_mixed() {
                 "frame",
                 AnimationVariableDef::Integer {
                     initial: 0,
-                    min: Some(0),
+                    min: Some(-10),
                     max: Some(10),
-                    typewriter: None,
                 },
             ),
             (
@@ -158,10 +140,9 @@ fn all_variable_types_mixed() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::Linear)),
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -171,10 +152,9 @@ fn all_variable_types_mixed() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(10.0)),
-                    relative_to: None,
                     easing: Some(EasingFunction::Named(EasingName::Linear)),
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
@@ -186,10 +166,8 @@ fn all_variable_types_mixed() {
                     to: Some(TransitionValue::Dynamic(DynamicValue::String(
                         "active".to_string(),
                     ))),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: None,
+                    ..Default::default()
                 })),
                 keyframe: Some("kf3".to_string()),
                 ..Default::default()
@@ -206,7 +184,7 @@ fn all_variable_types_mixed() {
     );
     assert_eq!(
         result.timelines.get("frame").unwrap().variable_type,
-        VariableTypeHint::Integer { typewriter: None }
+        VariableTypeHint::Integer
     );
     assert_eq!(
         result.timelines.get("state").unwrap().variable_type,
@@ -227,7 +205,7 @@ fn all_variable_types_mixed() {
 
     // Integer min/max
     let frame_tl = result.timelines.get("frame").unwrap();
-    assert_eq!(frame_tl.min_value, Some(0.0));
+    assert_eq!(frame_tl.min_value, Some(-10.0));
     assert_eq!(frame_tl.max_value, Some(10.0));
 }
 
@@ -248,10 +226,9 @@ fn builder_to_compile_flow() {
             TransitionDef {
                 from: Some(TransitionValue::Scalar(0.0)),
                 to: Some(TransitionValue::Scalar(1.0)),
-                relative_to: None,
                 easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                delay: 0.0,
                 duration: Some(0.5),
+                ..Default::default()
             },
         )
         .storyboard(
@@ -280,42 +257,6 @@ fn builder_to_compile_flow() {
         tl.segments[0].easing,
         Some(EasingFunction::Named(EasingName::CubicInOut))
     );
-}
-
-#[test]
-fn compile_result_serializable() {
-    let doc = make_doc(
-        vec![(
-            "opacity",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: Some(0.0),
-                max: Some(1.0),
-            },
-        )],
-        vec![],
-        "fade",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
-                    easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                keyframe: Some("visible".to_string()),
-                ..Default::default()
-            })
-            .build(),
-    );
-
-    let compiled = compile_storyboard(&doc, "fade", 0.0).unwrap();
-    let json = serde_json::to_string_pretty(&compiled).unwrap();
-    let deserialized: CompiledStoryboard = serde_json::from_str(&json).unwrap();
-    assert_eq!(compiled, deserialized);
 }
 
 #[test]

@@ -688,10 +688,7 @@ impl TextLayerState {
             // どの表現者の担当でもなく、本状態機械は状態を変えない。時間は envelope
             // duration が担い、上流が後続 cue の時刻へ焼き込み済みゆえ、ここで新たな
             // ローカル遅延を生じさせてはならない（二重待ち禁止）。
-            CueCommand::Emote { .. }
-            | CueCommand::EntityRef(..)
-            | CueCommand::BalloonSurface { .. }
-            | CueCommand::Wait => {
+            CueCommand::Emote { .. } | CueCommand::BalloonSurface { .. } | CueCommand::Wait => {
                 tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
             }
         }

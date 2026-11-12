@@ -4,7 +4,6 @@
 //! リアクティブ・アニメーション・ランタイム。
 
 mod conflict_resolver;
-mod document_store;
 mod facade;
 mod instance_manager;
 mod instance_state;
@@ -18,6 +17,4 @@ mod types;
 pub mod clock;
 
 pub use facade::DolaRuntime;
-pub use instance_state::InstanceState;
-pub use interpolator::Interpolator;
 pub use types::{EvaluatedValue, RuntimeError, StartResult, TriggerResult, UpdateResult};

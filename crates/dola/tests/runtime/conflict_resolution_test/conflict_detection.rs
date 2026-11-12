@@ -3,134 +3,92 @@
 // =========================================================================
 // 6.1 競合検出ロジックのテスト
 // =========================================================================
-mod conflict_detection {
-    use super::super::*;
+use super::*;
 
-    #[test]
-    fn no_conflict_when_different_variables() {
-        // 異なる変数の SB は競合しない
-        let mut variable = BTreeMap::new();
-        variable.insert(
-            "x".to_string(),
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        );
-        variable.insert(
-            "y".to_string(),
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        );
+#[test]
+fn no_conflict_when_different_variables() {
+    // 異なる変数の SB は競合しない
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("x", float())
+        .variable("y", float())
+        .storyboard(
+            "sb_x",
+            StoryboardBuilder::new()
+                .entry(linear("x", 0.0, 100.0, 2.0))
+                .build(),
+        )
+        .storyboard(
+            "sb_y",
+            StoryboardBuilder::new()
+                .entry(linear("y", 0.0, 100.0, 2.0))
+                .build(),
+        )
+        .build()
+        .unwrap();
 
-        let sb_x = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("x".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(2.0),
-                })),
-                ..Default::default()
-            })
-            .build();
+    let mut rt = DolaRuntime::new();
+    let _x_id = rt.subscribe("x");
+    let _y_id = rt.subscribe("y");
+    rt.load_document(doc).unwrap();
 
-        let sb_y = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("y".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(2.0),
-                })),
-                ..Default::default()
-            })
-            .build();
+    let r1 = rt.start("sb_x", 0.0).unwrap();
+    assert!(r1.affected_group_ids.is_empty());
 
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert("sb_x".to_string(), sb_x);
-        storyboard.insert("sb_y".to_string(), sb_y);
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable,
-            transition: BTreeMap::new(),
-            storyboard,
-        };
+    // sb_y は変数 y のみ → 変数 x と競合しない
+    let r2 = rt.start("sb_y", 0.5).unwrap();
+    assert!(r2.affected_group_ids.is_empty());
+}
 
-        let mut rt = DolaRuntime::new();
-        let _x_id = rt.subscribe("x");
-        let _y_id = rt.subscribe("y");
-        rt.load_document(doc).unwrap();
+#[test]
+fn no_conflict_when_no_existing_instances() {
+    let doc = make_doc_with_policy("fade", InterruptionPolicy::Conclude);
+    let mut rt = DolaRuntime::new();
+    let _opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
 
-        let r1 = rt.start("sb_x", 0.0).unwrap();
-        assert!(r1.affected_group_ids.is_empty());
+    let result = rt.start("fade", 0.0).unwrap();
+    assert!(result.affected_group_ids.is_empty());
+}
 
-        // sb_y は変数 y のみ → 変数 x と競合しない
-        let r2 = rt.start("sb_y", 0.5).unwrap();
-        assert!(r2.affected_group_ids.is_empty());
-    }
+#[test]
+fn conflict_detected_on_same_variable() {
+    let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
+    let mut rt = DolaRuntime::new();
+    let _opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
 
-    #[test]
-    fn no_conflict_when_no_existing_instances() {
-        let doc = make_doc_with_policy("fade", InterruptionPolicy::Conclude);
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
+    // 1st start
+    let r1 = rt.start("fade", 0.0).unwrap();
+    assert!(r1.affected_group_ids.is_empty());
 
-        let result = rt.start("fade", 0.0).unwrap();
-        assert!(result.affected_group_ids.is_empty());
-    }
+    // 2nd start on same variable → conflict with group_id 1
+    let r2 = rt.start("fade", 0.5).unwrap();
+    assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
+}
 
-    #[test]
-    fn conflict_detected_on_same_variable() {
-        let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
+#[test]
+fn no_conflict_after_natural_end() {
+    let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
+    let mut rt = DolaRuntime::new();
+    let _opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
 
-        // 1st start
-        let r1 = rt.start("fade", 0.0).unwrap();
-        assert!(r1.affected_group_ids.is_empty());
+    let _r1 = rt.start("fade", 0.0).unwrap();
+    // 自然終了を発生させる
+    rt.tick(3.0);
 
-        // 2nd start on same variable → conflict with group_id 1
-        let r2 = rt.start("fade", 0.5).unwrap();
-        assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
-    }
-
-    #[test]
-    fn no_conflict_after_natural_end() {
-        let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(doc).unwrap();
-
-        let _r1 = rt.start("fade", 0.0).unwrap();
-        // 自然終了を発生させる
-        rt.update(3.0);
-
-        // 新規 start → 競合なし（前のインスタンスは終了済み）
-        let r2 = rt.start("fade", 3.0).unwrap();
-        assert!(r2.affected_group_ids.is_empty());
-    }
+    // 新規 start → 競合なし（前のインスタンスは終了済み）
+    let r2 = rt.start("fade", 3.0).unwrap();
+    assert!(r2.affected_group_ids.is_empty());
 }
 
 // =========================================================================
-// D1b-T 追加: 競合検出の境界条件と終了経路の特性化
+// 競合検出の境界条件と終了経路の特性化
 // =========================================================================
 mod conflict_detection_boundaries {
     use super::super::*;
 
-    /// Paused 状態のインスタンスも競合検出の対象（detect_overlaps は Playing/Paused 両方を見る）
+    /// Paused 状態のインスタンスも競合検出の対象（Playing/Paused の両方を生きた項目と見る）
     #[test]
     fn paused_instance_still_conflicts() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
@@ -139,7 +97,7 @@ mod conflict_detection_boundaries {
         rt.load_document(doc).unwrap();
 
         let r1 = rt.start("fade", 0.0).unwrap();
-        rt.update(0.5);
+        rt.tick(0.5);
         rt.pause(r1.group_id, 0.5).unwrap();
 
         // Paused 中でも同一変数の新規 start は競合し、終了戦略が適用される
@@ -152,13 +110,8 @@ mod conflict_detection_boundaries {
         ));
     }
 
-    /// 特性化: 競合判定はストーリーボードローカル座標で行われ、wall-clock の
-    /// start_time を考慮しない。
-    ///
-    /// facade はすべての SB を base_time=0.0 でコンパイルし（`compile_and_validate(name, 0.0)`）、
-    /// `detect_overlaps` は `_start_time` 引数を使用せず compile 時座標どうしを比較する。
-    /// そのため壁時計上は重ならない [0,2] と [2,4] のスケジュールでも、
-    /// 同一変数を操作する Playing/Paused インスタンスがあれば常に競合扱いとなる（P11 参照）。
+    /// 競合は「同じ変数に生きた項目がある」で決まり、時刻の重なりは見ない（要件 11.8）。
+    /// 壁時計で隣り合う [0,2] と [2,4] でも、前のインスタンスが生きていれば競合する。
     #[test]
     fn time_shifted_start_on_same_variable_still_conflicts() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
@@ -168,60 +121,73 @@ mod conflict_detection_boundaries {
 
         // 既存: 壁時計 [0.0, 2.0]
         let r1 = rt.start("fade", 0.0).unwrap();
-        // 新規: 壁時計 [2.0, 4.0] — 壁時計上は隣接（非重複）だが現行実装では競合する
+        // 新規: 壁時計 [2.0, 4.0] — 壁時計では隣り合うだけだが、r1 がまだ生きているので競合する
         let r2 = rt.start("fade", 2.0).unwrap();
         assert_eq!(
             r2.affected_group_ids,
             vec![r1.group_id],
-            "current behavior: overlap detection uses storyboard-local coordinates"
+            "a live entry on the same variable conflicts"
         );
+    }
+
+    /// A（Never）の x は delay 5 で壁時計 [5,6]・B の x は t=5.0 から [5,6]。
+    /// 相対の [5,6] と [0,1] は重ならないが、x に A の生きた項目があるので B は拒まれる。
+    #[test]
+    fn never_blocks_overlap_on_wall_clock() {
+        let x_sb = |policy, delay| {
+            StoryboardBuilder::new()
+                .interruption_policy(policy)
+                .entry(StoryboardEntry {
+                    variable: Some("x".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        from: Some(TransitionValue::Scalar(0.0)),
+                        to: Some(TransitionValue::Scalar(1.0)),
+                        delay,
+                        duration: Some(1.0),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                })
+                .build()
+        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", float())
+            .storyboard("a", x_sb(InterruptionPolicy::Never, 5.0))
+            .storyboard("b", x_sb(InterruptionPolicy::Conclude, 0.0))
+            .build()
+            .unwrap();
+        let mut rt = DolaRuntime::new();
+        let _x_id = rt.subscribe("x");
+        rt.load_document(doc).unwrap();
+
+        let a = rt.start("a", 0.0).unwrap();
+        match rt.start("b", 5.0) {
+            Err(RuntimeError::Conflict {
+                conflicting_group_ids,
+            }) => assert_eq!(conflicting_group_ids, vec![a.group_id]),
+            other => panic!("expected RuntimeError::Conflict, got {other:?}"),
+        }
     }
 
     /// 新 SB が複数変数を操作し、各変数を別インスタンスが保持している場合、
     /// 全インスタンスが affected に含まれる
     #[test]
     fn overlap_with_multiple_instances_affects_all() {
-        let mut variable = BTreeMap::new();
-        for name in ["x", "y"] {
-            variable.insert(
-                name.to_string(),
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            );
-        }
-
         let make_sb = |vars: &[&str]| {
             let mut b = StoryboardBuilder::new().interruption_policy(InterruptionPolicy::Cancel);
             for v in vars {
-                b = b.entry(StoryboardEntry {
-                    variable: Some(v.to_string()),
-                    transition: Some(TransitionRef::Inline(TransitionDef {
-                        from: Some(TransitionValue::Scalar(0.0)),
-                        to: Some(TransitionValue::Scalar(100.0)),
-                        relative_to: None,
-                        easing: None,
-                        delay: 0.0,
-                        duration: Some(2.0),
-                    })),
-                    ..Default::default()
-                });
+                b = b.entry(linear(v, 0.0, 100.0, 2.0));
             }
             b.build()
         };
-
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert("sb_x".to_string(), make_sb(&["x"]));
-        storyboard.insert("sb_y".to_string(), make_sb(&["y"]));
-        storyboard.insert("sb_xy".to_string(), make_sb(&["x", "y"]));
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable,
-            transition: BTreeMap::new(),
-            storyboard,
-        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", float())
+            .variable("y", float())
+            .storyboard("sb_x", make_sb(&["x"]))
+            .storyboard("sb_y", make_sb(&["y"]))
+            .storyboard("sb_xy", make_sb(&["x", "y"]))
+            .build()
+            .unwrap();
 
         let mut rt = DolaRuntime::new();
         let _x_id = rt.subscribe("x");
@@ -235,8 +201,6 @@ mod conflict_detection_boundaries {
 
         // sb_xy は x・y 両方を操作 → 両インスタンスと競合
         let r3 = rt.start("sb_xy", 0.5).unwrap();
-        let mut affected = r3.affected_group_ids.clone();
-        affected.sort_unstable();
-        assert_eq!(affected, vec![r1.group_id, r2.group_id]);
+        assert_eq!(r3.affected_group_ids, vec![r1.group_id, r2.group_id]);
     }
 }

@@ -6,14 +6,7 @@ use super::*;
 fn sequential_after_at_placement_continues_from_segment_end() {
     // at 配置されたセグメントの end_time が同一変数の後続 sequential の基準になる
     let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
+        vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -33,7 +26,7 @@ fn sequential_after_at_placement_continues_from_segment_end() {
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
             })
-            // entry 1: sequential → 6.0..7.0（var_last_end_time から継続）
+            // entry 1: sequential → 6.0..7.0（配列の直前のエントリの終わりから継続）
             .entry(StoryboardEntry {
                 variable: Some("x".to_string()),
                 transition: Some(TransitionRef::Inline(TransitionDef {
@@ -60,14 +53,7 @@ fn sequential_after_at_placement_continues_from_segment_end() {
 fn out_of_order_at_entries_sorted_by_start_time() {
     // エントリ記述順と逆の時刻でも、コンパイル結果のセグメントは start_time 昇順
     let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
+        vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()

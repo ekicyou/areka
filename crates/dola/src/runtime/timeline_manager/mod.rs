@@ -1,11 +1,10 @@
 //! 購読変数ごとのタイムテーブル管理と時刻ベース評価。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::compile::{CompiledSegment, CompiledStoryboard, VariableTypeHint};
 
 use super::instance_manager::StoryboardInstance;
-use super::instance_state::InstanceState;
 use super::interpolator::{Interpolator, ObjectInternPool};
 use super::types::EvaluatedValue;
 
@@ -19,6 +18,43 @@ pub(crate) struct TimelineEntry {
     pub group_id: u64,
     pub segments: Vec<CompiledSegment>,
     pub variable_type: VariableTypeHint,
+    /// 値域（コンパイル結果の min_value／max_value）
+    pub min_value: Option<f64>,
+    pub max_value: Option<f64>,
+}
+
+impl TimelineEntry {
+    /// セグメントの進捗 `progress_t` の値。Object は intern を通し、Float と Integer は値域へ収める。
+    fn value_at(
+        &self,
+        seg: &CompiledSegment,
+        progress_t: f64,
+        intern_pool: &mut ObjectInternPool,
+    ) -> EvaluatedValue {
+        let min = self.min_value.unwrap_or(f64::NEG_INFINITY);
+        let max = self.max_value.unwrap_or(f64::INFINITY);
+        // clamp は min > max で panic し、max／min は NaN を捨てるので比べて収める
+        let fit = |v: f64| {
+            if v < min {
+                min
+            } else if v > max {
+                max
+            } else {
+                v
+            }
+        };
+        match Interpolator::interpolate_with_pool(
+            seg,
+            &self.variable_type,
+            progress_t,
+            Some(intern_pool),
+        ) {
+            EvaluatedValue::Float(v) => EvaluatedValue::Float(fit(v)),
+            // Integer の値域は i64 から来るので丸めた後に収める
+            EvaluatedValue::Integer(v) => EvaluatedValue::Integer(fit(v as f64) as i64),
+            other => other,
+        }
+    }
 }
 
 /// 購読変数ごとのタイムテーブル管理と時刻ベース評価を行う内部コンポーネント。
@@ -35,6 +71,11 @@ impl TimelineManager {
         }
     }
 
+    /// Object の値の intern の表から使われていない値を手放す（文書の差し替え）。
+    pub fn release_unused_intern_values(&mut self) {
+        self.intern_pool.release_unused();
+    }
+
     /// コンパイル結果をタイムテーブルに追加。
     pub fn insert_entries(&mut self, group_id: u64, compiled: &CompiledStoryboard) {
         for (var_name, timeline) in &compiled.timelines {
@@ -42,6 +83,8 @@ impl TimelineManager {
                 group_id,
                 segments: timeline.segments.clone(),
                 variable_type: timeline.variable_type.clone(),
+                min_value: timeline.min_value,
+                max_value: timeline.max_value,
             };
 
             self.timelines
@@ -56,83 +99,63 @@ impl TimelineManager {
 
     /// 指定変数の現在値を評価。
     ///
-    /// - 最新（最大）group_id 優先（Tier 2 暫定動作）
-    /// - 終了済みエントリは自動破棄
+    /// - 始まった項目（実効時刻が最初のセグメントの始まり以降）のうち最新（最大）group_id を優先する。
+    ///   始まっていない項目（未来の start・start_offset の子）は、全部が始まっていないときだけ from を出す
+    /// - 最後のセグメントを過ぎた変数は、インスタンスが生きている間は最後の値を保つ
+    ///   （項目を消すのは `remove_entries` だけ）
     /// - Pause 中のインスタンスは pause 開始時点の effective_time で固定
     pub fn evaluate(
         &mut self,
         variable_name: &str,
         current_time: f64,
-        instances: &HashMap<u64, StoryboardInstance>,
+        instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> Option<EvaluatedValue> {
         let timeline = self.timelines.get_mut(variable_name)?;
+        // インスタンスの無い項目（取り残し）だけを捨てる。生きた項目は remove_entries だけが消す
+        timeline
+            .entries
+            .retain(|e| instances.contains_key(&e.group_id));
 
-        let mut best_value: Option<(u64, EvaluatedValue)> = None;
-        let mut expired_indices: Vec<usize> = Vec::new();
+        // (始まったか, group_id) の大きい項目を取る
+        let mut best_value: Option<((bool, u64), EvaluatedValue)> = None;
 
-        for (idx, entry) in timeline.entries.iter().enumerate() {
-            let instance = match instances.get(&entry.group_id) {
-                Some(inst) => inst,
-                None => {
-                    // インスタンスが存在しない(Concluded で削除済み等) → expired
-                    expired_indices.push(idx);
-                    continue;
-                }
+        for entry in &timeline.entries {
+            let Some(instance) = instances.get(&entry.group_id) else {
+                continue;
             };
 
-            // effective_time 計算
-            let effective_time = calculate_effective_time(current_time, instance);
+            let effective_time = value_time(current_time, instance);
+            // 周回を 1 回でも終えたインスタンスは始まった扱い（2 周目の先頭の遅れの中でも）
+            let started = instance.loops_completed > 0
+                || entry
+                    .segments
+                    .first()
+                    .is_some_and(|s| effective_time >= s.start_time);
+            let key = (started, entry.group_id);
 
-            // アクティブなセグメントを探す
-            let eval = evaluate_segments(
-                &entry.segments,
-                &entry.variable_type,
-                effective_time,
-                &mut self.intern_pool,
-            );
-
-            match eval {
-                Some(val) => {
-                    // 最新（最大）group_id 優先
-                    match &best_value {
-                        Some((best_gid, _)) if entry.group_id <= *best_gid => {}
-                        _ => {
-                            best_value = Some((entry.group_id, val));
-                        }
-                    }
-                }
-                None => {
-                    // 全セグメント終了済み → expired
-                    expired_indices.push(idx);
-                }
+            if best_value.as_ref().is_some_and(|(best, _)| key <= *best) {
+                continue;
+            }
+            if let Some(val) = evaluate_segments(entry, effective_time, &mut self.intern_pool) {
+                best_value = Some((key, val));
             }
         }
 
-        // 終了済みエントリを逆順で削除（インデックスがずれないように）
-        for idx in expired_indices.into_iter().rev() {
-            timeline.entries.remove(idx);
-        }
-
-        // 空になったタイムラインはそのまま残す（cleanup は呼び出し側）
         best_value.map(|(_, val)| val)
     }
 
     /// Conclude 用: group_id の全変数の最終値を取得。
-    pub fn collect_final_values(&self, group_id: u64) -> HashMap<String, EvaluatedValue> {
+    pub fn collect_final_values(&mut self, group_id: u64) -> HashMap<String, EvaluatedValue> {
         let mut result = HashMap::new();
 
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
-                if entry.group_id == group_id {
-                    if let Some(last_seg) = entry.segments.last() {
-                        // 最終セグメントの to_value を最終値とする
-                        let val = Interpolator::interpolate(
-                            last_seg,
-                            &entry.variable_type,
-                            1.0, // progress_t = 1.0 で最終値
-                        );
-                        result.insert(var_name.clone(), val);
-                    }
+                if entry.group_id == group_id
+                    && let Some(last_seg) = entry.segments.last()
+                {
+                    // 最終セグメントの to_value を最終値とする
+                    let val = entry.value_at(last_seg, 1.0, &mut self.intern_pool);
+                    result.insert(var_name.clone(), val);
                 }
             }
         }
@@ -148,7 +171,7 @@ impl TimelineManager {
     }
 
     /// group_id に関連するタイムテーブルエントリが存在するか確認。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn has_entries(&self, group_id: u64) -> bool {
         self.timelines
             .values()
@@ -167,27 +190,23 @@ impl TimelineManager {
         &mut self,
         group_id: u64,
         current_time: f64,
-        instances: &HashMap<u64, StoryboardInstance>,
+        instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> HashMap<String, EvaluatedValue> {
         let instance = match instances.get(&group_id) {
             Some(inst) => inst,
             None => return HashMap::new(),
         };
 
-        let effective_time = calculate_effective_time(current_time, instance);
+        let effective_time = value_time(current_time, instance);
         let mut result = HashMap::new();
 
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
-                if entry.group_id == group_id {
-                    if let Some(val) = evaluate_segments(
-                        &entry.segments,
-                        &entry.variable_type,
-                        effective_time,
-                        &mut self.intern_pool,
-                    ) {
-                        result.insert(var_name.clone(), val);
-                    }
+                if entry.group_id == group_id
+                    && let Some(val) =
+                        evaluate_segments(entry, effective_time, &mut self.intern_pool)
+                {
+                    result.insert(var_name.clone(), val);
                 }
             }
         }
@@ -200,17 +219,17 @@ impl TimelineManager {
     /// セグメントの to_value (progress_t=1.0) を返す。
     /// 未開始のセグメントはスキップする。
     pub(crate) fn collect_current_segment_final_values(
-        &self,
+        &mut self,
         group_id: u64,
         current_time: f64,
-        instances: &HashMap<u64, StoryboardInstance>,
+        instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> HashMap<String, EvaluatedValue> {
         let instance = match instances.get(&group_id) {
             Some(inst) => inst,
             None => return HashMap::new(),
         };
 
-        let effective_time = calculate_effective_time(current_time, instance);
+        let effective_time = value_time(current_time, instance);
         let mut result = HashMap::new();
 
         for (var_name, timeline) in &self.timelines {
@@ -219,7 +238,7 @@ impl TimelineManager {
                     // アクティブなセグメントを特定
                     if let Some(active_seg) = find_active_segment(&entry.segments, effective_time) {
                         // アクティブセグメントの最終値 (progress_t=1.0) を取得
-                        let val = Interpolator::interpolate(active_seg, &entry.variable_type, 1.0);
+                        let val = entry.value_at(active_seg, 1.0, &mut self.intern_pool);
                         result.insert(var_name.clone(), val);
                     }
                 }
@@ -236,78 +255,58 @@ impl TimelineManager {
 /// Pause 中は pause 開始時点で固定。
 /// `loop_start_time` の初期値は `start_time` と同一のため、ループなし時は既存動作と互換。
 pub(crate) fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
-    let raw_time = if instance.state == InstanceState::Paused {
-        // Pause 中は pause_start 時点で固定
-        match instance.pause_start {
-            Some(pause_start) => {
-                pause_start - instance.loop_start_time - instance.pause_accumulated
-            }
-            None => current_time - instance.loop_start_time - instance.pause_accumulated,
-        }
-    } else {
-        current_time - instance.loop_start_time - instance.pause_accumulated
-    };
+    // pause_start は Paused の間だけある（pause が遷移と同時に入れ、resume が取る）。あればそこで時計を止める
+    let now = instance.pause_start.unwrap_or(current_time);
+    let raw_time = now - instance.loop_start_time - instance.pause_accumulated;
     // time_scale は再生速度倍率（1.0 倍速が標準、2.0 で 2 倍速）
     // time_scale が大きいほどタイムラインが速く進む
     raw_time * instance.time_scale
 }
 
+/// 値を出す実効時刻。周回の後の待ち（次の起点の前＝負）は、前の周回の最後の値を保つ。
+fn value_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
+    let t = calculate_effective_time(current_time, instance);
+    if instance.loops_completed > 0 && t < 0.0 {
+        f64::INFINITY
+    } else {
+        t
+    }
+}
+
 /// セグメント列から現在値を評価する。
 ///
-/// 全セグメント終了済みの場合は `None` を返す（エントリ破棄のシグナル）。
+/// セグメントが無いときだけ `None`。最後のセグメントを過ぎたら最後の値を返す。
 fn evaluate_segments(
-    segments: &[CompiledSegment],
-    variable_type: &VariableTypeHint,
+    entry: &TimelineEntry,
     effective_time: f64,
     intern_pool: &mut ObjectInternPool,
 ) -> Option<EvaluatedValue> {
-    if segments.is_empty() {
-        return None;
-    }
-
-    // 最終セグメントの end_time を超えている → 全終了
-    // SAFETY(panic 経路): 直前の is_empty() 早期 return により segments は非空のため
-    // unwrap は発火しない。
-    let last_seg = segments.last().unwrap();
-    if effective_time >= last_seg.end_time && last_seg.end_time > last_seg.start_time {
-        return None;
-    }
+    let segments = &entry.segments;
+    let last_seg = segments.last()?;
 
     // アクティブなセグメントを探す
+    let mut prev: Option<&CompiledSegment> = None;
     for seg in segments {
         if effective_time < seg.start_time {
-            // まだこのセグメントに到達していない → from_value を返す
-            let val =
-                Interpolator::interpolate_with_pool(seg, variable_type, 0.0, Some(intern_pool));
-            return Some(val);
+            // まだこのセグメントに到達していない。隙間なら直前の終わりの値を保ち（dola-compiled-transition 要件 1.2）、最初の前なら from
+            return Some(match prev {
+                Some(p) => entry.value_at(p, 1.0, intern_pool),
+                None => entry.value_at(seg, 0.0, intern_pool),
+            });
         }
+        prev = Some(seg);
 
         let duration = seg.end_time - seg.start_time;
-        if duration <= 0.0 {
-            // 即時遷移（duration=0）
-            if effective_time >= seg.start_time {
-                let val =
-                    Interpolator::interpolate_with_pool(seg, variable_type, 1.0, Some(intern_pool));
-                return Some(val);
-            }
-        } else if effective_time < seg.end_time {
+        if duration > 0.0 && effective_time < seg.end_time {
             // このセグメント内
             let progress_t = (effective_time - seg.start_time) / duration;
-            let val = Interpolator::interpolate_with_pool(
-                seg,
-                variable_type,
-                progress_t,
-                Some(intern_pool),
-            );
-            return Some(val);
+            return Some(entry.value_at(seg, progress_t, intern_pool));
         }
-        // seg.end_time <= effective_time → 次のセグメントへ
+        // 終わったセグメント（即時のセグメントを含む）→ 次へ。後ろが無ければ下で最後の値を保つ
     }
 
-    // 最終セグメントが即時遷移の場合、end_time == start_time で上のループを通過後ここに来る
-    // 最終セグメントが完了したが、全体終了とはみなさない（最後の値を保持）
-    let val = Interpolator::interpolate_with_pool(last_seg, variable_type, 1.0, Some(intern_pool));
-    Some(val)
+    // 最後のセグメントを過ぎた → 最後の値を保つ
+    Some(entry.value_at(last_seg, 1.0, intern_pool))
 }
 
 /// effective_time 時点でアクティブなセグメントを検索する。

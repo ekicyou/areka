@@ -836,7 +836,7 @@ fn every_production_scan_of_the_actor_map_is_registered() {
                 continue;
             }
             // 綴りの揺れ（改行・字下げ）で取り逃さないよう空白を潰してから見る。
-            // `sheet.actors()`（dola の別 API）と紛れないよう、直前が状態表であることを要求する。
+            // ほかの型の `.actors()` と紛れないよう、直前が状態表であることを要求する。
             let src: String = std::fs::read_to_string(&path)
                 .unwrap_or_default()
                 .chars()

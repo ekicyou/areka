@@ -2,13 +2,13 @@
 //!
 //! 純粋関数群として実装。全状態は `StoryboardInstance` に保持される。
 
-use interpolation::Ease;
 use rand::Rng;
 use rand::RngExt;
 
-use crate::easing::{EasingFunction, EasingName, ParametricEasing};
+use crate::easing::EasingFunction;
 
 use super::instance_manager::StoryboardInstance;
+use super::interpolator::apply_easing;
 
 /// ループ処理の結果を示す判別 enum。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,8 +27,8 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
     if instance.loop_count == -1 {
         return true;
     }
-    // 整数変換の安全性(D1a-V): loop_count は facade::compile_and_validate が
-    // 「-1 または正値」のみ許可する（loop_count <= 0 かつ != -1 は InvalidLoopCount）。
+    // 整数変換の安全性: loop_count は validate の数値の規則が
+    // 「-1 または 1 以上」に限る（それ以外は load_document が InvalidNumber で拒む）。
     // -1 は上の早期 return で処理済みのため、ここでの `as u64` は常に正値の
     // 無損失変換であり、負値の wrap（例: -2 → 約 1.8e19 ≒ 実質無限ループ化）は
     // 発火しない。
@@ -40,56 +40,9 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
     instance.loops_completed < instance.loop_count as u64
 }
 
-/// イージング関数を `[0,1]` 入力に適用し `[0,1]` 出力を返す。
-fn apply_easing(easing: &EasingFunction, t: f64) -> f64 {
-    match easing {
-        EasingFunction::Named(name) => match name {
-            EasingName::Linear => t,
-            EasingName::QuadraticIn => t.calc(interpolation::EaseFunction::QuadraticIn),
-            EasingName::QuadraticOut => t.calc(interpolation::EaseFunction::QuadraticOut),
-            EasingName::QuadraticInOut => t.calc(interpolation::EaseFunction::QuadraticInOut),
-            EasingName::CubicIn => t.calc(interpolation::EaseFunction::CubicIn),
-            EasingName::CubicOut => t.calc(interpolation::EaseFunction::CubicOut),
-            EasingName::CubicInOut => t.calc(interpolation::EaseFunction::CubicInOut),
-            EasingName::QuarticIn => t.calc(interpolation::EaseFunction::QuarticIn),
-            EasingName::QuarticOut => t.calc(interpolation::EaseFunction::QuarticOut),
-            EasingName::QuarticInOut => t.calc(interpolation::EaseFunction::QuarticInOut),
-            EasingName::QuinticIn => t.calc(interpolation::EaseFunction::QuinticIn),
-            EasingName::QuinticOut => t.calc(interpolation::EaseFunction::QuinticOut),
-            EasingName::QuinticInOut => t.calc(interpolation::EaseFunction::QuinticInOut),
-            EasingName::SineIn => t.calc(interpolation::EaseFunction::SineIn),
-            EasingName::SineOut => t.calc(interpolation::EaseFunction::SineOut),
-            EasingName::SineInOut => t.calc(interpolation::EaseFunction::SineInOut),
-            EasingName::CircularIn => t.calc(interpolation::EaseFunction::CircularIn),
-            EasingName::CircularOut => t.calc(interpolation::EaseFunction::CircularOut),
-            EasingName::CircularInOut => t.calc(interpolation::EaseFunction::CircularInOut),
-            EasingName::ExponentialIn => t.calc(interpolation::EaseFunction::ExponentialIn),
-            EasingName::ExponentialOut => t.calc(interpolation::EaseFunction::ExponentialOut),
-            EasingName::ExponentialInOut => t.calc(interpolation::EaseFunction::ExponentialInOut),
-            EasingName::ElasticIn => t.calc(interpolation::EaseFunction::ElasticIn),
-            EasingName::ElasticOut => t.calc(interpolation::EaseFunction::ElasticOut),
-            EasingName::ElasticInOut => t.calc(interpolation::EaseFunction::ElasticInOut),
-            EasingName::BackIn => t.calc(interpolation::EaseFunction::BackIn),
-            EasingName::BackOut => t.calc(interpolation::EaseFunction::BackOut),
-            EasingName::BackInOut => t.calc(interpolation::EaseFunction::BackInOut),
-            EasingName::BounceIn => t.calc(interpolation::EaseFunction::BounceIn),
-            EasingName::BounceOut => t.calc(interpolation::EaseFunction::BounceOut),
-            EasingName::BounceInOut => t.calc(interpolation::EaseFunction::BounceInOut),
-        },
-        EasingFunction::Parametric(p) => match p {
-            ParametricEasing::QuadraticBezier { x0, x1, x2 } => {
-                interpolation::quad_bez(x0, x1, x2, &t)
-            }
-            ParametricEasing::CubicBezier { x0, x1, x2, x3 } => {
-                interpolation::cub_bez(x0, x1, x2, x3, &t)
-            }
-        },
-    }
-}
-
 /// ランダム遅延生成。
 ///
-/// uniform `[0,1]` → easing → `[min, max]` mapping。
+/// uniform `[0,1]` → easing → `[0,1]` へクランプ → `[min, max]` mapping。
 /// `min == max` の場合は early return で固定遅延を返す。
 pub(crate) fn generate_delay(
     min: f64,
@@ -101,32 +54,33 @@ pub(crate) fn generate_delay(
         return min;
     }
     let t: f64 = rng.random_range(0.0..1.0);
-    let eased = apply_easing(easing, t);
+    // Back・Elastic・ベジェは [0,1] の外を出す。そのままだと待ちが min を割り、負なら tick が戻らない
+    let eased = apply_easing(t, Some(easing)).clamp(0.0, 1.0);
     min + eased * (max - min)
 }
 
-/// 周回進行: 1周回分のオフセット調整 + 遅延生成を実行する。
+/// 周回進行: 待ちを先に求め、次の周回を待ちの後に置く。
 ///
 /// - `loops_completed += 1`
-/// - `loop_start_time += loop_duration`
-/// - `end_time += loop_duration`
-/// - `loop_offset_min.is_some()` の場合: `end_time += generate_delay(...)`
+/// - `delay` = `loop_offset_min.is_some()` なら `generate_delay(...)`・無ければ 0
+/// - `loop_start_time = 前の end_time + delay - pause_accumulated`
+///   （評価で一時停止の累計を足し戻すと壁時計の起点になる）
+/// - `end_time = 前の end_time + loop_duration + delay`
 /// - 全 `trigger_states` の `fired = false` にリセット
 pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng) {
     instance.loops_completed += 1;
-    instance.loop_start_time += instance.loop_duration;
-    instance.end_time += instance.loop_duration;
 
-    // ループオフセット遅延の適用
-    if let Some(min) = instance.loop_offset_min {
-        let delay = generate_delay(
+    let delay = match instance.loop_offset_min {
+        Some(min) => generate_delay(
             min,
             instance.loop_offset_max,
             &instance.loop_offset_easing,
             rng,
-        );
-        instance.end_time += delay;
-    }
+        ),
+        None => 0.0,
+    };
+    instance.loop_start_time = instance.end_time + delay - instance.pause_accumulated;
+    instance.end_time += instance.loop_duration + delay;
 
     // トリガー状態リセット（周回ごとに再発火可能にする）
     for ts in &mut instance.trigger_states {
@@ -136,8 +90,9 @@ pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng
 
 /// 1つのインスタンスのループ処理を実行する。
 ///
-/// `current_time >= end_time` の場合、while ループで全終了済み周回を処理し、
-/// 各周回について `loops_completed` をインクリメントして継続可否を判定する。
+/// `current_time >= end_time` の場合、while ループで全終了済み周回を処理し
+/// （トリガーを持つインスタンスは 1 周だけ）、各周回について `loops_completed` を
+/// インクリメントして継続可否を判定する。
 /// 遅延が `end_time` に加算されるため、複数周回の一括スキップは自然に抑制される。
 ///
 /// # Arguments
@@ -164,17 +119,36 @@ pub(crate) fn process_loops(
     }
 
     // while ループで全終了済み周回を処理
-    // 時刻境界の注意(D1a-V): 反復回数は (current_time - end_time) / 周回長 に比例する。
+    // 時刻境界の注意: 反復回数は (current_time - end_time) / 周回長 に比例する。
     // 無限ループ（loop_count == -1）は MIN_LOOP_DURATION（0.1s）が周回長の下限のため
     // 停止性は保証されるが、巨大な時刻ジャンプ（壁時計補正等）では反復が膨大になり得る。
     // 反復上限キャップや剰余スキップの導入は外部観測可能な挙動
-    // （loops_completed / loop_start_time / 乱数消費）を変えるため
-    // report/proposals.md P9 に記録。
+    // （loops_completed / loop_start_time / 乱数消費）を変えるため入れない
+    // トリガーなしの無限のループは出来事に入らず、1 周は数を足すだけ（0.1s の周回で 8 時間飛んでも約 29 万回の軽い反復）。
+    // shortcut: トリガーなしの有限のループは周回の終わりごとに tick の出来事になり、1 周ごとに全部のインスタンスを見る
+    // （0.01s × 100 万周を一度に飛ばすと約 75ms・ほかに無限のループが 10 個あると約 0.16 秒。直しの前は約 1.2ms）。
+    // 大きな loop_count の文書が本番に入ったら、next_event_time で最後の周回の終わりの下限だけを出来事にする。
+    // shortcut: トリガーを持つループは 1 周ずつ戻り、飛ばした周回ごとに子を 1 つ起こす
+    // （コンパイル・競合の解決・Conclude と TriggerResult 1 件）。0.1s の周回で 8 時間飛ぶと
+    // 1 回の tick に約 0.67 秒・28.8 万件。トリガーを使う文書が本番に入ったら飛ばす周回の子の扱いを決め直す。
     while current_time >= instance.end_time {
+        let before = instance.end_time;
         advance_loop(instance, rng);
 
-        if !should_continue_loop(instance) {
+        // どの待ちを引いても時刻が進まない周回は、残りの周回もこの瞬間に終わる:
+        // 長さ 0・待ちなしの有限のループと、足しても丸めで消えるほど end_time が大きいとき
+        // （呼び出し側が巨大な start_time を渡したとき）。乱数の待ちが 0 を引いただけなら続ける
+        let max_delay = instance
+            .loop_offset_min
+            .map_or(0.0, |_| instance.loop_offset_max);
+        if !should_continue_loop(instance)
+            || before + (instance.loop_duration + max_delay) <= before
+        {
             return LoopAction::Conclude;
+        }
+        // トリガーを持つなら 1 周で戻る。呼び出し側がこの周回のトリガーを発火させてから次を進める
+        if !instance.trigger_states.is_empty() {
+            break;
         }
     }
 

@@ -61,7 +61,7 @@ impl InstanceState {
     ///
     /// 不変条件: 返却される `Some(state)` は常に `is_terminal() == true`
     /// （`conflict_resolver` の expect / debug_assert はこの不変条件に依存する。
-    /// tests/runtime/core_types_test.rs::from_policy_results_are_terminal で検証済み）。
+    /// このファイルの tests::instance_state_properties::from_policy_results_are_terminal で検証済み）。
     pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
         match policy {
             InterruptionPolicy::Cancel => Some(Self::Cancelled),
@@ -69,6 +69,108 @@ impl InstanceState {
             InterruptionPolicy::Trim => Some(Self::Trimmed),
             InterruptionPolicy::Compress => Some(Self::Compressed),
             InterruptionPolicy::Never => None,
+        }
+    }
+}
+
+// 公開の口がこの型を返さないので、状態遷移の表はクレートの中で見る
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =============================================================================
+    // Task 1.1: InstanceState 状態遷移テスト
+    // =============================================================================
+
+    mod instance_state_transitions {
+        use super::*;
+        use InstanceState::*;
+
+        const STATES: [InstanceState; 7] = [
+            Created, Playing, Paused, Concluded, Cancelled, Trimmed, Compressed,
+        ];
+
+        /// 7×7 の 49 組すべての期待（行＝遷移元・列＝遷移先、並びは STATES）。
+        /// 許す組は Ok(遷移先)、ほかは Err(遷移元)。
+        #[test]
+        fn try_transition_table() {
+            #[rustfmt::skip]
+            const ALLOWED: [[bool; 7]; 7] = [
+                //       Created Playing Paused Concluded Cancelled Trimmed Compressed
+                /* Created    */ [false, true,  false, false, false, false, false],
+                /* Playing    */ [false, false, true,  true,  true,  true,  true ],
+                /* Paused     */ [false, true,  false, true,  true,  true,  true ],
+                /* Concluded  */ [false, false, false, false, false, false, false],
+                /* Cancelled  */ [false, false, false, false, false, false, false],
+                /* Trimmed    */ [false, false, false, false, false, false, false],
+                /* Compressed */ [false, false, false, false, false, false, false],
+            ];
+            let mut checked = 0;
+            for (from, row) in STATES.iter().zip(ALLOWED) {
+                for (to, allowed) in STATES.iter().zip(row) {
+                    let expected = if allowed { Ok(*to) } else { Err(*from) };
+                    assert_eq!(from.try_transition(*to), expected, "{from:?} -> {to:?}");
+                    checked += 1;
+                }
+            }
+            assert_eq!(checked, 49);
+        }
+    }
+
+    mod instance_state_properties {
+        use super::*;
+
+        #[test]
+        fn terminal_states() {
+            assert!(!InstanceState::Created.is_terminal());
+            assert!(!InstanceState::Playing.is_terminal());
+            assert!(!InstanceState::Paused.is_terminal());
+            assert!(InstanceState::Concluded.is_terminal());
+            assert!(InstanceState::Cancelled.is_terminal());
+            assert!(InstanceState::Trimmed.is_terminal());
+            assert!(InstanceState::Compressed.is_terminal());
+        }
+
+        #[test]
+        fn from_policy_mapping() {
+            assert_eq!(
+                InstanceState::from_policy(InterruptionPolicy::Cancel),
+                Some(InstanceState::Cancelled)
+            );
+            assert_eq!(
+                InstanceState::from_policy(InterruptionPolicy::Conclude),
+                Some(InstanceState::Concluded)
+            );
+            assert_eq!(
+                InstanceState::from_policy(InterruptionPolicy::Trim),
+                Some(InstanceState::Trimmed)
+            );
+            assert_eq!(
+                InstanceState::from_policy(InterruptionPolicy::Compress),
+                Some(InstanceState::Compressed)
+            );
+            assert_eq!(InstanceState::from_policy(InterruptionPolicy::Never), None);
+        }
+
+        /// from_policy が返す Some(state) は全て終了状態である
+        /// （conflict_resolver の expect / debug_assert が依存する不変条件）
+        #[test]
+        fn from_policy_results_are_terminal() {
+            let policies = [
+                InterruptionPolicy::Cancel,
+                InterruptionPolicy::Conclude,
+                InterruptionPolicy::Trim,
+                InterruptionPolicy::Compress,
+                InterruptionPolicy::Never,
+            ];
+            for policy in policies {
+                if let Some(state) = InstanceState::from_policy(policy) {
+                    assert!(
+                        state.is_terminal(),
+                        "from_policy({policy:?}) returned non-terminal state {state:?}"
+                    );
+                }
+            }
         }
     }
 }

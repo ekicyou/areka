@@ -1,5 +1,5 @@
-//! core_types: Storyboard / Playback serde round-trip
-//! Tasks 5.7, 6.3
+//! core_types: Storyboard serde round-trip
+//! Task 5.7
 
 use super::*;
 
@@ -141,40 +141,5 @@ mod storyboard_tests {
             let deserialized: InterruptionPolicy = serde_json::from_str(&json).unwrap();
             assert_eq!(*variant, deserialized);
         }
-    }
-}
-
-// =============================================================
-// Task 6.3: PlaybackState/ScheduleRequest serde round-trip
-// =============================================================
-
-mod playback_tests {
-    use super::*;
-
-    #[test]
-    fn playback_state_all_variants_json_roundtrip() {
-        let variants = vec![
-            PlaybackState::Idle,
-            PlaybackState::Playing,
-            PlaybackState::Paused,
-            PlaybackState::Completed,
-            PlaybackState::Cancelled,
-        ];
-        for variant in variants {
-            let json = serde_json::to_string(&variant).unwrap();
-            let deserialized: PlaybackState = serde_json::from_str(&json).unwrap();
-            assert_eq!(variant, deserialized);
-        }
-    }
-
-    #[test]
-    fn schedule_request_json_roundtrip() {
-        let req = ScheduleRequest {
-            storyboard: "greeting".to_string(),
-            start_time: 1.5,
-        };
-        let json = serde_json::to_string(&req).unwrap();
-        let deserialized: ScheduleRequest = serde_json::from_str(&json).unwrap();
-        assert_eq!(req, deserialized);
     }
 }

@@ -76,7 +76,7 @@ pub struct Storyboard {
     /// 再生速度倍率（デフォルト 1.0）
     #[serde(default = "default_time_scale")]
     pub time_scale: f64,
-    /// ループ回数（1 = 1回再生、n≥2 = n回再生、-1 = 無限ループ、0以下 = エラー）
+    /// ループ回数（1 = 1回再生、n≥2 = n回再生、-1 = 無限ループ。0 と -2 以下は validate が `InvalidNumber` で拒む）
     #[serde(default = "default_loop_count")]
     pub loop_count: i32,
     /// 割り込み終了戦略（デフォルト: Conclude）

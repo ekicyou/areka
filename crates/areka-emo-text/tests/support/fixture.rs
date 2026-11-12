@@ -122,7 +122,7 @@ pub fn menu_script(heading: &str) -> String {
 }
 
 /// 実 sakura パイプライン（`parse` → `compile`）で台本を cue 列へ落とし、文字状態機械が
-/// 消費する Command cue だけを配送エンベロープへ無変形複写する（Barrier/Routing は対象外）。
+/// 消費する Command cue だけを配送エンベロープへ無変形複写する（Barrier は対象外）。
 pub fn command_cues(script: &str) -> Vec<TalkCue> {
     let instructions = areka_parsers::sakura::parse(script);
     let compiled = compile(&instructions, &SystemVarSnapshot::default());

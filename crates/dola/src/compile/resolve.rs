@@ -8,25 +8,20 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::storyboard::{KeyframeNames, KeyframeRef, StoryboardEntry};
-use crate::transition::{TransitionRef, TransitionValue};
-use crate::validate::collect_keyframe_names_from_ref;
+use crate::transition::{TransitionDef, TransitionRef, TransitionValue};
+use crate::validate::{IMPLICIT_KEYFRAME_PREFIX, collect_keyframe_names_from_ref};
 use crate::variable::AnimationVariableDef;
 
 use super::types::VariableTypeHint;
 
 /// エントリのキーフレーム名を返す（未指定時は内部用の暗黙名 `__implicit_{idx}`）
 ///
-/// NOTE(D2-V): バリデーションは `start` のみ予約し（V3）、`__implicit_` プレフィックスを
-/// 予約していないため、ユーザーが明示的に `keyframe = "__implicit_{n}"` を指定すると
-/// 別エントリの暗黙名と衝突し得る。衝突時は `kf_to_entry` / `keyframe_times` の
-/// HashMap 上書き（後勝ち）により明示名が黙ってシャドウされ、誤った時刻解決となる
-/// （panic はしない。tests/compile/boundary_test.rs で特性化、プレフィックス予約は
-/// バリデーション追加＝挙動変更のため P21 提案を参照）。
+/// 明示名が暗黙名とぶつからないよう、検証（V3）が `__implicit_` で始まる名を拒む。
 pub(super) fn entry_keyframe_name(entry: &StoryboardEntry, idx: usize) -> String {
     entry
         .keyframe
         .clone()
-        .unwrap_or_else(|| format!("__implicit_{}", idx))
+        .unwrap_or_else(|| format!("{IMPLICIT_KEYFRAME_PREFIX}{idx}"))
 }
 
 /// キーフレーム依存グラフ
@@ -36,6 +31,8 @@ pub(super) struct DependencyGraph {
     pub(super) deps: HashMap<usize, HashSet<usize>>,
     /// keyframe name → entry index that defines it
     pub(super) kf_to_entry: HashMap<String, usize>,
+    /// 連結の遷移の entry index → 同じ変数の配列上の直前のエントリの index
+    pub(super) prev_same_var: HashMap<usize, usize>,
 }
 
 /// Build dependency graph from storyboard entries (Task 4.1)
@@ -48,6 +45,7 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
     }
 
     let mut deps: HashMap<usize, HashSet<usize>> = HashMap::new();
+    let mut prev_same_var: HashMap<usize, usize> = HashMap::new();
 
     // Second pass: build dependency edges
     for (idx, entry) in sb.entry.iter().enumerate() {
@@ -74,12 +72,26 @@ pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> Depe
                     entry_deps.insert(dep_idx);
                 }
             }
+        } else if let Some(ref var) = entry.variable {
+            // 連結の遷移: 同じ変数の配列上の直前のエントリに続く（要件 11.7）
+            if let Some(prev) = (0..idx)
+                .rev()
+                .find(|&i| sb.entry[i].variable.as_ref() == Some(var))
+            {
+                entry_deps.insert(prev);
+                prev_same_var.insert(idx, prev);
+            }
+        } else if let Some(prev) = idx.checked_sub(1) {
+            // at の無い純粋なキーフレーム・トリガー: 配列の 1 つ前のエントリに続く（要件 11.7）
+            entry_deps.insert(prev);
         }
-        // Sequential entries: no explicit dependency in graph
-        // (handled by variable-specific last_end_time tracking)
     }
 
-    DependencyGraph { deps, kf_to_entry }
+    DependencyGraph {
+        deps,
+        kf_to_entry,
+        prev_same_var,
+    }
 }
 
 /// Topological sort using Kahn's algorithm (Task 4.2, 4.3)
@@ -114,7 +126,7 @@ pub(super) fn topological_sort(
 
     let mut result = Vec::new();
 
-    // NOTE(D2-V): Kahn 法による反復実装（再帰なし）。エントリ数に比例した
+    // NOTE: Kahn 法による反復実装（再帰なし）。エントリ数に比例した
     // ヒープ確保のみで、巨大文書でもスタック枯渇しない。
     while let Some(Reverse(node)) = queue.pop() {
         result.push(node);
@@ -131,9 +143,23 @@ pub(super) fn topological_sort(
     }
 
     if result.len() != entry_count {
-        // Cycle detected: find cycle members
-        let cycle_members: Vec<String> = (0..entry_count)
-            .filter(|&idx| in_degree[idx] > 0)
+        // 残った節はどれも残った節に依存するので、依存をたどれば閉路に入る。
+        // 閉路の先にあるだけの節を出さないよう、1 本たどって閉路の分だけを残す
+        let mut path: Vec<usize> = Vec::new();
+        let mut node = (0..entry_count).find(|&idx| in_degree[idx] > 0);
+        while let Some(n) = node {
+            if let Some(pos) = path.iter().position(|&p| p == n) {
+                path.drain(..pos);
+                break;
+            }
+            path.push(n);
+            node = graph
+                .deps
+                .get(&n)
+                .and_then(|d| d.iter().copied().filter(|&i| in_degree[i] > 0).min());
+        }
+        let cycle_members: Vec<String> = path
+            .into_iter()
             .map(|idx| {
                 // Try to find keyframe name for this entry
                 graph
@@ -155,6 +181,7 @@ pub(super) fn resolve_pure_keyframe_time(
     storyboard_name: &str,
     entry_idx: usize,
     entry: &StoryboardEntry,
+    start_time: f64,
     keyframe_times: &HashMap<String, f64>,
     entry_keyframe_time: &HashMap<usize, f64>,
     errors: &mut Vec<DolaError>,
@@ -173,38 +200,33 @@ pub(super) fn resolve_pure_keyframe_time(
                 None
             }
         }
-    } else {
-        // at なし: 配列直前エントリ（元配列 index - 1）の keyframe_time を継承
-        match entry_idx.checked_sub(1) {
-            Some(prev_idx) => {
-                if let Some(&t) = entry_keyframe_time.get(&prev_idx) {
-                    Some(t)
-                } else {
-                    errors.push(DolaError::CompileError {
-                        storyboard: storyboard_name.to_string(),
-                        entry_index: entry_idx,
-                        reason:
-                            "Pure keyframe without 'at': no previous entry keyframe time available"
-                                .to_string(),
-                    });
-                    None
-                }
-            }
-            None => {
-                // 先頭エントリ: "start" キーフレーム（= start_time）をフォールバック
-                if let Some(&t) = keyframe_times.get("start") {
-                    Some(t)
-                } else {
-                    errors.push(DolaError::CompileError {
-                        storyboard: storyboard_name.to_string(),
-                        entry_index: entry_idx,
-                        reason: "Pure keyframe without 'at': no previous entry in array"
-                            .to_string(),
-                    });
-                    None
-                }
-            }
+    } else if let Some(ref between) = entry.between {
+        // between の純粋KF・トリガーは between の始まりの時刻に置く（要件 11.10）
+        let time = keyframe_times.get(&between.from).copied();
+        if time.is_none() {
+            errors.push(DolaError::CompileError {
+                storyboard: storyboard_name.to_string(),
+                entry_index: entry_idx,
+                reason: "Cannot resolve between keyframe times".to_string(),
+            });
         }
+        time
+    } else {
+        // at なし: 配列直前エントリ（元配列 index - 1）の keyframe_time を継承。先頭は start_time
+        let Some(prev_idx) = entry_idx.checked_sub(1) else {
+            return Some(start_time);
+        };
+        let time = entry_keyframe_time.get(&prev_idx).copied();
+        if time.is_none() {
+            // 直前のエントリが解けなかったときの連鎖
+            errors.push(DolaError::CompileError {
+                storyboard: storyboard_name.to_string(),
+                entry_index: entry_idx,
+                reason: "Pure keyframe without 'at': no previous entry keyframe time available"
+                    .to_string(),
+            });
+        }
+        time
     }
 }
 
@@ -237,58 +259,33 @@ pub(super) fn resolve_keyframe_ref_time(
     }
 }
 
-/// Resolve transition definition from entry (Task 5.6)
-pub(super) fn resolve_transition(
-    storyboard_name: &str,
-    entry_idx: usize,
-    entry: &StoryboardEntry,
-    doc: &DolaDocument,
-    errors: &mut Vec<DolaError>,
-) -> Option<crate::transition::TransitionDef> {
-    match &entry.transition {
-        Some(TransitionRef::Inline(def)) => Some(def.clone()),
-        Some(TransitionRef::Named(name)) => match doc.transition.get(name) {
-            Some(def) => Some(def.clone()),
-            None => {
-                errors.push(DolaError::CompileError {
-                    storyboard: storyboard_name.to_string(),
-                    entry_index: entry_idx,
-                    reason: format!("Named transition '{}' not found", name),
-                });
-                None
-            }
-        },
-        None => {
-            // No transition, shouldn't happen for non-pure-KF entry
-            errors.push(DolaError::CompileError {
-                storyboard: storyboard_name.to_string(),
-                entry_index: entry_idx,
-                reason: "Entry has variable but no transition".to_string(),
-            });
-            None
-        }
+/// エントリの遷移の定義を借りる（Task 5.6）。遷移の有無は V7、名前の参照は V5 が先に確かめている
+pub(super) fn resolve_transition<'a>(
+    entry: &'a StoryboardEntry,
+    doc: &'a DolaDocument,
+) -> Option<&'a TransitionDef> {
+    match entry.transition.as_ref()? {
+        TransitionRef::Inline(def) => Some(def),
+        TransitionRef::Named(name) => doc.transition.get(name),
     }
 }
 
 /// Resolve entry timing (Tasks 5.1-5.3)
 /// Returns (segment_start, segment_end, keyframe_time)
 ///
-/// NOTE(D2-V): delay / duration / offset は指示書由来の任意 f64 で、有限性・符号の
-/// 検証がない（P14/P20 参照）。f64 加算は panic しないが以下の静かな縮退がある:
-/// - 負の duration → segment_end < segment_start の反転セグメントが生成される（P20）
-/// - NaN の delay/duration → between の反転検査 `segment_start >= segment_end` が
-///   NaN 比較 false で素通りし、NaN 時刻のセグメントが出力へ伝播する（P14）
-/// - ±inf は inf 時刻として伝播する
-///
-/// 現行挙動は tests/compile/boundary_test.rs で特性化済み。
+/// delay / duration / offset の有限・符号は validate() の数値の規則が先に見ている。
+#[expect(
+    clippy::too_many_arguments,
+    reason = "解決の途中の表を 1 か所で受ける私的な関数で、束の型を作ると同じ欄の写しが増える"
+)]
 pub(super) fn resolve_entry_timing(
     storyboard_name: &str,
     entry_idx: usize,
     entry: &StoryboardEntry,
-    trans_def: &crate::transition::TransitionDef,
+    trans_def: &TransitionDef,
     start_time: f64,
     keyframe_times: &HashMap<String, f64>,
-    var_last_end_time: Option<f64>,
+    prev_end_time: Option<f64>,
     errors: &mut Vec<DolaError>,
 ) -> Option<(f64, f64, f64)> {
     let delay = trans_def.delay;
@@ -348,7 +345,7 @@ pub(super) fn resolve_entry_timing(
         }
     } else {
         // Sequential placement (Task 5.1)
-        let base_time = var_last_end_time.unwrap_or(start_time);
+        let base_time = prev_end_time.unwrap_or(start_time);
         let segment_start = base_time + delay;
         let segment_end = segment_start + duration;
         let kf_time = segment_end;
@@ -358,7 +355,7 @@ pub(super) fn resolve_entry_timing(
 
 /// Resolve from value (Task 5.7)
 pub(super) fn resolve_from_value(
-    trans_def: &crate::transition::TransitionDef,
+    trans_def: &TransitionDef,
     last_value: Option<&TransitionValue>,
     var_def: &AnimationVariableDef,
 ) -> TransitionValue {
@@ -381,7 +378,7 @@ pub(super) fn resolve_from_value(
 
 /// Resolve to value (Task 5.8)
 pub(super) fn resolve_to_value(
-    trans_def: &crate::transition::TransitionDef,
+    trans_def: &TransitionDef,
     from_value: &TransitionValue,
 ) -> TransitionValue {
     if let Some(ref relative_to) = trans_def.relative_to {
@@ -400,26 +397,21 @@ pub(super) fn resolve_to_value(
 }
 
 /// Build VariableTypeHint from variable definition (Task 6.3)
-pub(super) fn build_variable_type_hint(var_def: Option<&AnimationVariableDef>) -> VariableTypeHint {
+pub(super) fn build_variable_type_hint(var_def: &AnimationVariableDef) -> VariableTypeHint {
     match var_def {
-        Some(AnimationVariableDef::Float { .. }) => VariableTypeHint::Float,
-        Some(AnimationVariableDef::Integer { typewriter, .. }) => VariableTypeHint::Integer {
-            typewriter: typewriter.clone(),
-        },
-        Some(AnimationVariableDef::Object { .. }) => VariableTypeHint::Object,
-        None => VariableTypeHint::Float, // fallback
+        AnimationVariableDef::Float { .. } => VariableTypeHint::Float,
+        AnimationVariableDef::Integer { .. } => VariableTypeHint::Integer,
+        AnimationVariableDef::Object { .. } => VariableTypeHint::Object,
     }
 }
 
 /// Extract min/max from variable definition (Task 6.3)
-pub(super) fn extract_min_max(
-    var_def: Option<&AnimationVariableDef>,
-) -> (Option<f64>, Option<f64>) {
+pub(super) fn extract_min_max(var_def: &AnimationVariableDef) -> (Option<f64>, Option<f64>) {
     match var_def {
-        Some(AnimationVariableDef::Float { min, max, .. }) => (*min, *max),
-        Some(AnimationVariableDef::Integer { min, max, .. }) => {
+        AnimationVariableDef::Float { min, max, .. } => (*min, *max),
+        AnimationVariableDef::Integer { min, max, .. } => {
             (min.map(|v| v as f64), max.map(|v| v as f64))
         }
-        _ => (None, None),
+        AnimationVariableDef::Object { .. } => (None, None),
     }
 }

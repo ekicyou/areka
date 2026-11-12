@@ -6,14 +6,7 @@ use super::*;
 fn simple_sequential_single_variable() {
     // 1 variable, 2 sequential entries
     let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
+        vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -22,10 +15,8 @@ fn simple_sequential_single_variable() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -35,10 +26,8 @@ fn simple_sequential_single_variable() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // infer from previous
                     to: Some(TransitionValue::Scalar(200.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf2".to_string()),
                 ..Default::default()
@@ -66,14 +55,7 @@ fn simple_sequential_single_variable() {
 #[test]
 fn sequential_with_delay() {
     let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
+        vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -82,10 +64,9 @@ fn sequential_with_delay() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
                     delay: 0.5,
                     duration: Some(1.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -104,14 +85,7 @@ fn sequential_with_delay() {
 #[test]
 fn duration_zero_instant_transition() {
     let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
+        vec![("x", float_var())],
         vec![],
         "test",
         StoryboardBuilder::new()
@@ -120,10 +94,8 @@ fn duration_zero_instant_transition() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: Some(TransitionValue::Scalar(0.0)),
                     to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
                     duration: None, // instant
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -134,43 +106,6 @@ fn duration_zero_instant_transition() {
     let result = compile_storyboard(&doc, "test", 0.0).unwrap();
     let tl = result.timelines.get("x").unwrap();
     assert_eq!(tl.segments[0].start_time, tl.segments[0].end_time);
-}
-
-#[test]
-fn start_time_offset() {
-    let doc = make_doc_with_storyboard(
-        vec![(
-            "x",
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        )],
-        vec![],
-        "test",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("x".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                keyframe: Some("kf1".to_string()),
-                ..Default::default()
-            })
-            .build(),
-    );
-
-    let result = compile_storyboard(&doc, "test", 5.0).unwrap();
-    let tl = result.timelines.get("x").unwrap();
-    assert_eq!(tl.segments[0].start_time, 5.0);
-    assert_eq!(tl.segments[0].end_time, 6.0);
-    assert_eq!(result.start_time, 5.0);
 }
 
 #[test]
@@ -193,10 +128,9 @@ fn sequential_first_entry_uses_compile_start_time() {
                 transition: Some(TransitionRef::Inline(TransitionDef {
                     from: None, // infer from initial = 10.0
                     to: Some(TransitionValue::Scalar(20.0)),
-                    relative_to: None,
-                    easing: None,
                     delay: 1.0,
                     duration: Some(2.0),
+                    ..Default::default()
                 })),
                 keyframe: Some("kf1".to_string()),
                 ..Default::default()
@@ -210,4 +144,153 @@ fn sequential_first_entry_uses_compile_start_time() {
     assert_eq!(tl.segments[0].start_time, 4.0);
     assert_eq!(tl.segments[0].end_time, 6.0);
     assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(10.0));
+    assert_eq!(result.start_time, 3.0);
+}
+
+fn x_to(to: f64, at: Option<KeyframeRef>) -> StoryboardEntry {
+    StoryboardEntry {
+        variable: Some("x".to_string()),
+        transition: Some(TransitionRef::Inline(TransitionDef {
+            to: Some(TransitionValue::Scalar(to)),
+            duration: Some(1.0),
+            ..Default::default()
+        })),
+        at,
+        ..Default::default()
+    }
+}
+
+fn at_name(name: &str) -> Option<KeyframeRef> {
+    Some(KeyframeRef::Single(name.to_string()))
+}
+
+fn kf_at_start_plus(name: &str, offset: f64) -> StoryboardEntry {
+    StoryboardEntry {
+        keyframe: Some(name.to_string()),
+        at: Some(KeyframeRef::WithOffset {
+            keyframes: KeyframeNames::Single("start".to_string()),
+            offset,
+        }),
+        ..Default::default()
+    }
+}
+
+/// 前方参照があっても、連結の遷移は同じ変数の配列上の直前のエントリに続く（要件 11.7・#5）
+#[test]
+fn sequential_follows_previous_entry_in_array_despite_forward_ref() {
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            .entry(x_to(1.0, at_name("k")))
+            .entry(x_to(2.0, None))
+            .entry(kf_at_start_plus("k", 5.0))
+            .build(),
+    );
+
+    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let segs = &result.timelines["x"].segments;
+    assert_eq!(segs.len(), 2);
+    assert_eq!((segs[0].start_time, segs[0].end_time), (5.0, 6.0));
+    assert_eq!(segs[0].from_value, TransitionValue::Scalar(0.0));
+    assert_eq!(segs[0].to_value, TransitionValue::Scalar(1.0));
+    assert_eq!((segs[1].start_time, segs[1].end_time), (6.0, 7.0));
+    assert_eq!(segs[1].from_value, TransitionValue::Scalar(1.0));
+    assert_eq!(segs[1].to_value, TransitionValue::Scalar(2.0));
+}
+
+/// at の無いキーフレームは配列の 1 つ前のエントリに続く。前方参照を挟んでも正しい文書が通る（要件 11.7・#5）
+#[test]
+fn pure_keyframe_without_at_follows_previous_entry_despite_forward_ref() {
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            .entry(x_to(1.0, at_name("k")))
+            .entry(StoryboardEntry {
+                keyframe: Some("m".to_string()),
+                ..Default::default()
+            })
+            .entry(kf_at_start_plus("k", 5.0))
+            .entry(x_to(2.0, at_name("m")))
+            .build(),
+    );
+
+    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let segs = &result.timelines["x"].segments;
+    assert_eq!(segs.len(), 2);
+    assert_eq!((segs[0].start_time, segs[0].end_time), (5.0, 6.0));
+    // "m" は entry 0 の終わり（6.0）
+    assert_eq!((segs[1].start_time, segs[1].end_time), (6.0, 7.0));
+}
+
+/// 連結の遷移は処理の順で最後に解いた同じ変数のエントリでなく、配列上の直前のエントリに続く（要件 11.7）
+#[test]
+fn sequential_follows_array_predecessor_not_last_processed() {
+    // entry 1 が [0,1] で k=1。entry 0 は k に置かれ [1,2]。entry 2 は配列上の直前＝entry 1 に続き [1,2]
+    // で entry 0 と重なる（処理の順で直前の entry 0 に続けると [2,3] で黙って通ってしまう）。
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            .entry(x_to(1.0, at_name("k")))
+            .entry(StoryboardEntry {
+                keyframe: Some("k".to_string()),
+                ..x_to(2.0, at_name("start"))
+            })
+            .entry(x_to(3.0, None))
+            .build(),
+    );
+
+    let errors = compile_storyboard(&doc, "test", 0.0).unwrap_err();
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_string().contains("Segment overlap")),
+        "expected an overlap error, got {errors:?}"
+    );
+}
+
+/// from を省いた連結の遷移は、時刻の上で間に挟まった at のセグメントでなく、
+/// 配列上の直前のエントリの to から始まる（要件 11.7・注 7.1）
+#[test]
+fn sequential_from_follows_array_predecessor_not_previous_in_time() {
+    let x_entry = |from: Option<f64>, to: f64, delay: f64, duration: f64| StoryboardEntry {
+        variable: Some("x".to_string()),
+        transition: Some(TransitionRef::Inline(TransitionDef {
+            from: from.map(TransitionValue::Scalar),
+            to: Some(TransitionValue::Scalar(to)),
+            delay,
+            duration: Some(duration),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            // P: [0,1] 0→5
+            .entry(x_entry(Some(0.0), 5.0, 0.0, 1.0))
+            // C: P に続き delay 1 で [2,3]
+            .entry(x_entry(None, 9.0, 1.0, 1.0))
+            // A: [1.2,1.7] 5→7（時刻の上では P と C の間）
+            .entry(StoryboardEntry {
+                at: Some(KeyframeRef::WithOffset {
+                    keyframes: KeyframeNames::Single("start".to_string()),
+                    offset: 1.2,
+                }),
+                ..x_entry(None, 7.0, 0.0, 0.5)
+            })
+            .build(),
+    );
+    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let segs = &result.timelines["x"].segments;
+    assert_eq!(segs[1].from_value, TransitionValue::Scalar(5.0));
+    assert_eq!((segs[2].start_time, segs[2].end_time), (2.0, 3.0));
+    assert_eq!(segs[2].from_value, TransitionValue::Scalar(5.0));
 }

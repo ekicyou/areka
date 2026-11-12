@@ -500,7 +500,6 @@ fn non_balloon_commands_do_not_disturb_state() {
             key: "smile".into(),
         },
     ));
-    state.apply_cue(&cue("0", 0.2, CueCommand::EntityRef(42)));
     // BalloonSurface（バルーン面切替）は表示系の消費対象＝文字状態機械へは配送しない（`areka-P0-balloon-face-cue` R3.2）。
     // 適用しても文字状態（items／reveal／visible_glyphs）は完全に不変。
     state.apply_cue(&cue(

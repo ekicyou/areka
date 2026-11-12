@@ -3,7 +3,7 @@
 
 use dola::*;
 
-use crate::common::make_doc_with_storyboard;
+use crate::common::{float_var, make_doc_with_storyboard};
 
 mod at_placement;
 mod between;
