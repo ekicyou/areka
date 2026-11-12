@@ -564,6 +564,8 @@ pub struct DrawExecutor {
     /// 行 TextLayout の生成・キャッシュストア（[`LineLayoutStore`]・両描画実行が同一経路で
     /// 行レイアウトを得るための共有資産＝抽出前の内蔵キャッシュと byte 等価・RN5）。
     line_store: LineLayoutStore,
+    /// 書体の台帳（本番の `ViewboxExecutor::ensure_format` と同じく `pick` で解いてから作る・指摘 34）。
+    fonts: FontCatalog,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・R8.5）。
     seam_warned: bool,
 }
@@ -587,11 +589,13 @@ impl DrawExecutor {
         // 行キャッシュは共有ストアへ抽出済み。store の factory は `dwrite` の別 clone
         // （`ensure_format` が `dwrite` を使い続けるため本体にも保持する・最小変更）。
         let line_store = LineLayoutStore::new(&dwrite);
+        let fonts = FontCatalog::new(&dwrite)?;
         Ok(DrawExecutor {
             dwrite,
             dc,
             format: None,
             line_store,
+            fonts,
             seam_warned: false,
         })
     }
@@ -728,7 +732,7 @@ impl DrawExecutor {
             );
             self.line_store.clear();
         }
-        let format = create_text_format(&self.dwrite, font, mode)?;
+        let format = create_text_format(&self.dwrite, &self.fonts.pick(font), mode)?;
         self.format = Some((key, format.clone()));
         Ok(format)
     }

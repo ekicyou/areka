@@ -302,20 +302,20 @@ pub(super) fn state_frame(
 
 /// 見本（全域再描画の [`DrawExecutor`]・front へ焼く）と viewbox（ダーティ描画・back へ焼いて
 /// flip）を同じ寸の 2 面へ装着した対。どちらも read_back は front を読むので直接比べられる。
-pub(super) struct RenderPair {
+pub(crate) struct RenderPair {
     /// 見本の供給面。
-    pub(super) oracle_surface: TextSurface,
+    pub(crate) oracle_surface: TextSurface,
     /// viewbox の供給面。
-    pub(super) viewbox_surface: TextSurface,
+    pub(crate) viewbox_surface: TextSurface,
     /// 比較専用の見本。
-    pub(super) oracle: DrawExecutor,
+    pub(crate) oracle: DrawExecutor,
     /// 本番の実行部。
-    pub(super) viewbox: ViewboxExecutor,
+    pub(crate) viewbox: ViewboxExecutor,
 }
 
 impl RenderPair {
     /// `rig` へ同じ寸（ceil(image × k)）の 2 面を装着し、両実行部を作る。
-    pub(super) fn attach(rig: &mut Rig, image: (u32, u32), k: f32) -> RenderPair {
+    pub(crate) fn attach(rig: &mut Rig, image: (u32, u32), k: f32) -> RenderPair {
         RenderPair {
             oracle_surface: rig.attach(image, k),
             viewbox_surface: rig.attach(image, k),
@@ -325,7 +325,7 @@ impl RenderPair {
     }
 
     /// 同じ canvas・可視窓を両方へ描き、読み戻し `(見本, viewbox)` を返す。
-    pub(super) fn render(
+    pub(crate) fn render(
         &mut self,
         label: &str,
         canvas: &ContentCanvas,

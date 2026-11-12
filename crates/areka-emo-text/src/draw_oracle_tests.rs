@@ -27,7 +27,9 @@ use crate::layout::VisibleWindow;
 use crate::layout::test_support::model_full;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::viewbox_draw::test_support::{Rig, geo_model, glyph_items, layout_frame, opaque_count};
+use crate::viewbox_draw::test_support::{
+    RenderPair, Rig, geo_model, glyph_items, layout_frame, opaque_count,
+};
 
 /// layout→canvas→visible_window→render→read_back の通し（テスト用最短経路）。
 #[allow(clippy::too_many_arguments)]
@@ -724,4 +726,48 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
             }
         }
     }
+}
+
+/// 指摘 34: 見本も本番と同じく台帳（[`FontCatalog::pick`](super::FontCatalog::pick)）で
+/// 書体を解いてから書式を作る。「Yu Gothic Medium」は GDI の名前で、解かずに作ると別の
+/// 書体へ落ちる。見本と viewbox が同じ顔で描けば、読み戻しは画素で一致する（実 GPU）。
+#[test]
+fn oracle_resolves_font_via_catalog_and_matches_viewbox_pixels() {
+    let mut rig = Rig::new();
+    let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+    super::test_support::require_yu_gothic(
+        &super::FontCatalog::new(&factory).expect("FontCatalog::new"),
+    );
+    let image = (320u32, 64u32);
+    let mode = WritingMode::HorizontalTb;
+    let model = model_with_font(Font::new(
+        Some("Yu Gothic Medium".to_owned()),
+        Some(28),
+        FontColor::new(None, None, None),
+    ));
+    let font = ResolvedFont::resolve(&model);
+    let region = TextRegion::resolve(&model, image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+        .expect("DWriteMetrics");
+    let items = glyph_items("おっはよー！iW");
+    let (_, canvas, window) = layout_frame(
+        &items,
+        items.len(),
+        &region,
+        mode,
+        font.height,
+        &metrics,
+        WrapPlan::CharByChar,
+    );
+    let mut pair = RenderPair::attach(&mut rig, image, 1.0);
+    let (ob, vb) = pair.render("Yu Gothic Medium", &canvas, &window, &font, mode, &contract);
+    assert!(
+        opaque_count(&ob) > 0,
+        "見本の面に墨が無い（空どうしで緑にしない）"
+    );
+    assert!(
+        ob == vb,
+        "見本と viewbox の読み戻しが画素で一致しない（見本が台帳で書体を解いていない）"
+    );
 }

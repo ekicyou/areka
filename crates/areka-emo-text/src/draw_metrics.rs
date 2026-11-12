@@ -242,6 +242,21 @@ impl DWriteMetrics {
         &self.fonts
     }
 
+    /// `look.font_key() == self.default_key` と同じ答えを、字ごとに鍵（名前の列の複製）を作らずに欄で比べて出す（指摘 31）。
+    fn is_default_look(&self, look: &TextLook) -> bool {
+        // 欄を全部ほどく: FontKey に欄が増えたらここが通らず、比べの漏れを防ぐ。
+        let FontKey {
+            name,
+            height_bits,
+            bold,
+            italic,
+        } = &self.default_key;
+        look.height.to_bits() == *height_bits
+            && look.bold == *bold
+            && look.italic == *italic
+            && look.name == *name
+    }
+
     /// 台帳の台詞の番号が進んでいたら、表の寿命を「1 つの台詞のあいだ」に揃える（指摘 11）。
     ///
     /// 試験用書式を全部と、既定の鍵以外の字幅と、既定の鍵の測れなかった字（`None`）を捨てる
@@ -386,10 +401,10 @@ impl GlyphMetrics for DWriteMetrics {
     /// 基準は**その見た目の**大きさ）を返して継続する。
     fn advance_styled(&self, text: &str, look: &TextLook) -> f32 {
         self.sync_talk();
-        let key = look.font_key();
-        if key == self.default_key {
+        if self.is_default_look(look) {
             return self.advance(text, look.height);
         }
+        let key = look.font_key();
         self.probe_format_for(&key)
             .and_then(|format| self.measure(text, &key, &format))
             .unwrap_or_else(|| degraded_advance(text, look.height))
