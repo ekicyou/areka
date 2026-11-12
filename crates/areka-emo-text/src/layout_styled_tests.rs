@@ -7,8 +7,8 @@
 //! 本タスクの範囲で先に固定する）。
 //!
 //! タスク 5.2 が足すのはさらに 4 点である——(1) 行矩形の丈と行送りが**行内最大の em**で
-//! 決まること（要件 7.9）、(2) 文字の置かれていない行の 2 つの落としどころ（次に置く文字の
-//! 大きさ／スコープの現在の見た目）、(3) 塊先決の折返しでも合計が見た目込みになること
+//! 決まること（要件 7.9）、(2) 文字の置かれていない行が後ろに置かれる文字の
+//! 大きさで送られること（先に閉じる行と先読みも同じ・後の装飾で前の字が動かない）、(3) 塊先決の折返しでも合計が見た目込みになること
 //! （要件 11.2）、(4) 行送りの式が `TextLayerConfig::line_pitch` の 1 点だけを通ること
 //! （要件 7.8——値の比較では見張れないので**字面**で固定する）。
 
@@ -444,7 +444,7 @@ fn line_pitch_advances_by_the_closing_lines_largest_em() {
     );
 }
 
-// ── 要件 7.9: 文字の置かれていない行の 2 つの落としどころ ──
+// ── 要件 7.9: 文字の置かれていない行は後ろに置かれる文字の大きさで送る ──
 
 /// 断言 ⑴——**文字の無い行はそのとき効いている大きさ**（＝次に置く文字の大きさ）で送る。
 /// 先頭の改行は行を作らないが、送り量はその 1 文字の大きさで決まる。
@@ -484,21 +484,23 @@ fn a_line_with_no_glyph_advances_by_the_height_in_effect() {
     );
 }
 
-/// 断言 ⑵——**次に置く文字が無いまま閉じる行**はスコープの現在の見た目の大きさで送る。
+/// 断言 ⑵——**先に閉じる文字の無い行も、後ろに置かれる文字の大きさ**で送る。
 ///
 /// 到達する本番の経路は `\_l` の先行実体化（`LineBreak` 腕・DD-11）である: 保留カーソルを
-/// 抱えたまま改行が届くと、その場で「行を閉じて保留改行を適用する」——このとき手元に
-/// 次の文字は無い。行内軸だけを指定した `\_l[50,]` を使うのは、行送り軸を指定すると
-/// 直後の 保留カーソルの適用が送り量を上書きして
-/// しまい、この断言が観測できなくなるためである。
+/// 抱えたまま改行が届くと、その場で「行を閉じて保留改行を適用する」。このとき後ろに文字が
+/// あれば、保留フラッシュ（閉じる行の丈に次の字の大きさを渡す経路）と同じくその字の大きさを
+/// 使う——スコープの現在の見た目（＝届いた最後の項目の後の見た目）を使うと、後の
+/// `\f[height]` が届くたびに前の字が動く。行内軸だけを指定した `\_l[50,]` を使うのは、
+/// 行送り軸を指定すると直後の保留カーソルの適用が送り量を上書きして、この断言が観測できなく
+/// なるためである。
 ///
-/// 手計算（現在の見た目 30・既定 10）: `\n` で保留 1.0 →`\_l[50,]` で保留カーソル →2 つ目の
-/// `\n` が先行実体化して `block = pitch(30) = 32`（行内は 50 へ）→ 最後の `あ` の直前で
-/// 保留 1.0 を `pitch(10) = 12` で適用し `block = 44`・行内は行頭へ戻る。
+/// 手計算（現在の見た目 30・既定 10・`あ` は既定）: `\n` で保留 1.0 →`\_l[50,]` で保留カーソル
+/// →2 つ目の `\n` が先行実体化して `block = pitch(10) = 12`（行内は 50 へ）→ `あ` の直前で
+/// 保留 1.0 を `pitch(10) = 12` で適用し `block = 24`・行内は行頭へ戻る。
 ///
-/// 較正（要件 15.5）: 既定の大きさで固定する誤りに戻すと `top` が 44 → 24 になって赤。
+/// 較正（要件 15.5）: スコープの現在の見た目へ戻すと `top` が 24 → 44 になって赤。
 #[test]
-fn closing_with_no_following_glyph_uses_the_scope_current_look() {
+fn closing_a_glyphless_line_early_uses_the_following_glyph_height() {
     let region = region_h(200);
     let items = vec![
         TextItem::LineBreak { ratio: 1.0 },
@@ -525,8 +527,112 @@ fn closing_with_no_following_glyph_uses_the_scope_current_look() {
 
     assert_eq!(
         rects(&lines),
-        vec![(0.0, 44.0, 10.0, 54.0)],
-        "次に置く文字が無い行はスコープの現在の見た目 30 で送る（32 + 12）"
+        vec![(0.0, 24.0, 10.0, 34.0)],
+        "後ろに置かれる字（既定 10）の大きさで送る（12 + 12）——現在の見た目 30 なら 32 + 12"
+    );
+}
+
+/// 1 文字ずつ届く再生でも、`\_l` の先読みが使う行送りは後から届く `\f[height]` で変わらない。
+///
+/// 台本 `\n\_l[,@0]あ\f[height,30]い`（既定 10）: `あ` までが届いた時点（現在の見た目は既定）と、
+/// `\f[height,30]` と `い` が届いた後（現在の見た目は 30）とで、`あ` の位置が同じ。`\_l` の
+/// 行送り軸は「実効位置から 0px」なので、先読みの行送りがそのまま `あ` の `top` に出る。
+/// `\_l` を外した同じ並びでも `あ` は `top = 12`（保留フラッシュは次の字の大きさで送る）。
+///
+/// 較正（要件 15.5）: 先読みをスコープの現在の見た目へ戻すと、届いた後の `top` が 12 → 32 になって赤。
+#[test]
+fn a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview() {
+    let region = region_h(200);
+    let mut items = vec![
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::CursorMove {
+            x: CursorCoord::Omitted,
+            y: CursorCoord::Relative {
+                value: 0.0,
+                unit: CursorUnit::Px,
+            },
+        },
+        TextItem::glyph("あ"),
+    ];
+    let default = look_with_height(10.0);
+    let big_look = look_with_height(30.0);
+    let mut table = StyleTable::default();
+    let big = table.intern(&big_look, &default);
+
+    // `あ` までが届いた時点。
+    let before = layout_styled_h(
+        &items,
+        &region,
+        styles_with_current(&table, &[StyleId::DEFAULT], &default, &default),
+        WrapPlan::CharByChar,
+    );
+    // `\f[height,30]` と `い` が届いた後。
+    items.push(TextItem::glyph("い"));
+    let ids = [StyleId::DEFAULT, big];
+    let after = layout_styled_h(
+        &items,
+        &region,
+        styles_with_current(&table, &ids, &default, &big_look),
+        WrapPlan::CharByChar,
+    );
+
+    assert_eq!(
+        rects(&before),
+        vec![(0.0, 12.0, 10.0, 22.0)],
+        "届いた時点の `あ`"
+    );
+    assert_eq!(
+        rects(&after)[0].1,
+        rects(&before)[0].1,
+        r"後から届く `\f[height]` で `あ` の行が動かない"
+    );
+}
+
+/// 後ろの字を探す手間は配置 1 回で項目数に比例する（字の無い `\n\_l` が長く続く台本でも
+/// 項目ごとに探し直さない）。
+///
+/// 手計算（既定 10・`あ` は 20）: `[\n, \_l[,@0]]` の 1 組ごとに後ろの字の大きさ 20 の行送り
+/// `pitch(20) = 22` だけ進み、`N` 組の後の `あ` は `top = 22 × N`。
+///
+/// 較正（要件 15.5）: 探した結果を覚えずに毎回探すと、見た項目の数が約 `N²` になって赤。
+#[test]
+fn finding_the_following_glyph_is_linear_in_the_items() {
+    const N: usize = 20_000;
+    let region = region_h(200);
+    let mut items = Vec::with_capacity(2 * N + 1);
+    for _ in 0..N {
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.push(TextItem::CursorMove {
+            x: CursorCoord::Omitted,
+            y: CursorCoord::Relative {
+                value: 0.0,
+                unit: CursorUnit::Px,
+            },
+        });
+    }
+    items.extend(glyph_items("あ"));
+    let default = look_with_height(10.0);
+    let mut table = StyleTable::default();
+    let big = table.intern(&look_with_height(20.0), &default);
+
+    super::scan::FOLLOWING_SCAN_VISITS.with(|c| c.set(0));
+    let lines = layout_styled_h(
+        &items,
+        &region,
+        styles(&table, &[big], &default),
+        WrapPlan::CharByChar,
+    );
+    let visits = super::scan::FOLLOWING_SCAN_VISITS.with(|c| c.get());
+
+    assert_eq!(
+        rects(&lines)[0].1,
+        22.0 * N as f32,
+        "後ろの字の大きさ 20 で送る"
+    );
+    assert!(
+        visits <= items.len(),
+        "後ろの字を探して見た項目 {visits} が項目数 {} を超える",
+        items.len()
     );
 }
 

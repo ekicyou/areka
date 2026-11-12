@@ -97,9 +97,11 @@ pub(super) fn glyph_style_advance(
 /// 3 つの答えを **1 つの優先順**で返す（[`LineHeights::close`]）:
 ///
 /// 1. 閉じる行に文字が置かれていれば、その行の最大 em。
-/// 2. 文字の無い行（改行だけの行）は、そのとき効いている大きさ＝**次に置く文字**の大きさ。
-/// 3. 次に置く文字も無いまま閉じるとき（`\_l` の先行実体化）は、スコープの**現在の見た目**の
-///    大きさ（[`GlyphStyles::current`]）。
+/// 2. 文字の無い行（改行だけの行）は、そのとき効いている大きさ＝**後ろに置かれる文字**の大きさ
+///    （`\_l` の先行実体化と先読みも、届いた項目の後ろの字を呼び手が引いて渡す）。
+/// 3. 後ろに置かれる文字が無いときだけ、スコープの**現在の見た目**の大きさ
+///    （[`GlyphStyles::current`]）。後ろに字が無ければその後に置かれる字も無いので、この値は
+///    配置の結果に出ない——後の `\f[height]` が届いても前の字は動かない。
 pub(super) struct LineHeights {
     /// スコープの現在の見た目の高さ（番号列が無い経路は `font_height`）。
     current: f32,
@@ -122,20 +124,19 @@ impl LineHeights {
     }
 
     /// 開いている行を閉じる——丈を返し、行内最大を空へ戻す。
-    /// `next` は「この直後に置かれる文字の大きさ」（先行実体化の経路では `None`）。
+    /// `next` は「後ろに置かれる文字の大きさ」（後ろに文字が無ければ `None`）。
     pub(super) fn close(&mut self, next: Option<f32>) -> f32 {
         self.line_max.take().or(next).unwrap_or(self.current)
     }
 
     /// いま閉じたとしたら返る丈を、**閉じずに**覗く（`\_l` の実効位置の先読み用）。
     ///
-    /// [`LineHeights::close`] と同じ優先順から「次に置く文字」だけを落とした形である
-    /// ——`\_l` の時点で次に置かれる文字はまだ読めていないので、文字の無い行はスコープの
-    /// 現在の見た目へ落ちる。先読みが `close` と別の規則を持つと、`\_l` を挟んだ行だけ
-    /// 行送りが食い違う（`layout_styled_tests.rs` の
-    /// `the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch`）。
-    pub(super) fn peek(&self) -> f32 {
-        self.line_max.unwrap_or(self.current)
+    /// [`LineHeights::close`] と同じ優先順・同じ `next` を取る。先読みが `close` と別の規則を
+    /// 持つと、`\_l` を挟んだ行だけ行送りが食い違う（`layout_styled_tests.rs` の
+    /// `the_cursor_preview_of_a_pending_newline_uses_the_closing_lines_pitch`・
+    /// `a_later_height_tag_does_not_move_a_glyph_placed_after_a_cursor_preview`）。
+    pub(super) fn peek(&self, next: Option<f32>) -> f32 {
+        self.line_max.or(next).unwrap_or(self.current)
     }
 }
 

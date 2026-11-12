@@ -23,8 +23,8 @@ use super::styled::glyph_style_advance;
 
 /// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
 ///
-/// 範囲 `[start_serial, start_serial + len)`（**渡された列の先頭から** `Glyph` のみを 0 起点で
-/// 数えた範囲——配置は今の字の位置からの列と 0 を渡す）のグリフ送り幅を、通し番号昇順＝
+/// **渡された列の先頭から** `Glyph` のみを数えた先頭 `len` 個（配置は今の字の位置からの列を
+/// 渡す）のグリフ送り幅を、通し番号昇順＝
 /// **左畳み込み順**で合計する（配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design
 /// Service Interface）。見た目は字の**通し番号**（`base_serial`＝列の頭の字の通し番号＋列の中の
 /// 番号）で引く（見た目の番号列は全文の頭から数える・指摘 9）。
@@ -36,29 +36,25 @@ use super::styled::glyph_style_advance;
 /// 届いた字の列が渡り、届いたぶんだけで合計する。
 pub(super) fn segment_advance_sum(
     items: &[TextItem],
-    start_serial: usize,
     len: usize,
     base_serial: usize,
     font_height: f32,
     metrics: &dyn GlyphMetrics,
     styles: Option<&GlyphStyles<'_>>,
 ) -> f32 {
-    let end = start_serial + len;
     let mut sum = 0.0f32;
     let mut serial = 0usize;
     for item in items {
         if let TextItem::Glyph { text } = item {
-            if serial >= end {
+            if serial >= len {
                 break;
             }
-            if serial >= start_serial {
-                // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
-                // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
-                // 見た目込みの配置と食い違って折返し位置がずれる。
-                let (_, advance, _) =
-                    glyph_style_advance(text, base_serial + serial, font_height, metrics, styles);
-                sum += advance;
-            }
+            // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
+            // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
+            // 見た目込みの配置と食い違って折返し位置がずれる。
+            let (_, advance, _) =
+                glyph_style_advance(text, base_serial + serial, font_height, metrics, styles);
+            sum += advance;
             serial += 1;
         }
     }

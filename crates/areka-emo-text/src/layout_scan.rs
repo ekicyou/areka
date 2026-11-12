@@ -4,13 +4,20 @@
 use super::{
     ActorKey, CursorAxis, CursorBasis, CursorWarnGuard, GlyphMetrics, GlyphStyles, LayoutEngine,
     LineHeights, LineRect, PositionedGlyph, PositionedLine, TextItem, TextRegion, WrapPlan,
-    WritingMode, line_pitch_of, resolve_cursor_component,
+    WritingMode, glyph_style_advance, line_pitch_of, resolve_cursor_component,
 };
 use crate::cursor_tag::CursorDegrade;
 use crate::state::CursorCoord;
 
 #[path = "layout_scan_glyph.rs"]
 mod glyph;
+
+#[cfg(test)]
+thread_local! {
+    /// 後ろの字を探す走査が見た項目の数（配置 1 回の手間が項目数に比例することの檻）。
+    pub(super) static FOLLOWING_SCAN_VISITS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 
 /// 走査の状態。`layout_inner` の中で作り、`finish` で消える（フレームをまたがない）。
 struct Scan<'a, 'w> {
@@ -43,6 +50,8 @@ struct Scan<'a, 'w> {
     seg_remaining: usize,
     /// 今の項目の `items` での位置（塊の字幅の合計に `&items[item_cursor..]` を渡す・指摘 9）。
     item_cursor: usize,
+    /// 後ろの字の覚え（`items` での位置・大きさ。字が無ければ `(items.len(), None)`）。
+    next_glyph: Option<(usize, Option<f32>)>,
 }
 
 impl LayoutEngine {
@@ -53,7 +62,7 @@ impl LayoutEngine {
     /// [`GlyphMetrics::advance_styled`] で測り、番号を配置済みグリフへ写す（R3.3／R7.10／R11.2）。
     ///
     /// 行の丈と行送りは [`LineHeights`] が供給する——閉じる行に置かれた文字の em の最大値
-    /// （文字が無い行は次に置く文字の大きさ・それも無ければスコープの現在の見た目）を
+    /// （文字が無い行は後ろに置かれる文字の大きさ・それも無ければスコープの現在の見た目）を
     /// [`line_pitch_of`] へ渡すだけで、装飾のための別の式は持ち込まない（R7.8／R7.9）。
     #[allow(clippy::too_many_arguments)]
     pub(super) fn layout_inner(
@@ -135,6 +144,7 @@ impl LayoutEngine {
             pending_cursor,
             seg_remaining,
             item_cursor: 0,
+            next_glyph: None,
         };
         for (i, item) in items.iter().enumerate() {
             scan.item_cursor = i;
@@ -176,9 +186,10 @@ impl Scan<'_, '_> {
         // 無いので本分岐は不発火）——順序で結果が分かれるのが正典の振舞いである。
         // 末尾規則は不変: 実体化は位置の更新と現在行の確定だけで、内容の無い行は作らない。
         if self.pending_cursor.is_some() {
-            // 先行実体化の時点では**次に置く文字が無い**——文字の置かれていない
-            // 行はスコープの現在の見た目の大きさで送る（要件 7.9）。
-            let closing = self.heights.close(None);
+            // 文字の置かれていない行は後ろに置かれる文字の大きさで送る（保留フラッシュと
+            // 同じ規則・要件 7.9）。スコープの現在の見た目は後ろに字が無いときだけ。
+            let next = self.following_glyph_height();
+            let closing = self.heights.close(next);
             finish_pending_line(
                 &mut self.lines,
                 &mut self.current,
@@ -232,6 +243,7 @@ impl Scan<'_, '_> {
         // `inline_pos`／`block_pos` は書き換えない（R3.5「基点は `\_l` 実行時点に固定」）。
         // 行送りはフラッシュ側と同じく閉じる行の丈から引く（[`LineHeights::peek`] の doc・要件 7.9）。
         // 下見は記録しない——送れなかった改行は後の本当の適用で 1 度だけ記録される。
+        let next = self.following_glyph_height();
         let (mut eff_inline, mut eff_block) = (self.inline_pos, self.block_pos);
         let (mut pending, mut pending_cursor) = (self.pending, self.pending_cursor);
         apply_pending_newline(
@@ -240,7 +252,7 @@ impl Scan<'_, '_> {
             &mut eff_block,
             self.inline_start,
             self.block_dir,
-            line_pitch_of(self.metrics, self.heights.peek()),
+            line_pitch_of(self.metrics, self.heights.peek(next)),
         );
         apply_pending_cursor(&mut pending_cursor, &mut eff_inline, &mut eff_block);
         // 実効位置を image 軸へ逆写像する（変数名 `eff` は、[`Scan`] で「現在行のグリフ列」を
@@ -293,6 +305,47 @@ impl Scan<'_, '_> {
                 "[layout_inner] 両軸縮退の \\_l を完全 no-op として素通しする（行区切りせず）"
             );
         }
+    }
+
+    /// 今の項目より後ろで最初に置かれる文字の大きさ（後ろに文字が無ければ `None`・要件 7.9）。
+    /// 見た目は通し番号 `placed`（次に置く字の番号）で引き、字の腕と同じ 1 か所で決める。
+    ///
+    /// 見つけた字の位置と大きさは [`Scan::next_glyph`] に覚え、走査がその字に着くまで使い回す
+    /// （その間に置かれる字は無いので `placed` も変わらない）——字の無い `\n`／`\_l` が長く
+    /// 続いても、配置 1 回の手間は項目数に比例する。
+    fn following_glyph_height(&mut self) -> Option<f32> {
+        if let Some((at, height)) = self.next_glyph
+            && at > self.item_cursor
+        {
+            return height;
+        }
+        let from = self.item_cursor + 1;
+        let found = self.items[from..]
+            .iter()
+            .inspect(|_| {
+                #[cfg(test)]
+                FOLLOWING_SCAN_VISITS.with(|c| c.set(c.get() + 1));
+            })
+            .position(|item| matches!(item, TextItem::Glyph { .. }));
+        let entry = match found.map(|k| (from + k, &self.items[from + k])) {
+            Some((at, TextItem::Glyph { text })) => (
+                at,
+                Some(
+                    glyph_style_advance(
+                        text,
+                        self.placed,
+                        self.font_height,
+                        self.metrics,
+                        self.styles.as_ref(),
+                    )
+                    .2,
+                ),
+            ),
+            // 後ろに字が無い（以後も現れない）——項目の終わりを覚えて探し直さない。
+            _ => (self.items.len(), None),
+        };
+        self.next_glyph = Some(entry);
+        entry.1
     }
 
     /// 送りの結果が有限でなかったことを `warn!` で残す（その送りは捨てた・致命ではない）。
