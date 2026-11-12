@@ -14,7 +14,7 @@
 
 申し送りの 2 件は中身が決まっているので、要件 7・8 に外から見た結果として書く。直し方は要件の討議と設計で決める。
 
-起票のときの範囲にあった `crates/shiori-abi/`（COM の面）と `crates/shiori4-testdll/` は、受け持ちから外す。2026-10-23 の開発者の決定（「COM-SHIORI インターフェースの作りかけは排除し、shiori4 に完全移行」）で `shiori4-api` が消すファイルであり（brief の 2026-10-23 の申し送り「受け持ちから外してよい」）、2026-11-13 の棚卸㊱も外すことを推している（残すと、その使い手の本体 `crates/areka/src/{reference_brain,shiori_demo,shiori_host,shiori_session}.rs` に直しが及び、C19 の約束 ⑴ に触れる）。外すことは要件の討議で開発者に確かめる。
+起票のときの範囲にあった `crates/shiori-abi/`（COM の面）と `crates/shiori4-testdll/` は、受け持ちから外す。2026-10-23 の開発者の決定（「COM-SHIORI インターフェースの作りかけは排除し、shiori4 に完全移行」）で `shiori4-api` が消すファイルであり（brief の 2026-10-23 の申し送り「受け持ちから外してよい」）、2026-11-13 の棚卸㊱も外すことを推している（残すと、その使い手の本体 `crates/areka/src/{reference_brain,shiori_demo,shiori_host,shiori_session}.rs` に直しが及び、C19 の約束 ⑴ に触れる）。外すことは 2026-11-13 の要件の討議で確定した（要件 10.1）。
 
 この spec はウェーブ C19 で、ほかの 7 本（`wintf-d2d-composite-rules`・`dola-yaml-backend`・`runtime-module-untangle`・`audit-mcp-update-crates`・`audit-emo-atlas`・`emo-text-reveal-incremental`・`audit-impl-watch`）と並んで走る。並走の約束（ロードマップの「ウェーブ編成」の C19 の行の ⑴〜⑸）を守る。
 
@@ -157,3 +157,27 @@
 3. The 検証 shall 新しい指摘が 0 件であることを、かけ直した audit の結果として記録に残す
 4. When 直しを全部終えたとき, the 全体テスト（`pwsh -NoProfile -File tools/test-all.ps1`。x64 の段と i686 の段を含む） shall 緑で終わる
 5. If かけ直しが 5 回目になっても 0 件に収まらず、5 回目の指摘に「必ず直す」と本番の振る舞いに関わるものが 1 件も無いとき, then the 本 spec shall 開発者に一言知らせたうえで、5 回目の指摘を直したところで打ち切り、検証の記録に「5 回目で打ち切った・残りは直し済み」と書いて全体テストへ進む（`audit-seriko`・`audit-dola` と同じ形）
+
+### Requirement 10: 要件の討議で確定した直す対象と残す指摘（2026-11-13・開発者「承認」＝議題 1〜13 を推奨案で確定）
+
+**Objective:** As a 開発者, I want 討議で決めた直す対象と、残すと裁定した指摘と、議題ごとの直し方の決めを 1 か所で引きたい, so that 設計とタスクが決めから外れない
+
+指摘の番号は `research.md` §4 の通し番号（1〜48）、議題の番号は `research.md` §11 の番号。
+
+#### Acceptance Criteria
+
+1. The 本 spec shall `crates/shiori-abi/` と `crates/shiori4-testdll/` を受け持たない（議題 1・`shiori4-api` が消す）
+2. The 本 spec shall 1 本の spec のまま進め、`research.md` §4 の 48 件のうち 10.3 で残すと決めた分を除く全部を、3 つの組とも直す（議題 13・タスクの見込み 15〜19）
+3. The 本 spec shall 次のものだけを直さずに残す（要件 2.5 の記録）
+   - 27（`request_of` の包み）: ⑴ 開発者の裁定＝完了した spec の決め「2 つの道（helper と同じプロセス内）が同じ組み立てを共有する」を守る（議題 7）
+   - 39（実物の pasta を使う任意のテストが、DLL が無いと黙って戻る）: ⑴ 開発者の裁定＝完了した spec が「任意」と決めた例外。要件 4.4 が縛るのは helper と試験用の DLL の成果物で、実物の pasta は外の物（議題 11）
+4. When 件 2 を直すとき, the host の helper の起こし方 shall helper にいつも `PASTA_DEBUG=0` を渡し、helper の下の pasta のデバッグの待ち受けを開ける口は設けない（議題 2）
+5. When 件 2 を直した後, the 本 spec の直し shall `crates/areka-ghost/tests/ghost/common.rs` の当座の錠 `real_pasta_turn` と、その 3 つの使い手の錠の取り回しと「`PASTA_DEBUG=0` で回す」の説明を消す（議題 3・`areka-ghost` は C19 のほかの spec と重ならない）
+6. When 件 1 を直すとき, the helper shall 同じプロセス内の読み込みと同じ旗（`LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`）で SHIORI の DLL を読み、依存が `PATH` にだけある配置と、DLL が下のフォルダにあり依存が `ghost\master` にある配置が読めなくなることを受け入れる（議題 4）。実物のゴーストが読めることは設計の段で確かめる（`research.md` R1）
+7. When 指摘 13 を直すとき, the host の job shall `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK` を足し、SHIORI が起こしたプロセスをゴーストを閉じても殺さない。これは ⑶ に当たらない（SSP は SHIORI を自分のプロセスの中に読み、SHIORI が起こしたプロセスはゴーストを閉じても残る。areka の同じプロセス内の道も同じ＝そろえる直し）（議題 5）
+8. When 指摘 22・23 を直すとき, the 本 spec の設計 shall 応答のヘッダの値の前後の空白の扱いと、同じ名前のヘッダが重なったときの決まりを SSP で測り、SSP に合わせる。ukadoc の応答の節（`ukadoc:spec/shiori3/response`）は形と各ヘッダの意味だけを書き、この 2 点を書いていない。測れなければ、22 は半角の空白とタブだけを削り、23 は先勝ちにそろえる（議題 6・読み取りの関数は同じプロセス内の道と共有＝どのゴーストにも効く）
+9. When 指摘 26 を直すとき, the 本 spec の直し shall 使い手のいない公開の関数と型（`poll_exit`・`HelperHandle::helper_hwnd`／`set_helper_hwnd`・`classify_failure`・`FailureClass`・`LifecycleReport`・`HelperLifecycle::report_failure`）を、それを試すだけのテストごと消す。消す前に設計の段で `runtime-module-untangle` のセッションと申し合わせる（要件 6.5・`crates/areka/` の使い手は 0）。申し合わせが付かなければ、C19 のほかの 7 本が `main` に着地した後に消す（議題 7）
+10. When 指摘 28 を直すとき, the 本 spec の直し shall 使っていない依存 3 つ（host の `event-listener`・helper の `thiserror`・ipc の `windows-core`）を、`dola-yaml-backend` が `main` に着地した後に `main` を取り込んでから、本 spec の最後の方のタスクで消す。本 spec の完了の方が先になるときは C20 へ回し、その旨を記録に残す（議題 8・C19 の約束 ⑷）
+11. When `unload` が偽を返したとき, the helper shall それを記録に残し、UNLOAD の返事は今と同じ [1] にする（議題 9・保存の失敗で終わりを止めない）
+12. When host が helper を起こすとき, the host shall helper の標準エラーをパイプで受け、行を文を変えずに areka の記録へ `warn` の段で書く（議題 10・本体の実機の試験が探す `[helper] LOAD 失敗…` の文を守る）
+13. When 指摘 25 を直すとき, the 本 spec の直し shall `ExitKind::Terminated` の腕は残し、誤った説明と偽のテストだけを直す（議題 12・C19 は公開の形を変えない）
