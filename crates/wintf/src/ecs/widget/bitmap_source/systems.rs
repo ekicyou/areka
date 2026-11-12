@@ -122,7 +122,10 @@ pub fn draw_bitmap_sources(
         let bitmap = if graphics.is_valid() && !resource.is_changed() {
             Ok(())
         } else {
-            create_d2d_bitmap(dc, resource.source()).map(|bitmap| graphics.set_bitmap(bitmap))
+            create_d2d_bitmap(dc, resource.source())
+                .map(|bitmap| graphics.set_bitmap(bitmap))
+                // 作れなければ前の画像を捨てる（命令の列は前の絵のまま・次に描くとき古い画像へ戻らない）
+                .inspect_err(|_| graphics.invalidate())
         };
         // Arrangement.size(DIP単位)の矩形に合わせてスケール描画
         // draw_image(ネイティブサイズ描画)ではなくDrawBitmapで宛先矩形を指定することで

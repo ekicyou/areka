@@ -318,6 +318,58 @@ fn oversize_image_gets_empty_list_and_is_not_retried() {
     });
 }
 
+/// 前の画像を持つ部品へ D2D で作れない画像が着いたら、前の画像を捨てる（次に描くとき古い絵へ戻らない）
+#[test]
+fn failed_bitmap_for_new_image_drops_previous_bitmap() {
+    use crate::ecs::Size;
+    use crate::ecs::graphics::GraphicsCore;
+    use crate::ecs::layout::Arrangement;
+    use windows::Win32::Graphics::Imaging::{GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad};
+
+    with_com_initialized(|| {
+        let wic = WicCore::new().expect("WicCore");
+        let mut world = World::new();
+        let core = GraphicsCore::new().expect("GraphicsCore");
+        let max = unsafe { core.device_context().expect("dc").GetMaximumBitmapSize() };
+        world.insert_resource(core);
+        world.insert_resource(WintfTaskPool::with_threads(1));
+        let path = asset("test_8x8_rgba.png");
+        let e = world
+            .spawn((
+                BitmapSource::new(path.to_str().unwrap()),
+                Arrangement {
+                    size: Size {
+                        width: 8.0,
+                        height: 8.0,
+                    },
+                    ..Default::default()
+                },
+            ))
+            .id();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(draw_bitmap_sources);
+        arrive(&mut world, e, &wic, "test_8x8_rgba.png");
+        schedule.run(&mut world);
+        assert!(world.get::<BitmapSourceGraphics>(e).unwrap().is_valid());
+
+        // 装置の上限を越える画像に入れ替わる
+        let source = unsafe {
+            wic.factory().CreateBitmap(
+                max + 1,
+                1,
+                &GUID_WICPixelFormat32bppPBGRA,
+                WICBitmapCacheOnLoad,
+            )
+        }
+        .expect("CreateBitmap")
+        .cast()
+        .expect("cast");
+        world.entity_mut(e).insert(BitmapSourceResource::new(source));
+        schedule.run(&mut world);
+        assert!(!world.get::<BitmapSourceGraphics>(e).unwrap().is_valid());
+    });
+}
+
 // ============================================================
 // 7.1 二度目の見直し N5: 読み込んだ後に当たりを AlphaMask へ替えてもマスクを作る（実 GPU なし）
 // ============================================================
