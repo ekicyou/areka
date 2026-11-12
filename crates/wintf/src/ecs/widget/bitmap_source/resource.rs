@@ -70,15 +70,6 @@ pub struct BitmapSourceGraphics {
     bitmap: Option<ID2D1Bitmap1>,
 }
 
-// SAFETY 条件: 保持する `ID2D1Bitmap1` は GraphicsCore の MULTI_THREADED D2D ファクトリ
-// 系列のオブジェクトであり、跨スレッド移動・参照共有とも D2D が内部直列化するため安全。
-// なお windows-rs 0.62.2 は `ID2D1Bitmap1` に Send+Sync を自動付与済み（Direct2D/mod.rs）
-// のため本 impl は厳密には冗長だが、crate 全域の COM 保持コンポーネント（components.rs /
-// core.rs / dcomp_resource.rs / command_list.rs）が一貫して明示 impl を採る慣習に合わせ、
-// かつ将来の windows-rs 仕様変更に対する明示の保険として残置する。
-unsafe impl Send for BitmapSourceGraphics {}
-unsafe impl Sync for BitmapSourceGraphics {}
-
 impl BitmapSourceGraphics {
     /// 空のBitmapSourceGraphicsを作成
     pub fn new() -> Self {

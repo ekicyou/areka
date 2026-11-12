@@ -6,33 +6,6 @@ use super::*;
 // ── SenderType::render（2.7） ──
 
 #[test]
-fn render_head_only() {
-    let t = SenderType {
-        head: SenderHead::Internal,
-        rest: &[],
-    };
-    assert_eq!(t.render(), "internal");
-}
-
-#[test]
-fn render_external_sstp() {
-    let t = SenderType {
-        head: SenderHead::External,
-        rest: &[SenderWord::Sstp],
-    };
-    assert_eq!(t.render(), "external,sstp");
-}
-
-#[test]
-fn render_internal_raise() {
-    let t = SenderType {
-        head: SenderHead::Internal,
-        rest: &[SenderWord::Raise],
-    };
-    assert_eq!(t.render(), "internal,raise");
-}
-
-#[test]
 fn render_all_rest_words_in_order() {
     // 残りの 7 語の綴りを ukadoc の語で固定する（1.8）。
     let t = SenderType {

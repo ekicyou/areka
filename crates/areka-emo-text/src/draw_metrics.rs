@@ -1,19 +1,17 @@
 //! # draw_metrics — 計測専用 probe layout（COM 層・draw ファサードの子）
 //!
 //! [`DWriteMetrics`]（測定専用 probe TextLayout 由来の [`GlyphMetrics`] 実装）と、
-//! 実 font face metrics からの行ボックス比の実測を担う。親ファサード `draw.rs` からの
-//! **純移動**——生成規則・キャッシュ規律・縮退の意図はいずれも移動前と同一。
+//! 実 font face metrics からの行ボックス比の実測を担う。
 //!
-//! タスク 6.4 で計測は**見た目込み**になった。送り幅に効く見た目（候補列・大きさ・
-//! 太字・斜体＝[`FontKey`]）ごとに試験用書式（probe format）を**鍵ごとに 1 度だけ**
-//! 焼き、記憶の鍵も「計測鍵と文字」へ広げた。既定の見た目は従来どおり束縛書式の
-//! 経路をそのまま通るので、装飾を使わない台本の計測値は 1 ビットも変わらない。
+//! 計測は**見た目込み**。送り幅に効く見た目（候補列・大きさ・太字・斜体＝[`FontKey`]）ごとに
+//! 試験用書式（probe format）を**鍵ごとに 1 度だけ**焼き、計測値は「計測鍵と文字」の組で覚える。
+//! 既定の見た目は束縛書式の経路をそのまま通る（既定の鍵では試験用書式を作らない）ので、装飾を
+//! 使わない台本の計測値は束縛書式で測った値（測れなければ同じ縮退値）そのもの。
 //!
 //! **層規律**: COM 層——UI スレッド専有。失敗は log-first（`tracing::error!`＋`Err`）で
 //! 扱い panic しない。probe 規約の本文は親ファサードのモジュール doc が正本。
 //!
-//! 親から `pub use` で再輸出されるため、crate 内から見た入口は
-//! `crate::draw::DWriteMetrics` のまま変わらない。
+//! 親から `pub use` で再輸出されるため、crate 内から見た入口は `crate::draw::DWriteMetrics`。
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -33,12 +31,12 @@ use super::{
     device_err, try_create_format,
 };
 use crate::TextLayerError;
-use crate::layout::{GlyphMetrics, column_centred_em_box_left};
+use crate::layout::{FixedMetrics, GlyphMetrics, column_centred_em_box_left};
 use crate::look::{FontKey, TextLook};
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
 
-/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（task 6.2・R4.5・probe 規約）。
+/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（R4.5・probe 規約）。
 ///
 /// 純粋層 `LayoutEngine` の外部注入点（`&dyn GlyphMetrics`）へ、DirectWrite の実測
 /// 送り幅を提供する。probe 規約（モジュール doc）:
@@ -57,7 +55,7 @@ use crate::writing::WritingMode;
 ///   同じ組は同じ送り幅の決定論・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」・
 ///   R11.1）。引くときは `&str` のまま引いて割り当てない。
 ///
-/// UI スレッド専有（COM 層規律）。`line_pitch` は M1 正準式
+/// UI スレッド専有（COM 層規律）。`line_pitch` は正典式
 /// `font_height + 行間`（正本 [`TextLayerConfig::line_pitch`]・`FixedMetrics` と同一式）
 /// に従う——足し算は自分で持たず config へ委譲する。
 pub struct DWriteMetrics {
@@ -78,49 +76,47 @@ pub struct DWriteMetrics {
     /// 横書きの字の箱の上端の比（`(基線 − ascent) ÷ h`・生成時に 1 度だけ実測）。
     /// 縦書きに束縛した物と、測れなかった物は 0（字の箱の上端＝行矩形の上端）。
     horizontal_char_box_top_ratio: f32,
-    /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（probe 成功値のみ・
-    /// 失敗は縮退値を返しキャッシュしない）。既定の見た目は [`default_key`](Self::default_key)
-    /// の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く（引くときに割り当てない）。
-    cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, f32>>>,
+    /// 「計測鍵 → 文字（クラスタ文字列）→ 送り幅」の 2 段の計測キャッシュ（`None`＝測れなかった・
+    /// `error!` は 1 回で、台詞の切れ目まで試し直さない＝指摘 12）。既定の見た目は
+    /// [`default_key`](Self::default_key) の組で入る。内側の鍵を `Arc<str>` にして `&str` で引く
+    /// （引くときに割り当てない）。既定の鍵以外と、既定の鍵の `None`・複数のスカラーの字（クラスタ）は
+    /// 台詞の切れ目で捨てる（[`sync_talk`](Self::sync_talk)）。
+    cache: RefCell<HashMap<FontKey, HashMap<Arc<str>, Option<f32>>>>,
     /// 候補列の解決台帳（共有・警告の源を 1 つに保つ）。
     fonts: Rc<FontCatalog>,
     /// 束縛書式の顔（`fonts.pick(font)` の解決）——全滅の計測鍵はこの顔で測る（要件 4.10）。
     bound_face: FontFace,
     /// 束縛書式に焼いた見た目の計測鍵——この鍵の計測は束縛書式の経路をそのまま通る
-    /// （装飾を使わない台本の計測値が従来と 1 ビットも変わらない構造的保証）。
+    /// （装飾を使わない台本の計測値が束縛書式で測った値と 1 ビットも違わない構造的保証）。
     default_key: FontKey,
     /// 書字方向（鍵ごとの試験用書式へ束縛書式と同じ方向レシピを焼くため）。
     mode: WritingMode,
-    /// 計測鍵ごとの試験用書式（鍵ごとに 1 度だけ生成して持ち回す）。
-    probe_formats: RefCell<HashMap<FontKey, IDWriteTextFormat>>,
+    /// 計測鍵ごとの試験用書式（台詞のあいだ鍵ごとに 1 度だけ生成して持ち回す・`None`＝作れなかった
+    /// （`error!` は 1 回・指摘 12）・[`sync_talk`](Self::sync_talk) で空になる）。
+    probe_formats: RefCell<HashMap<FontKey, Option<IDWriteTextFormat>>>,
     /// 試験用書式を実際に**生成した回数**（記憶に無くて作った回数）。保持庫の要素数ではなく
     /// 生成回数を数える——同じ鍵で作り直しても要素数は増えないので、要素数では
     /// 「鍵ごとに 1 度だけ」を見張れない（実測 2026-09-12）。
     probe_format_creations: Cell<usize>,
+    /// 表を最後に揃えた台詞の番号（[`FontCatalog::talk_epoch`]）。違えば台詞の寿命の表を空にする
+    /// （[`sync_talk`](Self::sync_talk)・指摘 11）。
+    seen_epoch: Cell<u64>,
 }
 
 impl DWriteMetrics {
     /// 解決済みフォント＋writing_mode から計測用 metrics を生成する。
     ///
-    /// format は描画と同一の [`create_text_format`] 経路（既定フォント再試行込み・
-    /// R4.2）——probe 規約「描画に使うのと同一のフォント設定・writing_mode 設定」の
-    /// 構造的保証。生成失敗は当該経路の log-first（`warn!`/`error!`＋`Err`）に従う。
+    /// format は描画と同一の [`create_text_format`] 経路——probe 規約「描画に使うのと同一のフォント設定・writing_mode 設定」の
+    /// 構造的保証。生成失敗は当該経路の log-first（`error!`＋`Err`）に従う。
     ///
-    /// **硬い経路が 1 つ増えている**（タスク 9.4 の記録・6.2 由来）——候補列の解決台帳を
-    /// 作るために `GetSystemFontCollection` を通すので、同 API の失敗が
-    /// **計測の縮退ではなく装着そのものの失敗**（`Err(TextLayerError::Device)`）になる。
-    /// 以前は書式生成の失敗が行ボックス比の縮退で済んでいた。失敗は
+    /// 候補列の解決台帳を作るために `GetSystemFontCollection` を通すので、同 API の失敗は
+    /// **計測の縮退ではなく装着そのものの失敗**（`Err(TextLayerError::Device)`）になる。失敗は
     /// `FontCatalog::new` が `error!` で記録するので記録なしの失敗経路ではない。
     ///
-    /// **本番の呼び手は [`new_shared`](Self::new_shared) へ移った**（`actor_decoration.rs::build_actor_render`
+    /// **本番は [`new_shared`](Self::new_shared) を使う**（`actor_decoration.rs::build_actor_render`
     /// が台帳を 1 つだけ作って描画器と共有する・要件 9.8）。本関数の本番の呼び手は 0 で、
-    /// 残しているのは自前の台帳で足りる決定論テストが呼ぶ委譲の入口としてである
-    /// （`draw_test_support.rs`／`draw_oracle_tests.rs`／`draw_format_metrics_tests.rs`／
-    /// `actor_choice_contract_tests.rs`／`viewbox_draw_live_diff_tests.rs`／
-    /// `viewbox_draw_oracle_regression_tests.rs`／`viewbox_draw_png_dump_tests.rs`、および
-    /// 統合試験 `tests/kero_menu_capacity_test.rs`／`tests/line_pitch_readback_test.rs`）。
-    /// crate 外では
-    /// `crates/areka-emo-text/examples/emo-text-layer/drive.rs` が 1 か所で呼ぶ（本番ではない）。
+    /// 自前の台帳で足りる決定論テスト（`src/` の `*_tests.rs` と `tests/` の統合試験）と
+    /// example `examples/emo-text-layer/drive.rs` が呼ぶ委譲の入口である。
     pub fn new(
         factory: &IDWriteFactory2,
         font: &ResolvedFont,
@@ -144,9 +140,10 @@ impl DWriteMetrics {
         fonts: Rc<FontCatalog>,
     ) -> Result<DWriteMetrics, TextLayerError> {
         let picked = fonts.pick(font);
+        let fonts_epoch = fonts.talk_epoch();
         let format = create_text_format(factory, &picked, mode)?;
         // 行ボックス比は **format が実際に束縛したフォント**の face metrics から実測する
-        // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
+        // （format 側から辿るため取り違えが起きない）。取得失敗は
         // warn＋行送りピッチと同丈の比（`line_pitch(h) / h`）へ縮退する（帯はピッチで
         // 頭打ちゆえ縮退値でも隣接行を侵さない・R3.10・現行の縮退の意図を新式のまま保つ）。
         let font_metrics = measure_font_metrics(factory, &format);
@@ -217,6 +214,7 @@ impl DWriteMetrics {
             mode,
             probe_formats: RefCell::new(HashMap::new()),
             probe_format_creations: Cell::new(0),
+            seen_epoch: Cell::new(fonts_epoch),
         })
     }
 
@@ -226,13 +224,51 @@ impl DWriteMetrics {
     /// [`FontCatalog`] を 1 つだけ作り、[`DWriteMetrics::new_shared`] と
     /// [`ViewboxExecutor::new_shared`](crate::viewbox_draw::ViewboxExecutor::new_shared) の
     /// **両方へ引数で渡す**形で共有が成立する（要件 9.8）。ゆえに本関数の本番の呼び手は 0 で、
-    /// 唯一の呼び手は `draw_metrics_styled_tests.rs::the_shared_catalog_constructor_measures_the_same_as_the_owning_one`
-    /// ——「渡した台帳がそのまま使われている」（`Rc` の同一性）を確かめるための口である。
+    /// テストの観測と操作の口である——「渡した台帳がそのまま使われている」（`Rc` の同一性・
+    /// `the_shared_catalog_constructor_measures_the_same_as_the_owning_one`）、実フォントの前提
+    /// （`require_yu_gothic`）、台詞の境目（`forget_talk`）を確かめる檻が呼ぶ。
     /// 本番の入口ではないことを構造で示すため [`probe_format_creations`](Self::probe_format_creations)
     /// と同じく `#[cfg(test)]` で塞いである。
     #[cfg(test)]
     pub(super) fn fonts(&self) -> &FontCatalog {
         &self.fonts
+    }
+
+    /// `look.font_key() == self.default_key` と同じ答えを、字ごとに鍵（名前の列の複製）を作らずに欄で比べて出す（指摘 31）。
+    fn is_default_look(&self, look: &TextLook) -> bool {
+        // 欄を全部ほどく: FontKey に欄が増えたらここが通らず、比べの漏れを防ぐ。
+        let FontKey {
+            name,
+            height_bits,
+            bold,
+            italic,
+        } = &self.default_key;
+        look.height.to_bits() == *height_bits
+            && look.bold == *bold
+            && look.italic == *italic
+            && look.name == *name
+    }
+
+    /// 台帳の台詞の番号が進んでいたら、表の寿命を「1 つの台詞のあいだ」に揃える（指摘 11）。
+    ///
+    /// 試験用書式を全部と、既定の鍵以外の字幅と、既定の鍵の測れなかった字（`None`）と、既定の鍵の
+    /// 複数のスカラーの字（結合文字・ZWJ で繋いだクラスタ）を捨てる（覚えた失敗はここで試し直しに
+    /// なる）。既定の鍵の 1 つのスカラーの成功した字幅は残す（Unicode のスカラーの数が元からある
+    /// 頭打ちで、台詞ごとに測り直すと台詞の頭のフレームが重くなる）。クラスタは組み合わせに
+    /// 頭打ちが無いので台詞をまたいで残さない（再監査 R1-C1）。台詞のあいだの上限の数は置かない——
+    /// 台詞が使う見た目と字の数が頭打ち。
+    fn sync_talk(&self) {
+        let epoch = self.fonts.talk_epoch();
+        if epoch == self.seen_epoch.get() {
+            return;
+        }
+        self.probe_formats.borrow_mut().clear();
+        let mut cache = self.cache.borrow_mut();
+        cache.retain(|key, _| *key == self.default_key);
+        for by_text in cache.values_mut() {
+            by_text.retain(|text, advance| advance.is_some() && text.chars().nth(1).is_none());
+        }
+        self.seen_epoch.set(epoch);
     }
 
     /// 計測鍵ごとの試験用書式（**鍵ごとに 1 度だけ**生成して持ち回す）。
@@ -242,10 +278,11 @@ impl DWriteMetrics {
     /// 完了 spec の「全滅は ＭＳ ゴシックで測る」を上書き）。書式は束縛書式と共用の
     /// `draw.rs::try_create_format` に顔と鍵の太字／斜体／大きさを渡して作り、最後に同じ
     /// [`DirectionRecipe`] を焼く（要件 4.1「計測と描画は同じ書式経路」・設定の写しを持たない）。
-    /// 計測鍵が顔を一意に決めるので、記憶の鍵は計測鍵のまま。
-    fn probe_format_for(&self, key: &FontKey) -> Result<IDWriteTextFormat, TextLayerError> {
+    /// 計測鍵が顔を一意に決めるので、記憶の鍵は計測鍵のまま。作れなかった鍵も `None` で覚え
+    /// （`error!` は作れなかったときの 1 回だけ）、台詞の切れ目まで試し直さない（指摘 12）。
+    fn probe_format_for(&self, key: &FontKey) -> Option<IDWriteTextFormat> {
         if let Some(format) = self.probe_formats.borrow().get(key) {
-            return Ok(format.clone());
+            return format.clone();
         }
         let face = self.fonts.face_or(&key.name, &self.bound_face);
         let format = try_create_format(
@@ -255,14 +292,18 @@ impl DWriteMetrics {
             key.italic,
             f32::from_bits(key.height_bits),
         )
-        .map_err(device_err("CreateTextFormat(probe)"))?;
-        self.probe_format_creations
-            .set(self.probe_format_creations.get() + 1);
-        DirectionRecipe::for_mode(self.mode).apply(&format)?;
+        .map_err(device_err("CreateTextFormat(probe)"))
+        .and_then(|format| {
+            self.probe_format_creations
+                .set(self.probe_format_creations.get() + 1);
+            DirectionRecipe::for_mode(self.mode).apply(&format)?;
+            Ok(format)
+        })
+        .ok();
         self.probe_formats
             .borrow_mut()
             .insert(key.clone(), format.clone());
-        Ok(format)
+        format
     }
 
     /// 試験用書式を実際に生成した回数（テスト観測用: 同じ鍵の 2 度目が生成を起こさない檻）。
@@ -273,9 +314,9 @@ impl DWriteMetrics {
 
     /// 「計測鍵と文字」の組で記憶しながら、指定の書式で 1 文字（クラスタ 1 つ）を測る。
     ///
-    /// 記憶に無ければ probe layout を作って測り、成功値だけを入れる（失敗は
-    /// [`probe_advance`](Self::probe_advance) 内で `error!` 済み——縮退値は呼び手が
-    /// 決めて記憶しない＝次回再試行）。引くときは割り当てず、入れるときだけ鍵を作る。
+    /// 記憶に無ければ probe layout を作って測り、結果を入れる（失敗は
+    /// [`probe_advance`](Self::probe_advance) 内で `error!` 済みで `None` を覚える——縮退値は
+    /// 呼び手が決め、台詞の切れ目まで試し直さない＝指摘 12）。引くときは割り当てず、入れるときだけ鍵を作る。
     fn measure(&self, text: &str, key: &FontKey, format: &IDWriteTextFormat) -> Option<f32> {
         let cached = self
             .cache
@@ -283,15 +324,15 @@ impl DWriteMetrics {
             .get(key)
             .and_then(|by_text| by_text.get(text).copied());
         if let Some(cached) = cached {
-            return Some(cached);
+            return cached;
         }
-        let advance = self.probe_advance(text, format).ok()?;
+        let advance = self.probe_advance(text, format).ok();
         self.cache
             .borrow_mut()
             .entry(key.clone())
             .or_default()
             .insert(Arc::from(text), advance);
-        Some(advance)
+        advance
     }
 
     /// 1 文字（クラスタ 1 つ）全体の未折返し probe layout を指定の書式で、行と同じ生成口
@@ -306,14 +347,19 @@ impl DWriteMetrics {
         Ok(clusters.iter().map(|c| c.width).sum())
     }
 
-    /// キャッシュ済み計測数（内側の表の要素数の合計。テスト観測用: 同じ「計測鍵と文字」の
+    /// キャッシュ済みの成功した計測数（失敗の `None` は数えない。テスト観測用: 同じ「計測鍵と文字」の
     /// 再計測が probe を増やさない檻・鍵が文字だけへ戻れば見た目違いが同じ組に潰れて赤くなる）。
     ///
     /// `pub(super)`: ファサード配下の兄弟テスト（`draw_format_metrics_tests.rs`＝
     /// `crate::draw` の子）から見える最小の可視性。crate 外へは出さない。
     #[cfg(test)]
     pub(super) fn cached_probe_count(&self) -> usize {
-        self.cache.borrow().values().map(HashMap::len).sum()
+        self.cache
+            .borrow()
+            .values()
+            .flat_map(HashMap::values)
+            .filter(|advance| advance.is_some())
+            .count()
     }
 }
 
@@ -334,7 +380,8 @@ impl GlyphMetrics for DWriteMetrics {
                 "advance へ束縛フォントと異なる font_height が渡された——束縛 format の実測を返す"
             );
         }
-        // 失敗は probe_advance 内で error! 済み。縮退値はキャッシュしない（次回再試行）。
+        self.sync_talk();
+        // 失敗は probe_advance 内で error! 済みで覚えてある（台詞の切れ目まで試し直さない）。
         self.measure(text, &self.default_key, &self.format)
             .unwrap_or_else(|| degraded_advance(text, self.font_height))
     }
@@ -342,17 +389,17 @@ impl GlyphMetrics for DWriteMetrics {
     /// 見た目込みの実測送り幅（R7.10／R11.1）。
     ///
     /// 既定の見た目（束縛書式に焼いた鍵と同値）は [`advance`](Self::advance) の
-    /// **同じ経路**をそのまま通る——装飾を使わない台本の計測値が従来と変わらない。
+    /// **同じ経路**をそのまま通る——装飾を使わない台本の計測値は `advance` と同じ。
     /// それ以外は鍵ごとの試験用書式で測り「計測鍵と文字」の組で記憶する。
     /// 書式の生成に失敗したときは `error!` 済みの縮退値（`FixedMetrics` と同式・
     /// 基準は**その見た目の**大きさ）を返して継続する。
     fn advance_styled(&self, text: &str, look: &TextLook) -> f32 {
-        let key = look.font_key();
-        if key == self.default_key {
+        self.sync_talk();
+        if self.is_default_look(look) {
             return self.advance(text, look.height);
         }
+        let key = look.font_key();
         self.probe_format_for(&key)
-            .ok()
             .and_then(|format| self.measure(text, &key, &format))
             .unwrap_or_else(|| degraded_advance(text, look.height))
     }
@@ -369,8 +416,8 @@ impl GlyphMetrics for DWriteMetrics {
     /// 実測例: Yu Gothic UI ＝ upem 2048・ascent 2210・descent 514 → 比 1.3301
     /// （28px で 37.24px＝em ボックス 28px より 9.24px 高い）／ＭＳ ゴシック ＝ upem 256・
     /// ascent 220・descent 36 → 比ちょうど 1.0（既定フォントでは em ボックスと一致するため
-    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——記憶
-    /// emo-text-byte-equiv-default-font-blindspot の系）。
+    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——完了 spec
+    /// `areka-P0-emo-text-viewbox` の tasks.md「横書きで各行の下端インクが描画されない」の記録）。
     fn line_box_height(&self, font_height: f32) -> f32 {
         font_height * self.line_box_ratio
     }
@@ -403,21 +450,17 @@ impl GlyphMetrics for DWriteMetrics {
     }
 }
 
-/// 実測できないときの決定論の縮退送り幅（`FixedMetrics` と同式: ASCII だけのクラスタ＝
-/// 高さ半分・それ以外＝高さ 1 つ分）。
+/// 実測できないときの決定論の縮退送り幅（式は [`FixedMetrics`] の送り幅の 1 か所: ASCII だけの
+/// クラスタ＝高さ半分・それ以外＝高さ 1 つ分）。
 fn degraded_advance(text: &str, height: f32) -> f32 {
-    if text.is_ascii() {
-        height / 2.0
-    } else {
-        height
-    }
+    FixedMetrics.advance(text, height)
 }
 
 /// format が束縛したフォントの face metrics（`DWRITE_FONT_METRICS`・upem ＞ 0 を確かめた物）を返す。
 /// 行ボックス比 `(ascent + descent) ÷ upem` などの比は呼び手が作る。
 ///
 /// format 自身が持つ family 名・フォント コレクション・weight/style/stretch を辿るため、
-/// [`create_text_format`] の既定フォント再試行（R4.2）後でも**実際に描画されるフォント**を測る。
+/// 書式に焼いた**実際に描画されるフォント**を測る。
 /// 取得経路のいずれかが失敗・不在（family 未発見・upem 0 等）なら `None`（呼び手が縮退）。
 pub(crate) fn measure_font_metrics(
     factory: &IDWriteFactory2,

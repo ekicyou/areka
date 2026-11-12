@@ -2,9 +2,8 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
-use super::super::taffy::TaffyLayoutResource;
 use super::super::{
     BoxInset, BoxPosition, BoxSize, BoxStyle, Dimension, LayoutRoot, LengthPercentageAuto, Rect,
 };
@@ -104,15 +103,6 @@ pub fn initialize_layout_root(world: &mut World) {
         ))
         .id();
 
-    // LayoutRoot用のTaffyノード作成
-    {
-        let mut taffy_res = world.resource_mut::<TaffyLayoutResource>();
-        if let Err(e) = taffy_res.create_node(layout_root) {
-            error!(error = ?e, "[initialize_layout_root] Failed to create Taffy node for LayoutRoot");
-            return;
-        }
-    }
-
     // 全モニターを列挙
     let monitors = crate::ecs::window::monitor::enumerate_monitors();
     debug!(
@@ -122,41 +112,11 @@ pub fn initialize_layout_root(world: &mut World) {
 
     // 各Monitorエンティティを生成
     for monitor in monitors {
-        let (width, height) = monitor.physical_size();
-        let (left, top) = monitor.top_left();
-
         log_enumerated_monitor(&monitor);
 
         // Note: Arrangement/GlobalArrangementはMonitor::on_addフックで自動挿入される
-        let monitor_entity = world
-            .spawn((
-                monitor,
-                ChildOf(layout_root),
-                BoxStyle {
-                    size: Some(BoxSize {
-                        width: Some(Dimension::Px(width)),
-                        height: Some(Dimension::Px(height)),
-                    }),
-                    position: Some(BoxPosition::Absolute),
-                    inset: Some(BoxInset(Rect {
-                        left: LengthPercentageAuto::Px(left),
-                        top: LengthPercentageAuto::Px(top),
-                        right: LengthPercentageAuto::Auto,
-                        bottom: LengthPercentageAuto::Auto,
-                    })),
-                    ..Default::default()
-                },
-            ))
-            .id();
-
-        // Monitor用のTaffyノード作成
-        let mut taffy_res = world.resource_mut::<TaffyLayoutResource>();
-        if let Err(e) = taffy_res.create_node(monitor_entity) {
-            error!(
-                error = ?e,
-                "[initialize_layout_root] Failed to create Taffy node for Monitor"
-            );
-        }
+        let box_style = monitor_box_style(&monitor);
+        world.spawn((monitor, ChildOf(layout_root), box_style));
     }
 }
 
@@ -176,16 +136,29 @@ pub fn update_monitor_layout_system(
             "[update_monitor_layout_system] Updating Monitor layout"
         );
 
-        box_style.size = Some(BoxSize {
+        let fresh = monitor_box_style(monitor);
+        box_style.size = fresh.size;
+        box_style.inset = fresh.inset;
+    }
+}
+
+/// モニタの物理の大きさと左上から、絶対配置の BoxStyle を作る。
+fn monitor_box_style(monitor: &crate::ecs::Monitor) -> BoxStyle {
+    let (width, height) = monitor.physical_size();
+    let (left, top) = monitor.top_left();
+    BoxStyle {
+        size: Some(BoxSize {
             width: Some(Dimension::Px(width)),
             height: Some(Dimension::Px(height)),
-        });
-        box_style.inset = Some(BoxInset(Rect {
+        }),
+        position: Some(BoxPosition::Absolute),
+        inset: Some(BoxInset(Rect {
             left: LengthPercentageAuto::Px(left),
             top: LengthPercentageAuto::Px(top),
             right: LengthPercentageAuto::Auto,
             bottom: LengthPercentageAuto::Auto,
-        }));
+        })),
+        ..Default::default()
     }
 }
 
@@ -202,16 +175,12 @@ pub fn update_monitor_layout_system(
 /// 行が出る）ため、刻印は必ず `Res<FrameCount>`＋`Res<TickStart>` から
 /// [`transition_diag::stamp_from_world`] で組む——`transition_diag::stamp()` を呼ぶのは
 /// 退行である。
-// bevy のシステムは引数がそのまま World への要求（Query／Res）であり、束ねると
-// 要求が読めなくなる。刻印の 2 資源（D1）を足したことで 7 を超えるが、まとめない。
-#[allow(clippy::too_many_arguments)]
 pub fn detect_display_change_system(
     mut commands: Commands,
     mut app: ResMut<crate::ecs::App>,
     layout_root: Query<Entity, With<LayoutRoot>>,
-    mut existing_monitors: Query<(Entity, &mut crate::ecs::Monitor), With<crate::ecs::Monitor>>,
+    mut existing_monitors: Query<(Entity, &mut crate::ecs::Monitor)>,
     mut windows: Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
-    mut taffy_res: ResMut<TaffyLayoutResource>,
     frame: Res<FrameCount>,
     tick_start: Res<TickStart>,
 ) {
@@ -241,7 +210,6 @@ pub fn detect_display_change_system(
         root_entity,
         &mut existing_monitors,
         &mut windows,
-        &mut taffy_res,
         new_monitors,
         transition_diag::stamp_from_world(&frame, &tick_start),
     );
@@ -274,9 +242,8 @@ pub fn detect_display_change_system(
 pub(crate) fn apply_monitor_snapshot(
     commands: &mut Commands,
     root_entity: Entity,
-    existing_monitors: &mut Query<(Entity, &mut crate::ecs::Monitor), With<crate::ecs::Monitor>>,
+    existing_monitors: &mut Query<(Entity, &mut crate::ecs::Monitor)>,
     windows: &mut Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
-    taffy_res: &mut TaffyLayoutResource,
     new_monitors: Vec<crate::ecs::Monitor>,
     stamp: Stamp,
 ) -> usize {
@@ -364,37 +331,9 @@ pub(crate) fn apply_monitor_snapshot(
                 "[detect_display_change_system] Adding new Monitor"
             );
 
-            let (width, height) = new_monitor.physical_size();
-            let (left, top) = new_monitor.top_left();
-
             // Note: Arrangement/GlobalArrangementはMonitor::on_addフックで自動挿入される
-            let monitor_entity = commands
-                .spawn((
-                    new_monitor,
-                    ChildOf(root_entity),
-                    BoxStyle {
-                        size: Some(BoxSize {
-                            width: Some(Dimension::Px(width)),
-                            height: Some(Dimension::Px(height)),
-                        }),
-                        position: Some(BoxPosition::Absolute),
-                        inset: Some(BoxInset(Rect {
-                            left: LengthPercentageAuto::Px(left),
-                            top: LengthPercentageAuto::Px(top),
-                            right: LengthPercentageAuto::Auto,
-                            bottom: LengthPercentageAuto::Auto,
-                        })),
-                        ..Default::default()
-                    },
-                ))
-                .id();
-
-            if let Err(e) = taffy_res.create_node(monitor_entity) {
-                error!(
-                    error = ?e,
-                    "[detect_display_change_system] Failed to create Taffy node for new Monitor"
-                );
-            }
+            let box_style = monitor_box_style(&new_monitor);
+            commands.spawn((new_monitor, ChildOf(root_entity), box_style));
         }
     }
 
@@ -405,12 +344,6 @@ pub(crate) fn apply_monitor_snapshot(
             handle = monitor.handle,
             "[detect_display_change_system] Removing Monitor entity"
         );
-        if let Err(e) = taffy_res.remove_node(*entity) {
-            error!(
-                error = ?e,
-                "[detect_display_change_system] Failed to remove Taffy node"
-            );
-        }
         commands.entity(*entity).despawn();
     }
 

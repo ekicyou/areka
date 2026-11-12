@@ -1,72 +1,14 @@
-use super::test_support::{phys, window};
+use super::test_support::{choice_resident, glyph_resident, phys, window};
 use super::{DirtyRect, ScrollPlanner, line_fingerprint};
-use crate::canvas::{
-    ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, RegionTransform, Resident,
-    ResidentContent, TextEffects,
-};
-use crate::layout::PositionedGlyph;
-use crate::look::StyleId;
+use crate::canvas::{ContentCanvas, RegionTransform, Resident, ResidentContent, TextEffects};
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
-use areka_sakura::cluster::{cluster_count, clusters};
 
 // ── 5.3 R11.4/15.5: 行指紋の装飾番号列（styles）——装飾だけが違う行を再利用しない ──
 //
 // 行の再利用（変化行検出）の唯一の根拠は `CommittedLine`。文字列・位置・行寸・hover 印だけを
 // 見ていた時代は「同じ文字列で装飾だけが違う行」が一致し、古い見た目のまま再利用された。
 // 番号列（`PositionedGlyph.style.0` の列）を指紋へ写すことで当該行だけが変化行になる。
-
-/// 行内 n グリフの GlyphRunContent（inline_pos 連番・全角 advance 10・番号列を明示指定）。
-/// 番号列の長さは文字数と一致させる（配置が `glyph_styles[ordinal]` を写す不変条件と同じ形）。
-fn run_content_styled(text: &str, ids: &[u32]) -> GlyphRunContent {
-    let count = cluster_count(text);
-    assert_eq!(count, ids.len(), "番号列の長さは文字数と一致させる");
-    let glyphs = clusters(text)
-        .zip(ids)
-        .enumerate()
-        .map(|(i, (ch, &id))| PositionedGlyph {
-            text: ch.into(),
-            inline_pos: i as f32 * 10.0,
-            advance: 10.0,
-            style: StyleId(id),
-        })
-        .collect();
-    GlyphRunContent {
-        glyphs,
-        size: (count as f32 * 10.0, 10.0),
-    }
-}
-
-/// GlyphRun 住人（非 Choice・ブロック軸位置 dy・番号列指定）。
-fn glyph_resident(text: &str, dy: f32, ids: &[u32]) -> Resident {
-    Resident {
-        content: ResidentContent::GlyphRun(run_content_styled(text, ids)),
-        transform: RegionTransform::translation(0.0, dy),
-        effects: TextEffects::default(),
-    }
-}
-
-/// Choice 住人（hover なし・ブロック軸位置 dy・番号列指定）。素描画は GlyphRun と同一ゆえ
-/// 指紋も同一の作り方（内包 `run` から番号列を写す）。
-fn choice_resident(text: &str, dy: f32, ids: &[u32]) -> Resident {
-    let run = run_content_styled(text, ids);
-    let w = run.size.0;
-    Resident {
-        content: ResidentContent::Choice(ChoiceLineContent {
-            run,
-            segments: vec![ChoiceRowSegment {
-                ordinal: 0,
-                inline_range: (0.0, w),
-            }],
-            hovered: None,
-            highlight: None,
-            band_extent: 10.0,
-            band_offset: 0.0,
-        }),
-        transform: RegionTransform::translation(0.0, dy),
-        effects: TextEffects::default(),
-    }
-}
 
 /// 同じ文字列・同じ位置・同じ行寸・同じ hover 印で**番号列だけ**が違う 2 行は、指紋が異なる
 /// （＝変化ありと判定される・R11.4）。文字列が本当に同じであることも述語に含め、「片方の文字列が
@@ -136,8 +78,8 @@ fn same_text_with_same_style_ids_is_an_unchanged_line() {
 #[test]
 fn choice_line_carries_style_ids_in_its_fingerprint() {
     let mode = WritingMode::HorizontalTb;
-    let plain = choice_resident("えらぶ", 26.0, &[0, 0, 0]);
-    let decorated = choice_resident("えらぶ", 26.0, &[0, 0, 3]);
+    let plain = choice_resident("えらぶ", 26.0, &[0, 0, 0], None);
+    let decorated = choice_resident("えらぶ", 26.0, &[0, 0, 3], None);
     let fp_plain = line_fingerprint(&plain, mode);
     let fp_decorated = line_fingerprint(&decorated, mode);
     assert_eq!(fp_plain.text, fp_decorated.text, "選択肢行の文字列は同一");

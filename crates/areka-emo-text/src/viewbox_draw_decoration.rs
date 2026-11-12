@@ -9,10 +9,14 @@
 //!
 //! 焼くのはフォント家族名・幅・大きさ・太さ・斜体・打ち消し線の 6 項目だけで、いずれも
 //! **既定（家族名・幅・太さ・斜体は束縛の顔）と値が違うときだけ**発行する（既定と同じ項目への範囲指定は意味が無く COM 呼出が
-//! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」を
-//! 実際に担っているのは、呼び手 `line_layout_for` の `line.default_only` 短絡と、下の
+//! 増えるだけ——これは節約であって要件 14.2 の担保ではない。「既定だけの行は範囲指定 0 回」
+//! （既定の見た目が打ち消し線つきの行は行の全体への 1 回だけ）を
+//! 実際に担っているのは、呼び手 `line_layout_for` の短絡（`line.default_only` かつ既定の見た目が
+//! 下線も打ち消し線も持たない）と、下の
 //! `apply_font_ranges` が外側で行う `if run.style == StyleId::DEFAULT { continue; }` の 2 点で、
-//! この項目ごとのガードを全撤去しても crate は緑のまま——実測 2026-09-12）。白抜き（`outline`）と
+//! 項目ごとのガードは別の檻が見張る——全撤去すると
+//! `a_default_strike_line_with_one_strike_off_run_issues_two_range_calls`（範囲指定の回数）と
+//! `a_run_face_bakes_its_stretch_and_an_all_missing_run_stays_bound`（顔の幅）が赤になる・再監査 R2-D3）。白抜き（`outline`）と
 //! 上下付き（`script`）は語彙のみで読まない。打ち消し線の**位置**は DirectWrite の既定に委ね
 //! （完了 `text-decoration-canon` の要件 5.7）、`SetStrikethrough` の真偽だけを渡す。
 //! 太字・斜体に対応する書体が無いときの合成も DirectWrite に委ねる（要件 5.6・失敗扱いにしない）。
@@ -61,7 +65,7 @@ pub(crate) struct StyleRun {
 
 /// 行のグリフ列を「連続する同じ装飾番号」の区間へ切る（要件 3.6）。
 ///
-/// 文字範囲の数え方は選択肢の範囲算出（`super::segment_text_range`）と同じ——行 TextLayout の
+/// 文字範囲の数え方は選択肢の範囲算出（`viewbox_draw_render.rs` の `segment_text_range`）と同じ——行 TextLayout の
 /// text は各グリフの文字列（クラスタ）の連結なので、UTF-16 長の累積がそのまま文字位置になる
 /// （`𠮷` のようなサロゲートペアは 2 単位・ZWJ 列は部品の単位の合計）。グリフの無い行は区間 0 個。
 pub(crate) fn style_runs(glyphs: &[PositionedGlyph]) -> Vec<StyleRun> {
@@ -109,15 +113,16 @@ pub(crate) struct LineStyles {
     pub extent: f32,
     /// 既定の見た目しか使っていない行か（真なら範囲指定・色の解除・ブラシ生成のいずれも行わない）。
     pub default_only: bool,
-    /// 下線を引く区間の列（areka が塗る・行の TextLayout には焼かない）。既定だけの行は空。
+    /// 下線を引く区間の列（areka が塗る・行の TextLayout には焼かない）。既定の見た目が
+    /// 下線つきでなければ、既定だけの行は空。
     pub underlines: Vec<DWRITE_TEXT_RANGE>,
 }
 
 /// 行の装飾を切り出す（既定だけの行は従来の引数——空の番号列と `font_height`——へ落とす）。
 ///
-/// 下線の区間は、既定と違う装飾の区間のうち、見た目の下線が真で既定の下線と違うもの
-/// （下線を行の TextLayout に焼いていたときと同じ選び方）。作者の `[underline,1]` と
-/// アンカーの既定の下線はどちらもここに入る。
+/// 下線の区間は、解決した見た目の下線が真の区間（既定の区間も対象＝バルーンの
+/// `font.underline,1` は飾りの無い字にも出る・指摘 6）。作者の `\f[underline,1]` と
+/// アンカーの既定の下線もここに入り、`\f[underline,0]` で外した区間は入らない。
 pub(crate) fn line_styles(
     run: &GlyphRunContent,
     font_height: f32,
@@ -129,11 +134,7 @@ pub(crate) fn line_styles(
     let default_only = runs.iter().all(|r| r.style == StyleId::DEFAULT);
     let underlines = runs
         .iter()
-        .filter(|r| r.style != StyleId::DEFAULT)
-        .filter(|r| {
-            let look = styles.resolve(r.style, default);
-            look.underline && look.underline != default.underline
-        })
+        .filter(|r| styles.resolve(r.style, default).underline)
         .map(|r| r.range)
         .collect();
     LineStyles {
@@ -157,7 +158,7 @@ pub(crate) fn line_styles(
 /// 3.2／4.1／4.3／4.6／4.10）。下線は焼かない（[`LineStyles::underlines`] の区間を areka が塗る・
 /// areka-P0-balloon-text-bugs 件 3）。
 ///
-/// 行 TextLayout の**生成時に 1 度だけ**呼ばれる（[`crate::draw::LineLayoutStore::line_layout_decorated`]
+/// 行 TextLayout の**生成時に 1 度だけ**呼ばれる（[`crate::draw::LineLayoutStore::line_layout_with_strokes`]
 /// の `decorate` 口）。顔で考える: 束縛の顔は `pick` と同じ規則（[`FontCatalog::face_or_default`]）で
 /// 引き、区間の名前が既定と違えば区間の候補列の顔（GDI の名前を含む・全滅なら束縛の顔＝要件 4.10）を
 /// 使う。家族名・幅は束縛の顔と違えば焼き、太さ・斜体は「区間の顔＋区間の太字・斜体」と
@@ -171,6 +172,19 @@ pub(crate) fn apply_font_ranges(
     fonts: &FontCatalog,
 ) -> Result<(), TextLayerError> {
     let bound = fonts.face_or_default(&default.name);
+    // 既定の打ち消し線は既定の区間（下のループが飛ばす）にも要るので、行の全体へ 1 回焼く（指摘 6）。
+    if default.strike && !runs.is_empty() {
+        note_range_call();
+        let length = runs
+            .last()
+            .map_or(0, |r| r.range.startPosition + r.range.length);
+        let whole = DWRITE_TEXT_RANGE {
+            startPosition: 0,
+            length,
+        };
+        unsafe { layout.SetStrikethrough(true, whole) }
+            .map_err(device_err("SetStrikethrough(既定の打ち消し線・行の全体)"))?;
+    }
     for run in runs {
         if run.style == StyleId::DEFAULT {
             continue;
@@ -220,8 +234,8 @@ pub(crate) fn apply_font_ranges(
 
 /// 既定と異なる色の区間にブラシを差す（要件 3.5／8.x の描画側の着地点）。
 ///
-/// 既定と異なる色の区間が 1 つも無ければ何も発行せず `Ok(false)`。1 つでもあれば
-/// 「（`reset` が真なら）全範囲の解除 → 区間ごとのブラシ」の順で焼き、戻り値は**解除を行ったか**。
+/// 既定と異なる色の区間が 1 つも無ければ何も発行しない。1 つでもあれば
+/// 「（`reset` が真なら）全範囲の解除 → 区間ごとのブラシ」の順で焼く。
 /// 選択肢の行は呼び手が既に全範囲を解除しているので `reset = false` で呼ぶ（二重化を避ける）。
 /// 重ね表示（hover）の色は呼び手がこの後に焼くので、同じ範囲では後勝ちで hover が勝つ。
 pub(crate) fn apply_color_ranges(
@@ -232,7 +246,7 @@ pub(crate) fn apply_color_ranges(
     brushes: &mut BrushCache,
     dc: &ID2D1DeviceContext,
     reset: bool,
-) -> Result<bool, TextLayerError> {
+) -> Result<(), TextLayerError> {
     let colored: Vec<(DWRITE_TEXT_RANGE, (u8, u8, u8))> = runs
         .iter()
         .filter(|r| r.style != StyleId::DEFAULT)
@@ -243,7 +257,7 @@ pub(crate) fn apply_color_ranges(
         .collect();
 
     if colored.is_empty() {
-        return Ok(false);
+        return Ok(());
     }
 
     if reset {
@@ -269,17 +283,13 @@ pub(crate) fn apply_color_ranges(
         unsafe { layout.SetDrawingEffect(&brush, range) }
             .map_err(device_err("SetDrawingEffect(装飾の色)"))?;
     }
-    Ok(reset)
+    Ok(())
 }
 
 /// 色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。
 ///
-/// executor が持ち、`ViewboxExecutor` の寿命＝専用 D2D DC の寿命と一致する。
-///
-/// **色は台詞をまたいで累積する**：[`StyleTable`] は台詞ごとに既定へ戻るのに、この保持庫だけは
-/// executor の寿命いっぱい残るという非対称がある。上限を設けないのは、鍵が RGB 3 バイトで
-/// 実際に現れる色数はゴーストの辞書が使う色数に押さえられるため（ブラシ 1 本は数十バイト）で、
-/// LRU を入れる方が実態より高いと判断したから。
+/// executor が持ち、台詞の切れ目（`ViewboxExecutor::request_clear`）で空になる——[`StyleTable`] と
+/// 同じく寿命は 1 つの台詞のあいだ（指摘 11）。上限の数は置かない（台詞が使う色の数が頭打ち）。
 #[derive(Default)]
 pub(crate) struct BrushCache {
     brushes: HashMap<(u8, u8, u8), ID2D1SolidColorBrush>,
@@ -302,6 +312,17 @@ impl BrushCache {
         self.brushes.insert(rgb, brush.clone());
         Ok(brush)
     }
+
+    /// 覚えたブラシを全部捨てる（台詞の切れ目）。
+    pub(super) fn clear(&mut self) {
+        self.brushes.clear();
+    }
+
+    /// 覚えているブラシの数（テスト観測用）。
+    #[cfg(test)]
+    pub(super) fn len(&self) -> usize {
+        self.brushes.len()
+    }
 }
 
 #[cfg(test)]
@@ -309,7 +330,8 @@ thread_local! {
     /// 範囲指定・色の解除・ブラシ生成を**実際に発行した回数**（テスト観測用）。
     ///
     /// 保持庫の要素数で数えると同じ鍵で作り直しても増えず「N 回だけ」が恒真になるので、
-    /// 発行のたびに 1 増やす素の勘定にしてある（記憶 6.4 の申し送り）。
+    /// 発行のたびに 1 増やす素の勘定にしてある（完了 spec `areka-P0-text-decoration-canon` の
+    /// tasks.md の 6.4 の記録）。
     pub(super) static RANGE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// 全範囲の解除（`SetDrawingEffect(None, 全域)`）を発行した回数（解除の二重化の見張り）。
     pub(super) static RESET_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

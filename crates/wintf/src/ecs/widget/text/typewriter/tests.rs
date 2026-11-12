@@ -1,38 +1,9 @@
 use super::*;
-
-/// `TypewriterLayoutCache` の手動 `unsafe impl Send/Sync`（typewriter.rs）の
-/// 健全性を固定する特性化テスト。内包フィールド（IDWriteTextLayout は windows-rs が
-/// Send+Sync 付与済み・TypewriterTimeline はプレーンデータ）により本構造体は本来
-/// 自動で Send+Sync を導出できる＝手動 impl は冗長だが健全、という不変条件をコンパイル時に
-/// 検証する。将来 !Send なフィールドが追加された場合は（手動 impl があっても）型として
-/// 不健全な状態をここで検出できないため、この境界の更新時は手動 impl の妥当性を再点検すること。
-#[test]
-fn test_typewriter_layout_cache_is_send_sync() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<TypewriterLayoutCache>();
-}
-
-#[test]
-fn test_typewriter_default() {
-    let tw = Typewriter::default();
-    assert_eq!(tw.font_family, "メイリオ");
-    assert_eq!(tw.font_size, 16.0);
-    assert!((tw.default_char_wait - 0.05).abs() < f64::EPSILON);
-}
-
-#[test]
-fn test_typewriter_state_default() {
-    let state = TypewriterState::default();
-    assert_eq!(state, TypewriterState::Playing);
-}
-
-#[test]
-fn test_typewriter_state_transitions() {
-    assert_eq!(TypewriterState::Playing, TypewriterState::Playing);
-    assert_eq!(TypewriterState::Paused, TypewriterState::Paused);
-    assert_eq!(TypewriterState::Completed, TypewriterState::Completed);
-    assert_ne!(TypewriterState::Playing, TypewriterState::Paused);
-}
+use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
+use crate::ecs::layout::Arrangement;
+use crate::ecs::layout::metrics::Size;
+use crate::ecs::widget::text::typewriter_layout::init_typewriter_layout;
+use bevy_ecs::prelude::*;
 
 // ============================================================
 // TypewriterTalk — デバイス非依存な再生状態マシンの特性化
@@ -56,20 +27,8 @@ fn make_glyph_timeline(glyph_count: u32, step: f64) -> TypewriterTimeline {
     TypewriterTimeline {
         full_text: "x".repeat(glyph_count as usize),
         items,
-        total_duration: t,
         total_cluster_count: glyph_count,
     }
-}
-
-#[test]
-fn test_typewriter_talk_new_initial_state() {
-    let talk = TypewriterTalk::new(vec![TypewriterToken::Text("ab".into())], 10.0);
-    assert_eq!(talk.state(), TypewriterState::Playing);
-    assert_eq!(talk.start_time(), 10.0);
-    assert_eq!(talk.visible_cluster_count(), 0);
-    assert_eq!(talk.progress(), 0.0);
-    assert!(!talk.is_completed());
-    assert_eq!(talk.tokens().len(), 1);
 }
 
 #[test]
@@ -107,12 +66,57 @@ fn test_typewriter_talk_resume_is_noop_when_not_paused() {
 
 #[test]
 fn test_typewriter_talk_skip_forces_complete() {
+    // skip した時点で完了・全文表示・進行度 1.0（次の update を待たない）。
+    let timeline = make_glyph_timeline(42, 1.0);
     let mut talk = TypewriterTalk::new(vec![], 0.0);
-    talk.skip(42);
+    let events = talk.skip(&timeline);
+    assert!(events.is_empty());
     assert_eq!(talk.state(), TypewriterState::Completed);
     assert_eq!(talk.visible_cluster_count(), 42);
     assert_eq!(talk.progress(), 1.0);
     assert!(talk.is_completed());
+}
+
+/// skip は残りの知らせ（末尾の Complete）をその場で返し、その場で完了する。
+#[test]
+fn test_typewriter_talk_skip_returns_remaining_events_immediately() {
+    let target = bevy_ecs::entity::Entity::from_raw_u32(3).unwrap();
+    let timeline = TypewriterTimeline {
+        full_text: "a".into(),
+        items: vec![
+            TimelineItem::Glyph {
+                cluster_index: 0,
+                show_at: 10.0,
+            },
+            TimelineItem::FireEvent {
+                target,
+                event: TypewriterEventKind::Complete,
+                fire_at: 10.0,
+            },
+        ],
+        total_cluster_count: 1,
+    };
+    let mut talk = TypewriterTalk::new(vec![], 0.0);
+    let events = talk.skip(&timeline);
+    assert_eq!(events, vec![(target, TypewriterEventKind::Complete)]);
+    assert_eq!(talk.visible_cluster_count(), 1);
+    assert_eq!(talk.state(), TypewriterState::Completed);
+    // 完了後の skip・update は何も出さない
+    assert!(talk.skip(&timeline).is_empty());
+    assert!(talk.update(100.0, &timeline).is_empty());
+}
+
+/// 一時停止中の skip もその場で完了する。
+#[test]
+fn test_typewriter_talk_skip_while_paused_completes() {
+    let timeline = make_glyph_timeline(3, 1.0);
+    let mut talk = TypewriterTalk::new(vec![], 0.0);
+    talk.update(1.5, &timeline);
+    talk.pause(1.5);
+    talk.skip(&timeline);
+    assert_eq!(talk.visible_cluster_count(), 3);
+    assert_eq!(talk.progress(), 1.0);
+    assert_eq!(talk.state(), TypewriterState::Completed);
 }
 
 #[test]
@@ -162,7 +166,11 @@ fn test_typewriter_talk_update_completes_when_all_glyphs_visible() {
 fn test_typewriter_talk_update_zero_clusters_completes_immediately() {
     // グリフを持たない timeline（total_cluster_count=0）は
     // progress=1.0・即 Completed（0 >= 0）になる退化ケース。
-    let timeline = TypewriterTimeline::empty();
+    let timeline = TypewriterTimeline {
+        full_text: String::new(),
+        items: Vec::new(),
+        total_cluster_count: 0,
+    };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
     talk.update(0.0, &timeline);
     assert_eq!(talk.progress(), 1.0);
@@ -185,7 +193,6 @@ fn test_typewriter_talk_update_wait_gates_following_glyph() {
                 show_at: 5.0,
             },
         ],
-        total_duration: 5.0,
         total_cluster_count: 1,
     };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
@@ -218,7 +225,6 @@ fn test_typewriter_talk_update_fires_event_at_threshold() {
                 show_at: 3.0,
             },
         ],
-        total_duration: 3.0,
         total_cluster_count: 1,
     };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
@@ -247,7 +253,6 @@ fn test_typewriter_talk_update_does_not_refire_event_on_second_call() {
             event: TypewriterEventKind::Complete,
             fire_at: 1.0,
         }],
-        total_duration: 1.0,
         total_cluster_count: 0,
     };
     let mut talk = TypewriterTalk::new(vec![], 0.0);
@@ -260,4 +265,680 @@ fn test_typewriter_talk_update_does_not_refire_event_on_second_call() {
     // 2回目: 既に Completed なので update は早期 return し、再発火しない。
     let second = talk.update(6.0, &timeline);
     assert!(second.is_empty());
+}
+
+// ============================================================
+// トークの入れ替えと外し（3 番・実 GPU）
+// ============================================================
+
+/// 控えを作る係を 1 回回す世界。控えは `GraphicsCore` の DirectWrite で作る。
+fn new_layout_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(init_typewriter_layout);
+    (world, schedule)
+}
+
+fn text_talk(text: &str) -> TypewriterTalk {
+    TypewriterTalk::new(vec![TypewriterToken::Text(text.into())], 0.0)
+}
+
+fn cached_text(world: &World, entity: Entity) -> Option<String> {
+    world
+        .get::<TypewriterLayoutCache>(entity)
+        .map(|c| c.timeline().full_text.clone())
+}
+
+#[test]
+fn replacing_talk_rebuilds_cache_with_new_text_and_removing_clears_list() {
+    let (mut world, mut schedule) = new_layout_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            Arrangement {
+                size: Size {
+                    width: 200.0,
+                    height: 100.0,
+                },
+                ..Default::default()
+            },
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert_eq!(cached_text(&world, entity).as_deref(), Some("あいう"));
+
+    // 入れ替えると控えが外れ、作り直した控えは新しい文になる。
+    world.entity_mut(entity).insert(text_talk("かきくけこ"));
+    world.flush();
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_none());
+    schedule.run(&mut world);
+    assert_eq!(cached_text(&world, entity).as_deref(), Some("かきくけこ"));
+
+    // 外すと命令の列が空になり、控えも外れる。
+    let list = {
+        let core = world.resource::<GraphicsCore>();
+        let dc = core.device_context().expect("device context");
+        crate::ecs::widget::record::record_command_list(dc, |_| Ok(())).expect("record")
+    };
+    world
+        .entity_mut(entity)
+        .insert(GraphicsCommandList::new(list));
+    world.entity_mut(entity).remove::<TypewriterTalk>();
+    world.flush();
+    assert!(
+        world
+            .get::<GraphicsCommandList>(entity)
+            .expect("list")
+            .command_list()
+            .is_none()
+    );
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_none());
+}
+
+#[test]
+fn despawning_typewriter_with_talk_does_not_panic() {
+    let (mut world, mut schedule) = new_layout_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            Arrangement {
+                size: Size {
+                    width: 200.0,
+                    height: 100.0,
+                },
+                ..Default::default()
+            },
+            text_talk("あ"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    world.despawn(entity);
+    world.flush();
+    assert!(world.get_entity(entity).is_err());
+}
+
+// ============================================================
+// 最後の待ちと知らせ（4 番）・消えた宛先（5 番）— CPU だけ
+// ============================================================
+
+/// 「おしまい」の 4 文字（0.1 秒おき）→ 1 秒の待ち → 宛先への完了の知らせ。
+fn wait_then_fire_timeline(target: Entity) -> TypewriterTimeline {
+    let mut timeline = make_glyph_timeline(4, 0.1);
+    timeline.full_text = "おしまい".into();
+    timeline.items.push(TimelineItem::Wait {
+        duration: 1.0,
+        start_at: 0.4,
+    });
+    timeline.items.push(TimelineItem::FireEvent {
+        target,
+        event: TypewriterEventKind::Complete,
+        fire_at: 1.4,
+    });
+    timeline
+}
+
+#[test]
+fn trailing_wait_and_event_run_before_completion() {
+    let target = Entity::from_raw_u32(3).unwrap();
+    let timeline = wait_then_fire_timeline(target);
+    let mut talk = TypewriterTalk::new(vec![], 0.0);
+
+    // 全部の文字が出た時刻でも、後ろの待ちが残るので再生中のまま。
+    let events = talk.update(0.4, &timeline);
+    assert!(events.is_empty());
+    assert_eq!(talk.visible_cluster_count(), 4);
+    assert_eq!(talk.progress(), 1.0);
+    assert_eq!(talk.state(), TypewriterState::Playing);
+
+    // 1 秒後に知らせが返り、完了する。
+    let events = talk.update(1.4, &timeline);
+    assert_eq!(events, vec![(target, TypewriterEventKind::Complete)]);
+    assert_eq!(talk.state(), TypewriterState::Completed);
+}
+
+/// 知らせの係を回す世界。控えの配置は DirectWrite の工場だけで作る（GPU は使わない）。
+fn spawn_firing_typewriter(world: &mut World, target: Entity) -> Entity {
+    use crate::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
+    use windows::Win32::Graphics::DirectWrite::*;
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("dwrite factory");
+    let format = factory
+        .create_text_format(
+            &windows::core::HSTRING::from("メイリオ"),
+            None::<&IDWriteFontCollection>,
+            DWRITE_FONT_WEIGHT_NORMAL,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            16.0,
+            &windows::core::HSTRING::from("ja-JP"),
+        )
+        .expect("text format");
+    let layout = factory
+        .create_text_layout(
+            &windows::core::HSTRING::from("おしまい"),
+            &format,
+            200.0,
+            100.0,
+        )
+        .expect("text layout");
+    // トークを入れたときのフックが控えを外すので、控えはトークの後に入れる。
+    let entity = world.spawn(TypewriterTalk::new(vec![], 0.0)).id();
+    world.flush();
+    world.entity_mut(entity).insert(TypewriterLayoutCache::new(
+        layout,
+        wait_then_fire_timeline(target),
+    ));
+    entity
+}
+
+fn new_update_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(crate::ecs::graphics::FrameTime(10.0));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(crate::ecs::widget::text::typewriter_draw::update_typewriters);
+    (world, schedule)
+}
+
+#[test]
+fn event_reaches_live_target() {
+    use crate::ecs::widget::text::typewriter_ir::TypewriterEvent;
+    let (mut world, mut schedule) = new_update_world();
+    let target = world.spawn_empty().id();
+    let entity = spawn_firing_typewriter(&mut world, target);
+    schedule.run(&mut world);
+    assert_eq!(
+        world.get::<TypewriterEvent>(target),
+        Some(&TypewriterEvent::Complete)
+    );
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+}
+
+#[test]
+fn event_to_despawned_target_is_dropped_without_panic() {
+    let (mut world, mut schedule) = new_update_world();
+    let target = world.spawn_empty().id();
+    let entity = spawn_firing_typewriter(&mut world, target);
+    world.despawn(target);
+    schedule.run(&mut world);
+    assert!(world.get_entity(target).is_err());
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+}
+
+// ============================================================
+// 時間表と隠す範囲をクラスタと UTF-16 で数える（6 番）— CPU だけ
+// ============================================================
+
+use crate::ecs::widget::text::typewriter_draw::hidden_text_range;
+use crate::ecs::widget::text::typewriter_layout::timeline_items;
+
+/// 項目を (種類, クラスタ番号) に縮めて並びを比べやすくする。
+fn item_kinds(items: &[TimelineItem]) -> Vec<(&'static str, Option<u32>)> {
+    items
+        .iter()
+        .map(|item| match item {
+            TimelineItem::Glyph { cluster_index, .. } => ("glyph", Some(*cluster_index)),
+            TimelineItem::Wait { .. } => ("wait", None),
+            TimelineItem::FireEvent { .. } => ("event", None),
+        })
+        .collect()
+}
+
+#[test]
+fn timeline_counts_surrogate_pair_as_one_cluster() {
+    // 𠮷 は UTF-16 で 2 つ・クラスタは 1 つ。
+    let tokens = vec![TypewriterToken::Text("𠮷野家です".into())];
+    let items = timeline_items(&tokens, &[2, 1, 1, 1, 1], 0.1);
+    assert_eq!(
+        item_kinds(&items),
+        (0..5).map(|i| ("glyph", Some(i))).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn timeline_puts_glyph_after_wait_when_cluster_spans_two_chars() {
+    // ❤️ は 2 文字（U+2764 U+FE0F）で 1 クラスタ。「!」は待ちの後ろに来る。
+    let tokens = vec![
+        TypewriterToken::Text("\u{2764}\u{FE0F}ok".into()),
+        TypewriterToken::Wait(1.0),
+        TypewriterToken::Text("!".into()),
+    ];
+    let items = timeline_items(&tokens, &[2, 1, 1, 1], 0.1);
+    assert_eq!(
+        item_kinds(&items),
+        vec![
+            ("glyph", Some(0)),
+            ("glyph", Some(1)),
+            ("glyph", Some(2)),
+            ("wait", None),
+            ("glyph", Some(3)),
+        ]
+    );
+    let TimelineItem::Glyph { show_at, .. } = items[4] else {
+        panic!("last item must be a glyph");
+    };
+    assert!((show_at - 1.4).abs() < 1e-9);
+}
+
+#[test]
+fn hidden_range_is_counted_in_utf16() {
+    // 𠮷野家です は UTF-16 で 6。𠮷 を 1 つ見せたら (2, 4) を隠す。
+    let lengths = [2, 1, 1, 1, 1];
+    assert_eq!(hidden_text_range(&lengths, 1), Some((2, 4)));
+    assert_eq!(hidden_text_range(&lengths, 0), Some((0, 6)));
+    assert_eq!(hidden_text_range(&lengths, 5), None);
+    assert_eq!(hidden_text_range(&lengths, 9), None);
+}
+
+// ============================================================
+// 背景の描き直しと空にする所（8 番）・止まった表示（12 番）— 実 GPU
+// ============================================================
+
+use crate::ecs::graphics::FrameTime;
+use crate::ecs::widget::brushes::Brushes;
+use crate::ecs::widget::text::typewriter_draw::{
+    draw_typewriter_backgrounds, draw_typewriters, update_typewriters,
+};
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+use windows::Win32::Graphics::Direct2D::ID2D1CommandList;
+
+/// 控えを作る → 進める → 文を描く → 背景を描く、を 1 回で回す世界（本番の Update → Draw の順）。
+fn new_draw_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    world.insert_resource(FrameTime(100.0));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(
+        (
+            init_typewriter_layout,
+            update_typewriters,
+            draw_typewriters,
+            draw_typewriter_backgrounds,
+        )
+            .chain(),
+    );
+    (world, schedule)
+}
+
+fn sized(width: f32, height: f32) -> Arrangement {
+    Arrangement {
+        size: Size { width, height },
+        ..Default::default()
+    }
+}
+
+fn list_of(world: &World, entity: Entity) -> Option<Option<ID2D1CommandList>> {
+    world
+        .get::<GraphicsCommandList>(entity)
+        .map(|l| l.command_list().cloned())
+}
+
+const BG: D2D1_COLOR_F = D2D1_COLOR_F {
+    r: 0.2,
+    g: 0.4,
+    b: 0.6,
+    a: 1.0,
+};
+
+#[test]
+fn resizing_empty_talk_background_replaces_command_list() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(100.0, 50.0),
+            Brushes::with_background(BG),
+        ))
+        .id();
+    schedule.run(&mut world);
+    let first = list_of(&world, entity).flatten().expect("background drawn");
+
+    world.entity_mut(entity).insert(sized(200.0, 80.0));
+    schedule.run(&mut world);
+    let second = list_of(&world, entity)
+        .flatten()
+        .expect("background redrawn");
+    assert_ne!(first, second, "大きさを変えたら命令の列が入れ替わる");
+}
+
+#[test]
+fn replacing_text_talk_with_empty_talk_without_background_clears_list() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::default(),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(list_of(&world, entity).flatten().is_some(), "文が描かれる");
+
+    world
+        .entity_mut(entity)
+        .insert(TypewriterTalk::new(vec![], 0.0));
+    schedule.run(&mut world);
+    assert_eq!(
+        list_of(&world, entity),
+        Some(None),
+        "描けない空のトークでは前の文の絵を残さない"
+    );
+}
+
+#[test]
+fn stopped_display_is_not_redrawn_on_second_update() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::default(),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+    let first = list_of(&world, entity).flatten().expect("text drawn");
+    let first_tick = world
+        .entity(entity)
+        .get_ref::<TypewriterTalk>()
+        .unwrap()
+        .last_changed();
+
+    world.insert_resource(FrameTime(101.0));
+    schedule.run(&mut world);
+    let second_tick = world
+        .entity(entity)
+        .get_ref::<TypewriterTalk>()
+        .unwrap()
+        .last_changed();
+    assert_eq!(first_tick, second_tick, "止まった表示に変化の印を立てない");
+    assert_eq!(
+        list_of(&world, entity).flatten(),
+        Some(first),
+        "止まった表示の命令の列を入れ替えない"
+    );
+}
+
+#[test]
+fn leftover_transparent_effect_is_cleared_on_next_draw() {
+    use crate::com::d2d::D2D1DeviceContextExt;
+    use windows::Win32::Graphics::DirectWrite::DWRITE_TEXT_RANGE;
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::default(),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+
+    // 描いた後の戻しに失敗した形: 控えの配置に透明の効果が残っている
+    let layout = world
+        .get::<TypewriterLayoutCache>(entity)
+        .unwrap()
+        .text_layout()
+        .clone();
+    let brush = {
+        let core = world.resource::<GraphicsCore>();
+        let dc = core.device_context().expect("device context");
+        dc.create_solid_color_brush(&crate::ecs::widget::record::TRANSPARENT, None)
+            .expect("brush")
+    };
+    unsafe {
+        layout
+            .SetDrawingEffect(
+                &brush,
+                DWRITE_TEXT_RANGE {
+                    startPosition: 1,
+                    length: 2,
+                },
+            )
+            .expect("set effect");
+    }
+
+    // 隠す範囲の無い次の描画で、残った効果が消える
+    world.entity_mut(entity).insert(sized(200.0, 100.0));
+    schedule.run(&mut world);
+    let mut effect = None;
+    unsafe { layout.GetDrawingEffect(1, &mut effect, None) }.expect("get effect");
+    assert!(effect.is_none(), "前の描画の透明の効果を残さない");
+}
+
+// ============================================================
+// 7.1 二度目の見直し: Typewriter の外し（N1）・控えの作り直し（N3・N4）— 実 GPU
+// ============================================================
+
+use crate::ecs::widget::text::typewriter_layout::invalidate_typewriter_layout_on_arrangement_change;
+
+/// 本番の Draw と同じ順（控えを外す → 控えを作る）で回す世界。
+fn new_cache_world() -> (World, Schedule) {
+    let mut world = World::new();
+    world.insert_resource(GraphicsCore::new().expect("GraphicsCore"));
+    let mut schedule = Schedule::default();
+    schedule.add_systems(
+        (
+            invalidate_typewriter_layout_on_arrangement_change,
+            init_typewriter_layout,
+        )
+            .chain(),
+    );
+    (world, schedule)
+}
+
+/// `Typewriter` を外すと、命令の列が空になり（絵を消す）、控えも外れる。
+#[test]
+fn removing_typewriter_clears_list_and_cache() {
+    let (mut world, mut schedule) = new_layout_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_some());
+    let list = {
+        let core = world.resource::<GraphicsCore>();
+        let dc = core.device_context().expect("device context");
+        crate::ecs::widget::record::record_command_list(dc, |_| Ok(())).expect("record")
+    };
+    world
+        .entity_mut(entity)
+        .insert(GraphicsCommandList::new(list));
+
+    world.entity_mut(entity).remove::<Typewriter>();
+    world.flush();
+    assert_eq!(list_of(&world, entity), Some(None), "絵を残さない");
+    assert!(world.get::<TypewriterLayoutCache>(entity).is_none());
+}
+
+/// 控えが作れない部品は、次の変化まで作り直さない（毎回の warn! を止める）。変われば作り直す。
+#[test]
+fn failed_cache_build_is_not_retried_until_typewriter_changes() {
+    let (mut world, mut schedule) = new_cache_world();
+    let entity = world
+        .spawn((
+            Typewriter {
+                font_size: 0.0,
+                ..Default::default()
+            },
+            sized(200.0, 100.0),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(
+        world.get::<TypewriterLayoutCache>(entity).is_none(),
+        "大きさ 0 では作れない"
+    );
+
+    // 原因を直しても変化の印を立てなければ、作り直さない
+    world
+        .get_mut::<Typewriter>(entity)
+        .unwrap()
+        .bypass_change_detection()
+        .font_size = 16.0;
+    schedule.run(&mut world);
+    assert!(
+        world.get::<TypewriterLayoutCache>(entity).is_none(),
+        "やり直さない"
+    );
+
+    world.get_mut::<Typewriter>(entity).unwrap().set_changed();
+    schedule.run(&mut world);
+    assert!(
+        world.get::<TypewriterLayoutCache>(entity).is_some(),
+        "変われば作る"
+    );
+}
+
+/// `Typewriter`（文字の大きさなど）を変えると控えが作り直される。
+#[test]
+fn changing_typewriter_rebuilds_cache() {
+    let (mut world, mut schedule) = new_cache_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert_eq!(font_size_of(&world, entity), 16.0, "既定の大きさの控え");
+
+    world.get_mut::<Typewriter>(entity).unwrap().font_size = 24.0;
+    schedule.run(&mut world);
+    assert_eq!(
+        font_size_of(&world, entity),
+        24.0,
+        "新しい大きさの控えになる"
+    );
+}
+
+/// 控えの配置の文字の大きさ。
+fn font_size_of(world: &World, entity: Entity) -> f32 {
+    let mut size = 0.0;
+    unsafe {
+        world
+            .get::<TypewriterLayoutCache>(entity)
+            .expect("cache")
+            .text_layout()
+            .GetFontSize(0, &mut size, None)
+    }
+    .expect("font size");
+    size
+}
+
+// ============================================================
+// 7.1 二度目の見直し 2 回目: 文の無いトーク（W1）・Typewriter の入れ直し（W3）— 実 GPU
+// ============================================================
+
+/// 文の無いトーク（待ち＋イベント）も控えができて進み、イベントが届いて完了する。
+#[test]
+fn textless_wait_and_event_talk_fires_event_and_completes() {
+    use crate::ecs::widget::text::typewriter_ir::{TypewriterEvent, TypewriterEventKind};
+    let (mut world, mut schedule) = new_draw_world();
+    let target = world.spawn_empty().id();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::with_background(BG),
+            TypewriterTalk::new(
+                vec![
+                    TypewriterToken::Wait(1.0),
+                    TypewriterToken::FireEvent {
+                        target,
+                        event: TypewriterEventKind::Complete,
+                    },
+                ],
+                0.0,
+            ),
+        ))
+        .id();
+    schedule.run(&mut world);
+    schedule.run(&mut world);
+    assert_eq!(
+        world.get::<TypewriterEvent>(target),
+        Some(&TypewriterEvent::Complete),
+        "文の無いトークでもイベントが届く"
+    );
+    assert!(world.get::<TypewriterTalk>(entity).unwrap().is_completed());
+    assert!(
+        list_of(&world, entity).flatten().is_some(),
+        "背景は文の係が描く"
+    );
+}
+
+/// `Typewriter` を外して（絵が消える）入れ直すと、空のトークの背景を描き直す。
+#[test]
+fn reinserting_typewriter_redraws_empty_talk_background() {
+    let (mut world, mut schedule) = new_draw_world();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(100.0, 50.0),
+            Brushes::with_background(BG),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(
+        list_of(&world, entity).flatten().is_some(),
+        "背景が描かれる"
+    );
+
+    world.entity_mut(entity).remove::<Typewriter>();
+    world.flush();
+    assert_eq!(list_of(&world, entity), Some(None), "外すと絵が消える");
+
+    world.entity_mut(entity).insert(Typewriter::default());
+    schedule.run(&mut world);
+    assert!(
+        list_of(&world, entity).flatten().is_some(),
+        "入れ直したら背景を描き直す"
+    );
+}
+
+/// 文の無いトークで控えが作れない部品（大きさが足りない）は、背景の係が前の文の絵を消す。
+#[test]
+fn textless_talk_without_cache_clears_previous_text_list() {
+    use crate::ecs::widget::text::typewriter_ir::TypewriterEventKind;
+    let (mut world, mut schedule) = new_draw_world();
+    let target = world.spawn_empty().id();
+    let entity = world
+        .spawn((
+            Typewriter::default(),
+            sized(200.0, 100.0),
+            Brushes::with_background(BG),
+            text_talk("あいう"),
+        ))
+        .id();
+    schedule.run(&mut world);
+    assert!(list_of(&world, entity).flatten().is_some(), "文が描かれる");
+
+    world.entity_mut(entity).insert((
+        sized(5.0, 5.0),
+        TypewriterTalk::new(
+            vec![
+                TypewriterToken::Wait(1.0),
+                TypewriterToken::FireEvent {
+                    target,
+                    event: TypewriterEventKind::Complete,
+                },
+            ],
+            0.0,
+        ),
+    ));
+    schedule.run(&mut world);
+    assert_eq!(
+        list_of(&world, entity),
+        Some(None),
+        "控えの無い文の無いトークでは前の文の絵を残さない"
+    );
 }

@@ -77,7 +77,7 @@ pub(crate) const REASON_OUT_OF_RANGE: &str = "色指定の成分が範囲外";
 /// 三原色の 3 成分で 10 進数と百分率が混ざっている（正典はどちらかに揃った形だけを定める）。
 pub(crate) const REASON_MIXED_NOTATION: &str = "色指定の 3 成分で 10 進と百分率が混在";
 /// `#` 表記の桁数が 3 でも 6 でもない、または 16 進数字でない字を含む。
-pub(crate) const REASON_BAD_HEX: &str = "16 進の色指定が 3 桁でも 6 桁でもない";
+pub(crate) const REASON_BAD_HEX: &str = "色指定が 3 桁か 6 桁の 16 進でない";
 /// 色名表にも戻し先の語彙にも無い単一トークン（色名は小文字の完全一致のみ）。
 pub(crate) const REASON_UNKNOWN_TOKEN: &str = "未知の色指定（色名は小文字のみ）";
 
@@ -141,6 +141,11 @@ fn parse_single(token: &str) -> Result<ColorSpec, ColorParseError> {
 
 /// `#` の後ろ——3 桁は各桁を 2 倍、6 桁は 2 桁ずつ 1 成分。
 fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
+    // 長さを先に見る——台本の長い字列を桁の列へ集めてから捨てない。16 進の字は 1 バイトなので
+    // バイト数で足りる（多バイトの字は長さか桁のどちらで落ちても理由は同じ R3-B-N1）。
+    if !matches!(body.len(), 3 | 6) {
+        return Err(err(REASON_BAD_HEX));
+    }
     let digits: Vec<u8> = body
         .chars()
         .map(|c| c.to_digit(16).map(|d| d as u8))
@@ -150,6 +155,7 @@ fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
         // 3 桁形: 各桁を 2 倍（`#f0a` → `ff 00 aa`＝`d * 17`）。
         [r, g, b] => Ok(ColorSpec::Rgb(r * 17, g * 17, b * 17)),
         [r0, r1, g0, g1, b0, b1] => Ok(ColorSpec::Rgb(r0 * 16 + r1, g0 * 16 + g1, b0 * 16 + b1)),
+        // 長さは上で 3 か 6 に絞ってあるのでここへは来ない。
         _ => Err(err(REASON_BAD_HEX)),
     }
 }
@@ -157,7 +163,10 @@ fn parse_hex(body: &str) -> Result<ColorSpec, ColorParseError> {
 /// 三原色の 1 成分——書式は呼び手（[`parse_color`]）が 3 成分まとめて決める。
 /// `percent` が真なら `N%` を 0〜100 から 0〜255 へ写し、偽なら `N` を 0〜255 のまま読む。
 ///
-/// 先頭の符号は受けない。`u32` の解析は `+5` を 5 として受けてしまうが、`-1` が落ちるのに
+/// 成分は `u64` で読む——`u32` だと `4294967296` が桁あふれで「数でない」になり、`256` と同じ
+/// 「範囲外」にならない（指摘 32）。u64 も越える桁数は「数でない」のまま。
+///
+/// 先頭の符号は受けない。整数の解析は `+5` を 5 として受けてしまうが、`-1` が落ちるのに
 /// `+1` が通る非対称は正典にも本仕様にも根拠が無い（`+N` は R7.2 で相対指定の意味を持つ）。
 fn parse_component(token: &str, percent: bool) -> Result<u8, ColorParseError> {
     if token.starts_with('+') {
@@ -167,14 +176,14 @@ fn parse_component(token: &str, percent: bool) -> Result<u8, ColorParseError> {
         let body = token
             .strip_suffix('%')
             .ok_or_else(|| err(REASON_MIXED_NOTATION))?;
-        let value: u32 = body.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
+        let value: u64 = body.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
         if value > 100 {
             return Err(err(REASON_OUT_OF_RANGE));
         }
         // round(value * 255 / 100)（四捨五入・50% → 128）。
         Ok(((value * 255 + 50) / 100) as u8)
     } else {
-        let value: u32 = token.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
+        let value: u64 = token.parse().map_err(|_| err(REASON_NOT_A_NUMBER))?;
         if value > 255 {
             return Err(err(REASON_OUT_OF_RANGE));
         }

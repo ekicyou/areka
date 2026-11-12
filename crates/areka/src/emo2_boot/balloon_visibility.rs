@@ -494,6 +494,12 @@ impl BalloonVisibilityState {
         }
         self.deadline = None;
     }
+
+    /// いまバルーンに出ている台詞のトークの番号（読み口・利用者の中断が kanade へ運ぶ・
+    /// audit-kanade #6）。会話開始の合図が番号を持たなければ `None`。
+    pub(crate) fn talk_id(&self) -> Option<TalkId> {
+        self.talk_id
+    }
 }
 
 /// 可視コンテンツ駆動の判定が本フレームに導いた遷移（いずれも scope 昇順）。

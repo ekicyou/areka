@@ -1,7 +1,6 @@
 //! mock shiori の応答表（fixture）と、その適用状態。
 //!
-//! `common/mod.rs`（1,657 行）から責務単位で切り出した子モジュール（タスク 8.2）。
-//! 項目は親のファサードから再輸出されるため、消費側の `super::common::X` は不変である。
+//! 項目は親のファサードから再輸出されるため、消費側は `super::common::X` で引く。
 
 use std::collections::HashMap;
 
@@ -20,41 +19,11 @@ pub const FIXED_FAREWELL_SCRIPT: &str = r"\0\s[0]またね\e-";
 // Fixture — イベント id → 応答の対応（シナリオ構成可能）
 // ============================================================================
 
-/// マウス GET（`OnMouseMove`／`OnMouseDoubleClick`）へ注入する応答パターン（4.1）。
-///
-/// 4.2／4.3 の檻がマウス GET へ「talk スクリプト応答」または「無応答（204）」を任意に
-/// 注入するための語彙。`Fixture` のマウス応答表（[`Fixture::mouse_responses`]）の値として
-/// 用いる。既存の boot／steady／close 応答（それぞれ専用フィールド）と同じく、mock は
-/// この記述子どおりの [`ShioriOutcome`] を即応する（設計「Fixture へマウス応答（script／204）の
-/// additive 拡張」）。
-#[derive(Debug, Clone)]
-pub enum MouseResponse {
-    /// talk スクリプト Value を返す（`Steady{None}` から StartTalk を起こす・Req 8.1(c)）。
-    Script(String),
-    /// 204 / NoContent を返す（無応答・StartTalk 不発・Req 8.1(d)）。
-    NoContent,
-}
-
-/// 選択由来 GET（任意名イベント／`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）へ
-/// 注入する応答パターン（6.1）。
-///
-/// [`MouseResponse`] と同型の 2 値語彙だが、注入先が別表（[`Fixture::choice_responses`]）である
-/// ことを型で区別する。カスケードの各段はイベント id で識別されるため、段ごとに script／204 を
-/// 打ち分けられる（正典形の「Ex が 204 → 無印へ前進」「Ex が Value → 無印を発行しない」の
-/// 両分岐を同一器で作れる）。
-#[derive(Debug, Clone)]
-pub enum ChoiceResponse {
-    /// talk スクリプト Value を返す（カスケードを短絡させ StartTalk を起こす）。
-    Script(String),
-    /// 204 / NoContent を返す（無応答＝次段へ前進、または最終段なら解決のみ）。
-    NoContent,
-}
-
 /// mock shiori の応答表（Req 7.1）。シナリオごとに構成する。
 ///
 /// 基調は fixture 表どおり（OnInitialize→Notified／OnFirstBoot→204／OnBoot→固定 Value／
-/// basewareversion→Notified／OnSecondChange→204 基調／Unload→Unloaded）。可変部は
-/// 次の 2 点:
+/// basewareversion→Notified／OnSecondChange→204 基調／Unload→Unloaded）。可変部は 4 欄で、
+/// `boot_greets` と `responses` は欄の注のとおり。残る 2 欄:
 ///
 /// - `steady_value_indices`: `OnSecondChange`（GET・talk 再生可能）呼出のうち Value を
 ///   返す 0 始まりの出現インデックス集合。含まれない出現は 204（`NoContent`）。
@@ -63,8 +32,6 @@ pub enum ChoiceResponse {
 ///   無言終了（204）なら `false`。
 #[derive(Debug, Clone)]
 pub struct Fixture {
-    /// `OnBoot` GET 200 の固定スクリプト。
-    pub boot_script: String,
     /// `OnBoot` が起動挨拶 Value を返すか（DD-IT-12）。`true`＝固定スクリプトの Value（挨拶 talk を
     /// 起こし `Steady{talk: Some(_)}` へ完了）。`false`＝204（挨拶なし・`Steady{talk: None}` へ直行）。
     ///
@@ -73,54 +40,29 @@ pub struct Fixture {
     /// 非決定になる）。定常 pump（`Steady{None}` の GET・Req 2.1/2.3/3.3）を**決定的に**観測する
     /// テストは、この挨拶を出さない（`false`）ことで boot→`Steady{None}` へ直行させ競合を発生源から
     /// 断つ（設計 Testing Strategy「boot が 204 を返す fixture」）。挨拶 boot 自体の観測は
-    /// boot_test／full_run_test が担う。
+    /// full_run_test が担う。
     pub boot_greets: bool,
     /// `OnSecondChange`（GET）で Value を返す出現インデックス集合（0 始まり）。
     pub steady_value_indices: Vec<usize>,
-    /// `OnSecondChange` GET 200 の固定スクリプト。
-    pub steady_script: String,
     /// `OnClose` を Value（quit talk）で返すなら true・204（無言終了）なら false。
     pub close_quits: bool,
-    /// `OnClose` GET 200（quit シナリオ）の固定スクリプト。
-    pub farewell_script: String,
-    /// マウス GET id（`"OnMouseMove"`／`"OnMouseDoubleClick"`）→ 注入応答の対応（4.1）。
+    /// 表に載らない GET（マウス・選択由来・リソース）の id → 200 で返す Value の対応。
     ///
-    /// 含まれない mouse id は 204（`NoContent`）——未注入既定は従来の catch-all（未知 GET＝204）と
-    /// 同値ゆえ additive（既存 consumer は mouse GET を発しないので無影響）。4.2／4.3 の檻が
-    /// [`Fixture::with_mouse_response`] でイベント別に script／204 を注入する。
-    pub mouse_responses: HashMap<&'static str, MouseResponse>,
-    /// 選択由来 GET のイベント id → 注入応答の対応（6.1）。
-    ///
-    /// キーは wire 形のイベント id（`"OnChoiceSelectEx"`／`"OnChoiceSelect"`／`"OnChoiceTimeout"`
-    /// および `\q` の `On` 始まり任意名 ID そのもの）。含まれない id は 204（`NoContent`）——
-    /// 未注入既定は従来の catch-all（未知 GET＝204）と同値ゆえ additive である。
-    pub choice_responses: HashMap<&'static str, ChoiceResponse>,
-    /// リソース GET の id → 注入応答の対応（2.3）。
-    ///
-    /// キーは SHIORI リソース名（`"readmebutton.caption"`・`"sakura.popupmenu.visible"` 等）。
-    /// 含まれない id は 204（`NoContent`）——未注入既定は従来の catch-all（未知 GET＝204）と
-    /// 同値ゆえ additive である（既存 consumer はリソース GET を発しない）。
-    ///
-    /// 値の語彙は [`MouseResponse`] を借りる（`Script`＝200 の Value・`NoContent`＝204 の 2 値で
-    /// マウス注入表と同型ゆえ、同じ形の enum を 3 つ目として増やさない・設計 Implementation Notes）。
-    /// `Script(String::new())` は **200 の空文字**であり 204 とは別物である（要件 3.3／3.4 の
-    /// 「空を返す」と「値なしを返す」の区別はここで作る）。
-    pub resource_responses: HashMap<&'static str, MouseResponse>,
+    /// キーは wire 形のイベント id（`"OnMouseMove"`・`"OnChoiceSelectEx"`・`\q` の任意名 ID）または
+    /// SHIORI リソース名（`"readmebutton.caption"` 等）。含まれない id は 204（未知 GET と同じ）。
+    /// 空文字の値は **200 の空文字**であり 204 とは別物である（リソースの要件 3.3／3.4 の「空を返す」と
+    /// 「値なしを返す」の区別はここで作る）。
+    pub responses: HashMap<&'static str, String>,
 }
 
 impl Default for Fixture {
     /// 既定シナリオ: 起動挨拶あり・散発 Value なし・無言 close（最小の疎通に足る保守的既定）。
     fn default() -> Self {
         Fixture {
-            boot_script: FIXED_BOOT_SCRIPT.to_string(),
             boot_greets: true,
             steady_value_indices: Vec::new(),
-            steady_script: FIXED_STEADY_SCRIPT.to_string(),
             close_quits: false,
-            farewell_script: FIXED_FAREWELL_SCRIPT.to_string(),
-            mouse_responses: HashMap::new(),
-            choice_responses: HashMap::new(),
-            resource_responses: HashMap::new(),
+            responses: HashMap::new(),
         }
     }
 }
@@ -149,35 +91,11 @@ impl Fixture {
         self
     }
 
-    /// マウス GET id へ注入応答（script Value ／ 204）を設定する（4.1・連鎖記法）。
+    /// GET の id（マウス・選択由来・リソース）へ 200 で返す Value を設定する（連鎖記法）。
     ///
-    /// `id` は `"OnMouseMove"` ／ `"OnMouseDoubleClick"`。同一 id への再指定は後勝ちで上書きする。
-    /// 未設定の mouse id は 204（`NoContent`）のまま——4.2／4.3 が「talk 応答」「無応答」の両
-    /// パターンをイベント別に注入するための唯一の口（設計 Testing Strategy #4「204→無動作」／
-    /// Integration #1「Value→StartTalk」）。
-    pub fn with_mouse_response(mut self, id: &'static str, response: MouseResponse) -> Self {
-        self.mouse_responses.insert(id, response);
-        self
-    }
-
-    /// 選択由来 GET のイベント id へ注入応答（script Value ／ 204）を設定する（6.1・連鎖記法）。
-    ///
-    /// `id` は wire 形のイベント id（任意名 ID・`"OnChoiceSelectEx"`・`"OnChoiceSelect"`・
-    /// `"OnChoiceTimeout"`）。同一 id への再指定は後勝ちで上書きする。未設定の id は 204
-    /// （`NoContent`）のまま——カスケードの段ごとに応答を打ち分ける唯一の口である。
-    pub fn with_choice_response(mut self, id: &'static str, response: ChoiceResponse) -> Self {
-        self.choice_responses.insert(id, response);
-        self
-    }
-
-    /// リソース GET の id へ注入応答（200 の Value ／ 204）を設定する（2.3・連鎖記法）。
-    ///
-    /// `id` は SHIORI リソース名（`"readmebutton.caption"` 等）。同一 id への再指定は後勝ちで
-    /// 上書きする。未設定の id は 204（`NoContent`）のまま——「値を返す」「空を返す」「値なしを
-    /// 返す」を id ごとに打ち分ける唯一の口である（`MouseResponse::Script(String::new())` が
-    /// 200 の空文字・[`MouseResponse::NoContent`] が 204）。
-    pub fn with_resource_response(mut self, id: &'static str, response: MouseResponse) -> Self {
-        self.resource_responses.insert(id, response);
+    /// 同一 id への再指定は後勝ちで上書きする。未設定の id は 204 のまま。
+    pub fn with_response(mut self, id: &'static str, value: String) -> Self {
+        self.responses.insert(id, value);
         self
     }
 }
@@ -209,7 +127,7 @@ impl FixtureState {
                 "OnBoot" => {
                     if self.fixture.boot_greets {
                         ShioriOutcome::Value(
-                            self.fixture.boot_script.clone(),
+                            FIXED_BOOT_SCRIPT.to_string(),
                             areka_talk::SecurityLevel::Local,
                         )
                     } else {
@@ -221,7 +139,7 @@ impl FixtureState {
                     self.second_change_get_seen += 1;
                     if self.fixture.steady_value_indices.contains(&index) {
                         ShioriOutcome::Value(
-                            self.fixture.steady_script.clone(),
+                            FIXED_STEADY_SCRIPT.to_string(),
                             areka_talk::SecurityLevel::Local,
                         )
                     } else {
@@ -231,41 +149,20 @@ impl FixtureState {
                 "OnClose" => {
                     if self.fixture.close_quits {
                         ShioriOutcome::Value(
-                            self.fixture.farewell_script.clone(),
+                            FIXED_FAREWELL_SCRIPT.to_string(),
                             areka_talk::SecurityLevel::Local,
                         )
                     } else {
                         ShioriOutcome::NoContent
                     }
                 }
-                // マウス GET は fixture の注入表を引く（未注入は 204・4.1）。script Value は
-                // 既存 talk 起動棚（Steady の StartTalk）へそのまま載る（Req 8.1(c)/(d)）。
-                mouse_id @ ("OnMouseMove" | "OnMouseDoubleClick") => {
-                    match self.fixture.mouse_responses.get(mouse_id) {
-                        Some(MouseResponse::Script(script)) => {
-                            ShioriOutcome::Value(script.clone(), areka_talk::SecurityLevel::Local)
-                        }
-                        Some(MouseResponse::NoContent) | None => ShioriOutcome::NoContent,
-                    }
-                }
-                // リソース GET も選択由来 GET も id が固定パターンに載らないため、catch-all の
-                // 手前で 2 つの注入表を順に引く（どちらの表にも無い id は従来どおり 204 へ落ちる）。
-                // リソース名と選択イベント名は語彙が交わらないので、引く順序は結果を変えない。
-                other => match self.fixture.resource_responses.get(other) {
-                    // 200 の Value（空文字もそのまま返す＝204 とは別の応答・2.3）。
-                    Some(MouseResponse::Script(value)) => {
+                // 表に載せた GET（マウス・選択由来・リソース）。どれも語彙が交わらないので表は 1 本。
+                other => match self.fixture.responses.get(other) {
+                    Some(value) => {
                         ShioriOutcome::Value(value.clone(), areka_talk::SecurityLevel::Local)
                     }
-                    Some(MouseResponse::NoContent) => ShioriOutcome::NoContent,
-                    // 選択由来 GET は fixture の注入表を引く（未注入は 204・6.1）。任意名イベントは
-                    // ゴースト作者が書いた名前がそのまま id になるため、固定パターンでは受けられない。
-                    None => match self.fixture.choice_responses.get(other) {
-                        Some(ChoiceResponse::Script(script)) => {
-                            ShioriOutcome::Value(script.clone(), areka_talk::SecurityLevel::Local)
-                        }
-                        // 未注入の選択由来 GET・未知 GET はいずれも 204（保守的既定）。
-                        Some(ChoiceResponse::NoContent) | None => ShioriOutcome::NoContent,
-                    },
+                    // 未設定の id・未知 GET はいずれも 204（保守的既定）。
+                    None => ShioriOutcome::NoContent,
                 },
             },
         }

@@ -1,21 +1,17 @@
 //! マウスの解放・ホイール・出入りの受理と、クリックの段の列の表のテスト
 //! （mouse-click-wheel-events 要件 1.1・1.7・2.1・2.4・2.6・3.2・6.1・6.2・7.5・8.2・8.3・9.1）。
 //!
-//! 表（[`plan_click`]）と受理（[`on_mouse_extended`]）は直に、定常の入口の委譲・閉じの握手の保留・
-//! 定常以外の棄却は最上位の `step` から通す。
+//! 表（[`plan_click`]）と受理（[`on_mouse_extended`]）は直に、定常の入口の委譲・閉じの握手の保留は
+//! 最上位の `step` から通す（定常以外の棄却は `schedule_tests.rs` の
+//! `mouse_input_in_non_steady_phases_is_ignored` が固定する）。
 
 use super::*;
-use crate::msg::{
-    CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriFailure, ShioriOutcome,
-};
+use crate::msg::{CloseReason, MonotonicMs, ShioriFailure, ShioriOutcome};
 use crate::schedule::log_capture::{assert_not_logged, capture, logged_once};
+use crate::schedule::translate_test_support::{config, only_get};
 use crate::schedule::{ActiveTalk, Input, Phase, step};
 use crate::talk::TalkId;
 use tracing::Level;
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 /// 定常（話していない）。
 fn steady_none() -> State {
@@ -55,16 +51,6 @@ fn up(button: ClickButton, second_of_double: bool) -> MouseEventKind {
     MouseEventKind::ButtonUp {
         button,
         second_of_double,
-    }
-}
-
-/// 一括が GET 1 本だけであることを確かめ、(イベント名, Reference の並び) を返す。
-fn only_get(actions: &[Action]) -> (String, Vec<String>) {
-    match actions {
-        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET 1 本だけのはず（{} 件）", actions.len()),
     }
 }
 
@@ -221,20 +207,6 @@ fn hover_sends_one_of_the_four_names() {
 
 // --- 定常の入口からの委譲 ---
 
-/// 要件 8.2: 話の最中でも送る（入口の委譲を `step` から通す）。
-#[test]
-fn step_delegates_in_steady_even_while_talking() {
-    for state in [steady_none(), steady_talking()] {
-        let (state, actions) = step(
-            state,
-            Input::Mouse(input(up(ClickButton::Right, false))),
-            &config(),
-        );
-        assert_eq!(only_get(&actions).0, "OnMouseUp");
-        assert!(state.mouse_click.is_some());
-    }
-}
-
 /// 要件 8.3: 閉じの握手の保留中は 3 つとも送らない（段の記憶も置かない）。
 #[test]
 fn step_sends_nothing_while_close_is_pending() {
@@ -253,24 +225,6 @@ fn step_sends_nothing_while_close_is_pending() {
         assert!(actions.is_empty(), "{kind:?}");
         assert!(state.mouse_click.is_none());
         assert_not_logged(&events, "mouse_event_sent");
-    }
-}
-
-/// 要件 8.3: 定常以外では 3 つとも送らない。
-#[test]
-fn step_sends_nothing_outside_steady() {
-    for kind in [
-        up(ClickButton::Left, false),
-        MouseEventKind::Wheel { delta: 120 },
-        MouseEventKind::Hover(HoverEdge::LeaveAll),
-    ] {
-        let state = State {
-            phase: Phase::Idle,
-            ..steady_none()
-        };
-        let (state, actions) = step(state, Input::Mouse(input(kind)), &config());
-        assert!(actions.is_empty(), "{kind:?}");
-        assert!(state.mouse_click.is_none());
     }
 }
 
@@ -396,23 +350,6 @@ fn script_at_any_step_plays_and_stops_the_chain() {
     }
 }
 
-/// 要件 2.5: 中ボタンで `Ex` の 2 段のどちらかに台本なら、互換の `OnMouseUp`／`OnMouseClick` は送らない。
-#[test]
-fn middle_script_on_ex_never_sends_compat_steps() {
-    // `OnMouseUpEx` に台本。
-    let state = released(steady_none(), ClickButton::Middle, false);
-    let (state, actions) = reply(state, script(), "OnMouseUpEx");
-    assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
-    assert!(state.mouse_click.is_none());
-    // `OnMouseClickEx` に台本。
-    let state = released(steady_none(), ClickButton::Middle, false);
-    let (state, actions) = reply(state, ShioriOutcome::NoContent, "OnMouseUpEx");
-    assert_eq!(only_get(&actions).0, "OnMouseClickEx");
-    let (state, actions) = reply(state, script(), "OnMouseClickEx");
-    assert!(matches!(actions.as_slice(), [Action::StartTalk(_)]));
-    assert!(state.mouse_click.is_none());
-}
-
 /// 要件 1.6・1.8・9.3: 送信の失敗は `error!` を残して 204 と同じに次へ。終了の系列へ倒れない。
 #[test]
 fn send_failure_at_each_step_moves_on_without_closing() {
@@ -452,7 +389,8 @@ fn unexpected_reply_moves_on_like_no_content() {
     }
 }
 
-/// 要件 5.4・8.1: 話の最中の台本は話を置き換える（出所は返事のあったイベントの名前）。
+/// 要件 5.4・8.1・8.2: 話の最中でも送り（入口の委譲を `step` から通す）、話の最中の台本は話を置き換える
+/// （出所は返事のあったイベントの名前）。
 #[test]
 fn script_while_talking_replaces_the_talk() {
     let state = released(steady_talking(), ClickButton::Right, false);

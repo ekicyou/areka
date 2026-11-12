@@ -596,7 +596,6 @@ fn vertical_big_glyph_column_band_is_40_and_overlap_is_fixed() {
                 table: &table,
                 ids: &ids,
                 default: &default,
-                current: &default,
             },
             &ActorKey::from("0"),
             &mut CursorWarnGuard::default(),

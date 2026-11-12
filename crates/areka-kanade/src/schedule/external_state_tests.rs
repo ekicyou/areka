@@ -8,12 +8,9 @@
 use super::translate_test_support::pass_translate;
 use super::{Action, ActiveTalk, Input, Phase, State, TermCause, step};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs};
+use crate::schedule::translate_test_support::config;
 use crate::status::{BalloonBinding, ExecutionStateUpdate, ExternalStates};
 use crate::talk::{TalkDone, TalkEndReason, TalkId};
-
-fn config() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
 
 fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
     BalloonBinding {
@@ -32,18 +29,13 @@ fn talk() -> Option<ActiveTalk> {
 }
 
 /// 運行の相のすべての種類。トークの有無で分かれる相（`BootVersion`・`Steady`）は両方作るので
-/// 17 通り（相を問わないことと、相ごとの「再生中か」を見る）。2 番目はトーク中の定常のまま動かさない。
+/// 17 通り（相を問わないことと、相ごとの「再生中か」を見る）。
 fn phases() -> Vec<(&'static str, Phase)> {
     let (talk_id, deadline) = (TalkId(3), None);
     vec![
         ("Idle", Phase::Idle),
         ("Steady{Some}", Phase::Steady { talk: talk() }),
-        (
-            "ClosePending",
-            Phase::ClosePending {
-                reason: CloseReason::System,
-            },
-        ),
+        ("ClosePending", Phase::ClosePending),
         ("ChangePending", Phase::ChangePending),
         (
             "Unloading",
@@ -142,9 +134,8 @@ fn snapshot_gates_nouserbreak_by_talk_and_copies_online_and_balloons() {
         online: true,
         balloons: vec![binding(0, 2)],
     };
-    let (_, talking) = phases().swap_remove(1);
     let with_talk = State {
-        phase: talking,
+        phase: Phase::Steady { talk: talk() },
         external: external.clone(),
         ..State::initial()
     }
@@ -178,34 +169,28 @@ fn full_copy() -> ExternalStates {
 /// 会話なしの作り方が残す `Status` の値（online とバルーンだけ）。
 const WITHOUT_TALK: &str = "online,balloon(0=2/1=0)";
 
-/// リクエスト 1 件の (イベント名, `Status` 行の値)。
-fn request_of(action: &super::Action) -> (String, Option<String>) {
-    match action {
-        super::Action::ShioriRequest(
+/// 行動列の最後のリクエストの (イベント名, `Status` 行の値)。
+fn last_request(actions: &[Action]) -> (String, Option<String>) {
+    match actions
+        .iter()
+        .rev()
+        .find(|a| matches!(a, Action::ShioriRequest(_)))
+        .expect("リクエストが 1 件はあるはず")
+    {
+        Action::ShioriRequest(
             crate::msg::ShioriCall::Get { id, status, .. }
             | crate::msg::ShioriCall::Notify { id, status, .. },
         ) => (id.as_str().to_string(), status.render()),
-        _ => panic!("リクエストのはず"),
+        _ => unreachable!("リクエストだけを選んだ"),
     }
-}
-
-/// 行動列の最後のリクエストの (イベント名, `Status` 行の値)。
-fn last_request(actions: &[super::Action]) -> (String, Option<String>) {
-    let action = actions
-        .iter()
-        .rev()
-        .find(|a| matches!(a, super::Action::ShioriRequest(_)))
-        .expect("リクエストが 1 件はあるはず");
-    request_of(action)
 }
 
 /// 要件 3.3・5.1: 会話なしの作り方は、トーク中の相から作っても talk・choice・
 /// nouserbreak を落とし、online とバルーンだけを写しから残す。
 #[test]
 fn snapshot_without_talk_keeps_only_online_and_balloons() {
-    let (_, talking) = phases().swap_remove(1);
     let state = State {
-        phase: talking,
+        phase: Phase::Steady { talk: talk() },
         external: full_copy(),
         ..State::initial()
     };
@@ -231,7 +216,7 @@ fn walk(state: State, inputs: Vec<Input>, config: &KanadeConfig) -> Vec<(String,
     let mut seen = Vec::new();
     for input in inputs {
         let next = step(state, input, config);
-        let (next, actions) = crate::schedule::translate_test_support::pass_translate(next, config);
+        let (next, actions) = pass_translate(next, config);
         seen.push(last_request(&actions));
         state = next;
     }
@@ -413,10 +398,9 @@ fn close_handshake_request_carries_online_and_balloons_from_the_copy() {
 /// バルーンだけを載せる。
 #[test]
 fn force_quit_request_carries_online_and_balloons_from_the_copy() {
-    let (_, talking) = phases().swap_remove(1);
     let seen = walk(
         State {
-            phase: talking,
+            phase: Phase::Steady { talk: talk() },
             ..State::initial()
         },
         vec![Input::ForceQuit {
@@ -440,7 +424,7 @@ fn plays_a_talk(phase: &Phase) -> bool {
         }
         Phase::BootVersion { talk: None } | Phase::Steady { talk: None } => false,
         Phase::BootVersion { talk: Some(_) } | Phase::Steady { talk: Some(_) } => true,
-        Phase::ClosePending { .. } | Phase::ChangePending | Phase::ChangeClosePending => false,
+        Phase::ClosePending | Phase::ChangePending | Phase::ChangeClosePending => false,
         Phase::CloseTalkWait { .. }
         | Phase::ChangeTalkWait { .. }
         | Phase::ChangeCloseTalkWait { .. } => true,
@@ -448,8 +432,8 @@ fn plays_a_talk(phase: &Phase) -> bool {
     }
 }
 
-/// 要件 4.1・4.6（1.4・1.5・1.7・3.2）: 運行の相のすべての種類で、判定・再生中のトークの番号が
-/// 引けるか・実行の状態の素の 3 つが、手書きの表と一致する。食い違う相はまとめて挙げる。
+/// 要件 4.1・4.6（1.4・1.5・1.7・3.2）: 運行の相のすべての種類で、判定（再生中のトークの番号が
+/// 引けるか）・実行の状態の素の 2 つが、手書きの表と一致する。食い違う相はまとめて挙げる。
 #[test]
 fn talk_judgment_matches_the_table_in_every_phase() {
     let kinds: std::collections::BTreeSet<_> = phases()
@@ -466,15 +450,14 @@ fn talk_judgment_matches_the_table_in_every_phase() {
     for (label, phase) in phases() {
         let expected = plays_a_talk(&phase);
         let judged = super::talk_active_of(&phase);
-        let numbered = super::current_talk_id(&phase).is_some();
         let state = State {
             phase,
             ..State::initial()
         };
         let snapshot = state.snapshot().talk_active;
-        if (judged, numbered, snapshot) != (expected, expected, expected) {
+        if (judged, snapshot) != (expected, expected) {
             wrong.push(format!(
-                "{label}: 表={expected} 判定={judged} 番号が引ける={numbered} 状態の素={snapshot}"
+                "{label}: 表={expected} 判定={judged} 状態の素={snapshot}"
             ));
         }
     }
@@ -623,7 +606,14 @@ fn farewell_talk_drops_talking_after_every_ending() {
             step(state, done(talk_id, TalkEndReason::Quit), &config())
         }),
         ("利用者の中断", |state, talk_id| {
-            let (state, stop) = step(state, Input::UserBreak { scope: 0 }, &config());
+            let (state, stop) = step(
+                state,
+                Input::UserBreak {
+                    scope: 0,
+                    talk_id: Some(talk_id),
+                },
+                &config(),
+            );
             assert!(
                 matches!(stop.as_slice(), [Action::CancelChoice { .. }]),
                 "中断を受理して止める"
@@ -673,9 +663,8 @@ fn farewell_talk_drops_talking_after_every_ending() {
 /// 流す `switching_requests_carry_online_and_balloons_from_the_copy` が固定している）。
 #[test]
 fn close_request_held_through_a_talk_sends_on_close_without_talk() {
-    let (_, talking) = phases().swap_remove(1);
     let state = State {
-        phase: talking,
+        phase: Phase::Steady { talk: talk() },
         external: full_copy(),
         ..State::initial()
     };

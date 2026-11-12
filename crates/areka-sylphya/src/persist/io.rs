@@ -42,9 +42,44 @@ pub trait PersistIo: Send {
     fn withholds(&self, _path: &Path) -> bool {
         false
     }
+    /// `path` を読んで重ねて書く間、ほかのプロセスの書き手を締め出す錠を取る。
+    /// 返した File を捨てると錠が放れる。既定は錠を持たない（`Ok(None)`・試験の偽の IO）。
+    fn lock_for_update(&self, _path: &Path) -> std::io::Result<Option<std::fs::File>> {
+        Ok(None)
+    }
 }
 
-/// 同じ IO を複数の持ち手で分ける包み（3 つの口をすべて中身へ渡す）。
+/// 一時の掴み（共有違反・拒み）を取り直す待ちの上限（記憶のファイルの読み・確定の `rename`・更新の間の錠）。
+pub(crate) const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+/// 一時の掴みを取り直す間隔。
+pub(crate) const LOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(10);
+
+/// 待てば通るかもしれない失敗か（共有違反＝os error 32・拒み＝5。ウイルス対策などの一時の掴み）。
+pub(crate) fn is_transient(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(32) | Some(5))
+}
+
+/// `op` を一時の掴み（[`is_transient`]）の間だけ [`LOCK_RETRY`] ごとに最大 `wait` 取り直す
+/// （本番の呼び手は [`LOCK_WAIT`]）。
+pub(crate) fn retry_transient<T>(
+    wait: std::time::Duration,
+    mut op: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        match op() {
+            Err(e) if is_transient(&e) && std::time::Instant::now() < deadline => {
+                std::thread::sleep(LOCK_RETRY);
+            }
+            result => return result,
+        }
+    }
+}
+
+/// `FILE_FLAG_DELETE_ON_CLOSE`。`areka-sylphya` は `windows` に依存しないので値で書く。
+const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+
+/// 同じ IO を複数の持ち手で分ける包み（4 つの口をすべて中身へ渡す）。
 impl<T: PersistIo + Sync + ?Sized> PersistIo for std::sync::Arc<T> {
     fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
         (**self).read(path)
@@ -54,6 +89,9 @@ impl<T: PersistIo + Sync + ?Sized> PersistIo for std::sync::Arc<T> {
     }
     fn withholds(&self, path: &Path) -> bool {
         (**self).withholds(path)
+    }
+    fn lock_for_update(&self, path: &Path) -> std::io::Result<Option<std::fs::File>> {
+        (**self).lock_for_update(path)
     }
 }
 
@@ -66,9 +104,8 @@ pub struct FsPersistIo;
 impl FsPersistIo {
     /// `path` と同一ディレクトリに置く一時ファイル名を組む（同一ボリューム＝rename 原子性の前提）。
     ///
-    /// 非決定源（時刻・乱数・PID）を混ぜない（R8.3）。M1 は単一プロセス前提（design「Risks:
-    /// 複数プロセス同時 open の write 競合は M1 想定外」）ゆえ、宛先ファイル名から決定論的に
-    /// 導いた固定サフィックスで十分。競合が必要になれば PersistIo 拡張でロックを導入する。
+    /// 非決定源（時刻・乱数・PID）を混ぜない（R8.3）。ほかのプロセスの書き手とは更新の間の錠
+    /// （[`PersistIo::lock_for_update`]）で並ぶので、宛先ファイル名から導いた固定サフィックスで足りる。
     fn temp_path_for(path: &Path) -> std::path::PathBuf {
         let file_name = path
             .file_name()
@@ -77,6 +114,45 @@ impl FsPersistIo {
         let mut temp_name = file_name;
         temp_name.push(".tmp");
         path.with_file_name(temp_name)
+    }
+
+    /// 錠のファイルの名前（宛先の名前に `.lock` を足す・同じフォルダ）。非決定源は混ぜない（R8.3）。
+    fn lock_path_for(path: &Path) -> std::path::PathBuf {
+        let mut lock_name = path
+            .file_name()
+            .map(|n| n.to_owned())
+            .unwrap_or_else(|| std::ffi::OsString::from("sylphya"));
+        lock_name.push(".lock");
+        path.with_file_name(lock_name)
+    }
+
+    /// 錠のファイルを共有なし・閉じたら消える指定で開く。共有違反と拒み（消える途中）の間だけ
+    /// `LOCK_RETRY` ごとに `wait` まで取り直し、ほかの失敗は待たずに返す。
+    fn lock_within(path: &Path, wait: std::time::Duration) -> std::io::Result<std::fs::File> {
+        use std::os::windows::fs::OpenOptionsExt;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let lock_path = Self::lock_path_for(path);
+        retry_transient(wait, || {
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .share_mode(0)
+                .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+                .open(&lock_path)
+        })
+        .map_err(|e| {
+            // 拒みのままの期限切れは本当に書けないフォルダかもしれない＝「ほかの areka」と言い違えない。
+            if e.raw_os_error() != Some(32) {
+                return e;
+            }
+            std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "記憶のファイル sylphya.toml の錠を 1 秒待っても取れないので、書くのをやめました（ほかの areka が同じ記憶を書いている）",
+            )
+        })
     }
 
     /// ゴーストの記憶のフォルダを先に作る。控える範囲の中なら作らずに `Ok`、外なら
@@ -139,9 +215,9 @@ impl PersistIo for FsPersistIo {
             return Err(e);
         }
 
-        // 原子的置換。Windows の rename は既存宛先を置換する（研究 §11-2）。失敗時も
-        // 本体（既存ファイル）は無傷——temp を掃除して Err を返す。
-        if let Err(e) = std::fs::rename(&temp, path) {
+        // 原子的置換。Windows の rename は既存宛先を置換する（研究 §11-2）。一時の掴みは取り直す。
+        // 失敗時も本体（既存ファイル）は無傷——temp を掃除して Err を返す。
+        if let Err(e) = retry_transient(LOCK_WAIT, || std::fs::rename(&temp, path)) {
             let _ = std::fs::remove_file(&temp);
             return Err(e);
         }
@@ -150,6 +226,14 @@ impl PersistIo for FsPersistIo {
 
     fn withholds(&self, path: &Path) -> bool {
         super::withhold::withholds(path)
+    }
+
+    fn lock_for_update(&self, path: &Path) -> std::io::Result<Option<std::fs::File>> {
+        // 控える道（読み取りだけの走り）はファイルにもフォルダにも触れない。
+        if self.withholds(path) {
+            return Ok(None);
+        }
+        Self::lock_within(path, LOCK_WAIT).map(Some)
     }
 }
 
@@ -225,6 +309,10 @@ impl PersistIo for FakePersistIo {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "io_lock_tests.rs"]
+mod lock_tests;
 
 #[cfg(test)]
 mod tests {
@@ -329,26 +417,17 @@ mod tests {
         assert_eq!(io.read(&PathBuf::from("/nope.toml")).unwrap(), None);
     }
 
-    #[test]
-    fn fake_is_deterministic_given_same_faults() {
-        let path = PathBuf::from("/scope/sylphya.toml");
-        let run = || {
-            let io = FakePersistIo::new();
-            io.commit(&path, "A").unwrap();
-            io.fail_next_commit();
-            let interrupted = io.commit(&path, "B").is_err();
-            (interrupted, io.read(&path).unwrap())
-        };
-        assert_eq!(run(), run());
-    }
-
     // fake は外部環境（暦時計・OS 名・実 FS）を一切必要としない（R8.3・R9.2 の純 x64 檻）。
 
-    /// `Arc` で包んでも 3 つの口（read・commit・withholds）はすべて中身へ渡る。
+    /// `Arc` で包んでも 4 つの口（read・commit・withholds・lock_for_update）はすべて中身へ渡る。
     #[test]
-    fn an_arc_forwards_all_three_methods() {
+    fn an_arc_forwards_all_four_methods() {
         struct Withholding(FakePersistIo);
         impl PersistIo for Withholding {
+            fn lock_for_update(&self, _path: &Path) -> std::io::Result<Option<std::fs::File>> {
+                // 開いた手なら何でもよい（既定の None と見分けられれば足りる）。
+                std::fs::File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")).map(Some)
+            }
             fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
                 self.0.read(path)
             }
@@ -369,6 +448,10 @@ mod tests {
         assert!(
             io.withholds(&path),
             "withholds も中身へ渡る（既定の false にならない）"
+        );
+        assert!(
+            io.lock_for_update(&path).unwrap().is_some(),
+            "lock_for_update も中身へ渡る（既定の None にならない）"
         );
     }
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::msg::{CloseReason, ShioriCall, ShioriFailure};
+use crate::msg::{ShioriCall, ShioriFailure, ShioriOutcome};
 use crate::schedule::{ActiveTalk, TermCause};
 use crate::talk::TalkId;
 use areka_actor::reply_channel;
@@ -30,10 +30,18 @@ fn all_phases() -> Vec<Phase> {
         Phase::Steady {
             talk: Some(active_talk()),
         },
-        Phase::ClosePending {
-            reason: CloseReason::User { scope: 0 },
-        },
+        Phase::ClosePending,
         Phase::CloseTalkWait {
+            talk_id: TalkId(7),
+            deadline: None,
+        },
+        Phase::ChangePending,
+        Phase::ChangeTalkWait {
+            talk_id: TalkId(7),
+            deadline: None,
+        },
+        Phase::ChangeClosePending,
+        Phase::ChangeCloseTalkWait {
             talk_id: TalkId(7),
             deadline: None,
         },
@@ -58,7 +66,7 @@ fn expected_queryable(phase: &Phase) -> bool {
         | Phase::BootType
         | Phase::BootMain
         | Phase::BootVersion { .. }
-        | Phase::ClosePending { .. }
+        | Phase::ClosePending
         | Phase::CloseTalkWait { .. }
         | Phase::ChangePending
         | Phase::ChangeTalkWait { .. }
@@ -78,28 +86,16 @@ fn state_in(phase: Phase) -> State {
 /// 会話できる状態（`Steady`）だけが照会できる（要件 3.10・終了中は既定名）。
 #[test]
 fn only_steady_is_queryable() {
-    let phases = all_phases();
-    let mut queryable_count = 0;
-    for phase in &phases {
+    for phase in &all_phases() {
         assert_eq!(
             queryable(phase),
             expected_queryable(phase),
             "フェーズごとの照会可否が期待と違う"
         );
-        if queryable(phase) {
-            queryable_count += 1;
-        }
     }
-    // 表の両側（真・偽）を実際に踏んでいること: 真は Steady の 2 形だけ。
-    assert_eq!(queryable_count, 2, "照会できるのは Steady の 2 形だけ");
-    assert_eq!(
-        phases.len() - queryable_count,
-        12,
-        "残り 12 形は照会できない"
-    );
 }
 
-/// SHIORI 応答から照会結果への写像（`boot.rs` の prefetch 段と同じ 3 分岐＋想定外）。
+/// SHIORI 応答から照会結果への写像（3 分岐＋想定外・起動の先読みも同じ関数を呼ぶ）。
 #[test]
 fn shiori_outcome_maps_onto_resource_outcome() {
     assert_eq!(
@@ -306,5 +302,47 @@ fn a_failed_round_trip_on_the_query_path_does_not_claim_termination() {
         matches!(replied[0].1, ResourceOutcome::Failed(_)),
         "その id の失敗として返る: {:?}",
         replied[0].1
+    );
+}
+
+/// リソース許可表に無い id は、イベント許可表にあっても（`OnBoot`）SHIORI へ出さず、
+/// その id だけが失敗になる（`error!` を 1 件・要件 3.2）。
+#[test]
+fn an_event_id_is_refused_as_a_resource_without_a_round_trip() {
+    use crate::schedule::log_capture::{capture, logged_once};
+    let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+    let fake = thread::spawn(move || {
+        let mut seen = Vec::new();
+        while let Ok(ShioriMsg::Request { call, reply }) = shiori_rx.recv() {
+            let ShioriCall::Get { id, .. } = call else {
+                panic!("リソース照会は GET");
+            };
+            seen.push(id.as_str().to_string());
+            let _ = reply.send(ShioriOutcome::NoContent);
+        }
+        seen
+    });
+    let (reply_tx, reply_rx) = reply_channel();
+    let events = capture(|| {
+        answer(
+            &state_in(Phase::Steady { talk: None }),
+            &shiori_tx,
+            vec!["OnBoot", "username"],
+            reply_tx,
+        );
+    });
+    drop(shiori_tx);
+    logged_once(&events, tracing::Level::ERROR, "resource_id_not_allowed");
+    let replied = reply_rx.recv().expect("応答は必ず 1 回返る");
+    assert!(
+        matches!(&replied[0], ("OnBoot", ResourceOutcome::Failed(why)) if why.contains("OnBoot")),
+        "リソースでない id はその id だけ失敗になる: {:?}",
+        replied[0]
+    );
+    assert_eq!(replied[1], ("username", ResourceOutcome::NoContent));
+    assert_eq!(
+        fake.join().expect("偽 SHIORI は panic しない"),
+        vec!["username".to_string()],
+        "リソースでない id は SHIORI へ出さない"
     );
 }

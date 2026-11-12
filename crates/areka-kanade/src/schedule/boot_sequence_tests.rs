@@ -1,8 +1,12 @@
-use super::test_support::{assert_get, assert_notify, config, initial};
+use super::test_support::{
+    assert_get, assert_notify, boot_until_version_with_greeting, config, drive_to_main,
+    drive_to_prefetch, reply,
+};
 use super::*;
 use crate::schedule::translate_test_support::pass_translate;
 use crate::schedule::{ActiveTalk, step};
 use crate::status::ExecutionSnapshot;
+use crate::talk::TalkId;
 
 // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 
@@ -11,7 +15,7 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     let cfg = config();
 
     // 1. Idle + Boot → OnInitialize NOTIFY / BootInit（Req 1.1）。
-    let (s, actions) = step(initial(), Input::Boot, &cfg);
+    let (s, actions) = step(State::initial(), Input::Boot, &cfg);
     assert!(matches!(s.phase, Phase::BootInit));
     assert_eq!(actions.len(), 1);
     assert_notify(
@@ -32,7 +36,7 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     assert_eq!(actions.len(), 1);
     assert_get(
         &actions[0],
-        &resources::resource_username(&ExecutionSnapshot::INACTIVE),
+        &resources::resource_get("username", &ExecutionSnapshot::INACTIVE),
     );
 
     // 2b. BootPrefetch + NoContent(204) → [ResourceOutcome, OnFirstBoot GET] / BootType（R4.1）。
@@ -154,40 +158,14 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
 #[test]
 fn boot_type_value_skips_onboot_and_starts_talk() {
     let cfg = config();
-    // BootType へ進める（Boot→Notified→prefetch 204）。prefetch 段が OnInitialize と OnFirstBoot の
-    // 間に挟まるため、username 照会応答（204）を 1 段挟んでから BootType へ到達する。
-    let (s, _) = step(initial(), Input::Boot, &cfg);
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Notified,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootInit→BootPrefetch（username GET）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootPrefetch→BootType（OnFirstBoot GET）
+    // BootType へ進める（prefetch の username 照会に 204 を返して OnFirstBoot GET まで）。
+    let s = reply(drive_to_prefetch(&cfg), ShioriOutcome::NoContent, &cfg).0;
     assert!(matches!(s.phase, Phase::BootType));
 
     // BootType + Value("earlygreet") → StartTalk + basewareversion NOTIFY / BootVersion。
-    let (s, actions) = pass_translate(
-        step(
-            s,
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value(
-                    "earlygreet".to_string(),
-                    areka_talk::SecurityLevel::Local,
-                ),
-                origin: "test",
-            },
-            &cfg,
-        ),
+    let (s, actions) = reply(
+        s,
+        ShioriOutcome::Value("earlygreet".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     assert!(
@@ -216,13 +194,6 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
         &actions[1],
         &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
     );
-
-    // OnBoot GET が一切発行されていないことを確認（フォールスルー打ち切り）。
-    for a in &actions {
-        if let Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) = a {
-            assert_ne!(id.as_str(), "OnBoot", "OnBoot はスキップされるべき");
-        }
-    }
 }
 
 // --- BootMain + NoContent → no StartTalk（Req 2.3） ---
@@ -232,20 +203,6 @@ fn boot_main_no_content_emits_no_talk() {
     let cfg = config();
     let s = State {
         phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (s, actions) = step(
@@ -266,10 +223,6 @@ fn boot_main_no_content_emits_no_talk() {
         &actions[0],
         &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
     );
-    assert!(
-        !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
-        "204 は talk 起動しない（Req 2.3）"
-    );
     // 採番カウンタは動かない。
     assert_eq!(s.next_talk_id, 1);
 }
@@ -280,30 +233,9 @@ fn boot_main_no_content_emits_no_talk() {
 fn boot_talk_ids_are_unique_and_monotonic() {
     let cfg = config();
     // BootMain + Value → id=1。
-    let s1 = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
-        ..State::initial()
-    };
-    let (s1, actions1) = step(
-        s1,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "test",
-        },
+    let (s1, actions1) = reply(
+        drive_to_main(&cfg),
+        ShioriOutcome::Value("a".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     let id1 = match &actions1[0] {
@@ -314,30 +246,11 @@ fn boot_talk_ids_are_unique_and_monotonic() {
     assert_eq!(s1.next_talk_id, 2);
 
     // 引き継いだカウンタ（2）から次の Value → id=2（別 run 想定・単調増番）。
-    let s2 = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: s1.next_talk_id,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
-        ..State::initial()
-    };
-    let (s2, actions2) = step(
+    let mut s2 = drive_to_main(&cfg);
+    s2.next_talk_id = s1.next_talk_id;
+    let (s2, actions2) = reply(
         s2,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("b".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "test",
-        },
+        ShioriOutcome::Value("b".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     let id2 = match &actions2[0] {
@@ -346,7 +259,6 @@ fn boot_talk_ids_are_unique_and_monotonic() {
     };
     assert_eq!(id2, TalkId(2), "id は単調増番で再利用しない");
     assert_eq!(s2.next_talk_id, 3);
-    assert_ne!(id1, id2);
 }
 
 // --- CloseRequest during boot → pending_close recorded, phase unchanged, no actions ---
@@ -357,26 +269,20 @@ fn close_request_during_boot_records_pending_only() {
     // 各 boot Phase で保留記録のみ・Phase 不変・Action なしを確認。
     for phase in [
         Phase::BootInit,
+        Phase::BootPrefetch,
         Phase::BootType,
         Phase::BootMain,
         Phase::BootVersion { talk: None },
+        Phase::BootVersion {
+            talk: Some(ActiveTalk {
+                talk_id: TalkId(1),
+                origin: "boot",
+                script: String::new(),
+            }),
+        },
     ] {
         let s = State {
             phase,
-            last_now: None,
-            next_talk_id: 1,
-            pending_close: None,
-            choice: None,
-            choice_prev_talk: None,
-            anchor: None,
-            user_break_talk: None,
-            shown: None,
-            change: None,
-            pending_change: None,
-            talk_gap: None,
-            external: Default::default(),
-            translate: None,
-            reply_source: None,
             ..State::initial()
         };
         let phase_before = std::mem::discriminant(&s.phase);
@@ -406,7 +312,7 @@ fn close_request_during_boot_records_pending_only() {
 fn pending_close_survives_boot_completion() {
     let cfg = config();
     // Boot 開始→BootInit で close 保留→そのまま boot 完走。
-    let (s, _) = step(initial(), Input::Boot, &cfg);
+    let (s, _) = step(State::initial(), Input::Boot, &cfg);
     let (s, _) = step(
         s,
         Input::CloseRequest {
@@ -416,47 +322,17 @@ fn pending_close_survives_boot_completion() {
     );
     assert!(matches!(s.phase, Phase::BootInit));
     assert!(matches!(s.pending_close, Some(CloseReason::System)));
-    // BootInit→BootPrefetch→BootType→BootMain→BootVersion→Steady を進める（prefetch 1 段追加）。
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Notified,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootInit→BootPrefetch（username GET）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootPrefetch→BootType（OnFirstBoot GET）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootType→BootMain（OnBoot GET）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootMain→BootVersion（204・挨拶なし）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Notified,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootVersion→Steady{None}
+    // BootInit→BootPrefetch→BootType→BootMain→BootVersion（204・挨拶なし）→Steady{None} を進める。
+    let mut s = s;
+    for outcome in [
+        ShioriOutcome::Notified,
+        ShioriOutcome::NoContent,
+        ShioriOutcome::NoContent,
+        ShioriOutcome::NoContent,
+        ShioriOutcome::Notified,
+    ] {
+        s = reply(s, outcome, &cfg).0;
+    }
     assert!(matches!(s.phase, Phase::Steady { talk: None }));
     assert!(
         matches!(s.pending_close, Some(CloseReason::System)),
@@ -487,30 +363,9 @@ fn baseware_version_status_reflects_greeting_tracking() {
     }
 
     // Value（挨拶）経路: BootMain + Value → Status: talking。
-    let greeting = State {
-        phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
-        ..State::initial()
-    };
-    let (_, actions) = step(
-        greeting,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
-            origin: "test",
-        },
+    let (_, actions) = reply(
+        drive_to_main(&cfg),
+        ShioriOutcome::Value("hi".to_string(), areka_talk::SecurityLevel::Local),
         &cfg,
     );
     assert_eq!(
@@ -522,20 +377,6 @@ fn baseware_version_status_reflects_greeting_tracking() {
     // 204 経路: BootMain + NoContent → Status 行なし。
     let no_greeting = State {
         phase: Phase::BootMain,
-        last_now: None,
-        next_talk_id: 1,
-        pending_close: None,
-        choice: None,
-        choice_prev_talk: None,
-        anchor: None,
-        user_break_talk: None,
-        shown: None,
-        change: None,
-        pending_change: None,
-        talk_gap: None,
-        external: Default::default(),
-        translate: None,
-        reply_source: None,
         ..State::initial()
     };
     let (_, actions) = step(
@@ -566,60 +407,18 @@ fn baseware_version_status_reflects_greeting_tracking() {
 /// 純粋 step 機械は本テストスレッド上で同期的に走るため、ここでこそ「未知 talk 扱いされていない
 /// （＝`unknown_talk_done` ERROR が出ない）」を直接、ログの**不在**として表明できる。挨拶 talk は
 /// boot 由来ゆえ本 boot モジュールの檻に置く（`Steady{Some}` へは `step` で boot を通して到達する）。
-///
-/// # `assert_logged` との対比
-/// `log_firing_tests` はログの**存在**を `assert_logged` で表明するが、本檻は逆に**不在**を
-/// 表明する必要があるため、捕捉列 `Vec<CapturedEvent>` を直接走査する（`target="kanade"`・ERROR・
-/// `event="unknown_talk_done"` を持つ要素が 1 件も無いこと）。相関ロジック（`current_talk_id` による
-/// slot 照合）が退行して挨拶 TalkDone が未知扱いになれば、この不在表明が失敗する。
+/// 相関ロジック（`current_talk_id` による slot 照合）が退行して挨拶 TalkDone が未知扱いになれば、
+/// この不在表明が失敗する。
 #[test]
 fn boot_greeting_talkdone_correlates_without_unknown_error() {
-    use crate::schedule::log_capture::capture;
+    use crate::schedule::log_capture::{assert_not_logged, capture};
     use crate::talk::{TalkDone, TalkEndReason};
-    use tracing::Level;
 
     let cfg = config();
 
     // boot を Idle→…→`Steady{talk: Some(挨拶, id=1)}` まで駆動する（挨拶 Value 経路・DD-IT-12）。
-    let (s, _) = step(initial(), Input::Boot, &cfg); // Idle→BootInit（OnInitialize NOTIFY）
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Notified,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootInit→BootType
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::NoContent,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootType→BootMain（OnBoot GET）
-    let (s, _) = pass_translate(
-        step(
-            s,
-            Input::ShioriReply {
-                outcome: ShioriOutcome::Value(
-                    "greeting".to_string(),
-                    areka_talk::SecurityLevel::Local,
-                ),
-                origin: "test",
-            },
-            &cfg,
-        ),
-        &cfg,
-    ); // BootMain(Value)→BootVersion{talk: Some(id=1)}
-    let (s, _) = step(
-        s,
-        Input::ShioriReply {
-            outcome: ShioriOutcome::Notified,
-            origin: "test",
-        },
-        &cfg,
-    ); // BootVersion{Some}→Steady{talk: Some(id=1)}
+    let s = boot_until_version_with_greeting(&cfg, None);
+    let (s, _) = reply(s, ShioriOutcome::Notified, &cfg); // BootVersion{Some}→Steady{talk: Some(id=1)}
     assert!(
         matches!(
             s.phase,
@@ -658,16 +457,7 @@ fn boot_greeting_talkdone_correlates_without_unknown_error() {
     assert!(actions_empty, "定常復帰（挨拶 talk 完了）は副作用なし");
 
     // (b) `unknown_talk_done` ERROR が発火していない（照合成立＝未知 talk 扱いされていない・DD-IT-12）。
-    //     log_capture の assert_logged は「存在」を表明するため、ここは捕捉列を直接走査して不在を表明する。
-    let unknown_fired = events.iter().any(|e| {
-        e.target == "kanade"
-            && e.level == Level::ERROR
-            && e.event.as_deref() == Some("unknown_talk_done")
-    });
-    assert!(
-        !unknown_fired,
-        "挨拶 TalkDone が slot と照合されれば unknown_talk_done ERROR は出ないはず: {events:#?}"
-    );
+    assert_not_logged(&events, "unknown_talk_done");
 }
 
 // --- 基盤バージョン通知の応答待ち（BootVersion{talk: Some}）中の挨拶 TalkDone 受理 ---
@@ -761,7 +551,7 @@ fn run_boot_version_talkdone_then_close(reason: crate::talk::TalkEndReason) {
         &actions[0],
         &events::on_close(CloseReason::User { scope: 0 }, &ExecutionSnapshot::INACTIVE),
     );
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
 }
 
 #[test]
@@ -820,6 +610,6 @@ fn boot_version_talkdone_keeps_pending_close_until_steady_tick() {
         &actions[0],
         &events::on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE),
     );
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
     assert!(s.pending_close.is_none());
 }

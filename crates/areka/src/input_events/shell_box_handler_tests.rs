@@ -299,7 +299,10 @@ fn talking_left_double_click_on_box_breaks_without_a_shell_double_click() {
     );
     assert!(matches!(
         f.break_rx.try_iter().collect::<Vec<_>>()[..],
-        [KanadeMsg::UserBreak { scope: 0 }]
+        [KanadeMsg::UserBreak {
+            scope: 0,
+            talk_id: None
+        }]
     ));
     assert!(f.shell().is_empty(), "シェルへのダブルクリックは 0 件");
 }

@@ -13,8 +13,9 @@
 //! 4. **`.vertical` の導出 3 値**——横書き `0`／`vertical_rl` `1`／`vertical_lr` `1`
 //!    （本仕様 7.1）。
 //!
-//! さらに、既存 API [`WritingMode::resolve`] が本決定点への薄い委譲であること
-//! （戻り値が `mode()` と一致すること・本仕様 2.3）を代表入力集合で固定する。
+//! 既存 API [`WritingMode::resolve`] は本決定点の `mode()` をそのまま返す 1 行の委譲
+//! （本仕様 2.3）であり、同じ式を 2 度呼んで比べても赤にならないので檻を置かない。
+//! 純関数を 2 度呼んで比べる決定論の檻も同じ理由で置かない。
 //!
 //! ## 0 件主張の規律（恒真の禁止）
 //!
@@ -30,9 +31,8 @@
 //! import しない（本ファイル自身が `lib.rs` の構造檻
 //! `pure_layer_modules_have_no_windows_imports` の走査対象に列挙されている）。
 
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
+use crate::layout::test_support::model_writing;
+use areka_parsers::balloon::BalloonModel;
 use log_capture_kit::{LevelCounts, count_levels};
 
 use super::{
@@ -44,21 +44,12 @@ const CONTROL_TARGET: &str = "areka_emo_text::writing_decision_tests::control";
 
 /// テスト用 `BalloonModel` 生成ヘルパ（`vertical` と `writing_mode` 以外は全成分未指定）。
 ///
-/// `writing.rs` の既存インラインテストの `model` を、正典キー `vertical` の生値も
-/// 取れる形へ広げたもの。`BalloonModel::new` は `vertical_raw` を持たないため、
-/// 転記層と同じ additive ビルダ `with_vertical_raw` で相乗りさせる（2 層マージは
-/// `balloon::parse` が既に確定させている前提＝本層はキー間の優劣だけを見る）。
+/// 支えの `model_writing` を、正典キー `vertical` の生値も取れる形へ広げたもの。
+/// `BalloonModel::new` は `vertical_raw` を持たないため、転記層と同じ additive ビルダ
+/// `with_vertical_raw` で相乗りさせる（2 層マージは `balloon::parse` が既に確定させている
+/// 前提＝本層はキー間の優劣だけを見る）。
 fn model(vertical: Option<&str>, writing_mode: Option<&str>) -> BalloonModel {
-    BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(None, None, None, None),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        writing_mode.map(str::to_owned),
-        None,
-    )
-    .with_vertical_raw(vertical.map(str::to_owned))
+    model_writing(writing_mode).with_vertical_raw(vertical.map(str::to_owned))
 }
 
 /// 共有のログ捕捉窓の中で決定を行い、（決定, レベル別件数）を返す。
@@ -89,37 +80,7 @@ fn assert_capture_alive(counts: &LevelCounts) {
     );
 }
 
-// ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7） ──
-
-/// 未宣言は `Undeclared`——`0` の宣言へ潰さない（共存規則の判定に宣言の有無が要る）。
-#[test]
-fn vertical_undeclared_is_classified_as_undeclared_without_records() {
-    let (decision, counts) = decide(None, None);
-    assert_eq!(decision.vertical_declaration(), VerticalDecl::Undeclared);
-    assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 0, "未宣言は正常系につき warn を出さない");
-    assert_eq!(counts.debug, 0, "未宣言は正常系につき debug を出さない");
-}
-
-/// `0` は「横書きの宣言」——未宣言とは別の分類として保つ。
-#[test]
-fn vertical_zero_is_classified_as_horizontal_without_records() {
-    let (decision, counts) = decide(Some("0"), None);
-    assert_eq!(decision.vertical_declaration(), VerticalDecl::Horizontal);
-    assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 0);
-    assert_eq!(counts.debug, 0);
-}
-
-/// `1` は「縦書きの宣言」（日本語縦書き＝右から左へ列送り・本仕様 2.2）。
-#[test]
-fn vertical_one_is_classified_as_vertical_without_records() {
-    let (decision, counts) = decide(Some("1"), None);
-    assert_eq!(decision.vertical_declaration(), VerticalDecl::Vertical);
-    assert_capture_alive(&counts);
-    assert_eq!(counts.warn, 0);
-    assert_eq!(counts.debug, 0);
-}
+// ── ⑴ 正典キー `vertical` の分類 4 分岐（本仕様 1.6／1.7・`0`／`1` は ⑵ の `vertical_alone_adopts_canon_key_without_records`・未宣言は ⑵ の `no_declaration_…` が見る） ──
 
 /// `0`／`1` 以外（`2`）と空文字列はいずれも `Invalid`＋`warn!` ちょうど 1 件。
 ///
@@ -155,10 +116,12 @@ fn vertical_invalid_values_warn_exactly_once_and_fall_back_to_canon_default() {
 
 // ── ⑵ 2 キーの共存規則（本仕様 2.2〜2.5・2.7・10.3） ──
 
-/// 両キーとも宣言なし——正典既定の横書き・記録 0 件（本仕様 1.3）。
+/// 両キーとも宣言なし——正典既定の横書き・記録 0 件（本仕様 1.3）。`vertical` の未宣言は
+/// `Undeclared` のまま保つ——`0` の宣言へ潰さない（共存規則の判定に宣言の有無が要る）。
 #[test]
 fn no_declaration_uses_canon_default_without_records() {
     let (decision, counts) = decide(None, None);
+    assert_eq!(decision.vertical_declaration(), VerticalDecl::Undeclared);
     assert_eq!(decision.mode(), WritingMode::HorizontalTb);
     assert_eq!(decision.source(), DirectionSource::CanonDefault);
     assert_eq!(
@@ -171,14 +134,20 @@ fn no_declaration_uses_canon_default_without_records() {
     assert_eq!(counts.debug, 0);
 }
 
-/// `vertical` 単独 2 形——`0`→横書き・`1`→`VerticalRl`（本仕様 2.2）・記録 0 件。
+/// `vertical` 単独 2 形——`0`→横書きの宣言・`1`→縦書きの宣言で `VerticalRl`（本仕様 1.6・2.2）・
+/// 記録 0 件。`0` は未宣言とは別の分類として保つ。
 #[test]
 fn vertical_alone_adopts_canon_key_without_records() {
-    for (value, expected) in [
-        ("0", WritingMode::HorizontalTb),
-        ("1", WritingMode::VerticalRl),
+    for (value, decl, expected) in [
+        ("0", VerticalDecl::Horizontal, WritingMode::HorizontalTb),
+        ("1", VerticalDecl::Vertical, WritingMode::VerticalRl),
     ] {
         let (decision, counts) = decide(Some(value), None);
+        assert_eq!(
+            decision.vertical_declaration(),
+            decl,
+            "vertical,{value} の分類"
+        );
         assert_eq!(decision.mode(), expected, "vertical,{value} の解決結果");
         assert_eq!(
             decision.source(),
@@ -387,69 +356,6 @@ fn vertical_property_value_round_trips_declared_canon_key() {
             decision.vertical_property_value(),
             expected_value,
             "vertical,{declared:?} の .vertical 導出値"
-        );
-    }
-}
-
-// ── ⑷ 既存 API の委譲同値（本仕様 2.3） ──
-
-/// [`WritingMode::resolve`] は決定点への薄い委譲であり、戻り値は常に `mode()` と一致する。
-///
-/// 代表入力集合は共存規則の全腕（単独・一致併記・不一致併記・未知値／不正値の合流・
-/// 両キー未宣言）を含む。ここが崩れると、既存の本番唯一の呼出（`actor.rs` の
-/// `ResolvedBalloonText::resolve` 内）が決定点と別の答えを返すことになる。
-#[test]
-fn writing_mode_resolve_delegates_to_decision_mode() {
-    const CASES: &[(Option<&str>, Option<&str>)] = &[
-        (None, None),
-        (Some("0"), None),
-        (Some("1"), None),
-        (Some("2"), None),
-        (Some(""), None),
-        (None, Some("horizontal_tb")),
-        (None, Some("vertical_rl")),
-        (None, Some("vertical_lr")),
-        (None, Some("diagonal_bt")),
-        (Some("0"), Some("horizontal_tb")),
-        (Some("1"), Some("vertical_rl")),
-        (Some("0"), Some("vertical_rl")),
-        (Some("1"), Some("horizontal_tb")),
-        (Some("1"), Some("vertical_lr")),
-        (Some("1"), Some("diagonal_bt")),
-        (Some("2"), Some("vertical_rl")),
-        (Some("2"), Some("diagonal_bt")),
-    ];
-
-    for (vertical, writing_mode) in CASES {
-        let via_api = WritingMode::resolve(&model(*vertical, *writing_mode));
-        let via_decision =
-            WritingDirectionDecision::resolve(&model(*vertical, *writing_mode)).mode();
-        assert_eq!(
-            via_api, via_decision,
-            "vertical={vertical:?} writing_mode={writing_mode:?} で委譲が一致しない"
-        );
-    }
-}
-
-/// 決定論——同一入力に対し、戻り値もログ件数も同一である（本仕様 10.6）。
-#[test]
-fn decision_is_deterministic_in_value_and_record_counts() {
-    for (vertical, writing_mode) in [
-        (None, None),
-        (Some("1"), None),
-        (Some("2"), None),
-        (Some("1"), Some("vertical_lr")),
-        (Some("1"), Some("diagonal_bt")),
-    ] {
-        let (first_decision, first_counts) = decide(vertical, writing_mode);
-        let (second_decision, second_counts) = decide(vertical, writing_mode);
-        assert_eq!(
-            first_decision, second_decision,
-            "vertical={vertical:?} writing_mode={writing_mode:?} の決定が 2 回で異なる"
-        );
-        assert_eq!(
-            first_counts, second_counts,
-            "vertical={vertical:?} writing_mode={writing_mode:?} のログ件数が 2 回で異なる"
         );
     }
 }

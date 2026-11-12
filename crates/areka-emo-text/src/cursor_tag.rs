@@ -37,7 +37,7 @@
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit};
 use areka_sakura::contract::ActorKey;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// `\_l` の軸（image 軸・X 正＝右・Y 正＝下）。
 ///
@@ -87,27 +87,32 @@ pub struct CursorBasis {
     /// `centerx`／`centery` の基準＝バルーン画像の原寸（`TextRegion::image_size()`）。
     /// **文字描画開始点でも文字描画範囲でもない**（正典 付録 A・R4.3）。
     pub image_size: (f32, f32),
-    /// `em`（および `%`）の係数の源＝タグを書いた時点での文字高さ（R1.3）。
+    /// `em`（および `%`）の係数の源＝その場所の既定の文字高さ（スコープの既定の見た目の大きさ・
+    /// R1.3）。`\f[height,…]` で変えた大きさは使わない（完了 spec `areka-P0-text-decoration-canon`
+    /// の design.md の決め「`\_l` の単位の係数は既定の見た目の大きさのまま・装飾で変えない」）。
     pub font_height: f32,
     /// `lh` の係数の源＝行送り（1em＋行間）。metrics が返す値をそのまま受け取り、
     /// 本モジュールでは算出しない。
     pub line_pitch: f32,
 }
 
-/// 縮退の分類（design.md 縮退表・2 分岐）。
+/// 縮退の分類（design.md 縮退表の 2 分岐と、有限でない結果）。
 ///
-/// キャラクターごと・分岐ごとの警告一回化（R5.3）の鍵になるので、`BTreeSet` のキーとして
+/// キャラクターごと・分岐ごとの警告一回化（R5.3）の鍵になるので、`BTreeMap` のキーとして
 /// 使えるよう全順序を導出している。
 ///
 /// 負値絶対・`%`・`@` 相対はいずれも「基点＋値×係数」で**実導出**する形であって、本分類には
 /// 含まれない（R5.2）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CursorDegrade {
-    /// 数値として解釈できない形（[`CursorCoord::Invalid`]）。非有限値は語彙層で既に
-    /// `Invalid` へ落ちている（`state.rs` の `parse_cursor_coord`）。
+    /// 数値として解釈できない形（[`CursorCoord::Invalid`]）。読んだ数が有限でないものは
+    /// 語彙層で既に `Invalid` へ落ちている（`state.rs` の `parse_cursor_coord`）。
     Unparsable,
     /// 中央指定の軸取り違え（`centerx` を Y に・`centery` を X に書いた）。
     CenterAxisMismatch,
+    /// 解決や送りの結果が有限の数でない（その軸・その送りは動かさない）。読んだ数が有限でも
+    /// 「基点＋値×係数」は f32 を越えうる（`3e38em`）。
+    NonFinite,
 }
 
 /// 単位の係数（**軸に依らないスカラー**・R1.3/1.4）。
@@ -137,6 +142,7 @@ pub fn unit_coefficient(unit: CursorUnit, font_height: f32, line_pitch: f32) -> 
 /// | [`CursorCoord::CenterY`] on Y | 画像 | — | `Ok(Some(image_size.1 / 2))` |
 /// | [`CursorCoord::CenterX`] on Y・[`CursorCoord::CenterY`] on X | — | — | `Err(`[`CursorDegrade::CenterAxisMismatch`]`)` |
 /// | [`CursorCoord::Invalid`] | — | — | `Err(`[`CursorDegrade::Unparsable`]`)` |
+/// | 絶対・相対の結果が有限でない | — | — | `Err(`[`CursorDegrade::NonFinite`]`)` |
 ///
 /// 事前条件: `basis` の各値は image px（呼び手が軸読み替え・metrics 解決済みで渡す）。
 ///
@@ -151,15 +157,15 @@ pub fn resolve_cursor_axis(
         // 省略＝当該軸不動。正典の正常形なので警告対象ではない（R1.6/5.5）。
         CursorCoord::Omitted => Ok(None),
         // 絶対＝文字描画開始点が基点（R2.1）。
-        CursorCoord::Absolute { value, unit } => Ok(Some(
+        CursorCoord::Absolute { value, unit } => finite(
             axis.component(basis.origin)
                 + value * unit_coefficient(unit, basis.font_height, basis.line_pitch),
-        )),
+        ),
         // `@` 相対＝現在の文字描画位置が基点（R3.1）。単位との共存も同じ式で通る（R3.2）。
-        CursorCoord::Relative { value, unit } => Ok(Some(
+        CursorCoord::Relative { value, unit } => finite(
             axis.component(basis.current)
                 + value * unit_coefficient(unit, basis.font_height, basis.line_pitch),
-        )),
+        ),
         // 中央指定は基準がバルーン画像そのもの（R4.1〜4.3）。書字方向に依らない（R4.4）。
         // 軸に対応しない側に書かれたときだけ縮退する（軸の判定は解決層の責務）。
         CursorCoord::CenterX => match axis {
@@ -172,6 +178,15 @@ pub fn resolve_cursor_axis(
         },
         // 解釈不能・非有限（語彙層が既に `Invalid` へ落としている）＝当該軸不動・警告対象。
         CursorCoord::Invalid => Err(CursorDegrade::Unparsable),
+    }
+}
+
+/// 有限の解決値はそのまま返し、有限でなければ [`CursorDegrade::NonFinite`]（その軸は動かさない）。
+fn finite(value: f32) -> Result<Option<f32>, CursorDegrade> {
+    if value.is_finite() {
+        Ok(Some(value))
+    } else {
+        Err(CursorDegrade::NonFinite)
     }
 }
 
@@ -217,18 +232,22 @@ pub fn note_out_of_range(axis: CursorAxis, value: f32, region: &TextRegion) {
 /// `TextLayerRuntime`）が所有し、レイアウトへ `&mut` で渡す。決定的な行出力には影響しない
 /// ——guard が担うのは縮退ログの重複抑止だけである。
 ///
-/// 決定論的な順序のため `BTreeSet` を使う（`ActorKey` の `Ord` は内部文字列の辞書順、
+/// 決定論的な順序のため `BTreeMap`・`BTreeSet` を使う（`ActorKey` の `Ord` は内部文字列の辞書順、
 /// [`CursorDegrade`] の `Ord` は宣言順）。
 #[derive(Clone, Debug, Default)]
 pub struct CursorWarnGuard {
-    /// 既に警告済みの `(キャラクター, 縮退分岐)`。
-    warned: BTreeSet<(ActorKey, CursorDegrade)>,
+    /// 既に警告済みの `(キャラクター, 縮退分岐)`（分岐ごとのキャラクターの集合・毎フレーム鍵を複製しない）。
+    warned: BTreeMap<CursorDegrade, BTreeSet<ActorKey>>,
 }
 
 impl CursorWarnGuard {
-    /// `(actor, degrade)` が初回なら記録して `true`（＝今回警告する）、既出なら `false`。
-    fn should_warn(&mut self, actor: &ActorKey, degrade: CursorDegrade) -> bool {
-        self.warned.insert((actor.clone(), degrade))
+    /// `(actor, degrade)` が初回なら記録して `true`（＝今回警告する）、既出なら鍵を複製せずに `false`。
+    pub(crate) fn should_warn(&mut self, actor: &ActorKey, degrade: CursorDegrade) -> bool {
+        let actors = self.warned.entry(degrade).or_default();
+        if actors.contains(actor) {
+            return false;
+        }
+        actors.insert(actor.clone())
     }
 }
 

@@ -15,7 +15,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -28,7 +28,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -44,7 +44,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
 語彙表だけを触る spec: property-ipc-transport（2026-09-11 の分割 ⑵ で property-query-channels から移った）
 """
@@ -58,7 +58,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -74,7 +74,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
 語彙表だけを触る spec: property-ipc-transport（2026-09-11 の分割 ⑵ で property-query-channels から移った）
 """
@@ -88,7 +88,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -101,7 +101,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -114,7 +114,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -127,7 +127,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差 — 読み取りは値を返すので壊れない。返るのは SSP ではなく areka 自身の名前なので、この値で分岐する辞書だけが別の枝へ進む。
-ログ: 読み取りは値を返すので何も出ない（値が未登録の間だけ crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（値が未登録の間だけ crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -141,7 +141,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差 — 読み取りは値を返すので壊れない。返るのは SSP ではなく areka 自身の版番号なので、この値で分岐する辞書だけが別の枝へ進む。
-ログ: 読み取りは値を返すので何も出ない（値が未登録の間だけ crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（値が未登録の間だけ crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -157,7 +157,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 前置き: currentghost 直下の族の頭 1 本だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -172,7 +172,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -187,7 +187,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -202,7 +202,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -215,7 +215,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -228,7 +228,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -243,7 +243,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -258,7 +258,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -273,7 +273,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -288,7 +288,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -301,7 +301,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -314,7 +314,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -327,7 +327,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -340,7 +340,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -353,7 +353,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -366,7 +366,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:185
 """
@@ -380,7 +380,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:185
 """
@@ -394,7 +394,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -407,7 +407,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差 — 読み取りはバルーンの窓の今の位置と大きさを「左,上,右,下」（物理の画素・仮想画面の座標）で返すので壊れない。バルーンが無いときは SSP と同じく値なし。大きさは拡大率への追従の方針で SSP と違うことがある。
-ログ: 読み取りは値を返すので何も出ない（窓の名前の書式が読めないときだけ crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（窓の名前の書式が読めないときだけ crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 実装: 読み手は crates/areka/src/ghost_session_scope_rect.rs（窓の印の表 ScopeWindowTable・読み手 ScopeRectSource・結線・OS の読み取り os_window_rect）。読まれた時に OS へ 1 回だけ窓の矩形を聞く（プル）登録の口は crates/areka-sylphya/src/pull.rs と reader.rs（PullRegistry・register_pull・写しの区画に無いときだけ引く）。証拠は os_window_rect の定義行の `// ukadoc:` の URL。
 テスト: crates/areka-sylphya/src/pull_tests.rs・crates/areka/src/ghost_session_scope_rect_tests.rs・crates/areka/src/ghost_session_scope_rect_boot_tests.rs・crates/areka/src/mcp/get_property_tests.rs（mod scope_rect）。
@@ -424,7 +424,7 @@ links = [
 ]
 note = """
 壊れ方: 見た目の差 — 読み取りはそのスコープのバルーンの窓の絵にその時点で実際にかかっている倍率を百分率の「横,縦」（例 `150,150`）で返すので壊れない。SSP と違い、拡大率の違う画面へ移ると移った先の画面での倍率を返す（DPI 追従の基本の設計・doc/COMPAT_ARCHITECTURE.md 8 節）。窓の無いスコープは値なし。
-ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 画面の DPI への追従の倍率 × 表示の倍率（今は 100%）。DPI への追従の倍率は窓の居る画面の DPI ÷ 作者の基準の DPI（シェルは `seriko.dpi`・バルーンはバルーンの `dpi`・書かれていなければ 96）。シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形のどれを指すか決まらないので関連には書かない。百分率は割り切れれば整数、割り切れなければ小数第 2 位まで（第 3 位で四捨五入・末尾の 0 は落とすが小数点の後に 1 桁は残す）。
 実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（表 ScopeScaleTable・読み手 ScopeScaleSource・百分率の文字 percent_text と scaling_text）。表は表示が成り立った時点の倍率の変わりを毎フレームの最後の相（crates/areka/src/emo2_boot/frame/scale_notice.rs の run_scale_notice_phase）が書き、読み取りは他のスレッドを待たない。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
@@ -441,7 +441,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:185
 """
@@ -455,7 +455,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:185
 """
@@ -469,7 +469,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:185
 """
@@ -483,7 +483,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:185
 """
@@ -497,7 +497,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 転記元: doc/COMPAT_ARCHITECTURE.md:184
 """
@@ -511,7 +511,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -524,7 +524,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -539,7 +539,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -554,7 +554,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -569,7 +569,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -584,7 +584,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -599,7 +599,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒞族の頭の継承） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -614,7 +614,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -627,7 +627,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -643,7 +643,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒝本文） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -656,7 +656,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面の色の深さ。相手の id が正典に無いので関連には書けない。
 """
@@ -670,7 +670,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差 — 読み取りはそのスコープのキャラクターの窓が居る画面の DPI を 10 進の整数（96 が等倍・150% の画面なら 144）で返すので壊れない。窓の無いスコープは値なし。
-ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面の目盛の細かさ（その窓の絵に倍率がかかった時点の DPI）。相手の id が正典に無いので関連には書けない。バルーンの窓の DPI は areka 独自の `currentghost.balloon.scope(ID).currentmonitor.dpi` で読める（ukadoc に無い名前なので台帳に行は無い・doc/COMPAT_ARCHITECTURE.md 8 節）。
 実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（表 ScopeScaleTable・読み手 ScopeScaleSource）。表は毎フレームの最後の相（crates/areka/src/emo2_boot/frame/scale_notice.rs の run_scale_notice_phase）が倍率と一緒に書く。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
@@ -687,7 +687,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面が主画面かどうか。相手の id が正典に無いので関連には書けない。
 """
@@ -701,7 +701,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面の位置と大きさ。相手の id が正典に無いので関連には書けない。
 """
@@ -715,7 +715,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 窓が載っている画面のうち窓を置いてよい範囲。相手の id が正典に無いので関連には書けない。
 """
@@ -736,7 +736,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -750,7 +750,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差 — 読み取りは窓の今の位置と大きさを「左,上,右,下」（物理の画素・仮想画面の座標）で返すので壊れない。無いスコープは SSP と同じ 0,0,0,0。大きさは拡大率への追従の方針で SSP と違うことがある。
-ログ: 読み取りは値を返すので何も出ない（窓の名前の書式が読めないときだけ crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（窓の名前の書式が読めないときだけ crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 実装: 読み手は crates/areka/src/ghost_session_scope_rect.rs（窓の印の表 ScopeWindowTable・読み手 ScopeRectSource・結線・OS の読み取り os_window_rect）。読まれた時に OS へ 1 回だけ窓の矩形を聞く（プル）登録の口は crates/areka-sylphya/src/pull.rs と reader.rs（PullRegistry・register_pull・写しの区画に無いときだけ引く）。証拠は os_window_rect の定義行の `// ukadoc:` の URL。
 テスト: crates/areka-sylphya/src/pull_tests.rs・crates/areka/src/ghost_session_scope_rect_tests.rs・crates/areka/src/ghost_session_scope_rect_boot_tests.rs・crates/areka/src/mcp/get_property_tests.rs（mod scope_rect）。
@@ -767,7 +767,7 @@ links = [
 ]
 note = """
 壊れ方: 見た目の差 — 読み取りはそのスコープのキャラクターの窓の絵にその時点で実際にかかっている倍率を百分率の「横,縦」（例 `150,150`）で返すので壊れない。SSP と違い、拡大率の違う画面へ移ると移った先の画面での倍率を返す（DPI 追従の基本の設計・doc/COMPAT_ARCHITECTURE.md 8 節）。窓の無いスコープは値なし。
-ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りは値を返すので何も出ない（窓の無いスコープでは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕が出るが、debug 段なので既定の実行では見えない）。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 画面の DPI への追従の倍率 × 表示の倍率（今は 100%）。DPI への追従の倍率は窓の居る画面の DPI ÷ 作者の基準の DPI（シェルは `seriko.dpi`・バルーンはバルーンの `dpi`・書かれていなければ 96）。シェルの指定（surfaces.txt の scaling）は関連で指した。タグの指定は本文が「タグ設定」としか書かず、正典にある set,scaling のタグ 3 形のどれを指すか決まらないので関連には書かない。百分率は割り切れれば整数、割り切れなければ小数第 2 位まで（第 3 位で四捨五入・末尾の 0 は落とすが小数点の後に 1 桁は残す）。
 実装: 読み手は crates/areka/src/ghost_session_scope_scale.rs（表 ScopeScaleTable・読み手 ScopeScaleSource・百分率の文字 percent_text と scaling_text）。表は表示が成り立った時点の倍率の変わりを毎フレームの最後の相（crates/areka/src/emo2_boot/frame/scale_notice.rs の run_scale_notice_phase）が書き、読み取りは他のスレッドを待たない。保存しない。証拠は ghost_session_scope_scale.rs の `// ukadoc:` の URL。
@@ -786,7 +786,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒝本文） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 テーマ: 各キャラクターの既定の姿を辞書が読めず、着せ替えを元へ戻す先が分からない。利用者は一度替えた見た目を戻せなくなる。
 """
@@ -803,7 +803,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒝本文） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -816,7 +816,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -829,7 +829,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -842,7 +842,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -862,7 +862,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -882,7 +882,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -895,7 +895,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -908,7 +908,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -924,7 +924,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -938,7 +938,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -954,7 +954,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -971,7 +971,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 所有: 語彙表の 1 行は areka-P0-sylphya-set-ledger（SET 有効群へ登記済み）。値の導出は currentghost-property-tree（seriko.* の一括所有・zorder を除く）。
 """
@@ -985,7 +985,7 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 テーマ: 絵の一式にどんな面があるかを辞書が数えられず、用意された姿を選び分けて見せられない。作者が何着ぶんも入れても、利用者は決め打ちの一着しか見られない。
 """
@@ -999,7 +999,7 @@ values = ["装い"]
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 テーマ: 実際に定義されている面だけを辞書が選り分けられず、無い面を指したまま着替えを促してしまう。利用者は着替えたはずの画面が変わらないのを見る。
 """
@@ -1013,7 +1013,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1026,7 +1026,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -1042,7 +1042,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -1055,7 +1055,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 型シームの予約のみ・実書込なし / 不一致（正典に設定の定めが無い名前を areka が SET 有効群へ先取りで登記している。実書込は無いので応答そのものは変わらない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -1071,7 +1071,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 """
 
@@ -1088,7 +1088,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（正典の定めとの食い違いは既に登記されている）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 転記元: doc/COMPAT_ARCHITECTURE.md:207
 所有: 語彙表の行も値の導出もともに zorder-property（開発者裁定 2026-09-13・先送り維持＝sylphya の語彙表へ名前だけの先行登記もしない）。
@@ -1103,7 +1103,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1116,7 +1116,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1129,7 +1129,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1142,7 +1142,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1158,7 +1158,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1171,7 +1171,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1186,7 +1186,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1201,7 +1201,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1214,7 +1214,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1229,7 +1229,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1244,7 +1244,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1257,7 +1257,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1270,7 +1270,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1283,7 +1283,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1296,7 +1296,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1309,7 +1309,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1322,7 +1322,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1335,7 +1335,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1348,7 +1348,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1361,7 +1361,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1374,7 +1374,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1387,7 +1387,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1400,7 +1400,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1413,7 +1413,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1426,7 +1426,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1439,7 +1439,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1452,7 +1452,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1465,7 +1465,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1478,7 +1478,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1491,7 +1491,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1504,7 +1504,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -1519,7 +1519,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1534,7 +1534,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -1552,7 +1552,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 前置き: currentghost 直下の族の頭 1 本だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -1567,7 +1567,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -1584,7 +1584,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1602,7 +1602,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 前置き: currentghost.shelllist の族の頭 3 本（current・index(ID)・名前指定）だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -1617,7 +1617,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1632,7 +1632,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1647,7 +1647,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1662,7 +1662,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1677,7 +1677,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1692,7 +1692,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1707,7 +1707,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1722,7 +1722,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1737,7 +1737,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 見出しの重複: 見出し name は 2 つの id を持つ。この id は汎用プロパティ名の葉の側で、本文が対象そのものの呼び名を返すと述べ、文書の並びでも sakuraname・keroname と地続きの群の先頭に立つ。もう 1 つは 2.8.72 で加わったサウンドの要素葉。
@@ -1755,7 +1755,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 見出しの重複: 見出し name は 2 つの id を持つ。この id はサウンドの要素葉の側で、本文が再生の対象をどう書いて指定したかを返すと述べ、2.8.72 で加わり、文書の並びでも char*.bind.menu の直後＝サウンドの葉の群の先頭に置かれている。もう 1 つは前置きを付けて使う汎用プロパティ名の葉。
@@ -1772,7 +1772,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 見出しの重複: 見出し path は 2 つの id を持つ。この id は汎用プロパティ名の葉の側で、本文が対象そのものの置き場所を返すと述べ、文書の並びでも汎用の葉の群の中に立つ。もう 1 つは 2.8.72 で加わったサウンドの要素葉。
@@ -1788,7 +1788,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 見出しの重複: 見出し path は 2 つの id を持つ。この id はサウンドの要素葉の側で、本文が再生の対象の解決後の置き場所を返すと述べ、2.8.72 で加わり、文書の並びでもサウンドの葉の群の 2 番目に置かれている。もう 1 つは前置きを付けて使う汎用プロパティ名の葉。
@@ -1809,7 +1809,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1828,7 +1828,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1843,7 +1843,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1856,7 +1856,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1872,7 +1872,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
 語彙表だけを触る spec: property-ipc-transport（2026-09-11 の分割 ⑵ で property-query-channels から移った）
 """
@@ -1886,7 +1886,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1902,7 +1902,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
 語彙表だけを触る spec: property-ipc-transport（2026-09-11 の分割 ⑵ で property-query-channels から移った）
 """
@@ -1919,7 +1919,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1934,7 +1934,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 語彙表だけを触る spec: property-query-channels
@@ -1949,7 +1949,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1962,7 +1962,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1975,7 +1975,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -1988,7 +1988,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2001,7 +2001,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2014,7 +2014,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2027,7 +2027,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -2041,7 +2041,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -2055,7 +2055,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2068,7 +2068,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2081,7 +2081,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2094,7 +2094,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -2108,7 +2108,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2121,7 +2121,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2134,7 +2134,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2147,7 +2147,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2160,7 +2160,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2173,7 +2173,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2186,7 +2186,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -2200,7 +2200,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -2214,7 +2214,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（通算版。同じ枝に月報版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2227,7 +2227,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（月報版。同じ枝に通算版・週報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2240,7 +2240,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない（週報版。同じ枝に通算版・月報版が別項目として並ぶ）。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 """
 
@@ -2253,7 +2253,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 語彙表: 葉（見出しの末尾のひと区切り）が areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている。見出しそのものは載っていない（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
 """
@@ -2270,7 +2270,7 @@ links = [
 ]
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:302-307 の警告 "SET on runtime-command vocab: reserved seam, not wired in M1 (no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 型シームの予約のみ・実書込なし / 不一致（正典は設定が効くと定めるが areka は型を予約するだけで値を変えない）
 前置き: currentghost 直下の族の頭 1 本だけで使う。本文が効く前置きを 1 つに絞っているため、ルート枝は currentghost の 1 本にとどまる。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -2285,7 +2285,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -2300,7 +2300,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -2315,7 +2315,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 走っている機械の演算装置の諸元と混み具合。相手の id が正典に無いので関連には書けない。
 """
@@ -2329,7 +2329,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — マウスポインタの今の位置。相手の id が正典に無いので関連には書けない。
 """
@@ -2343,7 +2343,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2357,7 +2357,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2371,7 +2371,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 論理ドライブの本数。相手の id が正典に無いので関連には書けない。
 """
@@ -2385,7 +2385,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 各論理ドライブの諸元。相手の id が正典に無いので関連には書けない。
 """
@@ -2399,7 +2399,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — OS 側の「邪魔しない」設定。相手の id が正典に無いので関連には書けない。
 """
@@ -2413,7 +2413,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2427,7 +2427,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 走っている機械の主記憶の量と使われ具合。相手の id が正典に無いので関連には書けない。
 """
@@ -2441,7 +2441,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2455,7 +2455,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2469,7 +2469,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — つながっている画面の枚数。相手の id が正典に無いので関連には書けない。
 """
@@ -2483,7 +2483,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 各画面の色の深さ。相手の id が正典に無いので関連には書けない。
 """
@@ -2497,7 +2497,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 各画面の目盛の細かさ。相手の id が正典に無いので関連には書けない。
 """
@@ -2511,7 +2511,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 各画面が主画面かどうか。相手の id が正典に無いので関連には書けない。
 """
@@ -2525,7 +2525,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 各画面の位置と大きさ。相手の id が正典に無いので関連には書けない。
 """
@@ -2539,7 +2539,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 各画面のうち窓を置いてよい範囲。相手の id が正典に無いので関連には書けない。
 """
@@ -2553,7 +2553,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2567,7 +2567,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 外とつながっているかどうかと、そのつなぎ方。相手の id が正典に無いので関連には書けない。
 """
@@ -2581,7 +2581,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 走っている OS の種別・世代・組み立て。相手の id が正典に無いので関連には書けない。
 版: 5.19.0 は本文が例示する OS の版のため採らない
@@ -2596,7 +2596,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — 電源の供給元と電池の残り。相手の id が正典に無いので関連には書けない。
 """
@@ -2610,7 +2610,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2624,7 +2624,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: 他エンジンの状態 — ベースウェア自身の画面まわりの明暗の設定。相手の id が正典に無いので関連には書けない。
 """
@@ -2638,7 +2638,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — OS 側の明暗の切り替え。相手の id が正典に無いので関連には書けない。
 """
@@ -2652,7 +2652,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 値の源: OS のメトリクス — システム時計。相手の id が正典に無いので関連には書けない。
 """
@@ -2666,7 +2666,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -2681,7 +2681,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -2696,7 +2696,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。
@@ -2711,7 +2711,7 @@ values = []
 links = []
 note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
-ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:158-164 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
+ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:153-158 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:374-379 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: 族の頭 25 本のどれかを前に付けて使う — activeghostlist（current・index(ID)・名前指定の 3）／balloonlist（index(ID)・名前指定の 2）／currentghost（直下 1・balloon 1・shelllist の 3）／ghostlist（current・index(ID)・名前指定の 3）／headlinelist（index(ID)・名前指定の 2）／history（balloon・ghost・headline・plugin それぞれ index(ID) と名前指定で 8）／pluginlist（index(ID)・名前指定の 2）。ルート枝は 7 本だが、葉はカタログに 1 件だけ置き、ルート枝ごとに項目を増やさない。
 語彙表: 見出しそのものが areka 側の汎用プロパティ名 17 の 1 つとして文字どおり載っている（crates/areka-sylphya/src/vocab/dotted.rs:37 の GENERIC_PROP_NAMES）。

@@ -31,13 +31,13 @@ pub(crate) enum Input {
         kind: crate::msg::ShioriDownKind,
         reason: String,
     },
-    /// マウス入力（移動／ダブルクリック）。Steady のみ `steady::on_mouse` へ委譲し、
+    /// マウス入力（[`MouseEventKind`](crate::msg::MouseEventKind) の 7 種）。Steady のみ `steady::on_mouse` へ委譲し、
     /// 他フェーズでは状態を変えず安全に無視する（DD-IE-8）。
     Mouse(MouseInput),
     /// 直前の Action::ShioriRequest／ShioriUnload の結果（シェルが即時再投入）。
     ///
     /// `origin` は再投入元の呼出イベント ID（シェルが送出した call の id を転記・DD-IE-3）。
-    /// 後続処理（マウス GET の origin 別 reply 政策・タスク 2.2）が応答の出所を識別するための
+    /// 後続処理（マウス GET の origin 別 reply 政策）が応答の出所を識別するための
     /// 内部情報。unload の応答には出所イベントが無いため `"Unload"` を転記する。
     ShioriReply {
         outcome: ShioriOutcome,
@@ -62,12 +62,20 @@ pub(crate) enum Input {
         display_end: MonotonicMs,
         timeout_directive_secs: Option<f64>,
     },
+    /// 選択待ちの期限の知らせ（刻み役 → kanade・[`Action::ArmChoiceWake`] の頼みに 1 回だけ応える）。
+    ///
+    /// 判断は [`steady::on_choice_timeout_due`] が持つ。`Tick` と違い `last_now` を進めず、pump も出さない。
+    ChoiceTimeoutDue {
+        now: MonotonicMs,
+    },
     /// 利用者の中断（バルーンの左ダブルクリック・UI 配線層 → kanade）。
     ///
     /// `scope` は「どのバルーンで起きたか」を運ぶだけで、受理の判断には使わない。
     /// 受理の規則は [`user_break::on_user_break`] が持ち、場面を問わず横断の腕から呼ぶ。
+    /// `talk_id` は押されたバルーンに出ていた台詞のトーク（観測できなければ `None`）。
     UserBreak {
         scope: u32,
+        talk_id: Option<TalkId>,
     },
     /// ゴーストの切替の要求（UI → kanade）。受理の判断は [`change::on_change_ghost`] が持つ。
     ChangeGhost(crate::change::ChangeRequest),
@@ -132,9 +140,8 @@ pub(crate) enum Phase {
     Steady {
         talk: Option<ActiveTalk>,
     },
-    ClosePending {
-        reason: CloseReason,
-    },
+    /// `OnClose` の応答待ち（終了の理由は `OnClose` を組んだ時点で使い切る）。
+    ClosePending,
     CloseTalkWait {
         talk_id: TalkId,
         deadline: Option<MonotonicMs>,
@@ -166,7 +173,7 @@ pub(crate) struct ActiveTalk {
     /// 当該 talk の起動スクリプト（`OnChoiceTimeout` の Reference0 供給源・DD-10）。
     ///
     /// **kanade が [`StartTalk`] で自ら作った値**の保持であり、新しい情報源ではない
-    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。Ref0 への割付はタスク 4.5。
+    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。
     pub script: String,
 }
 
@@ -200,7 +207,7 @@ pub(crate) enum ChoicePhase {
     TimeoutInFlight,
 }
 
-/// カスケードの残段（M1 は正典形の無印 1 段のみ・裁定 2）。
+/// カスケードの残段（正典形の無印 1 段のみ・裁定 2）。
 pub(crate) enum CascadeNext {
     Select,
 }
@@ -216,15 +223,15 @@ pub(crate) struct State {
     pub pending_close: Option<CloseReason>,
     /// 選択待ち〜choice 系 in-flight の帳簿（`pending_close` と同型に Phase 外へ置く・DD-3）。
     pub choice: Option<ChoiceState>,
-    /// choice 起因の slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
+    /// slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
     ///
     /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
-    /// `talk_done_stale_choice`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
+    /// `talk_done_stale`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
     ///
-    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点は choice 起因の slot 差替
-    /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
-    /// 次の slot 差替（マウス由来の置換を含む）である。
-    pub choice_prev_talk: Option<TalkId>,
+    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点はどの slot 差替でも共通の
+    /// [`super::start_talk`]（選択・マウスの答え・SSTP の台本・時間切れの答え）、消去点は現 talk の
+    /// `TalkDone` 到達と次の slot 差替（次の旧 talk_id で上書き）である。
+    pub prev_talk: Option<TalkId>,
     /// アンカーのイベントの応答待ちの段（送る直前に置き、応答で必ず取り出す・[`anchor`]）。
     pub anchor: Option<anchor::AnchorStage>,
     /// クリックの段の列の応答待ち（送る直前に置き、応答で必ず取り出す・[`mouse_events`]）。
@@ -265,7 +272,7 @@ impl State {
             next_talk_id: 1,
             pending_close: None,
             choice: None,
-            choice_prev_talk: None,
+            prev_talk: None,
             anchor: None,
             mouse_click: None,
             user_break_talk: None,
@@ -298,7 +305,7 @@ impl State {
     ///
     /// [`steady::on_choice`] と [`steady::on_cascade_reply`] は検証・分解のために帳簿を
     /// [`Option::take`] してから呼出を組み立てるため、その最中は `self.choice` が空である。
-    /// これらの呼出点は手元の帳簿から得た真偽値をここへ渡す——[`snapshot`](State::snapshot) を
+    /// どちらの呼出点も選択待ちが続いているので `true` を直に渡す——[`snapshot`](State::snapshot) を
     /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（設計 C5 の源は
     /// `Waiting|Cascading|TimeoutInFlight` の全段である）。
     ///
@@ -390,6 +397,10 @@ pub(crate) enum Action {
     CancelChoice {
         talk_id: TalkId,
     },
+    /// 選択待ちの期限で 1 回だけ起こす頼み（殻が刻み役へ渡し、期限で [`Input::ChoiceTimeoutDue`] が返る）。
+    ///
+    /// 発行点は [`steady::on_choice_waiting`] だけ（期限つきの帳簿を作った時・無期限では出さない）。
+    ArmChoiceWake(MonotonicMs),
     /// 運行の通知を UI へ送る（シェルは停止通知と同じ送出端へそのまま流す）。
     Notice(crate::change::KanadeNotice),
     /// 翻訳の依頼（殻が `OnTranslate` を往復させ、結果を [`Input::TranslateDone`] で再投入する）。

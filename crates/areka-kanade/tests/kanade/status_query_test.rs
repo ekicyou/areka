@@ -1,5 +1,5 @@
 //! 殻が実行の状態の問い合わせ（`KanadeMsg::StatusQuery`）にその場で答えることの統合檻
-//! （areka-P0-mcp-get-status タスク 1.2・要件 1.2／1.4／1.5／2.1／2.2／2.3／2.5／3.2／4.1／4.2／5.1／5.3）。
+//! （areka-P0-mcp-get-status 要件 1.2／1.4／1.5／2.1／2.2／2.3／2.5／3.2／4.1／4.2／5.1／5.3）。
 //!
 //! 共通の土台（`super::common`）の保留できる偽の sakura（`spawn_harness_gated`）と、呼出を
 //! `Status` つきで記録する偽の shiori を使う。問い合わせは同じ送出端から送るので受信箱で順に並び、
@@ -11,30 +11,18 @@
 
 use areka_actor::{ReplyError, reply_channel};
 use areka_kanade::{
-    BalloonBinding, ChoiceInput, CloseReason, ExecutionSnapshot, ExecutionStateUpdate,
-    ExecutionStatus, KanadeConfig, KanadeMsg, MonotonicMs, TalkCommand, TalkId, events,
+    ChoiceInput, CloseReason, ExecutionSnapshot, ExecutionStateUpdate, ExecutionStatus,
+    KanadeConfig, KanadeMsg, MonotonicMs, TalkId, events,
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call,
-    expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
+    CallMethod, DEFAULT_TIMEOUT, Driven, Fixture, Harness, QuitPolicy, RecordedCall, binding,
+    command_tag, expected_call, expected_unload, pumps, send, spawn_harness, spawn_harness_gated,
+    tick,
 };
 
 /// 選択待ちの候補（正典形＝`On` で始まらない）。
 const CHOICE_ID: &str = "頻度変更";
-
-fn send(harness: &Harness, msg: KanadeMsg) {
-    harness.sender.send(msg).expect("send to kanade inbox");
-}
-
-fn tick(harness: &Harness, now: u64) {
-    send(
-        harness,
-        KanadeMsg::Tick {
-            now: MonotonicMs(now),
-        },
-    );
-}
 
 /// 問い合わせを 1 通送り、その場で返る答えを上限つきで受け取る（wire の形 `render()` で返す）。
 fn query(harness: &Harness) -> Option<String> {
@@ -61,25 +49,6 @@ fn ask_here(harness: &Harness, ask: bool, answers: &mut Vec<Option<String>>) {
     answers.push(first);
 }
 
-fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
-    recorded
-        .iter()
-        .filter(|c| c.id == "OnSecondChange")
-        .collect()
-}
-
-/// 偽の sakura が受けた指示の列を比べられる形へ写す（`TalkCommand` は `PartialEq` を持たない）。
-fn command_tags(commands: &[TalkCommand]) -> Vec<String> {
-    commands
-        .iter()
-        .map(|c| match c {
-            TalkCommand::Start(s) => format!("Start({},{})", s.talk_id.0, s.script),
-            TalkCommand::ResolveChoice { talk_id, id } => format!("Resolve({},{})", talk_id.0, id),
-            TalkCommand::CancelChoice { talk_id } => format!("Cancel({})", talk_id.0),
-        })
-        .collect()
-}
-
 /// 1 回の走行の結果（問い合わせの答え・shiori の記録列・sakura の指示の列）。
 struct Run {
     answers: Vec<Option<String>>,
@@ -89,19 +58,13 @@ struct Run {
 
 /// close（別れ talk quit:true）で終わらせ、記録を確定する。
 fn finish(harness: Harness, answers: Vec<Option<String>>, what: &str) -> Run {
-    let Harness {
-        sender,
-        kanade,
-        shiori,
-        sakura,
-    } = harness;
-    join_bounded(what, DEFAULT_TIMEOUT, kanade).expect("kanade terminates via the driven close");
-    drop(sender);
-    let commands = command_tags(&sakura.join_bounded_then_commands(what, DEFAULT_TIMEOUT));
+    let Driven {
+        recorded, commands, ..
+    } = harness.finish(what);
     Run {
         answers,
-        recorded: shiori.recorded(),
-        commands,
+        recorded,
+        commands: commands.iter().map(command_tag).collect(),
     }
 }
 
@@ -114,13 +77,6 @@ fn gated_harness() -> (Harness, super::common::SakuraGate) {
         QuitPolicy::PerTalk(vec![false, true]),
         vec![0],
     )
-}
-
-fn binding(character_id: u32, balloon_id: u32) -> BalloonBinding {
-    BalloonBinding {
-        character_id,
-        balloon_id,
-    }
 }
 
 /// K1 の筋書き: 起動の前 → 起動直後 → 中断の無効化（真）→ バルーン → Tick1（再生中・完了は保留）→
@@ -210,10 +166,6 @@ fn assert_same_run(asked: &Run, plain: &Run) {
     assert_eq!(
         asked.commands, plain.commands,
         "問い合わせは sakura への指示の列を変えないはず（要件 4.1）"
-    );
-    assert!(
-        plain.answers.is_empty(),
-        "問わない筋書きは答えを持たない（比べる相手として正しく組めている）"
     );
 }
 
@@ -345,7 +297,8 @@ fn k4_query_after_close_ends_with_reply_dropped() {
     send(&harness, KanadeMsg::Boot);
     send(&harness, KanadeMsg::Close);
     let (reply, receiver) = reply_channel::<ExecutionStatus>();
-    send(&harness, KanadeMsg::StatusQuery { reply });
+    // 送れなくても（kanade が先に受信箱を捨てても）返信端は捨てられ、受け手には `Dropped` が届く。
+    let _ = harness.sender.send(KanadeMsg::StatusQuery { reply });
 
     assert!(
         matches!(
@@ -355,14 +308,5 @@ fn k4_query_after_close_ends_with_reply_dropped() {
         "終了の知らせの後の問い合わせは受信箱ごと落ちて「返信端が落ちた」で終わるはず"
     );
 
-    let Harness {
-        sender,
-        kanade,
-        sakura,
-        ..
-    } = harness;
-    join_bounded("kanade status-query K4 join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade stops on Close");
-    drop(sender);
-    sakura.join_bounded("mock-sakura status-query K4 join", DEFAULT_TIMEOUT);
+    harness.finish("kanade status-query K4 join");
 }

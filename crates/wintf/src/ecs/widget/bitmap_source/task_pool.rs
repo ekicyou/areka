@@ -1,7 +1,7 @@
 //! WintfTaskPool - 非同期タスク実行用リソース
 //!
 //! TaskPoolでバックグラウンド実行し、mpsc channelでコマンドをECSへ送信。
-//! Input scheduleでdrain_and_apply。
+//! Input scheduleの`drain_task_pool_commands`で受け取って適用する。
 
 use bevy_ecs::prelude::*;
 use bevy_tasks::{TaskPool, TaskPoolBuilder};
@@ -19,14 +19,16 @@ pub type CommandSender = mpsc::Sender<BoxedCommand>;
 ///
 /// # Design
 /// - TaskPoolでバックグラウンド実行
-/// - mpsc channelでBox<dyn Command>をECSへ送信
-/// - Input scheduleでdrain_and_apply
+/// - mpsc channelで`BoxedCommand`（`Box<dyn FnOnce(&mut World) + Send>`）をECSへ送信
+/// - Input scheduleの`drain_task_pool_commands`で適用
 ///
 /// # Example
 /// ```ignore
 /// task_pool.spawn(|tx| async move {
 ///     let result = some_async_work().await;
-///     let cmd: BoxedCommand = Box::new(MyCommand { result });
+///     let cmd: BoxedCommand = Box::new(move |world: &mut World| {
+///         world.insert_resource(MyResult(result));
+///     });
 ///     let _ = tx.send(cmd);
 /// });
 /// ```
@@ -75,15 +77,6 @@ impl WintfTaskPool {
             .detach();
     }
 
-    /// 受信したコマンドをすべてWorldに適用
-    pub fn drain_and_apply(&self, world: &mut World) {
-        if let Ok(receiver) = self.receiver.lock() {
-            for cmd in receiver.try_iter() {
-                cmd(world);
-            }
-        }
-    }
-
     /// 受信したコマンドをすべて収集して返す（Worldに適用しない）
     ///
     /// `drain_task_pool_commands`で使用。
@@ -95,20 +88,6 @@ impl WintfTaskPool {
         } else {
             Vec::new()
         }
-    }
-
-    /// コマンドを直接送信（テスト用）
-    #[cfg(test)]
-    pub fn send_command(&self, cmd: BoxedCommand) {
-        let _ = self.sender.send(cmd);
-    }
-
-    /// キューが空かどうかを確認（テスト用）
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        // try_iter()は非破壊的ではないため、ここではチャネルの状態を確認できない
-        // 簡易的な実装として常にtrueを返す（新規作成直後は空であることを前提）
-        true
     }
 }
 

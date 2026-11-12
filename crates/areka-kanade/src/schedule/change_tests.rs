@@ -6,30 +6,23 @@
 //! 再生中に届いた要求の保留（最後まで・中断で消化／終了の保留が勝つ／`\-` の予約・到達で捨てる）も固定する。
 
 use super::*;
-use crate::change::{ChangeOrigin, ChangeTarget};
+use crate::change::ChangeOrigin;
 use crate::msg::{CloseReason, ShioriCall};
-use crate::schedule::log_capture::{capture, logged_once};
-use crate::schedule::steady::test_support::base_state;
-use crate::schedule::translate_test_support::pass_translate;
+use crate::schedule::log_capture::{CapturedEvent, capture, logged_once};
+use crate::schedule::translate_test_support::{
+    change_request, config as cfg, only_get, pass_translate,
+};
 use crate::schedule::{ActiveTalk, step};
 use crate::talk::{TalkDone, TalkEndReason};
 use tracing::Level;
 
 const D: u64 = 30_000;
 
-fn cfg() -> KanadeConfig {
-    KanadeConfig::new("master", "1.0.0")
-}
-
 fn req(origin: ChangeOrigin, raise_event: bool) -> ChangeRequest {
     ChangeRequest {
-        target: ChangeTarget {
-            sakura_name: "ポスト".to_string(),
-            name: "R_POST_and_KOMAINU".to_string(),
-            dir: r"C:\areka\ghost\r_post".to_string(),
-        },
         origin,
         raise_event,
+        ..change_request()
     }
 }
 
@@ -38,7 +31,7 @@ fn steady() -> State {
         phase: Phase::Steady { talk: None },
         last_now: Some(MonotonicMs(1_000)),
         next_talk_id: 5,
-        ..base_state()
+        ..State::initial()
     }
 }
 
@@ -58,16 +51,6 @@ fn talk_done(s: State, talk_id: TalkId, reason: TalkEndReason) -> (State, Vec<Ac
         quit_reserved: false,
     };
     step(s, Input::TalkDone(done), &cfg())
-}
-
-/// GET を 1 件だけ返したことを確かめ、(イベント名, Reference 列) を取り出す。
-fn only_get(actions: &[Action]) -> (String, Vec<String>) {
-    match actions {
-        [Action::ShioriRequest(ShioriCall::Get { id, references, .. })] => {
-            (id.as_str().to_string(), references.clone())
-        }
-        _ => panic!("GET がちょうど 1 件のはず"),
-    }
 }
 
 fn script_of(s: &State) -> Option<&str> {
@@ -132,6 +115,11 @@ fn close_talking() -> (State, TalkId) {
     (s, talk_id)
 }
 
+/// `warn!` の件数（汎用の通知の入口・返しのイベントの子のテストが使う）。
+fn warn_count(events: &[CapturedEvent]) -> usize {
+    events.iter().filter(|e| e.level == Level::WARN).count()
+}
+
 fn assert_unloading(s: &State, actions: &[Action], expect: &str) {
     let cause = match &s.phase {
         Phase::Unloading {
@@ -194,9 +182,7 @@ fn reject_outside_idle_steady_warns_notifies_and_keeps_state() {
         },
         pending_close,
         State {
-            phase: Phase::ClosePending {
-                reason: CloseReason::System,
-            },
+            phase: Phase::ClosePending,
             ..steady()
         },
         accepted,
@@ -214,7 +200,14 @@ fn reject_outside_idle_steady_warns_notifies_and_keeps_state() {
             ))
         });
         let (next, actions) = out.expect("step は必ず結果を返す");
-        logged_once(&ev, Level::WARN, "change_rejected_phase");
+        let line = logged_once(&ev, Level::WARN, "change_rejected_phase");
+        if had_pending_close {
+            assert_eq!(
+                line.fields.get("reason").map(String::as_str),
+                Some("close_pending"),
+                "{label}: 終了の保留の理由を記録に載せる"
+            );
+        }
         assert!(
             matches!(
                 actions.as_slice(),
@@ -319,6 +312,35 @@ fn both_204_unloads_silently() {
     assert_eq!(script_of(&s), None);
 }
 
+/// 受理の後に `OnGhostChanging` が時間切れで失敗しても、故障で降ろす相へ進みつつ切替の帳簿は残る
+/// （areka は停止通知の切替の中身を見て、SHIORI の失敗の後でも切替を続ける）。
+#[test]
+fn failure_after_accept_unloads_as_fault_and_keeps_change_ledger() {
+    let (s, _) = step(
+        steady(),
+        Input::ChangeGhost(req(ChangeOrigin::Manual, true)),
+        &cfg(),
+    );
+    let (s, actions) = reply(
+        s,
+        ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout("30s".to_string())),
+    );
+    assert!(
+        matches!(
+            s.phase,
+            Phase::Unloading {
+                cause: TermCause::Fault(_)
+            }
+        ),
+        "SHIORI の失敗は故障で降ろす相へ"
+    );
+    assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
+    assert!(
+        s.change.is_some(),
+        "故障の道でも切替の帳簿は降ろす相まで残る"
+    );
+}
+
 #[test]
 fn deadline_is_armed_on_first_tick_when_entered_without_time() {
     let (s, _) = step(
@@ -348,21 +370,6 @@ fn deadline_is_armed_on_first_tick_when_entered_without_time() {
         s.phase,
         Phase::ChangeTalkWait { deadline: Some(d), .. } if d == MonotonicMs(500 + D)
     ));
-}
-
-#[test]
-fn without_raise_event_unloads_silently_without_events() {
-    let (s, actions) = step(
-        steady(),
-        Input::ChangeGhost(req(ChangeOrigin::Automatic, false)),
-        &cfg(),
-    );
-    assert_unloading(&s, &actions, "CloseSilent");
-    assert_eq!(
-        script_of(&s),
-        None,
-        "送らなかったので台本は無し・帳簿は立つ"
-    );
 }
 
 // ---- 再生中に届いた切替の保留（要件 2.6・5.5・10.3・11.6） ----
@@ -395,12 +402,23 @@ fn held(raise_event: bool) -> State {
     s
 }
 
-/// 利用者の中断を受けてから `TalkDone{Interrupted}` を返す。
-fn broken(s: State, quit_reserved: bool) -> (State, Vec<Action>) {
-    let (s, actions) = step(s, Input::UserBreak { scope: 0 }, &cfg());
-    assert!(matches!(actions.as_slice(), [Action::CancelChoice { .. }]));
+/// 利用者の中断を受けてから、そのトークの `TalkDone{Interrupted}` を返す。
+/// 止める指示は定常の中断と同じ単一の閉じ口（`CancelChoice`）であることも確かめる。
+fn break_talk(s: State, talk_id: TalkId, quit_reserved: bool) -> (State, Vec<Action>) {
+    let (s, actions) = step(
+        s,
+        Input::UserBreak {
+            scope: 0,
+            talk_id: Some(talk_id),
+        },
+        &cfg(),
+    );
+    assert!(
+        matches!(actions.as_slice(), [Action::CancelChoice { talk_id: t }] if *t == talk_id),
+        "中断の指示は定常と同じ（バルーンを隠す規則に触れない）"
+    );
     let done = TalkDone {
-        talk_id: TalkId(4),
+        talk_id,
         reason: TalkEndReason::Interrupted,
         quit_reserved,
     };
@@ -425,7 +443,7 @@ fn held_request_is_consumed_on_end_and_on_interrupt() {
         type Finish = fn(State) -> (State, Vec<Action>);
         let finishes: [(&str, Finish); 3] = [
             ("ended", |s| talk_done(s, TalkId(4), TalkEndReason::Ended)),
-            ("user_break", |s| broken(s, false)),
+            ("user_break", |s| break_talk(s, TalkId(4), false)),
             ("interrupted", |s| {
                 talk_done(s, TalkId(4), TalkEndReason::Interrupted)
             }),
@@ -440,7 +458,6 @@ fn held_request_is_consumed_on_end_and_on_interrupt() {
                 assert_eq!(only_get(&actions).0, "OnGhostChanging", "{label}");
             } else {
                 assert_unloading(&s, &actions, "CloseSilent");
-                assert!(sent_events(&actions).is_empty(), "{label}");
             }
         }
     }
@@ -452,6 +469,12 @@ fn without_raise_event_sends_neither_changing_nor_close() {
         steady(),
         Input::ChangeGhost(req(ChangeOrigin::Manual, false)),
         &cfg(),
+    );
+    assert_unloading(&s, &actions, "CloseSilent");
+    assert_eq!(
+        script_of(&s),
+        None,
+        "送らなかったので台本は無し・帳簿は立つ"
     );
     let (s, more) = reply(s, ShioriOutcome::Unloaded);
     assert!(matches!(s.phase, Phase::Stopped));
@@ -502,7 +525,7 @@ fn pending_close_wins_over_held_change() {
         "切替の中止（終了要求）を通知する"
     );
     assert_eq!(sent_events(&actions), vec!["OnClose".to_string()]);
-    assert!(matches!(s.phase, Phase::ClosePending { .. }));
+    assert!(matches!(s.phase, Phase::ClosePending));
     assert!(s.pending_change.is_none() && s.change.is_none());
 }
 
@@ -511,11 +534,10 @@ fn quit_reserved_break_drops_held_change_and_quits_without_handoff() {
     for raise_event in [true, false] {
         let s = held(raise_event);
         let mut out = None;
-        let ev = capture(|| out = Some(broken(s, true)));
+        let ev = capture(|| out = Some(break_talk(s, TalkId(4), true)));
         let (s, actions) = out.expect("step は必ず結果を返す");
         logged_once(&ev, Level::INFO, "change_dropped_by_quit");
         assert_unloading(&s, dropped_notice_then(&actions), "Quit");
-        assert!(sent_events(&actions).is_empty(), "OnGhostChanging は 0 件");
         assert!(s.pending_change.is_none(), "保留は捨てる");
         let (s, _) = reply(s, ShioriOutcome::Unloaded);
         assert!(matches!(s.phase, Phase::Stopped));

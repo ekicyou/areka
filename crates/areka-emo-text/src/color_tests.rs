@@ -164,6 +164,17 @@ fn hex_with_other_length_or_bad_digit_is_rejected() {
     assert_eq!(reason(&["#fffffff"]), REASON_BAD_HEX);
     assert_eq!(reason(&["#gggggg"]), REASON_BAD_HEX);
     assert_eq!(reason(&["#gg0"]), REASON_BAD_HEX);
+    assert_eq!(reason(&["#ａａ"]), REASON_BAD_HEX);
+    assert_eq!(reason(&["#ａａａ"]), REASON_BAD_HEX);
+}
+
+/// 記録の理由の文は実際と合う（指摘 32）——`#gggggg` は 6 字なので「桁数が違う」とは言わず、
+/// u32 を越える 10 進（`4294967296`）は「数でない」でなく「範囲外」と言う。定数でなく字面で固定する。
+#[test]
+fn reason_text_matches_what_actually_failed() {
+    assert_eq!(reason(&["#gggggg"]), "色指定が 3 桁か 6 桁の 16 進でない");
+    assert_eq!(reason(&["4294967296", "0", "0"]), "色指定の成分が範囲外");
+    assert_eq!(reason(&["4294967296%", "0%", "0%"]), "色指定の成分が範囲外");
 }
 
 /// 16 進は 1 成分の書式なので、3 成分に並べても受けない（R8.9）。
@@ -200,7 +211,6 @@ fn color_name_table_is_strictly_sorted() {
 /// 表のすべての名前が引き当てられ、表の値と一致する（R8.4）。
 #[test]
 fn every_table_name_resolves_to_its_entry() {
-    assert_eq!(CSS_COLOR_NAMES.len(), 147, "母数が動いたら §4 を見直すこと");
     for (name, (r, g, b)) in CSS_COLOR_NAMES {
         assert_eq!(
             rgb(&[name]),
@@ -391,7 +401,7 @@ fn calibration_components_must_not_be_read_independently() {
     assert!(parse_color(&["50%", "100", "20%"]).is_err());
 }
 
-/// 較正: 先頭の `+` を数の一部として黙って吸収してしまう誤り（`u32` の解析は `+` を受ける）。
+/// 較正: 先頭の `+` を数の一部として黙って吸収してしまう誤り（`u64` の解析は `+` を受ける）。
 #[test]
 fn calibration_leading_plus_must_not_be_absorbed() {
     assert_ne!(

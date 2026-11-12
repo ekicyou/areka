@@ -24,7 +24,7 @@
 //! ——`ghost_asker_id(&shiori_dir(&root))`——で production と**同一** asker を本番同型に再構築できる（GhostParts は asker を露出しない）。
 //!
 //! ## mock shiori の username=Value 台本化
-//! username prefetch は kanade boot 系列が resource id `"username"`（`resource_username`・
+//! username prefetch は kanade boot 系列が resource id `"username"`（`resource_get`・
 //! `ALLOWED_RESOURCE_IDS`）へ GET する。mock backend が `get("username")` へ `Ok(Some("SomeUser"))`
 //! を返すと、boot が kanade へ注入した実 `ResourceSink`（`make_username_resource_sink`）が
 //! `publish_shiori(ghost_asker, "username", Some("SomeUser"))`＋`barrier()` を実行し、初回 talk 前に
@@ -135,6 +135,7 @@ fn manual_teardown(parts: GhostParts) {
         shiori: shiori_handle,
         start_relay: start_relay_handle,
         down_relay: down_relay_handle,
+        choice_wake_relay: _,
         ticker: _,
         sylphya: sylphya_handle,
     } = handles;

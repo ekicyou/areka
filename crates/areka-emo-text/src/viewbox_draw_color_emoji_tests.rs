@@ -1,12 +1,11 @@
 use super::ViewboxExecutor;
 use super::test_support::{
-    Rig, build, colored_count, glyph_items, opaque_count, require_segoe_ui_emoji,
+    FILL_BGRA, Rig, build, choice_canvas_from, colored_count, count_in_x_band, glyph_items,
+    layout_frame, opaque_count, require_segoe_ui_emoji,
 };
-use crate::canvas::{
-    ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, Resident, ResidentContent,
-};
+use crate::canvas::{ChoiceLineContent, ChoiceRowSegment, HighlightPaint, ResidentContent};
 use crate::draw::{DWriteMetrics, FontCatalog, ResolvedFont};
-use crate::layout::{LayoutEngine, WrapPlan};
+use crate::layout::WrapPlan;
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
@@ -194,18 +193,6 @@ fn emoji_ignores_text_color() {
     }
 }
 
-/// 列 `x0..x1`（全 y）の画素を数える（`pred` が真のもの・BGRA 密配列）。
-fn count_in_x_band(bytes: &[u8], w: u32, x0: u32, x1: u32, pred: impl Fn(&[u8]) -> bool) -> usize {
-    bytes
-        .chunks_exact(4)
-        .enumerate()
-        .filter(|(i, px)| {
-            let x = *i as u32 % w;
-            x >= x0 && x < x1 && pred(px)
-        })
-        .count()
-}
-
 /// 1.3・4.5・6.3: 選択肢「あ😀い」の全体をホバーして、塗り色と白の切替文字色で描いた
 /// フレームと、ホバー無しのフレームを同じ描画器で描く（ホバーの序数は行の指紋に入るので
 /// 描き直される）。帯は本番と同じ実測の送り幅（`DWriteMetrics`）で組んだ配置から取る。
@@ -227,7 +214,7 @@ fn hovered_choice_keeps_emoji_own_colors() {
     let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
         .expect("DWriteMetrics::new 失敗");
     let items = glyph_items("あ😀い");
-    let lines = LayoutEngine::layout(
+    let (_, base, window) = layout_frame(
         &items,
         items.len(),
         &region,
@@ -236,38 +223,21 @@ fn hovered_choice_keeps_emoji_own_colors() {
         &metrics,
         WrapPlan::CharByChar,
     );
-    let base = ContentCanvas::from_layout(&lines, &region, mode);
-    let window = LayoutEngine::visible_window(&lines, &region, mode);
     assert_eq!(base.residents.len(), 1, "「あ😀い」は 1 行");
 
     // 行の全体を選択肢 0 にする（範囲は住人ローカル）。
     let make_choice = |highlight: Option<HighlightPaint>, hovered: Option<usize>| {
-        let residents = base
-            .residents
-            .iter()
-            .map(|r| match &r.content {
-                ResidentContent::GlyphRun(run) => Resident {
-                    content: ResidentContent::Choice(ChoiceLineContent {
-                        run: run.clone(),
-                        segments: vec![ChoiceRowSegment {
-                            ordinal: 0,
-                            inline_range: (0.0, run.size.0),
-                        }],
-                        hovered,
-                        highlight,
-                        band_extent: run.size.1,
-                        band_offset: 0.0,
-                    }),
-                    transform: r.transform,
-                    effects: r.effects,
-                },
-                _ => r.clone(),
-            })
-            .collect();
-        ContentCanvas {
-            residents,
-            size: base.size,
-        }
+        choice_canvas_from(&base, |run| ChoiceLineContent {
+            run: run.clone(),
+            segments: vec![ChoiceRowSegment {
+                ordinal: 0,
+                inline_range: (0.0, run.size.0),
+            }],
+            hovered,
+            highlight,
+            band_extent: run.size.1,
+            band_offset: 0.0,
+        })
     };
 
     // 3 字の帯（面の x・整数へ丸める）＝住人の平行移動＋配置の位置〜＋送り幅。
@@ -287,7 +257,7 @@ fn hovered_choice_keeps_emoji_own_colors() {
     assert_eq!(bands.len(), 3, "「あ」「😀」「い」の 3 クラスタ");
 
     let fill = (105u8, 25u8, 25u8);
-    let fill_bgra = [25u8, 25, 105, 255];
+    let fill_bgra = FILL_BGRA;
     let white_bgra = [255u8, 255, 255, 255];
     let mut surface = rig.attach(IMAGE, 1.0);
     let (w, _) = surface.size();

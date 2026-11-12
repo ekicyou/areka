@@ -123,3 +123,11 @@ B（バグ。件 1 は利用者に見える字の欠け。件 2〜4 は同じ場
 ## 2026-10-16 棚卸㉖で足した件（`balloon-text-bugs` の最終確認の拾い残し）
 
 - 件 5（小さい）: `crates/areka-emo-text/src/underline.rs` の 62 行あたりの `stroke_rect` は、引数 `origin` が本番ではいつも (0,0) で渡される（使われていない引数）。件 3 で `stroke_rect` に触るときに一緒に外すか、意味のある使い道を決める。持ち主が居なかったので、同じ関数を触るこの spec へ渡した。
+
+## 2026-11-12 `audit-emo-text-layout-draw` の完了の棚卸で足した件（validrect の近い辺）
+
+- 件 6: validrect の近い辺（左と上）が画像の外へ負に解ける。`crates/areka-emo-text/src/region.rs` の `resolve_coord` は負の値を反対の辺から読むので、`validrect.left`（`top` も）が画像の幅（高さ）より大きい負の値だと、left（top）が負になる。文字の面は `actor_present.rs` で validrect の左上に置かれ、面の中の座標は `canvas.rs`（341〜342 行あたり）と `choice.rs`（5 か所）が validrect の左上を引いて求める。バルーンの `descript.txt` は信用しない入力（落としてきたゴースト）なので、作者の書き方しだいで面が画像の外へはみ出す。
+- `audit-emo-text-layout-draw` は遠い辺（右と下）だけを画像の大きさで切った（設計の段の裁定・案甲＝2026-11-06 開発者「推奨案を承認」）。近い辺は「面の寸だけを切ると、近い辺が外のときは見た目が変わるか、面が画像より大きく残るかのどちらか」で、直し方が 1 つに決まらないので申し送られた（`completed/audit-emo-text-layout-draw/research.md` の「指摘 7 の近い辺」と 12.5 節）。
+- 直し方（要件の討議で決める・ここでは決めつけない）: 近い辺を 0 で切り、面の位置と面の中の座標の引き算を同じ切った値にそろえる／負に解ける validrect を作者の誤りとして警告し、左上を 0 に寄せる／今のままにして決まりとして記録する。どれでも、面は validrect より広げない（09-05 の裁定）。
+- 触るファイル: `region.rs`・`actor_present.rs`・`canvas.rs`・`choice.rs`（件 1 と同じ文字の領域の辺の扱いなので、この spec へ足した）。
+- 起票の訳（`/kiro-complete` の棚卸の条件）: 直し方が複数あり、開発者の裁定が要る。

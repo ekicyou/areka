@@ -1,12 +1,9 @@
 //! # layout_line_ops — 行配置の自己完結した補助 2 つ（純粋層・`layout.rs` の子）
 //!
 //! [`segment_advance_sum`]（塊の advance 合計）と [`resolve_cursor_component`]
-//! （`\_l` の 1 軸ぶんの解決と記録への配線）を担う。親 `layout.rs` からの**純移動**——
-//! 合計の畳み込み順・縮退の分類・記録の一回化はいずれも移動前と同一である。
+//! （`\_l` の 1 軸ぶんの解決と記録への配線）を担う。親 `layout.rs` が `use` で引き直して呼ぶ。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
-//!
-//! 親が `use` で引き直すため、`layout.rs` 内から見た呼び出し方は分割前と変わらない。
 
 use areka_sakura::contract::ActorKey;
 
@@ -21,11 +18,21 @@ use crate::state::{CursorCoord, TextItem};
 use super::GlyphMetrics;
 use super::styled::glyph_style_advance;
 
-/// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
+#[cfg(test)]
+thread_local! {
+    /// [`segment_advance_sum`] が見た項目の数（合計が全文の頭から数え直さないことの檻・指摘 9）。
+    pub(super) static SEGMENT_SUM_VISITS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// 塊の遠端（塊先決の判定式の左辺）＝ `start` に塊の送り幅を 1 字ずつ足した値。
 ///
-/// glyph 通し番号 `[start_serial, start_serial + len)`（`items` 中の `Glyph` のみを
-/// 0 起点で数えた範囲）のグリフ送り幅を、通し番号昇順＝**左畳み込み順**で合計する
-/// （配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design Service Interface）。
+/// **渡された列の先頭から** `Glyph` のみを数えた先頭 `len` 個（配置は今の字の位置からの列を
+/// 渡す）のグリフ送り幅を、通し番号昇順＝
+/// **左畳み込み順**で `start` へ足す。配置も行内位置へ同じ順で 1 字ずつ足すので、`start` に
+/// 塊を置く位置を渡せば浮動小数の丸めまで配置の遠端と一致する（0 から合計して残り行幅と
+/// 比べると、丸めの 1 ULP で先決と配置が食い違い塊が割れる・design Service Interface）。見た目は字の**通し番号**（`base_serial`＝列の頭の字の通し番号＋列の中の
+/// 番号）で引く（見た目の番号列は全文の頭から数える・指摘 9）。
 /// 渡された `items` の全部を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
 /// 字は台本のタグとタグの間のひと続きごとに分かれて届くので、届いた字の列だけを渡すと塊の
 /// 後ろの字がまだ無く、字が届くたびに合計が変わりうる。分かち書きの折返しでは呼び手
@@ -34,28 +41,28 @@ use super::styled::glyph_style_advance;
 /// 届いた字の列が渡り、届いたぶんだけで合計する。
 pub(super) fn segment_advance_sum(
     items: &[TextItem],
-    start_serial: usize,
     len: usize,
+    base_serial: usize,
+    start: f32,
     font_height: f32,
     metrics: &dyn GlyphMetrics,
     styles: Option<&GlyphStyles<'_>>,
 ) -> f32 {
-    let end = start_serial + len;
-    let mut sum = 0.0f32;
+    let mut sum = start;
     let mut serial = 0usize;
     for item in items {
+        #[cfg(test)]
+        SEGMENT_SUM_VISITS.with(|c| c.set(c.get() + 1));
         if let TextItem::Glyph { text } = item {
-            if serial >= end {
+            if serial >= len {
                 break;
             }
-            if serial >= start_serial {
-                // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
-                // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
-                // 見た目込みの配置と食い違って折返し位置がずれる。
-                let (_, advance, _) =
-                    glyph_style_advance(text, serial, font_height, metrics, styles);
-                sum += advance;
-            }
+            // 送り幅の決め方は配置ループと**同じ 1 か所**を通す（要件 11.2）——
+            // 塊の合計だけが旧幅のまま取り残されると、塊の収まり判定が
+            // 見た目込みの配置と食い違って折返し位置がずれる。
+            let (_, advance, _) =
+                glyph_style_advance(text, base_serial + serial, font_height, metrics, styles);
+            sum += advance;
             serial += 1;
         }
     }

@@ -4,21 +4,23 @@
 
 use super::resource::{BitmapSourceGraphics, BitmapSourceResource};
 use super::task_pool::WintfTaskPool;
-use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
-use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, format_entity_name};
+use crate::com::d2d::D2D1DeviceContextExt;
+use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
 use crate::ecs::layout::Arrangement;
+use crate::ecs::widget::record::{record_command_list, store_command_list};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_PIXEL_FORMAT;
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, ID2D1DeviceContext,
+    D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC,
+    ID2D1DeviceContext,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
-use windows::Win32::Graphics::Imaging::IWICBitmapSource;
-use windows::core::Result;
-use windows_numerics::Matrix3x2;
+use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
+use windows::Win32::Graphics::Imaging::{IWICBitmapSource, WICBitmapCacheOnLoad};
+use windows::core::{Interface, Result};
 
 // ============================================================
 // パス解決
@@ -44,16 +46,6 @@ pub fn resolve_path(path: &str) -> std::io::Result<PathBuf> {
     }
 }
 
-/// テスト用アセットパス解決（CARGO_MANIFEST_DIR基準）
-#[cfg(test)]
-pub fn test_asset_path(name: &str) -> PathBuf {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    PathBuf::from(manifest_dir)
-        .join("tests")
-        .join("assets")
-        .join(name)
-}
-
 // ============================================================
 // WIC画像読み込み
 // ============================================================
@@ -63,31 +55,18 @@ pub fn test_asset_path(name: &str) -> PathBuf {
 // 戻り値は `(IWICBitmapSource, has_alpha)` の tuple に拡張されている。
 pub use crate::com::wic::load_bitmap_source;
 
-// ============================================================
-// ECSコマンド
-// ============================================================
-
-/// 画像読み込み完了時にBitmapSourceResourceを挿入するCommand
-pub struct InsertBitmapSourceResource {
-    pub entity: Entity,
-    pub source: IWICBitmapSource,
-}
-
-// SAFETY 条件: windows-rs 0.62.2 は `IWICBitmapSource` に Send を自動生成しないため
-// 本 impl は必須。健全性は WIC の free-threaded（thread-free marshaling）特性 + MTA 初期化
-// （`CoInitializeEx(COINIT_MULTITHREADED)`）に依拠し、デコードしたソースをバックグラウンド
-// ワーカー → メインスレッドへ Command として移送する経路（Send のみ。Sync は不要）で安全。
-unsafe impl Send for InsertBitmapSourceResource {}
-
-impl Command for InsertBitmapSourceResource {
-    type Out = ();
-
-    fn apply(self, world: &mut World) {
-        // エンティティが存在するか確認（読み込み中にdespawnされた場合の対応）
-        if let Ok(mut entity_ref) = world.get_entity_mut(self.entity) {
-            entity_ref.insert(BitmapSourceResource::new(self.source));
-        }
-    }
+/// 画像を読み、裏の作業の中で 1 回だけ解読してメモリの画像にする。
+///
+/// `load_bitmap_source` が返す形式の変換器は読むたびに解読するので、
+/// `WICBitmapCacheOnLoad` でメモリへ写す。UI スレッドの `copy_pixels`（αのマスク）と
+/// `CreateBitmapFromWicBitmap`（描画）はこの写しを読むだけになる。
+pub(crate) fn load_decoded_bitmap(
+    factory: &IWICImagingFactory2,
+    path: &Path,
+) -> Result<IWICBitmapSource> {
+    let (converter, _has_alpha) = load_bitmap_source(factory, path)?;
+    let bitmap = unsafe { factory.CreateBitmapFromSource(&converter, WICBitmapCacheOnLoad)? };
+    bitmap.cast()
 }
 
 // ============================================================
@@ -96,14 +75,14 @@ impl Command for InsertBitmapSourceResource {
 
 /// BitmapSourceResourceからD2D Bitmapを生成し、GraphicsCommandListに描画コマンドを出力
 ///
-/// - BitmapSourceGraphics.is_valid() == falseの場合、D2D Bitmapを生成
+/// - BitmapSourceGraphics.is_valid() == false か画像の資源が変わった場合、D2D Bitmapを生成
 /// - GraphicsCommandListに描画コマンドを出力（OFFSET(0,0)から描画）
 pub fn draw_bitmap_sources(
     mut commands: Commands,
     mut query: Query<
         (
             Entity,
-            &BitmapSourceResource,
+            Ref<BitmapSourceResource>,
             &mut BitmapSourceGraphics,
             &Arrangement,
             Option<&GraphicsCommandList>,
@@ -118,13 +97,13 @@ pub fn draw_bitmap_sources(
     >,
     graphics_core: Option<Res<GraphicsCore>>,
 ) {
+    if query.is_empty() {
+        return;
+    }
     let Some(graphics_core) = graphics_core else {
         warn!("GraphicsCore not available, skipping draw_bitmap_sources");
         return;
     };
-    if query.is_empty() {
-        return;
-    }
     // グローバル共有DeviceContextを取得（無ければ部品ごとでなく 1 回だけ記録）
     let Some(dc) = graphics_core.device_context() else {
         warn!("DeviceContext not available, skipping draw_bitmap_sources");
@@ -132,103 +111,55 @@ pub fn draw_bitmap_sources(
     };
 
     for (entity, resource, mut graphics, arrangement, cmd_list_opt, name) in query.iter_mut() {
-        let entity_name = format_entity_name(entity, name);
         trace!(
-            entity = %entity_name,
+            ?entity,
             width = arrangement.size.width,
             height = arrangement.size.height,
             "Drawing bitmap source"
         );
 
-        // D2D Bitmap生成（未生成または無効化されている場合）
-        if !graphics.is_valid() {
-            match create_d2d_bitmap(dc, resource.source()) {
-                Ok(bitmap) => {
-                    graphics.set_bitmap(bitmap);
-                }
-                Err(e) => {
-                    warn!(
-                        entity = %entity_name,
-                        error = ?e,
-                        "Failed to create D2D bitmap"
-                    );
-                    continue;
-                }
-            }
-        }
-
-        // GraphicsCommandList生成
-        let command_list = match unsafe { dc.CreateCommandList() } {
-            Ok(cl) => cl,
-            Err(e) => {
-                warn!(
-                    entity = %entity_name,
-                    error = ?e,
-                    "Failed to create CommandList"
-                );
-                continue;
-            }
+        // D2D Bitmap生成（未生成・無効化・画像の入れ替えの場合）。作れない失敗も記録と同じ道を通す
+        let bitmap = if graphics.is_valid() && !resource.is_changed() {
+            Ok(())
+        } else {
+            create_d2d_bitmap(dc, resource.source())
+                .map(|bitmap| graphics.set_bitmap(bitmap))
+                // 作れなければ前の画像を捨てる（命令の列は前の絵のまま・次に描くとき古い画像へ戻らない）
+                .inspect_err(|_| graphics.invalidate())
         };
-
-        // DeviceContextのターゲットをCommandListに設定
-        unsafe {
-            dc.SetTarget(&command_list);
+        // Arrangement.size(DIP単位)の矩形に合わせてスケール描画
+        // draw_image(ネイティブサイズ描画)ではなくDrawBitmapで宛先矩形を指定することで
+        // ビットマップのネイティブ解像度やDPIに関係なく正確な表示サイズになる
+        let dest_rect = crate::ecs::Rect {
+            left: 0.0,
+            top: 0.0,
+            right: arrangement.size.width,
+            bottom: arrangement.size.height,
         }
-
-        // 描画命令を記録
-        unsafe {
-            // 共有DCのワールド変換をリセット（前フレームの描画処理の残留変換を防止）
-            dc.set_transform(&Matrix3x2::identity());
-            dc.BeginDraw();
-
-            if let Some(bitmap) = graphics.bitmap() {
-                // Arrangement.size(DIP単位)の矩形に合わせてスケール描画
-                // draw_image(ネイティブサイズ描画)ではなくDrawBitmapで宛先矩形を指定することで
-                // ビットマップのネイティブ解像度やDPIに関係なく正確な表示サイズになる
-                use crate::com::d2d::D2D1DeviceContextExt;
-                use windows::Win32::Graphics::Direct2D::D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC;
-                let dest_rect: windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F =
-                    crate::ecs::Rect {
-                        left: 0.0,
-                        top: 0.0,
-                        right: arrangement.size.width,
-                        bottom: arrangement.size.height,
-                    }
-                    .into();
-                dc.draw_bitmap(
-                    bitmap,
-                    Some(&dest_rect),
-                    1.0,
-                    D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC,
-                    None,
-                    None,
-                );
-            }
-
-            let _ = dc.EndDraw(None, None);
-        }
-
-        // CommandListを閉じる
-        if let Err(err) = command_list.close() {
-            warn!(
-                entity = %entity_name,
-                error = ?err,
-                "Failed to close CommandList"
-            );
-            continue;
-        }
-
-        // GraphicsCommandListをエンティティに挿入/更新
-        let new_cmd_list = GraphicsCommandList::new(command_list);
-        match cmd_list_opt {
-            Some(existing) if *existing != new_cmd_list => {
-                commands.entity(entity).insert(new_cmd_list);
-            }
-            None => {
-                commands.entity(entity).insert(new_cmd_list);
-            }
-            _ => {}
-        }
+        .into();
+        let recorded = bitmap.and_then(|()| {
+            record_command_list(dc, |dc| {
+                if let Some(bitmap) = graphics.bitmap() {
+                    dc.draw_bitmap(
+                        bitmap,
+                        Some(&dest_rect),
+                        1.0,
+                        D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC,
+                        None,
+                        None,
+                    );
+                }
+                Ok(())
+            })
+        });
+        store_command_list(
+            &mut commands,
+            entity,
+            name,
+            cmd_list_opt.is_some(),
+            recorded,
+            "bitmap source",
+        );
     }
 }
 
@@ -301,40 +232,59 @@ use crate::com::wic::WICBitmapSourceExt;
 use crate::ecs::layout::{HitTest, HitTestMode};
 use tracing::error;
 
+/// PBGRA32（1 画素 4 バイト）の行の幅と全体のバイト数。全体が u32 に収まらなければ `None`
+/// （`IWICBitmapSource::CopyPixels` は全体のバイト数を u32 へ変換し、溢れると panic する）。
+pub(crate) fn pbgra32_layout(width: u32, height: u32) -> Option<(u32, usize)> {
+    let stride = width.checked_mul(4)?;
+    let size = stride.checked_mul(height)?;
+    Some((stride, size as usize))
+}
+
 /// αマスク生成完了時にBitmapSourceResourceにαマスクを設定するCommand
-struct SetAlphaMaskCommand {
-    entity: Entity,
-    mask: AlphaMask,
+pub(super) struct SetAlphaMaskCommand {
+    pub(super) entity: Entity,
+    /// マスクを作った画像の COM の番地
+    pub(super) source: usize,
+    pub(super) mask: AlphaMask,
 }
 
 impl Command for SetAlphaMaskCommand {
     type Out = ();
 
     fn apply(self, world: &mut World) {
-        // エンティティが存在し、BitmapSourceResourceを持っているか確認
-        if let Ok(mut entity_ref) = world.get_entity_mut(self.entity) {
-            if let Some(mut resource) = entity_ref.get_mut::<BitmapSourceResource>() {
-                resource.set_alpha_mask(self.mask);
-            }
+        // 今の資源の画像が、マスクを作った画像と同じときだけ入れる
+        let resource = world
+            .get_entity_mut(self.entity)
+            .ok()
+            .and_then(|e| e.into_mut::<BitmapSourceResource>())
+            .filter(|r| r.source().as_raw() as usize == self.source);
+        match resource {
+            // 変化の印は立てない（描く係が D2D の画像をもう一度作らないため）
+            Some(mut resource) => resource.bypass_change_detection().set_alpha_mask(self.mask),
+            None => debug!(entity = ?self.entity, "Image changed or gone, dropping alpha mask"),
         }
     }
 }
 
 /// αマスク生成システム
 ///
-/// BitmapSourceResourceが追加された時、HitTestMode::AlphaMaskの場合のみ
+/// BitmapSourceResourceが追加・入れ替えされた時か HitTest が変わった時、HitTestMode::AlphaMaskの場合のみ
 /// 非同期でαマスクを生成する。
 ///
 /// # Trigger
-/// - `Added<BitmapSourceResource>` + `With<HitTest>`
+/// - `Changed<BitmapSourceResource>` か `Changed<HitTest>`（マスクがまだ無いものだけ）
 /// - `HitTestMode::AlphaMask` の場合のみ実行
 ///
 /// # Flow
-/// 1. WIC BitmapSource からピクセルデータを取得（同期）
+/// 1. 解読済みのメモリの画像からピクセルデータを写す（UI スレッド・解読はしない）
 /// 2. 非同期タスクでAlphaMask::from_pbgra32() でマスク生成
 /// 3. Command 経由で BitmapSourceResource.alpha_mask に設定
 pub fn generate_alpha_mask_system(
-    query: Query<(Entity, &BitmapSourceResource, &HitTest), Added<BitmapSourceResource>>,
+    // 読み込んだ後に当たりを AlphaMask へ替えたときも作る
+    query: Query<
+        (Entity, &BitmapSourceResource, &HitTest),
+        Or<(Changed<BitmapSourceResource>, Changed<HitTest>)>,
+    >,
     task_pool: Option<Res<WintfTaskPool>>,
 ) {
     let Some(task_pool) = task_pool else {
@@ -352,8 +302,10 @@ pub fn generate_alpha_mask_system(
             continue;
         }
 
-        // 同期でピクセルデータを取得（IWICBitmapSourceはSendでないため）
+        // UI スレッドで写す。資源は解読済みのメモリの画像なので、ここでは読むだけ
         let source = resource.source();
+
+        let source_addr = source.as_raw() as usize;
 
         // 画像サイズを取得
         let (width, height) = match source.get_size() {
@@ -365,8 +317,10 @@ pub fn generate_alpha_mask_system(
         };
 
         // ピクセルデータを取得
-        let stride = width * 4; // PBGRA32 = 4 bytes/pixel
-        let buffer_size = (stride * height) as usize;
+        let Some((stride, buffer_size)) = pbgra32_layout(width, height) else {
+            error!(entity = ?entity, width, height, "Bitmap is too large for alpha mask");
+            continue;
+        };
         let mut buffer = vec![0u8; buffer_size];
 
         if let Err(e) = source.copy_pixels(None, stride, &mut buffer) {
@@ -381,7 +335,12 @@ pub fn generate_alpha_mask_system(
 
             // Commandを送信してBitmapSourceResourceにαマスクを設定
             let cmd: super::task_pool::BoxedCommand = Box::new(move |world: &mut World| {
-                SetAlphaMaskCommand { entity, mask }.apply(world);
+                SetAlphaMaskCommand {
+                    entity,
+                    source: source_addr,
+                    mask,
+                }
+                .apply(world);
             });
             let _ = tx.send(cmd);
         });

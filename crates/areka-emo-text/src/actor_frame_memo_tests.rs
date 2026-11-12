@@ -12,9 +12,10 @@
 //! | 選択肢（`\_a` の開き） | `choices` |
 //! | 押した選択肢 | `settled` |
 //! | 強調 | `hover` |
-//! | `\f` だけ | 今の見た目（`look`） |
 //! | 先読みの入れ直し | `lookahead_rev` |
 //! | 配置の入力の差し替え | 配置の入力（`input`） |
+//!
+//! `\f` だけで今の見た目が変わり字が増えないフレームは作り直さない（今の見た目は鍵にしない）。
 //!
 //! 覚えを毎フレーム捨てた描き手と覚えを使う描き手とで、読み戻しの画素が同じことを見る。
 //!
@@ -176,15 +177,18 @@ fn hover_change_rebuilds() {
 }
 
 #[test]
-fn font_tag_only_rebuilds() {
+fn font_tag_only_does_not_rebuild() {
     let mut rig = Rig::new(&[instant_text("アヒル")], SETTLED);
-    // `\f` だけは項目を増やさずに今の見た目を変える。
+    // `\f` だけは項目を増やさずに今の見た目を変える。配置は字ごとの番号列しか読まない。
     rig.rt.apply_cue(&font("0", &["bold", "1"]));
     assert_eq!(
         rig.frame(SETTLED),
-        2,
-        "今の見た目だけ変わったフレームで作り直す"
+        1,
+        "今の見た目だけ変わって字が増えないフレームは作り直さない"
     );
+    // 太字の字が届けば項目が増えるので作り直す。
+    rig.rt.apply_cue(&instant_text("カ"));
+    assert_eq!(rig.frame(SETTLED), 2, "字が届いたフレームで作り直す");
 }
 
 #[test]

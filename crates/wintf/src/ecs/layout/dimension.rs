@@ -1,9 +1,7 @@
 //! 寸法プリミティブ型
 //!
 //! taffyの型を直接使わず、wintf独自の型を提供する。
-//! これらの型はCopy, Send, Syncを満たし、bevy_ecsのComponentとして使用可能。
-
-use bevy_ecs::prelude::*;
+//! これらの型はCopy, Send, Syncを満たす値の型で、部品（Component）ではない。
 
 // ===== Dimension型: Auto, Length, Percentをサポート =====
 
@@ -36,7 +34,7 @@ use bevy_ecs::prelude::*;
 ///
 /// 内部的にTaffyレイアウトエンジンは0.0-1.0の範囲（正規化値）を使用しますが、
 /// wintfのAPIでは0.0-100.0を採用しています。変換は自動的に行われます。
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Dimension {
     /// 自動サイズ
     Auto,
@@ -111,7 +109,7 @@ impl From<Dimension> for taffy::Dimension {
 /// 長さ/パーセント/自動を表す型（マージンなどで使用）
 ///
 /// マージンなどで使用される寸法型。パーセント値は**0.0～100.0**の範囲で指定します。
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LengthPercentageAuto {
     /// 自動値
     Auto,
@@ -168,7 +166,7 @@ impl From<LengthPercentageAuto> for taffy::LengthPercentageAuto {
 /// 長さ/パーセントを表す型（パディングなどで使用、Autoなし）
 ///
 /// パディングなどで使用される寸法型。パーセント値は**0.0～100.0**の範囲で指定します。
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LengthPercentage {
     /// ピクセル値
     Px(f32),
@@ -212,7 +210,7 @@ impl From<LengthPercentage> for taffy::LengthPercentage {
 // ===== Rect型: 矩形の4辺を表すジェネリック型 =====
 
 /// 矩形の4辺（left, right, top, bottom）を表すジェネリック型
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect<T> {
     pub left: T,
     pub right: T,

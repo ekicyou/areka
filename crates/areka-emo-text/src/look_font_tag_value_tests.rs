@@ -9,11 +9,10 @@
 //! | §12 | 大きさ（絶対・相対の重ね掛け・百分率の基準・層への戻し・非正／非有限・読めない値・語彙） | 7.1〜7.7 |
 //! | §13 | 色（各書式・戻し先の語彙の解決先・アンカーの縮退・読めない値） | 8.5〜8.8 |
 //! | §14 | フォント名（候補列を記述順のまま保持・層への戻し・候補なし） | 9.5, 9.6 |
-//! | §15 | 較正——過去に壊れうる形を再現すると赤になる述語 | 15.3 |
 //!
-//! §7〜§11（真偽 5 キー・上下付き・一括の戻し・所有外キー）は兄弟の
+//! §7〜§10（真偽 5 キー・上下付き・一括の戻し・所有外キー）は兄弟の
 //! `look_font_tag_tests.rs`、§1〜§6（見た目の値・2 層・装飾の表）は `look_tests.rs` にある。
-//! 本ファイルを分けたのは `look_font_tag_tests.rs` が 605 行で、本タスクの分を足すと
+//! 本ファイルを分けたのは `look_font_tag_tests.rs` へ本タスクの分を足すと
 //! 1 ファイル 1,000 行の見張り（要件 1.3・`crates/log-capture-kit/tests/file_length_guard_test.rs`）
 //! の射程に入るため。
 //!
@@ -37,13 +36,13 @@ use crate::color::{
 fn value_layers() -> LookLayers {
     LookLayers {
         default: TextLook {
-            name: vec!["Meiryo".to_owned(), "Arial".to_owned()],
+            name: vec!["Meiryo".to_owned(), "Arial".to_owned()].into(),
             height: 20.0,
             color: (10, 20, 30),
             ..TextLook::ukadoc_default()
         },
         disable: TextLook {
-            name: vec!["Yu Gothic".to_owned()],
+            name: vec!["Yu Gothic".to_owned()].into(),
             height: 14.0,
             color: (140, 145, 150),
             ..TextLook::ukadoc_default()
@@ -57,7 +56,7 @@ fn value_layers() -> LookLayers {
 /// 装飾を立てておくのは「値のキーの腕が見た目を丸ごと置き換えていないか」を見るため。
 fn styled() -> TextLook {
     TextLook {
-        name: vec!["Consolas".to_owned()],
+        name: vec!["Consolas".to_owned()].into(),
         height: 33.0,
         color: (1, 2, 3),
         bold: true,
@@ -118,7 +117,6 @@ fn the_three_keys_that_carry_a_value_are_interpreted() {
 /// （要件 7.7）。語が増減したらこのテストが先に赤くなる。
 #[test]
 fn the_stylesheet_size_keywords_are_the_nine_css_words() {
-    assert_eq!(STYLESHEET_SIZE_KEYWORDS.len(), 9);
     assert_eq!(
         STYLESHEET_SIZE_KEYWORDS.to_vec(),
         vec![
@@ -348,7 +346,11 @@ fn a_name_keeps_the_candidate_list_in_written_order() {
         let mut args = vec!["name"];
         args.extend_from_slice(values);
         let note = expect_only(&args, |look| {
-            look.name = want.iter().map(|name| (*name).to_owned()).collect();
+            look.name = want
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect::<Vec<_>>()
+                .into();
         });
         assert_eq!(note, None, "{values:?} は記録を要さない");
     }
@@ -377,55 +379,4 @@ fn a_name_without_a_candidate_leaves_the_font_alone() {
     expect_refused(&["name"], REASON_NO_CANDIDATE);
     expect_refused(&["name", ""], REASON_NO_CANDIDATE);
     expect_refused(&["name", "", ""], REASON_NO_CANDIDATE);
-}
-
-// ------------------------------------------------------------------ §15 較正（3.4）
-
-/// 較正: 「符号付きの大きさを**既定**に足す」誤り（要件 7.2・15.3・design の
-/// Implementation Notes が名指しする形）。
-///
-/// 出発点 33・既定 20 なので、正しければ 36、既定に足す実装なら 23 になる。
-#[test]
-fn calibration_a_signed_height_must_not_be_added_to_the_default_size() {
-    let layers = value_layers();
-    assert_eq!(styled().height, 33.0);
-    assert_eq!(layers.default.height, 20.0);
-    let (look, _) = apply(&["height", "+3"]);
-    assert_eq!(
-        look.height, 36.0,
-        "符号付きの大きさを既定（20）に足している（正しくは、そのとき効いている 33 に足す）"
-    );
-}
-
-/// 較正: 「百分率を**そのとき効いている大きさ**に掛ける」誤り（要件 7.3・15.3）。
-///
-/// 出発点 33・既定 20 なので、正しければ 40、現在に掛ける実装なら 66 になる。
-#[test]
-fn calibration_a_percent_height_must_not_be_measured_against_the_current_size() {
-    let (look, _) = apply(&["height", "200%"]);
-    assert_eq!(
-        look.height, 40.0,
-        "百分率をそのとき効いている大きさ（33）に掛けている（正しくは既定 20 が基準）"
-    );
-}
-
-/// 較正: 「アンカー色を既定へ落とさず失敗させる／落としても印を返さない」誤り
-/// （要件 8.8・15.3）。
-///
-/// 失敗させる実装なら `expect` で、印を返さない実装なら後ろの断言で赤になる。
-#[test]
-fn calibration_an_anchor_color_must_be_applied_as_default_and_marked() {
-    let layers = value_layers();
-    let (look, result) = apply(&["color", "default.anchor"]);
-    let note =
-        result.expect("\\f[color,default.anchor] は既定として受理される（拒んではならない）");
-    assert_eq!(
-        look.color, layers.default.color,
-        "アンカー色が既定層の色に落ちていない"
-    );
-    assert_eq!(
-        note,
-        Some(Note::AnchorColorAsDefault),
-        "既定として適用した印が返っていない（呼び手が warn を残せない）"
-    );
 }

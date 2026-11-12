@@ -12,7 +12,7 @@ pub(crate) fn resolve_region_name(
     let result = hit_test_in_window_ex(
         world,
         window,
-        PhysicalPoint::new(state.client_point.x as f32, state.client_point.y as f32),
+        PointF::new(state.client_point.x as f32, state.client_point.y as f32),
     )?;
     result.region
 }

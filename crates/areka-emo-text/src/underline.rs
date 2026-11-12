@@ -8,7 +8,8 @@
 //! - 縦書き（上から下）は DirectWrite の `offset` と太さのまま、D2D の既定の描き方と同じ向き
 //!   （ベースラインの原点の周りに時計回りに 90 度）へ回す（要件 3.4「側と位置は今のまま」）。
 //! - 面に収まらない線だけを行送りの軸で面の内側へ寄せる（要件 3.11・3.4）。太さは保ち、行内の
-//!   軸は動かさない。面は広げない（下線の有無でレイアウトを変えない＝要件 3.7）。
+//!   軸は動かさない。面は広げない（下線の有無でレイアウトを変えない＝要件 3.7）。行の箱が丸ごと
+//!   面の外の行の線は寄せない（行の箱で決める・線の矩形だけでは最下行と見分けられない）。
 //!
 //! 本モジュールは `windows` に依存しない（層の檻 `PURE_SOURCES` が走査する）。
 
@@ -88,13 +89,24 @@ pub(crate) fn stroke_rect(raw: &UnderlineRaw, origin: (f32, f32)) -> StrokeRect 
 
 /// 行送りの軸（横書き＝縦・縦書き＝横）で、面の範囲 `[0, bound]` に収まらなければ内側へ寄せる。
 ///
+/// 寄せるのは行の箱（`row`＝その行の em の箱・面の上の位置）が面にかかる行の線だけで、行の箱が
+/// 丸ごと面の外の行の線はそのまま返す（指摘 14）。線の矩形だけでは、線が面の外に落ちる最下行
+/// （要件 3.11）と面の外の行を見分けられない。
 /// 太さは保つ（太さが範囲より大きければ 0 の側に揃える）。行内の軸は動かさない。
 /// 収まっていれば同じ矩形を返す。`bound`＝面の物理寸 ÷ k（画像の画素・`(幅, 高さ)`）。
-pub(crate) fn pull_inside(rect: StrokeRect, mode: WritingMode, bound: (f32, f32)) -> StrokeRect {
-    // 1 本の軸の [lo, hi] を [0, limit] の内側へ寄せる（長さは保つ）。
-    let pull = |lo: f32, hi: f32, limit: f32| {
+pub(crate) fn pull_inside(
+    rect: StrokeRect,
+    row: StrokeRect,
+    mode: WritingMode,
+    bound: (f32, f32),
+) -> StrokeRect {
+    // 1 本の軸の [lo, hi] を [0, limit] の内側へ寄せる（長さは保つ）。行の箱 [row_lo, row_hi] が
+    // 丸ごと面の外なら寄せない。
+    let pull = |lo: f32, hi: f32, row_lo: f32, row_hi: f32, limit: f32| {
         let len = hi - lo;
-        if len > limit || lo < 0.0 {
+        if row_lo >= limit || row_hi <= 0.0 {
+            (lo, hi)
+        } else if len > limit || lo < 0.0 {
             (0.0, len)
         } else if hi > limit {
             (limit - len, limit)
@@ -104,7 +116,7 @@ pub(crate) fn pull_inside(rect: StrokeRect, mode: WritingMode, bound: (f32, f32)
     };
     match mode {
         WritingMode::HorizontalTb => {
-            let (top, bottom) = pull(rect.top, rect.bottom, bound.1);
+            let (top, bottom) = pull(rect.top, rect.bottom, row.top, row.bottom, bound.1);
             StrokeRect {
                 top,
                 bottom,
@@ -112,7 +124,7 @@ pub(crate) fn pull_inside(rect: StrokeRect, mode: WritingMode, bound: (f32, f32)
             }
         }
         WritingMode::VerticalRl | WritingMode::VerticalLr => {
-            let (left, right) = pull(rect.left, rect.right, bound.0);
+            let (left, right) = pull(rect.left, rect.right, row.left, row.right, bound.0);
             StrokeRect {
                 left,
                 right,

@@ -124,16 +124,15 @@ pub struct FontCatalog {
     /// 記録済みの鍵（[`WarnKey`]）。
     ///
     /// **記録の周期は「台帳の寿命のあいだ 1 度」**（タスク 9.4 の裁定・6.2 の申し送り）。
-    /// 要件 9.3／9.4 は「1 台詞につき 1 度」と書くが、台帳は台詞の切れ目を知らず
-    /// （承認済み design の型定義にも空にする口が無い）、実際には台帳が生きているあいだ
-    /// 1 度になる。**記録は要件より少ない側へ寄る**ので「記録があふれない」（要件 13.4）の
-    /// 目的は満たし、記録なしの失敗経路（要件 13.5）も作らない。要件文言と設計の間の
-    /// 既存のズレであり、本仕様の実装が持ち込んだものではない。周期を台詞に合わせるなら
-    /// 台詞の切れ目を台帳へ届ける配線が要る（純粋層 `state_decoration.rs` の `Decoration` 側の
-    /// `warned` は `ClearAll` で空になる別の集合）。
+    /// 台詞の切れ目（[`FontCatalog::forget_talk`]）でも空にしない——記録は要件 9.3／9.4 の
+    /// 「1 台詞につき 1 度」より少ない側へ寄るので「記録があふれない」（要件 13.4）の目的は満たし、
+    /// 記録なしの失敗経路（要件 13.5）も作らない（audit-emo-text-layout-draw の設計で残すと決めた）。
     warned: RefCell<BTreeSet<WarnKey>>,
     /// 記憶に無くて実際に問い合わせた回数（要件 9.7 の観測点）。
     lookups: Cell<usize>,
+    /// 台詞の番号（[`FontCatalog::forget_talk`] のたびに 1 進む）。台帳を共有する計測器は
+    /// これを自分の覚えた番号と比べて、台詞の寿命の表を空にする（指摘 11）。
+    talk: Cell<u64>,
 }
 
 impl FontCatalog {
@@ -165,6 +164,7 @@ impl FontCatalog {
             memo: RefCell::new(HashMap::new()),
             warned: RefCell::new(BTreeSet::new()),
             lookups: Cell::new(0),
+            talk: Cell::new(0),
         }
     }
 
@@ -190,6 +190,18 @@ impl FontCatalog {
     #[cfg(test)]
     pub(super) fn lookup_count(&self) -> usize {
         self.lookups.get()
+    }
+
+    /// 台詞の切れ目（消去・台詞の頭）: 候補列の記憶を空にし、台詞の番号を進める。
+    /// 記録済みの鍵（`warned`）は残す（記録は台帳の寿命のあいだ 1 度のまま）。
+    pub(crate) fn forget_talk(&self) {
+        self.memo.borrow_mut().clear();
+        self.talk.set(self.talk.get() + 1);
+    }
+
+    /// 今の台詞の番号（[`FontCatalog::forget_talk`] で進む）。
+    pub(crate) fn talk_epoch(&self) -> u64 {
+        self.talk.get()
     }
 
     /// 記述順に問い合わせて最初に入っている顔。空列は `None`（記録なし）。

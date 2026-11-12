@@ -19,10 +19,30 @@ use std::time::Duration;
 use areka_actor::ActorHandle;
 use areka_kanade::{KanadeMsg, MonotonicMs};
 
-/// ticker の制御メッセージ（停止規約の Close のみ）。
+/// ticker の制御メッセージ。
 pub enum TickerMsg {
     /// 即時停止。
     Close,
+    /// この時刻に 1 回だけ kanade を起こす頼み（選択待ちの期限・要件 9.5）。時刻を過ぎたと
+    /// 見たら [`KanadeMsg::ChoiceTimeoutDue`] を 1 通送る。新しい頼みは古い頼みを置き換える。
+    /// [`spawn_loop_ticker`] は読み飛ばす。
+    WakeKanadeAt(MonotonicMs),
+}
+
+/// 中継（`spawn_relay::<MonotonicMs, TickerMsg>`）が kanade の起こしの頼みを写すための変換。
+impl From<MonotonicMs> for TickerMsg {
+    fn from(at: MonotonicMs) -> Self {
+        TickerMsg::WakeKanadeAt(at)
+    }
+}
+
+/// 起こしの頼みまでの残り時間（頼みが無ければ `Duration::MAX`・過ぎていれば `ZERO`）。
+/// 丸めず ms ちょうどで返す。
+fn wake_remaining(at: Option<MonotonicMs>, now: MonotonicMs) -> Duration {
+    match at {
+        None => Duration::MAX,
+        Some(at) => Duration::from_millis(at.0.saturating_sub(now.0)),
+    }
 }
 
 /// ticker が dispatcher へ渡す 1 回分の Tick 内容。
@@ -171,15 +191,19 @@ where
         // 送出先切断は対象ごとに sticky（一度切れたら以後その対象へは送らない）。
         let mut dispatcher_disconnected = false;
         let mut kanade_disconnected = false;
+        // kanade の起こしの頼み（1 回だけ・送ったら空に戻す）。
+        let mut kanade_wake: Option<MonotonicMs> = None;
 
         loop {
             let now = clock();
             let remaining = dispatcher_schedule
                 .remaining(now)
-                .min(kanade_schedule.remaining(now));
+                .min(kanade_schedule.remaining(now))
+                .min(wake_remaining(kanade_wake, now));
 
             match stop_rx.recv_timeout(remaining) {
                 Ok(TickerMsg::Close) => return,
+                Ok(TickerMsg::WakeKanadeAt(at)) => kanade_wake = Some(at),
                 Err(RecvTimeoutError::Disconnected) => return,
                 Err(RecvTimeoutError::Timeout) => {
                     let now = clock();
@@ -213,6 +237,19 @@ where
                             );
                         }
                         if !kanade_disconnected && kanade.send(KanadeMsg::Tick { now }).is_err() {
+                            kanade_disconnected = true;
+                            tracing::info!(
+                                lane = "kanade",
+                                "ticker: kanade disconnected; stopping ticks to this target"
+                            );
+                        }
+                    }
+
+                    if kanade_wake.is_some_and(|at| at <= now) {
+                        kanade_wake = None;
+                        if !kanade_disconnected
+                            && kanade.send(KanadeMsg::ChoiceTimeoutDue { now }).is_err()
+                        {
                             kanade_disconnected = true;
                             tracing::info!(
                                 lane = "kanade",
@@ -281,6 +318,8 @@ pub fn spawn_loop_ticker(
 
             match stop_rx.recv_timeout(remaining) {
                 Ok(TickerMsg::Close) => return,
+                // ループの刻み役は kanade を起こさない。
+                Ok(TickerMsg::WakeKanadeAt(_)) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
                 Err(RecvTimeoutError::Timeout) => {
                     let now = clock();

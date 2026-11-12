@@ -1,4 +1,7 @@
-use super::test_support::{IMAGE, glyphs, inline_positions, model, model_rect};
+use super::test_support::{
+    IMAGE, cursor_px, glyph, glyphs, inline_positions, layout_guarded, model_rect,
+    zero_origin_region,
+};
 use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
@@ -9,10 +12,10 @@ use log_capture_kit::capture;
 // ── 横書きの配線（検証表 H1・H4・H5・H6 と範囲外記録の肯定側） ──
 //
 // 兄弟ファイルとの分担（重複させない）:
-// - `layout_cursor_tests.rs` — 行区切り・軸上書き・末尾蒸発・両軸 no-op・縮退 warn-once、
+// - `layout_cursor_tests.rs` — 行区切り・軸上書き・末尾蒸発・縮退 warn-once、
 //   および軸ごと合成（H2）と実効位置（H3）。
 // - `layout_cursor_order_tests.rs` — 書かれた順（H3b・H3c）。
-// - `layout_cursor_vertical_tests.rs` — 縦書き 2 方向。
+// - `layout_cursor_vertical_tests.rs`／`layout_cursor_vertical_canon_tests.rs` — 縦書き 2 方向。
 // - `cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs` — 解決そのもの（純関数）。
 //
 // 本ファイルが見るのは、上のどれにも属さない**配線の残り**である——絶対座標の基点が
@@ -22,16 +25,9 @@ use log_capture_kit::capture;
 //
 // 期待値はすべて design.md の検証表と正典逐語（requirements.md 付録 A）から**式で**導く。
 // 実装の戻り値を書き写さない。
-
-/// 共通前提 A（既存の横書き檻と同一）: 文字描画開始点 (0, 0)・validrect＝画像全域
-/// `0/0/400/224`・折返し閾値 400。font 10（全角 'あ' の advance 10・pitch 12＝10 + 行間 2）。
-fn region_a() -> TextRegion {
-    TextRegion::resolve(
-        &model((Some(0), Some(0)), (None, None)),
-        IMAGE,
-        WritingMode::HorizontalTb,
-    )
-}
+//
+// 共通前提 A（既存の横書き檻と同一）は支えの `zero_origin_region`: 文字描画開始点 (0, 0)・
+// validrect＝画像全域 `0/0/400/224`・折返し閾値 400。
 
 /// 共通前提 B（**弁別用**）: `origin` 未宣言・validrect を画像の**部分矩形**
 /// `left 40 / top 20 / right 360 / bottom 200` にしたバルーン。
@@ -89,25 +85,6 @@ fn layout_h(items: &[TextItem], visible: usize, region: &TextRegion) -> Vec<Posi
         &FixedMetrics,
         WrapPlan::CharByChar,
     )
-}
-
-/// 全角グリフ 1 個（'あ'・advance 10）。
-fn glyph() -> TextItem {
-    TextItem::glyph("あ")
-}
-
-/// `\_l[x,y]`（両軸とも絶対 px）。
-fn cursor_px(x: f32, y: f32) -> TextItem {
-    TextItem::CursorMove {
-        x: CursorCoord::Absolute {
-            value: x,
-            unit: CursorUnit::Px,
-        },
-        y: CursorCoord::Absolute {
-            value: y,
-            unit: CursorUnit::Px,
-        },
-    }
 }
 
 // ── H1: 未宣言バルーンでの既存表示結果の不変（Requirement 2.7・9.6） ──
@@ -189,7 +166,7 @@ fn undeclared_balloon_measures_absolute_cursor_from_the_write_start_corner() {
 /// 手計算: `start = (100, 60)` なので `\_l[0,0]` → `(100, 60)`。
 ///
 /// **本檻は横書き 1 方向の対照にとどめる**——検証項目 V7（3 書字方向 × 宣言 `origin`）は
-/// タスク 5.2 の所管である。
+/// `layout_cursor_center_origin_tests.rs` が持つ。
 #[test]
 fn declared_origin_moves_the_absolute_basis_off_the_write_start_corner() {
     let region = region_c_declared_origin();
@@ -213,7 +190,7 @@ fn declared_origin_moves_the_absolute_basis_off_the_write_start_corner() {
 /// 手計算（前提 A・`start = (0, 0)`・font 10）: `(0 + 30, 0 + 5×10) = (30, 50)`。
 #[test]
 fn canon_example_absolute_px_and_em() {
-    let region = region_a();
+    let region = zero_origin_region();
     let items = [
         TextItem::CursorMove {
             x: CursorCoord::Absolute {
@@ -246,7 +223,7 @@ fn canon_example_absolute_px_and_em() {
 /// 専用の檻が見る）。
 #[test]
 fn canon_example_relative_percent_and_absolute_px() {
-    let region = region_a();
+    let region = zero_origin_region();
     let mut items = glyphs(20);
     items.push(TextItem::CursorMove {
         x: CursorCoord::Relative {
@@ -280,7 +257,7 @@ fn canon_example_relative_percent_and_absolute_px() {
 /// 改行のような行内リセットとは別物である（Requirement 1.2・1.5・3.1）。
 #[test]
 fn canon_example_relative_negative_y_keeps_x_unchanged() {
-    let region = region_a();
+    let region = zero_origin_region();
     let items = [
         glyph(),
         TextItem::CursorMove {
@@ -334,7 +311,7 @@ fn canon_example_relative_negative_y_keeps_x_unchanged() {
 /// `debug!` を出すので、窓の中で組むと件数に混ざる。
 #[test]
 fn center_axis_mismatch_on_both_axes_is_a_complete_noop_with_one_warn_and_one_debug() {
-    let region = region_a();
+    let region = zero_origin_region();
     let actor = ActorKey::from("0");
     let items = [
         glyph(),
@@ -347,17 +324,7 @@ fn center_axis_mismatch_on_both_axes_is_a_complete_noop_with_one_warn_and_one_de
 
     let (lines, events) = capture(|| {
         let mut guard = CursorWarnGuard::default();
-        LayoutEngine::layout_with_cursor_warn(
-            &items,
-            2,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-            WrapPlan::CharByChar,
-            &actor,
-            &mut guard,
-        )
+        layout_guarded(&items, 2, &region, 10.0, &actor, &mut guard)
     });
 
     // 挙動: 両軸不動＝行を分割せず、`\_l` を書かなかった場合と同じ配置。
@@ -422,7 +389,7 @@ fn center_axis_mismatch_on_both_axes_is_a_complete_noop_with_one_warn_and_one_de
 /// - `[あ, \_l[,], あ]`: 両軸省略＝完全無効果。行は閉じない → 1 行 `[あ@0, あ@10]`。
 #[test]
 fn line_count_splits_only_when_a_move_succeeds() {
-    let region = region_a();
+    let region = zero_origin_region();
 
     let moved = [
         glyph(),
@@ -546,4 +513,61 @@ fn out_of_range_cursor_lands_literally_and_records_one_debug() {
         0,
         "範囲内（境界含む）は記録しない"
     );
+}
+
+/// `\_l` の解決が有限でない台本 3 本は、その軸を動かさず（行の位置はどれも有限）、
+/// guard つきの配置で `warn!`（`degrade = NonFinite`）を 1 件だけ残す（指摘 2）。
+///
+/// 台本: `\_l[3e38em,]あ`・`\_l[3e38em,]\_l[@-3e38em,]あ`（直す前は inf + (−inf) で NaN）・
+/// `\_l[,3e38lh]あ`。どれも両軸不動なので `あ` は書き始め (0, 0) に置かれる。
+#[test]
+fn non_finite_cursor_resolution_keeps_lines_finite_with_one_warn() {
+    let region = zero_origin_region();
+    let actor = ActorKey::from("0");
+    let abs = |value, unit| CursorCoord::Absolute { value, unit };
+    let mv = |x, y| TextItem::CursorMove { x, y };
+    let scripts = [
+        vec![mv(abs(3e38, CursorUnit::Em), CursorCoord::Omitted), glyph()],
+        vec![
+            mv(abs(3e38, CursorUnit::Em), CursorCoord::Omitted),
+            mv(
+                CursorCoord::Relative {
+                    value: -3e38,
+                    unit: CursorUnit::Em,
+                },
+                CursorCoord::Omitted,
+            ),
+            glyph(),
+        ],
+        vec![mv(CursorCoord::Omitted, abs(3e38, CursorUnit::Lh)), glyph()],
+    ];
+    for items in &scripts {
+        let (lines, events) = capture(|| {
+            let mut guard = CursorWarnGuard::default();
+            layout_guarded(items, 1, &region, 10.0, &actor, &mut guard)
+        });
+        assert_eq!(lines.len(), 1, "{items:?}");
+        let r = &lines[0].rect;
+        assert_eq!(
+            (r.left, r.top),
+            (0.0, 0.0),
+            "両軸不動＝書き始めのまま: {items:?}"
+        );
+        assert!(
+            lines.iter().all(|l| {
+                let r = &l.rect;
+                [r.left, r.top, r.right, r.bottom]
+                    .iter()
+                    .all(|v| v.is_finite())
+                    && l.glyphs.iter().all(|g| g.inline_pos.is_finite())
+            }),
+            "行の位置に非有限が無い: {items:?}"
+        );
+        let warns: Vec<_> = events
+            .iter()
+            .filter(|e| e.level == tracing::Level::WARN)
+            .collect();
+        assert_eq!(warns.len(), 1, "warn! は 1 件: {items:?}");
+        assert_eq!(warns[0].field("degrade"), Some("NonFinite"));
+    }
 }

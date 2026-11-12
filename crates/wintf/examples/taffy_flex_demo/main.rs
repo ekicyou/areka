@@ -84,15 +84,13 @@ pub(crate) use wintf::ecs::drag::{
 };
 pub(crate) use wintf::ecs::layout::hit_region::HitRegionMap;
 pub(crate) use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
-pub(crate) use wintf::ecs::layout::{
-    GlobalArrangement, HitTest, PhysicalPoint, hit_test_in_window_ex,
-};
+pub(crate) use wintf::ecs::layout::{GlobalArrangement, HitTest, hit_test_in_window_ex};
 pub(crate) use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed, Phase, PointerState};
 pub(crate) use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 pub(crate) use wintf::ecs::widget::brushes::Brushes;
 pub(crate) use wintf::ecs::widget::shapes::Rectangle;
 pub(crate) use wintf::ecs::window::find_owner_window;
-pub(crate) use wintf::ecs::{Point, Window, WindowPos};
+pub(crate) use wintf::ecs::{Point, PointF, Window, WindowPos};
 pub(crate) use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]

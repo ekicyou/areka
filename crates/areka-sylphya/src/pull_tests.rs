@@ -220,7 +220,10 @@ mod via_reader {
             .insert("currentghost.scope(0).rect".into(), "GLOBAL".into());
         img.dotted_global
             .insert("other.name".into(), "OTHER".into());
-        img.flat_global.insert("username".into(), "U".into());
+        img.flat_per_asker
+            .entry(AskerId::new("ghost/a"))
+            .or_default()
+            .insert("username".into(), "U".into());
         let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
 
         let snap_before = reader.talk_snapshot(&ctx());

@@ -29,7 +29,7 @@ areka-mcp = { path = "../areka-mcp" }
 # 落ちた回の写しの複写（copy_tree_atomic＝D-6）。
 areka-user-data = { path = "../areka-user-data" }
 # MCP の公式 SDK。版は areka-mcp と同じ = で固定する。呼び手の側だけを使う。
-rmcp = { version = "=3.5.0", default-features = false, features = ["client"] }
+rmcp = { version = "=3.9.0", default-features = false, features = ["client"] }
 # 呼ぶ間だけ回す current_thread の器・time::timeout・select!。
 tokio = { version = "1", features = ["rt", "time", "macros"] }
 # 引数の JSON の文を Map へ読む。

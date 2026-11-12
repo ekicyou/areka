@@ -2,6 +2,7 @@
 //!
 //! [`super::step`] の横断の腕 `Input::UserBreak` から、場面を問わず呼ばれる。規則は 1 つ
 //! ——「再生中なら止める／同じ相手へ二重に止めない／再生中でなければ何も止めない」である。
+//! 押されたバルーンのトークの番号が分かり、今のトークと違えば止めない（再生中でないのと同じ扱い）。
 //! 再生中でないときの合図は、読み終えたバルーンを閉じた知らせとして
 //! [`super::balloon_events::on_idle_double_click`]（表 C）へ渡す。
 //! 場面（起動の挨拶・定常のトーク・別れの台詞）でもスコープ番号でも結論を変えない（要件 2.5）。
@@ -9,11 +10,11 @@
 //! 止めるのは既存の単一の閉じ口（[`Action::CancelChoice`]）であり、第 2 の停止経路は作らない
 //! （要件 3.2）。受理そのものは SHIORI への要求を 1 件も積まない（要件 3.9・裁定 1）。止めたトークの
 //! 完了の後に `OnBalloonBreak`（行き違いでは `OnBalloonClose`）を送るかは
-//! [`super::balloon_events::after_talk_done`] が決める（areka-P0-balloon-lifecycle-events が約束を改めた）。
+//! [`super::balloon_events::after_talk_done`] が決める。
 
 use super::balloon_events::{self, BreakNote};
 use super::{Action, State, clear_choice_ledger, current_talk_id, phase_label};
-use crate::talk::{TalkDone, TalkEndReason};
+use crate::talk::{TalkDone, TalkEndReason, TalkId};
 
 /// 利用者の中断の要求を受ける。再生中なら停止の指示を 1 件返し、相手と scope を帳簿に控える。
 ///
@@ -21,7 +22,11 @@ use crate::talk::{TalkDone, TalkEndReason};
 /// だけで、受理の判断には使わない（要件 2.5）。
 /// `pending_close` の有無でも断らない——受理は SHIORI へ何も出さないため、マウス入力の
 /// 「close 保留中は GET を出さない」規則の対象外である（完了の後のイベントは終了の保留を見て送らない）。
-pub(super) fn on_user_break(mut state: State, scope: u32) -> (State, Vec<Action>) {
+pub(super) fn on_user_break(
+    mut state: State,
+    scope: u32,
+    pressed: Option<TalkId>,
+) -> (State, Vec<Action>) {
     let Some(talk_id) = current_talk_id(&state.phase) else {
         tracing::debug!(
             target: "kanade",
@@ -31,8 +36,24 @@ pub(super) fn on_user_break(mut state: State, scope: u32) -> (State, Vec<Action>
             phase = phase_label(&state.phase),
             "中断の要求を受けたが再生中のトークが無い——何も止めない（要件 2.2）"
         );
-        return balloon_events::on_idle_double_click(state);
+        return balloon_events::on_idle_double_click(state, None);
     };
+
+    // 押されたバルーンの台詞が今のトークでなければ（読み終えた X を押した瞬間に Y が始まった）、
+    // 利用者が見ていない Y は止めず、読み終えたバルーンを閉じた知らせ（表 C）へ渡す。
+    // `None`（表示の側が番号を知らない）は今のトークを止める。
+    if let Some(pressed) = pressed.filter(|&p| p != talk_id) {
+        tracing::debug!(
+            target: "kanade",
+            event = "balloon_break_no_talk",
+            scope,
+            reason = "other_talk",
+            pressed_talk_id = pressed.0,
+            current_talk_id = talk_id.0,
+            "押されたバルーンのトークは今のトークでない——何も止めない（表 C へ）"
+        );
+        return balloon_events::on_idle_double_click(state, Some(pressed));
+    }
 
     if state
         .user_break_talk

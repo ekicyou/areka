@@ -1,7 +1,7 @@
 //! `tools` の実ソケットのテスト（一覧の一致・`-32602`・橋・待ちの間の `ping`）。
 //!
 //! 登録表は本番と同じ [`entrances`] で組み、受け手はテストのスレッドの偽物。ネットへは出ない
-//! （`127.0.0.1` の空きポートだけ＝要件 8.1）。測った版は rmcp 3.5.0。
+//! （`127.0.0.1` の空きポートだけ＝要件 8.1）。測った版は rmcp 3.9.0。
 
 use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -83,7 +83,7 @@ fn assert_invalid_params(name: &str, arguments: Value, message: &str) {
     let (registry, rx) = entrances(LONG_WAIT);
     let (_server, addr) = serve(registry);
     let params = call_params(name, arguments);
-    // 旧式の経路は 200、無状態版の経路は 400（rmcp 3.5.0 で測った値＝差の一覧へ）。
+    // 旧式の経路も無状態版の経路も 200（rmcp 3.9.0 で測った値。3.5.0 の無状態版は 400 だった＝差の一覧へ）。
     for (path, status, response) in [
         (
             "旧式",
@@ -92,7 +92,7 @@ fn assert_invalid_params(name: &str, arguments: Value, message: &str) {
         ),
         (
             "無状態版",
-            400,
+            200,
             post_stateless(addr, "tools/call", 1, params.clone()),
         ),
     ] {

@@ -21,7 +21,7 @@ pub struct FlatEntry {
     pub degrade: DegradePolicy,
 }
 
-/// フラット 26 トークン全数（件数檻: `FLAT_VOCAB.len() == 26`・R1.1）。
+/// フラット 26 トークン全数（顔ぶれはテスト `flat_vocab_tokens_match_exactly` が縛る・並びは縛らない・R1.1）。
 ///
 /// 層割当（brief.md Scope typology）:
 /// - `username` = ShioriQuery（SHIORI Resource 照会）。
@@ -206,12 +206,6 @@ pub const SYNTAX_RECORDS: &[&str] = &["*", "property[...]"];
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 件数檻（R1.1・観測可能な完了条件）。
-    #[test]
-    fn flat_vocab_has_26_entries() {
-        assert_eq!(FLAT_VOCAB.len(), 26);
-    }
 
     /// 26 トークン全数が過不足なく一致（タイポ・重複を檻化）。
     #[test]

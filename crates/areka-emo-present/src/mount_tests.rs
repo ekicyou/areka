@@ -19,9 +19,8 @@ use wintf::ecs::{
     VisualGraphics, WindowPos, hit_test_in_window,
 };
 
-// 注意: `wintf::ecs::PhysicalPoint` は pointer 側の別名（整数 `Point`）へ解決される。
-// ヒットテストが取るのは `layout::hit_test` 側の別名（浮動小数 `PointF`）なので、
-// 取り違えを避けるため本ファイルでは `PointF` を直接使う。
+// 注意: `wintf::ecs::PhysicalPoint` は pointer 側の別名（整数 `Point`）。
+// ヒットテストが取るのは浮動小数の `PointF` なので、本ファイルでは `PointF` を直接使う。
 
 use super::test_support::{attach_fixture, attach_fixture_under_window};
 
@@ -246,8 +245,8 @@ fn known_mask() -> AlphaMask {
 /// **T-N4**: 原寸 4×4 のマスクを k=2 の非等倍で配置したとき、クリック透過の判定
 /// （`hit_test_in_window` → `alpha_mask_hit`）が「点を **1 回だけ** 縮約した表」と一致する。
 ///
-/// 経路は本番と同じ `evaluate_targets` → `hit_test_in_window` → `hit_test` → `hit_test_entity` →
-/// `bounds.contains` → `alpha_mask_hit`。`alpha_mask_hit` は境界に対する比例写像
+/// 経路は本番と同じ `evaluate_targets` → `hit_test_in_window` → `hit_test_in_window_ex` → `hit_test_ex` →
+/// `hit_test_entity_ex` → `bounds.contains` → `alpha_mask_hit`。`alpha_mask_hit` は境界に対する比例写像
 /// `⌊(p − left) / (native × k) × native⌋ = ⌊(p − left) / k⌋` を掛けるので、emo 側が点を
 /// 縮約していれば ÷k が二重に効いて判定がずれる（設計 §÷k の写像・要件 4.2／4.7）。
 ///

@@ -1,4 +1,4 @@
-//! 殻の停止と通知の手（`actor.rs` から移した 4 関数・中身は変えていない）。
+//! 殻の停止と通知の手（4 関数）。
 //!
 //! 終了系列の原因の写し（[`stop_cause_of`]）・切替の中身の写し（[`handoff_of`]）・停止通知の投函
 //! （[`notify_stop`]）・運行の通知の送出（[`send_notice`]）。殻（`actor.rs`）は同じ名前で使う。
@@ -31,6 +31,10 @@ pub(crate) fn stop_cause_of(state: &State) -> Option<KanadeStopCause> {
 
 /// 運行状態の切替の帳簿を、停止通知に載せる切替の中身へ写す（切替の相を経ていなければ `None`）。
 pub(crate) fn handoff_of(state: &State) -> Option<ChangeHandoff> {
+    // 使うのは終了系列の停止通知だけ——切替の相の毎秒の刻みで台本を複製しない。
+    if !matches!(state.phase, Phase::Unloading { .. }) {
+        return None;
+    }
     state.change.as_ref().map(|change| ChangeHandoff {
         script: change.script.clone(),
     })
@@ -38,7 +42,7 @@ pub(crate) fn handoff_of(state: &State) -> Option<ChangeHandoff> {
 
 /// 停止通知を投函する（R15.3・design D15 の 2）。
 ///
-/// `sink` が `None` なら何もしない（通知端を結線していない構成＝既存の呼び手はすべてこちら）。
+/// `sink` が `None` なら何もしない（通知端を結線していない構成。本番の起動は `Some` を渡す）。
 /// 送出失敗は受信端（UI）が既に落ちていることを意味するだけで異常ではないが、**沈黙で捨てる
 /// 経路を作らない**（steering: areka-log-first-no-silent-failure）ため `warn!` を 1 件残す。
 /// panic はしない——ここで落ちると終了系列そのものが完走しなくなる。

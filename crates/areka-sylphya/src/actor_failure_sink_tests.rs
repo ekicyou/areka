@@ -72,22 +72,26 @@ fn successful_post_sends_nothing() {
 fn spawn_without_receiver_behaves_as_today() {
     let parts = spawn_sylphya(init_ghost_root_only());
 
-    // 失敗も成功も今どおり処理され、返信つきの投函は結果を返す。
+    // 失敗の投函の後もアクターは生きていて、続く保存の知らせは読み口へ反映される。
     parts
         .publisher
         .persist_put(PersistScope::App, failing_entries());
-    let (reply, reply_rx) = areka_actor::reply_channel();
     parts
         .publisher
-        .tx
-        .send(SylphyaMsg::PersistPut {
-            scope: PersistScope::Ghost,
-            entries: vec![(PersistKey::BootCount, "2".into())],
-            reply: Some(reply),
-        })
-        .expect("post");
-    assert_eq!(reply_rx.recv().expect("reply"), PersistOutcome::Saved);
+        .barrier()
+        .expect("失敗の投函の後もアクターは生きている");
+    parts.publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "2".into())],
+    );
     parts.publisher.barrier().expect("barrier");
+    let ctx = crate::asker::AskerContext {
+        asker: crate::asker::AskerId::new("ghost/a"),
+    };
+    assert_eq!(
+        parts.reader.resolve_dotted_str(&ctx, "areka.boot.count"),
+        crate::value::DottedResolution::Value("2".into())
+    );
 
     parts.publisher.close();
     parts.handle.join().expect("join");

@@ -137,8 +137,11 @@ fn save_scope_inside_returns_withheld_and_logs_it() {
     };
     let _guard = WithholdGuard::under(tmp.path());
     let entries = vec![(PersistKey::LastGhost, "emo2".to_owned())];
-    let (outcome, events) =
-        log_capture_kit::capture(|| save_scope(PersistScope::App, &roots, &FsPersistIo, entries));
+    let mut outcome = None;
+    let events = crate::test_log_capture::capture(|| {
+        outcome = Some(save_scope(PersistScope::App, &roots, &FsPersistIo, entries))
+    });
+    let outcome = outcome.unwrap();
     assert_eq!(outcome, PersistOutcome::Withheld);
     assert!(tree(tmp.path()).is_empty(), "木は変わらない");
     assert!(
@@ -155,6 +158,34 @@ fn save_scope_inside_returns_withheld_and_logs_it() {
     // 同じ走りの中では書けたときと同じ値を読み返せる（要件 2.3）。
     let loaded = crate::persist::load_scope(PersistScope::App, &roots, &FsPersistIo);
     assert_eq!(loaded, vec![(PersistKey::LastGhost, "emo2".to_owned())]);
+}
+
+/// 読み取りだけの走りは使えない既存のファイル（新しい版）で止まらない＝何も書かないので守る物が無い。
+#[test]
+fn save_scope_inside_does_not_stop_on_an_unusable_existing_file() {
+    let tmp = TempPath::under_target("sylphya-withhold-unusable");
+    let root = tmp.child("areka");
+    std::fs::create_dir_all(&root).unwrap();
+    let file = root.join("sylphya.toml");
+    let newer = "format-version = 2\n[boot]\ncount = \"9\"\n";
+    std::fs::write(&file, newer).unwrap();
+    let roots = ScopeRoots {
+        app: Some(root),
+        ..ScopeRoots::default()
+    };
+    let _guard = WithholdGuard::under(tmp.path());
+    let outcome = save_scope(
+        PersistScope::App,
+        &roots,
+        &FsPersistIo,
+        vec![(PersistKey::BootCount, "1".to_owned())],
+    );
+    assert_eq!(outcome, PersistOutcome::Withheld);
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        newer,
+        "ファイルはそのまま"
+    );
 }
 
 #[test]

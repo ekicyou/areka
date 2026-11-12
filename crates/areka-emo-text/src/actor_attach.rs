@@ -78,7 +78,7 @@ impl ResolveInputs {
 /// 箱の名前ごとに 1 度だけ呼ぶ。
 ///
 /// 檻は `actor_region_warn_tests.rs`（装着 1 件・4 欄・3 回の同値再追従で 0 件・再構築するが
-/// 領域同値で 0 件・値の変わる再追従で 1 件・遠辺の内で 0 件・縦書きの軸欄）。
+/// 領域同値で 0 件・値の変わる再追従で 1 件・遠辺の内で 0 件・遠辺と等しくて 0 件・縦書きの軸欄）。
 pub(super) fn warn_coarse_wrap_threshold(
     balloon: &str,
     resolved: &ResolvedBalloonText,

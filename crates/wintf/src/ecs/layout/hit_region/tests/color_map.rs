@@ -44,19 +44,6 @@ fn test_color_map_data_hit_test_out_of_bounds() {
     assert_eq!(data.hit_test(5, 5), None);
 }
 
-/// ColorMapData::width()/height() アクセサ（W4b-T: 未検証だった）
-#[test]
-fn test_color_map_data_size_accessors() {
-    let data = ColorMapData {
-        index_map: vec![0u8; 12],
-        region_names: vec![],
-        width: 4,
-        height: 3,
-    };
-    assert_eq!(data.width(), 4);
-    assert_eq!(data.height(), 3);
-}
-
 /// ColorMapData::hit_test: region_id が region_names 範囲外の場合 None
 ///
 /// index_map に region_names.len() を超える ID が混入した場合、
@@ -297,4 +284,130 @@ fn test_color_map_nan_rel_does_not_panic() {
         map.hit_test_region(f32::INFINITY, f32::INFINITY, &entity_size),
         None
     );
+}
+
+// ========================================================================
+// ColorMapData::from_image の読み込み（design の Testing Strategy 15・17・18 番）
+//
+// PNG はワークツリーの target/hit_region_color_map_test/ に image で書く。
+// 透明な画素は使わない（16 番の透明の扱いは hit-id-pass で決める・ここで固定しない）。
+// ========================================================================
+
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
+
+/// 2×2 の不透明な PNG（左上 赤・右上 緑・左下 青・右下 白）を `file_name` で書き、そのパスを返す。
+fn write_rgbw_png(file_name: &std::ffi::OsStr) -> std::path::PathBuf {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/hit_region_color_map_test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(file_name);
+    let mut img = image::RgbImage::new(2, 2);
+    img.put_pixel(0, 0, image::Rgb([255, 0, 0]));
+    img.put_pixel(1, 0, image::Rgb([0, 255, 0]));
+    img.put_pixel(0, 1, image::Rgb([0, 0, 255]));
+    img.put_pixel(1, 1, image::Rgb([255, 255, 255]));
+    img.save_with_format(&path, image::ImageFormat::Png)
+        .unwrap();
+    path
+}
+
+fn rgb_mapping() -> HashMap<(u8, u8, u8), String> {
+    HashMap::from([
+        ((255, 0, 0), "red".to_string()),
+        ((0, 255, 0), "green".to_string()),
+        ((0, 0, 255), "blue".to_string()),
+    ])
+}
+
+/// このスレッドだけの STA で `f` を回す（`com/wic_tests.rs` と同じ・MTA は作らない）。
+fn with_sta<R>(f: impl FnOnce() -> R) -> R {
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().unwrap() };
+    let r = f();
+    unsafe { CoUninitialize() };
+    r
+}
+
+/// 18 番: 各画素の名前（白は対応外で名前なし）と寸法が画像のとおりになる。
+#[test]
+fn from_image_reads_each_pixel_name_and_size() {
+    let path = write_rgbw_png("rgbw.png".as_ref());
+    let data = with_sta(|| ColorMapData::from_image(&path, &rgb_mapping())).unwrap();
+    assert_eq!((data.width(), data.height()), (2, 2));
+    assert_eq!(data.hit_test(0, 0), Some("red"));
+    assert_eq!(data.hit_test(1, 0), Some("green"));
+    assert_eq!(data.hit_test(0, 1), Some("blue"));
+    assert_eq!(data.hit_test(1, 1), None);
+}
+
+/// 15 番: 対応が 255 個を越えると番号が 1 バイトに収まらないので失敗を返す。
+#[test]
+fn from_image_rejects_more_than_255_colors() {
+    let path = write_rgbw_png("rgbw_256.png".as_ref());
+    let mut mapping = rgb_mapping();
+    for i in 0..253u8 {
+        mapping.insert((i, i, 1), format!("extra{i}"));
+    }
+    assert_eq!(mapping.len(), 256);
+    let result = with_sta(|| ColorMapData::from_image(&path, &mapping));
+    assert_eq!(
+        result.map(|_| ()).map_err(|e| e.code()),
+        Err(windows::Win32::Foundation::E_INVALIDARG)
+    );
+}
+
+/// 15 番の境目: ちょうど 255 個は読める。
+#[test]
+fn from_image_accepts_255_colors() {
+    let path = write_rgbw_png("rgbw_255.png".as_ref());
+    let mut mapping = rgb_mapping();
+    for i in 0..252u8 {
+        mapping.insert((i, i, 1), format!("extra{i}"));
+    }
+    assert_eq!(mapping.len(), 255);
+    let data = with_sta(|| ColorMapData::from_image(&path, &mapping)).unwrap();
+    assert_eq!(data.hit_test(0, 0), Some("red"));
+}
+
+/// 画素のバイト数が u32 に収まらない画像は panic せず失敗を返す。
+/// 2×2 の PNG の IHDR の寸法だけを 32768×32768 に書き換える（画素は読む前に断るので小さいまま）。
+#[test]
+fn from_image_returns_err_for_oversize_image() {
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = !0u32;
+        for &b in bytes {
+            crc ^= b as u32;
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xEDB8_8320 & (crc & 1).wrapping_neg());
+            }
+        }
+        !crc
+    }
+    let path = write_rgbw_png("oversize.png".as_ref());
+    let mut png = std::fs::read(&path).unwrap();
+    // 署名 8 バイトの後が IHDR: 長さ 4・型 4・幅 4・高さ 4・…・CRC（型からデータの終わりまで）
+    assert_eq!(&png[12..16], b"IHDR");
+    png[16..20].copy_from_slice(&32768u32.to_be_bytes());
+    png[20..24].copy_from_slice(&32768u32.to_be_bytes());
+    let crc = crc32(&png[12..29]);
+    png[29..33].copy_from_slice(&crc.to_be_bytes());
+    std::fs::write(&path, &png).unwrap();
+    let result = with_sta(|| ColorMapData::from_image(&path, &rgb_mapping()));
+    assert_eq!(
+        result.map(|_| ()).map_err(|e| e.code()),
+        Err(windows::Win32::Foundation::E_INVALIDARG)
+    );
+}
+
+/// 17 番: 対のないサロゲートを含む名の PNG を読める（名を UTF-8 に化かさない）。
+#[test]
+fn from_image_opens_name_with_lone_surrogate() {
+    use std::os::windows::ffi::OsStringExt;
+    let name: Vec<u16> = [0xD800]
+        .into_iter()
+        .chain("rgbw.png".encode_utf16())
+        .collect();
+    let path = write_rgbw_png(&std::ffi::OsString::from_wide(&name));
+    let loaded = with_sta(|| ColorMapData::from_image(&path, &rgb_mapping()));
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(loaded.unwrap().hit_test(0, 0), Some("red"));
 }

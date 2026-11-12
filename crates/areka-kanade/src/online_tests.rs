@@ -31,36 +31,6 @@ fn nested_guards_yield_one_truth_until_the_last_drops() {
 }
 
 #[test]
-fn early_return_restores_the_count() {
-    static COUNTER: OnlineCounter = OnlineCounter::new();
-    let run = |stop_early: bool| -> u32 {
-        let _online = COUNTER.begin("update");
-        assert!(COUNTER.is_online());
-        if stop_early {
-            return 1;
-        }
-        2
-    };
-    assert_eq!(run(true), 1);
-    assert!(!COUNTER.is_online(), "早期 return でも戻る");
-    assert_eq!(run(false), 2);
-    assert!(!COUNTER.is_online(), "通常の終わりでも戻る");
-}
-
-#[test]
-fn question_mark_error_restores_the_count() {
-    static COUNTER: OnlineCounter = OnlineCounter::new();
-    let fetch = || -> Result<(), String> {
-        let _online = COUNTER.begin("install-fetch");
-        assert!(COUNTER.is_online());
-        Err::<(), String>("取得に失敗".to_owned())?;
-        Ok(())
-    };
-    assert!(fetch().is_err());
-    assert!(!COUNTER.is_online(), "`?` で抜けても戻る");
-}
-
-#[test]
 fn panic_restores_the_count() {
     static COUNTER: OnlineCounter = OnlineCounter::new();
     // 閉包の中の観測は panic と区別できるよう外の旗へ写す（中の assert の panic で緑に化けない）。

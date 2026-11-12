@@ -35,7 +35,7 @@ fn arr(x: f32, y: f32, sx: f32, sy: f32, w: f32, h: f32) -> Arrangement {
 
 /// 伝播に必要な 3 コンポーネントをまとめてスポーンするバンドル。
 /// （本番では `Arrangement::on_add` フックが `GlobalArrangement`/`ArrangementTreeChanged` を
-/// 自動挿入するが、フックは `DeferredWorld` 経由のためここでは明示的に同梱して挙動を等価にする。）
+/// 無ければ入れる。ここでは明示的に同梱し、フックはその値を上書きしない。）
 fn node_bundle(a: Arrangement) -> (Arrangement, GlobalArrangement, ArrangementTreeChanged) {
     (a, GlobalArrangement::default(), ArrangementTreeChanged)
 }

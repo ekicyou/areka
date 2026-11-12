@@ -206,12 +206,12 @@ COMオブジェクトをラップするECSコンポーネントは、以下の�
 - **デバイスロスト対応**: 不要（通常の参照カウント管理のみ）
 - **命名**: `XxxResource`サフィックス
 - **例**:
-  - `TextLayoutResource` - テキストレイアウト（Label、TextBlock等で再利用）
+  - `BitmapSourceResource` - WIC で解読済みの画像（D2D の画像はデバイスに依存する `BitmapSourceGraphics` の側で作る）
   - 将来: `TextFormatResource`, `PathGeometryResource`
 
 #### レベル分類
 - **ウィンドウレベル**: Windowエンティティに配置（例: `WindowGraphics`）
-- **ウィジェットレベル**: 個別ウィジェットエンティティに配置（例: `VisualGraphics`, `TextLayoutResource`）
+- **ウィジェットレベル**: 個別ウィジェットエンティティに配置（例: `VisualGraphics`, `BitmapSourceResource`）
 - **共有リソース**: 複数ウィジェットで再利用（例: 将来の`BrushGraphics`、`GeometryResource`）
 
 #### 非COMコンポーネント
@@ -223,7 +223,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `WindowGraphics::target()` → 合成ターゲット型
 - `VisualGraphics::visual()` → visual 型
 - `SurfaceGraphics::surface()` → surface 型
-- `TextLayoutResource::get()` → `Option<&IDWriteTextLayout>`
+- `BitmapSourceResource::source()` → `&IWICBitmapSource`
 
 ### Animation Definition Crate
 **Location**: `/crates/dola/`  

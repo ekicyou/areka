@@ -78,13 +78,27 @@ fn vertical_rotates_dwrite_geometry_clockwise() {
 
 // --- pull_inside ---------------------------------------------------------------------------
 
+/// 面にかかる行の箱（寄せの対象の行）。
+const ON: StrokeRect = StrokeRect {
+    left: 0.0,
+    top: 0.0,
+    right: 1.0,
+    bottom: 1.0,
+};
+
 /// 収まっている線はそのまま。
 #[test]
 fn pull_inside_keeps_a_stroke_that_fits() {
     let r = rect(10.0, 118.0, 90.0, 120.0);
-    assert_eq!(pull_inside(r, WritingMode::HorizontalTb, (200.0, 122.0)), r);
+    assert_eq!(
+        pull_inside(r, ON, WritingMode::HorizontalTb, (200.0, 122.0)),
+        r
+    );
     let v = rect(0.0, 10.0, 2.0, 90.0);
-    assert_eq!(pull_inside(v, WritingMode::VerticalRl, (200.0, 122.0)), v);
+    assert_eq!(
+        pull_inside(v, ON, WritingMode::VerticalRl, (200.0, 122.0)),
+        v
+    );
 }
 
 /// 横書き: 面の下端からはみ出す線は太さを保って `bound − 太さ` へ寄る。行内の軸（x）は動かない。
@@ -92,13 +106,13 @@ fn pull_inside_keeps_a_stroke_that_fits() {
 fn pull_inside_horizontal_moves_overflowing_stroke_up_keeping_thickness() {
     let r = rect(10.0, 121.0, 90.0, 123.0);
     assert_eq!(
-        pull_inside(r, WritingMode::HorizontalTb, (200.0, 122.0)),
+        pull_inside(r, ON, WritingMode::HorizontalTb, (200.0, 122.0)),
         rect(10.0, 120.0, 90.0, 122.0)
     );
     // 上端からはみ出す線は 0 へ寄る。
     let r = rect(10.0, -1.5, 90.0, 0.5);
     assert_eq!(
-        pull_inside(r, WritingMode::HorizontalTb, (200.0, 122.0)),
+        pull_inside(r, ON, WritingMode::HorizontalTb, (200.0, 122.0)),
         rect(10.0, 0.0, 90.0, 2.0)
     );
 }
@@ -110,12 +124,12 @@ fn pull_inside_vertical_moves_along_x_only() {
     let right = rect(199.0, 5.0, 201.0, 85.0);
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         assert_eq!(
-            pull_inside(left, mode, (200.0, 50.0)),
+            pull_inside(left, ON, mode, (200.0, 50.0)),
             rect(0.0, 5.0, 2.0, 85.0),
             "{mode:?}"
         );
         assert_eq!(
-            pull_inside(right, mode, (200.0, 50.0)),
+            pull_inside(right, ON, mode, (200.0, 50.0)),
             rect(198.0, 5.0, 200.0, 85.0),
             "{mode:?}"
         );
@@ -127,13 +141,66 @@ fn pull_inside_vertical_moves_along_x_only() {
 fn pull_inside_thicker_than_bound_aligns_to_zero() {
     let r = rect(10.0, 2.0, 90.0, 7.0);
     assert_eq!(
-        pull_inside(r, WritingMode::HorizontalTb, (200.0, 4.0)),
+        pull_inside(r, ON, WritingMode::HorizontalTb, (200.0, 4.0)),
         rect(10.0, 0.0, 90.0, 5.0)
     );
     let v = rect(2.0, 10.0, 7.0, 90.0);
     assert_eq!(
-        pull_inside(v, WritingMode::VerticalRl, (4.0, 200.0)),
+        pull_inside(v, ON, WritingMode::VerticalRl, (4.0, 200.0)),
         rect(0.0, 10.0, 5.0, 90.0)
+    );
+}
+
+/// 横書き: 行の箱が面にかかる最下行の線は丸ごと面の外でも寄せ（要件 3.11 の形・面 119・行の箱
+/// 90〜118）、行の箱が丸ごと面の外の行の線は寄せない（指摘 14）。行の箱が面の端にちょうど接する行も外。
+#[test]
+fn pull_inside_horizontal_leaves_strokes_of_rows_wholly_outside() {
+    let bound = (240.0, 119.0);
+    let bottom_row = rect(0.0, 90.0, 240.0, 118.0);
+    assert_eq!(
+        pull_inside(
+            rect(0.0, 120.0, 80.0, 122.0),
+            bottom_row,
+            WritingMode::HorizontalTb,
+            bound
+        ),
+        rect(0.0, 117.0, 80.0, 119.0)
+    );
+    for row in [
+        rect(0.0, 120.0, 240.0, 148.0),
+        rect(0.0, 119.0, 240.0, 147.0),
+    ] {
+        let stroke = rect(0.0, row.top + 30.0, 80.0, row.top + 32.0);
+        assert_eq!(
+            pull_inside(stroke, row, WritingMode::HorizontalTb, bound),
+            stroke,
+            "{row:?}"
+        );
+    }
+}
+
+/// 縦書き（右から左）: 面の左端にかかる列の線は寄せ、丸ごと面の左の外の列の線は x＝0 へ寄せない（指摘 14）。
+#[test]
+fn pull_inside_vertical_leaves_strokes_of_columns_wholly_outside() {
+    let bound = (118.0, 200.0);
+    assert_eq!(
+        pull_inside(
+            rect(-2.0, 5.0, 0.0, 85.0),
+            rect(0.0, 0.0, 28.0, 200.0),
+            WritingMode::VerticalRl,
+            bound
+        ),
+        rect(0.0, 5.0, 2.0, 85.0)
+    );
+    let outside = rect(-32.0, 5.0, -30.0, 85.0);
+    assert_eq!(
+        pull_inside(
+            outside,
+            rect(-30.0, 0.0, -2.0, 200.0),
+            WritingMode::VerticalRl,
+            bound
+        ),
+        outside
     );
 }
 
