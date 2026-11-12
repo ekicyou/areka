@@ -9,3 +9,5 @@ mod facade_test;
 mod loop_integration_test;
 #[path = "runtime/loop_offset_test/mod.rs"]
 mod loop_offset_test;
+#[path = "runtime/support.rs"]
+mod support;

@@ -218,7 +218,7 @@
   - _Requirements: 3.1, 5.6_
 
 - [ ] 13. storyboard のランタイムのテスト（#40・#41・#42・#46・#52 の前ぶれ）
-- [ ] 13.1 遷移を作る道具を 1 本にし、終わりの戦略のテストを値で見る形にする（#46・#40）
+- [x] 13.1 遷移を作る道具を 1 本にし、終わりの戦略のテストを値で見る形にする（#46・#40）
   - ランタイムのテストの共通の所に「変数・始め・終わり・長さ」から遷移を作る道具を 1 本置き、文書は組み立ての道具で作る（約 −400 行）
   - 4 つの終わりの戦略のテストを、新しい台本が触らない変数 y と 2 セグメントの台本で、各戦略の値を `expect` で見る形に改める
   - 終わった姿: 写しの道具の定義がランタイムのテストに 1 つだけで（grep）、4 本が緑
@@ -382,3 +382,4 @@
 - 10.1: 値は `TimelineEntry::value_at`（intern を通す補間＋値域へ収める）で配る（evaluate・evaluate_all_for_group・2 つの最終値の取り出し）。Integer は丸めた後に収める。research に無い既存の振る舞い: 有限でも極端に大きい値（from=−1.7e308・to=1.7e308 や巨大なベジェの制御点）で補間が NaN／inf を出し、NaN と値域の無い変数の inf はそのまま配られる（21 のかけ直しで拾う）。
 - 10.2（範囲の外・要起票）: 外のクレート `interpolation` 0.3.0 の `src/ease.rs:96` が `PI_2` を 2π と定義し、Sine 系と Elastic 系の式がそれを使うので、SineIn(0.5)=1.0（正しくは約 0.293）など曲線が前から誤っている。外のクレートはそのまま使う決まりなので、直すなら dola の側で式を書く別の spec（`/kiro-discovery` で起票）。既知の値のテストは誤った値を固定しないよう Sine 系を避けた。`InstanceManager::transition(gid, Playing)` で Paused から戻すと `pause_start` が残って時計が止まる（今は呼び手が無い・resume だけが消す）。
 - 11.2: wintf の檻は log-capture-kit が今のスレッドしか捕まえないので `world.run_system_once(tick_dola_animators)`（本番と同じ関数）で回す。Git Bash から wintf を作ると dbghelp.lib の LNK1181 が出ることがある（PowerShell からなら通る・環境の問題）。表記の揺れ: wintf は「トリガ」、dola は「トリガー」。
+- 13.1: ランタイムのテストの遷移の道具は `tests/runtime/support.rs` の `linear(var, from, to, dur)`（と `float()`）。`DolaDocumentBuilder::build` は全部をコンパイルにかけるので、拒まれる文書は手書きの `DolaDocument {..}`＋validate のまま。`loop_offset_compile.rs` の `doc_with_fade_and_offset`・`loop_offset_doc` は通る文書なのに手書き（任意で組み立ての道具へ）。Cancel と Trim は意図して同じ道（`evaluate_all_for_group`）で、値で見分けられない。

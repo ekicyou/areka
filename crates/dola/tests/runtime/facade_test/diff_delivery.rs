@@ -84,7 +84,6 @@ mod document_replacement {
                 initial: DynamicValue::String("a".to_string()),
             },
         );
-        let opacity_entry = doc.storyboard["x_only"].entry[0].clone();
         let mut swap = doc.storyboard["x_only"].clone();
         swap.entry = vec![
             StoryboardEntry {
@@ -99,15 +98,7 @@ mod document_replacement {
                 ..Default::default()
             },
             // o の後に opacity を長く動かす（競合の的）
-            StoryboardEntry {
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(10.0),
-                    ..Default::default()
-                })),
-                ..opacity_entry
-            },
+            linear("opacity", 0.0, 1.0, 10.0),
         ];
         doc.storyboard.insert("swap".to_string(), swap);
 
@@ -271,24 +262,8 @@ mod change_order {
         let mut builder = DolaDocumentBuilder::new("1.0");
         let mut sb = StoryboardBuilder::new();
         for name in names {
-            builder = builder.variable(
-                name,
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            );
-            sb = sb.entry(StoryboardEntry {
-                variable: Some(name.to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    duration: Some(1.0),
-                    ..Default::default()
-                })),
-                ..Default::default()
-            });
+            builder = builder.variable(name, crate::support::float());
+            sb = sb.entry(linear(name, 0.0, 1.0, 1.0));
         }
         let doc = builder.storyboard("all", sb.build()).build().unwrap();
 

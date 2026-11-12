@@ -3,88 +3,34 @@
 //!
 //! facade 経由でのループ再生エンドツーエンド検証。
 
-use std::collections::BTreeMap;
-
+use crate::support::linear;
 use dola::runtime::{DolaRuntime, EvaluatedValue, RuntimeError, StartResult};
-use dola::{
-    AnimationVariableDef, DolaDocument, StoryboardBuilder, StoryboardEntry, TransitionDef,
-    TransitionRef, TransitionValue,
-};
+use dola::{AnimationVariableDef, DolaDocument, DolaDocumentBuilder, StoryboardBuilder};
 
 // =========================================================================
 // ヘルパー
 // =========================================================================
 
-/// loop_count 付き minimal doc: opacity 0→1 (duration=1.0)
-fn loop_doc(sb_name: &str, loop_count: i32) -> DolaDocument {
-    let mut variable = BTreeMap::new();
-    variable.insert(
-        "opacity".to_string(),
-        AnimationVariableDef::Float {
-            initial: 0.0,
-            min: Some(0.0),
-            max: Some(1.0),
-        },
-    );
-    let sb = StoryboardBuilder::new()
-        .loop_count(loop_count)
-        .entry(StoryboardEntry {
-            variable: Some("opacity".to_string()),
-            transition: Some(TransitionRef::Inline(TransitionDef {
-                from: Some(TransitionValue::Scalar(0.0)),
-                to: Some(TransitionValue::Scalar(1.0)),
-                relative_to: None,
-                easing: None,
-                delay: 0.0,
-                duration: Some(1.0),
-            })),
-            ..Default::default()
-        })
-        .build();
-    let mut storyboard = BTreeMap::new();
-    storyboard.insert(sb_name.to_string(), sb);
-    DolaDocument {
-        schema_version: "1.0".to_string(),
-        variable,
-        transition: BTreeMap::new(),
-        storyboard,
-    }
-}
-
-/// 短い duration (0.05s) の loop doc（短周期テスト用）
-fn short_duration_loop_doc(sb_name: &str, loop_count: i32) -> DolaDocument {
-    let mut variable = BTreeMap::new();
-    variable.insert(
-        "opacity".to_string(),
-        AnimationVariableDef::Float {
-            initial: 0.0,
-            min: Some(0.0),
-            max: Some(1.0),
-        },
-    );
-    let sb = StoryboardBuilder::new()
-        .loop_count(loop_count)
-        .entry(StoryboardEntry {
-            variable: Some("opacity".to_string()),
-            transition: Some(TransitionRef::Inline(TransitionDef {
-                from: Some(TransitionValue::Scalar(0.0)),
-                to: Some(TransitionValue::Scalar(1.0)),
-                relative_to: None,
-                easing: None,
-                delay: 0.0,
-                duration: Some(0.05),
-            })),
-            ..Default::default()
-        })
-        .build();
-    let mut storyboard = BTreeMap::new();
-    storyboard.insert(sb_name.to_string(), sb);
-    DolaDocument {
-        schema_version: "1.0".to_string(),
-        variable,
-        transition: BTreeMap::new(),
-        storyboard,
-    }
+/// loop_count 付き minimal doc: opacity 0→1（長さ `duration`）
+fn loop_doc(sb_name: &str, loop_count: i32, duration: f64) -> DolaDocument {
+    DolaDocumentBuilder::new("1.0")
+        .variable(
+            "opacity",
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: Some(0.0),
+                max: Some(1.0),
+            },
+        )
+        .storyboard(
+            sb_name,
+            StoryboardBuilder::new()
+                .loop_count(loop_count)
+                .entry(linear("opacity", 0.0, 1.0, duration))
+                .build(),
+        )
+        .build()
+        .unwrap()
 }
 
 /// EvaluatedValue から f64 を取り出す
@@ -104,7 +50,7 @@ fn loop_count_1_compatible_with_existing_behavior() {
     let mut rt = DolaRuntime::new();
     let opacity_id = rt.subscribe("opacity");
 
-    let doc = loop_doc("fade", 1);
+    let doc = loop_doc("fade", 1, 1.0);
     rt.load_document(doc).unwrap();
 
     let StartResult { end_time, .. } = rt.start("fade", 0.0).unwrap();
@@ -145,7 +91,7 @@ fn finite_loop_3_cycles() {
     let mut rt = DolaRuntime::new();
     let opacity_id = rt.subscribe("opacity");
 
-    let doc = loop_doc("fade", 3);
+    let doc = loop_doc("fade", 3, 1.0);
     rt.load_document(doc).unwrap();
 
     let StartResult { end_time, .. } = rt.start("fade", 0.0).unwrap();
@@ -210,7 +156,7 @@ fn infinite_loop_continues_until_cancel() {
     let mut rt = DolaRuntime::new();
     let _opacity_id = rt.subscribe("opacity");
 
-    let doc = loop_doc("fade", -1);
+    let doc = loop_doc("fade", -1, 1.0);
     rt.load_document(doc).unwrap();
 
     let StartResult {
@@ -255,7 +201,7 @@ fn multi_loop_batch_processing() {
     let mut rt = DolaRuntime::new();
     let opacity_id = rt.subscribe("opacity");
 
-    let doc = loop_doc("fade", 5);
+    let doc = loop_doc("fade", 5, 1.0);
     rt.load_document(doc).unwrap();
 
     let StartResult { .. } = rt.start("fade", 0.0).unwrap();
@@ -292,7 +238,7 @@ fn pause_during_loop_resumes_correctly() {
     let mut rt = DolaRuntime::new();
     let opacity_id = rt.subscribe("opacity");
 
-    let doc = loop_doc("fade", 3);
+    let doc = loop_doc("fade", 3, 1.0);
     rt.load_document(doc).unwrap();
 
     let StartResult { group_id, .. } = rt.start("fade", 0.0).unwrap();
@@ -364,7 +310,7 @@ fn cancel_during_loop_stops_immediately() {
     let mut rt = DolaRuntime::new();
     let _opacity_id = rt.subscribe("opacity");
 
-    let doc = loop_doc("fade", -1); // 無限ループ
+    let doc = loop_doc("fade", -1, 1.0); // 無限ループ
     rt.load_document(doc).unwrap();
 
     let StartResult { group_id, .. } = rt.start("fade", 0.0).unwrap();
@@ -396,12 +342,12 @@ fn end_time_unified_for_single_and_infinite() {
     let mut rt = DolaRuntime::new();
 
     // loop_count=1
-    let doc1 = loop_doc("fade", 1);
+    let doc1 = loop_doc("fade", 1, 1.0);
     rt.load_document(doc1).unwrap();
     let r1 = rt.start("fade", 0.0).unwrap();
 
     // loop_count=-1
-    let doc2 = loop_doc("fade", -1);
+    let doc2 = loop_doc("fade", -1, 1.0);
     rt.load_document(doc2).unwrap();
     let r2 = rt.start("fade", 0.0).unwrap();
 
@@ -422,7 +368,7 @@ fn end_time_unified_for_single_and_infinite() {
 fn short_duration_infinite_loop_error() {
     let mut rt = DolaRuntime::new();
 
-    let doc = short_duration_loop_doc("fade", -1);
+    let doc = loop_doc("fade", -1, 0.05);
     rt.load_document(doc).unwrap();
 
     let err = rt.start("fade", 0.0).unwrap_err();
@@ -440,7 +386,7 @@ fn short_duration_infinite_loop_error() {
 fn short_duration_finite_loop_allowed() {
     let mut rt = DolaRuntime::new();
 
-    let doc = short_duration_loop_doc("fade", 10);
+    let doc = loop_doc("fade", 10, 0.05);
     rt.load_document(doc).unwrap();
 
     // 有限ループは短周期でもエラーなし

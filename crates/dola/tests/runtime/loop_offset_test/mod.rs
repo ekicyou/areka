@@ -7,6 +7,7 @@
 //! Task 6.4: 巨大テストファイルの分割（挙動非破壊）
 //! serde / validation / compile の 3 群へ分割。リーフ名・内部モジュール名は不変。
 
+use crate::support::linear;
 use dola::*;
 use std::collections::BTreeMap;
 

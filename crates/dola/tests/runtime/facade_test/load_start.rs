@@ -205,18 +205,7 @@ mod start_error_paths {
         );
         let sb = StoryboardBuilder::new()
             .loop_count(loop_count)
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(duration),
-                })),
-                ..Default::default()
-            })
+            .entry(linear("opacity", 0.0, 1.0, duration))
             .build();
         let mut storyboard = BTreeMap::new();
         storyboard.insert(sb_name.to_string(), sb);
@@ -351,18 +340,7 @@ mod time_scale_boundary {
         );
         let sb = StoryboardBuilder::new()
             .time_scale(time_scale)
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(duration),
-                })),
-                ..Default::default()
-            })
+            .entry(linear("opacity", 0.0, 1.0, duration))
             .build();
         let mut storyboard = BTreeMap::new();
         storyboard.insert(sb_name.to_string(), sb);

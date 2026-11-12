@@ -9,63 +9,23 @@ mod conflict_detection {
     #[test]
     fn no_conflict_when_different_variables() {
         // 異なる変数の SB は競合しない
-        let mut variable = BTreeMap::new();
-        variable.insert(
-            "x".to_string(),
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        );
-        variable.insert(
-            "y".to_string(),
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        );
-
-        let sb_x = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("x".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(2.0),
-                })),
-                ..Default::default()
-            })
-            .build();
-
-        let sb_y = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("y".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(2.0),
-                })),
-                ..Default::default()
-            })
-            .build();
-
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert("sb_x".to_string(), sb_x);
-        storyboard.insert("sb_y".to_string(), sb_y);
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable,
-            transition: BTreeMap::new(),
-            storyboard,
-        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", float())
+            .variable("y", float())
+            .storyboard(
+                "sb_x",
+                StoryboardBuilder::new()
+                    .entry(linear("x", 0.0, 100.0, 2.0))
+                    .build(),
+            )
+            .storyboard(
+                "sb_y",
+                StoryboardBuilder::new()
+                    .entry(linear("y", 0.0, 100.0, 2.0))
+                    .build(),
+            )
+            .build()
+            .unwrap();
 
         let mut rt = DolaRuntime::new();
         let _x_id = rt.subscribe("x");
@@ -184,31 +144,20 @@ mod conflict_detection_boundaries {
                     transition: Some(TransitionRef::Inline(TransitionDef {
                         from: Some(TransitionValue::Scalar(0.0)),
                         to: Some(TransitionValue::Scalar(1.0)),
-                        relative_to: None,
-                        easing: None,
                         delay,
                         duration: Some(1.0),
+                        ..Default::default()
                     })),
                     ..Default::default()
                 })
                 .build()
         };
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable: BTreeMap::from([(
-                "x".to_string(),
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            )]),
-            transition: BTreeMap::new(),
-            storyboard: BTreeMap::from([
-                ("a".to_string(), x_sb(InterruptionPolicy::Never, 5.0)),
-                ("b".to_string(), x_sb(InterruptionPolicy::Conclude, 0.0)),
-            ]),
-        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", float())
+            .storyboard("a", x_sb(InterruptionPolicy::Never, 5.0))
+            .storyboard("b", x_sb(InterruptionPolicy::Conclude, 0.0))
+            .build()
+            .unwrap();
         let mut rt = DolaRuntime::new();
         let _x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
@@ -226,47 +175,21 @@ mod conflict_detection_boundaries {
     /// 全インスタンスが affected に含まれる
     #[test]
     fn overlap_with_multiple_instances_affects_all() {
-        let mut variable = BTreeMap::new();
-        for name in ["x", "y"] {
-            variable.insert(
-                name.to_string(),
-                AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                },
-            );
-        }
-
         let make_sb = |vars: &[&str]| {
             let mut b = StoryboardBuilder::new().interruption_policy(InterruptionPolicy::Cancel);
             for v in vars {
-                b = b.entry(StoryboardEntry {
-                    variable: Some(v.to_string()),
-                    transition: Some(TransitionRef::Inline(TransitionDef {
-                        from: Some(TransitionValue::Scalar(0.0)),
-                        to: Some(TransitionValue::Scalar(100.0)),
-                        relative_to: None,
-                        easing: None,
-                        delay: 0.0,
-                        duration: Some(2.0),
-                    })),
-                    ..Default::default()
-                });
+                b = b.entry(linear(v, 0.0, 100.0, 2.0));
             }
             b.build()
         };
-
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert("sb_x".to_string(), make_sb(&["x"]));
-        storyboard.insert("sb_y".to_string(), make_sb(&["y"]));
-        storyboard.insert("sb_xy".to_string(), make_sb(&["x", "y"]));
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable,
-            transition: BTreeMap::new(),
-            storyboard,
-        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", float())
+            .variable("y", float())
+            .storyboard("sb_x", make_sb(&["x"]))
+            .storyboard("sb_y", make_sb(&["y"]))
+            .storyboard("sb_xy", make_sb(&["x", "y"]))
+            .build()
+            .unwrap();
 
         let mut rt = DolaRuntime::new();
         let _x_id = rt.subscribe("x");

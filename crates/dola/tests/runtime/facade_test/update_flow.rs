@@ -117,21 +117,9 @@ mod value_hold {
     /// 1 つのストーリーボードに opacity 0→1（1 秒）と scale 1→2（2 秒）。
     fn short_and_long_doc() -> DolaDocument {
         let mut doc = dual_variable_doc();
-        let entry = |var: &str, from: f64, to: f64, duration: f64| StoryboardEntry {
-            variable: Some(var.to_string()),
-            transition: Some(TransitionRef::Inline(TransitionDef {
-                from: Some(TransitionValue::Scalar(from)),
-                to: Some(TransitionValue::Scalar(to)),
-                relative_to: None,
-                easing: None,
-                delay: 0.0,
-                duration: Some(duration),
-            })),
-            ..Default::default()
-        };
         let sb = StoryboardBuilder::new()
-            .entry(entry("opacity", 0.0, 1.0, 1.0))
-            .entry(entry("scale", 1.0, 2.0, 2.0))
+            .entry(linear("opacity", 0.0, 1.0, 1.0))
+            .entry(linear("scale", 1.0, 2.0, 2.0))
             .build();
         doc.storyboard.clear();
         doc.storyboard.insert("both".to_string(), sb);

@@ -27,18 +27,7 @@ mod compile_integration_tests {
                 loop_count: -1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 loop_offset,
-                entry: vec![StoryboardEntry {
-                    variable: Some("opacity".to_string()),
-                    transition: Some(TransitionRef::Inline(TransitionDef {
-                        from: Some(TransitionValue::Scalar(1.0)),
-                        to: Some(TransitionValue::Scalar(0.0)),
-                        relative_to: None,
-                        easing: None,
-                        delay: 0.0,
-                        duration: Some(0.5),
-                    })),
-                    ..Default::default()
-                }],
+                entry: vec![linear("opacity", 1.0, 0.0, 0.5)],
             },
         );
 
@@ -98,6 +87,7 @@ mod compile_integration_tests {
 // =============================================================
 
 mod e2e_tests {
+    use crate::support::linear;
     use dola::runtime::{DolaRuntime, EvaluatedValue};
     use dola::*;
     use std::collections::BTreeMap;
@@ -122,18 +112,7 @@ mod e2e_tests {
             loop_count,
             interruption_policy: InterruptionPolicy::Conclude,
             loop_offset,
-            entry: vec![StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                ..Default::default()
-            }],
+            entry: vec![linear("opacity", 0.0, 1.0, 1.0)],
         };
         let mut storyboard = BTreeMap::new();
         storyboard.insert(sb_name.to_string(), sb);

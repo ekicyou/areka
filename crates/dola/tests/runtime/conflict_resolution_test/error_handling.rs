@@ -96,78 +96,37 @@ mod conflict_terminated_parent_triggers {
     fn conflict_terminated_parent_trigger_never_fires() {
         // parent: opacity 0→100 (2.0s, kf1 at end=2.0) + trigger at kf1 → child
         // interrupt: opacity を操作（親と競合）
-        let mut variable = BTreeMap::new();
-        variable.insert(
-            "opacity".to_string(),
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        );
-
-        let parent = StoryboardBuilder::new()
-            .interruption_policy(InterruptionPolicy::Cancel)
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(100.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(2.0),
-                })),
-                keyframe: Some("kf1".to_string()),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                trigger_storyboard: Some("child".to_string()),
-                at: Some(KeyframeRef::Single("kf1".to_string())),
-                ..Default::default()
-            })
-            .build();
-
-        let child = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(100.0)),
-                    to: Some(TransitionValue::Scalar(0.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                ..Default::default()
-            })
-            .build();
-
-        let interrupt = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(50.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                ..Default::default()
-            })
-            .build();
-
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert("parent".to_string(), parent);
-        storyboard.insert("child".to_string(), child);
-        storyboard.insert("interrupt".to_string(), interrupt);
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable,
-            transition: BTreeMap::new(),
-            storyboard,
-        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("opacity", float())
+            .storyboard(
+                "parent",
+                StoryboardBuilder::new()
+                    .interruption_policy(InterruptionPolicy::Cancel)
+                    .entry(StoryboardEntry {
+                        keyframe: Some("kf1".to_string()),
+                        ..linear("opacity", 0.0, 100.0, 2.0)
+                    })
+                    .entry(StoryboardEntry {
+                        trigger_storyboard: Some("child".to_string()),
+                        at: Some(KeyframeRef::Single("kf1".to_string())),
+                        ..Default::default()
+                    })
+                    .build(),
+            )
+            .storyboard(
+                "child",
+                StoryboardBuilder::new()
+                    .entry(linear("opacity", 100.0, 0.0, 1.0))
+                    .build(),
+            )
+            .storyboard(
+                "interrupt",
+                StoryboardBuilder::new()
+                    .entry(linear("opacity", 0.0, 50.0, 1.0))
+                    .build(),
+            )
+            .build()
+            .unwrap();
 
         let mut rt = DolaRuntime::new();
         let _opacity_id = rt.subscribe("opacity");
@@ -199,73 +158,31 @@ mod conflict_terminated_parent_triggers {
     fn triggered_child_excludes_parent_from_conflict() {
         // parent: entry1 opacity 0→1 (1.0s, kf1) + entry2 opacity 1→0 (1.0s) → 全体 [0,2]
         //         + trigger at kf1 → child（child は [1,2] で entry2 と重複）
-        let mut variable = BTreeMap::new();
-        variable.insert(
-            "opacity".to_string(),
-            AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            },
-        );
-
-        let parent = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(1.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                keyframe: Some("kf1".to_string()),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(1.0)),
-                    to: Some(TransitionValue::Scalar(0.0)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                ..Default::default()
-            })
-            .entry(StoryboardEntry {
-                trigger_storyboard: Some("child".to_string()),
-                at: Some(KeyframeRef::Single("kf1".to_string())),
-                ..Default::default()
-            })
-            .build();
-
-        let child = StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("opacity".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.5)),
-                    to: Some(TransitionValue::Scalar(0.7)),
-                    relative_to: None,
-                    easing: None,
-                    delay: 0.0,
-                    duration: Some(1.0),
-                })),
-                ..Default::default()
-            })
-            .build();
-
-        let mut storyboard = BTreeMap::new();
-        storyboard.insert("parent".to_string(), parent);
-        storyboard.insert("child".to_string(), child);
-        let doc = DolaDocument {
-            schema_version: "1.0".to_string(),
-            variable,
-            transition: BTreeMap::new(),
-            storyboard,
-        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("opacity", float())
+            .storyboard(
+                "parent",
+                StoryboardBuilder::new()
+                    .entry(StoryboardEntry {
+                        keyframe: Some("kf1".to_string()),
+                        ..linear("opacity", 0.0, 1.0, 1.0)
+                    })
+                    .entry(linear("opacity", 1.0, 0.0, 1.0))
+                    .entry(StoryboardEntry {
+                        trigger_storyboard: Some("child".to_string()),
+                        at: Some(KeyframeRef::Single("kf1".to_string())),
+                        ..Default::default()
+                    })
+                    .build(),
+            )
+            .storyboard(
+                "child",
+                StoryboardBuilder::new()
+                    .entry(linear("opacity", 0.5, 0.7, 1.0))
+                    .build(),
+            )
+            .build()
+            .unwrap();
 
         let mut rt = DolaRuntime::new();
         let _opacity_id = rt.subscribe("opacity");
