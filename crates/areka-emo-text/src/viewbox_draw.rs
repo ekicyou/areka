@@ -41,6 +41,7 @@
 //! スケール一点適用・描画状態は既定のまま両者同一——比較専用オラクル（[`DrawExecutor`]）との
 //! byte 等価はこの構造共有に載る。
 
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -49,7 +50,9 @@ use areka_emo_present::balloon_marker::MarkerImage;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS, ID2D1Bitmap1, ID2D1DeviceContext,
+    ID2D1SolidColorBrush,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{IDWriteFactory2, IDWriteTextFormat};
 use wintf::com::d2d::D2D1DeviceExt;
 use wintf::ecs::GraphicsCore;
@@ -126,6 +129,16 @@ pub struct ViewboxExecutor {
     /// 行の中の印の絵の D2D の絵（絵の `Arc` の同一性を鍵に 1 枚だけ覚える・毎フレーム作り直さない）。
     /// 作れなかった絵は `None` を覚える（同じ絵で作り直して `error!` を毎フレーム残さない・指摘 36）。
     marker_bitmap: Option<(Arc<MarkerImage>, Option<ID2D1Bitmap1>)>,
+    /// 既定の文字色・選択肢の帯と字の色・印の丸の塗りブラシ（色の 4 成分のビットが鍵・毎フレーム
+    /// 作り直さない・指摘 31）。[`BrushCache`] と別の欄なのは、それを通すと範囲の呼び出しの勘定に
+    /// 入り、既定だけの行で 0 件の檻（要件 14.2）が鳴るため。台詞の切れ目で空になる。
+    solid_brushes: HashMap<[u32; 4], ID2D1SolidColorBrush>,
+    /// 描き先の bitmap（面のテクスチャごと・front/back の 2 枚まで・毎フレーム作り直さない・指摘 31）。
+    /// テクスチャを握るので同じポインタが別の面に使い回されることは無い。面が作り直されると古い組は押し出される。
+    targets: Vec<(ID3D11Texture2D, ID2D1Bitmap1)>,
+    /// テスト観測用: 塗りブラシと描き先の bitmap を実際に作った回数。
+    #[cfg(test)]
+    created: (usize, usize),
     /// 決定論観測統計（常時コンパイル・[`Self::stats`] で読む）。
     stats: DrawStats,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の
@@ -190,6 +203,10 @@ impl ViewboxExecutor {
             fonts,
             brushes: BrushCache::default(),
             marker_bitmap: None,
+            solid_brushes: HashMap::new(),
+            targets: Vec::new(),
+            #[cfg(test)]
+            created: (0, 0),
             stats: DrawStats::default(),
             seam_warned: false,
             #[cfg(test)]
@@ -262,6 +279,7 @@ impl ViewboxExecutor {
         self.line_store.clear();
         self.fonts.forget_talk();
         self.brushes.clear();
+        self.solid_brushes.clear();
     }
 
     /// 1 フレームの実行。戻り値＝変化有無（`true` なら呼び手が present する・R1.1/R3.1）。

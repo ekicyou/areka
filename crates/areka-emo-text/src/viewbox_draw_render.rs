@@ -12,6 +12,7 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_ALIASED, D2D1_ELLIPSE, D2D1_INTERPOLATION_MODE_LINEAR, ID2D1Bitmap1,
     ID2D1Brush, ID2D1Image, ID2D1SolidColorBrush,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_RANGE, IDWriteTextFormat, IDWriteTextLayout,
 };
@@ -145,7 +146,7 @@ impl ViewboxExecutor {
 
             // Clear cue 適用——back を全域透明 Clear（描画 0 件）して flip。
             FramePlan::FullClear => {
-                let target = create_d2d_target_bitmap(&self.dc, surface.back_tex())?;
+                let target = self.target_for(surface.back_tex())?;
                 unsafe { self.dc.SetTarget(&target) };
                 unsafe { self.dc.BeginDraw() };
                 self.dc.clear(None);
@@ -266,14 +267,10 @@ impl ViewboxExecutor {
                     let hover = if let Some(choice) = choice
                         && let Some(paint) = choice.highlight
                     {
-                        let fill = self
-                            .dc
-                            .create_solid_color_brush(&color_f(paint.fill), None)
-                            .map_err(device_err("CreateSolidColorBrush(fill)"))?;
-                        let text_brush = self
-                            .dc
-                            .create_solid_color_brush(&color_f(paint.text), None)
-                            .map_err(device_err("CreateSolidColorBrush(text)"))?;
+                        let fill =
+                            self.solid_brush(color_f(paint.fill), "CreateSolidColorBrush(fill)")?;
+                        let text_brush =
+                            self.solid_brush(color_f(paint.text), "CreateSolidColorBrush(text)")?;
                         let mut rects: Vec<D2D_RECT_F> = Vec::new();
                         for seg in &choice.segments {
                             if Some(seg.ordinal) != choice.hovered {
@@ -365,12 +362,8 @@ impl ViewboxExecutor {
                     ));
                 }
 
-                let (r, g, b) = font.color;
-                let brush = self
-                    .dc
-                    .create_solid_color_brush(&color_f((r, g, b)), None)
-                    .map_err(device_err("CreateSolidColorBrush"))?;
-                let target = create_d2d_target_bitmap(&self.dc, surface.back_tex())?;
+                let brush = self.solid_brush(color_f(font.color), "CreateSolidColorBrush")?;
+                let target = self.target_for(surface.back_tex())?;
 
                 // ── Phase 2（描画・ダーティ矩形限定）: この区間の D2D 呼び出しは不可謬（戻り値
                 // なし）で、失敗は EndDraw に集約される。SetTarget は成否によらず必ず解除する。 ──
@@ -581,10 +574,7 @@ impl ViewboxExecutor {
                         a: DOT_OPACITY,
                         ..color_f(look.color)
                     };
-                    let fill = self
-                        .dc
-                        .create_solid_color_brush(&color, None)
-                        .map_err(device_err("CreateSolidColorBrush(印の丸)"))?;
+                    let fill = self.solid_brush(color, "CreateSolidColorBrush(印の丸)")?;
                     let ellipse = D2D1_ELLIPSE {
                         point: Vector2 { X: x, Y: y },
                         radiusX: radius,
@@ -608,6 +598,47 @@ impl ViewboxExecutor {
             }
         }
         Ok(paints)
+    }
+
+    /// その色の塗りブラシ（覚えていれば同じものを返す・無ければ作って覚える）。生成の失敗は
+    /// log-first（`device_err`）でフレームを見送る。範囲の呼び出しの勘定には入れない（指摘 31）。
+    fn solid_brush(
+        &mut self,
+        color: D2D1_COLOR_F,
+        what: &'static str,
+    ) -> Result<ID2D1SolidColorBrush, TextLayerError> {
+        let key = [color.r, color.g, color.b, color.a].map(f32::to_bits);
+        if let Some(brush) = self.solid_brushes.get(&key) {
+            return Ok(brush.clone());
+        }
+        let brush = self
+            .dc
+            .create_solid_color_brush(&color, None)
+            .map_err(device_err(what))?;
+        #[cfg(test)]
+        {
+            self.created.0 += 1;
+        }
+        self.solid_brushes.insert(key, brush.clone());
+        Ok(brush)
+    }
+
+    /// 面のテクスチャ（back）を巻いた描き先の bitmap（同じテクスチャなら覚えたものを返す）。
+    /// front/back の 2 枚を覚え、3 枚目（面の作り直し）は古い方を押し出す（指摘 31）。
+    fn target_for(&mut self, tex: &ID3D11Texture2D) -> Result<ID2D1Bitmap1, TextLayerError> {
+        if let Some((_, target)) = self.targets.iter().find(|(held, _)| held == tex) {
+            return Ok(target.clone());
+        }
+        let target = create_d2d_target_bitmap(&self.dc, tex)?;
+        #[cfg(test)]
+        {
+            self.created.1 += 1;
+        }
+        if self.targets.len() == 2 {
+            self.targets.remove(0);
+        }
+        self.targets.push((tex.clone(), target.clone()));
+        Ok(target)
     }
 
     /// 印の絵の D2D の絵（同じ `Arc` なら覚えた結果を返す）。作れないときは `None`

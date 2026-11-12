@@ -1,5 +1,5 @@
 use super::test_support::{
-    RenderPair, Rig, apply_fixture_script, diff_rows, geo_model, glyph_items, layout_frame,
+    RenderPair, Rig, apply_fixture_script, build, diff_rows, geo_model, glyph_items, layout_frame,
     opaque_count, state_frame,
 };
 use crate::draw::{DWriteMetrics, ResolvedFont};
@@ -159,5 +159,43 @@ fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
     assert!(
         inks[1] > 0 && inks[1] < inks[0],
         "墨の画素の数 visible 6 → 2 が {inks:?}（2 字の墨が在り、6 字より少ないはず）"
+    );
+}
+
+/// 指摘 31: 字送りのフレームごとに既定の文字色のブラシと描き先の bitmap を作らない。
+/// ブラシは台詞のあいだ 1 つ（`request_clear` で捨てて次の台詞で 1 つ作る）、描き先は
+/// front/back の 2 枚だけ。見本と画素が一致することも毎フレーム確かめる（振る舞いは変えない）。
+#[test]
+fn typing_frames_reuse_default_brush_and_target_bitmaps() {
+    let mut rig = Rig::new();
+    let image = (320u32, 122u32);
+    let mut pair = RenderPair::attach(&mut rig, image, 1.0);
+    let mode = WritingMode::HorizontalTb;
+    let model = geo_model(Some(28));
+    let font = ResolvedFont::resolve(&model);
+    let region = TextRegion::resolve(&model, image, mode);
+    let contract = ScaleContract::new(1.0, None);
+    let frame = |pair: &mut RenderPair, text: &str| {
+        let (canvas, window) = build(&glyph_items(text), &region, mode, font.height);
+        let (ob, vb) = pair.render(text, &canvas, &window, &font, mode, &contract);
+        assert!(opaque_count(&ob) > 0, "{text}: 見本の面に墨が無い");
+        assert_eq!(ob, vb, "{text}: 見本と viewbox の画素が一致する");
+    };
+    for text in ["あ", "あい", "あいう", "あいうえ", "あいうえお"] {
+        frame(&mut pair, text);
+    }
+    assert_eq!(
+        pair.viewbox.created,
+        (1, 2),
+        "5 フレームでブラシは 1 つ・描き先は front/back の 2 枚だけ作る"
+    );
+    pair.viewbox.request_clear();
+    for text in ["か", "かき"] {
+        frame(&mut pair, text);
+    }
+    assert_eq!(
+        pair.viewbox.created,
+        (2, 2),
+        "台詞の切れ目でブラシを捨てて 1 つ作り直し、描き先は作り直さない"
     );
 }

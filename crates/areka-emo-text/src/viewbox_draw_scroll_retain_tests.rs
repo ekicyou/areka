@@ -131,7 +131,7 @@ struct ScrollRig {
     contract: ScaleContract,
     mode: WritingMode,
     /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
-    _rig: Rig,
+    rig: Rig,
 }
 
 impl ScrollRig {
@@ -156,8 +156,13 @@ impl ScrollRig {
             metrics,
             contract: ScaleContract::new(1.0, None),
             mode,
-            _rig: rig,
+            rig,
         }
+    }
+
+    /// 器はそのままに、新しい二面と実行部へ付け替える（組み合わせごとに D3D の器を作り直さない・指摘 31）。
+    fn fresh_pair(&mut self) {
+        self.pair = RenderPair::attach(&mut self.rig, IMAGE, 1.0);
     }
 
     /// `visible` 字ぶんを見せた 1 フレームを両方式へ流し、読み戻しと可視窓を返す。
@@ -296,6 +301,7 @@ fn scroll_frame_sweep_matches_full_redraw_oracle() {
     let ratios = [1.0f32, 1.5, 2.0];
     let strides = [1usize, 2, 5];
     let mut scrolled_total = 0usize;
+    let mut rig = ScrollRig::new();
 
     for ratio in ratios {
         for stride in strides {
@@ -308,7 +314,7 @@ fn scroll_frame_sweep_matches_full_redraw_oracle() {
                 items.extend(glyph_items(body));
                 total += cluster_count(body);
             }
-            let mut rig = ScrollRig::new();
+            rig.fresh_pair();
             let (w, _h) = rig.pair.oracle_surface.size();
             let mut visible = 0usize;
             while visible < total {

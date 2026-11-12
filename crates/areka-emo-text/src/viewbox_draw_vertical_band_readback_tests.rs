@@ -5,6 +5,8 @@
 //! 解決で「游ゴシック」に引ける）で読み戻して見る。`viewbox_draw_choice_hover_tests.rs` が
 //! 1,000 行に届くので兄弟のファイルへ分けた（2.2 の `viewbox_draw_vertical_band_scroll_tests.rs` と同じ扱い）。
 
+use std::rc::Rc;
+
 use super::ViewboxExecutor;
 use super::test_support::{
     FILL_BGRA, R_CHOICES, R_FONTS, R_LATIN, Rig, bgra_x_span, bgra_y_span, block_axis_ink_span,
@@ -31,6 +33,7 @@ use wintf::com::dwrite::{DWriteFactoryExt, dwrite_create_factory};
 fn vertical_band_case(
     rig: &mut Rig,
     factory: &IDWriteFactory2,
+    fonts: &Rc<FontCatalog>,
     (name, expect): (&str, &str),
     size: u32,
     mode: WritingMode,
@@ -40,9 +43,7 @@ fn vertical_band_case(
     let mut red = Vec::new();
     let model = live_diff_model_font(Some(name), Some(size));
     let font = ResolvedFont::resolve(&model);
-    let picked = FontCatalog::new(factory)
-        .expect("FontCatalog 生成")
-        .pick(&font);
+    let picked = fonts.pick(&font);
     let tag = format!("[{} {size} {mode:?} k={k}]", picked.name);
     // 5.3: 候補列が本番の解決で引けた書体の名前を固定する（5.1 で確かめた名前）。
     if picked.name != expect {
@@ -114,7 +115,8 @@ fn vertical_band_case(
     let draw = |rig: &mut Rig, canvas: &ContentCanvas| -> (Vec<u8>, u32, u32, i32) {
         let mut surface = rig.attach(image, k);
         let (w, h) = surface.size();
-        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        let mut exec = ViewboxExecutor::new_shared(&rig.core, Rc::clone(fonts))
+            .expect("ViewboxExecutor::new_shared 失敗");
         exec.render(canvas, &window, &font, mode, &contract, &mut surface)
             .expect("縦書きの読み戻しの描画に失敗");
         let px = surface.read_back().expect("read_back 失敗");
@@ -300,12 +302,16 @@ fn vertical_band_case(
 fn vertical_band_covers_column_ink_readback() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("DWrite factory");
     let mut rig = Rig::new();
+    // 書体の台帳は 1 つを全部の組と描き手で使い回す（描くたびに作り直さない・指摘 31）。
+    let fonts = Rc::new(FontCatalog::new(&factory).expect("FontCatalog 生成"));
     let mut red = Vec::new();
     for font in R_FONTS {
         for size in [20u32, 28] {
             for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
                 for k in [1.0f32, 2.0] {
-                    red.extend(vertical_band_case(&mut rig, &factory, font, size, mode, k));
+                    red.extend(vertical_band_case(
+                        &mut rig, &factory, &fonts, font, size, mode, k,
+                    ));
                 }
             }
         }
