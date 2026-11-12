@@ -58,7 +58,7 @@ struct PendingSegment<'d> {
 /// # Postconditions
 /// - 成功時: CompiledStoryboard 内の全セグメントは絶対時刻を持ち、
 ///   各タイムラインのセグメントは時刻順ソート済みで重複なし
-/// - 失敗時: Vec<DolaError> にすべてのエラーを収集して返却
+/// - 失敗時: `Vec<DolaError>` にすべてのエラーを収集して返却
 ///
 /// # Invariants
 /// - time_scale はセグメント時刻に事前適用されない

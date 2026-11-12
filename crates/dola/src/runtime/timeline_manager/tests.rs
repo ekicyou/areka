@@ -348,6 +348,32 @@ fn instant_segment_does_not_hide_later_segments() {
 }
 
 #[test]
+fn gap_between_segments_holds_previous_end_value() {
+    // 隙間で次のセグメントの from を出すと、隙間の中の即時のセグメント（5）が一度も出なかった
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(
+        1,
+        &make_compiled_with_segments(
+            "x",
+            vec![
+                float_segment(0.0, 1.0, 0.0, 1.0),
+                float_segment(2.0, 2.0, 1.0, 5.0),
+                float_segment(3.0, 4.0, 7.0, 8.0),
+            ],
+        ),
+    );
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+    for (t, expected) in [(1.5, 1.0), (2.5, 5.0)] {
+        assert_eq!(
+            mgr.evaluate("x", t, &instances),
+            Some(EvaluatedValue::Float(expected)),
+            "t={t}"
+        );
+    }
+}
+
+#[test]
 fn not_yet_started_instance_does_not_override_started_one() {
     // 親（gid 1）が x を 0→1 に 2 秒・子（gid 2）は 1.5 秒に始まって x を 5→6。
     // 始まる前の子が group_id の大きさで勝つと、t=1.0 で x が子の from の 5 に跳んでいた

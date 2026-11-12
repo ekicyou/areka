@@ -285,11 +285,16 @@ fn evaluate_segments(
     let last_seg = segments.last()?;
 
     // アクティブなセグメントを探す
+    let mut prev: Option<&CompiledSegment> = None;
     for seg in segments {
         if effective_time < seg.start_time {
-            // まだこのセグメントに到達していない → from_value を返す
-            return Some(entry.value_at(seg, 0.0, intern_pool));
+            // まだこのセグメントに到達していない。隙間なら直前の終わりの値を保ち（dola-compiled-transition 要件 1.2）、最初の前なら from
+            return Some(match prev {
+                Some(p) => entry.value_at(p, 1.0, intern_pool),
+                None => entry.value_at(seg, 0.0, intern_pool),
+            });
         }
+        prev = Some(seg);
 
         let duration = seg.end_time - seg.start_time;
         if duration > 0.0 && effective_time < seg.end_time {

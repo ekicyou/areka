@@ -57,6 +57,22 @@ fn extreme_finite_endpoints_interpolate_exactly() {
     }
 }
 
+/// from と to が同じ「保つ」遷移は、途中のどの t でもちょうど from（重みの和は丸めで 1 ulp ずれ、空振りの差分を出す）
+#[test]
+fn hold_segment_stays_exactly_at_value() {
+    for v in [100.0, 0.1, 0.3, 255.0] {
+        let seg = make_segment(v, v, None);
+        for i in 0..=1000 {
+            let t = i as f64 / 1000.0;
+            assert_eq!(
+                Interpolator::interpolate(&seg, &VariableTypeHint::Float, t),
+                EvaluatedValue::Float(v),
+                "{v} @ {t}"
+            );
+        }
+    }
+}
+
 #[test]
 fn clamp_below_zero() {
     let seg = make_segment(0.0, 100.0, None);
@@ -554,7 +570,7 @@ fn named_easings_known_values() {
     }
 }
 
-/// Sine 系と Elastic 系は外のクレートの PI_2（2π）を使わず π/2 の式で出す（R1-03）
+/// Sine 系と Elastic 系は外のクレートの PI_2（2π）を使わず π/2 の式で出す
 #[test]
 fn sine_and_elastic_easings_known_values() {
     for (easing, t, expected) in [

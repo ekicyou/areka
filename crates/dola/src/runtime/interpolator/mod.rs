@@ -119,7 +119,11 @@ impl Interpolator {
 }
 
 /// `from + (to − from)·t` は有限の両端でも差があふれて NaN／inf になり、t=1 で to にならないので、重みの和で出す。
+/// 同じ両端は丸めで 1 ulp ずれるので、そのまま返す。
 fn lerp(from: f64, to: f64, t: f64) -> f64 {
+    if from == to {
+        return from;
+    }
     from * (1.0 - t) + to * t
 }
 

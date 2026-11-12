@@ -436,7 +436,7 @@ fn process_loops_infinite_with_offset_applies_each_loop() {
     assert_eq!(inst.end_time, 7.0);
 }
 
-/// [0,1] の外へ出るイージングでも待ちは [min, max] に収まる（R1-02・負の待ちで tick が戻らない）
+/// [0,1] の外へ出るイージングでも待ちは [min, max] に収まる（負の待ちで tick が戻らない）
 #[test]
 fn generate_delay_clamps_overshooting_easing_into_range() {
     let wild_bezier = EasingFunction::Parametric(crate::easing::ParametricEasing::CubicBezier {

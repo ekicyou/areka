@@ -1,6 +1,6 @@
-//! TimedSchedule<T> — 0 ベース相対オフセットの汎用配信エンジン。
+//! `TimedSchedule<T>` — 0 ベース相対オフセットの汎用配信エンジン。
 //!
-//! Entry<T> により Payload / Barrier を型レベルで 2 種分離する。
+//! `Entry<T>` により Payload / Barrier を型レベルで 2 種分離する。
 //! `tick()` + `ready()` の 2 フェーズ API で `DolaRuntime` の `tick()` + `last_result()` と対称。
 
 use std::fmt::Debug;
@@ -54,7 +54,7 @@ impl<T> Entry<T> {
 
 /// 0 ベース相対オフセットの汎用配信エンジン。
 ///
-/// Entry<T> により Payload / Barrier を型レベルで 2 種分離する。
+/// `Entry<T>` により Payload / Barrier を型レベルで 2 種分離する。
 /// ジェネリクス T は Payload(f64, T) のみに適用される。
 /// Barrier(BarrierKind) は T に関わらず固定型。
 #[derive(Debug)]

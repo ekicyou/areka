@@ -124,9 +124,9 @@ fn relative_end(cues: &[Cue]) -> f64 {
 /// - **絶対アンカーの継承**: スケジュールの `start_time` に [`CueSheet::absolute_start_time`]
 ///   を用いる（dispatch 刻印前は 0.0）。各 cue の相対 `start_time` はエントリオフセットとして
 ///   **そのまま**保存する（min 正規化しない＝先頭・単独の待ちが消えない）。
-/// - **同一 at の FIFO**: [`CueSheet::cues`] の記述順に 1 件ずつ [`TimedSchedule::insert`] したのと
+/// - **同一 at の FIFO**: [`CueSheet::cues`] の記述順に 1 件ずつ `insert` したのと
 ///   同じ並びを [`TimedSchedule::insert_each`] で作る。
-/// - **duration の clamp**: 各 cue の duration を [`clamp_duration`] で有限・非負へ丸め、
+/// - **duration の clamp**: 各 cue の duration を `clamp_duration` で有限・非負へ丸め、
 ///   その**同一値**を配送エンベロープ [`TalkCue::duration`] と占有 horizon の両方へ用いる。
 /// - **占有 horizon の算出**: 全 cue の `max(start_time + clamp(duration))`（空台本は 0.0）を
 ///   相対 horizon としてスケジュールへ保持し、[`TimedSchedule::is_completed`] が配送完了でなく
