@@ -279,11 +279,10 @@ fn text_format_honors_explicit_name_and_height() {
     }
 }
 
-/// フォント生成失敗経路（R4.2・Error Categories）: 生成失敗→warn＋既定フォント再試行→
-/// なお失敗は error!＋Device Err（panic しない）。fontsize 非正値は DirectWrite が
-/// 決定論的に拒否するため、再試行でも失敗する入力として経路全体を檻化する。
+/// 書式の作り失敗（指摘 35）: 既定の書体で作り直さず、`error!`＋`Device` を 1 件だけ出す
+/// （panic しない）。大きさ 0 は DirectWrite が決定論的に断る（書体の在る無しは確かめない）。
 #[test]
-fn unusable_format_surfaces_device_error_after_default_retry() {
+fn unusable_format_surfaces_one_device_error_without_retry() {
     let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
     // resolve は正値を保証するため、失敗経路は手組みの縮退値で叩く（crate 内テスト特権）。
     let mut resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
@@ -296,11 +295,7 @@ fn unusable_format_surfaces_device_error_after_default_retry() {
         }
         other => panic!("Device エラーを期待したが {other:?}"),
     }
-    assert_eq!(
-        warns, 1,
-        "初回失敗→既定フォント再試行の warn がちょうど 1 回"
-    );
-    assert_eq!(errors, 1, "再試行失敗→error! がちょうど 1 回");
+    assert_eq!((warns, errors), (0, 1), "記録は error! の 1 件だけ");
 }
 
 // ── task 6.2 R4.5: DWriteMetrics——計測専用 probe TextLayout（probe 規約） ──
@@ -711,26 +706,26 @@ fn at_prefixed_font_name_generation_is_absent_from_production_source() {
     );
 }
 
-/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前」か
-/// 「既定フォントへの戻し」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+/// 要件 6.3: DirectWrite へ渡るフォント family 名は「台本／バルーン定義が書いた名前を台帳が
+/// 解いた顔」だけ——縦書き専用の差し替え先も、既定の書体での作り直し（指摘 35 で消した）も無い。
 ///
 /// **家族名の入口は 2 つある**（タスク 6.4）:
 ///
 /// 1. `draw.rs::try_create_format`（描画・計測共用の束縛書式）——バルーン定義の
-///    束縛の顔（`FontCatalog::pick` の解決）を渡すか、生成失敗時に `DEFAULT_FONT_NAME` で再試行するか。
+///    束縛の顔（`FontCatalog::pick` の解決）を渡す。
 /// 2. `draw_metrics.rs::probe_format_for`（計測鍵ごとの試験用書式）——計測鍵の候補列を
 ///    `FontCatalog::face_or` で解決した顔か、全滅時の束縛の顔を共用の `try_create_format` へ。
 ///
 /// どちらの入口も「書かれた名前」か「既定名」しか通さないので、`@` 前置のような
 /// 別名生成が入り込む余地が無い。**入口を増やしたらこの檻も広げること。**
 #[test]
-fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
+fn font_family_reaches_directwrite_only_as_the_author_name() {
     let src = draw_rs();
-    // family 名が DirectWrite へ渡る唯一の窓口は try_create_format。定義 1＋呼出 2 で 3。
+    // family 名が DirectWrite へ渡る唯一の窓口は try_create_format。定義 1＋呼出 1 で 2。
     assert_eq!(
         count(&src, "try_create_format"),
-        3,
-        "try_create_format の出現が 1 定義＋2 呼出から動いた——family 名の入口が増減した疑い"
+        2,
+        "try_create_format の出現が 1 定義＋1 呼出から動いた——family 名の入口が増減した疑い"
     );
     let body = top_level_fn_source(&src, "pub fn create_text_format(");
     // 切り出しが本物であることの確認（範囲取得が壊れていたらここで落ちる）。
@@ -740,16 +735,16 @@ fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
     );
     assert_eq!(
         count(body, "try_create_format("),
-        2,
-        "呼出 2 箇所はいずれも create_text_format の内側にある"
+        1,
+        "呼出 1 箇所は create_text_format の内側にある"
     );
     assert!(
         body.contains("try_create_format(factory, &font.face, bold, italic, font.height)"),
         "1 回目は台帳が解決した束縛の顔をそのまま渡す（別名へ差し替えない）"
     );
     assert!(
-        body.contains("(DEFAULT_FONT_NAME);\n            try_create_format(factory, &retry,"),
-        "2 回目は生成失敗時の既定フォント再試行のみ（書字方向とは無関係な経路）"
+        !body.contains("DEFAULT_FONT_NAME"),
+        "既定の書体での作り直しが戻った（指摘 35: 同じ大きさで作り直しても断られる）"
     );
     // 既定フォント名リテラルは宣言 1 箇所だけ——縦書き専用の差し替え先が別に
     // 埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、

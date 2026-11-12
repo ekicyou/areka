@@ -36,6 +36,7 @@ use wintf::com::dwrite::{DWriteTextLayoutExt, dwrite_create_factory};
 
 use super::super::test_support::{
     PASTA_FONT_NAMES, default_metrics, empty_font, face_of, model_with_font, require_yu_gothic,
+    with_log_cage,
 };
 use super::super::{LineLayoutStore, ResolvedFont, create_text_format};
 use super::DWriteMetrics;
@@ -206,6 +207,31 @@ fn a_new_talk_rebuilds_non_default_formats_and_keeps_default_advances() {
         2,
         "次の台詞では既定でない鍵の試験用書式を作り直す"
     );
+}
+
+/// 作れない鍵（高さ 0＝DirectWrite が断る）は失敗を覚え、2 回測っても `error!` は 1 件で縮退の
+/// 字幅を返す。次の台詞の切れ目で 1 度だけ試し直す（指摘 12・記録は台詞ごとに高々 1 回）。
+#[test]
+fn an_unbuildable_key_logs_one_error_per_talk() {
+    let m = metrics();
+    let broken = look_with(|l| l.height = 0.0);
+    let (advances, _, errors) = with_log_cage(|| {
+        [
+            m.advance_styled("あ", &broken),
+            m.advance_styled("い", &broken),
+        ]
+    });
+    assert_eq!(
+        advances,
+        [0.0, 0.0],
+        "縮退の字幅（その見た目の大きさ 0）で続ける"
+    );
+    assert_eq!(errors, 1, "覚えた失敗は台詞のあいだ試し直さない");
+    assert_eq!(m.cached_probe_count(), 0, "失敗は成功の数に数えない");
+
+    m.fonts().forget_talk();
+    let (_, _, errors) = with_log_cage(|| m.advance_styled("あ", &broken));
+    assert_eq!(errors, 1, "次の台詞では試し直す");
 }
 
 // ────────────────────────── §4 計測値＝装飾入りで組んだ行の送り量（R11.3／R15.5）

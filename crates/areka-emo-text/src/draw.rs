@@ -26,7 +26,7 @@
 //!   wintf `typewriter_layout.rs` 実証済みレシピの **lift（複製）**——wintf の
 //!   テキスト widget system へは依存しない（steering 記憶 areka-emo-owns-drawing-wintf-lift）。
 //! - [`create_text_format`]: 上記 2 つを実 `IDWriteTextFormat` へ焼き込む
-//!   （生成失敗は warn→既定フォント再試行→なお失敗は `Device` エラー・R4.2）。
+//!   （生成失敗は `error!`＋`Device` エラー・既定の書体で作り直さない＝指摘 35）。
 //! - 無効表示の層（`disable.font.*`）は [`ResolvedFont::looks`] で**実体化済み**
 //!   （要件 4.4——`\f[disable]` の戻し先）。行単位の文字装飾（[`TextEffects`]）だけが
 //!   **型シームのみ・実挙動なし**のまま残る（予約）。
@@ -392,8 +392,8 @@ impl DirectionRecipe {
 /// 顔は `font.face`（[`FontCatalog::pick`] が解決した顔）、太字・斜体は既定の見た目
 /// （バルーン定義の `font.bold`／`font.italic`）を [`FontFace`] の規則で重ねる（要件 4.8／4.9）。
 ///
-/// フォント生成失敗（Error Categories・R4.2）: `warn!`→[`DEFAULT_FONT_NAME`] で同じ太字・斜体のまま再試行→
-/// なお失敗は `error!`＋[`TextLayerError::Device`]（panic しない）。
+/// フォント生成失敗（Error Categories）: `error!`＋[`TextLayerError::Device`] を 1 件（panic しない・
+/// 既定の書体での作り直しはしない＝指摘 35）。
 /// task 6.2 の計測専用 probe layout も**同一のこの format 生成経路**を用いる前提
 /// （probe 規約: 描画と同一 TextFormat）。
 pub fn create_text_format(
@@ -402,29 +402,22 @@ pub fn create_text_format(
     mode: WritingMode,
 ) -> Result<IDWriteTextFormat, TextLayerError> {
     let (bold, italic) = (font.looks.default.bold, font.looks.default.italic);
-    let format = match try_create_format(factory, &font.face, bold, italic, font.height) {
-        Ok(format) => format,
-        Err(e) => {
-            warn!(
+    // 作り直しはしない（指摘 35）: CreateTextFormat は書体の在る無しを確かめず、顔は pick が
+    // 解いてある。断られるのは大きさが不正なときだけで、同じ大きさで作り直しても断られる。
+    let format =
+        try_create_format(factory, &font.face, bold, italic, font.height).map_err(|e| {
+            let hresult = e.code().0;
+            tracing::error!(
+                hresult,
                 font_name = font.name.as_str(),
-                hresult = e.code().0,
-                "TextFormat 生成に失敗——既定フォント ＭＳ ゴシック で再試行する"
+                font_height = font.height,
+                "TextFormat 生成に失敗"
             );
-            let retry = FontFace::regular(DEFAULT_FONT_NAME);
-            try_create_format(factory, &retry, bold, italic, font.height).map_err(|e| {
-                let hresult = e.code().0;
-                tracing::error!(
-                    hresult,
-                    font_height = font.height,
-                    "既定フォントでも TextFormat 生成に失敗"
-                );
-                TextLayerError::Device {
-                    hresult,
-                    context: "CreateTextFormat",
-                }
-            })?
-        }
-    };
+            TextLayerError::Device {
+                hresult,
+                context: "CreateTextFormat",
+            }
+        })?;
     DirectionRecipe::for_mode(mode).apply(&format)?;
     Ok(format)
 }
