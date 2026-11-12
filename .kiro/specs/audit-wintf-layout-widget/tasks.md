@@ -210,3 +210,5 @@
 - 4.3: 描く流れの後の確かめ: `bitmap_source_integration_test` 7/7・`device_lost_recovery_test` 5/5 緑（2.1 の控えと同じ）。35 番で `bitmap_source/tests.rs:123-136` を消したので、4.4 で範囲の中に残る `path` の読み手は `bitmap_source.rs` の 1 か所だけ。
 - 4.3: 有効な `BitmapSourceGraphics` を持つ部品へ `BitmapSourceResource` を直に入れ直して D2D の画像が作れないと、前の画像が残る（前からの形・本番の道では起きない）。直すなら Err の枝で `invalidate()` の 1 行。7.1 で見る。
 - 5.1: 点の別名 `PhysicalPoint`（layout::hit_test）を消すため、範囲の外の 5 ファイル（`ecs/cursor/answer.rs`・`ecs/pointer/nchittest_cache.rs`・`ecs/window_proc/mouse_click.rs`・`mouse_dblclick_wheel.rs`・`mouse_move.rs`）の `use` を 1 行ずつ `PointF` に替えた（持ち主の `audit-wintf-input`・`audit-wintf-window` は brief だけで並走なし・design の 25 番の行に追記）。`crates/areka-emo-present/src/mount_tests.rs:22-24` の説明が古くなった（範囲の外）。`/kiro-complete` の棚卸で扱う。
+- 完了時にその場で解決（2026-11-12・`/kiro-complete` の棚卸）: 4.3 の「作れない画像が着くと前の D2D の画像が残る」を、失敗の枝で `invalidate()` して直した（テスト `failed_bitmap_for_new_image_drops_previous_bitmap`・`2ae08247`）。
+- 完了時にその場で解決（同）: 範囲の外の古い説明 3 か所（`.kiro/steering/structure.md` の `TextLayoutResource`・`ecs/world/mod.rs` のαマスクの係・`areka-emo-present/src/mount_tests.rs` の当たり判定の道と点の別名）を直した（`59d640c9`）。起票は 0 件。
