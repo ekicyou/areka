@@ -42,7 +42,7 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
 
 /// ランダム遅延生成。
 ///
-/// uniform `[0,1]` → easing → `[min, max]` mapping。
+/// uniform `[0,1]` → easing → `[0,1]` へクランプ → `[min, max]` mapping。
 /// `min == max` の場合は early return で固定遅延を返す。
 pub(crate) fn generate_delay(
     min: f64,
@@ -54,7 +54,8 @@ pub(crate) fn generate_delay(
         return min;
     }
     let t: f64 = rng.random_range(0.0..1.0);
-    let eased = apply_easing(t, Some(easing));
+    // Back・Elastic・ベジェは [0,1] の外を出す。そのままだと待ちが min を割り、負なら tick が戻らない
+    let eased = apply_easing(t, Some(easing)).clamp(0.0, 1.0);
     min + eased * (max - min)
 }
 

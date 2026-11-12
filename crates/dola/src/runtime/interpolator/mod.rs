@@ -2,6 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::f64::consts::FRAC_PI_2;
 use std::rc::Rc;
 
 use interpolation::{Ease, EaseFunction};
@@ -133,8 +134,11 @@ pub(super) fn apply_easing(t: f64, easing: Option<&EasingFunction>) -> f64 {
 
 /// `EasingName` を `interpolation::EaseFunction` にマッピングして適用する。
 ///
-/// NOTE(数値境界): interpolation クレートの各 ease 関数は入力を内部で [0,1] に
-/// クランプする（NaN は比較が false となりそのまま素通り）。実装は多項式・
+/// Sine In/Out と Elastic 系だけは自前の式: 外のクレート 0.3.0 は `PI_2` を 2π と定義して
+/// π/2 の所に使うので、SineOut と ElasticIn が終わりに 0 へ戻る（外のクレートはそのまま使う決まり）。
+///
+/// NOTE(数値境界): 呼び手は t を [0,1] に収めて渡す（interpolation クレートの各 ease 関数も
+/// 内部で [0,1] にクランプする。NaN は比較が false となりそのまま素通り）。実装は多項式・
 /// sqrt・sin・powf・定数除算のみで、入力依存の除算を含まず全 f64 入力で
 /// panic しない。NaN 入力は NaN として伝播する。
 fn apply_named_easing(t: f64, name: EasingName) -> f64 {
@@ -152,8 +156,8 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
         EasingName::QuinticIn => t.calc(EaseFunction::QuinticIn),
         EasingName::QuinticOut => t.calc(EaseFunction::QuinticOut),
         EasingName::QuinticInOut => t.calc(EaseFunction::QuinticInOut),
-        EasingName::SineIn => t.calc(EaseFunction::SineIn),
-        EasingName::SineOut => t.calc(EaseFunction::SineOut),
+        EasingName::SineIn => 1.0 - (t * FRAC_PI_2).cos(),
+        EasingName::SineOut => (t * FRAC_PI_2).sin(),
         EasingName::SineInOut => t.calc(EaseFunction::SineInOut),
         EasingName::CircularIn => t.calc(EaseFunction::CircularIn),
         EasingName::CircularOut => t.calc(EaseFunction::CircularOut),
@@ -161,9 +165,10 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
         EasingName::ExponentialIn => t.calc(EaseFunction::ExponentialIn),
         EasingName::ExponentialOut => t.calc(EaseFunction::ExponentialOut),
         EasingName::ExponentialInOut => t.calc(EaseFunction::ExponentialInOut),
-        EasingName::ElasticIn => t.calc(EaseFunction::ElasticIn),
-        EasingName::ElasticOut => t.calc(EaseFunction::ElasticOut),
-        EasingName::ElasticInOut => t.calc(EaseFunction::ElasticInOut),
+        EasingName::ElasticIn => elastic_in(t),
+        EasingName::ElasticOut => 1.0 - elastic_in(1.0 - t),
+        EasingName::ElasticInOut if t < 0.5 => 0.5 * elastic_in(2.0 * t),
+        EasingName::ElasticInOut => 1.0 - 0.5 * elastic_in(2.0 - 2.0 * t),
         EasingName::BackIn => t.calc(EaseFunction::BackIn),
         EasingName::BackOut => t.calc(EaseFunction::BackOut),
         EasingName::BackInOut => t.calc(EaseFunction::BackInOut),
@@ -171,6 +176,11 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
         EasingName::BounceOut => t.calc(EaseFunction::BounceOut),
         EasingName::BounceInOut => t.calc(EaseFunction::BounceInOut),
     }
+}
+
+/// AHEasing（Penner 由来）の ElasticIn（`sin(13·π/2·t)·2^(10(t−1))`）。
+fn elastic_in(t: f64) -> f64 {
+    (13.0 * FRAC_PI_2 * t).sin() * 2.0_f64.powf(10.0 * (t - 1.0))
 }
 
 /// パラメトリックイージング（ベジェ曲線）を適用する。

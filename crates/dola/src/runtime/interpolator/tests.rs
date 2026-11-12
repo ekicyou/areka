@@ -553,3 +553,71 @@ fn named_easings_known_values() {
         }
     }
 }
+
+/// Sine 系と Elastic 系は外のクレートの PI_2（2π）を使わず π/2 の式で出す（R1-03）
+#[test]
+fn sine_and_elastic_easings_known_values() {
+    for (easing, t, expected) in [
+        (EasingName::SineIn, 0.5, 0.292_893_218_813_452_5), // 1 − cos(π/4)
+        (EasingName::SineOut, 0.5, 0.707_106_781_186_547_5), // sin(π/4)
+        (EasingName::SineInOut, 0.5, 0.5),                  // (1 − cos(π/2))/2
+        (EasingName::ElasticIn, 0.5, -0.022_097_086_912_079_6), // sin(13π/4)·2^−5
+        (EasingName::ElasticOut, 0.5, 1.022_097_086_912_079_6), // sin(−39π/4)·2^−5 + 1
+        (EasingName::ElasticInOut, 0.25, -0.011_048_543_456_039_8), // ElasticIn(0.5)/2
+        (EasingName::ElasticInOut, 0.5, 0.5),
+        (EasingName::ElasticInOut, 0.75, 1.011_048_543_456_04), // 1 − ElasticIn(0.5)/2
+    ] {
+        let v = apply_easing(t, Some(&EasingFunction::Named(easing)));
+        assert!(
+            (v - expected).abs() < 1e-12,
+            "{easing:?}({t}): expected {expected}, got {v}"
+        );
+    }
+}
+
+/// どのイージングも 0 で始まり 1 で終わる（終わりの値が from へ戻らない）
+#[test]
+fn named_easings_start_at_zero_and_end_at_one() {
+    use EasingName::*;
+    for easing in [
+        Linear,
+        QuadraticIn,
+        QuadraticOut,
+        QuadraticInOut,
+        CubicIn,
+        CubicOut,
+        CubicInOut,
+        QuarticIn,
+        QuarticOut,
+        QuarticInOut,
+        QuinticIn,
+        QuinticOut,
+        QuinticInOut,
+        SineIn,
+        SineOut,
+        SineInOut,
+        CircularIn,
+        CircularOut,
+        CircularInOut,
+        ExponentialIn,
+        ExponentialOut,
+        ExponentialInOut,
+        ElasticIn,
+        ElasticOut,
+        ElasticInOut,
+        BackIn,
+        BackOut,
+        BackInOut,
+        BounceIn,
+        BounceOut,
+        BounceInOut,
+    ] {
+        for (t, expected) in [(0.0, 0.0), (1.0, 1.0)] {
+            let v = apply_easing(t, Some(&EasingFunction::Named(easing)));
+            assert!(
+                (v - expected).abs() < 1e-9,
+                "{easing:?}({t}): expected {expected}, got {v}"
+            );
+        }
+    }
+}

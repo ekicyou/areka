@@ -401,3 +401,25 @@ fn process_loops_infinite_with_offset_applies_each_loop() {
     assert_eq!(inst.loops_completed, 2);
     assert_eq!(inst.end_time, 7.0);
 }
+
+/// [0,1] の外へ出るイージングでも待ちは [min, max] に収まる（R1-02・負の待ちで tick が戻らない）
+#[test]
+fn generate_delay_clamps_overshooting_easing_into_range() {
+    let wild_bezier = EasingFunction::Parametric(crate::easing::ParametricEasing::CubicBezier {
+        x0: -5.0,
+        x1: -5.0,
+        x2: -5.0,
+        x3: -5.0,
+    });
+    let back_in = EasingFunction::Named(EasingName::BackIn);
+    for easing in [wild_bezier, back_in] {
+        for seed in 0..64 {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let d = generate_delay(0.5, 1.5, &easing, &mut rng);
+            assert!(
+                (0.5..=1.5).contains(&d),
+                "{easing:?} seed {seed}: delay {d}"
+            );
+        }
+    }
+}
