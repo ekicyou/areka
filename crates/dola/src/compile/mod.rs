@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
-use crate::transition::TransitionValue;
+use crate::transition::{TransitionDef, TransitionValue};
 use crate::validate::Validate;
 use crate::variable::AnimationVariableDef;
 
@@ -34,6 +34,18 @@ fn push_if_overflowed(
             value,
         });
     }
+}
+
+/// 時刻の決まった、値を埋める前のセグメント
+struct PendingSegment<'d> {
+    entry_idx: usize,
+    start_time: f64,
+    end_time: f64,
+    trans_def: &'d TransitionDef,
+    /// at も between も無い連結の遷移か
+    sequential: bool,
+    /// 同じ変数の配列上の直前のエントリ
+    prev_entry: Option<usize>,
 }
 
 /// ストーリーボードをコンパイルする
@@ -119,13 +131,12 @@ pub(crate) fn compile_validated(
     let mut keyframe_times: HashMap<String, f64> = HashMap::new();
     keyframe_times.insert("start".to_string(), start_time);
 
-    // variable_name → 処理の順で最後に解いたエントリの index
-    let mut var_last_entry: HashMap<&str, usize> = HashMap::new();
-    // variable_name → (定義, (元のエントリの index, セグメント))。名前の順で重なりを報告する
-    type VarSegments<'d> = (&'d AnimationVariableDef, Vec<(usize, CompiledSegment)>);
+    // variable_name → (定義, 時刻の決まったセグメント)。名前の順で重なりを報告する。
+    // 値（from/to）は時刻の順に並べた後の Step 5 で埋める
+    type VarSegments<'d> = (&'d AnimationVariableDef, Vec<PendingSegment<'d>>);
     let mut var_segments: BTreeMap<&str, VarSegments> = BTreeMap::new();
-    // entry_index → (segment end_time, to_value)（連結の遷移が配列上の直前のエントリに続くため）
-    let mut entry_segment_end: HashMap<usize, (f64, TransitionValue)> = HashMap::new();
+    // entry_index → segment end_time（連結の遷移が配列上の直前のエントリに続くため）
+    let mut entry_segment_end: HashMap<usize, f64> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
     let mut entry_keyframe_time: HashMap<usize, f64> = HashMap::new();
     // compiled triggers
@@ -201,17 +212,10 @@ pub(crate) fn compile_validated(
             continue;
         };
 
-        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）。
-        // at・between は終わりの時刻を使わず、値だけを処理の順で最後に解いた分から取る
+        // 連結の遷移は処理の順で最後に解いた分でなく、同じ変数の配列上の直前のエントリに続く（要件 11.7）
         let sequential = entry.at.is_none() && entry.between.is_none();
-        let prev = if sequential {
-            graph.prev_same_var.get(&entry_idx)
-        } else {
-            var_last_entry.get(var_name)
-        }
-        .and_then(|p| entry_segment_end.get(p));
-        let last_end_time = prev.filter(|_| sequential).map(|(t, _)| *t);
-        let last_value = prev.map(|(_, v)| v);
+        let prev_entry = graph.prev_same_var.get(&entry_idx).copied();
+        let last_end_time = prev_entry.and_then(|p| entry_segment_end.get(&p)).copied();
 
         // Resolve timing (Task 5.1-5.3)
         let timing = resolve_entry_timing(
@@ -242,62 +246,19 @@ pub(crate) fn compile_validated(
         keyframe_times.insert(kf_name, kf_time);
         entry_keyframe_time.insert(entry_idx, kf_time);
 
-        // Resolve from value (Task 5.7)
-        let from_value = resolve_from_value(trans_def, last_value, var_def);
-
-        // Resolve to value (Task 5.8)
-        let to_value = resolve_to_value(trans_def, &from_value);
-
-        // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる（要件 11.11）
-        if let TransitionValue::Scalar(v) = to_value {
-            let (min, max) = extract_min_max(var_def);
-            let (min, max) = (
-                min.unwrap_or(f64::NEG_INFINITY),
-                max.unwrap_or(f64::INFINITY),
-            );
-            if !v.is_finite() {
-                push_if_overflowed(&mut errors, storyboard_name, entry_idx, "relative_to", v);
-            } else if v < min || v > max {
-                errors.push(DolaError::TransitionValueOutOfRange {
-                    storyboard: storyboard_name.to_string(),
-                    entry_index: entry_idx,
-                    variable: var_name.to_string(),
-                    field: if trans_def.relative_to.is_some() {
-                        "relative_to"
-                    } else {
-                        "to"
-                    }
-                    .to_string(),
-                    value: v,
-                    min,
-                    max,
-                });
-            }
-        }
-
-        // Build segment (Task 5.9)
-        let is_object = matches!(var_def, AnimationVariableDef::Object { .. });
-        let easing = if is_object {
-            None
-        } else {
-            trans_def.easing.clone()
-        };
-
-        let segment = CompiledSegment {
-            start_time: segment_start,
-            end_time: segment_end,
-            from_value,
-            to_value: to_value.clone(),
-            easing,
-        };
-
         var_segments
             .entry(var_name)
             .or_insert_with(|| (var_def, Vec::new()))
             .1
-            .push((entry_idx, segment));
-        entry_segment_end.insert(entry_idx, (segment_end, to_value));
-        var_last_entry.insert(var_name, entry_idx);
+            .push(PendingSegment {
+                entry_idx,
+                start_time: segment_start,
+                end_time: segment_end,
+                trans_def,
+                sequential,
+                prev_entry,
+            });
+        entry_segment_end.insert(entry_idx, segment_end);
     }
 
     if !errors.is_empty() {
@@ -310,10 +271,77 @@ pub(crate) fn compile_validated(
     for (var_name, (var_def, mut segments)) in var_segments {
         // Sort by start_time (Task 6.1)
         // 比べは −0.0 を +0.0 にそろえた全順序（NaN は符号で両端に分かれる）。
-        segments.sort_by(|(_, a), (_, b)| (a.start_time + 0.0).total_cmp(&(b.start_time + 0.0)));
+        // 同じ始まりは配列の順（連結の直前のエントリは配列で先）
+        segments.sort_by(|a, b| {
+            (a.start_time + 0.0)
+                .total_cmp(&(b.start_time + 0.0))
+                .then(a.entry_idx.cmp(&b.entry_idx))
+        });
+
+        // from/to を時刻の順に埋める（Task 5.7・5.8）。from を省いたとき、連結の遷移は配列上の
+        // 直前のエントリ（要件 11.7）、at・between は時刻の上で直前のセグメント（完了
+        // dola-compiled-transition 要件 4.2）の to を取る。どちらもこの並びで先に埋まっている
+        let mut entry_to: HashMap<usize, TransitionValue> = HashMap::new();
+        let mut compiled: Vec<(usize, CompiledSegment)> = Vec::with_capacity(segments.len());
+        for pending in &segments {
+            let trans_def = pending.trans_def;
+            let last_value = if pending.sequential {
+                pending.prev_entry.and_then(|p| entry_to.get(&p))
+            } else {
+                compiled.last().map(|(_, s)| &s.to_value)
+            };
+            let from_value = resolve_from_value(trans_def, last_value, var_def);
+            let to_value = resolve_to_value(trans_def, &from_value);
+            let entry_idx = pending.entry_idx;
+
+            // 値域の検証は書かれた from/to だけを見るので、relative_to の結果はここで比べる（要件 11.11）
+            if let TransitionValue::Scalar(v) = to_value {
+                let (min, max) = extract_min_max(var_def);
+                let (min, max) = (
+                    min.unwrap_or(f64::NEG_INFINITY),
+                    max.unwrap_or(f64::INFINITY),
+                );
+                if !v.is_finite() {
+                    push_if_overflowed(&mut errors, storyboard_name, entry_idx, "relative_to", v);
+                } else if v < min || v > max {
+                    errors.push(DolaError::TransitionValueOutOfRange {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        variable: var_name.to_string(),
+                        field: if trans_def.relative_to.is_some() {
+                            "relative_to"
+                        } else {
+                            "to"
+                        }
+                        .to_string(),
+                        value: v,
+                        min,
+                        max,
+                    });
+                }
+            }
+
+            // Build segment (Task 5.9)
+            let easing = if matches!(var_def, AnimationVariableDef::Object { .. }) {
+                None
+            } else {
+                trans_def.easing.clone()
+            };
+            entry_to.insert(entry_idx, to_value.clone());
+            compiled.push((
+                entry_idx,
+                CompiledSegment {
+                    start_time: pending.start_time,
+                    end_time: pending.end_time,
+                    from_value,
+                    to_value,
+                    easing,
+                },
+            ));
+        }
 
         // Overlap check (Task 6.2)。重なった後ろのセグメントのエントリを指す
-        for pair in segments.windows(2) {
+        for pair in compiled.windows(2) {
             let ((_, prev), (entry_index, next)) = (&pair[0], &pair[1]);
             if prev.end_time > next.start_time {
                 errors.push(DolaError::CompileError {
@@ -326,7 +354,7 @@ pub(crate) fn compile_validated(
                 });
             }
         }
-        let segments: Vec<CompiledSegment> = segments.into_iter().map(|(_, s)| s).collect();
+        let segments: Vec<CompiledSegment> = compiled.into_iter().map(|(_, s)| s).collect();
 
         // Build CompiledVariableTimeline (Task 6.3)
         // 長さはコンパイルの起点から数える（先頭の遅れを含む）。

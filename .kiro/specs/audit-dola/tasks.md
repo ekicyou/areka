@@ -393,3 +393,4 @@
 - 20.1: 機能 `yaml` は `serde_yaml` を引くだけで、src に使う所が無い（`dola-yaml-backend` 待ち）。Cargo.lock は toml 0.8 系の 6 package が抜けただけ。THIRD-PARTY-NOTICES は変わらない見込み（22 の全体テストの -License で確かめる）。
 - 20.2: #70 は `ValueOutOfRange` に欄を足さず、遷移の分に新しい種類 `TransitionValueOutOfRange { storyboard, entry_index, .. }` を足した（`ValueOutOfRange` は場所を持たない変数の初期値にも使うため・Option や番兵より遷移の分で場所を必ず持てる）。`Interpolator::interpolate` は単体テストの入口として `#[cfg(test)]` で残した。`\bP[0-9]+\b` の grep に残る 5 件は完了 spec の名前（`areka-P0-…`）で P 番号の注ではない。
 - 21（かけ直し 1 回目・R1-03）: 10.2 の注で「範囲の外・要起票」とした `interpolation` 0.3.0 の PI_2 の誤りは、かけ直しの指摘として dola の側（`interpolator::apply_named_easing`・`elastic_in`）で式を書いて直した（誤っていたのは SineIn・SineOut・ElasticIn・ElasticOut・ElasticInOut の 5 つ・SineInOut は正しい）。起票は要らない。
+- 21（かけ直し 1 回目・R1-06）: 7.1 の注で残した `at`・`between` の from は「時刻の上で直前の同じ変数のセグメントの to」（無ければ初期値）に決めた（完了 dola-compiled-transition 要件 4.2 の読み）。連結のエントリは値も時刻も配列上の直前のエントリから（要件 11.7）。Step 5 の並べ替えの鍵は `(start, entry_idx)`。

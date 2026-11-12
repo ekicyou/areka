@@ -253,3 +253,44 @@ fn sequential_follows_array_predecessor_not_last_processed() {
         "expected an overlap error, got {errors:?}"
     );
 }
+
+/// from を省いた連結の遷移は、時刻の上で間に挟まった at のセグメントでなく、
+/// 配列上の直前のエントリの to から始まる（要件 11.7・注 7.1）
+#[test]
+fn sequential_from_follows_array_predecessor_not_previous_in_time() {
+    let x_entry = |from: Option<f64>, to: f64, delay: f64, duration: f64| StoryboardEntry {
+        variable: Some("x".to_string()),
+        transition: Some(TransitionRef::Inline(TransitionDef {
+            from: from.map(TransitionValue::Scalar),
+            to: Some(TransitionValue::Scalar(to)),
+            delay,
+            duration: Some(duration),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    let doc = make_doc_with_storyboard(
+        vec![("x", float_var())],
+        vec![],
+        "test",
+        StoryboardBuilder::new()
+            // P: [0,1] 0→5
+            .entry(x_entry(Some(0.0), 5.0, 0.0, 1.0))
+            // C: P に続き delay 1 で [2,3]
+            .entry(x_entry(None, 9.0, 1.0, 1.0))
+            // A: [1.2,1.7] 5→7（時刻の上では P と C の間）
+            .entry(StoryboardEntry {
+                at: Some(KeyframeRef::WithOffset {
+                    keyframes: KeyframeNames::Single("start".to_string()),
+                    offset: 1.2,
+                }),
+                ..x_entry(None, 7.0, 0.0, 0.5)
+            })
+            .build(),
+    );
+    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+    let segs = &result.timelines["x"].segments;
+    assert_eq!(segs[1].from_value, TransitionValue::Scalar(5.0));
+    assert_eq!((segs[2].start_time, segs[2].end_time), (2.0, 3.0));
+    assert_eq!(segs[2].from_value, TransitionValue::Scalar(5.0));
+}
