@@ -320,7 +320,8 @@ impl DolaRuntime {
     /// 内部フロー:
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
     ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
-    /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
+    /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）。
+    ///    進めた周回が無くなるまで 1.5 と 2 を繰り返す
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
     fn update_internal(&mut self, current_time: f64) -> UpdateResult {
@@ -330,27 +331,35 @@ impl DolaRuntime {
             self.conclude_internal(gid);
         }
 
-        // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
-        let trigger_results = self.process_triggers(current_time);
-
-        // Step 2: ループ処理 + 自然終了検知
+        // Step 1.5 と Step 2 を、終わった周回が無くなるまで交互に回す。トリガーを持つ
+        // インスタンスは Step 2 で 1 周ずつ進むので、飛ばした周回のトリガーもその周回の時刻で起きる
+        let mut trigger_results = Vec::new();
         let mut rng = rand::rng();
-        let loop_results: Vec<(u64, LoopAction)> = self
-            .instance_manager
-            .instances_mut()
-            .iter_mut()
-            .filter(|(_, inst)| {
-                inst.state == InstanceState::Playing && current_time >= inst.end_time
-            })
-            .map(|(gid, inst)| {
-                let action = loop_controller::process_loops(inst, current_time, &mut rng);
-                (*gid, action)
-            })
-            .collect();
+        loop {
+            // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
+            trigger_results.extend(self.process_triggers(current_time));
 
-        for (gid, action) in loop_results {
-            if action == LoopAction::Conclude {
-                self.conclude_internal(gid);
+            // Step 2: ループ処理 + 自然終了検知
+            let loop_results: Vec<(u64, LoopAction)> = self
+                .instance_manager
+                .instances_mut()
+                .iter_mut()
+                .filter(|(_, inst)| {
+                    inst.state == InstanceState::Playing && current_time >= inst.end_time
+                })
+                .map(|(gid, inst)| {
+                    let action = loop_controller::process_loops(inst, current_time, &mut rng);
+                    (*gid, action)
+                })
+                .collect();
+            if loop_results.is_empty() {
+                break;
+            }
+
+            for (gid, action) in loop_results {
+                if action == LoopAction::Conclude {
+                    self.conclude_internal(gid);
+                }
             }
         }
 
@@ -433,7 +442,10 @@ impl DolaRuntime {
                         + inst.pause_accumulated
                         + trigger.fire_time / inst.time_scale;
 
-                    if current_time >= wall_fire_time {
+                    // 周回の長さより後ろのトリガーは、親の周回が先に終わるので起きない（要件 11.3）。
+                    // 周回を飛ばした tick でも 1 コマずつ回したときと同じにするため、時刻でなく長さで比べる
+                    let within_loop = trigger.fire_time / inst.time_scale <= inst.loop_duration;
+                    if within_loop && current_time >= wall_fire_time {
                         let child_start = wall_fire_time + trigger.start_offset.unwrap_or(0.0);
                         pending.push(PendingTrigger {
                             parent_group_id: *gid,

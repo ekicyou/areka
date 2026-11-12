@@ -90,8 +90,9 @@ pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng
 
 /// 1つのインスタンスのループ処理を実行する。
 ///
-/// `current_time >= end_time` の場合、while ループで全終了済み周回を処理し、
-/// 各周回について `loops_completed` をインクリメントして継続可否を判定する。
+/// `current_time >= end_time` の場合、while ループで全終了済み周回を処理し
+/// （トリガーを持つインスタンスは 1 周だけ）、各周回について `loops_completed` を
+/// インクリメントして継続可否を判定する。
 /// 遅延が `end_time` に加算されるため、複数周回の一括スキップは自然に抑制される。
 ///
 /// # Arguments
@@ -138,6 +139,10 @@ pub(crate) fn process_loops(
             || before + (instance.loop_duration + max_delay) <= before
         {
             return LoopAction::Conclude;
+        }
+        // トリガーを持つなら 1 周で戻る。呼び出し側がこの周回のトリガーを発火させてから次を進める
+        if !instance.trigger_states.is_empty() {
+            break;
         }
     }
 

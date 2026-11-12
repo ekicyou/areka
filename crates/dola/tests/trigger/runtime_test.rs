@@ -771,3 +771,85 @@ fn simultaneous_triggers_resolve_in_group_order() {
         );
     }
 }
+
+/// 3 周（1 周 1 秒）の親。`at` は start からの秒で、x を 0→1 で動かす子 "child"（0.2 秒）を起こす
+fn three_loop_trigger_doc(at: f64) -> dola::DolaDocument {
+    let float_var = || AnimationVariableDef::Float {
+        initial: 0.0,
+        min: None,
+        max: None,
+    };
+    let parent_sb = StoryboardBuilder::new()
+        .loop_count(3)
+        .entry(StoryboardEntry {
+            variable: Some("opacity".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(1.0),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+        .entry(StoryboardEntry {
+            trigger_storyboard: Some("child".to_string()),
+            at: Some(dola::KeyframeRef::WithOffset {
+                keyframes: dola::KeyframeNames::Single("start".to_string()),
+                offset: at,
+            }),
+            ..Default::default()
+        })
+        .build();
+    let child_sb = StoryboardBuilder::new()
+        .entry(StoryboardEntry {
+            variable: Some("x".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(0.2),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+        .build();
+    DolaDocumentBuilder::new("1.0")
+        .variable("opacity", float_var())
+        .variable("x", float_var())
+        .storyboard("parent", parent_sb)
+        .storyboard("child", child_sb)
+        .build()
+        .expect("doc should be valid")
+}
+
+/// 1 回の tick で周回を飛ばしても、飛ばした周回のトリガーはその周回の壁時計の時刻で起きる
+#[test]
+fn skipped_loops_fire_their_triggers() {
+    let mut rt = DolaRuntime::new();
+    rt.load_document(three_loop_trigger_doc(0.5)).unwrap();
+    rt.start("parent", 0.0).unwrap();
+    rt.tick(0.0);
+    rt.tick(3.5);
+    let child_ends: Vec<f64> = rt
+        .last_result()
+        .triggered
+        .iter()
+        .map(|t| match t {
+            TriggerResult::Started { start_result, .. } => start_result.end_time,
+            TriggerResult::Error { error, .. } => panic!("trigger failed: {error}"),
+        })
+        .collect();
+    // 子は 0.5・1.5・2.5 に起き、0.2 秒で終わる
+    assert_eq!(child_ends, vec![0.7, 1.7, 2.7]);
+    assert!(!rt.has_instances(), "parent and children should all end");
+}
+
+/// 周回の長さより後ろのトリガーは、飛ばした周回でも起きない（親の周回が先に終わる・要件 11.3）
+#[test]
+fn trigger_after_loop_end_does_not_fire_in_skipped_loops() {
+    let mut rt = DolaRuntime::new();
+    rt.load_document(three_loop_trigger_doc(1.2)).unwrap();
+    rt.start("parent", 0.0).unwrap();
+    rt.tick(0.0);
+    rt.tick(3.5);
+    assert!(rt.last_result().triggered.is_empty());
+}
