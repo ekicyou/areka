@@ -182,7 +182,7 @@
   - 終わった姿: 檻が緑で、名前を消す行を外すと落ちる。購読のテストが緑
   - _Requirements: 4.1_
 
-- [ ] 11. ランタイムの小さな直しと wintf の結線（#38・#39・#45・#64・#65）
+- [x] 11. ランタイムの小さな直しと wintf の結線（#38・#39・#45・#64・#65）
 - [x] 11.1 生きたインスタンスの有無の口を足し、ランタイムの小さな直しをする（#39・#45・#64・#65）
   - 終わっていないインスタンス（一時停止中を含む）が 1 つでもあれば真を返す口を足す（足すだけ）
   - 開始の結果の欄だけを見る 2 本を消し、終わりの時刻の説明を「無限の周回でも 1 周分」に直す
@@ -190,7 +190,7 @@
   - 檻: delay 1.0 の台本で、変化 0 件の tick のあいだも真・Conclude の後は偽
   - 終わった姿: 檻が緑で、ランタイムのテストが緑
   - _Requirements: 3.4, 4.1, 6.4_
-- [ ] 11.2 wintf の dola の進め役で、トリガーの失敗を記録し、旗の判断に生きたインスタンスの口を使う（#38・#39 の結線）
+- [x] 11.2 wintf の dola の進め役で、トリガーの失敗を記録し、旗の判断に生きたインスタンスの口を使う（#38・#39 の結線）
   - dola の側: 子の起動に失敗したトリガーが `TriggerResult::Error` を返す檻（Never の競合）を足す。dola には記録を足さない
   - wintf の側: 進め役が同じループで `TriggerResult::Error` を `tracing::error!`（親・子・エラー）で記録し、動いている旗に 11.1 の口を加える。旗の説明を直す
   - wintf の側の檻: `log-capture-kit` で `error!` の 1 行を見る（wintf の既存の dev-dependencies だけを使う）
@@ -381,3 +381,4 @@
 - 9.2→10.3: research #36 の場所に挙がる `subscription_manager/mod.rs:122` の `subscribed_ids` はまだ HashSet で、`UpdateResult.changes` の並びが走るたびに変わりうる（design の #36 の行の範囲の外）。10.3 の「購読した id を直に回す」直しで BTreeSet にし、並びが決まる檻を足す（進行役の決め）。`trigger_store` は回して読まないので HashMap のまま。
 - 10.1: 値は `TimelineEntry::value_at`（intern を通す補間＋値域へ収める）で配る（evaluate・evaluate_all_for_group・2 つの最終値の取り出し）。Integer は丸めた後に収める。research に無い既存の振る舞い: 有限でも極端に大きい値（from=−1.7e308・to=1.7e308 や巨大なベジェの制御点）で補間が NaN／inf を出し、NaN と値域の無い変数の inf はそのまま配られる（21 のかけ直しで拾う）。
 - 10.2（範囲の外・要起票）: 外のクレート `interpolation` 0.3.0 の `src/ease.rs:96` が `PI_2` を 2π と定義し、Sine 系と Elastic 系の式がそれを使うので、SineIn(0.5)=1.0（正しくは約 0.293）など曲線が前から誤っている。外のクレートはそのまま使う決まりなので、直すなら dola の側で式を書く別の spec（`/kiro-discovery` で起票）。既知の値のテストは誤った値を固定しないよう Sine 系を避けた。`InstanceManager::transition(gid, Playing)` で Paused から戻すと `pause_start` が残って時計が止まる（今は呼び手が無い・resume だけが消す）。
+- 11.2: wintf の檻は log-capture-kit が今のスレッドしか捕まえないので `world.run_system_once(tick_dola_animators)`（本番と同じ関数）で回す。Git Bash から wintf を作ると dbghelp.lib の LNK1181 が出ることがある（PowerShell からなら通る・環境の問題）。表記の揺れ: wintf は「トリガ」、dola は「トリガー」。

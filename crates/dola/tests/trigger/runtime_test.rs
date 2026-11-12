@@ -3,10 +3,10 @@
 //! 5.5: ループ内トリガー統合テスト, 5.6: E2E テスト
 
 use super::common::{extract_float, timed_trigger_doc};
-use dola::runtime::{DolaRuntime, TriggerResult};
+use dola::runtime::{DolaRuntime, RuntimeError, TriggerResult};
 use dola::{
-    AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry, TransitionDef,
-    TransitionRef, TransitionValue,
+    AnimationVariableDef, DolaDocumentBuilder, InterruptionPolicy, StoryboardBuilder,
+    StoryboardEntry, TransitionDef, TransitionRef, TransitionValue,
 };
 
 // ============================================================
@@ -208,6 +208,82 @@ mod trigger_execution_tests {
         // t=1.0: トリガー + 変数更新の両方
         let result = rt.update(1.0);
         assert!(!result.triggered.is_empty(), "should have trigger");
+    }
+
+    /// 子の起動が Never の競合で拒まれると、トリガーは `TriggerResult::Error` を返す
+    /// （dola は記録しない・記録は呼び手の境目）。
+    #[test]
+    fn trigger_error_on_never_conflict() {
+        let var = || AnimationVariableDef::Float {
+            initial: 0.0,
+            min: None,
+            max: None,
+        };
+        let ramp = |variable: &str, duration: f64| StoryboardEntry {
+            variable: Some(variable.to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(duration),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        // blocker（Never）が x を 10 秒握る。parent は y を動かし t=1.0 で x を触る child を起こす
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("x", var())
+            .variable("y", var())
+            .storyboard(
+                "blocker",
+                StoryboardBuilder::new()
+                    .interruption_policy(InterruptionPolicy::Never)
+                    .entry(ramp("x", 10.0))
+                    .build(),
+            )
+            .storyboard(
+                "parent",
+                StoryboardBuilder::new()
+                    .entry(StoryboardEntry {
+                        keyframe: Some("kf1".to_string()),
+                        ..ramp("y", 1.0)
+                    })
+                    .entry(StoryboardEntry {
+                        trigger_storyboard: Some("child".to_string()),
+                        at: Some(dola::KeyframeRef::Single("kf1".to_string())),
+                        ..Default::default()
+                    })
+                    .build(),
+            )
+            .storyboard(
+                "child",
+                StoryboardBuilder::new().entry(ramp("x", 1.0)).build(),
+            )
+            .build()
+            .expect("doc should be valid");
+
+        let mut rt = DolaRuntime::new();
+        rt.load_document(doc).unwrap();
+        let blocker = rt.start("blocker", 0.0).unwrap();
+        rt.start("parent", 0.0).unwrap();
+
+        rt.tick(1.0);
+        match rt.last_result().triggered.as_slice() {
+            [
+                TriggerResult::Error {
+                    source_storyboard,
+                    target_storyboard,
+                    error:
+                        RuntimeError::Conflict {
+                            conflicting_group_ids,
+                        },
+                },
+            ] => {
+                assert_eq!(source_storyboard, "parent");
+                assert_eq!(target_storyboard, "child");
+                assert_eq!(conflicting_group_ids, &vec![blocker.group_id]);
+            }
+            other => panic!("expected one Conflict TriggerResult::Error, got {other:?}"),
+        }
     }
 }
 
