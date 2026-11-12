@@ -89,10 +89,10 @@ fn frames_60fps(end: f64) -> Vec<f64> {
         .collect()
 }
 
-fn assert_close(actual: f64, expected: f64, what: &str) {
+fn assert_close(actual: f64, expected: f64, var: &str, what: &str) {
     assert!(
         (actual - expected).abs() < 1e-9,
-        "{what}: x = {actual}, expected {expected}"
+        "{what}: {var} = {actual}, expected {expected}"
     );
 }
 
@@ -101,8 +101,8 @@ fn assert_close(actual: f64, expected: f64, what: &str) {
 fn triggers_in_one_tick_fire_in_time_order() {
     let doc = two_parent_doc(parent("a", 1.0, 1, 0.9, "A"), parent("b", 1.0, 1, 0.1, "B"));
     // A は 0.9 秒に起き、1.0 秒で 0.1 秒ぶん進む
-    assert_close(final_x(&doc, &frames_60fps(1.0)), 10.02, "60fps");
-    assert_close(final_x(&doc, &[0.0, 1.0]), 10.02, "one tick");
+    assert_close(final_x(&doc, &frames_60fps(1.0)), 10.02, "x", "60fps");
+    assert_close(final_x(&doc, &[0.0, 1.0]), 10.02, "x", "one tick");
 }
 
 /// 周回を飛ばしても、最後に起きるのは時刻の上で最後の A（P1 の 3 周目・2.9 秒）
@@ -113,8 +113,8 @@ fn skipped_loop_triggers_fire_in_time_order_across_parents() {
         parent("b", 0.25, 12, 0.0, "B"),
     );
     // A は 2.9 秒に起き、3.5 秒で 0.6 秒ぶん進む
-    assert_close(final_x(&doc, &frames_60fps(3.5)), 10.12, "60fps");
-    assert_close(final_x(&doc, &[0.0, 3.5]), 10.12, "one tick");
+    assert_close(final_x(&doc, &frames_60fps(3.5)), 10.12, "x", "60fps");
+    assert_close(final_x(&doc, &[0.0, 3.5]), 10.12, "x", "one tick");
 }
 
 /// finish の期限を同じ tick で越えても、期限より前のトリガーは起きる（0.5・1.5 秒の 2 回）
@@ -221,4 +221,58 @@ fn finite_loop_end_precedes_later_trigger_in_one_tick() {
             "{what}: {r:?}"
         );
     }
+}
+
+/// トリガーなしの無限の L（Cancel・1 秒・x と y を 0→1）は、2.5 秒に起きる子 C（x だけ）とぶつかって終わる。
+/// C が触らない y は L の終わりの値（3 周目の半ば・0.5）で止まる。一度に飛ばしても同じ
+#[test]
+fn infinite_loop_is_current_when_trigger_ends_it_in_one_tick() {
+    let float = || AnimationVariableDef::Float {
+        initial: 0.0,
+        min: None,
+        max: None,
+    };
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("a", float())
+        .variable("x", float())
+        .variable("y", float())
+        .storyboard(
+            "L",
+            StoryboardBuilder::new()
+                .loop_count(-1)
+                .interruption_policy(InterruptionPolicy::Cancel)
+                .entry(ramp("x", 0.0, 1.0, 1.0))
+                .entry(ramp("y", 0.0, 1.0, 1.0))
+                .build(),
+        )
+        .storyboard("P", parent("a", 3.0, 1, 2.5, "C"))
+        .storyboard(
+            "C",
+            StoryboardBuilder::new()
+                .entry(ramp("x", 5.0, 6.0, 1.0))
+                .build(),
+        )
+        .build()
+        .expect("doc should be valid");
+    let final_y = |times: &[f64]| {
+        let mut rt = DolaRuntime::new();
+        let y_id = rt.subscribe("y");
+        rt.load_document(doc.clone()).unwrap();
+        rt.start("L", 0.0).unwrap();
+        rt.start("P", 0.0).unwrap();
+        let mut y = f64::NAN;
+        for &t in times {
+            rt.tick(t);
+            for (id, v) in &rt.last_result().changes {
+                if *id == y_id
+                    && let EvaluatedValue::Float(f) = v
+                {
+                    y = *f;
+                }
+            }
+        }
+        y
+    };
+    assert_close(final_y(&frames_60fps(3.0)), 0.5, "y", "60fps");
+    assert_close(final_y(&[0.0, 3.0]), 0.5, "y", "one tick");
 }

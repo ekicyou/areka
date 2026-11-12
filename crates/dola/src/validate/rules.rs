@@ -458,6 +458,9 @@ pub(super) fn validate_loop_offset(
 ///
 /// ドキュメント内全ストーリーボードのトリガーグラフを構築し、
 /// DFS で循環を検出する。O(V+E)。
+// shortcut: トリガーの枝分かれの数は数えない。各段が次を 2 回起こす n 段の鎖は、1 回の tick に 2^n − 2 個の子を起こす
+// （16 段で約 6.5 万件・約 0.17 秒、24 段で約 45 秒の見込み、1 段ごとに倍）。作者の書いた文書を読み込むようになったら、
+// 循環の無いことを確かめた後に、1 回の start が起こす子の数（1 ＋ 起こす先の数の和・飽和で足す）に上限を置く。
 pub(super) fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
     use std::collections::{HashMap, HashSet};
 

@@ -318,8 +318,9 @@ impl DolaRuntime {
     /// 差分更新の内部実装。
     ///
     /// 内部フロー:
-    /// 1〜2 を、current_time までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
-    /// 同じ時刻では 1 → 1.5 → 2 の順（トリガーどうしは親の group_id の順）
+    /// 0〜2 を、current_time までの出来事の時刻（`next_event_time`）の順に 1 つずつ回す。
+    /// 同じ時刻では 0 → 1 → 1.5 → 2 の順（トリガーどうしは親の group_id の順）
+    /// 0. トリガーなしの無限のループを、その時刻より前に終わる周回まで進める
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
     ///    1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
     /// 2. 自然終了検知（その時刻 >= end_time の Playing インスタンス）
@@ -333,6 +334,9 @@ impl DolaRuntime {
         let mut trigger_results = Vec::new();
         let mut rng = rand::rng();
         while let Some(t) = self.next_event_time().filter(|&t| t <= current_time) {
+            // Step 0: トリガーなしの無限のループを t より前に終わる周回まで進める（60fps の前のコマと同じ周回にする）。
+            // ほかの Playing の end_time は出来事なので t 以上で、ここでは動かない。t ちょうどの周回は Step 2 で
+            self.process_loop_ends(t.next_down(), &mut rng);
             // Step 1: Finish Deadline チェック
             for gid in self.instance_manager.check_finish_deadlines(t) {
                 self.conclude_internal(gid);

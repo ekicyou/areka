@@ -341,7 +341,7 @@
 
 ## 仕上げ
 
-- [ ] 21. audit のかけ直し
+- [x] 21. audit のかけ直し
   - `crates/dola/` へ `/ponytail:ponytail-audit` を、要件 1 と同じ作法（上限なし・全部読む・残すと決めた 3 件は数えない）でかけ直す
   - 新しい指摘を直し（直しが生んだ指摘も含む）、0 件になるまで繰り返す。5 回目で 0 件に収まらず、5 回目に「必ず直す」と本番の振る舞いに関わる指摘が無ければ、開発者に一言知らせて 5 回目の指摘を直したところで打ち切る
   - 最後に clippy を警告 0 で通した出力を記録に残す
@@ -395,3 +395,4 @@
 - 21（かけ直し 1 回目・R1-03）: 10.2 の注で「範囲の外・要起票」とした `interpolation` 0.3.0 の PI_2 の誤りは、かけ直しの指摘として dola の側（`interpolator::apply_named_easing`・`elastic_in`）で式を書いて直した（誤っていたのは SineIn・SineOut・ElasticIn・ElasticOut・ElasticInOut の 5 つ・SineInOut は正しい）。起票は要らない。
 - 21（かけ直し 1 回目・R1-06）: 7.1 の注で残した `at`・`between` の from は「時刻の上で直前の同じ変数のセグメントの to」（無ければ初期値）に決めた（完了 dola-compiled-transition 要件 4.2 の読み）。連結のエントリは値も時刻も配列上の直前のエントリから（要件 11.7）。Step 5 の並べ替えの鍵は `(start, entry_idx)`。
 - 21（かけ直し 1 回目・R1-09・R1-12・R1-14）: `RuntimeError::InvalidLoopCount`・`typewriter` の欄（両方）・`Validate` trait（`DolaDocument::validate` の固有の関数に）・`InstanceState` の再公開・`calculate_end_time`・`unsubscribe_all`・`TimedSchedule::clear` を消し、`TimedSchedule::new`・`insert` を `#[cfg(test)] pub(crate)` にした（予定のテストは `src/cue/schedule/tests.rs` へ移した）。design.md 312 行の `calculate_end_time` と #62 の行の `unsubscribe_all` は前のタスクの記録で、この直しで消えた。
+- 21（かけ直しの結果・2026-11-13）: ponytail-audit を crates/dola に 5 回かけた（報告は `audit-rerun-1.md`〜`-5.md`）。指摘は 17 → 5 → 3 → 3 → 2 件で、2〜5 回目は必ず直すものが 0 件。5 回目も 0 件に収まらなかったが、5 回目に必ず直すものと本番の振る舞いに関わるもの（今の本番は cue の側だけで、`DolaRuntime` は wintf の `tick_dola_animators` が組まれておらず `start` を呼ぶのはテストだけ）が無いので、要件 10.6 のとおり 5 回目の指摘（R5-01・R5-02）を直したところで打ち切った。全部の指摘を直した後の `cargo clippy -p dola --all-targets --no-deps -- -D warnings`（`-A` なし）は警告 0 で Finished（    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.24s）。開発者の決めとして残したもの: (a) ベジェの制御点を「有限」より狭く縛るか（R1-05 (c)）・(b) 未来の時刻の `start()` が競合する古いインスタンスを今すぐ終わらせるか（R1-08）・(c) `MIN_LOOP_DURATION` を有限のループにも当てるか（R1-07）。費用の `shortcut:` の注は R3-03・R4-02・R5-02 の 3 つ。
