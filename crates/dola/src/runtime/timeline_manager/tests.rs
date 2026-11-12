@@ -488,3 +488,40 @@ fn get_timeline_returns_some_for_known_variable() {
     assert_eq!(mgr.get_timeline("x").unwrap().entries.len(), 1);
     assert!(mgr.get_timeline("nonexistent").is_none());
 }
+
+/// イージングの行き過ぎは変数の値域へ収める（#33・要件 11.11）
+#[test]
+fn easing_overshoot_is_clamped_to_variable_range() {
+    let mut instances = BTreeMap::new();
+    instances.insert(1, make_instance(0.0));
+
+    // Float [0,1]・BackOut は t=0.6 で 1.0 を越える
+    let mut seg = float_segment(0.0, 1.0, 0.0, 1.0);
+    seg.easing = Some(EasingFunction::Named(EasingName::BackOut));
+    let mut compiled = make_compiled_with_segments("x", vec![seg]);
+    let tl = compiled.timelines.get_mut("x").unwrap();
+    tl.min_value = Some(0.0);
+    tl.max_value = Some(1.0);
+
+    // Integer [0,100]・BackIn は t=0.3 で 0 を下回る（丸めると -22）
+    let mut seg = float_segment(0.0, 1.0, 0.0, 100.0);
+    seg.easing = Some(EasingFunction::Named(EasingName::BackIn));
+    let mut int_compiled = make_compiled_with_segments("n", vec![seg]);
+    let tl = int_compiled.timelines.get_mut("n").unwrap();
+    tl.variable_type = VariableTypeHint::Integer { typewriter: None };
+    tl.min_value = Some(0.0);
+    tl.max_value = Some(100.0);
+
+    let mut mgr = TimelineManager::new();
+    mgr.insert_entries(1, &compiled);
+    mgr.insert_entries(1, &int_compiled);
+
+    assert_eq!(
+        mgr.evaluate("x", 0.6, &instances),
+        Some(EvaluatedValue::Float(1.0))
+    );
+    assert_eq!(
+        mgr.evaluate("n", 0.3, &instances),
+        Some(EvaluatedValue::Integer(0))
+    );
+}

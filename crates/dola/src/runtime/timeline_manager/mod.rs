@@ -19,6 +19,43 @@ pub(crate) struct TimelineEntry {
     pub group_id: u64,
     pub segments: Vec<CompiledSegment>,
     pub variable_type: VariableTypeHint,
+    /// 値域（コンパイル結果の min_value／max_value）
+    pub min_value: Option<f64>,
+    pub max_value: Option<f64>,
+}
+
+impl TimelineEntry {
+    /// セグメントの進捗 `progress_t` の値。Object は intern を通し、Float と Integer は値域へ収める。
+    fn value_at(
+        &self,
+        seg: &CompiledSegment,
+        progress_t: f64,
+        intern_pool: &mut ObjectInternPool,
+    ) -> EvaluatedValue {
+        let min = self.min_value.unwrap_or(f64::NEG_INFINITY);
+        let max = self.max_value.unwrap_or(f64::INFINITY);
+        // clamp は min > max で panic し、max／min は NaN を捨てるので比べて収める
+        let fit = |v: f64| {
+            if v < min {
+                min
+            } else if v > max {
+                max
+            } else {
+                v
+            }
+        };
+        match Interpolator::interpolate_with_pool(
+            seg,
+            &self.variable_type,
+            progress_t,
+            Some(intern_pool),
+        ) {
+            EvaluatedValue::Float(v) => EvaluatedValue::Float(fit(v)),
+            // Integer の値域は i64 から来るので丸めた後に収める
+            EvaluatedValue::Integer(v) => EvaluatedValue::Integer(fit(v as f64) as i64),
+            other => other,
+        }
+    }
 }
 
 /// 購読変数ごとのタイムテーブル管理と時刻ベース評価を行う内部コンポーネント。
@@ -47,6 +84,8 @@ impl TimelineManager {
                 group_id,
                 segments: timeline.segments.clone(),
                 variable_type: timeline.variable_type.clone(),
+                min_value: timeline.min_value,
+                max_value: timeline.max_value,
             };
 
             self.timelines
@@ -87,12 +126,7 @@ impl TimelineManager {
             let effective_time = value_time(current_time, instance);
 
             // アクティブなセグメントを探す
-            let eval = evaluate_segments(
-                &entry.segments,
-                &entry.variable_type,
-                effective_time,
-                &mut self.intern_pool,
-            );
+            let eval = evaluate_segments(entry, effective_time, &mut self.intern_pool);
 
             if let Some(val) = eval {
                 // 最新（最大）group_id 優先
@@ -109,7 +143,7 @@ impl TimelineManager {
     }
 
     /// Conclude 用: group_id の全変数の最終値を取得。
-    pub fn collect_final_values(&self, group_id: u64) -> HashMap<String, EvaluatedValue> {
+    pub fn collect_final_values(&mut self, group_id: u64) -> HashMap<String, EvaluatedValue> {
         let mut result = HashMap::new();
 
         for (var_name, timeline) in &self.timelines {
@@ -117,11 +151,7 @@ impl TimelineManager {
                 if entry.group_id == group_id {
                     if let Some(last_seg) = entry.segments.last() {
                         // 最終セグメントの to_value を最終値とする
-                        let val = Interpolator::interpolate(
-                            last_seg,
-                            &entry.variable_type,
-                            1.0, // progress_t = 1.0 で最終値
-                        );
+                        let val = entry.value_at(last_seg, 1.0, &mut self.intern_pool);
                         result.insert(var_name.clone(), val);
                     }
                 }
@@ -171,12 +201,9 @@ impl TimelineManager {
         for (var_name, timeline) in &self.timelines {
             for entry in &timeline.entries {
                 if entry.group_id == group_id {
-                    if let Some(val) = evaluate_segments(
-                        &entry.segments,
-                        &entry.variable_type,
-                        effective_time,
-                        &mut self.intern_pool,
-                    ) {
+                    if let Some(val) =
+                        evaluate_segments(entry, effective_time, &mut self.intern_pool)
+                    {
                         result.insert(var_name.clone(), val);
                     }
                 }
@@ -191,7 +218,7 @@ impl TimelineManager {
     /// セグメントの to_value (progress_t=1.0) を返す。
     /// 未開始のセグメントはスキップする。
     pub(crate) fn collect_current_segment_final_values(
-        &self,
+        &mut self,
         group_id: u64,
         current_time: f64,
         instances: &BTreeMap<u64, StoryboardInstance>,
@@ -210,7 +237,7 @@ impl TimelineManager {
                     // アクティブなセグメントを特定
                     if let Some(active_seg) = find_active_segment(&entry.segments, effective_time) {
                         // アクティブセグメントの最終値 (progress_t=1.0) を取得
-                        let val = Interpolator::interpolate(active_seg, &entry.variable_type, 1.0);
+                        let val = entry.value_at(active_seg, 1.0, &mut self.intern_pool);
                         result.insert(var_name.clone(), val);
                     }
                 }
@@ -257,47 +284,36 @@ fn value_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
 ///
 /// セグメントが無いときだけ `None`。最後のセグメントを過ぎたら最後の値を返す。
 fn evaluate_segments(
-    segments: &[CompiledSegment],
-    variable_type: &VariableTypeHint,
+    entry: &TimelineEntry,
     effective_time: f64,
     intern_pool: &mut ObjectInternPool,
 ) -> Option<EvaluatedValue> {
+    let segments = &entry.segments;
     let last_seg = segments.last()?;
 
     // アクティブなセグメントを探す
     for seg in segments {
         if effective_time < seg.start_time {
             // まだこのセグメントに到達していない → from_value を返す
-            let val =
-                Interpolator::interpolate_with_pool(seg, variable_type, 0.0, Some(intern_pool));
-            return Some(val);
+            return Some(entry.value_at(seg, 0.0, intern_pool));
         }
 
         let duration = seg.end_time - seg.start_time;
         if duration <= 0.0 {
             // 即時遷移（duration=0）
             if effective_time >= seg.start_time {
-                let val =
-                    Interpolator::interpolate_with_pool(seg, variable_type, 1.0, Some(intern_pool));
-                return Some(val);
+                return Some(entry.value_at(seg, 1.0, intern_pool));
             }
         } else if effective_time < seg.end_time {
             // このセグメント内
             let progress_t = (effective_time - seg.start_time) / duration;
-            let val = Interpolator::interpolate_with_pool(
-                seg,
-                variable_type,
-                progress_t,
-                Some(intern_pool),
-            );
-            return Some(val);
+            return Some(entry.value_at(seg, progress_t, intern_pool));
         }
         // seg.end_time <= effective_time → 次のセグメントへ
     }
 
     // 最後のセグメントを過ぎた → 最後の値を保つ
-    let val = Interpolator::interpolate_with_pool(last_seg, variable_type, 1.0, Some(intern_pool));
-    Some(val)
+    Some(entry.value_at(last_seg, 1.0, intern_pool))
 }
 
 /// effective_time 時点でアクティブなセグメントを検索する。

@@ -71,6 +71,76 @@ mod document_replacement {
         );
     }
 
+    /// Object の最終値は intern を通る: "a"→"b" を終えるのが 2 回目以降なら差分 0（#37）
+    ///
+    /// 自然終了（全体の最終値）と競合の Conclude（今のセグメントの最終値）の両方を通す。
+    #[test]
+    fn object_conclude_twice_reports_no_change() {
+        use dola::DynamicValue;
+        let mut doc = simple_float_doc("x_only");
+        doc.variable.insert(
+            "o".to_string(),
+            AnimationVariableDef::Object {
+                initial: DynamicValue::String("a".to_string()),
+            },
+        );
+        let opacity_entry = doc.storyboard["x_only"].entry[0].clone();
+        let mut swap = doc.storyboard["x_only"].clone();
+        swap.entry = vec![
+            StoryboardEntry {
+                variable: Some("o".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    to: Some(TransitionValue::Dynamic(DynamicValue::String(
+                        "b".to_string(),
+                    ))),
+                    duration: Some(1.0),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            },
+            // o の後に opacity を長く動かす（競合の的）
+            StoryboardEntry {
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(1.0)),
+                    duration: Some(10.0),
+                    ..Default::default()
+                })),
+                ..opacity_entry
+            },
+        ];
+        doc.storyboard.insert("swap".to_string(), swap);
+
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("o");
+        rt.load_document(doc).unwrap();
+
+        // 1 回目: 自然終了で "b" を初めて配信
+        rt.start("swap", 0.0).unwrap();
+        rt.tick(20.0);
+        assert_eq!(rt.last_result().changes.len(), 1);
+
+        // 2 回目: 自然終了（collect_final_values）
+        rt.start("swap", 30.0).unwrap();
+        rt.tick(50.0);
+        assert!(
+            rt.last_result().changes.is_empty(),
+            "{:?}",
+            rt.last_result().changes
+        );
+
+        // 3 回目: o を終えた後に opacity の競合で Conclude（collect_current_segment_final_values）
+        rt.start("swap", 60.0).unwrap();
+        rt.tick(65.0);
+        rt.start("x_only", 65.0).unwrap();
+        rt.tick(66.0);
+        assert!(
+            rt.last_result().changes.is_empty(),
+            "{:?}",
+            rt.last_result().changes
+        );
+    }
+
     /// 検証で拒んだ文書は前の文書を消さない（#43）
     #[test]
     fn invalid_document_preserves_existing() {

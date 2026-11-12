@@ -162,7 +162,7 @@
   - _Requirements: 3.3, 9.2, 11.12_
 
 - [ ] 10. 評価・周回・購読（#33 のクランプ・#37・#55・#59・#62・#63・#67・#54 の残り）
-- [ ] 10.1 評価値を値域へ収め、Object の最終値を intern に通す（#33 のクランプ・#37）
+- [x] 10.1 評価値を値域へ収め、Object の最終値を intern に通す（#33 のクランプ・#37）
   - タイムラインの項目にコンパイル結果の最小と最大を持たせ、Float と Integer の評価値（補間とイージングの行き過ぎを含む）をその範囲へ収める（要件 11.11）
   - 最終値の取り出し 2 つを intern を通す形にする
   - 檻 2 本: イージングの行き過ぎがクランプされる。"a"→"b" を 2 回終えたとき 2 回目の Conclude で変化 0
@@ -379,3 +379,4 @@
 - 8: design 309 行の「読み込みで Object の intern の表を空にする」は、丸ごと空にすると動いている途中の Object の値が新しい Rc になり、`Rc::ptr_eq` の差分の比べで空振りの差分が 1 回出るので、「使われていない値だけ手放す」（`ObjectInternPool::release_unused`＝`strong_count > 1` を残す）にした（#62 の「表が増え続けない」は保つ・檻 `reload_keeps_animating_object_value_without_spurious_diff`）。`DolaDocumentBuilder::build` は検証の後に全部をコンパイルにかける（dola と wintf の呼び手だけ・緑）。`compile_validated` を呼ぶのは `compile_storyboard`・`compile_all`・facade の 3 か所で、どれも検証済みの文書。
 - 9.1: 競合は「新しいインスタンスが触る変数に、ほかの Playing／Paused のインスタンスの項目がある」で判定する。終わりの時刻を過ぎてまだ tick していないインスタンスも生きた扱い（前と同じ）。wintf の本番のコードは start を呼ばない。5.3 の待ちの中の値の保持は Conclude（`collect_current_segment_final_values`）と Cancel・Trim（`evaluate_all_for_group`）の 2 経路を檻 2 本で縛った（Trim 専用の檻は無い）。`LoopOffset::Scalar(v)` は [0, v] の乱数なので、決まった待ちのテストは `Range{v,v}` を使う。
 - 9.2→10.3: research #36 の場所に挙がる `subscription_manager/mod.rs:122` の `subscribed_ids` はまだ HashSet で、`UpdateResult.changes` の並びが走るたびに変わりうる（design の #36 の行の範囲の外）。10.3 の「購読した id を直に回す」直しで BTreeSet にし、並びが決まる檻を足す（進行役の決め）。`trigger_store` は回して読まないので HashMap のまま。
+- 10.1: 値は `TimelineEntry::value_at`（intern を通す補間＋値域へ収める）で配る（evaluate・evaluate_all_for_group・2 つの最終値の取り出し）。Integer は丸めた後に収める。research に無い既存の振る舞い: 有限でも極端に大きい値（from=−1.7e308・to=1.7e308 や巨大なベジェの制御点）で補間が NaN／inf を出し、NaN と値域の無い変数の inf はそのまま配られる（21 のかけ直しで拾う）。
