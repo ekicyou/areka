@@ -134,8 +134,10 @@ impl ViewboxExecutor {
             .planner
             .plan_with_overhangs(canvas, window, mode, contract, size, &overhangs);
         // 縮退判定（正しさ優先）: フォント/方向変更 or 想定外不整合なら全域ダーティ Update へ差し替え。
-        // 全域ダーティは面全域＝resident_rect を通らないため overhangs 不要（em ボックス経路と同一）。
-        let plan = degrade_if_needed(plan, rebuilt, canvas, window, mode, contract, size);
+        // 全域ダーティの描く行は、はみ出し込みで面と重なる行だけ（指摘 18）ゆえ overhangs を渡す。
+        let plan = degrade_if_needed(
+            plan, rebuilt, canvas, window, mode, contract, size, &overhangs,
+        );
 
         match &plan {
             // 変化なし——blit・描画・present とも 0・commit 不要（no-op）。

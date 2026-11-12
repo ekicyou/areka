@@ -11,7 +11,7 @@
 use crate::canvas::ContentCanvas;
 use crate::layout::VisibleWindow;
 use crate::region::ScaleContract;
-use crate::viewbox::{DirtyRect, FramePlan, ScrollPlanner};
+use crate::viewbox::{DirtyRect, FramePlan, LineOverhang, ScrollPlanner};
 use crate::writing::WritingMode;
 
 /// エラー縮退規律の適用（Error Handling）——`plan` を必要なら**全域ダーティ Update** へ縮退する。
@@ -25,6 +25,7 @@ use crate::writing::WritingMode;
 ///
 /// [`FramePlan::FullClear`] は縮退対象外（Clear は既に全域リセット）。[`FramePlan::NoChange`] は
 /// `rebuilt` のときのみ縮退（format 組み直し後の committed ピクセル前提消失を全域再描画で回復）。
+#[allow(clippy::too_many_arguments)]
 pub(super) fn degrade_if_needed(
     plan: FramePlan,
     rebuilt: bool,
@@ -33,6 +34,7 @@ pub(super) fn degrade_if_needed(
     mode: WritingMode,
     contract: &ScaleContract,
     surface_size: (u32, u32),
+    overhangs: &[LineOverhang],
 ) -> FramePlan {
     match plan {
         FramePlan::FullClear => FramePlan::FullClear,
@@ -41,7 +43,7 @@ pub(super) fn degrade_if_needed(
                 tracing::debug!(
                     "フォント/方向変更を検知——committed ピクセル前提消失のため全域ダーティへ縮退"
                 );
-                full_domain_update(canvas, window, mode, contract, surface_size)
+                full_domain_update(canvas, window, mode, contract, surface_size, overhangs)
             } else {
                 FramePlan::NoChange
             }
@@ -55,7 +57,7 @@ pub(super) fn degrade_if_needed(
                 tracing::debug!(
                     "フォント/方向変更を検知——format/行キャッシュ組み直し・全域ダーティへ縮退（committed ピクセル前提消失）"
                 );
-                full_domain_update(canvas, window, mode, contract, surface_size)
+                full_domain_update(canvas, window, mode, contract, surface_size, overhangs)
             } else if let Some(reason) =
                 plan_inconsistency(&dirty, &draw_lines, canvas.residents.len(), surface_size)
             {
@@ -63,7 +65,7 @@ pub(super) fn degrade_if_needed(
                     reason,
                     "plan と canvas/面寸の想定外不整合——全域ダーティ再描画へ縮退（正しさ優先・最悪でもレガシー全域再描画と等価）"
                 );
-                full_domain_update(canvas, window, mode, contract, surface_size)
+                full_domain_update(canvas, window, mode, contract, surface_size, overhangs)
             } else {
                 FramePlan::Update {
                     blit,
@@ -78,7 +80,8 @@ pub(super) fn degrade_if_needed(
 /// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=**可視窓の** GlyphRun 住人）を組む。
 ///
 /// [`ScrollPlanner::full_domain`]（計画者の全域の道）を呼び、面全域 1 枚のダーティと
-/// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人の描画対象を得る（初回フレームと同一経路）。
+/// **可視窓（`first_visible_line` 以降）の** GlyphRun 住人のうち、`overhangs` のはみ出し込みで面と
+/// 重なる行の描画対象を得る（初回フレームと同一経路・指摘 18）。
 /// 描画対象を可視窓で切るのは、全域再描画のオラクル `DrawExecutor::render` が
 /// `skip(first_visible_line)` で可視窓より前の行を描かないためで、こちらも同じ結果になる
 /// （タスク 3.4 でこの規律を揃えた——derivation-ledger.md「3.5.1 R-2 の決着」）。縮退の唯一の生成口。
@@ -88,8 +91,9 @@ pub(super) fn full_domain_update(
     mode: WritingMode,
     contract: &ScaleContract,
     surface_size: (u32, u32),
+    overhangs: &[LineOverhang],
 ) -> FramePlan {
-    ScrollPlanner::full_domain_plan(canvas, window, mode, contract, surface_size, &[])
+    ScrollPlanner::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs)
 }
 
 /// `plan` の `Update` が canvas/面寸と矛盾していないか検査する（防御的・render の縮退経路が呼ぶ）。
@@ -115,10 +119,10 @@ pub(super) fn plan_inconsistency(
         return Some("dirty 矩形が面寸を超える");
     }
     // 各矩形の行は描画対象行の部分集合（Phase 1 が draw_lines の資源しか組まないため、外れた
-    // index はその矩形で描かれず復元が欠ける）。
+    // index はその矩形で描かれず復元が欠ける）。draw_lines は昇順（計画者の不変条件）ゆえ二分探索。
     if dirty
         .iter()
-        .any(|d| d.lines.iter().any(|i| !draw_lines.contains(i)))
+        .any(|d| d.lines.iter().any(|i| draw_lines.binary_search(i).is_err()))
     {
         return Some("dirty 矩形の行が draw_lines の部分集合でない");
     }

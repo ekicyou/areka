@@ -661,3 +661,41 @@ fn choice_band_overflow_uses_row_extent_not_default_height() {
     assert_eq!(v.right, 2.0, "縦書き: 帯の右端 16 − 列の丈 14");
     assert_eq!(v.left, 1.0, "縦書き: 負の寄せの分だけ左へ");
 }
+
+/// 指摘 18・23: 描き手の全域の縮退（GPU 無し）。3 行（y 0・12・24・丈 10）を丈 20 の面で縮退させると、
+/// 面の下の行 2 は描かず、上のはみ出し 5 で面へ入れば描く。消去はそのまま。
+#[test]
+fn degrade_full_domain_draws_only_rows_overlapping_surface() {
+    use super::plan::degrade_if_needed;
+    use crate::viewbox::LineOverhang;
+    let mode = WritingMode::HorizontalTb;
+    let contract = ScaleContract::new(1.0, None);
+    let region = TextRegion::resolve(&geo_model(Some(10)), (120, 120), mode);
+    let (canvas, window) = build(&multiline_items(&["あ", "い", "う"]), &region, mode, 10.0);
+    let degrade = |plan, over: &[LineOverhang]| {
+        degrade_if_needed(
+            plan,
+            true,
+            &canvas,
+            &window,
+            mode,
+            &contract,
+            (120, 20),
+            over,
+        )
+    };
+    let draw_of = |plan| match plan {
+        FramePlan::Update {
+            blit, draw_lines, ..
+        } => {
+            assert_eq!(blit, (0, 0), "縮退は送らない");
+            draw_lines
+        }
+        other => panic!("全域の Update を期待: {other:?}"),
+    };
+    assert_eq!(draw_of(degrade(FramePlan::NoChange, &[])), vec![0, 1]);
+    let mut over = vec![LineOverhang::default(); 3];
+    over[2].top = 5.0;
+    assert_eq!(draw_of(degrade(FramePlan::NoChange, &over)), vec![0, 1, 2]);
+    assert_eq!(degrade(FramePlan::FullClear, &over), FramePlan::FullClear);
+}

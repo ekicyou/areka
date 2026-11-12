@@ -265,6 +265,7 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (0, 0),
         (400, 224),
         &prev,
+        &ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb),
         &over,
     );
     assert_eq!(
@@ -314,6 +315,7 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (0, 0),
         (400, 224),
         &vprev_lines,
+        &ScrollPlanner::committed_lines(&vcanvas, WritingMode::VerticalRl),
         &vover,
     );
     assert_eq!(v_em.len(), 1);
@@ -366,6 +368,7 @@ fn overhang_extends_changed_line_dirty_beyond_em_box() {
         (0, 0),
         (400, 224),
         &lprev_lines,
+        &ScrollPlanner::committed_lines(&lcanvas, WritingMode::VerticalLr),
         &lover,
     );
     assert_eq!(l_em.len(), 1);
@@ -473,6 +476,63 @@ fn empty_prev_is_full_domain() {
     );
     assert_eq!(dirty, vec![phys(0, 0, 400, 100)], "全域 1 枚");
     assert_eq!(draw, vec![0, 1, 2], "全 GlyphRun 住人");
+}
+
+/// 指摘 18: 全域の道でも描く行は面と重なる行だけ。行 0..3 は y 0・12・24・36（丈 10）で面の丈 30。
+/// 行 3 は面の下（ガード込みで 35..）で外れ、上のはみ出し 6 で 29 まで上がると面へ入って残る。
+#[test]
+fn full_domain_draws_only_rows_overlapping_surface() {
+    let contract = ScaleContract::new(1.0, None);
+    let mode = WritingMode::HorizontalTb;
+    let canvas = canvas_for(
+        &broken_lines(4),
+        mode,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let full = |over: &[LineOverhang]| {
+        ScrollPlanner::full_domain(&canvas, &window(0, 0.0), mode, &contract, (400, 30), over)
+    };
+    let (dirty, draw) = full(&[]);
+    assert_eq!(dirty, vec![phys(0, 0, 400, 30)], "全域 1 枚のまま");
+    assert_eq!(draw, vec![0, 1, 2], "面の下の行 3 は描かない");
+    assert_eq!(dirty[0].lines, draw, "矩形の行＝描く行");
+    let mut over = vec![LineOverhang::default(); 4];
+    over[3].top = 6.0;
+    assert_eq!(
+        full(&over).1,
+        vec![0, 1, 2, 3],
+        "上のはみ出しが面へ入る行は残る"
+    );
+}
+
+/// 指摘 23: 後ろ向きの縮みの 2 つの枝——同じ番号の行の位置が動いた・行の丈だけが縮んだ。
+#[test]
+fn backward_shrink_detects_moved_row_and_shorter_extent() {
+    let mode = WritingMode::HorizontalTb;
+    let canvas = canvas_for(
+        &broken_lines(2),
+        mode,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    );
+    let prev = ScrollPlanner::committed_lines(&canvas, mode);
+    assert!(
+        !ScrollPlanner::is_backward_shrink(&prev, &prev),
+        "対照: 同じ行は縮みでない"
+    );
+    let mut moved = prev.clone();
+    moved[1].block_pos_bits = (f32::from_bits(prev[1].block_pos_bits) + 1.0).to_bits();
+    assert!(
+        ScrollPlanner::is_backward_shrink(&prev, &moved),
+        "行の位置が動いた"
+    );
+    let mut shorter = prev.clone();
+    shorter[0].extent_bits.1 = (f32::from_bits(prev[0].extent_bits.1) / 2.0).to_bits();
+    assert!(
+        ScrollPlanner::is_backward_shrink(&prev, &shorter),
+        "高さだけ縮んだ"
+    );
 }
 
 // ── 整数格子拡張＋ガード＋クランプ（k=1.0／k=1.25 で面寸を越えない） ──
@@ -626,6 +686,7 @@ fn scrolled_out_line_ink_overhang_is_dirtied_and_not_drawn() {
         (0, -12),
         (400, 100),
         &prev,
+        &ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb),
         &over,
     );
     assert_eq!(
@@ -704,6 +765,7 @@ fn dirty_rects_carry_only_their_intersecting_lines() {
         (0, -12),
         surface,
         &prev,
+        &ScrollPlanner::committed_lines(&canvas, mode),
         &over,
     );
 
@@ -819,6 +881,7 @@ fn huge_and_infinite_line_positions_clip_into_surface_without_panic() {
             (0, 0),
             (400, 224),
             &prev,
+            &ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb),
             &over,
         );
         assert_eq!(dirty.len(), 1, "top {top}: 1 枚");

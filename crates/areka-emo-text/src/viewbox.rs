@@ -255,7 +255,7 @@ impl ScrollPlanner {
         // 戻し・前回の面の原点の上の余白が blit で写る）、内容が前回確定より減った＝スクロール
         // アウトした行の再露出、または確定行の行内縮小（同一 index 行の block 位置移動・extent
         // 縮小）を面内 blit＋差分描画で保持できない（退避インクを取りこぼす）ため、全域ダーティ（blit=0・
-        // 面全域・全住人）へ縮退して正しさを優先する（既存の format 変更/不整合縮退と同型・
+        // 面全域・面と重なる行）へ縮退して正しさを優先する（既存の format 変更/不整合縮退と同型・
         // design Error Handling「最悪でもレガシー全域再描画と等価な 1 フレーム」・DD-9）。
         // 前方 typewriter（住人単調増加・prefix 伸長で extent 増加・block 不動）では不発ゆえ
         // 増分ホットパスは維持——注入時刻の後方ジャンプ・un-reveal 等（確定 content を縮める
@@ -278,6 +278,7 @@ impl ScrollPlanner {
             blit,
             surface_size,
             prev_lines,
+            &new_lines,
             overhangs,
         );
         if blit == (0, 0) && dirty.is_empty() {

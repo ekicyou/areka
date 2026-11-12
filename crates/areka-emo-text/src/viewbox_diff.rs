@@ -105,25 +105,38 @@ impl ScrollPlanner {
             blit,
             surface_size,
             prev_lines,
+            &Self::committed_lines(canvas, mode),
             &[],
         )
     }
 
     /// 全域の道（前の行が分からない・縮退）: dirty＝面全域 1 枚・描画対象＝可視窓の GlyphRun 住人
-    /// （`first_visible_line` 以降・理由は `derive_dirty` の doc）。矩形が 1 枚ゆえ
-    /// 「矩形ごとの交差行」＝描画対象＝和集合。`overhangs` は面と重なる行の選り分け（指摘 18）の入力。
+    /// （`first_visible_line` 以降・理由は `derive_dirty` の doc）のうち、はみ出し込みの矩形が面と
+    /// 重なる行だけ（指摘 18・面の外の行はクリップで捨てるだけなので描かない。面のすぐ下の行でも
+    /// 上のはみ出しが面へ入るなら残す）。矩形が 1 枚ゆえ「矩形ごとの交差行」＝描画対象＝和集合。
     pub(crate) fn full_domain(
         canvas: &ContentCanvas,
         window: &VisibleWindow,
-        _mode: WritingMode,
-        _contract: &ScaleContract,
+        mode: WritingMode,
+        contract: &ScaleContract,
         surface_size: (u32, u32),
-        _overhangs: &[LineOverhang],
+        overhangs: &[LineOverhang],
     ) -> (Vec<DirtyRect>, Vec<usize>) {
         let (w, h) = surface_size;
         let full = PhysicalRect { x: 0, y: 0, w, h };
         let draw_lines: Vec<usize> = glyph_run_indices(canvas)
             .filter(|&i| i >= window.first_visible_line)
+            .filter(|&i| {
+                resident_rect(
+                    &canvas.residents[i],
+                    window.block_offset,
+                    mode,
+                    contract,
+                    surface_size,
+                    overhangs.get(i).copied().unwrap_or_default(),
+                )
+                .is_some()
+            })
             .collect();
         let dirty = if full.is_empty() {
             Vec::new()
@@ -167,6 +180,10 @@ impl ScrollPlanner {
     /// **送りの前に面の遠い端へ届いていた行**（(d)・指摘 15）: 線を面の内側へ寄せた最下行は、
     /// 寄せた線ごと送られる。`blit ≠ 0` のフレームでは、送りの前の位置で矩形（はみ出し込み）が
     /// 面にかかり行送りの向きの遠い端を越えていた行も、変わった行と同じくダーティへ入れる。
+    ///
+    /// `new_lines` は `canvas` の [`Self::committed_lines`]（住人 index と 1:1）——計画が 1 度だけ
+    /// 求めた指紋をそのまま受け、ここでは求め直さない（指摘 31）。
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn derive_dirty_with_overhangs(
         canvas: &ContentCanvas,
         window: &VisibleWindow,
@@ -175,6 +192,7 @@ impl ScrollPlanner {
         blit: (i32, i32),
         surface_size: (u32, u32),
         prev_lines: &[CommittedLine],
+        new_lines: &[CommittedLine],
         overhangs: &[LineOverhang],
     ) -> (Vec<DirtyRect>, Vec<usize>) {
         // 住人 index の実測はみ出し（無ければ既定 0＝em ボックス丈・テスト等の非測定経路）。
@@ -202,10 +220,9 @@ impl ScrollPlanner {
         //     可視窓の外の行の em ボックスは面の外にあり、はみ出しが 0 の行は残滓を作らない
         //     （＝可視窓だけが動いたフレームのダーティは露出帯 1 枚のまま）。
         let block_offset = window.block_offset;
-        for (i, resident) in canvas.residents.iter().enumerate() {
-            let fingerprint = line_fingerprint(resident, mode);
+        for (i, (resident, fingerprint)) in canvas.residents.iter().zip(new_lines).enumerate() {
             let changed = match prev_lines.get(i) {
-                Some(prev) => *prev != fingerprint,
+                Some(prev) => prev != fingerprint,
                 None => true, // 新規行（prev.len() を超える index）。
             };
             let scrolled_out_residue = blit != (0, 0)
