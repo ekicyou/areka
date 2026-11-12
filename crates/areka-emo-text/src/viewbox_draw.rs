@@ -129,7 +129,8 @@ pub struct ViewboxExecutor {
     /// 装飾の色ごとの塗りブラシの記憶（同じ色を毎フレーム作り直さない）。
     brushes: BrushCache,
     /// 行の中の印の絵の D2D の絵（絵の `Arc` の同一性を鍵に 1 枚だけ覚える・毎フレーム作り直さない）。
-    marker_bitmap: Option<(Arc<MarkerImage>, ID2D1Bitmap1)>,
+    /// 作れなかった絵は `None` を覚える（同じ絵で作り直して `error!` を毎フレーム残さない・指摘 36）。
+    marker_bitmap: Option<(Arc<MarkerImage>, Option<ID2D1Bitmap1>)>,
     /// 決定論観測統計（常時コンパイル・[`Self::stats`] で読む）。
     stats: DrawStats,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の

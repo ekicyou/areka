@@ -618,17 +618,18 @@ impl ViewboxExecutor {
         Ok(paints)
     }
 
-    /// 印の絵の D2D の絵（同じ `Arc` なら覚えた 1 枚を返す）。作れないときは `None`
-    /// （[`marker_bitmap`] が `error!` を残す・その印だけ塗らない）。
+    /// 印の絵の D2D の絵（同じ `Arc` なら覚えた結果を返す）。作れないときは `None`
+    /// （[`marker_bitmap`] が `error!` を残す・その印だけ塗らない）。失敗も成功と同じ欄に覚え、
+    /// 同じ絵では作り直さない（記録は絵ごとに 1 回・指摘 36）。
     fn marker_bitmap_for(&mut self, image: &Arc<MarkerImage>) -> Option<ID2D1Bitmap1> {
         if let Some((held, bitmap)) = &self.marker_bitmap
             && Arc::ptr_eq(held, image)
         {
-            return Some(bitmap.clone());
+            return bitmap.clone();
         }
-        let bitmap = marker_bitmap(&self.dc, image).ok()?;
+        let bitmap = marker_bitmap(&self.dc, image).ok();
         self.marker_bitmap = Some((Arc::clone(image), bitmap.clone()));
-        Some(bitmap)
+        bitmap
     }
 
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
