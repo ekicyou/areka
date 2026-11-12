@@ -360,7 +360,7 @@ fn anchor_cue_wire_form() {
     assert_eq!(parsed, blank);
 }
 
-// ── D3-T 追加ギャップテスト ──
+// ── ギャップテスト ──
 
 #[test]
 fn actor_key_new_display_as_str() {

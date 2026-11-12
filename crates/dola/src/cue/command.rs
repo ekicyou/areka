@@ -59,7 +59,7 @@ pub enum CueTarget {
     /// Emote, BalloonSurface を主に消費する。
     /// 注: 名前は「シェル」だが分類上バルーン面切替もここへ経路付けられる（名前負債）。
     Shell,
-    /// バルーン（テキスト表示）— Text, Clear, Choice, AnchorBegin, AnchorEnd, WaitForChoice を主に消費
+    /// バルーン（テキスト表示）— Text, Clear, Choice, AnchorBegin, AnchorEnd を主に消費
     Balloon,
 }
 

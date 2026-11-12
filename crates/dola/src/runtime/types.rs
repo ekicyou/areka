@@ -86,7 +86,7 @@ pub struct StartResult {
     pub affected_group_ids: Vec<u64>,
 }
 
-/// update() の返却値。
+/// `tick()` の結果（`last_result()` が返す）。
 ///
 /// 変数の差分変化とトリガー実行結果を含む。
 #[derive(Debug, Clone)]

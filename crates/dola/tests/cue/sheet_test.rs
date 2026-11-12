@@ -55,7 +55,7 @@ fn cue_sheet_len() {
 
 #[test]
 fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
-    // D3-T 特性化: CueSheet::new は安定ソート — 同時刻 Cue は記述順を保持する
+    // CueSheet::new は安定ソート — 同時刻 Cue は記述順を保持する
     let sheet = CueSheet::new(vec![
         text(1.0, "first", 0.0),
         text(1.0, "second", 0.0),
@@ -82,7 +82,7 @@ fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
 }
 
 // ============================================================================
-// 非有限 start_time の境界（D3-V 特性化）
+// 非有限 start_time の境界
 // ============================================================================
 
 #[test]
@@ -518,11 +518,11 @@ fn to_talk_schedule_not_completed_until_occupancy_horizon_reached() {
         !schedule.is_completed(),
         "配送完了時点では占有 horizon（D+0.8）未到達ゆえ未完了（早期終了しない）"
     );
-    // horizon 直前でもまだ未完了。
-    schedule.tick(d + wait_dur - 0.01);
+    // horizon 直前でもまだ未完了。horizon は ms の格子で数えた 0.95（素の和 0.9500000000000001 では tick しない）。
+    schedule.tick(0.94);
     assert!(!schedule.is_completed(), "占有 horizon 直前は未完了");
     // horizon 到達で初めて完了。
-    schedule.tick(d + wait_dur);
+    schedule.tick(0.95);
     assert!(schedule.is_completed(), "占有 horizon 到達で完了");
 }
 

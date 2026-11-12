@@ -131,25 +131,22 @@ mod e2e_tests {
 
     #[test]
     fn e2e_no_offset_natural_end() {
-        // loop_count=2, no offset → ends at t=2.0
+        // loop_count=2・待ちなし → 周回は [0,1]・[1,2]、t=2.0 で終わる
         let doc = loop_offset_doc("blink", 2, None);
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        let (mut rt, opacity_id) = setup_runtime(doc);
         let result = rt.start("blink", 0.0).unwrap();
         assert_eq!(result.end_time, 1.0); // first loop end
 
-        // Mid first loop
-        rt.tick(0.5);
-        let changes = rt.last_result().changes.clone();
-        assert!(!changes.is_empty());
+        let v = opacity_at(&mut rt, opacity_id, 0.25).expect("opacity at t=0.25");
+        assert!((v - 0.25).abs() < 1e-9, "t=0.25: {v}");
+        let v = opacity_at(&mut rt, opacity_id, 1.5).expect("opacity at t=1.5");
+        assert!((v - 0.5).abs() < 1e-9, "t=1.5: {v}");
+        assert!(rt.has_instances(), "t=1.5 は 2 周目の中");
 
-        // After 2 loops → conclude
-        rt.tick(2.5);
-        let _changes = rt.last_result().changes.clone();
-        // Should have final values (opacity=1.0 at end of loop)
-        // After conclude, subsequent update returns empty
-        rt.tick(3.0);
-        let changes = rt.last_result().changes.clone();
-        assert!(changes.is_empty());
+        // 2 周の後は最終値 1.0 を配って終わる
+        let v = opacity_at(&mut rt, opacity_id, 2.5).expect("opacity at t=2.5");
+        assert!((v - 1.0).abs() < 1e-9, "t=2.5: {v}");
+        assert!(!rt.has_instances(), "t=2.5 で終わっている");
     }
 
     #[test]
@@ -189,19 +186,25 @@ mod e2e_tests {
 
     #[test]
     fn e2e_loop_count_1_ignores_offset() {
-        // loop_count=1 + offset → offset is ignored, concludes normally
-        let doc = loop_offset_doc("blink", 1, Some(LoopOffset::Scalar(10.0)));
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        // loop_count=1 + 待ち 10 秒固定 → 待ちは使われず t=1.0 で終わる
+        let doc = loop_offset_doc(
+            "blink",
+            1,
+            Some(LoopOffset::Range(LoopOffsetRange {
+                min: 10.0,
+                max: 10.0,
+                easing: EasingFunction::Named(EasingName::Linear),
+            })),
+        );
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
 
-        // At t=1.5: past end_time=1.0, loop_count=1 → conclude
-        rt.tick(1.5);
-        let _changes = rt.last_result().changes.clone();
-
-        // After conclude, no more updates
-        rt.tick(2.0);
-        let changes = rt.last_result().changes.clone();
-        assert!(changes.is_empty());
+        let v = opacity_at(&mut rt, opacity_id, 1.5).expect("opacity at t=1.5");
+        assert!((v - 1.0).abs() < 1e-9, "t=1.5: {v}");
+        assert!(
+            !rt.has_instances(),
+            "t=1.5 で終わっている（待ちに入らない）"
+        );
     }
 
     #[test]
@@ -284,22 +287,21 @@ mod e2e_tests {
 
     #[test]
     fn e2e_without_offset_backward_compatible() {
-        // No loop_offset → identical behavior to before
+        // 待ちなし・3 周 → 周回は [0,1]・[1,2]・[2,3]、t=3.0 で終わる
         let doc = loop_offset_doc("fade", 3, None);
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("fade", 0.0).unwrap();
 
-        // Mid-loop updates should work normally
-        rt.tick(0.5);
-        let changes = rt.last_result().changes.clone();
-        assert!(!changes.is_empty());
+        for (t, want) in [(0.5, 0.5), (2.25, 0.25)] {
+            let v =
+                opacity_at(&mut rt, opacity_id, t).unwrap_or_else(|| panic!("opacity at t={t}"));
+            assert!((v - want).abs() < 1e-9, "t={t}: {v}");
+        }
+        assert!(rt.has_instances(), "t=2.25 は 3 周目の中");
 
-        // All 3 loops complete at t=3.0+
-        rt.tick(3.5);
-        let _changes = rt.last_result().changes.clone();
-        rt.tick(4.0);
-        let changes = rt.last_result().changes.clone();
-        assert!(changes.is_empty()); // concluded
+        let v = opacity_at(&mut rt, opacity_id, 3.5).expect("opacity at t=3.5");
+        assert!((v - 1.0).abs() < 1e-9, "t=3.5: {v}");
+        assert!(!rt.has_instances(), "t=3.5 で終わっている");
     }
 
     #[test]
@@ -337,7 +339,7 @@ mod e2e_tests {
 
     #[test]
     fn e2e_large_delay() {
-        // Task 6.2: Large delay (100.0s)
+        // 待ち 100 秒固定・2 周 → 周回は [0,1]・[101,102]
         let doc = loop_offset_doc(
             "slow",
             2,
@@ -347,29 +349,26 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("slow", 0.0).unwrap();
 
-        // At t=1.5: past first loop → advance, end_time=1.0+1.0+100.0=102.0
-        rt.tick(1.5);
-        let _changes = rt.last_result().changes.clone();
+        let v = opacity_at(&mut rt, opacity_id, 1.5).expect("opacity at t=1.5");
+        assert!((v - 1.0).abs() < 1e-9, "t=1.5: {v}");
+        // 待ちの中は値を保ったまま生きている
+        assert_eq!(opacity_at(&mut rt, opacity_id, 50.0), None, "t=50.0");
+        assert!(rt.has_instances(), "t=50.0 は待ちの中");
 
-        // At t=50.0: still in delay
-        rt.tick(50.0);
-        let _changes = rt.last_result().changes.clone();
-        // Should still be alive
+        let v = opacity_at(&mut rt, opacity_id, 101.5).expect("opacity at t=101.5");
+        assert!((v - 0.5).abs() < 1e-9, "t=101.5: {v}");
 
-        // At t=105.0: past end_time=102.0, 2nd loop completes → conclude
-        rt.tick(105.0);
-        let _changes = rt.last_result().changes.clone();
-        rt.tick(106.0);
-        let changes = rt.last_result().changes.clone();
-        assert!(changes.is_empty()); // concluded
+        let v = opacity_at(&mut rt, opacity_id, 106.0).expect("opacity at t=106.0");
+        assert!((v - 1.0).abs() < 1e-9, "t=106.0: {v}");
+        assert!(!rt.has_instances(), "t=106.0 で終わっている");
     }
 
     #[test]
     fn e2e_f64_precision_many_loops() {
-        // Task 6.2: Many loops with delay — check no precision issues
+        // 待ち 0.1 秒固定・無限 → k 周目は 1.1k 秒に始まる（1 周 1.1 秒）
         let doc = loop_offset_doc(
             "precision",
             -1,
@@ -379,13 +378,12 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let (mut rt, _opacity_id) = setup_runtime(doc);
+        let (mut rt, opacity_id) = setup_runtime(doc);
         rt.start("precision", 0.0).unwrap();
 
-        // Advance through many loops: each loop = 1.0s + 0.1s delay = 1.1s/loop
-        // 100 loops ≈ 110s
-        rt.tick(115.0);
-        let _changes = rt.last_result().changes.clone();
-        // Should still be running (infinite loops), no crash, no infinite loop
+        // t=115 は 104 周目（起点 114.4）の 0.6 秒目
+        let v = opacity_at(&mut rt, opacity_id, 115.0).expect("opacity at t=115.0");
+        assert!((v - 0.6).abs() < 1e-9, "t=115.0: {v}");
+        assert!(rt.has_instances(), "無限のループは生きている");
     }
 }

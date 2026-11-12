@@ -74,7 +74,7 @@ mod dynamic_value_tests {
         assert_eq!(val, deserialized);
     }
 
-    /// D1b-T 追加: Hash 実装の整合性 — 構造的に等しい値は同一ハッシュ
+    /// Hash 実装の整合性 — 構造的に等しい値は同一ハッシュ
     /// （runtime の ObjectInternPool は DynamicValue を HashMap キーとして使用する）
     #[test]
     fn hash_consistent_for_equal_values() {

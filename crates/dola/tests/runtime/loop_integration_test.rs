@@ -252,6 +252,55 @@ fn multi_loop_batch_processing() {
 }
 
 // =========================================================================
+// 先頭の遅れは周回ごとにくり返す（長さに入る）
+// =========================================================================
+
+/// delay 0.5・duration 1.0・2 周 → 1 周は 1.5 秒で、2 周目も [1.5,2.0] が遅れ・[2.0,3.0] が遷移。
+/// 2 周目から遅れを抜いても、長さを遅れの後から数えても落ちる。
+#[test]
+fn leading_delay_repeats_every_loop() {
+    let mut doc = loop_doc("fade", 2, 1.0);
+    let entry = &mut doc.storyboard.get_mut("fade").unwrap().entry[0];
+    let Some(dola::TransitionRef::Inline(tr)) = entry.transition.as_mut() else {
+        panic!("inline transition")
+    };
+    tr.delay = 0.5;
+
+    let mut rt = DolaRuntime::new();
+    let opacity_id = rt.subscribe("opacity");
+    rt.load_document(doc).unwrap();
+    rt.start("fade", 0.0).unwrap();
+
+    let mut opacity_at = |t: f64| {
+        rt.tick(t);
+        let v = rt
+            .last_result()
+            .changes
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .map(|(_, v)| extract_float(v));
+        (v, rt.has_instances())
+    };
+
+    // 1 周目の遷移の中ほど
+    let (v, _) = opacity_at(1.0);
+    assert!((v.expect("t=1.0") - 0.5).abs() < 1e-9, "t=1.0: {v:?}");
+    // 2 周目の遅れの中は 2 周目の from
+    let (v, _) = opacity_at(1.75);
+    assert!(v.expect("t=1.75").abs() < 1e-9, "t=1.75: {v:?}");
+    // 2 周目の遷移の中ほど
+    let (v, alive) = opacity_at(2.5);
+    assert!((v.expect("t=2.5") - 0.5).abs() < 1e-9, "t=2.5: {v:?}");
+    assert!(alive, "t=2.5 はまだ生きている");
+    // 2 周目の終わり 3.0 で終わる
+    let (_, alive) = opacity_at(2.99);
+    assert!(alive, "t=2.99 はまだ生きている");
+    let (v, alive) = opacity_at(3.0);
+    assert!((v.expect("t=3.0") - 1.0).abs() < 1e-9, "t=3.0: {v:?}");
+    assert!(!alive, "t=3.0 で終わる");
+}
+
+// =========================================================================
 // Pause + ループの正確な再開
 // =========================================================================
 

@@ -32,7 +32,7 @@ mod v13_tests {
 
     #[test]
     fn float_variable_with_dynamic_from_error() {
-        // D3-T 追加: to 側は既存テストあり。from 側の Dynamic 拒否を固定する
+        // to 側は既存テストあり。from 側の Dynamic 拒否を固定する
         let doc = with_transition(
             doc_with_float_var("x", 0.0, None, None),
             "x",

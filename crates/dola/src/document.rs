@@ -28,7 +28,7 @@ pub struct DolaDocument {
 mod tests {
     use super::*;
 
-    // D3-T ギャップテスト: #[serde(default)] による省略フィールドの空コレクション化
+    // #[serde(default)] による省略フィールドの空コレクション化
     // （フルラウンドトリップは tests/general/core_types_test/document_variable.rs が担う）
 
     #[test]

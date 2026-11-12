@@ -309,7 +309,7 @@ InvalidNumber {
 - `DocumentStore` を消し、`DolaRuntime` が `Option<DolaDocument>` を持つ。`load_document` は `validate()` の後、全ストーリーボードを `compile_validated(&doc, name, 0.0)` にかけ、1 つでも失敗すれば前の文書を残して `Err(RuntimeError::CompileError(errors))`。通れば差し替え、Object の値の intern の表を空にする（#62）。
 - V7 を「`variable` と `transition` は両方あるか両方無いか」にする（片方だけは `InvalidEntry`）。
 - `DolaDocumentBuilder::build` も `validate()` の後に全ストーリーボードを compile にかける。
-- `compile_storyboard`（公開）は今のまま validate してから `compile_validated` を呼ぶ。`start_internal`・`calculate_end_time` は `compile_validated` を使う。
+- `compile_storyboard`（公開）は今のまま validate してから `compile_validated` を呼ぶ。`start_internal`・`calculate_end_time`（21 のかけ直し R1-14 で消した）は `compile_validated` を使う。
 
 #### コンパイル（#4・#5・#31・#33・#68・#69・#71・#72）
 
@@ -444,7 +444,7 @@ pub fn has_instances(&self) -> bool;
 | 59 | 前 | `instance_manager` の `pause` に時刻を渡して 1 段に。`set_pause_start`・防御の分岐（`timeline_manager/mod.rs:245`・resume の分）とそのテストを消す | — | — |
 | 60 | 前 | `create_instance` を消し、facade で `StoryboardInstance` を組んで `insert`（件 3 の `too_many_arguments` も消える・要件 11.12） | — | — |
 | 61 | 前 | `let Some(terminal_state) = InstanceState::from_policy(policy) else { continue };` を値の match の前へ。Never の腕・`unreachable!`・`expect` を消す | — | — |
-| 62 | 前 | `unsubscribe`／`unsubscribe_all` で `id_to_name` も消す。`load_document` で intern の表を空に | — | 新 `unsubscribe_forgets_name`（解除と登録を 3 回繰り返して表の件数が増えない）（`src/runtime/subscription_manager/tests.rs`） |
+| 62 | 前 | `unsubscribe`／`unsubscribe_all`（21 のかけ直し R1-14 で消した）で `id_to_name` も消す。`load_document` で intern の表を空に | — | 新 `unsubscribe_forgets_name`（解除と登録を 3 回繰り返して表の件数が増えない）（`src/runtime/subscription_manager/tests.rs`） |
 | 63 | 前 | `subscribed_ids` を直に回して `&str` で評価（毎フレームの `String` の複製と `Vec`・`HashMap` を作らない） | — | — |
 | 64 | 前 | `finish` の引数名を `deadline` に（説明も） | — | — |
 | 65 | 前 | `compiled.triggers.clone()` を `std::mem::take` に | — | — |

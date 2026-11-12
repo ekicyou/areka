@@ -273,7 +273,7 @@ fn v15t_long_chain_validates_ok_on_small_stack() {
     assert!(doc.is_ok(), "long chain should validate: {:?}", doc.err());
 }
 
-/// V15t 特性化（D3-T）: 循環エラーのパスは閉路（先頭 == 末尾）として報告される
+/// V15t 特性化: 循環エラーのパスは閉路（先頭 == 末尾）として報告される
 #[test]
 fn v15t_cycle_path_is_closed_and_contains_members() {
     let sb_a = StoryboardBuilder::new()
@@ -338,7 +338,7 @@ fn trigger_cycle_reported_once_without_bystander() {
     assert_eq!(cycles, [["a", "b", "a"].map(String::from).as_slice()]);
 }
 
-/// V15t（D3-T）: ダイヤモンド型（合流のみで閉路なし）は循環と誤検出されない
+/// V15t: ダイヤモンド型（合流のみで閉路なし）は循環と誤検出されない
 #[test]
 fn v15t_diamond_join_is_not_a_cycle() {
     let opacity_var = AnimationVariableDef::Float {
@@ -389,7 +389,7 @@ fn v15t_diamond_join_is_not_a_cycle() {
     assert!(doc.is_ok(), "diamond join is not a cycle: {:?}", doc.err());
 }
 
-/// V14t/V15t 特性化（D3-T）: 自己参照は SelfReference と TriggerCycle の両方を報告する
+/// V14t/V15t 特性化: 自己参照は SelfReference と TriggerCycle の両方を報告する
 #[test]
 fn v14t_self_reference_also_reports_cycle() {
     let sb = StoryboardBuilder::new()

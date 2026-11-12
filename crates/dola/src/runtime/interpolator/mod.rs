@@ -80,7 +80,7 @@ impl Interpolator {
         // NaN の伝播先: Object は `t >= 1.0` が false → from_value 側、
         // Float は NaN が結果へ伝播、Integer は `NaN.round() as i64` の飽和キャストで 0。
         // +inf / -inf は 1.0 / 0.0 にクランプされる。いずれの経路も panic しない
-        // （tests.rs の D1b-V 数値境界テストで固定）。
+        // （tests.rs の数値境界のテストで固定）。
         let t = progress_t.clamp(0.0, 1.0);
 
         match variable_type {

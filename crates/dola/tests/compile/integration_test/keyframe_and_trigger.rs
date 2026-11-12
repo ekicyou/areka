@@ -111,7 +111,7 @@ fn multiple_keyframe_wait() {
 }
 
 // =========================================================
-// D2-T gap tests: トリガーエントリの時刻解決（compile_storyboard 内ロジック）
+// トリガーエントリの時刻解決（compile_storyboard 内ロジック）
 // =========================================================
 
 fn float_x_entry(duration: f64, kf: &str) -> StoryboardEntry {

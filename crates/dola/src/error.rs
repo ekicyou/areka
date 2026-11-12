@@ -164,7 +164,7 @@ pub enum DolaError {
 mod tests {
     use super::*;
 
-    // D2-T gap tests: DolaError の Display 文字列（全22バリアント）と Error トレイトの直接検証
+    // DolaError の Display 文字列（全22バリアント）と Error トレイトの直接検証
     // （診断メッセージはユーザー向け挙動の一部であり、フォーマット崩れを回帰検知する）
 
     fn s(v: &str) -> String {

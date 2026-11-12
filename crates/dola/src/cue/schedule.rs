@@ -159,7 +159,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// 時刻到達済みの Payload を `ready_buffer` に蒐集しながら進行。Barrier 到達（外部解決が
     /// 必要）または末尾到達で停止。冪等（同一時刻の再呼び出し安全）。
     ///
-    /// NOTE(D3-V): `current_time`（または start_time）が NaN の場合、下の全ガード
+    /// NOTE: `current_time`（または start_time）が NaN の場合、下の全ガード
     /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
     /// （`sum_on_ms_grid(start_time, entry_offset) > current_time`）がすべて false になるため、
     /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない。

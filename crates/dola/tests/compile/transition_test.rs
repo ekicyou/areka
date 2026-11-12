@@ -140,7 +140,7 @@ fn easing_function_preserved() {
 }
 
 // =========================================================
-// D2-T gap test: Integer 変数の initial からの from 推論
+// Integer 変数の initial からの from 推論
 // =========================================================
 
 #[test]

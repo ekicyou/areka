@@ -152,7 +152,7 @@ mod tests {
             assert_eq!(InstanceState::from_policy(InterruptionPolicy::Never), None);
         }
 
-        /// D1b-V 追加: from_policy が返す Some(state) は全て終了状態である
+        /// from_policy が返す Some(state) は全て終了状態である
         /// （conflict_resolver の expect / debug_assert が依存する不変条件）
         #[test]
         fn from_policy_results_are_terminal() {

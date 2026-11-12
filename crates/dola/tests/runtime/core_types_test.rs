@@ -41,7 +41,7 @@ mod evaluated_value_tests {
         assert_ne!(v1, v2);
     }
 
-    /// D1b-T 追加: 異種バリアント間は値が数値的に同じでも常に不等
+    /// 異種バリアント間は値が数値的に同じでも常に不等
     #[test]
     fn cross_variant_never_equal() {
         assert_ne!(EvaluatedValue::Float(1.0), EvaluatedValue::Integer(1));
@@ -52,7 +52,7 @@ mod evaluated_value_tests {
         );
     }
 
-    /// D1b-V 追加: Float(NaN) は自分自身と不等（IEEE 754）。NaN 混入時は差分検出が
+    /// Float(NaN) は自分自身と不等（IEEE 754）。NaN 混入時は差分検出が
     /// 毎フレーム「変化あり」と判定し続ける現行挙動の特性化
     #[test]
     fn float_nan_is_never_equal_to_itself() {
@@ -93,7 +93,7 @@ mod runtime_error_tests {
         assert!(msg.contains("zero duration"));
     }
 
-    /// D1b-T 追加: Display 未検証バリアントの固定（TooShortDurationWithInfiniteLoop）
+    /// Display 未検証バリアントの固定（TooShortDurationWithInfiniteLoop）
     #[test]
     fn too_short_duration_with_infinite_loop_display() {
         let err = RuntimeError::TooShortDurationWithInfiniteLoop {
@@ -115,7 +115,7 @@ mod runtime_error_tests {
         );
     }
 
-    /// D1b-T 追加: Display 未検証バリアントの固定（CompileError）
+    /// Display 未検証バリアントの固定（CompileError）
     #[test]
     fn compile_error_display() {
         use dola::DolaError;
@@ -135,7 +135,7 @@ mod runtime_error_tests {
         );
     }
 
-    /// D1b-T 追加: Display 未検証バリアントの固定（InvalidVariableId）
+    /// Display 未検証バリアントの固定（InvalidVariableId）
     #[test]
     fn invalid_variable_id_display() {
         let err = RuntimeError::InvalidVariableId(-7);

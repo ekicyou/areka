@@ -126,7 +126,7 @@ pub(super) fn topological_sort(
 
     let mut result = Vec::new();
 
-    // NOTE(D2-V): Kahn 法による反復実装（再帰なし）。エントリ数に比例した
+    // NOTE: Kahn 法による反復実装（再帰なし）。エントリ数に比例した
     // ヒープ確保のみで、巨大文書でもスタック枯渇しない。
     while let Some(Reverse(node)) = queue.pop() {
         result.push(node);
