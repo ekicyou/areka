@@ -70,7 +70,8 @@ pub struct ScrollState {
 pub enum FramePlan {
     /// 変化なし——blit も描画も present も行わない（描画呼び出し 0 の檻の対象・R3.2/3.6）。
     NoChange,
-    /// Clear cue 適用——back を全域透明 Clear（描画 0 件）して flip（R4.3）。
+    /// Clear cue 適用で見える行が無い——back を全域透明 Clear（描画 0 件）して flip（R4.3）。
+    /// 見える行があれば消去は全域の `Update` が担う（指摘 17）。
     FullClear,
     /// blit ＋ ダーティ描画（露出帯 ∪ 変化行・R2.3/3.2/3.3）。
     Update {
@@ -142,8 +143,9 @@ pub struct ScrollPlanner {
     /// 前回 `commit` 時の canvas 行指紋（変化行検出の唯一の根拠）。`None`＝前に描いた中身が
     /// 分からない（初め・消去の要求の後）＝全域を描き直す。`Some(空)`＝何も描いていないと分かっている。
     prev_lines: Option<Vec<CommittedLine>>,
-    /// Clear cue 受領フラグ——true の間 `plan` は `FramePlan::FullClear` を返す。
-    /// `commit(FullClear)` で false へ戻す（未 commit の失敗フレームは保持＝再試行安全）。
+    /// Clear cue 受領フラグ——true の間 `plan` は見える行が無ければ `FramePlan::FullClear`、
+    /// あれば全域の `FramePlan::Update` を返す。どちらの commit でも false へ戻す
+    /// （未 commit の失敗フレームは保持＝再試行安全）。
     clear_requested: bool,
 }
 
@@ -215,7 +217,8 @@ impl ScrollPlanner {
     /// 実測インクはみ出し（[`LineOverhang`]・住人 index と 1:1）付きで 1 フレームの描画計画を返す
     /// （**状態不変・純粋**・`&self`・R2.3/4.3）。
     ///
-    /// - `clear_requested` が立っていれば [`FramePlan::FullClear`]（描画 0 件・back 全域 Clear）。
+    /// - `clear_requested` が立っていれば、見える行が無ければ [`FramePlan::FullClear`]（描画 0 件・
+    ///   back 全域 Clear）、あれば全域の道（[`Self::full_domain_plan`]・消去と同じフレームで字も描く）。
     /// - 前の行が分からない（`prev_lines` が `None`）なら全域の道（[`Self::full_domain`]・面全域 1 枚）。
     /// - それ以外は現状 `committed` から目標（`window.block_offset` の量子化）への blit と、
     ///   前回確定 `prev_lines` に対する [`Self::derive_dirty_with_overhangs`] の結果（露出帯 ∪ 変化行）を組む。
@@ -235,7 +238,15 @@ impl ScrollPlanner {
         overhangs: &[LineOverhang],
     ) -> FramePlan {
         if self.clear_requested {
-            return FramePlan::FullClear;
+            // 消去と同じフレームで見える字も描く（全面を消してから描く＝0 フレーム・指摘 17）。
+            let plan =
+                Self::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs);
+            return match plan {
+                FramePlan::Update { draw_lines, .. } if draw_lines.is_empty() => {
+                    FramePlan::FullClear
+                }
+                plan => plan,
+            };
         }
         let Some(prev_lines) = self.prev_lines.as_deref() else {
             return Self::full_domain_plan(canvas, window, mode, contract, surface_size, overhangs);
@@ -288,7 +299,8 @@ impl ScrollPlanner {
     /// - [`FramePlan::FullClear`]: 全域リセットの確定（committed=0・pos=0・prev_lines は
     ///   「何も描いていない」＝`Some(空)`・`clear_requested` を落とす）。
     /// - [`FramePlan::Update`]: 目標位置を確定し（`committed`/`pos`）、新 canvas から行指紋
-    ///   `prev_lines` を張り直す（次フレームの変化行検出の根拠）。
+    ///   `prev_lines` を張り直す（次フレームの変化行検出の根拠）。`clear_requested` も落とす
+    ///   （消去と同じフレームで字を描いた全域の Update の確定）。
     pub fn commit(
         &mut self,
         canvas: &ContentCanvas,
@@ -310,15 +322,22 @@ impl ScrollPlanner {
                 self.committed = target.committed;
                 self.pos = target.pos;
                 self.prev_lines = Some(Self::committed_lines(canvas, mode));
+                self.clear_requested = false;
             }
         }
+    }
+
+    /// 消去の要求が立っているか（描き手が `full_clears` を数えるため・純粋）。
+    pub(crate) fn clear_pending(&self) -> bool {
+        self.clear_requested
     }
 
     /// Clear cue の適用点（破棄・リセットの唯一の口・`&mut self`・R4.3）。
     ///
     /// `clear_requested` を立て、確定位置／行指紋をその場で初期化する（committed=0・pos=0・
-    /// prev_lines は「分からない」＝`None`）。次 `plan` が [`FramePlan::FullClear`] を返し、COM 成功後の
-    /// `commit(FullClear)` がフラグを落とす（未 commit の失敗フレームはフラグ保持＝再試行安全）。
+    /// prev_lines は「分からない」＝`None`）。次 `plan` が [`FramePlan::FullClear`]（見える行が無い）
+    /// か全域の [`FramePlan::Update`]（ある）を返し、COM 成功後の commit がフラグを落とす
+    /// （未 commit の失敗フレームはフラグ保持＝再試行安全）。
     pub fn request_clear(&mut self) {
         self.clear_requested = true;
         self.committed = 0;
@@ -428,7 +447,7 @@ pub(crate) struct CommittedLine {
     /// 行内の装飾番号列（[`crate::layout::PositionedGlyph::style`] の `StyleId.0` をグリフ順に
     /// 並べたもの・非グリフ住人は空）。同じ文字列でも装飾が違えば列が違う＝**変化ありと判定される**
     /// （R11.4——装飾だけが変わった行を古い見た目のまま再利用しない）。番号は `Clear`／`ClearAll`
-    /// で振り直されるが、そのとき `request_clear` が `prev_lines` を捨てる（[`FramePlan::FullClear`]）
+    /// で振り直されるが、そのとき `request_clear` が `prev_lines` を捨てる（次の計画は全域の道）
     /// ので古い番号との比較は起きない。
     styles: Vec<u32>,
     /// hover 印（Choice 行のみ非 0・非 Choice 行は常に 0）。非 hover の Choice 行は 0・

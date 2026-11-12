@@ -64,8 +64,8 @@ fn commit_of_scroll_update_advances_committed() {
     );
 }
 
-/// plan は 3 種の計画結果を返し分ける——変化なし＝NoChange・request_clear 後＝FullClear・
-/// スクロール/伸長＝Update。
+/// plan は 3 種の計画結果を返し分ける——変化なし＝NoChange・見える行の無い request_clear 後＝
+/// FullClear・スクロール/伸長＝Update。
 #[test]
 fn plan_returns_three_variants() {
     let contract = ScaleContract::new(1.0, None);
@@ -97,26 +97,36 @@ fn plan_returns_three_variants() {
         "変化なしは NoChange"
     );
 
-    // (FullClear) request_clear 後。
+    // (FullClear) request_clear 後で見える行が無い。
     planner.request_clear();
     assert_eq!(
         planner.plan(
-            &canvas,
+            &empty_canvas(),
             &w,
             WritingMode::HorizontalTb,
             &contract,
             (400, 100)
         ),
         FramePlan::FullClear,
-        "Clear 要求後は FullClear"
+        "Clear 要求後で見える行が無ければ FullClear"
     );
 }
 
-/// FullClear の確定サイクル——request_clear で位置/指紋が 0 化し次 plan が FullClear、
-/// commit(FullClear) で clear_requested が落ちて次 plan は通常導出（全域 Update）へ戻る。
-/// 未 commit の失敗フレームはフラグ保持＝再試行安全。
+/// 行の無い canvas（消去の後で字がまだ来ていないフレーム）。
+fn empty_canvas() -> ContentCanvas {
+    canvas_for(
+        &[],
+        WritingMode::HorizontalTb,
+        (Some(0), Some(100), Some(0), Some(400)),
+        10.0,
+    )
+}
+
+/// 消去と字が同じフレーム（指摘 17）——request_clear で位置/指紋が 0 化し、見える行のある次 plan は
+/// 全域の Update（全面を消してから描く＝0 フレーム）。未 commit の反復は同じ計画（再試行安全）。
+/// その commit で要求が下り、次 plan は通常の差分（同じ入力なら NoChange）へ戻る。
 #[test]
-fn request_clear_then_commit_full_clear_returns_to_normal() {
+fn request_clear_with_glyphs_plans_full_domain_update_and_commit_drops_request() {
     let contract = ScaleContract::new(1.0, None);
     let canvas = plan_canvas();
     let mut planner = ScrollPlanner::new();
@@ -141,7 +151,7 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
     planner.commit(&canvas, &w1, WritingMode::HorizontalTb, &contract, &f1);
     assert_eq!(planner.scroll_state().committed, -12);
 
-    // request_clear: scroll_state 0 化・次 plan は FullClear。
+    // request_clear: scroll_state 0 化・要求が立つ。
     planner.request_clear();
     assert_eq!(
         planner.scroll_state(),
@@ -151,6 +161,7 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
         },
         "位置/指紋が初期化される"
     );
+    assert!(planner.clear_pending(), "request_clear で要求が立つ");
     let clear_plan = planner.plan(
         &canvas,
         &w0,
@@ -158,9 +169,28 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
         &contract,
         (400, 100),
     );
-    assert_eq!(clear_plan, FramePlan::FullClear);
+    let expected = ScrollPlanner::full_domain_plan(
+        &canvas,
+        &w0,
+        WritingMode::HorizontalTb,
+        &contract,
+        (400, 100),
+        &[],
+    );
+    assert_eq!(
+        clear_plan, expected,
+        "消去と字が同じフレームは全域の Update（字をそのフレームで描く）"
+    );
+    let FramePlan::Update {
+        blit, draw_lines, ..
+    } = &clear_plan
+    else {
+        panic!("全域の Update のはず: {clear_plan:?}");
+    };
+    assert_eq!(*blit, (0, 0), "全域の道は写さない");
+    assert_eq!(draw_lines, &vec![0, 1, 2], "見える 3 行を描く");
 
-    // 未 commit の反復は FullClear のまま（失敗フレーム再試行安全）。
+    // 未 commit の反復は同じ計画のまま（失敗フレーム再試行安全）。
     assert_eq!(
         planner.plan(
             &canvas,
@@ -169,11 +199,12 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
             &contract,
             (400, 100)
         ),
-        FramePlan::FullClear,
-        "commit するまで FullClear を保持"
+        clear_plan,
+        "commit するまで同じ計画を保持"
     );
+    assert!(planner.clear_pending(), "未 commit の間は要求が残る");
 
-    // commit(FullClear) → フラグが落ち・prev は「何も描いていない」ゆえ次 plan は通常導出（全行が新しい行の Update）へ戻る。
+    // commit(Update) → 要求が下り、同じ入力の次 plan は NoChange。
     planner.commit(
         &canvas,
         &w0,
@@ -181,6 +212,63 @@ fn request_clear_then_commit_full_clear_returns_to_normal() {
         &contract,
         &clear_plan,
     );
+    assert!(
+        !planner.clear_pending(),
+        "全域の Update の commit で要求が下りる"
+    );
+    assert_eq!(
+        planner.plan(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100)
+        ),
+        FramePlan::NoChange,
+        "消去のフレームの確定後は通常の差分へ戻る"
+    );
+}
+
+/// 見える行の無い消去の確定サイクル——request_clear 後の行の無い plan は FullClear、
+/// commit(FullClear) で要求が下り、次に字が来た plan は通常導出（全行が新しい行の Update）へ戻る。
+#[test]
+fn request_clear_then_commit_full_clear_returns_to_normal() {
+    let contract = ScaleContract::new(1.0, None);
+    let canvas = plan_canvas();
+    let empty = empty_canvas();
+    let mut planner = ScrollPlanner::new();
+    let w0 = window(0, 0.0);
+    let f0 = planner.plan(
+        &canvas,
+        &w0,
+        WritingMode::HorizontalTb,
+        &contract,
+        (400, 100),
+    );
+    planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &f0);
+
+    planner.request_clear();
+    let clear_plan = planner.plan(
+        &empty,
+        &w0,
+        WritingMode::HorizontalTb,
+        &contract,
+        (400, 100),
+    );
+    assert_eq!(clear_plan, FramePlan::FullClear);
+    assert!(
+        planner.clear_pending(),
+        "FullClear の commit 前は要求が残る"
+    );
+
+    planner.commit(
+        &empty,
+        &w0,
+        WritingMode::HorizontalTb,
+        &contract,
+        &clear_plan,
+    );
+    assert!(!planner.clear_pending(), "commit(FullClear) で要求が下りる");
     let after = planner.plan(
         &canvas,
         &w0,

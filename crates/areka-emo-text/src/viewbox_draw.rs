@@ -99,7 +99,8 @@ pub struct DrawStats {
     pub draw_text_layout_calls: u64,
     /// 面内 blit（`copy_front_to_back_shifted` の blit≠0）の累計回数。
     pub blits: u64,
-    /// FullClear（back を全域透明 Clear）の累計回数。
+    /// 消去の要求が立っていたフレームの累計回数（FullClear と、消去と同じフレームで字を描く全域の
+    /// Update のどちらも 1 と数える）。
     pub full_clears: u64,
 }
 
@@ -251,10 +252,11 @@ impl ViewboxExecutor {
     /// R4.3）。
     ///
     /// [`ScrollPlanner::request_clear`]（`clear_requested`＋committed/pos/prev_lines 初期化）と
-    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render`] は `plan` が
-    /// [`FramePlan::FullClear`] を返し、back を全域透明 Clear（`full_clears` +1）→ flip → commit
-    /// する（その後 prev_lines は「何も描いていない」ゆえ次 content フレームは全行を新しい行として描く＝透明フラッシュは
-    /// FullClear の 1 フレームのみ）。actor 結線（task 8）がこの口を Clear cue へ写像する。
+    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render`] は、見える行が無ければ
+    /// [`FramePlan::FullClear`]（back を全域透明 Clear）、あれば全域の [`FramePlan::Update`]
+    /// （全面を消してから見える行を描く）で、消去と同じフレームで見える字も描く（透明のフラッシュを
+    /// 挟まない・指摘 17）。どちらも `full_clears` を 1 増やし、commit が要求を下ろす。actor 結線
+    /// （task 8）がこの口を Clear cue へ写像する。
     pub fn request_clear(&mut self) {
         self.planner.request_clear();
         self.line_store.clear();
@@ -266,7 +268,8 @@ impl ViewboxExecutor {
     /// - `plan`（[`ScrollPlanner::plan`]・状態不変・純粋）。
     /// - [`FramePlan::NoChange`]: blit も描画も present も行わない（`Ok(false)`・stats 増分なし・
     ///   commit 不要）。
-    /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`。
+    /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`
+    ///   （消去の要求中に見える行が無いときだけ・あれば全域の `Update` になる）。
     /// - [`FramePlan::Update`]: 保持ピクセルの面内 blit → ダーティ矩形ごとの正準列（①〜⑥）で
     ///   限定描画（各矩形は**その矩形と交差する行だけ**を描く・R11.1）→ flip → commit → `Ok(true)`。
     ///

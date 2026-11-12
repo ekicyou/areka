@@ -1,4 +1,6 @@
-use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
+use super::test_support::{
+    RenderPair, Rig, build, diff_rows, geo_model, glyph_items, opaque_count,
+};
 use super::{DrawStats, ViewboxExecutor};
 use crate::draw::{ResolvedFont, create_text_format};
 use crate::layout::VisibleWindow;
@@ -318,64 +320,63 @@ fn multiline_items(chars: &[&str]) -> Vec<TextItem> {
     items
 }
 
-/// 観測可能な完了状態（R4.3）: content 描画済み → `request_clear()` → 次フレームが
-/// FullClear（`full_clears` +1・read_back 全域透明）→ さらに次フレームで content が
-/// 全域ダーティ再描画で復帰する（透明フラッシュは 1 フレームのみ）。
+/// 観測可能な完了状態（R4.3・指摘 17）: content 描画済み → `request_clear()` → 次フレームに
+/// 別の字があれば、そのフレームで全面を消して字を描く（透明のフラッシュを挟まない）＝描いた面が
+/// 全域再描画の見本と画素で一致し、`full_clears` はちょうど 1 増える。次の同じ入力は何も数えない。
+/// 見える行の無い消去は FullClear（全域透明・`full_clears` +1）。
 #[test]
-fn request_clear_triggers_full_clear_then_content_returns() {
+fn request_clear_draws_same_frame_glyphs_and_counts_one_clear() {
     let mut rig = Rig::new();
     let image = (80u32, 40u32);
-    let mut surface = rig.attach(image, 1.0);
+    let mut pair = RenderPair::attach(&mut rig, image, 1.0);
     let mode = WritingMode::HorizontalTb;
     let font = ResolvedFont::resolve(&geo_model(Some(10)));
     let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
     let contract = ScaleContract::new(1.0, None);
-    let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
 
-    let items = glyph_items("■■");
-    let (canvas, window) = build(&items, &region, mode, 10.0);
-
-    // frame 1: content 描画（初回＝全域ダーティ）。
-    exec.render(&canvas, &window, &font, mode, &contract, &mut surface)
-        .expect("content render 失敗");
-    let painted = surface.read_back().expect("read_back(content) 失敗");
+    // frame 1: content A を描く（初回＝全域）。
+    let (canvas_a, window_a) = build(&glyph_items("■■■■"), &region, mode, 10.0);
+    let (_, painted) = pair.render("A", &canvas_a, &window_a, &font, mode, &contract);
     assert!(
         opaque_count(&painted) > 0,
-        "content の非透明ピクセルが現れる"
+        "content A の非透明ピクセルが現れる"
     );
-    let full_before = exec.stats().full_clears;
+    let full_before = pair.viewbox.stats().full_clears;
 
-    // Clear cue 適用点（planner 初期化＋行キャッシュ破棄はこの口だけ）。
-    exec.request_clear();
-
-    // frame 2: FullClear（描画 0 件・back 全域透明 Clear → flip）。
-    let changed = exec
-        .render(&canvas, &window, &font, mode, &contract, &mut surface)
-        .expect("FullClear render 失敗");
-    assert!(changed, "FullClear は present 要（変化あり）");
-    assert_eq!(
-        exec.stats().full_clears,
-        full_before + 1,
-        "FullClear は full_clears をちょうど 1 増やす"
-    );
-    let cleared = surface.read_back().expect("read_back(cleared) 失敗");
-    assert_eq!(opaque_count(&cleared), 0, "Clear 後は全域透明（全 α=0）");
-
-    // frame 3: 同一 content の再フレーム → prev_lines は「何も描いていない」ゆえ全行を新しい行として描いて content 復帰
-    //（透明フラッシュは frame 2 の 1 回のみ・FullClear は増えない）。
-    let changed3 = exec
-        .render(&canvas, &window, &font, mode, &contract, &mut surface)
-        .expect("Clear 後 content render 失敗");
-    assert!(changed3, "Clear 後の再描画は全域ダーティで変化あり");
-    assert_eq!(
-        exec.stats().full_clears,
-        full_before + 1,
-        "content 復帰は FullClear を増やさない（全域ダーティ Update）"
-    );
-    let restored = surface.read_back().expect("read_back(restored) 失敗");
+    // frame 2: 消去と同じフレームに content B（A より短い＝消し残りがあれば見本と食い違う）。
+    pair.viewbox.request_clear();
+    let (canvas_b, window_b) = build(&glyph_items("あ"), &region, mode, 10.0);
+    let (oracle, drawn) = pair.render("clear+B", &canvas_b, &window_b, &font, mode, &contract);
+    assert!(opaque_count(&drawn) > 0, "消去のフレームで字 B が描かれる");
     assert!(
-        opaque_count(&restored) > 0,
-        "content が全域ダーティで復帰する"
+        oracle == drawn,
+        "消去と同じフレームの面が見本と画素で一致する（食い違う行: {:?}）",
+        diff_rows(&oracle, &drawn, image.0, image.1)
+    );
+    assert_eq!(
+        pair.viewbox.stats().full_clears,
+        full_before + 1,
+        "消去の要求が立っていたフレームを 1 と数える"
+    );
+
+    // frame 3: 同じ入力は要求が下りているので何も数えない。
+    let (_, again) = pair.render("B again", &canvas_b, &window_b, &font, mode, &contract);
+    assert_eq!(again, drawn, "同じ入力の再フレームは面を変えない");
+    assert_eq!(
+        pair.viewbox.stats().full_clears,
+        full_before + 1,
+        "要求の下りた後のフレームは full_clears を増やさない"
+    );
+
+    // frame 4: 見える行の無い消去は FullClear（全域透明）。
+    pair.viewbox.request_clear();
+    let (canvas_e, window_e) = build(&[], &region, mode, 10.0);
+    let (_, cleared) = pair.render("clear+empty", &canvas_e, &window_e, &font, mode, &contract);
+    assert_eq!(opaque_count(&cleared), 0, "行の無い消去は全域透明");
+    assert_eq!(
+        pair.viewbox.stats().full_clears,
+        full_before + 2,
+        "FullClear も 1 と数える"
     );
 }
 

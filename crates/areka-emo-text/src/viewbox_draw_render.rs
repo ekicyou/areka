@@ -128,6 +128,8 @@ impl ViewboxExecutor {
         }
         self.stats.line_layout_creations += self.line_store.creations() - creations_before;
 
+        // 消去の要求が立っていたフレームは、FullClear でも字を描く全域の Update でも 1 と数える（指摘 17）。
+        let clearing = u64::from(self.planner.clear_pending());
         let plan = self
             .planner
             .plan_with_overhangs(canvas, window, mode, contract, size, &overhangs);
@@ -151,7 +153,7 @@ impl ViewboxExecutor {
 
                 surface.flip();
                 self.planner.commit(canvas, window, mode, contract, &plan);
-                self.stats.full_clears += 1;
+                self.stats.full_clears += clearing;
                 Ok(true)
             }
 
@@ -481,6 +483,7 @@ impl ViewboxExecutor {
                 // 行レイアウト生成の集計は plan 前のはみ出し収集ループで済み（ここでは再計上しない）。
                 surface.flip();
                 self.planner.commit(canvas, window, mode, contract, &plan);
+                self.stats.full_clears += clearing;
                 Ok(true)
             }
         }
