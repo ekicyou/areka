@@ -732,8 +732,9 @@ pub(super) fn arrange_lines(
     let visible = arrived.reveal().visible(talk_time);
     // 配置に使う内容（字の列・装飾）と折返し計画。1 字ずつ（CharByChar）は今の呼び方のまま
     // 区切りを計算せず、区間の全文にも触れない（`areka-P0-budoux-reveal-reflow` R4.2・要件 3.3）。文節（BudouxWordWrap）は
-    // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表・字の無い行の丈に
-    // 使う「今の見た目」も）で、そうでなければ届いた字で区切る（修正前の動き・warn は持ち主が出す）。
+    // 区間の全文の持ち主に聞き、全文なら全文の側の字の列・区切り・装飾（番号・表）で、そうでなければ
+    // 届いた字で区切る（修正前の動き・warn は持ち主が出す）。字の無い行の丈は今の見た目でなく後ろの字
+    // から引く（`Scan::following_glyph_height`・後ろに字が無いときだけ `font_height`）。
     // 届いた字で区切る腕は、消した回数と項目の数が前と同じなら覚えた区切りを使う（audit-emo-text-state-actor 指摘 8）。
     let (content, wrap) = match resolved.wrap {
         WrapMode::CharByChar => (arrived, WrapPlan::CharByChar),
