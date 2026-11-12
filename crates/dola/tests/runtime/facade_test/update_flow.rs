@@ -25,7 +25,7 @@ mod pause_resume_cycle {
         let diff = rt.update(0.3).changes;
         assert!(!diff.is_empty());
         match &diff[0].1 {
-            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 0.05, "t=0.3: got {v}"),
+            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "t=0.3: got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
@@ -45,7 +45,7 @@ mod pause_resume_cycle {
         let new_end = rt.resume(group_id, 0.5).unwrap();
         // end_time は pause 分（0.2s）延長される: 1.0 + 0.2 = 1.2
         assert!(
-            (new_end - 1.2).abs() < 0.05,
+            (new_end - 1.2).abs() < 1e-9,
             "expected end_time ~1.2, got {new_end}"
         );
 
@@ -54,7 +54,7 @@ mod pause_resume_cycle {
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => {
-                assert!((*v - 0.5).abs() < 0.05, "t=0.7 (eff=0.5): got {v}")
+                assert!((*v - 0.5).abs() < 1e-9, "t=0.7 (eff=0.5): got {v}")
             }
             other => panic!("expected Float, got {other:?}"),
         }
@@ -87,23 +87,25 @@ mod concurrent_playback {
         let diff = rt.update(0.5).changes;
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
 
-        let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
-        let scale = diff.iter().find(|(id, _)| *id == scale_id);
-
-        if let Some((_, EvaluatedValue::Float(v))) = opacity {
-            assert!((*v - 0.5).abs() < 0.05, "opacity@0.5: {v}");
-        }
-        if let Some((_, EvaluatedValue::Float(v))) = scale {
-            assert!((*v - 1.25).abs() < 0.05, "scale@0.5: {v}");
-        }
+        let (_, opacity) = diff
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("opacity@0.5");
+        let (_, scale) = diff
+            .iter()
+            .find(|(id, _)| *id == scale_id)
+            .expect("scale@0.5");
+        assert_eq!(*opacity, EvaluatedValue::Float(0.5), "opacity@0.5");
+        assert_eq!(*scale, EvaluatedValue::Float(1.25), "scale@0.5");
 
         // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
         let diff = rt.update(1.5).changes;
         // opacity の自然終了 + scale の更新
-        let scale = diff.iter().find(|(id, _)| *id == scale_id);
-        if let Some((_, EvaluatedValue::Float(v))) = scale {
-            assert!((*v - 1.75).abs() < 0.05, "scale@1.5: {v}");
-        }
+        let (_, scale) = diff
+            .iter()
+            .find(|(id, _)| *id == scale_id)
+            .expect("scale@1.5");
+        assert_eq!(*scale, EvaluatedValue::Float(1.75), "scale@1.5");
     }
 }
 

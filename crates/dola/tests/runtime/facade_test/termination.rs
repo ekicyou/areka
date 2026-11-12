@@ -28,7 +28,7 @@ mod conclude_cancel_finish {
         let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
         match opacity {
             Some((_, EvaluatedValue::Float(v))) => {
-                assert!((*v - 1.0).abs() < 0.01, "conclude final value: {v}")
+                assert!((*v - 1.0).abs() < 1e-9, "conclude final value: {v}")
             }
             other => panic!("expected final opacity Float(1.0), got {other:?}"),
         }
@@ -83,19 +83,26 @@ mod conclude_cancel_finish {
 
         // t=0.3: deadline 未到達 → まだ再生中
         let diff = rt.update(0.3).changes;
-        assert!(!diff.is_empty(), "expected playing at 0.3");
-        match &diff[0].1 {
-            EvaluatedValue::Float(v) => assert!(*v < 0.9, "should not be final value yet, got {v}"),
-            _ => {}
+        let (_, opacity) = diff
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("opacity is delivered while playing at 0.3");
+        match opacity {
+            EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 1e-9, "playing at 0.3: {v}"),
+            other => panic!("expected Float, got {other:?}"),
         }
 
-        // t=0.5: deadline 到達 → Conclude 相当
+        // t=0.5: deadline 到達 → Conclude 相当で最終値が飛ぶ
         let diff = rt.update(0.5).changes;
-        // 最終値が配信されるか、conclude 処理で値が飛ぶ
-        let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
-        if let Some((_, EvaluatedValue::Float(v))) = opacity {
-            assert!((*v - 1.0).abs() < 0.01, "finish conclude final: {v}");
-        }
+        let (_, opacity) = diff
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("finish delivers the final opacity at the deadline");
+        assert_eq!(
+            *opacity,
+            EvaluatedValue::Float(1.0),
+            "finish conclude final"
+        );
 
         // 以降は差分なし
         let diff = rt.update(0.8).changes;

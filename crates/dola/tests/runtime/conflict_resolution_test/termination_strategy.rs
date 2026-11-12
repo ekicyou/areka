@@ -47,18 +47,11 @@ mod cancel_strategy {
         // sb_a's y values should be frozen at t=0.5 → 12.5 (progress=0.25 of 0→50)
         let changes = rt.update(0.5).changes;
         // y should show frozen value, x shows new SB value
-        let y_val = changes.iter().find(|(id, _)| *id == y_id);
-        if let Some((_, val)) = y_val {
-            match val {
-                EvaluatedValue::Float(v) => {
-                    assert!(
-                        (*v - 12.5).abs() < 1e-6,
-                        "y should be frozen at 12.5, got {v}"
-                    );
-                }
-                _ => panic!("expected Float"),
-            }
-        }
+        let (_, y_val) = changes
+            .iter()
+            .find(|(id, _)| *id == y_id)
+            .expect("y is delivered at the cancel time");
+        assert_eq!(*y_val, EvaluatedValue::Float(12.5), "y frozen at 12.5");
     }
 }
 

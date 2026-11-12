@@ -68,18 +68,11 @@ mod never_strategy {
         // Update → the Never SB should still be running normally
         let changes = rt.update(1.0).changes;
         // sb_never: x at t=1.0 → progress=0.5 of 0→100 = 50.0
-        let x_val = changes.iter().find(|(id, _)| *id == x_id);
-        if let Some((_, val)) = x_val {
-            match val {
-                EvaluatedValue::Float(v) => {
-                    assert!(
-                        (*v - 50.0).abs() < 1e-6,
-                        "x should be 50.0 at t=1.0, got {v}"
-                    );
-                }
-                _ => panic!("expected Float"),
-            }
-        }
+        let (_, x_val) = changes
+            .iter()
+            .find(|(id, _)| *id == x_id)
+            .expect("x of the Never SB is delivered at t=1.0");
+        assert_eq!(*x_val, EvaluatedValue::Float(50.0), "x at t=1.0");
     }
 }
 

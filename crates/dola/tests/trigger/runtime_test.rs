@@ -2,8 +2,8 @@
 //! トリガー機能のテスト — 5.4: update() トリガー実行統合テスト,
 //! 5.5: ループ内トリガー統合テスト, 5.6: E2E テスト
 
-use super::common::{extract_float, timed_trigger_doc};
-use dola::runtime::{DolaRuntime, RuntimeError, TriggerResult};
+use super::common::timed_trigger_doc;
+use dola::runtime::{DolaRuntime, EvaluatedValue, RuntimeError, TriggerResult};
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, InterruptionPolicy, StoryboardBuilder,
     StoryboardEntry, TransitionDef, TransitionRef, TransitionValue,
@@ -531,12 +531,14 @@ mod e2e_tests {
         };
         assert!(c_target > b_group_id);
 
-        // t=1.0: C が完了。opacity は最終値 1.0 付近
+        // t=1.0: C が完了し、opacity の最終値 1.0 が配られる
         let result = rt.update(1.0);
-        if let Some((_, val)) = result.changes.iter().find(|(id, _)| *id == opacity_id) {
-            let v = extract_float(val);
-            assert!(v > 0.9, "opacity should be ~1.0 at t=1.0, got {v}");
-        }
+        let (_, val) = result
+            .changes
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("C delivers opacity at t=1.0");
+        assert_eq!(*val, EvaluatedValue::Float(1.0), "opacity at t=1.0");
     }
 
     /// 親終了後も子SBは独立して動作する（ライフサイクル独立性）

@@ -60,12 +60,12 @@ fn loop_count_1_compatible_with_existing_behavior() {
     let diff = rt.update(0.0).changes;
     assert!(!diff.is_empty());
     let v = extract_float(&diff[0].1);
-    assert!(v < 0.01, "expected ~0.0 at t=0.0, got {v}");
+    assert!(v.abs() < 1e-9, "expected ~0.0 at t=0.0, got {v}");
 
     // t=0.5: opacity≈0.5
     let diff = rt.update(0.5).changes;
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 0.05, "expected ~0.5 at t=0.5, got {v}");
+    assert!((v - 0.5).abs() < 1e-9, "expected ~0.5 at t=0.5, got {v}");
 
     // t=1.0: 自然終了
     let diff = rt.update(1.0).changes;
@@ -75,7 +75,7 @@ fn loop_count_1_compatible_with_existing_behavior() {
         .find(|(id, _)| *id == opacity_id)
         .expect("opacity");
     let v = extract_float(&opacity.1);
-    assert!((v - 1.0).abs() < 0.01, "expected ~1.0, got {v}");
+    assert!((v - 1.0).abs() < 1e-9, "expected ~1.0, got {v}");
 
     // t=1.5: 終了後 — 差分なし
     let diff = rt.update(1.5).changes;
@@ -106,7 +106,7 @@ fn finite_loop_3_cycles() {
 
     let diff = rt.update(0.5).changes; // 周回1の中間 → opacity≈0.5
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 0.05, "cycle 1 t=0.5: {v}");
+    assert!((v - 0.5).abs() < 1e-9, "cycle 1 t=0.5: {v}");
 
     // 周回1→2の遷移 (t=1.25): 周回2 の 0.25s 地点 → opacity ≈ 0.25
     // 前回値 0.5 → 0.25 なので diff が発生する
@@ -117,7 +117,7 @@ fn finite_loop_3_cycles() {
     );
     let v = extract_float(&diff[0].1);
     assert!(
-        (v - 0.25).abs() < 0.05,
+        (v - 0.25).abs() < 1e-9,
         "cycle 2 t=1.25: expected ~0.25, got {v}"
     );
 
@@ -129,18 +129,22 @@ fn finite_loop_3_cycles() {
     );
     let v = extract_float(&diff[0].1);
     assert!(
-        (v - 0.75).abs() < 0.05,
+        (v - 0.75).abs() < 1e-9,
         "cycle 3 t=2.75: expected ~0.75, got {v}"
     );
 
     // t=3.0: 3周完了 → Conclude (自然終了)
     let diff = rt.update(3.0).changes;
     // 最終値 (opacity=1.0) が配信される
-    let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
-    if let Some((_, val)) = opacity {
-        let v = extract_float(val);
-        assert!((v - 1.0).abs() < 0.01, "expected final value 1.0, got {v}");
-    }
+    let (_, val) = diff
+        .iter()
+        .find(|(id, _)| *id == opacity_id)
+        .expect("final opacity after 3 cycles");
+    assert_eq!(
+        *val,
+        EvaluatedValue::Float(1.0),
+        "final value after 3 cycles"
+    );
 
     // t=3.5: 終了後 — 差分なし
     let diff = rt.update(3.5).changes;
@@ -175,14 +179,14 @@ fn infinite_loop_continues_until_cancel() {
     let diff = rt.update(4.5).changes;
     assert!(!diff.is_empty(), "should still be playing at t=4.5");
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 0.05, "cycle 5 at t=4.5: {v}");
+    assert!((v - 0.5).abs() < 1e-9, "cycle 5 at t=4.5: {v}");
 
     // 周回10の 0.25s 地点 t=9.25 → effective ≈ 0.25, opacity ≈ 0.25
     // 前回値 ≈0.5 → 0.25 なので diff 発生
     let diff = rt.update(9.25).changes;
     assert!(!diff.is_empty(), "should still be playing at t=9.25");
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.25).abs() < 0.05, "cycle 10 at t=9.25: {v}");
+    assert!((v - 0.25).abs() < 1e-9, "cycle 10 at t=9.25: {v}");
 
     // Cancel で停止
     rt.cancel(group_id).unwrap();
@@ -218,11 +222,15 @@ fn multi_loop_batch_processing() {
 
     // 残り全体進める: t=5.0 → 5周完了 → Conclude
     let diff = rt.update(5.0).changes;
-    let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
-    if let Some((_, val)) = opacity {
-        let v = extract_float(val);
-        assert!((v - 1.0).abs() < 0.01, "final value after 5 cycles: {v}");
-    }
+    let (_, val) = diff
+        .iter()
+        .find(|(id, _)| *id == opacity_id)
+        .expect("final opacity after 5 cycles");
+    assert_eq!(
+        *val,
+        EvaluatedValue::Float(1.0),
+        "final value after 5 cycles"
+    );
 
     // 終了後
     let diff = rt.update(5.5).changes;
@@ -249,7 +257,7 @@ fn pause_during_loop_resumes_correctly() {
     let diff = rt.update(0.5).changes;
     assert!(!diff.is_empty());
     let v = extract_float(&diff[0].1);
-    assert!((v - 0.5).abs() < 0.05, "before pause: {v}");
+    assert!((v - 0.5).abs() < 1e-9, "before pause: {v}");
 
     // Pause at t=0.5
     rt.pause(group_id, 0.5).unwrap();
@@ -268,7 +276,7 @@ fn pause_during_loop_resumes_correctly() {
     assert!(!diff.is_empty(), "should be playing after resume");
     let v = extract_float(&diff[0].1);
     assert!(
-        (v - 0.75).abs() < 0.05,
+        (v - 0.75).abs() < 1e-9,
         "t=1.25 after pause: expected ~0.75, got {v}"
     );
 
@@ -280,18 +288,22 @@ fn pause_during_loop_resumes_correctly() {
     assert!(!diff.is_empty(), "should be in cycle 2 at t=1.75");
     let v = extract_float(&diff[0].1);
     assert!(
-        (v - 0.25).abs() < 0.05,
+        (v - 0.25).abs() < 1e-9,
         "cycle 2 t=1.75: expected ~0.25, got {v}"
     );
 
     // 3周完了: end_time が 3.5 (0 + 3*1.0 + 0.5) に到達するはず
     // t=3.5: effective = (3.5 - 2.0 - 0.5) * 1.0 = 1.0 → 周回3終了
     let diff = rt.update(3.5).changes;
-    let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
-    if let Some((_, val)) = opacity {
-        let v = extract_float(val);
-        assert!((v - 1.0).abs() < 0.01, "final value: {v}");
-    }
+    let (_, val) = diff
+        .iter()
+        .find(|(id, _)| *id == opacity_id)
+        .expect("final opacity after the paused loop");
+    assert_eq!(
+        *val,
+        EvaluatedValue::Float(1.0),
+        "final value after the paused loop"
+    );
 
     // 終了後
     let diff = rt.update(4.0).changes;

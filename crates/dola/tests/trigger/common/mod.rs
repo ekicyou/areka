@@ -1,6 +1,5 @@
 //! Shared helpers for trigger tests
 
-use dola::runtime::EvaluatedValue;
 use dola::{
     AnimationVariableDef, DolaDocument, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry,
     TransitionDef, TransitionRef, TransitionValue,
@@ -94,11 +93,4 @@ pub fn timed_trigger_doc(
         .storyboard(child_name, child_sb)
         .build()
         .expect("timed_trigger_doc should be valid")
-}
-
-pub fn extract_float(val: &EvaluatedValue) -> f64 {
-    match val {
-        EvaluatedValue::Float(v) => *v,
-        other => panic!("expected Float, got {other:?}"),
-    }
 }

@@ -28,7 +28,7 @@ mod full_playback_cycle {
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0].0, opacity_id);
         match &diff[0].1 {
-            EvaluatedValue::Float(v) => assert!(*v < 0.01, "expected ~0.0, got {v}"),
+            EvaluatedValue::Float(v) => assert!(v.abs() < 1e-9, "expected ~0.0, got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
@@ -36,7 +36,7 @@ mod full_playback_cycle {
         let diff = rt.update(0.5).changes;
         assert_eq!(diff.len(), 1);
         match &diff[0].1 {
-            EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 0.05, "expected ~0.5, got {v}"),
+            EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 1e-9, "expected ~0.5, got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
@@ -49,7 +49,7 @@ mod full_playback_cycle {
             .find(|(id, _)| *id == opacity_id)
             .expect("opacity");
         match &opacity_val.1 {
-            EvaluatedValue::Float(v) => assert!((*v - 1.0).abs() < 0.01, "expected ~1.0, got {v}"),
+            EvaluatedValue::Float(v) => assert!((*v - 1.0).abs() < 1e-9, "expected ~1.0, got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
