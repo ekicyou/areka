@@ -1,7 +1,7 @@
 //! ランタイムコア型のテスト — InstanceState, EvaluatedValue, RuntimeError
 
 use dola::InterruptionPolicy;
-use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
+use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError};
 
 // =============================================================================
 // Task 1.1: InstanceState 状態遷移テスト
@@ -478,31 +478,5 @@ mod runtime_error_tests {
             }
             _ => panic!("expected CompileError variant"),
         }
-    }
-}
-
-mod start_result_tests {
-    use super::*;
-
-    #[test]
-    fn start_result_fields() {
-        let r = StartResult {
-            group_id: 1,
-            end_time: 5.0,
-            affected_group_ids: vec![],
-        };
-        assert_eq!(r.group_id, 1);
-        assert_eq!(r.end_time, 5.0);
-        assert!(r.affected_group_ids.is_empty());
-    }
-
-    #[test]
-    fn start_result_infinity() {
-        let r = StartResult {
-            group_id: 2,
-            end_time: f64::INFINITY,
-            affected_group_ids: vec![],
-        };
-        assert!(r.end_time.is_infinite());
     }
 }

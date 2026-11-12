@@ -163,3 +163,40 @@ mod value_hold {
         assert_eq!(tick(&mut rt, 2.5), Some(EvaluatedValue::Float(1.0)));
     }
 }
+
+// =========================================================================
+// #39: 生きたインスタンスの有無
+// =========================================================================
+mod has_instances {
+    use super::super::*;
+
+    /// delay の間は変化が 0 件でもインスタンスは生きている → 真。Conclude の後は偽。
+    #[test]
+    fn has_instances_stays_true_during_delay() {
+        let mut doc = simple_float_doc("delayed");
+        let sb = doc.storyboard.get_mut("delayed").unwrap();
+        let Some(TransitionRef::Inline(tr)) = sb.entry[0].transition.as_mut() else {
+            panic!("inline transition expected");
+        };
+        tr.delay = 1.0;
+
+        let mut rt = DolaRuntime::new();
+        rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+        assert!(!rt.has_instances());
+
+        let StartResult { group_id, .. } = rt.start("delayed", 0.0).unwrap();
+        rt.tick(0.0);
+        for t in [0.3, 0.6, 0.9] {
+            rt.tick(t);
+            assert!(
+                rt.last_result().changes.is_empty(),
+                "t={t}: delay 中は変化なし"
+            );
+            assert!(rt.has_instances(), "t={t}: delay 中も生きている");
+        }
+
+        rt.conclude(group_id).unwrap();
+        assert!(!rt.has_instances());
+    }
+}

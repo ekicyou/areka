@@ -95,7 +95,7 @@ impl DolaRuntime {
         // 1. ドキュメント取得 → コンパイル → バリデーション
         //    （セグメントは常に相対時間 0.0 起点で構築。
         //    壁時計時刻への変換は loop_start_time で行う）
-        let (compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
+        let (mut compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
 
         // 2. end_time 算出（無限ループでも1周分の end_time を設定）
         let end_time = start_time + loop_duration;
@@ -162,7 +162,7 @@ impl DolaRuntime {
         // 6.5 トリガー格納
         if !compiled.triggers.is_empty() {
             self.trigger_store
-                .insert(group_id, compiled.triggers.clone());
+                .insert(group_id, std::mem::take(&mut compiled.triggers));
         }
 
         // 7. 状態遷移 Created → Playing
@@ -271,16 +271,16 @@ impl DolaRuntime {
 
     /// 遅延 Conclude。
     ///
-    /// `offset` は呼び出し側が `clock::now() + offset_secs` として計算した
-    /// 絶対 deadline 時刻を想定。`update()` 内で `current_time >= deadline` の
+    /// `deadline` は呼び出し側が `clock::now() + offset_secs` として計算した
+    /// 絶対時刻。`update()` 内で `current_time >= deadline` の
     /// タイミングで Conclude 相当の処理を実行する。
-    pub fn finish(&mut self, group_id: u64, offset: f64) -> Result<(), RuntimeError> {
+    pub fn finish(&mut self, group_id: u64, deadline: f64) -> Result<(), RuntimeError> {
         let instance = self.instance_manager.get(group_id)?;
         if instance.state.is_terminal() {
             return Err(RuntimeError::InvalidGroupId(group_id));
         }
         self.instance_manager
-            .set_finish_deadline(group_id, offset)?;
+            .set_finish_deadline(group_id, deadline)?;
         Ok(())
     }
 
@@ -321,6 +321,13 @@ impl DolaRuntime {
     /// `TimedSchedule::ready()` と対称な設計。
     pub fn last_result(&self) -> &UpdateResult {
         &self.last_update_result
+    }
+
+    /// 終わっていないインスタンス（一時停止中を含む）が 1 つでもあれば true。
+    ///
+    /// 終わったインスタンスは表から消える（`InstanceManager::transition`）ので、表が空でないかを見る。
+    pub fn has_instances(&self) -> bool {
+        !self.instance_manager.instances().is_empty()
     }
 
     /// 差分更新取得（後方互換）。
