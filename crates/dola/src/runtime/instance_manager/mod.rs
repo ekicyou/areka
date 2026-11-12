@@ -1,6 +1,6 @@
 //! ストーリーボード実行インスタンスのコレクション管理と状態遷移制御。
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::easing::EasingFunction;
 use crate::storyboard::InterruptionPolicy;
@@ -57,13 +57,13 @@ pub(crate) struct StoryboardInstance {
 
 /// 実行インスタンスのコレクション管理と状態遷移制御。
 pub(crate) struct InstanceManager {
-    instances: HashMap<u64, StoryboardInstance>,
+    instances: BTreeMap<u64, StoryboardInstance>,
 }
 
 impl InstanceManager {
     pub fn new() -> Self {
         Self {
-            instances: HashMap::new(),
+            instances: BTreeMap::new(),
         }
     }
 
@@ -238,12 +238,12 @@ impl InstanceManager {
     }
 
     /// 全インスタンスへの参照。
-    pub fn instances(&self) -> &HashMap<u64, StoryboardInstance> {
+    pub fn instances(&self) -> &BTreeMap<u64, StoryboardInstance> {
         &self.instances
     }
 
     /// 全インスタンスへの可変参照。
-    pub fn instances_mut(&mut self) -> &mut HashMap<u64, StoryboardInstance> {
+    pub fn instances_mut(&mut self) -> &mut BTreeMap<u64, StoryboardInstance> {
         &mut self.instances
     }
 

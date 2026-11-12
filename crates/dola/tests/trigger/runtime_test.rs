@@ -523,4 +523,86 @@ mod e2e_tests {
             "no new triggers after everything concluded"
         );
     }
+
+    /// 同じ tick で 2 つの親が同じ x を触る子を起こしても、処理は親の group_id の順（#36）。
+    /// 走るたびに新しい DolaRuntime（＝新しい表）で組み直し、20 回とも同じ結果になる
+    #[test]
+    fn simultaneous_triggers_resolve_in_group_order() {
+        let fade = |var: &str, keyframe: Option<&str>| StoryboardEntry {
+            variable: Some(var.to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(1.0),
+                ..Default::default()
+            })),
+            keyframe: keyframe.map(str::to_string),
+            ..Default::default()
+        };
+        // 親 P1・P2 は別の変数を触り（互いに競合しない）、t=1 でそれぞれ C1・C2 を起こす
+        let parent = |var: &str, child: &str| {
+            StoryboardBuilder::new()
+                .entry(fade(var, Some("kf1")))
+                .entry(StoryboardEntry {
+                    trigger_storyboard: Some(child.to_string()),
+                    at: Some(dola::KeyframeRef::Single("kf1".to_string())),
+                    ..Default::default()
+                })
+                .build()
+        };
+        let float = || AnimationVariableDef::Float {
+            initial: 0.0,
+            min: None,
+            max: None,
+        };
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable("a", float())
+            .variable("b", float())
+            .variable("x", float())
+            .storyboard("p1", parent("a", "c1"))
+            .storyboard("p2", parent("b", "c2"))
+            .storyboard(
+                "c1",
+                StoryboardBuilder::new().entry(fade("x", None)).build(),
+            )
+            .storyboard(
+                "c2",
+                StoryboardBuilder::new().entry(fade("x", None)).build(),
+            )
+            .build()
+            .unwrap();
+
+        for _ in 0..20 {
+            let mut rt = DolaRuntime::new();
+            rt.load_document(doc.clone()).unwrap();
+            assert_eq!(rt.start("p1", 0.0).unwrap().group_id, 1);
+            assert_eq!(rt.start("p2", 0.0).unwrap().group_id, 2);
+            rt.tick(1.0);
+            let started: Vec<(String, u64, Vec<u64>)> = rt
+                .last_result()
+                .triggered
+                .iter()
+                .map(|t| match t {
+                    TriggerResult::Started {
+                        target_storyboard,
+                        start_result,
+                        ..
+                    } => (
+                        target_storyboard.clone(),
+                        start_result.group_id,
+                        start_result.affected_group_ids.clone(),
+                    ),
+                    TriggerResult::Error { error, .. } => panic!("trigger failed: {error}"),
+                })
+                .collect();
+            // C1 が先に 3 を取り、後の C2（4）が C1 を終わらせて残る
+            assert_eq!(
+                started,
+                vec![
+                    ("c1".to_string(), 3, vec![]),
+                    ("c2".to_string(), 4, vec![3]),
+                ]
+            );
+        }
+    }
 }

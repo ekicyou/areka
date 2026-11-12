@@ -1,6 +1,6 @@
 //! DolaRuntime — 唯一の公開 API（Facade パターン）。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_all, compile_validated};
 use crate::document::DolaDocument;
@@ -34,7 +34,7 @@ pub struct DolaRuntime {
     timeline_manager: TimelineManager,
     subscription_manager: SubscriptionManager,
     next_group_id: u64,
-    /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel で削除）
+    /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel/競合の終わりで削除）
     trigger_store: HashMap<u64, Vec<CompiledTrigger>>,
     /// 直前の tick() 結果を保持するフィールド
     last_update_result: UpdateResult,
@@ -79,7 +79,7 @@ impl DolaRuntime {
     /// 指示書からストーリーボード定義を取得し、コンパイル → インスタンス作成 →
     /// タイムテーブル挿入 → Playing 遷移の一連のフローを実行する。
     pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError> {
-        self.start_internal(name, start_time, &HashSet::new())
+        self.start_internal(name, start_time, &BTreeSet::new())
     }
 
     /// ストーリーボード開始（内部）。
@@ -90,7 +90,7 @@ impl DolaRuntime {
         &mut self,
         name: &str,
         start_time: f64,
-        skip_conflict_gids: &HashSet<u64>,
+        skip_conflict_gids: &BTreeSet<u64>,
     ) -> Result<StartResult, RuntimeError> {
         // 1. ドキュメント取得 → コンパイル → バリデーション
         //    （セグメントは常に相対時間 0.0 起点で構築。
@@ -141,6 +141,9 @@ impl DolaRuntime {
             &mut self.subscription_manager,
             skip_conflict_gids,
         )?; // Never 競合時はここで Err(RuntimeError::Conflict) を返す
+        for gid in &affected {
+            self.trigger_store.remove(gid);
+        }
 
         // 6. タイムテーブル挿入
         self.timeline_manager.insert_entries(group_id, &compiled);
@@ -413,8 +416,8 @@ impl DolaRuntime {
                     // SAFETY(panic 経路): trigger_states は create_instance で
                     // 0..compiled.triggers.len() の添字から構築され、trigger_store には
                     // 同一の compiled.triggers が同じ group_id で格納される
-                    // （start_internal ステップ 4 / 6.5）。両者は conclude/cancel で
-                    // 同時に削除され group_id は再利用されないため、
+                    // （start_internal ステップ 4 / 6.5）。trigger_store は自然終了・cancel・
+                    // 競合の終わり（ステップ 5 の直後）で消え、group_id は再利用されないため、
                     // ts.trigger_index < triggers.len() が常に成立し添字 panic は発火しない。
                     debug_assert!(
                         ts.trigger_index < triggers.len(),
@@ -458,7 +461,7 @@ impl DolaRuntime {
         //         親インスタンスを競合検出から除外する
         let mut results: Vec<TriggerResult> = Vec::new();
         for p in pending {
-            let skip = HashSet::from([p.parent_group_id]);
+            let skip = BTreeSet::from([p.parent_group_id]);
             match self.start_internal(&p.target_storyboard, p.child_start_time, &skip) {
                 Ok(start_result) => {
                     results.push(TriggerResult::Started {

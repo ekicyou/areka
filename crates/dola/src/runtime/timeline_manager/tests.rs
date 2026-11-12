@@ -115,7 +115,7 @@ fn insert_and_evaluate_float() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     // t=0.5 → progress 0.5 → value 50.0
@@ -126,7 +126,7 @@ fn insert_and_evaluate_float() {
 #[test]
 fn evaluate_nonexistent_variable() {
     let mut mgr = TimelineManager::new();
-    let instances = HashMap::new();
+    let instances = BTreeMap::new();
     assert!(mgr.evaluate("nonexistent", 0.0, &instances).is_none());
 }
 
@@ -136,7 +136,7 @@ fn expired_entry_auto_removal() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     // t=2.0 → 全セグメント終了でもインスタンスが生きている間は最後の値・項目は残る
@@ -160,7 +160,7 @@ fn latest_group_id_priority() {
     mgr.insert_entries(1, &compiled1);
     mgr.insert_entries(2, &compiled2);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
     instances.insert(2, make_instance(2, 0.0));
 
@@ -175,7 +175,7 @@ fn pause_freezes_value() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 2.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     let mut inst = make_instance(1, 0.0);
     inst.base_duration = 2.0;
     inst.end_time = 2.0;
@@ -215,7 +215,7 @@ fn effective_time_with_time_scale() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 2.0);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     let mut inst = make_instance(1, 0.0);
     inst.time_scale = 2.0; // 2倍速
     inst.base_duration = 2.0;
@@ -237,7 +237,7 @@ fn evaluate_removes_entry_when_instance_missing() {
     let compiled = make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0);
     mgr.insert_entries(1, &compiled);
 
-    let instances = HashMap::new(); // インスタンスなし
+    let instances = BTreeMap::new(); // インスタンスなし
     let val = mgr.evaluate("x", 0.5, &instances);
     assert!(val.is_none());
     assert!(!mgr.has_entries(1), "entry should be removed");
@@ -250,7 +250,7 @@ fn evaluate_before_first_segment_returns_from_value() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 2.0, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     let val = mgr.evaluate("x", 0.5, &instances);
@@ -264,7 +264,7 @@ fn evaluate_zero_duration_segment_returns_to_value() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 1.0, 0.0, 100.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     // 到達前: from_value
@@ -297,7 +297,7 @@ fn evaluate_multi_segment_progression() {
     );
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     // セグメント1内 (t=0.5): progress=0.5 → 5.0
@@ -375,7 +375,7 @@ fn evaluate_all_for_group_returns_all_variables() {
     );
     mgr.insert_entries(1, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
@@ -392,7 +392,7 @@ fn evaluate_all_for_group_missing_instance_returns_empty() {
         &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
     );
 
-    let instances = HashMap::new();
+    let instances = BTreeMap::new();
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
     assert!(values.is_empty());
 }
@@ -406,7 +406,7 @@ fn evaluate_all_for_group_ignores_other_groups() {
     );
     mgr.insert_entries(2, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
     instances.insert(2, make_instance(2, 0.0));
 
@@ -428,7 +428,7 @@ fn collect_current_segment_final_values_returns_active_segment_final() {
     );
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     // t=0.5: セグメント1がアクティブ → to_value=10.0（50.0 ではない）
@@ -447,7 +447,7 @@ fn collect_current_segment_final_values_before_first_segment_is_empty() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(1.0, 2.0, 10.0, 20.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
@@ -462,7 +462,7 @@ fn collect_current_segment_final_values_missing_instance_returns_empty() {
         &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
     );
 
-    let instances = HashMap::new();
+    let instances = BTreeMap::new();
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
     assert!(vals.is_empty());
 }
@@ -474,7 +474,7 @@ fn collect_current_segment_final_values_after_all_segments_uses_last() {
     let compiled = make_compiled_with_segments("x", vec![float_segment(0.0, 1.0, 0.0, 10.0)]);
     mgr.insert_entries(1, &compiled);
 
-    let mut instances = HashMap::new();
+    let mut instances = BTreeMap::new();
     instances.insert(1, make_instance(1, 0.0));
 
     let vals = mgr.collect_current_segment_final_values(1, 5.0, &instances);

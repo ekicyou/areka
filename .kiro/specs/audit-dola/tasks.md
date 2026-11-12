@@ -148,7 +148,7 @@
   - 檻: A（Never）を t=0 に始め、x は delay 5。B を t=5.0 に始めると B は `Conflict` で拒まれる
   - 終わった姿: 檻が緑で、重なりの比べに戻すと落ちる。既存の競合のテストが緑（変わる期待があれば research §3 #7 に照らして改める）
   - _Requirements: 4.1, 4.5, 11.8_
-- [ ] 9.2 インスタンスの表を順の決まる表にし、競合で終わったインスタンスのトリガーの記録を消す（#35・#36）
+- [x] 9.2 インスタンスの表を順の決まる表にし、競合で終わったインスタンスのトリガーの記録を消す（#35・#36）
   - インスタンスの表と集めた集合を順の決まる型にし、補助の関数も合わせる。テストの `sort_unstable` の逃げを外す
   - 競合の解決の直後に、終わったインスタンスのトリガーの記録を消し、SAFETY の注を事実に合わせる
   - 檻 2 本: 競合で終わったインスタンスのトリガーの記録が消える（ランタイムの中の欄を見るテスト）。親 P1・P2 が t=1 で同じ x を触る子を起こすと、残る子と影響した group の列が 20 回回して毎回同じ。エラーの扱いのテストを改める
@@ -378,3 +378,4 @@
 - 7.3: compile の通らない枝を消したのは「公開の口は `compile_storyboard` 1 つで、冒頭で必ず validate を通る」前提による。8 で足す crate 内の `compile_validated` も検証済みの文書だけから呼ぶこと（そうでないと `let Some(..) = resolved else { continue; }` が release で黙って飛ばす）。`resolve_pure_keyframe_time` の引数は 7 で too_many_arguments の境目（15.1）。
 - 8: design 309 行の「読み込みで Object の intern の表を空にする」は、丸ごと空にすると動いている途中の Object の値が新しい Rc になり、`Rc::ptr_eq` の差分の比べで空振りの差分が 1 回出るので、「使われていない値だけ手放す」（`ObjectInternPool::release_unused`＝`strong_count > 1` を残す）にした（#62 の「表が増え続けない」は保つ・檻 `reload_keeps_animating_object_value_without_spurious_diff`）。`DolaDocumentBuilder::build` は検証の後に全部をコンパイルにかける（dola と wintf の呼び手だけ・緑）。`compile_validated` を呼ぶのは `compile_storyboard`・`compile_all`・facade の 3 か所で、どれも検証済みの文書。
 - 9.1: 競合は「新しいインスタンスが触る変数に、ほかの Playing／Paused のインスタンスの項目がある」で判定する。終わりの時刻を過ぎてまだ tick していないインスタンスも生きた扱い（前と同じ）。wintf の本番のコードは start を呼ばない。5.3 の待ちの中の値の保持は Conclude（`collect_current_segment_final_values`）と Cancel・Trim（`evaluate_all_for_group`）の 2 経路を檻 2 本で縛った（Trim 専用の檻は無い）。`LoopOffset::Scalar(v)` は [0, v] の乱数なので、決まった待ちのテストは `Range{v,v}` を使う。
+- 9.2→10.3: research #36 の場所に挙がる `subscription_manager/mod.rs:122` の `subscribed_ids` はまだ HashSet で、`UpdateResult.changes` の並びが走るたびに変わりうる（design の #36 の行の範囲の外）。10.3 の「購読した id を直に回す」直しで BTreeSet にし、並びが決まる檻を足す（進行役の決め）。`trigger_store` は回して読まないので HashMap のまま。

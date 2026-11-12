@@ -1,6 +1,6 @@
 //! 購読変数ごとのタイムテーブル管理と時刻ベース評価。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::compile::{CompiledSegment, CompiledStoryboard, VariableTypeHint};
 
@@ -69,7 +69,7 @@ impl TimelineManager {
         &mut self,
         variable_name: &str,
         current_time: f64,
-        instances: &HashMap<u64, StoryboardInstance>,
+        instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> Option<EvaluatedValue> {
         let timeline = self.timelines.get_mut(variable_name)?;
         // インスタンスの無い項目（取り残し）だけを捨てる。生きた項目は remove_entries だけが消す
@@ -158,7 +158,7 @@ impl TimelineManager {
         &mut self,
         group_id: u64,
         current_time: f64,
-        instances: &HashMap<u64, StoryboardInstance>,
+        instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> HashMap<String, EvaluatedValue> {
         let instance = match instances.get(&group_id) {
             Some(inst) => inst,
@@ -194,7 +194,7 @@ impl TimelineManager {
         &self,
         group_id: u64,
         current_time: f64,
-        instances: &HashMap<u64, StoryboardInstance>,
+        instances: &BTreeMap<u64, StoryboardInstance>,
     ) -> HashMap<String, EvaluatedValue> {
         let instance = match instances.get(&group_id) {
             Some(inst) => inst,

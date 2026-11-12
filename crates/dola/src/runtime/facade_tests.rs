@@ -85,3 +85,67 @@ fn overwrite_document() {
     rt.load_document(doc2).unwrap();
     assert!(rt.document.as_ref().unwrap().variable.contains_key("y"));
 }
+
+fn fade_x(from: f64, to: f64, duration: f64) -> StoryboardEntry {
+    StoryboardEntry {
+        variable: Some("x".to_string()),
+        transition: Some(TransitionRef::Inline(TransitionDef {
+            from: Some(TransitionValue::Scalar(from)),
+            to: Some(TransitionValue::Scalar(to)),
+            duration: Some(duration),
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
+}
+
+/// 競合で終わったインスタンスのトリガーの記録は残らない（#35）
+#[test]
+fn conflict_termination_drops_trigger_store() {
+    use crate::builder::{DolaDocumentBuilder, StoryboardBuilder};
+    use crate::storyboard::KeyframeRef;
+
+    // 親: x 0→1（2 秒・kf1）＋ kf1 で child。interrupt: x を触る（親と競合）
+    let parent = StoryboardBuilder::new()
+        .interruption_policy(InterruptionPolicy::Cancel)
+        .entry(StoryboardEntry {
+            keyframe: Some("kf1".to_string()),
+            ..fade_x(0.0, 1.0, 2.0)
+        })
+        .entry(StoryboardEntry {
+            trigger_storyboard: Some("child".to_string()),
+            at: Some(KeyframeRef::Single("kf1".to_string())),
+            ..Default::default()
+        })
+        .build();
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable("x", float(0.0))
+        .storyboard("parent", parent)
+        .storyboard(
+            "child",
+            StoryboardBuilder::new()
+                .entry(fade_x(1.0, 0.0, 1.0))
+                .build(),
+        )
+        .storyboard(
+            "interrupt",
+            StoryboardBuilder::new()
+                .entry(fade_x(0.0, 0.5, 1.0))
+                .build(),
+        )
+        .build()
+        .unwrap();
+
+    let mut rt = DolaRuntime::new();
+    rt.load_document(doc).unwrap();
+    let parent_gid = rt.start("parent", 0.0).unwrap().group_id;
+    assert!(rt.trigger_store.contains_key(&parent_gid));
+
+    let r = rt.start("interrupt", 1.0).unwrap();
+    assert_eq!(r.affected_group_ids, vec![parent_gid]);
+    assert!(
+        rt.trigger_store.is_empty(),
+        "trigger records left: {:?}",
+        rt.trigger_store.keys().collect::<Vec<_>>()
+    );
+}

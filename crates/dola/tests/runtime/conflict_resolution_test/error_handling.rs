@@ -89,11 +89,9 @@ mod conflict_terminated_parent_triggers {
 
     /// 親（トリガー保持・未発火）が競合解決で終了した場合、トリガーは発火しない。
     ///
-    /// 特性化（D1a-V 申し送りの stale-entry 領域）: conflict_resolver の終了経路は
-    /// instance_manager からインスタンスを除去するが、facade の trigger_store
-    /// エントリは残置される。process_triggers はインスタンス起点で走査するため
-    /// 残置エントリが読まれることはなく、外部観測上は「トリガーが発火しない」
-    /// 挙動として現れる（panic も発火もしないことを固定する）。
+    /// 競合で終わった親のトリガーの記録は start の中で消える（記録が消えることは
+    /// `src/runtime/facade_tests.rs` の `conflict_termination_drops_trigger_store` が縛る）。
+    /// ここでは公開の API から見て、発火の予定を過ぎても発火も panic もしないことを確かめる。
     #[test]
     fn conflict_terminated_parent_trigger_never_fires() {
         // parent: opacity 0→100 (2.0s, kf1 at end=2.0) + trigger at kf1 → child

@@ -3,7 +3,7 @@
 //! 同じ変数に生きた項目を持つインスタンスを競合とし、`InterruptionPolicy` に基づく
 //! 5種の終了戦略を group_id 単位で適用する。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::compile::CompiledStoryboard;
 use crate::storyboard::InterruptionPolicy;
@@ -25,7 +25,7 @@ pub(crate) fn resolve_conflicts_excluding(
     timeline_manager: &mut TimelineManager,
     instance_manager: &mut InstanceManager,
     subscription_manager: &mut SubscriptionManager,
-    skip_group_ids: &HashSet<u64>,
+    skip_group_ids: &BTreeSet<u64>,
 ) -> Result<Vec<u64>, RuntimeError> {
     // 1. 競合検出
     let conflicting = detect_overlaps(compiled, timeline_manager, instance_manager, skip_group_ids);
@@ -134,8 +134,8 @@ fn detect_overlaps(
     compiled: &CompiledStoryboard,
     timeline_manager: &TimelineManager,
     instance_manager: &InstanceManager,
-    skip_group_ids: &HashSet<u64>,
-) -> HashSet<u64> {
+    skip_group_ids: &BTreeSet<u64>,
+) -> BTreeSet<u64> {
     let instances = instance_manager.instances();
     compiled
         .timelines

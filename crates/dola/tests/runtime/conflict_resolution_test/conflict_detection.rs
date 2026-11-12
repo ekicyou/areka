@@ -280,8 +280,6 @@ mod conflict_detection_boundaries {
 
         // sb_xy は x・y 両方を操作 → 両インスタンスと競合
         let r3 = rt.start("sb_xy", 0.5).unwrap();
-        let mut affected = r3.affected_group_ids.clone();
-        affected.sort_unstable();
-        assert_eq!(affected, vec![r1.group_id, r2.group_id]);
+        assert_eq!(r3.affected_group_ids, vec![r1.group_id, r2.group_id]);
     }
 }
