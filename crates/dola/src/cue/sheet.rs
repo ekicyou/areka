@@ -146,7 +146,7 @@ fn relative_end(cues: &[Cue]) -> f64 {
 ///   を用いる（dispatch 刻印前は 0.0）。各 cue の相対 `start_time` はエントリオフセットとして
 ///   **そのまま**保存する（min 正規化しない＝先頭・単独の待ちが消えない）。
 /// - **同一 at の FIFO**: [`CueSheet::cues`] の記述順に 1 件ずつ [`TimedSchedule::insert`] したのと
-///   同じ並びを [`TimedSchedule::insert_each`] で作る（`extend` の一括再ソートは同一オフセット群を逆順化するため使わない）。
+///   同じ並びを [`TimedSchedule::insert_each`] で作る。
 /// - **duration の clamp**: 各 cue の duration を [`clamp_duration`] で有限・非負へ丸め、
 ///   その**同一値**を配送エンベロープ [`TalkCue::duration`] と占有 horizon の両方へ用いる。
 /// - **占有 horizon の算出**: 全 cue の `max(start_time + clamp(duration))`（空台本は 0.0）を
@@ -154,14 +154,14 @@ fn relative_end(cues: &[Cue]) -> f64 {
 ///   **占有終了**で真になるようにする（末尾待ちの duration を終端で落とさない・R2.5/D6）。
 ///
 /// ペイロード写像: [`CuePayload::Command`] → [`Entry::Payload`]（[`TalkCue`] を組む）、
-/// [`CuePayload::Barrier`] → [`Entry::Barrier`]、[`CuePayload::Routing`] → [`Entry::Routing`]。
-/// Barrier/Routing は presentation でなく（R1.6）envelope duration を持たないが、その
+/// [`CuePayload::Barrier`] → [`Entry::Barrier`]。
+/// Barrier は presentation でなく（R1.6）envelope duration を持たないが、その
 /// `start_time` は horizon の fold に一律に寄与する（duration 相当は 0）。
 pub fn to_talk_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
     let mut schedule =
         TimedSchedule::with_horizon(sheet.absolute_start_time(), relative_end(sheet.cues()));
 
-    // per-cue insert と同じ並び（extend 禁止）: 同一 at 群を記述順（FIFO）で保つ。まとめて入れて
+    // per-cue insert と同じ並び: 同一 at 群を記述順（FIFO）で保つ。まとめて入れて
     // 台本の長さに比例する手間にする（1 件ずつの insert は長い台本で 2 乗になる）。
     schedule.insert_each(sheet.cues().iter().map(|cue| match &cue.payload {
         CuePayload::Command(command) => Entry::Payload(
@@ -174,7 +174,6 @@ pub fn to_talk_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
             },
         ),
         CuePayload::Barrier(kind) => Entry::Barrier(cue.start_time, kind.clone()),
-        CuePayload::Routing(routing) => Entry::Routing(cue.start_time, routing.clone()),
     }));
 
     schedule

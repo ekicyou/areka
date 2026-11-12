@@ -86,7 +86,7 @@ fn broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time() {
 fn broadcast_stops_at_barrier_and_resumes_delivery_after_resolve() {
     let sheet = CueSheet::new(vec![
         text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::WaitForInput { timeout: None }),
+        barrier(0.1, BarrierKind::WaitForInput),
         text(0.2, "after", 0.0),
     ]);
     let mut player = CuePlayer::from_sheet(&sheet);
@@ -141,47 +141,6 @@ fn broadcast_delivers_each_cue_once_even_when_ticked_repeatedly() {
         logged_commands(&log),
         vec![CueCommand::Text("a".into()), CueCommand::Text("b".into())],
         "各 cue は生涯 1 回のみ配送される（冪等再 tick で二重配送しない）"
-    );
-}
-
-/// Timeout バリア継続中の（時刻前進する）tick でも、バリア手前の cue を二重配送しない
-/// （schedule は Timeout 継続で early-return し ready バッファを据え置くが、配送は前進時のみ）。
-#[test]
-fn broadcast_does_not_redeliver_across_timeout_barrier_continuation() {
-    let sheet = CueSheet::new(vec![
-        text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::Timeout { duration: 1.0 }),
-        text(0.2, "after", 0.0),
-    ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
-    let (log, sink) = recording_sink();
-    player.register_sink(sink);
-
-    // before 配送 ＋ Timeout バリア到達（Playing 維持）。
-    player.tick(0.1);
-    assert_eq!(
-        logged_commands(&log),
-        vec![CueCommand::Text("before".into())],
-        "before のみ配送される"
-    );
-
-    // Timeout 継続中（duration 未経過）の前進 tick でも before を再配送しない。
-    player.tick(0.5);
-    assert_eq!(
-        log.borrow().len(),
-        1,
-        "Timeout 継続中の前進 tick で before を二重配送しない"
-    );
-
-    // Timeout duration 経過（0.1 + 1.0 = 1.1）で自動解除され after が配送される。
-    player.tick(1.1);
-    assert_eq!(
-        logged_commands(&log),
-        vec![
-            CueCommand::Text("before".into()),
-            CueCommand::Text("after".into()),
-        ],
-        "Timeout 解除後に after が配送される（各 cue は 1 回のみ）"
     );
 }
 

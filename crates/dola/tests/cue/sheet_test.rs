@@ -3,10 +3,7 @@
 //! 昇順ソート・絶対アンカー保存・先頭待ち保存・duration clamp・占有 horizon を検証する。
 
 use crate::test_support::{barrier, text, wait};
-use dola::cue::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget, RoutingCommand,
-    to_talk_schedule,
-};
+use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, to_talk_schedule};
 
 // ============================================================================
 // CueSheet 構築テスト
@@ -334,7 +331,7 @@ fn cue_sheet_serde_roundtrip() {
         Cue {
             actor: ActorKey::from("kero"),
             start_time: 1.0,
-            payload: CuePayload::Barrier(BarrierKind::Timeout { duration: 3.0 }),
+            payload: CuePayload::Barrier(BarrierKind::WaitForChoice { timeout: Some(3.0) }),
             duration: 0.0,
         },
     ]);
@@ -527,35 +524,23 @@ fn to_talk_schedule_carries_wait_duration_without_action() {
     );
 }
 
-/// R1.6: Barrier / Routing ペイロードは skip されず Entry::Barrier / Entry::Routing へ
+/// R1.6: Barrier ペイロードは skip されず Entry::Barrier へ
 /// **経路づけ**られる（旧 sakura to_schedule は skip していた・canonical は routing する）。
 #[test]
-fn to_talk_schedule_routes_barrier_and_routing_not_skipping() {
+fn to_talk_schedule_routes_barrier_not_skipping() {
     let sheet = CueSheet::new(vec![
         text(0.0, "keep", 0.0),
-        Cue {
-            actor: ActorKey::from("0"),
-            start_time: 0.1,
-            payload: CuePayload::Routing(RoutingCommand::RouteRemove {
-                target: CueTarget::Shell,
-            }),
-            duration: 0.0,
-        },
-        barrier(0.2, BarrierKind::WaitForInput { timeout: None }),
+        barrier(0.2, BarrierKind::WaitForInput),
         text(0.3, "after", 0.0),
     ]);
 
     let mut schedule = to_talk_schedule(&sheet);
     schedule.tick(1.0);
 
-    // Barrier 手前の Command のみ配信・Routing は next_routing へ・Barrier で停止。
+    // Barrier 手前の Command のみ配信・Barrier で停止。
     let ready = schedule.ready();
     assert_eq!(ready.len(), 1, "Barrier 手前の Command のみ配信");
     assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
-    assert!(
-        schedule.next_routing().is_some(),
-        "Routing は skip されず Entry::Routing へ経路づけられる"
-    );
     assert!(
         schedule.current_barrier().is_some(),
         "Barrier は skip されず Entry::Barrier で停止する"

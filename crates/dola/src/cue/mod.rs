@@ -9,10 +9,9 @@
 //! |---|---|
 //! | `TimedSchedule<T>` | 0 ベース相対オフセットの汎用配信エンジン |
 //! | `CueCommand` | データ系 13 バリアント演出コマンド |
-//! | `RoutingCommand` | 配送制御 3 バリアント |
 //! | `CuePayload` | CueSheet 記述時の統一型 |
 //! | `CueSheet` | 相対時刻コマンド列（演出台本） |
-//! | `ActorKey` / `CueTarget` / `EntityKey` / `Cue` | 演出ドメイン型 |
+//! | `ActorKey` / `CueTarget` / `Cue` | 演出ドメイン型 |
 //! | `TalkCue` | 配送エンベロープ（`Cue` の実行時投影・serde 非依存） |
 //! | `CueSink` | 演者非依存の単一出力契約トレイト（全表現者が各自 1 実装） |
 //! | `CueProbe` / `CueFinding` | 合図の受け手が誤りを知らせる口と、その知らせ 1 件（中身は不透明な文字列） |
@@ -26,10 +25,7 @@ pub mod schedule;
 pub mod sheet;
 mod sink;
 
-pub use command::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, EntityKey, RoutingCommand,
-    TalkCue,
-};
+pub use command::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, TalkCue};
 pub use runtime::{CuePlayer, CuePlayerState, PendingChoice};
 pub use schedule::{Entry, TimedSchedule};
 pub use sheet::{CueSheet, to_talk_schedule};

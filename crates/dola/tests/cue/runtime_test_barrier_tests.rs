@@ -1,7 +1,7 @@
 //! バリア状態機械の檻——バリアに到達すると再生が停止し、各解決経路で再開する。
 //!
-//! WaitForInput・WaitForChoice の停止と外部解決、`skip_barrier` の強制再開と非待機での no-op、
-//! Timeout バリアの自動解除を収める。`logged_has_text` は本テーマからしか参照されないのでここに残した。
+//! WaitForInput・WaitForChoice の停止と外部解決、`skip_barrier` の強制再開と非待機での no-op を収める。
+//! `logged_has_text` は本テーマからしか参照されないのでここに残した。
 
 use super::{BarrierKind, CueCommand, CuePlayer, CuePlayerState, CueSheet, TalkCue};
 use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
@@ -25,7 +25,7 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
     // before@0.0 → Barrier(WaitForInput)@0.1 → after@0.2。
     let sheet = CueSheet::new(vec![
         text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::WaitForInput { timeout: None }),
+        barrier(0.1, BarrierKind::WaitForInput),
         text(0.2, "after", 0.0),
     ]);
     let mut player = CuePlayer::from_sheet(&sheet);
@@ -193,7 +193,7 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
 fn skip_barrier_force_resumes_from_waiting() {
     let sheet = CueSheet::new(vec![
         text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::WaitForInput { timeout: None }),
+        barrier(0.1, BarrierKind::WaitForInput),
         text(0.2, "after", 0.0),
     ]);
     let mut player = CuePlayer::from_sheet(&sheet);
@@ -258,43 +258,5 @@ fn resolve_click_is_noop_while_waiting_for_choice() {
         player.pending_choices(),
         before.as_slice(),
         "先積みの選択肢は変わらない"
-    );
-}
-
-// ============================================================================
-// Timeout バリア: Playing を維持しつつ継続 tick で自動解除される
-// ============================================================================
-
-/// Timeout バリアは待機状態にせず Playing を維持し（schedule が自動管理）、継続 tick で
-/// duration 経過後に自動解除されて後続 cue が配送される。
-#[test]
-fn timeout_barrier_keeps_playing_and_auto_resolves_by_continued_ticking() {
-    // before@0.0 → Barrier(Timeout{1.0})@0.1 → after@0.2。
-    let sheet = CueSheet::new(vec![
-        text(0.0, "before", 0.0),
-        barrier(0.1, BarrierKind::Timeout { duration: 1.0 }),
-        text(0.2, "after", 0.0),
-    ]);
-    let mut player = CuePlayer::from_sheet(&sheet);
-    let (log, sink) = recording_sink();
-    player.register_sink(sink);
-
-    // Timeout バリアに到達しても Playing を維持する（WaitingFor* へは遷移しない）。
-    player.tick(0.1);
-    assert_eq!(
-        player.state(),
-        &CuePlayerState::Playing,
-        "Timeout バリアは Playing を維持する（自動管理）"
-    );
-    assert!(
-        !logged_has_text(&log, "after"),
-        "duration 未経過ゆえ after は未配送"
-    );
-
-    // Timeout duration（0.1 + 1.0 = 1.1）経過後の tick で自動解除され after が配送される。
-    player.tick(1.1);
-    assert!(
-        logged_has_text(&log, "after"),
-        "Timeout duration 経過で自動解除され after が配送される"
     );
 }

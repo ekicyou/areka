@@ -83,8 +83,6 @@ enum BarrierReached {
     Input,
     /// 選択肢待ち → `WaitingForChoice` へ停止。
     Choice,
-    /// 指定時間経過待ち → `Playing` を維持（`TimedSchedule` が継続 tick で自動解除）。
-    Timeout,
 }
 
 /// cue 再生の受動的注入時刻ランタイム。
@@ -195,9 +193,6 @@ impl CuePlayer {
     /// （`ready` バッファをクリアして早期 return）。再開は外部解決 seam
     /// （[`resolve_click`](Self::resolve_click)/[`resolve_choice`](Self::resolve_choice)/
     /// [`skip_barrier`](Self::skip_barrier)）が担う。
-    ///
-    /// なお `Timeout` バリアは待機状態にせず `Playing` を維持する——時間経過による解除は
-    /// [`TimedSchedule`] が継続 tick の中で自動管理するため（外部解決を要さない）。
     pub fn tick(&mut self, current_time: f64) {
         // 待機中・完了後は進行しない（バリア seam の外部解決/占有終了で確定した状態を保持）。
         if !matches!(self.state, CuePlayerState::Playing) {
@@ -207,7 +202,7 @@ impl CuePlayer {
 
         // schedule が本 tick で実際に前進したか（entry を pop したか）の判定材料。
         // schedule は前進時のみ ready_buffer を clear→再収集し entries を pop する（remaining 減少）。
-        // 冪等な再 tick や Timeout バリア継続は early-return で ready_buffer を据え置く（remaining
+        // 冪等な再 tick は early-return で ready_buffer を据え置く（remaining
         // 不変）ため、この差分で「新規に配送可能になった cue」だけを broadcast できる（下記参照）。
         let remaining_before = self.schedule.remaining();
         self.schedule.tick(current_time);
@@ -226,7 +221,7 @@ impl CuePlayer {
         // broadcast fan-out ＋ 選択肢バッグ積み: 準備完了した cue を、登録された**全** sink へ選別
         // なく配る（R2.1/R1.4）。あわせて Choice cue は解決照合用に pending_choices へ積む
         // （責務二分＝配送列は表示の単一真実源／バッグは照合の単一真実源・R8.6）。両者とも schedule
-        // が前進して entry を pop した tick（remaining 減少）に限り実行し、冪等再 tick・Timeout 継続
+        // が前進して entry を pop した tick（remaining 減少）に限り実行し、冪等再 tick
         // の early-return（remaining 不変・ready_buffer 据え置き）では実行しない——これにより各 cue は
         // 生涯 1 回のみ配送され、各 Choice は生涯 1 回のみバッグへ積まれる（同一時刻の再 tick で
         // 二重積みしない＝「bag 内容は tick 列に不変」をゲート内側化で構造保証）。バリア到達で待機へ
@@ -249,9 +244,8 @@ impl CuePlayer {
         // 必要な分類だけを所有値（`BarrierReached`）へ写し取る。match は BarrierKind を
         // 網羅する（catch-all を置かない）ため、将来 variant 追加時にコンパイラが強制更新する。
         let reached = self.schedule.current_barrier().map(|kind| match kind {
-            BarrierKind::WaitForInput { .. } => BarrierReached::Input,
+            BarrierKind::WaitForInput => BarrierReached::Input,
             BarrierKind::WaitForChoice { .. } => BarrierReached::Choice,
-            BarrierKind::Timeout { .. } => BarrierReached::Timeout,
         });
         match reached {
             Some(BarrierReached::Input) => {
@@ -265,8 +259,6 @@ impl CuePlayer {
                 self.state = CuePlayerState::WaitingForChoice;
                 return;
             }
-            // `Timeout` は Playing を維持（TimedSchedule が継続 tick で自動解除する）。
-            Some(BarrierReached::Timeout) => return,
             None => {}
         }
 
@@ -291,11 +283,13 @@ impl CuePlayer {
 
     /// クリック/入力バリア（`WaitingForInput`）を外部解決して再開する。
     ///
+    /// `talk-fast-forward` の `\x` の受け皿（ukadoc の `\x` に時間切れの引数は無い）。
+    ///
     /// 非待機状態（`Playing`/`WaitingForChoice`/`Completed`）では no-op。解決後に既に占有
     /// horizon へ達していれば `Completed` へ遷移する。
     pub fn resolve_click(&mut self) {
         if self.state == CuePlayerState::WaitingForInput {
-            self.schedule.notify_barrier_resolved(None);
+            self.schedule.notify_barrier_resolved();
             self.state = CuePlayerState::Playing;
             self.settle_completion_after_resolve();
         }
@@ -313,8 +307,7 @@ impl CuePlayer {
         }
         if self.pending_choices.iter().any(|c| c.id == choice_id) {
             self.pending_choices.clear();
-            self.schedule
-                .notify_barrier_resolved(Some(choice_id.to_string()));
+            self.schedule.notify_barrier_resolved();
             self.state = CuePlayerState::Playing;
             self.settle_completion_after_resolve();
             Some(choice_id.to_string())
@@ -333,7 +326,7 @@ impl CuePlayer {
             CuePlayerState::WaitingForInput | CuePlayerState::WaitingForChoice
         ) {
             self.pending_choices.clear();
-            self.schedule.notify_barrier_resolved(None);
+            self.schedule.notify_barrier_resolved();
             self.state = CuePlayerState::Playing;
             self.settle_completion_after_resolve();
         }

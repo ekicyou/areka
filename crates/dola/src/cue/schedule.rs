@@ -1,11 +1,11 @@
 //! TimedSchedule<T> — 0 ベース相対オフセットの汎用配信エンジン。
 //!
-//! Entry<T> により Payload / Barrier / Routing を型レベルで 3 種分離する。
+//! Entry<T> により Payload / Barrier を型レベルで 2 種分離する。
 //! `tick()` + `ready()` の 2 フェーズ API で `DolaRuntime` の `tick()` + `last_result()` と対称。
 
 use std::fmt::Debug;
 
-use super::command::{BarrierKind, RoutingCommand};
+use super::command::BarrierKind;
 
 /// 2 つの秒を足す。どちらも有限で ms の格子に載るなら ms の整数で足してから秒に直し、
 /// 載らなければ f64 の和そのもの（時刻を丸めない）。
@@ -25,10 +25,10 @@ pub(crate) fn sum_on_ms_grid(a: f64, b: f64) -> f64 {
 }
 
 // ============================================================================
-// Entry<T> — エントリの型レベル 3 種分離
+// Entry<T> — エントリの型レベル 2 種分離
 // ============================================================================
 
-/// エントリの型レベル 3 種分離。
+/// エントリの型レベル 2 種分離。
 /// f64 = スケジュール開始からの相対オフセット（0 ベース）。
 #[derive(Clone, Debug)]
 pub enum Entry<T> {
@@ -36,8 +36,6 @@ pub enum Entry<T> {
     Payload(f64, T),
     /// 時刻付きバリア（進行停止点、TimedSchedule が消費）
     Barrier(f64, BarrierKind),
-    /// 時刻付きルーティング（配送制御、CueQueue 層が消費）
-    Routing(f64, RoutingCommand),
 }
 
 impl<T> Entry<T> {
@@ -46,7 +44,6 @@ impl<T> Entry<T> {
         match self {
             Entry::Payload(t, _) => *t,
             Entry::Barrier(t, _) => *t,
-            Entry::Routing(t, _) => *t,
         }
     }
 }
@@ -57,9 +54,9 @@ impl<T> Entry<T> {
 
 /// 0 ベース相対オフセットの汎用配信エンジン。
 ///
-/// Entry<T> により Payload / Barrier / Routing を型レベルで 3 種分離する。
+/// Entry<T> により Payload / Barrier を型レベルで 2 種分離する。
 /// ジェネリクス T は Payload(f64, T) のみに適用される。
-/// Barrier(BarrierKind) / Routing(RoutingCommand) は T に関わらず固定型。
+/// Barrier(BarrierKind) は T に関わらず固定型。
 #[derive(Debug)]
 pub struct TimedSchedule<T> {
     /// 絶対時刻での開始時刻
@@ -68,20 +65,15 @@ pub struct TimedSchedule<T> {
     entries: Vec<Entry<T>>,
     /// tick() で収集した Payload
     ready_buffer: Vec<T>,
-    /// tick() で収集した Routing
-    routing_buffer: Vec<RoutingCommand>,
     /// 現在停止中のバリア
     current_barrier: Option<BarrierKind>,
     /// 前回 tick の絶対時刻（構築・clear の直後はアンカー `start_time`）。
     ///
-    /// 到達・期限・完了の判定はすべて「アンカー＋相対」の足し算で作った絶対時刻とこの値を
+    /// 到達・完了の判定はすべて「アンカー＋相対」の足し算で作った絶対時刻とこの値を
     /// 比べる（絶対の発火時刻の定義 [`CueSheet::absolute_fire_time`](crate::cue::CueSheet::absolute_fire_time)
     /// と同じ形）。「現在時刻−アンカー」の引き算で相対へ戻すと、丸めでその時刻ちょうどの
     /// tick が届かないことがあるため、引き算は使わない。
     current_time: f64,
-    /// バリアタイムアウトの相対オフセット（barrier_offset + timeout_duration）。
-    /// 期限の判定はアンカーを足した絶対時刻 `start_time + この値` で行う。
-    barrier_timeout_offset: Option<f64>,
     /// 占有終了 horizon（相対オフセット・0 ベース）。台本の全 cue の
     /// `max(start_time + duration)` を canonical 変換が焼き込む（D6）。
     ///
@@ -112,10 +104,8 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             start_time,
             entries: Vec::new(),
             ready_buffer: Vec::new(),
-            routing_buffer: Vec::new(),
             current_barrier: None,
             current_time: start_time,
-            barrier_timeout_offset: None,
             horizon,
         }
     }
@@ -161,24 +151,6 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.entries = all;
     }
 
-    /// 複数エントリを一括挿入（内部で再ソート）。
-    ///
-    /// NOTE(D3-V): NaN オフセットの扱いは insert() と同様（debug_assert 発火 /
-    /// release 素通り）。ソートは −0.0 を +0.0 にそろえた全順序の降順。
-    pub fn extend(&mut self, entries: impl IntoIterator<Item = Entry<T>>) {
-        for entry in entries {
-            debug_assert!(
-                entry.offset() >= 0.0,
-                "Entry offset must be non-negative: {}",
-                entry.offset()
-            );
-            self.entries.push(entry);
-        }
-        // 降順ソート（−0.0 を +0.0 にそろえた全順序）
-        self.entries
-            .sort_by(|a, b| (b.offset() + 0.0).total_cmp(&(a.offset() + 0.0)));
-    }
-
     // ── 2 フェーズ API（DolaRuntime の tick/last_result と対称） ──
 
     /// Phase 1: 新たな時刻を入力としてランタイムの時刻を進める。
@@ -186,9 +158,8 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// `current_time` は絶対時刻。各エントリの到達は `start_time + オフセット` の絶対時刻と
     /// 比べて判定する（相対へ引き戻さない・`current_time` 欄の説明を参照）。
     ///
-    /// 時刻到達済みの Payload を `ready_buffer` に、Routing を `routing_buffer` に
-    /// 蒐集しながら進行。Barrier 到達（外部解決が必要）または末尾到達で停止。
-    /// Routing は通過（停止しない）。冪等（同一時刻の再呼び出し安全）。
+    /// 時刻到達済みの Payload を `ready_buffer` に蒐集しながら進行。Barrier 到達（外部解決が
+    /// 必要）または末尾到達で停止。冪等（同一時刻の再呼び出し安全）。
     ///
     /// NOTE(D3-V): `current_time`（または start_time）が NaN の場合、下の全ガード
     /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
@@ -208,27 +179,13 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             return;
         }
 
-        // バリア中の場合
+        // バリア中は外部解除待ち
         if self.current_barrier.is_some() {
-            // タイムアウト自動解除チェック
-            if let Some(timeout_offset) = self.barrier_timeout_offset {
-                if current_time >= self.start_time + timeout_offset {
-                    // タイムアウト解除
-                    self.current_barrier = None;
-                    self.barrier_timeout_offset = None;
-                } else {
-                    // まだタイムアウトしていない → バリア継続
-                    return;
-                }
-            } else {
-                // タイムアウトなし → 外部解除待ち
-                return;
-            }
+            return;
         }
 
         self.current_time = current_time;
         self.ready_buffer.clear();
-        self.routing_buffer.clear();
 
         // entries は降順ソート → 末尾から時刻到達を消費
         let start_time = self.start_time;
@@ -240,33 +197,12 @@ impl<T: Clone + Debug> TimedSchedule<T> {
                 Entry::Payload(_, payload) => {
                     self.ready_buffer.push(payload);
                 }
-                Entry::Barrier(barrier_offset, kind) => {
-                    // タイムアウトチェック（Timeout は duration が必須タイムアウト）
-                    let timeout_dur = match &kind {
-                        BarrierKind::WaitForInput { timeout } => *timeout,
-                        // 選択待ちの `timeout` は上位層（kanade の期限の判定）へ運ぶ指令で、
-                        // 再生層はこれで区切りを飛ばしも解きもしない。解けるのは外からの
-                        // `notify_barrier_resolved` だけ（areka-P0-choice-timeout-directive 要件 5.1〜5.3）。
-                        BarrierKind::WaitForChoice { .. } => None,
-                        BarrierKind::Timeout { duration } => Some(*duration),
-                    };
-
-                    // タイムアウト解除チェック（全バリア種別共通）
-                    if let Some(dur) = timeout_dur {
-                        let timeout_abs = barrier_offset + dur;
-                        if current_time >= self.start_time + timeout_abs {
-                            // 既にタイムアウト → スキップ
-                            continue;
-                        }
-                        self.barrier_timeout_offset = Some(timeout_abs);
-                    }
-
+                // 選択待ちの `timeout` は上位層（kanade の期限の判定）へ運ぶ指令で、再生層はこれで
+                // 区切りを飛ばしも解きもしない。解けるのは外からの `notify_barrier_resolved` だけ
+                // （areka-P0-choice-timeout-directive 要件 5.1〜5.3）。
+                Entry::Barrier(_, kind) => {
                     self.current_barrier = Some(kind);
                     return; // バリア到達で停止
-                }
-                Entry::Routing(_, routing) => {
-                    self.routing_buffer.push(routing);
-                    // Routing は通過（停止しない）
                 }
             }
         }
@@ -285,32 +221,15 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.current_barrier.as_ref()
     }
 
-    /// バリア解除プッシュ通知（外部イベント駆動）。
-    ///
-    /// - WaitForInput: `choice_id = None`
-    /// - WaitForChoice: `choice_id = Some(選択ID)`
-    /// - 非バリア時: no-op
-    pub fn notify_barrier_resolved(&mut self, _choice_id: Option<String>) {
+    /// バリア解除プッシュ通知（外部イベント駆動）。非バリア時は no-op。
+    pub fn notify_barrier_resolved(&mut self) {
         if self.current_barrier.is_none() {
             return; // 非バリア時は no-op
         }
         self.current_barrier = None;
-        self.barrier_timeout_offset = None;
         // 集めは区切りの tick で配り済み。空にして、同じ時刻の次の tick が冪等の守りに止められず
         // 区切りの後ろを集められるようにする（解決が次の Tick より先に来る形）。
         self.ready_buffer.clear();
-    }
-
-    // ── ルーティング ──
-
-    /// 時刻到達済みルーティングコマンドを取得（CueQueue 層が消費）。
-    /// FIFO 順で 1 件ずつ返す。
-    pub fn next_routing(&mut self) -> Option<RoutingCommand> {
-        if self.routing_buffer.is_empty() {
-            None
-        } else {
-            Some(self.routing_buffer.remove(0))
-        }
     }
 
     // ── ユーティリティ ──
@@ -320,13 +239,13 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.entries.len()
     }
 
-    /// まだ配っていない中身（区切りと配送の制御を除く）を配る順に返す。
+    /// まだ配っていない中身（区切りを除く）を配る順に返す。
     ///
     /// `entries` は降順（末尾から取り出す）ゆえ後ろから読む。
     pub(crate) fn pending_payloads(&self) -> impl Iterator<Item = &T> {
         self.entries.iter().rev().filter_map(|entry| match entry {
             Entry::Payload(_, payload) => Some(payload),
-            Entry::Barrier(..) | Entry::Routing(..) => None,
+            Entry::Barrier(..) => None,
         })
     }
 
@@ -351,10 +270,8 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.ready_buffer.clear();
-        self.routing_buffer.clear();
         self.current_barrier = None;
         self.current_time = self.start_time;
-        self.barrier_timeout_offset = None;
         self.horizon = 0.0;
     }
 }

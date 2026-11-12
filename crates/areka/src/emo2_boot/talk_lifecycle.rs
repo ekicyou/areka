@@ -16,7 +16,7 @@
 //! 既存の通知先は変えない」という制約に反する。α は `GhostBootOptions.sinks` へ 1 本足すだけで
 //! 上流（ghost / kanade / dola）の署名を一切変えない。
 //!
-//! α の既知の弱点は別の合図が吸収する——sink は `Barrier` / `Routing` を受け取らないため
+//! α の既知の弱点は別の合図が吸収する——sink は `Barrier` を受け取らないため
 //! 選択肢バリア中の horizon は過小になりうる。そこで選択肢の合図（`CueCommand::Choice`）を
 //! 初めて見たときに [`TalkLifecycleSignal::ChoiceShown`] を 1 回送り、判断の側がそのトークを
 //! 選択肢つきと覚えられるようにする（areka-P0-balloon-text-bugs 要件 1.2〜1.4）。バリア中は

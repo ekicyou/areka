@@ -63,58 +63,30 @@ pub enum CueTarget {
     Balloon,
     /// 窓/placement 系（窓移動等）— `\!` 汎用キャリアのうち、消費側が名前で自己選別して
     /// ここへ割り当てるコマンド名（M1: `"move"`）を消費する演者スロット。
-    /// additive unit variant（既存 variant のワイヤ形不変・`EntityKey` 参照非破壊）。
+    /// additive unit variant（既存 variant のワイヤ形不変）。
     Window,
-}
-
-/// CueCommand の配送先スロット内でのキー識別子。
-/// EntityRegistry の名前空間を型で分離する。
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum EntityKey {
-    /// アクターの特定スロット
-    Actor(ActorKey, CueTarget),
-    /// 物理スポットエンティティ (P1 拡張)
-    Spot(String),
-    /// 物理バルーンエンティティ (P1 拡張)
-    Balloon(String),
 }
 
 // ============================================================================
 // バリア種別
 // ============================================================================
 
-/// バリア種別（3 種）。
+/// バリア種別（2 種）。
 ///
 /// `TimedSchedule<T>` の `Entry::Barrier` に格納される。
 /// `CueCommand` enum とは独立し、スケジューリング層が直接消費する。
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum BarrierKind {
-    /// クリック/キー入力待ち（旧 WaitForClick を統合）
-    WaitForInput { timeout: Option<f64> },
+    /// クリック/キー入力待ち（旧 WaitForClick を統合）。
+    ///
+    /// `talk-fast-forward` の `\x` の受け皿。外からの解決
+    /// （[`CuePlayer::resolve_click`](crate::cue::CuePlayer::resolve_click)）で解け、時間切れは持たない
+    /// （ukadoc の `\x`・`\x[noclear]` に時間切れの引数が無い）。
+    WaitForInput,
     /// 選択肢待ち
     ///
     /// `timeout`（秒）は上位層へ運ぶ指令で、`TimedSchedule` はこれで区切りを飛ばしも解きもしない。
     WaitForChoice { timeout: Option<f64> },
-    /// 指定時間経過待ち（新規）
-    Timeout { duration: f64 },
-}
-
-// ============================================================================
-// ルーティングコマンド
-// ============================================================================
-
-/// ルーティングコマンド（3 バリアント）。
-///
-/// `TimedSchedule<T>` の `Entry::Routing` に格納される。
-/// CueQueue 層が `next_routing()` で消費し、`ready()` 利用側には届かない。
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum RoutingCommand {
-    /// スロット追加（既存ルーティング維持で追加先登録）
-    RouteAdd { target: CueTarget, to: EntityKey },
-    /// スロット切替（既存ルーティング上書き）
-    RouteSwitch { target: CueTarget, to: EntityKey },
-    /// スロット除去
-    RouteRemove { target: CueTarget },
 }
 
 // ============================================================================
@@ -123,8 +95,7 @@ pub enum RoutingCommand {
 
 /// 演出コマンド（13 バリアント、データ系のみ）。
 ///
-/// バリアは `BarrierKind` として、ルーティングは `RoutingCommand` として、
-/// それぞれ `Entry` レベルで分離済み。
+/// バリアは `BarrierKind` として `Entry` レベルで分離済み。
 ///
 /// 各コマンドは **action の種別のみ**を表し、時間は常に `Cue` envelope の
 /// `duration` が担う（`Wait` も同様——コマンド側に時間値を埋め込まない）。
@@ -250,17 +221,15 @@ impl CueCommand {
 // 統合ペイロード型
 // ============================================================================
 
-/// CueSheet 記述時の統合型（3 種）。
+/// CueSheet 記述時の統合型（2 種）。
 ///
-/// コマンド・バリア・ルーティングを同一インターフェースで記述可能にする。
+/// コマンド・バリアを同一インターフェースで記述可能にする。
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CuePayload {
     /// データコマンド
     Command(CueCommand),
     /// バリア（進行停止点）
     Barrier(BarrierKind),
-    /// ルーティング（配送制御）
-    Routing(RoutingCommand),
 }
 
 impl From<CueCommand> for CuePayload {
@@ -275,12 +244,6 @@ impl From<BarrierKind> for CuePayload {
     }
 }
 
-impl From<RoutingCommand> for CuePayload {
-    fn from(routing: RoutingCommand) -> Self {
-        Self::Routing(routing)
-    }
-}
-
 // ============================================================================
 // 個別演出指示
 // ============================================================================
@@ -292,7 +255,7 @@ pub struct Cue {
     pub actor: ActorKey,
     /// CueSheet 開始時点からの相対秒数
     pub start_time: f64,
-    /// 演出ペイロード（コマンド / バリア / ルーティング）
+    /// 演出ペイロード（コマンド / バリア）
     pub payload: CuePayload,
     /// この cue の presentation 占有時間（秒）。
     ///
@@ -308,7 +271,7 @@ pub struct Cue {
     /// 値は**不透明な秒数**であり、dola は SakuraScript 固有の意味論
     /// （1 文字あたりのウェイト値等）を内包しない——算出は上流（sakura）の責務。
     ///
-    /// 注: `CuePayload::Barrier`（動的停止点）／`Routing`（表現者未配送の制御プレーン）は
+    /// 注: `CuePayload::Barrier`（動的停止点）は
     /// presentation でなく duration 概念が本質的に非該当のため、静的 duration
     /// タイムラインの外に置かれる（envelope としては一律にフィールドを持ち値は 0）。
     #[serde(default)]

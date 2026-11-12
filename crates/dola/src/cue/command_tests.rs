@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn barrier_kind_clone_debug_partial_eq() {
-    let barrier = BarrierKind::WaitForInput { timeout: Some(5.0) };
+    let barrier = BarrierKind::WaitForInput;
     let clone = barrier.clone();
     assert_eq!(barrier, clone);
     let debug = format!("{:?}", barrier);
@@ -15,15 +15,9 @@ fn cue_payload_from_conversions() {
     let payload: CuePayload = cmd.into();
     assert!(matches!(payload, CuePayload::Command(CueCommand::Text(_))));
 
-    let barrier = BarrierKind::WaitForInput { timeout: None };
+    let barrier = BarrierKind::WaitForInput;
     let payload: CuePayload = barrier.into();
     assert!(matches!(payload, CuePayload::Barrier(_)));
-
-    let routing = RoutingCommand::RouteRemove {
-        target: CueTarget::Shell,
-    };
-    let payload: CuePayload = routing.into();
-    assert!(matches!(payload, CuePayload::Routing(_)));
 }
 
 #[test]
@@ -43,7 +37,7 @@ fn domain_types_serde_roundtrip() {
     let parsed: CueCommand = serde_json::from_str(&json).unwrap();
     assert_eq!(cmd, parsed);
 
-    let barrier = BarrierKind::Timeout { duration: 3.0 };
+    let barrier = BarrierKind::WaitForChoice { timeout: Some(3.0) };
     let json = serde_json::to_string(&barrier).unwrap();
     let parsed: BarrierKind = serde_json::from_str(&json).unwrap();
     assert_eq!(barrier, parsed);
@@ -381,76 +375,14 @@ fn actor_key_new_display_as_str() {
 }
 
 #[test]
-fn entity_key_namespaces_are_distinct() {
-    use std::collections::HashSet;
-    // 同名でも名前空間（バリアント）が違えば別キー
-    let spot = EntityKey::Spot("x".to_string());
-    let balloon = EntityKey::Balloon("x".to_string());
-    let actor = EntityKey::Actor(ActorKey::from("x"), CueTarget::Shell);
-    assert_ne!(spot, balloon);
-    assert_ne!(spot, actor);
-
-    let mut set = HashSet::new();
-    set.insert(spot);
-    set.insert(balloon);
-    set.insert(actor);
-    assert_eq!(set.len(), 3);
-
-    // Actor の CueTarget スロット違いも別キー
-    let mut slots = HashSet::new();
-    slots.insert(EntityKey::Actor(ActorKey::from("a"), CueTarget::Shell));
-    slots.insert(EntityKey::Actor(ActorKey::from("a"), CueTarget::Balloon));
-    assert_eq!(slots.len(), 2);
-}
-
-#[test]
-fn entity_key_serde_roundtrip() {
-    let keys = vec![
-        EntityKey::Actor(ActorKey::from("sakura"), CueTarget::Balloon),
-        EntityKey::Spot("spot1".to_string()),
-        EntityKey::Balloon("balloon1".to_string()),
-    ];
-    for key in keys {
-        let json = serde_json::to_string(&key).unwrap();
-        let parsed: EntityKey = serde_json::from_str(&json).unwrap();
-        assert_eq!(key, parsed);
-    }
-}
-
-#[test]
-fn routing_command_serde_roundtrip() {
-    let cmds = vec![
-        RoutingCommand::RouteAdd {
-            target: CueTarget::Balloon,
-            to: EntityKey::Actor(ActorKey::from("sakura"), CueTarget::Balloon),
-        },
-        RoutingCommand::RouteSwitch {
-            target: CueTarget::Shell,
-            to: EntityKey::Spot("spot1".to_string()),
-        },
-        RoutingCommand::RouteRemove {
-            target: CueTarget::Shell,
-        },
-    ];
-    for cmd in cmds {
-        let json = serde_json::to_string(&cmd).unwrap();
-        let parsed: RoutingCommand = serde_json::from_str(&json).unwrap();
-        assert_eq!(cmd, parsed);
-    }
-}
-
-#[test]
 fn cue_payload_and_cue_serde_roundtrip() {
-    // CuePayload 3 種のラウンドトリップ
+    // CuePayload 2 種のラウンドトリップ
     let payloads = vec![
         CuePayload::Command(CueCommand::Custom {
             command: "fade".to_string(),
             params: DynamicValue::Null,
         }),
         CuePayload::Barrier(BarrierKind::WaitForChoice { timeout: Some(3.0) }),
-        CuePayload::Routing(RoutingCommand::RouteRemove {
-            target: CueTarget::Balloon,
-        }),
     ];
     for payload in payloads {
         let json = serde_json::to_string(&payload).unwrap();
@@ -506,9 +438,8 @@ fn cue_duration_defaults_to_zero_for_legacy_serialized_data() {
         "duration 欠落の旧資産は 0（瞬時）として復元されねばならない"
     );
 
-    // Barrier / Routing ペイロード（duration 非該当）の旧資産も同様に読める。
-    let legacy_barrier =
-        r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":{"WaitForInput":{"timeout":null}}}}"#;
+    // Barrier ペイロード（duration 非該当）の旧資産も同様に読める。
+    let legacy_barrier = r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":"WaitForInput"}}"#;
     let parsed: Cue = serde_json::from_str(legacy_barrier).unwrap();
     assert_eq!(parsed.duration, 0.0);
 }
@@ -575,13 +506,9 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
             y: "2lh".into(),
         }
         .into(),
-        // duration 非該当ペイロード（Barrier / Routing）も envelope としては
+        // duration 非該当ペイロード（Barrier）も envelope としては
         // 一律にフィールドを持つ（値は 0・静的 duration タイムラインの外）。
-        BarrierKind::Timeout { duration: 5.0 }.into(),
-        RoutingCommand::RouteRemove {
-            target: CueTarget::Shell,
-        }
-        .into(),
+        BarrierKind::WaitForInput.into(),
     ];
 
     for payload in payloads {
@@ -700,8 +627,7 @@ fn as_command_carrier_returns_none_for_non_canonical() {
     );
 }
 
-/// `CueTarget::Window` は additive unit variant（8.1）。既存 variant のワイヤ形は不変で、
-/// `EntityKey` 参照は非破壊（Window を含むスロットも構築可）。
+/// `CueTarget::Window` は additive unit variant（8.1）。既存 variant のワイヤ形は不変。
 #[test]
 fn cue_target_window_is_additive_unit_variant() {
     let target = CueTarget::Window;
@@ -718,13 +644,6 @@ fn cue_target_window_is_additive_unit_variant() {
     assert_eq!(
         serde_json::to_string(&CueTarget::Balloon).unwrap(),
         r#""Balloon""#
-    );
-
-    // `EntityKey` 参照非破壊（Window を含む Actor スロットも構築可）。
-    let key = EntityKey::Actor(ActorKey::from("0"), CueTarget::Window);
-    assert_eq!(
-        key,
-        EntityKey::Actor(ActorKey::from("0"), CueTarget::Window)
     );
 }
 

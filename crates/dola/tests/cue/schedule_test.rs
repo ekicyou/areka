@@ -1,10 +1,7 @@
-//! TimedSchedule<T> の tick/ready 2 フェーズ API、バリア管理、ルーティング収集の検証。
+//! TimedSchedule<T> の tick/ready 2 フェーズ API とバリア管理の検証。
 
 use crate::test_support::{recording_sink, text};
-use dola::cue::{
-    ActorKey, BarrierKind, CueCommand, CuePlayer, CueSheet, CueTarget, EntityKey, Entry,
-    RoutingCommand, TimedSchedule,
-};
+use dola::cue::{BarrierKind, CueCommand, CuePlayer, CueSheet, Entry, TimedSchedule};
 
 // ============================================================================
 // Payload 収集テスト
@@ -95,7 +92,7 @@ fn remaining_and_is_completed() {
 fn clear_resets_all_state() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(1.0, "a".into()));
-    sched.insert(Entry::Barrier(1.0, BarrierKind::Timeout { duration: 5.0 }));
+    sched.insert(Entry::Barrier(1.0, BarrierKind::WaitForInput));
     sched.tick(1.0);
     assert!(!sched.ready().is_empty());
     assert!(sched.current_barrier().is_some());
@@ -136,16 +133,13 @@ fn with_horizon_defers_completion_until_elapsed_time_reaches_horizon() {
 #[test]
 fn with_horizon_not_completed_while_barrier_active_even_past_horizon() {
     let mut sched = TimedSchedule::<String>::with_horizon(0.0, 1.0);
-    sched.insert(Entry::Barrier(
-        0.5,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
+    sched.insert(Entry::Barrier(0.5, BarrierKind::WaitForInput));
 
     sched.tick(2.0); // horizon(1.0) 超過だが barrier で停止
     assert!(sched.current_barrier().is_some());
     assert!(!sched.is_completed(), "barrier 中は horizon 超過でも未完了");
 
-    sched.notify_barrier_resolved(None);
+    sched.notify_barrier_resolved();
     assert!(
         sched.is_completed(),
         "解除後 entries 空・開始からの経過>=horizon で完了"
@@ -160,10 +154,7 @@ fn with_horizon_not_completed_while_barrier_active_even_past_horizon() {
 fn barrier_stops_progress() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(0.5, "before".into()));
-    sched.insert(Entry::Barrier(
-        1.0,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
+    sched.insert(Entry::Barrier(1.0, BarrierKind::WaitForInput));
     sched.insert(Entry::Payload(1.5, "after".into()));
 
     // 0.5 到達 → Payload 収集
@@ -185,72 +176,19 @@ fn barrier_stops_progress() {
 #[test]
 fn barrier_resolved_resumes_progress() {
     let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(
-        0.5,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
+    sched.insert(Entry::Barrier(0.5, BarrierKind::WaitForInput));
     sched.insert(Entry::Payload(1.0, "after_barrier".into()));
 
     sched.tick(0.5);
     assert!(sched.current_barrier().is_some());
 
     // バリア解除
-    sched.notify_barrier_resolved(None);
+    sched.notify_barrier_resolved();
     assert!(sched.current_barrier().is_none());
 
     // 次の tick で進行再開
     sched.tick(1.0);
     assert_eq!(sched.ready(), &["after_barrier".to_string()]);
-}
-
-#[test]
-fn barrier_timeout_auto_releases() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(
-        1.0,
-        BarrierKind::WaitForInput { timeout: Some(2.0) },
-    ));
-    sched.insert(Entry::Payload(4.0, "after_timeout".into()));
-
-    sched.tick(1.0);
-    assert!(sched.current_barrier().is_some());
-
-    // タイムアウト時刻 (1.0 + 2.0 = 3.0) に達する
-    sched.tick(3.0);
-    assert!(sched.current_barrier().is_none());
-
-    // 後続のペイロードが取得可能
-    sched.tick(4.0);
-    assert_eq!(sched.ready(), &["after_timeout".to_string()]);
-}
-
-#[test]
-fn timeout_barrier_auto_releases() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(1.0, BarrierKind::Timeout { duration: 0.5 }));
-    sched.insert(Entry::Payload(2.0, "after".into()));
-
-    sched.tick(1.0);
-    assert!(sched.current_barrier().is_some());
-
-    // duration 経過 (1.0 + 0.5 = 1.5) で自動解除
-    sched.tick(1.5);
-    assert!(sched.current_barrier().is_none());
-
-    sched.tick(2.0);
-    assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
-#[test]
-fn timeout_barrier_skipped_when_already_past() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(1.0, BarrierKind::Timeout { duration: 0.5 }));
-    sched.insert(Entry::Payload(2.0, "target".into()));
-
-    // 一気に 2.0 まで飛ぶ → Timeout はスキップ
-    sched.tick(2.0);
-    assert!(sched.current_barrier().is_none());
-    assert_eq!(sched.ready(), &["target".to_string()]);
 }
 
 #[test]
@@ -260,7 +198,7 @@ fn notify_barrier_resolved_noop_when_no_barrier() {
 
     // バリアなしで届いた後に解決しても、取り出しは変わらない
     sched.tick(1.0);
-    sched.notify_barrier_resolved(None);
+    sched.notify_barrier_resolved();
     assert_eq!(sched.ready(), &["x".to_string()]);
     assert!(sched.current_barrier().is_none());
 }
@@ -284,8 +222,7 @@ fn wait_for_choice_barrier_resolved_with_choice_id() {
         Some(BarrierKind::WaitForChoice { .. })
     ));
 
-    // 選択 ID 付きで解除（現行実装は choice_id を検査せず解除する）
-    sched.notify_barrier_resolved(Some("yes".to_string()));
+    sched.notify_barrier_resolved();
     assert!(sched.current_barrier().is_none());
 
     sched.tick(1.0);
@@ -308,7 +245,7 @@ fn resolve_then_same_time_tick_collects_after() {
     assert_eq!(sched.ready(), &["payload".to_string()]);
     assert!(sched.current_barrier().is_some());
 
-    sched.notify_barrier_resolved(Some("yes".to_string()));
+    sched.notify_barrier_resolved();
     sched.tick(1.0);
     assert_eq!(sched.ready(), &["after".to_string()]);
 }
@@ -346,8 +283,7 @@ fn choice_barrier_with_negative_timeout_stops_on_arrival() {
 
 #[test]
 fn choice_barrier_with_timeout_not_skipped_when_jumped_past() {
-    // 区切り＋値（1.0 + 0.5 = 1.5）を一度に越えてから着いても止まる（要件 5.2）。
-    // `input_barrier_with_timeout_skipped_when_jumped_past` の選択待ち版で、期待は逆
+    // 区切り＋値（1.0 + 0.5 = 1.5）を一度に越えてから着いても止まる（要件 5.2）
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Barrier(
         1.0,
@@ -384,72 +320,11 @@ fn choice_barrier_with_timeout_never_self_releases_only_external_resolve() {
     );
     assert!(sched.ready().is_empty());
 
-    sched.notify_barrier_resolved(Some("yes".to_string()));
+    sched.notify_barrier_resolved();
     assert!(sched.current_barrier().is_none());
 
     sched.tick(10.5);
     assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
-#[test]
-fn input_barrier_with_timeout_skipped_when_jumped_past() {
-    // バリア到達前にタイムアウト時刻を一気に飛び越えた場合、
-    // WaitForInput { timeout } バリアは停止せずスキップされる
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(
-        1.0,
-        BarrierKind::WaitForInput { timeout: Some(0.5) },
-    ));
-    sched.insert(Entry::Payload(2.0, "after".into()));
-
-    sched.tick(2.0); // 1.0 + 0.5 = 1.5 を既に超過
-    assert!(sched.current_barrier().is_none());
-    assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
-#[test]
-fn barrier_resolved_externally_before_timeout() {
-    // タイムアウト付きバリアでも外部解除が先行すれば即時に進行再開できる
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(
-        1.0,
-        BarrierKind::WaitForInput {
-            timeout: Some(10.0),
-        },
-    ));
-    sched.insert(Entry::Payload(2.0, "after".into()));
-
-    sched.tick(1.0);
-    assert!(sched.current_barrier().is_some());
-
-    sched.notify_barrier_resolved(None);
-    assert!(sched.current_barrier().is_none());
-
-    sched.tick(2.0); // タイムアウト時刻 11.0 を待たずに進行
-    assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
-#[test]
-fn routing_before_barrier_collected_then_stops() {
-    // Routing はバリア手前で収集され、バリアで進行が停止し、後続 Payload は残る
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Routing(
-        0.5,
-        RoutingCommand::RouteRemove {
-            target: CueTarget::Shell,
-        },
-    ));
-    sched.insert(Entry::Barrier(
-        1.0,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
-    sched.insert(Entry::Payload(1.5, "after".into()));
-
-    sched.tick(2.0);
-    assert!(sched.next_routing().is_some());
-    assert!(sched.current_barrier().is_some());
-    assert!(sched.ready().is_empty());
-    assert_eq!(sched.remaining(), 1); // "after" は未配信
 }
 
 // ============================================================================
@@ -468,25 +343,6 @@ fn insert_same_offset_payloads_delivered_fifo() {
     assert_eq!(
         sched.ready(),
         &["a".to_string(), "b".to_string(), "c".to_string()]
-    );
-}
-
-#[test]
-fn extend_same_offset_payloads_delivered_lifo() {
-    // 特性化: extend() は安定降順ソート + 末尾 pop のため、同一オフセットでは
-    // 挿入順と逆（LIFO）配信となる。insert() の FIFO と不整合がある点は
-    // 既知の挙動として固定する。
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.extend(vec![
-        Entry::Payload(1.0, "a".into()),
-        Entry::Payload(1.0, "b".into()),
-        Entry::Payload(1.0, "c".into()),
-    ]);
-
-    sched.tick(1.0);
-    assert_eq!(
-        sched.ready(),
-        &["c".to_string(), "b".to_string(), "a".to_string()]
     );
 }
 
@@ -519,10 +375,7 @@ fn tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers() {
     // 通常進行へ復帰する。
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(1.0, "before".into()));
-    sched.insert(Entry::Barrier(
-        2.0,
-        BarrierKind::WaitForInput { timeout: None },
-    ));
+    sched.insert(Entry::Barrier(2.0, BarrierKind::WaitForInput));
     sched.insert(Entry::Payload(3.0, "after".into()));
 
     sched.tick(f64::NAN);
@@ -531,7 +384,7 @@ fn tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers() {
     assert_eq!(sched.remaining(), 1);
 
     // バリア解除後、正常時刻で進行再開できる（current_time=NaN から復帰）
-    sched.notify_barrier_resolved(None);
+    sched.notify_barrier_resolved();
     sched.tick(3.0);
     assert_eq!(sched.ready(), &["after".to_string()]);
     assert!(sched.is_completed());
@@ -548,15 +401,6 @@ fn insert_nan_offset_fires_debug_assert_in_debug_builds() {
     sched.insert(Entry::Payload(f64::NAN, "x".into()));
 }
 
-#[cfg(debug_assertions)]
-#[test]
-#[should_panic(expected = "Entry offset must be non-negative")]
-fn extend_nan_offset_fires_debug_assert_in_debug_builds() {
-    // 特性化: extend() も insert() と同一の debug_assert で NaN を検出する。
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.extend(vec![Entry::Payload(f64::NAN, "x".into())]);
-}
-
 // ============================================================================
 // Entry アクセサ（D3-T）
 // ============================================================================
@@ -565,84 +409,9 @@ fn extend_nan_offset_fires_debug_assert_in_debug_builds() {
 fn entry_offset_accessor_for_all_variants() {
     assert_eq!(Entry::Payload(1.5, "x".to_string()).offset(), 1.5);
     assert_eq!(
-        Entry::<String>::Barrier(2.5, BarrierKind::WaitForInput { timeout: None }).offset(),
+        Entry::<String>::Barrier(2.5, BarrierKind::WaitForInput).offset(),
         2.5
     );
-    assert_eq!(
-        Entry::<String>::Routing(
-            3.5,
-            RoutingCommand::RouteRemove {
-                target: CueTarget::Shell,
-            }
-        )
-        .offset(),
-        3.5
-    );
-}
-
-// ============================================================================
-// ルーティングテスト
-// ============================================================================
-
-#[test]
-fn routing_collected_without_stopping() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    let routing = RoutingCommand::RouteAdd {
-        target: CueTarget::Balloon,
-        to: EntityKey::Actor(ActorKey::from("sakura"), CueTarget::Balloon),
-    };
-    sched.insert(Entry::Routing(0.5, routing.clone()));
-    sched.insert(Entry::Payload(1.0, "data".into()));
-
-    sched.tick(1.0);
-    // Payload は ready に
-    assert_eq!(sched.ready(), &["data".to_string()]);
-    // Routing は next_routing に
-    let r = sched.next_routing().expect("routing should be available");
-    assert_eq!(r, routing);
-}
-
-#[test]
-fn routing_not_in_ready() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Routing(
-        0.5,
-        RoutingCommand::RouteRemove {
-            target: CueTarget::Shell,
-        },
-    ));
-
-    sched.tick(1.0);
-    // ready にはルーティングが混入しない
-    assert!(sched.ready().is_empty());
-    // next_routing で取れる
-    assert!(sched.next_routing().is_some());
-}
-
-#[test]
-fn multiple_routings_fifo_order() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    let r1 = RoutingCommand::RouteAdd {
-        target: CueTarget::Shell,
-        to: EntityKey::Spot("spot1".into()),
-    };
-    let r2 = RoutingCommand::RouteSwitch {
-        target: CueTarget::Balloon,
-        to: EntityKey::Balloon("balloon1".into()),
-    };
-    let r3 = RoutingCommand::RouteRemove {
-        target: CueTarget::Shell,
-    };
-    sched.insert(Entry::Routing(0.1, r1.clone()));
-    sched.insert(Entry::Routing(0.2, r2.clone()));
-    sched.insert(Entry::Routing(0.3, r3.clone()));
-
-    sched.tick(1.0);
-
-    assert_eq!(sched.next_routing(), Some(r1));
-    assert_eq!(sched.next_routing(), Some(r2));
-    assert_eq!(sched.next_routing(), Some(r3));
-    assert_eq!(sched.next_routing(), None);
 }
 
 // ============================================================================
@@ -671,25 +440,6 @@ fn timed_schedule_with_cue_command() {
 
     sched.tick(1.0);
     assert!(matches!(sched.ready()[0], CueCommand::Clear));
-}
-
-// ============================================================================
-// extend テスト
-// ============================================================================
-
-#[test]
-fn extend_inserts_multiple_entries() {
-    let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.extend(vec![
-        Entry::Payload(2.0, "second".into()),
-        Entry::Payload(1.0, "first".into()),
-    ]);
-
-    sched.tick(1.0);
-    assert_eq!(sched.ready(), &["first".to_string()]);
-
-    sched.tick(2.0);
-    assert_eq!(sched.ready(), &["second".to_string()]);
 }
 
 // ============================================================================
@@ -807,66 +557,20 @@ fn completion_is_reached_at_exact_occupancy_horizon() {
     assert!(sched.is_completed());
 }
 
-/// 区切りの期限（区切りの相対時刻＋待ちの長さ）は、アンカーを足した絶対時刻ちょうどの tick で切れる。
-#[test]
-fn barrier_timeout_releases_at_exact_absolute_deadline() {
-    let mut sched = TimedSchedule::<String>::new(100.0);
-    sched.insert(Entry::Barrier(
-        0.0,
-        BarrierKind::Timeout {
-            duration: ROUNDS_DOWN,
-        },
-    ));
-    sched.insert(Entry::Payload(ROUNDS_DOWN, "after".into()));
-
-    sched.tick(100.0);
-    assert!(sched.current_barrier().is_some());
-
-    sched.tick(100.0 + ROUNDS_DOWN);
-    assert!(
-        sched.current_barrier().is_none(),
-        "期限ちょうどで区切りが切れる"
-    );
-    assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
-/// 期限ちょうどの絶対時刻へ一気に飛んだ tick は、区切りを止まらずに通り過ぎる。
-#[test]
-fn barrier_already_past_at_exact_absolute_deadline_is_skipped() {
-    let mut sched = TimedSchedule::<String>::new(100.0);
-    sched.insert(Entry::Barrier(
-        0.0,
-        BarrierKind::Timeout {
-            duration: ROUNDS_DOWN,
-        },
-    ));
-    sched.insert(Entry::Payload(ROUNDS_DOWN, "after".into()));
-
-    sched.tick(100.0 + ROUNDS_DOWN);
-    assert!(sched.current_barrier().is_none());
-    assert_eq!(sched.ready(), &["after".to_string()]);
-}
-
 // ============================================================================
 // まとめて入れる（insert_each）
 // ============================================================================
 
-/// 同じ時刻の群・区切り・配送の制御・時刻の逆行を混ぜた見本（記述順）。
+/// 同じ時刻の群・区切り・時刻の逆行を混ぜた見本（記述順）。
 fn mixed_entries() -> Vec<Entry<String>> {
     vec![
         Entry::Payload(0.0, "a0".into()),
         Entry::Payload(0.0, "a1".into()),
-        Entry::Routing(
-            0.0,
-            RoutingCommand::RouteRemove {
-                target: CueTarget::Shell,
-            },
-        ),
         Entry::Payload(0.5, "b0".into()),
-        Entry::Barrier(0.5, BarrierKind::WaitForInput { timeout: None }),
+        Entry::Barrier(0.5, BarrierKind::WaitForInput),
         Entry::Payload(0.5, "b1".into()),
         Entry::Payload(0.25, "late".into()),
-        Entry::Barrier(1.0, BarrierKind::Timeout { duration: 0.5 }),
+        Entry::Barrier(1.0, BarrierKind::WaitForChoice { timeout: Some(0.5) }),
         Entry::Payload(1.0, "c0".into()),
         Entry::Payload(2.0, "d0".into()),
         Entry::Payload(2.0, "d1".into()),

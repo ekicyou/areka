@@ -1,9 +1,8 @@
 //! 先渡し（`CueSink::preview`）の檻: 中身・時点・途中登録・既定の実装の受け手の `emit` 列
 //! （areka-P0-budoux-reveal-reflow 要件 2.1・2.8）。
 
-use super::{BarrierKind, Cue, CueCommand, CuePlayer, CueSheet, CueSink, Rc, RefCell, TalkCue};
+use super::{BarrierKind, CueCommand, CuePlayer, CueSheet, CueSink, Rc, RefCell, TalkCue};
 use crate::test_support::{barrier, choice, logged_commands, recording_sink, text};
-use dola::cue::{ActorKey, CueTarget, RoutingCommand};
 
 /// 受け手が受け取ったものを届いた順に残す記録。
 #[derive(Clone, Debug, PartialEq)]
@@ -54,21 +53,12 @@ fn emits(log: &Rc<RefCell<Vec<Event>>>) -> Vec<TalkCue> {
         .collect()
 }
 
-/// 区切り（入力待ち・選択待ち）と配送の制御を挟んだ台本。同じ時刻の合図を複数含む。
+/// 区切り（入力待ち・選択待ち）を挟んだ台本。同じ時刻の合図を複数含む。
 fn sheet() -> CueSheet {
     CueSheet::new(vec![
         text(0.0, "a", 0.1),
         text(0.0, "b", 0.1),
-        Cue {
-            actor: ActorKey::from("0"),
-            start_time: 0.1,
-            payload: RoutingCommand::RouteRemove {
-                target: CueTarget::Balloon,
-            }
-            .into(),
-            duration: 0.0,
-        },
-        barrier(0.2, BarrierKind::WaitForInput { timeout: None }),
+        barrier(0.2, BarrierKind::WaitForInput),
         text(0.3, "c", 0.1),
         choice(0.4, "x", "X"),
         barrier(0.5, BarrierKind::WaitForChoice { timeout: None }),
@@ -91,7 +81,7 @@ fn drive_to_end(player: &mut CuePlayer) {
 }
 
 /// 先渡しの中身は、これから `emit` で届く合図の全部（配る順）。選択待ちの後ろを含み、
-/// 区切りと配送の制御を含まない。
+/// 区切りを含まない。
 #[test]
 fn preview_carries_every_upcoming_cue_in_delivery_order() {
     let mut player = CuePlayer::from_sheet(&sheet());
@@ -114,7 +104,7 @@ fn preview_carries_every_upcoming_cue_in_delivery_order() {
             },
             CueCommand::Text("d".into()),
         ],
-        "選択待ちの後ろの d を含み、区切りと配送の制御を含まない"
+        "選択待ちの後ろの d を含み、区切りを含まない"
     );
 
     drive_to_end(&mut player);
