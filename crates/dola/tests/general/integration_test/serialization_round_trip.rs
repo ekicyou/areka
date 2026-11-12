@@ -1,5 +1,5 @@
-//! Serialization round-trip tests (JSON / TOML / YAML)
-//! Tasks 11.2, 11.3, 11.4
+//! Serialization round-trip tests (JSON / YAML)
+//! Tasks 11.2, 11.4
 
 // =============================================================
 // Task 11.2: JSON round-trip
@@ -34,31 +34,6 @@ mod json_integration_tests {
             .build();
         let json = serde_json::to_string(&sb).unwrap();
         assert!(json.contains("conclude"));
-    }
-}
-
-// =============================================================
-// Task 11.3: TOML round-trip (feature "toml")
-// =============================================================
-
-#[cfg(feature = "toml")]
-mod toml_integration_tests {
-    use super::super::*;
-
-    #[test]
-    fn complete_document_toml_roundtrip() {
-        let doc = build_complete_document();
-        let toml_str = toml::to_string_pretty(&doc).unwrap();
-        let deserialized: DolaDocument = toml::from_str(&toml_str).unwrap();
-        assert_eq!(doc, deserialized);
-    }
-
-    #[test]
-    fn btreemap_key_order_deterministic_toml() {
-        let doc = build_complete_document();
-        let toml1 = toml::to_string_pretty(&doc).unwrap();
-        let toml2 = toml::to_string_pretty(&doc).unwrap();
-        assert_eq!(toml1, toml2, "BTreeMap key order must be deterministic");
     }
 }
 

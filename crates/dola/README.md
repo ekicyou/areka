@@ -10,13 +10,12 @@ This crate is usable, but it is still an early release. The API is not stable ye
 
 ## About
 
-**dola** is a platform-independent declarative animation framework inspired by Windows Animation Manager. It provides a data model for defining animations (variables, transitions, keyframes, storyboards) that can be serialized in JSON, TOML, or YAML formats.
+**dola** is a platform-independent declarative animation framework inspired by Windows Animation Manager. It provides a data model for defining animations (variables, transitions, keyframes, storyboards) that can be serialized with serde (YAML support via the `yaml` feature flag).
 
 Key features:
 - Declarative animation definitions (variables, transitions, storyboards)
-- Multiple serialization formats (JSON, TOML, YAML via feature flags)
+- Serde-serializable data model (YAML via the `yaml` feature flag)
 - Easing function library (ease-in, ease-out, parametric curves)
-- Runtime playback state management
 - Cue sheets: absolute-time scripts broadcast to subscribers (the playback engine behind areka's Sakura Script runner)
 - Validation system for animation consistency
 

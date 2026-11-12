@@ -321,7 +321,7 @@
   - _Requirements: 6.1, 7.9_
 
 - [ ] 20. storyboard の層の公開の口を消す（#25・#26・#52・#56・#66・#70・#73）
-- [ ] 20.1 使われない書式の機能と再生の状態の型を消す（#25・#26）
+- [x] 20.1 使われない書式の機能と再生の状態の型を消す（#25・#26）
   - 機能 `json`・`toml` と任意の `toml` を消し、`serde_json` を dev-dependencies へ移す。`#[cfg(feature = "json")]` を外し、toml の往復と json の既定のテストを消す。機能 `yaml` と任意の `serde_yaml` は残す（要件 11.3）
   - 再生の状態のファイルと再公開・そのテストを消す（要件 11.5）。README の書式の機能と再生の状態の行を直す
   - `Cargo.lock` は cargo が書く分だけ変わる（17.1 で申し合わせた時期に）
@@ -390,3 +390,4 @@
 - 17.2: `BarrierKind::WaitForInput` は単位 variant になり JSON が `"WaitForInput"` に変わった（dola の外で BarrierKind・CueSheet を serde で読み書きする所は無い）。`doc/choice-cascade-compat.md` の 1 文を事実に合わせた。`doc/archive/ARCHITECTURE.md` の `RoutingCommand`・`EntityKey` は過去の写しなので残す。
 - 18.1: `areka-ghost/src/prop_sink.rs` の `stop()` を引く注 4 か所と assert の文 1 つを「上流が player を捨てる」に直した（進行役の判断・並走のセッション無し）。`TimedSchedule::clear` の呼び手はテスト 1 か所だけになった（design は消すと言っていない）。
 - 19: 本体は長さを 0 へ切り上げない（dola の `to_talk_schedule` は切り上げる）。違うのは負の長さだけで、本番の台本は `Duration` から作るので届かない（範囲の外・振る舞いの差 0）。
+- 20.1: 機能 `yaml` は `serde_yaml` を引くだけで、src に使う所が無い（`dola-yaml-backend` 待ち）。Cargo.lock は toml 0.8 系の 6 package が抜けただけ。THIRD-PARTY-NOTICES は変わらない見込み（22 の全体テストの -License で確かめる）。
