@@ -36,39 +36,6 @@ mod edge_case_tests {
     }
 
     #[test]
-    fn typewriter_variable_with_transition() {
-        DolaDocumentBuilder::new("1.0")
-            .variable(
-                "chars",
-                AnimationVariableDef::Integer {
-                    initial: 0,
-                    min: Some(0),
-                    max: None,
-                    typewriter: Some("こんにちは".to_string()),
-                },
-            )
-            .storyboard(
-                "type_sb",
-                StoryboardBuilder::new()
-                    .entry(StoryboardEntry {
-                        variable: Some("chars".to_string()),
-                        transition: Some(TransitionRef::Inline(TransitionDef {
-                            from: None,
-                            to: Some(TransitionValue::Scalar(5.0)),
-                            relative_to: None,
-                            easing: Some(EasingFunction::Named(EasingName::Linear)),
-                            delay: 0.0,
-                            duration: Some(3.0),
-                        })),
-                        ..Default::default()
-                    })
-                    .build(),
-            )
-            .build()
-            .unwrap();
-    }
-
-    #[test]
     fn bezier_easing_inline_transition() {
         let doc = DolaDocumentBuilder::new("1.0")
             .variable(

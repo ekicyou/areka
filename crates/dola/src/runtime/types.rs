@@ -51,9 +51,6 @@ pub enum RuntimeError {
     /// duration=0 かつ loop_count 設定 (Req 2.9)
     #[error("storyboard '{storyboard}' has zero duration with loop_count")]
     ZeroDurationWithLoop { storyboard: String },
-    /// 無効な loop_count 値（0 以下で -1 を除く）
-    #[error("invalid loop_count: {0}")]
-    InvalidLoopCount(i32),
     /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
     #[error(
         "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"

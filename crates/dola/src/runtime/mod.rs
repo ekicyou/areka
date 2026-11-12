@@ -17,5 +17,4 @@ mod types;
 pub mod clock;
 
 pub use facade::DolaRuntime;
-pub use instance_state::InstanceState;
 pub use types::{EvaluatedValue, RuntimeError, StartResult, TriggerResult, UpdateResult};

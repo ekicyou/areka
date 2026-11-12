@@ -67,7 +67,7 @@ pub struct TimedSchedule<T> {
     ready_buffer: Vec<T>,
     /// 現在停止中のバリア
     current_barrier: Option<BarrierKind>,
-    /// 前回 tick の絶対時刻（構築・clear の直後はアンカー `start_time`）。
+    /// 前回 tick の絶対時刻（構築の直後はアンカー `start_time`）。
     ///
     /// 到達・完了の判定はすべて「アンカー＋相対」の足し算で作った絶対時刻とこの値を
     /// 比べる（絶対の発火時刻の定義 [`CueSheet::absolute_fire_time`](crate::cue::CueSheet::absolute_fire_time)
@@ -82,7 +82,7 @@ pub struct TimedSchedule<T> {
     /// この horizon に達して初めて**占有終了＝完了とみなす（末尾 Wait・最終 Text の
     /// duration を終端で落とさない・早期終了しない）。
     ///
-    /// [`new`](Self::new) の既定は 0.0。`current_time` は常にアンカー以上（`tick` の手前ガード）
+    /// テストの手組みの `new` の既定は 0.0。`current_time` は常にアンカー以上（`tick` の手前ガード）
     /// ゆえ horizon=0.0 は `current_time >= start_time + horizon` を常に満たし、
     /// [`is_completed`](Self::is_completed) は「entries 枯渇かつ barrier なし」の
     /// 旧挙動に一致する（手組みスケジュールの後方互換）。
@@ -91,14 +91,15 @@ pub struct TimedSchedule<T> {
 
 impl<T: Clone + Debug> TimedSchedule<T> {
     /// 絶対時刻 `start_time` でスケジュールを構築（占有 horizon は 0.0 既定）。
-    pub fn new(start_time: f64) -> Self {
+    #[cfg(test)]
+    pub(crate) fn new(start_time: f64) -> Self {
         Self::with_horizon(start_time, 0.0)
     }
 
     /// 絶対時刻 `start_time` と占有 horizon（相対）を指定してスケジュールを構築。
     ///
     /// canonical 変換（[`crate::cue::to_talk_schedule`]）が台本の占有 horizon を焼き込むために
-    /// 使う。手組みスケジュール（[`new`](Self::new)）は horizon=0.0 で旧挙動を保つ。
+    /// 使う。手組みスケジュール（テストの手組みの `new`）は horizon=0.0 で旧挙動を保つ。
     pub fn with_horizon(start_time: f64, horizon: f64) -> Self {
         Self {
             start_time,
@@ -111,15 +112,12 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     }
 
     /// エントリを時刻順ソート維持で挿入（0 ベース相対オフセット）。
-    /// 降順ソートを維持する。
+    /// 降順ソートを維持する。テストの手組み用（本番は `insert_each`）。
     ///
-    /// NOTE(D3-V): NaN オフセットは `offset >= 0.0` が false となるため debug
-    /// ビルドでは下の debug_assert が発火する（tests/cue/schedule_test.rs で特性化済み）。
-    /// release ビルドでは素通りし、`partition_point` の前提（述語が前半 true /
-    /// 後半 false に分割されていること）を破るため、以後の挿入位置が不定となり
-    /// 配信順が黙って崩れ得る（panic はしない）。CueSheet 経路には DolaDocument の
-    /// validate() に相当する数値検証層がない。
-    pub fn insert(&mut self, entry: Entry<T>) {
+    /// NaN オフセットは `offset >= 0.0` が false となり debug_assert が発火する
+    /// （schedule/tests.rs で特性化済み）。
+    #[cfg(test)]
+    pub(crate) fn insert(&mut self, entry: Entry<T>) {
         debug_assert!(
             entry.offset() >= 0.0,
             "Entry offset must be non-negative: {}",
@@ -131,7 +129,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.entries.insert(pos, entry);
     }
 
-    /// `entries` を順に [`insert`](Self::insert) したのと同じ並びを、まとめて作る（同一オフセットは
+    /// `entries` を順に `insert` したのと同じ並びを、まとめて作る（同一オフセットは
     /// 後に入れたものが前＝先に入れたものから配る FIFO）。`insert` を 1 件ずつ呼ぶと昇順の台本で
     /// 毎回先頭へ挿すので全体が台本の長さの 2 乗になる。ここは逆順に積んで安定ソートする
     /// （昇順の台本なら既に降順の 1 本の並びで、ソートは 1 回の走査で済む）。
@@ -165,7 +163,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// （手前チェック・冪等性チェック）と本体の「届いていない」の比べ
     /// （`sum_on_ms_grid(start_time, entry_offset) > current_time`）がすべて false になるため、
     /// 最初のバリアまでの全エントリが即時配信される（時刻入力の有限性は検証されない。
-    /// tests/cue/schedule_test.rs の `tick_with_nan_time_delivers_all_pending_payloads`
+    /// schedule/tests.rs の `tick_with_nan_time_delivers_all_pending_payloads`
     /// で特性化済み）。
     // 到達の比べは NaN を「届いた」に倒すため、わざと `>` の否定で書く
     #[allow(clippy::neg_cmp_op_on_partial_ord)]
@@ -258,21 +256,12 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     ///
     /// 閾値は [`occupancy_horizon`](Self::occupancy_horizon) と同じ `start_time` と `horizon` の和。
     ///
-    /// horizon=0.0（[`new`](Self::new) 既定）では `current_time >= start_time` が常に真ゆえ
+    /// horizon=0.0（テストの手組みの `new` 既定）では `current_time >= start_time` が常に真ゆえ
     /// 「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
     pub fn is_completed(&self) -> bool {
         self.entries.is_empty()
             && self.current_barrier.is_none()
             && self.current_time >= sum_on_ms_grid(self.start_time, self.horizon)
-    }
-
-    /// 全エントリとバッファをクリア（horizon も 0.0 へリセット＝clear 済みは完了状態）。
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        self.ready_buffer.clear();
-        self.current_barrier = None;
-        self.current_time = self.start_time;
-        self.horizon = 0.0;
     }
 }
 
@@ -289,3 +278,6 @@ impl<T> TimedSchedule<T> {
         sum_on_ms_grid(self.start_time, self.horizon)
     }
 }
+
+#[cfg(test)]
+mod tests;

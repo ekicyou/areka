@@ -1,6 +1,6 @@
 //! バリデーションルールヘルパー関数群
 //!
-//! validate/mod.rs の `impl Validate for DolaDocument` から呼び出される
+//! validate/mod.rs の `DolaDocument::validate` から呼び出される
 //! 個々のバリデーションルール実装。
 
 use std::collections::BTreeSet;

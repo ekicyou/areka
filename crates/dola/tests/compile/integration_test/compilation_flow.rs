@@ -123,7 +123,6 @@ fn all_variable_types_mixed() {
                     initial: 0,
                     min: Some(-10),
                     max: Some(10),
-                    typewriter: None,
                 },
             ),
             (
@@ -185,7 +184,7 @@ fn all_variable_types_mixed() {
     );
     assert_eq!(
         result.timelines.get("frame").unwrap().variable_type,
-        VariableTypeHint::Integer { typewriter: None }
+        VariableTypeHint::Integer
     );
     assert_eq!(
         result.timelines.get("state").unwrap().variable_type,

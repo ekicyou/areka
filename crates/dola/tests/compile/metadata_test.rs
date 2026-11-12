@@ -88,45 +88,6 @@ fn interruption_policy_propagated() {
 }
 
 #[test]
-fn variable_type_hint_integer_with_typewriter() {
-    let doc = make_doc_with_storyboard(
-        vec![(
-            "idx",
-            AnimationVariableDef::Integer {
-                initial: 0,
-                min: Some(0),
-                max: Some(5),
-                typewriter: Some("Hello".to_string()),
-            },
-        )],
-        vec![],
-        "test",
-        StoryboardBuilder::new()
-            .entry(StoryboardEntry {
-                variable: Some("idx".to_string()),
-                transition: Some(TransitionRef::Inline(TransitionDef {
-                    from: Some(TransitionValue::Scalar(0.0)),
-                    to: Some(TransitionValue::Scalar(5.0)),
-                    duration: Some(2.0),
-                    ..Default::default()
-                })),
-                keyframe: Some("kf1".to_string()),
-                ..Default::default()
-            })
-            .build(),
-    );
-
-    let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-    let tl = result.timelines.get("idx").unwrap();
-    assert_eq!(
-        tl.variable_type,
-        VariableTypeHint::Integer {
-            typewriter: Some("Hello".to_string()),
-        }
-    );
-}
-
-#[test]
 fn base_duration_and_total_base_duration() {
     let doc = make_doc_with_storyboard(
         vec![("x", float_var()), ("y", float_var())],

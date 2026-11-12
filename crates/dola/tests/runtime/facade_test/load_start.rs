@@ -1,6 +1,6 @@
-//! load / start / calculate_end_time（research.md §R3: load_start シーム）
+//! load / start（research.md §R3: load_start シーム）
 //!
-//! フル再生サイクル・start/calculate_end_time のエラーパス・time_scale 境界の
+//! フル再生サイクル・start のエラーパス・time_scale 境界の
 //! 特性化テストを束ねる。
 
 // =========================================================================
@@ -79,22 +79,6 @@ mod full_playback_cycle {
         assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
     }
 
-    #[test]
-    fn calculate_end_time_does_not_create_instance() {
-        let mut rt = DolaRuntime::new();
-        let doc = simple_float_doc("fade_in");
-        rt.load_document(doc).unwrap();
-
-        let end_time = rt.calculate_end_time("fade_in", 0.0).unwrap();
-        assert!((end_time - 1.0).abs() < 1e-9);
-
-        // subscribe して update しても差分なし（インスタンス未生成）
-        let _opacity_id = rt.subscribe("opacity");
-        rt.tick(0.5);
-        let diff = rt.last_result().changes.clone();
-        assert!(diff.is_empty());
-    }
-
     /// 先頭の遅れは長さに入る: delay 0.5・duration 1.0 は 1.5 秒で終わり、t=1.0 は途中。
     #[test]
     fn leading_delay_counts_in_storyboard_duration() {
@@ -171,8 +155,8 @@ mod full_playback_cycle {
 }
 
 // =========================================================================
-// start / calculate_end_time エラーパステスト
-// （InvalidLoopCount / ZeroDurationWithLoop / TooShortDurationWithInfiniteLoop）
+// start エラーパステスト
+// （ZeroDurationWithLoop / TooShortDurationWithInfiniteLoop）
 // =========================================================================
 mod start_error_paths {
     use super::super::*;
@@ -272,41 +256,6 @@ mod start_error_paths {
         rt.load_document(empty_entry_doc("empty_sb", 1)).unwrap();
         let result = rt.start("empty_sb", 2.0).unwrap();
         assert!((result.end_time - 2.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn calculate_end_time_without_document_fails() {
-        let rt = DolaRuntime::new();
-        let err = rt.calculate_end_time("fade", 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
-    }
-
-    #[test]
-    fn calculate_end_time_nonexistent_storyboard_fails() {
-        let mut rt = DolaRuntime::new();
-        rt.load_document(loop_count_doc("fade", 1, 1.0)).unwrap();
-        let err = rt.calculate_end_time("nonexistent", 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::StoryboardNotFound(_)));
-    }
-
-    #[test]
-    fn calculate_end_time_zero_duration_infinite_loop_fails() {
-        let mut rt = DolaRuntime::new();
-        rt.load_document(empty_entry_doc("empty_sb", -1)).unwrap();
-        let err = rt.calculate_end_time("empty_sb", 0.0).unwrap_err();
-        assert!(matches!(err, RuntimeError::ZeroDurationWithLoop { .. }));
-    }
-
-    #[test]
-    fn calculate_end_time_short_duration_infinite_loop_fails() {
-        // duration=0.05 < MIN_LOOP_DURATION(0.1) かつ loop_count=-1
-        let mut rt = DolaRuntime::new();
-        rt.load_document(loop_count_doc("fade", -1, 0.05)).unwrap();
-        let err = rt.calculate_end_time("fade", 0.0).unwrap_err();
-        assert!(matches!(
-            err,
-            RuntimeError::TooShortDurationWithInfiniteLoop { .. }
-        ));
     }
 
     #[test]

@@ -3,7 +3,7 @@
 use super::common::minimal_trigger_doc;
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, DolaError, StoryboardBuilder, StoryboardEntry,
-    TransitionDef, TransitionRef, TransitionValue, Validate,
+    TransitionDef, TransitionRef, TransitionValue,
 };
 
 // ============================================================

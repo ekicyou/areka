@@ -42,7 +42,6 @@ mod v12_tests {
                 initial,
                 min: Some(min),
                 max: Some(max),
-                typewriter: None,
             },
         );
         doc

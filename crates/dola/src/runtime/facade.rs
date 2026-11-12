@@ -177,15 +177,8 @@ impl DolaRuntime {
         })
     }
 
-    /// 終了予定時刻のみ計算（インスタンス非生成）。
-    pub fn calculate_end_time(&self, name: &str, start_time: f64) -> Result<f64, RuntimeError> {
-        let (_, loop_duration) = self.compile_and_validate(name, start_time)?;
-        Ok(start_time + loop_duration)
-    }
-
     /// ドキュメント取得 → ストーリーボード存在確認 → コンパイル → ループ系バリデーション。
     ///
-    /// `start_internal` と `calculate_end_time` で共通の検証フロー。
     /// 成功時は（コンパイル結果, 1周分の実時間 loop_duration）を返す。
     fn compile_and_validate(
         &self,
@@ -205,11 +198,6 @@ impl DolaRuntime {
         // 文書は load_document で検証済み
         let compiled =
             compile_validated(doc, name, base_time).map_err(RuntimeError::CompileError)?;
-
-        // loop_count バリデーション
-        if compiled.loop_count <= 0 && compiled.loop_count != -1 {
-            return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
-        }
 
         // time_scale は validate() の数値の規則で有限・正に限られる（0 なら +inf／NaN になる）。
         // 割った結果が有限であることはコンパイルが確かめる
@@ -299,11 +287,6 @@ impl DolaRuntime {
     /// 購読解除（variable_id 指定）。
     pub fn unsubscribe(&mut self, variable_id: i64) -> Result<(), RuntimeError> {
         self.subscription_manager.unsubscribe(variable_id)
-    }
-
-    /// 全購読解除。
-    pub fn unsubscribe_all(&mut self) {
-        self.subscription_manager.unsubscribe_all();
     }
 
     // =========================================================================

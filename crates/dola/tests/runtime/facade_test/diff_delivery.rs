@@ -1,7 +1,7 @@
 //! 差分配信（research.md §R3: diff_delivery シーム）
 //!
 //! 指示書差し替えによる値の引き継ぎと、購読 API（unsubscribe /
-//! unsubscribe_all / Default）経由の差分配信を束ねる。
+//! Default）経由の差分配信を束ねる。
 
 // =========================================================================
 // 8.3 指示書差し替えテスト
@@ -147,7 +147,7 @@ mod document_replacement {
 }
 
 // =========================================================================
-// 購読 API のファサード経由検証（unsubscribe / unsubscribe_all / Default）
+// 購読 API のファサード経由検証（unsubscribe / Default）
 // =========================================================================
 mod subscription_via_facade {
     use super::super::*;
@@ -171,26 +171,6 @@ mod subscription_via_facade {
         assert!(
             diff.is_empty(),
             "expected no delivery after unsubscribe, got {diff:?}"
-        );
-    }
-
-    #[test]
-    fn unsubscribe_all_stops_diff_delivery() {
-        let mut rt = DolaRuntime::new();
-        let _opacity_id = rt.subscribe("opacity");
-        rt.load_document(simple_float_doc("fade_in")).unwrap();
-        rt.start("fade_in", 0.0).unwrap();
-
-        rt.tick(0.0);
-        let diff = rt.last_result().changes.clone();
-        assert!(!diff.is_empty());
-
-        rt.unsubscribe_all();
-        rt.tick(0.5);
-        let diff = rt.last_result().changes.clone();
-        assert!(
-            diff.is_empty(),
-            "expected no delivery after unsubscribe_all, got {diff:?}"
         );
     }
 

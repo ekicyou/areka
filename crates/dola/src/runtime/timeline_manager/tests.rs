@@ -583,7 +583,7 @@ fn easing_overshoot_is_clamped_to_variable_range() {
     seg.easing = Some(EasingFunction::Named(EasingName::BackIn));
     let mut int_compiled = make_compiled_with_segments("n", vec![seg]);
     let tl = int_compiled.timelines.get_mut("n").unwrap();
-    tl.variable_type = VariableTypeHint::Integer { typewriter: None };
+    tl.variable_type = VariableTypeHint::Integer;
     tl.min_value = Some(0.0);
     tl.max_value = Some(100.0);
 

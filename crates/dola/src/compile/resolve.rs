@@ -400,9 +400,7 @@ pub(super) fn resolve_to_value(
 pub(super) fn build_variable_type_hint(var_def: &AnimationVariableDef) -> VariableTypeHint {
     match var_def {
         AnimationVariableDef::Float { .. } => VariableTypeHint::Float,
-        AnimationVariableDef::Integer { typewriter, .. } => VariableTypeHint::Integer {
-            typewriter: typewriter.clone(),
-        },
+        AnimationVariableDef::Integer { .. } => VariableTypeHint::Integer,
         AnimationVariableDef::Object { .. } => VariableTypeHint::Object,
     }
 }

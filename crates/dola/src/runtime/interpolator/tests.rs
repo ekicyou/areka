@@ -74,7 +74,7 @@ fn clamp_above_one() {
 #[test]
 fn integer_rounding() {
     let seg = make_segment(0.0, 10.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.25);
     // 0.0 + (10.0 - 0.0) * 0.25 = 2.5 → round → 3 (banker's or standard)
     // standard round: 2.5 → 3
@@ -84,7 +84,7 @@ fn integer_rounding() {
 #[test]
 fn integer_exact() {
     let seg = make_segment(0.0, 10.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.5);
     assert_eq!(result, EvaluatedValue::Integer(5));
 }
@@ -328,7 +328,7 @@ fn object_with_scalar_values_converts_to_dynamic_float() {
 fn integer_negative_interpolation_rounds_away_from_zero() {
     // 0→-10 の t=0.25 → -2.5 → f64::round は 0 から遠い方向へ丸める → -3
     let seg = make_segment(0.0, -10.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.25);
     assert_eq!(result, EvaluatedValue::Integer(-3));
 }
@@ -341,7 +341,7 @@ fn integer_interpolation_with_easing() {
         100.0,
         Some(EasingFunction::Named(EasingName::QuadraticIn)),
     );
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, 0.5);
     assert_eq!(result, EvaluatedValue::Integer(25));
 }
@@ -365,7 +365,7 @@ fn nan_progress_propagates_nan_for_float() {
 #[test]
 fn nan_progress_saturates_to_zero_for_integer() {
     let seg = make_segment(0.0, 100.0, None);
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     let result = Interpolator::interpolate(&seg, &vt, f64::NAN);
     assert_eq!(result, EvaluatedValue::Integer(0));
 }
@@ -409,7 +409,7 @@ fn nan_endpoints_propagate_without_panic() {
         EvaluatedValue::Float(v) => assert!(v.is_nan(), "expected NaN, got {v}"),
         _ => panic!("expected Float"),
     }
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
     assert_eq!(
         Interpolator::interpolate(&seg, &vt, 0.5),
         EvaluatedValue::Integer(0)
@@ -419,7 +419,7 @@ fn nan_endpoints_propagate_without_panic() {
 /// 極端な振幅の Integer 補間は i64 範囲へ飽和し、オーバーフロー panic しない
 #[test]
 fn integer_interpolation_saturates_at_i64_bounds() {
-    let vt = VariableTypeHint::Integer { typewriter: None };
+    let vt = VariableTypeHint::Integer;
 
     let seg_pos = make_segment(0.0, 1e300, None);
     assert_eq!(

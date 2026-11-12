@@ -13,7 +13,6 @@ use std::collections::{BTreeMap, HashMap};
 use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::transition::{TransitionDef, TransitionValue};
-use crate::validate::Validate;
 use crate::variable::AnimationVariableDef;
 
 use resolve::*;

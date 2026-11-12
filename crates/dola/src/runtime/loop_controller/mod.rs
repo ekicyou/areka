@@ -27,8 +27,8 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
     if instance.loop_count == -1 {
         return true;
     }
-    // 整数変換の安全性(D1a-V): loop_count は facade::compile_and_validate が
-    // 「-1 または正値」のみ許可する（loop_count <= 0 かつ != -1 は InvalidLoopCount）。
+    // 整数変換の安全性(D1a-V): loop_count は validate の数値の規則が
+    // 「-1 または 1 以上」に限る（それ以外は load_document が InvalidNumber で拒む）。
     // -1 は上の早期 return で処理済みのため、ここでの `as u64` は常に正値の
     // 無損失変換であり、負値の wrap（例: -2 → 約 1.8e19 ≒ 実質無限ループ化）は
     // 発火しない。

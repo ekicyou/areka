@@ -4,7 +4,7 @@
 //! エンドツーエンド検証。
 //!
 //! このモジュールは挙動を変えずに研究シーム（research.md §R3）ごとに分割されている:
-//! - `load_start` … load/start/calculate_end_time（成功・エラー・time_scale 境界）
+//! - `load_start` … load/start（成功・エラー・time_scale 境界）
 //! - `update_flow` … update ループ挙動（pause/resume・同時再生）
 //! - `termination` … conclude/cancel/finish フロー
 //! - `diff_delivery` … 差分配信（指示書差し替え・購読 API）

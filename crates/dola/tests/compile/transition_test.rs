@@ -153,7 +153,6 @@ fn from_inferred_from_integer_initial_as_f64() {
                 initial: 7,
                 min: None,
                 max: None,
-                typewriter: None,
             },
         )],
         vec![],

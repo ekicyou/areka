@@ -70,16 +70,6 @@ impl SubscriptionManager {
         Ok(())
     }
 
-    /// 全購読解除。
-    pub fn unsubscribe_all(&mut self) {
-        // name_to_id を全削除
-        self.name_to_id.clear();
-        self.id_to_name.clear();
-        // last_values, last_sent_values を全削除
-        self.last_values.clear();
-        self.last_sent_values.clear();
-    }
-
     /// 購読中変数名のリストを取得。
     #[cfg(test)]
     pub fn get_subscribed_variable_names(&self) -> Vec<String> {

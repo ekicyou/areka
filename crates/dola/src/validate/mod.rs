@@ -1,6 +1,6 @@
 //! # DolaDocument Validation
 //!
-//! ドキュメント構造の整合性を検証するバリデーショントレイト・実装。
+//! ドキュメント構造の整合性を検証する `DolaDocument::validate` の実装。
 
 mod rules;
 
@@ -12,14 +12,9 @@ use crate::transition::TransitionRef;
 
 use rules::*;
 
-/// DolaDocument のバリデーション
-pub trait Validate {
+impl DolaDocument {
     /// ドキュメント全体を検証し、すべてのエラーを収集して返す
-    fn validate(&self) -> Result<(), Vec<DolaError>>;
-}
-
-impl Validate for DolaDocument {
-    fn validate(&self) -> Result<(), Vec<DolaError>> {
+    pub fn validate(&self) -> Result<(), Vec<DolaError>> {
         let mut errors = Vec::new();
 
         // V1: スキーマバージョン検証

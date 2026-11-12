@@ -60,7 +60,7 @@ fn sort_with_many_nan_follows_total_order() {
     // この半分は release でだけ走る（debug では予定の挿入の debug_assert が NaN のオフセットを拒む）。
     // 台本で並べ直す前の並びのまま渡し、予定自身の並べ替えを見る。
     if !cfg!(debug_assertions) {
-        let mut schedule = TimedSchedule::<f64>::new(0.0);
+        let mut schedule = TimedSchedule::<f64>::with_horizon(0.0, 0.0);
         schedule.insert_each(offsets.iter().map(|&t| Entry::Payload(t, t)));
         schedule.tick(1.0e9);
         let delivered: Vec<f64> = schedule.ready().to_vec();

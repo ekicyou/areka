@@ -104,7 +104,7 @@ impl Interpolator {
                 let eased_t = apply_easing(t, segment.easing.as_ref());
                 EvaluatedValue::Float(lerp(from, to, eased_t))
             }
-            VariableTypeHint::Integer { .. } => {
+            VariableTypeHint::Integer => {
                 let from = scalar_value(&segment.from_value);
                 let to = scalar_value(&segment.to_value);
                 let eased_t = apply_easing(t, segment.easing.as_ref());

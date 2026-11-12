@@ -30,6 +30,5 @@ pub use storyboard::{
     Storyboard, StoryboardEntry,
 };
 pub use transition::{TransitionDef, TransitionRef, TransitionValue};
-pub use validate::Validate;
 pub use value::DynamicValue;
 pub use variable::AnimationVariableDef;

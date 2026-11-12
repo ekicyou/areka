@@ -55,7 +55,7 @@ fn subscribe_before_document() {
 }
 
 // =====================================================================
-// 5.2 unsubscribe / unsubscribe_all / ライフサイクル
+// 5.2 unsubscribe / ライフサイクル
 // =====================================================================
 
 #[test]
@@ -86,15 +86,6 @@ fn unsubscribe_error_on_already_unsubscribed() {
 }
 
 #[test]
-fn unsubscribe_all_clears_subscriptions() {
-    let mut mgr = SubscriptionManager::new();
-    mgr.subscribe("x");
-    mgr.subscribe("y");
-    mgr.unsubscribe_all();
-    assert!(mgr.get_subscribed_variable_names().is_empty());
-}
-
-#[test]
 fn resubscribe_after_unsubscribe_gets_new_id() {
     let mut mgr = SubscriptionManager::new();
     let id1 = mgr.subscribe("x");
@@ -103,16 +94,6 @@ fn resubscribe_after_unsubscribe_gets_new_id() {
 
     let id2 = mgr.subscribe("x");
     assert_eq!(id2, 1); // 新しいID
-    assert_ne!(id1, id2);
-}
-
-#[test]
-fn resubscribe_after_unsubscribe_all_gets_new_id() {
-    let mut mgr = SubscriptionManager::new();
-    let id1 = mgr.subscribe("x");
-    mgr.unsubscribe_all();
-
-    let id2 = mgr.subscribe("x");
     assert_ne!(id1, id2);
 }
 
@@ -353,9 +334,4 @@ fn unsubscribe_forgets_name() {
         mgr.unsubscribe(id).unwrap();
     }
     assert_eq!(mgr.id_to_name.len(), 1);
-    for _ in 0..3 {
-        mgr.subscribe("x");
-        mgr.unsubscribe_all();
-    }
-    assert_eq!(mgr.id_to_name.len(), 0);
 }

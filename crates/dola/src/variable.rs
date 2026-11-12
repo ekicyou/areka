@@ -24,9 +24,6 @@ pub enum AnimationVariableDef {
         min: Option<i64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         max: Option<i64>,
-        /// タイプライター文字列（設定時: initial=0, 終了値=文字列長）
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        typewriter: Option<String>,
     },
     /// オブジェクト型変数（補間なし、キーフレームで値切り替え）
     #[serde(rename = "object")]

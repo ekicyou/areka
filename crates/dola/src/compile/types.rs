@@ -72,10 +72,7 @@ pub enum VariableTypeHint {
     /// f64連続値（補間対応）
     Float,
     /// i64離散値（補間後の丸め処理が必要）
-    Integer {
-        /// タイプライター文字列
-        typewriter: Option<String>,
-    },
+    Integer,
     /// Object型（即時切り替えのみ）
     Object,
 }

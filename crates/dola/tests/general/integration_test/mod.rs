@@ -29,7 +29,6 @@ fn build_complete_document() -> DolaDocument {
                     initial: 0,
                     min: Some(0),
                     max: None,
-                    typewriter: Some("こんにちは世界".to_string()),
                 },
             ),
             (
