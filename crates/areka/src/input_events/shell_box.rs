@@ -7,14 +7,16 @@
 //! 座標はシェルの窓の物理 px のまま、`shown_boxes` の四角と `choice_hit_rows_at` の行
 //! （どちらも拡大率を掛けた後の値）と突き合わせる（÷k はしない）。
 
-use std::collections::HashMap;
-
 use areka_emo_compose::BoxName;
 use areka_emo_text::actor::{ChoiceHitRow, ShownBox};
 use wintf::ecs::pointer::DoubleClick;
 
 use super::balloon::{ChoiceSelection, click_selection, hit_choice_row};
-use crate::emo2_boot::user_break_cue::NoUserBreakSignal;
+use crate::runtime::user_break_cue::NoUserBreakSignal;
+// 箱の滞在の型と整えは runtime の持ち物（可視性の相が読む）。呼び手とテストはここから引く。
+pub(crate) use crate::runtime::shell_box_hover::ShellBoxHover;
+#[cfg(test)]
+pub(crate) use crate::runtime::shell_box_hover::settle_box_hover;
 
 /// 届いた座標の下にある、文字の出ている箱を 1 つ選ぶ（要件 9.5・3.9）。
 ///
@@ -134,12 +136,6 @@ pub(crate) fn next_box_hover(
     (next.cloned(), clear)
 }
 
-/// 毎フレームの整え: 滞在している箱が `shown_boxes` に無ければ `None` へ戻す（要件 6.11）。
-pub(crate) fn settle_box_hover(prev: Option<&BoxName>, shown: &[ShownBox]) -> Option<BoxName> {
-    prev.filter(|p| shown.iter().any(|b| &b.name == *p))
-        .cloned()
-}
-
 /// 台詞の始まりと終わりの合図から「話している最中か」を畳む（要件 9.1・9.6〜9.8）。
 ///
 /// 始まりで真・終わりで偽。中断を禁じる区間の出入りは変えない（選択肢を待つあいだも最中）。
@@ -148,53 +144,6 @@ pub(crate) fn fold_talking(talking: bool, signal: NoUserBreakSignal) -> bool {
         NoUserBreakSignal::TalkStarted => true,
         NoUserBreakSignal::TalkEnded => false,
         NoUserBreakSignal::Enter | NoUserBreakSignal::Leave => talking,
-    }
-}
-
-/// スコープごとの「今ポインタが居る、文字の出ている箱の名前」（NonSend・UI スレッド所有）。
-///
-/// 書き込むのは [`next_box_hover`]（箱へ入る・移る・出る）・シェルの窓からの離脱（`None`）・
-/// 毎フレームの [`settle_box_hover`] の結果だけ。時間切れの観測の滞在は `get(scope).is_some()`。
-///
-/// 滞在している箱へ最後に注入した選択肢の強調（ordinal）も並べて持つ（同値の注入を避けるため・
-/// 普通のバルーンの `BalloonWiring::hover` と同じ役目）。強調は行の上の移動でしか載らず、その移動は
-/// 箱を滞在に記録するので、強調の載った箱はいつも滞在している箱である。滞在の箱が替わる・消える
-/// と記録も落ちる。
-#[derive(Debug, Default)]
-pub(crate) struct ShellBoxHover(HashMap<usize, (BoxName, Option<usize>)>);
-
-impl ShellBoxHover {
-    /// スコープの滞在している箱（居なければ `None`）。
-    pub(crate) fn get(&self, scope: usize) -> Option<&BoxName> {
-        self.0.get(&scope).map(|(name, _)| name)
-    }
-
-    /// スコープの滞在を書き換える（`None` で消す）。同じ箱のままなら強調の記録を保つ。
-    pub(crate) fn set(&mut self, scope: usize, name: Option<BoxName>) {
-        match name {
-            Some(name) => {
-                let injected = match self.0.get(&scope) {
-                    Some((prev, injected)) if *prev == name => *injected,
-                    _ => None,
-                };
-                self.0.insert(scope, (name, injected));
-            }
-            None => {
-                self.0.remove(&scope);
-            }
-        }
-    }
-
-    /// 滞在している箱へ最後に注入した強調（無ければ `None`）。
-    pub(crate) fn injected(&self, scope: usize) -> Option<usize> {
-        self.0.get(&scope).and_then(|(_, injected)| *injected)
-    }
-
-    /// 滞在している箱へ注入した強調を記録する（滞在が無ければ何もしない）。
-    pub(crate) fn set_injected(&mut self, scope: usize, ordinal: Option<usize>) {
-        if let Some((_, injected)) = self.0.get_mut(&scope) {
-            *injected = ordinal;
-        }
     }
 }
 

@@ -2,7 +2,7 @@
 //!
 //! `mod.rs` の `on_char_pointer_moved`・`on_char_pointer_pressed` の先頭（強制退避の判定の後）から
 //! 呼ばれ、「処理した」（`true`）なら呼び手は既存の道へ落とさない。判断は `shell_box.rs` の純関数に
-//! あり、ここは借用と送り出しだけを行う（借用の順は `balloon_pressed.rs` と同じ: `Emo2Wiring` から
+//! あり、ここは借用と送り出しだけを行う（借用の順は `balloon_pressed.rs` と同じ: `RuntimeWiring` から
 //! 文字の層の `Rc` を複製して world の借用を解く → 文字の層の不変借用で写しを取って解く →
 //! 持ち物へ書く・送る）。
 //!
@@ -38,7 +38,7 @@ use super::shell_box::{
     next_box_hover,
 };
 use super::user_break::on_box_press;
-use crate::emo2_boot::frame::Emo2Wiring;
+use crate::runtime::frame::RuntimeWiring;
 use areka_placement::spawn::CharWindowMarker;
 
 /// 届いた座標の写し（文字の層の借用を解いた後に判断と送り出しへ渡す）。
@@ -60,10 +60,10 @@ pub(super) fn box_place(scope: usize, name: &BoxName) -> PlaceKey {
     }
 }
 
-/// 文字の層の `Rc` を複製する（`Emo2Wiring` 不在＝結線前は `None`・箱は無い）。
+/// 文字の層の `Rc` を複製する（`RuntimeWiring` 不在＝結線前は `None`・箱は無い）。
 fn runtime_of(world: &World) -> Option<Rc<RefCell<TextLayerRuntime>>> {
     world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .map(|w| Rc::clone(w.runtime()))
 }
 
@@ -94,7 +94,7 @@ fn read_point(
     })
 }
 
-/// 窓のスコープと、座標の写しを取る（シェルの窓・Emo2Wiring・文字の層が揃うときだけ）。
+/// 窓のスコープと、座標の写しを取る（シェルの窓・RuntimeWiring・文字の層が揃うときだけ）。
 fn locate(
     world: &World,
     entity: Entity,

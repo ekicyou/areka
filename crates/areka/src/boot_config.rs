@@ -4,7 +4,7 @@
 //! 相互に凝集した「構成入力（根 → ゴースト → バルーン）の起動前の解決」と「`GhostBootOptions` の組み立て」を
 //! 本モジュールに置く。根の並びの決め方は `crate::roots`（areka-P0-baseware-root-list）。
 //!
-//! 消費者は `main.rs`（`pub(crate) use` で crate 直下へ再輸出）と `emo2_boot`
+//! 消費者は `main.rs`（`pub(crate) use` で crate 直下へ再輸出）と `runtime`
 //! （`crate::default_app_profile_dir` / `crate::is_benign_boot_error`）、および
 //! 檻 `main_config_input_tests.rs` / `main_ghost_wiring_tests.rs`。
 
@@ -397,7 +397,7 @@ enum Pointed {
 /// 親がどの置き場の `ghost\` とも同じでなければ一時の置き場にする（3.1〜3.3・3.10）。
 /// 絶対パスでなければ切り替えと同じ名前の引き当て（`name` が先・フォルダ名が後）で並びのゴーストから探す（4.1〜4.4）。
 fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
-    use crate::emo2_boot::ghost_switch::{GhostSpec, resolve_switch_target};
+    use crate::session::ghost_switch::{GhostSpec, resolve_switch_target};
     let path = std::path::Path::new(value);
     if !path.is_absolute() {
         let listed = areka_ghost::catalog_roots::list_ghosts(roots);
@@ -580,7 +580,7 @@ pub(crate) fn ghost_boot_options(
     modules: crate::cli::ModulePolicy,
 ) -> areka_ghost::GhostBootOptions {
     areka_ghost::GhostBootOptions {
-        strict_judges: crate::emo2_boot::strict_judges::production(),
+        strict_judges: crate::runtime::strict_judges::production(),
         ghost_root,
         default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
         shiori: shiori_wiring_for(modules, helper_exe),
@@ -614,11 +614,11 @@ pub(crate) fn shiori_wiring_for(
 ///
 /// 起動前の解決（`install::startup::resolve_boot`）が `ghost/master/descript.txt` の実在を確かめてから
 /// boot するので、ここでの `MountError::StartPointMissing` は解決後の消失（起動中の削除等）に
-/// 限られる。分類は `wire_emo2_boot` のフォールバックが使い続けるため残す。読取不能
+/// 限られる。分類は `wire_runtime` のフォールバックが使い続けるため残す。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
 ///
-/// `pub(crate)`: `emo2_boot::wire_emo2_boot`（task 5.1）が boot 失敗（`GhostBootError`）を
+/// `pub(crate)`: `runtime::wire_runtime`（task 5.1）が boot 失敗（`GhostBootError`）を
 /// 同一方針（起点不在＝良性 `warn!`・他＝`error!`・R7.4）で分類するため再利用する。
 pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
     match err {

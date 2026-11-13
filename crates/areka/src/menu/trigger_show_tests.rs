@@ -16,10 +16,10 @@ use log_capture_kit::{LineFormat, capture_lines};
 use windows::Win32::Foundation::{E_ACCESSDENIED, HINSTANCE};
 
 use super::*;
-use crate::emo2_boot::hit_region::HitRegion;
 use crate::input_events::RegionSource;
 use crate::menu::ItemBody;
 use crate::menu::captions::CaptionMap;
+use crate::runtime::hit_region::HitRegion;
 
 /// 動作が呼ばれた記録: どの項目が・どのスコープで・表示中の印が立ったまま呼ばれたか。
 type Calls = Rc<RefCell<Vec<(&'static str, u32, bool)>>>;

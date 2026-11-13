@@ -149,7 +149,7 @@ fn desk_refusal_answers_cannot_reload_now() {
 fn closing_drops_the_reply() {
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    crate::emo2_boot::reload::register(&mut world);
+    crate::session::reload::register(&mut world);
     let _ = crate::exit_wait::begin_close(&mut world);
 
     let (pending, events) = call(&mut world, "shell");
@@ -182,7 +182,7 @@ fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {
                 "reload requested. It runs asynchronously; errors while loading (dictionary errors etc.) will be recorded to the error log. Wait until get_status answers again, then check get_log tool (log_type=error, since_id=42)"
             )),
             Some(ReloadTarget::Descript(
-                crate::emo2_boot::reload_args::DescriptParts::ALL
+                crate::runtime::reload_args::DescriptParts::ALL
             )),
         )
     );
@@ -190,7 +190,7 @@ fn accepted_answers_ssp_text_with_last_id_read_after_the_desk() {
     let refused = answer(
         "ghost",
         &ghost(),
-        |_| ReloadVerdict::Refused(crate::emo2_boot::reload::RefusedReason::GhostSwitching),
+        |_| ReloadVerdict::Refused(crate::session::reload::RefusedReason::GhostSwitching),
         || panic!("断りでは番号を読まない"),
     );
     let closing = answer(

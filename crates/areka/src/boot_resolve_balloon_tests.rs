@@ -539,10 +539,10 @@ fn no_descript_keys_is_silent() {
 /// （本番の候補づくりは根を列挙する I/O を持つので呼ばない）。
 #[test]
 fn descript_balloon_agrees_with_runtime_switch() {
-    use crate::emo2_boot::shell_balloon_resolve::{
+    use crate::runtime::shell_balloon_resolve::{
         NotFoundReason, SkinCandidate, resolve_skin_target,
     };
-    use crate::emo2_boot::shell_balloon_switch::SkinSpec;
+    use crate::session::shell_balloon_switch::SkinSpec;
 
     let root = root();
     let listed = matching(&root);

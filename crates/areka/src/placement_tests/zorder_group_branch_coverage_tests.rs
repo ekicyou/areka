@@ -85,19 +85,19 @@ const TEST_FILES: [(&str, &str, &str); 8] = [
         crate_source!("areka-placement", "src/zorder_group_ledger.rs"),
     ),
     (
-        "emo2_boot/zorder_cue_tests.rs",
-        include_str!("../emo2_boot/zorder_cue_tests.rs"),
-        include_str!("../emo2_boot/zorder_cue.rs"),
+        "runtime/zorder_cue_tests.rs",
+        include_str!("../runtime/zorder_cue_tests.rs"),
+        include_str!("../runtime/zorder_cue.rs"),
     ),
     (
-        "emo2_boot/frame/zorder_drain_tests.rs",
-        include_str!("../emo2_boot/frame/zorder_drain_tests.rs"),
-        include_str!("../emo2_boot/frame/zorder_drain.rs"),
+        "runtime/frame/zorder_drain_tests.rs",
+        include_str!("../runtime/frame/zorder_drain_tests.rs"),
+        include_str!("../runtime/frame/zorder_drain.rs"),
     ),
     (
-        "emo2_boot/frame/zorder_descript_tests.rs",
-        include_str!("../emo2_boot/frame/zorder_descript_tests.rs"),
-        include_str!("../emo2_boot/frame/zorder_descript.rs"),
+        "runtime/frame/zorder_descript_tests.rs",
+        include_str!("../runtime/frame/zorder_descript_tests.rs"),
+        include_str!("../runtime/frame/zorder_descript.rs"),
     ),
     (
         "placement/zorder_chain_compose_tests.rs",
@@ -105,9 +105,9 @@ const TEST_FILES: [(&str, &str, &str); 8] = [
         crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
-        "emo2_boot/frame/zorder_drain_projection_tests.rs",
-        include_str!("../emo2_boot/frame/zorder_drain_projection_tests.rs"),
-        include_str!("../emo2_boot/frame/zorder_drain.rs"),
+        "runtime/frame/zorder_drain_projection_tests.rs",
+        include_str!("../runtime/frame/zorder_drain_projection_tests.rs"),
+        include_str!("../runtime/frame/zorder_drain.rs"),
     ),
 ];
 
@@ -129,7 +129,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "数値モード",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb01_a_numeric_setting_seats_exactly_one_descript_base",
     ),
     // 解釈の先——在庫から鎖を導く段（`compose_chain`）でも同じ分岐を覆う。
@@ -199,12 +199,12 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "グループをまたぐ再指定の拒否",
-        "emo2_boot/frame/zorder_drain_tests.rs",
+        "runtime/frame/zorder_drain_tests.rs",
         "t_zdr06_cross_group_redesignation_is_rejected_whole_and_recorded",
     ),
     (
         "グループをまたぐ再指定の拒否",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb10_the_seated_base_takes_part_in_the_redesignation_refusal",
     ),
     // ── 要素 2 個未満の無視（要件 1.6）
@@ -220,7 +220,7 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "要素 2 個未満の無視",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb06_short_and_empty_settings_are_rejected_with_a_reason",
     ),
     // ── スコープ内隣接との矛盾の調停（要件 2.4）
@@ -259,17 +259,17 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "スコープ内隣接との矛盾の調停",
-        "emo2_boot/frame/zorder_drain_tests.rs",
+        "runtime/frame/zorder_drain_tests.rs",
         "t_zdr04_the_written_order_shape_is_surfaced_only_for_the_explicit_mode",
     ),
     (
         "スコープ内隣接との矛盾の調停",
-        "emo2_boot/frame/zorder_drain_tests.rs",
+        "runtime/frame/zorder_drain_tests.rs",
         "t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record",
     ),
     (
         "スコープ内隣接との矛盾の調停",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb04_an_inverted_setting_is_seated_in_written_order_and_recorded",
     ),
     (
@@ -295,28 +295,28 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "解除",
-        "emo2_boot/zorder_cue_tests.rs",
+        "runtime/zorder_cue_tests.rs",
         "t_zcs2_reset_zorder_becomes_a_reset_directive",
     ),
     (
         "解除",
-        "emo2_boot/frame/zorder_drain_tests.rs",
+        "runtime/frame/zorder_drain_tests.rs",
         "t_zdr08_reset_falls_back_to_the_descript_base_and_records_the_result",
     ),
     // ── descript 適用（要件 5.1〜5.3）
     (
         "descript 適用",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb03_the_setting_is_read_by_the_very_function_the_tag_uses",
     ),
     (
         "descript 適用",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb08_the_seated_base_projects_on_the_first_pass_without_any_tag",
     ),
     (
         "descript 適用",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb11_the_boot_entry_point_seats_the_base_in_the_wired_ledger",
     ),
     (
@@ -342,12 +342,12 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     ),
     (
         "解釈失敗",
-        "emo2_boot/frame/zorder_drain_tests.rs",
+        "runtime/frame/zorder_drain_tests.rs",
         "t_zdr05_unparsable_tag_leaves_the_ledger_untouched_and_is_recorded",
     ),
     (
         "解釈失敗",
-        "emo2_boot/frame/zorder_descript_tests.rs",
+        "runtime/frame/zorder_descript_tests.rs",
         "t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason",
     ),
     // ── 窓の出現・破棄に伴う繋ぎ直しの導出（要件 7.1・7.2・15.3。改訂第 2 版で追加）
@@ -355,22 +355,22 @@ const COVERAGE: [(&str, &str, &str); 50] = [
     // drain 相が受け持ち、在庫の欠けを鎖へどう射影するかは合成の段が受け持つ。
     (
         "窓の出現・破棄に伴う繋ぎ直しの導出",
-        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "runtime/frame/zorder_drain_projection_tests.rs",
         "t_zdp06_publishing_happens_only_when_the_content_actually_differs",
     ),
     (
         "窓の出現・破棄に伴う繋ぎ直しの導出",
-        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "runtime/frame/zorder_drain_projection_tests.rs",
         "t_zdp04_destroyed_scope_leaves_the_chain_without_dragging_others_with_it",
     ),
     (
         "窓の出現・破棄に伴う繋ぎ直しの導出",
-        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "runtime/frame/zorder_drain_projection_tests.rs",
         "t_zdp08_a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept",
     ),
     (
         "窓の出現・破棄に伴う繋ぎ直しの導出",
-        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "runtime/frame/zorder_drain_projection_tests.rs",
         "t_zdp14_an_unnamed_scope_appearing_and_leaving_is_detected_too",
     ),
     (

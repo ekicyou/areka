@@ -14,14 +14,16 @@ use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
+use crate::session::ghost_switch::SwitchInFlight;
 
 pub(crate) mod desk;
 mod procedure;
 mod readonly_refusal;
 mod refs;
+/// `\![update…]` の受け口（runtime-module-untangle 2.2 で持ち主へ移した）。
+pub(crate) mod update_cue;
 mod worker;
 
 /// 更新の対象の種別（Reference の綴り: ghost／shell／balloon）。

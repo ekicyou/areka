@@ -14,10 +14,10 @@ use areka_ghost::catalog_roots::same_folder_name;
 use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
-use crate::emo2_boot::shell_balloon_switch::{
+use crate::ghost_session::GhostSlot;
+use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, request_skin_switch,
 };
-use crate::ghost_session::GhostSlot;
 
 /// 「シェル」枠の供給関数を登記する。呼び手はゴーストを起こすたびの結線（`wire_menu` の直後）。
 pub(crate) fn register(world: &mut World) {

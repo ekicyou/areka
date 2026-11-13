@@ -23,10 +23,10 @@ use log_capture_kit::{CapturedEvent, capture};
 use tracing::Level;
 
 use super::*;
-use crate::emo2_boot::spine::join_thread_bounded;
 use crate::install::judge::{ScriptRequest, script_request};
 use crate::install::{InstallOrigin, register};
 use crate::menu::{Frame, MenuContext, MenuWiring, install_frame, wire_menu};
+use crate::runtime::spine::join_thread_bounded;
 
 /// 絶対パスの書庫（fs は読まない＝在る必要はない）。
 const ABSOLUTE: &str = r"C:\areka-install-pick-test\in\hana.nar";

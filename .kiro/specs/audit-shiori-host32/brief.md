@@ -94,3 +94,9 @@
 - 要件定義のモデル: Opus（見直しの型が決まっている・新しい境界も順序の約束も作らない）。
 - 分割の案: 無し（要るなら指摘の組で 2 本目）。
 - 見つけた穴・古くなった記述: Current State の大きさ（51 ファイル・14,505 行）は古い＝上の数。
+
+## runtime-module-untangle からの申し送り（2026-11-13）
+
+`runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
+
+- **要らない項目: cargo のマニフェストの警告（使われない依存）2 件**。`crates/shiori-abi/Cargo.toml` の `windows` と `crates/shiori-host32-host/Cargo.toml` の `event-listener`。`cargo check` のたびに出る。使っていないことをツリー全体で確かめてから外す（`shiori-abi` は `shiori4-api` が消すなら不要）。

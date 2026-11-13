@@ -10,9 +10,9 @@ use areka_kanade::KanadeMsg;
 
 use super::*;
 use crate::ConfigInputs;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::emo2_boot::spine::RecordedCall;
 use crate::ghost_session::GhostBootInputsSource;
+use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// A を起こして定常に着かせる（起動記録を置く＝`OnFirstBoot` を飛ばす）。
 fn running_a() -> SwitchRig {

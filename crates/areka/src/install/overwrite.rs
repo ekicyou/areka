@@ -17,11 +17,11 @@ use bevy_ecs::world::World;
 use super::{InstallDesk, reply_to};
 use crate::app_exit::FirstExit;
 use crate::boot_config::BootContext;
-use crate::emo2_boot::ghost_switch::{
-    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
-};
 use crate::install::destination::install_into;
 use crate::install::procedure::Overwritten;
+use crate::session::ghost_switch::{
+    GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
+};
 
 /// 預かった書庫の段。
 enum Stage {

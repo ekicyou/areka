@@ -162,7 +162,7 @@ pub(super) fn boot_present_system(world: &mut World) {
     }
 
     // 窓寸 reconcile（emo-dpi-scaling task 5.2・R7.1/R7.2）: 本フレームの全 apply が済んだ**後**に
-    // 表示成立点の状態照合が積んだ要求を消費して窓 client を合わせる（本番 `emo2_frame_system` が
+    // 表示成立点の状態照合が積んだ要求を消費して窓 client を合わせる（本番 `frame_system` が
     // drain の後段で呼ぶ `reconcile_reported_sizes` と同順序）。初回表示が積む k₀ 補正はここで landing する。
     reconcile_present_sizes(&mut boot, world);
 

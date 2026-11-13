@@ -827,7 +827,7 @@ id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（
 **その群を成立させる最小の基盤**
 
 - **今ある物**: 表示側から会話進行側へ渡すための受け皿の型が
-  `crates/areka/src/emo2_boot/talk_lifecycle.rs` に用意してあった（`BalloonLifecycleNotice`。2026-10-06 に
+  `crates/areka/src/runtime/talk_lifecycle.rs` に用意してあった（`BalloonLifecycleNotice`。2026-10-06 に
   消した——今の根拠の場所は上の追記）。
   イベントの名前と参照値の割り当ても決まっている。
 - **足りない物**: その受け皿を作る側（吹き出しの開閉を見て通知を起こす側）と、受け取って SHIORI へ
