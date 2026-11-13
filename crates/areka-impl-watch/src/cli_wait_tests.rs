@@ -16,7 +16,7 @@ use std::path::Path;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    call, done, hold_sign, hold_watches, home_in, put_state, state_bytes, waits,
+    call, done, hold_sign, hold_watches, home_dir_in, not_applied, put_state, state_bytes, waits,
 };
 use crate::error::escape_path;
 use crate::state::{ParticipantStatus, WaitKind, WaitRecord};
@@ -100,7 +100,7 @@ fn put_not_working(home: &Path, status: &str, desks: &str) {
 #[test]
 fn merge_wait_ends_at_once_with_the_last_merge_when_the_turn_has_already_come() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a", "b"]);
     let merge_b = ["merge", "--id", "b", "--repo", "areka", "--spec", "y"];
     call(&home, &MERGE_A);
@@ -131,7 +131,7 @@ fn merge_wait_ends_at_once_with_the_last_merge_when_the_turn_has_already_come() 
 #[test]
 fn merge_wait_makes_the_request_before_waiting() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     // 参加もしていない a。申し込みが先に通り、机が空いているので直ちに番を受ける。
     let granted = done("granted merge repo=areka; last: none");
@@ -148,7 +148,7 @@ fn merge_wait_makes_the_request_before_waiting() {
 #[test]
 fn a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wait() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a"]);
     // a はすでに areka の机の持ち主。前の `merge --wait` は殺され、その記録だけが残っている
     // （居る印は殺されたときに解けている）。
@@ -174,7 +174,7 @@ fn a_restarted_merge_wait_that_ends_at_once_removes_the_record_of_the_killed_wai
 #[test]
 fn request_wait_is_granted_at_once_when_nobody_has_to_stop() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     let granted = done("granted test,sole; stopped: none");
     assert_eq!(waiting(&home, &SOLE_A), granted);
@@ -189,7 +189,7 @@ fn request_wait_is_granted_at_once_when_nobody_has_to_stop() {
 #[test]
 fn a_second_merge_wait_for_the_same_id_is_1_and_changes_nothing() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // 番はもう来ている: 印を確かめずに進むように壊れても、このテストは待ち続けずに赤になる。
     call(&home, &MERGE_A);
     // 1 つ目の待ちが走っている（その居る印をテストが握る）。
@@ -206,7 +206,7 @@ fn a_second_merge_wait_for_the_same_id_is_1_and_changes_nothing() {
 #[test]
 fn the_presence_sign_of_an_upper_case_id_is_the_lower_case_lock_file() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     // 机が空いているので直ちに番を受けて終わる。居る印のファイルは残る。
     let merge = ["merge", "--id", "A", "--repo", "areka", "--spec", "x"];
@@ -225,7 +225,7 @@ fn the_presence_sign_of_an_upper_case_id_is_the_lower_case_lock_file() {
 #[test]
 fn watch_is_1_while_its_presence_sign_is_held_and_touches_no_state() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // 停止要請はもう出ている: 印を確かめずに進むように壊れても、このテストは待ち続けずに赤になる。
     put_not_working(&home, "stop-requested", C_QUEUED);
     let before = state_bytes(&home);
@@ -242,7 +242,7 @@ fn watch_is_1_while_its_presence_sign_is_held_and_touches_no_state() {
 #[test]
 fn watch_for_a_stop_requested_participant_ends_at_once_with_who_and_where_to_read() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     put_not_working(&home, "stop-requested", C_QUEUED);
     let _held = hold_watches(&home, &["c"]);
     let told = format!("stop requested by c\n{}", details(&home));
@@ -266,7 +266,7 @@ fn watch_for_a_stop_requested_participant_ends_at_once_with_who_and_where_to_rea
 #[test]
 fn watch_for_a_stopped_participant_ends_at_once_saying_what_to_run() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     put_not_working(
         &home,
         "stopped",
@@ -292,7 +292,7 @@ fn watch_for_a_stopped_participant_ends_at_once_saying_what_to_run() {
 #[test]
 fn resume_without_a_record_is_3_and_joins_nobody() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let resume = ["resume", "--id", "a"];
 
     assert_eq!(call(&home, &resume), gone("removed"));
@@ -306,7 +306,7 @@ fn resume_without_a_record_is_3_and_joins_nobody() {
 #[test]
 fn resume_for_a_working_participant_ends_at_once_and_changes_nothing() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // 見張りを立てていない a。待ちの呼び手は自分なので、自分の待ちには回収されない。
     call(&home, &MERGE_A);
     let before = state_bytes(&home);
@@ -320,13 +320,12 @@ fn resume_for_a_working_participant_ends_at_once_and_changes_nothing() {
 #[test]
 fn stopped_wait_for_a_working_participant_is_resumed_at_once_not_a_refusal() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // 見張りを立てていない a（呼んだ識別は、同じ呼び出しでは回収されない）。
     call(&home, &MERGE_A);
     let stopped = ["stopped", "--id", "a"];
     // `--wait` 無しは「停止要請中でない」の断り。
-    let refusal = "not applied: not asked to stop\n".to_owned();
-    assert_eq!(call(&home, &stopped), (3, String::new(), refusal));
+    assert_eq!(call(&home, &stopped), not_applied("not asked to stop"));
     let before = state_bytes(&home);
 
     assert_eq!(waiting(&home, &stopped), done("resumed"));
@@ -337,7 +336,7 @@ fn stopped_wait_for_a_working_participant_is_resumed_at_once_not_a_refusal() {
 #[test]
 fn stopped_wait_for_an_unknown_id_is_3() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     assert_eq!(waiting(&home, &["stopped", "--id", "a"]), gone("removed"));
 
@@ -349,7 +348,7 @@ fn stopped_wait_for_an_unknown_id_is_3() {
 #[test]
 fn stopped_wait_records_stopped_before_it_starts_to_wait() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     put_not_working(&home, "stop-requested", C_QUEUED);
     let _held = hold_watches(&home, &["c"]);
 
@@ -366,7 +365,7 @@ fn stopped_wait_records_stopped_before_it_starts_to_wait() {
 #[test]
 fn resume_for_a_stop_requested_participant_ends_at_once_saying_who_asked_and_records_nothing() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     put_not_working(&home, "stop-requested", C_QUEUED);
     let _held = hold_watches(&home, &["c"]);
     let resume = ["resume", "--id", "a"];
@@ -389,7 +388,7 @@ fn resume_for_a_stop_requested_participant_ends_at_once_saying_who_asked_and_rec
 #[test]
 fn stopped_wait_ends_with_stop_requested_again_when_the_same_call_hands_the_sole_desk_on() {
     let root = TempPath::under_target("impl-watch-cli-wait");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // 排他テストの机とひとり占めの持ち主 h（作業中・見張りなし）・申し込みの c（見張りの印を
     // 握る）・作業中の a。
     put_state(

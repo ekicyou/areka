@@ -14,7 +14,8 @@ use std::path::Path;
 use temp_path_kit::TempPath;
 
 use super::test_support::{
-    args, call, done, hold_watches, home_in, not_applied, put_state, state_bytes,
+    args, call, done, hold_watches, home_dir_in, merge, not_applied, put_state, request,
+    state_bytes,
 };
 use super::{exit_code, run_with};
 use crate::error::{WatchError, escape_path};
@@ -23,28 +24,9 @@ use crate::test_support::{names, read_state};
 
 const NAME: &str = "見張り役";
 const PURPOSE: &str = "負荷の計測";
-
-fn merge(home: &Path, id: &str) -> (u8, String, String) {
-    let words = [
-        "merge",
-        "--id",
-        id,
-        "--repo",
-        "areka",
-        "--spec",
-        "impl-watch",
-    ];
-    call(home, &[&words[..], &["--name", NAME]].concat())
-}
-
-/// 机の申し込み（`desks` は `--desk` の値）。
-fn request(home: &Path, id: &str, desks: &str) -> (u8, String, String) {
-    let words = ["request", "--id", id, "--repo", "areka", "--desk", desks];
-    call(
-        home,
-        &[&words[..], &["--purpose", PURPOSE, "--name", NAME]].concat(),
-    )
-}
+const SPEC: &str = "impl-watch";
+/// `merge`・`request` の後ろに足す引数。
+const BY_NAME: [&str; 2] = ["--name", NAME];
 
 fn merged(home: &Path, id: &str) -> (u8, String, String) {
     call(
@@ -58,19 +40,22 @@ fn merged(home: &Path, id: &str) -> (u8, String, String) {
 #[test]
 fn a_merge_round_trip_prints_the_design_lines_and_exit_codes() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a", "b"]);
 
     // 机が空いていれば、待たない申し込みも直ちに番を受ける。
     assert_eq!(
-        merge(&home, "a"),
+        merge(&home, "a", SPEC, &BY_NAME),
         done("granted merge repo=areka; last: none")
     );
-    assert_eq!(merge(&home, "b"), done("queued merge repo=areka pos=1"));
+    assert_eq!(
+        merge(&home, "b", SPEC, &BY_NAME),
+        done("queued merge repo=areka pos=1")
+    );
     assert_eq!(merged(&home, "a"), done("merged repo=areka"));
 
     // 番は「済んだ」と同じ呼び出しで b へ移っている。直前のマージが 1 行に載る。
-    let (code, out, err) = merge(&home, "b");
+    let (code, out, err) = merge(&home, "b", SPEC, &BY_NAME);
     assert_eq!((code, err.as_str()), (0, ""), "{out:?}");
     let at = out
         .strip_prefix("granted merge repo=areka; last: PR#281 414d43eb impl-watch ")
@@ -86,10 +71,10 @@ fn a_merge_round_trip_prints_the_design_lines_and_exit_codes() {
 #[test]
 fn merged_by_a_non_holder_is_3_and_leaves_the_state_file_untouched() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a", "b"]);
-    merge(&home, "a");
-    merge(&home, "b");
+    merge(&home, "a", SPEC, &BY_NAME);
+    merge(&home, "b", SPEC, &BY_NAME);
     let before = state_bytes(&home);
 
     assert_eq!(merged(&home, "b"), not_applied("not the merge holder"));
@@ -101,11 +86,11 @@ fn merged_by_a_non_holder_is_3_and_leaves_the_state_file_untouched() {
 #[test]
 fn the_calling_id_is_not_reclaimed_by_its_own_call() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     // 見張りを立てていない a。自分の呼び出しでは回収されないので、机を持ったまま「済んだ」が通る。
     assert_eq!(
-        merge(&home, "a"),
+        merge(&home, "a", SPEC, &BY_NAME),
         done("granted merge repo=areka; last: none")
     );
     assert_eq!(merged(&home, "a"), done("merged repo=areka"));
@@ -114,27 +99,33 @@ fn the_calling_id_is_not_reclaimed_by_its_own_call() {
 #[test]
 fn the_merge_position_counts_in_serving_order_bugs_first() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a", "b", "c"]);
-    merge(&home, "a");
+    merge(&home, "a", SPEC, &BY_NAME);
 
-    assert_eq!(merge(&home, "b"), done("queued merge repo=areka pos=1"));
+    assert_eq!(
+        merge(&home, "b", SPEC, &BY_NAME),
+        done("queued merge repo=areka pos=1")
+    );
     // 後から来たバグの申し込みが先頭。
     let bug = [
         "merge", "--id", "c", "--repo", "areka", "--spec", "fix", "--bug",
     ];
     assert_eq!(call(&home, &bug), done("queued merge repo=areka pos=1"));
     // 申し込み直しても二重に並ばず、番は 2 番目になっている。
-    assert_eq!(merge(&home, "b"), done("queued merge repo=areka pos=2"));
+    assert_eq!(
+        merge(&home, "b", SPEC, &BY_NAME),
+        done("queued merge repo=areka pos=2")
+    );
 }
 
 #[test]
 fn ids_that_differ_only_in_case_are_the_same_participant() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     assert_eq!(
-        merge(&home, "A"),
+        merge(&home, "A", SPEC, &BY_NAME),
         done("granted merge repo=areka; last: none")
     );
     // 記録に入るのは小文字の形。
@@ -151,7 +142,7 @@ fn ids_that_differ_only_in_case_are_the_same_participant() {
 #[test]
 fn merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // a が 2 つのリポジトリの机を持ったまま（コマンドの列では作れないので直に置く）。
     put_state(
         &home,
@@ -179,17 +170,20 @@ fn merged_by_a_holder_of_two_desks_prints_one_line_per_desk_in_repo_order() {
 #[test]
 fn a_sole_round_trip_prints_the_design_lines_and_exit_codes() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a", "b"]);
 
     // b を、申し込みの無いただの参加者にする（止まる相手が居なければ番は直ちに来る）。
     let granted_alone = done("granted test,sole; stopped: none");
-    assert_eq!(request(&home, "b", "test,sole"), granted_alone);
+    assert_eq!(
+        request(&home, "b", "test,sole", PURPOSE, &BY_NAME),
+        granted_alone
+    );
     assert_eq!(call(&home, &["cancel", "--id", "b"]), done("cancelled"));
 
     // a の申し込みで b に停止要請が出る。b が止まるまで番は来ない。並べた順に依らず綴りは揃う。
     assert_eq!(
-        request(&home, "a", "sole,test"),
+        request(&home, "a", "sole,test", PURPOSE, &BY_NAME),
         done("queued test,sole pos=1")
     );
     let stopped = |id| call(&home, &["stopped", "--id", id]);
@@ -198,7 +192,7 @@ fn a_sole_round_trip_prints_the_design_lines_and_exit_codes() {
     assert_eq!(stopped("b"), not_applied("not asked to stop"));
     // 同じ組の申し込み直しは、持っていれば直ちに番の 1 行。
     assert_eq!(
-        request(&home, "a", "test,sole"),
+        request(&home, "a", "test,sole", PURPOSE, &BY_NAME),
         done("granted test,sole; stopped: b")
     );
 
@@ -215,7 +209,7 @@ fn a_sole_round_trip_prints_the_design_lines_and_exit_codes() {
 #[test]
 fn the_request_position_counts_in_serving_order_earliest_request_first() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // 待ち行列の並び（到着順）と申し込みの時刻の順が食い違う状態。マージの持ち主 m が居るので、
     // ひとり占めの番は来ない。
     put_state(
@@ -237,33 +231,13 @@ fn the_request_position_counts_in_serving_order_earliest_request_first() {
     let _held = hold_watches(&home, &["a", "b", "m"]);
 
     assert_eq!(
-        request(&home, "a", "test,sole"),
+        request(&home, "a", "test,sole", PURPOSE, &BY_NAME),
         done("queued test,sole pos=2")
     );
     assert_eq!(
-        request(&home, "b", "test,sole"),
+        request(&home, "b", "test,sole", PURPOSE, &BY_NAME),
         done("queued test,sole pos=1")
     );
-}
-
-#[test]
-fn loadrunning_records_the_holder_and_is_3_while_a_desk_is_held() {
-    let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
-    let _held = hold_watches(&home, &["a", "b"]);
-    let running = |id| {
-        let words = ["loadrunning", "--id", id, "--repo", "areka"];
-        call(&home, &[&words[..], &["--purpose", PURPOSE]].concat())
-    };
-
-    assert_eq!(running("a"), done("recorded running load"));
-    let before = state_bytes(&home);
-    assert_eq!(
-        running("b"),
-        not_applied("the test desk or the sole desk already has a holder")
-    );
-    // 断った b は参加もしていない。
-    assert_eq!(state_bytes(&home), before);
 }
 
 // ---- 離脱・取り下げ・周期の一回り ----
@@ -271,9 +245,9 @@ fn loadrunning_records_the_holder_and_is_3_while_a_desk_is_held() {
 #[test]
 fn leave_cancel_and_tick_print_one_fixed_line_each() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a"]);
-    merge(&home, "a");
+    merge(&home, "a", SPEC, &BY_NAME);
 
     assert_eq!(call(&home, &["tick"]), done("tick"));
     assert_eq!(read_state(&home).participants.len(), 1);
@@ -289,13 +263,13 @@ fn leave_cancel_and_tick_print_one_fixed_line_each() {
 #[test]
 fn status_changes_nothing_and_keeps_japanese_values_off_the_terminal() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     // a と c が居る印を持つ。b は見張りの無い「作業中」（次の状態を変える呼び出しで回収される
     // ので、最後に呼ぶ）。c のひとり占めの申し込みは、マージの持ち主 a が居るので渡らない。
     let _held = hold_watches(&home, &["a", "c"]);
-    merge(&home, "a");
-    request(&home, "c", "test,sole");
-    merge(&home, "b");
+    merge(&home, "a", SPEC, &BY_NAME);
+    request(&home, "c", "test,sole", PURPOSE, &BY_NAME);
+    merge(&home, "b", SPEC, &BY_NAME);
     let before = state_bytes(&home);
     fs::remove_file(home.join("status.md")).expect("消せる");
 
@@ -330,7 +304,7 @@ fn status_changes_nothing_and_keeps_japanese_values_off_the_terminal() {
 #[test]
 fn status_without_a_state_file_says_so_and_creates_neither_state_nor_reading() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     assert_eq!(call(&home, &["status"]), done("no state file"));
 
@@ -341,7 +315,7 @@ fn status_without_a_state_file_says_so_and_creates_neither_state_nor_reading() {
 #[test]
 fn status_over_a_broken_state_file_is_1_and_does_not_move_or_change_it() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     put_state(&home, "{ not json");
 
     let got = call(&home, &["status"]);
@@ -355,7 +329,7 @@ fn status_over_a_broken_state_file_is_1_and_does_not_move_or_change_it() {
 #[test]
 fn a_version_mismatched_state_file_is_1_and_stays_byte_identical() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let file = r#"{ "version": 1, "participants": { "x": {} } }"#;
     put_state(&home, file);
     let text = "state file version mismatch: file has 1, this exe knows 2. \
@@ -367,7 +341,10 @@ fn a_version_mismatched_state_file_is_1_and_stays_byte_identical() {
     );
     assert_eq!(names(&home), ["impl-watch.log", "state.json"]);
 
-    assert_eq!(merge(&home, "a"), (1, String::new(), text.to_owned()));
+    assert_eq!(
+        merge(&home, "a", SPEC, &BY_NAME),
+        (1, String::new(), text.to_owned())
+    );
     // 状態を変える呼び出しはロックを取るが、読まず、退避もせず、上書きもしない。
     assert_eq!(names(&home), ["impl-watch.log", "state.json", "state.lock"]);
     assert_eq!(state_bytes(&home), file.as_bytes());
@@ -378,8 +355,8 @@ fn a_version_mismatched_state_file_is_1_and_stays_byte_identical() {
 #[test]
 fn clear_sets_the_state_aside_at_once_and_prints_the_backup_path() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
-    merge(&home, "a");
+    let home = home_dir_in(&root);
+    merge(&home, "a", SPEC, &BY_NAME);
     let before = state_bytes(&home);
 
     let (code, out, err) = call(&home, &["clear"]);
@@ -411,7 +388,7 @@ fn clear_sets_the_state_aside_at_once_and_prints_the_backup_path() {
 #[test]
 fn clear_without_a_state_file_says_there_is_no_backup() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
 
     assert_eq!(call(&home, &["clear"]), done("cleared; backup: none"));
 
@@ -423,10 +400,10 @@ fn clear_without_a_state_file_says_there_is_no_backup() {
 #[test]
 fn clear_repo_leaves_everyone_of_the_repo_and_prints_the_ids_without_a_backup() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let _held = hold_watches(&home, &["a", "b", "c"]);
-    merge(&home, "a");
-    merge(&home, "b");
+    merge(&home, "a", SPEC, &BY_NAME);
+    merge(&home, "b", SPEC, &BY_NAME);
     let other = ["merge", "--id", "c", "--repo", "other", "--spec", "s"];
     call(&home, &other);
 
@@ -456,8 +433,8 @@ fn clear_repo_leaves_everyone_of_the_repo_and_prints_the_ids_without_a_backup() 
 #[test]
 fn a_reading_matter_that_cannot_be_written_changes_neither_the_result_nor_the_exit_code() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
-    merge(&home, "a");
+    let home = home_dir_in(&root);
+    merge(&home, "a", SPEC, &BY_NAME);
     let (_, summary, _) = call(&home, &["status"]);
     assert!(summary.contains("\nstatus: "), "{summary:?}");
     let reading = fs::read(home.join("status.md")).expect("読み物が在る");
@@ -501,7 +478,7 @@ impl Write for Closed {
 #[test]
 fn a_result_that_cannot_be_printed_is_a_failure_not_a_silent_success() {
     let root = TempPath::under_target("impl-watch-cli");
-    let home = home_in(&root);
+    let home = home_dir_in(&root);
     let mut err = Vec::new();
 
     let result = run_with(&args(&["tick"]), Some(home.into()), &mut Closed, &mut err);

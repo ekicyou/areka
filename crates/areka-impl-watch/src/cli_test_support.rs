@@ -30,8 +30,32 @@ pub(super) fn run_captured(
 }
 
 /// 一時の置き場所。道筋に ASCII の外の字が入る。
-pub(super) fn home_in(root: &TempPath) -> PathBuf {
+pub(super) fn home_dir_in(root: &TempPath) -> PathBuf {
     root.child("置き場")
+}
+
+/// マージの机の申し込み。`extra` は後ろに足す引数（`--name`・`--wait` など）。
+pub(super) fn merge(home: &Path, id: &str, spec: &str, extra: &[&str]) -> (u8, String, String) {
+    let words = ["merge", "--id", id, "--repo", "areka", "--spec", spec];
+    call(home, &[&words[..], extra].concat())
+}
+
+/// 机の申し込み（`desks` は `--desk` の値）。`extra` は後ろに足す引数（`--wait` など）。
+pub(super) fn request(
+    home: &Path,
+    id: &str,
+    desks: &str,
+    purpose: &str,
+    extra: &[&str],
+) -> (u8, String, String) {
+    let words = ["request", "--id", id, "--repo", "areka", "--desk", desks];
+    call(home, &[&words[..], &["--purpose", purpose], extra].concat())
+}
+
+/// 走っている負荷テストの記録。
+pub(super) fn running(home: &Path, id: &str, purpose: &str) -> (u8, String, String) {
+    let words = ["loadrunning", "--id", id, "--repo", "areka"];
+    call(home, &[&words[..], &["--purpose", purpose]].concat())
 }
 
 /// 走らせて、終了コード・標準出力・標準エラーを返す。端末へ出る文は ASCII だけ。
