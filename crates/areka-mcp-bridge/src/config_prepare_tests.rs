@@ -22,6 +22,8 @@ use crate::cache::Cache;
 const W1: &str = "[bridge] running without the cache until areka prepares its user root; it is used from the next start";
 /// W2 の文。
 const W2: &str = "[bridge] the user root of areka could not be located; running without the cache";
+/// W3 の文（どの段も使えない）。
+const W3: &str = "[bridge] no place for the cache (AREKA_PROFILE_DIR, areka profile beside the bridge, LOCALAPPDATA: none available); running without it";
 
 /// 組んだ根: 一時フォルダ・exe のフォルダ・偽の `LOCALAPPDATA`・まだ無い書ける根（`LOCALAPPDATA\areka`）。
 struct Fixture {
@@ -344,4 +346,58 @@ fn second_start_after_areka_prepares_root_uses_cache() {
     let (second, events) = run(&fx, None, Some(&signals));
     assert_eq!(second.cache_dir, Some(profile(&fx.root).join("mcp-bridge")));
     assert!(bridge_lines(&events).is_empty());
+}
+
+/// #1: 空・相対の `AREKA_PROFILE_DIR` は areka 本体と同じく捨てて次の段へ進み、`areka-user-data` の
+/// ERROR（`profile_dir_env_unusable`）がちょうど 1 件（隣に areka が居ても 2 度判定しない）。
+#[test]
+fn an_unusable_profile_env_is_dropped_with_one_error() {
+    for value in ["", "rel"] {
+        let fx = fixture("bridge-prep-unusable-env");
+        let zip = Signals {
+            winget_marker: None,
+            ..winget_signals(Some(&fx.lad))
+        };
+        let cases = [
+            (None, fx.root.join("mcp-bridge")),
+            (Some(&zip), profile(&fx.exe).join("mcp-bridge")),
+        ];
+        for (areka, expected) in cases {
+            let beside = areka.is_some();
+            let (config, events) = run(&fx, Some(Path::new(value)), areka);
+            assert_eq!(
+                config.cache_dir.as_deref(),
+                Some(expected.as_path()),
+                "{value:?} beside={beside}: 次の段の置き場"
+            );
+            let errors: Vec<_> = events
+                .iter()
+                .filter(|e| e.field_str("event") == Some("profile_dir_env_unusable"))
+                .collect();
+            assert_eq!(errors.len(), 1, "{value:?} beside={beside}: ERROR は 1 件");
+            assert_eq!(errors[0].level, tracing::Level::ERROR);
+            assert!(
+                bridge_lines(&events).is_empty(),
+                "{value:?} beside={beside}"
+            );
+        }
+    }
+}
+
+/// #2: 置き場が 1 つも無い（`LOCALAPPDATA` が無い・相対）→ 控え無し・W3 の WARN がちょうど 1 件。
+#[test]
+fn no_place_for_the_cache_is_warned_once() {
+    for local_app_data in [None, Some(PathBuf::from("rel"))] {
+        let (config, events) =
+            capture(|| Config::from_inputs(None, None, None, local_app_data.clone()));
+        assert_eq!(config.cache_dir, None, "{local_app_data:?}");
+        let lines = bridge_lines(&events);
+        assert_eq!(
+            lines.len(),
+            1,
+            "{local_app_data:?}: 中継の行は W3 の 1 件だけ"
+        );
+        assert_eq!(lines[0].message(), W3);
+        assert_eq!(lines[0].level, tracing::Level::WARN);
+    }
 }

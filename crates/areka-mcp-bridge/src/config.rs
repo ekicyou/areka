@@ -18,7 +18,7 @@ pub const VERIFY_WAIT: Duration = Duration::from_secs(3);
 /// 届けた要求の応答を待つ上限。areka のツールの上限（`areka_mcp::tools::REPLY_WAIT`）より長い。
 pub const REPLY_WAIT: Duration = Duration::from_secs(30);
 
-/// 記憶の置き場を変える環境変数（areka 本体と同じ名前。空の値も「設定あり」として扱うのも同じ）。
+/// 記憶の置き場を変える環境変数（areka 本体と同じ名前・同じ決まり（空・相対の値は `error!` を残して捨てる＝`areka_user_data::usable_profile_env`））。
 const PROFILE_DIR_ENV: &str = "AREKA_PROFILE_DIR";
 /// 中継の隣に居れば配布 zip の形と見なす、areka 本体の exe の名前。
 const AREKA_EXE_FILE_NAME: &str = "areka.exe";
@@ -100,12 +100,13 @@ impl Config {
         let beside = areka.map(|(exe_dir, signals)| {
             areka_user_data::locate_app_profile(signals, exe_dir, profile_env)
         });
-        let config = Config::from_values(
-            port_value,
-            profile_env.map(PathBuf::from),
-            beside.clone(),
-            local_app_data,
-        );
+        // 隣に areka が居れば、使える値は beside の答えが既に含み、使えない値の error! も
+        // locate_app_profile が 1 件残した（同じ値を 2 度判定しない）。
+        let profile_dir = match beside {
+            Some(_) => None,
+            None => areka_user_data::usable_profile_env(profile_env),
+        };
+        let config = Config::from_values(port_value, profile_dir, beside.clone(), local_app_data);
         log_without_cache(beside.as_ref(), &config);
         config
     }
@@ -118,6 +119,7 @@ impl Config {
     /// `beside` は `None`＝隣に areka.exe が無い、`Some(Ready(dir))`＝その下、`Some(ほか)`＝控え無し
     /// （まだ置けない・決められない根の代わりに `local_app_data` の段へ落ちない）。
     /// `local_app_data` は絶対パスのときだけ使う（空・相対の値で、起こされた場所しだいの置き場に黙って書かない）。
+    /// `profile_dir` は使える（絶対の）値だけを受ける。判定は [`Config::from_inputs`]。
     pub fn from_values(
         port_value: Option<&str>,
         profile_dir: Option<PathBuf>,
