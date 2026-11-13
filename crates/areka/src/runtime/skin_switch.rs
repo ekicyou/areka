@@ -83,7 +83,7 @@ pub(crate) enum SkinVerdict {
 /// 切替の進行中の印（World の NonSend・高々 1 つ）。在れば次の切替要求は断る（要件 1.12）。
 ///
 /// 置くのは受理のときだけ。消すのは差し替えの相（完了・中止・取りやめ・失敗）と終了の片付け
-/// （[`discard_for_exit`]）。
+/// （本体の側の `session::shell_balloon_switch::discard_for_exit`）。
 pub(crate) struct SkinSwitchInFlight {
     pub kind: SkinKind,
     pub target: SkinCandidate,

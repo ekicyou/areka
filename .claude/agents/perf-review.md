@@ -44,7 +44,7 @@ git diff --stat
    `cargo test -p wintf --lib command_batch_tests`
    `cargo test -p wintf --lib command_transition_tests`
    `cargo test -p wintf --lib window_pos_transition_tests`
-   `cargo test -p areka --bin areka transition_atomicity_tests`（`crates/areka/src/emo2_boot/frame.rs` が `frame_transition_atomicity_tests.rs` を `mod transition_atomicity_tests` として接続している。x64 のみ）
+   `cargo test -p areka --bin areka transition_atomicity_tests`（`crates/areka/src/runtime/frame.rs` が `frame_transition_atomicity_tests.rs` を `mod transition_atomicity_tests` として接続している。x64 のみ）
    1 本でも赤なら REJECTED。
 
 4. **既存ログ行の語彙が不変**

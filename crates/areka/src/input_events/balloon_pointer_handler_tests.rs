@@ -517,7 +517,7 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
 // 「戻り値 false＋ログレベル」までで、**観測資源を同居させた副作用ゼロ三点**——(a) send なし
 // （present の `ChoiceSelectionInbox.try_recv()==Empty`）、(b) `BalloonWiring.hover` 不変、
 // (c) runtime へ `inject_choice_hover` 未適用（借用/poison を残さず `choice_active` 不変・moved は
-// `choice_hover_inject` を出さない）——までは固定していない（Tunnel 檻は資源を一切挿入せず、Emo2 不在
+// `choice_hover_inject` を出さない）——までは固定していない（Tunnel 檻は資源を一切挿入せず、RuntimeWiring 不在
 // 檻は BalloonWiring を挿入しないため観測点が無かった）。
 //
 // 本 7.2 檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, RuntimeWiring 不在, BalloonWiring 不在}**へ
@@ -544,7 +544,7 @@ enum Degrade {
 /// moved: Tunnel／RuntimeWiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
 ///
 /// 各シナリオで観測資源（RuntimeWiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
-/// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・Emo2 不在=DEBUG・
+/// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・RuntimeWiring 不在=DEBUG・
 /// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ三点（choice_hover_inject なし／hover 不変／Inbox Empty／
 /// runtime 借用・active 不変）を固定する。判断分岐網羅は 4.1、本檻は副作用ゼロ観測を担う。
 #[test]

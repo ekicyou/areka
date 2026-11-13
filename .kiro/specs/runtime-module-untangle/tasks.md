@@ -134,7 +134,7 @@
   - _Requirements: 1.5, 4.2, 4.4, 4.5_
 
 - [ ] 8. 文書と申し送り
-- [ ] 8.1 (P) 文書と steering と網羅台帳の古いパスと名前を書き換える
+- [x] 8.1 (P) 文書と steering と網羅台帳の古いパスと名前を書き換える
   - `doc/COMPAT_ARCHITECTURE.md`・`doc/emo2-conformance-scope.md`・`doc/ssp-mcp/`（`log-convention.md` は 7.2 が持つので除く）・`doc/ideas/`・`.kiro/steering/structure.md`・`tech.md` を移した先のパスと改めた名前へ
   - 網羅台帳の根拠の場所を根拠のファイルが実際に移った先へ書き換え、台帳から作る生成物（`briefing-*.md` ほか）は生成器で作り直す（手で直さない）
   - 完了の形: 台帳の検査と生成物の差分が緑・きれいで、文書の古いパスが残らない
@@ -204,3 +204,4 @@
 - 6.1: 7.1・7.2 の一部を先に済ませた（決まり `areka::session::ghost_switch`・そのテスト・`log-convention.md:55`・`reload_tests:580`／`reload_skin_tests:328` の `areka::session::reload`）。7.1 に残るのは `UNKEPT_TARGETS` と assert。`runtime_boot_tests.rs` が `#[path = "../runtime/…"]` で引く e2e 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）は `runtime/` に残る＝8.2 の `runtime-crate-split` の申し送りに入れる。`ghost_session_switch_tests.rs:3` の説明の文の古いパスは 8.x で。
 - 6.2: 移した後、7.1 までは `log_history.rs:121` の `rule("areka::install", …)` が前方一致で `areka::install::install_cue` の `info!`（readonly_refused）を Update として残す（中間の状態）。7.1 で `UNKEPT_TARGETS` を必ず入れる。式 1 は本番で 2 行（どちらも `cfg(test)`: `session_hooks.rs:78`・`mod.rs:834`）。
 - 7.1: `update::update_cue`・`readme::readme_cue` は前方一致の決まり `areka::update`（Update）・`areka::readme`（Status）の下に入ったが、今は `info!` を持たないので分け方は前と同じ。後から `info!` を足すと残るようになる（9.3 の申し送りの候補）。
+- 8.1: 揺れ: `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が `cargo test -p areka -j 4` の 1 回で赤（単独 3 回・全体 1 回は緑）。9.5 で再び赤なら止めて調べる。前から古い行番号（`runtime/assets.rs:55`・`:82`・`:291`・`frame/zorder_descript.rs:61`・`spine_conformance_script.rs:589` ほか・merge-base でも同じ）は範囲外＝完了の棚卸で起票候補。briefing-*.md は手書き（生成物は report/*.md）。

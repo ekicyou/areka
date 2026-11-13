@@ -806,7 +806,7 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnBalloonChange:1" },
 ]
 note = """
-壊れ方: 該当なし。SwitchCueSink（crates/areka/src/emo2_boot/switch_cue.rs）が名前と第 1 引数の組（change・balloon）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口がベースウェアの根のバルーンの目録と突き合わせ、命令を運んだ台詞の終わりを待ってバルーンの絵と文字の層を差し替え、OnBalloonChange を送り、記憶 LastBalloon を書く。該当が無ければ何もせず warn! を残す。--option=raise-event はバルーンには無いので warn! を残して読み飛ばす（切替は行う）。
+壊れ方: 該当なし。SwitchCueSink（crates/areka/src/runtime/switch_cue.rs）が名前と第 1 引数の組（change・balloon）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/session/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口がベースウェアの根のバルーンの目録と突き合わせ、命令を運んだ台詞の終わりを待ってバルーンの絵と文字の層を差し替え、OnBalloonChange を送り、記憶 LastBalloon を書く。該当が無ければ何もせず warn! を残す。--option=raise-event はバルーンには無いので warn! を残して読み飛ばす（切替は行う）。
 ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ SwitchCueSink が warn! を残す。第 1 引数が shell・balloon でない change は担当外として debug! を残す。入口の断りは warn!、切替の取りやめは info!、途中の失敗は error!）。
 名前の解決: 切替先の名前は根の balloon/ の下のバルーンの descript.txt の name と大文字小文字を区別して突き合わせ、一致が無ければフォルダ名と突き合わせる。今のバルーン自身を指したときも作り直す。random は今のバルーンを除いて 1 つ選ぶ（候補が無ければ今のバルーン）。lastinstalled はこのプロセスの中で最後に入れたバルーンへ切り替える。sequential は正典がバルーンに書いていないので受けない（名前としてフォルダ名と突き合わせ、無ければ該当なし）。
 [群: バルーンの見た目と切り替え]
@@ -825,7 +825,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c__2b:1" },
 ]
 note = """
-壊れ方: 該当なし。ChangeCueSink（crates/areka/src/emo2_boot/change_cue.rs）が名前と第 1 引数の組（change・ghost）で自分を選び、切替の要求を UI 側へ運ぶ。UI 側が目録と突き合わせて送り出す側のゴーストを降ろし、切替先を起こす（--option=raise-event があれば送り出す側へ OnGhostChanging を送る）。
+壊れ方: 該当なし。ChangeCueSink（crates/areka/src/runtime/change_cue.rs）が名前と第 1 引数の組（change・ghost）で自分を選び、切替の要求を UI 側へ運ぶ。UI 側が目録と突き合わせて送り出す側のゴーストを降ろし、切替先を起こす（--option=raise-event があれば送り出す側へ OnGhostChanging を送る）。
 ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ ChangeCueSink が記録を残す。第 1 引数が ghost でない change は担当外として debug! を残す）。
 名前の解決: 切替先の名前はゴーストの目録の descript.txt の name と突き合わせ、一致が無ければフォルダ名と突き合わせる。正典の特別な名前 random／sequential／lastinstalled の解決は解決済み（areka-P0-ghost-change-name-resolution・ghost_switch.rs の resolve_special_name）。
 [群: ゴーストの切り替え]
@@ -844,7 +844,7 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnShellChanging:1" },
 ]
 note = """
-壊れ方: 該当なし。SwitchCueSink（crates/areka/src/emo2_boot/switch_cue.rs）が名前と第 1 引数の組（change・shell）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/emo2_boot/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口が今のゴーストのシェルの目録と突き合わせ、命令を運んだ台詞の終わり（--option=raise-event があれば OnShellChanging の台詞の終わり）を待って、SHIORI を降ろさずに絵を差し替え、OnShellChanged を送り、記憶 LastShell を書く。該当が無ければ何もせず warn! を残す。
+壊れ方: 該当なし。SwitchCueSink（crates/areka/src/runtime/switch_cue.rs）が名前と第 1 引数の組（change・shell）で自分を選び、切替の要求を UI 側の入口（crates/areka/src/session/shell_balloon_switch.rs の request_skin_switch）へ運ぶ。入口が今のゴーストのシェルの目録と突き合わせ、命令を運んだ台詞の終わり（--option=raise-event があれば OnShellChanging の台詞の終わり）を待って、SHIORI を降ろさずに絵を差し替え、OnShellChanged を送り、記憶 LastShell を書く。該当が無ければ何もせず warn! を残す。
 ログ: 出る（名前が無い・知らない option・送出の失敗はそれぞれ SwitchCueSink が warn! を残す。第 1 引数が shell・balloon でない change は担当外として debug! を残す。入口の断りは warn!、切替の中止・取りやめは info!、途中の失敗は error!）。
 名前の解決: 切替先の名前は今のゴーストの shell/ の下のシェル（menu,hidden のものも名指しなら可）の descript.txt の name と大文字小文字を区別して突き合わせ、一致が無ければフォルダ名と突き合わせる。今のシェル自身を指したときも作り直す。random は隠しシェルと今のシェルを除いて 1 つ選ぶ（候補が無ければ今のシェル）。lastinstalled は、原文の「最後にインストールしたゴーストに切り替え」を誤記と読み（ukadoc で lastinstalled を受ける他の項目はどれも命令と同じ種類を指す）、このプロセスの中で最後に入れたシェル（今のゴーストのもの）へ切り替える。ゴースト切替は起こさない。sequential は正典がシェルに書いていないので受けない（名前としてフォルダ名と突き合わせ、無ければ該当なし）。
 [群: ゴーストの切り替え]
@@ -1043,17 +1043,17 @@ note = """
 始まる時点で区間を解く（正典は沈黙・areka の裁量として doc/COMPAT_ARCHITECTURE.md に登記済み）。
 壊れ方: 無い（区間に入り、中断が退けられる）。
 ログ: 出る（区間で中断を退けたときの debug! 1 行）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UserBreakSink
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::UserBreakSink
 （正準台帳が ("enter","nouserbreakmode") の 1 組で登記する）・
-crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
+crates/areka/src/runtime/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
 crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
 出どころの制限（areka-P0-script-security-level）: ukadoc はこの指令を外部扱いの台本（SSTP など外から
 送られた台本・応答の SecurityLevel が external の台本。Owned SSTP は可）では実行しないと定める。
 外部扱いの台本では合図を送らず（区間に入らず）、warn のログ script_tag_refused（タグ・トークの番号・
 SenderType・Owned かどうか・実効のレベル）を 1 行残して台本の残りを続ける。ゴースト自身・MCP の
 台本は今までどおり入る。対の \\![leave,nouserbreakmode] は止めない。判定は
-crates/areka/src/emo2_boot/script_restriction.rs の判定の表 RESTRICTIONS、止めるのは
-crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink。
+crates/areka/src/runtime/script_restriction.rs の判定の表 RESTRICTIONS、止めるのは
+crates/areka/src/runtime/user_break_cue.rs の NoUserBreakCueSink。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 動作モードの出入り]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![enter。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -1392,9 +1392,9 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
 ]
 note = """
-壊れ方: 該当なし。InstallCueSink（crates/areka/src/emo2_boot/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が path で第 3 引数が絶対パスなら、そのファイルを（拡張子を問わず）インストールの手続きへ渡す。手続きは右クリックのメニューの「インストール…」と同じ 1 本で、OnInstallBegin から締めの知らせまでを正典のイベントで送る。入れた後に areka は自分から切り替えない。
+壊れ方: 該当なし。InstallCueSink（crates/areka/src/install/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が path で第 3 引数が絶対パスなら、そのファイルを（拡張子を問わず）インストールの手続きへ渡す。手続きは右クリックのメニューの「インストール…」と同じ 1 本で、OnInstallBegin から締めの知らせまでを正典のイベントで送る。入れた後に areka は自分から切り替えない。
 ログ: 出る（第 2 引数が path でも url でもない→ warn!（install_cue_unsupported）・パスが空か相対パス→ warn!（install_cue_bad_path）で、どちらも手続きを始めずイベントも送らない。パスより後ろの引数は読まずに warn!（install_cue_extra_ignored）。第 1 引数が install でない execute は担当外として debug! を残す）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::InstallSink（担当の台帳の行）の上の正典 URL の行。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::InstallSink（担当の台帳の行）の上の正典 URL の行。
 [条件: url の形（\\![execute,install,url,…]・兄弟の行）は areka-P0-network-update が同じ受け口に url の腕として足した（URL から落としてこの行と同じ手続きへ渡す。URL の形が悪い→ warn!（install_cue_bad_url）・種別が nar でも省略でもない→ warn!（install_cue_unsupported_kind））。path の腕の振る舞いは変えていない]
 [群: インストールと更新]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1]
@@ -1412,7 +1412,7 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnInstallComplete:1" },
 ]
 note = """
-壊れ方: 該当なし。InstallCueSink（crates/areka/src/emo2_boot/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が url で第 3 引数が http:// か https:// で始まる URL、第 4 引数の種別が nar か省略なら、短命のスレッドで URL のファイルを areka 専用の一時フォルダ（%TEMP%\\areka\\download\\）へ落とし、落とし終えたら \\![execute,install,path,…] と同じインストールの手続きへ渡す（以後の検査とイベントはその手続きのまま）。取得の間もゴーストは止まらない。落としたファイルはその場では消さず、同じフォルダの 7 日より古い物を次の取得のときに消す。このタグの取得では OnURLQuery を送らない。
+壊れ方: 該当なし。InstallCueSink（crates/areka/src/install/install_cue.rs）が名前と第 1 引数の組（execute・install）で自分を選び、第 2 引数が url で第 3 引数が http:// か https:// で始まる URL、第 4 引数の種別が nar か省略なら、短命のスレッドで URL のファイルを areka 専用の一時フォルダ（%TEMP%\\areka\\download\\）へ落とし、落とし終えたら \\![execute,install,path,…] と同じインストールの手続きへ渡す（以後の検査とイベントはその手続きのまま）。取得の間もゴーストは止まらない。落としたファイルはその場では消さず、同じフォルダの 7 日より古い物を次の取得のときに消す。このタグの取得では OnURLQuery を送らない。
 ログ: 出る（種別が feed・homeurl・ical・ssf ほか nar 以外→ warn!（install_cue_unsupported_kind）・URL が空か http:// / https:// で始まらない→ warn!（install_cue_bad_url）で、どちらも取得を始めずイベントも送らない。取得は info!（install_fetch_begin／install_fetch_done）を残し、取得の失敗・取得の部品を用意できないときは error!（install_fetch_failed・URL と理由）を 1 件残してインストールの依頼を作らず、イベントも送らない。消した古いファイルの数は info!（install_fetch_swept））。
 根拠の場所: crates/areka/src/install/judge.rs の ScriptRequest::Url（台本の引数の url の腕）の上の正典 URL の行。取得は crates/areka/src/install/fetch_url.rs の spawn_download。
 [条件: 種別は nar と省略だけ（省略は nar と読む・Content-Type と中身からの自動判別は持たない）。feed・homeurl・ical・ssf は α 後。落としたファイルは一時フォルダに最大 7 日残る]
@@ -1470,7 +1470,7 @@ note = """
 正典に対のイベントは無いので、ゴーストへ知らせは送らない。右クリックのメニューの「バルーン位置初期化」と近道 Ctrl＋Shift＋F10 も同じ初期化を行う。
 壊れ方: 無い。標準の位置の材料や窓の組が無いときは何もしない。
 ログ: 戻したら info! の balloon_pos_reset にスコープ・位置・ずらし・きっかけを残す。材料が無いときやスコープを解けなかったときは warn! の balloon_pos_reset_skipped に理由ときっかけを残す。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetballoonpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、初期化は crates/areka-placement/src/reset_balloon_pos.rs の reset_balloon_positions。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (execute, resetballoonpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、初期化は crates/areka-placement/src/reset_balloon_pos.rs の reset_balloon_positions。
 [群: 窓の位置の初期化]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![execute。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![executesntp の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -1487,7 +1487,7 @@ note = """
 OnResetWindowPos は送らない（送るのは右クリックのメニューの「シェル位置初期化」を選んだときだけ・SSP 2.9.18 の 2026-10-17 の実測と同じ）。
 壊れ方: 無い。並べ直す材料（窓の組・配置の設定・主モニタ）が無いときは何もしない。
 ログ: 並べ直したら info! の reset_window_pos に対象の窓と位置を残す。材料が無いときや大きさの揃わない窓を外したときは warn! の reset_window_pos_skipped。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (execute, resetwindowpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、並べ直しは crates/areka-placement/src/reset_pos.rs の reset_window_positions。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (execute, resetwindowpos) を窓の位置の指令の受け口（MoveCueSink）へ登記し、並べ直しは crates/areka-placement/src/reset_pos.rs の reset_window_positions。
 [群: 窓の位置の初期化]
 [版: 本文は 2.7 RC1 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![execute。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![executesntp の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -1652,9 +1652,9 @@ note = """
 現れたときは何もせず 1 行記録する。
 壊れ方: 無い（区間から出る）。
 ログ: 出る（区間の外でこの綴りを受けたときの debug! 1 行）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UserBreakSink
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::UserBreakSink
 （正準台帳が ("leave","nouserbreakmode") の 1 組で登記する）・
-crates/areka/src/emo2_boot/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
+crates/areka/src/runtime/user_break_cue.rs の NoUserBreakCueSink（受け口の自己選別）・
 crates/areka/src/input_events/user_break.rs の fold_no_user_break（区間の出入りの判断）。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 動作モードの出入り]
@@ -1748,7 +1748,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差。記録: info!。areka はこの指令を、指令を書いた所のスコープのバルーンの、利用者のドラッグでの移動の禁止と読んで使う。キャラクターの窓に付いて動くこと（追従）は止めない。受けるたびに `balloon_move_locked` の記録を残す。
-台本の並びのまま運ばれ、窓の位置の受け口（areka の emo2_boot::move_cue の MoveCueSink）が実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。check_script の担当の表（areka の emo2_boot::consumer_ledger）にも載る。
+台本の並びのまま運ばれ、窓の位置の受け口（areka の runtime::move_cue の MoveCueSink）が実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。check_script の担当の表（areka の runtime::consumer_ledger）にも載る。
 descript の段（シェルの `*.balloon.dontmove`・ゴーストの `balloon.dontmove`）の禁止とは別に持ち、この指令の禁止は `unlock,balloonmove` を受けるまで続き（unlock でも descript の段は解けない）、トークの終わり・シェルの切り替えでは解けず、ゴーストの終了・切り替え・読み直しで解ける。利用者がドラッグしている途中に受けたときは、そのドラッグは最後まで続け、次のドラッグから止める（正典が黙る点の扱いは doc/COMPAT_ARCHITECTURE.md の §8）。
 SSP 2.9 で 2026-10-23 に測ると、本体（スコープ 0）で書いた lock は本体のバルーンだけを止め、相方のバルーンは動いた。続けて本体で unlock・相方で lock を書くと、本体が動き相方が止まった（.kiro/specs/completed/descript-window-keys/research.md の 10.3 節）。前の注記の「追随を止める」読みは誤りだった。
 担当 spec は descript-window-keys。
@@ -1973,7 +1973,7 @@ note = """
 warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","browser") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2173,7 +2173,7 @@ ghost/master から探す）。表示行は常に無視する（ukadoc の「エ
 〔open_external_failed の reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行
 〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","editor") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2217,7 +2217,7 @@ headline・plugin・知らない種類で warn! 1 行〔open_external_rejected�
 根が無い・OS が断ったときに error! 1 行〔open_external_failed の reason=not_found／no_match／no_baseware_root／os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+の execute と named_folder（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","explorer") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2244,7 +2244,7 @@ warn! 1 行〔open_external_rejected〕、ファイルが無い・OS が断っ�
 reason=not_found／os〕、ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
 の execute（開く処理の 1 か所）、関連付けの確認は crates/areka/src/readme/os_port.rs。受け口は
-crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+crates/areka/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","file") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2346,7 +2346,7 @@ note = """
 warn! 1 行〔open_external_rejected〕、OS が断ったときに error! 1 行〔open_external_failed の reason=os〕、
 ゴーストが居ないなどで送れないときに error! 1 行〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify（行き先の規則）と crates/areka/src/readme/opener.rs
-の execute（開く処理の 1 か所）。受け口は crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳
+の execute（開く処理の 1 か所）。受け口は crates/areka/src/readme/readme_cue.rs で、正準台帳
 （consumer_ledger.rs）が ("open","mailer") の 1 組を CommandConsumer::ReadmeSink で登記する。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: 外部のアプリに渡す]
@@ -2474,8 +2474,8 @@ readme が指すファイルを既定の関連付けで開く。
 壊れ方: 引数なしの形は無い。引数付きの形は開かないが、記録は残る。
 ログ: 出る（引数付きを受けたときの警告 1 行、送り先が閉じているときの警告 1 行、開けなかったときの
 エラー 1 行）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::ReadmeSink
-（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka/src/emo2_boot/readme_cue.rs。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::ReadmeSink
+（正準台帳が ("open","readme") の 1 組で登記する）と crates/areka/src/readme/readme_cue.rs。
 [運搬: 名前はキャリアに載って受け口まで運ばれ、正準台帳が名前＋第 1 引数で担当を決める]
 [群: SSP の管理窓とビューア]
 [頻度: 里々 18 / YAYA 6（wiki の作例の文書数＝弱い代理。数えた綴りは \\![open。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -2703,9 +2703,9 @@ values = []
 links = []
 note = """
 実装済み。今のバルーンと同じフォルダのバルーンをディスクから読み直し、選び直さずに台詞の切れ目で差し替える。OnBalloonChange と記憶の書き込みはしない。
-壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/runtime/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
 ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, balloon) を読み直しの受け口（ReloadCueSink）へ登記する。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (reload, balloon) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: バルーンの見た目と切り替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2719,9 +2719,9 @@ values = []
 links = []
 note = """
 実装済み。パラメータを半角スペースで区切った語のうち ghost・shell・balloon に当たるものの descript.txt を読み直し（パラメータが無ければ 3 つとも）、動作中に使う値を差し替える。SHIORI は読み直さず、SHIORI イベントも送らない。第 3 引数より後ろは見ない（SSP の実測と同じ）。areka に無い種類（headline・plugin・language・calendar.skin・calendar.plugin）と知らない語は、その語ごとに warn! を残して飛ばす。
-壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/runtime/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
 ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, descript) を読み直しの受け口（ReloadCueSink）へ登記する。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (reload, descript) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2751,9 +2751,9 @@ values = []
 links = []
 note = """
 実装済み。今のゴーストを同じフォルダのゴーストとして降ろして起こし直し、辞書・descript.txt・シェル・バルーンをディスクから読み直す。起動の知らせ（台詞を求める GET）は送らず、情報の通知はふつうの起動と同じく送る。
-壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/runtime/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
 ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, ghost) を読み直しの受け口（ReloadCueSink）へ登記する。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (reload, ghost) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2782,9 +2782,9 @@ values = []
 links = []
 note = """
 実装済み。今のシェルと同じフォルダのシェルをディスクから読み直し、台詞の切れ目で差し替える。OnShellChanged と記憶の書き込みはしない。
-壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/runtime/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
 ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, shell) を読み直しの受け口（ReloadCueSink）へ登記する。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (reload, shell) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2798,9 +2798,9 @@ values = []
 links = []
 note = """
 実装済み。窓を閉じず、今の SHIORI へ NOTIFY OnDestroy（Reference0＝reload）を送ってから unload し、同じゴーストの SHIORI を load し直す。台詞を求める GET は送らない。
-壊れ方: 無い。ReloadCueSink（crates/areka/src/emo2_boot/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
+壊れ方: 無い。ReloadCueSink（crates/areka/src/runtime/reload_cue.rs）が名前と第 1 引数の組で自分を選び（綴りの振り分けは reload_args.rs の parse_script）、読み直しの要求を UI 側へ運ぶ。MCP の reload と同じ 1 つの入口で読み直し、ゴーストの切替・シェルとバルーンの切替・読み直し・更新・インストールの最中なら warn! を残して断る。
 ログ: 出る（読み直しの終わりに対象・ゴースト・成否を 1 件残す。失敗は error 種別で get_log から読める。断ったときと送出の失敗は warn!。第 1 引数が担当外の reload は debug!）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reload, shiori) を読み直しの受け口（ReloadCueSink）へ登記する。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (reload, shiori) を読み直しの受け口（ReloadCueSink）へ登記する。
 [群: 読み込み直しと差し替え]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reload。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![reloadsurface の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2847,7 +2847,7 @@ note = """
 実装済み。台本で作ったすべての組を解き、組を descript の `seriko.sticky-window` で作った組だけに戻す。
 壊れ方: 無い。
 ログ: info! の sticky_groups（action が reset）に残った組を残す。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (reset, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka-placement/src/sticky_group_ledger.rs。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (reset, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka-placement/src/sticky_group_ledger.rs。
 [群: 窓の位置と見え方]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![reset。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -2951,7 +2951,7 @@ note = """
 実装済み。`\\![set,alignmenttodesktop,方向]` と同じに扱う（同じ受け口・同じ語の読み・同じ寿命）。`bottom` と `top` のほか、`left`・`right`・`free`・`default` も同じに受ける。
 壊れ方: 無い。
 ログ: `\\![set,alignmenttodesktop,方向]` の項と同じ。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -2970,7 +2970,7 @@ note = """
 読めない語は `free` と同じに吸着を外して窓を今の位置に留める（SSP 2.9.18 の測りに合わせる）。値が欠けているとき（空や空白だけの値を含む）は何も変えない。どちらもトークは止めない。
 壊れ方: 無い。
 ログ: 向きを変えたら info! の alignment_changed。読めない語は warn! の alignment_unknown_word、値が欠けたときや窓が無いときは warn! の alignment_skipped に理由を残す。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -2987,7 +2987,7 @@ note = """
 実装済み。現スコープのキャラクターの窓の吸着を外し、窓を今の位置に留める（以後のドラッグは上下左右に自由）。`\\![set,alignmenttodesktop,方向]` の項と同じ受け口・同じ語の読み・同じ寿命（ゴーストが終わるまで保つ）。
 壊れ方: 無い。
 ログ: info! の alignment_changed（to が free）。窓が無いときは warn! の alignment_skipped。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (set, alignmenttodesktop) と (set, alignmentondesktop) を窓の位置の指令の受け口（MoveCueSink）へ登記し、語の読みは crates/areka-placement/src/script_alignment.rs の parse_alignment_word、窓へ当てるのは同じファイルの apply_script_alignment。
 [群: 窓の位置と見え方]
 [根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -3108,11 +3108,11 @@ priority = "A1"
 values = ["気配り"]
 links = []
 note = """
-壊れ方: 該当なし。compile は今までどおり汎用の \\! コマンドとして汎用のキャリアへ転記するだけで、再生時にバルーンの寿命の受け口 BalloonLifecycleSink（crates/areka/src/emo2_boot/talk_lifecycle.rs）が set の第 1 引数 balloontimeout の出現だけを拾い、parse_balloon_timeout で時間の欄を読んで表示の側へ渡す。正の整数はそのミリ秒（1,000 で 1 回割って秒へ写し、丸めない）、0 と負の数はすべて時間切れなし（そのトークでは時間切れで隠さず OnBalloonTimeout も送らない）、省略・空は既定、整数として読めない値（文字・小数・桁あふれ）は既定として扱う。効くのはそのトークの中だけで、次のトークが始まると既定へ戻る。1 本のトークに複数あれば最後に届いた値を使い、抑止が解けた後の計り直しもこの値で計る。中断でタグに達する前に止まったトークでは効かない。既定の待ち時間（30 秒・環境変数での上書きを含む）の決め方は変えず、その上に重ねる。
+壊れ方: 該当なし。compile は今までどおり汎用の \\! コマンドとして汎用のキャリアへ転記するだけで、再生時にバルーンの寿命の受け口 BalloonLifecycleSink（crates/areka/src/runtime/talk_lifecycle.rs）が set の第 1 引数 balloontimeout の出現だけを拾い、parse_balloon_timeout で時間の欄を読んで表示の側へ渡す。正の整数はそのミリ秒（1,000 で 1 回割って秒へ写し、丸めない）、0 と負の数はすべて時間切れなし（そのトークでは時間切れで隠さず OnBalloonTimeout も送らない）、省略・空は既定、整数として読めない値（文字・小数・桁あふれ）は既定として扱う。効くのはそのトークの中だけで、次のトークが始まると既定へ戻る。1 本のトークに複数あれば最後に届いた値を使い、抑止が解けた後の計り直しもこの値で計る。中断でタグに達する前に止まったトークでは効かない。既定の待ち時間（30 秒・環境変数での上書きを含む）の決め方は変えず、その上に重ねる。
 ログ: 出る（読めた値は info!、整数として読めない値は warn! の記録 balloon_timeout_set を読めなかった値付きで 1 件残す。他の受け口は今までどおり担当外の名前として debug! を残す。compile の catch-all は通らない）。
 語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行がこの綴りを逐語で名指ししており、compile はこの綴りを読まない（先読みは足さない）と書いてある。
 転記元: doc/COMPAT_ARCHITECTURE.md の「\\![set,balloontimeout,時間]（バルーン表示のタイムアウト時間指定）のバルーン寿命側の実導出」の行（読み方と、正典の「0 または負数」と「0 か -1」の割れの解き方）。
-根拠の場所: \\![ の受け取り手の宣言表 crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::LifecycleSink（正典 URL の注記）と、登録の行 ("set", Some("balloontimeout"))。
+根拠の場所: \\![ の受け取り手の宣言表 crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::LifecycleSink（正典 URL の注記）と、登録の行 ("set", Some("balloontimeout"))。
 [分担: compile 側もバルーン寿命側も owner の areka-P0-balloon-lifecycle-events が丸ごと持つ（同 spec の要件の討議 点 C・開発者裁定 2026-10-05）。sakura-time-directives の brief に相互登記がある。調査時点の分担は compile 側を sakura-time-directives、バルーン寿命側を balloon-canon-residue としていた]
 [テーマ: 吹き出しが閉じるまでの長さを決められず、読み終える前に消えたり読んだ後も残り続けたりする]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
@@ -3309,7 +3309,7 @@ note = """
 ID のどれかが既にほかの組（descript の組を含む）に入っている・異なる ID が 2 つ未満・同じ ID の重ね書き・数として読めない ID のときは、その指令では組を作らず、ほかの組は変えない。今は窓が無い ID は受けて、連れ動かす相手から外す。どれもトークは止めない。
 壊れ方: 無い。
 ログ: 組を作ったら info! の sticky_groups、捨てたら warn! の sticky_group_rejected に引数と理由、窓が無い ID は warn! の sticky_member_absent。連れ動いたら info! の sticky_follow（ドラッグの途中の 1 回ごとには残さない）、`ignore-sticky-window` で動かさなかったら info! の sticky_follow_ignored。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の正準台帳が (set, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka-placement/src/sticky_group_ledger.rs（parse_sticky_tokens と StickyGroupLedger）、連れ動きは crates/areka-placement/src/follow/sticky_follow.rs。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の正準台帳が (set, sticky-window) を窓の位置の指令の受け口（MoveCueSink）へ登記し、組の帳簿は crates/areka-placement/src/sticky_group_ledger.rs（parse_sticky_tokens と StickyGroupLedger）、連れ動きは crates/areka-placement/src/follow/sticky_follow.rs。
 [群: 窓の位置と見え方]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
 """
@@ -3723,7 +3723,7 @@ values = []
 links = []
 note = """
 壊れ方: 見た目の差。記録: info!。areka はこの指令を、指令を書いた所のスコープのバルーンについて、台本の `lock,balloonmove` が禁止した利用者のドラッグでの移動を解く指令と読んで使う。受けるたびに `balloon_move_unlocked` の記録を残す。
-台本の並びのまま運ばれ、窓の位置の受け口（areka の emo2_boot::move_cue の MoveCueSink）が実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。check_script の担当の表（areka の emo2_boot::consumer_ledger）にも載る。
+台本の並びのまま運ばれ、窓の位置の受け口（areka の runtime::move_cue の MoveCueSink）が実行者のスコープへ当てる。余分な引数は読まない（SSP 2.9 も誤りにしない）。check_script の担当の表（areka の runtime::consumer_ledger）にも載る。
 descript の段（シェルの `*.balloon.dontmove`・ゴーストの `balloon.dontmove`）の禁止は解けない。解けずに動かせないままのときは、続けて `balloon_move_unlock_held` の記録を 1 件残す。利用者がドラッグしている途中に受けたときは、次のドラッグから動かせる（正典が黙る点の扱いは doc/COMPAT_ARCHITECTURE.md の §8）。
 SSP 2.9 で 2026-10-23 に測ると、本体（スコープ 0）で書いた lock は本体のバルーンだけを止め、相方のバルーンは動いた。続けて本体で unlock・相方で lock を書くと、本体が動き相方が止まった（.kiro/specs/completed/descript-window-keys/research.md の 10.3 節）。前の注記の「追随を止める」読みは誤りだった。
 担当 spec は descript-window-keys。
@@ -3776,9 +3776,9 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateResult:1" },
 ]
 note = """
-壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 update で自分を選び、第 1 引数を + で分けて ghost・shell・balloon を並んだ順に（all なら \\![updatebymyself] と同じ 3 つ）今の物を対象に、理由 script で更新の手続きへ渡す。ゴースト以外は OnUpdateOther* の名で送り、最後に OnUpdateResult を送る。知らない対象の語（platform を含む）と第 2 引数以降（更新オプション）は要求ごと断る。
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/update/update_cue.rs）が名前 update で自分を選び、第 1 引数を + で分けて ghost・shell・balloon を並んだ順に（all なら \\![updatebymyself] と同じ 3 つ）今の物を対象に、理由 script で更新の手続きへ渡す。ゴースト以外は OnUpdateOther* の名で送り、最後に OnUpdateResult を送る。知らない対象の語（platform を含む）と第 2 引数以降（更新オプション）は要求ごと断る。
 ログ: 出る（開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/update/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
 [群: インストールと更新]
 [テーマ: 名指しした対象を新しくできず、直った台詞も増えた絵も手元に届かない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![update。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![updatebymyself・\\![updateother の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -3814,9 +3814,9 @@ priority = "B1"
 values = ["更新"]
 links = []
 note = """
-壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 updatebymyself で自分を選び、引数が無ければ今のゴースト・シェル・バルーンの 3 つ（右クリックのメニューの「ネットワーク更新」と同じ）を対象に、理由 script で更新の手続きへ渡す。手続きは OnUpdateProcessExec を送らずに標準の更新へ進み、対象ごとに OnUpdateBegin から締めまでを正典のイベントで送り（ゴーストの成功の締め OnUpdateComplete は取っておく）、最後に OnUpdateComplete → OnUpdateResult の列を送る。更新先の無い対象は飛ばす。何か入れ替わったときだけ、全対象の後・今の台詞の後に同じゴーストを読み直し、その列を読み直した後の新しいゴーストへ送る（列の先頭が起動の知らせ・2026-09-30 開発者確定）。引数（更新オプション）があれば要求ごと断る（checkonly・testonly・recovery は α 後）。
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/update/update_cue.rs）が名前 updatebymyself で自分を選び、引数が無ければ今のゴースト・シェル・バルーンの 3 つ（右クリックのメニューの「ネットワーク更新」と同じ）を対象に、理由 script で更新の手続きへ渡す。手続きは OnUpdateProcessExec を送らずに標準の更新へ進み、対象ごとに OnUpdateBegin から締めまでを正典のイベントで送り（ゴーストの成功の締め OnUpdateComplete は取っておく）、最後に OnUpdateComplete → OnUpdateResult の列を送る。更新先の無い対象は飛ばす。何か入れ替わったときだけ、全対象の後・今の台詞の後に同じゴーストを読み直し、その列を読み直した後の新しいゴーストへ送る（列の先頭が起動の知らせ・2026-09-30 開発者確定）。引数（更新オプション）があれば要求ごと断る（checkonly・testonly・recovery は α 後）。
 ログ: 出る（開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/update/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
 [群: インストールと更新]
 [テーマ: ゴースト自身から更新を始められず、作者が直しても手元は古いままになる]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![updatebymyself。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
@@ -3833,9 +3833,9 @@ links = [
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateResultEx:1" },
 ]
 note = """
-壊れ方: 該当なし。UpdateCueSink（crates/areka/src/emo2_boot/update_cue.rs）が名前 updateother で自分を選び、--shell=名前・--balloon=名前 を並んだ順に目録の name と完全一致（大文字小文字を区別・隠しシェルは引かない）で引いて、起動中でない物も対象に、理由 script で更新の手続きへ渡す。OnUpdateOther* の名で送り、最後に OnUpdateResultEx を送る。--plugin=・--headline=・--language= ほか知らない --名前= は読み飛ばし、更新オプションがあれば要求ごと断る。引けない名前はその対象を飛ばす。今表示中でないシェル・バルーンを更新しても読み直さない（中身は次に選んだときに効く）。
+壊れ方: 該当なし。UpdateCueSink（crates/areka/src/update/update_cue.rs）が名前 updateother で自分を選び、--shell=名前・--balloon=名前 を並んだ順に目録の name と完全一致（大文字小文字を区別・隠しシェルは引かない）で引いて、起動中でない物も対象に、理由 script で更新の手続きへ渡す。OnUpdateOther* の名で送り、最後に OnUpdateResultEx を送る。--plugin=・--headline=・--language= ほか知らない --名前= は読み飛ばし、更新オプションがあれば要求ごと断る。引けない名前はその対象を飛ばす。今表示中でないシェル・バルーンを更新しても読み直さない（中身は次に選んだときに効く）。
 ログ: 出る（読み飛ばした指定ごとに warn!（update_cue_selector_ignored）、引けない名前は warn!（update_target_skipped・reason＝name_not_found）。開けない荷物は warn!（update_cue_unopenable）、断り（更新オプション・知らない対象・--shell=／--balloon= 以外の指定しか無い）は warn!（update_cue_refused）で要求を作らない。受けた要求は窓口が info!（update_order_started）か断りの warn!（update_refused）を 1 件残す。走っている間の要求は OnUpdateFailure（executing）で断る。）。
-根拠の場所: crates/areka/src/emo2_boot/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/emo2_boot/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
+根拠の場所: crates/areka/src/runtime/consumer_ledger.rs の CommandConsumer::UpdateSink（担当の台帳の行）の上の正典 URL の行。受け口は crates/areka/src/update/update_cue.rs の UpdateCueSink、引数の解析は同じファイルの parse_update_command。
 [条件: --shell=・--balloon= だけ。other_homeurl_override の照会は α 後で、各対象の descript.txt の homeurl をそのまま使う]
 [群: インストールと更新]
 [テーマ: 同居している別のゴーストの更新を促せず、片方だけが古いまま残る]
@@ -3912,7 +3912,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1" },
 ]
 note = """
-壊れ方: 該当なし。decode_bare の \"+\" の腕が \\![change,ghost,random] と同じ受け皿（汎用のキャリアの change・ghost・random）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/emo2_boot/ghost_switch.rs の resolve_special_name）が random を目録のフォルダ名へ解く——今のゴーストを除いた候補から一様に 1 体を選び、目録が今のゴーストだけなら今のゴーストを起こし直す。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
+壊れ方: 該当なし。decode_bare の \"+\" の腕が \\![change,ghost,random] と同じ受け皿（汎用のキャリアの change・ghost・random）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/session/ghost_switch.rs の resolve_special_name）が random を目録のフォルダ名へ解く——今のゴーストを除いた候補から一様に 1 体を選び、目録が今のゴーストだけなら今のゴーストを起こし直す。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
 ログ: 出る（解けたときは何を何へ解いたかを info! の記録 ghost_switch_resolved に 1 件残す。目録が空で解けないときは warn のログ ghost_switch_unknown を reason=random_empty で 1 件残し、切り替えない）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
@@ -3964,7 +3964,7 @@ links = [
   { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1" },
 ]
 note = """
-壊れ方: 該当なし。decode_bare の \"_+\" の腕が \\![change,ghost,sequential] と同じ受け皿（汎用のキャリアの change・ghost・sequential）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/emo2_boot/ghost_switch.rs の resolve_special_name）が sequential を目録のフォルダ名へ解く——目録の並び（フォルダ名の昇順）で今のゴーストの次の 1 体（末尾なら先頭・今のゴーストが目録に無ければ先頭・目録に今のゴーストだけなら今のゴーストを起こし直す）。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
+壊れ方: 該当なし。decode_bare の \"_+\" の腕が \\![change,ghost,sequential] と同じ受け皿（汎用のキャリアの change・ghost・sequential）へ転記し、直後の本文はそのまま残る。切替の入口（crates/areka/src/session/ghost_switch.rs の resolve_special_name）が sequential を目録のフォルダ名へ解く——目録の並び（フォルダ名の昇順）で今のゴーストの次の 1 体（末尾なら先頭・今のゴーストが目録に無ければ先頭・目録に今のゴーストだけなら今のゴーストを起こし直す）。解けた後は \\![change,ghost,…] と同じく今のゴーストを降ろして切替先を起こす。
 ログ: 出る（解けたときは何を何へ解いたかと今の位置を info! の記録 ghost_switch_resolved に 1 件残す。目録が空で解けないときは warn のログ ghost_switch_unknown を reason=sequential_empty で 1 件残し、切り替えない）。
 [群: ゴーストの切り替え]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
@@ -5289,7 +5289,7 @@ ID・残りが空の file:/// で warn! 1 行〔open_external_rejected〕、フ�
 〔open_external_dropped〕）。
 根拠の場所: crates/areka/src/readme/destination.rs の classify_jump（行き先の規則）と crates/areka/src/readme/opener.rs
 の execute（開く処理の 1 か所）。タグは汎用の運び手（JUMP_TAG_CARRIER）に載り、受け口は
-crates/areka/src/emo2_boot/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
+crates/areka/src/readme/readme_cue.rs で、正準台帳（consumer_ledger.rs）が運び手の名前の 1 組を
 CommandConsumer::ReadmeSink で登記する。
 [群: 外部を開く・別窓]
 [頻度: 里々 3 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\j。綴りが短く別の語の一部にも当たるぶん過大に出る）]
@@ -5306,7 +5306,7 @@ note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。指定した窓へメッセージが送られない。
 ログ: 出る（compile の catch-all の debug! 記録）。
 出どころの制限（areka-P0-script-security-level）: ukadoc はこのタグを SSTP 専用（SSTP 以外の出どころの
-台本では実行しない）と定める。crates/areka/src/emo2_boot/script_restriction.rs の判定の表 RESTRICTIONS
+台本では実行しない）と定める。crates/areka/src/runtime/script_restriction.rs の判定の表 RESTRICTIONS
 に SSTP 専用として載せたが、タグ自体が未実装なので扱いは変えない（表の enforced は偽・上の壊れ方の
 まま）。実装する spec が表の行を有効にする。
 [群: 外部を開く・別窓]
