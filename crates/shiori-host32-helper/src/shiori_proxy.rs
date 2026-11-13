@@ -63,7 +63,9 @@ use windows::Win32::System::LibraryLoader::{
     GetProcAddress, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
     LoadLibraryExW,
 };
-use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
+use windows::Win32::System::Memory::{
+    GLOBAL_ALLOC_FLAGS, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+};
 use windows::core::{HSTRING, PCSTR, s};
 
 /// `GlobalAlloc` の `GMEM_FIXED`（=0）。pasta と同値で確保する（research §9.3）。
@@ -139,6 +141,9 @@ pub enum ProxyError {
     /// `request` が null／無効 HGLOBAL を返した（応答確保失敗等・クラッシュせず失敗を返した）。
     /// silent failure を避けるため他 variant と区別可能な形で返す（R3.2〜3.4 request 失敗面）。
     RequestFailed,
+    /// `request` が書いた応答の長さ `declared` が、応答 HGLOBAL の確保の大きさ `allocated`
+    /// （`GlobalSize`・0 は確かめられない）を超えた（指摘 7）。確保の外は読まずに解放して返す。
+    ResponseLengthMismatch { declared: usize, allocated: usize },
     /// 後始末の `unload` が 0 を返した（[`ShioriByteProxy::close`]・要件 10.11）。
     UnloadReturnedFalse,
     /// 後始末の `FreeLibrary` が失敗した（[`ShioriByteProxy::close`]）。
@@ -311,8 +316,9 @@ impl ShioriByteProxy {
     /// 3. `request(hreq, &mut len)` を呼出。**入力 HGLOBAL は callee(DLL) が `GlobalFree` する**規約ゆえ
     ///    ホストは `hreq` に以後触れず・自ら解放もしない（二重解放禁止・R3.3）。所有権は callee へ move。
     /// 4. 応答 HGLOBAL が null／無効なら [`ProxyError::RequestFailed`]（silent failure を避け区別可能に返す）。
-    /// 5. 応答 HGLOBAL から `*len` バイトを自前 `Vec<u8>` へコピー → `GlobalFree(hres)`（caller-free・R3.4）
-    ///    → bytes を返す。
+    /// 5. 応答 HGLOBAL を `GlobalLock` し、`GlobalSize` が 0 か `*len` より小さければ
+    ///    [`ProxyError::ResponseLengthMismatch`]（指摘 7）。そうでなければ `*len` バイトを自前 `Vec<u8>` へ
+    ///    コピー。どちらでも `GlobalUnlock` → `GlobalFree(hres)`（caller-free・R3.4）。
     ///
     /// `len` は in/out で 32bit `usize` として自然に閉じる（R7.6・i686 で ABI 一致）。`unload` は呼ばない
     /// （Drop courtesy のみ・R3.7）。unsafe FFI は本モジュールへ一点集約する。
@@ -338,19 +344,35 @@ impl ShioriByteProxy {
             return Err(ProxyError::RequestFailed);
         }
 
-        // 手順 5: 応答 HGLOBAL から len バイトをコピー → GlobalFree（caller-free・R3.4）。
+        // 手順 5: 応答 HGLOBAL を `GlobalLock` で先頭の場所にし（動くメモリでも正しく読む）、確保の
+        // 大きさを確かめてから len バイトをコピー → GlobalUnlock → GlobalFree（caller-free・R3.4・指摘 7）。
         // 応答を確保する側の写し: testdll・loadu の `lib.rs` の `request`。
-        // SAFETY: `hres` は DLL が `GlobalAlloc(GMEM_FIXED)` で確保した `len` バイトの有効領域
-        // （GMEM_FIXED ゆえ `hres.0` が先頭ポインタ）。上で is_invalid() を確認済み。ローカル Vec への
-        // コピーは非重複（別確保）。
-        let bytes = unsafe { std::slice::from_raw_parts(hres.0 as *const u8, len).to_vec() };
-        // 応答 HGLOBAL は caller(host) が解放する規約（R3.4）。best-effort で解放する。
-        // SAFETY: `hres` は callee(DLL) が alloc し所有権は caller へ移転済みの有効ハンドル。コピー後ゆえ
-        // 以後参照しない。GlobalFree の Result は best-effort で無視（解放漏れ・二重解放を起こさない）。
+        // SAFETY: `hres` は DLL が `GlobalAlloc` で確保し所有権が caller へ移った有効ハンドル
+        // （上で is_invalid() を確認済み）。失敗は null／0 で返る。
+        let (ptr, allocated) = unsafe { (GlobalLock(hres) as *const u8, GlobalSize(hres)) };
+        let result = if ptr.is_null() || allocated == 0 || allocated < len {
+            crate::helper_log(&format!(
+                "[helper] SHIORI の応答の長さが確保を超える（読まずに解放）: declared={len} allocated={allocated}"
+            ));
+            Err(ProxyError::ResponseLengthMismatch {
+                declared: len,
+                allocated,
+            })
+        } else {
+            // SAFETY: `ptr` は `allocated` バイトの確保の先頭で、`len <= allocated` を確かめた。
+            // ローカル Vec へのコピーは非重複（別確保）。
+            Ok(unsafe { std::slice::from_raw_parts(ptr, len).to_vec() })
+        };
+        // SAFETY: `hres` は上の有効ハンドル。コピー後ゆえ以後参照しない。GlobalUnlock の Err は
+        // ロックの数が 0 になった通知も含むので見ない。GlobalFree の Result は best-effort で無視
+        // （解放漏れ・二重解放を起こさない）。
         unsafe {
+            if !ptr.is_null() {
+                let _ = GlobalUnlock(hres);
+            }
             let _ = GlobalFree(Some(hres));
         }
-        Ok(bytes)
+        result
     }
 }
 

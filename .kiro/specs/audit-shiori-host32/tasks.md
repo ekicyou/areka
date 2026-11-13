@@ -149,7 +149,7 @@
   - _Boundary: helper main, shiori_proxy_
   - _Depends: 2, 3_
   - _Requirements: 3.1, 4.1, 5.2, 5.3, 10.11_
-- [ ] 10.2 helper の応答の長さを確かめ、空の応答を縛る（指摘 7・20）
+- [x] 10.2 helper の応答の長さを確かめ、空の応答を縛る（指摘 7・20）
   - 応答の HGLOBAL を `GlobalLock` で読み、確保の大きさが 0 か宣言の長さより小さければ行を書いて解放し、長さの合わない種類のエラーを返す（折り返しの腕は 500）
   - テスト `a_response_longer_than_its_allocation_is_refused`・`a_null_response_is_request_failed`・`a_null_response_answers_500` を i686 の段に置く
   - 完了の姿: 3 本が緑で、長さの確かめを外すと 1 本目が赤になる

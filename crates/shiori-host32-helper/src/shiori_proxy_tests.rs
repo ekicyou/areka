@@ -321,3 +321,50 @@ fn close_reports_unload_returning_false() {
         other => panic!("unload の偽は UnloadReturnedFalse のはず: {other:?}"),
     }
 }
+
+// ---------------------------------------------------------------------
+// 6. 応答の長さと空の応答（指摘 7・20）
+// ---------------------------------------------------------------------
+
+/// 指摘 7: `OnTestLenOverflow` は確保より大きい `*len` を書く。`request` は確保の外を読まずに
+/// `ResponseLengthMismatch` を返し、`[helper]` の行に残す。印の環境変数は差さないので錠は取らない。
+#[test]
+#[cfg(target_arch = "x86")]
+fn a_response_longer_than_its_allocation_is_refused() {
+    let (root, dll) = copy_testdll_into_unique_target_dir("len-overflow");
+    let proxy = ShioriByteProxy::load(&dll, root.path()).expect("testdll load must succeed");
+    crate::take_helper_log();
+    match proxy.request(b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nID: OnTestLenOverflow\r\n\r\n") {
+        Err(ProxyError::ResponseLengthMismatch {
+            declared,
+            allocated,
+        }) => assert!(
+            declared > allocated,
+            "declared={declared} allocated={allocated}"
+        ),
+        other => panic!(
+            "確保を超える長さは ResponseLengthMismatch のはず（Ok は長さだけ）: {:?}",
+            other.map(|b| b.len())
+        ),
+    }
+    assert!(
+        crate::take_helper_log()
+            .iter()
+            .any(|l| l.starts_with("[helper]") && l.contains("declared=")),
+        "長さの合わない応答の [helper] の行が無い"
+    );
+    drop(proxy);
+}
+
+/// 指摘 20: `OnTestNull` は null の HGLOBAL を返す。`request` は `RequestFailed` を返す。
+#[test]
+#[cfg(target_arch = "x86")]
+fn a_null_response_is_request_failed() {
+    let (root, dll) = copy_testdll_into_unique_target_dir("null-resp");
+    let proxy = ShioriByteProxy::load(&dll, root.path()).expect("testdll load must succeed");
+    match proxy.request(b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nID: OnTestNull\r\n\r\n") {
+        Err(ProxyError::RequestFailed) => {}
+        other => panic!("null の応答は RequestFailed のはず: {other:?}"),
+    }
+    drop(proxy);
+}

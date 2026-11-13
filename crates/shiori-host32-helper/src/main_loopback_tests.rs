@@ -541,3 +541,39 @@ fn an_empty_copydata_is_counted_as_bad() {
     assert_eq!(s.bad_frames.get(), 1, "空の lparam は不正なメッセージ");
     assert_logged(&take_helper_log(), "lparam");
 }
+
+/// 指摘 20: `OnTestNull` で DLL が null の応答を返しても、折り返しの REQUEST の腕は 500 を返す。
+/// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
+#[test]
+#[cfg(target_arch = "x86")]
+fn a_null_response_answers_500() {
+    let (parent, (_, _, last_response)) = stand_in_parent();
+    let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
+    let (root, _) = copy_testdll_into_unique_target_dir("null-500");
+    let helper = HelperMessageWindow::create(
+        parent_hwnd_u32,
+        root.path().to_path_buf(),
+        "shiori.dll".to_string(),
+    )
+    .expect("HelperMessageWindow 生成に失敗");
+    let send = |tag: MsgTag, payload: &[u8]| {
+        send_copydata(helper.hwnd(), parent.hwnd(), tag, payload, REPLY_TIMEOUT)
+            .unwrap_or_else(|e| panic!("{tag:?} の送出に失敗: {e:?}"));
+    };
+
+    send(MsgTag::Load, &[]);
+    assert_eq!(&*last_response.borrow(), &[LOAD_ACK_OK], "LOAD は成功する");
+    send(
+        MsgTag::Request,
+        b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nID: OnTestNull\r\n\r\n",
+    );
+    assert_eq!(
+        &*last_response.borrow(),
+        REQUEST_ERROR_RESPONSE,
+        "null の応答は 500"
+    );
+
+    drop(helper);
+    drop(parent);
+    drop(root);
+}
