@@ -100,6 +100,36 @@ fn test_and_sole_are_granted_at_once_in_one_call() {
     );
 }
 
+/// ひとり占めだけの番（要件 4.1）: `sole` だけを申し込んだ者は、止まる必要のある全員が止まった
+/// ときにひとり占めだけを受け、排他テストの机は誰も持たない。続けて参加した者の `test` は同じ
+/// 呼び出しで渡る（ひとり占めは待たれていない）。
+#[test]
+fn a_sole_only_request_gets_only_the_sole_desk() {
+    let mut state = state_with(&["a", "b"]);
+    run(&mut state, &request("a", DeskSet::Sole), Some("a"), T0 + 1);
+
+    let got = run(&mut state, &stopped("b"), Some("b"), T0 + 2);
+
+    assert!(
+        got.events.contains(&granted("a", DeskSet::Sole, &["b"])),
+        "{:?}",
+        got.events
+    );
+    assert_eq!(holders(&state), (None, Some("a")));
+    assert_fixed_point(&state, "sole only");
+
+    let got = run(&mut state, &request("d", DeskSet::Test), Some("d"), T0 + 3);
+
+    assert!(
+        got.events.contains(&granted("d", DeskSet::Test, &[])),
+        "{:?}",
+        got.events
+    );
+    assert_eq!(status(&state, "d"), ParticipantStatus::StopRequested);
+    assert_eq!(holders(&state), (Some("d"), Some("a")));
+    assert_fixed_point(&state, "joined test");
+}
+
 /// 固定点: 番の決め直しを 2 度続けて呼んだ 2 度目は、状態も出来事も変えない。
 #[test]
 fn replan_twice_changes_nothing_the_second_time() {
