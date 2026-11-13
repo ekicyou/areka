@@ -6,7 +6,7 @@
 use crate::charset::{Charset, CharsetPolicy};
 use crate::error::ShioriError;
 use crate::shiori3::{
-    ABSENT_REFERENCE, EncodedRequest, Method, ParsedResponse, ShioriRequest, parse_response_with,
+    EncodedRequest, Method, ParsedResponse, ShioriRequest, parse_response_with, push_references,
 };
 
 /// 相手の SHIORI の版（接続のあいだ変わらない）。
@@ -147,12 +147,7 @@ pub fn build_request(req: &ShioriRequest<'_>, is_resource: bool) -> Option<Encod
             req.references.first().map_or("", String::as_str),
         );
     } else {
-        for (n, reference) in req.references.iter().enumerate() {
-            // 欠番の印の位置は行を出さず、番号だけ進める（3.0 と同じ）。
-            if reference != ABSENT_REFERENCE {
-                line(&format!("Reference{n}"), reference);
-            }
-        }
+        push_references(&mut out, req.references);
     }
     out.push_str("\r\n");
     let (bytes, replaced) = req.charset.encode(&out);

@@ -288,7 +288,7 @@ fn default_sender_is_areka() {
 
 // --- 交渉状態の結線（タスク 3.3・要件 5.1/5.3）----------------------------
 //
-// 1 往復の前半（`encode_and_note`）と後半（`parse_and_note`）は `get`／`notify` が
+// 1 往復の前半（`encode_for`）と後半（`parse_for`）は `get`／`notify` が
 // 実際に呼ぶ本番関数そのものである。窓も 32bit 成果物も要さずに結線を検査できるのは、
 // 交渉に関わる判断がこの 2 つに閉じているため（要件 9.8）。
 
@@ -332,7 +332,7 @@ fn only_the_response_half_of_the_chain_adopts_a_charset() {
 
     // 応答待ちのイベントが通る後半: 解析と記録で EUC-JP を採用する。
     let mut answered = CharsetNegotiator::new(Charset::UTF_8, false);
-    let parsed = parse_and_note(&mut answered, &euc_jp_response()).expect("200 応答は解析できる");
+    let parsed = parse3(&mut answered, &euc_jp_response()).expect("200 応答は解析できる");
     assert_eq!(
         parsed.value.as_deref(),
         Some("あ"),
@@ -347,7 +347,7 @@ fn only_the_response_half_of_the_chain_adopts_a_charset() {
     // 片道イベントが通る前半だけでは、同じ応答が来ても現在の文字コードは動かない。
     let mut one_way = CharsetNegotiator::new(Charset::UTF_8, false);
     let charset = one_way.current();
-    let bytes = encode_and_note(
+    let bytes = encode3(
         &mut one_way,
         &a_request(Method::Notify, "OnSecondChange", charset),
     );
@@ -383,10 +383,10 @@ fn the_one_way_event_body_contains_no_adoption_path() {
         .expect("notify の閉じ括弧が見つからない")
         .0;
     assert!(
-        body.contains("encode_and_note("),
+        body.contains("encode_for("),
         "片道イベントは前半（符号化と置換の記録）を通るべき（要件 3.5/5.1）"
     );
-    for forbidden in ["parse_and_note", "note_response", "parse_response"] {
+    for forbidden in ["parse_for", "note_response", "parse_response"] {
         assert!(
             !body.contains(forbidden),
             "片道イベントの本体に採用の経路 `{forbidden}` がある（要件 5.3 の零が破れている）"
@@ -401,16 +401,16 @@ fn adoption_in_an_answered_event_reaches_the_next_one_way_request() {
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
 
     let charset = negotiator.current();
-    let first = encode_and_note(&mut negotiator, &a_request(Method::Get, "OnBoot", charset));
+    let first = encode3(&mut negotiator, &a_request(Method::Get, "OnBoot", charset));
     assert!(
         first.starts_with(b"GET SHIORI/3.0\r\nCharset: UTF-8\r\n"),
         "最初の要求は初期の文字コードで出る"
     );
 
-    parse_and_note(&mut negotiator, &euc_jp_response()).expect("200 応答は解析できる");
+    parse3(&mut negotiator, &euc_jp_response()).expect("200 応答は解析できる");
 
     let charset = negotiator.current();
-    let second = encode_and_note(
+    let second = encode3(
         &mut negotiator,
         &a_request(Method::Notify, "OnSecondChange", charset),
     );
@@ -435,7 +435,7 @@ fn a_non_200_response_still_adopts_its_charset_header() {
 
     // 204（スクリプト無しの成功）——emo2 の `username` 照会がこの形。
     let mut after_204 = CharsetNegotiator::new(Charset::UTF_8, false);
-    let parsed = parse_and_note(
+    let parsed = parse3(
         &mut after_204,
         &euc_jp_response_with_status("SHIORI/3.0 204 No Content"),
     )
@@ -452,7 +452,7 @@ fn a_non_200_response_still_adopts_its_charset_header() {
 
     // 400（SHIORI エラー応答）——結果の写しはエラーでも、採用は先に済んでいる。
     let mut after_400 = CharsetNegotiator::new(Charset::UTF_8, false);
-    let parsed = parse_and_note(
+    let parsed = parse3(
         &mut after_400,
         &euc_jp_response_with_status("SHIORI/3.0 400 Bad Request"),
     )
@@ -489,7 +489,7 @@ fn the_decode_replacement_fact_reaches_the_record() {
     bytes.extend_from_slice(b"\r\n\r\n");
 
     let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
-    let (parsed, events) = log_capture_kit::capture(|| parse_and_note(&mut negotiator, &bytes));
+    let (parsed, events) = log_capture_kit::capture(|| parse3(&mut negotiator, &bytes));
     let parsed = parsed.expect("不正な並びでも解析は成功する（要件 4.7）");
     assert!(
         parsed.decode_had_errors,
@@ -505,4 +505,91 @@ fn the_decode_replacement_fact_reaches_the_record() {
         1,
         "置換の事実が記録まで届いていない（要件 4.7・7.1）"
     );
+}
+
+// --- 版で分ける 2 か所（指摘 15・5）----------------------------------------
+
+/// 3.0 の前半（`encode_for` の 3.0 の腕）。3.0 は送らない要求を持たない。
+fn encode3(negotiator: &mut CharsetNegotiator, req: &ShioriRequest<'_>) -> Vec<u8> {
+    encode_for(ShioriVersion::Shiori3, negotiator, req, false).expect("3.0 は必ず送る")
+}
+
+/// 3.0 の後半（`parse_for` の 3.0 の腕）。3.0 の読みは要求を見ない。
+fn parse3(negotiator: &mut CharsetNegotiator, resp: &[u8]) -> Result<ParsedResponse, ShioriError> {
+    let charset = negotiator.current();
+    parse_for(
+        ShioriVersion::Shiori3,
+        negotiator,
+        &a_request(Method::Get, "OnBoot", charset),
+        resp,
+        false,
+    )
+}
+
+/// 版で符号化器を選ぶ: 同じ資源の問い合わせが 2.x では `GET String`・3.0 では `GET SHIORI/3.0`、
+/// 2.x へ送らない片道イベントは 2.x だけ `None`。腕を入れ替えると全部が逆になる。
+#[test]
+fn encode_for_picks_the_codec_by_version() {
+    let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+    let get = a_request(Method::Get, "username", Charset::UTF_8);
+    let two = encode_for(ShioriVersion::Shiori2, &mut negotiator, &get, true).expect("2.x は送る");
+    assert!(two.starts_with(b"GET String SHIORI/2.5\r\n"));
+    let three =
+        encode_for(ShioriVersion::Shiori3, &mut negotiator, &get, true).expect("3.0 は送る");
+    assert!(three.starts_with(b"GET SHIORI/3.0\r\n"));
+
+    let not_for_2x = a_request(Method::Notify, "basewareversion", Charset::UTF_8);
+    assert_eq!(
+        encode_for(ShioriVersion::Shiori2, &mut negotiator, &not_for_2x, false),
+        None
+    );
+    assert!(encode_for(ShioriVersion::Shiori3, &mut negotiator, &not_for_2x, false).is_some());
+}
+
+/// 版で読み手を選ぶ: 2.x の資源の答えは `String:` の値、3.0 の答えは `Value:` の値を読む。
+/// 腕を入れ替えると、どちらも値なしになる。
+#[test]
+fn parse_for_picks_the_reader_by_version() {
+    let req = a_request(Method::Get, "username", Charset::UTF_8);
+    let read = |version, resp: &[u8]| {
+        let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+        parse_for(version, &mut negotiator, &req, resp, true)
+            .expect("解析できる")
+            .value
+    };
+    let resp2 = b"SHIORI/2.6 200 OK\r\nString: x\r\n\r\n";
+    let resp3 = b"SHIORI/3.0 200 OK\r\nValue: y\r\n\r\n";
+    assert_eq!(read(ShioriVersion::Shiori2, resp2).as_deref(), Some("x"));
+    assert_eq!(read(ShioriVersion::Shiori3, resp2), None);
+    assert_eq!(read(ShioriVersion::Shiori3, resp3).as_deref(), Some("y"));
+    assert_eq!(read(ShioriVersion::Shiori2, resp3), None);
+}
+
+/// 読めない応答は `ERROR`（`shiori_response_unreadable`）を 1 行書いてから `Parse` で返す。
+/// 行には応答の長さと 1 行目（先頭 80 バイトまで）が載る。2 つの版のどちらでも同じ。
+#[test]
+fn an_unreadable_response_is_logged_as_error() {
+    let garbage = [b"x".repeat(100).as_slice(), b"\r\nmore\r\n\r\n"].concat();
+    for version in [ShioriVersion::Shiori3, ShioriVersion::Shiori2] {
+        let mut negotiator = CharsetNegotiator::new(Charset::UTF_8, false);
+        let req = a_request(Method::Get, "OnBoot", Charset::UTF_8);
+        let (result, events) =
+            log_capture_kit::capture(|| parse_for(version, &mut negotiator, &req, &garbage, false));
+        assert!(matches!(result, Err(ShioriError::Parse)), "{version:?}");
+        let lines: Vec<_> = events
+            .iter()
+            .filter(|e| e.field_str("event") == Some("shiori_response_unreadable"))
+            .collect();
+        assert_eq!(lines.len(), 1, "{version:?}");
+        assert_eq!(lines[0].level, tracing::Level::ERROR);
+        assert_eq!(lines[0].target, "shiori-host32");
+        assert_eq!(
+            lines[0].field("len"),
+            Some(garbage.len().to_string().as_str())
+        );
+        assert_eq!(
+            lines[0].field_str("first_line"),
+            Some("x".repeat(80).as_str())
+        );
+    }
 }

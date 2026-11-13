@@ -135,19 +135,7 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
     out.push_str("ID: ");
     out.push_str(req.id);
     out.push_str("\r\n");
-    for (n, reference) in req.references.iter().enumerate() {
-        // 欠番の印の位置は行を出さず、番号だけ進める（詰めない）。
-        if reference == ABSENT_REFERENCE {
-            continue;
-        }
-        // Reference0..N（0 起点連番・要件 1.4）。
-        // ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Reference_2a:1
-        out.push_str("Reference");
-        out.push_str(&n.to_string());
-        out.push_str(": ");
-        out.push_str(reference);
-        out.push_str("\r\n");
-    }
+    push_references(&mut out, req.references);
     // 空行終端（直前ヘッダの CRLF ＋ この空行 CRLF ＝ 末尾 "\r\n\r\n"・要件 1.3）。
     out.push_str("\r\n");
 
@@ -157,6 +145,23 @@ pub fn build_request(req: &ShioriRequest) -> EncodedRequest {
     EncodedRequest {
         bytes: bytes.into_owned(),
         replaced,
+    }
+}
+
+/// `Reference0..N` の行を `out` へ足す（0 起点連番・要件 1.4）。2.x の組み立ても使う。
+///
+/// 欠番の印（[`ABSENT_REFERENCE`]）の位置は行を出さず、番号だけ進める（詰めない）。
+// ukadoc: https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Reference_2a:1
+pub(crate) fn push_references(out: &mut String, references: &[String]) {
+    for (n, reference) in references.iter().enumerate() {
+        if reference == ABSENT_REFERENCE {
+            continue;
+        }
+        out.push_str("Reference");
+        out.push_str(&n.to_string());
+        out.push_str(": ");
+        out.push_str(reference);
+        out.push_str("\r\n");
     }
 }
 

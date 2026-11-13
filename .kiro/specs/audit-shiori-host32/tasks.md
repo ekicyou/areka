@@ -123,7 +123,7 @@
   - _Requirements: 3.1, 4.1, 4.2, 5.2, 5.3_
 
 - [ ] 9. 版で分ける道と応答のヘッダの読み方（U10・U11）
-- [ ] 9.1 (P) 版で分ける 2 か所を `encode_for`・`parse_for` にまとめる（指摘 5・15・46）
+- [x] 9.1 (P) 版で分ける 2 か所を `encode_for`・`parse_for` にまとめる（指摘 5・15・46）
   - `get_with_headers`・`notify_with_headers` は 2 つを呼ぶだけにし、`encode_and_note` ほか 4 つを吸わせて消す。片道のイベントは `encode_for` だけを呼ぶ
   - 読めない応答で長さと 1 行目を `error!(.., event = "shiori_response_unreadable")` で書く
   - `Reference` を並べる関数を `shiori3.rs` に 1 つ置き、2.x も使う

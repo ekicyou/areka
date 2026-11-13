@@ -3,16 +3,16 @@
 //! wire / HGLOBAL の内部型を一切露出しない。
 //!
 //! # 責務
-//! - [`Shiori3Client::get`] — 応答を要するイベント。前半（`encode_and_note`）→ `send_request`
-//!   → 後半（`parse_and_note`）を結線し、200 は `Some(Value)`／204 は `None`／400・500・
+//! - [`Shiori3Client::get`] — 応答を要するイベント。前半（`encode_for`）→ `send_request`
+//!   → 後半（`parse_for`）を結線し、200 は `Some(Value)`／204 は `None`／400・500・
 //!   `ErrorLevel` は `Err(RequestError::Shiori)` を返す（要件 4.1/4.3/4.7）。
 //! - [`Shiori3Client::notify`] — 片道イベント。前半だけを通して**同期 `request()` 往復**で
 //!   送出し、返却 response（例 204）を破棄して `Ok(())` を返す（片道 IPC 化しない・要件 4.8）。
 //!
 //! # 文字コードの交渉（要件 3.6/5.1/5.3）
-//! 交渉の判断は 1 往復の前半 `encode_and_note`（現在の文字コードで符号化し置換を記録）と
-//! 後半 `parse_and_note`（方針で解析しヘッダと置換有無を記録）の 2 つに閉じており、規則
-//! そのものは [`CharsetNegotiator`] が持つ。前半は GET／NOTIFY の双方が、後半は **GET だけ**が
+//! 交渉の判断は 1 往復の前半 `encode_for`（現在の文字コードで符号化し置換を記録）と
+//! 後半 `parse_for`（方針で解析しヘッダと置換有無を記録）の 2 つに閉じており（版で分かれるのも
+//! この 2 つの中だけ）、規則そのものは [`CharsetNegotiator`] が持つ。前半は GET／NOTIFY の双方が、後半は **GET だけ**が
 //! 通る（片道イベントの応答からは採用しない・要件 5.3）。交渉状態は本 client が持たず借りる
 //! ——本 client は 1 往復ごとに作り捨てられるためで、状態は接続の値が持ち続ける（要件 5.1）。
 //! 符号化したバイト列は helper・IPC へそのまま渡す（解釈を挟まない・要件 3.6）。
@@ -195,15 +195,9 @@ impl<'a> Shiori3Client<'a> {
         // 現在の文字コードを先に取り出す（交渉状態の可変借用と読みを同時に持たない）。
         let charset = self.negotiator.current();
         let req = request_of(Method::Get, id, references, status, *headers, charset);
-        // 版で分かれるのは符号化と読みの 2 か所だけ。2.x で送らない要求は送らずに値なしで返す。
-        let bytes = match self.version {
-            ShioriVersion::Shiori3 => encode_and_note(self.negotiator, &req),
-            ShioriVersion::Shiori2 => {
-                match encode2_and_note(self.negotiator, &req, self.is_resource) {
-                    Some(bytes) => bytes,
-                    None => return Ok(None),
-                }
-            }
+        // 2.x で送らない要求は送らずに値なしで返す。
+        let Some(bytes) = encode_for(self.version, self.negotiator, &req, self.is_resource) else {
+            return Ok(None);
         };
         // GET/NOTIFY は wire tag = MsgTag::Request で合流（要件 4.7）。符号化したバイト列は
         // helper・IPC へ**そのまま**渡す（解釈を挟まない・要件 3.6）。
@@ -214,12 +208,7 @@ impl<'a> Shiori3Client<'a> {
         // parse の malformed（ShioriError::Parse）は #[from] で RequestError::Shiori へ持ち上がる。
         // 採用と記録は `map_get_result` より前（応答が 204／400／500 でも `Charset` ヘッダは
         // 採用対象・design.md §交渉の一周）。
-        let parsed = match self.version {
-            ShioriVersion::Shiori3 => parse_and_note(self.negotiator, &resp)?,
-            ShioriVersion::Shiori2 => {
-                parse2_and_note(self.negotiator, &req, &resp, self.is_resource)?
-            }
-        };
+        let parsed = parse_for(self.version, self.negotiator, &req, &resp, self.is_resource)?;
         map_get_reply(parsed)
     }
 
@@ -262,15 +251,9 @@ impl<'a> Shiori3Client<'a> {
         // 現在の文字コードを先に取り出す（交渉状態の可変借用と読みを同時に持たない）。
         let charset = self.negotiator.current();
         let req = request_of(Method::Notify, id, references, status, *headers, charset);
-        // 版で分かれるのは符号化だけ。2.x で送らないイベントは送らずに成功で返す。
-        let bytes = match self.version {
-            ShioriVersion::Shiori3 => encode_and_note(self.negotiator, &req),
-            ShioriVersion::Shiori2 => {
-                match encode2_and_note(self.negotiator, &req, self.is_resource) {
-                    Some(bytes) => bytes,
-                    None => return Ok(()),
-                }
-            }
+        // 2.x で送らないイベントは送らずに成功で返す。
+        let Some(bytes) = encode_for(self.version, self.negotiator, &req, self.is_resource) else {
+            return Ok(());
         };
         // 同期往復（要件 4.8）: wire tag は GET と同じ MsgTag::Request（要件 4.7）。
         let _discarded = self
@@ -304,64 +287,72 @@ impl<'a> Shiori3Client<'a> {
     //   - SHIORI_S_PENDING（遅延応答）は塞がず型シームに留める（本仕様では実装しない）。
 }
 
-/// 1 往復の**前半**: 現在の文字コードで要求を符号化し、置換を記録する（要件 3.1/3.5/5.1）。
+/// 1 往復の**前半**: 版の符号化器で要求を組み、置換を記録する（要件 3.1/3.5/5.1）。
 ///
 /// GET／NOTIFY の双方が通る（同じ交渉状態＝同じ文字コードで送る・要件 5.1）。戻り値は
 /// そのまま helper・IPC へ渡すバイト列で、ここから先はバイト列に触れない（要件 3.6）。
-fn encode_and_note(negotiator: &mut CharsetNegotiator, req: &ShioriRequest<'_>) -> Vec<u8> {
-    let encoded = build_request(req);
-    negotiator.note_request(req.id, encoded.replaced);
-    encoded.bytes
-}
-
-/// 1 往復の**後半**: 応答を交渉の方針で解析し、応答ヘッダと置換の有無を記録する（要件 4.2〜4.7）。
-///
-/// **GET だけが呼ぶ**（片道イベントの応答からは採用しない・要件 5.3）。記録は `map_get_result`
-/// より前に行う——応答の status が 204／400／500 であっても `Charset` ヘッダは採用対象である
-/// （design.md §交渉の一周）。`note_response` が記録する文字コード名は「採用後の現在値」であり、
-/// `parse_response` が実際に復号に使った文字コードと一致する（`Negotiate` では解決できた
-/// ヘッダの値、`Force` では強制中の値がそれぞれ両者に共通するため）。
-fn parse_and_note(
-    negotiator: &mut CharsetNegotiator,
-    resp: &[u8],
-) -> Result<ParsedResponse, ShioriError> {
-    let parsed = parse_response(resp, negotiator.policy())?;
-    negotiator.note_response(parsed.charset_header.as_deref(), parsed.decode_had_errors);
-    Ok(parsed)
-}
-
-/// 2.x の 1 往復の**前半**: 2.x の要求を組んで置換を記録する（要件 3.5・3.6）。
-///
-/// `None` は「2.x の相手へは送らない」で、そのとき DEBUG を 1 行出す（要件 3.5）。
-fn encode2_and_note(
+/// `None` は「2.x の相手へは送らない」で、そのとき DEBUG を 1 行出す（2.x だけ）。
+fn encode_for(
+    version: ShioriVersion,
     negotiator: &mut CharsetNegotiator,
     req: &ShioriRequest<'_>,
     is_resource: bool,
 ) -> Option<Vec<u8>> {
-    let Some(encoded) = shiori2::build_request(req, is_resource) else {
-        tracing::debug!(
-            target: "shiori2",
-            event = "shiori2_event_not_sent",
-            id = req.id,
-            "SHIORI/2.x の相手へは送らないイベント"
-        );
-        return None;
+    let encoded = match version {
+        ShioriVersion::Shiori3 => build_request(req),
+        ShioriVersion::Shiori2 => {
+            let Some(encoded) = shiori2::build_request(req, is_resource) else {
+                tracing::debug!(
+                    target: "shiori2",
+                    event = "shiori2_event_not_sent",
+                    id = req.id,
+                    "SHIORI/2.x の相手へは送らないイベント"
+                );
+                return None;
+            };
+            encoded
+        }
     };
     negotiator.note_request(req.id, encoded.replaced);
     Some(encoded.bytes)
 }
 
-/// 2.x の 1 往復の**後半**: 2.x の答えを読み、応答ヘッダと置換の有無を記録する（要件 4.4〜4.6）。
+/// 1 往復の**後半**: 版の読み手で応答を解析し、応答ヘッダと置換の有無を記録する（要件 4.2〜4.7）。
 ///
-/// 3.0 の後半と同じく **GET だけが呼ぶ**。値の見出しは要求の種類と資源の印で選ぶ。
-fn parse2_and_note(
+/// **GET だけが呼ぶ**（片道イベントの応答からは採用しない・要件 5.3）。記録は `map_get_result`
+/// より前に行う——応答の status が 204／400／500 であっても `Charset` ヘッダは採用対象である
+/// （design.md §交渉の一周）。`note_response` が記録する文字コード名は「採用後の現在値」であり、
+/// 読み手が実際に復号に使った文字コードと一致する。2.x の値の見出しは要求の種類と資源の印で選ぶ。
+/// 読めない応答は長さと 1 行目（先頭 80 バイトまで）を `error!` で書いてから返す
+/// （ふつうの SHIORI のエラー応答と見分けるため）。
+fn parse_for(
+    version: ShioriVersion,
     negotiator: &mut CharsetNegotiator,
     req: &ShioriRequest<'_>,
     resp: &[u8],
     is_resource: bool,
 ) -> Result<ParsedResponse, ShioriError> {
-    let parsed =
-        shiori2::parse_response(resp, negotiator.policy(), req.method, req.id, is_resource)?;
+    let policy = negotiator.policy();
+    let parsed = match version {
+        ShioriVersion::Shiori3 => parse_response(resp, policy),
+        ShioriVersion::Shiori2 => {
+            shiori2::parse_response(resp, policy, req.method, req.id, is_resource)
+        }
+    }
+    .inspect_err(|_| {
+        let line = resp
+            .split(|&b| b == b'\r' || b == b'\n')
+            .next()
+            .unwrap_or(&[]);
+        tracing::error!(
+            target: "shiori-host32",
+            event = "shiori_response_unreadable",
+            len = resp.len(),
+            first_line = String::from_utf8_lossy(&line[..line.len().min(80)]).as_ref(),
+            id = req.id,
+            "SHIORI の応答が読めない"
+        );
+    })?;
     negotiator.note_response(parsed.charset_header.as_deref(), parsed.decode_had_errors);
     Ok(parsed)
 }
