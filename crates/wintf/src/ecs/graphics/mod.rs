@@ -1,6 +1,7 @@
 mod clip;
 mod command_list;
 mod components;
+mod composite;
 mod core;
 mod systems;
 pub mod visual;
@@ -16,5 +17,7 @@ pub use visual::*;
 pub use visual_manager::*;
 pub use wuc_resource::WucGraphicsResource;
 
+#[cfg(test)]
+mod composite_tests;
 #[cfg(test)]
 mod tests;

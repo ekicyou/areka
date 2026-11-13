@@ -78,7 +78,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 7.6_
 
 - [ ] 5. 描画面ごとの入れ物
-- [ ] 5.1 (P) 入れ物を作り、根の列と木を合成し、整数の offset で別の的へ写す手順を作る
+- [x] 5.1 (P) 入れ物を作り、根の列と木を合成し、整数の offset で別の的へ写す手順を作る
   - 描画面と同じ物理ピクセルの大きさ・8 ビット BGRA・α 掛け済み・96 DPI の描き先にできる入れ物と、1×1 の CPU で読める写し先を作る
   - 合成で、入れ物を透明に塗り、拡大の変換の下で根の命令の列を `SOURCE_OVER` で、木の列を再生で描き、成功したら世代を 1 上げ、結果に依らず DC の変換を恒等・的を無しに戻す
   - 写しで、的を透明に塗り、入れ物を整数の offset に最近傍・`SOURCE_OVER` で 1 度描く
@@ -148,3 +148,4 @@
 - 3.1: 描画面の持ち主（根）は fill_world_visuals が訪れないので、持ち主の欄へ直に書かれた NaN は記録されず 1.0 になる（要件 2.8 が持ち主にも及ぶかは最終検証で見る）。隠れた部分木の中の NaN の記録はコードでは行うがテストは無い。
 - 3.3: 描く中身の無い節（グループ）は `VisualTransform` を持たせないと描画面の持ち主と見なされ訪れられない（`emit_layer_tests.rs` の `ident()`）。
 - 4.2: `emit_layer_tests.rs` の `render_with_unbounded_clip` は emit の図形の切り抜きの層の旗を写している。emit の層の旗を変えるときは一緒に変える。
+- 5.1: `composite.rs` の `#![cfg_attr(not(test), allow(dead_code))]` は 6.2 で外す。`pixel`／`gpu_reads` の欄と `PixelReadState` の `#[allow(dead_code)]` は 5.2 で外す。根の列の `DrawImage` は `render.rs` と重複（6.2 で `compose` へ一本化）。
