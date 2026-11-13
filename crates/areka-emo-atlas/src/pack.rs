@@ -103,12 +103,13 @@ impl Packer {
             grouped.push_rect(id.0, None, RectToInsert::new(pw, ph, 1));
         }
 
-        // bin（頁）数を 1 から増やしながら all-or-nothing の pack_rects を再試行（5.4）。
+        // bin（頁）数を面積の下限から増やしながら all-or-nothing の pack_rects を再試行（5.4）。
+        // 下限より少ない頁には面積で入りきらないので、出力は 1 から試すのと変わらない（指摘 12）。
         // cap = placeable.len()（最悪 1 矩形 1 頁）で無限ループを封じる。
         let cap = placeable.len();
         // 頁に入る矩形が 0 なら普通の頁も 0（自頁だけ）。
         let mut locations = placeable.is_empty().then(Vec::new);
-        for num_bins in 1..=cap {
+        for num_bins in first_bins(&placeable, cfg)..=cap {
             let mut target_bins: BTreeMap<usize, TargetBin> = BTreeMap::new();
             for bin_id in 0..num_bins {
                 target_bins.insert(bin_id, TargetBin::new(cfg.page_size, cfg.page_size, 1));
@@ -206,6 +207,18 @@ impl Packer {
 
         PackOutput { pages, entries }
     }
+}
+
+/// 試す頁の数の下限: 余白込みの面積の合計 ÷ 頁の面積の切り上げ（1 以上・矩形の数以下）。
+/// 合計は u64 で数える（u32 の面積を足すとあふれる）。`rects` は頁に入る矩形だけを渡す。
+fn first_bins(rects: &[(ElementId, Size)], cfg: PackConfig) -> usize {
+    let pad = 2 * u64::from(cfg.padding);
+    let area: u64 = rects
+        .iter()
+        .map(|(_, sz)| (u64::from(sz.w) + pad) * (u64::from(sz.h) + pad))
+        .sum();
+    let page = u64::from(cfg.page_size) * u64::from(cfg.page_size);
+    (area.div_ceil(page.max(1)) as usize).clamp(1, rects.len().max(1))
 }
 
 #[cfg(test)]
@@ -517,6 +530,33 @@ mod tests {
                 }
             )
         );
+    }
+
+    /// 指摘 12: 試す頁の数の下限＝余白込みの面積の合計 ÷ 頁の面積の切り上げ（1 以上・矩形の数以下）。
+    #[test]
+    fn first_bins_is_area_lower_bound() {
+        let cfg = PackConfig {
+            page_size: 64,
+            padding: 1,
+        };
+        let r = |id: u32, w: u32, h: u32| (ElementId(id), Size { w, h });
+        // 42×42×4 = 7056 ÷ 4096 → 切り上げ 2。
+        let four: Vec<_> = (0..4).map(|i| r(i, 40, 40)).collect();
+        assert_eq!(first_bins(&four, cfg), 2);
+        // 小さい矩形 1 つでも 1。
+        assert_eq!(first_bins(&[r(0, 1, 1)], cfg), 1);
+        // 面積ちょうど 1 頁分（62+2=64 四方）は 1、2 つで 2。
+        assert_eq!(first_bins(&[r(0, 62, 62)], cfg), 1);
+        assert_eq!(first_bins(&[r(0, 62, 62), r(1, 62, 62)], cfg), 2);
+        // 空でも 1（下限は 1 以上）。
+        assert_eq!(first_bins(&[], cfg), 1);
+        // 合計は u64 で数え、あふれない（u32 の面積を大量に足す）。
+        let big_cfg = PackConfig {
+            page_size: 16_384,
+            padding: 0,
+        };
+        let many: Vec<_> = (0..300).map(|i| r(i, 16_384, 16_384)).collect();
+        assert_eq!(first_bins(&many, big_cfg), 300);
     }
 
     /// 指摘 3: 頁に入る矩形が無ければ普通の頁は 0 枚で、自頁だけになる。
