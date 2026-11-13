@@ -60,3 +60,13 @@ fn empty_url_is_invalid_before_any_os_call() {
     assert_eq!(check_url(&[]), Err(FetchError::Other { code: 12005 }));
     assert_eq!(check_url(&[u16::from(b'h')]), Ok(()));
 }
+
+#[test]
+fn the_body_limit_is_exclusive_above_max() {
+    let max = u32::try_from(MAX_BODY_BYTES).unwrap();
+    assert!(!over_limit(0, max), "ちょうど上限は通す");
+    assert!(over_limit(0, max + 1), "上限の 1 越えは止める");
+    assert!(!over_limit(MAX_BODY_BYTES - 1, 1));
+    assert!(over_limit(MAX_BODY_BYTES - 1, 2));
+    assert!(over_limit(MAX_BODY_BYTES, 1));
+}

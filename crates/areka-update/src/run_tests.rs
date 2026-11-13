@@ -426,6 +426,27 @@ fn non_http_homeurl_fails_at_entry_without_fetching() {
 }
 
 #[test]
+fn an_https_homeurl_runs() {
+    let f = fixture();
+    fs::write(f.target.join("a.txt"), b"abc").unwrap();
+    let before = tree(&f.target);
+    let home = "https://example.test/ghost/";
+    let manifest_url = format!("{home}updates2.dau");
+    let fetch = FakeFetch::new().serve(&manifest_url, &dau(&[&["a.txt", MD5_ABC]], true));
+
+    let ran = go(home, &f.target, &fetch);
+
+    let outcome = ran.result.as_ref().expect("https の更新先は通る");
+    assert!(
+        matches!(outcome, UpdateOutcome::Unchanged { .. }),
+        "{outcome:?}"
+    );
+    assert_eq!(fetch.calls(), vec![manifest_url]);
+    assert_eq!(tree(&f.target), before);
+    ran.expect(&head(&[]), [2, 0, 0]);
+}
+
+#[test]
 fn missing_trailing_slash_is_appended_and_warned_once() {
     let f = fixture();
     let before = tree(&f.target);
@@ -620,16 +641,19 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let before = tree(&f.target);
     let pinned: Rc<RefCell<Option<Pinned>>> = Rc::default();
     let shelf = f.target.join(WORK_DIR);
+    // 戻せなかった他の走行の元の内容＝残したまま報告する残骸（4.8・5.5）。
+    let other = shelf.join("9-9");
+    fs::create_dir_all(other.join("old")).unwrap();
+    fs::write(other.join("old/b.txt"), b"b").unwrap();
     let fetch = {
         let (pinned, shelf, b_url) = (pinned.clone(), shelf.clone(), url("b.txt"));
         fetch.on_get(move |u| {
             if u == b_url {
                 let dir = fs::read_dir(&shelf)
                     .unwrap()
-                    .next()
-                    .unwrap()
-                    .unwrap()
-                    .path();
+                    .map(|e| e.unwrap().path())
+                    .find(|p| !p.ends_with("9-9"))
+                    .unwrap();
                 *pinned.borrow_mut() = Some(pin(&dir.join("new").join("a.dll")));
             }
         })
@@ -669,8 +693,8 @@ fn rollback_failure_keeps_the_work_area_and_returns_its_path() {
     let work = err.work.as_ref().expect("作業場所のパスを返す");
     assert!(work.is_dir(), "{}", work.display());
     assert_eq!(work.parent(), Some(shelf.as_path()));
-    assert!(err.leftovers.is_empty(), "{err:?}");
-    ran.expect(&three_fetched(&pe), [1, 0, 1]);
+    assert_eq!(err.leftovers, [other]);
+    ran.expect(&three_fetched(&pe), [1, 1, 1]);
     // 作業場所の外は、消せなかった a.dll だけが開始前と違う（sub/x.txt と sub/ は戻した）。
     let mut expected = before;
     expected.insert("a.dll".into(), pe);
