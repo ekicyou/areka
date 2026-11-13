@@ -696,3 +696,46 @@ fn unstop_with_nobody_to_put_back_changes_nothing() {
         assert_not_applied(&got, "unstop");
     }
 }
+
+/// 表の鍵 `a` で入っているが欄 `id` が空の、止まった参加者 A（判断は欄を読まず鍵で見る）。
+fn keyed_a_with_empty_field() -> State {
+    let mut state = state_with(&["a", "C"]);
+    queue_load(&mut state, "C", T0 + 1);
+    stop_for(&mut state, "a", "C");
+    state
+        .participants
+        .get_mut("a")
+        .expect("参加者が居る")
+        .id
+        .clear();
+    state
+}
+
+#[test]
+fn unstop_finds_the_participant_by_the_table_key_not_the_field() {
+    for id in [Some("a"), None] {
+        let mut state = keyed_a_with_empty_field();
+        state.requests.clear();
+
+        let got = run(&mut state, &unstop(id), None, T0 + 9);
+
+        assert_eq!(got, applied(true, vec![unstopped("a")]), "{id:?}");
+        assert_eq!(seen(&state, "a").0, Working, "{id:?}");
+    }
+}
+
+#[test]
+fn the_resumed_event_carries_the_table_key_not_the_field() {
+    let mut state = keyed_a_with_empty_field();
+
+    let got = run(
+        &mut state,
+        &Command::Cancel { id: "C".to_owned() },
+        Some("C"),
+        T0 + 9,
+    );
+
+    let cancelled = Event::Cancelled { id: "C".to_owned() };
+    assert_eq!(got, applied(true, vec![cancelled, resumed("a", "no-sole")]));
+    assert_eq!(seen(&state, "a").0, Working);
+}

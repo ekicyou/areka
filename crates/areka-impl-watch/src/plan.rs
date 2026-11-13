@@ -351,13 +351,11 @@ pub fn apply(
             // 走っている印の無いひとり占めがまだ持たれ・待たれていれば、この後の番の決め直しが
             // 停止要請を出し直す。
             let mut any = false;
-            for participant in state.participants.values_mut() {
-                let target = id.as_ref().is_none_or(|id| *id == participant.id);
+            for (key, participant) in state.participants.iter_mut() {
+                let target = id.as_ref().is_none_or(|id| id == key);
                 if target && back_to_work(participant, now) {
                     any = true;
-                    events.push(Event::Unstopped {
-                        id: participant.id.clone(),
-                    });
+                    events.push(Event::Unstopped { id: key.clone() });
                 }
             }
             if any {
@@ -567,11 +565,17 @@ fn back_to_work(participant: &mut Participant, now: u64) -> bool {
     true
 }
 
-/// [`back_to_work`] で戻し、戻したら出来事 `Resumed` を 1 件。
-fn resume(participant: &mut Participant, why: &'static str, now: u64, events: &mut Vec<Event>) {
+/// [`back_to_work`] で戻し、戻したら表の鍵 `id` を載せた出来事 `Resumed` を 1 件。
+fn resume(
+    id: &str,
+    participant: &mut Participant,
+    why: &'static str,
+    now: u64,
+    events: &mut Vec<Event>,
+) {
     if back_to_work(participant, now) {
         events.push(Event::Resumed {
-            id: participant.id.clone(),
+            id: id.to_owned(),
             why,
         });
     }

@@ -261,10 +261,10 @@ fn cooperative_move(state: &State) -> Option<Command> {
         let mut own = state.requests.iter().filter(|request| request.id == id);
         own.any(|request| !request.desks.has_sole())
     };
-    let asked = state.participants.values().find(|participant| {
-        participant.status == ParticipantStatus::StopRequested && !only_test(&participant.id)
+    let asked = state.participants.iter().find(|(key, participant)| {
+        participant.status == ParticipantStatus::StopRequested && !only_test(key)
     });
-    asked.map(|participant| stopped(&participant.id))
+    asked.map(|(key, _)| stopped(key))
 }
 
 /// 協力的な進め方を上限まで進め、出来事を返す。申し込みとマージの待ち・持ち主が全部空にならなければ赤。
