@@ -62,6 +62,7 @@
 - **`AtlasTable::with_frames` の確かめが 1 つ増える**: `frames[0]` が親でないと panic する（説明の約束どおり）。範囲の外の呼び手は `areka-emo-compose/src/film_tests.rs:231` だけで、3 つとも `frames[0]` に親を置く（設計の段で読んで確かめた）。
 - **本体が数える読み手の呼び出し回数**（`crates/areka/src/placement_tests/measure_bake_count_tests.rs`）は変わらない。上限と長さの確かめは読み手を呼ばない。
 - **範囲の外のテストが `MemoryDecoder` に登録する絵**（`MemoryDecoder` を使う範囲の外のファイルは 39）: 約束（`stride >= width * 4`・`bgra.len() == stride * height`）を破る絵は、焼くと読めなかった絵になる。行の詰め物つきの stride（`areka-emo-present/src/balloon_marker_load_tests.rs:198` の幅 2・stride 12）は約束の内なので通る。指摘 18 のタスクで、範囲の外の `insert` の呼び出しを grep して全部が約束を守ることを確かめる。`crates/areka/` の中に破る所が見つかったら、直さずに止めて `runtime-module-untangle` と申し合わせる（C19 の約束 ⑴ で本体は触れない）。
+- **本体のパスの改名**（2026-11-13 棚卸からの知らせ）: 開発者の方針で、この spec の実装は `runtime-module-untangle` を含む audit 系以外の 4 本の後に行う。`runtime-module-untangle` は `crates/areka/src/emo2_boot/` を `runtime/` へ改名する。この設計が名指す本体のパス（`emo2_boot/…`）は、実装の頭で着地の後の本体を grep し直して読み替える。型 9 つの格下げと `MemoryDecoder::insert` の確かめは、棚卸から向こうへ伝え済み。
 
 ## Architecture
 
