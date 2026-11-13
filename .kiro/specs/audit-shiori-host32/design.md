@@ -114,7 +114,7 @@ graph TB
 | 層 | 選んだもの／版 | 役目 | 備考 |
 |----|----|----|----|
 | 取り決め | `shiori-host32-ipc`（ワークスペースの中） | タグ・枠の確かめ・送り | `PAYLOAD_HEADER_LEN` を消す |
-| Win32 | `windows` 0.62.2（ワークスペースの版） | `LoadLibraryExW`・`GlobalSize`／`GlobalLock`・`WaitForSingleObject`・`GetWindowThreadProcessId`・`QueryInformationJobObject`・`MultiByteToWideChar`・`CREATE_NO_WINDOW` | 機能の行を足すのは host の `Win32_Globalization` と testdll の `Win32_System_DataExchange` だけ（`Cargo.lock` は変わらない＝R6・R8） |
+| Win32 | `windows` 0.62.2（ワークスペースの版） | `LoadLibraryExW`・`GlobalSize`／`GlobalLock`・`WaitForSingleObject`・`GetWindowThreadProcessId`・`QueryInformationJobObject`・`MultiByteToWideChar`・`CREATE_NO_WINDOW` | 機能の行を足すのは host の `Win32_Globalization`・helper の `Win32_System_Console`・testdll の `Win32_System_DataExchange` だけ（`Cargo.lock` は変わらない＝R6・R8） |
 | 窓の手続き | `wintf-winmsg-executor` =0.0.5 | 親と helper のメッセージだけの窓 | 変えない・panic を受け止めない前提で設計する |
 | 記録 | `tracing`（host）・標準エラーの行（helper） | 記録 | helper の行は host が `warn` で記録へ回す |
 | テストの記録の捕捉 | `log-capture-kit`（dev・今あるもの） | 記録の段・宛名・文を確かめる | 全体の捕捉（`install_global_capture_all`）は使わない＝番人の例外表を増やさない |
@@ -128,7 +128,7 @@ crates/shiori-host32-host/
 ├── src/client_tests.rs              # client.rs の中のテストを移したもの＋版で分ける道のテスト（U10）
 ├── src/shiori3_tests.rs             # shiori3.rs の中のテストを移したもの＋値の空白と重なりのテスト（U11）
 ├── src/process_host_stderr_tests.rs # 標準エラーの回しのテスト（行の読み・記録の形・実 helper の行が届く）（U5）。成果物の探し方は #[path = "../tests/common/mod.rs"] で結合テストの道具を引く（写しを作らない）
-├── tests/common/mod.rs              # 結合テストの共通の道具: 成果物の探し方・テストの根・握手の上限（U1）
+├── tests/common/mod.rs              # 結合テストの共通の道具: 成果物の探し方・テストの根・握手の上限（U1）。テストごとに使う関数が違うので、頭に理由つきの `#![allow(dead_code)]` を置く（使わない関数の警告を出さない）
 └── tests/helper_env_e2e.rs          # 親に PASTA_DEBUG=1 を立てて自分を起こし直し、helper の下で 0 であることを確かめる（U4）
 crates/shiori-host32-helper/
 ├── src/proxy_test_support.rs        # helper のテストの共通の道具: 試験用の DLL の探し方・写し・テストの根（U1）
@@ -172,16 +172,18 @@ crates/shiori-host32-helper/
 
 全部で 18。U1 から順に進める。同じファイルに触るまとまりどうしは並べて走らせない（下の表の「触るファイル」）。
 
+C19 の中の着手の順（2026-11-13 棚卸・開発者の承認）: audit 系の 4 本は、audit 系でない 4 本（`runtime-module-untangle`・`dola-yaml-backend`・`wintf-d2d-composite-rules`・`emo-text-reveal-incremental`）の後に実装する。本 spec の縛りは U17（`dola-yaml-backend` の着地の後）だけ。
+
 | まとまり | 指摘 | 触るファイル（主なもの） | 先に要るもの |
 |---|---|---|---|
 | U1 試験の置き場・共通の道具・中のテストを兄弟のファイルへ（はじめに範囲の 5 クレートの clippy の警告の一覧を基準として `research.md` に控える＝要件 3.5） | 3・21・48（一部） | host `tests/`・`process_host*.rs` のテスト・`lifecycle.rs` のテスト・`client.rs`→`client_tests.rs`・`shiori3.rs`→`shiori3_tests.rs`／helper `proxy_test_support.rs`・`shiori_proxy.rs`→`shiori_proxy_tests.rs`・`main_loopback_tests.rs`・`shiori_proxy_loadu_tests.rs`／loadu `lib.rs`／`temp_path_guard_test.rs` | — |
 | U2 件 1: 依存の探し先を絞る | 1 | helper `shiori_proxy.rs`・`shiori_proxy_tests.rs` | U1 |
 | U3 試験用の DLL の試しの ID と版のピン | 29・47・32（testdll の分） | testdll `Cargo.toml`・`lib.rs`／loadu `Cargo.toml`・`lib.rs`／helper `shiori_proxy.rs`（注釈 1 行） | U1 |
-| U4 件 2: helper の起こし方と、その試験 | 2・16・要件 10.4・10.5 | host `process_host.rs`・`tests/helper_env_e2e.rs`・`tests/common/mod.rs`／`temp_path_guard_test.rs`／areka-ghost の錠の 4 ファイル | U1・U3 |
-| U5 helper の標準エラーを記録へ回す | 4・18・要件 10.12 | host `Cargo.toml`・`process_host.rs`・`process_host_stderr_tests.rs`・`tests/error_paths.rs` | U4 |
+| U4 件 2: helper の起こし方と、その試験 | 2・16・要件 10.4 | host `process_host.rs`・`tests/helper_env_e2e.rs`・`tests/common/mod.rs`／`temp_path_guard_test.rs` | U1・U3 |
+| U5 helper の標準エラーを記録へ回す（helper の標準の取っ手を SHIORI の子へ受け継がせない） | 4・18・要件 10.12 | host `Cargo.toml`・`process_host.rs`・`process_host_stderr_tests.rs`・`tests/error_paths.rs`／helper `Cargo.toml`・`main.rs`・`main_loopback_tests.rs` | U4 |
 | U6 host の記録の穴と文字コードの上限・速さ | 6・10・41・42 | host `error.rs`・`process_host.rs`・`charset.rs`・`charset_tests.rs` | U5 |
 | U7 後始末と job | 13・14・37・43 | host `process_host.rs`・`job.rs`・`lifecycle.rs`（Drop）・`tests/` の `HelperGuard` | U6 |
-| U8 親の窓: 記録・送り手・窓 2 組 | 11・38・40・48（一部） | host `parent_window.rs`・`lifecycle.rs`（錠）・`tests/common/mod.rs`・`tests/lifecycle_cyclic_e2e.rs`（説明）／areka-ghost `shiori_wiring.rs`／areka-kanade のテスト（要るときだけ） | U7 |
+| U8 親の窓: 記録・送り手・窓 2 組・areka-ghost の当座の錠（窓 2 組のテストが緑の後） | 11・38・40・48（一部）・要件 10.5 | host `parent_window.rs`・`lifecycle.rs`（錠）・`tests/common/mod.rs`・`tests/lifecycle_cyclic_e2e.rs`（説明）／areka-ghost `shiori_wiring.rs`・錠の 4 ファイル／areka-kanade のテスト（要るときだけ） | U4・U7 |
 | U9 正常終了の道 | 17・24・34・36・48（一部） | host `lifecycle.rs`・`job.rs`（宛名）・`process_host.rs`（`wait_for_exit` を使う） | U7・U8 |
 | U10 版で分ける道とその写し | 5・15・46 | host `client.rs`・`client_tests.rs`・`shiori3.rs`・`shiori2.rs` | U1 |
 | U11 応答のヘッダの読み方 | 22・23 | host `shiori3.rs`・`shiori3_tests.rs`・`shiori2_tests.rs` | U10 |
@@ -209,7 +211,7 @@ crates/shiori-host32-helper/
 
 | # | まとまり | 直し方 | 場所 | テスト |
 |---|---|---|---|---|
-| 4 | U5 | `helper_command` で `.stderr(Stdio::piped())`。`spawn_command` は子の標準エラーが管なら、helper 1 つに 1 本の読み手のスレッド（名前 `shiori-host32-stderr`）を起こし、行ごとに `log_helper_line(pid, 行)`＝`warn!(target: "shiori-host32", event = "helper_stderr", pid, "{行}")` で書く。行の文は変えない（Display で書く＝逃がしの文字を入れない）。行は UTF-8 で読み、UTF-8 でない行は OS の ANSI コードページ（`MultiByteToWideChar(CP_ACP)`）で読む（文字化けは読む側で直す）。読みの失敗は `error!` で 1 行書いて終わる。`HelperHandle` の Drop は helper の終わりを待った後、読み手の終わりを 1 秒まで待つ（終わった helper の最後の行が、接続の失敗の報告より先に記録に入る）。待ちきれなければ（SHIORI が起こしたプロセスが管を受け継いだとき）読み手を切り離し、`debug` で 1 行書く | host `process_host.rs`・`Cargo.toml` | `process_host_stderr_tests.rs` の 3 本: `forward_lines_reads_utf8_and_ansi_lines`（行の切り方と 2 つの読み方）・`a_helper_line_is_logged_verbatim_at_warn`（段・宛名・文がそのまま）・`real_helper_stderr_reaches_the_sink`（`spawn_command_with(helper_command(実の i686 helper, 根, "x.dll", 0), 集める口)` で起こし、helper が書く `[helper] 窓生成/HELLO 失敗` の行が届く＝`helper_command` の管と読み手の起こし方を縛る。成果物が無ければ panic＝要件 4.4） |
+| 4 | U5 | `helper_command` で `.stderr(Stdio::piped())`。`spawn_command` は子の標準エラーが管なら、helper 1 つに 1 本の読み手のスレッド（名前 `shiori-host32-stderr`）を起こし、行ごとに `log_helper_line(pid, 行)`＝`warn!(target: "shiori-host32", event = "helper_stderr", pid, "{行}")` で書く。行の文は変えない（Display で書く＝逃がしの文字を入れない）。行は UTF-8 で読み、UTF-8 でない行は OS の ANSI コードページ（`MultiByteToWideChar(CP_ACP)`）で読む（文字化けは読む側で直す）。読みの失敗は `error!` で 1 行書いて終わる。`HelperHandle` の Drop は helper の終わりを待った後、読み手の終わりを 1 秒まで待つ（終わった helper の最後の行が、接続の失敗の報告より先に記録に入る）。待ちきれなければ読み手を切り離し、`debug` で 1 行書く。SHIORI が取っ手を受け継ぐ形で起こしたプロセスが管の書き口を持ったまま残り、ゴーストを閉じるたびに Drop が 1 秒止まる道を断つため、helper は始めに自分の標準入力・標準出力・標準エラーの取っ手を受け継がせない印にする（内側の `disinherit_std_handles()`＝`GetStdHandle` の 3 つに `SetHandleInformation(.., HANDLE_FLAG_INHERIT, 0)`。取っ手が無い・失敗は `[helper]` の行で書いて続ける。helper の `windows` の機能に `Win32_System_Console` を足す＝`Cargo.lock` は変わらない） | host `process_host.rs`・`Cargo.toml`／helper `main.rs`・`Cargo.toml` | `process_host_stderr_tests.rs` の 3 本: `forward_lines_reads_utf8_and_ansi_lines`（行の切り方と 2 つの読み方）・`a_helper_line_is_logged_verbatim_at_warn`（段・宛名・文がそのまま）・`real_helper_stderr_reaches_the_sink`（`spawn_command_with(helper_command(実の i686 helper, 根, "x.dll", 0), 集める口)` で起こし、helper が書く `[helper] 窓生成/HELLO 失敗` の行が届く＝`helper_command` の管と読み手の起こし方を縛る。成果物が無ければ panic＝要件 4.4）。あわせて helper の `main_loopback_tests.rs::std_handles_are_not_inherited`（i686 だけ。管を標準エラーにした自分の子を起こすか、テストの中で継げる取っ手を標準エラーに据えてから `disinherit_std_handles()` を呼び、`GetHandleInformation` で `HANDLE_FLAG_INHERIT` が落ちている。呼ばないと赤） |
 | 5 | U10 | `parse_for` が読めなかったとき（`ShioriError::Parse`）、応答の長さと 1 行目（先頭 80 バイトまで）を `error!(target: "shiori-host32", event = "shiori_response_unreadable", ..)` で書いてから返す | host `client.rs` | `client_tests.rs::an_unreadable_response_is_logged_as_error`（ごみの応答で `ERROR` が 1 行・`event` の値） |
 | 6 | U6 | `ShioriError::Status` の表示に `ErrorLevel`・`ErrorDescription` を載せる（無ければ出さない）。`RequestError::Ipc` を `#[error("ipc transport failure: {0}")] Ipc(#[source] IpcError)` にする | host `error.rs` | `error.rs` の既存の 2 本（`:121`・`:139`）を新しい文に改め、`source()` が中の `IpcError` を返すことを足す |
 | 7 | U13 | `request` は応答の HGLOBAL を `GlobalLock` で先頭の場所にし（動くメモリでも正しく読む）、`GlobalSize` が 0 か `len` より小さければ `[helper]` の行を書き、`GlobalUnlock`・`GlobalFree` して `ProxyError::ResponseLengthMismatch { declared, allocated }` を返す。折り返しの REQUEST の腕は 500 を返す（今の `Err` の扱いのまま） | helper `shiori_proxy.rs` | `shiori_proxy_tests.rs::a_response_longer_than_its_allocation_is_refused`（試験用の DLL の `OnTestLenOverflow`。i686 だけ） |
@@ -412,7 +414,7 @@ impl ParentMessageWindow {
 
 - まず `two_parent_windows_live_side_by_side_on_two_threads`（2 つのスレッドで 1 つずつ `ParentMessageWindow` を作り、両方が生きているあいだにそれぞれへ自分あての HELLO を送って受けられる）を置いて回す。ソースの読み（R4）では緑になる見込み。
 - 緑なら: `WINDOW_TEST_SERIAL` と「窓 1 組の制約」「`--test-threads=1` で回す」の説明（`lifecycle.rs:534-541`・`parent_window.rs:555-575`・`lifecycle_cyclic_e2e.rs:33-50`・`:309`・`:324`）を消す。本番で 32bit のゴーストを 2 体同時に動かすこと（各 SHIORI のスレッドが自分の窓を作る）にも当たらないことが、このテストで縛られる。
-- 赤なら（先に決めておく逃げ道）: 原因を `kiro-debug` の手順で 1 つに絞る。原因が `wintf-winmsg-executor` の中なら、外のクレートは直さず、テストの錠を `tests/common` と `lifecycle` のテストの 1 か所にまとめて残し、本番の 2 体同時の件を `/kiro-discovery` で起票する（範囲の外）。U9 の正常終了の試験は、偽の helper の窓を作れないので、決めの分かれ目を窓の要らない内側の関数（ack の判定・送りの失敗の後の問い直し）へ出して試す形に替える。
+- 赤なら（先に決めておく逃げ道）: 原因を `kiro-debug` の手順で 1 つに絞る。原因が `wintf-winmsg-executor` の中なら、外のクレートは直さず、テストの錠を `tests/common` と `lifecycle` のテストの 1 か所にまとめて残し、本番の 2 体同時の件を `/kiro-discovery` で起票する（範囲の外）。U9 の正常終了の試験は、偽の helper の窓を作れないので、決めの分かれ目を窓の要らない内側の関数（ack の判定・送りの失敗の後の問い直し）へ出して試す形に替える。`areka-ghost` の当座の錠 `real_pasta_turn`（要件 10.5）も外さずに残し（実物の pasta の 3 本が並んでぶつかるため）、残すことを開発者への議題として出す。
 
 ### host・codec
 
@@ -487,7 +489,7 @@ enum ProxyError { /* 今の種類 */ ResponseLengthMismatch { declared: usize, a
 
 - 消すもの: `poll_exit`（と `lib.rs` の再公開）・`HelperHandle::helper_hwnd`・`set_helper_hwnd` と欄 `helper_hwnd`・`classify_failure`・`FailureClass`・`LifecycleReport`・`HelperLifecycle::report_failure`（と再公開）・それを試すだけのテスト（`lifecycle.rs` の中・`lifecycle_kill_e2e.rs:307-318` など）。あわせて、U9 で使い手がいなくなる `EXIT_POLL_INTERVAL`。
 - 申し合わせ（要件 10.9）: 2026-11-13、`runtime-module-untangle` のセッションから「上の項目（`EXIT_POLL_INTERVAL` を除く）を使っておらず使う予定も無い（そのブランチの `crates/areka` の grep で 0 件）・その書き換えは `shiori-host32-host` の公開の形に触らない・C19 のうちに消してよい」と返事を得た。C19 の約束 ⑴「③ のセッションと申し合わせる」を満たすので、**待ちのない普通のタスク**として C19 のうちに消す。
-- `EXIT_POLL_INTERVAL` は申し合わせの一覧に無い。`crates/areka` の使い手は 0（grep 済み）。U16 の始めに `runtime-module-untangle` のセッションへ一言知らせてから消す。異議があれば残し、説明に「使い手なし・C20 で消す」と書いて開発者へ報告する。
+- `EXIT_POLL_INTERVAL` は申し合わせの一覧に無い。`crates/areka` の使い手は 0（grep 済み）。U16 の始めに `runtime-module-untangle` のセッションへ一言知らせてから消す。異議があれば残し、説明に「使い手なし・C20 で消す」と書いて開発者へ報告する。知らせた日と答えは `research.md` §14 に書き残す。
 - 消す前にツリー全体（`crates/`・`tools/`・`doc/`・文字列での参照）を grep し直す（要件 3.3）。`pilot` は自分の写しを持つので響かない。
 
 ## 使っていない依存（指摘 28・U17・待ちあり）
@@ -539,7 +541,7 @@ enum ProxyError { /* 今の種類 */ ResponseLengthMismatch { declared: usize, a
 | 10.2 | 1 本の spec で 46 件 | 18 のまとまり |
 | 10.3 | 27・39 を残す | 「直さずに残すもの」 |
 | 10.4 | いつも `PASTA_DEBUG=0`・口なし | 2 |
-| 10.5 | 当座の錠を消す | U4 |
+| 10.5 | 当座の錠を消す | U8（窓 2 組のテストが緑の後） |
 | 10.6 | 件 1 の旗・読めなくなる配置を受け入れる | 1・R1 |
 | 10.7 | `SILENT_BREAKAWAY_OK` | 13 |
 | 10.8 | 22・23 を SSP で測る・既定 | 22・23・「実装の段で確かめること」R5 |
