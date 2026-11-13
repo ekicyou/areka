@@ -456,10 +456,24 @@ pub fn poll_exit(handle: &mut HelperHandle) -> Option<i32> {
 /// による分類）。`try_wait` ベースゆえ呼び出し側スレッドをブロックしない。
 #[must_use]
 pub fn poll_exit_kind(handle: &mut HelperHandle) -> Option<ExitKind> {
-    match handle.child.try_wait() {
+    note_try_wait(handle.child.try_wait())
+}
+
+/// `try_wait` の結果を終了種別へ写す。失敗は `error!` を書いてから稼働中（`None`）と
+/// みなす（非ブロッキングのまま・黙って握らない）。
+fn note_try_wait(result: std::io::Result<Option<ExitStatus>>) -> Option<ExitKind> {
+    match result {
         Ok(Some(status)) => Some(ExitKind::classify(&status)),
         Ok(None) => None,
-        Err(_) => None,
+        Err(error) => {
+            tracing::error!(
+                target: LOG_TARGET,
+                event = "helper_try_wait_failed",
+                %error,
+                "helper の終了を問い合わせられなかった——動いているとみなす"
+            );
+            None
+        }
     }
 }
 
@@ -593,6 +607,19 @@ pub(crate) mod tests {
             );
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+
+    /// `try_wait` の失敗は `ERROR` を 1 行書いてから「動いている」（`None`）とみなす（指摘 10）。
+    #[test]
+    fn a_try_wait_failure_is_logged() {
+        let failure = Err(std::io::Error::other("try_wait failed"));
+        let (kind, events) = log_capture_kit::capture(|| note_try_wait(failure));
+        assert_eq!(kind, None);
+        let errors: Vec<_> = events
+            .iter()
+            .filter(|e| e.target == LOG_TARGET && e.level == tracing::Level::ERROR)
+            .collect();
+        assert_eq!(errors.len(), 1, "{events:?}");
     }
 
     // --- ExitKind::classify 純関数（要件 1.3 / 1.4）---

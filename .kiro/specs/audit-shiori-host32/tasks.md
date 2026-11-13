@@ -73,7 +73,7 @@
   - 完了の姿: 新しいテストが i686 の段で緑、`Cargo.lock` の差分が 0
   - _Requirements: 3.1, 4.1, 5.3, 5.6_
 
-- [ ] 5. host の記録の穴と文字コードの上限（U6）
+- [x] 5. host の記録の穴と文字コードの上限（U6）
   - `ShioriError::Status` の表示に `ErrorLevel`・`ErrorDescription` を載せ、`RequestError::Ipc` に中のエラーを原因として持たせる。既存の 2 本の表示のテストを新しい文に改め、原因が返ることを足す（指摘 6）
   - `try_wait` の失敗を受ける内側の関数で `error!` を書いてから「動いている」とみなし、テスト `a_try_wait_failure_is_logged` を置く（指摘 10）
   - 文字コードの警告済みの集まりに上限 64 を置き（越えたら `debug` だけ）、テスト `warned_labels_stop_growing_at_the_limit` を置く（指摘 41）。置き換えの数え直しで ASCII の字を飛ばす（指摘 42）
@@ -199,3 +199,4 @@
 - 4.3: 標準エラーの読み手の read_until に行の長さの上限が無い（SHIORI の DLL が改行なしで書き続けると host のメモリが伸びる）。設計・要件は上限を求めていない。14 の audit のかけ直しで見る。
 - 4.3: forward_helper_stderr は設計の () でなく io::Result<()> を返し（読みの失敗の error! に pid を載せるため呼び手で書く）、読み手のスレッドを起こせないときの error!（helper_stderr_reader_spawn_failed）を足した。審査で承認。
 - 4.4: 審査の指摘で helper_command に stdin・stdout の Stdio::null() を足した（窓だけの areka は標準の取っ手を持たず、受け継ぐと helper が起きるたびに「取っ手が無い」を書き warn になるため）。Command は stdio の設定を読み返せず、テストでは縛れない。
+- 5: 置き換えの数え直しで ASCII を飛ばすのは ASCII をそのまま通す文字コード（is_ascii_compatible）のときだけ。ISO-2022-JP は ESC・SO・SI を表せないので飛ばすと置き換えを 0 と数えて黙る（審査で差し戻し・直した）。
