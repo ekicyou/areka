@@ -7,8 +7,10 @@
 //! ## 確立シーケンス（`areka-P0-shiori-loadu` design「System Flows」）
 //! 正典の入口は 4 つ（`loadu`／`load`／`unload`／`request`）。初期化の入口は `loadu`／`load` の
 //! どちらか 1 つを選んで 1 回だけ呼ぶ。
-//! 1. `LoadLibraryW(dll_path)`（呼出側が `load_dir\<shiori_name>` を組んだ **絶対パス**を渡す＝
-//!    DLL 検索パス曖昧性の排除）。失敗→[`ProxyError::LoadLibraryFailed`]。
+//! 1. `LoadLibraryExW(dll_path, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)`
+//!    （呼出側が `load_dir\<shiori_name>` を組んだ **絶対パス**を渡す。依存の DLL は読む DLL のフォルダと
+//!    システムの既定から探し、作業フォルダと PATH は見ない。相対パスは OS が断る）。
+//!    失敗→[`ProxyError::LoadLibraryFailed`]。
 //! 2. `GetProcAddress` で初期化の入口 `loadu`・`load` を **任意で**引き、[`choose_init_entry`] で
 //!    1 つ選ぶ（`loadu` 優先・`load` だけでも `loadu` だけでも可）。両方無い→
 //!    [`ProxyError::EntryNotFound`]`("load")`。続けて `unload`・`request` を **必須で**引く。欠落→
@@ -56,7 +58,10 @@ use windows::Win32::Globalization::{
 use windows::Win32::System::Diagnostics::Debug::{
     SEM_FAILCRITICALERRORS, SEM_NOOPENFILEERRORBOX, SetThreadErrorMode, THREAD_ERROR_MODE,
 };
-use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+use windows::Win32::System::LibraryLoader::{
+    GetProcAddress, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR,
+    LoadLibraryExW,
+};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
 use windows::core::{HSTRING, PCSTR, s};
 
@@ -77,7 +82,11 @@ type UnloadFn = unsafe extern "C" fn() -> u8;
 /// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
 type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 
-/// `LoadLibraryW` を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに呼ぶ。
+/// DLL を、OS の窓（「正しくないイメージ」0xc000012f など）を出さずに読む。
+///
+/// `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` で、依存の DLL は読む DLL の
+/// フォルダとシステムの既定から探し、作業フォルダと PATH は見ない（DLL の植え込みを塞ぐ）。
+/// このフラグは絶対パスを要り、相対パスは OS が断る。旗が効くのはこの 1 回の読み込みの静的な依存だけ。
 ///
 /// 既定では、壊れた DLL を読むと OS が利用者の画面に窓を出し、OK が押されるまでこのスレッドを止める。
 /// 失敗は `LoadLibraryFailed` として返るので、窓は要らない。呼ぶ間だけこのスレッドのエラーモードに
@@ -95,7 +104,13 @@ fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
     }
     .is_ok();
     // SAFETY: `wide` は呼出中生存する有効な NUL 終端 UTF-16。失敗は Err で返る。
-    let result = unsafe { LoadLibraryW(wide) };
+    let result = unsafe {
+        LoadLibraryExW(
+            wide,
+            None,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+        )
+    };
     if set {
         // SAFETY: 直前に読み出した元のモードを戻すだけ。
         let _ = unsafe { SetThreadErrorMode(old, None) };
@@ -108,7 +123,7 @@ fn load_library_quiet(wide: &HSTRING) -> windows::core::Result<HMODULE> {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum ProxyError {
-    /// `LoadLibraryW` 失敗（DLL 不在・ロード失敗・ビットネス不一致など・R6.1）。
+    /// `LoadLibraryExW` 失敗（DLL 不在・相対パス・ロード失敗・ビットネス不一致など・R6.1）。
     LoadLibraryFailed(windows::core::Error),
     /// 入口が無い。名札は `"load"`（初期化の入口 `loadu`・`load` が **両方無い**とき・片方在れば
     /// この失敗にならない）・`"unload"`・`"request"` の 3 値（R6.2・`areka-P0-shiori-loadu` 要件 1.4・1.7）。
@@ -175,11 +190,12 @@ pub struct ShioriByteProxy {
 }
 
 impl ShioriByteProxy {
-    /// `LoadLibraryW` → 入口の解決と選択 → 入口別の符号化 → 初期化の入口の呼出まで。成功時のみ
+    /// `LoadLibraryExW` → 入口の解決と選択 → 入口別の符号化 → 初期化の入口の呼出まで。成功時のみ
     /// `Self`（=load 済み）を返す（design §374-375）。
     ///
     /// - `dll_path`: **絶対パス**（呼出側 Task 6 が `load_dir.join(shiori_name)` を渡す前提）。本
-    ///   モジュールは受け取った絶対パスを `LoadLibraryW` で開く＝DLL 検索パス曖昧性の排除（design §381）。
+    ///   モジュールは受け取った絶対パスを、依存の探し先を絞った `LoadLibraryExW` で開く（相対パスは
+    ///   `LoadLibraryFailed`）。
     /// - `load_dir`: 初期化の入口の同期引数（リソース根）。`loadu` へは UTF-8、`load` へは
     ///   **ANSI(CP_ACP)** で符号化して渡す（[`init_bytes`]）。
     ///
@@ -188,7 +204,7 @@ impl ShioriByteProxy {
     ///
     /// Preconditions: `dll_path` は絶対パス。呼出は helper UI スレッド（WndProc）上。
     pub fn load(dll_path: &Path, load_dir: &Path) -> Result<Self, ProxyError> {
-        // --- 手順 1: LoadLibraryW（絶対パス・UTF-16 null 終端）---
+        // --- 手順 1: LoadLibraryExW（絶対パス・UTF-16 null 終端）---
         // HSTRING は NUL 終端の UTF-16 を保持する。失敗→LoadLibraryFailed（R6.1）。
         let wide = HSTRING::from(dll_path.as_os_str());
         // OS の窓は出さない（`load_library_quiet`）。失敗時は Err を返す（下で map）。

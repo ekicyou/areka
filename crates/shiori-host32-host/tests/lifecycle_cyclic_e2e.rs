@@ -2,7 +2,7 @@
 //! （task 5.1・design.md Testing Strategy #8「lifecycle_cyclic_e2e.rs::cyclic_run_and_clean_shutdown」）。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
-//! `LoadLibraryW` させたうえで、ハンドシェイク → LOAD 先行 → **固定応答の往復を 200 回連続
+//! `LoadLibraryExW` させたうえで、ハンドシェイク → LOAD 先行 → **固定応答の往復を 200 回連続
 //! （実時間 sleep なしの back-to-back）** で行い、各往復の成功と fixture 固定応答を確認する。
 //! 反復後も helper が生存継続していることを確認したうえで、**正規の正常終了経路**
 //! （UNLOAD → ループ正常終了 → `exit(0)`）を通じて **正常終了種別（`ExitKind::Clean`）**が

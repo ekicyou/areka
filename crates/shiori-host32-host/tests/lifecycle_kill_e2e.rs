@@ -2,7 +2,7 @@
 //! （task 5.3・design.md Testing Strategy #9「lifecycle_kill_e2e.rs::kill_injection_detection_and_reporting」）。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
-//! `LoadLibraryW` させたうえで、ベースラインの GET 往復成功（healthy round-trip）を確認した後、
+//! `LoadLibraryExW` させたうえで、ベースラインの GET 往復成功（healthy round-trip）を確認した後、
 //! **強制終了（`TerminateProcess` 相当）を注入**し、以下を **1 つの `#[test]` 関数**で実証する:
 //! - ① kill 後、bounded ポーリングで **異常な終了種別**（helper プロセス由来の非正常終了・R4.1）が検出される。
 //! - ② その後の request が **無限待ちにならず**、有限時間内に **観測可能なエラー**として返る（R4.2）。

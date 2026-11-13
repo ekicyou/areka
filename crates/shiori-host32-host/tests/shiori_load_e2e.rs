@@ -1,7 +1,7 @@
 //! 実プロセス LOAD E2E（task 7.1・design.md「#### LoadE2E」／System Flows WS-A LOAD）。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
-//! `LoadLibraryW` させて **LOAD の成否 ack を跨プロセスで観測**する。3 ケースを 1 つの
+//! `LoadLibraryExW` させて **LOAD の成否 ack を跨プロセスで観測**する。3 ケースを 1 つの
 //! `#[test]` 関数に集約し、各ケースで親 message-only 窓を新規 `create()`→使用→明示 `drop`
 //! することで、**同時生存する親窓を高々 1 つ**に保つ（wintf の message-only 窓は同一プロセスで
 //! 2 組独立生成すると 2 組目が失敗する既知制約・shiori_request_e2e/parent_window 参照）。
@@ -9,7 +9,7 @@
 //! 検証系列（design.md「検証系列」①〜④）:
 //! - ① 成功 ack `[1]`（testdll を `load_dir\shiori.dll` へコピー・cwd=load_dir 慣習）→ R5.3/7.3
 //! - ② env `HOST32_TESTDLL_LOAD_FAIL=1` 強制失敗 ack `[0]`（testdll の `load`→false）→ R6.3/7.3
-//! - ③ DLL 不在（空 load_dir）ack `[0]`（`LoadLibraryW` 失敗）→ R6.1
+//! - ③ DLL 不在（空 load_dir）ack `[0]`（`LoadLibraryExW` 失敗）→ R6.1
 //! - ④ 各失敗後の helper 生存（`poll_exit_kind`→`None`）→ R6.4
 //!
 //! LOAD ack 待機は推奨既定 timeout `LOAD_ACK_TIMEOUT`（親 per-call・凍結 timeout 機構は不変・R5.4）。
@@ -164,17 +164,17 @@ fn load_e2e_success_fail_survival() {
         );
     }
 
-    // --- ケース③ DLL 不在 ack[0]（空 load_dir・LoadLibraryW 失敗）---
+    // --- ケース③ DLL 不在 ack[0]（空 load_dir・LoadLibraryExW 失敗）---
     {
         let root = TestRoot::new("load-e2e-absent");
         let load_dir = root.path();
-        // shiori.dll を置かない＝LoadLibraryW が失敗する。
+        // shiori.dll を置かない＝LoadLibraryExW が失敗する。
 
         let ack = run_load_case(&helper_exe, load_dir, "shiori.dll", false);
         assert_eq!(
             ack,
             vec![0u8],
-            "ケース③: DLL 不在（LoadLibraryW 失敗）は ack [0] を返す（要件 6.1）"
+            "ケース③: DLL 不在（LoadLibraryExW 失敗）は ack [0] を返す（要件 6.1）"
         );
     }
 }

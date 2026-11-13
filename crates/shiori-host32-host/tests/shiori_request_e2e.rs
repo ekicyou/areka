@@ -1,7 +1,7 @@
 //! 決定的 request E2E（task 6.1・design.md「#### shiori_request_e2e」／System Flows GET 往復）。
 //!
 //! **実 i686 helper プロセス**を spawn し、**実 i686 testdll（`shiori.dll`）**を
-//! `LoadLibraryW` させたうえで、**helper 越しに GET／NOTIFY request を跨プロセスで往復**させ、
+//! `LoadLibraryExW` させたうえで、**helper 越しに GET／NOTIFY request を跨プロセスで往復**させ、
 //! [`Shiori3Client`] の出口 API が正しい Value を取り出す／204 を破棄することを観測する。
 //! GET と NOTIFY を **1 つの `#[test]` 関数**に集約し、単一の親窓＋helper を再利用する
 //! （R6.9「両 request line を 1 回の決定的 run で行使」）。親 message-only 窓は同一プロセスで

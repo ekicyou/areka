@@ -26,7 +26,7 @@ use std::sync::Mutex;
 /// 3. 印の環境変数を差すテストは、この錠を取る。印のパスは、読む DLL と同じフォルダに置く。
 /// 4. 今、偽の DLL を load するテストは、`testdll_drop_invokes_courtesy_unload`・
 ///    `testdll_unload_from_another_folder_leaves_marker_untouched`・
-///    `testdll_request_roundtrip_get_and_notify`・`main_loopback_tests.rs` の loopback のテスト。
+///    `testdll_request_roundtrip_get_and_notify`・`a_relative_dll_path_is_refused`・`main_loopback_tests.rs` の loopback のテスト。
 ///    うち環境変数を差すのは `testdll_drop_invokes_courtesy_unload` と
 ///    `testdll_unload_from_another_folder_leaves_marker_untouched`。
 static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
@@ -72,7 +72,7 @@ fn mixed_japanese_encodes_to_shift_jis_multibyte() {
 // 2. kernel32.dll で EntryNotFound（R6.2・設計判断 (d)）
 // ---------------------------------------------------------------------
 
-/// `kernel32.dll` は必ず存在し LoadLibraryW は成功するが、`load`/`unload`/`request` の
+/// `kernel32.dll` は必ず存在し LoadLibraryExW は成功するが、`load`/`unload`/`request` の
 /// SHIORI エクスポートを持たない。ゆえに `ShioriByteProxy::load` は解決段で
 /// `ProxyError::EntryNotFound` を**決定的**に返す（エクスポート欠落態様の証明・R6.2）。
 /// 半構築を残さないため内部で FreeLibrary 済み（Err = 状態残さず）。
@@ -91,6 +91,51 @@ fn kernel32_yields_entry_not_found() {
         Err(e) => panic!("expected EntryNotFound(\"load\"), got other error {e:?}"),
         Ok(_) => panic!("expected EntryNotFound(\"load\"), but load unexpectedly succeeded"),
     }
+}
+
+/// 今の作業フォルダから絶対パス `path` への相対パス（同じドライブであること）。
+/// 作業フォルダはプロセス全体で 1 つなので、変えずに読むだけにする（並ぶテストを乱さない）。
+#[cfg(target_arch = "x86")]
+fn relative_from_cwd(path: &Path) -> std::path::PathBuf {
+    let cwd = std::env::current_dir().expect("current dir is available");
+    let from: Vec<_> = cwd.components().collect();
+    let to: Vec<_> = path.components().collect();
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    assert!(
+        common > 0,
+        "作業フォルダと {} は同じドライブのはず",
+        path.display()
+    );
+    let mut relative: std::path::PathBuf = from[common..].iter().map(|_| "..").collect();
+    relative.extend(&to[common..]);
+    relative
+}
+
+/// 件 1（指摘 1・要件 7.1・7.4）: 依存の探し先を読む DLL のフォルダとシステムの既定に絞る旗は
+/// 絶対パスを要るので、作業フォルダからの相対パスは `LoadLibraryFailed` になり、同じ DLL の絶対パスは
+/// 読める。素の `LoadLibraryW` に戻すと相対パスで読めて赤になる。
+/// 偽の DLL を自分だけのフォルダへ写して読み、印の環境変数は差さないので錠は取らない。
+#[test]
+#[cfg(target_arch = "x86")]
+fn a_relative_dll_path_is_refused() {
+    let (root, dll) = copy_testdll_into_unique_target_dir("relative");
+    let relative = relative_from_cwd(&dll);
+    assert!(relative.is_relative(), "{}", relative.display());
+    assert!(
+        relative.exists(),
+        "相対パスは作業フォルダからは在る: {}",
+        relative.display()
+    );
+
+    match ShioriByteProxy::load(&relative, root.path()) {
+        Err(ProxyError::LoadLibraryFailed(_)) => {}
+        Err(e) => panic!("相対パスは LoadLibraryFailed のはず: {e:?}"),
+        Ok(_) => panic!("相対の DLL パスは読まないこと: {}", relative.display()),
+    }
+
+    let proxy = ShioriByteProxy::load(&dll, root.path())
+        .unwrap_or_else(|e| panic!("同じ DLL の絶対パスは読めること: {e:?}"));
+    drop(proxy);
 }
 
 // ---------------------------------------------------------------------

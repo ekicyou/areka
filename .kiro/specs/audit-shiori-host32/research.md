@@ -507,3 +507,27 @@
 - testdll と loadu の `Cargo.toml` を `[dependencies.windows] workspace = true` と機能の行にした（版の直書き `"0.62.2"` を消した）。testdll は `OnTestReenter` のために `Win32_System_DataExchange`（と、ワークスペースの機能に元からある `Win32_UI_WindowsAndMessaging`）を足した。
 - `git diff --exit-code Cargo.lock` は 0（差分なし）。x64 と i686（`--target i686-pc-windows-msvc`）の両方で `cargo build -p shiori-host32-testdll -p shiori-host32-testdll-loadu` が通った後に確かめた。解決される `windows` の版は今までと同じ 0.62.2。
 - 14.10 の基準のうち、i686 の `crates/shiori-host32-testdll/src/lib.rs:63` の `clippy::needless_bool` はこのタスクで消えた（`load` の戻りを比べの式にした）。
+
+### 14.12 実物のゴーストが読めるか（タスク 3・R1・要件 7.5）
+
+- 直し: helper の `load_library_quiet`（`crates/shiori-host32-helper/src/shiori_proxy.rs`）を `LoadLibraryExW(wide, None, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` にした。エラーの窓を止める手当ては残した。テスト `shiori_proxy_tests.rs::a_relative_dll_path_is_refused`（i686 だけ）は、素の `LoadLibraryW` に戻すと相対パスで読めて赤になることを確かめた。
+- 静かな読み（`dumpbin /dependents`・どれも `14C machine (x86)`）: 静的な依存はどれも OS の DLL だけで、探し先を絞っても見つかる。
+  - pasta（`vendors/pasta/release/hello-pasta/ghost/master/pasta.dll`）: user32・kernel32・bcryptprimitives・api-ms-win-core-synch-l1-2-0・ws2_32・ntdll・userenv
+  - YAYA（`konnoyayame` の `yaya.dll`）: KERNEL32・USER32・SHELL32
+  - 里々（`R_POST_and_KOMAINU`・手元の `emo-gs` の里々・`Kunigunde2` の `satori.dll`）: USER32・KERNEL32
+  - 華和梨のゴーストは手元に無かった（ゴーストの `ghost\master` を探して見つからなかった）。
+- 実機（排他のテストの机を取って 2 回。どれも `PASTA_DEBUG=0`）。
+
+| 回 | 走らせたもの | helper | SHIORI の DLL | 結果 |
+|---|---|---|---|---|
+| 1 | `areka-ghost` の `real_pasta_boot_observes_a_cue_then_shuts_down_cleanly` | 新 | hello-pasta | 赤。`[helper] SHIORI 初期化の入口: loadu` の後に `LoadReturnedFalse { last_error: 203 }` |
+| 1 | `areka-ghost` の `real_pasta_online` | 新 | hello-pasta | 7 本緑・1 本赤（`emo2_does_not_start_chatting_while_online`）。赤は上と同じ `LoadReturnedFalse` |
+| 1 | `areka-kanade` の `real_helper_boot_pump_close_completes` | 新 | hello-pasta | 緑（入口 `loadu`） |
+| 2 | 1a: `real_pasta_boot_observes_a_cue_then_shuts_down_cleanly` | 新 | emo2 の検体に入っている `pasta.dll` | 緑（入口 `loadu`・1.06 秒） |
+| 2 | 1b: 同じテスト | 旧（素の `LoadLibraryW`） | hello-pasta | 赤。1 回目と同じ `LoadReturnedFalse { last_error: 203 }` |
+| 2 | areka.exe を有界に自動終了で起こす（`konnoyayame`・YAYA） | 新 | `yaya.dll` | 終了コード 0・入口 `loadu`・`LoadLibraryFailed` と ERROR は 0 行 |
+| 2 | 同（`R_POST_and_KOMAINU`・里々） | 新 | `satori.dll` | 終了コード 0・入口 `load`・`LoadLibraryFailed` と ERROR は 0 行 |
+
+- 入口の行は DLL を読んで入口を解いた後にしか出ないので、どの走りでも読む段は通っている。
+- `areka-ghost` の 2 本の赤は、hello-pasta の `pasta.dll`（3,832,832 B）を emo2 の辞書の中へ差し込む組み合わせのせい。emo2 の検体の `pasta.dll`（3,681,280 B）は別物で、それなら新しいコードで緑になり、旧の `LoadLibraryW` でも hello-pasta なら同じ赤になる。この直しとは関係がない。
+- 結論: 読めないゴーストは見つからなかった。要件 7.5 の議題は要らない。

@@ -38,7 +38,7 @@
   - 完了の姿: x64 と i686 の両方で testdll と loadu が組め、`git diff --exit-code Cargo.lock` が 0 で、その結果を `research.md` に書く
   - _Requirements: 3.1, 4.1, 4.4, 5.5, 5.6_
 
-- [ ] 3. helper が DLL を読むときの依存の探し先を絞る（U2・件 1）
+- [x] 3. helper が DLL を読むときの依存の探し先を絞る（U2・件 1）
   - helper の DLL の読み込みを `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` 付きの読み込みに替え、エラーの窓を止める手当てを残す。取り込みと説明を直す
   - i686 だけのテスト `a_relative_dll_path_is_refused` を置く: 作業フォルダからの相対の道は `LoadLibraryFailed`、同じ DLL の絶対の道は読める（旗なしの読み込みに戻すと赤）
   - 実物の確かめ R1: 排他のテストの机を取ってから、`areka-ghost` の実物の pasta のテストを `vendors/pasta/release/hello-pasta/ghost/master/pasta.dll` に向けて回し、読めることを確かめて `research.md` に書く。手元に 32bit の YAYA・華和梨・里々のゴーストがあれば同じ形で確かめる。読めないゴーストが見つかったら直しを止めて開発者へ議題として出す
@@ -193,3 +193,5 @@
 - 1.1: shiori_load_e2e・shiori_request_e2e の TestRoot は HelperGuard が終わりを待たないので消え残る（Drop が eprintln）。タスク 6 で `target\test-roots\` に残らないことを確かめる。
 - 1.3: temp_path_guard_test.rs の ⒝ の見出し「読み出しのみの 2 件」は表の 1 件と合わない（1.1 の残り）。4.1 の件数と説明の直しで合わせる。
 - 2: testdll の OnTestReenter が実際に送る道（Reference0 の窓へ空の WM_COPYDATA・wParam 0）は testdll の中では縛っていない。10.3 の main_loopback_tests で初めて縛られる。
+- 3（範囲外・/kiro-complete の棚卸へ）: areka-ghost の実物の pasta のテスト（real_pasta_boot_observes_a_cue_then_shuts_down_cleanly・real_pasta_online）は HOST32_PASTA_DLL の DLL を emo2 の辞書へ差し込むので、hello-pasta の pasta.dll では LoadReturnedFalse で赤（古い LoadLibraryW でも同じ）。emo2 自身の DLL なら緑。
+- 3（範囲外）: crates/shiori-host32-host/README.md:15,92 と doc/COMPAT_ARCHITECTURE.md:84 に LoadLibraryW の記述が残る。README は 11 の説明の直しで扱う。
