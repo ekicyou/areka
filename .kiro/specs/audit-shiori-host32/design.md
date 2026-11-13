@@ -53,7 +53,7 @@
 - `RequestError`・`ShioriError` の表示の文が変わる（`areka-kanade` の記録の文が変わる・文字列で比べる使い手は無い＝grep 済み）。
 - helper の標準エラーが親から受け継がれず、areka の記録へ回る（helper の標準エラーを直接読む使い手は無い＝grep 済み）。
 - job に `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK` が付く（SHIORI が起こしたプロセスの寿命が変わる）。
-- 親の窓が HELLO を 1 度だけ・子のプロセスからだけ受ける（新しい `ParentMessageWindow::expect_helper_pid` を呼ぶ使い手は子のプロセス番号で縛られる）。
+- 親の窓が HELLO を 1 度だけ・子のプロセスからだけ受ける（新しい `ParentMessageWindow::expect_helper_pid` を呼ぶ使い手は子のプロセス番号で縛られる）。RESPONSE の送り手の確かめは取り違えを防ぐだけ（`shortcut:` の注）。差し替えを防ぐ要が出たら取り決めの形が変わる。
 - 公開の項目の消去（指摘 26・`EXIT_POLL_INTERVAL`・ipc の `PAYLOAD_HEADER_LEN`）。
 - 応答のヘッダの値の読み方（同じプロセス内の道も同じ関数を使う＝どのゴーストにも効く）。
 
@@ -406,7 +406,7 @@ impl ParentMessageWindow {
 ```
 - HELLO は 1 度だけ受ける（`helper_hwnd` が決まった後の HELLO は記録して捨てる）。
 - HELLO は送り手の窓（`wParam`）が中身の窓の値と同じときだけ受ける。`expect_helper_pid` が呼ばれていれば、さらに `GetWindowThreadProcessId(wParam)` がその番号と同じときだけ受ける。
-- RESPONSE は `wParam == helper_hwnd` のときだけ受け皿に入れる。
+- RESPONSE は `wParam == helper_hwnd` のときだけ受け皿に入れる。`wParam` は送り手が自分で書く値なので、これで防げるのは取り違え（helper でない窓からの返事）だけで、helper の窓を名乗る同じ利用者のプロセスの差し替えは防げない。その場所に `// shortcut: wParam は送り手の自己申告なので、helper の窓を名乗る同じ利用者のプロセスの RESPONSE は防げない（同じ利用者のプロセスは DLL の差し込みなど、もっと強いことができる）。防ぐ要が出たら、起こすたびの合言葉を枠に載せる形へ上げる` を置く（2026-11-13 設計の討議 議題 1・開発者「承認」＝要件 2.2 ⑵ の印として残す）。
 - 受けなかったものは `warn!(.., event = "parent_frame_ignored", reason = ..)`（11 と同じ形）。
 - 呼ぶ所: `areka-ghost/src/shiori_wiring.rs` の `real_connect`（spawn の直後）と host の結合テスト（`tests/common` の握手の手続き）。呼ばない使い手（`areka-kanade` のテスト・`pilot`）は「1 度だけ・送り手と中身が同じ」の決まりだけで守られる。spawn の後に握手を回すまでは親のスレッドがメッセージを取り出さないので、呼ぶのが HELLO より遅れることは無い。
 
@@ -590,7 +590,7 @@ enum ProxyError { /* 今の種類 */ ResponseLengthMismatch { declared: usize, a
 ## Security Considerations
 
 - 件 1: DLL の依存は読む DLL のフォルダと OS の安全な探し先からだけ探す（作業フォルダと `PATH` から探さない）。
-- 38: 同じ利用者のほかのプロセスが親の窓を見つけて偽の HELLO・RESPONSE を送っても、helper の窓の値は書き換わらず、応答も差し替わらない（本番は子のプロセス番号で縛る）。
+- 38: 同じ利用者のほかのプロセスが親の窓を見つけて偽の HELLO を送っても、helper の窓の値は書き換わらない（本番は子のプロセス番号で縛る）。RESPONSE は取り違えだけを防ぎ、helper の窓を名乗る差し替えは防がない（`shortcut:` の注・設計の討議 議題 1）。
 - 7: DLL が書いた長さを確保の大きさと照らしてから読む（確保の外を読まない）。
 - 8: DLL の呼び出しの最中のメッセージで helper が落ちない（`unload` が呼ばれずに保存が失われる元を無くす）。
 
