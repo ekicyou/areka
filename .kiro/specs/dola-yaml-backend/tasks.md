@@ -46,7 +46,7 @@
   - _Requirements: 2.6, 3.3, 7.1_
 
 - [ ] 5. 説明と申し送りを直しの後の形に合わせる
-- [ ] 5.1 README と steering の dola の記述を直す
+- [x] 5.1 README と steering の dola の記述を直す
   - README の書式の 2 行から YAML を消し、機能 `toml` で TOML を読み書きできること・ほかの書式は serde の導出で利用者が選べることを英文で書く
   - `tech.md` の dola の依存の表の YAML の行を `toml` の行に替え、`toml` の行の dola の文を直す。`product.md`・`structure.md` の書式の機能の列挙を `toml` だけにする
   - 済んだ形: README と steering 3 本に dola の機能としての `yaml`・`json` の語が残らず（`serde_json` が開発専用の依存だという記述は残す）、`toml` の版・機能の名前・使い道が書かれている
