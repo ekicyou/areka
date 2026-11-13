@@ -100,3 +100,39 @@ fn nan_opacity_is_drawn_as_one_and_warns_once_per_entity() {
     assert_eq!(log.matches(NAN_TEXT).count(), 1, "{log}");
     assert!(log.contains("opacity-node"), "実体名が要る: {log}");
 }
+
+#[test]
+fn nan_opacity_under_invisible_parent_still_warns_once() {
+    let mut world = World::new();
+    let root = world.spawn(Visual::default()).id();
+    let hidden = world
+        .spawn((
+            Visual {
+                is_visible: false,
+                ..Default::default()
+            },
+            solid_rect_content(rect4()),
+            ChildOf(root),
+        ))
+        .id();
+    world.spawn((
+        Visual {
+            opacity: f32::NAN,
+            ..Default::default()
+        },
+        solid_rect_content(rect4()),
+        Name::new("nan-under-hidden"),
+        ChildOf(hidden),
+    ));
+    let mut filler = Filler::new(&mut world);
+    let log = capture_under_filter("warn", || {
+        filler.run(&mut world, root);
+        filler.run(&mut world, root);
+    });
+    assert_eq!(
+        log.matches(NAN_TEXT).count(),
+        1,
+        "見えない部分木の中でも 1 回: {log}"
+    );
+    assert!(log.contains("nan-under-hidden"), "実体名が要る: {log}");
+}
