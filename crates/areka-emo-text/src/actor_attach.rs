@@ -14,6 +14,7 @@ use crate::place::PlaceKey;
 use crate::region::{TextRegion, inline_axis_name};
 #[cfg(doc)]
 use crate::state::TextLayerState;
+use crate::writing::{DirectionDecl, note_direction_declarations};
 
 use super::decoration;
 #[cfg(doc)]
@@ -42,6 +43,11 @@ impl ResolveInputs {
     /// 覚えた入力の選択肢の飾りの縮退の値（飾りの警告の「前の値」・`real-run-log-noise` 要件 2.3）。
     fn cursor_fallback(&self) -> CursorFallback {
         CursorFallback::of(self.model.cursor())
+    }
+
+    /// 覚えた入力の書字方向の宣言の生の値（書字方向の記録の「前の宣言」・`emo-text-reveal-incremental` 要件 3.3）。
+    fn direction_decl(&self) -> DirectionDecl {
+        DirectionDecl::of(&self.model)
     }
 }
 
@@ -155,6 +161,11 @@ impl TextLayerRuntime {
     /// 関数の本体だけは `actor_decoration.rs` に置く（本ファイルの行数の余白のため）。
     ///
     /// 描画範囲の潰れの状態の変わり目の記録（areka-P0-balloon-text-bugs 件 2）も本口が書く（`note_region_collapse`）。
+    ///
+    /// # 書字方向の宣言は記録しない（`emo-text-reveal-incremental` 要件 3.7）
+    ///
+    /// 本口は解決済みの値を受け取る試験の口なので、書字方向の宣言の警告と矛盾併記の記録を書かない。
+    /// 記録は解決させた側（装着・再追従が通る `remember_inputs`、箱の表の受け取り）が持つ。
     pub fn register_actor(
         &mut self,
         actor: ActorKey,
@@ -223,7 +234,8 @@ impl TextLayerRuntime {
     ) {
         let background = self.background_of(&actor);
         let resolved = self.resolve_stamped(&actor, model, binding.image_size, background);
-        self.finish_registration(&actor, binding, model, background, resolved);
+        // 装着（切り替えを含む）は前の宣言を渡さない＝必ず 1 回目として記録する（要件 3.2）。
+        self.finish_registration(&actor, binding, model, background, resolved, None);
     }
 
     /// 登録の後半（装着と再追従の作り直しで同じ）: 前の飾りの縮退を取り → 登録し → 入力を覚える。
@@ -234,6 +246,7 @@ impl TextLayerRuntime {
         model: &BalloonModel,
         background: (u8, u8, u8),
         resolved: ResolvedBalloonText,
+        previous_direction: Option<DirectionDecl>,
     ) {
         let place = PlaceKey::balloon(actor);
         // 飾りの警告の前の値は、記憶を消す直の登録口より前に取り出す（`real-run-log-noise` 要件 2.3）。
@@ -246,6 +259,7 @@ impl TextLayerRuntime {
             binding.image_size,
             background,
             previous,
+            previous_direction,
         );
     }
 
@@ -256,11 +270,24 @@ impl TextLayerRuntime {
             .map(ResolveInputs::cursor_fallback)
     }
 
+    /// 場所の記憶の入力から取り出した書字方向の宣言（記憶が無ければ `None`）。
+    fn direction_decl_at(&self, place: &PlaceKey) -> Option<DirectionDecl> {
+        self.resolve_inputs
+            .get(place)
+            .map(ResolveInputs::direction_decl)
+    }
+
     /// 解き直しの入力を場所の記憶へ入れ直す（装着・再追従の作り直しは `register_actor` の後、
     /// 再追従の中の段は解いた値が `layout_input` に等しいと確かめた後に呼ぶ＝不変条件を保つ）。
     ///
     /// 入れ直すときに、選択肢の飾りの縮退の値を `previous`（入れ直す前の記憶の値・呼び手が
     /// `register_actor` の前に取り出す）と比べて警告する（`warn_cursor_fallback`・`real-run-log-noise` 要件 2.1〜2.4）。
+    /// 書字方向の宣言も同じく `previous_direction` と生の値で比べて記録する
+    /// （`note_direction_declarations`・`emo-text-reveal-incremental` 要件 3.2〜3.4）。
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "前の値 2 つは記憶を消す直の登録口より前に呼び手が取り出す"
+    )]
     fn remember_inputs(
         &mut self,
         actor: &ActorKey,
@@ -269,12 +296,14 @@ impl TextLayerRuntime {
         image_size: (u32, u32),
         background: (u8, u8, u8),
         previous: Option<CursorFallback>,
+        previous_direction: Option<DirectionDecl>,
     ) {
         decoration::warn_cursor_fallback(
             &self.balloon_label_of(actor),
             &CursorFallback::of(model.cursor()),
             previous.as_ref(),
         );
+        note_direction_declarations(model, previous_direction.as_ref());
         let inputs = ResolveInputs {
             model: model.clone(),
             image_size,
@@ -381,6 +410,7 @@ impl TextLayerRuntime {
         if current == binding && self.layout_input.get(&place) == Some(&resolved) {
             // 中の段: 解いた値が今と同じ——記憶だけを新しい入力へ替える（不変条件は保たれる）。
             let previous = self.cursor_fallback_at(&place);
+            let previous_direction = self.direction_decl_at(&place);
             self.remember_inputs(
                 actor,
                 place,
@@ -388,6 +418,7 @@ impl TextLayerRuntime {
                 binding.image_size,
                 background,
                 previous,
+                previous_direction,
             );
             return trace_unchanged(actor, k_new);
         }
@@ -396,7 +427,16 @@ impl TextLayerRuntime {
         // layout 入力を再構築する（単一構築経路・R4.3）。純粋状態（TextLayerState）には
         // 触れない＝リビール進行・確定行は保存される（R4.7）。
         let collapsed = resolved.region.is_collapsed();
-        self.finish_registration(actor, binding, model, background, resolved);
+        // 前の宣言は、記憶を消す直の登録口（`finish_registration` の中）より前に取り出す。
+        let previous_direction = self.direction_decl_at(&place);
+        self.finish_registration(
+            actor,
+            binding,
+            model,
+            background,
+            resolved,
+            previous_direction,
+        );
         // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新しい k・面実寸の物理寸で
         // 再生成し、空の行 TextLayout キャッシュから保存済み状態を全再描画する（`areka-P0-kero-balloon` R4.3／`areka-P0-emo-dpi-scaling` R8.4）。
         // 新しい領域が潰れているときは捨てずに残す: World を持つ提示が同じフレームの下流で

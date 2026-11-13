@@ -4,7 +4,7 @@
 
 use super::super::{MouseWiring, RegionSource, on_char_pointer_moved};
 use super::char_watch;
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_kanade::{ClickButton, HoverEdge, KanadeMsg, MouseEventKind, MouseInput};
 use areka_placement::spawn::CharWindowMarker;
 use bevy_ecs::hierarchy::ChildOf;

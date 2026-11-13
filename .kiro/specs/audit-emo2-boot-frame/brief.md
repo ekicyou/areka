@@ -8,7 +8,7 @@
 
 ## Current State
 
-- 受け持つファイル: `crates/areka/src/emo2_boot/frame/` と `emo2_boot/frame_*.rs`。
+- 受け持つファイル: `crates/areka/src/runtime/frame/` と `runtime/frame_*.rs`、終わる相の `crates/areka/src/session/ghost_quit.rs`・`ghost_quit_tests.rs`・`ghost_quit_logsink_tests.rs`・`ghost_quit_switch_tests.rs`（2026-11-13 `runtime-module-untangle` で書き換えた＝前は `emo2_boot/frame/`・`emo2_boot/frame_*.rs`。終わる相は前の `frame.rs` と `frame_ghost_quit_*_tests.rs` から移した。`runtime-crate-split` で runtime の分は `crates/areka-runtime/src/` へもう一度移る。新旧は roadmap の「本体の crate 分け」の新旧のパスの対応表）。
 - 大きさ: 60 ファイル・コード 4,845 行・テスト 21,175 行（`_tests.rs`・`tests/`・`_test_support.rs` をテストに数えた）。
 - まだ audit をかけていない。指摘はギャップ分析で洗い出す（起票のときに出さなかったのは、着手までにコードが変わって指摘が古びるため）。
 
@@ -72,3 +72,9 @@
   - 依存を足すなら `tech.md` へ登記して、開発者の承認を得る。
 - 消す前に、ツリー全体（テスト・fixture・設定・文字列での参照を含む）で使われていないことを確かめる。
 - 1 spec 20 タスクを越えそうなら、要件の討議で、指摘の組ごとに同じ範囲の 2 本目として切ってよい。
+
+## runtime-module-untangle からの申し送り（2026-11-13）
+
+`runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
+
+- **要らない項目: `crates/areka/src/runtime/frame/wiring.rs` 322 行目の説明の文の古いパス**。`super::super::input_events::balloon` は `runtime` の下を指すが、`input_events` は本体の根（`crate::input_events::balloon`）にある。字面だけの直し。

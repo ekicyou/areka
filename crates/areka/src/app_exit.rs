@@ -16,8 +16,8 @@ use wintf::AppExit;
 use wintf::ecs::WindowHandle;
 use wintf::ecs::window::{OnCloseRequest, OnSessionEnd, ZOrderChainPlan};
 
-use crate::emo2_boot::frame::ZOrderAbsentReports;
 use crate::input_events::MouseWiring;
+use crate::runtime::frame::ZOrderAbsentReports;
 use areka_placement::balloon_lock::BalloonLockLedger;
 use areka_placement::chain_finalize::{ChainFinalizeStall, ChainFinalized};
 use areka_placement::chain_realign::ChainRealignPending;
@@ -106,9 +106,9 @@ pub(crate) fn write_failure_of(origin: &ExitOrigin) -> Option<&PersistFailure> {
 /// 受け口 [`AppExit`] が World に無いとき（本番では `WinApp` が必ず挿すので配線の誤り）は
 /// `error!` を残して戻る——窓は閉じたが終了は指示できない。
 pub(crate) fn quit_app(world: &mut World, origin: ExitOrigin) -> usize {
-    crate::emo2_boot::frame::log_stay_on_top_discard(
+    crate::runtime::frame::log_stay_on_top_discard(
         world,
-        crate::emo2_boot::frame::DiscardReason::Exit,
+        crate::runtime::frame::DiscardReason::Exit,
     );
     let closed = despawn_app_windows(world);
     if world.contains_resource::<FirstExit>() {
@@ -194,7 +194,7 @@ impl WindowsClosed {
 ///   `GhostBootInputsSource`・`AppExit`・`Schedules`・描画の装置（`GraphicsCore` ほか）・
 ///   `ZOrderPairStrategy`（系の登録と一緒にプロセスに 1 回）も同じ。
 /// - `MonitorSnapshot`・`MonitorDpiTable`: 画面の表。毎フレーム同期し、窓を開くたびにも据え直す。
-/// - ゴーストごとの結線（`Emo2Wiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
+/// - ゴーストごとの結線（`RuntimeWiring`・`KanadeNoticeRx`・`ChangeRx`・`MouseWiring`・
 ///   `BalloonWiring`・メニュー・記憶の結線など）: 起こすたびに `insert_non_send` で差し替わる。
 /// - 環境変数の読み取りの控え（`OnceLock`）と系の `Local`: 窓の一式に依らない。
 pub(crate) fn close_windows_for_restart(world: &mut World) -> WindowsClosed {

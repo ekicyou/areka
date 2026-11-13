@@ -13,14 +13,14 @@ use wintf::ecs::{Input, Update};
 
 use super::*;
 use crate::boot_resolve::{BalloonRoute, GhostRoute};
-use crate::emo2_boot::frame::KanadeNoticeRx;
-use crate::emo2_boot::sample_test_support::acquire_emo2;
-use crate::emo2_boot::spine::{
-    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
-};
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, ItemBody, MenuContext, MenuItem, MenuWiring};
 use crate::readme::ReadmeWiring;
+use crate::runtime::sample_test_support::acquire_emo2;
+use crate::runtime::spine::{
+    Progress, ScriptedShioriHandle, SpineHarness, run_bounded_watching, wait_until,
+};
+use crate::session::ghost_quit::KanadeNoticeRx;
 use areka_placement::spawn::GhostWindowMarker;
 use log_capture_kit::capture;
 
@@ -357,7 +357,7 @@ fn scripted_inputs(
 ) -> (GhostBootInputs, ScriptedShioriHandle) {
     let (backend, handle) = SpineHarness::standard_backend("\\s[0]\\e");
     let inputs = GhostBootInputs {
-        wiring: emo2_boot::Emo2BootInputs {
+        wiring: runtime::RuntimeInputs {
             ghost_root: sample.folder().to_path_buf(),
             balloon_root: emo2_balloon(sample),
             shiori: areka_ghost::ShioriWiring::Custom(Box::new(move || {
@@ -455,6 +455,11 @@ fn boots_twice_in_one_process_without_double_registration() {
 
     let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
     register_systems(&mut world, kanade_stop_rx);
+    // 本体の口は最初の巡より前に据わる（据え忘れは本番で `session_hooks_missing` の縮退になる）。
+    assert!(
+        world.contains_resource::<crate::runtime::session_hooks::SessionHooks>(),
+        "register_systems が本体の口を据えていない"
+    );
     let lens_before = systems_lens(&world);
 
     // ── 1 周目 ──

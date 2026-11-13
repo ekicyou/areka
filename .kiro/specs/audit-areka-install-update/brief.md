@@ -78,3 +78,9 @@
 `audit-sylphya-actor` の audit の指摘のうち、呼び手の乗り換えがこの spec の範囲に当たる 1 件を回した（2026-11-06 開発者の承認・`audit-sylphya-actor` の要件の討議 議題 4）。
 
 - **件（audit #4）**: `SylphyaPublisher::barrier()` は期限の無い待ち。`crates/areka/src/install/desk.rs`（`runtime.sylphya_publisher().barrier()`）は UI スレッドから呼ぶので、書き手のアクターが遅い書き込みの最中だと UI が止まる。`audit-sylphya-actor` が足す期限つきの `barrier_within(Duration)` へ乗り換え、期限切れは記録を残して続ける。
+
+## runtime-module-untangle からの申し送り（2026-11-13）
+
+`runtime-module-untangle`（`emo2_boot` を `runtime` と `session` へ分けた spec）は振る舞いを変えなかった。作業中に直したくなった所は直さず、ここへ書いた。行番号は 2026-11-13（`93aca049f`）のもので、着手のときに確かめ直す。
+
+- **気を付ける所: `update::update_cue`・`readme::readme_cue` は記録の決まりの前方一致の下に入った**。`crates/areka/src/log_history.rs` の `areka::update`（Update）・`areka::readme`（Status）に当たる。今は 2 つとも `info!` を持たないので記録の分け方は前と同じだが、直しで `info!` を足すと記録に残るようになる。足すなら `UNKEPT_TARGETS` へ足すか、残すのが正しいかを決める（`areka::install::install_cue` は `UNKEPT_TARGETS` に入れてある）。

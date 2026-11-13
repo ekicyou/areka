@@ -27,7 +27,7 @@
   - `#[cfg(test)]` だけの外の項目が 5 ファイル・12 か所: `placement::test_support`・`emily_shaped_scopes`・`spine::GpuPermit`。
   - `balloon_test_support` は、runtime の本番の組み立て（`RuntimeWiring::new`・`BootAssets`・`PositionCue`・`TalkClock`・`ZOrderDirective` など 7 モジュール）を使う。
   - 外のテストで input を参照するのは 19 ファイル。その 1 本が `placement-crate-split` で本体に残す `spawn_assembly_tests.rs`（`attach_char_pointer_handlers`）。
-- **ログ**: 出所を名前で読むのは `tests/script_security_real_run.rs:64`（`areka::input_events::user_break=debug`）と `tests/window_link_real_run.rs:49`（`areka::input_events=debug`）の 2 件。`log_history` の決まりに input の行は無い。input のテストはイベントの値と文言で照合しており、出所は見ない。
+- **ログ**: 出所を名前で読むのは `tests/emo2_mcp_real_run.rs` の `rust_log`（`areka::input_events::user_break=debug`）と `tests/window_link_real_run.rs:49`（`areka::input_events=debug`）の 2 件。`log_history` の決まりに input の行は無い。input のテストはイベントの値と文言で照合しており、出所は見ない。
 
 ## Desired Outcome
 
@@ -76,7 +76,7 @@
 ## Constraints
 
 - **検証（要件に入れる）**: roadmap の「本体の crate 分け」の「共通の約束」の検証の項を、そのまま要件に入れる。この spec で回す実機テストは、出所を名前で読む次の 2 つを 1 回ずつ。
-  - `tests/script_security_real_run.rs`
+  - `tests/emo2_mcp_real_run.rs`（2026-11-13 に `script_security_real_run.rs` ほか 2 本をまとめた）
   - `tests/window_link_real_run.rs`
 
   `quit_app` の向きを変えるので、Ctrl+左ダブルクリックの退避で終わる記録の順が前後で同じことも示す。

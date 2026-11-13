@@ -188,8 +188,8 @@ fn despawn_app_windows_skips_cascade_despawned_target_without_warning() {
 /// `world_with_wiring` は私有で流用できない）。当たり判定は受け手が読まないので代役で足りる。
 #[test]
 fn ghost_os_close_sends_close_request_with_the_window_scope() {
-    use crate::emo2_boot::hit_region::HitRegion;
     use crate::input_events::{MouseWiring, RegionSource};
+    use crate::runtime::hit_region::HitRegion;
     use areka_kanade::{CloseReason, KanadeMsg};
     use areka_placement::spawn::CharWindowMarker;
     use std::sync::mpsc;

@@ -17,25 +17,10 @@ use temp_path_kit::TempPath;
 
 use super::*;
 
-/// テストの DLL（`shiori4-testdll` の cdylib）＝テストの実行ファイルと同じ deps に置かれたもの。
-///
-/// cdylib は `cargo test --workspace` が同じ deps ディレクトリへ置く（design.md D-1・1.1 spike）。
-/// **不在は黙って飛ばさず panic**（フォールバックは設けない）。
+/// テストの DLL（`shiori4-testdll` の cdylib）の場所。決め方は [`shiori4_testdll::locate_built_dll`]
+/// が持つ（不在・決められないときは panic・黙って飛ばさない）。
 pub(crate) fn built_test_dll() -> PathBuf {
-    let test_exe = std::env::current_exe().expect("test executable path is available");
-    let dll = test_exe
-        .parent()
-        .expect("test executable resides in a deps directory")
-        .join(shiori4_testdll::DLL_FILE_NAME);
-    assert!(
-        dll.exists(),
-        "built test DLL が正準位置に不在: {}\n\
-         この cdylib は `cargo test --workspace` が自動ビルドし単一の正準位置（deps）へ出力する。\
-         単独実行時は先に `cargo test --workspace`（または `cargo build -p shiori4-testdll`）を\
-         実行すること（フォールバックは設けない・design.md D-1・1.1 spike）。",
-        dll.display()
-    );
-    dll
+    shiori4_testdll::locate_built_dll()
 }
 
 /// `TempPath` の下に、テストの DLL を `ghost/master` へ写した解決できるゴーストを作る

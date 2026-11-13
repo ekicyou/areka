@@ -65,7 +65,7 @@ use wintf::ecs::window::transition_diag::{
     STAGE_END, STAGE_SYNC, Stamp, WINDPI_FIELDS, WRITE_FIELDS, WRITE_OPTIONAL_FIELDS,
 };
 
-use crate::emo2_boot::target_map::{TargetWindow, target_scope};
+use crate::runtime::target_map::{TargetWindow, target_scope};
 
 use areka_placement::diag::{PlacementRoute, WindowKind};
 use areka_placement::transition_diag::{
@@ -178,8 +178,8 @@ impl WindowKey {
     /// 運ばない（それは areka の語彙であり emo-present は知らない）ため、判定側が
     /// 採番の番号から窓を引く。
     ///
-    /// 採番の正本は [`crate::emo2_boot::target_map`]（`shell_target`／`balloon_target`）で、
-    /// 逆写像も正本の [`crate::emo2_boot::target_map::target_scope`] に任せる。両者が食い違えば
+    /// 採番の正本は [`crate::runtime::target_map`]（`shell_target`／`balloon_target`）で、
+    /// 逆写像も正本の [`crate::runtime::target_map::target_scope`] に任せる。両者が食い違えば
     /// 判定は窓種別を取り違えたまま静かに緑になるので、往復が一致することは
     /// `transition_judge_tests::summarize_maps_the_surface_target_id_to_a_scope_and_a_kind`
     /// が正本の関数を呼んで固定する。

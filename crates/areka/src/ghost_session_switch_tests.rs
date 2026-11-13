@@ -1,6 +1,6 @@
 //! 偽の SHIORI を持つゴーストを同じ World で起こす統合テスト（areka-P0-ghost-shell-balloon-switch）。
 //!
-//! 土台は `emo2_boot::ghost_switch_test_support`。前半は土台そのものが使えることを確かめる:
+//! 土台は `session::ghost_switch_test_support`。前半は土台そのものが使えることを確かめる:
 //! 作り口がフォルダ名で偽の SHIORI を選ぶこと・先に書いた起動記録が効くこと・接続に失敗する
 //! 版が kanade を `Fault` で止めること。後半は台本の `\![change,ghost,…]` から切替先の定常到達
 //! までを 1 周させる（要件 10.1・10.6・10.13）。判定は集めてから 1 回・降ろすのは必ず有界に行う。
@@ -16,15 +16,15 @@ use wintf::ecs::{FrameFinalize, Input, Update};
 
 use super::GhostBootInputsSource;
 use crate::app_exit::{ExitOrigin, FirstExit};
-use crate::emo2_boot::frame::KanadeNoticeRx;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{
-    CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
-};
-use crate::emo2_boot::spine::RecordedCall;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::menu::{Frame, MenuWiring};
 use crate::readme::ReadmeWiring;
+use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_quit::KanadeNoticeRx;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{
+    CONNECT_ERR, FakeShiori, SwitchRig, standard_script,
+};
 
 /// 呼出列を「種類 名前」の列へ写す（Reference は見ない）。
 fn kinds(calls: &[RecordedCall]) -> Vec<String> {

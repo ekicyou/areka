@@ -133,7 +133,7 @@ fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
 /// 一切変えない（D2: 観測増設は挙動変更に数えない）。
 ///
 /// 起動時が作るのは作業領域源と**モニタ別拡大率表**の 2 源であり、実行時の同期段
-/// （`emo2_boot::frame::work_area_sync`）と**同一の構築関数**を通る（atom task 5.1・
+/// （`runtime::frame::work_area_sync`）と**同一の構築関数**を通る（atom task 5.1・
 /// 要件 5.1）——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う
 /// 形になり得る。
 #[test]

@@ -3,7 +3,7 @@
 SSP の MCP サーバに無く、areka だけが出すツールの約束の正本。今は `check_script` の 1 本。ツールの名前・引数・結果の形・診断の種類と文面・SSP との違い・あとからツールを 1 本足す手順を書く。あわせて、SSP と同じツールの `strict` で残る再生中の記録の約束も ⑺ に書く。SSP と同じ 10 本の約束は [survey.md](survey.md)、輸送の差は [transport-diff-areka.md](transport-diff-areka.md) にある。
 
 - **areka の根拠**: ツールの定義・引数・結果の組み立ては `crates/areka-mcp/src/tools/check_script.rs`、独自のツールの表と登録は `crates/areka-mcp/src/tools/mod.rs` の `OWN_TABLE` と `all_entrances`。答えを作る処理は `crates/areka/src/mcp/check_script.rs`（事実を集めて別のスレッドへ渡す）と `crates/areka/src/mcp/check_script_judge.rs`（診断を決める純粋な関数と、文面の定数）
-- **文面の正本**: 下の ⑶ の文面が正本で、文面の定数（`crates/areka-sakura/src/strict.rs` の `MSG_*`。`check_script_judge.rs` の定数はこれを指す別名）はこれを写したもの。文面を変えるときは、この文書と定数を同じ変更で直す。⑶ の 2 つの表と ⑺ の検出点の表は、strict の記録のテスト（`crates/areka/src/emo2_boot/strict_judges_tests.rs`）がこの文書から読んで記録と比べる。表は `<!-- …:begin -->`〜`<!-- …:end -->` の印で挟んであるので、印と表の列の並びを崩さない
+- **文面の正本**: 下の ⑶ の文面が正本で、文面の定数（`crates/areka-sakura/src/strict.rs` の `MSG_*`。`check_script_judge.rs` の定数はこれを指す別名）はこれを写したもの。文面を変えるときは、この文書と定数を同じ変更で直す。⑶ の 2 つの表と ⑺ の検出点の表は、strict の記録のテスト（`crates/areka/src/runtime/strict_judges_tests.rs`）がこの文書から読んで記録と比べる。表は `<!-- …:begin -->`〜`<!-- …:end -->` の印で挟んであるので、印と表の列の並びを崩さない
 
 ## ⑴ 独自のツールとは
 
@@ -109,7 +109,7 @@ OK:4 diagnostics
 
 <!-- diagnostic-rows:end -->
 
-- 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka/src/emo2_boot/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
+- 「誰も拾わない `\!`」は、名前と第 1 引数の組で決まる。拾う組の一覧は `crates/areka/src/runtime/consumer_ledger.rs` の `ConsumerLedger::canonical`（今 23 組）で、各機能の処理が実際に拾う組と一致することをテスト（`consumer_ledger_agreement_tests.rs`）で固定している。
 - `\s`・`\b` は、その場の話し手（`\0`・`\1`・`\h`・`\u`・`\p[n]`）のシェルとバルーンで判定する。
 - 表の各行の「出る台本」「出ない台本」は `crates/areka/src/mcp/check_script_judge_tests.rs` の `row01`〜`row17` が固定している。strict の再生でも、17 行の「出る台本」で記録が残り「出ない台本」で残らないことを、`strict_judges_tests.rs` がこの表を読んで確かめる（8 行目の「出ない台本」の `\b[名前]` は、再生では今のサーフェスに在る箱の名前で確かめる。⑺）。
 - `unpaired_tag`（14〜16 行目）は、再生が使うのと同じ判定（`areka_sakura::pair_anchors`）の答えを開き・閉じの位置に付けたもので、再生の警告と同じ所に同じ内容で出る。重なった開きが閉じられないまま終わる台本（`\_a[x]あ\_a[y]い`）では、2 つ目の開きに 15 行目・14 行目の順で 2 件付く。`\e`・`\-` の後ろの `\_a` には出さない（再生はそこで読むのをやめるので、開きも閉じも数えない）。

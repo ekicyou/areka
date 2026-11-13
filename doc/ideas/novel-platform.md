@@ -20,7 +20,7 @@
   - 「背景もトークの場所もシェルでありアクター」（pasta の 2026-10-10 の決定）。
 - **pasta の多アーキと SHIORI4**: pasta に `pasta-dll-multiarch`（`pasta.x64.dll`・`pasta.arm64.dll`・LuaJIT の ARM64 は確かめていない危険）・`shiori4-v4-host`・`shiori4-v4-lua-api` が起票済み。入口は COM ではなく shiori4 の C ABI。
 - **areka の SHIORI4**: `shiori4-api`（v0.2.0）が、COM の `IShiori`・`IShioriHost` と JSON-RPC の紙の契約をやめ、shiori4 の C ABI へ移る。SHIORI はどの版でも別プロセスの helper で動かす（2026-10-23）。DLL の選び方は shiori4 の `doc/textbook/distribution.md`。
-- **areka の今**: 窓はキャラクター 1 人に 1 枚で、スコープは 2 人まで（`emo2_boot/mod.rs` の `derive_scopes`）。全画面と枠つきの普通の窓は無い。音を鳴らす所は 0（`\_v`・`\_V`・`\![sound,…]` は受け手が居ない）。目録の `Identity` は 7 項目で `craftmanurl` を持たない。正典の descript には `id`・`craftman`・`craftmanw`・`craftmanurl` がある。
+- **areka の今**: 窓はキャラクター 1 人に 1 枚で、スコープは 2 人まで（`runtime/mod.rs` の `derive_scopes`）。全画面と枠つきの普通の窓は無い。音を鳴らす所は 0（`\_v`・`\_V`・`\![sound,…]` は受け手が居ない）。目録の `Identity` は 7 項目で `craftmanurl` を持たない。正典の descript には `id`・`craftman`・`craftmanw`・`craftmanurl` がある。
 
 ## 決めたこと（2026-10-28・議題 1〜12）
 

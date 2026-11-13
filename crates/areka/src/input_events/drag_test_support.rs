@@ -28,7 +28,7 @@ use wintf::ecs::drag::{
 use wintf::ecs::{PhysicalPoint, Point, WindowHandle, WindowPos};
 
 use super::super::{MouseWiring, RegionSource, attach_char_pointer_handlers};
-use crate::emo2_boot::hit_region::HitRegion;
+use crate::runtime::hit_region::HitRegion;
 use areka_placement::follow::{MonitorSnapshot, OffsetBase};
 use areka_placement::persist::PersistWiring;
 use areka_placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};

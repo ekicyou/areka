@@ -28,10 +28,15 @@ mod systems_tests;
 #[cfg(test)]
 mod visual_tests;
 #[cfg(test)]
+mod world_visual_opacity_tests;
+#[cfg(test)]
 mod world_visual_tests;
 
 pub use draw::command::*;
 pub(crate) use draw::emit;
+// graphics の下の入れ物・読み戻しのテストが WARP の足場を使う口。
+#[cfg(test)]
+pub(crate) use draw::emit_test_support;
 pub use draw_content::*;
 pub use draw_tree::*;
 pub use systems::*;
@@ -48,7 +53,9 @@ pub use world_visual::*;
 /// `clip_sync_system`）が、描画面を持たない節では D2D（描画の木を描く係）が実現する。
 /// - 任意の図形の切り抜き（`ClipShape::Geometry`）は節だけが効かせる。持ち主では `warn!` を
 ///   1 度残して切り抜かない。
-/// - 節の不透明度は保留（1.0 以外は `warn!` を 1 度残して 1.0 で描く）。
+/// - 節の不透明度は、1.0 未満なら D2D の不透明度の層で描く。層は透明から始まり、降ろすとき
+///   `SOURCE_OVER` で不透明度を掛けて下へ重なる（層の中の重ね方とブレンドは同じ層の中で先に描いた
+///   画素に効く）。持ち主の不透明度は WUC が実現する。NaN は 1.0 として扱う。
 ///
 /// # 描画面の持ち主か節か
 /// 新しい描き方の部品（`VisualDrawContent`・`VisualTransform`）を持つ `Visual` は既定で
@@ -184,22 +191,36 @@ impl Default for Visual {
     }
 }
 
+/// 不透明度を 0.0〜1.0 に収める共通の 1 か所。NaN は 1.0（不透明）とする。
+fn clamp_opacity(value: f32) -> f32 {
+    if value.is_nan() {
+        1.0
+    } else {
+        value.clamp(0.0, 1.0)
+    }
+}
+
 impl Visual {
     /// opacity を 0.0〜1.0 にクランプして設定する。
+    /// NaN は呼ばれるたびに warn ログを残して 1.0（不透明）を入れる。
     /// 範囲外の値は warn ログを出力後にクランプされる。
     pub fn set_opacity(&mut self, value: f32) {
-        if value < 0.0 || value > 1.0 {
+        if value.is_nan() {
+            warn!("Opacity value is NaN; treated as 1.0");
+        } else if value < 0.0 || value > 1.0 {
             warn!(
                 value = value,
                 "Opacity value is outside valid range [0.0, 1.0]"
             );
         }
-        self.opacity = value.clamp(0.0, 1.0);
+        self.opacity = clamp_opacity(value);
     }
 
     /// クランプ済み opacity 値を返す (0.0〜1.0)。
+    /// 欄へ直に書かれた NaN は黙って 1.0 を返す（記録は実体を知る `fill_world_visuals` の持ち分）。
+    /// 持ち主の同期・描く列の組み立て・当たり判定はこの関数を通るので、NaN の答えは全部 1.0 に揃う。
     pub fn clamped_opacity(&self) -> f32 {
-        self.opacity.clamp(0.0, 1.0)
+        clamp_opacity(self.opacity)
     }
 
     /// is_visible を設定する。

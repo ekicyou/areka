@@ -65,14 +65,14 @@ const TEST_FILES: [(&str, &str, &str); 11] = [
         crate_source!("areka-placement", "src/zorder_chain_compose.rs"),
     ),
     (
-        "emo2_boot/frame/zorder_drain_written_order_tests.rs",
-        include_str!("../emo2_boot/frame/zorder_drain_written_order_tests.rs"),
-        include_str!("../emo2_boot/frame/zorder_drain.rs"),
+        "runtime/frame/zorder_drain_written_order_tests.rs",
+        include_str!("../runtime/frame/zorder_drain_written_order_tests.rs"),
+        include_str!("../runtime/frame/zorder_drain.rs"),
     ),
     (
-        "emo2_boot/frame/zorder_descript_tests.rs",
-        include_str!("../emo2_boot/frame/zorder_descript_tests.rs"),
-        include_str!("../emo2_boot/frame/zorder_descript.rs"),
+        "runtime/frame/zorder_descript_tests.rs",
+        include_str!("../runtime/frame/zorder_descript_tests.rs"),
+        include_str!("../runtime/frame/zorder_descript.rs"),
     ),
     (
         "wintf/zorder_chain_release_tests.rs",
@@ -117,8 +117,8 @@ const LEDGER: &str = "placement/zorder_group_ledger_written_order_tests.rs";
 const COMPOSE: &str = "placement/zorder_chain_compose_tests.rs";
 const COMPOSE_WO: &str = "placement/zorder_chain_compose_written_order_tests.rs";
 const REAL_A: &str = "placement/zorder_chain_inversion_order_tests.rs";
-const DRAIN_WO: &str = "emo2_boot/frame/zorder_drain_written_order_tests.rs";
-const DESCRIPT: &str = "emo2_boot/frame/zorder_descript_tests.rs";
+const DRAIN_WO: &str = "runtime/frame/zorder_drain_written_order_tests.rs";
+const DESCRIPT: &str = "runtime/frame/zorder_descript_tests.rs";
 const RELEASE: &str = "wintf/zorder_chain_release_tests.rs";
 const APPLY: &str = "wintf/zorder_chain_apply_release_tests.rs";
 const REAL_W: &str = "wintf/zorder_chain_order_inversion_tests.rs";

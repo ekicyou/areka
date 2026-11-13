@@ -21,8 +21,7 @@ use crate::lookahead::{Basis, TalkLookahead};
 use crate::place::{PlaceKey, TextPlace};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::scroll_marker::{ScrollChange, marker_visibility, window_for};
-use crate::segment::{SegmentPlan, segment_plan};
-use crate::state::{ChoiceSpan, TextItem, TextLayerState};
+use crate::state::{ChoiceSpan, TextLayerState};
 use crate::surface::TextSurface;
 use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
@@ -424,7 +423,7 @@ fn present_actor(
     };
     // 鍵が前のフレームと同じなら、覚えた行・区切り・帯・キャンバスで描き手を回す（audit-emo-text-state-actor 指摘 8）。
     let mut memo = match render.frame_memo.take() {
-        Some(memo) if memo.matches(&key, &resolved) => memo,
+        Some(memo) if memo.matches(&key, resolved) => memo,
         _ => {
             // 「見える数 → 区切り → 配置」は [`arrange_lines`] の 1 回の呼び出し（検査も同じ関数を呼ぶ）。
             let Some(lines) = arrange_lines(
@@ -432,7 +431,7 @@ fn present_actor(
                 &mut runtime.lookahead,
                 &mut runtime.cursor_warn,
                 place,
-                &resolved,
+                resolved,
                 &render.metrics,
                 &mut render.break_memo,
                 talk_time,
@@ -760,31 +759,8 @@ pub(super) fn arrange_lines(
     ))
 }
 
-/// 届いた字の区切りの覚え（audit-emo-text-state-actor 指摘 8）: 鍵は（消した回数, 項目の数）。項目は消すまで増えるだけで、
-/// 表を替えると箱の `ActorRender` は捨てられるので、この 2 つが同じなら区切りも同じ。
-#[derive(Default)]
-pub(super) struct BreakMemo {
-    last: Option<((u64, usize), SegmentPlan)>,
-    /// 区切りを計算し直した回数（テストだけの数）。
-    #[cfg(test)]
-    pub(super) runs: u32,
-}
-
-impl BreakMemo {
-    /// 鍵が前と同じなら覚えた区切り、違えば区切り直して覚えた区切りを返す。
-    fn plan(&mut self, clears: u64, items: &[TextItem]) -> &SegmentPlan {
-        let key = (clears, items.len());
-        let kept = self.last.take().filter(|(k, _)| *k == key);
-        #[cfg(test)]
-        if kept.is_none() {
-            self.runs += 1;
-        }
-        &self
-            .last
-            .insert(kept.unwrap_or_else(|| (key, segment_plan(items))))
-            .1
-    }
-}
+/// 届いた字の区切りの覚え（定義は `segment.rs`・後ろだけ区切り直す・spec `emo-text-reveal-incremental` 件 1）。
+pub(super) use crate::segment::BreakMemo;
 
 /// 配置の覚えの鍵のうち数で比べる欄（配置の入力は [`FrameMemo`] が値で持って比べる）。
 #[derive(Clone, Copy, PartialEq)]

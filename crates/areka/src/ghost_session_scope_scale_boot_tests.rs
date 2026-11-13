@@ -1,7 +1,7 @@
 //! 本物の起動（切替の試験台・`boot_ghost` → `rewire_runtime_consumers` → `wire`）を通す結合テスト
 //! （spec shell-scale-linkage 要件 3.10・4.5・7.2）。
 //!
-//! 起動の後に毎フレームの配線（`Emo2Wiring`）の表へ手で書き、MCP の `get_property`（受け口から汲む）と
+//! 起動の後に毎フレームの配線（`RuntimeWiring`）の表へ手で書き、MCP の `get_property`（受け口から汲む）と
 //! ゴーストの道（`ShioriHostSink` の `GetProperty`）の答えを見る。実の窓・実の画面は使わない。
 
 use std::sync::mpsc::{self, Sender};
@@ -17,10 +17,10 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::*;
 use super::applied;
-use crate::emo2_boot::frame::Emo2Wiring;
-use crate::emo2_boot::ghost_switch::SwitchInFlight;
-use crate::emo2_boot::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
+use crate::runtime::frame::RuntimeWiring;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shiori_host::ShioriHostSink;
 
 /// A の `OnBoot`: 台詞の途中で B への切替を命じる。
@@ -77,7 +77,7 @@ fn booted_rig(a: FakeShiori) -> (SwitchRig, Sender<ToolRequest>) {
 fn write_scope0(rig: &SwitchRig, num: u32, dpi: u16) {
     let table = rig
         .world
-        .get_non_send::<Emo2Wiring>()
+        .get_non_send::<RuntimeWiring>()
         .expect("毎フレームの配線がある")
         .scope_scale_table();
     let mut t = table.write().unwrap();

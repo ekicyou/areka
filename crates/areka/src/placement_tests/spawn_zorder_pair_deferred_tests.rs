@@ -6,7 +6,7 @@
 //!
 //! 配置の crate の片割れ（`crates/areka-placement/src/spawn_zorder_pair_deferred_tests.rs`）が、
 //! 配置の本番ファイル 4 本・窓の印・配置の `src` の木を見る。ここは本体の 3 本（グループ機構が
-//! `emo2_boot` に新設したもの）・帯の語の持ち主のファイル・本体の `src` の木を見る。wintf 側の
+//! `runtime` に新設したもの）・帯の語の持ち主のファイル・本体の `src` の木を見る。wintf 側の
 //! 本番ファイル 8 本は `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
 //! 語の表と走査器は 2 つの片割れが共に使う `areka_placement::test_support::zorder_pair_deferred` に
 //! 1 つだけあり、ここでは本体の実物で較正する。
@@ -15,8 +15,8 @@
 //!
 //! 配置の片割れの頭の説明のとおり。要件は「**本フィーチャーにおいて**足さない」ことを言うので、
 //! 走査は 2 つの機構が全部を書いた本番ファイルに限る。常に手前の帯の語（`BAND_NEEDLES`）を
-//! areka 側で持つのは受け口（`emo2_boot/window_state_cue.rs`）と取り出しの相
-//! （`emo2_boot/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
+//! areka 側で持つのは受け口（`runtime/window_state_cue.rs`）と取り出しの相
+//! （`runtime/frame/window_state.rs`）だけと決めてあるので、その 2 本に語が在ることを対照として主張する。
 
 use std::path::PathBuf;
 
@@ -29,15 +29,15 @@ use areka_placement::test_support::zorder_pair_deferred::{
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 /// 「本体に実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
 const PRODUCTION_FILES: [&str; 3] = [
-    "src/emo2_boot/zorder_cue.rs",
-    "src/emo2_boot/frame/zorder_drain.rs",
-    "src/emo2_boot/frame/zorder_descript.rs",
+    "src/runtime/zorder_cue.rs",
+    "src/runtime/frame/zorder_drain.rs",
+    "src/runtime/frame/zorder_descript.rs",
 ];
 
 /// 帯の語を持つ本体の本番ファイル（`stay-on-top-directives` の受け口と取り出しの相）。
 const BAND_FILES: [&str; 2] = [
-    "src/emo2_boot/window_state_cue.rs",
-    "src/emo2_boot/frame/window_state.rs",
+    "src/runtime/window_state_cue.rs",
+    "src/runtime/frame/window_state.rs",
 ];
 
 fn source_path(relative: &str) -> PathBuf {
@@ -104,7 +104,7 @@ fn the_areka_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
 
     // 対照: 受け口の素の全文には最小化の語（読めない第 2 引数の例＝否定の説明）があり、
     // コードだけの本文には無い。
-    let raw = read_source("src/emo2_boot/window_state_cue.rs");
+    let raw = read_source("src/runtime/window_state_cue.rs");
     assert!(
         raw.to_lowercase().contains("minimize"),
         "前提が崩れている: 素の全文には最小化の語があるはず（別の対照へ差し替えること）"
@@ -168,10 +168,10 @@ fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
     // ① 道具の較正（本体の実物で）: 既知の正例が挙がり、木に在る既知の偽例
     //   （テスト・テスト専用の道具立て）は挙がらない。
     assert!(
-        actual.contains(&"src/emo2_boot/zorder_cue.rs".to_string()),
+        actual.contains(&"src/runtime/zorder_cue.rs".to_string()),
         "実物の走査が効いていない（既知の本番ファイルを見つけられない）: {actual:?}"
     );
-    let test_support = "src/emo2_boot/frame/zorder_drain_test_support.rs";
+    let test_support = "src/runtime/frame/zorder_drain_test_support.rs";
     assert!(
         all_source_files().contains(&test_support.to_string()),
         "較正の外れが失われた: {test_support} が木に無い（別の対照へ差し替えること）"

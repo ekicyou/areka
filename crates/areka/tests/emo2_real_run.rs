@@ -2,7 +2,7 @@
 //!
 //! 「emo2 が起動して喋る」最終統合（M-boot）を、**実 pasta.dll・実表示・実 DPI**で
 //! 任意に追験するための env-gate opt-in ハーネス。観測の二段（決定論 spine ＋ 本 env-gate 実走）の
-//! うち後者に相当し、決定論 spine（`crates/areka/src/emo2_boot/spine.rs`）が headless GPU で
+//! うち後者に相当し、決定論 spine（`crates/areka/src/runtime/spine.rs`）が headless GPU で
 //! 押さえ切れない「実表示・実 helper・実 DPI」の最終確認を人間判断に委ねる。
 //!
 //! ## 既定 OFF（DoD 非前提・要件 1.8）
@@ -16,8 +16,8 @@
 //! 実機の試験の窓口 `real-run-kit` で、`CARGO_BIN_EXE_areka`（Cargo が統合テスト用に先ビルドして渡す
 //! **実バイナリ**のパス）を emo2 の検体（`Launch::Sample { emo2, emo2-kakukaku }`）の新しい写しで立て、
 //! 印を順に待つ:
-//! - wire 成立マーカー `emo2-boot: 実 sink 結線が成立しました（wire 成立）`
-//! - attach 完了マーカー `emo2 attach: 装着計画を実行`
+//! - wire 成立マーカー `runtime: 実 sink 結線が成立しました（wire 成立）`
+//! - attach 完了マーカー `runtime attach: 装着計画を実行`
 //! - 折返し ON 解決の証跡 `wrap=BudouxWordWrap`
 //!
 //! 印 `wrap=BudouxWordWrap` を見てから**利用者と同じ閉じ方で閉じ**、別れの台詞の後に終了コード 0 で
