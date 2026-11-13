@@ -195,3 +195,97 @@
 - [D2D1_LAYER_OPTIONS1](https://learn.microsoft.com/en-us/windows/win32/api/d2d1_1/ne-d2d1_1-d2d1_layer_options1) — `NONE`＝透明で塗る・`INITIALIZE_FROM_BACKGROUND`＝塗らない
 - [ID2D1DeviceContext6::BlendImage](https://learn.microsoft.com/en-us/windows/win32/api/d2d1_3/nf-d2d1_3-id2d1devicecontext6-blendimage) — Blend 効果と同じ答え・`d2d1_3.h`・19H1（Windows 10 1903）
 - `windows` 0.62.2 の `Win32/Graphics/Direct2D/mod.rs`・`Common/mod.rs` — `ID2D1DeviceContext6`・`BlendImage`・`D2D1_BLEND_MODE_DIVISION`（25）・`CLSID_D2D1Blend`・`D2D1_LAYER_OPTIONS1_INITIALIZE_FROM_BACKGROUND`・`D2D1_PRIMITIVE_BLEND_COPY` が在ることを確かめた
+
+## 10. 設計の前の試し（2026-11-13・R1・R2・R3・R5・R4 と WUC の DC の状態）
+
+> 一時の兄弟のテスト（`crates/wintf/src/ecs/graphics/visual/draw/spike_tests.rs`・WARP）と一時の統合のテスト（`crates/wintf/tests/graphics/spike_wuc_test.rs`・実 GPU）で測り、測った後に両方とそれぞれの `mod` の行を消した（`git status` は spec の文書だけ）。走らせたのはその 2 つのテストだけ（`cargo test -p wintf --lib spike_ -- --nocapture`・`cargo test -p wintf --test graphics spike_wuc -- --nocapture`）。
+
+### 10.1 試しの形
+
+- 的: 64×64・B8G8R8A8・α 掛け済み・96 DPI。下の画素＝左半分（x < 32）が不透明の赤 `[0,0,255,255]`、右半分が α 0.5 の緑 `[0,128,0,128]`（どちらも BGRA）。
+- 描く絵: 命令の列（WARP の DC で記録）に (24,24)-(40,40) の不透明の色 (r,g,b)=(0.2,0.4,0.8)。重ね方は `DrawImage(LINEAR, mode)`、ブレンドは `ID2D1DeviceContext6::BlendImage(list, mode, None, None, LINEAR)`。
+- 切り抜き: 矩形＝`PushAxisAlignedClip`（8,8）-(56,56)・回転した矩形＝(-20,-20)-(20,20) の矩形の図形を 45 度回して (32,32) へ置いた層・楕円＝中心 (32,32)・半径 24 の図形の層。層は `contentBounds` ±f32::MAX・`maskAntialiasMode PER_PRIMITIVE`・`opacity 1.0`。
+- 層の旗の 5 通り: Plain＝今の `NONE`・BgCopyKeep＝`INITIALIZE_FROM_BACKGROUND`＋積む前に `SetPrimitiveBlend(COPY)`・降ろした後に `SOURCE_OVER`・BgCopyRestore＝同じく積む前に `COPY`、積んだ直後に `SOURCE_OVER`・BgCopyAtPop＝`INITIALIZE_FROM_BACKGROUND`、積むときは `SOURCE_OVER`、降ろす直前に `COPY`・BgNoCopy＝`INITIALIZE_FROM_BACKGROUND` だけ。
+- 判定: 画素の中心が切り抜きの縁から 1.5 画素以上内側の全画素を「切り抜き無しで描いた答え」と、1.5 画素以上外側の全画素を「描く前の下の画素」と比べ、1 チャネル ±1 を越える画素の数を数えた。
+
+### 10.2 R1（図形の切り抜きの中の効き先）の結果
+
+| 混ぜ方 | 矩形 | 回転・楕円 Plain | BgCopyKeep | BgCopyRestore | BgCopyAtPop | BgNoCopy |
+|---|---|---|---|---|---|---|
+| `SOURCE_OVER` | 0／0 | 0／0 | 0／0 | 0／0 | 内 574・660 | 内 574・660 |
+| `DESTINATION_IN` | 0／0 | 内 1148・1320 | 0／0 | 0／0 | 内 1276・1448 | 内 1276・1448 |
+| `DESTINATION_OUT` | 0／0 | 内 256・256 | 0／0 | 0／0 | 内 830・916 | 内 830・916 |
+| `DESTINATION_OVER` | 0／0 | 内 256・256 | 0／0 | 0／0 | 内 574・660 | 内 574・660 |
+| `SOURCE_COPY` | 0／0 | 内 1148・1320 | 0／0 | 0／0 | 内 1148・1320 | 内 1148・1320 |
+| `XOR` | 0／0 | 内 256・256 | 0／0 | 0／0 | 内 830・916 | 内 830・916 |
+| ブレンド `MULTIPLY` | 0／0 | 内 256・256 | 0／0 | 0／0 | 内 574・660 | 内 574・660 |
+| ブレンド `SCREEN` | 0／0 | 内 256・256 | 0／0 | 0／0 | 内 574・660 | 内 574・660 |
+| ブレンド `DIFFERENCE` | 0／0 | 内 256・256 | 0／0 | 0／0 | 内 574・660 | 内 574・660 |
+
+（「0／0」＝内側の食い違い 0・外側の食い違い 0。数は回転した矩形・楕円の順の内側の食い違いの画素の数。どの通りでも外側の食い違いは 0。内側の画素の数は回転した矩形 1404・楕円 1576、矩形の切り抜き 2116。）
+
+- **甲（背景から始める層＋ COPY）は通った**: BgCopyKeep と BgCopyRestore は、回転した矩形と楕円のどちらでも、`SOURCE_OVER` でない重ね方 5 つとブレンド 3 つの全部で、内側＝切り抜き無しの答え・外側＝下の画素のまま（食い違い 0）。矩形の切り抜きの答えとも同じ（要件 3.1〜3.3 の答えが D2D の層で出る）。
+- **COPY は積む時点の値が効く**: 積んだ直後に `SOURCE_OVER` へ戻しても（BgCopyRestore）答えは降ろすまで `COPY` のまま（BgCopyKeep）と同じ。降ろす直前だけ `COPY` にする（BgCopyAtPop）と `INITIALIZE_FROM_BACKGROUND` だけ（BgNoCopy）と同じに誤る（背景が二重に重なる＝右半分の緑 α 0.5 が α 0.75 `[0,192,0,192]` になる）。設計は「積む直前に `COPY`・積んだ直後に `SOURCE_OVER`」にする（層の中の描画に基本の混ぜ方を持ち込まない）。
+- **今の Plain は要件 3 に反する**: 図形の切り抜きの中の `DESTINATION_IN` などは下の画素に効かない（gap 分析 §4.1 の見立てどおり）。`SOURCE_OVER` だけは Plain でも BgCopy でも同じ答え（既存の答え〔6.2〕は変わらない）。
+- **縁の半端な覆い**: 楕円の左の縁（y=32 の行）で、`DESTINATION_IN`（切り抜き無しの答えは透明・下の画素は赤）の x=8 の画素が `[0,0,24,24]`＝下の画素 `[0,0,255,255]` と切り抜き無しの答え `[0,0,0,0]` を、覆いの割合（約 0.906）で 4 チャネルとも線形に補間した値。x ≤ 7 は下の画素のまま、x ≥ 9 は切り抜き無しの答え。`SOURCE_COPY` も同じ値。
+- **不透明度の層の中（要件 3.4）**: 不透明度 0.5 の層（`NONE`）の中に青 (16,16)-(48,48) を描き、その後に `DESTINATION_OUT` か `MULTIPLY` を「切り抜きなし」「矩形の切り抜き」「楕円の層 BgCopyRestore」「楕円の層 BgCopyKeep」の中で描いた 4 通りが、8 点ですべて同じ値（例: (30,30) の `DESTINATION_OUT` は層の中の青が消えて下の赤 `[0,0,255,255]` のまま・(20,20) は青 0.5 が赤に重なった `[128,0,127,255]`・`MULTIPLY` の (30,30) は `[102,0,127,255]`）＝背景から始める層の「背景」は不透明度の層の今の中身になり、3.4 と矛盾しない。
+- **実 GPU でも同じ**: 開発機の実 GPU（共有の DC）で、楕円の層 BgCopyRestore の `DESTINATION_IN` と `MULTIPLY` が内側 0／1576・外側 0／2064。
+
+### 10.3 R2（`BlendImage` の変形と絵の外）
+
+- 下の画素＝左半分が不透明の白・右半分が透明。絵＝(-10,-6)-(10,6) の不透明の色 (0.2,0.4,0.8)。変換＝拡大 (-1.5, 1.2)・30 度の回転・(32,30) への平行移動。`BlendImage(MULTIPLY)` と `DrawImage(SOURCE_OVER)` を比べた（白の上の乗算と透明の上のブレンドは、どちらも絵の色そのものになる）。
+- 結果: 1 チャネル ±1 を越える画素 0・最大の差 0・下の画素から変わった画素 484（絵の外形の中だけ）。**`BlendImage` は DC の世界の変換（負の拡大・回転を含む）を `DrawImage` と同じに効かせ、絵の外の画素を変えない**（要件 1.3・1.6）。
+
+### 10.4 R3（入れ物の原点で描いて整数の offset に写す答えのビット一致）
+
+- 中身＝半透明の楕円 (20.3,17.7) 半径 (11.2,7.9) と、17 度回した半透明の矩形（縁はすべて反りつき）。直接＝96×96 の的に (13,7)-(77,71) の軸の切り抜きを置き、変換 `拡大 × 平行移動(13,7)` で描く。入れ物＝64×64 の的に変換 `拡大` で描き、別の 96×96 の的へ `DrawImage(入れ物, targetOffset (13,7), NEAREST_NEIGHBOR, SOURCE_OVER)`（`SOURCE_COPY` も）で写す。
+- 結果: 拡大 1・1.25・1.5 のどれでも、`SOURCE_OVER` と `SOURCE_COPY` の両方で、食い違う画素 0・最大の差 0（描かれた画素はそれぞれ 484・743・1059）。**入れ物を通した答えは直接描いた答えとビット一致**（要件 4.2）。
+- WUC の DC の DPI（R3 の残り）は実 GPU で測った（10.5）。
+
+### 10.5 R5 と WUC の DC の状態（実 GPU）
+
+- **R5**: WARP の装置から `ID2D1Device::CreateDeviceContext` で作った DC・実 GPU の `GraphicsCore` の共有の DC・WUC の `BeginDraw` が返す DC のどれも `ID2D1DeviceContext6` へ cast できた（開発機の Windows 11）。
+- **WUC の DC**: DPI (96, 96)・単位 `DIPS`・反り `PER_PRIMITIVE`・文字の反り `DEFAULT`・基本の混ぜ方 `SOURCE_OVER`・変換は恒等・atlas の offset (1, 2)・的は 1024×1024 の atlas のビットマップ（`D2D1_BITMAP_OPTIONS_TARGET`）。共有の DC も DPI・単位・反り・文字の反り・基本の混ぜ方が同じ既定＝入れ物の合成を共有の DC で行っても、命令の列の再生の前提は WUC の DC と同じ。
+- **`ICompositionDrawingSurfaceInterop2::CopySurface`**: WUC の描画面（64×64）に (10,10)-(30,30) の半透明の矩形を描いて閉じた後、`CopySurface(D2D のビットマップの IDXGISurface, 0, 0, None)` で写して読むと、(20,20)・(29,29) が `[102,51,25,128]`・(5,5)・(40,40) が透明＝描画面の座標（atlas の offset を含まない）で画素が取れる。要件 7.10 の実 GPU のテストの確かめ方に使う（本番には使わない）。
+
+### 10.6 R4（1 画素の読み戻しの待ち・要件 5.10）
+
+- 実 GPU・共有の DC・512×512 の入れ物・200 回。1 回ごとに楕円 50 個を合成（中央値 667 µs・95% 点 1.18 ms）し、その直後に 1×1 の `CopyFromBitmap` → `Map(READ)` → `Unmap`。
+- 合成の直後に読む: 中央値 516 µs・95% 点 747 µs・最大 1.26 ms。続けてもう 1 点読む（GPU が空いている）: 中央値 344 µs・95% 点 556 µs・最大 0.91 ms。全体（512×512・写し先の作成込み・20 回）: 中央値 1.88 ms・最大 2.64 ms。
+- 読み: 1 画素の同期の読み戻しは 1 回 0.3〜0.8 ms を UI スレッドで待つ。マウスが動くたびに読むと 1 フレーム（16.7 ms）の数 % を使う。同じ座標の再読は控え（5.4）で 0 になる。クリックの透過を付け替えるかの判断は `draw-methods-canon`（議題 4 の確定のとおり）。
+
+### 10.7 残り（R6・R7）
+
+- R6（NaN）: 要件討議の議題 5 で「共通の 1 か所で NaN を 1.0」と決まったので測らない。
+- R7（層の `contentBounds` を外接矩形に絞る）: 設計は絞る形にし、答えの不変は 7.6 のテスト（縁から離れた内外の点）で固定する。試しは ±f32::MAX で測った。
+
+## 11. 設計の段の調べと決め（2026-11-13・`/kiro-spec-design -y`）
+
+### 11.1 調べの種類と使ったもの
+
+- 調べの種類: light（既存の描画の木の拡張・統合の点の調べ）に、要件 3 の危険のための試し（§10）を足した。新しい依存は無いので外の資料は Direct2D の文書（§9）だけ。
+- 読んだ steering: `product.md`・`tech.md`（Testing の WARP の例外・Windows の行）・`structure.md`（`graphics/visual/` の行・テスト分離）・`logging.md`・`roadmap.md`（C19 の行の触るファイルと約束）。使ったスキルの規則: `kiro-spec-design` の `design-principles.md`・`design-discovery-light.md`・`design-synthesis.md`・`design-review-gate.md`。
+- 読んだコード: `systems/render.rs`・`systems/surface.rs`・`components.rs`（`SurfaceGraphics`）・`core.rs`（共有の DC・`note_draw_failure`・`is_device_lost`）・`systems/window_pos.rs`（`invalidate_dependent_components`）・`visual/{mod,draw_content,world_visual}.rs`・`visual/draw/{command,builder,emit,emit_test_support}.rs`・`com/wuc.rs`・`systems/visual_sync.rs`（持ち主の不透明度）・`ecs/layout/hit_test/mod.rs`（`clamped_opacity` の使い手）・`tests/graphics/{draw_tree_systems_test,surface_systems_test}.rs`・`tests/visual/component_test.rs`。
+
+### 11.2 決め（設計に書いたもの）
+
+| 決め | 選んだ形 | 理由 |
+|---|---|---|
+| ブレンドの型（§7.1 の 1） | `MixMode { Composite, Blend }` で `composite_mode` を置き換える | 要件 1.5 を型で表す。直す使い手は wintf の中の 4 か所だけで、`new`／`new_ex` の引数は変えない |
+| 不透明度の層の命令（§7.1 の 2） | `PushOpacity(OpacityLayer)`／`PopOpacity` を足し、同じ節では外が不透明度・中が切り抜き | 不透明度と図形の覆いを 1 枚の層に入れると、`COPY` の補間が不透明度まで背景と混ぜる（§4.3）。2 枚に分けると §10.2 の「不透明度の層の中」の答えのとおり |
+| 図形の切り抜きの旗 | `INITIALIZE_FROM_BACKGROUND`＋積む直前に `COPY`・直後に `SOURCE_OVER`・範囲は外接矩形 | §10.2（WARP と実 GPU） |
+| 入れ物の置き場（§7.1 の 3） | `SurfaceGraphics` の欄（寿命は `set_surface`・`clear` と同じ）・手順は WUC と ECS を知らない `SurfaceComposite` | 選択肢 C。作り直しと放すが既存の道に乗り、WARP から同じ手順を通せる |
+| 写しの方式（§7.1 の 3） | D2D の写し（WUC の DC を透明に塗り、入れ物を整数の offset へ `NEAREST_NEIGHBOR`・`SOURCE_OVER` で 1 度） | §10.4 のビット一致。D3D の写しは `com/wuc.rs` に別の口が要り、順序の約束が増える |
+| 合成の DC（§7.1 の 4） | `GraphicsCore` の共有の DC | `render_surface` は `ResMut<GraphicsCore>` を持つので同時に使う係が無い。既定の状態は WUC の DC と同じ（§10.5）。戻すとき的なし・変換は恒等・基本の混ぜ方は `SOURCE_OVER` |
+| 入れ物を作る時点 | `render_surface` の中（無いか大きさが違えば作る） | 装置と DC が手元に在る。作り直した回は全部を合成する（4.5） |
+| 読み戻しの口（§7.1 の 5） | `SystemParam` の `SurfaceReadback`（`read_pixel`・`read_all`）・答えは `PixelRead`／`SurfaceImage`・控えは入れ物の中の `Mutex`・世代は合成の成功の数 | 読みは論理的に読むだけ（`&SurfaceGraphics`）で、`Changed<SurfaceGraphics>` を立てない。1 画素の写し先は入れ物と同時に作り、共有の DC の状態に触らない |
+| 読み戻しの失いの記録（5.6） | `GraphicsCore::is_lost_failure`（判定だけ）で失いなら記録しない | 立ち直りの道の 1 度だけの記録を守る |
+| 実 GPU の確かめ方（§7.1 の 6・§8 の 6） | `CopySurface` で WUC の描画面の画素を写して読み、入れ物の画素とバイトで一致 | 「描画面（画面に出す元）に入れ物の絵が出ている」を機械で確かめられる（§10.5）。画面を撮るテストは揺れる |
+| NaN（2.8） | `set_opacity` と `clamped_opacity` で 1.0 と `warn!` | 要件討議の議題 5 |
+| `fill_world_visuals` の不透明度 0 | 見えない節と同じ道（版は追う） | 2.2。描く列に何も出さない |
+
+### 11.3 合成（synthesis）
+
+- **一般化**: 不透明度の層と切り抜きの層は、どちらも「深さで閉じる push／pop」の同じ仕組みに乗る（`build` の `open` の積み）。新しい仕組みは作らない。1 画素の読み戻しと全体の読み戻しは同じ判定の順を共有し、違いは座標の確かめと控えだけ。
+- **作るか採るか**: ブレンドは D2D の `BlendImage` を採る（効果の道は層の中で `Flush` が要り使えない・議題 1）。切り抜きの効き先は D2D の層の旗を採る（自前の効果の組み合わせ＝乙は不要になった）。読み戻しは D2D の `CopyFromBitmap`＋`Map` を採る（D3D の staging は要らない）。
+- **簡素化**: 写しに D3D の道を足さない・`com/wuc.rs`・`com/dxgi.rs`・`com/d2d/mod.rs` を変えない・入れ物の専用の DC を持たない・読み戻しの係を作らない（口だけ）・ブレンドの効果の道を作らない。
