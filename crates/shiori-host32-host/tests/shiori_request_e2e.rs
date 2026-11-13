@@ -43,7 +43,7 @@ use shiori_host32_host::{
 use shiori_host32_ipc::MsgTag;
 
 mod common;
-use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe, resolve_testdll};
+use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
 // NOTE: GET／NOTIFY 往復の timeout は `Shiori3Client` が env シーム（`AREKA_SHIORI_REQUEST_TIMEOUT_MS`・
 // 既定 60s）から内部解決するため、本テストで per-call timeout 定数を持たない（client の効果 timeout に委ねる）。
@@ -89,7 +89,7 @@ fn request_e2e_get_value_and_notify_discard() {
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（silent-skip 禁止: helper 不在は
     //     resolve_helper_exe が既に panic 済み）---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, handle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
@@ -204,7 +204,7 @@ fn request_e2e_real_pasta_optional() {
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
 
     // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, handle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"

@@ -26,7 +26,7 @@ use shiori_host32_host::{Charset, CharsetNegotiator, ParentMessageWindow, Shiori
 use shiori_host32_ipc::MsgTag;
 
 mod common;
-use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe, resolve_testdll};
+use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
 /// 観測の本体が標準出力に書く結果の行の印（後ろに helper の下の値が続く）。
 const VALUE_MARKER: &str = "HELPER_PASTA_DEBUG=";
@@ -56,7 +56,7 @@ fn pasta_debug_probe_child() {
     let handle = spawn(&helper_exe, root.path(), "shiori.dll", parent.hwnd_u32())
         .expect("i686 helper を本番の起こし方で起こせない");
     assert!(
-        parent.pump_until_hello_or(HANDSHAKE_TIMEOUT).is_some(),
+        handshake(&parent, handle.pid()).is_some(),
         "上限時間内に helper から HELLO が届かない"
     );
     let load_ack = parent

@@ -60,7 +60,7 @@ use shiori_host32_host::{
 use shiori_host32_ipc::MsgTag;
 
 mod common;
-use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe, resolve_testdll};
+use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
 /// 周期運転の反復回数（連打・back-to-back・sleep なし・R3.1/R7.5）。
 const REPETITIONS: usize = 200;
@@ -116,7 +116,7 @@ fn cyclic_run_and_clean_shutdown() {
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
@@ -254,7 +254,7 @@ fn cyclic_real_pasta_optional() {
     let mut lifecycle = HelperLifecycle::new(handle);
 
     // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, lifecycle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"

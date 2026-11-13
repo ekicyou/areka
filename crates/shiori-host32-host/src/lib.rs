@@ -21,6 +21,10 @@
 //!   `classify_failure` による統一終了分類 / `LifecycleReport` によるレポート /
 //!   `ShutdownError` shutdown 失敗語彙）。クレート直下に公開 re-export。
 
+// 単体テストが `#[path]` で引く結合テストの道具（`tests/common`）は自分を `shiori_host32_host` と呼ぶ。
+#[cfg(test)]
+extern crate self as shiori_host32_host;
+
 /// 通信の文字コード（`Charset`）・ラベル解決の失敗理由（`LabelError`）・
 /// セッションの交渉状態（`CharsetNegotiator`）と復号方針（`CharsetPolicy`）。
 pub mod charset;

@@ -93,7 +93,7 @@
   - 知らない種類・長さの合わないもの・形の崩れた HELLO・無視する既知の種類で `warn!(.., event = "parent_frame_ignored", reason, ..)` を書き、`hellos`・`bad_frames`・`ignored_known` の数を消す。テストは記録で確かめる（指摘 11）
   - 完了の姿: テスト `ignored_frames_are_logged` が緑
   - _Requirements: 3.1, 4.1, 5.2_
-- [ ] 7.2 HELLO と RESPONSE の送り手を確かめ、`expect_helper_pid` を足す（指摘 38）
+- [x] 7.2 HELLO と RESPONSE の送り手を確かめ、`expect_helper_pid` を足す（指摘 38）
   - HELLO は 1 度だけ、送り手の窓と中身の窓が同じときだけ受ける。`expect_helper_pid` が呼ばれていれば、送り手の窓のプロセス番号も確かめる
   - RESPONSE は送り手の窓が helper の窓のときだけ受ける。その場所に設計どおりの `shortcut:` の注を置く
   - host の結合テストの握手の手続きと、窓のテストの偽の helper を新しい決まりに合わせる。`areka-kanade` のテスト（`idle_pump_test.rs`・`real_helper_test.rs`）が古びるなら的を外さずに直す
@@ -202,3 +202,4 @@
 - 5: 置き換えの数え直しで ASCII を飛ばすのは ASCII をそのまま通す文字コード（is_ascii_compatible）のときだけ。ISO-2022-JP は ESC・SO・SI を表せないので飛ばすと置き換えを 0 と数えて黙る（審査で差し戻し・直した）。
 - 6: process_host.rs の中のテストは process_host_tests.rs へ移した（901 行になったため）。wait_handle は WAIT_FAILED を時間切れと区別しない（記録は出る）。14 の audit で見る。
 - 7.1: parent_window の既存テスト pump_none_then_some_and_bad_frame_recorded は (c) の節を新しいテストへ移したので名前が中身とずれた。7.2／7.4 で触るときに名前を直す。
+- 7.2: expect_helper_pid は HELLO が届いた後に呼ぶと pid の確かめが記録なしで飛ぶ。7.3 の real_connect は spawn → expect_helper_pid → ポンプの順を守る。parent_window.rs は 898 行なので 7.4 でテストを足すときは parent_window_tests.rs へ移す。lib.rs に #[cfg(test)] extern crate self as shiori_host32_host; を置いた（tests/common を lib の単体テストからも #[path] で引くため）。

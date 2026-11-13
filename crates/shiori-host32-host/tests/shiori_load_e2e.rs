@@ -38,7 +38,7 @@ use shiori_host32_host::{ParentMessageWindow, poll_exit_kind, spawn};
 use shiori_host32_ipc::MsgTag;
 
 mod common;
-use common::{HANDSHAKE_TIMEOUT, TestRoot, resolve_helper_exe, resolve_testdll};
+use common::{TestRoot, handshake, resolve_helper_exe, resolve_testdll};
 
 /// 1 ケース分の LOAD 往復を実行し、observed ack バイト列を返す。
 ///
@@ -81,7 +81,7 @@ fn run_load_case(
     }
 
     // --- HELLO 受領で helper HWND 確定＝ハンドシェイク完了 ---
-    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    let helper_hwnd = handshake(&parent, handle.pid());
     assert!(
         helper_hwnd.is_some(),
         "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"

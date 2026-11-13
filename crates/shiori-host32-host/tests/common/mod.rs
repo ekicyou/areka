@@ -9,6 +9,7 @@
 //!   （クレートをまたいで共有するには新しいクレートが要るので、2 か所に置いて互いを注釈で指す）。
 //! - 握手の上限: [`HANDSHAKE_TIMEOUT`]（30 秒）。的は「上限の中で HELLO が届く」ことで、
 //!   時間そのものではない。負荷の高い机で i686 helper の起動が遅れても赤にしない上限にする（指摘 48）。
+//! - 握手の手続き: [`handshake`]。HELLO を子のプロセスに縛ってから（`expect_helper_pid`・指摘 38）待つ。
 // 結合テストのファイルごとに使う関数が違い、使わないファイルで dead_code の警告が出るため許す。
 #![allow(dead_code)]
 
@@ -16,8 +17,16 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use shiori_host32_host::ParentMessageWindow;
+
 /// ハンドシェイク（HELLO 受領）の上限時間。
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// 握手の手続き: HELLO を `helper_pid` の子に縛り（spawn の直後・待つ前）、[`HANDSHAKE_TIMEOUT`] まで待つ。
+pub fn handshake(parent: &ParentMessageWindow, helper_pid: u32) -> Option<u32> {
+    parent.expect_helper_pid(helper_pid);
+    parent.pump_until_hello_or(HANDSHAKE_TIMEOUT)
+}
 
 /// ワークスペースのルート（`CARGO_MANIFEST_DIR` = `crates/shiori-host32-host` の 2 つ上）。
 fn workspace_root() -> PathBuf {

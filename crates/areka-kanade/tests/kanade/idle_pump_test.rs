@@ -48,7 +48,8 @@ fn sync_send_to_idle_window_returns_within_bound() {
     let actor = spawn_window_actor();
     let host = hwnd_from_u32(actor.hwnd);
 
-    // 送出元にも自窓を渡す（受け手は送出元を使わない）。アクターは要求を 1 通も受けていない。
+    // 送出元にも自窓を渡す。アクターは要求を 1 通も受けておらず握手もしていないので、受け手は
+    // この RESPONSE を記録して捨てる（指摘 38）。的は「上限内に届いて返る」ことで、受け皿ではない。
     let send_started = Instant::now();
     let result = send_copydata_response(host, host, MsgTag::Response, b"idle-pump", SEND_BOUND);
     let elapsed = send_started.elapsed();

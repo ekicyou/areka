@@ -5,7 +5,8 @@
 //!
 //! 1. **HELLO 記録**（要件 3.2）: WndProc で inbound WM_COPYDATA を framing 検証し、
 //!    `Hello` なら payload（helper 窓 HWND の u32 LE）を `decode_hwnd_le` で復号して
-//!    [`ParentShared::helper_hwnd`] に記録＝ハンドシェイク完了を観測する。不正フレーム／
+//!    [`ParentShared::helper_hwnd`] に記録＝ハンドシェイク完了を観測する（1 度だけ・送り手の窓と
+//!    中身の窓が同じときだけ・指摘 38。RESPONSE も helper の窓からだけ受ける）。不正フレーム／
 //!    未知タグ／想定外タグは crash させず WARN の記録を残すのみ（要件 2.5・上位へ渡さない）。
 //! 2. **`pump_until_hello_or`**（要件 3.4）: HELLO 受領（helper HWND 確定）まで、または
 //!    `timeout` 経過まで `MessageLoop` を **bounded** に回す。無入力でも期限で必ず抜けられる
@@ -45,7 +46,8 @@ use windows::Win32::Foundation::HWND;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostMessageW, TranslateMessage, WM_COPYDATA,
+    DispatchMessageW, GetWindowThreadProcessId, MSG, PM_REMOVE, PeekMessageW, PostMessageW,
+    TranslateMessage, WM_COPYDATA,
 };
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -127,6 +129,8 @@ struct ParentShared {
     /// `send_request` が `clear→…→take` で消費し、RESPONSE の WndProc アームが再入で `store` する。
     /// 両者は同一 `&ResponseSlot` を参照する（`send_request` は `self.window.state()` 経由で取得）。
     response_slot: ResponseSlot,
+    /// HELLO を受けてよい子のプロセス番号（[`ParentMessageWindow::expect_helper_pid`]・指摘 38）。
+    expected_pid: Cell<Option<u32>>,
 }
 
 impl ParentShared {
@@ -134,8 +138,36 @@ impl ParentShared {
         Self {
             helper_hwnd: Cell::new(None),
             response_slot: ResponseSlot::new(),
+            expected_pid: Cell::new(None),
         }
     }
+}
+
+/// HELLO を受けてよいかを確かめる（指摘 38）。受けないときは記録の `reason` を返す。
+///
+/// 1 度だけ・送り手の窓（`wParam`）が中身の窓と同じときだけ受ける。子のプロセス番号が
+/// 伝えられていれば、送り手の窓のプロセス番号も確かめる。
+fn hello_rejection(
+    s: &ParentShared,
+    sender: HWND,
+    sender_wire: u32,
+    hello: u32,
+) -> Option<&'static str> {
+    if s.helper_hwnd.get().is_some() {
+        return Some("second_hello");
+    }
+    if sender_wire != hello {
+        return Some("hello_sender_mismatch");
+    }
+    if let Some(pid) = s.expected_pid.get() {
+        let mut sender_pid = 0u32;
+        // SAFETY: sender は任意の値でよい（無効な窓なら 0 を返し sender_pid も 0 のまま）。
+        unsafe { GetWindowThreadProcessId(sender, Some(&mut sender_pid)) };
+        if sender_pid != pid {
+            return Some("hello_from_other_process");
+        }
+    }
+    None
 }
 
 /// 受領した WM_COPYDATA の `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す。
@@ -177,10 +209,34 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
         return Some(LRESULT(0));
     };
 
+    // 送り手の窓（WM_COPYDATA の wParam・ipc の送り手は自分の窓を書く）。
+    let sender = HWND(msg.wparam.0 as *mut core::ffi::c_void);
+    let sender_wire = u32::from_le_bytes(encode_hwnd_le(sender));
+
     match classify_inbound(dw_data, declared_len, &payload) {
         InboundAction::RecordHello(helper_hwnd) => {
-            // ハンドシェイク完了観測（要件 3.2）: helper HWND を確定させ即 return。
-            s.helper_hwnd.set(Some(helper_hwnd));
+            match hello_rejection(s, sender, sender_wire, helper_hwnd) {
+                // ハンドシェイク完了観測（要件 3.2）: helper HWND を確定させ即 return。
+                None => s.helper_hwnd.set(Some(helper_hwnd)),
+                Some(reason) => tracing::warn!(
+                    target: "shiori-host32",
+                    event = "parent_frame_ignored",
+                    reason,
+                    sender = sender_wire,
+                    hello = helper_hwnd,
+                    "受けてよい送り手からでない HELLO を無視した"
+                ),
+            }
+        }
+        // shortcut: wParam は送り手の自己申告なので、helper の窓を名乗る同じ利用者のプロセスの RESPONSE は防げない（同じ利用者のプロセスは DLL の差し込みなど、もっと強いことができる）。防ぐ要が出たら、起こすたびの合言葉を枠に載せる形へ上げる
+        InboundAction::StoreResponse(_) if s.helper_hwnd.get() != Some(sender_wire) => {
+            tracing::warn!(
+                target: "shiori-host32",
+                event = "parent_frame_ignored",
+                reason = "response_not_from_helper",
+                sender = sender_wire,
+                "helper の窓でない送り手からの RESPONSE を無視した"
+            );
         }
         InboundAction::StoreResponse(payload) => {
             // 再入受領の核（要件 4.2・design.md §394）: RESPONSE payload を受け皿へ store して
@@ -254,6 +310,14 @@ impl ParentMessageWindow {
         )
         .map_err(|e| WindowCreationError(format!("{e:?}")))?;
         Ok(Self { window })
+    }
+
+    /// HELLO を受けてよい子のプロセス番号を伝える（spawn の直後・握手を回す前に呼ぶ・指摘 38）。
+    ///
+    /// 呼んだ後は、送り手の窓がこのプロセスのものでない HELLO を記録して捨てる。呼ばなければ
+    /// 「1 度だけ・送り手と中身の窓が同じ」の決まりだけで受ける。
+    pub fn expect_helper_pid(&self, pid: u32) {
+        self.window.state().expected_pid.set(Some(pid));
     }
 
     /// 親窓 HWND を u32 ワイヤ値で返す（`ProcessHost::spawn` へ渡す親 HWND・design.md §414）。
@@ -569,14 +633,14 @@ mod window_tests {
     /// なる既知制約ゆえ、窓は 1 組（親窓のみ）に集約する。以下を順に検証する:
     ///
     /// - (a) HELLO 未受領で短い timeout の `pump_until_hello_or` が `None`（要件 3.4・Timeout 経路）。
-    /// - (b) 同じ親窓へ HELLO を loopback 送出 → `pump_until_hello_or` が `Some(helper_hwnd)` を返し helper_hwnd が確定する（要件 3.2）。
+    /// - (b) 同じ親窓へ自分の窓を名乗る HELLO を loopback 送出 → `pump_until_hello_or` が `Some(helper_hwnd)` を返し helper_hwnd が確定する（要件 3.2）。
     /// - (c) 無視したメッセージの記録は [`ignored_frames_are_logged`] が確かめる。
     /// - (d) RESPONSE を loopback 送出 → WndProc の Response アームが `response_slot` へ store する（要件 4.2）。
     /// - (e) 無応答相手（親自身）へ `send_request` → 上限時間で `SendError::Ipc(Timeout)`・親はハングしない（要件 5.1/5.2/5.3）。
     ///
     /// bounded: いずれの pump / send_request も timeout / 受領 / quit で必ず抜ける（無限ループ禁止）。
     #[test]
-    fn pump_none_then_some_and_bad_frame_recorded() {
+    fn pump_times_out_then_hello_response_and_send_timeout() {
         // 窓生成テストの直列化（wintf-winmsg-executor 0.0.5 の「同一プロセスで 2 組の
         // message-only 窓を同時生成すると 2 組目が WindowCreationError」既知制約への対処）。
         // lifecycle.rs の窓生成テストと同一ロックを取り、並列窓生成の衝突を防ぐ。
@@ -601,9 +665,10 @@ mod window_tests {
         assert_eq!(parent.shared().helper_hwnd.get(), None);
 
         // --- (b) HELLO を loopback 送出 → pump が Some(helper_hwnd) を返す（要件 3.2）---
-        // 親窓宛に HELLO（helper HWND u32 LE）を送る。send_copydata は同期送出ゆえ、
+        // 親窓宛に HELLO（helper HWND u32 LE）を送る。送り手と中身の窓が同じでないと捨てられる
+        // （指摘 38）ので、親自身を helper として名乗る。send_copydata は同期送出ゆえ、
         // WndProc が呼ばれ helper_hwnd が確定した状態で戻る。
-        let helper_hwnd_wire: u32 = 0x0BAD_F00D;
+        let helper_hwnd_wire: u32 = parent.hwnd_u32();
         let hello_payload = helper_hwnd_wire.to_le_bytes();
         shiori_host32_ipc::send_copydata(
             parent.hwnd(),
@@ -651,12 +716,10 @@ mod window_tests {
         }
 
         // --- (e) 無応答相手への send_request は上限時間で Timeout（要件 5.1/5.2/5.3）---
-        // helper_hwnd を親自身へ差し替える。REQUEST を親 WndProc が受けても RESPONSE を
+        // helper_hwnd は (b) で親自身。REQUEST を親 WndProc が受けても RESPONSE を
         // store しない（Request アームは IgnoreKnown）→ slot は空のまま → Timeout。
         // SMTO_ABORTIFHUNG ＋短 timeout で有限復帰し親はハングしない。
         {
-            let self_wire = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
-            parent.shared().helper_hwnd.set(Some(self_wire));
             let before = Instant::now();
             let result = parent.send_request(MsgTag::Request, b"ping", Duration::from_millis(150));
             assert!(
@@ -675,8 +738,13 @@ mod window_tests {
         drop(parent);
     }
 
-    /// 生の WM_COPYDATA を親窓へ同期送出する（`dwData`・中身をそのまま渡す）。
+    /// 生の WM_COPYDATA を親窓へ同期送出する（`dwData`・中身をそのまま渡す・送り手は親自身）。
     fn send_raw(parent: &ParentMessageWindow, dw_data: usize, payload: &[u8]) {
+        send_raw_from(parent, parent.hwnd_u32(), dw_data, payload);
+    }
+
+    /// 送り手の窓（`wParam`）を `sender` と名乗って生の WM_COPYDATA を親窓へ同期送出する。
+    fn send_raw_from(parent: &ParentMessageWindow, sender: u32, dw_data: usize, payload: &[u8]) {
         let cds = COPYDATASTRUCT {
             dwData: dw_data,
             cbData: payload.len() as u32,
@@ -687,7 +755,7 @@ mod window_tests {
             let _ = windows::Win32::UI::WindowsAndMessaging::SendMessageW(
                 parent.hwnd(),
                 WM_COPYDATA,
-                Some(WPARAM(parent.hwnd().0 as usize)),
+                Some(WPARAM(sender as usize)),
                 Some(LPARAM(&cds as *const COPYDATASTRUCT as isize)),
             );
         }
@@ -724,5 +792,107 @@ mod window_tests {
             "{events:?}"
         );
         assert_eq!(parent.shared().helper_hwnd.get(), None);
+    }
+
+    /// `parent_frame_ignored` の WARN の `reason` を順に取り出す。
+    fn ignored_reasons(events: &[log_capture_kit::CapturedEvent]) -> Vec<String> {
+        events
+            .iter()
+            .filter(|e| {
+                e.target == "shiori-host32" && e.field_str("event") == Some("parent_frame_ignored")
+            })
+            .map(|e| {
+                assert_eq!(e.level, tracing::Level::WARN, "{e:?}");
+                e.field_str("reason").unwrap_or_default().to_owned()
+            })
+            .collect()
+    }
+
+    /// よその送り手の HELLO を捨てる（指摘 38）: 送り手の窓と中身の窓が違う HELLO と、
+    /// `expect_helper_pid` の番号でないプロセスの窓からの HELLO は記録して捨てる。
+    /// 伝えた番号のプロセス（ここでは自分）の窓から名乗った HELLO は受ける。
+    #[test]
+    fn hello_from_a_foreign_sender_is_dropped() {
+        let _guard = crate::lifecycle::tests::WINDOW_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let own = parent.hwnd_u32();
+        let hello = MsgTag::Hello.as_u32() as usize;
+
+        let ((), events) = log_capture_kit::capture(|| {
+            // 送り手は親の窓・中身は別の窓。
+            send_raw_from(&parent, own, hello, &0x0BAD_F00Du32.to_le_bytes());
+            // 送り手と中身は同じだが、伝えた番号のプロセスの窓でない。
+            parent.expect_helper_pid(std::process::id().wrapping_add(1));
+            send_raw_from(&parent, own, hello, &own.to_le_bytes());
+        });
+        assert_eq!(
+            ignored_reasons(&events),
+            ["hello_sender_mismatch", "hello_from_other_process"],
+            "{events:?}"
+        );
+        assert_eq!(parent.shared().helper_hwnd.get(), None);
+
+        parent.expect_helper_pid(std::process::id());
+        send_raw_from(&parent, own, hello, &own.to_le_bytes());
+        assert_eq!(parent.shared().helper_hwnd.get(), Some(own));
+    }
+
+    /// 2 度目の HELLO を捨てる（指摘 38）: helper の窓が決まった後の HELLO は記録して捨て、
+    /// 決まった窓は変わらない。
+    #[test]
+    fn a_second_hello_is_dropped() {
+        let _guard = crate::lifecycle::tests::WINDOW_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let own = parent.hwnd_u32();
+        let hello = MsgTag::Hello.as_u32() as usize;
+
+        send_raw_from(&parent, own, hello, &own.to_le_bytes());
+        assert_eq!(parent.shared().helper_hwnd.get(), Some(own));
+
+        let ((), events) =
+            log_capture_kit::capture(|| send_raw_from(&parent, own, hello, &own.to_le_bytes()));
+        assert_eq!(ignored_reasons(&events), ["second_hello"], "{events:?}");
+        assert_eq!(parent.shared().helper_hwnd.get(), Some(own));
+    }
+
+    /// helper でない送り手の RESPONSE を捨てる（指摘 38）: 握手の前の RESPONSE と、
+    /// 送り手の窓が helper の窓でない RESPONSE は受け皿に入れず記録して捨てる。
+    #[test]
+    fn a_response_from_a_non_helper_sender_is_dropped() {
+        let _guard = crate::lifecycle::tests::WINDOW_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+        let own = parent.hwnd_u32();
+        let response = MsgTag::Response.as_u32() as usize;
+
+        let ((), events) = log_capture_kit::capture(|| {
+            // 握手の前（helper の窓が決まっていない）。
+            send_raw_from(&parent, own, response, b"before-hello");
+            send_raw_from(
+                &parent,
+                own,
+                MsgTag::Hello.as_u32() as usize,
+                &own.to_le_bytes(),
+            );
+            // helper の窓（親自身）でない送り手。
+            send_raw_from(&parent, 0x0BAD_F00D, response, b"foreign");
+        });
+        assert_eq!(
+            ignored_reasons(&events),
+            ["response_not_from_helper", "response_not_from_helper"],
+            "{events:?}"
+        );
+        assert_eq!(parent.shared().response_slot.take(), None);
+
+        send_raw_from(&parent, own, response, b"from-helper");
+        assert_eq!(
+            parent.shared().response_slot.take(),
+            Some(b"from-helper".to_vec())
+        );
     }
 }
