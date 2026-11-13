@@ -23,7 +23,13 @@ use std::sync::mpsc::Sender;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, warn};
 
-use super::ghost_switch::ChangeRequestRaw;
+/// 台本の `\![change,ghost,名(,--option=raise-event)]` から届く切替要求（受け口
+/// `ChangeCueSink` が talk スレッドから送る）。名前は台本の字面のまま（無変形）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ChangeRequestRaw {
+    pub name: String,
+    pub raise_event: bool,
+}
 
 /// コマンド名（ゴースト・シェル・バルーンの切替の汎用の名前）。
 const NAME_CHANGE: &str = "change";

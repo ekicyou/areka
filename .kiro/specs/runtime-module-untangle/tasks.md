@@ -53,7 +53,7 @@
   - 完了の形: `runtime` の中で切替の型を引く所が新しいファイルを指し、`menu/`・`mcp/`・テストの書き換えなしで警告 0 件で通る
   - _Requirements: 2.3, 2.5_
 
-- [ ] 3.2 切替の要求の型と cue の束と起動の誤りを `runtime` へ下ろす
+- [x] 3.2 切替の要求の型と cue の束と起動の誤りを `runtime` へ下ろす
   - `ChangeRequestRaw` を `change_cue` へ、`CueSinkSources`・`RuntimeBootError` を `runtime` のモジュールの根へ下ろし、元の所は出し直しで呼び手を変えない
   - 誤りの分類と記録（`warn!`／`error!` の振り分け）は起動の側に残す
   - 完了の形: 残るファイルが 3 つの型を `runtime` の中から引き、警告 0 件で通る
@@ -197,3 +197,4 @@
 - 2.2: 8.x の掃き出しで拾う: `input_events/balloon_pointer_handler_tests.rs:513`・`:540` のコメント「Emo2 不在」（→「Runtime 不在」）、本体の外の `Emo2Wiring` の言及（`areka-placement/src/persist.rs:633`・`persist_io_wiring_tests.rs:163`・`chain_finalize.rs`・`lib.rs`・`placement_prepare_tests.rs`・`doc/ukadoc-coverage/ledger/assets.toml:5980`）。
 - 2.3: `crates/ukadoc-survey/src/evidence/candidates_tests.rs:345` の `choice_pressed_no_emo2` は抽出器に食わせる見本の文字列（照合ではない・本体の外）として残した。9.2 の 4 区分で判定する。
 - 3.1: `runtime/skin_switch.rs:86` の説明の文の [`discard_for_exit`] は移した先で rustdoc のリンクが切れる（cargo doc は回していない）。8.x で `crate::runtime::shell_balloon_switch::discard_for_exit` へ。入口の出し直しは設計の 5 型より多い（テストが入口のパスで引くため）＝6.1 で `session` へ移すときに絞れる。
+- 3.2: 8.x で直す文言: `runtime/mod.rs:176` の doc の [`boot_runtime`]（リンク切れ）と `change_cue.rs:14` の module doc「`ghost_switch::ChangeRequestRaw`」（型は change_cue へ移った）。

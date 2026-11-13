@@ -126,9 +126,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use areka_emo_present::shell_target::ShellLoadError;
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
+use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
-use areka_ghost::{ShioriWiring, TickerMode};
+use areka_ghost::{GhostBootError, ShioriWiring, TickerMode};
 use areka_kanade::{BootOrigin, KanadeNotice, MonotonicMs};
 use areka_parsers::package::MountError;
 use areka_seriko::{
@@ -148,10 +149,37 @@ use self::assets::{
 };
 use self::frame::{KanadeNoticeRx, RuntimeWiring, frame_system, ghost_quit_system};
 use self::move_cue::PositionCue;
-use self::runtime_boot::CueSinkSources;
 use self::talk_clock::TalkClock;
 use self::talk_lifecycle::TalkLifecycleSignal;
+use self::window_state_cue::WindowStateDirective;
 use self::zorder_cue::ZOrderDirective;
+
+/// 受け口の送出端の束（窓の側が 1 度作り、実行系を起こすたびに複製して sink を組む）。
+#[derive(Clone)]
+pub(crate) struct CueSinkSources {
+    /// seriko の送り手（Clone）。
+    pub surface: SerikoSink,
+    /// 文字の層の送り手（Clone）。
+    pub text: EmoTextSink,
+    /// `ClockedTextSink`／`BalloonLifecycleSink` が共有する台本の時計。
+    pub clock: TalkClock,
+    /// `\![move]` の線の送出端（受信端は `RuntimeWiring`）。
+    pub move_tx: Sender<PositionCue>,
+    /// 表示ライフサイクルの線の送出端（受信端は `RuntimeWiring`）。
+    pub lifecycle_tx: Sender<TalkLifecycleSignal>,
+    /// 重なりの線の送出端（受信端は `RuntimeWiring`）。
+    pub zorder_tx: Sender<ZOrderDirective>,
+    /// 常に手前の線の送出端（受信端は `RuntimeWiring`・SHIORI だけの読み直しでも同じ線に届く）。
+    pub window_state_tx: Sender<WindowStateDirective>,
+}
+
+/// 実行系の側の起動の失敗（分類した記録は [`boot_runtime`] が残す）。
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum RuntimeBootError {
+    /// `areka_ghost::boot_with_origin` の失敗。
+    #[error("実行系の起動に失敗")]
+    Boot(#[source] GhostBootError),
+}
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///

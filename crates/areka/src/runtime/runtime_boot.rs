@@ -10,14 +10,10 @@
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 
-use areka_emo_text::sink::EmoTextSink;
 use areka_ghost::sink::BootCueSink;
-use areka_ghost::{
-    GhostBootError, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode,
-};
+use areka_ghost::{GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_kanade::KanadeNotice;
 use areka_parsers::charset::DefaultEncoding;
-use areka_seriko::SerikoSink;
 use bevy_ecs::world::World;
 use tracing::{error, warn};
 
@@ -25,46 +21,21 @@ use super::RuntimeInputs;
 use super::change_cue::ChangeCueSink;
 use super::ghost_switch::{self, ChangeRequestRaw};
 use super::install_cue::InstallCueSink;
-use super::move_cue::{MoveCueSink, PositionCue};
+use super::move_cue::MoveCueSink;
 use super::readme_cue::ReadmeCueSink;
 use super::reload_args::ScriptReload;
 use super::reload_cue::{ReloadCueSink, wire_reload_rx};
 use super::shell_balloon_switch;
 use super::skin_switch::SkinRequestRaw;
 use super::switch_cue::SwitchCueSink;
-use super::talk_clock::{ClockedTextSink, TalkClock};
+use super::talk_clock::ClockedTextSink;
 use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::update_cue::UpdateCueSink;
 use super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
-use super::window_state_cue::{WindowStateCueSink, WindowStateDirective};
-use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
+use super::window_state_cue::WindowStateCueSink;
+use super::zorder_cue::ZOrderCueSink;
 
-/// 受け口の送出端の束（窓の側が 1 度作り、実行系を起こすたびに複製して sink を組む）。
-#[derive(Clone)]
-pub(crate) struct CueSinkSources {
-    /// seriko の送り手（Clone）。
-    pub surface: SerikoSink,
-    /// 文字の層の送り手（Clone）。
-    pub text: EmoTextSink,
-    /// `ClockedTextSink`／`BalloonLifecycleSink` が共有する台本の時計。
-    pub clock: TalkClock,
-    /// `\![move]` の線の送出端（受信端は `RuntimeWiring`）。
-    pub move_tx: Sender<PositionCue>,
-    /// 表示ライフサイクルの線の送出端（受信端は `RuntimeWiring`）。
-    pub lifecycle_tx: Sender<TalkLifecycleSignal>,
-    /// 重なりの線の送出端（受信端は `RuntimeWiring`）。
-    pub zorder_tx: Sender<ZOrderDirective>,
-    /// 常に手前の線の送出端（受信端は `RuntimeWiring`・SHIORI だけの読み直しでも同じ線に届く）。
-    pub window_state_tx: Sender<WindowStateDirective>,
-}
-
-/// 実行系の側の起動の失敗（分類した記録は [`boot_runtime`] が残す）。
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum RuntimeBootError {
-    /// `areka_ghost::boot_with_origin` の失敗。
-    #[error("実行系の起動に失敗")]
-    Boot(#[source] GhostBootError),
-}
+pub(crate) use super::{CueSinkSources, RuntimeBootError};
 
 /// 受信端が窓の側に無い線の手元の端（実行系の成立後にだけ World へ据える）。
 pub(super) struct RuntimeLines {

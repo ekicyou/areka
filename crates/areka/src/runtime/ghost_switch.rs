@@ -40,13 +40,7 @@ use crate::ghost_session::{
     rebuild_runtime_in_place, reopen_ghost_windows,
 };
 
-/// 台本の `\![change,ghost,名(,--option=raise-event)]` から届く切替要求（受け口
-/// `ChangeCueSink` が talk スレッドから送る）。名前は台本の字面のまま（無変形）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ChangeRequestRaw {
-    pub name: String,
-    pub raise_event: bool,
-}
+pub(crate) use crate::runtime::change_cue::ChangeRequestRaw;
 
 /// 台本からの切替要求の受信端（World の NonSend・ゴーストごとに新品）。
 pub(crate) struct ChangeRx(Receiver<ChangeRequestRaw>);
