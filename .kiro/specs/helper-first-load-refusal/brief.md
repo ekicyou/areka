@@ -74,3 +74,7 @@
 - 完了 spec `areka-P0-emo2-real-run-stability` の brief（157 行目）にある、以前の LOAD の失敗と同じ形の文（`loadu` の後に `HRESULT(0x80004005)`）。あちらは試験が赤になった。今回は赤にならなかった点が違う。
 - pasta 以外の SHIORI（YAYA）でも出た。断られるのが pasta の側の事情ではない手がかりになる。
 - ここへ足した訳: 触る場所（補助プログラムの初回の LOAD）が同じで、確かめるのに実物の走行を何度も回す必要がある。
+
+## 2026-11-13 試験の場所が変わった
+
+- 上の観測の `script_security_real_run`・`mcp_get_log_real_run` は、`mcp_strict_real_run` と合わせて `crates/areka/tests/emo2_mcp_real_run.rs` の 1 本（emo2 の起動 1 回）にまとめた。全体テストで emo2 を起こす回数が 3 回から 1 回に減ったので、初回の LOAD の断りに当たる回数も減る。調べるときはこの 1 本を見る。
