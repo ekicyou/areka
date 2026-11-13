@@ -58,7 +58,7 @@ pub enum WatchError {
 pub enum Damage {
     /// JSON として読めない（途中で切れた・BOM 付きを含む）。行と列は serde_json の示す位置。
     NotJson { line: usize, column: usize },
-    /// 版は 1 だが欄の形が合わない。行と列は元のバイト列を読み直して得た位置。
+    /// 版は合うが欄の形が合わない。行と列は元のバイト列を読み直して得た位置。
     WrongShape { line: usize, column: usize },
     /// 版の数字が無い・数でない・一番外が表でない。
     NoVersion,

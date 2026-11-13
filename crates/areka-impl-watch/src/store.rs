@@ -8,8 +8,9 @@
 //!
 //! - 読み: 版の数字だけを先に見る。無い → 空から始める。知らない版 → 読まず動かさず失敗。
 //!   JSON として読めない・形が合わない → 時刻入りの別名へ退避して空から始める。
-//! - 書き: プロセス番号入りの一時ファイルに全部書いて確定してから、名前を替えて置き換える
-//!   （読む側はロック無しでも書きかけを見ない。要件 8.3）。
+//! - 書き: プロセス番号入りの一時ファイルに全部書いてから、名前を替えて置き換える
+//!   （読む側はロック無しでも書きかけを見ない。要件 8.3）。ディスクへ確定するのは状態ファイル
+//!   だけで、読み物は確定しない。
 //! - ログ: 置き場所の下の `impl-watch.log` へ追記する。状態の変化は出来事 1 件ずつログの口へ
 //!   渡し（本物は 1 行ずつ書く）、失敗は各入口の出口で `error!` を 1 行出してから返す。
 //!   渡すのは、状態ファイルの置き換え（か退避）が済んだ変化だけ。読み物を書くのはその後。
@@ -353,26 +354,37 @@ impl Store {
     /// 状態ファイルを置き換える。
     fn write_state(&self, state: &State) -> Result<(), WatchError> {
         let json = serde_json::to_vec_pretty(state)?;
-        self.replace(&self.home.state_path(), &json, "write state.json")
+        self.replace(&self.home.state_path(), &json, "write state.json", true)
     }
 
     /// 読み物を置き換える。書けなくても失敗にしない: ログに 1 行残すだけで、呼び手の結果は
     /// 変わらない（正本は状態ファイルで、読み物は次の変化か状態の確認で書き直される）。
     fn write_status(&self, state: &State, now: u64) {
         let text = status::render_markdown(state, self.presence.as_ref(), now);
-        if let Err(err) = self.replace(&self.home.status_path(), text.as_bytes(), "write status.md")
-        {
+        // 読み物は確定しない: 消えても次の変化か状態の確認で書き直される。
+        if let Err(err) = self.replace(
+            &self.home.status_path(),
+            text.as_bytes(),
+            "write status.md",
+            false,
+        ) {
             tracing::warn!(error = %err, "[store] status.md not written; the result stands");
         }
     }
 
-    /// 置き換え書き。一時ファイル `<名前>.<プロセス番号>.tmp` に全部書いて確定してから、
+    /// 置き換え書き。一時ファイル `<名前>.<プロセス番号>.tmp` に全部書いて（`sync` なら確定して）から、
     /// 名前を替えて置き換える。失敗したら一時ファイルを消す（元のファイルは無傷）。
-    fn replace(&self, path: &Path, bytes: &[u8], op: &'static str) -> Result<(), WatchError> {
+    fn replace(
+        &self,
+        path: &Path,
+        bytes: &[u8],
+        op: &'static str,
+        sync: bool,
+    ) -> Result<(), WatchError> {
         let mut name = path.file_name().unwrap_or_default().to_owned();
         name.push(format!(".{}.tmp", std::process::id()));
         let temp = path.with_file_name(name);
-        write_synced(&temp, bytes)
+        write_temp(&temp, bytes, sync)
             .and_then(|()| self.rename_retrying(&temp, path))
             .map_err(|err| {
                 let _ = fs::remove_file(&temp);
@@ -429,11 +441,11 @@ fn lossy(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// 新しいファイルに全部書き、ディスクへ確定する。
-fn write_synced(path: &Path, bytes: &[u8]) -> io::Result<()> {
+/// 新しいファイルに全部書く。`sync` なら、ディスクへ確定する。
+fn write_temp(path: &Path, bytes: &[u8], sync: bool) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(bytes)?;
-    file.sync_all()
+    if sync { file.sync_all() } else { Ok(()) }
 }
 
 #[cfg(test)]

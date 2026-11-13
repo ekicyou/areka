@@ -10,11 +10,11 @@ use std::time::Duration;
 
 use temp_path_kit::TempPath;
 
-use super::Store;
 use super::test_support::{
     BROKEN_AT_T0, Nobody, T0, block_state_writes, home_in, names, participants, read_state,
     refuse_poll, store_in, store_noting_events, store_noting_pauses, tick, watch,
 };
+use super::{Store, lossy};
 use crate::error::{Damage, WatchError};
 use crate::home::Home;
 use crate::plan::{Applied, Command, Event, Presence, Verdict, apply};
@@ -58,10 +58,6 @@ fn cleared_event(backup: Option<&Path>) -> Event {
     Event::Cleared {
         backup: backup.map(lossy),
     }
-}
-
-fn lossy(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
 }
 
 /// 一時ファイルの名前（プロセス番号入り）をフォルダで塞ぐ: 読み物だけが書けなくなる。
