@@ -236,6 +236,27 @@ struct HelperShared {
     quit_requested: Cell<bool>,
     /// UNLOAD 観測カウンタ: `TriggerUnload` 受領数（R5.6）。
     unloads_handled: Cell<u64>,
+    /// DLL を呼んでいる最中か（指摘 8・design「helper の再入」）。立っている間の REQUEST は 500、
+    /// UNLOAD は後回し（DLL を入れ子に呼ばず、`proxy` の借りも衝突させない）。
+    in_dll_call: Cell<bool>,
+    /// DLL の呼び出しの最中に UNLOAD が来た印。呼び出しが戻ったら遅れた応答を送らずに後始末する。
+    unload_pending: Cell<bool>,
+}
+
+/// `in_dll_call` を立て、戻り方によらず下ろす見張りの値（指摘 8）。
+struct InDllCall<'a>(&'a Cell<bool>);
+
+impl<'a> InDllCall<'a> {
+    fn enter(flag: &'a Cell<bool>) -> Self {
+        flag.set(true);
+        Self(flag)
+    }
+}
+
+impl Drop for InDllCall<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 
 impl HelperShared {
@@ -254,8 +275,37 @@ impl HelperShared {
             load_acks_fail: Cell::new(0),
             quit_requested: Cell::new(false),
             unloads_handled: Cell::new(0),
+            in_dll_call: Cell::new(false),
+            unload_pending: Cell::new(false),
         }
     }
+}
+
+/// UNLOAD の後始末: proxy を `close`（unload → FreeLibrary）してから終了要求を立てる。`close` の失敗は
+/// 行で書き、返事は [1] のまま（要件 10.11）。未確立(None)なら閉じる物は無い（design §182）。
+/// `quit_requested` は後始末が済んでから立てる（DLL のモーダルな窓のループの中で回しを止めない）。
+fn close_and_request_quit(s: &HelperShared) {
+    let taken = s.proxy.borrow_mut().take();
+    if let Some(Err(e)) = taken.map(ShioriByteProxy::close) {
+        helper_log(&format!(
+            "[helper] UNLOAD の後始末に失敗（観測・ack[1] のまま）: {e:?}"
+        ));
+    }
+    s.quit_requested.set(true);
+}
+
+/// DLL の呼び出しが戻ったとき、最中に来た UNLOAD があれば後始末して真を返す（呼び手は遅れた応答を
+/// 送らない・host はもう待っていない）。ack [1] は UNLOAD の受領のときに返し済み。
+fn finish_deferred_unload(s: &HelperShared, self_hwnd: HWND, late: &str) -> bool {
+    if !s.unload_pending.get() {
+        return false;
+    }
+    helper_log(&format!(
+        "[helper] DLL の呼び出しの最中に来た UNLOAD を後始末する（遅れた {late} は送らない）"
+    ));
+    close_and_request_quit(s);
+    wake_self(self_hwnd);
+    true
 }
 
 /// 受領した WM_COPYDATA の `(dwData 生値, cbData 宣言長, payload コピー)` を取り出す。
@@ -312,21 +362,33 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             // 再入 REQUEST が borrow を掴んでも `BorrowError` panic を起こさない（R6.4）。
             s.requests_handled.set(s.requests_handled.get() + 1);
 
-            // 1) scoped borrow で proxy を実駆動し response_bytes を確定（borrow は本ブロックで即終了）。
-            //    proxy 未確立（構造上起きないが crash 回避の最小防御・R3.1）／`request` の Err は
-            //    識別可能なエラーバイト列（500）へ写像し、観測ログを残す（log-first・silent swallow 禁止）。
-            let response_bytes: Vec<u8> = {
+            // DLL の呼び出しの最中（DLL が helper の窓へ送り返した）なら DLL を入れ子に呼ばず 500（指摘 8）。
+            let response_bytes: Vec<u8> = if s.in_dll_call.get() {
+                helper_log(
+                    "[helper] DLL の呼び出しの最中に REQUEST を受領（DLL を入れ子に呼ばず 500 返送）",
+                );
+                REQUEST_ERROR_RESPONSE.to_vec()
+            } else {
+                // 1) scoped borrow で proxy を実駆動し response_bytes を確定（borrow は本ブロックで即終了）。
+                //    proxy 未確立（構造上起きないが crash 回避の最小防御・R3.1）／`request` の Err は
+                //    識別可能なエラーバイト列（500）へ写像し、観測ログを残す（log-first・silent swallow 禁止）。
                 let guard = s.proxy.borrow();
                 match guard.as_ref() {
-                    Some(proxy) => match proxy.request(&request_bytes) {
-                        Ok(bytes) => bytes,
-                        Err(e) => {
-                            helper_log(&format!(
-                                "[helper] REQUEST 駆動失敗（観測・500 返送）: {e:?}"
-                            ));
-                            REQUEST_ERROR_RESPONSE.to_vec()
+                    Some(proxy) => {
+                        let result = {
+                            let _call = InDllCall::enter(&s.in_dll_call);
+                            proxy.request(&request_bytes)
+                        };
+                        match result {
+                            Ok(bytes) => bytes,
+                            Err(e) => {
+                                helper_log(&format!(
+                                    "[helper] REQUEST 駆動失敗（観測・500 返送）: {e:?}"
+                                ));
+                                REQUEST_ERROR_RESPONSE.to_vec()
+                            }
                         }
-                    },
+                    }
                     None => {
                         // Load-before-Request は構造的不変（設計上ここへは来ない）。来ても crash させず
                         // 識別可能なエラーバイト列を返し helper は生存継続（R3.1/R6.4）。
@@ -337,6 +399,9 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                     }
                 }
             }; // ← ここで borrow が drop され、以後 RESPONSE 送出は borrow 非保持で行う。
+            if finish_deferred_unload(s, self_hwnd, "RESPONSE") {
+                return Some(LRESULT(0));
+            }
 
             // 2) borrow を一切保持しない状態で RESPONSE を親へ 1 通だけ返す（ブロッキング SMTO・再入可・§200）→
             //    即 return（それ以上の跨プロセス SendMessage 不可）。応答方向ゆえ
@@ -373,7 +438,10 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             } else {
                 // 絶対 DLL パス = load_dir\<shiori_name>（DLL 検索パス曖昧性の排除・design.md §321）。
                 let dll_path = s.load_dir.join(&s.shiori_name);
-                let result = ShioriByteProxy::load(&dll_path, &s.load_dir);
+                let result = {
+                    let _call = InDllCall::enter(&s.in_dll_call);
+                    ShioriByteProxy::load(&dll_path, &s.load_dir)
+                };
                 let ack = load_result_to_ack(&result);
                 match result {
                     Ok(proxy) => {
@@ -387,6 +455,10 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                 }
                 ack
             };
+            // 最中に UNLOAD が来ていれば、読めた proxy をそのまま閉じ、遅れた ack は送らない（指摘 8）。
+            if finish_deferred_unload(s, self_hwnd, "load-ack") {
+                return Some(LRESULT(0));
+            }
 
             // 4) borrow を一切保持しない状態で ack 送出（ブロッキング SMTO・再入可・R5.2）。
             if ack == LOAD_ACK_OK {
@@ -407,17 +479,18 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             // 正規の正常終了経路（design §UNLOAD アーム・R5.1/R5.6）。RefCell 再入規律を LOAD/REQUEST と
             // 同格に厳守: borrow を send_copydata_response（ブロッキング SMTO・再入可）越しに保持しない。
             s.unloads_handled.set(s.unloads_handled.get() + 1);
-            // 1) proxy を take（borrow は文末で終了）。
-            let taken = s.proxy.borrow_mut().take();
-            // 2) borrow 非保持で後始末（unload → FreeLibrary）。失敗は行で書き、返事は [1] のまま
-            //    （要件 10.11）。未確立(None)なら no-op（未 LOAD UNLOAD も crash させず終了系列に入る・design §182）。
-            if let Some(Err(e)) = taken.map(ShioriByteProxy::close) {
-                helper_log(&format!(
-                    "[helper] UNLOAD の後始末に失敗（観測・ack[1] のまま）: {e:?}"
-                ));
+            // DLL の呼び出しの最中なら proxy に触れず（借りの衝突の元を無くす）印だけ立て、後始末は
+            // 呼び出しが戻ってから（指摘 8）。返事 [1] は先に返す（host は [1] の後に終わりを待つ）。
+            let deferred = s.in_dll_call.get();
+            if deferred {
+                s.unload_pending.set(true);
+                helper_log(
+                    "[helper] DLL の呼び出しの最中に UNLOAD を受領（ack[1] を返し、後始末は呼び出しが戻ってから）",
+                );
+            } else {
+                // 1)〜3) proxy を閉じてから終了要求フラグを立てる（borrow は送出の前に終わる）。
+                close_and_request_quit(s);
             }
-            // 3) 終了要求フラグを立てる。
-            s.quit_requested.set(true);
             // 4) borrow 非保持で ack[1] を返送（LOAD ack と同型・MsgTag::Response 再入経路・新契約を発明
             //    しない・ack[1]=「unload 完了・終了系列に入った」）。送出失敗は行で観測のみ
             //    （親は ack timeout で検出＝意図的逸脱・design §475/validation Issue 2）。
@@ -433,8 +506,11 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             }
             // 5) 自窓へ PostMessageW(WM_NULL) — posted メッセージで MessageLoop を起こす
             //    （sent-message はフィルタに現れない）。main のフィルタが quit_requested を検知して
-            //    msg_loop.quit() → ループ正常終了 → exit 0（R5.6 正規正常終了経路）。
-            wake_self(self_hwnd);
+            //    msg_loop.quit() → ループ正常終了 → exit 0（R5.6 正規正常終了経路）。後回しのときは
+            //    終了要求がまだ無いので、後始末の側で起こす。
+            if !deferred {
+                wake_self(self_hwnd);
+            }
         }
         InboundAction::IgnoreKnown(tag) => {
             // Hello/Response は helper が能動応答しない。記録のみ（無応答）。

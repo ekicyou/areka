@@ -154,7 +154,7 @@
   - テスト `a_response_longer_than_its_allocation_is_refused`・`a_null_response_is_request_failed`・`a_null_response_answers_500` を i686 の段に置く
   - 完了の姿: 3 本が緑で、長さの確かめを外すと 1 本目が赤になる
   - _Requirements: 4.1, 5.2_
-- [ ] 10.3 DLL の呼び出しの最中の REQUEST と UNLOAD で helper が落ちないようにする（指摘 8）
+- [x] 10.3 DLL の呼び出しの最中の REQUEST と UNLOAD で helper が落ちないようにする（指摘 8）
   - 設計の「helper の再入」の状態どおり、DLL を呼ぶ 2 か所を見張りの値で包み、最中の REQUEST は 500、最中の UNLOAD は ack [1] と後回しの印にし、戻った後に遅れた応答を送らずに後始末を行う
   - テスト `unload_during_a_dll_call_defers_the_unload`・`request_during_a_dll_call_gets_500` を i686 の段に置く
   - 完了の姿: 2 本が緑で、旗を外すと panic か入れ子の呼び出しで赤になる
@@ -205,3 +205,4 @@
 - 7.2: expect_helper_pid は HELLO が届いた後に呼ぶと pid の確かめが記録なしで飛ぶ。7.3 の real_connect は spawn → expect_helper_pid → ポンプの順を守る。parent_window.rs は 898 行なので 7.4 でテストを足すときは parent_window_tests.rs へ移す。lib.rs に #[cfg(test)] extern crate self as shiori_host32_host; を置いた（tests/common を lib の単体テストからも #[path] で引くため）。
 - 7.4（範囲外・/kiro-complete の棚卸へ）: 窓 2 組のテストが緑で「窓 1 組の制約」は無いと分かった。areka-kanade の tests/kanade/common/common_window_actor.rs の WINDOW_CREATE_SERIAL（同時に作ると 2 つ目が失敗する前提）が今も要るかは確かめていない（注にその旨を書いた）。
 - 7.4: 机で、emo2 自身の pasta.dll・PASTA_DEBUG=1・既定の並列で areka-ghost を回し、錠なしで実物の pasta のテスト 3 本が並んで緑（lib 234・ghost 39・real_pasta_online 8）。
+- 10.3（14 の再監査へ）: LOAD の腕の DLL 呼び出しの最中に別の LOAD が届くと、proxy が None のため ShioriByteProxy::load がもう一度呼ばれ（入れ子）、内側の InDllCall の Drop が外側の印を下ろす。設計の状態図は REQUEST と UNLOAD だけを扱い、testdll では LOAD の再入を起こせないので縛れていない。

@@ -2,13 +2,18 @@ use super::*;
 use crate::proxy_test_support::copy_testdll_into_unique_target_dir;
 use std::rc::Rc;
 
-/// 受けた HELLO の helper HWND・RESPONSE の数・最後の RESPONSE。
-type ParentRecord = (Rc<Cell<Option<u32>>>, Rc<Cell<u64>>, Rc<RefCell<Vec<u8>>>);
+/// 受けた HELLO の helper HWND・RESPONSE の数・最後の RESPONSE・届いた順の全 RESPONSE。
+type ParentRecord = (
+    Rc<Cell<Option<u32>>>,
+    Rc<Cell<u64>>,
+    Rc<RefCell<Vec<u8>>>,
+    Rc<RefCell<Vec<Vec<u8>>>>,
+);
 
 /// stand-in parent（HELLO / RESPONSE の受け皿）。受けたものを [`ParentRecord`] に記録する。
 fn stand_in_parent() -> (Window<()>, ParentRecord) {
     let record: ParentRecord = Default::default();
-    let (hello_helper_hwnd, responses, last_response) = record.clone();
+    let (hello_helper_hwnd, responses, last_response, all_responses) = record.clone();
     let parent = Window::new(
         WindowType::MessageOnly,
         (),
@@ -26,6 +31,7 @@ fn stand_in_parent() -> (Window<()>, ParentRecord) {
                     Ok((MsgTag::Response, p)) => {
                         responses.set(responses.get() + 1);
                         *last_response.borrow_mut() = p.to_vec();
+                        all_responses.borrow_mut().push(p.to_vec());
                     }
                     _ => {}
                 }
@@ -49,7 +55,7 @@ fn stand_in_parent() -> (Window<()>, ParentRecord) {
 )]
 fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     // --- stand-in parent（HELLO / RESPONSE 受け皿）。受領を Rc<Cell> に記録 ---
-    let (parent, (hello_helper_hwnd, responses, last_response)) = stand_in_parent();
+    let (parent, (hello_helper_hwnd, responses, last_response, _)) = stand_in_parent();
     let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
 
     // --- helper 窓生成（HELLO は create 内で親へ送出）---
@@ -466,7 +472,7 @@ fn assert_logged(log: &[String], needle: &str) {
 #[test]
 #[cfg(target_arch = "x86")]
 fn unload_ack_stays_one_when_unload_returns_false() {
-    let (parent, (_, responses, last_response)) = stand_in_parent();
+    let (parent, (_, responses, last_response, _)) = stand_in_parent();
     let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
     let (root, _) = copy_testdll_into_unique_target_dir("unload-false");
     let helper = HelperMessageWindow::create(
@@ -547,7 +553,7 @@ fn an_empty_copydata_is_counted_as_bad() {
 #[test]
 #[cfg(target_arch = "x86")]
 fn a_null_response_answers_500() {
-    let (parent, (_, _, last_response)) = stand_in_parent();
+    let (parent, (_, _, last_response, _)) = stand_in_parent();
     let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
     let (root, _) = copy_testdll_into_unique_target_dir("null-500");
     let helper = HelperMessageWindow::create(
@@ -575,5 +581,110 @@ fn a_null_response_answers_500() {
 
     drop(helper);
     drop(parent);
+    drop(root);
+}
+
+/// 指摘 8 の再入の場: testdll を読んだ helper へ `OnTestReenter` を送り、DLL の `request` の中から
+/// helper の窓へ `tag`（3＝REQUEST・5＝UNLOAD）の空の `WM_COPYDATA` を送り返させる。
+/// 返すのはテストの根・helper（この順で受ければ panic でも helper が先に消える）・親に届いた全 RESPONSE（LOAD の ack を含む）・
+/// REQUEST を送った後の `[helper]` の行。
+#[cfg(target_arch = "x86")]
+fn reenter(
+    name: &str,
+    tag: MsgTag,
+) -> (
+    crate::proxy_test_support::TestRoot,
+    HelperMessageWindow,
+    Vec<Vec<u8>>,
+    Vec<String>,
+) {
+    let (parent, (_, _, _, all_responses)) = stand_in_parent();
+    let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
+    let (root, _) = copy_testdll_into_unique_target_dir(name);
+    let helper = HelperMessageWindow::create(
+        parent_hwnd_u32,
+        root.path().to_path_buf(),
+        "shiori.dll".to_string(),
+    )
+    .expect("HelperMessageWindow 生成に失敗");
+    send_copydata(
+        helper.hwnd(),
+        parent.hwnd(),
+        MsgTag::Load,
+        &[],
+        REPLY_TIMEOUT,
+    )
+    .expect("LOAD の送出に失敗");
+    take_helper_log();
+    let req = format!(
+        "GET SHIORI/3.0\r\nCharset: UTF-8\r\nID: OnTestReenter\r\nReference0: {}\r\nReference1: {}\r\n\r\n",
+        helper.hwnd().0 as usize,
+        tag as usize
+    );
+    send_copydata(
+        helper.hwnd(),
+        parent.hwnd(),
+        MsgTag::Request,
+        req.as_bytes(),
+        REPLY_TIMEOUT,
+    )
+    .expect("REQUEST の送出に失敗");
+    let log = take_helper_log();
+    let all = all_responses.borrow().clone();
+    drop(parent);
+    (root, helper, all, log)
+}
+
+/// 指摘 8: DLL の呼び出しの最中の REQUEST は DLL を入れ子に呼ばずに 500、外の呼び出しは 204 のまま。
+#[test]
+#[cfg(target_arch = "x86")]
+fn request_during_a_dll_call_gets_500() {
+    let (root, helper, all, log) = reenter("reenter-request", MsgTag::Request);
+    let all: Vec<String> = all
+        .iter()
+        .map(|r| String::from_utf8_lossy(r).into_owned())
+        .collect();
+    assert_eq!(
+        all.len(),
+        3,
+        "LOAD の ack・最中の 500・外の応答の 3 通: {all:?}"
+    );
+    assert_eq!(all[0].as_bytes(), [LOAD_ACK_OK], "LOAD の ack");
+    assert_eq!(
+        all[1].as_bytes(),
+        REQUEST_ERROR_RESPONSE,
+        "最中の REQUEST は 500"
+    );
+    assert!(
+        all[2].starts_with("SHIORI/3.0 204"),
+        "外の REQUEST は 204: {all:?}"
+    );
+    assert_logged(&log, "最中に REQUEST");
+    assert!(!helper.shared().in_dll_call.get(), "戻った後は印が下りる");
+    assert!(helper.shared().proxy.borrow().is_some(), "proxy は残る");
+    drop(helper);
+    drop(root);
+}
+
+/// 指摘 8: DLL の呼び出しの最中の UNLOAD は ack [1] を先に返し、戻った後に遅れた応答を送らずに
+/// 後始末（`close` → 終了要求）を行う（今は `proxy` の借りの衝突で panic して落ちる）。
+#[test]
+#[cfg(target_arch = "x86")]
+fn unload_during_a_dll_call_defers_the_unload() {
+    let (root, helper, all, log) = reenter("reenter-unload", MsgTag::Unload);
+    assert_eq!(
+        all,
+        vec![vec![LOAD_ACK_OK], vec![LOAD_ACK_OK]],
+        "LOAD の ack と UNLOAD の ack [1] だけで、遅れた RESPONSE は届かない"
+    );
+    assert_logged(&log, "最中に UNLOAD");
+    assert_logged(&log, "遅れた RESPONSE は送らない");
+    assert_eq!(helper.shared().unloads_handled.get(), 1);
+    assert!(helper.shared().proxy.borrow().is_none(), "proxy は閉じた");
+    assert!(
+        helper.shared().quit_requested.get(),
+        "後始末の後に終了要求が立つ"
+    );
+    drop(helper);
     drop(root);
 }
