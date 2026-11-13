@@ -139,3 +139,7 @@
   - 触ったファイルがどれも 1,000 行以内で、新しいテストが兄弟のファイルにあり、どの `Cargo.toml` と `crates/areka/`・CPU の画素の読み手に差分が無いことを確かめる
   - 完了の姿: 全体テストが緑で、行数と差分の確かめの結果が 0 件
   - _Requirements: 6.1, 6.2, 6.5, 6.7, 7.1_
+
+## Implementation Notes
+
+- 1.2: `visual/mod.rs` の `#[cfg(test)] pub(crate) use draw::emit_test_support;` は使い手のテストが入るまで `#[allow(unused_imports)]` 付き。入れ物か読み戻しのテスト（5.1 以降）が使い始めたら外す。描画面ごとの DC6 の cast（`render.rs`）は 5.1／6.2 で SurfaceComposite の合成の回へ移す。
