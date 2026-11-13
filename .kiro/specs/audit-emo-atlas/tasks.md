@@ -98,7 +98,7 @@
   - 静止画の腕のテストのうち、動く絵の腕のテストと同じ 2 本を消し、正規化のテストの重なりと、動く絵のテストの重なり（`research.md` 3 節の 9 の行）を消す。道具の描きのテストのうち、組み立てのテストとずれの見張りが覆う 2 か所を消す
   - 完了の状態: emo2 の本物の焼きの回数が 2＋3 回から 1＋1 回になり、消した本が見ていた事実がどれも残るテストで確かめられている（空の絵の確かめを含む）、クレートのテストが全部緑
   - _Requirements: 2.1, 2.3, 5.3_
-- [ ] 3.8 (P) 8 語の表と綴りの比べ方を `areka-parsers` へまとめる（指摘 13）
+- [x] 3.8 (P) 8 語の表と綴りの比べ方を `areka-parsers` へまとめる（指摘 13）
   - 頭で、roadmap の台帳で `areka-parsers` と `areka-emo-compose` に触る spec が走っていないことを確かめ直す（走っていれば申し合わせてから触る）
   - `areka-parsers` のシェルのモジュールに、8 語の種類・綴りを直す関数・確保せずに比べる関数・語を見分ける関数を、compose から説明ごと移して公開する。8 語のテスト 2 本を移し、2 つの比べ方が同じ答えであるテストを 1 本足す
   - compose は parsers の型と関数を再公開して公開のパスを保ち、合成メソッドの名前引きも parsers の関数を使う形にする（綴りの規則の写しを compose に残さない）
@@ -152,3 +152,4 @@
 - 2.4: `runtime-module-untangle` は PR#447 で着地済みのため、知らせの代わりに grep を記録する。9 つの型（Packer・PackOutput・PackedEntry・Baker・Trimmer・TrimResult・Trimmed・ManifestDeriver・Manifest）と 8 つのモジュール（bake・decode・error・manifest・normalize・pack・table・trim）の範囲の外のコードの使い手は 0 件（当たりは areka-emo-present の説明の文 2 か所と、別の同名の型だけ）。残り物（5.1 の audit で拾う候補）: `normalize.rs:92` の説明が非公開の `Normalizer::plan`/`apply` へリンクする `cargo doc` の警告 2 件（前からある）、`limits.rs` の外から届かない `pub const` 3 つ。
 - 3.5（範囲の外・完了の棚卸で起票）: `crates/areka-placement/src/measure_first_frame_tests.rs` の `fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake` は、動く絵の上限の環境変数（`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` か `AREKA_ANIMATED_IMAGE_MAX_PIXELS=1`）を立てると 258 行の `raw_warns == 0` で赤になる（本物の `bake` が環境の上限を読むため）。areka-placement はこの spec では触れない。`crates/areka/src/placement_tests/measure_bake_log_tests.rs` も動く絵を登録するが、環境変数を変えた走らせ方は未確認。
 - 3.6（範囲の外・完了の棚卸で拾う）: `crates/areka-emo-compose/src/film_tests.rs:258` の説明「②⑤⑥は `with_frames` も作れない」は、3.6 で ①（0 番が親でない）も `with_frames` で作れなくなったので少し古い。テストの働きには関係しない。
+- 3.8（範囲の外・前からある赤・完了の棚卸で扱う）: 今のツールチェーンの clippy（`--all-targets -D warnings`）が `clippy::chunks_exact_to_as_chunks` で赤: `crates/areka-emo-compose/src/golden_tests_test_support.rs:129`・`composer_tests.rs:518,553`、`crates/areka-sakura/src/drive.rs:325`（seriko の依存先）。どれもこの spec の差分の外。

@@ -95,25 +95,9 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
                     | areka_parsers::shell::Interval::BindRandom { .. }
             );
             for pattern in &animation.patterns {
-                // 欄 2 が面の番号でない 8 語は面を指さない（emo-compose の `pattern_word` の
-                // 写し・同じ綴りの比べ方）。
-                let method = pattern
-                    .method
-                    .as_str()
-                    .trim()
-                    .to_ascii_lowercase()
-                    .replace(['-', '_'], "");
-                let names_animation = matches!(
-                    method.as_str(),
-                    "start"
-                        | "stop"
-                        | "alternativestart"
-                        | "alternativestop"
-                        | "parallelstart"
-                        | "parallelstop"
-                        | "insert"
-                        | "move"
-                );
+                // 欄 2 が面の番号でない 8 語は面を指さない。
+                let names_animation = areka_parsers::shell::pattern_word(pattern.method.as_str())
+                    != areka_parsers::shell::PatternWord::Draw;
                 if !names_animation && pattern.surface_id >= 0 && ids.contains(&pattern.surface_id)
                 {
                     *referenced.entry(pattern.surface_id).or_insert(true) &= is_bind;
