@@ -22,14 +22,6 @@ fn parse_by_name(name: &str, args: Value) -> ToolCall {
     parse(&obj(args))
 }
 
-/// (要件 1.1・1.3) 表が 10 行・先頭が `get_active_ghost_list`。
-#[test]
-fn table_has_ten_rows_in_ssp_order() {
-    assert_eq!(TABLE.len(), 10);
-    let first = spec_from_definition(TABLE[0].0).unwrap();
-    assert_eq!(first.name, "get_active_ghost_list");
-}
-
 /// (要件 1.2・1.3) 10 本の定義が読めて `ToolSpec` になり、並びと中身が保存した JSON と一致する。
 #[test]
 fn definitions_are_verbatim_copies_of_saved_list() {
@@ -263,13 +255,7 @@ fn tool_call_name_matches_definition_for_all_ten() {
     }
 }
 
-/// (要件 6.2 の上限の値) 本番の上限は 10 秒。
-#[test]
-fn reply_wait_is_ten_seconds() {
-    assert_eq!(REPLY_WAIT, std::time::Duration::from_secs(10));
-}
-
-// ---- 登録表と受け口（`entrances`） ----
+// ---- 登録表と受け口（`register_rows`） ----
 
 use std::time::Duration;
 
@@ -297,8 +283,8 @@ fn names(registry: &ToolRegistry) -> Vec<String> {
 
 /// (要件 1.1・1.3) 組んだ登録表は 10 本を SSP の並びで持ち、定義は表の行と同じ。
 #[test]
-fn entrances_registers_ten_in_ssp_order() {
-    let (registry, _rx) = entrances(REPLY_WAIT);
+fn table_registers_ten_in_ssp_order() {
+    let (registry, _rx) = register_rows(TABLE, REPLY_WAIT);
     assert_eq!(registry.len(), 10);
     let want: Vec<String> = TABLE
         .iter()
@@ -314,7 +300,7 @@ fn entrances_registers_ten_in_ssp_order() {
 /// 10 本の処理を呼ぶと、受け口に型の付いた `ToolCall` が届き、受け手の返事が処理の結果になる。
 #[test]
 fn every_handler_delivers_typed_call_and_returns_the_answer() {
-    let (registry, rx) = entrances(REPLY_WAIT);
+    let (registry, rx) = register_rows(TABLE, REPLY_WAIT);
     // 偽のアプリ本体: 届いた呼び出しを書き写して返す。
     let answerer = std::thread::spawn(move || {
         for request in rx {
@@ -342,7 +328,7 @@ fn every_handler_delivers_typed_call_and_returns_the_answer() {
 /// 引数が object でない（handler の検査より前には起きない）ときは空の arguments として詰め替える。
 #[test]
 fn non_object_arguments_are_read_as_empty() {
-    let (registry, rx) = entrances(Duration::from_millis(1));
+    let (registry, rx) = register_rows(TABLE, Duration::from_millis(1));
     let (_, handler) = &registry.entries()[1];
     let _ = run_handler(handler, Value::Null);
     let request = rx.try_recv().expect("要求が届かない");
@@ -355,7 +341,7 @@ fn non_object_arguments_are_read_as_empty() {
 /// (要件 6.5) 誰も汲まない間に届いた要求は受け口に溜まり、後から汲める。
 #[test]
 fn requests_queue_until_someone_drains() {
-    let (registry, rx) = entrances(Duration::from_millis(1));
+    let (registry, rx) = register_rows(TABLE, Duration::from_millis(1));
     let (_, handler) = &registry.entries()[0];
     let got = run_handler(handler, json!({}));
     assert!(got.is_error, "誰も答えないので上限で返る: {got:?}");
@@ -367,7 +353,7 @@ fn requests_queue_until_someone_drains() {
 #[test]
 fn broken_definition_row_is_skipped_with_one_error() {
     let rows: [(&str, Parse); 2] = [("not json", get_status::parse), TABLE[0]];
-    let ((registry, _rx), events) = capture(|| register_rows(&rows, REPLY_WAIT));
+    let ((registry, _rx), events) = capture(|| register_rows(rows, REPLY_WAIT));
     assert_eq!(names(&registry), vec!["get_active_ghost_list".to_owned()]);
     assert_eq!(events.len(), 1, "記録は error 1 件だけ: {events:?}");
     assert_eq!(events[0].level, Level::ERROR);

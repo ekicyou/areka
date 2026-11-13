@@ -8,11 +8,11 @@ fn specs(registry: &ToolRegistry) -> Vec<ToolSpec> {
     registry.entries().iter().map(|(s, _)| s.clone()).collect()
 }
 
-/// (要件 1.1・1.3・1.4) 11 本・先頭 10 本は `entrances` と同じ並びと定義・11 本目は `check_script`。
+/// (要件 1.1・1.3・1.4) 11 本・先頭 10 本は SSP の表（`TABLE`）と同じ並びと定義・11 本目は `check_script`。
 #[test]
 fn all_entrances_is_ssp_ten_then_own_rows() {
     let (all, _rx) = all_entrances(REPLY_WAIT);
-    let (ssp, _rx) = entrances(REPLY_WAIT);
+    let (ssp, _rx) = register_rows(TABLE, REPLY_WAIT);
     let all = specs(&all);
     assert_eq!(all.len(), 11);
     assert_eq!(&all[..10], specs(&ssp).as_slice());
@@ -45,11 +45,4 @@ fn own_rows_are_registered_without_duplicate_names() {
 fn all_specs_equals_the_specs_of_the_production_registry() {
     let (all, _rx) = all_entrances(REPLY_WAIT);
     assert_eq!(all_specs(), specs(&all));
-}
-
-/// (要件 1.4) `entrances` は 10 本のまま。
-#[test]
-fn entrances_stays_ten() {
-    let (ssp, _rx) = entrances(REPLY_WAIT);
-    assert_eq!(ssp.len(), 10);
 }

@@ -160,7 +160,7 @@ pub(crate) fn assert_no_request(rx: &Receiver<ToolRequest>) {
     }
 }
 
-/// 登録表 `entrances`（`entrances(..)`／`all_entrances(..)` の戻り値）のサーバへ、旧式と無状態版の
+/// 登録表と受け口の組 `entrances`（`all_entrances(..)` の戻り値）のサーバへ、旧式と無状態版の
 /// 両方の経路で同じ `tools/call` を送り、`-32602` の `error` と HTTP の状態を固定する。
 /// どちらも `result` は無く、受け手への要求は 0 件。
 pub(crate) fn assert_invalid_params(

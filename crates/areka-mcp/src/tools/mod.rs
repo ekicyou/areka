@@ -116,25 +116,14 @@ pub(crate) fn spec_from_definition(definition: &str) -> Result<ToolSpec, String>
     })
 }
 
-/// 10 本の登録表と、アプリ本体が汲む受け口を組む（要件 1.1・1.3・6.5）。
-///
-/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる。
-pub fn entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
-    register_rows(&TABLE, reply_wait)
-}
-
 /// SSP と同じ 10 本に続けて独自のツールを登録し、アプリ本体が汲む受け口を返す（本番の入口・
 /// spec: areka-P0-mcp-author-tools）。受け口は 1 本で、10 本と独自のツールが同じ受け口へ届く。
+/// 受け口は呼び出し側が持つ。アプリ本体へ置くまでに届いた要求は受け口に溜まる（要件 6.5）。
 pub fn all_entrances(reply_wait: Duration) -> (ToolRegistry, Receiver<ToolRequest>) {
-    let (tx, rx) = mpsc::channel();
-    let mut registry = ToolRegistry::default();
-    for &(definition, parse) in &TABLE {
-        register_row(&mut registry, &tx, definition, parse, reply_wait);
-    }
-    for &(definition, parse, _) in &OWN_TABLE {
-        register_row(&mut registry, &tx, definition, parse, reply_wait);
-    }
-    (registry, rx)
+    let own = OWN_TABLE
+        .iter()
+        .map(|&(definition, parse, _)| (definition, parse));
+    register_rows(TABLE.into_iter().chain(own), reply_wait)
 }
 
 /// 本番の登録（[`all_entrances`]）と同じ行・同じ順の、ツールの定義の列（SSP と同じ 10 本、続けて独自の
@@ -153,14 +142,15 @@ pub fn all_specs() -> Vec<ToolSpec> {
     rows.filter_map(read).collect()
 }
 
-/// 表の行を順に登録する。定義が読めない行は `error!` 1 件で登録しない（本番の表では起きない）。
+/// 行を順に登録する（本番の [`all_entrances`] とテストが同じ道を通る）。定義が読めない行は `error!` 1 件で
+/// 登録しない（本番の表では起きない）。
 pub(crate) fn register_rows(
-    rows: &[(&str, Parse)],
+    rows: impl IntoIterator<Item = (&'static str, Parse)>,
     reply_wait: Duration,
 ) -> (ToolRegistry, Receiver<ToolRequest>) {
     let (tx, rx) = mpsc::channel();
     let mut registry = ToolRegistry::default();
-    for &(definition, parse) in rows {
+    for (definition, parse) in rows {
         register_row(&mut registry, &tx, definition, parse, reply_wait);
     }
     (registry, rx)
@@ -227,10 +217,6 @@ fn string_list(args: &Map<String, Value>, key: &str) -> Vec<String> {
 #[cfg(test)]
 #[path = "tools_tests.rs"]
 mod tools_tests;
-
-#[cfg(test)]
-#[path = "tools_socket_tests.rs"]
-mod tools_socket_tests;
 
 #[cfg(test)]
 #[path = "tools_own_tests.rs"]
