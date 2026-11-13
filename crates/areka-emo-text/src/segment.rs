@@ -25,7 +25,9 @@
 //!   呼び手が決める——再生の前に知らされた台本の全部から作った区間の全文（`lookahead.rs` の
 //!   `TalkLookahead` が区間ごとに 1 度だけ区切る）と、行を割り当てる関数 `arrange_lines`
 //!   （`actor_present.rs`）が全文を持たないとき・届いた字の列が全文の先頭と食い違うときに
-//!   区切る届いた字の列の 2 通りである。後者は字が届くたびに末尾の塊が変わりうる。
+//!   区切る届いた字の列の 2 通りである。後者は字が届くたびに末尾の塊が変わりうるので、
+//!   [`BreakMemo`] が前の区切りを残し、開いている run（最後の区切りの後ろ）の後ろだけを区切り
+//!   直す（結果は [`segment_plan`] と同じ・spec `emo-text-reveal-incremental` 件 1）。
 //! - **budouy Parser のライフサイクル（R8.1）**: `static PARSER: OnceLock<budouy::Parser>` を
 //!   モジュール内部に持ち、初回のみ `budouy::model::load_default_japanese_parser()`（infallible・
 //!   vendored-models 同梱データのロードのみ＝ネットワーク/ファイル I/O なし）でロードして
@@ -118,11 +120,12 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
             if run_text.is_empty() {
                 return;
             }
+            #[cfg(test)]
+            SEGMENTED_CHARS.with(|c| c.set(c.get() + run_text.chars().count()));
             let chunk_byte_lens: Vec<usize> =
                 parser.parse(run_text).iter().map(String::len).collect();
-            // 前提（塊の連結＝run の文字列）は試験の作りでだけ確かめる。本番は届いた字が増える
-            // たびに走る（`actor_present.rs` の `BreakMemo` が消した回数と項目の数で覚える）ので
-            // 記録は出さず、崩れたら最後の塊へまとめる（指摘 33）。
+            // 前提（塊の連結＝run の文字列）は試験の作りでだけ確かめる。区間の全文の区切りと
+            // 作り直しのたびに走るので記録は出さず、崩れたら最後の塊へまとめる（指摘 33）。
             debug_assert_eq!(chunk_byte_lens.iter().sum::<usize>(), run_text.len());
             segments.extend(assign_items_to_chunks(
                 &chunk_byte_lens,
@@ -201,6 +204,154 @@ fn assign_items_to_chunks(
         item_start += item_len;
     }
     segments
+}
+
+#[cfg(test)]
+thread_local! {
+    /// 区切りにかけた字の数（`budouy` に渡した `char` の数・伸ばしと `segment_plan` の両方で足す）。
+    pub(crate) static SEGMENTED_CHARS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// 届いた字の区切りの覚え（audit-emo-text-state-actor 指摘 8 を伸ばしの形へ）: 鍵は（消した回数,
+/// 項目の数）。消した回数が同じ間、項目は後ろへ足されるだけなので、閉じた run の区切りはそのまま
+/// 残し、開いている run だけを後ろから区切り直す。返す計画はいつも `segment_plan(items)` と同じ。
+#[derive(Default)]
+pub(crate) struct BreakMemo {
+    /// 覚えた区切りの（消した回数, 項目の数）。まだ区切っていなければ `None`。
+    key: Option<(u64, usize)>,
+    /// 全部の run の塊（閉じた run と開いている run）。
+    plan: SegmentPlan,
+    /// 開いている run（最後の改行か `\_l` の後ろ）。
+    open: OpenRun,
+    /// 区切りを計算した回数（伸ばしも 1 回・試験だけの数）。
+    #[cfg(test)]
+    pub(crate) runs: u32,
+}
+
+/// 開いている run の状態（`BreakMemo` の中だけ）。
+#[derive(Default)]
+struct OpenRun {
+    /// run の頭のグリフ通し番号（全 items の Glyph だけを数えた番号）。
+    start: usize,
+    /// run の字（`budouy` に渡す単位＝`char`）。
+    chars: Vec<char>,
+    /// run の各グリフの頭の字の位置（`chars` の添字・昇順）。
+    glyph_heads: Vec<usize>,
+    /// run の境目（字の位置・昇順・`budouy` の答え）。
+    boundaries: Vec<usize>,
+    /// 前に決めたときの `chars` の長さ（決め直す所の頭の目安）。
+    settled: usize,
+    /// 前に決めたときのグリフの数。
+    settled_glyphs: usize,
+}
+
+impl BreakMemo {
+    /// 鍵が前と同じなら覚えた区切り、項目が増えたなら後ろだけ伸ばした区切り、
+    /// 消した回数が変わったか項目が減ったなら作り直した区切りを返す。
+    pub(crate) fn plan(&mut self, clears: u64, items: &[TextItem]) -> &SegmentPlan {
+        let key = (clears, items.len());
+        let from = match self.key {
+            Some(k) if k == key => return &self.plan,
+            Some((c, n)) if c == clears && n < items.len() => n,
+            _ => {
+                self.plan = SegmentPlan::default();
+                self.open = OpenRun::default();
+                0
+            }
+        };
+        #[cfg(test)]
+        {
+            self.runs += 1;
+        }
+        for item in &items[from..] {
+            match item {
+                TextItem::Glyph { text } => {
+                    self.open.glyph_heads.push(self.open.chars.len());
+                    self.open.chars.extend(text.chars());
+                }
+                TextItem::LineBreak { .. } | TextItem::CursorMove { .. } => {
+                    self.settle();
+                    let start = self.open.start + self.open.glyph_heads.len();
+                    self.open = OpenRun {
+                        start,
+                        ..OpenRun::default()
+                    };
+                }
+            }
+        }
+        self.settle();
+        self.key = Some(key);
+        &self.plan
+    }
+
+    /// 開いている run を決め直す（design「ひと続きを決める規則」1〜5）。
+    ///
+    /// 字 `i` の前の境目は `budouy` 0.2.2 では `chars[i-3..i+3)` だけで決まるので、後ろへ字が
+    /// 足されて変わりうるのは前の長さ `L` の 2 字前から後ろだけ。そこへ左の文脈 3 字をつけて渡す。
+    fn settle(&mut self) {
+        let open = &mut self.open;
+        let (l, l2) = (open.settled, open.chars.len());
+        let g = open.glyph_heads.len();
+        if l == l2 && g == open.settled_glyphs {
+            return;
+        }
+        // 規則 5: 字の無い run は塊を作らない（`segment_plan` の空 run と同じ）。
+        if l2 == 0 {
+            open.settled_glyphs = g;
+            return;
+        }
+        // 規則 1・2: 決め直す境目の頭 p と左の文脈の頭 s。
+        let p = l.saturating_sub(2).max(1);
+        let s = p.saturating_sub(3);
+        if l2 != l {
+            let keep = open.boundaries.partition_point(|&b| b < p);
+            open.boundaries.truncate(keep);
+            let text: String = open.chars[s..].iter().collect();
+            #[cfg(test)]
+            SEGMENTED_CHARS.with(|c| c.set(c.get() + (l2 - s)));
+            let parser = PARSER.get_or_init(budouy::model::load_default_japanese_parser);
+            open.boundaries.extend(
+                parser
+                    .parse_boundaries(&text)
+                    .into_iter()
+                    .map(|b| b + s)
+                    .filter(|&b| b >= p),
+            );
+        }
+        // 規則 3: 決め直す最初のグリフ J（L = 0 なら塊はまだ無い）。
+        let j0 = if l == 0 {
+            0
+        } else {
+            open.glyph_heads.partition_point(|&h| h < p)
+        };
+        let segments = &mut self.plan.segments;
+        if j0 >= 1 {
+            let cut = open.start + j0;
+            let keep = segments.partition_point(|seg| seg.start < cut);
+            segments.truncate(keep);
+            if let Some(last) = segments.last_mut() {
+                last.len = cut - last.start;
+            }
+        }
+        // 規則 4: グリフの頭の字の間（前のグリフの頭, このグリフの頭］に境目があれば新しい塊。
+        for j in j0..g {
+            let head = open.glyph_heads[j];
+            let split = j == 0 || {
+                let prev = open.glyph_heads[j - 1];
+                let at = open.boundaries.partition_point(|&b| b <= prev);
+                open.boundaries.get(at).is_some_and(|&b| b <= head)
+            };
+            match segments.last_mut() {
+                Some(seg) if !split => seg.len += 1,
+                _ => segments.push(Segment {
+                    start: open.start + j,
+                    len: 1,
+                }),
+            }
+        }
+        open.settled = l2;
+        open.settled_glyphs = g;
+    }
 }
 
 #[cfg(test)]
