@@ -90,8 +90,10 @@
 #### Acceptance Criteria
 
 1. The `crates/dola/tests/compile/boundary_test.rs` の注記 shall 「NaN/inf の流入経路は YAML のみ」「機能 `yaml` により既定ビルド外」という古い書き方を残さず、TOML（`nan`・`inf`・`-inf` を書ける）が入り口になりうることを書く
-2. When 機能 `toml` を有効にして、TOML の `nan`・`inf`・`-inf` を含む定義を読ませたとき, the 境界のテスト shall 読み込みで断られるか、読めた値が validate の数値の規則で拒まれるかのどちらかになり、panic しないことを確かめる
-3. The 境界のテスト shall 2 の確かめを、TOML で書ける数値の欄（型の決まった `f64` の欄と、`#[serde(untagged)]` の値の欄）のそれぞれで行う
+2. When 機能 `toml` を有効にして、TOML の `nan`・`inf`・`-inf` を時刻と補間に使う数の欄に含む定義を読ませたとき, the 境界のテスト shall 読み込みで断られるか、読めた値が validate の数値の規則で拒まれるかのどちらかになり、panic しないことを確かめる
+3. The 境界のテスト shall 2 の確かめを、時刻と補間に使う数の欄のうち型の決まった `f64` の欄と、`#[serde(untagged)]` の数の欄（遷移の `to` の数・`loop_offset`・`at` の `offset`・ベジェの点）のそれぞれで行う
+4. When 機能 `toml` を有効にして、Object の値（`DynamicValue`・補間せずに運ぶ中身）に `nan`・`inf` を含む定義を読ませたとき, the 境界のテスト shall validate と compile が panic せずに終わることを確かめる（Object の値の中の数は数値の規則の外で、読めて validate も通る＝設計の討議 議題 1・2026-11-13 開発者「承認」）
+5. The `crates/dola/tests/compile/boundary_test.rs` の注記 shall Object の値の中の数が数値の規則の外であることを書く
 
 ### Requirement 5: 説明と生成物を直しの後の形に合わせる
 
@@ -104,6 +106,7 @@
 3. The `.kiro/steering/product.md` の dola の行と `.kiro/steering/structure.md` の dola の Dependencies の行 shall 消えた機能 `json`・`yaml` を挙げず、書式の機能を `toml` だけと書く
 4. The 根の `Cargo.lock` shall `serde_yaml` と `unsafe-libyaml` の項目を含まない
 5. The `THIRD-PARTY-NOTICES.md` shall 生成の道具（`cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md`）で作り直した物と 1 バイトも違わない（手で直さない）
+6. The `crates/dola/Cargo.toml` shall docs.rs が機能 `toml` を有効にして説明書を作る指定（`[package.metadata.docs.rs]` の `features = ["toml"]`）を持ち、TOML の入口が docs.rs に出る（設計の討議 議題 2・2026-11-13 開発者「承認」）
 
 ### Requirement 6: crates.io の利用者への変わる点を 1 項目で申し送る
 

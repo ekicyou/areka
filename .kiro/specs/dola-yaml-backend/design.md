@@ -22,7 +22,6 @@
 - `dola` の型の形・validate の規則・`dola` のほかのモジュールを変えること。
 - `deny.toml` のほかの行（`[graph] all-features = true` など）を変えること。
 - `dola` の公開の手順と版の番号の上げ方（`/release` が決める）。
-- docs.rs で機能 `toml` の関数を見せる設定（`[package.metadata.docs.rs]`）。要件に無いので足さない（README が関数の名前を書く）。
 
 ## Boundary Commitments
 
@@ -39,7 +38,7 @@
 ### Out of Boundary
 
 - `dola` の公開の型（`DolaDocument`・`DynamicValue`・`TransitionValue` ほか）の serde の形と、JSON での往復。
-- validate の数値の規則（`crates/dola/src/validate/rules.rs`）。Object の値（`DynamicValue`）の中の数を数値の規則に入れるかどうかは、この spec では決めない（下の「NaN と無限大の扱い」）。
+- validate の数値の規則（`crates/dola/src/validate/rules.rs`）。Object の値（`DynamicValue`）の中の数は数値の規則の外のままにする（設計の討議 議題 1 で確定・入れるなら validate の直しとして別に起票する）。
 - `crates/dola/src` の書式の例のコメント（`compile/mod.rs` 72 行目・`value.rs` 7・8 行目）。
 - `deny.toml` のほかの行、ほかのクレート、`/release` の手順書と `doc/crates-io-publish.md`。
 - 見どころの本文（次の `/release` が申し送りを読んで書く）。
@@ -101,7 +100,7 @@ graph TB
 
 ### Modified Files
 
-- `crates/dola/Cargo.toml` — `[dependencies.serde_yaml]`（3 行）を `[dependencies.toml]`（`workspace = true`・`optional = true`）に替え、`[features]` の `yaml = ["dep:serde_yaml"]` を `toml = ["dep:toml"]` に替える。既定の機能は足さない。
+- `crates/dola/Cargo.toml` — `[dependencies.serde_yaml]`（3 行）を `[dependencies.toml]`（`workspace = true`・`optional = true`）に替え、`[features]` の `yaml = ["dep:serde_yaml"]` を `toml = ["dep:toml"]` に替える。既定の機能は足さない。`[package.metadata.docs.rs]` に `features = ["toml"]` を足し、docs.rs が TOML の入口を載せるようにする（要件 5.6・設計の討議 議題 2）。
 - `crates/dola/src/document.rs` — `#[cfg(feature = "toml")] impl DolaDocument` に `from_toml_str`・`to_toml_string` を足す（下の「TOML の入口」）。既存の構造体と `#[cfg(test)]` の部分は変えない。
 - `crates/dola/src/lib.rs` — `#[cfg(feature = "toml")]` の下で `toml::de::Error` を `TomlReadError`、`toml::ser::Error` を `TomlWriteError` の名前で公開する 1 行を足す。ほかの `pub use` は変えない。
 - `crates/dola/tests/general/integration_test/serialization_round_trip.rs` — 1 行目の説明を「JSON（開発専用の依存 `serde_json`）と TOML（機能 `toml`）」に直し、`#[cfg(feature = "yaml")] mod yaml_integration_tests` を消して、`#[cfg(feature = "toml")] mod toml_integration_tests` を足す（往復・2 回の書き出しの一致・読み書きの失敗）。JSON の 3 本は変えない。
@@ -125,10 +124,10 @@ graph TB
 
 | 部品 | 層 | 役目 | 要件 | 頼る物 | 契約 |
 |---|---|---|---|---|---|
-| 機能の旗 | `crates/dola/Cargo.toml` | 任意の機能を `toml` の 1 つにする | 1.1, 2.1 | `toml` 1（P0） | — |
+| 機能の旗 | `crates/dola/Cargo.toml` | 任意の機能を `toml` の 1 つにする・docs.rs の機能の指定 | 1.1, 2.1, 5.6 | `toml` 1（P0） | — |
 | TOML の入口 | `crates/dola/src/document.rs`・`lib.rs` | `DolaDocument` の TOML の読み書き | 2.2, 2.3, 3.1 | `toml` 1（P0） | Service |
 | 往復のテスト | `serialization_round_trip.rs`・`integration_test/mod.rs` | 往復・決まった書き出し・失敗の誤り・JSON の 3 本 | 2.3, 2.4, 2.5, 2.7, 2.8, 3.2 | TOML の入口（P0） | — |
-| 境界のテスト | `crates/dola/tests/compile/boundary_test.rs` | TOML の NaN／無限大の入口の確かめと注記 | 2.8, 4.1, 4.2, 4.3 | TOML の入口・validate（P0） | — |
+| 境界のテスト | `crates/dola/tests/compile/boundary_test.rs` | TOML の NaN／無限大の入口の確かめと注記 | 2.8, 4.1〜4.5 | TOML の入口・validate（P0） | — |
 | 全体テストの段 | `tools/test-all.ps1` ほか段の一覧 | 機能 `toml` のテストを毎回回す | 2.6, 7.1 | `cargo test`（P0） | Batch |
 | 監査の設定 | `deny.toml` | 見逃しの 1 項目を消す | 1.2, 1.3, 1.4, 1.5 | `cargo deny`（P0） | — |
 | 説明と生成物 | README・steering・`Cargo.lock`・謝辞 | 直しの後の形に合わせる | 5.1〜5.5 | — | — |
@@ -236,7 +235,7 @@ TOML は `nan`・`inf`・`-inf`（と `+nan`・`-nan`・`+inf`）を書ける。
 | Object の値（`DynamicValue::Float`） | `type = "object"` の変数の `initial`・遷移の `to` の表や配列の中の数 | 読める | 通る（数値の規則の外） |
 
 - 要件 4.2・4.3 の「数値の欄」は、上の 1 段目と 2 段目（compile と実行の時刻と補間に使う数）と読む。境界のテストはこの 2 段の欄で、3 つの値のそれぞれを確かめる。
-- 3 段目の Object の値は、補間しない中身として運ぶ値で、数値の規則の外（`DynamicValue` の等しさとハッシュは NaN を 1 つの値として扱う作り）。実測で、読めて validate を通り、`compile_storyboard` も panic せず通る。境界のテストは「panic しない」ことだけを 1 本で確かめ、注記にこの扱いを書く。数値の規則に入れるかどうかは validate の直しになり、この spec の範囲の外（Out of Boundary・設計の討議で開発者に確かめる候補）。
+- 3 段目の Object の値は、補間しない中身として運ぶ値で、数値の規則の外（`DynamicValue` の等しさとハッシュは NaN を 1 つの値として扱う作り）。実測で、読めて validate を通り、`compile_storyboard` も panic せず通る。境界のテストは「panic しない」ことだけを 1 本で確かめ、注記にこの扱いを書く。数値の規則に入れない扱いは設計の討議 議題 1 で確定した（要件 4.4・4.5。入れるなら validate の直しとして別に起票する）。
 - 書く入口は f64 の NaN・無限大を `nan`・`inf` で書き、読み戻すと同じ値になる（実測）。validate を通らない文書でも書けるのは JSON の serde と同じで、入口は validate をしない。
 
 ## Requirements Traceability
@@ -261,12 +260,15 @@ TOML は `nan`・`inf`・`-inf`（と `+nan`・`-nan`・`+inf`）を書ける。
 | 3.3 | `crates/dola/` の外は許された物だけ | File Structure Plan | 変えるファイルの一覧 |
 | 4.1 | 注記を TOML が入口になる書き方に | 境界のテスト | 260〜262 行目の注記 |
 | 4.2 | TOML の `nan`・`inf`・`-inf` は断られるか拒まれ、panic しない | 境界のテスト | 数値の欄で validate が `InvalidNumber` |
-| 4.3 | 型の決まった欄と untagged の欄のそれぞれで | 境界のテスト | 「NaN と無限大の扱い」の表の 1・2 段 |
+| 4.3 | 型の決まった欄と untagged の数の欄のそれぞれで | 境界のテスト | 「NaN と無限大の扱い」の表の 1・2 段 |
+| 4.4 | Object の値の非有限の数で panic しない | 境界のテスト | `toml_non_finite_in_object_value_does_not_panic` |
+| 4.5 | 注記に Object の値は数値の規則の外と書く | 境界のテスト | 260〜262 行目の注記 |
 | 5.1 | README に YAML を挙げず機能 `toml` を書く | 説明と生成物 | `crates/dola/README.md` 13・17 行目 |
 | 5.2 | `tech.md` の dola の依存に `toml` の行 | 説明と生成物 | 「dola クレート依存」 |
 | 5.3 | `product.md`・`structure.md` の書式の機能は `toml` だけ | 説明と生成物 | 38 行目・262 行目 |
 | 5.4 | `Cargo.lock` に `serde_yaml`・`unsafe-libyaml` が無い | 説明と生成物 | 実測の差分 |
 | 5.5 | 謝辞は道具で作り直した物と同じ | 説明と生成物 | 全体テストの `-License` の段 |
+| 5.6 | docs.rs が機能 `toml` で説明書を作る | 機能の旗 | `[package.metadata.docs.rs]` の `features = ["toml"]` |
 | 6.1 | 申し送りは正味の差の 1 項目 | 申し送りの項目 | 207 行目の書き直し |
 | 6.2 | 機能 `json` と既定の機能の削除を壊れる変更として | 申し送りの項目 | ⑴ |
 | 6.3 | 機能 `yaml`・`serde_yaml` の削除と直し方 | 申し送りの項目 | ⑵ |
