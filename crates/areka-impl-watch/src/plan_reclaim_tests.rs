@@ -5,13 +5,13 @@
 
 use super::test_support::{
     FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, granted, hold_load, hold_merge,
-    hold_running_load, hold_test, merge, merge_granted, merge_requested, queue_load, queue_merge,
-    queue_request, resumed, run, state_with, stop_for, test_freed, test_freed_record, wait_record,
+    hold_running_load, hold_test, merge, merge_granted, merge_holder, merge_requested, queue_load,
+    queue_merge, queue_request, resumed, run, state_with, stop_for, test_freed, test_freed_record,
+    wait_record, wait_registered,
 };
 use super::{Applied, Command, Event, apply};
 use crate::state::{
-    DeskSet, MergeDesk, MergeHolder, Recent, RecentKind, SoleHolder, State, TestHolder, WaitKind,
-    WaitRecord,
+    DeskSet, MergeDesk, Recent, RecentKind, SoleHolder, State, TestHolder, WaitKind, WaitRecord,
 };
 use crate::test_support::T0;
 
@@ -62,30 +62,12 @@ fn reclaim_record(id: &str, at: u64) -> Recent {
     }
 }
 
-fn wait_registered(id: &str, kind: WaitKind) -> Event {
-    Event::WaitRegistered {
-        id: id.to_owned(),
-        kind,
-    }
-}
-
 fn wait_removed(id: &str, kind: WaitKind, why: &'static str) -> Event {
     Event::WaitRemoved {
         id: id.to_owned(),
         kind,
         why,
     }
-}
-
-/// `requested` に申し込み、`granted` に番の来たマージの持ち主（支えの申し込みと同じ綴り）。
-fn merge_holder(id: &str, requested: u64, granted: u64) -> Option<MergeHolder> {
-    Some(MergeHolder {
-        id: id.to_owned(),
-        spec: format!("spec-{id}"),
-        bug: false,
-        requested,
-        granted,
-    })
 }
 
 /// その識別の待ちの記録の種類の一覧（記録の並びの順）。

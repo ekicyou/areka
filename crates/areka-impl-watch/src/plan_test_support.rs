@@ -88,16 +88,20 @@ pub(super) fn queue_merge(state: &mut State, repo: &str, id: &str, requested: u6
     });
 }
 
-/// マージの机の持ち主にする。
-pub(super) fn hold_merge(state: &mut State, repo: &str, id: &str) {
-    let desk = state.merge.entry(repo.to_owned()).or_default();
-    desk.holder = Some(MergeHolder {
+/// `requested` に申し込み、`granted` に番の来たマージの持ち主（支えの申し込みと同じ綴り）。
+pub(super) fn merge_holder(id: &str, requested: u64, granted: u64) -> Option<MergeHolder> {
+    Some(MergeHolder {
         id: id.to_owned(),
         spec: format!("spec-{id}"),
         bug: false,
-        requested: T0,
-        granted: T0,
-    });
+        requested,
+        granted,
+    })
+}
+
+/// マージの机の持ち主にする。
+pub(super) fn hold_merge(state: &mut State, repo: &str, id: &str) {
+    state.merge.entry(repo.to_owned()).or_default().holder = merge_holder(id, T0, T0);
 }
 
 /// 机の申し込みの待ち行列の末尾へ、内容が [`PURPOSE`] の申し込みを足す。
@@ -236,12 +240,17 @@ pub(super) fn run(state: &mut State, cmd: &Command, caller: Option<&str>, now: u
     apply(state, cmd, caller, now, &FakePresence::all_present())
 }
 
-/// 見張りの記録が置かれた（置き換えを含む）出来事。
-pub(super) fn watch_registered(id: &str) -> Event {
+/// その種類の待ちの記録が置かれた（置き換えを含む）出来事。
+pub(super) fn wait_registered(id: &str, kind: WaitKind) -> Event {
     Event::WaitRegistered {
         id: id.to_owned(),
-        kind: WaitKind::Watch,
+        kind,
     }
+}
+
+/// 見張りの記録が置かれた（置き換えを含む）出来事。
+pub(super) fn watch_registered(id: &str) -> Event {
+    wait_registered(id, WaitKind::Watch)
 }
 
 /// 机の申し込みが並んだ出来事。

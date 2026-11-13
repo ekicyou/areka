@@ -466,8 +466,7 @@ fn recording_a_running_load_test_needs_both_desks_free() {
         stopped: Vec::new(),
     });
     assert_eq!(state, expected);
-    let recorded = recorded_running("Z");
-    let events = vec![joined("Z"), recorded];
+    let events = vec![joined("Z"), recorded_running("Z")];
     assert_eq!(got, applied(true, events));
     assert_fixed_point(&state, "both free");
 

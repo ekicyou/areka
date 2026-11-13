@@ -12,14 +12,15 @@
 use super::test_support::{
     PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled,
     desk_requested, give_back, granted, hold_load, hold_merge, hold_running_load, hold_test,
-    joined, leave, left, load_done, load_test, merge, merge_done, merge_granted, merge_requested,
-    merged, queue_load, queue_merge, queue_request, resumed, returned, run, state_with, stop_for,
-    stopped, test_freed, test_freed_record, wait_record, watch, watch_registered,
+    joined, leave, left, load_done, load_test, merge, merge_done, merge_granted, merge_holder,
+    merge_requested, merged, queue_load, queue_merge, queue_request, resumed, returned, run,
+    state_with, stop_for, stopped, test_freed, test_freed_record, wait_record, watch,
+    watch_registered,
 };
 use super::{Command, Verdict};
 use crate::state::{
-    DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
-    SoleHolder, State, TestHolder, WaitKind, WaitRecord, WatchInfo,
+    DeskSet, LastMerge, MergeDesk, MergeRequest, Participant, ParticipantStatus, SoleHolder, State,
+    TestHolder, WaitKind, WaitRecord, WatchInfo,
 };
 use crate::test_support::T0;
 
@@ -406,13 +407,7 @@ fn the_next_holder_is_a_bug_request_first_then_the_earlier_request() {
     assert_eq!(order, ["D", "B", "E", "A"]);
     // 番の時刻は「いま」。申し込みの中身はそのまま持ち主へ写る。
     let desk = MergeDesk {
-        holder: Some(MergeHolder {
-            id: "A".to_owned(),
-            spec: "spec-A".to_owned(),
-            bug: false,
-            requested: T0 + 2,
-            granted: T0 + 13,
-        }),
+        holder: merge_holder("A", T0 + 2, T0 + 13),
         ..MergeDesk::default()
     };
     assert_eq!(state.merge["areka"], desk);
@@ -512,13 +507,7 @@ fn merged_frees_the_desk_records_the_last_merge_and_ends_the_participation() {
     expected.merge.insert(
         "areka".to_owned(),
         MergeDesk {
-            holder: Some(MergeHolder {
-                id: "B".to_owned(),
-                spec: "spec-B".to_owned(),
-                bug: false,
-                requested: T0 + 1,
-                granted: T0 + 10,
-            }),
+            holder: merge_holder("B", T0 + 1, T0 + 10),
             queue: Vec::new(),
             last: Some(LastMerge {
                 pr: "281".to_owned(),
