@@ -99,18 +99,6 @@ fn values_landing_in_a_temp_folder_are_refused_and_create_nothing(shapes: &[&str
     );
 }
 
-#[cfg(windows)]
-#[test]
-fn a_relative_value_is_refused_before_anything_is_created() {
-    values_landing_in_a_temp_folder_are_refused_and_create_nothing(&RELATIVE);
-}
-
-#[cfg(windows)]
-#[test]
-fn a_rooted_value_without_a_drive_is_refused_before_anything_is_created() {
-    values_landing_in_a_temp_folder_are_refused_and_create_nothing(&ROOTED);
-}
-
 /// 設計が名指す綴り（`foo`・`.`・`..\x`・`\foo`・`C:foo`・`/c/x`）。断られなければカレントや
 /// ドライブの根（`target\` の外）にフォルダができる値なので、先に「一時フォルダの中に落ちる値」で
 /// 同じ判定を通し、断ると分かってから渡す（判定が壊れていれば、渡す前に赤で止まる）。
