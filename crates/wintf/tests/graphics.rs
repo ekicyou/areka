@@ -23,6 +23,8 @@ mod device_lost_recovery_test;
 mod draw_tree_systems_test;
 #[path = "graphics/init_window_graphics_test.rs"]
 mod init_window_graphics_test;
+#[path = "graphics/readback_test.rs"]
+mod readback_test;
 #[path = "graphics/surface_optimization_test.rs"]
 mod surface_optimization_test;
 #[path = "graphics/surface_systems_test.rs"]

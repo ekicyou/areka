@@ -193,16 +193,9 @@ impl GraphicsCore {
     ///
     /// 既に無効なら false（2 度目の記録を出さない）。失いでない失敗の記録は呼び出し元が残す。
     pub(crate) fn note_draw_failure(&mut self, error: &windows::core::Error) -> bool {
-        let Some(inner) = self.inner.as_ref() else {
+        let Some(removed_reason) = self.lost_reason(error) else {
             return false;
         };
-        let removed_reason = match unsafe { inner.d3d.GetDeviceRemovedReason() } {
-            Ok(()) => S_OK,
-            Err(e) => e.code(),
-        };
-        if !is_device_lost(error.code(), removed_reason) {
-            return false;
-        }
         error!(
             draw_error = ?error.code(),
             removed_reason = ?removed_reason,
@@ -211,6 +204,21 @@ impl GraphicsCore {
         self.invalidate();
         mark_graphics_wake();
         true
+    }
+
+    /// 描画の失敗が装置の失いかだけを判じる（記録も無効化もしない・読み戻しが使う）。無効なら false。
+    pub(crate) fn is_lost_failure(&self, error: &windows::core::Error) -> bool {
+        self.lost_reason(error).is_some()
+    }
+
+    /// 装置の失いなら `GetDeviceRemovedReason()` の値。失いでないか既に無効なら `None`。
+    fn lost_reason(&self, error: &windows::core::Error) -> Option<HRESULT> {
+        let inner = self.inner.as_ref()?;
+        let removed_reason = match unsafe { inner.d3d.GetDeviceRemovedReason() } {
+            Ok(()) => S_OK,
+            Err(e) => e.code(),
+        };
+        is_device_lost(error.code(), removed_reason).then_some(removed_reason)
     }
 
     pub fn is_valid(&self) -> bool {

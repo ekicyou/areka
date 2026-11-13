@@ -204,8 +204,6 @@ impl SurfaceGraphics {
     }
 
     /// 入れ物への参照を取得（まだ合成していない・放した後は `None`）
-    // 本番の係が使い始めるまで（6.2・6.3）は、テストの外で使い手が無い。
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn composite(&self) -> Option<&SurfaceComposite> {
         self.composite.as_ref()
     }
