@@ -54,8 +54,8 @@
 
 ### Revalidation Triggers
 
-- **公開の形を下げる（指摘 22）**: `Packer`・`PackOutput`・`PackedEntry`・`Baker`・`Trimmer`・`TrimResult`・`Trimmed`・`ManifestDeriver`・`Manifest` が `pub(crate)` になる。範囲の外のコードの使い手は 0（2026-11-13 にツリー全体を grep・`areka-update` の `Manifest` と `dola` の `Trimmed` は別の型）。実装の前にもう一度 grep し、`runtime-module-untangle` のセッションへ型の名を知らせる（要件 6.8）。
-- **parsers の公開の形に足す（指摘 13）**: `areka_parsers::shell::{PatternWord, pattern_word, canonical_method_name}`。`areka_emo_compose::{PatternWord, pattern_word}` は parsers の型と関数の再公開になる（パスは変わらない）。使い手 `areka-seriko`（`table_calls.rs`・`table_calls_dot_sakura_tests.rs`）はそのままビルドできる。
+- **公開の形を下げる（指摘 22）**: `Packer`・`PackOutput`・`PackedEntry`・`Baker`・`Trimmer`・`TrimResult`・`Trimmed`・`ManifestDeriver`・`Manifest` が `pub(crate)` になり、`pub mod` の 8 つが `mod` になる（範囲の外からモジュールのパスを使う所は 0）。範囲の外のコードの使い手は 0（2026-11-13 にツリー全体を grep・`areka-update` の `Manifest` と `dola` の `Trimmed` は別の型）。実装の前にもう一度 grep し、`runtime-module-untangle` のセッションへ型の名を知らせる（要件 6.8）。
+- **parsers の公開の形に足す（指摘 13）**: `areka_parsers::shell::{PatternWord, pattern_word, canonical_method_name, same_canonical}`。`areka_emo_compose::{PatternWord, pattern_word}` は parsers の型と関数の再公開になる（パスは変わらない）。使い手 `areka-seriko`（`table_calls.rs`・`table_calls_dot_sakura_tests.rs`）はそのままビルドできる。
 - **新しい読めなかった絵**: 一辺が 16,384 を越える絵・約束を破った読み手の絵が `BakeResult::errors` に `DecodeError::Decode` として入る。形は今の失敗と同じで、呼び手（`areka-emo-present` の `shell_target.rs`・`balloon.rs`）はもう全部を `error!` で出す。
 - **頁の大きさが頁ごとになる（指摘 3）**: 自頁は正方でなく、その絵の大きさ＋余白。下流はどれも `AtlasPage` の `width`・`height`・`stride` で引く（`areka-emo-compose` の `blit.rs` の `uv_fits`・本体の `balloon_background.rs`）＝壊れない。大きな絵 1 つにつき頁 1 枚ぶん（最大で約 1 GiB）メモリが増える。
 - **`AtlasTable::new` の同じ鍵**: 後の番号でなく先の番号が `resolve` の答えになる（`with_frames` と揃う）。範囲の外の呼び手（compose のテスト・本体のテスト 18 か所）に同じ鍵を 2 つ渡す所は無い（実装でもう一度 grep）。
@@ -150,7 +150,7 @@ crates/areka-parsers/src/shell/
 ### Modified Files
 
 ソース（`crates/areka-emo-atlas/src/`）:
-- `lib.rs` — `bake_core` の `pages_vec` と `survivor_keys` を数えるだけの回し方を消す（15）。`mod bake_entry_tests` の中身を兄弟のファイルへ（19）。`mod test_support`・`mod bake_guard_tests` を足す。再公開から指摘 22 の 9 つを外す（22）。モジュールの説明「本タスクでは雛形のみ」「間接参照解決」を事実に（14・1）。
+- `lib.rs` — `bake_core` の `pages_vec` と `survivor_keys` を数えるだけの回し方を消す（15）。`mod bake_entry_tests` の中身を兄弟のファイルへ（19）。`mod test_support`・`mod bake_guard_tests` を足す。再公開から指摘 22 の 9 つを外し、`pub mod` の 8 つを `mod` に下げる（22）。モジュールの説明「本タスクでは雛形のみ」「間接参照解決」を事実に（14・1）。
 - `manifest.rs` — `resolve_indirect`・`by_id`・`visited` と `HashMap` の取り込みを消す（1）。`bind_only_paths` の 8 語の写しを `areka_parsers::shell::pattern_word` へ（13）。間接参照の 3 本のテストを長い鎖の 1 本に替える（1）。`elem`・`surface` を `test_support` から引く（10）。`ManifestDeriver`・`Manifest` を `pub(crate)` へ（22）。説明（14）。
 - `decode.rs` — `MAX_SIDE`・`pixel_len`・`check_image` を足す（2・18）。
 - `decode/wic_arm.rs` — `decode_inner` を「変換器を作るまで」と「寸法を聞いて確かめてから写す所」に分け、`GetSize` の直後に `pixel_len`（2）。中のテストの `with_com_initialized` を消して `test_support::with_arm` へ（4）。`mod test_support` の宣言を消す（4）。説明 212 行・282〜288 行（14）。
@@ -190,10 +190,10 @@ crates/areka-parsers/src/shell/
 - `src/testdata/palette/README.md` — 8 本の表にし、「1 ビットは作らない」の行を事実に（6⑷）。
 
 範囲の外（指摘 13 だけ）:
-- `crates/areka-parsers/src/shell/mod.rs` — `mod pattern_word;` と `pub use pattern_word::{PatternWord, canonical_method_name, pattern_word};` の 2 行。
+- `crates/areka-parsers/src/shell/mod.rs` — `mod pattern_word;` と `pub use pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};` の 2 行。
 - `crates/areka-emo-compose/src/pattern_word.rs` — `PatternWord` と `pattern_word` を消し `pub use areka_parsers::shell::{PatternWord, pattern_word};`。`call_targets`・`UnreadableTarget`・`number` は残す。冒頭の説明の「上流の emo-atlas は写しを持つ」を「表は parsers」に。
 - `crates/areka-emo-compose/src/pattern_word_tests.rs` — 8 語の 2 本（`words_are_compared_like_compose_methods`・`other_words_are_draw`）を parsers へ移す。`call_targets` の本は残す。
-- `crates/areka-emo-compose/src/method.rs` — `canonical_method_name` を消し `use areka_parsers::shell::canonical_method_name;`。説明のリンクを直す。`same_canonical`（確保しない同じ規則）は compose の中の仕組みなので触らない。
+- `crates/areka-emo-compose/src/method.rs` — `canonical_method_name` と `same_canonical`（確保しない同じ規則・199〜205 行）を消し、`use areka_parsers::shell::{canonical_method_name, same_canonical};`。説明のリンクを直す（綴りの規則の写しを compose に残さない・設計の検証の重い指摘 1）。
 
 1,000 行の番人の見通し（要件 7.1）: 上限に近いのは `lib.rs`（873 → 約 370）と `animated_tests.rs`（838 → 減る）。新しいテストはこの 2 つに足さず、`bake_guard_tests.rs`・`bake_entry_tests.rs` ほか兄弟のファイルへ置く。`bake_entry_tests.rs` は移した後に消す行と部品を抜くので約 400 行。番人の例外表には足さない。
 
@@ -483,12 +483,15 @@ pub enum PatternWord { Draw, Start, Stop, AlternativeStart, AlternativeStop, Par
 /// 描画メソッドの語を、前後の空白・大文字・`-`・`_` を問わずに比べる形へ直す（正規化済みなら借りて返す）。
 pub fn canonical_method_name(name: &str) -> std::borrow::Cow<'_, str>;
 
+/// 描画メソッドの語を、正規化した綴り canon と確保せずに比べる（canonical_method_name(name) == canon と同じ答え）。
+pub fn same_canonical(name: &str, canon: &str) -> bool;
+
 /// 描画メソッドの語が 8 語のどれかを答える（綴りの比べ方は canonical_method_name・記録は出さない）。
 pub fn pattern_word(method: &str) -> PatternWord;
 ```
 
-- 中身は compose の `pattern_word.rs` の `PatternWord`・`pattern_word`（ukadoc の URL の注記ごと）と `method.rs` の `canonical_method_name` をそのまま移す。綴りの比べ方も parsers の 1 つにする（compose の合成メソッドの名前引き `ComposeMethod::from_name` も同じ関数を使う＝写しが残らない）。
-- `crates/areka-parsers/src/shell/mod.rs` に `mod pattern_word;` と `pub use pattern_word::{PatternWord, canonical_method_name, pattern_word};`。テストは compose の 8 語の 2 本を `pattern_word_tests.rs` へ移す。
+- 中身は compose の `pattern_word.rs` の `PatternWord`・`pattern_word`（ukadoc の URL の注記ごと）と `method.rs` の `canonical_method_name`・`same_canonical` をそのまま移す。移した `pattern_word_tests.rs` に「`same_canonical(n, c)` と `canonical_method_name(n) == c` が同じ答え」の 1 本を足す（2 つの比べ方が同じ規則であることを固定する）。綴りの比べ方も parsers の 1 つにする（compose の合成メソッドの名前引き `ComposeMethod::from_name` も同じ関数を使う＝写しが残らない）。
+- `crates/areka-parsers/src/shell/mod.rs` に `mod pattern_word;` と `pub use pattern_word::{PatternWord, canonical_method_name, pattern_word, same_canonical};`。テストは compose の 8 語の 2 本を `pattern_word_tests.rs` へ移す。
 - **compose**: `pattern_word.rs` は `pub use areka_parsers::shell::{PatternWord, pattern_word};` を置き、`call_targets`・`UnreadableTarget`・`number` を残す。`lib.rs` の `pub use pattern_word::{PatternWord, UnreadableTarget, call_targets, pattern_word};` は変えない＝`areka_emo_compose::PatternWord`・`pattern_word` のパスは変わらず、使い手 `areka-seriko` は直さない。`method.rs` は `canonical_method_name` の定義を消して parsers から取り込む。`bind_steps.rs`・`nesting.rs`・`plan_extent.rs`・`plan_issues.rs`・`world.rs` は `crate::pattern_word::…` のまま（再公開を通る）で変わらない。
 - **アトラス**: `manifest.rs` の `bind_only_paths` の 8 語の `matches!` と綴りの直しを `areka_parsers::shell::pattern_word(pattern.method.as_str()) != PatternWord::Draw` に替え、「emo-compose の写し」の説明を消す。
 - **波及**: parsers の公開の形に足す 3 つ。compose の公開の形は再公開で同じ。どちらのクレートも C19 で走っている spec の範囲ではなく、見直しは完了済み。
@@ -522,8 +525,8 @@ pub fn pattern_word(method: &str) -> PatternWord;
 #### 指摘 22: 使い手の無い公開の型を `pub(crate)` へ
 
 - 下げる 9 つ: `Packer`・`PackOutput`・`PackedEntry`（`pack.rs`）・`Baker`（`bake.rs`）・`Trimmer`・`TrimResult`・`Trimmed`（`trim.rs`）・`ManifestDeriver`・`Manifest`（`manifest.rs`）。`lib.rs` の再公開 4 行（321・330・333・336 行の該当部分）から外す。`PackConfig`・`SurfaceSet`・`Normalizer`・`NormalizedImage`・`AlphaParams` ほか使い手のある型は公開のまま。
-- `pub mod` の 8 つのモジュールはそのまま（指摘の範囲の外・モジュールのパスを外から使う所は 0 だが、指摘に挙がっていない）。下げた型は `pub mod` の中でも `pub(crate)` なので外からは見えない。
-- タスクの頭で: ⑴ ツリー全体で 9 つの名前を grep し、範囲の外のコードの使い手が 0 であることを確かめ直す（説明の文の名指しは `areka-emo-present` の 2 か所だけで、事実として残るので触らない）。⑵ `runtime-module-untangle` のセッションへ、下げる型の名を知らせる（要件 6.8）。
+- `lib.rs:24-32` の `pub mod` の 8 つ（`bake`・`decode`・`error`・`manifest`・`normalize`・`pack`・`table`・`trim`）も `mod` に下げる。指摘 22 の場所に入っている行で、範囲の外から `areka_emo_atlas::<モジュール>::` の形で使う所は 0（2026-11-13 にツリー全体を grep）。外の使い手は根の再公開（`areka_emo_atlas::AtlasTable` ほか）だけを使う。根から再公開しない公開の項目は、クレートの中で使われていれば `pub(crate)` にし、使われていなければ消す（`#[allow(dead_code)]` は置かない）。`decode::wic_arm` の `WicDecoderArm` は根の再公開のまま。`lib.rs` の冒頭の説明の `[`table`]` ほかのリンクは、下げたモジュールを指すので、根の再公開の型を指す形に直す。設計の検証の重い指摘 2（残すと、かけ直しの audit が同じ所を指し、実装の終わりに公開の形の議題が出直す）。
+- タスクの頭で: ⑴ ツリー全体で 9 つの名前と 8 つのモジュールのパス（`areka_emo_atlas::<モジュール>::`）を grep し、範囲の外のコードの使い手が 0 であることを確かめ直す（説明の文の名指しは `areka-emo-present` の 2 か所だけで、事実として残るので触らない）。⑵ `runtime-module-untangle` のセッションへ、下げる型とモジュールの名を知らせる（要件 6.8）。
 - 指摘 3 より前に入れる（3 は `PackOutput` の欄を替え、`bake_pages` の引数を減らすので）。
 - **テスト**: 公開の形の整理なので足さない。範囲の外のビルド（全体テスト）が壊れないことで確かめる。
 
@@ -597,7 +600,7 @@ pub fn pattern_word(method: &str) -> PatternWord;
 
 | 相手 | 何を | いつ |
 |---|---|---|
-| `runtime-module-untangle`（`crates/areka/` ほか） | 指摘 22 で下げる 9 つの型の名を知らせる（本体はどれも使っていない）。新しい失敗（一辺の上限・約束を破る読み手）は今の `DecodeError::Decode` と同じ形で、本体の触る所は無いことも添える | 指摘 22 のタスクの頭 |
+| `runtime-module-untangle`（`crates/areka/` ほか） | 指摘 22 で下げる 9 つの型と 8 つのモジュールの名を知らせる（本体はどれも使っていない）。新しい失敗（一辺の上限・約束を破る読み手）は今の `DecodeError::Decode` と同じ形で、本体の触る所は無いことも添える | 指摘 22 のタスクの頭 |
 | `dola-yaml-backend`（`Cargo.lock` の席） | 知らせることは無い（依存も `Cargo.toml` も変えない） | — |
 | `emo-text-reveal-incremental`（emo-text の新しいファイルの席） | 知らせることは無い（`crates/areka-emo-text/` に触らない） | — |
 | `areka-parsers`・`areka-emo-compose` の持ち主 | C19 で走っている spec は無い（見直しは完了済み）。実装の前に roadmap の台帳で、両クレートに触る spec が走っていないことを確かめ直す。走っていれば申し合わせてから触る | 指摘 13 のタスクの頭 |
