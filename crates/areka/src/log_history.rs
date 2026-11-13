@@ -131,10 +131,14 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka::readme", Kind::Status, false),
 ];
 
+/// [`RULES`] を当てる前に引く「残さない出所」（完全一致）。`install_cue` は emo2_boot から
+/// `areka::install` の下へ移したが、その info は移す前と同じく残さない（決まり `areka::install` に当てない）。
+pub(crate) const UNKEPT_TARGETS: &[&str] = &["areka::install::install_cue"];
+
 /// 出来事のレベルと target から種別を決める。どれにも当たらなければ None（残さない）。
 ///
 /// 判定の順: debug・trace は残さない → 取り決めの script → 取り決めの error
-/// → warn 以上は error → info は [`RULES`] を上から。
+/// → warn 以上は error → info は [`UNKEPT_TARGETS`] なら残さず、ほかは [`RULES`] を上から。
 pub(crate) fn classify(level: Level, target: &str) -> Option<Kind> {
     // tracing の `Level` は詳しいほど大きい（TRACE > DEBUG > INFO > WARN > ERROR）。
     if level > Level::INFO {
@@ -145,6 +149,9 @@ pub(crate) fn classify(level: Level, target: &str) -> Option<Kind> {
     }
     if target == TARGET_ERROR || level < Level::INFO {
         return Some(Kind::Error);
+    }
+    if UNKEPT_TARGETS.contains(&target) {
+        return None;
     }
     RULES.iter().find(|r| r.matches(target)).map(|r| r.kind)
 }

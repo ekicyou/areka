@@ -133,6 +133,12 @@ fn unrelated_info_is_not_kept() {
     assert_eq!(classify(Level::INFO, "areka_mcp"), None);
     assert_eq!(classify(Level::INFO, "log"), None);
     assert_eq!(classify(Level::INFO, ""), None);
+    // 移した install の台本の受け口は残さない出所（`areka::install` の決まりより先）。warn は誤り。
+    assert_eq!(classify(Level::INFO, "areka::install::install_cue"), None);
+    assert_eq!(
+        classify(Level::WARN, "areka::install::install_cue"),
+        Some(Kind::Error)
+    );
 }
 
 #[test]

@@ -120,7 +120,7 @@
   - _Requirements: 2.2, 2.3, 2.4_
 
 - [ ] 7. ログの出所の追従
-- [ ] 7.1 記録の分け方の決まりを移した出所へ追従させる
+- [x] 7.1 記録の分け方の決まりを移した出所へ追従させる
   - 決まり `areka::session::ghost_switch`（Status）へ改め、決まりを当てる前に引く「残さない出所」の表に `areka::install::install_cue` を置く
   - 既存の `unrelated_info_is_not_kept` に、その出所の info は残らず warn は誤りになる assert を足す。行の数と順（14 行）は変えない
   - 完了の形: `log_history_tests` が緑で、移した出所の行が前と同じ種類と扱いで分かれる
@@ -203,3 +203,4 @@
 - 5.2: 3.2 の注の `runtime/mod.rs:176` の [`boot_runtime`] は [`BootRuntimeFn`] へ替わって解けた。6.1 で起動のファイルを移した後、`runtime/mod.rs` 184・192 行の doc の字面「`runtime_boot::boot_runtime`」を `session::runtime_boot::boot_runtime` へ合わせる。`spine.rs:770` の `runtime_boot_options` は 6.1 でパスを直す（テストの支え・7.2 の申し送りに載る）。
 - 6.1: 7.1・7.2 の一部を先に済ませた（決まり `areka::session::ghost_switch`・そのテスト・`log-convention.md:55`・`reload_tests:580`／`reload_skin_tests:328` の `areka::session::reload`）。7.1 に残るのは `UNKEPT_TARGETS` と assert。`runtime_boot_tests.rs` が `#[path = "../runtime/…"]` で引く e2e 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）は `runtime/` に残る＝8.2 の `runtime-crate-split` の申し送りに入れる。`ghost_session_switch_tests.rs:3` の説明の文の古いパスは 8.x で。
 - 6.2: 移した後、7.1 までは `log_history.rs:121` の `rule("areka::install", …)` が前方一致で `areka::install::install_cue` の `info!`（readonly_refused）を Update として残す（中間の状態）。7.1 で `UNKEPT_TARGETS` を必ず入れる。式 1 は本番で 2 行（どちらも `cfg(test)`: `session_hooks.rs:78`・`mod.rs:834`）。
+- 7.1: `update::update_cue`・`readme::readme_cue` は前方一致の決まり `areka::update`（Update）・`areka::readme`（Status）の下に入ったが、今は `info!` を持たないので分け方は前と同じ。後から `info!` を足すと残るようになる（9.3 の申し送りの候補）。
