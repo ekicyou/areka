@@ -1,27 +1,21 @@
-//! 停止要請と再開の判断（停止要請・止まった・再開）の決定論テスト。時刻と生死は引数で渡し、眠らない。
+//! 停止要請と再開の判断（停止要請・止まった・再開）の決定論テスト。
+//! 時刻と生死は引数で渡し、眠らない。
 //!
 //! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
 //! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.5）。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled, granted,
-    hold_load, hold_merge, hold_running_load, joined, leave, left, left_merged, load_done,
-    load_running, load_test, merge, merge_done, merge_granted, merge_requested, merged, queue_load,
-    queue_merge, resumed, returned, run, state_with, stop_for, stopped, test_freed,
-    test_freed_record, watch, watch_registered,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled,
+    desk_requested, granted, hold_load, hold_merge, hold_running_load, joined, leave, left,
+    load_done, load_running, load_test, merge, merge_done, merge_granted, merge_requested, merged,
+    queue_load, queue_merge, recorded_running, resumed, returned, run, state_with, stop_for,
+    stop_reported, stopped, test_freed, test_freed_record, watch, watch_registered,
 };
 use super::{Command, Event};
 use crate::state::{DeskRequest, DeskSet, ParticipantStatus, SoleHolder, State, TestHolder};
 use crate::test_support::T0;
 
 use ParticipantStatus::{StopRequested, Stopped, Working};
-
-fn load_requested(id: &str) -> Event {
-    Event::DeskRequested {
-        id: id.to_owned(),
-        desks: DeskSet::TestSole,
-    }
-}
 
 fn load_granted(id: &str, stopped: &[&str]) -> Event {
     granted(id, DeskSet::TestSole, stopped)
@@ -53,14 +47,6 @@ fn stop_requested(id: &str, by: &str) -> Event {
         id: id.to_owned(),
         by: by.to_owned(),
     }
-}
-
-fn stop_reported(id: &str) -> Event {
-    Event::Stopped { id: id.to_owned() }
-}
-
-fn recorded_running(id: &str) -> Event {
-    Event::LoadRunning { id: id.to_owned() }
 }
 
 fn unstopped(id: &str) -> Event {
@@ -120,7 +106,7 @@ fn a_load_request_asks_the_working_participants_to_stop_with_the_reason() {
     }
     assert_eq!(state, expected);
     let events = vec![
-        load_requested("C"),
+        desk_requested("C", DeskSet::TestSole),
         stop_requested("A", "C"),
         stop_requested("B", "C"),
     ];
@@ -183,7 +169,10 @@ fn merge_holders_and_merge_waiters_are_not_asked_to_stop_and_the_grant_waits_for
 
     // 停止要請が出るのは S だけ（候補・マージの持ち主・マージ待ちには出ない）。
     let got = run(&mut state, &load_test("C"), Some("C"), T0 + 5);
-    let events = vec![load_requested("C"), stop_requested("S", "C")];
+    let events = vec![
+        desk_requested("C", DeskSet::TestSole),
+        stop_requested("S", "C"),
+    ];
     assert_eq!(got, applied(true, events));
     for id in ["C", "M", "W"] {
         assert_eq!(seen(&state, id), (Working, T0, None, None), "{id}");
@@ -198,7 +187,7 @@ fn merge_holders_and_merge_waiters_are_not_asked_to_stop_and_the_grant_waits_for
     let got = run(&mut state, &merged("M"), Some("M"), T0 + 7);
     let events = vec![
         merge_done("M", "areka"),
-        left_merged("M"),
+        left("M", "merged"),
         load_granted("C", &["S"]),
     ];
     assert_eq!(got, applied(true, events));
@@ -320,7 +309,11 @@ fn asking_for_a_load_test_while_stopped_or_stop_requested_leaves_the_requester_a
         let mut expected = before.clone();
         queue_load(&mut expected, id, T0 + 9);
         assert_eq!(state, expected, "{id}");
-        assert_eq!(got, applied(true, vec![load_requested(id)]), "{id}");
+        assert_eq!(
+            got,
+            applied(true, vec![desk_requested(id, DeskSet::TestSole)]),
+            "{id}"
+        );
     }
 }
 
@@ -335,7 +328,10 @@ fn a_load_request_from_a_stopped_participant_does_not_hold_back_the_candidate() 
 
     // 止まっている B が、自分の負荷テストを申し込む。
     let got = run(&mut state, &load_test("B"), Some("B"), T0 + 4);
-    assert_eq!(got, applied(true, vec![load_requested("B")]));
+    assert_eq!(
+        got,
+        applied(true, vec![desk_requested("B", DeskSet::TestSole)])
+    );
     assert_eq!(seen(&state, "B"), (Stopped, T0 + 3, Some("C"), None));
 
     // 最後の X が止まった呼び出しで、C に番が来る。B は止まったまま並んでいる。

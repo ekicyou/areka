@@ -8,7 +8,7 @@
 use std::cell::Cell;
 use std::fs;
 use std::rc::Rc;
-use std::sync::{Barrier, mpsc};
+use std::sync::Barrier;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use temp_path_kit::TempPath;
@@ -407,16 +407,10 @@ fn a_failed_replace_is_retried_five_times_and_then_removes_the_temp_file() {
 // ───────── 排他 ─────────
 
 #[test]
-fn while_another_thread_holds_the_lock_the_change_fails_at_the_limit() {
+fn while_another_handle_holds_the_lock_the_change_fails_at_the_limit() {
     let root = TempPath::under_target("impl-watch-store");
     let home = home_in(&root);
     let file = hold_state_lock(&store_in(&root));
-    let (release_tx, release_rx) = mpsc::channel::<()>();
-    let holder = std::thread::spawn(move || {
-        // 放せと言われる（または相手が落ちる）まで握っておく。
-        let _ = release_rx.recv();
-        file.unlock().expect("放せる");
-    });
     let (store, pauses) = store_noting_pauses(&root);
     let called = Cell::new(false);
 
@@ -424,8 +418,7 @@ fn while_another_thread_holds_the_lock_the_change_fails_at_the_limit() {
         called.set(true);
         (unchanged(), ())
     });
-    drop(release_tx);
-    holder.join().expect("握っていたスレッドが終わる");
+    drop(file);
 
     assert!(matches!(got, Err(WatchError::LockBusy)), "{got:?}");
     // 10 ms 間隔で、合わせて 10 秒ぶん待とうとした（眠ってはいない）。

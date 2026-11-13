@@ -244,6 +244,24 @@ pub(super) fn watch_registered(id: &str) -> Event {
     }
 }
 
+/// 机の申し込みが並んだ出来事。
+pub(super) fn desk_requested(id: &str, desks: DeskSet) -> Event {
+    Event::DeskRequested {
+        id: id.to_owned(),
+        desks,
+    }
+}
+
+/// 止まったと伝えた出来事。
+pub(super) fn stop_reported(id: &str) -> Event {
+    Event::Stopped { id: id.to_owned() }
+}
+
+/// 「すでに走っている負荷テスト」を記録した出来事。
+pub(super) fn recorded_running(id: &str) -> Event {
+    Event::LoadRunning { id: id.to_owned() }
+}
+
 /// 机の番が来た出来事。`stopped` は番が来たときに止まっていた識別。
 pub(super) fn granted(id: &str, desks: DeskSet, stopped: &[&str]) -> Event {
     Event::DeskGranted {
@@ -293,14 +311,6 @@ pub(super) fn merge_done(id: &str, repo: &str) -> Event {
         id: id.to_owned(),
         pr: "281".to_owned(),
         sha: "414d43eb".to_owned(),
-    }
-}
-
-/// マージが済んで参加を終えた出来事。
-pub(super) fn left_merged(id: &str) -> Event {
-    Event::Left {
-        id: id.to_owned(),
-        why: "merged",
     }
 }
 

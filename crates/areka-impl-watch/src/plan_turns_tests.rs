@@ -2,10 +2,10 @@
 //! 返し方・固定点）。支えは親の `plan_test_support.rs` を読むだけ。
 
 use super::super::test_support::{
-    PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, give_back, granted, hold_load,
-    hold_merge, hold_sole, hold_test, joined, load_done, load_running, queue_load, queue_merge,
-    queue_request, request, resumed, returned, run, state_with, stop_for, stopped, test_freed,
-    test_freed_record,
+    PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, desk_requested, give_back,
+    granted, hold_load, hold_merge, hold_sole, hold_test, joined, load_done, load_running,
+    queue_load, queue_merge, queue_request, recorded_running, request, resumed, returned, run,
+    state_with, stop_for, stop_reported, stopped, test_freed, test_freed_record,
 };
 use super::replan;
 use crate::plan::{Command, Event};
@@ -163,10 +163,7 @@ fn a_later_test_request_of_a_merge_holder_overtakes_a_waiting_load_test() {
         applied(
             true,
             vec![
-                Event::DeskRequested {
-                    id: "b".to_owned(),
-                    desks: DeskSet::Test,
-                },
+                desk_requested("b", DeskSet::Test),
                 granted("b", DeskSet::Test, &[]),
             ]
         )
@@ -264,7 +261,7 @@ fn reporting_stopped_frees_the_test_desk_and_records_it_once() {
         applied(
             true,
             vec![
-                Event::Stopped { id: "b".to_owned() },
+                stop_reported("b"),
                 test_freed("b", "stopped"),
                 granted("a", DeskSet::TestSole, &["b"]),
             ]
@@ -469,7 +466,7 @@ fn recording_a_running_load_test_needs_both_desks_free() {
         stopped: Vec::new(),
     });
     assert_eq!(state, expected);
-    let recorded = Event::LoadRunning { id: "Z".to_owned() };
+    let recorded = recorded_running("Z");
     let events = vec![joined("Z"), recorded];
     assert_eq!(got, applied(true, events));
     assert_fixed_point(&state, "both free");

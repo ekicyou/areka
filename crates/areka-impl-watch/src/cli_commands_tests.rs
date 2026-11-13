@@ -108,10 +108,10 @@ fn the_merge_position_counts_in_serving_order_bugs_first() {
         done("queued merge repo=areka pos=1")
     );
     // 後から来たバグの申し込みが先頭。
-    let bug = [
-        "merge", "--id", "c", "--repo", "areka", "--spec", "fix", "--bug",
-    ];
-    assert_eq!(call(&home, &bug), done("queued merge repo=areka pos=1"));
+    assert_eq!(
+        merge(&home, "c", "fix", &["--bug"]),
+        done("queued merge repo=areka pos=1")
+    );
     // 申し込み直しても二重に並ばず、番は 2 番目になっている。
     assert_eq!(
         merge(&home, "b", SPEC, &BY_NAME),

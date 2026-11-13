@@ -1,4 +1,5 @@
-//! 机と待ち行列の判断（参加・離脱・取り下げ・マージの机・机の申し込みと番）の決定論テスト。時刻と生死は引数で渡し、眠らない。
+//! 机と待ち行列の判断（参加・離脱・取り下げ・マージの机・机の申し込みと番）の決定論テスト。
+//! 時刻と生死は引数で渡し、眠らない。
 //!
 //! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
 //! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.4）。
@@ -9,13 +10,13 @@
 //! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled, give_back,
-    granted, hold_load, hold_merge, hold_running_load, hold_test, joined, leave, left, left_merged,
-    load_done, load_test, merge, merge_done, merge_granted, merge_requested, merged, queue_load,
-    queue_merge, queue_request, resumed, returned, run, state_with, stop_for, stopped, test_freed,
-    test_freed_record, wait_record, watch, watch_registered,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled,
+    desk_requested, give_back, granted, hold_load, hold_merge, hold_running_load, hold_test,
+    joined, leave, left, load_done, load_test, merge, merge_done, merge_granted, merge_requested,
+    merged, queue_load, queue_merge, queue_request, resumed, returned, run, state_with, stop_for,
+    stopped, test_freed, test_freed_record, wait_record, watch, watch_registered,
 };
-use super::{Command, Event, Verdict};
+use super::{Command, Verdict};
 use crate::state::{
     DeskSet, LastMerge, MergeDesk, MergeHolder, MergeRequest, Participant, ParticipantStatus,
     SoleHolder, State, TestHolder, WaitKind, WaitRecord, WatchInfo,
@@ -282,7 +283,7 @@ fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
             vec![
                 merge_done("A", REPO),
                 test_freed("A", "merged"),
-                left_merged("A"),
+                left("A", "merged"),
             ],
             "merged",
         ),
@@ -530,7 +531,7 @@ fn merged_frees_the_desk_records_the_last_merge_and_ends_the_participation() {
     assert_eq!(state, expected);
     let events = vec![
         merge_done("A", "areka"),
-        left_merged("A"),
+        left("A", "merged"),
         merge_granted("B", "areka"),
     ];
     assert_eq!(got, applied(true, events));
@@ -572,13 +573,13 @@ fn a_merge_round_trip_reports_one_event_per_change() {
     let got = run(&mut state, &merged("A"), Some("A"), T0 + 2);
     let events = vec![
         merge_done("A", "areka"),
-        left_merged("A"),
+        left("A", "merged"),
         merge_granted("B", "areka"),
     ];
     assert_eq!(got, applied(true, events));
 
     let got = run(&mut state, &merged("B"), Some("B"), T0 + 3);
-    let events = vec![merge_done("B", "areka"), left_merged("B")];
+    let events = vec![merge_done("B", "areka"), left("B", "merged")];
     assert_eq!(got, applied(true, events));
     assert!(state.participants.is_empty());
 }
@@ -626,10 +627,7 @@ fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
     assert_eq!(state, expected);
     let events = vec![
         joined("A"),
-        Event::DeskRequested {
-            id: "A".to_owned(),
-            desks: DeskSet::TestSole,
-        },
+        desk_requested("A", DeskSet::TestSole),
         granted("A", DeskSet::TestSole, &[]),
     ];
     assert_eq!(got, applied(true, events));
