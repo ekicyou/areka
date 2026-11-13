@@ -284,7 +284,7 @@ pub(crate) fn render_list_to_pixels(
 }
 
 /// `w×h` の透明な的に `root_transform` を置いて `draw` で描き、読み戻す。
-fn draw_to_pixels(
+pub(crate) fn draw_to_pixels(
     w: u32,
     h: u32,
     root_transform: Matrix3x2,
