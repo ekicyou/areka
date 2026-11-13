@@ -86,7 +86,7 @@
   - 動く絵を登録して普通の焼き・静かな焼きを呼ぶほかのテストが、上限の値に依らない比べ方であることを grep で確かめる
   - 完了の状態: 上限の環境変数を変えて回しても、動く絵のテストが緑のまま
   - _Requirements: 2.1, 4.7_
-- [ ] 3.6 失敗しえないテスト・弱いテストを直す（指摘 8 の残り）
+- [x] 3.6 失敗しえないテスト・弱いテストを直す（指摘 8 の残り）
   - emo2 の焼きの失敗の確かめを「ちょうど 1 件で、無い名前の見つからない失敗（パスも比べる）」にする
   - WebP の見出しの読みの働かない守りとそのテストを消し、見出しの読みのテストの働かない数える包みと比べを消す
   - 索引表の「安価な clone」のテストを事実の名前にして clone の比べを消す。動きのある組み立て口に「コマの先頭が親」の確かめを足し、親でない並びで panic する 1 本を足し、4 本の panic のテストに期待の文を付ける。足す前に、範囲の外の呼び手（`areka-emo-compose` の動く絵の表のテスト）が grep で全部コマの先頭に親を置くことを確かめる
@@ -151,3 +151,4 @@
 - 2.3: 範囲の外で替え玉の読み手（`MemoryDecoder`）に絵を登録する呼び出しを grep で全部読んだ。39 ファイル・45 件（`insert` 35・`insert_animated` 10。内訳 areka 4・areka-emo-compose 17・areka-emo-present 16・areka-emo-text 1・areka-placement 1）、約束（stride ≥ 幅×4・長さ＝stride×高さ）を破るものは 0 件。`decode/wic_arm.rs::copy_checked` の仮の `check_image` は消した。
 - 2.4: `runtime-module-untangle` は PR#447 で着地済みのため、知らせの代わりに grep を記録する。9 つの型（Packer・PackOutput・PackedEntry・Baker・Trimmer・TrimResult・Trimmed・ManifestDeriver・Manifest）と 8 つのモジュール（bake・decode・error・manifest・normalize・pack・table・trim）の範囲の外のコードの使い手は 0 件（当たりは areka-emo-present の説明の文 2 か所と、別の同名の型だけ）。残り物（5.1 の audit で拾う候補）: `normalize.rs:92` の説明が非公開の `Normalizer::plan`/`apply` へリンクする `cargo doc` の警告 2 件（前からある）、`limits.rs` の外から届かない `pub const` 3 つ。
 - 3.5（範囲の外・完了の棚卸で起票）: `crates/areka-placement/src/measure_first_frame_tests.rs` の `fade_in_animation_all_transparent_warns_zero_lines_on_measure_bake_and_raw_bake` は、動く絵の上限の環境変数（`AREKA_ANIMATED_IMAGE_MAX_FRAMES=1` か `AREKA_ANIMATED_IMAGE_MAX_PIXELS=1`）を立てると 258 行の `raw_warns == 0` で赤になる（本物の `bake` が環境の上限を読むため）。areka-placement はこの spec では触れない。`crates/areka/src/placement_tests/measure_bake_log_tests.rs` も動く絵を登録するが、環境変数を変えた走らせ方は未確認。
+- 3.6（範囲の外・完了の棚卸で拾う）: `crates/areka-emo-compose/src/film_tests.rs:258` の説明「②⑤⑥は `with_frames` も作れない」は、3.6 で ①（0 番が親でない）も `with_frames` で作れなくなったので少し古い。テストの働きには関係しない。

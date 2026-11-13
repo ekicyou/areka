@@ -108,13 +108,13 @@ fn infinite_loop_count_round_trips() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "keys.len() (1) != entries.len() (0)")]
 fn panics_when_keys_and_entries_differ() {
     AtlasTable::with_frames(vec![key("a.png")], vec![], vec![], vec![]);
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "has 1 frames and 1 delays")]
 fn panics_when_single_frame() {
     let mut a = three_frames();
     a.frames.truncate(1);
@@ -123,7 +123,7 @@ fn panics_when_single_frame() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "has 3 frames and 2 delays")]
 fn panics_when_delays_length_differs() {
     let mut a = three_frames();
     a.delays_ms.pop();
@@ -131,10 +131,19 @@ fn panics_when_delays_length_differs() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "has a frame outside the table")]
 fn panics_when_frame_outside_table() {
     let mut a = three_frames();
     a.frames[2] = ElementId(4);
+    frames_table(a);
+}
+
+/// コマの先頭が親でない並びは断る（説明の「`frames[0]` は親」の約束）。
+#[test]
+#[should_panic(expected = "frame 0 is not the parent")]
+fn panics_when_first_frame_is_not_parent() {
+    let mut a = three_frames();
+    a.frames.swap(0, 1);
     frames_table(a);
 }
 

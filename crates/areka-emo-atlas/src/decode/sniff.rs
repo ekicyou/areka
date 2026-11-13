@@ -67,7 +67,7 @@ fn sniff_png<R: Read + Seek>(reader: &mut R, total: u64) -> Option<AnimationInfo
 fn sniff_webp<R: Read + Seek>(reader: &mut R, total: u64) -> Option<AnimationInfo> {
     let header = read_at::<8, _>(reader, 12)?;
     let len = u64::from(le32(&header[4..]));
-    if &header[..4] != b"VP8X" || len < 10 || 20 + len > total {
+    if &header[..4] != b"VP8X" || len < 10 {
         return None;
     }
     let d = read_at::<10, _>(reader, 20)?;

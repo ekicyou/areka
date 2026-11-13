@@ -143,7 +143,7 @@ impl AtlasTable {
     ///
     /// # Panics
     /// `keys.len() != entries.len()`、コマの並びが 2 未満か待ち時間と長さが違う、
-    /// コマの番号が表の外、のいずれかで panic する（契約違反・呼び出し側のバグ）。
+    /// コマの先頭が親でない、コマの番号が表の外、のいずれかで panic する（契約違反・呼び出し側のバグ）。
     pub fn with_frames(
         keys: Vec<AtlasKey>,
         entries: Vec<AtlasEntry>,
@@ -163,6 +163,11 @@ impl AtlasTable {
                 "AtlasTable::with_frames: animation {parent:?} has {} frames and {} delays (need equal and >= 2)",
                 a.frames.len(),
                 a.delays_ms.len(),
+            );
+            assert!(
+                a.frames[0] == *parent,
+                "AtlasTable::with_frames: animation {parent:?} frame 0 is not the parent ({:?})",
+                a.frames[0],
             );
             assert!(
                 a.frames.iter().all(|f| (f.0 as usize) < entries.len()),
@@ -356,19 +361,10 @@ mod tests {
 
     /// 6.4: AtlasTable / AtlasPage が Send + Sync（スレッド間安全手渡し）。
     #[test]
-    fn table_is_send_sync_and_cheap_clone() {
+    fn table_and_page_are_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<AtlasTable>();
         assert_send_sync::<AtlasPage>();
-
-        // Arc 共有ゆえ clone が安価・両方使える。
-        let t = sample_table();
-        let t2 = t.clone();
-        assert_eq!(t.len(), t2.len());
-        assert_eq!(
-            t.resolve(SetId(0), "surface0.png"),
-            t2.resolve(SetId(0), "surface0.png")
-        );
     }
 
     /// 6.3: page 取得・stride 明示・範囲外は None・pages() スライス長一致。

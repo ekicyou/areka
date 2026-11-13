@@ -226,7 +226,7 @@ fn emo2_balloon_same_bake_path_as_shell() {
 /// テスト③: 存在しないパスを含む入力 → 当該エントリのみ errors・他は継続（2.2/5.6）。
 ///
 /// 実在 element（surface0.png）と bogus パスを混在させ、bogus は resolve→None かつ
-/// errors に Decode が 1 件以上、実在 element は resolve→Some＋placement（継続）。
+/// errors はちょうど 1 件の NotFound（パス付き）、実在 element は resolve→Some＋placement（継続）。
 #[test]
 fn emo2_nonexistent_path_isolated_others_continue() {
     let base = emo2_shell_dir();
@@ -253,19 +253,19 @@ fn emo2_nonexistent_path_isolated_others_continue() {
             "nonexistent path absent from table"
         );
 
-        // errors に当該 Decode 失敗が集約されている（≥1）。
-        assert!(
-            !result.errors.is_empty(),
-            "nonexistent path recorded as an error"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|e| matches!(e, BakeError::Decode(_))),
-            "errors contain a BakeError::Decode for the bogus path, got {:?}",
+        // errors はちょうど 1 件で、無い名前の NotFound（パスも比べる）。
+        assert_eq!(
+            result.errors.len(),
+            1,
+            "exactly one failure: {:?}",
             result.errors
         );
+        match &result.errors[0] {
+            BakeError::Decode(crate::decode::DecodeError::NotFound { path }) => {
+                assert_eq!(path, &base.join("this_file_does_not_exist_xyz.png"));
+            }
+            other => panic!("expected Decode(NotFound), got {other:?}"),
+        }
 
         // 実在 element は継続処理される（脱落しない・placement あり）。
         let ok_id = result
