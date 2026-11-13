@@ -89,7 +89,7 @@
   - _Requirements: 3.1, 3.2, 4.1, 5.3, 6.4, 10.7_
 
 - [ ] 7. 親の窓の記録と送り手の確かめ（U8）
-- [ ] 7.1 無視したメッセージを記録し、本番で読まれない数を消す
+- [x] 7.1 無視したメッセージを記録し、本番で読まれない数を消す
   - 知らない種類・長さの合わないもの・形の崩れた HELLO・無視する既知の種類で `warn!(.., event = "parent_frame_ignored", reason, ..)` を書き、`hellos`・`bad_frames`・`ignored_known` の数を消す。テストは記録で確かめる（指摘 11）
   - 完了の姿: テスト `ignored_frames_are_logged` が緑
   - _Requirements: 3.1, 4.1, 5.2_
@@ -201,3 +201,4 @@
 - 4.4: 審査の指摘で helper_command に stdin・stdout の Stdio::null() を足した（窓だけの areka は標準の取っ手を持たず、受け継ぐと helper が起きるたびに「取っ手が無い」を書き warn になるため）。Command は stdio の設定を読み返せず、テストでは縛れない。
 - 5: 置き換えの数え直しで ASCII を飛ばすのは ASCII をそのまま通す文字コード（is_ascii_compatible）のときだけ。ISO-2022-JP は ESC・SO・SI を表せないので飛ばすと置き換えを 0 と数えて黙る（審査で差し戻し・直した）。
 - 6: process_host.rs の中のテストは process_host_tests.rs へ移した（901 行になったため）。wait_handle は WAIT_FAILED を時間切れと区別しない（記録は出る）。14 の audit で見る。
+- 7.1: parent_window の既存テスト pump_none_then_some_and_bad_frame_recorded は (c) の節を新しいテストへ移したので名前が中身とずれた。7.2／7.4 で触るときに名前を直す。

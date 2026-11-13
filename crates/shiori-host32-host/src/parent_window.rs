@@ -6,7 +6,7 @@
 //! 1. **HELLO 記録**（要件 3.2）: WndProc で inbound WM_COPYDATA を framing 検証し、
 //!    `Hello` なら payload（helper 窓 HWND の u32 LE）を `decode_hwnd_le` で復号して
 //!    [`ParentShared::helper_hwnd`] に記録＝ハンドシェイク完了を観測する。不正フレーム／
-//!    未知タグ／想定外タグは crash させず観測カウンタに記録するのみ（要件 2.5・上位へ渡さない）。
+//!    未知タグ／想定外タグは crash させず WARN の記録を残すのみ（要件 2.5・上位へ渡さない）。
 //! 2. **`pump_until_hello_or`**（要件 3.4）: HELLO 受領（helper HWND 確定）まで、または
 //!    `timeout` 経過まで `MessageLoop` を **bounded** に回す。無入力でも期限で必ず抜けられる
 //!    よう別スレッドから自窓へ定期 `PostMessageW(WM_NULL)` を撃って `GetMessage` を起こす
@@ -60,7 +60,7 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(25);
 /// inbound WM_COPYDATA の framing 検証結果に応じた親 WndProc の取るべき動作（窓なしで単体検証可）。
 ///
 /// 窓・FFI から切り離した純ロジックとして [`classify_inbound`] が算出し、WndProc はこの結果を
-/// 見て副作用（状態記録・カウンタ更新）を行う。これにより HELLO 記録・不正フレーム分類を
+/// 見て副作用（状態記録・記録の行）を行う。これにより HELLO 記録・不正フレーム分類を
 /// 実窓なしで決定的に単体検証できる（helper の `classify_inbound` 方式を踏襲）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum InboundAction {
@@ -84,7 +84,7 @@ enum InboundAction {
 /// payload を `decode_hwnd_le` で復号して `RecordHello`、`Response` は payload を `StoreResponse`、
 /// その他の既知タグは `IgnoreKnown`、不正フレームは `IgnoreBad`、payload 長不正の HELLO は
 /// `IgnoreMalformedHello` とする。
-/// 副作用（状態記録・カウンタ）は持たず、WndProc 側が結果を見て実行する。
+/// 副作用（状態記録・記録の行）は持たず、WndProc 側が結果を見て実行する。
 fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> InboundAction {
     match copydata_payload(dw_data, declared_len, data) {
         Ok((MsgTag::Hello, payload)) => {
@@ -118,7 +118,7 @@ fn resolve_send_target(helper_hwnd_wire: Option<u32>) -> Result<HWND, SendError>
 /// WndProc と外側（呼び出し側）で共有する親窓の状態（design.md §426-429）。
 ///
 /// single-in-flight・単一 UI スレッドゆえ内部可変は [`Cell`] で足りる。本タスク（4.2）では
-/// ハンドシェイク観測に必要な `helper_hwnd` と観測カウンタのみを持つ。送信パス（`ResponseSlot`）は
+/// ハンドシェイク観測に必要な `helper_hwnd` のみを持つ。送信パス（`ResponseSlot`）は
 /// task 4.3 が追加する。
 struct ParentShared {
     /// HELLO で受領した helper のメッセージ窓 HWND（u32 ワイヤ値）。確定でハンドシェイク完了。
@@ -127,12 +127,6 @@ struct ParentShared {
     /// `send_request` が `clear→…→take` で消費し、RESPONSE の WndProc アームが再入で `store` する。
     /// 両者は同一 `&ResponseSlot` を参照する（`send_request` は `self.window.state()` 経由で取得）。
     response_slot: ResponseSlot,
-    /// 観測カウンタ: 受領した HELLO 数。
-    hellos: Cell<u64>,
-    /// 観測カウンタ: 応答対象外の既知タグ受領数（記録のみ・crash なし）。
-    ignored_known: Cell<u64>,
-    /// 観測カウンタ: 不正フレーム／未知タグ／不正 HELLO 受領数（crash させず記録・要件 2.5）。
-    bad_frames: Cell<u64>,
 }
 
 impl ParentShared {
@@ -140,9 +134,6 @@ impl ParentShared {
         Self {
             helper_hwnd: Cell::new(None),
             response_slot: ResponseSlot::new(),
-            hellos: Cell::new(0),
-            ignored_known: Cell::new(0),
-            bad_frames: Cell::new(0),
         }
     }
 }
@@ -175,7 +166,7 @@ unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
 /// 要件 4.2）して即 return する（design.md §393-395）。
 ///
 /// **非ブロッキング**（記録／store して即 return・跨プロセス SendMessage を発行しない）。不正フレーム／
-/// 未知タグ／想定外タグは crash させず観測カウンタに記録するのみ（要件 2.5・上位へ渡さない）。
+/// 未知タグ／想定外タグは crash させず WARN の記録を残すのみ（要件 2.5・上位へ渡さない）。
 fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
     if msg.msg != WM_COPYDATA {
         return None; // 非対象は DefWindowProc へ委譲（closure が None を返すと lib が委譲）。
@@ -190,7 +181,6 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
         InboundAction::RecordHello(helper_hwnd) => {
             // ハンドシェイク完了観測（要件 3.2）: helper HWND を確定させ即 return。
             s.helper_hwnd.set(Some(helper_hwnd));
-            s.hellos.set(s.hellos.get() + 1);
         }
         InboundAction::StoreResponse(payload) => {
             // 再入受領の核（要件 4.2・design.md §394）: RESPONSE payload を受け皿へ store して
@@ -199,18 +189,38 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
             // RESPONSE（同期 SendMessage）が OS によりこの WndProc へ再入配送される。
             s.response_slot.store(payload);
         }
-        InboundAction::IgnoreKnown(_tag) => {
-            // Load/Request/Unload は本ユニットでは能動処理しない。記録のみ（crash なし）。
-            s.ignored_known.set(s.ignored_known.get() + 1);
+        // 無視したものは crash させず WARN を 1 行残すだけ・上位へ渡さない（要件 2.5・指摘 11）。
+        InboundAction::IgnoreKnown(tag) => tracing::warn!(
+            target: "shiori-host32",
+            event = "parent_frame_ignored",
+            reason = "not_for_parent",
+            tag = ?tag,
+            "親の窓が受けない種類のメッセージを無視した"
+        ),
+        InboundAction::IgnoreBad(FramingError::UnknownTag(raw)) => tracing::warn!(
+            target: "shiori-host32",
+            event = "parent_frame_ignored",
+            reason = "unknown_tag",
+            raw,
+            "知らない種類のメッセージを無視した"
+        ),
+        InboundAction::IgnoreBad(FramingError::LengthMismatch { declared, actual }) => {
+            tracing::warn!(
+                target: "shiori-host32",
+                event = "parent_frame_ignored",
+                reason = "length_mismatch",
+                declared,
+                actual,
+                "宣言の長さと中身の長さが合わないメッセージを無視した"
+            );
         }
-        InboundAction::IgnoreBad(_err) => {
-            // 未知タグ・長さ不整合は crash させず記録のみ・上位へ渡さない（要件 2.5）。
-            s.bad_frames.set(s.bad_frames.get() + 1);
-        }
-        InboundAction::IgnoreMalformedHello => {
-            // HELLO だが payload 長が 4 でない。記録せず不正として計上（要件 2.5）。
-            s.bad_frames.set(s.bad_frames.get() + 1);
-        }
+        InboundAction::IgnoreMalformedHello => tracing::warn!(
+            target: "shiori-host32",
+            event = "parent_frame_ignored",
+            reason = "malformed_hello",
+            len = payload.len(),
+            "中身が 4 バイトでない HELLO を無視した"
+        ),
     }
     Some(LRESULT(0))
 }
@@ -381,7 +391,7 @@ impl ParentMessageWindow {
         self.window.hwnd()
     }
 
-    /// 共有状態（観測カウンタ）への参照（loopback セルフテストからの観測用）。
+    /// 共有状態への参照（loopback セルフテストからの観測用）。
     #[cfg(test)]
     fn shared(&self) -> Pin<&ParentShared> {
         self.window.state()
@@ -560,7 +570,7 @@ mod window_tests {
     ///
     /// - (a) HELLO 未受領で短い timeout の `pump_until_hello_or` が `None`（要件 3.4・Timeout 経路）。
     /// - (b) 同じ親窓へ HELLO を loopback 送出 → `pump_until_hello_or` が `Some(helper_hwnd)` を返し helper_hwnd が確定する（要件 3.2）。
-    /// - (c) 不正フレーム（未知タグ）を親窓へ送っても crash せず観測カウンタ記録のみ（要件 2.5）。
+    /// - (c) 無視したメッセージの記録は [`ignored_frames_are_logged`] が確かめる。
     /// - (d) RESPONSE を loopback 送出 → WndProc の Response アームが `response_slot` へ store する（要件 4.2）。
     /// - (e) 無応答相手（親自身）へ `send_request` → 上限時間で `SendError::Ipc(Timeout)`・親はハングしない（要件 5.1/5.2/5.3）。
     ///
@@ -610,7 +620,6 @@ mod window_tests {
             Some(helper_hwnd_wire),
             "HELLO 受領で helper HWND が確定する（要件 3.2）"
         );
-        assert_eq!(parent.shared().hellos.get(), 1);
 
         // 確定後の pump は即 Some を返す（bounded・要件 3.2）。
         let some = parent.pump_until_hello_or(Duration::from_secs(5));
@@ -619,32 +628,6 @@ mod window_tests {
             Some(helper_hwnd_wire),
             "HELLO 受領後 pump は Some(helper_hwnd) を返す（要件 3.2）"
         );
-
-        // --- (c) 不正フレーム（未知タグ）→ crash せず bad_frames 記録のみ（要件 2.5）---
-        {
-            let payload: &[u8] = b"";
-            let cds = COPYDATASTRUCT {
-                dwData: 0xFFusize,
-                cbData: 0,
-                lpData: payload.as_ptr() as *mut core::ffi::c_void,
-            };
-            // SAFETY: parent.hwnd() は有効。&cds は本呼び出し中生存。
-            unsafe {
-                let _ = windows::Win32::UI::WindowsAndMessaging::SendMessageW(
-                    parent.hwnd(),
-                    WM_COPYDATA,
-                    Some(WPARAM(parent.hwnd().0 as usize)),
-                    Some(LPARAM(&cds as *const COPYDATASTRUCT as isize)),
-                );
-            }
-        }
-        assert_eq!(
-            parent.shared().bad_frames.get(),
-            1,
-            "不正フレームは crash させず記録のみ（要件 2.5）"
-        );
-        // 不正フレームは helper_hwnd を書き換えない。
-        assert_eq!(parent.shared().helper_hwnd.get(), Some(helper_hwnd_wire));
 
         // --- (d) RESPONSE を親窓へ loopback → ResponseSlot に payload が store される（要件 4.2）---
         // WndProc の Response アームが store することを観測する。send_copydata は同期ゆえ、
@@ -690,5 +673,56 @@ mod window_tests {
         }
 
         drop(parent);
+    }
+
+    /// 生の WM_COPYDATA を親窓へ同期送出する（`dwData`・中身をそのまま渡す）。
+    fn send_raw(parent: &ParentMessageWindow, dw_data: usize, payload: &[u8]) {
+        let cds = COPYDATASTRUCT {
+            dwData: dw_data,
+            cbData: payload.len() as u32,
+            lpData: payload.as_ptr() as *mut core::ffi::c_void,
+        };
+        // SAFETY: parent.hwnd() は有効。&cds と payload は本呼び出し中生存。
+        unsafe {
+            let _ = windows::Win32::UI::WindowsAndMessaging::SendMessageW(
+                parent.hwnd(),
+                WM_COPYDATA,
+                Some(WPARAM(parent.hwnd().0 as usize)),
+                Some(LPARAM(&cds as *const COPYDATASTRUCT as isize)),
+            );
+        }
+    }
+
+    /// 無視したメッセージ（未知のタグ・形の崩れた HELLO・親が受けない既知の種類）は crash させず、
+    /// それぞれ `parent_frame_ignored` の WARN を 1 行ずつ残す（指摘 11・要件 3.1 / 4.1）。
+    /// 無視したメッセージは helper HWND を書き換えない。
+    #[test]
+    fn ignored_frames_are_logged() {
+        let _guard = crate::lifecycle::tests::WINDOW_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+
+        let ((), events) = log_capture_kit::capture(|| {
+            send_raw(&parent, 0xFF, b"");
+            send_raw(&parent, MsgTag::Hello.as_u32() as usize, b"abc");
+            send_raw(&parent, MsgTag::Load.as_u32() as usize, b"");
+        });
+        let reasons: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                e.target == "shiori-host32" && e.field_str("event") == Some("parent_frame_ignored")
+            })
+            .map(|e| {
+                assert_eq!(e.level, tracing::Level::WARN, "{e:?}");
+                e.field_str("reason").unwrap_or_default().to_owned()
+            })
+            .collect();
+        assert_eq!(
+            reasons,
+            ["unknown_tag", "malformed_hello", "not_for_parent"],
+            "{events:?}"
+        );
+        assert_eq!(parent.shared().helper_hwnd.get(), None);
     }
 }
