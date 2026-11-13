@@ -1,0 +1,190 @@
+# 実装計画: audit-shiori-host32
+
+- 元は `design.md` の「修正のまとまり」U1〜U18。指摘の番号は `research.md` §4 の通し番号。直し方・場所・縛るテストの名前は `design.md` の「指摘ごとの直し方・場所・縛るテスト」が正本。
+- 着手の順（2026-11-13 棚卸・開発者の承認）: 本 spec の実装は、C19 の audit 系でない 4 本（`runtime-module-untangle`・`dola-yaml-backend`・`wintf-d2d-composite-rules`・`emo-text-reveal-incremental`）の後に入る。本 spec の中の待ちは 13（`dola-yaml-backend` の `main` への着地）だけ。
+- 同じファイルに触るタスクは並べて走らせない。`(P)` は触るファイルが重ならないものだけに付けた。
+- 各タスクの終わりに、触ったファイルの行数を測り、900 行を越えたら中のテストを兄弟のファイルへ出す（要件 5.1）。
+- 直さずに残すもの: 指摘 27・39（要件 10.3。どのタスクも触らない）。
+
+## タスク
+
+- [ ] 1. 基礎: テストの置き場と共通の道具をそろえる（U1）
+- [ ] 1.1 clippy の基準を控え、host の結合テストの共通の道具を作る
+  - 範囲の 5 クレートの clippy の警告の一覧を、直しの前の基準として `research.md` に控える
+  - host の結合テストの共通の道具（成果物の探し方・テストの根・握手の上限 30 秒）を 1 つのモジュールにまとめ、5 本の e2e がそれを使う形にする。頭に理由つきの `dead_code` の許しを置く
+  - テストの根はワークスペースの `target\test-roots\shiori-host32-<名>-<pid>-<連番>` に作り、Drop で消す。helper を持つ値より先に作り、後に消える順に置く
+  - 握手の上限 5 秒を 30 秒にし、`error_paths` の経過時間の確かめ（`:204`・`:238`・`:276`）を的に合わせて外す（指摘 48 の一部）
+  - `temp_path_guard_test.rs` の例外表から、ここで `temp_dir` を使わなくなった host の結合テストの分を外す（外さないと番人の `every_exception_still_has_a_real_hit` が赤になる）
+  - 完了の姿: host の 5 本の e2e が共通の道具だけで組めて緑になり、host の結合テストに `std::env::temp_dir` の呼び出しが 0 件で、`temp_path_guard_test.rs` の 4 本が緑
+  - _Requirements: 3.1, 3.5, 4.2, 4.3, 4.4, 4.5_
+- [ ] 1.2 host の中のテストを兄弟のファイルへ移し、テストの重複をまとめる
+  - client の中のテストを `client_tests.rs` へ、shiori3 の中のテストを `shiori3_tests.rs` へ、中身を変えずに移す
+  - `cmd_exit` を `process_host` のテストの 1 つにし、`lifecycle` のテストがそれを使う。`process_host.rs:548-559` の重複のテストを消し `process_host_image_tests.rs` の 1 本に任せる（指摘 21）
+  - host の単体テストのテストの根も 1.1 の決まりにそろえる（`process_host.rs` の `.bat` のテストは 4.1 で消えるので触らない）
+  - 完了の姿: `client.rs` と `shiori3.rs` が 500 行を下回り、host の単体テストの本数が移す前と同じ（消した重複の 1 本を除く）で緑
+  - _Requirements: 3.1, 4.5, 5.1_
+- [ ] 1.3 helper と loadu のテストの道具をまとめ、中のテストを移す
+  - helper のテストの共通の道具（試験用の DLL の探し方・一意のフォルダへの写し・テストの根）を `proxy_test_support.rs` に置き、`main_loopback_tests`・`shiori_proxy_loadu_tests` がそれを使う。host の `TestRoot` と互いの場所を注釈で指す
+  - shiori_proxy の中のテストを `shiori_proxy_tests.rs` へ移す
+  - loadu の中のテストの根を `target\test-roots\` の下へ移す（指摘 3）
+  - `temp_path_guard_test.rs` の例外表から、ここで `temp_dir` を使わなくなった helper・loadu の分を外す
+  - 完了の姿: i686 の段で helper と loadu のテストが移す前と同じ本数で緑、`shiori_proxy.rs` が 500 行を下回り、helper・loadu に `std::env::temp_dir` の呼び出しが 0 件で、`temp_path_guard_test.rs` の 4 本が緑
+  - _Requirements: 3.1, 4.3, 4.4, 5.1, 5.5_
+
+- [ ] 2. 試験用の DLL の試しの ID と依存の形をそろえる（U3）
+  - testdll と loadu の `Cargo.toml` を `windows` のワークスペースの版と機能の行にし（指摘 29）、testdll に `Win32_System_DataExchange` を足す
+  - testdll に試しの ID 5 つ（`OnTestNull`・`OnTestLenOverflow`・`OnTestReenter`・`OnTestUnloadFalse`・`OnTestEnv`）を設計の表どおりに足す。`OnTestReenter` のタグの値は ipc の写しとし、場所を注釈で指す
+  - `GMEM_FIXED`・応答の確保・`alloc_input` の 3 か所に互いを指す注釈を置き（指摘 47）、testdll の古い説明（「`len` が null なら null」など）を直す（指摘 32 の testdll の分）
+  - 完了の姿: x64 と i686 の両方で testdll と loadu が組め、`git diff --exit-code Cargo.lock` が 0 で、その結果を `research.md` に書く
+  - _Requirements: 3.1, 4.1, 4.4, 5.5, 5.6_
+
+- [ ] 3. helper が DLL を読むときの依存の探し先を絞る（U2・件 1）
+  - helper の DLL の読み込みを `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` 付きの読み込みに替え、エラーの窓を止める手当てを残す。取り込みと説明を直す
+  - i686 だけのテスト `a_relative_dll_path_is_refused` を置く: 作業フォルダからの相対の道は `LoadLibraryFailed`、同じ DLL の絶対の道は読める（旗なしの読み込みに戻すと赤）
+  - 実物の確かめ R1: 排他のテストの机を取ってから、`areka-ghost` の実物の pasta のテストを `vendors/pasta/release/hello-pasta/ghost/master/pasta.dll` に向けて回し、読めることを確かめて `research.md` に書く。手元に 32bit の YAYA・華和梨・里々のゴーストがあれば同じ形で確かめる。読めないゴーストが見つかったら直しを止めて開発者へ議題として出す
+  - 完了の姿: 新しいテストと既存の折り返しのテスト・host の `shiori_load_e2e` が緑で、R1 の結果が `research.md` にある
+  - R1 は排他の机を取り、helper の起こし方を触る 4 と重ならないよう、2 の後・4 の前に順に回す
+  - _Depends: 1.3, 2_
+  - _Requirements: 4.1, 7.1, 7.2, 7.3, 7.4, 7.5, 10.6_
+
+- [ ] 4. helper の起こし方と標準エラー（U4・U5）
+- [ ] 4.1 helper を起こす組み立てを 1 か所にまとめ、`PASTA_DEBUG=0` を渡す（件 2）
+  - helper の引数・環境 3 つ・作業フォルダを組む内側の関数を作り、`spawn` はそれを使う。`PASTA_DEBUG` を `0` にする（開ける口は作らない）
+  - 組み立ての中身（引数・環境・作業フォルダ）を確かめる単体テストを置き、`.bat` を手で組み直す写しのテスト（`process_host.rs:651-733`）を消す（指摘 16）
+  - `temp_path_guard_test.rs` の例外表から残る `process_host.rs` の分を外し、本範囲の 10 件が全部外れたことに合わせて件数と説明を直す（指摘 3 の締め）
+  - 完了の姿: 新しい単体テストが環境に `("PASTA_DEBUG", Some("0"))` を見つけて緑、`temp_path_guard_test.rs` の 4 本が緑
+  - _Requirements: 3.1, 3.2, 4.1, 4.3, 8.1, 8.2, 10.4_
+- [ ] 4.2 親に `PASTA_DEBUG=1` を立てても helper の下で 0 になることを確かめる結合テストを置く
+  - `tests/helper_env_e2e.rs` に、親のテストが自分を `--exact <観測の本体> --ignored` で起こし直して子に `PASTA_DEBUG=1` を渡す形の 2 本を置く（自分のプロセスの環境は書き換えない）
+  - 観測の本体は前提（自分の環境が 1）を確かめてから、本番の起こし方で実の i686 helper を起こし、握手・LOAD・`GET OnTestEnv` で値を読む
+  - 完了の姿: テストが緑で、4.1 の `PASTA_DEBUG` の行を消すと値が `1` になって赤になる
+  - _Requirements: 4.1, 4.4, 8.5_
+- [ ] 4.3 helper の標準エラーを読み手のスレッドで areka の記録へ `warn` で回す（指摘 4）
+  - 起こし方で標準エラーを管にし、helper 1 つに 1 本の読み手のスレッドが行ごとに `warn!(target: "shiori-host32", event = "helper_stderr", pid, ..)` を書く。行の文は変えない
+  - 行は UTF-8 で読み、読めない行は OS の ANSI コードページで読む。読みの失敗は `error!` を 1 行書いて終わる
+  - 行を集める口を差し替えられる内側の起こし方を置き、公開の `spawn_command` の形は変えない。`windows` の機能に `Win32_Globalization` を足す（`Cargo.lock` は変わらない）
+  - `process_host_stderr_tests.rs` に 3 本（行の切り方と 2 つの読み方・段と宛名と文がそのまま・実 helper の `[helper]` の行が届く）を置く。成果物が無ければ panic
+  - 完了の姿: 3 本が緑で、`Cargo.lock` の差分が 0
+  - _Requirements: 4.1, 4.4, 5.2, 5.4, 5.6, 10.12_
+- [ ] 4.4 helper の標準の取っ手を SHIORI の子へ受け継がせない
+  - helper は始めに自分の標準入力・標準出力・標準エラーの取っ手から受け継ぎの印を落とす。取っ手が無い・失敗は `[helper]` の行で書いて続ける。helper の `windows` の機能に `Win32_System_Console` を足す
+  - i686 だけのテスト `std_handles_are_not_inherited` を置く（呼ばないと赤）
+  - `error_paths.rs` の 3 本目（`:292-351`）を消す（指摘 18。helper が自分で終わる道の記録は 4.3 の実 helper のテストが受ける）
+  - 完了の姿: 新しいテストが i686 の段で緑、`Cargo.lock` の差分が 0
+  - _Requirements: 3.1, 4.1, 5.3, 5.6_
+
+- [ ] 5. host の記録の穴と文字コードの上限（U6）
+  - `ShioriError::Status` の表示に `ErrorLevel`・`ErrorDescription` を載せ、`RequestError::Ipc` に中のエラーを原因として持たせる。既存の 2 本の表示のテストを新しい文に改め、原因が返ることを足す（指摘 6）
+  - `try_wait` の失敗を受ける内側の関数で `error!` を書いてから「動いている」とみなし、テスト `a_try_wait_failure_is_logged` を置く（指摘 10）
+  - 文字コードの警告済みの集まりに上限 64 を置き（越えたら `debug` だけ）、テスト `warned_labels_stop_growing_at_the_limit` を置く（指摘 41）。置き換えの数え直しで ASCII の字を飛ばす（指摘 42）
+  - 完了の姿: 表示・記録・上限のテストが緑で、`areka-kanade` の記録の文の変化が Revalidation Triggers のとおりである
+  - _Requirements: 3.1, 4.1, 4.5, 5.2_
+
+- [ ] 6. helper の後始末と job（U7）
+  - job の旗に `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK` を足し、読み戻しのテスト `job_limits_let_grandchildren_break_away` を置く（指摘 13）。job のテストは `ping.exe` をじかに起こす（指摘 43）
+  - `HelperHandle` に Drop を置く: 終わっていなければ終わらせ、5 秒まで終わりを待ち、標準エラーの読み手を 1 秒まで待つ。失敗と時間切れは `error!`。終わりを `WaitForSingleObject` 1 回で待つ内側の関数を足す。`HelperLifecycle` の Drop と結合テストの `HelperGuard` の 3 つの写しを消す（指摘 14）
+  - テスト `dropping_a_handle_without_job_ends_the_child` を置く
+  - 起こしてから job に入れるまでの穴に `shortcut:` の注釈を置く（指摘 37）
+  - 完了の姿: 新しい 2 本と既存の e2e が緑で、`HelperGuard` がツリーに 0 件
+  - _Requirements: 3.1, 3.2, 4.1, 5.3, 6.4, 10.7_
+
+- [ ] 7. 親の窓の記録と送り手の確かめ（U8）
+- [ ] 7.1 無視したメッセージを記録し、本番で読まれない数を消す
+  - 知らない種類・長さの合わないもの・形の崩れた HELLO・無視する既知の種類で `warn!(.., event = "parent_frame_ignored", reason, ..)` を書き、`hellos`・`bad_frames`・`ignored_known` の数を消す。テストは記録で確かめる（指摘 11）
+  - 完了の姿: テスト `ignored_frames_are_logged` が緑
+  - _Requirements: 3.1, 4.1, 5.2_
+- [ ] 7.2 HELLO と RESPONSE の送り手を確かめ、`expect_helper_pid` を足す（指摘 38）
+  - HELLO は 1 度だけ、送り手の窓と中身の窓が同じときだけ受ける。`expect_helper_pid` が呼ばれていれば、送り手の窓のプロセス番号も確かめる
+  - RESPONSE は送り手の窓が helper の窓のときだけ受ける。その場所に設計どおりの `shortcut:` の注を置く
+  - host の結合テストの握手の手続きと、窓のテストの偽の helper を新しい決まりに合わせる。`areka-kanade` のテスト（`idle_pump_test.rs`・`real_helper_test.rs`）が古びるなら的を外さずに直す
+  - 完了の姿: 窓のテスト 3 本（よその送り手の HELLO を捨てる・2 度目の HELLO を捨てる・helper でない送り手の RESPONSE を捨てる）が緑で、`areka-kanade` のテストも緑
+  - _Requirements: 3.2, 4.1, 4.5, 6.1, 6.4_
+- [ ] 7.3 areka-ghost の本番の接続で `expect_helper_pid` を呼ぶ
+  - `areka-ghost/src/shiori_wiring.rs` の `real_connect` で、spawn の直後・握手の前に子のプロセス番号を伝える
+  - 完了の姿: `areka-ghost` のテストが緑で、本番の接続の道が子のプロセス番号で縛られている
+  - _Depends: 7.2_
+  - _Requirements: 3.2, 6.1, 6.2_
+- [ ] 7.4 窓 2 組が並んで生きるテストを置き、緑なら直列の錠と当座の錠を消す（指摘 40・要件 10.5）
+  - テスト `two_parent_windows_live_side_by_side_on_two_threads` を置いて回す
+  - 緑なら: `WINDOW_TEST_SERIAL` と「窓 1 組」「`--test-threads=1` で回す」の説明（`lifecycle.rs`・`parent_window.rs`・`lifecycle_cyclic_e2e.rs`）を消し、`areka-ghost` の当座の錠 `real_pasta_turn` とその取り回し・「`PASTA_DEBUG=0` で回す」の説明（4 ファイル）を消す
+  - 赤なら: `kiro-debug` の手順で原因を 1 つに絞り、設計の「赤なら」の逃げ道どおり錠を 1 か所にまとめて残し、本番の 2 体同時の件を `/kiro-discovery` で起票し、錠を残すことを開発者への議題として出す（その場合 8 の試験の形が変わる）
+  - `parent_window.rs:587`・`:686` の経過時間の確かめを的に合わせて直す（指摘 48 の一部）
+  - 完了の姿: 新しいテストが緑で、錠と古い説明がツリーに 0 件、host と `areka-ghost` のテストが並べて回して緑（赤の道を取ったときは、議題を出したことが報告にある）
+  - _Requirements: 3.1, 3.2, 4.2, 4.5, 6.1, 10.5_
+
+- [ ] 8. 正常終了の道（U9）
+  - 待ちの長さを受け取る `request_clean_shutdown_within` を `pub(crate)` で置き、公開の `request_clean_shutdown` は定数でそれを呼ぶ（指摘 17）
+  - UNLOAD の送りの失敗の後に状態を問い直し、終わっていれば `Ok(終わり方)` を返す（指摘 24）。ack の後の終わりの見張りを 6 の `WaitForSingleObject` 1 回の待ちにする（指摘 36）
+  - `lifecycle.rs` と `job.rs` の記録の宛名を `shiori-host32` にそろえる（指摘 34）
+  - 偽の helper の窓と `ping.exe` の stand-in で、設計の「正常終了の試験」の 4 本を置く（`error!` の宛名も確かめる）。`lifecycle.rs:407`・`:456-476` の経過時間の確かめを直す（指摘 48 の一部）
+  - 7.4 が赤の道を取ったときは、偽の helper の窓を作れないので、4 本を決めの分かれ目を出した窓の要らない内側の関数（ack の判定・送りの失敗の後の問い直し）に対して書く（確かめる中身は同じ）
+  - 完了の姿: 4 本と既存の `lifecycle_cyclic_e2e` が緑で、`EXIT_POLL_INTERVAL` の使い手が 0 になっている
+  - _Depends: 6, 7.4_
+  - _Requirements: 3.1, 4.1, 4.2, 5.2, 5.3_
+
+- [ ] 9. 版で分ける道と応答のヘッダの読み方（U10・U11）
+- [ ] 9.1 (P) 版で分ける 2 か所を `encode_for`・`parse_for` にまとめる（指摘 5・15・46）
+  - `get_with_headers`・`notify_with_headers` は 2 つを呼ぶだけにし、`encode_and_note` ほか 4 つを吸わせて消す。片道のイベントは `encode_for` だけを呼ぶ
+  - 読めない応答で長さと 1 行目を `error!(.., event = "shiori_response_unreadable")` で書く
+  - `Reference` を並べる関数を `shiori3.rs` に 1 つ置き、2.x も使う
+  - テスト `encode_for_picks_the_codec_by_version`・`parse_for_picks_the_reader_by_version`・`an_unreadable_response_is_logged_as_error` を置き、片道のイベントの構造のテストを新しい語に合わせる（的は変えない）
+  - 完了の姿: 新しい 3 本と既存の組み立て・構造のテストが緑
+  - _Boundary: host client, shiori3, shiori2_
+  - _Depends: 1.2_
+  - _Requirements: 3.1, 4.1, 4.5, 5.2_
+- [ ] 9.2 応答のヘッダの値の空白と重なりの決まりを直す（指摘 22・23）
+  - 始めに R5: 進行役が、このタスクを実装係に渡す前に開発者へ SSP で測ってよいかを尋ね、答えを依頼の文に載せて渡す（実装係は開発者に尋ねられない）。承認があれば SSP の MCP と `ssp_shiori_log.txt` で測る。承認が無い・測れないときは「測れなかった」と `research.md` に書き、既定（半角の空白とタブだけ削る・先勝ち）で直す
+  - 値・ヘッダ名・`Charset` の値の前後の削り方をそろえ、同じ名前のヘッダを全部先勝ちにする
+  - テスト `a_value_keeps_full_width_spaces`・`the_first_of_duplicated_headers_wins` と、2.x の `Sentence` の 1 本を置く
+  - 完了の姿: 3 本が緑で、R5 の結果（測った値か「測れなかった」）が `research.md` にある
+  - _Requirements: 4.1, 10.8_
+
+- [ ] 10. helper の失敗の道・長さ・再入（U12〜U14）
+- [ ] 10.1 (P) helper の記録の口と後始末の失敗を見える形にする（指摘 9・12・44）
+  - `[helper]` の行の出口を 1 つの関数にまとめ（文は 1 文字も変えない）、テストのときだけ同じスレッドで行を読めるようにする
+  - `ShioriByteProxy::close` を足し、`unload` の偽と `FreeLibrary` の失敗を種類で返す。UNLOAD の腕は失敗を行で書き、返事は [1] のまま。Drop と確立の途中の失敗も行で書く
+  - 自分の窓を起こす `PostMessageW` の失敗と、`lparam` が空の `WM_COPYDATA` を記録する。受け取ったバイト列を写さずに返事へ渡す
+  - テスト 4 本（`close_reports_unload_returning_false`・`unload_ack_stays_one_when_unload_returns_false`・`wake_self_logs_a_post_failure`・`an_empty_copydata_is_counted_as_bad`）を i686 の段に置く
+  - 完了の姿: 4 本と既存の helper のテストが i686 の段で緑
+  - _Boundary: helper main, shiori_proxy_
+  - _Depends: 2, 3_
+  - _Requirements: 3.1, 4.1, 5.2, 5.3, 10.11_
+- [ ] 10.2 helper の応答の長さを確かめ、空の応答を縛る（指摘 7・20）
+  - 応答の HGLOBAL を `GlobalLock` で読み、確保の大きさが 0 か宣言の長さより小さければ行を書いて解放し、長さの合わない種類のエラーを返す（折り返しの腕は 500）
+  - テスト `a_response_longer_than_its_allocation_is_refused`・`a_null_response_is_request_failed`・`a_null_response_answers_500` を i686 の段に置く
+  - 完了の姿: 3 本が緑で、長さの確かめを外すと 1 本目が赤になる
+  - _Requirements: 4.1, 5.2_
+- [ ] 10.3 DLL の呼び出しの最中の REQUEST と UNLOAD で helper が落ちないようにする（指摘 8）
+  - 設計の「helper の再入」の状態どおり、DLL を呼ぶ 2 か所を見張りの値で包み、最中の REQUEST は 500、最中の UNLOAD は ack [1] と後回しの印にし、戻った後に遅れた応答を送らずに後始末を行う
+  - テスト `unload_during_a_dll_call_defers_the_unload`・`request_during_a_dll_call_gets_500` を i686 の段に置く
+  - 完了の姿: 2 本が緑で、旗を外すと panic か入れ子の呼び出しで赤になる
+  - _Requirements: 4.1, 5.3_
+
+- [ ] 11. 説明と小さな形を今の姿に直す（U15）
+  - `ExitKind::Terminated` の腕を残して説明を直し、偽のテストを消す（指摘 25・要件 10.13）。`CREATE_NO_WINDOW` を `windows` から使い手の定義を消す（指摘 30）。`terminate` の `InvalidInput` の腕を消す（指摘 31）
+  - helper のテストだけの `ansi_encode` を消し、テスト `load_gets_the_path_in_the_ansi_code_page` を置く（指摘 19）。helper の古い allow と説明を消す（指摘 33）。ipc の `PAYLOAD_HEADER_LEN` とそのテストを消す（指摘 45）
+  - README・`lib.rs`・各ファイルの説明を研究の §4 の 32 の挙げたとおり今の姿に書き直す（指摘 32）
+  - `areka-ghost` の握手の時間切れの誤りに helper の終わり方を載せ、兄弟のファイル `shiori_wiring_handshake_tests.rs` にテスト `handshake_timeout_names_the_helper_exit` を置く（指摘 35）
+  - 完了の姿: 新しい 2 本と既存のテストが緑で、消した項目の名前がツリーに 0 件（消す前に grep し直す）
+  - _Depends: 7.3, 8, 10.3_
+  - _Requirements: 3.1, 3.2, 3.3, 4.1, 10.13_
+
+- [ ] 12. 使い手のいない公開の項目を消す（U16・指摘 26）
+  - 始めに `runtime-module-untangle` のセッションへ `EXIT_POLL_INTERVAL` も消すことを一言知らせ、日と答えを `research.md` §14 に書く。異議があれば残して説明に「使い手なし・C20 で消す」と書き、開発者へ報告する
+  - ツリー全体（`crates/`・`tools/`・`doc/`・文字列の参照）を grep し直してから、設計の「使い手のいない公開の項目」の一覧とそれを試すだけのテストを消す
+  - 完了の姿: 消した名前の grep が 0 件で、ワークスペース全体が組めて host のテストが緑
+  - _Requirements: 3.1, 3.3, 6.4, 6.5, 10.9_
+
+- [ ] 13. 使っていない依存を消す（U17・待ちあり）
+  - このタスクに着いた時点で決める: `dola-yaml-backend` が `main` に着地していれば `main` を取り込んで消す。着地していなければ、このタスクを「未着手・C20 へ回した」として閉じ、`research.md` と `/kiro-complete` の未解決の棚卸に申し送る（待たない）
+  - host の `event-listener`・helper の `thiserror`・ipc の `windows-core` を消して組む
+  - 完了の姿: `Cargo.lock` の差分が 3 つのパッケージの依存の並びだけ（版は変わらない）で組めている、または C20 へ回したことが `research.md` にある
+  - _Requirements: 3.1, 3.3, 5.6, 10.10_
+
+- [ ] 14. 仕上げ: audit のかけ直しと全体テスト（U18）
+  - 範囲の全ファイルにもう一度 audit をかけ（洗い出しと同じやり方＝20 件の上限なし・全ファイルを読む）、新しい指摘が出たら直してかけ直す。5 回目で 0 件に収まらなければ区切って開発者へ報告する
+  - 1.1 の clippy の基準と比べ、消えた分と重なった所を `research.md` に書く
+  - 全体テスト（x64 と i686 の段）を回す
+  - 完了の姿: 最後のかけ直しの新しい指摘が 0 件、全体テストが緑で、結果が `research.md` にある
+  - _Depends: 12, 13_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.4, 3.5, 5.5, 5.7, 6.3, 6.6, 8.3, 8.4, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.2, 10.3_
