@@ -5,8 +5,8 @@
 
 use super::test_support::{
     FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, granted, hold_load, hold_merge,
-    hold_running_load, hold_test, merge, queue_load, queue_merge, queue_request, resumed, run,
-    state_with, stop_for, test_freed, test_freed_record, wait_record,
+    hold_running_load, hold_test, merge, merge_granted, merge_requested, queue_load, queue_merge,
+    queue_request, resumed, run, state_with, stop_for, test_freed, test_freed_record, wait_record,
 };
 use super::{Applied, Command, Event, apply};
 use crate::state::{
@@ -126,11 +126,8 @@ fn a_merge_holder_without_a_watch_is_reclaimed_and_the_next_holder_comes_in_the_
     hold_test(&mut expected, "C");
     expected.recent = vec![reclaim_record("A", T0 + 10)];
     assert_eq!(state, expected);
-    let granted = Event::MergeGranted {
-        repo: "areka".to_owned(),
-        id: "B".to_owned(),
-    };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), granted]));
+    let events = vec![reclaimed("A"), merge_granted("B", "areka")];
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]
@@ -162,15 +159,11 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
         test_freed_record("A", "reclaimed", T0 + 10),
     ];
     assert_eq!(state, expected);
-    let granted = Event::MergeGranted {
-        repo: REPO.to_owned(),
-        id: "C".to_owned(),
-    };
     let events = vec![
         test_freed("A", "reclaimed"),
         reclaimed("A"),
         resumed("B", "no-sole"),
-        granted,
+        merge_granted("C", REPO),
     ];
     assert_eq!(got, applied(true, events));
 }
@@ -221,17 +214,12 @@ fn an_ordinary_command_reclaims_first_then_works_then_replans() {
         state.merge[REPO].holder,
         merge_holder("B", T0 + 10, T0 + 10)
     );
-    let requested = Event::MergeRequested {
-        repo: REPO.to_owned(),
-        id: "B".to_owned(),
-        spec: "spec-B".to_owned(),
-        bug: false,
-    };
-    let granted = Event::MergeGranted {
-        repo: REPO.to_owned(),
-        id: "B".to_owned(),
-    };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), requested, granted]));
+    let events = vec![
+        reclaimed("A"),
+        merge_requested("B", REPO, false),
+        merge_granted("B", REPO),
+    ];
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]

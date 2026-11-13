@@ -2,10 +2,10 @@
 //! 眠らない。
 
 use super::test_support::{
-    REPO, hold_load, hold_merge, queue_merge, queue_request, resumed, run, state_with, stop_for,
-    test_freed, test_freed_record, wait_record,
+    REPO, cancelled, hold_load, hold_merge, left, merge_granted, queue_merge, queue_request,
+    resumed, run, state_with, stop_for, test_freed, test_freed_record, wait_record,
 };
-use super::{Command, Event, Verdict};
+use super::{Command, Verdict};
 use crate::state::{DeskSet, LastMerge, Recent, RecentKind, State, WaitKind};
 use crate::test_support::T0;
 
@@ -16,17 +16,6 @@ fn clear_repo(repo: &str) -> Command {
     Command::ClearRepo {
         repo: repo.to_owned(),
     }
-}
-
-fn left(id: &str) -> Event {
-    Event::Left {
-        id: id.to_owned(),
-        why: "leave",
-    }
-}
-
-fn cancelled(id: &str) -> Event {
-    Event::Cancelled { id: id.to_owned() }
 }
 
 fn cleared(id: &str, at: u64) -> Recent {
@@ -91,17 +80,14 @@ fn clear_repo_leaves_the_repo_and_empties_its_desk_and_resumes_the_stopped() {
     assert_eq!(
         got.events,
         vec![
-            left("a"),
-            left("b"),
+            left("a", "leave"),
+            left("b", "leave"),
             test_freed("x", "left"),
-            left("x"),
+            left("x", "leave"),
             cancelled("ghost"),
             cancelled("ghost2"),
             resumed("y", "no-sole"),
-            Event::MergeGranted {
-                repo: OTHER.to_owned(),
-                id: "z".to_owned(),
-            },
+            merge_granted("z", OTHER),
         ]
     );
 
@@ -162,7 +148,7 @@ fn clear_repo_keeps_the_load_test_desks_of_another_repo() {
 
     let got = run(&mut state, &clear_repo(REPO), None, T0 + 10);
 
-    assert_eq!(got.events, vec![left("x")]);
+    assert_eq!(got.events, vec![left("x", "leave")]);
     assert_eq!((state.test.clone(), state.sole.clone()), before);
     assert!(state.waits.contains(&wait_record("y", WaitKind::Request)));
     assert!(state.participants.contains_key("y"));

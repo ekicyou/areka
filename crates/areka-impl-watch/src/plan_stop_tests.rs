@@ -1,12 +1,14 @@
-//! 停止要請・止まった・再開の判断（規則 2・5・7）の決定論テスト。時刻と生死は引数で渡し、眠らない。
+//! 停止要請と再開の判断（停止要請・止まった・再開）の決定論テスト。時刻と生死は引数で渡し、眠らない。
 //!
 //! 負荷テストは「排他テストの机とひとり占めを並べた申し込み（`test,sole`）」で、済んだら名指し
 //! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.5）。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, granted, hold_load, hold_merge,
-    hold_running_load, load_done, load_running, load_test, merge, merged, queue_load, queue_merge,
-    resumed, run, state_with, stop_for, stopped, test_freed, test_freed_record, watch_registered,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, cancelled, granted,
+    hold_load, hold_merge, hold_running_load, joined, leave, left, left_merged, load_done,
+    load_running, load_test, merge, merge_done, merge_granted, merge_requested, merged, queue_load,
+    queue_merge, resumed, returned, run, state_with, stop_for, stopped, test_freed,
+    test_freed_record, watch, watch_registered,
 };
 use super::{Command, Event};
 use crate::state::{DeskRequest, DeskSet, ParticipantStatus, SoleHolder, State, TestHolder};
@@ -28,11 +30,8 @@ fn load_granted(id: &str, stopped: &[&str]) -> Event {
 /// 負荷テストの 2 つの机を名指しなしで返した出来事（排他テストの机が空いた・返した）に、
 /// 続く出来事 `rest` を並べたもの。
 fn load_finished(id: &str, rest: Vec<Event>) -> Vec<Event> {
-    let returned = Event::DeskReturned {
-        id: id.to_owned(),
-        desks: DeskSet::TestSole,
-    };
-    [vec![test_freed(id, "returned"), returned], rest].concat()
+    let freed = vec![test_freed(id, "returned"), returned(id, DeskSet::TestSole)];
+    [freed, rest].concat()
 }
 
 /// 排他テストの机・ひとり占め・机の申し込みの待ち行列（負荷テストの机に当たる部分）。
@@ -198,16 +197,8 @@ fn merge_holders_and_merge_waiters_are_not_asked_to_stop_and_the_grant_waits_for
     // 「マージが済んだ」と同じ呼び出しで番が来る。空いたマージの机の番は W に出ない。
     let got = run(&mut state, &merged("M"), Some("M"), T0 + 7);
     let events = vec![
-        Event::Merged {
-            repo: "areka".to_owned(),
-            id: "M".to_owned(),
-            pr: "281".to_owned(),
-            sha: "414d43eb".to_owned(),
-        },
-        Event::Left {
-            id: "M".to_owned(),
-            why: "merged",
-        },
+        merge_done("M", "areka"),
+        left_merged("M"),
         load_granted("C", &["S"]),
     ];
     assert_eq!(got, applied(true, events));
@@ -225,19 +216,9 @@ fn a_participant_who_joins_while_a_load_test_is_wanted_or_held_is_asked_to_stop(
     let held = c_holds_with_a_stopped(&["A", "C"]);
 
     for (mut state, label) in [(wanted, "wanted"), (held, "held")] {
-        let cmd = Command::Watch {
-            id: "D".to_owned(),
-            name: None,
-            repo: REPO.to_owned(),
-            pid: PID,
-        };
-        let got = run(&mut state, &cmd, Some("D"), T0 + 9);
+        let got = run(&mut state, &watch("D", None, REPO, PID), Some("D"), T0 + 9);
 
-        let events = vec![
-            Event::Joined { id: "D".to_owned() },
-            watch_registered("D"),
-            stop_requested("D", "C"),
-        ];
+        let events = vec![joined("D"), watch_registered("D"), stop_requested("D", "C")];
         assert_eq!(got, applied(true, events), "{label}");
         assert_eq!(
             seen(&state, "D"),
@@ -257,13 +238,11 @@ fn the_stop_requested_and_the_stopped_go_back_to_work_when_no_load_test_is_left(
     queue_load(&mut wanted, "C", T0 + 1);
     stop_for(&mut wanted, "A", "C");
     ask_to_stop(&mut wanted, "B", "C");
-    let cancel = Command::Cancel { id: "C".to_owned() };
-    let cancelled = Event::Cancelled { id: "C".to_owned() };
     let back = || vec![resumed("A", "no-sole"), resumed("B", "no-sole")];
 
     for (mut state, cmd, events) in [
         (held, load_done("C"), load_finished("C", back())),
-        (wanted, cancel, [vec![cancelled], back()].concat()),
+        (wanted, cancel("C"), [vec![cancelled("C")], back()].concat()),
     ] {
         let got = run(&mut state, &cmd, Some("C"), T0 + 20);
 
@@ -318,15 +297,11 @@ fn the_grant_comes_when_the_last_participant_who_has_not_stopped_leaves() {
     stop_for(&mut state, "A", "C");
     ask_to_stop(&mut state, "B", "C");
 
-    let cmd = Command::Leave { id: "B".to_owned() };
-    let got = run(&mut state, &cmd, None, T0 + 9);
+    let got = run(&mut state, &leave("B"), None, T0 + 9);
 
     // 止まる必要のある参加者が減ったら、同じ呼び出しで番を決め直す。
-    let left = Event::Left {
-        id: "B".to_owned(),
-        why: "leave",
-    };
-    assert_eq!(got, applied(true, vec![left, load_granted("C", &["A"])]));
+    let events = vec![left("B", "leave"), load_granted("C", &["A"])];
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]
@@ -405,24 +380,13 @@ fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes
 
     // マージの申し込みは並ぶだけで、番は出ない。
     let got = run(&mut state, &merge("A", "areka", false), Some("A"), T0 + 6);
-    let requested = Event::MergeRequested {
-        repo: "areka".to_owned(),
-        id: "A".to_owned(),
-        spec: "spec-A".to_owned(),
-        bug: false,
-    };
-    assert_eq!(got, applied(true, vec![requested]));
+    let events = vec![merge_requested("A", "areka", false)];
+    assert_eq!(got, applied(true, events));
     assert_eq!(state.merge["areka"].holder, None);
 
     // 後から参加した D にも停止要請は出ない（印の無い持ち主なら出る）。
-    let watch = Command::Watch {
-        id: "D".to_owned(),
-        name: None,
-        repo: REPO.to_owned(),
-        pid: PID,
-    };
-    let got = run(&mut state, &watch, Some("D"), T0 + 7);
-    let events = vec![Event::Joined { id: "D".to_owned() }, watch_registered("D")];
+    let got = run(&mut state, &watch("D", None, REPO, PID), Some("D"), T0 + 7);
+    let events = vec![joined("D"), watch_registered("D")];
     assert_eq!(got, applied(true, events));
     for id in ["A", "B", "C"] {
         assert_eq!(seen(&state, id), (Working, T0, None, None), "{id}");
@@ -431,11 +395,8 @@ fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes
 
     // 持ち主が「済んだ」と言った呼び出しで、待たせていたマージの番が出る。
     let got = run(&mut state, &load_done("C"), Some("C"), T0 + 8);
-    let granted = Event::MergeGranted {
-        repo: "areka".to_owned(),
-        id: "A".to_owned(),
-    };
-    assert_eq!(got, applied(true, load_finished("C", vec![granted])));
+    let events = load_finished("C", vec![merge_granted("A", "areka")]);
+    assert_eq!(got, applied(true, events));
 }
 
 #[test]
@@ -591,7 +552,7 @@ fn unstop_with_nobody_to_put_back_changes_nothing() {
     }
 }
 
-/// 表の鍵 `a` で入っているが欄 `id` が空の、止まった参加者 A（判断は欄を読まず鍵で見る）。
+/// 表の鍵 `a` で入っているが欄 `id` が空の、止まった参加者 `a`（判断は欄を読まず鍵で見る）。
 fn keyed_a_with_empty_field() -> State {
     let mut state = state_with(&["a", "C"]);
     queue_load(&mut state, "C", T0 + 1);
@@ -622,14 +583,9 @@ fn unstop_finds_the_participant_by_the_table_key_not_the_field() {
 fn the_resumed_event_carries_the_table_key_not_the_field() {
     let mut state = keyed_a_with_empty_field();
 
-    let got = run(
-        &mut state,
-        &Command::Cancel { id: "C".to_owned() },
-        Some("C"),
-        T0 + 9,
-    );
+    let got = run(&mut state, &cancel("C"), Some("C"), T0 + 9);
 
-    let cancelled = Event::Cancelled { id: "C".to_owned() };
-    assert_eq!(got, applied(true, vec![cancelled, resumed("a", "no-sole")]));
+    let events = vec![cancelled("C"), resumed("a", "no-sole")];
+    assert_eq!(got, applied(true, events));
     assert_eq!(seen(&state, "a").0, Working);
 }

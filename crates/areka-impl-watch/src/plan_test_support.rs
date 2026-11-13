@@ -1,4 +1,4 @@
-//! `plan` のテストの支え: 偽の生死・状態の組み立て・時刻の定数。
+//! `plan` のテストの支え: 偽の生死・状態とコマンドと出来事の組み立て。
 
 use super::{Applied, Command, Event, Presence, Verdict, apply};
 use crate::state::{
@@ -250,6 +250,88 @@ pub(super) fn granted(id: &str, desks: DeskSet, stopped: &[&str]) -> Event {
         id: id.to_owned(),
         desks,
         stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
+    }
+}
+
+/// 見張りの開始。`name` を省くと名前は識別（初回）か元のまま。
+pub(super) fn watch(id: &str, name: Option<&str>, repo: &str, pid: u32) -> Command {
+    Command::Watch {
+        id: id.to_owned(),
+        name: name.map(str::to_owned),
+        repo: repo.to_owned(),
+        pid,
+    }
+}
+
+/// 参加した出来事。
+pub(super) fn joined(id: &str) -> Event {
+    Event::Joined { id: id.to_owned() }
+}
+
+/// [`merge`] の申し込みが並んだ出来事（spec は `spec-<識別>`）。
+pub(super) fn merge_requested(id: &str, repo: &str, bug: bool) -> Event {
+    Event::MergeRequested {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+    }
+}
+
+/// マージの机の番が来た出来事。
+pub(super) fn merge_granted(id: &str, repo: &str) -> Event {
+    Event::MergeGranted {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+    }
+}
+
+/// [`merged`] の出来事（PR とコミットも [`merged`] と同じ綴り）。
+pub(super) fn merge_done(id: &str, repo: &str) -> Event {
+    Event::Merged {
+        repo: repo.to_owned(),
+        id: id.to_owned(),
+        pr: "281".to_owned(),
+        sha: "414d43eb".to_owned(),
+    }
+}
+
+/// マージが済んで参加を終えた出来事。
+pub(super) fn left_merged(id: &str) -> Event {
+    Event::Left {
+        id: id.to_owned(),
+        why: "merged",
+    }
+}
+
+/// 離脱。
+pub(super) fn leave(id: &str) -> Command {
+    Command::Leave { id: id.to_owned() }
+}
+
+/// 取り下げ。
+pub(super) fn cancel(id: &str) -> Command {
+    Command::Cancel { id: id.to_owned() }
+}
+
+/// 参加を終えた出来事。`why` は終えた訳の綴り。
+pub(super) fn left(id: &str, why: &'static str) -> Event {
+    Event::Left {
+        id: id.to_owned(),
+        why,
+    }
+}
+
+/// 取り下げた出来事。
+pub(super) fn cancelled(id: &str) -> Event {
+    Event::Cancelled { id: id.to_owned() }
+}
+
+/// 机を返した出来事。
+pub(super) fn returned(id: &str, desks: DeskSet) -> Event {
+    Event::DeskReturned {
+        id: id.to_owned(),
+        desks,
     }
 }
 

@@ -2,23 +2,15 @@
 //! 返し方・固定点）。支えは親の `plan_test_support.rs` を読むだけ。
 
 use super::super::test_support::{
-    PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, give_back, granted, hold_load,
-    hold_merge, hold_sole, hold_test, load_done, load_running, queue_load, queue_merge,
-    queue_request, request, resumed, run, state_with, stop_for, stopped, test_freed,
+    PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, cancel, give_back, granted, hold_load,
+    hold_merge, hold_sole, hold_test, joined, load_done, load_running, queue_load, queue_merge,
+    queue_request, request, resumed, returned, run, state_with, stop_for, stopped, test_freed,
     test_freed_record,
 };
 use super::replan;
 use crate::plan::{Command, Event};
 use crate::state::{DeskSet, Participant, ParticipantStatus, SoleHolder, State, TestHolder};
 use crate::test_support::T0;
-
-/// 机を返した出来事。
-fn returned(id: &str, desks: DeskSet) -> Event {
-    Event::DeskReturned {
-        id: id.to_owned(),
-        desks,
-    }
-}
 
 /// 出来事に机の番が 1 件も無い。
 fn no_grant(events: &[Event]) -> bool {
@@ -240,8 +232,7 @@ fn a_stopped_participant_gets_the_test_desk_in_the_call_that_resumes_it() {
     assert_eq!(status(&state, "b"), ParticipantStatus::Stopped);
     assert_fixed_point(&state, "stopped");
 
-    let cancel = Command::Cancel { id: "a".to_owned() };
-    let got = run(&mut state, &cancel, None, T0 + 3);
+    let got = run(&mut state, &cancel("a"), None, T0 + 3);
 
     let at = |wanted: &Event| got.events.iter().position(|event| event == wanted);
     let (resumed, grant) = (
@@ -479,7 +470,7 @@ fn recording_a_running_load_test_needs_both_desks_free() {
     });
     assert_eq!(state, expected);
     let recorded = Event::LoadRunning { id: "Z".to_owned() };
-    let events = vec![Event::Joined { id: "Z".to_owned() }, recorded];
+    let events = vec![joined("Z"), recorded];
     assert_eq!(got, applied(true, events));
     assert_fixed_point(&state, "both free");
 

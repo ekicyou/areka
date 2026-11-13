@@ -4,7 +4,7 @@
 use std::collections::{BTreeSet, HashSet};
 
 use super::super::test_support::{
-    assert_not_applied, give_back, load_running, load_test, merge, merged, request, run,
+    assert_not_applied, cancel, give_back, load_running, load_test, merge, merged, request, run,
     state_with, stopped,
 };
 use super::{holds_merge, replan};
@@ -40,7 +40,7 @@ fn alphabet() -> Vec<Command> {
         commands.push(load_running(id));
         commands.push(merged(id));
         commands.push(stopped(id));
-        commands.push(Command::Cancel { id: id.to_owned() });
+        commands.push(cancel(id));
     }
     commands
 }
