@@ -1,12 +1,11 @@
-//! マニフェスト導出（列挙・間接参照解決・重複排除）。
+//! マニフェスト導出（列挙・重複排除）。
 //!
 //! 設計決定 **D6**（要件 **R1.1–1.6, 5.6**）。
 //!
 //! shell モデル（`areka-parsers::shell::Shell`）と surface 表現された balloon から、
-//! 全 surface が参照する element 画像パス集合を列挙する。`Pattern.surface_id` の
-//! 間接 bind 参照を surface id 索引で辿って参照先 surface の element を展開し、
-//! 負値センチネル・不在 id・`Range`/alias（画像を持たない）は除外する。
-//! 訪問済み集合による循環検出を含む。列挙結果は正規化パスで重複排除する。
+//! 全部の面の element 画像パスを直に数える。`Pattern.surface_id` の参照先も同じセットの面なので、
+//! 参照をたどらなくても数え漏れは無い（負の番号・無い番号の参照は面を足さない）。
+//! 列挙結果は正規化パスで重複排除する。
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -35,12 +34,12 @@ pub struct Manifest {
     pub keys: Vec<AtlasKey>,
 }
 
-/// マニフェスト導出器（列挙・間接 bind 解決・重複排除・決定的採番）。
+/// マニフェスト導出器（列挙・重複排除・決定的採番）。
 pub struct ManifestDeriver;
 
 impl ManifestDeriver {
-    /// 全セットの element パス（直接＋間接 bind 参照）を重複なく導出し、
-    /// (SetId 昇順, 相対パス昇順) で `ElementId` を決定的に採番する（D7・golden 安定）。
+    /// 全セットの全部の面の element パスを直に数えて重複なく導出し（参照先も同じセットの面なので
+    /// 数え漏れは無い）、(SetId 昇順, 相対パス昇順) で `ElementId` を決定的に採番する（D7・golden 安定）。
     ///
     /// 入力は読み取り専用（改変しない）。実パスは生成しない（実パス化はデコード段・一度きり）。
     pub fn derive(&self, sets: &[SurfaceSet<'_>]) -> Manifest {
@@ -50,21 +49,11 @@ impl ManifestDeriver {
         for (set_index, set) in sets.iter().enumerate() {
             let set_id = set_index as u32;
 
-            // surface id → surface 索引（重複 id は先出優先・Precondition）。
-            let mut by_id: HashMap<i64, &areka_parsers::shell::Surface> = HashMap::new();
-            for surface in set.surfaces {
-                for id in surface_ids(surface) {
-                    by_id.entry(id).or_insert(surface);
-                }
-            }
-
             for surface in set.surfaces {
                 // 直接 element の列挙（1.1/1.2・base 自己参照も通常 element 扱い）。
-                Self::collect_elements(surface, set_id, &mut keys);
-
-                // 間接 bind 参照の解決（1.3/D6）。当該 surface を起点に visited で循環打ち切り。
-                let mut visited: BTreeSet<i64> = surface_ids(surface).into_iter().collect();
-                Self::resolve_indirect(surface, set_id, &by_id, &mut visited, &mut keys);
+                for element in &surface.elements {
+                    keys.insert((set_id, element.path.as_str().to_string()));
+                }
             }
         }
 
@@ -78,53 +67,6 @@ impl ManifestDeriver {
             .collect();
 
         Manifest { keys }
-    }
-
-    /// surface の直接 element パスを (set_id, rel_path) として追加（無改変・1.5）。
-    fn collect_elements(
-        surface: &areka_parsers::shell::Surface,
-        set_id: u32,
-        keys: &mut BTreeSet<(u32, String)>,
-    ) {
-        for element in &surface.elements {
-            keys.insert((set_id, element.path.as_str().to_string()));
-        }
-    }
-
-    /// `Animation.patterns[].surface_id` を辿り参照先 surface の element を列挙する（1.3/D6）。
-    ///
-    /// - `surface_id < 0`（レイヤクリア/停止センチネル）は画像を持たず除外。
-    /// - set 内に存在しない id も除外（不在参照）。
-    /// - `visited`（surface id 集合）で循環・重複訪問を打ち切る（構造として停止保証）。
-    fn resolve_indirect(
-        surface: &areka_parsers::shell::Surface,
-        set_id: u32,
-        by_id: &HashMap<i64, &areka_parsers::shell::Surface>,
-        visited: &mut BTreeSet<i64>,
-        keys: &mut BTreeSet<(u32, String)>,
-    ) {
-        for animation in &surface.animations {
-            for pattern in &animation.patterns {
-                let ref_id = pattern.surface_id;
-                // 負値センチネルは画像を持たない（1.3/D6）。
-                if ref_id < 0 {
-                    continue;
-                }
-                // 既訪問（循環含む）は打ち切り。
-                if visited.contains(&ref_id) {
-                    continue;
-                }
-                // 不在 id は除外（画像を持たない参照）。
-                let Some(referenced) = by_id.get(&ref_id) else {
-                    continue;
-                };
-                visited.extend(surface_ids(referenced));
-                // 参照先 surface の直接 element を列挙。
-                Self::collect_elements(referenced, set_id, keys);
-                // 推移的 bind も辿る（visited で停止保証）。
-                Self::resolve_indirect(referenced, set_id, by_id, visited, keys);
-            }
-        }
     }
 }
 
@@ -275,60 +217,29 @@ mod tests {
         assert_eq!(got.len(), 3, "3 distinct element paths enumerated");
     }
 
-    /// 1.3: bind pattern の間接参照先 surface の element も列挙される。
+    /// 1.3: 面 0 → 1 → … → 49,999 を `overlay` の参照の鎖でつないだ 5 万面のセットを、
+    /// スタック 256 KiB のスレッドで数え終え、絵を 1 度ずつ（鍵 5 万個）数える
+    /// （参照をたどる再帰があるとスタックがあふれて落ちる）。
     #[test]
-    fn indirect_bind_resolution_enumerates_referenced_surface() {
-        let base = Path::new("shell/master");
-        // A(=10) は表示 surface・自身は base 画像のみ。animation が helper B(=1100) を bind。
-        let mut a = surface(10, vec![elem(0, "surface10.png")]);
-        a.animations = vec![bind_anim(0, 1100)];
-        // B(=1100) は表示されないが A から間接参照される element を持つ。
-        let b = surface(1100, vec![elem(0, "arm_up.png"), elem(1, "arm_dn.png")]);
-        let surfaces = vec![a, b];
-        let sets = [set(&surfaces, base)];
-        let m = ManifestDeriver.derive(&sets);
-        let got = keys_of(&m);
-        assert!(got.contains(&(0, "surface10.png".to_string())));
-        // helper B の element が間接参照で列挙される（1.3）
-        assert!(got.contains(&(0, "arm_up.png".to_string())));
-        assert!(got.contains(&(0, "arm_dn.png".to_string())));
-    }
-
-    /// 1.3/D6: 負 surface_id・不在 id の bind は画像を持たず除外（panic しない）。
-    #[test]
-    fn negative_and_nonexistent_bind_excluded() {
-        let base = Path::new("shell/master");
-        let mut a = surface(10, vec![elem(0, "surface10.png")]);
-        a.animations = vec![
-            bind_anim(0, -2),   // レイヤクリア/停止センチネル → 画像なし
-            bind_anim(1, 9999), // set 内に存在しない id → 画像なし
-        ];
-        let surfaces = vec![a];
-        let sets = [set(&surfaces, base)];
-        let m = ManifestDeriver.derive(&sets);
-        let got = keys_of(&m);
-        assert_eq!(
-            got,
-            vec![(0, "surface10.png".to_string())],
-            "only the direct element; no phantom paths from sentinel/missing refs"
-        );
-    }
-
-    /// D6: A→B→A の bind ループでも derive が停止し両 surface の element を 1 度ずつ列挙。
-    #[test]
-    fn cycle_binds_terminate() {
-        let base = Path::new("shell/master");
-        let mut a = surface(10, vec![elem(0, "a.png")]);
-        a.animations = vec![bind_anim(0, 20)];
-        let mut b = surface(20, vec![elem(0, "b.png")]);
-        b.animations = vec![bind_anim(0, 10)]; // 循環参照
-        let surfaces = vec![a, b];
-        let sets = [set(&surfaces, base)];
-        let m = ManifestDeriver.derive(&sets); // 無限ループしないこと
-        let got = keys_of(&m);
-        assert!(got.contains(&(0, "a.png".to_string())));
-        assert!(got.contains(&(0, "b.png".to_string())));
-        assert_eq!(got.len(), 2, "each surface's element listed once");
+    fn chain_of_50000_surfaces_counts_in_small_stack() {
+        const N: u32 = 50_000;
+        let surfaces: Vec<Surface> = (0..N)
+            .map(|id| {
+                let mut s = surface(id, vec![elem(0, &format!("s{id}.png"))]);
+                s.animations = vec![bind_anim(0, i64::from(id) + 1)];
+                s
+            })
+            .collect();
+        let count = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || {
+                let base = Path::new("shell/master");
+                ManifestDeriver.derive(&[set(&surfaces, base)]).keys.len()
+            })
+            .expect("spawn")
+            .join()
+            .expect("derive in small stack");
+        assert_eq!(count, N as usize);
     }
 
     /// 1.5: サブディレクトリ入りパスは無改変で AtlasKey.rel_path に保持される。
