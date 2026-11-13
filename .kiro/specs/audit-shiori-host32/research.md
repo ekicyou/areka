@@ -419,3 +419,56 @@
 ## 13. 次の段
 
 要件の討議（`/kiro-requirements-discussion audit-shiori-host32`）で、11 節の議題と 48 件を直す対象として確定する。その後 `/kiro-design audit-shiori-host32`。
+
+## 14. 設計の段（2026-11-13・`/kiro-spec-design audit-shiori-host32 -y`）
+
+### 14.1 発見の型と読んだもの
+
+- 発見の型は light（今ある 5 クレートの直し・新しい依存なし・外の資料の調べは要らない）。サブエージェントは使わず、進め役が直接コードを読んだ。
+- 使った手引き: `kiro-spec-design` の `rules/`（design-principles・design-discovery-light・design-synthesis・design-review-gate）と `.kiro/settings/templates/specs/design.md`。直し方は ponytail の「いちばん小さな完全な変更」に従った。
+- 読んだコード（範囲の外を含む）: host の `process_host.rs`・`lifecycle.rs`・`parent_window.rs`・`client.rs`・`shiori3.rs`・`shiori2.rs`・`job.rs`・`lib.rs`・`error.rs`・`charset.rs`、helper の `main.rs`・`shiori_proxy.rs`、ipc の `lib.rs`、`wintf-winmsg-executor` 0.0.5 の `src/lib.rs`・`src/util/window.rs`・`src/util/msg_filter_hook.rs`（cargo の置き場の写し）、std の `sys/process/windows.rs`（`Child::kill`）、`areka-ghost/src/shiori_wiring.rs`・`tests/ghost/common.rs`、`crates/areka/tests/emo2_real_run/common.rs`、`real-run-kit/src/run.rs`・`launch.rs`、`log-capture-kit/tests/temp_path_guard_test.rs`・`with_default_guard_test.rs`・`src/global.rs`、`temp-path-kit/src/lib.rs`、ルートの `Cargo.toml`・`Cargo.lock`、`tools/test-all.ps1`。
+
+### 14.2 調べること（12 節）の結果
+
+- **R1（件 1 で実物のゴーストが読めるか）**: 静かな読みの結論は 5 節のまま（emo2 の i686 の `pasta.dll` が頼るのは OS の DLL だけ）。実機の確かめは SSP も動いている areka も動かさないこの段ではせず、実装の U2 の最後の手順にした（`areka-ghost` の `real_pasta_test` を `HOST32_PASTA_DLL` で回す）。読めなければ要件 7.5 で議題。
+- **R2（標準エラーをパイプにしても本体の実機の試験が文を探せるか）**: 探せる。本体の試験は areka の標準出力と標準エラーをつないだ文字列を `contains` で探す（`emo2_real_run/common.rs:143`・`real-run-kit/src/run.rs:110-111`）。areka の記録の行は同じ出力に出ていて（同じ試験が `WIRE`・`ATTACH` の記録の行を見つけている）、`warn!` の本文に行をそのまま入れれば一致する。試験の `RUST_LOG`（`info,kanade=trace,..`）は `warn` を通す。`job.rs:11-12` の詰まりのうち、標準エラーの受け継ぎの分は消える（標準出力の受け継ぎは今のまま＝指摘に無い）。
+- **R3（窓の手続きの panic）**: `wintf-winmsg-executor` 0.0.5 の `util/window.rs` の `wndproc_typed`（`unsafe extern "system"`）は利用者の手続きを `catch_unwind` なしで呼ぶ。panic は `extern "system"` を越えられずプロセスが止まる＝指摘 8 は本物。`catch_unwind` があるのは executor の起こし用の窓（`lib.rs:35`）と `MessageLoop::run` のフィルタ（`lib.rs:238`）だけ。再入の折り返しのテストは、試験用の DLL が `request` の中から helper の窓へ `SendMessageW` を送れば、同じスレッドの中で決定的に作れる（同じスレッドの窓への `SendMessage` は手続きを直接呼ぶ）。
+- **R4（「1 プロセスに窓 1 組」の制約）**: ソースに当たる制限は無い。窓のクラスはプロセスに 1 度だけ登録され（`new_ex` の中の `static CLASS_REGISTRATION: Once`）、`CreateWindowExW` は呼ぶたびに新しい窓を作る。スレッドごとの決まりは `MsgFilterHook::register` の「同じスレッドで `MessageLoop::run` を入れ子にしない」（`msg_filter_hook.rs` の `assert!`）だけ。設計は、2 つのスレッドで窓を同時に持つテストを先に置き、緑なら直列の錠と説明を消す、赤なら原因を絞って逃げ道へ、とした（design.md「窓を作るテストの並び」）。
+- **R5（SSP の振る舞い）**: 13 は要件 10.7 で決まったので測らない。22・23 は実装の U11 の始めに、開発者の承認を得てから SSP で測る手順にした。測れなければ要件 10.8 の既定（22＝半角の空白とタブだけ・23＝先勝ち）。
+- **R6（試験用の DLL を `workspace = true` にしたとき `Cargo.lock` が変わるか）**: 変わらない。ワークスペースの `windows` は `"0.62"` で、`Cargo.lock` の `windows` は 0.62.2 の 1 つだけ。`Cargo.lock` の 2 つの DLL の依存の並びは `"windows"` の名前だけで、版も機能も載らない。重い機能はワークスペースの機能に入っているが、i686 の段では helper が同じ機能で `windows` をもう組んでいる（機能は同じ組みの中でまとめられる）ので、組みの重さは増えない。実装では `git diff --exit-code Cargo.lock` で確かめる。
+- **R7（テストの根を `target\` の下に置く一番小さい形）**: `temp-path-kit` と同じ場所（`CARGO_MANIFEST_DIR` の 2 つ上の `target\test-roots\`）にする。`CARGO_TARGET_TMPDIR` は結合テストにしか無いので使わない。このワークツリーには `.cargo/config.toml` も `CARGO_TARGET_DIR` も無い（`target` は移されていない）。`temp-path-kit` を dev-dependency に足すと `Cargo.lock` が変わるので足さない。今の範囲の 10 ファイルは `log-capture-kit/tests/temp_path_guard_test.rs` の例外表に載っている＝直した後は表から外す（外さないと `every_exception_still_has_a_real_hit` が赤）。
+- **R8（`windows` の機能）**: `GetWindowThreadProcessId` は `Win32_UI_WindowsAndMessaging`（host が有効にしている）。`WaitForSingleObject` と `CREATE_NO_WINDOW` は `Win32_System_Threading`（ワークスペースの機能にある＝host は `workspace = true` で受け継ぐ）。`JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`・`QueryInformationJobObject` は `Win32_System_JobObjects`（host が有効）。`GlobalSize`・`GlobalLock` は `Win32_System_Memory`（helper が有効）。足すのは host の `Win32_Globalization`（`MultiByteToWideChar`）と testdll の `Win32_System_DataExchange`（`COPYDATASTRUCT`）だけで、機能の行は `Cargo.lock` に載らない。
+- **ついでに確かめたこと**: 今の std（1.100.0）の Windows の `Child::kill` は、終わったプロセスへの `TerminateProcess` の `ERROR_ACCESS_DENIED` を `Ok` にする（`sys/process/windows.rs:725-737`）＝指摘 31 の腕は通らない。`ExitStatus::code()` は Windows でいつも値を持つ＝指摘 25 のとおり。`log-capture-kit` の番人は、捕捉先をスレッドへ差す呼出（`with_default(`・`set_default(`）と全体の捕捉の窓口を例外表の外で禁じている＝標準エラーの読み手は記録の行き先をスレッドへ受け渡さず、行を渡す口（sink）で試す形にした。
+
+### 14.3 指摘 26 の申し合わせ（要件 10.9）
+
+- 2026-11-13、進め役を通して `runtime-module-untangle` のセッションから返事を得た: `poll_exit`・`HelperHandle::helper_hwnd`／`set_helper_hwnd`（と欄）・`classify_failure`・`FailureClass`・`LifecycleReport`・`HelperLifecycle::report_failure` を使っておらず、使う予定も無い（そのブランチの `crates/areka` の grep で 0 件）。その書き換えは `shiori-host32-host` の公開の形に触らない。C19 のうちに消すことに異議は無い。
+- C19 の約束 ⑴「③ のセッションと申し合わせる」を満たすので、26 は待ちのない普通のまとまり（U16）にした。
+- 一覧に無い `EXIT_POLL_INTERVAL`（U9 で使い手がいなくなる公開の定数・`crates/areka` の使い手 0）は、U16 の始めに同じセッションへ一言知らせてから消す。異議があれば残して開発者へ報告する。
+
+### 14.4 総合（design-synthesis）
+
+- **まとめられること**: テストの一時の置き場の決まりを 1 つ（`target\test-roots\`）にし、host・helper・loadu で同じにした。helper の失敗の行の出口を `helper_log` 1 つにした（行の文は変えない・テストで読める）。版で分ける 4 つの関数を `encode_for`／`parse_for` の 2 つに、`Reference` の並べ方を `push_references` 1 つにした。正常終了の 3 つの失敗の腕と 24 の問い直しを、待つ長さを引数にとる 1 つの内側の関数で試せる形にした。
+- **作るか、あるものを使うか**: テストの置き場は `temp-path-kit` を使いたいが `Cargo.lock` が変わるので、同じ場所の決まりを小さく写した（互いの場所を注釈で指す）。終わりの見張りは眠りの繰り返しをやめて OS の `WaitForSingleObject` を使う。job の抜け道は OS の `SILENT_BREAKAWAY_OK`。応答の長さは OS の `GlobalSize`／`GlobalLock`。標準エラーの別のスレッドの記録を試すのに全体の捕捉は使わず（番人の例外表を増やさない）、行を渡す口を内側の関数の引数にした。
+- **削ったもの**: 親の窓の本番で読まれない数（`hellos`・`bad_frames`・`ignored_known`）を記録に替えて消す。結合テストの `HelperGuard` の 3 つの写しは `HelperHandle` の Drop で要らなくなる。写しのテスト（`.bat`）と偽のテスト（`classify_terminated_branch_logic`）と時間に頼るテスト（`error_paths` の 3 本目）を消す。helper の下の pasta のデバッグの待ち受けを開ける口は作らない（要件 10.4）。
+
+### 14.5 設計で決めたこと（見直しの材料）
+
+1. **再入（8）の UNLOAD は ack [1] を先に返し、後始末は DLL の呼び出しが戻ってから**: host の取り決め（UNLOAD の返事が受け皿に入らないと送りの失敗）を変えずに、`unload` を呼ぶ道を残すため。DLL が `EXIT_OBSERVE_TIMEOUT`（10 秒）より長く戻らなければ host が終わらせる（今は必ず panic で落ちる）。
+2. **送り手の確かめ（38）は足す口 `expect_helper_pid` で本番だけ子のプロセス番号に縛る**: `pump_until_hello_or` の形を変えられない（要件 6.4）ため。呼ばない使い手も「HELLO は 1 度だけ・送り手と中身が同じ」で守られる。
+3. **`HelperHandle` の Drop は終わりを 5 秒まで、標準エラーの読み手を 1 秒まで待つ**: テストの根を消すときに DLL がまだ読まれている事故（指摘 3）と、最後の行が接続の失敗より後に記録に入る順の乱れを、同じ所で無くすため。`kill` の後の終わりはすぐ来るので、本番の終わりを遅らせない。
+4. **標準エラーの UTF-8 でない行は CP_ACP で読む**: helper 自身の行は UTF-8 だが、SHIORI の DLL が C の実行時の関数で書く行は ANSI のことがある。文字化けを読む側で直す決まりに従う。
+5. **`EXIT_POLL_INTERVAL` も消す**（申し合わせの一覧の外・知らせてから）。
+6. **22・23 は既定（半角の空白とタブだけ・先勝ち）の形で設計し、SSP で測れて違えば合わせる**: この段で SSP を動かさないため、測りは実装の段で開発者の承認を得てから。
+7. **`error_paths` の 3 本目は直さずに消す**（指摘 18 の 2 案のうち小さい方）。helper が自分で終わる道の記録は、実の helper の標準エラーのテストが受ける。
+8. **28 は U17 として `dola-yaml-backend` の着地を待つ**。先に完了するなら C20 へ回す（要件 10.10）。
+
+### 14.6 危うさ
+
+- R4 の見立てが外れて窓を 2 組持てなければ、U9 の正常終了の試験の作り方を替える（逃げ道は design.md に書いた）。
+- 標準エラーを areka の記録へ回すので、壊れた SHIORI が大量に書くと記録が増える（行ごとに 1 行。上限は置かない＝今の負荷で当たらない）。
+- 件 1 の直しで、依存を `PATH` にだけ置くゴーストや、DLL を下のフォルダに置き依存を `ghost\master` に置くゴーストは読めなくなる（要件 10.6 で受け入れ済み）。
+
+### 14.7 clippy の基準（要件 3.5）
+
+- U1 の始めに、範囲の 5 クレートの `cargo clippy`（x64 と i686）の警告の一覧（ファイル・行・lint の名前）をここに控え、U18 で消えた分を書く（`clippy-199-lints` が直し直さないため）。
