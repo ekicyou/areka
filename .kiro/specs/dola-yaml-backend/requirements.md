@@ -81,7 +81,7 @@
 
 1. The この spec の直し shall `dola` の公開の型・関数・トレイトの既存の形を変えない（機能 `toml` の下の入口〔要件 2.2〕は足すだけにする）
 2. When この spec の直しの後に `dola` のテストを回すとき, the JSON の往復のテスト shall 直しの前と同じ本数が緑になる
-3. The この spec の直し shall `crates/dola/` の外のソースファイル（根の `Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・steering・roadmap・要件 2.6 のための全体テストの手順を除く）を変えない
+3. The この spec の直し shall `crates/dola/` の外のソースファイル（根の `Cargo.lock`・`THIRD-PARTY-NOTICES.md`・`deny.toml`・steering・roadmap・要件 2.6 のための全体テストの手順〔`tools/test-all.ps1` と、その段の一覧を書いた文書＝`tech.md` のフルテストの節・`.claude/skills/kiro-complete/SKILL.md` の段の一覧〕を除く）を変えない
 
 ### Requirement 4: NaN と無限大の入り口の説明と確かめを合わせる
 

@@ -109,9 +109,9 @@ graph TB
 - `crates/dola/tests/compile/boundary_test.rs` — 3 行目「外部入力（JSON/TOML/YAML）」を「外部入力（JSON・機能 `toml` の TOML）」に直し、260〜262 行目の注記を TOML が入口になる書き方に直し、`#[cfg(feature = "toml")]` の境界のテストを足す（下の「NaN と無限大の扱い」）。
 - `crates/dola/README.md` — 13・17 行目から YAML を消し、機能 `toml` で TOML の読み書き（`DolaDocument::from_toml_str`・`to_toml_string`）ができること、ほかの書式は serde の導出で利用者が選んだクレートで扱えることを書く（英文のまま）。
 - `deny.toml` — 43〜46 行目（説明のコメント 3 行と `RUSTSEC-2024-0449` の項目）だけを消す。41 行目の決まりのコメントと `ignore = [` `]` は残す。
-- `tools/test-all.ps1` — `x64 workspace tests` の段の直後に `Step 'dola toml feature tests' { cargo test -p dola --features toml --no-fail-fast -j 4 }` を足し、`.DESCRIPTION` の段の一覧に 1 行足して番号を振り直す（1 の「5・6」の参照も合わせる）。
+- `tools/test-all.ps1` — `x64 workspace tests` の段の直後に `Step 'dola toml feature tests' { cargo test -p dola --features toml --no-fail-fast -j 4 }` を足し、`.DESCRIPTION` の段の一覧に 1 行足して番号を振り直す（7 行目の「`cargo test` を回す段（5・6）」は「5・7」に直し、新しい 6 は取り寄せが赤でも回ることを書き足す）。
 - `.claude/skills/kiro-complete/SKILL.md` — 433 行目の段の一覧の `x64 workspace tests` の後に `dola toml feature tests` を 1 つ足す（全体テストの手順の説明・要件 3.3 が許す範囲）。
-- `.kiro/steering/tech.md` — 32 行目の `toml` の行の dola の文を「`dola` の任意の機能 `toml` も同じ 1 を使う」に直す。「dola クレート依存」の `serde_yaml` の行を `toml` の行（1・機能 `toml`・`DolaDocument` の TOML の読み書きの入口・既定の機能は無い・`serde_json` は開発専用）に替える。「フルテスト」の節に段 `dola toml feature tests` の 1 項目を足す。
+- `.kiro/steering/tech.md` — 32 行目の `toml` の行の dola の文を「`dola` の任意の機能 `toml` も同じ 1 を使う」に直す。「dola クレート依存」の `serde_yaml` の行を `toml` の行（1・機能 `toml`・`DolaDocument` の TOML の読み書きの入口・既定の機能は無い・`serde_json` は開発専用）に替える。「フルテスト」の節に段 `dola toml feature tests` の 1 項目を足し、85 行目の「取り寄せが失敗したら `cargo test` を回す段を飛ばす」の文に、この段は検体を使わないので取り寄せが赤でも回ることを書き足す。
 - `.kiro/steering/product.md` — 38 行目「宣言的アニメーション定義フォーマット（JSON/TOML/YAML）」の書式の列挙を、書式の機能は `toml` だけ（ほかは serde の導出で利用者が選ぶ）の形に直す。
 - `.kiro/steering/structure.md` — 262 行目「`serde` + feature flags (`json`, `toml`, `yaml`)」を「`serde` ＋任意の機能 `toml`（`toml`）」の形に直す。
 - `.kiro/steering/roadmap.md` — 207 行目の「`v0.1.0` の後・`audit-dola`」の項目を、`audit-dola` とこの spec の分を合わせた 1 項目に書き直す（下の「申し送りの項目」）。
