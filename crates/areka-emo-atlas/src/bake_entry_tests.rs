@@ -13,7 +13,7 @@ use crate::test_support::{
 use areka_parsers::shell::{Interval, Surface};
 use std::path::Path;
 
-/// テスト①: end-to-end 結線（複数セット）。shell + balloon の 2 セットを 1 度の bake で
+/// end-to-end 結線（複数セット）。shell + balloon の 2 セットを 1 度の bake で
 /// 処理し、索引表＋頁バッファが**値で直接**得られる（channel 非依存・R6.5 ＋ 1.x/4.x/5.x/6.x）。
 #[test]
 fn end_to_end_wiring_multiple_sets() {
@@ -38,10 +38,7 @@ fn end_to_end_wiring_multiple_sets() {
     let result: BakeResult = bake(&sets, &dec, PackConfig::default());
 
     // 失敗なし。
-    assert!(
-        result.errors.is_empty(),
-        "no decode/normalize failures expected"
-    );
+    assert!(result.errors.is_empty(), "no decode failures expected");
 
     // 各セットの present key が resolve→Some・placement あり（非透明ゆえ焼かれる）。
     for (set, rel) in [
@@ -68,7 +65,7 @@ fn end_to_end_wiring_multiple_sets() {
     assert_eq!(result.table.len(), 4, "4 survivors densely indexed");
 }
 
-/// テスト②: デコード失敗は索引表に載せず・他エントリ継続（R2.2）。
+/// デコード失敗は索引表に載せず・他エントリ継続（R2.2）。
 /// 1 つだけ未登録（NotFound）にすると、その key は resolve が None・errors に Decode が
 /// 1 件・他の全 key は present（継続の実証）。
 #[test]
@@ -108,7 +105,7 @@ fn decode_failure_skipped_others_continue() {
     }
 }
 
-/// テスト④: 失敗後の密再採番・resolve/entry/key 往復整合（欠番/panic なし）。
+/// 失敗後の密再採番・resolve/entry/key 往復整合（欠番/panic なし）。
 /// manifest 上は 3 key（a,b,c 昇順）だが b を失敗させ、生存 a,c が密に 0..2 で番号付く。
 #[test]
 fn dense_renumbering_and_roundtrip_after_failure() {
@@ -148,7 +145,7 @@ fn dense_renumbering_and_roundtrip_after_failure() {
     assert_eq!(result.table.resolve(SetId(0), "b.png"), None);
 }
 
-/// テスト⑥（設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
+/// （設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
 /// 含む bake で `warn!` が発火する（tracing capture で決定論 assert・当該 element を名指し）。
 /// **bake 結果自体は既存挙動不変**（全透明はエラーでなく空エントリ・placement None）。
 #[test]
@@ -197,30 +194,7 @@ fn warn_fires_on_all_transparent_element() {
     assert!(result.table.entry(solid_id).placement.is_some());
 }
 
-/// テスト⑦: 元画像 0 寸（0×0）element を含む bake でも `warn!` が発火する。
-#[test]
-fn warn_fires_on_zero_sized_source_element() {
-    let base = Path::new("shell/master");
-    let shell = vec![surface(0, vec![elem(0, "zero.png")])];
-    let mut dec = MemoryDecoder::new();
-    register(&mut dec, base, "zero.png", zero_sized());
-    let sets = [set(&shell, base)];
-
-    let out = crate::log_capture::capture_logs(|| {
-        let _ = bake(&sets, &dec, PackConfig::default());
-    });
-    assert!(
-        out.contains("level=WARN"),
-        "0 寸 element で warn 発火: {out}"
-    );
-    assert!(
-        out.contains("target=areka_emo_atlas"),
-        "target 正しい: {out}"
-    );
-    assert!(out.contains("zero.png"), "問題の element を名指し: {out}");
-}
-
-/// テスト⑧（不変性の陰性確認）: 正常（不透明・非零）element の bake では warn は
+/// （不変性の陰性確認）: 正常（不透明・非零）element の bake では warn は
 /// 発火せず、既知の bake 出力（placement 有り・非零 uv・原寸）が変わらない。
 #[test]
 fn no_warn_and_output_unchanged_for_normal_bake() {
@@ -348,7 +322,9 @@ fn bind_only_zero_sized_keeps_zero_size_warn() {
     let warns: Vec<&str> = out.lines().filter(|l| l.contains("level=WARN")).collect();
     assert_eq!(warns.len(), 1, "0 寸の warn 1 件: {out}");
     assert!(
-        warns[0].contains(ZERO_WARN) && warns[0].contains("zero.png"),
+        warns[0].contains(ZERO_WARN)
+            && warns[0].contains("zero.png")
+            && warns[0].contains("target=areka_emo_atlas"),
         "{out}"
     );
     assert!(!out.contains(BIND_DEBUG), "0 寸は見分けに入らない: {out}");

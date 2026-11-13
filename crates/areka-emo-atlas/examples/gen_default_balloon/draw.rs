@@ -235,7 +235,7 @@ mod tests {
             .1
     }
 
-    // 名前と大きさは `build.rs` の `drawn_pictures_match_the_size_table`（大きさの表）が、
+    // 名前と大きさは `build.rs` の組み立てのテスト（大きさの表）が、
     // 同じに描けることは `build.rs` の組み立てのテストとずれの見張り（tests/default_balloon_drift_test.rs）が見る。
 
     #[test]

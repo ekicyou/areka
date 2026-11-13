@@ -98,8 +98,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
                 // 欄 2 が面の番号でない 8 語は面を指さない。
                 let names_animation = areka_parsers::shell::pattern_word(pattern.method.as_str())
                     != areka_parsers::shell::PatternWord::Draw;
-                if !names_animation && pattern.surface_id >= 0 && ids.contains(&pattern.surface_id)
-                {
+                if !names_animation && ids.contains(&pattern.surface_id) {
                     *referenced.entry(pattern.surface_id).or_insert(true) &= is_bind;
                 }
             }
@@ -107,7 +106,7 @@ pub(crate) fn bind_only_paths(sets: &[SurfaceSet<'_>]) -> BTreeSet<(u32, String)
         // 絵 → 持ち主がどれも bind だけから参照されているか。
         let mut paths: BTreeMap<&str, bool> = BTreeMap::new();
         for surface in set.surfaces {
-            // 多 id のブレスは全部の番号が bind だけから参照されるときだけ（指摘 38・番号の無いブレスは入れない）。
+            // 多 id のブレスは全部の番号が bind だけから参照されるときだけ（spec: audit-parsers-sakura 指摘 38・番号の無いブレスは入れない）。
             let owner_ids = surface_ids(surface);
             let owner_ok = !owner_ids.is_empty()
                 && owner_ids
@@ -446,7 +445,7 @@ mod tests {
     }
 
     /// T8 ⑼: 多 id のブレス（`surface1-3`）の絵は、ブレスの全部の番号が `bind` だけから参照されるときだけ入る
-    /// （先頭の番号 1 だけが参照されても 2・3 は参照されないので入らない・指摘 38）。
+    /// （先頭の番号 1 だけが参照されても 2・3 は参照されないので入らない・spec: audit-parsers-sakura 指摘 38）。
     #[test]
     fn bind_only_paths_requires_every_id_of_range_brace() {
         let mut eye = surface(1, vec![elem(0, "eye.png")]);

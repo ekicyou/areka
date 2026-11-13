@@ -40,7 +40,6 @@ use crate::{AtlasTable, ElementId, PackConfig, WicDecoderArm, bake};
 /// 読み手は呼び出し側が COM を張った下で組んで渡す（`with_arm`）。
 fn bake_emo2_shell(dec: &WicDecoderArm) -> crate::BakeResult {
     let (surfaces, base) = emo2_shell();
-    // freshly-constructed identical inputs + PackConfig::default()。
     bake(&[set(&surfaces, &base)], dec, PackConfig::default())
 }
 

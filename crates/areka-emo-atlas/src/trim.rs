@@ -207,27 +207,6 @@ mod tests {
         assert_eq!(res.original, Size { w: 5, h: 4 }, "original still recorded");
     }
 
-    /// 4.2: trim_offset / size / original の三者を具体値で記録。
-    #[test]
-    fn records_offset_size_original() {
-        let (w, h) = (6u32, 5u32);
-        let mut buf = vec![0u8; (w * 4 * h) as usize];
-        // x∈[1,4] y∈[2,3]
-        for y in 2..=3 {
-            for x in 1..=4 {
-                set_alpha(&mut buf, w * 4, x, y, 255);
-            }
-        }
-        let res = Trimmer.trim(&img(w, h, buf));
-        let t = res.placement.expect("opaque region");
-        assert_eq!(t.trim_offset, Point { x: 1, y: 2 });
-        assert_eq!(t.size, Size { w: 4, h: 2 });
-        assert_eq!(res.original, Size { w: 6, h: 5 });
-        // 三者整合（invariant）: trim_offset + size <= original。
-        assert!(t.trim_offset.x as u32 + t.size.w <= res.original.w);
-        assert!(t.trim_offset.y as u32 + t.size.h <= res.original.h);
-    }
-
     /// 4.5（最強）: 座標不変。トリム結果を trim_offset へ blit し直すと原画像に一致。
     ///
     /// bbox 外は全て α==0（premultiplied では BGRA すべて 0）ゆえ、tight 矩形を
@@ -319,26 +298,6 @@ mod tests {
         assert_eq!(t.size, Size { w: 3, h: 2 });
         // 入力 stride == width*4 ゆえ tightly-packed 出力は入力と一致。
         assert_eq!(t.pbgra, expected);
-    }
-
-    /// 7: Trimmed は tightly packed（stride==size.w*4・len==stride*size.h）。
-    #[test]
-    fn trimmed_is_tightly_packed() {
-        let (w, h) = (4u32, 4u32);
-        let mut buf = vec![0u8; (w * 4 * h) as usize];
-        for y in 1..=2 {
-            for x in 1..=3 {
-                set_alpha(&mut buf, w * 4, x, y, 255);
-            }
-        }
-        let res = Trimmer.trim(&img(w, h, buf));
-        let t = res.placement.expect("opaque");
-        assert_eq!(t.stride, t.size.w * 4, "tight stride");
-        assert_eq!(
-            t.pbgra.len(),
-            (t.stride * t.size.h) as usize,
-            "len == stride * height"
-        );
     }
 
     /// 8: パディング付き入力 stride（stride > width*4）でも正しくトリム＆tightly-packed 出力。

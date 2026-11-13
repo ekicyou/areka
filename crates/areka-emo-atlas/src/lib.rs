@@ -121,7 +121,7 @@ fn bake_core(
     limits: AnimationLimits,
     records: Records,
 ) -> BakeResult {
-    // 1. マニフェスト導出（列挙・重複排除・決定的採番）。
+    // マニフェスト導出（列挙・重複排除・決定的採番）。
     let manifest = ManifestDeriver.derive(sets);
     // 着せ替え（bind）のアニメーションからだけ参照される面の絵（全透明でも警告しない側・
     // real-run-log-noise 要件 3.7）。入口で 1 回だけ求める。
@@ -269,15 +269,15 @@ fn bake_core(
         &mut placed_items,
     );
 
-    // 5. packing（座標のみ・最終 ElementId で採番済み）。
+    // packing（座標のみ・最終 ElementId で採番済み）。
     let pack = Packer.pack(&placed_items, cfg);
 
-    // 6. 焼付（頁バッファ確保＋blit）。Placement は最終 ElementId キー。
+    // 焼付（頁バッファ確保＋blit）。Placement は最終 ElementId キー。
     let (pages, placements) = Baker.bake_pages(&placed_items, &pack);
     let placement_of: std::collections::HashMap<ElementId, Placement> =
         placements.into_iter().collect();
 
-    // 7. 生存集合上に密な索引表を構築（final ElementId 順）。
+    // 生存集合上に密な索引表を構築（final ElementId 順）。
     let entries: Vec<AtlasEntry> = survivor_originals
         .into_iter()
         .enumerate()
@@ -290,7 +290,7 @@ fn bake_core(
 
     let table = AtlasTable::with_frames(survivor_keys, entries, pages, animations);
 
-    // 8. 値で直接返す（channel 非依存・R6.5）。
+    // 値で直接返す（channel 非依存・R6.5）。
     BakeResult {
         table,
         errors,

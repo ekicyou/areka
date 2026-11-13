@@ -1,24 +1,22 @@
 //! emo2 fixture を用いた bake パイプラインの統合テスト（shell・balloon 横断）。
 //!
-//! 要件 **1.1, 1.4, 2.2, 5.6, 6.1, 6.2**。
+//! 要件 **1.1, 1.4, 5.6, 6.1, 6.2**。
 //!
 //! 既に構築済みの bake パイプライン（マニフェスト導出 → デコード → 正規化 → トリム →
-//! packing → 焼付）を、実 fixture emo2 の shell surface 一式・balloon 画像・欠落パス混在
-//! 入力で駆動し、成功/失敗を自動実行環境で明確に判定する。production コードは変更せず
+//! packing → 焼付）を、実 fixture emo2 の shell surface 一式・balloon 画像で
+//! 駆動し、成功/失敗を自動実行環境で明確に判定する。production コードは変更せず
 //! （本モジュールは `#[cfg(test)]`）、WIC 腕（COM 隔離）越しに実 PNG を復号する。
 //!
 //! - shell E2E: `surfaces.txt` を `areka_parsers::shell::parse` で読み、SurfaceSet として
 //!   bake。全 element が索引表に載り頁が生成される（1.1/6.1/6.2）。
 //! - balloon E2E: balloon 画像を surface 表現に**手組み**（balloon→surface 適応は本層外・
 //!   design D1）し、shell と同一の bake 経路で処理されることを実証（1.4）。
-//! - 欠落パス混在: 存在しないパスは当該エントリのみ errors・resolve→None、他エントリは
-//!   継続（2.2/5.6）。
 //!
 //! in-source `#[cfg(test)]`（regular dep `areka-parsers` / `windows` へ full access・
 //! WIC 腕のテストの前例に倣う）。
 
 use crate::test_support::{BIND_DEBUG, elem, emo2_shell, emo2_shell_dir, set, surface, with_arm};
-use crate::{BakeError, ManifestDeriver, PackConfig, SetId, bake};
+use crate::{ManifestDeriver, PackConfig, SetId, bake};
 
 /// emo2 shell の実測フィクスチャ事実（本統合テストが依拠する）。
 ///
@@ -207,62 +205,6 @@ fn emo2_balloon_same_bake_path_as_shell() {
         assert!(
             !result.table.pages().is_empty(),
             "pages materialized for combined bake"
-        );
-    });
-}
-
-/// テスト③: 存在しないパスを含む入力 → 当該エントリのみ errors・他は継続（2.2/5.6）。
-///
-/// 実在 element（surface0.png）と bogus パスを混在させ、bogus は resolve→None かつ
-/// errors はちょうど 1 件の NotFound（パス付き）、実在 element は resolve→Some＋placement（継続）。
-#[test]
-fn emo2_nonexistent_path_isolated_others_continue() {
-    let base = emo2_shell_dir();
-
-    // 実在 + bogus を 1 surface に混在（両者とも shell/master 基準）。
-    let surfaces = vec![surface(
-        0,
-        vec![
-            elem(0, "surface0.png"),
-            elem(1, "this_file_does_not_exist_xyz.png"),
-        ],
-    )];
-
-    with_arm(|dec| {
-        let set = set(&surfaces, &base);
-        let result = bake(std::slice::from_ref(&set), dec, PackConfig::default());
-
-        // bogus key は索引表に不在（脱落）。
-        assert_eq!(
-            result
-                .table
-                .resolve(SetId(0), "this_file_does_not_exist_xyz.png"),
-            None,
-            "nonexistent path absent from table"
-        );
-
-        // errors はちょうど 1 件で、無い名前の NotFound（パスも比べる）。
-        assert_eq!(
-            result.errors.len(),
-            1,
-            "exactly one failure: {:?}",
-            result.errors
-        );
-        match &result.errors[0] {
-            BakeError::Decode(crate::decode::DecodeError::NotFound { path }) => {
-                assert_eq!(path, &base.join("this_file_does_not_exist_xyz.png"));
-            }
-            other => panic!("expected Decode(NotFound), got {other:?}"),
-        }
-
-        // 実在 element は継続処理される（脱落しない・placement あり）。
-        let ok_id = result
-            .table
-            .resolve(SetId(0), "surface0.png")
-            .expect("real surface0.png still resolves (continuation)");
-        assert!(
-            result.table.entry(ok_id).placement.is_some(),
-            "real surface0.png placed despite sibling failure"
         );
     });
 }

@@ -319,13 +319,13 @@ mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
 
-    /// 2×2 の PBGRA 画像を登録した MemoryDecoder を組む。
+    /// 登録に使う既知のパス。
     fn known_path() -> PathBuf {
         PathBuf::from("shell/surface0.png")
     }
 
     /// 2×2・stride=8・16byte の小画像を作る（値はダミー）。
-    fn small_image(has_alpha: bool) -> (u32, u32, u32, Vec<u8>, bool) {
+    fn small_image(has_alpha: bool) -> crate::test_support::ImageSpec {
         let (w, h) = (2u32, 2u32);
         let stride = w * 4;
         let bgra = vec![0u8; (stride * h) as usize];

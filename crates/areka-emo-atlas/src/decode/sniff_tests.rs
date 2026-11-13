@@ -59,7 +59,7 @@ fn samples_answer_by_content() {
 
 // ---- バイト列の組み立て ----
 
-const PNG_SIG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+use super::PNG_SIGNATURE as PNG_SIG;
 
 fn png_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());
