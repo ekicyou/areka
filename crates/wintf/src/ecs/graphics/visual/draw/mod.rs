@@ -8,6 +8,8 @@ pub mod command;
 mod emit;
 #[cfg(test)]
 mod emit_blend_tests;
+#[cfg(test)]
+mod emit_layer_tests;
 pub(crate) use emit::emit;
 #[cfg(test)]
 pub(crate) mod emit_test_support;
