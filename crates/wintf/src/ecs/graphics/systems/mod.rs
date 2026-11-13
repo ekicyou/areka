@@ -2,6 +2,8 @@ mod brushes;
 mod clip_sync;
 mod init;
 mod render;
+#[cfg(test)]
+mod render_tests;
 mod surface;
 mod visual_sync;
 mod window_pos;

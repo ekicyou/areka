@@ -6,7 +6,7 @@ use crate::ecs::window::Window;
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use windows::UI::Composition::{ContainerVisual, Visual as WucVisual};
 use windows::core::Interface;
 
@@ -31,7 +31,7 @@ type PropertySyncData = (
     Entity,
     &'static Arrangement,
     &'static GlobalArrangement,
-    &'static Visual,
+    Ref<'static, Visual>,
     &'static VisualGraphics,
     Option<&'static Name>,
     Has<Window>,
@@ -308,6 +308,14 @@ pub fn visual_property_sync_system(changed_entities: Query<PropertySyncData, Pro
         }
 
         // Opacity同期: Visual.opacityを読み取り、is_visible=falseなら0.0を設定
+        // 欄へ直に書かれた NaN の記録。持ち主は fill_world_visuals が訪れないのでここで残す（2.8）。
+        // Visual が変わったときだけ出し、位置が動くたびには繰り返さない。
+        if visual_component.is_changed() && visual_component.opacity.is_nan() {
+            warn!(
+                entity = %entity_name(),
+                "[visual_property_sync] 描画面の持ち主の不透明度が NaN なので、1.0 として写す"
+            );
+        }
         let opacity_value = if !visual_component.is_visible {
             0.0
         } else {

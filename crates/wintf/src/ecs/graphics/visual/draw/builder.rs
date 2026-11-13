@@ -7,7 +7,6 @@ use crate::ecs::layout::Arrangement;
 use crate::numerics::*;
 use std::hash::{Hash, Hasher};
 use tracing::error;
-use windows::Win32::Graphics::Direct2D::Common::D2D1_COMPOSITE_MODE;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
 
@@ -44,6 +43,9 @@ enum ClipKind {
 ///   無限の矩形も渡せる（交わりにだけ使い、変形しない）。
 /// - `root`・`root_name`: 記録に載せる根（描画面の持ち主）。根が自分の `VisualDrawContent` を持てば
 ///   （節から昇格した持ち主）、それを先頭の 1 件として恒等の行列（根の局所の DIP）で出す（子より前・間引かない）。
+///
+/// 不透明度が 1.0 未満の節は、部分木の世界の外接矩形と外側の有効な矩形の交わりを範囲として
+/// `PushOpacity` を切り抜きより外側に積み、同じ深さで閉じる。範囲が空なら部分木を間引く（2.1, 2.3〜2.5）。
 ///
 /// 切り抜きの図形を作れないか外接矩形を取れない節は `error!`（実体・HRESULT）を残し、子孫ごと飛ばす（5.1, 5.2）。
 ///
@@ -98,7 +100,7 @@ pub(crate) fn build(
         }
         let size = &arrangement.size;
         let plan = plan_clip(factory, visual.clip.as_ref(), size, unit_rect, world, eff);
-        let new_eff = match plan {
+        let (clip, new_eff) = match plan {
             Err(e) => {
                 error!(
                     root = %format_entity_name(root, root_name),
@@ -114,13 +116,27 @@ pub(crate) fn build(
                 culled_at = Some(depth);
                 continue;
             }
-            Ok(ClipKind::NoClip) => eff,
-            Ok(ClipKind::Clip { push, pop, new_eff }) => {
-                out.push(push);
-                open.push((depth, pop, new_eff));
-                new_eff
-            }
+            Ok(ClipKind::NoClip) => (None, eff),
+            Ok(ClipKind::Clip { push, pop, new_eff }) => (Some((push, pop)), new_eff),
         };
+        // 不透明度の層は切り抜きの外側（根は訪れないので出ない・6.3）。
+        let opacity = visual.clamped_opacity();
+        if opacity < 1.0 {
+            let world_aabb = world.subtree_world_aabb.intersect(eff);
+            if world_aabb.is_empty() {
+                culled_at = Some(depth);
+                continue;
+            }
+            out.push(DrawCommand::PushOpacity(OpacityLayer {
+                opacity,
+                world_aabb,
+            }));
+            open.push((depth, DrawCommand::PopOpacity, new_eff));
+        }
+        if let Some((push, pop)) = clip {
+            out.push(push);
+            open.push((depth, pop, new_eff));
+        }
         if let Some(c) = content
             && !world.content_world_aabb.intersect(new_eff).is_empty()
         {
@@ -151,7 +167,7 @@ fn draw_item(
             entity,
             version.map_or(0, |v| v.0),
             c.interpolation_mode,
-            c.composite_mode,
+            c.mix_mode,
             &world_mat,
         ),
         entity,
@@ -159,7 +175,7 @@ fn draw_item(
         world_aabb,
         command_list: c.command_list.clone(),
         interpolation_mode: c.interpolation_mode,
-        composite_mode: c.composite_mode,
+        mix_mode: c.mix_mode,
     })
 }
 
@@ -234,20 +250,24 @@ fn geometry_bounds(g: &ID2D1Geometry, m: &Matrix3x2) -> windows::core::Result<Aa
     Ok(Aabb::new_rect(unsafe { g.GetBounds(Some(m as *const _)) }?))
 }
 
-/// 描く 1 件の同一性（4.5）。実体・見た目の版・補間・重ね方・世界の行列から取り、COM の番地は使わない。
+/// 描く 1 件の同一性（4.5）。実体・見た目の版・補間・混ぜ方（種類と値）・世界の行列から取り、COM の番地は使わない。
 /// 小数は `CalcHash` で正規化する。`DefaultHasher::new()` は鍵が固定なので回をまたいで同じ値になる。
 pub(crate) fn hash_draw(
     entity: Entity,
     version: u64,
     interpolation: D2D1_INTERPOLATION_MODE,
-    composite: D2D1_COMPOSITE_MODE,
+    mix: MixMode,
     world: &Matrix3x2,
 ) -> u64 {
     let mut state = std::collections::hash_map::DefaultHasher::new();
     entity.hash(&mut state);
     version.hash(&mut state);
     interpolation.0.hash(&mut state);
-    composite.0.hash(&mut state);
+    // 種類を先に混ぜる（重ね方とブレンドは同じ数値を持ち得る）。
+    match mix {
+        MixMode::Composite(c) => (0u8, c.0).hash(&mut state),
+        MixMode::Blend(b) => (1u8, b.0).hash(&mut state),
+    }
     world.calc_hash(&mut state);
     state.finish()
 }
