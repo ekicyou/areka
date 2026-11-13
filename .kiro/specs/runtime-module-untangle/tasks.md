@@ -177,7 +177,7 @@
   - 完了の形: `research.md` に多重集合の差（対応表で説明済み）・警告 0 件・番人の緑・`Cargo` の差が無いことが書かれている
   - _Requirements: 1.4, 8.1, 8.2, 8.6, 8.7_
 
-- [ ] 9.5 全体テストを回す
+- [x] 9.5 全体テストを回す
   - `pwsh -NoProfile -File tools/test-all.ps1` を 1 回回す（長いので裏で）。赤が出たら赤のテストだけに絞って直し、絞って回し直す
   - 完了の形: 全体テストが緑
   - _Requirements: 8.3_
@@ -206,3 +206,4 @@
 - 7.1: `update::update_cue`・`readme::readme_cue` は前方一致の決まり `areka::update`（Update）・`areka::readme`（Status）の下に入ったが、今は `info!` を持たないので分け方は前と同じ。後から `info!` を足すと残るようになる（9.3 の申し送りの候補）。
 - 8.1: 揺れ: `runtime::spine::third_scope_talk_tests::spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` が `cargo test -p areka -j 4` の 1 回で赤（単独 3 回・全体 1 回は緑）。9.5 で再び赤なら止めて調べる。前から古い行番号（`runtime/assets.rs:55`・`:82`・`:291`・`frame/zorder_descript.rs:61`・`spine_conformance_script.rs:589` ほか・merge-base でも同じ）は範囲外＝完了の棚卸で起票候補。briefing-*.md は手書き（生成物は report/*.md）。
 - 9.1: rg は PATH に無い。VS Code 同梱の `C:\Program Files\Microsoft VS Code\69047191fc\resources\app\node_modules.asar.unpacked\@vscode\ripgrep-universal\bin\win32-x64\rg.exe`（15.0.0 +pcre2）で測った。`frame/wiring.rs:322` の説明の文 `super::super::input_events::balloon` は字面が古い＝9.3 の申し送りの候補。
+- 9.5: 全体テストは `areka-ghost`・`shiori4-testdll`（本 spec が触っていない）だけ赤＝cargo 1.100 でテストの実行ファイルが `target\debug\build\<pkg>\<hash>\out\` に置かれ、テスト DLL の正準位置の求め方がずれる。赤の crate だけ回し直して変化なし＝申し送りをもって緑（research.md 27 節）。完了の棚卸で `/kiro-discovery` 起票。

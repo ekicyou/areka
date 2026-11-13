@@ -1161,3 +1161,11 @@ RG=<rg.exe>; cd crates/areka/src
 - 警告（要件 8.2）: `cargo check --workspace --all-targets` は成功（終わりの値 0）。rustc の警告は **0 件**。マニフェストの警告は 15 節と同じ 3 件のまま（workspace の `async-executor`・`shiori-abi` の `windows`・`shiori-host32-host` の `event-listener`・24 節の 6・7 で申し送り済み）。
 - 1,000 行の番人（要件 8.6）: `cargo test -p log-capture-kit` は全部緑（`file_length_guard_test` 6 passed を含む・失敗 0）。例外表の項目は土台 `4863cb66` も後も 5 件（`frame_transition_branch_tests.rs`・`window_move.rs`・`transition_judge_tests.rs`・`transition_judge_verdict_tests.rs`・`pilot-clickthrough-alpha-toggle/main.rs`）で増えていない。`git diff 4863cb66 -- crates/log-capture-kit/tests/file_length_guard_test.rs` の差は、例外表の 1 項目と較正の定数 `CALIBRATION_DROPPED_ENTRY` のパスの `emo2_boot/`→`runtime/` だけ（項目の数は同じ）。
 - Cargo（要件 8.7）: `git diff 4863cb66 -- Cargo.lock` は空。`git diff 4863cb66 -- '*Cargo.toml'` の差は `crates/areka/Cargo.toml` のコメント 3 行（`emo2-boot 統合結線`→`runtime 統合結線`・`emo2-boot の実 sink 結線`→`runtime の実 sink 結線`・`emo2_boot::spine`→`runtime::spine`）だけで、依存・機能・版は変わっていない。
+
+## 27. 全体テスト（9.5・2026-11-13）
+
+- `pwsh -NoProfile -File tools/test-all.ps1` を 1 回（commit `d1ed02f97`・排他テストの机を取って）。13 段のうち赤は「x64 workspace tests」の 1 段だけ。ほかの 12 段（fmt --check・i686・encoding ほか）は緑。
+- 赤のテストは本 spec が触っていない 2 つの crate だけ: `areka-ghost`（lib 5 本・`tests/ghost` 6 本）と `shiori4-testdll`（lib 1 本 `built_cdylib_appears_at_single_canonical_deps_dir`）。`git diff 4863cb66 -- crates/areka-ghost crates/shiori4-testdll` は空。`crates/areka` を含むほかの crate は全部緑。
+- 赤の文: 「built test DLL が正準位置に不在: …\target\debug\build\areka-ghost\<hash>\out\shiori4_testdll.dll」。テストの実行ファイルが `target\debug\build\<pkg>\<hash>\out\` に置かれている（cargo 1.100.0・2026-11-05 の build-dir の置き方）ため、`current_exe` から求める正準位置（deps）がずれる。DLL 自身は `target\debug\deps\shiori4_testdll.dll` にある。`.cargo/config.toml` に build-dir の指定は無い。
+- 決まり（触っていない crate だけが赤 → 赤の crate だけもう 1 回）どおり `cargo test -p areka-ghost -p shiori4-testdll` を回し直し、同じ 5 本が同じ文で赤（変化なし）。本 spec の受け持ちではないので申し送りとし、本 spec の全体テストは緑とみなす。完了の棚卸で `/kiro-discovery` に起票する（道具の版の上がりで落ちたテストの直し）。
+- 8.1 で 1 度だけ赤だった揺れのテスト `spine_third_scope_talk_runs_to_the_end_and_the_farewell_quits` は今回緑。
