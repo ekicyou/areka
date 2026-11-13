@@ -4,9 +4,9 @@
 //! `WaitKind::Watch` の答えだけで、ほかの種類の答えは待ちの記録の回収にだけ使う。
 
 use super::test_support::{
-    FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, hold_load, hold_merge,
-    hold_running_load, hold_test, queue_load, queue_merge, queue_request, run, state_with,
-    stop_for, test_freed, test_freed_record, wait_record,
+    FakePresence, PID, PURPOSE, REPO, applied, ask_to_stop, granted, hold_load, hold_merge,
+    hold_running_load, hold_test, merge, queue_load, queue_merge, queue_request, resumed, run,
+    state_with, stop_for, test_freed, test_freed_record, wait_record,
 };
 use super::{Applied, Command, Event, apply};
 use crate::state::{
@@ -162,10 +162,6 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
         test_freed_record("A", "reclaimed", T0 + 10),
     ];
     assert_eq!(state, expected);
-    let resumed = Event::Resumed {
-        id: "B".to_owned(),
-        why: "no-sole",
-    };
     let granted = Event::MergeGranted {
         repo: REPO.to_owned(),
         id: "C".to_owned(),
@@ -173,7 +169,7 @@ fn a_load_holder_without_a_watch_is_reclaimed_and_the_others_go_on_in_the_same_c
     let events = vec![
         test_freed("A", "reclaimed"),
         reclaimed("A"),
-        resumed,
+        resumed("B", "no-sole"),
         granted,
     ];
     assert_eq!(got, applied(true, events));
@@ -206,12 +202,8 @@ fn reclaiming_the_merge_holder_lets_the_waiting_load_test_take_its_desk_in_the_s
     };
     assert_eq!((state.test, state.sole), (Some(test), Some(sole)));
     assert!(state.requests.is_empty());
-    let granted = Event::DeskGranted {
-        id: "C".to_owned(),
-        desks: DeskSet::TestSole,
-        stopped: vec!["B".to_owned()],
-    };
-    assert_eq!(got, applied(true, vec![reclaimed("A"), granted]));
+    let grant = granted("C", DeskSet::TestSole, &["B"]);
+    assert_eq!(got, applied(true, vec![reclaimed("A"), grant]));
 }
 
 #[test]
@@ -219,13 +211,7 @@ fn an_ordinary_command_reclaims_first_then_works_then_replans() {
     // 見張りの居ない A が areka の机を持っている。B が申し込む。
     let mut state = state_with(&["A", "B"]);
     hold_merge(&mut state, REPO, "A");
-    let cmd = Command::Merge {
-        id: "B".to_owned(),
-        name: None,
-        repo: REPO.to_owned(),
-        spec: "spec-B".to_owned(),
-        bug: false,
-    };
+    let cmd = merge("B", REPO, false);
 
     let got = apply(&mut state, &cmd, Some("B"), T0 + 10, &no_watch(&["A"]));
 

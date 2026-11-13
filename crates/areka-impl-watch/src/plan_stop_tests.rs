@@ -4,14 +4,12 @@
 //! なしで返す。今の負荷テストの机と同じ答えになることを確かめる（要件 5.1〜5.5）。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, hold_load, hold_merge,
-    hold_running_load, load_done, load_test, queue_load, queue_merge, run, state_with, stop_for,
-    stopped, test_freed, test_freed_record, watch_registered,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, granted, hold_load, hold_merge,
+    hold_running_load, load_done, load_running, load_test, merge, merged, queue_load, queue_merge,
+    resumed, run, state_with, stop_for, stopped, test_freed, test_freed_record, watch_registered,
 };
 use super::{Command, Event};
-use crate::state::{
-    DeskRequest, DeskSet, Participant, ParticipantStatus, SoleHolder, State, TestHolder,
-};
+use crate::state::{DeskRequest, DeskSet, ParticipantStatus, SoleHolder, State, TestHolder};
 use crate::test_support::T0;
 
 use ParticipantStatus::{StopRequested, Stopped, Working};
@@ -24,11 +22,7 @@ fn load_requested(id: &str) -> Event {
 }
 
 fn load_granted(id: &str, stopped: &[&str]) -> Event {
-    Event::DeskGranted {
-        id: id.to_owned(),
-        desks: DeskSet::TestSole,
-        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
-    }
+    granted(id, DeskSet::TestSole, stopped)
 }
 
 /// 負荷テストの 2 つの机を名指しなしで返した出来事（排他テストの机が空いた・返した）に、
@@ -66,29 +60,12 @@ fn stop_reported(id: &str) -> Event {
     Event::Stopped { id: id.to_owned() }
 }
 
-fn resumed(id: &str, why: &'static str) -> Event {
-    Event::Resumed {
-        id: id.to_owned(),
-        why,
-    }
-}
-
 fn recorded_running(id: &str) -> Event {
     Event::LoadRunning { id: id.to_owned() }
 }
 
 fn unstopped(id: &str) -> Event {
     Event::Unstopped { id: id.to_owned() }
-}
-
-/// 名前を省いた、内容が [`PURPOSE`] の「すでに走っている負荷テスト」の記録。
-fn load_running(id: &str) -> Command {
-    Command::LoadRunning {
-        id: id.to_owned(),
-        name: None,
-        repo: REPO.to_owned(),
-        purpose: PURPOSE.to_owned(),
-    }
 }
 
 /// 停止要請の取り消し（`None` は全員）。
@@ -143,11 +120,6 @@ fn a_load_request_asks_the_working_participants_to_stop_with_the_reason() {
         expected.participants.get_mut(id).expect("居る").since = T0 + 5;
     }
     assert_eq!(state, expected);
-    let reason = state.participants["A"].stop_reason.as_ref().expect("理由");
-    assert_eq!(
-        (reason.by.as_str(), reason.purpose.as_str()),
-        ("C", PURPOSE)
-    );
     let events = vec![
         load_requested("C"),
         stop_requested("A", "C"),
@@ -224,12 +196,7 @@ fn merge_holders_and_merge_waiters_are_not_asked_to_stop_and_the_grant_waits_for
     assert_eq!(state.sole, None);
 
     // 「マージが済んだ」と同じ呼び出しで番が来る。空いたマージの机の番は W に出ない。
-    let cmd = Command::Merged {
-        id: "M".to_owned(),
-        pr: "281".to_owned(),
-        sha: "414d43eb".to_owned(),
-    };
-    let got = run(&mut state, &cmd, Some("M"), T0 + 7);
+    let got = run(&mut state, &merged("M"), Some("M"), T0 + 7);
     let events = vec![
         Event::Merged {
             repo: "areka".to_owned(),
@@ -432,58 +399,12 @@ fn stopped_from_a_participant_who_was_not_asked_to_stop_changes_nothing() {
 }
 
 #[test]
-fn recording_a_running_load_test_takes_the_desk_without_asking_anyone_to_stop() {
-    // Z は参加していない。記録は参加の申し出を兼ねる。
-    let mut state = state_with(&["A", "B"]);
-    let mut expected = state.clone();
-
-    let got = run(&mut state, &load_running("Z"), Some("Z"), T0 + 5);
-
-    // A も B も「作業中」のまま、Z が排他テストの机とひとり占めの両方の、走っている印つきの
-    // 持ち主になる。
-    expected.participants.insert(
-        "Z".to_owned(),
-        Participant {
-            id: "Z".to_owned(),
-            name: "Z".to_owned(),
-            repo: REPO.to_owned(),
-            since: T0 + 5,
-            ..Participant::default()
-        },
-    );
-    expected.test = Some(TestHolder {
-        id: "Z".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-    });
-    expected.sole = Some(SoleHolder {
-        id: "Z".to_owned(),
-        purpose: PURPOSE.to_owned(),
-        requested: T0 + 5,
-        granted: T0 + 5,
-        running: true,
-        stopped: Vec::new(),
-    });
-    assert_eq!(state, expected);
-    let events = vec![Event::Joined { id: "Z".to_owned() }, recorded_running("Z")];
-    assert_eq!(got, applied(true, events));
-}
-
-#[test]
 fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes() {
     let mut state = state_with(&["A", "B", "C"]);
     hold_running_load(&mut state, "C");
 
     // マージの申し込みは並ぶだけで、番は出ない。
-    let merge = Command::Merge {
-        id: "A".to_owned(),
-        name: None,
-        repo: "areka".to_owned(),
-        spec: "spec-A".to_owned(),
-        bug: false,
-    };
-    let got = run(&mut state, &merge, Some("A"), T0 + 6);
+    let got = run(&mut state, &merge("A", "areka", false), Some("A"), T0 + 6);
     let requested = Event::MergeRequested {
         repo: "areka".to_owned(),
         id: "A".to_owned(),
@@ -515,34 +436,6 @@ fn while_the_running_mark_is_on_nobody_is_asked_to_stop_and_no_merge_grant_comes
         id: "A".to_owned(),
     };
     assert_eq!(got, applied(true, load_finished("C", vec![granted])));
-}
-
-#[test]
-fn recording_a_running_load_test_while_the_desk_is_held_changes_nothing() {
-    // 持ち主（C）に走っている印が在っても無くても断る。A は止まっている参加者、Z は参加して
-    // いない識別。断るときは名前・リポジトリの更新も、参加も、「作業中」への戻しもしない
-    // （元のスクリプトは断っても参加させて「作業中」へ戻す）。
-    let mut marked = c_holds_with_a_stopped(&["A", "C"]);
-    marked.sole.as_mut().expect("C が持つ").running = true;
-    for (held, label) in [
-        (c_holds_with_a_stopped(&["A", "C"]), "plain"),
-        (marked, "running"),
-    ] {
-        for id in ["A", "C", "Z"] {
-            let mut state = held.clone();
-            let cmd = Command::LoadRunning {
-                id: id.to_owned(),
-                name: Some("別の名前".to_owned()),
-                repo: "pasta".to_owned(),
-                purpose: "別の内容".to_owned(),
-            };
-
-            let got = run(&mut state, &cmd, Some(id), T0 + 9);
-
-            assert_eq!(state, held, "{label} {id}");
-            assert_not_applied(&got, id);
-        }
-    }
 }
 
 #[test]

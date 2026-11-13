@@ -9,10 +9,10 @@
 //! 主題でない段が状態を動かして、判定が主題から外れないようにするため。
 
 use super::test_support::{
-    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, give_back, hold_load, hold_merge,
-    hold_running_load, hold_test, load_done, load_test, queue_load, queue_merge, queue_request,
-    run, state_with, stop_for, stopped, test_freed, test_freed_record, wait_record,
-    watch_registered,
+    PID, PURPOSE, REPO, applied, ask_to_stop, assert_not_applied, give_back, granted, hold_load,
+    hold_merge, hold_running_load, hold_test, load_done, load_test, merge, merged, queue_load,
+    queue_merge, queue_request, resumed, run, state_with, stop_for, stopped, test_freed,
+    test_freed_record, wait_record, watch_registered,
 };
 use super::{Command, Event, Verdict};
 use crate::state::{
@@ -36,25 +36,6 @@ fn leave(id: &str) -> Command {
 
 fn cancel(id: &str) -> Command {
     Command::Cancel { id: id.to_owned() }
-}
-
-/// 名前を省いた、spec が `spec-<識別>` の申し込み（支えの組み立てる申し込みと同じ綴り）。
-fn merge(id: &str, repo: &str, bug: bool) -> Command {
-    Command::Merge {
-        id: id.to_owned(),
-        name: None,
-        repo: repo.to_owned(),
-        spec: format!("spec-{id}"),
-        bug,
-    }
-}
-
-fn merged(id: &str) -> Command {
-    Command::Merged {
-        id: id.to_owned(),
-        pr: "281".to_owned(),
-        sha: "414d43eb".to_owned(),
-    }
 }
 
 fn joined(id: &str) -> Event {
@@ -242,7 +223,6 @@ fn repeating_the_same_watch_start_changes_nothing() {
 
     // 待ちの記録はその場で置き換わり、並びも変わらない。
     assert_eq!(state, before);
-    assert_eq!(state.waits[0].id, "A");
     assert_eq!(got, applied(false, vec![]));
 }
 
@@ -377,11 +357,7 @@ fn leave_cancel_and_merged_free_the_test_desk_with_their_own_reason() {
 
         let got = run(&mut state, &cmd, Some("A"), T0 + 10);
 
-        events.push(Event::DeskGranted {
-            id: "B".to_owned(),
-            desks: DeskSet::Test,
-            stopped: Vec::new(),
-        });
+        events.push(granted("B", DeskSet::Test, &[]));
         assert_eq!(got, applied(true, events), "{cmd:?}");
         let holder = TestHolder {
             id: "B".to_owned(),
@@ -721,11 +697,7 @@ fn a_load_request_joins_and_gets_the_desk_at_once_when_nobody_has_to_stop() {
             id: "A".to_owned(),
             desks: DeskSet::TestSole,
         },
-        Event::DeskGranted {
-            id: "A".to_owned(),
-            desks: DeskSet::TestSole,
-            stopped: Vec::new(),
-        },
+        granted("A", DeskSet::TestSole, &[]),
     ];
     assert_eq!(got, applied(true, events));
 }
@@ -825,10 +797,7 @@ fn no_repo_gets_a_merge_holder_while_a_load_test_is_wanted_or_held() {
             id: "C".to_owned(),
             desks: DeskSet::TestSole,
         },
-        Event::Resumed {
-            id: "D".to_owned(),
-            why: "no-sole",
-        },
+        resumed("D", "no-sole"),
         merge_granted("A", "areka"),
         merge_granted("B", "pasta"),
     ];

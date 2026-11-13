@@ -2,8 +2,8 @@
 //! 眠らない。
 
 use super::test_support::{
-    REPO, hold_load, hold_merge, queue_merge, queue_request, run, state_with, stop_for, test_freed,
-    test_freed_record, wait_record,
+    REPO, hold_load, hold_merge, queue_merge, queue_request, resumed, run, state_with, stop_for,
+    test_freed, test_freed_record, wait_record,
 };
 use super::{Command, Event, Verdict};
 use crate::state::{DeskSet, LastMerge, Recent, RecentKind, State, WaitKind};
@@ -97,10 +97,7 @@ fn clear_repo_leaves_the_repo_and_empties_its_desk_and_resumes_the_stopped() {
             left("x"),
             cancelled("ghost"),
             cancelled("ghost2"),
-            Event::Resumed {
-                id: "y".to_owned(),
-                why: "no-sole",
-            },
+            resumed("y", "no-sole"),
             Event::MergeGranted {
                 repo: OTHER.to_owned(),
                 id: "z".to_owned(),

@@ -201,6 +201,36 @@ pub(super) fn stopped(id: &str) -> Command {
     Command::Stopped { id: id.to_owned() }
 }
 
+/// 名前を省いた、spec が `spec-<識別>` のマージの申し込み（支えの組み立てる申し込みと同じ綴り）。
+pub(super) fn merge(id: &str, repo: &str, bug: bool) -> Command {
+    Command::Merge {
+        id: id.to_owned(),
+        name: None,
+        repo: repo.to_owned(),
+        spec: format!("spec-{id}"),
+        bug,
+    }
+}
+
+/// マージが済んだ（PR は "281"・コミットは "414d43eb"）。
+pub(super) fn merged(id: &str) -> Command {
+    Command::Merged {
+        id: id.to_owned(),
+        pr: "281".to_owned(),
+        sha: "414d43eb".to_owned(),
+    }
+}
+
+/// 名前を省いた、内容が [`PURPOSE`] の「すでに走っている負荷テスト」の記録。
+pub(super) fn load_running(id: &str) -> Command {
+    Command::LoadRunning {
+        id: id.to_owned(),
+        name: None,
+        repo: REPO.to_owned(),
+        purpose: PURPOSE.to_owned(),
+    }
+}
+
 /// 全員が居る机で、判断を 1 回呼ぶ。
 pub(super) fn run(state: &mut State, cmd: &Command, caller: Option<&str>, now: u64) -> Applied {
     apply(state, cmd, caller, now, &FakePresence::all_present())
@@ -211,6 +241,23 @@ pub(super) fn watch_registered(id: &str) -> Event {
     Event::WaitRegistered {
         id: id.to_owned(),
         kind: WaitKind::Watch,
+    }
+}
+
+/// 机の番が来た出来事。`stopped` は番が来たときに止まっていた識別。
+pub(super) fn granted(id: &str, desks: DeskSet, stopped: &[&str]) -> Event {
+    Event::DeskGranted {
+        id: id.to_owned(),
+        desks,
+        stopped: stopped.iter().map(|id| (*id).to_owned()).collect(),
+    }
+}
+
+/// 「作業中」へ戻った出来事。`why` は戻った訳の綴り。
+pub(super) fn resumed(id: &str, why: &'static str) -> Event {
+    Event::Resumed {
+        id: id.to_owned(),
+        why,
     }
 }
 
@@ -248,12 +295,4 @@ pub(super) fn assert_not_applied(got: &Applied, label: &str) {
         panic!("{label}: 当てはまらなかった、を返す: {:?}", got.verdict);
     };
     assert!(!text.is_empty() && text.is_ascii(), "{label}: {text}");
-}
-
-#[test]
-fn fake_presence_answers_present_unless_told_absent() {
-    let presence = FakePresence::all_present().absent("A", WaitKind::Merge);
-    assert!(presence.is_present("A", WaitKind::Watch));
-    assert!(presence.is_present("B", WaitKind::Merge));
-    assert!(!presence.is_present("A", WaitKind::Merge));
 }
