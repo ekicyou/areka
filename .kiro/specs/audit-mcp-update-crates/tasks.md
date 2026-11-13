@@ -139,8 +139,8 @@
 - 1.1: 赤を見るために一時的に書き換えて戻したファイルは、時刻の都合で cargo が組み直さず古いビルドのまま赤が残ることがある。戻した後は `touch` してから回す。
 - 1.2: 偽の受け口の `start`／`start_on` は受け口のスレッドの tokio の中で `listen` するので、待ち受けの準備の知らせ（mpsc）を待ってから戻る。知らせを待たないと、起こした直後の接続が断られ Windows の送り直しで `Connect(TimedOut)` になる。
 - 3.2: `testkit::junction` の後の確かめは `symlink_metadata` で見る（`exists()` は先をたどるので自分を指すジャンクションで落ちる）。#31 の名前は設計の 4 つだけだと先頭の 0 の扱いを崩しても順が変わらないので `delete3.txt` を足した。
-- 4.1（範囲の外・完了の棚卸で起票）: `doc/ssp-mcp/transport-diff-areka.md` の「ping」「未知メソッド」の行は、`2026-07-28` の版で 404・`-32601` になることを書いていない（名指したテストはそれを固定している）。この spec は表の値を変えない約束なので直さない（この spec より前からの書き漏れ）。
-- 4.1（範囲の外・完了の棚卸で起票）: `crates/areka/src/log_history.rs` の規則 `areka_update::winhttp`／`areka_update::fetch` は何の記録にも当たらない（更新の記録はすべて `lib.rs`＝target `areka_update` から出る）。`areka` クレートの持ち場。
+- 完了時にその場で解決: `doc/ssp-mcp/transport-diff-areka.md` の「ping」「未知メソッド」の行に、`2026-07-28` の話し方では 404・`-32601` になること（spec areka-P0-mcp-receiver-bugs 要件 1.3）と、それを縛るテストの名を書き添えた（判定は旧式どうしの比べなので「同じ」のまま）。
+- 完了の棚卸で外した: `crates/areka/src/log_history.rs` の規則 `areka_update::winhttp`／`areka_update::fetch` は、完了した `areka-P0-mcp-log-history` の要件 2.3 が「取得の行を足したときの受け皿」として置いたもので、欠陥ではない。
 - 4.1（裁定・数えない）: `areka-update` の `pub use` の `UpdateWarning`・`InvalidWhy`・`DeleteWhy`・`MAX_BODY_BYTES` は外の使い手が 0 だが、要件 6.1（公開の形を変えない）の外なので残す（要件 6.4・audit 系の議題は推奨案で決めてよい）。
 - 4.1（かけ直し 3〜4 回目・本番の直し）: rmcp 3.9.0 は交渉済みの版と違う `_meta` の版の要求を「止める間」として答えまでほかの要求を送らない。中継は、つなぎ先ごとに最初の版付きの要求の前へ同じ `_meta` の `server/discover` を 1 回送り、この待ちを短い往復へ移す（完了した `areka-P0-mcp-stdio-bridge` の設計 D-13 の例外の形を変える）。版を記録するのは discover の答え（エラーの答えも）が返ったときだけ。
-- 4.1（数えない・約束の外）: `crates/areka-mcp-bridge/Cargo.toml` の dev-dependencies の tokio `rt-multi-thread` とその注は使われていない。3 つのクレートの `Cargo.toml` は差分 0 の約束（要件 5.5）なので直さない。完了の棚卸で起票する。
+- 完了時にその場で解決: `crates/areka-mcp-bridge/Cargo.toml` の dev-dependencies の tokio から使われていない `rt-multi-thread` を外し、注を事実に合わせた（`Cargo.lock` は変わらない）。要件 5.5 の「3 つのクレートの `Cargo.toml` に差分が無い」は、この 2 行だけ外れる。
