@@ -630,3 +630,16 @@
   - (c) `response_not_from_helper` の理由は、ハンドシェイク前に届いた応答にも付く: 捨てて記録する振る舞いは正しく、理由の語の幅の話。
   - (d) 入れ子の LOAD: 14.16 の (a) で決着済み。
 - clippy の回し直し: x64（`-p shiori-host32-host -p shiori-host32-ipc --all-targets`）は 14.16 と同じ `clippy::drop_non_drop` の 3 件だけで、行は動いていない（`tests/lifecycle_kill_e2e.rs:215`・`lifecycle_cyclic_e2e.rs:162`・`:287`）。
+
+### 14.20 かけ直し 5 回目（タスク 14・最後）
+
+- 結果: 新しい指摘が 1 件出た。記録の文言だけで、本番の振る舞いを変えるものは 0 件。直した。
+  1. 記録の文言の誤り: `crates/shiori-host32-helper/src/main.rs` の `log_response_send_failure` が、last error 0 のときに「＝戻り 0 かつ last error 0＝応答なし判定で打ち切られた」と書いていた。今は誤り。呼び手の 3 か所（RESPONSE・LOAD の ack・UNLOAD の ack）はどれも `send_copydata_response` を通り、`SendFlavor::Response` は `SMTO_NORMAL` だけで `SMTO_ABORTIFHUNG` を付けない（`crates/shiori-host32-ipc/src/lib.rs`）。関数の説明とも食い違っていた。直し: 枝を畳んで、どの場合も `last_error={last_error}` を出す 1 行にした。説明は「応答なし判定（`SMTO_ABORTIFHUNG`）による打ち切り」を、旗を外す前（D16）に置いた当初の見立てとして書き直した。この文言を断言するテストは無い（grep で確かめた）。
+- 見直して数えなかったもの（5 回目の監査役の申し送り）:
+  - (a) `tests/error_paths.rs` の「すべて bounded」: 字面どおり正しい。
+  - (b) `tests/lifecycle_kill_e2e.rs` の SMTO の即時失敗の注: 言い切らない書き方で、誤りではない。
+  - (c) env が "0" のときの `Duration::MAX`: 無期限に待つことを選ぶための意図した入口。
+  - (d) `crates/shiori-host32-ipc/src/lib.rs` の 438 行目あたりの古い語: これまでの回と同じ型の語の話で、本番に関わらない。
+  - (e) 本番の往復の順序: 見直して問題なし。
+- 区切りの決め: かけ直しは開発者の決まり（5 回目で区切ってよい）に従い、ここで止める。本番の振る舞いや記録に関わる指摘は 1 回目の 2 件（`helper_log` の panic と、`parent_frame_ignored`／`null_lparam` の WARN を足した黙った捨て）で、2〜5 回目は 0 件。指摘は 4 → 10 → 14 → 3 → 1 件と減り、すべて直した。
+- 5 回目の監査役の但し書き: 残る大きなテストのファイル（約 5,000 行。`client_tests`・`shiori3*_tests`・`charset_tests`・`parent_window_tests`・`terminator_tests`・helper の `*_tests`・cyclic と request の e2e・`shiori_wiring_charset_tests`）は頭から終わりまでは読んでおらず、grep で的を絞って見ただけ。2〜4 回目ではこれらを通して読んでいる。

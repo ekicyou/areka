@@ -97,25 +97,18 @@ const REQUEST_ERROR_RESPONSE: &[u8] = b"SHIORI/3.0 500 Internal Server Error\r\n
 
 /// 応答（`MsgTag::Response`）の送出が失敗したときの観測ログ（要件 16.1・design.md D16）。
 ///
-/// `SendMessageTimeoutW` の戻り 0 には由来が 2 つある——**本当の送出失敗**（宛先の窓が既に無い等・
-/// last error が非 0）と、**「応答なし」判定による打ち切り**（戻り 0 かつ last error 0・待たずに
-/// 即座に返る）である。前者と後者は `IpcError::SendFailed` に潰れて見分けが付かないため、生の
-/// last error を必ず一緒に残す（もう 1 つの由来である期限切れ＝last error 1460 は
-/// `IpcError::Timeout` として別に届く・areka-P0-shiori-fault-notice 7.1）。応答方向からハング打ち切りの旗を外した後に last error 0 の失敗が
-/// 再発したら、旗以外の原因を疑う手がかりになる（log-first・silent swallow 禁止）。
+/// `SendMessageTimeoutW` の戻り 0 は `IpcError::SendFailed` に潰れて由来が見分けられないため、
+/// 生の last error を必ず一緒に残す（期限切れ＝last error 1460 は `IpcError::Timeout` として
+/// 別に届く・areka-P0-shiori-fault-notice 7.1）。この観測ログを置いた当初は、戻り 0 かつ
+/// last error 0 の失敗を「応答なし判定（`SMTO_ABORTIFHUNG`）による打ち切り」と見ていた。D16 で
+/// 応答方向からその旗を外したので、今 last error 0 の失敗が出たら旗以外の原因を疑う手がかりに
+/// なる（log-first・silent swallow 禁止）。
 fn log_response_send_failure(what: &str, e: &IpcError) {
     // SAFETY: Win32 境界。直前の送出呼び出しが残したスレッド局所のエラー値を読むだけ。
     let last_error = unsafe { GetLastError() }.0;
-    if last_error == 0 {
-        helper_log(&format!(
-            "[helper] {what} 送出失敗（観測）: {e:?} / last_error=0 \
-             ＝戻り 0 かつ last error 0＝応答なし判定で打ち切られた"
-        ));
-    } else {
-        helper_log(&format!(
-            "[helper] {what} 送出失敗（観測）: {e:?} / last_error={last_error}"
-        ));
-    }
+    helper_log(&format!(
+        "[helper] {what} 送出失敗（観測）: {e:?} / last_error={last_error}"
+    ));
 }
 
 /// 自窓へ `PostMessageW(WM_NULL)` を置き、メッセージループを起こす（指摘 12）。
