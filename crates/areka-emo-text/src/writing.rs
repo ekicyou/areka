@@ -274,26 +274,12 @@ impl WritingDirectionDecision {
 }
 
 /// 書字方向の宣言の生の値（前の装着・再追従の宣言と比べるため・要件 3.3）。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "本番の呼び手（登録口）は emo-text-reveal-incremental のタスク 4.2 で足す"
-    )
-)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DirectionDecl {
     vertical: Option<String>,
     writing_mode: Option<String>,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "本番の呼び手（登録口）は emo-text-reveal-incremental のタスク 4.2 で足す"
-    )
-)]
 impl DirectionDecl {
     /// 2 層マージ済み `BalloonModel` の 2 キーの生の値を写し取る。
     pub(crate) fn of(model: &BalloonModel) -> DirectionDecl {
@@ -310,13 +296,6 @@ impl DirectionDecl {
 /// キーごとに「前が無いか、生の値が前と違う」ときだけ、そのキーの警告を書く。
 /// 矛盾併記の `debug!` は、両キーが有効で方向が違い、前が無いかどちらかの生の値が違うときに書く。
 /// 分類と矛盾の判定は解決（[`WritingDirectionDecision::resolve`]）のものをそのまま使う。
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "本番の呼び手（登録口）は emo-text-reveal-incremental のタスク 4.2 で足す"
-    )
-)]
 pub(crate) fn note_direction_declarations(model: &BalloonModel, previous: Option<&DirectionDecl>) {
     let current = DirectionDecl::of(model);
     let vertical_changed = previous.is_none_or(|p| p.vertical != current.vertical);
