@@ -643,3 +643,11 @@
   - (e) 本番の往復の順序: 見直して問題なし。
 - 区切りの決め: かけ直しは開発者の決まり（5 回目で区切ってよい）に従い、ここで止める。本番の振る舞いや記録に関わる指摘は 1 回目の 2 件（`helper_log` の panic と、`parent_frame_ignored`／`null_lparam` の WARN を足した黙った捨て）で、2〜5 回目は 0 件。指摘は 4 → 10 → 14 → 3 → 1 件と減り、すべて直した。
 - 5 回目の監査役の但し書き: 残る大きなテストのファイル（約 5,000 行。`client_tests`・`shiori3*_tests`・`charset_tests`・`parent_window_tests`・`terminator_tests`・helper の `*_tests`・cyclic と request の e2e・`shiori_wiring_charset_tests`）は頭から終わりまでは読んでおらず、grep で的を絞って見ただけ。2〜4 回目ではこれらを通して読んでいる。
+
+### 14.21 全体テストの赤（タスク 14・直し 1 回目）
+
+- 症状: `tools/test-all.ps1` の `x64 workspace tests` で、`crates/areka/src/session_end_sync_send_tests.rs` の `production_sync_sends_match_the_allowed_table` と、それに引きずられた `sync_send_scan_turns_red_on_one_row_removed_or_one_call_added` が赤。本番ソースの同期の送信を許可表（`ALLOWED_SYNC_SENDS`）と突き合わせる検査で、表に無い当たり `crates/shiori-host32-testdll/src/lib.rs` の `SendMessageW(`（テストのモジュールの外）1 件と、当たりの無い表の行 `crates/shiori-host32-host/src/parent_window.rs` の `SendMessageW(`（テストのモジュールの中）1 件が出た。
+- 原因: このブランチの正当な変更 2 つに表が追いついていなかった。送信の形を誤ったものではない。
+  1. タスク 7.4（`1e13b0c03`）で `parent_window.rs` のファイル内のテスト（`mod window_tests`）を `parent_window_tests.rs` へ移した。検査は `_tests.rs` を走査しないので、表の行が当たりを失った。
+  2. タスク 2（`fa3be4212`）で試験用の DLL に `OnTestReenter` を足した。`request` の中から、テストが `Reference0` で渡す補助プロセス自身の窓へ `WM_COPYDATA` を `SendMessageW` で送り返す（指摘 8 の再入の場）。DLL のクレートの `src` は走査に入るので、表に無い当たりになった。
+- 直し: 許可表の親窓の行を消し、試験用の DLL の行（`false`・1 件）を理由つきで載せた。この DLL は補助プロセスのテストだけが読み、areka は読まない。送り先は送り手と同じスレッドの窓なので、窓の手続きの直接の呼び出しになり、OS のセッションの終了の join と輪にならない。IPC の行は表の先頭のまま残した（較正のテストが `[1..]` で先頭を消すため）。`session_end.rs` の受け手の説明は areka のスレッドの話で、この DLL に触れないので変えていない。

@@ -251,8 +251,10 @@ type SendKey = (String, &'static str, bool);
 /// 本番ソースで同期の送信を呼んでよい所と回数（`research.md` §6 の洗い出し）。
 /// - IPC の送信: shiori のスレッド → 32bit の補助プロセスの message-only 窓（別プロセス）と、
 ///   補助プロセス → shiori のスレッドの親窓の応答の両方が、この 1 か所を通る。
-/// - 親窓のテスト: 不正なフレームを親窓へ自分のスレッドから送る（ファイル内のテストの
-///   モジュールの中＝本番のビルドには入らない）。
+/// - 試験用の SHIORI DLL（`shiori-host32-testdll`・`OnTestReenter`）: 32bit の補助プロセスの
+///   テストだけが読む DLL が、`request` の中から補助プロセス自身の窓（同じスレッド）へ
+///   `WM_COPYDATA` を送り返す（audit-shiori-host32 指摘 8 の再入の場）。areka は読まない。
+///   親窓のテストの送信は `parent_window_tests.rs` へ移った（同タスク 7.4）ので走査に入らない。
 /// - 標準のツールチップ（areka-P0-wintf-tooltip）: UI スレッドが自分で作ったツールチップの窓へ
 ///   `TTM_*` などを送る。宛先が同じスレッドの窓なので送信は窓の手続きの直接の呼び出しになり、
 ///   キューを通らない＝join と輪にならない。
@@ -264,9 +266,9 @@ const ALLOWED_SYNC_SENDS: [(&str, &str, bool, usize); 3] = [
         1,
     ),
     (
-        "crates/shiori-host32-host/src/parent_window.rs",
+        "crates/shiori-host32-testdll/src/lib.rs",
         "SendMessageW(",
-        true,
+        false,
         1,
     ),
     (
