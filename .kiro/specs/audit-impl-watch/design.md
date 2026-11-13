@@ -24,7 +24,7 @@
 ### This Spec Owns
 - `crates/areka-impl-watch/` の全ファイル（本番 12・テスト 27・`Cargo.toml`）のうち、§File Structure Plan に挙げたファイルの直し。
 - 新しいテストの支えのファイル `crates/areka-impl-watch/src/main_test_support.rs`（クレートのテスト全体で共通の支え。#7）。
-- `doc/impl-watch.md` の `status` と `status.md`・`state.lock` に触れる文（#8 で変わる文 4 か所＝384・576・586・588 行目。9.3・3.2）。
+- `doc/impl-watch.md` の `status` と `status.md`・`state.lock` に触れる文（#8 で変わる文 4 か所＝384・576・586・588 行目。9.3・3.2。実装の後のかけ直しの audit R2-4 で、置き方の道具が呼ぶ `status` についての 162 行目も #8 に合わせて直した）。
 
 ### Out of Boundary
 - `crates/areka/`・`Cargo.lock`・`vendors/`・`runtime-module-untangle` が書き換えるファイル（6.3・6.8）。どの直しも触らない。
@@ -300,6 +300,10 @@ pub(crate) fn entries(dir: &Path) -> Vec<PathBuf>;     // 直下の道筋・並�
 pub(crate) fn names(dir: &Path) -> Vec<String>;        // 直下の名前・並べ替え済み
 pub(crate) fn home_in(root: &TempPath) -> Home;        // 一時フォルダを置き場所にした Home
 pub(crate) fn read_state(dir: &Path) -> State;         // dir の state.json を状態として読む（無い・読めないなら panic）
+// 実装の後（かけ直しの audit R4-1）に足したもの: plan・wait・status のテストで写されていた机の持ち主の組み立て
+pub(crate) fn merge_holder(id: &str, requested: u64, granted: u64) -> Option<MergeHolder>;
+pub(crate) fn test_holder(id: &str, purpose: &str, requested: u64, granted: u64) -> Option<TestHolder>;
+pub(crate) fn sole_holder(id: &str, purpose: &str, requested: u64, granted: u64, running: bool, stopped: &[&str]) -> Option<SoleHolder>;
 ```
 - 読むのは `crate::home::Home`・`crate::state::State`・`temp_path_kit`・`std::fs` だけ。本番のモジュールからは読まない。
 - 各テストは `use crate::test_support::{…}` で直に読む（支えのファイルで出し直さない）。
