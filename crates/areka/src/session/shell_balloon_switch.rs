@@ -23,24 +23,24 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use super::frame::RuntimeWiring;
 use super::ghost_switch::SwitchInFlight;
-use super::shell_balloon_resolve::{
-    SkinCandidate, balloon_candidates, installed_for, resolve_skin_target, shell_candidates,
-};
-use super::switch_assets::{SwitchBuildRequest, spawn_switch_build};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::pick_index;
 use crate::exit_wait::{self, WorkGate};
 use crate::ghost_session::GhostSlot;
+use crate::runtime::frame::RuntimeWiring;
+use crate::runtime::shell_balloon_resolve::{
+    SkinCandidate, balloon_candidates, installed_for, resolve_skin_target, shell_candidates,
+};
+use crate::runtime::switch_assets::{SwitchBuildRequest, spawn_switch_build};
 
-pub(crate) use super::skin_switch::{
+pub(crate) use crate::runtime::skin_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinRequestRaw, SkinSpec, SkinSwitchInFlight,
     SkinSwitchStage, SkinVerdict, skin_ref_name, skin_ref_path,
 };
 // 本番で引く呼び手は無い（差し替えの相は skin_switch を直に引く）・テストの道のためだけに出し直す。
 #[cfg(test)]
-pub(crate) use super::skin_switch::SwapFinish;
+pub(crate) use crate::runtime::skin_switch::SwapFinish;
 
 /// 台本からの切替要求の受信端（World の NonSend・ゴーストごとに新品）。
 pub(crate) struct SwitchRx(Receiver<SkinRequestRaw>);

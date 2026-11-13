@@ -13,11 +13,11 @@ use bevy_ecs::world::World;
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell};
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::reload;
 use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
 use crate::runtime::skin_switch::SkinKind;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::reload;
 
 /// 口の中身。
 pub(crate) const HOOKS: SessionHooks = SessionHooks {

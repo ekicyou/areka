@@ -29,7 +29,7 @@ use crate::input_events;
 use crate::menu;
 use crate::readme;
 use crate::runtime;
-use crate::runtime::runtime_boot::CueSinkSources;
+use crate::session::runtime_boot::CueSinkSources;
 use crate::{ConfigInputs, ghost_boot_options, is_benign_boot_error};
 
 #[path = "ghost_session_scope_rect.rs"]
@@ -72,9 +72,9 @@ pub(crate) fn register_systems(world: &mut World, kanade_stop_rx: Receiver<Kanad
     crate::write_failure::install(world);
 
     readme::register_readme_drain(world);
-    runtime::ghost_switch::register_change_drain(world);
-    runtime::shell_balloon_switch::register_switch_drain(world);
-    runtime::reload::register(world);
+    crate::session::ghost_switch::register_change_drain(world);
+    crate::session::shell_balloon_switch::register_switch_drain(world);
+    crate::session::reload::register(world);
     input_events::user_break::register_user_break_drain(world);
     menu::register_menu_poll(world);
     input_events::balloon::register_balloon_leave_system(world);
@@ -871,7 +871,7 @@ fn boot_wired(
         kanade_stop.clone(),
         shell,
         &descript.default_surfaces,
-        runtime::runtime_boot::boot_runtime,
+        crate::session::runtime_boot::boot_runtime,
     );
     if !outcome.wired {
         return Err(BootWiringFailed);

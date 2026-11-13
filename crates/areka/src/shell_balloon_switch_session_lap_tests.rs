@@ -34,16 +34,16 @@ use super::GhostSlot;
 use crate::boot_resolve::read_last_shell;
 use crate::input_events::user_break::UserBreakWiring;
 use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
-use crate::runtime::shell_balloon_switch::{
-    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
-    request_skin_switch,
-};
 use crate::runtime::spine::{
     GpuPermit, Progress, RecordedCall, ScriptedShioriBackendBuilder, wait_until,
 };
 use crate::runtime::target_map::shell_target;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
+use crate::session::shell_balloon_switch::{
+    SkinKind, SkinOrigin, SkinRequest, SkinSpec, SkinSwitchInFlight, SkinSwitchStage, SkinVerdict,
+    request_skin_switch,
+};
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::{GhostWindows, spawn_ghost_windows};

@@ -397,7 +397,7 @@ enum Pointed {
 /// 親がどの置き場の `ghost\` とも同じでなければ一時の置き場にする（3.1〜3.3・3.10）。
 /// 絶対パスでなければ切り替えと同じ名前の引き当て（`name` が先・フォルダ名が後）で並びのゴーストから探す（4.1〜4.4）。
 fn point_ghost(value: &str, roots: &areka_ghost::BasewareRoots) -> Pointed {
-    use crate::runtime::ghost_switch::{GhostSpec, resolve_switch_target};
+    use crate::session::ghost_switch::{GhostSpec, resolve_switch_target};
     let path = std::path::Path::new(value);
     if !path.is_absolute() {
         let listed = areka_ghost::catalog_roots::list_ghosts(roots);

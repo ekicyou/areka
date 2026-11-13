@@ -13,12 +13,12 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::RuntimeWiring;
-use crate::runtime::ghost_switch::{
+use crate::runtime::reload_args::{DescriptNotes, ReloadTarget};
+use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::runtime::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
-use crate::runtime::reload_args::{DescriptNotes, ReloadTarget};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::reload::{ReloadInFlight, ReloadOrigin, ReloadRequest, request_reload};
 use areka_placement::zorder_group_ledger::{GroupSource, parse_zorder_tokens};
 
 /// 切替の握手と SHIORI だけの読み直しに応える台本。
@@ -104,7 +104,7 @@ fn reload(rig: &mut SwitchRig, target: ReloadTarget) -> Vec<CapturedEvent> {
     });
     assert_eq!(
         flow,
-        (crate::runtime::reload::ReloadVerdict::Accepted, true),
+        (crate::session::reload::ReloadVerdict::Accepted, true),
         "{events:?}"
     );
     assert!(!rig.exit_requested(), "終了しない: {events:?}");

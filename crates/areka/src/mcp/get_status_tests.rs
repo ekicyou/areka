@@ -240,7 +240,7 @@ fn body(outcome: &ToolOutcome) -> String {
 /// （要件 1.1・2.1・3.4・4.2・4.3）。
 #[test]
 fn m6_real_unit_answers_talking_then_not_after_the_talk_ends() {
-    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(
         "A",

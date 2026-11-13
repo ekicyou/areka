@@ -15,7 +15,7 @@ use temp_path_kit::TempPath;
 use tracing::Level;
 
 use super::*;
-use crate::runtime::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch::SwitchInFlight;
 
 fn cand(folder: &str, name: Option<&str>, hidden: bool) -> SkinCandidate {
     SkinCandidate {

@@ -29,7 +29,7 @@ use crate::boot_config::BootContext;
 use crate::exit_wait::WorkGate;
 use crate::ghost_session::GhostSlot;
 use crate::menu::captions::{QueryReply, send_query};
-use crate::runtime::ghost_switch::{
+use crate::session::ghost_switch::{
     GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch,
 };
 

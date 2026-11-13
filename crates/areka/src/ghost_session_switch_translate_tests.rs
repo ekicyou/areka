@@ -6,9 +6,9 @@
 
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// A の `OnBoot` の台本: 台詞の途中で B への切替（`OnGhostChanging` を送らせる）を命じる。
 const A_TO_B: &str = "\\0A\\![change,ghost,B,--option=raise-event]\\e";

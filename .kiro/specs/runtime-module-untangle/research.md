@@ -815,3 +815,34 @@ public struct RECT { public int L, T, R, B; }
 - 置く回数もファイルごとに一致する（本番 1・テスト 30。`balloon_pointer_handler_tests.rs` 10・`balloon_visibility_phase_tests.rs` 10・`balloon_visibility_phase_box_tests.rs` 2・残り 8 ファイル各 1）。
 - 設計の「13 ファイル 45 か所」との差: `balloon_pass_through_tests.rs` は `BalloonWiring::new` を作るが world へ置かない（`send_selection` を直に呼ぶ）ので数に入らない。設計の 45 か所はこの式の数（30）と一致しない（設計の段の数え方は記録が無い）が、包含は上の式で 0 を示した。`wire_balloon_choice` を呼ぶテストは本番の関数が両方を置く。
 - 外す所: 本番で外す所は無い（`BalloonWiring` と同じ）。
+
+## 本体に頼るファイルの移動（2026-11-13・タスク 6.1・要件 2.1・2.3・3.7・6.4）
+
+### 移したファイル（23 本・`git mv`・名前は変えない）
+
+`runtime/` → `session/`: `ghost_switch.rs`・`ghost_switch_{balloon,boot_event,drop_write,fallback,notice,reload,rig_wait,roots,talk_clock}_tests.rs`・`ghost_switch_tests.rs`・`ghost_switch_test_support.rs`・`reload.rs`・`reload_tests.rs`・`reload_skin_tests.rs`・`runtime_boot.rs`・`runtime_boot_tests.rs`・`same_folder_pin.rs`・`same_folder_pin_tests.rs`・`shell_balloon_switch.rs`・`shell_balloon_switch_tests.rs`・`switch_copy.rs`・`switch_copy_tests.rs`。宣言は `runtime/mod.rs` から `session/mod.rs` へ同じ見える範囲と説明の文のまま移した。
+
+- 中身の書き換え: `super::X`（`X` が `runtime` に残るもの）→ `crate::runtime::X`、`crate::runtime::X`（`X` が移したもの）→ `crate::session::X`（本体の 69 ファイルも同じ置き換え）・`ghost_session.rs` の 4 か所を `crate::session::…` に（947 行のまま）・`spine.rs:770` の `runtime_boot_options` の引き口・`runtime/mod.rs` の `wire_tests` の `boot_runtime`・`zorder_wiring_tests.rs` の `include_str!("../session/runtime_boot.rs")`。
+- `runtime_boot_tests.rs` が `#[path]` で宣言する `script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs` は設計の対応表（下の行に無いもの＝`runtime`）どおり `runtime/` に残し、`#[path = "../runtime/…"]` へ直した。9.1 の `modtree.py` はこの 2 本を `UNDECLARED` と出す（テストなので式の集合には入らない）。
+- 既定のゴーストの判定（`DEFAULT_GHOST_FOLDER` の使い手）は `session/ghost_switch.rs` の中に残る（6.4）。
+- 出所の追従（振る舞いを保つため・2.1 と同じ中間の扱い）: `log_history.rs` の決まりと `log_history_tests.rs` の 3 か所と `doc/ssp-mcp/log-convention.md:55`（決まりの表と文書の表を突き合わせる `log_history_convention_tests` のため）を `areka::session::ghost_switch` へ、`reload_tests.rs:580`・`reload_skin_tests.rs:328` の照合の出所を `areka::session::reload` へ改めた。7.1 は `UNKEPT_TARGETS` と assert を足すだけ、7.2 はほかの出所を直す。
+
+### 広げた見える範囲（9.6 の一覧・コンパイルが求めた分だけ）
+
+| 項目 | 前 → 後 | 要る所 | 段 |
+|---|---|---|---|
+| `session::ghost_quit::ghost_quit_system` | `pub(super)` → `pub(crate)` | `runtime/frame_schedule_tests.rs` | 5.1 |
+| `runtime/mod.rs` の `mod change_cue`・`reload_cue`・`special_name`・`switch_cue`・`window_state_cue` | 私有 → `pub(crate)` | `session/runtime_boot.rs`・`ghost_switch.rs`・`reload.rs` | 6.1 |
+| `runtime/mod.rs` の `mod install_cue`・`readme_cue`・`update_cue` | 私有 → `pub(crate)` | `session/runtime_boot.rs` の `runtime_sinks`（6.2 で持ち主へ移すと持ち主の宣言になる） | 6.1 |
+| `RuntimeWiring` の欄 `shell_carry` | `pub(in crate::runtime)` → `pub(crate)` | `session/ghost_switch_reload_tests.rs` | 6.1 |
+
+- 8 つの `mod` は 1 つずつ私有へ戻して `cargo check -p areka --all-targets` が誤りになることを確かめた（8 つとも要る）。
+
+### 式 1〜3（6.1 の後・16.5 のコマンドで `B=crates/areka/src/runtime`・式 1 は `crate::(?!runtime\b)`）
+
+- 本番のファイルの集合と宣言の木が一致（`SAME`・60 本＝61 − 移した本番 6 ＋ 3.x・4.1 で足した 5）。D1 37 本・D2 22 本・深さ 3 以上の本番 0。
+- 式 2・式 3: **0 行**。
+- 式 1: **8 行**。
+  - `install_cue.rs:25`・`:26`・`:48`・`readme_cue.rs:39`・`:40`・`update_cue.rs:22`（6 行）＝受け口の持ち主を名指す所。**6.2** で持ち主へ移すと消える。
+  - `mod.rs:837`（`#[cfg(test)] mod wire_tests` の中の `crate::session::runtime_boot::boot_runtime`）・`session_hooks.rs:78`（`#[cfg(test)] const FALLBACK = crate::session::hooks::HOOKS`・設計どおり）（2 行）＝`#[cfg(test)]` の項目の中。**9.1** で行ごとに示す。
+- `runtime` の本番で `session` を名指すほかの行は説明の文だけ（`special_name.rs:3`・`mod.rs:176` の `session::runtime_boot::boot_runtime`・`mod.rs` の `wire_kanade_stop` のリンク）＝要件 3.4 の一覧（9.1）に載せる。

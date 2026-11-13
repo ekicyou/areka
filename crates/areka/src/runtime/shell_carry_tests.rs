@@ -22,7 +22,7 @@ use areka_seriko::{
 
 use super::*;
 use crate::ghost_session::{GhostSession, GhostSlot};
-use crate::runtime::reload::carries_shell_state;
+use crate::session::reload::carries_shell_state;
 
 /// 在る面の集合（読み直したシェルの代わり）。
 fn shell_with(ids: &'static [u32]) -> impl Fn(u32) -> bool {

@@ -20,25 +20,17 @@ mod balloon_background;
 pub(crate) mod balloon_hover;
 pub mod balloon_visibility;
 /// `\![change,ghost,…]` の受け口（areka-P0-ghost-shell-balloon-switch）。
-mod change_cue;
+pub(crate) mod change_cue;
 pub mod consumer_ledger;
 pub mod frame;
-/// ゴーストの切替の入口（areka-P0-ghost-shell-balloon-switch）。
-pub(crate) mod ghost_switch;
 pub mod hit_region;
 pub mod hover_inject;
-mod install_cue;
+pub(crate) mod install_cue;
 pub mod move_cue;
-mod readme_cue;
-/// 読み直しの窓口（areka-P0-mcp-reload）。
-pub(crate) mod reload;
+pub(crate) mod readme_cue;
 pub(crate) mod reload_args;
 /// `\![reload,…]`・`\![reloadsurface]` の受け口（areka-P0-mcp-reload）。
-mod reload_cue;
-/// 実行系の側の起動（受け口の送出端の束・areka-P0-mcp-reload）。
-pub(crate) mod runtime_boot;
-/// 同じフォルダ名のゴーストを今のゴーストとして扱う（areka-P0-baseware-root-list）。
-pub(crate) mod same_folder_pin;
+pub(crate) mod reload_cue;
 /// スコープの倍率の表と倍率の文字（読み手と倍率の通知が引く・runtime-module-untangle 3.4）。
 pub(crate) mod scope_scale;
 /// 出どころで実行を制限するタグの判定の表（areka-P0-script-security-level）。
@@ -47,8 +39,6 @@ pub(crate) mod script_restriction;
 pub(crate) mod session_hooks;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
 pub(crate) mod shell_balloon_resolve;
-/// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。
-pub(crate) mod shell_balloon_switch;
 /// 箱の束（置き場所の表・別名の写し・在るサーフェス番号・フォントの探す場所・areka-P0-shell-balloon）。
 pub(crate) mod shell_box_assets;
 /// 箱の上の滞在と毎フレームの整え（可視性の相が読み、入力の側が書く・runtime-module-untangle 3.3）。
@@ -61,22 +51,20 @@ pub(crate) mod shell_cursor_table;
 pub(crate) mod skin_facts_copy;
 /// シェル・バルーンの切替の型（入口から下ろした・runtime-module-untangle）。
 pub(crate) mod skin_switch;
-mod special_name;
+pub(crate) mod special_name;
 /// strict の記録の areka の判定（`\!` の台帳と `\f` の分類・mcp-strict-errors）。
 pub(crate) mod strict_judges;
 /// シェル・バルーンの差し替えの資産を背景で作る部品と荷物の置き場（areka-P0-shell-balloon-switch）。
 pub(crate) mod switch_assets;
-/// ゴーストの切替で同梱のゴーストを書ける根へ背景で写す（areka-P0-user-data-root）。
-pub(crate) mod switch_copy;
 /// `\![change,shell|balloon,…]` の受け口（areka-P0-shell-balloon-switch）。
-mod switch_cue;
+pub(crate) mod switch_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
-mod update_cue;
+pub(crate) mod update_cue;
 pub(crate) mod user_break_cue;
 /// `\v`／`\![set,windowstate,…]` の受け口（stay-on-top-directives）。
-mod window_state_cue;
+pub(crate) mod window_state_cue;
 pub mod zorder_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
@@ -95,10 +83,6 @@ mod crash_report_test_support;
 // 検体をここから引くので、保持（＝段 ③ の複製）はテストバイナリあたり 1 回で済む。
 #[cfg(test)]
 pub(crate) mod sample_test_support;
-
-// 偽の SHIORI を持つゴーストを同じ World で起こす統合テストの土台（areka-P0-ghost-shell-balloon-switch）。
-#[cfg(test)]
-pub(crate) mod ghost_switch_test_support;
 
 // タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
 // 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
@@ -189,7 +173,7 @@ pub(crate) enum RuntimeBootError {
     Boot(#[source] GhostBootError),
 }
 
-/// 実行系の側の起動（本番は `runtime_boot::boot_runtime`・[`wire_runtime`] の手順 5 で呼ぶ）。
+/// 実行系の側の起動（本番は `session::runtime_boot::boot_runtime`・[`wire_runtime`] の手順 5 で呼ぶ）。
 /// 同期の関数のポインタで受け、`wire_runtime` を総称にしない（字面 `pub fn wire_runtime(` を照合するテストのため）。
 pub(crate) type BootRuntimeFn = fn(
     &mut World,
@@ -850,7 +834,7 @@ mod wire_tests {
             std::sync::mpsc::channel().0,
             None,
             &DefaultSurfaces::builtin(),
-            runtime_boot::boot_runtime,
+            crate::session::runtime_boot::boot_runtime,
         );
 
         assert!(

@@ -11,12 +11,12 @@ use log_capture_kit::{CapturedEvent, capture};
 use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
-use crate::runtime::reload::{
-    ReloadInFlight, ReloadOrigin, ReloadRequest, ReloadStage, ReloadVerdict, request_reload,
-};
 use crate::runtime::reload_args::{DescriptNotes, ReloadTarget};
 use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::reload::{
+    ReloadInFlight, ReloadOrigin, ReloadRequest, ReloadStage, ReloadVerdict, request_reload,
+};
 
 /// 呼び出しを「GET 名」「NOTIFY 名」の列にする。
 fn ids(calls: &[RecordedCall]) -> Vec<String> {

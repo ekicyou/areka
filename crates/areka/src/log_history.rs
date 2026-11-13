@@ -124,7 +124,7 @@ pub(crate) const RULES: &[Rule] = &[
     rule("areka::boot_config", Kind::Status, false),
     rule("areka::boot_resolve", Kind::Status, false),
     rule("areka::ghost_session", Kind::Status, false),
-    rule("areka::runtime::ghost_switch", Kind::Status, false),
+    rule("areka::session::ghost_switch", Kind::Status, false),
     rule("ghost-boot", Kind::Status, false),
     rule("ghost-shutdown", Kind::Status, false),
     // 外のもの（説明書・ファイル・URL・フォルダ・メール）を開いた記録。

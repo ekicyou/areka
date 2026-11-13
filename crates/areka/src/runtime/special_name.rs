@@ -1,6 +1,6 @@
 //! 台本の特別な名前（`random`・`sequential`・`lastinstalled`）の解決（areka-P0-ghost-change-name-resolution）。
 //!
-//! ゴーストの切替の入口 [`super::ghost_switch`] から純移動した（areka-P0-mcp-reload・行数の確保）。
+//! ゴーストの切替の入口 [`crate::session::ghost_switch`] から純移動した（areka-P0-mcp-reload・行数の確保）。
 
 use areka_ghost::{GhostEntry, same_folder_name};
 use bevy_ecs::resource::Resource;

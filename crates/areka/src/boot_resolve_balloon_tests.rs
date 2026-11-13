@@ -542,7 +542,7 @@ fn descript_balloon_agrees_with_runtime_switch() {
     use crate::runtime::shell_balloon_resolve::{
         NotFoundReason, SkinCandidate, resolve_skin_target,
     };
-    use crate::runtime::shell_balloon_switch::SkinSpec;
+    use crate::session::shell_balloon_switch::SkinSpec;
 
     let root = root();
     let listed = matching(&root);

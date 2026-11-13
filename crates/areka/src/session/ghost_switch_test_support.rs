@@ -33,20 +33,20 @@ use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::AppExit;
 use wintf::ecs::Input;
 
-use super::RuntimeInputs;
 use super::ghost_switch::drain_change_requests;
-use super::sample_test_support::acquire_emo2;
-use super::spine::{
-    HOMEURL_RESOURCE, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
-    ScriptedShioriHandle, WaitFailure, run_bounded_watching, wait_recv, wait_until,
-    wait_until_with,
-};
 use crate::ConfigInputs;
 use crate::boot_config::{BootContext, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{
     GhostBootInputs, GhostBootInputsSource, GhostSlot, StartupDescriptValues, boot_ghost,
     register_systems,
+};
+use crate::runtime::RuntimeInputs;
+use crate::runtime::sample_test_support::acquire_emo2;
+use crate::runtime::spine::{
+    HOMEURL_RESOURCE, Progress, RecordedCall, ScriptedShioriBackend, ScriptedShioriBackendBuilder,
+    ScriptedShioriHandle, WaitFailure, run_bounded_watching, wait_recv, wait_until,
+    wait_until_with,
 };
 use crate::session::ghost_quit::{KanadeNoticeRx, run_ghost_quit_phase};
 use areka_placement::AuthorDpi;

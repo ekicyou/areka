@@ -45,8 +45,8 @@ use wintf::ecs::{DPI, FrameTime, GraphicsCore, Input, Update, WindowHandle, WucG
 
 use crate::ghost_session::GhostSlot;
 use crate::mcp::resolve;
-use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::{GpuPermit, Progress, RecordedCall, wait_until};
+use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig, standard_script};
 use areka_placement::follow::MonitorSnapshot;
 use areka_placement::resolver::RectPx;
 use areka_placement::spawn::spawn_ghost_windows;

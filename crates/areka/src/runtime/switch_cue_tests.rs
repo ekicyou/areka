@@ -6,7 +6,7 @@
 //! 0 件・受信端が落ちていても落ちずに記録すること。
 
 use super::*;
-use crate::runtime::shell_balloon_switch::SkinKind;
+use crate::session::shell_balloon_switch::SkinKind;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use log_capture_kit::{CapturedEvent, capture};

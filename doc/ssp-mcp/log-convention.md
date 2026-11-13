@@ -52,7 +52,7 @@ target の照合は 2 通りある。
 | status | `areka::boot_config` | 下も含む |
 | status | `areka::boot_resolve` | 下も含む |
 | status | `areka::ghost_session` | 下も含む |
-| status | `areka::runtime::ghost_switch` | 下も含む |
+| status | `areka::session::ghost_switch` | 下も含む |
 | status | `ghost-boot` | 下も含む |
 | status | `ghost-shutdown` | 下も含む |
 | status | `areka::readme` | 下も含む |

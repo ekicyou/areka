@@ -21,7 +21,7 @@ use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::{MenuAction, MenuWiring, wire_menu};
-use crate::runtime::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch::SwitchInFlight;
 
 // ---------------------------------------------------------------- 道具立て
 

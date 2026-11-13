@@ -15,7 +15,7 @@ use bevy_ecs::world::World;
 
 use super::{Frame, ItemBody, MenuContext, MenuItem, captions};
 use crate::ghost_session::GhostSlot;
-use crate::runtime::shell_balloon_switch::{
+use crate::session::shell_balloon_switch::{
     SkinKind, SkinOrigin, SkinRequest, SkinSpec, request_skin_switch,
 };
 

@@ -12,7 +12,7 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_config::BootContext;
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, read_last_balloon};
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 2 つ目のバルーンのフォルダ名と `name`（フォルダ名と違う綴り＝`name` で当たったと分かる）。
 const SECOND: &str = "second-balloon";

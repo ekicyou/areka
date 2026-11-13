@@ -30,11 +30,11 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::runtime::assets::{BalloonAssets, BalloonScopeAssets, ScopeAssets, ShellAssets};
 use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
-use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::runtime::session_hooks::NO_BODY;
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
-use crate::runtime::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 use crate::runtime::switch_assets::{SwapBuilt, SwapSlot, SwitchBuildError};
+use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
+use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchInFlight, SkinSwitchStage};
 use areka_placement::reseed::BalloonPlacementInputs;
 use areka_placement::source::{DescriptSource, GhostTitles};
 
@@ -203,7 +203,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     });
 }
 
@@ -874,7 +874,7 @@ fn shell_split_builds_the_seriko_fallback_from_the_same_values_as_the_box_bundle
     let areka_seriko::SerikoReplace::Shell { fallback, .. } = replace else {
         unreachable!("シェルの差し替えの命令")
     };
-    let crate::runtime::shell_balloon_switch::SwapFinish::Shell { boxes, .. } = finish else {
+    let crate::session::shell_balloon_switch::SwapFinish::Shell { boxes, .. } = finish else {
         unreachable!("シェルの後始末")
     };
     assert_eq!(

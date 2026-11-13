@@ -24,12 +24,12 @@ use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::GhostSession;
 use crate::install::desk::{InstallDesk, insert_busy_desk_for_test};
-use crate::runtime::ghost_switch::{
-    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
-};
 use crate::runtime::reload_args::DescriptParts;
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
-use crate::runtime::shell_balloon_switch::{SkinKind, SkinSwitchStage};
+use crate::session::ghost_switch::{
+    PrevGhost, SwitchEnd, SwitchStage, SwitchTarget, WelcomeAttempt,
+};
+use crate::session::shell_balloon_switch::{SkinKind, SkinSwitchStage};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 
 struct Rig {
@@ -120,7 +120,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     });
 }
 
@@ -577,7 +577,7 @@ fn switch_end_leaves_one_end_record_and_drops_the_mark() {
             (
                 vec![(
                     Level::INFO,
-                    "areka::runtime::reload".to_owned(),
+                    "areka::session::reload".to_owned(),
                     Some("reload_done".to_owned()),
                     None,
                     ghost.clone(),

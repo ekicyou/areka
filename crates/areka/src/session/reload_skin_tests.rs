@@ -37,9 +37,9 @@ use crate::ghost_session::GhostSession;
 use crate::readme::ReadmeWiring;
 use crate::runtime::assets::{BootAssets, LoopTables};
 use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::reload_args::DescriptParts;
 use crate::runtime::talk_clock::TalkClock;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 struct Rig {
     world: World,
@@ -325,7 +325,7 @@ fn applied_phase_end_with_empty_queue_is_done() {
             vec![(
                 "reload_done".to_owned(),
                 Level::INFO,
-                "areka::runtime::reload".to_owned(),
+                "areka::session::reload".to_owned(),
                 None,
                 Some(rig.ghost.clone()),
             )],
@@ -456,7 +456,7 @@ fn request_skin_switch_planted(world: &mut World, dir: &Path) {
             name: None,
             hidden: false,
         },
-        stage: crate::runtime::shell_balloon_switch::SkinSwitchStage::Waiting {
+        stage: crate::session::shell_balloon_switch::SkinSwitchStage::Waiting {
             gap: Some(areka_actor::reply_channel().1),
             gap_result: None,
             build: mpsc::channel().1,

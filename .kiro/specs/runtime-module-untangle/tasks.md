@@ -105,7 +105,7 @@
   - _Requirements: 2.1, 2.5, 3.1, 3.8_
 
 - [ ] 6. ファイルの移動
-- [ ] 6.1 本体に頼るファイルを `session` へ移す
+- [x] 6.1 本体に頼るファイルを `session` へ移す
   - 切替・読み直し・実行系の起動・写し・同じフォルダの留め・切替の要求の入口の本番と各テスト（切替の試験の支えを含む）を履歴の残る移動で `session` へ移す
   - 中身の書き換えは、`runtime` に残るものへのパス・型の置き場・名前の改めだけ。見える範囲の広げはコンパイルが求めた分だけで、足した分を `research.md` に書く
   - 移した先を文字列やパスで引く所を一緒に直す: `zorder_wiring_tests.rs` の `include_str!("runtime_boot.rs")` → `../session/runtime_boot.rs`・`spine.rs` の起動の選択肢の引き口（テストの支え）
@@ -201,3 +201,4 @@
 - 4.1: 口は 9 本（kanade・seriko_sink・ghost_ref_name・set_shell_dir・set_current_balloon・record_last_skin・ghost_switch_in_flight・reload_skin_applied・skin_phase_ended）。4.2 で ghost_folder を足して 10 本。`session/hooks.rs` にはログのマクロを置かない（記録の出所を runtime に残すため）。`main.rs` は 991 行で 1,000 行の番人に近い。
 - 5.1: 見える範囲の広げ: `ghost_quit_system` を `pub(super)`→`pub(crate)`（`frame_schedule_tests` のため）＝6.1 か 9.x で research.md の広げの一覧に載せる。`runtime/mod.rs:451`・`:655` の doc のリンク `crate::session::ghost_quit::wire_kanade_stop` は要件 3.4 の説明の文の一覧に入る。`doc/COMPAT_ARCHITECTURE.md:283` の古いパスは 8.1 で。
 - 5.2: 3.2 の注の `runtime/mod.rs:176` の [`boot_runtime`] は [`BootRuntimeFn`] へ替わって解けた。6.1 で起動のファイルを移した後、`runtime/mod.rs` 184・192 行の doc の字面「`runtime_boot::boot_runtime`」を `session::runtime_boot::boot_runtime` へ合わせる。`spine.rs:770` の `runtime_boot_options` は 6.1 でパスを直す（テストの支え・7.2 の申し送りに載る）。
+- 6.1: 7.1・7.2 の一部を先に済ませた（決まり `areka::session::ghost_switch`・そのテスト・`log-convention.md:55`・`reload_tests:580`／`reload_skin_tests:328` の `areka::session::reload`）。7.1 に残るのは `UNKEPT_TARGETS` と assert。`runtime_boot_tests.rs` が `#[path = "../runtime/…"]` で引く e2e 2 本（`script_security_e2e_tests.rs`・`readme_script_e2e_tests.rs`）は `runtime/` に残る＝8.2 の `runtime-crate-split` の申し送りに入れる。`ghost_session_switch_tests.rs:3` の説明の文の古いパスは 8.x で。

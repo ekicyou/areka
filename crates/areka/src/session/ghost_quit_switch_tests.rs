@@ -25,12 +25,12 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::*;
 use crate::app_exit::FirstExit;
 use crate::ghost_session::GhostSlot;
-use crate::runtime::ghost_switch::{
+use crate::runtime::spine::{Progress, ScriptedShioriBackend, wait_recv};
+use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchInFlight, SwitchRequest, SwitchStage, SwitchTarget, SwitchVerdict,
     request_ghost_switch,
 };
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig};
-use crate::runtime::spine::{Progress, ScriptedShioriBackend, wait_recv};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 
 fn levels_of(events: &[CapturedEvent], event: &str) -> Vec<tracing::Level> {
     events
@@ -95,7 +95,7 @@ fn reservation(stage: SwitchStage) -> SwitchInFlight {
         },
         stage,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     }
 }
 

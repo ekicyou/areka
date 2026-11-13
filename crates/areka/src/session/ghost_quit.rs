@@ -12,7 +12,7 @@ use wintf::ecs::Update;
 use crate::app_exit::{ExitOrigin, quit_app};
 use crate::runtime::frame::frame_system;
 // 終了相が運行の通知を切替の段で振り分ける先（areka-P0-ghost-shell-balloon-switch 要件 8.4）。
-use crate::runtime::ghost_switch::{self, SwitchInFlight};
+use crate::session::ghost_switch::{self, SwitchInFlight};
 
 /// kanade の運行の通知（停止・定常到達・切替の中止）の受け口（World の NonSend 資源・
 /// `Receiver` は `Sync` でない）。

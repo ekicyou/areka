@@ -47,9 +47,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 use super::end_session_within;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::hold_support::HoldAt;
 use crate::runtime::spine::{Progress, RecordedCall, run_bounded, wait_until};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 見張りが発火しない上限（後始末が戻るのは解き手が解いたときだけにする）。
 const HOUR: Duration = Duration::from_secs(3600);

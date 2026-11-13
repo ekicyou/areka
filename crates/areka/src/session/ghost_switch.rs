@@ -25,10 +25,6 @@ use bevy_ecs::world::World;
 use wintf::ecs::Input;
 use wintf::ecs::pointer::dispatch_pointer_events;
 
-use super::frame::{DiscardReason, log_stay_on_top_discard};
-#[cfg(test)]
-use super::special_name::UnresolvedReason;
-pub(crate) use super::special_name::{LastInstalledGhost, NameResolution, resolve_special_name};
 use crate::app_exit::{ExitOrigin, WindowsClosed, close_windows_for_restart, quit_app};
 use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost, resolve_balloon_for_ghost};
 use crate::boot_resolve::{
@@ -38,6 +34,12 @@ use crate::boot_resolve::{
 use crate::ghost_session::{
     GhostBootInputsSource, GhostSlot, RuntimeRebuild, boot_ghost_strict, commit_ghost_windows,
     rebuild_runtime_in_place, reopen_ghost_windows,
+};
+use crate::runtime::frame::{DiscardReason, log_stay_on_top_discard};
+#[cfg(test)]
+use crate::runtime::special_name::UnresolvedReason;
+pub(crate) use crate::runtime::special_name::{
+    LastInstalledGhost, NameResolution, resolve_special_name,
 };
 
 pub(crate) use crate::runtime::change_cue::ChangeRequestRaw;
@@ -642,7 +644,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
     }
     // ghost の読み直し（窓口自身の予約）だけは、窓を閉じる前に表示中の面を控える（要件 3.8）。
     let carries = super::reload::carries_shell_state(world);
-    let carry = super::shell_carry::capture_for_reload(world, carries);
+    let carry = crate::runtime::shell_carry::capture_for_reload(world, carries);
     let reason = if carries {
         DiscardReason::Reload
     } else {
@@ -694,7 +696,7 @@ pub(crate) fn switch_to(world: &mut World, handoff: ChangeHandoff) {
         folder: Some(target.folder.clone()),
     };
     if boot_into(world, closed, ghost, origin) {
-        super::shell_carry::hand_over(world, carry);
+        crate::runtime::shell_carry::hand_over(world, carry);
         set_stage(world, WelcomeAttempt::Target);
     } else if same_folder_name(&target.folder, DEFAULT_GHOST_FOLDER) {
         fatal(

@@ -20,7 +20,7 @@ use crate::boot_config::{BootContext, ConfigInputs, CurrentGhost};
 use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRoute};
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::readonly::ReadOnlyRun;
-use crate::runtime::ghost_switch::{
+use crate::session::ghost_switch::{
     GhostSpec, PrevGhost, SwitchRequest, SwitchTarget, SwitchVerdict, accept_switch,
     request_ghost_switch,
 };

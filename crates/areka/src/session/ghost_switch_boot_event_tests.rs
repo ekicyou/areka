@@ -12,8 +12,8 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::{GhostSpec, SwitchInFlight, SwitchRequest, SwitchVerdict, request_ghost_switch};
 use crate::boot_resolve::DEFAULT_GHOST_FOLDER;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 渡す起動の知らせの Reference（読み直しの `OnUpdateComplete` の形）。
 fn update_refs() -> Vec<String> {

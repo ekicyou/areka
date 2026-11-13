@@ -17,25 +17,25 @@ use areka_parsers::charset::DefaultEncoding;
 use bevy_ecs::world::World;
 use tracing::{error, warn};
 
-use super::RuntimeInputs;
-use super::change_cue::ChangeCueSink;
 use super::ghost_switch::{self, ChangeRequestRaw};
-use super::install_cue::InstallCueSink;
-use super::move_cue::MoveCueSink;
-use super::readme_cue::ReadmeCueSink;
-use super::reload_args::ScriptReload;
-use super::reload_cue::{ReloadCueSink, wire_reload_rx};
 use super::shell_balloon_switch;
-use super::skin_switch::SkinRequestRaw;
-use super::switch_cue::SwitchCueSink;
-use super::talk_clock::ClockedTextSink;
-use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
-use super::update_cue::UpdateCueSink;
-use super::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
-use super::window_state_cue::WindowStateCueSink;
-use super::zorder_cue::ZOrderCueSink;
+use crate::runtime::RuntimeInputs;
+use crate::runtime::change_cue::ChangeCueSink;
+use crate::runtime::install_cue::InstallCueSink;
+use crate::runtime::move_cue::MoveCueSink;
+use crate::runtime::readme_cue::ReadmeCueSink;
+use crate::runtime::reload_args::ScriptReload;
+use crate::runtime::reload_cue::{ReloadCueSink, wire_reload_rx};
+use crate::runtime::skin_switch::SkinRequestRaw;
+use crate::runtime::switch_cue::SwitchCueSink;
+use crate::runtime::talk_clock::ClockedTextSink;
+use crate::runtime::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use crate::runtime::update_cue::UpdateCueSink;
+use crate::runtime::user_break_cue::{NoUserBreakCueSink, NoUserBreakSignal};
+use crate::runtime::window_state_cue::WindowStateCueSink;
+use crate::runtime::zorder_cue::ZOrderCueSink;
 
-pub(crate) use super::{CueSinkSources, RuntimeBootError};
+pub(crate) use crate::runtime::{CueSinkSources, RuntimeBootError};
 
 /// 受信端が窓の側に無い線の手元の端（実行系の成立後にだけ World へ据える）。
 pub(super) struct RuntimeLines {
@@ -162,7 +162,7 @@ pub(crate) fn runtime_boot_options(
     ticker: TickerMode,
 ) -> GhostBootOptions {
     GhostBootOptions {
-        strict_judges: super::strict_judges::production(),
+        strict_judges: crate::runtime::strict_judges::production(),
         ghost_root,
         default_encoding: DefaultEncoding::Ansi,
         shiori,

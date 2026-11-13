@@ -19,8 +19,8 @@ use super::super::*;
 use super::applied;
 use crate::ghost_session::{GhostSlot, RuntimeRebuild, rebuild_runtime_in_place};
 use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::shiori_host::ShioriHostSink;
 
 /// A の `OnBoot`: 台詞の途中で B への切替を命じる。

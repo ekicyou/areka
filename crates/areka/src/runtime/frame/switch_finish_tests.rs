@@ -37,12 +37,12 @@ use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::runtime::frame::RuntimeWiring;
 use crate::runtime::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
-use crate::runtime::shell_balloon_switch::{
-    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
-};
 use crate::runtime::shell_box_assets::ShellBoxAssets;
 use crate::runtime::shell_cursor_assets::ShellCursorAssets;
 use crate::runtime::switch_assets::{SwapPayload, SwapSlot};
+use crate::session::shell_balloon_switch::{
+    SkinKind, SkinSwitchInFlight, SkinSwitchStage, SwapFinish,
+};
 use areka_placement::reseed::BalloonPlacementInputs;
 use areka_placement::reseed::test_support as reseed_tests;
 use areka_placement::reset_pos::DefaultPlacementBasis;

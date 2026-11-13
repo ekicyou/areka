@@ -30,10 +30,10 @@ use crate::boot_resolve::{
     record_last_shell, running_name,
 };
 use crate::ghost_session::{GhostSlot, StartupDescriptValues};
-use crate::runtime::ghost_switch::{
+use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, WelcomeAttempt, on_notice, switch_to,
 };
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::write_failure::sites_tests::{KINDS, drain_desk};
 use crate::{MarkInputs, Teardown, boot_first_ghost, insert_persist_wiring, settle_session_mark};
 use areka_placement::AuthorDpi;
@@ -109,7 +109,7 @@ fn reservation(rig: &SwitchRig, stage: SwitchStage) -> SwitchInFlight {
         },
         stage,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     }
 }
 

@@ -14,8 +14,8 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 use super::super::*;
 use super::LEFT_SCREEN;
 use super::wiring::{fake_handle, placement};
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use areka_placement::source::GhostTitles;
 use areka_placement::spawn::spawn_ghost_windows;
 

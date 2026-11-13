@@ -20,8 +20,8 @@ use super::shell_balloon_switch_session_lap_tests::{
 use crate::boot_config::BootContext;
 use crate::boot_resolve::read_last_balloon;
 use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
 use crate::runtime::target_map::balloon_target;
+use crate::session::ghost_switch_test_support::{BALLOON, SwitchRig, standard_script};
 
 /// 2 つ目のバルーン（検体 `StayseeBalloon` の複製・フォルダ名）。
 const STAYSEE: &str = "StayseeBalloon";

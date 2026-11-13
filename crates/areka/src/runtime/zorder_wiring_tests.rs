@@ -286,7 +286,7 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     let raw = include_str!("mod.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
-    let runtime_squeezed = squeeze(&code_only(include_str!("runtime_boot.rs")));
+    let runtime_squeezed = squeeze(&code_only(include_str!("../session/runtime_boot.rs")));
 
     assert!(
         squeezed.contains(

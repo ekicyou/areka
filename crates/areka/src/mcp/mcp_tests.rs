@@ -317,7 +317,7 @@ fn drain_without_inbox_is_a_no_op() {
 /// `get_active_ghost_list` を送り、`Input` の段を 1 回回すと descript の `name` で答える。
 #[test]
 fn real_unit_answers_get_active_ghost_list_in_one_frame() {
-    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(
         "A",
@@ -351,7 +351,7 @@ fn real_unit_answers_get_active_ghost_list_in_one_frame() {
 #[test]
 fn logsink_fallen_unit_is_active() {
     use crate::ghost_session::GhostSlot;
-    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig};
+    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig};
 
     let mut rig = SwitchRig::new(vec![("A", FakeShiori::BalloonMissing)]);
     rig.boot("A");
@@ -376,7 +376,7 @@ fn logsink_fallen_unit_is_active() {
 #[test]
 fn real_unit_resolves_by_sakura_name_and_ascii_case() {
     use crate::ghost_session::GhostSlot;
-    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(
         "A",

@@ -28,9 +28,9 @@ use super::*;
 use crate::exit_wait::{begin_close, register_gate};
 use crate::install::desk::InstallDesk;
 use crate::install::{InstallOrigin, SubmitVerdict, submit};
-use crate::runtime::ghost_switch::{LastInstalledGhost, SwitchInFlight};
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::RecordedCall;
+use crate::session::ghost_switch::{LastInstalledGhost, SwitchInFlight};
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 // ---------------------------------------------------------------- 道具立て
 

@@ -121,9 +121,9 @@ fn slot_empty(world: &World) -> bool {
 }
 
 fn reservation(
-    stage: crate::runtime::ghost_switch::SwitchStage,
-) -> crate::runtime::ghost_switch::SwitchInFlight {
-    use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchTarget};
+    stage: crate::session::ghost_switch::SwitchStage,
+) -> crate::session::ghost_switch::SwitchInFlight {
+    use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchTarget};
     SwitchInFlight {
         target: SwitchTarget {
             dir: "ghost/B".into(),
@@ -138,7 +138,7 @@ fn reservation(
         },
         stage,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     }
 }
 
@@ -191,10 +191,10 @@ fn boot_mark_unwritable_does_not_boot_for_plain_and_halted() {
 /// 切替の降ろした直後に書けない → 切替先を起こさず同じ（要件 3.3）。
 #[test]
 fn switch_marks_unwritable_end_with_write_failed_and_no_reservation() {
-    use crate::runtime::ghost_switch::{
+    use crate::session::ghost_switch::{
         SwitchInFlight, SwitchStage, WelcomeAttempt, on_notice, switch_to,
     };
-    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(
         "A",

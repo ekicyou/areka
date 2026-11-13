@@ -186,7 +186,7 @@ fn origin_given_to_source_reaches_wiring_inputs() {
 #[test]
 fn logsink_arm_sets_fallback_flag_and_uses_wiring_app_dir() {
     use crate::boot_resolve::read_last_ghost;
-    use crate::runtime::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
+    use crate::session::ghost_switch_test_support::{BALLOON, FakeShiori, SwitchRig};
 
     let (descript, ghost, balloon) = decisions();
 

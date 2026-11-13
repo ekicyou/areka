@@ -26,12 +26,12 @@ use crate::input_events::user_break::UserBreakWiring;
 use crate::readme::ReadmeWiring;
 use crate::runtime::RuntimeInputs;
 use crate::runtime::adapter::PresentBridge;
-use crate::runtime::ghost_switch::ChangeRx;
 use crate::runtime::reload_cue::ReloadRx;
 use crate::runtime::sample_test_support::acquire_emo2;
-use crate::runtime::shell_balloon_switch::SwitchRx;
 use crate::runtime::spine::{Progress, ScriptedShioriBackend, run_bounded_watching};
 use crate::runtime::talk_clock::TalkClock;
+use crate::session::ghost_switch::ChangeRx;
+use crate::session::shell_balloon_switch::SwitchRx;
 
 /// 窓の側の束の持ち物（seriko と文字の線を生かしておく）。
 struct Rig {
@@ -261,9 +261,9 @@ fn successful_boot_installs_receivers() {
 }
 
 // 台本の出どころを起動の道で通すテスト（areka-P0-script-security-level・同じ組み方を借りる）。
-#[path = "script_security_e2e_tests.rs"]
+#[path = "../runtime/script_security_e2e_tests.rs"]
 mod script_security_e2e;
 
 // 台本の `\![open,readme]` を起動の道で偽の OS まで通すテスト（popup-menu-residue 件 3）。
-#[path = "readme_script_e2e_tests.rs"]
+#[path = "../runtime/readme_script_e2e_tests.rs"]
 mod readme_script_e2e;

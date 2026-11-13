@@ -767,7 +767,7 @@ impl SpineHarness {
         // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（production mod.rs と同順・S-3 形）。
         // 起動の選択肢は本番の窓の在るゴーストと同じ組み立て（strict の判定・FromSylphya・Ansi）を使う。
         // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
-        let options = super::runtime_boot::runtime_boot_options(
+        let options = crate::session::runtime_boot::runtime_boot_options(
             sample.folder().to_path_buf(),
             ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)

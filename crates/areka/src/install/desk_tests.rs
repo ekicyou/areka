@@ -31,7 +31,7 @@ use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::install::procedure::{InstalledRecord, Overwritten};
 use crate::install::{InstallOrigin, SubmitVerdict, register, submit};
-use crate::runtime::ghost_switch::{
+use crate::session::ghost_switch::{
     PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget, on_notice,
 };
 
@@ -124,7 +124,7 @@ fn reservation() -> SwitchInFlight {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     }
 }
 

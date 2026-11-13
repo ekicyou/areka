@@ -13,8 +13,8 @@ use wintf::ecs::widget::bitmap_source::WintfTaskPool;
 
 use super::super::McpLater;
 use super::*;
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 #[test]
 fn answers_no_window_at_once_with_an_empty_world() {

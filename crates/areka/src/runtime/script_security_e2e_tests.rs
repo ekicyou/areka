@@ -7,9 +7,9 @@
 //! `external` では線に `Enter` が出ず、`local`／無しでは今どおり出る。
 
 use super::*;
-use crate::runtime::ghost_switch_test_support::standard_script;
 use crate::runtime::spine::wait_until;
 use crate::runtime::user_break_cue::NoUserBreakSignal;
+use crate::session::ghost_switch_test_support::standard_script;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_kanade::{MonotonicMs, ShioriUnblock};
 use shiori_host32_host::{

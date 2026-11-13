@@ -738,7 +738,7 @@ fn settle_kanade(world: &World) {
 fn real_unit_answers_from_the_current_shell_each_call_without_side_effects() {
     use std::sync::mpsc;
 
-    use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
+    use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
     let mut rig = SwitchRig::new(vec![(
         "A",

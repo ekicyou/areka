@@ -25,7 +25,7 @@ use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRou
 use crate::exit_wait::begin_close;
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::menu::captions::QueryReply;
-use crate::runtime::ghost_switch::on_notice;
+use crate::session::ghost_switch::on_notice;
 use crate::update::{
     RawUpdateRequest, SummaryKind, TargetKind, TargetSpec, UpdateReason, register,
 };

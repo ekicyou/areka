@@ -24,9 +24,9 @@ use super::{RawUpdateRequest, TargetKind};
 use crate::ghost_session::GhostSlot;
 use crate::install::fetch_url_test_support::FakeFetch;
 use crate::menu::captions::send_query;
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 use crate::runtime::spine::{HOMEURL_RESOURCE, RecordedCall};
+use crate::session::ghost_switch::SwitchInFlight;
+use crate::session::ghost_switch_test_support::{FakeShiori, SwitchRig, standard_script};
 
 /// 偽の配布サイト（ネットワークには出ない）。
 const HOMEURL: &str = "https://example.invalid/areka-update/";

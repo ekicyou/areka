@@ -179,7 +179,7 @@ pub struct RuntimeWiring {
     /// （spec: areka-P0-shell-balloon-switch 要件 4.4）。
     pub(super) last_drain: Duration,
     /// ghost の読み直しの前に控えた表示中の面（装着の相が 1 度だけ使う・areka-P0-mcp-reload 要件 3.8）。
-    pub(in crate::runtime) shell_carry: Option<ShellCarry>,
+    pub(crate) shell_carry: Option<ShellCarry>,
     /// 今のシェルの静的な着せ替えの既定（起動の資産から・シェルの差し替えで置き直す）。ghost の読み直しで
     /// 控える着せ替えを「この既定との差」にするのに使う（areka-P0-mcp-reload 要件 3.8）。
     pub(in crate::runtime) static_binds: areka_seriko::DefaultBinds,

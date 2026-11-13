@@ -38,8 +38,8 @@ use crate::boot_resolve::{BalloonDecision, BalloonRoute, GhostDecision, GhostRou
 use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::runtime::assets::{BootAssets, LoopTables};
 use crate::runtime::frame::RuntimeWiring;
-use crate::runtime::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::runtime::talk_clock::TalkClock;
+use crate::session::ghost_switch::{PrevGhost, SwitchInFlight, SwitchStage, SwitchTarget};
 use crate::update::desk::{UpdateDesk, insert_running_desk_for_test};
 
 // ---------------------------------------------------------------- 土台
@@ -257,7 +257,7 @@ fn plant_ghost_switch(world: &mut World) {
         },
         stage: SwitchStage::SendOff,
         boot_event: None,
-        copy: crate::runtime::switch_copy::SwitchCopy::None,
+        copy: crate::session::switch_copy::SwitchCopy::None,
     });
 }
 

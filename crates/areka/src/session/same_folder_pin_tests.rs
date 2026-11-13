@@ -6,7 +6,7 @@ use temp_path_kit::TempPath;
 
 use super::*;
 use crate::boot_resolve::GhostRoute;
-use crate::runtime::ghost_switch::{GhostSpec, resolve_switch_target};
+use crate::session::ghost_switch::{GhostSpec, resolve_switch_target};
 
 /// 根 `one` に今のゴースト `Alpha`、根 `two` に同じフォルダ名の `ALPHA` と別の `beta` を組む。
 fn put_two_roots(tmp: &TempPath) {

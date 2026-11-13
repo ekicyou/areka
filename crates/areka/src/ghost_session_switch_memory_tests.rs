@@ -19,8 +19,8 @@ use crate::boot_resolve::{
     DEFAULT_GHOST_FOLDER, read_last_ghost, read_session_mark, write_session_mark,
 };
 use crate::ghost_session::GhostSlot;
-use crate::runtime::ghost_switch::{SwitchStage, WelcomeAttempt};
-use crate::runtime::ghost_switch_test_support::BALLOON;
+use crate::session::ghost_switch::{SwitchStage, WelcomeAttempt};
+use crate::session::ghost_switch_test_support::BALLOON;
 use crate::{MarkVerdict, Teardown, after_run, settle_session_mark};
 
 /// App スコープの記憶: （最後に使ったゴースト, 起動中の印）。
