@@ -115,6 +115,7 @@ pub(crate) fn initial_charset(shiori: &ShioriMount, default: DefaultEncoding) ->
 ///    呼び出しスレッド＝shiori アクタースレッド上で実行される前提）。
 /// 3. `spawn(helper_exe, helper_dir, shiori_name, parent_hwnd)` で i686 helper を起動する
 ///    （`helper_dir` は [`helper_load_dir`] で決定 6 の形に整えた `load_dir`）。
+///    直後に `expect_helper_pid(helper.pid())` で HELLO の送り手を子に縛る（指摘 38）。
 /// 4. `pump_until_hello_or(HANDSHAKE_TIMEOUT)` で HELLO 受領（ハンドシェイク完了）を観測する。
 /// 5. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を発行し ack `[1]` を確認する。
 /// 6. 版の確かめを 1 往復し、[`record_version`] で記録して決めた版を接続へ渡す
@@ -166,6 +167,8 @@ pub fn real_connect(
         // 3. i686 helper を spawn（cwd=helper_dir）。
         let helper = spawn(&helper_exe, &helper_dir, &shiori_name, parent_hwnd)
             .map_err(|e| format!("i686 helper の spawn に失敗: {e}"))?;
+        // HELLO の送り手をこの子に縛る。ポンプの後に呼ぶと確かめが飛ぶので必ずここ（指摘 38）。
+        window.expect_helper_pid(helper.pid());
 
         // 4. HELLO 受領＝ハンドシェイク完了を観測（上限時間内に来なければ失敗）。
         let helper_hwnd = window.pump_until_hello_or(HANDSHAKE_TIMEOUT);

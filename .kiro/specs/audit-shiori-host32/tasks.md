@@ -99,7 +99,7 @@
   - host の結合テストの握手の手続きと、窓のテストの偽の helper を新しい決まりに合わせる。`areka-kanade` のテスト（`idle_pump_test.rs`・`real_helper_test.rs`）が古びるなら的を外さずに直す
   - 完了の姿: 窓のテスト 3 本（よその送り手の HELLO を捨てる・2 度目の HELLO を捨てる・helper でない送り手の RESPONSE を捨てる）が緑で、`areka-kanade` のテストも緑
   - _Requirements: 3.2, 4.1, 4.5, 6.1, 6.4_
-- [ ] 7.3 areka-ghost の本番の接続で `expect_helper_pid` を呼ぶ
+- [x] 7.3 areka-ghost の本番の接続で `expect_helper_pid` を呼ぶ
   - `areka-ghost/src/shiori_wiring.rs` の `real_connect` で、spawn の直後・握手の前に子のプロセス番号を伝える
   - 完了の姿: `areka-ghost` のテストが緑で、本番の接続の道が子のプロセス番号で縛られている
   - _Depends: 7.2_
