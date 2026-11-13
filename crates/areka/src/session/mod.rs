@@ -1,0 +1,4 @@
+//! 本体に頼る切替・読み直し・起動・終わる相の層（runtime-module-untangle）。モジュールの宣言だけ。
+
+/// 本体の口の束の中身と据え付け（`runtime::session_hooks::SessionHooks`）。
+pub(crate) mod hooks;

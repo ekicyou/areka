@@ -73,7 +73,7 @@
   - _Requirements: 3.1_
 
 - [ ] 4. 本体の口（SessionHooks）
-- [ ] 4.1 口の束を作り、差し替えの相を口に替える
+- [x] 4.1 口の束を作り、差し替えの相を口に替える
   - 本体の新しいモジュール `session` を作り（宣言だけの入口）、`runtime` に口の束の型・`NO_BODY`・本番とテストで倒れ先を分ける `FALLBACK`・`of()` を置く。本番で据え忘れたときは呼ぶたびに `error!(session_hooks_missing)` を出して `NO_BODY` を返す
   - `session` に口の中身と据え付けを置き、`register_systems` の先頭で最初の巡より前に据える。プロセスで共有する状態は増やさない（回数を絞る `OnceLock` は使わない）
   - 口の欄はこのタスクで読む分（差し替えの相が使う分）だけを置き、4.2 で読む分は 4.2 で足す（使われない欄で警告を出さない）
@@ -198,3 +198,4 @@
 - 2.3: `crates/ukadoc-survey/src/evidence/candidates_tests.rs:345` の `choice_pressed_no_emo2` は抽出器に食わせる見本の文字列（照合ではない・本体の外）として残した。9.2 の 4 区分で判定する。
 - 3.1: `runtime/skin_switch.rs:86` の説明の文の [`discard_for_exit`] は移した先で rustdoc のリンクが切れる（cargo doc は回していない）。8.x で `crate::runtime::shell_balloon_switch::discard_for_exit` へ。入口の出し直しは設計の 5 型より多い（テストが入口のパスで引くため）＝6.1 で `session` へ移すときに絞れる。
 - 3.2: 8.x で直す文言: `runtime/mod.rs:176` の doc の [`boot_runtime`]（リンク切れ）と `change_cue.rs:14` の module doc「`ghost_switch::ChangeRequestRaw`」（型は change_cue へ移った）。
+- 4.1: 口は 9 本（kanade・seriko_sink・ghost_ref_name・set_shell_dir・set_current_balloon・record_last_skin・ghost_switch_in_flight・reload_skin_applied・skin_phase_ended）。4.2 で ghost_folder を足して 10 本。`session/hooks.rs` にはログのマクロを置かない（記録の出所を runtime に残すため）。`main.rs` は 991 行で 1,000 行の番人に近い。

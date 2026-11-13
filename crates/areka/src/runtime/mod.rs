@@ -43,6 +43,8 @@ pub(crate) mod same_folder_pin;
 pub(crate) mod scope_scale;
 /// 出どころで実行を制限するタグの判定の表（areka-P0-script-security-level）。
 pub(crate) mod script_restriction;
+/// 本体の口の束（本体の状態を同期で読み書きする関数のポインタ・runtime-module-untangle）。
+pub(crate) mod session_hooks;
 /// シェル・バルーンの切替先の名前の解決とインストールの控え（areka-P0-shell-balloon-switch）。
 pub(crate) mod shell_balloon_resolve;
 /// シェル・バルーンの切替の入口（areka-P0-shell-balloon-switch）。

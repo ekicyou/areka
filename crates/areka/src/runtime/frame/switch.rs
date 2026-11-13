@@ -25,18 +25,14 @@ use areka_emo_present::balloon_definitions::ScopeBalloonDefinitions;
 use areka_kanade::{GapLeft, KanadeMsg, MarkedEnd, ShioriMethod, TalkGap};
 use areka_sakura::ActorKey;
 use areka_seriko::SerikoReplace;
-use areka_sylphya::{PersistKey, SylphyaPublisher};
+use areka_sylphya::PersistKey;
 use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
 use super::balloon_face::{FaceCause, select_balloon_face};
 use super::{RuntimeWiring, reconcile_reported_sizes};
-use crate::boot_config::BootContext;
-use crate::boot_resolve::{BalloonDecision, BalloonRoute, record_last_balloon, record_last_shell};
-use crate::ghost_session::{GhostSession, GhostSlot};
 use crate::runtime::assets::actor_keyed_balloon_tables;
-use crate::runtime::ghost_switch::SwitchInFlight;
-use crate::runtime::reload;
+use crate::runtime::session_hooks::SessionHooks;
 use crate::runtime::shell_balloon_resolve::SkinCandidate;
 use crate::runtime::shell_box_assets::ShellBoxAssets;
 use crate::runtime::shell_cursor_assets::ShellCursorAssets;
@@ -64,18 +60,19 @@ pub(super) fn run_switch_phase(wiring: &mut RuntimeWiring, world: &mut World) {
     let Some(mut flight) = world.remove_non_send::<SkinSwitchInFlight>() else {
         return;
     };
+    let hooks = SessionHooks::of(world);
     // 読み直しの窓口へ相の終わりを告げる鍵（相は印を外して進むので、外した印から控える）。
     let key = (flight.kind, flight.target.dir.clone());
     let keep = match flight.stage {
         SkinSwitchStage::Waiting { .. } => {
-            step_waiting(&mut flight, wiring, world).then_some(flight)
+            step_waiting(&mut flight, wiring, world, hooks).then_some(flight)
         }
-        SkinSwitchStage::Committed { .. } => step_committed(flight, wiring, world),
+        SkinSwitchStage::Committed { .. } => step_committed(flight, wiring, world, hooks),
     };
     match keep {
         Some(flight) => world.insert_non_send(flight),
         // 完了・中止・取りやめ・失敗のどれでも、相が終わったら 1 度だけ告げる。
-        None => reload::skin_phase_ended(world, key.0, &key.1),
+        None => (hooks.skin_phase_ended)(world, key.0, &key.1),
     }
 }
 
@@ -84,6 +81,7 @@ fn step_waiting(
     flight: &mut SkinSwitchInFlight,
     wiring: &mut RuntimeWiring,
     world: &World,
+    hooks: SessionHooks,
 ) -> bool {
     let kind = flight.kind;
     let to = flight.target.folder.clone();
@@ -105,7 +103,7 @@ fn step_waiting(
                 // 切れ目が資産より先に届いていた: kanade はもう見張っていないので、印なしの待ちを
                 // 送り直してその返事で決める（1 度目の返事は印の台詞の終わり方の記録に残す）。
                 if gap_result.is_some() {
-                    let Some(rx) = await_gap_again(world, kind, &to) else {
+                    let Some(rx) = await_gap_again(world, hooks, kind, &to) else {
                         return false;
                     };
                     *gap = Some(rx);
@@ -163,7 +161,7 @@ fn step_waiting(
                 _ => marked,
             };
             match built.take() {
-                Some(assets) => commit(flight, assets, first, wiring, world),
+                Some(assets) => commit(flight, assets, first, wiring, world, hooks),
                 None => {
                     *gap_result = Some(TalkGap::Reached { marked: first });
                     true
@@ -217,14 +215,17 @@ fn step_waiting(
 }
 
 /// 印なしの待ちを送り直す。送れなければ `error!(skin_switch_send_failed)` で `None`。
-fn await_gap_again(world: &World, kind: SkinKind, to: &str) -> Option<ReplyReceiver<TalkGap>> {
+fn await_gap_again(
+    world: &World,
+    hooks: SessionHooks,
+    kind: SkinKind,
+    to: &str,
+) -> Option<ReplyReceiver<TalkGap>> {
     let (reply, rx) = reply_channel();
-    let sent = session(world)
-        .and_then(GhostSession::kanade)
-        .is_some_and(|k| {
-            k.send(KanadeMsg::AwaitTalkGap { raise: None, reply })
-                .is_ok()
-        });
+    let sent = (hooks.kanade)(world).is_some_and(|k| {
+        k.send(KanadeMsg::AwaitTalkGap { raise: None, reply })
+            .is_ok()
+    });
     if !sent {
         error!(
             event = "skin_switch_send_failed",
@@ -253,10 +254,11 @@ fn commit(
     marked: Option<MarkedEnd>,
     wiring: &mut RuntimeWiring,
     world: &World,
+    hooks: SessionHooks,
 ) -> bool {
     let kind = flight.kind;
     let to = flight.target.folder.as_str();
-    if world.get_non_send::<SwitchInFlight>().is_some() {
+    if (hooks.ghost_switch_in_flight)(world) {
         info!(
             event = "skin_switch_dropped",
             reason = "ghost_switch",
@@ -308,9 +310,7 @@ fn commit(
         targets,
         replies,
     });
-    let sent = session(world)
-        .and_then(GhostSession::seriko_sink)
-        .is_some_and(|sink| sink.send_replace(replace, facts));
+    let sent = (hooks.seriko_sink)(world).is_some_and(|sink| sink.send_replace(replace, facts));
     if !sent {
         error!(
             event = "skin_switch_failed",
@@ -344,6 +344,7 @@ fn step_committed(
     flight: SkinSwitchInFlight,
     wiring: &mut RuntimeWiring,
     world: &mut World,
+    hooks: SessionHooks,
 ) -> Option<SkinSwitchInFlight> {
     let SkinSwitchInFlight {
         kind,
@@ -406,9 +407,9 @@ fn step_committed(
             boxes,
             cursors,
         } => finish_shell(
-            wiring, world, &target, &source, &balloon, &restored, boxes, cursors,
+            wiring, world, hooks, &target, &source, &balloon, &restored, boxes, cursors,
         ),
-        SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, &target, scopes),
+        SwapFinish::Balloon { scopes } => finish_balloon(wiring, world, hooks, &target, scopes),
     }
     info!(
         event = "skin_switch_done",
@@ -454,6 +455,7 @@ fn poll_replies(
 fn finish_shell(
     wiring: &mut RuntimeWiring,
     world: &mut World,
+    hooks: SessionHooks,
     target: &SkinCandidate,
     source: &DescriptSource,
     balloon: &BalloonPlacementInputs,
@@ -500,14 +502,7 @@ fn finish_shell(
         source: source.clone(),
         balloon: balloon.clone(),
     });
-    let replaced = world
-        .get_non_send_mut::<GhostSlot>()
-        .is_some_and(|mut slot| {
-            slot.0
-                .as_mut()
-                .is_some_and(|s| s.set_shell_dir(target.dir.clone()))
-        });
-    if !replaced {
+    if !(hooks.set_shell_dir)(world, target.dir.clone()) {
         warn!(
             event = "skin_shell_dir_not_set",
             to = %target.folder,
@@ -515,16 +510,14 @@ fn finish_shell(
         );
     }
     // 読み直し（areka-P0-mcp-reload 要件 5.3）は `LastShell` も `OnShellChanged` も出さない。
-    if reload::skin_is_reload(world, SkinKind::Shell, &target.dir) {
-        reload::skin_applied(world);
+    if (hooks.reload_skin_applied)(world, SkinKind::Shell, &target.dir) {
         return;
     }
-    record_memory(world, SkinKind::Shell, |p| {
-        record_last_shell(p, &target.folder)
-    });
-    let ghost = ghost_ref_name(world);
+    record_memory(world, hooks, SkinKind::Shell, &target.folder);
+    let ghost = (hooks.ghost_ref_name)(world);
     raise_changed(
         world,
+        hooks,
         "OnShellChanged",
         vec![skin_ref_name(target), ghost, skin_ref_path(&target.dir)],
     );
@@ -536,6 +529,7 @@ fn finish_shell(
 fn finish_balloon(
     wiring: &mut RuntimeWiring,
     world: &mut World,
+    hooks: SessionHooks,
     target: &SkinCandidate,
     scopes: Vec<(u32, ScopeBalloonDefinitions, (u8, u8, u8))>,
 ) {
@@ -555,30 +549,21 @@ fn finish_balloon(
         wiring.balloon_visibility.forget_scope(scope);
     }
     // 読み直し（areka-P0-mcp-reload 要件 6.3）は決め方も `LastBalloon` も `OnBalloonChange` も替えない。
-    if reload::skin_is_reload(world, SkinKind::Balloon, &target.dir) {
-        reload::skin_applied(world);
+    if (hooks.reload_skin_applied)(world, SkinKind::Balloon, &target.dir) {
         return;
     }
-    match world.get_resource_mut::<BootContext>() {
-        // 記憶に書くので、これが次の起動の選び方になる（`BalloonRoute` に腕を足さない）。
-        Some(mut ctx) => {
-            ctx.current.balloon = BalloonDecision {
-                route: BalloonRoute::Memory,
-                dir: target.dir.clone(),
-                folder: Some(target.folder.clone()),
-            };
-        }
-        None => warn!(
+    // 記憶に書くので、これが次の起動の選び方になる（`BalloonRoute` に腕を足さない）。
+    if !(hooks.set_current_balloon)(world, target) {
+        warn!(
             event = "skin_current_balloon_not_set",
             to = %target.folder,
             "起動の文脈が無いので今のバルーンを書き換えられない（更新の対象は古いバルーンのまま）"
-        ),
+        );
     }
-    record_memory(world, SkinKind::Balloon, |p| {
-        record_last_balloon(p, &target.folder)
-    });
+    record_memory(world, hooks, SkinKind::Balloon, &target.folder);
     raise_changed(
         world,
+        hooks,
         "OnBalloonChange",
         vec![skin_ref_name(target), skin_ref_path(&target.dir)],
     );
@@ -586,31 +571,28 @@ fn finish_balloon(
 
 /// 実行系の記憶の書き手で書く。書き手が無ければ `warn!(skin_memory_not_recorded)` で、切替は
 /// 成功として扱う（要件 6.1・記憶の縮退は今日と同じ）。
-fn record_memory(world: &World, kind: SkinKind, write: impl FnOnce(&SylphyaPublisher)) {
-    match session(world).and_then(GhostSession::memory_publisher) {
-        Some(publisher) => write(publisher),
-        None => warn!(
+fn record_memory(world: &World, hooks: SessionHooks, kind: SkinKind, folder: &str) {
+    if !(hooks.record_last_skin)(world, kind, folder) {
+        warn!(
             event = "skin_memory_not_recorded",
             ?kind,
             "記憶の書き手が無いので切替の選択を記憶へ書けない（切替は成功として扱う）"
-        ),
+        );
     }
 }
 
 /// 切り替えた後のイベントを汎用の入口で GET・返信なしで送る。送れなければ `warn!`（差し替えは
 /// 済んでいるので切替は成功のまま）。
-fn raise_changed(world: &World, id: &'static str, references: Vec<String>) {
-    let sent = session(world)
-        .and_then(GhostSession::kanade)
-        .is_some_and(|k| {
-            k.send(KanadeMsg::RaiseEvent {
-                id: id.to_owned(),
-                references,
-                method: ShioriMethod::Get,
-                reply: None,
-            })
-            .is_ok()
-        });
+fn raise_changed(world: &World, hooks: SessionHooks, id: &'static str, references: Vec<String>) {
+    let sent = (hooks.kanade)(world).is_some_and(|k| {
+        k.send(KanadeMsg::RaiseEvent {
+            id: id.to_owned(),
+            references,
+            method: ShioriMethod::Get,
+            reply: None,
+        })
+        .is_ok()
+    });
     if !sent {
         warn!(
             event = "skin_switch_event_not_sent",
@@ -618,18 +600,6 @@ fn raise_changed(world: &World, id: &'static str, references: Vec<String>) {
             "切り替えた後のイベントを送れなかった（kanade は止まっている）——差し替えは済んでいる"
         );
     }
-}
-
-/// Reference のゴーストの名前（`descript.txt` の `name`、無ければフォルダ名・要件 2.4）。
-fn ghost_ref_name(world: &World) -> String {
-    session(world).map_or_else(String::new, |s| {
-        s.ghost_name().unwrap_or_else(|| {
-            s.ghost_dir()
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default()
-        })
-    })
 }
 
 /// 荷物の中身（scope ごとの `EmoWorld`・アトラス・作者の DPI）。
@@ -691,11 +661,6 @@ fn split(built: SwapBuilt, epoch: u64) -> (Targets, SerikoReplace, SwapFinish) {
             )
         }
     }
-}
-
-/// 置き場のゴースト（無ければ `None`）。
-fn session(world: &World) -> Option<&GhostSession> {
-    world.get_non_send::<GhostSlot>()?.0.as_ref()
 }
 
 #[cfg(test)]

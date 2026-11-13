@@ -56,6 +56,8 @@ mod tick_gate_config;
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
 /// `wire_runtime`）。
 mod runtime;
+/// 本体に頼る切替・読み直し・起動・終わる相の層（runtime-module-untangle）。
+mod session;
 
 /// UI→kanade のマウス入力配信配線（areka-P0-input-events）。キャラ窓のポインタイベントを
 /// 捉え、当たり判定名を resolver で解決し、送出間引き（`throttle`）を通して kanade へ配信する

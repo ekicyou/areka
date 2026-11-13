@@ -455,6 +455,11 @@ fn boots_twice_in_one_process_without_double_registration() {
 
     let (kanade_stop_tx, kanade_stop_rx) = mpsc::channel::<KanadeNotice>();
     register_systems(&mut world, kanade_stop_rx);
+    // 本体の口は最初の巡より前に据わる（据え忘れは本番で `session_hooks_missing` の縮退になる）。
+    assert!(
+        world.contains_resource::<crate::runtime::session_hooks::SessionHooks>(),
+        "register_systems が本体の口を据えていない"
+    );
     let lens_before = systems_lens(&world);
 
     // ── 1 周目 ──
