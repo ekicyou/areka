@@ -473,7 +473,7 @@ impl Visual {
 | Requirements | 4.1, 4.2, 4.3, 4.4, 4.8, 5.1, 5.2, 5.4, 5.6, 5.9 |
 
 **Responsibilities & Constraints**
-- 入れ物＝`D2D1_BITMAP_OPTIONS_TARGET`・`DXGI_FORMAT_B8G8R8A8_UNORM`・`D2D1_ALPHA_MODE_PREMULTIPLIED`・96 DPI・描画面と同じ物理ピクセルの大きさ。1 画素の写し先＝1×1 の `CPU_READ | CANNOT_DRAW`（入れ物と同時に作る）。増えるメモリは入れ物 1 枚と 4 バイト（4.3）。
+- 入れ物＝`D2D1_BITMAP_OPTIONS_TARGET`・`DXGI_FORMAT_B8G8R8A8_UNORM`・`D2D1_ALPHA_MODE_PREMULTIPLIED`・96 DPI・描画面と同じ物理ピクセルの大きさ。1 画素の写し先＝1×1 の `CPU_READ | CANNOT_DRAW`（入れ物と同時に作り、控えと同じ錠の中に置く）。増えるメモリは入れ物 1 枚と 4 バイト（4.3）。
 - 世代＝合成し終えた回数（0＝まだ）。読みの控え＝最後に GPU から読んだ `(x, y, generation, 値)`。
 - 中身は次の合成まで保つ（写しは入れ物を読むだけ・4.4）。
 
@@ -487,11 +487,11 @@ impl Visual {
 ```rust
 pub(crate) struct SurfaceComposite {
     bitmap: ID2D1Bitmap1,
-    pixel_staging: ID2D1Bitmap1,
     size: (u32, u32),
     generation: u64,
-    last_read: std::sync::Mutex<Option<LastRead>>, // (x, y, generation, [u8; 4])
-    gpu_reads: std::sync::atomic::AtomicU64,       // GPU から読んだ回数（5.4 のテストの的）
+    /// 1×1 の写し先と控えを 1 つの錠に入れる（写し・Map・Unmap・控えの更新を錠を持ったまま行う）。
+    pixel: std::sync::Mutex<PixelReadState>,  // { staging: ID2D1Bitmap1, last: Option<(x, y, generation, [u8; 4])> }
+    gpu_reads: std::sync::atomic::AtomicU64,  // GPU から読んだ回数（5.4 のテストの的）
 }
 
 impl SurfaceComposite {
@@ -518,7 +518,7 @@ impl SurfaceComposite {
 
 - Preconditions: `compose` と `copy_to` は UI スレッドの係から呼ぶ（`render_surface` は `ResMut<GraphicsCore>` を持つので、共有の DC を同時に使う係は無い）。
 - Postconditions: `compose` が `Ok` なら世代が 1 上がり、入れ物は根の列と木の列を合成し終えた絵。`Err` なら世代は変わらない。
-- Invariants: 入れ物の大きさ＝作ったときの描画面の大きさ。控えの世代 ≤ 今の世代。
+- Invariants: 入れ物の大きさ＝作ったときの描画面の大きさ。控えの世代 ≤ 今の世代。`read_pixel` は錠 `pixel` を持ったまま `CopyFromBitmap`（1×1）→ `Map` → `Unmap` → 控えの更新を行う（並んで走る 2 つの読みが写し先を取り合って別の座標の値を返したり、写像中の `Map` が失敗したりしない）。`read_all` は呼び出しごとに写し先と DC を作るので錠を要らない。
 
 **Implementation Notes**
 - Integration: `compose` は `SetTarget(bitmap)` → `SetDpi(96, 96)` → `BeginDraw` → `SetTransform(scale)` → `SetPrimitiveBlend(SOURCE_OVER)` → `Clear(透明)` → 根の列 `DrawImage(LINEAR, SOURCE_OVER)` → `emit(dc, dc.cast().ok().as_ref(), scale, tree)` → `EndDraw` → `SetTransform(identity)` → `SetTarget(None)`（`EndDraw` の結果に依らず後の 2 つを行う）。
@@ -661,7 +661,7 @@ impl SurfaceReadback<'_, '_> {
 ### Integration Tests（WARP・入れ物と読み戻し）
 
 - `composite_tests.rs`（4.1, 4.2, 4.4, 4.8, 7.7）: 根の命令の列だけの描画面と木を持つ描画面を、入れ物へ合成して別の的の整数の offset へ写した答えが、offset を変換に入れて直接描いた答え（今の道）と同じ（拡大 1 と 1.25）。写した後も入れ物の中身が残り、もう 1 度写しても同じ。`compose` の後で DC の的が無く変換が恒等。合成のたびに世代が上がる。
-- `readback_tests.rs`（5.1〜5.6, 5.9, 7.8）: 読んだ 1 画素が同じ点の答えの画素と同じ。合成し直した直後に新しい答え。同じ座標で合成し直していないとき `gpu_reads` が増えない・座標を変えれば増える。外の座標で `Outside`・未合成で `Unreadable`（判定の順を、入れ物と大きさを差し替えた純粋なテストでも固定）。`read_all` の幅×4 の詰めた行と各点の値。
+- `readback_tests.rs`（5.1〜5.6, 5.9, 7.8）: 読んだ 1 画素が同じ点の答えの画素と同じ。合成し直した直後に新しい答え。同じ座標で合成し直していないとき `gpu_reads` が増えない・座標を変えれば増える。外の座標で `Outside`・未合成で `Unreadable`（判定の順を、入れ物と大きさを差し替えた純粋なテストでも固定）。`read_all` の幅×4 の詰めた行と各点の値。2 つのスレッドから違う座標を交互に読み、それぞれの答えが自分の座標の値であること（錠の範囲の固定）。
 - `systems_tests.rs` に足す（1.8, 2.7）: 描く中身の混ぜ方と節の不透明度を変えた回に `DrawTree` が組み直される。
 
 ### E2E（実 GPU・`tests/graphics/composite_systems_test.rs`）
