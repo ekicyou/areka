@@ -120,3 +120,4 @@
 
 - 較正の記録（戻すと赤）: 1.1 T1a は `Unstop` を欄 `id` と比べる形へ戻すと赤・T1b は `resume` が欄を読む形へ戻すと赤。1.2 T2 は `plan_turns.rs:304` を `if true` にすると赤（`(Some("a"), Some("a"))` ≠ `(None, Some("a"))`）。2.1 T8 は WouldBlock の枝を「書く」へ戻すと赤。
 - 3 の T3: 宣言しない `src/zz_probe.rs`（`const X: &str = "日本語";`）を置くと見張りが `zz_probe.rs: non-ASCII literals [(1, "日本語")]` で赤、消すと 316 本緑（実装係とレビュー係の 2 回）。宣言しないファイルはコンパイルに入らないので、赤になるのは見張りの 1 本だけ（tasks の「クレートのテストが全部赤」は実際より強い見込みだった）。一時のファイルはツリーに残っていない。
+- 申し送り（範囲の外・`/kiro-complete` の棚卸で扱う）: `tools/impl-watch-install.ps1:20-24` の注は「版が合っていれば状態には触らない」「ロック・居る印・ログ・status.md・退避のファイルは手 7 の clear でだけ変わる」と書くが、手 7 で呼ぶ `status` は `status.md` を書き直し、#8 の後は `state.lock` を一瞬握り、`impl-watch.log` を開く（無ければ作る）。`doc/impl-watch.md:162` は直した（かけ直し 2 回目 R2-4）。ps1 は `audit-tools-scripts` の持ち物で、注だけの直し。

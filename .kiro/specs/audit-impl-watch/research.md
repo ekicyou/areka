@@ -232,3 +232,5 @@
 | R2-7 | Nice | `store_test_support.rs:1` の doc | 「時刻の定数」が残る（R1-4・R1-11 の漏れ）。`hold_state_lock`・`block_state_writes` が並びに無い | 今の中身に合わせる |
 
 - 確かめて落としたもの（要約）: R1 の直しの値と主張は全部保たれている（読み手 4 本が差分を全部照らした）。本番のコードの新しい指摘は 0。`status` の排他の中の読み直しで状態ファイルが無い・壊れている枝は今どおり正しい。`TempPath::new` も `target\test-roots\` の下に作る。
+
+- 2 回目の直し（7 件すべて・本番のコードは差分 0）＝`26ec9739`。テストは 305 本緑。R2-4 の `tools/impl-watch-install.ps1:20-24` の注は範囲の外なので tasks.md の Implementation Notes へ申し送った。
