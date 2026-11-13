@@ -1,7 +1,7 @@
 # 設計の検証: audit-impl-watch
 
 - 検証日: 2026-11-13
-- 対象: `.kiro/specs/audit-impl-watch/design.md`（要件 `requirements.md`・調べ `research.md`・steering `product.md`／`tech.md`／`structure.md`）
+- 対象: `.kiro/specs/completed/audit-impl-watch/design.md`（要件 `requirements.md`・調べ `research.md`・steering `product.md`／`tech.md`／`structure.md`）
 - 突き合わせたコード: `crates/areka-impl-watch/src/`（`store.rs`・`main.rs`・`plan.rs`・`plan_turns.rs`・`main_layering_tests.rs`・各テストの支え）・`tests/real.rs`・`tests/real/mod.rs`・`doc/impl-watch.md`・完了 `areka-P0-impl-watch` の design.md
 - 進め方: スキル `kiro-validate-design` の手順（分析 → 重い指摘 → よい所 → GO／NO-GO）。対話なしで判定した。
 
