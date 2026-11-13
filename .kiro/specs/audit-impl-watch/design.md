@@ -24,7 +24,7 @@
 ### This Spec Owns
 - `crates/areka-impl-watch/` の全ファイル（本番 12・テスト 27・`Cargo.toml`）のうち、§File Structure Plan に挙げたファイルの直し。
 - 新しいテストの支えのファイル `crates/areka-impl-watch/src/main_test_support.rs`（クレートのテスト全体で共通の支え。#7）。
-- `doc/impl-watch.md` の `status.md` の節（#8 で変わる文 2 か所。9.3・3.2）。
+- `doc/impl-watch.md` の `status` と `status.md`・`state.lock` に触れる文（#8 で変わる文 4 か所＝384・576・586・588 行目。9.3・3.2）。
 
 ### Out of Boundary
 - `crates/areka/`・`Cargo.lock`・`vendors/`・`runtime-module-untangle` が書き換えるファイル（6.3・6.8）。どの直しも触らない。
@@ -103,7 +103,7 @@ crates/areka-impl-watch/src/
 ├── plan_turns.rs            # 変更: resume の呼び手 3 か所が鍵を渡す（#1）
 ├── store.rs                 # 変更: summary の 1 回だけの試し・replace の sync 引数（#8・#9）
 └── （テストのファイルは Modified Files の表）
-doc/impl-watch.md            # 変更: status.md の節の文と、コマンドの表の status の行（#8）
+doc/impl-watch.md            # 変更: コマンドの表の status の行・status.md の節の文・置き場所のファイルの表の state.lock と status.md の行（#8）
 ```
 
 ### Modified Files
@@ -125,10 +125,11 @@ doc/impl-watch.md            # 変更: status.md の節の文と、コマンド�
 | `src/store_test_support.rs`・`store_tests.rs`・`store_ports_tests.rs` | `T0`・`home_in`・`names`・`read_state` を共通の支えへ（`read_state(&home)` は `read_state(&home.dir)`）。`store_ports_tests.rs` の `lossy` の写しを消して `super::lossy`。#8 のテストを足す | #7・#8・#10 |
 | `src/status_tests.rs`・`wait_test_support.rs`・`home_tests.rs`・`presence_tests.rs` | `T0`・`entries`・`home_in` の写しを消して共通の支えを読む（`status_tests.rs` の `T0_UTC` は残す）。`home_tests.rs` の重なった 2 本を消す | #7・#12 |
 | `src/state_tests.rs` | `a_file_without_version_does_not_read_as_the_current_version`（143-146）を消す | #11 |
-| `doc/impl-watch.md` | 576 行目の文を直す。384 行目の表の `status` の行に「ほかの呼び出しが `state.lock` を握っている間は `status.md` を書かない」を足す | #8 |
+| `doc/impl-watch.md` | 576 行目の文を直す。384 行目の表の `status` の行に「ほかの呼び出しが `state.lock` を握っている間は `status.md` を書かない」を足す。置き場所のファイルの表の 586 行目（`state.lock`＝「状態を変える間だけ握る」）に「`status` が `status.md` を書く間も一瞬握る」を、588 行目（`status.md`＝「`status` のたびに書き直される」）に「ほかの呼び出しが排他を握っている回は書き直さない」を足す | #8 |
+| `src/cli.rs` | `status` の doc（353 行目「読み物を書き」）を「排他が取れたときだけ読み物を書き」に。コメントだけで、コードと端末の文は変えない | #8 |
 
 - 1,000 行の番人: どのファイルも越えない。足すのは `plan_stop_tests.rs`（698 → 約 730）・`plan_turns_tests.rs`（486 → #16 で減ってから約 +30）・`store_ports_tests.rs`（742 → 約 760）。`plan_desk_tests.rs`（924）には足さず、#6 で減る。
-- 触らないもの: `cli.rs`・`cli_args.rs`（`--help` の本文・端末の文）・`status.rs`・`wait.rs`・`home.rs`・`presence.rs`・`Cargo.toml`・`tests/real.rs`・`tests/real/mod.rs`（#8 の後も今の主張のまま通る見込み。§Testing Strategy で回して確かめる）。
+- 触らないもの: `cli.rs` のコード（doc の 1 行だけ直す）・`cli_args.rs`（`--help` の本文・端末の文。`status` の `--help` の行 `read without changing: write status.md and print a summary. 0=done`（`cli_args.rs:419`）は外への約束なので変えない。書かない回があっても「書く役目のコマンド」という説明として誤りではない）・`status.rs`・`wait.rs`・`home.rs`・`presence.rs`・`Cargo.toml`・`tests/real.rs`・`tests/real/mod.rs`（#8 の後も今の主張のまま通る見込み。§Testing Strategy で回して確かめる）。
 
 ## System Flows
 
@@ -180,7 +181,7 @@ sequenceDiagram
 | 5.3 | 終了の道 | 待ち・見張りの道は触らない |
 | 5.4・5.5 | 文字化け・端末の文は ASCII | 端末の文は 1 つも変えない。新しいリテラルは ASCII（#3 の見張りが見る） |
 | 5.6・5.7 | 依存を足さない | Allowed Dependencies（`File::try_lock` は標準） |
-| 6.1・6.2 | 範囲の外は申し合わせ・要る変更だけ | 範囲の外は `doc/impl-watch.md` の 2 か所だけ（C19 で走る他の spec の持ち物ではない） |
+| 6.1・6.2 | 範囲の外は申し合わせ・要る変更だけ | 範囲の外は `doc/impl-watch.md` の 4 か所だけ（C19 で走る他の spec の持ち物ではない） |
 | 6.3・6.8 | 触らないファイル | Out of Boundary・タスク 11 の差分の確かめ |
 | 6.4・6.5・6.6・6.7 | 外への約束は足すだけ・変えるなら議題 | 外への約束を変える直しは 0 件（#1 は欄を残す・#8 は書く時が変わるだけ） |
 | 7.1・7.2・7.3 | 置き場所に触れない・版を上げない | 直しの確かめは常時テストと実機テスト（置き場所を `target` の下へ上書き）だけ。版は 2 のまま |
@@ -205,7 +206,7 @@ sequenceDiagram
 | 5 | `not_applied`・`waits` を `cli_test_support.rs` へ移して 2 か所の写しを消す。`cli_desk_tests.rs:174-175` を `put_state` に | 約 −10 行 | — | 3.3 |
 | 6 | `merge(id, repo, bug)`・`merged(id)`（`pr` "281"・`sha` "414d43eb"）・`load_running(id)`（内容 `PURPOSE`）・`granted(id, desks, stopped)`・`resumed(id, why)` を `plan_test_support.rs` へ移し、写しと手書き（研究 §3 #6 の行）を置き換える。`plan_liveness_tests.rs` の `merge` は `merge(id, repo, false)`。`holds_merge` の写しを消して `super::holds_merge`。値の綴りに頼る主張は支えの値に合わせる | 約 −60 行 | — | 3.3・4.6 |
 | 7 | D3。`T0`（4 か所）・`entries`（3）・`names`（2）・`home_in`（→ `Home` の 2 か所）・`read_state`（2）を `main_test_support.rs` の 1 か所に。`cli_test_support.rs` の `home_in`（→ `PathBuf`＝置き場所にする子のフォルダの道筋）は別物なので残す | 約 −40 行 | — | 3.3 |
-| 8 | §System Flows（D5）。`doc/impl-watch.md` の 2 か所 | — | T8 | 9.3・4.1 |
+| 8 | §System Flows（D5）。`doc/impl-watch.md` の 4 か所・`cli.rs:353` の doc | — | T8 | 9.3・4.1 |
 | 9 | D4。`write_state` は `sync: true`・`write_status` は `sync: false` | — | なし（速さだけ・観測できる振る舞いが無い） | 3.1 |
 | 10 | `store_ports_tests.rs:63-65` を消して `super::lossy` | 3 行 | — | 3.3 |
 | 11 | `state_tests.rs:143-146` を消す | 4 行 | — | 3.3 |
@@ -306,6 +307,7 @@ pub(crate) fn read_state(dir: &Path) -> State;         // dir の state.json を
 ### 構造の見張り（`main_layering_tests.rs`）
 
 - `files_that_write_to_the_terminal_have_ascii_only_literals` は、`Path::new(env!("CARGO_MANIFEST_DIR")).join("src")` を読み、名前が `.rs` で終わり `_tests.rs`・`_test_support.rs` で終わらないファイルを全部、`fs::read_to_string` で読んで今と同じ 2 つを確かめる（ファイルごとの「リテラルを 1 つも拾えない」の較正は残す）。見たファイルが 0 本なら赤（道筋の誤りの較正）。
+- 常に回る較正を 2 つ足す（手で 1 度だけの T3 に頼らない）: ⑴ 見たファイルの名前に `main.rs` と `cli.rs` が入っている。⑵ 名前の絞り込みを 1 つの関数に切り出し、その関数の名前ごとのテストで、`cli_args.rs`・`plan_turns.rs`・`main.rs` は見る側、`plan_tests.rs`・`plan_test_support.rs`・`main_test_support.rs`・`main_layering_tests.rs` は外す側になることを確かめる。
 - 判断の中核の純粋さのテスト（`include_str!` の 2 本）は変えない。
 
 ## Data Models
@@ -343,16 +345,16 @@ pub(crate) fn read_state(dir: &Path) -> State;         // dir の state.json を
 | # | タスク | 指摘 | 触るファイル | 並べてよいか |
 |---|---|---|---|---|
 | 1 | 参加者を表の鍵で見る＋T1a・T1b | #1 | `plan.rs`・`plan_turns.rs`・`state.rs`・`plan_stop_tests.rs`・`plan_liveness_tests.rs`（`cooperative_move`） | 2・3 と並べてよい |
-| 2 | `status` の 1 回だけの試し＋T8＋手順書の 2 か所 | #8 | `store.rs`・`store_ports_tests.rs`・`doc/impl-watch.md`・（洗った cli テスト） | 1 と並べてよい |
+| 2 | `status` の 1 回だけの試し＋T8＋手順書の 4 か所＋`cli.rs:353` の doc | #8 | `store.rs`・`store_ports_tests.rs`・`cli.rs`（doc だけ）・`doc/impl-watch.md`・（洗った cli テスト） | 1 と並べてよい |
 | 3 | 読み物の確定を外す・`lossy` の写し・`WrongShape` の doc | #9・#10・#17（`error.rs`） | `store.rs`・`store_ports_tests.rs`・`error.rs` | 2 の後（同じファイル） |
 | 4 | `--desk sole` だけの番のテスト T2 | #2 | `plan_turns_tests.rs` | 1 の後 |
-| 5 | ASCII の見張りを `src/` を読む形に＋T3 の較正 | #3 | `main_layering_tests.rs` | 独立 |
+| 5 | ASCII の見張りを `src/` を読む形に＋常に回る較正 2 つ＋T3 の手の較正 | #3 | `main_layering_tests.rs` | 独立 |
 | 6 | クレートのテストの共通の支え | #7 | `main.rs`・`main_test_support.rs`（新）・支えとテストの 14 ファイルの読み込み | 1〜5 の後 |
 | 7 | 入口のテストの支えの寄せと重なりの整理 | #4・#5・#13・#14 | `cli_*` のテスト 6 ファイル | 6 の後 |
 | 8 | 判断の核のテストの支えの寄せと重なりの整理 | #6・#15・#16 | `plan_*` のテスト 7 ファイル | 6 の後（7 と並べてよい） |
 | 9 | 残りの消し・doc | #11・#12・#17（`plan.rs:1`） | `state_tests.rs`・`home_tests.rs`・`plan.rs` | 6 の後 |
 | 10 | かけ直しの audit（上限なし・全部読む）→ 出た指摘を直す → 0 件まで（5 回目で打ち切りの決まり＝8.7）・記録 | 8.1・8.2・8.3・8.7 | 範囲の全部・`research.md`（記録） | 1〜9 の後 |
-| 11 | 全体テスト `pwsh -NoProfile -File tools/test-all.ps1`・実機テスト `cargo test -p areka-impl-watch --test real -- --ignored`（排他テストの机を取って回す）・既定のブランチとの差分の確かめ（6.3 のファイル・`crates/areka/`・`Cargo.lock`・`vendors/` の差分 0、`cli.rs`・`cli_args.rs`・`status.rs`・`wait.rs` の差分 0、`state.rs` はコメントだけ）・記録 | 8.4・8.5・8.6 | — | 10 の後 |
+| 11 | 全体テスト `pwsh -NoProfile -File tools/test-all.ps1`・実機テスト `cargo test -p areka-impl-watch --test real -- --ignored`（排他テストの机を取って回す）・既定のブランチとの差分の確かめ（6.3 のファイル・`crates/areka/`・`Cargo.lock`・`vendors/` の差分 0、`cli_args.rs`・`status.rs`・`wait.rs` の差分 0、`cli.rs`・`state.rs` はコメントだけ）・記録 | 8.4・8.5・8.6 | — | 10 の後 |
 | 12 | 着地の後の置き直し: `main` へ squash merge された後に `pwsh -NoProfile -File <リポジトリ>\tools\impl-watch-install.ps1` を回し、`OK check: --help exit 0` が出て `clear` の行が出ないことを確かめ、結果を開発者への完了の報告と、着地した PR への一言（`gh pr comment`）に残す | 8.8 | 置き場所の実行ファイルだけ | `/kiro-complete` の後 |
 
 - タスク 1〜9 の各完了条件: `cargo test -p areka-impl-watch` が緑・触ったファイルが 1,000 行以下・消した名前と移した名前がツリー全体の grep で残っていない（3.2・3.3）。
