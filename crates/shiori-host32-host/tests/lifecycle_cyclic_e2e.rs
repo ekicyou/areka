@@ -158,8 +158,7 @@ fn cyclic_run_and_clean_shutdown() {
         "全 {REPETITIONS} 反復後も helper は稼働継続している（連打を生き延びた・R3.4）"
     );
 
-    // --- client（`&parent` 借用）を解放してから shutdown へ進む（clean・借用終端の明示）---
-    drop(client);
+    // --- client（`&parent` 借用）は最後に使った所で終わっているので、そのまま shutdown へ進む（clean）---
 
     // --- ⑤ 正規の正常終了経路: UNLOAD → ループ正常終了 → exit(0) → ExitKind::Clean を観測（R5.1/R5.3）---
     let kind = lifecycle
@@ -283,8 +282,7 @@ fn cyclic_real_pasta_optional() {
         "全 {N_PASTA} 連打後も実 pasta helper は稼働継続している（R6.1）"
     );
 
-    // --- client（`&parent` 借用）を解放してから shutdown へ進む（clean・借用終端の明示）---
-    drop(client);
+    // --- client（`&parent` 借用）は最後に使った所で終わっているので、そのまま shutdown へ進む（clean）---
 
     // --- ⑤ 正規の clean shutdown: UNLOAD → 正常終了 → exit0 → ExitKind::Clean を観測（confidence・R6.1）---
     let kind = lifecycle

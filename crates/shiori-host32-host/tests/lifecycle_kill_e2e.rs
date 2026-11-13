@@ -212,7 +212,6 @@ fn kill_injection_detection_and_reporting() {
 
     // --- ⑧（design #9 bonus・R5.3）異常後後始末の決定性: 既終了への request_clean_shutdown は
     //     UNLOAD を送出せず観測済み非 Clean kind へ短絡する（既終了への終了要求を失敗させない）---
-    drop(client); // `&parent` 借用を解放してから shutdown 経路へ進む（借用終端の明示）。
     let kind2 = lifecycle
         .request_clean_shutdown(&parent)
         .expect("short-circuit on already-exited");
